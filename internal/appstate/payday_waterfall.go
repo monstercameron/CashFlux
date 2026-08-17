@@ -53,6 +53,21 @@ type WaterfallProposal struct {
 	RemainderMinor int64
 	// FundedMinor is the total proposed across all lines.
 	FundedMinor int64
+	// Shortfalls are the goals whose quota this payday does NOT cover, with what
+	// each is short (EC-12). The plan already funds in priority order; this says
+	// what that order COSTS, which is the half a list of funded amounts cannot
+	// show — a goal that received nothing simply does not appear in Lines.
+	Shortfalls []WaterfallShortfall
+}
+
+// WaterfallShortfall is one goal that came up short this payday.
+type WaterfallShortfall struct {
+	GoalID, GoalName string
+	// ShortMinor is how much of its quota went unfunded.
+	ShortMinor int64
+	// RemainingMinor and QuotaMinor let the caller work out how much later this
+	// lands without re-deriving the goal.
+	RemainingMinor, QuotaMinor int64
 }
 
 // WaterfallLine is one goal's proposed funding in the preview.
@@ -204,6 +219,29 @@ func (a *App) waterfallProposalFor(now time.Time, income int64, base string, rat
 	}
 
 	plan := waterfall.Compute(income, quotas, free)
+	// EC-12: what the priority order costs. A goal funded below its quota — or
+	// not at all — never appears in Lines, so without this the preview shows only
+	// the winners and the reader cannot see who paid.
+	funded := make(map[string]int64, len(plan.Lines))
+	for _, l := range plan.Lines {
+		funded[l.GoalID] = l.AmountMinor
+	}
+	remainingOf := map[string]int64{}
+	for _, g := range allGoals {
+		if rem, err := goals.CoveredRemaining(g); err == nil {
+			remainingOf[g.ID] = convertMinor(rem.Amount, rem.Currency, base, rates)
+		}
+	}
+	for _, q := range quotas {
+		short := q.QuotaMinor - funded[q.GoalID]
+		if short <= 0 {
+			continue
+		}
+		proposal.Shortfalls = append(proposal.Shortfalls, WaterfallShortfall{
+			GoalID: q.GoalID, GoalName: q.Name, ShortMinor: short,
+			RemainingMinor: remainingOf[q.GoalID], QuotaMinor: q.QuotaMinor,
+		})
+	}
 	proposal.RemainderMinor = plan.RemainderMinor
 	proposal.FundedMinor = plan.FundedMinor
 	for _, l := range plan.Lines {

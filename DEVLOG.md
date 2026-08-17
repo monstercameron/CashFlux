@@ -1,3 +1,25 @@
+## 2026-08-17 - the plan lines are the winners (EC-12)
+
+The payday funding preview lists the goals it funds, and a goal that received nothing does not appear in
+it at all. So a reader looking at the preview cannot tell whether the priority order they chose has a
+price - and the price is the entire reason the order is a decision rather than a formality. The proposal
+now reports the unmet quotas, and the card says what each one costs.
+
+Two rules keep it from becoming a guilt machine. A trade-off is only real when the money is contested:
+slack is spent first, and funding something out of money nothing else wanted costs nobody anything.
+Saying otherwise teaches people to ignore the warning. And it names the goal that pays, because "this
+will slow your other goals" is unfalsifiable and unactionable - two months on an unbooked holiday is a
+different decision from two months on a deposit with a date attached.
+
+A goal that loses its whole contribution stalls rather than reporting a number: "delayed by 9,999 months"
+is not information.
+
+I could not demo it. The sample household's payday covers every goal quota, so nothing is contested and
+the engine correctly says nothing - the first rule working exactly as intended, and leaving the rendered
+line without an example. Contesting it would mean shrinking the sample's paycheck below its own goals,
+which would make a worse demo of everything else on that page. The ticket says so rather than implying a
+verification I did not do.
+
 ## 2026-08-17 - a readiness score is the one thing this must not produce (EC-11)
 
 The ticket asked for a "future-month readiness score", and "Next month: 68/100" is exactly the output

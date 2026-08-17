@@ -1633,8 +1633,29 @@ survived the duplicate/scope filters but didn't make the engine cut):
 
   PLACEMENT NOTE: it renders on the budgets FORWARD view, which appears when the period control is paged
   into the future — one click, and exactly when somebody is asking whether next month is set up.
-- [ ] **EC-12 Funding trade-off quantifier** (SMART, Goals) — in Compare/payday funding: "funding
+- [~] **EC-12 Funding trade-off quantifier** (SMART, Goals) — in Compare/payday funding: "funding
   this now delays Vacation ~2 months." Per-action sibling of E-GL's feasibility check.
+  — ENGINE + SURFACE DONE (2026-08-17). New pure `internal/fundtradeoff`; `WaterfallProposal` now carries
+  `Shortfalls`, and the payday funding card renders the cost.
+
+  THE PLAN LINES ARE THE WINNERS. A goal that received nothing is not in them at all, so a reader looking
+  at the preview cannot tell whether the order they chose has a price — and the price is the whole reason
+  the order is a decision rather than a formality. The proposal now reports which quotas went unmet.
+
+  A TRADE-OFF IS ONLY REAL WHEN THE MONEY IS CONTESTED. Slack is spent first, and funding something out of
+  money nothing else wanted costs nobody anything. Saying otherwise is scaremongering that teaches people
+  to ignore the warning.
+
+  IT NAMES THE GOAL THAT PAYS. "This will slow your other goals" is unfalsifiable and unactionable; two
+  months on an unbooked holiday is a different decision from two months on a deposit with a date.
+
+  A GOAL THAT LOSES EVERYTHING STALLS rather than reporting a huge number — "delayed by 9,999 months" is
+  not information, "this stops it entirely" is. Worst first, same ordering rule as the action preview.
+
+  UNVERIFIED IN A BROWSER, and honestly so: the sample's payday covers every goal quota, so nothing is
+  contested and the engine correctly says nothing. That silence IS the first rule working, but it means
+  the rendered line has no demo. Contesting it would mean making the sample household's payday too small
+  for its own goals, which is a worse demo of everything else. Eight engine tests cover both branches.
 - [~] **EC-13 Round-up accelerator estimate** (SMART, Goals) — "at current round-up rate this goal
   finishes ~7 weeks sooner."
   — ENGINE + SURFACE DONE (2026-08-17), in `internal/roundups` (`MonthlyRateCents`, `MonthsSooner`) and on

@@ -2844,6 +2844,12 @@ var english = Catalog{
 	// WF-SM3: what to do next, and WHY one thing sits above another.
 	// WF-SM4: what the app has been told to remember. Each line constrains ADVICE
 	// — never what the household may do with its own money.
+	// EC-12: what a funding order COSTS. The plan lines show the winners; these
+	// name who paid, because that is what makes the order a decision.
+	"goals.tradeoffDelay":      "%s lands about %s later because of this order.",
+	"goals.tradeoffStalls":     "%s gets nothing this payday — it stops moving until %s a month reaches it again.",
+	"goals.tradeoffMonthsOne":  "%d month",
+	"goals.tradeoffMonthsMany": "%d months",
 	// EC-11: whether the month ahead is set up. Sentences, not a score — "68/100"
 	// says something is wrong and nothing about what.
 	"monthready.ready":       "Next month has %s of room after everything already committed.",

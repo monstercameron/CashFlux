@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/fundtradeoff"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -148,6 +149,10 @@ func goalsWaterfallCard() ui.Node {
 				),
 				Ul(css.Class("wf-lines", tw.Mt2, tw.FlexCol, tw.Gap1), Attr("data-testid", "goals-waterfall-lines"), lineNodes),
 				remainderNode,
+				// EC-12: what this order COSTS. The lines above show who was funded;
+				// a goal that got nothing does not appear there at all, so without
+				// this the preview shows only the winners.
+				waterfallTradeOffNotes(proposal, base),
 				Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt3),
 					Button(css.Class("btn btn-primary btn-sm"), Type("button"),
 						Attr("data-testid", "goals-waterfall-approve"), OnClick(onApprove),
@@ -159,4 +164,42 @@ func goalsWaterfallCard() ui.Node {
 			),
 		),
 	)
+}
+
+// waterfallTradeOffNotes says what this payday's priority order costs the goals
+// that came up short (EC-12).
+//
+// The plan lines above are the winners. A goal that received nothing is not in
+// them at all, so a reader looking only at the lines cannot tell whether the
+// order they chose has a price — and the price is the whole reason the order is
+// a decision rather than a formality.
+func waterfallTradeOffNotes(p appstate.WaterfallProposal, base string) ui.Node {
+	if len(p.Shortfalls) == 0 {
+		return Fragment()
+	}
+	costs := make([]fundtradeoff.Cost, 0, len(p.Shortfalls))
+	for _, s := range p.Shortfalls {
+		// Each shortfall is that goal losing its own quota for this period, so the
+		// delay is computed against what it would have had.
+		c := fundtradeoff.Assess(s.ShortMinor, 0, []fundtradeoff.Goal{{
+			ID: s.GoalID, Name: s.GoalName,
+			RemainingMinor: s.RemainingMinor, MonthlyMinor: s.QuotaMinor,
+		}})
+		costs = append(costs, c...)
+	}
+	if len(costs) == 0 {
+		return Fragment()
+	}
+	rows := make([]ui.Node, 0, len(costs))
+	for _, c := range costs {
+		line := uistate.T("goals.tradeoffDelay", c.GoalName,
+			uistate.TN("goals.tradeoffMonthsOne", "goals.tradeoffMonthsMany", c.MonthsDelayed))
+		if c.Stalls {
+			line = uistate.T("goals.tradeoffStalls", c.GoalName,
+				waterfallAmount(c.LostMonthlyMinor, base))
+		}
+		rows = append(rows, P(css.Class("muted", tw.Text13),
+			Attr("data-testid", "goals-waterfall-tradeoff"), line))
+	}
+	return Div(css.Class(tw.Mt2), rows)
 }

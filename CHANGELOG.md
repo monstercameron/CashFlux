@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **The payday funding preview says who pays (EC-12).** When a paycheck cannot cover every goal's quota,
+  it names the goal that comes up short and how much later it lands — or that it stops moving entirely.
+
+### Added
 - **Budgets say whether next month is set up (EC-11).** Page the period forward and it states the room
   left after everything already committed, the large yearly charges landing, and what is still missing —
   in sentences, not a score.
