@@ -1,3 +1,37 @@
+## 2026-08-16 — persisted from the wrong place (C555)
+
+The report was that selecting a month reverts. The obvious first guess is that nothing persists the
+period. Wrong: `PersistPeriodWindow` exists, `LoadPeriodWindow` exists, both are careful, and there
+is even staleness handling so a year-old window does not lock you in.
+
+The problem is WHERE it was called. Two sites, both on /reports, both during RENDER. So the window
+was saved as a side effect of looking at the reports page, and the ten controls that actually change
+it — stepper, five quick-jump presets, resolution picker, range editor, week-start preference,
+saved-report apply — saved nothing at all. Change the month anywhere, and it holds until you reload,
+at which point you get back whatever state /reports last observed.
+
+Which is a nastier shape than "it does not persist", because it persists often enough to look like it
+works. Visit reports after changing the month and the change sticks. Do not, and it does not.
+
+Fixed with a seam — `uistate.SetPeriod(atom, w)` — rather than by adding a persist call beside each
+of the ten Sets. Ten call sites across the shell, settings and two screens is ten chances for the
+eleventh control to be written without one, and the failure is invisible until someone reloads.
+
+Two guards, because one is not enough here. An AST check fails the build on a bare period-atom
+`.Set(...)` in any file holding a period control; and a second pins `SetPeriod` itself, since
+deleting its `PersistPeriodWindow` line would satisfy the first guard perfectly while restoring the
+original bug. I verified the first guard fails against a reintroduced bare Set rather than assuming
+it would.
+
+And verified the fix in a browser in both directions: a probe steps the period, navigates away and
+back, and hard-reloads. With the fix, four of four. With the setters reverted, the probe prints the
+report's own sentence back — "the period survives a reload — Jul 2026 -> Aug 2026".
+
+One correction to the ticket's framing, recorded rather than glossed: /transactions is not a
+period-aware page. It has its own date filter, and the top-bar period control renders on /, /budgets,
+/planning, /insights and /reports. The defect is real and reproduced; it is just not a
+transactions-local one.
+
 ## 2026-08-16 — one component that owns the value
 
 Cam picked the full sweep, so the composer fix had to stop being a composer fix. The per-screen

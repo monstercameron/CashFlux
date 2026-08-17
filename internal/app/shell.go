@@ -1350,18 +1350,18 @@ func ResolutionControl(props resolutionControlProps) uic.Node {
 				now := time.Now()
 				switch v {
 				case "this":
-					atom.Set(period.NewWindow(w.Res, now, w.WeekStart))
+					uistate.SetPeriod(atom, period.NewWindow(w.Res, now, w.WeekStart))
 				case "last":
-					atom.Set(period.Previous(w.Res, now, w.WeekStart))
+					uistate.SetPeriod(atom, period.Previous(w.Res, now, w.WeekStart))
 				case "quarter":
 					uistate.PersistResolution(period.Quarter)
-					atom.Set(period.NewWindow(period.Quarter, now, w.WeekStart))
+					uistate.SetPeriod(atom, period.NewWindow(period.Quarter, now, w.WeekStart))
 				case "ytd":
 					uistate.PersistResolution(period.Month)
-					atom.Set(period.YearToDate(now, w.WeekStart))
+					uistate.SetPeriod(atom, period.YearToDate(now, w.WeekStart))
 				case "lastyear":
 					uistate.PersistResolution(period.Year)
-					atom.Set(period.PriorYear(now, w.WeekStart))
+					uistate.SetPeriod(atom, period.PriorYear(now, w.WeekStart))
 				}
 				closeMenu()
 			}),
@@ -1440,7 +1440,7 @@ func ResolutionControl(props resolutionControlProps) uic.Node {
 				Button(css.Class("btn btn-primary btn-sm"), Type("button"), Attr("data-testid", "period-range-apply"),
 					attrDisabledIf(!dirty),
 					OnClick(func() {
-						atom.Set(liveDraft())
+						uistate.SetPeriod(atom, liveDraft())
 						rangeAsked.Set(true)
 					}),
 					uistate.T("resolution.rangeApply")),
@@ -1454,7 +1454,7 @@ func ResolutionControl(props resolutionControlProps) uic.Node {
 						// window from before the range existed, conclude there was nothing
 						// to collapse, and leave the range applied with its editor gone.
 						if cur := atom.Get(); !cur.IsSinglePeriod() {
-							atom.Set(cur.Single())
+							uistate.SetPeriod(atom, cur.Single())
 						}
 					}),
 					uistate.T(rangeCancelKey(w, dirty))),
@@ -1466,7 +1466,7 @@ func ResolutionControl(props resolutionControlProps) uic.Node {
 	// center pill opens a popover with the granularity, quick jumps and custom range.
 	return Div(css.Class("period-control add-wrap"), Attr("id", menuID),
 		Button(css.Class("period-step"), Type("button"), Attr("aria-label", uistate.T("resolution.prevPeriod")), Attr("title", uistate.T("resolution.prevPeriod")),
-			OnClick(func() { atom.Set(w.Shift(-1)) }), ui.Icon(icon.ChevronLeft, css.Class(tw.W4, tw.H4))),
+			OnClick(func() { uistate.SetPeriod(atom, w.Shift(-1)) }), ui.Icon(icon.ChevronLeft, css.Class(tw.W4, tw.H4))),
 		Button(css.Class("period-pill"), Type("button"), Attr("aria-haspopup", "menu"), Attr("aria-expanded", expanded),
 			Attr("data-testid", "period-pill"), Attr("title", uistate.T("resolution.jumpTo")),
 			OnClick(func() { open.Set(!open.Get()) }),
@@ -1474,7 +1474,7 @@ func ResolutionControl(props resolutionControlProps) uic.Node {
 			ui.Icon(icon.ChevronDown, css.Class("period-caret", tw.W3, tw.H3)),
 		),
 		Button(css.Class("period-step"), Type("button"), Attr("aria-label", uistate.T("resolution.nextPeriod")), Attr("title", uistate.T("resolution.nextPeriod")),
-			OnClick(func() { atom.Set(w.Shift(1)) }), ui.Icon(icon.ChevronRight, css.Class(tw.W4, tw.H4))),
+			OnClick(func() { uistate.SetPeriod(atom, w.Shift(1)) }), ui.Icon(icon.ChevronRight, css.Class(tw.W4, tw.H4))),
 		Div(ClassStr("add-backdrop"+hidden), OnClick(closeMenu)),
 		Div(ClassStr("period-pop add-menu open-left"+hidden), Attr("role", "menu"),
 			ui.Segmented(ui.SegmentedProps{
@@ -1489,7 +1489,7 @@ func ResolutionControl(props resolutionControlProps) uic.Node {
 				OnSelect: func(v string) {
 					r := period.Resolution(v)
 					uistate.PersistResolution(r)
-					atom.Set(w.SetResolution(r, time.Now()))
+					uistate.SetPeriod(atom, w.SetResolution(r, time.Now()))
 				},
 			}),
 			Div(css.Class("period-presets", tw.Flex, tw.FlexWrap, tw.Gap15),

@@ -62,8 +62,7 @@ func savedReportsControl(props struct{}) ui.Node {
 		}
 		w := period.Window{Res: period.Resolution(s.Res), From: s.From, To: s.To,
 			WeekStart: uistate.LoadPrefs().WeekStartWeekday()}
-		periodAtom.Set(w)
-		uistate.PersistPeriodWindow(w)
+		uistate.SetPeriod(periodAtom, w)
 		uistate.SetReportScope(s.Scope)
 		uistate.PostNotice(uistate.T("reports.savedApplied", s.Name), false)
 	}

@@ -8414,7 +8414,7 @@ development-environment recovery issues, not product tickets; refresh is the doc
   be deliberate and reversible. Confirming an item must update only the chosen population and keep the
   ledger chips, Review count, and next-card navigation in agreement.
 
-- [ ] **C555 [MAJOR][TXN][STATE] The selected period is not stable across navigation and reload.**
+- [x] **C555 [MAJOR][TXN][STATE] The selected period is not stable across navigation and reload.**
   Selecting Aug 2026 while working with August transactions reverted to Jul 2026 after reload or
   route changes. Persist the period as view state, or explicitly restore the documented default and
   explain the reset. AC: the selected period and the displayed totals agree after reload and after

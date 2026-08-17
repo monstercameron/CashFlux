@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/period"
+	"github.com/monstercameron/GoWebComponents/v5/state"
 )
 
 const periodWindowStoreID = "cashflux:period-window"
@@ -86,4 +87,27 @@ func LoadPeriodWindow(now time.Time) (period.Window, bool) {
 		To:        to.UTC(),
 		WeekStart: weekStart,
 	}, true
+}
+
+// SetPeriod applies a new dashboard window AND persists it (C555).
+//
+// The window was persisted from exactly two places, both on /reports and both on
+// RENDER. Every control that actually CHANGES the period — the top-bar stepper,
+// the quick-jump presets, the resolution picker, the range editor — set the atom
+// and saved nothing. So selecting August while working in the transaction ledger
+// held for the session and reverted on reload to whatever /reports last happened
+// to write, with nothing on screen admitting the reset.
+//
+// The fix is this function rather than a persist call added beside each Set: the
+// setters are spread across the shell, settings and two screens, and a rule that
+// every caller has to remember is a rule that a future control will not follow.
+// A screenlint guard (screenlint/period_persist_test.go) fails the build on a
+// bare period-atom Set so the seam stays the only way through.
+//
+// It takes the atom rather than calling UsePeriod() because UsePeriod is a hook,
+// and these calls happen inside click handlers where a hook would corrupt the
+// hook order.
+func SetPeriod(atom state.Atom[period.Window], w period.Window) {
+	atom.Set(w)
+	PersistPeriodWindow(w)
 }

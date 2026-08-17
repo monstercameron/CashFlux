@@ -7,6 +7,13 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **The period you pick now survives a reload (C555).** Stepping to a different month held for the
+  session and reverted afterwards, with nothing on screen admitting the reset. The window was being
+  persisted — but only from the reports screen, and only as a side effect of rendering it. Every
+  control that actually changes the period saved nothing, so a reload restored whatever reports had
+  last happened to write. Changing the period now saves it, through a single seam that sets and
+  persists together rather than a rule each of the ten controls had to remember, with a build-time
+  guard that fails on any control that bypasses it.
 - **Editing a transfer moves both legs (C629).** A transfer is two independent rows, and the edit
   form only ever wrote the one the user opened. Correcting a transfer's amount from the ledger
   updated one account and not the other: the legs stopped summing to zero, so the ledger's net moved
