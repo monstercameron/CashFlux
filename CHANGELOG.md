@@ -7,6 +7,31 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Goal Compare says who can be compared, and what funding order costs (C398).** The picker applied
+  a rule inline and said nothing about it, so a reader expecting four goals and seeing two had no way
+  to learn why. The rule is now named — measured in money, has a target amount, not archived — stated
+  above the picker, with a count of what was left out and the reason for each. And the comparison
+  gained the thing it was missing: two columns of figures show what each goal costs, but not the
+  trade. With one pot and two goals, choosing who gets funded first moves both dates, so Compare now
+  simulates both orders over the two monthly plans combined and shows all four landings. When order
+  changes nothing — both plans already fit alongside each other — it says so instead of presenting a
+  table of identical numbers.
+- **A goal contribution history, planned against actual (C399).** The card answered "am I on track"
+  with a projected date computed from the monthly plan, and nothing ever checked the plan against
+  reality — a goal funded at half its plan for six months still showed a confident date. Each
+  financial goal now carries twelve months of what actually landed, with the plan drawn as a marker
+  on each month bar and a sentence naming how many months came in short and by how much in total.
+  The shortfall is the sum of monthly misses rather than planned-minus-actual: a monthly commitment
+  is missed month by month, and catching up in December does not put June back.
+
+### Fixed
+- **A long-running goal no longer forgets its own funding history (C399).** The contribution log is
+  capped at fifty entries so it cannot grow without limit, and the fifty-first contribution used to
+  be dropped outright. That served the log actual purpose — undo, which only needs the most recent
+  entry — and quietly destroyed the record, so a goal funded monthly for five years could only show
+  its last four months. Entries pushed past the cap are now rolled up into monthly totals on the goal
+  itself, bounded at twenty years, with a contribution in a currency the month total does not use
+  skipped rather than summed: a silently wrong history is worse than a short one.
 - **Saved to-do views, and one toolbar instead of three rows (C404).** The to-do screen had every
   control it needed and no memory: someone who works "everything overdue, assigned to me, oldest
   first" every Monday rebuilt it from four separate controls every Monday. A view now saves the whole

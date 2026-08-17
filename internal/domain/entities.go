@@ -3,6 +3,7 @@
 package domain
 
 import (
+	"sort"
 	"strings"
 	"time"
 
@@ -989,6 +990,11 @@ type Goal struct {
 	// entries — older ones drop off, which only limits how far "undo" can walk back.
 	// JSON round-trips automatically; no store migration needed.
 	Contributions []GoalContribution `json:"contributions,omitempty"`
+	// ContributionHistory holds monthly totals for contributions that have aged
+	// out of Contributions, oldest first, so a long-running goal's funding shape
+	// survives the detailed log's cap (C399). Additive — existing goals load with
+	// none, which reads correctly as "no history older than the log".
+	ContributionHistory []GoalMonthTotal `json:"contributionHistory,omitempty"`
 	// MonthlyContribution is an explicit amount to assign to this goal each month
 	// under zero-based budgeting ("give every dollar a job"). When set (> 0) it is
 	// what the Budgets zero-based view counts toward the assigned total; when zero
@@ -1131,13 +1137,73 @@ type GoalContribution struct {
 // limit over a goal's life.
 const MaxGoalContributions = 50
 
-// RecordContribution appends c to the goal's contribution log, dropping the oldest
-// entries beyond MaxGoalContributions. Pure; the caller persists the result.
+// GoalMonthTotal is one month of contribution history that has aged out of the
+// detailed log, kept as a total so the shape of a long-running goal's funding
+// survives the cap (C399).
+//
+// The detailed log exists to support undo, which only ever needs the most recent
+// entry; the history panel needs something else entirely — how much landed each
+// month, over years. Discarding the fifty-first contribution served the first
+// need and quietly destroyed the second, so a goal funded monthly for five years
+// could only ever show its last four.
+type GoalMonthTotal struct {
+	// Month is the calendar month as "2006-01".
+	Month string `json:"month"`
+	// Amount is the total contributed that month.
+	Amount money.Money `json:"amount"`
+	// Count is how many contributions it aggregates, so a rolled-up month can
+	// still say "3 contributions" rather than pretending to be one.
+	Count int `json:"count"`
+}
+
+// ContributionHistoryCap bounds the rolled-up monthly totals. Twenty years of
+// monthly funding is far past any horizon a person plans against, and the bound
+// is what stops a goal record growing without limit over a lifetime.
+const ContributionHistoryCap = 240
+
+// RecordContribution appends c to the goal's contribution log. Entries pushed
+// past MaxGoalContributions are ROLLED UP into ContributionHistory rather than
+// discarded: the detailed log is for undo, the monthly totals are for history,
+// and conflating the two is what made a five-year goal look four months old.
+// Pure; the caller persists the result.
 func (g Goal) RecordContribution(c GoalContribution) Goal {
 	g.Contributions = append(append([]GoalContribution(nil), g.Contributions...), c)
 	if len(g.Contributions) > MaxGoalContributions {
+		drop := g.Contributions[:len(g.Contributions)-MaxGoalContributions]
 		g.Contributions = g.Contributions[len(g.Contributions)-MaxGoalContributions:]
+		for _, d := range drop {
+			g = g.rollUpContribution(d)
+		}
 	}
+	return g
+}
+
+// rollUpContribution folds one aged-out contribution into the monthly totals,
+// keeping them sorted oldest-first. A contribution in a currency the month's
+// total does not use is skipped rather than added: summing two currencies would
+// produce a figure that is not money, and a silently wrong history is worse than
+// a short one.
+func (g Goal) rollUpContribution(c GoalContribution) Goal {
+	key := c.At.Format("2006-01")
+	hist := append([]GoalMonthTotal(nil), g.ContributionHistory...)
+	for i, h := range hist {
+		if h.Month != key {
+			continue
+		}
+		if h.Amount.Currency != c.Amount.Currency {
+			return g
+		}
+		hist[i].Amount = money.New(h.Amount.Amount+c.Amount.Amount, h.Amount.Currency)
+		hist[i].Count++
+		g.ContributionHistory = hist
+		return g
+	}
+	hist = append(hist, GoalMonthTotal{Month: key, Amount: c.Amount, Count: 1})
+	sort.Slice(hist, func(i, j int) bool { return hist[i].Month < hist[j].Month })
+	if len(hist) > ContributionHistoryCap {
+		hist = hist[len(hist)-ContributionHistoryCap:]
+	}
+	g.ContributionHistory = hist
 	return g
 }
 

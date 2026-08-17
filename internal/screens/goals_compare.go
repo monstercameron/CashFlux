@@ -5,10 +5,12 @@
 package screens
 
 import (
+	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/goalcompare"
 	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/goaltrajectory"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -69,13 +71,14 @@ func GoalCompareForm(props GoalCompareProps) ui.Node {
 	aS := ui.UseState("")
 	bS := ui.UseState("")
 
+	// C398: the picker used to apply this rule inline and say nothing about it, so
+	// a reader who expected four goals and saw two had no way to learn why. The
+	// rule is now named in goalcompare, and every exclusion carries a reason the
+	// note below the picker can state.
 	var goals []domain.Goal
+	var excluded []goalcompare.Excluded
 	if app != nil {
-		for _, g := range app.Goals() {
-			if !g.Archived && g.EffectiveKind().IsFinancial() && g.TargetAmount.Amount > 0 {
-				goals = append(goals, g)
-			}
-		}
+		goals, excluded = goalcompare.Partition(app.Goals())
 	}
 	byID := func(id string) (domain.Goal, bool) {
 		for _, g := range goals {
@@ -155,6 +158,64 @@ func GoalCompareForm(props GoalCompareProps) ui.Node {
 		)
 	}
 
+	// C398: the figures show what each goal costs; they do not show the trade. With
+	// one pot and two goals, choosing who goes first moves BOTH dates, and that is
+	// the decision this surface exists to support. The pot is the money already
+	// committed to these two — no new number to explain, and the question becomes
+	// "same money, different order", which is the one the user can actually act on.
+	var orderPanel ui.Node = Fragment()
+	if okA && okB {
+		sa, sb := computeGoalCompareStats(ga, now), computeGoalCompareStats(gb, now)
+		switch {
+		case !sa.hasMonthly || !sb.hasMonthly:
+			orderPanel = P(css.Class("muted"), Attr("data-testid", "goal-compare-order-none"),
+				uistate.T("goalcompare.orderNeedsPlans"))
+		case sa.monthly.Currency != sb.monthly.Currency:
+			// Pooling two currencies would produce a number that is not money.
+			orderPanel = P(css.Class("muted"), Attr("data-testid", "goal-compare-order-none"),
+				uistate.T("goalcompare.orderNeedsOneCurrency"))
+		default:
+			pool := sa.monthly.Amount + sb.monthly.Amount
+			swap := goalcompare.Compare(pool,
+				goalcompare.Fund{RemainingMinor: sa.toGo.Amount, MonthlyCapMinor: sa.monthly.Amount},
+				goalcompare.Fund{RemainingMinor: sb.toGo.Amount, MonthlyCapMinor: sb.monthly.Amount})
+			if !swap.Matters() {
+				// Both plans fit inside the pot, so order changes nothing. Saying so
+				// is the useful answer; a table of identical numbers is not.
+				orderPanel = P(css.Class("muted"), Attr("data-testid", "goal-compare-order-moot"),
+					uistate.T("goalcompare.orderMoot"))
+			} else {
+				orderPanel = Div(css.Class("goal-order-panel"), Attr("data-testid", "goal-compare-order"),
+					H4(css.Class("t-caption"), uistate.T("goalcompare.orderTitle")),
+					P(css.Class("muted"), uistate.T("goalcompare.orderLede",
+						fmtMoney(money.New(pool, sa.monthly.Currency)))),
+					Table(css.Class("goal-compare-table"),
+						Style(map[string]string{"width": "100%", "border-collapse": "collapse"}),
+						Thead(Tr(Th(""), Th(ga.Name), Th(gb.Name))),
+						Tbody(
+							Tr(Td(css.Class("t-caption"), uistate.T("goalcompare.orderAFirst", ga.Name)),
+								Td(Attr("data-testid", "goal-order-a-first-a"), landingLabel(swap.AFirst.First)),
+								Td(Attr("data-testid", "goal-order-a-first-b"), landingLabel(swap.AFirst.Second))),
+							Tr(Td(css.Class("t-caption"), uistate.T("goalcompare.orderBFirst", gb.Name)),
+								Td(Attr("data-testid", "goal-order-b-first-a"), landingLabel(swap.BFirst.Second)),
+								Td(Attr("data-testid", "goal-order-b-first-b"), landingLabel(swap.BFirst.First))),
+						),
+					),
+				)
+			}
+		}
+	}
+
+	// The eligibility note. It states the rule unconditionally — a reader seeing a
+	// short list needs the rule whether or not anything happened to be excluded —
+	// and adds the count of what was left out when there is any.
+	eligNote := P(css.Class("muted"), Attr("data-testid", "goal-compare-eligibility"),
+		uistate.T("goalcompare.eligibleRule"))
+	if len(excluded) > 0 {
+		eligNote = P(css.Class("muted"), Attr("data-testid", "goal-compare-eligibility"),
+			uistate.T("goalcompare.eligibleRule")+" "+goalExcludedNote(excluded))
+	}
+
 	return Div(css.Class("acct-edit-form"), Attr("data-testid", "goal-compare-form"),
 		Div(css.Class("modal-scroll"),
 			Div(Style(map[string]string{"display": "flex", "gap": "0.75rem", "flex-wrap": "wrap"}),
@@ -169,10 +230,58 @@ func GoalCompareForm(props GoalCompareProps) ui.Node {
 							TestID: "goal-compare-b", OnChange: func(v string) { bS.Set(v) },
 							AriaLabel: uistate.T("goalcompare.goalB")}))),
 			),
+			eligNote,
 			verdict,
 			table,
+			orderPanel,
 		),
 	)
+}
+
+// landingLabel renders one funding-order outcome. An unreached goal is NOT
+// rendered as its month cap: the simulation stopped, it did not finish, and
+// printing "600 months" would be a fabricated date rather than an honest
+// "this order never gets there".
+func landingLabel(l goalcompare.Landing) string {
+	switch {
+	case !l.Reached:
+		return uistate.T("goalcompare.orderNever")
+	case l.Months == 0:
+		return uistate.T("goalcompare.orderAlready")
+	case l.Months == 1:
+		return uistate.T("goalcompare.orderOneMonth")
+	}
+	return uistate.T("goalcompare.orderMonths", l.Months)
+}
+
+// goalExcludedNote summarizes what the picker left out, grouped by reason, so
+// the count and the cause arrive together.
+func goalExcludedNote(ex []goalcompare.Excluded) string {
+	var archived, notFinancial, noTarget int
+	for _, e := range ex {
+		switch e.Reason {
+		case goalcompare.ReasonArchived:
+			archived++
+		case goalcompare.ReasonNotFinancial:
+			notFinancial++
+		case goalcompare.ReasonNoTarget:
+			noTarget++
+		}
+	}
+	var parts []string
+	if notFinancial > 0 {
+		parts = append(parts, uistate.T("goalcompare.exclNotFinancial", notFinancial))
+	}
+	if noTarget > 0 {
+		parts = append(parts, uistate.T("goalcompare.exclNoTarget", noTarget))
+	}
+	if archived > 0 {
+		parts = append(parts, uistate.T("goalcompare.exclArchived", archived))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return uistate.T("goalcompare.exclLead", strings.Join(parts, ", "))
 }
 
 // goalCompareVerdict renders the one-sentence Compare verdict from the computed

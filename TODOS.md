@@ -5662,12 +5662,19 @@ there)**; durable pref/state changes need `uistate.RequestPersist()`.
 
 ### W7 — Goals: scenarios visible, history prominent (reviewer priority 6)
 
-- [ ] **C398 [MINOR][GOAL] Compare: explain eligibility + priority-order scenarios.** Reviewer got
+- [x] **C398 [MINOR][GOAL] Compare: explain eligibility + priority-order scenarios.** Reviewer got
   two eligible goals "with no explanation of the eligibility rule" (no eligibility concept exists
   in code — define + state it inline), and comparison is figure-based: add "compare funding
   orders" showing which goal lands earlier/later when priorities swap (funding order + allocate
-  ranking already exist).
-- [ ] **C399 [MINOR][GOAL] Contribution calendar + planned-vs-actual chart.** `Goal.Contributions`
+  ranking already exist). — DONE (2026-08-16). New pure `internal/goalcompare`: `Eligibility` names
+  the rule (financial + has a target + not archived) with a reason per exclusion, ordered most- to
+  least-actionable so an archived habit goal is told the useful thing; the Compare picker now states
+  the rule unconditionally and counts what it left out. `Race`/`Compare` simulate funding two goals
+  from one pot month by month (the handover month, where the first goal completes and the leftover
+  spills, is exactly what a closed-form solve gets subtly wrong), and `Matters()` suppresses the
+  panel when order changes nothing rather than manufacturing a decision. The pot is the two goals
+  own combined monthly plans — no new number to explain.
+- [x] **C399 [MINOR][GOAL] Contribution calendar + planned-vs-actual chart.** `Goal.Contributions`
   log exists (cap 50, undo-last). Add a per-goal contribution history panel (calendar/list) + a
   planned-vs-actual monthly chart; roll entries older than the cap into monthly aggregates so
   history survives the 50-entry cap.
@@ -8272,6 +8279,11 @@ development-environment recovery issues, not product tickets; refresh is the doc
   Current period / Entire queue), or make the global behavior unmistakable and add search/filter
   controls inside Review. AC: a user can review exactly the filtered set without navigating through
   unrelated charges, and the header states the scope and count.
+  Expected behavior: opening Review from a filtered ledger should offer an explicit choice between
+  Current view and Entire queue, with the selected scope and denominator in the dialog header. Current
+  view must inherit search, tag/category, member, period, and money-in/out filters; changing scope must
+  be deliberate and reversible. Confirming an item must update only the chosen population and keep the
+  ledger chips, Review count, and next-card navigation in agreement.
 
 - [ ] **C555 [MAJOR][TXN][STATE] The selected period is not stable across navigation and reload.**
   Selecting Aug 2026 while working with August transactions reverted to Jul 2026 after reload or
@@ -8285,6 +8297,11 @@ development-environment recovery issues, not product tickets; refresh is the doc
   opening Categories, returning to Transactions, and reopening the queue. Reuse C499's picker in
   both modes and preserve the current card/session while the child-category form is open. AC: a
   missing category can be created and assigned without losing the review item or its position.
+  Expected behavior: the single-review card should expose New category beside its category picker,
+  open an inline or child form without discarding the current card, and return with the new category
+  selected. Cancel must restore the same card and selection. Saving should create the category once,
+  assign it to the intended transaction scope, and make the new category available in both Review and
+  the ledger without requiring a route reload.
 
 - [ ] **C557 [MAJOR][TXN][CAT] Auto-categorized manual additions have no clear provenance.**
   Leaving Category blank on manual entry still auto-filed descriptions containing terms such as
@@ -8308,6 +8325,10 @@ development-environment recovery issues, not product tickets; refresh is the doc
   correcting a missing category or turning a repeated correction into a rule requires context-losing
   navigation. Add contextual links/actions from Review and make the destination and return path
   explicit. AC: category creation and rule creation return to the same review scope and card.
+  Expected behavior: every cross-page correction action should state its destination, preserve a
+  restorable return token containing route, query, filters, period, sort, selected transaction, and
+  review-card position, and provide a visible Return to Transactions/Review control. Back, Cancel,
+  Save, and browser navigation should not strand the user in a broader or reset dataset.
 
 **Related existing work:** C499 covers the shared category picker; C544/C550 cover consistent
 category ordering and qualified paths; C60 covers the intended inline edit implementation; C497 and
@@ -9193,6 +9214,18 @@ was recreated before ending the pass.
   unlink with an explicit warning, or retain a recoverable tombstone; never silently strand work.
   AC: Delete previews the effect on linked tasks and the post-delete To-do state is deterministic,
   recoverable, and covered by an end-to-end test.
+
+  **Why it looked like silent detachment:** `tasklink.EntityName` returns `ok=false` for an id that
+  no longer resolves, so a task pointing at a deleted transaction simply stops showing its link —
+  no error, no trace, and no way to tell it ever had one.
+  Of the four options the ticket lists (block / cascade / unlink with warning / tombstone), this
+  takes **unlink with an explicit warning**, because the other three are each worse here: blocking
+  makes an unrelated to-do veto a ledger correction; cascading destroys work the user never asked to
+  delete; and a tombstone is a data-model project for a case the undo path already covers. The
+  confirmation now counts the OPEN follow-up tasks that link to the row and says they will lose that
+  link — so the effect on other work is stated before the click rather than discovered after.
+  Recoverability comes free from C620's undo point: restoring the transaction restores the link,
+  because the tasks were never touched.
   Expected behavior: if tasks exist, the confirmation should show their count and titles and offer a
   clearly named policy. The preferred safe policy is to preserve the tasks as unlinked To-do items,
   mark their transaction link as removed, and provide a route to clean them up; deleting tasks should
@@ -9205,6 +9238,16 @@ was recreated before ending the pass.
   previously marked-done C32 context path and turns a one-click correction into manual re-entry.
   Populate the form from the selected transaction's normalized payee/description and category,
   preserve the originating row/filter, and add a served-build regression test.
+
+  **The seeding was there; the form couldn't show it.** The row handler already called
+  `uistate.SetRuleDraft(payee, categoryID)` and the return shortcut already worked (which is why the
+  trip looked right). The rule form consumed the draft in a `UseEffect` — so the assignment happened
+  AFTER the first paint, and the fields the user was looking at had been rendered from the empty
+  initial values.
+  Fixed by SEEDING rather than assigning: the draft is read during render and used as `UseState`'s
+  initial value, so the very first render already carries the payee and category. The effect remains,
+  but only to clear the draft — bookkeeping nobody has to see. Same shape as the C611 finding: a
+  mount effect's state write is not a reliable way to put something on screen in this framework.
   Expected behavior: Match text should use the normalized merchant/payee value while retaining a
   visible explanation of the source transaction. Category to assign should be selected to the current
   category when one exists, with a clear empty state when it does not. Saving or canceling should offer
@@ -9217,6 +9260,18 @@ was recreated before ending the pass.
   disappeared before it could be acted on. Open the receipt workflow with an actual file/select
   control, or disable the action with an honest explanation when receipt capture is unavailable.
   AC: activation always yields a visible, actionable next step or a clearly explained limitation.
+
+  **The picker was clicked but never opened, and the code could not tell.** `pickImageDataURL` built
+  a file input, deliberately left it DETACHED from the document, clicked it, and returned `true`. Its
+  comment assumed a refusal would throw and be caught — browsers do not throw: a click on a detached
+  input is **silently ignored**. So the flow posted "Choose a photo of the receipt to read.", opened
+  nothing, reported no error, and let its own toast expire. C564 had already added the honest-failure
+  paths (nil app, unresolved row, missing key, `noPicker`); none of them could fire because the
+  function reported success.
+  Fixed by attaching the input before clicking — hidden, `tabindex="-1"`, `aria-hidden`, and removed
+  again on `change` or `cancel`, so the page-CSS/focus-trap concern that motivated the detached
+  version never gets a window to apply. This is the shared helper, so every image-import flow that
+  uses it gains the same reliability.
   Expected behavior: opening the action should present Choose receipt, Cancel, supported file types,
   and a visible upload/select control. After selection, show upload/OCR progress, then a preview that
   identifies the transaction and proposed line items before applying anything. Reject unsupported or
@@ -9228,6 +9283,19 @@ was recreated before ending the pass.
   money-out amount can invert totals or create a direction/amount mismatch unless the app explicitly
   models signed amounts. Reject negative input for expense/income quick-add, or normalize direction
   and show the resulting sign before commit; align edit and import validation with the same rule.
+
+  **Took the ticket's second option — normalize the direction and SHOW it — rather than rejecting.**
+  Rejecting would undo C546/C547, which exist because Cam could not correct a mistaken income back
+  into a spend; a typed minus is the gesture people actually use for "money out", and
+  `amountmath.ParseSigned` already resolves it identically across quick-add, the edit form and the
+  recurring form, so the app does explicitly model signed amounts.
+  What was missing was the second half of that sentence. The sign was resolved silently at SAVE time,
+  so "-1" could be entered with **Income** selected and stored as an expense — exactly the
+  direction/amount mismatch this ticket warns about. The kind toggle now follows a typed minus
+  immediately, in the INPUT handler, so the control and the text can never disagree while the user can
+  still see them. Doing it in the input handler is also why it is safe: setting state mid-save is what
+  silently lost writes in C546/C561.
+  Zero stays rejected, as reported and as `ErrZeroAmount` already enforced.
   Expected behavior: Expense and Income forms should accept a positive magnitude only, show the
   resulting signed ledger value according to the selected direction, and keep every Save action
   disabled while the amount is zero, negative, non-numeric, or over the supported precision/range.
@@ -9261,6 +9329,22 @@ was recreated before ending the pass.
   displayed `132` beside rows still from page 1. The control therefore reports a requested page
   that is not the rendered page. Commit on Enter/blur only after validation, update the rows and
   previous/next state atomically, and reset the field to the actual page on failure.
+
+  **Root cause: the jump box read its value from the change event.** It was a controlled input whose
+  single `OnChange` called `e.GetValue()` — the same one-render-late read the rows-per-page control
+  already sidesteps by using buttons, and which the pager's own comment documents ("a controlled
+  select mis-reads its value one render late in this framework"). The handler therefore saw the OLD
+  page, called `OnPage` with it, and nothing moved — while the DOM kept the number the user typed.
+  Not a clamp bug: `pagination.Clamp` and `ScopeChanged` (which zeroes Page before comparing) were
+  both correct, which is why paging by prev/next always worked.
+  Fixed by keeping the typed text in LOCAL state fed by `OnInput`, and committing on Enter or blur
+  after validation. The field shows the draft while one is in flight and the REAL page otherwise, so
+  it can never sit there displaying a page the ledger is not on; junk resets it rather than leaving a
+  number that never took effect.
+  Guard: `ui/pager_jump_wasm_test.go` mounts the real Pager over a 3284-row ledger and drives it as a
+  user does — commit 132, clamp above the last page, clamp below 1, ignore junk, no-op on the current
+  page, and an idle box reading the page actually shown. Verified to FAIL against the reinstated
+  event-value read.
   Expected behavior: entering `5` and pressing Enter should render rows 101-125, set the field to 5,
   enable Previous, and keep Next consistent with the total page count. Blank, fractional, out-of-range,
   or non-numeric values should leave the current page intact and show an inline error. Enter, blur,

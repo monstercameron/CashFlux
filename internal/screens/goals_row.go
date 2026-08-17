@@ -502,6 +502,10 @@ func GoalRow(props goalRowProps) ui.Node {
 			// The savings-pace rail lives INSIDE the card's metadata block (right below the
 			// figures/notes it summarises), not as a detached section underneath the card.
 			goalTrajectoryNode(g, now),
+			// C399: the trajectory projects forward from the plan; this looks back at
+			// whether the plan was actually funded. The projection is only as good as
+			// that, so the two belong together.
+			goalContribHistoryNode(g, now),
 		)
 	} else {
 		var line string

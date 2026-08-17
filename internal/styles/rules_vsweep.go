@@ -215,4 +215,72 @@ func registerVSweep() {
 		gap("0.4rem"),
 	)
 
+	// ─── C399: the goal contribution-history rail ────────────────────────────
+	rule(".goal-hist",
+		marginTop("0.6rem"),
+		paddingTop("0.6rem"),
+		borderTop("1px solid var(--border)"),
+	)
+	rule(".goal-hist-head",
+		display("flex"),
+		flexWrap("wrap"),
+		alignItems("baseline"),
+		justifyContent("space-between"),
+		gap("0.4rem"),
+		marginBottom("0.4rem"),
+	)
+	rule(".goal-hist-bars",
+		display("flex"),
+		flexDirection("column"),
+		gap("0.2rem"),
+	)
+	rule(".goal-hist-row",
+		display("grid"),
+		gridTemplateColumns("4.5rem 1fr auto"),
+		alignItems("center"),
+		gap("0.45rem"),
+		fontSize("0.72rem"),
+	)
+	rule(".goal-hist-month, .goal-hist-amt",
+		color("var(--text-dim)"),
+		whiteSpace("nowrap"),
+	)
+	rule(".goal-hist-amt",
+		textAlign("right"),
+		fontVariantNumeric("tabular-nums"),
+	)
+	rule(".goal-hist-track",
+		position("relative"),
+		height("0.6rem"),
+		borderRadius("999px"),
+		background("var(--surface-2, var(--border))"),
+		overflow("visible"),
+	)
+	rule(".goal-hist-fill",
+		display("block"),
+		height("100%"),
+		borderRadius("999px"),
+		background("var(--accent)"),
+	)
+	// A month that missed its plan is toned down rather than alarmed: this is a
+	// record of what happened, not a warning about what will.
+	rule(".goal-hist-fill.is-short",
+		background("var(--text-faint)"),
+	)
+	// The plan marker sits ON the track, so clearing the line is a glance instead
+	// of a comparison between two bar lengths.
+	rule(".goal-hist-plan",
+		position("absolute"),
+		top("-2px"),
+		bottom("-2px"),
+		width("2px"),
+		background("var(--text)"),
+		opacity("0.5"),
+	)
+	rule(".goal-hist-legend",
+		margin("0.35rem 0 0"),
+		fontSize("0.7rem"),
+		color("var(--text-faint)"),
+	)
+
 }

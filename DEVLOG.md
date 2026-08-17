@@ -1,3 +1,40 @@
+## 2026-08-16 — the cap that was doing two jobs (C398, C399)
+
+Two goals tickets, and the second one turned on a distinction worth writing down.
+
+**C398.** The reviewer complaint was that Compare offered two eligible goals with no explanation of
+the eligibility rule. There was no rule to explain — just `!g.Archived && kind.IsFinancial() &&
+target > 0` inlined in a render function. A filter with no name cannot be described to a reader, so
+naming it was the fix, with a reason per exclusion ordered most- to least-actionable. Telling someone
+to un-archive a habit goal is useless advice; it still would not be comparable.
+
+The second half is the more interesting one. Two columns of figures show what each goal costs. They
+do not show the trade, which is the actual decision: one pot, two goals, and choosing who goes first
+moves both dates. `Race` simulates it month by month rather than solving in closed form, deliberately
+— the handover, where the first goal completes mid-month and the leftover spills to the second, is
+exactly the part a formula gets subtly wrong. `Matters()` then suppresses the whole panel when the
+order changes nothing, because presenting a trade-off the user does not have is worse than silence.
+
+**C399** started as "add a history panel" and turned into a data-model fix. `MaxGoalContributions =
+50` existed so a goal record could not grow without limit, and the fifty-first contribution was
+dropped. That is correct for the log real purpose — undo, which only ever needs the most recent
+entry — and it silently destroyed something else: a goal funded monthly for five years could only
+ever show its last four months. One cap was serving two needs and only one of them noticed.
+
+So entries pushed past the cap now roll up into monthly totals on the goal, bounded at twenty years.
+The detailed log stays exactly as small as undo needs.
+
+The test that earned its keep was the one asserting the series total equals everything contributed.
+My first implementation had detail "win outright" over a roll-up for the same month, on the theory
+that a month in both sources meant a roll-up bug. It does not — the month the log fills up has some
+of its contributions rolled up and the rest still itemized, and that is the normal case, not a bug.
+The rule discarded five real contributions. They sum, and double-counting is impossible by
+construction rather than by a rule: a contribution is rolled up exactly when it leaves the log.
+
+One more decision worth recording: the shortfall total is the sum of per-month shortfalls, not
+planned-minus-actual. A monthly plan is missed month by month, and a generous December does not put
+June back. Netting them would report "on plan" to someone who missed five months out of twelve.
+
 ## 2026-08-16 — the answer that was there a second ago
 
 Cam reported it in one line: the agent's message shows for a second, then disappears. And the second
