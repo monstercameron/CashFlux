@@ -470,6 +470,7 @@ type appReadCaches struct {
 	goals        revCache[domain.Goal]
 	tasks        revCache[domain.Task]
 	holdings     revCache[domain.Holding]
+	realized     revCache[domain.RealizedSale]
 	rules        revCache[rules.Rule]
 	documents    revCache[domain.Document]
 	recurring    revCache[domain.Recurring]
@@ -547,6 +548,15 @@ func (a *App) Holdings() []domain.Holding {
 	return a.reads.holdings.get(a.store.Rev(), func() []domain.Holding {
 		v, err := a.store.ListHoldings()
 		a.logErr("holdings", err)
+		return v
+	})
+}
+
+// RealizedSales returns every recorded disposal (FP-T1d).
+func (a *App) RealizedSales() []domain.RealizedSale {
+	return a.reads.realized.get(a.store.Rev(), func() []domain.RealizedSale {
+		v, err := a.store.ListRealizedSales()
+		a.logErr("realizedsales", err)
 		return v
 	})
 }
@@ -2937,6 +2947,26 @@ func (a *App) PutHolding(h domain.Holding) error {
 	}
 	a.log.Info("holding saved", "id", h.ID, "ticker", h.Ticker)
 	return nil
+}
+
+// PutRealizedSale records a disposal (insert or replace by ID).
+func (a *App) PutRealizedSale(r domain.RealizedSale) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
+	if err := a.store.PutRealizedSale(r); err != nil {
+		return fmt.Errorf("appstate: put realized sale: %w", err)
+	}
+	a.log.Info("realized sale recorded", "id", r.ID, "name", r.Name, "gain", r.GainMinor)
+	return nil
+}
+
+// DeleteRealizedSale removes a recorded disposal by ID.
+func (a *App) DeleteRealizedSale(id string) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
+	return a.del("realizedsale", id, a.store.DeleteRealizedSale)
 }
 
 // DeleteHolding removes an investment holding by ID.

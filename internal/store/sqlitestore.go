@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS transactions (id TEXT PRIMARY KEY, data TEXT NOT NULL
 CREATE TABLE IF NOT EXISTS budgets      (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS goals        (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS holdings     (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS realizedsales (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS balance_snapshots (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS tasks        (id TEXT PRIMARY KEY, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS customfielddefs (id TEXT PRIMARY KEY, data TEXT NOT NULL);
@@ -132,6 +133,9 @@ func (s *SQLiteStore) Load(ds Dataset) error {
 		return err
 	}
 	if err := replaceRows(tx, "goals", ds.Goals, func(g domain.Goal) string { return g.ID }); err != nil {
+		return err
+	}
+	if err := replaceRows(tx, "realizedsales", ds.RealizedSales, func(r domain.RealizedSale) string { return r.ID }); err != nil {
 		return err
 	}
 	if err := replaceRows(tx, "holdings", ds.Holdings, func(h domain.Holding) string { return h.ID }); err != nil {
@@ -281,6 +285,9 @@ func (s *SQLiteStore) Snapshot() (Dataset, error) {
 	}
 	if ds.Goals, err = loadRows[domain.Goal](s.db, "goals"); err != nil {
 		return Dataset{}, err
+	}
+	if ds.RealizedSales, err = loadRows[domain.RealizedSale](s.db, "realizedsales"); err != nil {
+		return ds, err
 	}
 	if ds.Holdings, err = loadRows[domain.Holding](s.db, "holdings"); err != nil {
 		return Dataset{}, err

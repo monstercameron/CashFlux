@@ -15,6 +15,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/portfolio"
+	"github.com/monstercameron/CashFlux/internal/taxlot"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -35,6 +36,12 @@ type holdingRowProps struct {
 	// OnPrice records a new price and the date it was true (FP-T2c). Nil leaves
 	// the row read-only.
 	OnPrice func(h domain.Holding, priceMinor int64, asOf time.Time)
+	// Base is the household's base currency, for the lot and sale forms.
+	Base string
+	// OnSaveHolding persists a holding whose purchase history changed (FP-T1d).
+	OnSaveHolding func(domain.Holding)
+	// OnSell records a disposal and what it left behind (FP-T1d).
+	OnSell func(h domain.Holding, sale taxlot.Sale, remaining []taxlot.Lot, when time.Time, method taxlot.Method)
 }
 
 // holdingRow renders one security position as a card: a security-type badge + name/ticker,
@@ -60,6 +67,9 @@ func holdingRow(props holdingRowProps) ui.Node {
 	onPriceIn := ui.UseEvent(func(v string) { priceS.Set(v) })
 	onAsOfIn := ui.UseEvent(func(v string) { asOfS.Set(v) })
 	cancelPrice := ui.UseEvent(Prevent(func() { editID.Set("") }))
+	sellOpen := uistate.UseHoldingSellOpen()
+	openSell := func() { sellOpen.Set(h.ID) }
+
 	savePrice := ui.UseEvent(Prevent(func() {
 		f, err := strconv.ParseFloat(strings.TrimSpace(priceS.Get()), 64)
 		if err != nil || f < 0 {
@@ -138,6 +148,11 @@ func holdingRow(props holdingRowProps) ui.Node {
 						Attr("data-testid", "holding-price-cancel-"+h.ID),
 						OnClick(cancelPrice), uistate.T("action.cancel"))),
 			)),
+			// FP-T1d: purchase history, then the sale form it makes possible.
+			ui.CreateElement(holdingLotsPanel, holdingLotsProps{
+				H: h, Sym: props.Sym, Dec: props.Dec, Base: props.Base, OnSave: props.OnSaveHolding}),
+			ui.CreateElement(holdingSellForm, holdingSellProps{
+				H: h, Sym: props.Sym, Dec: props.Dec, Base: props.Base, OnSell: props.OnSell}),
 			Div(css.Class("inv-weight"),
 				Div(css.Class("inv-weight-track"),
 					Div(css.Class("inv-weight-fill"), Attr("style", fmt.Sprintf("width:%.1f%%", w)))),
@@ -163,6 +178,14 @@ func holdingRow(props holdingRowProps) ui.Node {
 						Title(uistate.T("investments.updatePrice")),
 						OnClick(openPrice),
 						uistate.T("investments.updatePrice")),
+					// FP-T1d: recording a sale comes BEFORE closing in the menu,
+					// because it is what closing should almost always have been —
+					// closing throws the gain away, recording keeps it.
+					Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+						Attr("data-testid", "holding-sell-"+h.ID),
+						Title(uistate.T("sell.recordSale")),
+						OnClick(openSell),
+						uistate.T("sell.recordSale")),
 					Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
 						Attr("data-testid", "holding-close-"+h.ID),
 						Title(uistate.T("investments.closePosition")),

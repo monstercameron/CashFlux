@@ -1452,6 +1452,52 @@ type BalanceSnapshot struct {
 // fractional because partial shares are common. No schema migration is needed
 // — the "holdings" table is created on first write alongside all other entity
 // tables, and JSON round-trips automatically.
+// Lot is one dated acquisition of shares at a known cost (FP-T1d).
+type Lot struct {
+	ID string `json:"id"`
+	// Date is when the shares were acquired; it sets the holding period.
+	Date time.Time `json:"date"`
+	// Shares is how many were bought (fractional allowed — dividend reinvestment
+	// produces fractional lots constantly).
+	Shares float64 `json:"shares"`
+	// CostBasisMinor is what those shares cost, in minor units, including any
+	// commission the household chose to capitalize.
+	CostBasisMinor int64 `json:"costBasisMinor"`
+	// Note is free text — "employer match", "DRIP", a broker confirmation number.
+	Note string `json:"note,omitempty"`
+}
+
+// RealizedSale records a disposal and what it realized (FP-T1d).
+//
+// Kept as its own entity rather than as an event on the holding, because the
+// holding is routinely GONE afterwards — selling everything used to delete the
+// position and take the only record of the sale with it. A realized gain is
+// needed in April, months after the position stopped existing.
+type RealizedSale struct {
+	ID        string `json:"id"`
+	AccountID string `json:"accountId"`
+	// HoldingID is the position sold from. It may point at a holding that no
+	// longer exists, which is why Name and Ticker are copied in rather than
+	// looked up: a sale that cannot say what was sold is not a record.
+	HoldingID string    `json:"holdingId,omitempty"`
+	Ticker    string    `json:"ticker,omitempty"`
+	Name      string    `json:"name"`
+	Date      time.Time `json:"date"`
+	Shares    float64   `json:"shares"`
+
+	ProceedsMinor int64 `json:"proceedsMinor"`
+	BasisMinor    int64 `json:"basisMinor"`
+	GainMinor     int64 `json:"gainMinor"`
+	// ShortTermGainMinor and LongTermGainMinor split the gain by holding period.
+	// One disposal routinely spans both.
+	ShortTermGainMinor int64 `json:"shortTermGainMinor,omitempty"`
+	LongTermGainMinor  int64 `json:"longTermGainMinor,omitempty"`
+	// Method records HOW basis was chosen (fifo / lifo / hifo). Stored because
+	// the choice changes the number, and a gain figure whose method is unknown
+	// cannot be reproduced or defended.
+	Method string `json:"method,omitempty"`
+}
+
 type Holding struct {
 	ID        string `json:"id"`
 	AccountID string `json:"accountId"` // investment account this holding belongs to
@@ -1492,6 +1538,19 @@ type Holding struct {
 	// classified. Additive; existing holdings load with both empty.
 	Sector string `json:"sector,omitempty"`
 	Region string `json:"region,omitempty"`
+
+	// Lots are the dated acquisitions that make up this position (FP-T1d).
+	//
+	// Empty means the household has not recorded a purchase history, which is a
+	// real and common state — not an error, and not a claim that the shares cost
+	// nothing. A sale can only relieve basis from lots that exist, so a position
+	// with no lots reports that it cannot compute a realized gain rather than
+	// inventing one.
+	//
+	// Shares bought on different days at different prices are not
+	// interchangeable: which ones were sold changes both the tax owed and whether
+	// it is taxed at the long-term rate.
+	Lots []Lot `json:"lots,omitempty"`
 
 	// PriceAsOf is when CurrentPriceMinorPerShare was last known to be right
 	// (FP-T2c). The zero time means NO DATE RECORDED, which surfaces as exactly

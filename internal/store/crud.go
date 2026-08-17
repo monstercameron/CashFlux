@@ -249,6 +249,24 @@ func (s *SQLiteStore) ListHoldings() ([]domain.Holding, error) {
 	return loadRows[domain.Holding](s.db, "holdings")
 }
 
+// --- Realized sales (FP-T1d) ---
+
+// PutRealizedSale persists one recorded disposal, inserting or replacing by ID.
+func (s *SQLiteStore) PutRealizedSale(r domain.RealizedSale) error {
+	return putJSON(s.db, "realizedsales", r.ID, r)
+}
+
+// DeleteRealizedSale removes a recorded disposal by ID. Returns true if a row
+// was deleted.
+func (s *SQLiteStore) DeleteRealizedSale(id string) (bool, error) {
+	return deleteRow(s.db, "realizedsales", id)
+}
+
+// ListRealizedSales returns every recorded disposal in insertion order.
+func (s *SQLiteStore) ListRealizedSales() ([]domain.RealizedSale, error) {
+	return loadRows[domain.RealizedSale](s.db, "realizedsales")
+}
+
 // --- Tasks ---
 
 func (s *SQLiteStore) PutTask(t domain.Task) error { return putJSON(s.db, "tasks", t.ID, t) }

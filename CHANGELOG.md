@@ -7,6 +7,19 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Investments records what a sale actually earned (FP-T1d).** Positions now carry a purchase history —
+  what you bought, when, and what it cost — and "Record a sale" works out the real gain from it, split
+  into short-term and long-term, with the answer previewed before you commit it. You choose which shares
+  were sold (oldest first, most expensive first, newest first); it changes the number by a lot, so the
+  app will not choose for you. Selling used to just delete the position and throw the gain away.
+- **Sales are kept after the position is gone.** A disposal is its own record, with the name and ticker
+  copied in, because the gain is needed in April and the holding usually is not there by then.
+
+### Fixed
+- **A sale cannot be recorded from an incomplete purchase history.** It would have left the position
+  holding only the shares its lots accounted for, silently losing the rest.
+
+### Added
 - **Loans can show every payment (FP-T2a).** "Show all N payments" opens the full amortization schedule:
   each payment's date, how much goes to the balance and how much to interest, and what is left. On a
   long loan the first payments are almost all interest, which no single total conveys. With an extra

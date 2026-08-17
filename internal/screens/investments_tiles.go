@@ -14,9 +14,11 @@ import (
 	"github.com/monstercameron/CashFlux/internal/chartspec"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/portfolio"
+	"github.com/monstercameron/CashFlux/internal/taxlot"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -404,6 +406,53 @@ func investSecuritiesWidget(props investPanelProps) ui.Node {
 		uistate.BumpDataRevision()
 	}
 
+	// FP-T1d: persist a changed purchase history.
+	onSaveHolding := func(h domain.Holding) {
+		if err := app.PutHolding(h); err != nil {
+			uistate.PostNotice(err.Error(), true)
+			return
+		}
+		uistate.BumpDataRevision()
+	}
+
+	// FP-T1d: record a disposal. The sale is written FIRST, because it is the
+	// record that has to survive — the position it came from is routinely deleted
+	// a line later, and a crash between the two should lose the position, not the
+	// only account of what it earned.
+	onSell := func(h domain.Holding, sale taxlot.Sale, remaining []taxlot.Lot,
+		when time.Time, method taxlot.Method) {
+
+		rec := domain.RealizedSale{
+			ID: id.NewWithPrefix("sale"), AccountID: h.AccountID, HoldingID: h.ID,
+			// Name and ticker are COPIED, not referenced: the holding is usually
+			// gone afterwards, and a sale that cannot say what was sold is not a
+			// record of anything.
+			Ticker: h.Ticker, Name: h.Name, Date: when, Shares: sale.SharesSold,
+			ProceedsMinor: sale.ProceedsMinor, BasisMinor: sale.BasisMinor,
+			GainMinor:     sale.GainMinor,
+			ShortTermGainMinor: sale.ShortTermGainMinor,
+			LongTermGainMinor:  sale.LongTermGainMinor,
+			Method:             string(method),
+		}
+		if err := app.PutRealizedSale(rec); err != nil {
+			uistate.PostNotice(err.Error(), true)
+			return
+		}
+		next := portfolio.ApplyLots(h, remaining)
+		if next.Shares <= 0 {
+			if err := app.DeleteHolding(h.ID); err != nil {
+				uistate.PostNotice(err.Error(), true)
+				return
+			}
+		} else if err := app.PutHolding(next); err != nil {
+			uistate.PostNotice(err.Error(), true)
+			return
+		}
+		uistate.PostNotice(uistate.T("sell.recorded", h.Name,
+			fmtSignedMoney(sale.GainMinor, v.Sym, v.Dec)), false)
+		uistate.BumpDataRevision()
+	}
+
 	var listBody ui.Node
 	if len(v.Securities) == 0 {
 		listBody = P(css.Class("empty"), Attr("data-testid", "invest-no-securities"), uistate.T("investments.emptyHoldings"))
@@ -414,7 +463,8 @@ func investSecuritiesWidget(props investPanelProps) ui.Node {
 			if total != 0 {
 				weight = float64(portfolio.HoldingValueMinor(portfolio.FromDomain(h))) / float64(total) * 100
 			}
-			return ui.CreateElement(holdingRow, holdingRowProps{H: h, Sym: v.Sym, Dec: v.Dec, WeightPct: weight, OnClose: onClose, OnDelete: onDelete, OnPrice: onPrice})
+			return ui.CreateElement(holdingRow, holdingRowProps{H: h, Sym: v.Sym, Dec: v.Dec, WeightPct: weight, OnClose: onClose, OnDelete: onDelete, OnPrice: onPrice,
+				Base: v.Base, OnSaveHolding: onSaveHolding, OnSell: onSell})
 		})
 		listBody = Div(css.Class("inv-list"), rows)
 	}

@@ -269,7 +269,7 @@ func Plan(accountID string, existing []domain.Holding, rows []Parsed, newID func
 		}
 		if cur, ok := byKey[r.Key()]; ok {
 			next := applyTo(cur, r)
-			if next == cur {
+			if sameImportedFields(next, cur) {
 				out = append(out, Change{Action: ActionSkip, Row: r, Before: cur,
 					Reason: "already matches"})
 				continue
@@ -293,6 +293,25 @@ func Plan(accountID string, existing []domain.Holding, rows []Parsed, newID func
 // carried. A blank cell leaves the existing value alone — brokerage exports
 // routinely omit cost basis, and treating that as zero would report every
 // position as pure gain.
+// sameImportedFields reports whether an import would leave a holding unchanged.
+//
+// It compares the fields applyTo can touch rather than the whole struct: a
+// holding also carries tax lots and a price date that no import row sets, and
+// `==` on the struct stopped compiling the moment lots arrived. Comparing only
+// what the import writes is also the more honest test — "already matches" should
+// mean "this row has nothing to add", not "every unrelated field happens to be
+// equal too".
+func sameImportedFields(a, b domain.Holding) bool {
+	return a.Ticker == b.Ticker &&
+		a.Name == b.Name &&
+		a.Shares == b.Shares &&
+		a.CostBasisMinor == b.CostBasisMinor &&
+		a.CurrentPriceMinorPerShare == b.CurrentPriceMinorPerShare &&
+		a.AssetClass == b.AssetClass &&
+		a.Sector == b.Sector &&
+		a.Region == b.Region
+}
+
 func applyTo(h domain.Holding, r Parsed) domain.Holding {
 	if r.Ticker != "" {
 		h.Ticker = r.Ticker

@@ -1223,9 +1223,51 @@ bottom-up per SDLC.
   disable the reading's window rather than the chart's, or drop 1M. Do NOT lower the floor —
   annualizing three weeks multiplies noise by the same factor it multiplies the return, which is
   exactly what the floor prevents.
-- [ ] **FP-T1d — Realized gains + tax lots on sale.** "Close position" just deletes the holding
+- [x] **FP-T1d — Realized gains + tax lots on sale.** "Close position" just deletes the holding
   (`investments_tiles.go:292`). Model per-lot acquisitions (qty/date/price), relieve basis on sale,
   compute realized P&L + short/long-term holding period. Unblocks investment tax reporting.
+  — DONE (2026-08-17). New pure `internal/taxlot`, `domain.Lot` on the holding, a `domain.RealizedSale`
+  entity with its own table, a purchase-history panel and a record-a-sale form that previews the gain
+  before committing it.
+
+  The premise: shares bought on different days at different prices are NOT interchangeable. Which two
+  hundred of five hundred were sold changes both the tax owed and whether it is taxed at the long-term
+  rate. Averaging is not a simplification here, it is a different and wrong answer.
+
+  REFUSES RATHER THAN INVENTS, in three places. No lots at all → says there is no cost to subtract. Lots
+  covering only part of the POSITION → refuses. Selling more shares than the lots account for → refuses.
+  A zero basis is not "we do not know"; it is a claim that every dollar received was profit, which is
+  the largest possible tax bill stated with the confidence of a correct one.
+
+  THE METHOD IS THE USER'S CHOICE (oldest-first / most-expensive-first / newest-first) and it is worth
+  real money — on the sample, the same 10-share sale is a $3,000 long-term gain oldest-first and a
+  $1,000 short-term LOSS most-expensive-first. An app that silently picked one would be making a tax
+  decision on the household's behalf. The method is stored on the sale, because a gain figure whose
+  method is unknown cannot be reproduced or defended.
+
+  `LongTerm` lives on the PIECE, never on the sale: one disposal routinely spans both periods, and a
+  single flag would be a coin-flip presented as a fact. And "long-term" is MORE than a year, not at
+  least — a sale on the anniversary is short-term, and the off-by-one is the entire rule.
+
+  The gain is PREVIEWED before saving. A realized gain is not reversible by editing a number afterwards;
+  it is a tax fact about a year, and the figure moves sharply with the method, so the reader must see
+  the consequence while the choice is still a choice.
+
+  `RealizedSale` is its own entity, not an event on the holding, and copies the name and ticker in
+  rather than referencing them: the position is usually GONE afterwards, and a sale that cannot say what
+  was sold is not a record. The sale is written BEFORE the holding is updated, so a failure between the
+  two loses the position rather than the only account of what it earned.
+
+  BUG FOUND BY THE BROWSER PROBE, and it was a data loss: with lots covering 20 of a 412-share position,
+  a sale was allowed, and `ApplyLots` re-derives the position from what its lots say is left — so 392
+  shares vanished with nothing on screen to explain it. The sell form now requires the lots to cover the
+  whole position. (Re-deriving is still right: shares, cost basis and lots are three statements about
+  one thing, and letting a sale update them independently is how a position ends up holding 40 shares
+  whose lots say 60.)
+
+  VERIFIED IN A BROWSER: 14/14 end to end — record two purchases, watch the refusal while the history is
+  partial, complete it, see the gain and its short/long split, switch the method and watch the answer
+  invert, record the sale, and confirm the position drops to exactly what the remaining lots say.
 - [ ] **FP-T1e — Tax depth for the small-business persona.** Today a category is a single `Deductible`
   bool. Add (1) Schedule C line taxonomy (`TaxLine` on Category + grouped export), (2) realized
   capital-gains report (needs FP-T1d), (3) estimated quarterly tax (income × rate + safe-harbor). Quicken's

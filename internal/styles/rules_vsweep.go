@@ -835,4 +835,53 @@ func registerVSweep() {
 		textAlign("left"),
 	)
 
+	// ─── FP-T1d: purchase history + the sale form ────────────────────────────
+	rule(".lot-wrap",
+		marginTop("0.5rem"),
+	)
+	rule(".lot-panel",
+		marginTop("0.4rem"),
+		padding("0.5rem 0.6rem"),
+		border("1px solid var(--border)"),
+		borderRadius("var(--radius-md, 8px)"),
+	)
+	rule(".lot-row",
+		display("grid"),
+		gridTemplateColumns("7rem 5rem 7rem 1fr auto"),
+		alignItems("center"),
+		gap("0.4rem"),
+		padding("0.15rem 0"),
+		fontSize("var(--type-13)"),
+		fontVariantNumeric("tabular-nums"),
+	)
+	rule(".lot-add",
+		display("grid"),
+		gridTemplateColumns("repeat(auto-fit, minmax(8rem, 1fr))"),
+		alignItems("end"),
+		gap("0.5rem"),
+		marginTop("0.5rem"),
+	)
+	rule(".sell-form",
+		display("grid"),
+		gridTemplateColumns("repeat(auto-fit, minmax(9rem, 1fr))"),
+		gap("0.5rem"),
+		marginTop("0.6rem"),
+		padding("0.6rem"),
+		border("1px solid var(--border)"),
+		borderRadius("var(--radius-md, 8px)"),
+	)
+	// The preview and the actions span the whole form: the consequence of the
+	// choice above should not sit in a column beside it.
+	rule(".sell-preview, .sell-actions",
+		gridColumn("1 / -1"),
+	)
+	rule(".sell-actions",
+		display("flex"),
+		gap("0.5rem"),
+	)
+	rule(".sell-gain",
+		margin("0"),
+		fontSize("1rem"),
+	)
+
 }

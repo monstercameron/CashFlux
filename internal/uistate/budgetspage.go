@@ -252,6 +252,14 @@ func UseInvestAddOpen() state.Atom[bool] { return state.UseAtom("invest:addOpen"
 // background update silently reopened — costs more than the answer is worth.
 func UseLoanScheduleOpen() state.Atom[string] { return state.UseAtom("loans:scheduleOpen", "") }
 
+// UseHoldingLotsOpen returns the shared atom naming the holding whose purchase
+// history (tax lots) is expanded, "" for none (FP-T1d).
+func UseHoldingLotsOpen() state.Atom[string] { return state.UseAtom("invest:lotsOpen", "") }
+
+// UseHoldingSellOpen returns the shared atom naming the holding being sold, ""
+// for none (FP-T1d).
+func UseHoldingSellOpen() state.Atom[string] { return state.UseAtom("invest:sellOpen", "") }
+
 // UseHoldingPriceEdit returns the shared atom naming the holding whose price is
 // being edited ("" = none), plus the draft price and as-of date (FP-T2c).
 //

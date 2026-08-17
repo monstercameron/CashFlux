@@ -1,3 +1,48 @@
+## 2026-08-17 - what a sale actually earned (FP-T1d)
+
+Selling a position used to delete it. The unrealized gain went with it, so the one figure a household
+needs in April - and the only one this app was ever in a position to compute - was the one it threw
+away.
+
+The premise the whole feature rests on: shares bought on different days at different prices are NOT
+interchangeable. Which two hundred of five hundred were sold changes both the tax owed and whether it
+is taxed at the long-term rate. Averaging is not a simplification here, it is a different and wrong
+answer.
+
+**It refuses rather than invents, in three places.** No lots at all. Lots covering only part of the
+position. More shares sold than the lots account for. In each case the answer is "there is no cost to
+work from", never a zero basis - because a zero basis is not "we do not know", it is a claim that every
+dollar received was profit, which is the largest possible tax bill delivered with the confidence of a
+correct one.
+
+**The method is the user's choice and it is worth real money.** On the sample, the same 10-share sale
+is a $3,000 long-term gain oldest-first and a $1,000 short-term LOSS most-expensive-first. An app that
+silently picked one would be making a tax decision on someone's behalf without saying so. The method is
+stored on the sale: a gain figure whose method is unknown cannot be reproduced or defended.
+
+**Long-term lives on the piece, not the sale.** One disposal routinely spans both periods, and a single
+flag would be a coin-flip presented as a fact. And it is MORE than a year, not at least - a sale on the
+anniversary is short-term, and that off-by-one is the entire rule.
+
+**The gain is previewed before saving.** A realized gain is not reversible by editing a number
+afterwards; it is a tax fact about a year. The figure moves sharply with the method, so the reader has
+to see the consequence while the choice is still a choice.
+
+**The sale is its own entity, written first.** It copies the name and ticker in rather than referencing
+the holding, because the holding is usually gone afterwards and a sale that cannot say what was sold is
+not a record. And it is persisted before the position is updated, so a failure between the two loses
+the position rather than the only account of what it earned.
+
+The browser probe found a data loss. With lots covering 20 of a 412-share position, the sale was
+allowed - and `ApplyLots` re-derives the position from what its lots say is left, so 392 shares
+vanished with nothing on screen to explain it. The sell form now requires full coverage.
+
+Worth being clear about why I did not fix it the other way: re-deriving shares and basis from the lots
+is correct. Shares, cost basis and lots are three statements about the same thing, and letting a sale
+update them independently is how a position ends up holding 40 shares whose lots say 60 - a
+disagreement nothing downstream can resolve, because both numbers look equally authoritative. The bug
+was allowing a sale from a history that could not support it, not the re-derivation.
+
 ## 2026-08-17 - the schedule, and a term that forgot itself (FP-T2a)
 
 Two halves, and the smaller one was the more serious.
