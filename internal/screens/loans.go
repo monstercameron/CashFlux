@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/actionpreview"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -288,6 +289,56 @@ func loanCard(props loanCardProps) ui.Node {
 		Span(css.Class("t-caption", tw.TextDim), uistate.T("loans.extraPerMonth")),
 	)
 
+	// WF6: the extra payment as a before-and-after across every figure it moves,
+	// including the ones it does not. The savings tiles below say what improves;
+	// this says what the action DOES, costs included, which is the difference
+	// between a decision aid and an advertisement.
+	var previewNode ui.Node = Fragment()
+	if hasExtra && len(extraRows) > 0 {
+		pv := actionpreview.Build([]actionpreview.Metric{
+			{Name: uistate.T("preview.mInterest"), Before: baseTotalInterest,
+				After: extraTotalInterest, Goodness: actionpreview.LowerBetter,
+				DisplayBefore: fmtMoney(baseTotalInterest), DisplayAfter: fmtMoney(extraTotalInterest)},
+			{Name: uistate.T("preview.mMonths"), Before: int64(len(baseRows)),
+				After: int64(len(extraRows)), Goodness: actionpreview.LowerBetter},
+			// The cost. A preview that omits what leaves the account each month is
+			// the advertisement, not the decision aid.
+			{Name: uistate.T("preview.mMonthly"), Before: baseMonthlyPayment,
+				After: baseMonthlyPayment + extraMinor, Goodness: actionpreview.LowerBetter,
+				DisplayBefore: fmtMoney(baseMonthlyPayment),
+				DisplayAfter: fmtMoney(baseMonthlyPayment + extraMinor)},
+			// Stated as unchanged rather than omitted: its absence would be
+			// indistinguishable from nobody having checked.
+			{Name: uistate.T("preview.mBalance"), Before: balance, After: balance,
+				Goodness: actionpreview.LowerBetter},
+		})
+		rows := make([]ui.Node, 0, len(pv.Changed))
+		for _, c := range pv.Changed {
+			before, after := c.Metric.DisplayBefore, c.Metric.DisplayAfter
+			if before == "" {
+				before, after = strconv.FormatInt(c.Metric.Before, 10), strconv.FormatInt(c.Metric.After, 10)
+			}
+			tone := tw.TextDim
+			switch c.Direction {
+			case actionpreview.DirectionWorse:
+				tone = tw.TextWarn
+			case actionpreview.DirectionBetter:
+				tone = tw.TextUp
+			}
+			rows = append(rows, P(css.Class("t-caption", tone),
+				Attr("data-testid", "loan-preview-row-"+a.ID),
+				uistate.T("preview.row", c.Metric.Name, before, after)))
+		}
+		if len(pv.Unchanged) > 0 {
+			rows = append(rows, P(css.Class("t-caption", tw.TextFaint),
+				Attr("data-testid", "loan-preview-unchanged-"+a.ID),
+				uistate.T("preview.unchanged", strings.Join(pv.Unchanged, ", "))))
+		}
+		previewNode = Div(css.Class("card-inset", tw.Mt2), Attr("data-testid", "loan-preview-"+a.ID),
+			Div(css.Class("t-caption", tw.TextDim), uistate.T("preview.title")),
+			Fragment(rows))
+	}
+
 	var savingsNode ui.Node = Fragment()
 	if hasExtra && len(extraRows) > 0 {
 		savingsNode = Div(css.Class("card-inset", tw.Flex, tw.FlexCol, tw.Gap2, tw.Mt2),
@@ -383,6 +434,7 @@ func loanCard(props loanCardProps) ui.Node {
 			summaryNode,
 			trustNode,
 			extraRow,
+			previewNode,
 			savingsNode,
 			scheduleNode,
 		),

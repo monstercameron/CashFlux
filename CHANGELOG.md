@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Loans preview what an extra payment would actually do (WF6).** Proposing one now shows each figure it
+  moves, before and after — with what it costs you each month listed first, ahead of what it saves — and
+  states plainly what it leaves alone.
+
+### Added
 - **Loan figures say how far they can be trusted (WF4).** Where a payoff date rests on something missing,
   stale or assumed, the card now names it — "missing the interest rate, so the payoff date is arithmetic
   over a number nobody supplied" — rather than showing a confidence score you cannot act on. A figure

@@ -1,3 +1,35 @@
+## 2026-08-17 - a preview that leads with the good news is an advertisement (WF6)
+
+WF6 calls itself "the connective tissue that makes recommendations feel smart". I have re-derived pieces
+of it four or five times this session - the rule-apply confirmation, the restore preview, the sale
+preview, the marginal comparison - so building it as one thing was overdue.
+
+Two rules carry the whole idea, and both are about what a preview is FOR.
+
+Unchanged metrics are stated, not omitted. The ticket's own example ends "goal funding unchanged", and
+that clause is the most important one in it. A preview listing only what moved leaves the reader
+wondering about everything it did not mention, and the absence of a line is indistinguishable from
+nobody having checked. On the sample the preview ends "Unchanged: what you owe today."
+
+Worse things come first. A preview that leads with its improvements is an advertisement; one that leads
+with its costs is a decision aid, and the reader can stop as soon as they have seen the thing that would
+put them off. On the sample, "leaving your account each month: $462.77 to $662.77" leads - ahead of "72
+to 47 months" and "$6,479.28 to $4,135.77 of interest", which are the parts that make the action look
+good.
+
+The third rule is smaller but kept me honest while writing it: direction is declared, never inferred.
+Whether a number going up is good depends entirely on which number it is, and no amount of looking at
+the value tells you. A metric that declares no direction reports as changed with no verdict rather than
+being guessed at.
+
+The package compares and never formats. Formatting a change to a month count and a change to money need
+different knowledge - currencies, locales, units - and putting either in the comparison would drag all
+of it in.
+
+Honest scope: this is the tissue, not the connections. Applying it to allocate, debt strategy,
+cover-all and the smart suggestions, wiring in the system-wide metrics the ticket names (utilization,
+health, runway), and building the Apply / Adjust / Save-as-scenario row are all still ahead.
+
 ## 2026-08-17 - a score you cannot act on is not information (WF4)
 
 WF4 asks for a surface "scoring the reliability of the app's own conclusions", and notes that no

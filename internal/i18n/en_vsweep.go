@@ -782,6 +782,15 @@ var vSweepKeys = Catalog{
 	"trust.inLoanTerm":   "the loan term",
 	"trust.inLoanBalance": "the balance",
 
+	// WF6 — what an action would do, before it does it.
+	"preview.title":     "What this would change",
+	"preview.row":       "%s: %s → %s",
+	"preview.unchanged": "Unchanged: %s.",
+	"preview.mInterest": "total interest",
+	"preview.mMonths":   "months to pay off",
+	"preview.mMonthly":  "leaving your account each month",
+	"preview.mBalance":  "what you owe today",
+
 	// DP-F5a/b — the board's empty lanes, and where a calendar-seeded task lands.
 	"todoboard.addHere":     "+ Add one here",
 	"todoboard.addHereAria": "Add a task in this column",

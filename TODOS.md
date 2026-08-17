@@ -118,10 +118,39 @@ scenario lab (WF2) + universal action preview (WF6) → SMART+ explanations (WF2
   changed), safe-to-spend (three future bills added). Fully local. Generalize E1's attribution engine
   to sit beside every metric; classify each change as timing / behavior / categorization and whether
   it repeats.
-- [ ] **WF6 — Universal Action Preview.** ★ Before applying any recommendation, show its system-wide
+- [~] **WF6 — Universal Action Preview.** ★ Before applying any recommendation, show its system-wide
   consequences, e.g. *"Pay $2,000 to Rewards Card → utilization 59%→48%, health 74→77, runway
   11.0→10.6 mo, debt-free 3 mo earlier, interest saved $X, goal funding unchanged."* Then **Apply ·
   Adjust · Save as scenario**. The connective tissue that makes recommendations feel smart.
+  — THE ENGINE DONE (2026-08-17), applied to the loan extra-payment simulation as its first surface. New
+  pure `internal/actionpreview`.
+
+  TWO RULES CARRY THE WHOLE IDEA.
+
+  UNCHANGED METRICS ARE STATED, NOT OMITTED. The ticket's own example ends "goal funding unchanged", and
+  that clause is not filler — it answers the question the reader is already asking, and its absence is
+  indistinguishable from nobody having checked. On the sample the preview ends "Unchanged: what you owe
+  today."
+
+  WORSE THINGS COME FIRST. A preview that leads with its improvements is an advertisement; one that leads
+  with its costs is a decision aid, and the reader can stop as soon as they have seen the thing that
+  would put them off. On the sample: "leaving your account each month: $462.77 → $662.77" leads, ahead of
+  "months to pay off: 72 → 47" and "total interest: $6,479.28 → $4,135.77".
+
+  DIRECTION IS DECLARED, NEVER INFERRED. Whether a number going up is good depends entirely on which
+  number it is — a rising balance is good, a rising utilization is not, and the value cannot tell you
+  which you have. A metric that declares no direction reports as CHANGED WITH NO VERDICT rather than
+  being guessed at.
+
+  The package COMPARES and never FORMATS: formatting a change to a month count and a change to money
+  need different knowledge, and neither belongs in the comparison. Callers pass display strings through.
+
+  VERIFIED IN A BROWSER: 7/7.
+
+  STILL OPEN, and it is the larger half: applying this to the OTHER recommendation surfaces (allocate,
+  debt strategy, budget cover-all, smart suggestions), the system-wide metrics the ticket names
+  (utilization, health score, runway), and the Apply · Adjust · Save-as-scenario action row. What exists
+  is the connective tissue, not yet the connections.
 
 **Workflow accelerators**
 - [x] **WF7 — Rules Workbench.** ★ Before saving a categorization rule: preview every historical txn it
