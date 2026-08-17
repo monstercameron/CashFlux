@@ -15,6 +15,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/afford"
 	"github.com/monstercameron/CashFlux/internal/ai"
+	"github.com/monstercameron/CashFlux/internal/aicontext"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
@@ -181,7 +182,7 @@ func categoryNames(cats []domain.Category) string {
 // bound to the user's live data, so the model can answer specific questions from
 // real figures instead of guessing. All computation is local; only the short tool
 // results (totals, counts) go back to the model.
-func buildChatTools(app *appstate.App, base string, rates currency.Rates) []chatTool {
+func buildChatTools(app *appstate.App, base string, rates currency.Rates, tier aicontext.ConversationTier) []chatTool {
 	txns := app.Transactions()
 	accounts := app.Accounts()
 	cats := app.Categories()
@@ -1448,6 +1449,7 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates) []chat
 	tools = append(tools, agToolsSandbox(app, base, rates)...)
 	tools = append(tools, agToolsSpotlight(app, base, rates)...)
 	tools = append(tools, agToolsReference(app, base, rates)...)
+	tools = append(tools, agToolsReports(app, base, rates, tier)...)
 	return tools
 }
 

@@ -765,77 +765,52 @@ func Reports() ui.Node {
 	}
 	accent := chartLineColor(uistate.CurrentAccent())
 	flowColors := newRptaFlowColors(accent)
-	var moneyFlows []reports.Flow
-	// Sources → Income (the enhancement: where the money comes FROM).
-	incomeLabel := uistate.T("rpta.nodeIncome")
-	flowColors.hub(incomeLabel)
-	srcCount := 0
+	// The diagram's DATA — which nodes exist, what each is worth, and which
+	// categories sit behind it — is built in the pure reports package, so the
+	// assistant's money_flow tool reads the very ribbons this section draws and
+	// can trace each one back to its transactions. The view only picks colors
+	// and pixels. (Sources → Income → categories/savings; a category named
+	// exactly like the hub is disambiguated there, otherwise it forms a From==To
+	// self-loop the layout drops and the money vanishes from the picture while
+	// the headline still counts it — Cam's UKG paychecks, 2026-07-19.)
+	diagram := reports.BuildMoneyFlow(reports.MoneyFlowInputs{
+		Income:   incomeRows,
+		Spending: rows,
+		Net:      flow.Net(),
+		Name:     nameOf,
+		Labels: reports.MoneyFlowLabels{
+			Income:         uistate.T("rpta.nodeIncome"),
+			OtherIncome:    uistate.T("rpta.nodeOtherIncome"),
+			EverythingElse: uistate.T("rpta.nodeEverythingElse"),
+			Savings:        uistate.T("rpta.nodeSavings"),
+			FromSavings:    uistate.T("rpta.nodeFromSavings"),
+			Disambiguate:   func(n string) string { return uistate.T("rpta.nodeCatDisamb", n) },
+		},
+		TopSources:  rptaFlowTopSources,
+		TopSpending: rptaFlowTopCategories,
+	})
+	moneyFlows := diagram.Flows()
+	for _, n := range diagram.Nodes {
+		switch n.Kind {
+		case reports.FlowIncomeHub:
+			flowColors.hub(n.Label)
+		case reports.FlowIncomeSource:
+			flowColors.source(n.Label)
+		case reports.FlowSpendCategory:
+			flowColors.category(n.Label)
+		case reports.FlowSavings:
+			flowColors.savings(n.Label)
+		case reports.FlowFromSavings:
+			flowColors.deficit(n.Label)
+		default: // the pooled "other income" / "everything else" nodes
+			flowColors.rest(n.Label)
+		}
+	}
 	srcTotal := 0
-	var srcRest int64
-	// A category named exactly like the hub ("Income") used to form a From==To
-	// self-loop, which the sankey layout rightly drops — so a salary categorized
-	// under a category called "Income" silently VANISHED from the graphic while
-	// the headline total still counted it (Cam's UKG paychecks, 2026-07-19). The
-	// label-keyed color map merged the nodes the same way. Disambiguate the
-	// category node's label whenever it collides with the hub's.
-	flowName := func(id string) string {
-		n := nameOf(id)
-		if n == incomeLabel {
-			return uistate.T("rpta.nodeCatDisamb", n)
-		}
-		return n
-	}
 	for _, r := range incomeRows {
-		if r.Amount <= 0 {
-			continue
+		if r.Amount > 0 {
+			srcTotal++
 		}
-		srcTotal++
-		if srcCount < 5 {
-			name := flowName(r.CategoryID)
-			flowColors.source(name)
-			moneyFlows = append(moneyFlows, reports.Flow{From: name, To: incomeLabel, Value: r.Amount})
-			srcCount++
-		} else {
-			srcRest += r.Amount
-		}
-	}
-	if srcRest > 0 {
-		flowColors.rest(uistate.T("rpta.nodeOtherIncome"))
-		moneyFlows = append(moneyFlows, reports.Flow{From: uistate.T("rpta.nodeOtherIncome"), To: incomeLabel, Value: srcRest})
-	}
-	// Income → categories (top 10 + rest) + Savings.
-	catCount := 0
-	var catRest int64
-	for _, r := range rows {
-		v := absMinor(r.Amount)
-		if v == 0 {
-			continue
-		}
-		if catCount < 10 {
-			name := flowName(r.CategoryID)
-			flowColors.category(name)
-			moneyFlows = append(moneyFlows, reports.Flow{From: incomeLabel, To: name, Value: v})
-			catCount++
-		} else {
-			catRest += v
-		}
-	}
-	if catRest > 0 {
-		flowColors.rest(uistate.T("rpta.nodeEverythingElse"))
-		moneyFlows = append(moneyFlows, reports.Flow{From: incomeLabel, To: uistate.T("rpta.nodeEverythingElse"), Value: catRest})
-	}
-	if sav := flow.Net(); sav > 0 {
-		flowColors.savings(uistate.T("rpta.nodeSavings"))
-		moneyFlows = append(moneyFlows, reports.Flow{From: incomeLabel, To: uistate.T("rpta.nodeSavings"), Value: sav})
-	} else if def := -sav; def > 0 {
-		// Overspending: without an explicit inflow the hub bar silently grows to
-		// the expense total ("Income · $31,125" while income was $22,820) and the
-		// gap is invisible. Name it — a "Drawn from savings" ribbon feeds the hub
-		// so inflow equals outflow and the deficit shows in the picture, not just
-		// the caption's negative savings rate.
-		defLbl := uistate.T("rpta.nodeFromSavings")
-		flowColors.deficit(defLbl)
-		moneyFlows = append(moneyFlows, reports.Flow{From: defLbl, To: incomeLabel, Value: def})
 	}
 	per100Dot := func(color string) ui.Node {
 		return Span(css.Class("rpta-flow-dot", "rpta-cat-dot"), Attr("aria-hidden", "true"), Style(map[string]string{"background": color}))

@@ -51,6 +51,15 @@ var rptaSrcPalette = []string{
 	"#5b9aa9", "#6b87b8", "#9a8fb8", "#b8935b", "#8fa06b",
 }
 
+// How many ribbons the money-flow diagram names before pooling the rest into
+// one node. A diagram with forty ribbons is a texture, not a picture. The
+// assistant's money_flow tool reads the same caps, so what it describes is what
+// the user is looking at.
+const (
+	rptaFlowTopSources    = 5
+	rptaFlowTopCategories = 10
+)
+
 // The report's semantic tones — resolved hex twins of the theme's --up/--warn/
 // --down fallbacks, for SVG strokes and chart props that can't take a CSS var.
 const (

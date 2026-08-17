@@ -6,6 +6,28 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **The assistant can read the whole report, follow the money-flow diagram, and open any figure down to
+  its transactions (C690).** Ask about anything on a report page and the answer now comes from the report
+  itself rather than from something adjacent that had to be re-derived: all 24 sections — the money-flow
+  diagram, spending and income by category, movers, trends, payees, tags, people, weekdays, custom fields,
+  month-by-month, savings rate, statistics, no-spend days, runway, cost of money, net worth, investment
+  performance, deductibles and the tax roll-up — over any window you can name or date. Every row of them
+  opens: ask what a figure is made of and you get the exact transactions behind it, including which
+  categories are pooled inside "Everything else", so the aggregate is never something you have to take on
+  faith. And having found the one row that is wrong, the assistant can now fix that row — recategorize it,
+  correct the date or amount, reassign it, retag it, or flip it between money in and money out — instead of
+  only being able to change everything matching a phrase. Single-row edits state exactly which fields they
+  touch before you approve them, and they can be undone from Activity. Under the aggregates-only privacy
+  level the sections that name individual merchants, and the tracers themselves, are withheld rather than
+  merely discouraged.
+
+### Changed
+- **The money-flow diagram's data moved out of the view (C690).** Which nodes exist, what each is worth and
+  which categories sit behind it are now computed in the pure reports layer, so the picture the Annual
+  Review draws and the figures the assistant quotes cannot drift apart — they are the same computation. The
+  diagram renders identically; what changed is that it can now be queried.
+
 ### Fixed
 - **Reports and budgets say when transfer-shaped rows are inflating them (C672).** Rows that look like money
   moved between your own accounts, but were never linked, count as income and spending — and now the report

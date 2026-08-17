@@ -1,3 +1,60 @@
+## 2026-08-17 - the report was visible and unqueryable (C690)
+
+Cam asked for the agent to have "all of the reports sections and their transaction traces", and to be able
+to read the money-flow diagram. Reading the code first made clear those are one problem, not two.
+
+The assistant had 46 tools and not one of them touched /reports. It could total a category and list
+balances, so a question about a figure on a report page got answered by re-deriving something ADJACENT to
+that figure - a number that is plausibly close and computed a different way. That is the worst failure mode
+for this app: the user is looking at $1,725 and being told $1,690, with no way to tell which is wrong.
+
+The money-flow diagram was worse than absent. Its node/edge construction lived in reports_annual.go, inside
+the wasm view, seventy lines of it. So the one picture that explains where the money went existed only as
+pixels. Extracting BuildMoneyFlow into the pure layer was the enabling move, and it pays for itself twice:
+the view now only chooses colors, and the same function answers the tool. The diagram renders identically,
+which was the constraint I held myself to - I kept the edge ORDER exactly as it was, including the deliberate
+oddity that the "drawn from savings" ribbon is appended last even though it is an income-side edge, because
+LayoutSankey stacks a column in first-appearance order and that placement is load-bearing.
+
+The design rule for the sections was: one computation per figure. Every section calls the same pure reports
+function the screen calls. There is no second implementation to drift.
+
+The rule for traces was harder and matters more. A report row is an aggregate, and an aggregate the user
+cannot open is a claim they have to take on faith. So every section carries a Trace that resolves one of its
+rows back to the actual transactions - with ids. The pooled nodes are the reason MoneyFlowNode carries
+CategoryIDs at all: "Everything else" is six categories wearing one label, and a trace that could not name
+them would be describing a bucket as if it were a thing.
+
+Three things I got wrong and the tests caught:
+
+The payee traces keyed on t.Payee. TopPayees, PayeeTrends and LargestExpenses all group by t.Desc. So the
+row label the model reads off a section is a description, and my tracer would have failed to open the very
+line just printed - the exact failure the whole feature exists to prevent. Now it matches description first
+and payee after, because a person asking about "Publix" means the merchant whatever the ledger filed it
+under.
+
+The privacy tier. Sections like top_payees and largest_expenses name individual merchants, and the
+aggregates-only promise is enforced by filtering DATA, not by prompt wording. ToolAllowed keys off tool
+names, which cannot express "this section but not that one", so the tier is now threaded into
+buildChatTools and the merchant-naming sections are withheld at the source - not listed, not readable. The
+tracers went into DetailToolNames alongside list_transactions.
+
+And the i18n guard flagged 24 hardcoded Title: strings in the section catalog. It was right to flag the
+field name and I was wrong to have the field: those strings are model-facing protocol labels, like every
+tool description in ag_*.go, and the lookup already normalized "spending by category" onto the id. Renaming
+the field to dodge the linter would have been gaming it. Deleting it was the honest fix.
+
+update_transaction is the smallest tool here and the one Cam actually needed. Every existing write tool
+addresses rows by a payee substring, which is right for "categorize everything from Trader Joe's" and wrong
+for "this one deposit is actually a transfer". Tracing a figure to its rows and then not being able to touch
+one of them is half a feature. It takes an id, refuses an ambiguous prefix rather than editing the first
+match, and resolves amount and direction together so "make this $40" can never silently flip an expense into
+income.
+
+Next: the section catalog covers the /reports surface. The Annual Review's narrative sections (what is
+strong, what to watch, the plan) are still assistant-invisible except through the per-section "Ask AI"
+button, which seeds a prompt rather than exposing data.
+
 ## 2026-08-17 - a flag that lies is worse than no flag (C672)
 
 The detector and the repair path both existed by the time I got here. What was missing was the diagnostic

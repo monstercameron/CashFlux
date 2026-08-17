@@ -174,6 +174,18 @@ var rules = map[string]rule{
 		// A merge removes rows; Activity records it, but the removed rows are gone.
 		reversible: false,
 	},
+	"update_transaction": {
+		reads: fixed(read("the one transaction being edited, and your categories and people to place it")),
+		writes: func(a map[string]any) []Access {
+			return []Access{{
+				Verb:   VerbChange,
+				Entity: "transaction",
+				Count:  1,
+				Scope:  editedFields(a),
+			}}
+		},
+		reversible: true,
+	},
 	"delete_transaction": {
 		reads: fixed(read("the transaction being deleted")),
 		writes: func(a map[string]any) []Access {
@@ -256,6 +268,45 @@ func scopePhrase(args map[string]any, key, format string) string {
 		return ""
 	}
 	return fmt.Sprintf(format, v)
+}
+
+// editedFields names WHICH fields of a record an edit call touches, in the
+// user's own words. A single-record edit is otherwise the least legible kind of
+// approval — "changes 1 transaction" is true of correcting a typo and of
+// rewriting the amount, and those are not the same decision.
+func editedFields(args map[string]any) string {
+	labels := []struct{ key, label string }{
+		{"category", "its category"},
+		{"payee", "its payee"},
+		{"description", "its description"},
+		{"date", "its date"},
+		{"amount", "its amount"},
+		{"direction", "whether it is money in or money out"},
+		{"member", "who it belongs to"},
+		{"tags", "its tags"},
+		{"cleared", "whether it has cleared"},
+	}
+	var named []string
+	for _, f := range labels {
+		if v, ok := args[f.key]; ok && v != nil {
+			named = append(named, f.label)
+		}
+	}
+	if len(named) == 0 {
+		return ""
+	}
+	return "— " + joinPhrase(named)
+}
+
+// joinPhrase renders a list as "a", "a and b", or "a, b and c".
+func joinPhrase(items []string) string {
+	switch len(items) {
+	case 0:
+		return ""
+	case 1:
+		return items[0]
+	}
+	return strings.Join(items[:len(items)-1], ", ") + " and " + items[len(items)-1]
 }
 
 // countOf returns the length of an array argument, or 0 when it is absent.

@@ -474,7 +474,7 @@ func Insights() ui.Node {
 			return
 		}
 		loading.Set(true)
-		allTools := buildChatTools(app, base, rates)
+		allTools := buildChatTools(app, base, rates, tier)
 		// AG17: under aggregates-only, withhold the transaction/payee-detail read tools
 		// so the privacy promise holds for tool results too, not just the injected context.
 		tools := allTools[:0:0]

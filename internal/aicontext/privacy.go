@@ -66,6 +66,10 @@ var DetailToolNames = map[string]bool{
 	"list_transactions":               true,
 	"list_uncategorized_transactions": true,
 	"find_duplicate_transactions":     true,
+	// The report tracers return the individual rows behind a figure, which is
+	// transaction-level detail however aggregate the question that reached them.
+	"trace_report_row":  true,
+	"find_transactions": true,
 }
 
 // ToolAllowed reports whether a tool may be offered to the model at the given
