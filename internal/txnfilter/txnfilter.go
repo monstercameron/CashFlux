@@ -523,6 +523,28 @@ func (c Criteria) ToggleValue(f FilterField, value string) Criteria {
 // "Restaurants" category on top of a "#vacation" tag would show restaurants OR
 // vacation charges, with nothing on screen distinguishing that from the "and"
 // every other filter means.
+// DrillToTag narrows c to exactly one tag, replacing any existing tag selection
+// and leaving every other criterion (search text, period, member, …) alone.
+//
+// It is the row-level "Filter to #coffee" action (C651). Written here rather than
+// inline in the ledger so the promise the chip makes — one tag, additive to the
+// rest, and removable on its own through RemoveValue — is a tested property of
+// the filter model instead of two lines in a click handler.
+//
+// An empty tag is a no-op: a chip with no tag is a bug upstream, and clearing the
+// user's tag filter is not a reasonable guess at what they meant.
+func (c Criteria) DrillToTag(tag string) Criteria {
+	tag = strings.TrimSpace(tag)
+	if tag == "" {
+		return c
+	}
+	c.Tag, c.Tags = tag, ""
+	// ScopeAny widens a category/tag filter to "any of these"; a drill-down to one
+	// tag has nothing to widen, and leaving it set would silently change what the
+	// single tag means.
+	return c.dropScopeAnyOn(FieldTag)
+}
+
 func (c Criteria) dropScopeAnyOn(f FilterField) Criteria {
 	if f == FieldCategory || f == FieldTag {
 		c.ScopeAny = false

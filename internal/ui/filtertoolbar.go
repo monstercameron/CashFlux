@@ -43,6 +43,17 @@ type FilterToolbarProps struct {
 	Search      string       // current search text
 	SearchLabel string       // aria-label + placeholder for the search box
 	OnSearch    func(string) // search input handler
+	// SearchPending is true while typed text has not yet been applied — the search
+	// is debounced, so for a few hundred milliseconds the list underneath is the
+	// PREVIOUS query's results. Saying nothing during that window let people read,
+	// click and act on rows their query had already excluded (C619). When true the
+	// control shows a searching state and marks itself busy for assistive tech.
+	SearchPending bool
+	// OnClearSearch clears the query NOW, skipping the debounce. C628: the ✕ went
+	// through the same 400ms coalescing as typing, so the one control whose whole
+	// job is "undo what I typed" left the query on screen for the same window it
+	// was meant to end. Nil falls back to OnSearch("") — correct, just slower.
+	OnClearSearch func()
 
 	FiltersLabel string   // trigger button text, e.g. "Filters"
 	FiltersTitle string   // popover title + trigger tooltip
@@ -86,10 +97,31 @@ func FilterToolbar(props FilterToolbarProps) uic.Node {
 
 func filterToolbar(props FilterToolbarProps) uic.Node {
 	open := uic.UseState(false)
+	// Escape closes the filter panel. Registered unconditionally (never inside the
+	// If that renders the panel) so the hook keeps a stable position.
+	//
+	// The panel is an inline disclosure, not a modal — C52 chose that deliberately so
+	// the table stays visible underneath — but the trigger advertised
+	// aria-haspopup="dialog", which promises modal behaviour the panel never had:
+	// focus did not move in, nothing was trapped, and Escape did nothing, so a
+	// keyboard user who opened it had no way out but to find the ✕ or Tab through
+	// every field. The claim is now the honest one (a disclosure, described by
+	// aria-expanded + aria-controls) and Escape dismisses it the way it dismisses
+	// every other popover on the page.
+	onPanelKey := uic.UseEvent(func(e uic.KeyboardEvent) {
+		if e.GetKey() == "Escape" && open.Get() {
+			e.PreventDefault()
+			open.Set(false)
+		}
+	})
 	onSearch := uic.UseEvent(props.OnSearch)
 	// Unconditional handler for the search box's clear (×) so its hook sits at a stable
 	// position even though the button itself only renders when there's a query.
 	onClear := uic.UseEvent(func() {
+		if props.OnClearSearch != nil {
+			props.OnClearSearch()
+			return
+		}
 		if props.OnSearch != nil {
 			props.OnSearch("")
 		}
@@ -150,8 +182,20 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 	if open.Get() {
 		expanded = "true"
 	}
+	// C619: the search region's busy state, in the same string form this file
+	// already uses for aria-expanded.
+	searchBusy := "false"
+	if props.SearchPending {
+		searchBusy = "true"
+	}
 	trigger := Button(css.Class(triggerCls), Type("button"),
-		Attr("aria-haspopup", "dialog"), Attr("aria-expanded", expanded), Attr("aria-label", ariaLabel),
+		// A disclosure, not a dialog: aria-expanded + aria-controls describe what this
+		// button actually does. aria-haspopup="dialog" told assistive tech to expect a
+		// modal — focus moving in, Escape closing it — none of which an inline panel
+		// with no backdrop does or should do.
+		Attr("aria-expanded", expanded), Attr("aria-controls", "filter-inline-panel"),
+		Attr("aria-label", ariaLabel),
+		OnKeyDown(onPanelKey),
 		OnClick(func() { open.Set(!open.Get()) }),
 		Icon(icon.Filter, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
 		Span(props.FiltersLabel),
@@ -191,7 +235,16 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 					Icon(icon.Search, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
 					Input(css.Class("fctrl-input"), Type("search"),
 						Attr("aria-label", props.SearchLabel), Placeholder(props.SearchLabel),
+						// C619: while the debounce is still pending the rows below are the
+						// PREVIOUS query's. aria-busy tells assistive tech the region is
+						// mid-update, and the visible note beside it tells everyone else,
+						// so nobody acts on a result the query has already excluded.
+						Attr("aria-busy", searchBusy),
 						Value(props.Search), OnInput(onSearch)),
+					If(props.SearchPending, Span(css.Class("fctrl-pending"),
+						Attr("data-testid", "filter-search-pending"),
+						Attr("role", "status"), Attr("aria-live", "polite"),
+						uistate.T("filters.searchPending"))),
 					// "Clear search", not "Clear": on a page that also offers a filter
 					// reset and a panel close, a control named only for its verb leaves
 					// the user guessing how much of the view it takes with it (C574).
@@ -233,7 +286,10 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 		// remains visible below while the user adjusts filters. The panel mounts/unmounts
 		// with the open state (same as before for the FlipPanel) so it is keyed correctly.
 		If(open.Get(), Div(css.Class("filter-inline-panel"),
+			Attr("id", "filter-inline-panel"),
 			Attr("role", "region"), Attr("aria-label", props.FiltersTitle),
+			// Escape from anywhere inside the panel, not just from the trigger.
+			OnKeyDown(onPanelKey),
 			Div(css.Class("filter-inline-header"),
 				H3(css.Class("filter-inline-title", tw.Flex, tw.ItemsCenter, tw.Gap2),
 					Icon(icon.Filter, css.Class(tw.W4, tw.H4)), Span(props.FiltersTitle)),

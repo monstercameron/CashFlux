@@ -5,8 +5,12 @@
 package ui
 
 import (
+	"strconv"
+
 	"github.com/monstercameron/CashFlux/internal/icon"
+	"github.com/monstercameron/CashFlux/internal/textutil"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
+	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/css"
 	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/v5/ui"
@@ -58,6 +62,16 @@ type DataTableProps struct {
 	// when sorting a large list is momentarily expensive. Opt-in; the caller passes a
 	// plain OnSort and the table owns the indicator. No per-caller state machine needed.
 	SortSpinner bool
+
+	// Busy marks the table as mid-update for a reason the table does not own — a
+	// debounced search still in flight, say. It has the same effect as a sort in
+	// flight: aria-busy, dimmed rows, and row actions inert, because the rows on
+	// screen answer a query that has already been superseded (C628). The managed
+	// sort spinner ORs into this; a caller never has to coordinate the two.
+	Busy bool
+	// BusyLabel is what the table announces while Busy is set. Empty falls back to
+	// the generic updating message.
+	BusyLabel string
 
 	// Pagination (optional — omit OnPage to render no footer). Page is 1-based;
 	// Total is the full (unpaged) row count; PageSize<=0 means "all".
@@ -124,7 +138,9 @@ func dataTable(props DataTableProps) ui.Node {
 		}
 	}
 
-	headers := make([]any, 0, len(props.Columns))
+	// C626: the header is ARIA row 1, so a virtualized body's absolute row
+	// positions have something to count from.
+	headers := []any{Attr("aria-rowindex", "1")}
 	for _, c := range props.Columns {
 		headers = append(headers, ui.CreateElement(dtHeader, dtHeaderProps{
 			Col: c, Sort: props.Sort, Dir: props.Dir, OnSort: onSort,
@@ -152,8 +168,35 @@ func dataTable(props DataTableProps) ui.Node {
 		body = Tbody(props.Body)
 	}
 
-	tableArgs := []any{ClassStr(cls), Thead(Tr(headers...)), body}
-	if sortingKey != "" {
+	// The caption is the table's own voice: sr-only, a live region, and the root
+	// stays a <table> so no caller's layout changes.
+	//
+	// C625 puts the sort state in it — the state in words, for the reader who
+	// cannot see the rows dim — and announces BOTH transitions, into the busy
+	// window and out of it naming the order that settled, because a "sorting…"
+	// that never resolves is its own kind of stale.
+	//
+	// C626 puts the virtualization in it. A windowed body holds ~40 of N rows, and
+	// without this the table simply lied about its own size: assistive tech was
+	// told "1–3284 of 3284" by the pager and then handed a table it could count 40
+	// rows in, with no way to tell that the rest exist or where the rendered ones
+	// sit among them.
+	tableArgs := []any{ClassStr(cls),
+		Caption(css.Class(tw.SrOnly), Attr("data-testid", "dt-status"),
+			Attr("role", "status"), Attr("aria-live", "polite"),
+			dtCaptionText(props, sortingKey)),
+	}
+	if props.Virtual != nil {
+		// aria-rowcount counts the header row, hence +1.
+		tableArgs = append(tableArgs, Attr("aria-rowcount", strconv.Itoa(props.Virtual.Count+1)))
+	}
+	tableArgs = append(tableArgs, Thead(Tr(headers...)), body)
+	// C625/C628: one busy state, whatever put the table into it. While it is set
+	// the rows on screen do not yet answer the request the rest of the UI has
+	// already acted on, so they are dimmed AND made inert (the stylesheet drops
+	// pointer-events) — a fast click-and-read must not be able to open the row it
+	// was looking at a moment ago.
+	if sortingKey != "" || props.Busy {
 		tableArgs = append(tableArgs, Attr("aria-busy", "true"))
 	}
 	// The scroll anchor rides on the <table> element so the pager can scroll it back
@@ -186,6 +229,51 @@ func dataTable(props DataTableProps) ui.Node {
 		return Div(pager(true), table, pager(false))
 	}
 	return Div(table, pager(false))
+}
+
+// dtCaptionText is the sentence the table's sr-only caption carries: what it is
+// doing right now, and — when the body is windowed — how much of itself it is
+// actually rendering.
+//
+// The virtual half is the honest version of the count the pager shows. "1–3284 of
+// 3284" is true about the MATCHES and false about the DOM, and the gap between
+// those two is what made "All" unusable with a screen reader (C626): the status
+// implied 3,284 tabbable rows where about 40 existed. Naming both numbers, plus
+// aria-rowcount/aria-rowindex to place the rendered ones, is what lets assistive
+// tech understand the set it is being shown a window into.
+func dtCaptionText(props DataTableProps, sortingKey string) string {
+	if sortingKey != "" {
+		return uistate.T("ui.table.sorting")
+	}
+	if props.Busy {
+		if props.BusyLabel != "" {
+			return props.BusyLabel
+		}
+		return uistate.T("ui.table.updating")
+	}
+	settled := ""
+	if props.Sort != "" {
+		label := props.Sort
+		for _, c := range props.Columns {
+			if c.SortKey == props.Sort && c.Label != "" {
+				label = c.Label
+				break
+			}
+		}
+		dir := uistate.T("ui.table.descending")
+		if props.Dir == "asc" {
+			dir = uistate.T("ui.table.ascending")
+		}
+		settled = uistate.T("ui.table.sortedBy", label, dir)
+	}
+	if props.Virtual == nil {
+		return settled
+	}
+	window := uistate.T("ui.table.virtualCaption", textutil.Plural(props.Virtual.Count, "row"))
+	if settled == "" {
+		return window
+	}
+	return settled + " " + window
 }
 
 type dtHeaderProps struct {

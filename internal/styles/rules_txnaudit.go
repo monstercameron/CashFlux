@@ -196,6 +196,14 @@ func registerTxnAudit() {
 	rule(".data-table[aria-busy=\"true\"] tbody",
 		opacity(".55"),
 		transition("opacity .12s ease"),
+		// C625: dimming said "these rows are stale" and then let you click one
+		// anyway. The window is sub-second, which is exactly long enough for the
+		// fast click the report describes — reading the old order, clicking the row
+		// you saw, and landing on whichever row the new order put there. Inert for
+		// the duration is the only version of this that cannot be raced. The header
+		// keeps its pointer events, so a second sort click is rejected by the
+		// table's own re-entrancy guard rather than by being unreachable.
+		pointerEvents("none"),
 	)
 	ruleMedia("(prefers-reduced-motion: reduce)", ".data-table[aria-busy=\"true\"] tbody",
 		transition("none"),
