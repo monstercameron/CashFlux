@@ -1,3 +1,34 @@
+## 2026-08-16 — chores are not errors (LF-8)
+
+The data-health panel already existed and already had drill-throughs, over nine integrity checks. What
+it did not have was the thing the ticket actually names: "12 uncategorized · 3 stale accounts · 2
+unreconciled". Those are a different KIND of statement, and that difference is the whole design.
+
+An integrity finding means something is wrong — a transfer with one leg, a split that does not sum, a
+liability with a positive balance. Every one means a figure somewhere is incorrect. A hygiene count
+means something is unfinished. An uncategorized transaction is not an error; it is work. A stale
+balance is not a contradiction; it is a number nobody has confirmed lately.
+
+Putting them in one list fails in both directions. Twelve uncategorized coffees would bury a genuine
+one-legged transfer, and a panel that flags ordinary housekeeping in the register of corruption is one
+people stop reading — which costs you the real findings too. So: separate line, quieter framing, above
+the findings rather than among them.
+
+Three judgements inside the counts, each a test:
+
+**Transfers are not uncategorized.** Moving money between your own accounts has no category to assign.
+Counting them would present permanent, unfixable work, which is the worst possible thing to put in a
+list of things to do — the count never goes down no matter what you do.
+
+**Only statement-bearing accounts can be unreconciled.** A property valuation has no statement to match
+against. Listing it is asking for work that does not exist.
+
+**The staleness window comes from the app's freshness config, not a default.** Computing it twice with
+two different windows is precisely how two screens come to disagree about the same account — the E3
+defect class, reintroduced by a convenience.
+
+And zero counts render nothing at all. "0 uncategorized" is a panel talking about itself.
+
 ## 2026-08-16 — the burn window is the whole design (LF-6)
 
 "Your balance lasts N days at current burn" is a division. The interesting part is entirely in which

@@ -454,6 +454,12 @@ var vSweepKeys = Catalog{
 	"contra.more":  "Show %d more",
 	"contra.less":  "Show fewer",
 
+	// LF-8 — unfinished work, as distinct from the integrity findings beside it.
+	"health.hygieneLead":            "Worth finishing:",
+	"health.hygiene.uncategorized":  "%d uncategorized",
+	"health.hygiene.stale-accounts": "%d stale balances",
+	"health.hygiene.unreconciled":   "%d never reconciled",
+
 	"method.drawerLabel":  "How this is computed",
 	"method.howTitle":     "The calculation",
 	"method.benchTitle":   "What it is measured against",

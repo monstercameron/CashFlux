@@ -5,6 +5,8 @@
 package app
 
 import (
+	"time"
+
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/integrity"
@@ -59,6 +61,45 @@ func dataHealthCard() uic.Node {
 		}
 	}
 
+	// LF-8: the unfinished-work counts, as distinct from the integrity findings
+	// above. An uncategorized transaction is not an ERROR — it is a chore — and
+	// mixing the two would either bury real errors under a pile of housekeeping or
+	// dress housekeeping up as corruption. Separate line, separate framing.
+	//
+	// The staleness window comes from the app's own freshness config rather than a
+	// default, so this count and the accounts page cannot disagree about the same
+	// account.
+	hygiene := integrity.Hygiene(integrity.HygieneInput{
+		Accounts:     app.Accounts(),
+		Transactions: app.Transactions(),
+		Windows:      app.FreshnessWindows(),
+		Now:          time.Now(),
+	})
+	goHygiene := uic.UseEvent(func(e uic.Event) {
+		route := e.JSValue().Get("currentTarget").Call("getAttribute", "data-route").String()
+		if route != "" && route != "<null>" {
+			nav.Navigate(uistate.RoutePath(route))
+		}
+	})
+	hygieneChips := make([]any, 0, len(hygiene))
+	for _, h := range hygiene {
+		if h.N == 0 {
+			// "0 uncategorized" is noise; a panel listing what you have already
+			// finished is a panel about itself.
+			continue
+		}
+		hygieneChips = append(hygieneChips, Button(css.Class("btn-link", tw.Text12),
+			Type("button"), Attr("data-testid", "data-hygiene-"+h.Kind),
+			Attr("data-route", h.Route), OnClick(goHygiene),
+			uistate.T("health.hygiene."+h.Kind, h.N)))
+	}
+	var hygieneLine uic.Node = Fragment()
+	if len(hygieneChips) > 0 {
+		hygieneLine = Div(css.Class("data-hygiene"), Attr("data-testid", "data-hygiene"),
+			Span(css.Class(tw.TextFaint, tw.Text12), uistate.T("health.hygieneLead")),
+			Fragment(hygieneChips...))
+	}
+
 	keyOf := func(f integrity.Finding) any { return f.ID }
 	render := func(f integrity.Finding) uic.Node {
 		return uic.CreateElement(dataHealthRow, dataHealthRowProps{F: f, OnDrill: drill})
@@ -66,6 +107,7 @@ func dataHealthCard() uic.Node {
 	return Div(Attr("data-testid", "data-health-section"),
 		H4(css.Class("set-label"), uistate.T("health.sectionTitle")),
 		P(css.Class("muted", tw.TextXs), uistate.T("health.sectionHint")),
+		hygieneLine,
 		If(len(findings) == 0, P(css.Class(tw.TextFaint, tw.Text12), Attr("data-testid", "data-health-clean"),
 			uistate.T("health.allClear", dataHealthChecksCount))),
 		If(len(findings) > 0, Fragment(

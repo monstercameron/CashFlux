@@ -684,4 +684,14 @@ func registerVSweep() {
 		color("var(--text-dim)"),
 	)
 
+	// ─── LF-8: the unfinished-work line ──────────────────────────────────────
+	// Chores, not errors, so it reads quietly beside the integrity findings.
+	rule(".data-hygiene",
+		display("flex"),
+		flexWrap("wrap"),
+		alignItems("baseline"),
+		gap("0.5rem"),
+		margin("0.35rem 0 0.5rem"),
+	)
+
 }

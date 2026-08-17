@@ -844,8 +844,23 @@ survived the duplicate/scope filters but didn't make the engine cut):
   "unknown", so it exposes 0 and the catalog doc says explicitly that 0 means not-applicable.
 - [ ] **LF-7 Bill/due-date calendar** — reuse the v1.0.43 `uiw.Calendar` primitive for bills + recurring
   cash flows (dogfoods the standardized calendar further).
-- [ ] **LF-8 Data health check** — a small "12 uncategorized · 3 stale accounts · 2 unreconciled" panel
+- [x] **LF-8 Data health check** — a small "12 uncategorized · 3 stale accounts · 2 unreconciled" panel
   with one-click jumps to fix each.
+  — DONE (2026-08-16). The panel already existed (`datahealth_section.go`, over `internal/integrity`'s
+  nine checks, with drill-throughs) but covered integrity VIOLATIONS, not the hygiene counts the ticket
+  names. New pure `integrity.Hygiene` supplies those three, each with a route, rendered as a separate
+  quiet line above the findings.
+
+  Kept separate on purpose: an uncategorized transaction is not an error, it is a chore. Mixing them
+  would either bury real errors under a pile of housekeeping or dress housekeeping up as corruption —
+  and a panel that cries corruption over twelve uncategorized coffees is one people stop reading.
+
+  Three judgements, each a test. Transfers are excluded from "uncategorized": moving money between your
+  own accounts has no category to assign, so counting them presents permanent unfixable work — the
+  worst thing to put in a to-do list. "Unreconciled" counts only statement-bearing account types; a
+  property valuation has no statement to match. And the staleness window comes from the app's own
+  freshness config rather than a default, so this count and the accounts page cannot disagree about the
+  same account. Zero counts render nothing at all — "0 uncategorized" is a panel talking about itself.
 - [ ] **LF-9 Print / PDF-friendly report view** — a browser-native print stylesheet; fully local.
 - [ ] **LF-10 Recurring-transaction detection → create rule** (deterministic sibling of SM-6, surfaced on
   /transactions or /recurring).
