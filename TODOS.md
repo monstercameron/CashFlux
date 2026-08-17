@@ -1166,9 +1166,30 @@ bottom-up per SDLC.
 - [ ] **FP-T2c — Holding price-update UI + as-of date.** No edit path for a holding — a price change needs
   delete + re-add, so current value is stale-by-design. Add an Edit form reusing `PutHolding`'s replace-by-ID
   + a `PriceAsOf` field.
-- [ ] **FP-T2d — Inflation / real-dollar helper.** Add an inflation assumption + `realValue(nominal,years,infl)`
-  threaded through forecast/goal/retirement projections — cross-cutting prerequisite so every long-horizon
-  figure stops being misleadingly nominal. Low effort, high leverage.
+- [~] **FP-T2d — Inflation / real-dollar helper.** Add an inflation assumption + `realValue(...)` threaded
+  through forecast/goal/retirement projections so every long-horizon figure stops being misleadingly
+  nominal.
+  — PRIMITIVE + GOAL SEAM DONE (2026-08-16). New pure `internal/inflation` (`Factor`, `RealMinor`,
+  `NominalMinor`, `ErosionPct`), its own package rather than a method on any engine so a forecast does
+  not have to import a retirement engine to deflate a number.
+
+  Two rules drive it, and the asymmetry between them is the design. **A zero rate is the IDENTITY, not
+  an error** — plenty of callers have no assumption configured and refusing would force every one of
+  them to branch; no inflation genuinely means today's dollars ARE future dollars. **An unusable rate
+  REFUSES rather than passing the input through**, because there the caller would present a nominal
+  figure labelled as real, which is the exact confusion the package removes. Deflation is valid and
+  reports NEGATIVE erosion rather than being clamped — rare, real, and hiding it would be a small lie
+  for tidiness.
+
+  Threaded into goals: `goaltrajectory.Result.RealTargetMinor` / `ShortfallMinor` answer what a target
+  is worth on the day it is reached. A goal to save $30,000 for a kitchen, reached in eight years, is
+  not a $30,000 kitchen — the target is stated in today's money and reached in future money, and
+  nothing in the app closed that gap. An UNREACHABLE goal refuses (no date to discount to) instead of
+  falling back to the nominal figure.
+
+  REMAINING: the forecast and planning surfaces, and a household-level inflation SETTING (the package
+  ships `DefaultRatePct` as a stated assumption). Left in progress rather than closed because "threaded
+  through forecast/.../retirement" is most of the ticket's value and only the goal seam is wired.
 
 **Tier 3 — differentiators (more effort, valued by power users):**
 - [ ] **FP-T3a — Deeper what-if scenarios.** Extend `domain.Plan`/`planning.Project` beyond linear: % raises,

@@ -176,3 +176,68 @@ func TestProjectTargetDateVsPace(t *testing.T) {
 		t.Errorf("past-target series len = %d, want %d (no widening)", len(past.Series), flatHorizon+1)
 	}
 }
+
+// ─── FP-T2d: the target is worth less when you get there ─────────────────────
+
+// A goal to save $30,000 for a kitchen, reached in eight years, is not a $30,000
+// kitchen. The target is stated in today's money and reached in future money,
+// and nothing closed that gap.
+func TestRealTargetIsDiscountedToTheProjectedDate(t *testing.T) {
+	res := Project(Input{
+		CurrentMinor: 0, TargetMinor: 3000000, MonthlyMinor: 31250,
+		Start: time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC),
+	})
+	if !res.Reachable {
+		t.Fatalf("the goal is not reachable: %+v", res)
+	}
+	real, ok := res.RealTargetMinor(3000000, 3)
+	if !ok {
+		t.Fatal("RealTargetMinor reported unknown for a reachable goal")
+	}
+	if real >= 3000000 {
+		t.Errorf("real target = %d, not below the nominal 3000000 under 3%% inflation", real)
+	}
+	short, ok := res.ShortfallMinor(3000000, 3)
+	if !ok || short <= 0 {
+		t.Errorf("ShortfallMinor = %d,%v want a positive erosion", short, ok)
+	}
+	if short != 3000000-real {
+		t.Errorf("shortfall %d != target-real %d", short, 3000000-real)
+	}
+}
+
+// With no inflation assumption the real figure IS the target — a caller with
+// nothing configured needs no branch.
+func TestRealTargetWithNoInflationIsTheTarget(t *testing.T) {
+	res := Project(Input{TargetMinor: 100000, MonthlyMinor: 100000,
+		Start: time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)})
+	got, ok := res.RealTargetMinor(100000, 0)
+	if !ok || got != 100000 {
+		t.Errorf("RealTargetMinor at 0%% = %d,%v want the target unchanged", got, ok)
+	}
+}
+
+// An unreachable goal has no date to discount to. Falling back to the nominal
+// figure and presenting it as real is the confusion this exists to remove.
+func TestRealTargetRefusesWhenThereIsNoDate(t *testing.T) {
+	res := Project(Input{CurrentMinor: 0, TargetMinor: 3000000, MonthlyMinor: 0,
+		Start: time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)})
+	if res.Reachable {
+		t.Fatal("a zero-contribution goal reported reachable")
+	}
+	if _, ok := res.RealTargetMinor(3000000, 3); ok {
+		t.Error("an unreachable goal produced a real target")
+	}
+	if _, ok := res.ShortfallMinor(3000000, 3); ok {
+		t.Error("an unreachable goal produced a shortfall")
+	}
+}
+
+// An unusable rate must refuse too, rather than silently returning the nominal.
+func TestRealTargetRefusesAnUnusableRate(t *testing.T) {
+	res := Project(Input{TargetMinor: 100000, MonthlyMinor: 100000,
+		Start: time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)})
+	if _, ok := res.RealTargetMinor(100000, -150); ok {
+		t.Error("an impossible rate produced a figure")
+	}
+}

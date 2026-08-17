@@ -1,3 +1,36 @@
+## 2026-08-16 - the number everyone reads wrong (FP-T2d)
+
+The ticket calls this "low effort, high leverage" and both halves are right, but the leverage is not
+where it first looks. The function is four lines. The value is that every long-horizon figure in the
+app is quoted in nominal money and nobody reading one performs the discount in their head.
+
+"$412,000 by 2044" gets read against what $412,000 buys today. That is not a misunderstanding on the
+reader's part - it is the only way a person can read a number - so the app is the one making a claim
+it cannot support.
+
+Two rules, and the asymmetry between them is the design:
+
+**A zero rate is the identity, not an error.** Many callers have no inflation assumption configured.
+Refusing there would force every one of them to branch, and the branch would be noise: no inflation
+genuinely means today's dollars are future dollars.
+
+**An unusable rate refuses rather than passing the input through.** The tempting symmetry is to return
+the input on any bad rate too. That is wrong for a specific reason: the caller would then present a
+nominal figure labelled as real, which is precisely the confusion the package exists to remove. Better
+to say "cannot deflate this" and let the surface show the nominal figure honestly labelled.
+
+Deflation reports negative erosion rather than being clamped to zero. Clamping is tidier and hides a
+real, if rare, direction - and a helper that quietly refuses to represent one sign is a helper you
+cannot trust with the other.
+
+Wired into goals first because that is where the gap is most concrete: a $30,000 kitchen goal reached
+in eight years does not buy a $30,000 kitchen. The unreachable case refuses rather than falling back to
+the nominal target, for the same reason as above.
+
+Left in progress rather than closed: "threaded through forecast/goal/retirement" is most of the
+ticket's value and only the goal seam is wired. Marking it done would claim a cross-cutting change that
+crosses one thing.
+
 ## 2026-08-16 — the two halves of one question (FP-T1a, FP-T1b)
 
 Two tickets, one package, because "how much will I have" and "how long will it last" are the same arc.

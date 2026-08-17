@@ -10,6 +10,7 @@
 package goaltrajectory
 
 import (
+	"github.com/monstercameron/CashFlux/internal/inflation"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/dateutil"
@@ -147,4 +148,39 @@ func monthsUntil(start, date time.Time) int {
 		months = 0
 	}
 	return months
+}
+
+// ─── FP-T2d: what the target is worth when you get there ─────────────────────
+
+// RealTargetMinor reports what a goal's target amount is worth in TODAY's money
+// at the moment it is projected to be reached, and whether the question has an
+// answer.
+//
+// This is the cross-cutting point of the inflation work: a goal to save $30,000
+// for a kitchen, reached in eight years, is not a $30,000 kitchen. The target is
+// stated in today's money and reached in future money, and nothing in the app
+// closed that gap — so a long-dated goal quietly overstated what it would buy.
+//
+// ok is false when the goal is not reachable (there is no date to discount to)
+// or the rate is unusable. A caller must not fall back to the nominal figure and
+// present it as real; that is the confusion this exists to remove.
+func (r Result) RealTargetMinor(targetMinor int64, ratePct float64) (int64, bool) {
+	if !r.Reachable || r.MonthsToGoal < 0 {
+		return 0, false
+	}
+	return inflation.RealMinor(targetMinor, ratePct, float64(r.MonthsToGoal)/12)
+}
+
+// ShortfallMinor is how much of a goal's stated target inflation eats before it
+// is reached — the target minus what it will actually be worth.
+//
+// Zero-or-better is a legitimate answer (a goal reached this month loses
+// nothing), so the figure is not clamped: a negative value under deflation is a
+// real, if unusual, gain and hiding it would be a small lie for tidiness.
+func (r Result) ShortfallMinor(targetMinor int64, ratePct float64) (int64, bool) {
+	real, ok := r.RealTargetMinor(targetMinor, ratePct)
+	if !ok {
+		return 0, false
+	}
+	return targetMinor - real, true
 }
