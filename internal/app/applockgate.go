@@ -277,7 +277,15 @@ func buildAppLockGate(doc js.Value) {
 	fails := 0
 	hintBtnEl := func() js.Value { return doc.Call("getElementById", "cf-lock-hint-btn") }
 	attempt := func() {
-		if entered := inp.Get("value").String(); loadAppLock().Verify(entered) {
+		// C284: a successful unlock is the only moment the plaintext passcode is in
+		// hand, so it is the only moment a hash on a superseded scheme can be
+		// re-derived. VerifyAndUpgrade does both; Verify alone left every
+		// pre-argon2id credential on its old scheme forever.
+		entered := inp.Get("value").String()
+		if okUnlock, upgraded, changed := loadAppLock().VerifyAndUpgrade(entered); okUnlock {
+			if changed {
+				saveAppLock(upgraded)
+			}
 			// Record the verified passcode for the session and, if the dataset on
 			// disk is encrypted (C45), decrypt + hydrate it now.
 			onAppUnlocked(entered)

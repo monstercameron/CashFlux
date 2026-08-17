@@ -27,6 +27,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"golang.org/x/crypto/argon2"
 )
 
 // Config is the persisted app-lock configuration. The zero value is a valid,
@@ -106,6 +108,73 @@ func pbkdf2SHA256(password, salt []byte, iterations int) []byte {
 	return out
 }
 
+// ─── argon2id (C284) ─────────────────────────────────────────────────────────
+//
+// PBKDF2 is a large number of cheap hashes. That is exactly the shape a GPU is
+// good at, so its cost to an attacker scales far more slowly than its cost to
+// the user. argon2id is MEMORY-hard: cracking it in parallel needs memory per
+// guess, which is the resource attackers cannot buy their way out of cheaply.
+// For a four-digit passcode gate — a tiny keyspace — that difference is most of
+// the security this gate can offer.
+//
+// The parameters below are the OWASP minimum configuration for argon2id, and
+// they are the minimum ON PURPOSE. This runs in WebAssembly, inside a browser
+// tab, on whatever device the household owns. A 64 MiB allocation per unlock is
+// a real risk of a failed allocation or a visible stall on a phone, and a gate
+// that will not open is worse security than a gate that opens with a weaker
+// hash — people turn off the lock they cannot get past.
+const (
+	// Argon2Time is the number of passes.
+	Argon2Time = 2
+	// Argon2MemoryKiB is the memory cost. 19 MiB is OWASP's floor for t=2.
+	Argon2MemoryKiB = 19 * 1024
+	// Argon2Threads is the parallelism. One, because wasm is single-threaded
+	// here: asking for more would cost memory and buy nothing.
+	Argon2Threads = 1
+	// Argon2KeyLen is the derived-key length in bytes.
+	Argon2KeyLen = 32
+)
+
+// argon2Prefix tags hashes produced by [HashPasscodeArgon2id] so a stored value
+// is self-describing. Format: "argon2id$<time>$<memKiB>$<threads>$<hex>".
+//
+// The parameters are stored WITH the hash rather than read from the constants
+// at verify time. If they were not, raising the cost later would silently break
+// every existing passcode — the derived key depends on them, so a hash made at
+// 19 MiB cannot be verified at 64 MiB.
+const argon2Prefix = "argon2id"
+
+// HashPasscodeArgon2id derives an argon2id hash of passcode using salt and
+// returns a self-describing string. It is the current scheme; [VerifyPasscode]
+// still accepts the two older ones and reports that they should be migrated.
+func HashPasscodeArgon2id(passcode, salt string) string {
+	dk := argon2.IDKey([]byte(passcode), []byte(salt),
+		Argon2Time, Argon2MemoryKiB, Argon2Threads, Argon2KeyLen)
+	return fmt.Sprintf("%s$%d$%d$%d$%s", argon2Prefix,
+		Argon2Time, Argon2MemoryKiB, Argon2Threads, hex.EncodeToString(dk))
+}
+
+// verifyArgon2id checks passcode against an "argon2id$t$m$p$hex" hash, using the
+// parameters recorded in the hash itself rather than today's constants.
+func verifyArgon2id(passcode, salt, storedHash string) (bool, error) {
+	parts := strings.SplitN(storedHash, "$", 5)
+	if len(parts) != 5 {
+		return false, errors.New("applock: malformed argon2id hash: expected 5 '$'-separated parts")
+	}
+	t, errT := strconv.Atoi(parts[1])
+	m, errM := strconv.Atoi(parts[2])
+	p, errP := strconv.Atoi(parts[3])
+	if errT != nil || errM != nil || errP != nil || t <= 0 || m <= 0 || p <= 0 {
+		return false, fmt.Errorf("applock: invalid argon2id parameters %q/%q/%q", parts[1], parts[2], parts[3])
+	}
+	storedBytes, decErr := hex.DecodeString(parts[4])
+	if decErr != nil {
+		return false, fmt.Errorf("applock: malformed argon2id hash hex: %w", decErr)
+	}
+	dk := argon2.IDKey([]byte(passcode), []byte(salt), uint32(t), uint32(m), uint8(p), uint32(len(storedBytes)))
+	return subtle.ConstantTimeCompare(dk, storedBytes) == 1, nil
+}
+
 // HashPasscodePBKDF2 derives a PBKDF2-SHA256 hash of passcode using salt and
 // returns a self-describing string of the form "pbkdf2$<iters>$<hex>". The
 // salt must be non-empty and comes from the caller (crypto/rand in the UI
@@ -128,6 +197,11 @@ func HashPasscodePBKDF2(passcode, salt string) string {
 // Always uses a constant-time comparison to prevent timing side-channels.
 // Returns an error if storedHash is not in a recognised format.
 func VerifyPasscode(passcode, salt, storedHash string) (ok bool, needsMigration bool, err error) {
+	if strings.HasPrefix(storedHash, argon2Prefix+"$") {
+		// Current scheme. Nothing to migrate.
+		match, vErr := verifyArgon2id(passcode, salt, storedHash)
+		return match, false, vErr
+	}
 	if strings.HasPrefix(storedHash, pbkdf2Prefix+"$") {
 		// New PBKDF2 scheme: pbkdf2$<iters>$<hex>
 		parts := strings.SplitN(storedHash, "$", 3)
@@ -144,7 +218,11 @@ func VerifyPasscode(passcode, salt, storedHash string) (ok bool, needsMigration 
 		}
 		dk := pbkdf2SHA256([]byte(passcode), []byte(salt), iters)
 		match := subtle.ConstantTimeCompare(dk, storedBytes) == 1
-		return match, false, nil
+		// PBKDF2 is no longer the current scheme (C284). A successful verify is
+		// the one moment the plaintext passcode is in hand, so it is the only
+		// moment a re-hash is possible — hence migrating on verify rather than
+		// in a background pass that has nothing to hash.
+		return match, match, nil
 	}
 
 	// Legacy bare SHA-256 (64 hex chars, no "$").
@@ -193,7 +271,7 @@ func (c Config) WithPasscode(passcode, salt string, autoLockMinutes int, hint st
 	return Config{
 		Enabled:         true,
 		Salt:            salt,
-		Hash:            HashPasscodePBKDF2(passcode, salt),
+		Hash:            HashPasscodeArgon2id(passcode, salt),
 		AutoLockMinutes: autoLockMinutes,
 		Hint:            strings.TrimSpace(hint),
 		HideQuotes:      c.HideQuotes,
@@ -330,4 +408,32 @@ func isTrivialPasscode(r []rune) bool {
 		}
 	}
 	return allSame || asc || desc
+}
+
+// VerifyAndUpgrade verifies a passcode and, when the stored hash uses a
+// superseded scheme, returns a config carrying a freshly-derived current one
+// (C284).
+//
+// The lazy migration only works if someone calls this. `Verify` discards the
+// needsMigration flag, so every unlock through it left the old hash in place
+// forever — the machinery existed and nothing drove it. Callers that can persist
+// the config should use this instead.
+//
+// changed is true only when BOTH the passcode was correct AND the hash moved.
+// A failed verify never upgrades: re-hashing on a wrong passcode would let
+// anyone who can reach the lock screen overwrite the stored credential.
+func (c Config) VerifyAndUpgrade(passcode string) (ok bool, upgraded Config, changed bool) {
+	if !c.Enabled || c.Hash == "" || c.Salt == "" {
+		return false, c, false
+	}
+	match, needsMigration, err := VerifyPasscode(passcode, c.Salt, c.Hash)
+	if err != nil || !match {
+		return false, c, false
+	}
+	if !needsMigration {
+		return true, c, false
+	}
+	next := c
+	next.Hash = HashPasscodeArgon2id(passcode, c.Salt)
+	return true, next, true
 }

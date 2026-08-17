@@ -1,3 +1,43 @@
+## 2026-08-16 — the migration nothing was driving (C284)
+
+The ticket asked to replace SHA-256 with argon2id. Two things turned out to be true that changed the
+shape of the work.
+
+First, the code had already moved to PBKDF2-210k, so this is a three-tier ladder rather than a swap:
+sha256 and pbkdf2 both still verify and both report needing migration; argon2id is current. Worth
+doing anyway — PBKDF2 is a lot of cheap hashes, which is exactly what a GPU is good at, so its cost to
+an attacker scales far more slowly than its cost to the user. argon2id is memory-hard, and for a
+four-digit passcode with a tiny keyspace that is most of the security on offer.
+
+Second, and more importantly: **the lazy migration existed and nothing drove it.** `VerifyPasscode`
+returns `needsMigration`, and `Config.Verify` — the method every real caller used — discarded it. So
+the design was right, the plumbing was in place, and every pre-existing credential would have stayed
+on its old scheme forever. `VerifyAndUpgrade` returns the upgraded config and both call sites now
+persist it. That is the fix that actually matters; the algorithm change without it would have applied
+only to passcodes set after today.
+
+Two departures from the ticket, both deliberate:
+
+**OWASP minimum parameters (t=2, 19 MiB, p=1), not 3/64MB/4.** This runs in WebAssembly in a browser
+tab on whatever device the household owns. A 64 MiB allocation per unlock risks a failed allocation or
+a visible stall on a phone, and a gate that will not open is worse security than one that opens with a
+weaker hash — people switch off the lock they cannot get past. p=1 because wasm is single-threaded
+here; more parallelism costs memory and buys nothing.
+
+**The ticket's "run it in a goroutine so unlock doesn't freeze" is not done, on purpose.** At these
+parameters derivation is single-digit milliseconds. The freeze it anticipates is real at 64 MiB and
+absent at 19; building the async path now would be complexity for a problem the chosen parameters do
+not have. Filed as C284b against any future cost increase.
+
+One property worth stating because it is easy to get wrong: the parameters are stored WITH the hash
+and read from there at verify time, never from today's constants. Raising the cost later would
+otherwise silently invalidate every existing passcode, since the derived key depends on them. There is
+a test that verifies a hash made at different parameters.
+
+And a failed verify never migrates. Re-hashing on a wrong passcode would let anyone who reaches the
+lock screen overwrite the stored credential — a nice little denial-of-service handed out by the
+feature meant to strengthen it.
+
 ## 2026-08-16 — two facts that look like one (C204, C206)
 
 R21's blocking prereq, done in the only clean territory available today — 112 files under

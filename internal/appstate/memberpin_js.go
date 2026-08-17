@@ -101,6 +101,17 @@ func (a *App) VerifyMemberPIN(memberID, pin string) bool {
 	if !ok {
 		return false
 	}
-	match, _, _ := applock.VerifyPasscode(pin, rec.Salt, rec.Hash)
-	return match
+	match, needsMigration, err := applock.VerifyPasscode(pin, rec.Salt, rec.Hash)
+	if err != nil || !match {
+		return false
+	}
+	// C284: re-derive on the current scheme while the plaintext is in hand. Only
+	// on a SUCCESSFUL verify — re-hashing on a wrong PIN would let anyone at the
+	// switcher overwrite a member's credential.
+	if needsMigration {
+		rec.Hash = applock.HashPasscodeArgon2id(pin, rec.Salt)
+		m[memberID] = rec
+		saveMemberPins(m)
+	}
+	return true
 }

@@ -6,6 +6,19 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- **App-lock and member PINs now use argon2id, and old credentials actually get upgraded (C284).**
+  The passcode hash had already moved from SHA-256 to PBKDF2; it now uses argon2id, which is
+  memory-hard — cracking it in parallel costs memory per guess, which is the resource an attacker
+  cannot cheaply buy more of. For a four-digit gate, that difference is most of the security available.
+
+  The more consequential half is that the migration is now driven. The lazy re-hash machinery already
+  existed, but the unlock path threw away the flag that requested it, so every pre-existing credential
+  would have stayed on its old scheme indefinitely. A successful unlock is the only moment the
+  plaintext passcode is in hand — and therefore the only moment a stronger hash can be derived — so
+  that is where it happens now, for both the app lock and member PINs. A failed unlock never re-hashes:
+  doing so would let anyone who can reach the lock screen overwrite the stored credential.
+
 ### Added
 - **Loans know their term (C204, C206).** An account could record its rate, minimum payment and due
   day but not the two facts that make an installment loan amortizable: how many months the lender set,

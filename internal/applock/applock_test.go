@@ -3,6 +3,10 @@
 package applock
 
 import (
+	"encoding/hex"
+	"strconv"
+
+	"golang.org/x/crypto/argon2"
 	"strings"
 	"testing"
 )
@@ -250,10 +254,22 @@ func TestVerifyPasscodeNewFormat(t *testing.T) {
 		wantErr  bool
 	}{
 		{
-			name:     "correct passcode — new PBKDF2 format",
+			name:     "correct passcode — legacy PBKDF2 format (migrates to argon2id)",
 			passcode: "correct",
 			stored:   HashPasscodePBKDF2("correct", salt),
+			wantOk:   true, wantMigr: true, wantErr: false,
+		},
+		{
+			name:     "correct passcode — current argon2id format",
+			passcode: "correct",
+			stored:   HashPasscodeArgon2id("correct", salt),
 			wantOk:   true, wantMigr: false, wantErr: false,
+		},
+		{
+			name:     "wrong passcode — argon2id format",
+			passcode: "wrong",
+			stored:   HashPasscodeArgon2id("correct", salt),
+			wantOk:   false, wantMigr: false, wantErr: false,
 		},
 		{
 			name:     "wrong passcode — new PBKDF2 format",
@@ -315,16 +331,17 @@ func TestVerifyPasscodeNewFormat(t *testing.T) {
 }
 
 // TestVerifyPasscodeConstantTime ensures the constant-time path is exercised
-// for both matching and non-matching PBKDF2 hashes with no detectable early
-// exit (this is a structural test — it just proves ConstantTimeCompare is
-// called on equal-length inputs, not a timing oracle).
+// for both matching and non-matching hashes with no detectable early exit (this
+// is a structural test — it just proves ConstantTimeCompare is called on
+// equal-length inputs, not a timing oracle).
 func TestVerifyPasscodeConstantTime(t *testing.T) {
 	salt := "cttest"
 	stored := HashPasscodePBKDF2("secret", salt)
-	// Correct — must match.
+	// Correct — must match. It also reports needing migration now that argon2id
+	// is the current scheme (C284).
 	ok, migr, err := VerifyPasscode("secret", salt, stored)
-	if !ok || migr || err != nil {
-		t.Errorf("constant-time path: correct passcode should match; ok=%v migr=%v err=%v", ok, migr, err)
+	if !ok || !migr || err != nil {
+		t.Errorf("constant-time path: correct passcode should match and migrate; ok=%v migr=%v err=%v", ok, migr, err)
 	}
 	// Wrong — must not match.
 	ok, migr, err = VerifyPasscode("wrong!", salt, stored)
@@ -333,18 +350,148 @@ func TestVerifyPasscodeConstantTime(t *testing.T) {
 	}
 }
 
-// TestWithPasscodeUsesPBKDF2 confirms that Config.WithPasscode now stores the
-// new PBKDF2 format and that Config.Verify (which delegates to VerifyPasscode)
-// still works end-to-end.
-func TestWithPasscodeUsesPBKDF2(t *testing.T) {
+// TestWithPasscodeUsesArgon2id confirms Config.WithPasscode stores the current
+// format and that Config.Verify (which delegates to VerifyPasscode) still works
+// end-to-end.
+func TestWithPasscodeUsesArgon2id(t *testing.T) {
 	c := Config{}.WithPasscode("mypass", "mysalt", 10, "")
-	if !strings.HasPrefix(c.Hash, "pbkdf2$") {
-		t.Errorf("WithPasscode should store PBKDF2 hash, got %q", c.Hash)
+	if !strings.HasPrefix(c.Hash, "argon2id$") {
+		t.Errorf("WithPasscode should store an argon2id hash, got %q", c.Hash)
 	}
 	if !c.Verify("mypass") {
 		t.Error("Verify must succeed for the correct passcode after WithPasscode")
 	}
 	if c.Verify("wrong") {
 		t.Error("Verify must fail for the wrong passcode")
+	}
+}
+
+// ─── C284: argon2id ──────────────────────────────────────────────────────────
+
+// The parameters are stored WITH the hash, not read from today's constants at
+// verify time. Without that, raising the cost later would silently break every
+// existing passcode — the derived key depends on them.
+func TestArgon2idHashCarriesItsOwnParameters(t *testing.T) {
+	h := HashPasscodeArgon2id("secret", "salty")
+	parts := strings.Split(h, "$")
+	if len(parts) != 5 || parts[0] != "argon2id" {
+		t.Fatalf("hash shape = %q", h)
+	}
+	if parts[1] != strconv.Itoa(Argon2Time) ||
+		parts[2] != strconv.Itoa(Argon2MemoryKiB) ||
+		parts[3] != strconv.Itoa(Argon2Threads) {
+		t.Errorf("hash does not record its parameters: %q", h)
+	}
+	// A hash recorded at DIFFERENT parameters must still verify, which is the
+	// whole point of storing them.
+	old := "argon2id$1$8192$1$" + hex.EncodeToString(
+		argon2.IDKey([]byte("secret"), []byte("salty"), 1, 8192, 1, 32))
+	ok, migr, err := VerifyPasscode("secret", "salty", old)
+	if err != nil || !ok {
+		t.Errorf("a hash at older parameters failed to verify: ok=%v err=%v", ok, err)
+	}
+	if migr {
+		t.Error("an argon2id hash asked to be migrated — the scheme is current regardless of cost")
+	}
+}
+
+// The salt has to matter, or two households with the same passcode share a hash.
+func TestArgon2idIsSaltDependent(t *testing.T) {
+	a := HashPasscodeArgon2id("same", "salt-a")
+	b := HashPasscodeArgon2id("same", "salt-b")
+	if a == b {
+		t.Error("the same passcode under two salts produced one hash")
+	}
+	if ok, _, _ := VerifyPasscode("same", "salt-b", a); ok {
+		t.Error("a hash verified under the wrong salt")
+	}
+}
+
+// Both older schemes must keep verifying AND report that they should be
+// re-hashed — a successful verify is the only moment the plaintext is in hand,
+// so it is the only moment a migration is possible.
+func TestBothLegacySchemesVerifyAndRequestMigration(t *testing.T) {
+	salt := "migr"
+	legacy := map[string]string{
+		"sha256": HashPasscode("pw", salt),
+		"pbkdf2": HashPasscodePBKDF2("pw", salt),
+	}
+	for name, stored := range legacy {
+		ok, migr, err := VerifyPasscode("pw", salt, stored)
+		if err != nil || !ok {
+			t.Errorf("%s: ok=%v err=%v", name, ok, err)
+		}
+		if !migr {
+			t.Errorf("%s: did not request migration", name)
+		}
+		// A WRONG passcode must never request migration — that would re-hash on a
+		// failed unlock and hand an attacker a way to overwrite the credential.
+		if _, wrongMigr, _ := VerifyPasscode("nope", salt, stored); wrongMigr {
+			t.Errorf("%s: a failed verify requested migration", name)
+		}
+	}
+}
+
+// A malformed argon2id hash must error rather than silently returning false,
+// which would look identical to a wrong passcode and hide a corrupt credential.
+func TestMalformedArgon2idHashErrors(t *testing.T) {
+	for _, bad := range []string{
+		"argon2id$2$19456$1",             // too few parts
+		"argon2id$x$19456$1$deadbeef",    // non-numeric time
+		"argon2id$2$0$1$deadbeef",        // zero memory
+		"argon2id$2$19456$1$nothexatall", // bad hex
+	} {
+		if _, _, err := VerifyPasscode("pw", "s", bad); err == nil {
+			t.Errorf("%q verified without an error", bad)
+		}
+	}
+}
+
+// The lazy migration only works if something drives it. Verify discards the
+// flag, so an unlock through it leaves the old hash forever.
+func TestVerifyAndUpgradeMovesALegacyHashForward(t *testing.T) {
+	salt := "upg"
+	legacy := Config{Enabled: true, Salt: salt, Hash: HashPasscode("pw", salt), AutoLockMinutes: 5}
+
+	ok, next, changed := legacy.VerifyAndUpgrade("pw")
+	if !ok || !changed {
+		t.Fatalf("ok=%v changed=%v", ok, changed)
+	}
+	if !strings.HasPrefix(next.Hash, "argon2id$") {
+		t.Errorf("upgraded hash = %q", next.Hash)
+	}
+	// Everything else about the config survives — an upgrade is not a reset.
+	if next.AutoLockMinutes != 5 || next.Salt != salt || !next.Enabled {
+		t.Errorf("the upgrade changed unrelated config: %+v", next)
+	}
+	// And the new hash verifies without asking to migrate again.
+	if ok, _, again := next.VerifyAndUpgrade("pw"); !ok || again {
+		t.Errorf("the upgraded config still asks to migrate: ok=%v changed=%v", ok, again)
+	}
+}
+
+// Re-hashing on a wrong passcode would let anyone who reaches the lock screen
+// overwrite the stored credential.
+func TestVerifyAndUpgradeNeverUpgradesOnAFailedVerify(t *testing.T) {
+	salt := "upg"
+	legacy := Config{Enabled: true, Salt: salt, Hash: HashPasscode("pw", salt)}
+	ok, next, changed := legacy.VerifyAndUpgrade("wrong")
+	if ok || changed {
+		t.Errorf("a wrong passcode reported ok=%v changed=%v", ok, changed)
+	}
+	if next.Hash != legacy.Hash {
+		t.Error("a failed verify rewrote the stored hash")
+	}
+}
+
+func TestVerifyAndUpgradeOnAnUnconfiguredLock(t *testing.T) {
+	for _, c := range []Config{
+		{},
+		{Enabled: true},
+		{Enabled: true, Salt: "s"},
+	} {
+		if ok, _, changed := c.VerifyAndUpgrade("anything"); ok || changed {
+			t.Errorf("%+v reported ok=%v changed=%v", c, ok, changed)
+		}
 	}
 }
