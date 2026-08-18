@@ -208,6 +208,30 @@ func uploadDecision() syncstate.UploadDecision {
 	return syncstate.UploadProceed
 }
 
+// blockedWorkspaceID names the workspace a rebind decision is actually about.
+//
+// The recovery card used to assume this was the ACTIVE workspace, which is only
+// true by coincidence. The stranded entry can belong to a workspace the user is
+// not currently looking at — or to one they have since deleted locally, in which
+// case the active id can never equal it and the card could never target the
+// thing that was stuck. Reported by adversarial review, 2026-08-17.
+//
+// Preference order: an entry of MINE the server has refused, then the oldest
+// foreign entry, then the active workspace as a last resort.
+func blockedWorkspaceID() string {
+	queue := loadSyncQueue()
+	mine, foreign := splitQueueByOwner(queue, signedInUserID())
+	for _, q := range mine {
+		if syncstate.IsWorkspaceNotFound(q.LastAttemptError) {
+			return q.WorkspaceID
+		}
+	}
+	if len(foreign) > 0 {
+		return foreign[0].WorkspaceID
+	}
+	return ""
+}
+
 // pushableQueue is the subset of queued work the signed-in account may send.
 // The flush loop iterates this rather than the raw queue, so another identity's
 // stranded snapshot is never pushed under the current token — which the server

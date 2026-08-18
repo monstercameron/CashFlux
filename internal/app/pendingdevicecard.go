@@ -131,11 +131,23 @@ func pendingDeviceWatcher() uic.Node {
 				return
 			}
 			switch ev.Status {
-			case "approved":
+			case "approved", "redeemed":
+				// "redeemed" is this same request, already used. It reaches a
+				// watcher that reconnected after redeeming, and it means
+				// approved — not expired, which is what the old default branch
+				// told the user.
 				pairingCode.Set(ev.PairingCode)
 				phase.Set(string(pendingPhaseApproved))
 			case "rejected":
 				phase.Set(string(pendingPhaseRejected))
+			case "canceled":
+				// The device's own withdrawal. onCancel already set this phase
+				// optimistically and did NOT cancel this watch, so the server's
+				// echo used to arrive here and overwrite the correct "canceled"
+				// state with a danger-styled "expired" — telling the user their
+				// request timed out when they had just cancelled it themselves.
+				// Found by adversarial review, 2026-08-17.
+				phase.Set(string(pendingPhaseCanceled))
 			default: // "expired", or anything unrecognized
 				phase.Set(string(pendingPhaseExpired))
 			}

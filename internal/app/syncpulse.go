@@ -70,7 +70,10 @@ func syncPulseTone(state string) (cls string, ok bool) {
 		return "sync-ok", true
 	case "offline":
 		return "sync-off", true
-	case "conflict", "locked":
+	case "conflict", "locked", syncStateRebind:
+		// rebind used to fall to the default and render a display:none slot, so
+		// the liveness indicator went silent exactly when sync had permanently
+		// stalled. Warn, like the other states that need a person.
 		return "sync-warn", true
 	case "error":
 		return "sync-err", true

@@ -99,13 +99,35 @@ func renameWorkspaceID(fromID, toID string) error {
 // with the new workspace — the client would compare against the wrong history
 // and could conclude it was already up to date.
 //
-// The CONFLICT backup for the old id is deliberately left alone: it holds a
-// local edit that lost a last-write-wins race, which is the user's data and the
-// one thing here that is not reconstructible from the server.
+// The CONFLICT backup is MOVED rather than dropped. It holds a local edit that
+// lost a last-write-wins race — the user's data, and the one thing here that
+// cannot be reconstructed from the server. Leaving it under the old id would
+// have stranded it: every reader of that backup keys off the ACTIVE workspace's
+// id, which after a rebind is the new one, so an untouched backup becomes
+// unreachable from any surface that could restore it. Found by adversarial
+// review, 2026-08-17.
 func clearSyncMetaFor(workspaceID string) {
 	workspaceID = strings.TrimSpace(workspaceID)
 	if workspaceID == "" {
 		return
 	}
 	lsRemove(syncMetaKey(workspaceID))
+}
+
+// carryConflictBackup moves a pending conflict backup onto the new workspace id.
+func carryConflictBackup(fromID, toID string) {
+	fromID, toID = strings.TrimSpace(fromID), strings.TrimSpace(toID)
+	if fromID == "" || toID == "" || fromID == toID {
+		return
+	}
+	stashed := lsGet(syncConflictPrefix + fromID)
+	if stashed == "" {
+		return
+	}
+	// Never overwrite a backup already waiting on the target: that one is also
+	// an unrecoverable local edit, and this is a repair, not a tidy-up.
+	if lsGet(syncConflictPrefix+toID) == "" {
+		lsSet(syncConflictPrefix+toID, stashed)
+	}
+	lsRemove(syncConflictPrefix + fromID)
 }

@@ -27,6 +27,7 @@ var syncPageKeys = Catalog{
 	// reporting a failure — and states the facts the decision needs, because
 	// the old pane said only "1 change(s) waiting to upload / Reason: workspace
 	// not found", which names neither the identity nor the workspace involved.
+	"sync.rebindChip":          "Needs a decision",
 	"sync.rebindTitle":         "This copy belongs to a different account",
 	"sync.rebindReason":        "The account you are signed in as does not own this workspace, so nothing can be uploaded until you choose what to do.",
 	"sync.rebindSignInReason":  "Sign in to upload the changes waiting on this device.",

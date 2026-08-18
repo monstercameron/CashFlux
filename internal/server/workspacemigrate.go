@@ -88,11 +88,17 @@ var (
 	ErrMigrationTargetMissing = errors.New("server migrate: no such target account")
 	// ErrMigrationSameAccount means source and target are the same account.
 	ErrMigrationSameAccount = errors.New("server migrate: source and target are the same account")
-	// ErrMigrationTargetUnlocked means the target was not suspended for the
-	// operation. C699 requires the target locked while its data changes owner:
-	// a device writing to the target mid-migration would race the transfer and
-	// could resurrect the state being replaced.
-	ErrMigrationTargetUnlocked = errors.New("server migrate: target account must be suspended for the duration")
+	// ErrMigrationTargetUnlocked means one of the two accounts was not suspended
+	// for the operation.
+	//
+	// C699 asks for the target to be locked. Adversarial review (2026-08-17)
+	// showed that is not enough: SyncService.PutWorkspace authorizes ownership
+	// with separate reads and then upserts the row with no ownership guard, so a
+	// SOURCE device that is still syncing can land its write after the transfer
+	// commits, flip user_id back, and overwrite the moved snapshot with stale
+	// data — silently, with the migration reported as successful. Both sides are
+	// therefore locked, which closes the window rather than narrowing it.
+	ErrMigrationTargetUnlocked = errors.New("server migrate: both accounts must be suspended for the duration")
 )
 
 // PreviewMigration assembles the before picture without changing anything.
@@ -236,6 +242,23 @@ func (s *Store) PreviewReplace(sourceUserID, sourceWorkspaceID, targetUserID, ta
 	return out, nil
 }
 
+// requireBothSuspended enforces that neither account can be written to while its
+// data changes hands. Suspension is what stops an in-flight client sync
+// (requireWriter rejects a suspended caller), and an unsuspended SOURCE is just
+// as dangerous as an unsuspended target — see ErrMigrationTargetUnlocked.
+func (s *Store) requireBothSuspended(sourceUserID, targetUserID string) error {
+	for _, id := range []string{sourceUserID, targetUserID} {
+		locked, err := s.IsUserSuspended(id)
+		if err != nil {
+			return err
+		}
+		if !locked {
+			return ErrMigrationTargetUnlocked
+		}
+	}
+	return nil
+}
+
 func blockPreview(p MigrationPreview, reason string) MigrationPreview {
 	p.Blocked = true
 	p.Reason = reason
@@ -286,12 +309,8 @@ func (s *Store) TransferWorkspace(sourceUserID, targetUserID, workspaceID string
 		return MigrationResult{}, ErrMigrationTargetMissing
 	}
 	if requireTargetLocked {
-		locked, err := s.IsUserSuspended(targetUserID)
-		if err != nil {
+		if err := s.requireBothSuspended(sourceUserID, targetUserID); err != nil {
 			return MigrationResult{}, err
-		}
-		if !locked {
-			return MigrationResult{}, ErrMigrationTargetUnlocked
 		}
 	}
 	defer s.observeDB("TransferWorkspace", time.Now())
@@ -344,12 +363,8 @@ func (s *Store) ReplaceWorkspaceSnapshot(sourceUserID, sourceWorkspaceID, target
 		return MigrationResult{}, fmt.Errorf("server migrate: source and target accounts and workspaces are required")
 	}
 	if requireTargetLocked {
-		locked, err := s.IsUserSuspended(targetUserID)
-		if err != nil {
+		if err := s.requireBothSuspended(sourceUserID, targetUserID); err != nil {
 			return MigrationResult{}, err
-		}
-		if !locked {
-			return MigrationResult{}, ErrMigrationTargetUnlocked
 		}
 	}
 	source, ok, err := s.GetSnapshotForUser(sourceUserID, sourceWorkspaceID)
@@ -389,6 +404,23 @@ func (s *Store) ReplaceWorkspaceSnapshot(sourceUserID, sourceWorkspaceID, target
 			targetWorkspaceID, priorDataset, priorVersion, priorUpdated); err != nil {
 			return MigrationResult{}, fmt.Errorf("server migrate: archive target snapshot: %w", err)
 		}
+	}
+
+	// The dataset carries blob HASHES inside it (domain.Artifact.BlobRef), but
+	// authorization to fetch those bytes comes from a workspace_blobs row for the
+	// TARGET workspace id. Copying the dataset without the links leaves every
+	// attachment referenced-but-unreadable for the new owner, and — once the
+	// source is cleaned up and the sweeper runs — deletes the bytes outright,
+	// long after the migration and with nothing pointing back at it. Found by
+	// adversarial review, 2026-08-17.
+	//
+	// The links are copied, not moved: the source keeps its own, so this cannot
+	// break the account the data came from either. Blobs are content-addressed
+	// and shared by hash, so two links to one blob is the normal state.
+	if _, err := tx.Exec(`INSERT OR IGNORE INTO workspace_blobs(workspace_id, hash)
+SELECT ?, hash FROM workspace_blobs WHERE workspace_id = ?`,
+		targetWorkspaceID, sourceWorkspaceID); err != nil {
+		return MigrationResult{}, fmt.Errorf("server migrate: carry attachment links: %w", err)
 	}
 
 	nextVersion := priorVersion + 1

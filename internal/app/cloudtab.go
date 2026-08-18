@@ -29,6 +29,12 @@ func statusLabelColor(state string) any {
 	if state == "error" {
 		return tw.TextDanger
 	}
+	if state == syncStateRebind {
+		// Warning, not danger: nothing has failed and nothing is lost. Something
+		// is waiting on a decision, and colouring that as an error would push
+		// the reader toward "retry", which is the one response that cannot work.
+		return tw.TextWarn
+	}
 	return nil
 }
 

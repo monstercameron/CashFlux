@@ -165,7 +165,19 @@ func approvePendingDeviceAsNewUser(store *Store, deviceID string, now time.Time)
 //
 // The target must exist and must not be suspended: pairing onto a suspended
 // account would be a way to walk a suspension back without lifting it.
-func attachPendingDeviceToUser(store *Store, deviceID, userID string, now time.Time) (bool, string, error) {
+//
+// It must also not be somebody ELSE's privileged account. Attaching mints a
+// working pairing code for the target, and RedeemPairingCode is unauthenticated
+// by design — so without this guard an operator holding admin-tier trust could
+// request a pairing as an anonymous device, attach it to the owner account, and
+// redeem full owner credentials for themselves. That is a real escalation and
+// not one the flat admin model already grants, because it produces a durable
+// session for another identity rather than an audited action taken as your own.
+//
+// The legitimate case is preserved: callerID may always attach a device to their
+// OWN account, whatever its role — an owner pairing their second browser is
+// exactly what this feature is for.
+func attachPendingDeviceToUser(store *Store, deviceID, userID, callerID string, now time.Time) (bool, string, error) {
 	if store == nil {
 		return false, "", fmt.Errorf("server approval: store is not configured")
 	}
@@ -173,10 +185,15 @@ func attachPendingDeviceToUser(store *Store, deviceID, userID string, now time.T
 	if userID == "" {
 		return false, "", fmt.Errorf("server approval: target account is required")
 	}
-	if _, found, err := store.GetUserByID(userID); err != nil {
+	target, found, err := store.GetUserByID(userID)
+	if err != nil {
 		return false, "", fmt.Errorf("server approval: target lookup: %w", err)
-	} else if !found {
+	}
+	if !found {
 		return false, "", errNoSuchAccount
+	}
+	if target.Role == RoleOwner && strings.TrimSpace(callerID) != userID {
+		return false, "", errAccountPrivileged
 	}
 	if suspended, err := store.IsUserSuspended(userID); err != nil {
 		return false, "", fmt.Errorf("server approval: suspension check: %w", err)
@@ -208,4 +225,8 @@ func attachPendingDeviceToUser(store *Store, deviceID, userID string, now time.T
 var (
 	errNoSuchAccount    = errors.New("server approval: no such account")
 	errAccountSuspended = errors.New("server approval: account is suspended")
+	// errAccountPrivileged blocks minting a session for somebody else's owner
+	// account. Adversarial review, 2026-08-17: without it, admin-tier trust
+	// converts into durable owner credentials in two unauthenticated calls.
+	errAccountPrivileged = errors.New("server approval: that account is privileged")
 )

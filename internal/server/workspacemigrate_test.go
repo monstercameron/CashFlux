@@ -39,9 +39,9 @@ func TestTransferWorkspaceMovesOwnershipWithoutCopying(t *testing.T) {
 	store := openTestStore(t)
 	migrateTestUsers(t, store, "user-old", "user-new")
 	seedWorkspace(t, store, "user-old", "ws-1", "Household", []byte(`{"txns":1}`))
-	if err := store.SetUserSuspended("user-new", true, time.Now().UTC()); err != nil {
-		t.Fatalf("SetUserSuspended: %v", err)
-	}
+	// BOTH sides are locked: an unsuspended SOURCE can land a sync after the
+	// transfer commits and flip ownership back (see ErrMigrationTargetUnlocked).
+	suspendAll(t, store, "user-old", "user-new")
 
 	res, err := store.TransferWorkspace("user-old", "user-new", "ws-1", time.Now().UTC(), true)
 	if err != nil {
@@ -81,7 +81,17 @@ func TestTransferWorkspaceRefusesTheDangerousCases(t *testing.T) {
 	if _, err := store.TransferWorkspace("user-old", "user-new", "ws-1", now, true); err != ErrMigrationTargetUnlocked {
 		t.Fatalf("unlocked target: err = %v, want ErrMigrationTargetUnlocked", err)
 	}
+	// An unlocked SOURCE is just as dangerous, and used to be allowed: the
+	// source's own device could still be syncing, and SyncService.PutWorkspace
+	// upserts ownership without an ownership guard, so its write would land
+	// after the transfer and silently undo it.
 	if err := store.SetUserSuspended("user-new", true, now); err != nil {
+		t.Fatalf("SetUserSuspended: %v", err)
+	}
+	if _, err := store.TransferWorkspace("user-old", "user-new", "ws-1", now, true); err != ErrMigrationTargetUnlocked {
+		t.Fatalf("unlocked source: err = %v, want ErrMigrationTargetUnlocked", err)
+	}
+	if err := store.SetUserSuspended("user-old", true, now); err != nil {
 		t.Fatalf("SetUserSuspended: %v", err)
 	}
 	// A target that does not exist.
@@ -227,5 +237,74 @@ func TestPreviewReplaceWarnsAboutALossyOverwrite(t *testing.T) {
 	}
 	if len(p.Warnings) == 0 {
 		t.Fatal("overwriting a larger dataset must warn before it is confirmed")
+	}
+}
+
+// suspendAll locks every named account, the precondition a migration requires.
+func suspendAll(t *testing.T, store *Store, ids ...string) {
+	t.Helper()
+	now := time.Now().UTC()
+	for _, id := range ids {
+		if err := store.SetUserSuspended(id, true, now); err != nil {
+			t.Fatalf("SetUserSuspended(%s): %v", id, err)
+		}
+	}
+}
+
+func TestReplaceCarriesAttachmentLinksToTheTarget(t *testing.T) {
+	// The dataset carries blob HASHES, but permission to fetch the bytes comes
+	// from a workspace_blobs row for the TARGET workspace. Copying the dataset
+	// without the links leaves every attachment referenced-but-unreadable for
+	// the new owner - and once the source is cleaned up, the sweeper deletes the
+	// bytes outright. Found by adversarial review, 2026-08-17.
+	store := openTestStore(t)
+	migrateTestUsers(t, store, "src", "dst")
+	seedWorkspace(t, store, "src", "ws-src", "With attachments", []byte(`{"artifact":"h1"}`))
+	seedWorkspace(t, store, "dst", "ws-dst", "Target", []byte(`{"old":true}`))
+	now := time.Now().UTC()
+	blob, err := store.PutBlob(t.TempDir(), []byte("receipt"), "image/png", "receipt.png", 1024)
+	if err != nil {
+		t.Fatalf("PutBlob: %v", err)
+	}
+	if err := store.LinkWorkspaceBlob("ws-src", blob.Hash); err != nil {
+		t.Fatalf("LinkWorkspaceBlob: %v", err)
+	}
+
+	if _, err := store.ReplaceWorkspaceSnapshot("src", "ws-src", "dst", "ws-dst", now, false); err != nil {
+		t.Fatalf("ReplaceWorkspaceSnapshot: %v", err)
+	}
+	if ok, err := store.UserWorkspaceBlob("dst", "ws-dst", blob.Hash); err != nil || !ok {
+		t.Fatalf("target cannot reach the attachment its dataset references: ok=%v err=%v", ok, err)
+	}
+	// The source keeps its own link: the links are copied, not moved, so the
+	// account the data came from is not broken by the repair either.
+	if ok, err := store.UserWorkspaceBlob("src", "ws-src", blob.Hash); err != nil || !ok {
+		t.Fatalf("source lost its attachment link: ok=%v err=%v", ok, err)
+	}
+}
+
+func TestUnknownMigrationModeIsRefusedNotGuessed(t *testing.T) {
+	// An unrecognised mode used to fall through to a TRANSFER, so a typo ran a
+	// different operation than the one requested - and the audit line was built
+	// from the raw string, so the record could name something that never
+	// happened.
+	for _, raw := range []string{"Replace", "REPLACE", "move", "delete"} {
+		if _, ok := parseMigrationMode(raw); ok {
+			t.Errorf("parseMigrationMode(%q) accepted an unknown mode", raw)
+		}
+	}
+	for _, tc := range []struct {
+		raw  string
+		want MigrationMode
+	}{
+		{"", MigrateTransfer},
+		{"transfer", MigrateTransfer},
+		{" transfer ", MigrateTransfer},
+		{"replace", MigrateReplace},
+	} {
+		got, ok := parseMigrationMode(tc.raw)
+		if !ok || got != tc.want {
+			t.Errorf("parseMigrationMode(%q) = (%q, %v), want (%q, true)", tc.raw, got, ok, tc.want)
+		}
 	}
 }

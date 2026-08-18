@@ -238,10 +238,17 @@ func handleAdminPendingDeviceAttach(cfg Config, store *Store) http.HandlerFunc {
 			writeErrorJSON(w, ErrorReasonInvalidArgument, "invalid request body")
 			return
 		}
-		attached, code, err := attachPendingDeviceToUser(store, deviceID, req.UserID, time.Now().UTC())
+		attached, code, err := attachPendingDeviceToUser(store, deviceID, req.UserID, admin.ID, time.Now().UTC())
 		switch {
 		case errors.Is(err, errNoSuchAccount):
 			writeErrorJSON(w, ErrorReasonNotFound, "no such account")
+			return
+		case errors.Is(err, errAccountPrivileged):
+			// Adversarial review, 2026-08-17: attaching mints a redeemable code,
+			// and redemption is unauthenticated, so allowing this would turn
+			// admin-tier trust into durable owner credentials.
+			writeErrorJSON(w, ErrorReasonPermissionDenied,
+				"only the owner can pair a new device to the owner account")
 			return
 		case errors.Is(err, errAccountSuspended):
 			// Refused rather than silently allowed: pairing a new device onto a
@@ -338,6 +345,15 @@ func handleAdminUserDeleteProvisional(cfg Config, store *Store) http.HandlerFunc
 		}
 		if !strings.HasPrefix(user.ID, "device:") {
 			writeErrorJSON(w, ErrorReasonFailedPrecondition, "only provisional device accounts can be removed this way")
+			return
+		}
+		// The "device:" prefix is NOT proof of a provisional account: the
+		// platform owner's id is literally "device:owner" (pkg/embed.OwnerAccountID),
+		// so the prefix check alone let this door delete the one account that can
+		// never be recreated. Found by adversarial review, 2026-08-17. Role is the
+		// real test, and it matches the protection demote/suspend already carry.
+		if user.Role == RoleOwner {
+			writeErrorJSON(w, ErrorReasonFailedPrecondition, "the owner account cannot be removed")
 			return
 		}
 		workspaces, err := store.ListWorkspaces(userID, true)

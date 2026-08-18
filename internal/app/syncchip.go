@@ -44,6 +44,12 @@ func syncChipFace(state string) (labelKey, cls string, ok bool) {
 		return "sync.locked", "sync-chip sync-warn", true
 	case "error":
 		return "sync.error", "sync-chip sync-err", true
+	case syncStateRebind:
+		// Without this case the chip returned ok=false and rendered NOTHING, so
+		// the one state that actually needs the user's attention was the one
+		// state with no indicator at all. Warn rather than error: nothing has
+		// failed and nothing is lost, but it will not resolve on its own.
+		return "sync.rebindChip", "sync-chip sync-warn", true
 	default:
 		return "", "", false
 	}

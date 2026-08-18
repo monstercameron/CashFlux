@@ -68,7 +68,14 @@ func RebindCard(p rebindProps) uic.Node {
 	busy := uic.UseState(false)
 
 	blocked := p.Status.State == syncStateRebind
-	localWS := activeWorkspaceID()
+	// The workspace the DECISION is about, which is not always the one on
+	// screen: the stranded entry can belong to another workspace entirely.
+	// Rebinding the active one instead would repoint a workspace that was never
+	// broken and leave the stuck entry exactly where it was.
+	localWS := blockedWorkspaceID()
+	if localWS == "" {
+		localWS = activeWorkspaceID()
+	}
 	userID := signedInUserID()
 
 	loadChoices := uic.UseEvent(func() {
@@ -312,6 +319,7 @@ func rebindLocalWorkspace(fromWorkspaceID, toWorkspaceID, userID string) error {
 		next = append(next, q)
 	}
 	saveSyncQueue(next)
+	carryConflictBackup(from, to)
 	clearSyncMetaFor(from)
 	setSyncStatus(syncStatus{State: "syncing", Pending: len(next)})
 	return nil

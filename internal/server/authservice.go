@@ -734,7 +734,13 @@ func (s *authServer) WatchPairingStatusRPC(req backendrpc.WatchPairingStatusRequ
 				return nil
 			}
 			ev := backendrpc.PairingStatusEvent{Status: pd.Status}
-			if pd.Status == PendingDeviceStatusApproved {
+			// A REDEEMED request carries its code too. A device that reconnects
+			// this watch after redeeming would otherwise be told "redeemed" with
+			// nothing to redeem, and would sit waiting for a code that never
+			// comes. The code is single-use and already consumed, so re-sending
+			// it grants nothing new — RedeemPairingCode replays the cached token
+			// pair for exactly this case (C443).
+			if pd.Status == PendingDeviceStatusApproved || pd.Status == PendingDeviceStatusRedeemed {
 				ev.PairingCode = pd.PairingCode
 			}
 			if err := stream.SendMsg(&ev); err != nil {

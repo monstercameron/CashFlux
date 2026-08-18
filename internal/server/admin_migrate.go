@@ -5,6 +5,7 @@ package server
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -64,13 +65,36 @@ func handleAdminMigratePreview(cfg Config, store *Store) http.HandlerFunc {
 	}
 }
 
-func migrationPreview(store *Store, req adminMigratePreviewRequest) (MigrationPreview, error) {
-	switch MigrationMode(strings.TrimSpace(req.Mode)) {
+// parseMigrationMode resolves the requested mode, rejecting anything it does not
+// recognise.
+//
+// It used to fall through to a transfer for ANY unrecognised string. A typo or a
+// client bug sending "Replace" therefore ran the wrong operation — moving the
+// source's whole workspace to the target account instead of overwriting the
+// target's data — and the audit line was built from the raw string, so the
+// record could name an operation that never happened. Found by adversarial
+// review, 2026-08-17. An empty mode still means transfer, which is a stated
+// default rather than a guess.
+func parseMigrationMode(raw string) (MigrationMode, bool) {
+	switch MigrationMode(strings.TrimSpace(raw)) {
 	case MigrateReplace:
-		return store.PreviewReplace(req.SourceUserID, req.WorkspaceID, req.TargetUserID, req.TargetWorkspaceID)
-	default:
-		return store.PreviewMigration(MigrateTransfer, req.SourceUserID, req.TargetUserID, req.WorkspaceID)
+		return MigrateReplace, true
+	case MigrateTransfer, "":
+		return MigrateTransfer, true
 	}
+	return "", false
+}
+
+func migrationPreview(store *Store, req adminMigratePreviewRequest) (MigrationPreview, error) {
+	mode, ok := parseMigrationMode(req.Mode)
+	if !ok {
+		return blockPreview(MigrationPreview{Mode: MigrationMode(req.Mode)},
+			fmt.Sprintf("%q is not a migration mode; use \"transfer\" or \"replace\"", req.Mode)), nil
+	}
+	if mode == MigrateReplace {
+		return store.PreviewReplace(req.SourceUserID, req.WorkspaceID, req.TargetUserID, req.TargetWorkspaceID)
+	}
+	return store.PreviewMigration(MigrateTransfer, req.SourceUserID, req.TargetUserID, req.WorkspaceID)
 }
 
 // handleAdminMigrateCommit serves POST /v1/admin/migrations/commit.
@@ -84,9 +108,11 @@ func handleAdminMigrateCommit(cfg Config, store *Store) http.HandlerFunc {
 		if !decodeJSONBody(w, r, &req) {
 			return
 		}
-		mode := MigrationMode(strings.TrimSpace(req.Mode))
-		if mode == "" {
-			mode = MigrateTransfer
+		mode, ok := parseMigrationMode(req.Mode)
+		if !ok {
+			writeErrorJSON(w, ErrorReasonInvalidArgument,
+				"unknown migration mode — use \"transfer\" or \"replace\"")
+			return
 		}
 		// The workspace the operator names in `confirm` must be the one being
 		// acted on. For a replace that is the TARGET, since the target is what

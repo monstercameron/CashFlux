@@ -348,6 +348,12 @@ func clearAuthSession() {
 	lsRemove(authAccessTokenKey)
 	lsRemove(authRefreshTokenKey)
 	lsRemove(authExpiresInKey)
+	// Forget WHO the session belonged to as well. Leaving it behind meant the
+	// next person to sign in on this browser inherited the previous account's
+	// id until the page happened to reload, and their edits were queued under
+	// it. The QUEUE is deliberately not cleared: unpushed work is the user's
+	// data, and signing out is not a request to discard it.
+	clearSignedInUserID()
 	stopProactiveRefreshTimer()
 	stopBackendWatch()
 	// The shared tunnel is authenticated as the session that just ended. Leaving it
@@ -405,6 +411,16 @@ func startBackendSync() {
 		adoptIdentityForSync(pr.ServerURL, effectiveServerToken(pr))
 	}()
 	wireSyncLifecycleListeners()
+	// C696: re-resolve WHO this session is on every restart, not just at boot.
+	// persistAuthSession (register / login / redeem-pairing) funnels through
+	// here without reloading the page, so a boot-only identity would stay frozen
+	// across a sign-out and sign-in — and the next edit would be stamped with,
+	// and pushed as, the previous account. Found by adversarial review,
+	// 2026-08-17.
+	go func() {
+		pr := uistate.LoadPrefs().Normalize()
+		adoptIdentityForSync(pr.ServerURL, effectiveServerToken(pr))
+	}()
 	flushBackendSyncQueue()
 	pullActiveWorkspaceFromBackend(true)
 	mergeRemoteWorkspaces()
@@ -1646,6 +1662,12 @@ func syncStatusLabel() string {
 		return "Offline"
 	case "error":
 		return "Sync error"
+	case syncStateRebind:
+		// Without its own case this fell through to the default, which says
+		// "Synced" when nothing is queued and "N queued" when something is —
+		// the first a flat lie, the second an implication that it is going to
+		// go. It is not going to go until somebody decides.
+		return "Needs your decision"
 	case "conflict":
 		return "Newer server copy available"
 	case "local", "":
