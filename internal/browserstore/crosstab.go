@@ -1,0 +1,188 @@
+// SPDX-License-Identifier: MIT
+
+//go:build js && wasm
+
+package browserstore
+
+import (
+	"sync"
+	"syscall/js"
+)
+
+// Cross-tab coherence for the in-memory cache.
+//
+// This package replaced localStorage with IndexedDB plus a cache loaded once at
+// boot. That swap was invisible to every caller — Get/Set kept their shape — but
+// it silently removed a property localStorage had and callers were relying on:
+// a SHARED VIEW ACROSS TABS. localStorage reads hit one store that every tab
+// sees; this cache is per-tab and frozen at that tab's boot.
+//
+// Code written against the old semantics therefore became quietly wrong rather
+// than failing. The worst case found (2026-08-18) is in the auth layer: the
+// refresh-token rotation guard re-reads the stored refresh token inside a
+// cross-tab Web Lock to check whether another tab already rotated it. Against
+// localStorage that read saw the other tab's write and the guard worked. Against
+// a per-tab cache it can only ever see this tab's boot-time value, so the guard
+// always says "unchanged", the tab replays a refresh token another tab already
+// consumed, and the server — correctly — treats a replayed refresh token as a
+// compromise signal and revokes the entire session family. Three open tabs could
+// sign the user out of every device.
+//
+// Two mechanisms restore what was lost:
+//
+//   - Reload: re-read specific keys from IndexedDB on demand, for the moments
+//     where correctness depends on seeing another tab's write RIGHT NOW.
+//   - A BroadcastChannel: push every local write to the other tabs so their
+//     caches converge without anyone having to ask.
+//
+// Both are best-effort by design. A browser without either still runs exactly as
+// it does today; it just keeps the old per-tab behaviour.
+
+const broadcastChannelName = "cashflux:store"
+
+var (
+	channel    js.Value
+	watchMu    sync.Mutex
+	watchers   = map[string][]func(value string, present bool){}
+	onceListen sync.Once
+)
+
+// StartCrossTab opens the broadcast channel and begins applying other tabs'
+// writes to this tab's cache. Safe to call more than once; a browser without
+// BroadcastChannel is left with the per-tab behaviour rather than an error.
+func StartCrossTab() {
+	onceListen.Do(func() {
+		ctor := js.Global().Get("BroadcastChannel")
+		if !ctor.Truthy() {
+			return
+		}
+		defer func() { _ = recover() }()
+		channel = ctor.New(broadcastChannelName)
+		channel.Set("onmessage", js.FuncOf(func(_ js.Value, args []js.Value) any {
+			if len(args) == 0 {
+				return nil
+			}
+			data := args[0].Get("data")
+			if !data.Truthy() {
+				return nil
+			}
+			key := data.Get("key")
+			if !key.Truthy() {
+				return nil
+			}
+			k := key.String()
+			val := data.Get("value")
+			present := val.Truthy() || val.Type() == js.TypeString
+			mu.Lock()
+			if present {
+				cache[k] = val.String()
+			} else {
+				delete(cache, k)
+			}
+			mu.Unlock()
+			notifyWatchers(k, val.String(), present)
+			return nil
+		}))
+	})
+}
+
+// publish tells the other tabs about a local write. Never fails a write: a
+// browser without BroadcastChannel, or a channel that has been closed, simply
+// leaves the other tabs to find out on their next Reload or reload.
+func publish(key, value string, present bool) {
+	if !channel.Truthy() {
+		return
+	}
+	defer func() { _ = recover() }()
+	msg := map[string]any{"key": key}
+	if present {
+		msg["value"] = value
+	}
+	channel.Call("postMessage", msg)
+}
+
+// Watch registers fn to run when ANOTHER tab changes key. It is not called for
+// this tab's own writes — the caller already knows about those, and firing on
+// them would turn every local write into a re-render.
+func Watch(key string, fn func(value string, present bool)) {
+	if fn == nil {
+		return
+	}
+	watchMu.Lock()
+	watchers[key] = append(watchers[key], fn)
+	watchMu.Unlock()
+}
+
+func notifyWatchers(key, value string, present bool) {
+	watchMu.Lock()
+	fns := append([]func(value string, present bool){}, watchers[key]...)
+	watchMu.Unlock()
+	for _, fn := range fns {
+		func() {
+			// One bad watcher must not stop the others, and must never take the
+			// page down from inside a JS event callback.
+			defer func() { _ = recover() }()
+			fn(value, present)
+		}()
+	}
+}
+
+// Reload re-reads the named keys from IndexedDB into the cache, so this tab sees
+// what other tabs have written since it booted.
+//
+// It BLOCKS until the read completes, which is safe only from a goroutine — not
+// from inside a js.Func callback, where blocking prevents the runtime from
+// pumping the event loop and the IndexedDB callback could never fire. Every
+// current caller is a sync worker goroutine.
+//
+// Call it where correctness depends on a fresh read rather than on eventual
+// convergence: before deciding whether another tab has already rotated a
+// single-use credential, for instance.
+func Reload(keys ...string) {
+	if len(keys) == 0 || !db.Truthy() {
+		return
+	}
+	done := make(chan struct{})
+	var once sync.Once
+	finish := func() { once.Do(func() { close(done) }) }
+	defer func() {
+		if r := recover(); r != nil {
+			finish()
+		}
+	}()
+
+	tx := db.Call("transaction", idbStoreName, "readonly")
+	os := tx.Call("objectStore", idbStoreName)
+	remaining := len(keys)
+	for _, key := range keys {
+		k := key
+		req := os.Call("get", k)
+		settle := func() {
+			remaining--
+			if remaining == 0 {
+				finish()
+			}
+		}
+		req.Set("onsuccess", js.FuncOf(func(js.Value, []js.Value) any {
+			res := req.Get("result")
+			mu.Lock()
+			if res.Type() == js.TypeString {
+				cache[k] = res.String()
+			} else if res.IsUndefined() || res.IsNull() {
+				// Absent in IndexedDB means another tab removed it — a sign-out
+				// elsewhere. Dropping it here is the point: keeping a cached
+				// credential that has been deleted is how a signed-out tab goes
+				// on presenting a dead session as a live one.
+				delete(cache, k)
+			}
+			mu.Unlock()
+			settle()
+			return nil
+		}))
+		req.Set("onerror", js.FuncOf(func(js.Value, []js.Value) any {
+			settle()
+			return nil
+		}))
+	}
+	<-done
+}

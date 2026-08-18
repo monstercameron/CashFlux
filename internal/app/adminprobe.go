@@ -39,7 +39,11 @@ type adminOverviewResponse struct {
 func probeAdminAccess() {
 	pr := uistate.LoadPrefs().Normalize()
 	endpoint := strings.TrimSpace(pr.ServerURL)
-	token := strings.TrimSpace(pr.ServerToken)
+	// The rotating session token, when there is one: probing with the static
+	// prefs token on a hosted instance asks the server a question with a
+	// credential it has never issued, and the admin nav then hides itself from
+	// an operator who is in fact signed in.
+	token := strings.TrimSpace(effectiveServerToken(pr))
 	if endpoint == "" || token == "" {
 		return
 	}

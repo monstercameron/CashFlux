@@ -422,16 +422,24 @@ func CloudConnectionPane() uic.Node {
 	status := loadSyncStatus()
 	d := discovery.Get()
 	phase := discoveryState.Get()
+	// Re-render when the stored credential changes, including in another tab.
+	// Without this the pane keeps whatever was true at mount, which is how one
+	// tab could sit on "Request access" while another had signed in.
+	uistate.CaptureAuthRevision(uistate.UseAuthRevision())
+
 	seg := segment.Get()
 	commercial := seg == "commercial"
-	// signedIn reads prefs, NOT the serverToken UseState: that state is seeded once
-	// at mount, so it is stale the moment a sign-in persists a token mid-session,
-	// while the prefs atom is what persistAuthSession updates and this pane
-	// subscribes to. Every sign-in surface below is hidden once it's true — a signed-
-	// in device being shown a full sign-in apparatus is just noise it can act on
-	// wrongly. The raw-token FIELD still binds to serverToken, since that one is an
-	// editable value rather than a fact about the session.
-	signedIn := strings.TrimSpace(pr.ServerToken) != "" && !status.AuthFailed
+	// signedIn asks the SESSION, not preferences. Preferences hold the static
+	// self-host token; a Custom Sync session's credential is the rotated access
+	// token in browserstore, and prefs.ServerToken can be empty for a device that
+	// is signed in and syncing right now. Deciding from prefs told exactly those
+	// devices to "Request access" — while still offering "Set a password", which
+	// is only ever shown to a device that is already authorized. Two contradictory
+	// prompts on one screen were two definitions of one fact (2026-08-18).
+	//
+	// The raw-token FIELD still binds to serverToken: that is an editable value,
+	// not a claim about the session.
+	signedIn := uistate.Session(pr.ServerToken).Present() && !status.AuthFailed
 	showPassword := !commercial && !signedIn && phase == discoveryOK && d.CustomAuthEnabled
 	// Commercial always offers OAuth — a paid backend's capabilities are a known
 	// quantity, not something to probe for — so discovery is never even run.
@@ -617,7 +625,7 @@ func CloudConnectionPane() uic.Node {
 			If(signedIn, uic.CreateElement(SetPasswordCard)),
 			If(signedIn,
 				Button(css.Class("btn", tw.Mt1), Type("button"), OnClick(onSignOut), uistate.T("settings.signOut"))),
-			If(strings.TrimSpace(pr.ServerToken) != "" && status.AuthFailed,
+			If(uistate.Session(pr.ServerToken).Present() && status.AuthFailed,
 				Button(css.Class("btn", tw.Mt1), Type("button"), Attr("data-testid", "settings-clear-invalid-token"), OnClick(onSignOut), uistate.T("settings.clearInvalidToken"))),
 
 			If(seg != "commercial", Div(css.Class(tw.Mt1),

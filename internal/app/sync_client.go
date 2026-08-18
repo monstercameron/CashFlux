@@ -20,6 +20,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/backendrpc"
 	"github.com/monstercameron/CashFlux/internal/backoff"
+	"github.com/monstercameron/CashFlux/internal/browserstore"
 	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/CashFlux/internal/rpcprotocol"
 	"github.com/monstercameron/CashFlux/internal/rpcworker"
@@ -206,6 +207,16 @@ func refreshAccessToken(ctx context.Context, pr prefs.Prefs) bool {
 	}
 	ok := false
 	withTokenRefreshLock(func() {
+		// Re-read from storage before deciding. The guard below compares against
+		// what ANOTHER tab may have written while we waited for the lock, and
+		// browserstore's cache is per-tab and frozen at boot — so without this
+		// the comparison could only ever see our own starting value, always
+		// concluded "unchanged", and replayed a refresh token the other tab had
+		// already consumed. The server treats a replayed refresh token as a
+		// compromise signal and revokes the whole session family, so this
+		// omission could sign the user out of every device simply for having a
+		// second tab open (2026-08-18).
+		browserstore.Reload(authRefreshTokenKey, authAccessTokenKey)
 		// Reuse without replaying: another tab may have already refreshed
 		// while we waited for the lock. A refresh token is single-use —
 		// replaying our now-stale copy would trip the server's reuse/
@@ -401,6 +412,27 @@ func startBackendSync() {
 		return
 	}
 	restoreTokenLifecycleOnBoot()
+	// Credentials rotate, and they rotate in whichever tab happened to get there
+	// first. Every other tab is left holding a bearer that is about to stop
+	// working, a socket authenticated with it, and possibly a sticky "your
+	// credentials were rejected" flag from the 401 it earned on the way. React to
+	// the change instead of waiting for a reload (2026-08-18).
+	uistate.WatchAuthAcrossTabs(func() {
+		// A newer credential exists, so any earlier rejection is stale. Leaving
+		// AuthFailed set is what kept a recovered tab insisting the user had to
+		// sign in again.
+		if st := loadSyncStatus(); st.AuthFailed {
+			st.AuthFailed = false
+			st.Message = ""
+			setSyncStatus(st)
+		}
+		// The pooled connections are keyed by endpoint AND bearer; the live ones
+		// are authenticated as the credential that just got replaced.
+		dropSharedConn()
+		stopBackendWatch()
+		startBackendWatch()
+		flushBackendSyncQueue()
+	})
 	// C696: learn which account this session belongs to before anything is
 	// pushed. Queued work written while signed out is adopted by the current
 	// account; work belonging to a DIFFERENT one is left alone and surfaces as

@@ -16,6 +16,11 @@ import (
 // self-host token.
 const AuthAccessTokenKey = "cashflux:auth:access-token"
 
+// AuthRefreshTokenKey holds the rotating REFRESH token. Named here, beside the
+// access token, so the cross-tab credential watch can name both without
+// internal/app having to export its private copy of the string.
+const AuthRefreshTokenKey = "cashflux:auth:refresh-token"
+
 // EffectiveServerToken returns the bearer token a backend RPC must send.
 //
 // The rotated access token wins when a Custom Sync session exists; otherwise the

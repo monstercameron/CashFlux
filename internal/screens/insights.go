@@ -1664,7 +1664,10 @@ func Insights() ui.Node {
 
 	// Backend/OpenAI mode toggle — only meaningful when a backend is configured;
 	// otherwise the chat always uses the direct OpenAI provider.
-	backendConfigured := strings.TrimSpace(pr.ServerURL) != "" && strings.TrimSpace(pr.ServerToken) != ""
+	// The session's credential, not the static one: on a hosted instance
+	// prefs.ServerToken is empty while a rotating session is live, and reading it
+	// here hid the backend/OpenAI toggle from every hosted user.
+	backendConfigured := strings.TrimSpace(pr.ServerURL) != "" && uistate.Session(pr.ServerToken).Present()
 	backendToggle := Fragment()
 	if backendConfigured {
 		label := uistate.T("insights.usingOpenAI")

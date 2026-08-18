@@ -43,7 +43,13 @@ func TryActivationHandoff() {
 	stripHandoffParam()
 
 	pr := uistate.LoadPrefs().Normalize()
-	if strings.TrimSpace(pr.ServerToken) != "" {
+	// Ask the SESSION, not preferences. A device paired by approval or by an
+	// earlier code holds a rotating access token and an EMPTY prefs.ServerToken,
+	// so the prefs-only check could not see the very sessions this guard exists
+	// to protect — and an activation link would silently re-key a working client
+	// onto a different account, which is precisely the duplicate-account shape
+	// these tickets came from (2026-08-18).
+	if uistate.Session(pr.ServerToken).Present() {
 		return // already signed in; the code simply goes unused and expires
 	}
 

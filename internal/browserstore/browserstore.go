@@ -47,6 +47,9 @@ func Init() {
 		return
 	}
 	defer func() { ready = true }()
+	// Start listening before the load, so a write another tab makes while this
+	// one is still opening IndexedDB is not missed.
+	StartCrossTab()
 	idb := js.Global().Get("indexedDB")
 	if !idb.Truthy() {
 		mirrorLocalStorage()
@@ -204,6 +207,7 @@ func Set(key, val string) {
 	cache[key] = val
 	mu.Unlock()
 	idbPut(key, val)
+	publish(key, val, true)
 }
 
 // SetThen writes key→val and invokes done() once the IndexedDB transaction commits
@@ -227,6 +231,7 @@ func SetThen(key, val string, done func()) {
 			fin()
 		}
 	}()
+	publish(key, val, true)
 	tx := db.Call("transaction", idbStoreName, "readwrite")
 	tx.Set("oncomplete", js.FuncOf(func(js.Value, []js.Value) any { fin(); return nil }))
 	tx.Set("onerror", js.FuncOf(func(js.Value, []js.Value) any { fin(); return nil }))
@@ -240,6 +245,7 @@ func Remove(key string) {
 	delete(cache, key)
 	mu.Unlock()
 	idbDelete(key)
+	publish(key, "", false)
 }
 
 // RegisterJSBridge exposes the store to vendored JS (the music player, the
