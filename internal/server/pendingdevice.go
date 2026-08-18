@@ -73,7 +73,12 @@ func (s *Store) MintPendingDevice(label string, now time.Time) (deviceID string,
 	// sweep on every real mint bounds the table's steady-state size to
 	// roughly the request RATE rather than the cumulative total; a failure
 	// here must never block a legitimate pairing request, so it's ignored.
-	_, _ = s.PruneExpiredPendingDevices(now)
+	// Two steps since C700: time-out the requests nobody answered (so the
+	// console can show "expired" rather than an absence), then delete the ones
+	// whose retention window has passed. Deleting on expiry, as this used to,
+	// bounded the table by erasing the history an operator needs to read.
+	_, _ = s.ExpirePendingDevices(now)
+	_, _ = s.PruneRetiredPendingDevices(now)
 	expiresAt = now.Add(PendingDeviceTTL)
 	for attempt := 0; attempt < pendingDeviceIDMintAttempts; attempt++ {
 		id, genErr := randomPendingDeviceID()
@@ -186,61 +191,46 @@ WHERE device_id = ? AND status = ? AND expires_at > ?`,
 	return affected > 0, nil
 }
 
-// RejectPendingDevice atomically moves a still-pending request to rejected.
-// Shared by two distinct actors with equal authority to kill a pending
-// request: the admin (TODOS.md C454's approve/reject console) and the
-// requesting device itself, via CancelDevicePairing (e.g. the pairing code
-// WatchPairingStatus pushed doesn't match what the admin console shows — a
-// plausible sign of a mismatched or spoofed request). ok is false if the
-// request was already resolved or never existed.
+// RejectPendingDevice atomically moves a still-pending request to rejected, as
+// an OPERATOR decision. ok is false if the request was already resolved or never
+// existed.
+//
+// The device's own withdrawal goes through CancelPendingDevice instead. Both
+// used to call this one function, so a resolved row could not say whether an
+// operator had refused the request or the user had changed their mind in their
+// own browser — opposite facts about whether to trust the next request from
+// that device.
 func (s *Store) RejectPendingDevice(deviceID string) (ok bool, err error) {
-	if s == nil || s.db == nil {
-		return false, fmt.Errorf("server store: not configured")
-	}
-	deviceID = strings.TrimSpace(deviceID)
-	if deviceID == "" {
-		return false, nil
-	}
-	defer s.observeDB("RejectPendingDevice", time.Now())
-	res, err := s.db.Exec(`UPDATE pending_devices SET status = ? WHERE device_id = ? AND status = ?`,
-		PendingDeviceStatusRejected, deviceID, PendingDeviceStatusPending)
-	if err != nil {
-		return false, fmt.Errorf("server store: reject pending device: %w", err)
-	}
-	affected, err := res.RowsAffected()
-	if err != nil {
-		return false, fmt.Errorf("server store: reject pending device: %w", err)
-	}
-	return affected > 0, nil
+	return s.ResolvePendingDevice(deviceID, PendingDeviceStatusRejected, ResolvedByAdmin, time.Now().UTC())
 }
 
-// PruneExpiredPendingDevices removes every pending_devices row whose expiry
-// has passed, regardless of resolution status (pending/approved/rejected) —
-// security review finding (TODOS.md C454 follow-up): nothing ever deleted
-// these rows, so the table grew unbounded even while
-// devicePairingGlobalLimiter capped the per-minute MINT rate (that limiter
-// only slows growth, it never bounded the cumulative total). Safe to delete
-// any status once expires_at has passed: an approved/rejected row was
-// already delivered to the waiting device via WatchPairingStatus (its own
-// single-event, one-shot delivery — see WatchPairingStatusRPC) and nothing
-// else ever reads it again; the actual account link an approval grants
-// lives in pairing_codes/users, entirely independent of this row. Called
-// opportunistically from MintPendingDevice; exported so tests and any
-// future periodic sweep can call it directly too.
+// CancelPendingDevice records the requesting DEVICE withdrawing its own request.
+// Same authority as a rejection, different meaning.
+func (s *Store) CancelPendingDevice(deviceID string) (ok bool, err error) {
+	return s.ResolvePendingDevice(deviceID, PendingDeviceStatusCanceled, ResolvedByDevice, time.Now().UTC())
+}
+
+// PruneExpiredPendingDevices runs the full housekeeping pass: time out the
+// requests nobody answered, then delete the resolved rows whose retention
+// window has passed. It returns how many rows were DELETED.
+//
+// It used to delete every row the moment its expiry passed, on the reasoning
+// that nothing read a resolved row again. C700 established that something does:
+// an operator, trying to work out which account a browser was approved onto and
+// whether its code was ever used. Deleting on expiry meant a device account
+// whose request had timed out appeared in the console with no request behind it
+// at all — an orphan with no explanation, which is what made the duplicate
+// account impossible to diagnose.
+//
+// The security finding it was written for still holds — the table must not grow
+// without bound, since devicePairingGlobalLimiter caps the mint RATE and not the
+// cumulative total. Retention satisfies both: history for as long as anyone is
+// plausibly still debugging, then deletion (see PendingDeviceRetention).
 func (s *Store) PruneExpiredPendingDevices(now time.Time) (deleted int64, err error) {
-	if s == nil || s.db == nil {
-		return 0, fmt.Errorf("server store: not configured")
+	if _, err := s.ExpirePendingDevices(now); err != nil {
+		return 0, err
 	}
-	defer s.observeDB("PruneExpiredPendingDevices", time.Now())
-	res, err := s.db.Exec(`DELETE FROM pending_devices WHERE expires_at < ?`, formatTime(now.UTC()))
-	if err != nil {
-		return 0, fmt.Errorf("server store: prune expired pending devices: %w", err)
-	}
-	deleted, err = res.RowsAffected()
-	if err != nil {
-		return 0, fmt.Errorf("server store: prune expired pending devices: %w", err)
-	}
-	return deleted, nil
+	return s.PruneRetiredPendingDevices(now)
 }
 
 // randomPendingDeviceID returns a cryptographically random, URL-safe device

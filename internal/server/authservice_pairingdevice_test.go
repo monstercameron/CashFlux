@@ -102,8 +102,13 @@ func TestAuthServerCancelDevicePairing(t *testing.T) {
 	if err != nil || !ok {
 		t.Fatalf("GetPendingDevice: ok=%v err=%v", ok, err)
 	}
-	if pd.Status != PendingDeviceStatusRejected {
-		t.Fatalf("GetPendingDevice after cancel: status = %q, want %q", pd.Status, PendingDeviceStatusRejected)
+	// C700: a device withdrawing its own request is CANCELED, not rejected. The
+	// two used to share a status, so a resolved row could not say whether an
+	// operator refused the request or the user changed their mind in their own
+	// browser â opposite facts about whether to trust the next request from
+	// that device.
+	if pd.Status != PendingDeviceStatusCanceled {
+		t.Fatalf("GetPendingDevice after cancel: status = %q, want %q", pd.Status, PendingDeviceStatusCanceled)
 	}
 
 	// Canceling an unknown/already-resolved device id is not an error — it

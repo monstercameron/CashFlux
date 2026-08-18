@@ -6,6 +6,27 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **A device access request now has a life story the console can read, and approving one no longer has to
+  create a new account (C698, C700).** Approving a device could only ever mint a brand-new account, so an
+  operator faced with "this is my other browser, it should be my existing account" had one available action:
+  create a second account that owns none of the first one's data. The server then correctly refused every
+  sync from it. Requests now record which account they produced, whether the pairing code was ever used, who
+  resolved them (an operator refusing is no longer indistinguishable from the user cancelling in their own
+  browser), and whether they simply timed out — and the console can attach a request to an account that
+  already exists, reissue a pairing code that lapsed before anyone typed it, and remove a provisional device
+  account that should never have been created. Expired requests are kept as readable history for a month
+  instead of being deleted on the spot, which is what previously left device accounts in the console with no
+  request behind them and no way to explain where they came from.
+- **Workspaces can be moved between accounts, previewed first and reversible after (C695, C699).** When a
+  household's data ends up under the wrong account, the repairs people reach for — delete one account and
+  rename the other, or export and re-import — either drop records through a cascade or lose the workspace's
+  identity, which breaks every other device pinned to it. Ownership is now transferable directly: a preview
+  states what exists on each side and what the commit would do, the commit requires the operator to repeat
+  the id of the workspace being changed, the target account must be suspended while its data changes hands,
+  and anything overwritten is archived in the same transaction that overwrites it, so a rollback is a
+  guarantee rather than a courtesy. Every step is recorded in the audit trail.
+
 ### Fixed
 - **The import history and the ledger can now be reconciled (C687).** The history said 688 transaction
   records had been added while the ledger held 565, and nothing could explain the gap, because no import path

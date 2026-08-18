@@ -14,7 +14,7 @@ import (
 	_ "github.com/ncruces/go-sqlite3/driver" // registers the pure-Go sqlite3 driver
 )
 
-const CurrentServerSchemaVersion = 14
+const CurrentServerSchemaVersion = 15
 const sqliteBusyTimeoutMillis = 5000
 
 // Store owns the backend SQLite database.
@@ -257,6 +257,12 @@ func (s *Store) migrate() error {
 			return err
 		}
 		version = 14
+	}
+	if version < 15 {
+		if err := s.migrateTo15(); err != nil {
+			return err
+		}
+		version = 15
 	}
 	if _, err := s.db.Exec(`INSERT INTO schema_meta(id, version) VALUES(1, ?) ON CONFLICT(id) DO UPDATE SET version = excluded.version`, version); err != nil {
 		return fmt.Errorf("server store: write schema version: %w", err)
@@ -551,6 +557,61 @@ func (s *Store) migrateTo14() error {
 	// locked-out account.
 	if _, err := s.db.Exec(`UPDATE users SET role = 'member' WHERE role = '' OR role IS NULL;`); err != nil {
 		return fmt.Errorf("server store: migrate v14: backfill role: %w", err)
+	}
+	return nil
+}
+
+// migrateTo15 gives a device request a life story instead of a single verdict
+// (TODOS.md C700).
+//
+// Until now a pending_devices row recorded only pending/approved/rejected, and
+// nothing at all about what the approval PRODUCED. So an operator looking at a
+// device that had already been approved and redeemed saw an empty pending list
+// and a device account they could not connect to any request — which is exactly
+// the state that made the cam@/mr.e.cameron@ mix-up unreadable from the console.
+//
+// Four columns close that gap:
+//
+//   - user_id: the account this request was approved onto. Without it there is
+//     no link at all from a device to its account — approval minted a user and
+//     forgot which request it came from.
+//   - resolved_at / resolved_by: when the request left "pending" and who moved
+//     it. The admin and the device itself share one code path today, so a
+//     rejected row cannot say whether an operator refused it or the user
+//     cancelled from their own browser. Those are different facts.
+//   - redeemed_at: whether the approved pairing code was ever actually used. An
+//     approval nobody redeemed and an approval in daily use look identical
+//     without it.
+func (s *Store) migrateTo15() error {
+	for _, col := range []struct{ name, ddl string }{
+		{"user_id", `ALTER TABLE pending_devices ADD COLUMN user_id TEXT NOT NULL DEFAULT '';`},
+		{"resolved_at", `ALTER TABLE pending_devices ADD COLUMN resolved_at TEXT NOT NULL DEFAULT '';`},
+		{"resolved_by", `ALTER TABLE pending_devices ADD COLUMN resolved_by TEXT NOT NULL DEFAULT '';`},
+		{"redeemed_at", `ALTER TABLE pending_devices ADD COLUMN redeemed_at TEXT NOT NULL DEFAULT '';`},
+	} {
+		has, err := s.columnExists("pending_devices", col.name)
+		if err != nil {
+			return fmt.Errorf("server store: migrate v15: %w", err)
+		}
+		if has {
+			continue
+		}
+		if _, err := s.db.Exec(col.ddl); err != nil {
+			return fmt.Errorf("server store: migrate v15: add %s: %w", col.name, err)
+		}
+	}
+	// Finding a device by the account it was approved onto is the console's
+	// central question ("which browser is signed in as this user?").
+	if _, err := s.db.Exec(`CREATE INDEX IF NOT EXISTS idx_pending_devices_user ON pending_devices(user_id);`); err != nil {
+		return fmt.Errorf("server store: migrate v15: index: %w", err)
+	}
+	// Existing resolved rows get an honest, non-fabricated history: they were
+	// resolved at some unrecorded moment by an unrecorded actor. Backfilling
+	// resolved_at with "now" would date every historical decision to the
+	// deployment of this migration, which is worse than admitting it is unknown.
+	if _, err := s.db.Exec(`UPDATE pending_devices SET resolved_by = 'unknown'
+WHERE resolved_by = '' AND status <> 'pending';`); err != nil {
+		return fmt.Errorf("server store: migrate v15: backfill resolver: %w", err)
 	}
 	return nil
 }

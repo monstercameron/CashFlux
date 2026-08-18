@@ -3,6 +3,7 @@
 package server
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -139,5 +140,72 @@ func approvePendingDeviceAsNewUser(store *Store, deviceID string, now time.Time)
 		cleanup()
 		return false, "", nil
 	}
+	// C700: record WHICH account this approval produced. Without this the new
+	// device:<random> user has no link back to the request that created it, so
+	// the console shows an account nobody can explain — the shape of the
+	// duplicate-account incident this ticket came from.
+	if err := store.SetPendingDeviceAccount(deviceID, userID, ResolvedByAdmin, now); err != nil {
+		// The approval itself stands; only the link failed. Undoing a granted
+		// approval over a bookkeeping error would be a worse outcome than an
+		// unlabelled row, and the pairing code has already been minted.
+		return true, code, nil
+	}
 	return true, code, nil
 }
+
+// attachPendingDeviceToUser approves a request onto an account that ALREADY
+// EXISTS, instead of minting a new one.
+//
+// This is the ticket's central fix (C700). Approval had exactly one behaviour —
+// create a fresh device:<random> user — so an operator faced with "this is my
+// other browser, it should be my existing account" had no way to say so. Taking
+// the only available action produced a second account that could not read the
+// first one's workspaces, and the server then correctly answered `workspace not
+// found` forever.
+//
+// The target must exist and must not be suspended: pairing onto a suspended
+// account would be a way to walk a suspension back without lifting it.
+func attachPendingDeviceToUser(store *Store, deviceID, userID string, now time.Time) (bool, string, error) {
+	if store == nil {
+		return false, "", fmt.Errorf("server approval: store is not configured")
+	}
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return false, "", fmt.Errorf("server approval: target account is required")
+	}
+	if _, found, err := store.GetUserByID(userID); err != nil {
+		return false, "", fmt.Errorf("server approval: target lookup: %w", err)
+	} else if !found {
+		return false, "", errNoSuchAccount
+	}
+	if suspended, err := store.IsUserSuspended(userID); err != nil {
+		return false, "", fmt.Errorf("server approval: suspension check: %w", err)
+	} else if suspended {
+		return false, "", errAccountSuspended
+	}
+	code, _, err := store.MintPairingCode(userID, now)
+	if err != nil {
+		return false, "", fmt.Errorf("server approval: mint pairing code: %w", err)
+	}
+	approved, err := store.ApprovePendingDevice(deviceID, code, now)
+	if err != nil {
+		return false, "", fmt.Errorf("server approval: approve request: %w", err)
+	}
+	if !approved {
+		// Nothing to compensate: unlike the new-account path this created no
+		// user, and the unused code expires on its own in five minutes.
+		return false, "", nil
+	}
+	if err := store.SetPendingDeviceAccount(deviceID, userID, ResolvedByAdmin, now); err != nil {
+		return true, code, nil
+	}
+	return true, code, nil
+}
+
+// errNoSuchAccount and errAccountSuspended let the handler answer with a precise
+// reason instead of a generic failure — an operator attaching a device to the
+// wrong account id needs to know which of the two things went wrong.
+var (
+	errNoSuchAccount    = errors.New("server approval: no such account")
+	errAccountSuspended = errors.New("server approval: account is suspended")
+)

@@ -1,0 +1,491 @@
+// SPDX-License-Identifier: MIT
+
+package server
+
+import (
+	"database/sql"
+	"errors"
+	"fmt"
+	"strings"
+	"time"
+)
+
+// This file moves a workspace from one account to another, and it exists
+// because the alternative people reach for is worse (TODOS.md C695, C699).
+//
+// When a household's data ends up under the wrong account — a second device
+// approval minted a new user, and the browser is now signed in as somebody who
+// owns none of the workspaces — the intuitive repair is "delete the new account
+// and rename the old one", or "export from one, import to the other". Both
+// destroy things: the first drops rows through ON DELETE CASCADE, the second
+// loses the workspace's identity, so every other device pinned to that
+// workspace id starts failing in the same way the first one did.
+//
+// The actual operation is smaller and safer than either. Snapshots, history and
+// blob links are all keyed by workspace_id, never by user_id — so ownership is
+// one column on one row. Transferring it moves the data by moving nothing at
+// all, which is why C695 states the rule plainly: never implement overwrite as
+// account deletion plus rename.
+
+// MigrationMode is what to do when the target account already has a workspace
+// in the way.
+type MigrationMode string
+
+const (
+	// MigrateTransfer repoints an existing workspace at a new owner. Nothing is
+	// copied and nothing is deleted.
+	MigrateTransfer MigrationMode = "transfer"
+	// MigrateReplace overwrites the TARGET workspace's snapshot with the
+	// source's, after archiving what was there.
+	MigrateReplace MigrationMode = "replace"
+)
+
+// MigrationPreview is what an operator is shown BEFORE anything happens: what
+// exists on each side, and what the commit would do. C699 requires the preview
+// because a migration decided from memory is how data lands on the wrong
+// account.
+type MigrationPreview struct {
+	Mode           MigrationMode `json:"mode"`
+	SourceUserID   string        `json:"sourceUserId"`
+	TargetUserID   string        `json:"targetUserId"`
+	WorkspaceID    string        `json:"workspaceId"`
+	WorkspaceName  string        `json:"workspaceName"`
+	SourceBytes    int           `json:"sourceBytes"`
+	SourceVersion  int64         `json:"sourceVersion"`
+	SourceUpdated  string        `json:"sourceUpdatedAt,omitempty"`
+	SourceBlobs    int           `json:"sourceBlobs"`
+	TargetExists   bool          `json:"targetExists"`
+	TargetBytes    int           `json:"targetBytes,omitempty"`
+	TargetVersion  int64         `json:"targetVersion,omitempty"`
+	TargetUpdated  string        `json:"targetUpdatedAt,omitempty"`
+	TargetBlobs    int           `json:"targetBlobs,omitempty"`
+	TargetWorkspac string        `json:"targetWorkspaceId,omitempty"`
+	// Warnings are the things an operator should read before confirming. They
+	// are stated rather than enforced where the operation is legitimate but
+	// lossy — refusing outright would leave a real situation unfixable.
+	Warnings []string `json:"warnings,omitempty"`
+	// Blocked is set when the migration cannot proceed at all; Reason says why.
+	Blocked bool   `json:"blocked"`
+	Reason  string `json:"reason,omitempty"`
+}
+
+// MigrationResult records what a committed migration actually did.
+type MigrationResult struct {
+	Mode         MigrationMode `json:"mode"`
+	WorkspaceID  string        `json:"workspaceId"`
+	SourceUserID string        `json:"sourceUserId"`
+	TargetUserID string        `json:"targetUserId"`
+	// ArchivedVersion is the snapshot_history version the previous target
+	// contents were written to, so a rollback has a specific thing to name.
+	ArchivedVersion int64  `json:"archivedVersion,omitempty"`
+	CommittedAt     string `json:"committedAt"`
+}
+
+var (
+	// ErrMigrationSourceMissing means the workspace is not owned by the source.
+	ErrMigrationSourceMissing = errors.New("server migrate: source does not own that workspace")
+	// ErrMigrationTargetMissing means the target account does not exist.
+	ErrMigrationTargetMissing = errors.New("server migrate: no such target account")
+	// ErrMigrationSameAccount means source and target are the same account.
+	ErrMigrationSameAccount = errors.New("server migrate: source and target are the same account")
+	// ErrMigrationTargetUnlocked means the target was not suspended for the
+	// operation. C699 requires the target locked while its data changes owner:
+	// a device writing to the target mid-migration would race the transfer and
+	// could resurrect the state being replaced.
+	ErrMigrationTargetUnlocked = errors.New("server migrate: target account must be suspended for the duration")
+)
+
+// PreviewMigration assembles the before picture without changing anything.
+func (s *Store) PreviewMigration(mode MigrationMode, sourceUserID, targetUserID, workspaceID string) (MigrationPreview, error) {
+	if s == nil || s.db == nil {
+		return MigrationPreview{}, fmt.Errorf("server store: not configured")
+	}
+	sourceUserID = strings.TrimSpace(sourceUserID)
+	targetUserID = strings.TrimSpace(targetUserID)
+	workspaceID = strings.TrimSpace(workspaceID)
+	out := MigrationPreview{
+		Mode: mode, SourceUserID: sourceUserID, TargetUserID: targetUserID, WorkspaceID: workspaceID,
+	}
+	if sourceUserID == "" || targetUserID == "" || workspaceID == "" {
+		return blockPreview(out, "source, target and workspace are all required"), nil
+	}
+	if sourceUserID == targetUserID {
+		return blockPreview(out, ErrMigrationSameAccount.Error()), nil
+	}
+	if _, found, err := s.GetUserByID(targetUserID); err != nil {
+		return MigrationPreview{}, err
+	} else if !found {
+		return blockPreview(out, ErrMigrationTargetMissing.Error()), nil
+	}
+	source, found, err := s.GetWorkspace(sourceUserID, workspaceID)
+	if err != nil {
+		return MigrationPreview{}, err
+	}
+	if !found {
+		return blockPreview(out, ErrMigrationSourceMissing.Error()), nil
+	}
+	out.WorkspaceName = source.Name
+	out.SourceVersion = source.Version
+	out.SourceUpdated = formatTime(source.UpdatedAt)
+	if snap, ok, err := s.GetSnapshotForUser(sourceUserID, workspaceID); err != nil {
+		return MigrationPreview{}, err
+	} else if ok {
+		out.SourceBytes = len(snap.Dataset)
+	}
+	if n, err := s.countWorkspaceBlobs(workspaceID); err != nil {
+		return MigrationPreview{}, err
+	} else {
+		out.SourceBlobs = n
+	}
+
+	switch mode {
+	case MigrateTransfer:
+		// A transfer collides only if the target already owns this exact id,
+		// which cannot happen — ownership is one row — so the only real
+		// question is whether the target has a same-NAMED workspace, which is
+		// confusing but harmless.
+		targets, err := s.ListWorkspaces(targetUserID, false)
+		if err != nil {
+			return MigrationPreview{}, err
+		}
+		for _, t := range targets {
+			if strings.EqualFold(strings.TrimSpace(t.Name), strings.TrimSpace(source.Name)) {
+				out.Warnings = append(out.Warnings, fmt.Sprintf(
+					"the target already has a workspace named %q (%s) — after the transfer it will have two", t.Name, t.ID))
+			}
+		}
+		if out.SourceBytes == 0 {
+			out.Warnings = append(out.Warnings, "the source workspace has no snapshot yet — this transfers an empty workspace")
+		}
+	case MigrateReplace:
+		return MigrationPreview{}, fmt.Errorf("server migrate: replace requires a target workspace; use PreviewReplace")
+	default:
+		return blockPreview(out, fmt.Sprintf("unknown migration mode %q", mode)), nil
+	}
+	return out, nil
+}
+
+// PreviewReplace assembles the before picture for overwriting one workspace's
+// contents with another's. The two workspaces keep their own identities: only
+// the dataset moves, so every device pinned to the target's id keeps working.
+func (s *Store) PreviewReplace(sourceUserID, sourceWorkspaceID, targetUserID, targetWorkspaceID string) (MigrationPreview, error) {
+	if s == nil || s.db == nil {
+		return MigrationPreview{}, fmt.Errorf("server store: not configured")
+	}
+	out := MigrationPreview{
+		Mode:           MigrateReplace,
+		SourceUserID:   strings.TrimSpace(sourceUserID),
+		TargetUserID:   strings.TrimSpace(targetUserID),
+		WorkspaceID:    strings.TrimSpace(sourceWorkspaceID),
+		TargetWorkspac: strings.TrimSpace(targetWorkspaceID),
+	}
+	if out.SourceUserID == "" || out.TargetUserID == "" || out.WorkspaceID == "" || out.TargetWorkspac == "" {
+		return blockPreview(out, "source and target accounts and workspaces are all required"), nil
+	}
+	source, found, err := s.GetWorkspace(out.SourceUserID, out.WorkspaceID)
+	if err != nil {
+		return MigrationPreview{}, err
+	}
+	if !found {
+		return blockPreview(out, ErrMigrationSourceMissing.Error()), nil
+	}
+	target, found, err := s.GetWorkspace(out.TargetUserID, out.TargetWorkspac)
+	if err != nil {
+		return MigrationPreview{}, err
+	}
+	if !found {
+		return blockPreview(out, "target does not own that workspace"), nil
+	}
+	out.WorkspaceName = source.Name
+	out.SourceVersion = source.Version
+	out.SourceUpdated = formatTime(source.UpdatedAt)
+	out.TargetExists = true
+	out.TargetVersion = target.Version
+	out.TargetUpdated = formatTime(target.UpdatedAt)
+	if snap, ok, err := s.GetSnapshotForUser(out.SourceUserID, out.WorkspaceID); err != nil {
+		return MigrationPreview{}, err
+	} else if ok {
+		out.SourceBytes = len(snap.Dataset)
+	}
+	if snap, ok, err := s.GetSnapshotForUser(out.TargetUserID, out.TargetWorkspac); err != nil {
+		return MigrationPreview{}, err
+	} else if ok {
+		out.TargetBytes = len(snap.Dataset)
+	}
+	if out.SourceBlobs, err = s.countWorkspaceBlobs(out.WorkspaceID); err != nil {
+		return MigrationPreview{}, err
+	}
+	if out.TargetBlobs, err = s.countWorkspaceBlobs(out.TargetWorkspac); err != nil {
+		return MigrationPreview{}, err
+	}
+	if out.SourceBytes == 0 {
+		return blockPreview(out, "the source workspace has no snapshot — replacing with nothing would erase the target"), nil
+	}
+	if out.TargetBytes > out.SourceBytes {
+		// Stated, not blocked. A smaller replacement is often exactly right
+		// (a cleaned-up dataset), and refusing it would make a legitimate
+		// repair impossible. But an operator should see it before confirming.
+		out.Warnings = append(out.Warnings, fmt.Sprintf(
+			"the replacement is smaller than what it overwrites (%d bytes replacing %d) — confirm this is the copy you mean to keep",
+			out.SourceBytes, out.TargetBytes))
+	}
+	if out.TargetBlobs > 0 {
+		out.Warnings = append(out.Warnings, fmt.Sprintf(
+			"%d attachment(s) stay linked to the target workspace; replacing the dataset does not move or delete them", out.TargetBlobs))
+	}
+	return out, nil
+}
+
+func blockPreview(p MigrationPreview, reason string) MigrationPreview {
+	p.Blocked = true
+	p.Reason = reason
+	return p
+}
+
+// countWorkspaceBlobs counts a workspace's attachment links.
+func (s *Store) countWorkspaceBlobs(workspaceID string) (int, error) {
+	var n int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM workspace_blobs WHERE workspace_id = ?`, workspaceID).Scan(&n)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, fmt.Errorf("server store: count workspace blobs: %w", err)
+	}
+	return n, nil
+}
+
+// TransferWorkspace moves ownership of one workspace to another account, in a
+// single transaction.
+//
+// It is a one-column update because the schema already does the hard part:
+// snapshots, snapshot_history and workspace_blobs are all keyed by workspace_id.
+// Nothing is copied, so there is no half-copied state to recover from, and every
+// device already pinned to this workspace id keeps working — under the new
+// owner's credentials, which is the entire objective.
+//
+// requireTargetLocked implements C699's rule that the target is suspended for
+// the duration. A device writing to the target while ownership changes would
+// race the transfer.
+func (s *Store) TransferWorkspace(sourceUserID, targetUserID, workspaceID string, now time.Time, requireTargetLocked bool) (MigrationResult, error) {
+	if s == nil || s.db == nil {
+		return MigrationResult{}, fmt.Errorf("server store: not configured")
+	}
+	sourceUserID = strings.TrimSpace(sourceUserID)
+	targetUserID = strings.TrimSpace(targetUserID)
+	workspaceID = strings.TrimSpace(workspaceID)
+	if sourceUserID == "" || targetUserID == "" || workspaceID == "" {
+		return MigrationResult{}, fmt.Errorf("server migrate: source, target and workspace are required")
+	}
+	if sourceUserID == targetUserID {
+		return MigrationResult{}, ErrMigrationSameAccount
+	}
+	if _, found, err := s.GetUserByID(targetUserID); err != nil {
+		return MigrationResult{}, err
+	} else if !found {
+		return MigrationResult{}, ErrMigrationTargetMissing
+	}
+	if requireTargetLocked {
+		locked, err := s.IsUserSuspended(targetUserID)
+		if err != nil {
+			return MigrationResult{}, err
+		}
+		if !locked {
+			return MigrationResult{}, ErrMigrationTargetUnlocked
+		}
+	}
+	defer s.observeDB("TransferWorkspace", time.Now())
+	tx, err := s.db.Begin()
+	if err != nil {
+		return MigrationResult{}, fmt.Errorf("server migrate: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	// Conditional on the CURRENT owner, so two operators racing the same
+	// migration cannot both succeed and so a stale console view cannot move a
+	// workspace that has already moved.
+	res, err := tx.Exec(`UPDATE workspaces SET user_id = ?, updated_at = ? WHERE id = ? AND user_id = ?`,
+		targetUserID, formatTime(now.UTC()), workspaceID, sourceUserID)
+	if err != nil {
+		return MigrationResult{}, fmt.Errorf("server migrate: transfer: %w", err)
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return MigrationResult{}, fmt.Errorf("server migrate: transfer: %w", err)
+	}
+	if affected == 0 {
+		return MigrationResult{}, ErrMigrationSourceMissing
+	}
+	if err := tx.Commit(); err != nil {
+		return MigrationResult{}, fmt.Errorf("server migrate: commit: %w", err)
+	}
+	return MigrationResult{
+		Mode: MigrateTransfer, WorkspaceID: workspaceID,
+		SourceUserID: sourceUserID, TargetUserID: targetUserID,
+		CommittedAt: formatTime(now.UTC()),
+	}, nil
+}
+
+// ReplaceWorkspaceSnapshot overwrites the target workspace's dataset with the
+// source's, archiving what was there first.
+//
+// The archive is not optional and not best-effort: it is written in the same
+// transaction as the overwrite, so either the previous contents are recoverable
+// or the overwrite did not happen. An "are you sure" dialog is not a backup.
+func (s *Store) ReplaceWorkspaceSnapshot(sourceUserID, sourceWorkspaceID, targetUserID, targetWorkspaceID string, now time.Time, requireTargetLocked bool) (MigrationResult, error) {
+	if s == nil || s.db == nil {
+		return MigrationResult{}, fmt.Errorf("server store: not configured")
+	}
+	sourceUserID = strings.TrimSpace(sourceUserID)
+	sourceWorkspaceID = strings.TrimSpace(sourceWorkspaceID)
+	targetUserID = strings.TrimSpace(targetUserID)
+	targetWorkspaceID = strings.TrimSpace(targetWorkspaceID)
+	if sourceUserID == "" || sourceWorkspaceID == "" || targetUserID == "" || targetWorkspaceID == "" {
+		return MigrationResult{}, fmt.Errorf("server migrate: source and target accounts and workspaces are required")
+	}
+	if requireTargetLocked {
+		locked, err := s.IsUserSuspended(targetUserID)
+		if err != nil {
+			return MigrationResult{}, err
+		}
+		if !locked {
+			return MigrationResult{}, ErrMigrationTargetUnlocked
+		}
+	}
+	source, ok, err := s.GetSnapshotForUser(sourceUserID, sourceWorkspaceID)
+	if err != nil {
+		return MigrationResult{}, err
+	}
+	if !ok || len(source.Dataset) == 0 {
+		return MigrationResult{}, fmt.Errorf("server migrate: the source workspace has no snapshot to copy")
+	}
+	if _, found, err := s.GetWorkspace(targetUserID, targetWorkspaceID); err != nil {
+		return MigrationResult{}, err
+	} else if !found {
+		return MigrationResult{}, fmt.Errorf("server migrate: target does not own that workspace")
+	}
+
+	defer s.observeDB("ReplaceWorkspaceSnapshot", time.Now())
+	tx, err := s.db.Begin()
+	if err != nil {
+		return MigrationResult{}, fmt.Errorf("server migrate: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var (
+		priorDataset []byte
+		priorVersion int64
+		priorUpdated string
+	)
+	err = tx.QueryRow(`SELECT dataset_json, version, updated_at FROM snapshots WHERE workspace_id = ?`, targetWorkspaceID).
+		Scan(&priorDataset, &priorVersion, &priorUpdated)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		// Nothing to archive — the target has never been written.
+	case err != nil:
+		return MigrationResult{}, fmt.Errorf("server migrate: read target snapshot: %w", err)
+	default:
+		if _, err := tx.Exec(`INSERT INTO snapshot_history(workspace_id, dataset_json, version, updated_at) VALUES(?, ?, ?, ?)`,
+			targetWorkspaceID, priorDataset, priorVersion, priorUpdated); err != nil {
+			return MigrationResult{}, fmt.Errorf("server migrate: archive target snapshot: %w", err)
+		}
+	}
+
+	nextVersion := priorVersion + 1
+	stamp := formatTime(now.UTC())
+	if _, err := tx.Exec(`INSERT INTO snapshots(workspace_id, dataset_json, version, updated_at) VALUES(?, ?, ?, ?)
+ON CONFLICT(workspace_id) DO UPDATE SET dataset_json = excluded.dataset_json, version = excluded.version, updated_at = excluded.updated_at`,
+		targetWorkspaceID, source.Dataset, nextVersion, stamp); err != nil {
+		return MigrationResult{}, fmt.Errorf("server migrate: write target snapshot: %w", err)
+	}
+	// The workspace row's version must move with its snapshot, or the next
+	// client pull compares against a stale version and decides it is already
+	// up to date — the overwrite would be invisible to the very device it was
+	// performed for.
+	if _, err := tx.Exec(`UPDATE workspaces SET version = ?, updated_at = ? WHERE id = ?`,
+		nextVersion, stamp, targetWorkspaceID); err != nil {
+		return MigrationResult{}, fmt.Errorf("server migrate: bump target workspace: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return MigrationResult{}, fmt.Errorf("server migrate: commit: %w", err)
+	}
+	return MigrationResult{
+		Mode: MigrateReplace, WorkspaceID: targetWorkspaceID,
+		SourceUserID: sourceUserID, TargetUserID: targetUserID,
+		ArchivedVersion: priorVersion, CommittedAt: stamp,
+	}, nil
+}
+
+// RollbackWorkspaceSnapshot restores a workspace to an archived version — the
+// undo half C695 and C699 both require.
+//
+// It archives the CURRENT contents on the way back, so a rollback is itself
+// reversible. An undo that destroys the thing it undid is a second incident.
+func (s *Store) RollbackWorkspaceSnapshot(userID, workspaceID string, version int64, now time.Time) (MigrationResult, error) {
+	if s == nil || s.db == nil {
+		return MigrationResult{}, fmt.Errorf("server store: not configured")
+	}
+	userID = strings.TrimSpace(userID)
+	workspaceID = strings.TrimSpace(workspaceID)
+	if userID == "" || workspaceID == "" {
+		return MigrationResult{}, fmt.Errorf("server migrate: account and workspace are required")
+	}
+	if _, found, err := s.GetWorkspace(userID, workspaceID); err != nil {
+		return MigrationResult{}, err
+	} else if !found {
+		return MigrationResult{}, fmt.Errorf("server migrate: that account does not own that workspace")
+	}
+	defer s.observeDB("RollbackWorkspaceSnapshot", time.Now())
+	tx, err := s.db.Begin()
+	if err != nil {
+		return MigrationResult{}, fmt.Errorf("server migrate: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var restore []byte
+	err = tx.QueryRow(`SELECT dataset_json FROM snapshot_history WHERE workspace_id = ? AND version = ?
+ORDER BY id DESC LIMIT 1`, workspaceID, version).Scan(&restore)
+	if errors.Is(err, sql.ErrNoRows) {
+		return MigrationResult{}, fmt.Errorf("server migrate: no archived version %d for that workspace", version)
+	}
+	if err != nil {
+		return MigrationResult{}, fmt.Errorf("server migrate: read archive: %w", err)
+	}
+
+	var (
+		currentDataset []byte
+		currentVersion int64
+		currentUpdated string
+	)
+	err = tx.QueryRow(`SELECT dataset_json, version, updated_at FROM snapshots WHERE workspace_id = ?`, workspaceID).
+		Scan(&currentDataset, &currentVersion, &currentUpdated)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return MigrationResult{}, fmt.Errorf("server migrate: read current snapshot: %w", err)
+	}
+	if err == nil {
+		if _, err := tx.Exec(`INSERT INTO snapshot_history(workspace_id, dataset_json, version, updated_at) VALUES(?, ?, ?, ?)`,
+			workspaceID, currentDataset, currentVersion, currentUpdated); err != nil {
+			return MigrationResult{}, fmt.Errorf("server migrate: archive before rollback: %w", err)
+		}
+	}
+
+	nextVersion := currentVersion + 1
+	stamp := formatTime(now.UTC())
+	if _, err := tx.Exec(`INSERT INTO snapshots(workspace_id, dataset_json, version, updated_at) VALUES(?, ?, ?, ?)
+ON CONFLICT(workspace_id) DO UPDATE SET dataset_json = excluded.dataset_json, version = excluded.version, updated_at = excluded.updated_at`,
+		workspaceID, restore, nextVersion, stamp); err != nil {
+		return MigrationResult{}, fmt.Errorf("server migrate: restore snapshot: %w", err)
+	}
+	if _, err := tx.Exec(`UPDATE workspaces SET version = ?, updated_at = ? WHERE id = ?`,
+		nextVersion, stamp, workspaceID); err != nil {
+		return MigrationResult{}, fmt.Errorf("server migrate: bump workspace: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return MigrationResult{}, fmt.Errorf("server migrate: commit: %w", err)
+	}
+	return MigrationResult{
+		Mode: MigrateReplace, WorkspaceID: workspaceID,
+		SourceUserID: userID, TargetUserID: userID,
+		ArchivedVersion: currentVersion, CommittedAt: stamp,
+	}, nil
+}

@@ -196,6 +196,28 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 	mux.HandleFunc("POST /v1/admin/users/{id}/revoke-sessions", handleAdminUserRevokeSessions(cfg, store))
 	mux.HandleFunc("OPTIONS /v1/admin/users/{id}/suspend", handleCORSPreflight(cfg))
 	mux.HandleFunc("POST /v1/admin/users/{id}/suspend", handleAdminUserSuspend(cfg, store))
+	// Device lifecycle and account/workspace mapping (admin_devices.go, C698/C700):
+	// which browser holds which account, which workspaces that account owns, and
+	// the recovery actions that do not require minting yet another account.
+	mux.HandleFunc("OPTIONS /v1/admin/devices", handleCORSPreflight(cfg))
+	mux.HandleFunc("GET /v1/admin/devices", handleAdminDevices(cfg, store))
+	mux.HandleFunc("OPTIONS /v1/admin/users/{id}/access", handleCORSPreflight(cfg))
+	mux.HandleFunc("GET /v1/admin/users/{id}/access", handleAdminUserAccess(cfg, store))
+	mux.HandleFunc("OPTIONS /v1/admin/pending-devices/{id}/attach", handleCORSPreflight(cfg))
+	mux.HandleFunc("POST /v1/admin/pending-devices/{id}/attach", handleAdminPendingDeviceAttach(cfg, store))
+	mux.HandleFunc("OPTIONS /v1/admin/pending-devices/{id}/reissue", handleCORSPreflight(cfg))
+	mux.HandleFunc("POST /v1/admin/pending-devices/{id}/reissue", handleAdminPendingDeviceReissue(cfg, store))
+	mux.HandleFunc("OPTIONS /v1/admin/users/{id}/provisional", handleCORSPreflight(cfg))
+	mux.HandleFunc("DELETE /v1/admin/users/{id}/provisional", handleAdminUserDeleteProvisional(cfg, store))
+	// Audited workspace migration (admin_migrate.go, C695/C699): preview, commit,
+	// roll back. Preview is its own call so the consequences can be read before
+	// anything is decided.
+	mux.HandleFunc("OPTIONS /v1/admin/migrations/preview", handleCORSPreflight(cfg))
+	mux.HandleFunc("POST /v1/admin/migrations/preview", handleAdminMigratePreview(cfg, store))
+	mux.HandleFunc("OPTIONS /v1/admin/migrations/commit", handleCORSPreflight(cfg))
+	mux.HandleFunc("POST /v1/admin/migrations/commit", handleAdminMigrateCommit(cfg, store))
+	mux.HandleFunc("OPTIONS /v1/admin/migrations/rollback", handleCORSPreflight(cfg))
+	mux.HandleFunc("POST /v1/admin/migrations/rollback", handleAdminMigrateRollback(cfg, store))
 	mux.HandleFunc("OPTIONS /v1/admin/dev/seed", handleCORSPreflight(cfg))
 	mux.HandleFunc("POST /v1/admin/dev/seed", handleAdminDevSeed(cfg, store))
 	mux.HandleFunc("OPTIONS /v1/account/export", handleCORSPreflight(cfg))

@@ -319,6 +319,13 @@ func (s *authServer) RedeemPairingCode(ctx context.Context, req backendrpc.Redee
 	if !ok {
 		return backendrpc.TokenPairResponse{}, status.Error(codes.Unauthenticated, "pairing code is invalid, expired, or already used")
 	}
+	// C700: close the loop on the request this code came from. An approval
+	// nobody redeemed and an approval in daily use are different situations, and
+	// the console could not tell them apart. Best-effort: a bookkeeping failure
+	// must never cost the user the session they just legitimately earned.
+	if _, err := s.store.MarkPendingDeviceRedeemedByCode(code, now); err != nil {
+		s.logRedeemBookkeeping(err)
+	}
 	// The account the code was minted for may have been deleted since minting
 	// (e.g. right-to-erasure); IsUserSuspended alone would treat that as "not
 	// suspended" and happily issue a session for a user id nothing owns, so
@@ -747,7 +754,7 @@ func (s *authServer) WatchPairingStatusRPC(req backendrpc.WatchPairingStatusRequ
 // requesting device itself — see pendingDeviceIDBytes) is the only
 // credential this needs, the same trust model RequestDevicePairing already
 // established. Succeeds identically whether the ADMIN or the DEVICE rejects
-// a request — both share RejectPendingDevice.
+// a request, though they are now recorded distinctly (C700).
 func (s *authServer) CancelDevicePairing(ctx context.Context, req backendrpc.CancelDevicePairingRequest) (backendrpc.CancelDevicePairingResponse, error) {
 	if s == nil || s.store == nil {
 		return backendrpc.CancelDevicePairingResponse{}, status.Error(codes.FailedPrecondition, "store is not configured")
@@ -760,7 +767,9 @@ func (s *authServer) CancelDevicePairing(ctx context.Context, req backendrpc.Can
 	if !s.cancelDevicePairingLimiter.allow(deviceID, now) || !s.cancelDevicePairingGlobalLimiter.allow(cancelDevicePairingGlobalLimiterKey, now) {
 		return backendrpc.CancelDevicePairingResponse{}, status.Error(codes.ResourceExhausted, "too many cancel requests — try again in a minute")
 	}
-	canceled, err := s.store.RejectPendingDevice(deviceID)
+	// C700: a device withdrawing its own request is recorded as CANCELED, not
+	// as an operator rejection. Same authority, different fact.
+	canceled, err := s.store.CancelPendingDevice(deviceID)
 	if err != nil {
 		return backendrpc.CancelDevicePairingResponse{}, status.Error(codes.Internal, "cancel pending device failed")
 	}
