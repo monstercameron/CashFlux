@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/monstercameron/CashFlux/internal/datasetmerge"
 )
 
 // The operator-facing half of the migration workflow (TODOS.md C699).
@@ -26,6 +28,11 @@ type adminMigratePreviewRequest struct {
 	TargetUserID      string `json:"targetUserId"`
 	WorkspaceID       string `json:"workspaceId"`
 	TargetWorkspaceID string `json:"targetWorkspaceId,omitempty"`
+	// Policy decides same-id disagreements on a merge (C695's "conflict
+	// policy"). It is required of the caller rather than defaulted silently,
+	// because which copy is authoritative is exactly the thing the server cannot
+	// know — see datasetmerge. An unset value takes the conservative side.
+	Policy string `json:"policy,omitempty"`
 }
 
 // adminMigrateCommitRequest performs one. Confirm must carry the workspace id
@@ -79,8 +86,24 @@ func parseMigrationMode(raw string) (MigrationMode, bool) {
 	switch MigrationMode(strings.TrimSpace(raw)) {
 	case MigrateReplace:
 		return MigrateReplace, true
+	case MigrateMerge:
+		return MigrateMerge, true
 	case MigrateTransfer, "":
 		return MigrateTransfer, true
+	}
+	return "", false
+}
+
+// parseMergePolicy resolves the conflict policy, defaulting to the side that
+// changes least. Anything unrecognised is refused rather than defaulted: a
+// mistyped policy silently becoming "keep the target" would quietly discard the
+// incoming records an operator was trying to bring in.
+func parseMergePolicy(raw string) (datasetmerge.Policy, bool) {
+	switch datasetmerge.Policy(strings.TrimSpace(raw)) {
+	case datasetmerge.PreferSource:
+		return datasetmerge.PreferSource, true
+	case datasetmerge.PreferTarget, "":
+		return datasetmerge.PreferTarget, true
 	}
 	return "", false
 }
@@ -91,8 +114,16 @@ func migrationPreview(store *Store, req adminMigratePreviewRequest) (MigrationPr
 		return blockPreview(MigrationPreview{Mode: MigrationMode(req.Mode)},
 			fmt.Sprintf("%q is not a migration mode; use \"transfer\" or \"replace\"", req.Mode)), nil
 	}
-	if mode == MigrateReplace {
+	switch mode {
+	case MigrateReplace:
 		return store.PreviewReplace(req.SourceUserID, req.WorkspaceID, req.TargetUserID, req.TargetWorkspaceID)
+	case MigrateMerge:
+		policy, ok := parseMergePolicy(req.Policy)
+		if !ok {
+			return blockPreview(MigrationPreview{Mode: MigrateMerge},
+				fmt.Sprintf("%q is not a conflict policy; use \"prefer-target\" or \"prefer-source\"", req.Policy)), nil
+		}
+		return store.PreviewMerge(req.SourceUserID, req.WorkspaceID, req.TargetUserID, req.TargetWorkspaceID, policy)
 	}
 	return store.PreviewMigration(MigrateTransfer, req.SourceUserID, req.TargetUserID, req.WorkspaceID)
 }
@@ -118,7 +149,7 @@ func handleAdminMigrateCommit(cfg Config, store *Store) http.HandlerFunc {
 		// acted on. For a replace that is the TARGET, since the target is what
 		// gets overwritten and is therefore what can be lost.
 		expected := strings.TrimSpace(req.WorkspaceID)
-		if mode == MigrateReplace {
+		if mode == MigrateReplace || mode == MigrateMerge {
 			expected = strings.TrimSpace(req.TargetWorkspaceID)
 		}
 		if strings.TrimSpace(req.Confirm) != expected || expected == "" {
@@ -145,6 +176,26 @@ func handleAdminMigrateCommit(cfg Config, store *Store) http.HandlerFunc {
 		case MigrateReplace:
 			result, err = store.ReplaceWorkspaceSnapshot(
 				req.SourceUserID, req.WorkspaceID, req.TargetUserID, req.TargetWorkspaceID, now, true)
+		case MigrateMerge:
+			policy, ok := parseMergePolicy(req.Policy)
+			if !ok {
+				writeErrorJSON(w, ErrorReasonInvalidArgument,
+					"unknown conflict policy — use \"prefer-target\" or \"prefer-source\"")
+				return
+			}
+			result, mergeReport, mergeErr := store.MergeWorkspaceSnapshot(
+				req.SourceUserID, req.WorkspaceID, req.TargetUserID, req.TargetWorkspaceID, policy, now, true)
+			if !writeMigrationError(w, mergeErr) {
+				return
+			}
+			// The merge's own counts go into the audit line: "merged" alone does
+			// not say whether it moved two records or two thousand.
+			auditFromRequest(r, store, admin, "admin.migration.merge", "workspace",
+				fmt.Sprintf("%s %s->%s added=%d conflicts=%d policy=%s",
+					result.WorkspaceID, result.SourceUserID, result.TargetUserID,
+					mergeReport.TotalAdded, mergeReport.Conflicts, string(policy)))
+			writeJSON(w, adminMergeResponse{MigrationResult: result, Merge: mergeReport})
+			return
 		default:
 			result, err = store.TransferWorkspace(req.SourceUserID, req.TargetUserID, req.WorkspaceID, now, true)
 		}
@@ -155,6 +206,13 @@ func handleAdminMigrateCommit(cfg Config, store *Store) http.HandlerFunc {
 			result.WorkspaceID+" "+result.SourceUserID+"->"+result.TargetUserID)
 		writeJSON(w, result)
 	}
+}
+
+// adminMergeResponse reports a committed merge with the record counts, so the
+// console can show what actually moved rather than just that it succeeded.
+type adminMergeResponse struct {
+	MigrationResult
+	Merge datasetmerge.Report `json:"merge"`
 }
 
 // adminRollbackRequest names an archived version to restore.

@@ -95,6 +95,21 @@ func postAttachDevice(token, deviceID, userID string) (string, error) {
 	return d.PairingCode, nil
 }
 
+// deleteProvisionalAccount removes a device account an approval created that
+// never became anything. It goes through its OWN endpoint rather than the
+// general account delete: that one will remove any account, and this is used in
+// exactly the moment somebody is confused about which account is which.
+func deleteProvisionalAccount(token, userID string) error {
+	code, out, err := adminDo(token, "DELETE", "/v1/admin/users/"+userID+"/provisional", "")
+	if err != nil {
+		return err
+	}
+	if code != 200 {
+		return fmt.Errorf("remove: HTTP %d %s", code, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
 func postReissuePairing(token, deviceID string) (string, error) {
 	code, out, err := adminDo(token, "POST", "/v1/admin/pending-devices/"+deviceID+"/reissue", "")
 	if err != nil {
@@ -146,6 +161,25 @@ func accessPanel(p accessProps) ui.Node {
 	}, id, reload.Get())
 
 	retry := ui.UseEvent(func() { reload.Set(reload.Get() + 1) })
+	confirmRemove := ui.UseState(false)
+	toggleRemove := ui.UseEvent(func() { confirmRemove.Set(!confirmRemove.Get()) })
+	removeProvisional := ui.UseEvent(func() {
+		if busy.Get() != "" {
+			return
+		}
+		busy.Set(id)
+		status.Set("")
+		go func() {
+			defer busy.Set("")
+			if err := deleteProvisionalAccount(token, id); err != nil {
+				status.Set("Could not remove this account: " + err.Error())
+				return
+			}
+			confirmRemove.Set(false)
+			status.Set("Provisional account removed.")
+			reload.Set(reload.Get() + 1)
+		}()
+	})
 	reissue := func(deviceID string) {
 		if busy.Get() != "" {
 			return
@@ -211,6 +245,17 @@ func accessPanel(p accessProps) ui.Node {
 			Text("No device request produced this account — it was created some other way.")))
 	}
 
+	// Offered only where it can succeed: a device: account with no live
+	// workspace data. The server refuses anything else, and a button that is
+	// always there but usually fails teaches operators to ignore the refusal.
+	liveWorkspaces := 0
+	for _, w := range v.Workspaces {
+		if !w.Deleted {
+			liveWorkspaces++
+		}
+	}
+	removable := strings.HasPrefix(v.UserID, "device:") && v.Role != "owner" && liveWorkspaces == 0
+
 	lastSync := strings.TrimSpace(v.LastSyncAt)
 	if lastSync == "" {
 		lastSync = "never"
@@ -231,6 +276,24 @@ func accessPanel(p accessProps) ui.Node {
 		If(status.Get() != "", Div(css.Class("status-banner"), Attr("role", "status"),
 			Attr("data-testid", "admin-access-status"), Text(status.Get()))),
 		Div(css.Class("approval-list"), devRows),
+		If(removable, Div(css.Class("action-card action-danger"), Attr("data-testid", "admin-provisional-remove-card"),
+			Div(css.Class("action-desc"),
+				Text("This is a provisional device account with no live workspace data — an approval that never became anything. Removing it keeps the console readable.")),
+			If(!confirmRemove.Get(), Button(Type("button"), css.Class("btn btn-secondary"),
+				Attr("data-testid", "admin-provisional-remove"), OnClick(toggleRemove),
+				Text("Remove this provisional account"))),
+			If(confirmRemove.Get(), Div(css.Class("confirm-delete"),
+				Span(Text("This cannot be undone. The account and its pairing history go away.")),
+				Div(css.Class("approval-actions"),
+					Button(Type("button"), css.Class("btn btn-danger"),
+						Attr("data-testid", "admin-provisional-remove-confirm"),
+						Disabled(busy.Get() != ""), OnClick(removeProvisional), Text("Yes, remove it")),
+					Button(Type("button"), css.Class("btn btn-secondary"),
+						Attr("data-testid", "admin-provisional-remove-cancel"),
+						OnClick(toggleRemove), Text("Cancel")),
+				),
+			)),
+		)),
 	)
 }
 

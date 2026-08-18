@@ -6,11 +6,13 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/backendrpc"
+	"github.com/monstercameron/CashFlux/internal/datasetmerge"
 	"github.com/monstercameron/CashFlux/internal/syncstate"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/css"
@@ -101,6 +103,57 @@ func RebindCard(p rebindProps) uic.Node {
 		exportWorkspace(activeWorkspaceID())
 		message.Set(uistate.T("sync.rebindBackupSaved"))
 	})
+	// C695: once a target is chosen and BOTH copies hold records, the user still
+	// has to say what happens to the server's copy. The choice is only raised
+	// when there is genuinely something on the other side — inventing the
+	// dilemma when the target is empty would be noise.
+	compare := uic.UseState[*remoteComparison](nil)
+	comparing := uic.UseState(false)
+	winner := uic.UseState("local")
+	onWinner := uic.UseEvent(func(v string) { winner.Set(v) })
+	policyOf := func() datasetmerge.Policy {
+		if winner.Get() == "remote" {
+			return datasetmerge.PreferTarget // the server's copy is the merge target
+		}
+		return datasetmerge.PreferSource
+	}
+	doReplace := uic.UseEvent(func() {
+		c := compare.Get()
+		if c == nil || busy.Get() {
+			return
+		}
+		busy.Set(true)
+		message.Set("")
+		go func() {
+			defer busy.Set(false)
+			exportWorkspace(activeWorkspaceID())
+			if err := replaceRemoteWithLocal(c.WorkspaceID); err != nil {
+				message.Set(uistate.T("sync.mergeFailed", err.Error()))
+				return
+			}
+			compare.Set(nil)
+			message.Set(uistate.T("sync.mergeReplaced"))
+		}()
+	})
+	doMerge := uic.UseEvent(func() {
+		c := compare.Get()
+		if c == nil || busy.Get() {
+			return
+		}
+		busy.Set(true)
+		message.Set("")
+		go func() {
+			defer busy.Set(false)
+			exportWorkspace(activeWorkspaceID())
+			report, err := mergeWithRemote(c.WorkspaceID, policyOf())
+			if err != nil {
+				message.Set(uistate.T("sync.mergeFailed", err.Error()))
+				return
+			}
+			compare.Set(nil)
+			message.Set(uistate.T("sync.mergeDone", report.TotalAdded, report.Conflicts))
+		}()
+	})
 	onSignOutClick := uic.UseEvent(p.OnSignOut)
 	onDisconnectClick := uic.UseEvent(p.OnDisconnect)
 	onRetryClick := uic.UseEvent(p.OnRetry)
@@ -130,6 +183,16 @@ func RebindCard(p rebindProps) uic.Node {
 			}
 			message.Set(uistate.T("sync.rebindDone", name))
 			picking.Set(false)
+			// Look at what is already on the other side before pushing. If that
+			// workspace also holds records, the user gets the replace/merge
+			// choice; if it is empty, the ordinary flush is all that is needed.
+			comparing.Set(true)
+			cmp, cmpErr := compareWithRemote(target, policyOf())
+			comparing.Set(false)
+			if cmpErr == nil && cmp.RemoteFound {
+				compare.Set(&cmp)
+				return
+			}
 			p.OnRetry()
 		}()
 	})
@@ -226,6 +289,15 @@ func RebindCard(p rebindProps) uic.Node {
 				OnClick(onRetryClick), uistate.T("sync.rebindRetry")),
 		),
 		picker,
+		mergeChoicePanel(mergeChoiceProps{
+			comparing: comparing.Get(),
+			compare:   compare.Get(),
+			winner:    winner.Get(),
+			busy:      busy.Get(),
+			onWinner:  onWinner,
+			onReplace: doReplace,
+			onMerge:   doMerge,
+		}),
 		If(strings.TrimSpace(message.Get()) != "", P(css.Class("muted"), Attr("role", "status"),
 			Attr("data-testid", "rebind-message"), message.Get())),
 	)
@@ -323,4 +395,71 @@ func rebindLocalWorkspace(fromWorkspaceID, toWorkspaceID, userID string) error {
 	clearSyncMetaFor(from)
 	setSyncStatus(syncStatus{State: "syncing", Pending: len(next)})
 	return nil
+}
+
+// mergeChoiceProps drives the replace-or-merge decision panel.
+type mergeChoiceProps struct {
+	comparing bool
+	compare   *remoteComparison
+	winner    string
+	busy      bool
+	onWinner  uic.Handler
+	onReplace uic.Handler
+	onMerge   uic.Handler
+}
+
+// mergeChoicePanel asks what should happen to the server's copy, and states the
+// consequences in RECORDS. Bytes are shown as a footnote: "1.2 MB replacing 900
+// KB" tells nobody whether they are about to lose a month of transactions.
+func mergeChoicePanel(p mergeChoiceProps) uic.Node {
+	if p.comparing {
+		return P(css.Class("muted"), Attr("data-testid", "rebind-comparing"), uistate.T("sync.mergeChecking"))
+	}
+	c := p.compare
+	if c == nil {
+		return Fragment()
+	}
+	var overlap uic.Node = P(css.Class("muted"), uistate.T("sync.mergeNoOverlap"))
+	if c.Merge.TotalAdded > 0 || c.Merge.Conflicts > 0 {
+		overlap = Fragment(
+			P(css.Class("muted"), Attr("data-testid", "rebind-merge-adds"),
+				uistate.T("sync.mergeWouldAdd", c.Merge.TotalAdded)),
+			If(c.Merge.Conflicts > 0, P(css.Class("muted"), Attr("data-testid", "rebind-merge-conflicts"),
+				uistate.T("sync.mergeWouldConflict", c.Merge.Conflicts))),
+		)
+	}
+	return Div(css.Class("rebind-picker"), Attr("data-testid", "rebind-merge-choice"),
+		H4(uistate.T("sync.mergeChoiceTitle")),
+		P(uistate.T("sync.mergeChoiceIntro")),
+		overlap,
+		P(css.Class("muted"), uistate.T("sync.mergeCompare",
+			formatByteSize(c.LocalBytes), formatByteSize(c.RemoteBytes))),
+		If(c.Merge.Conflicts > 0, Div(css.Class("rebind-facts"),
+			Span(css.Class("rebind-fact-label"), uistate.T("sync.mergeConflictWins")),
+			Select(css.Class("field"), Attr("data-testid", "rebind-merge-winner"),
+				Attr("aria-label", uistate.T("sync.mergeConflictWins")), OnChange(p.onWinner),
+				Option(Value("local"), SelectedIf(p.winner == "local"), uistate.T("sync.mergeWinsLocal")),
+				Option(Value("remote"), SelectedIf(p.winner == "remote"), uistate.T("sync.mergeWinsRemote")),
+			),
+		)),
+		Div(css.Class("row-actions"),
+			Button(css.Class("btn", "btn-primary"), Type("button"), Attr("data-testid", "rebind-merge-keep-both"),
+				Disabled(p.busy), OnClick(p.onMerge), uistate.T("sync.mergeKeepBoth")),
+			Button(css.Class("btn"), Type("button"), Attr("data-testid", "rebind-merge-replace"),
+				Title(uistate.T("sync.mergeReplaceHint")),
+				Disabled(p.busy), OnClick(p.onReplace), uistate.T("sync.mergeReplace")),
+		),
+		P(css.Class("muted"), uistate.T("sync.mergeReplaceHint")),
+	)
+}
+
+// formatByteSize renders a byte count for a human, at one decimal place.
+func formatByteSize(n int) string {
+	switch {
+	case n >= 1<<20:
+		return fmt.Sprintf("%.1f MB", float64(n)/float64(1<<20))
+	case n >= 1<<10:
+		return fmt.Sprintf("%.1f KB", float64(n)/float64(1<<10))
+	}
+	return fmt.Sprintf("%d bytes", n)
 }

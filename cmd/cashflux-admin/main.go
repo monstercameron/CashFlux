@@ -54,6 +54,12 @@ type adminUserRow struct {
 	CreatedAt          string `json:"createdAt"`
 	SubscriptionPlan   string `json:"subscriptionPlan,omitempty"`
 	SubscriptionStatus string `json:"subscriptionStatus,omitempty"`
+	// Identity/sync columns (C698): which of these rows is the browser in front
+	// of you, and is it actually working.
+	Workspaces     int    `json:"workspaces"`
+	Devices        int    `json:"devices"`
+	LastSyncAt     string `json:"lastSyncAt,omitempty"`
+	PendingDevices int    `json:"pendingDevices,omitempty"`
 }
 
 // adminUsersResp mirrors server.AdminUsersResponse.

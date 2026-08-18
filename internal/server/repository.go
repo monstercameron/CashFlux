@@ -1934,6 +1934,19 @@ type AdminUserRow struct {
 	Role      string `json:"role"`
 	Username  string `json:"username,omitempty"`
 	Suspended bool   `json:"suspended,omitempty"`
+	// The identity/sync columns C698 asks for in the TABLE, not only in the
+	// detail view. Without them the list answers "who exists" and not "which of
+	// these is the browser in front of me, and is it working" — the only
+	// question anyone opens this page with when something has gone wrong.
+	Workspaces int `json:"workspaces"`
+	Devices    int `json:"devices"`
+	// LastSyncAt is the most recent write across the account's workspaces, which
+	// stands in for sync health: an account that has never written, or has not
+	// written since the incident, is then visible at a glance in the list.
+	LastSyncAt string `json:"lastSyncAt,omitempty"`
+	// PendingDevices counts requests still awaiting a decision, so an account
+	// with somebody waiting on it is not buried one page deeper.
+	PendingDevices int `json:"pendingDevices,omitempty"`
 }
 
 // Account roles. Authorization on this server was, until v14, purely "is this row
@@ -2054,6 +2067,11 @@ func (s *Store) ListUsers(limit, offset int) ([]AdminUserRow, error) {
 // email substring filter. An empty search returns every user (the ListUsers
 // behavior). The search term's LIKE wildcards are escaped so an operator typing
 // % or _ matches literally.
+// The search matches the identifiers an operator actually has to hand when
+// something is wrong (C698). An account is usually reported to them as a
+// WORKSPACE id out of a client error, or a DEVICE id from a pairing request —
+// neither of which was searchable, so "which account is this?" had no answer
+// short of paging through every user.
 func (s *Store) ListUsersFiltered(limit, offset int, search string) ([]AdminUserRow, error) {
 	if limit <= 0 {
 		limit = 50
@@ -2075,7 +2093,11 @@ func (s *Store) ListUsersFiltered(limit, offset int, search string) ([]AdminUser
 		rows, err = s.db.Query(`
 SELECT u.id, u.provider, u.email, u.created_at,
        COALESCE(sub.plan, ''), COALESCE(sub.status, ''),
-       COALESCE(u.role, ''), COALESCE(u.username, ''), COALESCE(u.suspended_at, '')
+       COALESCE(u.role, ''), COALESCE(u.username, ''), COALESCE(u.suspended_at, ''),
+       (SELECT COUNT(*) FROM workspaces w WHERE w.user_id = u.id AND w.deleted = 0),
+       (SELECT COUNT(*) FROM pending_devices pd WHERE pd.user_id = u.id),
+       COALESCE((SELECT MAX(w.updated_at) FROM workspaces w WHERE w.user_id = u.id), ''),
+       (SELECT COUNT(*) FROM pending_devices pd WHERE pd.user_id = u.id AND pd.status = 'pending')
 FROM users u
 LEFT JOIN subscriptions sub ON sub.user_id = u.id
 ORDER BY u.created_at DESC, u.id
@@ -2087,12 +2109,22 @@ LIMIT ? OFFSET ?`, limit, offset)
 		rows, err = s.db.Query(`
 SELECT u.id, u.provider, u.email, u.created_at,
        COALESCE(sub.plan, ''), COALESCE(sub.status, ''),
-       COALESCE(u.role, ''), COALESCE(u.username, ''), COALESCE(u.suspended_at, '')
+       COALESCE(u.role, ''), COALESCE(u.username, ''), COALESCE(u.suspended_at, ''),
+       (SELECT COUNT(*) FROM workspaces w WHERE w.user_id = u.id AND w.deleted = 0),
+       (SELECT COUNT(*) FROM pending_devices pd WHERE pd.user_id = u.id),
+       COALESCE((SELECT MAX(w.updated_at) FROM workspaces w WHERE w.user_id = u.id), ''),
+       (SELECT COUNT(*) FROM pending_devices pd WHERE pd.user_id = u.id AND pd.status = 'pending')
 FROM users u
 LEFT JOIN subscriptions sub ON sub.user_id = u.id
-WHERE u.email LIKE ? ESCAPE '\' OR u.username LIKE ? ESCAPE '\'
+WHERE u.email LIKE ? ESCAPE '\'
+   OR u.username LIKE ? ESCAPE '\'
+   OR u.id LIKE ? ESCAPE '\'
+   OR EXISTS (SELECT 1 FROM workspaces w WHERE w.user_id = u.id
+              AND (w.id LIKE ? ESCAPE '\' OR w.name LIKE ? ESCAPE '\' OR w.device_id LIKE ? ESCAPE '\'))
+   OR EXISTS (SELECT 1 FROM pending_devices pd WHERE pd.user_id = u.id
+              AND (pd.device_id LIKE ? ESCAPE '\' OR pd.label LIKE ? ESCAPE '\'))
 ORDER BY u.created_at DESC, u.id
-LIMIT ? OFFSET ?`, pattern, pattern, limit, offset)
+LIMIT ? OFFSET ?`, pattern, pattern, pattern, pattern, pattern, pattern, pattern, pattern, limit, offset)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("server store: list users: %w", err)
@@ -2101,10 +2133,14 @@ LIMIT ? OFFSET ?`, pattern, pattern, limit, offset)
 	var out []AdminUserRow
 	for rows.Next() {
 		var row AdminUserRow
-		var createdAt, suspendedAt string
+		var createdAt, suspendedAt, lastSync string
 		if err := rows.Scan(&row.ID, &row.Provider, &row.Email, &createdAt, &row.SubscriptionPlan, &row.SubscriptionStatus,
-			&row.Role, &row.Username, &suspendedAt); err != nil {
+			&row.Role, &row.Username, &suspendedAt,
+			&row.Workspaces, &row.Devices, &lastSync, &row.PendingDevices); err != nil {
 			return nil, fmt.Errorf("server store: scan list users: %w", err)
+		}
+		if t, err := parseOptionalTime(lastSync); err == nil && !t.IsZero() {
+			row.LastSyncAt = formatTime(t)
 		}
 		if strings.TrimSpace(row.Role) == "" {
 			row.Role = RoleMember // see UserRole: blank means pre-migration, not least-privileged

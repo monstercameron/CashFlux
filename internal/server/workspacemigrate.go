@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/monstercameron/CashFlux/internal/datasetmerge"
 )
 
 // This file moves a workspace from one account to another, and it exists
@@ -38,6 +40,11 @@ const (
 	// MigrateReplace overwrites the TARGET workspace's snapshot with the
 	// source's, after archiving what was there.
 	MigrateReplace MigrationMode = "replace"
+	// MigrateMerge unions the two snapshots record by record, keeping what only
+	// one side has and deciding same-id disagreements by an explicit policy.
+	// Replace is the right operation when one copy is simply the correct one;
+	// merge is the right one when both copies contain real work.
+	MigrateMerge MigrationMode = "merge"
 )
 
 // MigrationPreview is what an operator is shown BEFORE anything happens: what
@@ -67,6 +74,11 @@ type MigrationPreview struct {
 	// Blocked is set when the migration cannot proceed at all; Reason says why.
 	Blocked bool   `json:"blocked"`
 	Reason  string `json:"reason,omitempty"`
+	// Merge is the record-by-record outcome a merge WOULD have, computed by
+	// actually performing it against the two snapshots and throwing the result
+	// away. A merge preview that estimated instead of computing would be
+	// describing a different operation than the one about to run.
+	Merge *datasetmerge.Report `json:"merge,omitempty"`
 }
 
 // MigrationResult records what a committed migration actually did.

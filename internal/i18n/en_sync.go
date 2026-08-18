@@ -53,9 +53,29 @@ var syncPageKeys = Catalog{
 	"sync.rebindDone":          "Moved. This device now syncs to %s.",
 	"sync.rebindFailed":        "Could not move the data: %s",
 	"sync.rebindBackupSaved":   "Backup exported. Keep it until you have checked the result.",
-	"sync.syncingNow":    "Syncing now…",
-	"sync.openSettings":  "Manage subscription & devices",
-	"sync.manageMore":    "Billing, plan, and linked devices",
+
+	// Replace / merge (C695). The choice only appears once the target workspace
+	// is known to ALSO hold records: with nothing on the other side there is
+	// nothing to decide, and offering the choice anyway would invent a dilemma.
+	"sync.mergeChoiceTitle":   "That workspace already has data",
+	"sync.mergeChoiceIntro":   "Both copies have records in them. Choose what happens to the copy on the server.",
+	"sync.mergeCompare":       "This device: %s. On the server: %s.",
+	"sync.mergeWouldAdd":      "Merging would add %d record(s) the server does not have.",
+	"sync.mergeWouldConflict": "%d record(s) exist in both copies with different contents.",
+	"sync.mergeNoOverlap":     "The two copies have no records in common.",
+	"sync.mergeKeepBoth":      "Keep the records from both",
+	"sync.mergeReplace":       "Replace the server's copy with this device's",
+	"sync.mergeReplaceHint":   "The server's copy is archived first and can be restored by an operator.",
+	"sync.mergeConflictWins":  "When a record differs in both copies",
+	"sync.mergeWinsLocal":     "Use this device's version",
+	"sync.mergeWinsRemote":    "Use the server's version",
+	"sync.mergeDone":          "Merged. %d record(s) added, %d resolved by your choice.",
+	"sync.mergeReplaced":      "The server's copy now matches this device.",
+	"sync.mergeFailed":        "Could not finish: %s",
+	"sync.mergeChecking":      "Comparing the two copies…",
+	"sync.syncingNow":         "Syncing now…",
+	"sync.openSettings":       "Manage subscription & devices",
+	"sync.manageMore":         "Billing, plan, and linked devices",
 
 	// Capability-aware connect flow (2026-07-23): the server address is the one
 	// thing every modality needs; everything after it is chosen by what that

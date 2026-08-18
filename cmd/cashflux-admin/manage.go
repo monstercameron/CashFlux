@@ -472,6 +472,25 @@ func pendingApprovals(p pendingApprovalsProps) ui.Node {
 	)
 }
 
+// devicesCell reports the device count, calling out any request still waiting
+// on a decision — an account somebody is blocked on should not need a click to
+// discover.
+func devicesCell(u adminUserRow) string {
+	if u.PendingDevices > 0 {
+		return fmt.Sprintf("%d (%d waiting)", u.Devices, u.PendingDevices)
+	}
+	return fmt.Sprintf("%d", u.Devices)
+}
+
+// lastSyncCell stands in for sync health. "never" is the interesting value: an
+// account that has never written is usually one that was created by mistake.
+func lastSyncCell(u adminUserRow) string {
+	if strings.TrimSpace(u.LastSyncAt) == "" {
+		return "never"
+	}
+	return trimDate(u.LastSyncAt)
+}
+
 type userRowProps struct {
 	user   adminUserRow
 	onOpen func(string)
@@ -523,6 +542,11 @@ func userRow(p userRowProps) ui.Node {
 		Td(Text(plan)),
 		Td(Text(status)),
 		Td(Text(created)),
+		// C698: the identity/sync columns. A row that says only account and plan
+		// cannot answer "which of these is the browser that cannot sync".
+		Td(Attr("data-testid", "admin-user-workspaces"), Text(fmt.Sprintf("%d", p.user.Workspaces))),
+		Td(Attr("data-testid", "admin-user-devices"), Text(devicesCell(p.user))),
+		Td(Attr("data-testid", "admin-user-lastsync"), Text(lastSyncCell(p.user))),
 		Td(css.Class("row-action"),
 			Button(Type("button"), css.Class("btn btn-secondary btn-row"),
 				Attr("data-testid", "admin-user-manage"),
@@ -552,6 +576,9 @@ func usersTable(users []adminUserRow, onOpen func(string)) ui.Node {
 					Th(Text("Plan")),
 					Th(Text("Status")),
 					Th(Text("Created")),
+					Th(Text("Workspaces")),
+					Th(Text("Devices")),
+					Th(Text("Last sync")),
 					Th(Text("Actions")),
 				),
 			),
@@ -919,6 +946,10 @@ func manageView(p manageProps) ui.Node {
 				// whom is how data lands on the wrong account.
 				ui.CreateElement(accessPanel, accessProps{token: token, userID: id}),
 				H2(css.Class("section-title"), Text("Actions")),
+				// C699: the migration wizard sits AFTER the access view, so the
+				// read-only picture of what this account can reach is on screen
+				// before any control that moves data is offered.
+				ui.CreateElement(migrateWizard, migrateProps{token: token, targetUserID: id}),
 				Div(css.Class("action-card"),
 					Div(css.Class("action-desc"), Text("Change the user's sign-in name or access role.")),
 					Div(css.Class("field-row"),
