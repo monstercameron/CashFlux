@@ -714,6 +714,13 @@ func flushBackendSyncQueue() {
 			setSyncStatus(syncStatus{State: "local", Pending: len(queue), Message: uistate.T("sync.rebindSignInReason")})
 			return
 		}
+		// Push only what this account owns. Another identity's stranded snapshot
+		// stays queued until the user decides about it (C696).
+		queue = pushableQueue(queue)
+		if len(queue) == 0 {
+			refreshRebindStatus()
+			return
+		}
 		setSyncStatus(syncStatus{State: "syncing", Pending: len(queue)})
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()

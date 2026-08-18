@@ -1,3 +1,58 @@
+## 2026-08-17 - one browser, two accounts, and no way to say so (C694-C701)
+
+The trace was already in the ticket: the approval-gated request path creates a new device:<random> user. It
+does not overwrite, merge with, or rebind to an existing account. So the Codex browser got cam@..., the
+household data belongs to mr.e.cameron@..., and the server answers `workspace not found` - correctly, and
+for ever.
+
+Eight tickets, but one shape. At every layer, the system could observe the mismatch and could not express
+it. The server knew which account owned the workspace and had no way to record which account a device had
+been approved onto. The console listed accounts and never mentioned workspaces or devices, so a device
+account with no pending request was an orphan nobody could explain. The client stored a token and no account
+id, so queued work had no owner and a refusal it could never satisfy looked exactly like a refusal it should
+retry. And the only action any of them offered was "approve", which minted another account.
+
+The pieces that mattered:
+
+Sync state keyed by (user, workspace) rather than workspace. A workspace id is not an identity. Two
+identities can legitimately hold queued work for the same workspace id at once - that is precisely what a
+device-account change produces - and the old queue collapsed them on workspace alone, so acknowledging one
+identity's upload could clear another's unpushed snapshot.
+
+workspace-not-found made terminal instead of transient. The old loop re-attempted it on every tick, wake and
+watch event. Nothing on either side was ever going to change. The status is now "rebind", not "error",
+because an error invites a retry and retrying is the one thing that cannot work.
+
+I got the decision rule wrong on the first pass and caught it before the reviewers did: uploadDecision read
+the HEAD of the queue. After an identity change the old account's entry is still queued; the user then edits
+something, which appends an entry owned by the new account. Deciding from the head blocks that new,
+perfectly pushable work behind a stranded entry - converting a recoverable mismatch into a permanent stall.
+It now asks about the work the signed-in account owns, and the flush pushes only that.
+
+Transfer as a one-column update. Snapshots, history and blob links are all keyed by workspace_id, so
+ownership is one column on one row and a transfer moves the data by moving nothing. Every device already
+pinned to that id keeps working. That is why C695 forbids delete-plus-rename: the safe operation is smaller
+than the dangerous one, and the dangerous one is the one that feels obvious.
+
+The archive is in the same transaction as the overwrite, and rollback archives what IT replaces. An "are you
+sure" dialog is not a backup, and an undo that destroys what it undid is a second incident.
+
+Retention instead of deletion on expiry. The original delete-on-expiry existed for a real security finding -
+the table has no bound on cumulative growth, only on mint rate. But it also meant an expired request left no
+trace, which is what made a device account with nothing behind it unreadable. A 30-day window satisfies
+both, and the boundary is tested rather than asserted in a comment.
+
+C701 was the smallest and the most clear-cut: tr[role=button][tabindex=0] with a click handler and no key
+handler. role=button on a non-button element does not bring keyboard activation with it, so Enter and Space
+did nothing; and a table row claiming to be a button stops assistive tech presenting its cells as a row at
+all. The fix was to stop simulating a button.
+
+Working note: another session was committing in this worktree throughout, and a `git reset` there briefly
+reverted my in-flight edits. I misread a racing grep as lost work and said so before checking - the files
+were intact. What actually helped was committing each finished slice immediately and verifying builds in a
+separate `git worktree` at HEAD, since the shared tree spent most of the session not compiling for reasons
+that had nothing to do with this work.
+
 ## 2026-08-17 - a placeholder that nothing ever took away (C684)
 
 Editing an account's current balance posted a "Balance adjustment" transaction, which is a reasonable mechanism

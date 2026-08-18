@@ -12105,3 +12105,126 @@ is not visible from the browser.
   and bulk-adjust paths with tests asserting the next period's carry-in against the prior row.
   **Also check:** `monthclose.CopyBoosts` offers to carry a period's boosts forward at month close. Verify the
   review screen states each boost's size clearly enough that a large reconcile boost cannot roll forward unnoticed.
+
+---
+
+## Household ledger review follow-ups (2026-08-17)
+
+These items came from a July-statement import and mid-August balance review. They are deliberately
+tracked here as product/data-quality work, rather than as edits to a live household dataset.
+
+- [ ] **C683 [MAJOR][RECONCILIATION][CORRECTNESS] Fix reconciliation balance-sign behavior.**
+  **Issue:** Reconcile-to-statement shows a cleared balance that does not match the account-card balance;
+  entering the July checking closing balance produced an $8,441.80 gap. A cancelled test also did not
+  fully revert the cleared ticks. **Fix:** reconcile from a signed opening balance, make the sign
+  convention explicit in the dialog, and make Cancel roll back every in-modal change. Verify with July
+  checking: opening $3,210.20 and closing $4,493.95.
+
+- [ ] **C684 [MAJOR][RECONCILIATION][DATA] Automate provisional balance checkpoints.**
+  **Issue:** Editing current balances creates August-dated Balance adjustment transactions that require
+  manual tags and report exclusions. **Fix:** add a first-class checkpoint type with an as-of date,
+  automatic `reconciliation-checkpoint` metadata, automatic exclusion from reports, and replacement or
+  removal when the statement closes.
+
+- [ ] **C685 [MAJOR][ACCOUNTS][DISPLAY] Clarify utility zero versus cleared balances.**
+  **Issue:** Utility tracking accounts show a $0 current balance but still show negative cleared figures,
+  which looks like debt. **Fix:** label tracking-account balance separately from cleared transaction
+  history, or hide the cleared-history amount for zero-balance utility shells.
+
+- [ ] **C686 [MAJOR][TXN][TRANSFER][DATA] Resolve 52 unmatched transfer warnings.**
+  **Issue:** The Accounts page reports 52 money movements with no other side, so cash flow and net worth
+  can be distorted. **Fix:** pair transfers by date, amount, and account identifiers; mark transfers only
+  when both sides are verified; and leave uncertain items in a review queue.
+
+- [ ] **C687 [MAJOR][IMPORT][AUDIT] Explain the import count discrepancy.**
+  **Issue:** The import audit says 688 transaction records were added while the ledger displays 565
+  transactions. **Fix:** show imported, skipped, duplicate, updated, and currently active counts
+  separately, with per-file totals and a durable audit trail.
+
+- [ ] **C688 [MAJOR][TXN][DUPLICATES] Review five duplicate candidates.**
+  **Issue:** Duplicate review shows five possible duplicates across three groups: FAL Features Labels and
+  OpenRouter entries. **Fix:** compare exact date, amount, description, and account; merge only confirmed
+  duplicates; and retain the original audit trail.
+
+- [ ] **C689 [MAJOR][IMPORT][TOOL] Build statement staging and dedupe.**
+  Extract PDFs locally, normalize merchant/date/amount/account, hash candidate rows, and produce a review
+  table before import. The workflow should be **stage -> match -> approve -> import**.
+
+- [ ] **C690 [MAJOR][RECONCILIATION][TOOL] Build a July reconciliation worksheet.**
+  Compute `opening balance + money in - money out = statement closing balance` for each account, including
+  transfer pairs and residual differences. Include July 31 statement balances and the current mid-August
+  checkpoints.
+
+- [ ] **C691 [MAJOR][RULES][UTILITY] Create utility merchant and account rules.**
+  Add deterministic rules for FPL, Comcast, City of Lauderhill, Google Fi, and Wimbledon/HOA to set
+  category and tracking account while preserving zero utility-account balances.
+
+- [ ] **C692 [MAJOR][TXN][TRANSFER][TOOL] Create verified transfer pairing.**
+  Match account-number transfers by exact amount and date, propose both-side links, and block one-sided
+  transfer flags until the counterpart is found.
+
+- [ ] **C693 [MAJOR][REPORTS][RECONCILIATION] Add provisional-month reporting mode.**
+  Show closed statements through July 31 separately from August month-to-date, label August as
+  provisional, and exclude checkpoint offsets from cash-flow metrics.
+
+---
+
+## Hosted identity/workspace recovery (2026-08-17)
+
+Root cause found while tracing the Codex-browser account (`cam@...`) against the existing
+`mr.e.cameron@...` account. The approval-gated request path creates a new `device:<random>` user;
+it does not overwrite, merge with, or rebind to an existing account. The browser then retains a local
+workspace ID that belongs to the other user, so the server correctly returns `workspace not found`.
+
+- [x] **C694 [MAJOR][AUTH][WORKSPACE] Rebind the current device to an existing account/workspace.**
+  **Issue:** The Codex browser is authenticated as the newer `cam@...` device account, while the
+  household data/workspace belongs to `mr.e.cameron@...`; the new identity cannot read the old user's
+  workspace. **Fix:** add an account-switch/rebind flow that identifies the current local workspace,
+  lists the authenticated user's remote workspaces, previews the proposed mapping, preserves a local
+  backup, updates the user-bound sync metadata, and retries only after the mapping is confirmed.
+
+- [x] **C695 [MAJOR][SYNC][SAFETY] Add a safe replace-or-merge workspace migration.**
+  **Issue:** The user intended the current browser dataset to replace the old account's dataset, but the
+  only available path creates another device account. **Fix:** provide explicit `Replace remote with
+  this local copy` and `Merge with remote` operations with row counts, account/transaction differences,
+  an export backup, explicit confirmation, atomic snapshot/blob ownership changes, an audit record, and
+  rollback/restore support. Never implement overwrite as account deletion plus rename.
+
+- [x] **C696 [MAJOR][SYNC][CORRECTNESS] Bind sync metadata and queues to the authenticated user.**
+  **Issue:** After the account identity changed, the local workspace ID and pending mutation remained
+  attached to the old user; retries under the new token produce `workspace not found`. **Fix:** key sync
+  metadata and queued mutations by `(user ID, workspace ID)`, invalidate or remap them at identity change,
+  and block upload with a clear rebind decision instead of repeatedly retrying an unauthorized workspace.
+
+- [x] **C697 [MAJOR][SETTINGS][UX] Make `workspace not found` recovery actionable.**
+  **Issue:** Cloud settings only reports “1 change(s) waiting to upload — Reason: workspace not found,”
+  without showing which identity, endpoint, workspace ID, or last successful sync is involved. **Fix:**
+  show server URL, signed-in account, workspace ID, last-success timestamp, pending mutation details, and
+  actions for `Sign in to existing account`, `Rebind workspace`, `Keep local only`, `Export backup`, and
+  `Retry`.
+
+- [x] **C698 [MAJOR][ADMIN][WORKSPACE] Add account/device/workspace mapping to the admin console.**
+  **Issue:** The Users table shows account/provider/plan/status/date but not workspace IDs, device IDs,
+  last-seen time, approval state, or sync health, so the current browser cannot be identified. **Fix:**
+  add those fields to the table and detail view, searchable by account/device/workspace, with a read-only
+  “what this device can access” view before any transfer action.
+
+- [x] **C699 [MAJOR][ADMIN][MIGRATION] Add an audited account/workspace rebind and migration workflow.**
+  **Issue:** Admin management currently supports identity edits, sessions, suspension, subscriptions, and
+  deletion, but no merge, workspace transfer, or replacement between `cam@...` and `mr.e.cameron@...`.
+  **Fix:** add a permission-gated migration wizard with source/target selection, dataset and blob counts,
+  conflict policy, backup, preview, atomic commit, audit trail, and rollback. Require the target account
+  to be locked during the operation.
+
+- [x] **C700 [MAJOR][ADMIN][APPROVAL] Handle existing device accounts with no pending request.**
+  **Issue:** The admin console contains the newer device account, yet the pending-access list is empty;
+  there is no way to reissue pairing, attach the device to an existing user, or explain its lifecycle
+  state. **Fix:** model requested/approved/redeemed/expired/canceled device states, expose them in admin,
+  and add safe `Reissue pairing`, `Attach to existing account`, and `Reject/delete provisional account`
+  actions with confirmation and audit logging.
+
+- [x] **C701 [MINOR][ADMIN][UX][A11Y] Make user management rows reliably actionable.**
+  **Issue:** The deployed console renders user rows as `tr[role=button]`; opening a user detail view was
+  not reliable during review, and the row exposes no visible action affordance. **Fix:** use a real link or
+  button with a stable user ID, add a visible `Manage` action, preserve keyboard activation, surface detail
+  fetch failures in the page, and cover click/Enter navigation in the browser regression suite.

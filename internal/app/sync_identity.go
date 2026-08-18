@@ -159,34 +159,62 @@ func sameQueueOwnership(a, b []queuedSyncMutation) bool {
 	return true
 }
 
-// pendingBinding returns the binding of the first queued mutation, which is the
-// one an upload decision is about.
-func pendingBinding() (syncstate.PendingMutation, bool) {
-	for _, q := range loadSyncQueue() {
-		return syncstate.PendingMutation{
-			UserID:      q.UserID,
-			WorkspaceID: q.WorkspaceID,
-			Hash:        q.Hash,
-			UpdatedAt:   q.ClientUpdatedAt,
-		}, true
+// splitQueueByOwner divides the queue into work the signed-in account may push
+// and work belonging to somebody else.
+func splitQueueByOwner(queue []queuedSyncMutation, userID string) (mine, foreign []queuedSyncMutation) {
+	for _, q := range queue {
+		binding := syncstate.Binding{UserID: q.UserID, WorkspaceID: q.WorkspaceID}
+		if binding.OwnedBy(userID) {
+			mine = append(mine, q)
+			continue
+		}
+		foreign = append(foreign, q)
 	}
-	return syncstate.PendingMutation{}, false
+	return mine, foreign
 }
 
 // uploadDecision says what the sync loop should do with the queue right now.
+//
+// It asks about the work the signed-in account OWNS, not about whatever happens
+// to sit at the head of the queue. Those differ in exactly the case this
+// feature exists for: after an identity change the old account's entry is still
+// queued, and the user then edits something, which appends an entry owned by
+// the NEW account. Deciding from the head would block that new, perfectly
+// pushable work behind a stranded entry the user has not resolved yet — turning
+// a recoverable mismatch into a permanent stall.
 func uploadDecision() syncstate.UploadDecision {
-	next, ok := pendingBinding()
-	if !ok {
+	queue := loadSyncQueue()
+	if len(queue) == 0 {
 		return syncstate.UploadNothing
 	}
-	last := ""
-	for _, q := range loadSyncQueue() {
-		if q.WorkspaceID == next.WorkspaceID {
-			last = q.LastAttemptError
-			break
+	userID := signedInUserID()
+	if strings.TrimSpace(userID) == "" {
+		return syncstate.UploadSignIn
+	}
+	mine, foreign := splitQueueByOwner(queue, userID)
+	if len(mine) == 0 {
+		if len(foreign) > 0 {
+			return syncstate.UploadRebind
+		}
+		return syncstate.UploadNothing
+	}
+	// Among my own work, a workspace the server has already said I cannot
+	// address is terminal — retrying it is what used to spin for ever.
+	for _, q := range mine {
+		if syncstate.IsWorkspaceNotFound(q.LastAttemptError) {
+			return syncstate.UploadRebind
 		}
 	}
-	return syncstate.DecideUpload(signedInUserID(), next, last)
+	return syncstate.UploadProceed
+}
+
+// pushableQueue is the subset of queued work the signed-in account may send.
+// The flush loop iterates this rather than the raw queue, so another identity's
+// stranded snapshot is never pushed under the current token — which the server
+// would refuse anyway, but refusing it here keeps the queue's meaning honest.
+func pushableQueue(queue []queuedSyncMutation) []queuedSyncMutation {
+	mine, _ := splitQueueByOwner(queue, signedInUserID())
+	return mine
 }
 
 // refreshRebindStatus puts the client into the blocked state when the queue
