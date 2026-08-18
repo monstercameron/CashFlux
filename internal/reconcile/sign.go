@@ -47,33 +47,47 @@ const (
 	AsStated
 )
 
-// ConventionOf infers how an account holds its balance.
+// ConventionOf infers how an account holds its balance, and says whether the
+// answer was READ or GUESSED.
 //
-// An asset is AsStated and needs no inference. For a liability the opening
-// balance is preferred over the booked balance, because opening is what the
-// account was CREATED with and so records the choice the writer made, whereas a
-// booked balance can cross zero when a card is overpaid and would then report the
-// opposite convention for the same account.
+// An asset is AsStated and needs no inference, so known is always true for one.
 //
-// When both are zero the account is settled, the two conventions agree (zero has
-// no sign), and PositiveOwed is returned as the documented default.
-func ConventionOf(acc domain.Account, bookedMinor int64) Convention {
+// For a liability the opening balance decides it: that is what the account was
+// CREATED with, so it records the choice its writer made, and unlike the booked
+// balance it does not move. known is true whenever it is non-zero.
+//
+// With no opening balance there is nothing solid left. The booked balance is the
+// only remaining signal and it is a poor one — it crosses zero the moment a card
+// goes into credit, and then reports the opposite convention for the same
+// account. It is still the best guess available (a card sitting at a positive
+// balance is far more often positive-owed debt than negative-owed credit), so it
+// is used, but known is false and anything making a CLAIM on the strength of it
+// should decline instead.
+//
+// That distinction is the whole reason for the second return value. Displaying a
+// balance has to pick something and a good guess beats nothing; warning a person
+// that their data is wrong does not, because a warning built on a coin flip fires
+// on correct data, and a check that cries wolf is one people switch off.
+func ConventionOf(acc domain.Account, bookedMinor int64) (c Convention, known bool) {
 	if acc.Class != domain.ClassLiability {
-		return AsStated
+		return AsStated, true
 	}
 	if o := acc.OpeningBalance.Amount; o != 0 {
 		if o > 0 {
-			return PositiveOwed
+			return PositiveOwed, true
 		}
-		return NegativeOwed
+		return NegativeOwed, true
 	}
-	if bookedMinor != 0 {
-		if bookedMinor > 0 {
-			return PositiveOwed
-		}
-		return NegativeOwed
+	if bookedMinor > 0 {
+		return PositiveOwed, false
 	}
-	return PositiveOwed
+	if bookedMinor < 0 {
+		return NegativeOwed, false
+	}
+	// Nothing at all to read. The two conventions agree about zero, so the choice
+	// only matters for a figure typed against it later; PositiveOwed is what the
+	// "amount you owe" add form writes, which makes it the likelier of the two.
+	return PositiveOwed, false
 }
 
 // Stated converts a stored minor-unit balance into the convention the app shows

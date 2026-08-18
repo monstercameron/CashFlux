@@ -18,6 +18,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/ledger"
+	"github.com/monstercameron/CashFlux/internal/transferpair"
 )
 
 // Check identifies which cross-check produced a finding.
@@ -26,6 +27,11 @@ type Check string
 const (
 	// CheckTransferOrphan: a transfer leg with no counterpart in the other account.
 	CheckTransferOrphan Check = "transfer-orphan"
+	// CheckTransferLegsDisagree: a transfer whose two legs exist but do not cancel,
+	// so the pair moved money into existence or out of it. Distinct from an orphan
+	// on purpose — the far side IS there, and telling someone to go looking for a
+	// missing transaction that is sitting in front of them wastes the trip.
+	CheckTransferLegsDisagree Check = "transfer-legs-disagree"
 	// CheckSplitSum: a split transaction whose lines don't sum to its amount.
 	CheckSplitSum Check = "split-sum"
 	// CheckCurrencyMismatch: a transaction denominated differently from its account.
@@ -88,7 +94,7 @@ func Run(in Input) []Finding {
 		acctByID[a.ID] = a
 	}
 
-	out = append(out, checkTransfers(in.Transactions)...)
+	out = append(out, checkTransfers(in.Transactions, in.Accounts)...)
 	out = append(out, checkTransactions(in.Transactions, acctByID)...)
 	out = append(out, checkAccounts(in.Accounts, in.Transactions)...)
 	out = append(out, checkBudgets(in.Budgets)...)
@@ -107,51 +113,43 @@ func Run(in Input) []Finding {
 // must have a counterpart in B pointing back at A with the opposite amount.
 // Unpaired legs are orphans — the classic half-deleted transfer that makes one
 // account lie by exactly the moved amount.
-func checkTransfers(txns []domain.Transaction) []Finding {
+func checkTransfers(txns []domain.Transaction, accounts []domain.Account) []Finding {
+	// C686: this used to greedily match legs on an exactly opposite amount with no
+	// date check, while internal/contradict matched on the same calendar day with
+	// no amount check. The two disagreed about the same rows on two different
+	// screens, and this one had a second problem of its own: it required the same
+	// CURRENCY and an exactly opposite AMOUNT, so a correct cross-currency transfer
+	// and a correct payment into a positive-owed card — whose legs are both
+	// negative — were each reported as two orphans. The check meant to catch the
+	// orphan bug fired hardest on the healthy version of it.
+	//
+	// Both screens now ask internal/transferpair, which honours a declared pair
+	// before it matches anything.
 	var out []Finding
-	// Bucket legs by the unordered account pair, then greedily match opposites.
-	type key struct{ a, b string }
-	buckets := map[key][]domain.Transaction{}
 	for _, t := range txns {
 		if !t.IsTransfer() {
 			continue
 		}
-		k := key{t.AccountID, t.TransferAccountID}
-		if k.b < k.a {
-			k.a, k.b = k.b, k.a
-		}
-		buckets[k] = append(buckets[k], t)
-	}
-	for _, legs := range buckets {
-		matched := make([]bool, len(legs))
-		for i := range legs {
-			if matched[i] {
-				continue
+		if partner, ok := transferpair.Declared(t, txns); ok {
+			// Report each declared pair once, from the leg with the lower id, so a
+			// disagreement is one finding rather than two saying the same thing.
+			if net, balanced, known := transferpair.NetStated(t, partner, accounts); known && !balanced && t.ID < partner.ID {
+				out = append(out, Finding{
+					ID: fmt.Sprintf("%s:%s", CheckTransferLegsDisagree, t.ID), Check: CheckTransferLegsDisagree,
+					Severity: SevWarning, EntityType: "transaction", EntityID: t.ID,
+					Name: t.Desc, Currency: t.Amount.Currency, AmountMinor: net,
+				})
 			}
-			for j := i + 1; j < len(legs); j++ {
-				if matched[j] {
-					continue
-				}
-				if legs[j].AccountID == legs[i].TransferAccountID &&
-					legs[j].TransferAccountID == legs[i].AccountID &&
-					legs[j].Amount.Amount == -legs[i].Amount.Amount &&
-					legs[j].Amount.Currency == legs[i].Amount.Currency {
-					matched[i], matched[j] = true, true
-					break
-				}
-			}
+			continue
 		}
-		for i, ok := range matched {
-			if ok {
-				continue
-			}
-			t := legs[i]
-			out = append(out, Finding{
-				ID: fmt.Sprintf("%s:%s", CheckTransferOrphan, t.ID), Check: CheckTransferOrphan,
-				Severity: SevWarning, EntityType: "transaction", EntityID: t.ID,
-				Name: t.Desc, Currency: t.Amount.Currency, AmountMinor: t.Amount.Amount,
-			})
+		if transferpair.For(t, txns, accounts).Confidence != transferpair.Unmatched {
+			continue
 		}
+		out = append(out, Finding{
+			ID: fmt.Sprintf("%s:%s", CheckTransferOrphan, t.ID), Check: CheckTransferOrphan,
+			Severity: SevWarning, EntityType: "transaction", EntityID: t.ID,
+			Name: t.Desc, Currency: t.Amount.Currency, AmountMinor: t.Amount.Amount,
+		})
 	}
 	return out
 }

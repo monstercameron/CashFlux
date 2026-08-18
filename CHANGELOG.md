@@ -6,6 +6,39 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **One answer to "is this transfer missing its other side" (C686, C692).** Three parts of the app matched
+  transfer legs by three different rules and none of them agreed: the Accounts page required the same calendar
+  day and never checked the amount, the data-health check required an exactly opposite amount and never checked
+  the date, and a third matched unflagged rows within three days. So a transfer that left on a Friday and landed
+  on a Monday was a critical error on one screen and fine on another — which is how a household ends up with
+  dozens of unmatched-transfer warnings it cannot act on. Both screens now use one matcher, which allows a few
+  days of settlement lag and honours an explicit link before it guesses anything.
+
+- **A transfer whose two legs disagree is no longer reported as a missing leg (C686).** The far side is right
+  there; sending someone to look for a transaction sitting in front of them wastes the trip. It is now its own
+  finding, computed in each account's own sign convention — so a correct payment into a card that stores its
+  debt as a positive number, where both legs are negative, stops being reported as money evaporating. Where an
+  account's convention has to be guessed, nothing is reported at all.
+
+- **A reconcile balance is no longer read from a signal that flips (C683 follow-up).** For an account created
+  with no opening balance, the storage convention was inferred from the current balance — the very figure that
+  crosses zero when a card goes into credit. It now reports whether it read the convention or guessed it, and
+  only the display acts on a guess; nothing that warns you your data is wrong does.
+
+### Added
+- **Transfers can be matched by the account a descriptor names (C692).** Bank descriptors identify the far side
+  by its trailing digits — "Transfer to Savings *6500", "Transfer to Account Ending 1677" — and nothing read
+  them. Accounts now carry that mask, and a pair counts as verified only when exactly one candidate exists and
+  the descriptor agrees. Two $750 sweeps on the same day are identical under any amount-and-date rule; the
+  descriptors tell them apart, and where they cannot, the app declines to choose rather than linking money
+  between the wrong two accounts.
+
+- **Utility bills categorize themselves on import (C691).** FPL, City of Lauderhill, HOA dues and Google Fi
+  were missing from the merchant dictionary, and the entries that did exist were spelled the way a company
+  writes its name rather than the way a bank prints it — so "FPL DIRECT DEBIT" matched nothing at all.
+
+
 ### Added
 - **A device access request now has a life story the console can read, and approving one no longer has to
   create a new account (C698, C700).** Approving a device could only ever mint a brand-new account, so an

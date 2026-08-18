@@ -302,15 +302,30 @@ var table = []Entry{
 	{"Boost Mobile", CatPhone},
 	{"Vodafone", CatPhone},
 	{"EE Mobile", CatPhone},
+	// Google Fi is the mobile carrier, distinct from Google Fiber (internet) two
+	// entries above. Lookup tries longest key first, so "GOOGLE FIBER" still
+	// resolves to Fiber and only a bare "GOOGLE FI" lands here (C691).
+	{"Google Fi", CatPhone},
 	{"Duke Energy", CatUtilities},
 	{"Pacific Gas and Electric", CatUtilities},
 	{"Con Edison", CatUtilities},
 	{"National Grid", CatUtilities},
 	{"Georgia Power", CatUtilities},
 	{"Florida Power & Light", CatUtilities},
+	// The descriptor a Florida bank actually prints is "FPL DIRECT DEBIT" or
+	// "FPL ELECTRIC", never the spelled-out name above — so the spelled-out entry
+	// alone never fires on a real statement. Short, but token-bounded matching
+	// keeps it from firing inside a longer word (C691).
+	{"FPL", CatUtilities},
 	{"British Gas", CatUtilities},
 	{"Octopus Energy", CatUtilities},
 	{"Thames Water", CatUtilities},
+	// Municipal water / waste / stormwater bills descriptor as the city itself.
+	{"City of Lauderhill", CatUtilities},
+	// Homeowners-association dues. Generic on purpose: the association's own name
+	// varies per household and is unguessable, but "HOA" is in nearly every such
+	// descriptor, and TypeUtilities already covers HOA dues as a service account.
+	{"HOA", CatUtilities},
 
 	// --- Insurance -----------------------------------------------------------
 	{"Geico", CatInsurance},

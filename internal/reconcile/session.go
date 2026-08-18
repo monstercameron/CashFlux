@@ -89,18 +89,25 @@ func (s *Session) Rollback(l Ledger) (failed int) {
 		return 0
 	}
 
+	// What could not be put back STAYS in the journal, so the caller can retry and
+	// the before-image is not lost with the failure. Clearing it wholesale would
+	// leave a row changed, no record of what it was, and only a count to say so.
+	keptBefore := map[string]domain.Transaction{}
+	var keptCreated []string
 	for _, id := range s.created {
 		if err := l.DeleteTransaction(id); err != nil {
 			failed++
+			keptCreated = append(keptCreated, id)
 		}
 	}
-	for _, t := range s.before {
+	for id, t := range s.before {
 		if err := l.PutTransaction(t); err != nil {
 			failed++
+			keptBefore[id] = t
 		}
 	}
-	s.before = map[string]domain.Transaction{}
-	s.created = nil
+	s.before = keptBefore
+	s.created = keptCreated
 	return failed
 }
 

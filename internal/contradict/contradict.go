@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/transferpair"
 )
 
 // Kind names a class of contradiction.
@@ -140,19 +141,15 @@ func Check(d Data) []Finding {
 // nothing entered or left it. Both corrupt every total that spans the two
 // accounts, and neither is visible from either account on its own.
 func checkTransfers(d Data) []Finding {
-	// Group by the unordered account pair plus date and magnitude — the app pairs
-	// legs by construction, so a leg with no counterpart on the other side is the
-	// signal.
-	type leg struct {
-		txn domain.Transaction
-	}
-	byAccount := map[string][]leg{}
-	for _, t := range d.Transactions {
-		if !t.IsTransfer() {
-			continue
-		}
-		byAccount[t.AccountID] = append(byAccount[t.AccountID], leg{txn: t})
-	}
+	// C686: this used to pair legs on the same CALENDAR DAY, with no amount check
+	// at all, taking the first row it found. internal/integrity paired the same
+	// rows on an exactly opposite AMOUNT with no date check. Two screens
+	// contradicting each other about the same two rows is worse than either rule
+	// alone: a transfer that left on Friday and landed on Monday was an error
+	// here and fine there, and a household ended up with dozens of "unmatched
+	// transfer" warnings it could not act on.
+	//
+	// Both now ask internal/transferpair, so there is one answer to the question.
 	var out []Finding
 	for _, t := range d.Transactions {
 		if !t.IsTransfer() || t.Amount.Amount >= 0 {
@@ -160,18 +157,30 @@ func checkTransfers(d Data) []Finding {
 			// twice under two keys.
 			continue
 		}
-		var partner *domain.Transaction
-		for i, l := range byAccount[t.TransferAccountID] {
-			if l.txn.TransferAccountID != t.AccountID {
-				continue
+		// A DECLARED counterpart — a row on the named account pointing back at this
+		// one — settles the question before any matching runs, and it settles it
+		// regardless of amount. Two declared legs carrying different amounts is one
+		// leg having been edited and the other not, which is a real fault and a
+		// different one from a leg with nothing on the other side. Running the
+		// amount-matching first would report "nothing arrived in the other account"
+		// when something did arrive, for the wrong amount.
+		if partner, ok := transferpair.Declared(t, d.Transactions); ok {
+			if net := t.Amount.Amount + partner.Amount.Amount; net != 0 {
+				out = append(out, Finding{
+					Kind: KindTransferLegsDisagree, Severity: SeverityCritical,
+					Key:        string(KindTransferLegsDisagree) + ":" + t.ID,
+					EntityKind: "transaction", EntityID: t.ID,
+					Left:       "this leg moved one amount",
+					Right:      "the matching leg moved another",
+					DeltaMinor: net, HasDelta: true,
+				})
 			}
-			if !sameDay(l.txn.Date, t.Date) {
-				continue
-			}
-			partner = &byAccount[t.TransferAccountID][i].txn
-			break
+			continue
 		}
-		if partner == nil {
+		// No declared counterpart, so fall back to matching. A match here is exactly
+		// opposite by construction, so it cannot produce a legs-disagree finding —
+		// only the absence of one matters.
+		if transferpair.For(t, d.Transactions, d.Accounts).Confidence == transferpair.Unmatched {
 			out = append(out, Finding{
 				Kind: KindOneSidedTransfer, Severity: SeverityCritical,
 				Key:        string(KindOneSidedTransfer) + ":" + t.ID,
@@ -179,17 +188,6 @@ func checkTransfers(d Data) []Finding {
 				Left:       "money left this account",
 				Right:      "nothing arrived in the other one",
 				DeltaMinor: -t.Amount.Amount, HasDelta: true,
-			})
-			continue
-		}
-		if net := t.Amount.Amount + partner.Amount.Amount; net != 0 {
-			out = append(out, Finding{
-				Kind: KindTransferLegsDisagree, Severity: SeverityCritical,
-				Key:        string(KindTransferLegsDisagree) + ":" + t.ID,
-				EntityKind: "transaction", EntityID: t.ID,
-				Left:       "this leg moved one amount",
-				Right:      "the matching leg moved another",
-				DeltaMinor: net, HasDelta: true,
 			})
 		}
 	}

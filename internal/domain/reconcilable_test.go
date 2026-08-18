@@ -28,20 +28,43 @@ func TestIsReconcilable(t *testing.T) {
 	}
 }
 
-// Every type the app offers must have a considered answer, so a type added later
+// Every type the app offers must have a CONSIDERED answer, so a type added later
 // cannot silently inherit one.
-func TestEveryAccountTypeHasAReconcilableAnswer(t *testing.T) {
+//
+// The obvious way to write this — a switch mirroring the implementation's — is
+// worthless: a new type would fall through both defaults, they would agree, and
+// the test would pass while nobody had thought about it. This states the expected
+// answers as data instead, so a type absent from the table fails outright.
+func TestEveryAccountTypeHasAConsideredAnswer(t *testing.T) {
+	want := map[AccountType]bool{
+		TypeChecking: true, TypeDebit: true, TypeSavings: true, TypeCash: true,
+		TypeCreditCard: true, TypeLineOfCredit: true, TypeLoan: true,
+		TypePersonalLoan: true, TypeMortgage: true,
+		TypeInvestment: true, TypeRetirement: true, TypeOther: true,
+		// No statement to reconcile against: a tracking shell, and three types
+		// whose worth is estimated on a revaluation cadence.
+		TypeUtilities: false, TypeProperty: false, TypeVehicle: false, TypeCrypto: false,
+	}
 	for _, ty := range AllAccountTypes {
-		got := ty.IsReconcilable()
-		switch ty {
-		case TypeUtilities, TypeProperty, TypeVehicle, TypeCrypto:
-			if got {
-				t.Errorf("%s: IsReconcilable = true, want false", ty)
+		expected, considered := want[ty]
+		if !considered {
+			t.Errorf("%s has no entry here — decide whether it is ever reconciled against a statement, then add it", ty)
+			continue
+		}
+		if got := ty.IsReconcilable(); got != expected {
+			t.Errorf("%s: IsReconcilable = %v, want %v", ty, got, expected)
+		}
+	}
+	for ty := range want {
+		found := false
+		for _, known := range AllAccountTypes {
+			if known == ty {
+				found = true
+				break
 			}
-		default:
-			if !got {
-				t.Errorf("%s: IsReconcilable = false, want true", ty)
-			}
+		}
+		if !found {
+			t.Errorf("%s is expected here but is no longer an account type", ty)
 		}
 	}
 }

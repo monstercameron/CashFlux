@@ -361,7 +361,7 @@ func AccountRow(props accountRowProps) ui.Node {
 	// case where the shortcut and the truth disagree.
 	dispBal, dispCleared := props.Balance, props.Cleared
 	if a.Class == domain.ClassLiability {
-		conv := reconcile.ConventionOf(a, props.Balance.Amount)
+		conv, _ := reconcile.ConventionOf(a, props.Balance.Amount)
 		dispBal = money.New(reconcile.Stated(props.Balance.Amount, conv), props.Balance.Currency)
 		dispCleared = money.New(reconcile.Stated(props.Cleared.Amount, conv), props.Cleared.Currency)
 	}
@@ -629,7 +629,15 @@ func AccountRow(props accountRowProps) ui.Node {
 						Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "edit-account-btn-"+a.ID), Title(uistate.T("accounts.editTitle")), OnClick(startEdit), uistate.T("action.edit")),
 						// C1: reconcile-to-statement only where statements + transactions exist —
 						// a valuation account (property/vehicle/investment/…) uses Update value.
-						If(!a.Archived && !isValuationType(a.Type), Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "reconcile-start-btn-"+a.ID), Title(uistate.T("accounts.reconcileWhen")), OnClick(startReconcile), uistate.T("accounts.reconcileTitle"))),
+						//
+						// C685: and only where the account HAS a statement. A utility or HOA
+						// shell is not a valuation account, so it used to be offered the full
+						// reconcile dialog — where a person could tick rows, post an
+						// adjustment and record reconciliation history against an account
+						// nobody sends a statement for, producing exactly the cleared figure
+						// the row now hides. Offering an action whose result the app then
+						// refuses to show is worse than offering neither.
+						If(!a.Archived && !isValuationType(a.Type) && a.Type.IsReconcilable(), Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "reconcile-start-btn-"+a.ID), Title(uistate.T("accounts.reconcileWhen")), OnClick(startReconcile), uistate.T("accounts.reconcileTitle"))),
 						// C2: money moves FROM liquid cash — a property or 401(k) row doesn't
 						// offer an outgoing transfer. (The page-level Transfer money picks any
 						// eligible source.) C9: one name for the action everywhere.

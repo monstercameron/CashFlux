@@ -71,7 +71,7 @@ func TestSeededCorruptions(t *testing.T) {
 		}, CheckTransferOrphan, "x-out"},
 		{"sign-inconsistent transfer pair", func(in *Input) {
 			in.Transactions[2].Amount = money.New(-1000, "USD") // both legs negative
-		}, CheckTransferOrphan, ""},
+		}, CheckTransferLegsDisagree, "x-in"},
 		{"split no longer sums", func(in *Input) {
 			in.Transactions[3].Splits[0].Amount = money.New(-1500, "USD")
 		}, CheckSplitSum, "t2"},
@@ -140,9 +140,14 @@ func TestExemptions(t *testing.T) {
 		At: d("2026-07-10"), StatementDate: d("2026-07-10"),
 		StatementBalance: money.New(999, "USD"), Forced: true, DifferenceMinor: 123,
 	}}
-	// An archived liability with a positive balance stays quiet.
+	// An archived liability with a positive balance stays quiet. Flipping the
+	// card to the positive-owed convention flips what a PAYMENT into it looks
+	// like too, so the transfer leg moves with it — otherwise the fixture is
+	// asserting that inconsistent data is exempt, which is not the exemption
+	// under test.
 	in.Accounts[1].OpeningBalance = money.New(9000, "USD")
 	in.Accounts[1].Archived = true
+	in.Transactions[2].Amount = money.New(-1000, "USD")
 	if fs := Run(in); len(fs) != 0 {
 		t.Fatalf("exempt cases produced findings: %+v", fs)
 	}

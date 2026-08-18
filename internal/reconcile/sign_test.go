@@ -22,26 +22,63 @@ func TestConventionOf(t *testing.T) {
 		acc         domain.Account
 		bookedMinor int64
 		want        Convention
+		wantKnown   bool
 	}{
-		{"asset is always as-stated", acct(domain.ClassAsset, 100000), 250000, AsStated},
-		{"asset with a negative balance is still as-stated", acct(domain.ClassAsset, 0), -5000, AsStated},
-		{"debt opened positive stores positive-owed", acct(domain.ClassLiability, 50000), 50000, PositiveOwed},
-		{"debt opened negative stores negative-owed", acct(domain.ClassLiability, -50000), -50000, NegativeOwed},
-		// The opening balance records the choice the WRITER made. A booked balance
-		// can cross zero when a card is overpaid, and inferring from it there would
+		{"asset is always as-stated", acct(domain.ClassAsset, 100000), 250000, AsStated, true},
+		{"asset with a negative balance is still as-stated", acct(domain.ClassAsset, 0), -5000, AsStated, true},
+		{"debt opened positive stores positive-owed", acct(domain.ClassLiability, 50000), 50000, PositiveOwed, true},
+		{"debt opened negative stores negative-owed", acct(domain.ClassLiability, -50000), -50000, NegativeOwed, true},
+		// The opening balance records the choice the writer made. A booked balance
+		// crosses zero when a card is overpaid, and inferring from it there would
 		// report the opposite convention for the same account.
-		{"an overpaid positive-owed card keeps its convention", acct(domain.ClassLiability, 50000), -2500, PositiveOwed},
-		{"an overpaid negative-owed card keeps its convention", acct(domain.ClassLiability, -50000), 2500, NegativeOwed},
-		{"no opening falls back to the booked balance", acct(domain.ClassLiability, 0), 50000, PositiveOwed},
-		{"no opening, negative booked", acct(domain.ClassLiability, 0), -50000, NegativeOwed},
-		{"a settled debt defaults to positive-owed", acct(domain.ClassLiability, 0), 0, PositiveOwed},
+		{"an overpaid positive-owed card keeps its convention", acct(domain.ClassLiability, 50000), -2500, PositiveOwed, true},
+		{"an overpaid negative-owed card keeps its convention", acct(domain.ClassLiability, -50000), 2500, NegativeOwed, true},
+		// With no opening balance the booked sign is the only signal left, and it
+		// is the very one that crosses zero — so it is used, and reported as a
+		// guess rather than a reading.
+		{"no opening falls back to the booked balance, unknown", acct(domain.ClassLiability, 0), 50000, PositiveOwed, false},
+		{"no opening, negative booked, unknown", acct(domain.ClassLiability, 0), -50000, NegativeOwed, false},
+		{"a settled debt with no opening is a guess", acct(domain.ClassLiability, 0), 0, PositiveOwed, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := ConventionOf(tt.acc, tt.bookedMinor); got != tt.want {
+			got, known := ConventionOf(tt.acc, tt.bookedMinor)
+			if got != tt.want {
 				t.Errorf("ConventionOf = %v, want %v", got, tt.want)
 			}
+			if known != tt.wantKnown {
+				t.Errorf("known = %v, want %v", known, tt.wantKnown)
+			}
 		})
+	}
+}
+
+// The case the adversarial pass found: a liability CREATED at zero (the add form
+// allows it, and the sample data ships one) has no opening balance to read, so
+// the convention comes from a booked balance that flips the moment the card goes
+// into credit. The guess is still made — a balance has to be displayed — but it
+// must be reported as a guess, so that nothing which ACCUSES the data of being
+// wrong is built on it.
+func TestZeroOpeningLiabilityIsNeverAConfidentReading(t *testing.T) {
+	zeroOpened := acct(domain.ClassLiability, 0)
+
+	// $1.00 sitting on the card. Under positive-owed that is a dollar owed; under
+	// negative-owed it is a dollar of credit. Nothing here can tell which.
+	got, known := ConventionOf(zeroOpened, 100)
+	if known {
+		t.Errorf("known = true, but the only signal is a balance that crosses zero")
+	}
+	if got != PositiveOwed {
+		t.Errorf("guess = %v, want the likelier PositiveOwed", got)
+	}
+
+	// And the same account after the balance crosses.
+	got, known = ConventionOf(zeroOpened, -100)
+	if known {
+		t.Errorf("known = true on the other side of zero")
+	}
+	if got != NegativeOwed {
+		t.Errorf("guess = %v, want NegativeOwed", got)
 	}
 }
 
@@ -97,7 +134,7 @@ func TestJulyCheckingReconcilesToZero(t *testing.T) {
 		activity     = closingMinor - openingMinor // $1,283.75 of cleared movement
 	)
 	chk := acct(domain.ClassAsset, openingMinor)
-	conv := ConventionOf(chk, openingMinor+activity)
+	conv, _ := ConventionOf(chk, openingMinor+activity)
 
 	clearedStated := Stated(openingMinor+activity, conv)
 	if clearedStated != closingMinor {
@@ -133,8 +170,10 @@ func TestDebtReconcilesIdenticallyInBothStorageConventions(t *testing.T) {
 	pos := acct(domain.ClassLiability, owed)
 	neg := acct(domain.ClassLiability, -owed)
 
-	posStated := Stated(owed, ConventionOf(pos, owed))
-	negStated := Stated(-owed, ConventionOf(neg, -owed))
+	posConv, _ := ConventionOf(pos, owed)
+	posStated := Stated(owed, posConv)
+	negConv, _ := ConventionOf(neg, -owed)
+	negStated := Stated(-owed, negConv)
 	if posStated != negStated {
 		t.Fatalf("the same debt states as %d and %d", posStated, negStated)
 	}
@@ -180,7 +219,7 @@ func TestAdjustmentLandsOnTheStatementInBothConventions(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			conv := ConventionOf(c.acc, c.storedMinor)
+			conv, _ := ConventionOf(c.acc, c.storedMinor)
 			diff := Diff(Stated(c.storedMinor, conv), c.statementMinor)
 			if diff.Reconciled {
 				t.Fatalf("fixture should not already reconcile")

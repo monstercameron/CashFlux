@@ -1,3 +1,77 @@
+## 2026-08-17 - three matchers, three answers, one ledger (C686, C692, C691)
+
+The reported symptom was 52 unmatched-transfer warnings. The cause was not 52 broken transfers; it was that the
+app could not agree with itself about what a matched transfer looks like.
+
+- internal/contradict (Accounts page): same CALENDAR DAY, first row found wins, no amount check at all.
+- internal/integrity (Settings, Data tab): exactly opposite AMOUNT, same currency, no date check.
+- internal/doublecount: unflagged rows within three days.
+
+A transfer settling Friday-to-Monday was critical on one screen and invisible on another. A transfer shaved by a
+wire fee was the reverse. Integrity's exact-amount rule had a worse problem of its own: a correct payment into a
+positive-owed card has BOTH legs negative, so the check written to catch orphaned legs reported the healthy
+version of that as two orphans.
+
+internal/transferpair is the single answer. What took the most thought was not the matching but the REFUSING.
+Declining to pair leaves a row in a queue, which is a nuisance; pairing wrongly links two unrelated movements,
+and from then on balances, cash flow and delete-both all treat them as one. So Verified requires exactly one
+candidate AND descriptor agreement, and everything else is Possible with the alternatives kept rather than
+hidden. A household sweeping $750 into two accounts on the same day produces two candidates that are identical
+under any amount-and-date rule; only the descriptors separate them.
+
+That is what internal/acctref is for. Bank descriptors name the far side by its trailing digits and nothing read
+them, so domain.Account grew a Mask. Deliberately the last four and not the account number: it is what every
+descriptor prints, it is all pairing needs, and storing more would put a credential in a file people export and
+mail to themselves.
+
+Declared() is separate from For() on purpose. An explicit mutual link is somebody's statement that two rows are
+one movement, and it holds regardless of amount - two declared legs carrying different amounts is one leg having
+been edited and the other not. Collapsing that into "no counterpart" is what my first version did, and it made
+the message actively worse: it told a person nothing arrived in the other account when something did arrive, for
+the wrong amount. The existing test caught it, which is the test doing its job.
+
+NetStated sums a declared pair in each account's own stated convention rather than raw, because a raw sum fires
+on healthy data for the positive-owed-card case above. It returns known=false and stays silent when a liability
+has no opening balance to read its convention from - a warning resting on a coin flip fires on correct data, and
+a check that cries wolf is one people switch off.
+
+C691's merchant half rode along: FPL, City of Lauderhill, HOA and Google Fi. The interesting part is that
+"Florida Power and Light" and "Comcast" were already in the table, spelled the way the company writes its name
+rather than the way a bank prints it, so neither ever fired on a real statement. Google Fi also needed care - it
+would have been shadowed by the longer Google Fiber key, or shadowed it, depending on ordering, so both are
+pinned by test.
+
+### The adversarial pass
+
+Ran a reviewer over C683/C685/C691 and this work. Seven findings, five real:
+
+1. SEVERE and mine: reconcile.ConventionOf fell back to the BOOKED balance when an account had no opening
+   balance - the very signal its own doc says opening exists to avoid, because it crosses zero when a card goes
+   into credit. The sample data ships a zero-opening liability and the add form allows one. ConventionOf now
+   returns whether it READ the convention or GUESSED it. The guess is still made, because a balance has to be
+   displayed and a good guess beats nothing; what changed is that anything ACCUSING the data of being wrong
+   declines instead. transferpair had grown its own duplicate of that idea, which now asks reconcile.
+2. C685 hid the cleared figure on utility accounts while the overflow menu still offered "Reconcile to
+   statement" on them - so a person could tick rows, post an adjustment and record history against an account,
+   producing exactly the figure the row then refused to show. Offering an action whose result the app hides is
+   worse than offering neither.
+3. acctref matched its marker words as SUBSTRINGS, so "Acceleration Fee 12345" produced a confident account
+   reference, as would Accenture, Accessorize and Access Self Storage. A wrong account reference is the input to
+   a wrong pairing. Markers are now whole words.
+4. TestEveryAccountTypeHasAReconcilableAnswer mirrored the implementation's switch, so a new account type would
+   fall through both defaults, they would agree, and the test would pass having checked nothing - the exact
+   scenario its own docstring claimed to guard against. Rewritten as a table that fails on an unlisted type.
+5. Session.Rollback cleared the journal even when a restore failed, discarding the before-image of the one row
+   it could not put back. What fails now stays, so a retry finishes the job.
+
+Also fixed: a Unicode minus in the sign hint that a person copying the example could not type, a merchantdict
+guard case containing neither of the strings it claimed to guard, and a doc comment that said "three types" and
+then listed four.
+
+One finding is real and deliberately unaddressed: a concurrent external edit to a row during a reconcile session
+is clobbered by Cancel, because the journal restores a snapshot with no revision check. Fixing it properly needs
+a per-row revision the store does not currently expose, so it is a ticket rather than a patch.
+
 ## 2026-08-17 - 688 imported, 565 present, and no way to ask why (C687)
 
 Both numbers were true. 688 is the sum of what each import reported at the time it ran; 565 is what the ledger

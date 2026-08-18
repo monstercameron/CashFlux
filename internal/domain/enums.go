@@ -123,7 +123,7 @@ func (t AccountType) Valid() bool {
 // against an outside statement — the question that decides whether a
 // CLEARED-only balance means anything for it (C685).
 //
-// Three types are not. A utility/HOA account is a tracking shell: it records an
+// Four types are not. A utility/HOA account is a tracking shell: it records an
 // obligation the household owes a service provider, and nobody receives a
 // statement of it to tick rows against. Property, vehicle and crypto accounts are
 // ESTIMATED on a revaluation cadence rather than reconciled (see

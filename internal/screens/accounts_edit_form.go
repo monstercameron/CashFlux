@@ -96,7 +96,7 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 	// by the sample data and several importers, so diffing the stored number
 	// against a typed statement balance gave opposite answers for the same debt,
 	// and disagreed with the card about the same account.
-	reconConv := reconcile.ConventionOf(a, curBal.Amount)
+	reconConv, _ := reconcile.ConventionOf(a, curBal.Amount)
 	curClearedStated := money.New(reconcile.Stated(curCleared.Amount, reconConv), a.Currency)
 
 	// ---- setbal state ----

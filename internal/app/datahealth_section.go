@@ -135,6 +135,8 @@ func dataHealthRow(p dataHealthRowProps) uic.Node {
 	switch f.Check {
 	case integrity.CheckTransferOrphan:
 		line = uistate.T("health.transferOrphan", f.Name, amt(f.AmountMinor))
+	case integrity.CheckTransferLegsDisagree:
+		line = uistate.T("health.transferLegsDisagree", f.Name, amt(f.AmountMinor))
 	case integrity.CheckSplitSum:
 		line = uistate.T("health.splitSum", f.Name, amt(f.AmountMinor), amt(f.OtherMinor))
 	case integrity.CheckCurrencyMismatch:

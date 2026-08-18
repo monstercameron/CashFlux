@@ -279,3 +279,63 @@ func TestNilSessionIsSafe(t *testing.T) {
 		t.Errorf("failed = %d", failed)
 	}
 }
+
+// Found by an adversarial pass: a partial rollback used to clear the journal
+// regardless, so the one row it could not put back was left changed with its
+// before-image discarded and only a count to say so. What fails must stay, so a
+// retry is possible.
+func TestAPartialRollbackKeepsWhatItCouldNotRestore(t *testing.T) {
+	a, b := row("a", false), row("b", false)
+	l := newFakeLedger(a, b)
+	l.failPut["a"] = true
+	s := NewSession()
+
+	for _, r := range []domain.Transaction{a, b} {
+		s.NoteBefore(r)
+		tick := r
+		tick.Cleared = true
+		l.rows[r.ID] = tick
+	}
+	if failed := s.Rollback(l); failed != 1 {
+		t.Fatalf("failed = %d, want 1", failed)
+	}
+	if !s.Touched() || s.Count() != 1 {
+		t.Fatalf("journal = %d entries, want the one that failed kept for a retry", s.Count())
+	}
+
+	// The obstacle clears, and a retry finishes the job.
+	delete(l.failPut, "a")
+	if failed := s.Rollback(l); failed != 0 {
+		t.Fatalf("retry failed = %d, want 0", failed)
+	}
+	if l.rows["a"].Cleared {
+		t.Errorf("row a is still ticked after a successful retry")
+	}
+	if s.Touched() {
+		t.Errorf("the journal still reports work after everything was put back")
+	}
+}
+
+// A created row that cannot be deleted is kept for the same reason.
+func TestAFailedDeleteStaysInTheJournal(t *testing.T) {
+	l := newFakeLedger()
+	s := NewSession()
+	adj := row("adj", true)
+	_ = l.PutTransaction(adj)
+	s.NoteCreated(adj.ID)
+	l.failDel["adj"] = true
+
+	if failed := s.Rollback(l); failed != 1 {
+		t.Fatalf("failed = %d, want 1", failed)
+	}
+	if s.Count() != 1 {
+		t.Errorf("journal = %d, want the undeleted row kept", s.Count())
+	}
+	delete(l.failDel, "adj")
+	if failed := s.Rollback(l); failed != 0 {
+		t.Fatalf("retry failed = %d", failed)
+	}
+	if _, still := l.rows["adj"]; still {
+		t.Errorf("the adjustment survived the retry")
+	}
+}
