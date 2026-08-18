@@ -21,3 +21,16 @@ func init() {
 		english[k] = v
 	}
 }
+
+// balanceAsOfKeys are the "when was this true" field on the balance editor
+// (C684). Merged separately so the block above stays about the row itself.
+var balanceAsOfKeys = Catalog{
+	"accounts.setBalanceAsOfLabel": "Balance is as of",
+	"accounts.setBalanceAsOfHint":  "The date this figure was true. A balance you read on Friday and enter on Monday belongs to Friday — and the statement covering that date is the one that will replace it.",
+}
+
+func init() {
+	for k, v := range balanceAsOfKeys {
+		english[k] = v
+	}
+}

@@ -53,9 +53,10 @@ type accountRowProps struct {
 	OnRefresh      func(domain.Account)
 	OnSave         func(domain.Account)
 	OnView         func(string)
-	// OnSetBalance: newBalStr is the typed target; catID is the optional category
+	// OnSetBalance: newBalStr is the typed target; catID is the optional category;
+	// asOfISO is the date the balance was TRUE as of (C684), empty meaning today
 	// to attach to the adjustment transaction (empty = uncategorized).
-	OnSetBalance func(ac domain.Account, current money.Money, newBalStr, catID string)
+	OnSetBalance func(ac domain.Account, current money.Money, newBalStr, catID, asOfISO string)
 	OnTransfer   func(fromID, toID string, amountStr string, dateStr string, desc string)
 	// Smart badge inputs: SmartSettings + byEntity index from the page's insight run.
 	// When SmartSettings is zero-value the badge simply renders nothing (safe default).

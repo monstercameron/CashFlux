@@ -138,7 +138,7 @@ type acctRowCallbacks struct {
 	OnArchive    func(domain.Account)
 	OnRefresh    func(domain.Account)
 	OnSave       func(domain.Account)
-	OnSetBalance func(ac domain.Account, current money.Money, newBalStr, catID string)
+	OnSetBalance func(ac domain.Account, current money.Money, newBalStr, catID, asOfISO string)
 	OnTransfer   func(fromID, toID, amountStr, dateStr, desc string)
 }
 
@@ -211,7 +211,7 @@ func buildAcctRowCallbacks(app *appstate.App) acctRowCallbacks {
 			}
 			uistate.BumpDataRevision()
 		},
-		OnSetBalance: func(ac domain.Account, currentBal money.Money, newStr, catID string) {
+		OnSetBalance: func(ac domain.Account, currentBal money.Money, newStr, catID, asOfISO string) {
 			dec := currency.Decimals(ac.Currency)
 			target, err := money.ParseMinor(strings.TrimSpace(newStr), dec)
 			if err != nil {
@@ -230,8 +230,15 @@ func buildAcctRowCallbacks(app *appstate.App) acctRowCallbacks {
 			// is replaced rather than stacked — otherwise checking a balance twice
 			// leaves two adjustments both claiming to explain the same gap.
 			now := time.Now()
+			// The date the balance was true as of. A figure read on Friday and
+			// entered on Monday belongs to Friday; an unparseable or absent one
+			// falls back to now rather than refusing the update over a date field.
+			asOf := now
+			if parsed, perr := dateutil.ParseDate(asOfISO); perr == nil && !parsed.IsZero() {
+				asOf = parsed
+			}
 			if cp, ok := provisional.New(id.New(), ac.ID, uistate.T("accounts.balanceCheckpointDesc"),
-				currentBal.Amount, target, ac.Currency, now, now); ok {
+				currentBal.Amount, target, ac.Currency, asOf, now); ok {
 				cp.CategoryID = catID
 				replaced := 0
 				app.BulkMutate(func() {

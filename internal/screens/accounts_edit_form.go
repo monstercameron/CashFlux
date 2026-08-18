@@ -103,7 +103,13 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 	// ---- setbal state ----
 	setBalAmtS := ui.UseState("")
 	setBalCatS := ui.UseState("")
+	// C684: the date the balance was TRUE as of, which is not always today — a
+	// figure read on Friday and entered on Monday belongs to Friday, or every
+	// period total files it in the wrong month. Defaults to today, because that is
+	// the common case and nobody should have to fill in a date to update a balance.
+	setBalAsOfS := ui.UseState(time.Now().Format("2006-01-02"))
 	onSetBalAmt := ui.UseEvent(func(v string) { setBalAmtS.Set(v) })
+	onSetBalAsOf := ui.UseEvent(func(v string) { setBalAsOfS.Set(v) })
 
 	// ---- transfer state ----
 	xferFromS := ui.UseState(a.ID)
@@ -561,7 +567,7 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 		// one write — so we must NOT also call OnSave (that would double-write the account and
 		// clobber the adjustment's freshness). When the value field is blank, it's a plain edit.
 		if strings.TrimSpace(setBalAmtS.Get()) != "" {
-			cbs.OnSetBalance(cp, curBal, setBalAmtS.Get(), setBalCatS.Get())
+			cbs.OnSetBalance(cp, curBal, setBalAmtS.Get(), setBalCatS.Get(), strings.TrimSpace(setBalAsOfS.Get()))
 		} else {
 			cbs.OnSave(cp)
 		}
@@ -644,6 +650,7 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 				freshExemptS: freshExemptS, freshSnoozeS: freshSnoozeS,
 				onToggleFreshExempt: onToggleFreshExempt, onFreshSnooze: onFreshSnooze,
 				balancesNode: balancesNode,
+				setBalAsOfS:  setBalAsOfS, onSetBalAsOf: onSetBalAsOf,
 			})
 	}
 }
@@ -653,7 +660,7 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 // value records an adjustment so the computed balance matches; leaving it blank keeps
 // the balance as-is (a plain edit). It shows the current balance for context, a live
 // delta preview, and — once a value is entered — the category for the adjustment.
-func acctValueUpdateSection(a domain.Account, curBal money.Money, dec int, setBalAmtS, setBalCatS ui.State[string], onSetBalAmt ui.Handler, categories []domain.Category, focusValue bool) ui.Node {
+func acctValueUpdateSection(a domain.Account, curBal money.Money, dec int, setBalAmtS, setBalCatS, setBalAsOfS ui.State[string], onSetBalAmt, onSetBalAsOf ui.Handler, categories []domain.Category, focusValue bool) ui.Node {
 	rawAmt := strings.TrimSpace(setBalAmtS.Get())
 	var deltaNode ui.Node = Fragment()
 	if rawAmt != "" {
@@ -690,6 +697,15 @@ func acctValueUpdateSection(a domain.Account, curBal money.Money, dec int, setBa
 		Span(css.Class("t-caption acct-value-now", tw.TextDim), Attr("data-testid", "acct-value-now"),
 			uistate.T("accounts.currentValueNow", fmtMoney(curBal))),
 		deltaNode,
+		// C684: shown only once a value is typed, so updating a balance stays one
+		// field for the common case. It answers "when was this true", which is what
+		// makes the resulting checkpoint land in the right month and lets the right
+		// statement retire it later.
+		If(rawAmt != "", labeledField(uistate.T("accounts.setBalanceAsOfLabel"),
+			Input(css.Class("field"), Type("date"), Attr("data-testid", "acct-setbal-asof"),
+				Attr("aria-label", uistate.T("accounts.setBalanceAsOfLabel")),
+				Title(uistate.T("accounts.setBalanceAsOfHint")),
+				OnInput(onSetBalAsOf), uiw.FieldValue(setBalAsOfS.Get())))),
 		If(rawAmt != "", labeledField(uistate.T("accounts.setBalanceCategoryLabel"),
 			uiw.SelectInput(uiw.SelectInputProps{Options: catOpts, Selected: setBalCatS.Get(),
 				OnChange: func(v string) { setBalCatS.Set(v) }, AriaLabel: uistate.T("accounts.setBalanceCategoryLabel"), TestID: "setbal-cat-select"}))),
@@ -919,6 +935,12 @@ func transferForm(a domain.Account, app *appstate.App, accounts []domain.Account
 // positional signature (AC3 statement day, AC11 exclude-from-net-worth), bundled
 // into one struct so the editForm signature stays additive.
 type acctEditExtra struct {
+	// setBalAsOfS/onSetBalAsOf: the date a newly-entered balance was true as of
+	// (C684), which decides which month the resulting checkpoint lands in and
+	// which statement will later retire it.
+	setBalAsOfS  ui.State[string]
+	onSetBalAsOf ui.Handler
+
 	stmtDayS       ui.State[string]
 	exclNWS        ui.State[bool]
 	onStmtDay      ui.Handler
@@ -981,7 +1003,7 @@ func editForm(a domain.Account, dec int, curBal money.Money, members []domain.Me
 			// Merged "update value / balance" section, up top so the marquee account action
 			// (record a new value) is the fast path; leaving it blank keeps the balance as-is.
 			x.balancesNode,
-			acctValueUpdateSection(a, curBal, dec, setBalAmtS, setBalCatS, onSetBalAmt, categories, focusValue),
+			acctValueUpdateSection(a, curBal, dec, setBalAmtS, setBalCatS, x.setBalAsOfS, onSetBalAmt, x.onSetBalAsOf, categories, focusValue),
 			// QA CF-10: opened from the balance figure ("Update balance"), the account
 			// METADATA folds behind a native details disclosure so the dialog matches
 			// its label — value on top, everything else opt-in. The Edit entry keeps

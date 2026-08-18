@@ -6,6 +6,12 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **A balance you update can say when it was true (C684).** Entering a new value reveals an "as of" date,
+  defaulting to today. A figure you read on Friday and enter on Monday belongs to Friday — which decides the
+  month it counts in, and which statement later replaces it.
+
+
 ### Fixed
 - **The account editor shows how a balance was last set again.** Changing what a balance-update row is called
   (C684) broke three separate places that identified such a row by comparing its description text — the
