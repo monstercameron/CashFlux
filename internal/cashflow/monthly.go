@@ -35,7 +35,11 @@ func TrailingMonthly(txns []domain.Transaction, rates currency.Rates, base strin
 		start := dateutil.AddMonths(curStart, -k)
 		end := dateutil.AddMonths(curStart, -k+1)
 		for _, t := range txns {
-			if t.IsTransfer() || t.Date.Before(start) || !t.Date.Before(end) {
+			// C693: an excluded row is not income or spending. A provisional balance
+			// checkpoint is the case that made this matter — it stands in for money
+			// that already moved, so counting it here reports a payday nobody had,
+			// and the average it feeds is what the app calls a typical month.
+			if t.IsTransfer() || !t.CountsInReports() || t.Date.Before(start) || !t.Date.Before(end) {
 				continue
 			}
 			b := toBaseMinor(t.Amount.Amount, t.Amount.Currency, base, rates)

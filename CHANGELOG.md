@@ -7,6 +7,20 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Reports say when a period's figures are not final (C693).** A month still being written rendered exactly
+  like a finished one, so a month-to-date total read as a collapse in spending when it was simply three weeks
+  short. A period running past what has been reconciled is now captioned, with how far the statements actually
+  reach, and it names how much of the period rests on a balance checkpoint rather than on transactions. A
+  finished period resting on nothing gets no banner.
+
+### Fixed
+- **Excluded rows no longer feed the cash-flow averages (C693).** The monthly income and expense figures — the
+  ones the app calls a typical month — skipped transfers but not rows marked "exclude from reports", so a
+  provisional balance checkpoint standing in for money that already moved counted as a payday. The per-account
+  money-in/money-out on the account card had the same gap.
+
+
+### Added
 - **Updating an account's balance now records a provisional checkpoint, not an adjustment (C684).** The old
   behaviour posted an ordinary transaction that counted as income or spending, so keeping a month's figures
   honest meant remembering to tag it and tick "exclude from reports" by hand every time. A checkpoint is real

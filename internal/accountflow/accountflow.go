@@ -33,9 +33,9 @@ type Flow struct {
 	Transfer money.Money // signed net of transfers touching this account (in − out), for reference
 }
 
-// PeriodFlow folds the account's non-transfer transactions dated in the half-open
-// range [start, end) into money-in (positive amounts), money-out (magnitude of
-// negative amounts), and net. Only transactions booked on the account
+// PeriodFlow folds the account's non-transfer, report-counting transactions dated
+// in the half-open range [start, end) into money-in (positive amounts), money-out
+// (magnitude of negative amounts), and net. Only transactions booked on the account
 // (AccountID == account.ID) participate. Transfers are tallied into Transfer
 // (signed, in − out) but kept out of In/Out/Net so a transfer never reads as
 // income or spending. All amounts are in the account's currency.
@@ -50,6 +50,12 @@ func PeriodFlow(account domain.Account, all []domain.Transaction, start, end tim
 		}
 		if t.IsTransfer() {
 			xfer.Amount += t.Amount.Amount
+			continue
+		}
+		// C693: an excluded row still moves the BALANCE (that is TXC-1's rule, and
+		// a provisional balance checkpoint depends on it) but it is not money in or
+		// money out. Counting it makes the card claim a deposit arrived.
+		if !t.CountsInReports() {
 			continue
 		}
 		if t.Amount.Amount > 0 {

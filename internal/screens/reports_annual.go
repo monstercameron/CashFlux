@@ -1910,6 +1910,9 @@ func Reports() ui.Node {
 		// C672: stated above the report, not inside one section, because the leak
 		// distorts every figure below it — spending, income, the flow diagram and
 		// the category totals alike.
+		// C693: say whether these figures are final before the reader compares
+		// them against a finished month.
+		provisionalNotice(app, as, ae),
 		leakNotice,
 		modeToggle,
 		If(summaryMode.Get(), summaryView),

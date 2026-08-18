@@ -14,7 +14,7 @@ import (
 func on(day int) time.Time { return time.Date(2026, 8, day, 0, 0, 0, 0, time.UTC) }
 
 func checkpoint(id, acct string, minor int64, asOf time.Time) domain.Transaction {
-	t, ok := New(id, acct, 0, minor, "USD", asOf, asOf)
+	t, ok := New(id, acct, "checkpoint", 0, minor, "USD", asOf, asOf)
 	if !ok {
 		panic("fixture produced no checkpoint")
 	}
@@ -25,7 +25,7 @@ func checkpoint(id, acct string, minor int64, asOf time.Time) domain.Transaction
 // matter: drop the first and the account is wrong, drop the second and the app
 // invents a payday.
 func TestACheckpointCountsInBalancesAndNotInReports(t *testing.T) {
-	cp, ok := New("c1", "chk", 100000, 125000, "USD", on(15), on(15))
+	cp, ok := New("c1", "chk", "Balance checkpoint", 100000, 125000, "USD", on(15), on(15))
 	if !ok {
 		t.Fatal("New reported nothing to record for a $250 gap")
 	}
@@ -57,7 +57,7 @@ func TestACheckpointCountsInBalancesAndNotInReports(t *testing.T) {
 // computed over a date range files it in the wrong one.
 func TestTheRowIsDatedAsOfNotAsEntered(t *testing.T) {
 	asOf, posted := on(14), on(17)
-	cp, _ := New("c1", "chk", 0, 5000, "USD", asOf, posted)
+	cp, _ := New("c1", "chk", "x", 0, 5000, "USD", asOf, posted)
 	if !cp.Date.Equal(asOf) {
 		t.Errorf("Date = %v, want the as-of date %v", cp.Date, asOf)
 	}
@@ -67,21 +67,21 @@ func TestTheRowIsDatedAsOfNotAsEntered(t *testing.T) {
 }
 
 func TestNoGapMeansNoRow(t *testing.T) {
-	if _, ok := New("c1", "chk", 125000, 125000, "USD", on(15), on(15)); ok {
+	if _, ok := New("c1", "chk", "x", 125000, 125000, "USD", on(15), on(15)); ok {
 		t.Errorf("wrote a zero-amount row, which is a permanent artefact saying nothing")
 	}
 }
 
 func TestAMissingAsOfFallsBackToTheEntryDate(t *testing.T) {
 	posted := on(17)
-	cp, _ := New("c1", "chk", 0, 5000, "USD", time.Time{}, posted)
+	cp, _ := New("c1", "chk", "x", 0, 5000, "USD", time.Time{}, posted)
 	if !cp.Date.Equal(posted) {
 		t.Errorf("Date = %v, want the entry date when no as-of was given", cp.Date)
 	}
 }
 
 func TestCheckpointsAreTaggedAndFindable(t *testing.T) {
-	cp, _ := New("c1", "chk", 0, 5000, "USD", on(15), on(15))
+	cp, _ := New("c1", "chk", "x", 0, 5000, "USD", on(15), on(15))
 	found := false
 	for _, tag := range cp.Tags {
 		if tag == Tag {
@@ -170,5 +170,27 @@ func TestTotalMinorSumsOnlyCheckpoints(t *testing.T) {
 	}
 	if got := TotalMinor(txns); got != 3500 {
 		t.Errorf("TotalMinor = %d, want 3500 — ordinary spending must not be counted", got)
+	}
+}
+
+// Caught by the component test that first used this package: a transaction must
+// describe itself or the store refuses it, so New must never hand back a row
+// that cannot be written.
+func TestNewAlwaysProducesAWritableRow(t *testing.T) {
+	for _, desc := range []string{"", "   ", "\t"} {
+		cp, ok := New("c1", "chk", desc, 0, 5000, "USD", on(15), on(15))
+		if !ok {
+			t.Fatalf("New(%q) reported nothing to record", desc)
+		}
+		if cp.Desc == "" {
+			t.Errorf("New(%q) produced a row with no description; the store rejects it", desc)
+		}
+		if cp.Desc != FallbackDesc {
+			t.Errorf("New(%q) desc = %q, want the fallback", desc, cp.Desc)
+		}
+	}
+	cp, _ := New("c1", "chk", "Balance checkpoint (awaiting statement)", 0, 5000, "USD", on(15), on(15))
+	if cp.Desc != "Balance checkpoint (awaiting statement)" {
+		t.Errorf("a supplied description was overwritten: %q", cp.Desc)
 	}
 }

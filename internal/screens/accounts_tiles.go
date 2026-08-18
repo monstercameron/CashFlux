@@ -230,8 +230,8 @@ func buildAcctRowCallbacks(app *appstate.App) acctRowCallbacks {
 			// is replaced rather than stacked — otherwise checking a balance twice
 			// leaves two adjustments both claiming to explain the same gap.
 			now := time.Now()
-			if cp, ok := provisional.New(id.New(), ac.ID, currentBal.Amount, target, ac.Currency, now, now); ok {
-				cp.Desc = uistate.T("accounts.balanceCheckpointDesc")
+			if cp, ok := provisional.New(id.New(), ac.ID, uistate.T("accounts.balanceCheckpointDesc"),
+				currentBal.Amount, target, ac.Currency, now, now); ok {
 				cp.CategoryID = catID
 				replaced := 0
 				app.BulkMutate(func() {

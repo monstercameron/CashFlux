@@ -1,3 +1,34 @@
+## 2026-08-17 - a month that is not over yet, printed like one that is (C693)
+
+August month-to-date and July final rendered in the same type, at the same size, with no mark to separate them.
+Every comparison a reader makes between them is wrong, and always in the same direction: the current month looks
+like a spending collapse, because it is three weeks short.
+
+The model is small. A period is Closed when the household's books are reconciled through its last day, and
+Provisional otherwise. The judgement worth arguing about is which account decides: ClosedThrough takes the
+EARLIEST reconciled-through date across participating accounts, not the latest. A month is only finished when
+every account feeding it has confirmed, and taking the latest would let one well-kept checking account certify
+months the credit card has not. Utility shells and property valuations are skipped rather than counted as
+unreconciled, or the books stay open forever waiting on a statement that does not exist - which is where
+domain.AccountType.IsReconcilable from C685 earns its second use.
+
+The day-boundary reasoning is the same as C684's and worth repeating: "closed through July 31" means a month
+ending 1 August is settled, so StatusOf compares the period's last DAY rather than its exclusive end instant.
+
+The concrete bug the ticket names turned out to be real and wider than checkpoints. internal/cashflow skipped
+transfers and never checked CountsInReports, so ANY row a user had marked "exclude from reports" - a
+reimbursement, a gift, cash-back - still fed the monthly income and expense averages the app presents as a
+typical month. A provisional checkpoint is just the newest and most systematic instance. accountflow.PeriodFlow
+had the same hole, so a checkpoint showed on the account card as a deposit arriving. A sweep of every package
+that filters on IsTransfer found only those two missing the exclusion check among the income/expense
+aggregators; the rest (dedupe, contradict, integrity, receiptmatch) legitimately do not care.
+
+One thing my own test caught, which is the reason to write component tests against the real store: provisional.New
+returned a row with no Desc, and validate rejects a transaction that does not describe itself. The live path
+happened to work because the caller set a description afterwards, so the defect was invisible until a second
+caller existed. A constructor that can hand back an unwritable row is a trap for the next caller, so New takes
+the wording and falls back rather than producing one.
+
 ## 2026-08-17 - one browser, two accounts, and no way to say so (C694-C701)
 
 The trace was already in the ticket: the approval-gated request path creates a new device:<random> user. It

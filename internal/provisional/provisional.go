@@ -31,6 +31,7 @@ package provisional
 
 import (
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -40,6 +41,11 @@ import (
 // Tag is attached to every checkpoint so it is findable from the ledger's own
 // filters, without the user having to have thought of it in advance.
 const Tag = "reconciliation-checkpoint"
+
+// FallbackDesc is used when a caller supplies no wording. A transaction must
+// describe itself or the store refuses it, and a package with no strings of its
+// own would otherwise hand back a row that cannot be written.
+const FallbackDesc = "Balance checkpoint"
 
 // Of returns the checkpoints on one account, oldest first.
 func Of(accountID string, txns []domain.Transaction) []domain.Transaction {
@@ -90,7 +96,12 @@ func Stale(accountID string, txns []domain.Transaction) []domain.Transaction {
 //
 // The row is marked excluded from reports here rather than by the caller, because
 // "the user has to remember to tick a box" is the failure this replaces.
-func New(id, accountID string, currentMinor, targetMinor int64, currency string, asOf, postedAt time.Time) (domain.Transaction, bool) {
+//
+// desc is required and comes from the caller, because the wording belongs to the
+// UI layer and this package holds no strings. Passing an empty one yields a row
+// the store will refuse (a transaction must describe itself), so New fills in a
+// plain fallback rather than handing back something that cannot be written.
+func New(id, accountID, desc string, currentMinor, targetMinor int64, currency string, asOf, postedAt time.Time) (domain.Transaction, bool) {
 	delta := targetMinor - currentMinor
 	if delta == 0 {
 		return domain.Transaction{}, false
@@ -98,8 +109,11 @@ func New(id, accountID string, currentMinor, targetMinor int64, currency string,
 	if asOf.IsZero() {
 		asOf = postedAt
 	}
+	if strings.TrimSpace(desc) == "" {
+		desc = FallbackDesc
+	}
 	return domain.Transaction{
-		ID: id, AccountID: accountID,
+		ID: id, AccountID: accountID, Desc: desc,
 		// Posted on the as-of date, not the day it was typed: a balance read on
 		// Friday and entered on Monday belongs to Friday, or every figure computed
 		// over a date range puts it in the wrong one.
