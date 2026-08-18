@@ -265,6 +265,14 @@ func doRefreshAccessToken(ctx context.Context, pr prefs.Prefs, refreshToken stri
 		return false
 	}
 	storeAuthTokenPair(resp)
+	// Do not release the cross-tab lock until the rotated pair has actually
+	// COMMITTED. Set persists asynchronously, so returning here would let the
+	// next tab acquire the lock and re-read an IndexedDB that still holds the
+	// old refresh token — it would then conclude nothing had rotated and replay
+	// a token the server has already consumed, which revokes the entire session
+	// family. Found by adversarial review, 2026-08-18: the Reload added earlier
+	// closed the read side of that race and left the write side open.
+	browserstore.Barrier()
 	return true
 }
 

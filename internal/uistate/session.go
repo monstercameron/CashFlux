@@ -104,8 +104,21 @@ func WatchAuthAcrossTabs(onChange func()) {
 		return
 	}
 	authWatchStarted = true
+	// A rotation writes BOTH keys, so a naive watcher fires twice for one event
+	// and every other tab drops its socket, rebuilds the watch stream and
+	// re-flushes the queue twice over. Bounded, but pure churn — and it doubles
+	// under a burst of refreshes. Adversarial review, 2026-08-18.
+	//
+	// The fix is to react to the CREDENTIAL rather than to the writes: whatever
+	// order the two keys land in, this fires once per distinct bearer.
+	lastSeen := strings.TrimSpace(browserstore.GetString(AuthAccessTokenKey))
 	for _, key := range []string{AuthAccessTokenKey, AuthRefreshTokenKey} {
 		browserstore.Watch(key, func(string, bool) {
+			current := strings.TrimSpace(browserstore.GetString(AuthAccessTokenKey))
+			if current == lastSeen {
+				return
+			}
+			lastSeen = current
 			BumpAuthRevision()
 			if onChange != nil {
 				onChange()
@@ -113,3 +126,8 @@ func WatchAuthAcrossTabs(onChange func()) {
 		})
 	}
 }
+
+// notifyAuthWatchersForTest delivers a credential-change notification the way a
+// BroadcastChannel message would, so the coalescing rule can be tested without a
+// second browser tab.
+func notifyAuthWatchersForTest(key string) { browserstore.NotifyForTest(key) }

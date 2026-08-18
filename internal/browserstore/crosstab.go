@@ -197,3 +197,52 @@ func Reload(keys ...string) {
 	}
 	<-done
 }
+
+// Barrier blocks until every write issued by this tab before the call has
+// committed to IndexedDB.
+//
+// Set persists asynchronously: it updates the cache and fires the IndexedDB put
+// without waiting for the transaction to complete. That is right for ordinary
+// writes and wrong at exactly one moment — when another tab is about to read
+// what we just wrote in order to decide whether to reuse a single-use
+// credential. Adversarial review (2026-08-18) found the window: a tab can rotate
+// a refresh token, release the cross-tab lock as soon as the calls have been
+// ISSUED, and let the next tab's Reload run against an IndexedDB that has not
+// committed the new value yet. That tab then sees the old token, believes
+// nothing has rotated, and replays it — the precise failure the lock and the
+// Reload exist to prevent.
+//
+// It works by ordering rather than by inspection: IndexedDB runs transactions
+// with overlapping scope in creation order, so a readwrite transaction created
+// after the puts cannot complete before they have. Blocks, so goroutines only —
+// see Reload.
+func Barrier() {
+	if !db.Truthy() {
+		return
+	}
+	done := make(chan struct{})
+	var once sync.Once
+	finish := func() { once.Do(func() { close(done) }) }
+	defer func() {
+		if r := recover(); r != nil {
+			finish()
+		}
+	}()
+	tx := db.Call("transaction", idbStoreName, "readwrite")
+	tx.Set("oncomplete", js.FuncOf(func(js.Value, []js.Value) any { finish(); return nil }))
+	tx.Set("onerror", js.FuncOf(func(js.Value, []js.Value) any { finish(); return nil }))
+	tx.Set("onabort", js.FuncOf(func(js.Value, []js.Value) any { finish(); return nil }))
+	// A transaction with no request still completes; touching the store keeps the
+	// scope explicit and the ordering guarantee obvious to a reader.
+	tx.Call("objectStore", idbStoreName)
+	<-done
+}
+
+// NotifyForTest delivers a change notification for key as if it had arrived from
+// another tab, reading the current value from the cache. Exported for tests in
+// dependent packages, which cannot open a second browser tab to produce the real
+// thing.
+func NotifyForTest(key string) {
+	v, present := Get(key)
+	notifyWatchers(key, v, present)
+}

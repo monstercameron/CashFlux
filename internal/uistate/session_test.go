@@ -73,3 +73,43 @@ func TestSessionIsAbsentOnlyWhenThereIsNoCredentialAtAll(t *testing.T) {
 		t.Fatalf("session = %+v, want none for a blank rotating token", s)
 	}
 }
+
+func TestAuthWatchFiresOncePerCredentialNotOncePerWrite(t *testing.T) {
+	// A rotation writes BOTH the access and the refresh key. Reacting to writes
+	// made every other tab drop its socket, rebuild the watch stream and
+	// re-flush the queue twice for one rotation. Reacting to the CREDENTIAL
+	// collapses that back to one, whichever order the two writes land in.
+	browserstore.Remove(AuthAccessTokenKey)
+	browserstore.Remove(AuthRefreshTokenKey)
+	t.Cleanup(func() {
+		browserstore.Remove(AuthAccessTokenKey)
+		browserstore.Remove(AuthRefreshTokenKey)
+		authWatchStarted = false
+	})
+
+	authWatchStarted = false
+	fired := 0
+	WatchAuthAcrossTabs(func() { fired++ })
+
+	// One rotation, delivered as two key notifications.
+	browserstore.Set(AuthAccessTokenKey, "rotated-1")
+	browserstore.Set(AuthRefreshTokenKey, "refresh-1")
+	notifyAuthWatchersForTest(AuthAccessTokenKey)
+	notifyAuthWatchersForTest(AuthRefreshTokenKey)
+	if fired != 1 {
+		t.Fatalf("fired %d times for one rotation, want 1", fired)
+	}
+
+	// A second, genuinely different credential fires again.
+	browserstore.Set(AuthAccessTokenKey, "rotated-2")
+	notifyAuthWatchersForTest(AuthAccessTokenKey)
+	if fired != 2 {
+		t.Fatalf("fired %d times, want 2 after a second rotation", fired)
+	}
+
+	// A repeat notification for an unchanged credential does nothing.
+	notifyAuthWatchersForTest(AuthRefreshTokenKey)
+	if fired != 2 {
+		t.Fatalf("fired %d times, want 2 — an unchanged credential must not churn", fired)
+	}
+}
