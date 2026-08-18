@@ -84,6 +84,12 @@ type syncMeta struct {
 }
 
 type queuedSyncMutation struct {
+	// UserID is the account this snapshot was queued under (C696). It is part
+	// of the queue's KEY, not a label: a workspace id alone does not say whose
+	// workspace it is, and queued work that outlives an identity change would
+	// otherwise be pushed under a token that cannot address it. Empty means the
+	// entry predates user binding or was queued while signed out.
+	UserID           string `json:"userId,omitempty"`
 	WorkspaceID      string `json:"workspaceId"`
 	Name             string `json:"name,omitempty"`
 	Color            string `json:"color,omitempty"`
@@ -389,6 +395,15 @@ func startBackendSync() {
 		return
 	}
 	restoreTokenLifecycleOnBoot()
+	// C696: learn which account this session belongs to before anything is
+	// pushed. Queued work written while signed out is adopted by the current
+	// account; work belonging to a DIFFERENT one is left alone and surfaces as
+	// a decision rather than as an endless retry. Off the critical path — a
+	// slow or unreachable /v1/me must not delay boot.
+	go func() {
+		pr := uistate.LoadPrefs().Normalize()
+		adoptIdentityForSync(pr.ServerURL, effectiveServerToken(pr))
+	}()
 	wireSyncLifecycleListeners()
 	flushBackendSyncQueue()
 	pullActiveWorkspaceFromBackend(true)
@@ -684,6 +699,21 @@ func flushBackendSyncQueue() {
 			setSyncStatus(syncStatus{State: "synced", LastSyncedAt: time.Now().UTC().Format(time.RFC3339Nano)})
 			return
 		}
+		// C696: refuse to start a push that cannot succeed. `workspace not
+		// found` means the signed-in account does not own this workspace, and
+		// no amount of retrying changes that — the old loop re-attempted it on
+		// every tick, wake and watch event, which is why the settings page
+		// could sit at "1 change waiting to upload" indefinitely with nothing
+		// on either side about to change. The work is KEPT; what stops is the
+		// pointless retry, replaced by a decision the user can act on.
+		switch uploadDecision() {
+		case syncstate.UploadRebind:
+			refreshRebindStatus()
+			return
+		case syncstate.UploadSignIn:
+			setSyncStatus(syncStatus{State: "local", Pending: len(queue), Message: uistate.T("sync.rebindSignInReason")})
+			return
+		}
 		setSyncStatus(syncStatus{State: "syncing", Pending: len(queue)})
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
@@ -755,7 +785,16 @@ func flushBackendSyncQueue() {
 			if err != nil {
 				item.LastAttemptError = err.Error()
 				upsertQueuedSyncMutation(item)
-				setSyncStatus(syncStatus{State: "error", Pending: pendingSyncCount(), Message: customSyncErrorMessage(err, "sync failed"), AuthFailed: isAuthError(err)})
+				reason := customSyncErrorMessage(err, "sync failed")
+				// A workspace this account cannot address is terminal for that
+				// binding, not a transient failure. Say so once and stop, so the
+				// user gets a decision instead of an indefinitely spinning queue.
+				if syncstate.IsWorkspaceNotFound(reason) {
+					setSyncStatus(syncStatus{State: syncStateRebind, Pending: pendingSyncCount(), Message: reason})
+					logSyncError("backend sync push refused: workspace belongs to another account", err)
+					return
+				}
+				setSyncStatus(syncStatus{State: "error", Pending: pendingSyncCount(), Message: reason, AuthFailed: isAuthError(err)})
 				logSyncError("backend sync push failed", err)
 				return
 			}
@@ -1488,19 +1527,25 @@ func enqueueSyncMutation(item queuedSyncMutation) {
 
 func upsertQueuedSyncMutation(item queuedSyncMutation) {
 	queue := loadSyncQueue()
+	// Stamp the current account on new work so the queue can later tell whose
+	// it is. Entries queued while signed out stay unowned and are adopted at
+	// the next sign-in (adoptIdentityForSync).
+	if strings.TrimSpace(item.UserID) == "" {
+		item.UserID = signedInUserID()
+	}
 	pending := make([]syncstate.PendingMutation, 0, len(queue))
 	for _, q := range queue {
-		pending = append(pending, syncstate.PendingMutation{WorkspaceID: q.WorkspaceID, Hash: q.Hash, UpdatedAt: q.ClientUpdatedAt})
+		pending = append(pending, syncstate.PendingMutation{UserID: q.UserID, WorkspaceID: q.WorkspaceID, Hash: q.Hash, UpdatedAt: q.ClientUpdatedAt})
 	}
-	pending = syncstate.UpsertPending(pending, syncstate.PendingMutation{WorkspaceID: item.WorkspaceID, Hash: item.Hash, UpdatedAt: item.ClientUpdatedAt})
+	pending = syncstate.UpsertPending(pending, syncstate.PendingMutation{UserID: item.UserID, WorkspaceID: item.WorkspaceID, Hash: item.Hash, UpdatedAt: item.ClientUpdatedAt})
 	next := make([]queuedSyncMutation, 0, len(pending))
 	for _, p := range pending {
-		if p.WorkspaceID == item.WorkspaceID && p.Hash == item.Hash {
+		if p.UserID == item.UserID && p.WorkspaceID == item.WorkspaceID && p.Hash == item.Hash {
 			next = append(next, item)
 			continue
 		}
 		for _, q := range queue {
-			if q.WorkspaceID == p.WorkspaceID && q.Hash == p.Hash {
+			if q.UserID == p.UserID && q.WorkspaceID == p.WorkspaceID && q.Hash == p.Hash {
 				next = append(next, q)
 				break
 			}
@@ -1509,18 +1554,28 @@ func upsertQueuedSyncMutation(item queuedSyncMutation) {
 	saveSyncQueue(next)
 }
 
+// removeQueuedSyncMutation drops acknowledged work. Keyed on (account,
+// workspace) since C696, so acknowledging one identity's upload cannot silently
+// clear another identity's unpushed work for the same workspace id — a state a
+// device-account change genuinely produces.
 func removeQueuedSyncMutation(workspaceID, hash string) {
 	queue := loadSyncQueue()
 	pending := make([]syncstate.PendingMutation, 0, len(queue))
 	byKey := map[string]queuedSyncMutation{}
+	key := func(userID, wsID, h string) string { return userID + "\x00" + wsID + "\x00" + h }
 	for _, q := range queue {
-		pending = append(pending, syncstate.PendingMutation{WorkspaceID: q.WorkspaceID, Hash: q.Hash, UpdatedAt: q.ClientUpdatedAt})
-		byKey[q.WorkspaceID+"\x00"+q.Hash] = q
+		pending = append(pending, syncstate.PendingMutation{UserID: q.UserID, WorkspaceID: q.WorkspaceID, Hash: q.Hash, UpdatedAt: q.ClientUpdatedAt})
+		byKey[key(q.UserID, q.WorkspaceID, q.Hash)] = q
 	}
-	pending = syncstate.RemovePending(pending, workspaceID, hash)
+	pending = syncstate.RemovePending(pending, syncstate.Binding{UserID: signedInUserID(), WorkspaceID: workspaceID}, hash)
+	// An entry queued before identities were recorded carries no owner, so it
+	// would survive a removal keyed to the current account and then be retried
+	// for ever. Acknowledge that one too: it is this device's own work, and the
+	// push that just succeeded is exactly what it was waiting for.
+	pending = syncstate.RemovePending(pending, syncstate.Binding{WorkspaceID: workspaceID}, hash)
 	next := make([]queuedSyncMutation, 0, len(pending))
 	for _, p := range pending {
-		if q, ok := byKey[p.WorkspaceID+"\x00"+p.Hash]; ok {
+		if q, ok := byKey[key(p.UserID, p.WorkspaceID, p.Hash)]; ok {
 			next = append(next, q)
 		}
 	}

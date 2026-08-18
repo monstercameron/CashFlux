@@ -20,6 +20,38 @@ var syncPageKeys = Catalog{
 	"sync.encTitle":      "Privacy",
 	"sync.pendingCount":  "%d change(s) waiting to upload",
 	"sync.statusDetail":  "Reason: %s",
+
+	// Account/workspace mismatch (C696, C697). "workspace not found" is the
+	// server correctly refusing a workspace the signed-in account does not own.
+	// Retrying cannot fix it, so the copy asks for a decision instead of
+	// reporting a failure — and states the facts the decision needs, because
+	// the old pane said only "1 change(s) waiting to upload / Reason: workspace
+	// not found", which names neither the identity nor the workspace involved.
+	"sync.rebindTitle":         "This copy belongs to a different account",
+	"sync.rebindReason":        "The account you are signed in as does not own this workspace, so nothing can be uploaded until you choose what to do.",
+	"sync.rebindSignInReason":  "Sign in to upload the changes waiting on this device.",
+	"sync.rebindExplain":       "Your changes are safe on this device. Nothing has been lost and nothing will be sent until you pick one of these.",
+	"sync.rebindSignedInAs":    "Signed in as",
+	"sync.rebindServer":        "Server",
+	"sync.rebindWorkspace":     "This workspace",
+	"sync.rebindLastSuccess":   "Last successful sync",
+	"sync.rebindNeverSynced":   "never",
+	"sync.rebindPendingDetail": "%d change(s) waiting, oldest queued %s",
+	"sync.rebindUnknownUser":   "unknown — the server has not said who this session belongs to",
+	"sync.rebindRemoteTitle":   "Workspaces this account can reach",
+	"sync.rebindRemoteEmpty":   "This account owns no workspaces on the server yet.",
+	"sync.rebindPickPrompt":    "Choose the workspace this data belongs to. Your local copy is exported first, and nothing is uploaded until the mapping is confirmed.",
+	"sync.rebindAction":        "Move this data to…",
+	"sync.rebindConfirm":       "Use this workspace",
+	"sync.rebindCancel":        "Not now",
+	"sync.rebindSignIn":        "Sign in to the other account",
+	"sync.rebindKeepLocal":     "Keep this device local-only",
+	"sync.rebindKeepLocalHint": "Turns cloud sync off here. Your data stays on this device, exactly as it is.",
+	"sync.rebindExport":        "Export a backup first",
+	"sync.rebindRetry":         "Try uploading again",
+	"sync.rebindDone":          "Moved. This device now syncs to %s.",
+	"sync.rebindFailed":        "Could not move the data: %s",
+	"sync.rebindBackupSaved":   "Backup exported. Keep it until you have checked the result.",
 	"sync.syncingNow":    "Syncing now…",
 	"sync.openSettings":  "Manage subscription & devices",
 	"sync.manageMore":    "Billing, plan, and linked devices",

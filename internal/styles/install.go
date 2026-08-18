@@ -93,6 +93,7 @@ func Register() {
 	registerBgPolish()
 	registerDtxPolish()
 	registerSyncPulse()
+	registerRebindCard()
 	registerNotifTriage()
 	registerDashTodo()
 	registerNotifAsst()

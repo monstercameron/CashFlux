@@ -51,11 +51,11 @@ func TestPendingQueueUpsertAndRemove(t *testing.T) {
 		t.Fatalf("upsert append queue = %+v", queue)
 	}
 
-	queue = RemovePending(queue, "w1", "wrong")
+	queue = RemovePending(queue, Binding{WorkspaceID: "w1"}, "wrong")
 	if len(queue) != 3 {
 		t.Fatalf("remove with mismatched hash changed queue = %+v", queue)
 	}
-	queue = RemovePending(queue, "w1", "new")
+	queue = RemovePending(queue, Binding{WorkspaceID: "w1"}, "new")
 	if len(queue) != 2 || queue[0].WorkspaceID != "w2" || queue[1].WorkspaceID != "w3" {
 		t.Fatalf("remove accepted queue = %+v", queue)
 	}

@@ -329,7 +329,11 @@ func CloudConnectionPane() uic.Node {
 	onSignInGitHub := uic.UseEvent(func() {
 		startOAuthLogin(serverURL.Get(), "github", saveOAuthSession, func(msg string) { notify(msg, true) })
 	})
-	onSignOut := uic.UseEvent(func() {
+	// The body is a plain closure so both the button's handler and the rebind
+	// card can run it. The card offers "sign in to the other account", which is
+	// this same teardown — duplicating it would be a second place for session
+	// cleanup to drift out of step.
+	doSignOut := func() {
 		p := prefsAtom.Get()
 		// Present the token the session is ACTUALLY using (a rotated access token
 		// outranks prefs.ServerToken), or the server has nothing to revoke.
@@ -344,7 +348,8 @@ func CloudConnectionPane() uic.Node {
 			serverToken.Set("")
 			notify(uistate.T("settings.oauthSignedOut"), false)
 		})
-	})
+	}
+	onSignOut := uic.UseEvent(doSignOut)
 	onEnablePasscode := uic.UseEvent(func() { setPasscodeFlow() })
 	onToggleAdvancedToken := uic.UseEvent(func() { advancedTokenOpen.Set(!advancedTokenOpen.Get()) })
 	onTest := uic.UseEvent(func() {
@@ -475,6 +480,19 @@ func CloudConnectionPane() uic.Node {
 					uistate.T("sync.statusDetail", status.Message))),
 			),
 		),
+
+		// Account/workspace mismatch recovery (C694/C697). This is the state where
+		// the server is right to refuse and the client cannot fix it by trying
+		// again: the signed-in account does not own this workspace. The card
+		// states which account, which server, which workspace and when this last
+		// worked, and offers the decisions that actually resolve it.
+		uic.CreateElement(RebindCard, rebindProps{
+			ServerURL:    serverURL.Get(),
+			Status:       status,
+			OnSignOut:    doSignOut,
+			OnDisconnect: func() { onToggle(false) },
+			OnRetry:      func() { flushBackendSyncQueue() },
+		}),
 
 		// Locked recovery. "unlock to sync encrypted data" in the status card named an
 		// action this device cannot perform: unlocking runs from the passcode GATE,
