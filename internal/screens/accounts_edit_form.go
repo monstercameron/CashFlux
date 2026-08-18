@@ -17,6 +17,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/provisional"
 	"github.com/monstercameron/CashFlux/internal/reconcile"
 	"github.com/monstercameron/CashFlux/internal/textutil"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -155,10 +156,27 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 			uistate.PostNotice(err.Error(), true)
 			return
 		}
+		// C684: reconciling says what the balance actually WAS, so any provisional
+		// checkpoint standing in for it up to this date has done its job and is now
+		// double-counting against the statement's own rows. A stand-in nothing ever
+		// removes is worse than no stand-in: the error compounds every time somebody
+		// checks their balance between statements.
+		retired := 0
+		app.BulkMutate(func() {
+			for _, cid := range provisional.SupersededBy(a.ID, app.Transactions(), ev.Through()) {
+				if err := app.DeleteTransaction(cid); err == nil {
+					retired++
+				}
+			}
+		})
 		uistate.ClearReconcileDraft(a.ID)
 		reconUndo.Get().Forget() // a completed reconciliation keeps what it wrote
 		uistate.BumpDataRevision()
-		uistate.PostNotice(uistate.T("accounts.reconRecorded", ev.Through().Format("Jan 2, 2006")), false)
+		msg := uistate.T("accounts.reconRecorded", ev.Through().Format("Jan 2, 2006"))
+		if retired > 0 {
+			msg += " " + uistate.T("accounts.reconCheckpointsRetired", retired)
+		}
+		uistate.PostNotice(msg, false)
 		done()
 	}))
 	// --- QA R3 CF-02: legitimate discrepancy-resolution paths -----------------

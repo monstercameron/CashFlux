@@ -433,6 +433,27 @@ type Transaction struct {
 	// (TXC-1.) The exclusion is applied at the analytics aggregation layer
 	// (ledger.PeriodTotals, reports, budgeting.Spent), never in balance math.
 	ExcludeFromReports bool `json:"excludeFromReports,omitempty"`
+	// BalanceCheckpointAt marks this row as a PROVISIONAL BALANCE CHECKPOINT and
+	// records the date the balance was true as of (C684).
+	//
+	// A checkpoint is the adjustment written when someone updates an account's
+	// current balance from something they read — an app, a phone call, the bank's
+	// website — before the statement that will confirm it arrives. It is real for
+	// balance purposes and fiction for reporting purposes: the account genuinely
+	// holds that much, but the difference was not earned or spent, so counting it
+	// as income or spending invents a payday or a shopping trip that never
+	// happened.
+	//
+	// It used to be an ordinary "Balance adjustment" transaction, which meant the
+	// user had to remember to tag it and exclude it by hand every single time, and
+	// nothing removed it once the statement finally landed — so the adjustment and
+	// the statement's own rows both counted, and the account drifted by exactly the
+	// adjustment.
+	//
+	// The date is the point the balance was true as of, which is NOT the date the
+	// row is posted on: someone entering Friday's balance on Monday means Friday.
+	// Zero on every ordinary transaction. Additive; JSON round-trips.
+	BalanceCheckpointAt time.Time `json:"balanceCheckpointAt,omitempty"`
 	// Note is free-text the user attaches to a single transaction (a memo — e.g.
 	// "split with Priya, she owes half"), distinct from Desc (the payee/what) and
 	// Tags. Empty = none. (TXC-2.)
@@ -1852,3 +1873,7 @@ func AccountByMask(accounts []Account, digits string) (Account, bool) {
 	}
 	return found, n == 1
 }
+
+// IsBalanceCheckpoint reports whether this row is a provisional balance
+// checkpoint rather than a movement of money (C684).
+func (t Transaction) IsBalanceCheckpoint() bool { return !t.BalanceCheckpointAt.IsZero() }

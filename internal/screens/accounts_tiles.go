@@ -27,6 +27,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/liquidity"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/nwchange"
+	"github.com/monstercameron/CashFlux/internal/provisional"
 	"github.com/monstercameron/CashFlux/internal/smart"
 	"github.com/monstercameron/CashFlux/internal/smartengine"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -217,17 +218,34 @@ func buildAcctRowCallbacks(app *appstate.App) acctRowCallbacks {
 				uistate.PostNotice(uistate.T("accounts.invalidBalance"), true)
 				return
 			}
-			// Post an adjustment transaction for the difference so the computed balance
-			// equals the figure entered (e.g. matching a statement); the optional catID
-			// attaches a category so it doesn't land as an uncategorized spike (L57/L30).
-			if amount, ok := ledger.AdjustmentToTarget(currentBal, target); ok {
-				adj := domain.Transaction{
-					ID: id.New(), AccountID: ac.ID, Date: time.Now(), Desc: uistate.T("accounts.balanceAdjustment"),
-					Amount: amount, Cleared: true, CategoryID: catID, Source: domain.TxnSourceManual,
-				}
-				if err := app.PutTransaction(adj); err != nil {
-					uistate.PostNotice(err.Error(), true)
-					return
+			// C684: the difference is posted as a provisional balance CHECKPOINT, not
+			// as an ordinary adjustment. It is real for the balance and invisible to
+			// reporting, because the money was not earned or spent — the account
+			// simply held more than the ledger knew. Making that the user's job to
+			// remember (tag it, tick "exclude from reports", delete it when the
+			// statement lands) is what produced a run of August-dated adjustments
+			// counting as income.
+			//
+			// Only one guess per account stands at a time, so a previous checkpoint
+			// is replaced rather than stacked — otherwise checking a balance twice
+			// leaves two adjustments both claiming to explain the same gap.
+			now := time.Now()
+			if cp, ok := provisional.New(id.New(), ac.ID, currentBal.Amount, target, ac.Currency, now, now); ok {
+				cp.Desc = uistate.T("accounts.balanceCheckpointDesc")
+				cp.CategoryID = catID
+				replaced := 0
+				app.BulkMutate(func() {
+					for _, old := range provisional.Of(ac.ID, app.Transactions()) {
+						if err := app.DeleteTransaction(old.ID); err == nil {
+							replaced++
+						}
+					}
+					if err := app.PutTransaction(cp); err != nil {
+						uistate.PostNotice(err.Error(), true)
+					}
+				})
+				if replaced > 0 {
+					uistate.PostNotice(uistate.T("accounts.balanceCheckpointReplaced", replaced), false)
 				}
 			}
 			ac.BalanceAsOf = time.Now()

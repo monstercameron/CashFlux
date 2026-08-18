@@ -6,6 +6,16 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- **Updating an account's balance now records a provisional checkpoint, not an adjustment (C684).** The old
+  behaviour posted an ordinary transaction that counted as income or spending, so keeping a month's figures
+  honest meant remembering to tag it and tick "exclude from reports" by hand every time. A checkpoint is real
+  for the balance and invisible to reporting, both set where it is created. It is dated as of when the balance
+  was true rather than when it was typed, only one stands per account, and — the part that did not exist at all
+  — reconciling the account retires every checkpoint the statement now covers, instead of leaving the guess to
+  double-count against the statement's own rows forever.
+
+
 ### Fixed
 - **Two charges on different accounts are no longer offered as duplicates (C688).** The duplicates screen
   grouped on date, amount and description but not the account, while the importer's identical-looking check did

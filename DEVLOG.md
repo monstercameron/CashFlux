@@ -1,3 +1,31 @@
+## 2026-08-17 - a placeholder that nothing ever took away (C684)
+
+Editing an account's current balance posted a "Balance adjustment" transaction, which is a reasonable mechanism
+and was wired up wrong in two ways.
+
+First, it counted. The row was an ordinary income or expense, so a $250 correction read as $250 of income, and
+the only defence was the user remembering to tag it and tick "exclude from reports" - every time, on every
+account. That is not a workflow, it is a trap with a checklist.
+
+Second, and worse, nothing removed it. When the statement arrived and its rows were imported, the adjustment
+stayed alongside them, so the account carried both the real transactions and the guess that had been standing in
+for them. Every balance check between statements added another. A stand-in nothing retires is worse than no
+stand-in at all, because the error compounds instead of just existing.
+
+domain.Transaction.BalanceCheckpointAt carries both the flag and the date in one field, which is the shape the
+data actually has - there is no such thing as a checkpoint without an as-of date. And the as-of date is the
+POSTING date too, deliberately: a balance read on Friday and entered on Monday belongs to Friday, or every
+period figure files it in the wrong month.
+
+internal/provisional owns the lifecycle. Setting a balance replaces the account's existing checkpoint rather
+than stacking, so there is only ever one open guess. Recording a reconciliation retires every checkpoint dated
+at or before the statement's close - the statement has now SAID what the balance was, so the guess has done its
+job. A checkpoint dated after it survives, because that is a guess about a period the statement has not reached.
+
+The day-boundary detail is worth naming: statement dates are date-only, transaction dates carry a time, so a
+checkpoint stamped 4:30pm on the closing date would have survived a same-day reconciliation by six hours.
+SupersededBy compares against the END of the statement day.
+
 ## 2026-08-17 - the duplicates screen and the importer never agreed (C688)
 
 The ticket said "review five duplicate candidates across three groups: FAL Features Labels and OpenRouter
