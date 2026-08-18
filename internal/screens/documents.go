@@ -335,11 +335,7 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 	// skipped + cpID enrich the history row (#57): the full result and the
 	// pre-import checkpoint that can roll this exact run back.
 	recordDocument := func(kind domain.DocumentKind, accountID string, rows []extract.Row, rowCount, skipped int, cpID string) {
-		_ = app.PutDocument(domain.Document{
-			ID: id.New(), Kind: kind, UploadedAt: time.Now(), AccountID: accountID,
-			Status: domain.DocImported, Extracted: toDocumentRows(rows), RowCount: rowCount,
-			SkippedCount: skipped, CheckpointID: cpID,
-		})
+		recordDocumentAs(app, id.New(), kind, accountID, rows, rowCount, skipped, 0, 0, cpID)
 	}
 
 	// commitCSVImport is the shared write path used by both the paste and file-picker
@@ -360,7 +356,14 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 				beforeMinor, haveBal = b.Amount, true
 			}
 		}
-		n, skipped, err := app.ImportTransactionsCSV(data, importAcct.Get())
+		// C687: the run's id is minted BEFORE the import so every row it writes can
+		// be stamped with it. Recording the document afterwards, as this used to,
+		// left the rows with no way to say which import created them — which is
+		// exactly why "688 imported" and "565 in the ledger" could not be
+		// reconciled.
+		docID := id.New()
+		res, err := app.ImportTransactionsCSV(data, importAcct.Get(), docID)
+		n, skipped := res.Imported, res.Failed
 		csvDupWarn.Set("")
 		pendingCSV.Set(nil)
 		csvPreflightS.Set(nil)
@@ -369,8 +372,12 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 			msg.Set(uistate.T("documents.csvError", friendly))
 			return false
 		}
-		if n > 0 {
-			recordDocument(domain.DocCSV, importAcct.Get(), nil, n, len(skipped), cpID)
+		if n > 0 || res.Duplicates > 0 || len(skipped) > 0 {
+			// Recorded even when nothing landed: an import where every row was a
+			// duplicate is a thing that happened, and a history that only shows
+			// successful runs cannot explain a ledger that did not change.
+			recordDocumentAs(app, docID, domain.DocCSV, importAcct.Get(), nil,
+				n, res.Duplicates+len(skipped), res.Duplicates, len(skipped), cpID)
 		}
 		summary := csvImportSummary(accounts, importAcct.Get(), n)
 		if len(skipped) > 0 {
@@ -1445,7 +1452,7 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 			),
 			// #57: recent import runs with their full results and per-run
 			// roll-back (while the pre-import checkpoint is still in the ring).
-			importHistorySection(app.Documents(), accounts, rollbackImport, goActivity),
+			importHistorySection(app.Documents(), accounts, app.Transactions(), rollbackImport, goActivity),
 		)),
 
 		// STAGE 2 — "Review & import": the shared editable draft table + spend summary,

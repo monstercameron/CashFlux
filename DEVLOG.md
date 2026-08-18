@@ -1,3 +1,38 @@
+## 2026-08-17 - 688 imported, 565 present, and no way to ask why (C687)
+
+Both numbers were true. 688 is the sum of what each import reported at the time it ran; 565 is what the ledger
+holds now. Rows leave - a duplicate merge removes some, a bulk delete removes more, a rollback removes a whole
+run - and none of that was recorded against the run that created them. So the difference had no explanation and
+no way to get one, which is the worst version of this: a person cannot tell whether 123 rows were deliberately
+cleaned up or silently lost.
+
+The field to fix it already existed. domain.Transaction.SourceDocID has been in the schema for a long time and
+NO import path set it - grep finds it written only by the sample data. Both importers also minted their document
+record AFTER writing the rows, so even the id to stamp them with did not exist yet at the moment it was needed.
+Minting it first and stamping during the write is the whole fix; doing it in a second pass would double the
+writes and leave a window where a crash orphans rows from their own history.
+
+internal/importaudit then just counts. The part worth care is what it refuses to claim: a run whose rows carry
+no id is genuinely untraceable, and reporting "0 still here" would be a confident lie in exactly the direction
+that alarms people. Tally.ActiveKnown says so, Totals.Untraceable counts those runs, and Totals.Explains()
+reports whether the figures cover the whole history at all.
+
+Second half: "skipped" was two facts wearing one number. ImportTransactionsCSV counted duplicates and used the
+count for a single slog line, then returned only the imported count and the parse failures - so the summary
+could say "imported 12, skipped 3" where the 3 were unreadable rows, and say nothing at all where 40 rows were
+duplicates. Those are opposite messages. A duplicate is the safeguard working and re-importing an overlapping
+statement is a normal thing to do; a parse failure is money that is not in the ledger and nothing else will
+mention it. CSVImportResult separates them, domain.Document records both alongside the conflated SkippedCount
+that older readers still use, and the history row states each in its own words.
+
+An import where every row was a duplicate now records a document too. It used to be dropped, which meant the
+history could not explain a ledger that had not changed.
+
+Tested: 9 cases over importaudit (the reported 688/565 reproduced and explained, legacy untraceable runs,
+more-live-rows-than-imported, tie-broken ordering) and 5 through the real App (stamping, re-import duplicate
+reporting, failures counted apart, an end-to-end delete showing up as Removed, and an unstamped import still
+importing).
+
 ## 2026-08-17 - a number that is only meaningful against a statement (C685)
 
 A utility shell read "$0.00 - cleared ($120.00)". Nothing is owed; every bill was posted and every bill was

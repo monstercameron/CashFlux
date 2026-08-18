@@ -93,6 +93,21 @@ type Account struct {
 	// (e.g. "Chase", "Wells Fargo", "Fidelity"). Optional; omitted from JSON when
 	// empty so existing stored rows round-trip to "" with no migration needed.
 	Institution string `json:"institution,omitempty"`
+	// Mask is the account's trailing digits as the bank prints them ("6500",
+	// "1677") — the last four of the account number, not the number itself.
+	//
+	// It exists because a statement descriptor identifies the far side of a
+	// transfer by exactly this and nothing else: "Transfer to Savings *6500",
+	// "Transfer to Account Ending 1677". Without it those digits resolve to
+	// nothing, and an imported transfer can only be paired on amount and date —
+	// which cannot tell two $750 movements on the same day apart (C692).
+	//
+	// Deliberately NOT the full account number. The last four is what every
+	// descriptor prints, it is what pairing needs, and storing more would put a
+	// credential in a file the user exports and mails to themselves for no gain.
+	// Optional; empty means transfers to this account cannot be matched by
+	// descriptor. Additive: existing rows round-trip to "" with no migration.
+	Mask string `json:"mask,omitempty"`
 	// InstitutionID references a domain.Institution entity (AC10) — the structured
 	// institution directory that grounds Multi-Institution Analytics with a real
 	// entity instead of the free-text Institution string. Optional; empty means the
@@ -834,7 +849,21 @@ type Document struct {
 	RowCount int `json:"rowCount,omitempty"`
 	// SkippedCount records how many rows the import skipped as duplicates or
 	// parse failures, so the history row can state the full result (#57).
+	//
+	// It CONFLATES two different outcomes, which is why the two counters below
+	// exist (C687). "Skipped 12" reads as a problem when it means twelve rows were
+	// already in the ledger, and reads as routine when it means twelve rows could
+	// not be parsed and their money is simply missing. Kept for documents written
+	// before the split; new imports set it to Duplicates+Failed so old readers
+	// stay correct.
 	SkippedCount int `json:"skippedCount,omitempty"`
+	// DuplicateCount is how many rows the ledger already had. Not a failure — it
+	// is the safeguard working, and re-importing an overlapping statement is a
+	// normal thing to do.
+	DuplicateCount int `json:"duplicateCount,omitempty"`
+	// FailedCount is how many rows could not be read at all. This one IS a
+	// problem: that money is not in the ledger and nothing else will notice.
+	FailedCount int `json:"failedCount,omitempty"`
 	// CheckpointID names the pre-import safety checkpoint (#55) taken just
 	// before this import committed, enabling per-run "roll back this import"
 	// from the history while the checkpoint is still in the ring.
@@ -1788,4 +1817,38 @@ type Holding struct {
 	// and a household can hold an expensive fund for a decade with nothing in the
 	// ledger saying so. Zero means UNKNOWN, never free.
 	ExpenseRatioBps int `json:"expenseRatioBps,omitempty"`
+}
+
+// MaskDigits returns the account's mask reduced to the last four digits, with
+// any punctuation or masking characters the user typed removed — so "*6500",
+// "xxxx-6500" and "6500" are one value. Empty when the account carries no mask.
+func (a Account) MaskDigits() string {
+	var digits []rune
+	for _, r := range a.Mask {
+		if r >= '0' && r <= '9' {
+			digits = append(digits, r)
+		}
+	}
+	if len(digits) > 4 {
+		digits = digits[len(digits)-4:]
+	}
+	return string(digits)
+}
+
+// AccountByMask finds the single account whose mask matches these trailing
+// digits.
+//
+// It reports ok=false when two accounts share a mask, rather than returning the
+// first. Two accounts ending in the same four digits is uncommon but entirely
+// possible, and picking one of them would silently move money between the wrong
+// pair — the exact failure the mask was added to prevent.
+func AccountByMask(accounts []Account, digits string) (Account, bool) {
+	var found Account
+	n := 0
+	for _, a := range accounts {
+		if m := a.MaskDigits(); m != "" && m == digits {
+			found, n = a, n+1
+		}
+	}
+	return found, n == 1
 }

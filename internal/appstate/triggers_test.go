@@ -64,7 +64,8 @@ func TestBulkImportFiresPerRowTaskIdempotent(t *testing.T) {
 		Actions: []workflow.Action{{Kind: workflow.ActionCreateTask, Title: "Imported batch"}},
 	})
 	csv := "date,account_id,desc,amount\n2026-06-10,Checking,Row one,-10\n2026-06-11,Checking,Row two,-20\n2026-06-12,Checking,Row three,-30\n"
-	n, _, err := a.ImportTransactionsCSV([]byte(csv), "")
+	res, err := a.ImportTransactionsCSV([]byte(csv), "", "")
+	n := res.Imported
 	if err != nil {
 		t.Fatalf("import: %v", err)
 	}
@@ -85,11 +86,12 @@ func TestReimportCSVDeduplicates(t *testing.T) {
 	a := newApp(t, false)
 	seedAccount(t, a, 0)
 	csv := "date,account_id,desc,amount\n2026-06-10,Checking,Coffee,-10\n2026-06-11,Checking,Lunch,-20\n"
-	if n, _, err := a.ImportTransactionsCSV([]byte(csv), ""); err != nil || n != 2 {
-		t.Fatalf("first import: n=%d err=%v, want 2", n, err)
+	if res, err := a.ImportTransactionsCSV([]byte(csv), "", ""); err != nil || res.Imported != 2 {
+		t.Fatalf("first import: imported=%d err=%v, want 2", res.Imported, err)
 	}
 	// Same file again: every row is a duplicate, so nothing new is written.
-	n, _, err := a.ImportTransactionsCSV([]byte(csv), "")
+	res, err := a.ImportTransactionsCSV([]byte(csv), "", "")
+	n := res.Imported
 	if err != nil {
 		t.Fatalf("second import: %v", err)
 	}

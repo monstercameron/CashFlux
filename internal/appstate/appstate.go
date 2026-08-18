@@ -199,7 +199,39 @@ func (a *App) TransactionsCSV(txns []domain.Transaction) ([]byte, error) {
 // resolved to ids (C27). fallbackAccountID is applied to any row whose account
 // column is blank or unresolvable — pass "" to keep the previous behavior
 // (rows without an account are rejected by the validated write path).
-func (a *App) ImportTransactionsCSV(data []byte, fallbackAccountID string) (imported int, skipped []store.CSVRowError, err error) {
+// CSVImportResult is what one CSV import actually did, with the outcomes kept
+// apart (C687).
+//
+// The old signature returned only the imported count and the parse failures, and
+// computed the duplicate count purely to write it to a log line. So the summary a
+// person read could say "imported 12, skipped 3" where the 3 were parse failures,
+// or say nothing at all where 40 rows were skipped as duplicates — and the import
+// history recorded one conflated number for both. Those are different facts: a
+// duplicate is the safeguard working, a parse failure is money missing from the
+// ledger that nothing else will notice.
+type CSVImportResult struct {
+	// Imported is how many rows were written.
+	Imported int
+	// Duplicates is how many rows the ledger already had.
+	Duplicates int
+	// Failed is the rows that could not be parsed, with their reasons.
+	Failed []store.CSVRowError
+	// DocumentID is the import run these rows are stamped with, empty when the
+	// caller did not name one.
+	DocumentID string
+}
+
+// Presented is how many rows the file offered in total.
+func (r CSVImportResult) Presented() int { return r.Imported + r.Duplicates + len(r.Failed) }
+
+// ImportTransactionsCSV parses and writes a CSV of transactions.
+//
+// docID stamps every written row with the import run that created it
+// (domain.Transaction.SourceDocID). Passing it is what makes the import history
+// checkable afterwards: without it, "this run added 688 rows" and "the ledger
+// holds 565" are two unconnected numbers and the difference has no explanation.
+// Empty means the caller is not recording a run.
+func (a *App) ImportTransactionsCSV(data []byte, fallbackAccountID, docID string) (CSVImportResult, error) {
 	// #54: rows created here are audit-stamped "import", and the audit point is
 	// captured while the tag is live (the deferred autosave capture would run
 	// after the tag reset).
@@ -214,7 +246,7 @@ func (a *App) ImportTransactionsCSV(data []byte, fallbackAccountID string) (impo
 	}
 	txns, skipped, err := store.TransactionsFromCSVResilient(data, base)
 	if err != nil {
-		return 0, nil, err
+		return CSVImportResult{}, err
 	}
 
 	accPairs := make([][2]string, 0, len(a.Accounts()))
@@ -280,6 +312,10 @@ func (a *App) ImportTransactionsCSV(data []byte, fallbackAccountID string) (impo
 			dupes++
 			continue
 		}
+		// Stamp the run BEFORE writing, so the row can always say where it came
+		// from. Doing it in a second pass would double the writes and leave a
+		// window where a crash orphans the rows from their own history.
+		t.SourceDocID = docID
 		if putErr := a.PutTransaction(t); putErr == nil {
 			seen[sig] = true
 			importedTxns = append(importedTxns, t)
@@ -306,7 +342,7 @@ func (a *App) ImportTransactionsCSV(data []byte, fallbackAccountID string) (impo
 		a.fireTxnMutated()
 	}
 	a.log.Info("imported transactions from CSV", "imported", n, "parsed", len(txns), "duplicatesSkipped", dupes, "skipped", len(skipped))
-	return n, skipped, nil
+	return CSVImportResult{Imported: n, Duplicates: dupes, Failed: skipped, DocumentID: docID}, nil
 }
 
 // PreviewCSVImport parses data as CSV transactions (using the same logic as
@@ -1206,6 +1242,13 @@ func (a *App) ImportReviewedDocumentRows(kind domain.DocumentKind, accountID str
 	fresh := extract.FilterNew(rows, seen)
 	result.Skipped = len(rows) - len(fresh)
 
+	// C687: the run's id is minted BEFORE the rows are written, so each one can
+	// carry it. Recording the document afterwards under a fresh id — as this used
+	// to — leaves the rows unable to say which import created them, and the
+	// history's count and the ledger's count then have no way to be reconciled.
+	docID := id.New()
+	result.DocumentID = docID
+
 	importedRows := make([]extract.Row, 0, len(fresh))
 	a.WithoutTriggers(func() {
 		for _, r := range fresh {
@@ -1213,6 +1256,7 @@ func (a *App) ImportReviewedDocumentRows(kind domain.DocumentKind, accountID str
 			if !ok {
 				continue
 			}
+			t.SourceDocID = docID
 			if err := a.PutTransaction(t); err == nil {
 				result.Imported++
 				importedRows = append(importedRows, r)
@@ -1220,15 +1264,16 @@ func (a *App) ImportReviewedDocumentRows(kind domain.DocumentKind, accountID str
 		}
 	})
 	if result.Imported == 0 {
+		result.DocumentID = ""
 		return result, nil
 	}
 
-	docID := id.New()
-	result.DocumentID = docID
+	// Every row this path skips was skipped as a duplicate — it has no separate
+	// parse-failure notion, since the rows were already parsed and reviewed.
 	if err := a.PutDocument(domain.Document{
 		ID: docID, Kind: kind, UploadedAt: time.Now(), AccountID: acc.ID,
 		Status: domain.DocImported, Extracted: documentRowsFromExtract(importedRows),
-		SkippedCount: result.Skipped,
+		SkippedCount: result.Skipped, DuplicateCount: result.Skipped,
 	}); err != nil {
 		return result, err
 	}

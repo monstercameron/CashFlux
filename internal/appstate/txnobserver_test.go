@@ -79,7 +79,8 @@ func TestOnTxnMutated_ImportFiresOnce(t *testing.T) {
 	a.OnTxnMutated(func() { fired++ })
 
 	csv := "date,account_id,desc,amount\n2026-06-10,Checking,Row one,-10\n2026-06-11,Checking,Row two,-20\n2026-06-12,Checking,Row three,-30\n"
-	n, _, err := a.ImportTransactionsCSV([]byte(csv), "")
+	res, err := a.ImportTransactionsCSV([]byte(csv), "", "")
+	n := res.Imported
 	if err != nil {
 		t.Fatalf("import: %v", err)
 	}
@@ -98,15 +99,16 @@ func TestOnTxnMutated_ImportNoFireOnNoop(t *testing.T) {
 	seedAccount(t, a, 0)
 
 	csv := "date,account_id,desc,amount\n2026-06-10,Checking,Coffee,-10\n"
-	if n, _, err := a.ImportTransactionsCSV([]byte(csv), ""); err != nil || n != 1 {
-		t.Fatalf("first import: n=%d err=%v", n, err)
+	if res, err := a.ImportTransactionsCSV([]byte(csv), "", ""); err != nil || res.Imported != 1 {
+		t.Fatalf("first import: imported=%d err=%v", res.Imported, err)
 	}
 
 	var fired int
 	a.OnTxnMutated(func() { fired++ })
 
 	// Re-import the same file: all rows are duplicates, n=0 → no fire.
-	n, _, err := a.ImportTransactionsCSV([]byte(csv), "")
+	res, err := a.ImportTransactionsCSV([]byte(csv), "", "")
+	n := res.Imported
 	if err != nil {
 		t.Fatalf("second import: %v", err)
 	}

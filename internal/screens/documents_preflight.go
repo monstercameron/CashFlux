@@ -12,6 +12,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/extract"
+	"github.com/monstercameron/CashFlux/internal/importaudit"
 	"github.com/monstercameron/CashFlux/internal/importsafe"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -204,7 +205,7 @@ func receiptMatchRow(p receiptMatchRowProps) ui.Node {
 // run's snapshot has aged out of the ring its Roll back is gone, so the section
 // hint is honest about that and offers the always-available fallback: a link to
 // the Activity timeline (onViewActivity) where any import can still be reviewed.
-func importHistorySection(docs []domain.Document, accounts []domain.Account, onRollback func(domain.Document), onViewActivity ui.Handler) ui.Node {
+func importHistorySection(docs []domain.Document, accounts []domain.Account, txns []domain.Transaction, onRollback func(domain.Document), onViewActivity ui.Handler) ui.Node {
 	// Newest first by upload time (store order isn't chronological — the
 	// sample dataset seeds history rows with past dates).
 	sorted := append([]domain.Document(nil), docs...)
@@ -225,7 +226,7 @@ func importHistorySection(docs []domain.Document, accounts []domain.Account, onR
 	}
 	keyOf := func(d domain.Document) any { return d.ID }
 	render := func(d domain.Document) ui.Node {
-		return ui.CreateElement(importRunRow, importRunRowProps{Doc: d, AcctName: nameOf(d.AccountID), OnRollback: onRollback})
+		return ui.CreateElement(importRunRow, importRunRowProps{Doc: d, AcctName: nameOf(d.AccountID), Txns: txns, OnRollback: onRollback})
 	}
 	return Div(css.Class(tw.Mt3), Attr("data-testid", "import-history"),
 		P(css.Class("t-caption"), uistate.T("documents.historyHeading")),
@@ -239,8 +240,11 @@ func importHistorySection(docs []domain.Document, accounts []domain.Account, onR
 
 // importRunRowProps feeds one import-history row.
 type importRunRowProps struct {
-	Doc        domain.Document
-	AcctName   string
+	Doc      domain.Document
+	AcctName string
+	// Txns is the live ledger, so the row can say how many of this run's
+	// transactions are still in it (C687).
+	Txns       []domain.Transaction
 	OnRollback func(domain.Document)
 }
 
@@ -258,9 +262,32 @@ func importRunRow(p importRunRowProps) ui.Node {
 	if imported == 0 {
 		imported = len(d.Extracted)
 	}
+	// C687: the row used to say "N imported · M skipped", where M lumped together
+	// rows the ledger already had and rows that could not be read at all. The
+	// first is the safeguard working; the second is money missing from the ledger
+	// that nothing else will mention. And "imported" was a claim about the past
+	// with nothing to check it against — this row now also says how many of those
+	// transactions are still here, which is the only figure that reconciles the
+	// import history against the ledger.
+	tally := importaudit.For(d, p.Txns)
 	result := uistate.T("documents.historyImported", plural(imported, "transaction"))
-	if d.SkippedCount > 0 {
+	if tally.Split() {
+		if tally.Duplicates > 0 {
+			result += " " + uistate.T("documents.historyDuplicates", tally.Duplicates)
+		}
+		if tally.Failed > 0 {
+			result += " " + uistate.T("documents.historyFailed", tally.Failed)
+		}
+	} else if d.SkippedCount > 0 {
 		result += " " + uistate.T("documents.historySkipped", d.SkippedCount)
+	}
+	switch {
+	case !tally.ActiveKnown && imported > 0:
+		// An import from before rows carried their run id. Saying "0 still here"
+		// would be a confident lie in the direction that alarms people.
+		result += " " + uistate.T("documents.historyUntraceable")
+	case tally.Removed > 0:
+		result += " " + uistate.T("documents.historyRemoved", tally.Active, tally.Removed)
 	}
 	when := d.UploadedAt.Format("Jan 2, 2006 3:04 PM")
 	label := kindLabel

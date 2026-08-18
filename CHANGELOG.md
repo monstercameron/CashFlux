@@ -7,6 +7,22 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **The import history and the ledger can now be reconciled (C687).** The history said 688 transaction
+  records had been added while the ledger held 565, and nothing could explain the gap, because no import path
+  ever set `SourceDocID` — a row could not say which run created it. Every import now stamps its rows with
+  the run that wrote them, so "how many of these are still here" is a count rather than a guess, and the
+  history row says when transactions have been removed since. Imports made before this is honest about not
+  knowing, rather than reporting zero.
+
+- **"Skipped" no longer lumps together two different outcomes (C687).** A row the ledger already had and a
+  row that could not be read at all were counted in one number. The first is the safeguard working; the
+  second is money missing from the ledger that nothing else will mention. They are now counted and stated
+  separately, and the duplicate count — which the CSV importer computed only to write to a log line and then
+  discard — finally reaches the user. An import where every row was a duplicate is also recorded now, instead
+  of vanishing from the history entirely.
+
+
+### Fixed
 - **A utility or HOA account no longer shows a cleared figure that reads as debt (C685).** Beside the real
   balance the card printed a cleared-only total — a reconciliation aid, meaningful only against a statement.
   A utility shell sitting at $0 because every bill was posted and every bill paid still showed a few hundred
