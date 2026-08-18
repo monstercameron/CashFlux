@@ -89,6 +89,15 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 		curBal, _ = ledger.Balance(a, app.Transactions())
 		curCleared, _ = ledger.ClearedBalance(a, app.Transactions())
 	}
+	// C683: reconciliation runs entirely in the STATED convention — positive is
+	// money you have, negative is money you owe — because that is what the account
+	// card shows and what a statement prints. The raw stored figure cannot be used
+	// here: a debt is stored positive by the "amount you owe" add form and negative
+	// by the sample data and several importers, so diffing the stored number
+	// against a typed statement balance gave opposite answers for the same debt,
+	// and disagreed with the card about the same account.
+	reconConv := reconcile.ConventionOf(a, curBal.Amount)
+	curClearedStated := money.New(reconcile.Stated(curCleared.Amount, reconConv), a.Currency)
 
 	// ---- setbal state ----
 	setBalAmtS := ui.UseState("")
@@ -108,6 +117,10 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 	// ---- reconcile state ----
 	// QA R3 CF-02: an interrupted reconciliation resumes — the form seeds from a
 	// saved per-account draft ("Save & finish later") when one exists.
+	// C683: the journal of everything this modal writes, so Cancel can put it back.
+	// A ref, not state: it is recorded during handlers and read only when the modal
+	// closes, so mutating it must never trigger a re-render mid-write.
+	reconUndo := ui.UseRef(reconcile.NewSession())
 	draftBal, draftDate, hasReconDraft := uistate.LoadReconcileDraft(props.AccountID)
 	stmtDateInit := time.Now().Format("2006-01-02")
 	if hasReconDraft && draftDate != "" {
@@ -143,6 +156,7 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 			return
 		}
 		uistate.ClearReconcileDraft(a.ID)
+		reconUndo.Get().Forget() // a completed reconciliation keeps what it wrote
 		uistate.BumpDataRevision()
 		uistate.PostNotice(uistate.T("accounts.reconRecorded", ev.Through().Format("Jan 2, 2006")), false)
 		done()
@@ -159,14 +173,17 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 			return
 		}
 		cleared, _ := ledger.ClearedBalance(a, app.Transactions())
-		diff := reconcile.Diff(cleared.Amount, stmtMinor)
+		diff := reconcile.Diff(reconcile.Stated(cleared.Amount, reconConv), stmtMinor)
 		if diff.Reconciled {
 			return
 		}
+		// The difference is a STATED figure; the row posts into the account's own
+		// convention, or an adjustment on a positive-owed card would move the debt
+		// the wrong way by exactly twice itself.
 		t := domain.Transaction{
 			ID: id.New(), AccountID: a.ID, Date: time.Now(),
 			Desc:    uistate.T("accounts.reconAdjustDesc", strings.TrimSpace(stmtDateS.Get())),
-			Amount:  money.New(diff.DifferenceMinor, a.Currency),
+			Amount:  money.New(reconcile.Stored(diff.DifferenceMinor, reconConv), a.Currency),
 			Cleared: true, Reviewed: true,
 			Source: domain.TxnSourceManual,
 		}
@@ -174,6 +191,7 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 			uistate.PostNotice(err.Error(), true)
 			return
 		}
+		reconUndo.Get().NoteCreated(t.ID)
 		uistate.BumpDataRevision()
 		uistate.PostUndoable(uistate.T("accounts.reconAdjustPosted", fmtMoney(money.New(diff.DifferenceMinor, a.Currency))))
 	}))
@@ -188,7 +206,7 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 			return
 		}
 		cleared, _ := ledger.ClearedBalance(a, app.Transactions())
-		diff := reconcile.Diff(cleared.Amount, stmtMinor)
+		diff := reconcile.Diff(reconcile.Stated(cleared.Amount, reconConv), stmtMinor)
 		if diff.Reconciled {
 			return
 		}
@@ -212,6 +230,7 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 				return
 			}
 			uistate.ClearReconcileDraft(a.ID)
+			reconUndo.Get().Forget() // a recorded reconciliation keeps what it wrote
 			uistate.BumpDataRevision()
 			uistate.PostNotice(uistate.T("accounts.reconForceRecorded", diffStr), false)
 			done()
@@ -219,6 +238,7 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 	}))
 	// Save the half-done reconciliation and close; the draft re-seeds next open.
 	doReconSaveDraft := ui.UseEvent(Prevent(func() {
+		reconUndo.Get().Forget() // finishing later KEEPS the rows already ticked
 		uistate.SaveReconcileDraft(a.ID, strings.TrimSpace(stmtBalS.Get()), strings.TrimSpace(stmtDateS.Get()))
 		uistate.PostNotice(uistate.T("accounts.reconDraftSaved"), false)
 		done()
@@ -251,6 +271,7 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 	reconNav := router.UseNavigate()
 	reconTxFilter := uistate.UseTxFilter()
 	doReconInvestigate := ui.UseEvent(Prevent(func() {
+		reconUndo.Get().Forget() // leaving to investigate KEEPS the rows already ticked
 		f := uistate.TxFilter{Account: a.ID, Cleared: "yes"}.Normalize()
 		reconTxFilter.Set(f)
 		uistate.PersistTxFilter(f)
@@ -277,6 +298,7 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 			return
 		}
 		for _, t := range pending {
+			reconUndo.Get().NoteBefore(t)
 			t = t.MarkCleared(true, time.Now())
 			if err := app.PutTransaction(t); err != nil {
 				uistate.PostNotice(err.Error(), true)
@@ -387,6 +409,37 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 
 	// ---- save / cancel handlers (own the modal's commit actions) ----
 	cancel := ui.UseEvent(Prevent(func() { done() }))
+	// C683: Cancel in the reconcile modal means what the word says — the ledger
+	// goes back to how it was found. Ticking rows writes them immediately (every
+	// figure in the dialog recomputes from live data), so without this a person who
+	// opened the wrong statement, ticked twenty rows and pressed Cancel kept all
+	// twenty, with no record of which they were.
+	//
+	// It asks first, because the rows ticked so far are real work and Cancel is
+	// adjacent to the action that keeps them. Nothing to take back closes at once
+	// rather than asking a pointless question.
+	reconCancel := ui.UseEvent(Prevent(func() {
+		sess := reconUndo.Get()
+		if !sess.Touched() {
+			done()
+			return
+		}
+		n := sess.Count()
+		uistate.ConfirmModal(uistate.T("accounts.reconCancelConfirm", n), true, func(ok bool) {
+			if !ok {
+				return
+			}
+			var failed int
+			app.BulkMutate(func() { failed = sess.Rollback(app) })
+			if failed > 0 {
+				uistate.PostNotice(uistate.T("accounts.reconCancelPartial", failed), true)
+			} else {
+				uistate.PostNotice(uistate.T("accounts.reconCancelDone", n), false)
+			}
+			uistate.BumpDataRevision()
+			done()
+		})
+	}))
 	// AC10: "Manage institutions" jumps from the edit form straight to the
 	// institution-directory modal. Declared unconditionally here (not inside
 	// editForm) so the hook count stays stable across every switch branch below.
@@ -550,7 +603,7 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 
 	switch props.Mode {
 	case uistate.AcctEditModeReconcile:
-		return reconcileForm(a, curCleared, dec, stmtBalS, stmtDateS, onStmtBal, onStmtDate, cancel, doRecordRecon, cbs.OnRefresh, app,
+		return reconcileForm(a, curClearedStated, reconConv, reconUndo.Get(), dec, stmtBalS, stmtDateS, onStmtBal, onStmtDate, reconCancel, doRecordRecon, cbs.OnRefresh, app,
 			reconcileActions{Adjust: doReconAdjust, Force: doReconForce, Investigate: doReconInvestigate,
 				SaveDraft: doReconSaveDraft, Reopen: doReconReopen, MarkAll: doReconMarkAll, HasDraft: hasReconDraft})
 	case uistate.AcctEditModeTransfer:
@@ -645,13 +698,15 @@ type reconcileActions struct {
 // history so past reconciliations are inspectable in place. While a typed
 // statement balance still disagrees with the cleared balance, the resolution
 // row (acts) offers the legitimate ways out of the dead end.
-func reconcileForm(a domain.Account, curCleared money.Money, dec int, stmtBalS, stmtDateS ui.State[string], onStmtBal, onStmtDate, cancel, onRecord ui.Handler, onRefresh func(domain.Account), app *appstate.App, acts reconcileActions) ui.Node {
+func reconcileForm(a domain.Account, curCleared money.Money, conv reconcile.Convention, sess *reconcile.Session, dec int, stmtBalS, stmtDateS ui.State[string], onStmtBal, onStmtDate, cancel, onRecord ui.Handler, onRefresh func(domain.Account), app *appstate.App, acts reconcileActions) ui.Node {
 	var allTxns []domain.Transaction
 	if app != nil {
 		allTxns = app.Transactions()
 	}
 	stmtTyped := strings.TrimSpace(stmtBalS.Get()) != ""
 	stmtMinor, _ := money.ParseMinor(strings.TrimSpace(stmtBalS.Get()), dec)
+	// curCleared arrives ALREADY stated (positive is money you have), matching what
+	// the account card shows and what the user types off the statement.
 	result := reconcile.Diff(curCleared.Amount, stmtMinor)
 	sym := currency.Symbol(a.Currency)
 	// Signed, symboled, thousands-grouped — matches the cleared-balance figure it
@@ -670,6 +725,7 @@ func reconcileForm(a domain.Account, curCleared money.Money, dec int, stmtBalS, 
 		if app == nil {
 			return
 		}
+		sess.NoteBefore(t) // so Cancel can put this row back (C683)
 		t = t.MarkCleared(!t.Cleared, time.Now())
 		_ = app.PutTransaction(t)
 		onRefresh(a) // bumps the data revision → this modal re-derives the difference
@@ -698,7 +754,10 @@ func reconcileForm(a domain.Account, curCleared money.Money, dec int, stmtBalS, 
 	// match or warn about the gap that would still stand.
 	unclearedAmounts := make([]int64, 0, len(unclearedTxns))
 	for _, t := range unclearedTxns {
-		unclearedAmounts = append(unclearedAmounts, t.Amount.Amount)
+		// Stated, like curCleared: Stated is linear, so a sum of stated legs is the
+		// stated sum. Mixing a stored leg into a stated total is the original bug
+		// one layer down.
+		unclearedAmounts = append(unclearedAmounts, reconcile.Stated(t.Amount.Amount, conv))
 	}
 	bulk := reconcile.PreviewBulkClear(curCleared.Amount, stmtMinor, unclearedAmounts)
 	bulkDiffLabel := fmtSignedMoney(bulk.Result.DifferenceMinor, sym, dec)
@@ -733,6 +792,9 @@ func reconcileForm(a domain.Account, curCleared money.Money, dec int, stmtBalS, 
 				labeledField(uistate.T("accounts.reconStmtDate"),
 					Input(css.Class("field"), Type("date"), Attr("data-testid", "reconcile-statement-date"),
 						Attr("aria-label", uistate.T("accounts.reconStmtDate")), Title(uistate.T("accounts.reconStmtDateHint")), OnInput(onStmtDate), uiw.FieldValue(stmtDateS.Get()))),
+				P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "reconcile-sign-hint"),
+					Style(map[string]string{"margin": "0 0 0.5rem"}),
+					uistate.T(reconSignHintKey(a))),
 				Div(css.Class("reconcile-summary"),
 					Span(css.Class(tw.TextDim), uistate.T("accounts.clearedBalanceLabel"), fmtMoney(curCleared)),
 					Span(ClassStr(remainingCls), Attr("data-testid", "reconcile-difference"),

@@ -1,0 +1,30 @@
+// SPDX-License-Identifier: MIT
+
+package i18n
+
+import "testing"
+
+// The reconcile dialog picks its sign-hint key through a helper
+// (screens.reconSignHintKey) rather than writing a literal at the call site, so
+// TestScreensKeyCoverage cannot see these two. Its own doc names that limitation
+// and asks such call sites to bring their own test. This is it: a missing key
+// renders as the raw key string, which on this dialog would mean shipping
+// "accounts.reconSignHintDebt" where the sign convention should be.
+func TestReconcileSignHintKeysExist(t *testing.T) {
+	for _, key := range []string{
+		"accounts.reconSignHintAsset",
+		"accounts.reconSignHintDebt",
+		"accounts.reconCancelConfirm",
+		"accounts.reconCancelDone",
+		"accounts.reconCancelPartial",
+	} {
+		got, ok := english[key]
+		if !ok {
+			t.Errorf("%s is missing from the English catalog", key)
+			continue
+		}
+		if got == "" || got == key {
+			t.Errorf("%s = %q, which is not a sentence", key, got)
+		}
+	}
+}

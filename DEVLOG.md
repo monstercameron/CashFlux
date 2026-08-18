@@ -1,3 +1,54 @@
+## 2026-08-17 - reconciliation had no opinion about which sign a debt is (C683)
+
+Reconcile-to-statement showed a cleared balance that disagreed with the same account's card, and typing
+July checking's closing balance produced an $8,441.80 gap. That number is the tell: $8,441.80 is
+$4,493.95 + $3,947.85, which is what you get when a statement figure is diffed against a cleared figure
+carrying the opposite sign.
+
+The cause is that the app stores a liability in either of two conventions and always has. The "amount you
+owe" add form writes a debt POSITIVE; the sample data and several importers write it NEGATIVE. Everything
+that aggregates normalizes at the edge - ledger.NetWorth takes magnitudes, the account card takes -Abs -
+so the fork stays invisible until something compares a stored figure against a number a person typed. The
+reconcile dialog did exactly that, and said nothing about which sign it wanted. So the identical action
+gave opposite answers on two accounts holding the same debt, and the dialog and the card disagreed about
+one account.
+
+The fix is to give reconciliation one convention and convert at the boundary. internal/reconcile now owns
+Convention/ConventionOf/Stated/Stored: the dialog works entirely in the STATED convention (positive is
+money you have, negative is money you owe - what the card shows and what a statement prints), and anything
+it posts converts back to the account's own at-rest sign first. Without that conversion an adjustment on a
+positive-owed card moves the debt the wrong way by exactly twice itself, so the test asserts the account
+lands ON the statement figure rather than merely closer to it.
+
+ConventionOf prefers the OPENING balance over the booked one, which is the opposite of what
+liabilityPaymentMinor does. Opening records the choice the writer made; a booked balance crosses zero when
+a card is overpaid and would then report the opposite convention for the same account. That also fixes a
+smaller thing on the way: Stated is lossless and its own inverse, so an overpaid card states as a positive
+credit instead of collapsing into more debt, which is what the card's -Abs does today.
+
+The second half was Cancel. Ticking a row wrote it immediately - deliberately, because the difference
+readout, the mark-all preview and the finish gate all recompute from live data, and staging would mean a
+shadow ledger only the dialog can see. What was wrong was not the writes but that Cancel did not undo them:
+ticking twenty rows, realising the wrong statement was open and pressing Cancel kept all twenty, with no
+record of which. reconcile.Session is a journal of before-images - recorded on FIRST touch, so a row ticked,
+unticked and ticked again restores to how it started rather than one step ago - plus the ids of rows the
+dialog posted itself, which are deleted rather than restored. Deletes run before restores so the ledger is
+never briefly showing an adjustment against a balance already put back, and a failure mid-rollback keeps
+going and reports the count instead of stopping silently half-done.
+
+It is a Ledger interface rather than *appstate.App so the journal is pure logic with native tests, and so a
+rollback holds only the two powers it uses.
+
+Which paths keep their writes is a product decision, not a mechanical one: Finish and Force-complete keep
+them because the writes are the point; "Save & finish later" and "Investigate" keep them because ticked rows
+are progress a person expects to come back to; only Cancel takes them back, and it asks first, naming the
+count, because it sits next to the button that keeps them.
+
+Tested: 9 cases over the sign conversion (both conventions, credit balances, the round trip, the reported
+$8,441.80 gap reproduced and removed, the July acceptance figures) and 9 over the journal (restore-to-
+original across repeated toggles, created-row deletion, delete-before-restore ordering, continue-past-failure,
+Forget, non-repeatability, nil safety).
+
 ## 2026-08-17 - the report was visible and unqueryable (C690)
 
 Cam asked for the agent to have "all of the reports sections and their transaction traces", and to be able

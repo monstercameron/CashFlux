@@ -6,6 +6,24 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **Reconciling an account no longer depends on which sign it happens to store (C683).** The reconcile
+  dialog compared the raw stored cleared balance against the figure typed off the statement, and never said
+  which sign it wanted — so the same debt reconciled against "500" on one account and "-500" on another, and
+  the dialog disagreed with the account card about the same account. July checking produced an $8,441.80 gap,
+  which is the closing balance plus the cleared balance: two figures of opposite sign. Reconciliation now runs
+  entirely in the convention a person reads (positive is money you have, negative is money you owe), says so
+  above the field, and converts back to the account's own convention before posting anything — an adjustment
+  on a positive-owed card used to move the debt the wrong way by twice itself. An overpaid card now states as
+  a credit instead of as more debt.
+
+- **Cancel in the reconcile dialog puts the ledger back (C683).** Ticking rows cleared writes them
+  immediately, and Cancel only closed the window — so opening the wrong statement, ticking twenty rows and
+  pressing Cancel kept all twenty, with no record of which they were. Cancel now restores every row it
+  touched and removes any adjustment it posted, asking first and naming the count. "Save & finish later" and
+  "Investigate" still keep the rows already ticked; those are progress, not a draft.
+
+
 ### Added
 - **The assistant can read the whole report, follow the money-flow diagram, and open any figure down to
   its transactions (C690).** Ask about anything on a report page and the answer now comes from the report
