@@ -12113,59 +12113,70 @@ is not visible from the browser.
 These items came from a July-statement import and mid-August balance review. They are deliberately
 tracked here as product/data-quality work, rather than as edits to a live household dataset.
 
-- [ ] **C683 [MAJOR][RECONCILIATION][CORRECTNESS] Fix reconciliation balance-sign behavior.**
+- [x] **C683 [MAJOR][RECONCILIATION][CORRECTNESS] Fix reconciliation balance-sign behavior.**
   **Issue:** Reconcile-to-statement shows a cleared balance that does not match the account-card balance;
   entering the July checking closing balance produced an $8,441.80 gap. A cancelled test also did not
   fully revert the cleared ticks. **Fix:** reconcile from a signed opening balance, make the sign
   convention explicit in the dialog, and make Cancel roll back every in-modal change. Verify with July
   checking: opening $3,210.20 and closing $4,493.95.
 
-- [ ] **C684 [MAJOR][RECONCILIATION][DATA] Automate provisional balance checkpoints.**
+  **DONE 2026-08-17: reconciliation now runs entirely in the STATED convention (positive is money you have, negative is money you owe), says so above the field, and converts back to the account’s own at-rest sign before posting — an adjustment on a positive-owed card used to move the debt the wrong way by twice itself. internal/reconcile owns Convention/ConventionOf/Stated/Stored; ConventionOf reports whether it READ the convention or guessed it, and nothing that accuses the data of being wrong acts on a guess. Cancel now restores every row the dialog touched and deletes any adjustment it posted (reconcile.Session), asking first and naming the count; Finish, Force, Save-for-later and Investigate all keep their writes.**
+- [x] **C684 [MAJOR][RECONCILIATION][DATA] Automate provisional balance checkpoints.**
   **Issue:** Editing current balances creates August-dated Balance adjustment transactions that require
   manual tags and report exclusions. **Fix:** add a first-class checkpoint type with an as-of date,
   automatic `reconciliation-checkpoint` metadata, automatic exclusion from reports, and replacement or
   removal when the statement closes.
 
-- [ ] **C685 [MAJOR][ACCOUNTS][DISPLAY] Clarify utility zero versus cleared balances.**
+  **DONE 2026-08-17: domain.Transaction.BalanceCheckpointAt makes a provisional balance a first-class row — real for the balance, excluded from reports, tagged, and dated AS OF rather than as entered. internal/provisional owns the lifecycle: setting a balance replaces the account’s existing checkpoint instead of stacking, and recording a reconciliation retires every checkpoint the statement now covers (the half that did not exist at all, and why an account drifted by exactly the adjustment).**
+- [x] **C685 [MAJOR][ACCOUNTS][DISPLAY] Clarify utility zero versus cleared balances.**
   **Issue:** Utility tracking accounts show a $0 current balance but still show negative cleared figures,
   which looks like debt. **Fix:** label tracking-account balance separately from cleared transaction
   history, or hide the cleared-history amount for zero-balance utility shells.
 
-- [ ] **C686 [MAJOR][TXN][TRANSFER][DATA] Resolve 52 unmatched transfer warnings.**
+  **DONE 2026-08-17: domain.AccountType.IsReconcilable() gates the cleared figure — utility/HOA shells and the revaluation-cadence types (property, vehicle, crypto) have no statement to have cleared against, so a $0 utility no longer shows a few hundred dollars that reads as debt. The reconcile ACTION is gated on the same predicate (found by adversarial review: it was still offered on utilities). Liability display goes through reconcile.Stated, so an overpaid card reads as a credit rather than more debt.**
+- [x] **C686 [MAJOR][TXN][TRANSFER][DATA] Resolve 52 unmatched transfer warnings.**
   **Issue:** The Accounts page reports 52 money movements with no other side, so cash flow and net worth
   can be distorted. **Fix:** pair transfers by date, amount, and account identifiers; mark transfers only
   when both sides are verified; and leave uncertain items in a review queue.
 
-- [ ] **C687 [MAJOR][IMPORT][AUDIT] Explain the import count discrepancy.**
+  **DONE 2026-08-17: internal/transferpair is now the single matcher; internal/contradict (same calendar day, no amount check) and internal/integrity (exact amount, no date check) both call it, so the two screens can no longer disagree about the same rows. Settlement lag up to 4 days pairs; a DECLARED pair is honoured regardless of amount and reports as legs-disagreeing rather than as a vanished leg; NetStated sums such a pair in each account’s own convention and stays silent when that convention had to be guessed.**
+- [x] **C687 [MAJOR][IMPORT][AUDIT] Explain the import count discrepancy.**
   **Issue:** The import audit says 688 transaction records were added while the ledger displays 565
   transactions. **Fix:** show imported, skipped, duplicate, updated, and currently active counts
   separately, with per-file totals and a durable audit trail.
 
-- [ ] **C688 [MAJOR][TXN][DUPLICATES] Review five duplicate candidates.**
+  **DONE 2026-08-17: no import path ever set SourceDocID — only the sample data did — so “688 added” and “565 present” were unconnected numbers. The run id is now minted BEFORE the write and stamped on every row, and internal/importaudit counts what survived, reporting ActiveKnown=false rather than a confident zero for runs made before the linkage. CSVImportResult separates imported / duplicate / failed (the duplicate count was previously computed only for a log line and discarded).**
+- [x] **C688 [MAJOR][TXN][DUPLICATES] Review five duplicate candidates.**
   **Issue:** Duplicate review shows five possible duplicates across three groups: FAL Features Labels and
   OpenRouter entries. **Fix:** compare exact date, amount, description, and account; merge only confirmed
   duplicates; and retain the original audit trail.
 
-- [ ] **C689 [MAJOR][IMPORT][TOOL] Build statement staging and dedupe.**
+  **DONE 2026-08-17: dedupe.Signature’s doc claimed it was the single source of truth for both the importer and the duplicates screen; the importer prefixed the account id and the screen did not. So a subscription billed to two cards on the same day was offered with a Merge button that deletes one. dedupe.Key is now the whole key and every caller uses it (importsafe and the assistant’s ratio had the same bug), merging across accounts is refused, and each group names its account.**
+- [x] **C689 [MAJOR][IMPORT][TOOL] Build statement staging and dedupe.**
   Extract PDFs locally, normalize merchant/date/amount/account, hash candidate rows, and produce a review
   table before import. The workflow should be **stage -> match -> approve -> import**.
 
-- [ ] **C690 [MAJOR][RECONCILIATION][TOOL] Build a July reconciliation worksheet.**
+  **DONE 2026-08-18: internal/staging computes a batch once — every row normalized, content-hashed, and given a verdict from dedupe.Key — so the preview and the write path cannot disagree about the same file. Four verdicts, because “skipped” covered opposite things: duplicate (the safeguard working), repeated-in-file (a parsing artefact; first wins), and unusable (the only bad one — money that will silently not arrive). Wired into the CSV preflight.**
+- [x] **C690 [MAJOR][RECONCILIATION][TOOL] Build a July reconciliation worksheet.**
   Compute `opening balance + money in - money out = statement closing balance` for each account, including
   transfer pairs and residual differences. Include July 31 statement balances and the current mid-August
   checkpoints.
 
-- [ ] **C691 [MAJOR][RULES][UTILITY] Create utility merchant and account rules.**
+  **DONE 2026-08-18: internal/worksheet shows the period as opening + money in − money out + transfers + checkpoints = closing, with the residual stated once as what is still unaccounted for. Transfers and checkpoints are separate terms (folding either into income or spending is the mistake this run started from); every figure reads in the stated convention so it agrees with the account card; a test pins computed-closing against ledger.Balance. Mounted in the reconcile dialog, where the difference is actually asked about.**
+- [x] **C691 [MAJOR][RULES][UTILITY] Create utility merchant and account rules.**
   Add deterministic rules for FPL, Comcast, City of Lauderhill, Google Fi, and Wimbledon/HOA to set
   category and tracking account while preserving zero utility-account balances.
 
-- [ ] **C692 [MAJOR][TXN][TRANSFER][TOOL] Create verified transfer pairing.**
+  **DONE 2026-08-17: FPL, City of Lauderhill, HOA and Google Fi added to internal/merchantdict. The spelled-out entries already present (“Florida Power & Light”, “Comcast”) are how a company writes its own name rather than how a bank prints it, so they never fired on a real statement. Google Fi is pinned by test against being shadowed by the longer Google Fiber key, and the short keys (FPL, HOA) are pinned against matching inside longer words. The tracking-account half is BillAccountID, which tags without posting, so utility balances stay at zero.**
+- [x] **C692 [MAJOR][TXN][TRANSFER][TOOL] Create verified transfer pairing.**
   Match account-number transfers by exact amount and date, propose both-side links, and block one-sided
   transfer flags until the counterpart is found.
 
-- [ ] **C693 [MAJOR][REPORTS][RECONCILIATION] Add provisional-month reporting mode.**
+  **DONE 2026-08-17: domain.Account.Mask (last four only — what every descriptor prints, and storing more would put a credential in an exported file) plus internal/acctref, which reads the account a descriptor names. A pair is Verified only with exactly one candidate AND descriptor agreement; two $750 sweeps on one day are identical under any amount-and-date rule, so where the descriptors cannot separate them the app declines rather than linking the wrong two accounts.**
+- [x] **C693 [MAJOR][REPORTS][RECONCILIATION] Add provisional-month reporting mode.**
   Show closed statements through July 31 separately from August month-to-date, label August as
   provisional, and exclude checkpoint offsets from cash-flow metrics.
+  **DONE 2026-08-18: internal/provisional’s period model — ClosedThrough takes the EARLIEST reconciled account (a month is finished only when every account feeding it has confirmed), skipping accounts that never receive a statement. Reports caption a period running past what has been reconciled and name how much of it rests on a checkpoint. Also fixed the concrete half: internal/cashflow and accountflow skipped transfers but never checked CountsInReports, so any excluded row — checkpoints included — fed the “typical month” averages.**
 
 ---
 
