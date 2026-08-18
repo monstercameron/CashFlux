@@ -289,7 +289,7 @@ func (a *App) ImportTransactionsCSV(data []byte, fallbackAccountID, docID string
 	// is per-account: the same charge against a different account is not a dup.
 	seen := map[string]bool{}
 	for _, t := range a.Transactions() {
-		seen[t.AccountID+"|"+dedupe.Signature(t)] = true
+		seen[dedupe.Key(t)] = true
 	}
 
 	n := 0
@@ -307,7 +307,7 @@ func (a *App) ImportTransactionsCSV(data []byte, fallbackAccountID, docID string
 	a.suppressTxnObservers = true
 	importRuleHits := map[string]int{}
 	for i, t := range txns {
-		sig := t.AccountID + "|" + dedupe.Signature(t)
+		sig := dedupe.Key(t)
 		if seen[sig] {
 			dupes++
 			continue

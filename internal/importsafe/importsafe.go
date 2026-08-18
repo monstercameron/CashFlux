@@ -77,7 +77,7 @@ type WhyDup struct {
 func Duplicates(incoming, existing []domain.Transaction, accountID string) []WhyDup {
 	seen := make(map[string]bool, len(existing))
 	for _, t := range existing {
-		seen[t.AccountID+"|"+dedupe.Signature(t)] = true
+		seen[dedupe.Key(t)] = true
 	}
 	var out []WhyDup
 	batch := make(map[string]bool, len(incoming))
@@ -86,7 +86,11 @@ func Duplicates(incoming, existing []domain.Transaction, accountID string) []Why
 		if acct == "" {
 			acct = accountID
 		}
-		sig := acct + "|" + dedupe.Signature(t)
+		// Same key the importer and the duplicates screen use, with the row's
+		// account resolved through the caller's fallback first (C688).
+		scoped := t
+		scoped.AccountID = acct
+		sig := dedupe.Key(scoped)
 		switch {
 		case seen[sig]:
 			out = append(out, WhyDup{Date: t.Date.Format("2006-01-02"), Desc: strings.TrimSpace(t.Desc),

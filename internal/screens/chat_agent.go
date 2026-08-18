@@ -1474,7 +1474,7 @@ func flaggedActivityKeys(app *appstate.App, match string) []string {
 func distinctSignatures(txns []domain.Transaction) int {
 	seen := map[string]bool{}
 	for _, t := range txns {
-		seen[dedupe.Signature(t)] = true
+		seen[dedupe.Key(t)] = true
 	}
 	return len(seen)
 }

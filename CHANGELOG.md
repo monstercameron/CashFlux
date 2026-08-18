@@ -7,6 +7,14 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **Two charges on different accounts are no longer offered as duplicates (C688).** The duplicates screen
+  grouped on date, amount and description but not the account, while the importer's identical-looking check did
+  include it — despite a comment claiming they were the same rule. So a subscription billed to two cards on the
+  same day appeared as one entry made twice, with a Merge button that keeps one row and deletes the other. Both
+  now use one key, each group names the account it is on, and merging across accounts is refused outright.
+
+
+### Fixed
 - **One answer to "is this transfer missing its other side" (C686, C692).** Three parts of the app matched
   transfer legs by three different rules and none of them agreed: the Accounts page required the same calendar
   day and never checked the amount, the data-health check required an exactly opposite amount and never checked

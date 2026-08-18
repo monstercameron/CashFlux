@@ -15,37 +15,69 @@ import (
 )
 
 // Group is a set of transaction IDs that look like duplicates of one another —
-// same calendar date, same signed amount and currency, and the same normalized
-// description.
+// same account, same calendar date, same signed amount and currency, and the
+// same normalized description.
 type Group struct {
 	Date        string // the shared calendar date (YYYY-MM-DD)
 	Description string // the shared (original-cased) description
 	Amount      int64  // the shared signed amount, minor units
 	Currency    string
-	IDs         []string // the duplicate transactions' ids (2 or more), sorted
+	// AccountID is the account every member sits on. Part of the identity, not
+	// decoration: the same subscription charged to two different cards on the
+	// same day is two real payments, and merging them deletes one (C688).
+	AccountID string
+	IDs       []string // the duplicate transactions' ids (2 or more), sorted
 }
 
-// Signature is the duplicate-detection key for a transaction: its calendar date,
-// signed amount + currency, and case-insensitively-trimmed description. Two
-// transactions with the same signature are accidental double entries. It is the
-// single source of truth used both by FindDuplicates (to group after the fact)
-// and by the CSV importer (to skip rows already present before writing).
+// Key is the full duplicate-detection key for a transaction: its account, its
+// calendar date, its signed amount + currency, and its case-insensitively-
+// trimmed description. Two transactions sharing a Key are an accidental double
+// entry; two sharing only a Signature may be two real payments on two accounts.
+//
+// It is the single source of truth for BOTH the after-the-fact grouping
+// (FindDuplicates) and the importer's skip-if-already-present check, so the two
+// can no longer disagree about the same rows (C688).
+//
+// It is not the whole key. Use Key for that — the account is part of a
+// transaction's identity, and this function is exported only because callers
+// that have already scoped themselves to one account (the importer's per-account
+// seen-set) still want the cheaper half.
+//
+// Its doc used to claim it was "the single source of truth used both by
+// FindDuplicates and by the CSV importer". That was false in the way that
+// matters: the importer prefixed the account id and FindDuplicates did not, so
+// the review screen grouped rows the importer would never have called duplicates
+// (C688).
+func Key(t domain.Transaction) string {
+	return t.AccountID + "|" + Signature(t)
+}
+
+// Signature is the within-account half of Key.
 func Signature(t domain.Transaction) string {
 	day := t.Date.Format("2006-01-02")
 	norm := strings.ToLower(strings.TrimSpace(t.Desc))
 	return day + "|" + strconv.FormatInt(t.Amount.Amount, 10) + "|" + t.Amount.Currency + "|" + norm
 }
 
-// FindDuplicates groups transactions that share the same calendar date, signed
-// amount + currency, and case-insensitively-trimmed description — the signature
-// of an accidental double entry. Transfers are excluded (their paired legs are
-// not duplicates). Only groups of two or more are returned, ordered by date then
-// description for a stable display; the ids within each group are sorted.
+// FindDuplicates groups transactions that share the same ACCOUNT, calendar date,
+// signed amount + currency, and case-insensitively-trimmed description — the
+// signature of an accidental double entry. Transfers are excluded (their paired
+// legs are not duplicates). Only groups of two or more are returned, ordered by
+// date then description for a stable display; the ids within each group are
+// sorted.
+//
+// C688: the account used to be left out, while the importer's identical-looking
+// check included it. A subscription billed to two cards on the same day — an
+// OpenRouter or FAL charge split across a personal and a business card is exactly
+// the shape — was therefore offered on the duplicates screen with a Merge button,
+// and merging it deletes a real payment from the other account. Grouping is the
+// input to a destructive action, so it has to be the stricter of the two rules,
+// not the looser.
 func FindDuplicates(txns []domain.Transaction) []Group {
 	type bucket struct {
-		date, desc, cur string
-		amount          int64
-		ids             []string
+		date, desc, cur, acct string
+		amount                int64
+		ids                   []string
 	}
 	buckets := map[string]*bucket{}
 	for _, t := range txns {
@@ -53,10 +85,11 @@ func FindDuplicates(txns []domain.Transaction) []Group {
 			continue
 		}
 		day := t.Date.Format("2006-01-02")
-		key := Signature(t)
+		key := Key(t)
 		b := buckets[key]
 		if b == nil {
-			b = &bucket{date: day, desc: strings.TrimSpace(t.Desc), cur: t.Amount.Currency, amount: t.Amount.Amount}
+			b = &bucket{date: day, desc: strings.TrimSpace(t.Desc), cur: t.Amount.Currency,
+				acct: t.AccountID, amount: t.Amount.Amount}
 			buckets[key] = b
 		}
 		b.ids = append(b.ids, t.ID)
@@ -69,7 +102,7 @@ func FindDuplicates(txns []domain.Transaction) []Group {
 		}
 		ids := append([]string(nil), b.ids...)
 		sort.Strings(ids)
-		out = append(out, Group{Date: b.date, Description: b.desc, Amount: b.amount, Currency: b.cur, IDs: ids})
+		out = append(out, Group{Date: b.date, Description: b.desc, Amount: b.amount, Currency: b.cur, AccountID: b.acct, IDs: ids})
 	}
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].Date != out[j].Date {
@@ -86,7 +119,7 @@ func FindDuplicates(txns []domain.Transaction) []Group {
 //     tags from others appended in the order they first appear).
 //   - Cleared is set to true if any transaction in the group (survivor or others) is cleared.
 //   - Amount, Date, AccountID, ID, and all other identity fields are taken unchanged
-//     from survivor — they are identical across a duplicate group by signature.
+//     from survivor — they are identical across a duplicate group by Key.
 //
 // Merge is pure (no store access, no syscall/js) so it is unit-testable on native Go.
 func Merge(survivor domain.Transaction, others []domain.Transaction) domain.Transaction {
@@ -187,7 +220,7 @@ func Count(groups []Group) int {
 func CountIncomingDuplicates(incoming []domain.Transaction, existing []domain.Transaction, accountID string) int {
 	seen := make(map[string]bool, len(existing))
 	for _, t := range existing {
-		seen[t.AccountID+"|"+Signature(t)] = true
+		seen[Key(t)] = true
 	}
 	dupes := 0
 	for _, t := range incoming {
@@ -203,4 +236,20 @@ func CountIncomingDuplicates(incoming []domain.Transaction, existing []domain.Tr
 		}
 	}
 	return dupes
+}
+
+// SameAccount reports whether every member of a merge sits on one account.
+//
+// Merging is destructive: the caller keeps the survivor and deletes the rest. The
+// grouping rule (Key) already guarantees this, so a false answer means a caller
+// assembled a group by some other route — and the failure it prevents is deleting
+// a real payment from another account, which nothing downstream would notice
+// because the survivor looks exactly like it (C688).
+func SameAccount(survivor domain.Transaction, others []domain.Transaction) bool {
+	for _, o := range others {
+		if o.AccountID != survivor.AccountID {
+			return false
+		}
+	}
+	return true
 }

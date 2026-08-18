@@ -102,8 +102,19 @@ func dupeGroup(props dupeGroupProps) ui.Node {
 	}
 	badge := Span(css.Class("badge"), groupCount)
 
+	// C688: name the account. "Same day, same amount, same description" is only a
+	// duplicate WITHIN one account — the grouping enforces that now, and saying so
+	// is what lets a reader confirm it rather than take it on trust before pressing
+	// a button that deletes rows.
+	acctLabel := Fragment()
+	if a, ok := props.AccByID[g.AccountID]; ok && a.Name != "" {
+		acctLabel = Span(css.Class("t-caption", tw.TextDim), Attr("data-testid", "dupe-group-account"),
+			uistate.T("duplicates.onAccount", a.Name))
+	}
+
 	titleRow := Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mb3),
 		badge,
+		acctLabel,
 		Div(css.Class(tw.Flex1)),
 		Span(css.Class("t-caption", tw.TextDim), uistate.T("duplicates.keepNote")),
 		Button(
@@ -432,6 +443,15 @@ func DuplicatesPanel(props duplicatesPanelProps) ui.Node {
 			if t, ok := txnByID[id]; ok {
 				others = append(others, t)
 			}
+		}
+		// C688: merging keeps one row and DELETES the rest, so the last thing before
+		// the writes is a check that they are all on one account. The grouping rule
+		// already guarantees it; this catches a group assembled by any other route,
+		// where the failure is deleting a real payment from another account that
+		// nothing downstream would notice, because the survivor looks just like it.
+		if !dedupe.SameAccount(survivor, others) {
+			uistate.PostNotice(uistate.T("duplicates.crossAccountRefused"), true)
+			return
 		}
 		// C652: same rule as the delete — the restore point goes in before the
 		// writes, not after them.

@@ -1,3 +1,31 @@
+## 2026-08-17 - the duplicates screen and the importer never agreed (C688)
+
+The ticket said "review five duplicate candidates across three groups: FAL Features Labels and OpenRouter
+entries". Reviewing them found the real thing: some of those groups should never have been groups.
+
+dedupe.Signature carried a doc comment saying it was "the single source of truth used both by FindDuplicates
+and by the CSV importer". It was not. The importer built its seen-set as AccountID + "|" + Signature(t);
+FindDuplicates bucketed on Signature alone. One rule with the account, one without, and a comment asserting
+they were the same rule.
+
+The asymmetry matters because the two feed different actions. Getting the importer's wrong means skipping a row
+that should have been written - recoverable, and visible as a missing transaction. Getting the screen's wrong
+means offering a Merge button that keeps one row and DELETES the rest. A subscription billed to two cards on the
+same day is two real payments; merging them removes one, and nothing downstream notices, because the survivor is
+identical in every field the eye checks. That is the worst class of data loss: silent, and disguised as
+housekeeping.
+
+So Key is the whole key now and both callers use it. Two more callers turned out to have the same bug one screen
+over - importsafe's preflight count, and the assistant's duplicate-ratio helper, which keyed on Signature
+globally across every account. Signature stays exported, because a caller already scoped to one account still
+wants the cheaper half, but its doc no longer overclaims.
+
+Two additions beyond the fix, on the grounds that the failure is a silently deleted payment: SameAccount guards
+the merge handler against a group assembled by some other route, and each group card names the account it is on.
+The second is the one I care about - "same day, same amount, same description" is only a duplicate WITHIN an
+account, and a screen that asks someone to press a destructive button should show them the premise rather than
+ask them to trust it.
+
 ## 2026-08-17 - three matchers, three answers, one ledger (C686, C692, C691)
 
 The reported symptom was 52 unmatched-transfer warnings. The cause was not 52 broken transfers; it was that the
