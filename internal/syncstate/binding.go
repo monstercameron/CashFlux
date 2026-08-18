@@ -54,8 +54,16 @@ type UploadDecision string
 const (
 	// UploadProceed means the queued mutation may be pushed.
 	UploadProceed UploadDecision = "proceed"
-	// UploadSignIn means nobody is signed in, so there is no identity to push
-	// under. The work is kept, not discarded.
+	// UploadSignIn means nobody is signed in AND the server has already refused
+	// this workspace, so signing in is the only thing that can change the
+	// outcome.
+	//
+	// It is deliberately NOT returned merely because the identity is unknown.
+	// Treating "we cannot say who you are" as "do not upload" stops sync dead on
+	// every deployment whose server does not answer an identity lookup — token
+	// auth, older servers, an offline first run. The server is the authority on
+	// ownership and rejects what it should; the client's job is to stop retrying
+	// what the server has already refused, not to pre-empt it.
 	UploadSignIn UploadDecision = "sign-in"
 	// UploadRebind means the signed-in user does not own the workspace the work
 	// is queued against — either because the identity changed under it, or
@@ -89,7 +97,11 @@ func DecideUpload(signedInUserID string, next PendingMutation, lastReason string
 		return UploadNothing
 	}
 	if strings.TrimSpace(signedInUserID) == "" {
-		return UploadSignIn
+		// Unknown identity: proceed unless the server has already said no.
+		if IsWorkspaceNotFound(lastReason) {
+			return UploadSignIn
+		}
+		return UploadProceed
 	}
 	if !next.Binding().OwnedBy(signedInUserID) {
 		return UploadRebind

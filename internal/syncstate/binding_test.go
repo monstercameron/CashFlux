@@ -58,7 +58,12 @@ func TestDecideUpload(t *testing.T) {
 		want   UploadDecision
 	}{
 		{"nothing queued", "u1", PendingMutation{}, "", UploadNothing},
-		{"signed out keeps the work", "", mine, "", UploadSignIn},
+		// An unknown identity must NOT stop a working client. Blocking here
+		// meant every deployment whose server does not answer an identity
+		// lookup — token auth, older servers, a first run before the lookup
+		// lands — stopped syncing entirely. The server is the authority.
+		{"unknown identity still uploads", "", mine, "", UploadProceed},
+		{"unknown identity stops once the server refuses", "", mine, "workspace not found", UploadSignIn},
 		{"own workspace uploads", "u1", mine, "", UploadProceed},
 		{"legacy unbound work is adopted", "u1", legacy, "", UploadProceed},
 		{"another identity's work needs a decision", "u1", theirs, "", UploadRebind},

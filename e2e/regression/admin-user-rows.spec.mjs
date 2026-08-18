@@ -37,15 +37,20 @@ async function signInToConsole(page) {
 }
 
 async function ensureUser(page) {
+  // Wait for the table to actually render before asking whether the row is
+  // there. isVisible() does not wait, so checking too early reports "absent"
+  // for a user that exists and sends this helper down the create path.
+  await expect(page.getByTestId("admin-user-row").first()).toBeVisible({ timeout: 20_000 });
   const existing = page.getByRole("button", { name: `Manage ${ROW_USERNAME}` });
   if (await existing.isVisible().catch(() => false)) return;
   await page.getByRole("button", { name: "Create a user account" }).click();
   await page.getByLabel("Username").fill(ROW_USERNAME);
   await page.getByLabel("Temporary password").fill(ROW_PASSWORD);
   await page.getByRole("button", { name: "Create account" }).click();
-  // Back to the console list.
-  const back = page.getByRole("button", { name: "← Back" });
-  if (await back.isVisible().catch(() => false)) await back.click();
+  // The create screen replaces its Back button with the one-time recovery code,
+  // which has to be acknowledged before the console returns. Waiting for Back
+  // here is how this helper hung the first time it ran.
+  await page.getByRole("button", { name: "I saved the recovery code" }).click();
   await expect(existing).toBeVisible({ timeout: 20_000 });
 }
 
@@ -71,7 +76,7 @@ test.describe("operator console user rows", () => {
     await expect(page.getByTestId("admin-access-panel").or(page.getByTestId("admin-access-loading")))
       .toBeVisible({ timeout: 20_000 });
 
-    await page.getByRole("button", { name: "← Back" }).click();
+    await page.getByRole("button", { name: "Back to console" }).click();
     await expect(page.getByRole("heading", { name: "Operator Console" })).toBeVisible();
 
     // Mouse activation still works.
@@ -89,7 +94,11 @@ test.describe("operator console user rows", () => {
       return route.continue();
     });
     await page.getByRole("button", { name: `Manage ${ROW_USERNAME}` }).click();
+    // The detail screen opens either way; what changes is whether it can say
+    // what went wrong instead of sitting on "Loading...".
+    await expect(page.getByRole("heading", { name: "Manage user" })).toBeVisible({ timeout: 20_000 });
     await expect(page.getByTestId("admin-user-detail-error")).toBeVisible({ timeout: 20_000 });
     await expect(page.getByTestId("admin-user-detail-retry")).toBeVisible();
+    await expect(page.getByTestId("admin-user-detail-loading")).toHaveCount(0);
   });
 });

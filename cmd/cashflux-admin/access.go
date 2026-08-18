@@ -202,13 +202,13 @@ func accessPanel(p accessProps) ui.Node {
 	v := view.Get()
 	switch {
 	case loadErr.Get() != "":
-		return Div(css.Class("detail-card"), Attr("data-testid", "admin-access-error"),
+		return Div(css.Class("panel-card"), Attr("data-testid", "admin-access-error"),
 			Div(css.Class("action-desc"), Text("Could not load what this account can reach: "+loadErr.Get())),
 			Button(Type("button"), css.Class("btn btn-secondary"),
 				Attr("data-testid", "admin-access-retry"), OnClick(retry), Text("Try again")),
 		)
 	case v == nil:
-		return Div(css.Class("detail-card"), Attr("data-testid", "admin-access-loading"), Text("Loading…"))
+		return Div(css.Class("panel-card"), Attr("data-testid", "admin-access-loading"), Text("Loading…"))
 	}
 
 	var wsRows []ui.Node
@@ -265,13 +265,13 @@ func accessPanel(p accessProps) ui.Node {
 
 	return Div(Attr("data-testid", "admin-access-panel"),
 		Div(css.Class("section-title"), Text("What this account can reach")),
-		Div(css.Class("detail-card"),
+		Div(css.Class("panel-card"),
 			detailRow("Account", v.UserID),
 			detailRow("Last write to any workspace", lastSync),
 			detailRow("Suspended", map[bool]string{true: "yes", false: "no"}[v.Suspended]),
 		),
 		Div(css.Class("section-title"), Text("Workspaces")),
-		Div(css.Class("detail-card"), wsRows),
+		Div(css.Class("panel-card"), wsRows),
 		Div(css.Class("section-title"), Text("Devices")),
 		If(status.Get() != "", Div(css.Class("status-banner"), Attr("role", "status"),
 			Attr("data-testid", "admin-access-status"), Text(status.Get()))),

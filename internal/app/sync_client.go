@@ -722,12 +722,11 @@ func flushBackendSyncQueue() {
 		// could sit at "1 change waiting to upload" indefinitely with nothing
 		// on either side about to change. The work is KEPT; what stops is the
 		// pointless retry, replaced by a decision the user can act on.
-		switch uploadDecision() {
-		case syncstate.UploadRebind:
+		// Only an authoritative refusal stops the queue. An unknown identity does
+		// not — see uploadDecision; gating on it broke every deployment where the
+		// identity lookup does not answer.
+		if uploadDecision() == syncstate.UploadRebind {
 			refreshRebindStatus()
-			return
-		case syncstate.UploadSignIn:
-			setSyncStatus(syncStatus{State: "local", Pending: len(queue), Message: uistate.T("sync.rebindSignInReason")})
 			return
 		}
 		// Push only what this account owns. Another identity's stranded snapshot

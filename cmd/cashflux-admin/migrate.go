@@ -338,7 +338,7 @@ func migratePreviewPanel(p *adminMigrationPreview, stale bool) ui.Node {
 		return Fragment()
 	}
 	if p.Blocked {
-		return Div(css.Class("detail-card"), Attr("data-testid", "admin-migrate-blocked"),
+		return Div(css.Class("panel-card"), Attr("data-testid", "admin-migrate-blocked"),
 			Div(css.Class("action-desc"), Text("This migration cannot run: "+p.Reason)))
 	}
 	rows := []ui.Node{
@@ -376,10 +376,10 @@ func migratePreviewPanel(p *adminMigrationPreview, stale bool) ui.Node {
 		// describes a migration nobody is about to run.
 		If(stale, Div(css.Class("status-banner"), Attr("data-testid", "admin-migrate-stale"),
 			Text("You changed the form after this preview. Preview again before committing."))),
-		Div(css.Class("detail-card"), rows),
+		Div(css.Class("panel-card"), rows),
 		If(len(mergeRows) > 0, Fragment(
 			Div(css.Class("section-title"), Text("Merge result")),
-			Div(css.Class("detail-card"), Attr("data-testid", "admin-migrate-merge-counts"), mergeRows),
+			Div(css.Class("panel-card"), Attr("data-testid", "admin-migrate-merge-counts"), mergeRows),
 		)),
 		If(len(warnRows) > 0, Div(css.Class("action-card action-danger"), warnRows)),
 	)
@@ -402,7 +402,7 @@ func migrateResultPanel(r *adminMigrationResult, onRollback ui.Handler, busy boo
 	}
 	return Div(Attr("data-testid", "admin-migrate-result"),
 		Div(css.Class("section-title"), Text("Committed")),
-		Div(css.Class("detail-card"), rows),
+		Div(css.Class("panel-card"), rows),
 		// Rollback is offered right here rather than filed away somewhere,
 		// because the moment an operator discovers a migration was wrong is the
 		// moment they are looking at its result.

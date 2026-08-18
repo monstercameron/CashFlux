@@ -189,7 +189,21 @@ func uploadDecision() syncstate.UploadDecision {
 	}
 	userID := signedInUserID()
 	if strings.TrimSpace(userID) == "" {
-		return syncstate.UploadSignIn
+		// We do not know who this session is — /v1/me may be unreachable, the
+		// server may not offer it, or this may be a token-auth deployment that
+		// never had a user id to give. That is NOT a reason to stop syncing.
+		//
+		// Blocking here was a real regression: it turned "we cannot identify
+		// you" into "never upload again", which breaks every working setup
+		// where the identity lookup does not answer. The server remains the
+		// authority on ownership, and it rejects what it should. Only its own
+		// verdict stops the queue.
+		for _, q := range queue {
+			if syncstate.IsWorkspaceNotFound(q.LastAttemptError) {
+				return syncstate.UploadRebind
+			}
+		}
+		return syncstate.UploadProceed
 	}
 	mine, foreign := splitQueueByOwner(queue, userID)
 	if len(mine) == 0 {
@@ -237,7 +251,13 @@ func blockedWorkspaceID() string {
 // stranded snapshot is never pushed under the current token — which the server
 // would refuse anyway, but refusing it here keeps the queue's meaning honest.
 func pushableQueue(queue []queuedSyncMutation) []queuedSyncMutation {
-	mine, _ := splitQueueByOwner(queue, signedInUserID())
+	userID := signedInUserID()
+	if strings.TrimSpace(userID) == "" {
+		// Unknown identity classifies nothing as foreign — see uploadDecision.
+		// Filtering on an identity we do not have would drop every entry.
+		return queue
+	}
+	mine, _ := splitQueueByOwner(queue, userID)
 	return mine
 }
 

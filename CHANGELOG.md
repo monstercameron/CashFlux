@@ -6,6 +6,18 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **Sync no longer stops when the server cannot say who you are (C696 follow-up).** Running the browser
+  regression suite for the first time caught a regression in the identity work: the client refused to upload
+  anything at all until it had resolved an account id from the server. On any deployment whose server does
+  not answer that lookup — token auth, an older server, the moment before the first lookup lands — that
+  turned "we cannot identify you" into "never sync again". The server is the authority on ownership and
+  rejects what it should; the client now stops only when the server has actually refused, which was the point
+  of the change in the first place.
+- **The operator console's account summary is findable again.** Three new panels reused the same CSS class as
+  the account summary card, which made an existing browser test's selector ambiguous and would have made the
+  summary hard to target for anyone else too. The new panels have their own class.
+
 ### Added
 - **A balance you update can say when it was true (C684).** Entering a new value reveals an "as of" date,
   defaulting to today. A figure you read on Friday and enter on Monday belongs to Friday — which decides the

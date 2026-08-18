@@ -38,7 +38,7 @@ const manageCSS = `
 @media (max-width:860px){.manage-grid{grid-template-columns:1fr}}
 .manage-col{min-width:0;display:flex;flex-direction:column;gap:.5rem}
 .section-title{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:#9aa0aa;margin:.8rem 0 .2rem}
-.detail-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:.4rem .9rem}
+.detail-card,.panel-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:.4rem .9rem}
 .detail-row{display:flex;justify-content:space-between;gap:1rem;padding:.45rem 0;border-bottom:1px solid rgba(255,255,255,0.06)}
 .detail-row:last-child{border-bottom:none}
 .detail-label{color:#9aa0aa;font-size:13px}
