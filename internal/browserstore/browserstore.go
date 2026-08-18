@@ -207,7 +207,7 @@ func Set(key, val string) {
 	cache[key] = val
 	mu.Unlock()
 	idbPut(key, val)
-	publish(key, val, true)
+	publish(key)
 }
 
 // SetThen writes key→val and invokes done() once the IndexedDB transaction commits
@@ -231,7 +231,7 @@ func SetThen(key, val string, done func()) {
 			fin()
 		}
 	}()
-	publish(key, val, true)
+	publish(key)
 	tx := db.Call("transaction", idbStoreName, "readwrite")
 	tx.Set("oncomplete", js.FuncOf(func(js.Value, []js.Value) any { fin(); return nil }))
 	tx.Set("onerror", js.FuncOf(func(js.Value, []js.Value) any { fin(); return nil }))
@@ -245,7 +245,7 @@ func Remove(key string) {
 	delete(cache, key)
 	mu.Unlock()
 	idbDelete(key)
-	publish(key, "", false)
+	publish(key)
 }
 
 // RegisterJSBridge exposes the store to vendored JS (the music player, the

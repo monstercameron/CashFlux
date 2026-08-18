@@ -71,34 +71,45 @@ func StartCrossTab() {
 				return nil
 			}
 			k := key.String()
-			val := data.Get("value")
-			present := val.Truthy() || val.Type() == js.TypeString
-			mu.Lock()
-			if present {
-				cache[k] = val.String()
-			} else {
-				delete(cache, k)
-			}
-			mu.Unlock()
-			notifyWatchers(k, val.String(), present)
+			// Re-read the authoritative value from IndexedDB rather than trust
+			// the message. Two reasons, and the first is the important one:
+			// nothing sensitive then travels on the channel at all (see publish),
+			// and the value this tab adopts is the one that actually committed
+			// rather than one tab's claim about it.
+			//
+			// The read runs in a GOROUTINE because Reload blocks, and this is a
+			// js.Func callback: on GOOS=js/wasm the runtime is single-threaded
+			// and cooperatively scheduled, so blocking here would stop the event
+			// loop that has to deliver the IndexedDB callback Reload is waiting
+			// for — the same deadlock internal/app/tokenlock.go documents.
+			go func() {
+				Reload(k)
+				v, present := Get(k)
+				notifyWatchers(k, v, present)
+			}()
 			return nil
 		}))
 	})
 }
 
-// publish tells the other tabs about a local write. Never fails a write: a
-// browser without BroadcastChannel, or a channel that has been closed, simply
-// leaves the other tabs to find out on their next Reload or reload.
-func publish(key, value string, present bool) {
+// publish tells the other tabs WHICH key changed — never what it changed to.
+//
+// The values in this store include the access and refresh tokens, and a
+// BroadcastChannel is readable by anything running on the origin: an injected
+// script, a same-origin iframe, a service worker. IndexedDB is readable by those
+// too, so this is not a new capability for an attacker who already has script
+// execution — but it is a gratuitous second copy of a credential, sitting on a
+// bus that is trivially subscribed to and needs no await. Sending only the key
+// keeps the secret in one place. Every recipient re-reads the value itself.
+//
+// Never fails a write: a browser without BroadcastChannel simply leaves the
+// other tabs to find out on their next Reload or page load.
+func publish(key string) {
 	if !channel.Truthy() {
 		return
 	}
 	defer func() { _ = recover() }()
-	msg := map[string]any{"key": key}
-	if present {
-		msg["value"] = value
-	}
-	channel.Call("postMessage", msg)
+	channel.Call("postMessage", map[string]any{"key": key})
 }
 
 // Watch registers fn to run when ANOTHER tab changes key. It is not called for

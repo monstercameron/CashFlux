@@ -70,8 +70,7 @@ func TestCrossTabDegradesWithoutBrowserSupport(t *testing.T) {
 	// exactly the unsupported-browser case: every entry point must be a no-op
 	// rather than a panic, leaving the old per-tab behaviour intact.
 	StartCrossTab()
-	publish("cashflux:test-degrade", "v", true)
-	publish("cashflux:test-degrade", "", false)
+	publish("cashflux:test-degrade")
 	Reload("cashflux:test-degrade")
 	Reload()
 
@@ -80,5 +79,18 @@ func TestCrossTabDegradesWithoutBrowserSupport(t *testing.T) {
 	Set(key, "still works")
 	if got := GetString(key); got != "still works" {
 		t.Fatalf("GetString = %q — a write must succeed with no cross-tab support", got)
+	}
+}
+
+func TestPublishCarriesNoValue(t *testing.T) {
+	// The store holds the access and refresh tokens. A BroadcastChannel is
+	// readable by anything on the origin with script execution, so putting a
+	// credential on it is a gratuitous second copy of a secret on a bus that
+	// needs no await to subscribe to. publish takes a key and nothing else, and
+	// this test exists to keep it that way: adding a value parameter back would
+	// stop it compiling.
+	var publishSignature func(string) = publish
+	if publishSignature == nil {
+		t.Fatal("publish must remain a key-only signal")
 	}
 }
