@@ -17,6 +17,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/reconcile"
 	"github.com/monstercameron/CashFlux/internal/smart"
 	"github.com/monstercameron/CashFlux/internal/textutil"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -354,14 +355,27 @@ func AccountRow(props accountRowProps) ui.Node {
 	// -Abs so it reads correctly whether the balance is stored positive ("amount you
 	// owe" add form) or negative (the sample convention). Editing still works on the
 	// raw stored value; only the displayed figures are signed.
+	// A liability is shown as what it does to net worth. This goes through the
+	// account's own storage convention rather than -Abs (C683): -Abs turns an
+	// OVERPAID card — money the lender owes you — into more debt, which is the one
+	// case where the shortcut and the truth disagree.
 	dispBal, dispCleared := props.Balance, props.Cleared
 	if a.Class == domain.ClassLiability {
-		dispBal = props.Balance.Abs().Neg()
-		dispCleared = props.Cleared.Abs().Neg()
+		conv := reconcile.ConventionOf(a, props.Balance.Amount)
+		dispBal = money.New(reconcile.Stated(props.Balance.Amount, conv), props.Balance.Currency)
+		dispCleared = money.New(reconcile.Stated(props.Cleared.Amount, conv), props.Cleared.Currency)
 	}
 
 	meta := accountMeta(a, props.Balance)
-	if props.Cleared.Amount != props.Balance.Amount {
+	// C685: the cleared-only figure is a RECONCILIATION aid — what a statement has
+	// confirmed so far — and it is shown beside the real balance, where it reads as
+	// a second claim about what is owed. On an account nobody reconciles that claim
+	// is false: a utility or HOA shell whose balance is zero because every bill was
+	// posted and every bill paid still carried a cleared figure of a few hundred
+	// dollars, and the card said you owed it. Property, vehicle and crypto are
+	// estimated on a revaluation cadence rather than reconciled, and have the same
+	// problem for the same reason.
+	if a.Type.IsReconcilable() && props.Cleared.Amount != props.Balance.Amount {
 		meta += uistate.T("accounts.clearedSuffix", fmtMoney(dispCleared))
 	}
 	menuHidden := ""

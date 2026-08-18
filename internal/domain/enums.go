@@ -119,6 +119,31 @@ func (t AccountType) Valid() bool {
 	return false
 }
 
+// IsReconcilable reports whether an account of this type is ever reconciled
+// against an outside statement — the question that decides whether a
+// CLEARED-only balance means anything for it (C685).
+//
+// Three types are not. A utility/HOA account is a tracking shell: it records an
+// obligation the household owes a service provider, and nobody receives a
+// statement of it to tick rows against. Property, vehicle and crypto accounts are
+// ESTIMATED on a revaluation cadence rather than reconciled (see
+// internal/revalue) — their worth is an opinion refreshed periodically, not a
+// figure a counterparty confirms.
+//
+// The distinction matters because a cleared balance shown beside a real balance
+// reads as a SECOND claim about what is owed. On a utility shell whose balance is
+// zero — every bill posted and every bill paid — a cleared-only figure of a few
+// hundred dollars is not a reconciliation aid, it is the card saying you owe
+// money you do not owe.
+func (t AccountType) IsReconcilable() bool {
+	switch t {
+	case TypeUtilities, TypeProperty, TypeVehicle, TypeCrypto:
+		return false
+	default:
+		return true
+	}
+}
+
 // Class returns the natural account class for a type (liabilities are debts).
 func (t AccountType) Class() AccountClass {
 	switch t {

@@ -7,6 +7,14 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Fixed
+- **A utility or HOA account no longer shows a cleared figure that reads as debt (C685).** Beside the real
+  balance the card printed a cleared-only total — a reconciliation aid, meaningful only against a statement.
+  A utility shell sitting at $0 because every bill was posted and every bill paid still showed a few hundred
+  dollars there whenever one side had not been ticked cleared, so the card said you owed money you did not
+  owe. Account types nobody reconciles against an outside statement — utility/HOA, and the property, vehicle
+  and crypto accounts that are estimated on a revaluation cadence — no longer show one. Accounts that do have
+  a statement keep it.
+
 - **Reconciling an account no longer depends on which sign it happens to store (C683).** The reconcile
   dialog compared the raw stored cleared balance against the figure typed off the statement, and never said
   which sign it wanted — so the same debt reconciled against "500" on one account and "-500" on another, and

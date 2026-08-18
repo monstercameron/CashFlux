@@ -1,3 +1,26 @@
+## 2026-08-17 - a number that is only meaningful against a statement (C685)
+
+A utility shell read "$0.00 - cleared ($120.00)". Nothing is owed; every bill was posted and every bill was
+paid. What differed is that one side of that had never been ticked cleared, so the cleared-only fold - opening
+balance plus only the cleared rows - came out at $120 while the real balance came out at zero.
+
+The instinct is to special-case zero-balance utility accounts, which is what the ticket suggested. That is the
+wrong cut. The cleared figure is a RECONCILIATION aid: it answers "how much of this has the bank confirmed",
+which is a question you can only ask of an account that sends you a statement. A utility shell mid-cycle has
+exactly the same problem as one at zero, and so do property, vehicle and crypto accounts, which are estimated
+on a revaluation cadence rather than reconciled - internal/revalue already draws that line for freshness, and
+the edit form already gates its cadence override on it.
+
+So the predicate is domain.AccountType.IsReconcilable(), and the card shows the cleared figure only for types
+that have a statement to have cleared against. A test walks AllAccountTypes so a type added later cannot
+silently inherit an answer.
+
+While in that expression: the liability display was `.Abs().Neg()`, which is right for a debt and wrong for an
+overpaid card. Money the lender owes you became more debt. It now goes through reconcile.Stated with the
+account's own convention (C683), which is lossless in both directions, so a credit balance reads as a credit.
+Both storage conventions are covered by a component test, because that is exactly the kind of case that has
+no natural reader until someone overpays a card.
+
 ## 2026-08-17 - reconciliation had no opinion about which sign a debt is (C683)
 
 Reconcile-to-statement showed a cleared balance that disagreed with the same account's card, and typing
