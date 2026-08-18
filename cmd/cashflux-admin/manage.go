@@ -30,6 +30,8 @@ const manageCSS = `
 .user-row{cursor:pointer;transition:background .12s ease}
 .user-row:hover{background:rgba(255,255,255,0.06)}
 .user-row:focus-visible{outline:2px solid #6366f1;outline-offset:-2px}
+.row-action{text-align:right;white-space:nowrap}
+.btn-row{padding:.25rem .7rem;font-size:12px}
 .table-hint{color:#9aa0aa;font-size:13px;margin:.1rem 0 .6rem}
 .status-banner{background:rgba(99,102,241,0.14);border:1px solid rgba(99,102,241,0.4);color:#c7d2fe;padding:.6rem .9rem;border-radius:10px;margin:.6rem 0}
 .manage-grid{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:1.25rem;align-items:start}
@@ -317,23 +319,62 @@ type pendingApprovalRowProps struct {
 	device   adminPendingDevice
 	disabled bool
 	onDecide func(string, string)
+	// onAttach approves a request onto an account that already exists (C700),
+	// rather than minting a new one.
+	onAttach func(deviceID, userID string)
 }
 
 func pendingApprovalRow(p pendingApprovalRowProps) ui.Node {
 	approve := ui.UseEvent(func() { p.onDecide(p.device.DeviceID, "approve") })
 	reject := ui.UseEvent(func() { p.onDecide(p.device.DeviceID, "reject") })
+	// C700: approving used to be the only decision available, and it always
+	// created a NEW account. An operator whose answer was "this is my other
+	// browser, it belongs to the account I already have" had to pick the wrong
+	// action — producing a second account that owns none of the first one's
+	// workspaces, which the server then refuses to sync for ever.
+	attaching := ui.UseState(false)
+	target := ui.UseState("")
+	onTarget := ui.UseEvent(func(v string) { target.Set(v) })
+	toggleAttach := ui.UseEvent(func() { attaching.Set(!attaching.Get()) })
+	confirmAttach := ui.UseEvent(func() {
+		if strings.TrimSpace(target.Get()) == "" {
+			return
+		}
+		p.onAttach(p.device.DeviceID, strings.TrimSpace(target.Get()))
+		attaching.Set(false)
+	})
 	label := strings.TrimSpace(p.device.Label)
 	if label == "" {
 		label = "Unnamed device"
+	}
+	var attachForm ui.Node = Fragment()
+	if attaching.Get() {
+		attachForm = Div(css.Class("field-row"), Attr("data-testid", "admin-pending-attach-form"),
+			Label(Attr("for", "attach-"+p.device.DeviceID), Text("Account id to attach this device to")),
+			Input(Attr("id", "attach-"+p.device.DeviceID),
+				Attr("data-testid", "admin-pending-attach-target"),
+				Attr("placeholder", "device:… or the account id from the Users table"),
+				Value(target.Get()), OnInput(onTarget)),
+			Div(css.Class("approval-actions"),
+				Button(Type("button"), css.Class("btn btn-primary"),
+					Attr("data-testid", "admin-pending-attach-confirm"),
+					Disabled(p.disabled || strings.TrimSpace(target.Get()) == ""),
+					OnClick(confirmAttach), Text("Attach to this account")),
+			),
+		)
 	}
 	return Div(css.Class("approval-row"), Attr("data-testid", "admin-pending-device"),
 		Div(css.Class("approval-meta"),
 			Span(css.Class("approval-label"), Text(label)),
 			Span(css.Class("approval-time"), Text("Requested "+trimDate(p.device.RequestedAt)+" · expires "+trimDate(p.device.ExpiresAt))),
+			attachForm,
 		),
 		Div(css.Class("approval-actions"),
 			Button(Type("button"), css.Class("btn btn-primary"), Attr("data-testid", "admin-pending-approve"),
-				Attr("aria-label", "Approve access for "+label), Disabled(p.disabled), OnClick(approve), Text("Approve")),
+				Attr("aria-label", "Approve access for "+label), Disabled(p.disabled), OnClick(approve), Text("Approve as new account")),
+			Button(Type("button"), css.Class("btn btn-secondary"), Attr("data-testid", "admin-pending-attach"),
+				Attr("aria-label", "Attach "+label+" to an existing account"),
+				Disabled(p.disabled), OnClick(toggleAttach), Text("Attach to existing…")),
 			Button(Type("button"), css.Class("btn btn-danger"), Attr("data-testid", "admin-pending-reject"),
 				Attr("aria-label", "Reject access for "+label), Disabled(p.disabled), OnClick(reject), Text("Reject")),
 		),
@@ -388,12 +429,30 @@ func pendingApprovals(p pendingApprovalsProps) ui.Node {
 		}()
 	}
 
+	// Attaching to an existing account is the recovery this whole ticket set
+	// exists for: it grants the device the account the operator names, instead
+	// of creating a second account that owns none of the first one's data.
+	attach := func(deviceID, userID string) {
+		busyID.Set(deviceID)
+		status.Set("")
+		go func() {
+			code, err := postAttachDevice(p.token, deviceID, userID)
+			busyID.Set("")
+			if err != nil {
+				status.Set("Could not attach this device: " + err.Error())
+				return
+			}
+			status.Set("Device attached to " + userID + ". Verification code: " + code)
+			reload.Set(reload.Get() + 1)
+		}()
+	}
+
 	list := Div(css.Class("usage-empty"), Attr("data-testid", "admin-pending-empty"), Text("No pending access requests."))
 	if len(devices.Get()) > 0 {
 		list = Div(css.Class("approval-list"),
 			Map(devices.Get(), func(device adminPendingDevice) ui.Node {
 				return ui.CreateElement(pendingApprovalRow, pendingApprovalRowProps{
-					device: device, disabled: busyID.Get() != "", onDecide: decide,
+					device: device, disabled: busyID.Get() != "", onDecide: decide, onAttach: attach,
 				})
 			}),
 		)
@@ -442,17 +501,39 @@ func userRow(p userRowProps) ui.Node {
 	if status == "" {
 		status = "—"
 	}
+	// C701: the row used to BE the button — tr[role=button][tabindex=0] with a
+	// click handler. Two things were wrong with that. A table row that claims to
+	// be a button stops assistive technology presenting its cells as a row, so
+	// the columns an operator navigates by disappear; and role=button on a
+	// non-button element does not bring keyboard activation with it, so Enter
+	// and Space did nothing and the only way in was a mouse click that landed
+	// nowhere visible. The affordance is now a real <button> in its own cell:
+	// natively focusable, natively activated by both keys, and visible — an
+	// operator no longer has to discover that rows are clickable.
+	//
+	// The whole-row click is kept as a mouse convenience. It is no longer the
+	// only way in, so it carries no accessibility weight.
 	return Tr(
 		css.Class("user-row"),
-		Attr("role", "button"),
-		Attr("tabindex", "0"),
-		Attr("aria-label", "Manage "+identity),
+		Attr("data-testid", "admin-user-row"),
+		Attr("data-user-id", p.user.ID),
 		OnClick(open),
 		Td(Text(identity)),
 		Td(Text(p.user.Provider)),
 		Td(Text(plan)),
 		Td(Text(status)),
 		Td(Text(created)),
+		Td(css.Class("row-action"),
+			Button(Type("button"), css.Class("btn btn-secondary btn-row"),
+				Attr("data-testid", "admin-user-manage"),
+				Attr("data-user-id", p.user.ID),
+				// The accessible name carries the account, so a column of
+				// "Manage" buttons reads as N distinct actions rather than one
+				// repeated N times.
+				Attr("aria-label", "Manage "+identity),
+				OnClick(open),
+				Text("Manage")),
+		),
 	)
 }
 
@@ -471,6 +552,7 @@ func usersTable(users []adminUserRow, onOpen func(string)) ui.Node {
 					Th(Text("Plan")),
 					Th(Text("Status")),
 					Th(Text("Created")),
+					Th(Text("Actions")),
 				),
 			),
 			Tbody(
@@ -607,6 +689,11 @@ func manageView(p manageProps) ui.Node {
 	statusInput := ui.UseState("")
 	confirmDelete := ui.UseState(false)
 	reload := ui.UseState(0)
+	// C701: a failed detail fetch used to leave the card reading "Loading..."
+	// for ever, with the real reason in a status banner further up the page. An
+	// operator reasonably reads that as a slow request and waits. loadErr makes
+	// the failure land where the data was supposed to be, with a way to retry.
+	loadErr := ui.UseState("")
 
 	token, id := p.token, p.userID
 	ui.UseEffect(func() func() { ensureManageCSS(); return nil }, "cf-admin-css")
@@ -615,8 +702,10 @@ func manageView(p manageProps) ui.Node {
 	// Fetch detail + usage whenever the target user or a reload tick changes.
 	ui.UseEffect(func() func() {
 		go func() {
+			loadErr.Set("")
 			d, err := fetchUserDetail(token, id)
 			if err != nil {
+				loadErr.Set(err.Error())
 				status.Set("Could not load user: " + err.Error())
 				return
 			}
@@ -636,12 +725,19 @@ func manageView(p manageProps) ui.Node {
 			} else {
 				statusInput.Set(d.SubscriptionStatus)
 			}
+			// A failed usage fetch used to be swallowed entirely, leaving an
+			// empty chart that reads as "this account has no activity" - a
+			// wrong answer presented as a fact.
 			if u, err := fetchUserUsage(token, id, 14); err == nil {
 				usage.Set(u)
+			} else {
+				status.Set("Usage history could not be loaded: " + err.Error())
 			}
 		}()
 		return nil
 	}, id, reload.Get())
+
+	retryLoad := ui.UseEvent(func() { reload.Set(reload.Get() + 1) })
 
 	onPlanInput := ui.UseEvent(func(v string) { planInput.Set(v) })
 	onStatusInput := ui.UseEvent(func(v string) { statusInput.Set(v) })
@@ -721,9 +817,17 @@ func manageView(p manageProps) ui.Node {
 
 	d := detail.Get()
 	var summary ui.Node
-	if d == nil {
-		summary = Div(css.Class("detail-card"), Text("Loading…"))
-	} else {
+	switch {
+	case d == nil && loadErr.Get() != "":
+		summary = Div(css.Class("detail-card"), Attr("data-testid", "admin-user-detail-error"),
+			Div(css.Class("action-desc"), Text("This account could not be loaded: "+loadErr.Get())),
+			Button(Type("button"), css.Class("btn btn-secondary"),
+				Attr("data-testid", "admin-user-detail-retry"),
+				OnClick(retryLoad), Text("Try again")),
+		)
+	case d == nil:
+		summary = Div(css.Class("detail-card"), Attr("data-testid", "admin-user-detail-loading"), Text("Loading…"))
+	default:
 		summary = Div(css.Class("detail-card"),
 			detailRow("User ID", d.ID),
 			detailRow("Username", d.Username),
@@ -809,6 +913,11 @@ func manageView(p manageProps) ui.Node {
 			Div(css.Class("manage-col"),
 				H2(css.Class("section-title"), Text("Account")),
 				summary,
+				// C698: the read-only "what this device can access" view, shown
+				// BEFORE any action that moves data. That ordering is the point —
+				// a transfer decided from memory about which workspace belongs to
+				// whom is how data lands on the wrong account.
+				ui.CreateElement(accessPanel, accessProps{token: token, userID: id}),
 				H2(css.Class("section-title"), Text("Actions")),
 				Div(css.Class("action-card"),
 					Div(css.Class("action-desc"), Text("Change the user's sign-in name or access role.")),
