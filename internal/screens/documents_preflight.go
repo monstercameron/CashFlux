@@ -17,6 +17,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/receiptmatch"
+	"github.com/monstercameron/CashFlux/internal/staging"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/css"
@@ -39,6 +40,11 @@ type csvPreflightInfo struct {
 	Jump         bool
 	Whys         []importsafe.WhyDup
 	Pairs        []importsafe.Pair
+	// Batch is the same file staged through internal/staging — every row
+	// normalized, hashed and given a verdict, from the app's one duplicate rule
+	// (C689). It is what the counts below are read from, so the preview cannot
+	// reach a different verdict from the import that follows it.
+	Batch staging.Batch
 }
 
 // csvPreflightCard renders the staged import's pre-commit preview with the
@@ -77,9 +83,26 @@ func csvPreflightCard(info *csvPreflightInfo, confirm, cancel ui.Handler) ui.Nod
 			uistate.T("documents.preflightPairLine", p.IncomingDesc, money.FormatMinor(p.AmountMinor, info.Dec), p.OtherDesc)))
 	}
 
+	// C689: the outcomes that are NOT plain duplicates, each said in its own
+	// words. A row repeated inside the file and a row that cannot be read at all
+	// were previously either invisible or lumped in with "skipped", and they mean
+	// opposite things — one is the file being redundant, the other is money that
+	// will silently not arrive.
+	c := info.Batch.Counts
+	var extra []ui.Node
+	if c.RepeatedInFile > 0 {
+		extra = append(extra, P(css.Class("muted", tw.Text12), Attr("data-testid", "csv-preflight-repeated"),
+			uistate.T("documents.preflightRepeated", c.RepeatedInFile)))
+	}
+	if c.Unusable > 0 {
+		extra = append(extra, P(css.Class("t-caption"), Attr("data-testid", "csv-preflight-unusable"),
+			Attr("role", "alert"), uistate.T("documents.preflightUnusable", c.Unusable)))
+	}
+
 	return Div(css.Class("notice", tw.Mt2), Attr("data-testid", "csv-preflight"),
 		P(Attr("data-testid", "csv-preflight-counts"),
 			uistate.T("documents.preflightCounts", plural(newRows, "new transaction"), info.Dupes)),
+		extra,
 		If(info.HasBal, P(Attr("data-testid", "csv-preflight-balance"),
 			uistate.T("documents.preflightBalance", info.AcctName,
 				money.FormatMinor(info.BeforeMinor, info.Dec), money.FormatMinor(info.AfterMinor, info.Dec), signedNet))),

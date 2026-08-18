@@ -29,6 +29,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/pdftext"
 	"github.com/monstercameron/CashFlux/internal/receiptmatch"
 	"github.com/monstercameron/CashFlux/internal/rules"
+	"github.com/monstercameron/CashFlux/internal/staging"
 	"github.com/monstercameron/CashFlux/internal/statement"
 	"github.com/monstercameron/CashFlux/internal/store"
 	"github.com/monstercameron/CashFlux/internal/textutil"
@@ -439,6 +440,22 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 		info := &csvPreflightInfo{Total: len(txns)}
 		info.Whys = importsafe.Duplicates(txns, app.Transactions(), importAcct.Get())
 		info.Dupes = len(info.Whys)
+		// C689: the same rows, staged once through the app's one duplicate rule,
+		// so the preview and the write path cannot reach different verdicts about
+		// the same file — which is exactly how a review screen and an importer came
+		// to disagree (C688) and how counts stopped reconciling (C687).
+		cur := "USD"
+		if s := app.Settings(); s.BaseCurrency != "" {
+			cur = s.BaseCurrency
+		}
+		inputs := make([]staging.Input, 0, len(txns))
+		for _, t := range txns {
+			inputs = append(inputs, staging.Input{
+				Date: t.Date, Description: t.Desc, AmountMinor: t.Amount.Amount,
+				HasAmount: true, AccountID: t.AccountID,
+			})
+		}
+		info.Batch = staging.Stage(inputs, app.Transactions(), importAcct.Get(), cur)
 		info.Pairs = importsafe.TransferPairs(txns, app.Transactions(), importAcct.Get(), 3)
 		if acc, ok := domain.AccountByID(app.Accounts(), importAcct.Get()); ok {
 			info.Dec = currency.Decimals(acc.Currency)

@@ -7,6 +7,14 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **A statement is staged once before it is imported (C689).** Every row is normalized, content-hashed and
+  given a verdict from the app's one duplicate rule, so the preview and the import that follows it cannot reach
+  different conclusions about the same file. The import preview now separates rows already in your ledger, rows
+  repeated inside the file itself, and rows that could not be read at all — three outcomes previously either
+  invisible or counted together as "skipped", though only the last one means money will be missing.
+
+
+### Added
 - **A reconciliation worksheet, so a difference has somewhere to be looked for (C690).** The reconcile dialog
   stated a difference and nothing else, which makes "$8,441.80 out" a dead end. It now shows the period as the
   arithmetic it is — opening, money in, money out, transfers, balance checkpoints, and the closing balance they

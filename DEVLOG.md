@@ -1,3 +1,33 @@
+## 2026-08-18 - stage once, then import what was approved (C689)
+
+The ticket asks for stage -> match -> approve -> import. Two thirds of that already existed: the CSV path had a
+preflight card, the statement-paste path had an editable draft. What did not exist was ONE model behind them.
+Each had its own idea of what a duplicate is, what a row normalizes to, and what counts as ready - which is
+precisely how the duplicates screen and the importer came to disagree (C688) and how import counts stopped
+reconciling with the ledger (C687). Adding a third preview would have made that worse.
+
+So internal/staging computes a batch once and everything downstream reads it. The duplicate rule is dedupe.Key,
+not a fourth opinion.
+
+The four verdicts are the design. "Skipped" was one number covering things that mean opposite things:
+
+- Duplicate: the ledger already has it. Not a fault - it is the safeguard working, and re-importing an
+  overlapping statement is a normal thing to do.
+- RepeatedInFile: the FILE lists it twice. Almost always a parsing artefact rather than two identical charges,
+  so the first imports and the rest are held.
+- Unusable: it could not be read. This is the only genuinely bad one, because that money is not going into the
+  ledger and nothing else in the app will ever mention it.
+
+A row with no account is Unusable rather than guessed at. Writing a transaction to the wrong account is not
+recoverable by looking at it later - it just quietly makes two accounts wrong.
+
+Two details worth naming. The hash joins its parts with a NUL separator, so "AB"+"C" and "A"+"BC" cannot collide
+- the classic way a concatenated key silently merges two different rows, and a test pins it. And every skipped
+row stays in the batch with its file index, because a review table that hides skipped rows cannot be checked
+against the file it came from, which defeats the point of reviewing.
+
+That finishes the C683-C693 run: eleven tickets, all committed with tests at the layer each belongs to.
+
 ## 2026-08-17 - a difference with nowhere to look (C690)
 
 The reconcile dialog has always been able to tell you that you are $8,441.80 out. It has never been able to tell
