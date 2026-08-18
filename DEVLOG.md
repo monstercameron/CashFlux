@@ -1,3 +1,31 @@
+## 2026-08-17 - a difference with nowhere to look (C690)
+
+The reconcile dialog has always been able to tell you that you are $8,441.80 out. It has never been able to tell
+you which term that lives in, and a number without a next step is a dead end - you close the dialog and the
+account stays wrong.
+
+The worksheet is deliberately unremarkable: opening + money in - money out + transfers + checkpoints = closing,
+with the residual underneath. Every one of those figures already exists somewhere in the app. What did not exist
+was them appearing together, beside the total they are supposed to make. That is the whole feature - the app was
+full of individually-correct numbers that were never shown next to the thing they should reconcile to.
+
+Two terms are deliberately separate rather than folded in. Transfers, because they are not income or spending
+and treating them as either is where this entire run of tickets started. Checkpoints, because they stand in for
+movement rather than being movement - every report excludes them, so a worksheet that quietly included them
+under "money in" would fail to reconcile against the rest of the app while looking like it added up.
+
+Zero terms are omitted. A worksheet that lists every term the app knows about, most of them empty, buries the
+two that matter in a column of dashes.
+
+Amounts go through reconcile.Stated, so a card's worksheet agrees with its account card and its reconcile
+dialog. Introducing a fourth reading of a debt's sign into an app that already had two would be a strange way to
+end a week spent removing the second one. The test asserts a liability line reads identically whichever way the
+account stores its balance.
+
+The invariant worth having is TestComputedClosingMatchesTheLedger: the worksheet's closing figure must equal
+ledger.Balance. A worksheet that disagrees with the account card is a third opinion, which is worse than the two
+that already disagreed.
+
 ## 2026-08-17 - a month that is not over yet, printed like one that is (C693)
 
 August month-to-date and July final rendered in the same type, at the same size, with no mark to separate them.

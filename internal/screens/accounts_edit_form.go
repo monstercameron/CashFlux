@@ -821,6 +821,10 @@ func reconcileForm(a domain.Account, curCleared money.Money, conv reconcile.Conv
 						uistate.T("accounts.reconciledCheck"))),
 				),
 			),
+			// C690: the arithmetic behind the difference. The header states a number;
+			// this states which term it is in, which is the difference between a
+			// lead and a dead end.
+			reconcileWorksheet(app, a, strings.TrimSpace(stmtDateS.Get())),
 			// Standing copy: what finishing a reconciliation requires. Shown while
 			// the account isn't yet balanced, so the finish path is never a mystery.
 			If(!result.Reconciled, P(css.Class("t-caption", tw.TextDim, "reconcile-explain"),

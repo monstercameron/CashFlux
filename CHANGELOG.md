@@ -7,6 +7,15 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **A reconciliation worksheet, so a difference has somewhere to be looked for (C690).** The reconcile dialog
+  stated a difference and nothing else, which makes "$8,441.80 out" a dead end. It now shows the period as the
+  arithmetic it is — opening, money in, money out, transfers, balance checkpoints, and the closing balance they
+  add up to — with the residual stated once as the amount still unaccounted for. Transfers and checkpoints are
+  their own terms rather than folded into income or spending, and every figure reads in the same convention as
+  the account card.
+
+
+### Added
 - **Reports say when a period's figures are not final (C693).** A month still being written rendered exactly
   like a finished one, so a month-to-date total read as a collapse in spending when it was simply three weeks
   short. A period running past what has been reconciled is now captioned, with how far the statements actually
