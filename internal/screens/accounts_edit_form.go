@@ -579,9 +579,7 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 	// layer, not structurally).
 	var balancesNode ui.Node = Fragment()
 	if app != nil {
-		provKind, provAt := ledger.BalanceProvenance(a.ID, app.Transactions(), func(t domain.Transaction) bool {
-			return t.Source == domain.TxnSourceManual && t.Desc == uistate.T("accounts.balanceAdjustment")
-		})
+		provKind, provAt := ledger.BalanceProvenance(a.ID, app.Transactions(), isBalanceAdjustment)
 		provKey := map[ledger.ProvenanceKind]string{
 			ledger.ProvenanceOpening:  "accounts.provOpening",
 			ledger.ProvenanceAdjusted: "accounts.provAdjusted",
@@ -824,7 +822,7 @@ func reconcileForm(a domain.Account, curCleared money.Money, conv reconcile.Conv
 			// C690: the arithmetic behind the difference. The header states a number;
 			// this states which term it is in, which is the difference between a
 			// lead and a dead end.
-			reconcileWorksheet(app, a, strings.TrimSpace(stmtDateS.Get())),
+			reconcileWorksheet(app, a, strings.TrimSpace(stmtDateS.Get()), stmtMinor, stmtTyped),
 			// Standing copy: what finishing a reconciliation requires. Shown while
 			// the account isn't yet balanced, so the finish path is never a mystery.
 			If(!result.Reconciled, P(css.Class("t-caption", tw.TextDim, "reconcile-explain"),

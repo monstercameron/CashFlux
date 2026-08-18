@@ -1,3 +1,50 @@
+## 2026-08-18 - the second adversarial pass, and the regression it led me to
+
+Five findings against C684-C693. The most useful thing the pass did was not one of them.
+
+Its finding #4 was a stale comment: accounts_tiles.go still said a balance set "posts a REAL adjustment
+transaction", which C684 had made false. Chasing that led to the actual damage. C684 changed the DESCRIPTION of
+the row a balance update writes, and three separate places identified such a row by comparing that description
+string - the provenance chip in the account editor, the net-worth bridge, and the balance-quality assessment.
+All three silently stopped recognising it. Nothing failed loudly; the chip just vanished and two analyses
+quietly reclassified every user-stated balance as ordinary transaction-derived movement.
+
+What caught it was an e2e test asserting a modal footer stays pinned - it failed because the missing chip made
+the form 48 pixels shorter. That is a lucky catch, not a good one, and the lesson is the one ledger.BalanceProvenance's
+own doc comment had already written down: "adjustments are marked at the UI layer (description text), not
+structurally". C684 gave them a structural marker and I did not go back and use it. Now isBalanceAdjustment asks
+the row, and the three copies are one function.
+
+I also went looking for whether the rest of the accounts e2e failures were mine. They were not: a worktree at
+the commit before any of this work fails 8 of the same tests, and the set of failures reshuffles between
+identical runs - it is order-dependent and port-sensitive, which this repo already knows about. The single
+deterministic regression was the 48px one, and it passes now on a clean port. Worth saying plainly rather than
+reporting a green suite that is not green.
+
+The findings themselves:
+
+C690's residual could never appear during a reconciliation. Build looks for a statement in the account's
+history; the statement being TYPED is not recorded until Record is pressed. So the one number the worksheet
+exists to produce was structurally absent from the only moment anyone needs it, and every test in the package
+passed because they all put the statement in the history first. That is the sharpest kind of test theatre -
+internally consistent, and testing a shape the caller never produces.
+
+importaudit conflated "no linkage recorded" with "every row since deleted". Both give Active == 0, but only one
+is unknowable, and the UI said "from before imports were tracked" about a run that tracked exactly that.
+Whether the linkage exists is now recorded by the run rather than guessed from the outcome.
+
+ClosedThrough blocked on any account never reconciled. Defensible in principle, wrong in practice: people
+reconcile checking and cards and leave savings alone, so no period would ever be Closed and the provisional
+banner would appear on every report - the exact failure the feature exists to prevent. A never-reconciled
+account is not part of the practice and is skipped; one reconciled less recently still governs the date.
+
+Staging and the importer agreed about which rows are new only because both happened to call dedupe.Key. That is
+how the duplicates screen and the importer came to disagree in the first place, so agreement-by-coincidence is
+not good enough. Four shapes are now pinned, including a file that repeats a row within itself.
+
+And the worksheet's residual states a direction instead of printing a signed amount - "your statement is
+-$100.00 away from this" makes a reader do the work before they can start looking.
+
 ## 2026-08-18 - stage once, then import what was approved (C689)
 
 The ticket asks for stage -> match -> approve -> import. Two thirds of that already existed: the CSV path had a

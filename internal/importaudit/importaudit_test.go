@@ -189,3 +189,38 @@ func TestDocumentWithoutAnIDIsNotMatchedAgainstUnstampedRows(t *testing.T) {
 		t.Errorf("tally = %+v, want no match and no claim for an id-less document", got)
 	}
 }
+
+// Found by an adversarial pass: a run whose rows were all legitimately deleted
+// looked identical to a run made before stamping existed, so the history told the
+// user "how many remain is not recorded" about a run that recorded exactly that.
+func TestAFullyDeletedRunIsKnownToBeEmptyNotUntraceable(t *testing.T) {
+	d := doc("d1", 3, 5, 0, 0)
+	d.RowsLinked = true
+
+	got := For(d, nil) // every row since deleted
+	if !got.ActiveKnown {
+		t.Fatalf("ActiveKnown = false; this run recorded its linkage")
+	}
+	if got.Active != 0 || got.Removed != 5 {
+		t.Errorf("Active/Removed = %d/%d, want 0/5", got.Active, got.Removed)
+	}
+	if got.Clean() {
+		t.Errorf("Clean = true, but every row imported has gone")
+	}
+
+	// The same document WITHOUT the linkage flag is genuinely unknowable, and the
+	// old inference still covers it.
+	legacy := doc("d1", 3, 5, 0, 0)
+	if got := For(legacy, nil); got.ActiveKnown {
+		t.Errorf("a pre-linkage run claimed to know its live count")
+	}
+}
+
+func TestALinkedRunWithSurvivorsIsUnaffected(t *testing.T) {
+	d := doc("d1", 3, 10, 0, 0)
+	d.RowsLinked = true
+	got := For(d, rows("d1", 7))
+	if !got.ActiveKnown || got.Active != 7 || got.Removed != 3 {
+		t.Errorf("tally = %+v, want 7 active / 3 removed", got)
+	}
+}

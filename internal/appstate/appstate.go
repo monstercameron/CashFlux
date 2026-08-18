@@ -1274,6 +1274,7 @@ func (a *App) ImportReviewedDocumentRows(kind domain.DocumentKind, accountID str
 		ID: docID, Kind: kind, UploadedAt: time.Now(), AccountID: acc.ID,
 		Status: domain.DocImported, Extracted: documentRowsFromExtract(importedRows),
 		SkippedCount: result.Skipped, DuplicateCount: result.Skipped,
+		RowsLinked: true, // every row above carries docID (C687)
 	}); err != nil {
 		return result, err
 	}

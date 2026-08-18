@@ -520,15 +520,15 @@ var vSweepKeys = Catalog{
 
 	// FP-T1c — the return under the balance chart. Both returns ship because they
 	// answer different questions; the gap between them is what timing cost.
-	"invret.why":      "The line above is a balance — it rises when the market rises and when you pay in. These are the returns.",
-	"invret.twr":      "The investments returned %.1f%% a year.",
-	"invret.irr":      "You returned %.1f%% a year, counting when you paid in.",
-	"invret.gapCost":  "The timing of your contributions cost about %.1f points a year.",
-	"invret.gapGain":  "The timing of your contributions gained about %.1f points a year.",
-	"invret.basis":    "Over %d days, from %d valuations and %d transfers in or out.",
+	"invret.why":          "The line above is a balance — it rises when the market rises and when you pay in. These are the returns.",
+	"invret.twr":          "The investments returned %.1f%% a year.",
+	"invret.irr":          "You returned %.1f%% a year, counting when you paid in.",
+	"invret.gapCost":      "The timing of your contributions cost about %.1f points a year.",
+	"invret.gapGain":      "The timing of your contributions gained about %.1f points a year.",
+	"invret.basis":        "Over %d days, from %d valuations and %d transfers in or out.",
 	"invret.period":       "The investments returned %.1f%% over these %d days.",
 	"invret.noYearlyRate": "Too short to state as a yearly rate — annualizing under %d days multiplies the noise as much as the return.",
-	"invret.tooShort": "There is not enough history yet — a return needs at least %d days to mean anything.",
+	"invret.tooShort":     "There is not enough history yet — a return needs at least %d days to mean anything.",
 
 	// FP-T2d — long-horizon figures restated in money the reader can price. One
 	// household inflation assumption feeds every surface that discounts.
@@ -539,11 +539,11 @@ var vSweepKeys = Catalog{
 	"rpta.payeeSparkAlt": "Monthly spending at %s over the year",
 
 	// FP-T2c — the holding price editor and how old the price is.
-	"investments.updatePrice":     "Update price",
-	"investments.priceLabelPer":   "Price per share (%s)",
-	"investments.priceAsOfLabel":  "Price as of",
-	"investments.pricedOn":        "priced %s",
-	"investments.priceNoDate":     "price date not recorded",
+	"investments.updatePrice":    "Update price",
+	"investments.priceLabelPer":  "Price per share (%s)",
+	"investments.priceAsOfLabel": "Price as of",
+	"investments.pricedOn":       "priced %s",
+	"investments.priceNoDate":    "price date not recorded",
 
 	// FP-T2a — the amortization schedule table.
 	"loans.scheduleShow":      "Show all %d payments",
@@ -591,21 +591,21 @@ var vSweepKeys = Catalog{
 	"sell.recorded":    "Recorded the sale of %s — %s realized.",
 
 	// FP-T1f — what a position has PAID OUT, as distinct from what it grew.
-	"income.add":           "Record a dividend",
-	"income.amount":        "Amount received (%s)",
-	"income.date":          "Paid on",
-	"income.note":          "Note",
+	"income.add":             "Record a dividend",
+	"income.amount":          "Amount received (%s)",
+	"income.date":            "Paid on",
+	"income.note":            "Note",
 	"income.notePlaceholder": "Quarterly dividend",
-	"income.record":        "Record it",
-	"income.defaultDesc":   "Dividend from %s",
-	"income.recorded":      "Recorded %s from %s.",
-	"income.paid":          "Has paid you %s across %d payments.",
-	"income.paidOne":       "Has paid you %s in one payment.",
-	"income.paidYield":     "Has paid you %s across %d payments — %.2f%% of what the shares cost.",
-	"income.paidYieldOne":  "Has paid you %s in one payment — %.2f%% of what the shares cost.",
-	"income.annual":        "That is about %.2f%% a year on what you paid.",
-	"income.errAmount":     "Enter how much you received.",
-	"income.errDate":       "Enter the date it was paid — income is taxed in the year it arrives.",
+	"income.record":          "Record it",
+	"income.defaultDesc":     "Dividend from %s",
+	"income.recorded":        "Recorded %s from %s.",
+	"income.paid":            "Has paid you %s across %d payments.",
+	"income.paidOne":         "Has paid you %s in one payment.",
+	"income.paidYield":       "Has paid you %s across %d payments — %.2f%% of what the shares cost.",
+	"income.paidYieldOne":    "Has paid you %s in one payment — %.2f%% of what the shares cost.",
+	"income.annual":          "That is about %.2f%% a year on what you paid.",
+	"income.errAmount":       "Enter how much you received.",
+	"income.errDate":         "Enter the date it was paid — income is taxed in the year it arrives.",
 
 	"categories.taxLine":     "Schedule C line (used when this category is deductible)",
 	"categories.taxLineNone": "Not assigned yet",
@@ -737,12 +737,12 @@ var vSweepKeys = Catalog{
 	"savedViews.usualBelow":    "%s less than usual, against your last %d months",
 
 	// WF17 — pausing a funding target without losing it.
-	"budgets.targetSnoozed":   "Target of %s paused until %s",
+	"budgets.targetSnoozed":    "Target of %s paused until %s",
 	"budgets.targetPausedChip": "target paused",
-	"budgets.snoozeTarget":    "Pause this target for a month",
-	"budgets.resumeTarget":    "Resume this target now",
-	"budgets.snoozedNotice":   "Paused %s's target until %s. It comes back on its own — nothing to remember.",
-	"budgets.resumedNotice":   "%s's target is active again.",
+	"budgets.snoozeTarget":     "Pause this target for a month",
+	"budgets.resumeTarget":     "Resume this target now",
+	"budgets.snoozedNotice":    "Paused %s's target until %s. It comes back on its own — nothing to remember.",
+	"budgets.resumedNotice":    "%s's target is active again.",
 
 	// WF-AUDIT — what could take a recorded change back, said plainly.
 	"activity.undoCheckpoint": "Can be rolled back to the snapshot from %s — which also reverses %d later changes.",
@@ -753,9 +753,9 @@ var vSweepKeys = Catalog{
 	"rhythm.findStillChargingOne": "%s charged you again after you cancelled — %s on %s.",
 
 	// WF18 — spending a goal paid for is not overspending.
-	"budgets.goalFundedChip":     "part funded by a goal",
-	"budgets.goalFunded":         "%s of this came from money you had saved for it.",
-	"budgets.goalFundedRescued":  "%s of this came from money you had saved for it — without that, this would read as over budget.",
+	"budgets.goalFundedChip":    "part funded by a goal",
+	"budgets.goalFunded":        "%s of this came from money you had saved for it.",
+	"budgets.goalFundedRescued": "%s of this came from money you had saved for it — without that, this would read as over budget.",
 
 	// WF9 — a calendar of what the balance will be, not only what is due.
 	"bills.calShortfall": "On this projection the balance first goes short on %s, bottoming at %s across %d days.",
@@ -776,10 +776,10 @@ var vSweepKeys = Catalog{
 	"rpta.doubleCountedOne": "A movement of %s looks like a transfer recorded as two separate transactions — counted once as spending and once as income, so both figures above are overstated. Marking it as a transfer fixes it.",
 
 	// WF4 — how far a calculated figure can be trusted, and exactly why.
-	"trust.qualified":    "These figures rest on %s — worth knowing before acting on the payoff date.",
-	"trust.unreliable":   "These figures are missing %s, so the payoff date is arithmetic over a number nobody supplied.",
-	"trust.inLoanApr":    "the interest rate",
-	"trust.inLoanTerm":   "the loan term",
+	"trust.qualified":     "These figures rest on %s — worth knowing before acting on the payoff date.",
+	"trust.unreliable":    "These figures are missing %s, so the payoff date is arithmetic over a number nobody supplied.",
+	"trust.inLoanApr":     "the interest rate",
+	"trust.inLoanTerm":    "the loan term",
 	"trust.inLoanBalance": "the balance",
 
 	// WF6 — what an action would do, before it does it.

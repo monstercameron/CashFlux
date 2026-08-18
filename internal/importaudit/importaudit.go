@@ -109,9 +109,15 @@ func For(doc domain.Document, txns []domain.Transaction) Tally {
 			t.Active++
 		}
 	}
-	// The link is only trustworthy when the run claims rows AND at least one of
-	// them still carries the id. A run that imported nothing is trivially known.
-	t.ActiveKnown = t.Imported == 0 || t.Active > 0
+	// Whether the live count means anything is a fact the RUN records, not
+	// something to infer from whether any rows survived. Inferring it treats a run
+	// whose rows were all legitimately deleted as untraceable, which then tells
+	// the user "how many remain is not recorded" about a run that recorded exactly
+	// that — a false claim, in the direction that worries people.
+	//
+	// The fallback for documents written before RowsLinked existed is the old
+	// inference, which is the best available for them and no worse than before.
+	t.ActiveKnown = doc.RowsLinked || t.Imported == 0 || t.Active > 0
 	if t.ActiveKnown {
 		t.Removed = t.Imported - t.Active
 		if t.Removed < 0 {

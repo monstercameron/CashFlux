@@ -30,6 +30,7 @@ func recordDocumentAs(app *appstate.App, docID string, kind domain.DocumentKind,
 		ID: docID, Kind: kind, UploadedAt: time.Now(), AccountID: accountID,
 		Status: domain.DocImported, Extracted: toDocumentRows(rows), RowCount: rowCount,
 		SkippedCount: skipped, DuplicateCount: duplicates, FailedCount: failed,
+		RowsLinked:   true, // every row this run wrote carries docID (C687)
 		CheckpointID: cpID,
 	})
 }

@@ -199,9 +199,8 @@ func nwsAssessQuality(v nwsView) balancesheet.Quality {
 		return balancesheet.Quality{}
 	}
 	windows := app.FreshnessWindows()
-	adjDesc := uistate.T("accounts.balanceAdjustment")
 	txns := app.Transactions()
-	isAdj := func(t domain.Transaction) bool { return t.Desc == adjDesc }
+	isAdj := isBalanceAdjustment
 	return balancesheet.AssessQuality(balancesheet.QualityInput{
 		Accounts: app.Accounts(),
 		Txns:     txns,

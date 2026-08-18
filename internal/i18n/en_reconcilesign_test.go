@@ -28,3 +28,14 @@ func TestReconcileSignHintKeysExist(t *testing.T) {
 		}
 	}
 }
+
+// The worksheet picks its residual key by sign at the call site, so the coverage
+// scan cannot see either one (C690).
+func TestWorksheetResidualKeysExist(t *testing.T) {
+	for _, key := range []string{"worksheet.residualHigher", "worksheet.residualLower"} {
+		got, ok := english[key]
+		if !ok || got == "" || got == key {
+			t.Errorf("%s = %q ok=%v, which is not a sentence", key, got, ok)
+		}
+	}
+}

@@ -40,14 +40,49 @@ func TestClosedThroughTakesTheEarliestAccount(t *testing.T) {
 	}
 }
 
-// One never-reconciled account leaves the books open, and says so at once.
-func TestOneUnreconciledAccountLeavesTheBooksOpen(t *testing.T) {
+// An account nobody has EVER reconciled is not part of the household's
+// reconciliation practice, so it is skipped rather than holding every period
+// open. Blocking on it — the first version of this — meant that a household who
+// reconciles their checking account and ignores savings never saw a Closed
+// period at all, so the provisional banner appeared on every report. A banner
+// that always appears is one nobody reads, which is the thing this feature is
+// for.
+func TestANeverReconciledAccountDoesNotHoldTheBooksOpen(t *testing.T) {
 	accs := []domain.Account{
 		reconciled("chk", domain.TypeChecking, d(2026, time.July, 31)),
 		reconciled("sav", domain.TypeSavings, time.Time{}),
 	}
+	got, ok := ClosedThrough(accs)
+	if !ok {
+		t.Fatalf("ok = false; the reconciled account still says how far it reaches")
+	}
+	if !got.Equal(d(2026, time.July, 31)) {
+		t.Errorf("ClosedThrough = %v, want July 31", got.Format("2006-01-02"))
+	}
+}
+
+// But an account that HAS been reconciled, only not recently, still holds the
+// books to its own date — that is a real statement about a real period.
+func TestALaggingAccountStillSetsTheDate(t *testing.T) {
+	accs := []domain.Account{
+		reconciled("chk", domain.TypeChecking, d(2026, time.July, 31)),
+		reconciled("card", domain.TypeCreditCard, d(2026, time.May, 31)),
+		reconciled("sav", domain.TypeSavings, time.Time{}),
+	}
+	got, ok := ClosedThrough(accs)
+	if !ok || !got.Equal(d(2026, time.May, 31)) {
+		t.Errorf("ClosedThrough = %v ok=%v, want May 31 — the lagging account governs", got, ok)
+	}
+}
+
+// With nothing reconciled anywhere, nothing has been confirmed against a bank.
+func TestNoReconciledAccountsAtAllIsNotClosed(t *testing.T) {
+	accs := []domain.Account{
+		reconciled("chk", domain.TypeChecking, time.Time{}),
+		reconciled("sav", domain.TypeSavings, time.Time{}),
+	}
 	if _, ok := ClosedThrough(accs); ok {
-		t.Errorf("ok = true while an account has never been reconciled")
+		t.Errorf("ok = true with no reconciliation anywhere")
 	}
 }
 

@@ -17,7 +17,11 @@ var worksheetKeys = Catalog{
 	"worksheet.checkpoints": "Balance checkpoints",
 	"worksheet.computed":    "Balance this adds up to",
 	// Said only when there is something left over — the number to go looking for.
-	"worksheet.residual": "Your statement is %s away from this. That difference is what is still unaccounted for.",
+	// Two strings rather than one signed number: "your statement is -$100.00 away
+	// from this" makes a reader work out which way the gap runs before they can
+	// start looking, and a bracketed negative makes it worse.
+	"worksheet.residualHigher": "Your statement is %s higher than this. That much arrived without a transaction to explain it.",
+	"worksheet.residualLower":  "Your statement is %s lower than this. That much left without a transaction to explain it.",
 }
 
 func init() {

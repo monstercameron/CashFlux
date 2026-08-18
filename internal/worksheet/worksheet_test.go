@@ -259,3 +259,41 @@ func TestAccountsAreKeptApart(t *testing.T) {
 		t.Errorf("in = %d / %d, want 10000 and 500", r.Lines[0].In, r.Lines[1].In)
 	}
 }
+
+// Found by an adversarial pass: Build only finds a statement already recorded in
+// the account's history, but the statement a person is TYPING into the reconcile
+// dialog is not recorded until they press Record. So the residual — the whole
+// reason to show a worksheet during a reconciliation — could not appear until
+// after the reconciliation was over.
+func TestTheResidualWorksAgainstAStatementBeingTyped(t *testing.T) {
+	// Last reconciled through June 30; the user is now typing July's statement.
+	acc := chk(321020, domain.Reconciliation{
+		At: d(2026, time.June, 30), StatementDate: d(2026, time.June, 30),
+		StatementBalance: money.New(321020, "USD"),
+	})
+	txns := []domain.Transaction{row("pay", 40000, 4)}
+
+	l := Build([]domain.Account{acc}, txns, julyStart, julyEnd).Lines[0]
+	if l.HasStatement {
+		t.Fatalf("fixture should have no July statement recorded yet")
+	}
+	if l.Computed != 361020 {
+		t.Fatalf("Computed = %d, want 361020", l.Computed)
+	}
+
+	// The dialog hands over what is being typed: $3,640.20, a $30 gap.
+	got := l.AgainstStatement(364020)
+	if !got.HasStatement {
+		t.Errorf("HasStatement = false after being handed a statement")
+	}
+	if got.Residual != 3000 {
+		t.Errorf("Residual = %d, want the $30 gap", got.Residual)
+	}
+	if got.Explained() {
+		t.Errorf("Explained = true with $30 unaccounted for")
+	}
+	// And an exact match reconciles.
+	if exact := l.AgainstStatement(361020); !exact.Explained() || exact.Residual != 0 {
+		t.Errorf("an exact statement did not reconcile: %+v", exact)
+	}
+}

@@ -885,6 +885,15 @@ type Document struct {
 	// FailedCount is how many rows could not be read at all. This one IS a
 	// problem: that money is not in the ledger and nothing else will notice.
 	FailedCount int `json:"failedCount,omitempty"`
+	// RowsLinked records that this run stamped its transactions with its own id
+	// (C687), so "how many of them are still here" is a countable fact.
+	//
+	// It exists to separate two situations that otherwise look identical from the
+	// outside: a run made before stamping existed, where the live count is
+	// genuinely unknowable, and a run whose rows were all legitimately deleted
+	// afterwards, where the true answer is a confident zero. Reporting the second
+	// as "not recorded" is a false claim, and in the direction that worries people.
+	RowsLinked bool `json:"rowsLinked,omitempty"`
 	// CheckpointID names the pre-import safety checkpoint (#55) taken just
 	// before this import committed, enabling per-run "roll back this import"
 	// from the history while the checkpoint is still in the ring.

@@ -48,12 +48,16 @@ func (s Status) String() string {
 // nothing about a period the others have not closed, and taking the latest would
 // let a single well-kept account certify months the rest have not.
 //
-// Accounts that are archived, or that are never reconciled against a statement at
-// all (a utility shell, a property valuation), are skipped — waiting on a
-// statement that will never arrive would leave the books permanently open.
+// Three kinds of account are skipped rather than counted as unfinished:
+// archived ones, ones that never receive a statement at all (a utility shell, a
+// property valuation), and ones nobody has ever reconciled. The last is the
+// pragmatic one — people reconcile their checking account and their cards and
+// leave savings, investments and cash alone, so blocking on those would mean no
+// period was ever Closed and the provisional banner appeared on every report,
+// which is the failure this whole feature exists to avoid.
 //
-// ok is false when no participating account has ever been reconciled, in which
-// case nothing is closed and every period is provisional.
+// ok is false when NO account has ever been reconciled, in which case nothing has
+// been confirmed against a bank and every period is provisional.
 func ClosedThrough(accounts []domain.Account) (time.Time, bool) {
 	var earliest time.Time
 	found := false
@@ -63,9 +67,17 @@ func ClosedThrough(accounts []domain.Account) (time.Time, bool) {
 		}
 		through, ok := reconcile.Through(a.Reconciliations)
 		if !ok {
-			// An account that has never been reconciled leaves the books open, and
-			// says so immediately: there is no earliest date to take.
-			return time.Time{}, false
+			// An account that has NEVER been reconciled is not part of the
+			// household's reconciliation practice, so it is skipped rather than
+			// holding every period open forever.
+			//
+			// The first version blocked on it, which is defensible in principle and
+			// wrong in practice: people reconcile their checking account and their
+			// cards and leave savings, investments and cash alone, so one untouched
+			// account meant no period was ever Closed and the provisional banner
+			// showed on every report — the exact failure this feature exists to
+			// avoid, since a banner that always appears is one nobody reads.
+			continue
 		}
 		if !found || through.Before(earliest) {
 			earliest, found = through, true

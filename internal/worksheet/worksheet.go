@@ -176,3 +176,22 @@ func statementFor(acc domain.Account, start, end time.Time) (int64, bool) {
 	sort.SliceStable(in, func(i, j int) bool { return in[i].at.Before(in[j].at) })
 	return in[len(in)-1].amount, true
 }
+
+// AgainstStatement returns the line checked against a statement figure the caller
+// already holds, rather than one found in the account's history.
+//
+// It exists because of when a reconciliation actually happens. Build finds a
+// statement in acc.Reconciliations — but the statement a person is TYPING into
+// the reconcile dialog has not been recorded yet, and will not be until they
+// press Record. So the residual, which is the whole reason to show a worksheet
+// during a reconciliation, was structurally absent from the only moment it was
+// needed: it could not appear until after the reconciliation was finished, by
+// which point there was nothing left to reconcile.
+//
+// statedMinor is in the stated convention, matching the rest of the line.
+func (l Line) AgainstStatement(statedMinor int64) Line {
+	l.Statement = statedMinor
+	l.HasStatement = true
+	l.Residual = statedMinor - l.Computed
+	return l
+}

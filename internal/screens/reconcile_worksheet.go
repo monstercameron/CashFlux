@@ -33,7 +33,7 @@ import (
 // The period runs from the last reconciliation to the statement date being
 // entered, because that is the span this statement is actually responsible for.
 // Before the first reconciliation it runs from the beginning of the account.
-func reconcileWorksheet(app *appstate.App, a domain.Account, statementDate string) ui.Node {
+func reconcileWorksheet(app *appstate.App, a domain.Account, statementDate string, statedMinor int64, hasStatement bool) ui.Node {
 	if app == nil {
 		return Fragment()
 	}
@@ -53,6 +53,13 @@ func reconcileWorksheet(app *appstate.App, a domain.Account, statementDate strin
 		return Fragment()
 	}
 	l := r.Lines[0]
+	// The statement being TYPED is not in the account's history yet — it lands
+	// there only when Record is pressed — so the figure comes from the dialog
+	// rather than from the ledger. Without this the residual could never appear
+	// during a reconciliation, only after one (C690, found by adversarial review).
+	if hasStatement {
+		l = l.AgainstStatement(statedMinor)
+	}
 	dec := currency.Decimals(a.Currency)
 	amt := func(v int64) string { return money.FormatMinor(v, dec) }
 
@@ -71,10 +78,18 @@ func reconcileWorksheet(app *appstate.App, a domain.Account, statementDate strin
 	}
 	rows = append(rows, worksheetRow(uistate.T("worksheet.computed"), amt(l.Computed), true))
 
+	// The gap, said in a direction rather than as a signed number. Which way it
+	// runs is the first thing a person needs in order to start looking, and it is
+	// the thing a minus sign in front of a currency amount conveys worst.
 	var residual ui.Node = Fragment()
 	if l.HasStatement && l.Residual != 0 {
+		key := "worksheet.residualHigher"
+		gap := l.Residual
+		if gap < 0 {
+			key, gap = "worksheet.residualLower", -gap
+		}
 		residual = P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "worksheet-residual"),
-			uistate.T("worksheet.residual", amt(l.Residual)))
+			uistate.T(key, amt(gap)))
 	}
 
 	return Div(css.Class("card", tw.P3, tw.FlexCol, tw.Gap1), Attr("data-testid", "reconcile-worksheet"),

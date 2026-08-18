@@ -6,6 +6,28 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- **The account editor shows how a balance was last set again.** Changing what a balance-update row is called
+  (C684) broke three separate places that identified such a row by comparing its description text — the
+  provenance chip disappeared, and the net-worth bridge and balance-quality assessment quietly reclassified
+  every balance you had stated as ordinary transaction-derived movement. They now ask the row what it is
+  instead of what it is called.
+
+- **The reconciliation worksheet shows its residual while you are reconciling (C690).** It looked for a
+  statement already recorded against the account, but the statement you are typing is not recorded until you
+  press Record — so the one figure the worksheet exists to give you could only appear after the reconciliation
+  was finished.
+
+- **An import whose rows were all later deleted no longer claims it cannot be traced (C687).** It reported
+  "from before imports were tracked" about a run that tracked exactly that; it now says 0 remaining and how
+  many were removed.
+
+- **A period can be closed even if you do not reconcile every account (C693).** One never-reconciled savings
+  account used to keep every period provisional forever, so the "not final" caption appeared on every report —
+  which is how a caption stops being read. Accounts you have never reconciled are skipped; ones you reconcile
+  less often still hold the date back.
+
+
 ### Added
 - **A statement is staged once before it is imported (C689).** Every row is normalized, content-hashed and
   given a verdict from the app's one duplicate rule, so the preview and the import that follows it cannot reach

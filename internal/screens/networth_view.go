@@ -163,8 +163,7 @@ func computeNwsView(app *appstate.App, months int, now time.Time) nwsView {
 
 	v.Snapshot, _ = ledger.NetWorthExplained(accounts, txns, rates)
 
-	adjDesc := uistate.T("accounts.balanceAdjustment")
-	isAdj := func(t domain.Transaction) bool { return t.Desc == adjDesc }
+	isAdj := isBalanceAdjustment
 	v.Bridge, _ = attribution.BuildBridge(attribution.Input{
 		Accounts: accounts, Txns: txns, Rates: rates,
 		Since: v.Since, Until: v.Until, IsAdjustment: isAdj,

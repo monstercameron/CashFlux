@@ -254,7 +254,9 @@ func buildAcctRowCallbacks(app *appstate.App) acctRowCallbacks {
 				return
 			}
 			uistate.BumpDataRevision()
-			// G3: a balance set posts a REAL adjustment transaction — one-click reversible.
+			// G3: a balance set posts a real transaction — one-click reversible. Since
+			// C684 that row is a provisional CHECKPOINT: it moves the balance and stays
+			// out of reports, and it is retired when a statement covers its date.
 			uistate.PostUndoable(uistate.T("accounts.balanceUpdated", ac.Name, fmtMoney(money.New(target, ac.Currency))))
 		},
 		OnTransfer: func(fromID, toID, amountStr, dateStr, desc string) {
