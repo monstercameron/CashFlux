@@ -4,7 +4,10 @@ All notable changes to CashFlux are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/). Policy: **one feature per commit**,
 and every commit updates this file under `Unreleased`.
 
-## [Unreleased]
+## [1.14.0] - 2026-08-19
+
+Security release: seven auth fixes, per-account workspace scoping (schema v17), and a
+SQLite database export/import.
 
 ### Security
 - **A workspace belongs to an account, not to the server (schema v17).** `workspaces.id` was a global
