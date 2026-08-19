@@ -13,6 +13,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/backendrpc"
 	"github.com/monstercameron/CashFlux/internal/datasetmerge"
+	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/syncstate"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/css"
@@ -154,6 +155,36 @@ func RebindCard(p rebindProps) uic.Node {
 			message.Set(uistate.T("sync.mergeDone", report.TotalAdded, report.Conflicts))
 		}()
 	})
+	// The escape hatch. An account that owns NO workspaces cannot be offered a
+	// picker — there is nothing to pick — so before this the one state the card
+	// exists for ("the server refuses this workspace") ended in a dead end whose
+	// only exits were signing in as somebody else or giving up on sync. Claiming
+	// takes the third answer: this data is mine, give it an address this account
+	// owns. It rebinds to a FRESH id rather than to any existing one, so it can
+	// never collide with, overwrite or merge into another account's workspace.
+	claimFresh := uic.UseEvent(func() {
+		if busy.Get() {
+			return
+		}
+		busy.Set(true)
+		message.Set("")
+		go func() {
+			defer busy.Set(false)
+			// Same rule as every other path here: export before repointing. This
+			// is the moment a person is least sure which copy is which.
+			exportWorkspace(localWS)
+			fresh := id.NewWithPrefix("ws")
+			if err := rebindLocalWorkspace(localWS, fresh, userID); err != nil {
+				message.Set(uistate.T("sync.rebindFailed", err.Error()))
+				return
+			}
+			picking.Set(false)
+			message.Set(uistate.T("sync.rebindClaimDone"))
+			// A fresh id is unowned by construction, so there is nothing on the
+			// other side to compare against — straight to the ordinary flush.
+			p.OnRetry()
+		}()
+	})
 	onSignOutClick := uic.UseEvent(p.OnSignOut)
 	onDisconnectClick := uic.UseEvent(p.OnDisconnect)
 	onRetryClick := uic.UseEvent(p.OnRetry)
@@ -235,7 +266,15 @@ func RebindCard(p rebindProps) uic.Node {
 		case loading.Get():
 			body = P(css.Class("muted"), uistate.T("sync.syncingNow"))
 		case len(choices.Get()) == 0:
-			body = P(css.Class("muted"), Attr("data-testid", "rebind-remote-empty"), uistate.T("sync.rebindRemoteEmpty"))
+			body = Fragment(
+				P(css.Class("muted"), Attr("data-testid", "rebind-remote-empty"), uistate.T("sync.rebindRemoteEmpty")),
+				P(css.Class("muted"), uistate.T("sync.rebindClaimHint")),
+				Div(css.Class("row-actions"),
+					Button(css.Class("btn", "btn-primary"), Type("button"),
+						Attr("data-testid", "rebind-claim"), Disabled(busy.Get()),
+						OnClick(claimFresh), uistate.T("sync.rebindClaim")),
+				),
+			)
 		default:
 			body = Fragment(
 				P(css.Class("muted"), uistate.T("sync.rebindPickPrompt")),

@@ -180,3 +180,53 @@ func Rebind(queue []PendingMutation, from, to Binding) []PendingMutation {
 func (p PendingMutation) Binding() Binding {
 	return Binding{UserID: p.UserID, WorkspaceID: p.WorkspaceID}
 }
+
+// RemoteWorkspace is the subset of a server-side workspace the adoption
+// decision needs.
+type RemoteWorkspace struct {
+	ID        string
+	UpdatedAt string
+	Deleted   bool
+}
+
+// AdoptTarget names the workspace a device should OPEN after reconciling with
+// the account, or "" to keep whatever is already open.
+//
+// Merging the account's workspaces into the switcher is not the same as opening
+// one, and conflating them is what made a freshly signed-in browser look like
+// sync had failed: it sits on a local workspace whose id the account has never
+// heard of, so the pull finds nothing, seeds that empty workspace to the server
+// as a brand new one, and leaves the person staring at an empty app while their
+// records sit behind a switcher they have no reason to open.
+//
+// The three guards are what make this safe rather than destructive. The open
+// workspace must never have synced, must hold nothing the user typed, and must
+// be unknown to the account — under all three there is provably nothing on the
+// device to lose, because the only thing replaced is an empty or sample
+// workspace the app itself invented.
+func AdoptTarget(activeID string, activeHasSynced, activeHasUserData bool, remote []RemoteWorkspace) string {
+	activeID = strings.TrimSpace(activeID)
+	if activeID == "" || activeHasSynced || activeHasUserData {
+		return ""
+	}
+	best := ""
+	bestUpdated := ""
+	for _, w := range remote {
+		id := strings.TrimSpace(w.ID)
+		if id == "" || w.Deleted {
+			continue
+		}
+		// The account already knows this device's workspace, so the ordinary
+		// pull addresses it correctly and there is nothing to adopt.
+		if id == activeID {
+			return ""
+		}
+		// Most recently updated wins: with several workspaces on the account,
+		// the one worked on last is the best guess at which to open, and the
+		// rest stay one click away in the switcher.
+		if best == "" || w.UpdatedAt > bestUpdated {
+			best, bestUpdated = id, w.UpdatedAt
+		}
+	}
+	return best
+}

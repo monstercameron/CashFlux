@@ -322,6 +322,61 @@ type pendingApprovalRowProps struct {
 	// onAttach approves a request onto an account that already exists (C700),
 	// rather than minting a new one.
 	onAttach func(deviceID, userID string)
+	// accounts are the accounts already on this server, offered as the attach
+	// target. Passing them in — rather than making the operator type an id —
+	// is what turns "attach to existing" from a thing you have to know about
+	// into the thing you can just pick.
+	accounts []adminUserRow
+}
+
+// accountPickerLabel names an account the way an operator has to recognise it:
+// by who it is, then by whether it is the one holding the data. A bare account
+// id is unrecognisable — "device:7fK2…" tells nobody which browser that was —
+// and picking the wrong one here is precisely the mistake this control exists to
+// prevent, so the workspace count and last sync are on the label rather than a
+// column away.
+func accountPickerLabel(a adminUserRow) string {
+	name := strings.TrimSpace(a.Email)
+	if name == "" {
+		name = strings.TrimSpace(a.Username)
+	}
+	if name == "" {
+		name = strings.TrimSpace(a.ID)
+	}
+	detail := "no workspaces yet"
+	if a.Workspaces == 1 {
+		detail = "1 workspace"
+	} else if a.Workspaces > 1 {
+		detail = fmt.Sprintf("%d workspaces", a.Workspaces)
+	}
+	if last := trimDate(a.LastSyncAt); last != "" {
+		detail += ", last synced " + last
+	} else {
+		detail += ", never synced"
+	}
+	return name + " (" + detail + ")"
+}
+
+// bestAttachTarget picks the account a device most likely belongs to: the one
+// actually holding data. Workspace count decides it, because the failure this
+// whole path exists to undo is a device stranded on an EMPTY account while the
+// records sit on another one — so when in doubt, point at the records. Ties go
+// to whichever synced most recently, and an all-empty server returns "" so the
+// caller keeps the confirm button disabled rather than guessing.
+func bestAttachTarget(accounts []adminUserRow) string {
+	best := ""
+	bestWS := -1
+	bestSync := ""
+	for _, a := range accounts {
+		id := strings.TrimSpace(a.ID)
+		if id == "" {
+			continue
+		}
+		if a.Workspaces > bestWS || (a.Workspaces == bestWS && a.LastSyncAt > bestSync) {
+			best, bestWS, bestSync = id, a.Workspaces, a.LastSyncAt
+		}
+	}
+	return best
 }
 
 func pendingApprovalRow(p pendingApprovalRowProps) ui.Node {
@@ -336,11 +391,24 @@ func pendingApprovalRow(p pendingApprovalRowProps) ui.Node {
 	target := ui.UseState("")
 	onTarget := ui.UseEvent(func(v string) { target.Set(v) })
 	toggleAttach := ui.UseEvent(func() { attaching.Set(!attaching.Get()) })
+	// The selection defaults to the likeliest account rather than to nothing, so
+	// the common case — a single-owner server where "attach" always means "my
+	// account" — is one click and cannot be got wrong by mistyping an id.
+	// Computed rather than seeded into state: an effect that wrote the default
+	// would race the accounts arriving and re-fire on every reload.
+	chosen := strings.TrimSpace(target.Get())
+	if chosen == "" {
+		chosen = bestAttachTarget(p.accounts)
+	}
 	confirmAttach := ui.UseEvent(func() {
-		if strings.TrimSpace(target.Get()) == "" {
+		pick := strings.TrimSpace(target.Get())
+		if pick == "" {
+			pick = bestAttachTarget(p.accounts)
+		}
+		if pick == "" {
 			return
 		}
-		p.onAttach(p.device.DeviceID, strings.TrimSpace(target.Get()))
+		p.onAttach(p.device.DeviceID, pick)
 		attaching.Set(false)
 	})
 	label := strings.TrimSpace(p.device.Label)
@@ -349,16 +417,28 @@ func pendingApprovalRow(p pendingApprovalRowProps) ui.Node {
 	}
 	var attachForm ui.Node = Fragment()
 	if attaching.Get() {
-		attachForm = Div(css.Class("field-row"), Attr("data-testid", "admin-pending-attach-form"),
-			Label(Attr("for", "attach-"+p.device.DeviceID), Text("Account id to attach this device to")),
-			Input(Attr("id", "attach-"+p.device.DeviceID),
+		var picker ui.Node
+		if len(p.accounts) == 0 {
+			// No accounts to attach to yet: say so plainly instead of showing an
+			// empty control the operator would read as a broken form.
+			picker = Div(css.Class("table-hint"), Attr("data-testid", "admin-pending-attach-empty"),
+				Text("This server has no other accounts yet, so there is nothing to attach to. Approve as a new account instead."))
+		} else {
+			picker = Select(Attr("id", "attach-"+p.device.DeviceID),
 				Attr("data-testid", "admin-pending-attach-target"),
-				Attr("placeholder", "device:… or the account id from the Users table"),
-				Value(target.Get()), OnInput(onTarget)),
+				OnChange(onTarget),
+				Map(p.accounts, func(a adminUserRow) ui.Node {
+					return Option(Value(a.ID), SelectedIf(a.ID == chosen), Text(accountPickerLabel(a)))
+				}),
+			)
+		}
+		attachForm = Div(css.Class("field-row"), Attr("data-testid", "admin-pending-attach-form"),
+			Label(Attr("for", "attach-"+p.device.DeviceID), Text("Attach this device to")),
+			picker,
 			Div(css.Class("approval-actions"),
 				Button(Type("button"), css.Class("btn btn-primary"),
 					Attr("data-testid", "admin-pending-attach-confirm"),
-					Disabled(p.disabled || strings.TrimSpace(target.Get()) == ""),
+					Disabled(p.disabled || chosen == ""),
 					OnClick(confirmAttach), Text("Attach to this account")),
 			),
 		)
@@ -370,11 +450,20 @@ func pendingApprovalRow(p pendingApprovalRowProps) ui.Node {
 			attachForm,
 		),
 		Div(css.Class("approval-actions"),
-			Button(Type("button"), css.Class("btn btn-primary"), Attr("data-testid", "admin-pending-approve"),
-				Attr("aria-label", "Approve access for "+label), Disabled(p.disabled), OnClick(approve), Text("Approve as new account")),
-			Button(Type("button"), css.Class("btn btn-secondary"), Attr("data-testid", "admin-pending-attach"),
+			// Attaching leads, and approving-as-new is secondary. The old order
+			// put the destructive-by-accident choice under the primary button:
+			// "Approve" is what an operator clicks when they mean "yes, that is
+			// my browser", and it silently created a SECOND account owning none
+			// of the first one's workspaces — after which the server refuses
+			// every sync with `workspace not found`, permanently. The labels now
+			// say which question each button answers, because "approve" and
+			// "attach" do not distinguish themselves.
+			Button(Type("button"), css.Class("btn btn-primary"), Attr("data-testid", "admin-pending-attach"),
 				Attr("aria-label", "Attach "+label+" to an existing account"),
-				Disabled(p.disabled), OnClick(toggleAttach), Text("Attach to existing…")),
+				Disabled(p.disabled), OnClick(toggleAttach), Text("This is my device — attach…")),
+			Button(Type("button"), css.Class("btn btn-secondary"), Attr("data-testid", "admin-pending-approve"),
+				Attr("aria-label", "Approve access for "+label+" as a brand new account"),
+				Disabled(p.disabled), OnClick(approve), Text("Someone else — new account")),
 			Button(Type("button"), css.Class("btn btn-danger"), Attr("data-testid", "admin-pending-reject"),
 				Attr("aria-label", "Reject access for "+label), Disabled(p.disabled), OnClick(reject), Text("Reject")),
 		),
@@ -387,6 +476,7 @@ type pendingApprovalsProps struct {
 
 func pendingApprovals(p pendingApprovalsProps) ui.Node {
 	devices := ui.UseState[[]adminPendingDevice](nil)
+	accounts := ui.UseState[[]adminUserRow](nil)
 	status := ui.UseState("")
 	busyID := ui.UseState("")
 	reload := ui.UseState(0)
@@ -402,6 +492,18 @@ func pendingApprovals(p pendingApprovalsProps) ui.Node {
 			if status.Get() == "Refreshing access requests…" {
 				status.Set("")
 			}
+		}()
+		// The accounts already on this server are what "attach to existing"
+		// offers. Fetched alongside the requests and deliberately NOT gated on
+		// them succeeding: a failed account load must leave the approve/reject
+		// decisions usable, so it degrades to an empty picker with an
+		// explanation rather than blocking the whole panel.
+		go func() {
+			us, _, _, err := fetchUsers(p.token, "", 0)
+			if err != nil {
+				return
+			}
+			accounts.Set(us)
 		}()
 		return nil
 	}, p.token, reload.Get())
@@ -453,6 +555,7 @@ func pendingApprovals(p pendingApprovalsProps) ui.Node {
 			Map(devices.Get(), func(device adminPendingDevice) ui.Node {
 				return ui.CreateElement(pendingApprovalRow, pendingApprovalRowProps{
 					device: device, disabled: busyID.Get() != "", onDecide: decide, onAttach: attach,
+					accounts: accounts.Get(),
 				})
 			}),
 		)
@@ -463,6 +566,12 @@ func pendingApprovals(p pendingApprovalsProps) ui.Node {
 			Div(
 				H2(css.Class("table-title"), Text("Access requests")),
 				Div(css.Class("table-hint"), Text("New clients cannot create an account or sync until you approve them.")),
+				// Stated up front because the consequence of the wrong choice is
+				// permanent and silent: a second account owns none of the first
+				// one's workspaces, so every sync from that device is refused
+				// with `workspace not found` and no data ever arrives.
+				Div(css.Class("table-hint"), Attr("data-testid", "admin-pending-choice-hint"),
+					Text("Attach when the request is another browser or device of an account that already exists — it is the only way that device sees the existing data. Approve as a new account only for a different person.")),
 			),
 			Button(Type("button"), css.Class("btn btn-secondary"), Attr("data-testid", "admin-pending-refresh"),
 				OnClick(refresh), Text("Refresh requests")),

@@ -41,6 +41,14 @@ var syncPageKeys = Catalog{
 	"sync.rebindUnknownUser":   "unknown — the server has not said who this session belongs to",
 	"sync.rebindRemoteTitle":   "Workspaces this account can reach",
 	"sync.rebindRemoteEmpty":   "This account owns no workspaces on the server yet.",
+	// The escape hatch for the dead end: an account that owns nothing has no
+	// workspace to be repointed AT, so offering only a picker left the one
+	// state this card exists for with no action in it at all. Claiming gives
+	// this data a fresh address the account does own, which is the honest
+	// description of what happens — nothing is moved and nothing is merged.
+	"sync.rebindClaim":         "Keep this data and start it fresh on this account",
+	"sync.rebindClaimHint":     "Gives this workspace a new address that belongs to the account you are signed in as, then uploads it. Your data is unchanged, and a backup is exported first.",
+	"sync.rebindClaimDone":     "Done. This data now belongs to the account you are signed in as, and is uploading.",
 	"sync.rebindPickPrompt":    "Choose the workspace this data belongs to. Your local copy is exported first, and nothing is uploaded until the mapping is confirmed.",
 	"sync.rebindAction":        "Move this data to…",
 	"sync.rebindConfirm":       "Use this workspace",

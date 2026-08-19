@@ -462,8 +462,13 @@ func startBackendSync() {
 		adoptIdentityForSync(pr.ServerURL, effectiveServerToken(pr))
 	}()
 	flushBackendSyncQueue()
-	pullActiveWorkspaceFromBackend(true)
-	mergeRemoteWorkspaces()
+	// Reconcile the account's workspaces BEFORE pulling. The pull addresses
+	// whichever workspace is open, so running it first on a freshly signed-in
+	// browser asks the server for a workspace the account has never heard of,
+	// gets "not found", and seeds this device's empty one to the server as a new
+	// workspace — permanently, and before anything had a chance to notice the
+	// account already had the real one.
+	mergeRemoteWorkspaces(func() { pullActiveWorkspaceFromBackend(true) })
 	startBackendWatch()
 }
 
@@ -972,8 +977,8 @@ func restartBackendSync() {
 	}
 	wireSyncLifecycleListeners()
 	flushBackendSyncQueue()
-	pullActiveWorkspaceFromBackend(true)
-	mergeRemoteWorkspaces()
+	// Same ordering rule as startBackendSync: reconcile, then pull.
+	mergeRemoteWorkspaces(func() { pullActiveWorkspaceFromBackend(true) })
 	startBackendWatch()
 }
 
@@ -1102,20 +1107,48 @@ func readBackendWatch(stream *rpcworker.Stream) (received bool) {
 // that had not changed.
 var mergedRemoteWorkspaces bool
 
-func mergeRemoteWorkspaces() {
+// mergingRemoteWorkspaces is the in-flight half of that guard. Now that the
+// latch above is only set once the list SUCCEEDS, the latch alone no longer
+// keeps two overlapping calls (boot and a sign-in landing together) from both
+// dialling; this does.
+var mergingRemoteWorkspaces bool
+
+// mergeRemoteWorkspaces reconciles the account's remote workspaces into this
+// device's registry, then runs done — which is how the caller sequences the pull
+// AFTER the reconciliation rather than racing it. done runs exactly once on
+// every exit path, including the guarded no-op and every error, because a caller
+// that never gets its callback would simply never pull.
+//
+// It does not run done when it has decided to ADOPT a remote workspace: that
+// path reloads the page, and the reload's own boot does the pull.
+func mergeRemoteWorkspaces(done func()) {
+	finish := func() {
+		if done != nil {
+			done()
+		}
+	}
 	pr := uistate.LoadPrefs().Normalize()
-	if !pr.BackendActive() || mergedRemoteWorkspaces {
+	if !pr.BackendActive() || mergedRemoteWorkspaces || mergingRemoteWorkspaces {
+		finish()
 		return
 	}
-	mergedRemoteWorkspaces = true
+	mergingRemoteWorkspaces = true
 	go func() {
+		defer func() { mergingRemoteWorkspaces = false }()
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 		var resp backendrpc.ListWorkspacesResponse
 		if err := invokeAuthed(ctx, pr, backendrpc.MethodSyncListWorkspaces, backendrpc.ListWorkspacesRequest{}, &resp); err != nil {
 			logSyncError("backend workspace list failed", err)
+			finish()
 			return
 		}
+		// Latched only on SUCCESS. Latching before the call meant a list that
+		// failed — which is the ordinary shape of boot on a page that is not
+		// signed in yet — permanently disabled reconciliation, so the sign-in
+		// that followed moments later never got the one pass that decides which
+		// workspace to open. The failure is the case that most needs a retry.
+		mergedRemoteWorkspaces = true
 		r := loadRegistry()
 		added := 0
 		for _, w := range resp.Workspaces {
@@ -1138,15 +1171,69 @@ func mergeRemoteWorkspaces() {
 			}
 			added++
 		}
-		if added == 0 {
-			return
+		if added > 0 {
+			saveRegistry(r)
+			uistate.PostNotice(uistate.T("sync.workspacesAdded", added), false)
+			if app := appstate.Default; app != nil {
+				app.Log().Info("backend sync added remote workspaces to this device", "count", added)
+			}
 		}
-		saveRegistry(r)
-		uistate.PostNotice(uistate.T("sync.workspacesAdded", added), false)
-		if app := appstate.Default; app != nil {
-			app.Log().Info("backend sync added remote workspaces to this device", "count", added)
+		// Merging the account's workspaces into the switcher is not the same as
+		// OPENING one. A browser signing in for the first time is sitting on its
+		// own local workspace, whose id the account has never heard of — so the
+		// pull that follows finds nothing, seeds this empty workspace to the
+		// server as a brand new one, and leaves the person looking at an empty
+		// app with their real records filed behind the workspace switcher they
+		// have no reason to open. That reads exactly like "sync did not bring my
+		// data down", and it litters the account with junk workspaces besides.
+		if adoptRemoteWorkspaceIfUntouched(resp.Workspaces) {
+			return // the switch reloads the page; boot pulls the adopted workspace
 		}
+		finish()
 	}()
+}
+
+// adoptRemoteWorkspaceIfUntouched opens one of the account's own workspaces when
+// the one this device currently has open is demonstrably not the user's work.
+// Reports whether it switched (which reloads the page).
+//
+// Every condition below is a guard against destroying something. The local
+// workspace must never have synced, must hold no data the user typed, and must
+// be unknown to the account — under those three there is provably nothing on
+// this device to lose, because the only thing being replaced is an empty or
+// sample workspace the app itself invented.
+func adoptRemoteWorkspaceIfUntouched(remote []backendrpc.Workspace) bool {
+	r := loadRegistry()
+	active, ok := r.Active()
+	if !ok {
+		return false
+	}
+	// Has synced before: this device and the account have a history, and which
+	// workspace is open is a decision that was already made.
+	hasSynced := strings.TrimSpace(loadSyncMeta(active.ID).UpdatedAt) != ""
+	// Holds the user's own records. The seeded demo does not count — it is what
+	// the app invented, not what the user typed — which is the same distinction
+	// pullActiveWorkspaceFromBackend draws before applying a remote snapshot.
+	hasUserData := hadLocalDataset && !uistate.SampleActive()
+	candidates := make([]syncstate.RemoteWorkspace, 0, len(remote))
+	for _, w := range remote {
+		candidates = append(candidates, syncstate.RemoteWorkspace{
+			ID: w.ID, UpdatedAt: w.UpdatedAt, Deleted: w.Deleted,
+		})
+	}
+	target := syncstate.AdoptTarget(active.ID, hasSynced, hasUserData, candidates)
+	if target == "" {
+		return false
+	}
+	if !loadRegistry().Has(target) {
+		return false // the merge above should have added it; never switch to a workspace that is not there
+	}
+	if app := appstate.Default; app != nil {
+		app.Log().Info("backend sync opened the account's workspace on this device",
+			"from", active.ID, "to", target)
+	}
+	switchWorkspace(target)
+	return true
 }
 
 func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
