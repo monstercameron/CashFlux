@@ -103,6 +103,32 @@ func (a *App) rehydrateArtifactBytes(arts []domain.Artifact) {
 	}
 }
 
+// stashArtifactBytes is rehydrateArtifactBytes' inverse, run on the way IN:
+// embedded artifact image bytes are moved to the blob store and cleared from
+// the record, so the dataset SQLite holds — and the autosave writes back to
+// localStorage — stays lightweight.
+//
+// Shared by every import path rather than written per path. The two importers
+// (JSON and SQLite) have to treat artifacts identically or a file exported from
+// one and imported through the other would gain or lose its images, and that is
+// the kind of divergence only discovered by someone whose receipts vanished.
+func (a *App) stashArtifactBytes(arts []domain.Artifact) {
+	if a.blobs == nil {
+		return
+	}
+	for i := range arts {
+		art := &arts[i]
+		if !artifacts.IsBinaryKind(art.Kind) || len(art.Bytes) == 0 {
+			continue
+		}
+		if err := a.blobs.Put(art.ID, art.MIME, art.Bytes); err != nil {
+			a.log.Warn("blob store put during import failed", "id", art.ID, "err", err)
+			continue
+		}
+		art.Bytes = nil // strip from the SQLite record
+	}
+}
+
 // ExportJSONWithBlobs serializes the whole dataset, gathering artifact image
 // bytes from the blob store so the backup is fully self-contained (an import
 // on a fresh device works without access to the original IndexedDB). This is
@@ -141,18 +167,7 @@ func (a *App) ImportJSONWithBlobs(data []byte) error {
 	}
 	// Move image bytes to the blob store before loading, so SQLite stores only
 	// the lightweight record.
-	if a.blobs != nil {
-		for i := range ds.Artifacts {
-			art := &ds.Artifacts[i]
-			if artifacts.IsBinaryKind(art.Kind) && len(art.Bytes) > 0 {
-				if putErr := a.blobs.Put(art.ID, art.MIME, art.Bytes); putErr != nil {
-					a.log.Warn("blob store put during import failed", "id", art.ID, "err", putErr)
-				} else {
-					art.Bytes = nil // strip from the SQLite record
-				}
-			}
-		}
-	}
+	a.stashArtifactBytes(ds.Artifacts)
 	if err := a.store.Load(ds); err != nil {
 		return err
 	}
@@ -183,4 +198,60 @@ func (a *App) DatasetBytesWithBlobs() int {
 	total := len(b)
 	total += int(a.BlobStoreUsage())
 	return total
+}
+
+// ExportSQLite returns the household as a standalone SQLite database file.
+//
+// Every other export this app offers is CashFlux's own JSON. This one is a
+// database anyone's tools can open — the sqlite3 CLI, a GUI browser, pandas —
+// which is the point: it is the export for when the destination is not this
+// app. It is also a complete backup; ImportSQLite reads it straight back.
+//
+// The bytes are built from a SCRATCH store loaded with a snapshot, never by
+// serializing the live one. Two reasons, and the second is the one that
+// decided it: a self-contained file needs artifact image bytes pulled back out
+// of IndexedDB, and writing those into the live database would undo the whole
+// point of keeping them out of it — the next autosave would then push every
+// receipt back into localStorage.
+//
+// The OpenAI key is KEPT, matching ExportJSONWithBlobs: a backup the user asked
+// for by hand is meant to be complete. The autosave path is the one that
+// redacts, because that writes to storage nobody chose.
+func (a *App) ExportSQLite() ([]byte, error) {
+	ds, err := a.store.Snapshot()
+	if err != nil {
+		return nil, err
+	}
+	a.rehydrateArtifactBytes(ds.Artifacts)
+
+	scratch, err := store.NewMemory()
+	if err != nil {
+		return nil, fmt.Errorf("appstate: open export database: %w", err)
+	}
+	defer func() { _ = scratch.Close() }()
+	if err := scratch.Load(ds); err != nil {
+		return nil, fmt.Errorf("appstate: fill export database: %w", err)
+	}
+	return scratch.SerializeSQLite()
+}
+
+// ImportSQLite replaces all data with the contents of a SQLite database file.
+//
+// The file is validated and read in full before anything here is touched (see
+// store.ImportSQLiteFile), so a wrong or damaged file leaves the household
+// exactly as it was. Artifact bytes travel in the file and are moved into the
+// blob store on the way in, the same as a JSON import.
+func (a *App) ImportSQLite(data []byte) error {
+	ds, err := store.ImportSQLiteFile(data)
+	if err != nil {
+		return err
+	}
+	a.stashArtifactBytes(ds.Artifacts)
+	if err := a.store.Load(ds); err != nil {
+		return err
+	}
+	a.log.Info("imported sqlite database",
+		"accounts", len(ds.Accounts), "transactions", len(ds.Transactions), "artifacts", len(ds.Artifacts))
+	a.SyncTxnLinkNetting()
+	return nil
 }

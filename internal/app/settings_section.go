@@ -120,8 +120,12 @@ type settingsRightProps struct {
 	// Cloud & server: owned entirely by CloudConnectionPane (cloudtab.go) now —
 	// see settingsCloudPane's doc comment.
 	// Data
-	OnExportJSON    func()
-	OnExportCSV     func()
+	OnExportJSON func()
+	OnExportCSV  func()
+	// OnExportSQLite/OnImportSQLite move the whole household as a real SQLite
+	// database file — the export for when the destination is not this app.
+	OnExportSQLite  func()
+	OnImportSQLite  func()
 	OnBackupAll     func() // C297: full multi-workspace backup, also in the palette
 	OnImportJSON    func()
 	OnLoadSample    func()
@@ -343,6 +347,8 @@ func settingsDataPane(p settingsRightProps) uic.Node {
 			dataBtn(uistate.T("settings.exportCSV"), false, p.OnExportCSV),
 			dataBtn(uistate.T("settings.backupAll"), false, p.OnBackupAll),
 			dataBtn(uistate.T("settings.importDataset"), false, p.OnImportJSON),
+			dataBtn(uistate.T("settings.exportSQLite"), false, p.OnExportSQLite),
+			dataBtn(uistate.T("settings.importSQLite"), false, p.OnImportSQLite),
 			dataBtn(uistate.T("settings.loadSample"), false, p.OnLoadSample),
 			dataBtn(uistate.T("settings.resetSample"), false, p.OnResetSample),
 			dataBtn(uistate.T("settings.wipe"), true, p.OnWipe),

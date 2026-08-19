@@ -1144,8 +1144,10 @@ func globalSettingsForm() uic.Node {
 		BaseURL:        baseURLState.Get(),
 		OnBaseURL:      onBaseURL,
 
-		OnExportJSON: func() { exportJSON(notify) },
-		OnExportCSV:  func() { exportCSV(notify) },
+		OnExportJSON:   func() { exportJSON(notify) },
+		OnExportCSV:    func() { exportCSV(notify) },
+		OnExportSQLite: func() { exportSQLiteFile(notify) },
+		OnImportSQLite: func() { importSQLiteFile(bump, notify) },
 		// AC16: confirm before generating — the pack lists account names and balances,
 		// so it deserves a deliberate "yes, make this" moment, not a silent click.
 		OnExportPack: func() {
@@ -1562,6 +1564,73 @@ func exportJSON(notify func(string, bool)) {
 	downloadBytes("cashflux.json", "application/json", data)
 	recordBackupNow() // stamp the backup so the B28 reminder resets
 	notify(uistate.T("settings.exportedData", "cashflux.json"), false)
+}
+
+// exportSQLiteFile downloads the household as a standalone SQLite database.
+//
+// The other exports are CashFlux's own JSON, which is the right default and the
+// wrong thing to hand to a tool that has never heard of CashFlux. This one is a
+// real database file: it opens in the sqlite3 CLI, in a database browser, in
+// pandas — and it imports straight back here.
+func exportSQLiteFile(notify func(string, bool)) {
+	app := appstate.Default
+	if app == nil {
+		return
+	}
+	// Off the click handler. Building the file copies the whole household into a
+	// scratch database and VACUUMs it, which is real work on the wasm thread —
+	// and that thread is also the one painting. Done inline, the page is frozen
+	// for the duration and the click that started it never finishes dispatching.
+	go func() {
+		data, err := app.ExportSQLite()
+		if err != nil {
+			notify(uistate.T("settings.exportSQLiteErr", err.Error()), true)
+			return
+		}
+		downloadBytes("cashflux.sqlite", "application/vnd.sqlite3", data)
+		// A complete, restorable copy of everything — the same claim the JSON
+		// export makes, so it resets the backup reminder on the same terms.
+		recordBackupNow()
+		notify(uistate.T("settings.exportedSQLite", "cashflux.sqlite"), false)
+	}()
+}
+
+// importSQLiteFile picks a SQLite database file and replaces all data with it.
+//
+// Confirmed after the file is chosen and before anything is replaced, matching
+// importJSON: the user cannot lose their household without an explicit yes. The
+// file itself is validated inside ImportSQLite before the live database is
+// touched at all, so declining — or picking the wrong file — costs nothing.
+func importSQLiteFile(onChange func(), notify func(string, bool)) {
+	pickFile(".sqlite,.db,.sqlite3", func(data []byte) {
+		app := appstate.Default
+		if app == nil {
+			return
+		}
+		uistate.ConfirmModalLabeled(
+			uistate.T("settings.importSQLiteConfirm"),
+			uistate.T("settings.importConfirmBtn"),
+			true,
+			func(ok bool) {
+				if !ok {
+					return
+				}
+				// Off the click handler, for the same reason as the export:
+				// reading the file opens a second database, snapshots it, and
+				// reloads the live one. Inline, that freezes the page mid-click.
+				go func() {
+					if err := app.ImportSQLite(data); err != nil {
+						notify(uistate.T("settings.importSQLiteErr", err.Error()), true)
+						return
+					}
+					// A real import means the user is no longer on sample data (L6).
+					uistate.SetSampleActive(false)
+					onChange()
+					notify(uistate.T("settings.importedSQLite"), false)
+				}()
+			},
+		)
+	})
 }
 
 // exportCSV downloads all transactions as a CSV file.
