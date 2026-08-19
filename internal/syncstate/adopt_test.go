@@ -45,3 +45,27 @@ func TestAdoptTargetSkipsDeletedNewer(t *testing.T) {
 		t.Fatalf("AdoptTarget = %q, want ws_live", got)
 	}
 }
+
+// Two accounts sharing one browser: the second must not inherit the first's
+// loaded dataset, because inheriting it is how it gets pushed over their data.
+func TestDatasetForeign(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		owner    string
+		signedIn string
+		want     bool
+	}{
+		{"same account", "u1", "u1", false},
+		{"a different account", "u1", "u2", true},
+		{"never owned, so adoptable", "", "u2", false},
+		{"identity unknown, never foreign", "u1", "", false},
+		{"neither known", "", "", false},
+		{"whitespace is not an owner", "   ", "u2", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := DatasetForeign(tc.owner, tc.signedIn); got != tc.want {
+				t.Fatalf("DatasetForeign(%q, %q) = %v, want %v", tc.owner, tc.signedIn, got, tc.want)
+			}
+		})
+	}
+}

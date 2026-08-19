@@ -230,3 +230,30 @@ func AdoptTarget(activeID string, activeHasSynced, activeHasUserData bool, remot
 	}
 	return best
 }
+
+// DatasetForeign reports whether the dataset sitting in local storage belongs to
+// a DIFFERENT account than the one signed in now.
+//
+// Local per-workspace state — the dataset itself and its sync metadata — is
+// keyed by workspace, never by account. That is fine while a browser has one
+// account for ever, and it loses data the moment two accounts share a browser:
+// signing out deliberately keeps the dataset (unpushed work is the user's, and
+// signing out is not a request to discard it), so the next account inherits
+// whatever the previous one left loaded. If that inherited copy then looks
+// "newer" than the arriving account's server snapshot, it wins the
+// last-write-wins comparison and is pushed up over their real data.
+//
+// An empty owner is adoptable rather than foreign, for the same reason
+// Binding.OwnedBy treats unbound state that way: a dataset written before
+// ownership was recorded belongs to whoever is here now, and refusing to sync it
+// would strand every existing install on the upgrade.
+func DatasetForeign(ownerUserID, signedInUserID string) bool {
+	signedInUserID = strings.TrimSpace(signedInUserID)
+	if signedInUserID == "" {
+		// Unknown identity classifies nothing as foreign — see DecideUpload. The
+		// server is the authority on ownership, and pre-empting it here would
+		// stop sync dead on any deployment whose identity lookup does not answer.
+		return false
+	}
+	return !Binding{UserID: ownerUserID}.OwnedBy(signedInUserID)
+}

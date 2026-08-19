@@ -82,6 +82,20 @@ type syncMeta struct {
 	UpdatedAt string `json:"updatedAt,omitempty"`
 	Hash      string `json:"hash,omitempty"`
 	Version   int64  `json:"version,omitempty"`
+	// Owner is the account this bookmark describes a conversation with.
+	//
+	// The key is the WORKSPACE, and workspace ids collide across accounts —
+	// every install starts with "default" — so without this a second account
+	// signing in on the same browser reads the first account's version, hash and
+	// timestamp as its own. That is not cosmetic: ShouldApplyRemote compares the
+	// server's timestamp against this one, so an inherited bookmark can make the
+	// arriving account's real data look stale and be refused. Exactly that
+	// happened on 2026-08-19.
+	//
+	// Empty means the bookmark predates ownership being recorded, and is
+	// adoptable rather than foreign — the same rule syncstate.Binding.OwnedBy
+	// applies to queued work, and the reason an upgrade does not strand anyone.
+	Owner string `json:"owner,omitempty"`
 }
 
 type queuedSyncMutation struct {
@@ -536,6 +550,14 @@ func pushBlockedReason() string {
 	if uistate.SampleActive() {
 		return "local dataset is the seeded sample"
 	}
+	// The dataset loaded here belongs to a DIFFERENT account. Pushing it would
+	// write one household's records over another's under a timestamp that looks
+	// perfectly legitimate — which is exactly what happened on 2026-08-19. The
+	// data is not touched; only the push stops, until a pull replaces it with
+	// this account's own copy (which then claims it).
+	if datasetIsForeign() {
+		return "this device is holding another account's data"
+	}
 	if loadSyncStatus().State == "locked" {
 		return "server snapshot is encrypted and this device cannot read it"
 	}
@@ -916,6 +938,9 @@ func flushBackendSyncQueue() {
 			// Accepted: only now is it safe to drop the local mutation from the queue.
 			removeQueuedSyncMutation(item.WorkspaceID, item.Hash)
 			saveSyncMeta(item.WorkspaceID, syncMeta{UpdatedAt: resp.UpdatedAt, Version: resp.Version, Hash: item.Hash})
+			// The server took this dataset as this account's, which settles who
+			// owns the copy on this device.
+			claimDatasetForCurrentUser()
 			// The server took it — the one moment worth announcing in the top bar.
 			// Deliberately NOT the setSyncStatus below, which also fires for a flush
 			// that found an empty queue and uploaded nothing.
@@ -1317,7 +1342,15 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 		// signing in for the first time that means it sits on demo data forever while
 		// the account's real records wait on the server. There is nothing to protect:
 		// sample data is what the app invented, not what the user typed.
+		// A foreign dataset is NOT "unsynced local work to protect". Treating it
+		// as such is what let an inherited copy beat the arriving account's server
+		// snapshot on timestamp and survive to be pushed back. It is parked first,
+		// so nothing is destroyed by being overruled.
 		localIsUsers := hadLocalDataset && !uistate.SampleActive()
+		if datasetIsForeign() {
+			stashForeignDataset()
+			localIsUsers = false
+		}
 		if !syncstate.ShouldApplyRemote(localUpdatedAt, hasLocalMeta, localIsUsers, remoteUpdatedAt, true) {
 			markHostedHydrationReady()
 			return
@@ -1338,6 +1371,8 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 		// cleared this flag, so a freshly signed-in browser showed a wipe affordance
 		// over freshly arrived real records.
 		uistate.SetSampleActive(false)
+		// This account's own copy is now what is loaded, so record that it owns it.
+		claimDatasetForCurrentUser()
 		// Deliberate same-tab dataset replacement: advance the cross-tab generation
 		// (other tabs must stop overwriting) and this tab's own write entitlement.
 		datasetMyGen = bumpDatasetGen()
@@ -1386,15 +1421,27 @@ func datasetHash(data []byte) string {
 
 func syncMetaKey(workspaceID string) string { return syncMetaPrefix + workspaceID }
 
+// loadSyncMeta returns this account's sync bookmark for a workspace.
+//
+// A bookmark belonging to a DIFFERENT account reads as absent rather than being
+// deleted: it is still the truth about that account's last exchange with the
+// server, and it becomes correct again the moment they sign back in.
 func loadSyncMeta(workspaceID string) syncMeta {
 	var meta syncMeta
 	if raw := lsGet(syncMetaKey(workspaceID)); raw != "" {
 		_ = json.Unmarshal([]byte(raw), &meta)
 	}
+	if syncstate.DatasetForeign(meta.Owner, signedInUserID()) {
+		return syncMeta{}
+	}
 	return meta
 }
 
+// saveSyncMeta records the bookmark, stamped with the account it belongs to.
 func saveSyncMeta(workspaceID string, meta syncMeta) {
+	if meta.Owner == "" {
+		meta.Owner = signedInUserID()
+	}
 	if data, err := json.Marshal(meta); err == nil {
 		lsSet(syncMetaKey(workspaceID), string(data))
 	}
@@ -1504,6 +1551,14 @@ func loadConflictBackup(workspaceID string) (queuedSyncMutation, bool) {
 	}
 	var item queuedSyncMutation
 	if err := json.Unmarshal([]byte(raw), &item); err != nil {
+		return queuedSyncMutation{}, false
+	}
+	// The backup is keyed by workspace, and workspace ids collide across
+	// accounts. Restoring one account's rejected dataset into another's
+	// household would be the same data-crossing this whole change exists to
+	// stop — and it would arrive looking like the user's own recovered work.
+	// The entry is kept, not deleted: it is that account's only copy.
+	if syncstate.DatasetForeign(item.UserID, signedInUserID()) {
 		return queuedSyncMutation{}, false
 	}
 	return item, true

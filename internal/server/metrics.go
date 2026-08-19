@@ -33,8 +33,14 @@ type Metrics struct {
 
 	blobStoredBytes      atomic.Int64
 	blobTransferredBytes atomic.Int64
-	blobGCSweeps         atomic.Int64
-	blobGCDeleted        atomic.Int64
+
+	// destructiveWritesBlocked counts snapshots refused for destroying most of
+	// the stored copy. It should normally be zero; a non-zero value means either
+	// a client is misbehaving or somebody is deleting a lot on purpose, and both
+	// are worth being able to see from outside the app.
+	destructiveWritesBlocked atomic.Int64
+	blobGCSweeps             atomic.Int64
+	blobGCDeleted            atomic.Int64
 
 	aiProxyRequests atomic.Int64
 	aiProxyTokens   atomic.Int64
@@ -151,6 +157,14 @@ func (m *Metrics) ObserveBlobStored(bytes int64) {
 		return
 	}
 	m.blobStoredBytes.Add(bytes)
+}
+
+// ObserveDestructiveWriteBlocked records a snapshot refused by the dataset guard.
+func (m *Metrics) ObserveDestructiveWriteBlocked() {
+	if m == nil {
+		return
+	}
+	m.destructiveWritesBlocked.Add(1)
 }
 
 func (m *Metrics) ObserveBlobTransferred(bytes int64) {
@@ -412,25 +426,26 @@ type billingMetricRow struct {
 // metricsSnapshot is a scrape-time copy of every family, taken one family
 // lock at a time (Prometheus does not need cross-family atomicity).
 type metricsSnapshot struct {
-	httpRows             []metricRow
-	httpBucketRows       []bucketMetricRow
-	grpcRows             []metricRow
-	activeStreams        int64
-	streamRows           []metricRow
-	blobStoredBytes      int64
-	blobTransferredBytes int64
-	blobGCSweeps         int64
-	blobGCDeleted        int64
-	aiProxyRequests      int64
-	aiProxyTokens        int64
-	syncPulls            []labelMetricRow
-	syncPushes           []labelMetricRow
-	syncLWWRejects       int64
-	watchDropped         int64
-	dbRows               []namedMetricRow
-	queueDepths          []labelMetricRow
-	billingRows          []billingMetricRow
-	billingMRRCents      int64
+	httpRows                 []metricRow
+	httpBucketRows           []bucketMetricRow
+	grpcRows                 []metricRow
+	activeStreams            int64
+	streamRows               []metricRow
+	blobStoredBytes          int64
+	destructiveWritesBlocked int64
+	blobTransferredBytes     int64
+	blobGCSweeps             int64
+	blobGCDeleted            int64
+	aiProxyRequests          int64
+	aiProxyTokens            int64
+	syncPulls                []labelMetricRow
+	syncPushes               []labelMetricRow
+	syncLWWRejects           int64
+	watchDropped             int64
+	dbRows                   []namedMetricRow
+	queueDepths              []labelMetricRow
+	billingRows              []billingMetricRow
+	billingMRRCents          int64
 }
 
 func (m *Metrics) snapshot() metricsSnapshot {
@@ -448,6 +463,7 @@ func (m *Metrics) snapshot() metricsSnapshot {
 
 	snap.activeStreams = m.streamsActive.Load()
 	snap.blobStoredBytes = m.blobStoredBytes.Load()
+	snap.destructiveWritesBlocked = m.destructiveWritesBlocked.Load()
 	snap.blobTransferredBytes = m.blobTransferredBytes.Load()
 	snap.blobGCSweeps = m.blobGCSweeps.Load()
 	snap.blobGCDeleted = m.blobGCDeleted.Load()

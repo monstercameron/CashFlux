@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/backendrpc"
+	"github.com/monstercameron/CashFlux/internal/datasetguard"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -94,6 +95,22 @@ func (s *SyncService) PutWorkspaceRPC(ctx context.Context, req backendrpc.PutWor
 	clientUpdatedAt, err := parseOptionalRPCTime(req.ClientUpdatedAt)
 	if err != nil {
 		return backendrpc.PutWorkspaceResponse{}, err
+	}
+	// Before anything is written: would this dataset gut the copy already
+	// stored? Last-write-wins orders concurrent edits; it does not decide whether
+	// a replacement is sane, and on 2026-08-19 that gap let a stale dataset from
+	// another account overwrite a household's records with a merely newer
+	// timestamp. Checked server-side, so it holds whatever the client believes —
+	// including an old client, or one with the bug still in it.
+	//
+	// Force is the escape hatch: a user who really is deleting most of their
+	// records confirms it in the client and the same call comes back with
+	// Force set. The guard exists to make that a decision rather than an
+	// accident.
+	if !req.Force && len(req.Dataset) > 0 {
+		if err := s.guardDestructiveWrite(ctx, req.Workspace.ID, req.Dataset); err != nil {
+			return backendrpc.PutWorkspaceResponse{}, err
+		}
 	}
 	result, err := s.PutWorkspace(ctx, serverWorkspace(req.Workspace), clientUpdatedAt, req.Force, time.Now().UTC())
 	if err != nil {
@@ -321,4 +338,51 @@ func syncWatchWorkspacesHandler(srv any, stream grpc.ServerStream) error {
 		return err
 	}
 	return srv.(syncServiceServer).WatchWorkspacesRPC(in, stream)
+}
+
+// guardDestructiveWrite refuses a snapshot that would destroy most of what is
+// already stored for this workspace.
+//
+// It answers a question last-write-wins cannot: not "which of these is newer"
+// but "is this a replacement anyone meant". A client pushing a dataset it
+// inherited from another account looks, to a timestamp comparison, exactly like
+// a client pushing legitimate new work.
+//
+// It is deliberately narrow:
+//
+//   - Only an EXISTING stored snapshot can be protected; a first write has
+//     nothing to lose and is always allowed.
+//   - Either side being unreadable (an App Lock envelope, which the server
+//     cannot decrypt by design) means no verdict is possible, and the write
+//     proceeds. Refusing what it cannot read would break encrypted sync
+//     entirely, which is a worse failure than the one being guarded.
+//   - Only losses past the policy threshold are refused, and Force overrides.
+func (s *SyncService) guardDestructiveWrite(ctx context.Context, workspaceID string, incoming []byte) error {
+	user, err := syncUser(ctx)
+	if err != nil {
+		return err
+	}
+	stored, ok, err := s.store.GetSnapshotForUser(user.ID, strings.TrimSpace(workspaceID))
+	if err != nil {
+		return fmt.Errorf("server sync: read stored snapshot: %w", err)
+	}
+	if !ok || len(stored.Dataset) == 0 {
+		return nil // nothing stored yet — no loss is possible
+	}
+	prev, prevOK := datasetguard.Inspect(stored.Dataset)
+	next, nextOK := datasetguard.Inspect(incoming)
+	if !prevOK || !nextOK {
+		return nil // encrypted or unparseable: no honest verdict available
+	}
+	verdict := datasetguard.Check(prev, next, datasetguard.DefaultPolicy)
+	if !verdict.Destructive {
+		return nil
+	}
+	if s.metrics != nil {
+		s.metrics.ObserveDestructiveWriteBlocked()
+	}
+	// FailedPrecondition, not InvalidArgument: the request is well-formed and the
+	// caller may legitimately retry it with Force once a person has confirmed.
+	return status.Errorf(codes.FailedPrecondition,
+		"refusing a destructive sync: %s. Confirm in the app to replace it anyway.", verdict.Reason)
 }
