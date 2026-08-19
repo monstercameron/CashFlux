@@ -1,3 +1,39 @@
+## 2026-08-19 - the guards, and what the incident actually taught
+
+Three layers had to miss the same write for a household to lose three weeks, so three were added
+rather than one.
+
+The root cause was smaller than it looked. Local storage bound the dataset to a workspace and never to
+an account. Everything else followed from that: signing out keeps the dataset by design, so the next
+account inherited it; the inherited copy looked newer than the arriving account's server snapshot, so
+it won last-write-wins; and it was then pushed up as that account's own work. The queue had been
+taught about identity months ago (C696). The dataset never was, and nobody noticed the asymmetry
+because a browser with one account behaves identically either way.
+
+The server guard is the part worth keeping past this incident. Last-write-wins is a rule for ORDERING
+concurrent edits; it is not a licence to accept an arbitrary replacement, and treating it as one means
+the only question ever asked of a destructive write is whether its clock is fast. What makes the guard
+work is judging every collection rather than transactions: the clobber removed 18% of transactions,
+which is inside any tolerance a real user needs and would have had to be allowed on its own, but it
+also took categories from 52 to 10. The signature of a poisoned write is that SOMETHING falls off a
+cliff, not that everything does.
+
+Two things I deliberately did not do. The guard stands aside for App Lock payloads it cannot read -
+refusing them would break encrypted sync entirely, which is a worse failure than the one being
+guarded, and the account-binding layer covers those users anyway. And the 6.5% overwrite from the same
+night still passes the backstop, because any threshold low enough to catch it would nag people for
+ordinary pruning. Both are pinned in tests so the tradeoff is explicit rather than rediscovered.
+
+The isolation sweep is written with both accounts holding a workspace called "default" on purpose.
+Workspace ids are minted by clients and every install starts with that string, so "the other account's
+workspace" is not something an attacker has to guess - it is the id they are already using. A test
+that used distinct ids would pass while proving nothing.
+
+Finding the lost data came down to a size difference: two snapshots at 773KB against 506KB plaintext
+ones. Encrypted, so the server could not see what was in them and neither could I until the passcode
+opened them locally. They held the three missing weeks. Worth remembering that the server's own
+inability to read encrypted snapshots is exactly why it could not have detected this itself.
+
 ## 2026-08-18 - closing the two I had left open
 
 Both were mine to have finished already. The backup leak I found while answering a question about

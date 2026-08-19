@@ -4,6 +4,22 @@ All notable changes to CashFlux are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/). Policy: **one feature per commit**,
 and every commit updates this file under `Unreleased`.
 
+## [1.15.0] - 2026-08-19
+
+### Security
+- **One account's data can no longer reach another, at three layers.** A browser holding two accounts
+  had exactly one dataset: local storage bound it to a workspace and never to an account, and signing
+  out deliberately keeps it, so the next account inherited whatever the previous one left loaded — then
+  won last-write-wins on timestamp and pushed it over a household's real records. The dataset now has
+  an owner, claimed only when the data provably belongs to that account; a foreign dataset is never
+  pushed and never outranks the account's own server copy, and is parked rather than discarded. The
+  sync bookmark and the conflict backup were keyed by workspace alone and are now owner-checked — the
+  bookmark being unowned is why forcing a down-sync did not work. And the server refuses a write that
+  destroys most of the stored copy whatever the client believes, judging every collection so a
+  category tree collapsing 52 to 10 is caught even when the transaction count barely moves. `Force`
+  stays the escape hatch, encrypted payloads pass unjudged, and
+  `cashflux_destructive_writes_blocked_total` makes refusals visible.
+
 ## [1.14.0] - 2026-08-19
 
 Security release: seven auth fixes, per-account workspace scoping (schema v17), and a
