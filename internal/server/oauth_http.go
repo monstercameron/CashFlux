@@ -146,6 +146,16 @@ func handleOAuthCallback(cfg Config, store *Store) http.HandlerFunc {
 			writeErrorJSON(w, ErrorReasonFailedPrecondition, "store is not configured")
 			return
 		}
+		// A provider account maps to a stable id, so somebody who deleted their
+		// account and later signs in again with the same Google/GitHub identity
+		// arrives at the id their old account had. That is a person deliberately
+		// enrolling, having just proved who they are to the provider — not the
+		// stale credential the tombstone exists to stop — so the tombstone is
+		// lifted before the row is written, or they could never come back.
+		if err := store.ClearAccountTombstone(user.ID); err != nil {
+			writeErrorJSON(w, ErrorReasonInternal, "user upsert failed")
+			return
+		}
 		if err := store.UpsertUser(user); err != nil {
 			writeErrorJSON(w, ErrorReasonInternal, "user upsert failed")
 			return
@@ -261,7 +271,7 @@ func handleOAuthListSessions(cfg Config, store *Store) http.HandlerFunc {
 			writeErrorJSON(w, ErrorReasonPermissionDenied, "origin not allowed")
 			return
 		}
-		user, ok := httpBearerUser(r, cfg)
+		user, ok := httpBearerUser(r, cfg, store)
 		if !ok {
 			writeErrorJSON(w, ErrorReasonUnauthenticated, "access token is missing or invalid")
 			return
@@ -294,7 +304,7 @@ func handleOAuthRevokeSession(cfg Config, store *Store) http.HandlerFunc {
 			writeErrorJSON(w, ErrorReasonPermissionDenied, "csrf token is invalid")
 			return
 		}
-		user, ok := httpBearerUser(r, cfg)
+		user, ok := httpBearerUser(r, cfg, store)
 		if !ok {
 			writeErrorJSON(w, ErrorReasonUnauthenticated, "access token is missing or invalid")
 			return
@@ -362,7 +372,7 @@ func handleOAuthLogoutAll(cfg Config, store *Store) http.HandlerFunc {
 			writeErrorJSON(w, ErrorReasonPermissionDenied, "csrf token is invalid")
 			return
 		}
-		user, ok := httpBearerUser(r, cfg)
+		user, ok := httpBearerUser(r, cfg, store)
 		if !ok {
 			writeErrorJSON(w, ErrorReasonUnauthenticated, "access token is missing or invalid")
 			return
@@ -465,9 +475,26 @@ func requestIsSecure(r *http.Request) bool {
 	return r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
 }
 
+// validatedOAuthReturnTo resolves the ?returnTo= a sign-in should hand its
+// session back to, or "" to fall back to a plain JSON response.
+//
+// The destination is entirely attacker-choosable — it is a query parameter on
+// an unauthenticated GET — and writeOAuthCallbackHTML posts the ACCESS TOKEN and
+// CSRF token to it. So it is checked against the configured app origin, and a
+// wildcard app origin is explicitly NOT accepted here even though allowedOrigin
+// honours one. "*" is a statement about who may CALL this API; it is not a
+// statement that any site on the internet may be handed a user's session. Under
+// a wildcard, `?returnTo=https://evil.example` would otherwise exfiltrate the
+// token of anyone who could be induced to start a sign-in. Config.Validate
+// rejects "*" today, so this is unreachable through env configuration — but the
+// wildcard branch in allowedOrigin is real and reachable by an embedder that
+// builds a Config directly, and this door must not be the one that trusts it.
 func validatedOAuthReturnTo(r *http.Request, cfg Config) string {
 	raw := strings.TrimSpace(r.URL.Query().Get("returnTo"))
 	if raw == "" {
+		return ""
+	}
+	if strings.TrimSpace(cfg.AppOrigin) == "*" {
 		return ""
 	}
 	u, err := url.Parse(raw)

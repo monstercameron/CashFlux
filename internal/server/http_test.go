@@ -571,7 +571,7 @@ func TestAccountExportAndDeleteEndpoints(t *testing.T) {
 	if err := store.PutWorkspace(Workspace{ID: "w-other", UserID: other.ID, Name: "Other", UpdatedAt: now}); err != nil {
 		t.Fatalf("PutWorkspace other: %v", err)
 	}
-	if err := store.PutSnapshot(Snapshot{WorkspaceID: "w-export", Dataset: []byte(`{"ok":true}`), Version: 2, UpdatedAt: now}, 1024, 3); err != nil {
+	if err := store.PutSnapshot(Snapshot{UserID: user.ID, WorkspaceID: "w-export", Dataset: []byte(`{"ok":true}`), Version: 2, UpdatedAt: now}, 1024, 3); err != nil {
 		t.Fatalf("PutSnapshot: %v", err)
 	}
 	dataDir := t.TempDir()
@@ -579,7 +579,7 @@ func TestAccountExportAndDeleteEndpoints(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PutBlob: %v", err)
 	}
-	if err := store.LinkWorkspaceBlob("w-export", blob.Hash); err != nil {
+	if err := store.LinkWorkspaceBlob(user.ID, "w-export", blob.Hash); err != nil {
 		t.Fatalf("LinkWorkspaceBlob: %v", err)
 	}
 	if err := store.PutAIKey(user.ID, "openai", "sk-secret-export", []byte("0123456789abcdef0123456789abcdef")); err != nil {
@@ -1349,7 +1349,7 @@ func TestOAuthCallbackIssuesSessionAndRefreshLogout(t *testing.T) {
 	if body.TokenType != "Bearer" || body.AccessToken == "" || body.UserID != "github:42" {
 		t.Fatalf("callback body = %+v", body)
 	}
-	if _, ok := authUserForToken(body.AccessToken, cfg); !ok {
+	if _, ok := authUserForToken(body.AccessToken, cfg, nil); !ok {
 		t.Fatal("issued access token did not authenticate")
 	}
 	if _, ok, err := store.GetUserByID("github:42"); err != nil || !ok {
@@ -2006,18 +2006,18 @@ func TestGRPCTokenValidatorMatchesHTTPBearerUser(t *testing.T) {
 	cfg := Config{AuthMode: "token", Token: "dev-token"}
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Header.Set("Authorization", "Bearer dev-token")
-	want, ok := httpBearerUser(req, cfg)
+	want, ok := httpBearerUser(req, cfg, nil)
 	if !ok {
 		t.Fatal("http bearer user missing")
 	}
-	got, err := grpcTokenValidator(cfg)(context.Background(), "dev-token")
+	got, err := grpcTokenValidator(cfg, nil)(context.Background(), "dev-token")
 	if err != nil {
 		t.Fatalf("grpc token validator rejected token: %v", err)
 	}
 	if got != want {
 		t.Fatalf("grpc user = %+v, want %+v", got, want)
 	}
-	if _, err := grpcTokenValidator(cfg)(context.Background(), "wrong"); err == nil {
+	if _, err := grpcTokenValidator(cfg, nil)(context.Background(), "wrong"); err == nil {
 		t.Fatal("grpc token validator accepted wrong token")
 	}
 }

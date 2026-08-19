@@ -1,3 +1,120 @@
+## 2026-08-18 - closing the two I had left open
+
+Both were mine to have finished already. The backup leak I found while answering a question about
+exports, flagged, and then built a different feature instead. The workspace scoping I proposed
+deferring after arguing for it, and then treated my own recommendation as a decision.
+
+The backup one was twenty minutes: route the prefs through the same strip the workspace export
+already used, on the way in as well as out.
+
+The scoping was the real work. workspaces.id was a global primary key while workspace ids are minted
+by clients, and every install names its first one "default" - so the first account to sync owned that
+id for the whole server. The children had to move with it: leaving snapshots, snapshot_history and
+workspace_blobs keyed by workspace_id alone would have let two accounts both own "default" while
+sharing one snapshot row, which is worse than being refused.
+
+Three things the tests caught that reading would not have. The composite foreign key cannot even be
+CREATEd while the old parent is still in place - SQLite reports "foreign key mismatch", because the
+key it references does not exist until the rename lands; the rebuild has to run with foreign_keys OFF
+and a foreign_key_check afterwards, which is SQLite's documented procedure and not something I would
+have reached for unprompted. TransferWorkspace, whose doc comment proudly explained that it was a
+one-column update because the children followed the workspace automatically, silently became wrong -
+it now moves them explicitly and refuses a target that already holds that id, which is a conflict
+that could not previously exist. And the FK check fires mid-transaction, so re-owning a parent and
+its children in either order fails until the checks are deferred.
+
+Two existing tests asserted the old behaviour and had to be rewritten rather than fixed.
+TestSyncServicePutWorkspaceRejectsCrossUserIDTakeover was asserting tenant isolation by way of a
+namespace clash - the second account was refused because the id was taken, not because it was
+somebody else's. That is isolation by accident, and the accident was the bug. It now asserts the
+thing it was actually there for: two accounts, same id, separate data, neither able to read the
+other.
+
+## 2026-08-18 - a SQLite file you can actually take somewhere, and the freeze the browser found
+
+The client store is opened as ":memory:", so there has never been a file to hand over - SQLite is the
+query engine and JSON is what persists. That is why every export is JSON. It is also why JSON was the
+wrong answer to "can I get my data out": JSON is CashFlux's shape, and the reason to want the data out
+is usually that the destination is not CashFlux.
+
+ext/serdes drives sqlite3_backup into a slice-backed VFS, which gives a real database image rather than
+something shaped like one. The first thing I checked was whether it compiles for js/wasm at all, before
+building anything on top of it - it does, and it costs nothing in binary size, because the backup API
+was already linked in with the rest of SQLite.
+
+Two decisions worth writing down. The export builds its bytes from a SCRATCH store loaded with a
+snapshot, never from the live one: a self-contained file needs artifact bytes pulled back out of
+IndexedDB, and writing those into the live database would undo the entire reason they are kept out of
+it - the next autosave would push every receipt back into localStorage. And the import reads into a
+scratch database, validates, and only then loads, so a wrong file leaves the household untouched.
+Deserializing straight into the live database would be faster and would leave someone whose file was
+wrong with no app to fix it from, because the import would have destroyed the schema it was checking.
+
+The validation checks tables against a list PARSED out of sqliteSchema rather than a second
+hand-written one, with a test asserting the parse matches what the store actually creates. A table
+added to one and forgotten in the other would show up as an import quietly accepting a database missing
+whatever was added, which is not a failure anybody would trace back to a list.
+
+Then the part I would not have found without a browser. Unit tests passed at both layers, natively and
+under js/wasm. The e2e spec failed with the click on "Replace all data" never completing - not an
+assertion failure, the click itself hanging until the 180-second timeout. The import was running
+synchronously in the click handler: opening a second database, snapshotting it, reloading the live one,
+all on the single wasm thread that is also the one painting. The page was frozen and the click never
+finished dispatching. Both the export and the import now run in a goroutine.
+
+That is the third time this session that the thing which caught a real bug was the layer I nearly
+skipped. The unit tests were right about the bytes and could not have been wrong in a way that revealed
+this; "does it block the thread it is running on" is not a question they are able to ask.
+
+## 2026-08-18 - reviewing the auth surface, and being wrong about a fifth of it
+
+Seven findings across session handling, the account lifecycle, and the credential doors. Two of them I proved
+by running code rather than by reading it, which is the only reason I believed them.
+
+The one that matters most is the smallest. ensureUserRow exists to materialize a users row on demand for
+token-mode identities, which are synthesized per request and legitimately have no row until something needs
+one. That is fine. What is not fine is that an access token is a stateless JWT with a fifteen-minute life and
+no revocation check, so a browser open at the moment an account is deleted keeps pushing afterwards - and
+ensureUserRow obligingly rebuilt the account it had just been told to destroy. The row came back with the
+default role and, because suspended_at is a column ON that row, unsuspended. So account deletion silently did
+not delete, erasure restored the snapshot on the next push, and a suspended user could self-delete their way
+back to an active account via DELETE /v1/account, which checks neither suspension nor existence. The probe
+printed "after one ordinary sync push: account back = true, snapshot back = true" and that settled it.
+
+The fix is a tombstone written in the same transaction as the delete, checked both at the auth gate and in
+ensureUserRow. The interesting part was working out when a tombstone should STOP meaning something. Local
+account ids are derived from the username, so somebody registering a freed name lands on the id that name had
+last time; a provider id is stable across a delete and a later sign-in. Neither of those is the stale
+credential the tombstone guards against - they are people deliberately enrolling, having just authenticated.
+So every door that deliberately creates an account clears it, and only the credential that was already in
+flight is refused.
+
+The second is worse in principle and did not apply to our own deployment. sessionSigningSecret fell back to
+cfg.Token - the static bearer token every syncing client is handed - so on a bare self-host the JWT signing
+key was public to every client. A forged token for sub=device:owner verified, and so did a forged 30-day
+refresh token. There is no clever fix: any key derived from the token is derivable by every token holder, so
+the token had to stop participating. A server with no key configured now generates one and persists it, which
+keeps sessions alive across restarts without asking the operator for anything. budget.earlcameron.com sets
+CASHFLUX_SERVER_SESSION_KEY explicitly and was never exposed.
+
+Login was the only unauthenticated door without a constant-keyed global backstop. Every other one has both a
+per-key limiter and a global one, and the struct comments explain at length why per-key alone is not enough -
+so this was a gap in a rule the codebase had already written down. Per-username buckets bound guessing against
+one account and nothing else; 300 attempts across 300 usernames were refused zero times, and took 15.6 seconds
+of bcrypt to do it.
+
+Then the one I got wrong. I reported that neither SetPassword nor ResetPassword revoked existing sessions,
+having grepped authservice.go for RevokeRefreshSessionFamil and found only the refresh and logout paths. I
+went to add the revocation to both, and only noticed while checking the e2e specs for contract breakage that
+standalone-auth.spec.mjs already asserts a second device's refresh family dies during recovery. It does,
+because RotateLocalRecovery revokes inside the credential-swap transaction - at the store layer, where my grep
+never looked. Half the finding was real (SetPassword revoked nothing) and half was me reading one file and
+concluding something about two. The redundant call is out, the comment says where the revocation actually
+lives, and the test stays as a guard so the two halves cannot drift.
+
+The lesson is narrow and worth keeping: a grep over the service layer is not a search for behaviour that might
+be implemented a layer down. The e2e suite knew this before I did.
+
 ## 2026-08-18 - the second adversarial pass, and the regression it led me to
 
 Five findings against C684-C693. The most useful thing the pass did was not one of them.

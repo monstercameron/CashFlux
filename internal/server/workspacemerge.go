@@ -105,7 +105,7 @@ func (s *Store) MergeWorkspaceSnapshot(sourceUserID, sourceWorkspaceID, targetUs
 		priorVersion int64
 		priorUpdated string
 	)
-	err = tx.QueryRow("SELECT dataset_json, version, updated_at FROM snapshots WHERE workspace_id = ?", targetWorkspaceID).
+	err = tx.QueryRow("SELECT dataset_json, version, updated_at FROM snapshots WHERE user_id = ? AND workspace_id = ?", targetUserID, targetWorkspaceID).
 		Scan(&priorDataset, &priorVersion, &priorUpdated)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
@@ -113,8 +113,8 @@ func (s *Store) MergeWorkspaceSnapshot(sourceUserID, sourceWorkspaceID, targetUs
 	case err != nil:
 		return MigrationResult{}, report, fmt.Errorf("server migrate: read target snapshot: %w", err)
 	default:
-		if _, err := tx.Exec("INSERT INTO snapshot_history(workspace_id, dataset_json, version, updated_at) VALUES(?, ?, ?, ?)",
-			targetWorkspaceID, priorDataset, priorVersion, priorUpdated); err != nil {
+		if _, err := tx.Exec("INSERT INTO snapshot_history(user_id, workspace_id, dataset_json, version, updated_at) VALUES(?, ?, ?, ?, ?)",
+			targetUserID, targetWorkspaceID, priorDataset, priorVersion, priorUpdated); err != nil {
 			return MigrationResult{}, report, fmt.Errorf("server migrate: archive target snapshot: %w", err)
 		}
 	}
@@ -123,21 +123,21 @@ func (s *Store) MergeWorkspaceSnapshot(sourceUserID, sourceWorkspaceID, targetUs
 	if err != nil {
 		return MigrationResult{}, report, fmt.Errorf("server migrate: merge: %w", err)
 	}
-	if _, err := tx.Exec(`INSERT OR IGNORE INTO workspace_blobs(workspace_id, hash)
-SELECT ?, hash FROM workspace_blobs WHERE workspace_id = ?`,
-		targetWorkspaceID, sourceWorkspaceID); err != nil {
+	if _, err := tx.Exec(`INSERT OR IGNORE INTO workspace_blobs(user_id, workspace_id, hash)
+SELECT ?, ?, hash FROM workspace_blobs WHERE user_id = ? AND workspace_id = ?`,
+		targetUserID, targetWorkspaceID, sourceUserID, sourceWorkspaceID); err != nil {
 		return MigrationResult{}, report, fmt.Errorf("server migrate: carry attachment links: %w", err)
 	}
 
 	nextVersion := priorVersion + 1
 	stamp := formatTime(now.UTC())
-	if _, err := tx.Exec(`INSERT INTO snapshots(workspace_id, dataset_json, version, updated_at) VALUES(?, ?, ?, ?)
-ON CONFLICT(workspace_id) DO UPDATE SET dataset_json = excluded.dataset_json, version = excluded.version, updated_at = excluded.updated_at`,
-		targetWorkspaceID, merged, nextVersion, stamp); err != nil {
+	if _, err := tx.Exec(`INSERT INTO snapshots(user_id, workspace_id, dataset_json, version, updated_at) VALUES(?, ?, ?, ?, ?)
+ON CONFLICT(user_id, workspace_id) DO UPDATE SET dataset_json = excluded.dataset_json, version = excluded.version, updated_at = excluded.updated_at`,
+		targetUserID, targetWorkspaceID, merged, nextVersion, stamp); err != nil {
 		return MigrationResult{}, report, fmt.Errorf("server migrate: write merged snapshot: %w", err)
 	}
-	if _, err := tx.Exec("UPDATE workspaces SET version = ?, updated_at = ? WHERE id = ?",
-		nextVersion, stamp, targetWorkspaceID); err != nil {
+	if _, err := tx.Exec("UPDATE workspaces SET version = ?, updated_at = ? WHERE user_id = ? AND id = ?",
+		nextVersion, stamp, targetUserID, targetWorkspaceID); err != nil {
 		return MigrationResult{}, report, fmt.Errorf("server migrate: bump target workspace: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
@@ -199,10 +199,10 @@ func (s *Store) migrationEnds(mode MigrationMode, sourceUserID, sourceWorkspaceI
 		targetBytes = snap.Dataset
 		out.TargetBytes = len(snap.Dataset)
 	}
-	if out.SourceBlobs, err = s.countWorkspaceBlobs(out.WorkspaceID); err != nil {
+	if out.SourceBlobs, err = s.countWorkspaceBlobs(out.SourceUserID, out.WorkspaceID); err != nil {
 		return out, nil, nil, err
 	}
-	if out.TargetBlobs, err = s.countWorkspaceBlobs(out.TargetWorkspac); err != nil {
+	if out.TargetBlobs, err = s.countWorkspaceBlobs(out.TargetUserID, out.TargetWorkspac); err != nil {
 		return out, nil, nil, err
 	}
 	return out, targetBytes, sourceBytes, nil

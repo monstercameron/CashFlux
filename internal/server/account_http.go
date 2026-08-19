@@ -60,7 +60,7 @@ func authorizedAccountRequest(w http.ResponseWriter, r *http.Request, cfg Config
 		writeErrorJSON(w, ErrorReasonFailedPrecondition, "store is not configured")
 		return AuthUser{}, false
 	}
-	user, ok := httpBearerUser(r, cfg)
+	user, ok := httpBearerUser(r, cfg, store)
 	if !ok {
 		writeErrorJSON(w, ErrorReasonUnauthenticated, "missing bearer token")
 		return AuthUser{}, false

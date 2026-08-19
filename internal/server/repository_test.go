@@ -36,9 +36,9 @@ func TestRepositorySQLAuditUsesParameterizedQueries(t *testing.T) {
 	}
 	for _, want := range []string{
 		"WHERE user_id = ?",
-		"WHERE workspace_id = ?",
+		"WHERE user_id = ? AND workspace_id = ?",
 		"WHERE user_id = ? AND id = ?",
-		"WHERE w.user_id = ? AND wb.workspace_id = ? AND wb.hash = ?",
+		"WHERE wb.user_id = ? AND wb.workspace_id = ? AND wb.hash = ?",
 		"WHERE user_id = ? AND day = ?",
 		"WHERE hash = ?",
 	} {
@@ -358,6 +358,7 @@ func TestSnapshotStoreCurrentHistoryAndSizeLimit(t *testing.T) {
 	}
 	for i, payload := range [][]byte{[]byte("v1"), []byte("v2"), []byte("v3")} {
 		if err := s.PutSnapshot(Snapshot{
+			UserID:      "u1",
 			WorkspaceID: "w1",
 			Dataset:     payload,
 			Version:     int64(i + 1),
@@ -366,21 +367,21 @@ func TestSnapshotStoreCurrentHistoryAndSizeLimit(t *testing.T) {
 			t.Fatalf("PutSnapshot %d: %v", i+1, err)
 		}
 	}
-	current, ok, err := s.GetSnapshot("w1")
+	current, ok, err := s.GetSnapshot("u1", "w1")
 	if err != nil || !ok {
 		t.Fatalf("GetSnapshot = %+v/%v/%v", current, ok, err)
 	}
 	if current.Version != 3 || string(current.Dataset) != "v3" {
 		t.Fatalf("current snapshot = %+v/%q, want v3", current, current.Dataset)
 	}
-	history, err := s.SnapshotHistory("w1", 0)
+	history, err := s.SnapshotHistory("u1", "w1", 0)
 	if err != nil {
 		t.Fatalf("SnapshotHistory: %v", err)
 	}
 	if len(history) != 2 || history[0].Version != 2 || string(history[0].Dataset) != "v2" || history[1].Version != 1 {
 		t.Fatalf("history = %+v, want versions 2,1", history)
 	}
-	if err := s.PutSnapshot(Snapshot{WorkspaceID: "w1", Dataset: []byte("too-large"), Version: 4, UpdatedAt: now}, 4, 2); err == nil {
+	if err := s.PutSnapshot(Snapshot{UserID: "u1", WorkspaceID: "w1", Dataset: []byte("too-large"), Version: 4, UpdatedAt: now}, 4, 2); err == nil {
 		t.Fatal("oversized snapshot accepted")
 	}
 }
@@ -406,10 +407,10 @@ func TestSnapshotStoreIsServerBlind(t *testing.T) {
 	if !cryptobox.IsEnvelope(envelope) {
 		t.Fatal("test fixture is not an envelope")
 	}
-	if err := s.PutSnapshot(Snapshot{WorkspaceID: "w1", Dataset: envelope, Version: 1, UpdatedAt: now}, 0, 2); err != nil {
+	if err := s.PutSnapshot(Snapshot{UserID: "u1", WorkspaceID: "w1", Dataset: envelope, Version: 1, UpdatedAt: now}, 0, 2); err != nil {
 		t.Fatalf("PutSnapshot envelope: %v", err)
 	}
-	got, ok, err := s.GetSnapshot("w1")
+	got, ok, err := s.GetSnapshot("u1", "w1")
 	if err != nil || !ok {
 		t.Fatalf("GetSnapshot = %v/%v", ok, err)
 	}
@@ -434,13 +435,13 @@ func TestSnapshotStoreCanDropHistory(t *testing.T) {
 	if err := s.PutWorkspace(Workspace{ID: "w1", UserID: "u1", Name: "Home", UpdatedAt: now}); err != nil {
 		t.Fatalf("PutWorkspace: %v", err)
 	}
-	if err := s.PutSnapshot(Snapshot{WorkspaceID: "w1", Dataset: []byte("v1"), Version: 1, UpdatedAt: now}, 16, 1); err != nil {
+	if err := s.PutSnapshot(Snapshot{UserID: "u1", WorkspaceID: "w1", Dataset: []byte("v1"), Version: 1, UpdatedAt: now}, 16, 1); err != nil {
 		t.Fatalf("PutSnapshot v1: %v", err)
 	}
-	if err := s.PutSnapshot(Snapshot{WorkspaceID: "w1", Dataset: []byte("v2"), Version: 2, UpdatedAt: now.Add(time.Minute)}, 16, 0); err != nil {
+	if err := s.PutSnapshot(Snapshot{UserID: "u1", WorkspaceID: "w1", Dataset: []byte("v2"), Version: 2, UpdatedAt: now.Add(time.Minute)}, 16, 0); err != nil {
 		t.Fatalf("PutSnapshot v2: %v", err)
 	}
-	history, err := s.SnapshotHistory("w1", 0)
+	history, err := s.SnapshotHistory("u1", "w1", 0)
 	if err != nil {
 		t.Fatalf("SnapshotHistory: %v", err)
 	}
@@ -476,7 +477,7 @@ func TestBlobStoreContentAddressingLinksAndGC(t *testing.T) {
 	if string(read) != string(data) {
 		t.Fatalf("read blob = %q, want %q", read, data)
 	}
-	if err := s.LinkWorkspaceBlob("w1", blob.Hash); err != nil {
+	if err := s.LinkWorkspaceBlob("u1", "w1", blob.Hash); err != nil {
 		t.Fatalf("LinkWorkspaceBlob: %v", err)
 	}
 	linkedToUser, err := s.UserWorkspaceBlob("u1", "w1", blob.Hash)
@@ -493,7 +494,7 @@ func TestBlobStoreContentAddressingLinksAndGC(t *testing.T) {
 	if linkedToOther {
 		t.Fatal("UserWorkspaceBlob other user = true, want false")
 	}
-	linked, err := s.WorkspaceBlobs("w1")
+	linked, err := s.WorkspaceBlobs("u1", "w1")
 	if err != nil {
 		t.Fatalf("WorkspaceBlobs: %v", err)
 	}
@@ -561,15 +562,16 @@ func TestBlobStoreCountsDistinctUserBlobBytes(t *testing.T) {
 		t.Fatalf("PutBlob second: %v", err)
 	}
 	for _, link := range []struct {
+		userID      string
 		workspaceID string
 		hash        string
 	}{
-		{"w1", first.Hash},
-		{"w2", first.Hash},
-		{"w2", second.Hash},
-		{"w3", first.Hash},
+		{"u1", "w1", first.Hash},
+		{"u1", "w2", first.Hash},
+		{"u1", "w2", second.Hash},
+		{"u2", "w3", first.Hash},
 	} {
-		if err := s.LinkWorkspaceBlob(link.workspaceID, link.hash); err != nil {
+		if err := s.LinkWorkspaceBlob(link.userID, link.workspaceID, link.hash); err != nil {
 			t.Fatalf("LinkWorkspaceBlob %+v: %v", link, err)
 		}
 	}
@@ -920,4 +922,22 @@ func openTestStore(t *testing.T) *Store {
 	}
 	t.Cleanup(func() { _ = s.Close() })
 	return s
+}
+
+// withSessionKey resolves a Config the way every real constructor does before
+// using it, so a test that mints or verifies session tokens is exercising the
+// same signing key the server would.
+//
+// Tests used to get this for free: sessionSigningSecret fell back to cfg.Token,
+// so any Config with a bearer token could sign sessions. That fallback was the
+// bug — it made the signing key a value every client holds — and removing it
+// means a bare Config can no longer issue sessions at all. Resolving here is
+// what a deployment does at startup (see ResolveSessionKey), not a workaround.
+func withSessionKey(t *testing.T, cfg Config, store *Store) Config {
+	t.Helper()
+	resolved, err := ResolveSessionKey(cfg, store)
+	if err != nil {
+		t.Fatalf("resolve session key: %v", err)
+	}
+	return resolved
 }

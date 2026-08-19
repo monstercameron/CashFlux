@@ -239,6 +239,13 @@ func pendingDeviceWatcher() uic.Node {
 				return
 			}
 			setPwPassword.Set("")
+			// Setting the password revoked every session on the account, the
+			// redemption pair this card is holding included. Swap in the
+			// replacement the server issued, or the pair persisted when the user
+			// dismisses the recovery code below would already be dead.
+			if replacement, ok := sessionFromSetPassword(out); ok {
+				pendingPair.Set(replacement)
+			}
 			setPwRecovery.Set(strings.TrimSpace(out.RecoveryCode))
 			phase.Set(string(pendingPhaseRecovery))
 		}()

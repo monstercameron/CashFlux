@@ -6,6 +6,68 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Security
+- **A workspace belongs to an account, not to the server (schema v17).** `workspaces.id` was a global
+  primary key, but workspace ids are minted by the client and every fresh install names its first one
+  `"default"` — so the first account ever to sync claimed that id server-wide, and every other
+  account's first push was refused with `workspace not found`, permanently. On a shared server the
+  second person could never sync at all. Ownership is now part of the key, and `snapshots`,
+  `snapshot_history` and `workspace_blobs` carry their owner too (leaving them keyed by workspace
+  alone would only have relocated the collision, with two accounts sharing one snapshot row). The
+  migration rebuilds the four tables and verifies the result with `PRAGMA foreign_key_check`; every
+  existing id is globally unique today, so each row maps to exactly one owner and nothing merges.
+  Transferring a workspace between accounts now moves its data with it, in the same transaction, and
+  refuses a target that already owns that id.
+- **A full backup no longer carries a live access token.** `cashflux-backup.json` embedded
+  `cashflux:prefs` verbatim — including `serverToken` and `serverCsrf` — into the file most likely to
+  end up in a sync folder. The connection fields are stripped on the way out and on the way back in,
+  so an older backup cannot repoint this device at somebody else's server under their credential.
+- **A deleted account can no longer be brought back by a browser that was still open.** Access tokens are
+  stateless JWTs with a 15-minute life and no revocation check, and `ensureUserRow` materialized a users row
+  on demand — so a tab that was signed in when an account was deleted recreated it on its next sync push,
+  with the default role, its suspension cleared (suspension is a column on that row), and its workspace and
+  snapshot restored. "Delete my account" silently did not, and a suspended user could self-delete their way
+  back to an active account. Deletion now records a tombstone in the same transaction, which both blocks the
+  recreation and stops the stale credential authenticating at all. Deliberately creating an account again —
+  registering a freed username, signing in through the provider, an operator approval — clears it.
+- **The session-signing key is no longer a credential the clients hold.** It fell back to the static bearer
+  token (and its SHA-256) when no session or master key was configured, which is the default self-host shape
+  and the one `pkg/embed` generates a fresh token for on every start. Anyone holding the sync token could
+  therefore mint an access *or* 30-day refresh token for any account on the server, the owner included. No
+  derivation fixes that — anything computed from the token is computable by every token holder — so the token
+  no longer participates. A server with neither key configured now generates one and keeps it to itself, so
+  sessions still survive restarts with no operator action. Deployments that were signing with the bearer
+  token will sign everyone out once; `CASHFLUX_SERVER_SESSION_KEY` and `_MASTER_KEY` are unaffected.
+- **Login is rate limited server-wide, not only per username.** Every other unauthenticated door already had
+  a constant-keyed global backstop; login had only a per-username bucket, so a spray of one password across
+  many usernames never tripped anything. Measured before the fix: 300 attempts across distinct usernames,
+  none refused — and each one pays a full bcrypt comparison, unknown usernames included, so it was a CPU
+  exhaustion door as well as a guessing one.
+- **Workspace exports no longer carry a live access token.** `cashflux:prefs` is bundled per workspace, so
+  the downloaded JSON included `serverToken` and `serverCsrf` in plain text while the envelope's own comment
+  claimed it "carries no secrets" — and importing a file wrote them straight back, silently repointing the
+  app at the sender's server under the sender's credential. The connection fields are stripped on the way
+  out and on the way in; every other preference, known or not, passes through untouched.
+- **Changing an existing password now requires the current one, and evicts every other session.** A live
+  session was previously enough to rewrite the account's username and password and mint a fresh recovery
+  code, so any paired device was a silent, complete takeover. And the change revoked nothing, so the
+  attacker whose access prompted it kept a working refresh token for another 30 days. The bootstrap call a
+  freshly paired device makes is still exempt — there is no prior secret to prove — and the caller is handed
+  a replacement session so protecting the account does not sign out the person doing it. (The recovery-code
+  path already revoked correctly; only `SetPassword` was missing it.)
+- **A replacement recovery code is derived from the resolved signing secret.** It read `cfg.SessionKey`
+  directly, which is legitimately empty whenever a master key is configured instead — making the new code a
+  pure function of the user id and the idempotency key under an empty HMAC key. With no secret available at
+  all it now falls back to a random code rather than a derivable one.
+- **A wildcard app origin cannot authorize an OAuth `returnTo`.** The callback posts the access token to that
+  destination, and it is an unauthenticated query parameter, so a wildcard would have let any site be named
+  as the recipient. `Config.Validate` already rejects `"*"`, so this was unreachable through environment
+  configuration — but the wildcard branch is real for an embedder building a Config directly, and this is not
+  the door that should trust it.
+- **A client with no randomness no longer sends a fixed idempotency key.** `crypto/rand` failing produced the
+  same constant for every client, colliding unrelated actions on one idempotency record and — on the recovery
+  path — making the derived replacement code identical everywhere. It now sends none.
+
 ### Fixed
 - **Sync no longer stops when the server cannot say who you are (C696 follow-up).** Running the browser
   regression suite for the first time caught a regression in the identity work: the client refused to upload
@@ -19,6 +81,19 @@ and every commit updates this file under `Unreleased`.
   summary hard to target for anyone else too. The new panels have their own class.
 
 ### Added
+- **Export and import the whole database as a real SQLite file.** Settings → Data gains "Export
+  database (.sqlite)" and "Import database (.sqlite)…". Every other export is CashFlux's own JSON,
+  which is the right default and the wrong thing to hand to a tool that has never heard of CashFlux;
+  this one is a genuine database image — produced by SQLite's own backup machinery, not a rendering
+  with a new extension — so it opens in the sqlite3 CLI, a database browser, or pandas, and imports
+  straight back here. Artifact image bytes are gathered out of IndexedDB on the way out and put back
+  on the way in, so the file is a complete, restorable backup rather than one missing every receipt.
+  The database is VACUUMed before export, so the file is proportional to what you have rather than to
+  everything you have ever deleted, and stamped with `PRAGMA user_version` so an import knows what it
+  is reading. An import is validated in a scratch database first: a file that is not a database, is
+  truncated, belongs to another program, or comes from a newer build is refused with the household
+  untouched.
+
 - **A balance you update can say when it was true (C684).** Entering a new value reveals an "as of" date,
   defaulting to today. A figure you read on Friday and enter on Monday belongs to Friday — which decides the
   month it counts in, and which statement later replaces it.

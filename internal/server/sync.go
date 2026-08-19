@@ -142,13 +142,17 @@ func (s *SyncService) PutWorkspace(ctx context.Context, workspace Workspace, cli
 	if err := validateWorkspaceFields(workspace); err != nil {
 		return PutWorkspaceResult{}, err
 	}
-	owner, owned, err := s.store.WorkspaceOwner(workspace.ID)
-	if err != nil {
-		return PutWorkspaceResult{}, fmt.Errorf("server sync: workspace owner: %w", err)
-	}
-	if owned && owner != user.ID {
-		return PutWorkspaceResult{}, status.Error(codes.NotFound, "workspace not found")
-	}
+	// There used to be a global owner lookup here, refusing the write when any
+	// OTHER account already held this workspace id. That guard is gone with
+	// schema v17, which made ownership part of the key: another account holding
+	// "default" is now an ordinary, expected state rather than a collision, and
+	// refusing on it was the bug — every install mints "default", so the second
+	// account on a server could never sync anything.
+	//
+	// Nothing is lost by removing it. Every statement below addresses the
+	// workspace as (user.ID, workspace.ID): the read is user-scoped, and
+	// PutWorkspace upserts ON CONFLICT(user_id, id). There is no longer a way to
+	// express a write to somebody else's row, so there is nothing left to check.
 	current, exists, err := s.store.GetWorkspace(user.ID, workspace.ID)
 	if err != nil {
 		return PutWorkspaceResult{}, fmt.Errorf("server sync: get current workspace: %w", err)
@@ -352,6 +356,20 @@ func ensureUserRow(store *Store, user AuthUser) error {
 	}
 	if err != sql.ErrNoRows {
 		return fmt.Errorf("server store: find user: %w", err)
+	}
+	// An id with a tombstone is not a user we have never seen — it is one that
+	// was deleted while this credential was still valid. Materializing it here
+	// is what silently undid every account deletion: the row came back with the
+	// default role and, since suspension is a column ON that row, unsuspended,
+	// and the next push restored the workspace and its snapshot too. Refuse,
+	// loudly, so the device shows an authentication failure instead of quietly
+	// resurrecting what somebody asked to have erased.
+	deleted, err := store.AccountDeleted(user.ID)
+	if err != nil {
+		return fmt.Errorf("server store: deleted account check: %w", err)
+	}
+	if deleted {
+		return status.Error(codes.Unauthenticated, "this account no longer exists")
 	}
 	if err := store.UpsertUser(User{ID: user.ID, Provider: "token", Subject: user.ID, CreatedAt: time.Now().UTC()}); err != nil {
 		return fmt.Errorf("server store: upsert user: %w", err)

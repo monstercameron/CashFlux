@@ -102,6 +102,7 @@ func (s *SyncService) PutWorkspaceRPC(ctx context.Context, req backendrpc.PutWor
 	var dataset []byte
 	if result.Accepted && len(req.Dataset) > 0 {
 		if err := s.store.PutSnapshot(Snapshot{
+			UserID:      result.Workspace.UserID,
 			WorkspaceID: result.Workspace.ID,
 			Dataset:     req.Dataset,
 			Version:     result.Version,

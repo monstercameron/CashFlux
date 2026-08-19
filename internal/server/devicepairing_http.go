@@ -26,7 +26,7 @@ func handleMintPairingCode(cfg Config, store *Store) http.HandlerFunc {
 			writeErrorJSON(w, ErrorReasonFailedPrecondition, "store is not configured")
 			return
 		}
-		user, ok := httpBearerUser(r, cfg)
+		user, ok := httpBearerUser(r, cfg, store)
 		if !ok {
 			writeErrorJSON(w, ErrorReasonUnauthenticated, "missing bearer token")
 			return

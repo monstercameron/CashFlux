@@ -83,7 +83,7 @@ func TestMergeCarriesAttachmentLinks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PutBlob: %v", err)
 	}
-	if err := store.LinkWorkspaceBlob("ws-src", blob.Hash); err != nil {
+	if err := store.LinkWorkspaceBlob("src", "ws-src", blob.Hash); err != nil {
 		t.Fatalf("LinkWorkspaceBlob: %v", err)
 	}
 	if _, _, err := store.MergeWorkspaceSnapshot("src", "ws-src", "dst", "ws-dst", datasetmerge.PreferTarget, now, false); err != nil {

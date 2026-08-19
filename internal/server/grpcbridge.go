@@ -68,9 +68,19 @@ func NewGRPCBridgeHandler(cfg Config, stores ...*Store) http.Handler {
 	if len(stores) > 0 {
 		store = stores[0]
 	}
+	// Fill in a server-generated session-signing key when the operator configured
+	// none, so signing can never fall back to a credential the clients hold.
+	// A failure here is not fatal: the deployment keeps serving, and
+	// sessionSigningSecret returns nothing, so session issue fails closed rather
+	// than silently signing with something guessable.
+	if resolved, err := ResolveSessionKey(cfg, store); err == nil {
+		cfg = resolved
+	} else if cfg.Logger != nil {
+		cfg.Logger.Error("session signing key unavailable; sessions cannot be issued", "err", err)
+	}
 	grpcServer := grpc.NewServer(
-		grpc.ChainUnaryInterceptor(RequestIDUnaryInterceptor(), AuthUnaryInterceptor(grpcTokenValidator(cfg)), LoggingUnaryInterceptor(cfg.Logger, cfg.Metrics), CloudEntitlementUnaryInterceptor(cfg, store)),
-		grpc.ChainStreamInterceptor(RequestIDStreamInterceptor(), AuthStreamInterceptor(grpcTokenValidator(cfg)), LoggingStreamInterceptor(cfg.Logger, cfg.Metrics), CloudEntitlementStreamInterceptor(cfg, store)),
+		grpc.ChainUnaryInterceptor(RequestIDUnaryInterceptor(), AuthUnaryInterceptor(grpcTokenValidator(cfg, store)), LoggingUnaryInterceptor(cfg.Logger, cfg.Metrics), CloudEntitlementUnaryInterceptor(cfg, store)),
+		grpc.ChainStreamInterceptor(RequestIDStreamInterceptor(), AuthStreamInterceptor(grpcTokenValidator(cfg, store)), LoggingStreamInterceptor(cfg.Logger, cfg.Metrics), CloudEntitlementStreamInterceptor(cfg, store)),
 		// Permit the client's ~40s keepalive PINGs (syncbridge clientKeepaliveInterval)
 		// during an active watch stream so a half-open connection is detected
 		// client-side, without earning a GOAWAY. MinTime is set below that interval;
@@ -106,9 +116,19 @@ func NewSyncBridgeHandler(cfg Config, stores ...*Store) http.Handler {
 	if len(stores) > 0 {
 		store = stores[0]
 	}
+	// Fill in a server-generated session-signing key when the operator configured
+	// none, so signing can never fall back to a credential the clients hold.
+	// A failure here is not fatal: the deployment keeps serving, and
+	// sessionSigningSecret returns nothing, so session issue fails closed rather
+	// than silently signing with something guessable.
+	if resolved, err := ResolveSessionKey(cfg, store); err == nil {
+		cfg = resolved
+	} else if cfg.Logger != nil {
+		cfg.Logger.Error("session signing key unavailable; sessions cannot be issued", "err", err)
+	}
 	grpcServer := grpc.NewServer(
-		grpc.ChainUnaryInterceptor(RequestIDUnaryInterceptor(), AuthUnaryInterceptor(grpcTokenValidator(cfg)), syncTransferInterceptor(), LoggingUnaryInterceptor(cfg.Logger, cfg.Metrics), CloudEntitlementUnaryInterceptor(cfg, store)),
-		grpc.ChainStreamInterceptor(RequestIDStreamInterceptor(), AuthStreamInterceptor(grpcTokenValidator(cfg)), LoggingStreamInterceptor(cfg.Logger, cfg.Metrics), CloudEntitlementStreamInterceptor(cfg, store)),
+		grpc.ChainUnaryInterceptor(RequestIDUnaryInterceptor(), AuthUnaryInterceptor(grpcTokenValidator(cfg, store)), syncTransferInterceptor(), LoggingUnaryInterceptor(cfg.Logger, cfg.Metrics), CloudEntitlementUnaryInterceptor(cfg, store)),
+		grpc.ChainStreamInterceptor(RequestIDStreamInterceptor(), AuthStreamInterceptor(grpcTokenValidator(cfg, store)), LoggingStreamInterceptor(cfg.Logger, cfg.Metrics), CloudEntitlementStreamInterceptor(cfg, store)),
 		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
 			MinTime:             20 * time.Second,
 			PermitWithoutStream: false,
@@ -195,9 +215,19 @@ func NewSyncAndAuthBridgeHandler(cfg Config, stores ...*Store) http.Handler {
 	if len(stores) > 0 {
 		store = stores[0]
 	}
+	// Fill in a server-generated session-signing key when the operator configured
+	// none, so signing can never fall back to a credential the clients hold.
+	// A failure here is not fatal: the deployment keeps serving, and
+	// sessionSigningSecret returns nothing, so session issue fails closed rather
+	// than silently signing with something guessable.
+	if resolved, err := ResolveSessionKey(cfg, store); err == nil {
+		cfg = resolved
+	} else if cfg.Logger != nil {
+		cfg.Logger.Error("session signing key unavailable; sessions cannot be issued", "err", err)
+	}
 	grpcServer := grpc.NewServer(
-		grpc.ChainUnaryInterceptor(RequestIDUnaryInterceptor(), AuthUnaryInterceptor(grpcTokenValidator(cfg)), syncTransferInterceptor(), LoggingUnaryInterceptor(cfg.Logger, cfg.Metrics), CloudEntitlementUnaryInterceptor(cfg, store)),
-		grpc.ChainStreamInterceptor(RequestIDStreamInterceptor(), AuthStreamInterceptor(grpcTokenValidator(cfg)), LoggingStreamInterceptor(cfg.Logger, cfg.Metrics), CloudEntitlementStreamInterceptor(cfg, store)),
+		grpc.ChainUnaryInterceptor(RequestIDUnaryInterceptor(), AuthUnaryInterceptor(grpcTokenValidator(cfg, store)), syncTransferInterceptor(), LoggingUnaryInterceptor(cfg.Logger, cfg.Metrics), CloudEntitlementUnaryInterceptor(cfg, store)),
+		grpc.ChainStreamInterceptor(RequestIDStreamInterceptor(), AuthStreamInterceptor(grpcTokenValidator(cfg, store)), LoggingStreamInterceptor(cfg.Logger, cfg.Metrics), CloudEntitlementStreamInterceptor(cfg, store)),
 		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
 			MinTime:             20 * time.Second,
 			PermitWithoutStream: false,
@@ -250,9 +280,9 @@ func grpcBridgeOriginAllowed(r *http.Request, cfg Config) bool {
 	return allowedOrigin(origin, cfg.AppOrigin) || sameRequestOrigin(origin, r)
 }
 
-func grpcTokenValidator(cfg Config) TokenValidator {
+func grpcTokenValidator(cfg Config, store *Store) TokenValidator {
 	return func(_ context.Context, token string) (AuthUser, error) {
-		user, ok := authUserForToken(strings.TrimSpace(token), cfg)
+		user, ok := authUserForToken(strings.TrimSpace(token), cfg, store)
 		if !ok {
 			return AuthUser{}, http.ErrNoCookie
 		}
@@ -260,7 +290,15 @@ func grpcTokenValidator(cfg Config) TokenValidator {
 	}
 }
 
-func authUserForToken(token string, cfg Config) (AuthUser, bool) {
+// authUserForToken resolves a bearer token to the account it authenticates.
+//
+// store is consulted only on the session-JWT branch, and only to ask whether
+// that account has been deleted. A session token stays cryptographically valid
+// for its full 15-minute life no matter what happens to the account behind it,
+// so without this a credential minted before a deletion keeps authenticating
+// afterwards. A nil store skips the check rather than failing closed, because
+// several constructors legitimately build a token-only bridge with no store.
+func authUserForToken(token string, cfg Config, store *Store) (AuthUser, bool) {
 	token = strings.TrimSpace(token)
 	if token == "" {
 		return AuthUser{}, false
@@ -298,6 +336,14 @@ func authUserForToken(token string, cfg Config) (AuthUser, bool) {
 	// deployment that never issues any AuthService session has nothing new to
 	// accept.
 	if userID, ok := verifySessionToken(cfg, token, "access", time.Now().UTC()); ok {
+		if store != nil {
+			if deleted, err := store.AccountDeleted(userID); err != nil || deleted {
+				// Err on the side of refusing: a lookup failure here means we
+				// cannot say whether this account still exists, and honouring a
+				// credential we cannot check is the failure mode this guards.
+				return AuthUser{}, false
+			}
+		}
 		return AuthUser{ID: userID, Token: token}, true
 	}
 	return AuthUser{}, false

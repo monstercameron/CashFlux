@@ -81,11 +81,11 @@ func TestAuthUnaryInterceptorRejectsInvalidToken(t *testing.T) {
 func TestAuthUserForTokenAcceptsSHA256Hash(t *testing.T) {
 	sum := sha256.Sum256([]byte("self-host-token"))
 	cfg := Config{AuthMode: "token", TokenSHA256: hex.EncodeToString(sum[:])}
-	user, ok := authUserForToken("self-host-token", cfg)
+	user, ok := authUserForToken("self-host-token", cfg, nil)
 	if !ok || user.ID == "" || user.Token != "self-host-token" {
 		t.Fatalf("hashed token auth = %+v/%v", user, ok)
 	}
-	if _, ok := authUserForToken("wrong", cfg); ok {
+	if _, ok := authUserForToken("wrong", cfg, nil); ok {
 		t.Fatal("wrong token accepted against hash")
 	}
 }
@@ -120,17 +120,17 @@ func TestAuthUserForTokenAcceptsAuthServiceJWTRegardlessOfAuthMode(t *testing.T)
 			if err != nil {
 				t.Fatalf("issueStoredSessionPair: %v", err)
 			}
-			user, ok := authUserForToken(access, cfg)
+			user, ok := authUserForToken(access, cfg, nil)
 			if !ok || user.ID != "u1" {
 				t.Fatalf("AuthMode=%q: authUserForToken(sessionJWT) = %+v/%v, want u1/true", mode, user, ok)
 			}
 			// The static self-host token must keep working unaffected in either mode.
-			staticUser, ok := authUserForToken("self-host-token", cfg)
+			staticUser, ok := authUserForToken("self-host-token", cfg, nil)
 			if !ok || staticUser.Token != "self-host-token" {
 				t.Fatalf("AuthMode=%q: authUserForToken(staticToken) = %+v/%v, want accepted", mode, staticUser, ok)
 			}
 			// A garbage token must still be rejected in either mode.
-			if _, ok := authUserForToken("not-a-real-token", cfg); ok {
+			if _, ok := authUserForToken("not-a-real-token", cfg, nil); ok {
 				t.Fatalf("AuthMode=%q: garbage token was accepted", mode)
 			}
 		})

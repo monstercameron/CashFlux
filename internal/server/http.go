@@ -77,6 +77,16 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 	if len(stores) > 0 {
 		store = stores[0]
 	}
+	// Fill in a server-generated session-signing key when the operator configured
+	// none, so signing can never fall back to a credential the clients hold.
+	// A failure here is not fatal: the deployment keeps serving, and
+	// sessionSigningSecret returns nothing, so session issue fails closed rather
+	// than silently signing with something guessable.
+	if resolved, err := ResolveSessionKey(cfg, store); err == nil {
+		cfg = resolved
+	} else if cfg.Logger != nil {
+		cfg.Logger.Error("session signing key unavailable; sessions cannot be issued", "err", err)
+	}
 	if cfg.Metrics == nil {
 		cfg.Metrics = NewMetrics()
 	}
@@ -155,7 +165,7 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})
-	mux.HandleFunc("GET /metrics", handleMetrics(cfg))
+	mux.HandleFunc("GET /metrics", handleMetrics(cfg, store))
 	mux.HandleFunc("OPTIONS /v1/admin/setup", handleCORSPreflight(cfg))
 	mux.Handle("GET /v1/admin/setup", authLimiter(handleAdminSetupStatus(cfg, store)))
 	mux.Handle("POST /v1/admin/setup", authLimiter(handleAdminSetupCreate(cfg, store, adminSetupMu)))
@@ -352,9 +362,9 @@ func handleCORSPreflight(cfg Config) http.HandlerFunc {
 	}
 }
 
-func handleMetrics(cfg Config) http.HandlerFunc {
+func handleMetrics(cfg Config, store *Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		user, ok := httpBearerUser(r, cfg)
+		user, ok := httpBearerUser(r, cfg, store)
 		if !ok {
 			writeErrorJSON(w, ErrorReasonUnauthenticated, "missing bearer token")
 			return
@@ -482,7 +492,12 @@ func userRateLimitMiddleware(limit int, cfg Config, next http.Handler) http.Hand
 	}
 	limiter := newFixedWindowLimiter(limit)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		user, ok := httpBearerUser(r, cfg)
+		// nil store on purpose: this resolves an identity only to pick a rate-limit
+		// bucket, and grants no authority of its own. Paying a deleted-account
+		// lookup on every request to choose a bucket would put a database round
+		// trip in front of traffic that has not been authorized yet — the actual
+		// authorization downstream does consult the store.
+		user, ok := httpBearerUser(r, cfg, nil)
 		if ok && !limiter.allow(user.ID, time.Now()) {
 			w.Header().Set("Retry-After", "60")
 			writeErrorJSON(w, ErrorReasonRateLimited, "user rate limit exceeded")
@@ -611,13 +626,13 @@ func writeJSONStatus(w http.ResponseWriter, status int, v any) {
 	}
 }
 
-func httpBearerUser(r *http.Request, cfg Config) (AuthUser, bool) {
+func httpBearerUser(r *http.Request, cfg Config, store *Store) (AuthUser, bool) {
 	header := r.Header.Get("Authorization")
 	fields := strings.Fields(header)
 	if len(fields) != 2 || !strings.EqualFold(fields[0], "bearer") || strings.TrimSpace(fields[1]) == "" {
 		return AuthUser{}, false
 	}
-	user, ok := authUserForToken(strings.TrimSpace(fields[1]), cfg)
+	user, ok := authUserForToken(strings.TrimSpace(fields[1]), cfg, store)
 	if !ok {
 		return AuthUser{}, false
 	}

@@ -56,7 +56,7 @@ func handleAuditEvents(cfg Config, store *Store) http.HandlerFunc {
 			writeErrorJSON(w, ErrorReasonFailedPrecondition, "store is not configured")
 			return
 		}
-		user, source, ok := adminRequestUser(r, cfg)
+		user, source, ok := adminRequestUser(r, cfg, store)
 		if !ok {
 			writeErrorJSON(w, ErrorReasonUnauthenticated, "missing access credential")
 			return

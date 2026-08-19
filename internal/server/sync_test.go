@@ -89,7 +89,16 @@ func TestSyncServicePutWorkspaceLWW(t *testing.T) {
 	}
 }
 
-func TestSyncServicePutWorkspaceRejectsCrossUserIDTakeover(t *testing.T) {
+// Two accounts writing the same workspace id must each get their own, and
+// neither must be able to see or overwrite the other's.
+//
+// This used to assert a REFUSAL: workspaces.id was a global primary key, so the
+// second account's write was rejected with NotFound. That was tenant isolation
+// by accident of a namespace clash, and it had a cost — workspace ids are minted
+// by clients and every install starts with "default", so on a shared server the
+// second account could never sync at all. Ownership is now part of the key, and
+// the isolation this test exists for is asserted directly instead.
+func TestSyncServicePutWorkspaceIsolatesTheSameIDAcrossAccounts(t *testing.T) {
 	store := openTestStore(t)
 	service := NewSyncService(store)
 	now := time.Date(2026, time.June, 18, 18, 45, 0, 0, time.UTC)
@@ -98,13 +107,29 @@ func TestSyncServicePutWorkspaceRejectsCrossUserIDTakeover(t *testing.T) {
 	if err := store.PutWorkspace(Workspace{ID: "shared", UserID: "u2", Name: "Other", UpdatedAt: now}); err != nil {
 		t.Fatalf("PutWorkspace seed: %v", err)
 	}
+
 	ctx := ContextWithAuthUser(context.Background(), AuthUser{ID: "u1"})
-	if _, err := service.PutWorkspace(ctx, Workspace{ID: "shared", Name: "Takeover"}, now, true, now.Add(time.Minute)); status.Code(err) != codes.NotFound {
-		t.Fatalf("cross-user PutWorkspace = %v, want not found", err)
+	result, err := service.PutWorkspace(ctx, Workspace{ID: "shared", Name: "Mine"}, now, true, now.Add(time.Minute))
+	if err != nil || !result.Accepted {
+		t.Fatalf("second account could not claim its own workspace of the same id: %+v/%v", result, err)
 	}
-	workspace, ok, err := store.GetWorkspace("u2", "shared")
-	if err != nil || !ok || workspace.Name != "Other" {
-		t.Fatalf("cross-user workspace after rejected put = %+v/%v/%v", workspace, ok, err)
+
+	// u2's workspace is untouched...
+	theirs, ok, err := store.GetWorkspace("u2", "shared")
+	if err != nil || !ok || theirs.Name != "Other" {
+		t.Fatalf("the other account's workspace was modified: %+v/%v/%v", theirs, ok, err)
+	}
+	// ...and u1 has a separate one under the same id.
+	mine, ok, err := store.GetWorkspace("u1", "shared")
+	if err != nil || !ok || mine.Name != "Mine" {
+		t.Fatalf("this account's workspace = %+v/%v/%v", mine, ok, err)
+	}
+	// Each account sees exactly one.
+	for _, userID := range []string{"u1", "u2"} {
+		list, err := store.ListWorkspaces(userID, true)
+		if err != nil || len(list) != 1 {
+			t.Fatalf("%s sees %d workspaces (err %v), want 1", userID, len(list), err)
+		}
 	}
 }
 

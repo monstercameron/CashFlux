@@ -28,7 +28,7 @@ func TestRunBackupCopiesDatabaseBlobsAndManifest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PutBlob: %v", err)
 	}
-	if err := store.LinkWorkspaceBlob("w1", blob.Hash); err != nil {
+	if err := store.LinkWorkspaceBlob("u1", "w1", blob.Hash); err != nil {
 		t.Fatalf("LinkWorkspaceBlob: %v", err)
 	}
 	if err := store.Close(); err != nil {

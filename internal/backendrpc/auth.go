@@ -175,10 +175,25 @@ type CancelDevicePairingResponse struct {
 type SetPasswordRequest struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
+	// CurrentPassword re-authenticates the person at the keyboard when the
+	// account ALREADY has a password. It is empty for the bootstrap call, where
+	// a freshly paired device is setting the account's first password and there
+	// is nothing to re-authenticate against; the server decides which of the two
+	// situations it is in, so a caller cannot skip the check by omitting this.
+	CurrentPassword string `json:"currentPassword,omitempty"`
 }
 
 // SetPasswordResponse returns the one-time recovery code created with the
 // password. The server stores only its bcrypt hash.
 type SetPasswordResponse struct {
 	RecoveryCode string `json:"recoveryCode"`
+	// A credential change revokes every session on the account, including the
+	// one that made the call — otherwise the change would not evict an attacker
+	// who is already in. These carry the caller's replacement session so the
+	// device that just changed its own password is not signed out as a
+	// side effect of protecting itself.
+	AccessToken      string `json:"accessToken,omitempty"`
+	RefreshToken     string `json:"refreshToken,omitempty"`
+	ExpiresInSeconds int64  `json:"expiresInSeconds,omitempty"`
+	DeviceID         string `json:"deviceId,omitempty"`
 }

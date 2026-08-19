@@ -122,7 +122,7 @@ func handleAdminSessionStatus(cfg Config, store *Store) http.HandlerFunc {
 			writeErrorJSON(w, ErrorReasonFailedPrecondition, "store is not configured")
 			return
 		}
-		user, ok := httpAdminCookieUser(r, cfg)
+		user, ok := httpAdminCookieUser(r, cfg, store)
 		if !ok {
 			writeErrorJSON(w, ErrorReasonUnauthenticated, "operator session is missing or expired")
 			return
@@ -242,7 +242,7 @@ func handleAdminSessionLogout(cfg Config, store *Store, auth *authServer) http.H
 		if cookie, err := r.Cookie(adminRefreshCookie); err == nil && auth != nil {
 			_, _ = auth.Logout(r.Context(), backendrpc.LogoutRequest{RefreshToken: cookie.Value})
 		}
-		if user, ok := httpAdminCookieUser(r, cfg); ok {
+		if user, ok := httpAdminCookieUser(r, cfg, store); ok {
 			auditFromRequest(r, store, user, "admin.session.logout", "admin", "session")
 		}
 		clearAdminSessionCookies(w, requestIsSecure(r))
@@ -316,7 +316,7 @@ func clearAdminSessionCookies(w http.ResponseWriter, secure bool) {
 	}
 }
 
-func httpAdminCookieUser(r *http.Request, cfg Config) (AuthUser, bool) {
+func httpAdminCookieUser(r *http.Request, cfg Config, store *Store) (AuthUser, bool) {
 	cookie, err := r.Cookie(adminAccessCookie)
 	if err != nil {
 		return AuthUser{}, false
@@ -325,14 +325,24 @@ func httpAdminCookieUser(r *http.Request, cfg Config) (AuthUser, bool) {
 	if !ok {
 		return AuthUser{}, false
 	}
+	// Same rule as the bearer path: an operator cookie minted before the account
+	// was deleted stays cryptographically valid for its full 15 minutes. It
+	// matters most here, because an id named in cfg.AdminUserIDs is granted
+	// owner authority from configuration alone — deleting the account would not
+	// otherwise have taken that away until the cookie expired.
+	if store != nil {
+		if deleted, err := store.AccountDeleted(userID); err != nil || deleted {
+			return AuthUser{}, false
+		}
+	}
 	return AuthUser{ID: userID, Token: cookie.Value}, true
 }
 
-func adminRequestUser(r *http.Request, cfg Config) (AuthUser, adminAuthSource, bool) {
-	if user, ok := httpBearerUser(r, cfg); ok {
+func adminRequestUser(r *http.Request, cfg Config, store *Store) (AuthUser, adminAuthSource, bool) {
+	if user, ok := httpBearerUser(r, cfg, store); ok {
 		return user, adminAuthBearer, true
 	}
-	if user, ok := httpAdminCookieUser(r, cfg); ok {
+	if user, ok := httpAdminCookieUser(r, cfg, store); ok {
 		return user, adminAuthCookie, true
 	}
 	return AuthUser{}, adminAuthNone, false

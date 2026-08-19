@@ -60,6 +60,27 @@ func persistAuthSession(prefsAtom state.Atom[prefs.Prefs], serverURL string, pai
 	}
 }
 
+// sessionFromSetPassword lifts the replacement session out of a SetPassword
+// response, and reports whether there was one.
+//
+// Setting or changing a password now revokes every session on the account — the
+// point of a credential change is to evict whoever else is holding one — and
+// that includes the session that made the call. The server issues the caller a
+// replacement in the same response; a client that ignored it would keep using a
+// token whose refresh family has just been revoked and find itself silently
+// signed out when the access token expires fifteen minutes later.
+func sessionFromSetPassword(out backendrpc.SetPasswordResponse) (backendrpc.TokenPairResponse, bool) {
+	if strings.TrimSpace(out.AccessToken) == "" {
+		return backendrpc.TokenPairResponse{}, false
+	}
+	return backendrpc.TokenPairResponse{
+		AccessToken:      out.AccessToken,
+		RefreshToken:     out.RefreshToken,
+		ExpiresInSeconds: out.ExpiresInSeconds,
+		DeviceID:         out.DeviceID,
+	}, true
+}
+
 // PasswordAuthCard is the username/password sign-in surface (TODOS.md C422
 // client UI). Standalone component (its own hooks), composed into the /sync
 // page.
@@ -558,6 +579,11 @@ func SetPasswordCard() uic.Node {
 			}
 			// Never keep the plaintext around once the server has the hash.
 			password.Set("")
+			// Adopt the replacement session before anything else touches the
+			// backend: the token this call was made with has just been revoked.
+			if pair, ok := sessionFromSetPassword(out); ok {
+				persistAuthSession(prefsAtom, pr.ServerURL, pair, true)
+			}
 			recoveryCode.Set(strings.TrimSpace(out.RecoveryCode))
 			done.Set(true)
 			notify(uistate.T("authCards.pendingSetPasswordSuccess"), false)

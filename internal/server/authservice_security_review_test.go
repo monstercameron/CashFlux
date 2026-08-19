@@ -121,7 +121,7 @@ func TestGRPCTokenValidatorRejectsRefreshTokenTypeConfusion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("issueSessionToken: %v", err)
 	}
-	if _, ok := authUserForToken(refresh, cfg); ok {
+	if _, ok := authUserForToken(refresh, cfg, nil); ok {
 		t.Fatal("a refresh token validated as a bearer access token — type confusion")
 	}
 }

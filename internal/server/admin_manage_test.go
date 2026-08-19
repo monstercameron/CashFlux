@@ -161,7 +161,7 @@ func TestAdminUserDetailNotFound(t *testing.T) {
 func TestAdminUserDetailNonAdmin(t *testing.T) {
 	store := openTestStore(t)
 	seedAdminFixture(t, store)
-	cfg := Config{Addr: ":0", DataDir: t.TempDir(), AuthMode: "token", Token: "operator-secret", AdminUserIDs: nil, Metrics: NewMetrics()}
+	cfg := withSessionKey(t, Config{Addr: ":0", DataDir: t.TempDir(), AuthMode: "token", Token: "operator-secret", AdminUserIDs: nil, Metrics: NewMetrics()}, store)
 	token, err := issueSessionToken(cfg, "local:ordinary", "access", time.Hour, time.Now().UTC())
 	if err != nil {
 		t.Fatalf("issue session token: %v", err)

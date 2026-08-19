@@ -106,7 +106,7 @@ func adminAuthorize(cfg Config, store *Store, w http.ResponseWriter, r *http.Req
 		writeErrorJSON(w, ErrorReasonFailedPrecondition, "store is not configured")
 		return AuthUser{}, false
 	}
-	user, source, ok := adminRequestUser(r, cfg)
+	user, source, ok := adminRequestUser(r, cfg, store)
 	if !ok {
 		writeErrorJSON(w, ErrorReasonUnauthenticated, "operator session is missing or invalid")
 		return AuthUser{}, false

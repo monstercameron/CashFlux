@@ -48,7 +48,7 @@ func TestFullServerAuthServiceHonorsRegistrationPolicy(t *testing.T) {
 		t.Fatalf("closed Register error = %v, want Unimplemented", err)
 	}
 
-	open := authServiceForRegistrationPolicy(store, Config{RegistrationOpen: true, Token: "policy-test-token"})
+	open := authServiceForRegistrationPolicy(store, withSessionKey(t, Config{RegistrationOpen: true, Token: "policy-test-token"}, store))
 	if _, err := open.Register(context.Background(), req); err != nil {
 		t.Fatalf("open Register: %v", err)
 	}

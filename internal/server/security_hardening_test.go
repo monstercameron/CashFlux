@@ -409,11 +409,11 @@ func TestDeleteAccountPurgesEverythingWithoutCascade(t *testing.T) {
 	if err := store.PutWorkspace(Workspace{ID: "ws1", UserID: uid, Name: "Home", Version: 1, UpdatedAt: now}); err != nil {
 		t.Fatalf("PutWorkspace: %v", err)
 	}
-	if err := store.PutSnapshot(Snapshot{WorkspaceID: "ws1", Dataset: []byte(`{"a":1}`), Version: 1, UpdatedAt: now}, 1<<20, 5); err != nil {
+	if err := store.PutSnapshot(Snapshot{UserID: uid, WorkspaceID: "ws1", Dataset: []byte(`{"a":1}`), Version: 1, UpdatedAt: now}, 1<<20, 5); err != nil {
 		t.Fatalf("PutSnapshot: %v", err)
 	}
 	// A second snapshot version to populate snapshot_history too.
-	if err := store.PutSnapshot(Snapshot{WorkspaceID: "ws1", Dataset: []byte(`{"a":2}`), Version: 2, UpdatedAt: now.Add(time.Minute)}, 1<<20, 5); err != nil {
+	if err := store.PutSnapshot(Snapshot{UserID: uid, WorkspaceID: "ws1", Dataset: []byte(`{"a":2}`), Version: 2, UpdatedAt: now.Add(time.Minute)}, 1<<20, 5); err != nil {
 		t.Fatalf("PutSnapshot v2: %v", err)
 	}
 	if err := store.PutAIKey(uid, "openai", "sk-secret", master); err != nil {
@@ -496,7 +496,7 @@ func TestGetSnapshotForUserIsolatesTenants(t *testing.T) {
 	if err := store.PutWorkspace(Workspace{ID: "wsA", UserID: "a", Name: "A", Version: 1, UpdatedAt: now}); err != nil {
 		t.Fatalf("PutWorkspace: %v", err)
 	}
-	if err := store.PutSnapshot(Snapshot{WorkspaceID: "wsA", Dataset: []byte(`{"secret":true}`), Version: 1, UpdatedAt: now}, 1<<20, 5); err != nil {
+	if err := store.PutSnapshot(Snapshot{UserID: "a", WorkspaceID: "wsA", Dataset: []byte(`{"secret":true}`), Version: 1, UpdatedAt: now}, 1<<20, 5); err != nil {
 		t.Fatalf("PutSnapshot: %v", err)
 	}
 	// Owner can read it.

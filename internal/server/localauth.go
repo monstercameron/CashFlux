@@ -85,6 +85,16 @@ VALUES(?, 'local', ?, '', ?, ?, ?, ?, ?)`,
 		}
 		return User{}, fmt.Errorf("server store: create local user: %w", err)
 	}
+	// A local account's id is derived from its username (localUserID), so
+	// registering a name that was used before produces the id that name had last
+	// time — including a name whose account was deleted. Deliberately creating an
+	// account is the moment its tombstone stops meaning anything: what the
+	// tombstone guards against is a stale credential walking back in, not a
+	// person signing up again. Cleared in the same transaction as the insert so
+	// the two can never disagree.
+	if err := clearAccountTombstoneTx(tx, id); err != nil {
+		return User{}, fmt.Errorf("server store: clear account tombstone: %w", err)
+	}
 	if err := tx.Commit(); err != nil {
 		return User{}, fmt.Errorf("server store: commit create local user: %w", err)
 	}
@@ -303,4 +313,32 @@ func generateRecoveryCode() (string, error) {
 		return "", fmt.Errorf("server store: generate recovery code: %w", err)
 	}
 	return base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(buf), nil
+}
+
+// LocalPasswordHash returns the bcrypt password hash stored for userID, and
+// whether the account has one at all.
+//
+// SetPassword needs this to tell its two situations apart: a device that just
+// paired is setting the account's FIRST password and has nothing to
+// re-authenticate against, while a caller changing an EXISTING password must
+// prove they know the current one. Deciding that server-side — rather than
+// trusting the client to say which it is doing — is what stops the check being
+// skipped by simply omitting the field.
+func (s *Store) LocalPasswordHash(userID string) (hash string, has bool, err error) {
+	if s == nil || s.db == nil {
+		return "", false, fmt.Errorf("server store: not configured")
+	}
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return "", false, fmt.Errorf("server store: user id is required")
+	}
+	defer s.observeDB("LocalPasswordHash", time.Now())
+	err = s.db.QueryRow(`SELECT COALESCE(password_hash, '') FROM users WHERE id = ?`, userID).Scan(&hash)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, fmt.Errorf("server store: local password hash: %w", err)
+	}
+	return hash, strings.TrimSpace(hash) != "", nil
 }

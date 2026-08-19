@@ -45,7 +45,7 @@ func TestAdminPendingAccessApproveCreatesRedeemableAccount(t *testing.T) {
 		t.Fatalf("decision = %+v", decision)
 	}
 
-	service := newAuthService(store, Config{Token: adminToken})
+	service := newAuthService(store, withSessionKey(t, Config{Token: adminToken}, store))
 	session, err := service.RedeemPairingCode(context.Background(), backendrpc.RedeemPairingCodeRequest{
 		PairingCode: decision.PairingCode,
 		DeviceLabel: "approved-browser",

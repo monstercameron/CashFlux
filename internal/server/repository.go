@@ -47,6 +47,11 @@ type Workspace struct {
 
 // Snapshot is an opaque gzipped dataset payload for one workspace version.
 type Snapshot struct {
+	// UserID is the account that owns the workspace this snapshot belongs to.
+	// Part of the identity, not decoration: workspace ids are minted by clients
+	// and collide across accounts (every install starts with "default"), so a
+	// snapshot keyed by workspace alone belongs to whoever wrote it last.
+	UserID      string
 	WorkspaceID string
 	Dataset     []byte
 	Version     int64
@@ -227,9 +232,9 @@ func (s *Store) DeleteAccount(userID string) (bool, error) {
 	// Children of the user's workspaces first, then the workspaces, then the remaining
 	// user-owned rows, then the user itself.
 	childDeletes := []string{
-		`DELETE FROM snapshot_history WHERE workspace_id IN (SELECT id FROM workspaces WHERE user_id = ?)`,
-		`DELETE FROM snapshots WHERE workspace_id IN (SELECT id FROM workspaces WHERE user_id = ?)`,
-		`DELETE FROM workspace_blobs WHERE workspace_id IN (SELECT id FROM workspaces WHERE user_id = ?)`,
+		`DELETE FROM snapshot_history WHERE user_id = ?`,
+		`DELETE FROM snapshots WHERE user_id = ?`,
+		`DELETE FROM workspace_blobs WHERE user_id = ?`,
 		`DELETE FROM workspaces WHERE user_id = ?`,
 		`DELETE FROM ai_keys WHERE user_id = ?`,
 		`DELETE FROM usage WHERE user_id = ?`,
@@ -249,6 +254,17 @@ func (s *Store) DeleteAccount(userID string) (bool, error) {
 	affected, err := result.RowsAffected()
 	if err != nil {
 		return false, fmt.Errorf("server store: delete account rows: %w", err)
+	}
+	// The tombstone goes in the SAME transaction as the delete. Any credential
+	// issued before this moment is still cryptographically valid for up to its
+	// remaining lifetime, and the row it authenticated is now gone — which is
+	// precisely the state ensureUserRow used to repair by recreating the
+	// account. Remembering the id is what turns "deleted" into something a
+	// stale token cannot undo.
+	if affected > 0 {
+		if err := markAccountDeletedTx(tx, userID, time.Now().UTC()); err != nil {
+			return false, fmt.Errorf("server store: tombstone deleted account: %w", err)
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return false, fmt.Errorf("server store: commit delete account: %w", err)
@@ -697,8 +713,7 @@ func (s *Store) PutWorkspace(w Workspace) error {
 	_, err := s.db.Exec(`
 INSERT INTO workspaces(id, user_id, name, color, sort, deleted, version, updated_at, device_id)
 VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT(id) DO UPDATE SET
-  user_id = excluded.user_id,
+ON CONFLICT(user_id, id) DO UPDATE SET
   name = excluded.name,
   color = excluded.color,
   sort = excluded.sort,
@@ -758,19 +773,6 @@ FROM workspaces WHERE user_id = ? AND id = ?`, userID, workspaceID)
 	return w, true, nil
 }
 
-func (s *Store) WorkspaceOwner(workspaceID string) (string, bool, error) {
-	defer s.observeDB("WorkspaceOwner", time.Now())
-	var userID string
-	err := s.db.QueryRow(`SELECT user_id FROM workspaces WHERE id = ?`, workspaceID).Scan(&userID)
-	if errors.Is(err, sql.ErrNoRows) {
-		return "", false, nil
-	}
-	if err != nil {
-		return "", false, fmt.Errorf("server store: workspace owner: %w", err)
-	}
-	return userID, true, nil
-}
-
 // SoftDeleteWorkspace marks a user's workspace as deleted.
 func (s *Store) SoftDeleteWorkspace(userID, workspaceID string, updatedAt time.Time, deviceID string) (bool, error) {
 	if updatedAt.IsZero() {
@@ -811,15 +813,16 @@ func (s *Store) PutSnapshot(snapshot Snapshot, maxBytes, historyLimit int) error
 
 	var current Snapshot
 	var updated string
-	row := tx.QueryRow(`SELECT workspace_id, dataset_json, version, updated_at FROM snapshots WHERE workspace_id = ?`, snapshot.WorkspaceID)
+	row := tx.QueryRow(`SELECT workspace_id, dataset_json, version, updated_at FROM snapshots WHERE user_id = ? AND workspace_id = ?`,
+		snapshot.UserID, snapshot.WorkspaceID)
 	err = row.Scan(&current.WorkspaceID, &current.Dataset, &current.Version, &updated)
 	if err == nil {
 		current.UpdatedAt, err = parseTime(updated)
 		if err != nil {
 			return fmt.Errorf("server store: parse current snapshot time: %w", err)
 		}
-		if _, err := tx.Exec(`INSERT INTO snapshot_history(workspace_id, dataset_json, version, updated_at) VALUES(?, ?, ?, ?)`,
-			current.WorkspaceID, current.Dataset, current.Version, formatTime(current.UpdatedAt)); err != nil {
+		if _, err := tx.Exec(`INSERT INTO snapshot_history(user_id, workspace_id, dataset_json, version, updated_at) VALUES(?, ?, ?, ?, ?)`,
+			snapshot.UserID, current.WorkspaceID, current.Dataset, current.Version, formatTime(current.UpdatedAt)); err != nil {
 			return fmt.Errorf("server store: snapshot history: %w", err)
 		}
 	} else if !errors.Is(err, sql.ErrNoRows) {
@@ -827,16 +830,16 @@ func (s *Store) PutSnapshot(snapshot Snapshot, maxBytes, historyLimit int) error
 	}
 
 	if _, err := tx.Exec(`
-INSERT INTO snapshots(workspace_id, dataset_json, version, updated_at)
-VALUES(?, ?, ?, ?)
-ON CONFLICT(workspace_id) DO UPDATE SET
+INSERT INTO snapshots(user_id, workspace_id, dataset_json, version, updated_at)
+VALUES(?, ?, ?, ?, ?)
+ON CONFLICT(user_id, workspace_id) DO UPDATE SET
   dataset_json = excluded.dataset_json,
   version = excluded.version,
   updated_at = excluded.updated_at`,
-		snapshot.WorkspaceID, snapshot.Dataset, snapshot.Version, formatTime(snapshot.UpdatedAt)); err != nil {
+		snapshot.UserID, snapshot.WorkspaceID, snapshot.Dataset, snapshot.Version, formatTime(snapshot.UpdatedAt)); err != nil {
 		return fmt.Errorf("server store: put snapshot: %w", err)
 	}
-	if err := trimSnapshotHistory(tx, snapshot.WorkspaceID, historyLimit); err != nil {
+	if err := trimSnapshotHistory(tx, snapshot.UserID, snapshot.WorkspaceID, historyLimit); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -851,10 +854,10 @@ ON CONFLICT(workspace_id) DO UPDATE SET
 func (s *Store) GetSnapshotForUser(userID, workspaceID string) (Snapshot, bool, error) {
 	defer s.observeDB("GetSnapshotForUser", time.Now())
 	row := s.db.QueryRow(`
-SELECT sn.workspace_id, sn.dataset_json, sn.version, sn.updated_at
+SELECT sn.user_id, sn.workspace_id, sn.dataset_json, sn.version, sn.updated_at
 FROM snapshots sn
-JOIN workspaces w ON w.id = sn.workspace_id
-WHERE sn.workspace_id = ? AND w.user_id = ?`, workspaceID, userID)
+JOIN workspaces w ON w.user_id = sn.user_id AND w.id = sn.workspace_id
+WHERE sn.workspace_id = ? AND sn.user_id = ?`, workspaceID, userID)
 	snapshot, err := scanSnapshot(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Snapshot{}, false, nil
@@ -866,9 +869,10 @@ WHERE sn.workspace_id = ? AND w.user_id = ?`, workspaceID, userID)
 }
 
 // GetSnapshot returns the current dataset snapshot for a workspace.
-func (s *Store) GetSnapshot(workspaceID string) (Snapshot, bool, error) {
+func (s *Store) GetSnapshot(userID, workspaceID string) (Snapshot, bool, error) {
 	defer s.observeDB("GetSnapshot", time.Now())
-	row := s.db.QueryRow(`SELECT workspace_id, dataset_json, version, updated_at FROM snapshots WHERE workspace_id = ?`, workspaceID)
+	row := s.db.QueryRow(`SELECT user_id, workspace_id, dataset_json, version, updated_at FROM snapshots
+WHERE user_id = ? AND workspace_id = ?`, userID, workspaceID)
 	snapshot, err := scanSnapshot(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Snapshot{}, false, nil
@@ -880,10 +884,11 @@ func (s *Store) GetSnapshot(workspaceID string) (Snapshot, bool, error) {
 }
 
 // SnapshotHistory returns retained prior snapshots newest-first.
-func (s *Store) SnapshotHistory(workspaceID string, limit int) ([]Snapshot, error) {
+func (s *Store) SnapshotHistory(userID, workspaceID string, limit int) ([]Snapshot, error) {
 	defer s.observeDB("SnapshotHistory", time.Now())
-	query := `SELECT workspace_id, dataset_json, version, updated_at FROM snapshot_history WHERE workspace_id = ? ORDER BY version DESC, id DESC`
-	args := []any{workspaceID}
+	query := `SELECT user_id, workspace_id, dataset_json, version, updated_at FROM snapshot_history
+WHERE user_id = ? AND workspace_id = ? ORDER BY version DESC, id DESC`
+	args := []any{userID, workspaceID}
 	if limit > 0 {
 		query += ` LIMIT ?`
 		args = append(args, limit)
@@ -1038,12 +1043,12 @@ func (s *Store) GetBlob(hash string) (Blob, bool, error) {
 }
 
 // LinkWorkspaceBlob records that a workspace snapshot references a blob hash.
-func (s *Store) LinkWorkspaceBlob(workspaceID, hash string) error {
-	if strings.TrimSpace(workspaceID) == "" || strings.TrimSpace(hash) == "" {
-		return fmt.Errorf("server store: workspace id and blob hash are required")
+func (s *Store) LinkWorkspaceBlob(userID, workspaceID, hash string) error {
+	if strings.TrimSpace(userID) == "" || strings.TrimSpace(workspaceID) == "" || strings.TrimSpace(hash) == "" {
+		return fmt.Errorf("server store: user id, workspace id and blob hash are required")
 	}
 	defer s.observeDB("LinkWorkspaceBlob", time.Now())
-	if _, err := s.db.Exec(`INSERT OR IGNORE INTO workspace_blobs(workspace_id, hash) VALUES(?, ?)`, workspaceID, hash); err != nil {
+	if _, err := s.db.Exec(`INSERT OR IGNORE INTO workspace_blobs(user_id, workspace_id, hash) VALUES(?, ?, ?)`, userID, workspaceID, hash); err != nil {
 		return fmt.Errorf("server store: link workspace blob: %w", err)
 	}
 	return nil
@@ -1059,8 +1064,8 @@ func (s *Store) UserWorkspaceBlob(userID, workspaceID, hash string) (bool, error
 	err := s.db.QueryRow(`
 SELECT wb.hash
 FROM workspace_blobs wb
-JOIN workspaces w ON w.id = wb.workspace_id
-WHERE w.user_id = ? AND wb.workspace_id = ? AND wb.hash = ?`, userID, workspaceID, hash).Scan(&got)
+JOIN workspaces w ON w.user_id = wb.user_id AND w.id = wb.workspace_id
+WHERE wb.user_id = ? AND wb.workspace_id = ? AND wb.hash = ?`, userID, workspaceID, hash).Scan(&got)
 	if err == sql.ErrNoRows {
 		return false, nil
 	}
@@ -1080,7 +1085,7 @@ func (s *Store) UserBlobLinked(userID, hash string) (bool, error) {
 	err := s.db.QueryRow(`
 SELECT COUNT(*)
 FROM workspace_blobs wb
-JOIN workspaces w ON w.id = wb.workspace_id
+JOIN workspaces w ON w.user_id = wb.user_id AND w.id = wb.workspace_id
 WHERE w.user_id = ? AND wb.hash = ?`, userID, hash).Scan(&count)
 	if err != nil {
 		return false, fmt.Errorf("server store: user blob linked: %w", err)
@@ -1101,7 +1106,7 @@ FROM (
   SELECT DISTINCT b.hash, b.size
   FROM blobs b
   JOIN workspace_blobs wb ON wb.hash = b.hash
-  JOIN workspaces w ON w.id = wb.workspace_id
+  JOIN workspaces w ON w.user_id = wb.user_id AND w.id = wb.workspace_id
   WHERE w.user_id = ?
 )`, userID).Scan(&total)
 	if err != nil {
@@ -1110,15 +1115,19 @@ FROM (
 	return total, nil
 }
 
-// WorkspaceBlobs returns blob metadata linked to a workspace.
-func (s *Store) WorkspaceBlobs(workspaceID string) ([]Blob, error) {
+// WorkspaceBlobs returns blob metadata linked to one account's workspace.
+//
+// Scoped by account, not by workspace alone: ids are minted by clients and two
+// accounts can hold the same one, so a workspace-only lookup would return a
+// union of both households' attachments.
+func (s *Store) WorkspaceBlobs(userID, workspaceID string) ([]Blob, error) {
 	defer s.observeDB("WorkspaceBlobs", time.Now())
 	rows, err := s.db.Query(`
 SELECT b.hash, b.size, b.mime, b.created_at
 FROM blobs b
 JOIN workspace_blobs wb ON wb.hash = b.hash
-WHERE wb.workspace_id = ?
-ORDER BY b.hash`, workspaceID)
+WHERE wb.user_id = ? AND wb.workspace_id = ?
+ORDER BY b.hash`, userID, workspaceID)
 	if err != nil {
 		return nil, fmt.Errorf("server store: workspace blobs: %w", err)
 	}
@@ -1193,7 +1202,7 @@ func (s *Store) UserSyncSummary(userID string) (workspaces int, datasetBytes int
 	rows, err := s.db.Query(`
 SELECT w.updated_at, COALESCE(LENGTH(s.dataset_json), 0)
 FROM workspaces w
-LEFT JOIN snapshots s ON s.workspace_id = w.id
+LEFT JOIN snapshots s ON s.user_id = w.user_id AND s.workspace_id = w.id
 WHERE w.user_id = ? AND w.deleted = 0`, userID)
 	if err != nil {
 		return 0, 0, time.Time{}, fmt.Errorf("server store: user sync summary: %w", err)
@@ -1669,9 +1678,9 @@ func (s *Store) UsageWithinLimit(userID string, day time.Time, maxRequests, maxT
 func (s *Store) exportSnapshots(userID string) ([]Snapshot, error) {
 	defer s.observeDB("ExportSnapshots", time.Now())
 	rows, err := s.db.Query(`
-SELECT s.workspace_id, s.dataset_json, s.version, s.updated_at
+SELECT s.user_id, s.workspace_id, s.dataset_json, s.version, s.updated_at
 FROM snapshots s
-JOIN workspaces w ON w.id = s.workspace_id
+JOIN workspaces w ON w.user_id = s.user_id AND w.id = s.workspace_id
 WHERE w.user_id = ?
 ORDER BY s.workspace_id`, userID)
 	if err != nil {
@@ -1687,7 +1696,7 @@ func (s *Store) exportBlobs(userID string) ([]Blob, error) {
 SELECT DISTINCT b.hash, b.size, b.mime, b.created_at
 FROM blobs b
 JOIN workspace_blobs wb ON wb.hash = b.hash
-JOIN workspaces w ON w.id = wb.workspace_id
+JOIN workspaces w ON w.user_id = wb.user_id AND w.id = wb.workspace_id
 WHERE w.user_id = ?
 ORDER BY b.hash`, userID)
 	if err != nil {
@@ -1784,22 +1793,22 @@ func (s *Store) exportRefreshSessionCount(userID string) (int, error) {
 	return count, nil
 }
 
-func trimSnapshotHistory(tx *sql.Tx, workspaceID string, limit int) error {
+func trimSnapshotHistory(tx *sql.Tx, userID, workspaceID string, limit int) error {
 	if limit <= 0 {
-		if _, err := tx.Exec(`DELETE FROM snapshot_history WHERE workspace_id = ?`, workspaceID); err != nil {
+		if _, err := tx.Exec(`DELETE FROM snapshot_history WHERE user_id = ? AND workspace_id = ?`, userID, workspaceID); err != nil {
 			return fmt.Errorf("server store: trim snapshot history: %w", err)
 		}
 		return nil
 	}
 	_, err := tx.Exec(`
 DELETE FROM snapshot_history
-WHERE workspace_id = ?
+WHERE user_id = ? AND workspace_id = ?
   AND id NOT IN (
     SELECT id FROM snapshot_history
-    WHERE workspace_id = ?
+    WHERE user_id = ? AND workspace_id = ?
     ORDER BY version DESC, id DESC
     LIMIT ?
-  )`, workspaceID, workspaceID, limit)
+  )`, userID, workspaceID, userID, workspaceID, limit)
 	if err != nil {
 		return fmt.Errorf("server store: trim snapshot history: %w", err)
 	}
@@ -1895,7 +1904,7 @@ func parseOptionalTime(s string) (time.Time, error) {
 func scanSnapshot(row snapshotScanner) (Snapshot, error) {
 	var snapshot Snapshot
 	var updated string
-	if err := row.Scan(&snapshot.WorkspaceID, &snapshot.Dataset, &snapshot.Version, &updated); err != nil {
+	if err := row.Scan(&snapshot.UserID, &snapshot.WorkspaceID, &snapshot.Dataset, &snapshot.Version, &updated); err != nil {
 		return Snapshot{}, err
 	}
 	t, err := parseTime(updated)
@@ -2308,4 +2317,117 @@ func blobRelativePath(hash string) (string, error) {
 		return "", fmt.Errorf("server store: invalid blob hash")
 	}
 	return filepath.Join(hash[:2], hash[2:4], hash), nil
+}
+
+// ErrAccountDeleted is returned when something tries to act as an account that
+// has been deleted. It is deliberately distinct from "not found": the account
+// did exist, and a caller still holding a credential for it is exactly the case
+// worth naming.
+var ErrAccountDeleted = errors.New("server store: account was deleted")
+
+// MarkAccountDeleted records a tombstone for userID. Written inside
+// DeleteAccount's transaction so an account can never be removed without one.
+func markAccountDeletedTx(tx *sql.Tx, userID string, now time.Time) error {
+	_, err := tx.Exec(`INSERT INTO deleted_accounts(user_id, deleted_at) VALUES(?, ?)
+ON CONFLICT(user_id) DO UPDATE SET deleted_at = excluded.deleted_at`, userID, formatTime(now))
+	return err
+}
+
+// AccountDeleted reports whether userID names an account that was deleted.
+//
+// This is what stops a stale-but-unexpired access token from walking back into
+// an account that no longer exists: the id is remembered even though every row
+// keyed by it is gone, so ensureUserRow can refuse to recreate it and the auth
+// gate can refuse to authenticate as it.
+func (s *Store) AccountDeleted(userID string) (bool, error) {
+	if s == nil || s.db == nil {
+		return false, fmt.Errorf("server store: not configured")
+	}
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return false, nil
+	}
+	defer s.observeDB("AccountDeleted", time.Now())
+	var found string
+	err := s.db.QueryRow(`SELECT user_id FROM deleted_accounts WHERE user_id = ?`, userID).Scan(&found)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("server store: account deleted lookup: %w", err)
+	}
+	return true, nil
+}
+
+// clearAccountTombstoneTx is ClearAccountTombstone inside a caller's
+// transaction, so creating an account and forgetting that its id was once
+// deleted cannot half-happen.
+func clearAccountTombstoneTx(tx *sql.Tx, userID string) error {
+	_, err := tx.Exec(`DELETE FROM deleted_accounts WHERE user_id = ?`, userID)
+	return err
+}
+
+// ClearAccountTombstone forgets that an id was ever deleted, so the id can be
+// used again by a genuinely new account.
+//
+// Every enrollment door calls this for the id it is about to create. Without it
+// a tombstone would be permanent, which is right for a stale credential and
+// wrong for the deterministic ids token mode derives from the bearer token
+// (authUserFromToken): the same token always produces the same id, so deleting
+// that account once would otherwise lock the deployment out of it for ever.
+func (s *Store) ClearAccountTombstone(userID string) error {
+	if s == nil || s.db == nil {
+		return fmt.Errorf("server store: not configured")
+	}
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return nil
+	}
+	defer s.observeDB("ClearAccountTombstone", time.Now())
+	if _, err := s.db.Exec(`DELETE FROM deleted_accounts WHERE user_id = ?`, userID); err != nil {
+		return fmt.Errorf("server store: clear account tombstone: %w", err)
+	}
+	return nil
+}
+
+// sessionSecretName is server_secrets' key for the session-signing secret.
+const sessionSecretName = "session-signing-key"
+
+// EnsureServerSessionSecret returns the server's own session-signing secret,
+// generating and persisting one on first use.
+//
+// Persisted rather than generated per process because a fresh secret on every
+// restart would invalidate every outstanding session on every deploy. Kept in
+// the store rather than derived from any configured value because the only
+// configured values available on a bare self-host are the bearer token and its
+// hash — credentials the clients themselves hold, which would make the signing
+// key public to every client (see migrateTo16).
+func (s *Store) EnsureServerSessionSecret(now time.Time) (string, error) {
+	if s == nil || s.db == nil {
+		return "", fmt.Errorf("server store: not configured")
+	}
+	defer s.observeDB("EnsureServerSessionSecret", time.Now())
+	var secret string
+	err := s.db.QueryRow(`SELECT secret FROM server_secrets WHERE name = ?`, sessionSecretName).Scan(&secret)
+	if err == nil && strings.TrimSpace(secret) != "" {
+		return secret, nil
+	}
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return "", fmt.Errorf("server store: read session secret: %w", err)
+	}
+	generated, err := randomURLToken(48)
+	if err != nil {
+		return "", fmt.Errorf("server store: generate session secret: %w", err)
+	}
+	// INSERT OR IGNORE, then re-read: two processes opening the same store race
+	// here, and both must end up using the SAME secret or they will reject each
+	// other's tokens. The loser of the race keeps the winner's value.
+	if _, err := s.db.Exec(`INSERT OR IGNORE INTO server_secrets(name, secret, created_at) VALUES(?, ?, ?)`,
+		sessionSecretName, generated, formatTime(now)); err != nil {
+		return "", fmt.Errorf("server store: store session secret: %w", err)
+	}
+	if err := s.db.QueryRow(`SELECT secret FROM server_secrets WHERE name = ?`, sessionSecretName).Scan(&secret); err != nil {
+		return "", fmt.Errorf("server store: reread session secret: %w", err)
+	}
+	return secret, nil
 }

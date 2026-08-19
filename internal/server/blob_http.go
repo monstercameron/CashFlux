@@ -65,7 +65,7 @@ func handlePutBlob(cfg Config, store *Store) http.HandlerFunc {
 			writeErrorJSON(w, ErrorReasonInternal, "blob write failed")
 			return
 		}
-		if err := store.LinkWorkspaceBlob(workspaceID, blob.Hash); err != nil {
+		if err := store.LinkWorkspaceBlob(user.ID, workspaceID, blob.Hash); err != nil {
 			writeErrorJSON(w, ErrorReasonInternal, "blob link failed")
 			return
 		}
@@ -177,7 +177,7 @@ func authorizedBlobRequest(w http.ResponseWriter, r *http.Request, cfg Config, s
 		writeErrorJSON(w, ErrorReasonFailedPrecondition, "store is not configured")
 		return AuthUser{}, false
 	}
-	user, ok := httpBearerUser(r, cfg)
+	user, ok := httpBearerUser(r, cfg, store)
 	if !ok {
 		writeErrorJSON(w, ErrorReasonUnauthenticated, "missing bearer token")
 		return AuthUser{}, false

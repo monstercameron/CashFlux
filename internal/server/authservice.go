@@ -98,8 +98,21 @@ type authServer struct {
 	// the best available signal.
 	loginLimiter    *fixedWindowLimiter
 	recoveryLimiter *fixedWindowLimiter
-	registerLimiter *fixedWindowLimiter
-	pairingLimiter  *fixedWindowLimiter
+
+	// loginGlobalLimiter backstops loginLimiter server-wide, and closes the one
+	// gap every other unauthenticated door here had already closed.
+	// loginLimiter is keyed by USERNAME, which bounds guessing against a single
+	// account and nothing else: an attacker trying one common password against a
+	// thousand usernames never hits the per-username cap even once, because each
+	// attempt lands in its own bucket. Measured before this existed: 300 attempts
+	// across distinct usernames, zero refused. That is password spraying, and it
+	// is also a CPU-exhaustion surface — Login runs a full bcrypt.DefaultCost
+	// comparison on EVERY attempt, including unknown usernames (they are compared
+	// against dummyLoginPasswordHash to equalise timing), so the same 300 attempts
+	// cost the server ~16 seconds of hashing on one SQLite connection.
+	loginGlobalLimiter *fixedWindowLimiter
+	registerLimiter    *fixedWindowLimiter
+	pairingLimiter     *fixedWindowLimiter
 
 	// pairingGlobalLimiter backstops pairingLimiter with a single,
 	// server-wide bucket keyed on a fixed constant (see pairingGlobalLimiterKey)
@@ -170,6 +183,10 @@ const registerGlobalLimiterKey = "register:global"
 
 const recoveryGlobalLimiterKey = "reset-password:global"
 
+// loginGlobalLimiterKey is loginGlobalLimiter's constant bucket key — see
+// pairingGlobalLimiterKey.
+const loginGlobalLimiterKey = "login:global"
+
 // devicePairingGlobalLimiterKey is devicePairingGlobalLimiter's constant
 // bucket key — see pairingGlobalLimiterKey.
 const devicePairingGlobalLimiterKey = "request-device-pairing:global"
@@ -212,6 +229,16 @@ const (
 	registerGlobalLimitPerMinute = 30
 	recoveryGlobalLimitPerMinute = 30
 
+	// loginGlobalLimitPerMinute caps total Login attempts across EVERY caller
+	// server-wide. Set well above the per-username cap and above any plausible
+	// household's real sign-in traffic — a person logs in a handful of times a
+	// day, not a hundred times a minute — while still bounding both a spray
+	// across many usernames and the bcrypt cost an unauthenticated caller can
+	// impose. Deliberately more generous than the mint-side doors (30/min):
+	// login is the high-frequency door, and refusing a legitimate sign-in is a
+	// worse failure here than it is for pairing.
+	loginGlobalLimitPerMinute = 60
+
 	// devicePairingLimitPerMinute/devicePairingGlobalLimitPerMinute cap
 	// RequestDevicePairing the same shape as pairingLimitPerMinute/
 	// pairingGlobalLimitPerMinute cap RedeemPairingCode — see
@@ -239,6 +266,7 @@ func newAuthService(store *Store, cfg Config) *authServer {
 		store:                            store,
 		cfg:                              cfg,
 		loginLimiter:                     newFixedWindowLimiter(loginLimitPerMinute),
+		loginGlobalLimiter:               newFixedWindowLimiter(loginGlobalLimitPerMinute),
 		recoveryLimiter:                  newFixedWindowLimiter(recoveryLimitPerMinute),
 		registerLimiter:                  newFixedWindowLimiter(registerLimitPerMinute),
 		pairingLimiter:                   newFixedWindowLimiter(pairingLimitPerMinute),
@@ -445,7 +473,8 @@ func (s *authServer) Login(ctx context.Context, req backendrpc.LoginRequest) (ba
 	if username == "" || req.Password == "" {
 		return backendrpc.TokenPairResponse{}, status.Error(codes.InvalidArgument, "username and password are required")
 	}
-	if !s.loginLimiter.allow(username, time.Now().UTC()) {
+	loginNow := time.Now().UTC()
+	if !s.loginLimiter.allow(username, loginNow) || !s.loginGlobalLimiter.allow(loginGlobalLimiterKey, loginNow) {
 		return backendrpc.TokenPairResponse{}, status.Error(codes.ResourceExhausted, "too many login attempts — try again in a minute")
 	}
 	user, passwordHash, ok, err := s.store.GetLocalUserByUsername(username)
@@ -595,8 +624,16 @@ func (s *authServer) ResetPassword(ctx context.Context, req backendrpc.ResetPass
 		return backendrpc.TokenPairResponse{}, status.Error(codes.Internal, "password hashing failed")
 	}
 	var replacementCode string
-	if idempotencyKey != "" {
-		replacementCode = deterministicRecoveryCode(s.cfg.SessionKey, user.ID, idempotencyKey)
+	// The idempotent path derives the replacement code so a retry returns the
+	// same one without persisting the plaintext. It must use the RESOLVED signing
+	// secret, not cfg.SessionKey read raw: that field is legitimately empty
+	// whenever the operator configured a MasterKey instead or the server is using
+	// its own generated key, and HMAC-ing under an empty key would make the new
+	// recovery code a pure function of the user id and the idempotency key. With
+	// no secret at all there is nothing safe to derive from, so fall back to a
+	// random code and give up idempotency rather than mint a guessable one.
+	if signingSecret := sessionSigningSecret(s.cfg); idempotencyKey != "" && len(signingSecret) > 0 {
+		replacementCode = deterministicRecoveryCode(string(signingSecret), user.ID, idempotencyKey)
 	} else {
 		replacementCode, err = generateRecoveryCode()
 		if err != nil {
@@ -614,6 +651,10 @@ func (s *authServer) ResetPassword(ctx context.Context, req backendrpc.ResetPass
 	if !rotated {
 		return backendrpc.TokenPairResponse{}, status.Error(codes.Unauthenticated, "username or recovery code is incorrect")
 	}
+	// Every session open before this point is already revoked: RotateLocalRecovery
+	// does it in the same transaction as the credential swap, so recovery cannot
+	// half-succeed and leave the old sessions alive. The new pair is minted after
+	// that, so the person recovering keeps the session they just earned.
 	access, refresh, familyID, err := s.issueSession(user.ID, now, req.DeviceLabel)
 	if err != nil {
 		return backendrpc.TokenPairResponse{}, status.Error(codes.Internal, "session issue failed")
@@ -819,7 +860,32 @@ func (s *authServer) SetPassword(ctx context.Context, req backendrpc.SetPassword
 	// RequestDevicePairing, this door cannot be hit by an unauthenticated
 	// attacker at all.
 	if err := ensureUserRow(s.store, user); err != nil {
+		// ensureUserRow refuses a deleted account by design, and says so with an
+		// Unauthenticated status. Passing that through unchanged matters: a device
+		// still holding a session for an erased account must be told the account
+		// is gone, not handed a generic internal error that reads like a blip.
+		if status.Code(err) == codes.Unauthenticated {
+			return backendrpc.SetPasswordResponse{}, err
+		}
 		return backendrpc.SetPasswordResponse{}, status.Error(codes.Internal, "account lookup failed")
+	}
+	// Changing an existing password requires proving you know it. Holding a live
+	// session was previously sufficient, which made every paired device a silent,
+	// complete account takeover: it could rewrite the account's username and
+	// password and mint itself a fresh recovery code, locking the owner out
+	// without ever knowing their password. The FIRST password is exempt — that is
+	// the pairing bootstrap, where there is no prior secret to prove.
+	existingHash, hasPassword, err := s.store.LocalPasswordHash(user.ID)
+	if err != nil {
+		return backendrpc.SetPasswordResponse{}, status.Error(codes.Internal, "account lookup failed")
+	}
+	if hasPassword {
+		if strings.TrimSpace(req.CurrentPassword) == "" {
+			return backendrpc.SetPasswordResponse{}, status.Error(codes.InvalidArgument, "current password is required to change an existing password")
+		}
+		if bcrypt.CompareHashAndPassword([]byte(existingHash), []byte(req.CurrentPassword)) != nil {
+			return backendrpc.SetPasswordResponse{}, status.Error(codes.Unauthenticated, "current password is incorrect")
+		}
 	}
 	passwordHash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
@@ -842,8 +908,40 @@ func (s *authServer) SetPassword(ctx context.Context, req backendrpc.SetPassword
 		}
 		return backendrpc.SetPasswordResponse{}, status.Error(codes.Internal, "set password failed")
 	}
+	// A credential change is the remediation for a compromise, so it has to
+	// actually remediate: every other session for this account is revoked, and
+	// only then is the caller's own new pair issued. Before this, changing a
+	// password left every existing refresh family alive for the rest of its
+	// 30-day life — so the attacker whose access prompted the change kept it,
+	// and the change accomplished nothing but a new password.
+	//
+	// Best-effort by design: the password IS already changed at this point, and
+	// failing the call now would tell the user their change did not happen when
+	// it did. The failure is logged and audited instead.
+	now := time.Now().UTC()
+	if err := s.store.RevokeRefreshSessionsForUser(user.ID, now); err != nil {
+		s.auditActor(ctx, user.ID, "auth.password.set.revoke_failed", "user", user.ID)
+	}
+	// Issued AFTER the revocation, so the caller's replacement survives it while
+	// every other device on the account is turned out.
+	// No device label on this request; the session keeps the account's own name
+	// rather than inventing one, and ListDevices shows it unlabelled.
+	access, refresh, familyID, err := s.issueSession(user.ID, now, "")
+	if err != nil {
+		// The password change stands; only the re-issue failed. Say so by
+		// returning the recovery code with no session — the caller signs in again
+		// with the password it just set.
+		s.auditActor(ctx, user.ID, "auth.password.set", "user", user.ID)
+		return backendrpc.SetPasswordResponse{RecoveryCode: recoveryCode}, nil
+	}
 	s.auditActor(ctx, user.ID, "auth.password.set", "user", user.ID)
-	return backendrpc.SetPasswordResponse{RecoveryCode: recoveryCode}, nil
+	return backendrpc.SetPasswordResponse{
+		RecoveryCode:     recoveryCode,
+		AccessToken:      access,
+		RefreshToken:     refresh,
+		ExpiresInSeconds: int64(sessionAccessTTL.Seconds()),
+		DeviceID:         familyID,
+	}, nil
 }
 
 // minLocalPasswordLength is the minimum password length Register accepts.

@@ -105,11 +105,24 @@ func sessionTokenHash(token string) string {
 }
 
 // sessionSigningSecret returns the single secret used to SIGN new session tokens.
-// A dedicated CASHFLUX_SERVER_SESSION_KEY is preferred (key separation); when it
-// is unset, signing falls back to MasterKey/Token/TokenSHA256 so existing
-// deployments keep working unchanged.
+//
+// The candidates are deliberately only server-side secrets. This chain used to
+// end at cfg.Token and cfg.TokenSHA256 — the static bearer token every syncing
+// client is given, and its hash — which made the signing key a value the
+// clients themselves hold. Anyone with the sync token could therefore mint a
+// session JWT for any `sub` on the server, the owner account included, and read
+// every account's data as that user. There is no derivation that fixes it: any
+// key computed from the token is equally computable by every token holder, so
+// the token simply cannot participate.
+//
+// When neither key is configured, ResolveSessionKey fills SessionKey in from a
+// secret the server generated and kept to itself (Store.EnsureServerSessionSecret),
+// which is why an empty return here means "no session can be issued" rather than
+// "fall back to something". Failing closed is the point: a deployment that
+// somehow reaches signing with no server-side secret must refuse to mint
+// credentials, not invent a guessable one.
 func sessionSigningSecret(cfg Config) []byte {
-	for _, candidate := range []string{cfg.SessionKey, cfg.MasterKey, cfg.Token, cfg.TokenSHA256} {
+	for _, candidate := range []string{cfg.SessionKey, cfg.MasterKey} {
 		if strings.TrimSpace(candidate) != "" {
 			return []byte(candidate)
 		}
@@ -130,4 +143,30 @@ func sessionVerifySecrets(cfg Config) [][]byte {
 		secrets = append(secrets, []byte(prev))
 	}
 	return secrets
+}
+
+// ResolveSessionKey fills in a server-generated session-signing secret when the
+// operator has configured neither CASHFLUX_SERVER_SESSION_KEY nor
+// CASHFLUX_SERVER_MASTER_KEY, and returns the config to use.
+//
+// Every constructor that pairs a Config with a Store calls this, because those
+// are exactly the deployments that can issue sessions. It is idempotent and
+// cheap: the secret is generated once and persisted, so restarts keep signing
+// with the same key and outstanding sessions survive a deploy.
+//
+// A configured key always wins and is never overwritten — this only fills a
+// vacuum that previously got filled by the client-held bearer token.
+func ResolveSessionKey(cfg Config, store *Store) (Config, error) {
+	if strings.TrimSpace(cfg.SessionKey) != "" || strings.TrimSpace(cfg.MasterKey) != "" {
+		return cfg, nil
+	}
+	if store == nil {
+		return cfg, nil
+	}
+	secret, err := store.EnsureServerSessionSecret(time.Now().UTC())
+	if err != nil {
+		return cfg, fmt.Errorf("server session: resolve signing key: %w", err)
+	}
+	cfg.SessionKey = secret
+	return cfg, nil
 }

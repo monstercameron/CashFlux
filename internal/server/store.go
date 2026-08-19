@@ -14,7 +14,7 @@ import (
 	_ "github.com/ncruces/go-sqlite3/driver" // registers the pure-Go sqlite3 driver
 )
 
-const CurrentServerSchemaVersion = 15
+const CurrentServerSchemaVersion = 17
 const sqliteBusyTimeoutMillis = 5000
 
 // Store owns the backend SQLite database.
@@ -263,6 +263,18 @@ func (s *Store) migrate() error {
 			return err
 		}
 		version = 15
+	}
+	if version < 16 {
+		if err := s.migrateTo16(); err != nil {
+			return err
+		}
+		version = 16
+	}
+	if version < 17 {
+		if err := s.migrateTo17(); err != nil {
+			return err
+		}
+		version = 17
 	}
 	if _, err := s.db.Exec(`INSERT INTO schema_meta(id, version) VALUES(1, ?) ON CONFLICT(id) DO UPDATE SET version = excluded.version`, version); err != nil {
 		return fmt.Errorf("server store: write schema version: %w", err)
@@ -616,6 +628,178 @@ WHERE resolved_by = '' AND status <> 'pending';`); err != nil {
 	return nil
 }
 
+// migrateTo16 adds the two tables that stop a credential outliving the thing it
+// authenticates.
+//
+// deleted_accounts is a tombstone. Access tokens are stateless JWTs with a
+// 15-minute life and no revocation check, so a browser that was signed in when
+// an account was deleted keeps pushing afterwards — and ensureUserRow, whose job
+// is to materialize a users row on demand, obligingly recreated the account it
+// had just been deleted. The row came back with role 'member' and, because
+// suspended_at lives on that same row, NOT suspended. So "delete this account"
+// silently did not, "erase my data" restored the snapshot on the next sync, and
+// a suspended user could self-delete their way back to an active account.
+//
+// server_secrets holds the session-signing key when the operator has not set
+// one. It exists because the previous fallback chain ended at cfg.Token — the
+// static bearer token every syncing client holds — which meant anyone with the
+// sync token could mint a session JWT for any user id on the server, including
+// the owner. A secret the server generates and keeps to itself is the only
+// honest answer; deriving one from the token would still be computable by every
+// token holder.
+func (s *Store) migrateTo16() error {
+	if _, err := s.db.Exec(`
+CREATE TABLE IF NOT EXISTS deleted_accounts (
+  user_id TEXT PRIMARY KEY,
+  deleted_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS server_secrets (
+  name TEXT PRIMARY KEY,
+  secret TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);`); err != nil {
+		return fmt.Errorf("server store: migrate v16: %w", err)
+	}
+	return nil
+}
+
+// migrateTo17 scopes a workspace to the account that owns it.
+//
+// workspaces.id was a GLOBAL primary key, but workspace ids are minted by the
+// client and every fresh install names its first workspace "default". So the
+// first account ever to sync claimed that id for the whole server, and every
+// other account's first push was refused with `workspace not found` — terminal,
+// since the client correctly treats that as a decision rather than a retry. Two
+// people on one server, and the second could never sync at all.
+//
+// The child tables move with it. Leaving snapshots, snapshot_history and
+// workspace_blobs keyed on workspace_id alone would only relocate the
+// collision: two accounts could then both own "default" while sharing one
+// snapshot row between them, which is worse than being refused.
+//
+// SQLite cannot alter a primary key, so each table is rebuilt and copied. The
+// copy is exact — every existing id is globally unique today, so each row maps
+// to precisely one (user_id, id) pair and nothing can merge or be dropped. Rows
+// whose workspace no longer exists are left behind deliberately: they are
+// orphans a foreign key would have removed anyway, and carrying them into a
+// table that now requires an owner would fail the copy for everyone.
+func (s *Store) migrateTo17() error {
+	scoped, err := s.columnExists("snapshots", "user_id")
+	if err != nil {
+		return fmt.Errorf("server store: migrate v17: %w", err)
+	}
+	if scoped {
+		return nil
+	}
+	// SQLite's documented procedure for a schema change of this shape: foreign
+	// keys OFF, rebuild inside a transaction, verify, then back ON. Two reasons
+	// it is required rather than tidy. The child tables reference
+	// workspaces(user_id, id), which does not exist as a key until the new
+	// workspaces table is renamed into place — with enforcement on, merely
+	// CREATEing them fails with "foreign key mismatch". And the copies
+	// necessarily reference a parent that is mid-swap.
+	//
+	// The pragma cannot be set inside a transaction, so it brackets one.
+	if _, err := s.db.Exec(`PRAGMA foreign_keys = OFF`); err != nil {
+		return fmt.Errorf("server store: migrate v17: disable foreign keys: %w", err)
+	}
+	defer func() { _, _ = s.db.Exec(`PRAGMA foreign_keys = ON`) }()
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("server store: migrate v17: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	for _, stmt := range []string{
+		`CREATE TABLE workspaces_v17 (
+  id TEXT NOT NULL,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  color TEXT NOT NULL DEFAULT '',
+  sort INTEGER NOT NULL DEFAULT 0,
+  deleted INTEGER NOT NULL DEFAULT 0,
+  version INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL,
+  device_id TEXT NOT NULL DEFAULT '',
+  PRIMARY KEY(user_id, id)
+)`,
+		`INSERT INTO workspaces_v17(id, user_id, name, color, sort, deleted, version, updated_at, device_id)
+SELECT id, user_id, name, color, sort, deleted, version, updated_at, device_id FROM workspaces`,
+
+		`CREATE TABLE snapshots_v17 (
+  user_id TEXT NOT NULL,
+  workspace_id TEXT NOT NULL,
+  dataset_json BLOB NOT NULL,
+  version INTEGER NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY(user_id, workspace_id),
+  FOREIGN KEY(user_id, workspace_id) REFERENCES workspaces(user_id, id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED
+)`,
+		`INSERT INTO snapshots_v17(user_id, workspace_id, dataset_json, version, updated_at)
+SELECT w.user_id, s.workspace_id, s.dataset_json, s.version, s.updated_at
+FROM snapshots s JOIN workspaces w ON w.id = s.workspace_id`,
+
+		`CREATE TABLE snapshot_history_v17 (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id TEXT NOT NULL,
+  workspace_id TEXT NOT NULL,
+  dataset_json BLOB NOT NULL,
+  version INTEGER NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY(user_id, workspace_id) REFERENCES workspaces(user_id, id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED
+)`,
+		`INSERT INTO snapshot_history_v17(id, user_id, workspace_id, dataset_json, version, updated_at)
+SELECT h.id, w.user_id, h.workspace_id, h.dataset_json, h.version, h.updated_at
+FROM snapshot_history h JOIN workspaces w ON w.id = h.workspace_id`,
+
+		`CREATE TABLE workspace_blobs_v17 (
+  user_id TEXT NOT NULL,
+  workspace_id TEXT NOT NULL,
+  hash TEXT NOT NULL REFERENCES blobs(hash) ON DELETE CASCADE,
+  PRIMARY KEY(user_id, workspace_id, hash),
+  FOREIGN KEY(user_id, workspace_id) REFERENCES workspaces(user_id, id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED
+)`,
+		`INSERT INTO workspace_blobs_v17(user_id, workspace_id, hash)
+SELECT w.user_id, wb.workspace_id, wb.hash
+FROM workspace_blobs wb JOIN workspaces w ON w.id = wb.workspace_id`,
+
+		`DROP TABLE workspace_blobs`,
+		`DROP TABLE snapshot_history`,
+		`DROP TABLE snapshots`,
+		`DROP TABLE workspaces`,
+		`ALTER TABLE workspaces_v17 RENAME TO workspaces`,
+		`ALTER TABLE snapshots_v17 RENAME TO snapshots`,
+		`ALTER TABLE snapshot_history_v17 RENAME TO snapshot_history`,
+		`ALTER TABLE workspace_blobs_v17 RENAME TO workspace_blobs`,
+		`CREATE INDEX IF NOT EXISTS idx_workspaces_user ON workspaces(user_id, deleted, sort)`,
+		`CREATE INDEX IF NOT EXISTS idx_snapshot_history_workspace ON snapshot_history(user_id, workspace_id, version DESC)`,
+	} {
+		if _, err := tx.Exec(stmt); err != nil {
+			return fmt.Errorf("server store: migrate v17: %w", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("server store: migrate v17: commit: %w", err)
+	}
+	// With enforcement off for the rebuild, this is the only thing that proves
+	// the result is actually consistent. A migration that silently produced
+	// dangling rows would be discovered much later, by a query returning
+	// somebody else's data or none at all.
+	rows, err := s.db.Query(`PRAGMA foreign_key_check`)
+	if err != nil {
+		return fmt.Errorf("server store: migrate v17: foreign key check: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	if rows.Next() {
+		return fmt.Errorf("server store: migrate v17: rebuilt tables failed the foreign key check")
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("server store: migrate v17: foreign key check: %w", err)
+	}
+	return nil
+}
+
 // columnExists reports whether a table has a column of the given name.
 func (s *Store) columnExists(table, column string) (bool, error) {
 	rows, err := s.db.Query(`SELECT name FROM pragma_table_info(?)`, table)
@@ -646,7 +830,7 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 CREATE TABLE IF NOT EXISTS workspaces (
-  id TEXT PRIMARY KEY,
+  id TEXT NOT NULL,
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   color TEXT NOT NULL DEFAULT '',
@@ -654,25 +838,31 @@ CREATE TABLE IF NOT EXISTS workspaces (
   deleted INTEGER NOT NULL DEFAULT 0,
   version INTEGER NOT NULL DEFAULT 0,
   updated_at TEXT NOT NULL,
-  device_id TEXT NOT NULL DEFAULT ''
+  device_id TEXT NOT NULL DEFAULT '',
+  PRIMARY KEY(user_id, id)
 );
 CREATE INDEX IF NOT EXISTS idx_workspaces_user ON workspaces(user_id, deleted, sort);
 
 CREATE TABLE IF NOT EXISTS snapshots (
-  workspace_id TEXT PRIMARY KEY REFERENCES workspaces(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL,
+  workspace_id TEXT NOT NULL,
   dataset_json BLOB NOT NULL,
   version INTEGER NOT NULL,
-  updated_at TEXT NOT NULL
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY(user_id, workspace_id),
+  FOREIGN KEY(user_id, workspace_id) REFERENCES workspaces(user_id, id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED
 );
 
 CREATE TABLE IF NOT EXISTS snapshot_history (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL,
+  workspace_id TEXT NOT NULL,
   dataset_json BLOB NOT NULL,
   version INTEGER NOT NULL,
-  updated_at TEXT NOT NULL
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY(user_id, workspace_id) REFERENCES workspaces(user_id, id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED
 );
-CREATE INDEX IF NOT EXISTS idx_snapshot_history_workspace ON snapshot_history(workspace_id, version DESC);
+CREATE INDEX IF NOT EXISTS idx_snapshot_history_workspace ON snapshot_history(user_id, workspace_id, version DESC);
 
 CREATE TABLE IF NOT EXISTS blobs (
   hash TEXT PRIMARY KEY,
@@ -682,9 +872,11 @@ CREATE TABLE IF NOT EXISTS blobs (
 );
 
 CREATE TABLE IF NOT EXISTS workspace_blobs (
-  workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL,
+  workspace_id TEXT NOT NULL,
   hash TEXT NOT NULL REFERENCES blobs(hash) ON DELETE CASCADE,
-  PRIMARY KEY(workspace_id, hash)
+  PRIMARY KEY(user_id, workspace_id, hash),
+  FOREIGN KEY(user_id, workspace_id) REFERENCES workspaces(user_id, id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED
 );
 
 CREATE TABLE IF NOT EXISTS ai_keys (

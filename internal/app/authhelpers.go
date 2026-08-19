@@ -42,10 +42,15 @@ func customSyncDeviceLabel() string {
 func newIdempotencyKey() string {
 	buf := make([]byte, 16)
 	if _, err := rand.Read(buf); err != nil {
-		// crypto/rand failing would mean no source of randomness is available at
-		// all (fatal for the whole app, not just this flow); fall back to a
-		// fixed marker rather than panicking mid-render.
-		return "idempotency-key-unavailable"
+		// crypto/rand failing means no randomness is available at all. Returning
+		// a FIXED marker here was worse than returning nothing: every client in
+		// that state would send the same key, so two unrelated actions collide on
+		// one idempotency record — and on ResetPassword the replacement recovery
+		// code is derived from the key, making it identical for everyone. An
+		// empty key is the honest answer: the server treats it as "no idempotency
+		// requested" and simply processes the call, losing retry-dedup for one
+		// action instead of sharing a secret across every device.
+		return ""
 	}
 	return hex.EncodeToString(buf)
 }

@@ -125,8 +125,13 @@ func moveWorkspace(wsID string, toIndex int) {
 }
 
 // wsExport is the portable envelope for a single workspace: its name, color, and
-// the snapshot of its per-workspace keys (dataset + UI state). It carries no
-// secrets — the OpenAI key is user-global and lives outside perWorkspaceKeys.
+// the snapshot of its per-workspace keys (dataset + UI state).
+//
+// The OpenAI key is user-global and lives outside perWorkspaceKeys, so it never
+// appears here. The server connection fields DO live in perWorkspaceKeys (prefs
+// is bundled per workspace) and are stripped by stripConnectionPrefs on the way
+// out and on the way back in — this comment used to claim the envelope "carries
+// no secrets" while it was writing a live access token into a downloaded file.
 type wsExport struct {
 	Version int               `json:"version"`
 	Name    string            `json:"name"`
@@ -149,7 +154,7 @@ func exportWorkspace(wsID string) {
 	if wsID == r.ActiveID {
 		bundle = bundleCurrent()
 	}
-	env := wsExport{Version: wsExportVersion, Name: w.Name, Color: w.Color, Bundle: bundle}
+	env := wsExport{Version: wsExportVersion, Name: w.Name, Color: w.Color, Bundle: stripConnectionPrefs(bundle)}
 	data, err := json.MarshalIndent(env, "", "  ")
 	if err != nil {
 		return
@@ -177,9 +182,16 @@ func importWorkspace(data []byte) bool {
 	if color == "" {
 		color = paletteColor(len(r.Workspaces))
 	}
-	saveBlob(newID, env.Bundle)
+	// An imported file is untrusted input: it may be a colleague's export, or a
+	// file handed over by somebody who wants this browser talking to their
+	// server. Stripping the connection fields on the way IN — not just on the way
+	// out — means an older export written before the export-side strip existed,
+	// or one hand-edited to add them back, still cannot inject an endpoint or a
+	// bearer token into this device's prefs.
+	imported := stripConnectionPrefs(env.Bundle)
+	saveBlob(newID, imported)
 	saveRegistry(r.Add(newID, name).SetActive(newID).SetColor(newID, color))
-	applyBundle(env.Bundle)
+	applyBundle(imported)
 	reloadPage()
 	return true
 }

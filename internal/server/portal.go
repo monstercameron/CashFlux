@@ -69,7 +69,7 @@ func handleMe(cfg Config, store *Store) http.HandlerFunc {
 			writeErrorJSON(w, ErrorReasonPermissionDenied, "origin not allowed")
 			return
 		}
-		user, ok := httpBearerUser(r, cfg)
+		user, ok := httpBearerUser(r, cfg, store)
 		if !ok {
 			writeErrorJSON(w, ErrorReasonUnauthenticated, "missing bearer token")
 			return

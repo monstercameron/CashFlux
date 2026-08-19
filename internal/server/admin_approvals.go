@@ -118,6 +118,13 @@ func approvePendingDeviceAsNewUser(store *Store, deviceID string, now time.Time)
 		return false, "", fmt.Errorf("server approval: generate account id: %w", err)
 	}
 	userID := "device:" + opaque
+	// Defensive, not load-bearing: opaque is freshly random so this id has no
+	// history. Kept so that every door which deliberately creates an account
+	// clears the tombstone, and none of them relies on "this id cannot collide"
+	// staying true.
+	if err := store.ClearAccountTombstone(userID); err != nil {
+		return false, "", fmt.Errorf("server approval: clear account tombstone: %w", err)
+	}
 	if err := store.UpsertUser(User{
 		ID: userID, Provider: "device", Subject: opaque, CreatedAt: now,
 	}); err != nil {

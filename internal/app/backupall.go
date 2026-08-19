@@ -83,7 +83,10 @@ func marshalFullBackup() ([]byte, error) {
 			Theme:  lsGet(themeKey),
 			Fonts:  lsGet(fontsKey),
 			Banner: lsGet(bannerKey),
-			Prefs:  lsGet(prefsKey),
+			// Stripped of the server URL, bearer token and CSRF token. A full
+			// backup is the file most likely to end up in a sync folder, and it
+			// carried a live access token in the clear.
+			Prefs: strippedPrefsForBackup(),
 		},
 	}
 	return backup.MarshalEnvelope(env)
@@ -168,7 +171,16 @@ func restoreAppearance(a backup.Appearance) {
 	setOrClear(themeKey, a.Theme)
 	setOrClear(fontsKey, a.Fonts)
 	setOrClear(bannerKey, a.Banner)
-	setOrClear(prefsKey, a.Prefs)
+	// Stripped on the way IN as well as out, so a backup written before the
+	// export-side strip existed — or one hand-edited to put them back — cannot
+	// point this device at somebody else's server under their credential.
+	setOrClear(prefsKey, stripConnectionPrefsJSON(a.Prefs))
+}
+
+// strippedPrefsForBackup reads this device's prefs with the connection fields
+// removed, ready to travel in a backup file.
+func strippedPrefsForBackup() string {
+	return stripConnectionPrefsJSON(lsGet(prefsKey))
 }
 
 // setOrClear sets a localStorage key to val, or removes it when val is empty.

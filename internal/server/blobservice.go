@@ -198,7 +198,7 @@ func (s *blobServer) UploadBlob(stream grpc.ServerStream) error {
 	if err != nil {
 		return status.Error(codes.Internal, "blob write failed")
 	}
-	if err := s.store.LinkWorkspaceBlob(workspaceID, blob.Hash); err != nil {
+	if err := s.store.LinkWorkspaceBlob(user.ID, workspaceID, blob.Hash); err != nil {
 		return status.Error(codes.Internal, "blob link failed")
 	}
 	if s.cfg.Metrics != nil {

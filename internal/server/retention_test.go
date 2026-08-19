@@ -33,10 +33,10 @@ func TestRunRetentionPrunesAuditSnapshotHistoryAndBackups(t *testing.T) {
 	if err := store.PutWorkspace(Workspace{ID: "w1", UserID: "u1", Name: "Home", UpdatedAt: old}); err != nil {
 		t.Fatalf("PutWorkspace: %v", err)
 	}
-	if err := store.PutSnapshot(Snapshot{WorkspaceID: "w1", Dataset: []byte("old"), Version: 1, UpdatedAt: old}, 1024, 5); err != nil {
+	if err := store.PutSnapshot(Snapshot{UserID: "u1", WorkspaceID: "w1", Dataset: []byte("old"), Version: 1, UpdatedAt: old}, 1024, 5); err != nil {
 		t.Fatalf("PutSnapshot old: %v", err)
 	}
-	if err := store.PutSnapshot(Snapshot{WorkspaceID: "w1", Dataset: []byte("recent"), Version: 2, UpdatedAt: recent}, 1024, 5); err != nil {
+	if err := store.PutSnapshot(Snapshot{UserID: "u1", WorkspaceID: "w1", Dataset: []byte("recent"), Version: 2, UpdatedAt: recent}, 1024, 5); err != nil {
 		t.Fatalf("PutSnapshot recent: %v", err)
 	}
 	backupRoot := filepath.Join(dataDir, "backups")
@@ -70,7 +70,7 @@ func TestRunRetentionPrunesAuditSnapshotHistoryAndBackups(t *testing.T) {
 	if len(events) != 1 || events[0].Action != "workspace.put" {
 		t.Fatalf("remaining audit events = %+v", events)
 	}
-	history, err := store.SnapshotHistory("w1", 10)
+	history, err := store.SnapshotHistory("u1", "w1", 10)
 	if err != nil {
 		t.Fatalf("SnapshotHistory: %v", err)
 	}

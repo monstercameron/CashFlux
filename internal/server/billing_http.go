@@ -280,7 +280,7 @@ func authorizedBillingRequest(w http.ResponseWriter, r *http.Request, cfg Config
 	// Provider-specific configuration is checked per-provider in
 	// billingProviderFromRequest / at portal time, so this gate no longer requires
 	// Stripe specifically — a PayPal-only deployment is valid.
-	user, ok := httpBearerUser(r, cfg)
+	user, ok := httpBearerUser(r, cfg, store)
 	if !ok {
 		writeErrorJSON(w, ErrorReasonUnauthenticated, "missing bearer token")
 		return AuthUser{}, false
@@ -311,7 +311,7 @@ func handleBillingStatus(cfg Config, store *Store) http.HandlerFunc {
 			writeErrorJSON(w, ErrorReasonPermissionDenied, "origin not allowed")
 			return
 		}
-		user, ok := httpBearerUser(r, cfg)
+		user, ok := httpBearerUser(r, cfg, store)
 		if !ok {
 			writeErrorJSON(w, ErrorReasonUnauthenticated, "missing bearer token")
 			return

@@ -96,6 +96,11 @@ type MigrationResult struct {
 var (
 	// ErrMigrationSourceMissing means the workspace is not owned by the source.
 	ErrMigrationSourceMissing = errors.New("server migrate: source does not own that workspace")
+	// ErrMigrationTargetExists is returned when the target account already owns a
+	// workspace with the id being transferred. Only reachable since workspace ids
+	// became per-account: two households can now legitimately both hold
+	// "default", and folding one into the other is a merge, not a transfer.
+	ErrMigrationTargetExists = errors.New("server migrate: the target account already owns a workspace with that id")
 	// ErrMigrationTargetMissing means the target account does not exist.
 	ErrMigrationTargetMissing = errors.New("server migrate: no such target account")
 	// ErrMigrationSameAccount means source and target are the same account.
@@ -150,7 +155,7 @@ func (s *Store) PreviewMigration(mode MigrationMode, sourceUserID, targetUserID,
 	} else if ok {
 		out.SourceBytes = len(snap.Dataset)
 	}
-	if n, err := s.countWorkspaceBlobs(workspaceID); err != nil {
+	if n, err := s.countWorkspaceBlobs(sourceUserID, workspaceID); err != nil {
 		return MigrationPreview{}, err
 	} else {
 		out.SourceBlobs = n
@@ -230,10 +235,10 @@ func (s *Store) PreviewReplace(sourceUserID, sourceWorkspaceID, targetUserID, ta
 	} else if ok {
 		out.TargetBytes = len(snap.Dataset)
 	}
-	if out.SourceBlobs, err = s.countWorkspaceBlobs(out.WorkspaceID); err != nil {
+	if out.SourceBlobs, err = s.countWorkspaceBlobs(out.SourceUserID, out.WorkspaceID); err != nil {
 		return MigrationPreview{}, err
 	}
-	if out.TargetBlobs, err = s.countWorkspaceBlobs(out.TargetWorkspac); err != nil {
+	if out.TargetBlobs, err = s.countWorkspaceBlobs(out.TargetUserID, out.TargetWorkspac); err != nil {
 		return MigrationPreview{}, err
 	}
 	if out.SourceBytes == 0 {
@@ -278,9 +283,9 @@ func blockPreview(p MigrationPreview, reason string) MigrationPreview {
 }
 
 // countWorkspaceBlobs counts a workspace's attachment links.
-func (s *Store) countWorkspaceBlobs(workspaceID string) (int, error) {
+func (s *Store) countWorkspaceBlobs(userID, workspaceID string) (int, error) {
 	var n int
-	err := s.db.QueryRow(`SELECT COUNT(*) FROM workspace_blobs WHERE workspace_id = ?`, workspaceID).Scan(&n)
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM workspace_blobs WHERE user_id = ? AND workspace_id = ?`, userID, workspaceID).Scan(&n)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, nil
 	}
@@ -293,11 +298,20 @@ func (s *Store) countWorkspaceBlobs(workspaceID string) (int, error) {
 // TransferWorkspace moves ownership of one workspace to another account, in a
 // single transaction.
 //
-// It is a one-column update because the schema already does the hard part:
-// snapshots, snapshot_history and workspace_blobs are all keyed by workspace_id.
-// Nothing is copied, so there is no half-copied state to recover from, and every
-// device already pinned to this workspace id keeps working — under the new
-// owner's credentials, which is the entire objective.
+// Nothing is copied — only re-owned — so there is no half-copied state to
+// recover from, and every device already pinned to this workspace id keeps
+// working under the new owner's credentials, which is the entire objective.
+//
+// It used to be a single-column update, because snapshots, snapshot_history and
+// workspace_blobs were keyed by workspace_id alone and so followed the workspace
+// wherever it went. They now carry their owner too (workspace ids are minted by
+// clients and collide across accounts), so the transfer has to move them
+// explicitly — in the same transaction, or a failure halfway would leave a
+// workspace owned by one account and its data by another.
+//
+// A target that already owns a workspace with this id is a genuine conflict now
+// rather than an impossibility, and is refused: merging two households because
+// they happened to pick the same id is not a transfer.
 //
 // requireTargetLocked implements C699's rule that the target is suspended for
 // the duration. A device writing to the target while ownership changes would
@@ -335,6 +349,25 @@ func (s *Store) TransferWorkspace(sourceUserID, targetUserID, workspaceID string
 	// Conditional on the CURRENT owner, so two operators racing the same
 	// migration cannot both succeed and so a stale console view cannot move a
 	// workspace that has already moved.
+	// Source ownership is checked FIRST. Reporting a target clash to somebody who
+	// named the wrong source would answer a question they did not ask, and hide
+	// the one thing actually wrong with their request.
+	var owned int
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM workspaces WHERE user_id = ? AND id = ?`,
+		sourceUserID, workspaceID).Scan(&owned); err != nil {
+		return MigrationResult{}, fmt.Errorf("server migrate: check source: %w", err)
+	}
+	if owned == 0 {
+		return MigrationResult{}, ErrMigrationSourceMissing
+	}
+	var clash int
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM workspaces WHERE user_id = ? AND id = ?`,
+		targetUserID, workspaceID).Scan(&clash); err != nil {
+		return MigrationResult{}, fmt.Errorf("server migrate: check target: %w", err)
+	}
+	if clash > 0 {
+		return MigrationResult{}, ErrMigrationTargetExists
+	}
 	res, err := tx.Exec(`UPDATE workspaces SET user_id = ?, updated_at = ? WHERE id = ? AND user_id = ?`,
 		targetUserID, formatTime(now.UTC()), workspaceID, sourceUserID)
 	if err != nil {
@@ -346,6 +379,15 @@ func (s *Store) TransferWorkspace(sourceUserID, targetUserID, workspaceID string
 	}
 	if affected == 0 {
 		return MigrationResult{}, ErrMigrationSourceMissing
+	}
+	// The workspace's data has to follow it. Same transaction as the line above,
+	// so ownership can never end up split between two accounts.
+	for _, table := range []string{"snapshots", "snapshot_history", "workspace_blobs"} {
+		if _, err := tx.Exec(
+			`UPDATE `+table+` SET user_id = ? WHERE user_id = ? AND workspace_id = ?`,
+			targetUserID, sourceUserID, workspaceID); err != nil {
+			return MigrationResult{}, fmt.Errorf("server migrate: transfer %s: %w", table, err)
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return MigrationResult{}, fmt.Errorf("server migrate: commit: %w", err)
@@ -404,7 +446,8 @@ func (s *Store) ReplaceWorkspaceSnapshot(sourceUserID, sourceWorkspaceID, target
 		priorVersion int64
 		priorUpdated string
 	)
-	err = tx.QueryRow(`SELECT dataset_json, version, updated_at FROM snapshots WHERE workspace_id = ?`, targetWorkspaceID).
+	err = tx.QueryRow(`SELECT dataset_json, version, updated_at FROM snapshots WHERE user_id = ? AND workspace_id = ?`,
+		targetUserID, targetWorkspaceID).
 		Scan(&priorDataset, &priorVersion, &priorUpdated)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
@@ -412,8 +455,8 @@ func (s *Store) ReplaceWorkspaceSnapshot(sourceUserID, sourceWorkspaceID, target
 	case err != nil:
 		return MigrationResult{}, fmt.Errorf("server migrate: read target snapshot: %w", err)
 	default:
-		if _, err := tx.Exec(`INSERT INTO snapshot_history(workspace_id, dataset_json, version, updated_at) VALUES(?, ?, ?, ?)`,
-			targetWorkspaceID, priorDataset, priorVersion, priorUpdated); err != nil {
+		if _, err := tx.Exec(`INSERT INTO snapshot_history(user_id, workspace_id, dataset_json, version, updated_at) VALUES(?, ?, ?, ?, ?)`,
+			targetUserID, targetWorkspaceID, priorDataset, priorVersion, priorUpdated); err != nil {
 			return MigrationResult{}, fmt.Errorf("server migrate: archive target snapshot: %w", err)
 		}
 	}
@@ -429,25 +472,25 @@ func (s *Store) ReplaceWorkspaceSnapshot(sourceUserID, sourceWorkspaceID, target
 	// The links are copied, not moved: the source keeps its own, so this cannot
 	// break the account the data came from either. Blobs are content-addressed
 	// and shared by hash, so two links to one blob is the normal state.
-	if _, err := tx.Exec(`INSERT OR IGNORE INTO workspace_blobs(workspace_id, hash)
-SELECT ?, hash FROM workspace_blobs WHERE workspace_id = ?`,
-		targetWorkspaceID, sourceWorkspaceID); err != nil {
+	if _, err := tx.Exec(`INSERT OR IGNORE INTO workspace_blobs(user_id, workspace_id, hash)
+SELECT ?, ?, hash FROM workspace_blobs WHERE user_id = ? AND workspace_id = ?`,
+		targetUserID, targetWorkspaceID, sourceUserID, sourceWorkspaceID); err != nil {
 		return MigrationResult{}, fmt.Errorf("server migrate: carry attachment links: %w", err)
 	}
 
 	nextVersion := priorVersion + 1
 	stamp := formatTime(now.UTC())
-	if _, err := tx.Exec(`INSERT INTO snapshots(workspace_id, dataset_json, version, updated_at) VALUES(?, ?, ?, ?)
-ON CONFLICT(workspace_id) DO UPDATE SET dataset_json = excluded.dataset_json, version = excluded.version, updated_at = excluded.updated_at`,
-		targetWorkspaceID, source.Dataset, nextVersion, stamp); err != nil {
+	if _, err := tx.Exec(`INSERT INTO snapshots(user_id, workspace_id, dataset_json, version, updated_at) VALUES(?, ?, ?, ?, ?)
+ON CONFLICT(user_id, workspace_id) DO UPDATE SET dataset_json = excluded.dataset_json, version = excluded.version, updated_at = excluded.updated_at`,
+		targetUserID, targetWorkspaceID, source.Dataset, nextVersion, stamp); err != nil {
 		return MigrationResult{}, fmt.Errorf("server migrate: write target snapshot: %w", err)
 	}
 	// The workspace row's version must move with its snapshot, or the next
 	// client pull compares against a stale version and decides it is already
 	// up to date — the overwrite would be invisible to the very device it was
 	// performed for.
-	if _, err := tx.Exec(`UPDATE workspaces SET version = ?, updated_at = ? WHERE id = ?`,
-		nextVersion, stamp, targetWorkspaceID); err != nil {
+	if _, err := tx.Exec(`UPDATE workspaces SET version = ?, updated_at = ? WHERE user_id = ? AND id = ?`,
+		nextVersion, stamp, targetUserID, targetWorkspaceID); err != nil {
 		return MigrationResult{}, fmt.Errorf("server migrate: bump target workspace: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
@@ -487,8 +530,8 @@ func (s *Store) RollbackWorkspaceSnapshot(userID, workspaceID string, version in
 	defer func() { _ = tx.Rollback() }()
 
 	var restore []byte
-	err = tx.QueryRow(`SELECT dataset_json FROM snapshot_history WHERE workspace_id = ? AND version = ?
-ORDER BY id DESC LIMIT 1`, workspaceID, version).Scan(&restore)
+	err = tx.QueryRow(`SELECT dataset_json FROM snapshot_history WHERE user_id = ? AND workspace_id = ? AND version = ?
+ORDER BY id DESC LIMIT 1`, userID, workspaceID, version).Scan(&restore)
 	if errors.Is(err, sql.ErrNoRows) {
 		return MigrationResult{}, fmt.Errorf("server migrate: no archived version %d for that workspace", version)
 	}
@@ -501,27 +544,27 @@ ORDER BY id DESC LIMIT 1`, workspaceID, version).Scan(&restore)
 		currentVersion int64
 		currentUpdated string
 	)
-	err = tx.QueryRow(`SELECT dataset_json, version, updated_at FROM snapshots WHERE workspace_id = ?`, workspaceID).
+	err = tx.QueryRow(`SELECT dataset_json, version, updated_at FROM snapshots WHERE user_id = ? AND workspace_id = ?`, userID, workspaceID).
 		Scan(&currentDataset, &currentVersion, &currentUpdated)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return MigrationResult{}, fmt.Errorf("server migrate: read current snapshot: %w", err)
 	}
 	if err == nil {
-		if _, err := tx.Exec(`INSERT INTO snapshot_history(workspace_id, dataset_json, version, updated_at) VALUES(?, ?, ?, ?)`,
-			workspaceID, currentDataset, currentVersion, currentUpdated); err != nil {
+		if _, err := tx.Exec(`INSERT INTO snapshot_history(user_id, workspace_id, dataset_json, version, updated_at) VALUES(?, ?, ?, ?, ?)`,
+			userID, workspaceID, currentDataset, currentVersion, currentUpdated); err != nil {
 			return MigrationResult{}, fmt.Errorf("server migrate: archive before rollback: %w", err)
 		}
 	}
 
 	nextVersion := currentVersion + 1
 	stamp := formatTime(now.UTC())
-	if _, err := tx.Exec(`INSERT INTO snapshots(workspace_id, dataset_json, version, updated_at) VALUES(?, ?, ?, ?)
-ON CONFLICT(workspace_id) DO UPDATE SET dataset_json = excluded.dataset_json, version = excluded.version, updated_at = excluded.updated_at`,
-		workspaceID, restore, nextVersion, stamp); err != nil {
+	if _, err := tx.Exec(`INSERT INTO snapshots(user_id, workspace_id, dataset_json, version, updated_at) VALUES(?, ?, ?, ?, ?)
+ON CONFLICT(user_id, workspace_id) DO UPDATE SET dataset_json = excluded.dataset_json, version = excluded.version, updated_at = excluded.updated_at`,
+		userID, workspaceID, restore, nextVersion, stamp); err != nil {
 		return MigrationResult{}, fmt.Errorf("server migrate: restore snapshot: %w", err)
 	}
-	if _, err := tx.Exec(`UPDATE workspaces SET version = ?, updated_at = ? WHERE id = ?`,
-		nextVersion, stamp, workspaceID); err != nil {
+	if _, err := tx.Exec(`UPDATE workspaces SET version = ?, updated_at = ? WHERE user_id = ? AND id = ?`,
+		nextVersion, stamp, userID, workspaceID); err != nil {
 		return MigrationResult{}, fmt.Errorf("server migrate: bump workspace: %w", err)
 	}
 	if err := tx.Commit(); err != nil {

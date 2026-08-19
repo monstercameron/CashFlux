@@ -29,7 +29,7 @@ func seedWorkspace(t *testing.T, store *Store, userID, wsID, name string, datase
 		t.Fatalf("PutWorkspace(%s): %v", wsID, err)
 	}
 	if len(dataset) > 0 {
-		if err := store.PutSnapshot(Snapshot{WorkspaceID: wsID, Dataset: dataset, Version: 1, UpdatedAt: now}, 0, 10); err != nil {
+		if err := store.PutSnapshot(Snapshot{UserID: userID, WorkspaceID: wsID, Dataset: dataset, Version: 1, UpdatedAt: now}, 0, 10); err != nil {
 			t.Fatalf("PutSnapshot(%s): %v", wsID, err)
 		}
 	}
@@ -266,7 +266,7 @@ func TestReplaceCarriesAttachmentLinksToTheTarget(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PutBlob: %v", err)
 	}
-	if err := store.LinkWorkspaceBlob("ws-src", blob.Hash); err != nil {
+	if err := store.LinkWorkspaceBlob("src", "ws-src", blob.Hash); err != nil {
 		t.Fatalf("LinkWorkspaceBlob: %v", err)
 	}
 

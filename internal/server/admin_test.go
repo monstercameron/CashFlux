@@ -406,8 +406,8 @@ func TestHandleAdminOverviewStaticTokenIsOperator(t *testing.T) {
 }
 
 func TestHandleAdminOverviewSessionUserIsNotOperator(t *testing.T) {
-	cfg := Config{AuthMode: "token", Token: "operator-secret", Metrics: NewMetrics()}
 	store := openTestStore(t)
+	cfg := withSessionKey(t, Config{AuthMode: "token", Token: "operator-secret", Metrics: NewMetrics()}, store)
 	sessionToken, err := issueSessionToken(cfg, "local:ordinary", "access", time.Hour, time.Now().UTC())
 	if err != nil {
 		t.Fatalf("issue session token: %v", err)
@@ -482,8 +482,8 @@ func TestHandleAdminUsersStaticTokenIsOperator(t *testing.T) {
 }
 
 func TestHandleAdminUsersSessionUserIsNotOperator(t *testing.T) {
-	cfg := Config{AuthMode: "token", Token: "operator-secret", Metrics: NewMetrics()}
 	store := openTestStore(t)
+	cfg := withSessionKey(t, Config{AuthMode: "token", Token: "operator-secret", Metrics: NewMetrics()}, store)
 	sessionToken, err := issueSessionToken(cfg, "local:ordinary", "access", time.Hour, time.Now().UTC())
 	if err != nil {
 		t.Fatalf("issue session token: %v", err)
