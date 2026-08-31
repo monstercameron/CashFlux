@@ -4,6 +4,36 @@ All notable changes to CashFlux are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/). Policy: **one feature per commit**,
 and every commit updates this file under `Unreleased`.
 
+## [1.18.0] - 2026-08-31
+
+### Changed
+- **One graph on /budgets, in every month.** There were two heroes and the PERIOD chose between
+  them: a closed month got a spent/budgeted/left band, a live zero-based month got To Assign. The
+  page changed shape as you stepped through months, and the variant people preferred was the one
+  they saw least — from the outside indistinguishable from a regression, which is how it was
+  reported. "Budgeted against income" is now the only hero, on every method and every period.
+
+  Income is the denominator that reads the same in both tenses. "Left" is misleading live (a full
+  month of income measured against a part month of spending, so it read large and green directly
+  above a red "$3,260.20 more than you earn") and "To Assign" is meaningless on a closed month, but
+  "how much of what I earned did I commit" is answerable in either.
+
+  The band's spent figure survives on the allocation bar's own rail, which is now on for every
+  period rather than zero-based-live only — it is the only place that number lives now.
+
+### Fixed
+- **The band's "over budget" figure was never the overage.** It rendered spend minus limits, which
+  NETS one budget's overspend against another's headroom: a month $3,108.70 over on bars and $722.47
+  under on bills reported "$2,486.23 over budget", a figure that appeared in none of the rows beneath
+  it and that nobody could act on, because money in one budget is not available to another unless
+  somebody moves it. The band is gone, and with it the number.
+
+### Removed
+- The shared spent/budgeted/left band from /budgets, and the ~100 lines of geometry behind it —
+  fill percentages, the rescaled overage segment, tone thresholds — all of which described spending
+  against the SUM OF LIMITS, a denominator that moves when you add a budget without spending
+  anything. Goals and To-do keep the shared component; only this page stopped using it.
+
 ## [1.17.0] - 2026-08-31
 
 ### Added
