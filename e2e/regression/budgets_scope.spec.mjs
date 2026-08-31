@@ -186,6 +186,16 @@ test.describe("budgets: recurring dates say what they are relative to", () => {
     const strip = app.getByTestId("budgets-recurring");
     await strip.scrollIntoViewIfNeeded();
 
+    // The section is collapsible now and opens CLOSED: it was the tallest tile on
+    // the surface — thirteen rows for a figure that changes a few times a year —
+    // so the collapsed line carries the monthly total and the charge count, and the
+    // rows themselves are not in the DOM until it is opened. Everything below reads
+    // those rows, so it has to be expanded first (2026-08-31).
+    const toggle = app.getByTestId("budgets-recurring-toggle");
+    if ((await toggle.getAttribute("aria-expanded")) === "false") await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await expect(app.locator('[data-testid^="brc-date-"]').first()).toBeVisible({ timeout: 10_000 });
+
     // No bare "Next <date>" survives: each date carries its relationship.
     await expect(strip).not.toContainText(/·\s*Next \w{3} \d/);
     await expect(strip).toContainText(/(Was due|Due|Next due .*after this period)/);
