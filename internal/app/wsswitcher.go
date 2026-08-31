@@ -145,20 +145,25 @@ func WorkspaceSwitcher() uic.Node {
 	if summary != "" {
 		name = active.Name + " · " + summary + " · " + uistate.T("ws.switch")
 	}
-	return Div(css.Class("ws-switch", tw.Relative, tw.Mx3, tw.Mt3),
+	return Div(css.Class("ws-switch", tw.Relative),
 		Button(ClassStr("ws-switch-trigger"),
 			Type("button"), Title(name), Attr("aria-label", name),
 			Attr("aria-haspopup", "menu"), Attr("aria-expanded", boolAttr(open.Get())),
 			Attr("data-testid", "ws-switch-trigger"),
 			OnClick(func() { open.Set(!open.Get()) }),
-			Span(css.Class("ws-switch-value"),
-				Span(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.MinW0),
-					wsColorDot(active.Color),
-					Span(css.Class(tw.Truncate), active.Name),
-				),
-				ui.Icon(icon.ChevronDown, css.Class(tw.ShrinkO, tw.W4, tw.H4, tw.TextFaint)),
+			// The workspace's own colour, as the SAME dot the menu uses beside every
+			// workspace in the list. It was a lettered avatar for one iteration, and
+			// that put a second rounded green square directly beneath the brand's —
+			// two marks of near-identical weight, 28px apart, and no way to tell at a
+			// glance which one was the app and which the workspace. The dot is the
+			// vocabulary this app already has for "a workspace", it carries the same
+			// colour, and it does not compete with the brand mark above it.
+			wsColorDot(active.Color),
+			Span(css.Class("ws-switch-text"),
+				Span(css.Class("ws-switch-name"), active.Name),
+				If(summary != "", Span(css.Class("ws-switch-sub"), summary)),
 			),
-			If(summary != "", Span(css.Class("ws-switch-sub"), summary)),
+			ui.Icon(icon.ChevronDown, ClassStr("ws-switch-chev")),
 		),
 		menu,
 	)

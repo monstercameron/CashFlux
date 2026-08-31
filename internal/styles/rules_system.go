@@ -135,37 +135,54 @@ func registerSystemSurface() {
 	// Workspace switcher — styled like the app's standard select control: a bordered
 	// box that stacks an uppercase heading ("Workspace") over the selected option
 	// (colour dot + name) with a trailing chevron, so both the label and the value read.
+	// The identity row. NOT a bordered box: it used to be one, sitting directly
+	// above the filter's identical box, so the two read as a pair of form fields
+	// and neither said which mattered. A switcher is a menu trigger — it earns a
+	// background on hover and shows nothing at rest.
 	rule(".ws-switch-trigger",
 		prop("width", "100%"),
 		prop("display", "flex"),
-		prop("flex-direction", "column"),
-		prop("gap", "0.15rem"),
-		prop("padding", "0.4rem 0.7rem"),
-		prop("border", "1px solid var(--border)"),
-		prop("border-radius", "9px"),
-		prop("background", "var(--bg-elev)"),
+		prop("align-items", "center"),
+		prop("gap", "0.5rem"),
+		prop("padding", "0.45rem 0.6rem"),
+		prop("margin", "0.35rem 0.5rem 0"),
+		prop("width", "calc(100% - 1rem)"),
+		prop("border", "0"),
+		prop("border-radius", "8px"),
+		prop("background", "transparent"),
 		prop("cursor", "pointer"),
 		prop("text-align", "left"),
-		prop("transition", "border-color 0.14s ease, background 0.14s ease"),
+		prop("transition", "background 0.14s ease"),
 	)
-	rule(".ws-switch-trigger:hover",
-		prop("border-color", "color-mix(in srgb, var(--accent) 45%, var(--border))"),
-	)
-	rule(".ws-switch-head",
-		prop("font-size", "0.62rem"),
-		prop("font-weight", "600"),
-		prop("letter-spacing", "0.07em"),
-		prop("text-transform", "uppercase"),
-		prop("color", "var(--text-faint)"),
-	)
-	rule(".ws-switch-value",
-		prop("display", "flex"),
-		prop("align-items", "center"),
-		prop("justify-content", "space-between"),
-		prop("gap", "0.5rem"),
-		prop("font-size", "0.9rem"),
-		prop("font-weight", "500"),
-		prop("color", "var(--text)"),
+	rule(".ws-switch-trigger:hover", prop("background", "var(--hover)"))
+	rule(".ws-switch-trigger[aria-expanded=\"true\"]", prop("background", "var(--hover)"))
+	rule(".ws-switch-text",
+		prop("flex", "1 1 auto"),
 		prop("min-width", "0"),
+		prop("display", "flex"),
+		prop("flex-direction", "column"),
+		prop("line-height", "1.25"),
+	)
+	rule(".ws-switch-name",
+		prop("font-size", "0.8125rem"),
+		prop("font-weight", "600"),
+		prop("color", "var(--text)"),
+		prop("white-space", "nowrap"),
+		prop("overflow", "hidden"),
+		prop("text-overflow", "ellipsis"),
+	)
+	// The chevron is the quietest thing here until you reach for it: the row's job
+	// is to STATE the household, and a permanently dark arrow beside it advertises
+	// a menu nobody opens most sessions.
+	rule(".ws-switch-chev",
+		prop("flex", "0 0 auto"),
+		prop("width", "1rem"),
+		prop("height", "1rem"),
+		prop("color", "var(--text-faint)"),
+		prop("opacity", "0"),
+		prop("transition", "opacity 0.14s ease"),
+	)
+	rule(".ws-switch-trigger:hover .ws-switch-chev, .ws-switch-trigger:focus-visible .ws-switch-chev, .ws-switch-trigger[aria-expanded=\"true\"] .ws-switch-chev",
+		prop("opacity", "1"),
 	)
 }

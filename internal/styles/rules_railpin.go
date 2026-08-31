@@ -52,7 +52,7 @@ func registerRailPin() {
 
 	// The pinned block sits above the folders and never collapses.
 	rule(".rail-sec-head",
-		padding("0.5rem 0.75rem 0.25rem"),
+		padding("0.35rem 0.75rem 0.25rem"),
 		color("var(--text-faint)"),
 		fontSize("0.6875rem"),
 		fontWeight("600"),

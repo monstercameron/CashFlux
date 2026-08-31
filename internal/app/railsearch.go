@@ -125,7 +125,11 @@ func railSearchBox(props railSearchBoxProps) uic.Node {
 	}
 	return Div(css.Class("railsearch"),
 		ui.Icon(icon.Search, css.Class("railsearch-icon", tw.ShrinkO, tw.W4, tw.H4)),
-		Input(css.Class("field railsearch-input"), Type("text"),
+		// No generic "field" class: it carries the app's standard 44px control
+		// height, which is right for a form and wrong for a filter sitting under a
+		// 46px identity row — the two together made the top of the rail as tall as
+		// the pinned list. This input is styled completely by .railsearch-input.
+		Input(css.Class("railsearch-input"), Type("text"),
 			Attr("data-testid", "railsearch-input"),
 			Attr("aria-label", uistate.T("railsearch.label")),
 			// A filter is not a combobox: it rewrites a list of links in place
