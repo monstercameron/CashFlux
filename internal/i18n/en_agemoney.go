@@ -21,6 +21,10 @@ var ageMoneyKeys = Catalog{
 	// The "why?" affordance label + its tooltip explaining how the number is figured.
 	"budgets.ageMoneyWhyLabel": "Why?",
 	"budgets.ageMoneyWhy":      "Each dollar you spend is matched to the oldest dollar you'd earned but not yet spent. The age is how long that dollar waited, averaged over your recent spending.",
+	// At the ceiling the figure is a SENTINEL, not a measurement: 365 is the cap, so
+	// "365+ days" dresses a boundary up as precision and can never move again. Say
+	// the span in words instead, and let the tooltip carry the direction.
+	"budgets.ageMoneyOverYear": "over a year",
 	// Figure unit (singular / plural), rendered next to the day count.
 	"budgets.ageMoneyUnit":    "days",
 	"budgets.ageMoneyUnitOne": "day",

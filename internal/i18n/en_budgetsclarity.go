@@ -134,8 +134,8 @@ var budgetsClarityKeys = Catalog{
 	// like a transaction inbox and hides three different destinations. %s = the
 	// joined list of what is actually in there.
 	"common.and":                    "and",
-	"budgets.issuesRailNamed":       "%s to sort out",
-	"budgets.issuesRailHist":        "%s left from this period",
+	"budgets.issuesRailNamed":       "To sort out: %s",
+	"budgets.issuesRailHist":        "Left from this period: %s",
 	"budgets.issuePartOverAssigned": "an over-assignment",
 	"budgets.issuePartFundShort":    "a sinking-fund shortfall",
 	"budgets.issuePartFollowUps":    "open follow-ups",

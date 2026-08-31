@@ -42,11 +42,20 @@ var incomeAllocKeys = Catalog{
 	// First-run: an income basis is set but no budgets exist yet. This is the very
 	// first thing a household sees after configuring income, so it reads as an
 	// invitation rather than a deficiency.
-	"budgets.allocNoBudgets":  "No budgets yet — none of your %s income has a job.",
-	"budgets.allocBudgets":    "Budgets",
-	"budgets.allocUnassigned": "Not yet budgeted",
-	"budgets.allocOverShort":  "Over income",
-	"budgets.allocMarker":     "Where your income runs out",
+	"budgets.allocNoBudgets": "No budgets yet — none of your %s income has a job.",
+	// Named by DIRECTION, not by noun. A spending budget is a CEILING (stay under
+	// $300 for Dining); a savings assignment is a FLOOR (put $500 in the HYSA).
+	// They are inverses — going over one is bad, going over the other is good — and
+	// drawing both as "assigned" slices of one bar is arithmetically right and
+	// directionally mute. The words are the only place that distinction can live
+	// (Cam, 2026-08-31).
+	"budgets.allocBudgets": "Spending limits",
+	// Shown in the legend when zero-based has no savings assigned yet: the slot is
+	// stated rather than omitted, because absence is not information.
+	"budgets.allocSavingsNone": "none set",
+	"budgets.allocUnassigned":  "Not yet budgeted",
+	"budgets.allocOverShort":   "Over income",
+	"budgets.allocMarker":      "Where your income runs out",
 	// Screen-reader descriptions of the bar. %d = the plan as a percent of income.
 	"budgets.allocAria":     "You have budgeted %d%% of your income; the remainder is unbudgeted",
 	"budgets.allocAriaOver": "You have budgeted %d%% of your income — the tick marks where your income runs out, and the fill past it is over-budgeted",
@@ -92,6 +101,13 @@ var incomeAllocKeys = Catalog{
 	// Shown when a note save matched no budget. Silence on a write is worse than
 	// an error: the note vanishes and nothing says why.
 	"budgets.notesSaveFailed": "Could not save the note — this budget no longer exists. Copy your text before closing.",
+	// Shown when a write is rejected by a layer that does not describe itself in
+	// words a person can act on. The technical text goes to the log instead: on
+	// screen it would arrive at the moment someone most needs to understand what
+	// happened, and say nothing they can do about it.
+	"budgets.writeFailed":          "That change could not be saved, so nothing was changed. Try again — if it keeps happening, reload the page.",
+	"budgets.writeReadOnly":        "This household is open in a viewing role, so budgets cannot be changed here.",
+	"budgets.flexTargetUnreadable": "That is not an amount we can read. Try a number like 2,400 or 2400.50.",
 	// C614: the notes editor names the ACTION, and names it by state. Every other
 	// item in the row's ⋯ menu is a verb phrase ("Edit budget", "Delete"); "Notes"
 	// was the one noun, and it read the same whether it would create a note or

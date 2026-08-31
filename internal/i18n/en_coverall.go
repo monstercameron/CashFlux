@@ -8,7 +8,11 @@ package i18n
 // next month's same budget. Kept in its own file, merged via init.
 var coverAllKeys = Catalog{
 	// Over-banner entry point.
-	"coverAll.button": "Cover all",
+	// Names its object. "Cover all" sits directly under an over-assignment figure
+	// and beside "Resolve $X", so it read as the button that covers THAT — which it
+	// cannot: moving slack between budgets is zero-sum and leaves To Assign
+	// unchanged. It covers overSPENDING (Cam, 2026-08-31).
+	"coverAll.button": "Cover overages",
 
 	// Modal shell.
 	"coverAll.title": "Cover budget overages",

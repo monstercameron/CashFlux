@@ -36,8 +36,11 @@ var budgetGuardKeys = Catalog{
 	// A screen-reader-only suffix on the button's stable visible label, so the
 	// accessible name carries both the current view and what a click produces
 	// without the label contradicting aria-pressed (the C596 failure).
-	"budgets.densityStateOn":  "currently on, activating this shows full cards",
-	"budgets.densityStateOff": "currently off, activating this shows the compact list",
+	// The visible label names where a click GOES, so the accessible name is what
+	// carries where you ARE. Without this a screen-reader user reading "Full cards"
+	// has no way to tell whether that is the current view or the destination.
+	"budgets.densityStateOn":  "showing the compact list",
+	"budgets.densityStateOff": "showing full cards",
 }
 
 func init() {

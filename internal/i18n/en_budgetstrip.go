@@ -19,6 +19,9 @@ var budgetStripKeys = Catalog{
 	"budgets.issueReviewAlloc":      "Review allocations",
 	"budgets.issueReviewAllocTitle": "Open the Allocate tool to rebalance what each category gets",
 	"budgets.resolveAmount":         "Resolve %s",
+	// Tooltip on the Resolve button — it names the destination, because the button
+	// leaves the page and nothing else on the rail says where to.
+	"budgets.resolveTitle": "Open Allocate to assign the over-assigned amount",
 	// Column captions for the status strip.
 	"budgets.stripSpending": "Spending",
 	"budgets.stripPlan":     "Plan",
