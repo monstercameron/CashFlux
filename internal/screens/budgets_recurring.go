@@ -35,6 +35,8 @@ func budgetRecurringWidget(props budgetSummaryProps) ui.Node {
 	app := props.App
 	nav := router.UseNavigate()
 	goToRecurring := ui.UseEvent(Prevent(func() { nav.Navigate(uistate.RoutePath("/recurring")) }))
+	open := ui.UseState(false)
+	toggleOpen := ui.UseEvent(Prevent(func() { open.Set(!open.Get()) }))
 
 	base := app.Settings().BaseCurrency
 	if base == "" {
@@ -103,10 +105,32 @@ func budgetRecurringWidget(props budgetSummaryProps) ui.Node {
 		Span(css.Class("brc-count", tw.TextDim), uistate.T("budgets.recurring.countLabel", len(recs))),
 	)
 
-	section := uiw.EntityListSection(uiw.EntityListSectionProps{
-		Title:  uistate.T("budgets.recurring.title"),
-		TestID: "budgets-recurring",
-		Body: Fragment(
+	// Collapsible, like the two sections below it. This is the tallest tile on the
+	// surface — thirteen rows, over a thousand pixels — for a figure that changes a
+	// few times a year, so it opens closed and states its own headline: the monthly
+	// commitment and how many charges make it up. That is the whole answer most
+	// visits need; you open it to see WHICH charges (Cam, 2026-08-31).
+	caretCls := "budget-fold-caret"
+	foldAria := uistate.T("budgets.recurring.showAria")
+	if open.Get() {
+		caretCls += " is-open"
+		foldAria = uistate.T("budgets.recurring.hideAria")
+	}
+	fold := Div(css.Class("budget-fold-head"),
+		Button(css.Class("budget-fold-toggle"), Type("button"), Attr("data-testid", "budgets-recurring-toggle"),
+			Attr("aria-expanded", ariaBool(open.Get())), Attr("aria-label", foldAria), OnClick(toggleOpen),
+			Span(ClassStr(caretCls), Attr("aria-hidden", "true"),
+				uiw.Icon(icon.ChevronRight, css.Class(tw.ShrinkO, tw.W4, tw.H4))),
+			Span(css.Class("budget-fold-toggle-label"), uistate.T("budgets.recurring.title")),
+			Span(css.Class("budget-fold-toggle-hint"),
+				uistate.TN("budgets.recurring.foldHintOne", "budgets.recurring.foldHintMany",
+					len(recs), fmtMoney(money.New(totalMonthly, base)))),
+		),
+	)
+
+	var body ui.Node = Fragment()
+	if open.Get() {
+		body = Fragment(
 			head,
 			P(css.Class("muted", tw.Text13), uistate.T("budgets.recurring.desc")),
 			Div(css.Class("brc-rows"), rows),
@@ -116,11 +140,11 @@ func budgetRecurringWidget(props budgetSummaryProps) ui.Node {
 					uiw.Icon(icon.Repeat, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
 					Span(uistate.T("budgets.recurring.manage"))),
 			),
-		),
-	})
+		)
+	}
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "budget-recurring", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
-		Body: section,
+		Body: Div(css.Class("brc budget-fold"), Attr("data-testid", "budgets-recurring"), fold, body),
 	})
 }
 

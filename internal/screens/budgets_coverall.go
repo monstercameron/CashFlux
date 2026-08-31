@@ -5,6 +5,7 @@
 package screens
 
 import (
+	"log/slog"
 	"sort"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+	"github.com/monstercameron/CashFlux/internal/validate"
 	"github.com/monstercameron/GoWebComponents/v5/css"
 	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/v5/ui"
@@ -246,6 +248,25 @@ func coverAllForm(props coverAllFormProps) ui.Node {
 			errText.Set(uistate.T("coverAll.doneNone"))
 			return
 		}
+		// Build every budget first and check them ALL before writing any of them.
+		//
+		// This loop moves money between budgets: it lowers a source's cap for the
+		// period and raises the over budget's by the same amount. Writing as it went
+		// meant a rejection partway through left the earlier pairs applied and the
+		// rest not — some budgets robbed with nobody paid. The checkpoint above makes
+		// that recoverable from Settings → Data, but recoverable is not the same as
+		// not happening, and it asks the user to notice first.
+		//
+		// The two failures that can be seen coming are handled here: a viewing role,
+		// which is one check for the whole batch rather than one per budget, and
+		// validation, which is decidable before any write. A storage failure mid-loop
+		// is still possible — the store has no transaction across entities — and that
+		// is what the checkpoint is for.
+		if !app.CanEdit() {
+			errText.Set(uistate.T("budgets.writeReadOnly"))
+			return
+		}
+		var writes []domain.Budget
 		for id, ops := range byBudget {
 			var b domain.Budget
 			found := false
@@ -258,11 +279,32 @@ func coverAllForm(props coverAllFormProps) ui.Node {
 			if !found {
 				continue
 			}
+			gained := false
 			for _, op := range ops {
 				b = b.WithPeriodBoost(op.start, op.delta)
+				if op.delta > 0 {
+					gained = true
+				}
 			}
+			// Stamp the RECEIVING budget so it can be flagged as covered this period.
+			// Only appstate.CoverBudget did this, and cover-all does not go through it
+			// — it writes period boosts directly — so the flag never lit from the one
+			// control most people actually use, and the card's "Covered this period"
+			// badge was dead in that path (Cam, 2026-08-31). A budget that GAVE
+			// (delta < 0) is not covered by the transaction; only a receiver is.
+			if gained {
+				b.CoveredAt = time.Now()
+			}
+			if is := validate.ValidateBudget(b); !is.OK() {
+				errText.Set(budgetErrorText(is))
+				return // nothing has been written yet
+			}
+			writes = append(writes, b)
+		}
+		for _, b := range writes {
 			if err := app.PutBudget(b); err != nil {
-				errText.Set(err.Error())
+				slog.Error("budgets: cover-all write rejected", "id", b.ID, "err", err)
+				errText.Set(budgetErrorText(err))
 				return
 			}
 		}

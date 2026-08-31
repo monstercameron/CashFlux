@@ -85,6 +85,14 @@ func budgetFundedCallout(props budgetFundedProps) ui.Node {
 	if !f.Meaningful() || f.FullyFunded() {
 		return Fragment()
 	}
+	// Nothing outstanding means nothing is waiting to arrive, so what is "unfunded"
+	// is purely over-assignment — a number the hero already states. Left in, this
+	// card repeated that figure under a different claim ("planned against income
+	// you haven't received") that is false once every expected dollar has landed:
+	// identical digits, two meanings, one of them wrong (Cam, 2026-08-31).
+	if f.Shortfall() == 0 {
+		return Fragment()
+	}
 	reducePct := f.ReduceToFitPct()
 	openAdjust := uistate.UseBudgetAdjustOpen()
 	// C671: the action opens a form that used to be pre-filled for a PERMANENT

@@ -42,15 +42,13 @@ func buildMonthCloseSummary(app *appstate.App, v budgetView, bs, be time.Time) m
 			actual += ln.Amount
 		}
 	}
+	// Same one definition the rail and the allocation bar use — see the note in
+	// budgetSummaryWidget. This copy had the old two-method switch, so the review
+	// could report a plan that fits while the page behind it said otherwise.
 	overAssigned := int64(0)
-	switch v.Method {
-	case budgeting.MethodZeroBased:
-		if ta := budgeting.ToAssign(v.BannerIncome+v.RolledOver, v.TotalLimit+v.SavingsAssigned); ta < 0 {
+	if pool := v.BannerIncome + v.RolledOver; pool > 0 {
+		if ta := budgeting.ToAssign(pool, v.TotalLimit+v.SavingsAssigned); ta < 0 {
 			overAssigned = -ta
-		}
-	case budgeting.MethodSimple:
-		if d := v.BannerIncome - v.TotalLimit; d < 0 {
-			overAssigned = -d
 		}
 	}
 	nameOf := func(b domain.Budget) string { return budgetTitle(b.Name, v.CatName[b.CategoryID]) }
@@ -93,6 +91,21 @@ func monthCloseBody(_ monthCloseBodyProps) ui.Node {
 	v := computeBudgetView(app, activeMemberID, vw, pr, false)
 	bs, be := vw.Range()
 	s := buildMonthCloseSummary(app, v, bs, be)
+	// The offer appears in a period's LAST FIVE DAYS as well as after it closes, so
+	// this flow is usually read while the month is still running. Every line was
+	// written in the past tense regardless — "went over", "went unspent", "next
+	// month simply starts honest" — which on the 27th describes money that has not
+	// been spent YET as money that was left over. The rest of this surface already
+	// switches tense on a closed period (budgets.histUnspent, incomeActualEnded);
+	// this flow never did (Cam, 2026-08-31). Half-open range: the period is closed
+	// only once now is at or past its exclusive end.
+	ended := !time.Now().Before(be)
+	tense := func(live, past string) string {
+		if ended {
+			return past
+		}
+		return live
+	}
 
 	// Over-assignment: "leave unresolved" is an acknowledged choice, not a dismissal
 	// of the modal — the section collapses to a quiet note for this open/close cycle.
@@ -118,11 +131,17 @@ func monthCloseBody(_ monthCloseBodyProps) ui.Node {
 	basisAtom := uistate.UseBudgetBasisOpen()
 	basisDraft := uistate.UseBudgetBasisDraft()
 
-	openCoverAll := ui.UseEvent(Prevent(func() { openAtom.Set(false); coverAllAtom.Set(true) }))
-	openSweep := ui.UseEvent(Prevent(func() { openAtom.Set(false); sweepAtom.Set(true) }))
+	// These three open ANOTHER modal, and they used to dismiss this one first — so a
+	// flow whose whole premise is walking the month's loose ends in order ejected you
+	// at the first thing you acted on, and finishing meant re-opening it and
+	// re-finding your place. Four of its six actions did this. They now leave the
+	// review standing underneath, so closing the sub-modal returns you to the step
+	// you were on (Cam, 2026-08-31). goAllocate below still dismisses, because it
+	// leaves the page entirely and a modal cannot survive that.
+	openCoverAll := ui.UseEvent(Prevent(func() { coverAllAtom.Set(true) }))
+	openSweep := ui.UseEvent(Prevent(func() { sweepAtom.Set(true) }))
 	openBasis := ui.UseEvent(Prevent(func() {
 		basisDraft.Set(uistate.NewBudgetBasisDraft(uistate.CurrentPrefs()))
-		openAtom.Set(false)
 		basisAtom.Set(true)
 	}))
 	goAllocate := ui.UseEvent(Prevent(func() {
@@ -146,10 +165,11 @@ func monthCloseBody(_ monthCloseBodyProps) ui.Node {
 	if anchor.IsZero() {
 		anchor = time.Now()
 	}
+	// Carry FORWARD: the reviewed period's top-ups into the next one. See
+	// monthclose.CarryTargets for why the old (last, this) pair could never land
+	// usefully in the window this flow is offered.
 	periodStarts := func(b domain.Budget) (time.Time, time.Time) {
-		thisStart, _ := budgeting.PeriodRange(b.Period, anchor, ws)
-		lastStart, _ := budgeting.PeriodRange(b.Period, thisStart.AddDate(0, 0, -1), ws)
-		return lastStart, thisStart
+		return monthclose.CarryTargets(b.Period, anchor, ws)
 	}
 	var visibleBudgets []domain.Budget
 	for _, b := range app.Budgets() {
@@ -193,10 +213,14 @@ func monthCloseBody(_ monthCloseBodyProps) ui.Node {
 	// 1 — Overspending.
 	var overBody []any
 	if len(s.Overspends) == 0 {
-		overBody = append(overBody, P(css.Class("budget-sub"), uistate.T("monthclose.overNone")))
+		overBody = append(overBody, P(css.Class("budget-sub"),
+			uistate.T(tense("monthclose.overNoneLive", "monthclose.overNone"))))
 	} else {
 		overBody = append(overBody, P(css.Class("budget-sub"),
-			uistate.T("monthclose.overIntro", len(s.Overspends), fmtMoney(money.New(s.TotalOverMinor, v.Base)))))
+			uistate.TN(
+				tense("monthclose.overIntroLiveOne", "monthclose.overIntroOne"),
+				tense("monthclose.overIntroLiveMany", "monthclose.overIntroMany"),
+				len(s.Overspends), fmtMoney(money.New(s.TotalOverMinor, v.Base)))))
 		var rows []ui.Node
 		for _, it := range s.Overspends {
 			rows = append(rows, Li(css.Class("wf-line"),
@@ -218,10 +242,28 @@ func monthCloseBody(_ monthCloseBodyProps) ui.Node {
 	}
 	var leftBody []any
 	if len(s.Leftovers) == 0 {
-		leftBody = append(leftBody, P(css.Class("budget-sub"), uistate.T("monthclose.leftNone")))
+		leftBody = append(leftBody, P(css.Class("budget-sub"),
+			uistate.T(tense("monthclose.leftNoneLive", "monthclose.leftNone"))))
 	} else {
 		leftBody = append(leftBody, P(css.Class("budget-sub"),
-			uistate.T("monthclose.leftIntro", fmtMoney(money.New(s.TotalLeftMinor, v.Base)), len(s.Leftovers))))
+			// TN puts the count first, so these keys use explicit argument indexes
+			// to keep the money-first reading order.
+			uistate.TN(
+				tense("monthclose.leftIntroLiveOne", "monthclose.leftIntroOne"),
+				tense("monthclose.leftIntroLiveMany", "monthclose.leftIntroMany"),
+				len(s.Leftovers), fmtMoney(money.New(s.TotalLeftMinor, v.Base)))))
+		// Name the biggest contributor when it dominates the total. A single
+		// long-horizon budget can BE most of this figure — on the sample household
+		// "$4,525 unspent across 8 budgets" is 73% one goal-funded budget with a
+		// $6,000 limit — and the headline then reads as reallocatable money that
+		// mostly is not (Cam, 2026-08-31). Naming the outlier costs one line and is
+		// honest without needing to classify every budget's purpose.
+		if top := s.Leftovers[0]; len(s.Leftovers) > 1 && top.Minor*2 > s.TotalLeftMinor {
+			leftBody = append(leftBody, P(css.Class("budget-sub"), Attr("data-testid", "monthclose-left-top"),
+				uistate.T("monthclose.leftDominatedBy", top.Name,
+					fmtMoney(money.New(top.Minor, v.Base)),
+					top.Minor*100/s.TotalLeftMinor)))
+		}
 		leftBody = append(leftBody,
 			P(css.Class("budget-sub"), Attr("data-testid", "monthclose-rollover-note"), rolloverNote),
 			Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt2),

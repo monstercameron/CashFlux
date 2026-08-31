@@ -109,7 +109,14 @@ func BudgetAnnualGrid(props budgetAnnualGridProps) ui.Node {
 			Span(ClassStr(caretCls), Attr("aria-hidden", "true"),
 				uiw.Icon(icon.ChevronRight, css.Class(tw.ShrinkO, tw.W4, tw.H4))),
 			Span(css.Class("budget-annualgrid-toggle-label"), uistate.T("budgets.planYearTitle")),
-			Span(css.Class("budget-annualgrid-toggle-hint"), uistate.T("budgets.planYearHint")),
+			// Glanceable while closed: the year, and what the current plan comes to
+			// across it. "See the whole year and plan ahead" described the SECTION;
+			// a collapsed row should answer something instead of advertising itself
+			// (Cam, 2026-08-31). The figure is the budgets' own limits normalized to
+			// a year — no grid build, so it costs nothing while shut.
+			Span(css.Class("budget-annualgrid-toggle-hint"),
+				uistate.T("budgets.planYearFoldHint", year.Get(),
+					fmtMoney(money.New(annualPlanTotal(props.Budgets, props.Rates.Base), props.Rates.Base)))),
 		),
 	)
 
@@ -574,4 +581,35 @@ func annualGridWindowBar(win string, all, h1, h2 ui.Handler) ui.Node {
 		opt(annualWinH1, "budgets.gridWindowH1", "annualgrid-win-h1", h1),
 		opt(annualWinH2, "budgets.gridWindowH2", "annualgrid-win-h2", h2),
 	)
+}
+
+// annualPlanTotal is the household's planned spend for a full year: every budget's
+// limit scaled by how many of its periods fit in one. Budgets can run weekly,
+// biweekly, monthly, quarterly or yearly, so a bare sum of limits would compare a
+// weekly grocery cap with a yearly insurance one as though they were equal.
+func annualPlanTotal(budgets []domain.Budget, base string) int64 {
+	perYear := func(p domain.Period) int64 {
+		switch p {
+		case domain.PeriodWeekly:
+			return 52
+		case domain.PeriodBiweekly:
+			return 26
+		case domain.PeriodQuarterly:
+			return 4
+		case domain.PeriodYearly:
+			return 1
+		default:
+			return 12
+		}
+	}
+	var total int64
+	for _, b := range budgets {
+		// Mixed-currency budgets are left out rather than added at face value: a
+		// wrong total stated confidently is worse than one that omits an outlier.
+		if b.Limit.Currency != "" && b.Limit.Currency != base {
+			continue
+		}
+		total += b.Limit.Amount * perYear(b.Period)
+	}
+	return total
 }

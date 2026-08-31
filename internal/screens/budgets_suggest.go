@@ -82,7 +82,7 @@ func budgetSuggestHint(props budgetSuggestProps) ui.Node {
 		auditview.CaptureNow()
 		cur.Limit = money.New(suggested, cur.Limit.Currency)
 		if err := a.PutBudget(cur); err != nil {
-			uistate.PostNotice(err.Error(), true)
+			uistate.PostNotice(budgetErrorText(err), true)
 			return
 		}
 		uistate.RequestPersist()

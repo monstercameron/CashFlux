@@ -85,10 +85,11 @@ func Budgets() ui.Node {
 		// with their frequency. Self-gates to nothing when there are no recurrings.
 		budgetNativeSpec("budget-recurring"),
 	}
+	method := budgeting.ParseMethodology(app.Settings().BudgetMethodology)
 	// BG2: the flex methodology replaces the per-budget list with one pooled flex
 	// meter plus the fixed/non-monthly composition. Keep the toolbar (it holds the
 	// method picker to switch back) but swap the budget-heavy tiles for the flex view.
-	if budgeting.ParseMethodology(app.Settings().BudgetMethodology) == budgeting.MethodFlex {
+	if method == budgeting.MethodFlex {
 		specs = []domain.WidgetSpec{
 			budgetNativeSpec("budget-toolbar"),
 			budgetNativeSpec("budget-flex"),
@@ -100,7 +101,12 @@ func Budgets() ui.Node {
 	// transform) so its centering isn't broken.
 	return Fragment(
 		budgetsSweepCard(),
-		Div(css.Class("bento bento-budgets"),
+		// The surface says which method it is rendering. Four different pages live
+		// behind this one route and nothing in the DOM reported which was on screen,
+		// so anything wanting to observe a method change had to infer it from a
+		// toast — and a toast from the PREVIOUS change satisfies that check just as
+		// well, which is what made switching methods race (Cam, 2026-08-31).
+		Div(css.Class("bento bento-budgets"), Attr("data-method", string(method)),
 			MapKeyed(specs,
 				func(sp domain.WidgetSpec) any { return sp.ID },
 				func(sp domain.WidgetSpec) ui.Node {
@@ -115,6 +121,7 @@ func Budgets() ui.Node {
 		),
 		budgetsSweepConfigModal(),
 		budgetsCoverAllModal(),
+		budgetsTrackUntrackedModal(),
 		budgetsMonthCloseModal(),
 		flexAssignSheet(),
 	)

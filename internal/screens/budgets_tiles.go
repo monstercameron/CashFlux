@@ -18,6 +18,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/monthclose"
 	"github.com/monstercameron/CashFlux/internal/reports"
 	"github.com/monstercameron/CashFlux/internal/smart"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -118,17 +119,18 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 	// fill read as one unit. The fill grows with spending and turns amber/red as it
 	// nears/exceeds the cap; "Left" (safe-to-spend) is the hero figure on the right.
 	//
-	// The cap is the SELECTED MAX BUDGET. In zero-based mode that's the income basis you
-	// chose in the modal (all income / paychecks / chosen sources / a set monthly figure)
-	// plus any rolled-over leftover — so the bar reads as "spent of your income", not
-	// "spent of what's assigned to categories". Simple/envelope keep the total budgeted.
+	// The cap is the SELECTED MAX BUDGET — the total assigned to categories, on every
+	// method. Zero-based used to swap in the income basis here so the bar read "spent
+	// of your income"; that paired with a hero of income − spent, but it stopped
+	// working once To Assign became the hero (see zbbHero below). Against income, this
+	// bar plotted the same denominator as the allocation bar directly beneath it — two
+	// near-identical bars, and this one showed a calm 79% under a red "Over-assigned",
+	// so a plan $3,230.20 past its income read as comfortably under budget (Cam,
+	// 2026-08-31). Split the questions instead: this bar is spending against the PLAN,
+	// the allocation bar is the plan against INCOME.
 	spendLimit := v.TotalLimit
 	spendLimitLabel := uistate.T("budgets.budgeted")
 	leftLabel := uistate.T("budgets.left")
-	if v.Method == budgeting.MethodZeroBased {
-		spendLimit = v.BannerIncome + v.RolledOver
-		spendLimitLabel = uistate.T("budgets.spendBudgetLabel")
-	}
 	if v.LastMonthMode {
 		// Period-honest overlay: last month's spend reads against last month's OWN total
 		// budget, and the difference is what went UNSPENT — never this month's budget
@@ -234,6 +236,15 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 		fundFree = v.BannerIncome - v.TotalLimit
 		fundHasPool = true
 	}
+	// zbbHero (2026-08-31): in zero-based the hero figure is To Assign, not "Left".
+	// Zero-based asks exactly one question — is every dollar assigned? — and the
+	// band was answering a different one: "Left" here is income − spent, which is a
+	// full month of income measured against a part-month of spending. It reads
+	// large and green early in every month, and it stayed green while the plan was
+	// over-assigned, directly above a red "$X more than you earn". Live views only:
+	// a closed or last-month view is a spending record, where To Assign has no
+	// present tense to report.
+	zbbHero := v.Method == budgeting.MethodZeroBased && fundHasPool && !v.LastMonthMode && !hist
 
 	// B1 hero (2026-07-19): the summary opens on the ONE number a budget page
 	// answers — what's left to spend — over a slim month-ledger bar and a single
@@ -258,10 +269,11 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 			Attr("data-testid", "budgets-hero-attn"), Title(uistate.T("budgets.heroAttnTitle")),
 			OnClick(filterAttn), txt)
 	}
-	// Zero-based only: the still-unassigned pool as one small chip (over-assignment
-	// is an issue and lives in the rail, so the chip only speaks when positive).
+	// Zero-based only: the still-unassigned pool as one small chip. Redundant once
+	// the hero reports To Assign itself (zbbHero), so it now survives only for the
+	// views the hero does not cover — a closed month or the last-month overlay.
 	var toAssignChip ui.Node = Fragment()
-	if v.Method == budgeting.MethodZeroBased && fundHasPool && fundFree > 0 {
+	if v.Method == budgeting.MethodZeroBased && fundHasPool && fundFree > 0 && !zbbHero {
 		toAssignChip = Span(css.Class("budget-hero-toassign"), Attr("data-testid", "budgets-toassign-chip"),
 			uistate.T("budgets.heroToAssign", fmtMoney(money.New(fundFree, v.Base))))
 	}
@@ -279,20 +291,46 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 		heroLabel = vw.Label() + " · " + heroLabel
 	}
 	numTone := accentFor(leftM)
+	// Zero-based: swap the hero to To Assign, signed by its LABEL (the value stays
+	// an unsigned amount, the same contract heroOverLabel follows). Tones say what
+	// to do: red when the plan promises money that is not there, accent when every
+	// dollar has a job, warn while a pool is still waiting to be assigned — a
+	// surplus is unfinished work in this method, so it must not read as success.
+	heroTipKey := "smart.tipBudgetSafe"
+	if zbbHero {
+		heroTipKey = "smart.tipBudgetToAssign"
+		heroVal = fmtMoney(money.New(fundFree, v.Base).Abs())
+		switch {
+		case fundFree < 0:
+			heroLabel = uistate.T("budgets.heroOverAssigned")
+			numTone = "neg"
+		case fundFree == 0:
+			heroLabel = uistate.T("budgets.heroAllAssigned")
+			numTone = "pos"
+		default:
+			heroLabel = uistate.T("budgets.heroToAssignLabel")
+			numTone = "warn"
+		}
+	}
 	_ = spendCap
 	var ageChip ui.Node = Fragment()
 	if am := v.AgeMoney; am.Ready {
-		num := strconv.Itoa(am.Days)
-		if am.Capped {
-			num += "+"
-		}
-		unit := uistate.T("budgets.ageMoneyUnit")
-		if am.Days == 1 && !am.Capped {
-			unit = uistate.T("budgets.ageMoneyUnitOne")
+		// A capped figure is the ceiling reporting itself. "365+ days" reads as a
+		// measurement, is frozen there whatever you do, and says nothing about whether
+		// high is good — so at the cap the chip states the span in words and hands the
+		// tooltip the copy that names the direction ("an exceptional buffer").
+		figure := strconv.Itoa(am.Days) + " " + uistate.T("budgets.ageMoneyUnit")
+		why := uistate.T("budgets.ageMoneyWhy")
+		switch {
+		case am.Capped:
+			figure = uistate.T("budgets.ageMoneyOverYear")
+			why = uistate.T("budgets.ageMoneyCapped")
+		case am.Days == 1:
+			figure = "1 " + uistate.T("budgets.ageMoneyUnitOne")
 		}
 		ageChip = Span(css.Class("budget-hero-age"), Attr("data-testid", "budgets-agemoney"),
-			uistate.T("budgets.ageMoneyLabel")+" · "+num+" "+unit,
-			smartTooltipFor(smartSettings, "budget-agemoney", uistate.T("budgets.ageMoneyLabel"), uistate.T("budgets.ageMoneyWhy")))
+			uistate.T("budgets.ageMoneyLabel")+" · "+figure,
+			smartTooltipFor(smartSettings, "budget-agemoney", uistate.T("budgets.ageMoneyLabel"), why))
 	}
 	// #64: the plan figure is EXPECTED income — say what actually arrived, so the
 	// basis never masquerades as money already received. One quiet sub-line.
@@ -303,13 +341,16 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 	// like "fully funded". The difference is the part that decides whether a
 	// payment clears.
 	var funding budgeting.FundingRead
-	if v.BannerIncome > 0 && (v.Method == budgeting.MethodZeroBased || v.Method == budgeting.MethodSimple) {
-		actualIncome := int64(0)
-		if lines, err := reports.IncomeByCategory(app.Transactions(), wStart, wEnd, currency.Rates{Base: v.Base, Rates: app.Settings().FXRates}); err == nil {
-			for _, ln := range lines {
-				actualIncome += ln.Amount
-			}
+	// Scanned ONCE per render and reused: the funding read below and the month-close
+	// gate further down both need it, and IncomeByCategory walks every transaction.
+	// Computing it twice made a full ledger sweep the price of drawing this tile.
+	actualIncome := int64(0)
+	if lines, err := reports.IncomeByCategory(app.Transactions(), wStart, wEnd, currency.Rates{Base: v.Base, Rates: app.Settings().FXRates}); err == nil {
+		for _, ln := range lines {
+			actualIncome += ln.Amount
 		}
+	}
+	if v.BannerIncome > 0 && (v.Method == budgeting.MethodZeroBased || v.Method == budgeting.MethodSimple) {
 		funding = budgeting.FundingRead{
 			Expected: v.BannerIncome, Received: actualIncome,
 			Assigned: v.TotalLimit + v.SavingsAssigned,
@@ -322,8 +363,15 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 		if hist {
 			key = "budgets.incomeActualEnded"
 		}
-		incomeActual = P(css.Class("budget-sub"), Attr("data-testid", "budgets-income-actual"),
-			uistate.T(key, fmtMoney(money.New(actualIncome, v.Base)), fmtMoney(money.New(v.BannerIncome, v.Base))))
+		// Only speak while income is still outstanding. This line exists to stop the
+		// basis masquerading as money already in hand — once everything expected has
+		// arrived there is no gap to report, and "$5,900.00 of the $5,900.00 your plan
+		// expects" is a tautology that reads as "fully funded" directly beneath a hero
+		// saying the plan is over-assigned (Cam, 2026-08-31).
+		if actualIncome < v.BannerIncome {
+			incomeActual = P(css.Class("budget-sub"), Attr("data-testid", "budgets-income-actual"),
+				uistate.T(key, fmtMoney(money.New(actualIncome, v.Base)), fmtMoney(money.New(v.BannerIncome, v.Base))))
+		}
 	}
 	// The summary band is the SHARED cross-page component (`.budget-loader` — the
 	// same Spent/Budgeted/Left "loader" the Goals and To-do headline tiles mirror),
@@ -350,7 +398,9 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 			Div(css.Class("budget-loader-fig", "is-right"),
 				Div(css.Class("budget-loader-label "+tw.Fold(tw.InlineFlex, tw.ItemsCenter, tw.Gap1)),
 					heroLabel,
-					If(!v.LastMonthMode && !hist, smartTooltipFor(smartSettings, "budget-safe", leftLabel, uistate.T("smart.tipBudgetSafe"))),
+					// The tip explains the figure actually shown, so it tracks the
+					// hero rather than the "Left" figure zero-based replaced.
+					If(!v.LastMonthMode && !hist, smartTooltipFor(smartSettings, "budget-safe", heroLabel, uistate.T(heroTipKey))),
 				),
 				Div(ClassStr("budget-loader-value is-hero "+numTone), Attr("data-testid", "budgets-hero-left"), heroVal),
 				// When the plan runs past income, this figure is money left in a
@@ -358,7 +408,10 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 				// and greenest thing on the page and a skimmer reads it as slack —
 				// so the caveat travels WITH the number rather than sitting in
 				// smaller type further down.
-				If(overIncome > 0, Div(css.Class("budget-loader-caveat"), Attr("data-testid", "budgets-hero-over-income"),
+				// Suppressed under zbbHero: there the hero IS this number (overIncome
+				// is exactly -fundFree once To Assign goes negative), so the caveat
+				// would restate the figure it sits beneath.
+				If(overIncome > 0 && !zbbHero, Div(css.Class("budget-loader-caveat"), Attr("data-testid", "budgets-hero-over-income"),
 					uistate.T("budgets.leftOverIncomeNote", fmtMoney(money.New(overIncome, v.Base))))),
 			),
 		),
@@ -367,11 +420,73 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 	// so configuring "Budget income" always changes something you can see. It
 	// renders nothing without an income figure, in which case basisBtn below stays
 	// as the call to action.
-	alloc := budgetIncomeAllocation(v, basisBtn, hist)
+	alloc := budgetIncomeAllocation(v, basisBtn, hist, zbbHero)
 	hasAlloc := v.BannerIncome+v.RolledOver > 0
 
+	// Zero-based drops the loader band entirely. The band is a spent/budgeted/left
+	// reading on its own axis; beneath a bar that plots the same money against
+	// income it read as the same chart twice, and the pair could disagree — a calm
+	// 79% fill under a red "Over-assigned" (Cam, 2026-08-31). Spending moves onto
+	// the allocation bar's axis as a rail (showSpend), so what remains to say here
+	// is the one governing number. Every other method keeps the shared band, so the
+	// cross-page loader system that Goals and To-do mirror is untouched.
+	heroNode := band
+	if zbbHero {
+		heroNode = Div(css.Class("budget-zbb-hero"),
+			Div(css.Class("budget-zbb-hero-label"),
+				heroLabel,
+				smartTooltipFor(smartSettings, "budget-safe", heroLabel, uistate.T(heroTipKey)),
+			),
+			Div(ClassStr("budget-zbb-hero-value "+numTone), Attr("data-testid", "budgets-hero-left"), heroVal),
+		)
+	}
+	// How far the plan runs past the income basis. Feeds BOTH the issues rail below
+	// and the month-close gate, so it is computed once, before either.
+	// ONE definition, every method, and deliberately the SAME arithmetic the
+	// allocation bar uses (see resolveAllocation): pool minus everything assigned.
+	//
+	// It used to be a switch covering zero-based and simple only, so envelope and
+	// flex fell through to zero — and those surfaces then printed "155% of your
+	// income · $3,260.20 more than you earn" on the bar while the rail beneath it
+	// offered nothing to do about it. Stating a problem and withholding the remedy
+	// is worse than not mentioning it (Cam, 2026-08-31).
+	//
+	// Simple's old formula omitted rollover and savings, so on a household with
+	// either it could disagree with the bar directly above it by exactly those
+	// amounts. Sharing the bar's arithmetic makes that impossible rather than
+	// unlikely.
+	overAssigned := int64(0)
+	if pool := v.BannerIncome + v.RolledOver; pool > 0 {
+		if ta := budgeting.ToAssign(pool, v.TotalLimit+v.SavingsAssigned); ta < 0 {
+			overAssigned = -ta
+		}
+	}
+	// #64: offer the guided close flow when the period is in its last five days or
+	// already ended — the moment the checklist is actually useful. It rides in the
+	// action group rather than on a bar of its own: it is one more thing you can do
+	// about this month, and a third stacked strip for a single button was most of
+	// what made the summary's foot read as clutter (Cam, 2026-08-31).
+	// Timing is necessary but not sufficient: the offer also has to have something to
+	// review. monthclose.Summary.Clean() ("no overspent budgets and no
+	// over-assignment") was written for exactly this and had NO production caller —
+	// only tests — so the chip appeared in every period's last five days and opened
+	// on "Nothing ended over budget. Nice." / "Your plan fits the expected income."
+	// An invitation that reliably leads nowhere teaches people to ignore it
+	// (Cam, 2026-08-31).
+	var closeOffer ui.Node = Fragment()
+	if daysLeft := int(time.Until(wEnd).Hours() / 24); hist || (daysLeft >= 0 && daysLeft <= 5) {
+		// Built from figures this render already has — statuses, the over-assignment
+		// the rail uses, and the single income scan above — so the gate costs no
+		// extra passes over the ledger. Clean() stays the one definition of "nothing
+		// to review", shared with the flow the chip opens.
+		review := monthclose.Build(v.Statuses, nil, v.BannerIncome, actualIncome, overAssigned, pr.BudgetRolloverLeftover)
+		if !review.Clean() {
+			closeOffer = ui.CreateElement(monthCloseOfferChip, struct{}{})
+		}
+	}
+
 	strip := Div(css.Class("budget-hero"), Attr("data-testid", "budgets-status-strip"),
-		band,
+		heroNode,
 		alloc,
 		// C587: directly under the allocation bar, because that bar is what makes
 		// "fully assigned" look like "fully funded". Renders nothing when the plan
@@ -392,43 +507,39 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 		}),
 		Div(css.Class("budget-hero-cap"),
 			incomeActual,
+			// Split by CONSEQUENCE, not by type. The row used to give one treatment to
+			// five different things — a list filter, two controls that write to your
+			// data, a link off the page, and a frozen statistic — so nothing signalled
+			// which ones change anything (Cam, 2026-08-31). Acts come first and keep
+			// button weight; the passive group is pushed right and set quiet.
 			Div(css.Class("budget-hero-side"),
-				If(v.LastMonthMode, lastMonthTag),
-				attnChip,
-				// Cover-all re-homes here from the retired budget-attention tile: it
-				// belongs beside the chip that names the overages it fixes.
-				If(attnOver > 0 && smartSettings.IsEnabled(coverAllFeatureCode),
-					ui.CreateElement(coverAllBannerButton, coverAllButtonProps{})),
-				toAssignChip,
-				// C524: spend-per-category already exists in full on /reports — a
-				// magnitude histogram, prior-period deltas, sparklines and a
-				// drill-through per bar. Cam asked for it because nothing pointed
-				// at it. A link is the fix; a second surface would be a second set
-				// of numbers to disagree with the first.
-				spendReportLink(),
-				// Only a call to action while there is no basis yet — once one is
-				// set, the quiet "Change" in the allocation caption owns it, and two
-				// buttons for one action is clutter.
-				If(!hasAlloc, basisBtn),
-				ageChip,
+				Div(css.Class("budget-hero-acts"),
+					If(v.LastMonthMode, lastMonthTag),
+					attnChip,
+					// Cover-all re-homes here from the retired budget-attention tile: it
+					// belongs beside the chip that names the overages it fixes.
+					If(attnOver > 0 && smartSettings.IsEnabled(coverAllFeatureCode),
+						ui.CreateElement(coverAllBannerButton, coverAllButtonProps{})),
+					closeOffer,
+				),
+				Div(css.Class("budget-hero-meta"),
+					toAssignChip,
+					// C524: spend-per-category already exists in full on /reports — a
+					// magnitude histogram, prior-period deltas, sparklines and a
+					// drill-through per bar. Cam asked for it because nothing pointed
+					// at it. A link is the fix; a second surface would be a second set
+					// of numbers to disagree with the first.
+					spendReportLink(),
+					// Only a call to action while there is no basis yet — once one is
+					// set, the quiet "Change" in the allocation caption owns it, and two
+					// buttons for one action is clutter.
+					If(!hasAlloc, basisBtn),
+					ageChip,
+				),
 			),
 		),
 	)
 
-	// Every warning folds into ONE collapsed "N issues need attention" rail with
-	// drill-down (over-assignment, overspent categories, sinking-fund shortfall);
-	// healthy states reduce to a quiet footnote inside the rail component.
-	overAssigned := int64(0)
-	switch v.Method {
-	case budgeting.MethodZeroBased:
-		if ta := budgeting.ToAssign(v.BannerIncome+v.RolledOver, v.TotalLimit+v.SavingsAssigned); ta < 0 {
-			overAssigned = -ta
-		}
-	case budgeting.MethodSimple:
-		if d := v.BannerIncome - v.TotalLimit; d < 0 {
-			overAssigned = -d
-		}
-	}
 	// UX-05: open follow-up to-dos linked to any budget feed the rail, so a closed
 	// month can report its "N unresolved follow-ups" honestly.
 	followUps := 0
@@ -443,14 +554,7 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 		Hist: hist, FollowUps: followUps,
 	})
 
-	// #64: offer the guided close flow when the period is in its last five days or
-	// already ended — the moment the checklist is actually useful.
-	var closeOffer ui.Node = Fragment()
-	if daysLeft := int(time.Until(wEnd).Hours() / 24); hist || (daysLeft >= 0 && daysLeft <= 5) {
-		closeOffer = Div(css.Class(tw.Mt2), ui.CreateElement(monthCloseOfferChip, struct{}{}))
-	}
-
-	body := Div(strip, rail, closeOffer, rangeHint)
+	body := Div(strip, rail, rangeHint)
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "budget-summary", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
 		Body: body,
@@ -538,6 +642,22 @@ func budgetDensityTitleKey(density string) string {
 		return "budgets.densityTitleOn"
 	}
 	return "budgets.densityTitleOff"
+}
+
+// budgetDensityLabelKey picks the toggle's VISIBLE label, which names what a
+// click produces rather than what is on screen (Cam, 2026-08-31).
+//
+// C596 had frozen this label because a moving one beside aria-pressed announced
+// "Card view, pressed" over a compact list. The half that could not be true in
+// both states was aria-pressed, not the label: a button named for its destination
+// is never "pressed", it is just a button. So the label moves and aria-pressed is
+// gone — the current view is carried by the accessible-name suffix for assistive
+// tech and by data-density for anything that needs to read it.
+func budgetDensityLabelKey(density string) string {
+	if density == uistate.BudgetDensityCompact {
+		return "budgets.densityCards"
+	}
+	return "budgets.densityCompact"
 }
 
 // budgetDensityStateKey picks the screen-reader-only suffix that makes the
@@ -1070,6 +1190,11 @@ func budgetSavingsWidget(props budgetSummaryProps) ui.Node {
 	// budgeting method changes mid-session. The spread handler recomputes the view at
 	// click time so it always splits the current leftover across the current accounts.
 	nav := router.UseNavigate()
+	// Collapsed by default: this is a five-row account form at the BOTTOM of the
+	// surface, below Plan the year. Open, it is the tallest thing on the page for a
+	// figure most months never change; closed, it states its own total and waits.
+	open := ui.UseState(false)
+	toggleOpen := ui.UseEvent(Prevent(func() { open.Set(!open.Get()) }))
 	goToGoals := ui.UseEvent(Prevent(func() { nav.Navigate(uistate.RoutePath("/goals")) }))
 	goToAccounts := ui.UseEvent(Prevent(func() { nav.Navigate(uistate.RoutePath("/accounts")) }))
 	onSpread := ui.UseEvent(Prevent(func() {
@@ -1115,9 +1240,36 @@ func budgetSavingsWidget(props budgetSummaryProps) ui.Node {
 			Span(uistate.T("budgets.savingsSpread", fmtMoney(money.New(leftover, v.Base)))))
 	}
 
-	section := uiw.EntityListSection(uiw.EntityListSectionProps{
-		Title: uistate.T("budgets.savingsSectionTitle"),
-		Body: Fragment(
+	// The fold header mirrors "Plan the year" directly below it, so the two
+	// collapsible sections that close this surface read as one pattern. The hint
+	// carries the monthly total, which is the whole answer most visits need — you
+	// only open this to CHANGE an amount.
+	caretCls := "budget-fold-caret"
+	foldAria := uistate.T("budgets.savingsShowAria")
+	if open.Get() {
+		caretCls += " is-open"
+		foldAria = uistate.T("budgets.savingsHideAria")
+	}
+	hint := uistate.T("budgets.savingsHintNone")
+	if v.SavingsAssigned > 0 {
+		hint = uistate.TN("budgets.savingsHintOne", "budgets.savingsHintMany",
+			len(v.SavingsAccts), fmtMoney(money.New(v.SavingsAssigned, v.Base)))
+	}
+	fold := Div(css.Class("budget-fold-head"),
+		Button(css.Class("budget-fold-toggle"), Type("button"), Attr("data-testid", "budgets-savings-toggle"),
+			Attr("aria-expanded", ariaBool(open.Get())), Attr("aria-label", foldAria), OnClick(toggleOpen),
+			Span(ClassStr(caretCls), Attr("aria-hidden", "true"),
+				uiw.Icon(icon.ChevronRight, css.Class(tw.ShrinkO, tw.W4, tw.H4))),
+			Span(css.Class("budget-fold-toggle-label"), uistate.T("budgets.savingsSectionTitle")),
+			Span(css.Class("budget-fold-toggle-hint"), hint),
+		),
+	)
+	// The fold header IS the section title, exactly as it is for Plan the year — so
+	// the body is a plain container rather than an EntityListSection, which would
+	// print "Savings & investments" a second time directly under the toggle.
+	var foldBody ui.Node = Fragment()
+	if open.Get() {
+		foldBody = Fragment(
 			head,
 			P(css.Class("muted", tw.Text13), uistate.T("budgets.savingsDesc")),
 			body,
@@ -1128,11 +1280,11 @@ func budgetSavingsWidget(props budgetSummaryProps) ui.Node {
 						uiw.Icon(icon.Accounts, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("budgets.savingsManageAccounts"))),
 					Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "budgets-savings-goals-link"), OnClick(goToGoals),
 						uiw.Icon(icon.Goals, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("budgets.savingsManageGoals"))))),
-		),
-	})
+		)
+	}
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "budget-savings", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
-		Body: section,
+		Body: Div(css.Class("zbb-savings budget-fold"), fold, foldBody),
 	})
 }
 
@@ -1427,10 +1579,17 @@ func budgetIssuesRail(props budgetIssuesRailProps) ui.Node {
 	// behind it, and the wording read like a transaction review inbox, which is
 	// the one thing it never is.
 	title := budgetIssuesTitle(props.OverAssigned > 0, fundShort, props.FollowUps > 0, props.Hist)
-	// Over-assignment is the page's to-do: the Resolve figure rides the header.
+	// Over-assignment is the page's to-do, so Resolve is a REAL button that goes to
+	// Allocate. It used to be a Span inside the header button: styled as the loudest
+	// call to action on the page — a filled danger pill — while clicking it only
+	// expanded the disclosure it sat in. An affordance that looks like the primary
+	// action has to BE one (Cam, 2026-08-31). It is also a sibling of the toggle
+	// rather than a child, since a button inside a button is invalid markup.
 	var resolve ui.Node = Fragment()
 	if props.OverAssigned > 0 {
-		resolve = Span(css.Class("budget-rail-resolve"), Attr("data-testid", "budgets-rail-resolve"),
+		resolve = Button(css.Class("budget-rail-resolve"), Type("button"),
+			Attr("data-testid", "budgets-rail-resolve"), Title(uistate.T("budgets.resolveTitle")),
+			OnClick(goAllocate),
 			uistate.T("budgets.resolveAmount", fmtMoney(money.New(props.OverAssigned, v.Base))))
 	}
 	hint := uistate.T("budgets.issuesShow")
@@ -1439,13 +1598,26 @@ func budgetIssuesRail(props budgetIssuesRailProps) ui.Node {
 		hint = uistate.T("budgets.issuesHide")
 		chev = icon.ChevronUp
 	}
-	header := Button(css.Class("budget-issues-rail"), Type("button"),
-		Attr("data-testid", "budgets-issues-rail"), Attr("aria-expanded", ariaBool(open.Get())),
-		Title(hint), OnClick(toggle),
-		uiw.Icon(icon.AlertTriangle, css.Class("budget-issues-icon", tw.ShrinkO, tw.W4, tw.H4)),
-		Span(css.Class("budget-issues-title"), title),
+	// Order matters: title (claiming the slack) → Resolve → caret. The caret is the
+	// bar's rightmost edge because that is where a disclosure lives; leaving it
+	// inside the flex:1 toggle parked it in the middle of the row, to the LEFT of
+	// Resolve, which read as a stray glyph rather than "this opens".
+	//
+	// It is a second control on the same handler rather than part of the toggle, so
+	// it is hidden from assistive tech and taken out of the tab order — the labelled
+	// toggle beside it already announces and operates the disclosure.
+	header := Div(css.Class("budget-issues-rail"),
+		Button(css.Class("budget-issues-toggle"), Type("button"),
+			Attr("data-testid", "budgets-issues-rail"), Attr("aria-expanded", ariaBool(open.Get())),
+			Title(hint), OnClick(toggle),
+			uiw.Icon(icon.AlertTriangle, css.Class("budget-issues-icon", tw.ShrinkO, tw.W4, tw.H4)),
+			Span(css.Class("budget-issues-title"), title),
+		),
 		resolve,
-		uiw.Icon(chev, css.Class("budget-issues-chev", tw.ShrinkO, tw.W35, tw.H35)),
+		Button(css.Class("budget-issues-chevbtn"), Type("button"),
+			Attr("aria-hidden", "true"), Attr("tabindex", "-1"), OnClick(toggle),
+			uiw.Icon(chev, css.Class("budget-issues-chev", tw.ShrinkO, tw.W35, tw.H35)),
+		),
 	)
 
 	if !open.Get() {
@@ -1622,15 +1794,29 @@ func budgetToolbarContent(props budgetToolbarProps) ui.Node {
 			return
 		}
 		prev := cur.BudgetMethodology
-		apply := func() {
+		// apply REPORTS whether the switch landed. It used to return nothing and
+		// commit toasted unconditionally, so a rejected write announced "the
+		// household method is now X" over a page still rendering the old one — the
+		// sharpest form of this defect, since the surface publishes data-method and
+		// would have contradicted its own toast.
+		apply := func() bool {
 			s := app.Settings()
 			s.BudgetMethodology = next
-			_ = app.PutSettings(s)
+			if budgetWriteFailed("switch budgeting method", app.PutSettings(s)) {
+				// Re-render so the select springs back to the method actually in
+				// force, the same way the cancel path does. Without this the control
+				// keeps displaying a choice the store refused.
+				uistate.BumpDataRevision()
+				return false
+			}
 			uistate.BumpDataRevision()
 			uistate.RequestPersist()
+			return true
 		}
 		commit := func() {
-			apply()
+			if !apply() {
+				return
+			}
 			uistate.PostUndoable(uistate.T("budgets.methodGlobalSaved",
 				methodDisplayName(next), plural(methodImpact.Following, "budget")))
 		}
@@ -1700,18 +1886,17 @@ func budgetToolbarContent(props budgetToolbarProps) ui.Node {
 	// (below) so full cards — which show only one or two categories at a time — can be
 	// swapped for the scannable list in one click, instead of hunting inside the
 	// Budget-settings popover. Same atom + persisted pref; the button always names (via
-	// its label + tooltip) the layout a click switches TO, and reports its state through
-	// aria-pressed.
-	densityOn := densityAtom.Get() == uistate.BudgetDensityCompact
+	// its label + tooltip) the layout a click switches TO, and reports the layout it
+	// is CURRENTLY showing through data-density and the accessible-name suffix.
 	densityToggleBtn := Button(css.Class("btn btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
-		Attr("data-testid", "budgets-density"), Attr("aria-pressed", ariaBool(densityOn)),
+		Attr("data-testid", "budgets-density"), Attr("data-density", densityAtom.Get()),
 		Title(uistate.T(budgetDensityTitleKey(densityAtom.Get()))), OnClick(toggleDensity),
 		uiw.Icon(icon.List, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
 		// A STABLE visible name, so the pressed state means what it says. No
 		// aria-label override: the visible text is the accessible name, which is
 		// what lets a screen-reader user and a sighted user talk about the same
 		// control.
-		Span(uistate.T("budgets.densityCompact")),
+		Span(uistate.T(budgetDensityLabelKey(densityAtom.Get()))),
 		// C670: aria-pressed alone left the label saying nothing about which view
 		// is on screen or what a click produces — the tooltip carried both, and a
 		// tooltip is not reachable from the keyboard. This suffix puts them in the
@@ -2121,7 +2306,10 @@ func sortBudgetStatuses(sts []budgeting.Status, key string) {
 // sections are not in the DOM when the browser processes one — the report waits
 // for its own target now, so the link works.
 func spendReportLink() ui.Node {
-	return A(css.Class("btn btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap15),
+	// A quiet text link, not a tool button. It navigates off the page and changes
+	// nothing; wearing the same bordered button shape as the controls that DO edit
+	// your budgets made four different affordances read as one kind of thing.
+	return A(css.Class("budget-meta-link", tw.InlineFlex, tw.ItemsCenter, tw.Gap15),
 		Href(uistate.RoutePath("/reports")+"#rpta-04"),
 		Attr("data-testid", "budgets-see-spend"), Title(uistate.T("budgets.seeSpendTitle")),
 		Span(uistate.T("budgets.seeSpend")))

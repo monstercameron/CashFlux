@@ -181,7 +181,7 @@ func BudgetCategoriesBody(_ struct{}) ui.Node {
 		}
 		b.TrackedTags = tags // nil when the field is empty
 		if err := app.PutBudget(b); err != nil {
-			uistate.PostNotice(err.Error(), true)
+			uistate.PostNotice(budgetErrorText(err), true)
 			return
 		}
 		uistate.PostNotice(uistate.T("budgets.catsSaved"), false)

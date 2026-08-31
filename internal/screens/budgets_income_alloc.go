@@ -51,6 +51,14 @@ type allocRead struct {
 	SavingsPct  int
 	GapPct      int
 	MarkerPct   int // -1 when there is nothing past the tick to mark
+
+	// Spending, measured on the SAME money axis as the segments above. Zero-based
+	// has three quantities that nest — income holds the plan, the plan holds the
+	// spending — and nesting cannot be read off two charts with different
+	// denominators. Plotting spend against this scale lets the rail be compared to
+	// the plan and the income tick by LENGTH, with no percentages to reconcile.
+	Spent    int64
+	SpentPct int
 }
 
 // resolveAllocation computes the allocation read for a budget view.
@@ -98,6 +106,8 @@ func resolveAllocation(v budgetView) allocRead {
 		}
 		return 100
 	}
+	r.Spent = v.TotalSpent
+	r.SpentPct = pctOf(r.Spent)
 	r.BudgetedPct = pctOf(r.Budgeted)
 	r.GapPct = pctOf(gap)
 	r.SavingsPct = 100 - r.BudgetedPct - r.GapPct // the remainder, so the bar fills exactly
@@ -136,7 +146,12 @@ func resolveAllocation(v budgetView) allocRead {
 // `action` is the change-the-basis control, passed in rather than built here
 // because its OnClick registers a hook, and hooks belong to the component that
 // owns them.
-func budgetIncomeAllocation(v budgetView, action ui.Node, hist bool) ui.Node {
+//
+// `showSpend` adds the spend rail and its caption, folding "how much of the plan
+// have I spent" onto this bar's axis. It is set only where the caller has
+// dropped the separate loader band (zero-based live views); elsewhere the band
+// still owns that question and a rail here would draw it twice.
+func budgetIncomeAllocation(v budgetView, action ui.Node, hist bool, showSpend bool) ui.Node {
 	r := resolveAllocation(v)
 	if r.Pool <= 0 {
 		return Fragment()
@@ -199,13 +214,33 @@ func budgetIncomeAllocation(v budgetView, action ui.Node, hist bool) ui.Node {
 			),
 			If(r.MarkerPct >= 0, Div(css.Class("zbb-alloc-marker"), Attr("style", fmt.Sprintf("left:%d%%", r.MarkerPct)),
 				Attr("data-testid", "budgets-alloc-marker"), Attr("title", uistate.T("budgets.allocMarker")))),
+			// The spend rail shares this wrapper — and therefore this axis — with the
+			// plan above it. Read down the same x: where the rail stops against the
+			// income tick is what you have actually spent of what you actually have;
+			// where the PLAN stops against that tick is whether the plan was ever
+			// affordable. Two facts, one axis, no percentages to reconcile.
+			If(showSpend, Div(css.Class("budget-zbb-rail"), Attr("data-testid", "budgets-spend-rail"),
+				Attr("role", "img"), Attr("aria-label", uistate.T("budgets.spendRailAria", r.SpentPct)),
+				Div(css.Class("budget-zbb-rail-fill"), Attr("style", fmt.Sprintf("width:%d%%", r.SpentPct))),
+			)),
 		),
+		// Replaces the three figures the loader band used to carry. The band plotted
+		// spending on its OWN axis, which made it a second chart of the same money —
+		// this states the pair in words instead, under the picture that shows it.
+		If(showSpend, Div(css.Class("budget-zbb-note"), Attr("data-testid", "budgets-spend-cap"),
+			spendCaption(r, base))),
 		// The legend only earns its place when it says something the line above
 		// did not. With no savings there are two segments and both are already
 		// named in words directly above, so it would be pure restatement.
-		If(r.Savings > 0, Div(css.Class("zbb-legend"),
+		// The legend appears whenever savings is part of the picture — which in
+		// zero-based is ALWAYS, not merely once a target has been set. Gating it on
+		// Savings > 0 meant the concept did not exist for anyone who had not already
+		// found it: no segment, no legend, and the only trace a collapsed tile at the
+		// very bottom of the surface. A stated empty slot is information; an omitted
+		// one is not (Cam, 2026-08-31).
+		If(r.Savings > 0 || v.Method == budgeting.MethodZeroBased, Div(css.Class("zbb-legend"),
 			zbbLegendItem("is-exp", uistate.T("budgets.allocBudgets"), r.Budgeted, base),
-			zbbLegendItem("is-sav", uistate.T("budgets.zbbSavings"), r.Savings, base),
+			allocSavingsLegend(r, base),
 			allocThirdLegend(r, base),
 		)),
 	)
@@ -256,4 +291,32 @@ func allocThirdLegend(r allocRead, base string) ui.Node {
 		gap = 0
 	}
 	return zbbLegendItemTone("is-gap", "", uistate.T("budgets.allocUnassigned"), gap, base)
+}
+
+// allocSavingsLegend renders the savings slot, including when nothing is assigned
+// to it yet — the empty state reads "Savings targets — none set" rather than the
+// row simply not being there.
+func allocSavingsLegend(r allocRead, base string) ui.Node {
+	if r.Savings > 0 {
+		return zbbLegendItem("is-sav", uistate.T("budgets.zbbSavings"), r.Savings, base)
+	}
+	// Same element shape as zbbLegendItemTone, so the empty slot lines up with its
+	// siblings instead of sitting a few pixels off in its own layout.
+	return Div(css.Class("zbb-legend-item"), Attr("data-testid", "budgets-alloc-savings-none"),
+		Span(css.Class("zbb-legend-dot is-sav")),
+		Span(css.Class("zbb-legend-label"), uistate.T("budgets.zbbSavings")),
+		Span(css.Class("zbb-legend-val", tw.TextFaint), uistate.T("budgets.allocSavingsNone")))
+}
+
+// spendCaption states what was spent against what was assigned, and names the
+// savings share when there is one. A single "assigned" figure hides which part of
+// it is a ceiling to stay under and which part is a floor to reach.
+func spendCaption(r allocRead, base string) string {
+	assigned := fmtMoney(money.New(r.Budgeted+r.Savings, base))
+	spent := fmtMoney(money.New(r.Spent, base))
+	if r.Savings > 0 {
+		return uistate.T("budgets.spendOfAssignedSplit", spent, assigned,
+			fmtMoney(money.New(r.Savings, base)))
+	}
+	return uistate.T("budgets.spendOfAssigned", spent, assigned)
 }

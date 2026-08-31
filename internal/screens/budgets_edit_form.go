@@ -5,6 +5,7 @@
 package screens
 
 import (
+	"log/slog"
 	"sort"
 	"strconv"
 	"strings"
@@ -335,7 +336,7 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 					continue
 				}
 				if err := app.CoverBudget(sc.ID, props.BudgetID, money.New(share, cur)); err != nil {
-					errS.Set(err.Error())
+					errS.Set(budgetErrorText(err))
 					return
 				}
 			}
@@ -376,7 +377,15 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 			} else {
 				nb.RecurringCover = nil
 			}
-			_ = app.PutBudget(nb)
+			// A rejected save here used to fall through to BumpDataRevision and an
+			// undoable "saved" toast, so the arrangement was reported as standing when
+			// the store had refused it. Reported inline like every other error in this
+			// modal — a toast behind an open dialog is easy to miss entirely.
+			if err := app.PutBudget(nb); err != nil {
+				slog.Error("budgets: write rejected", "op", "save recurring cover", "err", err)
+				errS.Set(budgetErrorText(err))
+				return
+			}
 			break
 		}
 		uistate.BumpDataRevision()
@@ -486,7 +495,7 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 			// Tracked categories are managed in their own editor (C1) — this save leaves
 			// CategoryID/CategoryIDs untouched.
 			if err := app.PutBudget(bb); err != nil {
-				errS.Set(err.Error())
+				errS.Set(budgetErrorText(err))
 				return
 			}
 			break
@@ -507,7 +516,7 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 			had := strings.TrimSpace(bb.Notes) != ""
 			bb.Notes = next
 			if err := app.PutBudget(bb); err != nil {
-				errS.Set(err.Error())
+				errS.Set(budgetErrorText(err))
 				return
 			}
 			// Writing through the store updates memory; RequestPersist is what puts
@@ -649,14 +658,22 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 				if permanent {
 					// CoverBudget moves limit source→dest permanently (adds to dest.Limit too).
 					if err := app.CoverBudget(sc.ID, props.BudgetID, money.New(share, cur)); err != nil {
-						errS.Set(err.Error())
+						errS.Set(budgetErrorText(err))
 						return
 					}
 				} else {
 					// This period only: reduce the source's effective cap for this period.
+					// The error is fatal to the whole operation, not to this source: the
+					// destination is raised further down, so continuing past a rejected
+					// source write would raise the destination without lowering anybody —
+					// which does not fail to move the money, it invents it. The permanent
+					// branch above already returned here; this one used to discard.
 					for _, nb := range app.Budgets() {
 						if nb.ID == sc.ID {
-							_ = app.PutBudget(nb.WithPeriodBoost(periodStart, -share))
+							if err := app.PutBudget(nb.WithPeriodBoost(periodStart, -share)); err != nil {
+								errS.Set(budgetErrorText(err))
+								return
+							}
 							break
 						}
 					}
@@ -678,7 +695,7 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 					nb = nb.WithPeriodBoost(periodStart, amt)
 				}
 				if err := app.PutBudget(nb); err != nil {
-					errS.Set(err.Error())
+					errS.Set(budgetErrorText(err))
 					return
 				}
 				break

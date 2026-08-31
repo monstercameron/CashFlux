@@ -871,7 +871,7 @@ func buildBudgetRowCallbacks(app *appstate.App, base string, catName map[string]
 					return
 				}
 				if err := app.DeleteBudget(budgetID); err != nil {
-					uistate.PostNotice(err.Error(), true)
+					uistate.PostNotice(budgetErrorText(err), true)
 					return
 				}
 				uistate.BumpDataRevision()
@@ -901,7 +901,7 @@ func buildBudgetRowCallbacks(app *appstate.App, base string, catName map[string]
 					}
 					b.RecurringCover = nil
 					if err := app.PutBudget(b); err != nil {
-						uistate.PostNotice(err.Error(), true)
+						uistate.PostNotice(budgetErrorText(err), true)
 						return
 					}
 					break

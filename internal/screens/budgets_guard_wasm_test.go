@@ -567,23 +567,44 @@ func TestDriversToggleNamesItsBudget(t *testing.T) {
 
 // ─── C670: the compact-list toggle ───────────────────────────────────────────
 
-// TestDensityStateKeyTracksTheView is the C670 guard: the screen-reader suffix
-// must name the CURRENT view and what a click produces, in both states, while the
-// visible label and aria-pressed stay as C596 left them.
-func TestDensityStateKeyTracksTheView(t *testing.T) {
-	on := uistate.T(budgetDensityStateKey(uistate.BudgetDensityCompact))
-	off := uistate.T(budgetDensityStateKey(""))
-	if on == off {
-		t.Fatalf("both density states read the same: %q", on)
+// TestDensityLabelAndStateDisagreeByDesign guards the toggle's two halves after
+// the 2026-08-31 change: the visible label names the DESTINATION, the accessible
+// suffix names the CURRENT view. Together they say both things once each.
+//
+// The failure this replaces a guard for is C596's, and it can still happen: if the
+// label and the suffix ever name the same view, one of them is lying about which.
+func TestDensityLabelAndStateDisagreeByDesign(t *testing.T) {
+	compactLabel := uistate.T(budgetDensityLabelKey(uistate.BudgetDensityCompact))
+	cardsLabel := uistate.T(budgetDensityLabelKey(""))
+	if compactLabel == cardsLabel {
+		t.Fatalf("both states show the same label: %q", compactLabel)
 	}
-	compact := strings.ToLower(uistate.T("budgets.densityCompact"))
-	// Off: the current view is cards, and a click produces the compact list.
-	if !strings.Contains(off, "currently off") || !strings.Contains(off, compact) {
-		t.Errorf("the off-state suffix must say it is off and promise the compact list; got %q", off)
+	// Showing the compact list, the button offers the cards; and vice versa.
+	if !strings.Contains(strings.ToLower(compactLabel), "cards") {
+		t.Errorf("with the compact list on screen the label must offer cards; got %q", compactLabel)
 	}
-	// On: the current view is the compact list, and a click brings the cards back.
-	if !strings.Contains(on, "currently on") || !strings.Contains(on, "full cards") {
-		t.Errorf("the on-state suffix must say it is on and promise full cards; got %q", on)
+	if !strings.Contains(strings.ToLower(cardsLabel), "compact") {
+		t.Errorf("with cards on screen the label must offer the compact list; got %q", cardsLabel)
+	}
+
+	onState := uistate.T(budgetDensityStateKey(uistate.BudgetDensityCompact))
+	offState := uistate.T(budgetDensityStateKey(""))
+	if onState == offState {
+		t.Fatalf("both density states read the same: %q", onState)
+	}
+	// The suffix names where you ARE, so it must be the OPPOSITE view to the label
+	// in each state. Same-view wording in both is exactly the C596 contradiction.
+	if !strings.Contains(strings.ToLower(onState), "compact") {
+		t.Errorf("with the compact list on screen the suffix must say so; got %q", onState)
+	}
+	if !strings.Contains(strings.ToLower(offState), "cards") {
+		t.Errorf("with cards on screen the suffix must say so; got %q", offState)
+	}
+
+	// The tooltip describes the action, so it agrees with the label, not the state.
+	onTitle := strings.ToLower(uistate.T(budgetDensityTitleKey(uistate.BudgetDensityCompact)))
+	if !strings.Contains(onTitle, "cards") {
+		t.Errorf("the tooltip must promise what the click does; got %q", onTitle)
 	}
 }
 

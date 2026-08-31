@@ -122,7 +122,7 @@ func AdjustAllBody(_ struct{}) ui.Node {
 		// that lapses at the next boundary. This loop only persists the result.
 		for _, b := range budgeting.ApplyAdjust(preview, scope, periodStart) {
 			if err := app.PutBudget(b); err != nil {
-				uistate.PostNotice(err.Error(), true)
+				uistate.PostNotice(budgetErrorText(err), true)
 				continue
 			}
 			n++

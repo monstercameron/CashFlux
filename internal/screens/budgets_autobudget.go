@@ -179,7 +179,7 @@ func AutoBudgetBody(_ struct{}) ui.Node {
 				b.Limit = money.New(amt, base)
 				b.Period = domain.PeriodMonthly
 				if err := app.PutBudget(b); err != nil {
-					uistate.PostNotice(err.Error(), true)
+					uistate.PostNotice(budgetErrorText(err), true)
 					continue
 				}
 			} else {
@@ -189,7 +189,7 @@ func AutoBudgetBody(_ struct{}) ui.Node {
 					Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID,
 				}
 				if err := app.PutBudget(nb); err != nil {
-					uistate.PostNotice(err.Error(), true)
+					uistate.PostNotice(budgetErrorText(err), true)
 					continue
 				}
 			}

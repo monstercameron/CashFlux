@@ -59,11 +59,16 @@ func budgetFlexWidget(props budgetSummaryProps) ui.Node {
 	onSaveTarget := ui.UseEvent(func() {
 		amt, err := money.ParseMinor(strings.TrimSpace(draft.Get()), dec)
 		if err != nil {
+			// Silence on unparseable input reads as a dead button: the editor stayed
+			// open, nothing saved, and nothing said why.
+			uistate.PostNotice(uistate.T("budgets.flexTargetUnreadable"), true)
 			return
 		}
 		s := app.Settings()
 		s.FlexBudget = amt
-		_ = app.PutSettings(s)
+		if budgetWriteFailed("save flex target", app.PutSettings(s)) {
+			return // the editor stays open, holding what was typed
+		}
 		uistate.RequestPersist()
 		uistate.BumpDataRevision()
 		editing.Set(false)
@@ -416,7 +421,12 @@ func flexAssignForm(props flexAssignFormProps) ui.Node {
 				continue
 			}
 			c.CategoryClass = cl
-			_ = app.PutCategory(c)
+			// Stop on the first rejection rather than pressing on: the loop would
+			// otherwise leave some categories reclassified and some not, with one toast
+			// reporting the whole thing as done.
+			if budgetWriteFailed("save category class", app.PutCategory(c)) {
+				return
+			}
 		}
 		uistate.RequestPersist()
 		uistate.BumpDataRevision()

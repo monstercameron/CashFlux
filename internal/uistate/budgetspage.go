@@ -125,6 +125,28 @@ func UseBudgetAutoOpen() state.Atom[bool] { return state.UseAtom("budgets:autoOp
 // shell-root budgetsCoverAllModal renders the modal when true.
 func UseCoverAllOpen() state.Atom[bool] { return state.UseAtom("budgets:coverAllOpen", false) }
 
+// UseTrackUntrackedOpen controls the "Track untracked spending" sheet: the
+// review-and-apply surface behind the unbudgeted strip's bulk entry point.
+//
+// The strip's per-category "Budget this" chips stay as they are — they are a fine
+// one-off invitation. This sheet is the other half: every untracked category over
+// a twelve-month window, each row independently included, priced, and aimed at a
+// new budget or an existing one, applied in a single pass.
+func UseTrackUntrackedOpen() state.Atom[bool] {
+	return state.UseAtom("budgets:trackUntrackedOpen", false)
+}
+
+// UseTrackUntrackedRows holds the sheet's per-row edits between renders, encoded
+// as a string because atoms hold values. Format is one row per "|" segment:
+//
+//	<categoryID>~<include 0|1>~<amount minor>~<budgetID or empty>~<raise 0|1>
+//
+// A category absent from the string simply uses its seeded defaults, so the atom
+// starts empty and only carries what the user has actually touched.
+func UseTrackUntrackedRows() state.Atom[string] {
+	return state.UseAtom("budgets:trackUntrackedRows", "")
+}
+
 // UseBudgetBasisOpen returns the shared atom controlling whether the "Income to budget
 // with" flip modal is open. The budget summary's income button sets it; the shell-root
 // BudgetBasisHost renders the modal (the income-source picker + rules) when true. Lives

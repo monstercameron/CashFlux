@@ -15,6 +15,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/i18n"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/smart"
@@ -80,6 +81,7 @@ func sendSmartAIOn(c smartAIConn, model string, req smartai.Request, onResult fu
 // runSmartAI runs a request under the product routing policy: gpt-5.4-mini first,
 // escalating ONCE to gpt-5.5 when the mini answer isn't good enough.
 func runSmartAI(c smartAIConn, req smartai.Request, onResult func(string), onError func(string)) {
+	req = inActiveLanguage(req)
 	sendSmartAIOn(c, aiprovider.SmartModelID, req, func(text string) {
 		if smartai.Acceptable(text) {
 			onResult(text)
@@ -87,6 +89,24 @@ func runSmartAI(c smartAIConn, req smartai.Request, onResult func(string), onErr
 		}
 		sendSmartAIOn(c, aiprovider.SmartEscalationModelID, req, onResult, onError)
 	}, onError)
+}
+
+// inActiveLanguage makes a Smart+ answer come back in the language the app is set
+// to. Every prompt in internal/smartai is written in English, and a model answers
+// in the language it was asked in — so on a Spanish household the whole interface
+// was translated and the AI explanation sitting inside it was not. The prompts
+// themselves stay in English deliberately: they are instructions to the model, not
+// UI copy, and translating them would change model behaviour for no user benefit.
+// Only the OUTPUT language is directed. English is the default and adds nothing,
+// so the common path is untouched.
+func inActiveLanguage(req smartai.Request) smartai.Request {
+	lang := uistate.ActiveLanguage()
+	if lang == "" || lang == i18n.English {
+		return req
+	}
+	req.System = strings.TrimSpace(req.System) +
+		" Write your answer in the language with BCP-47 code \"" + string(lang) + "\"."
+	return req
 }
 
 // ratesOf builds the household rate table from the app's settings (no hooks).

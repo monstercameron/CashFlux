@@ -174,7 +174,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		if b.TargetSnoozed(now) {
 			b.TargetSnoozedUntil = time.Time{}
 			if err := app.PutBudget(b); err != nil {
-				uistate.PostNotice(err.Error(), true)
+				uistate.PostNotice(budgetErrorText(err), true)
 				return
 			}
 			uistate.PostNotice(uistate.T("budgets.resumedNotice", budgetTitle(s.Budget.Name, props.Category)), false)
@@ -185,7 +185,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 			until := now.AddDate(0, 1, 0)
 			b.TargetSnoozedUntil = until
 			if err := app.PutBudget(b); err != nil {
-				uistate.PostNotice(err.Error(), true)
+				uistate.PostNotice(budgetErrorText(err), true)
 				return
 			}
 			uistate.PostNotice(uistate.T("budgets.snoozedNotice",
@@ -215,7 +215,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 				}
 				start, _ := budgeting.PeriodRange(b.Period, time.Now(), uistate.LoadPrefs().WeekStartWeekday())
 				if err := app.PutBudget(b.WithPeriodBoost(start, -remaining.Amount)); err != nil {
-					uistate.PostNotice(err.Error(), true)
+					uistate.PostNotice(budgetErrorText(err), true)
 					return
 				}
 				uistate.BumpDataRevision()
@@ -232,10 +232,13 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	}))
 	// Notes + Formulas open their own modes of the same shell-root editor modal.
 	// (They also close the kebab, which is where they now live.)
-	openNotes := ui.UseEvent(Prevent(func() {
+	// The body is shared: the kebab item needs a Handler, the note marker needs a
+	// plain func it can register as its own click (its component owns that hook).
+	openNotesFn := func() {
 		menuOpen.Set(false)
 		uistate.SetBudgetEdit(uistate.BudgetEdit{ID: s.Budget.ID, Mode: uistate.BudgetEditModeNotes})
-	}))
+	}
+	openNotes := ui.UseEvent(Prevent(openNotesFn))
 	openFormulas := ui.UseEvent(Prevent(func() {
 		menuOpen.Set(false)
 		uistate.SetBudgetEdit(uistate.BudgetEdit{ID: s.Budget.ID, Mode: uistate.BudgetEditModeFormulas})
@@ -586,7 +589,11 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		// ledger — the same thing the row's Transactions control does, with none of
 		// the discoverability and nothing announcing it to a screen reader. One
 		// action, labelled, sits in the row's action cell beside the ⋯ menu.
-		crowTitle := Span(css.Class("budget-crow-name"), title)
+		// The compact row's name cell is narrow by design and ellipsizes ("Groce…",
+		// "Transpor…"). Carrying the full name as a native title means the browser
+		// recovers it on hover with no popover of our own — and the attribute is
+		// harmless when the text already fits (Cam, 2026-08-31).
+		crowTitle := Span(css.Class("budget-crow-name"), Attr("title", title), title)
 		var crowLeft, crowChip ui.Node
 		if lastMonthMode {
 			crowLeft = Span(ClassStr("budget-crow-left"+lastMonthSubTone(props.LastMonthOver)), props.LastMonthDelta)
@@ -630,25 +637,54 @@ func BudgetRow(props budgetRowProps) ui.Node {
 			// thing to do.
 			Div(css.Class("budget-crow-head"),
 				crowTitle,
-				If(hasNote, Button(css.Class("budget-crow-notes"), Type("button"),
-					Attr("data-testid", "budget-notes-"+s.Budget.ID),
-					Attr("aria-label", notesLabel+" — "+title),
-					Title(noteText), OnClick(openNotes),
-					uiw.Icon(icon.FileText, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-					// The note's own words, not just a glyph. /accounts retired exactly
-					// this glyph-plus-tooltip pattern for exactly this reason: a native
-					// tooltip never opens on keyboard focus and does not exist on touch,
-					// so the text was mouse-only. It ellipsizes after the budget name has
-					// taken the width it needs, and drops out entirely on narrow panes.
-					Span(css.Class("budget-crow-notes-text"), noteText))),
+				// The note marker rides the SAME hover system as every other marker in
+				// this cell: its words preview in the shared popover after the intent
+				// delay, and a click still opens the editor. It used to carry a native
+				// `title` instead — a third hover behaviour on a row that already had
+				// two, and the one its own comment recorded as mouse-only.
+				If(hasNote, ui.CreateElement(budgetNotesMarker, budgetNotesMarkerProps{
+					BudgetID: s.Budget.ID, Label: notesLabel, Text: noteText,
+					RowTitle: title, OnOpen: openNotesFn,
+				})),
 				If(s.Budget.Rollover, budgetRolloverBadgeFor(props)),
 				// WF18: and so does goal-funded spending, for the same reason — the
 				// card's line lives behind a disclosure this density omits, so a budget
 				// that only looks over because a goal paid for part of it would read as
 				// a plain overspend here. Exactly the trap WF17 hit one line below.
-				If(fundedChip != "", Span(css.Class("pill budget-crow-chip", tw.TextDim),
-					Attr("data-testid", "budget-goalfunded-chip-"+s.Budget.ID),
-					Attr("title", fundedTitle), fundedChip)),
+				// Two renderings of one marker, one visible at a time (CSS decides by
+				// content width): the pill while its words fit, the glyph once they
+				// do not. Both are always mounted so neither has to re-enter the tree
+				// on a resize — and the glyph owns the hover/popover hooks, which must
+				// not appear and disappear from a keyed row's hook order.
+				// Coverage, which the compact row never reported: the card carries a
+				// "Recurring cover" / "Covered this period" line, and dropping to the
+				// list lost it entirely — so a budget only looking healthy because
+				// another one is paying for it read as plain healthy (Cam, 2026-08-31).
+				// Recurring wins over one-time, matching the card: a standing
+				// arrangement is inherently covered, so the two never both show.
+				If(hasRecurring, ui.CreateElement(budgetGoalGlyph, budgetGoalGlyphProps{
+					BudgetID: s.Budget.ID, Kind: "cover", Icon: icon.Scale,
+					Title:    uistate.T("budgets.coverMarkerOngoingTitle"),
+					Text:     coverOngoingText(s.Budget, s.Limit.Currency),
+					PillText: uistate.T("budgets.coverMarkerPill"), PillClass: "pill budget-crow-chip is-cover",
+				})),
+				If(!hasRecurring && props.Covered, ui.CreateElement(budgetGoalGlyph, budgetGoalGlyphProps{
+					BudgetID: s.Budget.ID, Kind: "cover", Icon: icon.Scale,
+					Title:    uistate.T("budgets.coverMarkerOnceTitle"),
+					Text:     uistate.T("budgets.coverMarkerOnceText"),
+					PillText: uistate.T("budgets.coverMarkerPill"), PillClass: "pill budget-crow-chip is-cover",
+				})),
+				If(fundedChip != "", ui.CreateElement(budgetGoalGlyph, budgetGoalGlyphProps{
+					BudgetID: s.Budget.ID, Kind: "goal", Icon: icon.Goals,
+					Title: goalGlyphTitle(), Text: fundedChip,
+					// No pill: "part funded by a goal" renders at 168px and the name
+					// cell is 151px even at 1042px of content — it would need roughly
+					// 1400px before the words fit beside a name, so the pill shape
+					// existed only to spill 87px past the cell and paint over the bar
+					// (Cam, 2026-08-31). The sentence lives in the popover, where it
+					// has room; the row keeps the symbol. "Rolls over" is 68px and
+					// still earns its words, so rollover keeps both shapes.
+				})),
 				// WF17: a paused target has to show HERE too. The card's target line
 				// lives behind the details disclosure, which compact mode omits — so
 				// pausing from the ⋯ menu produced no visible change at all, and the
@@ -982,11 +1018,6 @@ type budgetRolloverBadgeProps struct {
 // arithmetic). Its own component so the popover's open-state + dismiss hooks sit
 // at a stable position — never inside the row's caption list.
 func budgetRolloverBadge(props budgetRolloverBadgeProps) ui.Node {
-	open := ui.UseState(false)
-	wrapID := "rollover-badge-" + props.BudgetID
-	uiw.DismissPopover(open.Get(), wrapID, func() { open.Set(false) })
-	toggle := ui.UseEvent(Prevent(func() { open.Set(!open.Get()) }))
-
 	// The glance-level label + tone.
 	var label, toneCls string
 	switch {
@@ -1016,16 +1047,22 @@ func budgetRolloverBadge(props budgetRolloverBadgeProps) ui.Node {
 			parts = append(parts, uistate.T("budgetsRollover.capThisPeriod", props.EffectiveCap, props.CapMath))
 		}
 	}
-	uiw.SmartTipPortal(open.Get(), wrapID, uistate.T("budgetsRollover.popTitle"), strings.Join(parts, " "))
 
-	aria := uistate.T("budgetsRollover.badgeAria", label)
-	return Span(ClassStr("budget-rollover-badge"+toneCls), Attr("id", wrapID),
-		Button(css.Class("budget-rollover-pill"), Type("button"),
-			Attr("data-testid", "budget-rollover-badge-"+props.BudgetID),
-			Attr("aria-label", aria), Attr("aria-expanded", ariaBool(open.Get())),
-			Title(aria), OnClick(toggle),
-			Span(label),
-		),
+	// Same two renderings as the goal marker, one visible at a time by content
+	// width: the worded pill while it fits, a glyph once it does not. "Rolls over"
+	// is shorter than the goal sentence but it is still a whole word competing with
+	// the budget's own name in a cell that has already given up its "left" column
+	// (Cam, 2026-08-31). The glyph carries the SAME explainer this badge already
+	// builds, so the two paths cannot drift apart.
+	// ONE marker, both shapes, one hover system. This used to run its own popover
+	// AND nest a glyph that ran a second — two systems for one piece of information,
+	// able to open together and anchored to different elements (Cam, 2026-08-31).
+	return Span(ClassStr("budget-rollover-badge"+toneCls),
+		ui.CreateElement(budgetGoalGlyph, budgetGoalGlyphProps{
+			BudgetID: props.BudgetID, Kind: "rollover", Icon: icon.Repeat,
+			Title: uistate.T("budgetsRollover.popTitle"), Text: strings.Join(parts, " "),
+			PillText: label, PillClass: "budget-rollover-pill",
+		}),
 	)
 }
 
@@ -1524,4 +1561,22 @@ func budgetDetailsKey(open bool) string {
 		return "budgets.detailsHide"
 	}
 	return "budgets.detailsShow"
+}
+
+// coverOngoingText describes a standing cover arrangement for the marker's
+// popover. The amount is what makes the badge worth opening: "covered" alone does
+// not say whether another budget is quietly carrying $10 of this one or $400.
+func coverOngoingText(b domain.Budget, evalCurrency string) string {
+	rc := b.RecurringCover
+	if rc == nil {
+		return uistate.T("budgets.coverMarkerOngoingPlain")
+	}
+	// The budget's own limit currency when it has one, else the currency the row was
+	// evaluated in — never a bare guess at the household base.
+	cur := b.Limit.Currency
+	if cur == "" {
+		cur = evalCurrency
+	}
+	return uistate.TN("budgets.coverMarkerOngoingTextOne", "budgets.coverMarkerOngoingTextMany",
+		len(rc.Sources), fmtMoney(money.New(rc.AmountMinor, cur)))
 }

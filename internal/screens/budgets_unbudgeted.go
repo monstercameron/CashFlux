@@ -95,7 +95,12 @@ func unbudgetedStrip(props unbudgetedStripProps) ui.Node {
 		return Fragment()
 	}
 	sort.Slice(cands, func(i, j int) bool { return cands[i].SpentMinor > cands[j].SpentMinor })
+	// The cap is fine — this is a teaser, not an inventory — but it used to be
+	// SILENT: a household with nine untracked categories was shown four and never
+	// told the other five existed, so "tidy these up" looked finished when it was
+	// not (Cam, 2026-08-31). The count rides on the bulk link below.
 	const maxChips = 4
+	totalCands := len(cands)
 	if len(cands) > maxChips {
 		cands = cands[:maxChips]
 	}
@@ -130,9 +135,30 @@ func unbudgetedStrip(props unbudgetedStripProps) ui.Node {
 			Span(css.Class("budget-unbudgeted-title"), uistate.T("budgets.unbudgetedHead")),
 			Span(css.Class(tw.TextFaint, tw.Text12), Attr("data-testid", "budgets-unbudgeted-hint"),
 				uistate.T(hintKey, label)),
+			// The chips are capped at four and scoped to the viewed period, and
+			// neither limit is visible from here. This is the way to the rest: every
+			// untracked category over a year, each one handled on its own terms.
+			ui.CreateElement(trackAllButton, trackAllButtonProps{Total: totalCands}),
 		),
 		Div(css.Class("budget-unbudgeted-chips"), chips),
 	)
+}
+
+type trackAllButtonProps struct{ Total int }
+
+// trackAllButton opens the bulk sheet. Its own component so the click hook sits at
+// a stable call-site, matching every other control on this strip.
+func trackAllButton(props trackAllButtonProps) ui.Node {
+	open := uistate.UseTrackUntrackedOpen()
+	onOpen := ui.UseEvent(Prevent(func() { open.Set(true) }))
+	// The label carries the number the chips cannot: how many untracked categories
+	// there actually are, over a full year rather than just this period.
+	label := uistate.T("budgets.trackAll")
+	if props.Total > 0 {
+		label = uistate.T("budgets.trackAllCount", props.Total)
+	}
+	return Button(css.Class("budget-unbudgeted-all"), Type("button"),
+		Attr("data-testid", "budgets-track-all"), OnClick(onOpen), label)
 }
 
 // unbudgetedChipProps drives one category chip in the unbudgeted strip.
