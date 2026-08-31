@@ -54,18 +54,26 @@ test.describe("income allocation read", { tag: "@prod" }, () => {
     }
   });
 
-  test("an over-income plan qualifies the hero figure instead of contradicting it", async ({ app }) => {
+  test("an over-income plan says so on the graph itself", async ({ app }) => {
     await openBudgets(app);
     const state = await app.getByTestId("budgets-income-alloc").getAttribute("data-state");
     test.skip(state !== "over", "sample household is not over-income");
 
-    // The largest, greenest number on the page is money left in a budget that was
-    // never affordable. Unqualified it reads as slack, so the caveat has to travel
-    // with the figure rather than sit in smaller type further down.
-    const caveat = app.getByTestId("budgets-hero-over-income");
-    await expect(caveat).toBeVisible();
-    await expect(caveat).toContainText(/over income/);
-    await expect(app.getByTestId("budgets-status-strip")).toContainText(/Left in budget/i);
+    // This used to assert a caveat pinned under the hero figure, because that
+    // figure was the largest and greenest thing on the page and read as slack. The
+    // figure is gone with the band, and the allocation bar states the overage in
+    // its own caption — which is where it belonged.
+    //
+    // The caption is the assertion, NOT the legend: the legend's third slot only
+    // renders when savings exist or the method is zero-based, so requiring "over
+    // income" failed on a simple household that was plainly over and said so
+    // (measured 2026-08-31). And the absence of the old element is deliberately not
+    // asserted here — this spec carries @prod, so it also runs against the live
+    // site, which lags a release behind and would fail on a build that is simply
+    // older rather than wrong. budgets_methods covers the removal locally.
+    const strip = app.getByTestId("budgets-status-strip");
+    await expect(strip).toContainText(/more than (you earn|was earned)/i);
+    await expect(strip).toContainText(/of your .* income/i);
   });
 
   test("changing the income basis is reachable from the figure it changes", async ({ app }) => {

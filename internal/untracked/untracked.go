@@ -213,3 +213,17 @@ func OverspendRisk(choices []Choice, spentOf, limitOf func(budgetID string) int6
 	sort.Strings(out)
 	return out
 }
+
+// TotalSpent sums what the candidates spent in the scanned window.
+//
+// It exists so the hero and the unbudgeted strip cannot disagree about how much
+// money left the household outside any budget. Both used to derive that
+// separately — the strip inline in view code, the hero not at all — and two
+// places computing one fact is how they drift.
+func TotalSpent(cands []Candidate) int64 {
+	var total int64
+	for _, c := range cands {
+		total += c.SpentMinor
+	}
+	return total
+}

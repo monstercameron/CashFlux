@@ -82,48 +82,52 @@ async function rowInvariants(page, label) {
 }
 
 test.describe("budgets · every method renders its own surface", () => {
-  test("simple leads with what was budgeted, not with income", async ({ page }) => {
+  test("every method leads with the same income graph", async ({ page }) => {
+    // There used to be two heroes and the PERIOD chose between them: a closed
+    // month got a spent/budgeted/left band, a live zero-based month got To Assign.
+    // The page changed shape as you stepped through months, and the variant people
+    // preferred was the one they saw least (Cam, 2026-08-31). Income reads the same
+    // in both tenses, so one bar serves every method and every period.
     await boot(page);
     await openBudgets(page);
     await setMethod(page, "simple");
 
-    const figs = page.locator(".budget-loader-fig");
-    await expect(figs).toHaveCount(3);
-    // The band's middle figure is the PLAN in simple — the labels and the numbers
-    // have to agree, which is the pairing zero-based broke by swapping in income.
-    await expect(figs.nth(0)).toContainText(/spent/i);
-    await expect(figs.nth(1)).toContainText(/budgeted/i);
-    await expect(figs.nth(2)).toContainText(/left/i);
+    await expect(page.locator(".budget-loader-fig")).toHaveCount(0);
+    await expect(page.getByTestId("budgets-status-strip")).toContainText(/of your .* income/i);
+    // The spent figure survives on the allocation bar's own rail — it is the only
+    // place it lives now that the band is gone.
+    await expect(page.getByTestId("budgets-spend-cap")).toContainText(/spent of/i);
     // Simple has no savings tile — that belongs to zero-based alone.
     await expect(page.locator('[data-widget="budget-savings"]')).toHaveCount(0);
     await rowInvariants(page, "simple");
   });
 
-  test("zero-based leads with To Assign and adds the savings tile", async ({ page }) => {
+  test("zero-based keeps the savings tile and the shared income graph", async ({ page }) => {
     await boot(page);
     await openBudgets(page);
     await setMethod(page, "zero-based");
 
-    // The hero is the method's one governing number, named by its state.
-    const hero = page.getByTestId("budgets-hero-left");
-    await expect(hero).toBeVisible();
-    await expect(page.getByTestId("budgets-status-strip"))
-      .toContainText(/to assign|over-assigned|all assigned/i);
-    // Spending rides the allocation bar's axis here rather than a band of its own.
+    // Zero-based no longer gets a hero of its own: the allocation bar states the
+    // same fact ("155% of your income · $X more than you earn") in the form every
+    // other method and every period now uses.
+    await expect(page.getByTestId("budgets-hero-left")).toHaveCount(0);
+    await expect(page.getByTestId("budgets-status-strip")).toContainText(/of your .* income/i);
     await expect(page.getByTestId("budgets-spend-rail")).toBeVisible();
     await expect(page.locator('[data-widget="budget-savings"]')).toHaveCount(1);
     await rowInvariants(page, "zero-based");
   });
 
-  test("envelope keeps the band and the list", async ({ page }) => {
+  test("envelope keeps the list, and the same income graph", async ({ page }) => {
     await boot(page);
     await openBudgets(page);
     await setMethod(page, "envelope");
 
-    await expect(page.locator(".budget-loader-fig")).toHaveCount(3);
+    await expect(page.locator(".budget-loader-fig")).toHaveCount(0);
+    await expect(page.getByTestId("budgets-status-strip")).toContainText(/of your .* income/i);
     await expect(page.locator(".budget-crow").first()).toBeVisible();
-    // Envelope is not zero-based: no To Assign hero, no savings tile.
-    await expect(page.getByTestId("budgets-spend-rail")).toHaveCount(0);
+    // The spend rail is on in every method now — it carries the figures the band
+    // used to hold, so removing the band did not remove the spent total.
+    await expect(page.getByTestId("budgets-spend-rail")).toBeVisible();
     await expect(page.locator('[data-widget="budget-savings"]')).toHaveCount(0);
     await rowInvariants(page, "envelope");
   });

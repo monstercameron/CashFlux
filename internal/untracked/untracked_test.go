@@ -317,3 +317,15 @@ func TestOverspendRiskAccumulatesPerDestination(t *testing.T) {
 		t.Fatalf("risky = %v, want [b1] — 6000 + 6000 > 10000 together", got)
 	}
 }
+
+func TestTotalSpentSumsTheWindow(t *testing.T) {
+	// The hero and the unbudgeted strip both need this number, and the whole point
+	// of it living here is that they cannot disagree about it.
+	got := TotalSpent([]Candidate{{SpentMinor: 310276}, {SpentMinor: 54348}, {SpentMinor: 4015}, {SpentMinor: 3723}})
+	if got != 372362 {
+		t.Errorf("TotalSpent = %d, want 372362", got)
+	}
+	if TotalSpent(nil) != 0 {
+		t.Error("TotalSpent(nil) should be zero, not a panic or a stale sum")
+	}
+}

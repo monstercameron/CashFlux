@@ -82,8 +82,15 @@ type budgetView struct {
 	// budgets on N independent cadences, so a yearly budget's March charge is in
 	// TotalSpent while the toolbar says August. A leak notice clipped to the
 	// toolbar renders "nothing wrong" beside a total that is wrong.
-	LeakRows          []domain.Transaction
-	TotalSpent        int64
+	LeakRows   []domain.Transaction
+	TotalSpent int64
+	// UntrackedSpent is money that left in categories no budget watches. It was
+	// only ever a footnote under the list; in a real month it can be the largest
+	// single slice, and a hero that omits it can report "97% budgeted" while
+	// thousands go unaccounted.
+	UntrackedSpent int64
+	// Split is the month divided by where the money went, against income.
+	Split             budgeting.IncomeSplit
 	TotalLimit        int64
 	TotalOver         int64
 	TotalFundSetAside int64

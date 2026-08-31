@@ -104,105 +104,10 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 
 	// The spend figure the graph shows: this month by default; last period's total when
 	// the "Last month's spend" overlay is on, so the top graph matches the tiles.
-	barSpent := v.TotalSpent
-	if v.LastMonthMode {
-		barSpent = v.LastTotalSpent
-	}
-	// "Spent" is only red once there's actually spending — red on $0.00 reads as an
-	// error rather than a healthy "nothing spent yet" (design critique).
-	spentTone := ""
-	if barSpent > 0 {
-		spentTone = "neg"
-	}
-	// The summary is a single big "loader" — an overall spent-of-budget progress bar with
-	// the spent / budget / left figures rendered INSIDE it, so the numbers and the visual
-	// fill read as one unit. The fill grows with spending and turns amber/red as it
-	// nears/exceeds the cap; "Left" (safe-to-spend) is the hero figure on the right.
-	//
-	// The cap is the SELECTED MAX BUDGET — the total assigned to categories, on every
-	// method. Zero-based used to swap in the income basis here so the bar read "spent
-	// of your income"; that paired with a hero of income − spent, but it stopped
-	// working once To Assign became the hero (see zbbHero below). Against income, this
-	// bar plotted the same denominator as the allocation bar directly beneath it — two
-	// near-identical bars, and this one showed a calm 79% under a red "Over-assigned",
-	// so a plan $3,230.20 past its income read as comfortably under budget (Cam,
-	// 2026-08-31). Split the questions instead: this bar is spending against the PLAN,
-	// the allocation bar is the plan against INCOME.
-	spendLimit := v.TotalLimit
-	spendLimitLabel := uistate.T("budgets.budgeted")
-	leftLabel := uistate.T("budgets.left")
-	if v.LastMonthMode {
-		// Period-honest overlay: last month's spend reads against last month's OWN total
-		// budget, and the difference is what went UNSPENT — never this month's budget
-		// minus last month's spend, a subtraction across two periods that means nothing
-		// (design critique #5). Every method uses the budget totals here; an income
-		// basis for a past month isn't computed.
-		spendLimit = v.LastTotalLimit
-		spendLimitLabel = uistate.T("budgets.budgeted")
-		leftLabel = uistate.T("budgets.lastMonthUnspent")
-	}
-	if hist && !v.LastMonthMode {
-		// A closed period has no "Left" — what remained is a historical fact.
-		leftLabel = uistate.T("budgets.histUnspent")
-	}
-	leftM := money.New(spendLimit-barSpent, v.Base)
-	// How far the whole plan runs past income, if at all. Drives the caveat pinned
-	// under the hero figure and the qualifier on its label.
-	var overIncome int64
-	if pool := v.BannerIncome + v.RolledOver; pool > 0 {
-		if ta := budgeting.ToAssign(pool, v.TotalLimit+v.SavingsAssigned); ta < 0 {
-			overIncome = -ta
-		}
-	}
-	if overIncome > 0 && !v.LastMonthMode && !hist {
-		// "Left" alone claims the money is available. It is available in the
-		// budget; it is not available in the income.
-		leftLabel = uistate.T("budgets.leftInBudget")
-	}
-	over := barSpent > spendLimit
-	fillPct := 0
-	if spendLimit > 0 {
-		fillPct = int(barSpent * 100 / spendLimit)
-	}
-	fillW := fillPct
-	if fillW > 100 {
-		fillW = 100
-	}
-	if fillW < 0 {
-		fillW = 0
-	}
-	// Over budget (2026-07-19, Cam): the track RESCALES so its full width is the
-	// SPENT total — the cap moves left to limit/spent (the fill's 2px right edge is
-	// the cap marker) and a striped overage segment fills rightwards, sized to the
-	// overshoot. The under-cap fill keeps the healthy tone: spending up to the cap
-	// was fine — the overage is the anomaly, and the stripes carry it.
-	capW := fillW
-	var overSeg ui.Node = Fragment()
-	if over && barSpent > 0 {
-		capW = int(spendLimit * 100 / barSpent)
-		if capW < 0 {
-			capW = 0
-		}
-		if capW > 100 {
-			capW = 100
-		}
-		overSeg = Div(css.Class("budget-loader-overage"), Attr("aria-hidden", "true"),
-			Attr("data-testid", "budgets-loader-overage"),
-			Attr("style", fmt.Sprintf("left:%d%%;width:%d%%", capW, 100-capW)))
-	}
-	fillCls := "budget-loader-fill"
-	switch {
-	case v.LastMonthMode, hist:
-		fillCls += " is-hist" // history is neutral — green/amber are live statements
-	case over:
-		// tone stays the healthy accent under the cap; the overage segment is the signal
-	case fillPct >= 85:
-		fillCls += " is-near"
-	}
-	loaderCls := "budget-loader"
-	if over {
-		loaderCls += " is-over"
-	}
+	// The band's geometry (spent-of-limit fill, overage segment, tone thresholds)
+	// went with the band. Everything it needed — barSpent, spendLimit, fillPct and
+	// the loader classes — described spending against the SUM OF LIMITS, which is
+	// the denominator this page stopped using.
 
 	// C130: clarify a custom top-bar range only changes the view window — it doesn't
 	// redefine each budget's own period.
@@ -277,41 +182,13 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 		toAssignChip = Span(css.Class("budget-hero-toassign"), Attr("data-testid", "budgets-toassign-chip"),
 			uistate.T("budgets.heroToAssign", fmtMoney(money.New(fundFree, v.Base))))
 	}
-	// The LABEL carries the state and tense; the NUMBER is only ever an amount.
-	// A closed month that ended over budget must read "Jun 2026 · Over budget /
-	// $509.58" — never "Unspent · Jun 2026 / $509.58 over", where the label and the
-	// value's baked-in suffix contradict each other (Cam, 2026-07-19).
-	heroLabel := leftLabel
-	heroVal := fmtMoney(leftM)
-	if leftM.IsNegative() {
-		heroLabel = uistate.T("budgets.heroOverLabel")
-		heroVal = fmtMoney(leftM.Abs())
-	}
-	if hist && !v.LastMonthMode {
-		heroLabel = vw.Label() + " · " + heroLabel
-	}
-	numTone := accentFor(leftM)
-	// Zero-based: swap the hero to To Assign, signed by its LABEL (the value stays
-	// an unsigned amount, the same contract heroOverLabel follows). Tones say what
-	// to do: red when the plan promises money that is not there, accent when every
-	// dollar has a job, warn while a pool is still waiting to be assigned — a
-	// surplus is unfinished work in this method, so it must not read as success.
-	heroTipKey := "smart.tipBudgetSafe"
-	if zbbHero {
-		heroTipKey = "smart.tipBudgetToAssign"
-		heroVal = fmtMoney(money.New(fundFree, v.Base).Abs())
-		switch {
-		case fundFree < 0:
-			heroLabel = uistate.T("budgets.heroOverAssigned")
-			numTone = "neg"
-		case fundFree == 0:
-			heroLabel = uistate.T("budgets.heroAllAssigned")
-			numTone = "pos"
-		default:
-			heroLabel = uistate.T("budgets.heroToAssignLabel")
-			numTone = "warn"
-		}
-	}
+	// The hero FIGURE is gone with the band. What it computed — "Left", or To
+	// Assign under zero-based — is now stated by the allocation bar's own caption
+	// ("155% of your $5,900.00 income · $3,260.20 more than you earn"), in one form
+	// that works for a closed month and a live one alike.
+	//
+	// heroLabel survives only because the attention chip and the month-close gate
+	// read the same period wording.
 	_ = spendCap
 	var ageChip ui.Node = Fragment()
 	if am := v.AgeMoney; am.Ready {
@@ -373,54 +250,22 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 				uistate.T(key, fmtMoney(money.New(actualIncome, v.Base)), fmtMoney(money.New(v.BannerIncome, v.Base))))
 		}
 	}
-	// The summary band is the SHARED cross-page component (`.budget-loader` — the
-	// same Spent/Budgeted/Left "loader" the Goals and To-do headline tiles mirror),
-	// so the three money pages open on one visual system (Cam, 2026-07-19). B1's
-	// consolidation survives around it: no plan-prose cell, no age tile, no attention
-	// tile — just the band, then one quiet sub-row (income received · actions · age).
-	band := Div(ClassStr(loaderCls),
-		// The accessible label reports the TRUE percentage (e.g. 136%) even though
-		// the visual fill caps at the rescaled track.
-		Div(ClassStr(fillCls),
-			Attr("role", "img"),
-			Attr("aria-label", fmt.Sprintf("%s: %d%%", uistate.T("budgets.progressLabel"), max(fillPct, 0))),
-			Attr("style", fmt.Sprintf("width:%d%%", capW))),
-		overSeg,
-		Div(css.Class("budget-loader-figs"),
-			Div(css.Class("budget-loader-fig"),
-				Div(css.Class("budget-loader-label"), uistate.T("budgets.spent")),
-				Div(ClassStr("budget-loader-value "+spentTone), fmtMoney(money.New(barSpent, v.Base))),
-			),
-			Div(css.Class("budget-loader-fig"),
-				Div(css.Class("budget-loader-label"), spendLimitLabel),
-				Div(css.Class("budget-loader-value"), fmtMoney(money.New(spendLimit, v.Base))),
-			),
-			Div(css.Class("budget-loader-fig", "is-right"),
-				Div(css.Class("budget-loader-label "+tw.Fold(tw.InlineFlex, tw.ItemsCenter, tw.Gap1)),
-					heroLabel,
-					// The tip explains the figure actually shown, so it tracks the
-					// hero rather than the "Left" figure zero-based replaced.
-					If(!v.LastMonthMode && !hist, smartTooltipFor(smartSettings, "budget-safe", heroLabel, uistate.T(heroTipKey))),
-				),
-				Div(ClassStr("budget-loader-value is-hero "+numTone), Attr("data-testid", "budgets-hero-left"), heroVal),
-				// When the plan runs past income, this figure is money left in a
-				// budget that was never affordable. Unqualified, it is the largest
-				// and greenest thing on the page and a skimmer reads it as slack —
-				// so the caveat travels WITH the number rather than sitting in
-				// smaller type further down.
-				// Suppressed under zbbHero: there the hero IS this number (overIncome
-				// is exactly -fundFree once To Assign goes negative), so the caveat
-				// would restate the figure it sits beneath.
-				If(overIncome > 0 && !zbbHero, Div(css.Class("budget-loader-caveat"), Attr("data-testid", "budgets-hero-over-income"),
-					uistate.T("budgets.leftOverIncomeNote", fmtMoney(money.New(overIncome, v.Base))))),
-			),
-		),
-	)
+	// The summary band is gone. It was the shared cross-page "loader" (Spent /
+	// Budgeted / Left) that Goals and To-do still use, and on this page it plotted
+	// spending against the SUM OF LIMITS — a denominator that moves when you add a
+	// budget without spending anything, and that reads "over budget" the moment you
+	// spend in a category no budget watches. Two heroes existed because neither it
+	// nor To Assign works in both tenses, so the page changed shape as you stepped
+	// through months (Cam, 2026-08-31). The allocation bar answers the same question
+	// in one form for every period, and carries the spent figures the band held.
+
 	// C529/C530: the allocation read sits directly under the band on EVERY method,
 	// so configuring "Budget income" always changes something you can see. It
 	// renders nothing without an income figure, in which case basisBtn below stays
 	// as the call to action.
-	alloc := budgetIncomeAllocation(v, basisBtn, hist, zbbHero)
+	// The spend rail is on in EVERY period now, not only zero-based-live: it is the
+	// only place the spent figure survives once the band above is gone.
+	alloc := budgetIncomeAllocation(v, basisBtn, hist, true)
 	hasAlloc := v.BannerIncome+v.RolledOver > 0
 
 	// Zero-based drops the loader band entirely. The band is a spent/budgeted/left
@@ -430,16 +275,19 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 	// the allocation bar's axis as a rail (showSpend), so what remains to say here
 	// is the one governing number. Every other method keeps the shared band, so the
 	// cross-page loader system that Goals and To-do mirror is untouched.
-	heroNode := band
-	if zbbHero {
-		heroNode = Div(css.Class("budget-zbb-hero"),
-			Div(css.Class("budget-zbb-hero-label"),
-				heroLabel,
-				smartTooltipFor(smartSettings, "budget-safe", heroLabel, uistate.T(heroTipKey)),
-			),
-			Div(ClassStr("budget-zbb-hero-value "+numTone), Attr("data-testid", "budgets-hero-left"), heroVal),
-		)
-	}
+	// ONE graph, every month: "Budgeted against income".
+	//
+	// There were two heroes and the period decided which you saw — a closed month
+	// got the spent/budgeted/left band, the live month got To Assign — so the page
+	// changed shape as you stepped through months and the version people preferred
+	// was the one they saw least. From the outside that is indistinguishable from a
+	// regression, which is exactly how it was reported (Cam, 2026-08-31).
+	//
+	// Income is the denominator that reads the same in both tenses. "Left" is wrong
+	// live (a full month of income against a part month of spending) and "To
+	// Assign" is meaningless on a closed month, but "how much of what I earned did
+	// I commit" is answerable in either, so one bar serves every period and the
+	// spend rail carries the figures the band used to hold.
 	// How far the plan runs past the income basis. Feeds BOTH the issues rail below
 	// and the month-close gate, so it is computed once, before either.
 	// ONE definition, every method, and deliberately the SAME arithmetic the
@@ -486,7 +334,6 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 	}
 
 	strip := Div(css.Class("budget-hero"), Attr("data-testid", "budgets-status-strip"),
-		heroNode,
 		alloc,
 		// C587: directly under the allocation bar, because that bar is what makes
 		// "fully assigned" look like "fully funded". Renders nothing when the plan
