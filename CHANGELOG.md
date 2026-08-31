@@ -4,6 +4,66 @@ All notable changes to CashFlux are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/). Policy: **one feature per commit**,
 and every commit updates this file under `Unreleased`.
 
+## [1.17.0] - 2026-08-31
+
+### Added
+- **The sidebar's destinations are searchable, and ranked.** The rail holds around thirty of them
+  across folders that default to closed, so reaching most meant remembering which folder they lived
+  in. Typing filters across all of them, including custom pages, and results are RANKED rather than
+  listed in menu order — an exact name beats a prefix, a prefix beats a word start, and a match on
+  the destination beats one on its section, so "bud" gives Budgets rather than "Annual budget grid".
+  Multi-word queries are ANDed, because an OR returns most of the rail for two words. Alt+M puts the
+  cursor in it.
+- **Ten pinned destinations, on the number keys.** Alt+1–9 and Alt+0 used to be positional — the
+  first nine primary screens in registry order, which nobody could change — so the fastest keys in
+  the app were spent on a list nobody chose. Any screen can be pinned with the star beside it,
+  including a custom page. The tenth slot is "0", because that is the digit row's own order and no
+  single key sends "10". A browser that has never pinned anything is seeded with the nine the keys
+  already opened, so nothing changes until somebody wants it to.
+- **An eleventh pin asks which slot to take.** The first cut disabled the control when the list was
+  full, which left the one screen the user had just asked for as the only one unreachable by key,
+  behind a button that said nothing about how to get it. It now asks, and the newcomer takes THAT
+  slot: appending it and closing the gap would renumber every slot after the one given up, so a swap
+  made to reach one screen would silently move several nobody touched.
+- **Pinned rows reorder by drag or by Alt+Arrow.** A rearrangement available only by dragging is
+  unavailable to anyone who cannot drag (WCAG 2.2 SC 2.5.7), and the row says so in its accessible
+  name.
+
+### Changed
+- **The menu is grouped by what people came to do.** Analysis used to be split three ways — Reports
+  with the daily screens, Net worth and Financial health under "Understand", projections under "Plan
+  & forecast" — "Build" was a heading over one row, and "Data & people" held people, classification
+  and system logs together. The sections are now Day to day, Plan, Insights, Needs you and Setup:
+  the questions a household actually asks, in the order they ask them. "Understand" and "Build"
+  named what the software does, not what the reader wants.
+- **The rail states which household you are in once, not twice.** A workspace picker at the top and
+  a four-line household card at the bottom said the same thing in different words, and the card
+  spent ~130px permanently on text that never changes. The summary reads on the workspace control;
+  the privacy line, About and the version moved into its menu.
+- **The rail's top strip has a hierarchy.** The workspace control and the filter were bordered boxes
+  of identical weight, stacked, so nothing said which mattered. Neither is a form field and neither
+  looks like one now: the workspace row is a menu trigger, and the filter is borderless until it has
+  focus.
+
+### Fixed
+- **Opening a menu folder no longer serialises the whole dataset.** It cost 1.07 seconds on a
+  household with ~3,300 transactions, doing two full exports: one redundant (SettingKVSet has
+  persisted on the leading edge since RH-PERSIST1) and one disproportionate (a leading-edge export
+  exists for settings whose loss a user notices; which folders are open is not that). 11ms now, and
+  the state still survives a reload.
+- **A pin could be lost for good.** Every edit was applied to the DISPLAYED list, which drops
+  anything unreachable — so one render where a custom page had not loaded yet deleted that pin, and
+  the next pin or move persisted the loss. Edits address the stored list by path now.
+- **The rail's active-page highlight sat 42px off.** It measured offsetTop, which is relative to the
+  nearest positioned ancestor — and the pinned list is one, so a pinned row reported an offset of
+  zero. It drifted further with every reorder because the effect that repositions it did not watch
+  the pinned order. It measures geometry against the nav now.
+- **Reordering a pin froze after the first move.** The re-render replaced the focused row, focus fell
+  back to the document, and the shortcut then correctly did nothing.
+- **Pinned order survived only four seconds.** Favorites were written with a KV call that reaches
+  storage on the autosave tick; a reload 1.2s after reordering restored the seeded order.
+- The `?` cheat sheet described the old positional jump and listed neither Alt+M nor the reorder.
+
 ## [1.16.0] - 2026-08-31
 
 ### Fixed
