@@ -7,12 +7,14 @@ package app
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"syscall/js"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/navorder"
+	"github.com/monstercameron/CashFlux/internal/navsearch"
 	"github.com/monstercameron/CashFlux/internal/period"
 	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/CashFlux/internal/screens"
@@ -734,6 +736,55 @@ func Sidebar(props sidebarProps) uic.Node {
 			))
 		}
 	}
+	// The destination filter. When the query is blank this whole block is inert and
+	// the rail below renders exactly as it always has — the filtered list is an
+	// alternative to the sections, never a modification of them.
+	railQuery := uic.UseState("")
+	q := strings.TrimSpace(railQuery.Get())
+	searching := q != "" && !railCollapsed
+	var matches []navsearch.Item
+	if searching {
+		matches = navsearch.Filter(railSearchable(visibleNav, visibleTools, visibleSystem), q)
+	}
+	navTo := router.UseNavigate()
+	onRailSearch := uic.UseEvent(func(e uic.Event) { railQuery.Set(e.GetValue()) })
+	clearRailSearch := uic.UseEvent(func() { railQuery.Set("") })
+	// Enter goes to the top match, which is the point of ranking it. Escape clears
+	// rather than blurring: a filter you cannot see the end of is a rail you cannot
+	// use, so the exit has to be the key people already press.
+	onRailSearchKey := uic.UseEvent(func(e uic.KeyboardEvent) {
+		switch e.GetKey() {
+		case "Enter":
+			e.PreventDefault()
+			if len(matches) > 0 {
+				railQuery.Set("")
+				navTo.Navigate(matches[0].Path)
+			}
+		case "Escape":
+			e.PreventDefault()
+			railQuery.Set("")
+		}
+	})
+	var railSearchNodes []any
+	if searching {
+		if len(matches) == 0 {
+			railSearchNodes = append(railSearchNodes,
+				Div(css.Class("railsearch-empty"), Attr("data-testid", "railsearch-empty"),
+					P(uistate.T("railsearch.noMatch", q)),
+					P(css.Class("railsearch-empty-hint"), uistate.T("railsearch.hintShorter"))))
+		} else {
+			railSearchNodes = append(railSearchNodes, MapKeyed(matches,
+				func(it navsearch.Item) any { return it.Path },
+				func(it navsearch.Item) uic.Node {
+					return uic.CreateElement(navItem, navItemProps{
+						Label: it.Label, Path: it.Path, Icon: railIconFor(it.Path),
+						Active: current == it.Path,
+					})
+				},
+			))
+		}
+	}
+
 	return Aside(ClassStr(cls),
 		Div(css.Class("railhead", tw.H14, tw.Flex, tw.ItemsCenter, tw.Gap25, tw.Px5, tw.BorderB, tw.BorderLine),
 			// Brand mark: accent-green square with a "C". (Was tw.BgFg + tw.TextBase — but TextBase
@@ -746,41 +797,54 @@ func Sidebar(props sidebarProps) uic.Node {
 		// Cloud-sync status chip by the workspace switcher (§7.11) — invisible until
 		// Cloud sync is in use; shows synced/syncing/offline/conflict/error + queue.
 		uic.CreateElement(SyncChip),
+		// Hidden while the rail is collapsed to icons: there is no width for a text
+		// field, and a filter you cannot read the results of is worse than none.
+		If(!railCollapsed, uic.CreateElement(railSearchBox, railSearchBoxProps{
+			Query: railQuery.Get(), Matches: len(matches),
+			OnInput: onRailSearch, OnKey: onRailSearchKey, OnClear: clearRailSearch,
+		})),
 		Nav(css.Class("rail-nav", tw.Flex1, tw.MinH0, tw.OverflowYAuto, tw.P3, tw.Flex, tw.FlexCol, tw.Gap05, tw.TextDim, tw.Text135), Attr("aria-label", uistate.T("nav.primaryLabel")),
 			// The single shared active-page indicator (motion spec §4). Positioned
 			// absolutely by positionRailIndicator(); CSS slides top/height between
 			// items over the standard token. Decorative — aria-current on the item
 			// itself carries the semantics.
-			Div(Attr("id", "cf-rail-ind"), ClassStr("rail-ind"), Attr("aria-hidden", "true")),
-			MapKeyed(visibleNav,
-				func(it railItem) any { return it.Path },
-				func(it railItem) uic.Node {
-					p := it.Path
-					// Find the 1-based position of this item in the ordered primary nav
-					// so the Alt+N hint (L34) matches what Alt+N actually does.
-					hint := 0
-					for idx, v := range visibleNav {
-						if v.Path == it.Path && idx < 9 {
-							hint = idx + 1
-							break
+			// Hidden during a search: it is positioned from the active item's
+			// offset, and a filtered list either does not contain that item or has
+			// moved it, so leaving it visible parks a highlight over an unrelated
+			// row.
+			If(!searching, Div(Attr("id", "cf-rail-ind"), ClassStr("rail-ind"), Attr("aria-hidden", "true"))),
+			Fragment(railSearchNodes...),
+			If(!searching, Fragment(
+				MapKeyed(visibleNav,
+					func(it railItem) any { return it.Path },
+					func(it railItem) uic.Node {
+						p := it.Path
+						// Find the 1-based position of this item in the ordered primary nav
+						// so the Alt+N hint (L34) matches what Alt+N actually does.
+						hint := 0
+						for idx, v := range visibleNav {
+							if v.Path == it.Path && idx < 9 {
+								hint = idx + 1
+								break
+							}
 						}
-					}
-					return uic.CreateElement(navItem, navItemProps{
-						Label:       uistate.T(it.Key),
-						Path:        it.Path,
-						Icon:        it.Icon,
-						Active:      current == it.Path,
-						AltHint:     hint,
-						Draggable:   true,
-						OnDragStart: func() { dragSrc.Set(p) },
-						OnDrop:      func() { reorderNav(p) },
-					})
-				},
-			),
-			Fragment(toolNodes...),
-			Fragment(systemNodes...),
-			// The user's custom pages ("My pages"): listing, create, and reorder.
-			uic.CreateElement(CustomPagesNav),
+						return uic.CreateElement(navItem, navItemProps{
+							Label:       uistate.T(it.Key),
+							Path:        it.Path,
+							Icon:        it.Icon,
+							Active:      current == it.Path,
+							AltHint:     hint,
+							Draggable:   true,
+							OnDragStart: func() { dragSrc.Set(p) },
+							OnDrop:      func() { reorderNav(p) },
+						})
+					},
+				),
+				Fragment(toolNodes...),
+				Fragment(systemNodes...),
+				// The user's custom pages ("My pages"): listing, create, and reorder.
+				uic.CreateElement(CustomPagesNav),
+			)),
 		),
 		// One-time, calm Cloud mention (§7.11) — self-hides once dismissed or syncing.
 		uic.CreateElement(CloudMention),

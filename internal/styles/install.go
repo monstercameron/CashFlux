@@ -42,6 +42,7 @@ func Register() {
 	registerBudgetsSurface()
 	registerIncomeAllocation()
 	registerTrackUntracked()
+	registerRailSearch()
 	registerGoalGlyph()
 	registerBudgetCatOptIn()
 	registerNotesMarkerWrap()
