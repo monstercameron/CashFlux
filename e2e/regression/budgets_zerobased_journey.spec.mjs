@@ -176,7 +176,7 @@ test.describe("C598 — the zero-based month, end to end", () => {
     // for cards rather than assume them, or this step silently does nothing.
     const density = page.getByTestId("budgets-density");
     await density.scrollIntoViewIfNeeded();
-    if ((await density.getAttribute("aria-pressed")) === "true") await density.click();
+    if ((await density.getAttribute("data-density")) === "compact") await density.click();
     await expect(page.locator(".budget-grid .budget").first()).toBeVisible();
 
     const cardId = await page

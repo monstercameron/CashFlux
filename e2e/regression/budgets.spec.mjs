@@ -4,7 +4,7 @@
 // Remove recurring, Delete — at its bottom); the enhanced top-up (this-month vs permanent
 // + fund-from-budgets); the notes modal; the copyable formulas modal; the sort picker; and
 // the 50/30/20 template living inside the Add-budget modal.
-import { test, expect, nav } from "./fixtures.mjs";
+import { test, expect, nav, openVia } from "./fixtures.mjs";
 
 test.describe("budgets: release unused funds", () => {
   test("the kebab's Release lowers this period's cap to what's spent", async ({ app }) => {
@@ -38,7 +38,8 @@ async function firstBudgetId(app) {
 async function useCardDensity(app) {
   const density = app.getByTestId("budgets-density");
   await density.scrollIntoViewIfNeeded();
-  if ((await density.getAttribute("aria-pressed")) === "true") await density.click();
+  // The label names the DESTINATION, so it cannot report state; data-density does.
+  if ((await density.getAttribute("data-density")) === "compact") await density.click();
   await expect(app.locator(".budget-grid .budget").first()).toBeVisible();
 }
 
@@ -110,9 +111,13 @@ test.describe("budgets: density toggle", () => {
     // opens on.
     await useCardDensity(app);
     const toggle = app.getByTestId("budgets-density");
-    await expect(toggle).toHaveAttribute("aria-pressed", "false");
+    await expect(toggle).not.toHaveAttribute("data-density", "compact");
+    // Showing cards, the button offers the compact list — it names where a click goes.
+    await expect(toggle).toHaveText(/compact list/i);
     await toggle.click();
-    await expect(toggle).toHaveAttribute("aria-pressed", "true");
+    await expect(toggle).toHaveAttribute("data-density", "compact");
+    // Now showing the compact list, it offers the cards back.
+    await expect(toggle).toHaveText(/full cards/i);
     // Cards become compact ledger rows; the card grid is gone.
     await expect(app.locator(".budget-clist .budget-crow").first()).toBeVisible();
     await expect(app.locator(".budget-grid")).toHaveCount(0);
@@ -176,7 +181,14 @@ test.describe("budgets: notes modal", () => {
     // compact actually renders, and it still proves the saved text reached the row.
     const line = app.locator(`[data-testid="budget-notes-${bid}"]`);
     await expect(line).toBeVisible();
-    await expect(line).toHaveAttribute("title", note);
+    // The note's words ride the marker's own text node, not a native `title`.
+    // Every marker in this row shares ONE hover→popover system now; a native
+    // tooltip beside it opened a second explainer on the same element, and it is
+    // unreachable from the keyboard and absent on touch — which the note marker's
+    // own source comment had recorded as the reason to stop using one
+    // (2026-08-31). textContent, so the assertion holds at widths where the text
+    // is collapsed to a glyph.
+    await expect(line.locator(".budget-crow-notes-text")).toContainText(note);
     // Clicking the marker reopens the full note in the flip modal (the old inline
     // aria-expanded expander was retired with the side-panel design).
     await line.click();
@@ -203,7 +215,7 @@ test.describe("budgets: notes modal", () => {
     await nav(app, "/budgets");
     const marker = app.locator(`[data-testid="budget-notes-${bid}"]`);
     await expect(marker).toBeVisible({ timeout: 20000 });
-    await expect(marker).toHaveAttribute("title", note);
+    await expect(marker.locator(".budget-crow-notes-text")).toContainText(note);
     // ...and the stored text is the whole sentence, not a truncated one. A
     // multi-line field that rewrote its own content on every keystroke used to
     // drop characters mid-word, so the note saved as a fragment of what was typed.
@@ -342,10 +354,32 @@ test.describe("budgets: sort + add template", () => {
     );
   }
 
+  // The sort picker moved inside the "Budget settings" popover (July-19 review #2)
+  // and this spec kept selecting it where it used to live, so every call sat for the
+  // full 60s timeout on a select that is real, resolvable, and not visible. The
+  // menu has to be opened first. Found while auditing the budgets suite, 2026-08-31.
+  // derivedOrder reads the CARD markup, and the household seeds to the compact list
+  // because it has more than six budgets — so this spec was parsing a container that
+  // never rendered and reading an empty list. Density has to be forced, not assumed.
+  async function cardMode(app) {
+    const density = app.getByTestId("budgets-density");
+    await density.scrollIntoViewIfNeeded();
+    if ((await density.getAttribute("data-density")) === "compact") await density.click();
+    await expect(app.locator(".budget-grid .budget").first()).toBeVisible({ timeout: 20_000 });
+  }
+
+  async function sortBy(app, value) {
+    await openVia(app, app.getByTestId("budgets-settings"), app.locator(".bud-set-menu:not(.hidden-menu)"));
+    await app.locator(".bud-set-menu:not(.hidden-menu)").getByTestId("budgets-sort").selectOption(value);
+    await app.keyboard.press("Escape");
+    await expect(app.locator(".bud-set-menu:not(.hidden-menu)")).toHaveCount(0);
+  }
+
   test("over budget sorts by severity (overage ↓); close-to-limit by |% − 100| (↑)", async ({ app }) => {
     await nav(app, "/budgets");
+    await cardMode(app);
     // Over budget → overage strictly non-increasing down the list (worst overspend first).
-    await app.getByTestId("budgets-sort").selectOption("overage");
+    await sortBy(app, "overage");
     await app.waitForTimeout(400);
     const ov = await derivedOrder(app);
     expect(ov.length).toBeGreaterThan(2);
@@ -354,7 +388,7 @@ test.describe("budgets: sort + add template", () => {
     }
     // Close to the limit → |% used − 100| non-decreasing (a 99%/101% budget beats a 200%
     // one, and 0%-used budgets — 100 points away — rank LAST, not first).
-    await app.getByTestId("budgets-sort").selectOption("near");
+    await sortBy(app, "near");
     await app.waitForTimeout(400);
     const nr = await derivedOrder(app);
     for (let i = 1; i < nr.length; i++) {
@@ -384,7 +418,7 @@ test.describe("budgets: card density", () => {
     // The sample household defaults to compact; this ticket is about the CARD.
     const density = app.getByTestId("budgets-density");
     await density.scrollIntoViewIfNeeded();
-    if ((await density.getAttribute("aria-pressed")) === "true") await density.click();
+    if ((await density.getAttribute("data-density")) === "compact") await density.click();
     await expect(app.locator(".budget-grid .budget").first()).toBeVisible();
 
     const bid = await firstBudgetId(app);
