@@ -36,7 +36,10 @@ func init() {
 		// Reordering is announced on the row itself: a drag has no keyboard
 		// equivalent unless someone is told there is one.
 		"rail.reorderHint": "Alt and the up or down arrow moves this",
-		"pages.menuFor":    "Options for %s",
+		// Rows in the ? cheat sheet.
+		"shortcuts.reorderPin": "Move a pinned screen",
+		"shortcuts.menuFilter": "Filter the menu",
+		"pages.menuFor":        "Options for %s",
 	} {
 		english[k] = v
 	}

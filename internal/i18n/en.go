@@ -381,8 +381,10 @@ var english = Catalog{
 	"custompage.dragReorder":   "Drag to reorder",
 
 	// Keyboard shortcuts help overlay (§6.6)
-	"shortcuts.title":      "Keyboard shortcuts",
-	"shortcuts.jump":       "Jump to a section",
+	"shortcuts.title": "Keyboard shortcuts",
+	// "a section" was true when the digits were positional. They open the screens
+	// the household PINNED now, which is the thing the label has to say.
+	"shortcuts.jump":       "Jump to a pinned screen",
 	"shortcuts.add":        "Add a transaction",
 	"shortcuts.palette":    "Command palette",
 	"shortcuts.save":       "Save the open settings panel",

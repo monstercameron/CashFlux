@@ -202,7 +202,9 @@ func helpHTML() string {
 		`<button id="cf-help-close" type="button" aria-label="Close" style="background:transparent;border:0;color:inherit;cursor:pointer;font-size:1.15rem;line-height:1;min-width:24px;min-height:24px;">&times;</button>` +
 		`</div>` +
 		`<table style="width:100%;border-collapse:collapse;">` +
-		row("shortcuts.jump", "Alt + 1&ndash;9") +
+		row("shortcuts.jump", "Alt + 1&ndash;9, 0") +
+		row("shortcuts.reorderPin", "Alt + &uarr;/&darr;") +
+		row("shortcuts.menuFilter", "Alt + M") +
 		row("shortcuts.add", "Alt + N") +
 		row("shortcuts.palette", "Ctrl/&#8984; + K") +
 		row("shortcuts.undo", "Ctrl/&#8984; + Z") +

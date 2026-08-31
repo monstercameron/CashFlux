@@ -164,12 +164,19 @@ test.describe("sidebar · pinned destinations", () => {
   // ── the eleventh pin ────────────────────────────────────────────────────────
   // Opening every section has to be retried: opening one re-renders the rail, so a
   // list of headers captured up front goes stale after the first click.
+  // Every click here carries an explicit SHORT timeout. `.catch(() => {})` on its
+  // own swallows the error but not the wait: Playwright still spends its default
+  // 30s on actionability before throwing, so two headers that were briefly
+  // unclickable burned the test's whole 60s budget and the three swap tests failed
+  // as timeouts that looked like product bugs (2026-08-31).
+  const QUICK = { timeout: 2_000 };
+
   async function openAllSections(page) {
     for (let i = 0; i < 12; i++) {
       const shut = page.locator('.rail-nav [aria-expanded="false"]').first();
       if ((await shut.count()) === 0) return;
-      await shut.click().catch(() => {});
-      await page.waitForTimeout(150);
+      await shut.click(QUICK).catch(() => {});
+      await page.waitForTimeout(120);
     }
   }
 
@@ -188,9 +195,9 @@ test.describe("sidebar · pinned destinations", () => {
         if ((await page.locator('.nav-pin[aria-pressed="false"]').count()) === 0) return false;
         continue;
       }
-      await spare.scrollIntoViewIfNeeded().catch(() => {});
-      await spare.hover().catch(() => {});
-      await spare.click({ force: true }).catch(() => {});
+      await spare.scrollIntoViewIfNeeded(QUICK).catch(() => {});
+      await spare.hover(QUICK).catch(() => {});
+      await spare.click({ force: true, timeout: 2_000 }).catch(() => {});
       await expect.poll(async () => page.locator(`${PINNED} .nav-row`).count(),
         { timeout: 5_000 }).toBeGreaterThan(n).catch(() => {});
     }
@@ -202,9 +209,9 @@ test.describe("sidebar · pinned destinations", () => {
   async function clickSparePin(page) {
     const spare = page.locator('.nav-pin[aria-pressed="false"]').first();
     await expect(spare).toHaveCount(1);
-    await spare.scrollIntoViewIfNeeded();
-    await spare.hover();
-    await spare.click({ force: true });
+    await spare.scrollIntoViewIfNeeded(QUICK);
+    await spare.hover(QUICK);
+    await spare.click({ force: true, timeout: 5_000 });
   }
 
   test("an eleventh pin asks which slot to take instead of refusing", async ({ page }) => {

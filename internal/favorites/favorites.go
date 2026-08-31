@@ -166,3 +166,33 @@ func Clean(list []string, exists func(string) bool) []string {
 	}
 	return out
 }
+
+// ── path-addressed edits ────────────────────────────────────────────────────
+//
+// The rail DISPLAYS a cleaned list (Clean drops anything it cannot currently
+// reach) but must STORE the raw one. A custom page that has not loaded yet is not
+// a page that is gone, and the difference matters: every edit below used to be
+// applied to the cleaned list and then persisted, so one render where a
+// destination was briefly unreachable silently deleted that pin for good.
+//
+// Addressing edits by path rather than by index is what keeps the two lists in
+// step. A display index means nothing in the raw list once anything has been
+// cleaned out of it.
+
+// MoveBefore moves `moving` to the position currently held by `target`.
+func MoveBefore(list []string, moving, target string) []string {
+	from, to := IndexOf(list, moving), IndexOf(list, target)
+	if from < 0 || to < 0 {
+		return list
+	}
+	return Move(list, from, to)
+}
+
+// ReplacePath swaps `incoming` into the slot `victim` holds.
+func ReplacePath(list []string, victim, incoming string) []string {
+	at := IndexOf(list, victim)
+	if at < 0 {
+		return list
+	}
+	return ReplaceAt(list, at, incoming)
+}

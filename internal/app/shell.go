@@ -707,6 +707,15 @@ func Sidebar(props sidebarProps) uic.Node {
 			}
 		}
 	}
+	// TWO lists, deliberately. favPaths is what the rail draws — Clean drops
+	// anything it cannot currently reach, so a stale pin never holds a number key
+	// that opens nothing. favRaw is what gets STORED, and it keeps those entries.
+	//
+	// The difference is not academic. A custom page that has not loaded yet is not
+	// a page that is gone, and every edit below used to be applied to the cleaned
+	// list and then persisted — so one render where a destination was briefly
+	// unreachable deleted that pin permanently. Edits address the raw list BY PATH
+	// now; a display index means nothing once anything has been cleaned out.
 	favPaths := favorites.Clean(favRaw, func(p string) bool { _, ok := reachable[p]; return ok })
 
 	// The pin being dragged. Deliberately NOT the folder rows' drag source: one
@@ -725,7 +734,7 @@ func Sidebar(props sidebarProps) uic.Node {
 		if from < 0 || from >= len(favPaths) || to < 0 || to >= len(favPaths) || from == to {
 			return false
 		}
-		setFavorites(favorites.Move(favPaths, from, to))
+		setFavorites(favorites.MoveBefore(favRaw, favPaths[from], favPaths[to]))
 		return true
 	})
 	// Published for the boot-time keydown listener, which lives outside any
@@ -742,7 +751,7 @@ func Sidebar(props sidebarProps) uic.Node {
 	// full, so instead of refusing, the rail asks which pinned screen it replaces.
 	// Never persisted — an unanswered question should not survive a reload.
 	pendingSwap := uic.UseState("")
-	pinFull := favorites.Full(favPaths)
+	pinFull := favorites.Full(favRaw)
 	// A pinned destination is LIFTED out of its folder rather than copied to the
 	// top. The first cut showed it in both places, which doubled the rail's length
 	// and left the reader deciding whether the two rows were the same thing — they
@@ -768,7 +777,7 @@ func Sidebar(props sidebarProps) uic.Node {
 			}
 		}
 		return pinned, slot, pinFull, func() {
-			next, nowPinned := favorites.Toggle(favPaths, path)
+			next, nowPinned := favorites.Toggle(favRaw, path)
 			if nowPinned && !favorites.Contains(next, path) {
 				// Full. Ask which slot to give up rather than refusing: the
 				// eleventh screen is exactly the one the user just said they want
@@ -965,7 +974,7 @@ func Sidebar(props sidebarProps) uic.Node {
 						Label: labelFor(p), Slot: digit, Icon: it.Icon,
 						Aria: uistate.T("rail.swapRowAria", labelFor(p), labelFor(incoming), digit),
 						OnPick: func() {
-							next := favorites.ReplaceAt(favPaths, idx, incoming)
+							next := favorites.ReplacePath(favRaw, victim, incoming)
 							pendingSwap.Set("")
 							justUnpinned.Set(victim)
 							setFavorites(next)
@@ -996,15 +1005,14 @@ func Sidebar(props sidebarProps) uic.Node {
 					Draggable:   true,
 					OnDragStart: func() { favDrag.Set(src) },
 					OnDrop: func() {
-						from := favorites.IndexOf(favPaths, favDrag.Get())
-						to := favorites.IndexOf(favPaths, src)
+						moving := favDrag.Get()
 						favDrag.Set("")
 						// A drop that lands on nothing, or on the row that started it,
 						// is not a reorder — leave the list exactly as it was.
-						if from < 0 || to < 0 || from == to {
+						if moving == "" || moving == src {
 							return
 						}
-						setFavorites(favorites.Move(favPaths, from, to))
+						setFavorites(favorites.MoveBefore(favRaw, moving, src))
 					},
 				})
 			},
@@ -1268,7 +1276,7 @@ func navItem(props navItemProps) uic.Node {
 	} else if props.AltHint >= 1 && props.AltHint <= 9 {
 		args = append(args, Span(css.Class("nav-alt-hint"),
 			Attr("aria-hidden", "true"),
-			Attr("title", fmt.Sprintf("Alt + %d", props.AltHint)),
+			Attr("title", uistate.T("rail.jumpHint", strconv.Itoa(props.AltHint))),
 			Text(strconv.Itoa(props.AltHint)),
 		))
 	}

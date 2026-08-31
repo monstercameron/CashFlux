@@ -262,3 +262,43 @@ func TestReplaceAtRejectsSlotsThatDoNotExist(t *testing.T) {
 		t.Errorf("an empty path changed the list: %v", got)
 	}
 }
+
+// The rail shows a CLEANED list and stores the raw one. These two functions are
+// what keeps an edit made against the display from corrupting the storage, so
+// the case that matters is a raw list holding something the display does not.
+func TestMoveBeforeAddressesTheRawListNotTheVisibleOne(t *testing.T) {
+	raw := []string{"/a", "/gone", "/b", "/c"}
+	// The rail is showing /a, /b, /c — "/gone" is a page that has not loaded.
+	// Dragging /c onto /b must move it in the RAW list, keeping /gone where it is.
+	got := MoveBefore(raw, "/c", "/b")
+	if strings.Join(got, ",") != "/a,/gone,/c,/b" {
+		t.Errorf("MoveBefore = %v, want [/a /gone /c /b]", got)
+	}
+	if !Contains(got, "/gone") {
+		t.Error("an unreachable pin was dropped by a reorder — it would be lost on the next save")
+	}
+	if len(got) != len(raw) {
+		t.Errorf("length changed: %d -> %d", len(raw), len(got))
+	}
+}
+
+func TestReplacePathKeepsUnreachablePins(t *testing.T) {
+	raw := []string{"/a", "/gone", "/b"}
+	got := ReplacePath(raw, "/b", "/new")
+	if strings.Join(got, ",") != "/a,/gone,/new" {
+		t.Errorf("ReplacePath = %v, want [/a /gone /new]", got)
+	}
+}
+
+func TestPathEditsIgnoreUnknownPaths(t *testing.T) {
+	raw := []string{"/a", "/b"}
+	if got := MoveBefore(raw, "/nope", "/a"); strings.Join(got, ",") != "/a,/b" {
+		t.Errorf("MoveBefore with an unknown mover changed the list: %v", got)
+	}
+	if got := MoveBefore(raw, "/a", "/nope"); strings.Join(got, ",") != "/a,/b" {
+		t.Errorf("MoveBefore with an unknown target changed the list: %v", got)
+	}
+	if got := ReplacePath(raw, "/nope", "/new"); strings.Join(got, ",") != "/a,/b" {
+		t.Errorf("ReplacePath with an unknown victim changed the list: %v", got)
+	}
+}
