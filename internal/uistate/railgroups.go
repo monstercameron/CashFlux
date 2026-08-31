@@ -30,10 +30,15 @@ func PersistCollapsedToolGroups(m map[string]bool) {
 	if err != nil {
 		return
 	}
-	SettingKVSet(toolGroupsStoreID, string(data))
-	// SettingKVSet writes through the dataset, which only reaches disk on the
-	// autosave tick — a reload before the tick silently dropped the choice.
-	RequestPersist()
+	// SettingKVSet ALREADY persists on the leading edge of a burst (RH-PERSIST1),
+	// so the RequestPersist that used to follow it here was a second full dataset
+	// export for the same write. On a household with ~3,300 transactions each
+	// export is ~500ms of JSON serialisation on the main thread, which made
+	// opening a menu folder cost about a second — measured 1.07s per click, of
+	// which this line was half. The comment that justified it ("only reaches disk
+	// on the autosave tick") predates the leading-edge persist and was no longer
+	// true.
+	SettingKVSetDeferred(toolGroupsStoreID, string(data))
 }
 
 func loadCollapsedToolGroups() map[string]bool {

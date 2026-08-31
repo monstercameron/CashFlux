@@ -52,11 +52,10 @@ func PersistRailCollapsed(collapsed bool) {
 	if collapsed {
 		v = "1"
 	}
-	SettingKVSet(railCollapsedStore, v)
-	// Flush the autosave now: the KV write alone only reaches IndexedDB on the
-	// ticker/pagehide, and a reload right after toggling the rail silently
-	// reverted the choice (same C2 lost-write class as the budgets prefs).
-	RequestPersist()
+	// One persist, not two: SettingKVSet already writes on the leading edge of a
+	// burst, so the RequestPersist that followed exported the whole dataset a
+	// second time for the same toggle.
+	SettingKVSetDeferred(railCollapsedStore, v)
 	mirrorRailClass(collapsed)
 }
 

@@ -172,6 +172,33 @@ func flushSettingsPersist() {
 	debounce.Call(settingsPersistKey, settingsPersistWindow, trailingSettingsPersist)
 }
 
+// SettingKVSetDeferred writes a setting WITHOUT the leading-edge dataset export.
+//
+// The leading edge exists for settings whose loss a user would notice and blame
+// on the app: set Light, reload a second later, boots Dark. It costs one full
+// dataset serialise per write — about half a second on a household with a few
+// thousand transactions, on the main thread.
+//
+// Menu chrome is not that class of setting. Which folders are open and whether
+// the rail is collapsed are arrangements of the furniture: they are written on
+// every click, nobody reloads within a quarter-second of opening a folder to
+// check the state stuck, and losing one is invisible. Paying a full serialise per
+// click for that made opening a folder take about a second (measured 1.07s, of
+// which the exports were nearly all of it).
+//
+// So this takes the trailing edge only. The write reaches the in-memory dataset
+// immediately and durable storage on the debounce, the autosave tick, or the
+// pagehide flush — all of which already exist.
+func SettingKVSetDeferred(key, val string) {
+	if app := appstate.Default; app != nil {
+		_ = app.SetSettingKV(key, val)
+		moreSinceLeadingPersist = true
+		debounce.Call(settingsPersistKey, settingsPersistWindow, trailingSettingsPersist)
+		return
+	}
+	browserstore.Set(key, val)
+}
+
 // trailingSettingsPersist writes the tail of a burst, and nothing at all when the
 // leading-edge persist already covered every write.
 func trailingSettingsPersist() {
