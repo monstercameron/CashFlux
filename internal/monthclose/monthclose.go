@@ -127,6 +127,29 @@ func Resolutions(s Summary) []string {
 	return append(out, ResolveDefer)
 }
 
+// CarryTargets resolves the (source, target) period starts CopyBoosts should use
+// when carrying one-time top-ups forward from the period being reviewed.
+//
+// The direction matters and used to be wrong. The caller derived (last, this) —
+// carry the PREVIOUS period's top-ups into the CURRENT one — which is coherent
+// only if the flow is opened at the start of a period. It is not: the offer
+// appears in a period's final days, or on one that has already closed. Reviewing
+// August on the 31st therefore wrote July's top-ups into August, a period with
+// nothing left to spend them in; reviewing a closed August from September did
+// the same, because the anchor falls back to the window's start either way. The
+// step could not land usefully in the window it is offered (Cam, 2026-08-31).
+//
+// Carrying forward is the only direction that makes sense at a period's end, so
+// source is the reviewed period and target is the one after it. `end` from
+// PeriodRange is exclusive, so it is already a reference date inside the next
+// period — no calendar arithmetic here, which is what keeps weekly, biweekly,
+// monthly and quarterly budgets all correct through the same call.
+func CarryTargets(p domain.Period, ref time.Time, weekStart time.Weekday) (source, target time.Time) {
+	thisStart, thisEnd := budgeting.PeriodRange(p, ref, weekStart)
+	nextStart, _ := budgeting.PeriodRange(p, thisEnd, weekStart)
+	return thisStart, nextStart
+}
+
 // CopyBoosts computes the "copy last month with exceptions" plan: budget limits
 // already persist period to period, so what a new period loses is last period's
 // ONE-TIME top-ups (PeriodBoosts). For every budget whose last-period boost is
