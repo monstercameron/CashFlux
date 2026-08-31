@@ -4,7 +4,7 @@ All notable changes to CashFlux are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/). Policy: **one feature per commit**,
 and every commit updates this file under `Unreleased`.
 
-## [Unreleased]
+## [1.16.0] - 2026-08-31
 
 ### Fixed
 - **A rejected write on /budgets no longer reports itself as a save.** Five writes discarded the
