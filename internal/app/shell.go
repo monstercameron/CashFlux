@@ -12,16 +12,18 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/favorites"
 	"github.com/monstercameron/CashFlux/internal/icon"
+	"github.com/monstercameron/CashFlux/internal/modules"
 	"github.com/monstercameron/CashFlux/internal/navorder"
 	"github.com/monstercameron/CashFlux/internal/navsearch"
+	"github.com/monstercameron/CashFlux/internal/pages"
 	"github.com/monstercameron/CashFlux/internal/period"
 	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/CashFlux/internal/screens"
 	"github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/CashFlux/internal/version"
 	"github.com/monstercameron/GoWebComponents/v5/css"
 	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/v5/router"
@@ -498,18 +500,45 @@ func systemNav() []railItem { return navGroup(screens.GroupSystem) }
 // toolSubGroupLabel resolves a Tools sub-group id to its display label.
 func toolSubGroupLabel(sg string) string {
 	switch sg {
+	case screens.SubGroupDaily:
+		return uistate.T("nav.sectionDaily")
 	case screens.SubGroupPlan:
-		return uistate.T("nav.toolsPlan")
-	case screens.SubGroupUnderstand:
-		return uistate.T("nav.toolsUnderstand")
-	case screens.SubGroupBuild:
-		return uistate.T("rail.subBuild") // "Build" — key already defined in en.go
-	case screens.SubGroupData:
-		return uistate.T("nav.toolsData")
-	case screens.SubGroupBills:
-		return uistate.T("rail.subBills") // retained; no rail routes currently use it
+		return uistate.T("nav.sectionPlan")
+	case screens.SubGroupInsights:
+		return uistate.T("nav.sectionInsights")
+	case screens.SubGroupNext:
+		return uistate.T("nav.sectionNext")
+	case screens.SubGroupSetup:
+		return uistate.T("nav.sectionSetup")
 	}
 	return sg
+}
+
+// railSections returns every rail destination the household can see, grouped by
+// section in NavSections order.
+//
+// It walks all three registry Groups together on purpose. Group used to decide
+// where a screen appeared in the rail, which is why the daily money screens ended
+// up beside a chat assistant and an inbox — they shared a Group, not a purpose.
+// Section decides placement now; Group is left to the command palette and the
+// keyboard fallbacks, which do still care about it.
+func railSections(hidden modules.Hidden) map[string][]railItem {
+	out := map[string][]railItem{}
+	for _, g := range []string{screens.GroupPrimary, screens.GroupTools, screens.GroupSystem} {
+		for _, it := range navGroup(g) {
+			if hidden.IsHidden(it.Path) {
+				continue
+			}
+			sg := it.SubGroup
+			if sg == "" {
+				// A screen added without a section still appears, in Setup, rather
+				// than being silently dropped from the menu (B7).
+				sg = screens.SubGroupSetup
+			}
+			out[sg] = append(out[sg], it)
+		}
+	}
+	return out
 }
 
 type toolGroupHeaderProps struct {
@@ -624,6 +653,142 @@ func Sidebar(props sidebarProps) uic.Node {
 			visibleTools = append(visibleTools, it)
 		}
 	}
+	var visibleSystem []railItem
+	for _, it := range systemNav() {
+		if !hidden.IsHidden(it.Path) {
+			visibleSystem = append(visibleSystem, it)
+		}
+	}
+
+	// ── Pinned destinations ─────────────────────────────────────────────────
+	//
+	// The number keys used to be positional: Alt+1..9 went to the first nine
+	// PRIMARY screens in registry order, and nobody could change that. The screens
+	// a household actually lives in are not the same nine for any two of them, so
+	// the fastest keys in the app were spent on a list nobody chose.
+	//
+	// A browser that has never pinned anything is seeded with exactly those nine,
+	// so the keys keep doing what they always did and the badges appear where they
+	// already were. Someone who has deliberately unpinned everything is a different
+	// state, which is why the seed is gated on FavoritesChosen rather than on the
+	// list being empty — otherwise clearing it would silently restore the defaults
+	// and the pins would look impossible to remove.
+	favAtom := uistate.UseFavorites()
+	favRaw := favAtom.Get()
+	if favRaw == nil && !uistate.FavoritesChosen() {
+		seed := make([]string, 0, favorites.Max)
+		for _, it := range visibleNav {
+			if len(seed) == favorites.Max {
+				break
+			}
+			seed = append(seed, it.Path)
+		}
+		favRaw = seed
+	}
+	// Everything the rail can reach, so a pin to something since deleted or hidden
+	// does not hold a number key that silently does nothing.
+	reachable := map[string]railItem{}
+	for _, it := range visibleNav {
+		reachable[it.Path] = it
+	}
+	for _, it := range visibleTools {
+		reachable[it.Path] = it
+	}
+	for _, it := range visibleSystem {
+		reachable[it.Path] = it
+	}
+	// Custom pages count as reachable. Without this, Clean treats a pinned page as
+	// pointing at nothing and silently drops it — so pinning one would appear to do
+	// nothing at all, which is the same symptom as a broken button.
+	if a := appstate.Default; a != nil {
+		for _, cp := range pages.Ordered(pages.Visible(a.CustomPages())) {
+			reachable[uistate.RoutePath("/p/"+cp.Slug)] = railItem{
+				Key: cp.Name, Path: uistate.RoutePath("/p/" + cp.Slug), Icon: icon.FileText,
+			}
+		}
+	}
+	favPaths := favorites.Clean(favRaw, func(p string) bool { _, ok := reachable[p]; return ok })
+
+	// The pin being dragged. Deliberately NOT the folder rows' drag source: one
+	// shared atom would let a pin dropped on a folder row run that section's
+	// reorder with a path the section does not contain.
+	favDrag := uic.UseState("")
+	setFavorites := func(next []string) {
+		favAtom.Set(next)
+		uistate.PersistFavorites(next)
+		publishFavorites(next)
+	}
+	// The keyboard reorder (Alt+Arrow) runs in the boot-time keydown listener,
+	// which cannot read a hook — so the Sidebar hands it a mover closed over the
+	// same favPaths the rail renders.
+	publishPinnedMover(func(from, to int) bool {
+		if from < 0 || from >= len(favPaths) || to < 0 || to >= len(favPaths) || from == to {
+			return false
+		}
+		setFavorites(favorites.Move(favPaths, from, to))
+		return true
+	})
+	// Published for the boot-time keydown listener, which lives outside any
+	// component and cannot read a hook.
+	uic.UseEffect(func() func() {
+		publishFavorites(favPaths)
+		return nil
+	}, strings.Join(favPaths, "|"))
+	// The path most recently unpinned, so the folder it landed in can reveal it.
+	// Cleared on the next pin, and never persisted: it describes one action, not a
+	// preference.
+	justUnpinned := uic.UseState("")
+	// The screen waiting for a slot. Set when someone pins an eleventh: the list is
+	// full, so instead of refusing, the rail asks which pinned screen it replaces.
+	// Never persisted — an unanswered question should not survive a reload.
+	pendingSwap := uic.UseState("")
+	pinFull := favorites.Full(favPaths)
+	// A pinned destination is LIFTED out of its folder rather than copied to the
+	// top. The first cut showed it in both places, which doubled the rail's length
+	// and left the reader deciding whether the two rows were the same thing — they
+	// were. Pinning reads as "move this within reach", so the row moves.
+	lifted := func(items []railItem) []railItem {
+		out := make([]railItem, 0, len(items))
+		for _, it := range items {
+			if !favorites.Contains(favPaths, it.Path) {
+				out = append(out, it)
+			}
+		}
+		return out
+	}
+	// pinProps decorates a row with its pin control and slot badge. Every rendered
+	// destination gets one, so a screen can be pinned from wherever it is found
+	// rather than only from the section it happens to live in.
+	pinProps := func(path string) (bool, string, bool, func()) {
+		pinned := favorites.Contains(favPaths, path)
+		slot := ""
+		if i := favorites.IndexOf(favPaths, path); i >= 0 {
+			if d, ok := favorites.DigitFor(i); ok {
+				slot = d
+			}
+		}
+		return pinned, slot, pinFull, func() {
+			next, nowPinned := favorites.Toggle(favPaths, path)
+			if nowPinned && !favorites.Contains(next, path) {
+				// Full. Ask which slot to give up rather than refusing: the
+				// eleventh screen is exactly the one the user just said they want
+				// within reach, and a dead button says nothing about how to get it.
+				pendingSwap.Set(path)
+				return
+			}
+			if !nowPinned {
+				// Unpinning MOVES the row back into its folder, and every folder
+				// defaults to collapsed — so without this the row simply vanished
+				// when you unpinned it, with nothing on screen to say where it went.
+				// Naming it here lets the folder that received it open itself.
+				justUnpinned.Set(path)
+			} else {
+				justUnpinned.Set("")
+			}
+			setFavorites(next)
+		}
+	}
+
 	// Tools sub-sections (C67): group the Tools items by SubGroup into collapsible
 	// accordion sections, in the registry's display order.
 	collapsedGroups := uistate.UseCollapsedToolGroups()
@@ -650,91 +815,205 @@ func Sidebar(props sidebarProps) uic.Node {
 	// §4: one indicator that SLIDES to the selection). Re-measure whenever the
 	// active route, rail collapse, an accordion section, or the nav order shifts
 	// vertical layout; the DOM write happens post-render inside a rAF.
-	indKey := current + "|" + railAnimKey + "|" + fmt.Sprint(collapsed) + "|" + fmt.Sprint(orderedPaths)
+	// The pinned order is part of the rail's vertical layout, so it has to be in
+	// this key: without it, reordering a pin moved every row below it while the
+	// indicator stayed where it was, and the highlight drifted further with each
+	// move because the effect never re-ran (Cam 2026-08-31).
+	indKey := current + "|" + railAnimKey + "|" + fmt.Sprint(collapsed) +
+		"|" + fmt.Sprint(orderedPaths) + "|" + strings.Join(favPaths, ",")
 	uic.UseEffect(func() func() {
 		positionRailIndicator()
 		return nil
 	}, indKey)
-	toolsByGroup := map[string][]railItem{}
-	for _, it := range visibleTools {
-		toolsByGroup[it.SubGroup] = append(toolsByGroup[it.SubGroup], it)
-	}
-	// "You are here": if the current route lives inside a Tools sub-group, auto-reveal
-	// that sub-group for this render (without persisting) so the active item is visible
-	// and highlighted — otherwise deep-linking to a Tools page (Reports, Net worth,
-	// Planning, …) leaves no active cue anywhere in the rail. The user's manual
-	// collapse preference is untouched and reasserts once they navigate away.
-	currentToolSubGroup := ""
-	for _, it := range visibleTools {
-		if it.Path == current {
-			currentToolSubGroup = it.SubGroup
-			break
-		}
-	}
-	var toolNodes []any
-	if len(visibleTools) > 0 {
-		// No redundant top-level "Tools" header: every tool already lives under a named
-		// sub-group (Plan & forecast, Understand, …), so those sub-group headers ARE the
-		// rail's section dividers. A parent "Tools" label above them just read as an empty
-		// heading, so it's dropped — the sub-groups render directly.
-		for _, sg := range screens.ToolsSubGroups {
-			sg := sg
-			items := toolsByGroup[sg]
-			if len(items) == 0 {
-				continue
-			}
-			// Keep the sub-group open when it holds the current route (see above).
-			isCollapsed := groupCollapsed(sg) && sg != currentToolSubGroup
-			toolNodes = append(toolNodes, uic.CreateElement(toolGroupHeader, toolGroupHeaderProps{
-				Label:     toolSubGroupLabel(sg),
-				Collapsed: isCollapsed,
-				OnToggle:  func() { setCollapsed(sg, !isCollapsed) },
-			}))
-			if !isCollapsed {
-				toolNodes = append(toolNodes, MapKeyed(items,
-					func(it railItem) any { return it.Path },
-					func(it railItem) uic.Node {
-						return uic.CreateElement(navItem, navItemProps{
-							Label: uistate.T(it.Key), Path: it.Path, Icon: it.Icon, Active: current == it.Path,
-						})
-					},
-				))
+	// One loop for every section. The rail used to render three different ways —
+	// a flat primary list, a sub-grouped tools accordion, and a system block — which
+	// is why the daily money screens could not sit beside anything else and why
+	// "Build" ended up as a heading over one row. Placement is data now: a screen's
+	// section decides where it appears, and adding one needs no code here.
+	sectionItems := railSections(hidden)
+	// "You are here", and "there it went": a section reveals itself when it holds
+	// the current route or the row just unpinned, without touching the stored
+	// preference — otherwise deep-linking to a filed screen leaves no active cue
+	// anywhere in the rail, and unpinning drops a row into a folder that is shut.
+	revealSection := map[string]bool{}
+	for sg, items := range sectionItems {
+		for _, it := range items {
+			if it.Path == current || it.Path == justUnpinned.Get() {
+				revealSection[sg] = true
+				break
 			}
 		}
+	}
+	var sectionNodes []any
+	for _, sg := range screens.NavSections {
+		sg := sg
+		items := lifted(sectionItems[sg])
+		if len(items) == 0 {
+			// Every row pinned, or nothing here: an empty folder is a heading that
+			// opens onto nothing.
+			continue
+		}
+		// The user's drag order applies WITHIN a section, so reordering still means
+		// something once destinations are filed rather than in one flat list.
+		paths := make([]string, len(items))
+		for i, it := range items {
+			paths[i] = it.Path
+		}
+		byPath := make(map[string]railItem, len(items))
+		for _, it := range items {
+			byPath[it.Path] = it
+		}
+		ordered := make([]railItem, 0, len(items))
+		for _, pth := range navorder.Apply(navOrder.Get(), paths) {
+			if it, ok := byPath[pth]; ok {
+				ordered = append(ordered, it)
+			}
+		}
+		isCollapsed := groupCollapsed(sg) && !revealSection[sg]
+		sectionNodes = append(sectionNodes, uic.CreateElement(toolGroupHeader, toolGroupHeaderProps{
+			Label:     toolSubGroupLabel(sg),
+			Collapsed: isCollapsed,
+			OnToggle:  func() { setCollapsed(sg, !isCollapsed) },
+		}))
+		if isCollapsed {
+			continue
+		}
+		sectionNodes = append(sectionNodes, MapKeyed(ordered,
+			func(it railItem) any { return it.Path },
+			func(it railItem) uic.Node {
+				pth := it.Path
+				pinned, slot, full, onPin := pinProps(pth)
+				return uic.CreateElement(navItem, navItemProps{
+					Label: uistate.T(it.Key), Path: pth, Icon: it.Icon, Active: current == pth,
+					Pinned: pinned, Slot: slot, PinFull: full, OnPin: onPin,
+					Draggable:   true,
+					OnDragStart: func() { dragSrc.Set(pth) },
+					OnDrop:      func() { reorderNav(pth) },
+				})
+			},
+		))
 	}
 
-	var visibleSystem []railItem
-	for _, it := range systemNav() {
-		if !hidden.IsHidden(it.Path) {
-			visibleSystem = append(visibleSystem, it)
+	swapping := pendingSwap.Get()
+	if swapping != "" {
+		// The question is only answerable while the incoming screen still exists and
+		// the list is still full; anything else and it is stale.
+		if _, ok := reachable[swapping]; !ok || !pinFull || favorites.Contains(favPaths, swapping) {
+			swapping = ""
 		}
 	}
-	// System is a collapsible section too (C67), keyed "system" in the same store.
-	currentInSystem := false
-	for _, it := range visibleSystem {
-		if it.Path == current {
-			currentInSystem = true
-			break
+	labelFor := func(path string) string {
+		it, ok := reachable[path]
+		if !ok {
+			return path
 		}
+		if strings.HasPrefix(path, uistate.RoutePath("/p/")) {
+			return it.Key
+		}
+		return uistate.T(it.Key)
 	}
-	var systemNodes []any
-	if len(visibleSystem) > 0 {
-		// Auto-reveal System when the current route lives there (see the Tools note).
-		sysCollapsed := groupCollapsed("system") && !currentInSystem
-		systemNodes = append(systemNodes, uic.CreateElement(toolGroupHeader, toolGroupHeaderProps{
-			Label: uistate.T("rail.system"), Collapsed: sysCollapsed,
-			OnToggle: func() { setCollapsed("system", !sysCollapsed) },
-		}))
-		if !sysCollapsed {
-			systemNodes = append(systemNodes, MapKeyed(visibleSystem,
-				func(it railItem) any { return it.Path },
-				func(it railItem) uic.Node {
-					return uic.CreateElement(navItem, navItemProps{
-						Label: uistate.T(it.Key), Path: it.Path, Icon: it.Icon, Active: current == it.Path,
+	cancelSwap := uic.UseEvent(func() { pendingSwap.Set("") })
+	// Escape backs out. The question steals the rail's meaning while it stands, so
+	// it must be dismissible by the key people already press to leave things.
+	uic.UseEffect(func() func() {
+		if pendingSwap.Get() == "" {
+			return nil
+		}
+		doc := js.Global().Get("document")
+		cb := js.FuncOf(func(_ js.Value, args []js.Value) any {
+			if len(args) > 0 && args[0].Get("key").String() == "Escape" {
+				pendingSwap.Set("")
+			}
+			return nil
+		})
+		doc.Call("addEventListener", "keydown", cb)
+		return func() {
+			doc.Call("removeEventListener", "keydown", cb)
+			cb.Release()
+		}
+	}, pendingSwap.Get())
+	var pinnedNodes []any
+	if swapping != "" {
+		// The prompt is a live region: the list below it does not visibly change
+		// when the mode opens, so nothing would otherwise tell a screen-reader user
+		// that their click asked a question.
+		pinnedNodes = append(pinnedNodes, Div(css.Class("rail-swap"),
+			Attr("data-testid", "rail-swap-prompt"), Attr("role", "status"), Attr("aria-live", "polite"),
+			P(css.Class("rail-swap-q"), uistate.T("rail.swapPrompt", labelFor(swapping))),
+			P(css.Class("rail-swap-hint"), uistate.T("rail.swapHint")),
+			Button(css.Class("rail-swap-cancel"), Type("button"),
+				Attr("data-testid", "rail-swap-cancel"), OnClick(cancelSwap),
+				uistate.T("rail.swapCancel")),
+		))
+	}
+	if len(favPaths) > 0 {
+		pinnedNodes = append(pinnedNodes, MapKeyed(favPaths,
+			func(p string) any { return p },
+			func(p string) uic.Node {
+				it, ok := reachable[p]
+				if !ok {
+					return Fragment()
+				}
+				if swapping != "" {
+					// In swap mode a pinned row is not a link — it is the slot being
+					// offered. Rendering it as a button rather than restyling the link
+					// is what keeps a click from navigating away mid-question.
+					idx := favorites.IndexOf(favPaths, p)
+					digit, _ := favorites.DigitFor(idx)
+					incoming, victim := swapping, p
+					return uic.CreateElement(swapTarget, swapTargetProps{
+						Label: labelFor(p), Slot: digit, Icon: it.Icon,
+						Aria: uistate.T("rail.swapRowAria", labelFor(p), labelFor(incoming), digit),
+						OnPick: func() {
+							next := favorites.ReplaceAt(favPaths, idx, incoming)
+							pendingSwap.Set("")
+							justUnpinned.Set(victim)
+							setFavorites(next)
+							uistate.PostNotice(uistate.T("rail.swapDone",
+								labelFor(incoming), labelFor(victim), uistate.T("rail.jumpHint", digit)), false)
+						},
 					})
-				},
-			))
-		}
+				}
+				pinned, slot, full, onPin := pinProps(p)
+				// A custom page's Key IS its name — the household typed it — so it
+				// is used verbatim; registry items carry an i18n key instead.
+				label := uistate.T(it.Key)
+				if strings.HasPrefix(p, uistate.RoutePath("/p/")) {
+					label = it.Key
+				}
+				src := p
+				return uic.CreateElement(navItem, navItemProps{
+					Label: label, Path: p, Icon: it.Icon, Active: current == p,
+					// The row says how to move it. A drag is invisible to anyone not
+					// holding a mouse, so the keyboard route has to be announced
+					// rather than discovered.
+					AriaSuffix: uistate.T("rail.reorderHint"),
+					Pinned:     pinned, Slot: slot, PinFull: full, OnPin: onPin,
+					// Dragging rearranges the SLOTS: the digits stay 1..9,0 down the
+					// list and the rows move between them. That is the right way
+					// round — the number is a position, and moving a row to second
+					// place is the whole reason for moving it.
+					Draggable:   true,
+					OnDragStart: func() { favDrag.Set(src) },
+					OnDrop: func() {
+						from := favorites.IndexOf(favPaths, favDrag.Get())
+						to := favorites.IndexOf(favPaths, src)
+						favDrag.Set("")
+						// A drop that lands on nothing, or on the row that started it,
+						// is not a reorder — leave the list exactly as it was.
+						if from < 0 || to < 0 || from == to {
+							return
+						}
+						setFavorites(favorites.Move(favPaths, from, to))
+					},
+				})
+			},
+		))
+	} else {
+		// An empty section reads as broken unless it says what it is for.
+		pinnedNodes = append(pinnedNodes, Div(css.Class("rail-pinned-empty"),
+			Attr("data-testid", "rail-pinned-empty"),
+			uistate.T("rail.pinnedEmpty", uistate.T("rail.pinnedKeys"))))
 	}
 	// The destination filter. When the query is blank this whole block is inert and
 	// the rail below renders exactly as it always has — the filtered list is an
@@ -776,9 +1055,11 @@ func Sidebar(props sidebarProps) uic.Node {
 			railSearchNodes = append(railSearchNodes, MapKeyed(matches,
 				func(it navsearch.Item) any { return it.Path },
 				func(it navsearch.Item) uic.Node {
+					pinned, slot, full, onPin := pinProps(it.Path)
 					return uic.CreateElement(navItem, navItemProps{
 						Label: it.Label, Path: it.Path, Icon: railIconFor(it.Path),
 						Active: current == it.Path,
+						Pinned: pinned, Slot: slot, PinFull: full, OnPin: onPin,
 					})
 				},
 			))
@@ -815,35 +1096,14 @@ func Sidebar(props sidebarProps) uic.Node {
 			If(!searching, Div(Attr("id", "cf-rail-ind"), ClassStr("rail-ind"), Attr("aria-hidden", "true"))),
 			Fragment(railSearchNodes...),
 			If(!searching, Fragment(
-				MapKeyed(visibleNav,
-					func(it railItem) any { return it.Path },
-					func(it railItem) uic.Node {
-						p := it.Path
-						// Find the 1-based position of this item in the ordered primary nav
-						// so the Alt+N hint (L34) matches what Alt+N actually does.
-						hint := 0
-						for idx, v := range visibleNav {
-							if v.Path == it.Path && idx < 9 {
-								hint = idx + 1
-								break
-							}
-						}
-						return uic.CreateElement(navItem, navItemProps{
-							Label:       uistate.T(it.Key),
-							Path:        it.Path,
-							Icon:        it.Icon,
-							Active:      current == it.Path,
-							AltHint:     hint,
-							Draggable:   true,
-							OnDragStart: func() { dragSrc.Set(p) },
-							OnDrop:      func() { reorderNav(p) },
-						})
-					},
-				),
-				Fragment(toolNodes...),
-				Fragment(systemNodes...),
+				Div(css.Class("rail-sec-head rail-pinned-head"), Attr("data-testid", "rail-pinned-head"),
+					Span(uistate.T("rail.pinnedSection"))),
+				Nav(css.Class("rail-pinned"), Attr("data-testid", "rail-pinned"),
+					Attr("aria-label", uistate.T("rail.pinnedSection")),
+					Fragment(pinnedNodes...)),
+				Fragment(sectionNodes...),
 				// The user's custom pages ("My pages"): listing, create, and reorder.
-				uic.CreateElement(CustomPagesNav),
+				uic.CreateElement(CustomPagesNav, CustomPagesNavProps{PinFor: pinProps}),
 			)),
 		),
 		// One-time, calm Cloud mention (§7.11) — self-hides once dismissed or syncing.
@@ -870,6 +1130,63 @@ type navItemProps struct {
 	Draggable   bool
 	OnDragStart func()
 	OnDrop      func()
+	// Pinning. OnPin nil means this row has no pin control at all — the search
+	// results reuse this component and a pin there would sit under a list that is
+	// about to disappear.
+	OnPin func()
+	// AriaSuffix is appended to the row's accessible name — used to announce an
+	// affordance that has no visible label, like the keyboard reorder.
+	AriaSuffix string
+	// Pinned drives the toggle's state and keeps its star filled and visible even
+	// when the row is not hovered; Slot is the digit key this row answers to ("" if
+	// unpinned). PinFull disables the control on an unpinned row once ten are taken.
+	Pinned  bool
+	Slot    string
+	PinFull bool
+}
+
+type swapTargetProps struct {
+	Label  string
+	Slot   string
+	Icon   icon.Name
+	Aria   string
+	OnPick func()
+}
+
+// swapTarget is one pinned row while the rail is asking which slot an eleventh
+// screen should take.
+//
+// It is a BUTTON, not the usual link restyled. During the question a click has to
+// answer it, and a link whose click has been repurposed still announces itself as
+// a link, still offers open-in-new-tab, and still shows a URL in the status bar —
+// three promises the row cannot keep while it means "give up this slot". Its own
+// component so the click hook stays at a stable position across the list.
+func swapTarget(props swapTargetProps) uic.Node {
+	onPick := props.OnPick
+	return Div(css.Class("nav-row"),
+		Button(css.Class("nv nav-swap-target "+tw.Fold(tw.Flex, tw.Flex1, tw.MinH10, tw.ItemsCenter, tw.Gap25, tw.Px3, tw.Py2, tw.Rounded4, tw.CursorPointer)),
+			Type("button"), Attr("data-testid", "rail-swap-target"),
+			Attr("aria-label", props.Aria), Title(props.Aria),
+			OnClick(Prevent(func() {
+				if onPick != nil {
+					onPick()
+				}
+			})),
+			ui.Icon(props.Icon, ClassStr(tw.Fold(tw.W4, tw.H4, tw.ShrinkO))),
+			Span(css.Class(tw.Flex1), props.Label),
+			// The slot the incoming screen inherits. Shown because the promise being
+			// made is about this number, not about the row.
+			Span(css.Class("nav-alt-hint"), Attr("aria-hidden", "true"), Text(props.Slot)),
+		),
+	)
+}
+
+// boolAttr renders a Go bool as the string an ARIA state attribute expects.
+func boolAttr(b bool) string {
+	if b {
+		return "true"
+	}
+	return "false"
 }
 
 // navItem is its own component so its click-handler hook stays stable regardless
@@ -891,8 +1208,8 @@ func navItem(props navItemProps) uic.Node {
 	path := props.Path
 	args := []any{
 		ClassStr(cls),
-		Title(props.Label),              // native tooltip
-		Attr("aria-label", props.Label), // C315: explicit accessible name (title alone is unreliable for SR)
+		Title(props.Label), // native tooltip
+		Attr("aria-label", strings.TrimSpace(props.Label+" "+props.AriaSuffix)), // C315: explicit accessible name (title alone is unreliable for SR)
 		// A real href makes nav items keyboard-focusable links that screen readers
 		// announce and that support middle-click / open-in-new-tab (L34/L19 a11y);
 		// the click handler prevents the full-page load and does SPA navigation.
@@ -903,7 +1220,11 @@ func navItem(props navItemProps) uic.Node {
 		})),
 	}
 	if path != "" {
-		args = append(args, Attr("href", uistate.RoutePath(path)))
+		// The RAW route alongside the href. The href carries whatever prefix
+		// RoutePath adds, so it cannot be compared against the paths the
+		// favorites list stores — the keyboard reorder reads this instead of
+		// parsing the prefix back off.
+		args = append(args, Attr("href", uistate.RoutePath(path)), Attr("data-path", path))
 	}
 	if props.Active {
 		args = append(args, Attr("aria-current", "page"))
@@ -931,14 +1252,73 @@ func navItem(props navItemProps) uic.Node {
 	// badge class is omitted on the icon-only rail to avoid clutter). The kbd tag
 	// is purely decorative (aria-hidden) because the Title tooltip already names
 	// the shortcut. Only positions 1–9 are labeled; beyond that there's no shortcut.
-	if props.AltHint >= 1 && props.AltHint <= 9 {
+	// The jump badge. It used to be a POSITION — the item's index in the primary
+	// nav — which meant the digit shown was a fact about the menu's order rather
+	// than about anything the user chose. It is now the pinned slot, so the badge
+	// and the key always agree, and rows without a pin show nothing.
+	if props.Slot != "" {
+		args = append(args, Span(css.Class("nav-alt-hint"),
+			// Decorative: the link's accessible name already states the shortcut
+			// (rail.pinnedAs), so announcing the bare digit again would read as a
+			// stray number between the destination and the next row.
+			Attr("aria-hidden", "true"),
+			Attr("title", uistate.T("rail.jumpHint", props.Slot)),
+			Text(props.Slot),
+		))
+	} else if props.AltHint >= 1 && props.AltHint <= 9 {
 		args = append(args, Span(css.Class("nav-alt-hint"),
 			Attr("aria-hidden", "true"),
 			Attr("title", fmt.Sprintf("Alt + %d", props.AltHint)),
 			Text(strconv.Itoa(props.AltHint)),
 		))
 	}
-	return A(args...)
+	link := A(args...)
+	if props.OnPin == nil {
+		return link
+	}
+	// The pin is a SIBLING of the link, never inside it: a button nested in an
+	// anchor is invalid, and nesting two controls makes the row a single confusing
+	// stop for anyone navigating by keyboard or screen reader. The wrapper is
+	// deliberately unpositioned — the active indicator measures the link's
+	// offsetTop against the nav, and a positioned ancestor here would reparent that
+	// measurement and park the highlight at the top of the rail.
+	pinLabel := uistate.T("rail.pinAdd", props.Label)
+	if props.Pinned {
+		pinLabel = uistate.T("rail.pinRemove", props.Label)
+	} else if props.PinFull {
+		// Full is no longer a refusal: the control still acts, and what it does is
+		// ask which slot this screen should take. The name says so.
+		pinLabel = uistate.T("rail.pinFullAria", props.Label)
+	}
+	pinCls := "nav-pin"
+	glyph := icon.Star
+	if props.Pinned {
+		pinCls += " is-pinned"
+		glyph = icon.StarFilled
+	}
+	onPin := props.OnPin
+	pinArgs := []any{
+		ClassStr(pinCls), Type("button"),
+		Attr("data-testid", "nav-pin-"+props.Path),
+		// A toggle, so it reports pressed rather than renaming itself into a
+		// destination. The name says which row it belongs to, because "Pin" alone
+		// is thirty identical controls to a screen reader.
+		Attr("aria-pressed", boolAttr(props.Pinned)),
+		Attr("aria-label", pinLabel),
+		Title(pinLabel),
+		OnClick(Prevent(func() {
+			if onPin != nil {
+				onPin()
+			}
+		})),
+		ui.Icon(glyph, ClassStr(tw.Fold(tw.W35, tw.H35, tw.ShrinkO))),
+	}
+	// Deliberately NOT disabled when full. Disabling it was the first design —
+	// refuse the eleventh pin — and it left the one screen the user had just asked
+	// for as the only one they could not reach by key, behind a control that said
+	// nothing about how to get it. It now opens the swap question instead.
+
+	return Div(css.Class("nav-row"), link, Button(pinArgs...))
 }
 
 // HouseholdCard sits at the bottom of the rail: a quiet, non-interactive
@@ -1016,31 +1396,14 @@ func HouseholdCard() uic.Node {
 				Span(css.Class(tw.TextXs, tw.TextFaint, tw.Block), summary),
 			),
 		)),
-		// The footer proper: one intentional, grouped block separated from the nav by a
-		// hairline — the quiet household identity, the local-first privacy assurance, and
-		// a tidy meta row (About & privacy on the left, the version on the right). Hidden
-		// as a unit when the rail is collapsed (rules_system.go).
-		Div(css.Class("rail-foot-info"),
-			// Household identity: people glance here for "2 members · USD base".
-			Div(css.Class("rail-foot-hh"),
-				Span(css.Class("rail-foot-hh-name"), name),
-				Span(css.Class("rail-foot-hh-sub"), summary),
-			),
-			// Local-first trust line (C289 / R34-trust): the privacy differentiator,
-			// surfaced where every user sees it. A lock glyph anchors it as an assurance.
-			Div(css.Class("rail-foot-privacy"),
-				ui.Icon(icon.Lock, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
-				Span(uistate.T("trust.localFooter")),
-			),
-			// Meta row: the /about entry point (C290) and the app version, aligned to the
-			// footer's two edges so both stay legible and deliberate.
-			Div(css.Class("rail-foot-meta"),
-				A(css.Class("rail-foot-about"),
-					Attr("href", uistate.RoutePath("/about")), uistate.T("nav.aboutPrivacyLink")),
-				Span(css.Class("app-version"),
-					Attr("title", "CashFlux "+version.Label()), version.Label()),
-			),
-		),
+		// The footer used to carry the household name, the member/currency summary,
+		// the privacy line, an About link and the version — four lines of text that
+		// never changed, permanently occupying the bottom of a rail whose menu had
+		// just grown a Pinned section and five folders. All of it moved onto the
+		// workspace control at the top, which is the thing that actually answers
+		// "which household am I in": the summary reads on the trigger, the rest is
+		// one click away inside its menu. What is left here is the collapse toggle,
+		// which is a control rather than a caption.
 	)
 }
 

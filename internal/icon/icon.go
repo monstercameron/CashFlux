@@ -53,6 +53,12 @@ const (
 	MoreH        Name = "more-horizontal"
 	Grip         Name = "grip"   // six-dot drag handle (signals draggable, vs MoreH = menu)
 	Search       Name = "search" // magnifier for search/filter inputs
+	// Star and StarFilled are ONE control in two states, not two icons: the rail's
+	// pin toggle swaps between them, so they share a silhouette and differ only in
+	// fill. A star rather than a heart — a heart says "I like this", where pinning
+	// says "keep this within reach", which is the thing the control actually does.
+	Star       Name = "star"
+	StarFilled Name = "star-filled"
 
 	// Status + trend glyphs (carry meaning at a glance; color via caller classes).
 	Check           Name = "check"
@@ -160,6 +166,8 @@ var inner = map[Name]string{
 	MoreH:        `<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>`,
 	Grip:         `<circle cx="9" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="18" r="1"/>`,
 	Search:       `<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/>`,
+	Star:         `<path d="M12 2.6l2.9 5.88 6.49.95-4.7 4.58 1.11 6.46L12 17.42l-5.8 3.05 1.11-6.46-4.7-4.58 6.49-.95L12 2.6z"/>`,
+	StarFilled:   `<path fill="currentColor" d="M12 2.6l2.9 5.88 6.49.95-4.7 4.58 1.11 6.46L12 17.42l-5.8 3.05 1.11-6.46-4.7-4.58 6.49-.95L12 2.6z"/>`,
 
 	Check:           `<path d="M20 6 9 17l-5-5"/>`,
 	CheckCircle:     `<circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/>`,

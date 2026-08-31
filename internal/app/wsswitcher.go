@@ -7,10 +7,12 @@ package app
 import (
 	"strings"
 
+	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+	"github.com/monstercameron/CashFlux/internal/version"
 	"github.com/monstercameron/CashFlux/internal/workspace"
 	"github.com/monstercameron/GoWebComponents/v5/css"
 	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
@@ -90,11 +92,28 @@ func WorkspaceSwitcher() uic.Node {
 	}
 	menu := Fragment()
 	if open.Get() {
-		menu = Div(ClassStr(menuCls),
+		menu = Div(ClassStr(menuCls), Attr("role", "menu"), Attr("data-testid", "ws-menu"),
 			Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap05), rows),
 			Div(css.Class(tw.BorderT, tw.BorderLine, tw.My2, tw.Pt2)),
-			Button(css.Class(tw.WFull, tw.TextLeft, tw.Px2, tw.Py15, tw.Rounded, tw.HoverBgHover), Type("button"), OnClick(onNew), uistate.T("ws.new")),
-			Button(css.Class(tw.WFull, tw.TextLeft, tw.Px2, tw.Py15, tw.Rounded, tw.HoverBgHover), Type("button"), OnClick(onDup), uistate.T("ws.duplicate")),
+			Button(css.Class(tw.WFull, tw.TextLeft, tw.Px2, tw.Py15, tw.Rounded, tw.HoverBgHover), Type("button"), Attr("role", "menuitem"), OnClick(onNew), uistate.T("ws.new")),
+			Button(css.Class(tw.WFull, tw.TextLeft, tw.Px2, tw.Py15, tw.Rounded, tw.HoverBgHover), Type("button"), Attr("role", "menuitem"), OnClick(onDup), uistate.T("ws.duplicate")),
+			// The identity detail that used to occupy four permanent lines at the
+			// foot of the rail: the privacy assurance, the About entry point and the
+			// version. None of it changes, and none of it is needed while reading the
+			// menu — but all of it belongs to "which household am I in", which is
+			// exactly what this control answers. It costs nothing here and it was
+			// costing the nav ninety pixels of height down there.
+			Div(css.Class(tw.BorderT, tw.BorderLine, tw.My2, tw.Pt2)),
+			Div(css.Class("ws-menu-privacy"),
+				ui.Icon(icon.Lock, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
+				Span(uistate.T("trust.localFooter")),
+			),
+			Div(css.Class("ws-menu-meta"),
+				A(css.Class("rail-foot-about"), Attr("role", "menuitem"),
+					Attr("href", uistate.RoutePath("/about")), uistate.T("nav.aboutPrivacyLink")),
+				Span(css.Class("app-version"),
+					Attr("title", "CashFlux "+version.Label()), version.Label()),
+			),
 		)
 	}
 
@@ -114,14 +133,24 @@ func WorkspaceSwitcher() uic.Node {
 		)
 	}
 
-	// Standard-selector styling: a bordered control that shows BOTH an uppercase heading
-	// ("Workspace") and the selected option (colour dot + name), with a trailing chevron —
-	// so it reads like the app's other select controls instead of a bare name.
+	// One identity block, not two. The rail used to answer "where am I" at both
+	// ends: this control at the top under an uppercase WORKSPACE heading, and a
+	// four-line household card at the bottom repeating the same idea in different
+	// words. The heading is gone — a colour dot and a chevron already say
+	// "switcher", and labelling a control whose value is its own name is a line
+	// spent on nothing — and the household summary takes its place, because
+	// "2 members · USD base" is the line people actually glance at.
+	summary := householdSummary()
+	name := uistate.T("ws.switch")
+	if summary != "" {
+		name = active.Name + " · " + summary + " · " + uistate.T("ws.switch")
+	}
 	return Div(css.Class("ws-switch", tw.Relative, tw.Mx3, tw.Mt3),
 		Button(ClassStr("ws-switch-trigger"),
-			Type("button"), Title(uistate.T("ws.switch")), Attr("aria-label", uistate.T("ws.switch")),
+			Type("button"), Title(name), Attr("aria-label", name),
+			Attr("aria-haspopup", "menu"), Attr("aria-expanded", boolAttr(open.Get())),
+			Attr("data-testid", "ws-switch-trigger"),
 			OnClick(func() { open.Set(!open.Get()) }),
-			Span(css.Class("ws-switch-head"), uistate.T("ws.railLabel")),
 			Span(css.Class("ws-switch-value"),
 				Span(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.MinW0),
 					wsColorDot(active.Color),
@@ -129,9 +158,30 @@ func WorkspaceSwitcher() uic.Node {
 				),
 				ui.Icon(icon.ChevronDown, css.Class(tw.ShrinkO, tw.W4, tw.H4, tw.TextFaint)),
 			),
+			If(summary != "", Span(css.Class("ws-switch-sub"), summary)),
 		),
 		menu,
 	)
+}
+
+// householdSummary is the one-line household glance ("2 members · USD base"),
+// or "" when the store is not up yet.
+//
+// It lives here rather than in the footer that used to own it because the
+// workspace control is now the single answer to "which household am I looking
+// at", and a summary of that household is the most useful thing that control can
+// show without being opened.
+func householdSummary() string {
+	app := appstate.Default
+	if app == nil {
+		return ""
+	}
+	base := app.Settings().BaseCurrency
+	if base == "" {
+		base = "USD"
+	}
+	members := len(app.Members())
+	return uistate.TN("household.summaryOne", "household.summaryMany", members, base)
 }
 
 // workspaceInitial is the uppercased first letter of a workspace name, used as the

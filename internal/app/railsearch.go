@@ -6,8 +6,10 @@ package app
 
 import (
 	"strings"
+	"syscall/js"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/favorites"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/navsearch"
 	"github.com/monstercameron/CashFlux/internal/pages"
@@ -138,4 +140,166 @@ func railSearchBox(props railSearchBoxProps) uic.Node {
 		clear,
 		count,
 	)
+}
+
+// ── the shortcut's view of the pinned list ───────────────────────────────────
+//
+// The keydown listener is registered once at boot, outside any component, so it
+// cannot read the favorites atom through a hook. The Sidebar publishes the live
+// list here instead and the listener reads it — one writer, one reader, no
+// subscription machinery for a slice of at most ten strings.
+//
+// It is deliberately NOT read back into the UI: the atom stays the source of
+// truth for rendering, and this is a projection of it. Two-way would give the
+// same list two owners.
+var pinnedForShortcuts []string
+
+// pinnedMover reorders the pinned list. The Sidebar publishes it alongside the
+// list itself, because it is the only place holding the list the UI actually
+// RENDERS — favPaths, after favorites.Clean has dropped anything unreachable.
+//
+// The first attempt had the global handler compute indices from the published
+// list and then hand them to a uistate helper that re-read the atom. The atom
+// holds the raw stored order; the rail renders the cleaned one. When those two
+// disagree — one dead pin is enough — the indices address different rows and the
+// move lands somewhere nobody asked for. One list, one owner.
+var pinnedMover func(from, to int) bool
+
+func publishPinnedMover(f func(from, to int) bool) { pinnedMover = f }
+
+func publishFavorites(list []string) {
+	next := make([]string, len(list))
+	copy(next, list)
+	pinnedForShortcuts = next
+}
+
+// pinnedPathForDigit returns the route a pressed digit should open, or "" when
+// that slot is empty.
+func pinnedPathForDigit(d byte) string {
+	i, ok := favorites.SlotForDigit(d)
+	if !ok || i >= len(pinnedForShortcuts) {
+		return ""
+	}
+	return pinnedForShortcuts[i]
+}
+
+// focusMenuFilter puts the cursor in the rail's filter box (Alt+M), expanding the
+// rail first when it is collapsed to icons and there is no field to focus.
+//
+// The re-query after expanding is deliberate: the field does not exist in the DOM
+// while the rail is collapsed, so it cannot be captured beforehand, and the
+// expansion has to reach the DOM before anything can be focused. A rAF is enough
+// — the atom flip re-renders synchronously and paint follows on the next frame.
+func focusMenuFilter() {
+	doc := js.Global().Get("document")
+	if doc.IsNull() || doc.IsUndefined() {
+		return
+	}
+	focus := func() bool {
+		el := doc.Call("querySelector", "[data-testid=railsearch-input]")
+		if !el.Truthy() {
+			return false
+		}
+		el.Call("focus")
+		el.Call("select")
+		return true
+	}
+	if focus() {
+		return
+	}
+	uistate.ToggleRailCollapsed()
+	var cb js.Func
+	cb = js.FuncOf(func(js.Value, []js.Value) any {
+		defer cb.Release()
+		focus()
+		return nil
+	})
+	js.Global().Call("requestAnimationFrame", cb)
+}
+
+// moveFocusedPin moves the pinned row that currently has focus by delta slots and
+// returns whether anything moved.
+//
+// It reads the row's position from the LIST rather than from a stored index: the
+// pinned order changes under the user's hands while they hold Alt and tap an
+// arrow, and an index captured when the key was first pressed would walk the
+// wrong row on the second press.
+//
+// Focus is restored afterwards because the row is re-rendered by the move; without
+// it the second Alt+Arrow would have nothing focused to act on, and a keyboard
+// reorder would be a one-press feature.
+func moveFocusedPin(doc js.Value, delta int) bool {
+	active := doc.Get("activeElement")
+	if !active.Truthy() {
+		return false
+	}
+	row := active.Call("closest", "[data-testid=rail-pinned] .nav-row a")
+	if !row.Truthy() {
+		row = active.Call("closest", "[data-testid=rail-pinned] .nav-row")
+		if !row.Truthy() {
+			return false
+		}
+		row = row.Call("querySelector", "a")
+		if !row.Truthy() {
+			return false
+		}
+	}
+	// Call("getAttribute", …), not Get("getAttribute").Invoke(…): the latter pulls
+	// the function off the node and calls it unbound, so it never sees the element.
+	attr := row.Call("getAttribute", "data-path")
+	if !attr.Truthy() {
+		return false
+	}
+	path := attr.String()
+	from := favorites.IndexOf(pinnedForShortcuts, path)
+	if from < 0 {
+		return false
+	}
+	to := from + delta
+	if to < 0 || to >= len(pinnedForShortcuts) {
+		return false
+	}
+	if pinnedMover == nil || !pinnedMover(from, to) {
+		return false
+	}
+	// Put focus back on the row after the move, so a RUN of Alt+Arrow presses keeps
+	// moving the same destination. Without this the first press works and every
+	// press after it does nothing, because the re-render replaced the focused node
+	// and focus fell back to the document — which is a one-press reorder, i.e. not
+	// a usable one.
+	//
+	// It retries across frames rather than firing once: a single rAF lands before
+	// the Go re-render has committed, and the row it is looking for does not exist
+	// yet (measured — focus ended up on "Skip to content").
+	refocusPinned(doc, path, 20)
+	return true
+}
+
+// refocusPinned looks for a pinned row by route and focuses it, retrying for up
+// to `tries` animation frames while the rail re-renders.
+func refocusPinned(doc js.Value, path string, tries int) {
+	sel := "[data-testid=rail-pinned] .nav-row a[data-path=\"" + path + "\"]"
+	var cb js.Func
+	left := tries
+	cb = js.FuncOf(func(js.Value, []js.Value) any {
+		// Re-assert focus every frame for the whole window rather than stopping at
+		// the first success. Stopping was not enough: the row gets focused, a later
+		// commit of the same re-render replaces the node, and focus falls back to
+		// the document — so the FIRST Alt+Arrow worked and every one after it did
+		// nothing, which is the freeze (Cam 2026-08-31). Focusing something that is
+		// already focused is a no-op, so repeating is free.
+		if el := doc.Call("querySelector", sel); el.Truthy() {
+			if !doc.Get("activeElement").Equal(el) {
+				el.Call("focus")
+			}
+		}
+		left--
+		if left <= 0 {
+			cb.Release()
+			return nil
+		}
+		js.Global().Call("requestAnimationFrame", cb)
+		return nil
+	})
+	js.Global().Call("requestAnimationFrame", cb)
 }

@@ -7,7 +7,7 @@ package i18n
 // headers — so finding one meant remembering which section it lived in.
 func init() {
 	for k, v := range map[string]string{
-		"railsearch.label":       "Filter the menu",
+		"railsearch.label":       "Filter the menu (Alt+M)",
 		"railsearch.placeholder": "Jump to…",
 		// The count is a live region, so it is phrased as a statement a screen
 		// reader can read on its own rather than as a fragment beside the box.

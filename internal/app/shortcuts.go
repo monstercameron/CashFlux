@@ -18,11 +18,11 @@ import (
 )
 
 // wireKeyboardShortcuts installs global keyboard shortcuts. Alt+1..9 jumps to the
-// Nth primary navigation screen (Dashboard, Accounts, …) so the keyboard alone can
-// move between sections. Registered once at boot; the listener lives for the app's
+// pinned destination (or, until anything is pinned, the Nth primary screen) so the
+// keyboard alone can move between sections. Registered once at boot; the listener lives for the app's
 // lifetime, so its js.Func is intentionally never released.
 //
-// It keys off KeyboardEvent.code ("Digit1".."Digit9") so it's keyboard-layout
+// It keys off KeyboardEvent.code ("Digit1".."Digit9", "Digit0") so it's keyboard-layout
 // independent and never matches the numpad (where Alt+number is an OS alt-code),
 // and it stays out of the way while the user is typing in a field.
 func wireKeyboardShortcuts() {
@@ -101,6 +101,31 @@ func wireKeyboardShortcuts() {
 			return nil
 		}
 		code := e.Get("code").String()
+		// Alt+Arrow reorders the pinned row that has focus. This is the keyboard
+		// half of drag-to-reorder: a rearrangement available only by dragging is
+		// unavailable to anyone who cannot drag, which is what WCAG 2.2 SC 2.5.7
+		// asks us not to ship. It lives here rather than on the row because the
+		// framework's event type hides altKey, and the raw event does not.
+		if code == "ArrowUp" || code == "ArrowDown" {
+			delta := -1
+			if code == "ArrowDown" {
+				delta = 1
+			}
+			if moveFocusedPin(doc, delta) {
+				e.Call("preventDefault")
+			}
+			return nil
+		}
+		// Alt+M puts the cursor in the menu filter. It pairs with the digits: the
+		// digits are for the ten destinations you already chose, and this is for
+		// the twenty you did not. On a collapsed rail there is no field to focus,
+		// so it expands first rather than doing nothing — a shortcut that silently
+		// no-ops teaches people it is broken.
+		if code == "KeyM" {
+			e.Call("preventDefault")
+			focusMenuFilter()
+			return nil
+		}
 		// Alt+N opens the quick-add transaction panel.
 		if code == "KeyN" {
 			e.Call("preventDefault")
@@ -108,6 +133,18 @@ func wireKeyboardShortcuts() {
 			return nil
 		}
 		if len(code) != 6 || code[:5] != "Digit" {
+			return nil
+		}
+		// The digits now open PINNED destinations, not the first nine primary
+		// screens by registry position. Ten slots rather than nine, because the
+		// tenth key is "0" — the digit row's own order, not a count.
+		//
+		// The fallback keeps a browser that has somehow lost its pins usable: it
+		// falls back to the same list these keys always opened, so the shortcut
+		// never becomes silently dead.
+		if path := pinnedPathForDigit(code[5]); path != "" {
+			e.Call("preventDefault")
+			uistate.NavigateTo(path)
 			return nil
 		}
 		d := code[5]

@@ -27,7 +27,17 @@ import (
 // a page and jumps to it; and a collapsible "Hidden pages" list to bring hidden
 // pages back. It reuses the pure internal/pages logic for ordering, slugging, and
 // reordering, and writes through appstate (autosave persists to localStorage).
-func CustomPagesNav() uic.Node {
+// CustomPagesNavProps threads the sidebar's pin state down, so a custom page can
+// be pinned from the section it lives in rather than only by finding it through
+// the filter.
+type CustomPagesNavProps struct {
+	// PinFor reports, for one page path, whether it is pinned, its slot digit,
+	// whether the list is full, and the toggle. A nil PinFor renders no pin
+	// controls at all.
+	PinFor func(path string) (bool, string, bool, func())
+}
+
+func CustomPagesNav(props CustomPagesNavProps) uic.Node {
 	app := appstate.Default
 	if app == nil {
 		return Fragment()
@@ -158,9 +168,17 @@ func CustomPagesNav() uic.Node {
 	for _, p := range visible {
 		p := p
 		slug := p.Slug
+		pinned, slot, pinFull, onPin := false, "", false, (func())(nil)
+		if props.PinFor != nil {
+			pinned, slot, pinFull, onPin = props.PinFor(uistate.RoutePath("/p/" + slug))
+		}
 		rows = append(rows, uic.CreateElement(customPageRow, customPageRowProps{
 			Page:        p,
 			Active:      current == uistate.RoutePath("/p/"+slug),
+			Pinned:      pinned,
+			Slot:        slot,
+			PinFull:     pinFull,
+			OnPin:       onPin,
 			OnRename:    func() { rename(p) },
 			OnHide:      func() { toggleHide(p) },
 			OnDelete:    func() { del(p) },
@@ -217,8 +235,15 @@ func CustomPagesNav() uic.Node {
 }
 
 type customPageRowProps struct {
-	Page        domain.CustomPage
-	Active      bool
+	Page   domain.CustomPage
+	Active bool
+	// Pinning, threaded from the sidebar: a custom page carries the household's
+	// own words and sits in a collapsed section, which makes it one of the most
+	// likely things to want within reach.
+	Pinned      bool
+	Slot        string
+	PinFull     bool
+	OnPin       func()
 	OnRename    func()
 	OnHide      func()
 	OnDelete    func()
@@ -297,9 +322,41 @@ func customPageRow(props customPageRowProps) uic.Node {
 		)
 	}
 
-	return Div(css.Class(tw.Relative, tw.Flex, tw.ItemsCenter), Attr("id", menuID),
+	var pin uic.Node = Fragment()
+	if props.OnPin != nil {
+		pinLabel := uistate.T("rail.pinAdd", props.Page.Name)
+		if props.Pinned {
+			pinLabel = uistate.T("rail.pinRemove", props.Page.Name)
+		} else if props.PinFull {
+			// Full asks which slot to give up; it does not refuse.
+			pinLabel = uistate.T("rail.pinFullAria", props.Page.Name)
+		}
+		pinCls := "nav-pin"
+		glyph := icon.Star
+		if props.Pinned {
+			pinCls += " is-pinned"
+			glyph = icon.StarFilled
+		}
+		onPin := props.OnPin
+		pinArgs := []any{
+			ClassStr(pinCls), Type("button"),
+			Attr("data-testid", "nav-pin-"+uistate.RoutePath("/p/"+props.Page.Slug)),
+			Attr("aria-pressed", boolAttr(props.Pinned)),
+			Attr("aria-label", pinLabel), Title(pinLabel),
+			OnClick(Prevent(func() { onPin() })),
+			ui.Icon(glyph, ClassStr(tw.Fold(tw.W35, tw.H35, tw.ShrinkO))),
+		}
+		pin = Button(pinArgs...)
+	}
+	return Div(css.Class("nav-row "+tw.Fold(tw.Relative, tw.Flex, tw.ItemsCenter)), Attr("id", menuID),
 		link,
+		pin,
 		Button(css.Class("rail-section", tw.ShrinkO, tw.Px15, tw.Py1, tw.TextFaint, tw.HoverTextFg), Type("button"),
+			// Named after the page it belongs to. Every one of these used to be
+			// "Page options" and nothing else, so a screen reader reached three
+			// identical controls with no way to tell which page each governed —
+			// and title alone is a weak accessible name besides.
+			Attr("aria-label", uistate.T("pages.menuFor", props.Page.Name)),
 			Title(uistate.T("pages.menu")), Attr("aria-haspopup", "menu"), Attr("aria-expanded", expanded),
 			OnClick(func() { open.Set(!open.Get()) }), ui.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
 		menu,

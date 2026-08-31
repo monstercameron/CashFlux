@@ -157,8 +157,25 @@ func positionRailIndicator() {
 			st.Set("opacity", "0")
 			return nil
 		}
-		st.Set("top", strconv.Itoa(item.Get("offsetTop").Int())+"px")
-		st.Set("height", strconv.Itoa(item.Get("offsetHeight").Int())+"px")
+		// Measure GEOMETRY, not offsetTop.
+		//
+		// offsetTop is relative to the nearest positioned ancestor, and the pinned
+		// list is one — so a pinned row reported an offset of 0 while the indicator
+		// is positioned against .rail-nav, parking the highlight 42px above the row
+		// it was meant to mark (measured, Cam 2026-08-31). Any future positioned
+		// wrapper would reintroduce exactly this, silently. Rect deltas against the
+		// nav, plus its scroll offset, describe the same number without caring what
+		// is positioned in between.
+		nav := doc.Call("querySelector", "aside.rail .rail-nav")
+		if !nav.Truthy() {
+			st.Set("opacity", "0")
+			return nil
+		}
+		ir := item.Call("getBoundingClientRect")
+		nr := nav.Call("getBoundingClientRect")
+		top := ir.Get("top").Float() - nr.Get("top").Float() + nav.Get("scrollTop").Float()
+		st.Set("top", strconv.Itoa(int(top))+"px")
+		st.Set("height", strconv.Itoa(int(ir.Get("height").Float()))+"px")
 		st.Set("opacity", "1")
 		return nil
 	})

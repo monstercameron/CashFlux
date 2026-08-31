@@ -29,7 +29,7 @@ var helpCorpusKeys = Catalog{
 	"help.smartBody1":     "Smart surfaces optional, opt-in insights and recommendations. Free insights run entirely on your device at no cost; AI features are clearly labelled and only run when you add your own key.",
 	"help.smartBody2":     "Turn features on or off in Smart → Manage, and dial how much they surface in Appearance.",
 	"help.shortcutsBody1": "Press ? anytime to see the full shortcut list. Ctrl/⌘ K opens the command palette to jump anywhere or run an action.",
-	"help.shortcutsBody2": "Alt + 1–9 jumps between the main sections; Alt + N adds a transaction.",
+	"help.shortcutsBody2": "Alt + 1–9 and Alt + 0 jump to your ten pinned screens — pin any screen with the star beside it in the menu. Alt + M puts the cursor in the menu filter, and Alt + N adds a transaction.",
 	"help.privacyBody1":   "CashFlux is local-first: your financial data is stored on this device and is never uploaded or shared. You can export a backup at any time from Settings.",
 	"help.privacyBody2":   "An optional passcode lock (Settings) keeps the app's screens behind a code and can encrypt your data at rest.",
 }
