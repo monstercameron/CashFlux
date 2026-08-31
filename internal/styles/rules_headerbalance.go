@@ -5,20 +5,30 @@ package styles
 // registerHeaderBalance emits the UX-04 header-hierarchy rules: the page title
 // gets first claim on top-bar space (it no longer shrinks before the context
 // group has fully yielded — "Dashboa…" beside full-width utilities read as a
-// bug), the music/lock utility buttons fold out of the bar on sub-1280px
-// widths (their labeled equivalents live in the ⋯ More menu; the inline
-// buttons stay mounted so the music player effect keeps running), and below
-// 1536px the context strip takes its own full-width second row — the two-row
-// layout the original top-bar comment promised but never shipped.
+// bug), and the context strip compresses inside its own box rather than
+// spilling under the action icons.
+//
+// Two UX-04 rules have since been removed, both because they hid a control
+// behind a premise that stopped holding:
+//
+//   - The two-row layout (641–1535px: title + actions on row 1, context strip
+//     full-width on row 2). Above 640px the bar is one row again — scope and
+//     period sit inline beside the title, which is the shape the base .topbar
+//     rules already describe (nowrap; .tb-context left-anchored with
+//     flex-shrink:4 so it yields before the title does). Below 641px the phone
+//     shell still stacks them; see registerMobileShell.
+//   - The sub-1280px music fold, premised on a labeled equivalent in the ⋯ More
+//     menu. That stopped holding when the music toggle moved BACK inline to
+//     tb-actions (see MoreMenu), leaving narrow windows with no music control
+//     anywhere while the first-run notice still pointed at "the ♪ button in the
+//     top bar". Un/mute is a one-click reflex; the button keeps its slot beside
+//     the notification bell at every width.
 func registerHeaderBalance() {
 	// Above the phone breakpoint the title refuses to shrink until it hits a
 	// generous cap; everything else in the bar can compress or fold first.
 	ruleMedia("(min-width: 641px)", ".topbar .tb-title",
 		flexShrink("0"),
 		maxWidth("40vw"),
-	)
-	ruleMedia("(max-width: 1280px)", ".topbar .muzak-btn",
-		display("none !important"),
 	)
 	// The freshness stamp is the context strip's least critical leg (its
 	// destination, /activity, is a click away regardless) — it yields width
@@ -36,29 +46,6 @@ func registerHeaderBalance() {
 		overflowX("auto"),
 		overflowY("hidden"),
 		scrollbarWidth("none"),
-	)
-	// Two-row layout below 1536px: row 1 = title + actions, row 2 = the
-	// context strip full-width — same shape the phone shell uses — so the
-	// period control never hides inside a clipped scroller beside the title.
-	ruleMedia("(min-width: 641px) and (max-width: 1535px)", ".topbar",
-		flexWrap("wrap"),
-		height("auto"),
-		rowGap("0.15rem"),
-		paddingTop("0.4rem"),
-		paddingBottom("0.4rem"),
-	)
-	ruleMedia("(min-width: 641px) and (max-width: 1535px)", ".topbar .tb-title",
-		order("0"),
-	)
-	ruleMedia("(min-width: 641px) and (max-width: 1535px)", ".topbar .tb-actions",
-		order("1"),
-		marginLeft("auto"),
-	)
-	ruleMedia("(min-width: 641px) and (max-width: 1535px)", ".topbar .tb-context",
-		order("2"),
-		flexBasis("100%"),
-		minWidth("100%"),
-		flexShrink("0"),
 	)
 	// On truly squeezed widths the "Viewing as" prose folds (the select keeps
 	// its accessible name) and the member select tightens, so the full context

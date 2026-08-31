@@ -385,12 +385,28 @@ func registerR4Surface() {
 		color("var(--text-dim)"),
 		fontSize("0.9rem"),
 	)
-	// Place the annual-grid cell after the budget list (the generated per-tile `order`
-	// rules only cover summary/toolbar/list/savings/formula, so a new tile would default
-	// to order:0 and jump to the top). Renumber savings/formula to sit after it.
-	rule(".bento-budgets > .w[data-widget=\"budget-annualgrid\"]", order("4"))
-	rule(".bento-budgets > .w[data-widget=\"budget-savings\"]", order("5"))
-	rule(".bento-budgets > .w[data-widget=\"budget-formula\"]", order("6"))
+	// Explicit `order` for every budgets tile. The generated per-tile rules only cover
+	// summary/toolbar/list/savings/formula, so any tile added later defaults to order:0
+	// and jumps to the TOP of the surface — which is exactly what happened to
+	// budget-recurring: a supporting ledger of detected commitments opened the page
+	// above the month summary and the budget list itself. Every tile is numbered here
+	// so the surface reads in its declared order (see budgetsWidget's spec list) and
+	// the next tile added cannot silently hoist itself.
+	//
+	// budget-future is the one tile that genuinely leads: it self-gates to nothing
+	// except when the period control is paged forward, where it stands in for the
+	// month summary. Its 0 is deliberate, not a default.
+	rule(".bento-budgets > .w[data-widget=\"budget-future\"]", order("0"))
+	rule(".bento-budgets > .w[data-widget=\"budget-recurring\"]", order("4"))
+	rule(".bento-budgets > .w[data-widget=\"budget-annualgrid\"]", order("5"))
+	rule(".bento-budgets > .w[data-widget=\"budget-savings\"]", order("6"))
+	rule(".bento-budgets > .w[data-widget=\"budget-formula\"]", order("7"))
+	// budget-savings keeps its order:6 slot at the BOTTOM of the surface. It was
+	// briefly hoisted to 2 so it sat beside the To Assign figure it edits, but the
+	// spend rail folded that relationship onto the allocation bar, and a five-row
+	// account form is a heavy thing to put between the summary and the budgets —
+	// it pushed the list itself a full viewport down (Cam, 2026-08-31). It opens
+	// collapsed instead, so the surface ends with a quiet, expandable row.
 	// A budget's cross-category tracked-tag caption: a label + small #tag chips.
 	rule(".budget-tag-line",
 		display("flex"),

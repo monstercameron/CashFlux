@@ -15,7 +15,13 @@ func registerAnnualGridSurface() {
 		gap("0.75rem"),
 	)
 	// Header: the section toggle on the left, the year stepper on the right.
-	rule(".budget-annualgrid-head",
+	//
+	// The `.budget-fold-*` aliases carry the same rules for any other collapsible
+	// section on this surface (currently Savings & investments), so the two folds
+	// that close the /budgets page share one visual language rather than each
+	// inventing a disclosure control. Aliases, not copies — restyle here and both
+	// move together.
+	rule(".budget-annualgrid-head, .budget-fold-head",
 		display("flex"),
 		alignItems("center"),
 		justifyContent("space-between"),
@@ -24,7 +30,7 @@ func registerAnnualGridSurface() {
 	)
 	// The toggle reads as a full-width collapsible-section header, not a stray button:
 	// a rotating disclosure caret, the title, and a right-aligned hint of what it opens.
-	rule(".budget-annualgrid-toggle",
+	rule(".budget-annualgrid-toggle, .budget-fold-toggle",
 		prop("appearance", "none"),
 		fontFamily("inherit"),
 		cursor("pointer"),
@@ -40,28 +46,28 @@ func registerAnnualGridSurface() {
 		textAlign("left"),
 		transition("border-color 0.12s ease, background 0.12s ease"),
 	)
-	rule(".budget-annualgrid-toggle:hover",
+	rule(".budget-annualgrid-toggle:hover, .budget-fold-toggle:hover",
 		borderColor("var(--text-dim)"),
 		background("color-mix(in srgb, var(--bg-elev) 65%, transparent)"),
 	)
-	rule(".budget-annualgrid-toggle:focus-visible",
+	rule(".budget-annualgrid-toggle:focus-visible, .budget-fold-toggle:focus-visible",
 		outline("2px solid var(--accent)"),
 		outlineOffset("2px"),
 	)
 	// The disclosure caret points right when closed, rotates down when open.
-	rule(".budget-annualgrid-caret",
+	rule(".budget-annualgrid-caret, .budget-fold-caret",
 		display("inline-flex"),
 		flexShrink("0"),
 		color("var(--text-dim)"),
 		transition("transform 0.15s ease"),
 	)
-	rule(".budget-annualgrid-caret.is-open",
+	rule(".budget-annualgrid-caret.is-open, .budget-fold-caret.is-open",
 		transform("rotate(90deg)"),
 	)
-	rule(".budget-annualgrid-toggle-label",
+	rule(".budget-annualgrid-toggle-label, .budget-fold-toggle-label",
 		fontWeight("600"),
 	)
-	rule(".budget-annualgrid-toggle-hint",
+	rule(".budget-annualgrid-toggle-hint, .budget-fold-toggle-hint",
 		marginLeft("auto"),
 		color("var(--text-dim)"),
 		fontSize("var(--type-13)"),

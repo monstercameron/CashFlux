@@ -90,28 +90,79 @@ func registerBudgetRefine() {
 	rule(".budget-hero-side",
 		display("flex"),
 		alignItems("center"),
-		gap("0.5rem"),
+		gap("0.5rem 1.1rem"),
 		flexWrap("wrap"),
 		marginLeft("auto"),
 	)
-	// The attention chip: the hero row's one warm element; clicking filters the list.
+	// Two groups, split by CONSEQUENCE. `.budget-hero-acts` holds the controls that
+	// do something — filter the list, change your budgets — and keeps button weight.
+	// `.budget-hero-meta` holds what you only read or follow: a link off the page and
+	// a statistic. They were peers in one flat row, so nothing distinguished a
+	// control that writes to your data from a report link beside it.
+	rule(".budget-hero-acts, .budget-hero-meta",
+		display("flex"),
+		alignItems("center"),
+		flexWrap("wrap"),
+	)
+	rule(".budget-hero-acts",
+		gap("0.45rem"),
+	)
+	// The passive group is pushed to the far edge, set quieter, and given a hairline
+	// so the boundary is visible without a second border or a heavier divider.
+	rule(".budget-hero-meta",
+		gap("0.75rem"),
+		marginLeft("auto"),
+		paddingLeft("1.1rem"),
+		borderLeft("1px solid var(--border)"),
+		color("var(--text-faint)"),
+	)
+	// Below the two-column threshold the groups stack, and a left border on a
+	// full-width row reads as an indent rather than a divider.
+	ruleMedia("(max-width: 720px)", ".budget-hero-meta",
+		marginLeft("0"),
+		paddingLeft("0"),
+		borderLeft("0"),
+	)
+	// The attention chip shares the .btn-tool FOOTPRINT of the controls beside it —
+	// same 38px height, same radius, same padding — so the action group reads as one
+	// row of one kind of thing. It was a 999px amber pill next to two rectangular
+	// buttons, which is three shapes for three controls that all just do something
+	// (Cam, 2026-08-31). It keeps a warm tone, because it is still the one item that
+	// reports a problem; the shape carries "control", the colour carries "warning".
 	rule(".budget-hero-attn",
 		display("inline-flex"),
 		alignItems("center"),
-		gap("0.3rem"),
-		padding("0.25rem 0.7rem"),
+		gap("0.4rem"),
+		minHeight("38px"),
+		padding("0.35rem 0.75rem"),
 		border("1px solid color-mix(in srgb, var(--warn, #d97706) 45%, var(--border))"),
-		borderRadius("999px"),
+		borderRadius("var(--radius-lg)"),
 		background("color-mix(in srgb, var(--warn, #d97706) 8%, transparent)"),
 		color("var(--warn, #d97706)"),
 		font("inherit"),
-		fontSize("0.78rem"),
+		fontSize("var(--type-13)"),
 		fontWeight("600"),
 		cursor("pointer"),
 		transition("background-color var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard)"),
 	)
 	rule(".budget-hero-attn:hover",
 		background("color-mix(in srgb, var(--warn, #d97706) 15%, transparent)"),
+	)
+	rule(".budget-hero-attn:focus-visible",
+		outline("2px solid var(--accent)"),
+		outlineOffset("2px"),
+	)
+	// Meta-group links: navigation, so they read as text with an underline on hover
+	// rather than borrowing the bordered box that means "this edits something".
+	rule(".budget-meta-link",
+		color("inherit"),
+		prop("text-decoration", "none"),
+		whiteSpace("nowrap"),
+	)
+	rule(".budget-meta-link:hover",
+		color("var(--text)"),
+		prop("text-decoration", "underline"),
+		prop("text-underline-offset", "2px"),
 	)
 	rule(".budget-hero-toassign",
 		fontSize("0.78rem"),

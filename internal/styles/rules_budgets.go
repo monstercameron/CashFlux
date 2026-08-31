@@ -835,9 +835,21 @@ func registerBudgetsSurface() {
 	// different x per row and the amounts never formed a column. Widths: amt fits
 	// "$00,000.00 / $00,000.00" at type-14 tabular; left fits "$0,000.00 left";
 	// chip fits the widest pill ("Over budget").
+	// The floors used to be 8rem (name) and 9rem (bar), which — with four fixed
+	// tracks, five gaps and the row's padding — put the row's MINIMUM at ~832px
+	// inside a 763px container. Over-constrained by construction, so the kebab
+	// column was clipped at the card's edge at any ordinary window width and the
+	// row scrolled inside itself (Cam, 2026-08-31).
+	//
+	// The two flexible tracks give the width back: a name needs enough to say
+	// something (5rem, then it ellipsizes), and the BAR is the one cell that can
+	// vanish without losing information — its numbers are printed beside it. The
+	// chip track grows 7rem → 8.5rem instead, because 7rem never fitted its own
+	// widest label ("Period just started" renders at 130px), so a wide status
+	// overflowed leftwards into the amount beside it.
 	rule(".budget-crow",
 		display("grid"),
-		gridTemplateColumns("minmax(8rem, 1fr) minmax(9rem, 1.4fr) 10.5rem 7.5rem 7rem 4.6rem"),
+		gridTemplateColumns("minmax(8rem, 1fr) minmax(0, 1.4fr) 10.5rem 7.5rem 8.5rem 4.6rem"),
 		alignItems("center"),
 		gap("0.8rem"),
 		padding("0.4rem 0.6rem 0.4rem 0.75rem"),
@@ -848,16 +860,35 @@ func registerBudgetsSurface() {
 	)
 	// The name cell: title + optional note marker + optional rollover badge sharing
 	// one grid cell; the title ellipsizes first, the markers never wrap or shrink.
+	// overflow:hidden is the structural guarantee, not a nicety. Three separate
+	// bugs in this cell were all "something painted outside its box": a note button
+	// squeezed to width 0 whose 16px icon still drew over its neighbour, and a
+	// 168px pill in a 151px cell spilling 87px across the progress bar. Each was
+	// fixed at its source, but the cell should not depend on every future marker
+	// getting its own sizing right (Cam, 2026-08-31). Popovers are portalled to
+	// <body>, so nothing that needs to escape this box lives inside it.
 	rule(".budget-crow-head",
 		display("flex"),
 		alignItems("center"),
 		gap("0.4rem"),
 		minWidth("0"),
+		overflow("hidden"),
 	)
+	// min-width was 0, which let the title be squeezed out ENTIRELY: the
+	// "part funded by a goal" pill is 148px and does not shrink, so in a 128px
+	// name cell the only flexible thing — the title — collapsed to zero and two
+	// budgets rendered with no name at all, just a pill (Cam, 2026-08-31). A floor
+	// keeps a readable stub; the title ellipsizes into it rather than disappearing.
 	rule(".budget-crow-head .budget-crow-name",
 		flex("0 1 auto"),
-		minWidth("0"),
+		minWidth("3.5rem"),
 	)
+	// Markers hold their natural width again. Letting them shrink did stop the
+	// title being squeezed to nothing, but it traded that for markers ellipsized to
+	// single letters — a "Rolls over" badge reading "R" and a goal pill reading "p"
+	// say less than no badge at all. The room comes from dropping a whole COLUMN at
+	// narrow widths instead (see the five-track rule below); the title's own
+	// min-width is what now guarantees it survives.
 	rule(".budget-crow-head > :not(.budget-crow-name)",
 		flexShrink("0"),
 	)
@@ -1297,11 +1328,27 @@ func registerBudgetsSurface() {
 	// heavily the name still lost the fraction of a pixel that turns "Transportation"
 	// into "Transportati…" on a 2× display. With no deficit there is nothing to
 	// shrink, and the name is never charged for the note's presence.
+	// `flex: 1 1 0` gave this a ZERO basis, which was harmless while it was the
+	// head's flexible member and could grow into slack. Once the markers stopped
+	// shrinking there was no slack left, so the button computed to width 0 — and a
+	// zero-width button still PAINTS its 16px icon, straight through the marker
+	// beside it. The overlap is invisible to a bounding-box check because the box
+	// really is 0 wide; only the icon overflows it (Cam, 2026-08-31).
+	//
+	// The zero basis STAYS for wide rows: showing the note's own words there is the
+	// point of the marker, and it earns that space by taking only what is left over.
+	// What changes is that the box can no longer leak — overflow:hidden means a
+	// button squeezed to nothing clips its icon instead of painting it over the
+	// marker beside it — and that below the glyph threshold it stops flexing at all
+	// and simply sizes to the icon (see the narrow-width rule further down). Sizing
+	// to content at EVERY width was the wrong correction: it let the button grow to
+	// 736px on a wide row and shove the markers out of the cell.
 	rule(".budget-crow-notes",
 		display("inline-flex"),
 		alignItems("center"),
 		gap("0.3rem"),
 		flex("1 1 0"),
+		overflow("hidden"),
 		minWidth("0"),
 		padding("0"),
 		border("0"),
@@ -1322,6 +1369,16 @@ func registerBudgetsSurface() {
 	// already given up its meter and its "left" phrase, so prose is the wrong thing
 	// to spend the remaining space on. The note is still one click away.
 	ruleContentMax(860-railCollapsedPx, ".budget-crow-notes-text", display("none"))
+	// Below ~900px of content the six-column row cannot hold six legible columns:
+	// the first attempt kept all of them and simply shrank the flexible tracks,
+	// which produced "Groce…", "Transpor…" and markers ellipsized to one letter.
+	// Crushing every column is a worse answer than dropping the one that is
+	// REDUNDANT — "$200.00 left" is arithmetic the "$1,100.00 / $1,300.00" beside
+	// it already shows. Removing it frees 120px plus a gap and gives the name back
+	// a readable width (Cam, 2026-08-31).
+	ruleContentMax(900, ".budget-crow-left", display("none"))
+	ruleContentMax(900, ".budget-crow",
+		gridTemplateColumns("minmax(7.5rem, 1fr) minmax(0, 1.2fr) 10.5rem 8.5rem 4.6rem"))
 	rule(".budget-crow-notes:hover", color("var(--text)"))
 	rule(".budget-crow-notes:focus-visible", color("var(--text)"))
 	// In the chip slot the LAST MONTH tag is an inline chip, not an overline above a bar.
@@ -1388,6 +1445,12 @@ func registerBudgetsSurface() {
 	rule(".budget-status-strip .budget-loader-value.is-hero",
 		fontSize("1.35rem"),
 	)
+	// Zero-based To Assign with a pool still waiting: neither an error (.neg) nor
+	// done (.pos). A surplus is unfinished work in this method, so it must not
+	// borrow the success colour the way "money left over" does elsewhere.
+	rule(".budget-loader-value.warn",
+		color("var(--warn)"),
+	)
 	rule(".budget-status-strip .budget-loader-fig",
 		overflow("hidden"),
 	)
@@ -1413,34 +1476,77 @@ func registerBudgetsSurface() {
 		flexDirection("column"),
 		gap("0.5rem"),
 	)
+	// The rail is now a CONTAINER, not one giant button: the disclosure toggle and
+	// the Resolve action are separate controls inside it, because they go to
+	// different places and a button cannot legally nest inside another button.
 	rule(".budget-issues-rail",
 		display("flex"),
 		alignItems("center"),
 		gap("0.5rem"),
 		width("100%"),
-		textAlign("left"),
 		padding("0.45rem 0.7rem"),
 		background("color-mix(in srgb, #f59e0b 8%, transparent)"),
 		border("1px solid color-mix(in srgb, #f59e0b 45%, var(--border))"),
 		borderRadius("var(--radius-lg)"),
 		color("var(--text)"),
-		cursor("pointer"),
-		font("inherit"),
 		fontSize("var(--type-14)"),
 		fontWeight("600"),
 	)
+	// The toggle claims the row's slack so the whole strip stays clickable, but it
+	// carries no chrome of its own — the container already draws the box.
+	rule(".budget-issues-toggle",
+		display("flex"),
+		alignItems("center"),
+		gap("0.5rem"),
+		flex("1"),
+		minWidth("0"),
+		padding("0"),
+		border("0"),
+		background("none"),
+		textAlign("left"),
+		color("inherit"),
+		font("inherit"),
+		cursor("pointer"),
+	)
+	rule(".budget-issues-toggle:focus-visible",
+		outline("2px solid var(--accent)"),
+		outlineOffset("2px"),
+	)
+	// The caret's own hit area, pinned to the bar's right edge.
+	rule(".budget-issues-chevbtn",
+		display("inline-flex"),
+		alignItems("center"),
+		flexShrink("0"),
+		padding("0"),
+		border("0"),
+		background("none"),
+		color("inherit"),
+		cursor("pointer"),
+	)
 	rule(".budget-issues-icon", color("#f59e0b"))
 	rule(".budget-issues-title", flex("1"), minWidth("0"))
-	// The over-assignment "Resolve $X" figure is the rail's call to action.
+	// The over-assignment "Resolve $X" button is the rail's call to action — and now
+	// genuinely a button, so it needs the affordances one: a pointer, a hover state
+	// and a focus ring. It keeps the filled danger pill; that treatment is earned
+	// here precisely because it IS the page's primary fix.
 	rule(".budget-rail-resolve",
-		padding("0.15rem 0.55rem"),
+		padding("0.2rem 0.6rem"),
+		border("0"),
 		borderRadius("var(--radius-pill)"),
 		background("var(--danger)"),
 		color("#fff"),
+		font("inherit"),
 		fontWeight("700"),
 		fontSize("var(--type-12)"),
 		whiteSpace("nowrap"),
 		fontVariantNumeric("tabular-nums"),
+		cursor("pointer"),
+		transition("filter var(--motion-fast) var(--ease-standard)"),
+	)
+	rule(".budget-rail-resolve:hover", prop("filter", "brightness(1.12)"))
+	rule(".budget-rail-resolve:focus-visible",
+		outline("2px solid var(--accent)"),
+		outlineOffset("2px"),
 	)
 	rule(".budget-issues-chev", color("var(--text-faint)"))
 	rule(".budget-issues-detail",
