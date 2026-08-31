@@ -1,3 +1,55 @@
+## 2026-08-31 - measuring in a place that cannot produce the signal
+
+The budgets error-handling pass found one defect worth the whole day. The funding path lowers a source
+budget's cap and then raises the destination; the source write's error was discarded. That is not a
+transfer that fails, it is a transfer that mints — the plan grows by the amount moved, and nothing on
+screen says so. What makes it interesting is that the permanent branch of the same function returned
+on error correctly. The two halves of one operation disagreed about whether a rejected write mattered,
+and the disagreement had been sitting in adjacent lines.
+
+The other four were the same shape without the arithmetic consequence: write, discard, bump the data
+revision, toast "saved". A visible failure is recoverable because the user knows to look again. This
+is worse, because the page tells them the opposite of what happened. The method switch made it
+concrete — the toast said "the household method is now X" while the surface still published the old
+`data-method`, so the page contradicted itself in two places a test can read.
+
+My first fix for it was wrong in a way worth recording. I returned early from `apply()`, which stopped
+the bump and the persist but not the toast, because `commit()` called `apply()` and then toasted
+unconditionally. A guard placed inside the function that fails does nothing if the caller does not ask
+whether it failed. Tracing the two-function path before editing would have shown that in less time
+than the fix took.
+
+Errors reaching the screen got classified rather than sanitised. The distinction that matters is who
+the message was written for: `validate.Issues` names a field and what it needs, and read-only says the
+household is open in a viewing role — both are answers a person can act on, so they pass through
+whole. Anything else arrived from a layer that describes machines. Folding read-only into the generic
+"try again" would have been the easy version and the wrong one: it tells someone to retry something
+that cannot succeed however many times they try it.
+
+Cover-all was left deliberately short of atomic. It writes several budgets in a loop, and the honest
+fix is a transaction across entities, which the store does not have. So the two failures that can be
+seen coming — a viewing role, and validation — are decided before any write happens, and the storage
+failure that cannot be is left to the checkpoint the flow already saves. Claiming more than that in
+the comment would have been the actual mistake.
+
+The accessibility work is a longer lesson about measurement. I reported that focusing a marker
+previewed it like hovering; then that it did not; both readings came from the same broken instrument.
+An unfocused document dispatches no focus events at all — `element.focus()` moves `activeElement` and
+fires nothing — and the browser pane the measurements were taken in does not hold window focus. Every
+conclusion drawn there about focus was noise, including the correction. The same class of error had
+already produced two wrong answers earlier in the day: a 16px icon painted from a zero-width box read
+as absent, and overlap reported against a `display:none` element's all-zero rect. The instrument was
+different each time and the mistake was identical — trusting a measurement the environment could not
+make. The focus assertions now live in Playwright, which drives a focused page, and the spec says why
+in its header so the next person does not move them somewhere cheaper.
+
+Two habits came out of the same root. A test that skips is not a test that passes: the first version of
+the accessibility spec skipped three of its cases because it never switched to the compact density
+where the markers live, and reported green. Those guards now assert, because the seeded household does
+have markers and zero is a defect rather than a reason to stand down. And a guard is only worth what
+it catches, so the plural pairs were verified by reintroducing the bug and watching both tests fail on
+it before being restored.
+
 ## 2026-08-19 - the guards, and what the incident actually taught
 
 Three layers had to miss the same write for a household to lose three weeks, so three were added

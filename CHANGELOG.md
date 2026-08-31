@@ -4,6 +4,54 @@ All notable changes to CashFlux are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/). Policy: **one feature per commit**,
 and every commit updates this file under `Unreleased`.
 
+## [Unreleased]
+
+### Fixed
+- **A rejected write on /budgets no longer reports itself as a save.** Five writes discarded the
+  error they were handed and carried straight on to a data-revision bump and a success toast, so the
+  page asserted a change the store had refused. One was not merely misleading: the funding path lowers
+  a SOURCE budget's cap and then raises the DESTINATION, and discarding the source write while
+  completing the destination one does not fail to move money, it invents it — the household's plan
+  grows by the amount of the transfer. The permanent branch of that same function already returned on
+  error, so the two halves disagreed about whether a rejected write mattered. The method switch was
+  the most visible: a refused write toasted "the household method is now X" over a page still
+  rendering the old one, and the select kept displaying a choice the store had rejected. It now
+  reports whether it landed, and re-renders so the control springs back to the method in force.
+- **Storage errors are no longer printed to the user.** Sixteen call sites rendered `err.Error()`
+  verbatim. Validation issues are written for people ("name is required"), which is why this went
+  unnoticed — but a failure from the SQLite layer is not, and "sql: database is closed" would have
+  arrived at exactly the moment someone most needed to understand what had happened. Errors are now
+  classified: validation and read-only reach the screen intact, everything else becomes a sentence and
+  the original goes to the log.
+- **Cover-all can no longer half-apply a transfer.** It writes several budgets in a loop and returned
+  partway through on failure, leaving some budgets robbed with nobody paid. The role is checked once
+  for the batch and every budget is validated before any is written, so neither predictable failure
+  can produce a partial. A storage failure mid-loop remains possible — the store has no transaction
+  across entities — which is what the pre-existing checkpoint is for.
+- **Saving an unreadable flex target says so.** Unparseable input returned silently: the editor stayed
+  open, nothing saved, and nothing explained why, which reads as a dead button.
+- **Counts on /budgets read correctly at one.** Eight strings rendered "1 budgets are over", "1
+  charges", "1 accounts", "1 categories" and "1 others". They are singular/plural pairs now, using
+  explicit argument indexes so the money-first reading order survives the count being prepended.
+
+### Added
+- **Keyboard preview for the compact row's markers.** Focusing a marker now opens its explainer the
+  way hovering does. The framework's `OnFocus`/`OnBlur` props are registered but do not fire, so the
+  pair is bound natively on the document and resolves the wrapper at event time — binding it at mount
+  time silently did nothing, because the wrapper does not yet carry its id when the effect first runs.
+- **Marker popovers are hoverable (WCAG 2.2 SC 1.4.13).** `mouseleave` closed the popover instantly,
+  so the pointer could never travel onto the text — which on a rollover marker is the arithmetic
+  behind the period's cap, not a decorative label. Leaving now arms a close that the popover cancels.
+- **Smart+ answers come back in the app's language.** Every prompt is written in English and a model
+  answers in the language it was asked in, so a translated interface held an untranslated explanation.
+  Only the output language is directed; the prompts stay English deliberately, since they are
+  instructions to the model rather than UI copy.
+
+### Changed
+- A marker's accessible name is its short title and its explanation is an `aria-describedby` node, so
+  the sentence reaches a screen reader without the popover and is not read twice before the control is
+  named.
+
 ## [1.15.0] - 2026-08-19
 
 ### Security
