@@ -12239,3 +12239,264 @@ workspace ID that belongs to the other user, so the server correctly returns `wo
   not reliable during review, and the row exposes no visible action affordance. **Fix:** use a real link or
   button with a stable user ID, add a visible `Manage` action, preserve keyboard activation, surface detail
   fetch failures in the page, and cover click/Enter navigation in the browser regression suite.
+
+---
+
+## Nine-page scan follow-ups (2026-10-18, v1.18.0, sample data)
+
+Hand walk-through of every pinned page from Dashboard to Reports in the browser, at a wide desktop
+width, with the built-in sample household (Marcus + Priya, October 18 2026). Each ticket gives the
+figures seen on screen so it can be reproduced against the same seed. Ordered by impact.
+
+- [ ] **C702 [MAJOR][BUDGETS][CORRECTNESS] Budget limits of different periods are summed as if all were monthly.**
+  **Issue:** the Budgets hero says "129% of your $7,063.00 income · $2,067.20 more than you earn" and
+  "$4,042.50 spent of $9,130.20 assigned". The $9,130.20 is the raw sum of every budget's limit:
+  Groceries $205.20 (after carried debt) + Transportation $1,300 + Splurges & getaways **$6,000 (a yearly
+  budget)** + Baby & Childcare $400 + Dining $300 + Entertainment **$25 (weekly)** + Shopping $200 +
+  Subscriptions $40 + Travel **$600 (quarterly)** + Everyday extras $60 = $9,130.20 exactly.
+  `budgeting.SummarizeRollup` adds `st.Limit.Amount` with no period conversion
+  (`internal/budgeting/budgeting.go:463`). Normalized to a month, the plan is well under income, so
+  every downstream alarm is false: the "$3,230.20 of your plan isn't funded yet" banner, "Bring Oct
+  2026's plan down to what arrived" (which would cut 10 budgets, Groceries included, by 35.4%),
+  "Resolve $2,067.20", the "2 need attention" chip, and the dashboard's "Your budgets assign $2,067.20
+  more than this period brings in." The same thing makes November, a future month, show "$2,700.00
+  spent of $9,582.50 assigned".
+  **Fix:** convert each budget's limit (and spend) to the viewed period before summing, or keep
+  non-monthly budgets out of the monthly roll-up and show them in their own row with their period
+  named. Add a table test for a mixed weekly/monthly/quarterly/yearly set. The yearly/quarterly/weekly
+  rows in the compact list should also say their period ("$2,700 of $6,000 this year").
+
+- [ ] **C703 [MAJOR][NOTIFICATIONS][I18N] Overdue to-do alerts render a Go format error.**
+  **Issue:** all seven critical alerts on Notifications read "Overdue by %!d(float64=26) days." (and
+  =10, =8, =3, =13, =17, =6). The body is built with an `int` in
+  `internal/app/notifyrun.go:183` (`notify.taskBodyOverdue`, "Overdue by %d days."), but it is
+  re-resolved later through `FeedItem.ResolvedBody` (`internal/uistate/notifyfeed_copy.go:19`). The args
+  most likely come back from storage as `float64` (JSON numbers), so `%d` fails.
+  **Fix:** make copytext arguments survive a round-trip with their type (store ints as ints, or format
+  numbers with a verb that accepts both), and add a test that persists and reloads a feed item before
+  rendering. Check every other `copytext.Of` call that passes a number.
+
+- [ ] **C704 [MAJOR][REPORTS][CORRECTNESS] "Free after debt minimums" counts loan payments twice.**
+  **Issue:** Reports → Full report → 00 Where you stand shows money in $7,032.83/month, money out
+  $4,153.65, required payments $3,320.00 and "Free after debt minimums ($440.82)", which is exactly
+  7,032.83 − 4,153.65 − 3,320.00. But both car payments ($620 + $480) and the student loan ($320) are
+  booked as spending ("Auto loans", "Education & Loans"), so they are already inside "money out". The
+  household shows as underwater after minimums while keeping about $2,879 a month.
+  **Fix:** subtract only the minimums not already counted as spending (match payments to liabilities
+  by category, payee or linked account), and say in the caption which payments were netted out.
+
+- [ ] **C705 [MAJOR][REPORTS][CORRECTNESS] Report contradicts itself on budget adherence.**
+  **Issue:** 01 What's strong shows "Budget adherence 100% · 100/100". In the same report, 07 says "3 of
+  10 budgets stayed within their limit all year" (Dining and Subscriptions 11 months over, Everyday
+  extras 8, Groceries 6), and 13 says "$20,099.43 over on some budgets".
+  **Fix:** compute the health factor from the same per-budget, per-period results 07 uses (trailing
+  window is fine, but it cannot read 100% while recent months show over-limit budgets). Name the window
+  in the factor's caption.
+
+- [ ] **C706 [MAJOR][REPORTS][CORRECTNESS] "How far budgets landed from plan" compares a monthly limit to a year of spending and mislabels Splurges.**
+  **Issue:** 13 Commitments and choices lists "Dining · Planned $300.00 · Actual $6,366.77 · $6,066.77
+  over", "Groceries $450.00 vs $6,204.83", and so on. Each Planned is one month's limit set against 12
+  months of actuals. The last row, "Uncategorized · $6,000.00 · $4,920.00 · $1,080.00 under", is the
+  Splurges & getaways yearly tag budget shown under the wrong name. The "$20,099.43 over" total built on
+  these rows is wrong for the same reason. Same root as C702.
+  **Fix:** scale each budget's plan to the report window using its own period, name cross-category tag
+  budgets by their own name, and reuse 07's period-aware evaluation.
+
+- [ ] **C707 [MAJOR][ACCOUNTS][UX] "These figures disagree" rows don't name the account, and "Go look" does nothing.**
+  **Issue:** the Accounts page shows three identical rows: "the positions in this account total one
+  amount, but its balance says another" with $500.88, $2,810.70 and $47.40. None names the account
+  (the testid shows the first is `acct-401k`), and the sentence starts lowercase. "Go look" routes to
+  `/accounts`, the page the reader is already on, so clicking it changes nothing
+  (`internal/screens/contradictions.go`, `contradictionRoute(f.EntityKind)` routes by entity kind only;
+  text from `internal/contradict/contradict.go:231`).
+  **Fix:** put the account name in the finding text ("Marcus's 401(k): holdings total $X, balance says
+  $Y"). Have "Go look" open that account's holdings, or scroll to and highlight its row, using
+  `EntityID`. Add an e2e that clicks it and asserts the target changed.
+
+- [ ] **C708 [MAJOR][REPORTS][SECTIONS] Full-report sections are numbered 10, 13, 12, 11.**
+  **Issue:** after "10 The plan", the report renders "13 Commitments and choices", "12 Business and
+  tax" and then "11 Appendix". The section rail stops at 10.
+  **Fix:** derive section numbers from render order rather than literals
+  (`internal/screens/reports_spendmix.go:79` hard-codes "13", `reports_tax.go:103` "12"), and add
+  the new sections to the rail.
+
+- [ ] **C709 [MAJOR][BUDGETS][CORRECTNESS] Car payments are counted in Transportation and also listed as unbudgeted.**
+  **Issue:** October Budgets shows "Transportation $1,100.00 / $1,300.00 · Near limit". The only October
+  transportation spend is the two car payments ($620 + $480, category Auto loans). "Unbudgeted spending
+  — categories with spending that no budget tracks" also lists "Auto loans · $1,100.00 · Budget this",
+  and the November projection says "Still missing for next month: a budget for Auto loans". The same
+  $1,100 is both tracked and untracked.
+  **Fix:** have the unbudgeted list respect sub-category rollup (a child of a budgeted parent is
+  tracked), and use the same rule in the projection's "still missing" line.
+
+- [ ] **C710 [MAJOR][GOALS][CORRECTNESS] Overall progress disagrees with the totals beside it.**
+  **Issue:** the Goals hero shows "Funded so far $53,360.00 (saved $45,860.00 · set aside $7,500.00)",
+  "Total target $183,000.00" and "Overall progress 25%". $53,360 / $183,000 = 29%; 25% is saved-only
+  ($45,860 / $183,000). Each goal's own percentage includes set-aside money (Baby fund 68% = $8,200 /
+  $12,000), so only the overall figure uses the other rule.
+  **Fix:** pick one definition (backed = saved + set aside, which matches the per-goal bars and
+  Reports 06 "backed") and use it for the overall figure. Show saved-only as a secondary line if it is
+  useful.
+
+- [ ] **C711 [MAJOR][CROSS-PAGE][CLARITY] Pages tell four different stories about the emergency fund.**
+  **Issue:** Reports says "Emergency fund 10.4 mo · 100/100", "Coverage 10.0 mo", "6-month fund … Met —
+  $19,214.66 past the target" and "11 months of runway". Goals lists "Emergency fund (3 months)" at 48%
+  under "Needs a plan", and the to-do list has "Rebuild the emergency fund". The sample Assistant
+  answer calls it "the thin emergency fund (~1.5 months)". A reader cannot tell whether they are
+  fine.
+  **Fix:** decide what counts toward the cushion (all liquid cash vs money set aside for the goal) and
+  say it everywhere. Reports should name the goal and its status next to the coverage figure. When the
+  cushion is already met from liquid cash, the goal should say "covered by cash you already hold" and
+  stop showing "Needs a plan". Also see C716 for the canned chat.
+
+- [ ] **C712 [MAJOR][REPORTS][CORRECTNESS] The year's net-worth change equals income minus spending to the cent. Verify.**
+  **Issue:** the Reports header shows "Kept $41,014.53" and "Net worth ▲ $41,014.53 over the year". The
+  12-month chart runs from $101,025 to $142,039. An identical figure means investment gains (the
+  Investments panel shows a $6,471.02 gain), property value changes and principal paydown on loans
+  booked as expenses are all left out. The net-worth series may be built from cash flow rather than
+  from month-end balances. The dashboard's 6-month change ("Up $13,729.49") and the health factor
+  "Net-worth trend 16.3%" are each computed differently again.
+  **Fix:** confirm how the report's net-worth series is built. If it comes from flows, rebuild it
+  from month-end balances (or label it "change from cash flow"), and make the dashboard trend and the
+  health factor read from the same series.
+
+- [ ] **C713 [MAJOR][DASHBOARD][LAYOUT] Fixed-height tiles hide their own actions and content.**
+  **Issue:** at desktop width, three tiles cut off content with no way to see it. Freshness shows two
+  of nine stale-account chips; "+1 more", **Update balances**, **Remind me** and **Dismiss** are in the
+  DOM but clipped out of view. To-do shows three items and hides "+34 more →". Monthly recap clips its
+  values and captions ("Nursery furniture an…", "below your usual, going …", "↑ $2,183.50 vs last
+  mo…"). Needs attention shows 5 of the 7 overdue tasks with no "+2 more".
+  **Fix:** let these tiles grow to their content, or keep the primary action and the overflow link
+  pinned inside the visible area. Add a layout check that every tile's buttons are visible.
+
+- [ ] **C714 [MAJOR][BUDGETS][CLARITY] Shopping reads $0 in Budgets while it is the month's top category.**
+  **Issue:** in October the Shopping budget shows "$0.00 / $200.00 · On track" and the dashboard Budgets
+  tile shows "Shopping 0%". On the same dashboard, "Top category: Shopping $2,270.00" and the spending
+  highlight says "Shopping spending is up 740%". Both October Shopping charges ($1,850 Babylist,
+  $420 crib) are claimed by the Splurges & getaways tag budget instead (#big-purchase), but nothing on
+  the Shopping row says so. Reports shows the same split: Shopping $4,556.59 in categories, $2,186.59
+  in the budget table.
+  **Fix:** when a cross-category budget claims a category's spending, the category's row should say
+  so ("$2,270 counted under Splurges & getaways"), and the tile should not show a bare 0%.
+
+- [ ] **C715 [MAJOR][TRANSACTIONS][BILLS] Upcoming and expected payments disagree across pages.**
+  **Issue:** Transactions shows "UPCOMING · 1 scheduled this month, $220.00 still to come". Assistant →
+  Insights shows "13 expected payments haven't posted yet". The Transactions calendar puts recurring
+  markers on past days (Oct 3 Gym membership; Oct 5 Shop software, Streaming & apps) but nothing on
+  Oct 22, when the $220 Rewards Credit Card payment is due. The November projection counts "Coming in
+  $4,700.00" (the paycheck only) while the Budgets hero expects $5,900 a month: Priya's $1,200
+  part-time pay is not projected.
+  **Fix:** one source for "expected but not posted" and "still to come this period", used by the
+  banner, the calendar, Insights and the projection. Missed occurrences should read as late, not be
+  silently left out. Check why part-time income has no recurring series.
+
+- [ ] **C716 [MINOR][ASSISTANT][SAMPLE] The canned sample chat contradicts the sample data.**
+  **Issue:** the seeded conversation answers "With the baby coming in December…" and blames "dining
+  overspend". The seed's baby fund is due Mar 1 2027, the to-dos run through February, a pinned insight
+  says "the baby due in March", and October dining is $0.00. The answer also gives the emergency fund
+  as about 1.5 months (see C711).
+  **Fix:** regenerate the sample chat from the seed's facts, or derive it at seed time so it cannot
+  drift.
+
+- [ ] **C717 [MINOR][ASSISTANT][CLARITY] Ask tab says "On-device answers" right above "add your OpenAI key".**
+  **Issue:** the Ask header reads "Your agent · On-device answers". The composer footer reads "Add your
+  OpenAI key in Settings to enable AI insights … only sent to OpenAI when you ask" and "Next message
+  sends full detail from this device". It is unclear whether a question leaves the device. Insights
+  also labels "TOP MERCHANT · NURSERY FURNITURE AND HOSPITAL BAG", which is the transaction description;
+  the merchant, shown just below, is Babylist.
+  **Fix:** state plainly which mode is active and what leaves the device. Use the merchant name in the
+  top-merchant card.
+
+- [ ] **C718 [MINOR][NOTIFICATIONS][SIGNAL] Alert severity and freshness are off.**
+  **Issue:** household chores ("Test smoke + CO detectors", "Replace all the air filters") are CRITICAL,
+  the same as money items. "Large charge: $620.00 — Car payment (Marcus)" flags a regular monthly
+  payment as bigger than usual. "Recent wins: Net worth past $100,000.00 · NEW" celebrates a threshold
+  crossed about a year ago (the report puts net worth at $101,025 in November 2025).
+  **Fix:** set severity by consequence (money at risk vs chore overdue). Exclude matched recurring
+  payments from large-charge detection. Show a milestone as new only in the period it was crossed.
+
+- [ ] **C719 [MINOR][ASSISTANT][INSIGHTS] "Paying only the minimum on Mortgage is costing you $525.21 a month" leads the action list.**
+  **Issue:** Insights → What to do next ranks mortgage minimums first, framed as a cost. Paying a 4.1%
+  mortgage on schedule is the normal case. The figure reads as interest, not as something the user can
+  avoid. "190 other findings aren't ranked" follows.
+  **Fix:** leave low-rate amortizing loans out of "minimum is costing you" unless prepaying beats the
+  alternatives, and rank by what acting would actually save.
+
+- [ ] **C720 [MINOR][ACCOUNTS][CLARITY] Three different "investments" figures on one page.**
+  **Issue:** the Accounts summary strip says "Investments $8,190.00" (Stonks only). Retirement accounts
+  sit in "Restricted $23,300.00" with no explanation. The Investments panel says "Value $28,131.02", and
+  its footnote says "$31,490.00 across investment accounts". The account list order follows no visible
+  rule, and "Mark all updated" appears twice (toolbar and banner).
+  **Fix:** label the strip items ("Brokerage", "Retirement (restricted)") or add a one-line legend.
+  Make the panel's headline match the footnote's total, or say which one it shows. Sort or group the
+  list by type and say so. Keep one "Mark all updated".
+
+- [ ] **C721 [MINOR][CROSS-PAGE][CLARITY] Month-to-date comparisons point in opposite directions.**
+  **Issue:** the dashboard recap shows "Spend vs last month ↓14% · $4,351.25, was $5,086.47" in green.
+  Assistant → Insights shows "▲ $2,167.25 ahead of last month's pace" in red. One compares to all of
+  September, the other to the same 18 days. The recap's "Versus typical $3,188.23 · below your usual,
+  going on 6 months" is shown in red although below usual is the good direction, and the sentence is
+  hard to parse.
+  **Fix:** say which comparison each figure uses ("vs all of September", "vs Sep 1–18"). Pick colors by
+  whether the direction is good. Rewrite the typical line as a full sentence.
+
+- [ ] **C722 [MINOR][GOALS][CLARITY] Goal status words differ by page.**
+  **Issue:** Goals groups four goals under "Needs a plan · 4 — behind or past their target date", with
+  "Trade up to a bigger family home" marked Far behind. The dashboard shows "Goals at a glance: 5
+  current · 0 missed". Reports 06 shows "0 reached · 5 on the way · 0 missed". The on-track group on
+  Goals is headed just "Goals".
+  **Fix:** share one status vocabulary (on track / behind / missed / reached) across all three, and
+  head the on-track group "On track".
+
+- [ ] **C723 [MINOR][REPORTS][CLARITY] One report shows three savings rates and two debt-to-income figures.**
+  **Issue:** the header shows "46% of income kept this period", 00 shows "Savings rate 40%" (last 6
+  active months), and 01 shows "Savings rate · last 3 months 38%". The dashboard shows 26% for October.
+  Debt share reads 47% in 00 and 44% in Top risks / 09. Each is labelled, but together they read as
+  noise.
+  **Fix:** lead with one figure per page and move the alternates behind "How this is computed".
+
+- [ ] **C724 [MINOR][REPORTS][VISUAL] Chart details.**
+  **Issue:** the "Spending by weekday" caption says "the heaviest day is amber", but every bar is green.
+  The small multiples in 03 (Cash flow, Savings-rate trend, Net worth) run their month labels together
+  ("NovDecJanFeb…") at about 1200px.
+  **Fix:** color the max bar with the amber token, and thin or rotate the axis labels when space is
+  short.
+
+- [ ] **C725 [MINOR][TRANSACTIONS][LAYOUT] The ledger squeezes Description to a few characters.**
+  **Issue:** at about 1200px wide, Description shows "VEN…", "Mo…", "Crib and nurs…", while Account
+  ("Joint Che…") and Status ("Not confirm…") still take full columns. Transfers show "Uncategorized" in
+  the category column. The "This month" filter chips read "From 2026-10-01 / To 2026-10-31" while
+  everything else uses "Oct 1, 2026".
+  **Fix:** give Description the flexible width (collapse Status to an icon, shorten account names),
+  show "Transfer" instead of "Uncategorized" on transfer legs, and format filter chips with the
+  household date style.
+
+- [ ] **C726 [MINOR][SHELL][LAYOUT] Header "Sample data · Start fresh" chip is clipped next to a period picker.**
+  **Issue:** on Budgets and Reports at about 1200px the chip is cut to "Sampl" / "Star", because the
+  period picker takes the room.
+  **Fix:** let the chip collapse to an icon with a tooltip, or move it under the title when the header
+  is crowded.
+
+- [ ] **C727 [MINOR][GOALS][VISUAL] Hero and progress-bar labels overlap.**
+  **Issue:** in the Goals hero, the line "Saved = money you've moved into a linked account…" sits on the
+  card's bottom border, and the green fill block crosses the "saved … · set aside …" text. On goal
+  cards, the amount chips overlap the bar ("$7,500.00 / $80,000.00"; "$12,000.00" sits mid-bar over the
+  hatched set-aside segment).
+  **Fix:** give the hero caption its own row inside the card, and place amount labels outside or above
+  the bar.
+
+- [ ] **C728 [MINOR][BUDGETS][LAYOUT] Compact budget list truncates names with room to spare, and one problem raises four alerts.**
+  **Issue:** the compact rows show "Groce…" (with the "Rolls over" chip clipped) and "Splurges & …" while
+  the row has free width. Separately, the single over-assignment produces four overlapping callouts
+  with two different numbers ($2,067.20 and $3,230.20). Most of that goes away with C702, but even a
+  real over-assignment should raise one callout.
+  **Fix:** let the name column flex before the bar does, and merge the over-assignment callouts into
+  one with one figure.
+
+- [ ] **C729 [MINOR][SAMPLE DATA] Car payments are expenses, not transfers to the loan accounts.**
+  **Issue:** in the seed, "Car payment (Marcus/Priya)" are expenses from Joint Checking (category Auto
+  loans). The mortgage payment is a proper transfer. So the car-loan balances never fall, "Pay off
+  Marcus's car loan" can never progress, and the debt-free horizon and free-after-minimums figures are
+  distorted (C704).
+  **Fix:** seed car and student-loan payments as transfers (or split principal/interest) so the
+  liabilities and payoff goals move month to month.
