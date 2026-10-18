@@ -12500,3 +12500,137 @@ figures seen on screen so it can be reproduced against the same seed. Ordered by
   distorted (C704).
   **Fix:** seed car and student-loan payments as transfers (or split principal/interest) so the
   liabilities and payoff goals move month to month.
+
+---
+
+## SV — Stable, encrypted local-first v2: storage, sync, accounts, credentials, routing (2026-10-18) ★★
+
+**Goal:** no lost or misrouted data, ever. Local data is always encrypted at rest; the server stores only
+ciphertext it cannot read; every write is durable before it is acknowledged; every byte belongs to exactly one
+scope `(server ID, account ID, workspace ID)`. Industry-standard building blocks only (AES-256-GCM with AAD,
+PBKDF2-SHA-256 600k, HPKE RFC 9180, HLC, idempotency keys, OAuth 2.1 + PKCE, rotating refresh tokens with
+reuse grace, Litestream). Full design and evidence: the 2026-10-18 analysis (DEVLOG entry of the same date).
+
+**Lanes:** `W` = Muse Wonder Full (complex design/correctness), `L` = GPT-6 Luna (bounded, cause pinned).
+Opus reviews every diff against this section's principles and commits. A ticket is done only when its
+acceptance checks pass on a clean HEAD and the diff has been reviewed.
+
+**Principles every ticket must keep:**
+1. Scope is fixed for the life of a page; identity, server, account or workspace changes go through one
+   reload path, never an in-page swap.
+2. A write is acknowledged only after it is durable (IndexedDB `durability: "strict"` / server transaction commit).
+3. Nothing is overwritten silently: unreadable data is quarantined; destructive actions need a named confirm.
+4. The server never sees plaintext and never merges; appends are idempotent by change ID.
+5. Every ciphertext's AAD names its scope, workspace, change ID and key version.
+6. No wall-clock comparison decides a winner.
+
+### Phase 0 — stop live data loss in v1 (ships first; v2 replaces most of it later)
+
+- [ ] **SV0.1 [L][SYNC][ROUTING] Re-resolve identity on every sign-in/out and bind queued pushes to their scope.**
+  Files: `internal/app/sync_client.go`, `internal/app/sync_identity.go` (owns the stalled 2026-08-31 client edits).
+  Do: every sign-in, sign-out and Server-URL change ends in a full page reload (one helper, used by
+  `authcards.go:59`, `cloudtab.go:330`, `handoff.go:82`, hosted gate — call sites only), so `startBackendSync`
+  re-runs `adoptIdentityForSync`; capture workspace ID, owner user ID and `BaseVersion` in `queuedSyncMutation`
+  at enqueue and push exactly those (never the active workspace at send time); a pull applies only if its
+  workspace is still active and owner matches; delete the own-device auto-`Force` retry (`:990-1022`).
+  Accept: unit tests for enqueue capture and for a pull racing a switch; e2e SV0.6 a/b/c pass.
+- [ ] **SV0.2 [L][AUTH] Make the cross-tab refresh lock real; give OAuth sign-ins a rotating session.**
+  Files: `internal/app/tokenlock.go`, `internal/app/cloudtab.go`, `internal/app/authtoken.go`.
+  Do: run the refresh inside the `navigator.locks.request` callback (today `fn()` starts before the lock,
+  `tokenlock.go:64-106`); store the OAuth sign-in as a rotatable session (refresh token + user ID), not as
+  `prefs.ServerToken`; Server-URL host change clears the rotated token, user ID, queue and bookmarks.
+  Accept: e2e two tabs refreshing at once keep the session; OAuth session still syncs after the access token expires.
+- [ ] **SV0.3 [W][SERVER] Atomic version-checked workspace writes; refresh-reuse grace window.**
+  Files: `internal/server/sync.go`, `repository.go`, `sync_grpc.go`, `authservice.go`,
+  `internal/syncstate/putdecision.go` (+ their tests; owns the stalled server edits).
+  Do: decide and write in ONE transaction: `UPDATE workspaces SET version=version+1 … WHERE user_id=? AND id=?
+  AND version=?` plus the snapshot row; accept only `BaseVersion == current` (not ≥); delete bumps version and
+  records a tombstone; size check before any write; refresh-token reuse within 30 s returns the same rotated
+  pair instead of revoking the family. Codec: ignore unknown JSON fields (`backendrpc/codec*`), keep wire names.
+  Accept: Go test with 16 goroutines pushing the same base version — exactly one accepted, others rejected with
+  current state; refresh duplicate within 30 s succeeds, after 30 s revokes.
+- [ ] **SV0.4 [L][PERSIST] Never overwrite unreadable data with the sample.**
+  Files: `internal/app/persist.go`, `internal/app/hydrate.go`.
+  Do: on import failure or `SchemaVersion` newer than supported, copy the raw bytes to
+  `cashflux:quarantine:<unix>` before anything else, block autosave, show a recovery banner with "Download the
+  unreadable copy"; never seed the sample over existing bytes. Accept: unit test with corrupt and future-schema input.
+- [ ] **SV0.5 [L][PERSIST] Restore, wipe and workspace operations reload only after their writes commit.**
+  Files: `internal/app/backupall.go`, `backupencrypted.go`, `workspace.go`, `applockgate.go`, `shortcuts.go`.
+  Do: wire `restoreFromBackupEncrypted` to the reloading restore; use `SetThen`-style awaited writes before
+  every reload; every workspace create/switch/duplicate/delete/import bumps and adopts the dataset generation;
+  forgot-passcode wipe keeps `cashflux:sync-queue` and calls server Logout before clearing tokens.
+  Accept: e2e restore-then-edit survives reload; cross-tab switch cannot push W1 as W2.
+- [ ] **SV0.6 [L][TEST] Incident regression suite.**
+  Files: new `e2e/regression/sv0_*.spec.mjs`, new `internal/server/sync_concurrency_test.go`.
+  Cases: (a) same tab sign-out A → sign-in B never pushes A's data to B; (b) cross-tab workspace switch never
+  pushes W1 as W2; (c) Server URL A→B never sends A's token or queue to B; (d) two tabs refresh together, both
+  stay signed in; (e) restore then edit then reload keeps the edit; (f) corrupt dataset is quarantined.
+- [ ] **SV0.7 [L][VAULT] Re-encrypt the bank-login vault when the passcode changes or the lock is disabled.**
+  Files: `internal/app/applock.go`, `internal/app/credvault.go`. Accept: unit/wasm test — vault opens after a
+  passcode change; disabling the lock asks before discarding vault entries.
+
+### Phase 1–2 — pure foundations (new packages, no existing files touched)
+
+- [ ] **SV1 [W][CRYPTO] `internal/keyring`: workspace data key (WDK), wrapping, recovery key, pairing.**
+  Pure Go formats + wasm WebCrypto glue (`keyring_wasm.go`). WDK random AES-256-GCM; wrap entries for passcode
+  (PBKDF2-SHA-256 600k, salt stored, derive once per unlock), recovery key (128-bit, Crockford base32 groups),
+  passkey PRF, device key; versioned keyring blob with key IDs; HPKE (X25519/HKDF-SHA256/AES-GCM) device pairing
+  seal/open; HKDF subkeys `attachments`, `attach-mac`, `vault`; AAD builder `scope‖workspace‖changeID‖keyVersion`.
+  Accept: table tests incl. wrong passcode never panics or mutates, rewrap keeps WDK, AAD mismatch fails,
+  `go test -fuzz` targets for the keyring and envelope decoders run 60 s clean.
+- [ ] **SV2 [W][MODEL] `internal/changes`: batches, HLC, per-field LWW merge, tombstones, schema gate.**
+  `Batch{ChangeID, Scope, DeviceID, HLC, SchemaVersion, Ops[{Table, RecordID, Fields, Deleted}]}`; HLC per
+  Kulkarni et al.; merge by (HLC, DeviceID) per field; tombstone clock; field-clock table model; batch from a
+  document diff (old JSON vs new JSON); canonical binary/JSON encoding. Accept: property test — 10k random
+  permutations of the same batches converge byte-identically; clock-skew tests; delete-vs-edit cases ported from
+  `internal/syncmerge/*_test.go`.
+
+### Phase 3–7 — v2 subsystems
+
+- [ ] **SV3 [W][LOCAL] `internal/localdb` + change capture.** Depends SV1, SV2. Interface + in-memory fake +
+  IndexedDB (`cfv2:<serverID>:<accountID>` / `cfv2:local`; stores keyring, meta, log, snapshot, drafts,
+  quarantine; strict durability; `navigator.storage.persist()`); capture at `internal/store/crud.go`
+  `putJSON`/`deleteRow` and `kv.go` `SetKV` into the open batch, sealed per user action (`BulkMutate`);
+  boot = decrypt snapshot → load → replay; leader Web Lock `cashflux:leader:<scope>`; BroadcastChannel per scope;
+  compaction at idle in chunks. Accept: fake-store tests for append/replay/compaction/quarantine; wasm test for
+  two tabs appending concurrently converging.
+- [ ] **SV4 [W][SERVER] Schema v18 blind change log.** Depends SV0.3 landed. New `internal/server/blobsync*.go`,
+  migration in `store.go`: `change_log`, `ws_snapshot`, `keyring`, `pairing_relay`, workspace tombstones; RPCs
+  `AppendChanges` (one `BEGIN IMMEDIATE` tx, dedupe by change_id, gap-free seq), `ListChanges`, `PutSnapshot`
+  (only if covers_seq advances), `GetSnapshot`, `Get/PutKeyring` (CAS), `DeleteWorkspace`, `Watch`; scope check on
+  every call; size limits; SyncService rate limit (closes C433); `/v1/version` adds `serverID`, apiVersion 2,
+  minClientApiVersion 2; `VACUUM INTO` backup; Litestream example config; healthchecks in both compose files.
+  Accept: concurrent appenders with retries → exactly-once, gap-free; server DB contains no plaintext from the
+  sample household after a sync e2e.
+- [ ] **SV5 [W][AUTH] One auth state machine in the services worker.** Depends SV0.2. States signed-out →
+  signing-in → active → refreshing → expired → revoked; tokens live in the scope DB (device-key wrapped) or an
+  HttpOnly SameSite=Strict cookie when same-origin; OAuth = code + PKCE then server session; access tokens carry a
+  session version checked on writes (revocation/suspension); random server-assigned user IDs, static-token users
+  get a stored stable ID; `pkg/embed` refuses to start without a pinned token. Accept: state-machine table tests;
+  e2e sign-in/out/expiry/revoke flows.
+- [ ] **SV6 [W][SYNC] `internal/syncv2` engine + status chip.** Depends SV3, SV4, SV5. Push pending log
+  ciphertext as-is; pull by cursor, verify AAD scope, decrypt, merge, broadcast — no wipe, no reload; snapshot
+  upload after compaction; behind-the-log bootstrap; backoff with jitter everywhere; worker self-restart; chip:
+  synced · pending N · offline · error(cause) · locked · update required. Accept: deterministic simulation
+  `internal/syncv2/sim` — 10k seeds of devices×tabs×offline×crash×server-restart converge with no lost
+  acknowledged write.
+- [ ] **SV7 [W][ROUTING] `openScope`, workspace URLs, navigation guard, service-worker versioning.**
+  Depends SV3. `/w/<workspaceID>/…` routes with "Open in <workspace>?"; dirty-form guard + `beforeunload`;
+  drafts autosave to `drafts`; `web/sw.js` cache name = build hash, atomic manifest precache, "Update ready"
+  banner, BroadcastChannel to other tabs; an older build than the scope DB's goes read-only.
+  Accept: e2e deep link refresh, unsaved-form guard, update banner, old tab read-only.
+
+### Phase 8–9 — migration, cut-over, review
+
+- [ ] **SV8 [W][MIGRATION] Client-driven one-time migration + attachments/vault on the WDK.** Depends SV6, SV7.
+  First v2 boot reads old `cashflux:dataset` (passcode if locked) and owner/auth keys, resolves scope (asks when
+  the owner is unknown), creates or adopts the WDK (keyring CAS), writes the v2 snapshot, keeps v1 keys
+  read-only + offers a backup download; `"default"` workspace IDs become UUIDs; attachments re-keyed with HMAC
+  content addresses; vault under the `vault` subkey. Accept: plain sample, 5-year seed, locked dataset, two devices
+  migrating at once, unknown owner — identical record counts and totals.
+- [ ] **SV8b [L][CLEANUP] Remove v1 paths after cut-over** (one lane per file group): `persist.go` autosave/ticker/
+  `RequestPersist`, generation stamp, `sync-queue`, conflict stashes, global `dataset-owner`, plaintext
+  checkpoints, `syncmerge`, snapshot push/pull. Accept: build + full suite green, no references left.
+- [ ] **SV9 [L+Opus][SECURITY] Review.** Read-only Luna reviewer lanes, one module each (keyring, localdb, syncv2,
+  server blobsync, auth), findings only with a concrete trigger; Opus triage; fixes become SV9.x tickets; protocol
+  and key notes go into existing `SECURITY.md` and `docs/SELF_HOSTING.md`.

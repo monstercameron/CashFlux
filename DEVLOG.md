@@ -1,3 +1,46 @@
+## 2026-10-18 - why storage, sync and identity keep breaking, and the v2 plan
+
+Cam reported four symptoms together: edits lost or reverted, sync stuck or erroring, devices showing
+different data, and the app freezing. A read-only mapping of the client store, the sync engine, the
+server, accounts and credentials, and routing traced all four to one design choice and a set of gaps
+around it.
+
+The design choice is that the whole dataset is the unit of saving and of syncing. Every save re-reads
+all 38 SQLite tables and writes one JSON value under `cashflux:dataset` (about 500 ms of main thread at
+3,300 transactions, on a 4-second ticker, unawaited). Autosave, restore, wipe, workspace operations,
+sync apply and every open tab replace that one value, and the cross-tab generation stamp that is meant
+to arbitrate is skipped by workspace operations and raced at boot. On the server the same value is
+stored per workspace with a read-then-upsert and no version condition, so two devices pushing at once
+both succeed and the later one erases the earlier. `internal/syncmerge` exists but nothing calls it.
+
+The gaps are in identity and routing, and they reopen the 2026-08-19 incident class:
+
+- `restartBackendSync` never re-resolves who is signed in, and every in-page sign-in uses it. With the
+  user ID empty, every ownership check reads "not foreign", so account A's queued snapshot is pushed
+  into account B's server copy.
+- A push reads the active workspace when it is sent, not when the edit was queued, so a workspace
+  switch in another tab redirects tab A's data into the new workspace.
+- Changing the Server URL keeps server A's rotated token, user ID, queue and bookmarks.
+- The cross-tab refresh lock starts the refresh before taking the lock, so two tabs present the same
+  refresh token and reuse detection revokes both. OAuth sign-ins never refresh at all and stop syncing
+  after 15 minutes.
+- Changing the passcode leaves the bank-login vault encrypted under the old one; "Forgot passcode"
+  deletes every key, including the sync queue, and leaves the encrypted server copy unrecoverable.
+
+The uncommitted version-check work from 2026-08-31 moved push acceptance off the wall clock, which was
+right, but it reads the base version at send time and accepts any base at or above the server's, which
+lets a stale queue overwrite newer data. It is taken over by tickets SV0.1 and SV0.3 rather than
+committed as is.
+
+The plan (TODOS.md, SV section) keeps the product's model — local-first, encrypted at rest, the server
+holds only ciphertext — and changes the unit from the dataset to the change. Each user action becomes
+an encrypted change batch appended durably to a per-scope IndexedDB store; the server keeps an
+append-only, idempotent log of those blobs and assigns order; devices merge per field by hybrid logical
+clock. Scope (server, account, workspace) is fixed for the life of a page, and every ciphertext names
+its scope in its authenticated data, so a blob that reaches the wrong place fails to decrypt instead of
+merging. Phase 0 fixes the live loss paths in v1 first, because the deployed instance holds real data
+and v2 is several weeks of work.
+
 ## 2026-08-31 - measuring in a place that cannot produce the signal
 
 The budgets error-handling pass found one defect worth the whole day. The funding path lowers a source
