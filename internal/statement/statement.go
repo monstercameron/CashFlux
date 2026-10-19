@@ -15,10 +15,12 @@ package statement
 import (
 	"encoding/csv"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/textdecode"
 )
 
 // Row is one normalized statement line.
@@ -29,6 +31,9 @@ type Row struct {
 	Balance     int64
 	HasBalance  bool
 	Category    string
+	// FITID is the financial institution transaction ID from OFX/QFX input.
+	// It is empty for formats that do not provide a stable transaction ID.
+	FITID string
 }
 
 // Columns maps each role to a 0-based column index, or -1 when the statement has no
@@ -228,7 +233,11 @@ func ParseWithOptions(text string, decimals int, options ParseOptions) (Statemen
 	if options.NumberFormat.DecimalSep != 0 && options.NumberFormat.DecimalSep == options.NumberFormat.GroupSep {
 		return Statement{}, errors.New("statement: decimal and grouping separators must differ")
 	}
-	text = strings.TrimPrefix(text, "\ufeff") // strip a UTF-8 BOM
+	decoded, err := textdecode.Decode([]byte(text))
+	if err != nil {
+		return Statement{}, fmt.Errorf("statement: decode text: %w", err)
+	}
+	text = decoded
 	firstLine := text
 	if i := strings.IndexAny(text, "\r\n"); i >= 0 {
 		firstLine = text[:i]

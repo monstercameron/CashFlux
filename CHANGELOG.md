@@ -90,6 +90,8 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Statements decode in any common encoding (IME).** UTF-8 with BOM, UTF-16 and Windows-1252 statement files decode correctly, and OFX
+  transaction IDs are carried through parsing for duplicate detection.
 - **The Split dialog lays out its rows (TV8D).** Split rows use a grid again so fields sit side by side, and the receipt action no longer
   shrinks to 9 px.
 - **Budget tiles judge today by your calendar day (BC6N2).** The future, recurring and list views use the local wall-clock day, so the

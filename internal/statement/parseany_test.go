@@ -3,8 +3,10 @@
 package statement
 
 import (
+	"bytes"
 	"strings"
 	"testing"
+	"unicode/utf16"
 )
 
 func TestParseAny_OFX1(t *testing.T) {
@@ -41,6 +43,39 @@ VERSION:102
 	}
 	if rows[0].Description != "Coffee Shop" {
 		t.Errorf("description: got %q want %q", rows[0].Description, "Coffee Shop")
+	}
+	if rows[0].FITID != "1" {
+		t.Errorf("FITID: got %q want %q", rows[0].FITID, "1")
+	}
+}
+
+func TestParseAny_OFX2PreservesFITID(t *testing.T) {
+	input := `<?xml version="1.0"?>
+<OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS><BANKTRANLIST>
+<STMTTRN><DTPOSTED>20260615120000</DTPOSTED><TRNAMT>-45.00</TRNAMT><FITID>bank-transaction-42</FITID><NAME>Coffee Shop</NAME></STMTTRN>
+</BANKTRANLIST></STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>`
+	rows, err := ParseAny(strings.NewReader(input), 2)
+	if err != nil {
+		t.Fatalf("ParseAny() error: %v", err)
+	}
+	if len(rows) != 1 || rows[0].FITID != "bank-transaction-42" {
+		t.Fatalf("rows = %+v, want one row with original FITID", rows)
+	}
+}
+
+func TestParseAnyDecodesUTF16Statement(t *testing.T) {
+	plain := "Date,Description,Amount\n2026-06-15,Coffee Shop,-45.00\n"
+	units := utf16.Encode([]rune(plain))
+	data := []byte{0xFE, 0xFF}
+	for _, unit := range units {
+		data = append(data, byte(unit>>8), byte(unit))
+	}
+	rows, err := ParseAny(bytes.NewReader(data), 2)
+	if err != nil {
+		t.Fatalf("ParseAny() error: %v", err)
+	}
+	if len(rows) != 1 || rows[0].Amount != -4500 {
+		t.Fatalf("rows = %+v, want one -4500 row", rows)
 	}
 }
 

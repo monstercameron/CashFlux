@@ -2,7 +2,44 @@
 
 package statement
 
-import "testing"
+import (
+	"encoding/binary"
+	"testing"
+	"unicode/utf16"
+)
+
+func TestParseDecodesStatementEncodings(t *testing.T) {
+	plain := "Date,Description,Amount\n2026-06-01,Caf\u00e9 \u2013 shop,12.34\n"
+	utf16Units := utf16.Encode([]rune(plain))
+	utf16LE := make([]byte, len(utf16Units)*2)
+	for i, unit := range utf16Units {
+		binary.LittleEndian.PutUint16(utf16LE[i*2:], unit)
+	}
+	withBOM := append([]byte{0xFF, 0xFE}, utf16LE...)
+	cp1252 := []byte("Date,Description,Amount\n2026-06-01,Caf")
+	cp1252 = append(cp1252, 0xE9)
+	cp1252 = append(cp1252, []byte(" ")...)
+	cp1252 = append(cp1252, 0x96)
+	cp1252 = append(cp1252, []byte(" shop,12.34\n")...)
+	tests := []struct {
+		name string
+		data []byte
+	}{
+		{"UTF-16LE statement with BOM", withBOM},
+		{"Windows-1252 statement", cp1252},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := Parse(string(tc.data), 2)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(got.Rows) != 1 || got.Rows[0].Amount != 1234 || got.Rows[0].Description != "Caf\u00e9 \u2013 shop" {
+				t.Fatalf("rows = %+v, want decoded description and 1234 minor units", got.Rows)
+			}
+		})
+	}
+}
 
 func TestDetectDelimiter(t *testing.T) {
 	tests := []struct {

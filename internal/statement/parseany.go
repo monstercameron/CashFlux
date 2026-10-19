@@ -11,6 +11,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/docx"
 	"github.com/monstercameron/CashFlux/internal/ofx"
 	"github.com/monstercameron/CashFlux/internal/pdftext"
+	"github.com/monstercameron/CashFlux/internal/textdecode"
 	"github.com/monstercameron/CashFlux/internal/xlsx"
 )
 
@@ -39,6 +40,11 @@ func ParseAny(r io.Reader, decimals int) ([]Row, error) {
 	if bytes.HasPrefix(data, []byte("%PDF")) {
 		return parsePDF(data, decimals)
 	}
+	decoded, err := textdecode.Decode(data)
+	if err != nil {
+		return nil, fmt.Errorf("statement: decode text: %w", err)
+	}
+	data = []byte(decoded)
 
 	// ── OFX / QFX ────────────────────────────────────────────────────────────
 	trimmed := strings.TrimSpace(string(data))
@@ -57,6 +63,7 @@ func ParseAny(r io.Reader, decimals int) ([]Row, error) {
 				Date:        or_.Date,
 				Description: or_.Description,
 				Amount:      or_.Amount,
+				FITID:       or_.FITID,
 			})
 		}
 		return rows, nil
