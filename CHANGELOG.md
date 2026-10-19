@@ -90,6 +90,10 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Budget row menus: Raise limit everywhere, menus close before dialogs (BR2ED).** Every row menu, including over-budget
+  rows, starts with "Raise limit" then "Cover from another budget". Choosing a menu item that opens a dialog closes the
+  menu first and hands focus back to the row's ⋯ button when the dialog closes, so the menu no longer floats over the
+  dialog's backdrop. Wording: "Pause this budget for a month", "Calculate the limit with a formula".
 - **Transaction writes no longer lose data (TQ1, TQ1.1, TQ2).** "Apply rules to existing" only sets a category when the
   rule has one, skips rows a person reviewed, and applies role and validation checks (bill-only rules used to blank
   categories). CSV import keeps genuine same-day repeats in one file — only as many rows as already exist in the ledger

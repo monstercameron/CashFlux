@@ -5,6 +5,8 @@
 package screens
 
 import (
+	"syscall/js"
+
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -90,14 +92,15 @@ func useBudgetRowNavigation(menuOpen ui.State[bool], props budgetRowProps, s bud
 	// the lower-frequency action, so it lives in the ⋯ menu (and closes it); Top up is a
 	// visible card button.
 	openEdit := ui.UseEvent(Prevent(func() {
-		menuOpen.Set(false)
+		closeBudgetMenuAndRestoreOpener(menuOpen, s.Budget.ID)
 		uistate.SetBudgetEdit(uistate.BudgetEdit{ID: s.Budget.ID, Mode: uistate.BudgetEditModeEdit})
 	}))
 	openCategories := ui.UseEvent(Prevent(func() {
-		menuOpen.Set(false)
+		closeBudgetMenuAndRestoreOpener(menuOpen, s.Budget.ID)
 		uistate.SetBudgetCategoriesEdit(s.Budget.ID)
 	}))
 	openTopup := ui.UseEvent(Prevent(func() {
+		closeBudgetMenuAndRestoreOpener(menuOpen, s.Budget.ID)
 		uistate.SetBudgetEdit(uistate.BudgetEdit{ID: s.Budget.ID, Mode: uistate.BudgetEditModeTopup})
 	}))
 	return budgetRowNavigationResult{
@@ -115,7 +118,7 @@ func useBudgetRowFundingActions(s budgeting.Status, props budgetRowProps, menuOp
 	// WF17: pause or resume the funding target. One action that reads what it
 	// does rather than a toggle labelled the same in both states — a control whose
 	// label does not change is one nobody trusts they have pressed.
-	snoozeLabel := uistate.T("budgets.snoozeTarget")
+	snoozeLabel := uistate.T("budgets.pauseBudgetForMonth")
 	if s.Budget.TargetSnoozed(time.Now()) {
 		snoozeLabel = uistate.T("budgets.resumeTarget")
 	}
@@ -203,6 +206,7 @@ func useBudgetRowDetailActions(s budgeting.Status, menuOpen ui.State[bool], prop
 	// "Cover…" opens the shell-root flip modal (BudgetEditHost cover mode), which picks
 	// a source budget + amount and moves the limit — no longer an inline row form.
 	openCover := ui.UseEvent(Prevent(func() {
+		closeBudgetMenuAndRestoreOpener(menuOpen, s.Budget.ID)
 		uistate.SetBudgetEdit(uistate.BudgetEdit{ID: s.Budget.ID, Mode: uistate.BudgetEditModeCover})
 	}))
 	// Notes + Formulas open their own modes of the same shell-root editor modal.
@@ -210,12 +214,12 @@ func useBudgetRowDetailActions(s budgeting.Status, menuOpen ui.State[bool], prop
 	// The body is shared: the kebab item needs a Handler, the note marker needs a
 	// plain func it can register as its own click (its component owns that hook).
 	openNotesFn := func() {
-		menuOpen.Set(false)
+		closeBudgetMenuAndRestoreOpener(menuOpen, s.Budget.ID)
 		uistate.SetBudgetEdit(uistate.BudgetEdit{ID: s.Budget.ID, Mode: uistate.BudgetEditModeNotes})
 	}
 	openNotes := ui.UseEvent(Prevent(openNotesFn))
 	openFormulas := ui.UseEvent(Prevent(func() {
-		menuOpen.Set(false)
+		closeBudgetMenuAndRestoreOpener(menuOpen, s.Budget.ID)
 		uistate.SetBudgetEdit(uistate.BudgetEdit{ID: s.Budget.ID, Mode: uistate.BudgetEditModeFormulas})
 	}))
 	// Transactions drill navigates to the filtered ledger.
@@ -248,5 +252,23 @@ func useBudgetRowDetailActions(s budgeting.Status, menuOpen ui.State[bool], prop
 		openCover: openCover, openNotesFn: openNotesFn, openNotes: openNotes, openFormulas: openFormulas, drillMenu: drillMenu,
 		openBudgetTodos: openBudgetTodos, openTodos: openTodos, todosOpen: todosOpen, toggleTodos: toggleTodos,
 		removeRecurring: removeRecurring,
+	}
+}
+
+// closeBudgetMenuAndRestoreOpener closes an open row menu and focuses its stable
+// trigger before a dialog mounts. The dialog then captures the correct opener.
+func closeBudgetMenuAndRestoreOpener(menuOpen ui.State[bool], budgetID string) {
+	wasOpen := menuOpen.Get()
+	menuOpen.Set(false)
+	if !wasOpen {
+		return
+	}
+	doc := js.Global().Get("document")
+	if !doc.Truthy() {
+		return
+	}
+	trigger := doc.Call("querySelector", `[data-testid="budget-kebab-`+budgetID+`"]`)
+	if trigger.Truthy() {
+		trigger.Call("focus")
 	}
 }
