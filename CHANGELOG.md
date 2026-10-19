@@ -90,6 +90,9 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Budget suggestions follow the viewed period, member and pay schedule (BC4B4.1).** Limit hints use the context-aware
+  recommendation with the viewed anchor, member lens, week start, pay anchor and FX, so weekly and biweekly budgets get hints in
+  their own cadence and currency.
 - **Imports are safer and faster (TC3B7).** Debit signs and totals use checked sums; preflight counts only writable rows and names
   failed ones; staging keys duplicates on the parsed payee and currency; transfer-pair scanning is indexed for 3,000-row
   files; malformed accounting signs, three-digit groups and ambiguous numeric dates are reported; mixed currencies and

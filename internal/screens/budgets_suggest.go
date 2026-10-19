@@ -72,9 +72,14 @@ func budgetSuggestHint(props budgetSuggestProps) ui.Node {
 	app := appstate.Default
 	settings := smartSettingsForRevision(dataRevision)
 	viewedPeriod := uistate.UsePeriod().Get()
+	memberLens := uistate.UseMemberLens()
+	memberID := ""
+	if len(memberLens) == 1 {
+		memberID = memberLens[0]
+	}
 	b := props.Budget
 
-	recommendation, displayAmount, ok := budgetRecommendationAt(app, b, viewedPeriod.From)
+	recommendation, displayAmount, ok := budgetRecommendationAtMember(app, b, viewedPeriod.From, memberID)
 
 	apply := func() {
 		a := appstate.Default
@@ -210,7 +215,21 @@ func budgetSuggestRowHintInner(props budgetSuggestRowHintProps) ui.Node {
 // Saving-direction budgets are omitted because their target is an intentional
 // contribution rather than a spending cap.
 func budgetRecommendationAt(app *appstate.App, b domain.Budget, anchor time.Time) (budgeting.LimitRecommendation, money.Money, bool) {
+	return budgetRecommendationAtMember(app, b, anchor, "")
+}
+
+func budgetRecommendationAtMember(app *appstate.App, b domain.Budget, anchor time.Time, memberID string) (budgeting.LimitRecommendation, money.Money, bool) {
 	if app == nil || b.Direction.IsSaving() {
+		return budgeting.LimitRecommendation{}, money.Money{}, false
+	}
+	visible := false
+	for _, visibleBudget := range budgeting.ViewBudgets(app.Budgets(), memberID) {
+		if visibleBudget.ID == b.ID {
+			visible = true
+			break
+		}
+	}
+	if !visible {
 		return budgeting.LimitRecommendation{}, money.Money{}, false
 	}
 	base := app.Settings().BaseCurrency
@@ -230,17 +249,20 @@ func budgetRecommendationAt(app *appstate.App, b domain.Budget, anchor time.Time
 		anchor = budgetNow()
 	}
 	userPrefs := uistate.LoadPrefs()
+	weekStart := userPrefs.WeekStartWeekday()
 	var payCycleAnchor time.Time
 	if userPrefs.PayCycleAnchor != "" {
 		payCycleAnchor, _ = time.Parse("2006-01-02", userPrefs.PayCycleAnchor)
 	}
-	start, end := budgeting.PeriodRangeAnchored(b.Period, anchor, userPrefs.WeekStartWeekday(), payCycleAnchor)
+	start, end := budgeting.PeriodRangeAnchored(b.Period, anchor, weekStart, payCycleAnchor)
 	periodKey := start.Format("2006-01-02")
 	now := budgetNow()
-	cacheKey := fmt.Sprintf("%p|%d|%s|%s|%s", app, app.Rev(), b.ID, periodKey, now.UTC().Truncate(time.Minute).Format(time.RFC3339))
+	cacheKey := fmt.Sprintf("%p|%d|%s|%s|%s|%s|%d|%s", app, app.Rev(), b.ID, memberID, periodKey, now.UTC().Truncate(time.Minute).Format(time.RFC3339), weekStart, payCycleAnchor.Format("2006-01-02"))
 	entry, cached := suggestLimitCache[cacheKey]
 	if !cached {
 		suggestedTxns, suggestedCovers := suggestTransactionsForScope(covers, scope.Tags, app.Transactions())
+		ledger := budgeting.NewNettedLedgerWithLinks(suggestedTxns, app.TxnLinks())
+		suggestedTxns = ledger.Transactions()
 		_, err := budgeting.EvaluateRollup(b, suggestedTxns, start, end, rates, budgeting.DefaultNearThreshold, suggestedCovers)
 		var recommendation budgeting.LimitRecommendation
 		var displayAmount money.Money
@@ -254,16 +276,16 @@ func budgetRecommendationAt(app *appstate.App, b domain.Budget, anchor time.Time
 			if view.Projection.Error != nil {
 				err = view.Projection.Error
 			}
-			if err == nil && recommendation.Direction == budgeting.SuggestionRaise && budgetIsUnderPace(view, start, end, now) &&
-				budgetRecommendationOverspends(b, covers, scope.Tags, app.Transactions(), start, userPrefs.WeekStartWeekday(), payCycleAnchor, rates) < 2 {
-				return budgeting.LimitRecommendation{}, money.Money{}, false
-			}
 			projected := view.Projection.Projected
 			if err == nil {
 				projected, err = budgeting.PeriodEquivalent(projected, b.Period, domain.PeriodMonthly)
 			}
 			if err == nil {
-				recommendation, err = budgeting.RecommendBudgetLimit(b, suggestedCovers, suggestedTxns, anchor, suggestLimitMonths, projected, rates)
+				recommendation, err = budgeting.RecommendBudgetLimitWithContext(b, suggestedCovers, suggestedTxns, anchor, suggestLimitMonths, projected, rates, weekStart, payCycleAnchor)
+			}
+			if err == nil && recommendation.Direction == budgeting.SuggestionRaise &&
+				budgetRecommendationOverspends(b, covers, scope.Tags, app.Transactions(), start, weekStart, payCycleAnchor, rates) < 2 {
+				return budgeting.LimitRecommendation{}, money.Money{}, false
 			}
 			if err == nil && recommendation.HasEvidence && recommendation.Direction != budgeting.SuggestionKeep {
 				periodAmount, convErr := budgeting.PeriodEquivalent(money.New(recommendation.Suggested, base), domain.PeriodMonthly, b.Period)
@@ -303,18 +325,6 @@ func budgetSuggestionBillFloor(suggested, required money.Money, targetCurrency s
 		return floor, nil
 	}
 	return suggested, nil
-}
-
-func budgetIsUnderPace(view budgeting.ViewBudget, start, end, now time.Time) bool {
-	if view.Error != nil || view.CommitmentError != nil || !now.After(start) || !now.Before(end) {
-		return false
-	}
-	committed := view.Committed.Committed
-	if committed.Currency == "" {
-		committed = money.Zero(view.Status.Spent.Currency)
-	}
-	marker := budgeting.ProjectPaceMarker(view.Status, committed, start, end, now)
-	return marker.Error == nil && marker.Delta.Amount < 0
 }
 
 func budgetRecommendationOverspends(b domain.Budget, covers map[string]bool, tags []string, txns []domain.Transaction, anchor time.Time, weekStart time.Weekday, payCycleAnchor time.Time, rates currency.Rates) int {
