@@ -3,6 +3,7 @@
 package unusual
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -89,6 +90,68 @@ func TestDoubleChargeBoundariesAndDeterministicOrder(t *testing.T) {
 	}
 }
 
+func TestDoubleChargeClusterProducesOneFindingPerTransaction(t *testing.T) {
+	rows := []domain.Transaction{
+		txn("first", "Transit", "travel", 1200, 2),
+		txn("middle", "Transit", "travel", 1200, 1),
+		txn("last", "Transit", "travel", 1200, 0),
+	}
+	findings := Detect(Input{Now: testNow, Transactions: rows})
+	seen := map[string]bool{}
+	for _, finding := range findings {
+		if finding.Signal != PossibleDoubleCharge {
+			continue
+		}
+		if seen[finding.TxnID] {
+			t.Fatalf("duplicate transaction/signal finding for %q: %+v", finding.TxnID, findings)
+		}
+		seen[finding.TxnID] = true
+		if len(finding.Evidence.RelatedTxnIDs) != 2 {
+			t.Errorf("%s related IDs = %v; want both other charges", finding.TxnID, finding.Evidence.RelatedTxnIDs)
+		}
+	}
+	if len(seen) != 3 {
+		t.Fatalf("double-charge findings cover %d transactions; want 3: %+v", len(seen), findings)
+	}
+}
+
+func TestDoubleChargeFindingsIgnoreHistoryOlderThan24Months(t *testing.T) {
+	rows := []domain.Transaction{
+		{ID: "old-a", Payee: "Transit", Date: testNow.AddDate(-4, 0, 0), Amount: money.New(-1200, "USD")},
+		{ID: "old-b", Payee: "Transit", Date: testNow.AddDate(-4, 0, 1), Amount: money.New(-1200, "USD")},
+	}
+	if got := Detect(Input{Now: testNow, Transactions: rows}); len(got) != 0 {
+		t.Fatalf("four-year-old pair produced stale findings: %+v", got)
+	}
+}
+
+func TestThresholdsUseFXValueInsteadOfMinorUnitScale(t *testing.T) {
+	rates := currency.Rates{Base: "JPY", Rates: map[string]float64{"USD": 150}}
+	for _, tc := range []struct {
+		name   string
+		amount int64
+		want   bool
+	}{
+		{name: "800 yen below first-time merchant floor", amount: 800},
+		{name: "250 dollars equivalent reaches floor", amount: 37500, want: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			row := domain.Transaction{ID: "candidate", Payee: "New Shop", Date: testNow.AddDate(0, 0, -1), Amount: money.New(-tc.amount, "JPY")}
+			if got := hasFinding(Detect(Input{Now: testNow, Rates: rates, Transactions: []domain.Transaction{row}}), row.ID, FirstTimeMerchantLarge); got != tc.want {
+				t.Fatalf("first-time finding=%t want %t", got, tc.want)
+			}
+		})
+	}
+
+	rows := []domain.Transaction{{ID: "candidate", Payee: "Cafe", CategoryID: "food", Date: testNow.AddDate(0, 0, -1), Amount: money.New(-3000, "JPY")}}
+	for i, daysAgo := range []int{31, 61, 91, 121} {
+		rows = append(rows, domain.Transaction{ID: fmt.Sprintf("history-%d", i), Payee: "Cafe", CategoryID: "food", Date: testNow.AddDate(0, 0, -daysAgo), Amount: money.New(-100, "JPY")})
+	}
+	if got := hasFinding(Detect(Input{Now: testNow, Rates: rates, Transactions: rows}), "candidate", Spike); got {
+		t.Fatal("¥3,000 charge below the USD $50 floor was flagged as a spike")
+	}
+}
+
 func TestRefundSuppressesNetSpikeAndThresholdScalesByCurrency(t *testing.T) {
 	t.Run("refund lowers candidate spend", func(t *testing.T) {
 		rows := []domain.Transaction{txn("candidate", "Cafe", "food", 20000, 4), txn("refund", "Cafe", "food", -18000, 2)}
@@ -105,9 +168,9 @@ func TestRefundSuppressesNetSpikeAndThresholdScalesByCurrency(t *testing.T) {
 			name  string
 			minor int64
 			want  bool
-		}{{"below 250 yen", 249, false}, {"at 250 yen", 250, true}} {
+		}{{"below USD 250 equivalent", 37499, false}, {"at USD 250 equivalent", 37500, true}} {
 			t.Run(tc.name, func(t *testing.T) {
-				input := Input{Now: testNow, Transactions: []domain.Transaction{{ID: "candidate", Payee: "Shop", Date: testNow.AddDate(0, 0, -1), Amount: money.New(-tc.minor, "JPY")}}}
+				input := Input{Now: testNow, Rates: currency.Rates{Base: "JPY", Rates: map[string]float64{"USD": 150}}, Transactions: []domain.Transaction{{ID: "candidate", Payee: "Shop", Date: testNow.AddDate(0, 0, -1), Amount: money.New(-tc.minor, "JPY")}}}
 				if got := hasFinding(Detect(input), "candidate", FirstTimeMerchantLarge); got != tc.want {
 					t.Fatalf("first-time finding=%t, want %t", got, tc.want)
 				}
@@ -120,16 +183,19 @@ func TestRefundSuppressesNetSpikeAndThresholdScalesByCurrency(t *testing.T) {
 			name  string
 			minor int64
 			want  bool
-		}{{"below 50 yen", 49, false}, {"at 50 yen", 50, true}} {
+		}{{"below USD 50 equivalent", 7499, false}, {"at USD 50 equivalent", 7500, true}} {
 			t.Run(tc.name, func(t *testing.T) {
 				rows := []domain.Transaction{txn("candidate", "Cafe", "food", tc.minor, 1)}
+				for i := range rows {
+					rows[i].Amount.Currency = "JPY"
+				}
 				for i, ago := range []int{31, 61, 91, 121} {
 					row := txn("history"+string(rune('a'+i)), "Cafe", "food", 10, ago)
 					row.Amount.Currency = "JPY"
 					rows = append(rows, row)
 				}
 				rows[0].Amount.Currency = "JPY"
-				if got := hasFinding(Detect(Input{Now: testNow, Transactions: rows}), "candidate", Spike); got != tc.want {
+				if got := hasFinding(Detect(Input{Now: testNow, Rates: currency.Rates{Base: "JPY", Rates: map[string]float64{"USD": 150}}, Transactions: rows}), "candidate", Spike); got != tc.want {
 					t.Fatalf("spike finding=%t, want %t", got, tc.want)
 				}
 			})

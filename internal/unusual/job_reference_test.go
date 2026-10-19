@@ -109,11 +109,12 @@ func referenceDetect(in Input) []Finding {
 			baseline, source = categoryHistory, BaselineCategory
 		}
 		floor := in.Settings.FirstTimeMerchantFloorMinor
+		floorAvailable := true
 		if floor == 25000 {
-			floor = currencyThreshold(25000, comparisonCurrency(candidate.txn.Amount, in))
+			floor, floorAvailable = currencyThreshold(25000, comparisonCurrency(candidate.txn.Amount, in), in.Rates)
 		}
 		candidate.minor -= refund
-		if len(merchantHistory) == 0 && candidate.key != "" && candidate.minor >= floor {
+		if floorAvailable && len(merchantHistory) == 0 && candidate.key != "" && candidate.minor >= floor {
 			findings = append(findings, Finding{TxnID: candidate.txn.ID, Signal: FirstTimeMerchantLarge, Confidence: ConfidenceLow,
 				Evidence: Evidence{AmountMinor: candidate.minor, CurrencyCode: baseCurrency(candidate.txn.Amount, in), Method: "first_merchant_charge", Window: "24 months"}})
 		}
@@ -126,11 +127,20 @@ func referenceDetect(in Input) []Finding {
 			mad := mad(vals, median)
 			delta := candidate.minor - median
 			comparisonCode := comparisonCurrency(candidate.txn.Amount, in)
-			tolerance := maxInt64(mulRatio(median, 20, 100), currencyThreshold(500, comparisonCode))
-			if mad > 0 {
-				tolerance = maxInt64(mulRatio(mad, 3, 1), currencyThreshold(500, comparisonCode))
+			floor, floorAvailable := currencyThreshold(500, comparisonCode, in.Rates)
+			tolerance := mulRatio(median, 20, 100)
+			if floorAvailable {
+				tolerance = maxInt64(tolerance, floor)
 			}
-			if candidate.minor >= currencyThreshold(spikeFloor, comparisonCode) && delta >= currencyThreshold(spikeDeltaFloor, comparisonCode) && candidate.minor >= mulRatio(median, 3, 1) && delta > tolerance {
+			if mad > 0 {
+				tolerance = mulRatio(mad, 3, 1)
+				if floorAvailable {
+					tolerance = maxInt64(tolerance, floor)
+				}
+			}
+			amountFloor, amountFloorAvailable := currencyThreshold(spikeFloor, comparisonCode, in.Rates)
+			deltaFloor, deltaFloorAvailable := currencyThreshold(spikeDeltaFloor, comparisonCode, in.Rates)
+			if amountFloorAvailable && deltaFloorAvailable && candidate.minor >= amountFloor && delta >= deltaFloor && candidate.minor >= mulRatio(median, 3, 1) && delta > tolerance {
 				confidence := ConfidenceMedium
 				if len(baseline) >= 8 && candidate.minor >= mulRatio(median, 5, 1) {
 					confidence = ConfidenceHigh
@@ -179,14 +189,17 @@ func duplicateSuspects(charges []charge) map[string]bool {
 func doubleChargeFindings(charges []charge, excluded map[string]bool, in Input, goals map[string]domain.Goal, seasonalYears map[string]map[time.Month]map[int]bool) []Finding {
 	var out []Finding
 	for i, a := range charges {
-		if a.key == "" || len(expectationEvidence(a, in, goals, seasonalYears)) > 0 {
+		if a.key == "" || !withinWindow(a.date, in.Now, baselineMonths) || len(expectationEvidence(a, in, goals, seasonalYears)) > 0 {
 			continue
 		}
 		var related []string
-		for j := i + 1; j < len(charges); j++ {
+		for j := range charges {
+			if j == i {
+				continue
+			}
 			b := charges[j]
-			if b.date.Sub(a.date) > 72*time.Hour {
-				break
+			if delta := b.date.Sub(a.date); delta < -72*time.Hour || delta > 72*time.Hour {
+				continue
 			}
 			if !sameComparisonCurrency(a.txn.Amount.Currency, b.txn.Amount.Currency, in) || b.key != a.key || b.minor != a.minor || b.txn.ID == a.txn.ID {
 				continue
@@ -198,10 +211,7 @@ func doubleChargeFindings(charges []charge, excluded map[string]bool, in Input, 
 		}
 		if len(related) > 0 {
 			sort.Strings(related)
-			out = append(out, Finding{TxnID: a.txn.ID, Signal: PossibleDoubleCharge, Confidence: ConfidenceHigh, Evidence: Evidence{AmountMinor: a.minor, CurrencyCode: baseCurrency(a.txn.Amount, in), Method: "same_merchant_amount_within_3_days", HistoryCount: 1, Window: "1–3 days", RelatedTxnIDs: related}})
-			for _, id := range related {
-				out = append(out, Finding{TxnID: id, Signal: PossibleDoubleCharge, Confidence: ConfidenceHigh, Evidence: Evidence{AmountMinor: a.minor, CurrencyCode: baseCurrency(a.txn.Amount, in), Method: "same_merchant_amount_within_3_days", HistoryCount: 1, Window: "1–3 days", RelatedTxnIDs: []string{a.txn.ID}}})
-			}
+			out = append(out, Finding{TxnID: a.txn.ID, Signal: PossibleDoubleCharge, Confidence: ConfidenceHigh, Evidence: Evidence{AmountMinor: a.minor, CurrencyCode: baseCurrency(a.txn.Amount, in), Method: "same_merchant_amount_within_3_days", HistoryCount: 1, Window: "1â€“3 days", RelatedTxnIDs: related}})
 		}
 	}
 	return out

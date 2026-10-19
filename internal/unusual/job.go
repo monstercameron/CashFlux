@@ -198,11 +198,11 @@ func (j *Job) Step(work int) bool {
 			}
 			c := j.charges[j.position]
 			j.position++
-			if c.key == "" || j.expected[c.txn.ID] {
+			if c.key == "" || j.expected[c.txn.ID] || !withinWindow(c.date, j.in.Now, baselineMonths) {
 				continue
 			}
 			series := j.doubles[j.doubleKey(c)]
-			start := sort.Search(len(series), func(i int) bool { return chargeLess(c, series[i]) })
+			start := sort.Search(len(series), func(i int) bool { return !series[i].date.Before(c.date.Add(-72 * time.Hour)) })
 			j.candidate, j.doubleSeries, j.doublePosition, j.related = c, series, start, nil
 		case 7:
 			if !j.sortFindings.step() {
@@ -279,7 +279,9 @@ func (j *Job) stepDouble() {
 	if j.doublePosition < len(j.doubleSeries) {
 		b := j.doubleSeries[j.doublePosition]
 		j.doublePosition++
-		if b.date.Sub(a.date) <= 72*time.Hour {
+		if b.date.Sub(a.date) > 72*time.Hour {
+			j.doublePosition = len(j.doubleSeries)
+		} else {
 			if !j.expected[b.txn.ID] && b.txn.ID != a.txn.ID {
 				j.related = append(j.related, b.txn.ID)
 			}
@@ -289,11 +291,6 @@ func (j *Job) stepDouble() {
 	if len(j.related) > 0 {
 		sort.Strings(j.related)
 		j.findings = append(j.findings, doubleFinding(a, j.related, j.in))
-		for _, id := range j.related {
-			c := a
-			c.txn.ID = id
-			j.findings = append(j.findings, doubleFinding(c, []string{a.txn.ID}, j.in))
-		}
 	}
 	j.doubleSeries, j.related = nil, nil
 }
@@ -369,10 +366,11 @@ func evaluateCandidate(candidate charge, merchantHistory, categoryHistory []char
 		baseline, source = categoryHistory, BaselineCategory
 	}
 	floor := in.Settings.FirstTimeMerchantFloorMinor
+	floorAvailable := true
 	if floor == 25000 {
-		floor = currencyThreshold(25000, comparisonCurrency(candidate.txn.Amount, in))
+		floor, floorAvailable = currencyThreshold(25000, comparisonCurrency(candidate.txn.Amount, in), in.Rates)
 	}
-	if len(merchantHistory) == 0 && candidate.key != "" && candidate.minor >= floor {
+	if floorAvailable && len(merchantHistory) == 0 && candidate.key != "" && candidate.minor >= floor {
 		findings = append(findings, Finding{TxnID: candidate.txn.ID, Signal: FirstTimeMerchantLarge, Confidence: ConfidenceLow,
 			Evidence: Evidence{AmountMinor: candidate.minor, CurrencyCode: baseCurrency(candidate.txn.Amount, in), Method: "first_merchant_charge", Window: "24 months"}})
 	}
@@ -388,11 +386,20 @@ func evaluateCandidate(candidate charge, merchantHistory, categoryHistory []char
 			delta = math.MaxInt64
 		}
 		comparisonCode := comparisonCurrency(candidate.txn.Amount, in)
-		tolerance := maxInt64(mulRatio(median, 20, 100), currencyThreshold(500, comparisonCode))
-		if mad > 0 {
-			tolerance = maxInt64(mulRatio(mad, 3, 1), currencyThreshold(500, comparisonCode))
+		floor, floorAvailable := currencyThreshold(500, comparisonCode, in.Rates)
+		tolerance := mulRatio(median, 20, 100)
+		if floorAvailable {
+			tolerance = maxInt64(tolerance, floor)
 		}
-		if candidate.minor >= currencyThreshold(spikeFloor, comparisonCode) && delta >= currencyThreshold(spikeDeltaFloor, comparisonCode) && candidate.minor >= mulRatio(median, 3, 1) && delta > tolerance {
+		if mad > 0 {
+			tolerance = mulRatio(mad, 3, 1)
+			if floorAvailable {
+				tolerance = maxInt64(tolerance, floor)
+			}
+		}
+		amountFloor, amountFloorAvailable := currencyThreshold(spikeFloor, comparisonCode, in.Rates)
+		deltaFloor, deltaFloorAvailable := currencyThreshold(spikeDeltaFloor, comparisonCode, in.Rates)
+		if amountFloorAvailable && deltaFloorAvailable && candidate.minor >= amountFloor && delta >= deltaFloor && candidate.minor >= mulRatio(median, 3, 1) && delta > tolerance {
 			confidence := ConfidenceMedium
 			if len(baseline) >= 8 && candidate.minor >= mulRatio(median, 5, 1) {
 				confidence = ConfidenceHigh

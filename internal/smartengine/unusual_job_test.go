@@ -3,13 +3,15 @@ package smartengine
 
 import (
 	"fmt"
+	"reflect"
+	"strings"
+	"testing"
+	"time"
+
 	"github.com/monstercameron/CashFlux/internal/debtpay"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/smart"
-	"reflect"
-	"testing"
-	"time"
 )
 
 // debtPrincipalTxnIDs returns cash-side debt-payment legs identified by the
@@ -134,5 +136,29 @@ func TestUnusualJobPublicationKeepsMuteDismissalAndLocalization(t *testing.T) {
 	settings.Dismissed = map[string]bool{job.Insights()[0].Key: true}
 	if len(job.ActiveInsights(settings)) != 0 {
 		t.Fatal("dismissed Unusual insight published")
+	}
+}
+
+func TestUnusualInsightsKeepUniqueKeysForThreeChargeCluster(t *testing.T) {
+	in := baseInput()
+	in.Transactions = []domain.Transaction{
+		{ID: "first", Date: in.Now.AddDate(0, 0, -2), Payee: "Transit", Amount: usd(-1200)},
+		{ID: "middle", Date: in.Now.AddDate(0, 0, -1), Payee: "Transit", Amount: usd(-1200)},
+		{ID: "last", Date: in.Now, Payee: "Transit", Amount: usd(-1200)},
+	}
+	insights := u1Unusual(in)
+	keys := map[string]bool{}
+	doubleCount := 0
+	for _, insight := range insights {
+		if keys[insight.Key] {
+			t.Fatalf("duplicate insight key %q: %+v", insight.Key, insights)
+		}
+		keys[insight.Key] = true
+		if strings.Contains(insight.Key, ":PossibleDoubleCharge:") {
+			doubleCount++
+		}
+	}
+	if doubleCount != 3 {
+		t.Fatalf("possible-double-charge insights=%d want one for each of 3 transactions; insights=%+v", doubleCount, insights)
 	}
 }

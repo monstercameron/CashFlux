@@ -262,24 +262,19 @@ func recurrenceMatches(t domain.Transaction, r domain.Recurring) bool {
 	return true
 }
 
-func currencyThreshold(minorUSD int64, code string) int64 {
-	decimals := currency.Decimals(code)
-	if decimals == 2 {
-		return minorUSD
+func currencyThreshold(minorUSD int64, code string, rates currency.Rates) (int64, bool) {
+	code = strings.ToUpper(strings.TrimSpace(code))
+	if code == "USD" {
+		return minorUSD, true
 	}
-	if decimals < 2 {
-		for range 2 - decimals {
-			minorUSD /= 10
-		}
-		return minorUSD
+	if strings.TrimSpace(rates.Base) == "" {
+		return 0, false
 	}
-	for range decimals - 2 {
-		if minorUSD > math.MaxInt64/10 {
-			return math.MaxInt64
-		}
-		minorUSD *= 10
+	converted, err := rates.Convert(money.New(minorUSD, "USD"), code)
+	if err != nil || converted.Amount < 0 {
+		return 0, false
 	}
-	return minorUSD
+	return converted.Amount, true
 }
 
 func comparisonCurrency(amount money.Money, in Input) string {
@@ -290,7 +285,11 @@ func comparisonCurrency(amount money.Money, in Input) string {
 }
 
 func increaseThresholdFor(expected int64, amount money.Money, in Input) int64 {
-	return maxInt64(mulRatio(expected, 10, 100), currencyThreshold(200, comparisonCurrency(amount, in)))
+	floor, ok := currencyThreshold(200, comparisonCurrency(amount, in), in.Rates)
+	if !ok {
+		return mulRatio(expected, 10, 100)
+	}
+	return maxInt64(mulRatio(expected, 10, 100), floor)
 }
 
 func stableAmounts(values []int64, typical int64, amount money.Money, in Input) bool {
