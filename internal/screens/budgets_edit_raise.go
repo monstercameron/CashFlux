@@ -7,6 +7,7 @@ package screens
 import (
 	"strings"
 
+	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -43,6 +44,9 @@ type budgetEditRaiseLimitProps struct {
 
 // budgetEditRaiseLimit builds the edit raise limit section.
 func budgetEditRaiseLimit(p budgetEditRaiseLimitProps) ui.Node {
+	_ = uistate.UseDataRevision().Get()
+	member := uistate.UseActiveMember().Get()
+	pr := uistate.UsePrefs().Get()
 	durVal := "month"
 	if p.topupPermanentS.Get() {
 		durVal = "perm"
@@ -54,6 +58,19 @@ func budgetEditRaiseLimit(p budgetEditRaiseLimitProps) ui.Node {
 	// and the duration hint states which one the top-up changes and what happens
 	// to it next period.
 	capLine, _ := budgetTopupCapCopy(fmtMoney(p.b.Limit), p.selfEffCap, p.selfCapMath, p.topupPermanentS.Get())
+	if p.b.Rollover && !p.topupPermanentS.Get() {
+		capLine = uistate.T("br3dlg.rolloverNextCap")
+	}
+	var overPick, projectedPick int64
+	if app := appstate.Default; app != nil {
+		view := computeBudgetView(app, member, p.vw, pr, false)
+		for _, status := range view.Statuses {
+			if status.Budget.ID == p.b.ID {
+				overPick, projectedPick = budgetRaiseQuickPickAmounts(status)
+				break
+			}
+		}
+	}
 	selNow := p.coverSelS.Get()
 	coverToggleLabel := uistate.T("budgets.topupCoverShow")
 	if p.topupCoverOpenS.Get() {
@@ -79,15 +96,22 @@ func budgetEditRaiseLimit(p budgetEditRaiseLimitProps) ui.Node {
 	if amt, perr := money.ParseMinor(strings.TrimSpace(p.topupAmt.Get()), p.dec); perr == nil && amt > 0 {
 		topupShares = splitCoverAmount(amt, p.coverSrcs, selNow, nil, nil)
 	}
+	onPickCover := ui.UseEvent(Prevent(func() { p.topupAmt.Set(money.FormatMinor(overPick, p.dec)) }))
+	onPickProjected := ui.UseEvent(Prevent(func() { p.topupAmt.Set(money.FormatMinor(projectedPick, p.dec)) }))
 	return Form(css.Class("acct-edit-form"), Attr("data-testid", "budget-raise-form"), OnSubmit(p.submitTopup),
 		Div(css.Class("modal-scroll"),
+			H3(Attr("data-testid", "budget-raise-title"), uistate.T("br3dlg.raiseTitle", p.b.Name)),
 			P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "topup-cap-math"),
 				Style(map[string]string{"margin": "0"}), capLine),
 			uiw.Field(uiw.FieldProps{ID: "budget-topup-amt", Label: uistate.T("budgets.raiseAmount"), Required: true,
 				TestID: "budget-raise-amount-field", Control: func(a uiw.FieldA11y) ui.Node {
 					return Input(css.Class("field"), Attr("id", a.ID), Attr("data-testid", "budget-topup-amt"), Attr("autofocus", ""), Attr("aria-required", "true"), Type("number"),
-						Placeholder(uistate.T("budgets.raiseAmount")), Step("0.01"), Attr("min", "0.01"), OnInput(p.onTopupAmt), uiw.FieldValue(p.topupAmt.Get()))
+						Placeholder(uistate.T("br3dlg.raisePlaceholder")), Step("0.01"), Attr("min", "0.01"), OnInput(p.onTopupAmt), uiw.FieldValue(p.topupAmt.Get()))
 				}}),
+			If(overPick > 0 || projectedPick > 0, Div(css.Class("budget-raise-picks"),
+				If(overPick > 0, Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "raise-pick-cover"), OnClick(onPickCover), uistate.T("br3dlg.pickCover", fmtMoney(money.New(overPick, p.cur))))),
+				If(projectedPick > 0, Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "raise-pick-projected"), OnClick(onPickProjected), uistate.T("br3dlg.pickProjected", fmtMoney(money.New(projectedPick, p.cur))))),
+			)),
 			// Duration: this period only (a one-time boost) vs a permanent cap change.
 			labeledField(uistate.T("budgets.topupDuration"),
 				uiw.Segmented(uiw.SegmentedProps{
@@ -136,4 +160,12 @@ func budgetEditRaiseLimit(p budgetEditRaiseLimitProps) ui.Node {
 			Button(css.Class("btn btn-primary"), Type("submit"), Attr("data-testid", "budget-raise-submit"), uistate.T("budgets.raiseLimit")),
 		),
 	)
+}
+
+func budgetRaiseQuickPickAmounts(status budgeting.Status) (coverOverspend, projectedOverspend int64) {
+	coverOverspend = budgeting.CoverAmount(status).Amount
+	if status.Projection.Error == nil {
+		projectedOverspend = status.Projection.OverBy.Amount
+	}
+	return coverOverspend, projectedOverspend
 }

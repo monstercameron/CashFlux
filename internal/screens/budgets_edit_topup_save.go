@@ -202,12 +202,8 @@ func useBudgetEditTopupSave(p budgetEditTopupSaveProps) ui.Handler {
 			}
 		}
 		uistate.BumpDataRevision()
-		toastKey := "budgets.toppedUpMonthToast"
-		if permanent {
-			toastKey = "budgets.toppedUpToast"
-		}
 		// G5: undoable — a mis-sized or mis-funded top-up reverts in one click.
-		uistate.PostUndoable(uistate.T(toastKey, fmtMoney(money.New(amt, p.cur))))
+		uistate.PostUndoable(uistate.T("br3dlg.raisedToast", p.b.Name))
 		p.done()
 	}))
 

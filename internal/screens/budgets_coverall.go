@@ -7,6 +7,7 @@ package screens
 import (
 	"log/slog"
 	"sort"
+	"syscall/js"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -33,6 +34,8 @@ const coverAllFeatureCode = "SMART-B14"
 // coverAllNextSource is the sentinel select value meaning "borrow from next month's
 // same budget" rather than moving slack from another budget.
 const coverAllNextSource = "__next__"
+
+var coverAllOpener js.Value
 
 // coverAllOver is one over-budget the modal offers to cover: the shortfall to clear
 // and the period boundaries used to apply the coverage as a per-period boost.
@@ -85,7 +88,13 @@ func coverAllData(app *appstate.App, member string, vw period.Window, pr prefs.P
 		case st.State == budgeting.StateOver:
 			overs = append(overs, coverAllOver{ID: b.ID, Name: b.Name, Rollover: b.Rollover, Currency: b.Limit.Currency, Shortfall: budgeting.CoverAmount(st), ThisStart: bs, NextStart: be})
 		case st.State == budgeting.StateOK && st.Remaining.Amount > 0:
-			sources = append(sources, coverAllSource{ID: b.ID, Name: b.Name, Currency: st.Remaining.Currency, Avail: st.Remaining, ThisStart: bs})
+			// Compare available room on a monthly-equivalent basis. A yearly
+			// budget's full remaining amount is not one month's available room.
+			avail, err := coverAllMonthlyRoom(st.Remaining, b.Period)
+			if err != nil || avail.Amount <= 0 {
+				continue
+			}
+			sources = append(sources, coverAllSource{ID: b.ID, Name: b.Name, Currency: avail.Currency, Avail: avail, ThisStart: bs})
 		}
 	}
 	sort.Slice(overs, func(i, j int) bool { return overs[i].Name < overs[j].Name })
@@ -96,6 +105,10 @@ func coverAllData(app *appstate.App, member string, vw period.Window, pr prefs.P
 		return sources[i].Name < sources[j].Name
 	})
 	return overs, sources, base
+}
+
+func coverAllMonthlyRoom(remaining money.Money, cadence domain.Period) (money.Money, error) {
+	return budgeting.PeriodEquivalent(remaining, cadence, domain.PeriodMonthly)
 }
 
 func coverAllDefaultSource(over coverAllOver, sources []coverAllSource) string {
@@ -117,6 +130,15 @@ func coverAllSourcesFor(over coverAllOver, sources []coverAllSource) []coverAllS
 	return matching
 }
 
+func coverAllHasDonor(chosen map[string]string) bool {
+	for _, source := range chosen {
+		if source != "" {
+			return true
+		}
+	}
+	return false
+}
+
 // coverAllButtonProps carries nothing — the button reads shared state itself.
 type coverAllButtonProps struct{}
 
@@ -125,9 +147,12 @@ type coverAllButtonProps struct{}
 // gates it on SMART-B14 + an over-count so this only mounts when there's work to do.
 func coverAllBannerButton(_ coverAllButtonProps) ui.Node {
 	open := uistate.UseCoverAllOpen()
-	onOpen := ui.UseEvent(Prevent(func() { open.Set(true) }))
+	onOpen := ui.UseEvent(Prevent(func() {
+		coverAllOpener = js.Global().Get("document").Get("activeElement")
+		open.Set(true)
+	}))
 	return Button(css.Class("btn btn-tool cover-all-open", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
-		Attr("data-testid", "budgets-cover-all"), Title(uistate.T("coverAll.title")), OnClick(onOpen),
+		Attr("data-testid", "budgets-cover-all"), Title(uistate.T("br3dlg.coverTitle")), OnClick(onOpen),
 		uiw.Icon(icon.Scale, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
 		Span(uistate.T("coverAll.button")))
 }
@@ -141,14 +166,31 @@ func budgetsCoverAllModal() ui.Node {
 		return Fragment()
 	}
 	return uiw.FlipPanel(uiw.FlipPanelProps{
-		Title:     uistate.T("coverAll.title"),
+		Title:     uistate.T("br3dlg.coverTitle"),
 		Width:     uiw.FlipMediumW,
 		Height:    uiw.FlipMediumH,
 		NoFooter:  true,
 		FlushBody: true,
-		OnClose:   func() { open.Set(false) },
-		Back:      ui.CreateElement(coverAllForm, coverAllFormProps{OnDone: func() { open.Set(false) }}),
+		OnClose:   func() { closeCoverAll(func() { open.Set(false) }) },
+		Back:      ui.CreateElement(coverAllForm, coverAllFormProps{OnDone: func() { closeCoverAll(func() { open.Set(false) }) }}),
 	})
+}
+
+func closeCoverAll(close func()) {
+	close()
+	opener := coverAllOpener
+	if !opener.Truthy() || opener.Get("focus").Type() != js.TypeFunction {
+		return
+	}
+	var restore js.Func
+	restore = js.FuncOf(func(js.Value, []js.Value) any {
+		restore.Release()
+		if opener.Get("isConnected").Bool() {
+			opener.Call("focus")
+		}
+		return nil
+	})
+	js.Global().Call("setTimeout", restore, 0)
 }
 
 type coverAllFormProps struct {
@@ -211,9 +253,6 @@ func coverAllForm(props coverAllFormProps) ui.Node {
 	}
 	if seededSig.Get() != sig {
 		seed := map[string]string{}
-		for _, o := range overs {
-			seed[o.ID] = coverAllDefaultSource(o, sources)
-		}
 		choices.Set(seed)
 		errText.Set("")
 		seededSig.Set(sig)
@@ -387,7 +426,13 @@ func coverAllForm(props coverAllFormProps) ui.Node {
 			uistate.BumpDataRevision()
 			msg := uistate.T("coverAll.doneMany", applied)
 			if applied == 1 {
-				msg = uistate.T("coverAll.doneOne")
+				o := overs[0]
+				sourceID := sel[o.ID]
+				if sourceID != "" && sourceID != coverAllNextSource {
+					msg = uistate.T("br3dlg.coveredFrom", fmtMoney(o.Shortfall), srcByID[sourceID].Name)
+				} else {
+					msg = uistate.T("coverAll.doneOne")
+				}
 			}
 			uistate.PostNotice(msg, false)
 			if props.OnDone != nil {
@@ -401,14 +446,7 @@ func coverAllForm(props coverAllFormProps) ui.Node {
 		}
 	})
 
-	if len(overs) == 0 {
-		return Form(css.Class("acct-edit-form"), OnSubmit(onCancel),
-			Div(css.Class("modal-scroll"),
-				P(css.Class("empty cover-all-empty"), Attr("data-testid", "cover-all-empty"), uistate.T("coverAll.none"))),
-			Div(css.Class("modal-foot"),
-				Button(css.Class("btn btn-primary"), Type("submit"), Attr("data-testid", "cover-all-close"), uistate.T("action.close"))),
-		)
-	}
+	empty := len(overs) == 0
 
 	var totalOver int64
 	for _, o := range overs {
@@ -430,6 +468,7 @@ func coverAllForm(props coverAllFormProps) ui.Node {
 	if currencyError {
 		intro = uistate.T("coverAll.currencyError")
 	}
+	canApply := coverAllHasDonor(choices.Get())
 
 	listArgs := []any{css.Class("cover-all-list")}
 	for _, o := range overs {
@@ -442,20 +481,27 @@ func coverAllForm(props coverAllFormProps) ui.Node {
 
 	return Form(css.Class("acct-edit-form cover-all"), OnSubmit(apply),
 		Div(css.Class("modal-scroll"),
-			P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0"}),
-				Attr("data-testid", "cover-all-intro"), intro),
-			P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "cover-all-impact"),
-				Style(map[string]string{"margin": "0"}), fundsImpactLine(budgeting.ImpactCover, fundsImpactOption{
-					reach: impactReach, movesFromSelectedBudgets: movesFromSelectedBudgets,
-				})),
-			Div(listArgs...),
-			If(!currencyError, P(css.Class("t-caption", tw.TextDim, "cover-all-hint"), uistate.T("coverAll.nextMonthHint"))),
-			If(currencyError, P(css.Class("err"), Attr("role", "alert"), Attr("data-testid", "cover-all-currency-error"), uistate.T("coverAll.currencyError"))),
-			If(errText.Get() != "", P(css.Class("err"), Attr("role", "alert"), errText.Get())),
+			If(empty, P(css.Class("empty cover-all-empty"), Attr("data-testid", "cover-all-empty"), uistate.T("coverAll.none"))),
+			If(!empty, Fragment(
+				P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0"}),
+					Attr("data-testid", "cover-all-intro"), intro),
+				P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "cover-all-impact"),
+					Style(map[string]string{"margin": "0"}), fundsImpactLine(budgeting.ImpactCover, fundsImpactOption{
+						reach: impactReach, movesFromSelectedBudgets: movesFromSelectedBudgets,
+					})),
+				Div(listArgs...),
+				If(!currencyError, P(css.Class("t-caption", tw.TextDim, "cover-all-hint"), uistate.T("coverAll.nextMonthHint"))),
+				If(currencyError, P(css.Class("err"), Attr("role", "alert"), Attr("data-testid", "cover-all-currency-error"), uistate.T("coverAll.currencyError"))),
+				If(errText.Get() != "", P(css.Class("err"), Attr("role", "alert"), errText.Get())),
+			)),
 		),
 		Div(css.Class("modal-foot"),
-			Button(css.Class("btn"), Type("button"), Attr("data-testid", "cover-all-cancel"), OnClick(onCancel), uistate.T("coverAll.cancel")),
-			buttonWithDisabled(checkpointSaving.Get(), []any{css.Class("btn btn-primary"), Type("submit"), Attr("data-testid", "cover-all-apply")}, IfElse(checkpointSaving.Get(), Text(uistate.T("enc34.saving")), Text(uistate.T("coverAll.apply")))),
+			IfElse(empty,
+				Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "cover-all-close"), OnClick(onCancel), uistate.T("action.close")),
+				Fragment(
+					Button(css.Class("btn"), Type("button"), Attr("data-testid", "cover-all-cancel"), OnClick(onCancel), uistate.T("coverAll.cancel")),
+					buttonWithDisabled(checkpointSaving.Get() || !canApply || currencyError, []any{css.Class("btn btn-primary"), Type("submit"), Attr("data-testid", "cover-all-apply")}, IfElse(checkpointSaving.Get(), Text(uistate.T("enc34.saving")), Text(uistate.T("coverAll.apply")))),
+				)),
 		),
 	)
 }

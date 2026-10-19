@@ -90,6 +90,11 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Budgets dialogs name what they change (BR3DLG).** The raise form is headed with the budget's name, its amount field
+  no longer repeats its label, quick-picks offer the current overspend and the projected overspend, and a rollover budget
+  explains that next period's cap is the base plus carry; the toast reads "Groceries limit raised". The cover dialog
+  starts with no donor chosen, keeps Apply disabled until one is picked, and shows a yearly donor's room as its monthly
+  equivalent.
 - **Stable hook order across the Budgets page (HOOKB).** The add form, adjust-all, annual grid, auto-budget, tracking,
   flex, funded, future, month-close, recurring, track-untracked, why-over and sweep components, the summary tiles and
   the page host now register every event handler and state hook at a fixed position before early returns and branches
