@@ -63,18 +63,43 @@ type allocRead struct {
 
 // resolveAllocation computes the allocation read for a budget view.
 func resolveAllocation(v budgetView) allocRead {
+	read, err := resolveAllocationChecked(v)
+	if err != nil {
+		return allocRead{MarkerPct: -1}
+	}
+	return read
+}
+
+func resolveAllocationChecked(v budgetView) (allocRead, error) {
+	pool, err := money.Add(v.BannerIncome, v.RolledOver)
+	if err != nil {
+		return allocRead{}, fmt.Errorf("add income and rollover: %w", err)
+	}
 	r := allocRead{
-		Pool:      v.BannerIncome + v.RolledOver,
+		Pool:      pool,
 		Budgeted:  v.TotalLimit,
 		Savings:   v.SavingsAssigned,
 		MarkerPct: -1,
 	}
 	if r.Pool <= 0 {
-		return r
+		return r, nil
 	}
-	assigned := r.Budgeted + r.Savings
-	r.Unassigned = budgeting.ToAssign(r.Pool, assigned)
-	r.PlanPct = int(assigned * 100 / r.Pool)
+	assigned, err := money.Add(r.Budgeted, r.Savings)
+	if err != nil {
+		return allocRead{}, fmt.Errorf("sum allocated budget amounts: %w", err)
+	}
+	r.Unassigned, err = money.Sub(r.Pool, assigned)
+	if err != nil {
+		return allocRead{}, fmt.Errorf("calculate unassigned income: %w", err)
+	}
+	planPct, err := money.MulDiv(assigned, 100, r.Pool, money.RoundTowardZero)
+	if err != nil || int64(int(planPct)) != planPct {
+		if err == nil {
+			err = fmt.Errorf("plan percentage does not fit int")
+		}
+		return allocRead{}, fmt.Errorf("calculate allocation percentage: %w", err)
+	}
+	r.PlanPct = int(planPct)
 	switch {
 	case assigned == 0:
 		r.State = "empty" // an income basis with no budgets yet — day one
@@ -97,19 +122,32 @@ func resolveAllocation(v budgetView) allocRead {
 	if gap < 0 {
 		gap = 0
 	}
-	pctOf := func(n int64) int {
+	pctOf := func(n int64) (int, error) {
 		if scale <= 0 || n <= 0 {
-			return 0
+			return 0, nil
 		}
-		if p := int(n * 100 / scale); p < 100 {
-			return p
+		p, err := money.MulDiv(n, 100, scale, money.RoundTowardZero)
+		if err != nil {
+			return 0, err
 		}
-		return 100
+		if p < 100 {
+			return int(p), nil
+		}
+		return 100, nil
 	}
 	r.Spent = v.TotalSpent
-	r.SpentPct = pctOf(r.Spent)
-	r.BudgetedPct = pctOf(r.Budgeted)
-	r.GapPct = pctOf(gap)
+	r.SpentPct, err = pctOf(r.Spent)
+	if err != nil {
+		return allocRead{}, fmt.Errorf("calculate spending percentage: %w", err)
+	}
+	r.BudgetedPct, err = pctOf(r.Budgeted)
+	if err != nil {
+		return allocRead{}, fmt.Errorf("calculate budgeted percentage: %w", err)
+	}
+	r.GapPct, err = pctOf(gap)
+	if err != nil {
+		return allocRead{}, fmt.Errorf("calculate income gap percentage: %w", err)
+	}
 	r.SavingsPct = 100 - r.BudgetedPct - r.GapPct // the remainder, so the bar fills exactly
 	if r.SavingsPct < 0 {
 		r.SavingsPct = 0
@@ -118,7 +156,14 @@ func resolveAllocation(v budgetView) allocRead {
 	// plan is under, the END of the track already IS the pool, so a tick at 100%
 	// would mark a boundary the track edge already draws.
 	if r.State == "over" {
-		r.MarkerPct = int(r.Pool * 100 / scale)
+		markerPct, err := money.MulDiv(r.Pool, 100, scale, money.RoundTowardZero)
+		if err != nil || int64(int(markerPct)) != markerPct {
+			if err == nil {
+				err = fmt.Errorf("income marker percentage does not fit int")
+			}
+			return allocRead{}, fmt.Errorf("calculate income marker: %w", err)
+		}
+		r.MarkerPct = int(markerPct)
 		// Everything past the tick is money that does not exist, and it must not
 		// wear the healthy accent. The first draft did, and a bar that is entirely
 		// green while its caption says "more than you earn" argues with itself —
@@ -128,7 +173,7 @@ func resolveAllocation(v budgetView) allocRead {
 			r.BudgetedPct = r.MarkerPct
 		}
 	}
-	return r
+	return r, nil
 }
 
 // budgetIncomeAllocation renders the income allocation read: a caption naming
@@ -152,7 +197,10 @@ func resolveAllocation(v budgetView) allocRead {
 // dropped the separate loader band (zero-based live views); elsewhere the band
 // still owns that question and a rail here would draw it twice.
 func budgetIncomeAllocation(v budgetView, action ui.Node, hist bool, showSpend bool) ui.Node {
-	r := resolveAllocation(v)
+	r, err := resolveAllocationChecked(v)
+	if err != nil {
+		return P(css.Class("form-err"), Attr("role", "status"), uistate.T("budgets.allocationError"))
+	}
 	if r.Pool <= 0 {
 		return Fragment()
 	}

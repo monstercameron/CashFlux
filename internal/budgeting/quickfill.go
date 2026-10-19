@@ -164,9 +164,14 @@ func averagePeriods(periods []money.Money, cur string) money.Money {
 	if len(periods) == 0 {
 		return money.Zero(cur)
 	}
-	var sum int64
+	// Spending values are non-negative. Sum quotient and remainder separately
+	// so six near-MaxInt64 periods cannot overflow before the average is taken.
+	count := int64(len(periods))
+	var whole, remainder int64
 	for _, m := range periods {
-		sum += m.Amount
+		whole += m.Amount / count
+		remainder += m.Amount % count
 	}
-	return money.New(sum/int64(len(periods)), cur)
+	whole += remainder / count
+	return money.New(whole, cur)
 }

@@ -260,12 +260,22 @@ func renderAutoBudgetRows(suggestions []budgeting.BudgetSuggestion, existing map
 	if selectedCount > 0 && suggestionErr == nil && impactErr == nil && incomeErr == nil {
 		var leftLine ui.Node = Fragment()
 		if impact.HasIncome() {
-			leftKey, leftCls := "budgets.autoImpactLeft", "autobudget-impact-left"
-			if impact.LeftAfter() < 0 {
-				leftKey, leftCls = "budgets.autoImpactOver", "autobudget-impact-left is-over"
+			left, err := impact.LeftAfterChecked()
+			if err != nil {
+				leftLine = autoBudgetErrorNode(err, "autobudget-left-error")
+			} else {
+				magnitude, absErr := money.Abs(left)
+				if absErr != nil {
+					leftLine = autoBudgetErrorNode(absErr, "autobudget-left-error")
+				} else {
+					leftKey, leftCls := "budgets.autoImpactLeft", "autobudget-impact-left"
+					if left < 0 {
+						leftKey, leftCls = "budgets.autoImpactOver", "autobudget-impact-left is-over"
+					}
+					leftLine = Span(ClassStr(leftCls), Attr("data-testid", "autobudget-impact-left"),
+						uistate.T(leftKey, fmtMoney(money.New(magnitude, base)), fmtMoney(money.New(impact.Income, base))))
+				}
 			}
-			leftLine = Span(ClassStr(leftCls), Attr("data-testid", "autobudget-impact-left"),
-				uistate.T(leftKey, fmtMoney(money.New(absMinor(impact.LeftAfter()), base)), fmtMoney(money.New(impact.Income, base))))
 		}
 		impactNode = Div(css.Class("autobudget-impact"), Attr("data-testid", "autobudget-impact"),
 			Span(css.Class("autobudget-impact-lbl"), uistate.T("budgets.autoImpactLabel")),
@@ -291,7 +301,7 @@ func autoBudgetErrorNode(err error, testID string) ui.Node {
 	if err == nil {
 		return Fragment()
 	}
-	return P(css.Class("form-err"), Attr("role", "status"), Attr("data-testid", testID), uistate.T("budgets.autoError", err.Error()))
+	return P(css.Class("form-err autobudget-error"), Attr("role", "status"), Attr("data-testid", testID), uistate.T("budgets.autoErrorGeneric"))
 }
 
 func saveAutoBudget(app *appstate.App, suggestions []budgeting.BudgetSuggestion, existing map[string]domain.Budget, base string, rates currency.Rates, anchor time.Time,

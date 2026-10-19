@@ -21,6 +21,7 @@
 package goalfunded
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -28,6 +29,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/money"
 )
 
 // Split is a period's spending, divided by what paid for it.
@@ -54,15 +56,27 @@ func (s Split) HasFunded() bool { return s.FundedMinor > 0 }
 // from "$120 over", and it is the difference between a budget that understands
 // the plan and one that only counts.
 func (s Split) OverBy(limitMinor int64) (overMinor int64, rescuedByGoal bool) {
+	overMinor, rescuedByGoal, _ = s.OverByChecked(limitMinor)
+	return overMinor, rescuedByGoal
+}
+
+// OverByChecked reports overflow while measuring ordinary and total overspend.
+func (s Split) OverByChecked(limitMinor int64) (overMinor int64, rescuedByGoal bool, err error) {
 	if limitMinor <= 0 {
-		return 0, false
+		return 0, false, nil
 	}
-	ordinaryOver := s.OrdinaryMinor - limitMinor
-	totalOver := s.TotalMinor - limitMinor
+	ordinaryOver, err := money.Sub(s.OrdinaryMinor, limitMinor)
+	if err != nil {
+		return 0, false, fmt.Errorf("calculate ordinary overspend: %w", err)
+	}
+	totalOver, err := money.Sub(s.TotalMinor, limitMinor)
+	if err != nil {
+		return 0, false, fmt.Errorf("calculate total overspend: %w", err)
+	}
 	if ordinaryOver < 0 {
 		ordinaryOver = 0
 	}
-	return ordinaryOver, totalOver > 0 && ordinaryOver == 0
+	return ordinaryOver, totalOver > 0 && ordinaryOver == 0, nil
 }
 
 // Summarize splits expense in [start, end) matching a category set.
@@ -71,6 +85,13 @@ func (s Split) OverBy(limitMinor int64) (overMinor int64, rescuedByGoal bool) {
 // scope; this package only decides what paid.
 func Summarize(txns []domain.Transaction, categoryIDs map[string]bool,
 	start, end time.Time, rates currency.Rates) Split {
+	split, _ := SummarizeChecked(txns, categoryIDs, start, end, rates)
+	return split
+}
+
+// SummarizeChecked splits matching spend and reports arithmetic overflow.
+func SummarizeChecked(txns []domain.Transaction, categoryIDs map[string]bool,
+	start, end time.Time, rates currency.Rates) (Split, error) {
 
 	var s Split
 	goals := map[string]bool{}
@@ -85,23 +106,32 @@ func Summarize(txns []domain.Transaction, categoryIDs map[string]bool,
 		if err != nil {
 			continue
 		}
-		v := amt.Amount
-		if v < 0 {
-			v = -v
+		v, err := money.Abs(amt.Amount)
+		if err != nil {
+			return Split{}, fmt.Errorf("absolute transaction %q: %w", t.ID, err)
 		}
-		s.TotalMinor += v
+		s.TotalMinor, err = money.Add(s.TotalMinor, v)
+		if err != nil {
+			return Split{}, fmt.Errorf("sum goal-funded spending: %w", err)
+		}
 		if id := strings.TrimSpace(t.GoalID); id != "" {
-			s.FundedMinor += v
+			s.FundedMinor, err = money.Add(s.FundedMinor, v)
+			if err != nil {
+				return Split{}, fmt.Errorf("sum goal-funded spending: %w", err)
+			}
 			goals[id] = true
 			continue
 		}
-		s.OrdinaryMinor += v
+		s.OrdinaryMinor, err = money.Add(s.OrdinaryMinor, v)
+		if err != nil {
+			return Split{}, fmt.Errorf("sum ordinary spending: %w", err)
+		}
 	}
 	for id := range goals {
 		s.Goals = append(s.Goals, id)
 	}
 	sort.Strings(s.Goals)
-	return s
+	return s, nil
 }
 
 // Drawdown is what a goal has had spent against it.
@@ -119,6 +149,12 @@ type Drawdown struct {
 // spent on that thing is no longer saved, and a goal that still shows the full
 // amount after the purchase is a goal lying about its own progress.
 func ByGoal(txns []domain.Transaction, start, end time.Time, rates currency.Rates) []Drawdown {
+	drawdowns, _ := ByGoalChecked(txns, start, end, rates)
+	return drawdowns
+}
+
+// ByGoalChecked totals goal-linked spending and reports arithmetic overflow.
+func ByGoalChecked(txns []domain.Transaction, start, end time.Time, rates currency.Rates) ([]Drawdown, error) {
 	byID := map[string]*Drawdown{}
 	for _, t := range txns {
 		id := strings.TrimSpace(t.GoalID)
@@ -129,16 +165,19 @@ func ByGoal(txns []domain.Transaction, start, end time.Time, rates currency.Rate
 		if err != nil {
 			continue
 		}
-		v := amt.Amount
-		if v < 0 {
-			v = -v
+		v, err := money.Abs(amt.Amount)
+		if err != nil {
+			return nil, fmt.Errorf("absolute transaction %q: %w", t.ID, err)
 		}
 		d, ok := byID[id]
 		if !ok {
 			d = &Drawdown{GoalID: id}
 			byID[id] = d
 		}
-		d.SpentMinor += v
+		d.SpentMinor, err = money.Add(d.SpentMinor, v)
+		if err != nil {
+			return nil, fmt.Errorf("sum drawdown for goal %q: %w", id, err)
+		}
 		d.Count++
 	}
 	out := make([]Drawdown, 0, len(byID))
@@ -153,7 +192,7 @@ func ByGoal(txns []domain.Transaction, start, end time.Time, rates currency.Rate
 		}
 		return out[i].GoalID < out[j].GoalID
 	})
-	return out
+	return out, nil
 }
 
 // RemainingMinor is a goal's balance after the purchases it funded.
@@ -164,9 +203,21 @@ func ByGoal(txns []domain.Transaction, start, end time.Time, rates currency.Rate
 // else — and the honest report is "nothing left", with the overspend visible in
 // the budget where it actually landed.
 func RemainingMinor(savedMinor int64, d Drawdown) int64 {
-	left := savedMinor - d.SpentMinor
-	if left < 0 {
+	left, err := RemainingMinorChecked(savedMinor, d)
+	if err != nil {
 		return 0
 	}
 	return left
+}
+
+// RemainingMinorChecked subtracts a drawdown and reports arithmetic overflow.
+func RemainingMinorChecked(savedMinor int64, d Drawdown) (int64, error) {
+	left, err := money.Sub(savedMinor, d.SpentMinor)
+	if err != nil {
+		return 0, fmt.Errorf("subtract goal drawdown: %w", err)
+	}
+	if left < 0 {
+		return 0, nil
+	}
+	return left, nil
 }

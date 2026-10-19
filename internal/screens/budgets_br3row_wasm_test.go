@@ -5,6 +5,7 @@
 package screens
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -60,6 +61,13 @@ func TestBR3RowProjectionUsesEndedAndCommittedCopy(t *testing.T) {
 	f.Rerender(budgetRowProjectionLine(live, budgetRowProps{}))
 	if got := strings.Join(strings.Fields(f.Text()), " "); got != "$200.00 free after $1,100.00 in committed bills" {
 		t.Fatalf("committed projection = %q", got)
+	}
+	failedCommitment := budgeting.Status{Budget: domain.Budget{ID: "commitment-error"}, CommitmentError: &budgeting.BudgetEvaluationError{Err: errors.New("offline")}}
+	failedCommitment.Projection.CommittedDominates = true
+	failedCommitment.Projection.Committed = money.New(110000, "USD")
+	f.Rerender(budgetRowProjectionLine(failedCommitment, budgetRowProps{}))
+	if got := strings.Join(strings.Fields(f.Text()), " "); got != "On track — $1,100.00 of this is bills" {
+		t.Fatalf("committed-dominates projection = %q", got)
 	}
 }
 

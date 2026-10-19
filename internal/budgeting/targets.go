@@ -152,6 +152,10 @@ func byDateMonthly(target, funded money.Money, from, deadline time.Time) money.M
 	if months < 1 {
 		months = 1
 	}
-	per := (rem.Amount + int64(months) - 1) / int64(months) // ceil division
+	periods := int64(months)
+	per := rem.Amount / periods
+	if rem.Amount%periods != 0 {
+		per++
+	}
 	return money.New(per, cur)
 }

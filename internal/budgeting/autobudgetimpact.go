@@ -33,12 +33,48 @@ type AutoBudgetImpact struct {
 }
 
 // Change is the household's total change in monthly budgeted amount.
-func (i AutoBudgetImpact) Change() int64 { return i.BudgetedAfter - i.BudgetedBefore }
+func (i AutoBudgetImpact) Change() int64 {
+	change, _ := i.ChangeChecked()
+	return change
+}
 
 // LeftBefore / LeftAfter are income minus what is budgeted, before and after —
 // negative when the plan asks for more than the household earns.
-func (i AutoBudgetImpact) LeftBefore() int64 { return i.Income - i.BudgetedBefore }
-func (i AutoBudgetImpact) LeftAfter() int64  { return i.Income - i.BudgetedAfter }
+func (i AutoBudgetImpact) LeftBefore() int64 {
+	left, _ := i.LeftBeforeChecked()
+	return left
+}
+func (i AutoBudgetImpact) LeftAfter() int64 {
+	left, _ := i.LeftAfterChecked()
+	return left
+}
+
+// ChangeChecked returns the monthly budget change or an overflow error.
+func (i AutoBudgetImpact) ChangeChecked() (int64, error) {
+	change, err := money.Sub(i.BudgetedAfter, i.BudgetedBefore)
+	if err != nil {
+		return 0, fmt.Errorf("calculate auto-budget change: %w", err)
+	}
+	return change, nil
+}
+
+// LeftBeforeChecked returns income less the current plan or an overflow error.
+func (i AutoBudgetImpact) LeftBeforeChecked() (int64, error) {
+	left, err := money.Sub(i.Income, i.BudgetedBefore)
+	if err != nil {
+		return 0, fmt.Errorf("calculate amount left before auto-budget: %w", err)
+	}
+	return left, nil
+}
+
+// LeftAfterChecked returns income less the proposed plan or an overflow error.
+func (i AutoBudgetImpact) LeftAfterChecked() (int64, error) {
+	left, err := money.Sub(i.Income, i.BudgetedAfter)
+	if err != nil {
+		return 0, fmt.Errorf("calculate amount left after auto-budget: %w", err)
+	}
+	return left, nil
+}
 
 // HasIncome reports whether an income basis is known, so the UI can show the
 // left-over figures rather than implying zero income.
@@ -52,26 +88,48 @@ func (i AutoBudgetImpact) HasIncome() bool { return i.Income > 0 }
 // absent from limits are untouched. Amounts are minor units in the base
 // currency — the caller converts, as Auto budget already does when it writes.
 func AutoBudgetImpactOf(budgets []domain.Budget, income int64, limits map[string]int64) AutoBudgetImpact {
+	impact, err := AutoBudgetImpactOfChecked(budgets, income, limits)
+	if err != nil {
+		return AutoBudgetImpact{Income: income}
+	}
+	return impact
+}
+
+// AutoBudgetImpactOfChecked computes a plan impact and reports sum overflow.
+func AutoBudgetImpactOfChecked(budgets []domain.Budget, income int64, limits map[string]int64) (AutoBudgetImpact, error) {
 	out := AutoBudgetImpact{Income: income}
+	var err error
 	replaced := map[string]bool{}
 	for _, b := range budgets {
 		if b.Period != domain.PeriodMonthly || !autoBudgetImpactEligible(b) {
 			continue
 		}
-		out.BudgetedBefore += b.Limit.Amount
+		out.BudgetedBefore, err = money.Add(out.BudgetedBefore, b.Limit.Amount)
+		if err != nil {
+			return AutoBudgetImpact{}, fmt.Errorf("sum current auto-budget plan: %w", err)
+		}
 		if next, ok := limits[b.CategoryID]; ok && !replaced[b.CategoryID] {
 			replaced[b.CategoryID] = true
-			out.BudgetedAfter += next
+			out.BudgetedAfter, err = money.Add(out.BudgetedAfter, next)
+			if err != nil {
+				return AutoBudgetImpact{}, fmt.Errorf("sum proposed auto-budget plan: %w", err)
+			}
 			continue
 		}
-		out.BudgetedAfter += b.Limit.Amount
+		out.BudgetedAfter, err = money.Add(out.BudgetedAfter, b.Limit.Amount)
+		if err != nil {
+			return AutoBudgetImpact{}, fmt.Errorf("sum proposed auto-budget plan: %w", err)
+		}
 	}
 	for cat, amt := range limits {
 		if !replaced[cat] {
-			out.BudgetedAfter += amt
+			out.BudgetedAfter, err = money.Add(out.BudgetedAfter, amt)
+			if err != nil {
+				return AutoBudgetImpact{}, fmt.Errorf("sum proposed auto-budget plan: %w", err)
+			}
 		}
 	}
-	return out
+	return out, nil
 }
 
 // AutoBudgetImpactWithRates previews the complete standing household plan on a

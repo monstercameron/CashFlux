@@ -1272,11 +1272,11 @@ func budgetMethodChangeHandler(app *appstate.App, impact budgeting.MethodImpact)
 			if !apply() {
 				return
 			}
-			uistate.PostUndoable(uistate.T("budgets.methodGlobalSaved", methodDisplayName(next), plural(impact.Following, "budget")))
+			uistate.PostUndoable(uistate.T("budgets.methodGlobalSaved", methodDisplayName(next), uistate.T(budgetCountKey("bc4b4.budgetCount", impact.Following), impact.Following)))
 		}
 		if impact.Overriding > 0 {
 			uistate.ConfirmModalLabeled(
-				uistate.T("budgets.methodGlobalConfirm", methodDisplayName(next), plural(impact.Following, "budget"), plural(impact.Overriding, "budget")),
+				uistate.T("budgets.methodGlobalConfirm", methodDisplayName(next), uistate.T(budgetCountKey("bc4b4.budgetCount", impact.Following), impact.Following), uistate.T(budgetCountKey("bc4b4.budgetCount", impact.Overriding), impact.Overriding)),
 				uistate.T("budgets.methodGlobalConfirmAction"), false,
 				func(ok bool) {
 					if ok {

@@ -101,7 +101,11 @@ func SuggestTrueUps(budgets []domain.Budget, txns NettedLedger, cats []domain.Ca
 		if err != nil {
 			return nil, err
 		}
-		if suggested-limit < trueUpMinDeltaMinor {
+		delta, err := money.Sub(suggested, limit)
+		if err != nil {
+			return nil, fmt.Errorf("true-up budget %q suggested raise: %w", b.ID, err)
+		}
+		if delta < trueUpMinDeltaMinor {
 			continue
 		}
 		out = append(out, TrueUp{
