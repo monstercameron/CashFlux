@@ -90,6 +90,15 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Budgets page uses the corrected math everywhere (BUDQ4).** The page, cover-all, month close and "why over" now use the
+  pay-cycle-anchored previous period, envelope and one shared boost key (honouring the week-start setting), with one shared
+  pay-anchor parser. Roll-ups and prior-period totals convert each budget to the base currency first; a budget that
+  can't be converted is shown as incomplete instead of being dropped or summed raw, and deltas are labelled in the budget's
+  own currency. Income and committed amounts report missing exchange rates. Unbudgeted uses the shared calculation (tags,
+  exclusions and split lines), the attention strip's "View spending" keeps tags and sub-categories, Adjust all previews
+  comparable monthly totals, amount entry rejects NaN/Infinity/huge values, sorting uses the displayed name, the view
+  refreshes when the period rolls over, and the new status-strip styles are switched on. "Top up…" is "Raise limit…"
+  everywhere, with a test that the key is defined once.
 - **Assistant transfers: you approve exactly what is written (SEC7).** The assistant's transfer confirmation now shows both
   accounts and currencies and the destination amount that will be recorded (the explicit received amount, or the converted
   amount), says when no exchange rate exists and the transfer will be refused, and warns when a received amount differs

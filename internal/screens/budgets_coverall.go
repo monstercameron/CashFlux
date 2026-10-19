@@ -64,12 +64,7 @@ func coverAllData(app *appstate.App, member string, vw period.Window, pr prefs.P
 		base = "USD"
 	}
 	weekStart := pr.WeekStartWeekday()
-	var payAnchor time.Time
-	if pr.PayCycleAnchor != "" {
-		if t, err := time.Parse("2006-01-02", pr.PayCycleAnchor); err == nil {
-			payAnchor = t
-		}
-	}
+	payAnchor := budgetPayCycleAnchor(pr.PayCycleAnchor)
 	// Anchor exactly like computeBudgetView: today when today is inside the viewed
 	// window, otherwise the window's start.
 	viewFrom, viewTo := vw.Range()
@@ -82,7 +77,7 @@ func coverAllData(app *appstate.App, member string, vw period.Window, pr prefs.P
 		b := st.Budget
 		var bs, be time.Time
 		if showLastMonth {
-			bs, be = budgeting.PreviousPeriodRange(b.Period, anchor, weekStart)
+			bs, be = budgeting.PreviousPeriodRangeAnchored(b.Period, anchor, weekStart, payAnchor)
 		} else {
 			bs, be = budgeting.PeriodRangeAnchored(b.Period, anchor, weekStart, payAnchor)
 		}
@@ -143,6 +138,8 @@ func coverAllForm(props coverAllFormProps) ui.Node {
 	member := uistate.UseActiveMember().Get()
 	pr := uistate.UsePrefs().Get()
 	vw := uistate.UsePeriod().Get()
+	weekStart := pr.WeekStartWeekday()
+	payAnchor := budgetPayCycleAnchor(pr.PayCycleAnchor)
 	showLM := uistate.UseBudgetsLastMonth().Get()
 	choices := ui.UseState(map[string]string{})
 	errText := ui.UseState("")
@@ -286,7 +283,9 @@ func coverAllForm(props coverAllFormProps) ui.Node {
 			}
 			gained := false
 			for _, op := range ops {
-				b = b.WithPeriodBoost(op.start, op.delta)
+				key := budgeting.PeriodKeyWithWeekStart(b.Period, op.start, payAnchor, weekStart)
+				keyStart, _ := time.Parse("2006-01-02", key)
+				b = b.WithPeriodBoost(keyStart, op.delta)
 				if op.delta > 0 {
 					gained = true
 				}

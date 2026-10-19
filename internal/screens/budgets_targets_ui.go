@@ -270,12 +270,7 @@ func budgetQuickFillRow(app *appstate.App, b domain.Budget, status budgeting.Sta
 	if anchor.IsZero() {
 		anchor = time.Now()
 	}
-	var payAnchor time.Time
-	if pr.PayCycleAnchor != "" {
-		if t, err := time.Parse("2006-01-02", pr.PayCycleAnchor); err == nil {
-			payAnchor = t
-		}
-	}
+	payAnchor := budgetPayCycleAnchor(pr.PayCycleAnchor)
 
 	// The target's remaining need is a forward-looking figure about today's
 	// funding, so it keeps the wall clock — the same reference budgetTargetLine

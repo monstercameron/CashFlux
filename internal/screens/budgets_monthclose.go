@@ -187,8 +187,13 @@ func monthCloseBody(_ monthCloseBodyProps) ui.Node {
 			if !ok {
 				continue
 			}
-			_, thisStart := periodStarts(b)
-			if err := app.PutBudget(b.WithPeriodBoost(thisStart, amt)); err == nil {
+			pr := uistate.CurrentPrefs()
+			key := budgeting.PeriodKeyWithWeekStart(b.Period, v.Anchor, budgetPayCycleAnchor(pr.PayCycleAnchor), pr.WeekStartWeekday())
+			thisStart, err := time.Parse("2006-01-02", key)
+			if err == nil {
+				err = app.PutBudget(b.WithPeriodBoost(thisStart, amt))
+			}
+			if err == nil {
 				n++
 			}
 		}

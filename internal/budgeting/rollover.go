@@ -68,7 +68,13 @@ func PreviousPeriodRangeAnchored(period domain.Period, ref time.Time, weekStart 
 // PeriodKey returns the stable UTC calendar-date key for the period containing
 // ref. Persisted boosts and recurring-period markers should all use this key.
 func PeriodKey(period domain.Period, ref time.Time, anchor time.Time) string {
-	start, _ := PeriodRangeAnchored(period, ref, time.Monday, anchor)
+	return PeriodKeyWithWeekStart(period, ref, anchor, time.Monday)
+}
+
+// PeriodKeyWithWeekStart returns a stable UTC calendar-date key for the period
+// containing ref, honoring the configured first day of the week.
+func PeriodKeyWithWeekStart(period domain.Period, ref, anchor time.Time, weekStart time.Weekday) string {
+	start, _ := PeriodRangeAnchored(period, ref, weekStart, anchor)
 	return dateutil.FormatDate(start)
 }
 

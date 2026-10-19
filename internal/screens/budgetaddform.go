@@ -5,6 +5,7 @@
 package screens
 
 import (
+	"log/slog"
 	"strings"
 	"time"
 
@@ -421,7 +422,10 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 	now := time.Now()
 	curStart := dateutil.MonthStart(now)
 	prevStart := dateutil.AddMonths(curStart, -1)
-	tmplIncome := budgeting.IncomeForBudgets(uistate.CurrentPrefs().MonthlyIncomeMinor, txns, prevStart, curStart, base, rates)
+	tmplIncome, tmplIncomeErr := budgeting.IncomeForBudgetsChecked(uistate.CurrentPrefs().MonthlyIncomeMinor, txns, prevStart, curStart, base, rates)
+	if tmplIncomeErr != nil {
+		slog.Error("calculate budget template income", "error", tmplIncomeErr)
+	}
 	var tmplProposals []budgeting.BudgetProposal
 	if tmplIncome > 0 {
 		res := budgeting.Generate5030(tmplIncome, categories, txns, now)
@@ -721,6 +725,7 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 						TestID:    "budget-copy-existing",
 					})),
 				),
+				If(tmplIncomeErr != nil, P(css.Class("form-err"), Attr("role", "status"), Attr("data-testid", "budget-template-income-incomplete"), uistate.T("budgets.incomplete"))),
 			),
 			Div(css.Class("budget-add-or"), Span(uistate.T("budgets.tmplOr"))),
 			Div(css.Class("form-grid", "budget-add-grid"),

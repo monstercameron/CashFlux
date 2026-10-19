@@ -14,6 +14,8 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
+	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -97,11 +99,19 @@ func AdjustAllBody(_ struct{}) ui.Node {
 	pct, parseErr := strconv.ParseFloat(raw, 64)
 	valid := raw != "" && parseErr == nil && budgeting.ValidAdjustPct(pct)
 	preview := budgeting.AdjustPreview{}
+	var normalizationErr error
 	if valid {
 		// Previewed on the basis the chosen scope will write, never on the other
 		// one — that mismatch is what made a this-period preview a promise the
 		// write could not keep.
-		preview = budgeting.AdjustAllPreviewFor(scoped, pct, scope, overlays)
+		base := "USD"
+		fx := currency.Rates{Base: base}
+		if app != nil && app.Settings().BaseCurrency != "" {
+			base = app.Settings().BaseCurrency
+			fx = currency.Rates{Base: base, Rates: app.Settings().FXRates}
+		}
+		preview, normalizationErr = budgeting.AdjustAllPreviewNormalized(scoped, pct, scope, overlays, domain.PeriodMonthly,
+			fx)
 	}
 	// C671: a permanent adjustment is always acknowledged, whatever its size. The
 	// old rule looked only at magnitude, so a 5% cut that reached every future
@@ -142,6 +152,8 @@ func AdjustAllBody(_ struct{}) ui.Node {
 	case !budgeting.ValidAdjustPct(pct):
 		inlineErr = uistate.T("budgets.adjustAllOutOfRange",
 			formatAdjustPct(budgeting.AdjustMinPct), formatAdjustPct(budgeting.AdjustMaxPct))
+	case normalizationErr != nil:
+		inlineErr = uistate.T("budgets.incomplete")
 	case preview.Count() == 0:
 		inlineErr = uistate.T("budgets.adjustAllNothingToChange")
 	}
@@ -184,10 +196,25 @@ func AdjustAllBody(_ struct{}) ui.Node {
 			totalNode = P(css.Class("budget-cat-fate", tw.TextFaint), Attr("data-testid", "adjustall-mixed"),
 				uistate.T("budgets.adjustAllMixedCurrency"))
 		}
+		var normalizedSummary ui.Node = Fragment()
+		if normalizationErr == nil {
+			normalizedSummary = P(css.Class("adjustall-normalized"), Attr("data-testid", "adjustall-normalized"),
+				uistate.T("budq4.adjustNormalized", fmtMoney(preview.NormalizedBefore), fmtMoney(preview.NormalizedAfter)))
+		}
+		var normalizedLines ui.Node = Fragment()
+		if len(preview.NormalizedLines) > 0 {
+			normalizedLines = Div(css.Class("adjustall-normalized-lines"), Attr("data-testid", "adjustall-normalized-lines"),
+				MapKeyed(preview.NormalizedLines, func(line budgeting.AdjustNormalizedLine) any { return line.BudgetID }, func(line budgeting.AdjustNormalizedLine) ui.Node {
+					return P(css.Class("budget-owner-hint", tw.TextFaint), line.Name, ": ",
+						fmtMoney(line.Before), " → ", fmtMoney(line.After))
+				}))
+		}
 		previewNode = Div(css.Class("adjustall-preview"), Attr("data-testid", "adjustall-preview"),
 			P(css.Class("adjustall-count"), Attr("data-testid", "adjustall-count"),
 				uistate.T("budgets.adjustAllCount", plural(preview.Count(), "budget"), formatAdjustPct(pct))),
 			totalNode,
+			normalizedSummary,
+			normalizedLines,
 			Div(css.Class("adjustall-rows"), Attr("data-testid", "adjustall-rows"), rows),
 		)
 	}

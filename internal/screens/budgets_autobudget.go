@@ -5,6 +5,7 @@
 package screens
 
 import (
+	"log/slog"
 	"strconv"
 	"time"
 
@@ -161,8 +162,11 @@ func AutoBudgetBody(_ struct{}) ui.Node {
 	// it, otherwise the window's start.
 	autoAnchor := budgetViewAnchor(uistate.UsePeriod().Get(), time.Now())
 	monthStart := dateutil.MonthStart(autoAnchor)
-	autoIncome := budgeting.IncomeForBudgets(uistate.CurrentPrefs().MonthlyIncomeMinor,
+	autoIncome, incomeErr := budgeting.IncomeForBudgetsChecked(uistate.CurrentPrefs().MonthlyIncomeMinor,
 		app.Transactions(), dateutil.AddMonths(monthStart, -1), monthStart, base, rates)
+	if incomeErr != nil {
+		slog.Error("calculate auto-budget income", "error", incomeErr)
+	}
 	impact := budgeting.AutoBudgetImpactOf(app.Budgets(), autoIncome, pending)
 
 	apply := ui.UseEvent(Prevent(func() {
@@ -308,6 +312,7 @@ func AutoBudgetBody(_ struct{}) ui.Node {
 			P(css.Class("muted", tw.Text13), Style(map[string]string{"margin": "0"}),
 				Attr("data-testid", "autobudget-intro"),
 				uistate.T(introKey, uistate.T("budgets.autoMonths", strconv.Itoa(months)))),
+			If(incomeErr != nil, P(css.Class("form-err"), Attr("role", "status"), Attr("data-testid", "autobudget-income-incomplete"), uistate.T("budgets.incomplete"))),
 			impactNode,
 			bulkBar,
 			Div(css.Class("autobudget-rows"), Attr("data-testid", "autobudget-rows"), rows)),

@@ -5,8 +5,6 @@
 package screens
 
 import (
-	"strings"
-
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -65,15 +63,8 @@ func budgetAttentionWidget(props budgetListProps) ui.Node {
 	// strip describe one period, and landing on the category's full multi-year
 	// history read as a mismatch (UI/UX task #14). The dates arrive as normal,
 	// clearable From/To filter chips, so widening back out is one click.
-	viewTransactions := func(categoryIDs []string, from, to string) {
-		var f uistate.TxFilter
-		switch len(categoryIDs) {
-		case 0:
-		case 1:
-			f.Category = categoryIDs[0]
-		default:
-			f.Categories = strings.Join(categoryIDs, ",")
-		}
+	viewTransactions := func(scope budgeting.Scope, from, to string) {
+		f := budgetScopeFilter(scope)
 		f.From = from
 		f.To = to
 		f = f.Normalize()
@@ -130,7 +121,7 @@ type budgetAttentionRowProps struct {
 	// strip's figures describe (task #14).
 	PeriodFrom string
 	PeriodTo   string
-	OnView     func(categoryIDs []string, from, to string)
+	OnView     func(scope budgeting.Scope, from, to string)
 }
 
 // budgetAttentionRow is one problem budget in the strip: name + spend-of-limit,
@@ -139,11 +130,7 @@ type budgetAttentionRowProps struct {
 func budgetAttentionRow(props budgetAttentionRowProps) ui.Node {
 	s := props.Status
 	onView := ui.UseEvent(Prevent(func() {
-		ids := s.Budget.CategoryIDs
-		if len(ids) == 0 && s.Budget.CategoryID != "" {
-			ids = []string{s.Budget.CategoryID}
-		}
-		props.OnView(ids, props.PeriodFrom, props.PeriodTo)
+		props.OnView(budgetDrillScope(s.Budget), props.PeriodFrom, props.PeriodTo)
 	}))
 
 	var tone, pillTxt string

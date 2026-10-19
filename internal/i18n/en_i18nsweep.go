@@ -119,7 +119,6 @@ var i18nSweepKeys = Catalog{
 
 	// Budget card actions.
 	"budgets.coverBtn": "Cover…",
-	"budgets.topupBtn": "Top up…",
 
 	// Shared component library (second sweep pass — components + helpers).
 	"ui.table.all":      "All",

@@ -5,7 +5,7 @@
 package screens
 
 import (
-	"sort"
+	"log/slog"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -43,10 +43,7 @@ type unbudgetedStripProps struct {
 
 // unbudgetedCat is one candidate: an expense category with spending this month
 // and no budget tracking it.
-type unbudgetedCat struct {
-	ID, Name   string
-	SpentMinor int64
-}
+type unbudgetedCat = budgeting.UnbudgetedCategory
 
 // unbudgetedStrip surfaces contextual budget creation (G8): the top expense
 // categories with real spending this month that no budget tracks, each one click
@@ -68,33 +65,20 @@ func unbudgetedStrip(props unbudgetedStripProps) ui.Node {
 	}
 	rates := currency.Rates{Base: props.Base, Rates: app.Settings().FXRates}
 
-	// Every category any budget tracks (primary or extra) is off the table.
-	tracked := map[string]bool{}
-	for _, b := range app.Budgets() {
-		for _, cid := range b.TrackedCategoryIDs() {
-			tracked[cid] = true
-		}
+	computed, err := budgeting.ComputeUnbudgeted(app.Budgets(), app.Categories(), app.Transactions(), ms, me, rates)
+	if err != nil {
+		slog.Error("calculate unbudgeted spending", "error", err)
+		return P(css.Class("form-err"), Attr("role", "status"), uistate.T("budgets.incomplete"))
 	}
-	// This month's expense spend per untracked category (base minor units).
-	spend := map[string]int64{}
-	for _, t := range app.Transactions() {
-		if !t.IsExpense() || t.CategoryID == "" || tracked[t.CategoryID] || !dateutil.InRange(t.Date, ms, me) {
-			continue
-		}
-		if conv, err := rates.Convert(t.Amount.Abs(), props.Base); err == nil {
-			spend[t.CategoryID] += conv.Amount
-		}
-	}
-	var cands []unbudgetedCat
-	for _, c := range app.Categories() {
-		if amt := spend[c.ID]; amt > 0 {
-			cands = append(cands, unbudgetedCat{ID: c.ID, Name: c.Name, SpentMinor: amt})
+	cands := make([]unbudgetedCat, 0, len(computed.Categories))
+	for _, candidate := range computed.Categories {
+		if candidate.CategoryID != "" {
+			cands = append(cands, candidate)
 		}
 	}
 	if len(cands) == 0 {
 		return Fragment()
 	}
-	sort.Slice(cands, func(i, j int) bool { return cands[i].SpentMinor > cands[j].SpentMinor })
 	// The cap is fine — this is a teaser, not an inventory — but it used to be
 	// SILENT: a household with nine untracked categories was shown four and never
 	// told the other five existed, so "tidy these up" looked finished when it was
@@ -105,17 +89,17 @@ func unbudgetedStrip(props unbudgetedStripProps) ui.Node {
 		cands = cands[:maxChips]
 	}
 
-	chips := MapKeyed(cands, func(c unbudgetedCat) any { return c.ID }, func(c unbudgetedCat) ui.Node {
+	chips := MapKeyed(cands, func(c unbudgetedCat) any { return c.CategoryID }, func(c unbudgetedCat) ui.Node {
 		// Suggest from 6-month history ending at the VIEWED period, falling back to
 		// that period's actual spend — so the suggested limit describes the same
 		// window the chip's figure does (C607).
-		sug, _ := budgeting.SuggestLimit(c.ID, app.Transactions(), ms, 6, rates)
+		sug, _ := budgeting.SuggestLimit(c.CategoryID, app.Transactions(), ms, 6, rates)
 		if sug <= 0 {
-			sug = c.SpentMinor
+			sug = c.Amount.Amount
 		}
 		return ui.CreateElement(unbudgetedChip, unbudgetedChipProps{
-			CatID: c.ID, CatName: c.Name,
-			SpentStr:   fmtMoney(money.New(c.SpentMinor, props.Base)),
+			CatID: c.CategoryID, CatName: c.Name,
+			SpentStr:   fmtMoney(c.Amount),
 			LimitMajor: money.FormatMinor(sug, currency.Decimals(props.Base)),
 		})
 	})

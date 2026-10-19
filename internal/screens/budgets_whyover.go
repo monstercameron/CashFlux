@@ -73,11 +73,9 @@ func budgetWhyOver(b domain.Budget, anchor time.Time) (whyOverFacts, bool) {
 		anchor = time.Now()
 	}
 	weekStart := uistate.LoadPrefs().WeekStartWeekday()
-	start, end := budgeting.PeriodRange(b.Period, anchor, weekStart)
-	// The comparable previous period: anchor one day before this one started, and
-	// let PeriodRange find that period's own bounds. Subtracting a fixed number of
-	// days would drift on months, which is the period most budgets use.
-	prevStart, prevEnd := budgeting.PeriodRange(b.Period, start.AddDate(0, 0, -1), weekStart)
+	payAnchor := budgetPayCycleAnchor(uistate.LoadPrefs().PayCycleAnchor)
+	start, end := budgeting.PeriodRangeAnchored(b.Period, anchor, weekStart, payAnchor)
+	prevStart, prevEnd := budgeting.PreviousPeriodRangeAnchored(b.Period, anchor, weekStart, payAnchor)
 
 	txns := app.Transactions()
 	descendants := categorytree.DescendantsOfAll(app.Categories(), b.TrackedCategoryIDs())

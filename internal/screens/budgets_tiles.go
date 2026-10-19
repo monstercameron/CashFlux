@@ -83,6 +83,9 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 	}))
 	v := computeBudgetView(app, activeMemberID, vw, pr, showLM)
 	if len(v.Statuses) == 0 {
+		if len(v.Incomplete) > 0 {
+			return P(css.Class("form-err"), Attr("role", "status"), uistate.T("budgets.incomplete"))
+		}
 		return Fragment()
 	}
 	// BUD1 exposes checked, explainable cadence conversion. Income on this screen
@@ -96,7 +99,7 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 	}
 	normalized, normalizeErr := budgeting.NormalizeBudgets(statusBudgets, domain.PeriodMonthly, rates)
 	normalizedBudgetTotal := v.TotalLimit
-	normalizationOK := normalizeErr == nil
+	normalizationOK := normalizeErr == nil && len(v.Incomplete) == 0
 	if normalizationOK {
 		normalizedBudgetTotal = normalized.Total.Amount
 	}
@@ -363,7 +366,10 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 	statusAmount := normalizedBudgetTotal
 	statusCopy := uistate.T("bud2.statusFits", vw.Label())
 	statusState := "fits"
-	if futurePeriod {
+	if len(v.Incomplete) > 0 {
+		statusCopy = uistate.T("budgets.incomplete")
+		statusState = "unknown"
+	} else if futurePeriod {
 		statusCopy = uistate.T("budgets.future.planning",
 			fmtMoney(money.New(normalizedBudgetTotal, v.Base)),
 			fmtMoney(money.New(v.BannerIncome, v.Base)))
@@ -392,11 +398,15 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 			Label: label, Percent: funding.ReduceToFitPct(), TestID: "budgets-status-primary-action",
 		})
 	}
+	statusFigure := fmtMoney(money.New(statusAmount, v.Base))
+	if len(v.Incomplete) > 0 {
+		statusFigure = "—"
+	}
 	statusLine := Div(css.Class("bud2-status-line"), Attr("role", "status"), Attr("data-state", statusState),
 		Attr("style", "display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.75rem;min-width:0"),
 		Div(css.Class("bud2-status-copy"), Attr("style", "display:flex;align-items:baseline;flex-wrap:wrap;gap:.2rem .65rem;min-width:0"),
 			Span(css.Class("bud2-status-figure"), Attr("data-testid", "budgets-status-figure"),
-				fmtMoney(money.New(statusAmount, v.Base))),
+				statusFigure),
 			Span(css.Class("bud2-status-sentence"), Attr("data-testid", "budgets-status-sentence"),
 				Attr("style", "max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"), statusCopy),
 		),
@@ -404,6 +414,7 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 	)
 	details := Details(css.Class("bud2-status-details"), Attr("data-testid", "budgets-status-details"),
 		Summary(uistate.T("bud2.moreDetails")),
+		budgetIncompleteNotice(v.Incomplete),
 		If(normalizationOK, budgetNormalizationDetails(normalized)),
 		If(!normalizationOK, P(css.Class("bud2-normalization-error"), Attr("role", "status"), uistate.T("bud2.normalizationUnavailable"))),
 		alloc,
@@ -831,16 +842,11 @@ func majorStrToMinor(s, base string) (int64, bool) {
 	if s == "" {
 		return 0, true // explicit clear
 	}
-	f, err := strconv.ParseFloat(s, 64)
-	if err != nil || f < 0 {
+	minor, err := money.ParseMinor(s, currency.Decimals(base))
+	if err != nil || minor < 0 {
 		return 0, false
 	}
-	dec := currency.Decimals(base)
-	mult := 1.0
-	for i := 0; i < dec; i++ {
-		mult *= 10
-	}
-	return int64(f*mult + 0.5), true
+	return minor, true
 }
 
 type incomeBasisProps struct {
@@ -1978,7 +1984,7 @@ func budgetListWidget(props budgetListProps) ui.Node {
 	if sortKey != uistate.BudgetSortHealth {
 		sorted := make([]budgeting.Status, len(v.Statuses))
 		copy(sorted, v.Statuses)
-		sortBudgetStatuses(sorted, sortKey)
+		sortBudgetStatuses(sorted, sortKey, v.CatName)
 		v.Statuses = sorted
 	}
 	smartSettings := uistate.LoadSmartSettings()
@@ -2020,7 +2026,9 @@ func budgetListWidget(props budgetListProps) ui.Node {
 	}
 
 	var body ui.Node
-	if len(v.Statuses) == 0 {
+	if len(v.Statuses) == 0 && len(v.Incomplete) > 0 {
+		body = budgetIncompleteNotice(v.Incomplete)
+	} else if len(v.Statuses) == 0 {
 		body = ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("budgets.empty"), CTALabel: uistate.T("budgets.addFirst"), AddTarget: "budget", Icon: icon.Budgets})
 	} else {
 		cbs := buildBudgetRowCallbacks(app, v.Base, v.CatName)
@@ -2154,7 +2162,7 @@ func budgetListWidget(props budgetListProps) ui.Node {
 			searchBar,
 			ui.CreateElement(budgetToolbarContent, budgetToolbarProps{App: app}),
 		)
-		body = Fragment(head, attChip, matchNote, Div(ClassStr(listCls), Attr("data-testid", "budgets-list"), rows), unbudgeted)
+		body = Fragment(head, budgetIncompleteNotice(v.Incomplete), attChip, matchNote, Div(ClassStr(listCls), Attr("data-testid", "budgets-list"), rows), unbudgeted)
 	}
 
 	section := uiw.EntityListSection(uiw.EntityListSectionProps{
@@ -2166,6 +2174,18 @@ func budgetListWidget(props budgetListProps) ui.Node {
 		ID: "budget-list", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
 		Body: section,
 	})
+}
+
+func budgetIncompleteNotice(messages []string) ui.Node {
+	if len(messages) == 0 {
+		return Fragment()
+	}
+	items := make([]ui.Node, 0, len(messages)+1)
+	items = append(items, P(css.Class("form-err"), Attr("role", "status"), uistate.T("budgets.incomplete")))
+	for _, message := range messages {
+		items = append(items, P(css.Class("budget-owner-hint", tw.TextFaint), Attr("data-testid", "budget-incomplete-item"), message))
+	}
+	return Div(css.Class("budget-incomplete"), items)
 }
 
 // budgetAnnualGridWidget (BG9) is the year-at-a-glance plan-vs-actual grid as its OWN
@@ -2227,7 +2247,7 @@ func budgetAnnualGridWidget(props budgetListProps) ui.Node {
 
 // sortBudgetStatuses re-orders the budget list in place for the toolbar's Sort picker.
 // "health" is the default order (left untouched — computeBudgetView already sorts by it).
-func sortBudgetStatuses(sts []budgeting.Status, key string) {
+func sortBudgetStatuses(sts []budgeting.Status, key string, categories map[string]string) {
 	// overAmt is how far a budget is OVER its limit (0 when under) — the severity of an
 	// overspend, in money.
 	overAmt := func(s budgeting.Status) int64 {
@@ -2274,7 +2294,9 @@ func sortBudgetStatuses(sts []budgeting.Status, key string) {
 		sort.SliceStable(sts, func(i, j int) bool { return limitOf(sts[i]) > limitOf(sts[j]) })
 	case uistate.BudgetSortName:
 		sort.SliceStable(sts, func(i, j int) bool {
-			return strings.ToLower(sts[i].Budget.Name) < strings.ToLower(sts[j].Budget.Name)
+			left := strings.ToLower(budgetTitle(sts[i].Budget.Name, categories[sts[i].Budget.CategoryID]))
+			right := strings.ToLower(budgetTitle(sts[j].Budget.Name, categories[sts[j].Budget.CategoryID]))
+			return left < right
 		})
 	}
 }

@@ -141,6 +141,7 @@ func Register() {
 	registerR10W()
 	registerSOL1()
 	registerBud3()
+	registerBud2Surface()
 	inject(Build())
 }
 
