@@ -7,6 +7,7 @@ package screens
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/url"
 	"sort"
 	"strings"
@@ -40,6 +41,121 @@ type chatTool struct {
 	run     func(args json.RawMessage) string
 	mutates bool
 	preview func(args json.RawMessage) string
+}
+
+type transferToolArgs struct {
+	From        string          `json:"from_account"`
+	To          string          `json:"to_account"`
+	Amount      json.RawMessage `json:"amount"`
+	Received    json.RawMessage `json:"received_amount"`
+	OperationID string          `json:"operation_id"`
+	Date        string          `json:"date"`
+}
+
+type transferToolBuild struct {
+	params        appstate.TransferParams
+	from, to      domain.Account
+	converted     int64
+	hasConversion bool
+}
+
+func parseTransferMinor(raw json.RawMessage, code string, optional bool) (int64, bool, error) {
+	if len(raw) == 0 || string(raw) == "null" {
+		if optional {
+			return 0, false, nil
+		}
+		return 0, false, fmt.Errorf("amount is required")
+	}
+	minor, err := money.ParseMinor(string(raw), currency.Decimals(code))
+	if err != nil {
+		return 0, false, err
+	}
+	if minor <= 0 {
+		return 0, false, fmt.Errorf("amount must be greater than zero")
+	}
+	return minor, true, nil
+}
+
+func validTransferOperationID(s string) bool {
+	if len(s) > 64 {
+		return false
+	}
+	for _, c := range s {
+		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_') {
+			return false
+		}
+	}
+	return true
+}
+
+func buildAssistantTransfer(raw json.RawMessage, from, to domain.Account, rates currency.Rates, now time.Time, desc string) (transferToolBuild, error) {
+	var a transferToolArgs
+	if err := json.Unmarshal(raw, &a); err != nil {
+		return transferToolBuild{}, fmt.Errorf("read transfer details: %w", err)
+	}
+	if a.OperationID != "" && !validTransferOperationID(a.OperationID) {
+		return transferToolBuild{}, fmt.Errorf("operation id must be at most 64 letters, numbers, hyphens, or underscores")
+	}
+	amount, _, err := parseTransferMinor(a.Amount, from.Currency, false)
+	if err != nil {
+		return transferToolBuild{}, fmt.Errorf("invalid source amount: %w", err)
+	}
+	received, hasReceived, err := parseTransferMinor(a.Received, to.Currency, true)
+	if err != nil {
+		return transferToolBuild{}, fmt.Errorf("invalid received amount: %w", err)
+	}
+	when := now
+	if a.Date != "" {
+		parsed, parseErr := dateutil.ParseDate(a.Date)
+		if parseErr != nil {
+			return transferToolBuild{}, fmt.Errorf("invalid transfer date: %w", parseErr)
+		}
+		when = parsed
+	}
+	converted, conversionErr := rates.Convert(money.New(amount, from.Currency), to.Currency)
+	build := transferToolBuild{from: from, to: to, converted: converted.Amount, hasConversion: conversionErr == nil}
+	if hasReceived {
+		build.params.ReceivedMinor = received
+	} else if conversionErr == nil {
+		build.params.ReceivedMinor = converted.Amount
+	}
+	opID := a.OperationID
+	if opID == "" {
+		opID = id.New()
+	}
+	build.params.OperationID = opID
+	build.params.FromAccountID = from.ID
+	build.params.ToAccountID = to.ID
+	build.params.AmountMinor = amount
+	build.params.Date = when
+	build.params.Desc = desc
+	build.params.Source = domain.TxnSourceAssistant
+	if from.ID == to.ID {
+		return transferToolBuild{}, fmt.Errorf("the two accounts must be different")
+	}
+	return build, nil
+}
+
+func assistantTransferPreview(build transferToolBuild) string {
+	fromAmount := fmtMoney(money.New(build.params.AmountMinor, build.from.Currency))
+	toAmount := ""
+	if build.params.ReceivedMinor > 0 {
+		toAmount = fmtMoney(money.New(build.params.ReceivedMinor, build.to.Currency))
+	}
+	preview := fmt.Sprintf("Transfer %s (%s) from %s to %s (%s). Destination amount to record: %s",
+		fromAmount, build.from.Currency, build.from.Name, build.to.Name, build.to.Currency, toAmount)
+	if build.params.ReceivedMinor == 0 && !build.hasConversion {
+		return preview + ". No exchange rate — this transfer will be refused."
+	}
+	if build.hasConversion && build.params.ReceivedMinor > 0 && build.converted > 0 {
+		pctExact := math.Abs(float64(build.params.ReceivedMinor)/float64(build.converted)-1) * 100
+		if pctExact <= 5 {
+			return preview
+		}
+		pct := math.Round(pctExact)
+		preview += fmt.Sprintf("\nWARNING: destination amount differs from today's rate by %.0f%%.", pct)
+	}
+	return preview
 }
 
 // approvalReq is a pending mutating tool awaiting the user's yes/no in the chat.
@@ -259,6 +375,7 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates, tier a
 		}
 	}
 
+	transferBuilds := make(map[string]transferToolBuild)
 	tools := []chatTool{
 		{
 			spec: ai.FunctionTool("list_categories", "List the user's spending/income category names. Call this first when unsure which category a question refers to.", json.RawMessage(`{"type":"object","properties":{}}`)),
@@ -1118,24 +1235,28 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates, tier a
 				json.RawMessage(`{"type":"object","properties":{"from_account":{"type":"string"},"to_account":{"type":"string"},"amount":{"type":"number","description":"positive major units in the source account currency"},"received_amount":{"type":"number","description":"optional positive major units received in the destination account currency"},"operation_id":{"type":"string","description":"optional stable idempotency key for retrying this exact transfer"},"date":{"type":"string","description":"YYYY-MM-DD, defaults to today"}},"required":["from_account","to_account","amount"]}`)),
 			mutates: true,
 			preview: func(raw json.RawMessage) string {
-				var a struct {
-					From   string  `json:"from_account"`
-					To     string  `json:"to_account"`
-					Amount float64 `json:"amount"`
+				var a transferToolArgs
+				if err := json.Unmarshal(raw, &a); err != nil {
+					return "Couldn't read the transfer details."
 				}
-				_ = json.Unmarshal(raw, &a)
-				return fmt.Sprintf("Transfer %s from %s to %s", fmtMoney(money.New(currency.MinorFromMajor(a.Amount, base), base)), a.From, a.To)
+				from, ok := resolveAccount(a.From)
+				if !ok {
+					return "No account matching “" + a.From + "”."
+				}
+				to, ok := resolveAccount(a.To)
+				if !ok {
+					return "No account matching “" + a.To + "”."
+				}
+				built, err := buildAssistantTransfer(raw, from, to, rates, now, uistate.T("assistant.transferToDesc", to.Name))
+				if err != nil {
+					return "Transfer cannot be prepared: " + err.Error()
+				}
+				transferBuilds[string(raw)] = built
+				return assistantTransferPreview(built)
 			},
 			run: func(raw json.RawMessage) string {
-				var a struct {
-					From        string  `json:"from_account"`
-					To          string  `json:"to_account"`
-					Amount      float64 `json:"amount"`
-					Received    float64 `json:"received_amount"`
-					OperationID string  `json:"operation_id"`
-					Date        string  `json:"date"`
-				}
-				if err := json.Unmarshal(raw, &a); err != nil || a.Amount <= 0 {
+				var a transferToolArgs
+				if err := json.Unmarshal(raw, &a); err != nil {
 					return "A transfer needs both accounts and a positive amount."
 				}
 				from, ok1 := resolveAccount(a.From)
@@ -1146,24 +1267,23 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates, tier a
 				if !ok2 {
 					return "No account matching “" + a.To + "”."
 				}
-				if from.ID == to.ID {
-					return "The two accounts must be different."
+				built, ok := transferBuilds[string(raw)]
+				if !ok {
+					var err error
+					built, err = buildAssistantTransfer(raw, from, to, rates, now, uistate.T("assistant.transferToDesc", to.Name))
+					if err != nil {
+						return "Couldn't prepare the transfer: " + err.Error()
+					}
 				}
-				when := now
-				if d, err := dateutil.ParseDate(a.Date); err == nil && a.Date != "" {
-					when = d
+				delete(transferBuilds, string(raw))
+				if built.params.ReceivedMinor == 0 && !built.hasConversion {
+					return "Couldn't record the transfer: no exchange rate is available; enter the amount received."
 				}
-				fromMinor := currency.MinorFromMajor(a.Amount, from.Currency)
-				params := appstate.TransferParams{
-					OperationID: a.OperationID, FromAccountID: from.ID, ToAccountID: to.ID,
-					AmountMinor: fromMinor, ReceivedMinor: currency.MinorFromMajor(a.Received, to.Currency),
-					Date: when, Desc: uistate.T("assistant.transferToDesc", to.Name), Source: domain.TxnSourceAssistant,
-				}
-				outID, _, err := app.CreateTransferPair(params)
+				outID, _, err := app.CreateTransferPair(built.params)
 				if err != nil {
 					return "Couldn't record the transfer: " + err.Error()
 				}
-				fromMoney := money.New(fromMinor, from.Currency)
+				fromMoney := money.New(built.params.AmountMinor, from.Currency)
 				return fmt.Sprintf("Transferred %s from %s to %s.%s", fmtMoney(fromMoney), from.Name, to.Name, openLink("/transactions", outID))
 			},
 		},

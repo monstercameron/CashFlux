@@ -90,6 +90,11 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Assistant transfers: you approve exactly what is written (SEC7).** The assistant's transfer confirmation now shows both
+  accounts and currencies and the destination amount that will be recorded (the explicit received amount, or the converted
+  amount), says when no exchange rate exists and the transfer will be refused, and warns when a received amount differs
+  from today's rate by more than 5%. Preview and write use the same built parameters; amounts are parsed with checked
+  money parsing (no NaN, infinity, negative or overflow) and a model-supplied operation ID is validated.
 - **Plainer Transactions wording (LBL2, LBL3).** About 180 Transactions labels were rewritten to one glossary: "Exclude from
   budgets and reports" (it always also left budgets), "Not cleared" instead of "Uncleared", "Scheduled" instead of
   "Upcoming", "Money in / Money out" in the calendar, "Possible duplicate" and "Higher than usual" for Smart chips,
