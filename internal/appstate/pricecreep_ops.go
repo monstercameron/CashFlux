@@ -134,7 +134,10 @@ func (a *App) RaiseBudgetForCreep(recurringID string, newMinor int64) error {
 	if !ok {
 		return fmt.Errorf("appstate: recurring %q not found", recurringID)
 	}
-	b, found := a.budgetForRecurring(r)
+	// Raising the limit is a write path with an established category-budget
+	// contract (BC4S1). Keep its selector independent from the stricter,
+	// account-scoped selector used by the impact preview.
+	b, found := a.budgetForCategory(r.CategoryID)
 	if !found {
 		return nil
 	}
@@ -240,6 +243,26 @@ func (a *App) recurringCategory(idStr string) string {
 		return r.CategoryID
 	}
 	return ""
+}
+
+// budgetForCategory selects the first budget whose tracked categories, including
+// descendants, cover categoryID. The price-creep raise path preserves this
+// historical category-based selection contract.
+func (a *App) budgetForCategory(categoryID string) (domain.Budget, bool) {
+	if categoryID == "" {
+		return domain.Budget{}, false
+	}
+	cats := a.Categories()
+	for _, b := range a.Budgets() {
+		if b.IsSaving() {
+			continue
+		}
+		covers := categorytree.DescendantsOfAll(cats, b.TrackedCategoryIDs())
+		if covers[categoryID] {
+			return b, true
+		}
+	}
+	return domain.Budget{}, false
 }
 
 // budgetForRecurring selects the most specific spending budget in the recurring
