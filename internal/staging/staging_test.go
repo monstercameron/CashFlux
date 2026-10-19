@@ -77,23 +77,40 @@ func TestTheSameChargeOnAnotherAccountIsNotADuplicate(t *testing.T) {
 	}
 }
 
-// A statement listing the same charge twice is far more often a parsing artefact
-// than two identical charges, so the first imports and the rest are held.
-func TestARepeatedRowInOneFileIsHeld(t *testing.T) {
+// Same-file repeats are imported after all matching ledger occurrences have
+// been consumed, matching the CSV importer exactly.
+func TestRepeatedRowsInOneFileAreNewWithoutLedgerMatches(t *testing.T) {
 	b := Stage([]Input{
 		in(3, "Publix", -8432),
 		in(3, "Publix", -8432),
 		in(3, "Publix", -8432),
 	}, nil, "chk", "USD")
 
-	if b.Counts.New != 1 {
-		t.Errorf("New = %d, want the first copy only", b.Counts.New)
+	if b.Counts.New != 3 {
+		t.Errorf("New = %d, want all three occurrences", b.Counts.New)
 	}
-	if b.Counts.RepeatedInFile != 2 {
-		t.Errorf("RepeatedInFile = %d, want 2", b.Counts.RepeatedInFile)
+	if b.Counts.Duplicate != 0 || b.Counts.RepeatedInFile != 0 {
+		t.Errorf("counts = %+v, want no skipped repeats", b.Counts)
 	}
-	if b.Rows[0].Verdict != New || b.Rows[1].Verdict != RepeatedInFile {
-		t.Errorf("verdicts = %s/%s, want the first kept", b.Rows[0].Verdict, b.Rows[1].Verdict)
+	for i, row := range b.Rows {
+		if row.Verdict != New {
+			t.Errorf("row %d verdict = %s, want new", i, row.Verdict)
+		}
+	}
+}
+
+func TestRepeatedRowsConsumeOnlyMatchingLedgerOccurrences(t *testing.T) {
+	have := []domain.Transaction{existing("t1", "chk", "Publix", -8432, 3)}
+	b := Stage([]Input{in(3, "Publix", -8432), in(3, "Publix", -8432)}, have, "chk", "USD")
+
+	if b.Counts.Duplicate != 1 || b.Counts.New != 1 || b.Counts.RepeatedInFile != 0 {
+		t.Fatalf("counts = %+v, want one duplicate and one new row", b.Counts)
+	}
+	if b.Rows[0].Verdict != Duplicate || b.Rows[0].MatchID != "t1" {
+		t.Errorf("first row = %+v, want duplicate of t1", b.Rows[0])
+	}
+	if b.Rows[1].Verdict != New || len(b.Approved()) != 1 {
+		t.Errorf("second row = %+v, approved = %d; want one new approved row", b.Rows[1], len(b.Approved()))
 	}
 }
 

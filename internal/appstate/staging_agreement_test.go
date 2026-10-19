@@ -61,6 +61,8 @@ func TestStagingAndTheImporterAgreeOnWhatIsNew(t *testing.T) {
 		{"a file overlapping an earlier one", "date,account_id,desc,amount\n2026-06-10,Checking,Coffee,-10\n", fresh},
 		{"a file repeating a row within itself", "",
 			fresh + "2026-06-10,Checking,Coffee,-10\n"},
+		{"two same-file rows with one existing match", "date,account_id,desc,amount\n2026-06-10,Checking,Coffee,-10\n",
+			"date,account_id,desc,amount\n2026-06-10,Checking,Coffee,-10\n2026-06-10,Checking,Coffee,-10\n"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

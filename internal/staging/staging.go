@@ -51,9 +51,9 @@ const (
 	// Duplicate is a row the ledger already holds. It is skipped — not a
 	// failure, and re-importing an overlapping statement is a normal thing to do.
 	Duplicate
-	// RepeatedInFile is a row that appears twice in THIS file. The first copy
-	// imports and the rest are held, because a statement listing the same charge
-	// twice is far more often a parsing artefact than two identical charges.
+	// RepeatedInFile is retained for compatibility with saved previews. Current
+	// staging uses Duplicate only for the number of occurrences already in the
+	// ledger; additional same-file occurrences are New and will be imported.
 	RepeatedInFile
 	// Unusable is a row that could not be read: no date, no amount, or an amount
 	// that is not a number. Its money is not going into the ledger and nothing
@@ -140,11 +140,13 @@ type Input struct {
 // assign. A row with neither is Unusable rather than guessed at: writing a
 // transaction to the wrong account is not recoverable by looking at it later.
 func Stage(inputs []Input, existing []domain.Transaction, fallbackAccountID, currency string) Batch {
-	seen := make(map[string]string, len(existing)) // dedupe key → existing txn id
+	remaining := make(map[string]int, len(existing))
+	matchIDs := make(map[string][]string, len(existing))
 	for _, t := range existing {
-		seen[dedupe.Key(t)] = t.ID
+		key := dedupe.Key(t)
+		remaining[key]++
+		matchIDs[key] = append(matchIDs[key], t.ID)
 	}
-	inFile := map[string]bool{}
 
 	b := Batch{Rows: make([]Row, 0, len(inputs))}
 	for i, in := range inputs {
@@ -177,14 +179,12 @@ func Stage(inputs []Input, existing []domain.Transaction, fallbackAccountID, cur
 			AccountID: r.AccountID, Date: r.Date, Desc: in.Description,
 			Amount: money.New(r.AmountMinor, currency),
 		})
-		switch {
-		case seen[key] != "":
-			r.Verdict, r.MatchID = Duplicate, seen[key]
-		case inFile[key]:
-			r.Verdict = RepeatedInFile
-		default:
+		if dedupe.ConsumeExisting(remaining, key) {
+			r.Verdict = Duplicate
+			matched := len(matchIDs[key]) - remaining[key] - 1
+			r.MatchID = matchIDs[key][matched]
+		} else {
 			r.Verdict = New
-			inFile[key] = true
 		}
 		b.Rows = append(b.Rows, r)
 	}

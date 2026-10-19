@@ -90,6 +90,14 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Transaction writes no longer lose data (TQ1, TQ1.1, TQ2).** "Apply rules to existing" only sets a category when the
+  rule has one, skips rows a person reviewed, and applies role and validation checks (bill-only rules used to blank
+  categories). CSV import keeps genuine same-day repeats in one file — only as many rows as already exist in the ledger
+  count as duplicates — and the import preview uses the same rule. Imported rows take their account's currency.
+  Restoring a deleted transaction no longer draws its sinking fund down twice. Every write stores the calendar day, so a
+  late-evening payment stays on its day. Deleting a transaction removes its bill, refund, group and event links. Editing
+  the liability side of a card or loan payment keeps the asset side's sign, and both-negative liability pairs are
+  recognised as one transfer.
 - **Calendar days and weeks agree on what money moved (TQ3).** Day cells and week totals now come from one pure,
   tested `txncalendar.MonthCashflow` fold: transfers count as "moved", never as spending, so a $500 sweep no longer shows
   "−$500" in the day beside "Spent $0" for the week. Sums use checked money arithmetic, missing exchange rates are

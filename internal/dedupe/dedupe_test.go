@@ -201,15 +201,15 @@ func TestCountIncomingDuplicates(t *testing.T) {
 			wantDupes: 1,
 		},
 		{
-			name: "three of five rows are duplicates",
+			name: "two existing matches are skipped and repeated new rows remain new",
 			incoming: []domain.Transaction{
 				func() domain.Transaction { t := txn("n1", "Coffee", -500, d); t.AccountID = "acc1"; return t }(),     // dup of e1
 				func() domain.Transaction { t := txn("n2", "Rent", -100000, d); t.AccountID = "acc1"; return t }(),    // dup of e2
 				func() domain.Transaction { t := txn("n3", "Groceries", -2000, d); t.AccountID = "acc1"; return t }(), // fresh
 				func() domain.Transaction { t := txn("n4", "Fuel", -4000, d); t.AccountID = "acc1"; return t }(),      // fresh
-				func() domain.Transaction { t := txn("n5", "Groceries", -2000, d); t.AccountID = "acc1"; return t }(), // dup of n3 (within-batch)
+				func() domain.Transaction { t := txn("n5", "Groceries", -2000, d); t.AccountID = "acc1"; return t }(), // same-file repeat, imported
 			},
-			wantDupes: 3,
+			wantDupes: 2,
 		},
 		{
 			name: "fallback accountID applied when AccountID is blank",

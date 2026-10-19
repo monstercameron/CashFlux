@@ -73,6 +73,18 @@ func AmbiguityKey(t domain.Transaction) string {
 	return t.AccountID + "|" + t.Date.Format("2006-01-02") + "|" + strconv.FormatInt(t.Amount.Amount, 10) + "|" + strings.ToUpper(t.Amount.Currency)
 }
 
+// ConsumeExisting reports whether one occurrence of key can be matched to an
+// existing row, consuming exactly one such occurrence when it can. Callers use
+// this while walking incoming rows in file order: the first N incoming rows
+// match the N existing rows, and every later occurrence is new.
+func ConsumeExisting(remaining map[string]int, key string) bool {
+	if remaining[key] <= 0 {
+		return false
+	}
+	remaining[key]--
+	return true
+}
+
 // FindDuplicates groups transactions that share the same ACCOUNT, calendar date,
 // signed amount + currency, and case-insensitively-trimmed description — the
 // signature of an accidental double entry. Transfers are excluded (their paired
@@ -236,18 +248,16 @@ func Count(groups []Group) int {
 }
 
 // CountIncomingDuplicates returns how many rows in incoming would be skipped as
-// duplicates if imported into an account that already contains existing. A row is
-// a duplicate when its per-account signature (AccountID + "|" + Signature) matches
-// an existing transaction OR an earlier row in the same incoming batch — mirroring
-// exactly the logic in appstate.ImportTransactionsCSV so the pre-import count is
-// always consistent with the post-import "skipped" tally.
+// duplicates if imported into an account that already contains existing. For a
+// key with N existing rows, only the first N matching incoming rows are skipped;
+// subsequent same-file occurrences are imported as distinct rows.
 //
 // accountID is the fallback account used for incoming rows whose AccountID is
 // blank; it should match the fallbackAccountID passed to ImportTransactionsCSV.
 func CountIncomingDuplicates(incoming []domain.Transaction, existing []domain.Transaction, accountID string) int {
-	seen := make(map[string]bool, len(existing))
+	remaining := make(map[string]int, len(existing))
 	for _, t := range existing {
-		seen[Key(t)] = true
+		remaining[Key(t)]++
 	}
 	dupes := 0
 	for _, t := range incoming {
@@ -256,10 +266,8 @@ func CountIncomingDuplicates(incoming []domain.Transaction, existing []domain.Tr
 			acct = accountID
 		}
 		sig := acct + "|" + Signature(t)
-		if seen[sig] {
+		if ConsumeExisting(remaining, sig) {
 			dupes++
-		} else {
-			seen[sig] = true
 		}
 	}
 	return dupes

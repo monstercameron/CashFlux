@@ -175,17 +175,41 @@ func (a *App) mirroredLegAmount(edited, pair domain.Transaction, receivedMinor i
 			out = conv
 		}
 	}
-	// The counterpart carries the opposite sign: whichever leg the user edited, the
-	// other one is the far side of the same move.
-	if !edited.Amount.IsNegative() {
-		out.Amount = -out.Amount
+	accounts := a.Accounts()
+	var editedAccount, pairAccount domain.Account
+	for _, acc := range accounts {
+		switch acc.ID {
+		case edited.AccountID:
+			editedAccount = acc
+		case pair.AccountID:
+			pairAccount = acc
+		}
 	}
-	if out.Amount > 0 {
-		for _, acc := range a.Accounts() {
-			if acc.ID == pair.AccountID && acc.Class == domain.ClassLiability {
-				out.Amount = liabilityPaymentMinor(acc, a.Transactions(), out.Amount)
-				break
+	if (editedAccount.Class == domain.ClassLiability) != (pairAccount.Class == domain.ClassLiability) {
+		// A liability payment has a sign based on that account's stored balance
+		// convention. On the asset side it is always an outgoing (negative) leg;
+		// on the liability side liabilityPaymentMinor supplies the signed payment.
+		liability := editedAccount
+		if pairAccount.Class == domain.ClassLiability {
+			liability = pairAccount
+		}
+		payment := liabilityPaymentMinor(liability, a.Transactions(), out.Amount)
+		if editedAccount.Class == domain.ClassLiability {
+			if edited.Amount.Amount == payment {
+				out.Amount = -out.Amount
 			}
+		} else {
+			if edited.Amount.Amount < 0 {
+				out.Amount = payment
+			} else {
+				out.Amount = -payment
+			}
+		}
+	} else {
+		// Transfers between accounts of the same class retain the ordinary
+		// opposite-sign convention.
+		if !edited.Amount.IsNegative() {
+			out.Amount = -out.Amount
 		}
 	}
 	return out, nil
@@ -229,6 +253,7 @@ func (a *App) CreateTransferPair(p TransferParams) (outID, inID string, err erro
 	if when.IsZero() {
 		when = time.Now()
 	}
+	when = normalizeTransactionDate(when)
 	desc := p.Desc
 	if desc == "" {
 		desc = "Transfer"

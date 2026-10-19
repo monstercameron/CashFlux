@@ -10,6 +10,8 @@
 package appstate
 
 import (
+	"bytes"
+	"encoding/csv"
 	"fmt"
 	"io"
 	"log/slog"
@@ -261,11 +263,26 @@ func (a *App) ImportTransactionsCSV(data []byte, fallbackAccountID, docID string
 		return CSVImportResult{}, err
 	}
 	resolveAcc, resolveCat, resolveMem := a.importResolvers()
+	accountCurrency := make(map[string]string, len(a.Accounts()))
+	for _, account := range a.Accounts() {
+		accountCurrency[account.ID] = account.Currency
+	}
+	defaultCurrencyRows := csvRowsMissingCurrency(data, skipped)
+	defaultCurrencyErrors := make(map[int]error)
 	ruleByIndex := make(map[int]string, len(txns))
 	for i := range txns {
 		txns[i].AccountID = resolveAcc(txns[i].AccountID)
 		if txns[i].AccountID == "" {
 			txns[i].AccountID = fallbackAccountID
+		}
+		if i < len(defaultCurrencyRows) && defaultCurrencyRows[i].missing && accountCurrency[txns[i].AccountID] != "" {
+			accountCurr := accountCurrency[txns[i].AccountID]
+			minor, parseErr := money.ParseMinor(defaultCurrencyRows[i].amount, currency.Decimals(accountCurr))
+			if parseErr != nil {
+				defaultCurrencyErrors[i] = parseErr
+			} else {
+				txns[i].Amount = money.New(minor, accountCurr)
+			}
 		}
 		txns[i].TransferAccountID = resolveAcc(txns[i].TransferAccountID)
 		txns[i].CategoryID = resolveCat(txns[i].CategoryID)
@@ -279,9 +296,9 @@ func (a *App) ImportTransactionsCSV(data []byte, fallbackAccountID, docID string
 		}
 		txns[i] = a.AutoCategorizeTransaction(txns[i])
 	}
-	seen, baseSeen := map[string]bool{}, map[string]bool{}
+	seen, baseSeen := map[string]int{}, map[string]bool{}
 	for _, old := range a.Transactions() {
-		seen[dedupe.Key(old)] = true
+		seen[dedupe.Key(old)]++
 		baseSeen[dedupe.AmbiguityKey(old)] = true
 	}
 	result := CSVImportResult{Duplicates: 0, Failed: append([]store.CSVRowError(nil), skipped...), DocumentID: docID}
@@ -291,7 +308,12 @@ func (a *App) ImportTransactionsCSV(data []byte, fallbackAccountID, docID string
 	ruleHits := map[string]int{}
 	for i, txn := range txns {
 		line := csvSourceLine(i, skipped)
-		if seen[dedupe.Key(txn)] {
+		if parseErr := defaultCurrencyErrors[i]; parseErr != nil {
+			result.Failed = append(result.Failed, store.CSVRowError{Line: line, Reason: fmt.Sprintf("amount is invalid for account currency: %v", parseErr)})
+			continue
+		}
+		key := dedupe.Key(txn)
+		if dedupe.ConsumeExisting(seen, key) {
 			result.Duplicates++
 			continue
 		}
@@ -312,10 +334,9 @@ func (a *App) ImportTransactionsCSV(data []byte, fallbackAccountID, docID string
 			result.Failed = append(result.Failed, store.CSVRowError{Line: line, Reason: err.Error()})
 			continue
 		}
-		seen[dedupe.Key(txn)] = true
-		baseSeen[dedupe.AmbiguityKey(txn)] = true
 		prepared = append(prepared, txn)
 		preparedLines = append(preparedLines, line)
+		baseSeen[dedupe.AmbiguityKey(txn)] = true
 		if rid := ruleByIndex[i]; rid != "" {
 			ruleHits[rid]++
 		}
@@ -355,6 +376,53 @@ func (a *App) ImportTransactionsCSV(data []byte, fallbackAccountID, docID string
 	}
 	a.log.Info("imported transactions from CSV", "imported", result.Imported, "parsed", len(txns), "duplicatesSkipped", result.Duplicates, "failed", len(result.Failed))
 	return result, nil
+}
+
+type csvDefaultCurrencyRow struct {
+	missing bool
+	amount  string
+}
+
+func csvRowsMissingCurrency(data []byte, skipped []store.CSVRowError) []csvDefaultCurrencyRow {
+	data = bytes.TrimPrefix(data, []byte{0xef, 0xbb, 0xbf})
+	reader := csv.NewReader(bytes.NewReader(data))
+	reader.FieldsPerRecord = -1
+	if header, _, ok := bytes.Cut(data, []byte("\n")); ok && bytes.Count(header, []byte(";")) > bytes.Count(header, []byte(",")) {
+		reader.Comma = ';'
+	}
+	records, err := reader.ReadAll()
+	if err != nil {
+		return nil
+	}
+	if len(records) == 0 {
+		return nil
+	}
+	currencyIndex, amountIndex := -1, -1
+	for i, name := range records[0] {
+		switch strings.ToLower(strings.TrimSpace(name)) {
+		case "currency":
+			currencyIndex = i
+		case "amount":
+			amountIndex = i
+		}
+	}
+	skippedLines := make(map[int]struct{}, len(skipped))
+	for _, row := range skipped {
+		skippedLines[row.Line] = struct{}{}
+	}
+	missing := make([]csvDefaultCurrencyRow, 0, len(records)-1)
+	for i, row := range records[1:] {
+		if _, bad := skippedLines[i+2]; bad {
+			continue
+		}
+		isMissing := currencyIndex < 0 || currencyIndex >= len(row) || strings.TrimSpace(row[currencyIndex]) == ""
+		amount := ""
+		if amountIndex >= 0 && amountIndex < len(row) {
+			amount = strings.TrimSpace(row[amountIndex])
+		}
+		missing = append(missing, csvDefaultCurrencyRow{missing: isMissing, amount: amount})
+	}
+	return missing
 }
 
 func (a *App) importResolvers() (func(string) string, func(string) string, func(string) string) {
@@ -1339,12 +1407,18 @@ func (a *App) AutoCategorizeTransaction(t domain.Transaction) domain.Transaction
 			t.BillAccountID = br.SetBillAccountID
 		}
 	}
-	r := rules.FirstMatchFull(rs, t.Payee, t.Desc, t.Amount.Amount, t.AccountID, td)
+	r := rules.FirstMatchFullWhere(rs, t.Payee, t.Desc, t.Amount.Amount, t.AccountID, td, func(rule rules.Rule) bool {
+		return rule.SetCategoryID != "" || len(rule.SetTags) > 0 || rule.RenameDesc != "" || rule.SetMemberID != "" || rule.SetReviewed || rule.SetExcludeFromReports
+	})
 	if r == nil {
 		return t
 	}
-	if strings.TrimSpace(t.CategoryID) == "" && r.SetCategoryID != "" {
-		t.CategoryID = r.SetCategoryID
+	if strings.TrimSpace(t.CategoryID) == "" {
+		if categoryRule := rules.FirstMatchFullWhere(rs, t.Payee, t.Desc, t.Amount.Amount, t.AccountID, td, func(rule rules.Rule) bool {
+			return rule.SetCategoryID != ""
+		}); categoryRule != nil {
+			t.CategoryID = categoryRule.SetCategoryID
+		}
 	}
 	if len(t.Tags) == 0 && len(r.SetTags) > 0 {
 		t.Tags = append([]string(nil), r.SetTags...)
@@ -2672,6 +2746,9 @@ func (a *App) FireBillDueTrigger(asOf time.Time) {
 // Semantics are identical to ApplyRules: categories are overwritten when a rule
 // matches, tags are merged additively, and transfers are skipped.
 func (a *App) ApplyRulesWithCounts() (total int, perRule map[string]int, err error) {
+	if err := a.roleGuard(); err != nil {
+		return 0, nil, err
+	}
 	// #54: recategorizations made by this backfill are audit-stamped "rule" —
 	// the trail distinguishes a rule's sweep from a person's edit. Captured
 	// before the tag resets, same as the assistant/import seams.
@@ -2686,17 +2763,26 @@ func (a *App) ApplyRulesWithCounts() (total int, perRule map[string]int, err err
 		return 0, perRule, nil
 	}
 	for _, t := range a.Transactions() {
-		if t.IsTransfer() {
+		if t.IsTransfer() || t.Reviewed {
 			continue
 		}
 		// C105: use full structured-condition matching so condition-bearing rules
 		// are evaluated with amount/account/date context on the backfill path.
 		r := rules.FirstMatchFull(rs, t.Payee, t.Desc, t.Amount.Amount, t.AccountID, rules.NewTxnDate(t.Date))
-		if r == nil {
+		categoryRule := rules.FirstMatchFullWhere(rs, t.Payee, t.Desc, t.Amount.Amount, t.AccountID, rules.NewTxnDate(t.Date), func(rr rules.Rule) bool {
+			return rr.SetCategoryID != ""
+		})
+		if r == nil && categoryRule == nil {
 			continue
 		}
-		changed := t.CategoryID != r.SetCategoryID
-		t.CategoryID = r.SetCategoryID
+		if r == nil {
+			r = categoryRule
+		}
+		changed := false
+		if categoryRule != nil && t.CategoryID != categoryRule.SetCategoryID {
+			t.CategoryID = categoryRule.SetCategoryID
+			changed = true
+		}
 		for _, tag := range r.SetTags {
 			before := len(t.Tags)
 			t.Tags = addTagUnique(t.Tags, tag)
@@ -2730,11 +2816,27 @@ func (a *App) ApplyRulesWithCounts() (total int, perRule map[string]int, err err
 		if !changed {
 			continue
 		}
+		ruleID := ""
+		if r != nil {
+			ruleID = r.ID
+		} else if categoryRule != nil {
+			ruleID = categoryRule.ID
+		}
+		if is := validate.ValidateTransaction(t); !is.OK() {
+			return total, perRule, fmt.Errorf("apply rule %q to transaction %q: %w", ruleID, t.ID, is)
+		}
+		if err = a.validateCustom("transaction", t.Custom); err != nil {
+			return total, perRule, fmt.Errorf("apply rule %q to transaction %q: %w", ruleID, t.ID, err)
+		}
 		if err = a.store.PutTransaction(t); err != nil {
-			return total, perRule, err
+			return total, perRule, fmt.Errorf("apply rules: save transaction %q: %w", t.ID, err)
 		}
 		total++
-		perRule[r.ID]++
+		if r != nil {
+			perRule[r.ID]++
+		} else if categoryRule != nil {
+			perRule[categoryRule.ID]++
+		}
 	}
 	// C372: the rule's durable record of what it has actually done.
 	if cerr := a.CreditRuleHits(perRule); cerr != nil {
@@ -2752,6 +2854,9 @@ func (a *App) ApplyRulesWithCounts() (total int, perRule map[string]int, err err
 // Action semantics match ApplyRulesWithCounts (category overwrite, additive
 // tags, rename, bill link on unlinked rows).
 func (a *App) ApplyOneRule(ruleID string) (int, error) {
+	if err := a.roleGuard(); err != nil {
+		return 0, err
+	}
 	rs := a.Rules()
 	var target *rules.Rule
 	for i := range rs {
@@ -2765,15 +2870,23 @@ func (a *App) ApplyOneRule(ruleID string) (int, error) {
 	}
 	total := 0
 	for _, t := range a.Transactions() {
-		if t.IsTransfer() {
+		if t.IsTransfer() || t.Reviewed {
 			continue
 		}
-		r := rules.FirstMatchFull(rs, t.Payee, t.Desc, t.Amount.Amount, t.AccountID, rules.NewTxnDate(t.Date))
-		if r == nil || r.ID != ruleID {
+		r := rules.FirstMatchFullWhere(rs, t.Payee, t.Desc, t.Amount.Amount, t.AccountID, rules.NewTxnDate(t.Date), func(candidate rules.Rule) bool {
+			return candidate.ID == ruleID
+		})
+		if r == nil {
 			continue
 		}
-		changed := t.CategoryID != r.SetCategoryID
-		t.CategoryID = r.SetCategoryID
+		changed := false
+		categoryRule := rules.FirstMatchFullWhere(rs, t.Payee, t.Desc, t.Amount.Amount, t.AccountID, rules.NewTxnDate(t.Date), func(candidate rules.Rule) bool {
+			return candidate.SetCategoryID != ""
+		})
+		if categoryRule != nil && categoryRule.ID == ruleID && t.CategoryID != r.SetCategoryID {
+			t.CategoryID = r.SetCategoryID
+			changed = true
+		}
 		for _, tag := range r.SetTags {
 			before := len(t.Tags)
 			t.Tags = addTagUnique(t.Tags, tag)
@@ -2785,9 +2898,13 @@ func (a *App) ApplyOneRule(ruleID string) (int, error) {
 			t.Desc = r.RenameDesc
 			changed = true
 		}
-		if t.BillAccountID == "" && r.SetBillAccountID != "" {
-			t.BillAccountID = r.SetBillAccountID
-			changed = true
+		if t.BillAccountID == "" {
+			if billRule := rules.FirstMatchFullWhere(rs, t.Payee, t.Desc, t.Amount.Amount, t.AccountID, rules.NewTxnDate(t.Date), func(candidate rules.Rule) bool {
+				return candidate.SetBillAccountID != ""
+			}); billRule != nil && billRule.ID == ruleID {
+				t.BillAccountID = billRule.SetBillAccountID
+				changed = true
+			}
 		}
 		// C373: member / reviewed / exclude, through the shared apply-once rule.
 		if ap := r.ApplyOnce(ruleOwnerForApplyOnce(t), t.Reviewed, t.ExcludeFromReports); ap.Any() {
@@ -2801,8 +2918,14 @@ func (a *App) ApplyOneRule(ruleID string) (int, error) {
 		if !changed {
 			continue
 		}
+		if is := validate.ValidateTransaction(t); !is.OK() {
+			return total, fmt.Errorf("apply rule %q to transaction %q: %w", r.ID, t.ID, is)
+		}
+		if err := a.validateCustom("transaction", t.Custom); err != nil {
+			return total, fmt.Errorf("apply rule %q to transaction %q: %w", r.ID, t.ID, err)
+		}
 		if err := a.store.PutTransaction(t); err != nil {
-			return total, err
+			return total, fmt.Errorf("apply rule %q: save transaction %q: %w", ruleID, t.ID, err)
 		}
 		total++
 	}
@@ -2890,14 +3013,20 @@ func (a *App) PreviewApplyRules() (total int, perRule map[string]int) {
 		return 0, perRule
 	}
 	for _, t := range a.Transactions() {
-		if t.IsTransfer() {
+		if t.IsTransfer() || t.Reviewed {
 			continue
 		}
 		r := rules.FirstMatchFull(rs, t.Payee, t.Desc, t.Amount.Amount, t.AccountID, rules.NewTxnDate(t.Date))
-		if r == nil {
+		categoryRule := rules.FirstMatchFullWhere(rs, t.Payee, t.Desc, t.Amount.Amount, t.AccountID, rules.NewTxnDate(t.Date), func(rr rules.Rule) bool {
+			return rr.SetCategoryID != ""
+		})
+		if r == nil && categoryRule == nil {
 			continue
 		}
-		changed := t.CategoryID != r.SetCategoryID
+		if r == nil {
+			r = categoryRule
+		}
+		changed := categoryRule != nil && t.CategoryID != categoryRule.SetCategoryID
 		for _, tag := range r.SetTags {
 			before := len(t.Tags)
 			t.Tags = addTagUnique(t.Tags, tag)
@@ -3002,6 +3131,7 @@ func (a *App) PutTransaction(t domain.Transaction) error {
 	if err := a.roleGuard(); err != nil {
 		return err
 	}
+	t.Date = normalizeTransactionDate(t.Date)
 	if is := validate.ValidateTransaction(t); !is.OK() {
 		return is
 	}
@@ -3024,7 +3154,7 @@ func (a *App) PutTransaction(t domain.Transaction) error {
 		return err
 	}
 	a.log.Info("transaction saved", "id", t.ID)
-	if !existed {
+	if !existed && !a.triggersSuspended {
 		// C192: spending against a sinking fund's linked category draws the fund
 		// down. New transactions only (so editing doesn't re-draw).
 		a.applySinkingFundDrawdown(t)
@@ -3050,6 +3180,14 @@ func (a *App) PutTransaction(t domain.Transaction) error {
 		a.autoMatchBills(a.clock())
 	}
 	return nil
+}
+
+func normalizeTransactionDate(date time.Time) time.Time {
+	if date.IsZero() {
+		return date
+	}
+	date = date.UTC()
+	return time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.UTC)
 }
 
 // overBudgetIDs returns the set of budget IDs currently over their limit —
@@ -3148,7 +3286,43 @@ func (a *App) DeleteTransaction(id string) error {
 	if err := a.del("transaction", id, a.store.DeleteTransactionWithDebtPayments); err != nil {
 		return err
 	}
+	if err := a.pruneTxnLinks(map[string]struct{}{id: {}}); err != nil {
+		return err
+	}
 	a.fireTxnMutated()
+	return nil
+}
+
+func (a *App) pruneTxnLinks(deleted map[string]struct{}) error {
+	if len(deleted) == 0 {
+		return nil
+	}
+	changed := false
+	for _, link := range a.TxnLinks() {
+		members := make([]string, 0, len(link.TxnIDs))
+		for _, txnID := range link.TxnIDs {
+			if _, gone := deleted[txnID]; !gone {
+				members = append(members, txnID)
+			}
+		}
+		if len(members) == len(link.TxnIDs) {
+			continue
+		}
+		changed = true
+		if len(members) == 0 || (link.Kind != domain.TxnLinkOrderGroup && len(members) != len(link.TxnIDs)) || (link.Kind == domain.TxnLinkOrderGroup && len(members) < 2) {
+			if _, err := a.store.DeleteTxnLink(link.ID); err != nil {
+				return fmt.Errorf("appstate: remove transaction link %q for deleted transaction: %w", link.ID, err)
+			}
+			continue
+		}
+		link.TxnIDs = members
+		if err := a.store.PutTxnLink(link); err != nil {
+			return fmt.Errorf("appstate: prune transaction link %q: %w", link.ID, err)
+		}
+	}
+	if changed {
+		a.SyncTxnLinkNetting()
+	}
 	return nil
 }
 
@@ -3273,6 +3447,15 @@ func (a *App) deleteTransactionsAtomic(ids []string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	deletedSet := make(map[string]struct{}, len(deleted))
+	for _, id := range deleted {
+		deletedSet[id] = struct{}{}
+	}
+	if len(deletedSet) > 0 {
+		if err := a.pruneTxnLinks(deletedSet); err != nil {
+			return deleted, err
+		}
+	}
 	if len(deleted) > 0 {
 		a.fireTxnMutated()
 	}
@@ -3303,6 +3486,15 @@ func (a *App) DeleteTransactionWithTransferPair(id string) error {
 	deleted, err := a.store.DeleteTransactionsWithDebtPaymentsAtomic(ids)
 	if err != nil {
 		return err
+	}
+	deletedSet := make(map[string]struct{}, len(deleted))
+	for _, deletedID := range deleted {
+		deletedSet[deletedID] = struct{}{}
+	}
+	if len(deletedSet) > 0 {
+		if err := a.pruneTxnLinks(deletedSet); err != nil {
+			return err
+		}
 	}
 	if len(deleted) > 0 {
 		a.fireTxnMutated()

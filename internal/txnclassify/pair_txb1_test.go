@@ -65,3 +65,34 @@ func TestVisibleTransferSummaryPairsAndIndexesRows(t *testing.T) {
 		t.Fatalf("large summary counted=%d unpaired=%d; want 1650 and 0", count, got.UnpairedRows)
 	}
 }
+
+func TestVisibleTransferSummaryRecognizesLiabilitySignConventions(t *testing.T) {
+	tests := []struct {
+		name          string
+		first, second int64
+	}{
+		{name: "opposite-sign asset pair", first: -5000, second: 5000},
+		{name: "both-negative liability pair", first: -5000, second: -5000},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rows := []domain.Transaction{
+				{ID: "asset-side", AccountID: "checking", TransferAccountID: "loan", TransferGroupID: "group", Amount: money.New(tt.first, "USD")},
+				{ID: "liability-side", AccountID: "loan", TransferAccountID: "checking", TransferGroupID: "group", Amount: money.New(tt.second, "USD")},
+			}
+			got := SummarizeVisibleTransfers(rows)
+			if got.UnpairedRows != 0 {
+				t.Errorf("UnpairedRows = %d, want 0", got.UnpairedRows)
+			}
+			counted := 0
+			for _, isCounted := range got.CountedRows {
+				if isCounted {
+					counted++
+				}
+			}
+			if counted != 1 {
+				t.Errorf("counted rows = %d, want 1", counted)
+			}
+		})
+	}
+}

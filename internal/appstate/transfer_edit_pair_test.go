@@ -127,6 +127,79 @@ func TestEditTransferLegFromInSideMirrorsOutSide(t *testing.T) {
 	}
 }
 
+// TestEditNegativeLiabilityTransferLegKeepsAssetPaymentNegative covers the
+// positive-stored liability convention, where a payment pair has negative
+// amounts on both the asset and liability accounts.
+func TestEditNegativeLiabilityTransferLegKeepsAssetPaymentNegative(t *testing.T) {
+	a := newApp(t, false)
+	checking, loan := seedLiability(t, a, 50000)
+	outID, inID, err := a.CreateTransferPair(TransferParams{
+		FromAccountID: checking.ID, ToAccountID: loan.ID, AmountMinor: 5000,
+		Date: time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatalf("CreateTransferPair: %v", err)
+	}
+	out, ok := legByID(a, outID)
+	if !ok {
+		t.Fatal("checking leg missing")
+	}
+	loanLeg, ok := legByID(a, inID)
+	if !ok {
+		t.Fatal("loan leg missing")
+	}
+	if out.Amount.Amount != -5000 || loanLeg.Amount.Amount != -5000 {
+		t.Fatalf("initial pair amounts = %d/%d, want -5000/-5000", out.Amount.Amount, loanLeg.Amount.Amount)
+	}
+
+	edited := loanLeg
+	edited.Amount = money.New(-8000, "USD")
+	if err := a.PutTransactionWithTransferPair(loanLeg, edited); err != nil {
+		t.Fatalf("PutTransactionWithTransferPair: %v", err)
+	}
+	gotOut, _ := legByID(a, outID)
+	gotLoan, _ := legByID(a, inID)
+	if gotOut.Amount.Amount != -8000 || gotLoan.Amount.Amount != -8000 {
+		t.Errorf("edited pair amounts = %d/%d, want -8000/-8000", gotOut.Amount.Amount, gotLoan.Amount.Amount)
+	}
+}
+
+// TestEditPositiveLiabilityPaymentKeepsAssetPaymentNegative covers the
+// negative-stored liability convention, where the liability payment leg is
+// positive while the asset payment remains negative.
+func TestEditPositiveLiabilityPaymentKeepsAssetPaymentNegative(t *testing.T) {
+	a := newApp(t, false)
+	checking, loan := seedLiability(t, a, -50000)
+	_, inID, err := a.CreateTransferPair(TransferParams{
+		FromAccountID: checking.ID, ToAccountID: loan.ID, AmountMinor: 5000,
+		Date: time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatalf("CreateTransferPair: %v", err)
+	}
+	loanLeg, ok := legByID(a, inID)
+	if !ok {
+		t.Fatal("loan leg missing")
+	}
+	edited := loanLeg
+	edited.Amount = money.New(8000, "USD")
+	if err := a.PutTransactionWithTransferPair(loanLeg, edited); err != nil {
+		t.Fatalf("PutTransactionWithTransferPair: %v", err)
+	}
+	foundCheckingLeg := false
+	for _, txn := range a.Transactions() {
+		if txn.AccountID == checking.ID && txn.IsTransfer() {
+			foundCheckingLeg = true
+			if txn.Amount.Amount != -8000 {
+				t.Errorf("checking payment = %d, want -8000", txn.Amount.Amount)
+			}
+		}
+	}
+	if !foundCheckingLeg {
+		t.Fatal("checking transfer leg missing")
+	}
+}
+
 // TestEditTransferLegDateUpdatesBothLegs guards the other half of the pairing
 // key: isReciprocalTransferLeg matches on equal dates, so a one-sided date edit
 // would orphan the pair for every later operation.

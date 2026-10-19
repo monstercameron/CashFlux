@@ -207,7 +207,7 @@ func SummarizeVisibleTransfers(txns []domain.Transaction) VisibleTransferSummary
 	for _, indexes := range groups {
 		if len(indexes) == 2 {
 			a, b := txns[indexes[0]], txns[indexes[1]]
-			if a.Amount.Amount != 0 && b.Amount.Amount != 0 && a.AccountID == b.TransferAccountID && b.AccountID == a.TransferAccountID && (a.Amount.Amount > 0) != (b.Amount.Amount > 0) {
+			if a.Amount.Amount != 0 && b.Amount.Amount != 0 && a.AccountID == b.TransferAccountID && b.AccountID == a.TransferAccountID {
 				chosen := indexes[0]
 				if a.Amount.Amount > 0 {
 					chosen = indexes[1]
