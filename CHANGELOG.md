@@ -90,6 +90,8 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **The Split dialog lays out its rows (TV8D).** Split rows use a grid again so fields sit side by side, and the receipt action no longer
+  shrinks to 9 px.
 - **Budget tiles judge today by your calendar day (BC6N2).** The future, recurring and list views use the local wall-clock day, so the
   current month is never shown as future in Tokyo or ended early in the Pacific evening; future windows anchor expected income on today.
 - **Transaction rows fit and their menus read (TV8B).** Only the row menu trigger gets the 32 px target, so menu items show full

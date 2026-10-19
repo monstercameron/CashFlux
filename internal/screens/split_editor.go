@@ -534,7 +534,7 @@ func splitEditorInline(props splitEditorLayoutProps) ui.Node {
 	return Fragment(Div(css.Class("split-editor"), inert, Attr("data-testid", "split-editor"), Attr("aria-busy", strconv.FormatBool(p.Pending)),
 		If(p.Pending, P(Attr("role", "status"), uistate.T("common.saving"))),
 		Style(map[string]string{"margin-top": "0.75rem", "padding": "0.75rem", "border": "1px solid var(--border)", "border-radius": "8px"}),
-		P(css.Class("hero-flanker-label"), Style(map[string]string{"margin-bottom": "0.4rem", "text-align": "left"}), uistate.T("splitEditor.title")),
+		P(css.Class("hero-flanker-label"), Attr("data-testid", "split-inline-title"), Style(map[string]string{"margin-bottom": "0.4rem", "text-align": "left"}), uistate.T("splitEditor.title")),
 		props.Hint, props.ReceiptAction, props.ModeToggle, splitColumnLabels(props.ShowOwner), props.Rows, props.AddRow, props.Error,
 		Div(Style(map[string]string{"margin-top": "0.5rem", "display": "flex", "gap": "0.5rem"}), save, clear),
 	), props.Picker)
