@@ -90,6 +90,13 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Budgets page split into small components with a pure view pipeline (BUDQ6.1).** The budget view calculation moved
+  into a pure, natively tested `internal/budgeting/view.go` pipeline (anchors, member scope, carry/boost/smoothing,
+  commitments, pace, health order, attention set, checked currency roll-up, income basis); `computeBudgetViewRaw` went
+  from 435 lines to a 20-line orchestration. `BudgetRow` (934 → 99 lines), `BudgetEditForm` (1,132 → 102) and
+  `budgetSummaryWidget` (417 → 99) are now composed of named components and unconditional custom hooks across
+  `budgets_row_*.go`, `budgets_edit_*.go`, `budgets_summary.go` and `budgets_view.go`; no function is over ~130 lines.
+  Behaviour, test ids, classes and copy are unchanged and every existing test passes unmodified.
 - **Future months read like the ledger; calendar columns line up (FUT2, FUT2.1).** In a future month the scheduled bills
   are rows of the real transactions table — same columns, widths and date format as posted rows, hidden columns honoured —
   each with a Scheduled pill and a menu that opens Bills & repeating payments, under one short line instead of the italic

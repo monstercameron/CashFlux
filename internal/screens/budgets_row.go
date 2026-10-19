@@ -10,7 +10,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall/js"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -37,316 +36,23 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	s := props.Status
 	dataRevision := uistate.UseDataRevision().Get()
 
-	// The everyday actions are labelled tool buttons surfaced inline (the full-width
-	// card has the room); the DESTRUCTIVE actions (Remove recurring, Delete) live in a
-	// "⋯" overflow menu — a standing directive: delete always stays in the kebab, never
-	// as an always-visible row button. Escape + outside-pointerdown dismiss the menu;
-	// AnchorPopover flips it near the viewport edge.
-	menuOpen := ui.UseState(false)
-	// C595: the card stacked every caption it had — tracking, tags, committed,
-	// set-aside, target, coverage, owner, method, custom fields, pace, carry,
-	// metrics — between the bar and the actions, so "how much is left?" competed
-	// with a dozen explanations. The explanatory ones now live behind one
-	// disclosure; anything that CHANGES the headline figure's meaning (an
-	// effective cap, an envelope balance, a projected overspend) stays out.
-	detailsOpen := ui.UseState(false)
-	toggleDetails := ui.UseEvent(Prevent(func() { detailsOpen.Set(!detailsOpen.Get()) }))
-	menuID := ui.UseId()
-	toggleMenu := ui.UseEvent(Prevent(func() { menuOpen.Set(!menuOpen.Get()) }))
-	closeMenu := ui.UseEvent(Prevent(func() { menuOpen.Set(false) }))
-	uiw.DismissPopover(menuOpen.Get(), menuID, func() { menuOpen.Set(false) })
-	uiw.AnchorPopover(menuOpen.Get(), menuID)
-	prefs := uistate.UsePrefs().Get()
+	rowDisclosure := useBudgetRowDisclosure()
 
-	// G1: inline limit editing — clicking the limit figure swaps it for a compact
-	// number input (Enter/✓ saves, ✕ cancels), so the single most frequent budget
-	// edit never costs a modal round-trip. Edits the BASE limit; the effective-cap
-	// line explains any carry/boost delta.
-	limitEditing := ui.UseState(false)
-	limitRestoreFocus := ui.UseState(false)
-	limitDraft := ui.UseState("")
-	limitDec := currency.Decimals(s.Budget.Limit.Currency)
-	// C665: the field advertises min="0.01" and the browser's own validation does
-	// nothing for it, because the value is read out of state on submit rather than
-	// through form validity. Typing -1 left ✓ live, and pressing it silently threw
-	// the edit away — a negative limit is refused, but so is any feedback that it
-	// happened. The draft is now validated on every keystroke: ✓ goes dead, the
-	// reason is stated inline, and the editor stays open with the text intact.
-	_, limitProblem := budgeting.ParseLimitMajor(limitDraft.Get(), limitDec)
-	limitErrID := "budget-limit-err-" + s.Budget.ID
-	limitErrMsg := budgetLimitError(limitProblem, s.Budget.Limit.Currency)
-	limitSaveTitle := uistate.T("action.save")
-	if limitErrMsg != "" {
-		limitSaveTitle = uistate.T("budgets.limitSaveBlocked")
-	}
-	startLimitEdit := ui.UseEvent(Prevent(func() {
-		// Seed from the STORED base limit — s.Budget here is the evaluation copy whose
-		// Limit has rollover carry / period boosts folded in (the effective cap). If the
-		// draft seeded from that, an untouched save would silently rewrite the base
-		// limit to the cap, destroying the carry distinction. Look up the real budget.
-		seed := s.Budget.Limit
-		if app := appstate.Default; app != nil {
-			for _, bb := range app.Budgets() {
-				if bb.ID == s.Budget.ID {
-					seed = bb.Limit
-					break
-				}
-			}
-		}
-		limitDraft.Set(money.FormatMinor(seed.Amount, limitDec))
-		limitEditing.Set(true)
-	}))
-	cancelLimitEdit := ui.UseEvent(Prevent(func() {
-		limitRestoreFocus.Set(true)
-		limitEditing.Set(false)
-	}))
-	limitKeyDown := ui.UseEvent(func(e ui.KeyboardEvent) {
-		switch e.GetKey() {
-		case "Escape":
-			e.PreventDefault()
-			limitRestoreFocus.Set(true)
-			limitEditing.Set(false)
-		case "Enter":
-			e.PreventDefault()
-			// The form submit owns validation and persistence.
-			amt, prob := budgeting.ParseLimitMajor(limitDraft.Get(), limitDec)
-			if prob.OK() {
-				limitRestoreFocus.Set(true)
-				// Invoke the same save path as the submit button.
-				if app := appstate.Default; app != nil {
-					for _, bb := range app.Budgets() {
-						if bb.ID == s.Budget.ID {
-							if bb.Limit.Amount != amt {
-								bb.Limit = money.New(amt, bb.Limit.Currency)
-								if err := app.PutBudget(bb); err == nil {
-									uistate.PostUndoable(uistate.T("budgets.limitChangedToast", fmtMoney(bb.Limit)))
-									uistate.BumpDataRevision()
-								} else {
-									uistate.PostNotice(budgetErrorText(err), true)
-									return
-								}
-							}
-							break
-						}
-					}
-				}
-				if limitEditing.Get() {
-					limitEditing.Set(false)
-				}
-			}
-		}
+	rowLimitDraft := useBudgetRowLimitDraft(s)
+	limitKeyDown, onLimitDraft := useBudgetRowLimitKeyboard(budgetRowLimitKeyboardProps{
+		limitRestoreFocus: rowLimitDraft.limitRestoreFocus, limitEditing: rowLimitDraft.limitEditing, limitDraft: rowLimitDraft.limitDraft,
+		limitDec: rowLimitDraft.limitDec, s: s,
 	})
-	onLimitDraft := ui.UseEvent(func(v string) { limitDraft.Set(v) })
-	saveLimitEdit := ui.UseEvent(Prevent(func() {
-		amt, prob := budgeting.ParseLimitMajor(limitDraft.Get(), limitDec)
-		if !prob.OK() {
-			// Hold the editor open on a bad value. Closing it discarded the typed
-			// text and left the old figure back on the card as though nothing had
-			// been attempted — the failure mode that made a rejected negative
-			// indistinguishable from a saved one.
-			return
-		}
-		if app := appstate.Default; app != nil {
-			for _, bb := range app.Budgets() {
-				if bb.ID != s.Budget.ID {
-					continue
-				}
-				if bb.Limit.Amount != amt {
-					bb.Limit = money.New(amt, bb.Limit.Currency)
-					if err := app.PutBudget(bb); err == nil {
-						uistate.PostUndoable(uistate.T("budgets.limitChangedToast", fmtMoney(bb.Limit)))
-						uistate.BumpDataRevision()
-					} else {
-						uistate.PostNotice(budgetErrorText(err), true)
-						return
-					}
-				}
-				break
-			}
-		}
-		limitEditing.Set(false)
-		limitRestoreFocus.Set(true)
-	}))
-	ui.UseEffect(func() func() {
-		if !limitRestoreFocus.Get() {
-			return nil
-		}
-		cb := js.FuncOf(func(js.Value, []js.Value) any {
-			doc := js.Global().Get("document")
-			if doc.Truthy() {
-				button := doc.Call("querySelector", `[data-testid="budget-limit-btn-`+s.Budget.ID+`"]`)
-				if button.Truthy() {
-					button.Call("focus")
-				}
-			}
-			limitRestoreFocus.Set(false)
-			return nil
-		})
-		handle := js.Global().Call("setTimeout", cb, 0)
-		return func() {
-			js.Global().Call("clearTimeout", handle)
-			cb.Release()
-		}
-	}, limitRestoreFocus.Get())
+	saveLimitEdit := useBudgetRowLimitSave(budgetRowLimitSaveProps{
+		limitDraft: rowLimitDraft.limitDraft, limitDec: rowLimitDraft.limitDec, s: s, limitEditing: rowLimitDraft.limitEditing,
+		limitRestoreFocus: rowLimitDraft.limitRestoreFocus,
+	})
 
-	del := ui.UseEvent(Prevent(func() { menuOpen.Set(false); props.OnDelete(s.Budget.ID) }))
-	// C585: the drill-through carries the budget's WHOLE spend scope — tracked
-	// categories, their descendants, and any tracked tags — the same set the bar
-	// counts against. Passing only TrackedCategoryIDs is what opened an empty
-	// ledger under a non-zero total for a parent-category budget whose spend all
-	// sat in its sub-categories.
-	drillScope := budgetDrillScope(s.Budget)
-	drill := ui.UseEvent(Prevent(func() {
-		if props.OnDrill != nil {
-			props.OnDrill(drillScope, props.PeriodFrom, props.PeriodTo)
-		}
-	}))
-	// The drill affordances show whenever the budget counts anything at all (a
-	// multi-category budget may have no single primary CategoryID; a tag budget
-	// may count charges from any of them).
-	canDrill := !drillScope.IsEmpty()
-	// Edit and Top up open the shell-root flip modal (BudgetEditHost) rather than an
-	// inline row form: a row sits under transformed bento/tile ancestors, which threw an
-	// in-row modal off-centre. SetBudgetEdit updates the atom the host captured. Edit is
-	// the lower-frequency action, so it lives in the ⋯ menu (and closes it); Top up is a
-	// visible card button.
-	openEdit := ui.UseEvent(Prevent(func() {
-		menuOpen.Set(false)
-		uistate.SetBudgetEdit(uistate.BudgetEdit{ID: s.Budget.ID, Mode: uistate.BudgetEditModeEdit})
-	}))
-	openCategories := ui.UseEvent(Prevent(func() {
-		menuOpen.Set(false)
-		uistate.SetBudgetCategoriesEdit(s.Budget.ID)
-	}))
-	openTopup := ui.UseEvent(Prevent(func() {
-		uistate.SetBudgetEdit(uistate.BudgetEdit{ID: s.Budget.ID, Mode: uistate.BudgetEditModeTopup})
-	}))
-	// Release unused funds: the mirror of Top up — a NEGATIVE one-time period
-	// boost lowering THIS period's cap to what's spent, so the leftover returns
-	// to the plan (To Assign under zero-based budgeting) instead of implying it
-	// may still be spent. Future periods are untouched (boosts are per-period).
-	// WF17: pause or resume the funding target. One action that reads what it
-	// does rather than a toggle labelled the same in both states — a control whose
-	// label does not change is one nobody trusts they have pressed.
-	snoozeLabel := uistate.T("budgets.snoozeTarget")
-	if s.Budget.TargetSnoozed(time.Now()) {
-		snoozeLabel = uistate.T("budgets.resumeTarget")
-	}
-	toggleSnooze := ui.UseEvent(Prevent(func() {
-		app := appstate.Default
-		if app == nil {
-			return
-		}
-		b := s.Budget
-		now := time.Now()
-		if b.TargetSnoozed(now) {
-			b.TargetSnoozedUntil = time.Time{}
-			if err := app.PutBudget(b); err != nil {
-				uistate.PostNotice(budgetErrorText(err), true)
-				return
-			}
-			uistate.PostNotice(uistate.T("budgets.resumedNotice", budgetTitle(s.Budget.Name, props.Category)), false)
-		} else {
-			// A month, not a date picker. The common case is "not this month", and
-			// asking somebody to choose a date for something they want to stop
-			// thinking about is the friction that sends them back to deleting it.
-			until := now.AddDate(0, 1, 0)
-			b.TargetSnoozedUntil = until
-			if err := app.PutBudget(b); err != nil {
-				uistate.PostNotice(budgetErrorText(err), true)
-				return
-			}
-			uistate.PostNotice(uistate.T("budgets.snoozedNotice",
-				budgetTitle(s.Budget.Name, props.Category),
-				uistate.LoadPrefs().FormatDate(until)), false)
-		}
-		uistate.BumpDataRevision()
-	}))
+	rowNavigation := useBudgetRowNavigation(rowDisclosure.menuOpen, props, s)
+	snoozeLabel, toggleSnooze, releaseUnused := useBudgetRowFundingActions(s, props, rowDisclosure.menuOpen)
 
-	releaseUnused := ui.UseEvent(Prevent(func() {
-		menuOpen.Set(false)
-		app := appstate.Default
-		if app == nil || s.Remaining.Amount <= 0 {
-			return
-		}
-		remaining := s.Remaining
-		// C597: the same impact vocabulary every other funds-moving action uses.
-		msg := uistate.T("budgets.releaseConfirm", fmtMoney(remaining), s.Budget.Name) + " " +
-			fundsImpactLine(budgeting.ImpactRelease)
-		uistate.ConfirmModal(msg, false, func(ok bool) {
-			if !ok {
-				return
-			}
-			for _, b := range app.Budgets() {
-				if b.ID != s.Budget.ID {
-					continue
-				}
-				prefs := uistate.LoadPrefs()
-				start := budgetPeriodKeyStartWithWeekStart(b.Period, props.Anchor, budgetPayCycleAnchor(prefs.PayCycleAnchor), prefs.WeekStartWeekday())
-				if err := app.PutBudget(b.WithPeriodBoost(start, -remaining.Amount)); err != nil {
-					uistate.PostNotice(budgetErrorText(err), true)
-					return
-				}
-				uistate.BumpDataRevision()
-				uistate.PostUndoable(uistate.T("budgets.releasedToast", fmtMoney(remaining), b.Name))
-				return
-			}
-		})
-	}))
-
-	// "Cover…" opens the shell-root flip modal (BudgetEditHost cover mode), which picks
-	// a source budget + amount and moves the limit — no longer an inline row form.
-	openCover := ui.UseEvent(Prevent(func() {
-		uistate.SetBudgetEdit(uistate.BudgetEdit{ID: s.Budget.ID, Mode: uistate.BudgetEditModeCover})
-	}))
-	// Notes + Formulas open their own modes of the same shell-root editor modal.
-	// (They also close the kebab, which is where they now live.)
-	// The body is shared: the kebab item needs a Handler, the note marker needs a
-	// plain func it can register as its own click (its component owns that hook).
-	openNotesFn := func() {
-		menuOpen.Set(false)
-		uistate.SetBudgetEdit(uistate.BudgetEdit{ID: s.Budget.ID, Mode: uistate.BudgetEditModeNotes})
-	}
-	openNotes := ui.UseEvent(Prevent(openNotesFn))
-	openFormulas := ui.UseEvent(Prevent(func() {
-		menuOpen.Set(false)
-		uistate.SetBudgetEdit(uistate.BudgetEdit{ID: s.Budget.ID, Mode: uistate.BudgetEditModeFormulas})
-	}))
-	// Transactions drill navigates to the filtered ledger.
-	drillMenu := ui.UseEvent(Prevent(func() {
-		if props.OnDrill != nil {
-			props.OnDrill(drillScope, props.PeriodFrom, props.PeriodTo)
-		}
-	}))
-	// Jump to the To-do list PRE-FILTERED to this budget's follow-ups (link=budget +
-	// the specific budget id), used by both a to-do row's title and the "+N more" link.
-	openBudgetTodos := func() {
-		uistate.SetTodoFilterLink(uistate.TodoLinkBudget)
-		uistate.SetTodoFilterLinkID(s.Budget.ID)
-		if props.OnViewTodos != nil {
-			props.OnViewTodos()
-		}
-	}
-	openTodos := ui.UseEvent(Prevent(func() { openBudgetTodos() }))
-	// UX-05: the linked follow-ups list starts collapsed — the header row (with its
-	// open/total count) is always visible; the items reveal on click.
-	todosOpen := ui.UseState(false)
-	toggleTodos := ui.UseEvent(Prevent(func() { todosOpen.Set(!todosOpen.Get()) }))
-	removeRecurring := ui.UseEvent(Prevent(func() {
-		menuOpen.Set(false)
-		if props.OnRemoveRecurring != nil {
-			props.OnRemoveRecurring(s.Budget.ID)
-		}
-	}))
-	hasRecurring := s.Budget.RecurringCover != nil
-	// Coverage badge — differentiate continual (recurring) from a one-time cover this
-	// period. Recurring wins (it's inherently covered), so the two never both show.
-	var coverageLine ui.Node = Fragment()
-	if hasRecurring {
-		coverageLine = Span(css.Class("budget-sub", "budget-recurring"), Attr("data-testid", "recurring-badge-"+s.Budget.ID), uistate.T("budgets.recurringBadge"))
-	} else if props.Covered {
-		coverageLine = Span(css.Class("budget-sub", "budget-covered"), Attr("data-testid", "covered-badge-"+s.Budget.ID), uistate.T("budgets.coveredBadge"))
-	}
+	rowDetailActions := useBudgetRowDetailActions(s, rowDisclosure.menuOpen, props, rowNavigation.drillScope)
+	hasRecurring, coverageLine := budgetRowCoverage(s, props)
 
 	limit := s.Limit
 
@@ -355,415 +61,46 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	// reference line below — so last month "takes over the tile" instead of a tiny bar.
 	lastMonthMode := props.LastMonthSpent != ""
 
-	// Bar figures + fill (this month by default; swapped to last month below).
-	barSpent := fmtMoney(s.Spent)
-	barPct := s.Percent
-	width := s.Percent
-	fillClass := "bar-fill"
-	label := uistate.T("budgets.onTrack")
-	switch s.State {
-	case budgeting.StateNear:
-		fillClass = "bar-fill near"
-		label = uistate.T("budgets.nearLimit")
-	case budgeting.StateOver:
-		fillClass = "bar-fill over"
-		label = uistate.T("budgets.overBudget")
-	default:
-		// Not over/near yet, but the pace projection says this budget is trending
-		// to overspend — don't claim "On track" while also warning of an overspend
-		// (the L35 contradiction). Call it "At risk" instead.
-		if props.PaceOver != "" {
-			fillClass = "bar-fill near"
-			label = uistate.T("budgets.atRisk")
-		}
-		// C344: three days into a period nothing has been broken yet, so "On track"
-		// is a statement about the calendar, not about the household — and a card
-		// that says "doing great" every time a month opens is one people learn to
-		// ignore. Say what is actually true (the period just started) and let last
-		// period's outcome, shown below, be the thing worth reading.
-		if props.PeriodEarly {
-			fillClass = "bar-fill is-hist"
-			label = uistate.T("budgets.periodJustStarted")
-		}
-	}
-	if lastMonthMode {
-		barSpent, barPct, width = props.LastMonthSpent, props.LastMonthPct, props.LastMonthFill
-		if props.LastMonthOver {
-			// An actual overrun stays danger red — it's a fact, whenever it happened.
-			fillClass = "bar-fill over"
-		} else {
-			// History fills NEUTRAL: the healthy-green live tone (and the amber "near"
-			// warning) under a LAST MONTH tag would read as a statement about now
-			// (design critique: green was doing too many jobs).
-			fillClass = "bar-fill is-hist"
-		}
-	}
-	if width > 100 {
-		width = 100
-	}
-	// Grade the over-budget treatment by HOW FAR past the cap the row is, so a small
-	// overspend doesn't wear the same full-severity red as a large overrun (a mild bar
-	// gets a softer tone + thinner overflow marker; a severe one, the heaviest). The
-	// tier reads off the displayed percent (this-month, or last-month's in that overlay)
-	// and only attaches when the fill is actually over — the style layer
-	// (rules_budgetovercalm.go) does the rest.
-	if strings.Contains(fillClass, "over") {
-		if tc := budgeting.ClassifyOverage(barPct).Class(); tc != "" {
-			fillClass += " " + tc
-		}
-	}
+	rowBarValues := budgetRowBarValues(s, props, lastMonthMode)
+	rowTitle := budgetRowTitle(s, rowBarValues.title, rowNavigation.drillScope, props)
+	customLine, envLine, envDebtLine := budgetRowMetadata(props, s, lastMonthMode)
 
-	// Show "name · category" only when they add information (see budgetTitle).
-	title := budgetTitle(s.Budget.Name, props.Category)
-	// The note, and what to call the action that opens it. Every other item in the
-	// row's ⋯ menu is a verb phrase; "Notes" was the one noun, and it read the same
-	// whether it would create a note or overwrite one.
-	noteText := strings.TrimSpace(s.Budget.Notes)
-	hasNote := noteText != ""
-	notesLabel := uistate.T("budgets.notesAdd")
-	if hasNote {
-		notesLabel = uistate.T("budgets.notesEdit")
-	}
-	// One tooltip for the drill action, in BOTH densities. The two used to differ,
-	// and the compact one interpolated the primary category name — which is empty
-	// for a multi-category or tag-tracking budget, leaving "See all  transactions
-	// in this period" on exactly the budgets whose scope most needed naming.
-	drillTitle := budgetDrillTitle(title, s.Budget, drillScope)
+	rowPaceNotes := budgetRowPaceNotes(lastMonthMode, props, s, rowDisclosure.prefs)
 
-	// Owner tag (L106 learning): an INDIVIDUAL budget only counts its owner's spending, so a household
-	// can't otherwise tell why a shared expense didn't move it. Flag whose it is — but only for
-	// individual budgets (OwnerID matches a real member); shared/household budgets (the common default,
-	// OwnerID = group) stay unlabeled to keep rows clean.
-	var ownerLine ui.Node = Fragment()
-	for _, m := range props.Members {
-		if m.ID == s.Budget.OwnerID {
-			ownerLine = Span(css.Class("budget-sub", tw.TextFaint), uistate.T("budgets.individualOwner", m.Name))
-			break
-		}
-	}
+	rowPeriodNotes := budgetRowPeriodNotes(lastMonthMode, props, s, rowDetailActions.openCover)
+	kebabNode, actionsRow := budgetRowActions(budgetRowActionsProps{
+		isOver: rowPeriodNotes.isOver, s: s, openTopup: rowNavigation.openTopup, menuOpen: rowDisclosure.menuOpen,
+		menuID: rowDisclosure.menuID, title: rowBarValues.title, toggleMenu: rowDisclosure.toggleMenu, closeMenu: rowDisclosure.closeMenu,
+		props: props, openCover: rowDetailActions.openCover, openEdit: rowNavigation.openEdit, openCategories: rowNavigation.openCategories,
+		notesLabel: rowTitle.notesLabel, openNotes: rowDetailActions.openNotes, openFormulas: rowDetailActions.openFormulas,
+		releaseUnused: releaseUnused, toggleSnooze: toggleSnooze, snoozeLabel: snoozeLabel, hasRecurring: hasRecurring,
+		removeRecurring: rowDetailActions.removeRecurring, del: rowNavigation.del, coverBtn: rowPeriodNotes.coverBtn,
+		canDrill: rowNavigation.canDrill, drillTitle: rowTitle.drillTitle, drillMenu: rowDetailActions.drillMenu,
+	})
 
-	// C118: show a small method badge when this budget has its own method override,
-	// so the user can see at a glance which budget uses a different approach from
-	// the household default. Hidden when the budget inherits the global method.
-	var methodLine ui.Node = Fragment()
-	if s.Budget.Methodology != "" {
-		methodLine = Span(css.Class("budget-sub", tw.TextFaint), uistate.T("budgets.methodOverrideRow", budgetMethodLabel(budgeting.ParseMethodology(s.Budget.Methodology))))
-	}
-
-	// Custom-field summary (e.g. "Priority: High · Review: Q3") — shown when the budget
-	// has any user-defined field values, so custom data stays visible on the row.
-	var customLine ui.Node = Fragment()
-	if cs := customSummary(props.BudgetDefs, s.Budget.Custom); cs != "" {
-		customLine = Span(css.Class("budget-sub", tw.TextFaint), cs)
-	}
-
-	// Envelope methodology: show the carried-forward balance under the period row.
-	// Like every this-month caption below, it hides in last-month mode: the bar then
-	// shows a DIFFERENT period's spend, and a this-month pace/carry/cap line under a
-	// last-month bar reads as an internal contradiction (the L-overlay critique).
-	var envLine ui.Node = Fragment()
-	if !lastMonthMode && props.Envelope != "" {
-		cls := "budget-sub"
-		if props.EnvelopeNeg {
-			cls += " " + tw.Fold(tw.TextDown)
-		}
-		envLine = Span(ClassStr(cls), uistate.T("budgets.envelopeRow", props.Envelope))
-	}
-
-	// BG5: an overdrawn envelope names what next period starts down, so the overdraft
-	// doesn't quietly vanish at the boundary. Caution amber (not danger red): it's a
-	// heads-up about where next period STARTS, not a "you're over now" alarm.
-	var envDebtLine ui.Node = Fragment()
-	if !lastMonthMode && props.EnvelopeDebtStart != "" {
-		envDebtLine = Span(css.Class("budget-sub", tw.TextWarn), Attr("data-testid", "budget-envdebt-"+s.Budget.ID),
-			Attr("role", "status"), props.EnvelopeDebtStart)
-	}
-
-	// Pace projection (D2): a gentle heads-up when current spending would blow the
-	// budget by period end, shown only while the period is still in progress.
-	var paceLine ui.Node = Fragment()
-	if !lastMonthMode && props.PaceOver != "" {
-		paceLine = Span(css.Class("budget-sub", tw.TextDown), uistate.T("budgets.paceOver", props.PaceOver))
-	}
-
-	// BG3: the even-pace caption ("on pace" / "running $38 hot" / "$12 under pace so
-	// far"). A hot budget reads in the caution amber; on/under pace stays faint. Only
-	// shown while in progress and when the pace overspend warning isn't already owning
-	// the message (paceOver is the stronger signal).
-	var paceMarkLine ui.Node = Fragment()
-	if !lastMonthMode && props.PaceCaption != "" && props.PaceOver == "" {
-		tone := tw.TextFaint
-		if props.PaceHot {
-			tone = tw.TextWarn
-		}
-		paceMarkLine = Span(css.Class("budget-sub", tone), Attr("data-testid", "budget-pace-caption-"+s.Budget.ID),
-			Attr("role", "status"), props.PaceCaption)
-	}
-	var paceLegend ui.Node = Fragment()
-	if !lastMonthMode && props.PaceMarkerPct > 0 && s.Spent.Amount > 0 {
-		anchor := props.Anchor
-		if anchor.IsZero() {
-			anchor = time.Now()
-		}
-		from, to := budgeting.PeriodRange(s.Budget.Period, anchor, prefs.WeekStartWeekday())
-		elapsed := 0
-		if total := to.Sub(from).Hours(); total > 0 {
-			elapsed = int(time.Since(from).Hours() / total * 100)
-			if elapsed < 0 {
-				elapsed = 0
-			} else if elapsed > 100 {
-				elapsed = 100
-			}
-		}
-		paceLegend = Span(css.Class("budget-pace-legend"), Attr("data-testid", "budget-pace-legend-"+s.Budget.ID),
-			uistate.T("budgets.paceLegend", elapsed))
-	}
-
-	var rolloverLine ui.Node = Fragment()
-	if !lastMonthMode && props.RolloverCarry != "" {
-		// A carried-in deficit is historical context about where the period STARTED, not a
-		// live alert — keep it quiet/neutral (TextDim) so an over-budget card has ONE colored
-		// signal (the red status line) rather than several caption lines competing for the eye.
-		cls := "budget-sub " + tw.Fold(tw.TextDim)
-		rolloverLine = Span(ClassStr(cls), uistate.T("budgets.rolloverCarry", props.RolloverCarry))
-	}
-
-	// C136: show the effective cap when it differs from the base limit — WITH its
-	// arithmetic (base limit ± carry-over ± top-up), so the number is explainable at a
-	// glance instead of an opaque figure. Hidden when cap == base limit (no note needed).
-	var effectiveCapLine ui.Node = Fragment()
-	if !lastMonthMode && props.EffectiveCap != "" {
-		if props.EffectiveCapMath != "" {
-			effectiveCapLine = Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-capmath-"+s.Budget.ID),
-				uistate.T("budgets.effectiveCapMath", props.EffectiveCap, props.EffectiveCapMath))
-		} else {
-			effectiveCapLine = Span(css.Class("budget-sub", tw.TextFaint), uistate.T("budgets.effectiveCap", props.EffectiveCap))
-		}
-	}
-
-	// C143: even-pace guidance — how much of what's left can be spent over the days
-	// still in the period, so the user knows the sustainable daily-ish pace instead
-	// of seeing only a lump remaining. Quiet faint line; only set while in-progress.
-	var proratedLine ui.Node = Fragment()
-	if !lastMonthMode && props.ProratedRest != "" {
-		proratedLine = Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-prorated"),
-			uistate.T("budgets.proratedRest", props.ProratedRest))
-	}
-
-	// "Last month's spend" overlay: an overline tag above the (now last-month) bar, plus a
-	// faint reference line showing what THIS month has actually spent — so the tile leads
-	// with last month while this month stays visible for comparison.
-	var lastMonthTag, thisMonthRef ui.Node = Fragment(), Fragment()
-	if lastMonthMode {
-		lastMonthTag = Div(css.Class("budget-lastmonth-tag"), Attr("data-testid", "budget-lastmonth-"+s.Budget.ID),
-			Attr("aria-label", uistate.T("budgets.lastMonthAria", props.LastMonthSpent, props.LastMonthDelta)),
-			uistate.T("budgets.lastMonthCap"))
-		thisMonthRef = Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-thismonth-ref-"+s.Budget.ID),
-			uistate.T("budgets.thisMonthRef", fmtMoney(s.Spent)))
-	}
-
-	// "Cover…" is offered on an over-budget row and opens the flip modal (which lists
-	// the other budgets to pull from). Top up is offered when not over.
-	isOver := s.State == budgeting.StateOver
-	var coverBtn ui.Node = Fragment()
-	if isOver {
-		coverBtn = Button(css.Class("btn"), Type("button"), Attr("data-testid", "budget-cover-btn-"+s.Budget.ID), Title(uistate.T("budgets.coverTitle")), OnClick(openCover), uistate.T("budgets.actionCoverFromOther"))
-	}
-	// Top up is a visible card button (the frequent proactive action) on budgets that
-	// aren't over.
-	var topupBtn ui.Node = Fragment()
-	if !isOver {
-		topupBtn = Button(css.Class("btn"), Type("button"), Attr("data-testid", "budget-topup-btn-"+s.Budget.ID), Title(uistate.T("budgets.topupTitle")), OnClick(openTopup), uistate.T("budgets.actionRaiseLimit"))
-	}
-
-	// The row actions, rendered as the card's footer (pinned to the bottom by CSS) so the
-	// card reads top-to-bottom: title → amount → bar → status → actions. The footer keeps
-	// only the EVERYDAY money moves inline — Cover/Top-up and the Transactions drill —
-	// and everything configurational (Edit budget, Edit tracking, Notes, Formulas) folds
-	// into the ⋯ overflow with the destructive actions at its bottom (standing directive:
-	// delete never sits exposed on the row). Seven visible buttons made every card a
-	// toolbar; three keep it a card (design critique #8).
-	menuHidden := ""
-	if !menuOpen.Get() {
-		menuHidden = " hidden-menu"
-	}
-	// The ⋯ overflow is shared by both densities. In COMPACT the row has no footer, so
-	// the money moves (Cover/Top-up, Transactions) join the top of the menu; the
-	// destructive group stays pinned at the bottom either way.
-	kebabNode := Div(css.Class("add-wrap"), Attr("id", menuID),
-		Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "budget-kebab-"+s.Budget.ID), Attr("title", uistate.T("budgets.moreActions")), Attr("aria-label", uistate.T("budgets.moreActions")+" — "+title), Attr("aria-haspopup", "menu"), Attr("aria-expanded", ariaBool(menuOpen.Get())), OnClick(toggleMenu), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
-		Div(ClassStr("add-backdrop"+menuHidden), OnClick(closeMenu)),
-		Div(ClassStr("add-menu"+menuHidden), Attr("role", "menu"),
-			If(props.Compact && isOver, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "budget-cover-btn-"+s.Budget.ID), Title(uistate.T("budgets.coverTitle")), OnClick(openCover), uistate.T("budgets.actionCoverFromOther"))),
-			If(props.Compact && !isOver, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "budget-topup-btn-"+s.Budget.ID), Title(uistate.T("budgets.topupTitle")), OnClick(openTopup), uistate.T("budgets.actionRaiseLimit"))),
-			Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "edit-budget-btn-"+s.Budget.ID), Title(uistate.T("budgets.editTitle")), OnClick(openEdit), uistate.T("budgets.editAction")),
-			Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "edit-budget-cats-btn-"+s.Budget.ID), Title(uistate.T("budgets.catsTitle")), OnClick(openCategories), uistate.T("budgets.actionEditTracking")),
-			Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "budget-notes-btn-"+s.Budget.ID), Attr("aria-label", notesLabel+" — "+title), Title(uistate.T("budgets.notesTitle")), OnClick(openNotes), notesLabel),
-			Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "budget-formulas-btn-"+s.Budget.ID), Title(uistate.T("budgets.formulasTitle")), OnClick(openFormulas), uistate.T("budgets.actionEditFormulas")),
-			If(s.Budget.Rollover && s.Remaining.Amount > 0, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
-				Attr("data-testid", "budget-release-btn-"+s.Budget.ID), Title(uistate.T("budgets.releaseTitle")),
-				OnClick(releaseUnused), uistate.T("budgets.releaseAction"))),
-			// WF17: pause a funding target instead of deleting it to stop the
-			// nagging. Deleting to silence something is how settings get lost, and
-			// until now it was the only option.
-			If(s.Budget.HasTarget(), Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
-				Attr("data-testid", "budget-snooze-btn-"+s.Budget.ID),
-				OnClick(toggleSnooze), snoozeLabel)),
-			If(hasRecurring, Button(css.Class("add-item danger"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "remove-recurring-btn-"+s.Budget.ID), OnClick(removeRecurring), uistate.T("budgets.removeRecurring"))),
-			Button(css.Class("add-item danger"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "delete-budget-btn-"+s.Budget.ID), Attr("aria-label", uistate.T("budgets.deleteTitle")), Title(uistate.T("budgets.deleteTitle")), OnClick(del), uistate.T("budgets.deleteAction")),
-		),
-	)
-	actionsRow := Div(css.Class("budget-actions"),
-		coverBtn,
-		topupBtn,
-		If(canDrill, Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "budget-view-txns-"+s.Budget.ID), Title(drillTitle), OnClick(drillMenu),
-			uiw.Icon(icon.Receipt, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("nav.transactions")))),
-		kebabNode,
-	)
-
-	// COMPACT density: one scannable line — name, mini bar, spent/limit, what's left,
-	// a status chip, and the ⋯ menu (which absorbs the money moves above). Everything
-	// analytical (pie, metrics, captions, notes, to-dos) belongs to the card layout;
-	// compact is for reading fifteen budgets without scrolling (design critique #9).
-	// WF18: spending a goal paid for is not overspending. Two transactions can
-	// look identical in the ledger and mean opposite things — one blew the budget,
-	// the other came out of a fund saved for exactly this — and a budget that
-	// cannot tell them apart punishes somebody for executing their own plan.
-	//
-	// The funded amount is SEPARATED, never deducted: the money still left the
-	// account, and a budget that quietly shrank its own totals would be a worse
-	// lie than the one being fixed.
-	var fundedLine ui.Node = Fragment()
-	fundedChip, fundedTitle := "", ""
-	if app := appstate.Default; app != nil && !lastMonthMode {
-		cats := map[string]bool{}
-		if s.Budget.CategoryID != "" {
-			cats[s.Budget.CategoryID] = true
-		}
-		for _, c := range s.Budget.TrackedCategoryIDs() {
-			cats[c] = true
-		}
-		base := app.Settings().BaseCurrency
-		if base == "" {
-			base = budgetBaseCurrency(base)
-		}
-		// The row does not carry its period bounds, so derive them the same way the
-		// page does — from the budget's own period against the household's week
-		// start. Re-deriving here rather than threading a new prop keeps this
-		// additive, and both paths call the same function so they cannot disagree.
-		anchor := props.Anchor
-		if anchor.IsZero() {
-			anchor = time.Now()
-		}
-		payAnchor := budgetPayCycleAnchor(uistate.LoadPrefs().PayCycleAnchor)
-		pStart, pEnd := budgeting.PeriodRangeAnchored(s.Budget.Period, anchor,
-			uistate.LoadPrefs().WeekStartWeekday(), payAnchor)
-		split := memoGoalFunded(app, dataRevision, s.Budget.ID, pStart, pEnd, func() goalfunded.Split {
-			return goalfunded.Summarize(app.Transactions(), cats, pStart, pEnd,
-				currency.Rates{Base: base, Rates: app.Settings().FXRates})
-		})
-		if split.HasFunded() {
-			key := "budgets.goalFunded"
-			if _, rescued := split.OverBy(s.Limit.Amount); rescued {
-				// The sentence worth showing: without the goal this would read as
-				// overspent, and saying so is the difference between a budget that
-				// understands the plan and one that only counts.
-				key = "budgets.goalFundedRescued"
-			}
-			fundedTitle = uistate.T(key, fmtMoney(money.New(split.FundedMinor, base)))
-			fundedChip = uistate.T("budgets.goalFundedChip")
-			fundedLine = Span(css.Class("budget-sub", tw.TextDim),
-				Attr("data-testid", "budget-goalfunded-"+s.Budget.ID), fundedTitle)
-		}
-	}
+	fundedLine, fundedChip := budgetRowGoalFunding(lastMonthMode, s, props, dataRevision)
 
 	if props.Compact {
 		return budgetRowCompact(budgetRowCompactProps{
-			budgetRowProps: props, Status: s, Title: title, LastMonthMode: lastMonthMode,
-			BarSpent: barSpent, Width: width, FillClass: fillClass,
-			Limit: limit, Label: label, CanDrill: canDrill, DrillTitle: drillTitle,
-			Kebab: kebabNode, OnLimitEdit: startLimitEdit, OnDrill: drill,
-			LimitEditing: limitEditing.Get(), LimitDraft: limitDraft.Get(), OnLimitDraft: onLimitDraft,
-			OnLimitSave: saveLimitEdit, OnLimitCancel: cancelLimitEdit, OnLimitKeyDown: limitKeyDown,
-			LimitErrorID: limitErrID, LimitError: limitErrMsg, FundedChip: fundedChip,
+			budgetRowProps: props, Status: s, Title: rowBarValues.title, LastMonthMode: lastMonthMode,
+			BarSpent: rowBarValues.barSpent, Width: rowBarValues.width, FillClass: rowBarValues.fillClass,
+			Limit: limit, Label: rowBarValues.label, CanDrill: rowNavigation.canDrill, DrillTitle: rowTitle.drillTitle,
+			Kebab: kebabNode, OnLimitEdit: rowLimitDraft.startLimitEdit, OnDrill: rowNavigation.drill,
+			LimitEditing: rowLimitDraft.limitEditing.Get(), LimitDraft: rowLimitDraft.limitDraft.Get(), OnLimitDraft: onLimitDraft,
+			OnLimitSave: saveLimitEdit, OnLimitCancel: rowLimitDraft.cancelLimitEdit, OnLimitKeyDown: limitKeyDown,
+			LimitErrorID: rowLimitDraft.limitErrID, LimitError: rowLimitDraft.limitErrMsg, FundedChip: fundedChip,
 			HasRecurring: hasRecurring,
-			HasNote:      hasNote, NotesLabel: notesLabel, NoteText: noteText, OnOpenNotes: openNotesFn,
+			HasNote:      rowTitle.hasNote, NotesLabel: rowTitle.notesLabel, NoteText: rowTitle.noteText, OnOpenNotes: rowDetailActions.openNotesFn,
 		})
 	}
 	// Readable, clickable-to-expand notes line (the attached note itself), shown on the
 	// card when the budget has a note — mirrors the /accounts notes affordance.
-	var notesNode ui.Node = Fragment()
-	hasNotes := hasNote
-	if hasNote {
-		// Clicking the note opens the full note in the flip modal (handy when it's long) —
-		// the card shows a clamped preview.
-		//
-		// The accessible name carries the budget it belongs to. On a page listing a
-		// dozen budgets, an unqualified "Notes, button" repeated on every card left a
-		// screen-reader user unable to tell whose note was next without backing up to
-		// the heading.
-		notesNode = Button(ClassStr("acct-notes budget-notes"), Type("button"), Attr("data-testid", "budget-notes-"+s.Budget.ID),
-			Attr("aria-label", notesLabel+" — "+title),
-			Title(uistate.T("budgets.notesTitle")), OnClick(openNotes),
-			uiw.Icon(icon.FileText, css.Class("acct-notes-icon", tw.ShrinkO, tw.W4, tw.H4)),
-			Span(css.Class("acct-notes-text"), noteText),
-		)
-	}
+	notesNode, hasNotes := budgetRowNotes(budgetRowNotesProps{
+		hasNote: rowTitle.hasNote, s: s, notesLabel: rowTitle.notesLabel, title: rowBarValues.title, openNotes: rowDetailActions.openNotes,
+		noteText: rowTitle.noteText,
+	})
 
-	// A quiet link to the To-dos page when this budget has linked to-dos.
-	// A quick, scannable metric strip — the full-width card has room for the TIME
-	// dimension the prose lines don't make glanceable: how much is left to spend per
-	// remaining day, how many days remain (and when it resets), and how far through the
-	// period we are. Hidden in the last-month overlay (which shows a different period).
-	var metricsStrip ui.Node = Fragment()
-	if !lastMonthMode {
-		// QA CF-05: the period must come from the VIEW's anchor, not today — a
-		// June card paged into July was showing "14 days left · 52% elapsed ·
-		// Aug 1" (all current-month pacing). Completed periods state final facts;
-		// future periods say when they start; only a period containing today gets
-		// the live per-day / days-left / elapsed race.
-		nowT := time.Now()
-		anchorT := props.Anchor
-		if anchorT.IsZero() {
-			anchorT = nowT
-		}
-		pStart, pEnd := budgeting.PeriodRange(s.Budget.Period, anchorT, prefs.WeekStartWeekday())
-		switch {
-		case !nowT.Before(pEnd): // completed period — history has no pacing
-			metricsStrip = Div(css.Class("budget-metrics"), Attr("data-testid", "budget-metrics-"+s.Budget.ID),
-				budgetMetric(uistate.T("budgetMetrics.ended"), prefs.FormatDate(pEnd.AddDate(0, 0, -1)), ""),
-				budgetMetric(uistate.T("budgetMetrics.elapsed"), "100%", ""),
-			)
-		case nowT.Before(pStart): // future period — nothing has elapsed yet
-			metricsStrip = Div(css.Class("budget-metrics"), Attr("data-testid", "budget-metrics-"+s.Budget.ID),
-				budgetMetric(uistate.T("budgetMetrics.startsOn"), prefs.FormatDate(pStart), ""),
-				budgetMetric(uistate.T("budgetMetrics.elapsed"), "0%", ""),
-			)
-		default: // the viewed period contains today — live pacing
-			daysLeft := int(pEnd.Sub(nowT).Hours() / 24)
-			if daysLeft < 1 {
-				daysLeft = 1
-			}
-			elapsed := 0
-			if total := pEnd.Sub(pStart).Hours(); total > 0 {
-				elapsed = int(nowT.Sub(pStart).Hours() / total * 100)
-				if elapsed < 0 {
-					elapsed = 0
-				} else if elapsed > 100 {
-					elapsed = 100
-				}
-			}
-			perDay := int64(0)
-			if s.Remaining.Amount > 0 {
-				perDay = s.Remaining.Amount / int64(daysLeft)
-			}
-			metricsStrip = Div(css.Class("budget-metrics"), Attr("data-testid", "budget-metrics-"+s.Budget.ID),
-				budgetMetric(uistate.T("budgetMetrics.perDay"), fmtMoney(money.New(perDay, s.Remaining.Currency)), ""),
-				budgetMetric(uistate.T("budgetMetrics.daysLeft"), strconv.Itoa(daysLeft), prefs.FormatDate(pEnd)),
-				budgetMetric(uistate.T("budgetMetrics.elapsed"), fmt.Sprintf("%d%%", elapsed), ""),
-			)
-		}
-	}
+	metricsStrip := budgetRowMetrics(lastMonthMode, props, s, rowDisclosure.prefs)
 
 	// A composite budget (multi-category, cats+tags, or multi-tag) gets a spend-composition
 	// donut UNDER the full-width status bar; a single-dimension budget shows none.
@@ -773,199 +110,26 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		cardCls += " budget-has-pie"
 	}
 
-	// The right column holds the note (if any) and the budget's linked follow-up to-dos (if
-	// any) — check-off in place, like the transaction follow-ups. Shown whenever either
-	// exists; otherwise the column is omitted and the main content fills the width.
-	linkedTodos := budgetLinkedTodos(s.Budget.ID)
-	var todosPanel ui.Node = Fragment()
-	if len(linkedTodos) > 0 {
-		const maxTodos = 5
-		open := 0
-		for _, it := range linkedTodos {
-			if !it.Done {
-				open++
-			}
-		}
-		toggleHint := uistate.T("budgets.followUpsShow")
-		chev := icon.ChevronDown
-		if todosOpen.Get() {
-			toggleHint = uistate.T("budgets.followUpsHide")
-			chev = icon.ChevronUp
-		}
-		kids := []any{css.Class("budget-todos"), Attr("data-testid", "budget-todos-"+s.Budget.ID),
-			Button(css.Class("budget-todos-head"), Type("button"),
-				Attr("data-testid", "budget-todos-toggle-"+s.Budget.ID),
-				Attr("aria-expanded", ariaBool(todosOpen.Get())), Title(toggleHint), OnClick(toggleTodos),
-				Style(map[string]string{"background": "transparent", "border": "0", "padding": "0", "margin": "0",
-					"font": "inherit", "color": "inherit", "cursor": "pointer",
-					"display": "inline-flex", "align-items": "center", "gap": "0.25rem"}),
-				Span(css.Class("budget-followup-count"), Attr("aria-label", uistate.T("budgets.followUpsHead", open, len(linkedTodos))), strconv.Itoa(open)),
-				uiw.Icon(chev, css.Class(tw.ShrinkO, tw.W35, tw.H35)))}
-		if todosOpen.Get() {
-			for i, it := range linkedTodos {
-				if i >= maxTodos {
-					break
-				}
-				kids = append(kids, ui.CreateElement(txnFollowUpItem, txnFollowUpItemProps{ID: it.ID, Title: it.Title, Done: it.Done, Due: it.Due, OnOpen: openBudgetTodos}))
-			}
-			if extra := len(linkedTodos) - maxTodos; extra > 0 {
-				kids = append(kids, Button(css.Class("txnfu-pop-foot"), Type("button"), Attr("data-testid", "budget-todos-more-"+s.Budget.ID),
-					OnClick(openTodos), uistate.T("budgets.followUpsMore", extra)))
-			}
-		}
-		todosPanel = Div(kids...)
-	}
-	hasSide := hasNotes || len(linkedTodos) > 0
+	// The side column holds the attached note and linked follow-ups.
+	todosPanel, hasSide := budgetRowFollowUps(budgetRowFollowUpsProps{
+		s: s, todosOpen: rowDetailActions.todosOpen, toggleTodos: rowDetailActions.toggleTodos,
+		openBudgetTodos: rowDetailActions.openBudgetTodos, openTodos: rowDetailActions.openTodos, hasNotes: hasNotes,
+	})
 
-	return Div(css.Class(cardCls), Attr("data-testid", "budget-card-"+s.Budget.ID),
-		Div(css.Class("budget-head"),
-			// The title gets the whole header line now (the spent/limit amount and the
-			// percent moved INTO the bar below), so a long budget name has room to breathe.
-			// C591: the card's title is a heading. It used to double as an
-			// unlabelled drill-through — the same navigation the footer's labelled
-			// "Transactions" button performs — so the page had two ways to do one
-			// thing, one of them invisible to anyone not hovering it.
-			Div(css.Class("budget-head-main"),
-				Span(css.Class("row-desc"), title),
-			),
-		),
-		// Overline tag naming the bar as last month's, when the overlay is on.
-		lastMonthTag,
-		// The card's "loader": a taller progress bar with the spent/limit amount (left) and
-		// the percent-used (right) rendered inside it, over the fill. In last-month mode the
-		// figures are last period's spend against this month's budget.
-		Div(css.Class("budget-card-loader"), Attr("role", "progressbar"), Attr("aria-valuenow", strconv.Itoa(width)), Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"), Attr("aria-label", uistate.T("budgets.progressLabel")+" — "+title),
-			Div(ClassStr(fillClass), Attr("style", fmt.Sprintf("width:%d%%", width))),
-			// XC4: the committed band sits just past the spent fill (hidden in last-month
-			// mode, where the bar shows a different period's spend).
-			If(!lastMonthMode && props.HasCommitted && props.Committed.CommittedPct > 0,
-				Div(css.Class("bar-committed"), Attr("data-testid", "budget-committed-seg-"+s.Budget.ID),
-					Attr("style", fmt.Sprintf("left:%d%%;width:%d%%", props.Committed.SpentPct, props.Committed.CommittedPct)))),
-			// BG3: the even-pace tick — a thin vertical marker at where discretionary
-			// spending SHOULD be right now (committed money excluded). Hidden in
-			// last-month mode (the bar then shows a different period).
-			If(!lastMonthMode && props.PaceMarkerPct > 0,
-				Div(css.Class("bar-pace-tick"), Attr("data-testid", "budget-pace-tick-"+s.Budget.ID),
-					Attr("aria-hidden", "true"),
-					Attr("style", fmt.Sprintf("position:absolute;top:0;bottom:0;left:%d%%;width:2px;background:var(--text);opacity:0.55;pointer-events:none", props.PaceMarkerPct)))),
-			Div(css.Class("budget-card-loader-figs"),
-				// Spent carries foreground weight; the "/ limit" reads as muted context.
-				// The limit figure is a direct affordance: click it to edit in place (G1) —
-				// the most frequent budget change never costs a modal round-trip.
-				IfElse(limitEditing.Get(),
-					Form(css.Class("budget-amount", "budget-limit-editform"), OnSubmit(saveLimitEdit),
-						Span(css.Class("budget-spent"), barSpent), Span(" / "),
-						// When carry/boost make the cap differ from the base limit, the button
-						// face shows the CAP but this input edits the BASE — label it so the
-						// number swap on open doesn't read as a glitch (the capmath line below
-						// carries the arithmetic).
-						Div(css.Class("budget-limit-edit-values"),
-							Span(css.Class("budget-limit-editor-cap"), uistate.T("budgets.effectiveCapLabel"), Strong(fmtMoney(limit))),
-							Span(css.Class("budget-limit-editor-base"), uistate.T("budgets.baseLimitLabel"), Strong(baseBudgetLimit(s.Budget.ID, s.Budget.Limit)))),
-						Input(append(append([]any{css.Class("field", "budget-limit-input"), Type("number"), OnKeyDown(limitKeyDown),
-							Attr("data-testid", "budget-limit-input-"+s.Budget.ID), Attr("aria-label", uistate.T("budgets.limitLabel")), Step("0.01"), Attr("min", "0.01"), OnInput(onLimitDraft)},
-							errAttrs(limitErrID, limitErrMsg)...), uiw.FieldValue(limitDraft.Get()))...),
-						Button(append([]any{css.Class("btn btn-sm", "budget-limit-save"), Type("submit"), Attr("data-testid", "budget-limit-save-"+s.Budget.ID),
-							Attr("aria-label", uistate.T("action.save")), Title(limitSaveTitle),
-							uiw.Icon(icon.Check, css.Class(tw.W35, tw.H35))}, disabledAttr(limitErrMsg != "")...)...),
-						Button(css.Class("btn btn-sm", "budget-limit-cancel"), Type("button"), Attr("data-testid", "budget-limit-cancel-"+s.Budget.ID),
-							Attr("aria-label", uistate.T("action.cancel")), Title(uistate.T("action.cancel")), OnClick(cancelLimitEdit), uiw.Icon(icon.Close, css.Class(tw.W35, tw.H35))),
-						// C665: say why ✓ is dead, right where the number was typed.
-						errText(limitErrID, limitErrMsg),
-					),
-					Span(css.Class("budget-amount"),
-						Span(css.Class("budget-spent"), barSpent), Span(" / "),
-						Button(css.Class("budget-limit-btn"), Type("button"), Attr("data-testid", "budget-limit-btn-"+s.Budget.ID),
-							Title(uistate.T("budgets.limitEditTitle")), Attr("aria-label", uistate.T("budgets.limitEditTitle")+" — "+title),
-							OnClick(startLimitEdit), fmtMoney(limit)),
-					)),
-				// Percent-used, capped for display (e.g. "112%" when over).
-				Span(css.Class("budget-pct"), strconv.Itoa(barPct)+"%"),
-			),
-		),
-		paceLegend,
-		// Everything below the bar sits in a flex row so a budget WITH a note can put the
-		// note in a right-hand column (the lower-left content is short, leaving that space
-		// empty). No note → the note column is omitted and the main content fills the width.
-		Div(css.Class("budget-lower"),
-			Div(css.Class("budget-lower-main"),
-				// --- The primary summary: status, what is left, and anything that changes
-				// what the headline figure MEANS. Always visible (C595). ---
-				// One quiet metadata line beneath the bar. In last-month mode it reads the over/
-				// under-budget gap + period; otherwise the health status · money left · period.
-				IfElse(lastMonthMode,
-					Span(css.Class("budget-sub"+lastMonthSubTone(props.LastMonthOver)), props.LastMonthDelta+" · "+periodLabel(s.Budget.Period)),
-					Span(css.Class("budget-sub"), uistate.T("budgets.rowPrimary", label, budgetRemainPhrase(s.Remaining))+" · "+periodLabel(s.Budget.Period))),
-				// C344: while the period is too young to judge, last period's outcome is the
-				// only reading here worth anything.
-				If(props.PeriodEarly && props.PriorSpent != "",
-					Span(css.Class("budget-sub"+lastMonthSubTone(props.PriorOver)),
-						Attr("data-testid", "budget-prior-"+s.Budget.ID),
-						uistate.T("budgets.priorPeriodOutcome", props.PriorSpent, props.PriorDelta))),
-				// C395: the rollover policy badge — a glanceable chip, not a caption.
-				If(s.Budget.Rollover, budgetRolloverBadgeFor(props)),
-				// A cap that differs from the base limit, an envelope balance, an envelope in
-				// debt, a projected overspend: each re-reads the big number above it, so
-				// hiding them would hide the headline's meaning.
-				effectiveCapLine,
-				envLine,
-				envDebtLine,
-				fundedLine,
-				paceLine,
-				// --- Everything explanatory, behind one disclosure (C595). The card used to
-				// stack all of it between the bar and the actions, so "how much is left?"
-				// competed with a dozen explanations of how it was arrived at. ---
-				Button(css.Class("btn cf-adv-toggle budget-details-toggle"), Type("button"),
-					Attr("data-testid", "budget-details-"+s.Budget.ID),
-					Attr("aria-expanded", ariaBool(detailsOpen.Get())),
-					Attr("aria-label", uistate.T("budgets.detailsAria", title)),
-					OnClick(toggleDetails), uistate.T(budgetDetailsKey(detailsOpen.Get()))),
-				If(detailsOpen.Get(), Div(css.Class("budget-details"), Attr("data-testid", "budget-details-body-"+s.Budget.ID),
-					// Spend-composition donut for a composite budget.
-					pieNode,
-					// Multi-category budgets: the categories the combined total is made of.
-					If(props.TrackedCats != "", Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-tracked-cats-"+s.Budget.ID),
-						uistate.T("budgets.catsTracking", props.TrackedCats))),
-					// Cross-category tag tracking: the tags this budget also counts.
-					If(len(s.Budget.TrackedTags) > 0, budgetTagLine(s.Budget.ID, s.Budget.TrackedTags)),
-					// XC4 committed-vs-free caption; XC3 set-aside explainer.
-					If(!lastMonthMode && props.HasCommitted && props.Committed.CommittedStr != "",
-						Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-committed-caption-"+s.Budget.ID),
-							uistate.T("budgets.committedCaption", props.Committed.CommittedStr, props.Committed.FreeStr))),
-					If(!lastMonthMode && props.HasCommitted && props.Committed.SetAsideNote != "",
-						Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-setaside-note-"+s.Budget.ID),
-							props.Committed.SetAsideNote)),
-					// BG1: funding-target summary ("Refill to $200 · $60 to go").
-					budgetTargetLine(s),
-					thisMonthRef,
-					coverageLine,
-					ownerLine,
-					methodLine,
-					customLine,
-					paceMarkLine,
-					proratedLine,
-					rolloverLine,
-					metricsStrip,
-				)),
-				// "What's driving this?" stays OUT of the disclosure: it is offered only when
-				// a budget is near or over — exactly when "why" is the question — and it is
-				// already collapsed and lazy.
-				If(!lastMonthMode && (s.State == budgeting.StateOver || s.State == budgeting.StateNear),
-					ui.CreateElement(budgetDriversPanel, budgetDriversPanelProps{Budget: s.Budget, Title: title, Anchor: props.Anchor})),
-				// SM-12: this budget's own trailing average, when the limit has drifted
-				// far enough from it to be worth saying. Not shown in last-month mode:
-				// the figures there describe a closed period, and offering to rewrite a
-				// limit from a historical view is a change you cannot see the effect of.
-				If(!lastMonthMode,
-					ui.CreateElement(budgetSuggestHint, budgetSuggestProps{Budget: s.Budget})),
-				actionsRow,
-			),
-			If(hasSide, Div(css.Class("budget-side-col"),
-				If(hasNotes, notesNode),
-				todosPanel,
-			)),
-		),
-	)
+	return ui.CreateElement(budgetRowCard, budgetRowCardProps{
+		cardCls: cardCls, s: s, title: rowBarValues.title, lastMonthTag: rowPeriodNotes.lastMonthTag, width: rowBarValues.width,
+		fillClass: rowBarValues.fillClass, lastMonthMode: lastMonthMode, props: props, limitEditing: rowLimitDraft.limitEditing,
+		saveLimitEdit: saveLimitEdit, barSpent: rowBarValues.barSpent, limit: limit, limitKeyDown: limitKeyDown, onLimitDraft: onLimitDraft,
+		limitErrID: rowLimitDraft.limitErrID, limitErrMsg: rowLimitDraft.limitErrMsg, limitDraft: rowLimitDraft.limitDraft,
+		limitSaveTitle: rowLimitDraft.limitSaveTitle, cancelLimitEdit: rowLimitDraft.cancelLimitEdit,
+		startLimitEdit: rowLimitDraft.startLimitEdit, barPct: rowBarValues.barPct, paceLegend: rowPaceNotes.paceLegend,
+		label: rowBarValues.label, effectiveCapLine: rowPaceNotes.effectiveCapLine, envLine: envLine, envDebtLine: envDebtLine,
+		fundedLine: fundedLine, paceLine: rowPaceNotes.paceLine, detailsOpen: rowDisclosure.detailsOpen,
+		toggleDetails: rowDisclosure.toggleDetails, pieNode: pieNode, thisMonthRef: rowPeriodNotes.thisMonthRef, coverageLine: coverageLine,
+		ownerLine: rowTitle.ownerLine, methodLine: rowTitle.methodLine, customLine: customLine, paceMarkLine: rowPaceNotes.paceMarkLine,
+		proratedLine: rowPeriodNotes.proratedLine, rolloverLine: rowPaceNotes.rolloverLine, metricsStrip: metricsStrip,
+		actionsRow: actionsRow, hasSide: hasSide, hasNotes: hasNotes, notesNode: notesNode, todosPanel: todosPanel,
+	})
 }
 
 type budgetRowCompactProps struct {
@@ -1976,4 +1140,9 @@ func coverOngoingText(b domain.Budget, evalCurrency string) string {
 	}
 	return uistate.TN("budgets.coverMarkerOngoingTextOne", "budgets.coverMarkerOngoingTextMany",
 		len(rc.Sources), fmtMoney(money.New(rc.AmountMinor, cur)))
+}
+
+// budgetRowReleaseImpact supplies the shared consequence wording for the release action.
+func budgetRowReleaseImpact() string {
+	return fundsImpactLine(budgeting.ImpactRelease)
 }

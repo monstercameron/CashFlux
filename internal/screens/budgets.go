@@ -6,7 +6,6 @@ package screens
 
 import (
 	"fmt"
-	"log/slog"
 	"sort"
 	"strings"
 	"time"
@@ -14,20 +13,15 @@ import (
 	"github.com/monstercameron/CashFlux/internal/agemoney"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
-	"github.com/monstercameron/CashFlux/internal/categorytree"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
-	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/period"
-	"github.com/monstercameron/CashFlux/internal/periodage"
 	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/CashFlux/internal/reports"
-	"github.com/monstercameron/CashFlux/internal/safespend"
-	"github.com/monstercameron/CashFlux/internal/txnclassify"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
@@ -147,18 +141,12 @@ func budgetBaseCurrency(base string) string {
 // budgetNeedsAttention is the shared definition behind the attention count and
 // its list filter. Over-limit and near-limit budgets are both included.
 func budgetNeedsAttention(status budgeting.Status) bool {
-	return status.State == budgeting.StateOver || status.State == budgeting.StateNear
+	return budgeting.NeedsViewAttention(status)
 }
 
 // budgetAttentionStatuses selects the exact set named by the attention count.
 func budgetAttentionStatuses(statuses []budgeting.Status) []budgeting.Status {
-	selected := make([]budgeting.Status, 0, len(statuses))
-	for _, status := range statuses {
-		if budgetNeedsAttention(status) {
-			selected = append(selected, status)
-		}
-	}
-	return selected
+	return budgeting.ViewAttention(statuses)
 }
 
 // budgetCommitted is the per-budget committed-vs-free breakdown the row renders as a
@@ -382,437 +370,22 @@ func computeBudgetView(app *appstate.App, activeMemberID string, vw period.Windo
 func computeBudgetViewRaw(app *appstate.App, activeMemberID string, vw period.Window, pr prefs.Prefs, showLastMonth bool) budgetView {
 	base := budgetBaseCurrency(app.Settings().BaseCurrency)
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	weekStart := pr.WeekStartWeekday()
-	// C128: parse the pay-cycle anchor from prefs. When set, biweekly budget periods
-	// snap to the user's actual payday instead of the internal epoch.
-	payCycleAnchor := budgetPayCycleAnchor(pr.PayCycleAnchor)
-
-	categories := app.Categories()
-	catName := make(map[string]string, len(categories))
-	for _, c := range categories {
-		catName[c.ID] = c.Name
+	start, end := vw.Range()
+	input := budgeting.ViewInput{
+		Period:       budgeting.ResolveViewPeriod(start, end, time.Now(), pr.WeekStartWeekday(), budgetPayCycleAnchor(pr.PayCycleAnchor)),
+		Transactions: app.Transactions(), Categories: app.Categories(), Recurring: app.Recurring(),
+		Rates: rates, Base: base, PoolRollover: pr.BudgetRolloverLeftover, ShowPrior: showLastMonth,
 	}
-
-	allBudgets := app.Budgets()
-	// C278: when a member view is active, show only that member's budgets plus shared
-	// (group) budgets. ownerVisibleTo keeps group-owned budgets visible in every view.
-	budgets := make([]domain.Budget, 0, len(allBudgets))
-	for _, b := range allBudgets {
-		if ownerVisibleTo(b.OwnerID, activeMemberID) {
-			budgets = append(budgets, b)
-		}
+	builder := newBudgetViewBuilder(input, showLastMonth)
+	budgets := budgeting.ViewBudgets(app.Budgets(), activeMemberID)
+	for _, budget := range budgets {
+		builder.addBudget(budgeting.EvaluateViewBudget(budget, input))
 	}
-	txns := app.Transactions()
-	now := time.Now()
-	// Anchor each budget's period to today when the viewed window includes today,
-	// otherwise to the window's start (C40).
-	anchor := budgetViewAnchor(vw, now)
-	cats := app.Categories()
-
-	statuses := make([]budgeting.Status, 0, len(budgets))
-	paceOver := map[string]string{}
-	paceMark := map[string]budgetPaceMark{}
-	rollCarry := map[string]string{}
-	rollNeg := map[string]bool{}
-	rollEffCap := map[string]string{}
-	rollEffCapMath := map[string]string{}
-	proratedRest := map[string]string{}
-	covered := map[string]bool{}
-	earlyPeriod := map[string]bool{}
-	committedMap := map[string]budgetCommitted{}
-	periodFrom := map[string]string{}
-	periodTo := map[string]string{}
-	recurrings := app.Recurring()
-	// lastMonth (populated only when the "Last month's spend" overlay is on): each
-	// budget's ACTUAL spend last period plus how it compares to this month's budget, so
-	// the user can plan this month's amounts against what they really spent.
-	lastMonth := map[string]budgetLastMonth{}
-	var lastTotalSpent int64 // last period's total spend across budgets (base minor), for the summary graph
-	var lastTotalLimit int64 // last period's total budget (spent + remaining), the honest denominator for it
-	// Pooled leftover: last month's unspent budget (limit − spent, clamped ≥ 0)
-	// summed across budgets that DON'T carry their own remaining, when the user opts
-	// to roll leftover into next month's assignable pool (zero-based view).
-	var pooledRollover int64
-	// C672 accumulators: the suspect rows that actually land in these figures.
-	leakSeen := map[string]bool{}
-	var leakRows []domain.Transaction
-	var budgetErrors []string
-	for _, b := range budgets {
-		bs, be := budgeting.PeriodRangeAnchored(b.Period, anchor, weekStart, payCycleAnchor)
-		// Inclusive window for drill-throughs: be is the exclusive next-period
-		// start, and the ledger's To bound is inclusive (task #14).
-		periodFrom[b.ID] = dateutil.FormatDate(bs)
-		periodTo[b.ID] = dateutil.FormatDate(be.AddDate(0, 0, -1))
-		// Flag budgets that received cover money this period (quick ref on the row).
-		if !b.CoveredAt.IsZero() && !b.CoveredAt.Before(bs) && b.CoveredAt.Before(be) {
-			covered[b.ID] = true
-		}
-		eval := b
-		carryDelta := int64(0) // how much rollover carry-in moved the cap off the base limit
-		if b.Rollover {
-			ps, pe := budgeting.PreviousPeriodRangeAnchored(b.Period, anchor, weekStart, payCycleAnchor)
-			if prev, perr := budgeting.EvaluateRollup(b, txns, ps, pe, rates, budgeting.DefaultNearThreshold, categorytree.DescendantsOfAll(cats, b.TrackedCategoryIDs())); perr == nil {
-				// BG5: clamp the carried-in surplus to the budget's rollover cap (N× the
-				// limit) so a neglected budget can't build an unbounded fictional cushion.
-				// CappedCarryover is uncapped when RolloverCapPeriods <= 0 (the default),
-				// preserving the historical behavior; a carried-in DEFICIT is never clamped.
-				if eff, cerr := budgeting.CappedCarryover(prev.Remaining, b.Limit, b.RolloverCapPeriods); cerr == nil {
-					eval.Limit = eff
-					carryDelta = eff.Amount - b.Limit.Amount
-				} else {
-					slog.Error("cap budget rollover", "budget_id", b.ID, "error", cerr)
-					budgetErrors = append(budgetErrors, fmt.Sprintf("%s: %s", budgetTitle(b.Name, catName[b.CategoryID]), uistate.T("budgets.incomplete")))
-				}
-				rollCarry[b.ID] = budgetRemainPhrase(prev.Remaining)
-				rollNeg[b.ID] = prev.Remaining.IsNegative()
-			} else {
-				slog.Error("evaluate prior rollover period", "budget_id", b.ID, "error", perr)
-				budgetErrors = append(budgetErrors, fmt.Sprintf("%s: %s", budgetTitle(b.Name, catName[b.CategoryID]), uistate.T("budgets.incomplete")))
-			}
-		} else if pr.BudgetRolloverLeftover {
-			// This budget doesn't carry its own remaining, so its last-month unspent
-			// feeds the pooled leftover that raises next month's assignable budget.
-			ps, pe := budgeting.PreviousPeriodRangeAnchored(b.Period, anchor, weekStart, payCycleAnchor)
-			if prev, perr := budgeting.EvaluateRollup(b, txns, ps, pe, rates, budgeting.DefaultNearThreshold, categorytree.DescendantsOfAll(cats, b.TrackedCategoryIDs())); perr == nil && prev.Remaining.Amount > 0 {
-				if conv, cerr := currency.ConvertBetween(prev.Remaining.Amount, prev.Remaining.Currency, base, rates); cerr == nil {
-					pooledRollover += conv
-				} else {
-					slog.Error("convert pooled rollover", "budget_id", b.ID, "error", cerr)
-					budgetErrors = append(budgetErrors, fmt.Sprintf("%s: %s", budgetTitle(b.Name, catName[b.CategoryID]), uistate.T("budgets.incomplete")))
-				}
-			} else if perr != nil {
-				slog.Error("evaluate pooled rollover", "budget_id", b.ID, "error", perr)
-				budgetErrors = append(budgetErrors, fmt.Sprintf("%s: %s", budgetTitle(b.Name, catName[b.CategoryID]), uistate.T("budgets.incomplete")))
-			}
-		}
-		// This-month top-up: a one-time boost recorded for THIS period only raises the
-		// effective cap without touching the base Limit (so it reverts next period). It
-		// stacks on any rollover carry-in already folded into eval.Limit above.
-		boostAmt := eval.PeriodBoosts[budgeting.PeriodKeyWithWeekStart(b.Period, anchor, payCycleAnchor, weekStart)]
-		if boostAmt != 0 {
-			eval.Limit = money.New(eval.Limit.Amount+boostAmt, eval.Limit.Currency)
-		}
-		// C3 (opacity fix): whenever the effective cap differs from the base limit —
-		// rollover carry-in, a this-month top-up, or money boosted away to fund another
-		// budget — surface the cap AND its arithmetic so the number is explainable.
-		if eval.Limit.Amount != b.Limit.Amount {
-			rollEffCap[b.ID] = fmtMoney(eval.Limit)
-			cur := eval.Limit.Currency
-			parts := []string{uistate.T("budgets.capMathLimit", fmtMoney(b.Limit))}
-			if carryDelta > 0 {
-				parts = append(parts, uistate.T("budgets.capMathCarryPlus", fmtMoney(money.New(carryDelta, cur))))
-			} else if carryDelta < 0 {
-				parts = append(parts, uistate.T("budgets.capMathCarryMinus", fmtMoney(money.New(-carryDelta, cur))))
-			}
-			if boostAmt > 0 {
-				parts = append(parts, uistate.T("budgets.capMathBoost", fmtMoney(money.New(boostAmt, cur))))
-			} else if boostAmt < 0 {
-				parts = append(parts, uistate.T("budgets.capMathBoostMinus", fmtMoney(money.New(-boostAmt, cur))))
-			}
-			rollEffCapMath[b.ID] = strings.Join(parts, " ")
-		}
-		covers := categorytree.DescendantsOfAll(cats, b.TrackedCategoryIDs())
-		st, err := budgeting.EvaluateRollup(eval, txns, bs, be, rates, budgeting.DefaultNearThreshold, covers)
-		if err != nil {
-			slog.Error("evaluate budget", "budget_id", b.ID, "error", err)
-			budgetErrors = append(budgetErrors, fmt.Sprintf("%s: %s", budgetTitle(b.Name, catName[b.CategoryID]), uistate.T("budgets.incomplete")))
-			continue
-		}
-		// C672: the suspect rows this budget just counted — same window, same
-		// category set, so they are exactly the rows inflating the figure the bar
-		// is about to draw. Deduped across budgets, because two budgets tracking
-		// one category count one row once each and it is still one row.
-		for _, sus := range txnclassify.SuspectsIn(txns, func(id string) string { return catName[id] }, bs, be) {
-			if !b.TracksCategory(sus.Txn.CategoryID) && !covers[sus.Txn.CategoryID] {
-				continue
-			}
-			if leakSeen[sus.Txn.ID] {
-				continue
-			}
-			leakSeen[sus.Txn.ID] = true
-			leakRows = append(leakRows, sus.Txn)
-		}
-		// XC3: in a smoothed bill's landing period, the accrued set-aside pays the
-		// posted charge — offset it so the row (and totals/pace below) read on-pace
-		// instead of a one-period blowout. Only POSTED occurrences offset.
-		landOff, landItems := budgeting.SmoothingLandingItems(b, recurrings, txns, bs, be)
-		if landOff > 0 {
-			st = budgeting.ApplySmoothingOffset(st, landOff, budgeting.DefaultNearThreshold)
-		}
-		statuses = append(statuses, st)
-		// XC4: split this budget's remaining into committed (recurring expected but not
-		// yet posted this period, plus XC3 smoothing set-asides) vs. truly free.
-		committedResult := budgeting.CommittedResult{Committed: money.Zero(st.Spent.Currency), Free: st.Remaining}
-		if st.Remaining.IsPositive() {
-			committedResult, err = budgeting.CommittedWithRates(b, recurrings, txns, st.Remaining, bs, be, rates)
-			if err != nil {
-				slog.Error("calculate committed budget", "budget_id", b.ID, "error", err)
-				budgetErrors = append(budgetErrors, fmt.Sprintf("%s: %s", budgetTitle(b.Name, catName[b.CategoryID]), uistate.T("budgets.incomplete")))
-			}
-		}
-		bc, hasBC := buildBudgetCommitted(st, b, recurrings, committedResult)
-		// XC3 explainability: name what the landing offset covered, so the on-pace
-		// read is never a black box ("covered by $600 set aside for Car insurance").
-		if len(landItems) > 0 {
-			var landNotes []string
-			for _, it := range landItems {
-				landNotes = append(landNotes, uistate.T("budgets.landedNote", fmtMoney(it.Amount), it.Label))
-			}
-			note := strings.Join(landNotes, "; ")
-			if hasBC {
-				if bc.SetAsideNote != "" {
-					bc.SetAsideNote += "; " + note
-				} else {
-					bc.SetAsideNote = note
-				}
-			} else {
-				bc, hasBC = budgetCommitted{SetAsideNote: note}, true
-			}
-		}
-		if hasBC {
-			committedMap[b.ID] = bc
-		}
-		// C344: while this budget's period is too young to read, the card stops
-		// claiming a verdict and shows last period's outcome instead — so the
-		// last-period figures are computed whenever the overlay is on OR the
-		// period has barely started.
-		budgetEarly := periodage.Of(bs, be, now).Early()
-		if budgetEarly {
-			earlyPeriod[b.ID] = true
-		}
-		// Last-month spend overlay (planning): what was actually spent in this budget's
-		// categories LAST period, and how that lines up against this month's budget.
-		if showLastMonth || budgetEarly {
-			ps, pe := budgeting.PreviousPeriodRangeAnchored(b.Period, anchor, weekStart, payCycleAnchor)
-			if prev, perr := budgeting.EvaluateRollup(b, txns, ps, pe, rates, budgeting.DefaultNearThreshold, categorytree.DescendantsOfAll(cats, b.TrackedCategoryIDs())); perr == nil {
-				if spentBase, cerr := currency.ConvertBetween(prev.Spent.Amount, prev.Spent.Currency, base, rates); cerr == nil {
-					lastTotalSpent += spentBase
-				} else {
-					slog.Error("convert previous budget spending", "budget_id", b.ID, "error", cerr)
-					budgetErrors = append(budgetErrors, fmt.Sprintf("%s: %s", budgetTitle(b.Name, catName[b.CategoryID]), uistate.T("budgets.incomplete")))
-				}
-				if limitBase, cerr := currency.ConvertBetween(prev.Limit.Amount, prev.Limit.Currency, base, rates); cerr == nil {
-					lastTotalLimit += limitBase
-				} else {
-					slog.Error("convert previous budget limit", "budget_id", b.ID, "error", cerr)
-					budgetErrors = append(budgetErrors, fmt.Sprintf("%s: %s", budgetTitle(b.Name, catName[b.CategoryID]), uistate.T("budgets.incomplete")))
-				}
-				limitMinor := st.Limit.Amount // this period's effective budget
-				lm := budgetLastMonth{Spent: fmtMoney(prev.Spent)}
-				comparison := budgeting.ComparePriorSpend(prev.Spent.Amount, limitMinor)
-				lm.Pct, lm.Fill = comparison.Percent, comparison.Fill
-				if comparison.Delta >= 0 {
-					lm.Delta = uistate.T("budgets.lastMonthUnder", fmtMoney(money.New(comparison.Delta, st.Spent.Currency)))
-				} else {
-					lm.Over = true
-					lm.Delta = uistate.T("budgets.lastMonthOver", fmtMoney(money.New(-comparison.Delta, st.Spent.Currency)))
-				}
-				lastMonth[b.ID] = lm
-			} else if perr != nil {
-				slog.Error("evaluate prior budget spending", "budget_id", b.ID, "error", perr)
-				budgetErrors = append(budgetErrors, fmt.Sprintf("%s: %s", budgetTitle(b.Name, catName[b.CategoryID]), uistate.T("budgets.incomplete")))
-			}
-		}
-		// Pace projection (D2): warn only while the period is genuinely in progress and
-		// the budget isn't already over.
-		if p := budgeting.ProjectPace(st, bs, be, now); !p.OnTrack && p.Elapsed > 0 && p.Elapsed < 1 && st.State != budgeting.StateOver {
-			paceOver[b.ID] = fmtMoney(p.OverBy)
-		}
-		// BG3: the even-pace tick + caption (committed money excluded from the race),
-		// shown only while the period is in progress.
-		if pm, ok := buildBudgetPaceMark(st, committedResult, bs, be, now); ok {
-			paceMark[b.ID] = pm
-		}
-		// C143: even-pace per-category safe-to-spend, only while in progress and there's
-		// still room (paceOver owns the over case).
-		if !st.Remaining.IsNegative() && st.Remaining.Amount > 0 {
-			daysInPeriod := int(be.Sub(bs).Hours() / 24)
-			daysLeft := int(be.Sub(now).Hours() / 24)
-			if daysLeft > 0 && daysLeft < daysInPeriod {
-				if v := safespend.ComputeCategory(st.Remaining.Amount, daysLeft, daysInPeriod); v > 0 && v < st.Remaining.Amount {
-					proratedRest[b.ID] = fmtMoney(money.New(v, base))
-				}
-			}
-		}
-	}
-
-	// Health-first ordering (G4): Over → Near/At-risk → On track, then percent-used desc.
-	healthRank := func(s budgeting.Status) int {
-		switch s.State {
-		case budgeting.StateOver:
-			return 0
-		case budgeting.StateNear:
-			return 1
-		}
-		if paceOver[s.Budget.ID] != "" {
-			return 1
-		}
-		return 2
-	}
-	sort.SliceStable(statuses, func(i, j int) bool {
-		ri, rj := healthRank(statuses[i]), healthRank(statuses[j])
-		if ri != rj {
-			return ri < rj
-		}
-		return statuses[i].Percent > statuses[j].Percent
-	})
-
-	// R-LEAK: this was an aggregation loop in view code, including a
-	// `limit = spent + remaining` re-derivation. It is domain arithmetic — the
-	// saving-vs-spending split especially is a judgement about what the figures
-	// MEAN (C538) — so it lives in budgeting.SummarizeRollup, where a test can
-	// reach it. Status now carries Limit as a field rather than being re-derived.
-	baseStatuses := make([]budgeting.Status, 0, len(statuses))
-	for _, status := range statuses {
-		converted := status
-		for label, value := range map[string]*money.Money{"spent": &converted.Spent, "limit": &converted.Limit, "remaining": &converted.Remaining} {
-			amount, err := currency.ConvertBetween(value.Amount, value.Currency, base, rates)
-			if err != nil {
-				slog.Error("convert budget rollup", "budget_id", status.Budget.ID, "field", label, "error", err)
-				budgetErrors = append(budgetErrors, fmt.Sprintf("%s: %s", budgetTitle(status.Budget.Name, catName[status.Budget.CategoryID]), uistate.T("budgets.incomplete")))
-				converted.Budget.ID = ""
-				break
-			}
-			*value = money.New(amount, base)
-		}
-		if converted.Budget.ID != "" {
-			baseStatuses = append(baseStatuses, converted)
-		}
-	}
-	roll, rollErr := budgeting.SummarizeRollupChecked(baseStatuses)
-	if rollErr != nil {
-		slog.Error("summarize budget rollup", "error", rollErr)
-		budgetErrors = append(budgetErrors, uistate.T("budgets.incomplete"))
-		roll = budgeting.RollupSummary{}
-	}
-	overCount, nearCount := roll.OverCount, roll.NearCount
-	totalSpent, totalLimit, totalOver := roll.SpentMinor, roll.LimitMinor, roll.OverMinor
-	savingsBudgeted, savingsMoved := roll.SavingsBudgetedMinor, roll.SavingsMovedMinor
-
-	// The methodology shapes the view (D6). Resolve each budget's effective method and,
-	// for envelope budgets, its carried-forward balance.
-	method := budgeting.ParseMethodology(app.Settings().BudgetMethodology)
-	effectiveMethod := func(b domain.Budget) budgeting.Methodology {
-		if m := budgeting.ParseMethodology(b.Methodology); b.Methodology != "" && m.Valid() {
-			return m
-		}
-		return method
-	}
-	effMethod := map[string]budgeting.Methodology{}
-	envAvail := map[string]string{}
-	envNeg := map[string]bool{}
-	envDebtStart := map[string]string{}
-	for _, b := range budgets {
-		em := effectiveMethod(b)
-		effMethod[b.ID] = em
-		if em != budgeting.MethodEnvelope {
-			continue
-		}
-		if av, err := budgeting.EnvelopeAvailableAnchored(b, txns, anchor, weekStart, payCycleAnchor, rates, categorytree.DescendantsOfAll(cats, b.TrackedCategoryIDs())); err == nil {
-			if av.IsNegative() {
-				envAvail[b.ID] = fmtMoney(av.Abs()) + " " + uistate.T("budgets.overdrawnWord")
-				// BG5 debt visibility: name what NEXT period starts down, so the overdraft
-				// doesn't quietly vanish at the period boundary ("Starts March down $32").
-				_, curEnd := budgeting.PeriodRangeAnchored(b.Period, anchor, weekStart, payCycleAnchor)
-				envDebtStart[b.ID] = uistate.T("budgets.envelopeDebtStart", budgetMonthName(curEnd, false), fmtMoney(av.Abs()))
-			} else {
-				envAvail[b.ID] = fmtMoney(av)
-			}
-			envNeg[b.ID] = av.IsNegative()
-		} else {
-			slog.Error("calculate envelope availability", "budget_id", b.ID, "error", err)
-			budgetErrors = append(budgetErrors, fmt.Sprintf("%s: %s", budgetTitle(b.Name, catName[b.CategoryID]), uistate.T("budgets.incomplete")))
-		}
-	}
-
-	// Monthly income for the assign banner: prefer the configured figure, otherwise
-	// derive it from LAST full month's income. The current period is partial — this
-	// month's paychecks may not all have landed yet — so deriving from it under-reports
-	// what you have to budget; the most recent complete month is the honest basis.
-	ms, _ := budgeting.PeriodRange(domain.PeriodMonthly, anchor, weekStart)
-	prevStart := dateutil.AddMonths(ms, -1)
-	var bannerIncome int64
-	switch pr.BudgetIncomeMode {
-	case budgeting.IncomeModeAll, budgeting.IncomeModePaychecks, budgeting.IncomeModeFixed, budgeting.IncomeModeCategories:
-		// Explicit basis (zero-based income control): all income, paychecks-only, a fixed
-		// figure, or a chosen set of income categories — averaged over BudgetIncomeAvgMonths
-		// recent months (last month only when 0/1).
-		var incomeErr error
-		bannerIncome, incomeErr = resolveIncomeBasis(app, pr.BudgetIncomeMode, pr.BudgetPaycheckMinMinor, pr.MonthlyIncomeMinor, pr.BudgetIncomeCategoryIDs, pr.BudgetIncomeAvgMonths, ms, base, rates)
-		if incomeErr != nil {
-			slog.Error("calculate selected budget income", "error", incomeErr)
-			budgetErrors = append(budgetErrors, uistate.T("budgets.incomplete"))
-		}
-	default:
-		// Unset basis — preserve prior behaviour: configured figure wins, else last month's income.
-		var incomeErr error
-		bannerIncome, incomeErr = budgeting.IncomeForBudgetsChecked(pr.MonthlyIncomeMinor, txns, prevStart, ms, base, rates)
-		if incomeErr != nil {
-			slog.Error("calculate budget income", "error", incomeErr)
-			budgetErrors = append(budgetErrors, uistate.T("budgets.incomplete"))
-		}
-		if bannerIncome == 0 {
-			if raw, _, err := ledger.PeriodTotals(txns, prevStart, ms, rates); err == nil {
-				bannerIncome = raw.Amount
-			}
-		}
-	}
-
-	// Savings/investments assigned this month: each savings/investment account's own
-	// monthly savings budget (Account.MonthlySavings), FX-converted to base. Counts
-	// toward "assigned" in the zero-based view (To Assign spans expenses + savings).
-	savingsAccts := computeSavingsAccounts(app, activeMemberID, anchor, base, rates)
-	var savingsAssigned int64
-	for _, sa := range savingsAccts {
-		savingsAssigned += sa.AssignedBase
-	}
-	// Saving BUDGETS count as assigned to savings too, so the allocation read
-	// shows the whole plan rather than only the account-based half.
-	//
-	// Known overlap, recorded on C540: a household that sets BOTH a savings budget
-	// and a per-account monthly savings figure for the same money would have it
-	// counted twice here. Reconciling the three places savings can be declared
-	// (this, Account.MonthlySavings, and sinking-fund goals) is that ticket's job;
-	// leaving saving budgets out entirely would understate the plan, which is the
-	// worse of the two errors while the reconciliation is outstanding.
-	savingsAssigned += savingsBudgeted
-
-	// C190: sum the monthly set-aside across all active sinking-fund goals.
-	var totalFundSetAside int64
-	for _, g := range app.Goals() {
-		if g.IsSinkingFund && !g.Archived {
-			totalFundSetAside += goalsvc.FundSetAsideMinor(g, now)
-		}
-	}
-
-	// Age of Money (YNAB's signature buffer metric): built from the whole ledger's
-	// income/expense flows, FX-converted to base and time-ordered, with transfers
-	// excluded (they move money, they don't earn or spend it).
-	ageMoney := computeAgeOfMoney(txns, base, rates)
-
-	return budgetView{
-		Base: base, Method: method, Statuses: statuses, CatName: catName,
-		PaceOver: paceOver, PaceMark: paceMark, RollCarry: rollCarry, RollNeg: rollNeg, RollEffCap: rollEffCap, RollEffCapMath: rollEffCapMath,
-		ProratedRest: proratedRest, EnvAvail: envAvail, EnvNeg: envNeg, EnvDebtStart: envDebtStart, Covered: covered, EffMethod: effMethod,
-		EarlyPeriod: earlyPeriod,
-		OverCount:   overCount, NearCount: nearCount,
-		LeakRows:   leakRows,
-		TotalSpent: totalSpent, TotalLimit: totalLimit, TotalOver: totalOver,
-		TotalFundSetAside: totalFundSetAside, BannerIncome: bannerIncome,
-		SavingsBudgeted: savingsBudgeted, SavingsMoved: savingsMoved,
-		SavingsAssigned: savingsAssigned, SavingsAccts: savingsAccts,
-		RolledOver:     pooledRollover,
-		LastMonth:      lastMonth,
-		LastMonthMode:  showLastMonth,
-		LastTotalSpent: lastTotalSpent,
-		LastTotalLimit: lastTotalLimit,
-		Committed:      committedMap,
-		AgeMoney:       ageMoney,
-		Anchor:         anchor,
-		Incomplete:     budgetErrors,
-		PeriodFrom:     periodFrom,
-		PeriodTo:       periodTo,
-	}
+	builder.summarize()
+	builder.addEnvelopes(budgets, app.Settings().BudgetMethodology)
+	builder.addIncome(pr)
+	builder.addSavings(app, activeMemberID)
+	return builder.view
 }
 
 // computeAgeOfMoney builds the age-of-money input from the ledger and runs the
@@ -1350,9 +923,6 @@ func checkedAttr(checked bool) []any {
 // July's income while the page behind it used June's: two months' figures for
 // one question, on one screen.
 func budgetViewAnchor(vw period.Window, now time.Time) time.Time {
-	viewFrom, viewTo := vw.Range()
-	if !now.Before(viewFrom) && now.Before(viewTo) {
-		return now
-	}
-	return viewFrom
+	start, end := vw.Range()
+	return budgeting.ResolveViewPeriod(start, end, now, time.Sunday, time.Time{}).Anchor
 }

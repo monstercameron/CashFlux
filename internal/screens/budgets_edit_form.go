@@ -5,8 +5,6 @@
 package screens
 
 import (
-	"log/slog"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -15,7 +13,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/coverformula"
 	"github.com/monstercameron/CashFlux/internal/currency"
-	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/engineenv"
@@ -44,985 +41,87 @@ type BudgetEditFormProps struct {
 // from the budget. It lives at the shell root, outside the transformed bento/tile
 // ancestors, so the modal centers on the viewport.
 func BudgetEditForm(props BudgetEditFormProps) ui.Node {
-	// Re-render on data mutations so a stale figure can't linger while open.
-	_ = uistate.UseDataRevision().Get()
-	// Resolved for the cover editor's source list (hooks stay unconditional).
-	activeMemberID := uistate.UseActiveMember().Get()
-	vw := uistate.UsePeriod().Get()
-	pr := uistate.UsePrefs().Get()
-	coverPayAnchor := budgetPayCycleAnchor(pr.PayCycleAnchor)
+	editData := useBudgetEditData(props)
+	nameS := ui.UseState(editData.b.Name)
+	editDraft := useBudgetEditDraft(budgetEditDraftProps{
+		nameS: nameS, b: editData.b, limitMajor: editData.limitMajor, props: props, coverDefaultStr: editData.coverDefaultStr,
+		found: editData.found, dec: editData.dec,
+	})
+	onToggleSrc, onWeightSrc, onToggleMax := budgetEditSourceCallbacks(editDraft.coverSelS, editDraft.coverWtS, editDraft.coverMaxS)
+	submitCover := useBudgetEditCoverSave(budgetEditCoverSaveProps{
+		app: editData.app, done: editData.done, amtFxS: editDraft.amtFxS, pr: editData.pr, coverPayAnchor: editData.coverPayAnchor,
+		amtFormulaS: editDraft.amtFormulaS, b: editData.b, errS: editDraft.errS, coverAmtS: editDraft.coverAmtS, dec: editData.dec,
+		coverSrcs: editData.coverSrcs, coverSelS: editDraft.coverSelS, recurringS: editDraft.recurringS, coverWtS: editDraft.coverWtS,
+		wtFxS: editDraft.wtFxS, wtFormulaS: editDraft.wtFormulaS, coverMaxS: editDraft.coverMaxS, cur: editData.cur, props: props,
+		viewAnchor: editData.viewAnchor, coverCustomVals: editDraft.coverCustomVals,
+	})
+	cancel, onCustom, onCoverCustom := useBudgetEditCustomCallbacks(editData.done, editDraft.customEditVals, editDraft.coverCustomVals)
 
-	app := appstate.Default
-	done := props.OnDone
-	if done == nil {
-		done = func() {}
-	}
+	saveEdit := useBudgetEditSave(budgetEditSaveProps{
+		app: editData.app, done: editData.done, props: props, nameS: nameS, ev: editDraft.ev, errS: editDraft.errS,
+		limitS: editDraft.limitS, dec: editData.dec, cur: editData.cur, periodS: editDraft.periodS, ownerS: editDraft.ownerS,
+		rolloverS: editDraft.rolloverS, rolloverCapS: editDraft.rolloverCapS, methodologyS: editDraft.methodologyS,
+		customEditVals: editDraft.customEditVals, targetKindS: editDraft.targetKindS, targetAmtS: editDraft.targetAmtS,
+		targetDateS: editDraft.targetDateS, linkedGoalS: editDraft.linkedGoalS,
+	})
 
-	// Resolve the budget (before the hooks so useState seeds from it).
-	var b domain.Budget
-	found := false
-	if app != nil {
-		for _, bb := range app.Budgets() {
-			if bb.ID == props.BudgetID {
-				b, found = bb, true
-				break
-			}
-		}
-	}
-	cur := b.Limit.Currency
-	if cur == "" {
-		if app != nil {
-			cur = app.Settings().BaseCurrency
-		}
-		if cur == "" {
-			cur = budgetBaseCurrency(cur)
-		}
-	}
-	dec := currency.Decimals(cur)
-	limitMajor := ""
-	if found {
-		limitMajor = money.FormatMinor(b.Limit.Amount, dec)
-	}
+	saveNotes, removeNote := useBudgetEditNotesSave(budgetEditNotesSaveProps{
+		app: editData.app, props: props, errS: editDraft.errS, done: editData.done, notesS: editDraft.notesS,
+	})
 
-	// Cover-editor data: the over-budget's shortfall (prefills the amount) and every
-	// other budget that has limit to give, so the user can spread the cover across
-	// several. Computed for every mode so the useState seeds below can read it (cheap;
-	// keeps hooks stable).
-	var coverSrcs []budgetCoverSource
-	coverIncomplete := false
-	coverDefaultStr, coverShortfallStr := "", ""
-	var selfStatus budgeting.Status // this budget's live status (for the formulas view)
-	selfFound := false
-	// C669: the effective cap this period and the arithmetic that produced it —
-	// the very figures the card shows — so the top-up dialog can name the number it
-	// is about to change instead of quoting the base limit under the word
-	// "currently" beside a card reading a different one.
-	selfEffCap, selfCapMath := "", ""
-	// C667: the period the card is reporting on. computeBudgetView anchors every
-	// budget to this, so anything that quotes history beside those figures — the
-	// quick-fill chips — has to walk back from here, not from the wall clock.
-	viewAnchor := budgetViewAnchor(vw, time.Now())
-	if app != nil {
-		cv := computeBudgetView(app, activeMemberID, vw, pr, false)
-		selfEffCap, selfCapMath = cv.RollEffCap[props.BudgetID], cv.RollEffCapMath[props.BudgetID]
-		for _, s := range cv.Statuses {
-			if s.Budget.ID == props.BudgetID {
-				selfStatus, selfFound = s, true
-				sf := budgeting.CoverAmount(s)
-				coverShortfallStr = fmtMoney(sf)
-				if sf.IsPositive() {
-					coverDefaultStr = money.FormatMinor(sf.Amount, currency.Decimals(sf.Currency))
-				}
-				continue
-			}
-			if s.Budget.Limit.Amount <= 0 {
-				continue // nothing to give
-			}
-			// C606: what this source can actually give, computed from the SAME
-			// model the card shows — the effective limit (rollover carry and
-			// boosts folded in), what is left after spending, and the part of that
-			// already claimed by this period's recurring charges. The list used to
-			// offer the whole limit under the word "available", which is the plan's
-			// size, not money.
-			bs, be := budgeting.PeriodRangeAnchored(s.Budget.Period, cv.Anchor, pr.WeekStartWeekday(), coverPayAnchor)
-			rates := currency.Rates{Base: app.Settings().BaseCurrency, Rates: app.Settings().FXRates}
-			if rates.Base == "" {
-				rates.Base = budgetBaseCurrency(rates.Base)
-			}
-			committedResult, commitErr := budgeting.CommittedWithRates(s.Budget, app.Recurring(), app.Transactions(), s.Remaining, bs, be, rates)
-			if commitErr != nil {
-				coverIncomplete = true
-				continue
-			}
-			committed := committedResult.Committed
-			funds := budgeting.SourceFundsOf(s.Budget.Limit, s.Remaining, committed)
-			if !funds.CanGive() {
-				continue // an overspent or exhausted budget has nothing to offer
-			}
-			coverSrcs = append(coverSrcs, budgetCoverSource{
-				ID:             s.Budget.ID,
-				Label:          budgetTitle(s.Budget.Name, cv.CatName[s.Budget.CategoryID]),
-				RemainMinor:    s.Remaining.Amount,
-				LimitMinor:     s.Budget.Limit.Amount,
-				MovableMinor:   funds.Movable.Amount,
-				CommittedMinor: funds.Committed.Amount,
-				FreeMinor:      funds.Free.Amount,
-			})
-		}
-	}
+	submitTopup := useBudgetEditTopupSave(budgetEditTopupSaveProps{
+		app: editData.app, done: editData.done, topupAmt: editDraft.topupAmt, dec: editData.dec, errS: editDraft.errS,
+		topupPermanentS: editDraft.topupPermanentS, b: editData.b, viewAnchor: editData.viewAnchor, coverPayAnchor: editData.coverPayAnchor,
+		pr: editData.pr, coverSelS: editDraft.coverSelS, coverSrcs: editData.coverSrcs, cur: editData.cur, props: props,
+	})
 
-	// All hooks unconditionally at stable positions (before any branch/return).
-	nameS := ui.UseState(b.Name)
-	ev := useEntityVarField(budgetVarKind, nameS, b.VarName)
-	limitS := ui.UseState(limitMajor)
-	periodS := ui.UseState(string(b.Period))
-	ownerS := ui.UseState(b.OwnerID)
-	rolloverS := ui.UseState(b.Rollover)
-	rolloverCapS := ui.UseState(strconv.Itoa(b.RolloverCapPeriods)) // BG5: rollover cap, "0" = no cap
-	methodologyS := ui.UseState(b.Methodology)
-	// C1 (one editor per concept): tracked categories are managed ONLY in the dedicated
-	// searchable modal, rather than by embedding a second, slightly-different picker here.
-	//
-	// C521: it opens ON TOP of this form rather than replacing it. Closing this form
-	// first destroyed the component, and with it every unsaved edit — so changing the
-	// name, stepping into the tracked categories, and coming back lost the name. It
-	// also left no way back: the return trip was main page → edit → categories →
-	// main page, with the edit form skipped.
-	//
-	// Layering rather than lifting the draft into atoms is deliberate: the form holds
-	// a dozen fields, and a component that never unmounts cannot lose them.
-	catsOpen := uistate.UseBudgetCategoriesEdit()
-	openCats := ui.UseEvent(Prevent(func() {
-		catsOpen.Set(props.BudgetID)
-	}))
-	closeCats := ui.UseEvent(Prevent(func() { catsOpen.Set("") }))
-	// C6: the engine-facing variable name is plumbing most edits never touch — it lives
-	// behind this disclosure rather than between Name and Limit.
-	advEditOpen := ui.UseState(false)
-	toggleAdvEdit := ui.UseEvent(Prevent(func() { advEditOpen.Set(!advEditOpen.Get()) }))
-	customEditVals := ui.UseState(customMapToStrings(b.Custom))
-	topupAmt := ui.UseState("")
-	// Top-up: whether the raise is permanent (changes the base Limit) or just this period
-	// (a one-time boost via PeriodBoosts), and an optional "fund it from other budgets" panel.
-	topupPermanentS := ui.UseState(false)
-	topupCoverOpenS := ui.UseState(false)
-	// Notes mode: the budget's free-text note.
-	notesS := ui.UseState(b.Notes)
-	onNotes := func(v string) { notesS.Set(v) }
-	coverAmtS := ui.UseState(coverDefaultStr)
-	coverSelS := ui.UseState(map[string]bool{})            // sourceID → checked
-	coverWtS := ui.UseState(map[string]int{})              // sourceID → ratio weight (default 1)
-	coverMaxS := ui.UseState(map[string]bool{})            // sourceID → "use all remaining"
-	amtFxS := ui.UseState(recurringAmountFormula(b) != "") // amount is a formula, not a number
-	amtFormulaS := ui.UseState(recurringAmountFormula(b))
-	wtFxS := ui.UseState(recurringWeightFormula(b) != "") // weights come from a formula, not numbers
-	wtFormulaS := ui.UseState(recurringWeightFormula(b))
-	recurringS := ui.UseState(b.RecurringCover != nil)
-	coverCustomVals := ui.UseState(customMapToStrings(recurringCoverCustom(b))) // "cover" custom fields
-	errS := ui.UseState("")
-
-	// BG1 funding-target draft state, seeded from the budget.
-	targetAmtSeed := ""
-	if found && b.TargetAmount.Amount > 0 {
-		targetAmtSeed = money.FormatMinor(b.TargetAmount.Amount, dec)
-	}
-	targetDateSeed := ""
-	if !b.TargetDate.IsZero() {
-		targetDateSeed = dateutil.FormatDate(b.TargetDate)
-	}
-	targetKindS := ui.UseState(string(b.TargetKind))
-	targetAmtS := ui.UseState(targetAmtSeed)
-	targetDateS := ui.UseState(targetDateSeed)
-	linkedGoalS := ui.UseState(b.LinkedGoalID)
-	onTargetAmt := ui.UseEvent(func(v string) { targetAmtS.Set(v) })
-	onTargetDate := ui.UseEvent(func(v string) { targetDateS.Set(v) })
-	// BG4: a quick-fill chip seeds the amount field.
-	onFillPick := func(major string) { limitS.Set(major) }
-
-	onLimit := ui.UseEvent(func(v string) { limitS.Set(v) })
-	onRollover := ui.UseEvent(func() { rolloverS.Set(!rolloverS.Get()) })
-	onTopupAmt := ui.UseEvent(func(v string) { topupAmt.Set(v) })
-	onToggleTopupCover := ui.UseEvent(func() { topupCoverOpenS.Set(!topupCoverOpenS.Get()) })
-	onCoverAmt := ui.UseEvent(func(v string) { coverAmtS.Set(v) })
-	fullCover := ui.UseEvent(Prevent(func() { coverAmtS.Set(coverDefaultStr) }))
-	toggleAmtFx := ui.UseEvent(func() { amtFxS.Set(!amtFxS.Get()) })
-	onAmtFormula := ui.UseEvent(func(v string) { amtFormulaS.Set(v) })
-	toggleWtFx := ui.UseEvent(func() { wtFxS.Set(!wtFxS.Get()) })
-	onWtFormula := ui.UseEvent(func(v string) { wtFormulaS.Set(v) })
-	onToggleRecurring := ui.UseEvent(func() { recurringS.Set(!recurringS.Get()) })
-	// Plain funcs (not hooks) passed down to each per-source row component, so the
-	// checkbox/weight On* handlers live in the row, not in this loop.
-	onToggleSrc := func(sid string) {
-		sel := coverSelS.Get()
-		ns := make(map[string]bool, len(sel)+1)
-		for k, v := range sel {
-			ns[k] = v
-		}
-		ns[sid] = !ns[sid]
-		coverSelS.Set(ns)
-		if ns[sid] { // default a newly-checked source to weight 1 (equal split)
-			w := coverWtS.Get()
-			if w[sid] == 0 {
-				nw := make(map[string]int, len(w)+1)
-				for k, v := range w {
-					nw[k] = v
-				}
-				nw[sid] = 1
-				coverWtS.Set(nw)
-			}
-		}
-	}
-	onWeightSrc := func(sid string, val int) {
-		if val < 0 {
-			val = 0
-		}
-		w := coverWtS.Get()
-		nw := make(map[string]int, len(w)+1)
-		for k, v := range w {
-			nw[k] = v
-		}
-		nw[sid] = val
-		coverWtS.Set(nw)
-	}
-	onToggleMax := func(sid string) {
-		m := coverMaxS.Get()
-		nm := make(map[string]bool, len(m)+1)
-		for k, v := range m {
-			nm[k] = v
-		}
-		nm[sid] = !nm[sid]
-		coverMaxS.Set(nm)
-	}
-	submitCover := ui.UseEvent(Prevent(func() {
-		if app == nil {
-			done()
-			return
-		}
-		// Resolve the amount: a formula evaluated in this budget's context, else a number.
-		var amt int64
-		if amtFxS.Get() {
-			m, ferr := buildCoverContext(app, pr.WeekStartWeekday(), coverPayAnchor).AmountMinor(amtFormulaS.Get(), b)
-			if ferr != nil {
-				errS.Set(uistate.T("budgets.coverFormulaErr", ferr.Error()))
-				return
-			}
-			amt = m
-		} else if m, perr := money.ParseMinor(strings.TrimSpace(coverAmtS.Get()), dec); perr == nil {
-			amt = m
-		}
-		if amt < 0 {
-			amt = 0
-		}
-		// Sources are required (that's where the money comes from), whether covering now
-		// or saving a recurring rule.
-		selectedAny := false
-		for _, sc := range coverSrcs {
-			if coverSelS.Get()[sc.ID] {
-				selectedAny = true
-				break
-			}
-		}
-		if !selectedAny {
-			errS.Set(uistate.T("budgets.coverPickSource"))
-			return
-		}
-		// A one-time cover needs a positive amount; a recurring rule may evaluate to 0
-		// this period (nothing to cover yet) and still be saved for future periods.
-		if amt == 0 && !recurringS.Get() {
-			errS.Set(uistate.T("budgets.limitRequired"))
-			return
-		}
-		// Resolve the ratio weights once (formula-driven or fixed) so the applied split
-		// and the saved recurring shares agree.
-		effWeights := coverWtS.Get()
-		if wtFxS.Get() {
-			effWeights, _ = resolveCoverWeights(app, buildCoverContext(app, pr.WeekStartWeekday(), coverPayAnchor), coverSrcs, coverSelS.Get(), coverWtS.Get(), wtFormulaS.Get())
-		}
-		if amt > 0 {
-			shares, shortMinor := splitCoverAmountShort(amt, coverSrcs, coverSelS.Get(), effWeights, coverMaxS.Get())
-			// C606: the chosen sources cannot fund the amount. Refuse and say by how
-			// much, rather than moving what fits and leaving the user to discover the
-			// difference on the cards.
-			if shortMinor > 0 {
-				errS.Set(uistate.T("budgets.coverShortBy", fmtMoney(money.New(shortMinor, cur))))
-				return
-			}
-			// Pre-validate so a partial failure can't leave a half-applied cover: each
-			// source must keep a positive limit after giving its share.
-			for _, sc := range coverSrcs {
-				if share, ok := shares[sc.ID]; ok && share >= sc.LimitMinor {
-					errS.Set(uistate.T("budgets.coverSourceShort", sc.Label))
-					return
-				}
-			}
-			for _, sc := range coverSrcs {
-				share, ok := shares[sc.ID]
-				if !ok || share <= 0 {
-					continue
-				}
-				if err := app.CoverBudget(sc.ID, props.BudgetID, money.New(share, cur)); err != nil {
-					errS.Set(budgetErrorText(err))
-					return
-				}
-			}
-		}
-		// Save / clear the standing recurring arrangement per the toggle (re-fetch the
-		// destination since CoverBudget just mutated the budget set).
-		for _, nb := range app.Budgets() {
-			if nb.ID != props.BudgetID {
-				continue
-			}
-			if recurringS.Get() {
-				wtFormula := ""
-				if wtFxS.Get() {
-					wtFormula = strings.TrimSpace(wtFormulaS.Get())
-				}
-				var srcs []domain.CoverShare
-				for _, sc := range coverSrcs {
-					if coverSelS.Get()[sc.ID] {
-						w := effWeights[sc.ID]
-						if w <= 0 {
-							w = 1
-						}
-						// Store the shared per-source formula (re-evaluated each period in
-						// that source's context) alongside the last-resolved weight as a record.
-						srcs = append(srcs, domain.CoverShare{BudgetID: sc.ID, Weight: w, WeightFormula: wtFormula})
-					}
-				}
-				rc := &domain.RecurringCover{Sources: srcs, LastAppliedPeriod: budgeting.PeriodKeyWithWeekStart(b.Period, viewAnchor, coverPayAnchor, pr.WeekStartWeekday())}
-				if amtFxS.Get() {
-					rc.AmountFormula = strings.TrimSpace(amtFormulaS.Get())
-				}
-				rc.AmountMinor = amt // fixed amount, or the last-evaluated value as a record
-				if defs := app.CustomFieldDefsFor("cover"); len(defs) > 0 {
-					rc.Custom = customValuesToMap(defs, coverCustomVals.Get())
-				}
-				nb.RecurringCover = rc
-			} else {
-				nb.RecurringCover = nil
-			}
-			// A rejected save here used to fall through to BumpDataRevision and an
-			// undoable "saved" toast, so the arrangement was reported as standing when
-			// the store had refused it. Reported inline like every other error in this
-			// modal — a toast behind an open dialog is easy to miss entirely.
-			if err := app.PutBudget(nb); err != nil {
-				slog.Error("budgets: write rejected", "op", "save recurring cover", "err", err)
-				errS.Set(budgetErrorText(err))
-				return
-			}
-			break
-		}
-		uistate.BumpDataRevision()
-		// G5: money moves are reversible — the toast offers a one-click Undo backed by
-		// the global snapshot stack.
-		if amt > 0 {
-			uistate.PostUndoable(uistate.T("budgets.coveredUndoToast", fmtMoney(money.New(amt, cur))))
-		}
-		done()
-	}))
-	cancel := ui.UseEvent(Prevent(func() { done() }))
-	onCustom := func(key, value string) {
-		m := customEditVals.Get()
-		nm := make(map[string]string, len(m)+1)
-		for k, val := range m {
-			nm[k] = val
-		}
-		nm[key] = value
-		customEditVals.Set(nm)
-	}
-	onCoverCustom := func(key, value string) {
-		m := coverCustomVals.Get()
-		nm := make(map[string]string, len(m)+1)
-		for k, val := range m {
-			nm[k] = val
-		}
-		nm[key] = value
-		coverCustomVals.Set(nm)
-	}
-
-	saveEdit := ui.UseEvent(Prevent(func() {
-		if app == nil {
-			done()
-			return
-		}
-		for _, bb := range app.Budgets() {
-			if bb.ID != props.BudgetID {
-				continue
-			}
-			if n := strings.TrimSpace(nameS.Get()); n != "" {
-				bb.Name = n
-			}
-			// Refuse a variable name that collides with another budget's handle.
-			if warn := entityVarCollision(budgetVarKind, budgetVarEntities(app.Budgets()), props.BudgetID, ev.VarName.Get(), nameS.Get()); warn != "" {
-				errS.Set(warn)
-				return
-			}
-			bb.VarName = strings.TrimSpace(ev.VarName.Get())
-			// C665: the save boundary refuses the same values the field does, and
-			// says which one it refused. "Enter a positive limit" was the only
-			// answer for blank, "abc" and -1 alike.
-			amt, prob := budgeting.ParseLimitMajor(limitS.Get(), dec)
-			if !prob.OK() {
-				errS.Set(budgetLimitError(prob, cur))
-				return
-			}
-			bb.Limit = money.New(amt, cur)
-			if p := domain.Period(periodS.Get()); p.Valid() {
-				bb.Period = p
-			}
-			bb.OwnerID = ownerS.Get()
-			if ownerS.Get() == domain.GroupOwnerID {
-				bb.Scope = domain.ScopeShared
-			} else {
-				bb.Scope = domain.ScopeIndividual
-			}
-			bb.Rollover = rolloverS.Get()
-			// BG5: the rollover surplus cap (0 = no cap). Only meaningful with rollover on,
-			// but persisting it regardless keeps a re-enable from losing the prior choice.
-			if n, cerr := strconv.Atoi(rolloverCapS.Get()); cerr == nil && n >= 0 {
-				bb.RolloverCapPeriods = n
-			}
-			if m := budgeting.Methodology(methodologyS.Get()); m.Valid() {
-				bb.Methodology = methodologyS.Get()
-			} else {
-				bb.Methodology = ""
-			}
-			if defs := app.CustomFieldDefsFor("budget"); len(defs) > 0 {
-				bb.Custom = customValuesToMap(defs, customEditVals.Get())
-			}
-			// BG1: funding target. An invalid/none kind clears every target field so a
-			// budget switched back to "no target" doesn't keep a stale amount or date.
-			if tk := domain.TargetKind(targetKindS.Get()); tk.Valid() && tk != domain.TargetNone {
-				bb.TargetKind = tk
-				if tamt, terr := money.ParseMinor(strings.TrimSpace(targetAmtS.Get()), dec); terr == nil && tamt >= 0 {
-					bb.TargetAmount = money.New(tamt, cur)
-				} else {
-					bb.TargetAmount = money.Zero(cur)
-				}
-				if tk == domain.TargetByDate {
-					if td, derr := time.Parse("2006-01-02", strings.TrimSpace(targetDateS.Get())); derr == nil {
-						bb.TargetDate = td
-					} else {
-						bb.TargetDate = time.Time{}
-					}
-					bb.LinkedGoalID = strings.TrimSpace(linkedGoalS.Get())
-				} else {
-					bb.TargetDate = time.Time{}
-					bb.LinkedGoalID = ""
-				}
-			} else {
-				bb.TargetKind = domain.TargetNone
-				bb.TargetAmount = money.Zero(cur)
-				bb.TargetDate = time.Time{}
-				bb.LinkedGoalID = ""
-			}
-			// Tracked categories are managed in their own editor (C1) — this save leaves
-			// CategoryID/CategoryIDs untouched.
-			if err := app.PutBudget(bb); err != nil {
-				errS.Set(budgetErrorText(err))
-				return
-			}
-			break
-		}
-		uistate.BumpDataRevision()
-		done()
-	}))
-
-	// writeNote is the single path that changes a budget's note, so that clearing
-	// the field and pressing Save cannot behave differently from pressing Remove.
-	// An empty result IS a removal and says so; announcing "Note saved" for a
-	// deletion would be the interface making a false statement about what it did.
-	writeNote := func(next string) {
-		for _, bb := range app.Budgets() {
-			if bb.ID != props.BudgetID {
-				continue
-			}
-			had := strings.TrimSpace(bb.Notes) != ""
-			bb.Notes = next
-			if err := app.PutBudget(bb); err != nil {
-				errS.Set(budgetErrorText(err))
-				return
-			}
-			// Writing through the store updates memory; RequestPersist is what puts
-			// it in the dataset. Without it the note survives only until a reload.
-			uistate.RequestPersist()
-			uistate.BumpDataRevision()
-			// Say so at the moment of the click. The row does change, but the user
-			// is looking at the modal, and a modal that just closes is what made a
-			// working save read as a broken one. The budget is named because notes
-			// are per-budget and several get written in a row.
-			// Report what actually changed. Opening the editor on a budget with no
-			// note and closing it with Save leaves an empty note empty — announcing
-			// "Note removed" there would claim a deletion that never happened, which
-			// is the same class of untruth as the "Note saved" this replaced.
-			switch title := budgetTitle(bb.Name, budgetCategoryName(app, bb.CategoryID)); {
-			case next == "" && had:
-				uistate.PostNotice(uistate.T("budgets.notesRemoved", title), false)
-			case next != "":
-				uistate.PostNotice(uistate.T("budgets.notesSaved", title), false)
-			}
-			done()
-			return
-		}
-		// A save that matched nothing used to close the editor as though it had
-		// worked: the note simply never appeared on the card, with no error to
-		// explain it. Silence is the worst outcome for a write — say so and stay
-		// open so the text is not lost.
-		errS.Set(uistate.T("budgets.notesSaveFailed"))
-	}
-
-	// confirmRemoval asks before discarding text that cannot be recovered. Read
-	// fresh from the store rather than from the budget captured at render, so the
-	// question is asked about what is actually there.
-	confirmRemoval := func(then func()) {
-		title := ""
-		for _, bb := range app.Budgets() {
-			if bb.ID == props.BudgetID {
-				title = budgetTitle(bb.Name, budgetCategoryName(app, bb.CategoryID))
-			}
-		}
-		uistate.ConfirmModal(uistate.T("budgets.notesRemoveConfirm", title), true, func(ok bool) {
-			if ok {
-				then()
-			}
-		})
-	}
-
-	// noteExists reports whether there is currently a note to lose.
-	noteExists := func() bool {
-		for _, bb := range app.Budgets() {
-			if bb.ID == props.BudgetID {
-				return strings.TrimSpace(bb.Notes) != ""
-			}
-		}
-		return false
-	}
-
-	saveNotes := ui.UseEvent(Prevent(func() {
-		if app == nil {
-			done()
-			return
-		}
-		next := strings.TrimSpace(notesS.Get())
-		// Emptying the box and pressing Save destroys the note exactly as the
-		// Remove button does — and it is the quicker, more natural gesture for
-		// anyone already editing the text. Guarding only the button would leave
-		// the easier path as the unguarded one.
-		if next == "" && noteExists() {
-			confirmRemoval(func() { writeNote("") })
-			return
-		}
-		writeNote(next)
-	}))
-
-	// removeNote clears the note after confirming. Emptying the field and pressing
-	// Save does the same thing, but that is a destructive gesture with no name —
-	// this is the named one.
-	removeNote := ui.UseEvent(Prevent(func() {
-		if app == nil {
-			done()
-			return
-		}
-		confirmRemoval(func() { writeNote("") })
-	}))
-
-	submitTopup := ui.UseEvent(Prevent(func() {
-		if app == nil {
-			done()
-			return
-		}
-		amt, err := money.ParseMinor(strings.TrimSpace(topupAmt.Get()), dec)
-		if err != nil || amt <= 0 {
-			errS.Set(uistate.T("budgets.limitRequired"))
-			return
-		}
-		permanent := topupPermanentS.Get()
-		periodStart := budgetPeriodKeyStartWithWeekStart(b.Period, viewAnchor, coverPayAnchor, pr.WeekStartWeekday())
-
-		// Optional funding: pull the amount from other budgets (equal split across the
-		// checked sources). Without any source, the top-up adds new limit from income.
-		sel := coverSelS.Get()
-		var funded bool
-		for _, sc := range coverSrcs {
-			if sel[sc.ID] {
-				funded = true
-				break
-			}
-		}
-		if funded {
-			weights := map[string]int{}
-			for _, sc := range coverSrcs {
-				if sel[sc.ID] {
-					weights[sc.ID] = 1
-				}
-			}
-			shares, shortMinor := splitCoverAmountShort(amt, coverSrcs, sel, weights, map[string]bool{})
-			// C606: refuse a top-up the chosen sources cannot fund. The this-period
-			// path had NO guard at all — it applied a negative period boost per
-			// source, so an over-large share silently pushed a source's effective cap
-			// below what it had already spent and left it overspent.
-			if shortMinor > 0 {
-				errS.Set(uistate.T("budgets.coverShortBy", fmtMoney(money.New(shortMinor, cur))))
-				return
-			}
-			// A permanent move must leave each source with a positive base limit.
-			if permanent {
-				for _, sc := range coverSrcs {
-					if share, ok := shares[sc.ID]; ok && share >= sc.LimitMinor {
-						errS.Set(uistate.T("budgets.coverSourceShort", sc.Label))
-						return
-					}
-				}
-			}
-			for _, sc := range coverSrcs {
-				share, ok := shares[sc.ID]
-				if !ok || share <= 0 {
-					continue
-				}
-				if permanent {
-					// CoverBudget moves limit source→dest permanently (adds to dest.Limit too).
-					if err := app.CoverBudget(sc.ID, props.BudgetID, money.New(share, cur)); err != nil {
-						errS.Set(budgetErrorText(err))
-						return
-					}
-				} else {
-					// This period only: reduce the source's effective cap for this period.
-					// The error is fatal to the whole operation, not to this source: the
-					// destination is raised further down, so continuing past a rejected
-					// source write would raise the destination without lowering anybody —
-					// which does not fail to move the money, it invents it. The permanent
-					// branch above already returned here; this one used to discard.
-					for _, nb := range app.Budgets() {
-						if nb.ID == sc.ID {
-							if err := app.PutBudget(nb.WithPeriodBoost(periodStart, -share)); err != nil {
-								errS.Set(budgetErrorText(err))
-								return
-							}
-							break
-						}
-					}
-				}
-			}
-		}
-
-		// Raise the destination. For a permanent FUNDED top-up, CoverBudget already added
-		// the amount to dest.Limit, so don't double-count — only the unfunded-permanent and
-		// the this-month cases still need to bump the destination here.
-		if !(permanent && funded) {
-			for _, nb := range app.Budgets() {
-				if nb.ID != props.BudgetID {
-					continue
-				}
-				if permanent {
-					nb.Limit = money.New(nb.Limit.Amount+amt, cur)
-				} else {
-					nb = nb.WithPeriodBoost(periodStart, amt)
-				}
-				if err := app.PutBudget(nb); err != nil {
-					errS.Set(budgetErrorText(err))
-					return
-				}
-				break
-			}
-		}
-		uistate.BumpDataRevision()
-		toastKey := "budgets.toppedUpMonthToast"
-		if permanent {
-			toastKey = "budgets.toppedUpToast"
-		}
-		// G5: undoable — a mis-sized or mis-funded top-up reverts in one click.
-		uistate.PostUndoable(uistate.T(toastKey, fmtMoney(money.New(amt, cur))))
-		done()
-	}))
-
-	if app == nil || !found {
+	if editData.app == nil || !editData.found {
 		return Div(css.Class("acct-edit-form"), P(css.Class("empty"), uistate.T("common.notReady")))
 	}
 
 	var errLine ui.Node = Fragment()
-	if errS.Get() != "" {
-		errLine = P(css.Class("err"), Attr("role", "alert"), errS.Get())
+	if editDraft.errS.Get() != "" {
+		errLine = P(css.Class("err"), Attr("role", "alert"), editDraft.errS.Get())
 	}
 
 	// --- Notes: a free-text note on the budget. The textarea grows to fill the modal. ---
 	if props.Mode == uistate.BudgetEditModeNotes {
-		// The visible "Notes" label is gone: the modal title and the hint under it
-		// already say what this field is, so a third label repeated the same word a
-		// third time. The accessible name is carried on the field itself, so nothing
-		// is lost for a screen reader.
-		//
-		// Removing a note is an explicit control, offered only when there IS one,
-		// and separated from Cancel/Save so it cannot be hit while reaching for the
-		// primary action. It confirms first, because the text is not recoverable.
-		hasNote := strings.TrimSpace(b.Notes) != ""
-		var removeBtn ui.Node = Fragment()
-		if hasNote {
-			// btn-link WITHOUT btn: `.btn` is registered after `.btn-link` in the
-			// generated sheet and overrides every property they share (border,
-			// padding, background, min-height), so "btn btn-link" rendered a
-			// full-weight button that merely happened to be red — the loudest
-			// thing in the footer, for the action that should be the quietest.
-			// The danger tone is a decision; that weight was a cascade accident.
-			removeBtn = Button(css.Class("btn-link budget-notes-remove"), Type("button"),
-				Attr("data-testid", "budget-notes-remove"), OnClick(removeNote),
-				uistate.T("budgets.notesRemove"))
-		}
-		return Form(css.Class("acct-edit-form", "budget-notes-form"), OnSubmit(saveNotes),
-			Div(css.Class("modal-scroll", "budget-notes-scroll"),
-				P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0"}),
-					uistate.T("budgets.notesHint", budgetTitle(b.Name, budgetCategoryName(app, b.CategoryID)))),
-				uiw.TextAreaInput(uiw.TextFieldProps{Value: notesS.Get(), Placeholder: uistate.T("budgets.notesPlaceholder"),
-					AriaLabel: uistate.T("budgets.notesLabel"), OnInput: onNotes}),
-				errLine,
-			),
-			Div(css.Class("modal-foot", "budget-notes-foot"),
-				removeBtn,
-				Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
-				Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "budget-notes-save"),
-					OnClick(saveNotes), uistate.T("action.save")),
-			),
-		)
+		return ui.CreateElement(budgetEditNotes, budgetEditNotesProps{
+			b: editData.b, removeNote: removeNote, saveNotes: saveNotes, app: editData.app, notesS: editDraft.notesS,
+			onNotes: editDraft.onNotes, errLine: errLine, cancel: cancel,
+		})
 	}
 
 	// --- Formulas: the budget's engine variables + live values, each copyable. ---
 	if props.Mode == uistate.BudgetEditModeFormulas {
-		return budgetFormulasView(b, selfStatus, selfFound, cur, dec, cancel)
+		return budgetFormulasView(editData.b, editData.selfStatus, editData.selfFound, editData.cur, editData.dec, cancel)
 	}
 
 	// --- Cover: spread the overspend across one or more source budgets. ---
 	if props.Mode == uistate.BudgetEditModeCover {
-		if len(coverSrcs) == 0 {
-			return Div(css.Class("acct-edit-form"),
-				If(coverIncomplete, P(css.Class("err"), Attr("role", "status"), Attr("data-testid", "budget-cover-incomplete"), uistate.T("budgets.committedIncomplete"))),
-				P(css.Class("empty"), uistate.T("budgets.coverNoSources")))
-		}
-		// Effective amount + live preview: in formula mode evaluate the amount formula in
-		// this budget's context; otherwise parse the number. The shares below use it.
-		coverCtx := buildCoverContext(app, pr.WeekStartWeekday(), coverPayAnchor)
-		var amtMinor int64
-		amtPreview, amtFxErr := "—", ""
-		if amtFxS.Get() {
-			if strings.TrimSpace(amtFormulaS.Get()) != "" {
-				if m, ferr := coverCtx.AmountMinor(amtFormulaS.Get(), b); ferr != nil {
-					amtFxErr = ferr.Error()
-				} else {
-					amtMinor, amtPreview = m, fmtMoney(money.New(m, cur))
-				}
-			}
-		} else {
-			amtMinor, _ = money.ParseMinor(strings.TrimSpace(coverAmtS.Get()), dec)
-		}
-		// Effective ratio weights: a per-source formula (evaluated in each source's own
-		// context) or the fixed ratio inputs. The shares + the displayed ratios use these.
-		effWeights := coverWtS.Get()
-		wtFxErr := ""
-		if wtFxS.Get() {
-			effWeights, wtFxErr = resolveCoverWeights(app, coverCtx, coverSrcs, coverSelS.Get(), coverWtS.Get(), wtFormulaS.Get())
-		}
-		shares := splitCoverAmount(amtMinor, coverSrcs, coverSelS.Get(), effWeights, coverMaxS.Get())
-		spreadSub := uistate.T("budgets.coverSpreadSub")
-		if wtFxS.Get() {
-			spreadSub = uistate.T("budgets.coverWeightFxSub")
-		}
-		// Keyed single list sorted checked-first, so the picked budgets cluster at the top
-		// (the CSS tints them into one visible group and rules a divider before the rest).
-		// A single keyed list — rather than two — keeps each row's DOM node across a toggle,
-		// so a click never detaches the element being interacted with.
-		selNow := coverSelS.Get()
-		var selCount int
-		var selTotal int64
-		for _, sc := range coverSrcs {
-			if selNow[sc.ID] {
-				selCount++
-				selTotal += shares[sc.ID]
-			}
-		}
-		sortedCoverSrcs := make([]budgetCoverSource, len(coverSrcs))
-		copy(sortedCoverSrcs, coverSrcs)
-		sort.SliceStable(sortedCoverSrcs, func(i, j int) bool {
-			return selNow[sortedCoverSrcs[i].ID] && !selNow[sortedCoverSrcs[j].ID]
+		return ui.CreateElement(budgetEditCover, budgetEditCoverProps{
+			coverSrcs: editData.coverSrcs, coverIncomplete: editData.coverIncomplete, app: editData.app, pr: editData.pr,
+			coverPayAnchor: editData.coverPayAnchor, amtFxS: editDraft.amtFxS, amtFormulaS: editDraft.amtFormulaS, b: editData.b,
+			cur: editData.cur, coverAmtS: editDraft.coverAmtS, dec: editData.dec, coverWtS: editDraft.coverWtS, wtFxS: editDraft.wtFxS,
+			coverSelS: editDraft.coverSelS, wtFormulaS: editDraft.wtFormulaS, coverMaxS: editDraft.coverMaxS, onToggleSrc: onToggleSrc,
+			onWeightSrc: onWeightSrc, onToggleMax: onToggleMax, submitCover: submitCover, coverShortfallStr: editData.coverShortfallStr,
+			onAmtFormula: editDraft.onAmtFormula, onCoverAmt: editDraft.onCoverAmt, coverDefaultStr: editData.coverDefaultStr,
+			fullCover: editDraft.fullCover, toggleAmtFx: editDraft.toggleAmtFx, toggleWtFx: editDraft.toggleWtFx,
+			onWtFormula: editDraft.onWtFormula, onToggleRecurring: editDraft.onToggleRecurring, recurringS: editDraft.recurringS,
+			coverCustomVals: editDraft.coverCustomVals, onCoverCustom: onCoverCustom, errLine: errLine, cancel: cancel,
 		})
-		renderSrc := func(sc budgetCoverSource) ui.Node {
-			shareStr, over := "", false
-			if sh, ok := shares[sc.ID]; ok && sh > 0 {
-				shareStr = fmtMoney(money.New(sh, cur))
-				// C606: "over" means the share exceeds what this source can
-				// actually give — not what its LIMIT is. Comparing against the limit
-				// meant a source could be asked for everything it had left and be
-				// reported as fine.
-				over = sh > coverMaxGive(sc)
-			}
-			return ui.CreateElement(coverSourceRow, coverSourceRowProps{
-				ID: sc.ID, Label: sc.Label, RemainStr: fmtMoney(money.New(sc.MovableMinor, cur)),
-				Selected: selNow[sc.ID], Weight: effWeights[sc.ID], ShareStr: shareStr,
-				Over: over, AvailStr: fmtMoney(money.New(sc.MovableMinor, cur)), Max: coverMaxS.Get()[sc.ID],
-				CommittedStr: committedCaveat(sc, cur), AfterStr: sourceAfterGiving(sc, shares[sc.ID], cur),
-				WeightLocked: wtFxS.Get(), OnToggle: onToggleSrc, OnWeight: onWeightSrc, OnToggleMax: onToggleMax,
-			})
-		}
-		srcKey := func(sc budgetCoverSource) any { return sc.ID }
-		return Form(css.Class("acct-edit-form", "cover-form"), OnSubmit(submitCover),
-			Div(css.Class("modal-scroll"),
-				P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0"}),
-					uistate.T("budgets.coverHint", coverShortfallStr)),
-				// C597: covering moves LIMIT between budgets, permanently — a very
-				// different act from a one-month top-up, and the form never said so.
-				P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "cover-impact"),
-					Style(map[string]string{"margin": "0"}), fundsImpactLine(budgeting.ImpactCover)),
-				// Amount: a number or a formula (ƒx toggle). A formula is evaluated live in
-				// this budget's context and re-evaluated each period when recurring.
-				labeledField(uistate.T("budgets.amountToMove"),
-					Div(css.Class("cover-amount-block"),
-						Div(css.Class("cover-amount-row"),
-							IfElse(amtFxS.Get(),
-								Input(css.Class("field"), Attr("id", "budget-cover-formula"), Type("text"),
-									Placeholder("overspend"), OnInput(onAmtFormula), uiw.FieldValue(amtFormulaS.Get())),
-								Input(css.Class("field"), Attr("id", "budget-cover-amt"), Attr("autofocus", ""), Type("number"),
-									Attr("aria-label", uistate.T("budgets.amountToMove")), Placeholder(uistate.T("budgets.amountToMove")), Step("0.01"), Attr("min", "0.01"), OnInput(onCoverAmt), uiw.FieldValue(coverAmtS.Get()))),
-							If(!amtFxS.Get() && coverDefaultStr != "", Button(css.Class("btn"), Type("button"), Title(uistate.T("budgets.fullOverspendTitle")),
-								OnClick(fullCover), uistate.T("budgets.coverFull", coverShortfallStr))),
-							Button(css.Class("btn", "cover-fx-toggle"), Type("button"), Attr("aria-pressed", ariaBool(amtFxS.Get())),
-								Attr("data-testid", "cover-fx-toggle"), Title(uistate.T("budgets.coverFormulaTitle")), OnClick(toggleAmtFx), "ƒx"),
-						),
-						If(amtFxS.Get() && amtFxErr == "", Span(css.Class("cover-fx-preview"), Attr("data-testid", "cover-fx-preview"), uistate.T("budgets.coverFormulaPreview", amtPreview))),
-						If(amtFxErr != "", Span(css.Class("cover-fx-err"), uistate.T("budgets.coverFormulaErr", amtFxErr))),
-						If(amtFxS.Get(), Span(css.Class("cover-fx-hint"), uistate.T("budgets.coverFormulaHint"))),
-					)),
-				// Multi-source: check the budgets to pull from (split equally by default);
-				// the ratio input per source lets the split be unequal — or drive every
-				// source's ratio from a single formula (ƒx) evaluated in each source's context.
-				Div(css.Class("cover-spread-head"),
-					Div(css.Class("cover-spread-titles"),
-						Span(css.Class("cover-spread-label"), uistate.T("budgets.coverSpreadLabel")),
-						Span(css.Class("cover-spread-sub"), spreadSub),
-					),
-					// The "ƒx ratios" toggle only appears once a source is picked (it weights the
-					// selected sources), so the default view has just one ƒx — the amount one —
-					// instead of two identical buttons. Labelled to read as the ratio control.
-					If(selCount > 0, Button(css.Class("btn", "cover-fx-toggle", "cover-fx-ratio"), Type("button"), Attr("aria-pressed", ariaBool(wtFxS.Get())),
-						Attr("data-testid", "cover-wt-fx-toggle"), Title(uistate.T("budgets.coverWeightFxTitle")), OnClick(toggleWtFx),
-						Span(css.Class("cover-fx-ratio-label"), uistate.T("budgets.coverWeightFxBtn")), "ƒx")),
-				),
-				If(wtFxS.Get() && selCount > 0, Div(css.Class("cover-weight-fx"),
-					Input(css.Class("field"), Attr("id", "budget-cover-wt-formula"), Type("text"),
-						Placeholder("cf_budget_priority"), OnInput(onWtFormula), uiw.FieldValue(wtFormulaS.Get())),
-					If(wtFxErr != "", Span(css.Class("cover-fx-err"), uistate.T("budgets.coverFormulaErr", wtFxErr))),
-					Span(css.Class("cover-fx-hint"), uistate.T("budgets.coverWeightFxHint")),
-				)),
-				// A running "Selected N · splitting $X" caption pinned above the list, so the
-				// split total reads at a glance even as rows scroll. Kept always-present (hidden
-				// when empty) so toggling it never restructures the siblings and forces the keyed
-				// list below to remount — which would detach a row mid-click.
-				Span(ClassStr(coverCapClass(selCount)), coverCapText(selCount, selTotal, cur)),
-				// One keyed list, sorted so the picked budgets cluster at the top; the CSS tints
-				// the checked group and rules a divider before the remaining sources.
-				Div(css.Class("cover-sources"),
-					MapKeyed(sortedCoverSrcs, srcKey, renderSrc),
-				),
-				// Repeat this cover automatically at the start of each new period.
-				Label(css.Class("cover-recurring-toggle"),
-					Input(append([]any{Type("checkbox"), Attr("data-testid", "cover-recurring"), OnChange(onToggleRecurring)}, checkedAttr(recurringS.Get())...)...),
-					Span(uistate.T("budgets.coverRecurring")),
-				),
-				// Custom fields on the standing rule (metadata like a reason / review-by), shown
-				// only when recurring is on and the household has defined "cover" fields.
-				If(recurringS.Get() && len(app.CustomFieldDefsFor("cover")) > 0,
-					Div(css.Class("cover-custom-fields"),
-						P(css.Class("cover-fx-hint"), uistate.T("budgets.coverCustomHint")),
-						MapKeyed(app.CustomFieldDefsFor("cover"), func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
-							return labeledField(d.Label, ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: coverCustomVals.Get()[d.Key], OnChange: onCoverCustom}))
-						}),
-					)),
-				errLine,
-			),
-			Div(css.Class("modal-foot"),
-				Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
-				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("budgets.coverAction")),
-			),
-		)
 	}
 
 	// --- Top-up: raise the budget's cap (this period only or permanently), optionally
 	// funded by pulling from other budgets. ---
 	if props.Mode == uistate.BudgetEditModeTopup {
-		durVal := "month"
-		if topupPermanentS.Get() {
-			durVal = "perm"
-		}
-		durHint := "budgets.topupThisMonthHint"
-		if topupPermanentS.Get() {
-			durHint = "budgets.topupPermanentHint"
-		}
-		// C669: the dialog used to open with "Increase Groceries (currently $500.00)"
-		// beside a card reading an effective cap of $721.71, and never said which of
-		// the two the typed amount would land on. Both figures are named now, with
-		// the arithmetic between them (the same string the card's cap line carries),
-		// and the duration hint states which one the top-up changes and what happens
-		// to it next period.
-		capLine, changesLine := budgetTopupCapCopy(fmtMoney(b.Limit), selfEffCap, selfCapMath, topupPermanentS.Get())
-		selNow := coverSelS.Get()
-		selCount := 0
-		for _, sc := range coverSrcs {
-			if selNow[sc.ID] {
-				selCount++
-			}
-		}
-		coverToggleLabel := uistate.T("budgets.topupCoverShow")
-		if topupCoverOpenS.Get() {
-			coverToggleLabel = uistate.T("budgets.topupCoverHide")
-		}
-		// C606: the split the top-up WOULD take from each source, so every row can
-		// show what it would be left with before anything is written. The same
-		// splitCoverAmount the submit uses, so the preview cannot promise a
-		// different number than the write performs.
-		var topupShares map[string]int64
-		if amt, perr := money.ParseMinor(strings.TrimSpace(topupAmt.Get()), dec); perr == nil && amt > 0 {
-			topupShares = splitCoverAmount(amt, coverSrcs, selNow, nil, nil)
-		}
-		periodCopy := uistate.T("budgets.raisePeriodOnly", vw.Label())
-		if topupPermanentS.Get() {
-			periodCopy = uistate.T("budgets.raisePermanently")
-		}
-		return Form(css.Class("acct-edit-form"), Attr("data-testid", "budget-raise-form"), OnSubmit(submitTopup),
-			Div(css.Class("modal-scroll"),
-				P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "budget-raise-period-copy"), periodCopy),
-				P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "topup-cap-math"),
-					Style(map[string]string{"margin": "0"}), capLine),
-				uiw.Field(uiw.FieldProps{ID: "budget-topup-amt", Label: uistate.T("budgets.raiseAmount"), Required: true,
-					TestID: "budget-raise-amount-field", Control: func(a uiw.FieldA11y) ui.Node {
-						return Input(css.Class("field"), Attr("id", a.ID), Attr("data-testid", "budget-topup-amt"), Attr("autofocus", ""), Attr("aria-required", "true"), Type("number"),
-							Placeholder(uistate.T("budgets.raiseAmount")), Step("0.01"), Attr("min", "0.01"), OnInput(onTopupAmt), uiw.FieldValue(topupAmt.Get()))
-					}}),
-				// Duration: this period only (a one-time boost) vs a permanent cap change.
-				labeledField(uistate.T("budgets.topupDuration"),
-					uiw.Segmented(uiw.SegmentedProps{
-						Label:    uistate.T("budgets.topupDuration"),
-						Selected: durVal,
-						Options: []uiw.SegOption{
-							{Value: "month", Label: uistate.T("budgets.topupThisMonth"), TestID: "topup-dur-month"},
-							{Value: "perm", Label: uistate.T("budgets.topupPermanent"), TestID: "topup-dur-perm"},
-						},
-						OnSelect: func(v string) { topupPermanentS.Set(v == "perm") },
-					})),
-				// C597: the duration hint plus the shared impact vocabulary — reach,
-				// whether other budgets are touched, that no account balance moves,
-				// and that it can be undone. Every funds-moving action on this page
-				// answers the same four questions in the same words.
-				P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "topup-dur-hint"),
-					uistate.T(durHint)+" "+fundsImpactLine(budgeting.TopUpImpact(topupPermanentS.Get(), selCount > 0))),
-				// C669: which of the two figures above the amount lands on, and what
-				// happens to it at the period boundary.
-				P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "topup-changes"),
-					Style(map[string]string{"margin": "0"}), changesLine),
-				// Optional: fund the top-up by pulling from budgets that have room to give.
-				If(len(coverSrcs) > 0, Fragment(
-					Button(css.Class("btn cf-adv-toggle"), Type("button"), Attr("aria-expanded", ariaBool(topupCoverOpenS.Get())),
-						Attr("data-testid", "topup-cover-toggle"), OnClick(onToggleTopupCover), Text(coverToggleLabel)),
-					If(topupCoverOpenS.Get(), Div(css.Class("budget-topup-cover"),
-						P(css.Class("t-caption", tw.TextDim), uistate.T("budgets.topupCoverHint")),
-						Div(css.Class("cover-sources"),
-							MapKeyed(coverSrcs, func(sc budgetCoverSource) any { return sc.ID }, func(sc budgetCoverSource) ui.Node {
-								return ui.CreateElement(budgetTopupSourceRow, budgetTopupSourceRowProps{
-									// C606: the movable amount, not the limit — the figure
-									// this list showed was the size of the source's plan.
-									ID: sc.ID, Label: sc.Label, AvailStr: fmtMoney(money.New(sc.MovableMinor, cur)),
-									CommittedStr: committedCaveat(sc, cur),
-									AfterStr:     sourceAfterGiving(sc, topupShares[sc.ID], cur),
-									Selected:     selNow[sc.ID], OnToggle: onToggleSrc,
-								})
-							})),
-						If(selCount > 0, P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "topup-cover-split"),
-							uistate.T("budgets.topupCoverSplit", plural(selCount, "budget")))),
-					)),
-				)),
-				If(coverIncomplete, P(css.Class("err"), Attr("role", "status"), Attr("data-testid", "budget-cover-incomplete"), uistate.T("budgets.committedIncomplete"))),
-				errLine,
-			),
-			Div(css.Class("modal-foot"),
-				Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
-				Button(css.Class("btn btn-primary"), Type("submit"), Attr("data-testid", "budget-raise-submit"), uistate.T("budgets.raiseLimit")),
-			),
-		)
+		return ui.CreateElement(budgetEditRaiseLimit, budgetEditRaiseLimitProps{
+			topupPermanentS: editDraft.topupPermanentS, b: editData.b, selfEffCap: editData.selfEffCap, selfCapMath: editData.selfCapMath,
+			coverSelS: editDraft.coverSelS, coverSrcs: editData.coverSrcs, topupCoverOpenS: editDraft.topupCoverOpenS,
+			topupAmt: editDraft.topupAmt, dec: editData.dec, vw: editData.vw, submitTopup: submitTopup, onTopupAmt: editDraft.onTopupAmt,
+			onToggleTopupCover: editDraft.onToggleTopupCover, cur: editData.cur, onToggleSrc: onToggleSrc,
+			coverIncomplete: editData.coverIncomplete, errLine: errLine, cancel: cancel,
+		})
 	}
 
 	// --- Full edit. Single-column form (.acct-edit-form) — a clean vertical stack so
@@ -1031,149 +130,17 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 	// G6: consequence previews — when the period or method is CHANGED from the saved
 	// value, say what will happen before the user commits, instead of reshaping the
 	// current period's figures silently on save.
-	periodChanged := periodS.Get() != string(b.Period)
-	methodChanged := methodologyS.Get() != b.Methodology
-	// C665: the limit's live verdict, shared by the field, its inline message and
-	// the Save button, so the three can never disagree about whether the form is
-	// committable.
-	_, limitProblem := budgeting.ParseLimitMajor(limitS.Get(), dec)
-	limitErrMsg := budgetLimitError(limitProblem, cur)
-	limitSaveTitle := uistate.T("action.save")
-	if limitErrMsg != "" {
-		limitSaveTitle = uistate.T("budgets.limitSaveBlocked")
-	}
-	advEditLabel := uistate.T("budgets.advancedShow")
-	if advEditOpen.Get() {
-		advEditLabel = uistate.T("budgets.advancedHide")
-	}
-
-	// C521: the tracked-categories editor is a SECOND PAGE of this panel, not a
-	// second panel.
-	//
-	// It used to close this form and open its own modal, which destroyed this
-	// component and every unsaved edit with it — change the name, step into the
-	// categories, come back, and the name was gone. It also left no way back: the
-	// return trip was main page → edit → categories → main page, skipping the form.
-	//
-	// Layering two FlipPanels was tried first and does not work: each registers its
-	// own document-level Escape handler and captures its close callback in a ref, so
-	// one press closes both and no guard on the parent can prevent it. Keeping ONE
-	// panel and swapping its body means there is one Escape, one backdrop, an
-	// explicit Back, and a component that never unmounts — so nothing can be lost.
-	if catsOpen.Get() == props.BudgetID {
-		return Div(css.Class("acct-edit-form", "budget-edit"),
-			Div(css.Class("modal-scroll"),
-				Div(css.Class("budget-cats-back"),
-					Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "budget-cats-back"),
-						OnClick(closeCats), uistate.T("budgets.editCatsBack")),
-					Span(css.Class(tw.TextFaint, tw.Text12), uistate.T("budgets.editCatsBackHint")),
-				),
-				ui.CreateElement(BudgetCategoriesBody, struct{}{}),
-			),
-		)
-	}
-
-	return Form(css.Class("acct-edit-form", "budget-edit"), OnSubmit(saveEdit),
-		Div(css.Class("modal-scroll"),
-			labeledField(uistate.T("common.name"),
-				Input(css.Class("field"), Attr("id", "budget-edit-name"), Attr("autofocus", ""), Type("text"), Placeholder(uistate.T("common.name")), OnInput(ev.OnName), uiw.FieldValue(nameS.Get()))),
-			// The core budget params pair into two columns so the form reads calmly and fits
-			// the panel instead of a long single stack: amount + cadence, then owner + method.
-			Div(css.Class("budget-edit-row"),
-				// C665: min + live validation. The field accepted "-1" and left Save
-				// enabled; a negative limit inverts every figure computed from it
-				// (remaining, percent used, over/under), so it is refused while it is
-				// being typed rather than argued about after a commit attempt.
-				labeledField(uistate.T("budgets.limitLabel"),
-					Fragment(
-						Input(append(append([]any{css.Class("field"), Type("number"), Attr("data-testid", "budget-edit-limit"), Attr("aria-label", uistate.T("budgets.limitLabel")),
-							Placeholder(uistate.T("budgets.limitLabel")), Step("0.01"), Attr("min", "0.01"), Attr("aria-required", "true"), OnInput(onLimit)},
-							errAttrs("budget-edit-limit-err", limitErrMsg)...), uiw.FieldValue(limitS.Get()))...),
-						errText("budget-edit-limit-err", limitErrMsg))),
-				labeledField(uistate.T("budgets.period"),
-					uiw.SelectInput(uiw.SelectInputProps{
-						Options: periodOptions(periodS.Get()), Selected: periodS.Get(),
-						OnChange: func(v string) { periodS.Set(v) }, AriaLabel: uistate.T("budgets.period"),
-					}))),
-			If(periodChanged, P(css.Class(tw.TextWarn, tw.Text12), Attr("data-testid", "budget-period-hint"),
-				Style(map[string]string{"margin": "0"}), uistate.T("budgets.periodChangeHint"))),
-			// BG4: one-tap fill chips (last month, 3/6-mo average, last period, to target).
-			budgetQuickFillRow(app, b, selfStatus, viewAnchor, budgetTargetDraft{
-				Kind: targetKindS.Get(), Amount: targetAmtS.Get(), Date: targetDateS.Get(),
-				GoalID: linkedGoalS.Get(), Decimals: dec, Currency: cur,
-			}, onFillPick),
-			If(app != nil && selfFound, budgetRecommendationLine(app, b, selfStatus, viewAnchor)),
-			// BG1: optional funding target (refill-up-to, set-aside, or by-date via a goal).
-			budgetTargetSection(app, budgetTargetDraft{
-				Kind: targetKindS.Get(), Amount: targetAmtS.Get(), Date: targetDateS.Get(),
-				GoalID: linkedGoalS.Get(), Decimals: dec, Currency: cur,
-			}, func(v string) { targetKindS.Set(v) }, func(v string) { linkedGoalS.Set(v) }, onTargetAmt, onTargetDate),
-			Div(css.Class("budget-edit-row"),
-				labeledField(uistate.T("common.owner"),
-					uiw.SelectInput(uiw.SelectInputProps{
-						Options: ownerSelectOptions(app.Members(), ownerS.Get()), Selected: ownerS.Get(),
-						OnChange: func(v string) { ownerS.Set(v) }, AriaLabel: uistate.T("common.owner"),
-					})),
-				// C590: this picker moves ONE budget; the page's "Budgeting method"
-				// popover moves the household. Both were called "method" and neither
-				// said so, which is how a card-level edit became a page-wide switch.
-				labeledField(uistate.T("budgets.methodLabel"),
-					Fragment(
-						uiw.SelectInput(uiw.SelectInputProps{
-							Options: budgetMethodOptions(methodologyS.Get()), Selected: methodologyS.Get(),
-							OnChange: func(v string) { methodologyS.Set(v) }, AriaLabel: uistate.T("budgets.methodLabel"),
-						}),
-						Span(css.Class(tw.TextFaint, tw.Text12), Attr("data-testid", "budget-edit-method-hint"),
-							budgetOwnMethodHint(app.Settings().BudgetMethodology, methodologyS.Get()))))),
-			// C5: owner silently set the budget's shared/individual scope — say what it means.
-			If(len(app.Members()) > 0, P(css.Class(tw.TextFaint, tw.Text12), Attr("data-testid", "budget-edit-owner-hint"),
-				Style(map[string]string{"margin": "0"}), budgetOwnerScopeHint(app.Members(), ownerS.Get()))),
-			If(methodChanged, P(css.Class(tw.TextWarn, tw.Text12), Attr("data-testid", "budget-method-hint"),
-				Style(map[string]string{"margin": "0"}), uistate.T("budgets.methodChangeHint"))),
-			// C1: tracked categories are managed in their own searchable editor — one
-			// concept, one place. This closes the edit form and opens it.
-			Div(css.Class("budget-edit-cats-link"),
-				Span(css.Class(tw.TextFaint, tw.Text12), uistate.T("budgets.editCatsElsewhere")),
-				Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "budget-edit-open-cats"),
-					OnClick(openCats), uistate.T("budgets.editCatsOpen"))),
-			Label(css.Class("field", tw.Flex, tw.ItemsCenter, tw.Gap2), Attr("style", "flex-wrap:nowrap"),
-				Input(append([]any{Type("checkbox"), Attr("style", "flex-shrink:0"), OnChange(onRollover)}, checkedAttr(rolloverS.Get())...)...),
-				Span(uistate.T("budgets.rollover")),
-			),
-			P(css.Class(tw.TextFaint, tw.Text12), uistate.T("budgets.rolloverHint")),
-			// BG5: cap how much unused budget can roll over, so a neglected budget can't
-			// build an unbounded fictional cushion. Only shown while rollover is on.
-			If(rolloverS.Get(),
-				labeledField(uistate.T("budgets.rolloverCapLabel"),
-					uiw.SelectInput(uiw.SelectInputProps{
-						Options:   rolloverCapOptions(),
-						Selected:  rolloverCapS.Get(),
-						OnChange:  func(v string) { rolloverCapS.Set(v) },
-						AriaLabel: uistate.T("budgets.rolloverCapLabel"),
-					}))),
-			// Custom fields: one input per user-defined "budget" field (renders nothing
-			// when there are no defs).
-			MapKeyed(app.CustomFieldDefsFor("budget"), func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
-				return labeledField(d.Label, ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customEditVals.Get()[d.Key], OnChange: onCustom}))
-			}),
-			// C6: the formula-engine variable name — plumbing, behind a disclosure.
-			Button(css.Class("btn cf-adv-toggle"), Type("button"), Attr("data-testid", "budget-edit-advanced"),
-				Attr("aria-expanded", ariaBool(advEditOpen.Get())), OnClick(toggleAdvEdit), Text(advEditLabel)),
-			If(advEditOpen.Get(),
-				labeledField(uistate.T("budgets.varNameLabel"),
-					entityVarField(budgetVarKind, budgetVarEntities(app.Budgets()), props.BudgetID, "budget-edit-varname", "budget-varname-warn", ev.VarName.Get(), nameS.Get(), ev.OnVarName))),
-			errLine,
-		),
-		Div(css.Class("modal-foot"),
-			Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
-			// C665: Save is dead while the limit is unusable, and its tooltip says
-			// why. The handler refuses the same values, so a keyboard submit cannot
-			// slip past a disabled button.
-			Button(append([]any{css.Class("btn btn-primary"), Type("submit"),
-				Attr("data-testid", "budget-edit-save"), Title(limitSaveTitle), uistate.T("action.save")},
-				disabledAttr(limitErrMsg != "")...)...),
-		),
-	)
+	return ui.CreateElement(budgetEditFields, budgetEditFieldsProps{
+		periodS: editDraft.periodS, b: editData.b, methodologyS: editDraft.methodologyS, limitS: editDraft.limitS, dec: editData.dec,
+		cur: editData.cur, advEditOpen: editDraft.advEditOpen, catsOpen: editDraft.catsOpen, props: props, closeCats: editDraft.closeCats,
+		saveEdit: saveEdit, ev: editDraft.ev, nameS: nameS, onLimit: editDraft.onLimit, app: editData.app, selfStatus: editData.selfStatus,
+		viewAnchor: editData.viewAnchor, targetKindS: editDraft.targetKindS, targetAmtS: editDraft.targetAmtS,
+		targetDateS: editDraft.targetDateS, linkedGoalS: editDraft.linkedGoalS, onFillPick: editDraft.onFillPick,
+		selfFound: editData.selfFound, onTargetAmt: editDraft.onTargetAmt, onTargetDate: editDraft.onTargetDate, ownerS: editDraft.ownerS,
+		openCats: editDraft.openCats, onRollover: editDraft.onRollover, rolloverS: editDraft.rolloverS,
+		rolloverCapS: editDraft.rolloverCapS, customEditVals: editDraft.customEditVals, onCustom: onCustom,
+		toggleAdvEdit: editDraft.toggleAdvEdit, errLine: errLine, cancel: cancel,
+	})
 }
 
 // budgetTopupCapCopy builds the two sentences the top-up dialog opens with (C669):
@@ -1662,4 +629,9 @@ func rolloverCapOptions() []uiw.SelectOption {
 		{Value: "2", Label: uistate.T("budgets.rolloverCap2x")},
 		{Value: "3", Label: uistate.T("budgets.rolloverCap3x")},
 	}
+}
+
+// budgetEditTopupImpact supplies the shared consequence wording for the raise-limit form.
+func budgetEditTopupImpact(permanent, funded bool) string {
+	return fundsImpactLine(budgeting.TopUpImpact(permanent, funded))
 }
