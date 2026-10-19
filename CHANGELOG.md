@@ -90,6 +90,12 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Transfers never invent a rate or half-save (MONEYC).** A cross-currency transfer with no saved exchange rate and no
+  received amount now fails with a typed error before anything is written (it used to book −10,000 USD as +10,000 JPY).
+  The transfer legs and optional fee are written in one store transaction under an operation ID: a failure on any leg
+  leaves nothing behind, an identical retry is a no-op, and reusing the ID with different data is refused. Editing the
+  amount of a cross-currency pair whose rate has gone refuses instead of mirroring a wrong amount. The assistant's
+  transfer tool now uses the same service.
 - **Quick Add and import use the default account (DF4).** Quick Add and the import panel (Documents and the Transactions
   import modal) pick their opening account through the shared resolver: the selected member's default, then the
   workspace default, then a deterministic fallback; archived or missing defaults are skipped. "Save & add another"

@@ -1114,8 +1114,8 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates, tier a
 		},
 		{
 			spec: ai.FunctionTool("add_transfer",
-				"Move money between two of the user's accounts (records a matched transfer). Use this for the cash side of events like a loan payout or moving funds. Resolve accounts by name.",
-				json.RawMessage(`{"type":"object","properties":{"from_account":{"type":"string"},"to_account":{"type":"string"},"amount":{"type":"number","description":"major units, positive"},"date":{"type":"string","description":"YYYY-MM-DD, defaults to today"}},"required":["from_account","to_account","amount"]}`)),
+				"Move money between two of the user's accounts (records a matched transfer). Use this for the cash side of events like a loan payout or moving funds. Resolve accounts by name. For different currencies, provide received_amount when the saved exchange rate is unavailable or the user gives the exact amount that arrived.",
+				json.RawMessage(`{"type":"object","properties":{"from_account":{"type":"string"},"to_account":{"type":"string"},"amount":{"type":"number","description":"positive major units in the source account currency"},"received_amount":{"type":"number","description":"optional positive major units received in the destination account currency"},"operation_id":{"type":"string","description":"optional stable idempotency key for retrying this exact transfer"},"date":{"type":"string","description":"YYYY-MM-DD, defaults to today"}},"required":["from_account","to_account","amount"]}`)),
 			mutates: true,
 			preview: func(raw json.RawMessage) string {
 				var a struct {
@@ -1128,10 +1128,12 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates, tier a
 			},
 			run: func(raw json.RawMessage) string {
 				var a struct {
-					From   string  `json:"from_account"`
-					To     string  `json:"to_account"`
-					Amount float64 `json:"amount"`
-					Date   string  `json:"date"`
+					From        string  `json:"from_account"`
+					To          string  `json:"to_account"`
+					Amount      float64 `json:"amount"`
+					Received    float64 `json:"received_amount"`
+					OperationID string  `json:"operation_id"`
+					Date        string  `json:"date"`
 				}
 				if err := json.Unmarshal(raw, &a); err != nil || a.Amount <= 0 {
 					return "A transfer needs both accounts and a positive amount."
@@ -1152,20 +1154,17 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates, tier a
 					when = d
 				}
 				fromMinor := currency.MinorFromMajor(a.Amount, from.Currency)
+				params := appstate.TransferParams{
+					OperationID: a.OperationID, FromAccountID: from.ID, ToAccountID: to.ID,
+					AmountMinor: fromMinor, ReceivedMinor: currency.MinorFromMajor(a.Received, to.Currency),
+					Date: when, Desc: uistate.T("assistant.transferToDesc", to.Name), Source: domain.TxnSourceAssistant,
+				}
+				outID, _, err := app.CreateTransferPair(params)
+				if err != nil {
+					return "Couldn't record the transfer: " + err.Error()
+				}
 				fromMoney := money.New(fromMinor, from.Currency)
-				toMoney := money.New(currency.MinorFromMajor(a.Amount, to.Currency), to.Currency)
-				if conv, err := rates.Convert(fromMoney.Abs(), to.Currency); err == nil {
-					toMoney = conv // honor FX across currencies
-				}
-				out := domain.Transaction{ID: id.New(), AccountID: from.ID, Amount: money.New(-fromMinor, from.Currency), TransferAccountID: to.ID, Date: when, Payee: to.Name, Desc: uistate.T("assistant.transferToDesc", to.Name), Source: domain.TxnSourceAssistant}
-				in := domain.Transaction{ID: id.New(), AccountID: to.ID, Amount: toMoney, TransferAccountID: from.ID, Date: when, Payee: from.Name, Desc: uistate.T("assistant.transferFromDesc", from.Name), Source: domain.TxnSourceAssistant}
-				if err := app.PutTransaction(out); err != nil {
-					return "Couldn't record the transfer: " + err.Error()
-				}
-				if err := app.PutTransaction(in); err != nil {
-					return "Couldn't record the transfer: " + err.Error()
-				}
-				return fmt.Sprintf("Transferred %s from %s to %s.%s", fmtMoney(fromMoney), from.Name, to.Name, openLink("/transactions", out.ID))
+				return fmt.Sprintf("Transferred %s from %s to %s.%s", fmtMoney(fromMoney), from.Name, to.Name, openLink("/transactions", outID))
 			},
 		},
 		{

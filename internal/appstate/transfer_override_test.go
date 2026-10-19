@@ -3,7 +3,9 @@
 package appstate
 
 import (
+	"errors"
 	"testing"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -29,6 +31,125 @@ func seedFXPair(t *testing.T, a *App) (from, eur domain.Account) {
 		t.Fatalf("PutSettings: %v", err)
 	}
 	return from, eur
+}
+
+func TestTransferMissingFXRequiresExplicitReceivedAmount(t *testing.T) {
+	a := newApp(t, false)
+	from, _ := seedAssetPair(t, a, 100000, 0)
+	yen := domain.Account{
+		ID: "yen", Name: "Yen account", OwnerID: "m1", Scope: domain.ScopeIndividual,
+		Class: domain.ClassAsset, Type: domain.TypeChecking, Currency: "JPY",
+		OpeningBalance: money.New(0, "JPY"),
+	}
+	if err := a.PutAccount(yen); err != nil {
+		t.Fatalf("PutAccount yen: %v", err)
+	}
+	_, _, err := a.CreateTransferPair(TransferParams{
+		OperationID: "missing-rate", FromAccountID: from.ID, ToAccountID: yen.ID, AmountMinor: 10000,
+	})
+	if !errors.Is(err, ErrTransferRateUnavailable) {
+		t.Fatalf("CreateTransferPair error = %v, want ErrTransferRateUnavailable", err)
+	}
+	if got := balanceOf(t, a, from); got != 100000 {
+		t.Errorf("source after rejected transfer = %d, want 100000", got)
+	}
+	if got := balanceOf(t, a, yen); got != 0 {
+		t.Errorf("destination after rejected transfer = %d, want 0", got)
+	}
+	if len(a.Transactions()) != 0 {
+		t.Errorf("transactions after rejected transfer = %d, want 0", len(a.Transactions()))
+	}
+	if _, _, err := a.CreateTransferPair(TransferParams{
+		OperationID: "explicit-received", FromAccountID: from.ID, ToAccountID: yen.ID,
+		AmountMinor: 10000, ReceivedMinor: 15000,
+	}); err != nil {
+		t.Fatalf("explicit received transfer: %v", err)
+	}
+	if got := balanceOf(t, a, yen); got != 15000 {
+		t.Errorf("destination after explicit transfer = %d, want 15000", got)
+	}
+}
+
+func TestTransferWithRateAndOperationRetry(t *testing.T) {
+	a := newApp(t, false)
+	from, to := seedFXPair(t, a)
+	p := TransferParams{
+		OperationID: "retryable-fx", FromAccountID: from.ID, ToAccountID: to.ID, AmountMinor: 5000,
+		Date: time.Date(2026, 10, 18, 0, 0, 0, 0, time.UTC), Desc: "Retry test",
+	}
+	outID, inID, err := a.CreateTransferPair(p)
+	if err != nil {
+		t.Fatalf("first CreateTransferPair: %v", err)
+	}
+	outRetry, inRetry, err := a.CreateTransferPair(p)
+	if err != nil {
+		t.Fatalf("retry CreateTransferPair: %v", err)
+	}
+	if outRetry != outID || inRetry != inID {
+		t.Fatalf("retry IDs = %q/%q, want %q/%q", outRetry, inRetry, outID, inID)
+	}
+	p.FeeMinor = 100
+	if _, _, err := a.CreateTransferPair(p); err == nil {
+		t.Fatal("same operation ID with a different fee was accepted")
+	}
+	if len(a.Transactions()) != 2 {
+		t.Fatalf("transactions after retry = %d, want 2", len(a.Transactions()))
+	}
+	if got := balanceOf(t, a, from); got != 95000 {
+		t.Errorf("source after retry = %d, want 95000", got)
+	}
+	if got := balanceOf(t, a, to); got != 12500 {
+		t.Errorf("destination after retry = %d, want 12500", got)
+	}
+}
+
+func TestEditingCrossCurrencyTransferWithoutFXDoesNotRelabelAmount(t *testing.T) {
+	a := newApp(t, false)
+	from, to := seedFXPair(t, a)
+	outID, _, err := a.CreateTransferPair(TransferParams{
+		OperationID: "edit-missing-rate", FromAccountID: from.ID, ToAccountID: to.ID, AmountMinor: 5000,
+	})
+	if err != nil {
+		t.Fatalf("CreateTransferPair: %v", err)
+	}
+	s := a.Settings()
+	s.FXRates = nil
+	if err := a.PutSettings(s); err != nil {
+		t.Fatalf("clear FX rates: %v", err)
+	}
+	var prior domain.Transaction
+	for _, txn := range a.Transactions() {
+		if txn.ID == outID {
+			prior = txn
+		}
+	}
+	if prior.ID == "" {
+		t.Fatal("source transfer leg not found")
+	}
+	next := prior
+	next.Amount.Amount = -6000
+	if err := a.PutTransactionWithTransferPair(prior, next); !errors.Is(err, ErrTransferRateUnavailable) {
+		t.Fatalf("PutTransactionWithTransferPair error = %v, want ErrTransferRateUnavailable", err)
+	}
+	for _, txn := range a.Transactions() {
+		if txn.ID == prior.ID && txn.Amount.Amount != -5000 {
+			t.Errorf("source leg after rejected edit = %d, want -5000", txn.Amount.Amount)
+		}
+		if txn.AccountID == to.ID && txn.TransferGroupID == prior.TransferGroupID && txn.Amount.Amount != 2500 {
+			t.Errorf("destination leg after rejected edit = %d, want 2500", txn.Amount.Amount)
+		}
+	}
+	if err := a.PutTransactionWithTransferPairReceived(prior, next, 2700); err != nil {
+		t.Fatalf("explicit destination amount edit: %v", err)
+	}
+	for _, txn := range a.Transactions() {
+		if txn.ID == prior.ID && txn.Amount.Amount != -6000 {
+			t.Errorf("source leg after explicit edit = %d, want -6000", txn.Amount.Amount)
+		}
+		if txn.AccountID == to.ID && txn.TransferGroupID == prior.TransferGroupID && txn.Amount.Amount != 2700 {
+			t.Errorf("destination leg after explicit edit = %d, want 2700", txn.Amount.Amount)
+		}
+	}
 }
 
 // TestTransferReceivedOverride: the user's actual landed amount beats the saved

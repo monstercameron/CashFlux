@@ -3,6 +3,7 @@
 package store
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 
@@ -38,6 +39,84 @@ func (s *SQLiteStore) PutTransactionsAtomic(txns []domain.Transaction) error {
 	}
 	mutationRev.Add(1)
 	return nil
+}
+
+// PutTransferBatchAtomic commits the operation receipt and every transaction
+// together. Repeating the same operation ID and payload is a no-op; reusing an
+// operation ID for different data is rejected without overwriting anything.
+func (s *SQLiteStore) PutTransferBatchAtomic(operationID string, txns []domain.Transaction) (bool, error) {
+	if operationID == "" {
+		return false, fmt.Errorf("store: transfer operation id is required")
+	}
+	if len(txns) == 0 {
+		return false, fmt.Errorf("store: transfer batch must contain transactions")
+	}
+	data, err := json.Marshal(txns)
+	if err != nil {
+		return false, fmt.Errorf("store: encode transfer operation %s: %w", operationID, err)
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return false, fmt.Errorf("store: begin transfer batch %s: %w", operationID, err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	var existingBatch string
+	receiptErr := tx.QueryRow("SELECT data FROM transfer_operations WHERE id = ?", operationID).Scan(&existingBatch)
+	if receiptErr != nil && receiptErr != sql.ErrNoRows {
+		return false, fmt.Errorf("store: read transfer operation %s: %w", operationID, receiptErr)
+	}
+	if receiptErr == nil {
+		if existingBatch != string(data) {
+			return false, fmt.Errorf("store: transfer operation %s already belongs to different data", operationID)
+		}
+		if err := tx.Commit(); err != nil {
+			return false, fmt.Errorf("store: finish transfer retry %s: %w", operationID, err)
+		}
+		return false, nil
+	}
+	existingCount := 0
+	encoded := make([]string, len(txns))
+	for i, txn := range txns {
+		if txn.ID == "" {
+			return false, fmt.Errorf("store: transaction id is required")
+		}
+		txnData, err := json.Marshal(txn)
+		if err != nil {
+			return false, fmt.Errorf("store: encode transaction %s: %w", txn.ID, err)
+		}
+		encoded[i] = string(txnData)
+		var existing string
+		lookupErr := tx.QueryRow("SELECT data FROM transactions WHERE id = ?", txn.ID).Scan(&existing)
+		if lookupErr == nil {
+			if existing != string(txnData) {
+				return false, fmt.Errorf("store: transaction id %s already belongs to different data", txn.ID)
+			}
+			existingCount++
+		} else if lookupErr != sql.ErrNoRows {
+			return false, fmt.Errorf("store: inspect transaction %s: %w", txn.ID, lookupErr)
+		}
+	}
+	if existingCount != 0 && existingCount != len(txns) {
+		return false, fmt.Errorf("store: transfer operation %s has an incomplete existing batch", operationID)
+	}
+	if _, err := tx.Exec("INSERT INTO transfer_operations(id, data) VALUES(?, ?)", operationID, string(data)); err != nil {
+		return false, fmt.Errorf("store: reserve transfer operation %s: %w", operationID, err)
+	}
+	if existingCount == 0 {
+		for i, txn := range txns {
+			if _, err := tx.Exec("INSERT INTO transactions(id, data) VALUES(?, ?)", txn.ID, encoded[i]); err != nil {
+				return false, fmt.Errorf("store: write transaction %s: %w", txn.ID, err)
+			}
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return false, fmt.Errorf("store: commit transfer batch %s: %w", operationID, err)
+	}
+	if existingCount == 0 {
+		mutationRev.Add(1)
+		return true, nil
+	}
+	return false, nil
 }
 
 // PutImportBatch stores imported transactions and, when doc has an ID, their
