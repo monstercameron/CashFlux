@@ -90,6 +90,7 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- Update transfer search regression checks for folded rows and account-aware direction.
 - Use shared transfer pairing and account sign conventions in ledger rows.
 - Count actual committed transaction changes and show truthful durable Undo feedback.
 - Move budget tracking and annual planning decisions into tested pure logic.

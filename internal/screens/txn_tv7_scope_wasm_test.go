@@ -44,7 +44,7 @@ func tv7ScopeApp(t *testing.T) (*appstate.App, []domain.Transaction) {
 		{ID: "transfer-out", AccountID: "checking", TransferAccountID: "loan", Date: date, Desc: "Car payment", Amount: money.New(-48000, "USD"), Reviewed: true, MemberIDs: []string{"priya"}},
 		{ID: "transfer-in", AccountID: "loan", TransferAccountID: "checking", Date: date, Desc: "Car payment", Amount: money.New(48000, "USD"), Reviewed: true, MemberIDs: []string{"priya"}},
 	}
-	// Legacy transfer legs intentionally remain separately visible, as in TV7-1.
+	// Keep both legacy legs as input: the ledger folds them, while the raw table fixture renders its supplied rows.
 	if err := app.Store().Load(ds); err != nil {
 		t.Fatal(err)
 	}
@@ -77,9 +77,15 @@ func tv7Nodes(root *render.QueryNode, match func(*render.QueryNode) bool) []*ren
 	return result
 }
 
-func tv7AssertRows(t *testing.T, f *render.Fixture, rows []domain.Transaction) {
+func tv7AssertRows(t *testing.T, f *render.Fixture, rows []domain.Transaction, folded bool) {
 	t.Helper()
 	for _, txn := range rows {
+		if folded && txn.ID == "transfer-in" {
+			if byTestID(f, "tr", "txn-row-transfer-in") != nil {
+				t.Error("the restored ledger duplicates the receiving leg of the legacy transfer")
+			}
+			continue
+		}
 		row := byTestID(f, "tr", "txn-row-"+txn.ID)
 		if row == nil {
 			t.Errorf("missing restored row %s", txn.ID)
@@ -96,9 +102,7 @@ func tv7AssertRows(t *testing.T, f *render.Fixture, rows []domain.Transaction) {
 		}
 		if txn.IsTransfer() {
 			category = "Joint Checking → Car loan"
-			if txn.Amount.Amount > 0 {
-				category = "Car loan → Joint Checking"
-			}
+
 		}
 		cells := tv7Nodes(row, func(n *render.QueryNode) bool { return n.Tag() == "td" && hasClass(n.Attr("class"), "td-cat") })
 		if len(cells) != 1 || !strings.Contains(cells[0].Text(), category) {
@@ -122,7 +126,7 @@ func TestTV7SearchClearRestoresEveryRow(t *testing.T) {
 	defer func() { f.Render(Div()) }()
 	defer debounce.Flush("txn-filter:text")
 	f.Render(ui.CreateElement(Transactions))
-	tv7AssertRows(t, f, rows)
+	tv7AssertRows(t, f, rows, true)
 	for _, query := range []string{"coffee", "", "zzqx", "coffee", ""} {
 		search := byTestID(f, "input", "filter-toolbar-search")
 		if search == nil {
@@ -143,7 +147,7 @@ func TestTV7SearchClearRestoresEveryRow(t *testing.T) {
 			t.Fatalf("applied query = %q, want %q", got, query)
 		}
 		if query == "" {
-			tv7AssertRows(t, f, rows)
+			tv7AssertRows(t, f, rows, true)
 			if value := byTestID(f, "span", "txn-count-spent-value"); value == nil || value.Text() != "$220.75" {
 				t.Errorf("cleared search did not restore the period's Spent figure: %v", value)
 			}
@@ -198,12 +202,12 @@ func TestTV7RowEnrichmentFollowsSuppliedRowsAtSameRevisionAndFilter(t *testing.T
 	// rows. Both renders already see the same cleared filter and store revision.
 	renderRows(rows[:1])
 	renderRows(rows)
-	tv7AssertRows(t, f, rows)
+	tv7AssertRows(t, f, rows, false)
 	// A count alone is insufficient: replacing one matching row with another
 	// must also replace enrichment. Then restore the entire period again.
 	renderRows(rows[:1])
 	renderRows(rows[1:2])
-	tv7AssertRows(t, f, rows[1:2])
+	tv7AssertRows(t, f, rows[1:2], false)
 	// The header's order cache must follow equal-length result replacements too.
 	byTestID(f, "input", "txn-select-all-visible").Click()
 	if row := byTestID(f, "tr", "txn-row-groceries"); row == nil || !hasClass(row.Attr("class"), "selected") {
@@ -211,5 +215,5 @@ func TestTV7RowEnrichmentFollowsSuppliedRowsAtSameRevisionAndFilter(t *testing.T
 	}
 	byTestID(f, "input", "txn-select-all-visible").Click()
 	renderRows(rows)
-	tv7AssertRows(t, f, rows)
+	tv7AssertRows(t, f, rows, false)
 }
