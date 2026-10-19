@@ -90,6 +90,9 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Budgets toolbar and list split into small components (BUDQ6.2).** `budgetToolbarContent` (269 → 30 lines) and
+  `budgetListWidget` (215 → 64) compose child components for settings, tools, density, add, search and attention chips; the
+  search/attention filtering is a pure, table-tested function. No visible change.
 - **The Transactions summary strip is true and compact (V5SUM).** The category breakdown recomputes on every transaction
   change (recategorising updates it in the same render). The bar adds a neutral "Other" segment so segments are each
   category's share of Spent. Only an active category filter looks selected; uncategorized spending gets a small amber dot.
