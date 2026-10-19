@@ -3,9 +3,25 @@
 package rpcprotocol
 
 import (
+	"encoding/json"
 	"errors"
 	"testing"
 )
+
+func TestRequestCarriesDeviceIDAcrossWorkerBoundary(t *testing.T) {
+	input := Request{Version: Version, Kind: KindUnary, ID: "rpc-1", Endpoint: "https://cashflux.test", Token: "refresh", Method: "/cashflux.v1.AuthService/RefreshToken", DeviceID: "device-1"}
+	encoded, err := json.Marshal(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded Request
+	if err := json.Unmarshal(encoded, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if decoded.DeviceID != input.DeviceID {
+		t.Fatalf("device ID crossed worker boundary as %q, want %q", decoded.DeviceID, input.DeviceID)
+	}
+}
 
 func TestValidateRequest(t *testing.T) {
 	valid := Request{

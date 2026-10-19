@@ -13,7 +13,7 @@ import (
 
 // Version changes whenever app.wasm and services.wasm would interpret a
 // message differently.
-const Version = 1
+const Version = 2
 
 // Kind identifies one worker protocol message shape.
 type Kind string
@@ -44,6 +44,7 @@ type Request struct {
 	Endpoint string          `json:"endpoint,omitempty"`
 	Token    string          `json:"token,omitempty"`
 	Method   string          `json:"method,omitempty"`
+	DeviceID string          `json:"deviceId,omitempty"`
 	Payload  json.RawMessage `json:"payload,omitempty"`
 	Binary   []byte          `json:"-"`
 }

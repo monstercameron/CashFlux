@@ -9,17 +9,22 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/backendrpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
-func TestRefreshTokenReuseGraceReturnsSamePairThenRevokes(t *testing.T) {
+func TestRefreshTokenReuseGraceIsBoundAndRevokes(t *testing.T) {
 	for _, tc := range []struct {
-		name      string
-		age       time.Duration
-		wantGrace bool
+		name          string
+		age           time.Duration
+		deviceID      string
+		presentedHash bool
+		wantGrace     bool
 	}{
-		{name: "within grace", age: 0, wantGrace: true},
-		{name: "after grace", age: 31 * time.Second, wantGrace: false},
+		{name: "bound within grace", age: 0, deviceID: "device-1", presentedHash: true, wantGrace: true},
+		{name: "unbound replay", age: 0, presentedHash: true},
+		{name: "after grace", age: 11 * time.Second, deviceID: "device-1", presentedHash: true},
+		{name: "token hash mismatch", age: 0, deviceID: "device-1"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s := newTestAuthServer(t)
@@ -27,7 +32,11 @@ func TestRefreshTokenReuseGraceReturnsSamePairThenRevokes(t *testing.T) {
 			if err != nil {
 				t.Fatalf("register: %v", err)
 			}
-			first, err := s.RefreshToken(context.Background(), backendrpc.RefreshTokenRequest{RefreshToken: registered.RefreshToken})
+			ctx := context.Background()
+			if tc.deviceID != "" {
+				ctx = metadata.NewIncomingContext(ctx, metadata.Pairs("x-cashflux-device-id", tc.deviceID))
+			}
+			first, err := s.RefreshToken(ctx, backendrpc.RefreshTokenRequest{RefreshToken: registered.RefreshToken})
 			if err != nil {
 				t.Fatalf("first refresh: %v", err)
 			}
@@ -39,13 +48,21 @@ func TestRefreshTokenReuseGraceReturnsSamePairThenRevokes(t *testing.T) {
 				t.Fatalf("age consumed token: %v", err)
 			}
 
-			second, err := s.RefreshToken(context.Background(), backendrpc.RefreshTokenRequest{RefreshToken: registered.RefreshToken})
+			presented := registered.RefreshToken
+			if !tc.presentedHash {
+				claims.Exp++
+				presented, err = issueSessionTokenWithClaims(s.cfg, claims)
+				if err != nil {
+					t.Fatalf("issue hash-mismatched token: %v", err)
+				}
+			}
+			second, err := s.RefreshToken(ctx, backendrpc.RefreshTokenRequest{RefreshToken: presented})
 			if tc.wantGrace {
 				if err != nil {
 					t.Fatalf("duplicate inside grace: %v", err)
 				}
-				if second.AccessToken != first.AccessToken || second.RefreshToken != first.RefreshToken {
-					t.Fatalf("grace retry changed successor pair: access_equal=%v refresh_equal=%v access_lengths=%d/%d refresh_lengths=%d/%d", second.AccessToken == first.AccessToken, second.RefreshToken == first.RefreshToken, len(second.AccessToken), len(first.AccessToken), len(second.RefreshToken), len(first.RefreshToken))
+				if second.AccessToken == first.AccessToken || second.RefreshToken != first.RefreshToken {
+					t.Fatalf("grace replay must mint fresh access and keep successor refresh: access_equal=%v refresh_equal=%v", second.AccessToken == first.AccessToken, second.RefreshToken == first.RefreshToken)
 				}
 				return
 			}

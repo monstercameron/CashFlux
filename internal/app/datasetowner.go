@@ -5,6 +5,7 @@
 package app
 
 import (
+	"encoding/json"
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -38,7 +39,15 @@ const datasetOwnerKey = "cashflux:dataset-owner"
 
 // datasetOwner returns the account the loaded dataset belongs to, or "" when
 // nothing has claimed it (a fresh install, or a device that predates this).
-func datasetOwner() string { return strings.TrimSpace(lsGet(datasetOwnerKey)) }
+func datasetOwner() syncstate.DatasetOwner {
+	owner, legacy := syncstate.ParseDatasetOwner(lsGet(datasetOwnerKey), currentDatasetServerID())
+	if legacy && owner.ServerID != "" {
+		if encoded, err := json.Marshal(owner); err == nil {
+			lsSet(datasetOwnerKey, string(encoded))
+		}
+	}
+	return owner
+}
 
 // claimDatasetForCurrentUser records the signed-in account as the owner of
 // whatever is loaded now.
@@ -49,17 +58,21 @@ func datasetOwner() string { return strings.TrimSpace(lsGet(datasetOwnerKey)) }
 // else would launder an inherited dataset into a legitimate one, which is the
 // whole failure being prevented.
 func claimDatasetForCurrentUser() {
-	userID := signedInUserID()
-	if userID == "" {
+	owner := currentDatasetOwner()
+	if owner.UserID == "" || owner.ServerID == "" {
 		// Unknown identity claims nothing. See syncstate.DatasetForeign: an
 		// unknown identity must never be treated as authoritative, in either
 		// direction.
 		return
 	}
-	if datasetOwner() == userID {
+	if datasetOwner() == owner {
 		return
 	}
-	lsSet(datasetOwnerKey, userID)
+	encoded, err := json.Marshal(owner)
+	if err != nil {
+		return
+	}
+	lsSet(datasetOwnerKey, string(encoded))
 }
 
 // releaseDatasetOwner forgets the claim. Used when the local dataset is
@@ -70,7 +83,7 @@ func releaseDatasetOwner() { lsRemove(datasetOwnerKey) }
 // datasetIsForeign reports whether the loaded dataset belongs to a different
 // account than the one signed in now.
 func datasetIsForeign() bool {
-	return syncstate.DatasetForeign(datasetOwner(), signedInUserID())
+	return syncstate.DatasetOwnerForeign(datasetOwner(), currentDatasetOwner())
 }
 
 // foreignDatasetStashKey is where an inherited dataset is parked when the
@@ -80,8 +93,8 @@ func datasetIsForeign() bool {
 // and the failure this whole change exists to prevent was CAUSED by treating one
 // account's data as disposable in the presence of another. Keyed by the owning
 // account so two of them cannot overwrite each other in the stash either.
-func foreignDatasetStashKey(userID string) string {
-	return "cashflux:dataset-stash:" + userID
+func foreignDatasetStashKey(owner syncstate.DatasetOwner) string {
+	return "cashflux:dataset-stash:" + owner.ServerID + ":" + owner.UserID
 }
 
 // stashForeignDataset parks the loaded dataset under its owner's key before
@@ -89,7 +102,7 @@ func foreignDatasetStashKey(userID string) string {
 // belongs to the signed-in account.
 func stashForeignDataset() {
 	owner := datasetOwner()
-	if owner == "" || !datasetIsForeign() {
+	if owner.UserID == "" || !datasetIsForeign() {
 		return
 	}
 	raw := lsGet(datasetStoreKey)
@@ -99,6 +112,6 @@ func stashForeignDataset() {
 	lsSet(foreignDatasetStashKey(owner), raw)
 	if app := appstate.Default; app != nil {
 		app.Log().Warn("parked another account's dataset before replacing it",
-			"owner", owner, "bytes", len(raw))
+			"owner_server", owner.ServerID, "owner_user", owner.UserID, "bytes", len(raw))
 	}
 }

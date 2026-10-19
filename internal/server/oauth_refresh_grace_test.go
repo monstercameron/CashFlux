@@ -12,11 +12,16 @@ import (
 
 func TestOAuthRefreshReuseGraceReturnsSamePairThenRevokes(t *testing.T) {
 	for _, tc := range []struct {
-		name      string
-		lateReuse bool
+		name         string
+		lateReuse    bool
+		deviceBound  bool
+		hashMismatch bool
+		wantGrace    bool
 	}{
-		{name: "within grace"},
-		{name: "after grace", lateReuse: true},
+		{name: "bound within grace", deviceBound: true, wantGrace: true},
+		{name: "unbound replay"},
+		{name: "after grace", lateReuse: true, deviceBound: true},
+		{name: "token hash mismatch", deviceBound: true, hashMismatch: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			store := openTestStore(t)
@@ -74,13 +79,33 @@ func TestOAuthRefreshReuseGraceReturnsSamePairThenRevokes(t *testing.T) {
 					t.Fatalf("age consumed token: %v", err)
 				}
 			}
-			second := oauthRefreshRequest(t, handler, originalRefresh, csrfCookie)
-			if tc.lateReuse {
+			var deviceCookie *http.Cookie
+			for _, cookie := range first.Result().Cookies() {
+				if cookie.Name == sessionDeviceBindingCookie {
+					deviceCookie = cookie
+				}
+			}
+			if deviceCookie == nil || !deviceCookie.HttpOnly || deviceCookie.Path != "/v1/auth" {
+				t.Fatalf("device binding cookie missing or insecure: %+v", deviceCookie)
+			}
+			if !tc.deviceBound {
+				deviceCookie = nil
+			}
+			presentedRefresh := originalRefresh
+			if tc.hashMismatch {
+				claims.Exp++
+				presentedRefresh, err = issueSessionTokenWithClaims(cfg, claims)
+				if err != nil {
+					t.Fatalf("issue hash-mismatched token: %v", err)
+				}
+			}
+			second := oauthRefreshRequest(t, handler, presentedRefresh, csrfCookie, deviceCookie)
+			if !tc.wantGrace {
 				if second.Code != http.StatusUnauthorized {
-					t.Fatalf("late reuse status = %d body %q, want 401", second.Code, second.Body.String())
+					t.Fatalf("rejected reuse status = %d body %q, want 401", second.Code, second.Body.String())
 				}
 				assertHTTPErrorReason(t, second, ErrorReasonUnauthenticated)
-				reuseSuccessor := oauthRefreshRequest(t, handler, firstRefresh.Value, csrfCookie)
+				reuseSuccessor := oauthRefreshRequest(t, handler, firstRefresh.Value, csrfCookie, deviceCookie)
 				if reuseSuccessor.Code != http.StatusUnauthorized {
 					t.Fatalf("successor after late reuse status = %d body %q, want 401", reuseSuccessor.Code, reuseSuccessor.Body.String())
 				}
@@ -95,19 +120,22 @@ func TestOAuthRefreshReuseGraceReturnsSamePairThenRevokes(t *testing.T) {
 				t.Fatalf("decode duplicate refresh: %v", err)
 			}
 			secondRefresh := refreshCookieFromResponse(t, second)
-			if secondResponse.AccessToken != firstResponse.AccessToken || secondRefresh.Value != firstRefresh.Value {
-				t.Fatalf("grace retry changed successor pair: access_equal=%v refresh_equal=%v", secondResponse.AccessToken == firstResponse.AccessToken, secondRefresh.Value == firstRefresh.Value)
+			if secondResponse.AccessToken == firstResponse.AccessToken || secondRefresh.Value != firstRefresh.Value {
+				t.Fatalf("grace replay must mint fresh access and keep successor refresh: access_equal=%v refresh_equal=%v", secondResponse.AccessToken == firstResponse.AccessToken, secondRefresh.Value == firstRefresh.Value)
 			}
 		})
 	}
 }
 
-func oauthRefreshRequest(t *testing.T, handler http.Handler, refresh string, csrf *http.Cookie) *httptest.ResponseRecorder {
+func oauthRefreshRequest(t *testing.T, handler http.Handler, refresh string, csrf *http.Cookie, device ...*http.Cookie) *httptest.ResponseRecorder {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodPost, "/v1/auth/refresh", nil)
 	req.Header.Set("Origin", "http://127.0.0.1:8080")
 	req.Header.Set(sessionCSRFHeader, csrf.Value)
 	req.AddCookie(csrf)
+	if len(device) != 0 && device[0] != nil {
+		req.AddCookie(device[0])
+	}
 	req.AddCookie(&http.Cookie{Name: sessionRefreshCookie, Value: refresh})
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)

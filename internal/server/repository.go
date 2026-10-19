@@ -275,15 +275,16 @@ func (s *Store) DeleteAccount(userID string) (bool, error) {
 }
 
 type RefreshSession struct {
-	JTI          string
-	FamilyID     string
-	UserID       string
-	TokenHash    string
-	DeviceLabel  string
-	ExpiresAt    time.Time
-	UsedAt       time.Time
-	RevokedAt    time.Time
-	SuccessorJTI string
+	JTI             string
+	FamilyID        string
+	UserID          string
+	TokenHash       string
+	DeviceLabel     string
+	ExpiresAt       time.Time
+	UsedAt          time.Time
+	RevokedAt       time.Time
+	SuccessorJTI    string
+	RotationBinding string
 }
 
 type RefreshSessionFamily struct {
@@ -321,6 +322,12 @@ VALUES(?, ?, ?, ?, ?, ?, '', '')`,
 // its successor, and records the successor JTI on the consumed row. A replay
 // returns the consumed row unchanged so the caller can apply its grace policy.
 func (s *Store) RotateRefreshSession(jti, tokenHash string, now time.Time, successor RefreshSession) (RefreshSession, bool, error) {
+	return s.RotateRefreshSessionBound(jti, tokenHash, "", now, successor)
+}
+
+// RotateRefreshSessionBound atomically consumes an unused refresh token,
+// creates its successor, and stores the requester binding on the consumed row.
+func (s *Store) RotateRefreshSessionBound(jti, tokenHash, binding string, now time.Time, successor RefreshSession) (RefreshSession, bool, error) {
 	if strings.TrimSpace(jti) == "" || strings.TrimSpace(tokenHash) == "" {
 		return RefreshSession{}, false, fmt.Errorf("server store: refresh jti and hash are required")
 	}
@@ -335,9 +342,9 @@ func (s *Store) RotateRefreshSession(jti, tokenHash string, now time.Time, succe
 	// Claim the rotation with a conditional UPDATE first. This serializes two
 	// simultaneous refreshes at the SQLite write lock: one consumes the token;
 	// the other sees zero rows and reads the committed successor link below.
-	claimed, err := tx.Exec(`UPDATE refresh_tokens SET used_at = ?, successor_jti = ?
+	claimed, err := tx.Exec(`UPDATE refresh_tokens SET used_at = ?, successor_jti = ?, rotation_binding = ?
 WHERE jti = ? AND token_hash = ? AND used_at = '' AND revoked_at = '' AND expires_at > ?`,
-		formatTime(now.UTC()), successor.JTI, jti, tokenHash, formatTime(now.UTC()))
+		formatTime(now.UTC()), successor.JTI, binding, jti, tokenHash, formatTime(now.UTC()))
 	if err != nil {
 		return RefreshSession{}, false, fmt.Errorf("server store: claim refresh rotation: %w", err)
 	}
@@ -348,8 +355,8 @@ WHERE jti = ? AND token_hash = ? AND used_at = '' AND revoked_at = '' AND expire
 	var session RefreshSession
 	var expiresAt, usedAt, revokedAt string
 	readSession := func() error {
-		return tx.QueryRow(`SELECT jti, family_id, user_id, token_hash, device_label, expires_at, used_at, revoked_at, successor_jti FROM refresh_tokens WHERE jti = ?`, jti).
-			Scan(&session.JTI, &session.FamilyID, &session.UserID, &session.TokenHash, &session.DeviceLabel, &expiresAt, &usedAt, &revokedAt, &session.SuccessorJTI)
+		return tx.QueryRow(`SELECT jti, family_id, user_id, token_hash, device_label, expires_at, used_at, revoked_at, successor_jti, rotation_binding FROM refresh_tokens WHERE jti = ?`, jti).
+			Scan(&session.JTI, &session.FamilyID, &session.UserID, &session.TokenHash, &session.DeviceLabel, &expiresAt, &usedAt, &revokedAt, &session.SuccessorJTI, &session.RotationBinding)
 	}
 	if claimedRows == 0 {
 		err := readSession()
@@ -402,8 +409,8 @@ WHERE jti = ? AND token_hash = ? AND used_at = '' AND revoked_at = '' AND expire
 func (s *Store) GetRefreshSession(jti string) (RefreshSession, bool, error) {
 	var session RefreshSession
 	var expiresAt, usedAt, revokedAt string
-	err := s.db.QueryRow(`SELECT jti, family_id, user_id, token_hash, device_label, expires_at, used_at, revoked_at, successor_jti FROM refresh_tokens WHERE jti = ?`, jti).
-		Scan(&session.JTI, &session.FamilyID, &session.UserID, &session.TokenHash, &session.DeviceLabel, &expiresAt, &usedAt, &revokedAt, &session.SuccessorJTI)
+	err := s.db.QueryRow(`SELECT jti, family_id, user_id, token_hash, device_label, expires_at, used_at, revoked_at, successor_jti, rotation_binding FROM refresh_tokens WHERE jti = ?`, jti).
+		Scan(&session.JTI, &session.FamilyID, &session.UserID, &session.TokenHash, &session.DeviceLabel, &expiresAt, &usedAt, &revokedAt, &session.SuccessorJTI, &session.RotationBinding)
 	if errors.Is(err, sql.ErrNoRows) {
 		return RefreshSession{}, false, nil
 	}

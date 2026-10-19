@@ -117,3 +117,13 @@ func StreamBearerInterceptor(token string) grpc.StreamClientInterceptor {
 func withBearer(ctx context.Context, token string) context.Context {
 	return metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+strings.TrimSpace(token))
 }
+
+// WithDeviceID attaches the stable device identity used to bind refresh-token
+// replay grace to the browser that initiated the rotation.
+func WithDeviceID(ctx context.Context, deviceID string) context.Context {
+	deviceID = strings.TrimSpace(deviceID)
+	if deviceID == "" {
+		return ctx
+	}
+	return metadata.AppendToOutgoingContext(ctx, "x-cashflux-device-id", deviceID)
+}

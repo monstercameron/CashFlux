@@ -1357,6 +1357,7 @@ func TestOAuthCallbackIssuesSessionAndRefreshLogout(t *testing.T) {
 	}
 	var refreshCookie *http.Cookie
 	var csrfCookie *http.Cookie
+	var deviceCookie *http.Cookie
 	for _, cookie := range rr.Result().Cookies() {
 		if cookie.Name == sessionRefreshCookie {
 			refreshCookie = cookie
@@ -1364,12 +1365,18 @@ func TestOAuthCallbackIssuesSessionAndRefreshLogout(t *testing.T) {
 		if cookie.Name == sessionCSRFCookie {
 			csrfCookie = cookie
 		}
+		if cookie.Name == sessionDeviceBindingCookie {
+			deviceCookie = cookie
+		}
 	}
 	if refreshCookie == nil || !refreshCookie.HttpOnly || refreshCookie.SameSite != http.SameSiteLaxMode {
 		t.Fatalf("refresh cookie = %+v", refreshCookie)
 	}
 	if csrfCookie == nil || csrfCookie.HttpOnly || csrfCookie.SameSite != http.SameSiteStrictMode {
 		t.Fatalf("csrf cookie = %+v", csrfCookie)
+	}
+	if deviceCookie == nil || !deviceCookie.HttpOnly || deviceCookie.SameSite != http.SameSiteStrictMode {
+		t.Fatalf("device binding cookie = %+v", deviceCookie)
 	}
 	if rr.Header().Get(sessionCSRFHeader) == "" {
 		t.Fatal("callback csrf header missing")
@@ -1391,6 +1398,7 @@ func TestOAuthCallbackIssuesSessionAndRefreshLogout(t *testing.T) {
 	refreshReq.Header.Set(sessionCSRFHeader, csrfCookie.Value)
 	refreshReq.AddCookie(refreshCookie)
 	refreshReq.AddCookie(csrfCookie)
+	refreshReq.AddCookie(deviceCookie)
 	refreshRR = httptest.NewRecorder()
 	refreshHandler.ServeHTTP(refreshRR, refreshReq)
 	if refreshRR.Code != http.StatusOK {
@@ -1421,6 +1429,7 @@ func TestOAuthCallbackIssuesSessionAndRefreshLogout(t *testing.T) {
 	reuseReq.Header.Set(sessionCSRFHeader, csrfCookie.Value)
 	reuseReq.AddCookie(oldRefreshCookie)
 	reuseReq.AddCookie(csrfCookie)
+	reuseReq.AddCookie(deviceCookie)
 	reuseRR := httptest.NewRecorder()
 	refreshHandler.ServeHTTP(reuseRR, reuseReq)
 	if reuseRR.Code != http.StatusOK {
@@ -1431,8 +1440,8 @@ func TestOAuthCallbackIssuesSessionAndRefreshLogout(t *testing.T) {
 		t.Fatalf("decode reused refresh: %v", err)
 	}
 	reusedRefresh := refreshCookieFromResponse(t, reuseRR)
-	if reused.AccessToken != refreshed.AccessToken || reusedRefresh.Value != refreshCookie.Value {
-		t.Fatalf("grace retry changed successor pair: access_equal=%v refresh_equal=%v", reused.AccessToken == refreshed.AccessToken, reusedRefresh.Value == refreshCookie.Value)
+	if reused.AccessToken == refreshed.AccessToken || reused.UserID != refreshed.UserID || reusedRefresh.Value != refreshCookie.Value {
+		t.Fatalf("grace retry response access_equal=%v user_equal=%v refresh_equal=%v; want fresh access and same user/successor refresh", reused.AccessToken == refreshed.AccessToken, reused.UserID == refreshed.UserID, reusedRefresh.Value == refreshCookie.Value)
 	}
 	for _, cookie := range reuseRR.Result().Cookies() {
 		if cookie.Name == sessionCSRFCookie {
@@ -1450,7 +1459,7 @@ func TestOAuthCallbackIssuesSessionAndRefreshLogout(t *testing.T) {
 	if logoutRR.Code != http.StatusNoContent {
 		t.Fatalf("logout status = %d", logoutRR.Code)
 	}
-	postLogoutReuse := oauthRefreshRequest(t, refreshHandler, oldRefreshCookie.Value, csrfCookie)
+	postLogoutReuse := oauthRefreshRequest(t, refreshHandler, oldRefreshCookie.Value, csrfCookie, deviceCookie)
 	if postLogoutReuse.Code != http.StatusUnauthorized {
 		t.Fatalf("logged-out refresh reuse status = %d body %q, want 401", postLogoutReuse.Code, postLogoutReuse.Body.String())
 	}

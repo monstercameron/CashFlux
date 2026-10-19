@@ -2,7 +2,10 @@
 
 package syncstate
 
-import "strings"
+import (
+	"encoding/json"
+	"strings"
+)
 
 // This file makes sync state answer the question it previously could not: whose
 // workspace is this?
@@ -256,4 +259,37 @@ func DatasetForeign(ownerUserID, signedInUserID string) bool {
 		return false
 	}
 	return !Binding{UserID: ownerUserID}.OwnedBy(signedInUserID)
+}
+
+// DatasetOwner identifies the server and user that own a local dataset.
+type DatasetOwner struct {
+	ServerID string `json:"serverId"`
+	UserID   string `json:"userId"`
+}
+
+// DatasetOwnerForeign reports whether a dataset belongs to a different server
+// or user. An unowned dataset is adoptable; an incomplete owner fails closed.
+func DatasetOwnerForeign(owner, current DatasetOwner) bool {
+	if strings.TrimSpace(current.UserID) == "" {
+		return false
+	}
+	if strings.TrimSpace(owner.UserID) == "" {
+		return false
+	}
+	return strings.TrimSpace(owner.ServerID) != strings.TrimSpace(current.ServerID) ||
+		strings.TrimSpace(owner.UserID) != strings.TrimSpace(current.UserID)
+}
+
+// ParseDatasetOwner reads a structured owner record or migrates a legacy bare
+// user ID by binding it to currentServerID. The bool reports legacy migration.
+func ParseDatasetOwner(raw, currentServerID string) (owner DatasetOwner, legacy bool) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return DatasetOwner{}, false
+	}
+	var parsed DatasetOwner
+	if json.Unmarshal([]byte(raw), &parsed) == nil && parsed.UserID != "" {
+		return DatasetOwner{ServerID: strings.TrimSpace(parsed.ServerID), UserID: strings.TrimSpace(parsed.UserID)}, false
+	}
+	return DatasetOwner{ServerID: strings.TrimSpace(currentServerID), UserID: raw}, true
 }

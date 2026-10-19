@@ -44,6 +44,12 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Sign-in sessions and device data are harder to misuse (SEC2, SEC3, SEC5).** A refresh token replayed within the
+  grace window only succeeds from the device that rotated it (token hash checked, device bound by cookie or a stable
+  device id the app now sends, 10-second window, every replay and revocation logged; schema v20); a replay from anywhere
+  else revokes the session. The OpenAI key is re-encrypted when App Lock is turned on, re-keyed or turned off. The
+  locally stored data remembers which server and account own it, so switching server or account can never adopt and push
+  someone else's data, even when two servers issue the same user id.
 - **Imports are all-or-nothing and honest about what happened (IMPB).** CSV and reviewed-document imports validate
   every row first, then write the rows and the import-history record in one transaction (existing IDs are rejected,
   never overwritten), and return exact imported, duplicate, possible-duplicate and failed counts with reasons; undo

@@ -9,7 +9,9 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -17,6 +19,77 @@ import (
 	"github.com/monstercameron/CashFlux/internal/syncstate"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 )
+
+var datasetServerIDCache = struct {
+	sync.Mutex
+	ids map[string]string
+}{ids: make(map[string]string)}
+
+type serverVersionIdentity struct {
+	ServerID string `json:"serverId"`
+}
+
+// currentDatasetOwner returns the owner identity for the configured backend.
+func currentDatasetOwner() syncstate.DatasetOwner {
+	return syncstate.DatasetOwner{ServerID: currentDatasetServerID(), UserID: signedInUserID()}
+}
+
+// currentDatasetServerID uses the stable server ID when supported. Older or
+// unreachable servers are scoped by their normalized configured URL.
+func currentDatasetServerID() string {
+	return datasetServerIDForURL(uistate.LoadPrefs().Normalize().ServerURL)
+}
+
+func datasetServerIDForURL(serverURL string) string {
+	endpoint := normalizedDatasetServerURL(serverURL)
+	if endpoint == "" {
+		return ""
+	}
+	datasetServerIDCache.Lock()
+	if id := datasetServerIDCache.ids[endpoint]; id != "" {
+		datasetServerIDCache.Unlock()
+		return id
+	}
+	datasetServerIDCache.Unlock()
+
+	serverID := ""
+	req, err := http.NewRequest(http.MethodGet, endpoint+"/v1/version", nil)
+	if err == nil {
+		client := &http.Client{Timeout: 3 * time.Second}
+		if resp, requestErr := client.Do(req); requestErr == nil {
+			var version serverVersionIdentity
+			if resp.StatusCode == http.StatusOK {
+				_ = json.NewDecoder(io.LimitReader(resp.Body, 1<<16)).Decode(&version)
+				serverID = strings.TrimSpace(version.ServerID)
+			}
+			_ = resp.Body.Close()
+		}
+	}
+	if serverID == "" {
+		serverID = endpoint
+	}
+	datasetServerIDCache.Lock()
+	datasetServerIDCache.ids[endpoint] = serverID
+	datasetServerIDCache.Unlock()
+	return serverID
+}
+
+func normalizedDatasetServerURL(serverURL string) string {
+	endpoint := strings.TrimRight(strings.TrimSpace(serverURL), "/")
+	if endpoint == "" {
+		return ""
+	}
+	u, err := url.Parse(endpoint)
+	if err != nil || u.Host == "" {
+		return endpoint
+	}
+	u.Scheme = strings.ToLower(u.Scheme)
+	u.Host = strings.ToLower(u.Host)
+	u.Path = strings.TrimRight(u.Path, "/")
+	u.RawQuery = ""
+	u.Fragment = ""
+	return strings.TrimRight(u.String(), "/")
+}
 
 // This file teaches the client WHO it is signed in as (TODOS.md C696).
 //

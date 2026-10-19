@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -991,10 +993,11 @@ func (s *authServer) issueSession(userID string, now time.Time, deviceLabel stri
 	return access, refresh, familyID, nil
 }
 
-// RefreshToken rotates a refresh token for a new access/refresh pair. Reuse
-// within 30 seconds returns the same pair to tolerate concurrent tabs and
-// retried requests; later reuse revokes the session family. Suspended accounts
-// are denied even with a still-valid refresh token.
+const refreshReuseGrace = 10 * time.Second
+
+// RefreshToken rotates a refresh token. A same-device replay within the
+// configured grace window receives a fresh access token and the existing
+// successor refresh token; any other reuse revokes the family.
 func (s *authServer) RefreshToken(ctx context.Context, req backendrpc.RefreshTokenRequest) (backendrpc.TokenPairResponse, error) {
 	if s == nil || s.store == nil {
 		return backendrpc.TokenPairResponse{}, status.Error(codes.FailedPrecondition, "store is not configured")
@@ -1016,17 +1019,21 @@ func (s *authServer) RefreshToken(ctx context.Context, req backendrpc.RefreshTok
 	if err != nil {
 		return backendrpc.TokenPairResponse{}, status.Error(codes.Internal, "session issue failed")
 	}
-	session, rotated, err := s.store.RotateRefreshSession(claims.JTI, sessionTokenHash(refreshToken), now, successor)
+	binding := grpcRefreshBinding(ctx)
+	presentedHash := sessionTokenHash(refreshToken)
+	session, rotated, err := s.store.RotateRefreshSessionBound(claims.JTI, presentedHash, binding, now, successor)
 	if err != nil {
 		return backendrpc.TokenPairResponse{}, status.Error(codes.Internal, "refresh token lookup failed")
 	}
 	if !rotated {
-		if !session.UsedAt.IsZero() && session.SuccessorJTI != "" && now.Sub(session.UsedAt) >= 0 && now.Sub(session.UsedAt) <= 30*time.Second && session.RevokedAt.IsZero() {
-			pair, ok, err := s.refreshSuccessorPair(session)
+		if hmac.Equal([]byte(session.TokenHash), []byte(presentedHash)) && binding != "" && hmac.Equal([]byte(session.RotationBinding), []byte(binding)) && !session.UsedAt.IsZero() && session.SuccessorJTI != "" && now.Sub(session.UsedAt) >= 0 && now.Sub(session.UsedAt) <= refreshReuseGrace && session.RevokedAt.IsZero() {
+			pair, ok, err := s.refreshSuccessorPair(session, now)
 			if err != nil {
 				return backendrpc.TokenPairResponse{}, status.Error(codes.Internal, "refresh token lookup failed")
 			}
 			if ok {
+				s.auditActor(ctx, session.UserID, "auth.token.refresh.grace", "session_family", session.FamilyID)
+				slog.InfoContext(ctx, "refresh token reuse grace granted", "transport", "grpc", "family_id", session.FamilyID)
 				if suspended, err := s.store.IsUserSuspended(session.UserID); err != nil {
 					return backendrpc.TokenPairResponse{}, status.Error(codes.Internal, "suspension check failed")
 				} else if suspended {
@@ -1039,6 +1046,7 @@ func (s *authServer) RefreshToken(ctx context.Context, req backendrpc.RefreshTok
 		if strings.TrimSpace(session.FamilyID) != "" {
 			_ = s.store.RevokeRefreshSessionFamily(session.FamilyID, now)
 			s.auditActor(ctx, session.UserID, "auth.token.reuse", "session_family", session.FamilyID)
+			slog.WarnContext(ctx, "refresh token reuse revoked session family", "transport", "grpc", "family_id", session.FamilyID)
 		}
 		return backendrpc.TokenPairResponse{}, status.Error(codes.Unauthenticated, "refresh token is invalid")
 	}
@@ -1073,19 +1081,44 @@ func tokenPairFromSuccessor(cfg Config, successor RefreshSession, issuedAt time.
 	return backendrpc.TokenPairResponse{AccessToken: access, RefreshToken: refresh, ExpiresInSeconds: int64(sessionAccessTTL.Seconds()), DeviceID: successor.FamilyID}, nil
 }
 
-func (s *authServer) refreshSuccessorPair(consumed RefreshSession) (backendrpc.TokenPairResponse, bool, error) {
+func grpcRefreshBinding(ctx context.Context) string {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok || len(md.Get("x-cashflux-device-id")) == 0 {
+		return ""
+	}
+	deviceID := strings.TrimSpace(md.Get("x-cashflux-device-id")[0])
+	if deviceID == "" {
+		return ""
+	}
+	hash := sha256.Sum256([]byte("grpc-refresh-device-v1\x00" + deviceID))
+	return base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(hash[:])
+}
+
+func (s *authServer) refreshSuccessorPair(consumed RefreshSession, now time.Time) (backendrpc.TokenPairResponse, bool, error) {
 	successor, ok, err := s.store.GetRefreshSession(consumed.SuccessorJTI)
 	if err != nil || !ok || !successor.UsedAt.IsZero() || !successor.RevokedAt.IsZero() {
 		return backendrpc.TokenPairResponse{}, false, err
 	}
-	returnPair, err := tokenPairFromSuccessor(s.cfg, successor, consumed.UsedAt.UTC().Truncate(time.Second))
+	accessID, err := randomURLToken(18)
+	if err != nil {
+		return backendrpc.TokenPairResponse{}, false, fmt.Errorf("server session: generate grace access id: %w", err)
+	}
+	access, err := issueSessionTokenWithClaims(s.cfg, sessionClaims{
+		Sub: successor.UserID, Type: "access", Exp: now.Add(sessionAccessTTL).Unix(), JTI: accessID,
+	})
 	if err != nil {
 		return backendrpc.TokenPairResponse{}, false, err
 	}
-	if sessionTokenHash(returnPair.RefreshToken) != successor.TokenHash {
+	refresh, err := issueSessionTokenWithClaims(s.cfg, sessionClaims{
+		Sub: successor.UserID, Type: "refresh", Exp: successor.ExpiresAt.Unix(), JTI: successor.JTI, Family: successor.FamilyID,
+	})
+	if err != nil {
+		return backendrpc.TokenPairResponse{}, false, err
+	}
+	if sessionTokenHash(refresh) != successor.TokenHash {
 		return backendrpc.TokenPairResponse{}, false, fmt.Errorf("server session: successor token did not match stored hash")
 	}
-	return returnPair, true, nil
+	return backendrpc.TokenPairResponse{AccessToken: access, RefreshToken: refresh, ExpiresInSeconds: int64(sessionAccessTTL.Seconds()), DeviceID: successor.FamilyID}, true, nil
 }
 
 // Logout revokes the session family the given refresh token belongs to. It is

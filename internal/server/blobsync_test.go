@@ -382,8 +382,17 @@ func TestMigrateV18ToV19AndDryRun(t *testing.T) {
 		t.Fatal(err)
 	}
 	v, err := s.SchemaVersion()
-	if err != nil || v != 19 {
+	if err != nil || v != CurrentServerSchemaVersion {
 		t.Fatalf("migrated version=%d err=%v", v, err)
+	}
+	for _, table := range []string{"change_log", "ws_head", "ws_snapshot", "keyring", "pairing_relay", "server_meta"} {
+		var exists int
+		if err := s.db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?`, table).Scan(&exists); err != nil {
+			t.Fatalf("check v19 table %q: %v", table, err)
+		}
+		if exists != 1 {
+			t.Errorf("v19 table %q missing after migration", table)
+		}
 	}
 	id1, err := s.ServerID(context.Background())
 	if err != nil {
@@ -395,7 +404,7 @@ func TestMigrateV18ToV19AndDryRun(t *testing.T) {
 	}
 	_ = s.Close()
 	dry, err := DryRunStoreMigrations(path)
-	if err != nil || dry != 19 {
+	if err != nil || dry != CurrentServerSchemaVersion {
 		t.Fatalf("migrate-check dry run version=%d err=%v", dry, err)
 	}
 }

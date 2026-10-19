@@ -14,7 +14,7 @@ import (
 	_ "github.com/ncruces/go-sqlite3/driver" // registers the pure-Go sqlite3 driver
 )
 
-const CurrentServerSchemaVersion = 19
+const CurrentServerSchemaVersion = 20
 const sqliteBusyTimeoutMillis = 5000
 
 // Store owns the backend SQLite database.
@@ -288,8 +288,54 @@ func (s *Store) migrate() error {
 		}
 		version = 19
 	}
+	if version < 20 {
+		if err := s.migrateTo20(); err != nil {
+			return err
+		}
+		version = 20
+	}
 	if _, err := s.db.Exec(`INSERT INTO schema_meta(id, version) VALUES(1, ?) ON CONFLICT(id) DO UPDATE SET version = excluded.version`, version); err != nil {
 		return fmt.Errorf("server store: write schema version: %w", err)
+	}
+	return nil
+}
+
+// migrateTo20 stores the requester binding that consumed each refresh token.
+func (s *Store) migrateTo20() error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("server store: migrate v20 begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	rows, err := tx.Query(`SELECT name FROM pragma_table_info('refresh_tokens')`)
+	if err != nil {
+		return fmt.Errorf("server store: migrate v20 inspect refresh_tokens: %w", err)
+	}
+	hasBinding := false
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			rows.Close()
+			return fmt.Errorf("server store: migrate v20 inspect refresh_tokens: %w", err)
+		}
+		if name == "rotation_binding" {
+			hasBinding = true
+		}
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return fmt.Errorf("server store: migrate v20 inspect refresh_tokens: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return fmt.Errorf("server store: migrate v20 close refresh_tokens: %w", err)
+	}
+	if !hasBinding {
+		if _, err := tx.Exec(`ALTER TABLE refresh_tokens ADD COLUMN rotation_binding TEXT NOT NULL DEFAULT '';`); err != nil {
+			return fmt.Errorf("server store: migrate v20 add rotation binding: %w", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("server store: migrate v20 commit: %w", err)
 	}
 	return nil
 }

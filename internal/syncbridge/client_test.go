@@ -88,3 +88,14 @@ func TestStreamBearerInterceptorAddsMetadata(t *testing.T) {
 		t.Fatalf("stream interceptor: %v", err)
 	}
 }
+
+func TestWithDeviceIDAddsRefreshBindingMetadata(t *testing.T) {
+	ctx := WithDeviceID(context.Background(), " device-123 ")
+	md, ok := metadata.FromOutgoingContext(ctx)
+	if !ok {
+		t.Fatal("missing outgoing metadata")
+	}
+	if got := md.Get("x-cashflux-device-id"); len(got) != 1 || got[0] != "device-123" {
+		t.Fatalf("device binding metadata = %v", got)
+	}
+}

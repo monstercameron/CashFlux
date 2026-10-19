@@ -382,8 +382,11 @@ func jsString(v js.Value) string {
 // previously configured server when the Server URL's host changes (SV0.2):
 // the rotated access token, the refresh token, their expiry, the
 // refresh-mode marker, the CSRF token, the signed-in user ID, the sync
-// queue, every per-workspace sync bookmark (cashflux:sync-meta:*), the
-// dataset owner, and the "cloud AI key stored" flag. Without this,
+// queue, every per-workspace sync bookmark (cashflux:sync-meta:*), and the
+// "cloud AI key stored" flag. The dataset owner deliberately survives: the
+// local dataset survives too, and the next account must see the previous owner
+// and treat that data as foreign rather than adopting it.
+// Without clearing the connection state,
 // EffectiveServerToken keeps preferring the OLD server's rotated JWT, and
 // the old server's queued snapshots and bookmarks are presented to the new
 // server as if they were its own — data mixing across scopes, which the SV
@@ -410,7 +413,6 @@ func resetScopeForServerChange() bool {
 		authCSRFKey,
 		syncUserIDKey,
 		syncQueueKey,
-		datasetOwnerKey,
 		cloudAIKeySetKey,
 	}
 	keys := syncstate.KeysToClearOnServerChange(browserstore.Keys(), exact, []string{syncMetaPrefix})

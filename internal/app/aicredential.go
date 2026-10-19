@@ -5,6 +5,7 @@
 package app
 
 import (
+	"errors"
 	"strings"
 	"time"
 
@@ -16,6 +17,8 @@ import (
 )
 
 const aiCredentialStoreKey = "cashflux:cred:openai"
+
+var errAICredentialChangedDuringMigration = errors.New("OpenAI device credential changed during App Lock migration")
 
 var aiCredentialSaveTimer *time.Timer
 var aiCredentialWriteRevision uint64
@@ -46,6 +49,17 @@ func cancelQueuedAICredentialSave() {
 // saveAICredential stores the BYO key outside all dataset-scoped state. A
 // remembered key is written only after strict IndexedDB durability succeeds.
 func saveAICredential(key string, remember bool, done func(error)) {
+	passcode := ""
+	if datasetEncryptionActive() {
+		passcode = activePasscode
+	}
+	saveAICredentialForPasscode(key, remember, passcode, done)
+}
+
+// saveAICredentialForPasscode writes the credential in the requested at-rest
+// mode. An empty passcode means plaintext mode; callers changing App Lock use
+// this before dropping the old passcode or acknowledging the new setting.
+func saveAICredentialForPasscode(key string, remember bool, passcode string, done func(error)) {
 	aiCredentialWriteRevision++
 	revision := aiCredentialWriteRevision
 	key = strings.TrimSpace(key)
@@ -73,8 +87,8 @@ func saveAICredential(key string, remember bool, done func(error)) {
 		}
 		browserstore.SetDurable(aiCredentialStoreKey, string(data), done)
 	}
-	if datasetEncryptionActive() {
-		encryptDataset([]byte(key), activePasscode, func(envelope []byte, err error) {
+	if passcode != "" {
+		encryptDataset([]byte(key), passcode, func(envelope []byte, err error) {
 			if revision != aiCredentialWriteRevision {
 				return
 			}
@@ -95,6 +109,69 @@ func saveAICredential(key string, remember bool, done func(error)) {
 		return
 	}
 	store(key, "")
+}
+
+// migrateAICredentialAtRest changes the device-local OpenAI credential to the
+// requested App Lock mode. Existing ciphertext is decrypted only with the old
+// passcode, and the replacement is reported complete only after durable storage.
+func migrateAICredentialAtRest(oldPasscode, newPasscode string, done func(error)) {
+	aiCredentialWriteRevision++
+	revision := aiCredentialWriteRevision
+	raw := strings.TrimSpace(browserstore.GetString(aiCredentialStoreKey))
+	if raw == "" {
+		if done != nil {
+			done(nil)
+		}
+		return
+	}
+	record, err := aicred.Parse([]byte(raw))
+	if err != nil {
+		if done != nil {
+			done(err)
+		}
+		return
+	}
+	if record.Envelope == "" && newPasscode == "" {
+		if done != nil {
+			done(nil)
+		}
+		return
+	}
+	persist := func(key string) {
+		if revision != aiCredentialWriteRevision || strings.TrimSpace(browserstore.GetString(aiCredentialStoreKey)) != raw {
+			if done != nil {
+				done(errAICredentialChangedDuringMigration)
+			}
+			return
+		}
+		saveAICredentialForPasscode(key, record.Remember, newPasscode, done)
+	}
+	if record.Envelope == "" {
+		persist(record.Key)
+		return
+	}
+	env, ok := cryptobox.Parse([]byte(record.Envelope))
+	if !ok {
+		if done != nil {
+			done(errSyncEncryptEmpty)
+		}
+		return
+	}
+	if oldPasscode == "" {
+		if done != nil {
+			done(errVaultLocked)
+		}
+		return
+	}
+	decryptDataset(env, oldPasscode, func(plain []byte, err error) {
+		if err != nil {
+			if done != nil {
+				done(err)
+			}
+			return
+		}
+		persist(string(plain))
+	})
 }
 
 // hydrateAIKey loads the device credential after dataset hydration and migrates

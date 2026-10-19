@@ -94,8 +94,9 @@ func TestDecideRefresh(t *testing.T) {
 func TestKeysToClearOnServerChange(t *testing.T) {
 	// The exact/prefix lists mirror what internal/app passes for a server
 	// host change (SV0.2): the rotated pair, its expiry and refresh mode,
-	// the CSRF token, the signed-in user ID, the sync queue, the dataset
-	// owner, the cloud-AI-key flag, and every per-workspace sync bookmark.
+	// the CSRF token, the signed-in user ID, the sync queue, the cloud-AI-key
+	// flag, and every per-workspace sync bookmark. The dataset owner survives
+	// because the dataset itself survives.
 	exact := []string{
 		"cashflux:auth:access-token",
 		"cashflux:auth:refresh-token",
@@ -104,7 +105,6 @@ func TestKeysToClearOnServerChange(t *testing.T) {
 		"cashflux:auth:csrf",
 		"cashflux:auth:user-id",
 		"cashflux:sync-queue",
-		"cashflux:dataset-owner",
 		"cashflux:cloud-ai-key-set",
 	}
 	prefixes := []string{"cashflux:sync-meta:"}
@@ -149,7 +149,6 @@ func TestKeysToClearOnServerChange(t *testing.T) {
 				"cashflux:auth:refresh-token",
 				"cashflux:auth:user-id",
 				"cashflux:cloud-ai-key-set",
-				"cashflux:dataset-owner",
 				"cashflux:sync-meta:default",
 				"cashflux:sync-meta:ws-2",
 				"cashflux:sync-queue",
@@ -205,5 +204,22 @@ func TestKeysToClearOnServerChange(t *testing.T) {
 				t.Fatalf("KeysToClearOnServerChange = %q, want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestServerChangeKeepsOwnerSoNewAccountSeesForeignDataset(t *testing.T) {
+	const ownerKey = "cashflux:dataset-owner"
+	cleared := KeysToClearOnServerChange(
+		[]string{ownerKey, "cashflux:dataset", "cashflux:auth:user-id"},
+		[]string{"cashflux:auth:user-id", "cashflux:sync-queue"},
+		[]string{"cashflux:sync-meta:"},
+	)
+	if len(cleared) != 1 || cleared[0] != "cashflux:auth:user-id" {
+		t.Fatalf("server switch cleared %q, want only the old signed-in identity", cleared)
+	}
+	// Account X's marker remains beside the dataset after A→B. When account Y
+	// signs into B, the local data is foreign and cannot be pushed implicitly.
+	if !DatasetForeign("account-x", "account-y") {
+		t.Fatal("retained account X dataset was not foreign to account Y")
 	}
 }

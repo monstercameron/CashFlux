@@ -12,9 +12,12 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall/js"
+	"time"
 
+	"github.com/monstercameron/CashFlux/internal/browserstore"
 	"github.com/monstercameron/CashFlux/internal/rpcprotocol"
 )
 
@@ -366,11 +369,55 @@ func (c *Client) post(kind rpcprotocol.Kind, id, endpoint, token, method string,
 	if method != "" {
 		message.Set("method", method)
 	}
+	if deviceID := stableDeviceID(); deviceID != "" {
+		message.Set("deviceId", deviceID)
+	}
 	if payload != nil {
 		message.Set("payload", string(payload))
 	}
 	c.worker.Call("postMessage", message)
 	return nil
+}
+
+const deviceIDStorageKey = "cashflux:sync-device-id"
+
+// stableDeviceID reuses the sync identity persisted by the app. The fallback
+// also persists before a request crosses the worker boundary, so a refresh on
+// a first-run device has the same binding after reload.
+func stableDeviceID() string {
+	if id := strings.TrimSpace(browserstore.GetString(deviceIDStorageKey)); id != "" {
+		return id
+	}
+	id := ""
+	crypto := js.Global().Get("crypto")
+	if !crypto.IsUndefined() && !crypto.IsNull() {
+		func() {
+			defer func() { _ = recover() }()
+			candidate := crypto.Call("randomUUID")
+			if candidate.Type() == js.TypeString {
+				id = strings.TrimSpace(candidate.String())
+			}
+		}()
+	}
+	if id == "" {
+		id = fmt.Sprintf("browser-%d", time.Now().UTC().UnixNano())
+	}
+	browserstore.Set(deviceIDStorageKey, id)
+	return id
+}
+
+func waitForDeviceIDDurability(ctx context.Context) error {
+	done := make(chan struct{})
+	go func() {
+		browserstore.Barrier()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (c *Client) postBinary(kind rpcprotocol.Kind, id, endpoint, token, method string, payload, binary []byte) error {
@@ -419,6 +466,12 @@ func (c *Client) Invoke(ctx context.Context, endpoint, token, method string, req
 	}
 	if err := c.waitReady(ctx); err != nil {
 		return err
+	}
+	if strings.HasSuffix(method, "/RefreshToken") {
+		stableDeviceID()
+		if err := waitForDeviceIDDurability(ctx); err != nil {
+			return err
+		}
 	}
 	payload, err := json.Marshal(request)
 	if err != nil {

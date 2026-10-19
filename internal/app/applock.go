@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/applock"
+	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/browserstore"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 )
@@ -91,9 +92,40 @@ func enableAppLock(passcode string, autoLockMinutes int, hint string) bool {
 		// The setup form remains open until the re-key has durably completed.
 		return false
 	}
-	if !installAppLock(passcode, autoLockMinutes, hint) {
-		return false
-	}
+	// Move a remembered device key before reporting that the lock is enabled.
+	// The migration may need Web Crypto, so the first enable can complete from
+	// its callback after this event handler has returned.
+	migrationReturned := false
+	completedSynchronously := false
+	installed := false
+	migrateAICredentialAtRest(activePasscode, passcode, func(err error) {
+		completedSynchronously = !migrationReturned
+		if err != nil {
+			uistate.PostNotice(uistate.T("vault.rekeyFailed"), true)
+			return
+		}
+		if !installAppLock(passcode, autoLockMinutes, hint) {
+			uistate.PostNotice(uistate.T("vault.rekeyFailed"), true)
+			return
+		}
+		installed = true
+		finishAppLockEnable()
+		if migrationReturned {
+			if doc := js.Global().Get("document"); !doc.IsNull() && !doc.IsUndefined() {
+				if modal := doc.Call("getElementById", appLockSetupID); !modal.IsNull() && !modal.IsUndefined() {
+					modal.Get("style").Set("display", "none")
+				}
+			}
+			if appLockOnDone != nil {
+				appLockOnDone()
+			}
+		}
+	})
+	migrationReturned = true
+	return completedSynchronously && installed
+}
+
+func finishAppLockEnable() {
 	// Remembering the passcode above lets the dataset autosave encrypt at rest
 	// immediately (C45), without waiting for a reload + unlock.
 	migrateDatasetAtRest() // encrypt the existing at-rest copy now
@@ -105,7 +137,6 @@ func enableAppLock(passcode string, autoLockMinutes int, hint string) bool {
 	if uistate.LoadPrefs().Normalize().BackendActive() {
 		pullActiveWorkspaceFromBackend(true)
 	}
-	return true
 }
 
 var appLockPasscodeChangeInProgress bool
@@ -131,7 +162,23 @@ func beginAppLockPasscodeChange(passcode string, autoLockMinutes int, hint strin
 			uistate.PostNotice(uistate.T("vault.rekeyFailed"), true)
 			return
 		}
-		completeAppLockPasscodeChange(passcode, salt, autoLockMinutes, hint)
+		migrateAICredentialAtRest(oldPasscode, passcode, func(err error) {
+			if err != nil {
+				// Restore the vault to the still-active old passcode before leaving
+				// the lock untouched. A failed credential write must not strand it.
+				rekeyCredVault(passcode, oldPasscode, func(rollbackErr error) {
+					appLockPasscodeChangeInProgress = false
+					if rollbackErr != nil {
+						if app := appstate.Default; app != nil {
+							app.Log().Error("restore bank-login vault after failed passcode change", "err", rollbackErr)
+						}
+					}
+					uistate.PostNotice(uistate.T("vault.rekeyFailed"), true)
+				})
+				return
+			}
+			completeAppLockPasscodeChange(passcode, salt, autoLockMinutes, hint)
+		})
 	})
 }
 
@@ -236,6 +283,17 @@ func disableAppLock(onDone ...func()) {
 }
 
 func removeVaultThenDisable(onDone ...func()) {
+	oldPasscode := activePasscode
+	migrateAICredentialAtRest(oldPasscode, "", func(err error) {
+		if err != nil {
+			uistate.PostNotice(uistate.T("vault.disableFailed"), true)
+			return
+		}
+		removeVaultThenDisableAfterAICredential(onDone...)
+	})
+}
+
+func removeVaultThenDisableAfterAICredential(onDone ...func()) {
 	// Commit an empty value before dropping the lock. This makes the vault
 	// unreachable only after its deletion has reached durable storage.
 	browserstore.SetThen(credVaultStoreKey, "", func() {

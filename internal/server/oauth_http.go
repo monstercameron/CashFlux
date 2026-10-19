@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"html"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -18,6 +19,7 @@ import (
 )
 
 const oauthStateCookie = "cashflux_oauth_state"
+const sessionDeviceBindingCookie = "cashflux_device_binding"
 const oauthIDTokenClockSkew = 5 * time.Minute
 
 // oauthHTTPClient bounds every outbound OAuth provider call (token exchange, userinfo)
@@ -172,6 +174,10 @@ func handleOAuthCallback(cfg Config, store *Store) http.HandlerFunc {
 		}
 		now := time.Now().UTC()
 		auditFromRequest(r, store, AuthUser{ID: user.ID}, "auth.login", "user", user.ID)
+		if _, err := oauthDeviceBindingCookie(w, r, requestIsSecure(r), now.Add(sessionRefreshTTL)); err != nil {
+			writeErrorJSON(w, ErrorReasonInternal, "device binding issue failed")
+			return
+		}
 		access, refresh, err := issueStoredSessionPair(cfg, store, user.ID, now, "", "")
 		if err != nil {
 			writeErrorJSON(w, ErrorReasonInternal, "session issue failed")
@@ -233,20 +239,30 @@ func handleOAuthRefresh(cfg Config, store *Store) http.HandlerFunc {
 			writeErrorJSON(w, ErrorReasonInternal, "session issue failed")
 			return
 		}
-		session, rotated, err := store.RotateRefreshSession(claims.JTI, sessionTokenHash(cookie.Value), now, successor)
+		deviceBinding, err := oauthDeviceBindingCookie(w, r, requestIsSecure(r), now.Add(sessionRefreshTTL))
+		if err != nil {
+			writeErrorJSON(w, ErrorReasonInternal, "device binding issue failed")
+			return
+		}
+		csrfCookie, _ := r.Cookie(sessionCSRFCookie)
+		binding := oauthRefreshBinding(csrfCookie.Value, deviceBinding)
+		presentedHash := sessionTokenHash(cookie.Value)
+		session, rotated, err := store.RotateRefreshSessionBound(claims.JTI, presentedHash, binding, now, successor)
 		if err != nil {
 			writeErrorJSON(w, ErrorReasonInternal, "refresh token lookup failed")
 			return
 		}
 		var access, refresh string
 		if !rotated {
-			if !session.UsedAt.IsZero() && session.SuccessorJTI != "" && now.Sub(session.UsedAt) >= 0 && now.Sub(session.UsedAt) <= 30*time.Second && session.RevokedAt.IsZero() {
-				pair, ok, err := (&authServer{cfg: cfg, store: store}).refreshSuccessorPair(session)
+			if subtle.ConstantTimeCompare([]byte(session.TokenHash), []byte(presentedHash)) == 1 && subtle.ConstantTimeCompare([]byte(session.RotationBinding), []byte(binding)) == 1 && !session.UsedAt.IsZero() && session.SuccessorJTI != "" && now.Sub(session.UsedAt) >= 0 && now.Sub(session.UsedAt) <= refreshReuseGrace && session.RevokedAt.IsZero() {
+				pair, ok, err := (&authServer{cfg: cfg, store: store}).refreshSuccessorPair(session, now)
 				if err != nil {
 					writeErrorJSON(w, ErrorReasonInternal, "refresh token lookup failed")
 					return
 				}
 				if ok {
+					auditFromRequest(r, store, AuthUser{ID: session.UserID}, "auth.token.refresh.grace", "session_family", session.FamilyID)
+					logRefreshGrace(cfg, session.FamilyID)
 					if suspended, err := store.IsUserSuspended(session.UserID); err != nil {
 						writeErrorJSON(w, ErrorReasonInternal, "suspension check failed")
 						return
@@ -263,6 +279,7 @@ func handleOAuthRefresh(cfg Config, store *Store) http.HandlerFunc {
 				if strings.TrimSpace(session.FamilyID) != "" {
 					_ = store.RevokeRefreshSessionFamily(session.FamilyID, now)
 					auditFromRequest(r, store, AuthUser{ID: session.UserID}, "auth.token.reuse", "session_family", session.FamilyID)
+					logRefreshReuse(cfg, session.FamilyID)
 				}
 				writeErrorJSON(w, ErrorReasonUnauthenticated, "refresh token is invalid")
 				return
@@ -289,14 +306,46 @@ func handleOAuthRefresh(cfg Config, store *Store) http.HandlerFunc {
 			auditFromRequest(r, store, AuthUser{ID: session.UserID}, "auth.token.refresh", "user", session.UserID)
 		}
 		setRefreshCookie(w, refresh, requestIsSecure(r), now.Add(sessionRefreshTTL))
-		csrf, err := setCSRFCookie(w, requestIsSecure(r), now.Add(sessionRefreshTTL))
-		if err != nil {
-			writeErrorJSON(w, ErrorReasonInternal, "csrf cookie issue failed")
-			return
-		}
-		w.Header().Set(sessionCSRFHeader, csrf)
+		setCSRFCookieValue(w, csrfCookie.Value, requestIsSecure(r), now.Add(sessionRefreshTTL))
+		w.Header().Set(sessionCSRFHeader, csrfCookie.Value)
 		writeJSON(w, oauthSessionResponse{AccessToken: access, TokenType: "Bearer", ExpiresIn: int64(sessionAccessTTL.Seconds()), UserID: session.UserID})
 	}
+}
+
+func oauthDeviceBindingCookie(w http.ResponseWriter, r *http.Request, secure bool, expires time.Time) (string, error) {
+	if cookie, err := r.Cookie(sessionDeviceBindingCookie); err == nil && strings.TrimSpace(cookie.Value) != "" {
+		return cookie.Value, nil
+	}
+	value, err := randomURLToken(32)
+	if err != nil {
+		return "", fmt.Errorf("server session: generate device binding: %w", err)
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name: sessionDeviceBindingCookie, Value: value, Path: "/v1/auth",
+		HttpOnly: true, Secure: secure, SameSite: http.SameSiteStrictMode, Expires: expires,
+	})
+	return value, nil
+}
+
+func oauthRefreshBinding(csrf, device string) string {
+	hash := sha256.Sum256([]byte("oauth-refresh-binding-v1\x00" + csrf + "\x00" + device))
+	return base64.RawURLEncoding.EncodeToString(hash[:])
+}
+
+func logRefreshGrace(cfg Config, familyID string) {
+	logger := cfg.Logger
+	if logger == nil {
+		logger = slog.Default()
+	}
+	logger.Info("refresh token reuse grace granted", "transport", "oauth", "family_id", familyID)
+}
+
+func logRefreshReuse(cfg Config, familyID string) {
+	logger := cfg.Logger
+	if logger == nil {
+		logger = slog.Default()
+	}
+	logger.Warn("refresh token reuse revoked session family", "transport", "oauth", "family_id", familyID)
 }
 
 func handleOAuthListSessions(cfg Config, store *Store) http.HandlerFunc {
@@ -857,6 +906,11 @@ func setCSRFCookie(w http.ResponseWriter, secure bool, expires time.Time) (strin
 	if err != nil {
 		return "", fmt.Errorf("server session: generate csrf token: %w", err)
 	}
+	setCSRFCookieValue(w, token, secure, expires)
+	return token, nil
+}
+
+func setCSRFCookieValue(w http.ResponseWriter, token string, secure bool, expires time.Time) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCSRFCookie,
 		Value:    token,
@@ -866,7 +920,6 @@ func setCSRFCookie(w http.ResponseWriter, secure bool, expires time.Time) (strin
 		SameSite: http.SameSiteStrictMode,
 		Expires:  expires,
 	})
-	return token, nil
 }
 
 func setExpiredCSRFCookie(w http.ResponseWriter, secure bool) {

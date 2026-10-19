@@ -282,7 +282,11 @@ func (w *serviceWorker) handleUnary(ctx context.Context, req rpcprotocol.Request
 	default:
 		request := json.RawMessage(req.Payload)
 		var response json.RawMessage
-		if err := conn.Invoke(ctx, req.Method, request, &response, grpccodec.CallOptions()...); err != nil {
+		callCtx := ctx
+		if req.Method == backendrpc.MethodAuthRefreshToken {
+			callCtx = syncbridge.WithDeviceID(callCtx, req.DeviceID)
+		}
+		if err := conn.Invoke(callCtx, req.Method, request, &response, grpccodec.CallOptions()...); err != nil {
 			postFailure(req.ID, rpcError(err, mayHaveApplied(err)))
 			return
 		}
