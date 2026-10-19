@@ -34,15 +34,21 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Stamp release build
+        run: |
+          mkdir -p web/bin
+          go run ./tools/stampbuild -out web/build.json -ldflags-out web/bin/ldflags.txt
+
       - name: Build WebAssembly
         env:
           GOOS: js
           GOARCH: wasm
         run: |
           mkdir -p web/bin
+          app_ldflags="-s -w $(cat web/bin/ldflags.txt)"
           # -s -w strips the DWARF debug info + symbol table (smaller binary, no
           # effect on behavior); -trimpath drops absolute build paths.
-          go build -ldflags="-s -w" -trimpath -o web/bin/main.wasm .
+          go build -ldflags="$app_ldflags" -trimpath -o web/bin/main.wasm .
           go build -ldflags="-s -w" -trimpath -o web/bin/services.wasm ./cmd/cashflux-services
 
       - name: Compress WebAssembly (precompressed siblings for C314)

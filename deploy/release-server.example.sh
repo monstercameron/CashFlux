@@ -33,9 +33,11 @@ build_console() {
   echo "built $3/$1.wasm"
 }
 mkdir -p web/bin
+env -u GOOS -u GOARCH go run ./tools/stampbuild -out web/build.json -ldflags-out web/bin/ldflags.txt
+app_ldflags="-s -w -buildid= $(cat web/bin/ldflags.txt)"
 GOOS=js GOARCH=wasm CGO_ENABLED=0 go build \
   -trimpath \
-  -ldflags="-s -w -buildid=" \
+  -ldflags="$app_ldflags" \
   -o web/bin/main.wasm \
   .
 GOOS=js GOARCH=wasm CGO_ENABLED=0 go build \

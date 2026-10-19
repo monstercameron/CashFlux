@@ -71,6 +71,11 @@ and every commit updates this file under `Unreleased`.
   per-user rate limiter evicts idle buckets (SV4.1). `/v1/version` reports a server ID and API version.
   Backups use `VACUUM INTO` plus an atomic rename, with a Litestream example and container health
   checks. The service is not registered on the gRPC bridge until the v2 cut-over.
+- **Every release gets its own build id, and an offline boot never mixes builds (SV7a.1).** The Pages
+  workflow and the self-host release script stamp `web/build.json` and the wasm with a unique id (git
+  SHA, nanosecond time, random nonce). The service worker fills a per-build staging cache and only
+  treats it as usable once every required file is present, so an interrupted update leaves the last
+  complete build in charge.
 
 ### Changed
 - **The Transactions page, reworked through an adversarial review loop (5.5 → 7.8/10 so far).**
