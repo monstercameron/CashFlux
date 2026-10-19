@@ -75,6 +75,13 @@ func TestTransactionsCSVFormulaNeutralizationRoundTrip(t *testing.T) {
 		{name: "payee", put: func(tx *domain.Transaction, value string) { tx.Payee = value }, get: func(tx domain.Transaction) string { return tx.Payee }, col: "payee"},
 		{name: "description", put: func(tx *domain.Transaction, value string) { tx.Desc = value }, get: func(tx domain.Transaction) string { return tx.Desc }, col: "desc"},
 		{name: "tag", put: func(tx *domain.Transaction, value string) { tx.Tags = []string{value} }, get: func(tx domain.Transaction) string { return tx.Tags[0] }, col: "tags"},
+		{name: "transaction id", put: func(tx *domain.Transaction, value string) { tx.ID = value }, get: func(tx domain.Transaction) string { return tx.ID }, col: "id"},
+		{name: "account id", put: func(tx *domain.Transaction, value string) { tx.AccountID = value }, get: func(tx domain.Transaction) string { return tx.AccountID }, col: "account_id"},
+		{name: "category id", put: func(tx *domain.Transaction, value string) { tx.CategoryID = value }, get: func(tx domain.Transaction) string { return tx.CategoryID }, col: "category_id"},
+		{name: "currency", put: func(tx *domain.Transaction, value string) { tx.Amount.Currency = value }, get: func(tx domain.Transaction) string { return tx.Amount.Currency }, col: "currency"},
+		{name: "transfer account id", put: func(tx *domain.Transaction, value string) { tx.TransferAccountID = value }, get: func(tx domain.Transaction) string { return tx.TransferAccountID }, col: "transfer_account_id"},
+		{name: "transfer group id", put: func(tx *domain.Transaction, value string) { tx.TransferGroupID = value }, get: func(tx domain.Transaction) string { return tx.TransferGroupID }, col: "transfer_group_id"},
+		{name: "member id", put: func(tx *domain.Transaction, value string) { tx.MemberIDs = []string{value} }, get: func(tx domain.Transaction) string { return tx.Owners()[0] }, col: "member_id"},
 	}
 	for _, field := range fields {
 		for _, value := range dangerous {
@@ -108,18 +115,50 @@ func TestTransactionsCSVFormulaNeutralizationRoundTrip(t *testing.T) {
 				if len(got) != 1 {
 					t.Fatalf("round trip returned %d transactions, want 1", len(got))
 				}
-				if roundTripped := field.get(got[0]); roundTripped != value {
-					t.Errorf("round trip text = %q, want %q", roundTripped, value)
+				wantValue := value
+				if field.name == "currency" {
+					wantValue = strings.ToUpper(strings.TrimSpace(value))
+				}
+				if roundTripped := field.get(got[0]); roundTripped != wantValue {
+					t.Errorf("round trip text = %q, want %q", roundTripped, wantValue)
 				}
 				resilient, skipped, err := TransactionsFromCSVResilient(data, "")
 				if err != nil || len(skipped) != 0 || len(resilient) != 1 {
 					t.Fatalf("resilient import = %v, skipped=%v, err=%v; want one transaction", resilient, skipped, err)
 				}
-				if roundTripped := field.get(resilient[0]); roundTripped != value {
-					t.Errorf("resilient round trip text = %q, want %q", roundTripped, value)
+				if roundTripped := field.get(resilient[0]); roundTripped != wantValue {
+					t.Errorf("resilient round trip text = %q, want %q", roundTripped, wantValue)
 				}
 			})
 		}
+	}
+}
+
+func TestTransactionsCSVGuardDoesNotChangeNonTextColumns(t *testing.T) {
+	day, _ := dateutil.ParseDate("2026-06-03")
+	tx := domain.Transaction{ID: "t1", Date: day, Amount: money.New(-450, "USD"), Cleared: true}
+	data, err := TransactionsToCSV([]domain.Transaction{tx})
+	if err != nil {
+		t.Fatalf("export: %v", err)
+	}
+	reader := csv.NewReader(strings.NewReader(string(data)))
+	records, err := reader.ReadAll()
+	if err != nil {
+		t.Fatalf("read exported CSV: %v", err)
+	}
+	columns := make(map[string]int, len(records[0]))
+	for i, header := range records[0] {
+		columns[header] = i
+	}
+	row := records[1]
+	if got := row[columns["amount"]]; got != "-4.50" {
+		t.Errorf("amount = %q, want unguarded numeric -4.50", got)
+	}
+	if got := row[columns["date"]]; got != "2026-06-03" {
+		t.Errorf("date = %q, want unguarded date", got)
+	}
+	if got := row[columns["cleared"]]; got != "true" {
+		t.Errorf("cleared = %q, want unguarded boolean", got)
 	}
 }
 

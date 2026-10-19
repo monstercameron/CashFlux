@@ -8,6 +8,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/csvsafe"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -89,7 +90,7 @@ func DeductibleCSV(s DeductibleSummary, name func(id string) string, amount func
 	w := csv.NewWriter(&buf)
 	_ = w.Write([]string{"Category", "Deductible Expense"})
 	for _, r := range s.Rows {
-		_ = w.Write([]string{name(r.CategoryID), amount(r.Amount)})
+		_ = w.Write([]string{csvsafe.Guard(name(r.CategoryID)), amount(r.Amount)})
 	}
 	_ = w.Write([]string{"TOTAL", amount(s.Total)})
 	w.Flush()

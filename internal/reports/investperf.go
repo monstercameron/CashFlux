@@ -7,6 +7,7 @@ import (
 	"encoding/csv"
 	"strconv"
 
+	"github.com/monstercameron/CashFlux/internal/csvsafe"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -94,7 +95,7 @@ func InvestmentPerformanceCSV(perf []AccountPerformance, amount func(int64) stri
 	_ = w.Write([]string{"Account", "Invested", "Current value", "Gain", "Return %"})
 	for _, p := range perf {
 		ret := strconv.FormatFloat(float64(p.ReturnBips)/100, 'f', 2, 64)
-		_ = w.Write([]string{p.Name, amount(p.Invested), amount(p.Current), amount(p.Gain), ret})
+		_ = w.Write([]string{csvsafe.Guard(p.Name), amount(p.Invested), amount(p.Current), amount(p.Gain), ret})
 	}
 	w.Flush()
 	return buf.Bytes()

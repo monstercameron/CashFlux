@@ -6,6 +6,8 @@ import (
 	"bytes"
 	"encoding/csv"
 	"strconv"
+
+	"github.com/monstercameron/CashFlux/internal/csvsafe"
 )
 
 // CategoryCSV renders a spending-by-category report as CSV bytes: a header row
@@ -24,7 +26,7 @@ func CategoryCSV(rows []CategorySpend, name func(id string) string, amount func(
 		if r.HasDelta {
 			change = strconv.FormatInt(r.DeltaPct, 10)
 		}
-		_ = w.Write([]string{name(r.CategoryID), amount(r.Amount), amount(r.Prior), change})
+		_ = w.Write([]string{csvsafe.Guard(name(r.CategoryID)), amount(r.Amount), amount(r.Prior), change})
 	}
 	w.Flush()
 	return buf.Bytes()
@@ -39,7 +41,7 @@ func MemberCSV(rows []MemberSpend, name func(id string) string, amount func(int6
 	w := csv.NewWriter(&buf)
 	_ = w.Write([]string{"Member", "Amount"})
 	for _, r := range rows {
-		_ = w.Write([]string{name(r.MemberID), amount(r.Amount)})
+		_ = w.Write([]string{csvsafe.Guard(name(r.MemberID)), amount(r.Amount)})
 	}
 	w.Flush()
 	return buf.Bytes()
@@ -53,9 +55,9 @@ func MemberCSV(rows []MemberSpend, name func(id string) string, amount func(int6
 func CustomFieldCSV(rows []CustomFieldSpend, fieldLabel string, amount func(int64) string) []byte {
 	var buf bytes.Buffer
 	w := csv.NewWriter(&buf)
-	_ = w.Write([]string{fieldLabel, "Amount"})
+	_ = w.Write([]string{csvsafe.Guard(fieldLabel), "Amount"})
 	for _, r := range rows {
-		_ = w.Write([]string{r.Value, amount(r.Amount)})
+		_ = w.Write([]string{csvsafe.Guard(r.Value), amount(r.Amount)})
 	}
 	w.Flush()
 	return buf.Bytes()
@@ -73,7 +75,7 @@ func PayeeCSV(rows []PayeeTotal, amount func(int64) string) []byte {
 		if name == "" {
 			name = "(no description)"
 		}
-		_ = w.Write([]string{name, amount(r.Amount)})
+		_ = w.Write([]string{csvsafe.Guard(name), amount(r.Amount)})
 	}
 	w.Flush()
 	return buf.Bytes()
@@ -94,7 +96,7 @@ func LargestExpensesCSV(rows []ExpenseItem, name func(id string) string, amount 
 		if desc == "" {
 			desc = "(no description)"
 		}
-		_ = w.Write([]string{desc, name(r.CategoryID), r.Date.Format("2006-01-02"), amount(r.Amount)})
+		_ = w.Write([]string{csvsafe.Guard(desc), csvsafe.Guard(name(r.CategoryID)), r.Date.Format("2006-01-02"), amount(r.Amount)})
 	}
 	w.Flush()
 	return buf.Bytes()
@@ -107,10 +109,10 @@ func LargestExpensesCSV(rows []ExpenseItem, name func(id string) string, amount 
 func YearTaxCSV(s YearTaxSummary, name func(id string) string, amount func(int64) string) []byte {
 	var buf bytes.Buffer
 	w := csv.NewWriter(&buf)
-	_ = w.Write([]string{"Tax year", strconv.Itoa(s.Year)})
+	_ = w.Write([]string{csvsafe.Guard("Tax year"), strconv.Itoa(s.Year)})
 	_ = w.Write([]string{"Category", "Income", "Expense", "Net"})
 	for _, r := range s.Rows {
-		_ = w.Write([]string{name(r.CategoryID), amount(r.Income), amount(r.Expense), amount(r.Net)})
+		_ = w.Write([]string{csvsafe.Guard(name(r.CategoryID)), amount(r.Income), amount(r.Expense), amount(r.Net)})
 	}
 	_ = w.Write([]string{"TOTAL", amount(s.TotalIncome), amount(s.TotalExpense), amount(s.NetIncome)})
 	w.Flush()

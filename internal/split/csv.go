@@ -5,6 +5,8 @@ package split
 import (
 	"bytes"
 	"encoding/csv"
+
+	"github.com/monstercameron/CashFlux/internal/csvsafe"
 )
 
 // CSV renders settle-up transfers as CSV bytes: a header row then one row per
@@ -18,7 +20,7 @@ func CSV(transfers []Transfer, name func(id string) string, amount func(int64) s
 	w := csv.NewWriter(&buf)
 	_ = w.Write([]string{"From", "To", "Amount"})
 	for _, tr := range transfers {
-		_ = w.Write([]string{name(tr.From), name(tr.To), amount(tr.Amount)})
+		_ = w.Write([]string{csvsafe.Guard(name(tr.From)), csvsafe.Guard(name(tr.To)), amount(tr.Amount)})
 	}
 	w.Flush()
 	return buf.Bytes()

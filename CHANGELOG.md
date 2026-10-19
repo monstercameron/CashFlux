@@ -90,6 +90,11 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Every CSV export is safe to open in a spreadsheet (SEC4, SEC6.1).** All text and id columns of the transaction export
+  (ids, payee, description, category, account, member, currency, tags, notes) and every report, split and subscription
+  export neutralise cells that would start a formula; amounts, dates and booleans stay plain, and re-importing a CashFlux
+  export restores the original text. Attachment uploads also refuse to send anything unless encryption is on, at the
+  upload function itself.
 - **Imports read numbers and dates the way your bank wrote them, and big files page instead of failing (IMPA, IMPC,
   IMPC.1).** OFX amounts are parsed exactly (no floating point); statement amounts detect the number format
   ("1.234,56" vs "1,234.56"), trailing minus, parentheses and CR/DR, and the date order (day/month vs month/day) from

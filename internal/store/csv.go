@@ -91,9 +91,9 @@ func TransactionsToCSV(txns []domain.Transaction) ([]byte, error) {
 			cashFluxCSVExportMarker,
 			string(owners),
 		}
-		row[3] = csvsafe.Guard(row[3])
-		row[4] = csvsafe.Guard(row[4])
-		row[10] = csvsafe.Guard(row[10])
+		for _, col := range []int{0, 2, 3, 4, 5, 7, 8, 10, 11, 12, 13, 15} {
+			row[col] = csvsafe.Guard(row[col])
+		}
 		if err := w.Write(row); err != nil {
 			return nil, err
 		}
@@ -140,15 +140,25 @@ func TransactionsFromCSVResilient(data []byte, defaultCurrency string) (txns []d
 		}
 		return ""
 	}
-	colID := func(row []string, base string) string {
-		if v := col(row, base+"_id"); v != "" {
-			return v
-		}
-		return col(row, base)
-	}
 	isCashFluxExportRow := func(row []string) bool {
 		i, ok := idx["cashflux_export"]
 		return ok && i < len(row) && strings.TrimSpace(row[i]) == cashFluxCSVExportMarker
+	}
+	fieldCol := func(row []string, name string, nativeExport bool) string {
+		if i, ok := idx[name]; ok && i < len(row) {
+			value := row[i]
+			if nativeExport {
+				return csvsafe.Restore(value)
+			}
+			return strings.TrimSpace(value)
+		}
+		return ""
+	}
+	colID := func(row []string, base string) string {
+		if v := fieldCol(row, base+"_id", isCashFluxExportRow(row)); v != "" {
+			return v
+		}
+		return fieldCol(row, base, isCashFluxExportRow(row))
 	}
 	textCol := func(row []string, name string, nativeExport bool) string {
 		if i, ok := idx[name]; ok && i < len(row) {
@@ -171,7 +181,7 @@ func TransactionsFromCSVResilient(data []byte, defaultCurrency string) (txns []d
 			skipped = append(skipped, CSVRowError{Line: line, Reason: "amount is required"})
 			continue
 		}
-		curr := col(row, "currency")
+		curr := fieldCol(row, "currency", nativeExport)
 		if curr == "" {
 			curr = defaultCurrency
 		}
@@ -215,7 +225,7 @@ func TransactionsFromCSVResilient(data []byte, defaultCurrency string) (txns []d
 			}
 		}
 
-		tid := col(row, "id")
+		tid := fieldCol(row, "id", nativeExport)
 		if tid == "" {
 			tid = id.New()
 		}
@@ -230,7 +240,7 @@ func TransactionsFromCSVResilient(data []byte, defaultCurrency string) (txns []d
 			desc = payee
 		}
 
-		owners, ownerErr := parseCSVOwners(col(row, "member_ids"), colID(row, "member"))
+		owners, ownerErr := parseCSVOwners(fieldCol(row, "member_ids", nativeExport), colID(row, "member"))
 		if ownerErr != nil {
 			skipped = append(skipped, CSVRowError{Line: line, Reason: fmt.Sprintf("invalid member_ids: %v", ownerErr)})
 			continue
@@ -248,7 +258,7 @@ func TransactionsFromCSVResilient(data []byte, defaultCurrency string) (txns []d
 			Cleared:           cleared,
 			Tags:              tags,
 			MemberIDs:         owners,
-			Source:            csvSource(col(row, "source"), srcCol),
+			Source:            csvSource(fieldCol(row, "source", nativeExport), srcCol),
 		})
 	}
 	return out, skipped, nil
@@ -300,17 +310,28 @@ func TransactionsFromCSV(data []byte, defaultCurrency string) ([]domain.Transact
 		}
 		return ""
 	}
-	// colID reads an entity reference from either the export header (`<base>_id`)
-	// or the friendly documented name (`<base>`), preferring the explicit id.
-	colID := func(row []string, base string) string {
-		if v := col(row, base+"_id"); v != "" {
-			return v
-		}
-		return col(row, base)
-	}
 	isCashFluxExportRow := func(row []string) bool {
 		i, ok := idx["cashflux_export"]
 		return ok && i < len(row) && strings.TrimSpace(row[i]) == cashFluxCSVExportMarker
+	}
+	fieldCol := func(row []string, name string, nativeExport bool) string {
+		if i, ok := idx[name]; ok && i < len(row) {
+			value := row[i]
+			if nativeExport {
+				return csvsafe.Restore(value)
+			}
+			return strings.TrimSpace(value)
+		}
+		return ""
+	}
+	// colID reads an entity reference from either the export header (`<base>_id`)
+	// or the friendly documented name (`<base>`), preferring the explicit id.
+	colID := func(row []string, base string) string {
+		nativeExport := isCashFluxExportRow(row)
+		if v := fieldCol(row, base+"_id", nativeExport); v != "" {
+			return v
+		}
+		return fieldCol(row, base, nativeExport)
 	}
 	textCol := func(row []string, name string, nativeExport bool) string {
 		if i, ok := idx[name]; ok && i < len(row) {
@@ -332,7 +353,7 @@ func TransactionsFromCSV(data []byte, defaultCurrency string) ([]domain.Transact
 		if amtStr == "" {
 			return nil, fmt.Errorf("store: csv line %d: amount is required", line)
 		}
-		curr := col(row, "currency")
+		curr := fieldCol(row, "currency", nativeExport)
 		if curr == "" {
 			curr = defaultCurrency
 		}
@@ -370,7 +391,7 @@ func TransactionsFromCSV(data []byte, defaultCurrency string) ([]domain.Transact
 			}
 		}
 
-		tid := col(row, "id")
+		tid := fieldCol(row, "id", nativeExport)
 		if tid == "" {
 			tid = id.New()
 		}
@@ -385,7 +406,7 @@ func TransactionsFromCSV(data []byte, defaultCurrency string) ([]domain.Transact
 			desc = payee
 		}
 
-		owners, ownerErr := parseCSVOwners(col(row, "member_ids"), colID(row, "member"))
+		owners, ownerErr := parseCSVOwners(fieldCol(row, "member_ids", nativeExport), colID(row, "member"))
 		if ownerErr != nil {
 			return nil, fmt.Errorf("store: csv line %d: invalid member_ids: %w", line, ownerErr)
 		}
@@ -402,7 +423,7 @@ func TransactionsFromCSV(data []byte, defaultCurrency string) ([]domain.Transact
 			Cleared:           cleared,
 			Tags:              tags,
 			MemberIDs:         owners,
-			Source:            csvSource(col(row, "source"), srcCol),
+			Source:            csvSource(fieldCol(row, "source", nativeExport), srcCol),
 		})
 	}
 	return out, nil

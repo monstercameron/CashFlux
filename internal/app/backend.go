@@ -23,6 +23,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/CashFlux/internal/store"
+	"github.com/monstercameron/CashFlux/internal/syncstate"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 )
 
@@ -448,6 +449,15 @@ func hydrateBackendSyncDataset(ctx context.Context, endpoint, token, workspaceID
 // so an unlinked upload silently never counts against the account's storage
 // cap, and DownloadBlob has nothing to scope tenant access by.
 func uploadBackendArtifactBlob(ctx context.Context, endpoint, token, workspaceID string, art domain.Artifact) (domain.BlobRef, error) {
+	if !datasetEncryptionActive() {
+		decision := syncstate.DecideEncryptedUpload(false)
+		setSyncStatus(syncStatus{
+			State:   string(decision.Status),
+			Pending: pendingSyncCount(),
+			Message: decision.Message,
+		})
+		return domain.BlobRef{}, fmt.Errorf("blob upload: %s", decision.Message)
+	}
 	// When encryption is active the server stores ciphertext — it never sees the
 	// plaintext bytes. The payload is the encrypted envelope; MIME is reported as
 	// application/octet-stream so the real MIME is not leaked. The artifact's
@@ -458,14 +468,15 @@ func uploadBackendArtifactBlob(ctx context.Context, endpoint, token, workspaceID
 	if mime == "" {
 		mime = "application/octet-stream"
 	}
-	if datasetEncryptionActive() {
-		enc, err := encryptArtifactSync(art.Bytes)
-		if err != nil {
-			return domain.BlobRef{}, fmt.Errorf("blob upload: encrypt artifact: %w", err)
-		}
-		payload = enc
-		mime = "application/octet-stream"
+	enc, err := encryptArtifactSync(art.Bytes)
+	if err != nil {
+		return domain.BlobRef{}, fmt.Errorf("blob upload: encrypt artifact: %w", err)
 	}
+	if len(enc) == 0 || !cryptobox.IsEnvelope(enc) {
+		return domain.BlobRef{}, fmt.Errorf("blob upload: encrypted artifact is not a valid envelope")
+	}
+	payload = enc
+	mime = "application/octet-stream"
 
 	sum := sha256.Sum256(payload)
 	hash := hex.EncodeToString(sum[:])

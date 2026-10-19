@@ -3,6 +3,7 @@
 package subscriptions
 
 import (
+	"encoding/csv"
 	"strconv"
 	"strings"
 	"testing"
@@ -37,5 +38,23 @@ func TestCSV(t *testing.T) {
 	// Domain: yearly charge 1200 → monthly 100, annual 1200.
 	if strings.TrimRight(lines[2], "\r") != "Domain,yearly,1200,100,1200,2027-06-11" {
 		t.Errorf("domain row = %q", lines[2])
+	}
+}
+
+func TestCSVGuardsNameAndCadence(t *testing.T) {
+	const formula = "=HYPERLINK(\"https://example.invalid\")"
+	subs := []Subscription{{Name: formula, Cadence: Cadence(formula), Amount: 100, NextRenewal: time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC)}}
+	data := CSV(subs, func(int64) string { return "1.00" })
+	records, err := csv.NewReader(strings.NewReader(string(data))).ReadAll()
+	if err != nil {
+		t.Fatalf("parse CSV: %v", err)
+	}
+	for _, col := range []int{0, 1} {
+		if got := records[1][col]; got != "'"+formula {
+			t.Errorf("text column %d = %q, want guarded value", col, got)
+		}
+	}
+	if got := records[1][2]; got != "1.00" {
+		t.Errorf("amount = %q, want numeric 1.00", got)
 	}
 }

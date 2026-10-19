@@ -5,6 +5,8 @@ package subscriptions
 import (
 	"bytes"
 	"encoding/csv"
+
+	"github.com/monstercameron/CashFlux/internal/csvsafe"
 )
 
 // CSV renders the detected subscriptions as CSV bytes: a header row then one row
@@ -18,8 +20,8 @@ func CSV(subs []Subscription, amount func(int64) string) []byte {
 	_ = w.Write([]string{"Name", "Cadence", "Charge", "Monthly", "Annual", "Next renewal"})
 	for _, s := range subs {
 		_ = w.Write([]string{
-			s.Name,
-			string(s.Cadence),
+			csvsafe.Guard(s.Name),
+			csvsafe.Guard(string(s.Cadence)),
 			amount(s.Amount),
 			amount(s.MonthlyAmount()),
 			amount(s.AnnualAmount()),

@@ -3,6 +3,7 @@
 package split
 
 import (
+	"encoding/csv"
 	"strconv"
 	"strings"
 	"testing"
@@ -31,6 +32,23 @@ func TestCSV(t *testing.T) {
 	}
 	if strings.TrimRight(lines[2], "\r") != "Cara,Alice,10" {
 		t.Errorf("row 2 = %q", lines[2])
+	}
+}
+
+func TestCSVGuardsNamesAndKeepsAmountNumeric(t *testing.T) {
+	const formula = "=HYPERLINK(\"https://example.invalid\")"
+	data := CSV([]Transfer{{From: "payer", To: "payee", Amount: 2500}}, func(string) string { return formula }, func(int64) string { return "25.00" })
+	records, err := csv.NewReader(strings.NewReader(string(data))).ReadAll()
+	if err != nil {
+		t.Fatalf("parse CSV: %v", err)
+	}
+	for _, col := range []int{0, 1} {
+		if got := records[1][col]; got != "'"+formula {
+			t.Errorf("name column %d = %q, want guarded value", col, got)
+		}
+	}
+	if got := records[1][2]; got != "25.00" {
+		t.Errorf("amount = %q, want numeric 25.00", got)
 	}
 }
 
