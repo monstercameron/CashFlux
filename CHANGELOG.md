@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Component library: Overlay and MoneyFig (LIB1A, LIB1B).** `uiw.Overlay` / `Sheet` / `BottomBar` render every layered
+  surface through one portal on `body` using GoWebComponents' accessible overlay (dialog roles, focus trap, Escape, scroll
+  lock, focus return) on the existing z-index tokens, so nothing layered can be clipped by a transformed tile again.
+  `uiw.MoneyFig` is the single money display with a style enum (ledger, signed, accounting for reports, magnitude) whose
+  tone follows from the style, with screen-reader text that spells out plus, minus and transfer. Not wired in yet.
 - **Component library, first piece: menu logic (LIB1E).** `internal/ui/menu_pure.go` holds the platform-free rules
   every menu will share — hide only what is explicitly hidden, group adjacent sections, drop a heading over a single
   item, keep submenus — with a property test proving no visible action is ever dropped or reordered (the bug that once
