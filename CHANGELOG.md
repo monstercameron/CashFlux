@@ -90,6 +90,7 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- Extract recurring bill calculations and presentation into tested pure logic.
 - Extract budget cover selection, planning and presentation into tested pure logic.
 - Move transaction edit decisions into tested pure logic and stable form components.
 - Move budget creation decisions into tested pure logic and stable form components.
