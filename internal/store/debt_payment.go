@@ -143,6 +143,59 @@ SELECT link_id FROM debt_payment_link_txns WHERE txn_id = ?
 	return count > 0, nil
 }
 
+// DeleteTransactionsWithDebtPaymentsAtomic deletes the selected transactions
+// and every debt-payment link that references any of them in one transaction.
+// It returns only transaction IDs that existed and were deleted.
+func (s *SQLiteStore) DeleteTransactionsWithDebtPaymentsAtomic(ids []string) ([]string, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	if err := s.ensureDebtPaymentSchema(); err != nil {
+		return nil, err
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("store: begin debt-payment transaction deletion: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	deleteLinks, err := tx.Prepare(`DELETE FROM debt_payment_links WHERE id IN (
+SELECT link_id FROM debt_payment_link_txns WHERE txn_id = ?
+)`)
+	if err != nil {
+		return nil, fmt.Errorf("store: prepare debt-payment link cleanup: %w", err)
+	}
+	defer deleteLinks.Close()
+	deleteTransactions, err := tx.Prepare("DELETE FROM transactions WHERE id = ?")
+	if err != nil {
+		return nil, fmt.Errorf("store: prepare transaction delete: %w", err)
+	}
+	defer deleteTransactions.Close()
+	deleted := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if _, err := deleteLinks.Exec(id); err != nil {
+			return nil, fmt.Errorf("store: delete transaction %q debt-payment links: %w", id, err)
+		}
+		result, err := deleteTransactions.Exec(id)
+		if err != nil {
+			return nil, fmt.Errorf("store: delete transaction %q: %w", id, err)
+		}
+		count, err := result.RowsAffected()
+		if err != nil {
+			return nil, fmt.Errorf("store: count deleted transaction %q: %w", id, err)
+		}
+		if count > 0 {
+			deleted = append(deleted, id)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("store: commit debt-payment transaction deletion: %w", err)
+	}
+	if len(deleted) > 0 {
+		mutationRev.Add(1)
+	}
+	return deleted, nil
+}
+
 // DeleteAccountWithDebtPayments removes an account, links targeting it, and
 // rules that use it as their debt or source account in one SQLite transaction.
 func (s *SQLiteStore) DeleteAccountWithDebtPayments(id string) (bool, error) {

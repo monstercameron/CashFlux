@@ -111,6 +111,9 @@ func loadRows[T any](db *sql.DB, table string) ([]T, error) {
 
 // Load replaces all stored data with the given dataset (clean ingress).
 func (s *SQLiteStore) Load(ds Dataset) error {
+	if err := s.ensureDebtPaymentSchema(); err != nil {
+		return err
+	}
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
@@ -222,6 +225,25 @@ func (s *SQLiteStore) Load(ds Dataset) error {
 	if err := replaceRows(tx, "subignores", ds.SubscriptionIgnores, func(ig domain.SubscriptionIgnore) string { return ig.ID }); err != nil {
 		return err
 	}
+	if err := replaceRows(tx, "debt_payment_links", ds.DebtPaymentLinks, func(link domain.DebtPaymentLink) string { return link.ID }); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("DELETE FROM debt_payment_link_txns"); err != nil {
+		return err
+	}
+	for _, link := range ds.DebtPaymentLinks {
+		for _, transactionID := range link.TransactionIDs {
+			if transactionID == "" {
+				return fmt.Errorf("store: debt-payment link %q has an empty transaction id", link.ID)
+			}
+			if _, err := tx.Exec("INSERT INTO debt_payment_link_txns(link_id, txn_id) VALUES(?, ?)", link.ID, transactionID); err != nil {
+				return fmt.Errorf("store: add transaction %q to debt-payment link %q: %w", transactionID, link.ID, err)
+			}
+		}
+	}
+	if err := replaceRows(tx, "debt_payee_rules", ds.DebtPayeeRules, func(rule domain.DebtPayeeRule) string { return rule.ID }); err != nil {
+		return err
+	}
 	if err := replaceRows(tx, "institutions", ds.Institutions, func(in domain.Institution) string { return in.ID }); err != nil {
 		return err
 	}
@@ -266,6 +288,9 @@ func (s *SQLiteStore) Load(ds Dataset) error {
 
 // Snapshot reads the entire dataset back out (clean egress).
 func (s *SQLiteStore) Snapshot() (Dataset, error) {
+	if err := s.ensureDebtPaymentSchema(); err != nil {
+		return Dataset{}, err
+	}
 	var ds Dataset
 	var err error
 	if ds.Members, err = loadRows[domain.Member](s.db, "members"); err != nil {
@@ -374,6 +399,12 @@ func (s *SQLiteStore) Snapshot() (Dataset, error) {
 		return Dataset{}, err
 	}
 	if ds.SubscriptionIgnores, err = loadRows[domain.SubscriptionIgnore](s.db, "subignores"); err != nil {
+		return Dataset{}, err
+	}
+	if ds.DebtPaymentLinks, err = loadRows[domain.DebtPaymentLink](s.db, "debt_payment_links"); err != nil {
+		return Dataset{}, err
+	}
+	if ds.DebtPayeeRules, err = loadRows[domain.DebtPayeeRule](s.db, "debt_payee_rules"); err != nil {
 		return Dataset{}, err
 	}
 	// Audit log entries ordered oldest-first for consistent round-trips.

@@ -1164,8 +1164,22 @@ func (a *App) DeleteAccount(id string) error {
 			ds.Settings.DefaultAccountID = ""
 		}
 		ds.Accounts = accounts
+		links := ds.DebtPaymentLinks[:0]
+		for _, link := range ds.DebtPaymentLinks {
+			if link.DebtAccountID != id {
+				links = append(links, link)
+			}
+		}
+		ds.DebtPaymentLinks = links
+		rules := ds.DebtPayeeRules[:0]
+		for _, rule := range ds.DebtPayeeRules {
+			if rule.DebtAccountID != id && rule.SourceAccountID != id {
+				rules = append(rules, rule)
+			}
+		}
+		ds.DebtPayeeRules = rules
 		// Load replaces the account and its saved defaults inside one SQLite
-		// transaction, so observers never see a deleted account with stale defaults.
+		// transaction, so references and debt-payment data disappear atomically.
 		if err := a.store.Load(ds); err != nil {
 			return fmt.Errorf("appstate: delete account %q: %w", id, err)
 		}
@@ -3131,7 +3145,7 @@ func (a *App) DeleteTransaction(id string) error {
 	if err := a.roleGuard(); err != nil {
 		return err
 	}
-	if err := a.del("transaction", id, a.store.DeleteTransaction); err != nil {
+	if err := a.del("transaction", id, a.store.DeleteTransactionWithDebtPayments); err != nil {
 		return err
 	}
 	a.fireTxnMutated()
@@ -3255,7 +3269,7 @@ func (a *App) DeleteTransactionsBulkExpanded(ids []string) ([]string, error) {
 }
 
 func (a *App) deleteTransactionsAtomic(ids []string) ([]string, error) {
-	deleted, err := a.store.DeleteTransactionsAtomic(ids)
+	deleted, err := a.store.DeleteTransactionsWithDebtPaymentsAtomic(ids)
 	if err != nil {
 		return nil, err
 	}
@@ -3286,7 +3300,7 @@ func (a *App) DeleteTransactionWithTransferPair(id string) error {
 			}
 		}
 	}
-	deleted, err := a.store.DeleteTransactionsAtomic(ids)
+	deleted, err := a.store.DeleteTransactionsWithDebtPaymentsAtomic(ids)
 	if err != nil {
 		return err
 	}

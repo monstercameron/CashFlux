@@ -111,6 +111,8 @@ type Dataset struct {
 	PayeeAliases              []domain.PayeeAlias               `json:"payeeAliases,omitempty"`
 	SubscriptionIgnores       []domain.SubscriptionIgnore       `json:"subscriptionIgnores,omitempty"`
 	SubscriptionCancellations []domain.SubscriptionCancellation `json:"subscriptionCancellations,omitempty"`
+	DebtPaymentLinks          []domain.DebtPaymentLink          `json:"debtPaymentLinks,omitempty"`
+	DebtPayeeRules            []domain.DebtPayeeRule            `json:"debtPayeeRules,omitempty"`
 	AuditEntries              []auditlog.Entry                  `json:"auditEntries,omitempty"`
 	// KV is app/UI state ported off scattered localStorage into the SQLite dataset:
 	// dashboard layout, widget config, view filters, the activity feed, etc. Keeping
