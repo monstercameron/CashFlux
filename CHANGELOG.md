@@ -90,6 +90,13 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Budgets: one status strip, budgets first, clearer menus (BUD2, BUD2.1).** The three overlapping banners are replaced by
+  one status strip with one figure, one sentence and one action; allocation, funding and issues move into an expandable
+  details section that names every non-monthly budget converted to the month. The "need attention" count and its filter
+  use the same set (over or near the limit). The member lens has a visible "View as" label and says how many budgets are
+  shared. Budget settings (the method) and Tools (last month's spend, auto budget, review, sweep, adjust all) are separate
+  menus. Future months show a neutral "planned · expected income" line instead of red alarms, and the budget list comes
+  before the projection. The period button is announced as "<month>, choose period".
 - **Budgets: Add starts blank, no duplicate budgets, "Raise limit" dialog (BUD5).** Add budget no longer preselects a
   category; categories already budgeted for that period and owner are shown disabled with the reason; choosing a category
   fills the name (a custom name is kept); focus lands on the first empty field. The top-up dialog is now "Raise limit",

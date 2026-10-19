@@ -53,12 +53,14 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 	// tile's props are the same *App pointer across host renders.
 	_ = uistate.UseDataRevision().Get()
 	app := props.App
-	activeMemberID := uistate.UseActiveMember().Get()
+	activeMember := uistate.UseActiveMember()
+	activeMemberID := activeMember.Get()
 	vw := uistate.UsePeriod().Get()
 	pr := uistate.UsePrefs().Get()
 	// "Last month's spend" overlay: when on, the summary graph shows last period's total
 	// spend too (matching the tiles), not just this month.
 	showLM := uistate.UseBudgetsLastMonth().Get()
+	futurePeriod := isFuturePeriod(vw, time.Now())
 	// Income-basis modal opener. Called unconditionally (before any early return) so the
 	// hook order is stable across renders. Opening seeds the modal's draft from the
 	// current prefs, so the Save/Cancel modal starts from today's basis.
@@ -75,16 +77,31 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 	attnAtom := uistate.UseBudgetAttention()
 	var attnOver, attnNear int
 	filterAttn := ui.UseEvent(Prevent(func() {
-		if attnOver > 0 {
-			attnAtom.Set(uistate.BudgetAttentionOver)
-		} else if attnNear > 0 {
-			attnAtom.Set(uistate.BudgetAttentionNear)
+		if attnOver+attnNear > 0 {
+			attnAtom.Set("needs-attention")
 		}
 	}))
 	v := computeBudgetView(app, activeMemberID, vw, pr, showLM)
 	if len(v.Statuses) == 0 {
 		return Fragment()
 	}
+	// BUD1 exposes checked, explainable cadence conversion. Income on this screen
+	// is monthly, so every budget contributes its monthly equivalent before the
+	// plan is compared with income. Fall back to the existing view total only if a
+	// currency or cadence cannot be converted; the disclosure below says so.
+	rates := currency.Rates{Base: v.Base, Rates: app.Settings().FXRates}
+	statusBudgets := make([]domain.Budget, 0, len(v.Statuses))
+	for _, status := range v.Statuses {
+		statusBudgets = append(statusBudgets, status.Budget)
+	}
+	normalized, normalizeErr := budgeting.NormalizeBudgets(statusBudgets, domain.PeriodMonthly, rates)
+	normalizedBudgetTotal := v.TotalLimit
+	normalizationOK := normalizeErr == nil
+	if normalizationOK {
+		normalizedBudgetTotal = normalized.Total.Amount
+	}
+	planView := v
+	planView.TotalLimit = normalizedBudgetTotal
 	smartSettings := uistate.LoadSmartSettings()
 	// UX-05: a wholly-past view window flips the summary into past-tense wording —
 	// "Jun 2026 spending", "ended over budget" — because "so far this month" over a
@@ -135,10 +152,10 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 	fundHasPool := false
 	switch v.Method {
 	case budgeting.MethodZeroBased:
-		fundFree = budgeting.ToAssign(v.BannerIncome+v.RolledOver, v.TotalLimit+v.SavingsAssigned)
+		fundFree = budgeting.ToAssign(v.BannerIncome+v.RolledOver, normalizedBudgetTotal+v.SavingsAssigned)
 		fundHasPool = true
 	case budgeting.MethodSimple:
-		fundFree = v.BannerIncome - v.TotalLimit
+		fundFree = v.BannerIncome - normalizedBudgetTotal
 		fundHasPool = true
 	}
 	// zbbHero (2026-08-31): in zero-based the hero figure is To Assign, not "Left".
@@ -151,11 +168,7 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 	// present tense to report.
 	zbbHero := v.Method == budgeting.MethodZeroBased && fundHasPool && !v.LastMonthMode && !hist
 
-	// B1 hero (2026-07-19): the summary opens on the ONE number a budget page
-	// answers — what's left to spend — over a slim month-ledger bar and a single
-	// caption. The old three-cell strip (plan prose · stat trio · age tile) is
-	// gone: the attention chip narrows the list, age of money shrinks to a faint
-	// caption-row chip, and the plan-level issues stay in the rail below.
+	// BUD2: count the same over-or-near set that the list's attention filter uses.
 	for _, s := range v.Statuses {
 		switch s.State {
 		case budgeting.StateOver:
@@ -164,12 +177,10 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 			attnNear++
 		}
 	}
+	attentionCount := len(budgetAttentionStatuses(v.Statuses))
 	var attnChip ui.Node = Fragment()
-	if n := attnOver + attnNear; n > 0 && !hist && !v.LastMonthMode {
-		txt := uistate.T("budgets.heroAttn", n)
-		if n == 1 {
-			txt = uistate.T("budgets.heroAttnOne")
-		}
+	if n := attentionCount; n > 0 && !hist && !v.LastMonthMode {
+		txt := uistate.T("bud2.attentionCount", n)
 		attnChip = Button(css.Class("budget-hero-attn"), Type("button"),
 			Attr("data-testid", "budgets-hero-attn"), Title(uistate.T("budgets.heroAttnTitle")),
 			OnClick(filterAttn), txt)
@@ -227,10 +238,10 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 			actualIncome += ln.Amount
 		}
 	}
-	if v.BannerIncome > 0 && (v.Method == budgeting.MethodZeroBased || v.Method == budgeting.MethodSimple) {
+	if normalizationOK && v.BannerIncome > 0 && (v.Method == budgeting.MethodZeroBased || v.Method == budgeting.MethodSimple) {
 		funding = budgeting.FundingRead{
 			Expected: v.BannerIncome, Received: actualIncome,
-			Assigned: v.TotalLimit + v.SavingsAssigned,
+			Assigned: normalizedBudgetTotal + v.SavingsAssigned,
 			// The savings/investment assignments are part of the plan but not part
 			// of what a bulk budget adjustment can scale, so the reconcile
 			// percentage has to be computed against the budgets alone.
@@ -265,7 +276,10 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 	// as the call to action.
 	// The spend rail is on in EVERY period now, not only zero-based-live: it is the
 	// only place the spent figure survives once the band above is gone.
-	alloc := budgetIncomeAllocation(v, basisBtn, hist, true)
+	var alloc ui.Node = Fragment()
+	if !futurePeriod {
+		alloc = budgetIncomeAllocation(planView, basisBtn, hist, true)
+	}
 	hasAlloc := v.BannerIncome+v.RolledOver > 0
 
 	// Zero-based drops the loader band entirely. The band is a spent/budgeted/left
@@ -304,8 +318,8 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 	// amounts. Sharing the bar's arithmetic makes that impossible rather than
 	// unlikely.
 	overAssigned := int64(0)
-	if pool := v.BannerIncome + v.RolledOver; pool > 0 {
-		if ta := budgeting.ToAssign(pool, v.TotalLimit+v.SavingsAssigned); ta < 0 {
+	if pool := v.BannerIncome + v.RolledOver; normalizationOK && pool > 0 {
+		if ta := budgeting.ToAssign(pool, normalizedBudgetTotal+v.SavingsAssigned); ta < 0 {
 			overAssigned = -ta
 		}
 	}
@@ -333,25 +347,72 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 		}
 	}
 
-	strip := Div(css.Class("budget-hero"), Attr("data-testid", "budgets-status-strip"),
+	// UX-05: open follow-up to-dos linked to any budget feed the detail disclosure.
+	followUps := 0
+	for _, t := range app.Tasks() {
+		if t.RelatedType == domain.RelatedBudget && t.RelatedID != "" && t.Status != domain.StatusDone {
+			followUps++
+		}
+	}
+	rail := ui.CreateElement(budgetIssuesRail, budgetIssuesRailProps{
+		View: v, SmartSettings: smartSettings,
+		OverAssigned: overAssigned, FundFree: fundFree, FundHasPool: fundHasPool,
+		Hist: hist, FollowUps: followUps,
+	})
+
+	statusAmount := normalizedBudgetTotal
+	statusCopy := uistate.T("bud2.statusFits", vw.Label())
+	statusState := "fits"
+	if futurePeriod {
+		statusCopy = uistate.T("budgets.future.planning",
+			fmtMoney(money.New(normalizedBudgetTotal, v.Base)),
+			fmtMoney(money.New(v.BannerIncome, v.Base)))
+	} else if !normalizationOK {
+		statusCopy = uistate.T("bud2.normalizationUnavailable")
+		statusState = "unknown"
+	} else if v.BannerIncome <= 0 {
+		statusCopy = uistate.T("bud2.statusNoIncome", vw.Label())
+	}
+	if !futurePeriod && overAssigned > 0 {
+		statusAmount = overAssigned
+		statusCopy = uistate.T("bud2.statusOver", vw.Label())
+		statusState = "over"
+	} else if !futurePeriod && funding.Meaningful() && !funding.FullyFunded() && funding.Unfunded() > 0 {
+		statusAmount = funding.Unfunded()
+		statusCopy = uistate.T("bud2.statusUnfunded", vw.Label())
+		statusState = "unfunded"
+	}
+	var statusAction ui.Node = Fragment()
+	if statusState == "over" || statusState == "unfunded" {
+		label := uistate.T("bud2.bringPlanDown")
+		if statusState == "over" {
+			label = uistate.T("bud2.resolveAmount", fmtMoney(money.New(statusAmount, v.Base)))
+		}
+		statusAction = ui.CreateElement(budgetStatusAction, budgetStatusActionProps{
+			Label: label, Percent: funding.ReduceToFitPct(), TestID: "budgets-status-primary-action",
+		})
+	}
+	statusLine := Div(css.Class("bud2-status-line"), Attr("role", "status"), Attr("data-state", statusState),
+		Attr("style", "display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.75rem;min-width:0"),
+		Div(css.Class("bud2-status-copy"), Attr("style", "display:flex;align-items:baseline;flex-wrap:wrap;gap:.2rem .65rem;min-width:0"),
+			Span(css.Class("bud2-status-figure"), Attr("data-testid", "budgets-status-figure"),
+				fmtMoney(money.New(statusAmount, v.Base))),
+			Span(css.Class("bud2-status-sentence"), Attr("data-testid", "budgets-status-sentence"),
+				Attr("style", "max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"), statusCopy),
+		),
+		statusAction,
+	)
+	details := Details(css.Class("bud2-status-details"), Attr("data-testid", "budgets-status-details"),
+		Summary(uistate.T("bud2.moreDetails")),
+		If(normalizationOK, budgetNormalizationDetails(normalized)),
+		If(!normalizationOK, P(css.Class("bud2-normalization-error"), Attr("role", "status"), uistate.T("bud2.normalizationUnavailable"))),
 		alloc,
-		// C587: directly under the allocation bar, because that bar is what makes
-		// "fully assigned" look like "fully funded". Renders nothing when the plan
-		// IS funded, so it is a state rather than a permanent fixture.
-		// C672: the rows that inflated THESE figures — collected per budget, in each
-		// budget's own window and category set, because this page scores N budgets
-		// on N cadences and no single toolbar window describes them all.
-		ui.CreateElement(transferLeakNotice, transferLeakProps{
-			Txns: v.LeakRows, Where: uistate.T("txnleak.whereBudgets"),
-		}),
-		// ScalableCount comes from the SAME preview the Adjust-all form builds, under
-		// the SAME scope the button seeds, so the count promised here is the count
-		// the form shows (C671).
-		ui.CreateElement(budgetFundedCallout, budgetFundedProps{
-			Funding: funding, Base: v.Base, Historical: hist,
-			PeriodLabel:   vw.FromLabel(),
+		ui.CreateElement(transferLeakNotice, transferLeakProps{Txns: v.LeakRows, Where: uistate.T("txnleak.whereBudgets")}),
+		If(!futurePeriod, ui.CreateElement(budgetFundedCallout, budgetFundedProps{
+			Funding: funding, Base: v.Base, Historical: hist, PeriodLabel: vw.FromLabel(),
 			ScalableCount: budgetReconcileCount(app, activeMemberID, v, vw, pr, funding.ReduceToFitPct()),
-		}),
+		})),
+		rail,
 		Div(css.Class("budget-hero-cap"),
 			incomeActual,
 			// Split by CONSEQUENCE, not by type. The row used to give one treatment to
@@ -387,25 +448,63 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 		),
 	)
 
-	// UX-05: open follow-up to-dos linked to any budget feed the rail, so a closed
-	// month can report its "N unresolved follow-ups" honestly.
-	followUps := 0
-	for _, t := range app.Tasks() {
-		if t.RelatedType == domain.RelatedBudget && t.RelatedID != "" && t.Status != domain.StatusDone {
-			followUps++
-		}
-	}
-	rail := ui.CreateElement(budgetIssuesRail, budgetIssuesRailProps{
-		View: v, SmartSettings: smartSettings,
-		OverAssigned: overAssigned, FundFree: fundFree, FundHasPool: fundHasPool,
-		Hist: hist, FollowUps: followUps,
-	})
-
-	body := Div(strip, rail, rangeHint)
+	body := Div(Div(css.Class("budget-hero"), Attr("data-testid", "budgets-status-strip"), statusLine, details), rangeHint)
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "budget-summary", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
 		Body: body,
 	})
+}
+
+func budgetNormalizationDetails(normalized budgeting.BudgetNormalization) ui.Node {
+	items := make([]any, 0, len(normalized.Lines)+1)
+	items = append(items, P(css.Class("bud2-normalization-total"), Attr("data-testid", "budgets-normalized-total"),
+		uistate.T("bud2.monthlyEquivalent", fmtMoney(normalized.Total))))
+	for _, line := range normalized.Lines {
+		if line.Period == domain.PeriodMonthly || line.Period == "" {
+			continue
+		}
+		items = append(items, P(css.Class("bud2-normalization-line"), Attr("data-testid", "budgets-normalized-line"),
+			uistate.T("bud2.normalizedBudgetLine", line.Name, budgetPeriodName(line.Period), fmtMoney(line.Amount))))
+	}
+	args := []any{css.Class("bud2-normalization"), Attr("data-testid", "budgets-normalization")}
+	args = append(args, items...)
+	return Div(args...)
+}
+
+func budgetPeriodName(period domain.Period) string {
+	switch period {
+	case domain.PeriodWeekly:
+		return uistate.T("bud2.periodWeekly")
+	case domain.PeriodBiweekly:
+		return uistate.T("bud2.periodBiweekly")
+	case domain.PeriodSemimonthly:
+		return uistate.T("bud2.periodSemimonthly")
+	case domain.PeriodQuarterly:
+		return uistate.T("bud2.periodQuarterly")
+	case domain.PeriodYearly:
+		return uistate.T("bud2.periodYearly")
+	default:
+		return uistate.T("bud2.periodMonthly")
+	}
+}
+
+type budgetStatusActionProps struct {
+	Label   string
+	Percent float64
+	TestID  string
+}
+
+// budgetStatusAction opens the existing preview-first adjustment flow from the
+// status strip. The adjustment remains explicit and undoable; the strip never
+// writes the budget plan itself.
+func budgetStatusAction(props budgetStatusActionProps) ui.Node {
+	open := uistate.UseBudgetAdjustOpen()
+	onClick := ui.UseEvent(Prevent(func() {
+		uistate.SetBudgetAdjustSeed(strconv.FormatFloat(props.Percent, 'f', -1, 64), string(budgeting.AdjustThisPeriod))
+		open.Set(true)
+	}))
+	return Button(css.Class("btn btn-sm btn-primary"), Type("button"), Attr("data-testid", props.TestID),
+		OnClick(onClick), props.Label)
 }
 
 // budgetAgeOfMoneyNode renders the Age-of-Money stat for the budgets summary: a
@@ -1567,7 +1666,8 @@ func budgetToolbarContent(props budgetToolbarProps) ui.Node {
 	app := props.App
 	sortAtom := uistate.UseBudgetSort()
 	onSort := ui.UseEvent(func(e ui.Event) { sortAtom.Set(e.GetValue()) })
-	activeMemberID := uistate.UseActiveMember().Get()
+	activeMember := uistate.UseActiveMember()
+	activeMemberID := activeMember.Get()
 
 	base := app.Settings().BaseCurrency
 	if base == "" {
@@ -1626,6 +1726,15 @@ func budgetToolbarContent(props budgetToolbarProps) ui.Node {
 	closeSettings := ui.UseEvent(Prevent(func() { settingsOpen.Set(false) }))
 	uiw.DismissPopover(settingsOpen.Get(), "budgets-settings-wrap", func() { settingsOpen.Set(false) })
 	uiw.AnchorPopover(settingsOpen.Get(), "budgets-settings-wrap")
+	toolsOpen := ui.UseState(false)
+	toggleTools := ui.UseEvent(Prevent(func() { toolsOpen.Set(!toolsOpen.Get()) }))
+	closeTools := ui.UseEvent(Prevent(func() { toolsOpen.Set(false) }))
+	uiw.DismissPopover(toolsOpen.Get(), "budgets-tools-wrap", func() { toolsOpen.Set(false) })
+	uiw.AnchorPopover(toolsOpen.Get(), "budgets-tools-wrap")
+	onMember := ui.UseEvent(func(e ui.Event) {
+		activeMember.Set(e.GetValue())
+		uistate.PersistActiveMember(e.GetValue())
+	})
 	// C112: switch the budgeting methodology right from /budgets.
 	//
 	// C590: this control is the HOUSEHOLD's method, and the page has a second,
@@ -1698,7 +1807,7 @@ func budgetToolbarContent(props budgetToolbarProps) ui.Node {
 	// that closes the menu on click (each tool opens its own modal). Every control keeps
 	// its original data-testid so existing flows still resolve it.
 	viewSection := Div(css.Class("bud-set-sec"),
-		Span(css.Class("bud-set-head"), uistate.T("budgetrefine.sectionView")),
+		Span(css.Class("bud-set-head"), uistate.T("bud2.settings")),
 		Label(css.Class("bud-set-field"),
 			// C590: the label states the SCOPE. "Budgeting method" beside a
 			// per-budget control with the same name is what made a page-wide switch
@@ -1751,51 +1860,86 @@ func budgetToolbarContent(props budgetToolbarProps) ui.Node {
 		// target (the C596 failure: "Card view, pressed" over a compact list).
 		Span(css.Class("sr-only"), Attr("data-testid", "budgets-density-state"),
 			" — "+uistate.T(budgetDensityStateKey(densityAtom.Get()))))
-	toolsSection := Div(css.Class("bud-set-sec"), OnClick(closeSettings),
-		Span(css.Class("bud-set-head"), uistate.T("budgetrefine.sectionTools")),
+	toolsSection := Div(css.Class("bud-set-sec"), OnClick(closeTools),
 		Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
 			Attr("data-testid", "budgets-last-month"), Attr("aria-pressed", ariaBool(lastMonthAtom.Get())),
 			Title(uistate.T("budgets.lastMonthTitle")), OnClick(toggleLastMonth),
 			uiw.Icon(icon.History, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-			Span(uistate.T(lastMonthLabelKey(lastMonthAtom.Get())))),
+			Span(uistate.T("bud2.lastMonth"))),
 		Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
 			Attr("data-testid", "budgets-autobudget"),
 			Title(uistate.T("budgets.autoTitleAction")), OnClick(openAutoBudget),
-			uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("budgets.autoTitle"))),
+			uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("bud2.autoBudget"))),
 		// #64: the guided month-close checklist.
 		Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
 			Attr("data-testid", "budgets-month-close"),
 			Title(uistate.T("monthclose.offerTitle")), OnClick(openMonthClose),
-			uiw.Icon(icon.Check, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("monthclose.offer"))),
+			uiw.Icon(icon.Check, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("bud2.monthClose"))),
 		// XC6: the leftover-sweep config modal.
 		Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
 			Attr("data-testid", "budgets-sweep-config"),
 			Title(uistate.T("sweep.openConfig")), OnClick(openSweep),
-			uiw.Icon(icon.TrendingUp, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("sweep.openConfig"))),
+			uiw.Icon(icon.TrendingUp, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("bud2.sweep"))),
 		// G2: percent-based bulk limit adjustment across every visible budget.
 		If(hasBudgets, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
 			Attr("data-testid", "budgets-adjust-all"),
 			Title(uistate.T("budgets.adjustAllTitle")), OnClick(adjustAll),
-			uiw.Icon(icon.Scale, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("budgets.adjustAll")))),
+			uiw.Icon(icon.Scale, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("bud2.adjustAll")))),
 	)
+	sharedBudgets := 0
+	for _, b := range app.Budgets() {
+		if ownerVisibleTo(b.OwnerID, activeMemberID) && b.OwnerID == domain.GroupOwnerID {
+			sharedBudgets++
+		}
+	}
+	var memberName string
+	for _, m := range app.Members() {
+		if m.ID == activeMemberID {
+			memberName = m.Name
+			break
+		}
+	}
+	var memberLens ui.Node = Fragment()
+	if len(app.Members()) > 0 {
+		memberOpts := []any{Option(Value(""), SelectedIf(activeMemberID == ""), uistate.T("bud2.everyone"))}
+		for _, m := range app.Members() {
+			memberOpts = append(memberOpts, Option(Value(m.ID), SelectedIf(activeMemberID == m.ID), m.Name))
+		}
+		memberLens = Label(css.Class("bud2-member-lens"), Attr("style", "display:inline-flex;align-items:center;gap:.4rem;min-width:0"),
+			Span(css.Class("bud2-member-label"), Attr("data-testid", "budgets-member-label"), uistate.T("bud2.viewAs")),
+			Select(css.Class("fctrl-select"), Attr("data-testid", "budgets-member-lens"),
+				Attr("aria-label", uistate.T("bud2.viewAsMember")), OnChange(onMember), memberOpts),
+		)
+		if activeMemberID != "" && memberName != "" {
+			memberLens = Fragment(memberLens, P(css.Class("bud2-member-share"), Attr("data-testid", "budgets-member-share"),
+				uistate.T("bud2.sharedCount", memberName, sharedBudgets, visibleBudgets)))
+		}
+	}
 	toolbar := Div(css.Class("filter-toolbar budgets-tb"),
 		Div(css.Class("filter-toolbar-actions"),
-			// The one "Budget settings" popover. Same .add-wrap/.add-menu chrome as the row
-			// kebabs — viewport-aware via AnchorPopover, dismissed via DismissPopover.
+			memberLens,
 			Div(ClassStr("add-wrap"), Attr("id", "budgets-settings-wrap"),
 				Button(css.Class("btn btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
 					Attr("data-testid", "budgets-settings"), Attr("aria-haspopup", "menu"),
 					Attr("aria-expanded", ariaBool(settingsOpen.Get())),
-					Title(uistate.T("budgetrefine.settingsTitle")), OnClick(toggleSettings),
+					Title(uistate.T("bud2.settingsTitle")), OnClick(toggleSettings),
 					uiw.Icon(icon.Settings, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-					Span(uistate.T("budgetrefine.settings")),
+					Span(uistate.T("bud2.settings")),
 					uiw.Icon(icon.ChevronDown, css.Class(tw.ShrinkO, tw.W35, tw.H35))),
 				Div(ClassStr("add-backdrop"+hiddenIf(!settingsOpen.Get())), OnClick(closeSettings)),
-				Div(ClassStr("add-menu bud-set-menu"+hiddenIf(!settingsOpen.Get())), Attr("role", "menu"),
+				Div(ClassStr("add-menu bud-set-menu"+hiddenIf(!settingsOpen.Get())), Attr("role", "menu"), Attr("data-testid", "budgets-settings-menu"),
+					Attr("style", "max-height: min(70vh, 42rem); overflow-y: auto; overscroll-behavior: contain"),
 					viewSection,
-					Div(css.Class("bud-set-sep")),
-					toolsSection,
 				),
+			),
+			Div(ClassStr("add-wrap"), Attr("id", "budgets-tools-wrap"),
+				Button(css.Class("btn btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+					Attr("data-testid", "budgets-tools"), Attr("aria-haspopup", "menu"),
+					Attr("aria-expanded", ariaBool(toolsOpen.Get())), OnClick(toggleTools),
+					Span(uistate.T("bud2.tools")), uiw.Icon(icon.ChevronDown, css.Class(tw.ShrinkO, tw.W35, tw.H35))),
+				Div(ClassStr("add-backdrop"+hiddenIf(!toolsOpen.Get())), OnClick(closeTools)),
+				Div(ClassStr("add-menu bud2-tools-menu"+hiddenIf(!toolsOpen.Get())), Attr("role", "menu"), Attr("data-testid", "budgets-tools-menu"),
+					Attr("style", "max-height: min(70vh, 42rem); overflow-y: auto; overscroll-behavior: contain"), toolsSection),
 			),
 			// Density toggle, surfaced directly beside the settings popover (only useful
 			// once there are budgets to lay out).
@@ -1917,22 +2061,12 @@ func budgetListWidget(props budgetListProps) ui.Node {
 		if key := att.Get(); key != "" {
 			filtered := make([]budgeting.Status, 0, len(visible))
 			for _, s := range visible {
-				switch key {
-				case uistate.BudgetAttentionOver:
-					if s.State == budgeting.StateOver {
-						filtered = append(filtered, s)
-					}
-				case uistate.BudgetAttentionNear:
-					if s.State == budgeting.StateNear {
-						filtered = append(filtered, s)
-					}
+				if key == "needs-attention" && budgetNeedsAttention(s) {
+					filtered = append(filtered, s)
 				}
 			}
 			visible = filtered
-			chipTxt := uistate.T("budgets.attentionOver")
-			if key == uistate.BudgetAttentionNear {
-				chipTxt = uistate.T("budgets.attentionNear")
-			}
+			chipTxt := uistate.T("bud2.attentionFilter")
 			attChip = Div(css.Class("budget-search-empty", tw.Flex, tw.ItemsCenter, tw.Gap2),
 				Attr("data-testid", "budgets-attention-chip"), Attr("role", "status"),
 				Span(chipTxt),

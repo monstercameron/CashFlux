@@ -1,0 +1,143 @@
+// SPDX-License-Identifier: MIT
+
+//go:build js && wasm
+
+package screens
+
+import (
+	"bytes"
+	"testing"
+
+	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/budgeting"
+	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/uistate"
+	"github.com/monstercameron/GoWebComponents/v5/testkit/render"
+	"github.com/monstercameron/GoWebComponents/v5/ui"
+)
+
+func bud2TestApp(t *testing.T) *appstate.App {
+	t.Helper()
+	app, err := appstate.New(&bytes.Buffer{}, false)
+	if err != nil {
+		t.Fatalf("appstate.New: %v", err)
+	}
+	if err := app.PutCategory(domain.Category{ID: "c-food", Name: "Food", Kind: domain.KindExpense}); err != nil {
+		t.Fatalf("PutCategory: %v", err)
+	}
+	prev := appstate.Default
+	appstate.Default = app
+	t.Cleanup(func() { appstate.Default = prev })
+	return app
+}
+
+func TestBudgetStatusStripHasOneHeadlineFigure(t *testing.T) {
+	app := bud2TestApp(t)
+	if err := app.PutCategory(domain.Category{ID: "c-travel", Name: "Travel", Kind: domain.KindExpense}); err != nil {
+		t.Fatalf("PutCategory: %v", err)
+	}
+	if err := app.PutBudget(domain.Budget{
+		ID: "b-food", Name: "Food", CategoryID: "c-food", OwnerID: domain.GroupOwnerID,
+		Scope: domain.ScopeShared, Period: domain.PeriodMonthly,
+		Limit: money.New(50000, "USD"),
+	}); err != nil {
+		t.Fatalf("PutBudget: %v", err)
+	}
+	if err := app.PutBudget(domain.Budget{
+		ID: "b-travel", Name: "Travel", CategoryID: "c-travel", OwnerID: domain.GroupOwnerID,
+		Scope: domain.ScopeShared, Period: domain.PeriodYearly,
+		Limit: money.New(600000, "USD"),
+	}); err != nil {
+		t.Fatalf("PutBudget yearly: %v", err)
+	}
+	f := render.New(t)
+	f.Render(ui.CreateElement(budgetSummaryWidget, budgetSummaryProps{App: app}))
+	if strip := byTestID(f, "div", "budgets-status-strip"); strip == nil {
+		t.Fatal("the status strip did not render")
+	}
+	figures := 0
+	for _, node := range f.AllByTag("span") {
+		if node.Attr("data-testid") == "budgets-status-figure" {
+			figures++
+		}
+	}
+	if figures != 1 {
+		t.Fatalf("headline figures = %d, want one", figures)
+	}
+	if sentence := byTestID(f, "span", "budgets-status-sentence"); sentence == nil || sentence.Text() == "" {
+		t.Fatal("the status strip has no plain-language sentence")
+	}
+	if total := byTestID(f, "p", "budgets-normalized-total"); total == nil || total.Text() != uistate.T("bud2.monthlyEquivalent", "$1,000.00") {
+		t.Fatalf("normalized plan disclosure = %v, want monthly total", total)
+	}
+	if line := byTestID(f, "p", "budgets-normalized-line"); line == nil || line.Text() != uistate.T("bud2.normalizedBudgetLine", "Travel", "yearly", "$500.00") {
+		t.Fatalf("yearly budget disclosure = %v, want its $500 monthly equivalent", line)
+	}
+}
+
+func TestBudgetAttentionCountAndFilterUseSameSet(t *testing.T) {
+	statuses := []budgeting.Status{
+		{State: budgeting.StateOver},
+		{State: budgeting.StateNear},
+		{State: budgeting.StateOK},
+		{State: "healthy"},
+	}
+	count := len(budgetAttentionStatuses(statuses))
+	filtered := make([]budgeting.Status, 0, len(statuses))
+	for _, status := range statuses {
+		if budgetNeedsAttention(status) {
+			filtered = append(filtered, status)
+		}
+	}
+	if count != len(filtered) || count != 2 {
+		t.Fatalf("attention count = %d, filtered rows = %d; want both 2", count, len(filtered))
+	}
+}
+
+func TestBudgetMemberLensAndMenuSplit(t *testing.T) {
+	app := bud2TestApp(t)
+	if err := app.PutMember(domain.Member{ID: "m-priya", Name: "Priya"}); err != nil {
+		t.Fatalf("PutMember: %v", err)
+	}
+	for _, b := range []domain.Budget{
+		{ID: "b-shared", Name: "Shared", CategoryID: "c-food", OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared, Period: domain.PeriodMonthly, Limit: money.New(10000, "USD")},
+		{ID: "b-priya", Name: "Priya", CategoryID: "c-food", OwnerID: "m-priya", Scope: domain.ScopeIndividual, Period: domain.PeriodMonthly, Limit: money.New(10000, "USD")},
+	} {
+		if err := app.PutBudget(b); err != nil {
+			t.Fatalf("PutBudget(%s): %v", b.ID, err)
+		}
+	}
+	uistate.SetActiveMember("m-priya")
+	t.Cleanup(func() { uistate.SetActiveMember("") })
+	f := render.New(t)
+	f.Render(ui.CreateElement(budgetToolbarContent, budgetToolbarProps{App: app}))
+	lens := byTestID(f, "select", "budgets-member-lens")
+	if lens == nil {
+		t.Fatal("member lens did not render")
+	}
+	if lens.Attr("aria-label") != uistate.T("bud2.viewAsMember") {
+		t.Fatalf("member lens accessible name = %q, want %q", lens.Attr("aria-label"), uistate.T("bud2.viewAsMember"))
+	}
+	if label := byTestID(f, "span", "budgets-member-label"); label == nil || label.Text() != uistate.T("bud2.viewAs") {
+		t.Fatalf("visible member lens label = %v, want %q", label, uistate.T("bud2.viewAs"))
+	}
+	if label := byTestID(f, "p", "budgets-member-share"); label == nil || label.Text() != uistate.T("bud2.sharedCount", "Priya", 1, 2) {
+		t.Fatalf("share sentence = %v, want %q", label, uistate.T("bud2.sharedCount", "Priya", 1, 2))
+	}
+	if method := byTestID(f, "select", "budgets-method"); method == nil {
+		t.Fatal("Settings menu does not contain the household budgeting method")
+	}
+	if settingsMenu := byTestID(f, "div", "budgets-settings-menu"); settingsMenu == nil || settingsMenu.Attr("role") != "menu" {
+		t.Fatal("Settings menu was not rendered as its own menu")
+	}
+	if tools := byTestID(f, "button", "budgets-tools"); tools == nil || tools.Text() != uistate.T("bud2.tools") {
+		t.Fatalf("Tools menu trigger = %v", tools)
+	}
+	if toolsMenu := byTestID(f, "div", "budgets-tools-menu"); toolsMenu == nil || toolsMenu.Attr("role") != "menu" {
+		t.Fatal("Tools menu was not rendered separately from Settings")
+	}
+	if adjust := byTestID(f, "button", "budgets-adjust-all"); adjust == nil || adjust.Text() != uistate.T("bud2.adjustAll") {
+		t.Fatalf("Tools menu does not expose the plain-language adjust-all action: %v", adjust)
+	}
+}

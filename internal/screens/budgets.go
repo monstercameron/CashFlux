@@ -138,6 +138,23 @@ type budgetView struct {
 	Anchor time.Time
 }
 
+// budgetNeedsAttention is the shared definition behind the attention count and
+// its list filter. Over-limit and near-limit budgets are both included.
+func budgetNeedsAttention(status budgeting.Status) bool {
+	return status.State == budgeting.StateOver || status.State == budgeting.StateNear
+}
+
+// budgetAttentionStatuses selects the exact set named by the attention count.
+func budgetAttentionStatuses(statuses []budgeting.Status) []budgeting.Status {
+	selected := make([]budgeting.Status, 0, len(statuses))
+	for _, status := range statuses {
+		if budgetNeedsAttention(status) {
+			selected = append(selected, status)
+		}
+	}
+	return selected
+}
+
 // budgetCommitted is the per-budget committed-vs-free breakdown the row renders as a
 // second meter segment plus a quiet caption (XC4), with an optional plain-English
 // set-aside explainer for smoothed annual/quarterly bills (XC3).

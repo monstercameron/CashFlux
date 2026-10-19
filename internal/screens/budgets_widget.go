@@ -69,12 +69,12 @@ func Budgets() ui.Node {
 		// (the hero's attention chip filters the list to the same budgets), and
 		// budget-toolbar's controls render inside the list card's head row (the
 		// standalone tile remains only on the flex surface below).
-		// Feedback #6: when the period control is paged into the future, this leads
-		// with what's projected to happen (recurring bills + income) so the view
-		// isn't empty. Self-gates to nothing for the current/past period.
-		budgetNativeSpec("budget-future"),
 		budgetNativeSpec("budget-summary"),
 		budgetNativeSpec("budget-list"),
+		// Keep planned recurring activity after the budget list in DOM order. The
+		// fixed bento uses source order for packing, so the projection follows the
+		// budgets visually as well.
+		budgetNativeSpec("budget-future"),
 		// BG9: the annual plan-vs-actual grid as its own full-width cell below the list
 		// (self-gates to nothing when there are no budgets).
 		budgetNativeSpec("budget-annualgrid"),
