@@ -1467,7 +1467,10 @@ func TopBar(props topBarProps) uic.Node {
 			uic.CreateElement(MemberSwitcher),
 			// QA CF-24: on /reports the compact month pill silently controls a rolling
 			// ANNUAL window — the prop makes the pill say so ("Year ending Jul 2026").
-			If(periodAware, uic.CreateElement(ResolutionControl, resolutionControlProps{YearEnding: curPath == "/reports"})),
+			uic.CreateElement(shellResolutionSlot, shellResolutionSlotProps{
+				PeriodAware: periodAware,
+				YearEnding:  curPath == "/reports",
+			}),
 			uic.CreateElement(OfflineIndicator),
 			// Sample-data status chip (audit P0): lives in the bar's context zone —
 			// "Sample data · Start fresh" — instead of a banner row above content.
@@ -1519,18 +1522,9 @@ func TopBar(props topBarProps) uic.Node {
 func ThemeToggle() uic.Node {
 	pAtom := uistate.UsePrefs()
 	p := pAtom.Get()
-	next := prefs.ThemeLight
-	switch p.Theme {
-	case prefs.ThemeDark:
-		next = prefs.ThemeLight
-	case prefs.ThemeLight:
-		next = prefs.ThemeSystem
-	default:
-		next = prefs.ThemeDark
-	}
 	cycle := uic.UseEvent(func() {
 		np := pAtom.Get()
-		np.Theme = next
+		np.Theme = nextTheme(np.Theme)
 		uistate.ApplyPrefs(np)
 		uistate.PersistPrefs(np)
 		pAtom.Set(np)
@@ -1540,7 +1534,7 @@ func ThemeToggle() uic.Node {
 		uistate.SyncThemeToMode(np)
 		uistate.ApplyTheme(uistate.LoadTheme())
 	})
-	label := uistate.T("topbar.themeToggle", uistate.T("settings.theme"+themeWord(p.Theme)), uistate.T("settings.theme"+themeWord(next)))
+	label := uistate.T("tv7h.themeLabel", uistate.T("settings.theme"+themeWord(p.Theme)))
 	return Button(css.Class("icon-btn", tw.W7, tw.H7, tw.TextDim, tw.HoverTextFg),
 		Type("button"), Attr("title", label), Attr("aria-label", label),
 		Attr("data-testid", "theme-toggle"), Attr("data-theme-current", string(p.Theme)),

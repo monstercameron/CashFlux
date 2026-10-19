@@ -90,6 +90,9 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **The app shell keeps a stable top bar; the pressed Ledger/Calendar segment is readable (TV7H).** The period control slot is
+  always mounted so the sample banner never remounts on route changes; the theme toggle names the current theme; the pressed
+  segment exposes data-pressed matching aria-checked and uses contrast-aware ink.
 - **Budget suggestions follow the viewed period, member and pay schedule (BC4B4.1).** Limit hints use the context-aware
   recommendation with the viewed anchor, member lens, week start, pay anchor and FX, so weekly and biweekly budgets get hints in
   their own cadence and currency.

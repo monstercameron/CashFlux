@@ -202,6 +202,7 @@ func segButton(props segButtonProps) uic.Node {
 		Type("button"),
 		Attr("role", "radio"),
 		Attr("aria-checked", checked),
+		Attr("data-pressed", checked),
 		Attr("tabindex", tabidx),
 		OnClick(func() {
 			if onSelect != nil {
