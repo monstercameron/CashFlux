@@ -11,33 +11,10 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 )
 
-// budgetCoversTxn reports whether the budget draws any spend from the
-// transaction under pred, honoring per-line owners (XC10): for a split
-// transaction, at least one line must pass pred and be owned by the budget's
-// scope; for an atomic transaction, its category passes pred and its payer is in
-// scope.
-func budgetCoversTxn(budget domain.Budget, t domain.Transaction, pred func(string) bool) bool {
-	if !t.CountsInReports() || !t.IsExpense() {
-		return false
-	}
-	if budget.TracksAnyTag(t.Tags) {
-		return ownsTransactionScope(budget, t)
-	}
-	if t.HasSplits() {
-		for _, s := range t.Splits {
-			if pred(s.CategoryID) && ownsSplitScope(budget, t, s) {
-				return true
-			}
-		}
-		return false
-	}
-	return pred(t.CategoryID) && ownsTransactionScope(budget, t)
-}
-
 // EnvelopeAvailable returns the envelope balance available for the period
-// containing curRef under envelope budgeting (D6): every period from the first
-// covered transaction through the current period is funded by the budget's
-// limit, and all covered spend in that span draws it down. The result is the
+// containing curRef under envelope budgeting (D6). Each funded period uses its
+// historical base and boost, starting at the later of the recorded start and
+// first covered transaction. All covered contributions draw it down. The result is the
 // running balance carried forward — positive means money still in the envelope,
 // negative means it's overdrawn. covers is the set of categories the budget
 // counts (its own plus descendants, from categorytree.Descendants); an empty
@@ -52,57 +29,59 @@ func EnvelopeAvailable(budget domain.Budget, all []domain.Transaction, curRef ti
 // EnvelopeAvailableAnchored is EnvelopeAvailable with a pay-cycle anchor for
 // biweekly budgets.
 func EnvelopeAvailableAnchored(budget domain.Budget, all []domain.Transaction, curRef time.Time, weekStart time.Weekday, anchor time.Time, rates currency.Rates, covers map[string]bool) (money.Money, error) {
-	limit := normalizedLimit(budget, rates)
-	pred := func(id string) bool { return budget.TracksCategory(id) || covers[id] }
-	ledger := NewNettedLedger(all)
-
-	// Earliest covered, in-scope expense — the period funding starts from here.
-	var earliest time.Time
-	found := false
-	for _, t := range all {
-		// XC10: a split transaction is covered when any owned line matches; an
-		// atomic transaction uses its own category and payer. Mirrors spentCovered
-		// so the envelope's first-funded period lines up with what it draws down.
-		if !budgetCoversTxn(budget, t, pred) {
-			continue
-		}
-		if !found || t.Date.Before(earliest) {
-			earliest, found = t.Date, true
-		}
-	}
-	if !found {
-		start, _ := PeriodRangeAnchored(budget.Period, curRef, weekStart, anchor)
-		return limit.Add(money.New(budget.PeriodBoost(start), limit.Currency)) // funded once, nothing spent
-	}
-
-	curStart, _ := PeriodRangeAnchored(budget.Period, curRef, weekStart, anchor)
-	periods := make([]RolloverPeriod, 0)
-	ref := earliest
-	for {
-		ps, pe := PeriodRangeAnchored(budget.Period, ref, weekStart, anchor)
-		spent, err := spentCoveredNetted(budget, ledger.transactions, ps, pe, rates, pred)
-		if err != nil {
-			return money.Money{}, err
-		}
-		base, err := limit.Add(money.New(budget.PeriodBoost(ps), limit.Currency))
-		if err != nil {
-			return money.Money{}, fmt.Errorf("period %s effective base: %w", ps.Format("2006-01-02"), err)
-		}
-		periods = append(periods, RolloverPeriod{Start: ps, Base: base, Spend: spent})
-		if !ps.Before(curStart) {
-			break // reached the current period (or beyond) — stop after funding it
-		}
-		if !pe.After(ps) {
-			return money.Money{}, fmt.Errorf("envelope: period %s did not advance from %s", budget.Period, ps.Format("2006-01-02"))
-		}
-		ref = pe // step to the next period
-	}
-	chain, err := BuildRolloverChain(periods, budget.RolloverCapPeriods)
+	in := ViewInput{Period: ViewPeriod{Anchor: curRef, Now: curRef, WeekStart: weekStart, PayCycleAnchor: anchor}, Transactions: all, Rates: rates, Base: rates.Base}
+	view, err := EnvelopeRolloverView(budget, in, covers)
 	if err != nil {
-		return money.Money{}, fmt.Errorf("build rollover chain: %w", err)
+		return money.Money{}, err
 	}
-	if len(chain) == 0 {
-		return money.Zero(limit.Currency), nil
+	return view.Current.EffectiveCap.Sub(view.Current.Spend)
+}
+
+// EnvelopeRolloverView uses the card's carry engine and historical bases. Funding
+// starts at the later of the recorded start and first covered transaction period.
+// An empty envelope, or a view before its first spend, funds one viewed period.
+// Legacy rollover budgets share the card's one-prior-period compatibility start.
+func EnvelopeRolloverView(b domain.Budget, in ViewInput, covers map[string]bool) (RolloverView, error) {
+	p := in.Period
+	current, _ := PeriodRangeAnchored(b.Period, p.Anchor, p.WeekStart, p.PayCycleAnchor)
+	first := current
+	found := false
+	ledger := NewNettedLedgerWithLinks(in.Transactions, nil)
+	if in.Ledger != nil {
+		ledger = *in.Ledger
+	} else {
+		ledger = NewNettedLedger(in.Transactions)
 	}
-	return chain[len(chain)-1].EffectiveCap.Sub(chain[len(chain)-1].Spend)
+	in.Ledger = &ledger
+	for _, t := range ledger.transactions {
+		_, ok, err := ContributionChecked(b, t, func(id string) bool { return covers[id] })
+		if err != nil {
+			return RolloverView{}, fmt.Errorf("envelope first contribution: %w", err)
+		}
+		if ok && (!found || t.Date.Before(first)) {
+			first = t.Date
+			found = true
+		}
+	}
+	if found {
+		first, _ = PeriodRangeAnchored(b.Period, first, p.WeekStart, p.PayCycleAnchor)
+	}
+	assumed := b.RolloverStart.IsZero() && b.Rollover
+	start := b.RolloverStart
+	if assumed {
+		start, _ = PreviousPeriodRangeAnchored(b.Period, current, p.WeekStart, p.PayCycleAnchor)
+	}
+	if !start.IsZero() {
+		start, _ = PeriodRangeAnchored(b.Period, start, p.WeekStart, p.PayCycleAnchor)
+		if start.After(first) {
+			first = start
+		}
+	}
+	if first.After(current) {
+		first = current
+	}
+	b.RolloverStart = first
+	result, err := EvaluateRolloverView(b, in, covers)
+	result.StartAssumed = assumed
+	return result, err
 }

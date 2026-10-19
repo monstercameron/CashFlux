@@ -32,7 +32,7 @@ func (a *App) CreateBudgetWithCategory(newCat *domain.Category, b domain.Budget)
 			return fmt.Errorf("appstate: create category %q for budget %q: %w", newCat.Name, b.Name, err)
 		}
 	}
-	if err := a.PutBudget(b); err != nil {
+	if err := a.PutBudgetWithHistory(b); err != nil {
 		if newCat != nil {
 			// Roll the category back so a failed add leaves nothing behind. A
 			// rollback that itself fails is logged, not returned: the caller must

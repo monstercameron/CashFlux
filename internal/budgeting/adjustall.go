@@ -3,6 +3,7 @@
 package budgeting
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"time"
@@ -41,6 +42,8 @@ const (
 	// SkipNothingToScale: the figure the adjustment would scale is already at or
 	// below zero, so there is nothing to take a percentage of.
 	SkipNothingToScale SkipReason = "nothing-to-scale"
+	// SkipInvalidArithmetic identifies invalid or overflowing money.
+	SkipInvalidArithmetic SkipReason = "invalid-arithmetic"
 	// SkipUnknownOverlay: this budget's period state could not be resolved — how
 	// much rollover carry-in and one-off change sits on top of its base limit —
 	// so neither what a this-period change would scale nor what a permanent one
@@ -83,6 +86,8 @@ type AdjustSkip struct {
 // were in scope, what the total was, or what it would become — so "lower
 // everything by 10%" was a number typed into the dark.
 type AdjustPreview struct {
+	// Error prevents an overflowing or invalid preview from being applied.
+	Error       error
 	Lines       []AdjustLine
 	TotalBefore int64
 	TotalAfter  int64
@@ -118,6 +123,9 @@ type AdjustNormalizedLine struct {
 // write remains in its own cadence; only the displayed comparison is normalized.
 func AdjustAllPreviewNormalized(budgets []domain.Budget, pct float64, scope AdjustScope, overlays AdjustOverlays, viewedPeriod domain.Period, rates currency.Rates) (AdjustPreview, error) {
 	p := AdjustAllPreviewFor(budgets, pct, scope, overlays)
+	if p.Error != nil {
+		return p, p.Error
+	}
 	p.NormalizedPeriod = viewedPeriod
 	p.NormalizedBefore = money.Zero(rates.Base)
 	p.NormalizedAfter = money.Zero(rates.Base)
@@ -238,20 +246,54 @@ func AdjustNeedsAck(pct float64, scope AdjustScope) bool {
 // delta a this-period write records is only correct if the preview measured it
 // against the effective cap the boost lands on.
 func ApplyAdjust(p AdjustPreview, scope AdjustScope, periodStart func(domain.Budget) time.Time) []domain.Budget {
+	out, _ := ApplyAdjustChecked(p, scope, periodStart)
+	return out
+}
+
+// ApplyAdjustChecked builds every write before returning any, checking boost
+// accumulation as well as the preview. No partial write set escapes on failure.
+func ApplyAdjustChecked(p AdjustPreview, scope AdjustScope, periodStart func(domain.Budget) time.Time) ([]domain.Budget, error) {
+	if p.Error != nil {
+		return nil, p.Error
+	}
+	if !scope.Valid() {
+		return nil, fmt.Errorf("invalid adjustment scope")
+	}
 	out := make([]domain.Budget, 0, len(p.Lines))
 	for _, line := range p.Lines {
 		b := line.Budget
 		if scope == AdjustThisPeriod {
 			if periodStart == nil {
-				continue // no period to attach the boost to; writing the base limit here would be the very thing the scope excludes
+				return nil, fmt.Errorf("adjustment period is required")
 			}
-			out = append(out, b.WithPeriodBoost(periodStart(b), line.Delta()))
-			continue
+			var err error
+			b, err = WithPeriodBoostChecked(b, periodStart(b), line.Delta())
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			b.Limit = money.New(line.After, b.Limit.Currency)
 		}
-		b.Limit = money.New(line.After, b.Limit.Currency)
 		out = append(out, b)
 	}
-	return out
+	return out, nil
+}
+
+// WithPeriodBoostChecked adds a one-period adjustment without wrapping money or
+// mutating the budget's existing boost map. start is the budget's own period key.
+func WithPeriodBoostChecked(b domain.Budget, start time.Time, delta int64) (domain.Budget, error) {
+	key := start.Format(time.DateOnly)
+	amount, err := money.Add(b.PeriodBoosts[key], delta)
+	if err != nil {
+		return domain.Budget{}, fmt.Errorf("budget %q period boost: %w", b.ID, err)
+	}
+	boosts := make(map[string]int64, len(b.PeriodBoosts)+1)
+	for k, v := range b.PeriodBoosts {
+		boosts[k] = v
+	}
+	boosts[key] = amount
+	b.PeriodBoosts = boosts
+	return b, nil
 }
 
 // AdjustAllPreviewFor computes the before/after for an adjustment under a given
@@ -294,30 +336,56 @@ func ApplyAdjust(p AdjustPreview, scope AdjustScope, periodStart func(domain.Bud
 func AdjustAllPreviewFor(budgets []domain.Budget, pct float64, scope AdjustScope, overlays AdjustOverlays) AdjustPreview {
 	var p AdjustPreview
 	for _, b := range budgets {
+		reject := func(err error) {
+			p.Error = errors.Join(p.Error, fmt.Errorf("adjust budget %q: %w", b.ID, err))
+			p.Skipped = append(p.Skipped, AdjustSkip{Budget: b, Reason: SkipInvalidArithmetic})
+		}
 		overlay, known := overlays[b.ID]
 		if !known {
 			p.Skipped = append(p.Skipped, AdjustSkip{Budget: b, Reason: SkipUnknownOverlay})
 			continue
 		}
 		before := b.Limit.Amount
+		var err error
 		if scope == AdjustThisPeriod {
-			before = b.Limit.Amount + overlay
+			before, err = money.Add(before, overlay)
+			if err != nil {
+				reject(err)
+				continue
+			}
 		}
 		if before <= 0 {
 			p.Skipped = append(p.Skipped, AdjustSkip{Budget: b, Reason: SkipNothingToScale})
 			continue
 		}
-		after := AdjustedLimit(before, pct)
-		// The cap the write would leave behind. Under this-period scope `after` IS
-		// the cap and is already floored; under a permanent one the overlay rides
-		// along on top of the new limit.
-		if scope == AdjustEveryPeriod && after+overlay < 1 {
-			p.Skipped = append(p.Skipped, AdjustSkip{Budget: b, Reason: SkipWouldInvert})
+		after, err := adjustedLimitChecked(before, pct)
+		if err != nil {
+			reject(err)
+			continue
+		}
+		if scope == AdjustEveryPeriod {
+			effective, err := money.Add(after, overlay)
+			if err != nil {
+				reject(err)
+				continue
+			}
+			if effective < 1 {
+				p.Skipped = append(p.Skipped, AdjustSkip{Budget: b, Reason: SkipWouldInvert})
+				continue
+			}
+		}
+		totalBefore, err := money.Add(p.TotalBefore, before)
+		if err != nil {
+			reject(err)
+			continue
+		}
+		totalAfter, err := money.Add(p.TotalAfter, after)
+		if err != nil {
+			reject(err)
 			continue
 		}
 		p.Lines = append(p.Lines, AdjustLine{Budget: b, Before: before, After: after})
-		p.TotalBefore += before
-		p.TotalAfter += after
+		p.TotalBefore, p.TotalAfter = totalBefore, totalAfter
 		switch {
 		case p.Currency == "":
 			p.Currency = b.Limit.Currency
@@ -325,17 +393,42 @@ func AdjustAllPreviewFor(budgets []domain.Budget, pct float64, scope AdjustScope
 			p.MixedCurrency = true
 		}
 	}
+
 	if p.MixedCurrency {
 		p.Currency = ""
 	}
 	return p
 }
 
-// AdjustedLimit is one limit scaled by pct percent, floored at one minor unit.
+// AdjustedLimit is the compatibility form of AdjustedLimitBPS. It leaves the
+// limit unchanged on invalid arithmetic. Write previews use the checked form and
+// expose Error, so a rejected adjustment cannot be acknowledged as successful.
 func AdjustedLimit(limit int64, pct float64) int64 {
-	next := limit + int64(math.Round(float64(limit)*pct/100))
-	if next < 1 {
-		return 1
+	result, err := adjustedLimitChecked(limit, pct)
+	if err != nil {
+		return limit
 	}
-	return next
+	return result
+}
+
+func adjustedLimitChecked(limit int64, pct float64) (int64, error) {
+	if math.IsNaN(pct) || math.IsInf(pct, 0) || pct < AdjustMinPct || pct > AdjustMaxPct {
+		return 0, fmt.Errorf("invalid adjustment percentage")
+	}
+	return AdjustedLimitBPS(limit, int64(math.Round(pct*100)))
+}
+
+// AdjustedLimitBPS scales a limit by integer hundredths of one percent, checking
+// multiplication and addition and rounding only the delta half away from zero.
+// A reduction floors the resulting limit at one minor unit.
+func AdjustedLimitBPS(limit, basisPoints int64) (int64, error) {
+	delta, err := money.MulDiv(limit, basisPoints, 10000, money.RoundHalfAwayFromZero)
+	if err != nil {
+		return 0, fmt.Errorf("scale budget limit: %w", err)
+	}
+	next, err := money.Add(limit, delta)
+	if err != nil {
+		return 0, fmt.Errorf("adjust budget limit: %w", err)
+	}
+	return max(next, 1), nil
 }

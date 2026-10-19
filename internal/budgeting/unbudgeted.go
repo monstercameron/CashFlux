@@ -51,7 +51,32 @@ func CoveredCategories(budgets []domain.Budget, cats []domain.Category) map[stri
 // as one row with an empty CategoryID. Categories are sorted by amount, largest first, then
 // by id; categories that net to zero or below are omitted.
 func ComputeUnbudgeted(budgets []domain.Budget, cats []domain.Category, all []domain.Transaction, start, end time.Time, rates currency.Rates) (Unbudgeted, error) {
-	covered := CoveredCategories(budgets, cats)
+	type coverage struct {
+		budget     domain.Budget
+		categories map[string]bool
+	}
+	scopes := make([]coverage, 0, len(budgets))
+	for _, b := range budgets {
+		if !b.IsSaving() {
+			scopes = append(scopes, coverage{b, categorytree.DescendantsOfAll(cats, b.TrackedCategoryIDs())})
+		}
+	}
+	covered := func(t domain.Transaction, split *domain.CategorySplit) bool {
+		for _, scope := range scopes {
+			b := scope.budget
+			if b.TracksAnyTag(t.Tags) && ownsTransactionScope(b, t) {
+				return true
+			}
+			if split != nil {
+				if (b.TracksCategory(split.CategoryID) || scope.categories[split.CategoryID]) && ownsSplitScope(b, t, *split) {
+					return true
+				}
+			} else if (b.TracksCategory(t.CategoryID) || scope.categories[t.CategoryID]) && ownsTransactionScope(b, t) {
+				return true
+			}
+		}
+		return false
+	}
 	nameByID := make(map[string]string, len(cats))
 	for _, c := range cats {
 		nameByID[c.ID] = c.Name
@@ -60,9 +85,6 @@ func ComputeUnbudgeted(budgets []domain.Budget, cats []domain.Category, all []do
 	all = nettedForSpending(all)
 	byCat := make(map[string]money.Money)
 	add := func(categoryID string, amt money.Money) error {
-		if covered[categoryID] {
-			return nil
-		}
 		contribution, err := expenseContribution(amt)
 		if err != nil {
 			return err
@@ -76,26 +98,19 @@ func ComputeUnbudgeted(budgets []domain.Budget, cats []domain.Category, all []do
 			current = money.Zero(rates.Base)
 		}
 		byCat[categoryID], err = current.Add(conv)
-		return nil
+		return err
 	}
 
 	for _, t := range all {
 		if !t.CountsInReports() || !t.IsExpense() || !dateutil.InRange(t.Date, start, end) {
 			continue
 		}
-		trackedTag := false
-		for _, budget := range budgets {
-			if budget.TracksAnyTag(t.Tags) {
-				trackedTag = true
-				break
-			}
-		}
-		if trackedTag {
-			continue
-		}
 		if t.HasSplits() {
 			linesByCategory := make(map[string][]money.Money)
 			for _, s := range t.Splits {
+				if covered(t, &s) {
+					continue
+				}
 				linesByCategory[s.CategoryID] = append(linesByCategory[s.CategoryID], s.Amount)
 			}
 			for categoryID, lines := range linesByCategory {
@@ -107,6 +122,9 @@ func ComputeUnbudgeted(budgets []domain.Budget, cats []domain.Category, all []do
 					return Unbudgeted{}, err
 				}
 			}
+			continue
+		}
+		if covered(t, nil) {
 			continue
 		}
 		if err := add(t.CategoryID, t.Amount); err != nil {

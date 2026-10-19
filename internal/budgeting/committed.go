@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/smoothing"
@@ -79,7 +80,10 @@ func CommittedWithRates(budget domain.Budget, recurrings []domain.Recurring, pos
 		if expected == 0 {
 			continue
 		}
-		postedCount := countPostedMatches(budget, posted, r, mag, start, end)
+		postedCount, err := countPostedMatchesWithRates(budget, posted, r, mag, start, end, rates)
+		if err != nil {
+			return CommittedResult{}, err
+		}
 		notPosted := expected - postedCount
 		if notPosted <= 0 {
 			continue
@@ -232,26 +236,54 @@ func Committed(budget domain.Budget, recurrings []domain.Recurring, posted []dom
 // settle recurring r: a tracked-category expense whose magnitude is within tolerance of
 // the recurring's amount. Split lines are matched per-line against the tracked category.
 func countPostedMatches(budget domain.Budget, posted []domain.Transaction, r domain.Recurring, mag int64, start, end time.Time) int {
+	n, _ := countPostedMatchesWithRates(budget, posted, r, mag, start, end, currency.Rates{Base: r.Amount.Currency})
+	return n
+}
+
+func countPostedMatchesWithRates(budget domain.Budget, posted []domain.Transaction, r domain.Recurring, mag int64, start, end time.Time, rates currency.Rates) (int, error) {
+	contributions, err := postedContributions(budget, posted, r, mag, start, end, rates)
+	return len(contributions), err
+}
+
+func postedContributions(budget domain.Budget, posted []domain.Transaction, r domain.Recurring, mag int64, start, end time.Time, rates currency.Rates) ([]money.Money, error) {
 	tol := amountTolerance(mag)
-	n := 0
+	var out []money.Money
 	for _, t := range posted {
-		if !t.IsExpense() {
+		if !dateutil.InRange(t.Date, start, end) {
 			continue
 		}
-		if t.Date.Before(start) || !t.Date.Before(end) {
+		// Membership and validity are decided by the shared contribution rule before
+		// matching the full recurring charge. The offset uses only the owned portion.
+		amount, ok, err := ContributionChecked(budget, t, nil)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
 			continue
 		}
-		if t.HasSplits() {
-			for _, s := range t.Splits {
-				if budget.TracksCategory(s.CategoryID) && abs64(abs64(s.Amount.Amount)-mag) <= tol {
-					n++
-				}
-			}
+		candidate := domain.Budget{CategoryID: r.CategoryID, Direction: budget.Direction}
+		full, ok, err := ContributionChecked(candidate, t, nil)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
 			continue
 		}
-		if budget.TracksCategory(t.CategoryID) && abs64(abs64(t.Amount.Amount)-mag) <= tol {
-			n++
+		converted, err := rates.Convert(full, r.Amount.Currency)
+		if err != nil {
+			return nil, fmt.Errorf("match recurring %q contribution: %w", r.ID, err)
+		}
+		delta, err := money.Sub(converted.Amount, mag)
+		if err != nil {
+			return nil, err
+		}
+		difference, err := money.Abs(delta)
+		if err != nil {
+			return nil, err
+		}
+		if difference <= tol {
+			out = append(out, amount)
 		}
 	}
-	return n
+	return out, nil
 }

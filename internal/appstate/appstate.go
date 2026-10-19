@@ -2670,43 +2670,49 @@ func (a *App) RunDueFundAccruals(now time.Time) (int, error) {
 }
 
 // isBudgetOver returns true when the given budget is currently in the StateOver
-// state according to a full EvaluateRollup against the live dataset.
+// state according to the same evaluated carry/boost model as the budget cards.
 func (a *App) isBudgetOver(b domain.Budget) bool {
-	now := a.clock()
-	base := a.Settings().BaseCurrency
-	if base == "" {
-		base = "USD"
+	in, err := a.BudgetViewInput(a.clock())
+	if err != nil {
+		a.log.Error("evaluate budget flag", "budget", b.ID, "err", err)
+		return false
 	}
-	rates := currency.Rates{Base: base, Rates: a.Settings().FXRates}
-	cats := a.Categories()
-	bs, be := budgeting.PeriodRange(b.Period, now, time.Monday)
-	st, err := budgeting.EvaluateRollup(b, a.Transactions(), bs, be, rates, budgeting.DefaultNearThreshold, categorytree.DescendantsOfAll(cats, b.TrackedCategoryIDs()))
-	return err == nil && st.State == budgeting.StateOver
+	v := budgeting.EvaluateViewBudget(b, in)
+	if v.Error != nil {
+		a.log.Error("evaluate budget flag", "budget", b.ID, "err", v.Error)
+	}
+	return v.Valid && v.Status.State == budgeting.StateOver
 }
 
 // applyFlagBudgetOver creates an open task for every budget that is currently
 // over its limit, skipping any that already have an open task with the same
 // title (deduplication).
 func (a *App) applyFlagBudgetOver() {
-	now := a.clock()
-	base := a.Settings().BaseCurrency
-	if base == "" {
-		base = "USD"
+	in, err := a.BudgetViewInput(a.clock())
+	if err != nil {
+		a.log.Error("evaluate budget flags", "err", err)
+		return
 	}
-	rates := currency.Rates{Base: base, Rates: a.Settings().FXRates}
-	cats := a.Categories()
-	txns := a.Transactions()
 	existing := a.Tasks()
 	for _, b := range a.Budgets() {
-		bs, be := budgeting.PeriodRange(b.Period, now, time.Monday)
-		st, err := budgeting.EvaluateRollup(b, txns, bs, be, rates, budgeting.DefaultNearThreshold, categorytree.DescendantsOfAll(cats, b.TrackedCategoryIDs()))
-		if err != nil || st.State != budgeting.StateOver {
+		v := budgeting.EvaluateViewBudget(b, in)
+		if !v.Valid {
+			a.log.Error("evaluate budget flag", "budget", b.ID, "err", v.Error)
 			continue
 		}
+		st := v.Status
+		if st.State != budgeting.StateOver {
+			continue
+		}
+		titleKey, titleArgs := BudgetOverTaskTitle(b)
+
 		title := "Budget over limit: " + b.Name
+		if b.IsSaving() {
+			title = "Savings target needs funding: " + b.Name
+		}
 		dup := false
 		for _, tk := range existing {
-			if tk.Status == domain.StatusOpen && tk.Title == title {
+			if tk.Status == domain.StatusOpen && (tk.RelatedID == b.ID && tk.RelatedType == domain.RelatedType("budget") || tk.RelatedID == "" && tk.Title == title) {
 				dup = true
 				break
 			}
@@ -2714,14 +2720,18 @@ func (a *App) applyFlagBudgetOver() {
 		if dup {
 			continue
 		}
-		_ = a.PutTask(domain.Task{
+		if err := a.PutTask(domain.Task{
+			RelatedType: domain.RelatedType("budget"), RelatedID: b.ID,
+			Custom:   map[string]any{"titleKey": titleKey, "titleArgs": titleArgs},
 			ID:       id.New(),
 			Title:    title,
 			Notes:    fmt.Sprintf("Budget %q is at %d%% of its limit.", b.Name, st.Percent),
 			Status:   domain.StatusOpen,
 			Priority: domain.PriorityMedium,
 			Source:   domain.SourceManual,
-		})
+		}); err != nil {
+			a.log.Error("create budget flag task", "budget", b.ID, "err", err)
+		}
 	}
 }
 

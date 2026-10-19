@@ -90,6 +90,16 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Budget money integrity, part 2 (SOLB2).** One signed `budgeting.Contribution` rule now decides what every budget
+  counts (spent, rollover, smoothing, suggestions, tracking, true-up, composition), with checked arithmetic. Cards, badges
+  and envelopes share one bounded rollover engine (history beyond 2,400 periods is an explicit error, never a page freeze;
+  the ledger is bucketed once per pass); envelopes start at the budget's rollover start or first contribution and saving
+  envelopes count their transfers. Creating a budget, enabling rollover and changing a limit permanently now record the
+  rollover start and limit history for the viewed period, with an explicit repair for older budgets. The month-close
+  sweep uses the same evaluated figures as the cards (sub-categories, carry, boosts, member lens, FX; monthly spending
+  budgets only) and withholds itself on incomplete data. True-up and Unbudgeted honour exclusions, tags and owner scope;
+  one wall-clock helper keeps pace and period comparisons on the local day; the over-budget task uses the evaluated cap,
+  the app clock and a translatable title; adjust-all uses integer basis points.
 - **The Budgets page shows the corrected math (BR2STRIP).** The status strip keeps the usable subtotal with "(excludes 1
   budget)" and lists issues once instead of five times. A budget that can't be calculated still appears as a named row
   with a "Fix" action (Edit, or Settings for a missing exchange rate) and no fake figures. Rows say "On pace to overspend

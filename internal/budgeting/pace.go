@@ -3,6 +3,7 @@
 package budgeting
 
 import (
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -30,6 +31,7 @@ type Pace struct {
 // [start, end), clamped to [0, 1]. A non-positive span yields 1 (treat a
 // degenerate period as fully elapsed).
 func elapsedFraction(start, end, now time.Time) float64 {
+	now = dateutil.WallClockUTC(now)
 	span := end.Sub(start)
 	if span <= 0 {
 		return 1
@@ -54,6 +56,7 @@ func elapsedFraction(start, end, now time.Time) float64 {
 // on day one projects to a huge total — so callers should present the projection
 // as a gentle heads-up, not a hard prediction.
 func ProjectPace(status Status, start, end, now time.Time) Pace {
+	now = dateutil.WallClockUTC(now)
 	cur := status.Spent.Currency
 	frac := elapsedFraction(start, end, now)
 
@@ -124,6 +127,7 @@ type PaceMarker struct {
 // sits at zero (everything is "hot" if anything is spent); a degenerate period is
 // treated as fully elapsed.
 func ProjectPaceMarker(status Status, committed money.Money, start, end, now time.Time) PaceMarker {
+	now = dateutil.WallClockUTC(now)
 	cur := status.Spent.Currency
 	frac := elapsedFraction(start, end, now)
 

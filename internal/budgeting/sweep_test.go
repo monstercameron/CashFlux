@@ -11,7 +11,7 @@ import (
 
 func sweepStatus(id, name string, remainingMinor int64) Status {
 	return Status{
-		Budget:    domain.Budget{ID: id, Name: name},
+		Budget:    domain.Budget{ID: id, Name: name, Period: domain.PeriodMonthly},
 		Remaining: money.New(remainingMinor, "USD"),
 	}
 }

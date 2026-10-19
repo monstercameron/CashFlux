@@ -13,6 +13,7 @@ import (
 // and changes no totals. Installed by SetRefundLinks; nil disables netting.
 var refundLinks []domain.TxnLink
 
+// Deprecated: pass NewNettedLedgerWithLinks in ViewInput.Ledger instead.
 // SetRefundLinks installs the refund-pair links whose per-period netting budget
 // spend evaluation applies. Pass the app's full link set (order groups are
 // filtered out internally); call again when links change, or with nil to disable.
@@ -38,4 +39,11 @@ func nettedForSpending(txns []domain.Transaction) []domain.Transaction {
 		return txns
 	}
 	return txnlinks.NetTransactions(txns, refundLinks)
+}
+
+// NewNettedLedgerWithLinks creates a scope-local refund read model. An explicit
+// nil links slice means no refunds, independent of any legacy SetRefundLinks
+// caller. Pass this ledger in ViewInput.Ledger for deterministic evaluation.
+func NewNettedLedgerWithLinks(all []domain.Transaction, links []domain.TxnLink) NettedLedger {
+	return NettedLedger{transactions: txnlinks.NetTransactions(all, links)}
 }

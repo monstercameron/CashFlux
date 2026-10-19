@@ -3,6 +3,7 @@
 package budgeting
 
 import (
+	"errors"
 	"strings"
 	"time"
 
@@ -16,6 +17,8 @@ import (
 // tracking editor's category and tag pickers. Amounts are in the requested base
 // currency's minor units.
 type TrackingMetadata struct {
+	// Error marks incomplete metadata; successful categories remain available.
+	Error         error
 	CategoryCount map[string]int
 	CategoryTotal map[string]int64
 	TagCount      map[string]int
@@ -25,7 +28,7 @@ type TrackingMetadata struct {
 // ComputeTrackingMetadata totals reportable expense transactions within the
 // half-open period [start, end). Split expenses count once per category line;
 // tags count the full transaction once per tag, matching the picker display.
-// Amounts that cannot be converted are omitted, as in the prior picker logic.
+// Failed amounts are omitted and Error marks the result as incomplete.
 func ComputeTrackingMetadata(txns []domain.Transaction, start, end time.Time, base string, rates currency.Rates) TrackingMetadata {
 	result := TrackingMetadata{
 		CategoryCount: make(map[string]int),
@@ -33,34 +36,56 @@ func ComputeTrackingMetadata(txns []domain.Transaction, start, end time.Time, ba
 		TagCount:      make(map[string]int),
 		TagTotal:      make(map[string]int64),
 	}
-	for _, txn := range txns {
-		if !txn.CountsInReports() || txn.IsTransfer() || !txn.Amount.IsNegative() || !dateutil.InRange(txn.Date, start, end) {
-			continue
+	add := func(target map[string]int64, key string, amount money.Money) bool {
+		converted, err := rates.Convert(amount, base)
+		var next int64
+		if err == nil {
+			next, err = money.Add(target[key], converted.Amount)
 		}
-		whole, err := currency.ConvertBetween(txn.Amount.Abs().Amount, txn.Amount.Currency, base, rates)
 		if err != nil {
+			result.Error = errors.Join(result.Error, err)
+			return false
+		}
+		target[key] = next
+		return true
+	}
+	for _, txn := range nettedForSpending(txns) {
+		if !dateutil.InRange(txn.Date, start, end) {
 			continue
 		}
+		whole, ok, err := ContributionChecked(domain.Budget{}, txn, func(string) bool { return true })
+		if err != nil {
+			result.Error = errors.Join(result.Error, err)
+			continue
+		}
+		if !ok {
+			continue
+		}
+		categories := map[string]int{txn.CategoryID: 1}
 		if txn.HasSplits() {
-			for _, split := range txn.Splits {
-				amount, err := currency.ConvertBetween(split.Amount.Abs().Amount, split.Amount.Currency, base, rates)
-				if err != nil {
-					continue
-				}
-				result.CategoryCount[split.CategoryID]++
-				result.CategoryTotal[split.CategoryID], _ = money.Add(result.CategoryTotal[split.CategoryID], amount)
+			categories = map[string]int{}
+			for _, s := range txn.Splits {
+				categories[s.CategoryID]++
 			}
-		} else {
-			result.CategoryCount[txn.CategoryID]++
-			result.CategoryTotal[txn.CategoryID], _ = money.Add(result.CategoryTotal[txn.CategoryID], whole)
+		}
+		for category, count := range categories {
+			amount, ok, err := ContributionChecked(domain.Budget{}, txn, func(id string) bool { return id == category })
+			if err != nil {
+				result.Error = errors.Join(result.Error, err)
+				continue
+			}
+			if ok && add(result.CategoryTotal, category, amount) {
+				result.CategoryCount[category] += count
+			}
 		}
 		for _, tag := range txn.Tags {
 			key := strings.ToLower(strings.TrimSpace(tag))
 			if key == "" {
 				continue
 			}
-			result.TagCount[key]++
-			result.TagTotal[key], _ = money.Add(result.TagTotal[key], whole)
+			if add(result.TagTotal, key, whole) {
+				result.TagCount[key]++
+			}
 		}
 	}
 	return result

@@ -149,80 +149,27 @@ func SpentFromNetted(budget domain.Budget, ledger NettedLedger, start, end time.
 func spentCoveredNetted(budget domain.Budget, all []domain.Transaction, start, end time.Time, rates currency.Rates, covers func(string) bool) (money.Money, error) {
 	limit := normalizedLimit(budget, rates)
 	total := money.Zero(limit.Currency)
-	add := func(amt money.Money) error {
-		conv, err := rates.Convert(amt.Abs(), limit.Currency)
-		if err != nil {
-			return err
-		}
-		total, err = total.Add(conv)
-		return err
-	}
 	for _, t := range all {
-		// TXC-1: a transaction excluded from reports doesn't count toward budget
-		// spend either (reimbursements, cash-back, one-offs) — but still affects the
-		// account balance elsewhere.
-		if !t.CountsInReports() {
+		if !dateutil.InRange(t.Date, start, end) {
 			continue
 		}
-		if !matchesScope(budget, t, start, end) {
-			continue
-		}
-		// Cross-category tag tracking: a transaction carrying one of the budget's tracked
-		// tags counts in FULL and counts ONCE — regardless of how many of those tags it
-		// carries, and taking priority over category/split matching so a charge that matches
-		// both a tracked tag and a tracked category is never double-counted.
-		if budget.TracksAnyTag(t.Tags) {
-			if !ownsTransactionScope(budget, t) {
-				continue
-			}
-			if err := add(t.Amount); err != nil {
-				return money.Money{}, err
-			}
-			continue
-		}
-		if t.HasSplits() {
-			lines := make([]money.Money, 0, len(t.Splits))
-			for _, s := range t.Splits {
-				if !covers(s.CategoryID) {
-					continue
-				}
-				// XC10: attribute the line to its effective owner (the line's own
-				// MemberID, or the transaction's payer when the line carries none).
-				// An individual budget counts only the lines it owns — so a shared
-				// receipt paid by A can still feed B's personal budget line.
-				if !ownsSplitScope(budget, t, s) {
-					continue
-				}
-				lines = append(lines, s.Amount)
-			}
-			signed, err := signedLineTotal(lines)
-			if err != nil {
-				return money.Money{}, err
-			}
-			contribution, err := expenseContribution(signed)
-			if err != nil {
-				return money.Money{}, err
-			}
-			conv, err := rates.Convert(contribution, limit.Currency)
-			if err != nil {
-				return money.Money{}, err
-			}
-			total, err = total.Add(conv)
-			if err != nil {
-				return money.Money{}, err
-			}
-			continue
-		}
-		if !ownsTransactionScope(budget, t) {
-			continue
-		}
-		if !covers(t.CategoryID) {
-			continue
-		}
-		if err := add(t.Amount); err != nil {
+		amount, ok, err := ContributionChecked(budget, t, covers)
+		if err != nil {
 			return money.Money{}, err
 		}
+		if !ok {
+			continue
+		}
+		converted, err := rates.Convert(amount, limit.Currency)
+		if err != nil {
+			return money.Money{}, fmt.Errorf("convert budget contribution %q: %w", t.ID, err)
+		}
+		total, err = total.Add(converted)
+		if err != nil {
+			return money.Money{}, fmt.Errorf("sum budget contributions: %w", err)
+		}
 	}
+
 	return total, nil
 }
 
@@ -247,8 +194,13 @@ func SpentRollup(budget domain.Budget, all []domain.Transaction, start, end time
 
 // evaluateWith builds the Status using the given category-cover predicate.
 func evaluateWith(budget domain.Budget, all []domain.Transaction, start, end time.Time, rates currency.Rates, nearThreshold float64, covers func(string) bool) (Status, error) {
+	return evaluateNettedWith(budget, nettedForSpending(all), start, end, rates, nearThreshold, covers)
+}
+
+func evaluateNettedWith(budget domain.Budget, all []domain.Transaction, start, end time.Time, rates currency.Rates, nearThreshold float64, covers func(string) bool) (Status, error) {
+
 	limit := normalizedLimit(budget, rates)
-	spent, err := spentCovered(budget, all, start, end, rates, covers)
+	spent, err := spentCoveredNetted(budget, all, start, end, rates, covers)
 	if err != nil {
 		return Status{}, err
 	}

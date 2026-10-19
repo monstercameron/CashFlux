@@ -124,3 +124,12 @@ func NextMonthlyDue(now time.Time, day int) time.Time {
 	}
 	return due
 }
+
+// WallClockUTC re-expresses local calendar and clock fields in UTC. Budget
+// windows are timezone-free UTC calendar bounds, so compare them with this value
+// rather than converting the local instant with Time.UTC.
+func WallClockUTC(now time.Time) time.Time {
+	y, m, d := now.Date()
+	h, min, sec := now.Clock()
+	return time.Date(y, m, d, h, min, sec, now.Nanosecond(), time.UTC)
+}

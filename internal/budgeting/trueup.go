@@ -85,10 +85,17 @@ func SuggestTrueUps(budgets []domain.Budget, txns []domain.Transaction, cats []d
 		if limit <= 0 {
 			continue
 		}
-		if learned < limit*trueUpMinRatioBps/10000 {
+		threshold, err := money.MulDiv(limit, trueUpMinRatioBps, 10000, money.RoundTowardZero)
+		if err != nil {
+			return nil, err
+		}
+		if learned < threshold {
 			continue // within normal variation of the current limit
 		}
-		suggested := roundTo(learned, trueUpRoundMinor)
+		suggested, err := roundToChecked(learned, trueUpRoundMinor)
+		if err != nil {
+			return nil, err
+		}
 		if suggested-limit < trueUpMinDeltaMinor {
 			continue
 		}
@@ -119,10 +126,14 @@ func learnedMonthlySpend(b domain.Budget, txns []domain.Transaction, cats []doma
 	earliest := time.Time{}
 	netted := NewNettedLedger(txns)
 	for _, t := range netted.transactions {
-		if !t.IsExpense() || t.Date.After(now) {
+		if t.Date.After(dateutil.WallClockUTC(now)) {
 			continue
 		}
-		if !coveredTxn(t, tracks) {
+		_, ok, err := ContributionChecked(b, t, tracks)
+		if err != nil {
+			return 0, 0, false, err
+		}
+		if !ok {
 			continue
 		}
 		if earliest.IsZero() || t.Date.Before(earliest) {
@@ -144,7 +155,10 @@ func learnedMonthlySpend(b domain.Budget, txns []domain.Transaction, cats []doma
 			if err != nil {
 				return 0, 0, false, err
 			}
-			total += sum
+			total, err = money.Add(total, sum)
+			if err != nil {
+				return 0, 0, false, err
+			}
 			count++
 		}
 		if count > 0 {
@@ -168,72 +182,18 @@ func learnedMonthlySpend(b domain.Budget, txns []domain.Transaction, cats []doma
 		if err != nil {
 			return 0, 0, false, err
 		}
-		total += sum
+		total, err = money.Add(total, sum)
+		if err != nil {
+			return 0, 0, false, err
+		}
 	}
 	return total / int64(window), window, false, nil
 }
 
 // sumCoveredInRange sums covered expense for a budget in [start, end), in the limit currency.
 func sumCoveredInRange(b domain.Budget, txns []domain.Transaction, start, end time.Time, rates currency.Rates, tracks func(string) bool) (int64, error) {
-	limit := normalizedLimit(b, rates)
-	var total int64
-	netted := NewNettedLedger(txns)
-	for _, t := range netted.transactions {
-		if !t.IsExpense() || !dateutil.InRange(t.Date, start, end) {
-			continue
-		}
-		if t.HasSplits() {
-			lines := make([]money.Money, 0, len(t.Splits))
-			for _, s := range t.Splits {
-				if !tracks(s.CategoryID) {
-					continue
-				}
-				lines = append(lines, s.Amount)
-			}
-			signed, err := signedLineTotal(lines)
-			if err != nil {
-				return 0, err
-			}
-			contribution, err := expenseContribution(signed)
-			if err != nil {
-				return 0, err
-			}
-			conv, err := rates.Convert(contribution, limit.Currency)
-			if err != nil {
-				return 0, err
-			}
-			total, err = money.Add(total, conv.Amount)
-			if err != nil {
-				return 0, err
-			}
-			continue
-		}
-		if !tracks(t.CategoryID) {
-			continue
-		}
-		conv, err := rates.Convert(t.Amount.Abs(), limit.Currency)
-		if err != nil {
-			return 0, err
-		}
-		total, err = money.Add(total, conv.Amount)
-		if err != nil {
-			return 0, err
-		}
-	}
-	return total, nil
-}
-
-// coveredTxn reports whether any part of a transaction lands in a tracked category.
-func coveredTxn(t domain.Transaction, tracks func(string) bool) bool {
-	if t.HasSplits() {
-		for _, s := range t.Splits {
-			if tracks(s.CategoryID) {
-				return true
-			}
-		}
-		return false
-	}
-	return tracks(t.CategoryID)
+	amount, err := spentCovered(b, txns, start, end, rates, tracks)
+	return amount.Amount, err
 }
 
 // monthsBetween returns the whole-month count from a to b (both reduced to first-of-month).
@@ -241,10 +201,14 @@ func monthsBetween(a, b time.Time) int {
 	return int(b.Year()-a.Year())*12 + int(b.Month()) - int(a.Month())
 }
 
-// roundTo rounds v to the nearest multiple of step (step <= 1 returns v unchanged).
-func roundTo(v, step int64) int64 {
+// roundToChecked rounds v to the nearest step without an overflowing addition.
+func roundToChecked(v, step int64) (int64, error) {
 	if step <= 1 {
-		return v
+		return v, nil
 	}
-	return (v + step/2) / step * step
+	units, err := money.MulDiv(v, 1, step, money.RoundHalfAwayFromZero)
+	if err != nil {
+		return 0, err
+	}
+	return money.Mul(units, step)
 }

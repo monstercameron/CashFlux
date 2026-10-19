@@ -3,6 +3,7 @@
 package budgeting
 
 import (
+	"github.com/monstercameron/CashFlux/internal/money"
 	"sort"
 	"time"
 
@@ -80,6 +81,7 @@ func HealthyLimit(categoryID string, txns []domain.Transaction, now time.Time, m
 		return 0, nil
 	}
 	covers := map[string]bool{categoryID: true}
+	txns = nettedForSpending(txns)
 	curStart := dateutil.MonthStart(now)
 
 	monthSums := make([]int64, months+1)
@@ -95,7 +97,10 @@ func HealthyLimit(categoryID string, txns []domain.Transaction, now time.Time, m
 				return 0, err
 			}
 			if ok {
-				monthSums[k] += amt
+				monthSums[k], err = money.Add(monthSums[k], amt)
+				if err != nil {
+					return 0, err
+				}
 			}
 		}
 	}
@@ -118,7 +123,11 @@ func HealthyLimit(categoryID string, txns []domain.Transaction, now time.Time, m
 	// Drop the single highest month, then average the rest — the "healthy" trim.
 	var total, hi int64
 	for _, v := range span {
-		total += v
+		var err error
+		total, err = money.Add(total, v)
+		if err != nil {
+			return 0, err
+		}
 		if v > hi {
 			hi = v
 		}

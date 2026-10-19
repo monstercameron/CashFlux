@@ -5,6 +5,7 @@
 package screens
 
 import (
+	"log/slog"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -77,17 +78,24 @@ func budgetsSweepCard() ui.Node {
 		return Fragment()
 	}
 
-	base := app.Settings().BaseCurrency
-	if base == "" {
-		base = "USD"
-	}
-	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	mStart, mEnd, _ := closedMonthRange(now)
-	statuses, err := budgeting.EvaluateAll(app.Budgets(), app.Transactions(), mStart, mEnd, rates, budgeting.DefaultNearThreshold)
+	mStart, _, _ := closedMonthRange(now)
+	input, err := app.BudgetViewInput(mStart)
 	if err != nil {
+		slog.Error("calculate month-close sweep", "err", err)
 		return Fragment()
 	}
-	plan := budgeting.ComputeSweep(statuses, cfg.Domain(), base, app.SweepAllowedForGoal)
+	// The live preferences are authoritative for the current view's member/grid.
+	pr := uistate.CurrentPrefs()
+	input.Period.WeekStart = pr.WeekStartWeekday()
+	input.Period.PayCycleAnchor = budgetPayCycleAnchor(pr.PayCycleAnchor)
+	input.PoolRollover = pr.BudgetRolloverLeftover
+	base := input.Base
+	plan, err := budgeting.EvaluateSweep(app.Budgets(), input, cfg.Domain(), uistate.ActiveMemberFromScope(), app.SweepAllowedForGoal)
+	if err != nil {
+		slog.Error("calculate month-close sweep", "err", err)
+		return Fragment()
+	}
+
 	if !plan.HasLeftover() {
 		return Fragment()
 	}

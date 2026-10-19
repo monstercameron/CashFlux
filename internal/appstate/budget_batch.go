@@ -4,6 +4,7 @@ package appstate
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/validate"
@@ -14,12 +15,27 @@ import (
 // one SQLite transaction. No budget changes are visible if validation or the
 // underlying transaction fails.
 func (a *App) PutBudgetsAtomic(writes []domain.Budget) error {
+	return a.PutBudgetsAtomicAt(writes, a.clock())
+}
+
+// PutBudgetsAtomicAt records each budget's history from its own period containing
+// ref and commits all changes together. The caller's drafts are not mutated.
+func (a *App) PutBudgetsAtomicAt(writes []domain.Budget, ref time.Time) error {
 	if err := a.roleGuard(); err != nil {
 		return err
 	}
 	if len(writes) == 0 {
 		return fmt.Errorf("appstate: budget batch is empty")
 	}
+	prepared := make([]domain.Budget, len(writes))
+	for i, b := range writes {
+		var err error
+		prepared[i], err = a.prepareBudgetWrite(b, ref)
+		if err != nil {
+			return err
+		}
+	}
+	writes = prepared
 	wasOver := make(map[string]bool, len(writes))
 	seen := make(map[string]bool, len(writes))
 	current := make(map[string]domain.Budget, len(writes))

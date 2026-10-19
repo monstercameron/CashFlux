@@ -48,6 +48,7 @@ func SuggestLimitIn(covers map[string]bool, txns []domain.Transaction, now time.
 	if len(covers) == 0 || months <= 0 {
 		return 0, nil
 	}
+	txns = nettedForSpending(txns)
 	curStart := dateutil.MonthStart(now)
 	monthSums := make([]int64, months+1)
 	for k := 1; k <= months; k++ {
@@ -90,35 +91,10 @@ func SuggestLimitIn(covers map[string]bool, txns []domain.Transaction, now time.
 // rate table's base currency. A split transaction contributes only its covered
 // lines; an unsplit one contributes in full when its own category is covered.
 func scopedSpend(t domain.Transaction, covers map[string]bool, rates currency.Rates) (int64, bool, error) {
-	add := func(m money.Money) (int64, error) {
-		conv, err := rates.Convert(m.Abs(), rates.Base)
-		if err != nil {
-			return 0, err
-		}
-		return conv.Amount, nil
+	amount, ok, err := ContributionChecked(domain.Budget{}, t, func(id string) bool { return covers[id] })
+	if err != nil || !ok {
+		return 0, ok, err
 	}
-	if t.HasSplits() {
-		var sum int64
-		any := false
-		for _, s := range t.Splits {
-			if !covers[s.CategoryID] {
-				continue
-			}
-			amt, err := add(s.Amount)
-			if err != nil {
-				return 0, false, err
-			}
-			sum += amt
-			any = true
-		}
-		return sum, any, nil
-	}
-	if !covers[t.CategoryID] {
-		return 0, false, nil
-	}
-	amt, err := add(t.Amount)
-	if err != nil {
-		return 0, false, err
-	}
-	return amt, true, nil
+	converted, err := rates.Convert(amount, rates.Base)
+	return converted.Amount, true, err
 }

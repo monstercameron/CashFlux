@@ -43,6 +43,7 @@ type budgetEditSaveProps struct {
 
 // useBudgetEditSave registers full-edit validation and persistence.
 func useBudgetEditSave(p budgetEditSaveProps) ui.Handler {
+	viewWindow := uistate.UsePeriod()
 	saveEdit := ui.UseEvent(Prevent(func() {
 		if p.app == nil {
 			p.done()
@@ -121,7 +122,15 @@ func useBudgetEditSave(p budgetEditSaveProps) ui.Handler {
 			}
 			// Tracked categories are managed in their own editor (C1) — this save leaves
 			// CategoryID/CategoryIDs untouched.
-			if err := p.app.PutBudget(bb); err != nil {
+			// Apply a permanent edit from the period the user is viewing.
+			start, end := viewWindow.Get().Range()
+			input, err := p.app.BudgetViewInput(start)
+			if err != nil {
+				p.errS.Set(budgetErrorText(err))
+				return
+			}
+			ref := budgeting.ResolveViewPeriod(start, end, input.Period.Now, input.Period.WeekStart, input.Period.PayCycleAnchor).Anchor
+			if err := p.app.PutBudgetAt(bb, ref); err != nil {
 				p.errS.Set(budgetErrorText(err))
 				return
 			}

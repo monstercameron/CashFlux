@@ -23,6 +23,7 @@ type ViewPeriod struct {
 
 // ResolveViewPeriod anchors a live window to now and any other window to its start.
 func ResolveViewPeriod(start, end, now time.Time, weekStart time.Weekday, payCycleAnchor time.Time) ViewPeriod {
+	now = dateutil.WallClockUTC(now)
 	anchor := start
 	if !now.Before(start) && now.Before(end) {
 		anchor = now
@@ -32,6 +33,9 @@ func ResolveViewPeriod(start, end, now time.Time, weekStart time.Weekday, payCyc
 
 // ViewInput contains the immutable ledger inputs for evaluating one budget.
 type ViewInput struct {
+	// Ledger is an explicit scope-local refund read model. When nil, the legacy
+	// transaction/netting adapter is used for compatibility with older callers.
+	Ledger                  *NettedLedger
 	Period                  ViewPeriod
 	Transactions            []domain.Transaction
 	Categories              []domain.Category
@@ -96,8 +100,18 @@ func (v *ViewBudget) fail(operation string, err error) {
 // The stored budget is never modified; Status.Limit carries the effective cap
 // while Status.Budget retains the standing plan for editing and annual totals.
 func EvaluateViewBudget(b domain.Budget, in ViewInput) ViewBudget {
+	ledger := NewNettedLedgerWithLinks(in.Transactions, nil)
+	if in.Ledger != nil {
+		ledger = *in.Ledger
+	} else {
+		ledger = NewNettedLedger(in.Transactions)
+	}
+	in.Ledger = &ledger
+	in.Transactions = ledger.transactions
 	b = b.WithBaseCurrency(in.Base)
 	p := in.Period
+	p.Now = dateutil.WallClockUTC(p.Now)
+	in.Period = p
 	start, end := PeriodRangeAnchored(b.Period, p.Anchor, p.WeekStart, p.PayCycleAnchor)
 	calendar := periodStatus(start, end, p.Now, periodage.Of(start, end, p.Now).Early())
 	v := ViewBudget{Budget: b, Start: start, End: end, PeriodStatus: calendar, Status: Status{Budget: b, Limit: b.Limit, PeriodStatus: calendar}, Covers: categorytree.DescendantsOfAll(in.Categories, b.TrackedCategoryIDs())}
@@ -110,7 +124,7 @@ func EvaluateViewBudget(b domain.Budget, in ViewInput) ViewBudget {
 		v.fail("convert budget limit", err)
 		return v
 	}
-	st, err := EvaluateRollup(eval, in.Transactions, start, end, in.Rates, DefaultNearThreshold, v.Covers)
+	st, err := evaluateNettedWith(eval, in.Transactions, start, end, in.Rates, DefaultNearThreshold, func(id string) bool { return eval.TracksCategory(id) || v.Covers[id] })
 	if err != nil {
 		v.fail("evaluate budget", err)
 		return v
@@ -211,7 +225,7 @@ func (v *ViewBudget) effectiveBudget(in ViewInput) domain.Budget {
 		v.CarryDelta = v.Carry.Amount
 	} else if in.PoolRollover {
 		start, end := PreviousPeriodRangeAnchored(b.Period, p.Anchor, p.WeekStart, p.PayCycleAnchor)
-		prev, err := EvaluateRollup(b, in.Transactions, start, end, in.Rates, DefaultNearThreshold, v.Covers)
+		prev, err := evaluateNettedWith(b, in.Transactions, start, end, in.Rates, DefaultNearThreshold, func(id string) bool { return b.TracksCategory(id) || v.Covers[id] })
 		switch {
 		case err != nil:
 			v.issue("evaluate pooled rollover", err)
@@ -255,7 +269,7 @@ func (v *ViewBudget) previousPeriod(in ViewInput) {
 	if len(v.Rollover.Prior) > 0 {
 		eval.Limit = v.Rollover.Prior[len(v.Rollover.Prior)-1].EffectiveCap
 	}
-	prev, err := EvaluateRollup(eval, in.Transactions, start, end, in.Rates, DefaultNearThreshold, v.Covers)
+	prev, err := evaluateNettedWith(eval, in.Transactions, start, end, in.Rates, DefaultNearThreshold, func(id string) bool { return eval.TracksCategory(id) || v.Covers[id] })
 	if err != nil {
 		v.issue("evaluate prior budget spending", err)
 		return

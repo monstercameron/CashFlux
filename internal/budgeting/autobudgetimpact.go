@@ -2,7 +2,12 @@
 
 package budgeting
 
-import "github.com/monstercameron/CashFlux/internal/domain"
+import (
+	"fmt"
+	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/money"
+)
 
 // AutoBudgetImpact is what an Auto-budget run would do to the household's plan
 // as a whole (C593).
@@ -67,4 +72,45 @@ func AutoBudgetImpactOf(budgets []domain.Budget, income int64, limits map[string
 		}
 	}
 	return out
+}
+
+// AutoBudgetImpactWithRates previews the complete standing household plan on a
+// monthly basis. Auto-budget replaces monthly category budgets only; every other
+// cadence remains in both normalized totals. limits are base-currency monthly
+// amounts, converted to a replaced budget's currency before normalization.
+func AutoBudgetImpactWithRates(budgets []domain.Budget, income int64, limits map[string]int64, rates currency.Rates) (AutoBudgetImpact, error) {
+	before, err := NormalizeBudgets(budgets, domain.PeriodMonthly, rates)
+	if err != nil {
+		return AutoBudgetImpact{}, fmt.Errorf("auto-budget before plan: %w", err)
+	}
+	after := append([]domain.Budget(nil), budgets...)
+	replaced := map[string]bool{}
+	for i, b := range after {
+		next, ok := limits[b.CategoryID]
+		if b.Period != domain.PeriodMonthly || !ok || replaced[b.CategoryID] {
+			continue
+		}
+		amount, err := rates.Convert(money.New(next, rates.Base), b.WithBaseCurrency(rates.Base).Limit.Currency)
+		if err != nil {
+			return AutoBudgetImpact{}, fmt.Errorf("auto-budget replacement %q: %w", b.ID, err)
+		}
+		after[i].Limit = amount
+		replaced[b.CategoryID] = true
+	}
+	for cat, amount := range limits {
+		if !replaced[cat] {
+			after = append(after, domain.Budget{ID: "auto:" + cat, CategoryID: cat, Period: domain.PeriodMonthly, Limit: money.New(amount, rates.Base)})
+		}
+	}
+	normalized, err := NormalizeBudgets(after, domain.PeriodMonthly, rates)
+	if err != nil {
+		return AutoBudgetImpact{}, fmt.Errorf("auto-budget after plan: %w", err)
+	}
+	out := AutoBudgetImpact{BudgetedBefore: before.Total.Amount, BudgetedAfter: normalized.Total.Amount, Income: income}
+	for _, pair := range [][2]int64{{out.BudgetedAfter, out.BudgetedBefore}, {income, out.BudgetedBefore}, {income, out.BudgetedAfter}} {
+		if _, err := money.Sub(pair[0], pair[1]); err != nil {
+			return AutoBudgetImpact{}, fmt.Errorf("auto-budget affordability: %w", err)
+		}
+	}
+	return out, nil
 }

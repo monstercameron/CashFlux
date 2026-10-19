@@ -3,6 +3,9 @@
 package budgeting
 
 import (
+	"fmt"
+	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
 )
 
@@ -59,6 +62,8 @@ type SweepLine struct {
 // and their total, plus the goal the total is destined for. A plan with no lines
 // (Total zero) means nothing to sweep — the card should not appear.
 type SweepPlan struct {
+	// Error marks an incomplete plan; a failed plan must never move money.
+	Error error
 	// Lines are the participating budgets that left money unspent.
 	Lines []SweepLine
 	// Total is the sum of all line leftovers, in the base currency.
@@ -73,7 +78,7 @@ type SweepPlan struct {
 
 // HasLeftover reports whether the plan has anything worth sweeping.
 func (p SweepPlan) HasLeftover() bool {
-	return p.Total.Amount > 0 && len(p.Lines) > 0
+	return p.Error == nil && p.Total.Amount > 0 && len(p.Lines) > 0
 }
 
 // BudgetCount is the number of budgets contributing to the sweep.
@@ -81,40 +86,72 @@ func (p SweepPlan) BudgetCount() int {
 	return len(p.Lines)
 }
 
-// ComputeSweep totals the unspent leftover across the config's participating
-// budgets. statuses are the budgets' evaluated states for the closed period
-// (from Evaluate/EvaluateAll); only a positive Remaining counts — an overspent or
-// exactly-spent budget contributes nothing. base is the household base currency
-// the total is reported in; leftovers are summed in minor units (exact for the
-// single-currency common case).
-//
-// goalAllowed composes the XC7 earmark-integrity gate: it is asked whether the
-// target goal may receive a sweep, and when it answers false the returned plan is
-// marked Blocked so the UI can explain the hold rather than silently earmark into
-// an already-overdrawn account. A nil goalAllowed means "no gate" (always allow).
-func ComputeSweep(statuses []Status, cfg SweepConfig, base string, goalAllowed func(goalID string) bool) SweepPlan {
-	plan := SweepPlan{Total: money.Zero(base), GoalID: cfg.TargetGoalID}
-	if !cfg.Enabled {
-		return plan
+// ComputeSweep is the single-currency compatibility wrapper. Foreign currency,
+// overflow or a failed status produces a blocked plan with Error. Use
+// ComputeSweepWithRates for household FX.
+func ComputeSweep(statuses []Status, cfg SweepConfig, base string, goalAllowed func(string) bool) SweepPlan {
+	plan, err := ComputeSweepWithRates(statuses, cfg, currency.Rates{Base: base}, goalAllowed)
+	if err != nil {
+		plan.Error = err
+		plan.Blocked = true
 	}
-	var totalMinor int64
+	return plan
+}
+
+// ComputeSweepWithRates computes checked leftovers from evaluated card statuses.
+// Month-close sweeps only monthly spending budgets; weekly, quarterly, yearly
+// and saving budgets are excluded. Every line and Total use rates.Base.
+// Any eligible failure withholds the entire plan instead of moving a subtotal.
+func ComputeSweepWithRates(statuses []Status, cfg SweepConfig, rates currency.Rates, goalAllowed func(string) bool) (SweepPlan, error) {
+	plan := SweepPlan{Total: money.Zero(rates.Base), GoalID: cfg.TargetGoalID}
+	fail := func(err error) (SweepPlan, error) {
+		return SweepPlan{GoalID: cfg.TargetGoalID, Blocked: true, Error: err}, err
+	}
+	if !cfg.Enabled {
+		return plan, nil
+	}
+	if rates.Base == "" {
+		return fail(fmt.Errorf("sweep: base currency is required"))
+	}
 	for _, s := range statuses {
-		if !cfg.Participates(s.Budget.ID) {
+		b := s.Budget
+		if !cfg.Participates(b.ID) || b.IsSaving() || b.Period != domain.PeriodMonthly {
 			continue
+		}
+		if s.Error != nil {
+			return fail(s.Error)
+		}
+		if s.State == StateUnavailable {
+			return fail(fmt.Errorf("sweep budget %q is unavailable", b.ID))
 		}
 		if s.Remaining.Amount <= 0 {
 			continue
 		}
-		plan.Lines = append(plan.Lines, SweepLine{
-			BudgetID:   s.Budget.ID,
-			BudgetName: s.Budget.Name,
-			Leftover:   s.Remaining,
-		})
-		totalMinor += s.Remaining.Amount
+		amount, err := rates.Convert(s.Remaining, rates.Base)
+		if err != nil {
+			return fail(fmt.Errorf("sweep budget %q: %w", b.ID, err))
+		}
+		plan.Total, err = plan.Total.Add(amount)
+		if err != nil {
+			return fail(fmt.Errorf("sum sweep leftovers: %w", err))
+		}
+		plan.Lines = append(plan.Lines, SweepLine{BudgetID: b.ID, BudgetName: b.Name, Leftover: amount})
 	}
-	plan.Total = money.New(totalMinor, base)
 	if goalAllowed != nil && cfg.TargetGoalID != "" && !goalAllowed(cfg.TargetGoalID) {
 		plan.Blocked = true
 	}
-	return plan
+	return plan, nil
+}
+
+// EvaluateSweep evaluates the closed month through the same carry, boost,
+// descendant and smoothing model as cards, retaining the active member lens.
+func EvaluateSweep(budgets []domain.Budget, in ViewInput, cfg SweepConfig, memberID string, goalAllowed func(string) bool) (SweepPlan, error) {
+	var statuses []Status
+	for _, b := range ViewBudgets(budgets, memberID) {
+		if !cfg.Participates(b.ID) || b.Period != domain.PeriodMonthly || b.IsSaving() {
+			continue
+		}
+		statuses = append(statuses, EvaluateViewBudget(b, in).Status)
+	}
+	return ComputeSweepWithRates(statuses, cfg, in.Rates, goalAllowed)
 }
