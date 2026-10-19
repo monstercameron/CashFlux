@@ -6,11 +6,15 @@ package screens
 
 import (
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/period"
+	"github.com/monstercameron/CashFlux/internal/prefs"
+	"github.com/monstercameron/CashFlux/internal/reports"
 	"github.com/monstercameron/CashFlux/internal/txncalendar"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -34,11 +38,18 @@ const budgetFutureMaxRows = 8
 // current or a past period, so it never clutters the normal view.
 func budgetFutureWidget(props budgetSummaryProps) ui.Node {
 	_ = uistate.UseDataRevision().Get()
-	app := props.App
 	w := uistate.UsePeriod().Get()
-	now := time.Now()
+	activeMember := uistate.UseActiveMember().Get()
+	prefs := uistate.UsePrefs().Get()
+	open := ui.UseState(false)
+	toggleOpen := ui.UseEvent(Prevent(func() { open.Set(!open.Get()) }))
+	return renderBudgetFutureWidget(props, w, time.Now(), activeMember, prefs, open.Get(), toggleOpen)
+}
+
+func renderBudgetFutureWidget(props budgetSummaryProps, w period.Window, now time.Time, activeMember string, prefs prefs.Prefs, open bool, toggleOpen ui.Handler) ui.Node {
+	app := props.App
 	start, end := w.Range()
-	if !start.After(now) {
+	if !isFuturePeriod(w, now) {
 		// Not a future window: render a hidden placeholder rather than an empty
 		// Fragment. An empty→content transition would late-mount and append the tile
 		// to the end of the bento (losing its lead position); a keyed placeholder
@@ -65,24 +76,33 @@ func budgetFutureWidget(props budgetSummaryProps) ui.Node {
 	ghosts := txncalendar.Ghosts(active, start, end)
 	sort.SliceStable(ghosts, func(i, j int) bool { return ghosts[i].Date.Before(ghosts[j].Date) })
 
-	var inflow, outflow int64
+	// Keep the future income figure on the same basis as the budget hero. Scheduled
+	// deposits remain visible as individual recurring rows, while this total is the
+	// plan's expected income, not a second estimate derived from the recurrence list.
+	view := computeBudgetView(app, activeMember, w, prefs, false)
+	expectedIncome := view.BannerIncome
+	var outflow int64
 	for _, g := range ghosts {
 		conv, err := currency.ConvertBetween(g.Amount, curOf[g.RecurringID], base, rates)
 		if err != nil {
 			continue
 		}
-		if conv >= 0 {
-			inflow += conv
-		} else {
+		if conv < 0 {
 			outflow += -conv
 		}
 	}
-	net := inflow - outflow
+	var receivedIncome int64
+	if lines, err := reports.IncomeByCategory(app.Transactions(), start, end, rates); err == nil {
+		for _, line := range lines {
+			receivedIncome += line.Amount
+		}
+	}
+	planned := view.TotalLimit + view.SavingsAssigned
 
 	stats := Div(css.Class("bfut-stats"),
-		bfutStat("budgets.future.in", money.New(inflow, base), "text-up"),
+		bfutStat("budgets.future.expectedIncome", money.New(expectedIncome, base), "text-up"),
 		bfutStat("budgets.future.out", money.New(outflow, base), "text-down"),
-		bfutStat("budgets.future.net", money.New(net, base), netTone(net)),
+		bfutStat("budgets.future.net", money.New(expectedIncome-outflow, base), netTone(expectedIncome-outflow)),
 	)
 
 	var listBody ui.Node
@@ -102,10 +122,32 @@ func budgetFutureWidget(props budgetSummaryProps) ui.Node {
 		listBody = Div(css.Class("brc-rows"), rows)
 	}
 
-	section := uiw.EntityListSection(uiw.EntityListSectionProps{
-		Title:  uistate.T("budgets.future.title", w.Label()),
-		TestID: "budgets-future",
-		Body: Fragment(
+	billCount := 0
+	for _, g := range ghosts {
+		if g.Amount < 0 {
+			billCount++
+		}
+	}
+	foldLabel := uistate.TN("budgets.future.foldHintOne", "budgets.future.foldHintMany",
+		billCount, fmtMoney(money.New(outflow, base)))
+	buttonLabel := uistate.T("budgets.future.showAria")
+	if open {
+		buttonLabel = uistate.T("budgets.future.hideAria")
+	}
+	fold := Button(css.Class("budget-fold-toggle"), Type("button"),
+		Attr("data-testid", "budgets-future-toggle"), Attr("aria-expanded", ariaBool(open)),
+		Attr("aria-label", buttonLabel), OnClick(toggleOpen),
+		Span(css.Class("budget-fold-toggle-label"), uistate.T("budgets.future.title", w.Label())+" · "),
+		Span(css.Class("budget-fold-toggle-hint"), foldLabel),
+	)
+
+	var body ui.Node = Fragment()
+	if open {
+		body = Fragment(
+			P(css.Class("budget-future-plan", tw.Text13), Attr("data-testid", "budgets-future-planning"), uistate.T("budgets.future.planning",
+				fmtMoney(money.New(planned, base)), fmtMoney(money.New(expectedIncome, base)))),
+			P(css.Class("budget-future-received", tw.Text12, tw.TextDim), Attr("data-testid", "budgets-future-received"), uistate.T("budgets.future.received",
+				fmtMoney(money.New(receivedIncome, base)))),
 			P(css.Class("muted", tw.Text13), uistate.T("budgets.future.desc")),
 			stats,
 			// EC-11: whether the month ahead is actually set up, as sentences
@@ -113,17 +155,25 @@ func budgetFutureWidget(props budgetSummaryProps) ui.Node {
 			// wrong and nothing about what.
 			readinessNotes(app, now, rates, base),
 			listBody,
-		),
-	})
+		)
+	}
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "budget-future", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
-		Body: section,
+		Body: Div(css.Class("brc budget-fold"), Attr("data-testid", "budgets-future"), fold, body),
 	})
+}
+
+// isFuturePeriod reports whether the viewed window starts after today. Budgets uses
+// this same decision to replace present-tense funding alarms with planning language.
+func isFuturePeriod(w period.Window, now time.Time) bool {
+	start, _ := w.Range()
+	return start.After(now)
 }
 
 // bfutStat renders one in/out/net figure block.
 func bfutStat(labelKey string, m money.Money, tone string) ui.Node {
 	return Div(css.Class("bfut-stat"),
+		Attr("data-testid", "budgets-future-stat-"+strings.TrimPrefix(labelKey, "budgets.future.")),
 		Span(css.Class("bfut-stat-label", tw.TextDim), uistate.T(labelKey)),
 		Span(ClassStr("bfut-stat-val fig "+tw.Fold(tw.FontDisplay)+" "+tw.ColorClass(tone)), fmtMoney(m)),
 	)

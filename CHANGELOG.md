@@ -90,6 +90,10 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Budgets: calmer future months (BUD4).** Viewing a future month, the "Projected for <month>" panel starts collapsed
+  behind a one-line summary (bills expected and their total), and when expanded it shows planned budgets, expected income
+  and received income separately. Expected income now comes from the same source as the page headline, so the two figures
+  agree.
 - **Budgets screens: stable hooks, cached suggestions, correct annual grid (BUDQ3).** The tracking, cover-all and flex
   dialogs call every hook before any early return, so removing a budget while its dialog is open no longer breaks hook
   order. Suggestions load smart settings once and are cached per data revision, and now count the budget's tracked tags
