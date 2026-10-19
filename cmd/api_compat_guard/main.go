@@ -35,8 +35,8 @@ func main() {
 		{
 			path: "internal/server/config.go",
 			want: []string{
-				`APIVersion          = "v1"`,
-				`MinClientAPIVersion = "v1"`,
+				`APIVersion          = "2"`,
+				`MinClientAPIVersion = "1"`,
 			},
 		},
 		{
