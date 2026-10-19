@@ -166,5 +166,5 @@ func migrate(ds Dataset) (Dataset, error) {
 	}
 	// Future stepwise migrations go here (e.g. if ds.SchemaVersion < 2 { ... }).
 	ds.SchemaVersion = SchemaVersion
-	return ds, nil
+	return backfillBudgetCurrencies(ds), nil
 }

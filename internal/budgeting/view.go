@@ -41,14 +41,25 @@ type ViewInput struct {
 	PoolRollover, ShowPrior bool
 }
 
-// ViewIssue identifies a failed step without hiding the successfully evaluated steps.
+// ViewIssue identifies a failed or informational step without hiding successfully evaluated figures.
 type ViewIssue struct {
 	Operation, BudgetID, Field string
+	Kind, Message              string
 	Err                        error
 }
 
+// ViewIssueRolloverStartAssumed identifies the compatibility fallback for
+// legacy rollover budgets without a recorded first period.
+const ViewIssueRolloverStartAssumed = "RolloverStartAssumed"
+
 // ViewBudget holds unformatted figures and their provenance for a budget card.
 type ViewBudget struct {
+	CommitmentError                   *BudgetEvaluationError
+	Error                             *BudgetEvaluationError
+	PeriodStatus                      PeriodStatus
+	Projection                        Pace
+	FreeAfterCommitted                money.Money
+	Rollover                          RolloverView
 	Budget                            domain.Budget
 	Start, End                        time.Time
 	Status                            Status
@@ -72,68 +83,136 @@ func (v *ViewBudget) issue(operation string, err error) {
 	v.Issues = append(v.Issues, ViewIssue{Operation: operation, BudgetID: v.Budget.ID, Err: err})
 }
 
+func (v *ViewBudget) fail(operation string, err error) {
+	v.Error = &BudgetEvaluationError{BudgetID: v.Budget.ID, Operation: operation, Err: err}
+	v.Valid = false
+	v.Status.Error = v.Error
+	v.Status.State = StateUnavailable
+	v.issue(operation, v.Error)
+	v.Status.Issues = DeduplicateViewIssues(v.Issues)
+}
+
 // EvaluateViewBudget resolves carry, boosts, spending, smoothing, commitments and prior-period figures.
-// The stored budget is never modified; Status.Budget carries the effective evaluation cap.
+// The stored budget is never modified; Status.Limit carries the effective cap
+// while Status.Budget retains the standing plan for editing and annual totals.
 func EvaluateViewBudget(b domain.Budget, in ViewInput) ViewBudget {
+	b = b.WithBaseCurrency(in.Base)
 	p := in.Period
 	start, end := PeriodRangeAnchored(b.Period, p.Anchor, p.WeekStart, p.PayCycleAnchor)
-	v := ViewBudget{Budget: b, Start: start, End: end, Covers: categorytree.DescendantsOfAll(in.Categories, b.TrackedCategoryIDs())}
+	calendar := periodStatus(start, end, p.Now, periodage.Of(start, end, p.Now).Early())
+	v := ViewBudget{Budget: b, Start: start, End: end, PeriodStatus: calendar, Status: Status{Budget: b, Limit: b.Limit, PeriodStatus: calendar}, Covers: categorytree.DescendantsOfAll(in.Categories, b.TrackedCategoryIDs())}
 	v.Covered = !b.CoveredAt.IsZero() && !b.CoveredAt.Before(start) && b.CoveredAt.Before(end)
 	eval := v.effectiveBudget(in)
-	st, err := EvaluateRollup(eval, in.Transactions, start, end, in.Rates, DefaultNearThreshold, v.Covers)
-	if err != nil {
-		v.issue("evaluate budget", err)
+	if v.Error != nil {
 		return v
 	}
-	offset, items := SmoothingLandingItems(b, in.Recurring, in.Transactions, start, end)
-	if offset > 0 {
-		st = ApplySmoothingOffset(st, offset, DefaultNearThreshold)
+	if _, err := in.Rates.Convert(eval.Limit, in.Base); err != nil {
+		v.fail("convert budget limit", err)
+		return v
 	}
-	v.Status, v.Valid, v.LandingItems = st, true, items
-	v.Committed = CommittedResult{Committed: money.Zero(st.Spent.Currency), Free: st.Remaining}
-	if st.Remaining.IsPositive() {
-		v.Committed, err = CommittedWithRates(b, in.Recurring, in.Transactions, st.Remaining, start, end, in.Rates)
+	st, err := EvaluateRollup(eval, in.Transactions, start, end, in.Rates, DefaultNearThreshold, v.Covers)
+	if err != nil {
+		v.fail("evaluate budget", err)
+		return v
+	}
+	smoothingBudget := b
+	smoothingBudget.CategoryIDs = ScopeOf(b, v.Covers).CategoryIDs
+	offset, items, err := SmoothingLandingItemsWithRates(smoothingBudget, in.Recurring, in.Transactions, start, end, in.Rates)
+	if err != nil {
+		v.fail("calculate smoothed budget spend", err)
+		return v
+	}
+	if offset > 0 {
+		st, err = ApplySmoothingOffsetChecked(st, offset, DefaultNearThreshold)
 		if err != nil {
-			v.issue("calculate committed budget", err)
+			v.fail("offset smoothed budget spend", err)
+			return v
 		}
 	}
+	v.Status, v.Valid, v.LandingItems = st, true, items
+	// Preserve the standing configuration for editing and annual planning; the
+	// evaluated cap lives only in Status.Limit.
+	v.Status.Budget = b
+	commitBudget := b
+	commitBudget.CategoryIDs = ScopeOf(b, v.Covers).CategoryIDs
+	v.Committed, err = CommittedWithRates(commitBudget, in.Recurring, in.Transactions, st.Remaining, start, end, in.Rates)
+	if err == nil {
+		v.FreeAfterCommitted, err = st.Remaining.Sub(v.Committed.Required)
+	}
+	if err != nil {
+		v.CommitmentError = &BudgetEvaluationError{BudgetID: b.ID, Operation: "calculate committed budget", Err: err}
+		v.issue(v.CommitmentError.Operation, v.CommitmentError)
+		v.FreeAfterCommitted = money.Money{}
+	}
 	v.Early = periodage.Of(start, end, p.Now).Early()
+	v.PeriodStatus = periodStatus(start, end, p.Now, v.Early)
+	if v.PeriodStatus != PeriodEarly {
+		v.Early = false
+	}
 	if in.ShowPrior || v.Early {
 		v.previousPeriod(in)
 	}
 	pace := ProjectPace(st, start, end, p.Now)
+	v.Projection = pace
+	if pace.Error != nil {
+		v.issue("project budget pace", pace.Error)
+	}
 	if !pace.OnTrack && pace.Elapsed > 0 && pace.Elapsed < 1 && st.State != StateOver {
 		v.PaceOver = pace.OverBy
 	}
 	if st.Remaining.Amount > 0 {
 		days, left := int(end.Sub(start).Hours()/24), int(end.Sub(p.Now).Hours()/24)
 		if left > 0 && left < days {
-			if amount := st.Remaining.Amount * int64(left) / int64(days); amount > 0 && amount < st.Remaining.Amount {
+			amount, err := money.MulDiv(st.Remaining.Amount, int64(left), int64(days), money.RoundTowardZero)
+			if err != nil {
+				v.issue("prorate budget remainder", err)
+			} else if amount > 0 && amount < st.Remaining.Amount {
 				v.ProratedRest = amount
 			}
 		}
 	}
+	v.Status.CommitmentError = v.CommitmentError
+	v.Status.FreeAfterCommitted = v.FreeAfterCommitted
+	v.Status.PeriodStatus = v.PeriodStatus
+	v.Status.Projection = v.Projection
+	v.Status.Committed = v.Committed
+	v.Status.Rollover = v.Rollover
+	v.Issues = DeduplicateViewIssues(v.Issues)
+	v.Status.Issues = v.Issues
 	return v
 }
 
 func (v *ViewBudget) effectiveBudget(in ViewInput) domain.Budget {
 	b, p := v.Budget, in.Period
 	eval := b
-	if b.Rollover || in.PoolRollover {
+	base, err := BudgetBaseAt(b, v.Start)
+	if err != nil {
+		v.fail("resolve budget base", err)
+		return eval
+	}
+	eval.Limit = base
+	if b.Rollover {
+		chain, err := EvaluateRolloverView(b, in, v.Covers)
+		if err != nil {
+			v.fail("evaluate prior rollover period", err)
+			return eval
+		}
+		v.Rollover = chain
+		if chain.StartAssumed {
+			v.Issues = append(v.Issues, ViewIssue{
+				Operation: "evaluate prior rollover period",
+				BudgetID:  b.ID,
+				Kind:      ViewIssueRolloverStartAssumed,
+				Message:   fmt.Sprintf("Carry is counted from %s. Set when this budget started rolling over to include earlier months.", chain.Start.Format("January 2006")),
+			})
+		}
+		eval.Limit = chain.Current.EffectiveCap
+		v.Carry, v.HasCarry = chain.Current.CarryIn, len(chain.Prior) > 0
+		v.CarryDelta = v.Carry.Amount
+	} else if in.PoolRollover {
 		start, end := PreviousPeriodRangeAnchored(b.Period, p.Anchor, p.WeekStart, p.PayCycleAnchor)
 		prev, err := EvaluateRollup(b, in.Transactions, start, end, in.Rates, DefaultNearThreshold, v.Covers)
 		switch {
-		case b.Rollover && err != nil:
-			v.issue("evaluate prior rollover period", err)
-		case b.Rollover:
-			effective, err := CappedCarryover(prev.Remaining, b.Limit, b.RolloverCapPeriods)
-			if err != nil {
-				v.issue("cap budget rollover", err)
-			} else {
-				eval.Limit = effective
-				v.CarryDelta = effective.Amount - b.Limit.Amount
-			}
-			v.Carry, v.HasCarry = prev.Remaining, true
 		case err != nil:
 			v.issue("evaluate pooled rollover", err)
 		case prev.Remaining.Amount > 0:
@@ -146,8 +225,13 @@ func (v *ViewBudget) effectiveBudget(in ViewInput) domain.Budget {
 		}
 	}
 	v.Boost = eval.PeriodBoosts[PeriodKeyWithWeekStart(b.Period, p.Anchor, p.PayCycleAnchor, p.WeekStart)]
-	if v.Boost != 0 {
-		eval.Limit = money.New(eval.Limit.Amount+v.Boost, eval.Limit.Currency)
+	if v.Boost != 0 && !b.Rollover {
+		var err error
+		eval.Limit, err = eval.Limit.Add(money.New(v.Boost, eval.Limit.Currency))
+		if err != nil {
+			v.fail("apply budget period boost", err)
+			return eval
+		}
 	}
 	// Preserve the effective cap even when current-period evaluation subsequently fails.
 	v.Status.Limit = eval.Limit
@@ -157,20 +241,52 @@ func (v *ViewBudget) effectiveBudget(in ViewInput) domain.Budget {
 func (v *ViewBudget) previousPeriod(in ViewInput) {
 	p := in.Period
 	start, end := PreviousPeriodRangeAnchored(v.Budget.Period, p.Anchor, p.WeekStart, p.PayCycleAnchor)
-	prev, err := EvaluateRollup(v.Budget, in.Transactions, start, end, in.Rates, DefaultNearThreshold, v.Covers)
+	eval := v.Budget
+	base, err := BudgetBaseAt(eval, start)
+	if err != nil {
+		v.issue("resolve previous budget base", err)
+		return
+	}
+	eval.Limit, err = base.Add(money.New(eval.PeriodBoosts[PeriodKeyWithWeekStart(eval.Period, start, p.PayCycleAnchor, p.WeekStart)], base.Currency))
+	if err != nil {
+		v.issue("apply previous budget boost", err)
+		return
+	}
+	if len(v.Rollover.Prior) > 0 {
+		eval.Limit = v.Rollover.Prior[len(v.Rollover.Prior)-1].EffectiveCap
+	}
+	prev, err := EvaluateRollup(eval, in.Transactions, start, end, in.Rates, DefaultNearThreshold, v.Covers)
 	if err != nil {
 		v.issue("evaluate prior budget spending", err)
 		return
 	}
-	v.Prior, v.HasPrior = prev, true
-	v.PriorSpentBase, err = currency.ConvertBetween(prev.Spent.Amount, prev.Spent.Currency, in.Base, in.Rates)
+	smoothingBudget := eval
+	smoothingBudget.CategoryIDs = ScopeOf(eval, v.Covers).CategoryIDs
+	offset, _, err := SmoothingLandingItemsWithRates(smoothingBudget, in.Recurring, in.Transactions, start, end, in.Rates)
+	if err == nil {
+		prev, err = ApplySmoothingOffsetChecked(prev, offset, DefaultNearThreshold)
+	}
+	if err != nil {
+		v.issue("calculate previous smoothed spending", err)
+		return
+	}
+	spent, err := PeriodEquivalent(prev.Spent, eval.Period, domain.PeriodMonthly)
+	if err == nil {
+		v.PriorSpentBase, err = currency.ConvertBetween(spent.Amount, spent.Currency, in.Base, in.Rates)
+	}
 	if err != nil {
 		v.issue("convert previous budget spending", err)
+		return
 	}
-	v.PriorLimitBase, err = currency.ConvertBetween(prev.Limit.Amount, prev.Limit.Currency, in.Base, in.Rates)
+	limit, err := PeriodEquivalent(prev.Limit, eval.Period, domain.PeriodMonthly)
+	if err == nil {
+		v.PriorLimitBase, err = currency.ConvertBetween(limit.Amount, limit.Currency, in.Base, in.Rates)
+	}
 	if err != nil {
 		v.issue("convert previous budget limit", err)
+		return
 	}
+	v.Prior, v.HasPrior = prev, true
 }
 
 // ViewBudgets selects member-owned and shared budgets without changing store order.
@@ -224,28 +340,60 @@ func SortViewStatuses(statuses []Status, paceOver map[string]bool) {
 // SummarizeViewStatuses converts complete statuses to base before the checked roll-up.
 // An unconvertible budget is omitted as a whole, with a diagnostic for the caller.
 func SummarizeViewStatuses(statuses []Status, base string, rates currency.Rates) (RollupSummary, []ViewIssue, error) {
+	return SummarizeViewStatusesForPeriod(statuses, domain.PeriodMonthly, base, rates)
+}
+
+// SummarizeViewStatusesForPeriod reduces budget amounts to one currency and
+// cadence. A failed budget stays in the input, contributes no figures, and is
+// counted once in Excluded; healthy budgets still produce a usable subtotal.
+func SummarizeViewStatusesForPeriod(statuses []Status, period domain.Period, base string, rates currency.Rates) (RollupSummary, []ViewIssue, error) {
 	converted := make([]Status, 0, len(statuses))
 	var issues []ViewIssue
+	excluded := 0
 	for _, st := range statuses {
+		if st.Error != nil {
+			excluded++
+			issues = append(issues, ViewIssue{BudgetID: st.Budget.ID, Operation: st.Error.Operation, Err: st.Error})
+			continue
+		}
 		next := st
-		for label, value := range map[string]*money.Money{"spent": &next.Spent, "limit": &next.Limit, "remaining": &next.Remaining} {
-			amount, err := currency.ConvertBetween(value.Amount, value.Currency, base, rates)
-			if err != nil {
-				issues = append(issues, ViewIssue{Operation: "convert budget rollup", BudgetID: st.Budget.ID, Field: label, Err: err})
-				next.Budget.ID = ""
-				break
-			}
-			*value = money.New(amount, base)
+		b := st.Budget
+		b.Limit = st.Limit
+		normalized, err := NormalizeBudgets([]domain.Budget{b}, period, rates)
+		if err != nil {
+			excluded++
+			issues = append(issues, normalized.Issues...)
+			continue
 		}
-		if next.Budget.ID != "" {
-			converted = append(converted, next)
+		next.Limit = normalized.Total
+		next.Limit, err = rates.Convert(next.Limit, base)
+		if err != nil {
+			excluded++
+			issues = append(issues, ViewIssue{Operation: "convert normalized budget limit", BudgetID: st.Budget.ID, Err: err})
+			continue
 		}
+		next.Spent, err = PeriodEquivalent(st.Spent, st.Budget.Period, period)
+		if err == nil {
+			next.Spent, err = rates.Convert(next.Spent, base)
+		}
+		if err == nil {
+			// Round each independent amount once; derive the remainder so the
+			// normalized figures reconcile exactly even on a half-cent boundary.
+			next.Remaining, err = next.Limit.Sub(next.Spent)
+		}
+		if err != nil {
+			excluded++
+			issues = append(issues, ViewIssue{Operation: "convert budget rollup", BudgetID: st.Budget.ID, Err: err})
+			continue
+		}
+		converted = append(converted, next)
 	}
 	summary, err := SummarizeRollupChecked(converted)
 	if err != nil {
 		return RollupSummary{}, issues, fmt.Errorf("summarize budget rollup: %w", err)
 	}
-	return summary, issues, nil
+	summary.Excluded = excluded
+	return summary, DeduplicateViewIssues(issues), nil
 }
 
 // ViewIncomeBasis is the saved or draft monthly income configuration.

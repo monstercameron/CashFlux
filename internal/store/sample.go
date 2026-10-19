@@ -956,7 +956,8 @@ func SampleDatasetAt(now time.Time) Dataset {
 			// A refill-up-to target: the envelope is topped back to $450 each month,
 			// which is what a rollover budget with a ceiling actually means.
 			{ID: "bud-groceries", Name: "Groceries", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, CategoryID: catGroceries, Period: domain.PeriodMonthly, Limit: usd(45000), Rollover: true,
-				TargetKind: domain.TargetRefillUpTo, TargetAmount: usd(45000)},
+				RolloverStart: date(2026, time.June, 1),
+				TargetKind:    domain.TargetRefillUpTo, TargetAmount: usd(45000)},
 			{ID: "bud-transport", Name: "Transportation", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, CategoryID: catTransport, Period: domain.PeriodMonthly, Limit: usd(130000)},
 			{ID: "bud-baby", Name: "Baby & Childcare", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, CategoryID: catBaby, Period: domain.PeriodMonthly, Limit: usd(40000)},
 			{ID: "bud-shopping", Name: "Shopping", Scope: domain.ScopeIndividual, OwnerID: marcus, CategoryID: catShopping, Period: domain.PeriodMonthly, Limit: usd(20000)},

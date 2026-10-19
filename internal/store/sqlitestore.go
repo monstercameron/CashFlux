@@ -112,6 +112,7 @@ func loadRows[T any](db *sql.DB, table string) ([]T, error) {
 
 // Load replaces all stored data with the given dataset (clean ingress).
 func (s *SQLiteStore) Load(ds Dataset) error {
+	ds = backfillBudgetCurrencies(ds)
 	if err := s.ensureDebtPaymentSchema(); err != nil {
 		return err
 	}

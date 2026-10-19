@@ -970,6 +970,12 @@ type Budget struct {
 	Period     Period      `json:"period"`
 	Limit      money.Money `json:"limit"`
 	Rollover   bool        `json:"rollover,omitempty"`
+	// RolloverStart is the first period that participates in the carry chain.
+	// Earlier imported ledger history does not create retroactive carry.
+	RolloverStart time.Time `json:"rolloverStart,omitempty"`
+	// LimitHistory records base limits in force from each ISO calendar date.
+	// Missing history uses Limit; one-off adjustments remain in PeriodBoosts.
+	LimitHistory map[string]int64 `json:"limitHistory,omitempty"`
 	// Methodology overrides the household-level budgeting method for this
 	// individual budget. An empty string means "inherit the global method".
 	// Valid values are the budgeting.Method* constants ("simple",

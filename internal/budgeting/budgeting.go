@@ -28,13 +28,30 @@ const (
 	StateOK   State = "ok"
 	StateNear State = "near"
 	StateOver State = "over"
+	// StateUnavailable preserves a budget row whose figures cannot be calculated.
+	StateUnavailable State = "unavailable"
 )
 
 // Status is the evaluated state of a budget for a period.
 type Status struct {
-	Budget    domain.Budget
-	Spent     money.Money
-	Remaining money.Money
+	// Error prevents failed budgets from silently contributing zero to totals.
+	Error *BudgetEvaluationError
+	// Issues holds deduplicated diagnostics for optional figures such as pace.
+	Issues []ViewIssue
+	// CommitmentError marks an unavailable free-after-commitments amount.
+	CommitmentError *BudgetEvaluationError
+	// FreeAfterCommitted is signed remaining money after all known obligations.
+	// It is unavailable when CommitmentError is non-nil.
+	FreeAfterCommitted money.Money
+	// PeriodStatus distinguishes a future plan from a recently started period.
+	PeriodStatus PeriodStatus
+	// Projection and Committed expose pace and free money to compact rows.
+	Projection Pace
+	Committed  CommittedResult
+	Rollover   RolloverView
+	Budget     domain.Budget
+	Spent      money.Money
+	Remaining  money.Money
 	// Limit is the budget's cap in the evaluation currency (R-LEAK). Callers used
 	// to re-derive it as Spent+Remaining, which is arithmetically right and wrong
 	// as a practice: it puts domain arithmetic in view code and it would break
@@ -461,6 +478,8 @@ func IsDuplicateBudget(existing []domain.Budget, categoryID, period, ownerID, ex
 // RollupSummary is the household-level read over a set of budget statuses: how
 // many are in trouble, and how the money splits between spending and saving.
 type RollupSummary struct {
+	// Excluded counts budgets omitted because a calculation or conversion failed.
+	Excluded int
 	// OverCount and NearCount are how many budgets are past or approaching their
 	// number. They key off State, so a SAVING budget's "over" means it exceeded
 	// its target — a success — exactly as classifyDirected intends.
@@ -492,6 +511,10 @@ func SummarizeRollupChecked(statuses []Status) (RollupSummary, error) {
 	var s RollupSummary
 	currency := ""
 	for _, st := range statuses {
+		if st.Error != nil {
+			s.Excluded++
+			continue
+		}
 		if st.Spent.Currency == "" || st.Limit.Currency != st.Spent.Currency || st.Remaining.Currency != st.Spent.Currency {
 			return RollupSummary{}, fmt.Errorf("budget %q has inconsistent or missing rollup currency", st.Budget.ID)
 		}

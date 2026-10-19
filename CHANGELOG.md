@@ -90,6 +90,16 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Budget math is right everywhere; one bad budget never blanks the page (SOLB1, SOLB1.1).** An empty budget currency
+  now means the household currency (backfilled on load and import, and on every save). A budget that genuinely can't be
+  evaluated stays in the results with a typed error instead of disappearing, and totals exclude it and say so rather than
+  turning into "—". Every page total uses period-equivalent amounts (weekly, quarterly and yearly limits converted to the
+  viewed month). Rollover carry is chained from each period's own limit and boosts (new `Budget.RolloverStart` and
+  `LimitHistory`), bounded to the budget's rollover start with at most three prior periods returned; budgets without a
+  recorded start carry from the previous period and get a note. Each budget now exposes its projection, money left after
+  committed recurring bills (with the full required amount, never a fake zero), a calendar period status (planned, early,
+  live, ended), and checked pace arithmetic; the standing limit is kept separate from the evaluated cap so the annual plan
+  no longer changes with the viewed month.
 - **Budgets Full cards: figures above the bar, lazy details, honest goal note (BR2CARD).** The spent/limit and percent row
   now sits in normal flow above the progress bar, so it no longer covers the pace legend. Spending drivers and suggestions
   only mount when a card's details are opened, and follow-ups are cached per data change, cutting the work done when

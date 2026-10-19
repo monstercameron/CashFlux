@@ -52,6 +52,7 @@ func TestEvaluateViewBudget(t *testing.T) {
 			in.ShowPrior = true
 			b := cmtBudget(domain.PeriodMonthly, 10000)
 			b.Rollover = tc.rollover
+			b.RolloverStart = mustDate("2026-05-01")
 			b.CoveredAt = mustDate("2026-06-01")
 			b.PeriodBoosts = map[string]int64{PeriodKeyWithWeekStart(b.Period, in.Period.Anchor, time.Time{}, time.Monday): tc.boost}
 			in.Transactions = []domain.Transaction{cmtTxn(-tc.previous, mustDate("2026-05-15")), cmtTxn(-tc.spent, mustDate("2026-06-10")), cmtTxn(-90000, mustDate("2026-07-01"))}
@@ -63,7 +64,7 @@ func TestEvaluateViewBudget(t *testing.T) {
 			if !got.Covered || !got.HasPrior || got.Prior.Spent.Amount != tc.previous || got.PriorLimitBase != 10000 || got.PriorSpentBase != tc.previous {
 				t.Fatalf("prior/coverage = %+v", got)
 			}
-			if b.Limit != before || got.Status.Budget.Limit.Amount != tc.wantLimit {
+			if b.Limit != before || got.Status.Budget.Limit != before || got.Status.Limit.Amount != tc.wantLimit {
 				t.Fatal("stored/effective cap distinction lost")
 			}
 			if got.ProratedRest <= 0 || got.ProratedRest >= got.Status.Remaining.Amount {
@@ -92,10 +93,11 @@ func TestEvaluateViewBudgetCadenceAndFailures(t *testing.T) {
 			r.Amount.Currency = "EUR"
 			in.Recurring = []domain.Recurring{r}
 		}, true, "calculate committed budget"},
-		{"prior failure still evaluates current", func(b *domain.Budget, in *ViewInput) {
+		{"unknown prior carry makes only this budget unavailable", func(b *domain.Budget, in *ViewInput) {
 			b.Rollover = true
+			b.RolloverStart = mustDate("2026-05-01")
 			in.Transactions = []domain.Transaction{{ID: "fx", CategoryID: "cat1", Date: mustDate("2026-05-10"), Amount: money.New(-1000, "EUR")}}
-		}, true, "evaluate prior rollover period"},
+		}, false, "evaluate prior rollover period"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			in := viewTestInput()
@@ -135,6 +137,7 @@ func TestEvaluateViewBudgetSmoothingAndCarryCap(t *testing.T) {
 	in := viewTestInput()
 	b := cmtBudget(domain.PeriodMonthly, 10000)
 	b.Rollover = true
+	b.RolloverStart = mustDate("2026-05-01")
 	b.RolloverCapPeriods = 1
 	in.Transactions = []domain.Transaction{cmtTxn(-60000, mustDate("2026-06-15"))}
 	in.Recurring = []domain.Recurring{cmtRec("annual", -60000, domain.CadenceYearly, mustDate("2026-06-15"), true)}

@@ -46,7 +46,7 @@ func CommittedWithRates(budget domain.Budget, recurrings []domain.Recurring, pos
 		return converted.Amount, nil
 	}
 	for _, r := range recurrings {
-		if r.CategoryID == "" || !budget.TracksCategory(r.CategoryID) {
+		if !r.Active() || !r.Amount.IsNegative() || r.CategoryID == "" || !budget.TracksCategory(r.CategoryID) {
 			continue
 		}
 		mag, err := money.Abs(r.Amount.Amount)
@@ -100,13 +100,13 @@ func CommittedWithRates(budget domain.Budget, recurrings []domain.Recurring, pos
 	}
 	rem := remaining.Amount
 	if rem <= 0 {
-		return CommittedResult{Committed: money.Zero(cur), Free: remaining, Items: items}, nil
+		return CommittedResult{Required: money.New(committedRaw, cur), Committed: money.Zero(cur), Free: remaining, Items: items}, nil
 	}
 	committed := committedRaw
 	if committed > rem {
 		committed = rem
 	}
-	return CommittedResult{Committed: money.New(committed, cur), Free: money.New(rem-committed, cur), Items: items}, nil
+	return CommittedResult{Required: money.New(committedRaw, cur), Committed: money.New(committed, cur), Free: money.New(rem-committed, cur), Items: items}, nil
 }
 
 // CommittedResult splits a budget's remaining money into the part already
@@ -114,6 +114,9 @@ func CommittedWithRates(budget domain.Budget, recurrings []domain.Recurring, pos
 // genuinely free to spend (Free). Committed + Free always equals Remaining, so
 // the meter's committed segment and the "free" figure reconcile exactly.
 type CommittedResult struct {
+	// Required is the full outstanding amount, before clipping to available
+	// funds for the meter. Remaining minus Required can reveal a shortfall.
+	Required money.Money
 	// Committed is remaining money already claimed by recurring items expected
 	// this period but not yet posted, plus smoothed off-period set-asides.
 	Committed money.Money

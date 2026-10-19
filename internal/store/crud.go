@@ -202,7 +202,16 @@ func (s *SQLiteStore) TransactionsByDateRange(start, end time.Time) ([]domain.Tr
 
 // --- Budgets ---
 
-func (s *SQLiteStore) PutBudget(b domain.Budget) error { return putJSON(s.db, "budgets", b.ID, b) }
+func (s *SQLiteStore) PutBudget(b domain.Budget) error {
+	if b.Limit.Currency == "" || (b.HasTarget() && b.TargetAmount.Currency == "") {
+		settings, err := s.GetSettings()
+		if err != nil {
+			return fmt.Errorf("store: resolve budget currency: %w", err)
+		}
+		b = b.WithBaseCurrency(settings.BaseCurrency)
+	}
+	return putJSON(s.db, "budgets", b.ID, b)
+}
 func (s *SQLiteStore) GetBudget(id string) (domain.Budget, bool, error) {
 	return getJSON[domain.Budget](s.db, "budgets", id)
 }

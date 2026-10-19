@@ -5,7 +5,6 @@
 package screens
 
 import (
-	"fmt"
 	"log/slog"
 	"strings"
 
@@ -29,7 +28,7 @@ type budgetViewBuilder struct {
 	view     budgetView
 	leakSeen map[string]bool
 	paceRisk map[string]bool
-	budgets  map[string]domain.Budget
+	issues   []budgeting.ViewIssue
 }
 
 func newBudgetViewBuilder(input budgeting.ViewInput, showLastMonth bool) *budgetViewBuilder {
@@ -46,26 +45,31 @@ func newBudgetViewBuilder(input budgeting.ViewInput, showLastMonth bool) *budget
 	for _, c := range input.Categories {
 		v.CatName[c.ID] = c.Name
 	}
-	return &budgetViewBuilder{input: input, view: v, leakSeen: map[string]bool{}, paceRisk: map[string]bool{}, budgets: map[string]domain.Budget{}}
+	return &budgetViewBuilder{input: input, view: v, leakSeen: map[string]bool{}, paceRisk: map[string]bool{}}
 }
 
 func (builder *budgetViewBuilder) addIssues(issues []budgeting.ViewIssue) {
 	v := &builder.view
-	for _, issue := range issues {
+	previous := len(builder.issues)
+	builder.issues = budgeting.DeduplicateViewIssues(append(builder.issues, issues...))
+	for _, issue := range builder.issues[previous:] {
 		args := []any{"budget_id", issue.BudgetID, "error", issue.Err}
 		if issue.Field != "" {
 			args = append(args, "field", issue.Field)
 		}
 		slog.Error(issue.Operation, args...)
-		b := builder.budgets[issue.BudgetID]
-		v.Incomplete = append(v.Incomplete, fmt.Sprintf("%s: %s", budgetTitle(b.Name, v.CatName[b.CategoryID]), uistate.T("budgets.incomplete")))
+		// A budget-local failure travels on Status.Error/Issues. Incomplete is
+		// reserved for unavailable page-wide figures because existing widgets
+		// treat any entry there as a reason to blank the whole headline.
+		if issue.BudgetID == "" && len(v.Incomplete) == 0 {
+			v.Incomplete = []string{uistate.T("budgets.incomplete")}
+		}
 	}
 }
 
 func (builder *budgetViewBuilder) addBudget(result budgeting.ViewBudget) {
 	v, in := &builder.view, builder.input
 	b, st := result.Budget, result.Status
-	builder.budgets[b.ID] = b
 	v.PeriodFrom[b.ID], v.PeriodTo[b.ID] = dateutil.FormatDate(result.Start), dateutil.FormatDate(result.End.AddDate(0, 0, -1))
 	if result.Covered {
 		v.Covered[b.ID] = true
@@ -74,13 +78,17 @@ func (builder *budgetViewBuilder) addBudget(result budgeting.ViewBudget) {
 		v.RollCarry[b.ID] = budgetRemainPhrase(result.Carry)
 		v.RollNeg[b.ID] = result.Carry.IsNegative()
 	}
-	v.RolledOver += result.PooledRollover
+	if amount, err := money.Add(v.RolledOver, result.PooledRollover); err != nil {
+		builder.addIssues([]budgeting.ViewIssue{{Operation: "sum pooled budget rollover", BudgetID: b.ID, Err: err}})
+	} else {
+		v.RolledOver = amount
+	}
 	builder.addCap(result)
 	builder.addIssues(result.Issues)
+	v.Statuses = append(v.Statuses, st)
 	if !result.Valid {
 		return
 	}
-	v.Statuses = append(v.Statuses, st)
 	for _, sus := range txnclassify.SuspectsIn(in.Transactions, func(id string) string { return v.CatName[id] }, result.Start, result.End) {
 		if (!b.TracksCategory(sus.Txn.CategoryID) && !result.Covers[sus.Txn.CategoryID]) || builder.leakSeen[sus.Txn.ID] {
 			continue
@@ -107,21 +115,35 @@ func (builder *budgetViewBuilder) addBudget(result budgeting.ViewBudget) {
 
 func (builder *budgetViewBuilder) addCap(result budgeting.ViewBudget) {
 	b, limit := result.Budget, result.Status.Limit
-	if limit.Amount == b.Limit.Amount {
+	base, err := budgeting.BudgetBaseAt(b, result.Start)
+	if err != nil {
+		return
+	}
+	if !result.Valid || limit.Amount == base.Amount {
 		return
 	}
 	v := &builder.view
 	v.RollEffCap[b.ID] = fmtMoney(limit)
-	parts := []string{uistate.T("budgets.capMathLimit", fmtMoney(b.Limit))}
+	parts := []string{uistate.T("budgets.capMathLimit", fmtMoney(base))}
 	if delta := result.CarryDelta; delta > 0 {
 		parts = append(parts, uistate.T("budgets.capMathCarryPlus", fmtMoney(money.New(delta, limit.Currency))))
 	} else if delta < 0 {
-		parts = append(parts, uistate.T("budgets.capMathCarryMinus", fmtMoney(money.New(-delta, limit.Currency))))
+		magnitude, err := money.Neg(delta)
+		if err != nil {
+			builder.addIssues([]budgeting.ViewIssue{{Operation: "format carried budget debt", BudgetID: b.ID, Err: err}})
+			return
+		}
+		parts = append(parts, uistate.T("budgets.capMathCarryMinus", fmtMoney(money.New(magnitude, limit.Currency))))
 	}
 	if boost := result.Boost; boost > 0 {
 		parts = append(parts, uistate.T("budgets.capMathBoost", fmtMoney(money.New(boost, limit.Currency))))
 	} else if boost < 0 {
-		parts = append(parts, uistate.T("budgets.capMathBoostMinus", fmtMoney(money.New(-boost, limit.Currency))))
+		magnitude, err := money.Neg(boost)
+		if err != nil {
+			builder.addIssues([]budgeting.ViewIssue{{Operation: "format budget reduction", BudgetID: b.ID, Err: err}})
+			return
+		}
+		parts = append(parts, uistate.T("budgets.capMathBoostMinus", fmtMoney(money.New(magnitude, limit.Currency))))
 	}
 	v.RollEffCapMath[b.ID] = strings.Join(parts, " ")
 }
@@ -154,9 +176,18 @@ func (builder *budgetViewBuilder) addPrior(result budgeting.ViewBudget) {
 		return
 	}
 	v := &builder.view
-	v.LastTotalSpent += result.PriorSpentBase
-	v.LastTotalLimit += result.PriorLimitBase
-	comparison := budgeting.ComparePriorSpend(result.Prior.Spent.Amount, result.Status.Limit.Amount)
+	spent, err := money.Add(v.LastTotalSpent, result.PriorSpentBase)
+	if err != nil {
+		builder.addIssues([]budgeting.ViewIssue{{Operation: "sum prior budget spending", BudgetID: result.Budget.ID, Err: err}})
+		return
+	}
+	limit, err := money.Add(v.LastTotalLimit, result.PriorLimitBase)
+	if err != nil {
+		builder.addIssues([]budgeting.ViewIssue{{Operation: "sum prior budget limits", BudgetID: result.Budget.ID, Err: err}})
+		return
+	}
+	v.LastTotalSpent, v.LastTotalLimit = spent, limit
+	comparison := budgeting.ComparePriorSpend(result.Prior.Spent.Amount, result.Prior.Limit.Amount)
 	lm := budgetLastMonth{Spent: fmtMoney(result.Prior.Spent), Pct: comparison.Percent, Fill: comparison.Fill}
 	if comparison.Delta >= 0 {
 		lm.Delta = uistate.T("budgets.lastMonthUnder", fmtMoney(money.New(comparison.Delta, result.Status.Spent.Currency)))
@@ -179,6 +210,9 @@ func (builder *budgetViewBuilder) summarize() {
 	v.OverCount, v.NearCount = roll.OverCount, roll.NearCount
 	v.TotalSpent, v.TotalLimit, v.TotalOver = roll.SpentMinor, roll.LimitMinor, roll.OverMinor
 	v.SavingsBudgeted, v.SavingsMoved = roll.SavingsBudgetedMinor, roll.SavingsMovedMinor
+	if roll.Excluded > 0 && roll.Excluded == len(v.Statuses) && len(v.Incomplete) == 0 {
+		v.Incomplete = []string{uistate.T("budgets.incomplete")}
+	}
 }
 
 func (builder *budgetViewBuilder) addEnvelopes(budgets []domain.Budget, householdMethod string) {

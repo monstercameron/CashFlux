@@ -3,7 +3,6 @@
 package budgeting
 
 import (
-	"math"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -58,25 +57,27 @@ func ProjectPace(status Status, start, end, now time.Time) Pace {
 	cur := status.Spent.Currency
 	frac := elapsedFraction(start, end, now)
 
-	limit, err := status.Spent.Add(status.Remaining) // compatibility for callers constructing Status directly
+	limit, err := paceLimit(status)
 	if err != nil {
 		return Pace{Error: err}
 	}
 
 	projAmt := status.Spent.Amount
-	if frac > 0 {
-		f := float64(status.Spent.Amount) / frac
-		if f > math.MaxInt64 {
-			f = math.MaxInt64 // guard a tiny fraction from overflowing int64
+	if frac > 0 && frac < 1 {
+		projAmt, err = money.MulDiv(status.Spent.Amount, int64(end.Sub(start)), int64(now.Sub(start)), money.RoundHalfAwayFromZero)
+		if err != nil {
+			return Pace{Elapsed: frac, Error: err}
 		}
-		projAmt = int64(math.Round(f))
 	}
 	projected := money.New(projAmt, cur)
 
 	overBy := money.Zero(cur)
 	onTrack := true
 	if projAmt > limit.Amount {
-		overBy = money.New(projAmt-limit.Amount, cur)
+		overBy, err = projected.Sub(limit)
+		if err != nil {
+			return Pace{Elapsed: frac, Error: err}
+		}
 		onTrack = false
 	}
 
@@ -126,27 +127,51 @@ func ProjectPaceMarker(status Status, committed money.Money, start, end, now tim
 	cur := status.Spent.Currency
 	frac := elapsedFraction(start, end, now)
 
-	limit, err := status.Spent.Add(status.Remaining) // compatibility for callers constructing Status directly
+	limit, err := paceLimit(status)
 	if err != nil {
 		return PaceMarker{Error: err}
 	}
 
 	// Discretionary limit and discretionary spend both net out committed money.
-	discLimit := limit.Amount - committed.Amount
+	if committed.Currency != cur {
+		return PaceMarker{Error: money.ErrCurrencyMismatch}
+	}
+	discLimit, err := money.Sub(limit.Amount, committed.Amount)
+	if err != nil {
+		return PaceMarker{Error: err}
+	}
 	if discLimit < 0 {
 		discLimit = 0
 	}
-	discSpent := status.Spent.Amount - committed.Amount
+	discSpent, err := money.Sub(status.Spent.Amount, committed.Amount)
+	if err != nil {
+		return PaceMarker{Error: err}
+	}
 	if discSpent < 0 {
 		discSpent = 0
 	}
 
-	idealAmt := int64(math.Round(float64(discLimit) * frac))
-	delta := discSpent - idealAmt
+	idealAmt := discLimit
+	if frac == 0 {
+		idealAmt = 0
+	} else if frac < 1 {
+		idealAmt, err = money.MulDiv(discLimit, int64(now.Sub(start)), int64(end.Sub(start)), money.RoundHalfAwayFromZero)
+		if err != nil {
+			return PaceMarker{Error: err}
+		}
+	}
+	delta, err := money.Sub(discSpent, idealAmt)
+	if err != nil {
+		return PaceMarker{Error: err}
+	}
 
 	markerPct := 0
 	if limit.Amount > 0 {
-		markerPct = int(idealAmt * 100 / limit.Amount)
+		pct, err := money.MulDiv(idealAmt, 100, limit.Amount, money.RoundTowardZero)
+		if err != nil {
+			return PaceMarker{Error: err}
+		}
+		markerPct = int(pct)
 	}
 	if markerPct > 100 {
 		markerPct = 100
@@ -162,4 +187,14 @@ func ProjectPaceMarker(status Status, committed money.Money, start, end, now tim
 		Hot:       delta > 0,
 		MarkerPct: markerPct,
 	}
+}
+
+func paceLimit(status Status) (money.Money, error) {
+	if status.Limit.Currency != "" {
+		if status.Limit.Currency != status.Spent.Currency {
+			return money.Money{}, money.ErrCurrencyMismatch
+		}
+		return status.Limit, nil
+	}
+	return status.Spent.Add(status.Remaining)
 }
