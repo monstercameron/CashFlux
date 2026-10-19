@@ -9,13 +9,13 @@ package txnfilter
 import (
 	"fmt"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/money"
 )
 
 // SortKeys are the columns the ledger can be ordered by, in display order.
@@ -741,6 +741,21 @@ type Labels struct {
 	// search for the clean merchant name finds every charge even though the raw payee
 	// on the transaction is unchanged. Nil = match raw fields only (the pure default).
 	Payee func(raw string) string
+	// BaseCurrency is the currency used by amount bounds and numeric searches.
+	// An empty value defaults to USD for legacy callers.
+	BaseCurrency string
+	// ToBase converts transaction amounts to BaseCurrency. Cross-currency amount
+	// filters without this hook report a conversion error and do not match the row.
+	ToBase func(money.Money) (money.Money, error)
+	// OnConversionError receives rows that could not be compared in BaseCurrency.
+	OnConversionError func(domain.Transaction, error)
+}
+
+// ConversionIssue describes one transaction that could not be compared in the
+// configured base currency.
+type ConversionIssue struct {
+	Transaction domain.Transaction
+	Err         error
 }
 
 func (l Labels) account(t domain.Transaction) string {
@@ -767,71 +782,15 @@ func Apply(txns []domain.Transaction, c Criteria) []domain.Transaction {
 // ApplyWithLabels is Apply with id→name maps so category/account sort by the
 // names the user sees rather than opaque IDs.
 func ApplyWithLabels(txns []domain.Transaction, c Criteria, labels Labels) []domain.Transaction {
-	c = c.Normalize()
-
-	ft := strings.ToLower(strings.TrimSpace(c.Text))
-	tagF := strings.ToLower(strings.TrimSpace(c.Tag))
-	minMajor, hasMin := parseAmountBound(c.AmountMin)
-	maxMajor, hasMax := parseAmountBound(c.AmountMax)
-	var fromT, toT time.Time
-	if s := strings.TrimSpace(c.From); s != "" {
-		if d, err := dateutil.ParseDate(s); err == nil {
-			fromT = d
-		}
-	}
-	if s := strings.TrimSpace(c.To); s != "" {
-		if d, err := dateutil.ParseDate(s); err == nil {
-			toT = d
-		}
-	}
+	filter := compileCriteria(c, labels)
+	c = filter.criteria
 
 	out := make([]domain.Transaction, 0, len(txns))
 	for _, t := range txns {
-		switch {
-		// An account filter matches a transaction booked on the account (AccountID) OR
-		// one linked to it as a bill payment (BillAccountID) — so filtering by an account
-		// that only receives linked bill payments (e.g. an HOA obligation the money is
-		// paid FROM another account) still surfaces those payments.
-		case c.Accounts != "" && !csvHasAccount(c.Accounts, t):
-		case c.Accounts == "" && c.Account != "" && t.AccountID != c.Account && t.BillAccountID != c.Account:
-		case c.BillAccount != "" && t.BillAccountID != c.BillAccount:
-		case c.Subscription != "" && t.SubscriptionName != c.Subscription:
-		// The category dimension matches a split LINE's category too (the split
-		// contract in domain/category_split.go named this filter as a known gap):
-		// a receipt whose produce line is Groceries is a Groceries transaction, the
-		// budget bar already counts it that way, and a ledger that hides it makes a
-		// budget's own drill-through disagree with its bar (C585).
-		//
-		// ScopeAny switches this dimension and the tag dimension from AND to OR,
-		// because that is how a budget counts: a charge belongs to it if it is in a
-		// tracked category OR carries a tracked tag. Both are skipped here and
-		// evaluated together below.
-		case !c.ScopeAny && c.Categories != "" && !matchesCategory(t, func(id string) bool { return csvHas(c.Categories, id) }):
-		case !c.ScopeAny && c.Categories == "" && c.Category != "" && !matchesCategory(t, func(id string) bool { return id == c.Category }):
-		case c.Uncategorized && (t.CategoryID != "" || t.IsTransfer()):
-		case c.Members != "" && !matchesMemberSelection(c.Members, t):
-		case c.Members == "" && c.Member != "" && !matchesMemberSelection(c.Member, t):
-		case c.Sources != "" && !csvHas(c.Sources, string(t.Source)):
-		case c.Sources == "" && c.Source != "" && string(t.Source) != c.Source:
-		case !c.ScopeAny && c.Tags != "" && !hasAnyTagCSV(t, c.Tags):
-		case !c.ScopeAny && c.Tags == "" && tagF != "" && !hasTag(t, tagF):
-		// The OR'd category-or-tag scope, evaluated as one dimension.
-		case c.ScopeAny && !matchesScopeAny(t, c, tagF):
-		case hasMin && AbsAmount(t) < currency.MinorFromMajor(minMajor, t.Amount.Currency):
-		case hasMax && AbsAmount(t) > currency.MinorFromMajor(maxMajor, t.Amount.Currency):
-		case !fromT.IsZero() && t.Date.Before(fromT):
-		case !toT.IsZero() && t.Date.After(toT):
-		case ft != "" && !matchText(t, ft, labels.Payee):
-		case c.Cleared == "yes" && !t.Cleared:
-		case c.Cleared == "no" && t.Cleared:
-		// Direction follows the domain's income/expense definitions, which exclude
-		// transfer legs even when a leg's signed amount looks like income or spend.
-		case c.Flow == "out" && !t.IsExpense():
-		case c.Flow == "in" && !t.IsIncome():
-		case c.CustomKey != "" && c.CustomVal != "" && customString(t.Custom[c.CustomKey]) != c.CustomVal:
-		default:
-			out = append(out, t)
+		if !filter.matches(t) {
+			continue
 		}
+		out = append(out, t)
 	}
 
 	asc := c.Dir == Asc
@@ -845,10 +804,143 @@ func ApplyWithLabels(txns []domain.Transaction, c Criteria, labels Labels) []dom
 			}
 			return k > 0
 		}
-		// Ties always break on ID ascending so the order is fully deterministic.
 		return out[i].ID < out[j].ID
 	})
 	return out
+}
+
+// ApplyWithLabelsChecked applies the filter and returns every amount-conversion
+// failure encountered while evaluating it. If labels also has OnConversionError,
+// that callback is called for each issue as well.
+func ApplyWithLabelsChecked(txns []domain.Transaction, c Criteria, labels Labels) ([]domain.Transaction, []ConversionIssue) {
+	var issues []ConversionIssue
+	callback := labels.OnConversionError
+	labels.OnConversionError = func(txn domain.Transaction, err error) {
+		issues = append(issues, ConversionIssue{Transaction: txn, Err: err})
+		if callback != nil {
+			callback(txn, err)
+		}
+	}
+	return ApplyWithLabels(txns, c, labels), issues
+}
+
+type compiledCriteria struct {
+	criteria           Criteria
+	labels             Labels
+	text, tag          string
+	minMinor, maxMinor int64
+	hasMin, hasMax     bool
+	from, to           time.Time
+}
+
+func compileCriteria(c Criteria, labels Labels) compiledCriteria {
+	c = c.Normalize()
+	filter := compiledCriteria{
+		criteria: c,
+		labels:   labels,
+		text:     strings.ToLower(strings.TrimSpace(c.Text)),
+		tag:      strings.ToLower(strings.TrimSpace(c.Tag)),
+	}
+	filter.minMinor, filter.hasMin = parseAmountBound(c.AmountMin, labels.BaseCurrency)
+	filter.maxMinor, filter.hasMax = parseAmountBound(c.AmountMax, labels.BaseCurrency)
+	if d, err := dateutil.ParseDate(strings.TrimSpace(c.From)); err == nil {
+		filter.from = d
+	}
+	if d, err := dateutil.ParseDate(strings.TrimSpace(c.To)); err == nil {
+		filter.to = d
+	}
+	return filter
+}
+
+func (f compiledCriteria) matches(t domain.Transaction) bool {
+	return matchesCriteria(t, f.criteria, f.labels, f.text, f.tag, f.minMinor, f.hasMin, f.maxMinor, f.hasMax, f.from, f.to)
+}
+
+func matchesCriteria(t domain.Transaction, c Criteria, labels Labels, ft, tagF string, minMinor int64, hasMin bool, maxMinor int64, hasMax bool, fromT, toT time.Time) bool {
+	// Reject rows by ordinary scope before attempting currency conversion, so an FX
+	// warning is only reported for a row the other active filters would show.
+	if c.Accounts != "" && !csvHasAccount(c.Accounts, t) || c.Accounts == "" && c.Account != "" && t.AccountID != c.Account && t.BillAccountID != c.Account {
+		return false
+	}
+	if c.BillAccount != "" && t.BillAccountID != c.BillAccount || c.Subscription != "" && t.SubscriptionName != c.Subscription {
+		return false
+	}
+	if !c.ScopeAny && c.Categories != "" && !matchesCategory(t, func(id string) bool { return csvHas(c.Categories, id) }) {
+		return false
+	}
+	if !c.ScopeAny && c.Categories == "" && c.Category != "" && !matchesCategory(t, func(id string) bool { return id == c.Category }) {
+		return false
+	}
+	if c.Uncategorized && (t.CategoryID != "" || t.IsTransfer()) {
+		return false
+	}
+	if c.Members != "" && !matchesMemberSelection(c.Members, t) || c.Members == "" && c.Member != "" && !matchesMemberSelection(c.Member, t) {
+		return false
+	}
+	if c.Sources != "" && !csvHas(c.Sources, string(t.Source)) || c.Sources == "" && c.Source != "" && string(t.Source) != c.Source {
+		return false
+	}
+	if !c.ScopeAny && c.Tags != "" && !hasAnyTagCSV(t, c.Tags) || !c.ScopeAny && c.Tags == "" && tagF != "" && !hasTag(t, tagF) {
+		return false
+	}
+	if c.ScopeAny && !matchesScopeAny(t, c, tagF) {
+		return false
+	}
+	if !fromT.IsZero() && t.Date.Before(fromT) || !toT.IsZero() && calendarDayAfter(t.Date, toT) {
+		return false
+	}
+	if c.Cleared == "yes" && !t.Cleared || c.Cleared == "no" && t.Cleared {
+		return false
+	}
+	// Direction follows the domain's income/expense definitions, which exclude
+	// transfer legs even when a leg's signed amount looks like income or spend.
+	if c.Flow == "out" && !t.IsExpense() || c.Flow == "in" && !t.IsIncome() {
+		return false
+	}
+	if c.CustomKey != "" && c.CustomVal != "" && customString(t.Custom[c.CustomKey]) != c.CustomVal {
+		return false
+	}
+	if hasMin || hasMax {
+		amount, err := amountInBase(t, labels)
+		if err != nil {
+			if labels.OnConversionError != nil {
+				labels.OnConversionError(t, err)
+			}
+			return false
+		}
+		if hasMin && amount < minMinor || hasMax && amount > maxMinor {
+			return false
+		}
+	}
+	return ft == "" || matchTextWithLabels(t, ft, labels)
+}
+
+func calendarDayAfter(date, bound time.Time) bool {
+	d := time.Date(date.UTC().Year(), date.UTC().Month(), date.UTC().Day(), 0, 0, 0, 0, time.UTC)
+	b := time.Date(bound.UTC().Year(), bound.UTC().Month(), bound.UTC().Day(), 0, 0, 0, 0, time.UTC)
+	return d.After(b)
+}
+
+func amountInBase(t domain.Transaction, labels Labels) (int64, error) {
+	amount, err := t.Amount.AbsChecked()
+	if err != nil {
+		return 0, fmt.Errorf("transaction %q amount magnitude: %w", t.ID, err)
+	}
+	base := effectiveBaseCurrency(labels.BaseCurrency)
+	if base == amount.Currency {
+		return amount.Amount, nil
+	}
+	if labels.ToBase == nil {
+		return 0, fmt.Errorf("transaction %q: no conversion from %s to %s", t.ID, amount.Currency, base)
+	}
+	converted, err := labels.ToBase(amount)
+	if err != nil {
+		return 0, fmt.Errorf("transaction %q: convert %s to %s: %w", t.ID, amount.Currency, base, err)
+	}
+	if converted.Currency != base {
+		return 0, fmt.Errorf("transaction %q: conversion returned %s, want %s", t.ID, converted.Currency, base)
+	}
+	return converted.Amount, nil
 }
 
 func emptySortValue(t domain.Transaction, key string) bool {
@@ -963,8 +1055,18 @@ func AbsAmount(t domain.Transaction) int64 {
 // findable. resolve (optional) maps the raw payee to its cleaned alias so a search for
 // the clean merchant name matches every charge even though the raw payee is unchanged.
 func matchText(t domain.Transaction, q string, resolve func(string) string) bool {
-	if amount, ok := parseSearchAmount(q); ok && AbsAmount(t) == currency.MinorFromMajor(amount, t.Amount.Currency) {
-		return true
+	return matchTextWithLabels(t, q, Labels{Payee: resolve})
+}
+
+func matchTextWithLabels(t domain.Transaction, q string, labels Labels) bool {
+	if amount, ok := parseSearchAmount(q, labels.BaseCurrency); ok {
+		actual, err := amountInBase(t, labels)
+		if err == nil && actual == amount {
+			return true
+		}
+		if err != nil && labels.OnConversionError != nil {
+			labels.OnConversionError(t, err)
+		}
 	}
 	if strings.Contains(strings.ToLower(t.Payee), q) {
 		return true
@@ -972,8 +1074,8 @@ func matchText(t domain.Transaction, q string, resolve func(string) string) bool
 	if strings.Contains(strings.ToLower(t.Desc), q) {
 		return true
 	}
-	if resolve != nil {
-		if strings.Contains(strings.ToLower(resolve(t.Payee)), q) {
+	if labels.Payee != nil {
+		if strings.Contains(strings.ToLower(labels.Payee(t.Payee)), q) {
 			return true
 		}
 	}
@@ -989,14 +1091,15 @@ func matchText(t domain.Transaction, q string, resolve func(string) string) bool
 // parseSearchAmount recognizes an unambiguous exact amount query in major units.
 // A leading currency symbol and grouping commas are accepted because they are
 // common in the amount column's displayed value.
-func parseSearchAmount(q string) (float64, bool) {
+func parseSearchAmount(q, base string) (int64, bool) {
 	s := strings.TrimSpace(q)
-	s = strings.TrimPrefix(s, "$")
+	base = effectiveBaseCurrency(base)
+	s = strings.TrimPrefix(s, currency.Symbol(base))
 	s = strings.ReplaceAll(s, ",", "")
 	if s == "" {
 		return 0, false
 	}
-	v, err := strconv.ParseFloat(s, 64)
+	v, err := money.ParseMinor(s, currency.Decimals(base))
 	if err != nil {
 		return 0, false
 	}
@@ -1006,23 +1109,35 @@ func parseSearchAmount(q string) (float64, bool) {
 	return v, true
 }
 
-// parseAmountBound parses an amount filter bound (major units, e.g. "12.50") to a
-// float and whether it is usable. A blank or unparseable bound returns ok=false so
+// parseAmountBound parses an amount filter bound (major units, e.g. "12.50") to
+// base-currency minor units. A blank or unparseable bound returns ok=false so
 // it's treated as unset — a half-typed number never hides every row. A negative
 // bound is clamped to 0 (the filter compares absolute amounts). (C53)
-func parseAmountBound(s string) (float64, bool) {
+func parseAmountBound(s, base string) (int64, bool) {
 	s = strings.TrimSpace(s)
 	if s == "" {
 		return 0, false
 	}
-	v, err := strconv.ParseFloat(s, 64)
+	base = effectiveBaseCurrency(base)
+	v, err := money.ParseMinor(s, currency.Decimals(base))
 	if err != nil {
 		return 0, false
 	}
 	if v < 0 {
-		v = -v
+		v, err = money.Abs(v)
+		if err != nil {
+			return 0, false
+		}
 	}
 	return v, true
+}
+
+func effectiveBaseCurrency(base string) string {
+	base = strings.ToUpper(strings.TrimSpace(base))
+	if base == "" {
+		return "USD"
+	}
+	return base
 }
 
 // hasTag reports whether a transaction carries the given (already-lowercased) tag,

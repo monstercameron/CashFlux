@@ -90,6 +90,12 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Transaction filters: inclusive end day, base-currency amounts, preset counts that match (TQ5).** The "To" date now
+  includes rows stamped late on that day. Amount bounds, the Large preset and amount search parse with exact minor units
+  in the base currency and compare FX-converted magnitudes (a ¥5,000 charge no longer passes "≥ $100"); rows that can't
+  be converted are reported instead of silently matching. Preset counts use the same merchant aliases as the rows and one
+  unsorted pass — about 6.6× faster on 3,300 transactions (49.5 ms → 7.5 ms). The screens adopt the new API in a
+  follow-up.
 - **Budgets compact rows work on phones and at 1024 px (BR2MOB).** On narrow screens a compact row puts the name, status
   and actions on one line and readable figures ("$1,100 of $1,300 · $200 left") on the next; only the name shrinks with an
   ellipsis, so no figure is pushed off screen. A thin bar stays visible at 1024 px, compact bars show the pace tick when

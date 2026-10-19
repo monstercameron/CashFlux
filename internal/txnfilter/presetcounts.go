@@ -3,6 +3,7 @@
 package txnfilter
 
 import (
+	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -27,6 +28,9 @@ type PresetScope struct {
 	// LargeMinor is the absolute-amount floor (minor units) the "Large" preset
 	// applies, resolved per transaction currency by the caller's LargeFor.
 	LargeFor func(t domain.Transaction) int64
+	// LargeMinor is the Large preset threshold in Labels.BaseCurrency. When
+	// positive, it takes precedence over LargeFor.
+	LargeMinor int64
 	// MonthStart and MonthEnd bound the "This month" preset, half-open [start, end).
 	MonthStart, MonthEnd time.Time
 }
@@ -46,46 +50,54 @@ type PresetScope struct {
 // currently showing rather than the rows it selects, and every inactive chip would
 // read 0 the moment a different preset was engaged.
 func CountPresets(txns []domain.Transaction, c Criteria, s PresetScope) PresetCounts {
-	var out PresetCounts
+	return CountPresetsWithLabels(txns, c, s, Labels{})
+}
 
-	// Uncategorized: drop the preset itself, then count what has no category.
-	base := c.Without(FieldUncategorized)
-	for _, t := range Apply(txns, base) {
-		if !t.IsTransfer() && t.CategoryID == "" {
+// CountPresetsWithLabels reports preset counts using the same alias and currency
+// context as ApplyWithLabels. It scans the input once and does not sort discarded
+// result sets.
+func CountPresetsWithLabels(txns []domain.Transaction, c Criteria, s PresetScope, labels Labels) PresetCounts {
+	var out PresetCounts
+	uncategorized := compileCriteria(c.Without(FieldUncategorized), labels)
+	review := compileCriteria(c.Without(FieldTag), labels)
+	large := compileCriteria(c.Without(FieldAmountMin), labels)
+	month := compileCriteria(c.Without(FieldFrom).Without(FieldTo), labels)
+	for _, t := range txns {
+		if uncategorized.matches(t) && !t.IsTransfer() && t.CategoryID == "" {
 			out.Uncategorized++
 		}
-	}
-
-	// Needs review: the preset writes the tag dimension, so that is what is dropped.
-	if s.ReviewTag != "" {
-		for _, t := range Apply(txns, c.Without(FieldTag)) {
+		if s.ReviewTag != "" && review.matches(t) {
 			for _, tag := range t.Tags {
-				if tag == s.ReviewTag {
+				if tagEqual(tag, s.ReviewTag) {
 					out.NeedsReview++
 					break
 				}
 			}
 		}
-	}
-
-	// Large: the preset writes AmountMin, so an existing minimum is dropped first.
-	if s.LargeFor != nil {
-		for _, t := range Apply(txns, c.Without(FieldAmountMin)) {
-			if AbsAmount(t) >= s.LargeFor(t) {
+		if (s.LargeMinor > 0 || s.LargeFor != nil) && large.matches(t) {
+			amount, err := amountInBase(t, labels)
+			if err != nil {
+				if labels.OnConversionError != nil {
+					labels.OnConversionError(t, err)
+				}
+			} else if threshold := presetLargeThreshold(t, s); amount >= threshold {
 				out.Large++
 			}
 		}
-	}
-
-	// This month: the preset writes both date bounds, so both come off.
-	if !s.MonthStart.IsZero() && !s.MonthEnd.IsZero() {
-		dated := c.Without(FieldFrom).Without(FieldTo)
-		for _, t := range Apply(txns, dated) {
+		if !s.MonthStart.IsZero() && !s.MonthEnd.IsZero() && month.matches(t) {
 			if !t.Date.Before(s.MonthStart) && t.Date.Before(s.MonthEnd) {
 				out.ThisMonth++
 			}
 		}
 	}
-
 	return out
 }
+
+func presetLargeThreshold(t domain.Transaction, s PresetScope) int64 {
+	if s.LargeMinor > 0 {
+		return s.LargeMinor
+	}
+	return s.LargeFor(t)
+}
+
+func tagEqual(a, b string) bool { return strings.EqualFold(a, b) }
