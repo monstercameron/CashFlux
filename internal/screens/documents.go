@@ -95,6 +95,13 @@ func draftDuplicateCount(rows []extract.Row, seen map[string]bool) int {
 	return count
 }
 
+// resolveInitialImportAccount selects the import panel's opening account. Once
+// initialized, the panel keeps the user's selection in its importAcct state.
+func resolveInitialImportAccount(input accountselect.ResolveInput) string {
+	id, _ := accountselect.Resolve(input)
+	return id
+}
+
 // statementImportSchema constrains the model's reply to a transactions array (strict
 // structured outputs) for the statement-PDF source. Category is a free string here; it's
 // constrained to the user's EXISTING categories by the prompt and enforced on import
@@ -290,6 +297,7 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 	// Save/Cancel dismiss the modal by flipping this shared atom. On the /documents
 	// route the atom is simply always false and never read, so this is a no-op there.
 	importModalOpen := uistate.UseImportPanelOpen()
+	memberLens := uistate.UseMemberLens()
 	csvText := ui.UseState("")
 	stmtText := ui.UseState("")
 	msg := ui.UseState("")
@@ -305,16 +313,16 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 	pendingCSV := ui.UseState([]byte(nil))
 
 	accounts := app.Accounts()
-	// C360: the import target defaulted to accounts[0], which is store order —
-	// so a CSV import opened preselected on "Marcus's 401(k)" and quietly filed a
-	// checking statement into a retirement account if the user did not notice.
-	// accountselect.DefaultID is the app's existing answer to "which account did
-	// they most likely mean": most-used recent spend account, then a
-	// checking-like one, never an investment account.
-	defaultAcc := accountselect.DefaultID(accounts, app.Transactions(), "")
-	if defaultAcc == "" && len(accounts) > 0 {
-		defaultAcc = accounts[0].ID
+	// Saved defaults seed a new import only. The selector stays controlled by
+	// importAcct afterward, so the user's choice remains authoritative.
+	defaultMemberID := ""
+	if len(memberLens) == 1 {
+		defaultMemberID = memberLens[0]
 	}
+	defaultAcc := resolveInitialImportAccount(accountselect.ResolveInput{
+		Accounts: accounts, Transactions: app.Transactions(), ActiveMemberID: defaultMemberID,
+		Members: app.Members(), WorkspaceDefaultID: app.DefaultAccountID(),
+	})
 	imageURL := ui.UseState("")
 	// C98: persist the chosen image URL across navigation (e.g. when the user
 	// goes to Settings to add an OpenAI key and returns). The atom survives

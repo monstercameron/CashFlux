@@ -90,6 +90,10 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Quick Add and import use the default account (DF4).** Quick Add and the import panel (Documents and the Transactions
+  import modal) pick their opening account through the shared resolver: the selected member's default, then the
+  workspace default, then a deterministic fallback; archived or missing defaults are skipped. "Save & add another"
+  re-resolves instead of keeping a stale choice. The WHO2 Quick Add owner test that was left out of its commit is added.
 - **Budgets: readable rows and bars (BUD3).** Limit and percentage figures sit beside a thin progress track instead of on
   the coloured fill (≥ 4.5:1 in light and dark), and "$X over" / "$X left" is always written out. In compact rows the
   limit is a button that opens a separate inline editor showing the effective cap and base limit side by side; Enter

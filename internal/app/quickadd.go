@@ -10,6 +10,7 @@ import (
 	"syscall/js"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/accountselect"
 	"github.com/monstercameron/CashFlux/internal/amountmath"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
@@ -135,53 +136,21 @@ func quickAddForm(props quickAddFormProps) uic.Node {
 	}, focusField.Get())
 
 	accounts := app.Accounts()
-	// Active member drives the per-member default-account preselect (§1.19); read at
-	// a stable hook position so the conditional fallback below never reorders hooks.
-	today := dateutil.FormatDate(time.Now())
-	// Effective values: fall back to the first account and today when the user
-	// hasn't touched those fields, so the form works without a pre-render Set.
-	effAcct := acctID.Get()
-	if effAcct == "" {
-		// Prefer the active member's per-member default account (§1.19) when they've
-		// set one and it still exists, otherwise the first account.
-		if am := activeMember; am != "" {
-			for _, mb := range app.Members() {
-				if mb.ID == am && mb.Prefs.DefaultAccountID != "" {
-					if _, ok := accountByID(accounts, mb.Prefs.DefaultAccountID); ok {
-						effAcct = mb.Prefs.DefaultAccountID
-					}
-					break
-				}
-			}
-		}
-		if effAcct == "" {
-			// Default to the MOST-USED everyday spending account (by transaction count),
-			// not merely the first in store order — so the modal opens on the account the
-			// household actually records against (e.g. Joint Checking) instead of an
-			// incidental first-listed one (e.g. a rarely-touched business checking).
-			// Investment/retirement/crypto accounts are never everyday-spend accounts, so
-			// they're excluded (C73/L78-T3).
-			txnCount := map[string]int{}
-			for _, t := range app.Transactions() {
-				txnCount[t.AccountID]++
-			}
-			bestN := -1
-			for _, a := range accounts {
-				if a.Class != domain.ClassAsset || a.Archived ||
-					a.Type == domain.TypeInvestment ||
-					a.Type == domain.TypeRetirement ||
-					a.Type == domain.TypeCrypto {
-					continue
-				}
-				if n := txnCount[a.ID]; n > bestN {
-					effAcct, bestN = a.ID, n
-				}
-			}
-			if effAcct == "" && len(accounts) > 0 {
-				effAcct = accounts[0].ID
-			}
-		}
+	// The single-member view supplies the member-specific default. A broader view
+	// has no member default and falls back to the workspace setting.
+	memberLens := uistate.UseMemberLens()
+	defaultMemberID := ""
+	if len(memberLens) == 1 {
+		defaultMemberID = memberLens[0]
 	}
+	today := dateutil.FormatDate(time.Now())
+	// account selection remains explicit once the user or a template chooses it;
+	// clearing state after Save & add another runs this same resolver again.
+	effAcct := resolveQuickAddAccountID(accountselect.ResolveInput{
+		Accounts: accounts, Transactions: app.Transactions(), ExplicitID: acctID.Get(),
+		ActiveMemberID: defaultMemberID, Members: app.Members(),
+		WorkspaceDefaultID: app.DefaultAccountID(),
+	})
 	effDate := date.Get()
 	if effDate == "" {
 		effDate = today
@@ -725,6 +694,11 @@ func accountByID(accounts []domain.Account, id string) (domain.Account, bool) {
 func quickAddHasAccount(accounts []domain.Account, accountID string) bool {
 	_, ok := accountByID(accounts, accountID)
 	return ok
+}
+
+func resolveQuickAddAccountID(input accountselect.ResolveInput) string {
+	id, _ := accountselect.Resolve(input)
+	return id
 }
 
 func quickAddAmountValid(accounts []domain.Account, accountID, raw, kind string) bool {
