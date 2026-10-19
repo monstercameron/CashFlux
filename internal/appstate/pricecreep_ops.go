@@ -67,18 +67,37 @@ func (a *App) AcceptNewPrice(recurringID string, newMinor int64) error {
 }
 
 // RaiseBudgetForCreep raises the budget covering the recurring's category by the
-// monthly-equivalent delta so the higher price doesn't blow the budget (the "also
+// price delta converted to that budget's currency and cadence (the "also
 // raise the budget?" option in the accept flow). No-op when there is no budget.
 func (a *App) RaiseBudgetForCreep(recurringID string, newMinor int64) error {
-	imp := a.PriceCreepBudgetImpact(recurringID, newMinor)
-	if !imp.HasBudget {
-		return nil
+	r, ok := a.findRecurring(recurringID)
+	if !ok {
+		return fmt.Errorf("appstate: recurring %q not found", recurringID)
 	}
-	b, found := a.budgetForCategory(a.recurringCategory(recurringID))
+	b, found := a.budgetForCategory(r.CategoryID)
 	if !found {
 		return nil
 	}
-	b.Limit = money.New(imp.SuggestedLimitMinor, imp.Currency)
+	newR := r
+	newR.Amount = money.New(-abs64(newMinor), r.Amount.Currency)
+	delta, err := money.New(abs64(newR.MonthlyEquivalent()), r.Amount.Currency).Sub(money.New(abs64(r.MonthlyEquivalent()), r.Amount.Currency))
+	if err != nil {
+		return fmt.Errorf("price increase delta: %w", err)
+	}
+	b = b.WithBaseCurrency(a.baseCurrency())
+	rates := currency.Rates{Base: a.baseCurrency(), Rates: a.Settings().FXRates}
+	delta, err = rates.Convert(delta, b.Limit.Currency)
+	if err != nil {
+		return fmt.Errorf("convert price increase: %w", err)
+	}
+	delta, err = budgeting.PeriodEquivalent(delta, domain.PeriodMonthly, b.Period)
+	if err != nil {
+		return fmt.Errorf("price increase cadence: %w", err)
+	}
+	b.Limit, err = b.Limit.Add(delta)
+	if err != nil {
+		return fmt.Errorf("raise budget for price increase: %w", err)
+	}
 	return a.PutBudget(b)
 }
 
