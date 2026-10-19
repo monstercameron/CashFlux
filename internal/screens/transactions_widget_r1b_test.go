@@ -63,7 +63,7 @@ func TestR1BRowMenuLabelsOrderAndExcludeTone(t *testing.T) {
 	if got := items[byTestID["txn-split-open"]].Label; got != uistate.T("r4k.split") {
 		t.Errorf("split action = %q", got)
 	}
-	if got := items[byTestID["txn-link-open"]].Label; got != uistate.T("transactions.linkTo") {
+	if got := items[byTestID["txn-link-open"]].Label; got != "Link to…" {
 		t.Errorf("link action = %q", got)
 	}
 	if items[byTestID["txn-toggle-exclude"]].Danger {

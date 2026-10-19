@@ -39,7 +39,7 @@ func TestTxnBulkBarGroupsHavePlainLabelsAndVerbActions(t *testing.T) {
 		txnBulkActionGroup(uistate.T("txp3.bulkMore"), Button(uistate.T("txp3.bulkGroupPurchase"))),
 		Button(Attr("data-testid", "bulk-delete"), uistate.T("txp3.bulkDeleteSelected")),
 	))
-	labels := []string{"Categorize", "Assign", "Status", "More", "Choose a person", "Apply category", "Assign person", "Mark cleared", "Group as purchase", "Delete selected"}
+	labels := []string{"Categorize", "Assign", "Status", "More", "Choose a person", "Apply category", "Assign person", "Mark as cleared", "Group as one purchase", "Delete selected"}
 	text := f.Text()
 	for _, label := range labels {
 		if !strings.Contains(text, label) {

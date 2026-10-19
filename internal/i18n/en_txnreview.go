@@ -13,24 +13,24 @@ package i18n
 // the shared en.go.
 var txnReviewKeys = Catalog{
 	// Entry point.
-	"txnreview.reviewBtn":   "Review transfers",
-	"txnreview.reviewBadge": "Review transfers (%s)",
+	"txnreview.reviewBtn":   "Link transfers",
+	"txnreview.reviewBadge": "Link transfers (%s)",
 
 	// The panel.
-	"txnreview.intro":     "These rows look like money moved between your own accounts, but nothing says which account they moved to — so they are counting as income or spending. Pick the other side and they stop.",
-	"txnreview.empty":     "Nothing here looks like an unlinked transfer. Rows that move money between your own accounts are already leaving your income and spending alone.",
-	"txnreview.unrouted":  "Not sure where these went",
+	"txnreview.intro":     "These transactions look like money moved between your accounts. Choose the other account so they stop counting as income or spending.",
+	"txnreview.empty":     "No unlinked transfers found. Transactions that move money between your accounts are already left out of income and spending.",
+	"txnreview.unrouted":  "Choose the other account",
 	"txnreview.batchMeta": "%s · %s counting right now",
 
 	// Why a group was grouped. A user confirming a grouping is entitled to know
 	// how much of it is evidence and how much is a reading.
-	"txnreview.basisReciprocal": "The other side of these moves is sitting in that account, dated to match.",
-	"txnreview.basisName":       "These rows name that account in their own text.",
-	"txnreview.basisCategory":   "Filed under a payment category, and this is the only account of that kind.",
+	"txnreview.basisReciprocal": "The other side of these transfers is in that account on a matching date.",
+	"txnreview.basisName":       "These transactions name that account in their text.",
+	"txnreview.basisCategory":   "Assigned to a payment category, and this is the only account of that kind.",
 	"txnreview.basisNone":       "Nothing in these rows says where the money went, so they are yours to place.",
 
 	// Controls.
-	"txnreview.counterparty":    "Moved to or from",
+	"txnreview.counterparty":    "Other account",
 	"txnreview.pickAccount":     "Choose an account",
 	"txnreview.countTowardDebt": "Count these as payments toward what you owe",
 
@@ -41,12 +41,12 @@ var txnReviewKeys = Catalog{
 	// each a single currency. A summed figure with one symbol on it would look
 	// precise and mean nothing.
 	"txnreview.summaryRows":  "%s will stop counting as income or spending.",
-	"txnreview.summaryMixed": "%s will stop counting as income or spending, across %s currencies — the amounts are listed per account above.",
+	"txnreview.summaryMixed": "%s will stop counting as income or spending across %s currencies — amounts are listed by account above.",
 	// An uncertain pairing is not a wrong classification, and says so.
-	"txnreview.ambiguousLeg": "more than one row over there could be this one's other half",
+	"txnreview.ambiguousLeg": "More than one transaction in that account could match this one",
 	"txnreview.debtNote":     "%s will also count as paying down that balance.",
 	"txnreview.failures":     "%s can't take this and will be left alone; each one says why above.",
-	"txnreview.apply":        "Link these transfers",
+	"txnreview.apply":        "Link transfers",
 
 	"txnreview.appliedToast": "Linked %s.",
 

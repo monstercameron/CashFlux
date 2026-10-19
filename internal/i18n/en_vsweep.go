@@ -164,10 +164,10 @@ var vSweepKeys = Catalog{
 	"rules.memberFieldLabel":   "Assign to",
 	"rules.memberNone":         "Don't assign anyone",
 	"rules.reviewedFieldLabel": "Mark reviewed (skip the review inbox)",
-	"rules.excludeFieldLabel":  "Exclude from reports (still counts in balances)",
+	"rules.excludeFieldLabel":  "Exclude from budgets and reports",
 	"rules.memberMeta":         "assigns %s",
 	"rules.reviewedMeta":       "marks reviewed",
-	"rules.excludeMeta":        "excludes from reports",
+	"rules.excludeMeta":        "excludes from budgets and reports",
 
 	// ── C377/C378: allocation dimensions and what the funds cost ────────────
 	"investments.bySector": "By sector",
@@ -828,7 +828,7 @@ var vSweepKeys = Catalog{
 	"method.f.planProject":    "Projections continue the current monthly pattern forward; they are arithmetic, not a forecast of your life.",
 
 	"method.exclTransfers":         "Transfers between your own accounts. Moving money is not earning or spending it, and counting transfers is the most common reason a total looks too big.",
-	"method.exclFlagged":           "Transactions you marked as excluded from reports.",
+	"method.exclFlagged":           "Transactions you marked as excluded from budgets and reports.",
 	"method.exclFx":                "Amounts in other currencies use the exchange rate stored in Settings, not a live rate.",
 	"method.exclUncategorized":     "Transactions with no category are grouped separately rather than spread across the others.",
 	"method.exclPayeeBlank":        "Transactions with neither a payee nor a description cannot be grouped and are left out.",

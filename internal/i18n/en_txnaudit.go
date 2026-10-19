@@ -20,13 +20,13 @@ var txnAuditKeys = Catalog{
 	// --- C560: one period, one view ---------------------------------------------
 	// The ledger's period bar. The label is derived from the ledger's own date
 	// range, so it can never disagree with the rows beneath it.
-	"txnperiod.prev":       "Earlier month",
-	"txnperiod.next":       "Later month",
+	"txnperiod.prev":       "Previous month",
+	"txnperiod.next":       "Next month",
 	"txnperiod.thisMonth":  "This month",
 	"txnperiod.allDates":   "All dates",
 	"txnperiod.allLabel":   "All dates",
 	"txnperiod.scopeAria":  "Period shown: %s",
-	"txnperiod.viewLabel":  "View",
+	"txnperiod.viewLabel":  "Show as",
 	"txnperiod.viewLedger": "Ledger",
 	"txnperiod.viewCal":    "Calendar",
 	// Shown while the ledger is on a hand-picked range rather than a whole month,
@@ -41,13 +41,13 @@ var txnAuditKeys = Catalog{
 	"transactions.bulkClearCatTitle":   "Remove the category from the selected transactions, leaving them uncategorized.",
 	"transactions.bulkClearCatConfirm": "Clear the category on %d? They become uncategorized, so they drop out of every category budget and report until you file them again.",
 	"transactions.bulkOpClearedCat":    "Cleared the category on %d",
-	"transactions.bulkCatApplied":      "Filed %d under %s",
+	"transactions.bulkCatApplied":      "Set %d transactions to %s",
 
 	// --- C562: excluding from reports is a reporting change, so it asks ---------
-	"transactions.excludeConfirm":    "Exclude “%s” from reports? Your account balances do not change — this charge just stops counting toward budgets, spending and reports.",
-	"transactions.excludeConfirmBtn": "Exclude from reports",
-	"transactions.excludedOne":       "“%s” no longer counts toward budgets or reports",
-	"transactions.includedOne":       "“%s” counts toward budgets and reports again",
+	"transactions.excludeConfirm":    "Exclude “%s” from budgets and reports? The account balance stays the same. This transaction is left out of budgets and reports.",
+	"transactions.excludeConfirmBtn": "Exclude from budgets and reports",
+	"transactions.excludedOne":       "“%s” is left out of budgets and reports",
+	"transactions.includedOne":       "“%s” is included in budgets and reports again",
 
 	// How a transaction refers to itself in a sentence when it has neither a
 	// description nor a payee to be named by.
@@ -61,24 +61,24 @@ var txnAuditKeys = Catalog{
 	// The row's ⋯ trigger, named after its row like the checkbox and the pencil
 	// beside it. The unparameterised "Transaction actions" was identical on every
 	// row, so tabbing the actions column announced the same name over and over.
-	"transactions.rowActionsFor": "Actions for %s",
+	"transactions.rowActionsFor": "More actions for %s",
 
 	// --- C564: the receipt split always says what happens next -----------------
-	"receiptsplit.choosing": "Choose a photo of the receipt to read.",
+	"receiptsplit.choosing": "Choose a receipt photo.",
 	"receiptsplit.noTxn":    "That transaction is no longer in the ledger, so there is nothing to split.",
 	"receiptsplit.noPicker": "This browser would not open a file picker. Attach the receipt from the row's paperclip instead, or split by hand.",
 
 	// --- C565: a payment-link dialog cannot commit a no-op ----------------------
-	"txnlink.nothingToSave": "Pick a bill or a subscription to link this payment to.",
+	"txnlink.nothingToSave": "Choose a bill or subscription to link this payment to.",
 	"txnlink.clearHint":     "Saving now removes the links this payment already has.",
 	"txnlink.saveRemove":    "Remove link",
 
 	// --- C566: a split is not balanced while a line is unfinished ---------------
-	"splitEditor.draftRow":      "Empty line — fill it in or remove it before saving.",
-	"splitEditor.incomplete":    "One line still needs a category and an amount",
-	"splitEditor.needTwoShort":  "A split needs at least two complete lines",
-	"splitEditor.unassigned":    "%s not assigned yet",
-	"splitEditor.cannotSaveYet": "Finish every line before saving.",
+	"splitEditor.draftRow":      "Finish or remove this split row before saving.",
+	"splitEditor.incomplete":    "Add a category and amount to this row.",
+	"splitEditor.needTwoShort":  "Add at least two rows with a category and amount.",
+	"splitEditor.unassigned":    "%s left to assign",
+	"splitEditor.cannotSaveYet": "Fill in each row before saving.",
 
 	// --- C568: quick-filter counts describe what you are looking at ------------
 	"transactions.presetCountAria": "%s — %d in the current view",
@@ -98,9 +98,9 @@ var txnAuditKeys = Catalog{
 
 	// --- C572: the row menu groups by what an action costs you -----------------
 	"txnmenu.sectionOrganize": "Organize",
-	"txnmenu.sectionLinks":    "Links",
-	"txnmenu.sectionReports":  "Reporting",
-	"txnmenu.sectionRemove":   "Remove",
+	"txnmenu.sectionLinks":    "Link",
+	"txnmenu.sectionReports":  "Budgets and reports",
+	"txnmenu.sectionRemove":   "Delete",
 }
 
 func init() {

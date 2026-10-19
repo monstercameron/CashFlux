@@ -46,7 +46,7 @@ var netWorthRedesignKeys = Catalog{
 	"nws.legDebtPaidWhat":    "Payments that reduced what you owe.",
 	"nws.legNewDebtWhat":     "Fresh borrowing, new card charges and interest added to what you owe.",
 	"nws.legRevaluationWhat": "Balance updates on property, vehicles and cash — a re-appraisal, depreciation, a reconcile.",
-	"nws.legResidualWhat":    "The part the steps above don't account for: transactions excluded from reports, currency conversion, and unusual debt movements. Shown rather than hidden.",
+	"nws.legResidualWhat":    "The part the steps above don’t account for: transactions excluded from budgets and reports, currency conversion, and unusual debt movements. Shown rather than hidden.",
 
 	// ── TWO SIDES
 	"nws.sidesTitle":  "Two sides",

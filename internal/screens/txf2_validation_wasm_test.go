@@ -58,7 +58,7 @@ func TestTxnCountLineNamesExcludedRows(t *testing.T) {
 	f := render.New(t)
 	f.Render(txnCountLine(txnCountLineProps{Shown: 3, Total: 3, Net: money.New(8500, "USD"), Excluded: 1}))
 	got := f.Text()
-	for _, want := range []string{"3 transactions", "includes 1 excluded"} {
+	for _, want := range []string{"3 transactions", "includes 1 left out of budgets and reports"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("count line = %q, want current summary containing %q", got, want)
 		}

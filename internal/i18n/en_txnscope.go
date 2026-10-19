@@ -16,20 +16,20 @@ var txnScopeKeys = Catalog{
 	"transactions.scopeAllOne":      "Showing all 1 transaction",
 	"transactions.scopeNarrowed":    "Showing %s of %s transactions",
 	"transactions.scopeNarrowedOne": "Showing %s of 1 transaction",
-	"transactions.scopeNet":         "net %s",
+	"transactions.scopeNet":         "Net: %s",
 	"transactions.scopeLens":        "viewing as %s",
 	"transactions.scopeAria":        "What this ledger is showing",
 	// Said only when a row could not be folded into the base currency (no exchange
 	// rate saved for it). Without this the net silently covered fewer rows than the
 	// count printed beside it.
-	"transactions.scopeUnconverted": "%d not counted — no exchange rate",
+	"transactions.scopeUnconverted": "%d not included (no exchange rate)",
 	// C681: transfer legs are money you still own. Summed into a figure labelled
 	// "net" they describe moving money as earning or spending it — and filtering
 	// to one leg of a pair makes that the only available reading. Stated apart.
-	"transactions.scopeMoved": "%s moved between your accounts",
+	"transactions.scopeMoved": "%s transferred between your accounts",
 	// The counterpart is not in THIS VIEW. It may exist outside the filter, so the
 	// wording describes the view rather than accusing the data of being broken.
-	"transactions.scopeUnpaired": "%d with the other side not shown",
+	"transactions.scopeUnpaired": "%d transfers have a hidden other side",
 
 	// The member lens, shown as its own chip rather than folded in with the page's
 	// filters — it comes from the top bar and its ✕ clears the top bar, not a filter.
@@ -48,25 +48,25 @@ var txnScopeKeys = Catalog{
 
 	// The review backlog is measured across the whole household; the ledger beside
 	// it usually is not. The button says so on hover and to assistive tech.
-	"transactions.reviewScopeTitle": "%d charges need review across the whole household — this count ignores the filters on this page",
+	"transactions.reviewScopeTitle": "%d transactions need review across your household, including ones hidden by these filters",
 
 	// Classification provenance (C579). The mark is one small word beside a
 	// category nobody has confirmed; the sentences behind it say what filed the
 	// row, and name the rule when one accounts for it.
-	"transactions.autoMark":           "auto",
-	"transactions.autoWhyRule":        "Filed automatically by your rule matching \"%s\". No one has confirmed it — open the transaction to change or confirm the category.",
-	"transactions.autoWhyRuleUnnamed": "Filed automatically by one of your rules. No one has confirmed it — open the transaction to change or confirm the category.",
-	"transactions.autoWhySource":      "Filed automatically when this came in from %s. No rule of yours accounts for this category, and no one has confirmed it.",
-	"transactions.autoWhyUnknown":     "Filed automatically. No rule of yours accounts for this category, and no one has confirmed it.",
-	"transactions.confirmCategory":    "Confirm this category",
-	"transactions.confirmedCategory":  "Category confirmed — this row no longer reads as automatic.",
+	"transactions.autoMark":           "Added automatically",
+	"transactions.autoWhyRule":        "Added automatically by your rule matching \"%s\". This category needs review — open the transaction to change it or mark it reviewed.",
+	"transactions.autoWhyRuleUnnamed": "Added automatically by one of your rules. This category needs review — open the transaction to change it or mark it reviewed.",
+	"transactions.autoWhySource":      "Added automatically when this came in from %s. This category needs review.",
+	"transactions.autoWhyUnknown":     "Added automatically. This category needs review.",
+	"transactions.confirmCategory":    "Mark reviewed",
+	"transactions.confirmedCategory":  "Category reviewed",
 
 	// The one primary entry point and its type-scoped menu (C573). Each label names
 	// the KIND of thing being created, and the form it opens is already set that way.
-	"transactions.addKindLabel": "Choose what kind of transaction to add",
-	"transactions.addExpense":   "Expense — money going out",
-	"transactions.addIncome":    "Income — money coming in",
-	"transactions.addTransfer":  "Transfer between your accounts",
+	"transactions.addKindLabel": "Choose a transaction type",
+	"transactions.addExpense":   "Expense (money out)",
+	"transactions.addIncome":    "Income (money in)",
+	"transactions.addTransfer":  "Transfer (between your accounts)",
 	// The section heading sits over "Import" and had to stop reading as a fourth
 	// KIND of transaction: the three items above it are kinds, so a heading of the
 	// same weight in the same list gets read as one. It names the different thing
@@ -111,15 +111,15 @@ var txnScopeKeys = Catalog{
 	// "Mark as reviewed") is not in that queue, so saying it needs review sent
 	// people looking for a card that was never there. It is unconfirmed, which is
 	// a different thing, and the tooltip says where it actually stands.
-	"transactions.statusUnconfirmed":      "Not confirmed",
-	"transactions.statusUnconfirmedTitle": "Already categorized, so it isn't waiting in the Review inbox — open the row to confirm or change its category.",
+	"transactions.statusUnconfirmed":      "Needs review",
+	"transactions.statusUnconfirmedTitle": "Needs review — this category was added automatically. Open the transaction to change the category or mark it reviewed.",
 
 	// The pending band above the ledger (C582), collapsed to one fact by default.
-	"transactions.upcomingSummary":     "%d scheduled this month, %s still to come",
+	"transactions.upcomingSummary":     "%d scheduled this month, %s still expected",
 	"transactions.upcomingShow":        "Show them",
 	"transactions.upcomingHide":        "Hide",
-	"transactions.upcomingShowAria":    "Show the scheduled items — %s",
-	"transactions.upcomingHideAria":    "Hide the scheduled items — %s",
+	"transactions.upcomingShowAria":    "Show scheduled items: %s",
+	"transactions.upcomingHideAria":    "Hide scheduled items: %s",
 	"transactions.upcomingSeeSchedule": "See the whole schedule",
 
 	// Shared toolbar controls whose labels were generic enough to be ambiguous

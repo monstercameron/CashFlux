@@ -77,16 +77,16 @@ func TestR3MCalendarMoneyUsesLedgerDisplayAndAccessibleDescriptions(t *testing.T
 	if len(totals) != 2 {
 		t.Fatalf("calendar week totals = %d, want 2", len(totals))
 	}
-	if got := totals[0].Text(); !strings.Contains(got, "Spent −$6.75") {
-		t.Fatalf("expense week total text = %q, want spent $6.75", got)
+	if got := totals[0].Text(); !strings.Contains(got, "Money out −$6.75") {
+		t.Fatalf("expense week total text = %q, want money out $6.75", got)
 	}
-	if got := totals[0].Attr("aria-label"); !strings.Contains(got, "spent $6.75") || !strings.Contains(got, "1 transaction") {
-		t.Fatalf("expense week total aria-label = %q, want spent $6.75 and one transaction", got)
+	if got := totals[0].Attr("aria-label"); !strings.Contains(got, "money out $6.75") || !strings.Contains(got, "1 transaction") {
+		t.Fatalf("expense week total aria-label = %q, want money out $6.75 and one transaction", got)
 	}
-	if got := totals[1].Text(); !strings.Contains(got, "+$5,270.75 in") {
-		t.Fatalf("income week total text = %q, want +$5,270.75 in", got)
+	if got := totals[1].Text(); !strings.Contains(got, "Money in $5,270.75") {
+		t.Fatalf("income week total text = %q, want money in $5,270.75", got)
 	}
-	if got := totals[1].Attr("aria-label"); !strings.Contains(got, "+$5,270.75 in") || !strings.Contains(got, "1 transaction") {
-		t.Fatalf("income week total aria-label = %q, want +$5,270.75 in and one transaction", got)
+	if got := totals[1].Attr("aria-label"); !strings.Contains(got, "money in $5,270.75") || !strings.Contains(got, "1 transaction") {
+		t.Fatalf("income week total aria-label = %q, want money in $5,270.75 and one transaction", got)
 	}
 }

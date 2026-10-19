@@ -164,7 +164,7 @@ func TestClassifyFieldOffersTheDebtClaimOnlyForADebt(t *testing.T) {
 		wantEffect string
 	}{
 		{"nothing chosen", "", false, ""},
-		{"an asset", "sav", false, "between your own accounts"},
+		{"an asset", "sav", false, "between your accounts"},
 		{"a debt", "card", true, "pays down what you owe on Apple Credit Card"},
 	}
 	for _, c := range cases {

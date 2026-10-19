@@ -111,10 +111,10 @@ func TestTxnKeyHelpPanelRendersAndReleasesItsListenersAcrossOpens(t *testing.T) 
 		SetTxnKeyHelpOpen(true)
 		f.Render(host)
 		text := f.Text()
-		if !strings.Contains(text, "transaction search") || !strings.Contains(text, "Close") {
+		if !strings.Contains(text, "Search transactions") || !strings.Contains(text, "Close") {
 			t.Fatalf("open %d did not render the shortcut list and close action: %q", openNumber, text)
 		}
-		if dialog := f.ByRole("dialog", "Transaction keyboard shortcuts"); !dialog.Exists() {
+		if dialog := f.ByRole("dialog", "Keyboard shortcuts"); !dialog.Exists() {
 			t.Fatalf("open %d did not render the guide in the standard dialog component", openNumber)
 		}
 		if close := f.ByRole("button", "Close"); !close.Exists() {

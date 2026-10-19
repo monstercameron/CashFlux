@@ -12,8 +12,8 @@ var txnWidgetKeys = Catalog{
 	"txnwidget.countSub":       "matching your filters",
 	"txnwidget.netTitle":       "Net",
 	"txnwidget.netSub":         "across the shown set",
-	"txnwidget.unclearedTitle": "Uncleared",
-	"txnwidget.unclearedSub":   "not yet reconciled",
+	"txnwidget.unclearedTitle": "Not cleared",
+	"txnwidget.unclearedSub":   "not yet matched to your bank statement",
 	"txnwidget.tableTitle":     "All transactions",
 
 	// Edit modal.

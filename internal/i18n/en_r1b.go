@@ -3,11 +3,11 @@
 package i18n
 
 var r1bKeys = Catalog{
-	"r1b.catSuggest.menuAction":    "Suggest a category",
+	"r1b.catSuggest.menuAction":    "Change category",
 	"r1b.categorySuggestionInline": " · %s?",
-	"r1b.categorySuggestionAria":   "Apply suggested category: %s",
+	"r1b.categorySuggestionAria":   "Use suggested category: %s",
 	"r1b.autoFiledByRule":          "Filed by rule: %s",
-	"transactions.linkTo":          "Link to…",
+	"transactions.linkTo":          "Link payment",
 	"transactions.bankStatus":      "Bank status",
 }
 

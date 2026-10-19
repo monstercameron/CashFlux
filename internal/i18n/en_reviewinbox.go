@@ -6,7 +6,7 @@ package i18n
 // the guided triage flow reached from the transactions toolbar. Merged via init
 // so this file never touches en.go.
 var reviewInboxKeys = Catalog{
-	"review.title":  "Review transactions",
+	"review.title":  "Review categories",
 	"review.button": "Review inbox (%d)", // guided-triage entry; count = uncategorized + flagged (distinct from the filter chips below)
 
 	"review.progress":  "%d of %d",
@@ -61,9 +61,9 @@ var reviewInboxKeys = Catalog{
 	"catpick.newOption":         "+ New category or sub-category…",
 
 	// Dual-mode review surface (C500–C512).
-	"review.modeLabel":    "Review mode",
-	"review.modeSingle":   "One at a time",
-	"review.modeBulk":     "Bulk",
+	"review.modeLabel":    "Choose how to review",
+	"review.modeSingle":   "Review one at a time",
+	"review.modeBulk":     "Review several at once",
 	"review.collapseNote": "Charges are grouped by merchant and sorted by how confident the matcher is. Confirm a whole merchant at once, or open one to change individual charges.",
 	// C602: the header reads "251 charges left → 11 merchants to decide", and the
 	// arrow carries "grouped into" as its accessible name. It used to be "251
@@ -73,20 +73,20 @@ var reviewInboxKeys = Catalog{
 	"review.charges":            "charges left",
 	"review.decisions":          "merchants to decide",
 	"review.groupedInto":        "grouped into",
-	"review.tierReady":          "Ready to confirm",
-	"review.tierLook":           "Worth a look",
-	"review.tierNone":           "No suggestion yet",
+	"review.tierReady":          "Ready to accept",
+	"review.tierLook":           "Check these",
+	"review.tierNone":           "No category suggestion",
 	"review.tierCount":          "%s · %s",
 	"review.selectAll":          "Select all %d",
 	"review.chargeCount":        "%s",
 	"review.oneCharge":          "1 charge",
 	"review.nothingPicked":      "Nothing selected",
-	"review.pickHint":           "Pick a merchant, or confirm a whole tier at once.",
+	"review.pickHint":           "Select transactions to accept suggestions.",
 	"review.selCount":           "%s · %s",
 	"review.undoStays":          "%s · undo stays available",
-	"review.confirmN":           "Confirm %d",
-	"review.confirm":            "Confirm",
-	"review.clear":              "Clear",
+	"review.confirmN":           "Accept %d suggestions",
+	"review.confirm":            "Accept suggestions",
+	"review.clear":              "Clear selection",
 	"review.makeRule":           "Always do this — make a rule",
 	"review.rulesMade":          "Made %d rules — future charges from these merchants file themselves.",
 	"review.snooze":             "Snooze",
@@ -96,9 +96,9 @@ var reviewInboxKeys = Catalog{
 	"review.emptyTitle":         "Nothing needs a look",
 	"review.emptySub":           "Every charge is categorized. New imports will show up here.",
 	"review.showOther":          "Show the other %d",
-	"review.keyboardHintBulk":   "j / k move · space picks · Enter confirms · 1 for one at a time",
-	"review.keyboardHintSingle": "j / k move · Enter confirms · s snoozes · d dismisses · b for bulk",
-	"review.bulkApplied":        "Categorized %d charges.",
+	"review.keyboardHintBulk":   "j / k moves · Space selects · Enter marks reviewed · 1 for one at a time",
+	"review.keyboardHintSingle": "j / k moves · Enter marks reviewed · s snoozes · d dismisses · b for several at once",
+	"review.bulkApplied":        "Accepted %d suggestions.",
 
 	// SMART+ scan strip (C504/C509) — scope and cost stated BEFORE the button.
 	"review.scanTitle":     "Let Smart+ suggest categories",
@@ -121,9 +121,9 @@ var reviewInboxKeys = Catalog{
 	"review.needsYou":      "%d merchants still need you.",
 	"review.pickAria":      "Select %s, %d charges",
 	"review.expandAria":    "Show the charges from %s",
-	"review.legendHigh":    "Sure enough to confirm in bulk",
-	"review.legendMid":     "Suggested, but check it",
-	"review.legendNone":    "Skipped rather than guess",
+	"review.legendHigh":    "Strong suggestions",
+	"review.legendMid":     "Suggestions to check",
+	"review.legendNone":    "No suggestion",
 
 	// Single-mode context band (C503).
 	"review.bandTitle":  "What else this charge is tied to",
@@ -151,10 +151,10 @@ var reviewInboxKeys = Catalog{
 	"review.rulesReadyMany": "%d ready-made rules could file many of these",
 	"review.rulesReadyLink": "Review rules",
 
-	"review.categorizedUndo":      "Categorized as %s.",
-	"review.categorizedBatchUndo": "Categorized %d transactions as %s.",
+	"review.categorizedUndo":      "Category set to %s.",
+	"review.categorizedBatchUndo": "Set %d transactions to %s",
 	"review.skip":                 "Skip for now",
-	"review.done":                 "Done",
+	"review.done":                 "Close",
 
 	"review.allDoneTitle":   "All caught up!",
 	"review.allDoneClean":   "Nothing needs review right now.",

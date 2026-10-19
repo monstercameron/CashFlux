@@ -90,6 +90,13 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Plainer Transactions wording (LBL2, LBL3).** About 180 Transactions labels were rewritten to one glossary: "Exclude from
+  budgets and reports" (it always also left budgets), "Not cleared" instead of "Uncleared", "Scheduled" instead of
+  "Upcoming", "Money in / Money out" in the calendar, "Possible duplicate" and "Higher than usual" for Smart chips,
+  "Change category", "Link payment", shorter keyboard-shortcut names, and filter labels without "Filter by" or dash
+  decorations. The Review inbox says it accepts category suggestions. Every rewrite was checked against what the code does:
+  date chips stay inclusive ("From / Through"), the edit-form delete says it can't be undone while the row delete (which has
+  undo) says it can, and a suspected transfer is said to still count as income or spending.
 - **Dead legacy ledger deleted (R3D).** The unreachable `transactionsLegacy()` page (1,086 lines) and its row editor (510
   lines) are gone, with their row-only tests and the legacy shared-form entry point; `TxnSharedForm` now takes the typed
   `TxnFormModel`. The four helpers the live page still uses moved to `txn_reviewed.go` and `txn_row_helpers.go` with new

@@ -26,7 +26,7 @@ var lane1Keys = Catalog{
 	// %s = "N transfers".
 	"rpta.provTransfers": "%s ignored — money moving between your accounts is never income or spending.",
 	// %s = "N transactions".
-	"rpta.provExcluded": "%s marked \"exclude from reports\" are not counted.",
+	"rpta.provExcluded": "%s marked “exclude from budgets and reports” are not counted.",
 	// %s = "N accounts" in scope.
 	"rpta.provNWAccounts": "Assets minus debts across %s.",
 	// %s = "N transactions", %s = the window's last month (e.g. "Jul 2026").

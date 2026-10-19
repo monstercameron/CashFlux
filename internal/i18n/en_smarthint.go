@@ -60,9 +60,9 @@ var smartHintKeys = Catalog{
 	"sm6.trackedUndo": "Now tracking %s as recurring.",
 
 	// SM-8 — a likely duplicate charge.
-	"sm8.chip":   "Duplicate?",
-	"sm8.hint":   "This looks like a duplicate.",
-	"sm8.detail": "Same amount and merchant as another charge within a few days.",
+	"sm8.chip":   "Possible duplicate",
+	"sm8.hint":   "This may be a duplicate.",
+	"sm8.detail": "Same amount and merchant as another transaction from the last few days.",
 	"sm8.action": "Compare them",
 
 	// SM-9 — an expected charge that hasn't posted.
@@ -72,8 +72,8 @@ var smartHintKeys = Catalog{
 
 	// SM-10 — a category spiked against its own baseline.
 	// %s = the category, %s = how much above its baseline.
-	"sm10.chip":   "Unusual",
-	"sm10.hint":   "%s is running %s above its usual.",
+	"sm10.chip":   "Higher than usual",
+	"sm10.hint":   "%[1]s is running %[2]s above its usual.",
 	"sm10.action": "See the charges",
 
 	// SM-11 — a low-balance / overdraft forecast on one account.

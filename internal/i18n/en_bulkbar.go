@@ -11,9 +11,9 @@ var bulkBarKeys = Catalog{
 	"transactions.bulkSelectedShort":  "%d selected",
 	"transactions.bulkCatShort":       "Categorize",
 	"transactions.bulkAssignShort":    "Assign",
-	"transactions.bulkClearedShort":   "Cleared",
-	"transactions.bulkUnclearedShort": "Uncleared",
-	"transactions.bulkGroupShort":     "Group",
+	"transactions.bulkClearedShort":   "Mark cleared",
+	"transactions.bulkUnclearedShort": "Mark not cleared",
+	"transactions.bulkGroupShort":     "Group as one purchase",
 	"transactions.bulkExportShort":    "Export",
 	"transactions.bulkDeleteShort":    "Delete",
 }

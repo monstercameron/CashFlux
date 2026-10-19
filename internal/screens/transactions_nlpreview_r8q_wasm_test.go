@@ -38,7 +38,7 @@ func TestNaturalLanguagePreviewIncludesQueryDateBounds(t *testing.T) {
 		}
 	}
 	got := strings.Join(preview, " · ")
-	for _, want := range []string{"From Oct 25", "To Oct 31", "Search: coffee"} {
+	for _, want := range []string{"From Oct 25", "Through Oct 31", "Search: coffee"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("natural-language preview %q does not mention %q", got, want)
 		}

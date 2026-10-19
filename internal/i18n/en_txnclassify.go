@@ -36,7 +36,7 @@ var txnClassifyKeys = Catalog{
 	// The heading now names the ACTION, and the picker underneath is the question
 	// it needs answered.
 	"transactions.classifyGroup":     "Mark as transfer",
-	"transactions.classifyGroupHint": "A transfer is money moving between accounts you own. Choose the account on the other side and this row stops counting as income or spending.",
+	"transactions.classifyGroupHint": "A transfer is money moving between your accounts. Choose the other account and this transaction stops counting as income or spending.",
 	// The picker itself. Its first option is the way OUT of the classification,
 	// so it has to read as a real answer rather than an empty slot.
 	"transactions.classifyLabel": "Account on the other side",
@@ -52,7 +52,7 @@ var txnClassifyKeys = Catalog{
 	"transactions.classifyCategoryNote": "Choosing a category called “Transfer” does not make this a transfer — pick the account on the other side above.",
 	// Shown under the picker once an account is chosen, so the consequence is
 	// visible before saving rather than discovered afterwards.
-	"transactions.classifyEffectNeutral": "Kept out of income and spending — it moved between your own accounts.",
+	"transactions.classifyEffectNeutral": "Kept out of income and spending — money moved between your accounts.",
 	"transactions.classifyEffectDebt":    "Kept out of spending — it pays down what you owe on %s.",
 	// The debt claim, offered only when the chosen account is a card or loan.
 	// C674: whether the far side was found. Classifying a leg never creates its
@@ -71,8 +71,8 @@ var txnClassifyKeys = Catalog{
 	// account-relative, so income-green / spending-red argues the opposite of the
 	// truth on one of the two legs — these badges carry the meaning instead.
 	"transactions.badgeTransfer":          "Transfer",
-	"transactions.badgeTransferTitle":     "Moved between your own accounts — not income or spending.",
-	"transactions.badgeTransferWithTitle": "Moved between your own accounts, with %s — not income or spending.",
+	"transactions.badgeTransferTitle":     "Money moved between your accounts — not income or spending.",
+	"transactions.badgeTransferWithTitle": "Money moved between your accounts, with %s — not income or spending.",
 	// Distinct from Transfer, not a stronger version of it (C677): naming a card
 	// says the money stayed in the household; counting it as a payment is a claim
 	// about which debt it settles.
@@ -80,8 +80,8 @@ var txnClassifyKeys = Catalog{
 	"transactions.badgeDebtPaymentTitle": "Counted as a payment toward %s — it reduces what you owe rather than being spending.",
 	// C672: not structurally a transfer, but it looks like one, and it is counting
 	// as income or spending right now. A question, because the app does not know.
-	"transactions.badgeSuspectTransfer":      "Transfer?",
-	"transactions.badgeSuspectTransferTitle": "This looks like a move between your own accounts, but no account is set on the other side — so it is still counting as income or spending. Open it to say which account it moved to or from.",
+	"transactions.badgeSuspectTransfer":      "Choose the other account",
+	"transactions.badgeSuspectTransferTitle": "Looks like money moved between your accounts, but it still counts as income or spending. Choose the other account.",
 }
 
 func init() {

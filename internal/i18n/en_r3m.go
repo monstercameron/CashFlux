@@ -8,7 +8,7 @@ var r3mKeys = Catalog{
 	"transactions.calDaySpent":      "Day %s, spent %s",
 	"transactions.calDayNet":        "Day %s, net %s",
 	"transactions.calDayZero":       "Day %s, net %s",
-	"transactions.calWeekSpentAria": "Week: spent %s across %d transactions",
+	"transactions.calWeekSpentAria": "Week: money out %s across %d transactions",
 	"transactions.calWeekNetAria":   "Week: net %s across %d transactions",
 	"transactions.calWeekZeroAria":  "Week: net %s across %d transactions",
 }

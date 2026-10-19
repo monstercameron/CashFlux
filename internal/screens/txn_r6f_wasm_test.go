@@ -87,10 +87,10 @@ func TestR9CCalendarWeekTotalsUseComparableMetrics(t *testing.T) {
 		wantAria  string
 		wantTone  string
 	}{
-		{name: "spending", props: txnCalWeekTotalProps{Stat: txncalendar.DayStat{Net: -262200, Count: 4}, Base: "USD", Spent: 262200, WeekOf: "Oct 4"}, wantLines: []string{"Spent −$2,622.00", "4 transactions"}, wantAria: "Week of Oct 4: spent $2,622.00, 4 transactions."},
-		{name: "mixed", props: txnCalWeekTotalProps{Stat: txncalendar.DayStat{Net: 15000, Count: 2}, Base: "USD", Spent: 10000, Income: 25000, WeekOf: "Oct 4"}, wantLines: []string{"Spent −$100.00", "+$250.00 in", "2 transactions"}, wantAria: "Week of Oct 4: spent $100.00, +$250.00 in, 2 transactions.", wantTone: "text-up"},
-		{name: "future scheduled", props: txnCalWeekTotalProps{Base: "USD", Scheduled: 3, WeekOf: "Oct 25", Future: true}, wantLines: []string{"Spent $0.00", "3 scheduled"}, wantAria: "Week of Oct 25: spent $0.00, 3 scheduled."},
-		{name: "empty future", props: txnCalWeekTotalProps{Base: "USD", WeekOf: "Oct 25", Future: true}, wantLines: []string{"Spent $0.00", "Nothing yet"}, wantAria: "Week of Oct 25: spent $0.00, Nothing yet."},
+		{name: "spending", props: txnCalWeekTotalProps{Stat: txncalendar.DayStat{Net: -262200, Count: 4}, Base: "USD", Spent: 262200, WeekOf: "Oct 4"}, wantLines: []string{"Money out −$2,622.00", "4 transactions"}, wantAria: "Week of Oct 4: money out $2,622.00, 4 transactions."},
+		{name: "mixed", props: txnCalWeekTotalProps{Stat: txncalendar.DayStat{Net: 15000, Count: 2}, Base: "USD", Spent: 10000, Income: 25000, WeekOf: "Oct 4"}, wantLines: []string{"Money out −$100.00", "Money in $250.00", "2 transactions"}, wantAria: "Week of Oct 4: money out $100.00, money in $250.00, 2 transactions.", wantTone: "text-up"},
+		{name: "future scheduled", props: txnCalWeekTotalProps{Base: "USD", Scheduled: 3, WeekOf: "Oct 25", Future: true}, wantLines: []string{"Money out $0.00", "3 scheduled"}, wantAria: "Week of Oct 25: money out $0.00, 3 scheduled."},
+		{name: "empty future", props: txnCalWeekTotalProps{Base: "USD", WeekOf: "Oct 25", Future: true}, wantLines: []string{"Money out $0.00", "Nothing yet"}, wantAria: "Week of Oct 25: money out $0.00, Nothing yet."},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

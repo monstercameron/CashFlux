@@ -22,12 +22,12 @@ func TestTxnNoMatchFuturePeriodShowsOneMessageAndScheduleLink(t *testing.T) {
 		t.Fatalf("future empty state rendered %d message paragraphs, want 1", got)
 	}
 	message := f.AllByTag("p")[0].Text()
-	if !strings.Contains(message, "No transactions have been posted for this future period") ||
+	if !strings.Contains(message, "No transactions yet for this period") ||
 		!strings.Contains(message, "1 scheduled item") {
 		t.Errorf("future empty-state message = %q, want one message mentioning the empty period and scheduled item", message)
 	}
 	links := f.AllByTag("a")
-	if len(links) != 1 || links[0].Attr("href") != "/recurring" || links[0].Text() != "View Bills & recurring" {
+	if len(links) != 1 || links[0].Attr("href") != "/recurring" || links[0].Text() != "View bills and repeating payments" {
 		t.Errorf("future empty-state schedule link = %#v, want one link to /recurring", links)
 	}
 }

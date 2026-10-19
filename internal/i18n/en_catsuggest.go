@@ -8,7 +8,7 @@ package i18n
 // the optional Smart+ ask). Merged via init so this file does not touch en.go.
 var catSuggestKeys = Catalog{
 	"catSuggest.title":      "Categorize this",
-	"catSuggest.menuAction": "Categorize this…",
+	"catSuggest.menuAction": "Change category",
 	// The inline row chip. %s = the suggested category name.
 	"catSuggest.chipApply": "%s?",
 	"catSuggest.chipAria":  "File this charge under %s",

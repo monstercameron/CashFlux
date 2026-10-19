@@ -15,11 +15,11 @@ var txcFieldKeys = Catalog{
 	"transactions.excludeLabel":     "Exclude from budgets and reports",
 	"transactions.excludeHint":      "Still changes the account balance, but is left out of budgets and reports.",
 	"transactions.excludedBadge":    "Excluded",
-	"transactions.kebabExclude":     "Exclude from reports",
+	"transactions.kebabExclude":     "Exclude from budgets and reports",
 	"transactions.kebabInclude":     "Include in reports",
 	"transactions.bulkExcludeShort": "Exclude",
 	"transactions.bulkIncludeShort": "Include",
-	"transactions.bulkOpExcluded":   "Excluded %d from reports",
+	"transactions.bulkOpExcluded":   "Left %d transactions out of budgets and reports",
 	"transactions.bulkOpIncluded":   "Included %d in reports",
 
 	// TXC-4 non-lossy merge preview.
