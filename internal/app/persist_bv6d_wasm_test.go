@@ -517,6 +517,13 @@ func TestBV6DPreferenceReloadRapidChangesAndAccountIsolation(t *testing.T) {
 	// A legacy household choice remains readable without migration writes during
 	// render; the next explicit choice becomes the independent durable preference.
 	cursor, _ := a.Store().ChangeCursor()
+	// A reload keeps the connection scope in which the device preference was
+	// written. An empty App alone would fall back to unrelated legacy server
+	// preferences once LoadPrefs' short cache expires in the accumulated suite.
+	scopePrefs, err := json.Marshal(uistate.LoadPrefs())
+	if err != nil {
+		t.Fatal(err)
+	}
 	_ = uistate.KVGet(densityKey)
 	for i := 0; i < 20; i++ {
 		uistate.PersistBudgetDensity(uistate.BudgetDensityCompact)
@@ -534,6 +541,9 @@ func TestBV6DPreferenceReloadRapidChangesAndAccountIsolation(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer loaded.Store().Close()
+	if err := loaded.SetSettingKV("cashflux:prefs", string(scopePrefs)); err != nil {
+		t.Fatal(err)
+	}
 	appstate.Default = loaded
 	defer func() { appstate.Default = a }()
 	if got := uistate.KVGet(densityKey); got != uistate.BudgetDensityComfortable {
@@ -544,6 +554,9 @@ func TestBV6DPreferenceReloadRapidChangesAndAccountIsolation(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer other.Store().Close()
+	if err := other.SetSettingKV("cashflux:prefs", string(scopePrefs)); err != nil {
+		t.Fatal(err)
+	}
 	oldUser := browserstore.GetString(syncUserIDKey)
 	browserstore.SetMemory(syncUserIDKey, "bv6d-other-account")
 	defer browserstore.SetMemory(syncUserIDKey, oldUser)

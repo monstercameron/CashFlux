@@ -5,6 +5,7 @@
 package app
 
 import (
+	"errors"
 	"strings"
 	"syscall/js"
 	"time"
@@ -78,6 +79,8 @@ var keptOnWipePrefixes = []string{
 	"cashflux:ws-data:",
 	"cashflux:sync-meta:",
 	"cashflux:ui-preference:",
+	quarantinePrefix,
+	journalRecoveryPrefix,
 }
 
 // wipeFinancialLocalState commits the already-wiped SQLite snapshot, cleared
@@ -214,10 +217,31 @@ func hydrateDataset() {
 		return
 	}
 	loadQuarantineRecord()
-	raw := browserstore.GetString(datasetStoreKey)
+	snapshot, snapshotErr := readDurableDatasetSnapshot()
+	if snapshotErr != nil {
+		app.Log().Error("saved dataset could not be read consistently", "err", snapshotErr)
+		return
+	}
+	raw := snapshot.Values[datasetStoreKey]
+	if raw == "" && (snapshot.Errors[datasetStoreKey] != nil || snapshot.Values[datasetCheckpointBackupKey] != "") {
+		err := hydrateDurableDataset(app, snapshot)
+		if err == nil {
+			hadLocalDataset, hydrationSucceeded = true, true
+			loadJournalRecoveryCopies()
+			initializeHostedHydration(false)
+			return
+		}
+		if !errors.Is(err, errNoDatasetCheckpoint) {
+			hadLocalDataset = false
+			app.Log().Error("checkpoint recovery is paused; the authenticated backup was kept", "err", err)
+			return
+		}
+		quarantineDataset(raw, "No authenticated dataset checkpoint could be read. The protected records have been kept.")
+		return
+	}
 	if raw == "" {
-		head, _, err := browserstore.GetSecure(datasetHeadKey)
-		if err != nil || head != "" {
+		head, _, err := snapshot.Read(datasetHeadKey)
+		if err != nil || head != "" || hasUnclaimedJournal(snapshot, nil) {
 			quarantineDataset(raw, "Saved changes are missing their dataset checkpoint. The saved records have been kept.")
 			uistate.SetSampleActive(false)
 			initializeHostedHydration(hostedDocument())
@@ -243,34 +267,25 @@ func hydrateDataset() {
 	seededBefore := browserstore.GetString(seededFlagKey) != ""
 	markSeeded := func() { browserstore.Set(seededFlagKey, "1") }
 	allowSample := !hostedDocument()
-	if raw != "" && strings.TrimSpace(raw) == "" {
-		quarantineDataset(raw, unreadableDatasetReason([]byte(raw)))
-		uistate.SetSampleActive(false)
-		initializeHostedHydration(hostedDocument())
-		return
-	}
 
 	switch decideHydrate(raw, seededBefore, allowSample) {
 	case hydrateImport:
 		hadLocalDataset = true
-		dataset, _, err := checkpointDatasetJSON([]byte(raw))
-		if err == nil {
-			err = app.ImportJSON(dataset)
-		}
+		err := hydrateDurableDataset(app, snapshot)
 		if err != nil {
 			app.Log().Error("dataset hydrate failed", "err", err)
 			hadLocalDataset = false
+			if !errors.Is(err, errNoDatasetCheckpoint) {
+				app.Log().Error("saved dataset recovery is paused; original data was kept", "err", err)
+				initializeHostedHydration(hostedDocument())
+				return
+			}
 			reason := unreadableDatasetReason([]byte(raw))
 			if reason == "" {
 				reason = err.Error()
 			}
 			quarantineDataset(raw, reason)
 			uistate.SetSampleActive(false)
-			initializeHostedHydration(hostedDocument())
-			return
-		}
-		if err := replayDurableDatasetRecords(app, raw); err != nil {
-			quarantineDataset(raw, "Saved changes could not be recovered: "+err.Error())
 			initializeHostedHydration(hostedDocument())
 			return
 		}
@@ -298,6 +313,12 @@ func hydrateDataset() {
 		hydrationSucceeded = true
 		uistate.SetSampleActive(false)
 	}
+	if hydrationSucceeded && uistate.SampleActive() {
+		if current, err := readDurableDatasetSnapshot(); err == nil {
+			tryRecoverQuarantinedDataset(app, current)
+		}
+	}
+	loadJournalRecoveryCopies()
 	// A hosted first boot (including a sample cached by an older build) must not
 	// mount financial screens until the account's server workspace is resolved.
 	initializeHostedHydration(hostedDocument() && (!hadLocalDataset || uistate.SampleActive()))

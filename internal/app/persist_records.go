@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/atrest"
 	"github.com/monstercameron/CashFlux/internal/browserstore"
 	"github.com/monstercameron/CashFlux/internal/history"
 	"github.com/monstercameron/CashFlux/internal/id"
@@ -49,11 +50,18 @@ type datasetRecordHead struct {
 	BaseHash   string `json:"baseHash"`
 	Generation string `json:"generation"`
 	Tail       string `json:"tail"`
+	Cursor     uint64 `json:"cursor,omitempty"`
 }
 
 type datasetRecordNode struct {
-	Parent string   `json:"parent,omitempty"`
-	Keys   []string `json:"keys"`
+	Parent           string   `json:"parent,omitempty"`
+	Keys             []string `json:"keys"`
+	Generation       string   `json:"generation,omitempty"`
+	ParentGeneration string   `json:"parentGeneration,omitempty"`
+	BaseHash         string   `json:"baseHash,omitempty"`
+	Workspace        string   `json:"workspace,omitempty"`
+	From             uint64   `json:"from,omitempty"`
+	Through          uint64   `json:"through,omitempty"`
 }
 
 func recordWorkspace() string {
@@ -94,6 +102,7 @@ func readDatasetRecords(raw, headRaw, generation, workspace string, read func(st
 
 	var nodes []datasetRecordNode
 	seen := map[string]bool{}
+	nodeGeneration, nodeCursor := head.Generation, head.Cursor
 	for key := head.Tail; key != ""; {
 		if seen[key] || !strings.HasPrefix(key, recordWorkspacePrefix(workspace)) {
 			return nil, errors.New("saved change chain is invalid")
@@ -110,8 +119,17 @@ func readDatasetRecords(raw, headRaw, generation, workspace string, read func(st
 		if err := json.Unmarshal([]byte(value), &node); err != nil {
 			return nil, fmt.Errorf("read saved change batch: %w", err)
 		}
+		if node.Generation != "" {
+			if node.Generation != nodeGeneration || node.Workspace != workspace || node.BaseHash != baseHash || node.Through != nodeCursor || node.Through != node.From+1 {
+				return nil, errors.New("saved change generations or cursors do not chain")
+			}
+			nodeGeneration, nodeCursor = node.ParentGeneration, node.From
+		}
 		nodes = append(nodes, node)
 		key = node.Parent
+	}
+	if generation := checkpointGeneration(raw); generation != "" && (nodeGeneration != generation || nodeCursor != 0) {
+		return nil, errors.New("saved changes do not chain from the checkpoint generation")
 	}
 	var records []store.RecordChange
 	for i := len(nodes) - 1; i >= 0; i-- {
@@ -177,32 +195,12 @@ func journalKeysFromHead(head datasetRecordHead, workspace string, read func(str
 var hydratedRecordApp *appstate.App
 var hydratedRecordCursor, hydratedRecordRevision uint64
 
-func replayDurableDatasetRecords(app *appstate.App, checkpoint string) (result error) {
-	defer func() {
-		if result == nil {
-			hydratedRecordApp = app
-			hydratedRecordCursor, _ = app.Store().ChangeCursor()
-			hydratedRecordRevision = app.Rev()
-		}
-	}()
-	head, _, err := browserstore.GetSecure(datasetHeadKey)
+func replayDurableDatasetRecords(app *appstate.App, _ string) error {
+	snapshot, err := readDurableDatasetSnapshot()
 	if err != nil {
 		return err
 	}
-	if head == "" {
-		return nil
-	}
-	records, err := readDatasetRecords(checkpoint, head, readDatasetGen(), recordWorkspace(), browserstore.GetSecure)
-	if err != nil {
-		return err
-	}
-	if err := app.Store().ReplayChanges(records); err != nil {
-		return err
-	}
-	if len(records) > 0 {
-		app.SyncTxnLinkNetting()
-	}
-	return nil
+	return hydrateDurableDataset(app, snapshot)
 }
 
 type durableWaiter struct {
@@ -216,12 +214,25 @@ func newRecordAutosave(app *appstate.App, commit func(map[string]string, map[str
 	durableNoticeApp = app
 	workspace := recordWorkspace()
 	checkpoint := browserstore.GetString(datasetStoreKey)
+	writerGeneration := readDatasetGen()
+	writerOwner := browserstore.GetString(datasetOwnerKey)
+	headRaw := browserstore.GetString(datasetHeadKey)
+	if hydratedDatasetState.app == app {
+		checkpoint = hydratedDatasetState.snapshot.Values[datasetStoreKey]
+		writerGeneration = hydratedDatasetState.snapshot.Values[datasetGenKey]
+		writerOwner = hydratedDatasetState.snapshot.Values[datasetOwnerKey]
+		headRaw = hydratedDatasetState.snapshot.Values[datasetHeadKey]
+	}
 	var head datasetRecordHead
-	_ = json.Unmarshal([]byte(browserstore.GetString(datasetHeadKey)), &head)
-	if head.Generation != readDatasetGen() || head.BaseHash != checkpointHash(checkpoint) || head.Workspace != recordWorkspace() {
+	_ = json.Unmarshal([]byte(headRaw), &head)
+	if head.Generation != writerGeneration || head.BaseHash != checkpointHash(checkpoint) || head.Workspace != workspace {
 		head = datasetRecordHead{}
 	}
-	journalKeys, journalErr := journalKeysFromHead(head, workspace, browserstore.GetSecure)
+	readJournal := browserstore.GetSecure
+	if hydratedDatasetState.app == app {
+		readJournal = hydratedDatasetState.snapshot.Read
+	}
+	journalKeys, journalErr := journalKeysFromHead(head, workspace, readJournal)
 	if journalErr != nil {
 		app.Log().Error("load journal compaction state", "err", journalErr)
 		journalKeys = nil
@@ -242,7 +253,7 @@ func newRecordAutosave(app *appstate.App, commit func(map[string]string, map[str
 	forceVersion, savedForce := uint64(0), uint64(0)
 	inFlight := false
 	var waiters []durableWaiter
-	datasetMyGen = readDatasetGen()
+	datasetMyGen = writerGeneration
 	var save func()
 	completeWaiters := func(revision, cursor uint64, err error) {
 		if appstate.Default == app && recordWorkspace() == workspace {
@@ -286,7 +297,14 @@ func newRecordAutosave(app *appstate.App, commit func(map[string]string, map[str
 			completeWaiters(app.Rev(), 0, errors.New("the workspace changed before saving could finish"))
 			return
 		}
-		if readDatasetGen() != datasetMyGen {
+		// Only an explicit full replacement adopted by this hydrated App may
+		// rebase its writer. Another App's generation is never our entitlement.
+		observed := browserstore.GetString(datasetStoreKey)
+		if observed != checkpoint && datasetMyGen != writerGeneration && hydratedRecordApp == app && datasetMyGen == readDatasetGen() {
+			writerGeneration = datasetMyGen
+			checkpoint, baseHash, head, headRaw, initialized = observed, checkpointHash(observed), datasetRecordHead{}, "", false
+		}
+		if readDatasetGen() != writerGeneration || observed != checkpoint || browserstore.GetString(datasetHeadKey) != headRaw {
 			completeWaiters(app.Rev(), 0, appstate.ErrStaleDataset)
 			return
 		}
@@ -297,12 +315,6 @@ func newRecordAutosave(app *appstate.App, commit func(map[string]string, map[str
 		if suspendAutosave || hostedHydrationRequired() || pendingEnvelopeRaw != "" || autosaveBlocked() {
 			completeWaiters(app.Rev(), 0, errors.New("saving is paused; keep this page open until recovery finishes"))
 			return
-		}
-		if observed := browserstore.GetString(datasetStoreKey); observed != checkpoint {
-			// An authorized full replacement (for example a server pull) adopts a
-			// new generation outside this closure. Its next save must establish a
-			// fresh checkpoint, never append an old chain beneath the new base.
-			checkpoint, baseHash, head, initialized = observed, checkpointHash(observed), datasetRecordHead{}, false
 		}
 		if initialized && savedRevision == app.Rev() && forceVersion == savedForce {
 			cursor, err := app.Store().ChangeCursor()
@@ -315,8 +327,8 @@ func newRecordAutosave(app *appstate.App, commit func(map[string]string, map[str
 				return
 			}
 		}
-		if recordWorkspace() != workspace || readDatasetGen() != datasetMyGen {
-			completeWaiters(app.Rev(), 0, datasetSaveGenerationError(recordWorkspace() == workspace, readDatasetGen() == datasetMyGen))
+		if recordWorkspace() != workspace || readDatasetGen() != writerGeneration {
+			completeWaiters(app.Rev(), 0, datasetSaveGenerationError(recordWorkspace() == workspace, readDatasetGen() == writerGeneration))
 			return
 		}
 		inFlight = true
@@ -357,6 +369,7 @@ func newRecordAutosave(app *appstate.App, commit func(map[string]string, map[str
 			var captured []store.RecordChange
 			var fullDataset []byte
 			nextGeneration := id.New()
+			expectedGeneration := writerGeneration
 			nextHead := head
 			full := shouldCheckpointJournal(initialized, forceVersion != savedForce, len(journalKeys))
 			if full {
@@ -366,14 +379,15 @@ func newRecordAutosave(app *appstate.App, commit func(map[string]string, map[str
 					return
 				}
 				fullDataset = data
-				values[datasetStoreKey], values[datasetHeadKey] = encodeRecordCheckpoint(data), ""
+				values[datasetStoreKey], values[datasetHeadKey] = encodeRecordCheckpointGeneration(data, nextGeneration), ""
+				values[datasetCheckpointBackupKey] = encodeCheckpointBackup(workspace, values[datasetStoreKey], writerOwner)
 				for _, key := range journalKeys {
 					values[key] = ""
 				}
 				nextHead = datasetRecordHead{}
 			} else {
 				prefix := recordWorkspacePrefix(workspace) + nextGeneration + ":"
-				node := datasetRecordNode{Parent: head.Tail}
+				node := datasetRecordNode{Parent: head.Tail, Generation: nextGeneration, ParentGeneration: expectedGeneration, BaseHash: baseHash, Workspace: workspace, From: head.Cursor, Through: head.Cursor + 1}
 				for from := savedCursor; from < targetCursor; {
 					page, err := app.Store().CaptureChanges(from, targetCursor, 64)
 					if err != nil {
@@ -408,7 +422,7 @@ func newRecordAutosave(app *appstate.App, commit func(map[string]string, map[str
 					return
 				}
 				values[prefix+"batch"] = string(encoded)
-				nextHead = datasetRecordHead{Version: 1, Workspace: workspace, BaseHash: baseHash, Generation: nextGeneration, Tail: prefix + "batch"}
+				nextHead = datasetRecordHead{Version: 1, Workspace: workspace, BaseHash: baseHash, Generation: nextGeneration, Tail: prefix + "batch", Cursor: node.Through}
 				encoded, err = json.Marshal(nextHead)
 				if err != nil {
 					fail(err)
@@ -417,8 +431,8 @@ func newRecordAutosave(app *appstate.App, commit func(map[string]string, map[str
 				values[datasetHeadKey] = string(encoded)
 			}
 			values[datasetGenKey] = nextGeneration
-			if suspendAutosave || appstate.Default != app || recordWorkspace() != workspace || readDatasetGen() != datasetMyGen {
-				fail(datasetSaveGenerationError(recordWorkspace() == workspace, readDatasetGen() == datasetMyGen))
+			if suspendAutosave || appstate.Default != app || recordWorkspace() != workspace || readDatasetGen() != expectedGeneration {
+				fail(datasetSaveGenerationError(recordWorkspace() == workspace, readDatasetGen() == expectedGeneration))
 				return
 			}
 
@@ -435,13 +449,17 @@ func newRecordAutosave(app *appstate.App, commit func(map[string]string, map[str
 			if persistPerfObserve != nil {
 				persistPerfObserve("durable-write")
 			}
-			expected := map[string]string{datasetGenKey: datasetMyGen}
-			if full {
-				expected[datasetStoreKey] = checkpoint
-			}
+			expected := map[string]string{datasetGenKey: expectedGeneration, datasetStoreKey: checkpoint, datasetHeadKey: headRaw, datasetOwnerKey: writerOwner}
 			commit(values, expected, func(err error) {
 				if err != nil {
+					if errors.Is(err, atrest.ErrRecordChanged) {
+						err = fmt.Errorf("saved data changed in another instance: %w", appstate.ErrStaleDataset)
+					}
 					fail(err)
+					return
+				}
+				if appstate.Default != app || recordWorkspace() != workspace {
+					fail(errors.New("the workspace changed before saving could finish"))
 					return
 				}
 				if full {
@@ -458,6 +476,7 @@ func newRecordAutosave(app *appstate.App, commit func(map[string]string, map[str
 					_, mirrorErr = applyCapturedRecords(mirror, captured)
 				}
 				head, savedCursor, savedRevision, savedForce = nextHead, targetCursor, targetRevision, targetForce
+				headRaw, writerGeneration = values[datasetHeadKey], nextGeneration
 				initialized, hadLocalDataset, datasetMyGen = true, true, nextGeneration
 				publishDurableUndo(targetCursor)
 				inFlight = false
@@ -583,11 +602,16 @@ func portableDatasetForBundle(checkpoint string) (string, error) {
 		data, err := app.ExportJSONRedacted()
 		return string(data), err
 	}
-	head, _, err := browserstore.GetSecure(datasetHeadKey)
+	snapshot, err := readDurableDatasetSnapshot()
 	if err != nil {
 		return "", err
 	}
-	records, err := readDatasetRecords(checkpoint, head, readDatasetGen(), recordWorkspace(), browserstore.GetSecure)
+	checkpoint = snapshot.Values[datasetStoreKey]
+	head, _, err := snapshot.Read(datasetHeadKey)
+	if err != nil {
+		return "", err
+	}
+	records, err := readDatasetRecords(checkpoint, head, snapshot.Values[datasetGenKey], snapshot.workspace, snapshot.Read)
 	if err != nil {
 		return "", err
 	}

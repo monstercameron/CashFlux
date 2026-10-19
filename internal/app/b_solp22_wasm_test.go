@@ -73,8 +73,19 @@ type solp22Fixture struct {
 // the production record writer. Reload assertions read protected persisted bytes.
 func solp22Journal(t *testing.T) solp22Fixture {
 	t.Helper()
+	return solp22JournalDataset(t, store.SampleDataset(), "solp22-workspace")
+}
+
+func solp22JournalDataset(t *testing.T, ds store.Dataset, workspaceID string) solp22Fixture {
+	t.Helper()
 	solp22Storage(t)
 	browserstore.Barrier()
+	initialJournal := map[string]bool{}
+	for _, key := range browserstore.Keys() {
+		if strings.HasPrefix(key, recordWorkspacePrefix(workspaceID)) {
+			initialJournal[key] = true
+		}
+	}
 	f := render.New(t)
 	oldApp, oldPasscode, oldPending := appstate.Default, activePasscode, pendingEnvelopeRaw
 	oldHydrated, oldLocal, oldSuspend := hydrationSucceeded, hadLocalDataset, suspendAutosave
@@ -85,7 +96,7 @@ func solp22Journal(t *testing.T) solp22Fixture {
 	oldUser := browserstore.GetString(syncUserIDKey)
 	keys := []string{datasetStoreKey, datasetHeadKey, datasetGenKey, datasetOwnerKey, workspacesKey,
 		appLockKey, credVaultStoreKey, aiCredentialStoreKey, webauthnCredKey, webauthnSaltKey,
-		webauthnVaultKey, secureLockTransitionKey, syncMetaKey("solp22-workspace")}
+		webauthnVaultKey, secureLockTransitionKey, syncMetaKey(workspaceID)}
 	previous := map[string]string{}
 	for _, key := range keys {
 		previous[key] = browserstore.GetString(key)
@@ -109,6 +120,16 @@ func solp22Journal(t *testing.T) solp22Fixture {
 			}
 		}
 		solp22Batch(t, previous, nil)
+		// Assertions have finished and original metadata is durable again. Remove
+		// only this fixture's detached records from the isolated Node backend;
+		// later snapshot/wipe tests must not inherit encrypted fixture history.
+		var detachedRecords []string
+		for _, key := range browserstore.Keys() {
+			if !initialJournal[key] && strings.HasPrefix(key, recordWorkspacePrefix(workspaceID)) {
+				detachedRecords = append(detachedRecords, key)
+			}
+		}
+		jrnlRemoveFixtureRecords(t, detachedRecords)
 		browserstore.SetMemory(syncUserIDKey, oldUser)
 		f.Cleanup()
 		appstate.Default, activePasscode, pendingEnvelopeRaw = oldApp, oldPasscode, oldPending
@@ -120,7 +141,6 @@ func solp22Journal(t *testing.T) solp22Fixture {
 		undoPending, undoCaptureCursor = oldUndoPending, oldUndoCursor
 		a.Store().Close()
 	})
-	ds := store.SampleDataset()
 	ds.Transactions = ds.Transactions[:2]
 	if err := a.Store().Load(ds); err != nil {
 		t.Fatal(err)
@@ -136,7 +156,7 @@ func solp22Journal(t *testing.T) solp22Fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	registry, _ := json.Marshal(workspace.Registry{}.Add("solp22-workspace", "Journal test"))
+	registry, _ := json.Marshal(workspace.Registry{}.Add(workspaceID, "Journal test"))
 	values := map[string]string{}
 	for _, key := range keys {
 		values[key] = ""

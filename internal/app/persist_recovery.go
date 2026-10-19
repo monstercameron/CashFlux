@@ -18,13 +18,17 @@ import (
 // A future outer schema prevents normal dataset import from accepting this
 // diagnostic bundle as an empty household.
 type recordRecovery struct {
-	SchemaVersion int               `json:"schemaVersion"`
-	Format        string            `json:"cashfluxRecordRecovery"`
-	Workspace     string            `json:"workspace"`
-	Checkpoint    string            `json:"checkpoint"`
-	Head          string            `json:"head"`
-	Records       map[string]string `json:"records,omitempty"`
-	ReadErrors    map[string]string `json:"readErrors,omitempty"`
+	SchemaVersion    int               `json:"schemaVersion"`
+	Format           string            `json:"cashfluxRecordRecovery"`
+	Workspace        string            `json:"workspace"`
+	Owner            string            `json:"owner,omitempty"`
+	Checkpoint       string            `json:"checkpoint"`
+	Head             string            `json:"head"`
+	Generation       string            `json:"generation,omitempty"`
+	Backup           string            `json:"backup,omitempty"`
+	ProtectedRecords map[string]string `json:"protectedRecords,omitempty"`
+	Records          map[string]string `json:"records,omitempty"`
+	ReadErrors       map[string]string `json:"readErrors,omitempty"`
 }
 
 func recoveryWorkspaceName() string {

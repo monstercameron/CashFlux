@@ -5,7 +5,6 @@ package browserstore
 import (
 	"crypto/sha256"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"sort"
@@ -150,8 +149,13 @@ func SetSecure(key, value string, done func(error)) {
 // SetSecureBatch commits related records atomically. expected names plaintext
 // values the caller is entitled to replace; an absent record matches "". This
 // lets dataset writers compare their generation without a wall-clock winner.
+// Conditions may name read-only records, which are compared without rewriting.
 // The maps are copied before return, so the caller may safely reuse them.
 func SetSecureBatch(values, expected map[string]string, done func(error)) {
+	setSecureBatch(values, expected, nil, done)
+}
+
+func setSecureBatch(values, expected map[string]string, ciphertexts map[string]*string, done func(error)) {
 	updates := make(map[string]string, len(values))
 	conditions := make(map[string]string, len(expected))
 	for key, value := range values {
@@ -174,7 +178,7 @@ func SetSecureBatch(values, expected map[string]string, done func(error)) {
 			}
 		}
 		if err == nil {
-			err = writeSecureBatch(updates, conditions)
+			err = writeSecureBatchCompared(updates, conditions, ciphertexts)
 		}
 		if err == nil {
 			mu.Lock()
@@ -201,6 +205,7 @@ func SetSecureBatch(values, expected map[string]string, done func(error)) {
 type recordReplacement struct {
 	key, value string
 	expected   *string
+	write      bool
 }
 
 func recordChangedAt(key, stage string) error {
@@ -208,10 +213,21 @@ func recordChangedAt(key, stage string) error {
 }
 
 func writeSecureBatch(values, expected map[string]string) error {
+	return writeSecureBatchCompared(values, expected, nil)
+}
+
+func writeSecureBatchCompared(values, expected map[string]string, ciphertexts map[string]*string) error {
 	var keys []string
+	for key := range ciphertexts {
+		if _, write := values[key]; !write {
+			if _, plain := expected[key]; !plain {
+				keys = append(keys, key)
+			}
+		}
+	}
 	for key := range expected {
 		if _, have := values[key]; !have {
-			return errors.New("conditional record must be included in the batch")
+			keys = append(keys, key)
 		}
 	}
 	for key := range values {
@@ -226,6 +242,11 @@ func writeSecureBatch(values, expected map[string]string) error {
 	sliceStart := time.Now()
 	for i, key := range keys {
 		old, have := priorRecords[key]
+		if want, conditional := ciphertexts[key]; conditional {
+			if (want == nil && have) || (want != nil && (!have || old != *want)) {
+				return recordChangedAt(key, "snapshot ciphertext condition")
+			}
+		}
 		if want, conditional := expected[key]; conditional {
 			plain := ""
 			if have {
@@ -238,16 +259,20 @@ func writeSecureBatch(values, expected map[string]string) error {
 				return recordChangedAt(key, "plaintext generation condition")
 			}
 		}
-		value, err := storage().Encode(key, values[key])
-		if err != nil {
-			return err
+		plain, write := values[key]
+		var value string
+		if write {
+			value, err = storage().Encode(key, plain)
+			if err != nil {
+				return err
+			}
 		}
 		var prior *string
 		if have {
 			copy := old
 			prior = &copy
 		}
-		updates = append(updates, recordReplacement{key: key, value: value, expected: prior})
+		updates = append(updates, recordReplacement{key: key, value: value, expected: prior, write: write})
 		// Encryption and JSON encoding run outside the strict transaction. Give
 		// the browser a timer boundary before a large journal monopolizes a task.
 		if i+1 < len(keys) && time.Since(sliceStart) >= 12*time.Millisecond {
@@ -274,7 +299,9 @@ func writeSecureBatch(values, expected map[string]string) error {
 					tx.Call("abort")
 					return nil
 				}
-				os.Call("put", u.value, u.key)
+				if u.write {
+					os.Call("put", u.value, u.key)
+				}
 				return nil
 			})
 			retain(fn)

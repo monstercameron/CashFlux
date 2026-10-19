@@ -149,8 +149,12 @@ func stashForeignDataset() error {
 // function can await legacy decryption and must run outside a JS event callback.
 func materializeLocalDataset() (string, map[string]string, error) {
 	expected := make(map[string]string)
+	snapshot, err := readDurableDatasetSnapshot()
+	if err != nil {
+		return "", expected, fmt.Errorf("read saved dataset snapshot: %w", err)
+	}
 	for _, key := range []string{datasetStoreKey, datasetHeadKey, datasetGenKey, datasetOwnerKey, workspacesKey} {
-		raw, _, err := browserstore.GetSecure(key)
+		raw, _, err := snapshot.Read(key)
 		if err != nil {
 			return "", expected, fmt.Errorf("read saved dataset metadata: %w", err)
 		}
@@ -160,7 +164,7 @@ func materializeLocalDataset() (string, map[string]string, error) {
 	if checkpoint == "" && expected[datasetHeadKey] == "" {
 		return "", expected, nil
 	}
-	records, err := readDatasetRecords(checkpoint, expected[datasetHeadKey], expected[datasetGenKey], recordWorkspace(), browserstore.GetSecure)
+	records, err := readDatasetRecords(checkpoint, expected[datasetHeadKey], expected[datasetGenKey], snapshot.workspace, snapshot.Read)
 	if err != nil {
 		return "", expected, err
 	}
