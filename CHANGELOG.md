@@ -90,6 +90,10 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Budgets: Add starts blank, no duplicate budgets, "Raise limit" dialog (BUD5).** Add budget no longer preselects a
+  category; categories already budgeted for that period and owner are shown disabled with the reason; choosing a category
+  fills the name (a custom name is kept); focus lands on the first empty field. The top-up dialog is now "Raise limit",
+  says whether it raises this period only or permanently, and one-time raises apply to the period being viewed.
 - **Budget periods on calendar dates, pay-cycle keys, no mixed-currency sums (BUDQ2).** Every budget period boundary
   (biweekly, semimonthly, quarterly, yearly, annual grid, auto-budget, 50/30/20, suggestions, true-up) is now built at UTC
   midnight from the calendar date, so in New York a charge dated the 1st no longer lands in the previous half-month or

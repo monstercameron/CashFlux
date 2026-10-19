@@ -613,7 +613,7 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 			return
 		}
 		permanent := topupPermanentS.Get()
-		periodStart, _ := budgeting.PeriodRange(b.Period, time.Now(), pr.WeekStartWeekday())
+		periodStart, _ := budgeting.PeriodRangeAnchored(b.Period, viewAnchor, pr.WeekStartWeekday(), coverPayAnchor)
 
 		// Optional funding: pull the amount from other budgets (equal split across the
 		// checked sources). Without any source, the top-up adds new limit from income.
@@ -953,15 +953,20 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 		if amt, perr := money.ParseMinor(strings.TrimSpace(topupAmt.Get()), dec); perr == nil && amt > 0 {
 			topupShares = splitCoverAmount(amt, coverSrcs, selNow, nil, nil)
 		}
-		return Form(css.Class("acct-edit-form"), OnSubmit(submitTopup),
+		periodCopy := uistate.T("budgets.raisePeriodOnly", vw.Label())
+		if topupPermanentS.Get() {
+			periodCopy = uistate.T("budgets.raisePermanently")
+		}
+		return Form(css.Class("acct-edit-form"), Attr("data-testid", "budget-raise-form"), OnSubmit(submitTopup),
 			Div(css.Class("modal-scroll"),
-				P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0"}),
-					uistate.T("budgets.topupHintPlain", budgetTitle(b.Name, budgetCategoryName(app, b.CategoryID)))),
+				P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "budget-raise-period-copy"), periodCopy),
 				P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "topup-cap-math"),
 					Style(map[string]string{"margin": "0"}), capLine),
-				labeledField(uistate.T("budgets.amountToAdd"),
-					Input(css.Class("field"), Attr("id", "budget-topup-amt"), Attr("autofocus", ""), Type("number"),
-						Attr("aria-label", uistate.T("budgets.amountToAdd")), Placeholder(uistate.T("budgets.amountToAdd")), Step("0.01"), Attr("min", "0.01"), OnInput(onTopupAmt), uiw.FieldValue(topupAmt.Get()))),
+				uiw.Field(uiw.FieldProps{ID: "budget-topup-amt", Label: uistate.T("budgets.raiseAmount"), Required: true,
+					TestID: "budget-raise-amount-field", Control: func(a uiw.FieldA11y) ui.Node {
+						return Input(css.Class("field"), Attr("id", a.ID), Attr("data-testid", "budget-topup-amt"), Attr("autofocus", ""), Attr("aria-required", "true"), Type("number"),
+							Placeholder(uistate.T("budgets.raiseAmount")), Step("0.01"), Attr("min", "0.01"), OnInput(onTopupAmt), uiw.FieldValue(topupAmt.Get()))
+					}}),
 				// Duration: this period only (a one-time boost) vs a permanent cap change.
 				labeledField(uistate.T("budgets.topupDuration"),
 					uiw.Segmented(uiw.SegmentedProps{
@@ -1008,7 +1013,7 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 			),
 			Div(css.Class("modal-foot"),
 				Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
-				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("budgets.addFunds")),
+				Button(css.Class("btn btn-primary"), Type("submit"), Attr("data-testid", "budget-raise-submit"), uistate.T("budgets.raiseLimit")),
 			),
 		)
 	}

@@ -111,7 +111,9 @@ func TestAddBudgetBlockedUntilNameAndLimit(t *testing.T) {
 func TestAddBudgetRejectsNonPositiveLimit(t *testing.T) {
 	guardTestApp(t)
 	f := render.New(t)
-	f.Render(ui.CreateElement(budgetAddForm, BudgetAddFormProps{}))
+	f.Render(ui.CreateElement(budgetAddForm, BudgetAddFormProps{Seed: uistate.BudgetAddSeed{
+		Name: "Transportation", CategoryID: "c-transport",
+	}}))
 
 	f.InputByID("budget-add", "Transportation")
 	f.Stabilize()
@@ -127,7 +129,7 @@ func TestAddBudgetRejectsNonPositiveLimit(t *testing.T) {
 	for _, bad := range []string{"-1", "0"} {
 		limitField.Input(bad)
 		f.Stabilize()
-		if err := f.ByID("budget-limit-err"); !err.Exists() || err.Text() == "" {
+		if err := f.ByID("budget-add-limit-error"); !err.Exists() || err.Text() == "" {
 			t.Errorf("limit %q produced no field-level error", bad)
 		}
 		if !isDisabled(byTestID(f, "button", "budget-add-submit")) {
@@ -137,7 +139,7 @@ func TestAddBudgetRejectsNonPositiveLimit(t *testing.T) {
 
 	limitField.Input("1300.00")
 	f.Stabilize()
-	if err := f.ByID("budget-limit-err"); err.Exists() && err.Text() != "" {
+	if err := f.ByID("budget-add-limit-error"); err.Exists() && err.Text() != "" {
 		t.Errorf("a valid limit still shows an error: %q", err.Text())
 	}
 	if isDisabled(byTestID(f, "button", "budget-add-submit")) {

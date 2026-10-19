@@ -103,6 +103,30 @@ func matchTopLevelCategory(categories []domain.Category, name string) (domain.Ca
 	return domain.Category{}, false
 }
 
+// budgetAddCategoryOptions preserves already-used categories in the picker so the
+// user can see why they cannot be selected for this owner and period.
+func budgetAddCategoryOptions(categories []domain.Category, budgets []domain.Budget, period, owner string) []uiw.PickerOption {
+	options := make([]uiw.PickerOption, 0, len(categories))
+	for _, category := range categories {
+		blocked := budgeting.IsDuplicateBudget(budgets, category.ID, period, owner, "")
+		option := uiw.PickerOption{Value: category.ID, Label: category.Name, Disabled: blocked}
+		if blocked {
+			option.Secondary = uistate.T("budgets.categoryAlreadyBudgeted")
+		}
+		options = append(options, option)
+	}
+	return options
+}
+
+// budgetAddNameForCategory supplies a category-based default while preserving a
+// name the user has already customized.
+func budgetAddNameForCategory(currentName, previousCategoryName, nextCategoryName string) string {
+	if strings.TrimSpace(currentName) == "" || strings.TrimSpace(currentName) == previousCategoryName {
+		return nextCategoryName
+	}
+	return currentName
+}
+
 func budgetAddForm(props BudgetAddFormProps) ui.Node {
 	app := appstate.Default
 	if app == nil {
@@ -126,18 +150,9 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 	// lists read the same way (C518).
 	pickableCats := catname.Sorted(expenseCats)
 
-	// A budget watches a category. By default we create a NEW category named after the
-	// budget, so a transaction can be assigned to it immediately (closing the loop) —
-	// unless the typed name matches an existing category, which is then reused (no
-	// silent duplicates). The Advanced section still lets the user pick explicitly.
-	// The picker now defaults to an EXISTING category rather than to the create-new
-	// sentinel: creating one is opt-in (C535), so the default has to be something
-	// the household already has. Falls back to the sentinel only when there is
-	// nothing to pick, in which case the opt-in is forced on and says why.
-	defaultCat := budgetNewCatSentinel
-	if len(expenseCats) > 0 {
-		defaultCat = expenseCats[0].ID
-	}
+	// Leave the category unset for an ordinary add. A seed from a "Budget this"
+	// action is the only path that begins with a category selected.
+	defaultCat := ""
 	if props.Seed.CategoryID != "" {
 		defaultCat = props.Seed.CategoryID
 	}
@@ -301,7 +316,7 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 		// completely or leaves nothing behind — writing it here is what left an
 		// orphan category when the budget write then failed.
 		var newCat *domain.Category
-		if createCat.Get() || liveExpense == 0 || finalCatID == budgetNewCatSentinel || finalCatID == "" {
+		if createCat.Get() || liveExpense == 0 || finalCatID == budgetNewCatSentinel {
 			catName := strings.TrimSpace(newCatName.Get())
 			if catName == "" {
 				catName = strings.TrimSpace(name.Get())
@@ -317,6 +332,10 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 				finalCatID = nc.ID
 				createdCatName = catName
 			}
+		}
+		if finalCatID == "" {
+			errMsg.Set(uistate.T("budgets.categoryRequired"))
+			return
 		}
 		// One budget per (category, period, owner) — reject duplicates (L40). Runs for
 		// every path now that the category is resolved.
@@ -510,10 +529,24 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 	if direction.Get() == string(domain.DirectionSave) {
 		pickableCats = catname.Sorted(categories)
 	}
-	existingCatOptions := uiw.OptionsFrom(pickableCats,
-		func(c domain.Category) string { return c.ID },
-		func(c domain.Category) string { return c.Name },
-		catID.Get())
+	existingCatOptions := budgetAddCategoryOptions(pickableCats, app.Budgets(), period.Get(), owner.Get())
+	selectedCatName := ""
+	for _, c := range pickableCats {
+		if c.ID == catID.Get() {
+			selectedCatName = c.Name
+			break
+		}
+	}
+	chooseCategory := func(id string) {
+		previousName := selectedCatName
+		catID.Set(id)
+		for _, c := range pickableCats {
+			if c.ID == id {
+				name.Set(budgetAddNameForCategory(name.Get(), previousName, c.Name))
+				return
+			}
+		}
+	}
 	// Control before consequence: the opt-in, then the field it governs. Putting
 	// the picker first meant that ticking the box revealed the new-category name
 	// field ABOVE the checkbox that had just revealed it, which reads backwards.
@@ -525,14 +558,17 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 			Span(uistate.T("budgets.createCatOptIn"))),
 		If(mustCreateCat, Span(css.Class("budget-cat-fate", tw.TextFaint), Attr("data-testid", "budget-create-cat-forced"),
 			uistate.T("budgets.createCatForced"))),
-		If(!wantNewCat, labeledField(uistate.T("budgets.categoryLabel"),
-			uiw.SelectInput(uiw.SelectInputProps{
-				Options:   existingCatOptions,
-				Selected:  catID.Get(),
-				OnChange:  func(v string) { catID.Set(v) },
-				AriaLabel: uistate.T("budgets.categoryLabel"),
-				TestID:    "budget-existing-cat",
-			}))),
+		If(!wantNewCat, uiw.Field(uiw.FieldProps{
+			ID: "budget-add-category", Label: uistate.T("budgets.categoryLabel"), Required: true,
+			TestID: "budget-add-category-field",
+			Control: func(a uiw.FieldA11y) ui.Node {
+				return uiw.Picker(uiw.PickerProps{
+					ID: a.ID, Label: a.Label, Placeholder: uistate.T("budgets.chooseCategory"),
+					SelectedLabel: selectedCatName, Searchable: true, TestID: "budget-existing-cat",
+					Options: existingCatOptions, OnCommit: chooseCategory,
+				})
+			},
+		})),
 		If(wantNewCat && !mustCreateCat, labeledField(uistate.T("budgets.newCategoryName"),
 			Input(css.Class("field"), Type("text"), Attr("data-testid", "budget-new-cat-name"),
 				Placeholder(uistate.T("budgets.newCategoryPlaceholder")), OnInput(onNewCatName), uiw.FieldValue(newCatName.Get())))),
@@ -607,13 +643,19 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 	if !limitProblem.OK() && limitProblem != budgeting.LimitBlank {
 		limitFieldErr = budgetLimitError(limitProblem, base)
 	}
-	addBlocked := nameMissing || !limitProblem.OK()
+	categoryMissing := !wantNewCat && strings.TrimSpace(catID.Get()) == ""
+	categoryAlreadyBudgeted := !wantNewCat && catID.Get() != "" && budgeting.IsDuplicateBudget(app.Budgets(), catID.Get(), period.Get(), owner.Get(), "")
+	addBlocked := nameMissing || categoryMissing || categoryAlreadyBudgeted || !limitProblem.OK()
 	blockerMsg := ""
 	switch {
 	case nameMissing && limitProblem == budgeting.LimitBlank:
 		blockerMsg = uistate.T("budgets.addNeedsBoth")
 	case nameMissing:
 		blockerMsg = uistate.T("budgets.addNeedsName")
+	case categoryMissing:
+		blockerMsg = uistate.T("budgets.categoryRequired")
+	case categoryAlreadyBudgeted:
+		blockerMsg = uistate.T("budgets.categoryAlreadyBudgeted")
 	case limitProblem == budgeting.LimitBlank:
 		blockerMsg = uistate.T("budgets.addNeedsLimit")
 	case !limitProblem.OK():
@@ -684,8 +726,16 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 			Div(css.Class("form-grid", "budget-add-grid"),
 				// The essentials: Name, then Limit + Period. Everything else is Advanced.
 				Div(css.Class("ba-full"),
-					labeledFieldRequired(uistate.T("common.name"),
-						Input(append(append([]any{css.Class("field"), Attr("id", "budget-add"), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), OnInput(ev.OnName)}, errAttrs("budget-err", errMsg.Get())...), uiw.FieldValue(name.Get()))...))),
+					uiw.Field(uiw.FieldProps{ID: "budget-add", Label: uistate.T("common.name"), Required: true, TestID: "budget-add-name-field",
+						Control: func(a uiw.FieldA11y) ui.Node {
+							attrs := []any{css.Class("field"), Attr("id", a.ID), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), OnInput(ev.OnName)}
+							if strings.TrimSpace(props.Seed.Name) == "" {
+								attrs = append(attrs, Attr("autofocus", "autofocus"))
+							}
+							attrs = append(attrs, errAttrs("budget-err", errMsg.Get())...)
+							return Input(append(attrs, uiw.FieldValue(name.Get()))...)
+						},
+					})),
 				// What this budget measures, before what it watches: the direction
 				// changes which categories are even offered below.
 				Div(css.Class("ba-full"),
@@ -710,12 +760,21 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 				// C666/C665: required, floored at a cent, and validated as it is typed —
 				// a zero, a negative or a malformed limit says so under the field
 				// instead of waiting to be discovered by a failed commit.
-				labeledFieldRequired(uistate.T("budgets.limitLabel"),
-					Fragment(
-						Input(append(append([]any{css.Class("field"), Type("number"), Attr("data-testid", "budget-add-limit"), Attr("aria-required", "true"),
-							Placeholder(uistate.T("budgets.limitPlaceholder", base)), Step("0.01"), Attr("min", "0.01"), OnInput(onLimit)},
-							errAttrs("budget-limit-err", limitFieldErr)...), uiw.FieldValue(limit.Get()))...),
-						errText("budget-limit-err", limitFieldErr))),
+				uiw.Field(uiw.FieldProps{ID: "budget-add-limit", Label: uistate.T("budgets.limitLabel"), Required: true,
+					Error: limitFieldErr, TestID: "budget-add-limit-field",
+					Control: func(a uiw.FieldA11y) ui.Node {
+						attrs := []any{css.Class("field"), Attr("id", a.ID), Type("number"), Attr("data-testid", "budget-add-limit"),
+							Attr("aria-required", "true"), Attr("aria-describedby", a.DescribedBy),
+							Placeholder(uistate.T("budgets.limitPlaceholder", base)), Step("0.01"), Attr("min", "0.01"), OnInput(onLimit)}
+						if strings.TrimSpace(props.Seed.LimitMajor) == "" {
+							attrs = append(attrs, Attr("autofocus", "autofocus"))
+						}
+						if limitFieldErr != "" {
+							attrs = append(attrs, Attr("aria-invalid", "true"))
+						}
+						return Input(append(attrs, uiw.FieldValue(limit.Get()))...)
+					},
+				}),
 				labeledField(uistate.T("budgets.period"),
 					uiw.SelectInput(uiw.SelectInputProps{
 						Options:   periodOptions(period.Get()),
