@@ -42,7 +42,7 @@ func AutoBudgetBody(_ struct{}) ui.Node {
 	_ = uistate.UseDataRevision().Get()
 	openAtom := uistate.UseBudgetAutoOpen()
 
-	base := "USD"
+	base := budgetBaseCurrency("")
 	if b := app.Settings().BaseCurrency; b != "" {
 		base = b
 	}

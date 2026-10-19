@@ -32,14 +32,6 @@ func (a *App) bgMethodology() budgeting.Methodology {
 	return budgeting.ParseMethodology(a.Settings().BudgetMethodology)
 }
 
-// UnbudgetedThisPeriod computes the BG11 catch-all — expense in [start, end) that no budget
-// covers, with its per-category breakdown — over the given window. Callers pass the same
-// [start, end) the budget rows use so the catch-all and the budget bars partition the
-// period's spend without overlap or gap.
-func (a *App) UnbudgetedThisPeriod(start, end time.Time) (budgeting.Unbudgeted, error) {
-	return budgeting.ComputeUnbudgeted(a.Budgets(), a.Categories(), a.Transactions(), start, end, a.bgRates())
-}
-
 // BudgetMemberShares returns the BG13 per-member attribution for a shared budget over
 // [start, end): who spent what, summing to the budget's total. covers is the tracked
 // category set (budget categories + descendants); pass nil to use the budget's own tracked

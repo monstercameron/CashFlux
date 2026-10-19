@@ -6,6 +6,7 @@ package screens
 
 import (
 	"fmt"
+	"log/slog"
 	"sort"
 	"strconv"
 	"strings"
@@ -1101,7 +1102,7 @@ func BudgetBasisBody(_ struct{}) ui.Node {
 	d := uistate.UseBudgetBasisDraft().Get()
 	base := app.Settings().BaseCurrency
 	if base == "" {
-		base = "USD"
+		base = budgetBaseCurrency(base)
 	}
 
 	// Everything the modal shows reflects the STAGED draft (its mode, chosen sources, and
@@ -1116,11 +1117,17 @@ func BudgetBasisBody(_ struct{}) ui.Node {
 	if mode == "" {
 		mode = budgeting.IncomeModeAll
 	}
-	draftIncome := resolveIncomeBasis(app, mode, d.PaycheckMin, d.Fixed, d.Cats, d.AvgMonths, ms, base, rates)
+	draftIncome, incomeErr := resolveIncomeBasis(app, mode, d.PaycheckMin, d.Fixed, d.Cats, d.AvgMonths, ms, base, rates)
 	sources := computeIncomeSources(app, base, rates, ms, d.AvgMonths)
+	var incomeNotice ui.Node = Fragment()
+	if incomeErr != nil {
+		slog.Error("preview selected budget income", "error", incomeErr)
+		incomeNotice = P(css.Class("form-err"), Attr("role", "status"), uistate.T("budgets.incomplete"))
+	}
 
 	return Div(css.Class("zbb-basis-modal"),
 		P(css.Class("zbb-basis-modal-help", tw.TextDim), uistate.T("budgets.basisModalHelp")),
+		incomeNotice,
 		ui.CreateElement(budgetIncomeBasisControl, incomeBasisProps{Base: base, Sources: sources, Income: draftIncome}),
 	)
 }
@@ -1677,7 +1684,7 @@ func budgetToolbarContent(props budgetToolbarProps) ui.Node {
 
 	base := app.Settings().BaseCurrency
 	if base == "" {
-		base = "USD"
+		base = budgetBaseCurrency(base)
 	}
 	method := budgeting.ParseMethodology(app.Settings().BudgetMethodology)
 
@@ -2268,7 +2275,7 @@ func sortBudgetStatuses(sts []budgeting.Status, key string, categories map[strin
 			return d
 		}
 	}
-	limitOf := func(s budgeting.Status) int64 { return s.Spent.Amount + s.Remaining.Amount }
+	limitOf := func(s budgeting.Status) int64 { return s.Limit.Amount }
 	switch key {
 	case uistate.BudgetSortOverage:
 		// Severity: the worst overspends first — by how far over in money, then by how far

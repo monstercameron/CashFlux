@@ -107,6 +107,36 @@ func AveragedIncome(
 	return sum / int64(months)
 }
 
+// AveragedIncomeChecked resolves an averaged income basis and reports missing
+// exchange rates and arithmetic overflow instead of treating incomplete income
+// as a complete total.
+func AveragedIncomeChecked(
+	mode string,
+	paycheckMinMinor, configuredMinor int64,
+	sources IncomeSources,
+	txns []domain.Transaction,
+	monthStart time.Time,
+	months int,
+	base string,
+	rates currency.Rates,
+) (int64, error) {
+	if months < 1 {
+		months = 1
+	}
+	if mode == IncomeModeFixed {
+		if configuredMinor > 0 {
+			return configuredMinor, nil
+		}
+		return 0, nil
+	}
+	start := dateutil.AddMonths(monthStart, -months)
+	total, err := ZeroBasedIncomeChecked(mode, paycheckMinMinor, configuredMinor, sources, txns, start, monthStart, base, rates)
+	if err != nil {
+		return 0, err
+	}
+	return total / int64(months), nil
+}
+
 // IncomeSources is the RESOLVED set of category ids a "by source" income basis
 // counts: the categories the user ticked, plus every descendant of each.
 //
@@ -252,4 +282,95 @@ func ZeroBasedIncome(
 		total += conv
 	}
 	return total
+}
+
+// ZeroBasedIncomeChecked sums the selected income basis and fails if a relevant
+// amount cannot be converted or if the total overflows.
+func ZeroBasedIncomeChecked(
+	mode string,
+	paycheckMinMinor, configuredMinor int64,
+	sources IncomeSources,
+	txns []domain.Transaction,
+	start, end time.Time,
+	base string,
+	rates currency.Rates,
+) (int64, error) {
+	if mode == IncomeModeFixed {
+		if configuredMinor > 0 {
+			return configuredMinor, nil
+		}
+		return 0, nil
+	}
+	if mode == IncomeModeCategories && sources.Empty() {
+		return 0, nil
+	}
+	convert := func(amt money.Money) (int64, error) {
+		converted, err := currency.ConvertBetween(amt.Amount, amt.Currency, base, rates)
+		if err != nil {
+			return 0, fmt.Errorf("convert income amount from %s to %s: %w", amt.Currency, base, err)
+		}
+		return converted, nil
+	}
+	add := func(total, amount int64) (int64, error) {
+		value, err := money.Add(total, amount)
+		if err != nil {
+			return 0, fmt.Errorf("sum selected income: %w", err)
+		}
+		return value, nil
+	}
+	var total int64
+	for _, txn := range txns {
+		if !txn.IsIncome() || !txn.CountsInReports() || !dateutil.InRange(txn.Date, start, end) {
+			continue
+		}
+		if mode == IncomeModeCategories && txn.HasSplits() {
+			var allocated int64
+			for _, split := range txn.Splits {
+				converted, err := convert(split.Amount)
+				if err != nil {
+					return 0, fmt.Errorf("transaction %q split: %w", txn.ID, err)
+				}
+				allocated, err = add(allocated, converted)
+				if err != nil {
+					return 0, fmt.Errorf("transaction %q: %w", txn.ID, err)
+				}
+				if sources.Has(split.CategoryID) {
+					total, err = add(total, converted)
+					if err != nil {
+						return 0, fmt.Errorf("transaction %q: %w", txn.ID, err)
+					}
+				}
+			}
+			whole, err := convert(txn.Amount)
+			if err != nil {
+				return 0, fmt.Errorf("transaction %q: %w", txn.ID, err)
+			}
+			remainder, err := money.Sub(whole, allocated)
+			if err != nil {
+				return 0, fmt.Errorf("subtract allocated income for transaction %q: %w", txn.ID, err)
+			}
+			if rest := remainder; rest > 0 && sources.Has(txn.CategoryID) {
+				total, err = add(total, rest)
+				if err != nil {
+					return 0, fmt.Errorf("transaction %q: %w", txn.ID, err)
+				}
+			}
+			continue
+		}
+		if mode == IncomeModeCategories && !sources.Has(txn.CategoryID) {
+			continue
+		}
+		converted, err := convert(txn.Amount)
+		if err != nil {
+			return 0, fmt.Errorf("transaction %q: %w", txn.ID, err)
+		}
+		if mode == IncomeModePaychecks && paycheckMinMinor > 0 && converted < paycheckMinMinor {
+			continue
+		}
+		total, err = add(total, converted)
+		if err != nil {
+			return 0, fmt.Errorf("transaction %q: %w", txn.ID, err)
+		}
+	}
+	return total, nil
 }

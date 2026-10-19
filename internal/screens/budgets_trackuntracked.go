@@ -147,7 +147,7 @@ func trackUntrackedForm(_ trackUntrackedFormProps) ui.Node {
 	v := computeBudgetView(app, activeMemberID, vw, pr, false)
 	base := v.Base
 	if base == "" {
-		base = "USD"
+		base = budgetBaseCurrency(base)
 	}
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 

@@ -7,7 +7,6 @@ package screens
 import (
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/icon"
-	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -144,7 +143,7 @@ func budgetAttentionRow(props budgetAttentionRowProps) ui.Node {
 	}
 
 	title := budgetTitle(s.Budget.Name, props.Category)
-	limit := money.New(s.Spent.Amount+s.Remaining.Amount, s.Spent.Currency)
+	limit := s.Limit
 	nums := uistate.T("bgpolish.attnSpentOf", fmtMoney(s.Spent), fmtMoney(limit))
 	// An over budget also states how far over — the number that makes it urgent.
 	var overNote ui.Node = Fragment()

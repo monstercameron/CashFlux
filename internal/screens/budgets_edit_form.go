@@ -75,7 +75,7 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 			cur = app.Settings().BaseCurrency
 		}
 		if cur == "" {
-			cur = "USD"
+			cur = budgetBaseCurrency(cur)
 		}
 	}
 	dec := currency.Decimals(cur)
@@ -127,7 +127,7 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 			bs, be := budgeting.PeriodRangeAnchored(s.Budget.Period, cv.Anchor, pr.WeekStartWeekday(), coverPayAnchor)
 			rates := currency.Rates{Base: app.Settings().BaseCurrency, Rates: app.Settings().FXRates}
 			if rates.Base == "" {
-				rates.Base = "USD"
+				rates.Base = budgetBaseCurrency(rates.Base)
 			}
 			committedResult, commitErr := budgeting.CommittedWithRates(s.Budget, app.Recurring(), app.Transactions(), s.Remaining, bs, be, rates)
 			if commitErr != nil {
@@ -1333,7 +1333,7 @@ func committedCaveat(sc budgetCoverSource, cur string) string {
 func budgetRecommendationLine(app *appstate.App, b domain.Budget, status budgeting.Status, anchor time.Time) ui.Node {
 	base := app.Settings().BaseCurrency
 	if base == "" {
-		base = "USD"
+		base = budgetBaseCurrency(base)
 	}
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 	projected, err := budgeting.PeriodEquivalent(status.Spent, b.Period, domain.PeriodMonthly)
@@ -1514,7 +1514,7 @@ func buildCoverContext(app *appstate.App, weekStart time.Weekday, payCycleAnchor
 	now := time.Now()
 	base := app.Settings().BaseCurrency
 	if base == "" {
-		base = "USD"
+		base = budgetBaseCurrency(base)
 	}
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 	ms, me := dateutil.MonthRange(now)

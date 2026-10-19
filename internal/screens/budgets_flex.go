@@ -38,13 +38,13 @@ func budgetFlexWidget(props budgetSummaryProps) ui.Node {
 	_ = uistate.UsePrefs().Get()
 	vw := uistate.UsePeriod().Get()
 	var target int64
-	base := "USD"
+	base := budgetBaseCurrency("")
 	if app != nil {
 		base = app.Settings().BaseCurrency
 		target = app.Settings().FlexBudget
 	}
 	if base == "" {
-		base = "USD"
+		base = budgetBaseCurrency(base)
 	}
 	dec := currency.Decimals(base)
 	now := time.Now()

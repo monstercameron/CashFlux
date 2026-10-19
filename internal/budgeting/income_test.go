@@ -132,6 +132,32 @@ func TestAveragedIncome(t *testing.T) {
 	}
 }
 
+func TestAveragedIncomeCheckedReportsFXAndOverflow(t *testing.T) {
+	monthStart := time.Date(2024, time.February, 1, 0, 0, 0, 0, time.UTC)
+	cases := []struct {
+		name    string
+		txns    []domain.Transaction
+		rates   currency.Rates
+		want    int64
+		wantErr bool
+	}{
+		{name: "converts and averages", txns: []domain.Transaction{incomeTxn(15, 300, "EUR")}, rates: makeRates(map[string]float64{"EUR": 1.1}), want: 330},
+		{name: "missing FX is an error", txns: []domain.Transaction{incomeTxn(15, 300, "EUR")}, rates: makeRates(nil), wantErr: true},
+		{name: "overflow is an error", txns: []domain.Transaction{incomeTxn(15, int64(^uint64(0)>>1), "USD"), incomeTxn(16, 1, "USD")}, rates: makeRates(nil), wantErr: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := AveragedIncomeChecked(IncomeModeAll, 0, 0, IncomeSources{}, tc.txns, monthStart, 1, "USD", tc.rates)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("error = %v, wantErr %t", err, tc.wantErr)
+			}
+			if err == nil && got != tc.want {
+				t.Errorf("income = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestIncomeForBudgets(t *testing.T) {
 	rates := makeRates(map[string]float64{
 		"EUR": 1.10, // 1 EUR = 1.10 USD

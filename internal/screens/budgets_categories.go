@@ -13,6 +13,7 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/catname"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
@@ -39,52 +40,19 @@ func budgetTrackMeta(app *appstate.App, from, to time.Time) (catMeta map[string]
 	if app == nil {
 		return
 	}
-	base := app.Settings().BaseCurrency
-	if base == "" {
-		base = "USD"
-	}
+	base := budgetBaseCurrency(app.Settings().BaseCurrency)
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 	mStart, mEnd := from, to
 	if mStart.IsZero() || mEnd.IsZero() {
 		mStart = dateutil.MonthStart(time.Now())
 		mEnd = dateutil.AddMonths(mStart, 1)
 	}
-	catN, catT, tagT := map[string]int{}, map[string]int64{}, map[string]int64{}
-	for _, t := range app.Transactions() {
-		if !t.CountsInReports() || t.IsTransfer() || !t.Amount.IsNegative() {
-			continue
-		}
-		if t.Date.Before(mStart) || !t.Date.Before(mEnd) {
-			continue
-		}
-		whole, err := rates.Convert(t.Amount.Abs(), base)
-		if err != nil {
-			continue
-		}
-		if t.HasSplits() {
-			for _, s := range t.Splits {
-				sm, err := rates.Convert(s.Amount.Abs(), base)
-				if err != nil {
-					continue
-				}
-				catN[s.CategoryID]++
-				catT[s.CategoryID] += sm.Amount
-			}
-		} else {
-			catN[t.CategoryID]++
-			catT[t.CategoryID] += whole.Amount
-		}
-		for _, tg := range t.Tags {
-			if k := strings.ToLower(strings.TrimSpace(tg)); k != "" {
-				tagCount[k]++
-				tagT[k] += whole.Amount
-			}
-		}
+	metadata := budgeting.ComputeTrackingMetadata(app.Transactions(), mStart, mEnd, base, rates)
+	tagCount = metadata.TagCount
+	for id, count := range metadata.CategoryCount {
+		catMeta[id] = fmt.Sprintf("%d · %s", count, fmtMoney(money.New(metadata.CategoryTotal[id], base)))
 	}
-	for id, n := range catN {
-		catMeta[id] = fmt.Sprintf("%d · %s", n, fmtMoney(money.New(catT[id], base)))
-	}
-	for k, amt := range tagT {
+	for k, amt := range metadata.TagTotal {
 		tagTotal[k] = fmtMoney(money.New(amt, base))
 	}
 	return

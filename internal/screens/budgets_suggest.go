@@ -146,7 +146,7 @@ func budgetSuggestedLimitAt(app *appstate.App, b domain.Budget, anchor time.Time
 	}
 	base := app.Settings().BaseCurrency
 	if base == "" {
-		base = "USD"
+		base = budgetBaseCurrency(base)
 	}
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 	// Match the budget meter's category descendants and tracked-tag scope. The

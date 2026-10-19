@@ -59,7 +59,7 @@ func renderBudgetFutureWidget(props budgetSummaryProps, w period.Window, now tim
 
 	base := app.Settings().BaseCurrency
 	if base == "" {
-		base = "USD"
+		base = budgetBaseCurrency(base)
 	}
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 

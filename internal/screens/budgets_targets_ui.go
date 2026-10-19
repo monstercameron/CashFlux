@@ -264,7 +264,7 @@ func budgetQuickFillRow(app *appstate.App, b domain.Budget, status budgeting.Sta
 	pr := uistate.LoadPrefs()
 	base := app.Settings().BaseCurrency
 	if base == "" {
-		base = "USD"
+		base = budgetBaseCurrency(base)
 	}
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 	if anchor.IsZero() {

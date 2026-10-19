@@ -90,6 +90,12 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Budgets code cleanup, part 1 (BUDQ6).** Explicit income modes use the new checked `AveragedIncomeChecked` /
+  `ZeroBasedIncomeChecked`, so a missing exchange rate shows "incomplete" instead of $0. The effective cap is read from
+  `Status.Limit` everywhere instead of being re-derived; ~19 scattered "USD" fallbacks go through one
+  `budgetBaseCurrency` helper; category/tag tracking metadata and committed/prior-period percentages moved from view code
+  into tested `internal/budgeting` helpers; the compact budget row is its own component. Dead `SplitFromRollup`,
+  `UnbudgetedThisPeriod` and an unused view field are removed.
 - **One crisp favicon everywhere (FAV1).** The "C" is now drawn as a path instead of system-font text, so it looks the same
   on every machine and stays centred at 16 px. A deterministic Go generator (`tools/genicons`, byte-identical output
   tested) produces `favicon.ico` (16/32/48), 16 and 32 px PNGs, 192/512 icons, separate full-bleed maskable icons (so

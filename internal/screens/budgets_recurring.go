@@ -40,7 +40,7 @@ func budgetRecurringWidget(props budgetSummaryProps) ui.Node {
 
 	base := app.Settings().BaseCurrency
 	if base == "" {
-		base = "USD"
+		base = budgetBaseCurrency(base)
 	}
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 

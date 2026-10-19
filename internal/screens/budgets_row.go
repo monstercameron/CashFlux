@@ -348,7 +348,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		coverageLine = Span(css.Class("budget-sub", "budget-covered"), Attr("data-testid", "covered-badge-"+s.Budget.ID), uistate.T("budgets.coveredBadge"))
 	}
 
-	limit, _ := s.Spent.Add(s.Remaining) // limit in base currency
+	limit := s.Limit
 
 	// When the "Last month's spend" overlay is on, the tile leads with LAST period's spend
 	// (against this month's budget): the big bar shows it and this month drops to a small
@@ -645,7 +645,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		}
 		base := app.Settings().BaseCurrency
 		if base == "" {
-			base = "USD"
+			base = budgetBaseCurrency(base)
 		}
 		// The row does not carry its period bounds, so derive them the same way the
 		// page does — from the budget's own period against the household's week
@@ -678,154 +678,18 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	}
 
 	if props.Compact {
-		crowCls := "budget-crow " + budgetRowStateClass(s, props.PaceOver)
-		// C591: the name is a HEADING, not a second copy of the Transactions
-		// action. It used to be an unlabelled button that navigated to a filtered
-		// ledger — the same thing the row's Transactions control does, with none of
-		// the discoverability and nothing announcing it to a screen reader. One
-		// action, labelled, sits in the row's action cell beside the ⋯ menu.
-		// The compact row's name cell is narrow by design and ellipsizes ("Groce…",
-		// "Transpor…"). Carrying the full name as a native title means the browser
-		// recovers it on hover with no popover of our own — and the attribute is
-		// harmless when the text already fits (Cam, 2026-08-31).
-		crowTitle := Span(css.Class("budget-crow-name"), Attr("title", title), title)
-		var crowLeft, crowChip ui.Node
-		if lastMonthMode {
-			crowLeft = Span(ClassStr("budget-crow-left"+lastMonthSubTone(props.LastMonthOver)), props.LastMonthDelta)
-			crowChip = Span(css.Class("budget-lastmonth-tag"), Attr("data-testid", "budget-lastmonth-"+s.Budget.ID), uistate.T("budgets.lastMonthCap"))
-		} else {
-			leftCls := "budget-crow-left"
-			if s.Remaining.IsNegative() {
-				leftCls += " " + tw.Fold(tw.TextDown)
-			}
-			crowLeft = Span(ClassStr(leftCls), budgetRemainPhrase(s.Remaining))
-			chipTone := ""
-			switch {
-			case s.State == budgeting.StateOver:
-				chipTone = " is-danger"
-			case s.State == budgeting.StateNear || props.PaceOver != "":
-				chipTone = " is-warn"
-			}
-			crowChip = Span(ClassStr("pill budget-crow-chip"+chipTone), label)
-		}
-		row := Div(ClassStr(crowCls), Attr("data-testid", "budget-card-"+s.Budget.ID),
-			// Name cell: the title and the conditional C395 rollover badge share ONE
-			// grid cell, so the row is always exactly six children. The badge used to
-			// be a seventh top-level child in a six-column template — every later cell
-			// shifted a column right and the kebab wrapped onto an implicit row.
-			// Name cell: the title, the note marker, and the conditional C395
-			// rollover badge.
-			//
-			// C545: the note's TEXT belongs to the card layout, but showing no trace
-			// of it in compact meant saving a note in the DEFAULT density produced no
-			// visible change at all — the write looked like it had failed, which is
-			// exactly how it was reported. The marker is the smallest honest signal:
-			// it confirms the note saved, carries the text as its tooltip, and
-			// reopens the editor on click.
-			//
-			// It rides in the name cell rather than the action cell for two reasons.
-			// The action cell is a fixed-width column, and a third control there
-			// overflowed it and clipped the status chip to "On trac". And the drill
-			// action's receipt icon is another lined document outline, so at 16px the
-			// two sat side by side as near-identical shapes. Here it reads as what it
-			// is — something the budget HAS, next to its name — rather than a third
-			// thing to do.
-			Div(css.Class("budget-crow-head"),
-				crowTitle,
-				// The note marker rides the SAME hover system as every other marker in
-				// this cell: its words preview in the shared popover after the intent
-				// delay, and a click still opens the editor. It used to carry a native
-				// `title` instead — a third hover behaviour on a row that already had
-				// two, and the one its own comment recorded as mouse-only.
-				If(hasNote, ui.CreateElement(budgetNotesMarker, budgetNotesMarkerProps{
-					BudgetID: s.Budget.ID, Label: notesLabel, Text: noteText,
-					RowTitle: title, OnOpen: openNotesFn,
-				})),
-				If(s.Budget.Rollover, budgetRolloverBadgeFor(props)),
-				// WF18: and so does goal-funded spending, for the same reason — the
-				// card's line lives behind a disclosure this density omits, so a budget
-				// that only looks over because a goal paid for part of it would read as
-				// a plain overspend here. Exactly the trap WF17 hit one line below.
-				// Two renderings of one marker, one visible at a time (CSS decides by
-				// content width): the pill while its words fit, the glyph once they
-				// do not. Both are always mounted so neither has to re-enter the tree
-				// on a resize — and the glyph owns the hover/popover hooks, which must
-				// not appear and disappear from a keyed row's hook order.
-				// Coverage, which the compact row never reported: the card carries a
-				// "Recurring cover" / "Covered this period" line, and dropping to the
-				// list lost it entirely — so a budget only looking healthy because
-				// another one is paying for it read as plain healthy (Cam, 2026-08-31).
-				// Recurring wins over one-time, matching the card: a standing
-				// arrangement is inherently covered, so the two never both show.
-				If(hasRecurring, ui.CreateElement(budgetGoalGlyph, budgetGoalGlyphProps{
-					BudgetID: s.Budget.ID, Kind: "cover", Icon: icon.Scale,
-					Title:    uistate.T("budgets.coverMarkerOngoingTitle"),
-					Text:     coverOngoingText(s.Budget, s.Limit.Currency),
-					PillText: uistate.T("budgets.coverMarkerPill"), PillClass: "pill budget-crow-chip is-cover",
-				})),
-				If(!hasRecurring && props.Covered, ui.CreateElement(budgetGoalGlyph, budgetGoalGlyphProps{
-					BudgetID: s.Budget.ID, Kind: "cover", Icon: icon.Scale,
-					Title:    uistate.T("budgets.coverMarkerOnceTitle"),
-					Text:     uistate.T("budgets.coverMarkerOnceText"),
-					PillText: uistate.T("budgets.coverMarkerPill"), PillClass: "pill budget-crow-chip is-cover",
-				})),
-				If(fundedChip != "", ui.CreateElement(budgetGoalGlyph, budgetGoalGlyphProps{
-					BudgetID: s.Budget.ID, Kind: "goal", Icon: icon.Goals,
-					Title: goalGlyphTitle(), Text: fundedChip,
-					// No pill: "part funded by a goal" renders at 168px and the name
-					// cell is 151px even at 1042px of content — it would need roughly
-					// 1400px before the words fit beside a name, so the pill shape
-					// existed only to spill 87px past the cell and paint over the bar
-					// (Cam, 2026-08-31). The sentence lives in the popover, where it
-					// has room; the row keeps the symbol. "Rolls over" is 68px and
-					// still earns its words, so rollover keeps both shapes.
-				})),
-				// WF17: a paused target has to show HERE too. The card's target line
-				// lives behind the details disclosure, which compact mode omits — so
-				// pausing from the ⋯ menu produced no visible change at all, and the
-				// action looked like it had failed. That is precisely the report C545
-				// fixed for notes, arriving again through a different door, so it gets
-				// the same answer: the smallest honest marker, carrying the resume date
-				// as its label.
-				If(s.Budget.TargetSnoozed(time.Now()),
-					Span(css.Class("pill budget-crow-chip", tw.TextDim),
-						Attr("data-testid", "budget-snoozed-chip-"+s.Budget.ID),
-						Attr("title", uistate.T("budgets.targetSnoozed",
-							fmtMoney(s.Budget.TargetAmount),
-							uistate.LoadPrefs().FormatDate(s.Budget.TargetSnoozedUntil))),
-						uistate.T("budgets.targetPausedChip"))),
-			),
-			Div(css.Class("budget-crow-bar"), Attr("role", "progressbar"), Attr("aria-valuenow", strconv.Itoa(width)), Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"), Attr("aria-label", uistate.T("budgets.progressLabel")+" — "+title),
-				Div(ClassStr(fillClass), Attr("style", fmt.Sprintf("width:%d%%", width)))),
-			// Spent carries the weight, the "/ limit" reads muted — same voice as the
-			// card loader's figures.
-			Span(css.Class("budget-crow-amt fig"),
-				Span(css.Class("budget-crow-spent"), barSpent),
-				Span(css.Class("budget-crow-limit"), " / "),
-				Button(css.Class("budget-limit-btn", "budget-crow-limit-btn"), Type("button"), Attr("data-testid", "budget-limit-btn-"+s.Budget.ID),
-					Title(uistate.T("budgets.limitEditTitle")), Attr("aria-label", uistate.T("budgets.limitEditTitle")+" — "+title),
-					OnClick(startLimitEdit), fmtMoney(limit)),
-			),
-			crowLeft,
-			crowChip,
-			// One action cell: the labelled Transactions drill (icon + accessible
-			// name) and the ⋯ overflow, so the compact row keeps a one-click path to
-			// the ledger without the name pretending to be one (C591).
-			Div(css.Class("budget-crow-actions"),
-				If(canDrill, Button(css.Class("btn btn-tool budget-crow-drill"), Type("button"),
-					Attr("data-testid", "budget-view-txns-"+s.Budget.ID),
-					Attr("aria-label", uistate.T("budgets.drillAria", title)),
-					Title(drillTitle), OnClick(drill),
-					uiw.Icon(icon.Receipt, css.Class(tw.ShrinkO, tw.W4, tw.H4)))),
-				kebabNode,
-			),
-		)
-		return Fragment(row, If(limitEditing.Get(), budgetLimitEditor(
-			s.Budget.ID, limitDraft.Get(), onLimitDraft, saveLimitEdit, cancelLimitEdit,
-			limitKeyDown, limitErrID, limitErrMsg, fmtMoney(limit), baseBudgetLimit(s.Budget.ID, s.Budget.Limit),
-		)))
+		return budgetRowCompact(budgetRowCompactProps{
+			budgetRowProps: props, Status: s, Title: title, LastMonthMode: lastMonthMode,
+			BarSpent: barSpent, Width: width, FillClass: fillClass,
+			Limit: limit, Label: label, CanDrill: canDrill, DrillTitle: drillTitle,
+			Kebab: kebabNode, OnLimitEdit: startLimitEdit, OnDrill: drill,
+			LimitEditing: limitEditing.Get(), LimitDraft: limitDraft.Get(), OnLimitDraft: onLimitDraft,
+			OnLimitSave: saveLimitEdit, OnLimitCancel: cancelLimitEdit, OnLimitKeyDown: limitKeyDown,
+			LimitErrorID: limitErrID, LimitError: limitErrMsg, FundedChip: fundedChip,
+			HasRecurring: hasRecurring,
+			HasNote:      hasNote, NotesLabel: notesLabel, NoteText: noteText, OnOpenNotes: openNotesFn,
+		})
 	}
-
 	// Readable, clickable-to-expand notes line (the attached note itself), shown on the
 	// card when the budget has a note — mirrors the /accounts notes affordance.
 	var notesNode ui.Node = Fragment()
@@ -1104,6 +968,201 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	)
 }
 
+type budgetRowCompactProps struct {
+	budgetRowProps
+	Status                                                   budgeting.Status
+	Title                                                    string
+	LastMonthMode                                            bool
+	BarSpent                                                 string
+	Width                                                    int
+	FillClass                                                string
+	Limit                                                    money.Money
+	Label                                                    string
+	CanDrill                                                 bool
+	DrillTitle                                               string
+	Kebab                                                    ui.Node
+	OnLimitEdit, OnDrill                                     any
+	LimitEditing                                             bool
+	LimitDraft                                               string
+	OnLimitDraft, OnLimitSave, OnLimitCancel, OnLimitKeyDown any
+	LimitErrorID, LimitError                                 string
+	FundedChip                                               string
+	HasRecurring                                             bool
+	HasNote                                                  bool
+	NotesLabel, NoteText                                     string
+	OnOpenNotes                                              func()
+}
+
+// budgetRowCompact renders the dense row layout. All row interactions arrive as
+// callbacks from BudgetRow so this component owns no hooks of its own.
+func budgetRowCompact(props budgetRowCompactProps) ui.Node {
+	s := props.Status
+	title := props.Title
+	lastMonthMode := props.LastMonthMode
+	barSpent, width, fillClass := props.BarSpent, props.Width, props.FillClass
+	limit, label := props.Limit, props.Label
+	canDrill, drillTitle, kebabNode := props.CanDrill, props.DrillTitle, props.Kebab
+	startLimitEdit, drill := props.OnLimitEdit, props.OnDrill
+	onLimitDraft, saveLimitEdit, cancelLimitEdit, limitKeyDown := props.OnLimitDraft, props.OnLimitSave, props.OnLimitCancel, props.OnLimitKeyDown
+	limitErrID, limitErrMsg := props.LimitErrorID, props.LimitError
+	crowCls := "budget-crow " + budgetRowStateClass(s, props.PaceOver)
+	// C591: the name is a HEADING, not a second copy of the Transactions
+	// action. It used to be an unlabelled button that navigated to a filtered
+	// ledger — the same thing the row's Transactions control does, with none of
+	// the discoverability and nothing announcing it to a screen reader. One
+	// action, labelled, sits in the row's action cell beside the ⋯ menu.
+	// The compact row's name cell is narrow by design and ellipsizes ("Groce…",
+	// "Transpor…"). Carrying the full name as a native title means the browser
+	// recovers it on hover with no popover of our own — and the attribute is
+	// harmless when the text already fits (Cam, 2026-08-31).
+	crowTitle := Span(css.Class("budget-crow-name"), Attr("title", title), title)
+	var crowLeft, crowChip ui.Node
+	if lastMonthMode {
+		crowLeft = Span(ClassStr("budget-crow-left"+lastMonthSubTone(props.LastMonthOver)), props.LastMonthDelta)
+		crowChip = Span(css.Class("budget-lastmonth-tag"), Attr("data-testid", "budget-lastmonth-"+s.Budget.ID), uistate.T("budgets.lastMonthCap"))
+	} else {
+		leftCls := "budget-crow-left"
+		if s.Remaining.IsNegative() {
+			leftCls += " " + tw.Fold(tw.TextDown)
+		}
+		crowLeft = Span(ClassStr(leftCls), budgetRemainPhrase(s.Remaining))
+		chipTone := ""
+		switch {
+		case s.State == budgeting.StateOver:
+			chipTone = " is-danger"
+		case s.State == budgeting.StateNear || props.PaceOver != "":
+			chipTone = " is-warn"
+		}
+		crowChip = Span(ClassStr("pill budget-crow-chip"+chipTone), label)
+	}
+	row := Div(ClassStr(crowCls), Attr("data-testid", "budget-card-"+s.Budget.ID),
+		// Name cell: the title and the conditional C395 rollover badge share ONE
+		// grid cell, so the row is always exactly six children. The badge used to
+		// be a seventh top-level child in a six-column template — every later cell
+		// shifted a column right and the kebab wrapped onto an implicit row.
+		// Name cell: the title, the note marker, and the conditional C395
+		// rollover badge.
+		//
+		// C545: the note's TEXT belongs to the card layout, but showing no trace
+		// of it in compact meant saving a note in the DEFAULT density produced no
+		// visible change at all — the write looked like it had failed, which is
+		// exactly how it was reported. The marker is the smallest honest signal:
+		// it confirms the note saved, carries the text as its tooltip, and
+		// reopens the editor on click.
+		//
+		// It rides in the name cell rather than the action cell for two reasons.
+		// The action cell is a fixed-width column, and a third control there
+		// overflowed it and clipped the status chip to "On trac". And the drill
+		// action's receipt icon is another lined document outline, so at 16px the
+		// two sat side by side as near-identical shapes. Here it reads as what it
+		// is — something the budget HAS, next to its name — rather than a third
+		// thing to do.
+		budgetCompactNameCell(props, crowTitle),
+		Div(css.Class("budget-crow-bar"), Attr("role", "progressbar"), Attr("aria-valuenow", strconv.Itoa(width)), Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"), Attr("aria-label", uistate.T("budgets.progressLabel")+" — "+title),
+			Div(ClassStr(fillClass), Attr("style", fmt.Sprintf("width:%d%%", width)))),
+		// Spent carries the weight, the "/ limit" reads muted — same voice as the
+		// card loader's figures.
+		Span(css.Class("budget-crow-amt fig"),
+			Span(css.Class("budget-crow-spent"), barSpent),
+			Span(css.Class("budget-crow-limit"), " / "),
+			Button(css.Class("budget-limit-btn", "budget-crow-limit-btn"), Type("button"), Attr("data-testid", "budget-limit-btn-"+s.Budget.ID),
+				Title(uistate.T("budgets.limitEditTitle")), Attr("aria-label", uistate.T("budgets.limitEditTitle")+" — "+title),
+				OnClick(startLimitEdit), fmtMoney(limit)),
+		),
+		crowLeft,
+		crowChip,
+		// One action cell: the labelled Transactions drill (icon + accessible
+		// name) and the ⋯ overflow, so the compact row keeps a one-click path to
+		// the ledger without the name pretending to be one (C591).
+		Div(css.Class("budget-crow-actions"),
+			If(canDrill, Button(css.Class("btn btn-tool budget-crow-drill"), Type("button"),
+				Attr("data-testid", "budget-view-txns-"+s.Budget.ID),
+				Attr("aria-label", uistate.T("budgets.drillAria", title)),
+				Title(drillTitle), OnClick(drill),
+				uiw.Icon(icon.Receipt, css.Class(tw.ShrinkO, tw.W4, tw.H4)))),
+			kebabNode,
+		),
+	)
+	return Fragment(row, If(props.LimitEditing, budgetLimitEditor(
+		s.Budget.ID, props.LimitDraft, onLimitDraft, saveLimitEdit, cancelLimitEdit,
+		limitKeyDown, limitErrID, limitErrMsg, fmtMoney(limit), baseBudgetLimit(s.Budget.ID, s.Budget.Limit),
+	)))
+}
+
+// budgetCompactNameCell renders the compact row's title and in-name markers.
+func budgetCompactNameCell(props budgetRowCompactProps, crowTitle ui.Node) ui.Node {
+	s := props.Status
+	title := props.Title
+	hasNote, notesLabel, noteText, openNotesFn := props.HasNote, props.NotesLabel, props.NoteText, props.OnOpenNotes
+	hasRecurring := props.HasRecurring
+	fundedChip := props.FundedChip
+	return Div(css.Class("budget-crow-head"),
+		crowTitle,
+		// The note marker rides the SAME hover system as every other marker in
+		// this cell: its words preview in the shared popover after the intent
+		// delay, and a click still opens the editor. It used to carry a native
+		// `title` instead — a third hover behaviour on a row that already had
+		// two, and the one its own comment recorded as mouse-only.
+		If(hasNote, ui.CreateElement(budgetNotesMarker, budgetNotesMarkerProps{
+			BudgetID: s.Budget.ID, Label: notesLabel, Text: noteText,
+			RowTitle: title, OnOpen: openNotesFn,
+		})),
+		If(s.Budget.Rollover, budgetRolloverBadgeFor(props.budgetRowProps)),
+		// WF18: and so does goal-funded spending, for the same reason — the
+		// card's line lives behind a disclosure this density omits, so a budget
+		// that only looks over because a goal paid for part of it would read as
+		// a plain overspend here. Exactly the trap WF17 hit one line below.
+		// Two renderings of one marker, one visible at a time (CSS decides by
+		// content width): the pill while its words fit, the glyph once they
+		// do not. Both are always mounted so neither has to re-enter the tree
+		// on a resize — and the glyph owns the hover/popover hooks, which must
+		// not appear and disappear from a keyed row's hook order.
+		// Coverage, which the compact row never reported: the card carries a
+		// "Recurring cover" / "Covered this period" line, and dropping to the
+		// list lost it entirely — so a budget only looking healthy because
+		// another one is paying for it read as plain healthy (Cam, 2026-08-31).
+		// Recurring wins over one-time, matching the card: a standing
+		// arrangement is inherently covered, so the two never both show.
+		If(hasRecurring, ui.CreateElement(budgetGoalGlyph, budgetGoalGlyphProps{
+			BudgetID: s.Budget.ID, Kind: "cover", Icon: icon.Scale,
+			Title:    uistate.T("budgets.coverMarkerOngoingTitle"),
+			Text:     coverOngoingText(s.Budget, s.Limit.Currency),
+			PillText: uistate.T("budgets.coverMarkerPill"), PillClass: "pill budget-crow-chip is-cover",
+		})),
+		If(!hasRecurring && props.Covered, ui.CreateElement(budgetGoalGlyph, budgetGoalGlyphProps{
+			BudgetID: s.Budget.ID, Kind: "cover", Icon: icon.Scale,
+			Title:    uistate.T("budgets.coverMarkerOnceTitle"),
+			Text:     uistate.T("budgets.coverMarkerOnceText"),
+			PillText: uistate.T("budgets.coverMarkerPill"), PillClass: "pill budget-crow-chip is-cover",
+		})),
+		If(fundedChip != "", ui.CreateElement(budgetGoalGlyph, budgetGoalGlyphProps{
+			BudgetID: s.Budget.ID, Kind: "goal", Icon: icon.Goals,
+			Title: goalGlyphTitle(), Text: fundedChip,
+			// No pill: "part funded by a goal" renders at 168px and the name
+			// cell is 151px even at 1042px of content — it would need roughly
+			// 1400px before the words fit beside a name, so the pill shape
+			// existed only to spill 87px past the cell and paint over the bar
+			// (Cam, 2026-08-31). The sentence lives in the popover, where it
+			// has room; the row keeps the symbol. "Rolls over" is 68px and
+			// still earns its words, so rollover keeps both shapes.
+		})),
+		// WF17: a paused target has to show HERE too. The card's target line
+		// lives behind the details disclosure, which compact mode omits — so
+		// pausing from the ⋯ menu produced no visible change at all, and the
+		// action looked like it had failed. That is precisely the report C545
+		// fixed for notes, arriving again through a different door, so it gets
+		// the same answer: the smallest honest marker, carrying the resume date
+		// as its label.
+		If(s.Budget.TargetSnoozed(time.Now()),
+			Span(css.Class("pill budget-crow-chip", tw.TextDim),
+				Attr("data-testid", "budget-snoozed-chip-"+s.Budget.ID),
+				Attr("title", uistate.T("budgets.targetSnoozed",
+					fmtMoney(s.Budget.TargetAmount),
+					uistate.LoadPrefs().FormatDate(s.Budget.TargetSnoozedUntil))),
+				uistate.T("budgets.targetPausedChip"))),
+	)
+}
+
 func baseBudgetLimit(id string, fallback money.Money) string {
 	if app := appstate.Default; app != nil {
 		for _, budget := range app.Budgets() {
@@ -1297,7 +1356,7 @@ func buildBudgetRolloverChainText(b domain.Budget, anchor time.Time) string {
 	}
 	base := app.Settings().BaseCurrency
 	if base == "" {
-		base = "USD"
+		base = budgetBaseCurrency(base)
 	}
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 	ledger := budgeting.NewNettedLedger(txns)
@@ -1394,11 +1453,11 @@ func budgetScopeFilter(scope budgeting.Scope) uistate.TxFilter {
 func budgetTopDriversFor(b domain.Budget, n int, anchor time.Time) ([]budgeting.Driver, string) {
 	app := appstate.Default
 	if app == nil {
-		return nil, "USD"
+		return nil, budgetBaseCurrency("")
 	}
 	base := app.Settings().BaseCurrency
 	if base == "" {
-		base = "USD"
+		base = budgetBaseCurrency(base)
 	}
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 	if anchor.IsZero() {
@@ -1733,7 +1792,7 @@ func budgetCompositionSlices(b domain.Budget, anchor time.Time) []budgetSlice {
 	}
 	base := app.Settings().BaseCurrency
 	if base == "" {
-		base = "USD"
+		base = budgetBaseCurrency(base)
 	}
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 	if anchor.IsZero() {

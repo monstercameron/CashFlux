@@ -66,7 +66,7 @@ func budgetWhyOver(b domain.Budget, anchor time.Time) (whyOverFacts, bool) {
 	}
 	base := app.Settings().BaseCurrency
 	if base == "" {
-		base = "USD"
+		base = budgetBaseCurrency(base)
 	}
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 	if anchor.IsZero() {

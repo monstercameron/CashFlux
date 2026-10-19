@@ -68,21 +68,6 @@ func SplitIncome(income, withinLimits, overLimits, untracked, savings int64) Inc
 	return s
 }
 
-// SplitFromRollup builds the split from a rollup, deriving within-limits rather
-// than asking the caller for it.
-//
-// The rollup's SpentMinor already INCLUDES the overspend, so within-limits is
-// spend minus over. Passing both separately would let a caller hand over numbers
-// that do not add up, and a bar whose segments do not sum to its own total is
-// worse than no bar.
-func SplitFromRollup(r RollupSummary, income, untracked, savings int64) IncomeSplit {
-	within := r.SpentMinor - r.OverMinor
-	if within < 0 {
-		within = 0
-	}
-	return SplitIncome(income, within, r.OverMinor, untracked, savings)
-}
-
 // Pct returns part as a whole percentage of Income, clamped to 0..100 and never
 // dividing by a zero or negative income.
 //

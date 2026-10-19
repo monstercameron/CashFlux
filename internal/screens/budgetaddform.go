@@ -136,7 +136,7 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 
 	base := app.Settings().BaseCurrency
 	if base == "" {
-		base = "USD"
+		base = budgetBaseCurrency(base)
 	}
 
 	categories := app.Categories()

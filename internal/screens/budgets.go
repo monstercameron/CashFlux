@@ -85,11 +85,6 @@ type budgetView struct {
 	// toolbar renders "nothing wrong" beside a total that is wrong.
 	LeakRows   []domain.Transaction
 	TotalSpent int64
-	// UntrackedSpent is money that left in categories no budget watches. It was
-	// only ever a footnote under the list; in a real month it can be the largest
-	// single slice, and a hero that omits it can report "97% budgeted" while
-	// thousands go unaccounted.
-	UntrackedSpent int64
 	// Split is the month divided by where the money went, against income.
 	Split             budgeting.IncomeSplit
 	TotalLimit        int64
@@ -139,6 +134,14 @@ type budgetView struct {
 	// from THIS — not time.Now() — or a historical month shows today's pacing
 	// (QA CF-05).
 	Anchor time.Time
+}
+
+// budgetBaseCurrency applies the Budgets surfaces' shared currency fallback.
+func budgetBaseCurrency(base string) string {
+	if base == "" {
+		return "USD"
+	}
+	return base
 }
 
 // budgetNeedsAttention is the shared definition behind the attention count and
@@ -377,10 +380,7 @@ func computeBudgetView(app *appstate.App, activeMemberID string, vw period.Windo
 }
 
 func computeBudgetViewRaw(app *appstate.App, activeMemberID string, vw period.Window, pr prefs.Prefs, showLastMonth bool) budgetView {
-	base := app.Settings().BaseCurrency
-	if base == "" {
-		base = "USD"
-	}
+	base := budgetBaseCurrency(app.Settings().BaseCurrency)
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 	weekStart := pr.WeekStartWeekday()
 	// C128: parse the pay-cycle anchor from prefs. When set, biweekly budget periods
@@ -597,21 +597,15 @@ func computeBudgetViewRaw(app *appstate.App, activeMemberID string, vw period.Wi
 					slog.Error("convert previous budget limit", "budget_id", b.ID, "error", cerr)
 					budgetErrors = append(budgetErrors, fmt.Sprintf("%s: %s", budgetTitle(b.Name, catName[b.CategoryID]), uistate.T("budgets.incomplete")))
 				}
-				limitMinor := st.Spent.Amount + st.Remaining.Amount // this period's effective budget
+				limitMinor := st.Limit.Amount // this period's effective budget
 				lm := budgetLastMonth{Spent: fmtMoney(prev.Spent)}
-				if limitMinor > 0 {
-					if lm.Pct = int(prev.Spent.Amount * 100 / limitMinor); lm.Pct < 0 {
-						lm.Pct = 0
-					}
-					if lm.Fill = lm.Pct; lm.Fill > 100 {
-						lm.Fill = 100
-					}
-				}
-				if delta := limitMinor - prev.Spent.Amount; delta >= 0 {
-					lm.Delta = uistate.T("budgets.lastMonthUnder", fmtMoney(money.New(delta, st.Spent.Currency)))
+				comparison := budgeting.ComparePriorSpend(prev.Spent.Amount, limitMinor)
+				lm.Pct, lm.Fill = comparison.Percent, comparison.Fill
+				if comparison.Delta >= 0 {
+					lm.Delta = uistate.T("budgets.lastMonthUnder", fmtMoney(money.New(comparison.Delta, st.Spent.Currency)))
 				} else {
 					lm.Over = true
-					lm.Delta = uistate.T("budgets.lastMonthOver", fmtMoney(money.New(-delta, st.Spent.Currency)))
+					lm.Delta = uistate.T("budgets.lastMonthOver", fmtMoney(money.New(-comparison.Delta, st.Spent.Currency)))
 				}
 				lastMonth[b.ID] = lm
 			} else if perr != nil {
@@ -743,7 +737,12 @@ func computeBudgetViewRaw(app *appstate.App, activeMemberID string, vw period.Wi
 		// Explicit basis (zero-based income control): all income, paychecks-only, a fixed
 		// figure, or a chosen set of income categories — averaged over BudgetIncomeAvgMonths
 		// recent months (last month only when 0/1).
-		bannerIncome = resolveIncomeBasis(app, pr.BudgetIncomeMode, pr.BudgetPaycheckMinMinor, pr.MonthlyIncomeMinor, pr.BudgetIncomeCategoryIDs, pr.BudgetIncomeAvgMonths, ms, base, rates)
+		var incomeErr error
+		bannerIncome, incomeErr = resolveIncomeBasis(app, pr.BudgetIncomeMode, pr.BudgetPaycheckMinMinor, pr.MonthlyIncomeMinor, pr.BudgetIncomeCategoryIDs, pr.BudgetIncomeAvgMonths, ms, base, rates)
+		if incomeErr != nil {
+			slog.Error("calculate selected budget income", "error", incomeErr)
+			budgetErrors = append(budgetErrors, uistate.T("budgets.incomplete"))
+		}
 	default:
 		// Unset basis — preserve prior behaviour: configured figure wins, else last month's income.
 		var incomeErr error
@@ -866,15 +865,15 @@ func resolveIncomeBasis(
 	app *appstate.App,
 	mode string, paycheckMin, fixed int64, catIDs []string, avgMonths int,
 	ms time.Time, base string, rates currency.Rates,
-) int64 {
+) (int64, error) {
 	if app == nil {
-		return 0
+		return 0, nil
 	}
 	if mode == "" {
 		mode = budgeting.IncomeModeAll
 	}
 	sources := budgeting.NewIncomeSources(app.Categories(), catIDs)
-	return budgeting.AveragedIncome(mode, paycheckMin, fixed, sources, app.Transactions(), ms, avgMonths, base, rates)
+	return budgeting.AveragedIncomeChecked(mode, paycheckMin, fixed, sources, app.Transactions(), ms, avgMonths, base, rates)
 }
 
 // computeIncomeSources builds the income-source menu the "by source" basis presents:
@@ -1124,21 +1123,7 @@ func buildBudgetCommitted(st budgeting.Status, b domain.Budget, recurrings []dom
 	if cr.Committed.Amount <= 0 {
 		return budgetCommitted{}, false
 	}
-	limit := st.Spent.Amount + st.Remaining.Amount
-	var committedPct, spentPct int
-	if limit > 0 {
-		committedPct = int(cr.Committed.Amount * 100 / limit)
-		spentPct = int(st.Spent.Amount * 100 / limit)
-	}
-	if spentPct > 100 {
-		spentPct = 100
-	}
-	if spentPct+committedPct > 100 {
-		committedPct = 100 - spentPct
-	}
-	if committedPct < 0 {
-		committedPct = 0
-	}
+	spentPct, committedPct := budgeting.CommittedPercentages(st.Limit.Amount, st.Spent.Amount, cr.Committed.Amount)
 	var notes []string
 	for _, it := range cr.Items {
 		if !it.Smoothed {

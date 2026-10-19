@@ -104,7 +104,7 @@ func AdjustAllBody(_ struct{}) ui.Node {
 		// Previewed on the basis the chosen scope will write, never on the other
 		// one — that mismatch is what made a this-period preview a promise the
 		// write could not keep.
-		base := "USD"
+		base := budgetBaseCurrency("")
 		fx := currency.Rates{Base: base}
 		if app != nil && app.Settings().BaseCurrency != "" {
 			base = app.Settings().BaseCurrency
@@ -158,7 +158,7 @@ func AdjustAllBody(_ struct{}) ui.Node {
 		inlineErr = uistate.T("budgets.adjustAllNothingToChange")
 	}
 
-	base := "USD"
+	base := budgetBaseCurrency("")
 	if app != nil {
 		if b := app.Settings().BaseCurrency; b != "" {
 			base = b
