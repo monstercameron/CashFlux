@@ -59,15 +59,21 @@ type txnCatSuggestion struct {
 }
 
 type txnCatSuggestInputsCache struct {
-	app      *appstate.App
-	revision int
-	inputs   txnCatSuggestInputs
-	valid    bool
+	app           *appstate.App
+	revision      int
+	storeRevision uint64
+	inputs        txnCatSuggestInputs
+	valid         bool
 }
 
 func (c *txnCatSuggestInputsCache) get(app *appstate.App, revision int, build func() txnCatSuggestInputs) txnCatSuggestInputs {
-	if !c.valid || c.app != app || c.revision != revision {
+	storeRevision := uint64(0)
+	if app != nil {
+		storeRevision = app.Rev()
+	}
+	if !c.valid || c.app != app || c.revision != revision || c.storeRevision != storeRevision {
 		c.app, c.revision, c.inputs, c.valid = app, revision, build(), true
+		c.storeRevision = storeRevision
 	}
 	return c.inputs
 }
@@ -224,12 +230,7 @@ func txnByID(app *appstate.App, id string) (domain.Transaction, bool) {
 	if app == nil || id == "" {
 		return domain.Transaction{}, false
 	}
-	for _, t := range app.Transactions() {
-		if t.ID == id {
-			return t, true
-		}
-	}
-	return domain.Transaction{}, false
+	return app.TransactionByID(id)
 }
 
 // categoryByID finds a category by id in a category slice.

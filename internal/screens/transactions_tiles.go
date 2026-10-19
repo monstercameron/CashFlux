@@ -678,6 +678,7 @@ func txnPresetRow(uncategorized, flagged, large int, uncatActive, flaggedActive,
 }
 
 func txnToolbarWidget(props txnToolbarProps) ui.Node {
+	defer txnPerfStart("toolbar")()
 	app := props.App
 	filterAtom := uistate.UseTxFilter()
 	displayPrefs := uistate.UsePrefs().Get()
@@ -1102,17 +1103,25 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	// active-filter chips before the first ledger row.
 	monthStart := dateutil.MonthStart(time.Now())
 	monthEndEx := dateutil.AddMonths(monthStart, 1)
-	summaryCache := ui.UseMemo(func() *txnToolbarSummaryCache { return &txnToolbarSummaryCache{} }, app.Rev())
-	summary := summaryCache.get(dataRevision, txnSummaryScope(f), func() txnToolbarSummary {
-		result := txnToolbarSummary{
-			review: reviewqueue.Count(txns),
-			presets: txnfilter.CountPresets(txns, f, txnfilter.PresetScope{
-				ReviewTag:  reviewqueue.ReviewTag,
-				LargeFor:   func(t domain.Transaction) int64 { return currency.MinorFromMajor(100, t.Amount.Currency) },
-				MonthStart: monthStart, MonthEnd: monthEndEx,
-			}),
+	ledgerCounts := ui.UseMemo(func() txnToolbarSummary {
+		defer txnPerfStart("ledger-counts")()
+		return txnToolbarSummary{review: reviewqueue.Count(txns),
 			duplicates: dedupe.Count(dedupe.FindDuplicates(txns)),
-			suspects:   transferSuspectCount(app),
+			suspects:   len(txnclassify.Suspects(txns, func(id string) string { return catName[id] }))}
+	}, app, app.Rev())
+	summaryCache := ui.UseMemo(func() *txnToolbarSummaryCache { return &txnToolbarSummaryCache{} }, app, app.Rev(), monthStart)
+	summary := summaryCache.get(dataRevision, txnSummaryScope(f), func() txnToolbarSummary {
+		defer txnPerfStart("summary")()
+		result := txnToolbarSummary{
+			review: ledgerCounts.review,
+			presets: txnfilter.CountPresetsWithLabels(txns, f, txnfilter.PresetScope{
+				ReviewTag:  reviewqueue.ReviewTag,
+				LargeMinor: currency.MinorFromMajor(100, props.Base),
+				MonthStart: monthStart, MonthEnd: monthEndEx,
+			}, txnfilter.Labels{Account: accName, Category: catName, Payee: app.PayeeResolver().Resolve,
+				BaseCurrency: props.Base, ToBase: func(m money.Money) (money.Money, error) { return props.Rates.Convert(m, props.Base) }}),
+			duplicates: ledgerCounts.duplicates,
+			suspects:   ledgerCounts.suspects,
 		}
 		transferSummary := txnclassify.SummarizeVisibleTransfers(props.Shown)
 		for i, t := range props.Shown {

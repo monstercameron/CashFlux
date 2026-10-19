@@ -63,6 +63,7 @@ func (f txnRowFlags) Any() bool { return len(f.Duplicate) > 0 || len(f.Spike) > 
 // what decides whether the props are worth threading at all, and recomputing it
 // on a density change would be wasted work either way.
 func buildTxnRowFlags(app *appstate.App, settings smart.Settings, weekStart time.Weekday) txnRowFlags {
+	defer txnPerfStart("flag-recompute")()
 	out := txnRowFlags{}
 	if app == nil {
 		return out
@@ -78,7 +79,10 @@ func buildTxnRowFlags(app *appstate.App, settings smart.Settings, weekStart time
 	if settings.IsEnabled(spikeFlagCode) && !settings.IsMuted(spikeFlagCode) {
 		out.Spike = map[string]string{}
 		in := buildSmartInput(app, weekStart)
-		for _, ins := range smartengine.RunPage(in, settings, smart.PageTransactions) {
+		// The row needs only Unusual. Running every transaction-page engine here
+		// also computes subscription, clearing and refund insights that are thrown
+		// away, including their independent full-ledger scans.
+		for _, ins := range smartengine.RunPage(in, txnFlagEngineSettings(settings), smart.PageTransactions) {
 			if ins.Feature != spikeFlagCode || ins.Action == nil || ins.Action.RelatedID == "" {
 				continue
 			}
@@ -89,6 +93,19 @@ func buildTxnRowFlags(app *appstate.App, settings smart.Settings, weekStart time
 		}
 	}
 	return out
+}
+
+func txnFlagEngineSettings(settings smart.Settings) smart.Settings {
+	// Do not mutate the persisted settings' maps through a value copy.
+	enabled := settings.IsEnabled(spikeFlagCode)
+	settings.Enabled = map[string]bool{spikeFlagCode: enabled}
+	settings.ExplicitOff = map[string]bool{spikeFlagCode: !enabled}
+	for _, feature := range smart.Catalog() {
+		if feature.Code != spikeFlagCode {
+			settings.ExplicitOff[feature.Code] = true
+		}
+	}
+	return settings
 }
 
 // txnFlagChipProps carries one row's flags.

@@ -90,6 +90,13 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Transactions opens and saves much faster (SOLP1, part 1).** Measured with a 3,300-transaction fixture: the page mounts
+  its rows in ~0.24 s (was ~2.2 s) and a recategorise costs ~0.7 s of work (was ~2.7 s). Rows no longer build a hidden
+  category picker each (one page-level picker mounts only while open), filtering and sorting run once per change with
+  memoised aliases and precomputed sort keys, preset counts use the single-pass alias-aware API, and secondary row flags
+  compute after the first paint. Saving skips unchanged revisions and shares one export between persistence, audit and
+  undo instead of exporting up to four times. Count-based guard tests fail if these regress. Further work (per-record
+  saves, sliced detectors) continues in SOLP2.
 - **Split opens calmly and shows what's left (R4SPLIT).** The split dialog no longer opens with two error messages; rows
   are validated on Save. A live "Left to assign: $64.00" turns into "Balanced" when the parts add up (checked money in the
   transaction's currency). Columns are labelled Category, Who and Amount, the New category action is named, the category

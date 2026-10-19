@@ -299,30 +299,59 @@ func migrateStandaloneAIKey() {
 // so it survives a reload. It snapshots on a short ticker — which catches every
 // mutation regardless of code path, without instrumenting each write — and on
 // page hide, writing only when the serialized bytes change.
-// localDatasetExport serializes data without device credentials. The credential
-// has its own durable, workspace-independent browser-store record.
-func localDatasetExport(app *appstate.App) ([]byte, error) {
-	return app.ExportJSONRedacted()
-}
-
 func startDatasetAutosave() {
 	app := appstate.Default
 	if app == nil {
 		return
 	}
+	save, force := newDatasetAutosave(app, browserstore.SetSecureBatch, pushActiveWorkspaceToBackend)
+	resaveDataset = force
+	uistate.CapturePersistNow(save)
+	cb := js.FuncOf(func(js.Value, []js.Value) any {
+		uistate.FlushPendingSettingsPersist()
+		save()
+		return nil
+	})
+	js.Global().Call("addEventListener", "pagehide", cb)
+	js.Global().Call("addEventListener", "visibilitychange", cb)
+	save()
+	go func() {
+		for {
+			time.Sleep(4 * time.Second)
+			save()
+		}
+	}()
+	go watchDataRevision(save)
+}
+
+// newDatasetAutosave owns the serial save policy. Its commit boundary is injected
+// so the real production path can be tested with a delayed or rejected durable
+// commit, without mounting a page or starting perpetual watcher goroutines.
+func newDatasetAutosave(app *appstate.App,
+	commit func(map[string]string, map[string]string, func(error)),
+	push func([]byte, time.Time),
+) (func(), func()) {
 	last := ""
+	var savedRevision uint64
+	hasSavedRevision := false
+	var forceVersion uint64
+	var savedForceVersion uint64
 	saveInFlight := false
 	if hadLocalDataset {
 		data, err := localDatasetExport(app)
 		if err != nil {
-			return
+			return func() {}, func() {}
 		}
 		last = string(data)
+		savedRevision, hasSavedRevision = app.Rev(), true
 	}
 	// Seed this tab's write entitlement from the store's current generation.
 	datasetMyGen = readDatasetGen()
 	save := func() {
 		if saveInFlight {
+			return
+		}
+		if hasSavedRevision && savedRevision == app.Rev() {
 			return
 		}
 		if suspendAutosave {
@@ -359,31 +388,40 @@ func startDatasetAutosave() {
 				app.Log().Error("dataset autosave failed", "err", r)
 			}
 		}()
+		// Capture first so the audit entry belongs to the same durable snapshot;
+		// the revision cache shares the export when capture makes no audit write.
+		captureUndoPoint()
 		data, err := localDatasetExport(app)
 		if err != nil {
 			return
 		}
 		s := string(data)
-		if s == last {
+		targetRevision := app.Rev()
+		targetForceVersion := forceVersion
+		if s == last && savedForceVersion == forceVersion {
+			savedRevision, hasSavedRevision = targetRevision, true
 			return
 		}
-		captureUndoPoint() // record an undo point for this mutation (C78)
 		// afterWrite mirrors the post-save bookkeeping (backend push / first-save
 		// flag) shared by the plaintext and encrypted paths. The cloud copy is always
 		// redacted so the OpenAI key never leaves the device.
 		afterWrite := func() {
 			if hadLocalDataset {
-				if redacted, rErr := app.ExportJSONRedacted(); rErr == nil {
-					pushActiveWorkspaceToBackend(redacted, time.Now().UTC())
-				}
+				// Push exactly the snapshot whose durable commit completed. Reading
+				// live state here both re-exports the entire ledger and can publish
+				// a newer mutation that has not committed locally yet.
+				push(data, time.Now().UTC())
 			} else {
 				hadLocalDataset = true
 			}
 		}
 		write := func(value, target string) {
+			if persistPerfObserve != nil {
+				persistPerfObserve("durable-write")
+			}
 			saveInFlight = true
 			nextGeneration := id.New()
-			browserstore.SetSecureBatch(map[string]string{
+			commit(map[string]string{
 				datasetStoreKey: value, datasetGenKey: nextGeneration,
 			}, map[string]string{datasetGenKey: datasetMyGen}, func(err error) {
 				saveInFlight = false
@@ -392,6 +430,11 @@ func startDatasetAutosave() {
 					return
 				}
 				last = target
+				savedForceVersion = targetForceVersion
+				savedRevision, hasSavedRevision = targetRevision, true
+				if forceVersion != targetForceVersion {
+					hasSavedRevision = false
+				}
 				datasetMyGen = nextGeneration
 				afterWrite()
 			})
@@ -434,36 +477,13 @@ func startDatasetAutosave() {
 	// unchanged — used when the encryption mode flips (passcode set/removed) so the
 	// at-rest copy migrates plaintext↔envelope right away instead of waiting for the
 	// next edit (C45).
-	resaveDataset = func() {
+	force := func() {
+		forceVersion++
 		last = ""
+		hasSavedRevision = false
 		save()
 	}
-	// Expose an immediate-persist trigger to screens that can't reach this
-	// unexported closure — used to flush a freshly loaded sample before a fast
-	// reload can race the ticker and lose it (C2).
-	uistate.CapturePersistNow(resaveDataset)
-	// Teardown: run any settings persist still coalescing in its debounce window
-	// before the dataset save, so nothing is left pending on a page that is about
-	// to stop existing. RH-PERSIST1's primary guarantee is the leading-edge persist
-	// in uistate.flushSettingsPersist — this is the burst safety net.
-	cb := js.FuncOf(func(js.Value, []js.Value) any {
-		uistate.FlushPendingSettingsPersist()
-		save()
-		return nil
-	})
-	js.Global().Call("addEventListener", "pagehide", cb)
-	js.Global().Call("addEventListener", "visibilitychange", cb)
-	// Persist once immediately so a freshly seeded/imported dataset reaches the
-	// (async) IndexedDB store right after boot — otherwise a reload within the 4s
-	// tick could race the write and lose the seed. Subsequent saves run on the ticker.
-	save()
-	go func() {
-		for {
-			time.Sleep(4 * time.Second)
-			save()
-		}
-	}()
-	go watchDataRevision(save)
+	return save, force
 }
 
 // dataRevisionTick is how often the watcher looks for new edits. It is also the

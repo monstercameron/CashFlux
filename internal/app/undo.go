@@ -25,6 +25,9 @@ var lastUndoSnap history.Snapshot
 // recording the restoration itself as a new undo step.
 var applyingUndo bool
 
+var lastUndoCaptureApp *appstate.App
+var lastUndoCaptureRev uint64
+
 // initUndo captures the baseline snapshot immediately after the dataset has
 // been hydrated from localStorage (or seeded).  Call once, after hydrateDataset.
 func initUndo() {
@@ -34,6 +37,7 @@ func initUndo() {
 		return
 	}
 	lastUndoSnap = snap
+	lastUndoCaptureApp, lastUndoCaptureRev = appstate.Default, appstate.Default.Rev()
 }
 
 // captureUndoPoint diffs the current dataset against the last recorded snapshot
@@ -46,6 +50,9 @@ func initUndo() {
 // applyingUndo) so the restoration doesn't become its own undo step.
 func captureUndoPoint() {
 	if applyingUndo {
+		return
+	}
+	if app := appstate.Default; app != nil && lastUndoCaptureApp == app && lastUndoCaptureRev == app.Rev() {
 		return
 	}
 	snap, err := currentSnapshot()
@@ -62,12 +69,14 @@ func captureUndoPoint() {
 	// baseline instead: not undoable, not shown, no phantom entry.
 	cs = filterCapturedChanges(cs)
 	lastUndoSnap = snap // absorb everything (incl. the dropped derived changes)
+	lastUndoCaptureApp, lastUndoCaptureRev = appstate.Default, appstate.Default.Rev()
 	if cs.IsEmpty() {
 		return
 	}
 	undoStack.Push(cs)
 	// Feed the audit log so the Activity timeline shows a per-change entry (C78).
 	RecordAuditPoint(cs)
+	lastUndoCaptureRev = appstate.Default.Rev()
 }
 
 // capturedSkipCollections are dataset collections that mutate as DERIVED UI
@@ -190,16 +199,15 @@ func applySnapshot(newSnap history.Snapshot) bool {
 		return false
 	}
 	lastUndoSnap = newSnap
+	lastUndoCaptureApp, lastUndoCaptureRev = appstate.Default, appstate.Default.Rev()
 	uistate.BumpDataRevision() // re-render screens after the dataset is replaced
 	return true
 }
 
-// currentSnapshot exports the dataset and converts it to a history.Snapshot.
-// It uses ExportJSON (non-redacted) so the full round-trip is lossless; the
-// OpenAI key is included in undo snapshots but never written to localStorage
-// (the autosave calls ExportJSONRedacted separately).
+// currentSnapshot converts the shared credential-free export into an undo
+// snapshot. Device credentials are outside dataset state and never enter undo.
 func currentSnapshot() (history.Snapshot, error) {
-	data, err := appstate.Default.ExportJSON()
+	data, err := localDatasetExport(appstate.Default)
 	if err != nil {
 		return nil, err
 	}

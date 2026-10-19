@@ -77,6 +77,7 @@ func txnTableSortKey(registerActive bool, key string) string {
 // specs are present and the engine renders each. The receipt
 // preview is a modal overlay (like the edit host), not a bento tile.
 func Transactions() ui.Node {
+	defer txnPerfStart("page")()
 	app := appstate.Default
 	if app == nil {
 		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("common.notReady"))})
@@ -120,13 +121,16 @@ func Transactions() ui.Node {
 	selScope.Page, selScope.PageSize = 0, 0
 	selScope.Sort, selScope.Dir = "", ""
 	lastSelScope := ui.UseState(selScope)
-	if lastSelScope.Get() != selScope {
-		lastSelScope.Set(selScope)
-		if len(selAtom.Get()) > 0 {
-			selAtom.Set(map[string]bool{})
-			selAnchorAtom.Set("")
+	ui.UseEffect(func() func() {
+		if lastSelScope.Get() != selScope {
+			lastSelScope.Set(selScope)
+			if len(selAtom.Get()) > 0 {
+				selAtom.Set(map[string]bool{})
+				selAnchorAtom.Set("")
+			}
 		}
-	}
+		return nil
+	}, selScope)
 
 	// Register mode (TX12): when the filter scopes to exactly one account, the
 	// running-balance column is available; while it's ON the ledger is forced into
@@ -167,8 +171,9 @@ func Transactions() ui.Node {
 	shown := ui.UseMemo(func() []domain.Transaction {
 		return deriveTxnRows(transactions, derivedFilter, txnfilter.Labels{
 			Account: accName, Category: catName, Payee: resolver.Resolve,
+			BaseCurrency: base, ToBase: func(m money.Money) (money.Money, error) { return rates.Convert(m, base) },
 		}, resolver.HasLearned, resolver.Resolve)
-	}, dataRevision, derivedFilter)
+	}, app, app.Rev(), dataRevision, derivedFilter)
 
 	// The engine render context: the live data every tile body reads from (§6). The
 	// SCOPED slices are the filtered ledger, so the table frame and the toolbar/bulk
@@ -338,12 +343,17 @@ type txnTableProps struct {
 // bulk tiles stay in step. Rows drill into the edit modal; the leading checkbox
 // toggles bulk selection; the paperclip opens a receipt.
 func txnTableWidget(props txnTableProps) ui.Node {
+	defer txnPerfStart("table")()
+	categoryTarget := ui.UseState("")
+	chooseCategory := ui.UseCallback(func(id string) { categoryTarget.Set(id) }, props.App)
 	// Subscribe to the data revision: link changes (XC1/XC2 group/pair badges)
 	// mutate no row content, so without this the memoized table body renders
 	// stale badges after an ungroup/unpair.
 	txnDataRev := uistate.UseDataRevision().Get()
 	filterAtom := uistate.UseTxFilter()
 	f := filterAtom.Get()
+	memberLens := uistate.UseMemberLens()
+	f, _ = f.WithOwnerLens(memberLens)
 	// C628: true while a typed search is still inside its debounce window, i.e.
 	// while the rows this table is about to render answer the previous query.
 	searchPending := uistate.UseTxnSearchPending().Get()
@@ -398,12 +408,19 @@ func txnTableWidget(props txnTableProps) ui.Node {
 		// "did the criteria change" but "did anything VISIBLE change", which is the
 		// reported situation exactly: a search already narrowed to the one row that
 		// carries the tag, so the chip is the only difference and the count is
-		// identical. Two filter passes on a click is cheap next to a control the
-		// user has learned not to trust.
-		if txnfilter.ScopeChanged(prev, next) &&
-			len(txnfilter.Apply(props.App.Transactions(), next)) !=
-				len(txnfilter.Apply(props.App.Transactions(), prev)) {
-			return
+		// identical. Reuse the current lensed result count and derive only the next
+		// scope, using the same alias and currency context as the displayed rows.
+		if txnfilter.ScopeChanged(prev, next) {
+			effective, _ := next.WithOwnerLens(memberLens)
+			settings := props.App.Settings()
+			rates := currency.Rates{Base: props.Base, Rates: settings.FXRates}
+			rows, _ := txnfilter.ApplyWithLabelsChecked(props.App.Transactions(), effective, txnfilter.Labels{
+				Payee: props.App.PayeeResolver().Resolve, BaseCurrency: props.Base,
+				ToBase: func(m money.Money) (money.Money, error) { return rates.Convert(m, props.Base) },
+			})
+			if len(rows) != len(props.Shown) {
+				return
+			}
 		}
 		uistate.PostNotice(uistate.T("transactions.tagFilterApplied", tag), false)
 	}
@@ -414,17 +431,19 @@ func txnTableWidget(props txnTableProps) ui.Node {
 	// still shows the TRUE figure. A multi-currency account (whose fold errors) leaves
 	// runBal nil, and the column is simply not shown. (regID/registerActive are
 	// resolved above, where they also force the header's sort to match the rows.)
-	var runBal map[string]money.Money
-	if registerActive {
-		for _, a := range props.App.Accounts() {
-			if a.ID == regID {
-				if m, err := ledger.RegisterBalances(a, props.App.Transactions()); err == nil {
-					runBal = m
+	runBal := ui.UseMemo(func() map[string]money.Money {
+		if registerActive {
+			for _, a := range props.App.Accounts() {
+				if a.ID == regID {
+					if m, err := ledger.RegisterBalances(a, props.App.Transactions()); err == nil {
+						return m
+					}
+					break
 				}
-				break
 			}
 		}
-	}
+		return nil
+	}, props.App, props.App.Rev(), regID, registerActive)
 	showBalance := runBal != nil
 
 	setPage := func(p int) { setTxFilterOn(filterAtom, func(x *uistate.TxFilter) { x.Page = p }) }
@@ -674,10 +693,13 @@ func txnTableWidget(props txnTableProps) ui.Node {
 
 	// Resolve a transaction's attachments by id so the row paperclip can open a
 	// preview (the frame doesn't carry attachment refs).
-	txByID := make(map[string]domain.Transaction, len(props.Shown))
-	for _, t := range props.Shown {
-		txByID[t.ID] = t
-	}
+	txByID := ui.UseMemo(func() map[string]domain.Transaction {
+		byID := make(map[string]domain.Transaction, len(props.Shown))
+		for _, t := range props.Shown {
+			byID[t.ID] = t
+		}
+		return byID
+	}, props.App, props.App.Rev(), txnDataRev, f)
 	// Payee-alias resolver (TX1): raw payee → clean display name (learned alias →
 	// rule pack → raw). Applied at DISPLAY only; the raw payee stays on the txn.
 	payeeResolver := props.App.PayeeResolver()
@@ -811,7 +833,9 @@ func txnTableWidget(props txnTableProps) ui.Node {
 	// features' on/off state; the settings value is loaded once and shared
 	// with the suggestion gate below (it was loaded twice per render).
 	smartSettings := uistate.LoadSmartSettings()
-	smartFlags := txnRowFlagsMemo(props.App, txnDataRev, smartSettings, uistate.LoadPrefs().WeekStartWeekday())
+	finishFlags := txnPerfStart("flags")
+	smartFlags := useTxnRowFlags(props.App, txnDataRev, smartSettings, uistate.LoadPrefs().WeekStartWeekday())
+	finishFlags()
 
 	sel := selAtom.Get()
 
@@ -819,11 +843,13 @@ func txnTableWidget(props txnTableProps) ui.Node {
 	// decide in O(1) whether to show the spending-trend chip without rescanning the
 	// ledger on every sort / select / pagination re-render (the full stats still compute
 	// lazily only when a chip is opened).
-	merchantCounts := merchantChargeCountsMemo(props.App, txnDataRev)
+	finishMerchants := txnPerfStart("merchants")
+	merchantCounts := merchantChargeCountsMemo(props.App, int(props.App.Rev()))
+	finishMerchants()
 	// C579: which rows carry a category no person has confirmed, and which rule (if
 	// any) accounts for it. Classified once for the whole view — rows re-render on
 	// selection, sort and pagination, and none of those change the answer.
-	autoProv := txnAutoByID(props.App, props.Shown, props.App.Rules(), txnDataRev)
+	provenanceRules := props.App.Rules()
 	// The trend chips are a secondary affordance, so mount them just AFTER the table has
 	// painted (useAfterSettle) — this keeps the interactive-row cost off the initial
 	// route-settle so the ledger paints as fast as before, then the chips fade in.
@@ -869,7 +895,7 @@ func txnTableWidget(props txnTableProps) ui.Node {
 	// Keep callback identities stable across selection/preview renders. These hooks
 	// live at the table component's fixed level (never inside the variable row loop).
 	openFollowUps = ui.UseCallback(openFollowUps, nav)
-	onTagFilter = ui.UseCallback(onTagFilter, props.App, txnDataRev)
+	onTagFilter = ui.UseCallback(onTagFilter, props.App, props.App.Rev(), txnDataRev, f, memberLens)
 	toggleSelect = ui.UseCallback(toggleSelect, f, txnDataRev)
 	openEdit = ui.UseCallback(openEdit, props.App)
 	openSplit = ui.UseCallback(openSplit, props.App)
@@ -946,6 +972,7 @@ func txnTableWidget(props txnTableProps) ui.Node {
 		}
 		// C672 suspect-transfer mark, answered for this rendered row only (R3P).
 		_, suspectTransfer := txnclassify.Suspected(rowTxn, catName[rowTxn.CategoryID])
+		autoProv := txnAutoByID(props.App, []domain.Transaction{rowTxn}, provenanceRules, int(props.App.Rev()))
 		autoWhy := autoMarkWhy(autoProv[rid], srcCol.Str(i))
 		if match := autoProv[rid].RuleMatch; match != nil {
 			if phrase := rulePhrase(*match); phrase != "" {
@@ -1052,6 +1079,7 @@ func txnTableWidget(props txnTableProps) ui.Node {
 		r.OnOpenFollowUps = openFollowUps
 		r.OnCreateRule = createRuleFromTxn
 		r.OnDelete = deleteRow
+		r.OnChooseCategory = chooseCategory
 		return ui.CreateElement(txnFrameRow, rowPropsCache.Get().reuse(r))
 	}
 
@@ -1076,7 +1104,7 @@ func txnTableWidget(props txnTableProps) ui.Node {
 			ids = append(ids, idCol.Str(i))
 		}
 		return ids
-	}, props.App, txnDataRev, f, virtualize, vStart, vEnd)
+	}, props.App, props.App.Rev(), txnDataRev, f, virtualize, vStart, vEnd)
 
 	var tableBody ui.Node
 	switch {
@@ -1198,7 +1226,8 @@ func txnTableWidget(props txnTableProps) ui.Node {
 	}
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "txn-table", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
-		Body: Div(Attr("role", "region"), Attr("aria-label", uistate.T("txw1.tableRegion")), body),
+		Body: Div(Attr("role", "region"), Attr("aria-label", uistate.T("txw1.tableRegion")), body,
+			ui.CreateElement(txnPageCategoryPicker, txnPageCategoryPickerProps{App: props.App, ID: categoryTarget.Get(), Close: func() { categoryTarget.Set("") }})),
 	})
 }
 
@@ -1212,6 +1241,7 @@ func txnTableWidget(props txnTableProps) ui.Node {
 var txnRowFlagsMemoState struct {
 	app       *appstate.App
 	rev       int
+	storeRev  uint64
 	dupeOn    bool
 	spikeOn   bool
 	weekStart time.Weekday
@@ -1223,11 +1253,16 @@ func txnRowFlagsMemo(app *appstate.App, rev int, settings smart.Settings, weekSt
 	dupeOn := settings.IsEnabled(dupeFlagCode) && !settings.IsMuted(dupeFlagCode)
 	spikeOn := settings.IsEnabled(spikeFlagCode) && !settings.IsMuted(spikeFlagCode)
 	m := &txnRowFlagsMemoState
-	if m.valid && m.app == app && m.rev == rev && m.dupeOn == dupeOn && m.spikeOn == spikeOn && m.weekStart == weekStart {
+	storeRev := uint64(0)
+	if app != nil {
+		storeRev = app.Rev()
+	}
+	if m.valid && m.app == app && m.rev == rev && m.storeRev == storeRev && m.dupeOn == dupeOn && m.spikeOn == spikeOn && m.weekStart == weekStart {
 		return m.value
 	}
 	value := buildTxnRowFlags(app, settings, weekStart)
 	m.app, m.rev, m.dupeOn, m.spikeOn, m.weekStart, m.value, m.valid = app, rev, dupeOn, spikeOn, weekStart, value, true
+	m.storeRev = storeRev
 	return value
 }
 
@@ -1236,15 +1271,20 @@ func txnRowFlagsMemo(app *appstate.App, rev int, settings smart.Settings, weekSt
 // the filtered page), collecting only the ids some group actually names.
 // Memoised per app and data revision; link writes bump the revision.
 var txnGroupMembersMemoState struct {
-	app   *appstate.App
-	rev   int
-	value map[string]domain.Transaction
-	valid bool
+	app      *appstate.App
+	rev      int
+	storeRev uint64
+	value    map[string]domain.Transaction
+	valid    bool
 }
 
 func txnGroupMembersMemo(app *appstate.App, rev int, groupByTxn map[string]domain.TxnLink) map[string]domain.Transaction {
 	m := &txnGroupMembersMemoState
-	if m.valid && m.app == app && m.rev == rev {
+	storeRev := uint64(0)
+	if app != nil {
+		storeRev = app.Rev()
+	}
+	if m.valid && m.app == app && m.rev == rev && m.storeRev == storeRev {
 		return m.value
 	}
 	var all []domain.Transaction
@@ -1253,6 +1293,7 @@ func txnGroupMembersMemo(app *appstate.App, rev int, groupByTxn map[string]domai
 	}
 	value := collectTxnGroupMembers(groupByTxn, all)
 	m.app, m.rev, m.value, m.valid = app, rev, value, true
+	m.storeRev = storeRev
 	return value
 }
 
@@ -1288,7 +1329,8 @@ func txnRowActionName(action, description, date, amount string) string {
 // Display strings are pre-formatted; the callbacks are plain funcs (not hooks) so
 // they pass safely through MapKeyed. The row owns its own interaction hooks.
 type txnFrameRowProps struct {
-	ID string
+	ID               string
+	OnChooseCategory func(string)
 	// CategoryPickerTarget is normally empty (the overlay portals to body); a
 	// component test may supply its fixture root as the portal target.
 	CategoryPickerTarget ui.PortalTarget
@@ -1485,6 +1527,7 @@ func sameTxnFrameRowValues(a, b txnFrameRowProps) bool {
 	a.OnUnpair, b.OnUnpair = nil, nil
 	a.OnUngroup, b.OnUngroup = nil, nil
 	a.OnUnlinkBill, b.OnUnlinkBill = nil, nil
+	a.OnChooseCategory, b.OnChooseCategory = nil, nil
 	return reflect.DeepEqual(a, b)
 }
 
@@ -1518,8 +1561,15 @@ func txnTagChip(props txnTagChipProps) ui.Node {
 }
 
 func txnFrameRow(props *txnFrameRowProps) ui.Node {
+	defer txnPerfStart("row")()
 	pickerOpen := ui.UseState(false)
-	openCategoryPicker := func(ui.Event) { pickerOpen.Set(true) }
+	openCategoryPicker := func(ui.Event) {
+		if props.OnChooseCategory != nil {
+			props.OnChooseCategory(props.ID)
+			return
+		}
+		pickerOpen.Set(true)
+	}
 	applyManualCategory := func(categoryID string) {
 		pickerOpen.Set(false)
 		applyTxnManualCategory(props.ID, categoryID)
@@ -1696,7 +1746,7 @@ func txnFrameRow(props *txnFrameRowProps) ui.Node {
 		categoryCellArgs = append(categoryCellArgs, Attr("title", props.Category))
 	}
 	categoryCellArgs = append(categoryCellArgs,
-		Span(css.Class("td-cat-inner"),
+		Span(css.Class("td-cat-inner"), Style(map[string]string{"min-height": "1.5rem", "width": "100%"}),
 			If(props.IsTransfer, Span(css.Class("txn-transfer-category"),
 				Attr("data-testid", "txn-transfer-category"),
 				Attr("title", uistate.T("r4c.transferCounterparty", props.TransferWith)),
@@ -1816,15 +1866,19 @@ func txnFrameRow(props *txnFrameRowProps) ui.Node {
 	if pickerTarget.Selector == "" && pickerTarget.Node == nil {
 		pickerTarget = ui.PortalTarget{Selector: "body"}
 	}
-	return Fragment(row, If(pickerOpen.Get(), ui.Portal(ui.PortalProps{
-		Target: pickerTarget,
-		Child: CategoryPicker(CategoryPickerProps{
-			Kind:     txnCategoryKind(props.AmountMoney),
-			Selected: props.CategoryID,
-			OnPick:   applyManualCategory,
-			OnClose:  func() { pickerOpen.Set(false) },
-		}),
-	})))
+	var picker ui.Node
+	if pickerOpen.Get() {
+		picker = ui.Portal(ui.PortalProps{
+			Target: pickerTarget,
+			Child: ui.CreateElement(CategoryPicker, CategoryPickerProps{
+				Kind:     txnCategoryKind(props.AmountMoney),
+				Selected: props.CategoryID,
+				OnPick:   applyManualCategory,
+				OnClose:  func() { pickerOpen.Set(false) },
+			}),
+		})
+	}
+	return Fragment(row, picker)
 }
 
 type txnCategoryChooseProps struct {
