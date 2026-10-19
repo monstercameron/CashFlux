@@ -20,6 +20,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/browserstore"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/prefs"
+	"github.com/monstercameron/CashFlux/internal/rpcworker"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/v5/state"
@@ -28,6 +29,40 @@ import (
 )
 
 type enc39Transport struct{ account string }
+
+// enc39Page gives each ENC39 test its own browser storage, document, and
+// services-worker test seams. The worker protocol stub mirrors ENC35 so the
+// session bootstrap never tries to construct a real worker in Node.
+func enc39Page(t *testing.T) {
+	t.Helper()
+	solp22Storage(t)
+	enc31FakeDocument(t)
+	document := js.Global().Get("document")
+	document.Set("baseURI", "https://app.test/")
+	oldWorker, oldRPC := js.Global().Get("Worker"), js.Global().Get("__enc35RPC")
+	js.Global().Call("eval", `globalThis.__enc35RPC={calls:[],error:"",next:1};
+ globalThis.Worker=class {
+ constructor(){setTimeout(()=>this.onmessage({data:{version:2,kind:"ready"}}),0)}
+ postMessage(m){
+  if(m.kind!=="unary")return;
+  const cfg=globalThis.__enc35RPC;cfg.calls.push(m);
+  let reply;
+  if(cfg.error)reply={version:2,kind:"failure",id:m.id,error:{code:cfg.error,message:"mock failure",mayHaveApplied:false}};
+  else if(m.method.endsWith("/RefreshToken")){let n=cfg.next++;reply={version:2,kind:"reply",id:m.id,payload:JSON.stringify({accessToken:"enc35-access-"+n,refreshToken:"enc35-refresh-"+n,expiresInSeconds:900})}}
+  else reply={version:2,kind:"reply",id:m.id,payload:"{}"};
+  setTimeout(()=>this.onmessage({data:reply}),0);
+ }
+ };`)
+	if _, err := rpcworker.StartDefault(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		browserstore.Barrier()
+		enc35ResetPage()
+		js.Global().Set("Worker", oldWorker)
+		js.Global().Set("__enc35RPC", oldRPC)
+	})
+}
 
 func (s enc39Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	var body string
@@ -56,21 +91,15 @@ func enc39WaitUntil(t *testing.T, condition func() bool, message string) {
 }
 
 func TestENC39ActivationHandoffSurvivesReloadWithoutPrefsToken(t *testing.T) {
-	if !browserstore.Durable() {
-		t.Fatal("ENC31 IndexedDB/Web Crypto fixture is unavailable")
-	}
+	enc39Page(t)
 	oldTransport, oldLocation, oldHistory := http.DefaultTransport, js.Global().Get("location"), js.Global().Get("history")
 	http.DefaultTransport = enc39Transport{account: "enc39-handoff-account"}
 	js.Global().Set("location", map[string]any{"origin": "https://app.test", "href": "https://app.test/?activate=123456", "search": "?activate=123456"})
 	js.Global().Set("history", map[string]any{"replaceState": js.Global().Get("Function").New("return function(){}")})
-	oldDoc := js.Global().Get("document")
-	enc31FakeDocument(t)
 	t.Cleanup(func() {
 		http.DefaultTransport = oldTransport
 		js.Global().Set("location", oldLocation)
 		js.Global().Set("history", oldHistory)
-		js.Global().Set("document", oldDoc)
-		enc35ResetPage()
 	})
 	if code := handoffCodeFromURL(); code != "123456" {
 		t.Fatalf("activation code = %q", code)
@@ -123,14 +152,10 @@ func TestENC39ActivationHandoffSurvivesReloadWithoutPrefsToken(t *testing.T) {
 }
 
 func TestENC39EraseRevokeIsBestEffortAndLocalCredentialDeleteIsRequired(t *testing.T) {
-	if !browserstore.Durable() {
-		t.Fatal("ENC31 IndexedDB/Web Crypto fixture is unavailable")
-	}
+	enc39Page(t)
 	oldTransport, oldDocument, oldLocation := http.DefaultTransport, js.Global().Get("document"), js.Global().Get("location")
 	http.DefaultTransport = enc39Transport{account: "enc39-wipe-account"}
-	enc31FakeDocument(t)
 	document := js.Global().Get("document")
-	document.Set("baseURI", "https://app.test/")
 	document.Set("querySelector", js.Global().Get("Function").New("return {}"))
 	reloads := make(chan struct{}, 2)
 	reload := js.FuncOf(func(js.Value, []js.Value) any { reloads <- struct{}{}; return nil })
@@ -140,7 +165,6 @@ func TestENC39EraseRevokeIsBestEffortAndLocalCredentialDeleteIsRequired(t *testi
 		http.DefaultTransport = oldTransport
 		js.Global().Set("document", oldDocument)
 		js.Global().Set("location", oldLocation)
-		enc35ResetPage()
 	})
 	scope := enc33Scope(t, "enc39-wipe-server", "enc39-wipe-account")
 	pair := backendrpc.TokenPairResponse{AccessToken: "enc39-wipe-access", RefreshToken: "enc39-wipe-refresh", ExpiresInSeconds: 900}
@@ -245,9 +269,7 @@ func TestENC39EraseRevokeIsBestEffortAndLocalCredentialDeleteIsRequired(t *testi
 }
 
 func TestENC39RecoveryPersistenceFailureRetainsPairAndCode(t *testing.T) {
-	if !browserstore.Durable() {
-		t.Fatal("ENC31 IndexedDB/Web Crypto fixture is unavailable")
-	}
+	enc39Page(t)
 	pr := prefs.Default()
 	pr.ServerURL = "https://sync.test"
 	oldTransport := http.DefaultTransport
