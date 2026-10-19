@@ -22,12 +22,22 @@ func quarantine(store Store, raw []byte, reason string, cause error) error {
 // Engine owns one workspace state in one scope. Callers serialize Commit and
 // Compact for the lifetime of this instance.
 type Engine struct {
-	store     Store
-	scope     Scope
-	workspace string
-	key       *keyring.WorkspaceKey
-	state     *changes.State
-	ready     bool
+	store      Store
+	scope      Scope
+	workspace  string
+	key        *keyring.WorkspaceKey
+	state      *changes.State
+	ready      bool
+	bootReport BootReport
+}
+
+// BootReport summarizes local log entries rejected during or before the most
+// recent successful Boot. IDs are change IDs, with positions available in
+// Records for precise recovery and support.
+type BootReport struct {
+	RejectedCount int
+	RejectedIDs   []string
+	Records       []RejectedRecord
 }
 
 // NewEngine constructs an engine for one fixed scope/workspace.
@@ -79,34 +89,83 @@ func (e *Engine) Boot(wdk *keyring.WorkspaceKey) error {
 	if err != nil {
 		return fmt.Errorf("read local log: %w", err)
 	}
+	e.bootReport = BootReport{}
 	for _, entry := range entries {
 		if entry.WorkspaceID != e.workspace {
 			continue
 		}
-		quarantined, checkErr := e.store.IsQuarantined(entry.Sealed)
-		if checkErr != nil {
-			return fmt.Errorf("check local change quarantine: %w", checkErr)
-		}
-		if quarantined {
+		if entry.Rejected {
+			e.addRejection(rejectionFor(e.scope, entry, entry.RejectReason))
 			continue
 		}
 		plain, openErr := keyring.Open(key, keyring.AAD(e.scope, e.workspace, entry.ChangeID, wdk.Version()), entry.Sealed)
 		if openErr != nil {
-			return quarantine(e.store, entry.Sealed, "change authentication failed", fmt.Errorf("open local change %s: %w", entry.ChangeID, openErr))
+			if err := e.rejectEntry(entry, "change authentication failed"); err != nil {
+				return err
+			}
+			continue
 		}
 		batch, parseErr := changes.Unmarshal(plain)
 		if parseErr != nil {
-			return quarantine(e.store, entry.Sealed, "change decode failed", fmt.Errorf("decode local change %s: %w", entry.ChangeID, parseErr))
+			if err := e.rejectEntry(entry, "change decode failed"); err != nil {
+				return err
+			}
+			continue
 		}
 		if batch.ChangeID != entry.ChangeID || batch.WorkspaceID != e.workspace || batch.Scope != (changes.Scope{ServerID: e.scope.ServerID, AccountID: e.scope.AccountID}) {
-			return quarantine(e.store, entry.Sealed, "change envelope scope mismatch", fmt.Errorf("change envelope mismatch: %w", changes.ErrScopeMismatch))
+			if err := e.rejectEntry(entry, "change envelope scope mismatch"); err != nil {
+				return err
+			}
+			continue
 		}
 		if applyErr := e.state.Apply(batch); applyErr != nil {
-			return quarantine(e.store, entry.Sealed, "change apply failed", fmt.Errorf("replay local change %s: %w", entry.ChangeID, applyErr))
+			if err := e.rejectEntry(entry, "change apply failed"); err != nil {
+				return err
+			}
+			continue
+		}
+	}
+	rejected, err := e.store.RejectedLogEntries()
+	if err != nil {
+		return fmt.Errorf("load rejected local changes: %w", err)
+	}
+	e.bootReport = BootReport{}
+	for _, record := range rejected {
+		if record.WorkspaceID == e.workspace {
+			e.addRejection(record)
 		}
 	}
 	e.ready = true
 	return nil
+}
+
+func (e *Engine) rejectEntry(entry LogEntry, reason string) error {
+	record, err := e.store.RejectLogEntry(entry.LocalSeq, reason)
+	if err != nil {
+		return fmt.Errorf("reject local change %s at sequence %d: %w", entry.ChangeID, entry.LocalSeq, err)
+	}
+	e.addRejection(record)
+	return nil
+}
+
+func (e *Engine) addRejection(record RejectedRecord) {
+	for _, existing := range e.bootReport.Records {
+		if existing.LocalSeq == record.LocalSeq {
+			return
+		}
+	}
+	e.bootReport.Records = append(e.bootReport.Records, record)
+	e.bootReport.RejectedIDs = append(e.bootReport.RejectedIDs, record.ChangeID)
+	e.bootReport.RejectedCount = len(e.bootReport.Records)
+}
+
+// BootReport returns the rejected local log records observed at the most
+// recent Boot. A nonzero count requires an explicit recovery or user notice.
+func (e *Engine) BootReport() BootReport {
+	out := e.bootReport
+	out.Records = append([]RejectedRecord(nil), out.Records...)
+	out.RejectedIDs = append([]string(nil), out.RejectedIDs...)
+	return out
 }
 
 // Commit durably appends an encrypted batch before applying it in memory.

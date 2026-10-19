@@ -164,12 +164,26 @@ type Meta struct {
 
 // LogEntry is an encrypted change batch. ServerSeq zero means pending.
 type LogEntry struct {
-	LocalSeq    uint64      `json:"localSeq"`
-	ChangeID    string      `json:"changeId"`
-	WorkspaceID string      `json:"workspaceId"`
-	Sealed      []byte      `json:"sealed"`
-	ServerSeq   uint64      `json:"serverSeq"`
-	CreatedHLC  changes.HLC `json:"createdHlc"`
+	LocalSeq     uint64      `json:"localSeq"`
+	ChangeID     string      `json:"changeId"`
+	WorkspaceID  string      `json:"workspaceId"`
+	Sealed       []byte      `json:"sealed"`
+	ServerSeq    uint64      `json:"serverSeq"`
+	CreatedHLC   changes.HLC `json:"createdHlc"`
+	Rejected     bool        `json:"rejected,omitempty"`
+	RejectReason string      `json:"rejectReason,omitempty"`
+}
+
+// RejectedRecord identifies one rejected log position without relying on
+// ciphertext equality, which may also occur on unrelated remote payloads.
+type RejectedRecord struct {
+	Scope       Scope  `json:"scope"`
+	WorkspaceID string `json:"workspaceId"`
+	ChangeID    string `json:"changeId"`
+	LocalSeq    uint64 `json:"localSeq"`
+	ServerSeq   uint64 `json:"serverSeq"`
+	SHA256      string `json:"sha256"`
+	Reason      string `json:"reason"`
 }
 
 // Snapshot is a sealed workspace state and the log positions it covers.
@@ -190,6 +204,8 @@ type Store interface {
 	Append(workspaceID, changeID string, sealed []byte, created changes.HLC) (uint64, error)
 	Pending(limit int) ([]LogEntry, error)
 	MarkAcked(localSeq, serverSeq uint64) error
+	RejectLogEntry(localSeq uint64, reason string) (RejectedRecord, error)
+	RejectedLogEntries() ([]RejectedRecord, error)
 	AppendRemote(workspaceID, changeID string, sealed []byte, serverSeq uint64, created changes.HLC) (uint64, error)
 	IsQuarantined(raw []byte) (bool, error)
 	Since(localSeq uint64) ([]LogEntry, error)
@@ -203,9 +219,10 @@ type Store interface {
 }
 
 type quarantineEntry struct {
-	Raw    []byte
-	Reason string
-	At     time.Time
+	Raw      []byte
+	Reason   string
+	At       time.Time
+	Rejected *RejectedRecord `json:"rejected,omitempty"`
 }
 
 // MemStore is a concurrency-safe store for native use and conformance tests.
@@ -319,7 +336,7 @@ func (m *MemStore) Pending(limit int) ([]LogEntry, error) {
 	}
 	out := []LogEntry{}
 	for _, x := range m.log {
-		if x.ServerSeq == 0 {
+		if x.ServerSeq == 0 && !x.Rejected {
 			out = append(out, copyEntry(x))
 			if len(out) == limit {
 				break
@@ -347,6 +364,55 @@ func (m *MemStore) MarkAcked(seq, server uint64) error {
 		}
 	}
 	return ErrNotFound
+}
+
+// RejectLogEntry marks exactly one log position rejected and records its
+// ciphertext digest and scope metadata in quarantine atomically.
+func (m *MemStore) RejectLogEntry(seq uint64, reason string) (RejectedRecord, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if err := m.ready(); err != nil {
+		return RejectedRecord{}, err
+	}
+	if reason == "" {
+		return RejectedRecord{}, ErrInvalid
+	}
+	for i := range m.log {
+		entry := &m.log[i]
+		if entry.LocalSeq != seq {
+			continue
+		}
+		if entry.Rejected {
+			return rejectionFor(m.scope, *entry, entry.RejectReason), nil
+		}
+		record := rejectionFor(m.scope, *entry, reason)
+		entry.Rejected = true
+		entry.RejectReason = reason
+		m.quarantine = append(m.quarantine, quarantineEntry{Raw: clone(entry.Sealed), Reason: reason, At: time.Now().UTC(), Rejected: &record})
+		return record, nil
+	}
+	return RejectedRecord{}, ErrNotFound
+}
+
+// RejectedLogEntries returns a stable list ordered by local sequence.
+func (m *MemStore) RejectedLogEntries() ([]RejectedRecord, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if err := m.ready(); err != nil {
+		return nil, err
+	}
+	var out []RejectedRecord
+	for _, entry := range m.log {
+		if entry.Rejected {
+			out = append(out, rejectionFor(m.scope, entry, entry.RejectReason))
+		}
+	}
+	return out, nil
+}
+
+func rejectionFor(scope Scope, entry LogEntry, reason string) RejectedRecord {
+	digest := sha256.Sum256(entry.Sealed)
+	return RejectedRecord{Scope: scope, WorkspaceID: entry.WorkspaceID, ChangeID: entry.ChangeID, LocalSeq: entry.LocalSeq, ServerSeq: entry.ServerSeq, SHA256: hex.EncodeToString(digest[:]), Reason: reason}
 }
 func (m *MemStore) AppendRemote(w, id string, b []byte, server uint64, h changes.HLC) (uint64, error) {
 	m.mu.Lock()
@@ -409,7 +475,7 @@ func (m *MemStore) Compact(w string, b []byte, local, server uint64) error {
 	m.snapshots[w] = s
 	kept := m.log[:0]
 	for _, x := range m.log {
-		if x.WorkspaceID == w && x.LocalSeq <= local && x.ServerSeq != 0 {
+		if x.WorkspaceID == w && x.LocalSeq <= local && x.ServerSeq != 0 && !x.Rejected {
 			continue
 		}
 		kept = append(kept, x)
@@ -459,7 +525,7 @@ func (m *MemStore) Quarantine(b []byte, r string) error {
 	if r == "" {
 		return ErrInvalid
 	}
-	m.quarantine = append(m.quarantine, quarantineEntry{clone(b), r, time.Now().UTC()})
+	m.quarantine = append(m.quarantine, quarantineEntry{Raw: clone(b), Reason: r, At: time.Now().UTC()})
 	return nil
 }
 

@@ -956,7 +956,7 @@ func (s *IDBStore) Pending(limit int) ([]LogEntry, error) {
 	}
 	out := []LogEntry{}
 	for _, entry := range entries {
-		if entry.ServerSeq == 0 {
+		if entry.ServerSeq == 0 && !entry.Rejected {
 			out = append(out, entry)
 			if len(out) == limit {
 				break
@@ -1033,6 +1033,102 @@ func (s *IDBStore) MarkAcked(localSeq, serverSeq uint64) error {
 	return w.wait()
 }
 
+// RejectLogEntry atomically marks a log position rejected and copies its
+// ciphertext plus scope-bound metadata into quarantine.
+func (s *IDBStore) RejectLogEntry(localSeq uint64, reason string) (RejectedRecord, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.readyLocked(); err != nil {
+		return RejectedRecord{}, err
+	}
+	if reason == "" {
+		return RejectedRecord{}, ErrInvalid
+	}
+	tx, w, err := s.newTx([]string{idbStoreMeta, idbStoreLog, idbStoreQuarantine}, "readwrite")
+	if err != nil {
+		return RejectedRecord{}, err
+	}
+	value, found, err := getInTx(tx, idbStoreLog, float64(localSeq))
+	if err != nil {
+		abortTx(tx, w)
+		return RejectedRecord{}, err
+	}
+	if !found {
+		abortTx(tx, w)
+		return RejectedRecord{}, ErrNotFound
+	}
+	entry, err := decodeLogRecord(value, localSeq)
+	if err != nil {
+		abortTx(tx, w)
+		return RejectedRecord{}, err
+	}
+	if entry.Rejected {
+		if err := w.wait(); err != nil {
+			return RejectedRecord{}, err
+		}
+		return rejectionFor(s.scope, entry, entry.RejectReason), nil
+	}
+	entry.Rejected, entry.RejectReason = true, reason
+	record := rejectionFor(s.scope, entry, reason)
+	logValue, err := logRecord(entry)
+	if err != nil {
+		abortTx(tx, w)
+		return RejectedRecord{}, err
+	}
+	if err := putInTx(tx, idbStoreLog, logValue, float64(localSeq)); err != nil {
+		abortTx(tx, w)
+		return RejectedRecord{}, err
+	}
+	c, err := getCountersInTx(tx)
+	if err != nil {
+		abortTx(tx, w)
+		return RejectedRecord{}, err
+	}
+	c.QuarantineSeq++
+	encoded, err := marshalRecord(quarantineEntry{Raw: clone(entry.Sealed), Reason: reason, At: time.Now().UTC(), Rejected: &record})
+	if err != nil {
+		abortTx(tx, w)
+		return RejectedRecord{}, err
+	}
+	store, err := txStore(tx, idbStoreQuarantine)
+	if err != nil {
+		abortTx(tx, w)
+		return RejectedRecord{}, err
+	}
+	if _, err := callValue(func() js.Value { store.Call("add", encoded, float64(c.QuarantineSeq)); return js.Undefined() }); err != nil {
+		abortTx(tx, w)
+		return RejectedRecord{}, err
+	}
+	if err := putCountersInTx(tx, c); err != nil {
+		abortTx(tx, w)
+		return RejectedRecord{}, err
+	}
+	if err := w.wait(); err != nil {
+		return RejectedRecord{}, err
+	}
+	return record, nil
+}
+
+// RejectedLogEntries returns rejected log positions ordered by localSeq.
+func (s *IDBStore) RejectedLogEntries() ([]RejectedRecord, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.readyLocked(); err != nil {
+		return nil, err
+	}
+	entries, err := s.readAllLog()
+	if err != nil {
+		return nil, err
+	}
+	var out []RejectedRecord
+	for _, entry := range entries {
+		if entry.Rejected {
+			out = append(out, rejectionFor(s.scope, entry, entry.RejectReason))
+		}
+	}
+	return out, nil
+}
+
 // LatestSnapshot returns the stored snapshot for a workspace.
 func (s *IDBStore) LatestSnapshot(workspaceID string) (Snapshot, error) {
 	s.mu.Lock()
@@ -1094,7 +1190,7 @@ func (s *IDBStore) Compact(workspaceID string, sealed []byte, coversLocalSeq, co
 		return err
 	}
 	for _, entry := range entries {
-		if entry.WorkspaceID != workspaceID || entry.LocalSeq > coversLocalSeq || entry.ServerSeq == 0 {
+		if entry.WorkspaceID != workspaceID || entry.LocalSeq > coversLocalSeq || entry.ServerSeq == 0 || entry.Rejected {
 			continue
 		}
 		seq := entry.LocalSeq

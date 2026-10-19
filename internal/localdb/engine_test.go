@@ -62,11 +62,15 @@ func TestEngineAADMismatchQuarantines(t *testing.T) {
 	}
 	store.log[0].Sealed[0] ^= 1
 	restarted, _ := NewEngine(store, keyring.LocalScope("acct"), "ws")
-	if err := restarted.Boot(wk); err == nil {
-		t.Fatal("expected authentication error")
+	if err := restarted.Boot(wk); err != nil {
+		t.Fatalf("Boot should report and skip rejected local records: %v", err)
 	}
 	if len(store.quarantine) != 1 {
 		t.Fatalf("quarantine count=%d", len(store.quarantine))
+	}
+	report := restarted.BootReport()
+	if report.RejectedCount != 1 || len(report.RejectedIDs) != 1 || report.Records[0].LocalSeq != 1 {
+		t.Fatalf("rejection report = %+v", report)
 	}
 }
 
@@ -138,7 +142,7 @@ func TestApplyRemoteQuarantinesInvalidBatchBeforeAppend(t *testing.T) {
 	}
 }
 
-func TestBootSkipsPreviouslyQuarantinedLogEntry(t *testing.T) {
+func TestBootRejectsInvalidLogEntryOnceAndReportsIt(t *testing.T) {
 	_, wk, store := fixture(t)
 	b := makeBatch(t, "hostile", 1)
 	encoded, err := changes.Marshal(b)
@@ -154,22 +158,67 @@ func TestBootSkipsPreviouslyQuarantinedLogEntry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.AppendRemote("ws", b.ChangeID, sealed, 7, b.HLC); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.Quarantine(sealed, "remote change validation failed"); err != nil {
+	if _, err := store.Append("ws", b.ChangeID, sealed, b.HLC); err != nil {
 		t.Fatal(err)
 	}
 	restarted, _ := NewEngine(store, keyring.LocalScope("acct"), "ws")
 	if err := restarted.Boot(wk); err != nil {
-		t.Fatalf("Boot with previously quarantined entry: %v", err)
+		t.Fatalf("Boot with corrupt local entry: %v", err)
 	}
 	state, err := restarted.State()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if state.Exists("things", "hostile") {
-		t.Fatal("quarantined hostile change was replayed")
+		t.Fatal("rejected hostile change was replayed")
+	}
+	firstReport := restarted.BootReport()
+	if firstReport.RejectedCount != 1 || firstReport.Records[0].ChangeID != b.ChangeID || firstReport.Records[0].LocalSeq != 1 || firstReport.Records[0].SHA256 == "" {
+		t.Fatalf("rejection report = %+v", firstReport)
+	}
+	if len(store.quarantine) != 1 {
+		t.Fatalf("quarantine entries = %d, want 1", len(store.quarantine))
+	}
+	restartedAgain, _ := NewEngine(store, keyring.LocalScope("acct"), "ws")
+	if err := restartedAgain.Boot(wk); err != nil {
+		t.Fatal(err)
+	}
+	if got := restartedAgain.BootReport(); got.RejectedCount != 1 || got.RejectedIDs[0] != b.ChangeID {
+		t.Fatalf("later boot report = %+v", got)
+	}
+	if len(store.quarantine) != 1 {
+		t.Fatalf("repeated boot duplicated quarantine record: %d", len(store.quarantine))
+	}
+}
+
+func TestRemoteQuarantineDoesNotHideIdenticalLocalCiphertext(t *testing.T) {
+	e, wk, store := fixture(t)
+	b := makeBatch(t, "genuine-local", 1)
+	if err := e.Commit(b); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := store.Since(0)
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("local entries=%+v err=%v", entries, err)
+	}
+	// The same bytes presented under a different remote change ID fail AAD
+	// validation and enter quarantine, but do not reject the local position.
+	if err := e.ApplyRemote("remote-alias", entries[0].Sealed, 7); err == nil {
+		t.Fatal("expected remote authentication rejection")
+	}
+	restarted, _ := NewEngine(store, keyring.LocalScope("acct"), "ws")
+	if err := restarted.Boot(wk); err != nil {
+		t.Fatal(err)
+	}
+	state, err := restarted.State()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !state.Exists("things", "genuine-local") {
+		t.Fatal("remote quarantine hid genuine local log entry")
+	}
+	if got := restarted.BootReport(); got.RejectedCount != 0 {
+		t.Fatalf("local rejection report = %+v", got)
 	}
 }
 

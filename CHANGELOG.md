@@ -28,6 +28,9 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Local store never skips a change because a copy of it was rejected (SV3a.4).** A record that cannot be
+  replayed is marked rejected at its own log position in the same transaction; boot skips only those positions
+  and reports them, and a rejected remote copy can no longer hide the genuine local change.
 - **Exported transactions can no longer carry spreadsheet formulas (IMPD).** A payee, description or tag that
   starts with `=`, `+`, `-`, `@`, a tab or a carriage return is written with a leading apostrophe, so opening
   the export in Excel or Sheets shows text instead of running it; re-importing a CashFlux export restores the
