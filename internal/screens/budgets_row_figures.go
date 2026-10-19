@@ -6,6 +6,7 @@ package screens
 
 import (
 	"strings"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -53,6 +54,15 @@ func budgetRowBarValues(s budgeting.Status, props budgetRowProps, lastMonthMode 
 			fillClass = "bar-fill is-hist"
 			label = uistate.T("budgets.periodJustStarted")
 		}
+	}
+	if s.PeriodStatus == budgeting.PeriodPlanned {
+		anchor := props.Anchor
+		if anchor.IsZero() {
+			anchor = time.Now()
+		}
+		pr := uistate.LoadPrefs()
+		start, _ := budgeting.PeriodRange(s.Budget.Period, anchor, pr.WeekStartWeekday())
+		label = uistate.T("bud2.startsDate", budgetMonthName(start, false), start.Day())
 	}
 	if lastMonthMode {
 		barSpent, barPct, width = props.LastMonthSpent, props.LastMonthPct, props.LastMonthFill

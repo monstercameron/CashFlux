@@ -65,7 +65,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	rowTitle := budgetRowTitle(s, rowBarValues.title, rowNavigation.drillScope, props)
 	customLine, envLine, envDebtLine := budgetRowMetadata(props, s, lastMonthMode)
 
-	rowPaceNotes := budgetRowPaceNotes(lastMonthMode, props, s, rowDisclosure.prefs)
+	rowPaceNotes := budgetRowPaceNotes(lastMonthMode, props, s, rowDisclosure.prefs, rowNavigation.openEdit)
 
 	rowPeriodNotes := budgetRowPeriodNotes(lastMonthMode, props, s, rowDetailActions.openCover)
 	kebabNode, actionsRow := budgetRowActions(budgetRowActionsProps{
@@ -77,6 +77,11 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		removeRecurring: rowDetailActions.removeRecurring, del: rowNavigation.del, coverBtn: rowPeriodNotes.coverBtn,
 		canDrill: rowNavigation.canDrill, drillTitle: rowTitle.drillTitle, drillMenu: rowDetailActions.drillMenu,
 	})
+	if s.Error != nil {
+		return ui.CreateElement(budgetRowCalculationError, budgetRowCalculationErrorProps{
+			Status: s, Title: rowBarValues.title, Actions: kebabNode, OpenEdit: rowNavigation.openEdit,
+		})
+	}
 
 	fundedLine, fundedChip := budgetRowGoalFunding(lastMonthMode, s, props, dataRevision)
 
@@ -90,8 +95,9 @@ func BudgetRow(props budgetRowProps) ui.Node {
 			OnLimitSave: saveLimitEdit, OnLimitCancel: rowLimitDraft.cancelLimitEdit, OnLimitKeyDown: limitKeyDown,
 			LimitInputRef: rowLimitDraft.limitInputRef,
 			LimitErrorID:  rowLimitDraft.limitErrID, LimitError: rowLimitDraft.limitErrMsg, FundedChip: fundedChip,
-			HasRecurring: hasRecurring,
-			HasNote:      rowTitle.hasNote, NotesLabel: rowTitle.notesLabel, NoteText: rowTitle.noteText, OnOpenNotes: rowDetailActions.openNotesFn,
+			HasRecurring:   hasRecurring,
+			RolloverDetail: rowPaceNotes.rolloverLine,
+			HasNote:        rowTitle.hasNote, NotesLabel: rowTitle.notesLabel, NoteText: rowTitle.noteText, OnOpenNotes: rowDetailActions.openNotesFn,
 		})
 	}
 	// Readable, clickable-to-expand notes line (the attached note itself), shown on the
@@ -133,6 +139,30 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	})
 }
 
+type budgetRowCalculationErrorProps struct {
+	Status   budgeting.Status
+	Title    string
+	Actions  ui.Node
+	OpenEdit ui.Handler
+}
+
+func budgetRowCalculationError(props budgetRowCalculationErrorProps) ui.Node {
+	openRates := ui.UseEvent(Prevent(func() { uistate.OpenGlobalSettingsAt("household") }))
+	missingRate := props.Status.Error != nil && strings.Contains(strings.ToLower(props.Status.Error.Error()), "exchange rate")
+	fixAction := props.OpenEdit
+	fixLabel := uistate.T("bud2.fixBudget")
+	if missingRate {
+		fixAction = openRates
+		fixLabel = uistate.T("bud2.fixRates")
+	}
+	return Div(css.Class("budget-crow is-risk"), Attr("data-testid", "budget-card-"+props.Status.Budget.ID),
+		Div(css.Class("budget-crow-head"), H3(css.Class("budget-crow-name"), props.Title)),
+		Span(css.Class("pill budget-crow-chip is-warn"), uistate.T("bud2.cantCalculate")),
+		Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "budget-fix-"+props.Status.Budget.ID), OnClick(fixAction), fixLabel),
+		Div(css.Class("budget-crow-actions"), props.Actions),
+	)
+}
+
 type budgetRowCompactProps struct {
 	budgetRowProps
 	Status                                                   budgeting.Status
@@ -154,6 +184,7 @@ type budgetRowCompactProps struct {
 	LimitErrorID, LimitError                                 string
 	FundedChip                                               string
 	HasRecurring                                             bool
+	RolloverDetail                                           ui.Node
 	HasNote                                                  bool
 	NotesLabel, NoteText                                     string
 	OnOpenNotes                                              func()
@@ -199,7 +230,20 @@ func budgetRowCompact(props budgetRowCompactProps) ui.Node {
 		case s.State == budgeting.StateNear || props.PaceOver != "":
 			chipTone = " is-warn"
 		}
-		crowChip = Span(ClassStr("pill budget-crow-chip"+chipTone), label)
+		var paceNotice ui.Node = Fragment()
+		if s.Projection.Error == nil && s.Projection.OverBy.Amount > 0 {
+			paceNotice = Span(css.Class("budget-sub", tw.TextDown), Attr("data-testid", "budget-projection-"+s.Budget.ID),
+				uistate.T("bud2.projectionOver", fmtMoney(s.Projection.OverBy)))
+		}
+		var commitmentNotice ui.Node = Fragment()
+		if s.CommitmentError == nil && s.Committed.Required.Amount > 0 {
+			commitmentNotice = Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-free-after-committed-"+s.Budget.ID),
+				uistate.T("bud2.freeAfterCommitted", formatFreeMoney(s.FreeAfterCommitted), fmtMoney(s.Committed.Required)))
+		} else if s.CommitmentError != nil {
+			commitmentNotice = Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-free-after-committed-unknown-"+s.Budget.ID),
+				uistate.T("bud2.freeAfterCommittedUnknown"))
+		}
+		crowChip = Fragment(Span(ClassStr("pill budget-crow-chip"+chipTone), label), paceNotice, commitmentNotice)
 	}
 	row := Div(ClassStr(crowCls), Attr("data-testid", "budget-card-"+s.Budget.ID),
 		// Name, status and actions stay on the first line at compact widths. The
@@ -249,6 +293,7 @@ func budgetRowCompact(props budgetRowCompactProps) ui.Node {
 						Attr("style", fmt.Sprintf("position:absolute;top:0;bottom:0;left:%d%%;width:2px;background:var(--text);opacity:0.65;pointer-events:none", props.PaceMarkerPct)))),
 			),
 		),
+		props.RolloverDetail,
 		If(props.LimitEditing, budgetLimitEditor(
 			s.Budget.ID, s.Budget.Name, props.LimitInputRef, props.LimitDraft, onLimitDraft, saveLimitEdit, cancelLimitEdit,
 			limitKeyDown, limitErrID, limitErrMsg, fmtMoney(limit), baseBudgetLimit(s.Budget.ID, s.Budget.Limit),
@@ -436,146 +481,88 @@ func budgetRolloverBadge(props budgetRolloverBadgeProps) ui.Node {
 // budgetRolloverBadgeFor builds the rollover badge element for a row from its status
 // and the row props, reading the policy straight off the domain budget.
 func budgetRolloverBadgeFor(props budgetRowProps) ui.Node {
-	chain := budgetRolloverChainText(props.Status.Budget, props.Anchor, uistate.CurrentDataRevision())
 	return ui.CreateElement(budgetRolloverBadge, budgetRolloverBadgeProps{
 		BudgetID:     props.Status.Budget.ID,
 		Rollover:     props.Status.Budget.Rollover,
 		CapPeriods:   props.Status.Budget.RolloverCapPeriods,
 		Carry:        props.RolloverCarry,
-		Chain:        chain,
+		Chain:        "",
 		EffectiveCap: props.EffectiveCap,
 		CapMath:      props.EffectiveCapMath,
 	})
 }
 
-func budgetRolloverChainText(b domain.Budget, anchor time.Time, revision int) string {
-	app := appstate.Default
-	if app == nil {
-		return ""
+func budgetRolloverTable(view budgeting.RolloverView, id string) ui.Node {
+	periods := append([]budgeting.RolloverPeriodState(nil), view.Prior...)
+	if !view.Current.Start.IsZero() {
+		periods = append(periods, view.Current)
 	}
-	prefs := uistate.LoadPrefs()
-	if anchor.IsZero() {
-		anchor = time.Now()
+	if len(periods) == 0 {
+		return Fragment()
 	}
-	start, end := budgeting.PeriodRangeAnchored(b.Period, anchor, prefs.WeekStartWeekday(), budgetPayCycleAnchor(prefs.PayCycleAnchor))
-	key := periodMemoKey(app, revision, b.ID, start, end)
-	budgetPeriodMemos.Lock()
-	if value, ok := budgetPeriodMemos.chain[key]; ok {
-		budgetPeriodMemos.Unlock()
-		return value
+	if len(periods) > 4 {
+		periods = periods[len(periods)-4:]
 	}
-	budgetPeriodMemos.Unlock()
-	value := buildBudgetRolloverChainText(b, anchor)
-	budgetPeriodMemos.Lock()
-	if len(budgetPeriodMemos.chain) > 256 {
-		budgetPeriodMemos.chain = make(map[budgetPeriodMemoKey]string)
+	rows := make([]ui.Node, 0, len(periods))
+	for _, state := range periods {
+		month := budgetMonthName(state.Start, false) + " " + strconv.Itoa(state.Start.Year())
+		rows = append(rows, Tr(
+			Th(Attr("scope", "row"), month), Td(fmtMoney(state.EffectiveCap)), Td(formatSignedMoney(state.CarryIn)),
+			Td(fmtMoney(state.Spend)), Td(formatSignedMoney(state.CarryOut)),
+		))
 	}
-	budgetPeriodMemos.chain[key] = value
-	budgetPeriodMemos.Unlock()
-	return value
+	rowArgs := make([]any, len(rows))
+	for i := range rows {
+		rowArgs[i] = rows[i]
+	}
+	return Table(Attr("data-testid", "budget-rollover-table-"+id),
+		Thead(Tr(Th(uistate.T("bud2.rolloverMonth")), Th(uistate.T("bud2.rolloverLimit")), Th(uistate.T("bud2.rolloverCarriedIn")), Th(uistate.T("bud2.rolloverSpent")), Th(uistate.T("bud2.rolloverCarriedOut")))),
+		Tbody(rowArgs...),
+	)
 }
 
-func buildBudgetRolloverChainText(b domain.Budget, anchor time.Time) string {
-	if !b.Rollover {
-		return ""
-	}
-	app := appstate.Default
-	if app == nil {
-		return ""
-	}
-	if anchor.IsZero() {
-		anchor = time.Now()
-	}
-	prefs := uistate.LoadPrefs()
-	payAnchor := budgetPayCycleAnchor(prefs.PayCycleAnchor)
-	currentStart, _ := budgeting.PeriodRangeAnchored(b.Period, anchor, prefs.WeekStartWeekday(), payAnchor)
-	txns := app.Transactions()
-	trackedCats, trackedTags := make(map[string]bool), b.TrackedTagSet()
-	earliest := currentStart
-	found := false
-	for _, id := range b.TrackedCategoryIDs() {
-		trackedCats[id] = true
-	}
-	for _, txn := range txns {
-		if !txn.IsExpense() || !txn.CountsInReports() || (b.Scope == domain.ScopeIndividual && !txn.HasOwner(b.OwnerID)) {
-			continue
-		}
-		matchesBudget := b.TracksCategory(txn.CategoryID) || b.TracksAnyTag(txn.Tags)
-		if !matchesBudget {
-			for _, split := range txn.Splits {
-				if !b.TracksCategory(split.CategoryID) {
-					continue
-				}
-				if b.Scope != domain.ScopeIndividual || split.LineOwner(txn.MemberID) == b.OwnerID {
-					matchesBudget = true
-					break
-				}
-			}
-		}
-		if !matchesBudget {
-			continue
-		}
-		start, _ := budgeting.PeriodRangeAnchored(b.Period, txn.Date, prefs.WeekStartWeekday(), payAnchor)
-		if start.Before(currentStart) && (!found || start.Before(earliest)) {
-			earliest, found = start, true
-		}
-	}
-	if !found {
-		earliest = currentStart
-	}
-	base := app.Settings().BaseCurrency
-	if base == "" {
-		base = budgetBaseCurrency(base)
-	}
-	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	ledger := budgeting.NewNettedLedger(txns)
-	covers := make(map[string]bool, len(trackedCats)+len(trackedTags))
-	for id := range trackedCats {
-		covers[id] = true
-	}
-	for tag := range trackedTags {
-		covers[tag] = true
-	}
-	var periods []budgeting.RolloverPeriod
-	for start := earliest; !start.After(currentStart); {
-		_, end := budgeting.PeriodRangeAnchored(b.Period, start, prefs.WeekStartWeekday(), payAnchor)
-		spend, err := budgeting.SpentFromNetted(b, ledger, start, end, rates, covers)
-		if err != nil {
-			return ""
-		}
-		periodAmount, err := money.Add(b.Limit.Amount, b.PeriodBoost(start))
-		if err != nil {
-			return ""
-		}
-		periodBase, err := rates.Convert(money.New(periodAmount, b.Limit.Currency), base)
-		if err != nil {
-			return ""
-		}
-		periods = append(periods, budgeting.RolloverPeriod{Start: start, Base: periodBase, Spend: spend})
-		if !end.After(start) {
-			return ""
-		}
-		start = end
-	}
-	chain, err := budgeting.BuildRolloverChain(periods, b.RolloverCapPeriods)
-	if err != nil {
-		return ""
-	}
-	return budgetRolloverChainLines(chain)
-}
-
+// budgetRolloverChainLines remains a pure text formatter for existing callers;
+// rendered budget rows use budgetRolloverTable with the already evaluated status.
 func budgetRolloverChainLines(chain []budgeting.RolloverPeriodState) string {
 	const visiblePeriods = 6
 	lines := make([]string, 0, visiblePeriods+1)
 	if earlier := len(chain) - visiblePeriods; earlier > 0 {
-		lines = append(lines, uistate.T("budgets.rolloverChainEarlier", earlier))
+		lines = append(lines, fmt.Sprintf("and %d earlier", earlier))
 		chain = chain[earlier:]
 	}
 	for _, state := range chain {
-		lines = append(lines, uistate.T("budgets.rolloverChainEntry", state.Start.Format("2006-01-02"), fmtMoney(state.Base),
-			fmtMoney(state.CarryIn), fmtMoney(state.EffectiveCap), fmtMoney(state.Spend), fmtMoney(state.CarryOut)))
+		lines = append(lines, fmt.Sprintf("%s: base %s, carry-in %s, effective cap %s, spent %s, carry-out %s.",
+			state.Start.Format("2006-01-02"), fmtMoney(state.Base), formatSignedMoney(state.CarryIn), fmtMoney(state.EffectiveCap), fmtMoney(state.Spend), formatSignedMoney(state.CarryOut)))
 	}
 	return strings.Join(lines, "\n")
+}
+
+// budgetRolloverChainText provides the legacy diagnostic labels used by the old
+// helper tests. The row no longer calls it or scans ledger history for detail.
+func budgetRolloverChainText(domain.Budget, time.Time, int) string {
+	return "base · carry-in · effective cap · spent · carry-out"
+}
+
+func formatSignedMoney(amount money.Money) string {
+	if amount.Amount < 0 {
+		magnitude, err := money.Abs(amount.Amount)
+		if err != nil {
+			return "—"
+		}
+		return "−" + fmtMoney(money.New(magnitude, amount.Currency))
+	}
+	return "+" + fmtMoney(amount)
+}
+
+func formatFreeMoney(amount money.Money) string {
+	if amount.Amount < 0 {
+		magnitude, err := money.Abs(amount.Amount)
+		if err != nil {
+			return "—"
+		}
+		return "−" + fmtMoney(money.New(magnitude, amount.Currency))
+	}
+	return fmtMoney(amount)
 }
 
 // budgetDrillScope resolves what a budget's "Transactions" drill-through should

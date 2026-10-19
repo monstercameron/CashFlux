@@ -138,12 +138,22 @@ type budgetRowPaceNotesResult struct {
 }
 
 // budgetRowPaceNotes builds the row pace notes section.
-func budgetRowPaceNotes(lastMonthMode bool, props budgetRowProps, s budgeting.Status, prefs prefs.Prefs) budgetRowPaceNotesResult {
+func budgetRowPaceNotes(lastMonthMode bool, props budgetRowProps, s budgeting.Status, prefs prefs.Prefs, openEdit ui.Handler) budgetRowPaceNotesResult {
 	// Pace projection (D2): a gentle heads-up when current spending would blow the
 	// budget by period end, shown only while the period is still in progress.
 	var paceLine ui.Node = Fragment()
-	if !lastMonthMode && props.PaceOver != "" {
-		paceLine = Span(css.Class("budget-sub", tw.TextDown), uistate.T("budgets.paceOver", props.PaceOver))
+	if !lastMonthMode && s.Projection.Error == nil && s.Projection.OverBy.Amount > 0 {
+		paceLine = Span(css.Class("budget-sub", tw.TextDown), Attr("data-testid", "budget-projection-"+s.Budget.ID),
+			uistate.T("bud2.projectionOver", fmtMoney(s.Projection.OverBy)))
+	}
+	if !lastMonthMode && s.CommitmentError == nil && s.Committed.Required.Amount > 0 {
+		free := formatFreeMoney(s.FreeAfterCommitted)
+		commitment := Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-free-after-committed-"+s.Budget.ID),
+			uistate.T("bud2.freeAfterCommitted", free, fmtMoney(s.Committed.Required)))
+		paceLine = Fragment(paceLine, commitment)
+	} else if !lastMonthMode && s.CommitmentError != nil {
+		paceLine = Fragment(paceLine, Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-free-after-committed-unknown-"+s.Budget.ID),
+			uistate.T("bud2.freeAfterCommittedUnknown")))
 	}
 
 	// BG3: the even-pace caption ("on pace" / "running $38 hot" / "$12 under pace so
@@ -180,12 +190,27 @@ func budgetRowPaceNotes(lastMonthMode bool, props budgetRowProps, s budgeting.St
 	}
 
 	var rolloverLine ui.Node = Fragment()
+	for _, issue := range s.Issues {
+		if issue.Kind == budgeting.ViewIssueRolloverStartAssumed {
+			message := issue.Message
+			if message == "" {
+				message = uistate.T("bud2.rolloverStartAssumed")
+			}
+			rolloverLine = Fragment(rolloverLine, Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-rollover-start-assumed-"+s.Budget.ID),
+				message, " ", Button(css.Class("btn btn-sm"), Type("button"), Attr("aria-label", uistate.T("bud2.setStart")), OnClick(openEdit), uistate.T("bud2.setStart"))))
+			break
+		}
+	}
+	if s.Budget.Rollover {
+		rolloverLine = Fragment(rolloverLine, Details(css.Class("budget-rollover-detail"), Attr("data-testid", "budget-rollover-detail-"+s.Budget.ID),
+			Summary(uistate.T("bud2.rolloverDetail")), budgetRolloverTable(s.Rollover, s.Budget.ID)))
+	}
 	if !lastMonthMode && props.RolloverCarry != "" {
 		// A carried-in deficit is historical context about where the period STARTED, not a
 		// live alert — keep it quiet/neutral (TextDim) so an over-budget card has ONE colored
 		// signal (the red status line) rather than several caption lines competing for the eye.
 		cls := "budget-sub " + tw.Fold(tw.TextDim)
-		rolloverLine = Span(ClassStr(cls), uistate.T("budgets.rolloverCarry", props.RolloverCarry))
+		rolloverLine = Fragment(rolloverLine, Span(ClassStr(cls), uistate.T("budgets.rolloverCarry", props.RolloverCarry)))
 	}
 
 	// C136: show the effective cap when it differs from the base limit — WITH its

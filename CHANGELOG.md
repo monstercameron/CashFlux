@@ -90,6 +90,13 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **The Budgets page shows the corrected math (BR2STRIP).** The status strip keeps the usable subtotal with "(excludes 1
+  budget)" and lists issues once instead of five times. A budget that can't be calculated still appears as a named row
+  with a "Fix" action (Edit, or Settings for a missing exchange rate) and no fake figures. Rows say "On pace to overspend
+  by $X" and "$X free after $Y committed" (or that the free amount is unknown), budgets without a recorded rollover start
+  get a "Set start" note, the rollover disclosure is a signed table of at most three periods, future periods show "Starts
+  Nov 1", and the year plan is normalised at yearly cadence with exclusions explained, so it no longer changes with the
+  viewed month. "See where it went" and the quick-fill chips are named starting with their visible text.
 - **Everything the app keeps in the browser is encrypted at rest, and sign-in survives reloads (ENC3–ENC3.9).** All
   browser storage now goes through one encrypted boundary (`browserstore` secure records sealed with the device-wrapped
   key, unknown keys fail closed, strict-durability IndexedDB writes, success reported only after commit); existing

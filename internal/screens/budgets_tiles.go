@@ -134,6 +134,7 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 	statusLine := budgetSummaryStatus(budgetSummaryStatusProps{
 		normalizedBudgetTotal: summaryPlan.normalizedBudgetTotal, vw: vw, v: v, futurePeriod: futurePeriod,
 		normalizationOK: summaryPlan.normalizationOK, overAssigned: summaryAllocation.overAssigned, funding: funding,
+		excluded: summaryPlan.excluded, issues: summaryPlan.issues,
 	})
 	details := budgetSummaryDetails(budgetSummaryDetailsProps{
 		v: v, normalizationOK: summaryPlan.normalizationOK, normalized: summaryPlan.normalized, alloc: summaryAllocation.alloc,
@@ -2018,7 +2019,7 @@ func spendReportLink() ui.Node {
 	// your budgets made four different affordances read as one kind of thing.
 	return A(css.Class("budget-meta-link", tw.InlineFlex, tw.ItemsCenter, tw.Gap15),
 		Href(uistate.RoutePath("/reports")+"#rpta-04"),
-		Attr("data-testid", "budgets-see-spend"), Title(uistate.T("budgets.seeSpendTitle")),
+		Attr("data-testid", "budgets-see-spend"), Attr("aria-label", uistate.T("budgets.seeSpend")+" — "+uistate.T("budgets.seeSpendTitle")), Title(uistate.T("budgets.seeSpendTitle")),
 		Span(uistate.T("budgets.seeSpend")))
 }
 

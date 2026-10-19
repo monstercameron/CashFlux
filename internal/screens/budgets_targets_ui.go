@@ -203,7 +203,7 @@ func budgetQuickFillChip(props budgetQuickFillChipProps) ui.Node {
 	pick := ui.UseEvent(Prevent(func() { props.OnPick(props.Major) }))
 	return Button(css.Class("budget-fill-chip"), Type("button"),
 		Attr("data-testid", "budget-fill-"+props.Key),
-		Attr("aria-label", uistate.T("budgets.fillApplyKind", props.Label, props.Kind, props.Value)),
+		Attr("aria-label", props.Label+" — "+uistate.T("budgets.fillApplyKind", props.Label, props.Kind, props.Value)),
 		OnClick(pick),
 		Span(css.Class("budget-fill-chip-label"), props.Label),
 		Span(css.Class("budget-fill-chip-value", tw.TextDim), " · "+props.Value),

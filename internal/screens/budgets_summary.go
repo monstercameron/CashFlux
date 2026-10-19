@@ -6,6 +6,7 @@ package screens
 
 import (
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -18,6 +19,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/CashFlux/internal/reports"
 	"github.com/monstercameron/CashFlux/internal/smart"
+	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/css"
 	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
@@ -34,6 +36,8 @@ type budgetSummaryPlanResult struct {
 	wStart                time.Time
 	wEnd                  time.Time
 	hist                  bool
+	excluded              int
+	issues                []budgeting.ViewIssue
 }
 
 // budgetSummaryPlan resolves monthly normalization and the period/member lens.
@@ -44,15 +48,27 @@ func budgetSummaryPlan(v budgetView, app *appstate.App, vw period.Window) budget
 	// currency or cadence cannot be converted; the disclosure below says so.
 	rates := currency.Rates{Base: v.Base, Rates: app.Settings().FXRates}
 	statusBudgets := make([]domain.Budget, 0, len(v.Statuses))
+	issues := make([]budgeting.ViewIssue, 0)
+	excluded := 0
 	for _, status := range v.Statuses {
-		statusBudgets = append(statusBudgets, status.Budget)
+		if status.Error != nil {
+			excluded++
+			issues = append(issues, status.Issues...)
+			if len(status.Issues) == 0 {
+				issues = append(issues, budgeting.ViewIssue{BudgetID: status.Budget.ID, Operation: "evaluate budget", Err: status.Error})
+			}
+			continue
+		}
+		budget := status.Budget
+		budget.Limit = status.Limit
+		statusBudgets = append(statusBudgets, budget)
+		issues = append(issues, status.Issues...)
 	}
 	normalized, normalizeErr := budgeting.NormalizeBudgets(statusBudgets, domain.PeriodMonthly, rates)
-	normalizedBudgetTotal := v.TotalLimit
+	normalizedBudgetTotal := normalized.Total.Amount
+	excluded += normalized.Excluded
+	issues = budgeting.DeduplicateViewIssues(append(issues, normalized.Issues...))
 	normalizationOK := normalizeErr == nil && len(v.Incomplete) == 0
-	if normalizationOK {
-		normalizedBudgetTotal = normalized.Total.Amount
-	}
 	planView := v
 	planView.TotalLimit = normalizedBudgetTotal
 	smartSettings := uistate.LoadSmartSettings()
@@ -64,7 +80,7 @@ func budgetSummaryPlan(v budgetView, app *appstate.App, vw period.Window) budget
 	hist := !time.Now().Before(wEnd)
 	return budgetSummaryPlanResult{
 		normalized: normalized, normalizedBudgetTotal: normalizedBudgetTotal, normalizationOK: normalizationOK, planView: planView,
-		smartSettings: smartSettings, wStart: wStart, wEnd: wEnd, hist: hist,
+		smartSettings: smartSettings, wStart: wStart, wEnd: wEnd, hist: hist, excluded: excluded, issues: issues,
 	}
 }
 
@@ -404,6 +420,8 @@ type budgetSummaryStatusProps struct {
 	normalizationOK       bool
 	overAssigned          int64
 	funding               budgeting.FundingRead
+	excluded              int
+	issues                []budgeting.ViewIssue
 }
 
 // budgetSummaryStatus renders the status strip and its primary action.
@@ -424,14 +442,17 @@ func budgetSummaryStatus(p budgetSummaryStatusProps) ui.Node {
 	} else if p.v.BannerIncome <= 0 {
 		statusCopy = uistate.T("bud2.statusNoIncome", p.vw.Label())
 	}
-	if !p.futurePeriod && p.overAssigned > 0 {
+	if p.excluded == 0 && !p.futurePeriod && p.overAssigned > 0 {
 		statusAmount = p.overAssigned
 		statusCopy = uistate.T("bud2.statusOver", p.vw.Label())
 		statusState = "over"
-	} else if !p.futurePeriod && p.funding.Meaningful() && !p.funding.FullyFunded() && p.funding.Unfunded() > 0 {
+	} else if p.excluded == 0 && !p.futurePeriod && p.funding.Meaningful() && !p.funding.FullyFunded() && p.funding.Unfunded() > 0 {
 		statusAmount = p.funding.Unfunded()
 		statusCopy = uistate.T("bud2.statusUnfunded", p.vw.Label())
 		statusState = "unfunded"
+	}
+	if p.excluded > 0 {
+		statusCopy += " · " + budgetExclusionsLabel(p.excluded)
 	}
 	var statusAction ui.Node = Fragment()
 	if statusState == "over" || statusState == "unfunded" {
@@ -444,9 +465,6 @@ func budgetSummaryStatus(p budgetSummaryStatusProps) ui.Node {
 		})
 	}
 	statusFigure := fmtMoney(money.New(statusAmount, p.v.Base))
-	if len(p.v.Incomplete) > 0 {
-		statusFigure = "—"
-	}
 	statusLine := Div(css.Class("bud2-status-line"), Attr("role", "status"), Attr("data-state", statusState),
 		Attr("style", "display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.75rem;min-width:0"),
 		Div(css.Class("bud2-status-copy"), Attr("style", "display:flex;align-items:baseline;flex-wrap:wrap;gap:.2rem .65rem;min-width:0"),
@@ -458,7 +476,27 @@ func budgetSummaryStatus(p budgetSummaryStatusProps) ui.Node {
 		statusAction,
 	)
 
-	return statusLine
+	issueText := make([]string, 0, len(p.issues))
+	for _, issue := range p.issues {
+		message := issue.Message
+		if message == "" {
+			message = uistate.T("bud2.cantCalculate")
+		}
+		if message != "" {
+			issueText = append(issueText, message)
+		}
+	}
+	if len(issueText) == 0 {
+		return statusLine
+	}
+	return Fragment(statusLine, P(css.Class("budget-sub", tw.TextWarn), Attr("data-testid", "budgets-status-issues"), strings.Join(issueText, " · ")))
+}
+
+func budgetExclusionsLabel(count int) string {
+	if count == 1 {
+		return uistate.T("bud2.excludesOneBudget")
+	}
+	return uistate.T("bud2.excludesManyBudgets", count)
 }
 
 // budgetSummaryDetailsProps carries the explicit inputs for budgetSummaryDetails.

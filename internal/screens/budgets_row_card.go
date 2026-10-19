@@ -199,10 +199,8 @@ func budgetRowExpandedDetails(p budgetRowCardProps) ui.Node {
 				uistate.T("budgets.catsTracking", p.props.TrackedCats))),
 			// Cross-category tag tracking: the tags this budget also counts.
 			If(len(p.s.Budget.TrackedTags) > 0, budgetTagLine(p.s.Budget.ID, p.s.Budget.TrackedTags)),
-			// XC4 committed-vs-free caption; XC3 set-aside explainer.
-			If(!p.lastMonthMode && p.props.HasCommitted && p.props.Committed.CommittedStr != "",
-				Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-committed-caption-"+p.s.Budget.ID),
-					uistate.T("budgets.committedCaption", p.props.Committed.CommittedStr, p.props.Committed.FreeStr))),
+			// The full outstanding commitment and signed free amount are shown in the
+			// always-visible pace line above; the clipped progress segment is only a bar.
 			If(!p.lastMonthMode && p.props.HasCommitted && p.props.Committed.SetAsideNote != "",
 				Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-setaside-note-"+p.s.Budget.ID),
 					p.props.Committed.SetAsideNote)),

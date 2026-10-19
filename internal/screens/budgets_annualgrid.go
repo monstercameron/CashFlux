@@ -125,10 +125,8 @@ func BudgetAnnualGrid(props budgetAnnualGridProps) ui.Node {
 			// (Cam, 2026-08-31). The figure is the budgets' own limits normalized to
 			// a year — no grid build, so it costs nothing while shut.
 			Span(css.Class("budget-annualgrid-toggle-hint"),
-				// TODO(SOLB1): replace this display-only annualized budget-limit total
-				// with SOLB1's calendar-year-stable calculation when its API lands.
 				uistate.T("budgets.planYearStableHint", year.Get(),
-					fmtMoney(money.New(annualPlanTotal(props.Budgets, props.Rates.Base), props.Rates.Base)))),
+					annualPlanTotalLabel(props.Budgets, props.Rates))),
 		),
 	)
 
@@ -599,19 +597,24 @@ func annualGridWindowBar(win string, all, h1, h2 ui.Handler) ui.Node {
 // limit scaled by how many of its periods fit in one. Budgets can run weekly,
 // biweekly, monthly, quarterly or yearly, so a bare sum of limits would compare a
 // weekly grocery cap with a yearly insurance one as though they were equal.
-func annualPlanTotal(budgets []domain.Budget, base string) int64 {
-	var total int64
-	for _, b := range budgets {
-		// Mixed-currency budgets are left out rather than added at face value: a
-		// wrong total stated confidently is worse than one that omits an outlier.
-		if b.Limit.Currency != "" && b.Limit.Currency != base {
-			continue
-		}
-		annual, err := budgeting.PeriodEquivalent(b.Limit, b.Period, domain.PeriodYearly)
-		if err != nil {
-			continue
-		}
-		total += annual.Amount
+func annualPlanTotal(budgets []domain.Budget, base string, rateTables ...currency.Rates) int64 {
+	rates := currency.Rates{Base: base}
+	if len(rateTables) > 0 {
+		rates = rateTables[0]
 	}
-	return total
+	normalized, _ := budgeting.NormalizeBudgets(budgets, domain.PeriodYearly, rates)
+	return normalized.Total.Amount
+}
+
+func annualPlanTotalLabel(budgets []domain.Budget, rates currency.Rates) string {
+	normalized, _ := budgeting.NormalizeBudgets(budgets, domain.PeriodYearly, rates)
+	label := fmtMoney(normalized.Total)
+	if normalized.Excluded > 0 {
+		if normalized.Excluded == 1 {
+			label += " " + uistate.T("bud2.excludesOneBudget")
+		} else {
+			label += " " + uistate.T("bud2.excludesManyBudgets", normalized.Excluded)
+		}
+	}
+	return label
 }
