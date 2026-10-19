@@ -19,6 +19,7 @@
 package engineenv
 
 import (
+	"errors"
 	"log/slog"
 	"sort"
 	"strconv"
@@ -344,6 +345,9 @@ func computeAtoms(d Data) map[string]float64 {
 
 	// Assets/liabilities: explaining variant excludes missing-FX accounts gracefully.
 	nw, netWorthErr := ledger.NetWorthFromBalances(d.Accounts, bals, d.Rates)
+	if balancesErr != nil {
+		netWorthErr = errors.Join(netWorthErr, balancesErr)
+	}
 	if netWorthErr != nil {
 		slog.Warn("engineenv: net-worth totals are unavailable", "err", netWorthErr)
 	}
@@ -377,6 +381,9 @@ func computeAtoms(d Data) map[string]float64 {
 	// Computed once (from the shared balance map) and threaded into
 	// addBillsSmartVars/addReportsVars below.
 	liquid, liquidErr := ledger.LiquidFromBalances(d.Accounts, bals, d.Rates)
+	if balancesErr != nil {
+		liquidErr = errors.Join(liquidErr, balancesErr)
+	}
 	_, monthEnd := dateutil.MonthRange(d.Now)
 	toBase := safespend.ToBaseFunc(d.Rates)
 	billsDue := safespend.BillsDueBefore(d.Accounts, d.Recurring, d.Now, monthEnd, toBase)

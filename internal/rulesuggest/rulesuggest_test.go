@@ -88,11 +88,11 @@ func TestSuggestSkipsConditionCoveredKeys(t *testing.T) {
 		tx("Starbucks", "latte", "cafe"),
 		tx("Starbucks", "beans", "cafe"),
 	}
-	// A condition rule catching every small outflow (amount > -1000 minor units,
-	// i.e. all the -500 fixtures) already governs the Starbucks population.
+	// Amount conditions compare magnitudes, so this catches each 500-minor-unit
+	// outflow: |amount| < 1000.
 	existing := []rules.Rule{{
 		ID: "small", SetCategoryID: "cafe",
-		Conditions: []rules.RuleCondition{{Field: rules.ConditionFieldAmount, Op: rules.ConditionOpGt, Value: "-1000"}},
+		Conditions: []rules.RuleCondition{{Field: rules.ConditionFieldAmount, Op: rules.ConditionOpLt, Value: "1000"}},
 	}}
 	if got := Suggest(txns, existing, 3); len(got) != 0 {
 		t.Fatalf("Suggest = %d suggestions, want 0 (key fully governed by a condition rule)", len(got))

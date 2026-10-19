@@ -90,6 +90,9 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Net worth and liquid cash are unavailable when an account balance cannot be computed (NATFIX).** Formula and Smart
+  variables no longer report a partial total when one account's balance fails or overflows. The rule-suggestion test fixture
+  now uses the documented magnitude semantics for amount conditions.
 - **The wasm test runner passes `-run` patterns with `|` through unchanged (TOOL1).** The Windows `-exec` wrapper is now a
   PowerShell shim that starts Node with an argument array, so `-run=A|B`, regex groups, spaces and `&` reach the test binary
   as written; a round-trip test guards it.
