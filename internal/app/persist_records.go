@@ -254,6 +254,10 @@ func newRecordAutosave(app *appstate.App, commit func(map[string]string, map[str
 	inFlight := false
 	var waiters []durableWaiter
 	datasetMyGen = writerGeneration
+	paused := func() bool {
+		return suspendAutosave || hostedHydrationRequired() || pendingEnvelopeRaw != "" || autosaveBlocked()
+	}
+	pausedErr := errors.New("saving is paused; keep this page open until recovery finishes")
 	var save func()
 	completeWaiters := func(revision, cursor uint64, err error) {
 		if appstate.Default == app && recordWorkspace() == workspace {
@@ -297,10 +301,17 @@ func newRecordAutosave(app *appstate.App, commit func(map[string]string, map[str
 			completeWaiters(app.Rev(), 0, errors.New("the workspace changed before saving could finish"))
 			return
 		}
+		// A durable replacement publishes its cache before its completion
+		// goroutine adopts the generation. While it owns the pause, that window
+		// must not be mistaken for a foreign writer and made permanently stale.
+		if paused() {
+			completeWaiters(app.Rev(), 0, pausedErr)
+			return
+		}
 		// Only an explicit full replacement adopted by this hydrated App may
 		// rebase its writer. Another App's generation is never our entitlement.
 		observed := browserstore.GetString(datasetStoreKey)
-		if observed != checkpoint && datasetMyGen != writerGeneration && hydratedRecordApp == app && datasetMyGen == readDatasetGen() {
+		if datasetMyGen != writerGeneration && hydratedRecordApp == app && datasetMyGen == readDatasetGen() {
 			writerGeneration = datasetMyGen
 			checkpoint, baseHash, head, headRaw, initialized = observed, checkpointHash(observed), datasetRecordHead{}, "", false
 		}
@@ -310,10 +321,6 @@ func newRecordAutosave(app *appstate.App, commit func(map[string]string, map[str
 		}
 		if baselineErr != nil || mirrorErr != nil {
 			completeWaiters(app.Rev(), 0, errors.New("the saved dataset could not be prepared"))
-			return
-		}
-		if suspendAutosave || hostedHydrationRequired() || pendingEnvelopeRaw != "" || autosaveBlocked() {
-			completeWaiters(app.Rev(), 0, errors.New("saving is paused; keep this page open until recovery finishes"))
 			return
 		}
 		if initialized && savedRevision == app.Rev() && forceVersion == savedForce {
@@ -345,6 +352,11 @@ func newRecordAutosave(app *appstate.App, commit func(map[string]string, map[str
 			if appstate.Default != app || recordWorkspace() != workspace {
 				inFlight = false
 				completeWaiters(app.Rev(), 0, errors.New("the workspace changed before saving could finish"))
+				return
+			}
+			if paused() {
+				inFlight = false
+				completeWaiters(app.Rev(), 0, pausedErr)
 				return
 			}
 			captureUndoPoint()
@@ -431,7 +443,11 @@ func newRecordAutosave(app *appstate.App, commit func(map[string]string, map[str
 				values[datasetHeadKey] = string(encoded)
 			}
 			values[datasetGenKey] = nextGeneration
-			if suspendAutosave || appstate.Default != app || recordWorkspace() != workspace || readDatasetGen() != expectedGeneration {
+			if paused() {
+				fail(pausedErr)
+				return
+			}
+			if appstate.Default != app || recordWorkspace() != workspace || readDatasetGen() != expectedGeneration {
 				fail(datasetSaveGenerationError(recordWorkspace() == workspace, readDatasetGen() == expectedGeneration))
 				return
 			}
@@ -478,6 +494,12 @@ func newRecordAutosave(app *appstate.App, commit func(map[string]string, map[str
 				head, savedCursor, savedRevision, savedForce = nextHead, targetCursor, targetRevision, targetForce
 				headRaw, writerGeneration = values[datasetHeadKey], nextGeneration
 				initialized, hadLocalDataset, datasetMyGen = true, true, nextGeneration
+				// A fresh or intentionally empty household gains the same local
+				// writer authority as an imported checkpoint only after its first
+				// save commits. App Lock can then adopt its own replacement without
+				// mistaking it for another page's write.
+				hydratedRecordApp = app
+				hydratedRecordCursor, hydratedRecordRevision = targetCursor, targetRevision
 				publishDurableUndo(targetCursor)
 				inFlight = false
 				if pruneThrough := min(undoCaptureCursor, targetCursor); pruneThrough > 0 {
