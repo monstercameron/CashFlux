@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Component library: Pill, MemberAvatar, Field, AmountField and key bindings (LIB1D).** One `uiw.Pill` with semantic
+  tones replaces a dozen hand-built badges; `MemberAvatar` gives initials in a stable colour or a named blank; `Field`
+  wires label, hint, error and ARIA ids for any control; `AmountField` parses with integer minor units; `ActionFor` is a
+  pure key-binding table that leaves typing in inputs alone and lets an open dialog consume shortcuts. Not wired in yet.
 - **Component library: Overlay and MoneyFig (LIB1A, LIB1B).** `uiw.Overlay` / `Sheet` / `BottomBar` render every layered
   surface through one portal on `body` using GoWebComponents' accessible overlay (dialog roles, focus trap, Escape, scroll
   lock, focus return) on the existing z-index tokens, so nothing layered can be clipped by a transformed tile again.
