@@ -104,6 +104,25 @@ func TestAADHasNoAmbiguousConcatenation(t *testing.T) {
 	}
 }
 
+func TestRecordAADBindsRecordTupleAndHasSeparateDomain(t *testing.T) {
+	scope := Scope{ServerID: "server", AccountID: "account"}
+	base := RecordAAD(scope, "workspace", "record", 2)
+	if bytes.Equal(base, AAD(scope, "workspace", "record", 2)) {
+		t.Fatal("record AAD shares the change AAD domain")
+	}
+	for name, got := range map[string][]byte{
+		"server":    RecordAAD(Scope{ServerID: "other", AccountID: "account"}, "workspace", "record", 2),
+		"account":   RecordAAD(Scope{ServerID: "server", AccountID: "other"}, "workspace", "record", 2),
+		"workspace": RecordAAD(scope, "other", "record", 2),
+		"record":    RecordAAD(scope, "workspace", "other", 2),
+		"version":   RecordAAD(scope, "workspace", "record", 3),
+	} {
+		if bytes.Equal(base, got) {
+			t.Errorf("RecordAAD did not bind %s", name)
+		}
+	}
+}
+
 func TestSealRejectsBadKeySizes(t *testing.T) {
 	for _, size := range []int{0, 16, 24, 31, 33} {
 		if _, err := Seal(make([]byte, size), nil, []byte("x")); !errors.Is(err, ErrInvalidKey) {

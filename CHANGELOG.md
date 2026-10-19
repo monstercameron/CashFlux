@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Encrypted-at-rest foundation (ENC1).** `internal/atrest` lists every key the app stores in the browser and classifies
+  it — must-encrypt, may-stay-plain (with a reason), or should-not-persist — and any key not on the list is treated as
+  must-encrypt. A record envelope seals stored values with the keyring's AES-GCM and a record-bound AAD (scope,
+  workspace, key name, key version), so a value copied to another key, workspace or account fails to open. Legacy
+  plaintext values are recognised for migration. Not wired into storage yet.
 - **An evaluation harness for the Unusual detector (UNU1).** `internal/unusualeval` runs any detector over 48 labelled
   scenarios built on the sample household (spikes, price increases, double charges, first large charges at a new
   merchant, and near-miss controls for each, split into tuning and held-out sets), with expectation evidence such as a

@@ -60,6 +60,23 @@ func AAD(scope Scope, workspaceID, changeID string, keyVersion uint32) []byte {
 	)
 }
 
+// RecordAAD builds authenticated data for a stored record envelope. It uses
+// a separate domain from change and snapshot AAD so record keys cannot be
+// confused with change IDs, while binding the same scope, workspace, record
+// key, and key version tuple.
+func RecordAAD(scope Scope, workspaceID, recordKey string, keyVersion uint32) []byte {
+	var versionBytes [4]byte
+	binary.BigEndian.PutUint32(versionBytes[:], keyVersion)
+	return joinLengthPrefixed(
+		[]byte("cfv2/record-aad/v1"),
+		[]byte(scope.ServerID),
+		[]byte(scope.AccountID),
+		[]byte(workspaceID),
+		[]byte(recordKey),
+		versionBytes[:],
+	)
+}
+
 // wrapAAD builds the authenticated data binding a wrap entry to its kind,
 // key ID, key version, and entry identity:
 //
