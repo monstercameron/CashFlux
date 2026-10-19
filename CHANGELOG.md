@@ -90,6 +90,7 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- Style the reviewed budget template bucket selector.
 - Improve import tile hierarchy, Smart+ marks, contrast and draft spacing.
 - Reject overflowing budget calculations and clarify budget save feedback.
 - Keep Enter on menus and dialogs from opening the transaction editor.
