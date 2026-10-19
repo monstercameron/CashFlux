@@ -13078,3 +13078,167 @@ the Transactions page only. Muse Wonder lanes for research and implementation.
 - [ ] **SEC4 [L] CSV formula injection beyond payee/description/tags** — guard every free-text and ID column in
   `TransactionsToCSV` (category, account, member, currency; or restrict IDs/currency to strict charsets on import), and in
   `internal/reports/csv.go`, `reports/deductible.go`, `reports/investperf.go`, `split/csv.go`, `subscriptions/csv.go`.
+
+### Default account for new transactions (Cam, 2026-10-19 — research cfsv2/lanes/DEFACCT0/report.md)
+A per-member default already exists (`MemberPrefs.DefaultAccountID`, used by Add) but is buried in member editing; there is
+no household fallback; import uses its own heuristic. Precedence: explicit > member default > workspace default > heuristic.
+- [ ] **DF1 [L] Model + pure resolver** (domain field + `accountselect` resolver, table tests) — running.
+- [ ] **DF2 [L] Persistence/state** — store/export/import of the workspace default; clear dangling IDs on account delete.
+  After IMPB frees store/appstate.
+- [ ] **DF3 [L] Controls** — single-click "Make default" in the account menu (member or workspace), shown/cleared in member
+  edit and Settings; durable write before the success notice.
+- [ ] **DF4 [L] Consumers** — Add (incl. Save & add another) and import initial selection use the resolver; never override
+  an explicit pick, template account, import mapping, assistant-named account, recurring/bill account, Edit or transfers.
+  After IMPC frees documents.go.
+
+### Unusual detection — review and Smart+ design (Cam, 2026-10-19)
+- [ ] **UNU0 [L] Research** — review the Unusual flag (`txn_flags.go`, `internal/smart*`, `anomalyprobe`, `merchantstats`),
+  propose Smart enhancements and an "Unusual+" Smart+ design, and write a plan for the coordinator (cfsv2/lanes/UNU0/plan.md).
+- [x] **UNU0** research done; plan + coordinator decisions in cfsv2/lanes/UNU0/plan.md (one detector `internal/unusual`,
+  merchant-first robust baselines, signals Spike / Price increase / Possible double charge / First-time merchant large,
+  workspace suppression 12 months, Unusual+ explains Smart evidence with minimal egress, JSON schema, cache, consent).
+- [ ] **UNU1 [L] Evaluation harness + current T6 baseline** (`internal/unusualeval`) — running.
+- [ ] **UNU2 [L] `internal/unusual` pure detector** — after UNU1 baseline is reviewed.
+- [ ] **UNU3 smartengine integration · UNU4 suppression persistence · UNU5 row evidence panel (after LIB-2C) · UNU6
+  notification unification · UNU7 Unusual+ pure contract · UNU8 Unusual+ UI/transport · UNU9 evaluate and tune.
+- [ ] **IMPB.1 [L] Make the workspace ID required on import-profile calls** — `ImportProfiles` / `SaveImportProfile` /
+  `DeleteImportProfile` take it as an optional variadic argument, so a caller that forgets it silently uses an unscoped
+  bucket (anti-pattern). Also update `importmap/persist.go` comments that still say profiles are session-only. After IMPC.
+
+### Encrypted at rest — browser storage audit (Cam, 2026-10-19)
+- [ ] **ENC0 [L] Audit every key/record that survives a reload** (localStorage, sessionStorage, IndexedDB, SW Cache Storage,
+  cookies, URLs) — classify must-encrypt / may-stay-plain / should-not-persist, reproduce plaintext leaks with App Lock
+  on and off, and plan a device-key encrypted storage wrapper + migration + a no-plaintext test. Running.
+
+### CI on main (red since 2026-08-18; last green e25d80a6)
+- [ ] **CI1 [L] Fix CI** — govulncheck: `golang.org/x/net` v0.56.0 → ≥ v0.60.0 and Go 1.26.6 → ≥ 1.26.9 (GO-2026-6617,
+  -6613, -6612); e2e shard 1: stale R3M calendar test, `TestBudgetLeakRowsFollowEachBudgetsOwnWindow` (date-dependent?);
+  then every other failing job back to August. Running.
+- [x] **ENC0** audit done (cfsv2/lanes/ENC0/report.md): with App Lock OFF the whole dataset, checkpoints, sync queue,
+  conflict copies, workspace bundles, notifications, search text and a remembered AI key are plaintext in IndexedDB; with
+  App Lock ON checkpoints, queue, conflicts, workspace bundles and attachments still are.
+- [ ] **ENC1 [L] `internal/atrest`** — sensitivity catalogue (unknown keys fail closed to must-encrypt) + record envelope
+  built on `internal/keyring` AAD/seal. Running.
+- [ ] **ENC2 [S/W] Non-extractable WebCrypto device key** encrypting every must-encrypt value with App Lock off; WDK wrapped
+  by the passcode when on.
+- [ ] **ENC3 [S/W] One encrypted storage wrapper** in `browserstore`; every writer moved onto it; static test that fails on
+  raw localStorage/IndexedDB writes; first-boot migration re-encrypts and deletes plaintext; a test scans storage after a
+  scripted session for sample merchant names/amounts and expects zero hits; fix `SetThen` acknowledging failed writes.
+- [ ] **ENC4 [L] Attachments encrypted before `artifactstore.Put`** (HKDF subkey, HMAC addressing).
+
+### Money correctness (Cam, 2026-10-19: "must be flawless")
+- [ ] **MONEY0 [S] Critical review of money types and math, whole codebase** — floats in domain math/storage (incl.
+  `Settings.FXRates map[string]float64`), rounding modes and lost cents, currency decimals, overflow, signs, parsing,
+  JS 2^53 boundary, missing property tests; fix plan as lanes. Running (gpt-6.1-sol).
+
+### Sync conflicts: ask which copy to keep? (Cam, 2026-10-19)
+- [ ] **CONF0 [L] Research** — what happens today when browser and server diverge (offline, multiple browsers), what v2
+  merges automatically, and options: keep-mine/keep-server modal, auto-merge with notice, review only true conflicts,
+  keep-both checkpoint; recommendation + flow for Cam to decide. Running.
+
+### Settings (Cam, 2026-10-19)
+- [ ] **MODELS1 [L] OpenAI model picker shows every model** (no chat-only filtering; search, groups, custom id, reload
+  keeps the selection). Running.
+- [ ] **CLOUD1 [S] Redesign Settings → Cloud** (status first, guided setup, encryption required before sync, devices,
+  conflicts, danger zone). Running.
+- [ ] **SEC6 [L] Sync must refuse plaintext uploads** — Settings → Cloud says data is uploaded "as readable JSON" without a
+  passcode; every upload path must require encryption and report a typed "protect your data" status. Running.
+- [ ] **OTEL1 [L] OTLP trace path after the OTel 1.45 upgrade** (`TestConfigureTracingExportsOTLPSpans`) — blocks the CI push.
+
+### Who: unassigned and several owners (Cam, 2026-10-19)
+- [ ] **WHO1 [L] Model + logic** — `Transaction.MemberIDs` (legacy `MemberID` migrates), lens shows a shared transaction
+  under each owner, per-member totals split evenly with largest remainder (household total unchanged). Running.
+- [ ] **WHO2 [L] UI** — "Unassigned" marker, layered avatar stack with ring + offset (max 3 + "+N"), multi-select Who in
+  Add/Edit, bulk "Set owners". After WHO1.
+- [ ] **RED1 [L] Spending red with a minus sign on the Transactions page** (Cam overrides C1-2). Running.
+- [ ] **SEC6.1 [L] Guard `uploadBackendArtifactBlob` itself** (`internal/app/backend.go`) so an attachment can never be uploaded unencrypted even if a new caller skips the queue gate.
+
+### Debt payments (Cam, 2026-10-19)
+- [ ] **DEBT0 [L] Research** — payments from checking to a card/loan counted as spending or debt growth; trace today's
+  classification and distortions (count line, budgets, reports, Unusual, net worth, payoff, safe-to-spend), compare
+  YNAB/Monarch/Copilot/Quicken/Actual, recommend a strategy + UX + build plan. Running.
+
+### Debt payments — decisions (Cam, 2026-10-19; research cfsv2/lanes/DEBT0/report.md)
+Principal never in category budgets (own "Debt payments" target); labelled rate-based estimate when no statement split;
+after the first confirmation, a payee rule links automatically with notice + Undo; untracked-debt payments count as a
+normal expense category the user picks.
+- [ ] **DEBT1 [L] Pure classification + principal/interest allocation** (`internal/debtpay`). Running.
+- [ ] **DEBT2 model/persistence · DEBT3 import + recurring integration (recurring loan payments today post as category
+  expenses — the main distortion) · DEBT4 analytics seam (budgets, reports, Unusual, engineenv, payoff, net worth) ·
+  DEBT5 UI (confirmation, rules, split correction, Debt payments view).
+
+### Regular monthly spend — decisions (Cam, 2026-10-19; research cfsv2/lanes/BASE0/report.md)
+Headline "Typical essential month" + "Fixed commitments" floor; lives in Bills & recurring with a compact expandable entry
+on Transactions (not a modal); annual bills as monthly set-aside + due month; essentials chosen by the user with suggestions.
+- [ ] **BASE2 [L] Pure calculation** (`internal/regularspend`). Running.
+- [ ] **BASE3 corrections persistence · BASE4 read-model integration (shared accessor; engineenv adopts it) · BASE5 UI.
+- [ ] **CLOUD2 [S] Real data recovery key** — App Lock / keyring / live v1 encryption integration: create/adopt a WDK wrapped by
+  the passcode AND a one-time recovery key (shown once, download/print, acknowledged); unlock completion callback so a paused
+  Cloud setup advances. Ties into ENC2/ENC3.
+- [ ] **CLOUD3 [L] OAuth deferred sync** — `persistOAuthCookieSession` option to not start sync until setup is done (removes
+  the protect-before-OAuth ordering exception).
+- [ ] **PERSIST1 [L] One durable `CommitPrefs(next, done)`** in persist.go replacing CLOUD1's lane-local
+  `cloudCommitPreferences` (no second persistence implementation).
+- [ ] **E2E1 [L] Update e2e/regression selectors** for the new Cloud setup (never restore the bare enable toggle).
+
+### Money correctness — MONEY0 findings (37; cfsv2/lanes/MONEY0/report.md)
+Policies (coordinator, 2026-10-19): integer minor units + currency; every overflowable op checked (error, never wrap/clamp/
+float); one rounding helper, documented half-away-from-zero; missing FX/precision = error or explicit incomplete, never a
+guess; one canonical signed balance convention for liabilities (negative = owed) with migration of legacy positive-owed data.
+- [ ] **MONEYC [L] CRITICAL transfers** — missing FX relabels minor units (100 USD → 100 JPY); a failing second leg/fee
+  leaves the source debited. Running.
+- [ ] **MONEY1 [S] Checked money core** (Add/Sub/Neg/Abs/MulDiv/CeilDiv/Sum, exact ParseMinor, Min formatting, largest-
+  remainder Allocate, fuzz/property tests). Running.
+- [ ] **MONEY2 FX** (complete exponent registry incl. BHD/KWD 3 decimals, rational rates, exact conversion, provenance) ·
+  **MONEY3 schema** (versioned money/rates, currency on base-dependent fields, liability sign migration) · then MONEY4-14 per
+  the report (splits, validation/refunds, imports, budgets/goals, debt/APR, investments, timelines, ledger, yield, retirement,
+  estimates, commitments, formula engine (cents equality), orchestration, UI inputs (0.29 → 28 truncation), assistant,
+  audit, detector, reports, AI spend as float USD).
+- [ ] **DS1 [L] Integrate DEBT2 + BASE3 into the dataset** — add debt-payment links/rules and regular-spend overrides to
+  `store.Dataset` export/import, `SQLiteStore.Load`/`Snapshot`, backups/checkpoints/sync, and wire appstate transaction (single +
+  bulk) and account deletion to clean them atomically. Until then they would be lost on reload. After BASE3.
+
+## Budgets page review r1 (2026-10-18) — UX 6.0/10 (Sonnet, in-app browser) + code review (Haiku, 25 findings)
+Findings: cfsv2/critic/budgets_r1.md (F1–F20), cfsv2/critic/budgets_code_r1.md (Q1–Q25).
+- [x] BUD1 period-equivalent totals, rollover chain, robust recommendations (F1, F2, F6)
+- [x] BUD2 + BUD2.1 single status strip, attention set, View-as lens, Settings vs Tools, calm future months (F4, F5, F9, F14, F15, F17)
+- [x] BUD3 rows and bars: figures beside bar, inline limit editor, pace legend, plain actions, targets (F3, F7, F10–F12, F15, F18)
+- [x] BUD4 future-month projection collapsed, one income source (F8)
+- [x] BUD5 blank Add category, no duplicate budgets, Raise-limit dialog (F13, F14)
+- [x] BUD6 Adjust-all default, light amber contrast, smart.b8 copy, focus return (F16, F19, F20)
+- [x] BUDQ1 signed split lines, envelope inclusion, attribution, Unbudgeted, income/committed FX, saving smoothing (Q1, Q4, Q7, Q8, Q11, Q14, Q15)
+- [x] BUDQ2 UTC calendar boundaries, anchored PeriodKey, checked roll-ups, ledger netted once (Q1, Q2, Q3, Q12, Q17, Q24)
+- [x] BUDQ3 hooks before returns, cached tag-aware suggestions, annual grid cadence, flex period (Q5, Q17, Q18, Q19, Q22, Q25)
+- [ ] BUDQ4 page-level callers: anchored periods, checked roll-up/income/committed, Unbudgeted view, attention drill, cache key, ParseMinor, silent drops, sort, month formats, bud2 styles registration, duplicate topupBtn key
+- [ ] BUDQ5 rows/Edit: save error notice, goal-funded period, PeriodKey writes, budgetPie memo, carry-chain detail, RecommendBudgetLimit
+- [ ] BUDQ6 code quality: split god functions (BudgetRow, BudgetEditForm, computeBudgetViewRaw, budgetSummaryWidget), one base-currency default, Status.Limit use
+- [ ] BUD-R2 second critic round in the in-app browser once BUDQ4/5 land (target ≥ 9/10)
+
+## ENC3 integration (encrypted browser store) — ENC3 itself uncommitted until these land
+- [ ] ENC3.1 boot gate on protected-storage errors (no seed/reset) + App Lock lifecycle on the secure APIs
+- [ ] ENC3.2 remove raw web-storage writers (widget_builder.go, artifactcrypto.go salt, muzak.js, index.html)
+- [ ] ENC3.3 keep sign-in across reloads: cookie refresh or encrypted per-scope refresh credential; tokens never plaintext
+- [ ] ENC3.4 risky-operation callers use SaveCheckpointThen (allocate, budgets_coverall, documents, rules, transactions_tiles)
+- [ ] ENC4 attachments: MIME/metadata encrypted with bytes; artifact blob DB in the origin-wide plaintext proof
+- [ ] SEC7 assistant transfer confirmation shows the received amount/currencies it will write; one shared params builder; checked parsing; validated operation id (security review of 7c406ecb)
+- [ ] ENC3.5 wire scoped refresh credentials into boot, sign-in, OAuth, sign-out, server change, runtime refresh
+- [ ] ENC3.6 server: Strict/Secure refresh cookie, readable CSRF cookie, same-origin session exchange, one-time OAuth code + PKCE
+- [ ] ENC3.7 client cookie logout → /v1/auth/refresh/logout; device list → /v1/auth/refresh/sessions
+- [ ] DEPLOY: droplet proxy X-Forwarded-Proto + CASHFLUX_SERVER_TRUSTED_PROXIES before shipping ENC3.6
+- [ ] WHO3 unassigned Who placeholder 64 px stretches rows to 74 px (pill.go uses --space-8 as a size)
+- [ ] BULK2 bulk bar on one line, one Owners picker, visible surface, non-doubled accessible names
+- [ ] FORM3 Add/Edit one grid, readable placeholders, "No category", no redundant Type helper, consistent Transfer option
+- [ ] FUT2 future-month scheduled rows inside the ledger table; count line colour; calendar grid alignment + empty weeks
+- [ ] BUDQ6.1 decompose BudgetRow / BudgetEditForm / computeBudgetViewRaw / budgetSummaryWidget (≤150 lines each); BUDQ6.2 (ba20f64a) + BUDQ6.3 (f90c0641) done
+- [ ] Budgets code scan 0326 (6/10, 47 findings): BC4S2B done (5031987f); BC4S1, B1, B2, B5 done (held for BC4INT integration); BC4S2A, B3, B4, B6 running
+- [ ] Transactions code scan 0405 (5.5/10, 51 findings): TC3B1–B10 + TC3W13/W4/W5 running; W2, S1 liability sign, S2 atomic undoable writes queued (see cfsv2/QUEUE.md)
+- [ ] Budgets visual 0405 (5.4/10, 30 findings): A/B/C/F/G landed (5423a8b6); BV6D (held, storage bundle) + BV6H running
+- [ ] Transactions visual 0453 (6.8/10, 30 findings): TV7A (Sol) + TV7B/C/D/E/H running; TV7F/G queued; route mount → S2
+- [ ] Budgets visual 0555 (5.6/10, 27 findings incl. 2 critical): BV7A–J running
+- [ ] Transactions visual 0718 (5.6/10; TV8-1 write failure fixed TV8A) + Budgets code 0723 (6.5): TV8H/G (Sol), TV8B-F/J, BC6N1-N8 running; TV8I, S-A, S-B queued
+- [ ] Import modal focus (08:45-10:45): visual + code critics running; DOCSPLIT componentizing DocumentsPanel
+- [ ] Componentization wave (Sol, uncapped per Cam): wave 1 CSREV/CSEDIT/CSCOVER/CSSMART/CSLINK/CSBUDT/CSCAL/CSFLEX running; wave 2 queued as files free (see cfsv2/QUEUE.md)
+- [x] NATFIX: engineenv balance-fold errors propagate; rulesuggest fixture (524989a8). Full native suite green on main.
+- [ ] Transactions code scan 0154 follow-ups: TC2A–TC2E running; SOLT1 + TC2F queued (see cfsv2/QUEUE.md)
+- [ ] Transactions visual 0253 (7.1): V5CAL + V5TYPE (353935a9) + V5SUM (6b42df09) done; V5ROW, V5FORM, V5BULK running; HOOKX done (held with SOLP2 bundle) (see cfsv2/QUEUE.md)
+- [x] SOLP2 storage journal + Transactions held bundle committed 7959dfda (SOLP2.x, SOLP3, BV6D, UXT, V5, TC3W, TV7A/B/D/E/F, TXINT)
