@@ -42,8 +42,8 @@ func TestBR2MOBCompactFiguresAndPaceTick(t *testing.T) {
 	props.Status.Spent = money.Zero("USD")
 	props.Status.Remaining = b.Limit
 	f.Rerender(ui.CreateElement(BudgetRow, props))
-	if tick := byTestID(f, "div", "budget-pace-tick-"+b.ID); tick != nil {
-		t.Fatal("pace tick should be hidden when nothing has been spent")
+	if tick := byTestID(f, "div", "budget-pace-tick-"+b.ID); tick == nil || tick.Attr("aria-hidden") != "true" {
+		t.Fatal("current-period pace tick should remain visible when nothing has been spent")
 	}
 }
 

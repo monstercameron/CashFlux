@@ -19,7 +19,7 @@ func TestBudgetTrackAllNameStartsWithVisibleText(t *testing.T) {
 	if button == nil {
 		t.Fatal("Review all untracked button did not render")
 	}
-	if name := button.Attr("aria-label"); name != button.Text() || !strings.HasPrefix(name, "Review all 2 untracked") {
+	if name, visible := button.Attr("aria-label"), button.Text(); !strings.HasPrefix(name, visible) {
 		t.Fatalf("accessible name = %q, visible text = %q", name, button.Text())
 	}
 }

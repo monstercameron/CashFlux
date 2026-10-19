@@ -54,7 +54,7 @@ func TestTV7CTransactionPageCalendarToggleShowsLiabilityDueDate(t *testing.T) {
 	})
 
 	f := render.New(t)
-	f.Render(Transactions())
+	f.Render(ui.CreateElement(Transactions))
 	calendarToggle := r2aByTestID(f, "button", "txn-view-calendar")
 	if calendarToggle == nil {
 		t.Fatal("transaction toolbar calendar toggle is missing")
