@@ -20,7 +20,6 @@ import (
 func TestReviewR4LOAN1SuggestionsHaveTheirOwnGroupAndActions(t *testing.T) {
 	suggestion := txnclassify.PaymentSuggestion{
 		TransactionID: "payment-1", AccountID: "loan-1", AccountName: "Priya's Car Loan",
-		Message: "Looks like a payment to Priya's Car Loan — record as a transfer?",
 	}
 	var recorded, dismissed string
 	f := render.New(t)
@@ -32,8 +31,8 @@ func TestReviewR4LOAN1SuggestionsHaveTheirOwnGroupAndActions(t *testing.T) {
 	if got := byTestID(f, "div", "review-loan-payment-group"); got == nil || got.Text() == "" {
 		t.Fatal("Review did not render a separate loan-payment suggestion group")
 	}
-	if !strings.Contains(f.Text(), suggestion.Message) {
-		t.Fatalf("Review copy = %q, want %q", f.Text(), suggestion.Message)
+	if !strings.Contains(f.Text(), "Looks like a payment to Priya's Car Loan") {
+		t.Fatalf("Review copy = %q, want destination named", f.Text())
 	}
 	if button := byTestID(f, "button", "review-loan-payment-record"); button == nil || button.Text() != "Record as transfer" {
 		t.Fatalf("record action = %v", button)
