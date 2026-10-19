@@ -5,37 +5,6 @@ package styles
 // registerBud2Surface emits the compact Budgets status strip and responsive
 // toolbar rules. Register it last so the focused page refinements win the cascade.
 func registerBud2Surface() {
-	rule(".bud2-status-line",
-		display("flex"),
-		alignItems("center"),
-		justifyContent("space-between"),
-		gap("0.75rem"),
-		minWidth("0"),
-		padding("0.65rem 0.8rem"),
-		border("1px solid var(--border)"),
-		borderRadius("var(--radius-md)"),
-		background("var(--bg-card)"),
-	)
-	rule(".bud2-status-copy",
-		display("flex"),
-		alignItems("baseline"),
-		flexWrap("wrap"),
-		gap("0.2rem 0.65rem"),
-		minWidth("0"),
-	)
-	rule(".bud2-status-figure",
-		fontSize("var(--type-18)"),
-		fontWeight("800"),
-		fontVariantNumeric("tabular-nums"),
-		color("var(--text)"),
-		whiteSpace("nowrap"),
-	)
-	rule(".bud2-status-sentence",
-		fontSize("var(--type-14)"),
-		fontWeight("600"),
-		color("var(--text)"),
-		maxWidth("100%"),
-	)
 	rule(".bud2-status-details", marginTop("0.35rem"))
 	rule(".bud2-status-details > summary",
 		minHeight("32px"),
@@ -68,15 +37,6 @@ func registerBud2Surface() {
 		flexWrap("wrap"),
 		alignItems("center"),
 		gap("0.4rem"),
-	)
-	ruleMedia("(max-width: 640px)", ".bud2-status-line",
-		alignItems("flex-start"),
-		flexWrap("wrap"),
-	)
-	ruleMedia("(max-width: 640px)", ".bud2-status-sentence",
-		whiteSpace("nowrap"),
-		overflow("hidden"),
-		textOverflow("ellipsis"),
 	)
 	ruleMedia("(max-width: 640px)", "main.cf-scroll",
 		prop("padding-bottom", "calc(7.5rem + env(safe-area-inset-bottom, 0px))"),

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/budgeting"
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
 )
@@ -20,8 +21,9 @@ func TestBQ8SourcesUseViewedPeriodWhenYearlyDestinationRises(t *testing.T) {
 	monthly := domain.Budget{ID: "monthly", Period: domain.PeriodMonthly, Limit: money.New(50_000, "USD")}
 	weekly := domain.Budget{ID: "weekly", Period: domain.PeriodWeekly, Limit: money.New(50_000, "USD")}
 	destination := domain.Budget{ID: "yearly", Period: domain.PeriodYearly, Limit: money.New(100_000, "USD")}
-	writes, err := planFundedBudgetTopup([]domain.Budget{monthly, weekly, destination}, map[string]int64{"monthly": 3_750, "weekly": 3_750},
-		"yearly", 7_500, false, viewAnchor, time.Time{}, weekStart)
+	writes, err := budgeting.PlanCover([]domain.Budget{monthly, weekly, destination},
+		[]budgeting.CoverRequest{{DestinationID: "yearly", Shares: map[string]money.Money{"monthly": money.New(3750, "USD"), "weekly": money.New(3750, "USD")}}},
+		budgeting.ViewInput{Base: "USD", Rates: currency.Rates{Base: "USD"}, Period: budgeting.ViewPeriod{Anchor: viewAnchor, Now: viewAnchor, WeekStart: weekStart}})
 	if err != nil {
 		t.Fatalf("plan funded top-up: %v", err)
 	}
@@ -55,12 +57,13 @@ func TestBQ8SourcesUseViewedPeriodWhenYearlyDestinationRises(t *testing.T) {
 }
 
 func TestBQ8RejectsCrossCurrencyFundedTopup(t *testing.T) {
-	writes, err := planFundedBudgetTopup([]domain.Budget{
-		{ID: "source", Period: domain.PeriodWeekly, Limit: money.New(50_000, "EUR")},
-		{ID: "destination", Period: domain.PeriodMonthly, Limit: money.New(100_000, "USD")},
-	}, map[string]int64{"source": 5_000}, "destination", 5_000, false,
-		time.Date(2026, time.October, 1, 0, 0, 0, 0, time.UTC), time.Time{}, time.Monday)
-	if !errors.Is(err, errBudgetTopupCurrencyMismatch) {
+	anchor := time.Date(2026, time.October, 1, 0, 0, 0, 0, time.UTC)
+	writes, err := budgeting.PlanCover([]domain.Budget{
+		{ID: "source", Period: domain.PeriodWeekly, Limit: money.New(50000, "EUR")},
+		{ID: "destination", Period: domain.PeriodMonthly, Limit: money.New(100000, "USD")},
+	}, []budgeting.CoverRequest{{DestinationID: "destination", Shares: map[string]money.Money{"source": money.New(5000, "USD")}}},
+		budgeting.ViewInput{Base: "USD", Rates: currency.Rates{Base: "USD"}, Period: budgeting.ViewPeriod{Anchor: anchor, Now: anchor, WeekStart: time.Monday}})
+	if !errors.Is(err, budgeting.ErrTransferCurrency) {
 		t.Fatalf("cross-currency plan error = %v, want currency mismatch", err)
 	}
 	if writes != nil {

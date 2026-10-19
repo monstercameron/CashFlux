@@ -4,7 +4,6 @@ package appstate
 
 import (
 	"fmt"
-	"sort"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/budgeting"
@@ -26,12 +25,12 @@ func (a *App) PutBudgetsAtomic(writes []domain.Budget) error {
 // ref and commits creates and updates together. Existing history remains owned
 // by the stored row; new rows start their history at ref. Drafts are not mutated.
 func (a *App) PutBudgetsAtomicAt(writes []domain.Budget, ref time.Time) error {
-	return a.putBudgetsAt(writes, ref, true)
+	return a.putBudgetsAt(writes, ref)
 }
 
 // putBudgetsAt snapshots preferences and the budget index once. Both the single
 // upsert and batch APIs use the same history and validation policy.
-func (a *App) putBudgetsAt(writes []domain.Budget, ref time.Time, allowCreate bool) error {
+func (a *App) putBudgetsAt(writes []domain.Budget, ref time.Time) error {
 	if err := a.roleGuard(); err != nil {
 		return err
 	}
@@ -59,8 +58,6 @@ func (a *App) putBudgetsAt(writes []domain.Budget, ref time.Time, allowCreate bo
 		if old, ok := current[budget.ID]; ok {
 			old = old.WithBaseCurrency(base)
 			previous = &old
-		} else if !allowCreate {
-			return fmt.Errorf("appstate: budget %q not found", budget.ID)
 		}
 		prepared[i], err = prepareBudgetWrite(budget, previous, ref, p.WeekStartWeekday(), anchor)
 		if err != nil {
@@ -105,7 +102,7 @@ func (a *App) putBudgetsAt(writes []domain.Budget, ref time.Time, allowCreate bo
 	}
 	// Keep the single-row store boundary (and its change-capture hooks) for
 	// upserts; multi-row actions use the transactional batch boundary.
-	if allowCreate && len(prepared) == 1 {
+	if len(prepared) == 1 {
 		err = a.store.PutBudget(prepared[0])
 	} else {
 		err = a.store.PutBudgetsAtomic(prepared)
@@ -164,78 +161,41 @@ func (a *App) coverBudgetsAt(destinationID string, shares map[string]money.Money
 		rc.LastAppliedPeriod = key
 		to.RecurringCover = &rc
 	}
-	ids := make([]string, 0, len(shares))
-	for id := range shares {
-		ids = append(ids, id)
+	writes, err := budgeting.PlanCover(a.Budgets(), []budgeting.CoverRequest{{DestinationID: destinationID, Shares: shares}}, in)
+	if err != nil {
+		return err
 	}
-	sort.Strings(ids)
-	writes := make([]domain.Budget, 0, len(shares)+1)
-	total := money.Zero(to.Limit.Currency)
-	for _, id := range ids {
-		if id == destinationID {
-			return budgeting.ErrTransferSameBudget
+	if recurring {
+		found := false
+		for i := range writes {
+			if writes[i].ID == destinationID {
+				writes[i].RecurringCover = to.RecurringCover
+				found = true
+			}
 		}
-		amount := shares[id]
-		if !amount.IsPositive() {
-			return budgeting.ErrTransferNonPositive
-		}
-		from, ok := current[id]
-		if !ok {
-			return fmt.Errorf("appstate: source budget %q not found", id)
-		}
-		from = from.WithBaseCurrency(in.Base)
-		if from.Limit.Currency != to.Limit.Currency || amount.Currency != to.Limit.Currency {
-			return budgeting.ErrTransferCurrency
-		}
-		v := budgeting.EvaluateViewBudget(from, in)
-		if !v.Valid {
-			return fmt.Errorf("evaluate cover source %q: %w", id, v.Error)
-		}
-		remaining, err := v.Status.Remaining.Sub(amount)
-		if err != nil {
-			return fmt.Errorf("cover source %q room: %w", id, err)
-		}
-		if !remaining.IsPositive() {
-			return fmt.Errorf("%w: %s would have nothing left", budgeting.ErrInsufficientSource, from.Name)
-		}
-		start, _ := budgeting.PeriodRangeAnchored(from.Period, ref, p.WeekStart, p.PayCycleAnchor)
-		from, err = budgetWithBoost(from, start, amount.Neg())
-		if err != nil {
-			return err
-		}
-		writes = append(writes, from)
-		total, err = total.Add(amount)
-		if err != nil {
-			return fmt.Errorf("cover total: %w", err)
+		if !found {
+			writes = append(writes, to)
 		}
 	}
-	if total.IsPositive() {
-		start, _ := budgeting.PeriodRangeAnchored(to.Period, ref, p.WeekStart, p.PayCycleAnchor)
-		to, err = budgetWithBoost(to, start, total)
-		if err != nil {
-			return err
-		}
-		to.CoveredAt = ref
+	if len(writes) == 0 {
+		return nil
 	}
-	writes = append(writes, to)
 	return a.PutBudgetsAtomicAt(writes, ref)
 }
 
-func budgetWithBoost(b domain.Budget, start time.Time, delta money.Money) (domain.Budget, error) {
-	amount, err := money.New(b.PeriodBoost(start), b.Limit.Currency).Add(delta)
+// CoverBudgetsAt plans and saves a complete reviewed cover operation. The same
+// pure planner is used for individual, bulk and recurring covers.
+func (a *App) CoverBudgetsAt(requests []budgeting.CoverRequest, ref time.Time) error {
+	in, err := a.BudgetViewInput(dateutil.WallClockUTC(ref))
 	if err != nil {
-		return domain.Budget{}, fmt.Errorf("budget %q period boost: %w", b.ID, err)
+		return err
 	}
-	boosts := make(map[string]int64, len(b.PeriodBoosts)+1)
-	for key, value := range b.PeriodBoosts {
-		boosts[key] = value
+	writes, err := budgeting.PlanCover(a.Budgets(), requests, in)
+	if err != nil {
+		return err
 	}
-	key := start.Format(time.DateOnly)
-	if amount.Amount == 0 {
-		delete(boosts, key)
-	} else {
-		boosts[key] = amount.Amount
+	if len(writes) == 0 {
+		return nil
 	}
-	b.PeriodBoosts = boosts
-	return b, nil
+	return a.PutBudgetsAtomicAt(writes, ref)
 }

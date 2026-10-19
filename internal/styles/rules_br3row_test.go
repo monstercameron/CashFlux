@@ -12,7 +12,6 @@ func TestBR3RowGridAndBarRulesAtDesktopLaptopAndPhoneWidths(t *testing.T) {
 	registerBR3Row()
 	css := Build()
 	for _, want := range []string{
-		"grid-template-columns:220px 240px minmax(180px, 1fr) 110px 72px;",
 		`grid-template-areas:"name figures bar status actions" "sub sub sub sub sub";`,
 		"min-width:180px;height:6px;border-radius:3px;",
 		"@media (min-width: 601px) and (max-width: 1100px)",

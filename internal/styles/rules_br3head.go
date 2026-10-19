@@ -36,7 +36,7 @@ func registerBR3Head() {
 	)
 	rule(".bento-budgets .bud3-headline-attention",
 		display("flex"), alignItems("center"), flexWrap("wrap"), gap("0.35rem"),
-		fontSize("12.5px"), color("var(--text-dim)"),
+		fontSize("var(--fs-meta)"), color("var(--text-dim)"),
 	)
 	rule(".bento-budgets .bud3-attention-separator", color("var(--text-faint)"))
 	rule(".bento-budgets .bud3-attention-link",
@@ -47,10 +47,7 @@ func registerBR3Head() {
 		fontSize("12px"), fontWeight("400"), color("var(--text-dim)"), whiteSpace("nowrap"),
 	)
 	rule(".bento-budgets .bud-set-head, .bento-budgets .budget-add-or, .bento-budgets .budget-strip-label, .bento-budgets .budget-metric-label, .bento-budgets .brc-total-label, .bento-budgets .bfut-stat-label, .bento-budgets .zbb-sources-title, .bento-budgets .zbb-sources-total-cap, .bento-budgets .zbb-source-kind, .bento-budgets .zbb-alloc-cap-label, .bento-budgets .budget-agemoney-label, .bento-budgets .ba-group-head, .bento-budgets .budget-annualgrid-winlabel, .bento-budgets .autobudget-impact-lbl, .bento-budgets .adjustall-total-lbl, .bento-budgets .budget-limit-basetag, .bento-budgets .bflex-kicker-label, .bento-budgets .bflex-editor-label, .bento-budgets .bflex-ledger-title, .bento-budgets .bflex-badge",
-		fontSize("12.5px"), fontWeight("400"), letterSpacing("normal"), textTransform("none"), color("var(--text-dim)"),
-	)
-	rule(".bento-budgets .brc-total-label, .bento-budgets .bfut-stat-label, .bento-budgets .zbb-sources-title, .bento-budgets .zbb-sources-total-cap, .bento-budgets .zbb-source-kind, .bento-budgets .zbb-alloc-cap-label, .bento-budgets .budget-agemoney-label, .bento-budgets .ba-group-head, .bento-budgets .budget-annualgrid-winlabel, .bento-budgets .autobudget-impact-lbl, .bento-budgets .adjustall-total-lbl, .bento-budgets .budget-limit-basetag, .bento-budgets .bflex-kicker-label, .bento-budgets .bflex-editor-label, .bento-budgets .bflex-ledger-title, .bento-budgets .bflex-badge",
-		fontSize("12.5px"),
+		fontSize("var(--fs-meta)"), fontWeight("400"), letterSpacing("normal"), textTransform("none"), color("var(--text-dim)"),
 	)
 	rule(".bento-budgets .budget-crow-name, .bento-budgets .budget-name",
 		fontSize("14px"), fontWeight("600"),
@@ -59,7 +56,7 @@ func registerBR3Head() {
 		fontSize("14px"), fontWeight("500"), fontVariantNumeric("tabular-nums"),
 	)
 	rule(".bento-budgets .budget-sub, .bento-budgets .budget-crow-chip, .bento-budgets .bud-set-lbl, .bento-budgets .bud-set-hint",
-		fontSize("12.5px"), fontWeight("400"), lineHeight("1.4"), color("var(--text-dim)"),
+		fontSize("var(--fs-meta)"), fontWeight("400"), lineHeight("1.4"), color("var(--text-dim)"),
 	)
 	rule(".bento-budgets .budget-add-or", minHeight("24px"))
 	rule(".bento-budgets .budget-cat-row .cf-picker-trigger",

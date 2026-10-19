@@ -41,16 +41,37 @@ func buildMonthCloseSummary(app *appstate.App, v budgetView, bs, be time.Time) m
 	actual := int64(0)
 	if lines, err := reports.IncomeByCategory(app.Transactions(), bs, be, rates); err == nil {
 		for _, ln := range lines {
-			actual += ln.Amount
+			next, addErr := money.Add(actual, ln.Amount)
+			if addErr != nil {
+				return monthclose.Summary{Error: addErr}
+			}
+			actual = next
 		}
+	} else {
+		return monthclose.Summary{Error: err}
 	}
 	// Same one definition the rail and the allocation bar use — see the note in
 	// budgetSummaryWidget. This copy had the old two-method switch, so the review
 	// could report a plan that fits while the page behind it said otherwise.
 	overAssigned := int64(0)
-	if pool := v.BannerIncome + v.RolledOver; pool > 0 {
-		if ta := budgeting.ToAssign(pool, v.TotalLimit+v.SavingsAssigned); ta < 0 {
-			overAssigned = -ta
+	pool, err := money.Add(v.BannerIncome, v.RolledOver)
+	if err != nil {
+		return monthclose.Summary{Error: err}
+	}
+	planned, err := money.Add(v.TotalLimit, v.SavingsAssigned)
+	if err != nil {
+		return monthclose.Summary{Error: err}
+	}
+	if pool > 0 {
+		toAssign, err := money.Sub(pool, planned)
+		if err != nil {
+			return monthclose.Summary{Error: err}
+		}
+		if toAssign < 0 {
+			overAssigned, err = money.Neg(toAssign)
+			if err != nil {
+				return monthclose.Summary{Error: err}
+			}
 		}
 	}
 	nameOf := func(b domain.Budget) string { return budgetTitle(b.Name, v.CatName[b.CategoryID]) }
@@ -97,6 +118,11 @@ type monthCloseLeftoverLine struct {
 }
 
 func monthCloseLeftovers(items []monthclose.Item, budgets []domain.Budget, base string) ([]monthCloseLeftoverLine, int64) {
+	lines, total, _ := monthCloseLeftoversChecked(items, budgets, base)
+	return lines, total
+}
+
+func monthCloseLeftoversChecked(items []monthclose.Item, budgets []domain.Budget, base string) ([]monthCloseLeftoverLine, int64, error) {
 	byID := make(map[string]domain.Budget, len(budgets))
 	for _, budget := range budgets {
 		byID[budget.ID] = budget
@@ -110,15 +136,19 @@ func monthCloseLeftovers(items []monthclose.Item, budgets []domain.Budget, base 
 		}
 		monthly, err := budgeting.PeriodEquivalent(money.New(item.Minor, base), budget.Period, domain.PeriodMonthly)
 		if err != nil {
-			monthly = money.New(item.Minor, base)
+			return nil, 0, err
 		}
-		total += monthly.Amount
+		next, err := money.Add(total, monthly.Amount)
+		if err != nil {
+			return nil, 0, err
+		}
+		total = next
 		lines = append(lines, monthCloseLeftoverLine{
 			name: item.Name, amount: fmtMoney(money.New(item.Minor, base)), monthly: fmtMoney(monthly),
 			outcome: monthCloseLeftoverOutcomeKey(budget.Rollover), rollover: budget.Rollover,
 		})
 	}
-	return lines, total
+	return lines, total, nil
 }
 
 func monthCloseLeftoverOutcomeKey(rollover bool) string {
@@ -152,7 +182,10 @@ func monthCloseLeftBody(s monthclose.Summary, budgets []domain.Budget, base stri
 	if len(s.Leftovers) == 0 {
 		return []any{P(css.Class("budget-sub"), uistate.T("monthclose.leftNoneLive"))}
 	}
-	leftovers, monthlyTotal := monthCloseLeftovers(s.Leftovers, budgets, base)
+	leftovers, monthlyTotal, err := monthCloseLeftoversChecked(s.Leftovers, budgets, base)
+	if err != nil {
+		return []any{P(css.Class("err"), Attr("role", "alert"), uistate.T("budgets.incomplete"))}
+	}
 	rows := make([]ui.Node, 0, len(s.Leftovers))
 	for _, item := range leftovers {
 		rows = append(rows, Div(css.Class("mc-leftover-row"), Attr("role", "row"),
@@ -216,7 +249,10 @@ func monthCloseIncomeBody(s monthclose.Summary, base string, ended bool) []any {
 }
 
 func monthCloseIncomeDeltaText(s monthclose.Summary, base string, ended bool) string {
-	delta := s.IncomeDeltaMinor()
+	delta, err := s.IncomeDeltaChecked()
+	if err != nil {
+		return uistate.T("budgets.incomplete")
+	}
 	if !ended {
 		return uistate.T("bv6g.monthclose.incomeLive", fmtMoney(money.New(s.ActualIncomeMinor, base)), fmtMoney(money.New(s.ExpectedIncomeMinor, base)))
 	}
@@ -241,12 +277,12 @@ func monthCloseCopyBody(budgets []domain.Budget, catNames map[string]string, cop
 			continue
 		}
 		rows = append(rows, ui.CreateElement(monthCloseCopyRow, monthCloseCopyRowProps{
-			ID: b.ID, Name: budgetTitle(b.Name, catNames[b.CategoryID]), Amount: fmtMoney(money.New(amt, base)),
+			ID: b.ID, Name: budgetTitle(b.Name, catNames[b.CategoryID]), Amount: fmtMoney(money.New(amt, b.WithBaseCurrency(base).Limit.Currency)),
 			Included: !excluded[b.ID], OnToggle: toggleExclude,
 		}))
 	}
 	return []any{
-		P(css.Class("budget-sub"), uistate.T("monthclose.copyIntro")),
+		P(css.Class("budget-sub"), uistate.T("bcs2.copy.intro")),
 		Div(css.Class("mc-copy-rows"), rows),
 		Button(css.Class("btn btn-sm btn-primary", tw.Mt2), Type("button"), Attr("data-testid", "monthclose-copy-apply"),
 			Title(uistate.T("monthclose.copyApplyTitle")), applyCopyOnClick, uistate.T("monthclose.copyApply", len(copyPlan))),
@@ -268,7 +304,7 @@ func applyMonthCloseCopy(app *appstate.App, budgets []domain.Budget, anchor time
 	}
 	uistate.BumpDataRevision()
 	uistate.RequestPersist()
-	uistate.PostUndoable(uistate.T("monthclose.copyApplied", plural(len(writes), "budget")))
+	uistate.PostUndoable(uistate.T("bcs2.copy.applied", budgetCountPhrase(len(writes))))
 	return nil
 }
 
@@ -286,6 +322,7 @@ func monthCloseBody(_ monthCloseBodyProps) ui.Node {
 	v := computeBudgetView(app, activeMemberID, vw, pr, false)
 	bs, be := vw.Range()
 	s := buildMonthCloseSummary(app, v, bs, be)
+	summaryError := s.Error != nil
 	// The offer appears in a period's LAST FIVE DAYS as well as after it closes, so
 	// this flow is usually read while the month is still running. Every line was
 	// written in the past tense regardless — "went over", "went unspent", "next
@@ -403,6 +440,11 @@ func monthCloseBody(_ monthCloseBodyProps) ui.Node {
 
 	// 5 — Copy last month's one-time top-ups, with per-budget exceptions.
 	copyBody := monthCloseCopyBody(visibleBudgets, v.CatName, copyAll, copyPlan, monthCloseExcludeSet(excluded.Get()), toggleExclude, applyCopyOnClick, v.Base)
+	if summaryError {
+		return Div(css.Class("modal-scroll", "mc-body"),
+			P(css.Class("err"), Attr("role", "alert"), uistate.T("budgets.incomplete")),
+			Button(css.Class("btn"), Type("button"), doneOnClick, uistate.T("action.done")))
+	}
 
 	return Div(css.Class("modal-scroll", "mc-body"), Attr("data-testid", "monthclose-body"),
 		P(css.Class("budget-sub"), uistate.T("monthclose.intro", vw.Label())),

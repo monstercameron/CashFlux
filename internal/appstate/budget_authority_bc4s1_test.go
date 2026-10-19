@@ -94,7 +94,7 @@ func TestBC4PastPermanentEditReplacesLaterHistory(t *testing.T) {
 	}
 }
 
-func TestBC4PeriodChangeResetsFundingGrid(t *testing.T) {
+func TestBC4PeriodChangeResetsBaseGridAndRetainsMoney(t *testing.T) {
 	for _, from := range []domain.Period{domain.PeriodWeekly, domain.PeriodMonthly, domain.PeriodYearly} {
 		for _, to := range []domain.Period{domain.PeriodWeekly, domain.PeriodMonthly, domain.PeriodYearly} {
 			if from == to {
@@ -115,7 +115,8 @@ func TestBC4PeriodChangeResetsFundingGrid(t *testing.T) {
 					}
 					b.RolloverStart = moneyDate("2026-01-01")
 					b.LimitHistory = map[string]int64{"2026-01-01": 10000}
-					b.PeriodBoosts = map[string]int64{"2026-10-01": 90000}
+					oldStart, _ := budgeting.PeriodRangeAnchored(from, a.clock(), time.Monday, time.Time{})
+					b.PeriodBoosts = map[string]int64{oldStart.Format(time.DateOnly): 90000}
 					if err := a.store.PutBudget(b); err != nil {
 						t.Fatal(err)
 					}
@@ -125,10 +126,10 @@ func TestBC4PeriodChangeResetsFundingGrid(t *testing.T) {
 					}
 					got := bc4Budget(t, a, "b")
 					start, _ := budgeting.PeriodRangeAnchored(to, a.clock(), time.Monday, time.Time{})
-					if !got.RolloverStart.Equal(start) || !reflect.DeepEqual(got.LimitHistory, map[string]int64{start.Format(time.DateOnly): 45000}) || len(got.PeriodBoosts) != 0 {
+					if !got.RolloverStart.Equal(start) || !reflect.DeepEqual(got.LimitHistory, map[string]int64{start.Format(time.DateOnly): 45000}) || got.PeriodBoosts[start.Format(time.DateOnly)] != 90000 {
 						t.Fatalf("grid not reset: %+v", got)
 					}
-					bc4Cap(t, a, "b", "2026-10-19", 45000)
+					bc4Cap(t, a, "b", "2026-10-19", 135000)
 				})
 			}
 		}
@@ -258,8 +259,8 @@ func TestBC4CoverUsesEachBudgetGridAndSourceRoom(t *testing.T) {
 	if err := a.store.PutTransaction(domain.Transaction{ID: "t", CategoryID: "food", Amount: money.New(-24000, "USD"), Date: a.clock()}); err != nil {
 		t.Fatal(err)
 	}
-	if err := a.CoverBudget("from", "to", money.New(1000, "USD")); err == nil {
-		t.Fatal("spent source's last available room")
+	if err := a.CoverBudget("from", "to", money.New(1000, "USD")); err != nil {
+		t.Fatalf("last uncommitted room should be movable while the cap remains positive: %v", err)
 	}
 }
 

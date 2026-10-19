@@ -6,7 +6,6 @@ package styles
 // supporting copy quiet beneath the name at desktop and phone widths.
 func registerBR3Row() {
 	rule(".budget-crow",
-		gridTemplateColumns("220px 240px minmax(180px, 1fr) 110px 72px"),
 		prop("grid-template-areas", `"name figures bar status actions" "sub sub sub sub sub"`),
 		prop("align-items", "center"),
 	)
@@ -58,5 +57,4 @@ func registerBR3Row() {
 	ruleMedia("(max-width: 600px)", ".budget-crow-actions", gridColumn("3"), minWidth("72px"), justifySelf("end"))
 	ruleMedia("(max-width: 600px)", ".budget-crow-bar", width("100%"), minWidth("0"), height("6px"))
 	ruleMedia("(max-width: 600px)", ".budget-crow-rollover", gridColumn("1 / -1"))
-	ruleMedia("(max-width: 600px)", "main.cf-scroll", paddingBottom("calc(148px + env(safe-area-inset-bottom, 0px)) !important"))
 }

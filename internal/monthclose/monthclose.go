@@ -9,12 +9,14 @@
 package monthclose
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/money"
 )
 
 // Item is one budget's contribution to a month-close step: which budget, its
@@ -27,6 +29,8 @@ type Item struct {
 
 // Summary is the computed month-close picture for one budget period.
 type Summary struct {
+	// Error identifies an arithmetic failure; totals must not be displayed then.
+	Error error
 	// Overspends lists budgets that ended over their cap, largest overage first.
 	Overspends []Item
 	// Leftovers lists budgets that ended with money unspent, largest first.
@@ -46,11 +50,21 @@ type Summary struct {
 
 // IncomeDeltaMinor is actual minus expected income: positive means the period
 // brought in more than the plan assumed.
-func (s Summary) IncomeDeltaMinor() int64 { return s.ActualIncomeMinor - s.ExpectedIncomeMinor }
+func (s Summary) IncomeDeltaMinor() int64 {
+	delta, _ := s.IncomeDeltaChecked()
+	return delta
+}
+
+// IncomeDeltaChecked returns the income difference without wrapping money.
+func (s Summary) IncomeDeltaChecked() (int64, error) {
+	return money.Sub(s.ActualIncomeMinor, s.ExpectedIncomeMinor)
+}
 
 // Clean reports whether the period closes with nothing demanding a decision:
 // no overspent budgets and no over-assignment.
-func (s Summary) Clean() bool { return len(s.Overspends) == 0 && s.OverAssignedMinor == 0 }
+func (s Summary) Clean() bool {
+	return s.Error == nil && len(s.Overspends) == 0 && s.OverAssignedMinor == 0
+}
 
 // Build assembles the month-close summary from evaluated statuses. nameOf
 // resolves a budget's display name (nil falls back to the budget's Name field).
@@ -74,14 +88,31 @@ func Build(statuses []budgeting.Status, nameOf func(domain.Budget) string, expec
 		return b.Name
 	}
 	for _, st := range statuses {
+		if st.Budget.IsSaving() {
+			continue
+		}
 		switch {
 		case st.Remaining.Amount < 0:
-			over := -st.Remaining.Amount
+			over, err := money.Neg(st.Remaining.Amount)
+			if err != nil {
+				s.Error = errors.Join(s.Error, err)
+				continue
+			}
 			s.Overspends = append(s.Overspends, Item{BudgetID: st.Budget.ID, Name: name(st.Budget), Minor: over})
-			s.TotalOverMinor += over
+			total, err := money.Add(s.TotalOverMinor, over)
+			if err != nil {
+				s.Error = errors.Join(s.Error, err)
+			} else {
+				s.TotalOverMinor = total
+			}
 		case st.Remaining.Amount > 0:
 			s.Leftovers = append(s.Leftovers, Item{BudgetID: st.Budget.ID, Name: name(st.Budget), Minor: st.Remaining.Amount})
-			s.TotalLeftMinor += st.Remaining.Amount
+			total, err := money.Add(s.TotalLeftMinor, st.Remaining.Amount)
+			if err != nil {
+				s.Error = errors.Join(s.Error, err)
+			} else {
+				s.TotalLeftMinor = total
+			}
 		}
 	}
 	byAmount := func(items []Item) {
@@ -157,14 +188,11 @@ func CarryTargetsAnchored(p domain.Period, ref time.Time, weekStart time.Weekday
 	return thisStart, nextStart
 }
 
-// CopyBoosts computes the "copy last month with exceptions" plan: budget limits
-// already persist period to period, so what a new period loses is last period's
-// ONE-TIME top-ups (PeriodBoosts). For every budget whose last-period boost is
-// non-zero and not excluded, the result maps budget ID → that boost amount,
-// ready to be written as this period's boost. Budgets already carrying a boost
-// this period are skipped — copying must never stack on a manual top-up.
-// periodStarts resolves each budget's own last/this period-start dates (budgets
-// can run weekly, monthly, or quarterly, so the key differs per budget).
+// CopyBoosts copies only explicitly recorded unfunded PeriodTopups. Covers,
+// funded raises and opaque legacy adjustments remain in their original periods.
+// Excluding any row therefore cannot replay just one leg of a money move.
+// Existing target adjustments or top-ups prevent stacking. periodStarts resolves
+// each budget's own source and target keys, including weekly and biweekly grids.
 func CopyBoosts(budgets []domain.Budget, periodStarts func(domain.Budget) (last, this time.Time), exclude map[string]bool) map[string]int64 {
 	out := map[string]int64{}
 	for _, b := range budgets {
@@ -172,8 +200,10 @@ func CopyBoosts(budgets []domain.Budget, periodStarts func(domain.Budget) (last,
 			continue
 		}
 		lastStart, thisStart := periodStarts(b)
-		last := b.PeriodBoost(lastStart)
-		if last == 0 || b.PeriodBoost(thisStart) != 0 {
+		// Only explicitly identified unfunded top-ups may be copied. Legacy
+		// aggregates can contain either leg of a cover and must stay put.
+		last := b.PeriodTopups[lastStart.Format(time.DateOnly)]
+		if last <= 0 || b.PeriodBoost(thisStart) != 0 || b.PeriodTopups[thisStart.Format(time.DateOnly)] != 0 {
 			continue
 		}
 		out[b.ID] = last

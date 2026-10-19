@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/monstercameron/CashFlux/internal/i18n"
 )
 
 // ─── C361/C362 hardcoded-English ratchet ─────────────────────────────────────
@@ -34,9 +36,10 @@ import (
 // (see internal/i18n/en_*.go for the extension-file pattern). When you convert
 // strings, lower the matching baseline to the new count.
 //
-// A literal counts when it looks like prose (letters + a space, or sentence
-// punctuation) or is a single capitalized word ≥3 letters. i18n keys, routes,
-// css utility soup, glyphs, urls, and all-lowercase identifiers are ignored.
+// The prose ratchet counts strings with prose or sentence punctuation, plus
+// single capitalized words. A separate ratchet catches lowercase display words
+// while excluding lowercase schema values such as field names. i18n keys,
+// routes, css utility soup, glyphs and urls are ignored.
 var i18nBaselines = map[string]int{
 	// UI layer (wasm screens + app chrome). Baselines set 2026-07-03 (C361);
 	// first conversion tranche brought screens 211→126, later sweeps to 115, and
@@ -137,9 +140,10 @@ var i18nAttrNames = map[string]bool{
 }
 
 var (
-	i18nLetterRe = regexp.MustCompile(`[A-Za-z]`)
-	i18nKeyRe    = regexp.MustCompile(`^[a-z][a-zA-Z0-9_]*\.[a-zA-Z0-9_.\-]+$`)
-	i18nVerbRe   = regexp.MustCompile(`%[#+\-\d.*]*[a-zA-Z%]`)
+	i18nLetterRe  = regexp.MustCompile(`[A-Za-z]`)
+	i18nKeyRe     = regexp.MustCompile(`^[a-z][a-zA-Z0-9_]*\.[a-zA-Z0-9_.\-]+$`)
+	i18nVerbRe    = regexp.MustCompile(`%[#+\-\d.*]*[a-zA-Z%]`)
+	i18nLowerWord = regexp.MustCompile(`^[a-z]{2,}$`)
 )
 
 // i18nExempt are exact literals that are deliberately NOT translated: brand and
@@ -222,7 +226,7 @@ func i18nClassify(s string) bool {
 		return false
 	}
 	if strings.ToLower(trim) == trim && !strings.ContainsAny(trim, ".!?,’'") {
-		return false // css utility soup / identifiers
+		return false // css utility soup / identifiers; lowercase copy has its own ratchet
 	}
 	letters := 0
 	for _, r := range trim {
@@ -236,6 +240,57 @@ func i18nClassify(s string) bool {
 	return letters >= 3 && trim[0] >= 'A' && trim[0] <= 'Z' && strings.ToUpper(trim) != trim
 }
 
+func i18nClassifyLowerExpr(e ast.Expr) (string, ast.Expr) {
+	for _, lit := range i18nLiteralsWithin(e) {
+		s, _ := i18nLiteral(lit)
+		trim := strings.TrimSpace(s)
+		if i18nLowerWord.MatchString(trim) {
+			return trim, lit
+		}
+	}
+	return "", nil
+}
+
+func budgetCountKeyIssues(t *testing.T, dir string) []string {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("read %s: %v", dir, err)
+	}
+	bundle := i18n.DefaultBundle()
+	var issues []string
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
+			continue
+		}
+		path := filepath.Join(dir, entry.Name())
+		file, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+		if err != nil {
+			t.Fatalf("parse %s: %v", path, err)
+		}
+		ast.Inspect(file, func(node ast.Node) bool {
+			call, ok := node.(*ast.CallExpr)
+			if !ok || i18nCalleeName(call) != "budgetCountKey" || len(call.Args) < 1 {
+				return true
+			}
+			prefix, ok := i18nLiteral(call.Args[0])
+			if !ok {
+				issues = append(issues, entry.Name()+": budgetCountKey prefix must be a string literal")
+				return true
+			}
+			for _, suffix := range []string{"one", "many"} {
+				key := prefix + "." + suffix
+				if bundle.T(i18n.English, key) == key {
+					issues = append(issues, entry.Name()+": missing budgetCountKey catalog key "+key)
+				}
+			}
+			return true
+		})
+	}
+	sort.Strings(issues)
+	return issues
+}
+
 func i18nClassifyExpr(e ast.Expr) (string, ast.Expr) {
 	for _, lit := range i18nLiteralsWithin(e) {
 		s, _ := i18nLiteral(lit)
@@ -247,6 +302,14 @@ func i18nClassifyExpr(e ast.Expr) (string, ast.Expr) {
 }
 
 func i18nScanDir(t *testing.T, dir string) []string {
+	return i18nScanDirMode(t, dir, false)
+}
+
+func i18nScanLowerDir(t *testing.T, dir string) []string {
+	return i18nScanDirMode(t, dir, true)
+}
+
+func i18nScanDirMode(t *testing.T, dir string, lowercase bool) []string {
 	t.Helper()
 	fset := token.NewFileSet()
 	entries, err := os.ReadDir(dir)
@@ -272,37 +335,44 @@ func i18nScanDir(t *testing.T, dir string) []string {
 		}
 		// Values already reachable through a sibling <Field>Key (C362).
 		hasCatalogKey := map[token.Pos]bool{}
+		classifyExpr := i18nClassifyExpr
+		if lowercase {
+			classifyExpr = i18nClassifyLowerExpr
+		}
 		ast.Inspect(f, func(n ast.Node) bool {
 			switch node := n.(type) {
 			case *ast.CallExpr:
 				name := i18nCalleeName(node)
 				if i18nElementFuncs[name] {
 					for _, arg := range node.Args {
-						if s, lit := i18nClassifyExpr(arg); s != "" {
+						if s, lit := classifyExpr(arg); s != "" {
 							record(lit.Pos(), name+"(child)", s)
 						}
 					}
 				}
 				if i18nPropFuncs[name] && len(node.Args) >= 1 {
-					if s, lit := i18nClassifyExpr(node.Args[0]); s != "" {
+					if s, lit := classifyExpr(node.Args[0]); s != "" {
 						record(lit.Pos(), name+"(prop)", s)
 					}
 				}
 				if i18nAllArgStringFuncs[name] {
 					for _, arg := range node.Args {
-						if s, lit := i18nClassifyExpr(arg); s != "" {
+						if s, lit := classifyExpr(arg); s != "" {
 							record(lit.Pos(), name+"(arg)", s)
 						}
 					}
 				}
 				if name == "Attr" && len(node.Args) == 2 {
 					if an, ok := i18nLiteral(node.Args[0]); ok && i18nAttrNames[an] {
-						if s, lit := i18nClassifyExpr(node.Args[1]); s != "" {
+						if s, lit := classifyExpr(node.Args[1]); s != "" {
 							record(lit.Pos(), "Attr("+an+")", s)
 						}
 					}
 				}
 			case *ast.CompositeLit:
+				if lowercase {
+					break // field names such as "name" and "currency" are schema values
+				}
 				// A display field paired with a <Field>Key sibling IS reachable by
 				// the catalog — the literal is that key's fallback, not the only
 				// copy of the sentence (C362). Mark its value so the KeyValueExpr
@@ -325,7 +395,7 @@ func i18nScanDir(t *testing.T, dir string) []string {
 				}
 			case *ast.KeyValueExpr:
 				if id, ok := node.Key.(*ast.Ident); ok && i18nDisplayFields[id.Name] && !hasCatalogKey[node.Value.Pos()] {
-					if s, lit := i18nClassifyExpr(node.Value); s != "" {
+					if s, lit := classifyExpr(node.Value); s != "" {
 						record(lit.Pos(), id.Name+":", s)
 					}
 				}
@@ -360,6 +430,24 @@ func TestNoNewHardcodedEnglish(t *testing.T) {
 			}
 		}
 	}
+	if issues := budgetCountKeyIssues(t, "../screens"); len(issues) > 0 {
+		t.Errorf("budgetCountKey prefix has no catalog entry:\n  %s", strings.Join(issues, "\n  "))
+	}
+	for dir, baseline := range map[string]int{"../screens": 33, "../widgetsource": 41} {
+		if findings := i18nScanLowerDir(t, dir); len(findings) > baseline {
+			t.Errorf("%s: %d lowercase user-facing words (baseline %d) — route new copy through the catalog:\n  %s",
+				dir, len(findings), baseline, strings.Join(findings, "\n  "))
+		}
+	}
+	budgetFindings := make([]string, 0)
+	for _, finding := range i18nScanLowerDir(t, "../screens") {
+		if strings.HasPrefix(finding, "budgets") {
+			budgetFindings = append(budgetFindings, finding)
+		}
+	}
+	if len(budgetFindings) != 0 {
+		t.Errorf("budget screens contain lowercase user-facing literals:\n  %s", strings.Join(budgetFindings, "\n  "))
+	}
 }
 
 func TestHardcodedEnglishScannerChecksNoticeStatusAndLabelHelpers(t *testing.T) {
@@ -378,5 +466,29 @@ func sample() {
 		if !strings.Contains(findings, want) {
 			t.Errorf("scanner missed %q; findings:\n%s", want, findings)
 		}
+	}
+}
+
+func TestHardcodedEnglishScannerFindsLowercaseDisplayWords(t *testing.T) {
+	dir := t.TempDir()
+	source := `package screens
+func sample() { Span("of") }`
+	if err := os.WriteFile(filepath.Join(dir, "sample.go"), []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if findings := strings.Join(i18nScanLowerDir(t, dir), "\n"); !strings.Contains(findings, `"of"`) {
+		t.Fatalf("scanner missed lowercase display word; findings:\n%s", findings)
+	}
+}
+
+func TestBudgetCountKeyRatchetResolvesBothPluralKeys(t *testing.T) {
+	dir := t.TempDir()
+	source := `package screens
+func sample(n int) { budgetCountKey("missing.prefix", n) }`
+	if err := os.WriteFile(filepath.Join(dir, "sample.go"), []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if issues := budgetCountKeyIssues(t, dir); len(issues) != 2 {
+		t.Fatalf("invalid plural prefix produced %d issues, want one/many failures: %v", len(issues), issues)
 	}
 }

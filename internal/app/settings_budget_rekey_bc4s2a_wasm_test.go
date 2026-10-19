@@ -52,8 +52,8 @@ func TestPayAnchorChangeRekeysBiweeklyBoost(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := writes[0].PeriodBoosts["2026-10-02"]; got != -700 {
-		t.Fatalf("rekeyed biweekly boost = %v, want 2026-10-02: -700", writes[0].PeriodBoosts)
+	if got := writes[0].PeriodBoosts["2026-10-16"]; got != -700 {
+		t.Fatalf("rekeyed biweekly boost = %v, want 2026-10-16: -700", writes[0].PeriodBoosts)
 	}
 }
 
@@ -63,6 +63,9 @@ func TestChangingBudgetPeriodPrefsPersistsRekeyedBudget(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer a.Store().Close()
+	if err := a.SetSettingKV("cashflux:prefs", `{"weekStart":"monday"}`); err != nil {
+		t.Fatal(err)
+	}
 	if err := a.PutCategory(domain.Category{ID: "groceries", Name: "Groceries", Kind: domain.KindExpense}); err != nil {
 		t.Fatal(err)
 	}

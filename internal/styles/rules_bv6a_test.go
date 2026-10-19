@@ -14,7 +14,6 @@ func TestBV6AResponsiveBudgetRowsStayWithinTheirCard(t *testing.T) {
 	registerBV6A()
 	css := Build()
 	for _, want := range []string{
-		"grid-template-columns:minmax(180px, 1fr) max-content minmax(160px, 1.2fr) 96px 72px;",
 		"@media (min-width: 601px) and (max-width: 1200px)",
 		"grid-template-columns:minmax(0, 1fr) minmax(0, max-content) 72px;",
 		`grid-template-areas:"name figures actions" "bar bar status" "sub sub sub";`,

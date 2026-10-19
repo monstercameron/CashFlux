@@ -22,7 +22,6 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/CashFlux/internal/validate"
 	"github.com/monstercameron/GoWebComponents/v5/css"
 	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/v5/ui"
@@ -75,26 +74,28 @@ func coverAllData(app *appstate.App, member string, vw period.Window, pr prefs.P
 	}
 	weekStart := pr.WeekStartWeekday()
 	payAnchor := budgetPayCycleAnchor(pr.PayCycleAnchor)
-	rates := currency.Rates{Base: app.Settings().BaseCurrency, Rates: app.Settings().FXRates}
-	if rates.Base == "" {
-		rates.Base = base
-	}
 	// Anchor exactly like computeBudgetView: today when today is inside the viewed
 	// window, otherwise the window's start.
 	anchor := budgetViewAnchor(vw, dateutil.WallClockUTC(time.Now()))
+	input, err := app.BudgetViewInput(anchor)
+	if err != nil {
+		return nil, nil, base
+	}
 	for _, st := range v.Statuses {
 		b := st.Budget
+		if b.IsSaving() {
+			continue
+		}
 		var bs, be time.Time
 		bs, be = budgeting.PeriodRangeAnchored(b.Period, anchor, weekStart, payAnchor)
 		switch {
 		case st.State == budgeting.StateOver:
 			overs = append(overs, coverAllOver{ID: b.ID, Name: b.Name, Rollover: b.Rollover, Currency: b.Limit.Currency, Shortfall: budgeting.CoverAmount(st), ThisStart: bs, NextStart: be})
 		case st.State == budgeting.StateOK && st.Remaining.Amount > 0:
-			committed, err := budgeting.CommittedWithRates(b, app.Recurring(), app.Transactions(), st.Remaining, bs, be, rates)
+			funds, err := budgeting.CoverSourceFunds(b, input)
 			if err != nil {
 				continue
 			}
-			funds := budgeting.SourceFundsOf(b.Limit, st.Remaining, committed.Committed)
 			if !funds.CanGive() {
 				continue
 			}
@@ -176,16 +177,25 @@ func coverAllHasDonor(chosen map[string]string) bool {
 }
 
 func coverAllSelectedTotal(overs []coverAllOver, chosen map[string]string) (int64, int) {
+	amount, count, _ := coverAllSelectedTotalChecked(overs, chosen)
+	return amount, count
+}
+
+func coverAllSelectedTotalChecked(overs []coverAllOver, chosen map[string]string) (int64, int, error) {
 	var amount int64
 	count := 0
 	for _, over := range overs {
 		if chosen[over.ID] == "" {
 			continue
 		}
-		amount += over.Shortfall.Amount
+		var err error
+		amount, err = money.Add(amount, over.Shortfall.Amount)
+		if err != nil {
+			return 0, 0, err
+		}
 		count++
 	}
-	return amount, count
+	return amount, count, nil
 }
 
 func coverAllHasNextMonthSelection(chosen map[string]string) bool {
@@ -265,8 +275,6 @@ func coverAllForm(props coverAllFormProps) ui.Node {
 	member := uistate.UseActiveMember().Get()
 	pr := uistate.UsePrefs().Get()
 	vw := uistate.UsePeriod().Get()
-	weekStart := pr.WeekStartWeekday()
-	payAnchor := budgetPayCycleAnchor(pr.PayCycleAnchor)
 	showLM := uistate.UseBudgetsLastMonth().Get()
 	choices := ui.UseState(map[string]string{})
 	errText := ui.UseState("")
@@ -339,6 +347,10 @@ func coverAllForm(props coverAllFormProps) ui.Node {
 			return
 		}
 		sel := choices.Get()
+		if _, _, err := coverAllSelectedTotalChecked(overs, sel); err != nil {
+			errText.Set(budgetErrorText(err))
+			return
+		}
 		// Validate that no source budget is over-drawn across all rows that draw on it.
 		drawn := map[string]int64{}
 		for _, o := range overs {
@@ -355,7 +367,12 @@ func coverAllForm(props coverAllFormProps) ui.Node {
 				errText.Set(uistate.T("coverAll.currencyError"))
 				return
 			}
-			drawn[src] += o.Shortfall.Amount
+			amount, err := money.Add(drawn[src], o.Shortfall.Amount)
+			if err != nil {
+				errText.Set(budgetErrorText(err))
+				return
+			}
+			drawn[src] = amount
 		}
 		for id, amt := range drawn {
 			s := srcByID[id]
@@ -368,116 +385,35 @@ func coverAllForm(props coverAllFormProps) ui.Node {
 		// #55: checkpoint before the multi-budget rewrite so Settings → Data can
 		// roll the whole cover-all back in one click.
 		checkpointSaving.Set(true)
-		uistate.SaveCheckpointThen(uistate.T("ckpt.beforeCoverAll", plural(len(overs), "budget")), func(_ string, checkpointErr error) {
+		uistate.SaveCheckpointThen(uistate.T("ckpt.beforeCoverAll", budgetCountPhrase(len(overs))), func(_ string, checkpointErr error) {
 			checkpointSaving.Set(false)
 			if checkpointErr != nil {
 				uistate.PostNotice(uistate.T("enc34.checkpointFailed"), true)
 				return
 			}
 
-			// Accumulate per-period boost deltas per budget so multiple rows drawing on the
-			// same source (or the same over) net correctly, then write each budget once.
-			type pboost struct {
-				start time.Time
-				delta int64
-			}
-			byBudget := map[string][]pboost{}
-			coveredPeriods := map[string]time.Time{}
-			add := func(id string, start time.Time, delta int64) {
-				byBudget[id] = append(byBudget[id], pboost{start, delta})
-			}
-			applied := 0
-			for _, o := range overs {
-				src := sel[o.ID]
-				if src == "" || o.Shortfall.Amount <= 0 {
+			requests := make([]budgeting.CoverRequest, 0, len(overs))
+			for _, over := range overs {
+				source := sel[over.ID]
+				if source == "" || !over.Shortfall.IsPositive() {
 					continue
 				}
-				// Cover the EXACT shortfall (QA L1: a $49.64 overage used to move $49.65).
-				// A budget landing exactly on its limit now classifies "near", not "over",
-				// so the extra clearing cent is no longer needed.
-				cover := o.Shortfall.Amount
-				coveredPeriods[o.ID] = coverAllCoveredAt(o)
-				switch src {
-				case coverAllNextSource:
-					// Borrow from next month's same budget: raise this period, lower the next.
-					add(o.ID, o.ThisStart, cover)
-					add(o.ID, o.NextStart, -cover)
-				default:
-					s, ok := srcByID[src]
-					if !ok {
-						continue
-					}
-					// Move this period's slack from the source budget to the over budget.
-					add(o.ID, o.ThisStart, cover)
-					add(s.ID, s.ThisStart, -cover)
+				request := budgeting.CoverRequest{DestinationID: over.ID}
+				if source == coverAllNextSource {
+					request.BorrowNext = over.Shortfall
+				} else {
+					request.Shares = map[string]money.Money{source: over.Shortfall}
 				}
-				applied++
+				requests = append(requests, request)
 			}
+			applied := len(requests)
 			if applied == 0 {
 				errText.Set(uistate.T("coverAll.doneNone"))
 				return
 			}
-			// Build every budget first and check them ALL before writing any of them.
-			//
-			// This loop moves money between budgets: it lowers a source's cap for the
-			// period and raises the over budget's by the same amount. Writing as it went
-			// meant a rejection partway through left the earlier pairs applied and the
-			// rest not — some budgets robbed with nobody paid. The checkpoint above makes
-			// that recoverable from Settings → Data, but recoverable is not the same as
-			// not happening, and it asks the user to notice first.
-			//
-			// The two failures that can be seen coming are handled here: a viewing role,
-			// which is one check for the whole batch rather than one per budget, and
-			// validation, which is decidable before any write. A storage failure mid-loop
-			// is still possible — the store has no transaction across entities — and that
-			// is what the checkpoint is for.
-			if !app.CanEdit() {
-				errText.Set(uistate.T("budgets.writeReadOnly"))
-				return
-			}
-			var writes []domain.Budget
-			for id, ops := range byBudget {
-				var b domain.Budget
-				found := false
-				for _, bb := range app.Budgets() {
-					if bb.ID == id {
-						b, found = bb, true
-						break
-					}
-				}
-				if !found {
-					continue
-				}
-				gained := false
-				for _, op := range ops {
-					key := budgeting.PeriodKeyWithWeekStart(b.Period, op.start, payAnchor, weekStart)
-					keyStart, _ := time.Parse("2006-01-02", key)
-					var boostErr error
-					b, boostErr = budgeting.WithPeriodBoostChecked(b, keyStart, op.delta)
-					if boostErr != nil {
-						errText.Set(budgetErrorText(boostErr))
-						return
-					}
-					if op.delta > 0 {
-						gained = true
-					}
-				}
-				// Stamp the RECEIVING budget so it can be flagged as covered this period.
-				// Only appstate.CoverBudget did this, and cover-all does not go through it
-				// — it writes period boosts directly — so the flag never lit from the one
-				// control most people actually use, and the card's "Covered this period"
-				// badge was dead in that path (Cam, 2026-08-31). A budget that GAVE
-				// (delta < 0) is not covered by the transaction; only a receiver is.
-				if gained {
-					b.CoveredAt = coveredPeriods[id]
-				}
-				if is := validate.ValidateBudget(b); !is.OK() {
-					errText.Set(budgetErrorText(is))
-					return // nothing has been written yet
-				}
-				writes = append(writes, b)
-			}
-			if err := app.PutBudgetsAtomicAt(writes, vw.From); err != nil {
+			// Re-evaluate room after the checkpoint, then commit all pairs in
+			// one transaction. The preview and every other cover share a planner.
+			if err := app.CoverBudgetsAt(requests, budgetViewAnchor(vw, budgetNow())); err != nil {
 				slog.Error("budgets: cover-all write rejected", "err", err)
 				errText.Set(budgetErrorText(err))
 				return
@@ -509,8 +445,12 @@ func coverAllForm(props coverAllFormProps) ui.Node {
 	empty := len(overs) == 0
 
 	var totalOver int64
+	var totalErr error
 	for _, o := range overs {
-		totalOver += o.Shortfall.Amount
+		totalOver, totalErr = money.Add(totalOver, o.Shortfall.Amount)
+		if totalErr != nil {
+			break
+		}
 	}
 	intro := uistate.T("coverAll.intro", len(overs), fmtMoney(money.New(totalOver, base)))
 	if len(overs) == 1 {
@@ -528,8 +468,11 @@ func coverAllForm(props coverAllFormProps) ui.Node {
 	if currencyError {
 		intro = uistate.T("coverAll.currencyError")
 	}
-	canApply := coverAllHasDonor(choices.Get())
-	selectedAmount, _ := coverAllSelectedTotal(overs, choices.Get())
+	selectedAmount, _, selectedErr := coverAllSelectedTotalChecked(overs, choices.Get())
+	if totalErr != nil || selectedErr != nil {
+		intro = uistate.T("budgets.incomplete")
+	}
+	canApply := coverAllHasDonor(choices.Get()) && totalErr == nil && selectedErr == nil
 	applyLabel := uistate.T("bv7g.cover.applyEmpty")
 	if selectedAmount > 0 {
 		applyLabel = uistate.T("bv7g.cover.apply", fmtMoney(money.New(selectedAmount, base)))

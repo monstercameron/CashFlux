@@ -691,21 +691,6 @@ func registerBudgetsSurface() {
 		textTransform("uppercase"),
 		color("var(--text-faint)"),
 	)
-	// The "Why?" affordance: a quiet, keyboard-reachable dotted-underline note whose
-	// title tooltip explains the FIFO matching. Accent-toned but understated.
-	rule(".budget-agemoney-why",
-		fontSize("var(--type-12)"),
-		fontWeight("600"),
-		color("var(--accent)"),
-		cursor("help"),
-		prop("border-bottom", "1px dotted var(--accent)"),
-		prop("flex-shrink", "0"),
-	)
-	rule(".budget-agemoney-why:focus-visible",
-		prop("outline", "2px solid var(--accent)"),
-		prop("outline-offset", "2px"),
-		borderRadius("3px"),
-	)
 	// The figure: a large serif numeral (the app's clearest typographic signature) with
 	// a small unit word riding the baseline beside it.
 	rule(".budget-agemoney-fig",
@@ -849,7 +834,6 @@ func registerBudgetsSurface() {
 	// overflowed leftwards into the amount beside it.
 	rule(".budget-crow",
 		display("grid"),
-		gridTemplateColumns("minmax(8rem, 1fr) minmax(0, 1.4fr) 10.5rem 7.5rem 8.5rem 4.6rem"),
 		alignItems("center"),
 		gap("0.8rem"),
 		padding("0.4rem 0.6rem 0.4rem 0.75rem"),

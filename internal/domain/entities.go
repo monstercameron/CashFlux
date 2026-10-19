@@ -3,6 +3,7 @@
 package domain
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -985,6 +986,10 @@ type Budget struct {
 	// and may be negative (this-period cover pulled FROM this budget). Additive; existing
 	// budgets load with nil (no boosts).
 	PeriodBoosts map[string]int64 `json:"periodBoosts,omitempty"`
+	// PeriodTopups records the copyable, unfunded portion of PeriodBoosts.
+	// Money moved between budgets or periods is never copied. Legacy boosts
+	// without this provenance remain effective, but are conservatively not copied.
+	PeriodTopups map[string]int64 `json:"periodTopups,omitempty"`
 	// PeriodNotes is a per-period journal keyed by the period's start date ("2006-01-02"):
 	// one short note explaining that period ("December was high because we hosted"). Distinct
 	// from Notes, which is the budget's standing note; these are anchored to a single period
@@ -1103,33 +1108,42 @@ func (b Budget) PeriodBoost(periodStart time.Time) int64 {
 	return b.PeriodBoosts[periodStart.Format("2006-01-02")]
 }
 
-// WithPeriodBoost returns a copy of the budget with delta added to the period-start's
-// one-time boost (creating the map on first use, and dropping the entry when it nets to
-// zero so the map doesn't accumulate cleared boosts).
+// WithPeriodBoost is the compatibility form of WithPeriodBoostChecked. On
+// overflow it returns the original budget. Writers must use the checked form.
 func (b Budget) WithPeriodBoost(periodStart time.Time, delta int64) Budget {
-	key := periodStart.Format("2006-01-02")
-	m := make(map[string]int64, len(b.PeriodBoosts)+1)
-	for k, v := range b.PeriodBoosts {
-		m[k] = v
+	updated, err := b.WithPeriodBoostChecked(periodStart, delta)
+	if err != nil {
+		return b
 	}
-	m[key] += delta
-	if m[key] == 0 {
-		delete(m, key)
-	}
-	if len(m) == 0 {
-		m = nil
-	}
-	b.PeriodBoosts = m
-	return b
+	return updated
 }
 
-// WithPeriodBoostChecked returns a copy with delta added to the period boost,
-// reporting overflow instead of wrapping the stored money amount.
+// WithPeriodBoostChecked adds unfunded period funding to both the effective
+// adjustment and its copyable top-up record, reporting overflow without mutation.
+// Balanced money moves must use WithPeriodMoveChecked instead.
 func (b Budget) WithPeriodBoostChecked(periodStart time.Time, delta int64) (Budget, error) {
+	return b.withPeriodAdjustment(periodStart, delta, true)
+}
+
+// WithPeriodMoveChecked adds one leg of a balanced money move. The amount is
+// effective in this period but never eligible for month-close top-up copying.
+// Both legs must be saved together by the application's atomic write boundary.
+func (b Budget) WithPeriodMoveChecked(periodStart time.Time, delta int64) (Budget, error) {
+	return b.withPeriodAdjustment(periodStart, delta, false)
+}
+
+func (b Budget) withPeriodAdjustment(periodStart time.Time, delta int64, copyable bool) (Budget, error) {
 	key := periodStart.Format("2006-01-02")
 	amount, err := money.Add(b.PeriodBoosts[key], delta)
 	if err != nil {
-		return Budget{}, err
+		return Budget{}, fmt.Errorf("budget %q period adjustment: %w", b.ID, err)
+	}
+	topup := b.PeriodTopups[key]
+	if copyable {
+		topup, err = money.Add(topup, delta)
+		if err != nil {
+			return Budget{}, fmt.Errorf("budget %q copyable top-up: %w", b.ID, err)
+		}
 	}
 	boosts := make(map[string]int64, len(b.PeriodBoosts)+1)
 	for k, v := range b.PeriodBoosts {
@@ -1144,6 +1158,21 @@ func (b Budget) WithPeriodBoostChecked(periodStart time.Time, delta int64) (Budg
 		boosts = nil
 	}
 	b.PeriodBoosts = boosts
+	if copyable {
+		topups := make(map[string]int64, len(b.PeriodTopups)+1)
+		for k, v := range b.PeriodTopups {
+			topups[k] = v
+		}
+		if topup == 0 {
+			delete(topups, key)
+		} else {
+			topups[key] = topup
+		}
+		if len(topups) == 0 {
+			topups = nil
+		}
+		b.PeriodTopups = topups
+	}
 	return b, nil
 }
 

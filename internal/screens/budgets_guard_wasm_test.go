@@ -688,8 +688,8 @@ func TestAdjustScopeCopyTracksTheScope(t *testing.T) {
 	if got := defaultAdjustScope("nonsense"); got != string(budgeting.AdjustThisPeriod) {
 		t.Errorf("an unparseable seed resolved to %q, want the safe default", got)
 	}
-	if got := adjustEveryPeriodLabel(); got != uistate.T("budgets.adjustAllScopeEveryPast") {
-		t.Errorf("permanent scope label = %q, want explicit past-period warning", got)
+	if got := adjustEveryPeriodLabel(); got != uistate.T("bcs2.adjust.fromPeriod") {
+		t.Errorf("permanent scope label = %q, want forward-only scope", got)
 	}
 
 	this := budgeting.AdjustThisPeriod
@@ -706,17 +706,11 @@ func TestAdjustScopeCopyTracksTheScope(t *testing.T) {
 			t.Errorf("missing catalog entry for %q / %q", pair.a, pair.b)
 		}
 	}
-	// The permanent hint must name the reach; the this-period one must promise the
-	// revert. Those are the two facts the ticket says were missing.
-	// It must say the change is unbounded in time. It must NOT say the change
-	// begins at this period: a limit has no history, so past periods report
-	// against the new number too.
+	// A permanent change starts in the viewed period; recorded earlier limits
+	// remain intact through the history-aware write boundary.
 	h := strings.ToLower(uistate.T(adjustScopeHintKey(every)))
-	if !strings.Contains(h, "every period") {
-		t.Errorf("the permanent hint does not say it reaches every period; got %q", h)
-	}
-	if strings.Contains(h, "every period after") {
-		t.Errorf("the permanent hint draws a future-only boundary the data model does not have; got %q", h)
+	if !strings.Contains(h, "onward") || !strings.Contains(h, "earlier periods keep their limits") {
+		t.Errorf("permanent hint is not forward-only: %q", h)
 	}
 	if h := strings.ToLower(uistate.T(adjustScopeHintKey(this))); !strings.Contains(h, "next period") {
 		t.Errorf("the this-period hint does not promise the revert; got %q", h)

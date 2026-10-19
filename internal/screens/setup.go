@@ -107,16 +107,27 @@ func SetupWizard() ui.Node {
 
 	// confirmCurrency saves currency + week-start and advances to step 1.
 	confirmCurrency := ui.UseEvent(Prevent(func() {
-		s2 := app.Settings()
-		s2.BaseCurrency = curS.Get()
-		_ = app.PutSettings(s2)
-		uistate.SettingKVSet(setupKVCurrencyConfirmed, "1")
-		curConfirmedS.Set(true)
-
 		pr := uistate.CurrentPrefs()
 		pr.WeekStart = prefs.WeekStart(weekS.Get())
-		uistate.SetPrefs(pr)
-		stepS.Set(1)
+		if err := uistate.SetPrefs(pr); err != nil {
+			uistate.PostNotice(uistate.T("settings.budgetPeriodRekeyFailed"), true)
+			return
+		}
+		s2 := app.Settings()
+		s2.BaseCurrency = curS.Get()
+		if err := app.PutSettings(s2); err != nil {
+			uistate.PostNotice(uistate.T("settings.budgetPeriodRekeyFailed"), true)
+			return
+		}
+		uistate.SettingKVSet(setupKVCurrencyConfirmed, "1")
+		app.RequestDurable(func(result appstate.DurableResult) {
+			if result.Err != nil {
+				uistate.PostNotice(uistate.T("settings.budgetPeriodRekeyFailed"), true)
+				return
+			}
+			curConfirmedS.Set(true)
+			stepS.Set(1)
+		})
 	}))
 
 	// confirmIncome saves monthly income and advances to step 2.
@@ -229,7 +240,7 @@ func SetupWizard() ui.Node {
 	weekVal := weekS.Get()
 	step0 := uiw.Card(uiw.CardProps{
 		Title: uistate.T("setup.step1Title"),
-		Body: Form(css.Class("form-grid"), OnSubmit(confirmCurrency),
+		Body: Form(css.Class("form-grid"), Attr("data-testid", "setup-currency-form"), OnSubmit(confirmCurrency),
 			P(css.Class("t-caption", tw.TextDim), uistate.T("setup.step1Hint")),
 			labeledField(uistate.T("setup.currencyLabel"),
 				Select(css.Class("field"),

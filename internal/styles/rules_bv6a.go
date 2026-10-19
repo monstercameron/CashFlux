@@ -46,7 +46,6 @@ func registerNotesMarkerWrap() {
 func registerBV6A() {
 	// Desktop keeps the amount intact while allowing the bar to take the remaining card width.
 	rule(".budget-crow",
-		gridTemplateColumns("minmax(180px, 1fr) max-content minmax(160px, 1.2fr) 96px 72px"),
 		prop("grid-template-areas", `"name figures bar status actions" "sub sub sub sub sub"`),
 		minWidth("0"),
 	)

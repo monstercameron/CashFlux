@@ -7,16 +7,7 @@ package styles
 func registerBR2MOB() {
 	// Compact rows keep a stable desktop scan line while their figures remain
 	// grouped together, so a narrow viewport can make the row two lines tall.
-	rule(".budget-crow",
-		gridTemplateColumns("minmax(8rem, 1fr) minmax(0, 1.4fr) minmax(10.5rem, auto) 8.5rem 4.6rem"),
-		prop("grid-template-areas", `"name bar figures chip actions"`),
-	)
-	rule(".budget-crow-head", prop("grid-area", "name"), minWidth("0"))
-	rule(".budget-crow-chip", prop("grid-area", "chip"), justifySelf("end"))
-	rule(".budget-crow-actions", prop("grid-area", "actions"), justifySelf("end"))
-	rule(".budget-crow-bar", prop("grid-area", "bar"))
 	rule(".budget-crow-figures",
-		prop("grid-area", "figures"),
 		display("flex"),
 		alignItems("center"),
 		justifyContent("flex-end"),
@@ -30,7 +21,7 @@ func registerBR2MOB() {
 	rule(".budget-crow-bar .bar-pace-tick", zIndex("1"))
 
 	// Keep the progress bar at 1024px, where the legacy content-width rule hid it.
-	ruleMedia("(max-width: 1100px)", ".budget-crow-bar", display("block !important"))
+	ruleMedia("(max-width: 1100px)", ".budget-crow-bar", display("block"))
 	ruleMedia("(max-width: 1100px)", ".budget-crow",
 		gridTemplateColumns("minmax(0, 1fr) auto auto"),
 		prop("grid-template-areas", `"name chip actions" "figures figures figures"`),
@@ -103,7 +94,7 @@ func registerBR2MOB() {
 	// Reserve the mobile tab bar and quick-add footprint at the end of scroll,
 	// and lift Back to top above the floating quick-add button.
 	ruleMedia("(max-width: 640px)", "main.cf-scroll",
-		paddingBottom("calc(148px + env(safe-area-inset-bottom, 0px)) !important"),
+		paddingBottom("calc(148px + env(safe-area-inset-bottom, 0px))"),
 	)
 	ruleMedia("(max-width: 640px)", ".cf-scrolltop",
 		bottom("calc(56px + env(safe-area-inset-bottom, 0px) + 76px)"),

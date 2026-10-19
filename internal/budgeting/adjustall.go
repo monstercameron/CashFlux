@@ -31,6 +31,25 @@ type AdjustLine struct {
 	After  int64
 }
 
+// AdjustBasesAt snapshots each budget's recorded base in the edited period.
+// A permanent percentage edit must scale that period's plan, even when a later
+// standing limit differs. The application still owns and preserves the history.
+func AdjustBasesAt(budgets []domain.Budget, periodStart func(domain.Budget) time.Time) ([]domain.Budget, error) {
+	if periodStart == nil {
+		return nil, fmt.Errorf("adjustment period is required")
+	}
+	out := make([]domain.Budget, len(budgets))
+	for i, b := range budgets {
+		base, err := BudgetBaseAt(b, periodStart(b))
+		if err != nil {
+			return nil, fmt.Errorf("adjustment base: %w", err)
+		}
+		b.Limit = base
+		out[i] = b
+	}
+	return out, nil
+}
+
 // Delta is the change to this budget's limit; negative means a reduction.
 func (l AdjustLine) Delta() int64 { return l.After - l.Before }
 
@@ -232,7 +251,7 @@ func AdjustNeedsAck(pct float64, scope AdjustScope) bool {
 	return scope.IsPermanent() || IsLargeAdjust(pct)
 }
 
-// ApplyAdjust returns each affected budget as the adjustment would store it,
+// ApplyAdjustChecked returns each affected budget as the adjustment would store it,
 // leaving the caller only the persistence.
 //
 // The two scopes are two different writes, not one write with a flag: a permanent
@@ -245,7 +264,7 @@ func AdjustNeedsAck(pct float64, scope AdjustScope) bool {
 // p MUST have been built by AdjustAllPreviewFor under the same scope — the
 // delta a this-period write records is only correct if the preview measured it
 // against the effective cap the boost lands on.
-// ApplyAdjustChecked builds every write before returning any, checking boost
+// It builds every write before returning any, checking boost
 // accumulation as well as the preview. No partial write set escapes on failure.
 func ApplyAdjustChecked(p AdjustPreview, scope AdjustScope, periodStart func(domain.Budget) time.Time) ([]domain.Budget, error) {
 	if p.Error != nil {
@@ -262,7 +281,7 @@ func ApplyAdjustChecked(p AdjustPreview, scope AdjustScope, periodStart func(dom
 				return nil, fmt.Errorf("adjustment period is required")
 			}
 			var err error
-			b, err = WithPeriodBoostChecked(b, periodStart(b), line.Delta())
+			b, err = b.WithPeriodBoostChecked(periodStart(b), line.Delta())
 			if err != nil {
 				return nil, err
 			}
@@ -272,23 +291,6 @@ func ApplyAdjustChecked(p AdjustPreview, scope AdjustScope, periodStart func(dom
 		out = append(out, b)
 	}
 	return out, nil
-}
-
-// WithPeriodBoostChecked adds a one-period adjustment without wrapping money or
-// mutating the budget's existing boost map. start is the budget's own period key.
-func WithPeriodBoostChecked(b domain.Budget, start time.Time, delta int64) (domain.Budget, error) {
-	key := start.Format(time.DateOnly)
-	amount, err := money.Add(b.PeriodBoosts[key], delta)
-	if err != nil {
-		return domain.Budget{}, fmt.Errorf("budget %q period boost: %w", b.ID, err)
-	}
-	boosts := make(map[string]int64, len(b.PeriodBoosts)+1)
-	for k, v := range b.PeriodBoosts {
-		boosts[k] = v
-	}
-	boosts[key] = amount
-	b.PeriodBoosts = boosts
-	return b, nil
 }
 
 // AdjustAllPreviewFor computes the before/after for an adjustment under a given

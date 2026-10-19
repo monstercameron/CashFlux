@@ -10,6 +10,7 @@ import (
 	"syscall/js"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/GoWebComponents/v5/state"
 )
@@ -19,10 +20,8 @@ const (
 	prefsStoreID = "cashflux:prefs"
 )
 
-// UsePrefs returns the shared display-preferences atom, seeded from localStorage
-// so week-start and date-format choices survive reloads (the dataset is re-seeded
-// each boot, so preferences persist here, not in the store). Screens read it to
-// format dates; the settings form writes it back via PersistPrefs.
+// UsePrefs returns the shared display-preferences atom, seeded from the active
+// dataset. Calendar writers use SetPrefs so stored period state migrates first.
 func UsePrefs() state.Atom[prefs.Prefs] {
 	a := state.UseAtom(prefsAtomID, loadPrefs())
 	capturedPrefs = a
@@ -48,24 +47,42 @@ func CurrentPrefs() prefs.Prefs {
 // SetPrefs writes preferences from outside a component render and persists +
 // applies them. Routes through the captured atom so the change re-renders
 // subscribers; a hook call from such a callback would panic.
-func SetPrefs(p prefs.Prefs) {
+func SetPrefs(p prefs.Prefs) error {
+	p = p.Normalize()
+	old := loadPrefs()
+	if err := PersistPrefs(p); err != nil {
+		return err
+	}
 	if prefsCaptured {
 		capturedPrefs.Set(p)
 	}
-	PersistPrefs(p)
 	ApplyPrefs(p)
+	if old.WeekStart != p.WeekStart || old.PayCycleAnchor != p.PayCycleAnchor {
+		BumpDataRevision()
+	}
+	return nil
 }
 
-// PersistPrefs saves preferences to localStorage. Call it after writing the atom
-// so the choice is remembered across reloads.
-func PersistPrefs(p prefs.Prefs) {
+// PersistPrefs migrates period state and saves preferences together in the active
+// dataset, then requests its normal durable save. It returns errors before any
+// caller publishes a new calendar grid. Before hydration it uses the KV bridge.
+func PersistPrefs(p prefs.Prefs) error {
+	if a := appstate.Default; a != nil {
+		if err := a.SaveBudgetPeriodPreferences(p); err != nil {
+			return err
+		}
+		invalidatePrefsCache()
+		flushSettingsPersist()
+		return nil
+	}
 	data, err := json.Marshal(p.Normalize())
 	if err != nil {
-		return
+		return err
 	}
 	SettingKVSet(prefsStoreID, string(data))
 	// Our own write must be visible to the very next read, TTL or not.
 	invalidatePrefsCache()
+	return nil
 }
 
 // LoadPrefs returns the persisted preferences directly (without the atom), for
@@ -80,7 +97,11 @@ func LoadPrefs() prefs.Prefs { return loadPrefs() }
 // whenever the preferences change.
 func ApplyPrefs(p prefs.Prefs) {
 	p = p.Normalize()
-	root := js.Global().Get("document").Get("documentElement")
+	document := js.Global().Get("document")
+	if document.IsNull() || document.IsUndefined() {
+		return
+	}
+	root := document.Get("documentElement")
 	if root.IsNull() || root.IsUndefined() {
 		return
 	}
@@ -103,6 +124,9 @@ func ApplyPrefs(p prefs.Prefs) {
 // consulting the OS color-scheme for "system".
 func resolveTheme(t prefs.Theme) string {
 	if t == prefs.ThemeSystem {
+		if js.Global().Get("matchMedia").Type() != js.TypeFunction {
+			return string(prefs.ThemeDark)
+		}
 		m := js.Global().Call("matchMedia", "(prefers-color-scheme: light)")
 		if !m.IsNull() && !m.IsUndefined() && m.Get("matches").Bool() {
 			return "light"

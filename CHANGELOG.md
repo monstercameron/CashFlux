@@ -90,6 +90,12 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Budget money moves stay balanced across periods (BCS2); Budgets clean-up (BC5B9).** Covers and top-ups are stored as paired moves,
+  so month-close copy and cadence resets treat both sides as one unit and never create or destroy money; changing the week start or
+  pay anchor re-keys boosts by period midpoint (no more sliding into last week) and re-keys recurring covers so they do not replay;
+  the Bills pay-day editor, Setup wizard and settings all migrate budgets before saving a new period grid; cover, cover-all and
+  recurring cover share one planner and one source-room rule; Adjust every budget changes limits from the edited period on. Stale docs,
+  duplicate count keys, dead helpers and shadowed style rules removed; the screen lint now catches lowercase English literals.
 - **Budgets use one netted ledger; transaction writes go through one undoable seam (BCS1, TCS2, BC5B1, BC5B2, BC5B4, INT3).**
   The global refund-link table is gone: every budget evaluator takes a ledger netted once per revision, so a refund no longer moves
   spending between months and the annual grid, summary and hints stop copying the whole ledger; the Monthly Review and Insights judge

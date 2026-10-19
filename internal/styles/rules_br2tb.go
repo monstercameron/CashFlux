@@ -16,10 +16,6 @@ func registerRulesBR2TB() {
 		lineHeight("1.45"),
 		flex("1 1 100%"),
 	)
-	rule(".budget-agemoney-why",
-		minWidth("24px"),
-		minHeight("24px"),
-	)
 	rule(".budget-issues-chevbtn",
 		minWidth("24px"),
 		minHeight("24px"),
@@ -30,10 +26,6 @@ func registerRulesBR2TB() {
 		color("var(--muted)"),
 	)
 	ruleMedia("(pointer: coarse)", ".budget-issues-chevbtn",
-		minWidth("44px"),
-		minHeight("44px"),
-	)
-	ruleMedia("(pointer: coarse)", ".budget-agemoney-why",
 		minWidth("44px"),
 		minHeight("44px"),
 	)

@@ -44,6 +44,9 @@ func (f SourceFunds) CanGive() bool { return f.Movable.Amount > 0 }
 // caller caps the move at Movable — a negative here would mean the cap failed,
 // and a preview is not the place to display that.
 func (f SourceFunds) AfterGiving(amtMinor int64) money.Money {
+	if amtMinor <= 0 {
+		return f.Movable
+	}
 	left := f.Movable.Amount - amtMinor
 	if left < 0 {
 		left = 0
@@ -63,8 +66,10 @@ func SourceFundsOf(limit, remaining, committed money.Money) SourceFunds {
 		cur = remaining.Currency
 	}
 	movable := remaining.Amount
-	if capMax := limit.Amount - 1; movable > capMax {
-		movable = capMax
+	if limit.Amount <= 1 {
+		movable = 0
+	} else if movable > limit.Amount-1 {
+		movable = limit.Amount - 1
 	}
 	if movable < 0 {
 		movable = 0

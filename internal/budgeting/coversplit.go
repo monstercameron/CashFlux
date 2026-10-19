@@ -2,7 +2,10 @@
 
 package budgeting
 
-import "sort"
+import (
+	"math/big"
+	"sort"
+)
 
 // CoverShare is one source's contribution to a funded cover or top-up.
 type CoverShare struct {
@@ -48,7 +51,12 @@ func CoverSplit(total int64, srcs []CoverSplitInput) (shares map[string]int64, s
 
 	// Pinned sources give everything they have first — that is what pinning means.
 	var free []CoverSplitInput
+	seen := make(map[string]bool, len(srcs))
 	for _, s := range srcs {
+		if s.ID == "" || seen[s.ID] {
+			return nil, total
+		}
+		seen[s.ID] = true
 		c := s.Cap
 		if c < 0 {
 			c = 0
@@ -79,20 +87,23 @@ func CoverSplit(total int64, srcs []CoverSplitInput) (shares map[string]int64, s
 	})
 	for round := 0; round < len(free)+1 && remaining > 0; round++ {
 		var open []CoverSplitInput
-		totalWeight := 0
+		totalWeight := new(big.Int)
 		for _, s := range free {
 			if out[s.ID] < capOf[s.ID] {
 				open = append(open, s)
-				totalWeight += weightOf(s)
+				totalWeight.Add(totalWeight, big.NewInt(int64(weightOf(s))))
 			}
 		}
-		if len(open) == 0 || totalWeight == 0 {
+		if len(open) == 0 || totalWeight.Sign() == 0 {
 			break
 		}
 		before := remaining
 		var assigned int64
 		for i, s := range open {
-			want := remaining * int64(weightOf(s)) / int64(totalWeight)
+			// Intermediate products and weight totals can exceed int64 even
+			// though every share is bounded by the requested minor-unit total.
+			weighted := new(big.Int).Mul(big.NewInt(remaining), big.NewInt(int64(weightOf(s))))
+			want := weighted.Quo(weighted, totalWeight).Int64()
 			if i == len(open)-1 {
 				want = remaining - assigned
 			}

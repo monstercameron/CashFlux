@@ -17,7 +17,7 @@ func registerBV6H() {
 	rule(".bento-budgets .budget-sub, .bento-budgets .budget-crow-chip, .bento-budgets .bud-set-lbl, .bento-budgets .bud-set-hint, .bento-budgets .brc-meta", fontSize("var(--fs-meta)"), fontWeight("400"))
 	rule(".bento-budgets .bud3-attention-link", color("#28613f"))
 	rule(".bento-budgets .budget-agemoney-head .smart-tip-wrap button", minWidth("32px"), minHeight("32px"), gap("0.25rem"), padding("0 0.35rem"))
-	rule(".bento-budgets .budget-agemoney-head .smart-tip-wrap button::after", content("\"Why?\""), fontSize("12.5px"), fontWeight("500"), color("var(--text)"))
+	rule(".bento-budgets .budget-agemoney-head .smart-tip-wrap button::after", content("\"Why?\""), fontSize("var(--fs-meta)"), fontWeight("500"), color("var(--text)"))
 	rule(".bento-budgets .budget-crow-actions", order("2"))
 	rule(".bento-budgets .brc-excluded-list", margin("0"), paddingLeft("1.25rem"), color("var(--text)"))
 	rule(".bento-budgets .brc-excluded-list li", fontSize("14px"), lineHeight("1.4"))

@@ -173,6 +173,7 @@ func Register() {
 	registerBV7F()
 	registerBV7G1()
 	registerTC4W3()
+	registerBC5B9()
 	inject(Build())
 }
 

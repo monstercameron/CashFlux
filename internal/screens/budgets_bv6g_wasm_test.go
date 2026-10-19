@@ -94,7 +94,7 @@ func TestBV6GAdjustCopyUsesMinusSign(t *testing.T) {
 	if got := adjustScopeDescription(budgeting.AdjustThisPeriod); got != "Updates budgets in the period you are viewing." {
 		t.Fatalf("single-period explanation = %q", got)
 	}
-	if got := adjustScopeDescription(budgeting.AdjustEveryPeriod); got != "Updates every budget period, including past periods." {
+	if got := adjustScopeDescription(budgeting.AdjustEveryPeriod); got != "Updates limits from the period you are viewing onward. Earlier periods keep their limits." {
 		t.Fatalf("all-period explanation = %q", got)
 	}
 }

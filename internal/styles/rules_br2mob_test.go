@@ -17,11 +17,11 @@ func TestBR2MOBResponsiveRulesAndGreenTextContrast(t *testing.T) {
 	for _, want := range []string{
 		"@media (max-width: 1100px)",
 		"grid-template-areas:\"name chip actions\" \"figures figures figures\";",
-		".budget-crow-bar{display:block !important;",
+		".budget-crow-bar{display:block;",
 		".budget-crow-head .budget-crow-name{flex:1 1 0;min-width:0;",
 		"color:var(--up-ink, var(--accent-ink, var(--up)));",
 		".topbar .sample-banner-actions{display:flex;",
-		"main.cf-scroll{padding-bottom:calc(148px + env(safe-area-inset-bottom, 0px)) !important;",
+		"main.cf-scroll{padding-bottom:calc(148px + env(safe-area-inset-bottom, 0px));",
 		".cf-scrolltop{bottom:calc(56px + env(safe-area-inset-bottom, 0px) + 76px);",
 	} {
 		if !strings.Contains(css, want) {

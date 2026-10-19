@@ -13,6 +13,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/coverformula"
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
 )
@@ -26,7 +27,7 @@ func TestRecurringBC4CoverShares(t *testing.T) {
 		fail    bool
 	}{
 		{"remainder", 101, []domain.CoverShare{{BudgetID: "a", Weight: 1}, {BudgetID: "b", Weight: 1}}, map[string]int64{"a": 50, "b": 51}, false},
-		{"duplicate source", 101, []domain.CoverShare{{BudgetID: "a", Weight: 1}, {BudgetID: "a", Weight: 1}}, map[string]int64{"a": 101}, false},
+		{"duplicate source", 101, []domain.CoverShare{{BudgetID: "a", Weight: 1}, {BudgetID: "a", Weight: 1}}, nil, true},
 		{"large product", math.MaxInt64, []domain.CoverShare{{BudgetID: "a", Weight: 100}, {BudgetID: "b", Weight: 100}}, map[string]int64{"a": math.MaxInt64 / 2, "b": math.MaxInt64/2 + 1}, false},
 		{"zero", 0, []domain.CoverShare{{BudgetID: "a", Weight: 1}}, map[string]int64{}, false},
 		{"missing", 100, []domain.CoverShare{{BudgetID: "missing", Weight: 1}}, nil, true},
@@ -34,8 +35,9 @@ func TestRecurringBC4CoverShares(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			b := domain.Budget{ID: "to", Limit: money.New(10000, "USD"), RecurringCover: &domain.RecurringCover{AmountMinor: tc.amount, Sources: tc.sources}}
-			byID := map[string]domain.Budget{"a": {ID: "a"}, "b": {ID: "b"}}
-			got, err := recurringCoverShares(b, byID, coverformula.Context{}, "USD")
+			byID := map[string]domain.Budget{"a": {ID: "a", Period: domain.PeriodMonthly, Limit: money.New(math.MaxInt64, "USD")}, "b": {ID: "b", Period: domain.PeriodMonthly, Limit: money.New(math.MaxInt64, "USD")}}
+			now := time.Date(2026, 10, 19, 0, 0, 0, 0, time.UTC)
+			got, err := recurringCoverShares(b, byID, coverformula.Context{Now: now, Rates: currency.Rates{Base: "USD"}}, "USD")
 			if (err != nil) != tc.fail {
 				t.Fatalf("err=%v fail=%v", err, tc.fail)
 			}

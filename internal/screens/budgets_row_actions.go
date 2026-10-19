@@ -173,7 +173,11 @@ func useBudgetRowFundingActions(s budgeting.Status, props budgetRowProps, menuOp
 				}
 				prefs := uistate.LoadPrefs()
 				start := budgetPeriodKeyStartWithWeekStart(b.Period, props.Anchor, budgetPayCycleAnchor(prefs.PayCycleAnchor), prefs.WeekStartWeekday())
-				if err := app.PutBudget(b.WithPeriodBoost(start, -remaining.Amount)); err != nil {
+				updated, err := b.WithPeriodBoostChecked(start, -remaining.Amount)
+				if err == nil {
+					err = app.PutBudgetAt(updated, props.Anchor)
+				}
+				if err != nil {
 					uistate.PostNotice(budgetErrorText(err), true)
 					return
 				}

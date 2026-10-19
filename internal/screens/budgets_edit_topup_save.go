@@ -5,7 +5,6 @@
 package screens
 
 import (
-	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -37,73 +36,6 @@ type budgetEditTopupSaveProps struct {
 	coverSrcs       []budgetCoverSource
 	cur             string
 	props           BudgetEditFormProps
-}
-
-var errBudgetTopupCurrencyMismatch = errors.New("funding budgets must use the destination currency")
-
-// planFundedBudgetTopup creates every source and destination update before a
-// funded top-up is persisted. Period-only source boosts use that source's own
-// period key for the period containing viewAnchor.
-func planFundedBudgetTopup(budgets []domain.Budget, shares map[string]int64, destinationID string, amount int64, permanent bool, viewAnchor, payAnchor time.Time, weekStart time.Weekday) ([]domain.Budget, error) {
-	byID := make(map[string]domain.Budget, len(budgets))
-	for _, budget := range budgets {
-		byID[budget.ID] = budget
-	}
-	destination, ok := byID[destinationID]
-	if !ok {
-		return nil, fmt.Errorf("destination budget %q not found", destinationID)
-	}
-	writes := make([]domain.Budget, 0, len(shares)+1)
-	for id, share := range shares {
-		if share <= 0 {
-			continue
-		}
-		source, ok := byID[id]
-		if !ok {
-			return nil, fmt.Errorf("source budget %q not found", id)
-		}
-		if source.Limit.Currency != destination.Limit.Currency {
-			return nil, errBudgetTopupCurrencyMismatch
-		}
-		if permanent {
-			if share >= source.Limit.Amount {
-				return nil, fmt.Errorf("source budget %q would have nothing left", id)
-			}
-			source.Limit.Amount -= share
-		} else {
-			key := budgeting.PeriodKeyWithWeekStart(source.Period, viewAnchor, payAnchor, weekStart)
-			start, err := time.Parse("2006-01-02", key)
-			if err != nil {
-				return nil, fmt.Errorf("source budget %q period key: %w", id, err)
-			}
-			source, err = source.WithPeriodBoostChecked(start, -share)
-			if err != nil {
-				return nil, fmt.Errorf("source budget %q period boost: %w", id, err)
-			}
-		}
-		writes = append(writes, source)
-	}
-	if permanent {
-		if amount > 0 && destination.Limit.Amount > math.MaxInt64-amount {
-			return nil, fmt.Errorf("destination budget limit would overflow")
-		}
-		destination.Limit.Amount += amount
-	} else {
-		key := budgeting.PeriodKeyWithWeekStart(destination.Period, viewAnchor, payAnchor, weekStart)
-		if destination.PeriodBoosts[key] > math.MaxInt64-amount {
-			return nil, fmt.Errorf("destination budget period boost would overflow")
-		}
-		destinationStart, err := time.Parse(time.DateOnly, key)
-		if err != nil {
-			return nil, fmt.Errorf("destination budget period key: %w", err)
-		}
-		destination, err = destination.WithPeriodBoostChecked(destinationStart, amount)
-		if err != nil {
-			return nil, fmt.Errorf("destination budget period boost: %w", err)
-		}
-	}
-	writes = append(writes, destination)
-	return writes, nil
 }
 
 // useBudgetEditTopupSave registers funded and unfunded limit increases.
@@ -156,25 +88,20 @@ func useBudgetEditTopupSave(p budgetEditTopupSaveProps) ui.Handler {
 					}
 				}
 			}
-			writes, planErr := planFundedBudgetTopup(p.app.Budgets(), shares, p.props.BudgetID,
-				amt, permanent, viewAnchor, p.coverPayAnchor, p.pr.WeekStartWeekday())
-			if errors.Is(planErr, errBudgetTopupCurrencyMismatch) {
-				p.errS.Set(uistate.T("budgets.coverCurrencyMismatch"))
-				return
+			amounts := make(map[string]money.Money, len(shares))
+			for id, share := range shares {
+				if share > 0 {
+					amounts[id] = money.New(share, p.cur)
+				}
 			}
-			if planErr != nil {
-				p.errS.Set(budgetErrorText(planErr))
-				return
-			}
-			if err := p.app.PutBudgetsAtomicAt(writes, p.viewAnchor); err != nil {
+			if err := p.app.CoverBudgetsAt([]budgeting.CoverRequest{{DestinationID: p.props.BudgetID, Shares: amounts, Permanent: permanent}}, viewAnchor); err != nil {
 				p.errS.Set(budgetErrorText(err))
 				return
 			}
 		}
 
-		// Raise the destination. For a permanent FUNDED top-up, CoverBudget already added
-		// the amount to dest.Limit, so don't double-count — only the unfunded-permanent and
-		// the this-month cases still need to bump the destination here.
+		// Funded plans already contain both legs. An unfunded raise adds
+		// copyable period funding, or a history-aware permanent limit change.
 		if !funded {
 			for _, nb := range p.app.Budgets() {
 				if nb.ID != p.props.BudgetID {

@@ -76,7 +76,7 @@ func AdjustAllBody(_ struct{}) ui.Node {
 
 	scope := budgeting.AdjustScope(scopeS.Get())
 	if !scope.Valid() {
-		scope = budgeting.AdjustEveryPeriod
+		scope = budgeting.AdjustThisPeriod
 	}
 	impactReach := fundsReachThisPeriod
 	if scope.IsPermanent() {
@@ -88,6 +88,7 @@ func AdjustAllBody(_ struct{}) ui.Node {
 	// resolver, so the period this form writes to is the one every other caller
 	// means by "this period".
 	periodStart := budgetPeriodStarts(vw, pr)
+	scoped, baseErr := budgeting.AdjustBasesAt(scoped, periodStart)
 	// Whether the window being viewed has already closed — the same test the
 	// budgets hero uses to decide between "hasn't arrived yet" and "never arrived".
 	_, viewedEnd := vw.Range()
@@ -128,7 +129,7 @@ func AdjustAllBody(_ struct{}) ui.Node {
 	// old rule looked only at magnitude, so a 5% cut that reached every future
 	// period passed without a word while a 30% one that did the same was stopped.
 	needsAck := valid && budgeting.AdjustNeedsAck(pct, scope)
-	canApply := valid && normalizationErr == nil && preview.Error == nil && normalizedDeltaErr == nil && preview.Count() > 0 && (!needsAck || ack.Get())
+	canApply := valid && baseErr == nil && normalizationErr == nil && preview.Error == nil && normalizedDeltaErr == nil && preview.Count() > 0 && (!needsAck || ack.Get())
 
 	apply := ui.UseEvent(Prevent(func() {
 		if !canApply || app == nil {
@@ -151,6 +152,9 @@ func AdjustAllBody(_ struct{}) ui.Node {
 	}))
 
 	inlineErr := adjustAllInlineError(raw, parseErr, pct, normalizationErr, preview, normalizedDeltaErr)
+	if baseErr != nil {
+		inlineErr = uistate.T("budgets.incomplete")
+	}
 
 	base := budgetBaseCurrency("")
 	if app != nil {
@@ -299,7 +303,7 @@ func adjustAllFormNode(props adjustAllFormProps) ui.Node {
 				Label: uistate.T("bv6g.adjust.scopeLabel"), Selected: string(props.Scope),
 				Options: []uiw.SegOption{
 					{Value: string(budgeting.AdjustThisPeriod), Label: uistate.T("bv7g.adjust.thisPeriod"), TestID: "adjustall-scope-this"},
-					{Value: string(budgeting.AdjustEveryPeriod), Label: uistate.T("bv7g.adjust.everyPeriod"), TestID: "adjustall-scope-every"},
+					{Value: string(budgeting.AdjustEveryPeriod), Label: uistate.T("bcs2.adjust.fromPeriod"), TestID: "adjustall-scope-every"},
 				}, OnSelect: props.OnScope,
 			})),
 			P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "adjustall-scope-hint"), Style(map[string]string{"margin": "0"}), adjustScopeDescription(props.Scope)),
@@ -342,7 +346,7 @@ func defaultAdjustScope(seed string) string {
 }
 
 // adjustEveryPeriodLabel makes the effect on already-closed periods explicit.
-func adjustEveryPeriodLabel() string { return uistate.T("budgets.adjustAllScopeEveryPast") }
+func adjustEveryPeriodLabel() string { return uistate.T("bcs2.adjust.fromPeriod") }
 
 // adjustIntroKey, adjustScopeHintKey, adjustApplyKey and adjustAppliedKey name
 // the copy for each scope: what the form does, what the control will do, what the
@@ -384,28 +388,28 @@ func adjustPeriodClass(closed bool) string {
 
 func adjustIntroKey(scope budgeting.AdjustScope) string {
 	if scope.IsPermanent() {
-		return "budgets.adjustAllIntro"
+		return "bcs2.adjust.introFrom"
 	}
 	return "budgets.adjustAllIntroThis"
 }
 
 func adjustScopeHintKey(scope budgeting.AdjustScope) string {
 	if scope.IsPermanent() {
-		return "budgets.adjustAllScopeEveryHint"
+		return "bcs2.adjust.fromHint"
 	}
 	return "budgets.adjustAllScopeThisHint"
 }
 
 func adjustApplyKey(scope budgeting.AdjustScope) string {
 	if scope.IsPermanent() {
-		return "budgets.adjustAllApplyEvery"
+		return "bcs2.adjust.applyFrom"
 	}
 	return "budgets.adjustAllApplyThis"
 }
 
 func adjustAppliedKey(scope budgeting.AdjustScope) string {
 	if scope.IsPermanent() {
-		return "budgets.adjustAllAppliedEvery"
+		return "bcs2.adjust.appliedFrom"
 	}
 	return "budgets.adjustAllAppliedThis"
 }
@@ -426,7 +430,7 @@ func formatAdjustPctCopy(pct float64) string {
 
 func adjustScopeDescription(scope budgeting.AdjustScope) string {
 	if scope.IsPermanent() {
-		return uistate.T("bv7g.adjust.everyHint")
+		return uistate.T("bcs2.adjust.fromHint")
 	}
 	return uistate.T("bv7g.adjust.thisHint")
 }

@@ -820,17 +820,10 @@ func globalSettingsForm() uic.Node {
 	refreshLog := func() { logRev.Set(logRev.Get() + 1) }
 	savePrefs := func(p prefs.Prefs) {
 		p = p.Normalize()
-		old := prefsAtom.Get().Normalize()
-		if a := appstate.Default; a != nil && budgetPeriodPreferencesChanged(old, p) {
-			if err := rekeyBudgetPeriodPreferences(a, old, p, time.Now()); err != nil {
-				noticeAtom.Set(noticeAtom.Get().With(uistate.T("settings.budgetPeriodRekeyFailed"), true))
-				return
-			}
-			uistate.BumpDataRevision()
+		if err := uistate.SetPrefs(p); err != nil {
+			noticeAtom.Set(noticeAtom.Get().With(uistate.T("settings.budgetPeriodRekeyFailed"), true))
+			return
 		}
-		prefsAtom.Set(p)
-		uistate.PersistPrefs(p)
-		uistate.ApplyPrefs(p)
 		// Keep the dashboard window's week boundaries in lockstep with the
 		// week-start preference (no-op for any non-week-start change).
 		if w := periodAtom.Get(); w.WeekStart != p.WeekStartWeekday() {

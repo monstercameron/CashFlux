@@ -103,6 +103,7 @@ func useBudgetEditData(props BudgetEditFormProps) budgetEditDataResult {
 	if app != nil {
 		cv := computeBudgetView(app, activeMemberID, vw, pr, false)
 		selfEffCap, selfCapMath = cv.RollEffCap[props.BudgetID], cv.RollEffCapMath[props.BudgetID]
+		input, inputErr := app.BudgetViewInput(cv.Anchor)
 		for _, s := range cv.Statuses {
 			if s.Budget.ID == props.BudgetID {
 				selfStatus, selfFound = s, true
@@ -113,7 +114,7 @@ func useBudgetEditData(props BudgetEditFormProps) budgetEditDataResult {
 				}
 				continue
 			}
-			if s.Budget.Limit.Amount <= 0 {
+			if s.Budget.IsSaving() || s.Limit.Amount <= 0 {
 				continue // nothing to give
 			}
 			// C606: what this source can actually give, computed from the SAME
@@ -122,19 +123,16 @@ func useBudgetEditData(props BudgetEditFormProps) budgetEditDataResult {
 			// already claimed by this period's recurring charges. The list used to
 			// offer the whole limit under the word "available", which is the plan's
 			// size, not money.
-			bs, be := budgeting.PeriodRangeAnchored(s.Budget.Period, cv.Anchor, pr.WeekStartWeekday(), coverPayAnchor)
-			rates := currency.Rates{Base: app.Settings().BaseCurrency, Rates: app.Settings().FXRates}
-			if rates.Base == "" {
-				rates.Base = budgetBaseCurrency(rates.Base)
-			}
-			committedResult, commitErr := budgeting.CommittedWithRates(s.Budget, app.Recurring(), app.Transactions(), s.Remaining, bs, be, rates)
-			if commitErr != nil {
+			if inputErr != nil {
 				coverIncomplete = true
 				continue
 			}
-			committed := committedResult.Committed
-			funds := budgeting.SourceFundsOf(s.Budget.Limit, s.Remaining, committed)
-			if !funds.CanGive() {
+			funds, err := budgeting.CoverSourceFunds(s.Budget, input)
+			if err != nil {
+				coverIncomplete = true
+				continue
+			}
+			if funds.Free.Amount <= 0 {
 				continue // an overspent or exhausted budget has nothing to offer
 			}
 			coverSrcs = append(coverSrcs, budgetCoverSource{
@@ -142,7 +140,7 @@ func useBudgetEditData(props BudgetEditFormProps) budgetEditDataResult {
 				Label:          budgetTitle(s.Budget.Name, cv.CatName[s.Budget.CategoryID]),
 				RemainMinor:    s.Remaining.Amount,
 				LimitMinor:     s.Budget.Limit.Amount,
-				MovableMinor:   funds.Movable.Amount,
+				MovableMinor:   funds.Free.Amount,
 				CommittedMinor: funds.Committed.Amount,
 				FreeMinor:      funds.Free.Amount,
 			})

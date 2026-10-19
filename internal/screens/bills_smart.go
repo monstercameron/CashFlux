@@ -171,7 +171,10 @@ func BillsSmartForm(props BillsSmartFormProps) ui.Node {
 		}
 		pr := uistate.CurrentPrefs()
 		pr.PayCycleAnchor = v
-		uistate.SetPrefs(pr)
+		if err := uistate.SetPrefs(pr); err != nil {
+			uistate.PostNotice(uistate.T("settings.budgetPeriodRekeyFailed"), true)
+			return
+		}
 		uistate.BumpDataRevision()
 	}
 	onAnchor := ui.UseEvent(func(v string) {
