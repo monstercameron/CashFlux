@@ -35,22 +35,20 @@ import (
 func budgetFlexWidget(props budgetSummaryProps) ui.Node {
 	_ = uistate.UseDataRevision().Get()
 	app := props.App
-	if app == nil {
-		return Fragment()
+	_ = uistate.UsePrefs().Get()
+	vw := uistate.UsePeriod().Get()
+	var target int64
+	base := "USD"
+	if app != nil {
+		base = app.Settings().BaseCurrency
+		target = app.Settings().FlexBudget
 	}
-
-	base := app.Settings().BaseCurrency
 	if base == "" {
 		base = "USD"
 	}
 	dec := currency.Decimals(base)
-	pr := uistate.UsePrefs().Get()
 	now := time.Now()
-	start, end := budgeting.PeriodRange(domain.PeriodMonthly, now, pr.WeekStartWeekday())
-
-	target := app.Settings().FlexBudget
-	view := budgeting.EvaluateFlex(app.Categories(), app.Transactions(), app.Recurring(), target, base, start, end)
-
+	start, end := vw.Range()
 	// The flex number is edited inline (staged in local state, saved on click).
 	editing := ui.UseState(false)
 	draft := ui.UseState(money.FormatMinor(target, dec))
@@ -77,6 +75,11 @@ func budgetFlexWidget(props budgetSummaryProps) ui.Node {
 	// its setter invoked from the event handler — never call UseAtom inside a callback.
 	flexSheet := uistate.UseFlexSheetOpen()
 	openSheet := ui.UseEvent(func() { flexSheet.Set(true) })
+	if app == nil {
+		return Fragment()
+	}
+
+	view := budgeting.EvaluateFlex(app.Categories(), app.Transactions(), app.Recurring(), target, base, start, end)
 
 	m := newFlexMeter(view, target, now, start, end)
 

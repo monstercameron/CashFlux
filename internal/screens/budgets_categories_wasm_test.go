@@ -11,6 +11,8 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/uistate"
+	"github.com/monstercameron/GoWebComponents/v5/state"
 	"github.com/monstercameron/GoWebComponents/v5/testkit/render"
 	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
@@ -59,6 +61,31 @@ func pickerTestApp(t *testing.T) *appstate.App {
 	appstate.Default = app
 	t.Cleanup(func() { appstate.Default = prev })
 	return app
+}
+
+func TestBudgetCategoriesBodyKeepsHookOrderWhenBudgetIsRemoved(t *testing.T) {
+	app := pickerTestApp(t)
+	b := quickFillFixtureBudget()
+	b.ID = "budget-hook-order"
+	if err := app.PutBudget(b); err != nil {
+		t.Fatalf("PutBudget: %v", err)
+	}
+	state.NewGlobalAtom("budgets:catsEdit", "").Set(b.ID)
+	f := render.New(t)
+	f.Render(ui.CreateElement(BudgetCategoriesBody, struct{}{}))
+	if f.Text() == "" {
+		t.Fatal("tracking modal rendered no content for the existing budget")
+	}
+	if err := app.DeleteBudget(b.ID); err != nil {
+		t.Fatalf("DeleteBudget: %v", err)
+	}
+	uistate.BumpDataRevision()
+	// Re-rendering the still-open modal after the backing budget disappears used
+	// to skip the period hooks and violate the component's positional hook order.
+	f.Render(ui.CreateElement(BudgetCategoriesBody, struct{}{}))
+	if !strings.Contains(f.Text(), "Close") {
+		t.Errorf("removed-budget fallback did not render its close action: %q", f.Text())
+	}
 }
 
 // pickerRowLabels returns the visible label of each rendered picker row, in

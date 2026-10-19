@@ -90,6 +90,12 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Budgets screens: stable hooks, cached suggestions, correct annual grid (BUDQ3).** The tracking, cover-all and flex
+  dialogs call every hook before any early return, so removing a budget while its dialog is open no longer breaks hook
+  order. Suggestions load smart settings once and are cached per data revision, and now count the budget's tracked tags
+  and sub-categories (without excluded transactions), matching the meter. The annual grid uses the shared cadence
+  conversion (a $200 semimonthly budget is $4,800 a year, not $2,400) and localised month names. The flex card follows the
+  viewed period.
 - **Budget math: period-equivalent totals, honest rollover, signed split lines (BUD1, BUDQ1).** New checked helpers
   convert any cadence to the viewed period with one half-away-from-zero rounding (`PeriodEquivalent`, `NormalizeBudgets`,
   `AdjustAllPreviewNormalized`), so a $6,000 yearly cap counts as $500 a month. Rollover now carries the prior period's

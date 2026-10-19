@@ -97,9 +97,21 @@ func budgetTrackMeta(app *appstate.App, from, to time.Time) (catMeta map[string]
 // tracked by another budget shows a soft "also in …" note. Nothing is written until Save.
 func BudgetCategoriesBody(_ struct{}) ui.Node {
 	app := appstate.Default
-	_ = uistate.UseDataRevision().Get()
+	dataRev := uistate.UseDataRevision().Get()
 	openAtom := uistate.UseBudgetCategoriesEdit()
 	budgetID := openAtom.Get()
+	trackPeriod := uistate.UsePeriod().Get()
+	trackFrom, trackTo := trackPeriod.Range()
+	trackLabel := trackPeriod.Label()
+	trackMeta := ui.UseMemo(func() budgetTrackMetaResult {
+		catMeta, tagCount, tagTotal := budgetTrackMeta(app, trackFrom, trackTo)
+		return budgetTrackMetaResult{
+			Categories:   catMeta,
+			TagCount:     tagCount,
+			TagTotal:     tagTotal,
+			DistinctTags: distinctTxnTags(app),
+		}
+	}, dataRev, trackFrom.Unix(), trackTo.Unix())
 
 	var budget domain.Budget
 	found := false
@@ -211,11 +223,6 @@ func BudgetCategoriesBody(_ struct{}) ui.Node {
 	// C607: count over the page's SELECTED period, and say which one — these
 	// figures sit beside budget cards that describe that period, and a caption
 	// reading "this month" over another month's numbers is the defect.
-	trackFrom, trackTo := uistate.UsePeriod().Get().Range()
-	trackLabel := uistate.UsePeriod().Get().Label()
-	catMeta, tagCount, tagTotal := budgetTrackMeta(app, trackFrom, trackTo)
-	allTags := distinctTxnTags(app)
-
 	return Div(css.Class(tw.FlexCol),
 		Div(css.Class("modal-scroll", tw.FlexCol, tw.Gap3),
 			Span(css.Class(tw.TextFaint, tw.Text12), Attr("data-testid", "budgetcats-metahint"), uistate.T("budgets.trackMetaHintPeriod", trackLabel)),
@@ -223,15 +230,15 @@ func BudgetCategoriesBody(_ struct{}) ui.Node {
 			Div(css.Class("budgettrack-section"),
 				Span(css.Class("budgettrack-head"), uistate.T("budgets.catsSection")),
 				ui.CreateElement(budgetCategoryPicker, budgetCategoryPickerProps{
-					Picked: picked.Get(), OnToggle: toggle, ExcludeBudgetID: budgetID, Meta: catMeta,
+					Picked: picked.Get(), OnToggle: toggle, ExcludeBudgetID: budgetID, Meta: trackMeta.Categories,
 				})),
 			// Tags section — a searchable checklist of the tags already in use (cross-
 			// category), plus "add a new tag" from the search box.
 			Div(css.Class("budgettrack-section"),
 				Span(css.Class("budgettrack-head"), uistate.T("budgets.tagsSection")),
 				ui.CreateElement(budgetTagPicker, budgetTagPickerProps{
-					Picked: pickedTags.Get(), OnToggle: toggleTag, AllTags: allTags,
-					Count: tagCount, Total: tagTotal,
+					Picked: pickedTags.Get(), OnToggle: toggleTag, AllTags: trackMeta.DistinctTags,
+					Count: trackMeta.TagCount, Total: trackMeta.TagTotal,
 				}))),
 		Div(css.Class("modal-foot", "autobudget-footer"),
 			Span(css.Class("autobudget-total", tw.TextDim), Attr("data-testid", "budgetcats-count"),
@@ -241,6 +248,13 @@ func BudgetCategoriesBody(_ struct{}) ui.Node {
 			Button(css.Class("btn"), Type("button"), Attr("data-testid", "budgetcats-cancel"), OnClick(onCancel), uistate.T("action.cancel")),
 			buttonWithDisabled(nSel == 0 && nTags == 0, []any{css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "budgetcats-save"), OnClick(onSave)},
 				uistate.T("budgets.tracksSave"))))
+}
+
+type budgetTrackMetaResult struct {
+	Categories   map[string]string
+	TagCount     map[string]int
+	TagTotal     map[string]string
+	DistinctTags []string
 }
 
 // budgetCategoryPickerProps configures the reusable multi-category picker (used by the
@@ -266,6 +280,16 @@ func budgetCategoryPicker(props budgetCategoryPickerProps) ui.Node {
 	app := appstate.Default
 	query := ui.UseState("")
 	onQuery := ui.UseEvent(func(v string) { query.Set(v) })
+	var appRev uint64
+	if app != nil {
+		appRev = app.Rev()
+	}
+	cats := ui.UseMemo(func() []domain.Category {
+		if app == nil {
+			return nil
+		}
+		return app.Categories()
+	}, appRev)
 
 	// Which OTHER budgets track each category — for the soft overlap tag.
 	otherBudget := make(map[string]string)
@@ -300,7 +324,6 @@ func budgetCategoryPicker(props budgetCategoryPickerProps) ui.Node {
 		// hides my categories" report, alongside the kind filter (C519) and the
 		// ordering (C544). The search matches the path too, so typing "auto"
 		// finds "Auto › Gas".
-		cats := app.Categories()
 		for _, c := range cats {
 			if !props.Saving && c.Kind != domain.KindExpense {
 				hiddenKinds++
@@ -314,10 +337,7 @@ func budgetCategoryPicker(props budgetCategoryPickerProps) ui.Node {
 	}
 
 	keyOf := func(c domain.Category) any { return c.ID }
-	allCats := []domain.Category(nil)
-	if app != nil {
-		allCats = app.Categories()
-	}
+	allCats := cats
 	rows := MapKeyed(shown, keyOf, func(c domain.Category) ui.Node {
 		return ui.CreateElement(budgetCatRow, budgetCatRowProps{
 			CategoryID: c.ID, CategoryName: catname.Label(allCats, c), Checked: props.Picked[c.ID],

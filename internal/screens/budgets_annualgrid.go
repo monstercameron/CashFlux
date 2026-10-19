@@ -43,7 +43,17 @@ type budgetAnnualGridProps struct {
 	OnCell func(categoryIDs []string, from, to string)
 }
 
-var annualGridMonths = [12]string{"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"}
+var annualGridMonthKeys = [12]string{
+	"budgets.month.jan", "budgets.month.feb", "budgets.month.mar", "budgets.month.apr",
+	"budgets.month.may", "budgets.month.jun", "budgets.month.jul", "budgets.month.aug",
+	"budgets.month.sep", "budgets.month.oct", "budgets.month.nov", "budgets.month.dec",
+}
+
+var annualGridMonthFullKeys = [12]string{
+	"budgets.month.january", "budgets.month.february", "budgets.month.march", "budgets.month.april",
+	"budgets.month.mayFull", "budgets.month.june", "budgets.month.july", "budgets.month.august",
+	"budgets.month.september", "budgets.month.october", "budgets.month.november", "budgets.month.december",
+}
 
 // scenarioStepMinor is one press of the income scenario stepper: ±$100 a month.
 const scenarioStepMinor int64 = 10000
@@ -334,7 +344,7 @@ func annualGridTable(grid budgeting.AnnualGrid, props budgetAnnualGridProps, fro
 		Th(css.Class("budget-annualgrid-corner"), Attr("scope", "col"),
 			uistate.T("budgets.annualGridBudgetCol")),
 	}
-	for i, name := range annualGridMonths {
+	for i, monthKey := range annualGridMonthKeys {
 		if i < firstM || i > lastM {
 			continue
 		}
@@ -343,12 +353,12 @@ func annualGridTable(grid budgeting.AnnualGrid, props budgetAnnualGridProps, fro
 		// cell's own label references it.
 		full := annualMonthLabel(i, grid.Year)
 		th := Th(ClassStr("budget-annualgrid-th"+gridColClass(i, grid.CurrentMonth, fromMonth)),
-			Attr("scope", "col"), Attr("aria-label", full), Attr("title", full), name)
+			Attr("scope", "col"), Attr("aria-label", full), Attr("title", full), uistate.T(monthKey))
 		if i == grid.CurrentMonth {
 			// id anchors the scroll-into-view (C371).
 			th = Th(ClassStr("budget-annualgrid-th"+gridColClass(i, grid.CurrentMonth, fromMonth)),
 				Attr("scope", "col"), Attr("id", "budget-annualgrid-current"),
-				Attr("aria-label", full), Attr("title", full), name)
+				Attr("aria-label", full), Attr("title", full), uistate.T(monthKey))
 		}
 		headCells = append(headCells, th)
 	}
@@ -560,7 +570,7 @@ func annualMonthLabel(m, year int) string {
 	if m < 0 || m > 11 {
 		return strconv.Itoa(year)
 	}
-	return time.Month(m+1).String() + " " + strconv.Itoa(year)
+	return uistate.T(annualGridMonthFullKeys[m]) + " " + strconv.Itoa(year)
 }
 
 // annualGridWindowBar renders the month-window control. Handlers arrive from the
@@ -588,20 +598,6 @@ func annualGridWindowBar(win string, all, h1, h2 ui.Handler) ui.Node {
 // biweekly, monthly, quarterly or yearly, so a bare sum of limits would compare a
 // weekly grocery cap with a yearly insurance one as though they were equal.
 func annualPlanTotal(budgets []domain.Budget, base string) int64 {
-	perYear := func(p domain.Period) int64 {
-		switch p {
-		case domain.PeriodWeekly:
-			return 52
-		case domain.PeriodBiweekly:
-			return 26
-		case domain.PeriodQuarterly:
-			return 4
-		case domain.PeriodYearly:
-			return 1
-		default:
-			return 12
-		}
-	}
 	var total int64
 	for _, b := range budgets {
 		// Mixed-currency budgets are left out rather than added at face value: a
@@ -609,7 +605,11 @@ func annualPlanTotal(budgets []domain.Budget, base string) int64 {
 		if b.Limit.Currency != "" && b.Limit.Currency != base {
 			continue
 		}
-		total += b.Limit.Amount * perYear(b.Period)
+		annual, err := budgeting.PeriodEquivalent(b.Limit, b.Period, domain.PeriodYearly)
+		if err != nil {
+			continue
+		}
+		total += annual.Amount
 	}
 	return total
 }

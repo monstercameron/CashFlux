@@ -139,27 +139,29 @@ type coverAllFormProps struct{ OnDone func() }
 // Cancel + "Cover all" footer that applies every chosen coverage in one pass.
 func coverAllForm(props coverAllFormProps) ui.Node {
 	app := appstate.Default
-	if app == nil {
-		return Fragment()
-	}
 	_ = uistate.UseDataRevision().Get()
 	member := uistate.UseActiveMember().Get()
 	pr := uistate.UsePrefs().Get()
 	vw := uistate.UsePeriod().Get()
 	showLM := uistate.UseBudgetsLastMonth().Get()
-	overs, sources, base := coverAllData(app, member, vw, pr, showLM)
+	choices := ui.UseState(map[string]string{})
+	errText := ui.UseState("")
+	seededSig := ui.UseState("")
+	var overs []coverAllOver
+	var sources []coverAllSource
+	base := "USD"
+	if app != nil {
+		overs, sources, base = coverAllData(app, member, vw, pr, showLM)
+	}
 	dec := currency.Decimals(base)
 
 	// choices: overBudgetID → source value ("" leave, "__next__", or a source budget id).
 	// Seed each over to "next month" the first time this over-set is shown (a stable
 	// signature so reopening with the same overs keeps the user's picks).
-	choices := ui.UseState(map[string]string{})
-	errText := ui.UseState("")
 	sig := ""
 	for _, o := range overs {
 		sig += o.ID + ";"
 	}
-	seededSig := ui.UseState("")
 	if seededSig.Get() != sig {
 		seed := map[string]string{}
 		for _, o := range overs {
@@ -186,6 +188,9 @@ func coverAllForm(props coverAllFormProps) ui.Node {
 	}
 
 	apply := ui.UseEvent(Prevent(func() {
+		if app == nil {
+			return
+		}
 		sel := choices.Get()
 		// Validate that no source budget is over-drawn across all rows that draw on it.
 		drawn := map[string]int64{}

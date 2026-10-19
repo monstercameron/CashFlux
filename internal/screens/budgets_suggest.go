@@ -16,6 +16,8 @@
 package screens
 
 import (
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -51,15 +53,29 @@ type budgetSuggestProps struct {
 	Budget domain.Budget
 }
 
+type suggestLimitCacheEntry struct {
+	amount int64
+	err    error
+	valid  bool
+}
+
+var suggestLimitCache = map[string]suggestLimitCacheEntry{}
+var suggestSettingsCache struct {
+	revision int
+	settings smart.Settings
+	loaded   bool
+}
+
 // budgetSuggestHint renders "your 3-month average here is $X — use it". Its own
 // component: it renders inside the budget list and owns a click hook.
 func budgetSuggestHint(props budgetSuggestProps) ui.Node {
-	_ = uistate.UseDataRevision().Get()
+	dataRevision := uistate.UseDataRevision().Get()
 	app := appstate.Default
-	settings := uistate.LoadSmartSettings()
+	settings := smartSettingsForRevision(dataRevision)
+	viewedPeriod := uistate.UsePeriod().Get()
 	b := props.Budget
 
-	suggested, ok := budgetSuggestedLimit(app, b)
+	suggested, ok := budgetSuggestedLimitAt(app, b, viewedPeriod.From)
 
 	apply := func() {
 		a := appstate.Default
@@ -115,6 +131,10 @@ func budgetSuggestHint(props budgetSuggestProps) ui.Node {
 // three-month average" is an argument for aiming lower, which is the opposite of
 // what a savings goal is for.
 func budgetSuggestedLimit(app *appstate.App, b domain.Budget) (int64, bool) {
+	return budgetSuggestedLimitAt(app, b, time.Now())
+}
+
+func budgetSuggestedLimitAt(app *appstate.App, b domain.Budget, anchor time.Time) (int64, bool) {
 	if app == nil || b.Direction.IsSaving() {
 		return 0, false
 	}
@@ -129,15 +149,28 @@ func budgetSuggestedLimit(app *appstate.App, b domain.Budget) (int64, bool) {
 		base = "USD"
 	}
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	// The budget's WHOLE scope, matching what its meter counts: a parent-category
-	// budget must average its sub-categories too, or the suggestion would sit below
-	// a spend figure it cannot explain (the C586 mismatch, in the other direction).
+	// Match the budget meter's category descendants and tracked-tag scope. The
+	// budgeting suggestion engine accepts category sets, so tag-matched rows get
+	// private synthetic category IDs while ordinary rows retain their categories.
 	covers := categorytree.DescendantsOfAll(app.Categories(), b.TrackedCategoryIDs())
-	if len(covers) == 0 {
+	scope := budgeting.ScopeOf(b, covers)
+	if scope.IsEmpty() {
 		return 0, false
 	}
-	suggested, err := budgeting.SuggestLimitIn(covers, app.Transactions(), time.Now(), suggestLimitMonths, rates)
-	if err != nil || suggested <= 0 {
+	periodKey := anchor.Format("2006-01")
+	cacheKey := fmt.Sprintf("%p|%d|%s|%s", app, app.Rev(), b.ID, periodKey)
+	entry, cached := suggestLimitCache[cacheKey]
+	if !cached {
+		suggestedTxns, suggestedCovers := suggestTransactionsForScope(covers, scope.Tags, app.Transactions())
+		amount, err := budgeting.SuggestLimitIn(suggestedCovers, suggestedTxns, anchor, suggestLimitMonths, rates)
+		entry = suggestLimitCacheEntry{amount: amount, err: err, valid: err == nil && amount > 0}
+		if len(suggestLimitCache) > 512 {
+			suggestLimitCache = map[string]suggestLimitCacheEntry{}
+		}
+		suggestLimitCache[cacheKey] = entry
+	}
+	suggested := entry.amount
+	if entry.err != nil || !entry.valid {
 		return 0, false
 	}
 	limit := b.Limit.Amount
@@ -151,4 +184,66 @@ func budgetSuggestedLimit(app *appstate.App, b domain.Budget) (int64, bool) {
 		}
 	}
 	return suggested, true
+}
+
+func smartSettingsForRevision(revision int) smart.Settings {
+	if !suggestSettingsCache.loaded || suggestSettingsCache.revision != revision {
+		suggestSettingsCache = struct {
+			revision int
+			settings smart.Settings
+			loaded   bool
+		}{revision: revision, settings: uistate.LoadSmartSettings(), loaded: true}
+	}
+	return suggestSettingsCache.settings
+}
+
+// suggestTransactionsForScope adapts the established budget scope to the
+// category-set suggestion engine. Tag matches are marked with transaction-local
+// synthetic categories so unrelated transactions in those real categories do
+// not leak into the suggestion.
+func suggestTransactionsForScope(covers map[string]bool, tags []string, txns []domain.Transaction) ([]domain.Transaction, map[string]bool) {
+	allCovers := make(map[string]bool, len(covers))
+	for id, on := range covers {
+		if on {
+			allCovers[id] = true
+		}
+	}
+	tagSet := make(map[string]bool, len(tags))
+	for _, tag := range tags {
+		if key := strings.ToLower(strings.TrimSpace(tag)); key != "" {
+			tagSet[key] = true
+		}
+	}
+	out := make([]domain.Transaction, 0, len(txns))
+	for _, txn := range txns {
+		if !txn.CountsInReports() {
+			continue
+		}
+		tagMatch := false
+		for _, tag := range txn.Tags {
+			if tagSet[strings.ToLower(strings.TrimSpace(tag))] {
+				tagMatch = true
+				break
+			}
+		}
+		if !tagMatch {
+			out = append(out, txn)
+			continue
+		}
+		copyTxn := txn
+		prefix := "__budget_tag__" + txn.ID
+		if txn.HasSplits() {
+			copyTxn.Splits = append([]domain.CategorySplit(nil), txn.Splits...)
+			for i := range copyTxn.Splits {
+				id := fmt.Sprintf("%s:%d", prefix, i)
+				copyTxn.Splits[i].CategoryID = id
+				allCovers[id] = true
+			}
+		} else {
+			copyTxn.CategoryID = prefix
+			allCovers[prefix] = true
+		}
+		out = append(out, copyTxn)
+	}
+	return out, allCovers
 }
