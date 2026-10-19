@@ -42,7 +42,7 @@ and Playwright starts the static server (`serve.mjs`) itself on port 8099 — yo
   that `go test ./...` skips (build tag), so they run via a dedicated lane:
 
   ```bash
-  pwsh tools/wasm-test.ps1        # Windows (uses tools/go_js_wasm_exec.bat)
+  pwsh tools/wasm-test.ps1        # Windows (uses tools/go_js_wasm_exec.ps1)
   # or, on Unix: PATH="$PATH:$(go env GOROOT)/lib/wasm" GOOS=js GOARCH=wasm go test ./internal/ui/ ./internal/screens/ ./internal/browserstore/
   ```
 

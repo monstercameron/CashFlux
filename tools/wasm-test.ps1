@@ -20,6 +20,7 @@ $repo = Split-Path $PSScriptRoot -Parent
 # So resolve what the toolchain needs, then run go test with a MINIMAL env. This is
 # a no-op-ish safety on a dev box (small env) and the fix on CI.
 $goExe   = (Get-Command go).Source
+$powershell = (Get-Command powershell).Source
 $nodeDir = Split-Path (Get-Command node).Source -Parent
 $goDir   = Split-Path $goExe -Parent
 $sys32   = Join-Path $env:SystemRoot "System32"
@@ -48,6 +49,8 @@ Get-ChildItem env: | ForEach-Object { Remove-Item "env:$($_.Name)" -ErrorAction 
 foreach ($k in $keep.Keys) { Set-Item "env:$k" $keep[$k] }
 
 Set-Location $repo
-& go test @Packages
+$wasmExec = Join-Path $PSScriptRoot "go_js_wasm_exec.ps1"
+$execCommand = '"{0}" -NoProfile -ExecutionPolicy Bypass -File "{1}"' -f $powershell, $wasmExec
+& go test "-exec=$execCommand" @Packages
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 Write-Host "wasm tests passed"

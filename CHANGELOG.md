@@ -90,6 +90,9 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **The wasm test runner passes `-run` patterns with `|` through unchanged (TOOL1).** The Windows `-exec` wrapper is now a
+  PowerShell shim that starts Node with an argument array, so `-run=A|B`, regex groups, spaces and `&` reach the test binary
+  as written; a round-trip test guards it.
 - **Segmented controls no longer panic when their DOM is missing (UISEG).** The sliding-pill effect checks that each DOM
   function exists before calling it, so a control that unmounts between render and effect (or a test DOM) returns quietly
   instead of logging an effect panic.
