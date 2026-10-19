@@ -7,6 +7,7 @@ package screens
 import (
 	"strings"
 
+	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/period"
@@ -46,27 +47,29 @@ func budgetEditRaiseLimit(p budgetEditRaiseLimitProps) ui.Node {
 	if p.topupPermanentS.Get() {
 		durVal = "perm"
 	}
-	durHint := "budgets.topupThisMonthHint"
-	if p.topupPermanentS.Get() {
-		durHint = "budgets.topupPermanentHint"
-	}
 	// C669: the dialog used to open with "Increase Groceries (currently $500.00)"
 	// beside a card reading an effective cap of $721.71, and never said which of
 	// the two the typed amount would land on. Both figures are named now, with
 	// the arithmetic between them (the same string the card's cap line carries),
 	// and the duration hint states which one the top-up changes and what happens
 	// to it next period.
-	capLine, changesLine := budgetTopupCapCopy(fmtMoney(p.b.Limit), p.selfEffCap, p.selfCapMath, p.topupPermanentS.Get())
+	capLine, _ := budgetTopupCapCopy(fmtMoney(p.b.Limit), p.selfEffCap, p.selfCapMath, p.topupPermanentS.Get())
 	selNow := p.coverSelS.Get()
-	selCount := 0
-	for _, sc := range p.coverSrcs {
-		if selNow[sc.ID] {
-			selCount++
-		}
-	}
 	coverToggleLabel := uistate.T("budgets.topupCoverShow")
 	if p.topupCoverOpenS.Get() {
 		coverToggleLabel = uistate.T("budgets.topupCoverHide")
+	}
+	funded := false
+	for id, selected := range selNow {
+		if selected && id != "" {
+			funded = true
+			break
+		}
+	}
+	impact := budgeting.TopUpImpact(p.topupPermanentS.Get(), funded)
+	reach := fundsReachThisPeriod
+	if p.topupPermanentS.Get() {
+		reach = fundsReachPermanent
 	}
 	// C606: the split the top-up WOULD take from each source, so every row can
 	// show what it would be left with before anything is written. The same
@@ -76,13 +79,8 @@ func budgetEditRaiseLimit(p budgetEditRaiseLimitProps) ui.Node {
 	if amt, perr := money.ParseMinor(strings.TrimSpace(p.topupAmt.Get()), p.dec); perr == nil && amt > 0 {
 		topupShares = splitCoverAmount(amt, p.coverSrcs, selNow, nil, nil)
 	}
-	periodCopy := uistate.T("budgets.raisePeriodOnly", p.vw.Label())
-	if p.topupPermanentS.Get() {
-		periodCopy = uistate.T("budgets.raisePermanently")
-	}
 	return Form(css.Class("acct-edit-form"), Attr("data-testid", "budget-raise-form"), OnSubmit(p.submitTopup),
 		Div(css.Class("modal-scroll"),
-			P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "budget-raise-period-copy"), periodCopy),
 			P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "topup-cap-math"),
 				Style(map[string]string{"margin": "0"}), capLine),
 			uiw.Field(uiw.FieldProps{ID: "budget-topup-amt", Label: uistate.T("budgets.raiseAmount"), Required: true,
@@ -105,12 +103,12 @@ func budgetEditRaiseLimit(p budgetEditRaiseLimitProps) ui.Node {
 			// whether other budgets are touched, that no account balance moves,
 			// and that it can be undone. Every funds-moving action on this page
 			// answers the same four questions in the same words.
-			P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "topup-dur-hint"),
-				uistate.T(durHint)+" "+budgetEditTopupImpact(p.topupPermanentS.Get(), selCount > 0)),
 			// C669: which of the two figures above the amount lands on, and what
 			// happens to it at the period boundary.
 			P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "topup-changes"),
-				Style(map[string]string{"margin": "0"}), changesLine),
+				Style(map[string]string{"margin": "0"}), fundsImpactLine(impact, fundsImpactOption{
+					reach: reach, movesFromSelectedBudgets: funded,
+				})),
 			// Optional: fund the top-up by pulling from budgets that have room to give.
 			If(len(p.coverSrcs) > 0, Fragment(
 				Button(css.Class("btn cf-adv-toggle"), Type("button"), Attr("aria-expanded", ariaBool(p.topupCoverOpenS.Get())),
@@ -128,8 +126,6 @@ func budgetEditRaiseLimit(p budgetEditRaiseLimitProps) ui.Node {
 								Selected:     selNow[sc.ID], OnToggle: p.onToggleSrc,
 							})
 						})),
-					If(selCount > 0, P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "topup-cover-split"),
-						uistate.T("budgets.topupCoverSplit", plural(selCount, "budget")))),
 				)),
 			)),
 			If(p.coverIncomplete, P(css.Class("err"), Attr("role", "status"), Attr("data-testid", "budget-cover-incomplete"), uistate.T("budgets.committedIncomplete"))),

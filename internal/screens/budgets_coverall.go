@@ -39,6 +39,8 @@ const coverAllNextSource = "__next__"
 type coverAllOver struct {
 	ID        string
 	Name      string
+	Rollover  bool
+	Currency  string
 	Shortfall money.Money // positive amount over the limit this period
 	ThisStart time.Time   // current period start (the boost target)
 	NextStart time.Time   // next period start (for the next-month borrow)
@@ -48,6 +50,7 @@ type coverAllOver struct {
 type coverAllSource struct {
 	ID        string
 	Name      string
+	Currency  string
 	Avail     money.Money // positive remaining this period
 	ThisStart time.Time
 }
@@ -58,7 +61,8 @@ type coverAllSource struct {
 // bounds the identical way computeBudgetView anchors them (so the per-period boost
 // lands on the period whose overage it's covering). Pure read model.
 func coverAllData(app *appstate.App, member string, vw period.Window, pr prefs.Prefs, showLastMonth bool) (overs []coverAllOver, sources []coverAllSource, base string) {
-	v := computeBudgetView(app, member, vw, pr, showLastMonth)
+	_ = showLastMonth // statuses and writes always describe the viewed period.
+	v := computeBudgetView(app, member, vw, pr, false)
 	base = v.Base
 	if base == "" {
 		base = budgetBaseCurrency(base)
@@ -76,21 +80,41 @@ func coverAllData(app *appstate.App, member string, vw period.Window, pr prefs.P
 	for _, st := range v.Statuses {
 		b := st.Budget
 		var bs, be time.Time
-		if showLastMonth {
-			bs, be = budgeting.PreviousPeriodRangeAnchored(b.Period, anchor, weekStart, payAnchor)
-		} else {
-			bs, be = budgeting.PeriodRangeAnchored(b.Period, anchor, weekStart, payAnchor)
-		}
+		bs, be = budgeting.PeriodRangeAnchored(b.Period, anchor, weekStart, payAnchor)
 		switch {
 		case st.State == budgeting.StateOver:
-			overs = append(overs, coverAllOver{ID: b.ID, Name: b.Name, Shortfall: budgeting.CoverAmount(st), ThisStart: bs, NextStart: be})
-		case st.Remaining.Amount > 0:
-			sources = append(sources, coverAllSource{ID: b.ID, Name: b.Name, Avail: st.Remaining, ThisStart: bs})
+			overs = append(overs, coverAllOver{ID: b.ID, Name: b.Name, Rollover: b.Rollover, Currency: b.Limit.Currency, Shortfall: budgeting.CoverAmount(st), ThisStart: bs, NextStart: be})
+		case st.State == budgeting.StateOK && st.Remaining.Amount > 0:
+			sources = append(sources, coverAllSource{ID: b.ID, Name: b.Name, Currency: st.Remaining.Currency, Avail: st.Remaining, ThisStart: bs})
 		}
 	}
 	sort.Slice(overs, func(i, j int) bool { return overs[i].Name < overs[j].Name })
-	sort.Slice(sources, func(i, j int) bool { return sources[i].Name < sources[j].Name })
+	sort.SliceStable(sources, func(i, j int) bool {
+		if sources[i].Avail.Amount != sources[j].Avail.Amount {
+			return sources[i].Avail.Amount > sources[j].Avail.Amount
+		}
+		return sources[i].Name < sources[j].Name
+	})
 	return overs, sources, base
+}
+
+func coverAllDefaultSource(over coverAllOver, sources []coverAllSource) string {
+	for _, source := range sources {
+		if source.Currency == over.Currency {
+			return source.ID
+		}
+	}
+	return ""
+}
+
+func coverAllSourcesFor(over coverAllOver, sources []coverAllSource) []coverAllSource {
+	matching := make([]coverAllSource, 0, len(sources))
+	for _, source := range sources {
+		if source.Currency == over.Currency {
+			matching = append(matching, source)
+		}
+	}
+	return matching
 }
 
 // coverAllButtonProps carries nothing — the button reads shared state itself.
@@ -127,7 +151,10 @@ func budgetsCoverAllModal() ui.Node {
 	})
 }
 
-type coverAllFormProps struct{ OnDone func() }
+type coverAllFormProps struct {
+	OnDone   func()
+	TargetID string
+}
 
 // coverAllForm is the modal body: an intro, one row per over-budget with a per-budget
 // coverage-source picker (leave / next month / another budget's slack), and a pinned
@@ -151,6 +178,28 @@ func coverAllForm(props coverAllFormProps) ui.Node {
 	if app != nil {
 		overs, sources, base = coverAllData(app, member, vw, pr, showLM)
 	}
+	if props.TargetID != "" {
+		filtered := overs[:0]
+		for _, over := range overs {
+			if over.ID == props.TargetID {
+				filtered = append(filtered, over)
+			}
+		}
+		overs = filtered
+	}
+	currencies := map[string]bool{}
+	for _, o := range overs {
+		currencies[o.Currency] = true
+	}
+	for _, s := range sources {
+		currencies[s.Currency] = true
+	}
+	currencyError := len(currencies) > 1
+	if len(currencies) == 1 {
+		for code := range currencies {
+			base = code
+		}
+	}
 	dec := currency.Decimals(base)
 
 	// choices: overBudgetID → source value ("" leave, "__next__", or a source budget id).
@@ -163,7 +212,7 @@ func coverAllForm(props coverAllFormProps) ui.Node {
 	if seededSig.Get() != sig {
 		seed := map[string]string{}
 		for _, o := range overs {
-			seed[o.ID] = coverAllNextSource
+			seed[o.ID] = coverAllDefaultSource(o, sources)
 		}
 		choices.Set(seed)
 		errText.Set("")
@@ -186,7 +235,7 @@ func coverAllForm(props coverAllFormProps) ui.Node {
 	}
 
 	apply := ui.UseEvent(Prevent(func() {
-		if checkpointSaving.Get() {
+		if checkpointSaving.Get() || currencyError {
 			return
 		}
 		if app == nil {
@@ -197,15 +246,24 @@ func coverAllForm(props coverAllFormProps) ui.Node {
 		drawn := map[string]int64{}
 		for _, o := range overs {
 			src := sel[o.ID]
+			if src == coverAllNextSource && o.Rollover {
+				errText.Set(uistate.T("coverAll.rolloverBorrowBlocked", o.Name))
+				return
+			}
 			if src == "" || src == coverAllNextSource {
 				continue
+			}
+			s, ok := srcByID[src]
+			if !ok || s.Currency != o.Currency {
+				errText.Set(uistate.T("coverAll.currencyError"))
+				return
 			}
 			drawn[src] += o.Shortfall.Amount
 		}
 		for id, amt := range drawn {
 			s := srcByID[id]
 			if amt > s.Avail.Amount {
-				errText.Set(uistate.T("coverAll.sourceShort", s.Name, fmtMoney(money.New(amt-s.Avail.Amount, base))))
+				errText.Set(uistate.T("coverAll.sourceShort", s.Name, fmtMoney(money.New(amt-s.Avail.Amount, s.Currency))))
 				return
 			}
 		}
@@ -295,7 +353,12 @@ func coverAllForm(props coverAllFormProps) ui.Node {
 				for _, op := range ops {
 					key := budgeting.PeriodKeyWithWeekStart(b.Period, op.start, payAnchor, weekStart)
 					keyStart, _ := time.Parse("2006-01-02", key)
-					b = b.WithPeriodBoost(keyStart, op.delta)
+					var boostErr error
+					b, boostErr = budgeting.WithPeriodBoostChecked(b, keyStart, op.delta)
+					if boostErr != nil {
+						errText.Set(budgetErrorText(boostErr))
+						return
+					}
 					if op.delta > 0 {
 						gained = true
 					}
@@ -315,12 +378,10 @@ func coverAllForm(props coverAllFormProps) ui.Node {
 				}
 				writes = append(writes, b)
 			}
-			for _, b := range writes {
-				if err := app.PutBudget(b); err != nil {
-					slog.Error("budgets: cover-all write rejected", "id", b.ID, "err", err)
-					errText.Set(budgetErrorText(err))
-					return
-				}
+			if err := app.PutBudgetsAtomicAt(writes, vw.From); err != nil {
+				slog.Error("budgets: cover-all write rejected", "err", err)
+				errText.Set(budgetErrorText(err))
+				return
 			}
 			uistate.RequestPersist()
 			uistate.BumpDataRevision()
@@ -355,7 +416,19 @@ func coverAllForm(props coverAllFormProps) ui.Node {
 	}
 	intro := uistate.T("coverAll.intro", len(overs), fmtMoney(money.New(totalOver, base)))
 	if len(overs) == 1 {
-		intro = uistate.T("coverAll.introOne", fmtMoney(money.New(overs[0].Shortfall.Amount, base)))
+		intro = uistate.T("coverAll.introOne", fmtMoney(overs[0].Shortfall))
+	}
+	impactReach := fundsReachThisPeriod
+	movesFromSelectedBudgets := false
+	for _, source := range choices.Get() {
+		if source == coverAllNextSource {
+			impactReach = fundsReachThisAndNext
+		} else if source != "" {
+			movesFromSelectedBudgets = true
+		}
+	}
+	if currencyError {
+		intro = uistate.T("coverAll.currencyError")
 	}
 
 	listArgs := []any{css.Class("cover-all-list")}
@@ -371,8 +444,13 @@ func coverAllForm(props coverAllFormProps) ui.Node {
 		Div(css.Class("modal-scroll"),
 			P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0"}),
 				Attr("data-testid", "cover-all-intro"), intro),
+			P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "cover-all-impact"),
+				Style(map[string]string{"margin": "0"}), fundsImpactLine(budgeting.ImpactCover, fundsImpactOption{
+					reach: impactReach, movesFromSelectedBudgets: movesFromSelectedBudgets,
+				})),
 			Div(listArgs...),
-			P(css.Class("t-caption", tw.TextDim, "cover-all-hint"), uistate.T("coverAll.nextMonthHint")),
+			If(!currencyError, P(css.Class("t-caption", tw.TextDim, "cover-all-hint"), uistate.T("coverAll.nextMonthHint"))),
+			If(currencyError, P(css.Class("err"), Attr("role", "alert"), Attr("data-testid", "cover-all-currency-error"), uistate.T("coverAll.currencyError"))),
 			If(errText.Get() != "", P(css.Class("err"), Attr("role", "alert"), errText.Get())),
 		),
 		Div(css.Class("modal-foot"),
@@ -399,10 +477,10 @@ func coverAllRow(props coverAllRowProps) ui.Node {
 		Attr("aria-label", uistate.T("coverAll.sourceLabel")), OnChange(onChange)}
 	opts = append(opts,
 		Option(Value(""), SelectedIf(props.Selected == ""), uistate.T("coverAll.sourceSkip")),
-		Option(Value(coverAllNextSource), SelectedIf(props.Selected == coverAllNextSource), uistate.T("coverAll.sourceNextMonth")))
-	for _, s := range props.Sources {
+		If(!o.Rollover, Option(Value(coverAllNextSource), SelectedIf(props.Selected == coverAllNextSource), uistate.T("coverAll.sourceNextMonth"))))
+	for _, s := range coverAllSourcesFor(o, props.Sources) {
 		opts = append(opts, Option(Value(s.ID), SelectedIf(props.Selected == s.ID),
-			uistate.T("coverAll.sourceBudget", s.Name, fmtMoney(s.Avail))))
+			uistate.T("coverAll.sourceBudget", s.Name, fmtMoney(money.New(s.Avail.Amount, s.Currency)))))
 	}
 	return Div(css.Class("cover-all-row"), Attr("data-testid", "cover-all-row"),
 		Div(css.Class("cover-all-row-main"),

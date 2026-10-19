@@ -6,6 +6,7 @@ package screens
 
 import (
 	"log/slog"
+	"sort"
 	"strings"
 	"time"
 
@@ -42,6 +43,8 @@ type budgetEditCoverSaveProps struct {
 	props           BudgetEditFormProps
 	viewAnchor      time.Time
 	coverCustomVals ui.State[map[string]string]
+	coverBatch      map[string]domain.Budget
+	coverChanged    map[string]bool
 }
 
 // useBudgetEditCoverSave registers the cover validation and persistence handler.
@@ -108,23 +111,54 @@ func useBudgetEditCoverSave(p budgetEditCoverSaveProps) ui.Handler {
 					return
 				}
 			}
+			current := make(map[string]domain.Budget)
+			changed := make(map[string]bool)
+			for _, budget := range p.app.Budgets() {
+				current[budget.ID] = budget
+			}
 			for _, sc := range p.coverSrcs {
-				share, ok := shares[sc.ID]
-				if !ok || share <= 0 {
+				share := shares[sc.ID]
+				if share <= 0 {
 					continue
 				}
-				if err := p.app.CoverBudget(sc.ID, p.props.BudgetID, money.New(share, p.cur)); err != nil {
-					p.errS.Set(budgetErrorText(err))
+				from, fromOK := current[sc.ID]
+				to, toOK := current[p.props.BudgetID]
+				if !fromOK || !toOK {
+					p.errS.Set(uistate.T("coverAll.budgetMissing"))
 					return
 				}
+				transfer, transferErr := budgeting.Transfer(from, to, money.New(share, p.cur), false)
+				if transferErr != nil {
+					p.errS.Set(budgetErrorText(transferErr))
+					return
+				}
+				if !transfer.From.Limit.IsPositive() {
+					p.errS.Set(uistate.T("budgets.coverSourceShort", sc.Label))
+					return
+				}
+				current[transfer.From.ID], current[transfer.To.ID] = transfer.From, transfer.To
+				changed[transfer.From.ID], changed[transfer.To.ID] = true, true
 			}
+			to := current[p.props.BudgetID]
+			to.CoveredAt = p.viewAnchor
+			current[to.ID] = to
+			p.coverBatch = current
+			p.coverChanged = changed
 		}
 		// Save / clear the standing recurring arrangement per the toggle (re-fetch the
 		// destination since CoverBudget just mutated the budget set).
-		for _, nb := range p.app.Budgets() {
-			if nb.ID != p.props.BudgetID {
-				continue
+		current := p.coverBatch
+		if current == nil {
+			current = make(map[string]domain.Budget)
+			for _, budget := range p.app.Budgets() {
+				current[budget.ID] = budget
 			}
+		}
+		changed := p.coverChanged
+		if changed == nil {
+			changed = make(map[string]bool)
+		}
+		if nb, ok := current[p.props.BudgetID]; ok {
 			if p.recurringS.Get() {
 				wtFormula := ""
 				if p.wtFxS.Get() {
@@ -158,12 +192,22 @@ func useBudgetEditCoverSave(p budgetEditCoverSaveProps) ui.Handler {
 			// undoable "saved" toast, so the arrangement was reported as standing when
 			// the store had refused it. Reported inline like every other error in this
 			// modal — a toast behind an open dialog is easy to miss entirely.
-			if err := p.app.PutBudget(nb); err != nil {
-				slog.Error("budgets: write rejected", "op", "save recurring cover", "err", err)
-				p.errS.Set(budgetErrorText(err))
-				return
-			}
-			break
+			current[nb.ID] = nb
+			changed[nb.ID] = true
+		}
+		ids := make([]string, 0, len(changed))
+		for id := range changed {
+			ids = append(ids, id)
+		}
+		sort.Strings(ids)
+		writes := make([]domain.Budget, 0, len(ids))
+		for _, id := range ids {
+			writes = append(writes, current[id])
+		}
+		if err := p.app.PutBudgetsAtomicAt(writes, p.viewAnchor); err != nil {
+			slog.Error("budgets: write rejected", "op", "save recurring cover", "err", err)
+			p.errS.Set(budgetErrorText(err))
+			return
 		}
 		uistate.BumpDataRevision()
 		// G5: money moves are reversible — the toast offers a one-click Undo backed by

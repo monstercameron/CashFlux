@@ -82,6 +82,12 @@ func fundedReconcileSummaryKey(historical bool) string {
 // than the silence it replaces.
 func budgetFundedCallout(props budgetFundedProps) ui.Node {
 	f := props.Funding
+	openAdjust := uistate.UseBudgetAdjustOpen()
+	reducePct := f.ReduceToFitPct()
+	reconcile := ui.UseEvent(Prevent(func() {
+		uistate.SetBudgetAdjustSeed(strconv.FormatFloat(reducePct, 'f', -1, 64), string(budgeting.AdjustThisPeriod))
+		openAdjust.Set(true)
+	}))
 	if !f.Meaningful() || f.FullyFunded() {
 		return Fragment()
 	}
@@ -93,18 +99,11 @@ func budgetFundedCallout(props budgetFundedProps) ui.Node {
 	if f.Shortfall() == 0 {
 		return Fragment()
 	}
-	reducePct := f.ReduceToFitPct()
-	openAdjust := uistate.UseBudgetAdjustOpen()
 	// C671: the action opens a form that used to be pre-filled for a PERMANENT
 	// rewrite of every budget, and said so only after it was open. Reconciling one
 	// underfunded month is a current-period act, so that is what this hands over —
 	// and the label, tooltip and summary below all say so before it is pressed.
 	// The form still offers the permanent choice; it is no longer the silent one.
-	reconcile := ui.UseEvent(Prevent(func() {
-		uistate.SetBudgetAdjustSeed(strconv.FormatFloat(reducePct, 'f', -1, 64), string(budgeting.AdjustThisPeriod))
-		openAdjust.Set(true)
-	}))
-
 	// Every reconcile string names the period, so a missing label falls back to a
 	// phrase rather than leaving a possessive dangling off nothing.
 	periodLabel := props.PeriodLabel

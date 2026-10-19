@@ -58,12 +58,12 @@ func buildMonthCloseSummary(app *appstate.App, v budgetView, bs, be time.Time) m
 
 // budgetsMonthCloseModal renders the month-close flip modal when its atom is set,
 // as a surface-root sibling of the bento (no tile transform clips it).
-func budgetsMonthCloseModal() ui.Node {
+func budgetsMonthCloseModal(_ struct{}) ui.Node {
 	openAtom := uistate.UseMonthCloseOpen()
+	vw := uistate.UsePeriod().Get()
 	if !openAtom.Get() {
 		return Fragment()
 	}
-	vw := uistate.UsePeriod().Get()
 	return uiw.FlipPanel(uiw.FlipPanelProps{
 		Title:     uistate.T("monthclose.title", vw.Label()),
 		Width:     uiw.FlipLargeW,

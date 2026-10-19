@@ -57,7 +57,7 @@ func AutoBudgetBody(_ struct{}) ui.Node {
 	if m == budgeting.MethodHealthy {
 		months = autoBudgetHealthyMonths
 	}
-	suggestions, _ := budgeting.SuggestBudgets(app.Categories(), app.Transactions(), time.Now(), months, rates, m)
+	suggestions, suggestionErr := budgeting.SuggestBudgets(app.Categories(), app.Transactions(), time.Now(), months, rates, m)
 
 	// Existing MONTHLY budgets by category — so we update rather than duplicate, and can
 	// mark a category as already-budgeted (and not overwrite it unless the user opts in).
@@ -167,10 +167,13 @@ func AutoBudgetBody(_ struct{}) ui.Node {
 	if incomeErr != nil {
 		slog.Error("calculate auto-budget income", "error", incomeErr)
 	}
-	impact := budgeting.AutoBudgetImpactOf(app.Budgets(), autoIncome, pending)
+	impact, impactErr := budgeting.AutoBudgetImpactWithRates(app.Budgets(), autoIncome, pending, rates)
 
 	apply := ui.UseEvent(Prevent(func() {
 		saved := 0
+		if suggestionErr != nil || impactErr != nil || incomeErr != nil {
+			return
+		}
 		for _, s := range suggestions {
 			if !picked.Get()[s.CategoryID] {
 				continue
@@ -180,9 +183,14 @@ func AutoBudgetBody(_ struct{}) ui.Node {
 				continue
 			}
 			if b, ok := existing[s.CategoryID]; ok {
-				b.Limit = money.New(amt, base)
+				converted, err := currency.ConvertBetween(amt, base, b.Limit.Currency, rates)
+				if err != nil {
+					uistate.PostNotice(budgetErrorText(err), true)
+					continue
+				}
+				b.Limit = money.New(converted, b.Limit.Currency)
 				b.Period = domain.PeriodMonthly
-				if err := app.PutBudget(b); err != nil {
+				if err := app.PutBudgetAt(b, autoAnchor); err != nil {
 					uistate.PostNotice(budgetErrorText(err), true)
 					continue
 				}
@@ -192,7 +200,7 @@ func AutoBudgetBody(_ struct{}) ui.Node {
 					Period: domain.PeriodMonthly, Limit: money.New(amt, base),
 					Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID,
 				}
-				if err := app.PutBudget(nb); err != nil {
+				if err := app.PutBudgetAt(nb, autoAnchor); err != nil {
 					uistate.PostNotice(budgetErrorText(err), true)
 					continue
 				}
@@ -281,9 +289,9 @@ func AutoBudgetBody(_ struct{}) ui.Node {
 	// budgets now, what it would budget after saving, and what that leaves of the
 	// income the plan is measured against.
 	var impactNode ui.Node = Fragment()
-	if nSel > 0 {
+	if nSel > 0 && suggestionErr == nil && impactErr == nil && incomeErr == nil {
 		var leftLine ui.Node = Fragment()
-		if impact.HasIncome() {
+		if impactErr == nil && incomeErr == nil && impact.HasIncome() {
 			leftKey := "budgets.autoImpactLeft"
 			leftCls := "autobudget-impact-left"
 			if impact.LeftAfter() < 0 {
@@ -312,7 +320,9 @@ func AutoBudgetBody(_ struct{}) ui.Node {
 			P(css.Class("muted", tw.Text13), Style(map[string]string{"margin": "0"}),
 				Attr("data-testid", "autobudget-intro"),
 				uistate.T(introKey, uistate.T("budgets.autoMonths", strconv.Itoa(months)))),
-			If(incomeErr != nil, P(css.Class("form-err"), Attr("role", "status"), Attr("data-testid", "autobudget-income-incomplete"), uistate.T("budgets.incomplete"))),
+			If(suggestionErr != nil, P(css.Class("form-err"), Attr("role", "status"), Attr("data-testid", "autobudget-suggestion-error"), uistate.T("budgets.autoError", suggestionErr.Error()))),
+			If(impactErr != nil, P(css.Class("form-err"), Attr("role", "status"), Attr("data-testid", "autobudget-impact-error"), uistate.T("budgets.autoError", impactErr.Error()))),
+			If(incomeErr != nil, P(css.Class("form-err"), Attr("role", "status"), Attr("data-testid", "autobudget-income-incomplete"), uistate.T("budgets.autoError", incomeErr.Error()))),
 			impactNode,
 			bulkBar,
 			Div(css.Class("autobudget-rows"), Attr("data-testid", "autobudget-rows"), rows)),
@@ -320,7 +330,7 @@ func AutoBudgetBody(_ struct{}) ui.Node {
 			Span(css.Class("autobudget-total", tw.TextDim), Attr("data-testid", "autobudget-total"),
 				uistate.T("budgets.autoTotal", fmtMoney(money.New(totalMinor, base)))),
 			Button(css.Class("btn"), Type("button"), Attr("data-testid", "autobudget-cancel"), OnClick(onCancel), uistate.T("action.cancel")),
-			buttonWithDisabled(nSel == 0, []any{css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "autobudget-save"), OnClick(apply)},
+			buttonWithDisabled(nSel == 0 || suggestionErr != nil || impactErr != nil || incomeErr != nil, []any{css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "autobudget-save"), OnClick(apply)},
 				uistate.T("budgets.autoSave", strconv.Itoa(nSel)))))
 }
 

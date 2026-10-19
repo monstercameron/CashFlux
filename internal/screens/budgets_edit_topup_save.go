@@ -79,7 +79,10 @@ func planFundedBudgetTopup(budgets []domain.Budget, shares map[string]int64, des
 			if source.PeriodBoosts[key] < math.MinInt64+share {
 				return nil, fmt.Errorf("source budget %q period boost would overflow", id)
 			}
-			source = source.WithPeriodBoost(start, -share)
+			source, err = budgeting.WithPeriodBoostChecked(source, start, -share)
+			if err != nil {
+				return nil, fmt.Errorf("source budget %q period boost: %w", id, err)
+			}
 		}
 		writes = append(writes, source)
 	}
@@ -93,7 +96,11 @@ func planFundedBudgetTopup(budgets []domain.Budget, shares map[string]int64, des
 		if destination.PeriodBoosts[key] > math.MaxInt64-amount {
 			return nil, fmt.Errorf("destination budget period boost would overflow")
 		}
-		destination = destination.WithPeriodBoost(destinationStart, amount)
+		var err error
+		destination, err = budgeting.WithPeriodBoostChecked(destination, destinationStart, amount)
+		if err != nil {
+			return nil, fmt.Errorf("destination budget period boost: %w", err)
+		}
 	}
 	writes = append(writes, destination)
 	return writes, nil
@@ -159,7 +166,7 @@ func useBudgetEditTopupSave(p budgetEditTopupSaveProps) ui.Handler {
 				p.errS.Set(budgetErrorText(planErr))
 				return
 			}
-			if err := p.app.PutBudgetsAtomic(writes); err != nil {
+			if err := p.app.PutBudgetsAtomicAt(writes, p.viewAnchor); err != nil {
 				p.errS.Set(budgetErrorText(err))
 				return
 			}
@@ -180,9 +187,14 @@ func useBudgetEditTopupSave(p budgetEditTopupSaveProps) ui.Handler {
 					}
 					nb.Limit = money.New(nb.Limit.Amount+amt, p.cur)
 				} else {
-					nb = nb.WithPeriodBoost(periodStart, amt)
+					var boostErr error
+					nb, boostErr = budgeting.WithPeriodBoostChecked(nb, periodStart, amt)
+					if boostErr != nil {
+						p.errS.Set(budgetErrorText(boostErr))
+						return
+					}
 				}
-				if err := p.app.PutBudget(nb); err != nil {
+				if err := p.app.PutBudgetAt(nb, p.viewAnchor); err != nil {
 					p.errS.Set(budgetErrorText(err))
 					return
 				}

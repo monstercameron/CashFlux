@@ -90,6 +90,18 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **One cover flow and honest dialog copy (BQ10A, BQ10A.1).** "Cover overages" and the row's "Cover from another budget"
+  open the same flow: donors are offered safest first with the same "left" figures as the rows, rollover budgets never
+  default to borrowing from next month, and mixed currencies are refused. Every funds-moving dialog (adjust all, cover,
+  raise limit, top-up) states its reach in one sentence generated from the chosen scope, instead of a shared paragraph
+  that contradicted the dialog. Adjust-all and auto-budget use normalised, checked totals and block saving on calculation
+  errors; permanent changes record history for the viewed period; the month-close sweep shows why it is on hold; the
+  sweep card and month-close dialog mount as their own components and every Budgets helper registers its hooks before
+  any early return.
+- **The Budgets headline answers "how am I doing" (BR3HEAD).** It now reads "$1,567.50 spent of $3,313.53 this month"
+  with a 6 px meter and the same pace marker as the rows, then "2 budgets need attention" (a link to the filter) and
+  Cover overages; "fits the available income" moves to the income meter. Budgets gets its own type scale, sentence-case
+  labels instead of ALL-CAPS, a real category field in Add budget, a shorter mobile header and 24 px minimum targets.
 - **Budget rows put the bar and its pace tick first (BR3ROW).** At 1440 px the progress bar has its own column (it was
   1 px wide), with a 6 px bar and a pace tick that reads as a marker; projections move to a quiet second line. On phones
   rows use explicit areas so the name is never squeezed to nothing. Only Over and Near get a status chip; limits carry

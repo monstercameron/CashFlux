@@ -272,11 +272,7 @@ func allocRelation(r allocRead, base string, hist bool) (string, string) {
 		}
 		return uistate.T(key), cls
 	}
-	key := "budgets.allocUnder"
-	if hist {
-		key = "budgets.allocUnderHist"
-	}
-	return uistate.T(key, fmtMoney(money.New(r.Unassigned, base))), cls
+	return uistate.T("budgets.allocFitsIncome"), cls
 }
 
 // allocThirdLegend is the legend's last slot: what is still unbudgeted, or how

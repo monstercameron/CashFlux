@@ -59,58 +59,23 @@ func budgetCountPhrase(n int) string {
 // handled. One sentence, one primary action ("Sweep $X to Goal"), one dismiss —
 // a quiet month-boundary moment, never naggy. Its own component so the dismissal
 // hook stays at a stable render position.
-func budgetsSweepCard() ui.Node {
+func budgetsSweepCard(_ struct{}) ui.Node {
 	app := appstate.Default
-	if app == nil {
-		return Fragment()
-	}
 	_ = uistate.UseDataRevision().Get()
-
-	cfg := uistate.SweepConfigGet()
-	now := time.Now()
-	_, _, monthKey := closedMonthRange(now)
-
-	// Local hide-state so a click hides the card instantly (the handled-month is
-	// also persisted so it never returns for this month).
 	hidden := ui.UseState(false)
-
-	if !uistate.SweepPromptDue(monthKey, cfg) || hidden.Get() {
-		return Fragment()
-	}
-
-	mStart, _, _ := closedMonthRange(now)
-	input, err := app.BudgetViewInput(mStart)
-	if err != nil {
-		slog.Error("calculate month-close sweep", "err", err)
-		return Fragment()
-	}
-	// The live preferences are authoritative for the current view's member/grid.
-	pr := uistate.CurrentPrefs()
-	input.Period.WeekStart = pr.WeekStartWeekday()
-	input.Period.PayCycleAnchor = budgetPayCycleAnchor(pr.PayCycleAnchor)
-	input.PoolRollover = pr.BudgetRolloverLeftover
-	base := input.Base
-	plan, err := budgeting.EvaluateSweep(app.Budgets(), input, cfg.Domain(), uistate.ActiveMemberFromScope(), app.SweepAllowedForGoal)
-	if err != nil {
-		slog.Error("calculate month-close sweep", "err", err)
-		return Fragment()
-	}
-
-	if !plan.HasLeftover() {
-		return Fragment()
-	}
-
-	goalName := goalNameByID(app, cfg.TargetGoalID)
-	dec := currency.Decimals(base)
-	totalStr := money.FormatMinor(plan.Total.Amount, dec)
-
+	var monthKey, totalStr, goalName, base string
+	var amount int64
+	nav := router.UseNavigate()
 	onDismiss := ui.UseEvent(func() {
 		uistate.MarkSweepPromptHandled(monthKey)
 		uistate.RequestPersist()
 		hidden.Set(true)
 	})
 	onSweep := ui.UseEvent(func() {
-		if _, err := app.ApplyLeftoverSweep(cfg.TargetGoalID, plan.Total.Amount, base); err != nil {
+		if app == nil {
+			return
+		}
+		if _, err := app.ApplyLeftoverSweep(uistate.SweepConfigGet().TargetGoalID, amount, base); err != nil {
 			uistate.PostNotice(err.Error(), true)
 			return
 		}
@@ -120,8 +85,44 @@ func budgetsSweepCard() ui.Node {
 		uistate.PostNotice(uistate.T("sweep.done", totalStr, goalName), false)
 		hidden.Set(true)
 	})
-	nav := router.UseNavigate()
 	onReview := ui.UseEvent(func() { nav.Navigate(uistate.RoutePath("/goals")) })
+	if app == nil {
+		return Fragment()
+	}
+
+	cfg := uistate.SweepConfigGet()
+	now := time.Now()
+	_, _, monthKey = closedMonthRange(now)
+
+	mStart, _, _ := closedMonthRange(now)
+	input, err := app.BudgetViewInput(mStart)
+	if err != nil {
+		slog.Error("calculate month-close sweep", "err", err)
+		return sweepHold(err)
+	}
+	// The live preferences are authoritative for the current view's member/grid.
+	pr := uistate.CurrentPrefs()
+	input.Period.WeekStart = pr.WeekStartWeekday()
+	input.Period.PayCycleAnchor = budgetPayCycleAnchor(pr.PayCycleAnchor)
+	input.PoolRollover = pr.BudgetRolloverLeftover
+	base = input.Base
+	plan, err := budgeting.EvaluateSweep(app.Budgets(), input, cfg.Domain(), uistate.ActiveMemberFromScope(), app.SweepAllowedForGoal)
+	if err != nil {
+		slog.Error("calculate month-close sweep", "err", err)
+		return sweepHold(err)
+	}
+	if !uistate.SweepPromptDue(monthKey, cfg) || hidden.Get() {
+		return Fragment()
+	}
+
+	if !plan.HasLeftover() {
+		return Fragment()
+	}
+
+	goalName = goalNameByID(app, cfg.TargetGoalID)
+	dec := currency.Decimals(base)
+	totalStr = money.FormatMinor(plan.Total.Amount, dec)
+	amount = plan.Total.Amount
 
 	// The primary action, or — when the target goal's account is over-earmarked
 	// (XC7 gate) — a quiet explanation with a "Review goals" nudge instead.
@@ -161,6 +162,11 @@ func budgetsSweepCard() ui.Node {
 			action,
 		),
 	)
+}
+
+func sweepHold(err error) ui.Node {
+	return Div(css.Class("catchup-card"), Attr("role", "status"), Attr("data-testid", "sweep-hold"),
+		Strong(uistate.T("sweep.cardTitle")), P(uistate.T("sweep.error", err.Error())))
 }
 
 // budgetsSweepConfigModal renders the "Sweep leftovers" flip modal when its open

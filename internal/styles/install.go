@@ -153,6 +153,7 @@ func Register() {
 	registerUXT2()
 	registerBR3Row()
 	registerUXT1()
+	registerBR3Head()
 	inject(Build())
 }
 

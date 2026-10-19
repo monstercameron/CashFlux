@@ -28,7 +28,6 @@ import (
 
 // budgetSummaryPlanResult carries the explicit results for budgetSummaryPlan.
 type budgetSummaryPlanResult struct {
-	normalized            budgeting.BudgetNormalization
 	normalizedBudgetTotal int64
 	normalizationOK       bool
 	planView              budgetView
@@ -76,7 +75,7 @@ func budgetSummaryPlan(v budgetView, app *appstate.App, vw period.Window) budget
 	wStart, wEnd := vw.Range()
 	hist := !time.Now().Before(wEnd)
 	return budgetSummaryPlanResult{
-		normalized: normalized, normalizedBudgetTotal: normalizedBudgetTotal, normalizationOK: normalizationOK, planView: planView,
+		normalizedBudgetTotal: normalizedBudgetTotal, normalizationOK: normalizationOK, planView: planView,
 		smartSettings: smartSettings, wStart: wStart, wEnd: wEnd, hist: hist, excluded: excluded, issues: issues,
 	}
 }
@@ -218,6 +217,7 @@ func budgetSummaryChips(p budgetSummaryChipsProps) (ui.Node, ui.Node, ui.Node) {
 		}
 		ageChip = Span(css.Class("budget-hero-age"), Attr("data-testid", "budgets-agemoney"),
 			uistate.T("budgets.ageMoneyLabel")+" · "+figure,
+			Span(css.Class("bud3-age-explain"), uistate.T("budgets.ageMoneyOneLine")),
 			smartTooltipFor(p.smartSettings, "budget-agemoney", uistate.T("budgets.ageMoneyLabel"), why))
 	}
 
@@ -430,42 +430,33 @@ type budgetSummaryStatusProps struct {
 	vw                    period.Window
 	v                     budgetView
 	futurePeriod          bool
+	hist                  bool
 	normalizationOK       bool
 	overAssigned          int64
 	funding               budgeting.FundingRead
 	excluded              int
 	issues                []budgeting.ViewIssue
+	filterAttn            ui.Handler
+	attnCount             int
+	attnOver              int
+	smartSettings         smart.Settings
 }
 
 // budgetSummaryStatus renders the status strip and its primary action.
 func budgetSummaryStatus(p budgetSummaryStatusProps) ui.Node {
 	statusAmount := p.normalizedBudgetTotal
-	statusCopy := uistate.T("bud2.statusFits", p.vw.Label())
 	statusState := "fits"
 	if len(p.v.Incomplete) > 0 {
-		statusCopy = uistate.T("budgets.incomplete")
 		statusState = "unknown"
-	} else if p.futurePeriod {
-		statusCopy = uistate.T("budgets.future.planning",
-			fmtMoney(money.New(p.normalizedBudgetTotal, p.v.Base)),
-			fmtMoney(money.New(p.v.BannerIncome, p.v.Base)))
 	} else if !p.normalizationOK {
-		statusCopy = uistate.T("bud2.normalizationUnavailable")
 		statusState = "unknown"
-	} else if p.v.BannerIncome <= 0 {
-		statusCopy = uistate.T("bud2.statusNoIncome", p.vw.Label())
 	}
 	if p.excluded == 0 && !p.futurePeriod && p.overAssigned > 0 {
 		statusAmount = p.overAssigned
-		statusCopy = uistate.T("bud2.statusOver", p.vw.Label())
 		statusState = "over"
 	} else if p.excluded == 0 && !p.futurePeriod && p.funding.Meaningful() && !p.funding.FullyFunded() && p.funding.Unfunded() > 0 {
 		statusAmount = p.funding.Unfunded()
-		statusCopy = uistate.T("bud2.statusUnfunded", p.vw.Label())
 		statusState = "unfunded"
-	}
-	if p.excluded > 0 {
-		statusCopy += " · " + budgetExclusionsLabel(p.excluded)
 	}
 	var statusAction ui.Node = Fragment()
 	if statusState == "over" || statusState == "unfunded" {
@@ -477,14 +468,39 @@ func budgetSummaryStatus(p budgetSummaryStatusProps) ui.Node {
 			Label: label, Percent: p.funding.ReduceToFitPct(), TestID: "budgets-status-primary-action",
 		})
 	}
-	statusFigure := fmtMoney(money.New(statusAmount, p.v.Base))
-	statusLine := Div(css.Class("bud2-status-line"), Attr("role", "status"), Attr("data-state", statusState),
-		Attr("style", "display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.75rem;min-width:0"),
-		Div(css.Class("bud2-status-copy"), Attr("style", "display:flex;align-items:baseline;flex-wrap:wrap;gap:.2rem .65rem;min-width:0"),
-			Span(css.Class("bud2-status-figure"), Attr("data-testid", "budgets-status-figure"),
-				statusFigure),
-			Span(css.Class("bud2-status-sentence"), Attr("data-testid", "budgets-status-sentence"),
-				Attr("style", "max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"), statusCopy),
+	statusFigure := fmtMoney(money.New(p.v.TotalSpent, p.v.Base))
+	statusCopy := uistate.T("budgets.headlineSpentOf", fmtMoney(money.New(p.normalizedBudgetTotal, p.v.Base)))
+	if p.hist {
+		statusCopy = uistate.T("budgets.headlineSpentPast", fmtMoney(money.New(p.normalizedBudgetTotal, p.v.Base)), p.vw.Label())
+	}
+	if p.futurePeriod {
+		statusCopy = uistate.T("budgets.future.planning",
+			fmtMoney(money.New(p.normalizedBudgetTotal, p.v.Base)),
+			fmtMoney(money.New(p.v.BannerIncome, p.v.Base)))
+	}
+	if len(p.v.Incomplete) > 0 || !p.normalizationOK {
+		statusCopy = uistate.T("budgets.incomplete")
+	}
+	if p.excluded > 0 {
+		statusCopy += " · " + budgetExclusionsLabel(p.excluded)
+	}
+	fillPct := budgetHeadlinePercent(p.v.TotalSpent, p.normalizedBudgetTotal)
+	statusLine := Div(css.Class("bud3-headline"), Attr("data-state", statusState),
+		Div(css.Class("bud3-headline-copy"), Attr("role", "status"),
+			Span(css.Class("bud3-headline-figure"), Attr("data-testid", "budgets-status-figure"), statusFigure),
+			Span(css.Class("bud3-headline-secondary"), Attr("data-testid", "budgets-status-sentence"), statusCopy),
+		),
+		Div(css.Class("bud3-headline-meter"), Attr("data-testid", "budgets-status-meter"), Attr("role", "meter"), Attr("aria-label", uistate.T("budgets.headlineMeterLabel")),
+			Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"), Attr("aria-valuenow", strconv.Itoa(fillPct)),
+			Div(css.Class("bud3-headline-meter-fill"), Attr("style", "width:"+strconv.Itoa(fillPct)+"%")),
+			If(!p.hist && !p.v.LastMonthMode && !p.futurePeriod, Div(css.Class("bud3-headline-pace"), Attr("aria-hidden", "true"), Attr("style", "left:"+strconv.Itoa(budgetPeriodElapsedPct(p.vw, time.Now()))+"%"))),
+		),
+		If(p.attnCount > 0 && !p.hist && !p.v.LastMonthMode,
+			Div(css.Class("bud3-headline-attention"),
+				Button(css.Class("bud3-attention-link"), Type("button"), Attr("data-testid", "budgets-hero-attn"), OnClick(p.filterAttn), uistate.T("budgets.headlineAttention", p.attnCount)),
+				If(p.attnOver > 0 && p.smartSettings.IsEnabled(coverAllFeatureCode), Span(css.Class("bud3-attention-separator"), "·")),
+				If(p.attnOver > 0 && p.smartSettings.IsEnabled(coverAllFeatureCode), ui.CreateElement(coverAllBannerButton, coverAllButtonProps{})),
+			),
 		),
 		statusAction,
 	)
@@ -505,6 +521,29 @@ func budgetSummaryStatus(p budgetSummaryStatusProps) ui.Node {
 	return Fragment(statusLine, P(css.Class("budget-sub", tw.TextWarn), Attr("data-testid", "budgets-status-issues"), strings.Join(issueText, " · ")))
 }
 
+func budgetHeadlinePercent(spent, plan int64) int {
+	if spent <= 0 || plan <= 0 {
+		return 0
+	}
+	pct := int(spent * 100 / plan)
+	if pct > 100 {
+		return 100
+	}
+	return pct
+}
+
+func budgetPeriodElapsedPct(vw period.Window, now time.Time) int {
+	start, end := vw.Range()
+	span := end.Sub(start)
+	if span <= 0 || !now.After(start) {
+		return 0
+	}
+	if !now.Before(end) {
+		return 100
+	}
+	return int(now.Sub(start) * 100 / span)
+}
+
 func budgetExclusionsLabel(count int) string {
 	if count == 1 {
 		return uistate.T("bud2.excludesOneBudget")
@@ -516,7 +555,6 @@ func budgetExclusionsLabel(count int) string {
 type budgetSummaryDetailsProps struct {
 	v               budgetView
 	normalizationOK bool
-	normalized      budgeting.BudgetNormalization
 	alloc           ui.Node
 	futurePeriod    bool
 	funding         budgeting.FundingRead
@@ -528,9 +566,6 @@ type budgetSummaryDetailsProps struct {
 	rail            ui.Node
 	incomeActual    ui.Node
 	lastMonthTag    ui.Node
-	attnChip        ui.Node
-	attnOver        int
-	smartSettings   smart.Settings
 	closeOffer      ui.Node
 	toAssignChip    ui.Node
 	hasAlloc        bool
@@ -543,7 +578,6 @@ func budgetSummaryDetails(p budgetSummaryDetailsProps) ui.Node {
 	details := Details(css.Class("bud2-status-details"), Attr("data-testid", "budgets-status-details"),
 		Summary(uistate.T("bud2.moreDetails")),
 		budgetIncompleteNotice(p.v.Incomplete),
-		If(p.normalizationOK, budgetNormalizationDetails(p.normalized)),
 		If(!p.normalizationOK, P(css.Class("bud2-normalization-error"), Attr("role", "status"), uistate.T("bud2.normalizationUnavailable"))),
 		p.alloc,
 		ui.CreateElement(transferLeakNotice, transferLeakProps{Txns: p.v.LeakRows, Where: uistate.T("txnleak.whereBudgets")}),
@@ -562,11 +596,6 @@ func budgetSummaryDetails(p budgetSummaryDetailsProps) ui.Node {
 			Div(css.Class("budget-hero-side"),
 				Div(css.Class("budget-hero-acts"),
 					If(p.v.LastMonthMode, p.lastMonthTag),
-					p.attnChip,
-					// Cover-all re-homes here from the retired budget-attention tile: it
-					// belongs beside the chip that names the overages it fixes.
-					If(p.attnOver > 0 && p.smartSettings.IsEnabled(coverAllFeatureCode),
-						ui.CreateElement(coverAllBannerButton, coverAllButtonProps{})),
 					p.closeOffer,
 				),
 				Div(css.Class("budget-hero-meta"),

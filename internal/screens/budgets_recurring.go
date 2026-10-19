@@ -48,6 +48,8 @@ func budgetRecurringWidget(props budgetSummaryProps) ui.Node {
 	goToRecurring := ui.UseEvent(Prevent(func() { nav.Navigate(uistate.RoutePath("/recurring")) }))
 	open := ui.UseState(false)
 	toggleOpen := ui.UseEvent(Prevent(func() { open.Set(!open.Get()) }))
+	recurNow := time.Now()
+	recurStart, recurEnd := uistate.UsePeriod().Get().Range()
 
 	base := app.Settings().BaseCurrency
 	if base == "" {
@@ -107,8 +109,6 @@ func budgetRecurringWidget(props budgetSummaryProps) ui.Node {
 	// 2026" beside "Next Sep 1, 2026" with nothing saying whether either had
 	// happened, was about to, or belonged to the period on screen — three
 	// different facts under one word.
-	recurNow := time.Now()
-	recurStart, recurEnd := uistate.UsePeriod().Get().Range()
 	coveredRows := make([]ui.Node, 0, len(covered))
 	for _, r := range covered {
 		coveredRows = append(coveredRows, budgetRecurringRow(r, catName, recurNow, recurStart, recurEnd))

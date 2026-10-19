@@ -112,7 +112,7 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 			attnNear++
 		}
 	}
-	attnChip, toAssignChip, ageChip := budgetSummaryChips(budgetSummaryChipsProps{
+	_, toAssignChip, ageChip := budgetSummaryChips(budgetSummaryChipsProps{
 		v: v, hist: summaryPlan.hist, filterAttn: filterAttn, fundHasPool: summaryPool.fundHasPool, fundFree: summaryPool.fundFree,
 		zbbHero: summaryPool.zbbHero, spendCap: summaryPool.spendCap, smartSettings: summaryPlan.smartSettings,
 	})
@@ -133,14 +133,15 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 
 	statusLine := budgetSummaryStatus(budgetSummaryStatusProps{
 		normalizedBudgetTotal: summaryPlan.normalizedBudgetTotal, vw: vw, v: v, futurePeriod: futurePeriod,
-		normalizationOK: summaryPlan.normalizationOK, overAssigned: summaryAllocation.overAssigned, funding: funding,
-		excluded: summaryPlan.excluded, issues: summaryPlan.issues,
+		normalizationOK: summaryPlan.normalizationOK, overAssigned: summaryAllocation.overAssigned, funding: funding, hist: summaryPlan.hist,
+		excluded: summaryPlan.excluded, issues: summaryPlan.issues, filterAttn: filterAttn,
+		attnCount: len(budgetAttentionStatuses(v.Statuses)), attnOver: attnOver, smartSettings: summaryPlan.smartSettings,
 	})
 	details := budgetSummaryDetails(budgetSummaryDetailsProps{
-		v: v, normalizationOK: summaryPlan.normalizationOK, normalized: summaryPlan.normalized, alloc: summaryAllocation.alloc,
+		v: v, normalizationOK: summaryPlan.normalizationOK, alloc: summaryAllocation.alloc,
 		futurePeriod: futurePeriod, funding: funding, hist: summaryPlan.hist, vw: vw, app: app, activeMemberID: activeMemberID, pr: pr,
-		rail: rail, incomeActual: incomeActual, lastMonthTag: summaryPool.lastMonthTag, attnChip: attnChip, attnOver: attnOver,
-		smartSettings: summaryPlan.smartSettings, closeOffer: summaryAllocation.closeOffer, toAssignChip: toAssignChip,
+		rail: rail, incomeActual: incomeActual, lastMonthTag: summaryPool.lastMonthTag,
+		closeOffer: summaryAllocation.closeOffer, toAssignChip: toAssignChip,
 		hasAlloc: summaryAllocation.hasAlloc, basisBtn: basisBtn, ageChip: ageChip,
 	})
 
@@ -149,39 +150,6 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 		ID: "budget-summary", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
 		Body: body,
 	})
-}
-
-func budgetNormalizationDetails(normalized budgeting.BudgetNormalization) ui.Node {
-	items := make([]any, 0, len(normalized.Lines)+1)
-	items = append(items, P(css.Class("bud2-normalization-total"), Attr("data-testid", "budgets-normalized-total"),
-		uistate.T("bud2.monthlyEquivalent", fmtMoney(normalized.Total))))
-	for _, line := range normalized.Lines {
-		if line.Period == domain.PeriodMonthly || line.Period == "" {
-			continue
-		}
-		items = append(items, P(css.Class("bud2-normalization-line"), Attr("data-testid", "budgets-normalized-line"),
-			uistate.T("bud2.normalizedBudgetLine", line.Name, budgetPeriodName(line.Period), fmtMoney(line.Amount))))
-	}
-	args := []any{css.Class("bud2-normalization"), Attr("data-testid", "budgets-normalization")}
-	args = append(args, items...)
-	return Div(args...)
-}
-
-func budgetPeriodName(period domain.Period) string {
-	switch period {
-	case domain.PeriodWeekly:
-		return uistate.T("bud2.periodWeekly")
-	case domain.PeriodBiweekly:
-		return uistate.T("bud2.periodBiweekly")
-	case domain.PeriodSemimonthly:
-		return uistate.T("bud2.periodSemimonthly")
-	case domain.PeriodQuarterly:
-		return uistate.T("bud2.periodQuarterly")
-	case domain.PeriodYearly:
-		return uistate.T("bud2.periodYearly")
-	default:
-		return uistate.T("bud2.periodMonthly")
-	}
 }
 
 type budgetStatusActionProps struct {

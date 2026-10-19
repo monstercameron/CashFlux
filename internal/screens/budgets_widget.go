@@ -38,13 +38,13 @@ import (
 // each through its per-widget error boundary.
 func Budgets() ui.Node {
 	app := appstate.Default
+	_ = uistate.UseDataRevision().Get()
 	if app == nil {
 		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("common.notReady"))})
 	}
 
 	// Re-render on any data mutation (a budget CRUD, a transaction added elsewhere, a
 	// method switch).
-	_ = uistate.UseDataRevision().Get()
 
 	base := app.Settings().BaseCurrency
 	if base == "" {
@@ -100,7 +100,7 @@ func Budgets() ui.Node {
 	// config flip modal renders as a sibling of the bento (outside any tile
 	// transform) so its centering isn't broken.
 	return Fragment(
-		budgetsSweepCard(),
+		ui.CreateElement(budgetsSweepCard, struct{}{}),
 		// The surface says which method it is rendering. Four different pages live
 		// behind this one route and nothing in the DOM reported which was on screen,
 		// so anything wanting to observe a method change had to infer it from a
@@ -122,7 +122,7 @@ func Budgets() ui.Node {
 		budgetsSweepConfigModal(),
 		budgetsCoverAllModal(),
 		budgetsTrackUntrackedModal(),
-		budgetsMonthCloseModal(),
+		ui.CreateElement(budgetsMonthCloseModal, struct{}{}),
 		flexAssignSheet(),
 	)
 }

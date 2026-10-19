@@ -140,6 +140,12 @@ func trackUntrackedForm(_ trackUntrackedFormProps) ui.Node {
 	pr := uistate.UsePrefs().Get()
 
 	closeSheet := ui.UseEvent(Prevent(func() { openAtom.Set(false) }))
+	var applyFn func()
+	apply := ui.UseEvent(Prevent(func() {
+		if applyFn != nil {
+			applyFn()
+		}
+	}))
 
 	if app == nil {
 		return Fragment()
@@ -221,7 +227,7 @@ func trackUntrackedForm(_ trackUntrackedFormProps) ui.Node {
 		}
 	}
 
-	apply := ui.UseEvent(Prevent(func() {
+	applyFn = func() {
 		// Re-resolve at click time so the write uses the state on screen.
 		live := parseTrackRows(rowsAtom.Get())
 		n := 0
@@ -272,7 +278,7 @@ func trackUntrackedForm(_ trackUntrackedFormProps) ui.Node {
 		}
 		rowsAtom.Set("")
 		openAtom.Set(false)
-	}))
+	}
 
 	body := MapKeyed(rows,
 		func(r trackRow) any { return r.Cand.CategoryID },

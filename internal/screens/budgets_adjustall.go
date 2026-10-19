@@ -76,6 +76,10 @@ func AdjustAllBody(_ struct{}) ui.Node {
 	if !scope.Valid() {
 		scope = budgeting.AdjustEveryPeriod
 	}
+	impactReach := fundsReachThisPeriod
+	if scope.IsPermanent() {
+		impactReach = fundsReachPermanent
+	}
 	pr := uistate.UsePrefs().Get()
 	vw := uistate.UsePeriod().Get()
 	// Each budget's current period start, for a this-period write — the shared
@@ -113,27 +117,31 @@ func AdjustAllBody(_ struct{}) ui.Node {
 		preview, normalizationErr = budgeting.AdjustAllPreviewNormalized(scoped, pct, scope, overlays, domain.PeriodMonthly,
 			fx)
 	}
+	normalizedDelta := money.Zero(preview.NormalizedAfter.Currency)
+	var normalizedDeltaErr error
+	if normalizationErr == nil && preview.Error == nil {
+		normalizedDelta, normalizedDeltaErr = preview.NormalizedAfter.Sub(preview.NormalizedBefore)
+	}
 	// C671: a permanent adjustment is always acknowledged, whatever its size. The
 	// old rule looked only at magnitude, so a 5% cut that reached every future
 	// period passed without a word while a 30% one that did the same was stopped.
 	needsAck := valid && budgeting.AdjustNeedsAck(pct, scope)
-	canApply := valid && preview.Count() > 0 && (!needsAck || ack.Get())
+	canApply := valid && normalizationErr == nil && preview.Error == nil && normalizedDeltaErr == nil && preview.Count() > 0 && (!needsAck || ack.Get())
 
 	apply := ui.UseEvent(Prevent(func() {
 		if !canApply || app == nil {
 			return
 		}
-		n := 0
-		// The write itself is pure (budgeting.ApplyAdjust): a permanent adjustment
-		// rewrites base limits, a this-period one records a boost of the same delta
-		// that lapses at the next boundary. This loop only persists the result.
-		for _, b := range budgeting.ApplyAdjust(preview, scope, periodStart) {
-			if err := app.PutBudget(b); err != nil {
-				uistate.PostNotice(budgetErrorText(err), true)
-				continue
-			}
-			n++
+		writes, err := budgeting.ApplyAdjustChecked(preview, scope, periodStart)
+		if err != nil {
+			uistate.PostNotice(budgetErrorText(err), true)
+			return
 		}
+		if err := app.PutBudgetsAtomicAt(writes, vw.From); err != nil {
+			uistate.PostNotice(budgetErrorText(err), true)
+			return
+		}
+		n := len(writes)
 		uistate.BumpDataRevision()
 		uistate.RequestPersist()
 		uistate.PostUndoable(uistate.T(adjustAppliedKey(scope), plural(n, "budget"), formatAdjustPct(pct)))
@@ -153,6 +161,10 @@ func AdjustAllBody(_ struct{}) ui.Node {
 		inlineErr = uistate.T("budgets.adjustAllOutOfRange",
 			formatAdjustPct(budgeting.AdjustMinPct), formatAdjustPct(budgeting.AdjustMaxPct))
 	case normalizationErr != nil:
+		inlineErr = uistate.T("budgets.incomplete")
+	case preview.Error != nil:
+		inlineErr = uistate.T("budgets.incomplete")
+	case normalizedDeltaErr != nil:
 		inlineErr = uistate.T("budgets.incomplete")
 	case preview.Count() == 0:
 		inlineErr = uistate.T("budgets.adjustAllNothingToChange")
@@ -183,21 +195,25 @@ func AdjustAllBody(_ struct{}) ui.Node {
 				)
 			})
 		var totalNode ui.Node = Fragment()
-		if !preview.MixedCurrency {
+		if normalizationErr == nil && preview.Error == nil && normalizedDeltaErr == nil {
+			delta := normalizedDelta.Amount
 			totalNode = Div(css.Class("adjustall-total"), Attr("data-testid", "adjustall-total"),
 				Span(css.Class("adjustall-total-lbl"), uistate.T("budgets.adjustAllTotalLabel")),
-				Span(css.Class("adjustall-before", tw.TextFaint), fmtMoney(money.New(preview.TotalBefore, cur))),
+				Span(css.Class("adjustall-before", tw.TextFaint), fmtMoney(preview.NormalizedBefore)),
 				Span(css.Class("adjustall-arrow", tw.TextFaint), "→"),
-				Span(css.Class("adjustall-after", tw.FontDisplay), fmtMoney(money.New(preview.TotalAfter, cur))),
-				Span(ClassStr("adjustall-delta"+adjustDeltaTone(preview.TotalDelta())),
-					uistate.T(adjustDeltaKey(preview.TotalDelta()), fmtMoney(money.New(absMinor(preview.TotalDelta()), cur)))),
+				Span(css.Class("adjustall-after", tw.FontDisplay), fmtMoney(preview.NormalizedAfter)),
+				Span(ClassStr("adjustall-delta"+adjustDeltaTone(delta)),
+					uistate.T(adjustDeltaKey(delta), fmtMoney(money.New(absMinor(delta), base)))),
 			)
-		} else {
+		} else if preview.MixedCurrency {
 			totalNode = P(css.Class("budget-cat-fate", tw.TextFaint), Attr("data-testid", "adjustall-mixed"),
 				uistate.T("budgets.adjustAllMixedCurrency"))
+		} else {
+			totalNode = P(css.Class("budget-cat-fate", tw.TextFaint), Attr("data-testid", "adjustall-error"),
+				uistate.T("budgets.incomplete"))
 		}
 		var normalizedSummary ui.Node = Fragment()
-		if normalizationErr == nil {
+		if normalizationErr == nil && preview.Error == nil {
 			normalizedSummary = P(css.Class("adjustall-normalized"), Attr("data-testid", "adjustall-normalized"),
 				uistate.T("budq4.adjustNormalized", fmtMoney(preview.NormalizedBefore), fmtMoney(preview.NormalizedAfter)))
 		}
@@ -278,8 +294,6 @@ func AdjustAllBody(_ struct{}) ui.Node {
 			// C597: the same reach vocabulary the page's other funds-moving actions
 			// use, so "Adjust all" can be compared with them rather than read on its
 			// own terms.
-			P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "adjustall-impact"),
-				Style(map[string]string{"margin": "0"}), fundsImpactLine(budgeting.ImpactAdjustAll)),
 			labeledField(uistate.T("budgets.adjustAllFieldLabel"),
 				Fragment(
 					Div(css.Class("adjustall-field"),
@@ -308,7 +322,7 @@ func AdjustAllBody(_ struct{}) ui.Node {
 					OnSelect: func(v string) { scopeS.Set(v); ack.Set(false) },
 				})),
 			P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "adjustall-scope-hint"),
-				Style(map[string]string{"margin": "0"}), uistate.T(adjustScopeHintKey(scope))),
+				Style(map[string]string{"margin": "0"}), fundsImpactLine(budgeting.ImpactAdjustAll, fundsImpactOption{reach: impactReach})),
 			// C671: WHICH period "this period" is, said inside the form. The funding
 			// callout discloses it before opening, but the toolbar's own Adjust-all is
 			// available at any time and carries none of that — so a user browsing a
