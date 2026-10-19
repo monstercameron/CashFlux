@@ -59,6 +59,7 @@ type taskRowProps struct {
 // unconditionally so the edit toggle never reorders them.
 func TaskRow(props taskRowProps) ui.Node {
 	t := props.Task
+	title := taskRowDisplayTitle(t)
 
 	nav := router.UseNavigate()
 	toggle := ui.UseEvent(Prevent(func() { props.OnToggle(t.ID) }))
@@ -278,7 +279,7 @@ func TaskRow(props taskRowProps) ui.Node {
 	if props.Selectable {
 		rowArgs = append(rowArgs, Input(css.Class("todo-select"), Type("checkbox"),
 			Attr("data-testid", "task-select-"+t.ID), CheckedIf(props.Selected),
-			Attr("aria-label", uistate.T("todo.selectTask")+" — "+t.Title),
+			Attr("aria-label", uistate.T("todo.selectTask")+" — "+title),
 			Title(uistate.T("todo.selectTask")), OnClick(pick)))
 	}
 	// A leading connector glyph makes a nested sub-task unmistakable as a child of the
@@ -307,7 +308,7 @@ func TaskRow(props taskRowProps) ui.Node {
 	rowArgs = append(rowArgs,
 		Button(ClassStr("todo-check"+map[bool]string{true: " is-done", false: ""}[done]), Type("button"),
 			Attr("role", "checkbox"), Attr("aria-checked", ariaBool(done)),
-			Attr("aria-label", uistate.T("todo.toggle")+" — "+t.Title), Attr("data-testid", "task-check-"+t.ID),
+			Attr("aria-label", uistate.T("todo.toggle")+" — "+title), Attr("data-testid", "task-check-"+t.ID),
 			Title(uistate.T("todo.toggle")), OnClick(toggle), checkGlyph),
 		Div(css.Class("todo-main"),
 			Div(css.Class("todo-headline"),
@@ -316,7 +317,7 @@ func TaskRow(props taskRowProps) ui.Node {
 					// row carries a High/Low priority tag (Medium leaves the slot empty) — no
 					// ragged left edge down the list.
 					Span(css.Class("todo-prio-slot"), todoPriorityTag(t.Priority)),
-					Span(css.Class("todo-title"), t.Title),
+					Span(css.Class("todo-title"), title),
 				),
 				dueNode,
 			),
@@ -326,10 +327,10 @@ func TaskRow(props taskRowProps) ui.Node {
 		// Edit opens the flip modal; the shared ⋯ KebabMenu (viewport-aware) holds Add
 		// sub-task + the destructive Delete.
 		Div(css.Class("todo-actions"),
-			Button(css.Class("todo-icon-btn"), Type("button"), Attr("data-testid", "task-edit-btn-"+t.ID), Attr("aria-label", uistate.T("todo.editTitle")+" — "+t.Title), Title(uistate.T("todo.editTitle")), OnClick(openEdit), uiw.Icon(icon.Pencil, css.Class(tw.W4, tw.H4))),
+			Button(css.Class("todo-icon-btn"), Type("button"), Attr("data-testid", "task-edit-btn-"+t.ID), Attr("aria-label", uistate.T("todo.editTitle")+" — "+title), Title(uistate.T("todo.editTitle")), OnClick(openEdit), uiw.Icon(icon.Pencil, css.Class(tw.W4, tw.H4))),
 			uiw.KebabMenu(uiw.KebabMenuProps{
 				ID:           "task-menu-" + t.ID,
-				AriaLabel:    uistate.T("todo.moreActions") + " — " + t.Title,
+				AriaLabel:    uistate.T("todo.moreActions") + " — " + title,
 				ToggleTestID: "task-menu-btn-" + t.ID,
 				ToggleClass:  "todo-icon-btn",
 				Items: []ui.Node{
@@ -340,6 +341,26 @@ func TaskRow(props taskRowProps) ui.Node {
 		),
 	)
 	return Div(rowArgs...)
+}
+
+func taskRowDisplayTitle(task domain.Task) string {
+	if task.Custom == nil {
+		return task.Title
+	}
+	key, _ := task.Custom["titleKey"].(string)
+	if key == "" {
+		return task.Title
+	}
+	var args []any
+	switch values := task.Custom["titleArgs"].(type) {
+	case []any:
+		args = values
+	case []string:
+		for _, value := range values {
+			args = append(args, value)
+		}
+	}
+	return uistate.T(key, args...)
 }
 
 // linkTypeIcon maps a task's linked-entity type to its glyph for the link chip.

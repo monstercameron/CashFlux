@@ -90,6 +90,12 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Budgets rows, summary and search follow the shared rules (BQ10B).** Saving budgets are counted once in To Assign. The
+  budget evaluation uses an explicit refund-netted ledger; a missing exchange rate leaves a savings account unassigned
+  instead of treating foreign minor units as base currency. The spending breakdown uses signed slices in the budget's
+  currency (discounts show as negative), goal-funded notes follow the shared contribution rules, list search matches
+  budget names, categories and tags, generated budget tasks have translatable titles, "period age" uses the local day,
+  the limit editor restores focus through a component ref, and stray coverage files are removed from the repository.
 - **Goal money is allocated to budgets once (BR3GOAL).** New `goalfunded.AllocateAvailable` gives each goal's available
   money to budgets deterministically — explicit goal–budget links first (split by observed contributions, or equally),
   then the matching category — so the same "$420 from the Baby fund" can no longer appear in two budgets. It also flags

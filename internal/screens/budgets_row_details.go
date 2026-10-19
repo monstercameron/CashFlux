@@ -6,6 +6,7 @@ package screens
 
 import (
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 	"sync"
@@ -13,7 +14,9 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
+	"github.com/monstercameron/CashFlux/internal/categorytree"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/goalfunded"
 	"github.com/monstercameron/CashFlux/internal/icon"
@@ -175,10 +178,10 @@ func budgetRowPaceNotes(lastMonthMode bool, props budgetRowProps, s budgeting.St
 		if anchor.IsZero() {
 			anchor = time.Now()
 		}
-		from, to := budgeting.PeriodRange(s.Budget.Period, anchor, prefs.WeekStartWeekday())
+		from, to := budgeting.PeriodRangeAnchored(s.Budget.Period, anchor, prefs.WeekStartWeekday(), budgetPayCycleAnchor(prefs.PayCycleAnchor))
 		elapsed := 0
 		if total := to.Sub(from).Hours(); total > 0 {
-			elapsed = int(time.Since(from).Hours() / total * 100)
+			elapsed = int(dateutil.WallClockUTC(time.Now()).Sub(from).Hours() / total * 100)
 			if elapsed < 0 {
 				elapsed = 0
 			} else if elapsed > 100 {
@@ -292,13 +295,6 @@ func budgetRowGoalFunding(lastMonthMode bool, s budgeting.Status, props budgetRo
 	var fundedLine ui.Node = Fragment()
 	fundedChip, fundedTitle := "", ""
 	if app := appstate.Default; app != nil && !lastMonthMode {
-		cats := map[string]bool{}
-		if s.Budget.CategoryID != "" {
-			cats[s.Budget.CategoryID] = true
-		}
-		for _, c := range s.Budget.TrackedCategoryIDs() {
-			cats[c] = true
-		}
 		base := app.Settings().BaseCurrency
 		if base == "" {
 			base = budgetBaseCurrency(base)
@@ -315,22 +311,55 @@ func budgetRowGoalFunding(lastMonthMode bool, s budgeting.Status, props budgetRo
 		pStart, pEnd := budgeting.PeriodRangeAnchored(s.Budget.Period, anchor,
 			uistate.LoadPrefs().WeekStartWeekday(), payAnchor)
 		split := memoGoalFunded(app, dataRevision, s.Budget.ID, pStart, pEnd, func() goalfunded.Split {
-			return goalfunded.Summarize(app.Transactions(), cats, pStart, pEnd,
+			summary, err := budgetGoalFundedSummary(s.Budget, app.Transactions(), app.Categories(), pStart, pEnd,
 				currency.Rates{Base: base, Rates: app.Settings().FXRates})
+			if err != nil {
+				slog.Error("calculate goal-funded budget contributions", "budget_id", s.Budget.ID, "error", err)
+				return goalfunded.Split{}
+			}
+			return summary
 		})
 		if split.HasFunded() {
+			rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
+			ordinaryOver, err := budgetGoalFundedOverBy(split, s.Limit, rates)
+			if err != nil {
+				slog.Error("convert goal-funded budget limit", "budget_id", s.Budget.ID, "error", err)
+				return Fragment(), ""
+			}
 			key := "budgets.goalFundedAvailableMany"
 			if len(split.Goals) == 1 {
 				key = "budgets.goalFundedAvailableOne"
 			}
 			fundedTitle = uistate.T(key, fmtMoney(money.New(split.FundedMinor, base)), budgetGoalNames(app.Goals(), split.Goals), fmtMoney(s.Limit))
 			fundedChip = fundedTitle
+			var ordinaryOverLine ui.Node = Fragment()
+			if ordinaryOver.Amount > 0 {
+				ordinaryOverLine = Span(css.Class("budget-sub", tw.TextDown), uistate.T("budgets.goalFundedOrdinaryOver", fmtMoney(ordinaryOver)))
+			}
 			fundedLine = Span(css.Class("budget-sub", tw.TextDim),
-				Attr("data-testid", "budget-goalfunded-"+s.Budget.ID), fundedTitle)
+				Attr("data-testid", "budget-goalfunded-"+s.Budget.ID), fundedTitle, ordinaryOverLine)
 		}
 	}
 
 	return fundedLine, fundedChip
+}
+
+func budgetGoalFundedOverBy(split goalfunded.Split, limit money.Money, rates currency.Rates) (money.Money, error) {
+	limitBase, err := rates.ToBase(limit)
+	if err != nil {
+		return money.Money{}, err
+	}
+	over, _ := split.OverBy(limitBase.Amount)
+	return money.New(over, rates.Base), nil
+}
+
+func budgetGoalFundedSummary(b domain.Budget, transactions []domain.Transaction, categories []domain.Category, start, end time.Time, rates currency.Rates) (goalfunded.Split, error) {
+	covers := categorytree.DescendantsOfAll(categories, b.TrackedCategoryIDs())
+	contributors, err := budgeting.ContributingTransactions(b, transactions, start, end, covers)
+	if err != nil {
+		return goalfunded.Split{}, err
+	}
+	return goalfunded.Summarize(contributors, nil, start, end, rates), nil
 }
 
 func budgetGoalNames(goals []domain.Goal, ids []string) string {
@@ -399,12 +428,12 @@ func budgetRowMetrics(lastMonthMode bool, props budgetRowProps, s budgeting.Stat
 		// Aug 1" (all current-month pacing). Completed periods state final facts;
 		// future periods say when they start; only a period containing today gets
 		// the live per-day / days-left / elapsed race.
-		nowT := time.Now()
+		nowT := dateutil.WallClockUTC(time.Now())
 		anchorT := props.Anchor
 		if anchorT.IsZero() {
 			anchorT = nowT
 		}
-		pStart, pEnd := budgeting.PeriodRange(s.Budget.Period, anchorT, prefs.WeekStartWeekday())
+		pStart, pEnd := budgeting.PeriodRangeAnchored(s.Budget.Period, anchorT, prefs.WeekStartWeekday(), budgetPayCycleAnchor(prefs.PayCycleAnchor))
 		switch {
 		case !nowT.Before(pEnd): // completed period — history has no pacing
 			metricsStrip = Div(css.Class("budget-metrics"), Attr("data-testid", "budget-metrics-"+s.Budget.ID),

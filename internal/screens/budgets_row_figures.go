@@ -61,7 +61,7 @@ func budgetRowBarValues(s budgeting.Status, props budgetRowProps, lastMonthMode 
 			anchor = time.Now()
 		}
 		pr := uistate.LoadPrefs()
-		start, _ := budgeting.PeriodRange(s.Budget.Period, anchor, pr.WeekStartWeekday())
+		start, _ := budgeting.PeriodRangeAnchored(s.Budget.Period, anchor, pr.WeekStartWeekday(), budgetPayCycleAnchor(pr.PayCycleAnchor))
 		label = uistate.T("bud2.startsDate", budgetMonthName(start, false), start.Day())
 	}
 	if lastMonthMode {

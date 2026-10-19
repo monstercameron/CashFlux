@@ -268,12 +268,7 @@ func computeSavingsAccounts(app *appstate.App, activeMemberID string, asOf time.
 		if mCur == "" {
 			mCur = cur
 		}
-		assignedBase := monthly
-		if monthly != 0 {
-			if conv, err := currency.ConvertBetween(monthly, mCur, base, rates); err == nil {
-				assignedBase = conv
-			}
-		}
+		assignedBase := savingsMonthlyBase(monthly, mCur, base, rates)
 		sa := savingsAcct{
 			AccountID: ac.ID, Name: ac.Name, Type: humanizeType(string(ac.Type)),
 			Currency: cur, Monthly: monthly, AssignedBase: assignedBase,
@@ -336,6 +331,17 @@ func computeSavingsAccounts(app *appstate.App, activeMemberID string, asOf time.
 	return out
 }
 
+func savingsMonthlyBase(monthly int64, monthlyCurrency, base string, rates currency.Rates) int64 {
+	if monthly == 0 {
+		return 0
+	}
+	converted, err := currency.ConvertBetween(monthly, monthlyCurrency, base, rates)
+	if err != nil {
+		return 0
+	}
+	return converted
+}
+
 // computeBudgetView runs the full budget evaluation for the active member scope and
 // the given view window. It is the single source of truth the /budgets tiles share:
 // the same statuses drive the summary totals, the banners, and the rows. Pure (no
@@ -371,7 +377,9 @@ func computeBudgetViewRaw(app *appstate.App, activeMemberID string, vw period.Wi
 	base := budgetBaseCurrency(app.Settings().BaseCurrency)
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 	start, end := vw.Range()
+	ledger := budgeting.NewNettedLedgerWithLinks(app.Transactions(), app.TxnLinks())
 	input := budgeting.ViewInput{
+		Ledger:       &ledger,
 		Period:       budgeting.ResolveViewPeriod(start, end, time.Now(), pr.WeekStartWeekday(), budgetPayCycleAnchor(pr.PayCycleAnchor)),
 		Transactions: app.Transactions(), Categories: app.Categories(), Recurring: app.Recurring(),
 		Rates: rates, Base: base, PoolRollover: pr.BudgetRolloverLeftover, ShowPrior: showLastMonth,

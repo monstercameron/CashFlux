@@ -138,3 +138,26 @@ func TestProrateWindowSlicesTheReference(t *testing.T) {
 		t.Error("a zero-length reference window should come back unchanged")
 	}
 }
+
+func TestOfUsesLocalWallClockAgainstUTCPeriodBounds(t *testing.T) {
+	start, end := july()
+	for _, tc := range []struct {
+		name        string
+		local       time.Time
+		wantElapsed float64
+		wantDay     int
+	}{
+		{name: "New York late on final day", local: time.Date(2026, time.July, 31, 20, 0, 0, 0, time.FixedZone("EDT", -4*60*60)), wantElapsed: float64((30*24+20)*time.Hour) / float64((31*24)*time.Hour), wantDay: 31},
+		{name: "Tokyo early on first day", local: time.Date(2026, time.July, 1, 0, 0, 0, 0, time.FixedZone("JST", 9*60*60)), wantElapsed: 0, wantDay: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			age := Of(start, end, tc.local)
+			if age.Complete || age.Day != tc.wantDay || age.Elapsed != tc.wantElapsed {
+				t.Fatalf("Of(%s) = complete %t day %d elapsed %.4f; want day %d elapsed %.4f", tc.local, age.Complete, age.Day, age.Elapsed, tc.wantDay, tc.wantElapsed)
+			}
+			if age.Now.Location() != time.UTC {
+				t.Errorf("normalized now location = %s, want UTC", age.Now.Location())
+			}
+		})
+	}
+}

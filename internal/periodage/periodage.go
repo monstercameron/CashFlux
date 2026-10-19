@@ -26,6 +26,8 @@ package periodage
 import (
 	"math"
 	"time"
+
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 )
 
 // EarlyFraction is how much of a period must have elapsed before a
@@ -57,6 +59,7 @@ type Age struct {
 // every other window in the app. A degenerate or inverted period reads as
 // complete: there is no partial period to warn about.
 func Of(start, end, now time.Time) Age {
+	now = dateutil.WallClockUTC(now)
 	a := Age{Start: start, End: end, Now: now}
 	span := end.Sub(start)
 	if span <= 0 {

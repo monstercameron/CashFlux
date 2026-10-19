@@ -22,6 +22,7 @@ type budgetRowLimitDraftResult struct {
 	limitRestoreFocus ui.State[bool]
 	limitDraft        ui.State[string]
 	limitInputRef     ui.DOMRef
+	limitButtonRef    ui.DOMRef
 	limitDec          int
 	limitErrID        string
 	limitErrMsg       string
@@ -40,6 +41,7 @@ func useBudgetRowLimitDraft(s budgeting.Status) budgetRowLimitDraftResult {
 	limitRestoreFocus := ui.UseState(false)
 	limitDraft := ui.UseState("")
 	limitInputRef := ui.UseDOMRef()
+	limitButtonRef := ui.UseDOMRef()
 	limitDec := currency.Decimals(s.Budget.Limit.Currency)
 	// C665: the field advertises min="0.01" and the browser's own validation does
 	// nothing for it, because the value is read out of state on submit rather than
@@ -90,7 +92,7 @@ func useBudgetRowLimitDraft(s budgeting.Status) budgetRowLimitDraftResult {
 		limitEditing.Set(false)
 	}))
 	return budgetRowLimitDraftResult{
-		limitEditing: limitEditing, limitRestoreFocus: limitRestoreFocus, limitDraft: limitDraft, limitInputRef: limitInputRef, limitDec: limitDec,
+		limitEditing: limitEditing, limitRestoreFocus: limitRestoreFocus, limitDraft: limitDraft, limitInputRef: limitInputRef, limitButtonRef: limitButtonRef, limitDec: limitDec,
 		limitErrID: limitErrID, limitErrMsg: limitErrMsg, limitSaveTitle: limitSaveTitle, startLimitEdit: startLimitEdit,
 		cancelLimitEdit: cancelLimitEdit,
 	}
@@ -155,6 +157,7 @@ type budgetRowLimitSaveProps struct {
 	s                 budgeting.Status
 	limitEditing      ui.State[bool]
 	limitRestoreFocus ui.State[bool]
+	limitButtonRef    ui.DOMRef
 }
 
 // useBudgetRowLimitSave registers the submit handler and focus-restoration effect.
@@ -193,22 +196,9 @@ func useBudgetRowLimitSave(p budgetRowLimitSaveProps) ui.Handler {
 		if !p.limitRestoreFocus.Get() {
 			return nil
 		}
-		cb := js.FuncOf(func(js.Value, []js.Value) any {
-			doc := js.Global().Get("document")
-			if doc.Truthy() {
-				button := doc.Call("querySelector", `[data-testid="budget-limit-btn-`+p.s.Budget.ID+`"]`)
-				if button.Truthy() {
-					button.Call("focus")
-				}
-			}
-			p.limitRestoreFocus.Set(false)
-			return nil
-		})
-		handle := js.Global().Call("setTimeout", cb, 0)
-		return func() {
-			js.Global().Call("clearTimeout", handle)
-			cb.Release()
-		}
+		p.limitButtonRef.Focus()
+		p.limitRestoreFocus.Set(false)
+		return nil
 	}, p.limitRestoreFocus.Get())
 
 	return saveLimitEdit

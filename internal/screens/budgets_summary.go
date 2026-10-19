@@ -47,7 +47,7 @@ func budgetSummaryPlan(v budgetView, app *appstate.App, vw period.Window) budget
 	// plan is compared with income. Fall back to the existing view total only if a
 	// currency or cadence cannot be converted; the disclosure below says so.
 	rates := currency.Rates{Base: v.Base, Rates: app.Settings().FXRates}
-	statusBudgets := make([]domain.Budget, 0, len(v.Statuses))
+	statusBudgets := budgetSummarySpendingBudgets(v.Statuses)
 	issues := make([]budgeting.ViewIssue, 0)
 	excluded := 0
 	for _, status := range v.Statuses {
@@ -59,9 +59,6 @@ func budgetSummaryPlan(v budgetView, app *appstate.App, vw period.Window) budget
 			}
 			continue
 		}
-		budget := status.Budget
-		budget.Limit = status.Limit
-		statusBudgets = append(statusBudgets, budget)
 		issues = append(issues, status.Issues...)
 	}
 	normalized, normalizeErr := budgeting.NormalizeBudgets(statusBudgets, domain.PeriodMonthly, rates)
@@ -82,6 +79,22 @@ func budgetSummaryPlan(v budgetView, app *appstate.App, vw period.Window) budget
 		normalized: normalized, normalizedBudgetTotal: normalizedBudgetTotal, normalizationOK: normalizationOK, planView: planView,
 		smartSettings: smartSettings, wStart: wStart, wEnd: wEnd, hist: hist, excluded: excluded, issues: issues,
 	}
+}
+
+// budgetSummarySpendingBudgets returns evaluable spending budgets for the
+// monthly plan denominator. Saving targets are accounted for separately in
+// SavingsAssigned and must not be normalized here as well.
+func budgetSummarySpendingBudgets(statuses []budgeting.Status) []domain.Budget {
+	budgets := make([]domain.Budget, 0, len(statuses))
+	for _, status := range statuses {
+		if status.Error != nil || status.Budget.IsSaving() {
+			continue
+		}
+		budget := status.Budget
+		budget.Limit = status.Limit
+		budgets = append(budgets, budget)
+	}
+	return budgets
 }
 
 // budgetSummaryPoolResult carries the explicit results for budgetSummaryPool.

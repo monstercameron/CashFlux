@@ -1743,19 +1743,14 @@ func budgetListWidget(props budgetListProps) ui.Node {
 		}
 		viewTodos := func() { nav.Navigate(uistate.RoutePath("/todo")) }
 
-		// Name filter: narrow the visible cards to those whose category name (or any tracked
-		// category name) contains the query, case-insensitive. The full v.Statuses still
+		// Search names, category names, and tracked tags. The full v.Statuses still
 		// feeds the summary + annual-grid tiles — this only narrows what the list shows.
 		q := strings.ToLower(strings.TrimSpace(search.Get()))
 		visible := v.Statuses
 		if q != "" {
 			filtered := make([]budgeting.Status, 0, len(v.Statuses))
 			for _, s := range v.Statuses {
-				hay := strings.ToLower(v.CatName[s.Budget.CategoryID])
-				for _, id := range s.Budget.CategoryIDs {
-					hay += " " + strings.ToLower(v.CatName[id])
-				}
-				if strings.Contains(hay, q) {
+				if budgetSearchMatches(s.Budget, v.CatName, q) {
 					filtered = append(filtered, s)
 				}
 			}
@@ -1875,6 +1870,21 @@ func budgetListWidget(props budgetListProps) ui.Node {
 		ID: "budget-list", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
 		Body: section,
 	})
+}
+
+func budgetSearchMatches(b domain.Budget, catNames map[string]string, query string) bool {
+	query = strings.ToLower(strings.TrimSpace(query))
+	if query == "" {
+		return true
+	}
+	haystack := strings.ToLower(b.Name)
+	for _, id := range b.TrackedCategoryIDs() {
+		haystack += " " + strings.ToLower(catNames[id])
+	}
+	for _, tag := range b.TrackedTags {
+		haystack += " " + strings.ToLower(tag)
+	}
+	return strings.Contains(haystack, query)
 }
 
 func budgetIncompleteNotice(messages []string) ui.Node {

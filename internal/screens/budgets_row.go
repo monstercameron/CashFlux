@@ -6,6 +6,7 @@ package screens
 
 import (
 	"fmt"
+	"log/slog"
 	"sort"
 	"strconv"
 	"strings"
@@ -45,7 +46,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	})
 	saveLimitEdit := useBudgetRowLimitSave(budgetRowLimitSaveProps{
 		limitDraft: rowLimitDraft.limitDraft, limitDec: rowLimitDraft.limitDec, s: s, limitEditing: rowLimitDraft.limitEditing,
-		limitRestoreFocus: rowLimitDraft.limitRestoreFocus,
+		limitRestoreFocus: rowLimitDraft.limitRestoreFocus, limitButtonRef: rowLimitDraft.limitButtonRef,
 	})
 
 	rowNavigation := useBudgetRowNavigation(rowDisclosure.menuOpen, props, s)
@@ -93,8 +94,9 @@ func BudgetRow(props budgetRowProps) ui.Node {
 			Kebab: kebabNode, OnLimitEdit: rowLimitDraft.startLimitEdit, OnDrill: rowNavigation.drill,
 			LimitEditing: rowLimitDraft.limitEditing.Get(), LimitDraft: rowLimitDraft.limitDraft.Get(), OnLimitDraft: onLimitDraft,
 			OnLimitSave: saveLimitEdit, OnLimitCancel: rowLimitDraft.cancelLimitEdit, OnLimitKeyDown: limitKeyDown,
-			LimitInputRef: rowLimitDraft.limitInputRef,
-			LimitErrorID:  rowLimitDraft.limitErrID, LimitError: rowLimitDraft.limitErrMsg, FundedChip: fundedChip,
+			LimitInputRef:  rowLimitDraft.limitInputRef,
+			LimitButtonRef: rowLimitDraft.limitButtonRef,
+			LimitErrorID:   rowLimitDraft.limitErrID, LimitError: rowLimitDraft.limitErrMsg, FundedChip: fundedChip,
 			HasRecurring:   hasRecurring,
 			RolloverDetail: rowPaceNotes.rolloverLine,
 			HasNote:        rowTitle.hasNote, NotesLabel: rowTitle.notesLabel, NoteText: rowTitle.noteText, OnOpenNotes: rowDetailActions.openNotesFn,
@@ -181,6 +183,7 @@ type budgetRowCompactProps struct {
 	LimitDraft                                               string
 	OnLimitDraft, OnLimitSave, OnLimitCancel, OnLimitKeyDown any
 	LimitInputRef                                            ui.DOMRef
+	LimitButtonRef                                           ui.DOMRef
 	LimitErrorID, LimitError                                 string
 	FundedChip                                               string
 	HasRecurring                                             bool
@@ -281,7 +284,7 @@ func budgetRowCompact(props budgetRowCompactProps) ui.Node {
 			Span(css.Class("budget-crow-amt fig"),
 				Span(css.Class("budget-crow-spent"), barSpent),
 				Span(css.Class("budget-crow-limit"), " of "),
-				Button(css.Class("budget-limit-btn", "budget-crow-limit-btn"), Type("button"), Attr("data-testid", "budget-limit-btn-"+s.Budget.ID),
+				Button(css.Class("budget-limit-btn", "budget-crow-limit-btn"), Type("button"), Ref(props.LimitButtonRef), Attr("data-testid", "budget-limit-btn-"+s.Budget.ID),
 					Title(uistate.T("budgets.limitEditTitle")), Attr("aria-label", uistate.T("budgets.limitEditTitle")+" — "+title),
 					OnClick(startLimitEdit), fmtMoney(limit)),
 				Span(css.Class("budget-crow-fig-separator"), " · "), crowLeft,
@@ -856,9 +859,10 @@ func budgetTagLine(budgetID string, tags []string) ui.Node {
 
 // budgetSlice is one wedge of a composite budget's spend-composition pie.
 type budgetSlice struct {
-	Label  string
-	Amount int64 // minor units, base currency
-	ValStr string
+	Label    string
+	Amount   int64 // signed minor units
+	Currency string
+	ValStr   string
 }
 
 type budgetPeriodMemoKey struct {
@@ -926,21 +930,9 @@ func memoBudgetComposition(b domain.Budget, anchor time.Time, revision int) []bu
 	return value
 }
 
-// budgetOwnsScope mirrors the budgeting engine's scope rule for the pie: a shared budget
-// counts everyone; an individual budget counts only its owner's spend.
-func budgetOwnsScope(b domain.Budget, member string) bool {
-	if b.Scope != domain.ScopeIndividual {
-		return true
-	}
-	return member == b.OwnerID
-}
-
-// budgetCompositionSlices breaks a budget's CURRENT-period spend into wedges by tracked
-// dimension — one per tracked category and one per tracked tag. The cats+tags dedupe is the
-// careful bit: a charge that matches a tracked tag is attributed WHOLE to that tag (the
-// first of the budget's tags it carries, in the budget's tag order) and never also to a
-// category — exactly mirroring the engine's tag-priority spend, so the wedges sum to the
-// budget's Spent with no double-counting. Wedges are sorted largest-first; zero wedges drop.
+// budgetCompositionSlices returns the shared budgeting engine's signed contributions
+// for the current period. Negative discounts remain visible, and each value keeps the
+// budget's currency so the legend reconciles to its Spent figure.
 func budgetCompositionSlices(b domain.Budget, anchor time.Time) []budgetSlice {
 	app := appstate.Default
 	if app == nil {
@@ -957,82 +949,43 @@ func budgetCompositionSlices(b domain.Budget, anchor time.Time) []budgetSlice {
 	// Composition follows the VIEWED period (QA CF-05), matching the card's bar.
 	prefs := uistate.LoadPrefs()
 	start, end := budgeting.PeriodRangeAnchored(b.Period, anchor, prefs.WeekStartWeekday(), budgetPayCycleAnchor(prefs.PayCycleAnchor))
+	slices, err := budgetCompositionData(b, app.Transactions(), app.Categories(), start, end, rates)
+	if err != nil {
+		slog.Error("calculate budget composition", "budget_id", b.ID, "error", err)
+		return nil
+	}
+	return slices
+}
+
+func budgetCompositionData(b domain.Budget, transactions []domain.Transaction, categories []domain.Category, start, end time.Time, rates currency.Rates) ([]budgetSlice, error) {
 	catName := map[string]string{}
-	for _, c := range app.Categories() {
+	for _, c := range categories {
 		catName[c.ID] = c.Name
 	}
-	catSet := map[string]bool{}
-	for _, id := range b.TrackedCategoryIDs() {
-		catSet[id] = true
+	covers := categorytree.DescendantsOfAll(categories, b.TrackedCategoryIDs())
+	compositions, err := budgeting.CompositionSlices(b, transactions, start, end, rates, covers)
+	if err != nil {
+		return nil, err
 	}
-	tagSet := b.TrackedTagSet()
+	slices := make([]budgetSlice, 0, len(compositions))
+	for _, composition := range compositions {
+		name := catName[composition.CategoryID]
+		if name == "" {
+			name = composition.CategoryID
+		}
+		slices = append(slices, budgetSlice{Label: name, Amount: composition.Amount.Amount, Currency: composition.Amount.Currency, ValStr: fmtMoney(composition.Amount)})
+	}
+	sort.SliceStable(slices, func(i, j int) bool {
+		return budgetSliceMagnitude(slices[i].Amount) > budgetSliceMagnitude(slices[j].Amount)
+	})
+	return slices, nil
+}
 
-	amt := map[string]int64{}
-	label := map[string]string{}
-	var order []string
-	add := func(key, lbl string, m money.Money) {
-		conv, err := rates.Convert(m.Abs(), base)
-		if err != nil {
-			return
-		}
-		if _, ok := amt[key]; !ok {
-			order = append(order, key)
-			label[key] = lbl
-		}
-		amt[key] += conv.Amount
+func budgetSliceMagnitude(amount int64) uint64 {
+	if amount < 0 {
+		return uint64(-(amount + 1)) + 1
 	}
-	for _, t := range app.Transactions() {
-		if !t.CountsInReports() || t.IsTransfer() || !t.Amount.IsNegative() {
-			continue
-		}
-		if t.Date.Before(start) || !t.Date.Before(end) {
-			continue
-		}
-		if b.Scope == domain.ScopeIndividual && !t.HasOwner(b.OwnerID) {
-			continue
-		}
-		// Tag priority (dedupe): the first tracked tag this charge carries wins the whole
-		// charge; it's never also counted under a category.
-		matched := ""
-		for _, tg := range b.TrackedTags {
-			k := strings.ToLower(strings.TrimSpace(tg))
-			if k == "" || !tagSet[k] {
-				continue
-			}
-			has := false
-			for _, tt := range t.Tags {
-				if strings.ToLower(strings.TrimSpace(tt)) == k {
-					has = true
-					break
-				}
-			}
-			if has {
-				matched = k
-				break
-			}
-		}
-		if matched != "" {
-			add("tag:"+matched, "#"+matched, t.Amount)
-			continue
-		}
-		if t.HasSplits() {
-			for _, s := range t.Splits {
-				if catSet[s.CategoryID] {
-					add("cat:"+s.CategoryID, catName[s.CategoryID], s.Amount)
-				}
-			}
-		} else if catSet[t.CategoryID] {
-			add("cat:"+t.CategoryID, catName[t.CategoryID], t.Amount)
-		}
-	}
-	var slices []budgetSlice
-	for _, k := range order {
-		if amt[k] > 0 {
-			slices = append(slices, budgetSlice{Label: label[k], Amount: amt[k], ValStr: fmtMoney(money.New(amt[k], base))})
-		}
-	}
-	sort.SliceStable(slices, func(i, j int) bool { return slices[i].Amount > slices[j].Amount })
-	return slices
+	return uint64(amount)
 }
 
 // budgetPiePalette colours the composition wedges (theme-agnostic, distinct hues).
@@ -1049,29 +1002,46 @@ func budgetPie(b domain.Budget, anchor time.Time, revision int) (ui.Node, bool) 
 	slices := memoBudgetComposition(b, anchor, revision)
 	var total int64
 	for _, s := range slices {
-		total += s.Amount
+		if s.Amount > 0 {
+			total += s.Amount
+		}
 	}
-	if total <= 0 || len(slices) == 0 {
+	if len(slices) == 0 {
 		return Fragment(), false // nothing spent yet — an empty pie helps no one
 	}
 	var stops []string
 	legend := []any{css.Class("budget-pie-legend")}
 	var acc float64
+	hasNegative := false
 	for i, s := range slices {
 		color := budgetPiePalette[i%len(budgetPiePalette)]
-		pct := float64(s.Amount) / float64(total) * 100
-		stops = append(stops, fmt.Sprintf("%s %.3f%% %.3f%%", color, acc, acc+pct))
-		acc += pct
-		legend = append(legend, Div(css.Class("budget-pie-legrow"),
+		if s.Amount > 0 && total > 0 {
+			pct := float64(s.Amount) / float64(total) * 100
+			stops = append(stops, fmt.Sprintf("%s %.3f%% %.3f%%", color, acc, acc+pct))
+			acc += pct
+		}
+		rowClass := "budget-pie-legrow"
+		if s.Amount < 0 {
+			rowClass += " is-negative"
+			hasNegative = true
+		}
+		legend = append(legend, Div(css.Class(rowClass),
 			Span(css.Class("budget-pie-dot"), Attr("style", "background:"+color)),
 			Span(css.Class("budget-pie-leglabel"), s.Label),
 			Span(css.Class("budget-pie-legval"), s.ValStr)))
 	}
-	donut := Div(css.Class("budget-pie-donut"), Attr("aria-hidden", "true"),
-		Attr("style", "background:conic-gradient("+strings.Join(stops, ", ")+")"),
-		Div(css.Class("budget-pie-hole")))
+	var donut ui.Node = Fragment()
+	if len(stops) > 0 {
+		donut = Div(css.Class("budget-pie-donut"), Attr("aria-hidden", "true"),
+			Attr("style", "background:conic-gradient("+strings.Join(stops, ", ")+")"),
+			Div(css.Class("budget-pie-hole")))
+	}
+	var negativeNote ui.Node = Fragment()
+	if hasNegative {
+		negativeNote = P(css.Class("budget-pie-negative-note"), uistate.T("budgets.compositionNegativeNote"))
+	}
 	return Div(css.Class("budget-pie"), Attr("data-testid", "budget-pie-"+b.ID),
-		donut, Div(legend...)), true
+		donut, Div(legend...), negativeNote), true
 }
 
 // budgetLinkedTodos returns the to-dos linked to a budget (Task.RelatedType=budget),
