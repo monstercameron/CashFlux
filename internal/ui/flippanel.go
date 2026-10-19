@@ -214,6 +214,14 @@ func flipPanel(props FlipPanelProps) uic.Node {
 			e := args[0]
 			switch e.Get("key").String() {
 			case "Escape":
+				// A picker or other portalled popover can be opened from inside this
+				// panel. Its surface lives under <body>, so the key event's target may
+				// not be inside .flip-wrap; do not let this document listener dismiss
+				// the parent while that higher overlay is still open. The overlay owns
+				// the first Escape, and the panel owns the next one.
+				if e.Get("defaultPrevented").Bool() || flipPanelHasOpenPopover(doc) {
+					return nil
+				}
 				if onCloseRef != nil {
 					onCloseRef()
 				}
@@ -491,6 +499,16 @@ func flipPanelHandlesEnterInForm(active js.Value, formID string) bool {
 		return true
 	}
 	return formID != "" && form.Get("id").String() == formID
+}
+
+// flipPanelHasOpenPopover reports whether a portalled popover is currently
+// mounted above a FlipPanel. Popovers are rendered only while open, so their
+// presence means Escape belongs to that nested surface first.
+func flipPanelHasOpenPopover(doc js.Value) bool {
+	if doc.IsNull() || doc.IsUndefined() || doc.Get("querySelector").Type() != js.TypeFunction {
+		return false
+	}
+	return doc.Call("querySelector", `[data-overlay-kind="popover"]`).Truthy()
 }
 
 // focusRestoreTarget returns the original opener when it remains in the page.

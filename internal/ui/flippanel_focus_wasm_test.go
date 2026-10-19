@@ -61,6 +61,26 @@ func TestFlipPanelInitialFocusPrefersAutofocusThenFirstField(t *testing.T) {
 	}
 }
 
+func TestFlipPanelEscapeDefersToOpenNestedPopover(t *testing.T) {
+	object := js.Global().Get("Object")
+	doc := object.New()
+	popover := object.New()
+	doc.Set("querySelector", testJSFunc(t, func(_ js.Value, args []js.Value) any {
+		if args[0].String() != `[data-overlay-kind="popover"]` {
+			t.Fatalf("unexpected nested overlay selector %q", args[0].String())
+		}
+		return popover
+	}))
+	if !flipPanelHasOpenPopover(doc) {
+		t.Fatal("FlipPanel did not yield Escape while a nested popover was open")
+	}
+
+	doc.Set("querySelector", testJSFunc(t, func(js.Value, []js.Value) any { return js.Null() }))
+	if flipPanelHasOpenPopover(doc) {
+		t.Fatal("FlipPanel yielded Escape after the nested popover closed")
+	}
+}
+
 func testJSFunc(t *testing.T, fn func(js.Value, []js.Value) any) js.Func {
 	t.Helper()
 	owned := js.FuncOf(fn)
