@@ -1373,6 +1373,10 @@ func (a *App) transactionAutoRules() []rules.Rule {
 	autoRules := make([]rules.Rule, 0, len(userRules)+len(categories))
 	autoRules = append(autoRules, userRules...)
 	for _, c := range categories {
+		// Short labels are unsafe as substring rules: "Car" matches "Carl's Cafe".
+		if len([]rune(strings.TrimSpace(c.Name))) < 4 {
+			continue
+		}
 		autoRules = append(autoRules, rules.Rule{Match: c.Name, SetCategoryID: c.ID})
 	}
 	return autoRules
@@ -3213,8 +3217,8 @@ func normalizeTransactionDate(date time.Time) time.Time {
 	if date.IsZero() {
 		return date
 	}
-	date = date.UTC()
-	return time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.UTC)
+	year, month, day := date.Date()
+	return time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
 }
 
 // overBudgetIDs returns the set of budget IDs currently over their limit —
@@ -3310,10 +3314,10 @@ func (a *App) DeleteTransaction(id string) error {
 	if err := a.roleGuard(); err != nil {
 		return err
 	}
-	if err := a.del("transaction", id, a.store.DeleteTransactionWithDebtPayments); err != nil {
+	if err := a.pruneTxnLinks(map[string]struct{}{id: {}}); err != nil {
 		return err
 	}
-	if err := a.pruneTxnLinks(map[string]struct{}{id: {}}); err != nil {
+	if err := a.del("transaction", id, a.store.DeleteTransactionWithDebtPayments); err != nil {
 		return err
 	}
 	a.fireTxnMutated()

@@ -173,6 +173,24 @@ func CategorySpendSeries(all []domain.Transaction, bounds []time.Time, rates cur
 		if err != nil {
 			return nil, err
 		}
+		if t.HasSplits() {
+			for _, split := range t.Splits {
+				if split.CategoryID == "" {
+					continue
+				}
+				splitValue, splitErr := rates.Convert(split.Amount, rates.Base)
+				if splitErr != nil {
+					return nil, splitErr
+				}
+				series := out[split.CategoryID]
+				if series == nil {
+					series = make([]int64, n)
+					out[split.CategoryID] = series
+				}
+				series[idx] += splitValue.Abs().Amount
+			}
+			continue
+		}
 		series, ok := out[t.CategoryID]
 		if !ok {
 			series = make([]int64, n)

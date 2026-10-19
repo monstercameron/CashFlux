@@ -63,7 +63,7 @@ func CountPresetsWithLabels(txns []domain.Transaction, c Criteria, s PresetScope
 	large := compileCriteria(c.Without(FieldAmountMin), labels)
 	month := compileCriteria(c.Without(FieldFrom).Without(FieldTo), labels)
 	for _, t := range txns {
-		if uncategorized.matches(t) && !t.IsTransfer() && t.CategoryID == "" {
+		if uncategorized.matches(t) && !t.IsTransfer() && !matchesCategory(t, func(id string) bool { return id != "" }) {
 			out.Uncategorized++
 		}
 		if s.ReviewTag != "" && review.matches(t) {

@@ -40,6 +40,21 @@ func TestBalance(t *testing.T) {
 	}
 }
 
+func TestCategorySpendSeriesAttributesSplitLines(t *testing.T) {
+	start := mustDate("2026-08-01")
+	end := mustDate("2026-09-01")
+	txn := domain.Transaction{ID: "split", Date: mustDate("2026-08-10"), Amount: usd(-3000), Splits: []domain.CategorySplit{
+		{CategoryID: "food", Amount: usd(-2000)}, {CategoryID: "home", Amount: usd(-1000)},
+	}}
+	got, err := CategorySpendSeries([]domain.Transaction{txn}, []time.Time{start, end}, currency.Rates{Base: "USD"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got["food"]) == 0 || len(got["home"]) == 0 || got["food"][0] != 2000 || got["home"][0] != 1000 {
+		t.Fatalf("series = %#v, want split spends food=2000 home=1000", got)
+	}
+}
+
 func TestClearedBalance(t *testing.T) {
 	acc := domain.Account{ID: "a1", Currency: "USD", OpeningBalance: usd(10000)}
 	all := []domain.Transaction{

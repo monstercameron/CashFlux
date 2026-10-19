@@ -73,6 +73,18 @@ func TestBalancesMatchesPerAccount(t *testing.T) {
 	}
 }
 
+func TestBalancesKeepsValidBalanceWhenTransactionCurrencyIsWrong(t *testing.T) {
+	account := domain.Account{ID: "checking", Currency: "USD", OpeningBalance: money.New(10000, "USD")}
+	txn := domain.Transaction{ID: "bad-currency", AccountID: account.ID, Amount: money.New(-2500, "EUR")}
+	balances, err := Balances([]domain.Account{account}, []domain.Transaction{txn})
+	if err == nil {
+		t.Fatal("Balances should report the transaction currency mismatch")
+	}
+	if got, ok := balances[account.ID]; !ok || got.Amount != 10000 || got.Currency != "USD" {
+		t.Fatalf("balance = %+v, present=%v; want original USD opening balance retained", got, ok)
+	}
+}
+
 // TestNetWorthFromBalancesMatchesExplained: identical result to
 // NetWorthExplained on the same data, including missing-rate exclusions and
 // liability magnitude handling — minus the corrupt account, which both reject.

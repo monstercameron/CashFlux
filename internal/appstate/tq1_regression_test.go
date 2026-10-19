@@ -164,15 +164,26 @@ func TestTQ1RestoreDeletedExpenseDoesNotDrawFundAgain(t *testing.T) {
 func TestTQ1PutTransactionNormalizesUTCDate(t *testing.T) {
 	a := newApp(t, false)
 	seedAccount(t, a, 0)
-	local := time.Date(2026, 10, 31, 23, 0, 0, 0, time.FixedZone("local", -4*60*60))
+	local := time.Date(2026, 10, 31, 20, 30, 0, 0, time.FixedZone("New York", -4*60*60))
 	tx := domain.Transaction{ID: "late", AccountID: "acc1", Date: local, Desc: "late", Amount: money.New(-100, "USD")}
 	if err := a.PutTransaction(tx); err != nil {
 		t.Fatal(err)
 	}
 	got := a.Transactions()[0].Date
-	want := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+	want := time.Date(2026, 10, 31, 0, 0, 0, 0, time.UTC)
 	if !got.Equal(want) || got.Location() != time.UTC {
 		t.Fatalf("date = %s (%s), want UTC day %s", got, got.Location(), want)
+	}
+}
+
+func TestTransactionAutoRulesDoNotUseShortCategorySubstring(t *testing.T) {
+	a := newApp(t, false)
+	if err := a.PutCategory(domain.Category{ID: "car", Name: "Car", Kind: domain.KindExpense}); err != nil {
+		t.Fatal(err)
+	}
+	got := a.AutoCategorizeTransaction(domain.Transaction{Payee: "Carl's Cafe", Desc: "Lunch", Amount: money.New(-900, "USD"), Date: thisMonth()})
+	if got.CategoryID == "car" {
+		t.Fatalf("short category name incorrectly categorized unrelated payee: %+v", got)
 	}
 }
 
@@ -190,7 +201,7 @@ func TestTQ1CreateTransferPairNormalizesDate(t *testing.T) {
 	if _, _, err := a.CreateTransferPair(TransferParams{OperationID: "tq1", FromAccountID: "from", ToAccountID: "to", AmountMinor: 1000, Date: local}); err != nil {
 		t.Fatal(err)
 	}
-	want := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+	want := time.Date(2026, 10, 31, 0, 0, 0, 0, time.UTC)
 	for _, txn := range a.Transactions() {
 		if !txn.Date.Equal(want) || txn.Date.Location() != time.UTC {
 			t.Errorf("transfer leg %q date = %s (%s), want UTC %s", txn.ID, txn.Date, txn.Date.Location(), want)

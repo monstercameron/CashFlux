@@ -54,7 +54,6 @@ func bulkBalances(accounts []domain.Account, all []domain.Transaction, clearedOn
 			if firstErr == nil {
 				firstErr = fmt.Errorf("ledger: account %s: %w", t.AccountID, err)
 			}
-			delete(out, t.AccountID)
 			continue
 		}
 		out[t.AccountID] = next

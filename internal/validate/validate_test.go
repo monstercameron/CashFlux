@@ -80,6 +80,31 @@ func TestValidateTransaction(t *testing.T) {
 	}
 }
 
+func TestValidateTransactionAccountAndSplits(t *testing.T) {
+	accounts := []domain.Account{{ID: "checking", Currency: "USD"}}
+	base := domain.Transaction{AccountID: "checking", Desc: "Market", Amount: usd(-1000), Date: time.Now()}
+	tests := []struct {
+		name      string
+		txn       domain.Transaction
+		wantField string
+	}{
+		{name: "account must exist", txn: func() domain.Transaction { v := base; v.AccountID = "missing"; return v }(), wantField: "accountId"},
+		{name: "currency must match account", txn: func() domain.Transaction { v := base; v.Amount = money.New(-1000, "EUR"); return v }(), wantField: "amount"},
+		{name: "splits must reconcile", txn: func() domain.Transaction {
+			v := base
+			v.Splits = []domain.CategorySplit{{CategoryID: "food", Amount: usd(-900)}}
+			return v
+		}(), wantField: "splits"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if issues := ValidateTransaction(tc.txn, accounts...); !hasField(issues, tc.wantField) {
+				t.Fatalf("issues = %v, want %q", issues, tc.wantField)
+			}
+		})
+	}
+}
+
 func TestValidateBudget(t *testing.T) {
 	good := domain.Budget{Name: "Food", OwnerID: "g", CategoryID: "c", Scope: domain.ScopeShared, Period: domain.PeriodMonthly, Limit: usd(50000)}
 	if is := ValidateBudget(good); !is.OK() {

@@ -143,10 +143,10 @@ func TestPreviewApplyRulesIsDry(t *testing.T) {
 			t.Fatalf("put txn: %v", err)
 		}
 	}
-	// Condition rule: outflows bigger than $100 (minor units < -10000).
+	// Condition rule: transactions with magnitude under 10000 minor units do not match.
 	if err := app.PutRule(rules.Rule{
 		ID: "r-big", SetCategoryID: "cat-big",
-		Conditions: []rules.RuleCondition{{Field: rules.ConditionFieldAmount, Op: rules.ConditionOpLt, Value: "-10000"}},
+		Conditions: []rules.RuleCondition{{Field: rules.ConditionFieldAmount, Op: rules.ConditionOpGt, Value: "10000"}},
 	}); err != nil {
 		t.Fatalf("put rule: %v", err)
 	}

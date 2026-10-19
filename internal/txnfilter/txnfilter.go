@@ -871,7 +871,7 @@ func matchesCriteria(t domain.Transaction, c Criteria, labels Labels, ft, tagF s
 	if !c.ScopeAny && c.Categories == "" && c.Category != "" && !matchesCategory(t, func(id string) bool { return id == c.Category }) {
 		return false
 	}
-	if c.Uncategorized && (t.CategoryID != "" || t.IsTransfer()) {
+	if c.Uncategorized && (matchesCategory(t, func(id string) bool { return id != "" }) || t.IsTransfer()) {
 		return false
 	}
 	if c.Members != "" && !matchesMemberSelection(c.Members, t) || c.Members == "" && c.Member != "" && !matchesMemberSelection(c.Member, t) {

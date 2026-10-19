@@ -8,6 +8,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/store"
 )
 
 // seedTransferPair creates two asset accounts and one $77.00 transfer between
@@ -216,6 +217,63 @@ func TestEditTransferLegDateUpdatesBothLegs(t *testing.T) {
 	gotIn, _ := legByID(a, inLeg.ID)
 	if !gotIn.Date.Equal(newDate) {
 		t.Errorf("in leg date = %s, want %s", gotIn.Date, newDate)
+	}
+}
+
+func TestClearTransferOnOneLegClearsPartner(t *testing.T) {
+	a, outLeg, inLeg := seedTransferPair(t)
+	next := outLeg
+	next.TransferAccountID = ""
+	if err := a.PutTransactionWithTransferPair(outLeg, next); err != nil {
+		t.Fatalf("clear transfer: %v", err)
+	}
+	got, ok := legByID(a, inLeg.ID)
+	if !ok {
+		t.Fatal("partner missing")
+	}
+	if got.IsTransfer() || got.TransferGroupID != "" {
+		t.Fatalf("partner remains a transfer: %+v", got)
+	}
+}
+
+func TestEditCrossCurrencyLiabilityTransferUsesEditedMagnitude(t *testing.T) {
+	a := newApp(t, false)
+	checking := domain.Account{ID: "checking", Name: "Checking", OwnerID: "m1", Scope: domain.ScopeIndividual, Class: domain.ClassAsset, Type: domain.TypeChecking, Currency: "USD", OpeningBalance: money.New(100000, "USD")}
+	loan := domain.Account{ID: "loan", Name: "Loan", OwnerID: "m1", Scope: domain.ScopeIndividual, Class: domain.ClassLiability, Type: domain.TypeLoan, Currency: "EUR", OpeningBalance: money.New(-100000, "EUR")}
+	for _, account := range []domain.Account{checking, loan} {
+		if err := a.PutAccount(account); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := a.PutSettings(store.Settings{BaseCurrency: "USD", FXRates: map[string]float64{"EUR": 1.1}}); err != nil {
+		t.Fatal(err)
+	}
+	_, loanID, err := a.CreateTransferPair(TransferParams{FromAccountID: checking.ID, ToAccountID: loan.ID, AmountMinor: 10000, ReceivedMinor: 9000, Date: time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var loanLeg domain.Transaction
+	for _, tx := range a.Transactions() {
+		if tx.ID == loanID {
+			loanLeg = tx
+		}
+	}
+	if loanLeg.ID == "" {
+		t.Fatal("loan leg missing")
+	}
+	next := loanLeg
+	next.Amount = money.New(-12000, "EUR")
+	if err := a.PutTransactionWithTransferPair(loanLeg, next); err != nil {
+		t.Fatalf("edit cross-currency liability leg: %v", err)
+	}
+	var assetAmount int64
+	for _, tx := range a.Transactions() {
+		if tx.AccountID == checking.ID && tx.IsTransfer() {
+			assetAmount = tx.Amount.Amount
+		}
+	}
+	if assetAmount != 13200 {
+		t.Fatalf("asset leg = %d USD cents, want +13200 converted from the edited EUR magnitude and its reversed flow", assetAmount)
 	}
 }
 

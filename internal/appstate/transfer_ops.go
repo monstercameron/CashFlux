@@ -95,6 +95,28 @@ func (a *App) PutTransactionWithTransferPairReceived(prior, next domain.Transact
 		return fmt.Errorf("save transfer pair: received amount must not be negative")
 	}
 	if !next.IsTransfer() {
+		if prior.IsTransfer() {
+			next.TransferAccountID, next.TransferGroupID = "", ""
+			if pair, found := a.transferPartner(prior); found {
+				pair.TransferAccountID, pair.TransferGroupID = "", ""
+				if err := a.roleGuard(); err != nil {
+					return err
+				}
+				for _, txn := range []domain.Transaction{next, pair} {
+					if issues := validate.ValidateTransaction(txn, a.Accounts()...); !issues.OK() {
+						return issues
+					}
+					if err := a.validateCustom("transaction", txn.Custom); err != nil {
+						return err
+					}
+				}
+				if err := a.store.PutTransactionsAtomic([]domain.Transaction{next, pair}); err != nil {
+					return fmt.Errorf("clear transfer pair: %w", err)
+				}
+				a.fireTxnMutated()
+				return nil
+			}
+		}
 		return a.PutTransaction(next)
 	}
 	amountChanged := prior.Amount.Amount != next.Amount.Amount
@@ -137,7 +159,7 @@ func (a *App) PutTransactionWithTransferPairReceived(prior, next domain.Transact
 		return err
 	}
 	for _, txn := range []domain.Transaction{next, pair} {
-		if issues := validate.ValidateTransaction(txn); !issues.OK() {
+		if issues := validate.ValidateTransaction(txn, a.Accounts()...); !issues.OK() {
 			return issues
 		}
 		if err := a.validateCustom("transaction", txn.Custom); err != nil {
@@ -150,6 +172,19 @@ func (a *App) PutTransactionWithTransferPairReceived(prior, next domain.Transact
 	a.log.Info("transfer pair saved", "ids", []string{next.ID, pair.ID})
 	a.fireTxnMutated()
 	return nil
+}
+
+func (a *App) transferPartner(prior domain.Transaction) (domain.Transaction, bool) {
+	rates := a.transactionPairRates()
+	for _, txn := range a.Transactions() {
+		if txn.ID == prior.ID {
+			continue
+		}
+		if prior.TransferGroupID != "" && txn.TransferGroupID == prior.TransferGroupID || isReciprocalTransferLegWithRates(prior, txn, rates) {
+			return txn, true
+		}
+	}
+	return domain.Transaction{}, false
 }
 
 // mirroredLegAmount returns the amount the counterpart leg must carry so the pair
@@ -195,7 +230,8 @@ func (a *App) mirroredLegAmount(edited, pair domain.Transaction, receivedMinor i
 		}
 		payment := liabilityPaymentMinor(liability, a.Transactions(), out.Amount)
 		if editedAccount.Class == domain.ClassLiability {
-			if edited.Amount.Amount == payment {
+			editedPayment := liabilityPaymentMinor(editedAccount, a.Transactions(), abs)
+			if (edited.Amount.Amount < 0) == (editedPayment < 0) {
 				out.Amount = -out.Amount
 			}
 		} else {

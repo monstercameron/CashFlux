@@ -90,6 +90,13 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Transaction writes respect the local day, transfer partners and splits (TC2A).** A transaction written in the evening
+  west of UTC keeps its local calendar day. Clearing the transfer on one leg also clears its partner, and a cross-currency
+  liability edit signs the partner from the edited leg's own amount. Validation can check the account exists, the
+  currency matches the account, and splits reconcile (wired on the transfer path; the main write path follows). Split
+  rows count in category spend series and are no longer treated as Uncategorized; a currency mismatch no longer wipes an
+  account's whole balance; amount rules compare magnitudes; category names shorter than four characters no longer become
+  substring rules ("Car" matching "Carl's Cafe"); deleting a transaction prunes its links in the same step.
 - **The calendar counts a transfer once; imports preview exactly what they import; the summary names rows it can't
   compare (TC2B, TC2C, TC2E).** Calendar day and week figures use the same pairing rule as the summary strip, so a $500
   sweep shows "$500 moved", not $1,000, and excluded rows no longer count as spending; scheduled and not-posted bills are

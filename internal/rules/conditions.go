@@ -126,7 +126,7 @@ func matchOneCondition(c RuleCondition, payee, desc string, amountMinor int64, a
 	case ConditionFieldDescription:
 		return matchText(desc, c.Op, c.Value)
 	case ConditionFieldAmount:
-		return matchAmount(amountMinor, c.Op, c.Value)
+		return matchAmount(amountMagnitude(amountMinor), c.Op, c.Value)
 	case ConditionFieldAccount:
 		return matchAccount(accountID, c.Op, c.Value)
 	case ConditionFieldDate:
@@ -149,14 +149,15 @@ func matchText(fieldVal string, op ConditionOp, value string) bool {
 	}
 }
 
-// matchAmount evaluates a numeric condition against the signed amount in minor
-// units. The condition value must be an integer string in the same denomination
-// as amountMinor (e.g. cents). An unparseable value returns false.
+// matchAmount evaluates a numeric condition against the amount's magnitude in
+// minor units. The condition value uses the transaction currency's minor unit
+// (for example, cents for USD); signs never change the comparison.
 func matchAmount(amountMinor int64, op ConditionOp, value string) bool {
 	v, err := strconv.ParseInt(strings.TrimSpace(value), 10, 64)
 	if err != nil {
 		return false
 	}
+	v = amountMagnitude(v)
 	switch op {
 	case ConditionOpEq:
 		return amountMinor == v
@@ -173,6 +174,16 @@ func matchAmount(amountMinor int64, op ConditionOp, value string) bool {
 	default:
 		return false
 	}
+}
+
+func amountMagnitude(amount int64) int64 {
+	if amount == -1<<63 {
+		return 1<<63 - 1
+	}
+	if amount < 0 {
+		return -amount
+	}
+	return amount
 }
 
 // matchAccount evaluates an account identity condition.

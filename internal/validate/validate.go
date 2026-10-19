@@ -194,11 +194,36 @@ func ValidateCategoryInTree(c domain.Category, existing []domain.Category) Issue
 }
 
 // ValidateTransaction checks a transaction.
-func ValidateTransaction(t domain.Transaction) Issues {
+func ValidateTransaction(t domain.Transaction, accounts ...domain.Account) Issues {
 	var is Issues
 	is.require("accountId", t.AccountID)
 	is.require("desc", t.Desc)
 	is.requireCurrency("amount", t.Amount.Currency)
+	if len(accounts) > 0 {
+		found := false
+		for _, account := range accounts {
+			if account.ID != t.AccountID {
+				continue
+			}
+			found = true
+			if t.Amount.Currency != account.Currency {
+				is.add("amount", "currency must match the account")
+			}
+			break
+		}
+		if !found {
+			is.add("accountId", "does not match an existing account")
+		}
+	}
+	if !t.SplitsReconcile() {
+		is.add("splits", "must add up to the transaction amount")
+	}
+	for _, split := range t.Splits {
+		if split.Amount.Currency != "" && t.Amount.Currency != "" && split.Amount.Currency != t.Amount.Currency {
+			is.add("splits", "must use the transaction currency")
+			break
+		}
+	}
 	if t.Date.IsZero() {
 		is.add("date", "is required")
 	}

@@ -19,15 +19,15 @@ func fullCtxs() []TxnCtx {
 }
 
 func TestMatchCountFullConditions(t *testing.T) {
-	// amount < -10000 (big outflows) — a condition rule the legacy MatchCount
+	// amount magnitude > 10000 (large transactions in either flow direction) — a condition rule the legacy MatchCount
 	// reads as 0 because its Match phrase is empty/ignored.
 	r := Rule{
 		ID:            "big",
 		SetCategoryID: "shopping",
-		Conditions:    []RuleCondition{{Field: ConditionFieldAmount, Op: ConditionOpLt, Value: "-10000"}},
+		Conditions:    []RuleCondition{{Field: ConditionFieldAmount, Op: ConditionOpGt, Value: "10000"}},
 	}
-	if got := r.MatchCountFull(fullCtxs()); got != 2 {
-		t.Fatalf("MatchCountFull = %d, want 2", got)
+	if got := r.MatchCountFull(fullCtxs()); got != 3 {
+		t.Fatalf("MatchCountFull = %d, want 3", got)
 	}
 	if got := r.MatchCount([]string{"Big Store tv", "Big Store sofa"}); got != 0 {
 		t.Fatalf("legacy MatchCount for a conditions rule = %d, want 0 (the honest-count gap MatchCountFull closes)", got)
@@ -43,12 +43,12 @@ func TestMatchCountFullLegacyPhrase(t *testing.T) {
 
 func TestCoveredFullMixedRules(t *testing.T) {
 	rs := []Rule{
-		{ID: "big", SetCategoryID: "shopping", Conditions: []RuleCondition{{Field: ConditionFieldAmount, Op: ConditionOpLt, Value: "-10000"}}},
+		{ID: "big", SetCategoryID: "shopping", Conditions: []RuleCondition{{Field: ConditionFieldAmount, Op: ConditionOpGt, Value: "10000"}}},
 		{ID: "cafe", Match: "cafe", SetCategoryID: "dining"},
 	}
-	// Big Store ×2 (condition) + Corner Cafe (phrase) = 3 of 4 covered.
-	if got := CoveredFull(rs, fullCtxs()); got != 3 {
-		t.Fatalf("CoveredFull = %d, want 3", got)
+	// Two Big Store rows and payroll (condition) + Corner Cafe (phrase) = 4 of 4.
+	if got := CoveredFull(rs, fullCtxs()); got != 4 {
+		t.Fatalf("CoveredFull = %d, want 4", got)
 	}
 	// Legacy Covered sees only the phrase rule.
 	texts := []string{"Big Store tv", "Big Store sofa", "Corner Cafe coffee", "Acme Payroll salary"}

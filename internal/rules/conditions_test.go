@@ -92,25 +92,31 @@ func TestMatchConditions(t *testing.T) {
 		{
 			name:        "amount > passes",
 			conditions:  []RuleCondition{{Field: ConditionFieldAmount, Op: ConditionOpGt, Value: "5000"}},
-			amountMinor: 7500,
+			amountMinor: -7500,
 			want:        true,
 		},
 		{
 			name:        "amount > fails",
 			conditions:  []RuleCondition{{Field: ConditionFieldAmount, Op: ConditionOpGt, Value: "5000"}},
-			amountMinor: 3000,
+			amountMinor: -3000,
 			want:        false,
+		},
+		{
+			name:        "legacy signed threshold compares by magnitude",
+			conditions:  []RuleCondition{{Field: ConditionFieldAmount, Op: ConditionOpGt, Value: "-5000"}},
+			amountMinor: -7500,
+			want:        true,
 		},
 		// 6. Amount < condition.
 		{
 			name:        "amount < passes",
-			conditions:  []RuleCondition{{Field: ConditionFieldAmount, Op: ConditionOpLt, Value: "-1000"}},
+			conditions:  []RuleCondition{{Field: ConditionFieldAmount, Op: ConditionOpLt, Value: "3000"}},
 			amountMinor: -2500,
 			want:        true,
 		},
 		{
 			name:        "amount < fails",
-			conditions:  []RuleCondition{{Field: ConditionFieldAmount, Op: ConditionOpLt, Value: "-1000"}},
+			conditions:  []RuleCondition{{Field: ConditionFieldAmount, Op: ConditionOpLt, Value: "100"}},
 			amountMinor: -500,
 			want:        false,
 		},
@@ -216,7 +222,7 @@ func TestMatchConditions(t *testing.T) {
 		{
 			name:        "amount == match",
 			conditions:  []RuleCondition{{Field: ConditionFieldAmount, Op: ConditionOpEq, Value: "2500"}},
-			amountMinor: 2500,
+			amountMinor: -2500,
 			want:        true,
 		},
 		{

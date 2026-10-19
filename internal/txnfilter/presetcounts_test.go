@@ -102,6 +102,21 @@ func TestCountPresetsHonoursTheActiveScope(t *testing.T) {
 	}
 }
 
+func TestUncategorizedTreatsCategorizedSplitAsCategorized(t *testing.T) {
+	txns := []domain.Transaction{
+		{ID: "split", Date: time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC), Amount: money.New(-1000, "USD"), Splits: []domain.CategorySplit{{CategoryID: "food", Amount: money.New(-1000, "USD")}}},
+		{ID: "plain", Date: time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC), Amount: money.New(-500, "USD")},
+	}
+	filtered := Apply(txns, Criteria{Uncategorized: true})
+	if len(filtered) != 1 || filtered[0].ID != "plain" {
+		t.Fatalf("uncategorized filter = %#v, want only plain row", filtered)
+	}
+	counts := CountPresets(txns, Criteria{}, PresetScope{})
+	if counts.Uncategorized != 1 {
+		t.Fatalf("uncategorized preset count = %d, want 1", counts.Uncategorized)
+	}
+}
+
 // The ticket names search, member and period as the scopes that must be honoured.
 // Search is covered above; these are the other two, plus the multi-value
 // dimensions the filter panel writes as pills.
