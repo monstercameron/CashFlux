@@ -90,6 +90,9 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Saving keeps working in the browser after many writes (TV8A).** The in-browser SQLite store keeps temporary tables in memory
+  (`temp_store=MEMORY`), so the change journal no longer tries to open a temp file the browser cannot create; after ~30 edits every
+  write used to fail, even after a reload.
 - **The Edit budget dialog says what a limit change does (BV7G1).** A note under Limit explains the change applies from this period on
   and shows the evaluated cap with any carry or boost.
 - **Transactions clean-up (TC4W3).** Unused merchant-trend counts and helpers removed; the after-settle memo is tested.

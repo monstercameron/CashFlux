@@ -77,6 +77,12 @@ func NewMemory() (*SQLiteStore, error) {
 		return nil, fmt.Errorf("store: open: %w", err)
 	}
 	db.SetMaxOpenConns(1)
+	// TEMP tables, triggers, and statement journals must remain in memory in
+	// browser builds, where SQLite cannot create its usual /tmp backing files.
+	if _, err := db.Exec("PRAGMA temp_store=MEMORY"); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("store: configure temporary storage: %w", err)
+	}
 	if _, err := db.Exec(sqliteSchema); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("store: schema: %w", err)

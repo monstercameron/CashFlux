@@ -320,6 +320,59 @@ func TestCaptureWatermarkAndBoundedTransactionPages(t *testing.T) {
 	}
 }
 
+func TestPruneFailureLeavesCaptureStateUsable(t *testing.T) {
+	s, err := NewMemory()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	if err := s.PutTransaction(domain.Transaction{ID: "before", Desc: "kept"}); err != nil {
+		t.Fatal(err)
+	}
+	before := cursor(t, s)
+	var journalBefore int
+	if err := s.db.QueryRow("SELECT COUNT(*) FROM store_change_journal").Scan(&journalBefore); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.PruneChanges(before + 1); err == nil {
+		t.Fatal("pruning beyond the committed cursor succeeded")
+	}
+	var journalAfter int
+	if err := s.db.QueryRow("SELECT COUNT(*) FROM store_change_journal").Scan(&journalAfter); err != nil {
+		t.Fatal(err)
+	}
+	if journalAfter != journalBefore {
+		t.Fatalf("failed prune changed journal size: before=%d after=%d", journalBefore, journalAfter)
+	}
+	page, err := s.CaptureChanges(0, before, 8)
+	if err != nil || len(page.Changes) != 1 || page.Changes[0].ID != "before" {
+		t.Fatalf("failed prune damaged captured changes: %+v, %v", page, err)
+	}
+
+	if err := s.PutTransaction(domain.Transaction{ID: "after", Desc: "still writable"}); err != nil {
+		t.Fatalf("write after failed prune: %v", err)
+	}
+	if got := cursor(t, s); got <= before {
+		t.Fatalf("cursor did not advance after failed prune: before=%d after=%d", before, got)
+	}
+}
+
+func TestSQLiteTemporaryStorageUsesMemory(t *testing.T) {
+	s, err := NewMemory()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	var tempStore int
+	if err := s.db.QueryRow("PRAGMA temp_store").Scan(&tempStore); err != nil {
+		t.Fatal(err)
+	}
+	if tempStore != 2 {
+		t.Fatalf("PRAGMA temp_store = %d, want MEMORY (2)", tempStore)
+	}
+}
+
 func TestCoalescedCaptureKeepsOnlyFinalChangedRecords(t *testing.T) {
 	s, err := NewMemory()
 	if err != nil {
