@@ -90,6 +90,7 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- Keep source-analysis regression checks aligned with the CSCAL component extraction.
 - Extract calendar decisions into pure logic and stable keyed calendar components.
 - Move split draft decisions into pure logic and stable editor components.
 - Move category suggestions and transaction drafts into tested pure logic.

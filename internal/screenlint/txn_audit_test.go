@@ -292,7 +292,12 @@ func TestLedgerPeriodLabelIsDerived(t *testing.T) {
 	if !ok {
 		t.Fatal("screens/transactions_calendar.go not found")
 	}
-	if !strings.Contains(cal, "txnscope.Of(f.From, f.To") {
-		t.Error("the calendar's visible month is no longer derived from the ledger's dates (C560).")
+	projection, ok := readInternal(t)["txncalendarview/calendar.go"]
+	if !ok {
+		t.Fatal("txncalendarview/calendar.go not found")
+	}
+	if !strings.Contains(cal, "labels.Build(txncalendarview.Input{") || !strings.Contains(cal, "Filter: f") ||
+		!strings.Contains(projection, "txnscope.Of(in.Filter.From, in.Filter.To") {
+		t.Error("the calendar's visible month must be derived from the ledger's filter through txncalendarview (C560)")
 	}
 }
