@@ -63,7 +63,13 @@ func OrderImportCard(_ orderImportCardProps) ui.Node {
 	}))
 	onPasteInput := ui.UseEvent(func(v string) { pasteText.Set(v) })
 	onChooseFile := ui.UseEvent(func() {
-		pickFile(".csv,text/csv", func(_ string, _ string, data []byte) {
+		pickFileLimited(".csv,text/csv", maxImportCSVBytes, func(_, limit int) {
+			msg.Set(uistate.T("impc.fileTooLarge", "CSV", fileLimitLabel(limit)))
+		}, func(_ string, _ string, data []byte) {
+			if err := validateCSVRowLimit(data, maxImportRows); err != nil {
+				msg.Set(uistate.T("impc.tooManyRows", maxImportRows))
+				return
+			}
 			orders, err := orderimport.ParseRetailCSV(string(data), base)
 			if err != nil {
 				msg.Set(err.Error())

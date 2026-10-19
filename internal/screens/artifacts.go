@@ -476,6 +476,12 @@ func itoaPct0(n int) string {
 // with the chosen file's name, MIME type, and raw bytes (decoded from the reader's
 // data URL). Cleans up its JS callbacks. A no-op if nothing is chosen.
 func pickFile(accept string, onData func(name, mime string, data []byte)) {
+	pickFileLimited(accept, 0, func(size, limit int) {
+		uistate.PostNotice(uistate.T("impc.fileTooLarge", artifactFileKind("", ""), fileLimitLabel(limit)), true)
+	}, onData)
+}
+
+func pickFileLimited(accept string, maxBytes int, onTooLarge func(size, limit int), onData func(name, mime string, data []byte)) {
 	doc := js.Global().Get("document")
 	input := doc.Call("createElement", "input")
 	input.Set("type", "file")
@@ -483,6 +489,7 @@ func pickFile(accept string, onData func(name, mime string, data []byte)) {
 
 	var onChange, onLoad js.Func
 	var fileName string
+	var fileMime string
 	onLoad = js.FuncOf(func(this js.Value, _ []js.Value) any {
 		mime, data := decodeDataURL(this.Get("result").String())
 		onData(fileName, mime, data)
@@ -494,6 +501,20 @@ func pickFile(accept string, onData func(name, mime string, data []byte)) {
 		if files.Length() > 0 {
 			f := files.Index(0)
 			fileName = f.Get("name").String()
+			fileMime = f.Get("type").String()
+			size := f.Get("size").Int()
+			limit := maxBytes
+			if limit <= 0 {
+				limit = artifactFileLimit(fileName, fileMime)
+			}
+			if size > limit {
+				if onTooLarge != nil {
+					onTooLarge(size, limit)
+				}
+				onLoad.Release()
+				onChange.Release()
+				return nil
+			}
 			reader := js.Global().Get("FileReader").New()
 			reader.Set("onload", onLoad)
 			reader.Call("readAsDataURL", f)
@@ -505,6 +526,30 @@ func pickFile(accept string, onData func(name, mime string, data []byte)) {
 	})
 	input.Set("onchange", onChange)
 	input.Call("click")
+}
+
+func artifactFileLimit(name, mime string) int {
+	if strings.HasPrefix(mime, "image/") || strings.HasPrefix(strings.ToLower(name), ".") && strings.HasSuffix(strings.ToLower(name), ".png") {
+		return 10 * 1024 * 1024
+	}
+	if strings.HasSuffix(strings.ToLower(name), ".csv") || mime == "text/csv" {
+		return 25 * 1024 * 1024
+	}
+	return 45 * 1024 * 1024
+}
+
+func artifactFileKind(name, mime string) string {
+	if strings.HasPrefix(mime, "image/") {
+		return "image"
+	}
+	if strings.HasSuffix(strings.ToLower(name), ".csv") || mime == "text/csv" {
+		return "CSV"
+	}
+	return "file"
+}
+
+func fileLimitLabel(limit int) string {
+	return fmt.Sprintf("%d MB", limit/(1024*1024))
 }
 
 // artifactStorageBar renders a thin progress bar showing how much of the practical

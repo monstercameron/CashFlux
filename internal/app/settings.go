@@ -1626,7 +1626,10 @@ func exportSQLiteFile(notify func(string, bool)) {
 // file itself is validated inside ImportSQLite before the live database is
 // touched at all, so declining — or picking the wrong file — costs nothing.
 func importSQLiteFile(onChange func(), notify func(string, bool)) {
-	pickFile(".sqlite,.db,.sqlite3", func(data []byte) {
+	const maxSQLiteBackupBytes = 100 * 1024 * 1024
+	pickFileLimited(".sqlite,.db,.sqlite3", maxSQLiteBackupBytes, func(size int) {
+		notify(uistate.T("impc.backupTooLarge", "SQLite backup", "100 MB"), true)
+	}, func(data []byte) {
 		app := appstate.Default
 		if app == nil {
 			return
@@ -1730,7 +1733,10 @@ func importLanguages(notify func(string, bool)) {
 // is shown after the user has chosen a file but before the overwrite occurs,
 // so they cannot lose their data without an explicit yes.
 func importJSON(onChange func(), notify func(string, bool)) {
-	pickFile(".json", func(data []byte) {
+	const maxJSONBackupBytes = 50 * 1024 * 1024
+	pickFileLimited(".json", maxJSONBackupBytes, func(size int) {
+		notify(uistate.T("impc.backupTooLarge", "JSON backup", "50 MB"), true)
+	}, func(data []byte) {
 		app := appstate.Default
 		if app == nil {
 			return

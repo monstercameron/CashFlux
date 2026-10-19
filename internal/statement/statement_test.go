@@ -32,6 +32,8 @@ func TestParseAmount(t *testing.T) {
 		{"(1,234.56)", -123456},
 		{"-50.00", -5000},
 		{"+50.00", 5000},
+		{"12.00-", -1200},
+		{"+12.00", 1200},
 		{"100.00 DR", -10000},
 		{"100.00 CR", 10000},
 		{"£2,000", 200000},
@@ -49,6 +51,83 @@ func TestParseAmount(t *testing.T) {
 	}
 	if _, err := ParseAmount("   ", 2); err == nil {
 		t.Error("blank amount should error")
+	}
+}
+
+func TestParseWithOptionsDetectsNumberFormats(t *testing.T) {
+	tests := []struct {
+		name string
+		csv  string
+		want int64
+		fmt  NumberFormat
+	}{
+		{
+			name: "US decimal and grouping",
+			csv:  "Date,Description,Amount\n2026-01-02,Shop,\"1,234.56\"\n",
+			want: 123456,
+			fmt:  NumberFormat{DecimalSep: '.', GroupSep: ','},
+		},
+		{
+			name: "European decimal and grouping",
+			csv:  "Date;Description;Amount\n2026-01-02;Shop;\"1.234,56\"\n",
+			want: 123456,
+			fmt:  NumberFormat{DecimalSep: ',', GroupSep: '.'},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			st, err := Parse(tc.csv, 2)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(st.Rows) != 1 || st.Rows[0].Amount != tc.want {
+				t.Fatalf("rows = %+v, want amount %d", st.Rows, tc.want)
+			}
+			if st.NumberFormat != tc.fmt {
+				t.Errorf("format = %+v, want %+v", st.NumberFormat, tc.fmt)
+			}
+		})
+	}
+}
+
+func TestParseWithOptionsAmbiguousNumberAndOverride(t *testing.T) {
+	csv := "Date,Description,Amount\n2026-01-02,Shop,\"1,234\"\n"
+	got, err := Parse(csv, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.AmbiguousNumbers != 1 || len(got.Rows) != 0 || len(got.Errors) != 1 {
+		t.Fatalf("ambiguous result = %+v; want one ambiguity and row error", got)
+	}
+	got, err = ParseWithOptions(csv, 2, ParseOptions{NumberFormat: NumberFormat{DecimalSep: '.', GroupSep: ','}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Rows) != 1 || got.Rows[0].Amount != 123400 {
+		t.Fatalf("override rows = %+v; want 123400 minor units", got.Rows)
+	}
+}
+
+func TestParseDateOrderDetectionAndOverride(t *testing.T) {
+	csv := "Date,Description,Amount\n01/02/2026,First,1.00\n15/02/2026,Second,2.00\n"
+	st, err := Parse(csv, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.DateOrder != DayMonth || st.AmbiguousDates != 1 {
+		t.Fatalf("date detection = order %q ambiguous %d", st.DateOrder, st.AmbiguousDates)
+	}
+	if got := st.Rows[0].Date.Format("2006-01-02"); got != "2026-02-01" {
+		t.Errorf("detected DMY date = %s, want 2026-02-01", got)
+	}
+
+	ambiguousOnly := "Date,Description,Amount\n01/02/2026,First,1.00\n"
+	st, err = ParseWithOptions(ambiguousOnly, 2, ParseOptions{DateOrder: DayMonth})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.AmbiguousDates != 1 || st.Rows[0].Date.Format("2006-01-02") != "2026-02-01" {
+		t.Fatalf("override result = %+v, want DMY and one ambiguity", st)
 	}
 }
 

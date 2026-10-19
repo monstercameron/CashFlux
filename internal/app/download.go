@@ -37,11 +37,21 @@ func pickFile(accept string, onLoad func([]byte)) {
 	pickFileNamed(accept, func(_, _ string, data []byte) { onLoad(data) })
 }
 
+// pickFileLimited rejects a file before allocating a FileReader buffer when it
+// exceeds maxBytes. onTooLarge receives the selected size for a friendly error.
+func pickFileLimited(accept string, maxBytes int, onTooLarge func(size int), onLoad func([]byte)) {
+	pickFileNamedLimited(accept, maxBytes, func(size int) { onTooLarge(size) }, func(_, _ string, data []byte) { onLoad(data) })
+}
+
 // pickFileNamed is like pickFile but also reports the chosen file's name and MIME
 // type — needed when the handler must infer a format or label from the file (e.g.
 // a custom font, whose family name comes from the file name). The browser's MIME
 // type may be empty for some fonts; the caller can fall back to the name.
 func pickFileNamed(accept string, onLoad func(name, mime string, data []byte)) {
+	pickFileNamedLimited(accept, 0, nil, onLoad)
+}
+
+func pickFileNamedLimited(accept string, maxBytes int, onTooLarge func(size int), onLoad func(name, mime string, data []byte)) {
 	input := js.Global().Get("document").Call("createElement", "input")
 	input.Set("type", "file")
 	if accept != "" {
@@ -56,6 +66,14 @@ func pickFileNamed(accept string, onLoad func(name, mime string, data []byte)) {
 			return nil
 		}
 		file := files.Index(0)
+		size := file.Get("size").Int()
+		if maxBytes > 0 && size > maxBytes {
+			if onTooLarge != nil {
+				onTooLarge(size)
+			}
+			changeCb.Release()
+			return nil
+		}
 		name := file.Get("name").String()
 		mime := file.Get("type").String()
 		reader := js.Global().Get("FileReader").New()

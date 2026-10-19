@@ -6,7 +6,9 @@ package screens
 
 import (
 	"encoding/base64"
+	"encoding/csv"
 	"errors"
+	"io"
 	"strconv"
 	"strings"
 	"syscall/js"
@@ -46,6 +48,49 @@ import (
 const visionSystemPrompt = "You extract transactions from receipt and bank-statement images. " +
 	"Return each transaction with: date (YYYY-MM-DD), description, amount (negative for money out / " +
 	"expenses, positive for money in, as a string), and category."
+
+const (
+	maxImportCSVBytes   = 25 * 1024 * 1024
+	maxImportRows       = 10000
+	draftReviewPageSize = 100
+)
+
+// draftReviewWindow returns the zero-based slice bounds for a one-based review
+// page. It clamps stale page numbers after rows are removed and never returns
+// more than draftReviewPageSize rows.
+func draftReviewWindow(total, page int) (start, end, currentPage, pageCount int) {
+	if total <= 0 {
+		return 0, 0, 1, 1
+	}
+	pageCount = (total + draftReviewPageSize - 1) / draftReviewPageSize
+	if page < 1 {
+		page = 1
+	}
+	if page > pageCount {
+		page = pageCount
+	}
+	start = (page - 1) * draftReviewPageSize
+	end = start + draftReviewPageSize
+	if end > total {
+		end = total
+	}
+	return start, end, page, pageCount
+}
+
+// draftDuplicateCount counts rows already present in the selected account and
+// repeated rows within the complete draft, matching the import skip behavior.
+func draftDuplicateCount(rows []extract.Row, seen map[string]bool) int {
+	count := 0
+	batchSeen := make(map[string]bool, len(rows))
+	for _, row := range rows {
+		sig := row.Signature()
+		if seen[sig] || batchSeen[sig] {
+			count++
+		}
+		batchSeen[sig] = true
+	}
+	return count
+}
 
 // statementImportSchema constrains the model's reply to a transactions array (strict
 // structured outputs) for the statement-PDF source. Category is a free string here; it's
@@ -116,6 +161,63 @@ func csvSkipDetail(rows []store.CSVRowError) string {
 		detail += " " + uistate.T("documents.skipMore", len(rows)-maxShown)
 	}
 	return detail
+}
+
+func statementRowsForDraft(rows []statement.Row, decimals int) []extract.Row {
+	out := make([]extract.Row, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, extract.Row{
+			Date: row.Date.Format("2006-01-02"), Description: row.Description,
+			Amount: money.FormatMinor(row.Amount, decimals), Category: row.Category,
+		})
+	}
+	return out
+}
+
+func statementImportCounts(ambiguousDates, ambiguousNumbers, invalidRows int) string {
+	return " " + uistate.T("impc.rowCounts", ambiguousDates, ambiguousNumbers, invalidRows)
+}
+
+func statementParseOptions(dateOrder, numberFormat string) statement.ParseOptions {
+	options := statement.ParseOptions{DateOrder: statement.DateOrder(dateOrder)}
+	switch numberFormat {
+	case "dot":
+		options.NumberFormat = statement.NumberFormat{DecimalSep: '.', GroupSep: ','}
+	case "comma":
+		options.NumberFormat = statement.NumberFormat{DecimalSep: ',', GroupSep: '.'}
+	}
+	return options
+}
+
+func validateCSVRowLimit(data []byte, limit int) error {
+	if limit <= 0 {
+		return nil
+	}
+	text := strings.TrimPrefix(string(data), "\ufeff")
+	firstLine := text
+	if i := strings.IndexAny(text, "\r\n"); i >= 0 {
+		firstLine = text[:i]
+	}
+	r := csv.NewReader(strings.NewReader(text))
+	r.Comma = statement.DetectDelimiter(firstLine)
+	r.FieldsPerRecord = -1
+	if _, err := r.Read(); err != nil {
+		return err
+	}
+	count := 0
+	for {
+		_, err := r.Read()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		count++
+		if count > limit {
+			return errors.New("too many CSV rows")
+		}
+	}
 }
 
 // visionExtractionSchema constrains the vision reply to a transactions array
@@ -230,6 +332,7 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 	// navigating away mid-review keeps them and the dashboard resume card can
 	// jump back into the wizard. The mount effect below restores the stage.
 	draft := uistate.UseImportDraftRows()
+	reviewPage := ui.UseState(1)
 	importAcct := ui.UseState(defaultAcc)
 	receiptMode := ui.UseState(false)  // import the draft as ONE split transaction
 	receiptTotal := ui.UseState("")    // the receipt's single total (defaults to the line sum)
@@ -244,6 +347,9 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 	// lockstep with the draft: non-empty rows show the review stage, an emptied draft
 	// (import done, cleared, or last row removed) returns to the input hub.
 	setDraft := func(rows []extract.Row) {
+		if len(draft.Get()) == 0 && len(rows) > 0 {
+			reviewPage.Set(1)
+		}
 		draft.Set(rows)
 		if len(rows) > 0 {
 			stage.Set("review")
@@ -315,6 +421,13 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 	wizardAmount := ui.UseState("-1")
 	wizardDebit := ui.UseState("-1")
 	wizardCredit := ui.UseState("-1")
+	dateOrderChoice := ui.UseState("")
+	numberFormatChoice := ui.UseState("auto")
+	statementRaw := ui.UseState("")
+	statementAmbiguousDates := ui.UseState(0)
+	statementAmbiguousNumbers := ui.UseState(0)
+	statementInvalidRows := ui.UseState(0)
+	statementFormatOptionsVisible := ui.UseState(false)
 
 	// C74 — profile save/load
 	profileName := ui.UseState("")
@@ -476,9 +589,15 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 	// chooseCsvFile opens a file picker for .csv files and feeds the bytes into
 	// the same staged preflight the paste path uses (C60 → #57).
 	chooseCsvFile := ui.UseEvent(func() {
-		pickFile(".csv,text/csv", func(_, _ string, data []byte) {
+		pickFileLimited(".csv,text/csv", maxImportCSVBytes, func(_, limit int) {
+			msg.Set(uistate.T("impc.fileTooLarge", "CSV", fileLimitLabel(limit)))
+		}, func(_, _ string, data []byte) {
 			if len(data) == 0 {
 				msg.Set(uistate.T("documents.csvFileEmpty"))
+				return
+			}
+			if err := validateCSVRowLimit(data, maxImportRows); err != nil {
+				msg.Set(uistate.T("impc.tooManyRows", maxImportRows))
 				return
 			}
 			buildCSVPreflight(data)
@@ -504,6 +623,10 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 			msg.Set(uistate.T("documents.csvEmpty"))
 			return
 		}
+		if err := validateCSVRowLimit([]byte(data), maxImportRows); err != nil {
+			msg.Set(uistate.T("impc.tooManyRows", maxImportRows))
+			return
+		}
 		buildCSVPreflight([]byte(data))
 	}))
 
@@ -523,12 +646,45 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 			msg.Set(uistate.T("documents.stmtEmpty"))
 			return
 		}
+		upperData := strings.ToUpper(data)
+		isStructured := strings.HasPrefix(data, "%PDF") || strings.HasPrefix(data, "PK\x03\x04") ||
+			strings.HasPrefix(upperData, "OFXHEADER:") || strings.HasPrefix(upperData, "<?XML") ||
+			strings.HasPrefix(upperData, "<?OFX") || strings.HasPrefix(upperData, "<OFX")
+		if !isStructured {
+			if err := validateCSVRowLimit([]byte(data), maxImportRows); err != nil {
+				msg.Set(uistate.T("impc.tooManyRows", maxImportRows))
+				return
+			}
+		}
 		// Parse amounts at the import account's currency precision. ParseAny
 		// auto-detects the format — OFX 1.x/2.x (bank/card statements) as well as the
 		// delimited CSV/TSV/pipe path — so a pasted .ofx/.qfx statement now imports
 		// through the same review pipeline (C74 Tier 2).
 		dec := currency.Decimals(reviewCurrencyFor(app, accounts, importAcct.Get()))
-		stRows, err := statement.ParseAny(strings.NewReader(data), dec)
+		statementRaw.Set(data)
+		statementFormatOptionsVisible.Set(true)
+		options := statementParseOptions(dateOrderChoice.Get(), numberFormatChoice.Get())
+		var st statement.Statement
+		var stErr error
+		var stRows []statement.Row
+		if strings.HasPrefix(data, "%PDF") || strings.HasPrefix(strings.ToUpper(data), "OFXHEADER:") || strings.HasPrefix(data, "<OFX") || strings.HasPrefix(data, "<?OFX") {
+			stRows, stErr = statement.ParseAny(strings.NewReader(data), dec)
+		} else {
+			st, stErr = statement.ParseWithOptions(data, dec, options)
+			stRows = st.Rows
+			statementAmbiguousDates.Set(st.AmbiguousDates)
+			statementAmbiguousNumbers.Set(st.AmbiguousNumbers)
+			statementInvalidRows.Set(len(st.Errors))
+			if st.DateOrder != "" {
+				dateOrderChoice.Set(string(st.DateOrder))
+			}
+			if st.NumberFormat.DecimalSep == ',' {
+				numberFormatChoice.Set("comma")
+			} else if st.NumberFormat.DecimalSep == '.' && st.NumberFormat.GroupSep == ',' {
+				numberFormatChoice.Set("dot")
+			}
+		}
+		err := stErr
 		if err != nil {
 			// Tier 3: scanned/image-only or encrypted PDF — don't show the wizard,
 			// show a helpful message directing the user to Extract with AI or image import.
@@ -548,6 +704,10 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 				// which is enough to populate the wizard column list.
 				header, rawRecs := extractRawHeaderAndRows(data, raw.Delimiter)
 				_ = rerr
+				if len(rawRecs) > maxImportRows {
+					msg.Set(uistate.T("impc.tooManyRows", maxImportRows))
+					return
+				}
 				wizardHeader.Set(header)
 				wizardRawRows.Set(rawRecs)
 				// Pre-fill wizard fields from whatever was auto-detected, with a
@@ -567,14 +727,7 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 			msg.Set(uistate.T("documents.stmtError", strings.TrimPrefix(err.Error(), "statement: ")))
 			return
 		}
-		rows := make([]extract.Row, 0, len(stRows))
-		for _, r := range stRows {
-			rows = append(rows, extract.Row{
-				Date:        r.Date.Format("2006-01-02"),
-				Description: r.Description,
-				Amount:      money.FormatMinor(r.Amount, dec),
-			})
-		}
+		rows := statementRowsForDraft(stRows, dec)
 		if len(rows) == 0 {
 			msg.Set(uistate.T("documents.stmtNoneFound"))
 			return
@@ -582,8 +735,34 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 		// Successful parse — hide wizard, populate draft.
 		wizardVisible.Set(false)
 		setDraft(rows)
-		msg.Set(uistate.T("documents.stmtParsed", plural(len(rows), "row")))
+		msg.Set(uistate.T("documents.stmtParsed", plural(len(rows), "row")) + statementImportCounts(statementAmbiguousDates.Get(), statementAmbiguousNumbers.Get(), statementInvalidRows.Get()))
 		rev.Set(rev.Get() + 1)
+	}))
+	onDateOrderChoice := ui.UseEvent(func(e ui.Event) { dateOrderChoice.Set(e.GetValue()) })
+	onNumberFormatChoice := ui.UseEvent(func(e ui.Event) { numberFormatChoice.Set(e.GetValue()) })
+	applyStatementFormats := ui.UseEvent(Prevent(func() {
+		data := statementRaw.Get()
+		if data == "" {
+			return
+		}
+		dec := currency.Decimals(reviewCurrencyFor(app, accounts, importAcct.Get()))
+		options := statementParseOptions(dateOrderChoice.Get(), numberFormatChoice.Get())
+		st, err := statement.ParseWithOptions(data, dec, options)
+		if err != nil {
+			msg.Set(uistate.T("documents.stmtError", strings.TrimPrefix(err.Error(), "statement: ")))
+			return
+		}
+		statementAmbiguousDates.Set(st.AmbiguousDates)
+		statementAmbiguousNumbers.Set(st.AmbiguousNumbers)
+		statementInvalidRows.Set(len(st.Errors))
+		statementFormatOptionsVisible.Set(true)
+		rows := statementRowsForDraft(st.Rows, dec)
+		if len(rows) == 0 {
+			msg.Set(uistate.T("impc.noValidRows", len(st.Errors)))
+			return
+		}
+		setDraft(rows)
+		msg.Set(uistate.T("documents.stmtParsed", plural(len(rows), "row")) + statementImportCounts(st.AmbiguousDates, st.AmbiguousNumbers, len(st.Errors)))
 	}))
 
 	// applyWizard (C74) applies the user's manual column assignments via
@@ -981,7 +1160,7 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 		cpID := uistate.SaveCheckpoint(uistate.T("ckpt.beforeDocImport", plural(len(rows), "row")))
 		result, err := app.ImportReviewedDocumentRows(domain.DocImage, importAcct.Get(), rows)
 		if err != nil {
-			aiErr.Set(uistate.T("documents.chooseAccount"))
+			aiErr.Set(strings.TrimPrefix(err.Error(), "appstate: "))
 			return false
 		}
 		// #57: attach the pre-import checkpoint to the history record appstate
@@ -1028,9 +1207,9 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 		pdfName.Set("")
 		pdfSaveCopy.Set(false)
 		aiErr.Set("")
-		summary := uistate.T("documents.importedImage", plural(result.Imported, "transaction"))
-		if result.Skipped > 0 {
-			summary += uistate.T("documents.skipped", plural(result.Skipped, "duplicate"))
+		summary := uistate.T("impc.importSummary", result.Imported, result.Skipped, len(result.Failed), len(result.PossibleDuplicates))
+		if detail := csvSkipDetail(result.Failed); detail != "" {
+			summary += " " + detail
 		}
 		msg.Set(summary)
 		// C364: undo story for a committed image/statement import.
@@ -1132,6 +1311,8 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 
 	// Draft review list: each row can be removed before importing.
 	rows := draft.Get()
+	reviewStart, reviewEnd, currentReviewPage, reviewPageCount := draftReviewWindow(len(rows), reviewPage.Get())
+	visibleRows := rows[reviewStart:reviewEnd]
 	// The review amounts format in the chosen import account's currency (falling
 	// back to base), so they read in accounting style like the rest of the app.
 	reviewCur := app.Settings().BaseCurrency
@@ -1415,15 +1596,24 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 
 					// Column-map wizard + saved profiles belong to the statement-text flow.
 					If(source.Get() == "stmt" && wizardVisible.Get(),
-						wizardCard(
-							wizardHeader.Get(),
-							wizardDate.Get(), wizardDescCol.Get(), wizardAmount.Get(),
-							wizardDebit.Get(), wizardCredit.Get(),
-							onWizardDate, onWizardDesc, onWizardAmount, onWizardDebit, onWizardCredit,
-							applyWizard,
-							profileName.Get(), onProfileName, saveProfile,
+						Fragment(
+							wizardCard(
+								wizardHeader.Get(),
+								wizardDate.Get(), wizardDescCol.Get(), wizardAmount.Get(),
+								wizardDebit.Get(), wizardCredit.Get(),
+								onWizardDate, onWizardDesc, onWizardAmount, onWizardDebit, onWizardCredit,
+								applyWizard,
+								profileName.Get(), onProfileName, saveProfile,
+							),
+							statementFormatControls(dateOrderChoice.Get(), numberFormatChoice.Get(),
+								statementAmbiguousDates.Get(), statementAmbiguousNumbers.Get(), statementInvalidRows.Get(),
+								onDateOrderChoice, onNumberFormatChoice, applyStatementFormats),
 						),
 					),
+					If(source.Get() == "stmt" && statementFormatOptionsVisible.Get() && !inReview,
+						statementFormatControls(dateOrderChoice.Get(), numberFormatChoice.Get(),
+							statementAmbiguousDates.Get(), statementAmbiguousNumbers.Get(), statementInvalidRows.Get(),
+							onDateOrderChoice, onNumberFormatChoice, applyStatementFormats)),
 					If(source.Get() == "stmt" && (wizardVisible.Get() || showProfiles.Get()),
 						savedProfilesCard(app, accounts, importAcct.Get(),
 							showProfiles.Get(),
@@ -1488,26 +1678,52 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 			If(len(rows) > 0,
 				Div(css.Class(tw.Mt2, tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter),
 					Button(css.Class("btn"), Type("button"), Attr("data-testid", "suggest-categories-btn"),
-						OnClick(categorizeDraft), uistate.T("documents.suggestCategories")),
+						OnClick(categorizeDraft), uistate.T("impc.suggestCategoriesAll")),
 					If(aiLoading.Get(), Span(css.Class("muted"), uistate.T("documents.categorizing"))),
+				),
+			),
+			If(source.Get() == "stmt" && statementRaw.Get() != "",
+				Div(css.Class("card", tw.Mt2), Attr("data-testid", "statement-format-preview"),
+					H3(css.Class("card-title"), uistate.T("impc.formatTitle")),
+					P(css.Class("muted", tw.Text12), statementImportCounts(statementAmbiguousDates.Get(), statementAmbiguousNumbers.Get(), statementInvalidRows.Get())),
+					Div(css.Class("form-grid"),
+						Div(Label(For("statement-date-order"), uistate.T("impc.dateOrder")),
+							Select(css.Class("field"), Attr("id", "statement-date-order"), Attr("data-testid", "statement-date-order"),
+								Attr("aria-label", uistate.T("impc.dateOrder")), OnChange(onDateOrderChoice),
+								Option(Value(string(statement.MonthDay)), SelectedIf(dateOrderChoice.Get() == string(statement.MonthDay)), uistate.T("impc.monthDay")),
+								Option(Value(string(statement.DayMonth)), SelectedIf(dateOrderChoice.Get() == string(statement.DayMonth)), uistate.T("impc.dayMonth")))),
+						Div(Label(For("statement-number-format"), uistate.T("impc.numberFormat")),
+							Select(css.Class("field"), Attr("id", "statement-number-format"), Attr("data-testid", "statement-number-format"),
+								Attr("aria-label", uistate.T("impc.numberFormat")), OnChange(onNumberFormatChoice),
+								Option(Value("auto"), SelectedIf(numberFormatChoice.Get() == "auto"), uistate.T("impc.detectAutomatically")),
+								Option(Value("dot"), SelectedIf(numberFormatChoice.Get() == "dot"), uistate.T("impc.dotDecimal")),
+								Option(Value("comma"), SelectedIf(numberFormatChoice.Get() == "comma"), uistate.T("impc.commaDecimal")))),
+					),
+					Button(css.Class("btn"), Type("button"), Attr("data-testid", "statement-apply-formats"),
+						OnClick(applyStatementFormats), uistate.T("impc.applyFormats")),
 				),
 			),
 			// Review results sit below the import inputs that produce them (G14 §1): a
 			// parsed statement / scanned receipt's draft rows no longer pop in *above* the
 			// card the user just acted in.
-			DraftReviewList(draftReviewListProps{
+			paginatedDraftReview(draftReviewProps{
 				Rows:              rows,
+				VisibleRows:       visibleRows,
+				Start:             reviewStart,
+				Page:              currentReviewPage,
+				PageCount:         reviewPageCount,
 				Accounts:          accounts,
 				Categories:        app.Categories(),
 				ReviewCur:         reviewCur,
 				ImportAcctID:      importAcct.Get(),
+				SeenSigs:          seenSigs,
 				ReceiptMode:       receiptMode.Get(),
 				ReceiptTotal:      receiptTotal.Get(),
 				ReceiptMerchant:   receiptMerchant.Get(),
 				RecBaseCur:        recBaseCur,
-				SeenSigs:          seenSigs,
 				ClearDraft:        clearDraft,
 				Toggle:            receiptToggle,
+				OnPage:            func(page int) { reviewPage.Set(page) },
 				OnAcctChange:      onAcct,
 				OnReceiptTotal:    onReceiptTotal,
 				OnReceiptMerchant: onReceiptMerchant,
@@ -1532,6 +1748,170 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 			}),
 		)),
 	)
+}
+
+type draftReviewProps struct {
+	Rows              []extract.Row
+	VisibleRows       []extract.Row
+	Start             int
+	Page              int
+	PageCount         int
+	Accounts          []domain.Account
+	Categories        []domain.Category
+	ReviewCur         string
+	ImportAcctID      string
+	SeenSigs          map[string]bool
+	ReceiptMode       bool
+	ReceiptTotal      string
+	ReceiptMerchant   string
+	RecBaseCur        string
+	ClearDraft        ui.Handler
+	Toggle            ui.Node
+	OnPage            func(int)
+	OnAcctChange      ui.Handler
+	OnReceiptTotal    ui.Handler
+	OnReceiptMerchant ui.Handler
+	OnImportDraft     ui.Handler
+	OnImportReceipt   ui.Handler
+	OnRemoveDraft     func(int)
+	OnUpdateDraft     func(int, extract.Row)
+}
+
+// paginatedDraftReview renders only the selected page while calculating row
+// counts, duplicate status, totals, and receipt reconciliation from the full
+// draft. Row callbacks retain their absolute draft index across pages.
+func paginatedDraftReview(props draftReviewProps) ui.Node {
+	if len(props.Rows) == 0 {
+		return nil
+	}
+	dupCount := draftDuplicateCount(props.Rows, props.SeenSigs)
+	items := make([]ui.Node, 0, len(props.VisibleRows))
+	for i, row := range props.Rows {
+		sig := row.Signature()
+		if i < props.Start || i >= props.Start+len(props.VisibleRows) {
+			continue
+		}
+		dup := props.SeenSigs[sig]
+		for earlier := 0; earlier < i && !dup; earlier++ {
+			dup = props.Rows[earlier].Signature() == sig
+		}
+		items = append(items, ui.CreateElement(DraftRow, draftRowProps{
+			Index:       i,
+			Row:         row,
+			Currency:    props.ReviewCur,
+			Categories:  props.Categories,
+			IsDuplicate: dup,
+			ColorBySign: !props.ReceiptMode,
+			OnRemove:    props.OnRemoveDraft,
+			OnUpdate:    props.OnUpdateDraft,
+		}))
+	}
+	start, end, _, _ := draftReviewWindow(len(props.Rows), props.Page)
+	onPrev := ui.UseEvent(Prevent(func() { props.OnPage(props.Page - 1) }))
+	onNext := ui.UseEvent(Prevent(func() { props.OnPage(props.Page + 1) }))
+	pageControls := func() ui.Node {
+		return Div(css.Class(tw.Flex, tw.ItemsCenter, tw.JustifyBetween, tw.Gap2, tw.Mt2, tw.Mb2),
+			If(props.Page > 1, Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "draft-page-prev"),
+				OnClick(onPrev), uistate.T("impc.previousPage"))),
+			Span(Attr("data-testid", "draft-page-range"), uistate.T("impc.pageRange", start+1, end, len(props.Rows))),
+			If(props.Page < props.PageCount, Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "draft-page-next"),
+				OnClick(onNext), uistate.T("impc.nextPage"))),
+		)
+	}
+	var summary ui.Node = Fragment()
+	if dupCount > 0 {
+		summary = Div(css.Class("notice notice-warn"), Attr("data-testid", "draft-all-duplicate-count"),
+			uistate.T("impc.duplicateCount", dupCount, len(props.Rows)))
+	}
+	clear := Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "draft-clear-all"),
+		OnClick(props.ClearDraft), uistate.T("impc.clearAllRows"))
+	var body ui.Node
+	if props.ReceiptMode {
+		recCur := props.RecBaseCur
+		if recCur == "" {
+			recCur = "USD"
+		}
+		dec := currency.Decimals(recCur)
+		lines := make([]extract.ReceiptLine, 0, len(props.Rows))
+		for _, row := range props.Rows {
+			lines = append(lines, extract.ReceiptLine{Description: row.Description, Category: row.Category, Amount: absAmount(row.Amount)})
+		}
+		residual, err := (extract.Receipt{Total: absAmount(props.ReceiptTotal), Lines: lines}).Residual(dec)
+		reconciled := err == nil && residual == 0
+		var receiptStatus ui.Node = P(css.Class("muted"), uistate.T("documents.linesReconciled"))
+		if err != nil {
+			receiptStatus = P(css.Class("err"), Attr("role", "alert"), uistate.T("documents.linesUnreadable"))
+		} else if !reconciled {
+			receiptStatus = P(css.Class("err"), Attr("role", "alert"), uistate.T("documents.linesOffBy", fmtMoney(money.New(draftAbsInt64(residual), recCur))))
+		}
+		body = Fragment(
+			Form(css.Class("form-grid"), OnSubmit(props.OnImportReceipt),
+				Input(css.Class("field"), Type("text"), Attr("aria-label", uistate.T("documents.storeName")),
+					Placeholder(uistate.T("documents.storeNamePh")), OnInput(props.OnReceiptMerchant), uiw.FieldValue(props.ReceiptMerchant)),
+				Input(css.Class("field"), Type("text"), Attr("aria-label", uistate.T("documents.receiptTotal")),
+					Placeholder(uistate.T("documents.receiptTotal")), OnInput(props.OnReceiptTotal), uiw.FieldValue(props.ReceiptTotal)),
+				Select(css.Class("field"), Attr("aria-label", uistate.T("documents.importAccount")), OnChange(props.OnAcctChange), draftAccountOptions(props.Accounts, props.ImportAcctID)),
+				receiptStatus,
+				buttonWithDisabled(!reconciled, []any{css.Class("btn btn-primary"), Type("submit")}, uistate.T("documents.importReceipt")),
+			),
+		)
+	} else {
+		dec := currency.Decimals(props.ReviewCur)
+		var inMinor, outMinor int64
+		seen := make(map[string]bool, len(props.Rows))
+		for _, row := range props.Rows {
+			sig := row.Signature()
+			if props.SeenSigs[sig] || seen[sig] {
+				seen[sig] = true
+				continue
+			}
+			seen[sig] = true
+			if minor, err := money.ParseMinor(strings.TrimSpace(row.Amount), dec); err == nil {
+				if minor >= 0 {
+					inMinor += minor
+				} else {
+					outMinor -= minor
+				}
+			}
+		}
+		body = Fragment(
+			Div(css.Class("draft-summary"),
+				draftSumItem(uistate.T("documents.sumIn"), fmtMoney(money.New(inMinor, props.ReviewCur)), "in"),
+				draftSumItem(uistate.T("documents.sumOut"), fmtMoney(money.New(outMinor, props.ReviewCur)), "out"),
+				draftSumNet(inMinor-outMinor, props.ReviewCur)),
+			Form(css.Class("draft-actionrow"), OnSubmit(props.OnImportDraft),
+				Select(css.Class("field"), Attr("aria-label", uistate.T("documents.importAccount")), OnChange(props.OnAcctChange), draftAccountOptions(props.Accounts, props.ImportAcctID)),
+				Button(css.Class("btn btn-primary"), Type("submit"), Attr("data-testid", "draft-import-all"),
+					uistate.T("impc.importAllRows", len(props.Rows))),
+			),
+		)
+	}
+	return uiw.EntityListSection(uiw.EntityListSectionProps{
+		Title:      uistate.T("documents.reviewTitle", plural(len(props.Rows), "transaction")),
+		ClassParts: []any{"card-step-active"},
+		Body: Fragment(summary,
+			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter), clear, props.Toggle),
+			P(css.Class("muted"), uistate.T("documents.reviewDesc")),
+			pageControls(),
+			Div(css.Class("rows draft-ledger"), Attr("data-testid", "draft-review-page"), items),
+			pageControls(), body,
+		),
+	})
+}
+
+func draftAccountOptions(accounts []domain.Account, selected string) []ui.Node {
+	options := make([]ui.Node, 0, len(accounts))
+	for _, account := range accounts {
+		options = append(options, Option(Value(account.ID), SelectedIf(selected == account.ID), account.Name))
+	}
+	return options
+}
+
+func draftAbsInt64(n int64) int64 {
+	if n < 0 {
+		return -n
+	}
+	return n
 }
 
 type draftRowProps struct {
@@ -1571,6 +1951,7 @@ func DraftRow(props draftRowProps) ui.Node {
 	r := props.Row
 	rm := ui.UseEvent(Prevent(func() { props.OnRemove(props.Index) }))
 	editing := ui.UseState(false)
+	categoryPickerOpen := ui.UseState(false)
 	dateS := ui.UseState(r.Date)
 	descS := ui.UseState(r.Description)
 	amtS := ui.UseState(r.Amount)
@@ -1586,6 +1967,23 @@ func DraftRow(props draftRowProps) ui.Node {
 		catS.Set(r.Category)
 		editing.Set(true)
 	}))
+	openCategoryPicker := ui.UseEvent(Prevent(func() { categoryPickerOpen.Set(true) }))
+	chooseDraftCategory := func(categoryID string) {
+		if app := appstate.Default; app != nil {
+			for _, category := range app.Categories() {
+				if category.ID == categoryID {
+					r.Category = category.Name
+					props.OnUpdate(props.Index, r)
+					break
+				}
+			}
+		}
+		categoryPickerOpen.Set(false)
+	}
+	categoryKind := domain.KindExpense
+	if amount, err := money.ParseMinor(strings.TrimSpace(r.Amount), currency.Decimals(props.Currency)); err == nil && amount > 0 {
+		categoryKind = domain.KindIncome
+	}
 	cancelEdit := ui.UseEvent(Prevent(func() { editing.Set(false) }))
 	saveEdit := ui.UseEvent(Prevent(func() {
 		props.OnUpdate(props.Index, extract.Row{
@@ -1612,7 +2010,7 @@ func DraftRow(props draftRowProps) ui.Node {
 		// A purpose-built editor grid (date · description · amount · category on one
 		// aligned row, actions right-aligned below) rather than the generic auto-fit
 		// form-grid, which wrapped its six controls unpredictably in the modal width.
-		return Div(css.Class("row-edit"),
+		return Div(css.Class("row-edit"), Attr("data-testid", "draft-review-row"),
 			Form(css.Class("draft-edit-grid"), OnSubmit(saveEdit),
 				Input(css.Class("field"), Attr("id", draftFieldID), Type("date"), OnInput(onDate), uiw.FieldValue(dateS.Get())),
 				Input(css.Class("field"), Type("text"), Placeholder(uistate.T("documents.descPlaceholder")), OnInput(onDesc), uiw.FieldValue(descS.Get())),
@@ -1658,10 +2056,10 @@ func DraftRow(props draftRowProps) ui.Node {
 	} else {
 		catNode = Button(css.Class("draft-cat-add"), Type("button"),
 			Attr("aria-label", uistate.T("documents.addCategory")),
-			OnClick(startEdit), Span("+ "), uistate.T("documents.category"))
+			OnClick(openCategoryPicker), Span("+ "), uistate.T("documents.category"))
 	}
 
-	return Div(css.Class("row"),
+	return Div(css.Class("row"), Attr("data-testid", "draft-review-row"),
 		Div(css.Class("row-main"),
 			Span(css.Class("row-desc"), textutil.FirstNonEmpty(r.Description, uistate.T("documents.noDescription"))),
 			Div(css.Class("draft-subline"),
@@ -1683,6 +2081,11 @@ func DraftRow(props draftRowProps) ui.Node {
 				uiw.Icon(icon.Pencil, css.Class(tw.W4, tw.H4))),
 			Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("documents.removeRow")), Title(uistate.T("documents.removeRow")), OnClick(rm), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 		),
+		If(categoryPickerOpen.Get(), ui.CreateElement(CategoryPicker, CategoryPickerProps{
+			Kind:    categoryKind,
+			OnPick:  chooseDraftCategory,
+			OnClose: func() { categoryPickerOpen.Set(false) },
+		})),
 	)
 }
 
@@ -1889,36 +2292,30 @@ func pickImageDataURL(onData func(string), onErr func(string)) (opened bool) {
 // C74 — import-map wizard helpers
 // ---------------------------------------------------------------------------
 
-// extractRawHeaderAndRows splits raw delimited text into a header slice and a
-// [][][]string of records (each record is a []string of fields). The outer
-// slice wraps each record in its own single-element slice so it can be stored
-// in a ui.UseState([][][]string) and later flattened to [][]string for Apply.
+// extractRawHeaderAndRows parses delimited text with the same quoted-field rules
+// as the statement importer. The outer slice wraps each record in its own
+// single-element slice so it can be stored in ui state and flattened for Apply.
 func extractRawHeaderAndRows(text string, delim rune) (header []string, rows [][][]string) {
-	lines := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
-	if len(lines) == 0 {
+	if delim == 0 {
+		firstLine := text
+		if i := strings.IndexAny(text, "\r\n"); i >= 0 {
+			firstLine = text[:i]
+		}
+		delim = statement.DetectDelimiter(firstLine)
+	}
+	r := csv.NewReader(strings.NewReader(strings.TrimPrefix(text, "\ufeff")))
+	r.Comma = delim
+	r.FieldsPerRecord = -1
+	r.TrimLeadingSpace = true
+	records, err := r.ReadAll()
+	if err != nil || len(records) == 0 {
 		return nil, nil
 	}
-	sep := string(delim)
-	header = splitLine(lines[0], sep)
-	for _, line := range lines[1:] {
-		if strings.TrimSpace(line) == "" {
-			continue
-		}
-		rows = append(rows, [][]string{splitLine(line, sep)})
+	header = records[0]
+	for _, record := range records[1:] {
+		rows = append(rows, [][]string{record})
 	}
 	return header, rows
-}
-
-// splitLine splits a single CSV/TSV/pipe line by sep without full csv.Reader
-// overhead. Used only to populate the wizard header for display purposes.
-func splitLine(line, sep string) []string {
-	line = strings.TrimRight(line, "\r")
-	parts := strings.Split(line, sep)
-	out := make([]string, len(parts))
-	for i, p := range parts {
-		out[i] = strings.Trim(strings.TrimSpace(p), `"`)
-	}
-	return out
 }
 
 // guessWizardField returns the pre-selected value for a wizard dropdown (as a
@@ -2038,6 +2435,28 @@ func wizardCard(
 			),
 		),
 	})
+}
+
+func statementFormatControls(dateOrder, numberFormat string, ambiguousDates, ambiguousNumbers, invalidRows int, onDateOrder, onNumberFormat, onApply ui.Handler) ui.Node {
+	return Div(css.Class("card", tw.Mt2), Attr("data-testid", "statement-format-preview"),
+		H3(css.Class("card-title"), uistate.T("impc.formatTitle")),
+		P(css.Class("muted", tw.Text12), statementImportCounts(ambiguousDates, ambiguousNumbers, invalidRows)),
+		Div(css.Class("form-grid"),
+			Div(Label(For("statement-date-order"), uistate.T("impc.dateOrder")),
+				Select(css.Class("field"), Attr("id", "statement-date-order"), Attr("data-testid", "statement-date-order"),
+					Attr("aria-label", uistate.T("impc.dateOrder")), OnChange(onDateOrder),
+					Option(Value(string(statement.MonthDay)), SelectedIf(dateOrder == string(statement.MonthDay)), uistate.T("impc.monthDay")),
+					Option(Value(string(statement.DayMonth)), SelectedIf(dateOrder == string(statement.DayMonth)), uistate.T("impc.dayMonth")))),
+			Div(Label(For("statement-number-format"), uistate.T("impc.numberFormat")),
+				Select(css.Class("field"), Attr("id", "statement-number-format"), Attr("data-testid", "statement-number-format"),
+					Attr("aria-label", uistate.T("impc.numberFormat")), OnChange(onNumberFormat),
+					Option(Value("auto"), SelectedIf(numberFormat == "auto"), uistate.T("impc.detectAutomatically")),
+					Option(Value("dot"), SelectedIf(numberFormat == "dot"), uistate.T("impc.dotDecimal")),
+					Option(Value("comma"), SelectedIf(numberFormat == "comma"), uistate.T("impc.commaDecimal")))),
+		),
+		Button(css.Class("btn"), Type("button"), Attr("data-testid", "statement-apply-formats"),
+			OnClick(onApply), uistate.T("impc.applyFormats")),
+	)
 }
 
 // savedProfilesCard renders the saved-profile picker. It is shown alongside

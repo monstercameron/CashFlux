@@ -50,7 +50,8 @@ func ImageImportCard(props imageImportCardProps) ui.Node {
 				),
 			),
 		),
-		// C99: muted cost note so BYOK users understand each vision call has a small credit cost.
+		// Explain the outbound image transfer beside the action before the user can send it.
+		P(css.Class("muted", tw.Text12), uistate.T("impc.aiDisclosure")),
 		P(css.Class("muted", tw.Text12), uistate.T("documents.imageCostNote")),
 		// Image preview: shown once a file is chosen so the user can verify the scan (C60).
 		If(props.ImageURL != "",

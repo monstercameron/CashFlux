@@ -140,3 +140,59 @@ DATA:OFXSGML
 		t.Errorf("amount: got %d want -45", rows[0].Amount)
 	}
 }
+
+func TestParseAmountExactBoundaries(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		prec int
+		want int64
+		bad  bool
+	}{
+		{name: "half cent is rejected", in: "1.005", prec: 2, bad: true},
+		{name: "large exact value", in: "90000000000000.01", prec: 2, want: 9000000000000001},
+		{name: "int64 overflow", in: "92233720368547758.08", prec: 2, bad: true},
+		{name: "negative", in: "-12.34", prec: 2, want: -1234},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := parseAmount(tc.in, tc.prec)
+			if tc.bad {
+				if err == nil {
+					t.Fatalf("parseAmount(%q) = %d, want error", tc.in, got)
+				}
+				return
+			}
+			if err != nil || got != tc.want {
+				t.Fatalf("parseAmount(%q) = %d, %v; want %d", tc.in, got, err, tc.want)
+			}
+		})
+	}
+}
+
+func TestParseDetailedReportsBadSGMLAmountPerRow(t *testing.T) {
+	input := `OFXHEADER:100
+DATA:OFXSGML
+<OFX>
+<STMTTRN>
+<DTPOSTED>20260101
+<TRNAMT>1.005
+<NAME>Too precise
+</STMTTRN>
+<STMTTRN>
+<DTPOSTED>20260102
+<TRNAMT>2.00
+<NAME>Valid
+</STMTTRN>
+</OFX>`
+	result, err := ParseDetailed(strings.NewReader(input), 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Rows) != 1 || result.Rows[0].Amount != 200 {
+		t.Fatalf("rows = %+v, want only valid 200-minor-unit row", result.Rows)
+	}
+	if len(result.Errors) != 1 || result.Errors[0].Index != 1 || !strings.Contains(result.Errors[0].Err, "too many decimal places") {
+		t.Fatalf("errors = %+v, want precision error for transaction 1", result.Errors)
+	}
+}

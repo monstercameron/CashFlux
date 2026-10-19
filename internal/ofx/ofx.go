@@ -6,10 +6,11 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
-	"math"
-	"strconv"
+	"math/big"
 	"strings"
 	"time"
+
+	"github.com/monstercameron/CashFlux/internal/money"
 )
 
 // Row is one normalized OFX transaction. Amount is signed minor units.
@@ -20,12 +21,38 @@ type Row struct {
 	FITID       string
 }
 
+// RowError identifies an OFX transaction that could not be normalized.
+// Index is one-based and follows the transaction order in the source file.
+type RowError struct {
+	Index int
+	Err   string
+}
+
+// Result contains valid transactions and errors for rejected transactions.
+type Result struct {
+	Rows   []Row
+	Errors []RowError
+}
+
 // Parse parses OFX 1.x (SGML) or OFX 2.x (XML) content from r.
 // Decimals is the minor-unit precision (e.g. 2 for USD/GBP).
 func Parse(r io.Reader, decimals int) ([]Row, error) {
-	data, err := io.ReadAll(r)
+	result, err := ParseDetailed(r, decimals)
 	if err != nil {
 		return nil, err
+	}
+	if len(result.Errors) != 0 {
+		return result.Rows, fmt.Errorf("ofx: %d transaction(s) could not be parsed; first error: transaction %d: %s", len(result.Errors), result.Errors[0].Index, result.Errors[0].Err)
+	}
+	return result.Rows, nil
+}
+
+// ParseDetailed parses OFX and returns valid rows together with per-transaction
+// errors. Invalid amounts are rejected instead of being rounded or replaced by zero.
+func ParseDetailed(r io.Reader, decimals int) (Result, error) {
+	data, err := io.ReadAll(r)
+	if err != nil {
+		return Result{}, fmt.Errorf("ofx: read input: %w", err)
 	}
 	content := string(data)
 	trimmed := strings.TrimSpace(content)
@@ -36,13 +63,15 @@ func Parse(r io.Reader, decimals int) ([]Row, error) {
 	if strings.HasPrefix(trimmed, "<?xml") || strings.HasPrefix(trimmed, "<?OFX") || strings.HasPrefix(trimmed, "<OFX") {
 		return parseXML(trimmed, decimals)
 	}
-	return nil, fmt.Errorf("ofx: unrecognized format")
+	return Result{}, fmt.Errorf("ofx: unrecognized format")
 }
 
 // parseSGML parses OFX 1.x SGML line-by-line.
-func parseSGML(content string, decimals int) ([]Row, error) {
-	var rows []Row
+func parseSGML(content string, decimals int) (Result, error) {
+	var result Result
 	var cur *Row
+	index := 0
+	var amountErr string
 	lines := strings.Split(content, "\n")
 	for _, raw := range lines {
 		line := strings.TrimSpace(raw)
@@ -53,8 +82,13 @@ func parseSGML(content string, decimals int) ([]Row, error) {
 		if strings.HasPrefix(line, "</") {
 			tag := strings.ToUpper(strings.Trim(line, "</>"))
 			if tag == "STMTTRN" && cur != nil {
-				rows = append(rows, *cur)
+				if amountErr != "" {
+					result.Errors = append(result.Errors, RowError{Index: index, Err: amountErr})
+				} else {
+					result.Rows = append(result.Rows, *cur)
+				}
 				cur = nil
+				amountErr = ""
 			}
 			continue
 		}
@@ -70,6 +104,7 @@ func parseSGML(content string, decimals int) ([]Row, error) {
 		value := strings.TrimSpace(line[closeAngle+1:])
 
 		if tag == "STMTTRN" {
+			index++
 			c := &Row{}
 			cur = c
 			continue
@@ -85,7 +120,9 @@ func parseSGML(content string, decimals int) ([]Row, error) {
 			}
 		case "TRNAMT":
 			amt, err := parseAmount(value, decimals)
-			if err == nil {
+			if err != nil {
+				amountErr = fmt.Sprintf("invalid TRNAMT %q: %v", value, err)
+			} else {
 				cur.Amount = amt
 			}
 		case "FITID":
@@ -100,7 +137,14 @@ func parseSGML(content string, decimals int) ([]Row, error) {
 			}
 		}
 	}
-	return rows, nil
+	if cur != nil {
+		if amountErr != "" {
+			result.Errors = append(result.Errors, RowError{Index: index, Err: amountErr})
+		} else {
+			result.Rows = append(result.Rows, *cur)
+		}
+	}
+	return result, nil
 }
 
 // XML structs for OFX 2.x
@@ -131,7 +175,7 @@ type trnXML struct {
 }
 
 // parseXML parses OFX 2.x XML content.
-func parseXML(content string, decimals int) ([]Row, error) {
+func parseXML(content string, decimals int) (Result, error) {
 	// Strip <?OFX ...?> processing instruction if present (not valid XML PI)
 	if strings.HasPrefix(content, "<?OFX") {
 		end := strings.Index(content, "?>")
@@ -142,7 +186,7 @@ func parseXML(content string, decimals int) ([]Row, error) {
 
 	var envelope ofxXML
 	if err := xml.Unmarshal([]byte(content), &envelope); err != nil {
-		return nil, fmt.Errorf("ofx: xml parse error: %w", err)
+		return Result{}, fmt.Errorf("ofx: xml parse error: %w", err)
 	}
 
 	var trns []trnXML
@@ -153,28 +197,30 @@ func parseXML(content string, decimals int) ([]Row, error) {
 		trns = append(trns, s.Transactions...)
 	}
 
-	rows := make([]Row, 0, len(trns))
-	for _, t := range trns {
+	result := Result{Rows: make([]Row, 0, len(trns))}
+	for i, t := range trns {
 		date, err := parseOFXDate(t.DTPosted)
 		if err != nil {
+			result.Errors = append(result.Errors, RowError{Index: i + 1, Err: fmt.Sprintf("invalid DTPOSTED %q: %v", t.DTPosted, err)})
 			continue
 		}
 		amt, err := parseAmount(t.TrnAmt, decimals)
 		if err != nil {
+			result.Errors = append(result.Errors, RowError{Index: i + 1, Err: fmt.Sprintf("invalid TRNAMT %q: %v", t.TrnAmt, err)})
 			continue
 		}
 		desc := t.Name
 		if desc == "" {
 			desc = t.Memo
 		}
-		rows = append(rows, Row{
+		result.Rows = append(result.Rows, Row{
 			Date:        date,
 			Description: desc,
 			Amount:      amt,
 			FITID:       t.FITID,
 		})
 	}
-	return rows, nil
+	return result, nil
 }
 
 // parseOFXDate parses an OFX date string, stripping the [tz] annotation.
@@ -198,10 +244,44 @@ func parseOFXDate(s string) (time.Time, error) {
 // parseAmount parses a decimal amount string to signed minor units.
 func parseAmount(s string, decimals int) (int64, error) {
 	s = strings.TrimSpace(s)
-	f, err := strconv.ParseFloat(s, 64)
+	if decimals < 0 || decimals > 18 {
+		return 0, fmt.Errorf("unsupported currency precision %d", decimals)
+	}
+	parsed, err := money.ParseMinor(s, decimals)
 	if err != nil {
 		return 0, err
 	}
-	factor := math.Pow(10, float64(decimals))
-	return int64(math.Round(f * factor)), nil
+	// ParseMinor is exact, but check the scaled integer explicitly so overflow
+	// cannot wrap before it is returned as an int64.
+	clean := strings.TrimSpace(s)
+	negative := strings.HasPrefix(clean, "-")
+	clean = strings.TrimLeft(clean, "+-")
+	parts := strings.Split(clean, ".")
+	if len(parts) > 2 {
+		return 0, fmt.Errorf("invalid decimal amount %q", s)
+	}
+	whole := new(big.Int)
+	if _, ok := whole.SetString(parts[0], 10); !ok {
+		return 0, fmt.Errorf("invalid decimal amount %q", s)
+	}
+	whole.Mul(whole, new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(decimals)), nil))
+	frac := ""
+	if len(parts) == 2 {
+		frac = parts[1]
+	}
+	frac += strings.Repeat("0", decimals-len(frac))
+	if frac != "" {
+		fraction := new(big.Int)
+		if _, ok := fraction.SetString(frac, 10); !ok {
+			return 0, fmt.Errorf("invalid decimal amount %q", s)
+		}
+		whole.Add(whole, fraction)
+	}
+	if negative {
+		whole.Neg(whole)
+	}
+	if !whole.IsInt64() {
+		return 0, money.ErrOverflow
+	}
+	return parsed, nil
 }

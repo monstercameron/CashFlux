@@ -71,6 +71,14 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Imports read numbers and dates the way your bank wrote them, and big files page instead of failing (IMPA, IMPC,
+  IMPC.1).** OFX amounts are parsed exactly (no floating point); statement amounts detect the number format
+  ("1.234,56" vs "1,234.56"), trailing minus, parentheses and CR/DR, and the date order (day/month vs month/day) from
+  the file, with controls to override both and counts of ambiguous or invalid rows before importing. The column wizard
+  reads quoted CSV correctly. Import errors say what went wrong, results show imported, duplicate, possible-duplicate and
+  failed rows. Files have size limits checked before they are read (images 10 MB, CSV 25 MB, backups 50/100 MB), large
+  reviews page through every row and import all of them, "Read with AI" says the image goes to OpenAI, and "+ Category"
+  on a draft row can create a category.
 - **Sync never uploads readable data (SEC6).** Every path that sends household data to a server — the sync queue,
   "Keep my changes", "Replace the server copy", conflict actions and pulls — now requires the passcode-backed
   encryption first; without it, changes stay safely queued on this device and sync shows "Protect your data to turn on
