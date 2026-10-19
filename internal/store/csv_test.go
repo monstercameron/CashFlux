@@ -3,10 +3,14 @@
 package store
 
 import (
+	"bytes"
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -102,7 +106,12 @@ func TestTransactionsCSVFormulaNeutralizationRoundTrip(t *testing.T) {
 					columns[header] = i
 				}
 				cell := records[1][columns[field.col]]
-				if cell != "'"+value {
+				if field.name == "tag" {
+					var tags []string
+					if err := json.Unmarshal([]byte(cell), &tags); err != nil || len(tags) != 1 || tags[0] != value {
+						t.Errorf("exported tags JSON = %q, want one original tag %q (err=%v)", cell, value, err)
+					}
+				} else if cell != "'"+value {
 					t.Errorf("exported %s = %q, want guarded %q", field.col, cell, "'"+value)
 				}
 				if amount := records[1][columns["amount"]]; amount != "-4.50" {
@@ -134,6 +143,105 @@ func TestTransactionsCSVFormulaNeutralizationRoundTrip(t *testing.T) {
 	}
 }
 
+func TestTransactionsCSVV2RoundTripsEveryField(t *testing.T) {
+	day, err := dateutil.ParseDate("2026-10-18")
+	if err != nil {
+		t.Fatal(err)
+	}
+	txn := domain.Transaction{
+		ID: "txn-1", AccountID: "account-1", Date: day, Payee: "Cafe, Inc.", Desc: "Lunch",
+		CategoryID: "food", Amount: money.New(-12345, "USD"),
+		Splits:            []domain.CategorySplit{{CategoryID: "dining", Amount: money.New(-10000, "USD"), MemberID: "member-1"}},
+		TransferAccountID: "account-2", TransferGroupID: "transfer-1", Cleared: true,
+		ClearedAt: time.Date(2026, 10, 19, 12, 30, 45, 123, time.UTC),
+		Tags:      []string{"food; work", "=formula-looking tag"}, MemberIDs: []string{"member-1", "member-2"},
+		MemberID: "legacy-member", Source: domain.TxnSourceScanned, SourceDocID: "doc-1",
+		Attachments: []domain.AttachmentRef{{ArtifactID: "artifact-1", Name: "receipt.pdf", Kind: "receipt", MIME: "application/pdf"}},
+		Custom:      map[string]any{"merchantCode": "=raw text", "reviewCount": float64(2), "enabled": true},
+		Reviewed:    true, ExcludeFromReports: true,
+		BalanceCheckpointAt: time.Date(2026, 10, 17, 0, 0, 0, 0, time.UTC),
+		Note:                "split with Alex; settle Friday", HoldingID: "holding-1", GoalID: "goal-1",
+		BillAccountID: "liability-1", SubscriptionName: "Music plan",
+	}
+
+	data, err := TransactionsToCSV([]domain.Transaction{txn})
+	if err != nil {
+		t.Fatalf("export: %v", err)
+	}
+	if !strings.Contains(string(data), cashFluxCSVExportMarker) {
+		t.Fatalf("export missing v2 marker: %q", data)
+	}
+	got, err := TransactionsFromCSV(data, "")
+	if err != nil {
+		t.Fatalf("import: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("import returned %d rows, want 1", len(got))
+	}
+	if !reflect.DeepEqual(got[0], txn) {
+		t.Errorf("round trip mismatch:\n got: %#v\nwant: %#v", got[0], txn)
+	}
+	resilient, skipped, err := TransactionsFromCSVResilient(data, "")
+	if err != nil || len(skipped) != 0 || len(resilient) != 1 {
+		t.Fatalf("resilient import = %v, skipped=%v, err=%v", resilient, skipped, err)
+	}
+	if !reflect.DeepEqual(resilient[0], txn) {
+		t.Errorf("resilient round trip mismatch:\n got: %#v\nwant: %#v", resilient[0], txn)
+	}
+}
+
+func TestTransactionsCSVV1RemainsReadable(t *testing.T) {
+	var buffer bytes.Buffer
+	w := csv.NewWriter(&buffer)
+	if err := w.Write([]string{"id", "date", "account_id", "payee", "desc", "category_id", "amount", "currency", "transfer_account_id", "cleared", "tags", "member_id", "source", "transfer_group_id", "cashflux_export", "member_ids"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Write([]string{"old", "2026-06-03", "a1", "Coffee", "Coffee", "food", "-4.50", "USD", "", "true", "weekly", "m1", "manual", "tg-1", cashFluxCSVExportMarkerV1, `["m1"]`}); err != nil {
+		t.Fatal(err)
+	}
+	w.Flush()
+	if err := w.Error(); err != nil {
+		t.Fatal(err)
+	}
+	got, err := TransactionsFromCSV(buffer.Bytes(), "")
+	if err != nil {
+		t.Fatalf("read v1 export: %v", err)
+	}
+	if len(got) != 1 || got[0].ID != "old" || got[0].TransferGroupID != "tg-1" || got[0].Source != domain.TxnSourceManual || !got[0].Cleared || !got[0].HasOwner("m1") {
+		t.Fatalf("v1 import mismatch: %+v", got)
+	}
+	resilient, skipped, err := TransactionsFromCSVResilient(buffer.Bytes(), "")
+	if err != nil || len(skipped) != 0 || len(resilient) != 1 || resilient[0].ID != "old" || resilient[0].TransferGroupID != "tg-1" {
+		t.Fatalf("resilient v1 import = %+v, skipped=%+v, err=%v", resilient, skipped, err)
+	}
+}
+
+func TestCSVImportBOMAndDelimiters(t *testing.T) {
+	tests := []struct {
+		name string
+		data string
+		want string
+	}{
+		{name: "comma bank CSV with BOM", data: "\ufeffdate,payee,amount,currency\n2026-06-01,\"Coffee, Inc.\",-4.50,USD\n", want: "Coffee, Inc."},
+		{name: "semicolon bank CSV with BOM", data: "\ufeffdate;payee;amount;currency\n2026-06-01;\"Coffee; Shop\";-4.50;USD\n", want: "Coffee; Shop"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := TransactionsFromCSV([]byte(tt.data), "")
+			if err != nil {
+				t.Fatalf("strict import: %v", err)
+			}
+			if len(got) != 1 || got[0].Payee != tt.want || got[0].Amount.Amount != -450 {
+				t.Fatalf("strict import = %+v", got)
+			}
+			resilient, skipped, err := TransactionsFromCSVResilient([]byte(tt.data), "")
+			if err != nil || len(skipped) != 0 || len(resilient) != 1 || resilient[0].Payee != tt.want {
+				t.Fatalf("resilient import = %+v, skipped=%+v, err=%v", resilient, skipped, err)
+			}
+		})
+	}
+}
+
 func TestTransactionsCSVGuardDoesNotChangeNonTextColumns(t *testing.T) {
 	day, _ := dateutil.ParseDate("2026-06-03")
 	tx := domain.Transaction{ID: "t1", Date: day, Amount: money.New(-450, "USD"), Cleared: true}
@@ -159,6 +267,54 @@ func TestTransactionsCSVGuardDoesNotChangeNonTextColumns(t *testing.T) {
 	}
 	if got := row[columns["cleared"]]; got != "true" {
 		t.Errorf("cleared = %q, want unguarded boolean", got)
+	}
+}
+
+func TestTransactionsCSVGuardsEveryNamedTextColumn(t *testing.T) {
+	nonTextColumns := map[string]struct{}{
+		"date": {}, "amount": {}, "cleared": {}, "cleared_at": {}, "reviewed": {},
+		"exclude_from_reports": {}, "balance_checkpoint_at": {},
+	}
+	seenText := make(map[string]struct{}, len(csvTextColumns))
+	fixture := make([]string, len(csvHeader))
+	for i, header := range csvHeader {
+		_, text := csvTextColumns[header]
+		_, nonText := nonTextColumns[header]
+		if text == nonText {
+			t.Errorf("header %q must be classified exactly once as text or non-text", header)
+		}
+		if text {
+			seenText[header] = struct{}{}
+			fixture[i] = `=HYPERLINK("x")`
+		}
+	}
+	if len(seenText) != len(csvTextColumns) {
+		t.Errorf("text column set has %d entries, but header accounts for %d", len(csvTextColumns), len(seenText))
+	}
+
+	indexes := guardedCSVColumnIndexes(csvHeader, csvTextColumns)
+	guardCSVRow(fixture, indexes)
+	var buffer bytes.Buffer
+	w := csv.NewWriter(&buffer)
+	if err := w.Write(fixture); err != nil {
+		t.Fatalf("write guarded fixture: %v", err)
+	}
+	w.Flush()
+	if err := w.Error(); err != nil {
+		t.Fatalf("flush guarded fixture: %v", err)
+	}
+	reader := csv.NewReader(&buffer)
+	row, err := reader.Read()
+	if err != nil {
+		t.Fatalf("read guarded fixture: %v", err)
+	}
+	for i, header := range csvHeader {
+		if _, text := csvTextColumns[header]; text && row[i] != "'=HYPERLINK(\"x\")" {
+			t.Errorf("exported fixture cell %q = %q, want guarded formula", header, row[i])
+		}
+		if _, nonText := nonTextColumns[header]; nonText && row[i] != "" {
+			t.Errorf("non-text fixture cell %q was unexpectedly guarded: %q", header, row[i])
+		}
 	}
 }
 

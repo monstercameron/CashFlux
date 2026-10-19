@@ -90,6 +90,11 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Transaction CSV export round-trips every field; imports accept BOM and semicolons (TQ8, TQ8.1).** Exports now write
+  `cashflux-csv-v2` with every transaction field (splits, custom fields, attachments, owners, provenance, report flags,
+  bill/subscription links, timestamps); importing it gives back identical transactions, and v1 files still import. Bank
+  CSVs with a UTF-8 byte-order mark or `;` delimiters import correctly. Formula-injection guarding is chosen by column
+  name, with a test that fails if a new text column is added without a guard.
 - **Add and Edit transaction share one grid (FORM3).** Both dialogs lay their fields out in the same two-column grid
   (Amount | Type, Merchant | Date, Category | Account) with every input filling its cell and one column on small
   screens; Add's "Describe it in a sentence" field spans the full width so its example is readable. Labels match between

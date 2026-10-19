@@ -52,13 +52,51 @@ var csvHeader = []string{
 	"amount", "currency", "transfer_account_id", "cleared", "tags", "member_id", "source",
 	// C680 appended after the published columns on purpose: other tools read them
 	// positionally, so inserting beside transfer_account_id would shift their fields.
-	// cashflux_export is internal round-trip metadata and stays after that column.
-	"transfer_group_id",
-	"cashflux_export",
-	"member_ids",
+	"transfer_group_id", "cashflux_export", "member_ids",
+	// v2-only fields are appended so established positional columns stay stable.
+	"splits", "cleared_at", "legacy_member_id", "source_doc_id", "attachments", "custom",
+	"reviewed", "exclude_from_reports", "balance_checkpoint_at", "note", "holding_id", "goal_id",
+	"bill_account_id", "subscription_name",
 }
 
-const cashFluxCSVExportMarker = "cashflux-csv-v1"
+// csvTextColumns names every exported column whose values are text. Keep this
+// classification explicit so a new text field cannot become spreadsheet
+// formula input merely because its position changed.
+var csvTextColumns = map[string]struct{}{
+	"id": {}, "account_id": {}, "payee": {}, "desc": {}, "category_id": {},
+	"currency": {}, "transfer_account_id": {}, "tags": {}, "member_id": {},
+	"source": {}, "transfer_group_id": {}, "cashflux_export": {}, "member_ids": {},
+	"splits": {}, "legacy_member_id": {}, "source_doc_id": {}, "attachments": {},
+	"custom": {}, "note": {}, "holding_id": {}, "goal_id": {},
+	"bill_account_id": {}, "subscription_name": {},
+}
+
+// csvGuardedColumnIndexes is derived once from the stable export header. The
+// exporter applies it to each row, so column order changes cannot bypass the
+// text-column guard.
+var csvGuardedColumnIndexes = guardedCSVColumnIndexes(csvHeader, csvTextColumns)
+
+func guardedCSVColumnIndexes(header []string, textColumns map[string]struct{}) map[int]struct{} {
+	indexes := make(map[int]struct{}, len(textColumns))
+	for i, name := range header {
+		if _, ok := textColumns[name]; ok {
+			indexes[i] = struct{}{}
+		}
+	}
+	return indexes
+}
+
+func guardCSVRow(row []string, indexes map[int]struct{}) {
+	for i := range row {
+		if _, ok := indexes[i]; ok {
+			row[i] = csvsafe.Guard(row[i])
+		}
+	}
+}
+
+const cashFluxCSVExportMarker = "cashflux-csv-v2"
+
+const cashFluxCSVExportMarkerV1 = "cashflux-csv-v1"
 
 // TransactionsToCSV serializes transactions to CSV with a header row. Amounts
 // are written as plain decimals in the transaction's currency.
@@ -69,9 +107,32 @@ func TransactionsToCSV(txns []domain.Transaction) ([]byte, error) {
 		return nil, err
 	}
 	for _, t := range txns {
-		owners, err := json.Marshal(t.Owners())
+		jsonCell := func(name string, value any) (string, error) {
+			encoded, err := json.Marshal(value)
+			if err != nil {
+				return "", fmt.Errorf("store: csv transaction %s %s: %w", t.ID, name, err)
+			}
+			return string(encoded), nil
+		}
+		splits, err := jsonCell("splits", t.Splits)
 		if err != nil {
-			return nil, fmt.Errorf("store: csv transaction %s owners: %w", t.ID, err)
+			return nil, err
+		}
+		owners, err := jsonCell("owners", t.MemberIDs)
+		if err != nil {
+			return nil, err
+		}
+		tags, err := jsonCell("tags", t.Tags)
+		if err != nil {
+			return nil, err
+		}
+		attachments, err := jsonCell("attachments", t.Attachments)
+		if err != nil {
+			return nil, err
+		}
+		custom, err := jsonCell("custom", t.Custom)
+		if err != nil {
+			return nil, err
 		}
 		row := []string{
 			t.ID,
@@ -84,16 +145,28 @@ func TransactionsToCSV(txns []domain.Transaction) ([]byte, error) {
 			t.Amount.Currency,
 			t.TransferAccountID,
 			strconv.FormatBool(t.Cleared),
-			strings.Join(t.Tags, ";"),
-			firstOwner(t), // TODO(WHO2): keep the legacy column while the full list uses member_ids.
+			tags,
+			firstOwner(t), // Compatibility column for single-owner importers.
 			string(t.Source),
 			t.TransferGroupID,
 			cashFluxCSVExportMarker,
-			string(owners),
+			owners,
+			splits,
+			formatCSVTime(t.ClearedAt),
+			t.MemberID,
+			t.SourceDocID,
+			attachments,
+			custom,
+			strconv.FormatBool(t.Reviewed),
+			strconv.FormatBool(t.ExcludeFromReports),
+			formatCSVTime(t.BalanceCheckpointAt),
+			t.Note,
+			t.HoldingID,
+			t.GoalID,
+			t.BillAccountID,
+			t.SubscriptionName,
 		}
-		for _, col := range []int{0, 2, 3, 4, 5, 7, 8, 10, 11, 12, 13, 15} {
-			row[col] = csvsafe.Guard(row[col])
-		}
+		guardCSVRow(row, csvGuardedColumnIndexes)
 		if err := w.Write(row); err != nil {
 			return nil, err
 		}
@@ -103,6 +176,123 @@ func TransactionsToCSV(txns []domain.Transaction) ([]byte, error) {
 		return nil, err
 	}
 	return buf.Bytes(), nil
+}
+
+// csvReader accepts UTF-8 CSV exported by CashFlux and common bank downloads.
+// The delimiter is selected from the header line so quoted data rows are parsed
+// by encoding/csv without guessing based on their contents.
+func csvReader(data []byte) *csv.Reader {
+	data = bytes.TrimPrefix(data, []byte{0xef, 0xbb, 0xbf})
+	reader := csv.NewReader(bytes.NewReader(data))
+	reader.FieldsPerRecord = -1
+	if header, _, err := bytes.Cut(data, []byte("\n")); err {
+		if bytes.Count(header, []byte(";")) > bytes.Count(header, []byte(",")) {
+			reader.Comma = ';'
+		}
+	}
+	return reader
+}
+
+func isCashFluxCSVMarker(marker string) bool {
+	marker = strings.TrimSpace(marker)
+	return marker == cashFluxCSVExportMarker || marker == cashFluxCSVExportMarkerV1
+}
+
+func formatCSVTime(value time.Time) string {
+	if value.IsZero() {
+		return ""
+	}
+	return value.Format(time.RFC3339Nano)
+}
+
+func decodeCSVJSON(row []string, idx map[string]int, name string, native bool, target any) error {
+	i, ok := idx[name]
+	if !ok || i >= len(row) || strings.TrimSpace(row[i]) == "" {
+		return nil
+	}
+	value := row[i]
+	if native {
+		value = csvsafe.Restore(value)
+	}
+	if err := json.Unmarshal([]byte(value), target); err != nil {
+		return err
+	}
+	return nil
+}
+
+func applyCSVV2Fields(tx *domain.Transaction, row []string, idx map[string]int, native bool) error {
+	jsonColumns := []struct {
+		name   string
+		target any
+	}{
+		{name: "splits", target: &tx.Splits},
+		{name: "member_ids", target: &tx.MemberIDs},
+		{name: "tags", target: &tx.Tags},
+		{name: "attachments", target: &tx.Attachments},
+		{name: "custom", target: &tx.Custom},
+	}
+	for _, column := range jsonColumns {
+		if err := decodeCSVJSON(row, idx, column.name, native, column.target); err != nil {
+			return fmt.Errorf("invalid %s JSON: %w", column.name, err)
+		}
+	}
+	tx.MemberID = csvText(row, idx, "legacy_member_id", native)
+	tx.SourceDocID = csvText(row, idx, "source_doc_id", native)
+	var err error
+	if tx.Reviewed, err = parseCSVBool(row, idx, "reviewed", native); err != nil {
+		return err
+	}
+	if tx.ExcludeFromReports, err = parseCSVBool(row, idx, "exclude_from_reports", native); err != nil {
+		return err
+	}
+	tx.Note = csvText(row, idx, "note", native)
+	tx.HoldingID = csvText(row, idx, "holding_id", native)
+	tx.GoalID = csvText(row, idx, "goal_id", native)
+	tx.BillAccountID = csvText(row, idx, "bill_account_id", native)
+	tx.SubscriptionName = csvText(row, idx, "subscription_name", native)
+	timeColumns := []struct {
+		name   string
+		target *time.Time
+	}{
+		{name: "cleared_at", target: &tx.ClearedAt},
+		{name: "balance_checkpoint_at", target: &tx.BalanceCheckpointAt},
+	}
+	for _, column := range timeColumns {
+		value := csvText(row, idx, column.name, native)
+		if value == "" {
+			continue
+		}
+		parsed, err := time.Parse(time.RFC3339Nano, value)
+		if err != nil {
+			return fmt.Errorf("invalid %s %q: %w", column.name, value, err)
+		}
+		*column.target = parsed
+	}
+	return nil
+}
+
+func parseCSVBool(row []string, idx map[string]int, name string, native bool) (bool, error) {
+	value := csvText(row, idx, name, native)
+	if value == "" {
+		return false, nil
+	}
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		return false, fmt.Errorf("invalid %s %q: %w", name, value, err)
+	}
+	return parsed, nil
+}
+
+func csvText(row []string, idx map[string]int, name string, native bool) string {
+	i, ok := idx[name]
+	if !ok || i >= len(row) {
+		return ""
+	}
+	value := row[i]
+	if native {
+		return csvsafe.Restore(value)
+	}
+	return strings.TrimSpace(value)
 }
 
 // CSVRowError records a single row that could not be parsed during a resilient
@@ -119,8 +309,7 @@ type CSVRowError struct {
 // valid rows. The semantics of column matching, id generation, and currency
 // defaulting are identical to TransactionsFromCSV.
 func TransactionsFromCSVResilient(data []byte, defaultCurrency string) (txns []domain.Transaction, skipped []CSVRowError, err error) {
-	r := csv.NewReader(bytes.NewReader(data))
-	r.FieldsPerRecord = -1
+	r := csvReader(data)
 	records, csvErr := r.ReadAll()
 	if csvErr != nil {
 		return nil, nil, fmt.Errorf("store: csv read: %w", csvErr)
@@ -141,6 +330,10 @@ func TransactionsFromCSVResilient(data []byte, defaultCurrency string) (txns []d
 		return ""
 	}
 	isCashFluxExportRow := func(row []string) bool {
+		i, ok := idx["cashflux_export"]
+		return ok && i < len(row) && isCashFluxCSVMarker(row[i])
+	}
+	isV2ExportRow := func(row []string) bool {
 		i, ok := idx["cashflux_export"]
 		return ok && i < len(row) && strings.TrimSpace(row[i]) == cashFluxCSVExportMarker
 	}
@@ -240,12 +433,18 @@ func TransactionsFromCSVResilient(data []byte, defaultCurrency string) (txns []d
 			desc = payee
 		}
 
-		owners, ownerErr := parseCSVOwners(fieldCol(row, "member_ids", nativeExport), colID(row, "member"))
+		var owners []string
+		var ownerErr error
+		if isV2ExportRow(row) {
+			ownerErr = decodeCSVJSON(row, idx, "member_ids", true, &owners)
+		} else {
+			owners, ownerErr = parseCSVOwners(fieldCol(row, "member_ids", nativeExport), colID(row, "member"))
+		}
 		if ownerErr != nil {
 			skipped = append(skipped, CSVRowError{Line: line, Reason: fmt.Sprintf("invalid member_ids: %v", ownerErr)})
 			continue
 		}
-		out = append(out, domain.Transaction{
+		txn := domain.Transaction{
 			ID:                tid,
 			AccountID:         colID(row, "account"),
 			Date:              date,
@@ -259,7 +458,14 @@ func TransactionsFromCSVResilient(data []byte, defaultCurrency string) (txns []d
 			Tags:              tags,
 			MemberIDs:         owners,
 			Source:            csvSource(fieldCol(row, "source", nativeExport), srcCol),
-		})
+		}
+		if isV2ExportRow(row) {
+			if err := applyCSVV2Fields(&txn, row, idx, true); err != nil {
+				skipped = append(skipped, CSVRowError{Line: line, Reason: err.Error()})
+				continue
+			}
+		}
+		out = append(out, txn)
 	}
 	return out, skipped, nil
 }
@@ -289,8 +495,7 @@ func csvSource(raw string, columnPresent bool) domain.TxnSource {
 // `category`/`member` names; values given as names are resolved to ids by the
 // caller (appstate), which has the entity lists.
 func TransactionsFromCSV(data []byte, defaultCurrency string) ([]domain.Transaction, error) {
-	r := csv.NewReader(bytes.NewReader(data))
-	r.FieldsPerRecord = -1
+	r := csvReader(data)
 	records, err := r.ReadAll()
 	if err != nil {
 		return nil, fmt.Errorf("store: csv read: %w", err)
@@ -311,6 +516,10 @@ func TransactionsFromCSV(data []byte, defaultCurrency string) ([]domain.Transact
 		return ""
 	}
 	isCashFluxExportRow := func(row []string) bool {
+		i, ok := idx["cashflux_export"]
+		return ok && i < len(row) && isCashFluxCSVMarker(row[i])
+	}
+	isV2ExportRow := func(row []string) bool {
 		i, ok := idx["cashflux_export"]
 		return ok && i < len(row) && strings.TrimSpace(row[i]) == cashFluxCSVExportMarker
 	}
@@ -406,11 +615,17 @@ func TransactionsFromCSV(data []byte, defaultCurrency string) ([]domain.Transact
 			desc = payee
 		}
 
-		owners, ownerErr := parseCSVOwners(fieldCol(row, "member_ids", nativeExport), colID(row, "member"))
+		var owners []string
+		var ownerErr error
+		if isV2ExportRow(row) {
+			ownerErr = decodeCSVJSON(row, idx, "member_ids", true, &owners)
+		} else {
+			owners, ownerErr = parseCSVOwners(fieldCol(row, "member_ids", nativeExport), colID(row, "member"))
+		}
 		if ownerErr != nil {
 			return nil, fmt.Errorf("store: csv line %d: invalid member_ids: %w", line, ownerErr)
 		}
-		out = append(out, domain.Transaction{
+		txn := domain.Transaction{
 			ID:                tid,
 			AccountID:         colID(row, "account"),
 			Date:              date,
@@ -424,7 +639,13 @@ func TransactionsFromCSV(data []byte, defaultCurrency string) ([]domain.Transact
 			Tags:              tags,
 			MemberIDs:         owners,
 			Source:            csvSource(fieldCol(row, "source", nativeExport), srcCol),
-		})
+		}
+		if isV2ExportRow(row) {
+			if err := applyCSVV2Fields(&txn, row, idx, true); err != nil {
+				return nil, fmt.Errorf("store: csv line %d: %w", line, err)
+			}
+		}
+		out = append(out, txn)
 	}
 	return out, nil
 }
