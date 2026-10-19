@@ -276,9 +276,7 @@ func TestSOLB2ExplicitRefundLedgerIsolation(t *testing.T) {
 		links []domain.TxnLink
 		want  int64
 	}{{links, 8000}, {nil, 12000}} {
-		ledger := NewNettedLedgerWithLinks(all, tt.links)
-		SetRefundLinks(links)
-		defer SetRefundLinks(nil)
+		ledger := NewNettedLedger(all, tt.links)
 		in := ViewInput{Ledger: &ledger, Transactions: all, Base: "USD", Rates: currency.Rates{Base: "USD"}, Period: ViewPeriod{Anchor: mustDate("2026-09-01"), Now: mustDate("2026-10-19")}}
 		v := EvaluateViewBudget(b, in)
 		if !v.Valid || v.Status.Spent.Amount != tt.want || v.Rollover.Current.Spend.Amount != tt.want {

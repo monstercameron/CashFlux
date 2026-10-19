@@ -17,7 +17,6 @@ package screens
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -79,7 +78,7 @@ func budgetSuggestHint(props budgetSuggestProps) ui.Node {
 	}
 	b := props.Budget
 
-	recommendation, displayAmount, ok := budgetRecommendationAtMember(app, b, viewedPeriod.From, memberID)
+	recommendation, displayAmount, ok := budgetRecommendationAtMember(app, b, budgetViewAnchor(viewedPeriod, budgetNow()), memberID)
 
 	apply := func() {
 		a := appstate.Default
@@ -237,9 +236,7 @@ func budgetRecommendationAtMember(app *appstate.App, b domain.Budget, anchor tim
 		base = budgetBaseCurrency(base)
 	}
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	// Match the budget meter's category descendants and tracked-tag scope. The
-	// budgeting suggestion engine accepts category sets, so tag-matched rows get
-	// private synthetic category IDs while ordinary rows retain their categories.
+	// Match the card's category descendants and tracked tags without rewriting rows.
 	covers := categorytree.DescendantsOfAll(app.Categories(), b.TrackedCategoryIDs())
 	scope := budgeting.ScopeOf(b, covers)
 	if scope.IsEmpty() {
@@ -257,12 +254,11 @@ func budgetRecommendationAtMember(app *appstate.App, b domain.Budget, anchor tim
 	start, end := budgeting.PeriodRangeAnchored(b.Period, anchor, weekStart, payCycleAnchor)
 	periodKey := start.Format("2006-01-02")
 	now := budgetNow()
-	cacheKey := fmt.Sprintf("%p|%d|%s|%s|%s|%s|%d|%s", app, app.Rev(), b.ID, memberID, periodKey, now.UTC().Truncate(time.Minute).Format(time.RFC3339), weekStart, payCycleAnchor.Format("2006-01-02"))
+	cacheKey := fmt.Sprintf("%p|%d|%s|%s|%s|%s|%d|%s", app, app.Rev(), b.ID, memberID, periodKey, now.Format("2006-01-02"), weekStart, payCycleAnchor.Format("2006-01-02"))
 	entry, cached := suggestLimitCache[cacheKey]
 	if !cached {
-		suggestedTxns, suggestedCovers := suggestTransactionsForScope(covers, scope.Tags, app.Transactions())
-		ledger := budgeting.NewNettedLedgerWithLinks(suggestedTxns, app.TxnLinks())
-		suggestedTxns = ledger.Transactions()
+		ledger := budgetLedgerForApp(app)
+		suggestedTxns, suggestedCovers := ledger, covers
 		_, err := budgeting.EvaluateRollup(b, suggestedTxns, start, end, rates, budgeting.DefaultNearThreshold, suggestedCovers)
 		var recommendation budgeting.LimitRecommendation
 		var displayAmount money.Money
@@ -270,8 +266,8 @@ func budgetRecommendationAtMember(app *appstate.App, b domain.Budget, anchor tim
 			projectionBudget := b
 			projectionBudget.CategoryIDs = scope.CategoryIDs
 			view := budgeting.EvaluateViewBudget(projectionBudget, budgeting.ViewInput{
-				Period:       budgeting.ViewPeriod{Anchor: start, Now: now, WeekStart: userPrefs.WeekStartWeekday(), PayCycleAnchor: payCycleAnchor},
-				Transactions: app.Transactions(), Categories: app.Categories(), Recurring: app.Recurring(), Rates: rates, Base: base,
+				Period: budgeting.ViewPeriod{Anchor: anchor, Now: now, WeekStart: userPrefs.WeekStartWeekday(), PayCycleAnchor: payCycleAnchor},
+				Ledger: &ledger, Transactions: ledger, Categories: app.Categories(), Recurring: app.Recurring(), Rates: rates, Base: base,
 			})
 			if view.Projection.Error != nil {
 				err = view.Projection.Error
@@ -284,7 +280,7 @@ func budgetRecommendationAtMember(app *appstate.App, b domain.Budget, anchor tim
 				recommendation, err = budgeting.RecommendBudgetLimitWithContext(b, suggestedCovers, suggestedTxns, anchor, suggestLimitMonths, projected, rates, weekStart, payCycleAnchor)
 			}
 			if err == nil && recommendation.Direction == budgeting.SuggestionRaise {
-				overCount := budgetRecommendationOverspends(b, covers, scope.Tags, app.Transactions(), start, weekStart, payCycleAnchor, rates)
+				overCount := budgetRecommendationOverspends(b, covers, scope.Tags, ledger, start, weekStart, payCycleAnchor, rates)
 				if !budgetRaiseAllowed(overCount, view.Projection.Projected, view.Status.Limit) {
 					return budgeting.LimitRecommendation{}, money.Money{}, false
 				}
@@ -335,12 +331,12 @@ func budgetSuggestionBillFloor(suggested, required money.Money, targetCurrency s
 	return suggested, nil
 }
 
-func budgetRecommendationOverspends(b domain.Budget, covers map[string]bool, tags []string, txns []domain.Transaction, anchor time.Time, weekStart time.Weekday, payCycleAnchor time.Time, rates currency.Rates) int {
+func budgetRecommendationOverspends(b domain.Budget, covers map[string]bool, tags []string, txns budgeting.NettedLedger, anchor time.Time, weekStart time.Weekday, payCycleAnchor time.Time, rates currency.Rates) int {
 	scope := budgeting.ScopeOf(b, covers)
 	if scope.IsEmpty() {
 		return 0
 	}
-	scoped, scopedCategories := suggestTransactionsForScope(covers, tags, txns)
+	scoped, scopedCategories := txns, covers
 	count := 0
 	for i := 0; i < suggestLimitMonths; i++ {
 		start, end := budgeting.PreviousPeriodRangeAnchored(b.Period, anchor, weekStart, payCycleAnchor)
@@ -362,55 +358,4 @@ func smartSettingsForRevision(revision int) smart.Settings {
 		}{revision: revision, settings: uistate.LoadSmartSettings(), loaded: true}
 	}
 	return suggestSettingsCache.settings
-}
-
-// suggestTransactionsForScope adapts the established budget scope to the
-// category-set suggestion engine. Tag matches are marked with transaction-local
-// synthetic categories so unrelated transactions in those real categories do
-// not leak into the suggestion.
-func suggestTransactionsForScope(covers map[string]bool, tags []string, txns []domain.Transaction) ([]domain.Transaction, map[string]bool) {
-	allCovers := make(map[string]bool, len(covers))
-	for id, on := range covers {
-		if on {
-			allCovers[id] = true
-		}
-	}
-	tagSet := make(map[string]bool, len(tags))
-	for _, tag := range tags {
-		if key := strings.ToLower(strings.TrimSpace(tag)); key != "" {
-			tagSet[key] = true
-		}
-	}
-	out := make([]domain.Transaction, 0, len(txns))
-	for _, txn := range txns {
-		if !txn.CountsInReports() {
-			continue
-		}
-		tagMatch := false
-		for _, tag := range txn.Tags {
-			if tagSet[strings.ToLower(strings.TrimSpace(tag))] {
-				tagMatch = true
-				break
-			}
-		}
-		if !tagMatch {
-			out = append(out, txn)
-			continue
-		}
-		copyTxn := txn
-		prefix := "__budget_tag__" + txn.ID
-		if txn.HasSplits() {
-			copyTxn.Splits = append([]domain.CategorySplit(nil), txn.Splits...)
-			for i := range copyTxn.Splits {
-				id := fmt.Sprintf("%s:%d", prefix, i)
-				copyTxn.Splits[i].CategoryID = id
-				allCovers[id] = true
-			}
-		} else {
-			copyTxn.CategoryID = prefix
-			allCovers[prefix] = true
-		}
-		out = append(out, copyTxn)
-	}
-	return out, allCovers
 }

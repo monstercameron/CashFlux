@@ -154,9 +154,10 @@ func b8SafeToSpend(in Input) []smart.Insight {
 // end of their period and the per-week trim to get back on track.
 func b9PacingNudge(in Input) []smart.Insight {
 	var out []smart.Insight
+	ledger := in.budgetLedger()
 	for _, b := range in.Budgets {
 		start, end := budgeting.PeriodRange(b.Period, in.Now, in.WeekStart)
-		st, err := budgeting.Evaluate(b, in.Transactions, start, end, in.Rates, pacingNearBudget)
+		st, err := budgeting.Evaluate(b, ledger, start, end, in.Rates, pacingNearBudget)
 		if err != nil {
 			continue
 		}

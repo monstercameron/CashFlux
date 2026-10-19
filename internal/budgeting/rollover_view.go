@@ -73,7 +73,7 @@ func EvaluateRolloverView(b domain.Budget, in ViewInput, covers map[string]bool)
 	// Bucket the immutable netted ledger once, instead of scanning it per period.
 	spends := make(map[time.Time]money.Money)
 	postedByPeriod := make(map[time.Time][]domain.Transaction)
-	for _, t := range ledger.transactions {
+	for _, t := range ledger {
 		if t.Date.Before(first) {
 			continue
 		}

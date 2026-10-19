@@ -192,16 +192,15 @@ func (s *insightsQASource) BudgetStatus() (total, over int, worstName string, wo
 	if len(budgets) == 0 {
 		return 0, 0, "", 0, false
 	}
-	mStart, mEnd := dateutil.MonthRange(s.now)
-	statuses, err := budgeting.EvaluateAll(budgets, s.app.Transactions(), mStart, mEnd, s.rates, budgetNearThreshold)
-	if err != nil {
-		return 0, 0, "", 0, false
-	}
+	statuses := budgetStatusesAt(s.app, s.now)
 	catName := map[string]string{}
 	for _, c := range s.app.Categories() {
 		catName[c.ID] = c.Name
 	}
 	for _, st := range statuses {
+		if st.Error != nil {
+			return len(statuses), 0, "", 0, false
+		}
 		if st.State != budgeting.StateOver {
 			continue
 		}
@@ -209,6 +208,14 @@ func (s *insightsQASource) BudgetStatus() (total, over int, worstName string, wo
 		// Remaining is negative once a budget is over, so the overspend is its
 		// magnitude.
 		amountOver := -st.Remaining.Amount
+		if st.Budget.IsSaving() {
+			amountOver = st.Remaining.Amount
+		}
+		amount, err := s.rates.ToBase(money.New(amountOver, st.Remaining.Currency))
+		if err != nil {
+			return len(statuses), 0, "", 0, false
+		}
+		amountOver = amount.Amount
 		if amountOver > worstOverMinor {
 			worstOverMinor = amountOver
 			worstName = budgetDisplayName(st, catName)

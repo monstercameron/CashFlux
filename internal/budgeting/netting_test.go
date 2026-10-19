@@ -30,9 +30,9 @@ func TestRefundNettingReducesOriginalMonthSpend(t *testing.T) {
 	aprStart := mustDate("2026-04-01")
 	aprEnd := mustDate("2026-05-01")
 
-	// Baseline: no netting installed → March shows the full $120 blowout.
-	SetRefundLinks(nil)
-	base, err := Spent(budget, all, marchStart, marchEnd, rates)
+	// Baseline: an explicit ledger without refund links → March shows the full $120 blowout.
+	ledger := NewNettedLedger(all)
+	base, err := Spent(budget, ledger, marchStart, marchEnd, rates)
 	if err != nil {
 		t.Fatalf("baseline Spent: %v", err)
 	}
@@ -42,10 +42,9 @@ func TestRefundNettingReducesOriginalMonthSpend(t *testing.T) {
 
 	// With netting: March nets to $80, April stays $0 (refund is not spend and is
 	// zeroed anyway — no phantom).
-	SetRefundLinks(links)
-	defer SetRefundLinks(nil)
+	ledger = NewNettedLedger(all, links)
 
-	march, err := Spent(budget, all, marchStart, marchEnd, rates)
+	march, err := Spent(budget, ledger, marchStart, marchEnd, rates)
 	if err != nil {
 		t.Fatalf("netted March Spent: %v", err)
 	}
@@ -53,7 +52,7 @@ func TestRefundNettingReducesOriginalMonthSpend(t *testing.T) {
 		t.Errorf("netted March spend = %d, want 8000 (120 - 40)", march.Amount)
 	}
 
-	april, err := Spent(budget, all, aprStart, aprEnd, rates)
+	april, err := Spent(budget, ledger, aprStart, aprEnd, rates)
 	if err != nil {
 		t.Fatalf("netted April Spent: %v", err)
 	}

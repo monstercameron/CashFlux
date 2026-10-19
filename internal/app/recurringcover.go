@@ -27,7 +27,7 @@ import (
 // across the source budgets by weight — and stamps the period so it can't run twice.
 //
 // Amount and weights may be FORMULAS: the amount is evaluated in the destination
-// budget's context (so `overspend` re-covers whatever the shortfall is that period),
+// budget's last closed period context (so `overspend` settles that shortfall),
 // and each source's weight in that source's context (so a weight can track e.g.
 // `cf_budget_priority`). A blank formula falls back to the fixed AmountMinor / Weight.
 //
@@ -35,11 +35,15 @@ import (
 // A failed formula or depleted source leaves the whole cover available to retry.
 // Called on boot (after the dataset hydrates).
 func applyRecurringCovers() {
+	applyRecurringCoversAt(time.Now())
+}
+
+func applyRecurringCoversAt(ref time.Time) {
 	app := appstate.Default
 	if app == nil {
 		return
 	}
-	now := dateutil.WallClockUTC(time.Now())
+	now := dateutil.WallClockUTC(ref)
 	pr := uistate.LoadPrefs()
 	weekStart := pr.WeekStartWeekday()
 	var payCycleAnchor time.Time
@@ -53,17 +57,7 @@ func applyRecurringCovers() {
 		base = "USD"
 	}
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	mStart, mEnd := dateutil.MonthRange(now)
-	surface := engineenv.Vars(engineenv.Data{
-		Accounts: app.Accounts(), Transactions: app.Transactions(), Members: app.Members(),
-		Budgets: app.Budgets(), Goals: app.Goals(), Tasks: app.Tasks(), Recurring: app.Recurring(),
-		Rates: rates, Now: now, PeriodStart: mStart, PeriodEnd: mEnd,
-		CustomDefs: app.CustomFieldDefs(), Molecules: app.Molecules(),
-	})
-	ctx := coverformula.Context{
-		Base: surface, Txns: app.Transactions(), Rates: rates, Now: now,
-		WeekStart: weekStart, PayCycleAnchor: payCycleAnchor, Defs: app.CustomFieldDefs(),
-	}
+	budgetLedger := budgeting.NewNettedLedger(app.Transactions(), app.TxnLinks())
 	changed := false
 
 	for _, b := range app.Budgets() {
@@ -71,7 +65,15 @@ func applyRecurringCovers() {
 		if rc == nil || len(rc.Sources) == 0 {
 			continue
 		}
-		key := budgeting.PeriodKeyWithWeekStart(b.Period, now, payCycleAnchor, weekStart)
+		ref := now
+		// Formula arrangements settle the last closed period, when its spending
+		// and effective cap are known. A zero at the first boot of a new period
+		// must not mark that still-open period as already covered.
+		if strings.TrimSpace(rc.AmountFormula) != "" {
+			start, _ := budgeting.PeriodRangeAnchored(b.Period, now, weekStart, payCycleAnchor)
+			ref = start.Add(-time.Nanosecond)
+		}
+		key := budgeting.PeriodKeyWithWeekStart(b.Period, ref, payCycleAnchor, weekStart)
 		if rc.LastAppliedPeriod == key {
 			continue // already covered this period
 		}
@@ -81,9 +83,22 @@ func applyRecurringCovers() {
 			byID[bb.ID] = bb
 		}
 		b = byID[b.ID]
-		shares, err := recurringCoverShares(b, byID, ctx, base)
+		mStart, mEnd := dateutil.MonthRange(ref)
+		surface := engineenv.Vars(engineenv.Data{
+			Ledger: budgetLedger, Accounts: app.Accounts(), Transactions: app.Transactions(), Members: app.Members(),
+			Budgets: app.Budgets(), Goals: app.Goals(), Tasks: app.Tasks(), Recurring: app.Recurring(),
+			Rates: rates, Now: ref, PeriodStart: mStart, PeriodEnd: mEnd, WeekStart: weekStart,
+			Categories: app.Categories(),
+			CustomDefs: app.CustomFieldDefs(), Molecules: app.Molecules(),
+		})
+		periodContext := coverformula.Context{
+			Base: surface, Txns: budgetLedger, Rates: rates, Now: ref,
+			WeekStart: weekStart, PayCycleAnchor: payCycleAnchor, Defs: app.CustomFieldDefs(),
+			Categories: app.Categories(), Recurring: app.Recurring(), PoolRollover: pr.BudgetRolloverLeftover,
+		}
+		shares, err := recurringCoverShares(b, byID, periodContext, base)
 		if err == nil {
-			err = app.ApplyRecurringBudgetCoverAt(b.ID, shares, now)
+			err = app.ApplyRecurringBudgetCoverAt(b.ID, shares, ref)
 		}
 		if err != nil {
 			slog.Error("apply recurring budget cover", "budget", b.ID, "err", err)
@@ -111,54 +126,39 @@ func recurringCoverShares(b domain.Budget, byID map[string]domain.Budget, ctx co
 	if amt <= 0 {
 		return shares, nil
 	}
-	weights := make([]int64, len(rc.Sources))
-	var total int64
-	for i, source := range rc.Sources {
+	inputs := make([]budgeting.CoverSplitInput, 0, len(rc.Sources))
+	seen := map[string]bool{}
+	cur := b.WithBaseCurrency(base).Limit.Currency
+	for _, source := range rc.Sources {
 		from, ok := byID[source.BudgetID]
-		if !ok {
-			return nil, fmt.Errorf("recurring cover source %q not found", source.BudgetID)
+		if !ok || source.BudgetID == b.ID || seen[source.BudgetID] {
+			return nil, fmt.Errorf("missing, duplicate or self recurring cover source %q", source.BudgetID)
 		}
-		w := source.Weight
+		seen[source.BudgetID] = true
+		from = from.WithBaseCurrency(base)
+		if from.Limit.Currency != cur {
+			return nil, budgeting.ErrTransferCurrency
+		}
+		funds, err := budgeting.CoverSourceFunds(from, ctx.ViewInput())
+		if err != nil {
+			return nil, err
+		}
+		weight := source.Weight
 		if strings.TrimSpace(source.WeightFormula) != "" {
-			var err error
-			w, err = ctx.Weight(source.WeightFormula, from)
+			weight, err = ctx.Weight(source.WeightFormula, from)
 			if err != nil {
 				return nil, fmt.Errorf("recurring cover weight: %w", err)
 			}
 		}
-		if w <= 0 {
-			w = 1
-		}
-		weights[i] = int64(w)
-		var err error
-		total, err = money.Add(total, weights[i])
-		if err != nil {
-			return nil, fmt.Errorf("recurring cover weights: %w", err)
-		}
+		inputs = append(inputs, budgeting.CoverSplitInput{ID: from.ID, Cap: funds.Free.Amount, Weight: weight})
 	}
-	cur := b.WithBaseCurrency(base).Limit.Currency
-	var assigned int64
-	for i, source := range rc.Sources {
-		share := amt - assigned
-		if i != len(rc.Sources)-1 {
-			var err error
-			share, err = money.MulDiv(amt, weights[i], total, money.RoundTowardZero)
-			if err != nil {
-				return nil, fmt.Errorf("recurring cover share: %w", err)
-			}
-		}
-		assigned += share // bounded by the positive total amount
-		if share == 0 {
-			continue
-		}
-		prior := shares[source.BudgetID]
-		if prior.Currency == "" {
-			prior = money.Zero(cur)
-		}
-		var err error
-		shares[source.BudgetID], err = prior.Add(money.New(share, cur))
-		if err != nil {
-			return nil, fmt.Errorf("recurring cover source total: %w", err)
+	split, short := budgeting.CoverSplit(amt, inputs)
+	if short > 0 {
+		return nil, fmt.Errorf("%w: recurring cover short by %d minor units", budgeting.ErrInsufficientSource, short)
+	}
+	for id, share := range split {
+		if share > 0 {
+			shares[id] = money.New(share, cur)
 		}
 	}
 	return shares, nil

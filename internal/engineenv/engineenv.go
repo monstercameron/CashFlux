@@ -52,6 +52,8 @@ import (
 // caller) plus the FX rate table, the reference time, the active period window,
 // the custom-field definitions, and the molecule set (empty → DefaultMolecules).
 type Data struct {
+	// Ledger is the immutable scope-local refund-netted budget read model.
+	Ledger       budgeting.NettedLedger
 	Accounts     []domain.Account
 	Transactions []domain.Transaction
 	Members      []domain.Member
@@ -103,6 +105,13 @@ type Data struct {
 	// compares against (AC15) — a setting, never a live feed. Zero disables the
 	// idle_cash_forgone_annual atom (nothing to compare to).
 	IdleBenchmarkAPRPercent float64
+}
+
+func (d Data) budgetLedger() budgeting.NettedLedger {
+	if d.Ledger != nil {
+		return d.Ledger
+	}
+	return budgeting.NewNettedLedger(d.Transactions)
 }
 
 // BillsSmartData is the smart-schedule input the wasm layer feeds in. Empty
@@ -247,6 +256,9 @@ var Names = func() []string {
 // molecules unvalidated. Money figures are major units of the base currency.
 // Deterministic for a given Data.
 func Vars(d Data) map[string]float64 {
+	if d.Ledger == nil {
+		d.Ledger = d.budgetLedger()
+	}
 	out := computeAtoms(d)
 	mols := d.Molecules
 	if len(mols) == 0 {
@@ -551,7 +563,7 @@ func addDailyAllowanceVars(out map[string]float64, d Data, major func(int64) flo
 	var remaining int64
 	for _, b := range d.Budgets {
 		bs, be := budgeting.PeriodRange(b.Period, d.Now, d.WeekStart)
-		spent, err := budgeting.Spent(b, d.Transactions, bs, be, d.Rates)
+		spent, err := budgeting.Spent(b, d.budgetLedger(), bs, be, d.Rates)
 		if err != nil {
 			continue
 		}
@@ -1152,7 +1164,7 @@ func addBudgetVars(out map[string]float64, d Data, major func(int64) float64) {
 		b := base.Budget
 		start, end := budgeting.PeriodRange(b.Period, d.Now, d.WeekStart)
 		spent := 0.0
-		if s, err := budgeting.Spent(b, d.Transactions, start, end, d.Rates); err == nil {
+		if s, err := budgeting.Spent(b, d.budgetLedger(), start, end, d.Rates); err == nil {
 			spent = major(s.Amount)
 		}
 		limit := major(b.Limit.Amount)

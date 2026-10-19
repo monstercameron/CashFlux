@@ -173,14 +173,27 @@ func TestSOLP2SplitAndBulkUndoWaitForCommit(t *testing.T) {
 	if closed != 1 {
 		t.Fatal("durable split did not close")
 	}
-	published := 0
-	snapshot := uistate.BulkSnapshot{Label: "Changed one transaction", Prior: []domain.Transaction{txn}}
-	setTxnBulkUndoAfterCommit(a, snapshot, func(uistate.BulkSnapshot) { published++ })
-	if published != 0 {
-		t.Fatal("bulk Undo published before durability")
-	}
-	complete(appstate.DurableResult{Revision: revision})
-	if published != 1 {
-		t.Fatal("durable bulk Undo was not published")
+	var notice state.Atom[uistate.Notice]
+	f.Rerender(ui.CreateElement(func() ui.Node { notice = uistate.UseNotice(); return Div() }))
+	for _, fail := range []bool{true, false} {
+		notice.Set(uistate.Notice{})
+		if err := CommitUndoable(a, "Changed one transaction", []string{txn.ID}, func() error {
+			live, _ := a.TransactionByID(txn.ID)
+			live.Note += " updated"
+			return a.PutTransactionsAtomic([]domain.Transaction{live})
+		}, nil); err != nil {
+			t.Fatal(err)
+		}
+		if complete == nil || notice.Get().Undoable {
+			t.Fatal("bulk Undo published before durability")
+		}
+		result := appstate.DurableResult{Revision: revision}
+		if fail {
+			result.Err = errors.New("commit failed")
+		}
+		complete(result)
+		if notice.Get().Undoable == fail {
+			t.Fatalf("Undo after failed=%v: %+v", fail, notice.Get())
+		}
 	}
 }

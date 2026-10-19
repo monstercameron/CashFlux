@@ -12,6 +12,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/smartai"
+	"github.com/monstercameron/CashFlux/internal/txnreview"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -52,7 +53,6 @@ func TxnSmartCatBody(_ struct{}) ui.Node {
 	app := appstate.Default
 	_ = uistate.UseDataRevision().Get()
 	openAtom := uistate.UseTxnSmartCatOpen()
-	undoAtom := uistate.UseTxnUndo()
 	pr := uistate.UsePrefs().Get()
 
 	// C522: the no-provider state told the user to add a key in Settings and gave
@@ -257,35 +257,29 @@ func TxnSmartCatBody(_ struct{}) ui.Node {
 			openAtom.Set(false)
 			return
 		}
-		rows := assigns.Get()
-		txByID := make(map[string]domain.Transaction, len(app.Transactions()))
-		for _, t := range app.Transactions() {
-			txByID[t.ID] = t
-		}
-		var prior []domain.Transaction
-		applied := 0
-		for i, r := range rows {
+		var writes []domain.Transaction
+		var ids []string
+		for i, r := range assigns.Get() {
 			if !sel[i] {
 				continue
 			}
-			t, ok := txByID[r.TxnID]
-			if !ok || t.CategoryID == r.CatID {
+			t, ok := app.TransactionByID(r.TxnID)
+			if !ok || t.IsTransfer() {
 				continue
 			}
-			prior = append(prior, t)
-			t.CategoryID = r.CatID
-			if err := app.PutTransaction(t); err != nil {
-				uistate.PostNotice(err.Error(), true)
-				continue
+			writes = append(writes, txnreview.Confirm(t, r.CatID))
+			ids = append(ids, t.ID)
+		}
+		if len(writes) == 0 {
+			return
+		}
+		_ = CommitUndoable(app, uistate.T("smartcat.appliedLabel", len(writes)), ids, func() error { return app.PutTransactionsAtomic(writes) }, func(err error) {
+			if err != nil {
+				uistate.PostNotice(uistate.T("txint.changesNotSaved"), true)
+				return
 			}
-			applied++
-		}
-		if applied > 0 {
-			undoAtom.Set(uistate.BulkSnapshot{Label: uistate.T("smartcat.appliedLabel", applied), Prior: prior})
-			uistate.PostNotice(uistate.T("smartcat.appliedToast", plural(applied, "transaction")), false)
-		}
-		uistate.BumpDataRevision()
-		openAtom.Set(false)
+			openAtom.Set(false)
+		})
 	}
 	onApply := ui.UseEvent(Prevent(applyResults))
 

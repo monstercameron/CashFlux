@@ -66,7 +66,7 @@ func QuickAddBudgetImpact(app *appstate.App, categoryID string, amountMinor int6
 			continue
 		}
 		bs, be := budgeting.PeriodRange(b.Period, now, weekStart)
-		st, err := budgeting.EvaluateRollup(b, app.Transactions(), bs, be, rates, budgeting.DefaultNearThreshold, covers)
+		st, err := budgeting.EvaluateRollup(b, budgetLedgerForApp(app), bs, be, rates, budgeting.DefaultNearThreshold, covers)
 		if err != nil {
 			continue
 		}

@@ -82,6 +82,18 @@ func TestGoalSweepAllowed(t *testing.T) {
 	}
 }
 
+func TestGoalSweepAllowedAfterChecksNewEarmark(t *testing.T) {
+	goal := domain.Goal{ID: "emg", AccountID: "checking"}
+	all := []domain.Goal{earmarkGoal("emg", "checking", 45000)}
+	balances := map[string]int64{"checking": 50000}
+	if !GoalSweepAllowedAfter(goal, all, balances, map[string]int64{"checking": 5000}) {
+		t.Fatal("sweep exactly to the account balance should be allowed")
+	}
+	if GoalSweepAllowedAfter(goal, all, balances, map[string]int64{"checking": 5001}) {
+		t.Fatal("sweep exceeding account headroom should be refused")
+	}
+}
+
 func TestAccountBreached(t *testing.T) {
 	goals := []domain.Goal{earmarkGoal("emg", "checking", 200000)}
 	if !AccountBreached(goals, "checking", 140000) {

@@ -41,18 +41,17 @@ func TestBUDQ3SuggestionScopeIncludesTrackedTagsAndCategories(t *testing.T) {
 		{ID: "unmatched", CategoryID: "travel"},
 		{ID: "excluded-tag", CategoryID: "travel", Tags: []string{"vacation"}, ExcludeFromReports: true},
 	}
-	gotTxns, gotCovers := suggestTransactionsForScope(covers, []string{"vacation"}, txns)
-	if len(gotTxns) != len(txns)-1 {
-		t.Fatalf("adapted transaction count = %d, want %d after report exclusion", len(gotTxns), len(txns)-1)
+	b := domain.Budget{CategoryID: "groceries", TrackedTags: []string{"vacation"}, Limit: money.New(50000, "USD")}
+	for i, txn := range txns {
+		txn.Amount = money.New(-100, "USD")
+		amount, ok, err := budgeting.ContributionChecked(b, txn, func(id string) bool { return covers[id] })
+		want := i < 2
+		if err != nil || ok != want || ok && amount.Amount != 100 {
+			t.Fatalf("%s contribution=%+v ok=%v err=%v", txn.ID, amount, ok, err)
+		}
 	}
-	if !gotCovers["groceries"] || !gotCovers["__budget_tag__tagged-other-category"] {
-		t.Fatalf("scope omitted category or tag coverage: %v", gotCovers)
-	}
-	if gotCovers["travel"] {
-		t.Fatal("tag adaptation broadened scope to every transaction in the tagged transaction's category")
-	}
-	if gotTxns[1].CategoryID != "__budget_tag__tagged-other-category" || gotTxns[2].CategoryID != "travel" {
-		t.Fatalf("tag adaptation changed the wrong transaction categories: %+v", gotTxns)
+	if txns[1].CategoryID != "travel" || txns[2].CategoryID != "travel" {
+		t.Fatal("scope evaluation mutated categories")
 	}
 }
 
@@ -63,12 +62,13 @@ func TestBUDQ3TagSuggestionCountsFullTaggedChargeButNotExcludedCharge(t *testing
 		{ID: "tag-spend", Date: time.Date(2026, time.August, 5, 0, 0, 0, 0, time.UTC), CategoryID: "travel", Tags: []string{"vacation"}, Amount: money.New(-30000, "USD")},
 		{ID: "excluded-tag", Date: time.Date(2026, time.August, 6, 0, 0, 0, 0, time.UTC), CategoryID: "travel", Tags: []string{"vacation"}, Amount: money.New(-90000, "USD"), ExcludeFromReports: true},
 	}
-	adapted, covers := suggestTransactionsForScope(map[string]bool{"groceries": true}, []string{"vacation"}, txns)
-	got, err := budgeting.SuggestLimitIn(covers, adapted, anchor, suggestLimitMonths, currency.Rates{Base: "USD"})
+	b := domain.Budget{CategoryID: "groceries", TrackedTags: []string{"vacation"}, Period: domain.PeriodMonthly, Limit: money.New(50000, "USD")}
+	ledger := budgeting.NewNettedLedger(txns)
+	got, err := budgeting.RecommendBudgetLimitWithContext(b, map[string]bool{"groceries": true}, ledger, anchor, suggestLimitMonths, money.Zero("USD"), currency.Rates{Base: "USD"}, time.Sunday, time.Time{})
 	if err != nil {
 		t.Fatalf("SuggestLimitIn: %v", err)
 	}
-	if got != 17500 {
-		t.Fatalf("suggested monthly spend = %d cents, want 17500 (the $350 August scope averaged over August and September, excluding $900)", got)
+	if got.Suggested != 17500 {
+		t.Fatalf("suggested monthly spend = %d cents, want 17500 (the $350 August scope with September zero, excluding $900)", got.Suggested)
 	}
 }

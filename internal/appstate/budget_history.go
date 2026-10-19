@@ -53,7 +53,7 @@ func (a *App) budgetViewInput(ref time.Time, p prefs.Prefs, anchor time.Time) bu
 		base = "USD"
 	}
 	transactions := a.Transactions()
-	ledger := budgeting.NewNettedLedgerWithLinks(transactions, a.TxnLinks())
+	ledger := budgeting.NewNettedLedger(transactions, a.TxnLinks())
 	return budgeting.ViewInput{Ledger: &ledger,
 		Period:       budgeting.ViewPeriod{Anchor: ref, Now: a.clock(), WeekStart: p.WeekStartWeekday(), PayCycleAnchor: anchor},
 		Transactions: transactions, Categories: a.Categories(), Recurring: a.Recurring(),
@@ -65,9 +65,11 @@ func (a *App) budgetViewInput(ref time.Time, p prefs.Prefs, anchor time.Time) bu
 // and batch writes. Limit remains the editable standing amount; callers cannot
 // replace existing history by supplying their own map. A permanent edit replaces
 // all later scheduled amounts, so editing a past period also changes the future.
-// A cadence change starts a fresh funding grid: history, carry and boosts from
-// the old grid are not reinterpreted as amounts for the new cadence. Dated journal
-// notes are retained. Existing-budget currency changes remain refused.
+// A cadence change starts a fresh base/carry grid, but retains dated adjustments:
+// dropping a cover credit alone would destroy money while retaining its debit.
+// Current-period adjustments stay in the edited period; other adjustments map
+// by midpoint, with checked sums when several old periods become one new one.
+// Existing-budget currency changes remain refused.
 func prepareBudgetWrite(b domain.Budget, previous *domain.Budget, effective time.Time, weekStart time.Weekday, anchor time.Time) (domain.Budget, error) {
 	if effective.IsZero() {
 		return domain.Budget{}, fmt.Errorf("budget effective date is required")
@@ -87,11 +89,35 @@ func prepareBudgetWrite(b domain.Budget, previous *domain.Budget, effective time
 		if previous.Period != b.Period {
 			b.RolloverStart = start
 			b.LimitHistory = map[string]int64{start.Format(time.DateOnly): b.Limit.Amount}
-			b.PeriodBoosts = nil
-			b.CoveredAt = time.Time{}
+			oldKey := budgeting.PeriodKeyWithWeekStart(previous.Period, effective, anchor, weekStart)
+			keyOf := func(key string) (string, error) {
+				if key == oldKey {
+					return start.Format(time.DateOnly), nil
+				}
+				date, err := time.Parse(time.DateOnly, key)
+				if err != nil {
+					return "", fmt.Errorf("budget cadence period: %w", err)
+				}
+				from, end := budgeting.PeriodRangeAnchored(previous.Period, date, weekStart, anchor)
+				return budgeting.PeriodKeyWithWeekStart(b.Period, from.Add(end.Sub(from)/2), anchor, weekStart), nil
+			}
+			var err error
+			b.PeriodBoosts, err = rekeyBudgetAmounts(previous.PeriodBoosts, keyOf, true)
+			if err != nil {
+				return domain.Budget{}, err
+			}
+			b.PeriodTopups, err = rekeyBudgetAmounts(previous.PeriodTopups, keyOf, true)
+			if err != nil {
+				return domain.Budget{}, err
+			}
 			if b.RecurringCover != nil {
 				rc := *b.RecurringCover
-				rc.LastAppliedPeriod = ""
+				if rc.LastAppliedPeriod != "" {
+					rc.LastAppliedPeriod, err = keyOf(rc.LastAppliedPeriod)
+					if err != nil {
+						return domain.Budget{}, err
+					}
+				}
 				b.RecurringCover = &rc
 			}
 			return b, nil
@@ -181,5 +207,5 @@ func (a *App) PutBudgetWithHistory(b domain.Budget) error { return a.PutBudgetAt
 // replacing later limit changes. Earlier periods retain their recorded amounts.
 // Use an explicit ref when editing a viewed past or planned period.
 func (a *App) PutBudgetAt(b domain.Budget, ref time.Time) error {
-	return a.putBudgetsAt([]domain.Budget{b}, ref, true)
+	return a.putBudgetsAt([]domain.Budget{b}, ref)
 }

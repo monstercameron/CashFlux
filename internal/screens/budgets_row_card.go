@@ -140,7 +140,7 @@ func budgetRowFigures(p budgetRowCardProps) ui.Node {
 				Form(css.Class("budget-amount", "budget-limit-editform"), OnSubmit(p.saveLimitEdit),
 					Span(css.Class("budget-spent"), p.barSpent), Span(" / "),
 					Div(css.Class("budget-limit-edit-values"),
-						Span(css.Class("budget-limit-editor-cap"), Strong(budgetEffectiveCapCopy(p.s.Budget.ID, p.limit)))),
+						Span(css.Class("budget-limit-editor-cap"), Strong(budgetEffectiveCapCopy(p.s.Budget.ID, p.limit, p.s.Base)))),
 					Input(append(append([]any{css.Class("field", "budget-limit-input"), Type("number"), OnKeyDown(p.limitKeyDown),
 						Attr("data-testid", "budget-limit-input-"+p.s.Budget.ID), Attr("aria-label", uistate.T("budgets.limitLabel")), Step("0.01"), Attr("min", "0.01"), OnInput(p.onLimitDraft)},
 						errAttrs(p.limitErrID, p.limitErrMsg)...), uiw.FieldValue(p.limitDraft.Get()))...),

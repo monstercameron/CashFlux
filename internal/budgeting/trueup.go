@@ -3,6 +3,7 @@
 package budgeting
 
 import (
+	"fmt"
 	"sort"
 	"time"
 
@@ -67,10 +68,10 @@ type TrueUp struct {
 // Only monthly budgets are considered (the true-up compares a monthly limit to monthly
 // spend); non-monthly budgets are skipped rather than guessed at. Results are sorted by the
 // size of the suggested raise, largest first.
-func SuggestTrueUps(budgets []domain.Budget, txns []domain.Transaction, cats []domain.Category, now time.Time, rates currency.Rates) ([]TrueUp, error) {
+func SuggestTrueUps(budgets []domain.Budget, txns NettedLedger, cats []domain.Category, now time.Time, rates currency.Rates) ([]TrueUp, error) {
 	var out []TrueUp
 	for _, b := range budgets {
-		if b.Period != domain.PeriodMonthly {
+		if b.Period != domain.PeriodMonthly || b.IsSaving() {
 			continue
 		}
 		covers := categorytree.DescendantsOfAll(cats, b.TrackedCategoryIDs())
@@ -81,7 +82,11 @@ func SuggestTrueUps(budgets []domain.Budget, txns []domain.Transaction, cats []d
 		if months == 0 || learned <= 0 {
 			continue
 		}
-		limit := normalizedLimit(b, rates).Amount
+		currentLimit, err := BudgetBaseAt(b, now)
+		if err != nil {
+			return nil, fmt.Errorf("true-up budget %q current limit: %w", b.ID, err)
+		}
+		limit := currentLimit.Amount
 		if limit <= 0 {
 			continue
 		}
@@ -118,14 +123,13 @@ func SuggestTrueUps(budgets []domain.Budget, txns []domain.Transaction, cats []d
 // learnedMonthlySpend returns the monthly spend a budget's history implies, the number of
 // months averaged, and whether a seasonal (same-month) basis was used. Spend is summed in
 // the budget's limit currency over the covered categories, honouring splits.
-func learnedMonthlySpend(b domain.Budget, txns []domain.Transaction, cats []domain.Category, now time.Time, rates currency.Rates, covers map[string]bool) (learned int64, months int, seasonal bool, err error) {
+func learnedMonthlySpend(b domain.Budget, txns NettedLedger, cats []domain.Category, now time.Time, rates currency.Rates, covers map[string]bool) (learned int64, months int, seasonal bool, err error) {
 	tracks := func(id string) bool { return b.TracksCategory(id) || covers[id] }
 	curStart := dateutil.MonthStart(now)
 
 	// How many completed months of history exist (from the earliest covered expense).
 	earliest := time.Time{}
-	netted := NewNettedLedger(txns)
-	for _, t := range netted.transactions {
+	for _, t := range txns {
 		if t.Date.After(dateutil.WallClockUTC(now)) {
 			continue
 		}
@@ -191,7 +195,7 @@ func learnedMonthlySpend(b domain.Budget, txns []domain.Transaction, cats []doma
 }
 
 // sumCoveredInRange sums covered expense for a budget in [start, end), in the limit currency.
-func sumCoveredInRange(b domain.Budget, txns []domain.Transaction, start, end time.Time, rates currency.Rates, tracks func(string) bool) (int64, error) {
+func sumCoveredInRange(b domain.Budget, txns NettedLedger, start, end time.Time, rates currency.Rates, tracks func(string) bool) (int64, error) {
 	amount, err := spentCovered(b, txns, start, end, rates, tracks)
 	return amount.Amount, err
 }

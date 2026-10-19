@@ -67,6 +67,9 @@ func healthFactorVar(key string) string {
 // applicability flag so the model can drop what doesn't apply (e.g. no cards)
 // and re-normalize, rather than penalizing a household for something it lacks.
 func HealthInputs(d Data) healthscore.Inputs {
+	if d.Ledger == nil {
+		d.Ledger = d.budgetLedger()
+	}
 	bals, _ := ledger.Balances(d.Accounts, d.Transactions)
 	return healthInputs(d, bals)
 }
@@ -153,7 +156,7 @@ func healthInputs(d Data, bals map[string]money.Money) healthscore.Inputs {
 		total, within := 0, 0
 		for _, b := range d.Budgets {
 			bs, be := budgeting.PeriodRange(b.Period, measureAt, d.WeekStart)
-			st, berr := budgeting.EvaluateRollup(b, d.Transactions, bs, be, rates, budgeting.DefaultNearThreshold, categorytree.DescendantsOfAll(d.Categories, b.TrackedCategoryIDs()))
+			st, berr := budgeting.EvaluateRollup(b, d.budgetLedger(), bs, be, rates, budgeting.DefaultNearThreshold, categorytree.DescendantsOfAll(d.Categories, b.TrackedCategoryIDs()))
 			if berr != nil {
 				continue
 			}

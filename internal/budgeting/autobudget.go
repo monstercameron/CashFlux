@@ -99,7 +99,7 @@ type BudgetSuggestion struct {
 //
 // It is a pure function over the ledger: the UI layer decides which suggestions to
 // pre-select and how the user tunes them before any budget is written.
-func SuggestBudgets(categories []domain.Category, txns []domain.Transaction, now time.Time, months int, rates currency.Rates, method SuggestMethod) ([]BudgetSuggestion, error) {
+func SuggestBudgets(categories []domain.Category, txns NettedLedger, now time.Time, months int, rates currency.Rates, method SuggestMethod) ([]BudgetSuggestion, error) {
 	limit := SuggestLimit
 	if method == MethodHealthy {
 		limit = HealthyLimit
@@ -179,12 +179,12 @@ func SelectedBudgetCategories(categories []domain.Category, selected map[string]
 // splits its Costco receipt across Groceries and Household got a Groceries
 // suggestion under "recent" and none at all under "healthy", because this
 // function saw no transaction booked to Groceries.
-func HealthyLimit(categoryID string, txns []domain.Transaction, now time.Time, months int, rates currency.Rates) (int64, error) {
+func HealthyLimit(categoryID string, txns NettedLedger, now time.Time, months int, rates currency.Rates) (int64, error) {
 	if categoryID == "" || months <= 0 {
 		return 0, nil
 	}
 	covers := map[string]bool{categoryID: true}
-	txns = nettedForSpending(txns)
+
 	curStart := dateutil.MonthStart(now)
 
 	monthSums := make([]int64, months+1)

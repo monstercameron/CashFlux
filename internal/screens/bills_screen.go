@@ -115,7 +115,7 @@ func billBudgetFit(b bills.Bill) (billFitChip, bool) {
 		return billFitChip{}, false
 	}
 	start, end := budgeting.PeriodRange(matched.Period, b.DueDate, uistate.LoadPrefs().WeekStartWeekday())
-	spent, err := budgeting.Spent(matched, app.Transactions(), start, end, rates)
+	spent, err := budgeting.Spent(matched, budgetLedgerForApp(app), start, end, rates)
 	if err != nil {
 		return billFitChip{}, false
 	}

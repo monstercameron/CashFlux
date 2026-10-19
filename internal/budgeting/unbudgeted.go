@@ -50,7 +50,7 @@ func CoveredCategories(budgets []domain.Budget, cats []domain.Category) map[stri
 // catch-all is not guaranteed to partition total spending with budget rows. Uncategorized spend (empty CategoryID) is reported
 // as one row with an empty CategoryID. Categories are sorted by amount, largest first, then
 // by id; categories that net to zero or below are omitted.
-func ComputeUnbudgeted(budgets []domain.Budget, cats []domain.Category, all []domain.Transaction, start, end time.Time, rates currency.Rates) (Unbudgeted, error) {
+func ComputeUnbudgeted(budgets []domain.Budget, cats []domain.Category, all NettedLedger, start, end time.Time, rates currency.Rates) (Unbudgeted, error) {
 	type coverage struct {
 		budget     domain.Budget
 		categories map[string]bool
@@ -82,7 +82,6 @@ func ComputeUnbudgeted(budgets []domain.Budget, cats []domain.Category, all []do
 		nameByID[c.ID] = c.Name
 	}
 
-	all = nettedForSpending(all)
 	byCat := make(map[string]money.Money)
 	add := func(categoryID string, amt money.Money) error {
 		contribution, err := expenseContribution(amt)

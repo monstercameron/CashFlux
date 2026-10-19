@@ -6,6 +6,7 @@ package screens
 
 import (
 	"fmt"
+	"github.com/monstercameron/CashFlux/internal/auditview"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -82,7 +83,6 @@ func observeTxnDurability(app *appstate.App) {
 			status := txnSaveStatuses[id]
 			if event.Pending {
 				status.operation = event.Operation
-				status.value = txnSavePending
 				txnSaveStatuses[id] = status
 				setTxnSaveStatus(id, txnSavePending)
 				continue
@@ -103,8 +103,7 @@ func useTxnSaveStatus(id string) string {
 	observeTxnDurability(appstate.Default)
 	status := txnSaveStatuses[id]
 	atom := state.UseAtom(fmt.Sprintf("transaction:durable:%d:%s", txnDurabilityNamespace, id), status.value)
-	txnSaveMountGeneration++
-	mountGeneration := txnSaveMountGeneration
+	mountGeneration := ui.UseMemo(func() uint64 { txnSaveMountGeneration++; return txnSaveMountGeneration }, txnDurabilityNamespace, id)
 	status.atom, status.mounted, status.mountGeneration = atom, true, mountGeneration
 	txnSaveStatuses[id] = status
 	ui.UseEffect(func() func() {
@@ -137,6 +136,9 @@ func txnSaveStatusText(status txnSaveState) string {
 
 func setTxnSaveStatus(id string, value txnSaveState) {
 	status := txnSaveStatuses[id]
+	if status.value == value {
+		return
+	}
 	status.value = value
 	txnSaveStatuses[id] = status
 	if status.mounted {
@@ -151,16 +153,59 @@ func awaitTxnSave(app *appstate.App, ids []string, done func(error)) {
 	app.RequestTransactionsDurable(ids, func(result appstate.DurableResult) { done(result.Err) })
 }
 
-func setTxnBulkUndoAfterCommit(app *appstate.App, snapshot uistate.BulkSnapshot, set func(uistate.BulkSnapshot)) {
-	ids := make([]string, len(snapshot.Prior))
-	for i, t := range snapshot.Prior {
-		ids[i] = t.ID
-	}
-	awaitTxnSave(app, ids, func(err error) {
-		if err != nil {
-			uistate.PostNotice(uistate.T("tc3w4.changesNotSaved"), true)
+// CommitUndoable is the shared transaction action boundary, also used by quick
+// add at the app root. It captures preceding work, applies one validated atomic
+// write, lets persistence capture the after-image, then advertises Undo after commit.
+// A completion callback owns error presentation when supplied; otherwise this
+// boundary emits exactly one error notice. Completion never crosses App scope.
+func CommitUndoable(app *appstate.App, label string, ids []string, write func() error, done func(error)) error {
+	scope := appstate.Default
+	active := scope == app
+	finish := func(err error) {
+		if appstate.Default != scope {
 			return
 		}
-		set(snapshot)
+		if done != nil {
+			done(err)
+		} else if active && err != nil {
+			uistate.PostNotice(uistate.T("txint.changesNotSaved"), true)
+		}
+	}
+	if app == nil {
+		err := appstate.ErrDurabilityUnavailable
+		finish(err)
+		return err
+	}
+	// Explicit App props also support isolated forms. Global undo/publication is
+	// used only for the active App; the durable request always uses the given App.
+	if active {
+		auditview.CaptureNow()
+	}
+	if err := write(); err != nil {
+		if done == nil && active {
+			uistate.PostNotice(err.Error(), true)
+		} else {
+			finish(err)
+		}
+		return err
+	}
+	awaitTxnSave(app, ids, func(err error) {
+		if appstate.Default != scope {
+			return
+		}
+		if err == nil && active {
+			uistate.BumpDataRevision()
+			uistate.PostUndoable(uistate.T("toast.undoStory", label))
+		}
+		finish(err)
 	})
+	return nil
+}
+
+func commitUndoable(label string, ids []string, write func() error, done ...func(error)) error {
+	var complete func(error)
+	if len(done) > 0 {
+		complete = done[0]
+	}
+	return CommitUndoable(appstate.Default, label, ids, write, complete)
 }

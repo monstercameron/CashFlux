@@ -172,68 +172,6 @@ func budgetStatusAction(props budgetStatusActionProps) ui.Node {
 		OnClick(onClick), props.Label)
 }
 
-// budgetAgeOfMoneyNode renders the Age-of-Money stat for the budgets summary: a
-// serif day-count (the app's hero-figure signature) with a plain-English read of
-// whether the buffer is healthy or tight, plus a quiet "Why?" affordance whose
-// tooltip explains the FIFO matching. Before there's enough matched history it
-// shows a low-pressure nudge instead of a misleading number. Pure node builder.
-func budgetAgeOfMoneyNode(v budgetView, smartSettings smart.Settings) ui.Node {
-	am := v.AgeMoney
-	why := uistate.T("budgets.ageMoneyWhy")
-	if am.Capped {
-		why = uistate.T("budgets.ageMoneyOverYearWhyBR2TB")
-	}
-	label := Span(css.Class("budget-agemoney-label"), uistate.T("budgets.ageMoneyLabel"))
-	if !am.Ready {
-		return Div(css.Class("budget-agemoney", "is-empty"), Attr("data-testid", "budgets-agemoney"),
-			label,
-			P(css.Class("budget-agemoney-explain", tw.TextDim), Attr("data-testid", "budgets-agemoney-empty"),
-				uistate.T("budgets.ageMoneyNotReady")),
-		)
-	}
-	// A larger age reads as a healthier buffer; a small one, tighter. Tone is a calm
-	// accent, never an alarm — money moving fast isn't an error, just less cushioned.
-	figCls := "budget-agemoney-fig"
-	var explain string
-	switch {
-	case am.Capped:
-		// The buffer hit the one-year ceiling — the exact number stops mattering.
-		figCls += " is-healthy"
-		explain = uistate.T("budgets.ageMoneyCapped")
-	case am.Days <= 1:
-		figCls += " is-tight"
-		explain = uistate.T("budgets.ageMoneyOneDay")
-	case am.Days >= 14:
-		figCls += " is-healthy"
-		explain = uistate.T("budgets.ageMoneyHealthy", am.Days)
-	default:
-		figCls += " is-tight"
-		explain = uistate.T("budgets.ageMoneyTight", am.Days)
-	}
-	// "365+" when capped, so the figure reads as a ceiling rather than an exact age.
-	num := strconv.Itoa(am.Days)
-	if am.Capped {
-		num += "+"
-	}
-	unit := uistate.T("budgets.ageMoneyUnit")
-	if am.Days == 1 && !am.Capped {
-		unit = uistate.T("budgets.ageMoneyUnitOne")
-	}
-	return Div(css.Class("budget-agemoney"), Attr("data-testid", "budgets-agemoney"),
-		Div(css.Class("budget-agemoney-head"),
-			label,
-			// Same explainer affordance as the LEFT hero stat (the app-wide "?" info-icon
-			// tooltip), not a one-off text link — one vocabulary for "explain this figure".
-			smartTooltipFor(smartSettings, "budget-agemoney", uistate.T("budgets.ageMoneyLabel"), why),
-		),
-		Div(ClassStr(figCls), Attr("data-testid", "budgets-agemoney-days"),
-			Span(css.Class("budget-agemoney-num"), num),
-			Span(css.Class("budget-agemoney-unit"), unit),
-		),
-		P(css.Class("budget-agemoney-explain"), explain),
-	)
-}
-
 // lastMonthLabelKey picks the toolbar toggle's label: a call-to-action when off,
 // a "you're viewing last month" state when on.
 func lastMonthLabelKey(on bool) string {
@@ -291,11 +229,6 @@ func budgetDensityStateKey(density string) string {
 	return "budgets.densityStateOff"
 }
 
-// budgetAssignBanner renders the method-specific income context line: simple mode
-// shows income · budgeted · the unbudgeted/over gap; zero-based shows the amount left
-// to assign; envelope shows a short note. Pure (no hooks) — a plain node builder.
-// overBannerText renders the over-budget banner copy with correct grammar for a
-// single over-budget category (the plural string read "1 budgets are over").
 // hiddenIf returns the " hidden-menu" class suffix when hide is true — the same
 // convention the shared kebab menus use to keep closed popovers in the DOM.
 func hiddenIf(hide bool) string {
@@ -314,6 +247,8 @@ func nearBadgeText(count int, hist bool) string {
 	return uistate.T("budgets.nearBadge", count)
 }
 
+// overBannerText renders the over-budget banner copy with correct grammar for a
+// single over-budget category.
 func overBannerText(count int, total string, hist bool) string {
 	if hist {
 		if count == 1 {
@@ -325,142 +260,6 @@ func overBannerText(count int, total string, hist bool) string {
 		return uistate.T("budgets.overBannerOne", total)
 	}
 	return uistate.T("budgets.overBanner", count, total)
-}
-
-func budgetAssignBanner(v budgetView) ui.Node {
-	switch v.Method {
-	case budgeting.MethodSimple:
-		unbudgeted := v.BannerIncome - v.TotalLimit
-		var diff ui.Node
-		switch {
-		case unbudgeted > 0:
-			diff = Span(css.Class(tw.TextUp), uistate.T("budgets.simpleUnbudgeted", fmtMoney(money.New(unbudgeted, v.Base))))
-		case unbudgeted == 0:
-			diff = Span(uistate.T("budgets.simpleFullyAllocated"))
-		default:
-			// Over income is the one state worth flagging — you've budgeted more than you
-			// earn. Promote it from a dim-red inline phrase to a warning chip (icon + tinted
-			// pill) so it reads as an alert, not just another figure in the line.
-			diff = Span(css.Class("budget-overincome-chip"), Attr("data-testid", "budget-over-income"),
-				uiw.Icon(icon.AlertTriangle, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
-				Span(uistate.T("budgets.simpleOverAllocated", fmtMoney(money.New(-unbudgeted, v.Base)))))
-		}
-		return P(css.Class("budget-sub"),
-			uistate.T("budgets.simpleIncome", fmtMoney(money.New(v.BannerIncome, v.Base))), " · ",
-			uistate.T("budgets.simpleBudgeted", fmtMoney(money.New(v.TotalLimit, v.Base))), " · ", diff)
-	case budgeting.MethodZeroBased:
-		return zeroBasedHero(v, Fragment())
-	case budgeting.MethodEnvelope:
-		return P(css.Class("budget-sub"), uistate.T("budgets.envelopeNote"))
-	}
-	return Fragment()
-}
-
-// zeroBasedHero is the zero-based view's centrepiece. The thesis of zero-based
-// budgeting — give every dollar a job — is made visual: a big "To Assign" figure (the
-// income pool minus everything assigned to expenses and savings) sits over an
-// ALLOCATION BAR that splits the income into Expenses, Savings, and the still-
-// unassigned gap. Filling the bar (closing the gap) is the goal; the figure reads green
-// at $0 and red when over-assigned. `action` is an optional control rendered in the
-// header — the income button — pass Fragment() for none. Pure node builder.
-func zeroBasedHero(v budgetView, action ui.Node) ui.Node {
-	expenses, savings := v.TotalLimit, v.SavingsAssigned
-	assigned := expenses + savings
-	pool := v.BannerIncome + v.RolledOver // last month's leftover adds to what you can assign
-	toAssign := budgeting.ToAssign(pool, assigned)
-
-	figCls := "zbb-figure fig"
-	var status ui.Node
-	switch {
-	case toAssign == 0:
-		figCls += " is-done"
-		status = Span(css.Class("zbb-status"), uistate.T("budgets.zbbAllAssigned"))
-	case toAssign > 0:
-		figCls += " is-left"
-		status = Span(css.Class("zbb-status"), uistate.T("budgets.zbbLeft"))
-	default:
-		figCls += " is-over"
-		status = Span(css.Class("zbb-status zbb-status-over"), uistate.T("budgets.zbbOver"))
-	}
-
-	// Segment widths as a share of the larger of the income pool or what's assigned, so
-	// the bar stays sensible when over-assigned. The remainder folds into savings so the
-	// segments always fill exactly 100% (no rounding sliver).
-	over := toAssign < 0
-	base := pool
-	if assigned > base {
-		base = assigned
-	}
-	unassigned := toAssign
-	if unassigned < 0 {
-		unassigned = 0
-	}
-	pctOf := func(n int64) int {
-		if base <= 0 || n <= 0 {
-			return 0
-		}
-		if p := int(n * 100 / base); p < 100 {
-			return p
-		}
-		return 100
-	}
-	expPct := pctOf(expenses)
-	gapPct := pctOf(unassigned)
-	savPct := 100 - expPct - gapPct // savings takes the remainder so the bar always fills
-	if savPct < 0 || base <= 0 {
-		// Guard: no income and nothing assigned → an empty bar, never a false 100% savings.
-		savPct = 0
-	}
-	// Income reference marker: only meaningful when over-assigned — it sits where actual
-	// income runs out, so the fill past it reads as the overage rather than "healthy".
-	incomeMarkerPct := -1
-	if over && base > 0 {
-		incomeMarkerPct = int(pool * 100 / base)
-	}
-	// The third legend slot flips to a red "Over-assigned $X" when over, instead of a
-	// misleading "Unassigned $0.00" sitting beside the red headline. Its swatch is a tick
-	// (is-over renders as a vertical mark, matching the bar's income marker) not a round
-	// dot — the over figure is a threshold reading, not an additive fourth slice.
-	thirdLegend := zbbLegendItemTone("is-gap", "", uistate.T("budgets.zbbUnassigned"), unassigned, v.Base)
-	if over {
-		thirdLegend = zbbLegendItemTone("is-over", "zbb-legend-val-over", uistate.T("budgets.zbbOverAssignedShort"), -toAssign, v.Base)
-	}
-	allocAria := uistate.T("budgets.zbbAllocAria")
-	if over {
-		allocAria = uistate.T("budgets.zbbAllocAriaOver")
-	}
-
-	return Div(css.Class("zbb-hero"),
-		Div(css.Class("zbb-hero-top"),
-			Span(css.Class("zbb-label"), uistate.T("budgets.zbbToAssign")),
-			action,
-		),
-		Div(css.Class("zbb-figrow"),
-			// Show the magnitude — the status word ("left to assign" / "over-assigned")
-			// carries the sign, so an accounting-parens negative is avoided.
-			Span(css.Class(figCls), Attr("data-testid", "budgets-zbb-toassign"), fmtMoney(money.New(toAssign, v.Base).Abs())),
-			status),
-		Div(css.Class("zbb-alloc-cap"),
-			Span(css.Class("zbb-alloc-cap-label"), uistate.T("budgets.zbbIncome")),
-			Span(css.Class("zbb-alloc-cap-val fig"), fmtMoney(money.New(pool, v.Base))),
-			If(v.RolledOver > 0, Span(css.Class("zbb-alloc-cap-note"), uistate.T("budgets.zbbAllocRolled", fmtMoney(money.New(v.RolledOver, v.Base))))),
-		),
-		// Bar + marker share a non-clipping wrapper so the income tick can protrude above
-		// and below the bar (the bar itself clips its segments).
-		Div(css.Class("zbb-alloc-wrap"),
-			Div(css.Class("zbb-alloc"), Attr("role", "img"), Attr("aria-label", allocAria),
-				If(expPct > 0, Div(css.Class("zbb-alloc-seg is-exp"), Attr("style", fmt.Sprintf("width:%d%%", expPct)))),
-				If(savPct > 0, Div(css.Class("zbb-alloc-seg is-sav"), Attr("style", fmt.Sprintf("width:%d%%", savPct)))),
-				If(gapPct > 0, Div(css.Class("zbb-alloc-seg is-gap"), Attr("style", fmt.Sprintf("width:%d%%", gapPct)))),
-			),
-			If(incomeMarkerPct >= 0, Div(css.Class("zbb-alloc-marker"), Attr("style", fmt.Sprintf("left:%d%%", incomeMarkerPct)), Attr("title", uistate.T("budgets.zbbIncomeMarker")))),
-		),
-		Div(css.Class("zbb-legend"),
-			zbbLegendItem("is-exp", uistate.T("budgets.zbbExpenses"), expenses, v.Base),
-			zbbLegendItem("is-sav", uistate.T("budgets.zbbSavings"), savings, v.Base),
-			thirdLegend,
-		),
-	)
 }
 
 // zbbLegendItem is one entry in the allocation legend: a color swatch matching a bar
@@ -479,8 +278,6 @@ func zbbLegendItemTone(tone, valCls, label string, minor int64, base string) ui.
 	)
 }
 
-// minorToMajorStr renders minor units as an edit-friendly major-unit string (""
-// for zero, so an input shows its placeholder instead of "0").
 func minorToMajorStr(minor int64, base string) string {
 	if minor <= 0 {
 		return ""
@@ -1621,8 +1418,9 @@ func budgetAnnualGridWidget(props budgetListProps) ui.Node {
 		budgetsForGrid = append(budgetsForGrid, s.Budget)
 	}
 	annualGrid := ui.CreateElement(BudgetAnnualGrid, budgetAnnualGridProps{
-		Budgets:    budgetsForGrid,
-		Txns:       app.Transactions(),
+		Budgets: budgetsForGrid,
+		Txns:    budgetLedgerForApp(app),
+		App:     app, Scope: uistate.ActiveMemberFromScope(),
 		Cats:       app.Categories(),
 		Recurrings: app.Recurring(), // W6/C394 — future-month bill + goal projection
 		Goals:      app.Goals(),

@@ -90,6 +90,7 @@ func Reports() ui.Node {
 	instOf := func(a domain.Account) string { return a.Institution }
 	scopeIDs := scope.ResolveScope(accounts, sc, instOf)
 	scopedTxns := scope.ApplyScopeToTxns(txns, scopeIDs)
+	budgetLedger := budgeting.NettedLedger(scope.ApplyScopeToTxns(budgetLedgerForApp(app), scopeIDs))
 
 	// When any scope narrows the report, every section that deliberately stays
 	// household-wide (a balance sheet, health factors, goals, budget limits)
@@ -1420,7 +1421,7 @@ func Reports() ui.Node {
 			var cells []ui.Node
 			over := 0
 			for k := 0; k+1 < len(bounds) && k < 12; k++ {
-				sp, err := budgeting.Spent(bg, scopedTxns, bounds[k], bounds[k+1], rates)
+				sp, err := budgeting.Spent(bg, budgetLedger, bounds[k], bounds[k+1], rates)
 				if err != nil {
 					continue
 				}
@@ -1453,7 +1454,7 @@ func Reports() ui.Node {
 			))
 		} else {
 			yearCap := limit * periodsPerYear(bg.Period)
-			sp, err := budgeting.Spent(bg, scopedTxns, as, ae, rates)
+			sp, err := budgeting.Spent(bg, budgetLedger, as, ae, rates)
 			if err != nil {
 				continue
 			}

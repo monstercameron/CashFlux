@@ -49,8 +49,14 @@ type ViewInput struct {
 type ViewIssue struct {
 	Operation, BudgetID, Field string
 	Kind, Message              string
+	Informational              bool
 	Err                        error
 }
+
+const (
+	// ViewIssueKindFailure marks an issue that makes a calculated figure unavailable.
+	ViewIssueKindFailure = "failure"
+)
 
 // ViewIssueRolloverStartAssumed identifies the compatibility fallback for
 // legacy rollover budgets without a recorded first period.
@@ -84,7 +90,7 @@ type ViewBudget struct {
 }
 
 func (v *ViewBudget) issue(operation string, err error) {
-	v.Issues = append(v.Issues, ViewIssue{Operation: operation, BudgetID: v.Budget.ID, Err: err})
+	v.Issues = append(v.Issues, ViewIssue{Operation: operation, BudgetID: v.Budget.ID, Kind: ViewIssueKindFailure, Err: err})
 }
 
 func (v *ViewBudget) fail(operation string, err error) {
@@ -107,14 +113,14 @@ func EvaluateViewBudget(b domain.Budget, in ViewInput) ViewBudget {
 		ledger = NewNettedLedger(in.Transactions)
 	}
 	in.Ledger = &ledger
-	in.Transactions = ledger.transactions
+	in.Transactions = ledger
 	b = b.WithBaseCurrency(in.Base)
 	p := in.Period
 	p.Now = dateutil.WallClockUTC(p.Now)
 	in.Period = p
 	start, end := PeriodRangeAnchored(b.Period, p.Anchor, p.WeekStart, p.PayCycleAnchor)
 	calendar := periodStatus(start, end, p.Now, periodage.Of(start, end, p.Now).Early())
-	v := ViewBudget{Budget: b, Start: start, End: end, PeriodStatus: calendar, Status: Status{Budget: b, Limit: b.Limit, PeriodStatus: calendar}, Covers: categorytree.DescendantsOfAll(in.Categories, b.TrackedCategoryIDs())}
+	v := ViewBudget{Budget: b, Start: start, End: end, PeriodStatus: calendar, Status: Status{Budget: b, Start: start, End: end, Base: b.Limit, Limit: b.Limit, PeriodStatus: calendar}, Covers: categorytree.DescendantsOfAll(in.Categories, b.TrackedCategoryIDs())}
 	v.Covered = !b.CoveredAt.IsZero() && !b.CoveredAt.Before(start) && b.CoveredAt.Before(end)
 	eval := v.effectiveBudget(in)
 	if v.Error != nil {
@@ -124,7 +130,7 @@ func EvaluateViewBudget(b domain.Budget, in ViewInput) ViewBudget {
 		v.fail("convert budget limit", err)
 		return v
 	}
-	st, err := evaluateNettedWith(eval, in.Transactions, start, end, in.Rates, DefaultNearThreshold, func(id string) bool { return eval.TracksCategory(id) || v.Covers[id] })
+	st, err := evaluateWith(eval, in.Transactions, start, end, in.Rates, DefaultNearThreshold, func(id string) bool { return eval.TracksCategory(id) || v.Covers[id] })
 	if err != nil {
 		v.fail("evaluate budget", err)
 		return v
@@ -143,6 +149,7 @@ func EvaluateViewBudget(b domain.Budget, in ViewInput) ViewBudget {
 			return v
 		}
 	}
+	st.Base = v.Status.Base
 	v.Status, v.Valid, v.LandingItems = st, true, items
 	// Preserve the standing configuration for editing and annual planning; the
 	// evaluated cap lives only in Status.Limit.
@@ -166,7 +173,7 @@ func EvaluateViewBudget(b domain.Budget, in ViewInput) ViewBudget {
 	if in.ShowPrior || v.Early {
 		v.previousPeriod(in)
 	}
-	postedRecurring, matchErr := matchedRecurringPosted(eval, in.Recurring, in.Transactions, start, end, st.Spent.Currency, in.Rates)
+	postedRecurring, matchErr := matchedRecurringPosted(commitBudget, in.Recurring, in.Transactions, start, end, st.Spent.Currency, in.Rates)
 	if matchErr != nil {
 		v.issue("match posted recurring spending", matchErr)
 	}
@@ -187,7 +194,7 @@ func EvaluateViewBudget(b domain.Budget, in ViewInput) ViewBudget {
 	if pace.Error != nil {
 		v.issue("project budget pace", pace.Error)
 	}
-	if !pace.PeriodEnded && !pace.OnTrack && pace.Elapsed > 0 && pace.Elapsed < 1 && st.State != StateOver {
+	if !b.IsSaving() && !pace.PeriodEnded && !pace.OnTrack && pace.Elapsed > 0 && pace.Elapsed < 1 && st.State != StateOver {
 		v.PaceOver = pace.OverBy
 	}
 	if st.Remaining.Amount > 0 {
@@ -247,6 +254,7 @@ func (v *ViewBudget) effectiveBudget(in ViewInput) domain.Budget {
 		return eval
 	}
 	eval.Limit = base
+	v.Status.Base = base
 	if b.Rollover {
 		chain, err := EvaluateRolloverView(b, in, v.Covers)
 		if err != nil {
@@ -256,9 +264,10 @@ func (v *ViewBudget) effectiveBudget(in ViewInput) domain.Budget {
 		v.Rollover = chain
 		if chain.StartAssumed {
 			v.Issues = append(v.Issues, ViewIssue{
-				Operation: "evaluate prior rollover period",
-				BudgetID:  b.ID,
-				Kind:      ViewIssueRolloverStartAssumed,
+				Operation:     "evaluate prior rollover period",
+				BudgetID:      b.ID,
+				Kind:          ViewIssueRolloverStartAssumed,
+				Informational: true,
 			})
 		}
 		eval.Limit = chain.Current.EffectiveCap
@@ -274,7 +283,7 @@ func (v *ViewBudget) effectiveBudget(in ViewInput) domain.Budget {
 		}
 		var prev Status
 		if err == nil {
-			prev, err = evaluateNettedWith(previous, in.Transactions, start, end, in.Rates, DefaultNearThreshold, func(id string) bool { return previous.TracksCategory(id) || v.Covers[id] })
+			prev, err = evaluateWith(previous, in.Transactions, start, end, in.Rates, DefaultNearThreshold, func(id string) bool { return previous.TracksCategory(id) || v.Covers[id] })
 		}
 		switch {
 		case err != nil:
@@ -319,7 +328,7 @@ func (v *ViewBudget) previousPeriod(in ViewInput) {
 	if len(v.Rollover.Prior) > 0 {
 		eval.Limit = v.Rollover.Prior[len(v.Rollover.Prior)-1].EffectiveCap
 	}
-	prev, err := evaluateNettedWith(eval, in.Transactions, start, end, in.Rates, DefaultNearThreshold, func(id string) bool { return eval.TracksCategory(id) || v.Covers[id] })
+	prev, err := evaluateWith(eval, in.Transactions, start, end, in.Rates, DefaultNearThreshold, func(id string) bool { return eval.TracksCategory(id) || v.Covers[id] })
 	if err != nil {
 		v.issue("evaluate prior budget spending", err)
 		return
@@ -346,6 +355,8 @@ func (v *ViewBudget) previousPeriod(in ViewInput) {
 		v.issue("convert previous budget limit", err)
 		return
 	}
+	prev.Base = base
+	prev.Budget = v.Budget
 	v.Prior, v.HasPrior = prev, true
 }
 

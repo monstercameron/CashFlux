@@ -115,18 +115,9 @@ func reviewAvailability(app *appstate.App) monthlyreview.Availability {
 	var a monthlyreview.Availability
 	a.HasFindings = len(runAnomalyDetectors(app, uistate.LoadPrefs().WeekStartWeekday())) > 0
 
-	settings := app.Settings()
-	base := settings.BaseCurrency
-	if base == "" {
-		base = "USD"
-	}
-	rates := currency.Rates{Base: base, Rates: settings.FXRates}
-	mStart, mEnd := dateutil.MonthRange(time.Now())
-	if statuses, err := budgeting.EvaluateAll(app.Budgets(), app.Transactions(), mStart, mEnd, rates, budgeting.DefaultNearThreshold); err == nil {
-		for _, st := range statuses {
-			if st.State == budgeting.StateOver || st.State == budgeting.StateNear {
-				a.BudgetsNeedingAttention++
-			}
+	for _, st := range budgetStatusesAt(app, time.Now()) {
+		if budgeting.NeedsViewAttention(st) {
+			a.BudgetsNeedingAttention++
 		}
 	}
 	goals := make([]goalcoach.Goal, 0, len(app.Goals()))
@@ -135,6 +126,28 @@ func reviewAvailability(app *appstate.App) monthlyreview.Availability {
 	}
 	a.GoalsNeedingAttention = len(goalcoach.CoachAll(goals, time.Now()))
 	return a
+}
+
+// budgetStatusesAt evaluates each visible budget on its own cadence, with the
+// same history, carry, boosts, refund ledger and preferences as its budget card.
+func budgetStatusesAt(app *appstate.App, now time.Time) []budgeting.Status {
+	if app == nil {
+		return nil
+	}
+	pr := uistate.LoadPrefs()
+	settings := app.Settings()
+	base := budgetBaseCurrency(settings.BaseCurrency)
+	start, end := dateutil.MonthRange(now)
+	ledger := budgetLedgerForApp(app)
+	input := budgeting.ViewInput{Ledger: &ledger, Transactions: ledger, Categories: app.Categories(), Recurring: app.Recurring(),
+		Period: budgeting.ResolveViewPeriod(start, end, now, pr.WeekStartWeekday(), budgetPayCycleAnchor(pr.PayCycleAnchor)),
+		Rates:  currency.Rates{Base: base, Rates: settings.FXRates}, Base: base, PoolRollover: pr.BudgetRolloverLeftover}
+	budgets := budgeting.ViewBudgets(app.Budgets(), uistate.ActiveMemberFromScope())
+	statuses := make([]budgeting.Status, 0, len(budgets))
+	for _, budget := range budgets {
+		statuses = append(statuses, budgeting.EvaluateViewBudget(budget, input).Status)
+	}
+	return statuses
 }
 
 // reviewStepBody renders what the current step has to say. Each is a couple of

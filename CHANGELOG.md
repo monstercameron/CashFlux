@@ -90,6 +90,13 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Budgets use one netted ledger; transaction writes go through one undoable seam (BCS1, TCS2, BC5B1, BC5B2, BC5B4, INT3).**
+  The global refund-link table is gone: every budget evaluator takes a ledger netted once per revision, so a refund no longer moves
+  spending between months and the annual grid, summary and hints stop copying the whole ledger; the Monthly Review and Insights judge
+  each budget on its own window. Every transaction write captures undo, writes atomically, waits for durability and then offers Undo;
+  "mark reviewed" uses one rule. Route entry and recategorise renders are much cheaper. Sweep takes a leftover once across member
+  views; the view model carries each period's start, end and base (funding targets no longer start at zero time); flex compares the
+  right window and is memoized.
 - **Saving keeps working in the browser after many writes (TV8A).** The in-browser SQLite store keeps temporary tables in memory
   (`temp_store=MEMORY`), so the change journal no longer tries to open a temp file the browser cannot create; after ~30 edits every
   write used to fail, even after a reload.

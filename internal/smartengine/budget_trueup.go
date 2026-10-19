@@ -26,7 +26,7 @@ func init() {
 // the raise is one edit away; the detection, level-encoded dismissal, and preview figure are
 // all live.
 func b13TrueUp(in Input) []smart.Insight {
-	ups, err := budgeting.SuggestTrueUps(in.Budgets, in.Transactions, in.Categories, in.Now, in.Rates)
+	ups, err := budgeting.SuggestTrueUps(in.Budgets, in.budgetLedger(), in.Categories, in.Now, in.Rates)
 	if err != nil {
 		return nil
 	}

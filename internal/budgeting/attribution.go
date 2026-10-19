@@ -40,9 +40,9 @@ const UnassignedMemberID = ""
 // every member's contribution, which is the whole point — attribution, not blame. Results
 // are sorted by amount, largest first, then by member id for a stable order. Members who
 // spent nothing are omitted.
-func AttributeByMember(budget domain.Budget, all []domain.Transaction, start, end time.Time, rates currency.Rates, covers map[string]bool) ([]MemberShare, error) {
+func AttributeByMember(budget domain.Budget, all NettedLedger, start, end time.Time, rates currency.Rates, covers map[string]bool) ([]MemberShare, error) {
 	limit := normalizedLimit(budget, rates)
-	all = nettedForSpending(all) // XC2: same refund-pair netting the budget bar uses
+
 	tracks := func(id string) bool { return budget.TracksCategory(id) || covers[id] }
 
 	byMember := make(map[string]int64)

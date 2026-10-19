@@ -68,7 +68,10 @@ func budgetSummaryPlan(v budgetView, app *appstate.App, vw period.Window) budget
 	normalizationOK := planExcluded == 0 && len(v.Incomplete) == 0
 	planView := v
 	planView.TotalLimit = normalizedBudgetTotal
-	actualSpent, spendIssues := budgetSummaryActualSpend(app, v.Statuses, vw, v.LastMonthMode, rates, v.Base)
+	actualSpent, spendIssues := v.SummaryActual, v.SummaryIssues
+	if !v.SummaryReady {
+		actualSpent, spendIssues = budgetSummaryActualSpend(app, v.Statuses, vw, v.LastMonthMode, rates, v.Base)
+	}
 	issues = append(issues, spendIssues...)
 	planView.TotalSpent = actualSpent
 	smartSettings := uistate.LoadSmartSettings()
@@ -94,6 +97,10 @@ func budgetSummaryActualSpend(app *appstate.App, statuses []budgeting.Status, vw
 	if app == nil {
 		return 0, []budgeting.ViewIssue{{Operation: "read budget spending", Err: fmt.Errorf("budget app is unavailable")}}
 	}
+	return budgetSummaryActualSpendNetted(budgetLedgerForApp(app), app.Categories(), statuses, vw, previous, rates, base)
+}
+
+func budgetSummaryActualSpendNetted(transactions budgeting.NettedLedger, categories []domain.Category, statuses []budgeting.Status, vw period.Window, previous bool, rates currency.Rates, base string) (int64, []budgeting.ViewIssue) {
 	start, end := vw.Range()
 	if previous {
 		start, end = start.AddDate(0, -1, 0), end.AddDate(0, -1, 0)
@@ -101,8 +108,6 @@ func budgetSummaryActualSpend(app *appstate.App, statuses []budgeting.Status, vw
 	if budgetNow().Before(start) {
 		return 0, nil
 	}
-	transactions := budgeting.NewNettedLedgerWithLinks(app.Transactions(), app.TxnLinks()).Transactions()
-	categories := app.Categories()
 	active := make([]budgetSummarySpendScope, 0, len(statuses))
 	for _, status := range statuses {
 		if status.Error == nil && !status.Budget.IsSaving() {
@@ -224,6 +229,9 @@ func budgetSummaryWindowPlan(statuses []budgeting.Status, vw period.Window, prev
 			}
 			budget := status.Budget
 			base, err := budgeting.BudgetBaseAt(budget, monthStart)
+			if !status.Start.IsZero() && coveredStart.Before(status.End) && coveredEnd.After(status.Start) && status.Base.Currency != "" {
+				base = status.Base
+			}
 			if err != nil {
 				excluded++
 				issues = append(issues, budgeting.ViewIssue{BudgetID: budget.ID, Operation: "resolve viewed-period budget limit", Err: err})
@@ -705,20 +713,26 @@ func budgetSummaryStatus(p budgetSummaryStatusProps) ui.Node {
 		statusAction,
 	)
 
-	issueText := make([]string, 0, len(p.issues))
-	for _, issue := range p.issues {
+	return Fragment(statusLine, budgetSummaryDiagnosticLines(p.issues))
+}
+
+func budgetSummaryDiagnosticLines(issues []budgeting.ViewIssue) ui.Node {
+	var failures, notes []string
+	for _, issue := range issues {
+		if issue.Informational {
+			notes = append(notes, uistate.T("budgets.rolloverStartAssumed"))
+			continue
+		}
 		message := issue.Message
 		if message == "" {
 			message = uistate.T("bud2.cantCalculate")
 		}
-		if message != "" {
-			issueText = append(issueText, message)
-		}
+		failures = append(failures, message)
 	}
-	if len(issueText) == 0 {
-		return statusLine
-	}
-	return Fragment(statusLine, P(css.Class("budget-sub", tw.TextWarn), Attr("data-testid", "budgets-status-issues"), strings.Join(issueText, " · ")))
+	return Fragment(
+		If(len(failures) > 0, P(css.Class("budget-sub", tw.TextWarn), Attr("data-testid", "budgets-status-issues"), strings.Join(failures, " · "))),
+		If(len(notes) > 0, P(css.Class("budget-sub", tw.TextDim), Attr("data-testid", "budgets-status-notes"), strings.Join(notes, " · "))),
+	)
 }
 
 func budgetHeadlineWindowLabel(vw period.Window, previous bool) string {

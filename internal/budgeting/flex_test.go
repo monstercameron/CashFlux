@@ -26,7 +26,7 @@ func flexTxn(catID string, minor int64, date time.Time) domain.Transaction {
 
 func evaluateFlexForTest(t *testing.T, cats []domain.Category, txns []domain.Transaction, recs []domain.Recurring, target int64, base string, start, end time.Time) FlexView {
 	t.Helper()
-	view, err := EvaluateFlex(cats, txns, recs, target, base, start, end)
+	view, err := EvaluateFlex(cats, NewNettedLedger(txns), recs, target, currency.Rates{Base: base}, start, end)
 	if err != nil {
 		t.Fatalf("EvaluateFlex: %v", err)
 	}
@@ -178,7 +178,7 @@ func TestEvaluateFlexUsesContributionRulesFXAndRefundNetting(t *testing.T) {
 	}
 	links := []domain.TxnLink{{ID: "pair", Kind: domain.TxnLinkRefundPair, TxnIDs: []string{"purchase", "refund"}, Amount: money.New(2000, "USD")}}
 	rates := currency.Rates{Base: "USD", Rates: map[string]float64{"JPY": 0.01}}
-	view, err := EvaluateFlexWithLinks(cats, txns, links, nil, 50000, rates, start, end)
+	view, err := EvaluateFlex(cats, NewNettedLedger(txns, links), nil, 50000, rates, start, end)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -187,6 +187,32 @@ func TestEvaluateFlexUsesContributionRulesFXAndRefundNetting(t *testing.T) {
 	// stay out. Together: $230.
 	if view.Spent.Amount != 23000 {
 		t.Fatalf("flex spent = %d, want 23000 USD cents", view.Spent.Amount)
+	}
+}
+
+func TestEvaluateFlexAttributesNestedCategoriesWithoutDoubleCounting(t *testing.T) {
+	start, end := flexDate(2026, 6, 1), flexDate(2026, 7, 1)
+	cats := []domain.Category{
+		flexCat("housing", "Housing", domain.ClassFixed),
+		{ID: "repairs", Name: "Repairs", ParentID: "housing", Kind: domain.KindExpense, CategoryClass: domain.ClassFlex},
+		{ID: "unclassified", Name: "Unclassified", ParentID: "housing", Kind: domain.KindExpense},
+	}
+	recs := []domain.Recurring{{ID: "housing-bill", CategoryID: "housing", Amount: money.New(-2500, "USD"), Cadence: domain.CadenceMonthly, NextDue: start}}
+	txns := []domain.Transaction{
+		flexTxn("housing", -10000, flexDate(2026, 6, 2)),
+		flexTxn("repairs", -5000, flexDate(2026, 6, 3)),
+		flexTxn("unclassified", -2000, flexDate(2026, 6, 4)),
+	}
+
+	view := evaluateFlexForTest(t, cats, txns, recs, 20000, "USD", start, end)
+	if view.Spent.Amount != 7000 {
+		t.Fatalf("flex spend = %d, want flex child and default-flex child (7000)", view.Spent.Amount)
+	}
+	if len(view.Fixed) != 1 {
+		t.Fatalf("fixed rows = %d, want one owner row", len(view.Fixed))
+	}
+	if got := view.Fixed[0]; got.CategoryID != "housing" || got.Actual.Amount != 10000 || got.Expected.Amount != 2500 {
+		t.Fatalf("fixed row = %+v, want housing actual 10000 and expected 2500", got)
 	}
 }
 
@@ -205,9 +231,9 @@ func TestEvaluateFlexReturnsErrorsForMissingFXAndOverflow(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := EvaluateFlexWithLinks([]domain.Category{flexCat("flex", "Flex", domain.ClassFlex)}, tt.txns, nil, nil, 100, tt.rates, start, end)
+			_, err := EvaluateFlex([]domain.Category{flexCat("flex", "Flex", domain.ClassFlex)}, NewNettedLedger(tt.txns), nil, 100, tt.rates, start, end)
 			if err == nil {
-				t.Fatal("EvaluateFlexWithLinks returned no error")
+				t.Fatal("EvaluateFlex returned no error")
 			}
 		})
 	}

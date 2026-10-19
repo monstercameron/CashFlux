@@ -46,6 +46,7 @@ func studioPreviewCtx(app *appstate.App) widgetrender.RenderCtx {
 	accounts := app.Accounts()
 	txns := app.Transactions()
 	vars := engineenv.Vars(engineenv.Data{
+		Ledger:   budgetLedgerForTransactions(app, txns),
 		Accounts: accounts, Transactions: txns, Members: app.Members(),
 		Budgets: app.Budgets(), Goals: app.Goals(), Tasks: app.Tasks(), Recurring: app.Recurring(),
 		Rates: rates, Now: now, PeriodStart: start, PeriodEnd: end,

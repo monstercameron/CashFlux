@@ -84,7 +84,7 @@ func overspentComparablePeriods(values []SuggestionMonth, limit int64) int {
 // RecommendBudgetLimitWithContext evaluates a recommendation against the same
 // budget scope and cadence grid used by the card. txns must be the caller's
 // refund-netted ledger snapshot; weekStart and payAnchor define its period grid.
-func RecommendBudgetLimitWithContext(budget domain.Budget, covers map[string]bool, txns []domain.Transaction, now time.Time, months int, projectedMonthly money.Money, rates currency.Rates, weekStart time.Weekday, payAnchor time.Time) (LimitRecommendation, error) {
+func RecommendBudgetLimitWithContext(budget domain.Budget, covers map[string]bool, txns NettedLedger, now time.Time, months int, projectedMonthly money.Money, rates currency.Rates, weekStart time.Weekday, payAnchor time.Time) (LimitRecommendation, error) {
 	limit := budget.Limit
 	if limit.Currency == "" {
 		limit = money.New(limit.Amount, rates.Base)
@@ -108,14 +108,8 @@ func RecommendBudgetLimitWithContext(budget domain.Budget, covers map[string]boo
 	return recommendFromComparableSpend(values, monthly.Amount, projection.Amount)
 }
 
-// Transactions returns a defensive copy of a pre-netted ledger snapshot for
-// consumers that need to pass the same evidence into another pure evaluator.
-func (l NettedLedger) Transactions() []domain.Transaction {
-	return append([]domain.Transaction(nil), l.transactions...)
-}
-
-func comparableBudgetSpend(budget domain.Budget, covers map[string]bool, txns []domain.Transaction, now time.Time, periods int, rates currency.Rates, weekStart time.Weekday, payAnchor time.Time) ([]SuggestionMonth, error) {
-	if len(budget.TrackedCategoryIDs()) == 0 && len(covers) == 0 || periods <= 0 {
+func comparableBudgetSpend(budget domain.Budget, covers map[string]bool, txns NettedLedger, now time.Time, periods int, rates currency.Rates, weekStart time.Weekday, payAnchor time.Time) ([]SuggestionMonth, error) {
+	if len(budget.TrackedCategoryIDs()) == 0 && len(covers) == 0 && len(budget.TrackedTags) == 0 || periods <= 0 {
 		return nil, nil
 	}
 	start, _ := PeriodRangeAnchored(budget.Period, now, weekStart, payAnchor)

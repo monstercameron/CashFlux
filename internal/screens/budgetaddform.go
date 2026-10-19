@@ -454,7 +454,7 @@ func budgetAddFormReady(componentProps budgetAddFormComponentProps) ui.Node {
 		if income <= 0 {
 			return budgetAddTemplateMemo{}
 		}
-		result, err := budgeting.Generate5030WithRates(income, categories, txns, now, rates)
+		result, err := budgeting.Generate5030WithRates(income, categories, budgetLedgerForApp(app), now, rates)
 		if err != nil {
 			return budgetAddTemplateMemo{Err: err}
 		}
@@ -630,7 +630,7 @@ func budgetAddFormReady(componentProps budgetAddFormComponentProps) ui.Node {
 		sugCovers[sugCatID] = true
 	}
 	suggestionMemo := ui.UseMemo(func() budgetAddSuggestionMemo {
-		monthly, err := budgeting.SuggestLimitIn(sugCovers, txns, now, 6, rates)
+		monthly, err := budgeting.SuggestLimitIn(sugCovers, budgetLedgerForApp(app), now, 6, rates)
 		if err != nil {
 			return budgetAddSuggestionMemo{Err: err}
 		}

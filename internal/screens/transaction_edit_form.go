@@ -21,7 +21,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
-	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/similartxns"
 	"github.com/monstercameron/CashFlux/internal/textutil"
@@ -29,6 +28,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
 	"github.com/monstercameron/CashFlux/internal/txnmove"
 	"github.com/monstercameron/CashFlux/internal/txnprov"
+	"github.com/monstercameron/CashFlux/internal/txnreview"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -178,18 +178,12 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 	prefs := uistate.UsePrefs().Get()
 
 	// Look the transaction up live so an edit always works against current data.
-	var txn domain.Transaction
-	found := false
-	for _, t := range app.Transactions() {
-		if t.ID == props.TxnID {
-			txn, found = t, true
-			break
-		}
-	}
+	txn, found := app.TransactionByID(props.TxnID)
 
 	categories := app.Categories()
 	members := app.Members()
 
+	merchantPanel := ui.UseMemo(func() ui.Node { return merchantContextPanel(app, txn) }, app, app.Rev(), txn.ID)
 	// Seed display values from the transaction (amount shown in major units,
 	// absolute, with the sign preserved separately on save).
 	amountMajor := ""
@@ -261,30 +255,24 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 		if saving.Get() {
 			return
 		}
-		if err := app.PutTransaction(updated); err != nil {
-			errMsg.Set(txnEditSaveError(err))
+		live, ok := app.TransactionByID(updated.ID)
+		if !ok {
 			return
 		}
+		live.Splits = append([]domain.CategorySplit(nil), updated.Splits...)
 		isCurrent := saveLease.check()
 		saving.Set(true)
-		uistate.BumpDataRevision()
-		awaitTxnSave(app, []string{updated.ID}, func(err error) {
+		label := uistate.T("splitEditor.cleared")
+		if live.HasSplits() {
+			label = uistate.T("splitEditor.saved")
+		}
+		_ = CommitUndoable(app, label, []string{live.ID}, func() error { return app.PutTransactionsAtomic([]domain.Transaction{live}) }, func(err error) {
 			if !isCurrent() {
-				if err != nil {
-					uistate.PostNotice(uistate.T("txint.transactionNotSaved"), true)
-				}
 				return
 			}
 			saving.Set(false)
 			if err != nil {
 				errMsg.Set(txnEditSaveError(err))
-				return
-			}
-
-			if updated.HasSplits() {
-				uistate.PostNotice(uistate.T("splitEditor.saved"), false)
-			} else {
-				uistate.PostNotice(uistate.T("splitEditor.cleared"), false)
 			}
 		})
 	}
@@ -376,7 +364,7 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 		// a category the user never looked at.
 		confirmsCat := txnprov.ConfirmsCategory(txn, domain.Transaction{CategoryID: catS.Get()})
 		if confirmsCat {
-			t.Reviewed = true
+			t = txnreview.Confirm(t, catS.Get())
 		}
 		t.CategoryID = catS.Get()
 		t.Date = date
@@ -395,7 +383,7 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 		// here: a state setter mid-handler re-renders the component while this
 		// closure is still running, and the rest of the save can be lost with it.)
 		if confirmsCat {
-			t.Tags = removeReviewTag(t.Tags)
+			t = txnreview.Confirm(t, catS.Get())
 		}
 		t = t.MarkCleared(clearedS.Get(), time.Now())
 		t.Note = strings.TrimSpace(noteS.Get())
@@ -424,20 +412,10 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 			errMsg.Set(uistate.T("transactions.splitAmountMismatch"))
 			return
 		}
-		// Reposting to another account goes through txnmove rather than assigning
-		// AccountID here, because two things have to travel with it: a transfer
-		// leg's partner names THIS row's account as its counterparty and would
-		// otherwise be left pointing at an account the money is no longer on, and a
-		// currency mismatch has to be refused rather than saved — balances drop the
-		// whole account when a row does not fold into its currency.
-		var movedPartner domain.Transaction
-		haveMovedPartner := false
+		// Validate the move against the old pair before changing either row.
 		if accountS.Get() != "" && accountS.Get() != t.AccountID {
-			plan := txnmove.PlanMove(t, accountS.Get(), app.Accounts(), app.Transactions())
+			plan := txnmove.PlanMove(txn, accountS.Get(), app.Accounts(), app.Transactions())
 			if plan.Err != nil {
-				// Same reasoning as the inline note: say it in the user's terms, not
-				// the package's. This path is reachable when the picker changed and the
-				// save came before the preview re-rendered.
 				switch plan.Reason {
 				case txnmove.ReasonCurrency:
 					errMsg.Set(uistate.T("transactions.accountMoveCurrency", t.Amount.Currency, plan.ToName))
@@ -448,111 +426,104 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 				}
 				return
 			}
-			moved, partner, hasPartner, merr := txnmove.Apply(t, accountS.Get(), app.Accounts(), app.Transactions())
-			if merr != nil {
-				errMsg.Set(uistate.T("transactions.accountMoveRefused", plan.ToName))
-				return
-			}
-			t, movedPartner, haveMovedPartner = moved, partner, hasPartner
+			t.AccountID = accountS.Get()
 		}
-		// C629: a transfer is two rows. Writing only the one the user opened left the
-		// other account stale and the pair no longer summing to zero, so pass the
-		// pre-edit copy too and let appstate keep the counterpart in step.
-		if err := app.PutTransactionWithTransferPair(txn, t); err != nil {
-			errMsg.Set(txnEditSaveError(err))
-			return
-		}
-		// The partner follows the move. Written after the row itself so a failure
-		// on the first leaves the pair as it was rather than half-relocated.
-		if haveMovedPartner {
-			if err := app.PutTransaction(movedPartner); err != nil {
-				errMsg.Set(txnEditSaveError(err))
-				return
-			}
-		}
-		// C33-style learn tally: record the payee→category correction on an explicit set.
-		if t.CategoryID != "" {
-			learn := t.Payee
-			if learn == "" {
-				learn = t.Desc
-			}
-			uistate.IncrementLearnTally(learn, t.CategoryID)
-		}
-		isCurrent := saveLease.check()
-		saving.Set(true)
-		uistate.BumpDataRevision()
-		awaitTxnSave(app, []string{t.ID}, func(err error) {
-			if !isCurrent() {
+		performSave := func(removePartner bool) {
+			isCurrent := saveLease.check()
+			saving.Set(true)
+			ids := app.ExpandTransferPairs([]string{t.ID})
+			_ = CommitUndoable(app, uistate.T("toast.txnUpdated"), ids, func() error {
+				var err error
+				if removePartner {
+					err = app.EditTransactionRemovingPartner(txn, t)
+				} else {
+					err = app.EditTransaction(txn, t)
+				}
 				if err != nil {
-					uistate.PostNotice(uistate.T("txint.transactionNotSaved"), true)
+					return err
 				}
-				return
-			}
-			saving.Set(false)
-			if err != nil {
-				errMsg.Set(txnEditSaveError(err))
-				return
-			}
+				if t.CategoryID != "" {
+					learn := firstNonEmpty(t.Payee, t.Desc)
+					uistate.IncrementLearnTally(learn, t.CategoryID)
+				}
+				return nil
+			}, func(err error) {
+				if !isCurrent() {
+					if err != nil {
+						uistate.PostNotice(uistate.T("txint.transactionNotSaved"), true)
+					}
+					return
+				}
+				saving.Set(false)
+				if err != nil {
+					errMsg.Set(txnEditSaveError(err))
+					return
+				}
 
-			// C547: now that the write has landed, bring the control into agreement
-			// with what was stored. Doing this earlier re-rendered the form mid-save
-			// and lost the write.
-			if syncDirectionOut {
-				directionS.Set(txnDirOut)
-			}
-			// #63: the saved confirmation names the consequence — where the account's
-			// balance now stands — instead of a bare "updated".
-			saveMsg := uistate.T("toast.txnUpdated")
-			if txnEditBalanceAccountCount(txn, t) == 1 {
-				if acc, ok := domain.AccountByID(app.Accounts(), t.AccountID); ok {
-					if b, berr := ledger.Balance(acc, app.Transactions()); berr == nil {
-						saveMsg = uistate.T("transactions.savedImpact", acc.Name,
-							fmtMoney(money.New(b.Amount, acc.Currency)))
+				// C547: now that the write has landed, bring the control into agreement
+				// with what was stored. Doing this earlier re-rendered the form mid-save
+				// and lost the write.
+				if syncDirectionOut {
+					directionS.Set(txnDirOut)
+				}
+
+				// TX1 learning flow: when the user renamed the payee, quietly offer to always
+				// show the original (raw) name as the new one — creating a view-layer alias so
+				// every transaction with that raw name reads cleanly (the raw stays on the txn).
+				origPayee := strings.TrimSpace(txn.Payee)
+				newPayee := strings.TrimSpace(payeeS.Get())
+				if origPayee != "" && newPayee != "" && !strings.EqualFold(origPayee, newPayee) &&
+					!app.PayeeResolver().HasLearned(origPayee) {
+					uistate.ConfirmModal(uistate.T("payeealias.learnPrompt", origPayee, newPayee), false, func(ok bool) {
+						if !ok {
+							return
+						}
+						if err := app.PutPayeeAlias(domain.PayeeAlias{RawPayee: origPayee, Display: newPayee}); err != nil {
+							uistate.PostNotice(txnEditSaveError(err), true)
+							return
+						}
+						uistate.BumpDataRevision()
+						uistate.PostNotice(uistate.T("payeealias.learned", origPayee, newPayee), false)
+					})
+				}
+
+				// TX7: when the category changed to a real category, proactively find similar
+				// transactions (alias/payee match via TX1, else the rules matcher) that carry a
+				// different or no category, and offer to recategorize them too. The offer keeps
+				// the modal open (inline preview + Apply); already-categorized rows are listed
+				// but never overwritten without the click.
+				if t.CategoryID != "" && t.CategoryID != txn.CategoryID {
+					cands := similartxns.Find(t, app.Transactions(), t.CategoryID, app.PayeeResolver(), app.Rules())
+					if len(cands) > 0 {
+						simTarget.Set(t)
+						simState.Set(cands)
+						return // hold the modal open to show the offer
 					}
 				}
-			} else {
-				saveMsg = uistate.T("v5row.transactionSaved")
-			}
-			uistate.PostNotice(saveMsg, false)
 
-			// TX1 learning flow: when the user renamed the payee, quietly offer to always
-			// show the original (raw) name as the new one — creating a view-layer alias so
-			// every transaction with that raw name reads cleanly (the raw stays on the txn).
-			origPayee := strings.TrimSpace(txn.Payee)
-			newPayee := strings.TrimSpace(payeeS.Get())
-			if origPayee != "" && newPayee != "" && !strings.EqualFold(origPayee, newPayee) &&
-				!app.PayeeResolver().HasLearned(origPayee) {
-				uistate.ConfirmModal(uistate.T("payeealias.learnPrompt", origPayee, newPayee), false, func(ok bool) {
-					if !ok {
-						return
+				if props.OnDone != nil {
+					props.OnDone()
+				}
+			})
+		}
+		if txn.IsTransfer() && !t.IsTransfer() {
+			ids := app.ExpandTransferPairs([]string{txn.ID})
+			if len(ids) > 1 {
+				partner, ok := app.TransactionByID(ids[1])
+				if !ok {
+					return
+				}
+				account, _ := domain.AccountByID(app.Accounts(), partner.AccountID)
+				prompt := uistate.T("transactions.deleteConfirmDetail", firstNonEmpty(partner.Payee, partner.Desc), dateutil.FormatDate(partner.Date), fmtMoney(partner.Amount), account.Name)
+				uistate.ConfirmModalLabeled(prompt, uistate.T("uxt4.delete"), true, func(ok bool) {
+					if ok {
+						performSave(true)
 					}
-					if err := app.PutPayeeAlias(domain.PayeeAlias{RawPayee: origPayee, Display: newPayee}); err != nil {
-						uistate.PostNotice(txnEditSaveError(err), true)
-						return
-					}
-					uistate.BumpDataRevision()
-					uistate.PostNotice(uistate.T("payeealias.learned", origPayee, newPayee), false)
 				})
+				return
 			}
-
-			// TX7: when the category changed to a real category, proactively find similar
-			// transactions (alias/payee match via TX1, else the rules matcher) that carry a
-			// different or no category, and offer to recategorize them too. The offer keeps
-			// the modal open (inline preview + Apply); already-categorized rows are listed
-			// but never overwritten without the click.
-			if t.CategoryID != "" && t.CategoryID != txn.CategoryID {
-				cands := similartxns.Find(t, app.Transactions(), t.CategoryID, app.PayeeResolver(), app.Rules())
-				if len(cands) > 0 {
-					simTarget.Set(t)
-					simState.Set(cands)
-					return // hold the modal open to show the offer
-				}
-			}
-
-			if props.OnDone != nil {
-				props.OnDone()
-			}
-		})
+		}
+		performSave(false)
 	}))
 
 	cancel := ui.UseEvent(Prevent(func() {
@@ -567,37 +538,34 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 	// flow (C32). dismissSimilar closes the offer and the modal.
 	applySimilar := ui.UseEvent(func() {
 		target := simTarget.Get()
-		n := 0
-		for _, c := range simState.Get() {
-			t := c.Txn
-			// C579: pressing "Recategorize them" IS the person deciding, for every row
-			// it touches — so each one is confirmed, exactly as a single hand-edit is.
-			// Without this the rows the user just filed by hand keep their "auto" mark
-			// and go on crediting a rule, which is the contradiction ConfirmsCategory
-			// exists to prevent, reproduced one code path over.
-			if txnprov.ConfirmsCategory(t, domain.Transaction{CategoryID: target.CategoryID}) {
-				t.Reviewed = true
-				// C601, third path: and it leaves the review queue. The single-row save
-				// above strips this tag and assignReviewCategory always has; this bulk
-				// sibling did not, so a flagged charge swept up by "Recategorize them"
-				// kept its flag — still queued, still counted in "Review inbox (N)" —
-				// after the user had explicitly decided it. Three code paths write this
-				// one decision and all three now mean the same thing by it.
-				t.Tags = removeReviewTag(t.Tags)
+		var writes []domain.Transaction
+		var ids []string
+		for _, candidate := range simState.Get() {
+			live, ok := app.TransactionByID(candidate.Txn.ID)
+			if ok && !live.IsTransfer() {
+				writes = append(writes, txnreview.Confirm(live, target.CategoryID))
+				ids = append(ids, live.ID)
 			}
-			t.CategoryID = target.CategoryID
-			if err := app.PutTransaction(t); err != nil {
-				uistate.PostNotice(txnEditSaveError(err), true)
-				continue
+		}
+		if len(writes) == 0 {
+			return
+		}
+		isCurrent := saveLease.check()
+		saving.Set(true)
+		_ = CommitUndoable(app, uistate.T("similartxns.applied", len(writes)), ids, func() error { return app.PutTransactionsAtomic(writes) }, func(err error) {
+			if !isCurrent() {
+				return
 			}
-			n++
-		}
-		simState.Set(nil)
-		uistate.BumpDataRevision()
-		uistate.PostNotice(uistate.T("similartxns.applied", n), false)
-		if props.OnDone != nil {
-			props.OnDone()
-		}
+			saving.Set(false)
+			if err != nil {
+				errMsg.Set(txnEditSaveError(err))
+				return
+			}
+			simState.Set(nil)
+			if props.OnDone != nil {
+				props.OnDone()
+			}
+		})
 	})
 	alwaysRule := ui.UseEvent(func() {
 		target := simTarget.Get()
@@ -624,20 +592,24 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 	// table (whose paperclip opens the preview) reflect it. Operates on the stored
 	// transaction, so it persists independently of unsaved field edits in the form.
 	attach := func() {
+		isCurrent := saveLease.check()
 		pickFile("image/*", func(name, mime string, data []byte) {
+			if !isCurrent() {
+				return
+			}
 			art := domain.Artifact{ID: id.New(), Name: name, Kind: "image", MIME: mime, Bytes: data, Size: len(data), CreatedAt: time.Now()}
-			if err := app.PutArtifact(art); err != nil {
-				errMsg.Set(txnEditSaveError(err))
-				return
-			}
-			cur := txn
-			cur.Attachments = append(cur.Attachments, domain.AttachmentRef{ArtifactID: art.ID, Name: name, Kind: "image", MIME: mime})
-			if err := app.PutTransaction(cur); err != nil {
-				errMsg.Set(txnEditSaveError(err))
-				return
-			}
-			uistate.BumpDataRevision()
-			uistate.PostNotice(uistate.T("transactions.attachReceiptTitle"), false)
+			saving.Set(true)
+			_ = CommitUndoable(app, uistate.T("transactions.attachReceiptTitle"), []string{props.TxnID}, func() error {
+				return app.AttachTransactionArtifact(props.TxnID, art)
+			}, func(err error) {
+				if !isCurrent() {
+					return
+				}
+				saving.Set(false)
+				if err != nil {
+					errMsg.Set(txnEditSaveError(err))
+				}
+			})
 		})
 	}
 
@@ -851,7 +823,7 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 				debtPayS.Set(false)
 			}
 		}, onDebtPay),
-		merchantContextPanel(app, txn),
+		merchantPanel,
 	}
 	rowActions := Div(css.Class("txn-edit-row-actions"), Attr("data-testid", "txn-edit-row-actions"),
 		uiw.OverflowMenu(uiw.OverflowMenuProps{
@@ -980,19 +952,20 @@ func txnEditDeleteFooter(props TransactionEditFormProps) ui.Node {
 		if !found {
 			return
 		}
-		uistate.ConfirmModal(uistate.T("transactions.deleteConfirm", txn.Desc), true, func(confirmed bool) {
+		uistate.ConfirmModal(txnDeletePrompt(app, txn), true, func(confirmed bool) {
 			if !confirmed {
 				return
 			}
-			if err := app.DeleteTransaction(props.TxnID); err != nil {
-				slog.Error("transaction editor delete failed", "transaction", props.TxnID, "error", err)
-				uistate.PostNotice(uistate.T("sol1.deleteFailed"), true)
-				return
-			}
-			uistate.BumpDataRevision()
-			if props.OnDone != nil {
-				props.OnDone()
-			}
+			ids := app.ExpandTransferPairs([]string{props.TxnID})
+			_ = CommitUndoable(app, uistate.T("toast.txnDeleted"), ids, func() error { _, err := app.DeleteTransactionsBulkExpanded(ids); return err }, func(err error) {
+				if err != nil {
+					uistate.PostNotice(uistate.T("sol1.deleteFailed"), true)
+					return
+				}
+				if props.OnDone != nil {
+					props.OnDone()
+				}
+			})
 		})
 	}))
 	return ui.CreateElement(txnEditDeleteButton, txnEditDeleteButtonProps{Found: found, Remove: remove})

@@ -164,14 +164,14 @@ func Insights() ui.Node {
 			}
 		}
 
-		// Near-limit budget: the budget closest to (or over) its limit this month.
+		budgetStatuses := budgetStatusesAt(app, time.Now())
+
+		// Near-limit budget: the budget closest to (or over) its limit in its own period.
 		nearLimitBudget := ""
-		if statuses, err := budgeting.EvaluateAll(app.Budgets(), txns, mStart, mEnd, rates, budgeting.DefaultNearThreshold); err == nil {
-			for _, s := range statuses {
-				if s.State == budgeting.StateNear || s.State == budgeting.StateOver {
-					nearLimitBudget = s.Budget.Name
-					break // first near/over budget (EvaluateAll order matches Budgets order)
-				}
+		for _, s := range budgetStatuses {
+			if s.State == budgeting.StateNear || s.State == budgeting.StateOver {
+				nearLimitBudget = s.Budget.Name
+				break // first near/over budget in the view order
 			}
 		}
 
@@ -193,11 +193,9 @@ func Insights() ui.Node {
 		// the first chip names something real rather than asking a reasonable
 		// question in general.
 		overBudgets, uncategorized := 0, 0
-		if statuses, err := budgeting.EvaluateAll(app.Budgets(), txns, mStart, mEnd, rates, budgeting.DefaultNearThreshold); err == nil {
-			for _, st := range statuses {
-				if st.State == budgeting.StateOver {
-					overBudgets++
-				}
+		for _, st := range budgetStatuses {
+			if st.State == budgeting.StateOver {
+				overBudgets++
 			}
 		}
 		var largestPayee, largestAmount string
@@ -230,7 +228,7 @@ func Insights() ui.Node {
 			LargestExpensePayee:  largestPayee,
 			LargestExpenseAmount: largestAmount,
 		})
-	}, app.Rev(), fmt.Sprintf("%v", insightsSc), mStart.Unix())
+	}, app.Rev(), fmt.Sprintf("%v", insightsSc), mStart.Unix(), pr.WeekStart, pr.PayCycleAnchor, pr.BudgetRolloverLeftover)
 
 	// The no-key hint is a clear call to action that hops to Settings (where the AI
 	// key lives), not a dead-end sentence (C59; same fix as C54). Built fresh per

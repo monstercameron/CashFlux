@@ -23,7 +23,7 @@ import (
 // count (they pull the average down, as a budget should reflect). Returns 0 when
 // the category is empty, months is non-positive, or there's no spend to learn
 // from.
-func SuggestLimit(categoryID string, txns []domain.Transaction, now time.Time, months int, rates currency.Rates) (int64, error) {
+func SuggestLimit(categoryID string, txns NettedLedger, now time.Time, months int, rates currency.Rates) (int64, error) {
 	if categoryID == "" {
 		return 0, nil
 	}
@@ -44,11 +44,11 @@ func SuggestLimit(categoryID string, txns []domain.Transaction, now time.Time, m
 // contract in domain/category_split.go): a receipt split across categories
 // contributes each line to its own category, never the whole amount to the
 // transaction's category.
-func SuggestLimitIn(covers map[string]bool, txns []domain.Transaction, now time.Time, months int, rates currency.Rates) (int64, error) {
+func SuggestLimitIn(covers map[string]bool, txns NettedLedger, now time.Time, months int, rates currency.Rates) (int64, error) {
 	if len(covers) == 0 || months <= 0 {
 		return 0, nil
 	}
-	txns = nettedForSpending(txns)
+
 	curStart := dateutil.MonthStart(now)
 	monthSums := make([]int64, months+1)
 	for k := 1; k <= months; k++ {

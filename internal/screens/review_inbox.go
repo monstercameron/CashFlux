@@ -24,22 +24,12 @@ package screens
 
 import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
-	"github.com/monstercameron/CashFlux/internal/auditview"
 	"github.com/monstercameron/CashFlux/internal/catname"
+	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/reviewqueue"
+	"github.com/monstercameron/CashFlux/internal/txnreview"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 )
-
-// removeReviewTag returns tags without the review flag.
-func removeReviewTag(tags []string) []string {
-	out := make([]string, 0, len(tags))
-	for _, t := range tags {
-		if t != reviewqueue.ReviewTag {
-			out = append(out, t)
-		}
-	}
-	return out
-}
 
 // assignReviewToCharges categorizes exactly the listed transactions — clearing
 // the review flag, since categorizing resolves it — in one pass, and persists.
@@ -59,87 +49,62 @@ func removeReviewTag(tags []string) []string {
 // (QA CF-02). Charges that have left the queue since the card was drawn are
 // skipped rather than silently re-categorized.
 func assignReviewToCharges(app *appstate.App, ids []string, catID string) int {
-	if app == nil || catID == "" || len(ids) == 0 {
-		return 0
-	}
-	want := make(map[string]bool, len(ids))
+	assignments := make(map[string]string, len(ids))
 	for _, id := range ids {
-		if id != "" {
-			want[id] = true
-		}
+		assignments[id] = catID
 	}
-	if len(want) == 0 {
-		return 0
-	}
-	var writeErr error
-	splitSkipped := false
-	n := 0
-	app.BulkMutate(func() {
-		for _, t := range app.Transactions() {
-			if !want[t.ID] || !reviewqueue.Needs(t) {
-				continue
-			}
-			if reviewqueue.ReasonFor(t) == reviewqueue.ReasonSplitUnbalanced {
-				splitSkipped = true
-				continue
-			}
-			t.CategoryID = catID
-			t.Tags = removeReviewTag(t.Tags)
-			// C617: a confirmed decision IS the review. Clearing only the queue's
-			// inputs (category + tag) left `Reviewed` false, so the row vanished
-			// from the inbox while the ledger still badged it "Needs review" —
-			// the app disagreeing with itself about the same transaction.
-			t.Reviewed = true
-			if err := app.PutTransaction(t); err != nil {
-				if writeErr == nil {
-					writeErr = err
-				}
-				continue
-			}
-			// Learn from the confirmation, so the next charge from this merchant
-			// is suggested locally instead of costing a SMART+ call (C513).
-			rememberReviewChoice(t, catID)
-			n++
-		}
-	})
-	if writeErr != nil {
-		uistate.PostNotice(writeErr.Error(), true)
-	}
-	if splitSkipped {
-		uistate.PostNotice(uistate.T("review.splitNeeded"), false)
-	}
-	// The caller showed a count before the click — "Categorize all 122" — and that
-	// count came from a memoized snapshot. If anything resolved one of these charges
-	// in between (a SMART+ scan callback landing, a rule firing, another surface),
-	// fewer are written than were promised, and the user has no way to notice: the
-	// dialog they read said 122 and the queue simply drops by 119. Saying so is the
-	// difference between a count that was wrong and a count that corrected itself.
-	if n > 0 && n < len(want) && writeErr == nil {
-		uistate.PostNotice(uistate.T("review.wroteFewer", n, len(want)), false)
-	}
-	// C553: PutTransaction writes the in-memory store; RequestPersist is what puts
-	// it in the dataset. Without this the card advanced and the queue count
-	// dropped, but a reload brought the transaction back Uncategorized — the write
-	// looked like it landed and had not. Same defect as C543 on the categories
-	// page, in a second surface.
-	if n > 0 {
-		uistate.RequestPersist()
-	}
-	uistate.BumpDataRevision()
-	return n
+	return commitReviewAssignments(app, assignments, nil)
 }
 
-// postCategorizedUndo captures an undo point for the categorization that just
-// landed and shows an undoable toast naming the category, so a slip in the
-// review flow is reversible in one click (report item: review loop needs undo).
-func postCategorizedUndo(app *appstate.App, catID string, batch int) {
-	auditview.CaptureNow()
-	name := reviewCatName(app, catID)
-	if batch > 1 {
-		uistate.PostUndoable(uistate.T("review.categorizedBatchUndo", batch, name))
-		return
+// commitReviewAssignments confirms exactly the live queued rows in one atomic,
+// undoable write. Completion, learning and success copy wait for strict durability.
+func commitReviewAssignments(app *appstate.App, assignments map[string]string, done func(int, error)) int {
+	if app == nil {
+		return 0
 	}
-	uistate.PostUndoable(uistate.T("review.categorizedUndo", name))
+	var updates []domain.Transaction
+	var ids []string
+	splitSkipped := false
+	for _, txn := range app.Transactions() {
+		category := assignments[txn.ID]
+		if category == "" || !reviewqueue.Needs(txn) {
+			continue
+		}
+		if reviewqueue.ReasonFor(txn) == reviewqueue.ReasonSplitUnbalanced {
+			splitSkipped = true
+			continue
+		}
+		updates = append(updates, txnreview.Confirm(txn, category))
+		ids = append(ids, txn.ID)
+	}
+	if splitSkipped && appstate.Default == app {
+		uistate.PostNotice(uistate.T("review.splitNeeded"), false)
+	}
+	if len(updates) == 0 {
+		return 0
+	}
+	label := uistate.T("review.bulkApplied", len(updates))
+	err := CommitUndoable(app, label, ids, func() error { return app.PutTransactionsAtomic(updates) }, func(err error) {
+		if appstate.Default == app {
+			if err == nil {
+				for _, txn := range updates {
+					rememberReviewChoice(txn, txn.CategoryID)
+				}
+				if len(updates) < len(assignments) {
+					uistate.PostNotice(uistate.T("review.wroteFewer", len(updates), len(assignments)), false)
+				}
+			} else {
+				uistate.PostNotice(uistate.T("review.commitFailed"), true)
+			}
+		}
+		if done != nil {
+			done(len(updates), err)
+		}
+	})
+	if err != nil {
+		return 0
+	}
+	return len(updates)
 }
 
 // reviewCatName names a category the way the picker the user chose from does.

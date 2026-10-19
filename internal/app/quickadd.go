@@ -87,6 +87,7 @@ func quickAddForm(props quickAddFormProps) uic.Node {
 	date := uic.UseState("")
 	needsReview := uic.UseState(false)
 	saveAttempted := uic.UseState(false)
+	saveDraftID := uic.UseRef("")
 	focusField := uic.UseState("")
 	// QA M7: the metadata that used to require save-then-reopen (tags, member,
 	// note, cleared, report exclusion) is available at creation, folded behind a
@@ -188,6 +189,7 @@ func quickAddForm(props quickAddFormProps) uic.Node {
 		categoryPickerOpen.Set(false)
 		needsReview.Set(false)
 		saveAttempted.Set(false)
+		saveDraftID.Set("")
 		focusField.Set("")
 		tagsS.Set("")
 		ownersS.Set(quickAddOwnerDefaults(activeMember))
@@ -215,18 +217,28 @@ func quickAddForm(props quickAddFormProps) uic.Node {
 		}
 		return nil
 	}, "quickadd-seed:"+strconv.FormatBool(open.Get())+":"+seedKind.Get())
+	saving := uic.UseState(false)
+	saveGeneration := uic.UseRef(uint64(0))
+	uic.UseEffect(func() func() {
+		saveGeneration.Set(saveGeneration.Get() + 1)
+		saving.Set(false)
+		return func() { saveGeneration.Set(saveGeneration.Get() + 1) }
+	}, props.Open)
 	// saveCore validates + persists the transaction, returning true on success. It is
 	// shared by the panel's Save (which then closes) and "Save & add another" (C40),
 	// which keeps the panel open and resets the form for the next entry.
-	saveCore := func() bool {
+	saveCore := func(after func()) {
+		if saving.Get() {
+			return
+		}
 		if field, _ := quickAddInvalidFieldR4F(accounts, effAcct, amount.Get(), kind.Get(), payee.Get(), desc.Get()); field != "" {
 			saveAttempted.Set(true)
 			focusField.Set(field)
-			return false
+			return
 		}
 		acc, ok := accountByID(accounts, effAcct)
 		if !ok {
-			return false
+			return
 		}
 		// C546: the amount field is a magnitude and the kind toggle carries the
 		// sign — but this used to guard on `amt == 0`, so a typed "-50" parsed to
@@ -241,7 +253,7 @@ func quickAddForm(props quickAddFormProps) uic.Node {
 		}
 		amt, resolved, err := amountmath.ParseSigned(amount.Get(), currency.Decimals(acc.Currency), want)
 		if err != nil {
-			return false
+			return
 		}
 		// The resolved direction is already carried by amt's sign. The kind toggle
 		// is deliberately NOT set here: a state setter mid-handler re-renders the
@@ -253,8 +265,11 @@ func quickAddForm(props quickAddFormProps) uic.Node {
 		if derr != nil {
 			d = time.Now()
 		}
+		if saveDraftID.Get() == "" {
+			saveDraftID.Set(id.New())
+		}
 		t := domain.Transaction{
-			ID: id.New(), AccountID: acc.ID, Date: d, Payee: strings.TrimSpace(payee.Get()),
+			ID: saveDraftID.Get(), AccountID: acc.ID, Date: d, Payee: strings.TrimSpace(payee.Get()),
 			Desc: quickAddDescriptionR4F(payee.Get(), desc.Get()), CategoryID: catID.Get(),
 			Amount: money.New(amt, acc.Currency), MemberIDs: quickAddOwnerSelection(ownersS.Get(), activeMember, acc, ownersTouched.Get()), Reviewed: quickAddReviewedValue(needsReview.Get()),
 			Source:             domain.TxnSourceManual,
@@ -268,40 +283,36 @@ func quickAddForm(props quickAddFormProps) uic.Node {
 		// transaction form was removed (C73/C79), so without this a rule-matching
 		// payee would no longer be auto-filed the way the inline form did (L15).
 		t = app.AutoCategorizeTransaction(t)
-		if err := app.PutTransaction(t); err != nil {
-			post(err.Error(), true)
-			return false
-		}
-		// C33: record payee→category in the self-learning tally whenever a category
-		// was explicitly provided by the user. The payee field (or description as
-		// fallback) is the key; the tally is persisted across reloads via the
-		// preserved KV store so corrections accumulate session-to-session.
-		if t.CategoryID != "" {
-			learnPayee := strings.TrimSpace(t.Payee)
-			if learnPayee == "" {
-				learnPayee = strings.TrimSpace(t.Desc)
+		generation := saveGeneration.Get()
+		saving.Set(true)
+		_ = screens.CommitUndoable(app, uistate.T("quickAdd.added"), []string{t.ID}, func() error {
+			if err := app.PutTransaction(t); err != nil {
+				return err
 			}
-			uistate.IncrementLearnTally(learnPayee, t.CategoryID)
-		}
-		// PutTransaction now fires the "transaction added" workflow trigger itself
-		// (for every add path), so no explicit RunTriggered call here.
-		dataRev.Update(func(v int) int { return v + 1 })
-		post(uistate.T("quickAdd.added"), false)
-		return true
+			if t.CategoryID != "" {
+				learn := strings.TrimSpace(t.Payee)
+				if learn == "" {
+					learn = strings.TrimSpace(t.Desc)
+				}
+				uistate.IncrementLearnTally(learn, t.CategoryID)
+			}
+			return nil
+		}, func(err error) {
+			if saveGeneration.Get() != generation {
+				return
+			}
+			saving.Set(false)
+			if err != nil {
+				post(uistate.T("txint.transactionNotSaved"), true)
+				return
+			}
+			if after != nil {
+				after()
+			}
+		})
 	}
-	save := func() {
-		if saveCore() {
-			closePanel()
-		}
-	}
-	// C40: "Save & add another" — persist, then keep the panel open and clear the
-	// inputs for rapid back-to-back entry (the amount field is re-focused). The
-	// account/kind are also reset by reset(); a power user can re-pick once.
-	saveAndAnother := func() {
-		if saveCore() {
-			reset()
-		}
-	}
+	save := func() { saveCore(closePanel) }
+	saveAndAnother := func() { saveCore(reset) }
 
 	// TXT: transaction quick-templates ("favourites"). onPick pre-fills the add
 	// form's existing state atoms from a chosen template (account, kind, amount,
@@ -687,8 +698,8 @@ func quickAddForm(props quickAddFormProps) uic.Node {
 	footer := Div(css.Class("txn-form-footer"),
 		Div(css.Class("txn-form-footer-actions"),
 			Button(css.Class("btn"), Type("button"), Attr("data-testid", "txn-add-cancel"), OnClick(closePanel), uistate.T("action.cancel")),
-			Button(css.Class("btn"), Type("button"), Attr("data-testid", "txn-add-another"), OnClick(saveAndAnother), uistate.T("quickAdd.saveAndAnother")),
-			Button(css.Class("btn btn-primary"), Type("button"), Attr("id", "txn-add-save"), Attr("data-testid", "flip-save"), OnClick(save), uistate.T("action.save")),
+			Button(css.Class("btn"), Type("button"), Disabled(saving.Get()), Attr("data-testid", "txn-add-another"), OnClick(saveAndAnother), uistate.T("quickAdd.saveAndAnother")),
+			Button(css.Class("btn btn-primary"), Type("button"), Disabled(saving.Get()), Attr("aria-busy", strconv.FormatBool(saving.Get())), Attr("id", "txn-add-save"), Attr("data-testid", "flip-save"), OnClick(save), uistate.T("action.save")),
 		),
 	)
 	return ui.Overlay(ui.OverlayProps{

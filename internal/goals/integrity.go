@@ -54,7 +54,17 @@ func EarmarkIntegrity(goals []domain.Goal, balances map[string]int64) []AccountE
 			if al.AccountID == "" {
 				continue
 			}
-			earmarked[al.AccountID] += al.Amount.Amount
+			total := earmarked[al.AccountID]
+			amount := al.Amount.Amount
+			if amount > 0 && total > int64(^uint64(0)>>1)-amount {
+				earmarked[al.AccountID] = int64(^uint64(0) >> 1)
+				continue
+			}
+			if amount < 0 && total < -int64(^uint64(0)>>1)-1-amount {
+				earmarked[al.AccountID] = -int64(^uint64(0)>>1) - 1
+				continue
+			}
+			earmarked[al.AccountID] = total + amount
 		}
 	}
 	out := make([]AccountEarmark, 0, len(earmarked))
@@ -72,7 +82,12 @@ func EarmarkIntegrity(goals []domain.Goal, balances map[string]int64) []AccountE
 // AccountBreached reports whether a single account is over-earmarked given the
 // goals and the account's real balance in minor units.
 func AccountBreached(goals []domain.Goal, accountID string, balanceMinor int64) bool {
-	return AccountEarmarkedMinor(goals, accountID, "") > balanceMinor
+	for _, position := range EarmarkIntegrity(goals, map[string]int64{accountID: balanceMinor}) {
+		if position.AccountID == accountID {
+			return position.Breached()
+		}
+	}
+	return false
 }
 
 // GoalSweepAllowed reports whether a sweep may earmark into a goal without
@@ -84,6 +99,33 @@ func AccountBreached(goals []domain.Goal, accountID string, balanceMinor int64) 
 func GoalSweepAllowed(g domain.Goal, allGoals []domain.Goal, balances map[string]int64) bool {
 	for _, acct := range g.LinkedAccountIDs() {
 		if AccountBreached(allGoals, acct, balances[acct]) {
+			return false
+		}
+	}
+	return true
+}
+
+// GoalSweepAllowedAfter reports whether adding the supplied earmarks leaves all
+// linked accounts at or below their real balances. Both maps use account-currency
+// minor units. Missing account balances are treated as zero.
+func GoalSweepAllowedAfter(g domain.Goal, allGoals []domain.Goal, balances, additions map[string]int64) bool {
+	if !GoalSweepAllowed(g, allGoals, balances) {
+		return false
+	}
+	for _, accountID := range g.LinkedAccountIDs() {
+		add := additions[accountID]
+		if add <= 0 {
+			continue
+		}
+		var current int64
+		for _, position := range EarmarkIntegrity(allGoals, balances) {
+			if position.AccountID == accountID {
+				current = position.EarmarkedMinor
+				break
+			}
+		}
+		balance := balances[accountID]
+		if current > balance || add > balance-current {
 			return false
 		}
 	}

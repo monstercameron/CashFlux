@@ -5,6 +5,7 @@
 package screens
 
 import (
+	"fmt"
 	"strconv"
 	"time"
 
@@ -30,7 +31,7 @@ var smartInputCache = map[string]smartengine.Input{}
 // hooks), so it is safe to call anywhere in a render. weekStart is passed in by
 // the caller (which reads it from the prefs hook at a stable render position).
 func buildSmartInput(app *appstate.App, weekStart time.Weekday) smartengine.Input {
-	key := strconv.FormatUint(app.Rev(), 10) + "|" + strconv.Itoa(int(weekStart)) + "|" + strconv.FormatInt(time.Now().Unix()/60, 10)
+	key := fmt.Sprintf("%p|", app) + strconv.FormatUint(app.Rev(), 10) + "|" + strconv.Itoa(int(weekStart)) + "|" + strconv.FormatInt(time.Now().Unix()/60, 10)
 	if v, ok := smartInputCache[key]; ok {
 		return v
 	}
@@ -49,6 +50,7 @@ func buildSmartInputRaw(app *appstate.App, weekStart time.Weekday) smartengine.I
 		base = "USD"
 	}
 	return smartengine.Input{
+		Ledger:        budgetLedgerForApp(app),
 		Now:           time.Now(),
 		Base:          base,
 		Rates:         currency.Rates{Base: base, Rates: s.FXRates},

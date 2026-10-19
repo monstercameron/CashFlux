@@ -74,7 +74,7 @@ func todoSuggestStrip(app *appstate.App) ui.Node {
 	s := app.Settings()
 	rates := currency.Rates{Base: s.BaseCurrency, Rates: s.FXRates}
 	now := time.Now()
-	suggestions := tasksuggest.Scan(app.Accounts(), app.Transactions(), app.Budgets(),
+	suggestions := tasksuggest.Scan(app.Accounts(), budgetLedgerForApp(app), app.Budgets(),
 		app.FreshnessWindows(), rates, now, uistate.LoadPrefs().WeekStartWeekday())
 
 	// Drop dismissed-within-snooze and already-open proposals (an open task

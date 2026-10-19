@@ -12,11 +12,13 @@ package appstate
 import (
 	"bytes"
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
 	"math"
 	"os"
+	"reflect"
 	"sort"
 	"strings"
 	"time"
@@ -48,6 +50,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/taskrecur"
 	"github.com/monstercameron/CashFlux/internal/tasksort"
 	"github.com/monstercameron/CashFlux/internal/txnclassify"
+	"github.com/monstercameron/CashFlux/internal/txnmove"
 	"github.com/monstercameron/CashFlux/internal/validate"
 	"github.com/monstercameron/CashFlux/internal/workflow"
 )
@@ -55,8 +58,11 @@ import (
 // App holds the live application state.
 type App struct {
 	store *store.SQLiteStore
-	log   *slog.Logger
-	ring  *logging.Ring
+	// transactionDeletes retains relationship before-images for the legacy row restore API.
+	// The durable undo journal captures these same records independently.
+	transactionDeletes map[string][]store.RecordChange
+	log                *slog.Logger
+	ring               *logging.Ring
 	// blobs is the optional IndexedDB-backed binary artifact store. When non-nil,
 	// artifact image bytes are kept here instead of in the main dataset JSON blob,
 	// which prevents large uploads from blowing the localStorage quota. Wired in by
@@ -2263,6 +2269,7 @@ func (a *App) engineVars() map[string]float64 {
 		base = "USD"
 	}
 	return engineenv.Vars(engineenv.Data{
+		Ledger:   budgeting.NewNettedLedger(a.Transactions(), a.TxnLinks()),
 		Accounts: a.Accounts(), Transactions: a.Transactions(), Members: a.Members(),
 		Budgets: a.Budgets(), Goals: a.Goals(), Tasks: a.Tasks(),
 		Recurring: a.Recurring(), Categories: a.Categories(),
@@ -3328,67 +3335,339 @@ func (a *App) BulkMutate(fn func()) {
 	a.fireTxnMutated() // once; no-ops if still suppressed (nested)
 }
 
-func (a *App) DeleteTransaction(id string) error {
+// PutTransactionsAtomic validates the complete edit batch before writing any row.
+// It suppresses addition triggers: callers use PutTransaction for new entries.
+func (a *App) PutTransactionsAtomic(txns []domain.Transaction) error {
+	if len(txns) == 0 {
+		return nil
+	}
 	if err := a.roleGuard(); err != nil {
 		return err
 	}
-	if err := a.pruneTxnLinks(map[string]struct{}{id: {}}); err != nil {
-		return err
+	writes := append([]domain.Transaction(nil), txns...)
+	accounts := a.Accounts()
+	seen := make(map[string]bool, len(writes))
+	for i, t := range writes {
+		if seen[t.ID] {
+			return fmt.Errorf("save transactions: duplicate id %q", t.ID)
+		}
+		seen[t.ID] = true
+		t.Date = normalizeTransactionDate(t.Date)
+		if issues := validate.ValidateTransaction(t, accounts...); !issues.OK() {
+			return issues
+		}
+		if err := a.validateCustom("transaction", t.Custom); err != nil {
+			return err
+		}
+		writes[i] = t
 	}
-	if err := a.del("transaction", id, a.store.DeleteTransactionWithDebtPayments); err != nil {
-		return err
+	if err := a.store.PutTransactionsAtomic(writes); err != nil {
+		return fmt.Errorf("save transactions: %w", err)
 	}
 	a.fireTxnMutated()
 	return nil
 }
 
-func (a *App) pruneTxnLinks(deleted map[string]struct{}) error {
-	if len(deleted) == 0 {
-		return nil
+// AttachTransactionArtifact attaches a newly uploaded receipt to the current row.
+// Artifact bytes and the row reference commit together; neither can survive a
+// failure on the other record, and intervening edits are preserved.
+func (a *App) AttachTransactionArtifact(transactionID string, artifact domain.Artifact) error {
+	if err := a.roleGuard(); err != nil {
+		return err
 	}
-	changed := false
-	for _, link := range a.TxnLinks() {
+	if artifact.ID == "" || strings.TrimSpace(artifact.Name) == "" || artifact.Kind == "" {
+		return fmt.Errorf("a receipt needs an id, name and kind")
+	}
+	txn, ok, err := a.store.GetTransaction(transactionID)
+	if err != nil {
+		return fmt.Errorf("read transaction for receipt: %w", err)
+	}
+	if !ok {
+		return fmt.Errorf("the transaction no longer exists")
+	}
+	before, err := json.Marshal(txn)
+	if err != nil {
+		return fmt.Errorf("encode receipt transaction: %w", err)
+	}
+	txn.Attachments = append(append([]domain.AttachmentRef(nil), txn.Attachments...), domain.AttachmentRef{ArtifactID: artifact.ID, Name: artifact.Name, Kind: artifact.Kind, MIME: artifact.MIME})
+	after, err := json.Marshal(txn)
+	if err != nil {
+		return fmt.Errorf("encode receipt reference: %w", err)
+	}
+	encodedArtifact, err := json.Marshal(artifact)
+	if err != nil {
+		return fmt.Errorf("encode receipt: %w", err)
+	}
+	changes := []store.RecordChange{{Table: "artifacts", ID: artifact.ID, After: encodedArtifact}, {Table: "transactions", ID: txn.ID, Before: before, After: after}}
+	if err := a.store.ReplayChangesExpected(changes); err != nil {
+		return fmt.Errorf("attach receipt: %w", err)
+	}
+	a.fireTxnMutated()
+	return nil
+}
+
+// EditTransaction commits a row's edits, account move and mirrored transfer
+// amount together. A stale draft is refused, as is silently unclassifying its
+// partner. Use EditTransactionRemovingPartner after a named confirmation instead.
+func (a *App) EditTransaction(prior, draft domain.Transaction) error {
+	return a.editTransaction(prior, draft, false)
+}
+
+// EditTransactionRemovingPartner turns a paired row into ordinary spending or
+// income and deletes the other leg, including its relationships, atomically.
+// The caller must first confirm the named partner deletion with the user.
+func (a *App) EditTransactionRemovingPartner(prior, draft domain.Transaction) error {
+	return a.editTransaction(prior, draft, true)
+}
+
+func (a *App) editTransaction(prior, draft domain.Transaction, removePartner bool) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
+	current, ok, err := a.store.GetTransaction(prior.ID)
+	if err != nil {
+		return fmt.Errorf("edit transaction: %w", err)
+	}
+	prior.Date = normalizeTransactionDate(prior.Date)
+	if !ok || draft.ID != prior.ID || !reflect.DeepEqual(current, prior) {
+		return fmt.Errorf("this transaction changed; reopen it before saving")
+	}
+	draft.Date = normalizeTransactionDate(draft.Date)
+	if draft.AccountID != prior.AccountID {
+		// The draft is expressed in the original account's booking convention.
+		// Apply the pure move before mirroring, including its checked split signing.
+		target := draft.AccountID
+		draft.AccountID = prior.AccountID
+		moved, _, _, err := txnmove.Apply(draft, target, a.Accounts(), a.Transactions())
+		if err != nil {
+			return fmt.Errorf("move edited transaction: %w", err)
+		}
+		draft = moved
+	}
+
+	var pair domain.Transaction
+	paired := false
+	if prior.IsTransfer() {
+		pair, paired = a.transferPartner(prior)
+	}
+	writes := []domain.Transaction{draft}
+	if prior.IsTransfer() && paired {
+		if !draft.IsTransfer() {
+			if !removePartner {
+				return fmt.Errorf("confirm deleting the other transfer leg before changing this to income or spending")
+			}
+			draft.TransferAccountID, draft.TransferGroupID = "", ""
+			if issues := validate.ValidateTransaction(draft, a.Accounts()...); !issues.OK() {
+				return issues
+			}
+			if err := a.validateCustom("transaction", draft.Custom); err != nil {
+				return err
+			}
+			changes, _, err := a.transactionDeleteChanges([]string{pair.ID})
+			if err != nil {
+				return err
+			}
+			before, _ := json.Marshal(current)
+			after, err := json.Marshal(draft)
+			if err != nil {
+				return fmt.Errorf("encode edited transaction: %w", err)
+			}
+			changes = append(changes, store.RecordChange{Table: "transactions", ID: draft.ID, Before: before, After: after})
+			if err := a.store.ReplayChangesExpected(changes); err != nil {
+				return fmt.Errorf("remove transfer partner: %w", err)
+			}
+			a.SyncTxnLinkNetting()
+			a.fireTxnMutated()
+			return nil
+		}
+		if draft.TransferAccountID != prior.TransferAccountID {
+			return fmt.Errorf("change the transfer destination separately before editing this pair")
+		}
+		if draft.AccountID != prior.AccountID {
+			if draft.AccountID == pair.AccountID {
+				return fmt.Errorf("the two transfer accounts must differ")
+			}
+			pair.TransferAccountID = draft.AccountID
+		}
+		if draft.Amount != prior.Amount {
+			mirrored, err := a.mirroredLegAmount(draft, pair, 0)
+			if err != nil {
+				return err
+			}
+			pair.Amount = mirrored
+		}
+		pair.Date = draft.Date
+		writes = append(writes, pair)
+	}
+	return a.PutTransactionsAtomic(writes)
+}
+
+// DeleteTransaction removes one row and its relationships in one SQL commit.
+func (a *App) DeleteTransaction(id string) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
+	_, err := a.deleteTransactionsAtomic([]string{id})
+	return err
+}
+
+// transactionDeleteChanges plans row and relationship changes without touching
+// the store. Checked replay commits the entire plan or preserves every record.
+func (a *App) transactionDeleteChanges(ids []string) ([]store.RecordChange, []string, error) {
+	deleted := make(map[string]bool, len(ids))
+	var changes []store.RecordChange
+	var actual []string
+	for _, id := range ids {
+		if deleted[id] {
+			continue
+		}
+		t, ok, err := a.store.GetTransaction(id)
+		if err != nil {
+			return nil, nil, fmt.Errorf("read transaction for deletion: %w", err)
+		}
+		if !ok {
+			continue
+		}
+		before, err := json.Marshal(t)
+		if err != nil {
+			return nil, nil, err
+		}
+		changes = append(changes, store.RecordChange{Table: "transactions", ID: id, Before: before})
+		actual = append(actual, id)
+		deleted[id] = true
+	}
+	links, err := a.store.ListTxnLinks()
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, link := range links {
 		members := make([]string, 0, len(link.TxnIDs))
-		for _, txnID := range link.TxnIDs {
-			if _, gone := deleted[txnID]; !gone {
-				members = append(members, txnID)
+		for _, id := range link.TxnIDs {
+			if !deleted[id] {
+				members = append(members, id)
 			}
 		}
 		if len(members) == len(link.TxnIDs) {
 			continue
 		}
-		changed = true
-		if len(members) == 0 || (link.Kind != domain.TxnLinkOrderGroup && len(members) != len(link.TxnIDs)) || (link.Kind == domain.TxnLinkOrderGroup && len(members) < 2) {
-			if _, err := a.store.DeleteTxnLink(link.ID); err != nil {
-				return fmt.Errorf("appstate: remove transaction link %q for deleted transaction: %w", link.ID, err)
+		before, err := json.Marshal(link)
+		if err != nil {
+			return nil, nil, err
+		}
+		var after json.RawMessage
+		if link.Kind == domain.TxnLinkOrderGroup && len(members) >= 2 {
+			link.TxnIDs = members
+			after, err = json.Marshal(link)
+			if err != nil {
+				return nil, nil, err
 			}
-			continue
 		}
-		link.TxnIDs = members
-		if err := a.store.PutTxnLink(link); err != nil {
-			return fmt.Errorf("appstate: prune transaction link %q: %w", link.ID, err)
+		changes = append(changes, store.RecordChange{Table: "txnlinks", ID: link.ID, Before: before, After: after})
+	}
+	debtLinks, err := a.store.ListDebtPaymentLinks()
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, link := range debtLinks {
+		for _, id := range link.TransactionIDs {
+			if !deleted[id] {
+				continue
+			}
+			before, err := json.Marshal(link)
+			if err != nil {
+				return nil, nil, err
+			}
+			changes = append(changes, store.RecordChange{Table: "debt_payment_links", ID: link.ID, Before: before})
+			break
 		}
 	}
-	if changed {
-		a.SyncTxnLinkNetting()
-	}
-	return nil
+	return changes, actual, nil
 }
 
-// RestoreTransactions upserts each transaction in txns, restoring them to the
-// store regardless of whether they currently exist. Deleted transactions are
-// re-created and mutated transactions are reverted to the supplied copies.
-// This is the undo primitive for bulk operations on the Transactions ledger.
+// RestoreTransactions restores the rows and relationships carried by preceding
+// deletes on this App. It never runs addition triggers or draws sinking funds
+// again. Relationships with intervening edits are refused, never overwritten.
 func (a *App) RestoreTransactions(txns []domain.Transaction) error {
-	var firstErr error
-	a.BulkMutate(func() {
-		for _, t := range txns {
-			if err := a.PutTransaction(t); err != nil && firstErr == nil {
-				firstErr = fmt.Errorf("restore transaction %s: %w", t.ID, err)
+	if len(txns) == 0 {
+		return nil
+	}
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
+	var changes []store.RecordChange
+	restored := make(map[string]bool, len(txns))
+	for _, t := range txns {
+		t.Date = normalizeTransactionDate(t.Date)
+		if issues := validate.ValidateTransaction(t, a.Accounts()...); !issues.OK() {
+			return issues
+		}
+		if err := a.validateCustom("transaction", t.Custom); err != nil {
+			return err
+		}
+		current, ok, err := a.store.GetTransaction(t.ID)
+		if err != nil {
+			return err
+		}
+		var before json.RawMessage
+		if ok {
+			before, err = json.Marshal(current)
+			if err != nil {
+				return err
 			}
 		}
-	})
-	return firstErr
+		after, err := json.Marshal(t)
+		if err != nil {
+			return err
+		}
+		changes = append(changes, store.RecordChange{Table: "transactions", ID: t.ID, Before: before, After: after})
+		restored[t.ID] = true
+	}
+	seen := map[string]bool{}
+	for _, t := range txns {
+		for _, c := range a.transactionDeletes[t.ID] {
+			key := c.Table + "/" + c.ID
+			if seen[key] {
+				continue
+			}
+			var members []string
+			if c.Table == "txnlinks" {
+				var link domain.TxnLink
+				if err := json.Unmarshal(c.Before, &link); err != nil {
+					return err
+				}
+				members = link.TxnIDs
+			} else {
+				var link domain.DebtPaymentLink
+				if err := json.Unmarshal(c.Before, &link); err != nil {
+					return err
+				}
+				members = link.TransactionIDs
+			}
+			complete := true
+			for _, id := range members {
+				if !restored[id] {
+					if _, ok := a.TransactionByID(id); !ok {
+						complete = false
+						break
+					}
+				}
+			}
+			if !complete {
+				continue
+			}
+			seen[key] = true
+			changes = append(changes, store.RecordChange{Table: c.Table, ID: c.ID, Before: c.After, After: c.Before})
+		}
+	}
+	if err := a.store.ReplayChangesExpected(changes); err != nil {
+		return fmt.Errorf("restore transactions: %w", err)
+	}
+	for id := range restored {
+		delete(a.transactionDeletes, id)
+	}
+	a.SyncTxnLinkNetting()
+	a.fireTxnMutated()
+	return nil
 }
 
 // DeleteTransactionWithTransferPair removes a transaction and, when it is one
@@ -3406,7 +3685,7 @@ func (a *App) RestoreTransactions(txns []domain.Transaction) error {
 // leaving the other account permanently short.
 func (a *App) ExpandTransferPairs(ids []string) []string {
 	all := a.Transactions()
-	return expandTransferPairs(all, ids, a.transactionPairRates())
+	return expandTransferPairs(all, ids, a.transactionPairRates(), a.Accounts()...)
 }
 
 func (a *App) transactionPairRates() currency.Rates {
@@ -3418,10 +3697,10 @@ func (a *App) transactionPairRates() currency.Rates {
 	return currency.Rates{Base: base, Rates: s.FXRates}
 }
 
-func expandTransferPairs(all []domain.Transaction, ids []string, rates currency.Rates) []string {
+func expandTransferPairs(all []domain.Transaction, ids []string, rates currency.Rates, accounts ...domain.Account) []string {
 	byID := make(map[string]domain.Transaction, len(all))
 	grouped := make(map[string]map[transferDirection]domain.Transaction)
-	legacy := make(map[legacyTransferIndexKey]domain.Transaction)
+	legacy := make(map[legacyTransferIndexKey][]domain.Transaction)
 	for _, t := range all {
 		byID[t.ID] = t
 		if !t.IsTransfer() {
@@ -3434,8 +3713,8 @@ func expandTransferPairs(all []domain.Transaction, ids []string, rates currency.
 			grouped[t.TransferGroupID][transferDirectionKey(t)] = t
 			continue
 		}
-		if key, ok := legacyTransferPairKey(t, rates); ok {
-			legacy[key] = t
+		if key, ok := legacyTransferPairKey(t, rates, accounts...); ok {
+			legacy[key] = append(legacy[key], t)
 		}
 	}
 	seen := make(map[string]bool, len(ids))
@@ -3447,6 +3726,9 @@ func expandTransferPairs(all []domain.Transaction, ids []string, rates currency.
 		}
 	}
 	for _, id := range ids {
+		if seen[id] {
+			continue
+		}
 		add(id)
 		if t, ok := byID[id]; ok && t.IsTransfer() {
 			var candidates []domain.Transaction
@@ -3454,14 +3736,17 @@ func expandTransferPairs(all []domain.Transaction, ids []string, rates currency.
 				if candidate, ok := grouped[t.TransferGroupID][transferDirectionKey(t).reverse()]; ok {
 					candidates = append(candidates, candidate)
 				}
-			} else if key, ok := legacyTransferPairKey(t, rates); ok {
-				if candidate, exists := legacy[reverseLegacyTransferKey(key)]; exists {
-					candidates = append(candidates, candidate)
-				}
+			} else if key, ok := legacyTransferPairKey(t, rates, accounts...); ok {
+				candidates = legacy[reverseLegacyTransferKey(key)]
 			}
-			for _, u := range candidates {
-				if isReciprocalTransferLegWithRates(t, u, rates) {
+			for i, u := range candidates {
+				if !seen[u.ID] && isReciprocalTransferLegWithRates(t, u, rates, accounts...) {
 					add(u.ID)
+					if t.TransferGroupID == "" {
+						if key, ok := legacyTransferPairKey(t, rates, accounts...); ok {
+							legacy[reverseLegacyTransferKey(key)] = candidates[i+1:]
+						}
+					}
 					break
 				}
 			}
@@ -3477,7 +3762,7 @@ func (a *App) DeleteTransactionsBulk(ids []string) ([]string, error) {
 		return nil, err
 	}
 	all := a.Transactions()
-	toDel := expandTransferPairs(all, ids, a.transactionPairRates())
+	toDel := expandTransferPairs(all, ids, a.transactionPairRates(), a.Accounts()...)
 	return a.deleteTransactionsAtomic(toDel)
 }
 
@@ -3492,63 +3777,39 @@ func (a *App) DeleteTransactionsBulkExpanded(ids []string) ([]string, error) {
 }
 
 func (a *App) deleteTransactionsAtomic(ids []string) ([]string, error) {
-	deleted, err := a.store.DeleteTransactionsWithDebtPaymentsAtomic(ids)
+	changes, deleted, err := a.transactionDeleteChanges(ids)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("plan transaction deletion: %w", err)
 	}
-	deletedSet := make(map[string]struct{}, len(deleted))
-	for _, id := range deleted {
-		deletedSet[id] = struct{}{}
+	if len(deleted) == 0 {
+		return nil, nil
 	}
-	if len(deletedSet) > 0 {
-		if err := a.pruneTxnLinks(deletedSet); err != nil {
-			return deleted, err
+	if err := a.store.ReplayChangesExpected(changes); err != nil {
+		return nil, fmt.Errorf("delete transactions: %w", err)
+	}
+	var relations []store.RecordChange
+	for _, c := range changes {
+		if c.Table != "transactions" {
+			relations = append(relations, c)
 		}
 	}
-	if len(deleted) > 0 {
-		a.fireTxnMutated()
+	if len(relations) > 0 {
+		if a.transactionDeletes == nil {
+			a.transactionDeletes = map[string][]store.RecordChange{}
+		}
+		for _, id := range deleted {
+			a.transactionDeletes[id] = relations
+		}
 	}
+	a.SyncTxnLinkNetting()
+	a.fireTxnMutated()
 	return deleted, nil
 }
 
+// DeleteTransactionWithTransferPair deletes both legs and their relationships.
 func (a *App) DeleteTransactionWithTransferPair(id string) error {
-	if err := a.roleGuard(); err != nil {
-		return err
-	}
-	all := a.Transactions()
-	var target domain.Transaction
-	found := false
-	for _, t := range all {
-		if t.ID == id {
-			target, found = t, true
-			break
-		}
-	}
-	ids := []string{id}
-	if found && target.IsTransfer() {
-		for _, partnerID := range expandTransferPairs(all, []string{id}, a.transactionPairRates())[1:] {
-			if partnerID != id {
-				ids = append(ids, partnerID)
-			}
-		}
-	}
-	deleted, err := a.store.DeleteTransactionsWithDebtPaymentsAtomic(ids)
-	if err != nil {
-		return err
-	}
-	deletedSet := make(map[string]struct{}, len(deleted))
-	for _, deletedID := range deleted {
-		deletedSet[deletedID] = struct{}{}
-	}
-	if len(deletedSet) > 0 {
-		if err := a.pruneTxnLinks(deletedSet); err != nil {
-			return err
-		}
-	}
-	if len(deleted) > 0 {
-		a.fireTxnMutated()
-	}
-	return nil
+	_, err := a.DeleteTransactionsBulk([]string{id})
+	return err
 }
 
 // isReciprocalTransferLeg reports whether candidate is the far side of target.
@@ -3568,7 +3829,7 @@ func isReciprocalTransferLeg(target, candidate domain.Transaction) bool {
 	return isReciprocalTransferLegWithRates(target, candidate, currency.Rates{})
 }
 
-func isReciprocalTransferLegWithRates(target, candidate domain.Transaction, rates currency.Rates) bool {
+func isReciprocalTransferLegWithRates(target, candidate domain.Transaction, rates currency.Rates, accounts ...domain.Account) bool {
 	if candidate.ID == target.ID || !candidate.IsTransfer() {
 		return false
 	}
@@ -3580,11 +3841,13 @@ func isReciprocalTransferLegWithRates(target, candidate domain.Transaction, rate
 	}
 	if candidate.AccountID != target.TransferAccountID ||
 		candidate.TransferAccountID != target.AccountID || !candidate.Date.Equal(target.Date) ||
-		candidate.Amount.IsNegative() == target.Amount.IsNegative() {
+		transferNegative(candidate, accounts) == transferNegative(target, accounts) {
 		return false
 	}
 	if candidate.Amount.Currency == target.Amount.Currency {
-		return candidate.Amount.Amount == -target.Amount.Amount
+		left, e1 := money.Abs(candidate.Amount.Amount)
+		right, e2 := money.Abs(target.Amount.Amount)
+		return e1 == nil && e2 == nil && left == right
 	}
 	if rates.Base == "" {
 		return false
@@ -3597,7 +3860,7 @@ func isReciprocalTransferLegWithRates(target, candidate domain.Transaction, rate
 	return err == nil && candidateBase.Amount == targetBase.Amount
 }
 
-func legacyTransferPairKey(t domain.Transaction, rates currency.Rates) (legacyTransferIndexKey, bool) {
+func legacyTransferPairKey(t domain.Transaction, rates currency.Rates, accounts ...domain.Account) (legacyTransferIndexKey, bool) {
 	if t.TransferGroupID != "" || !t.IsTransfer() || t.TransferAccountID == "" {
 		return legacyTransferIndexKey{}, false
 	}
@@ -3609,8 +3872,18 @@ func legacyTransferPairKey(t domain.Transaction, rates currency.Rates) (legacyTr
 		}
 	}
 	key := legacyTransferIndexKey{AccountID: t.AccountID, TransferAccountID: t.TransferAccountID,
-		Date: t.Date.UnixNano(), Currency: currencyCode, Amount: amount, Negative: t.Amount.IsNegative()}
+		Date: t.Date.UnixNano(), Currency: currencyCode, Amount: amount, Negative: transferNegative(t, accounts)}
 	return key, true
+}
+
+// transferNegative describes economic direction rather than a liability's
+// booking sign. TCS1 owns the account convention; pairing consumes that API.
+func transferNegative(t domain.Transaction, accounts []domain.Account) bool {
+	negative := t.Amount.IsNegative()
+	if account, ok := domain.AccountByID(accounts, t.AccountID); ok && account.InflowSign() < 0 {
+		return !negative
+	}
+	return negative
 }
 
 type legacyTransferIndexKey struct {

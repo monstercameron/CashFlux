@@ -73,18 +73,10 @@ func useBudgetRowLimitDraft(s budgeting.Status) budgetRowLimitDraftResult {
 		return nil
 	}, limitEditing.Get())
 	startLimitEdit := ui.UseEvent(Prevent(func() {
-		// Seed from the STORED base limit — s.Budget here is the evaluation copy whose
-		// Limit has rollover carry / period boosts folded in (the effective cap). If the
-		// draft seeded from that, an untouched save would silently rewrite the base
-		// limit to the cap, destroying the carry distinction. Look up the real budget.
-		seed := s.Budget.Limit
-		if app := appstate.Default; app != nil {
-			for _, bb := range app.Budgets() {
-				if bb.ID == s.Budget.ID {
-					seed = bb.Limit
-					break
-				}
-			}
+		// The displayed period can precede later edits to the standing plan.
+		seed := s.Base
+		if seed.Currency == "" {
+			seed = s.Budget.Limit
 		}
 		limitDraft.Set(money.FormatMinor(seed.Amount, limitDec))
 		limitEditing.Set(true)
@@ -196,7 +188,15 @@ func queueBudgetLimitSave(s budgeting.Status, amount int64, viewedPeriod period.
 			break
 		}
 	}
-	if !found || budget.Limit.Amount == amount {
+	if !found {
+		return
+	}
+	priorBase, err := budgeting.BudgetBaseAt(budget, budgetViewAnchor(viewedPeriod, budgetNow()))
+	if err != nil {
+		uistate.PostNotice(budgetErrorText(err), true)
+		return
+	}
+	if priorBase.Amount == amount {
 		editing.Set(false)
 		restoreFocus.Set(true)
 		return

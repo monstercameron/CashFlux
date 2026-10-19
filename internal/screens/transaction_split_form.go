@@ -37,12 +37,7 @@ func transactionSplitForm(props TransactionSplitFormProps) ui.Node {
 	var txn domain.Transaction
 	found := false
 	if app != nil {
-		for _, t := range app.Transactions() {
-			if t.ID == props.TxnID {
-				txn, found = t, true
-				break
-			}
-		}
+		txn, found = app.TransactionByID(props.TxnID)
 	}
 
 	// Consume a receipt-derived proposal once so the editor can review its lines.
@@ -76,6 +71,24 @@ func transactionSplitForm(props TransactionSplitFormProps) ui.Node {
 		}
 		return nil
 	}, props.TxnID, found)
+	suggestionUse := ui.UseCallback(func(lines []domain.CategorySplit) {
+		if len(lines) == 0 {
+			return
+		}
+		live := txn
+		live.Splits = lines
+		seededTxn.Set(live)
+		proposedNote.Set("")
+		haveSeed.Set(true)
+		draftGeneration.Set(draftGeneration.Get() + 1)
+	}, app, props.TxnID, txn.Amount, txn.Payee, txn.Desc)
+	revision := uint64(0)
+	if app != nil {
+		revision = app.Rev()
+	}
+	suggestionNode := ui.UseMemo(func() ui.Node {
+		return ui.CreateElement(splitSuggestHint, splitSuggestProps{Txn: txn, OnUse: suggestionUse})
+	}, app, revision, props.TxnID, txn.Amount, txn.Payee, txn.Desc, draftGeneration.Get())
 	if app == nil {
 		return P(css.Class("empty"), uistate.T("common.notReady"))
 	}
@@ -83,41 +96,29 @@ func transactionSplitForm(props TransactionSplitFormProps) ui.Node {
 		return Fragment()
 	}
 
-	// Route local suggestions and receipt proposals through the same editor state.
-	useProposal := func(lines []domain.CategorySplit) {
-		if len(lines) == 0 {
-			return
-		}
-		t := txn
-		t.Splits = lines
-		seededTxn.Set(t)
-		proposedNote.Set("")
-		haveSeed.Set(true)
-		draftGeneration.Set(draftGeneration.Get() + 1)
-	}
-
 	editorTxn := txn
 	if haveSeed.Get() {
 		// Keep the live transaction's mutable fields but carry the proposed splits.
-		editorTxn = seededTxn.Get()
+		editorTxn.Splits = seededTxn.Get().Splits
 	}
 
 	save := func(updated domain.Transaction) {
 		if saving.Get() {
 			return
 		}
-		if err := app.PutTransaction(updated); err != nil {
-			uistate.PostNotice(err.Error(), true)
+		live, ok := app.TransactionByID(props.TxnID)
+		if !ok {
 			return
 		}
+		live.Splits = append([]domain.CategorySplit(nil), updated.Splits...)
 		isCurrent := saveLease.check()
-		uistate.BumpDataRevision()
 		saving.Set(true)
-		awaitTxnSave(app, []string{updated.ID}, func(err error) {
+		label := uistate.T("splitEditor.cleared")
+		if live.HasSplits() {
+			label = uistate.T("splitEditor.r4Saved")
+		}
+		_ = CommitUndoable(app, label, []string{live.ID}, func() error { return app.PutTransactionsAtomic([]domain.Transaction{live}) }, func(err error) {
 			if !isCurrent() {
-				if err != nil {
-					uistate.PostNotice(uistate.T("txint.splitNotSaved"), true)
-				}
 				return
 			}
 			saving.Set(false)
@@ -125,7 +126,6 @@ func transactionSplitForm(props TransactionSplitFormProps) ui.Node {
 				uistate.PostNotice(uistate.T("txint.splitNotSaved"), true)
 				return
 			}
-			postTransactionSplitNotice(updated.HasSplits())
 			if props.OnDone != nil {
 				props.OnDone()
 			}
@@ -134,7 +134,7 @@ func transactionSplitForm(props TransactionSplitFormProps) ui.Node {
 
 	return Fragment(
 		// Keep suggestion handlers in their own component.
-		ui.CreateElement(splitSuggestHint, splitSuggestProps{Txn: editorTxn, OnUse: useProposal}),
+		suggestionNode,
 		If(proposedNote.Get() != "",
 			Div(css.Class("callout"), Attr("role", "status"), Attr("data-testid", "receipt-split-note"),
 				Style(map[string]string{"margin-bottom": "0.5rem", "padding": "0.6rem 0.75rem",

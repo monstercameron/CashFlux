@@ -324,7 +324,7 @@ func budgetRowGoalFunding(lastMonthMode bool, s budgeting.Status, props budgetRo
 		pStart, pEnd := budgeting.PeriodRangeAnchored(s.Budget.Period, anchor,
 			uistate.LoadPrefs().WeekStartWeekday(), payAnchor)
 		split := memoGoalFunded(app, dataRevision, s.Budget.ID, pStart, pEnd, func() goalfunded.Split {
-			transactions := budgetGoalFundingTransactions(app.Transactions(), app.TxnLinks())
+			transactions := budgetLedgerForApp(app)
 			summary, err := budgetGoalFundedSummary(s.Budget, transactions, app.Categories(), pStart, pEnd,
 				currency.Rates{Base: base, Rates: app.Settings().FXRates})
 			if err != nil {
@@ -481,7 +481,7 @@ func budgetGoalFundingForPeriod(app *appstate.App, start, end time.Time, rates c
 		return nil
 	}
 	goals, budgets, categories := app.Goals(), app.Budgets(), app.Categories()
-	transactions := budgetGoalFundingTransactions(app.Transactions(), app.TxnLinks())
+	transactions := budgetLedgerForApp(app)
 	drawdowns := make(map[string]int64)
 	for _, drawdown := range goalfunded.ByGoal(transactions, start, end, rates) {
 		drawdowns[drawdown.GoalID] = drawdown.SpentMinor
@@ -524,8 +524,8 @@ func budgetGoalFundingForPeriod(app *appstate.App, start, end time.Time, rates c
 	return goalfunded.AllocateAvailable(goals, budgets, categories, available, contributions)
 }
 
-func budgetGoalFundingTransactions(transactions []domain.Transaction, links []domain.TxnLink) []domain.Transaction {
-	return budgeting.NewNettedLedgerWithLinks(transactions, links).Transactions()
+func budgetGoalFundingTransactions(transactions []domain.Transaction, links []domain.TxnLink) budgeting.NettedLedger {
+	return budgeting.NewNettedLedger(transactions, links)
 }
 
 func budgetGoalFundedOverBy(split goalfunded.Split, limit money.Money, rates currency.Rates) (money.Money, error) {

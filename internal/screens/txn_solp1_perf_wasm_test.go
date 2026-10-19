@@ -62,9 +62,8 @@ func TestSOLP1Profile3300(t *testing.T) {
 	})
 	uistate.CapturePersistNow(func() { persists++ })
 	auditview.CaptureNow = func() { captures++ }
-	r3pTime(t, "SOLP1 production recategorise+render", 1, func() {
+	r3pTime(t, "SOLP1 production recategorise+subscribed renders", 1, func() {
 		applyTxnManualCategory(ds.Transactions[0].ID, ds.Categories[1].ID)
-		f.Render(ui.CreateElement(Transactions))
 	})
 	got, ok := app.TransactionByID(ds.Transactions[0].ID)
 	if !ok || got.CategoryID != ds.Categories[1].ID {
@@ -72,7 +71,9 @@ func TestSOLP1Profile3300(t *testing.T) {
 	}
 	t.Logf("SOLP1 work: rows=%d persist requests=%d undo captures=%d", len(ds.Transactions), persists, captures)
 	t.Logf("SOLP1 recategorise counts=%v durations=%v", counts, elapsed)
-	if persists != 1 || captures != 1 || counts["filter-sort"] != 1 || counts["category-picker"] != 0 || counts["ledger-counts"] > 1 || counts["summary"] > 1 {
+	// Count expensive invalidations, not asynchronous decoration renders or
+	// elapsed wall time. Flags/suggestions can settle during a slow CI action.
+	if persists != 1 || captures != 1 || counts["filter-sort"] != 1 || counts["category-picker"] != 0 || counts["ledger-counts"] > 1 || counts["summary"] > 1 || counts["placement-txn-table"] != 1 || counts["placement-txn-toolbar"] != 1 {
 		t.Fatalf("recategorise exceeded work budget: persists=%d captures=%d stages=%v", persists, captures, counts)
 	}
 	r3pTime(t, "SOLP1 deferred flags (still unsliced)", 1, func() {

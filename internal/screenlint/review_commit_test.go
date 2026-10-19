@@ -108,7 +108,7 @@ func TestEveryReviewCommitBranchesOnTheResult(t *testing.T) {
 }
 
 // TestReviewWritesRequestPersist keeps the flush in place on both write helpers.
-func TestReviewWritesRequestPersist(t *testing.T) {
+func TestReviewWritesAwaitDurability(t *testing.T) {
 	path := filepath.Join(internalRoot(t), "screens", "review_inbox.go")
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -119,30 +119,31 @@ func TestReviewWritesRequestPersist(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse review_inbox.go: %v", err)
 	}
-	// C653 collapsed the two write helpers (one keyed on a transaction id, one that
-	// re-derived a merchant key and swept the ledger) into a single one that takes
-	// the exact ids the surface drew. The flush requirement this test exists for is
-	// unchanged; there is just one place left to enforce it.
-	want := map[string]bool{
-		"assignReviewToCharges": false,
+	// Both the legacy adapter and visible actions must reach the same atomic,
+	// durable boundary; a fire-and-forget RequestPersist is no longer sufficient.
+	want := map[string][]string{
+		"assignReviewToCharges":   {"commitReviewAssignments"},
+		"commitReviewAssignments": {"CommitUndoable", "PutTransactionsAtomic"},
 	}
 	for _, decl := range file.Decls {
 		fn, ok := decl.(*ast.FuncDecl)
-		if !ok {
+		if !ok || fn.Body == nil {
 			continue
 		}
-		if _, tracked := want[fn.Name.Name]; !tracked || fn.Body == nil {
+		required, tracked := want[fn.Name.Name]
+		if !tracked {
 			continue
 		}
 		names := callNamesIn(fn.Body)
-		want[fn.Name.Name] = names["uistate.RequestPersist"] || names["RequestPersist"]
-	}
-	for name, ok := range want {
-		if !ok {
-			t.Errorf("%s does not call uistate.RequestPersist — the review loop writes fast and is "+
-				"often closed or reloaded straight after, which is the exact race RequestPersist "+
-				"removes (C553).", name)
+		for _, name := range required {
+			if !names[name] {
+				t.Errorf("%s must call %s for atomic durable review", fn.Name.Name, name)
+			}
 		}
+		delete(want, fn.Name.Name)
+	}
+	for name := range want {
+		t.Errorf("missing review write boundary %s", name)
 	}
 }
 

@@ -59,6 +59,11 @@ func DeduplicateViewIssues(issues []ViewIssue) []ViewIssue {
 		if issue.BudgetID == "" {
 			key = "operation:" + issue.Operation
 		}
+		if issue.Informational {
+			key += ":information"
+		} else if issue.Err != nil || issue.Kind == ViewIssueKindFailure {
+			key += ":failure"
+		}
 		if !seen[key] {
 			seen[key] = true
 			out = append(out, issue)

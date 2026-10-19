@@ -62,7 +62,7 @@ func spendMixSection(props spendMixProps) ui.Node {
 		catName[c.ID] = c.Name
 	}
 	for _, bg := range app.Budgets() {
-		sp, err := budgeting.Spent(bg, app.Transactions(), props.From, props.To, rates)
+		sp, err := budgeting.Spent(bg, budgetLedgerForApp(app), props.From, props.To, rates)
 		if err != nil {
 			continue
 		}

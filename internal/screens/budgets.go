@@ -5,9 +5,10 @@
 package screens
 
 import (
-	"fmt"
+	"encoding/json"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/agemoney"
@@ -40,6 +41,12 @@ import (
 // values as plain arguments, so both the summary and list tiles can build it without
 // sharing state.
 type budgetView struct {
+	// SummaryActual and SummaryIssues cache the union-of-scopes calendar-window
+	// spend alongside the own-cadence statuses. SummaryReady allows isolated view
+	// fixtures to use the uncached helper without making production renders scan.
+	SummaryActual  int64
+	SummaryIssues  []budgeting.ViewIssue
+	SummaryReady   bool
 	Base           string
 	Method         budgeting.Methodology
 	Statuses       []budgeting.Status
@@ -358,29 +365,88 @@ func savingsMonthlyBaseChecked(monthly int64, monthlyCurrency, base string, rate
 // the same statuses drive the summary totals, the banners, and the rows. Pure (no
 // hooks) — the caller resolves the active member, period window, and prefs and passes
 // them in, so it can be called from more than one tile without hook-ordering issues.
-// budgetViewCache memoizes computeBudgetView within/across renders. The budgets surface
-// renders several tiles (summary, list, savings, formula) that each call it with the same
-// inputs in one frame — without this, the full budget-over-all-transactions evaluation
-// ran once per tile. The key captures the app instance, data revision, member scope, period
-// window, last-month toggle, base currency + FX rates, and prefs. App identity matters
-// because separate instances can have the same process-wide revision. The
-// map is cleared once it grows past a small cap (old data-revision keys are dead weight).
-var budgetViewCache = map[string]budgetView{}
+// budgetViewKey contains only identity, revisions and scalar view inputs. Settings
+// (including FX) are covered by the store revision; preferences get a local
+// version when their serialized value changes. No FX map formatting is needed.
+type budgetViewKey struct {
+	App                *appstate.App
+	Revision           uint64
+	DataRevision       int
+	Member             string
+	Start, End, Anchor time.Time
+	PrefsVersion       uint64
+	Prior              bool
+}
 
-// computeBudgetView is the memoized entry point; computeBudgetViewRaw does the work.
+var budgetViewCache = struct {
+	sync.Mutex
+	values       map[budgetViewKey]budgetView
+	order        []budgetViewKey
+	prefs        string
+	prefsVersion uint64
+}{values: make(map[budgetViewKey]budgetView)}
+
+// budgetLedgerForApp shares the single netting pass across all budget surfaces
+// for an app's data revision. Entries are bounded without flushing other apps.
+var budgetLedgerCache = struct {
+	sync.Mutex
+	values map[*appstate.App]struct {
+		revision uint64
+		ledger   budgeting.NettedLedger
+	}
+	order []*appstate.App
+}{values: make(map[*appstate.App]struct {
+	revision uint64
+	ledger   budgeting.NettedLedger
+})}
+
+func budgetLedgerForApp(app *appstate.App) budgeting.NettedLedger {
+	budgetLedgerCache.Lock()
+	defer budgetLedgerCache.Unlock()
+	revision := app.Rev()
+	if entry, ok := budgetLedgerCache.values[app]; ok && entry.revision == revision {
+		return entry.ledger
+	}
+	ledger := budgeting.NewNettedLedger(app.Transactions(), app.TxnLinks())
+	if _, ok := budgetLedgerCache.values[app]; !ok {
+		if len(budgetLedgerCache.order) == 8 {
+			delete(budgetLedgerCache.values, budgetLedgerCache.order[0])
+			budgetLedgerCache.order = budgetLedgerCache.order[1:]
+		}
+		budgetLedgerCache.order = append(budgetLedgerCache.order, app)
+	}
+	budgetLedgerCache.values[app] = struct {
+		revision uint64
+		ledger   budgeting.NettedLedger
+	}{revision, ledger}
+	return ledger
+}
+
+// computeBudgetView memoizes completed views with synchronized bounded eviction.
 func computeBudgetView(app *appstate.App, activeMemberID string, vw period.Window, pr prefs.Prefs, showLastMonth bool) budgetView {
-	s := app.Settings()
-	anchor := budgetViewAnchor(vw, time.Now())
-	key := fmt.Sprintf("%p|%d|%s|%v|%t|%s|%v|%v|%s",
-		app, uistate.CurrentDataRevision(), activeMemberID, vw, showLastMonth, s.BaseCurrency, s.FXRates, pr, dateutil.FormatDate(anchor))
-	if v, ok := budgetViewCache[key]; ok {
+	if app == nil {
+		return budgetView{}
+	}
+	budgetViewCache.Lock()
+	defer budgetViewCache.Unlock()
+	encoded, _ := json.Marshal(pr)
+	if budgetViewCache.prefs != string(encoded) {
+		budgetViewCache.prefs = string(encoded)
+		budgetViewCache.prefsVersion++
+	}
+	start, end := vw.Range()
+	key := budgetViewKey{App: app, Revision: app.Rev(), DataRevision: uistate.CurrentDataRevision(), Member: activeMemberID, Start: start, End: end,
+		Anchor: dateutil.CalendarDayUTC(budgetViewAnchor(vw, time.Now())), PrefsVersion: budgetViewCache.prefsVersion, Prior: showLastMonth}
+	if v, ok := budgetViewCache.values[key]; ok {
 		return v
 	}
-	if len(budgetViewCache) > 8 {
-		budgetViewCache = map[string]budgetView{}
-	}
 	v := computeBudgetViewRaw(app, activeMemberID, vw, pr, showLastMonth)
-	budgetViewCache[key] = v
+	if len(budgetViewCache.order) == 8 {
+		delete(budgetViewCache.values, budgetViewCache.order[0])
+		budgetViewCache.order = budgetViewCache.order[1:]
+	}
+	budgetViewCache.order = append(budgetViewCache.order, key)
+	budgetViewCache.values[key] = v
 	return v
 }
 
@@ -388,7 +454,7 @@ func computeBudgetViewRaw(app *appstate.App, activeMemberID string, vw period.Wi
 	base := budgetBaseCurrency(app.Settings().BaseCurrency)
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 	start, end := vw.Range()
-	ledger := budgeting.NewNettedLedgerWithLinks(app.Transactions(), app.TxnLinks())
+	ledger := budgetLedgerForApp(app)
 	input := budgeting.ViewInput{
 		Ledger:       &ledger,
 		Period:       budgeting.ResolveViewPeriod(start, end, time.Now(), pr.WeekStartWeekday(), budgetPayCycleAnchor(pr.PayCycleAnchor)),
@@ -404,6 +470,8 @@ func computeBudgetViewRaw(app *appstate.App, activeMemberID string, vw period.Wi
 	builder.addEnvelopes(budgets, app.Settings().BudgetMethodology)
 	builder.addIncome(pr)
 	builder.addSavings(app, activeMemberID)
+	builder.view.SummaryActual, builder.view.SummaryIssues = budgetSummaryActualSpendNetted(ledger, app.Categories(), builder.view.Statuses, vw, showLastMonth, rates, base)
+	builder.view.SummaryReady = true
 	return builder.view
 }
 
@@ -951,4 +1019,21 @@ func checkedAttr(checked bool) []any {
 func budgetViewAnchor(vw period.Window, now time.Time) time.Time {
 	start, end := vw.Range()
 	return budgeting.ResolveViewPeriod(start, end, now, time.Sunday, time.Time{}).Anchor
+}
+
+// budgetLedgerForTransactions preserves full-ledger refund resolution while
+// restricting budget reads to the transaction IDs chosen by the caller's scope.
+func budgetLedgerForTransactions(app *appstate.App, txns []domain.Transaction) budgeting.NettedLedger {
+	ledger := budgetLedgerForApp(app)
+	ids := make(map[string]bool, len(txns))
+	for _, txn := range txns {
+		ids[txn.ID] = true
+	}
+	scoped := make(budgeting.NettedLedger, 0, len(txns))
+	for _, txn := range ledger {
+		if ids[txn.ID] {
+			scoped = append(scoped, txn)
+		}
+	}
+	return scoped
 }

@@ -16,6 +16,7 @@
 package smartengine
 
 import (
+	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/copytext"
@@ -34,9 +35,11 @@ import (
 // into it. Now is the reference clock (engines never call time.Now themselves, so
 // they are deterministic and testable).
 type Input struct {
-	Now   time.Time
-	Base  string
-	Rates currency.Rates
+	// Ledger is the immutable scope-local refund-netted budget read model.
+	Ledger budgeting.NettedLedger
+	Now    time.Time
+	Base   string
+	Rates  currency.Rates
 
 	// WeekStart is the household's first day of the week, used to bound weekly
 	// budget periods. The zero value (Sunday) is a sensible default.
@@ -78,6 +81,13 @@ type Input struct {
 	// detector should skip these so a matched bill is not re-flagged as missed.
 	// Populated by the wasm adapter from appstate.BillMatchPaidOccurrences().
 	PaidOccurrences map[string]bool
+}
+
+func (in Input) budgetLedger() budgeting.NettedLedger {
+	if in.Ledger != nil {
+		return in.Ledger
+	}
+	return budgeting.NewNettedLedger(in.Transactions)
 }
 
 // OccurrencePaid reports whether the recurring occurrence (recurringID + due
@@ -177,6 +187,9 @@ func ImplementedCodes() []string {
 // off feature costs nothing — the structural guarantee that the SMART layer
 // never slows a core flow until asked for.
 func Run(in Input, s smart.Settings) []smart.Insight {
+	if in.Ledger == nil {
+		in.Ledger = budgeting.NewNettedLedger(in.Transactions)
+	}
 	var out []smart.Insight
 	codes := s.ActiveCodes() // enabled AND not muted
 	in = in.withDetectedSubs(codes)
@@ -193,6 +206,9 @@ func Run(in Input, s smart.Settings) []smart.Insight {
 // RunPage is Run scoped to a single page — used by per-page Smart panels so a
 // page only computes its own engines.
 func RunPage(in Input, s smart.Settings, page smart.Page) []smart.Insight {
+	if in.Ledger == nil {
+		in.Ledger = budgeting.NewNettedLedger(in.Transactions)
+	}
 	var out []smart.Insight
 	var codes []string
 	for _, f := range s.EnabledFeaturesForPage(page) {

@@ -48,15 +48,8 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 		nameS: nameS, b: editData.b, limitMajor: editData.limitMajor, props: props, coverDefaultStr: editData.coverDefaultStr,
 		found: editData.found, dec: editData.dec,
 	})
-	onToggleSrc, onWeightSrc, onToggleMax := budgetEditSourceCallbacks(editDraft.coverSelS, editDraft.coverWtS, editDraft.coverMaxS)
-	submitCover := useBudgetEditCoverSave(budgetEditCoverSaveProps{
-		app: editData.app, done: editData.done, amtFxS: editDraft.amtFxS, pr: editData.pr, coverPayAnchor: editData.coverPayAnchor,
-		amtFormulaS: editDraft.amtFormulaS, b: editData.b, errS: editDraft.errS, coverAmtS: editDraft.coverAmtS, dec: editData.dec,
-		coverSrcs: editData.coverSrcs, coverSelS: editDraft.coverSelS, recurringS: editDraft.recurringS, coverWtS: editDraft.coverWtS,
-		wtFxS: editDraft.wtFxS, wtFormulaS: editDraft.wtFormulaS, coverMaxS: editDraft.coverMaxS, cur: editData.cur, props: props,
-		viewAnchor: editData.viewAnchor, coverCustomVals: editDraft.coverCustomVals,
-	})
-	cancel, onCustom, onCoverCustom := useBudgetEditCustomCallbacks(editData.done, editDraft.customEditVals, editDraft.coverCustomVals)
+	onToggleSrc, _, _ := budgetEditSourceCallbacks(editDraft.coverSelS, editDraft.coverWtS, editDraft.coverMaxS)
+	cancel, onCustom, _ := useBudgetEditCustomCallbacks(editData.done, editDraft.customEditVals, editDraft.coverCustomVals)
 
 	saveEdit := useBudgetEditSave(budgetEditSaveProps{
 		app: editData.app, done: editData.done, props: props, nameS: nameS, ev: editDraft.ev, errS: editDraft.errS,
@@ -100,17 +93,7 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 
 	// --- Cover: spread the overspend across one or more source budgets. ---
 	if props.Mode == uistate.BudgetEditModeCover {
-		return ui.CreateElement(budgetEditCover, budgetEditCoverProps{
-			coverSrcs: editData.coverSrcs, coverIncomplete: editData.coverIncomplete, app: editData.app, pr: editData.pr,
-			coverPayAnchor: editData.coverPayAnchor, amtFxS: editDraft.amtFxS, amtFormulaS: editDraft.amtFormulaS, b: editData.b,
-			cur: editData.cur, coverAmtS: editDraft.coverAmtS, dec: editData.dec, coverWtS: editDraft.coverWtS, wtFxS: editDraft.wtFxS,
-			coverSelS: editDraft.coverSelS, wtFormulaS: editDraft.wtFormulaS, coverMaxS: editDraft.coverMaxS, onToggleSrc: onToggleSrc,
-			onWeightSrc: onWeightSrc, onToggleMax: onToggleMax, submitCover: submitCover, coverShortfallStr: editData.coverShortfallStr,
-			onAmtFormula: editDraft.onAmtFormula, onCoverAmt: editDraft.onCoverAmt, coverDefaultStr: editData.coverDefaultStr,
-			fullCover: editDraft.fullCover, toggleAmtFx: editDraft.toggleAmtFx, toggleWtFx: editDraft.toggleWtFx,
-			onWtFormula: editDraft.onWtFormula, onToggleRecurring: editDraft.onToggleRecurring, recurringS: editDraft.recurringS,
-			coverCustomVals: editDraft.coverCustomVals, onCoverCustom: onCoverCustom, errLine: errLine, cancel: cancel,
-		})
+		return ui.CreateElement(budgetEditCover, budgetEditCoverProps{b: editData.b})
 	}
 
 	// --- Top-up: raise the budget's cap (this period only or permanently), optionally
@@ -230,7 +213,7 @@ func budgetFormulasView(b domain.Budget, st budgeting.Status, haveStatus bool, c
 	prefix := "budget_" + engineenv.BudgetVarSlug(slugSrc) + "_"
 	var rows []any
 	if haveStatus {
-		limit, _ := st.Spent.Add(st.Remaining)
+		limit := st.Limit
 		over := money.New(0, cur)
 		if st.Remaining.IsNegative() {
 			over = st.Remaining.Abs()
@@ -330,9 +313,8 @@ func budgetRecommendationLine(app *appstate.App, b domain.Budget, status budgeti
 	if scope.IsEmpty() {
 		return Fragment()
 	}
-	txns, suggestionCovers := suggestTransactionsForScope(covers, scope.Tags, app.Transactions())
-	ledger := budgeting.NewNettedLedgerWithLinks(txns, app.TxnLinks())
-	recommendation, err := budgeting.RecommendBudgetLimitWithContext(b, suggestionCovers, ledger.Transactions(), anchor, 3,
+	ledger := budgetLedgerForApp(app)
+	recommendation, err := budgeting.RecommendBudgetLimitWithContext(b, covers, ledger, anchor, 3,
 		projected, rates, userPrefs.WeekStartWeekday(), payAnchor)
 	if err != nil {
 		return P(css.Class("t-caption", tw.TextWarn), Attr("data-testid", "budget-limit-recommendation-incomplete"), uistate.T("budgets.recommendationIncomplete"))
@@ -529,14 +511,16 @@ func buildCoverContext(app *appstate.App, weekStart time.Weekday, payCycleAnchor
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 	ms, me := dateutil.MonthRange(now)
 	surface := engineenv.Vars(engineenv.Data{
+		Ledger:   budgetLedgerForApp(app),
 		Accounts: app.Accounts(), Transactions: app.Transactions(), Members: app.Members(),
 		Budgets: app.Budgets(), Goals: app.Goals(), Tasks: app.Tasks(), Recurring: app.Recurring(),
 		Rates: rates, Now: now, PeriodStart: ms, PeriodEnd: me, WeekStart: weekStart,
 		CustomDefs: app.CustomFieldDefs(), Molecules: app.Molecules(),
 	})
 	return coverformula.Context{
-		Base: surface, Txns: app.Transactions(), Rates: rates, Now: now,
+		Base: surface, Txns: budgetLedgerForApp(app), Rates: rates, Now: now,
 		WeekStart: weekStart, PayCycleAnchor: payCycleAnchor, Defs: app.CustomFieldDefs(),
+		Categories: app.Categories(), Recurring: app.Recurring(), PoolRollover: uistate.CurrentPrefs().BudgetRolloverLeftover,
 	}
 }
 

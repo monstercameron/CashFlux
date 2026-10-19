@@ -23,9 +23,9 @@ type CompositionSlice struct {
 // transaction for goal-funded attribution. Splits are resolved by Contribution;
 // the returned copies have no splits, so later attribution cannot recount them.
 // Refund links must be resolved on the input ledger before calling this helper.
-func ContributingTransactions(b domain.Budget, all []domain.Transaction, start, end time.Time, covers map[string]bool) ([]domain.Transaction, error) {
+func ContributingTransactions(b domain.Budget, all NettedLedger, start, end time.Time, covers map[string]bool) ([]domain.Transaction, error) {
 	var out []domain.Transaction
-	for _, t := range nettedForSpending(all) {
+	for _, t := range all {
 		if !dateutil.InRange(t.Date, start, end) {
 			continue
 		}
@@ -51,10 +51,10 @@ func ContributingTransactions(b domain.Budget, all []domain.Transaction, start, 
 // Each transaction is converted once for its total; any category rounding residue
 // goes to its last sorted category. Consequently the signed slices sum exactly
 // to Spent, including discounts, tags, descendants, FX and individual ownership.
-func CompositionSlices(b domain.Budget, all []domain.Transaction, start, end time.Time, rates currency.Rates, covers map[string]bool) ([]CompositionSlice, error) {
+func CompositionSlices(b domain.Budget, all NettedLedger, start, end time.Time, rates currency.Rates, covers map[string]bool) ([]CompositionSlice, error) {
 	totals := map[string]money.Money{}
 	cur := normalizedLimit(b, rates).Currency
-	for _, t := range nettedForSpending(all) {
+	for _, t := range all {
 		if !dateutil.InRange(t.Date, start, end) {
 			continue
 		}

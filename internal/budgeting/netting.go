@@ -7,43 +7,55 @@ import (
 	"github.com/monstercameron/CashFlux/internal/txnlinks"
 )
 
-// refundLinks holds the refund-pair links (XC2) whose netting budget spend
-// evaluation folds in. It is a read-model overlay only: the ledger atoms are
-// never rewritten. Order-group links are ignored here — grouping is presentation
-// and changes no totals. Installed by SetRefundLinks; nil disables netting.
-var refundLinks []domain.TxnLink
+// NettedLedger is a read-only refund-netted transaction view. Build it once for
+// a data revision and share it across evaluators. Its slice and nested values
+// must not be mutated; evaluators select contributions without copying rows.
+// An ordinary transaction slice is assignable when no refund links apply.
+type NettedLedger []domain.Transaction
 
-// Deprecated: pass NewNettedLedgerWithLinks in ViewInput.Ledger instead.
-// SetRefundLinks installs the refund-pair links whose per-period netting budget
-// spend evaluation applies. Pass the app's full link set (order groups are
-// filtered out internally); call again when links change, or with nil to disable.
-//
-// With these installed, a return posted in April against a purchase in March is
-// netted into March's budget (the purchase reads as net spend) and contributes
-// nothing to April — no phantom negative. The ledger keeps both transactions.
-func SetRefundLinks(links []domain.TxnLink) {
-	filtered := links[:0:0]
-	for _, l := range links {
-		if l.Kind == domain.TxnLinkRefundPair {
-			filtered = append(filtered, l)
+// NewNettedLedger folds explicit refund links into a scope-local read model.
+// Passing an existing NettedLedger is idempotent, even with the same links:
+// refunds are never applied a second time. Rebuild from raw transactions when
+// the data revision or links change. Omitting links means no refund netting.
+func NewNettedLedger[T ~[]domain.Transaction](all T, links ...[]domain.TxnLink) NettedLedger {
+	if ledger, ok := any(all).(NettedLedger); ok {
+		return ledger
+	}
+	if len(links) == 0 || len(links[0]) == 0 {
+		return NettedLedger(all)
+	}
+	// Only linked rows need the refund resolver's ID index. Indexing the entire
+	// ledger as Transaction values would copy hundreds of bytes per row again.
+	wanted := make(map[string]bool, 2*len(links[0]))
+	for _, link := range links[0] {
+		if link.Kind == domain.TxnLinkRefundPair && len(link.TxnIDs) == 2 {
+			wanted[link.TxnIDs[0]], wanted[link.TxnIDs[1]] = true, true
 		}
 	}
-	refundLinks = filtered
-}
-
-// nettedForSpending folds installed refund-pair netting into txns for budget
-// spend evaluation, returning the input unchanged when no refund links are set.
-// This is the single hook spentCovered calls.
-func nettedForSpending(txns []domain.Transaction) []domain.Transaction {
-	if len(refundLinks) == 0 {
-		return txns
+	if len(wanted) == 0 {
+		return NettedLedger(all)
 	}
-	return txnlinks.NetTransactions(txns, refundLinks)
+	linked := make([]domain.Transaction, 0, len(wanted))
+	for i := range all {
+		if wanted[all[i].ID] {
+			linked = append(linked, all[i])
+		}
+	}
+	adjustments := txnlinks.NetAdjustments(linked, links[0])
+	if len(adjustments) == 0 {
+		return NettedLedger(all)
+	}
+	out := make(NettedLedger, len(all))
+	copy(out, all)
+	for i := range out {
+		if adjustment, ok := adjustments[out[i].ID]; ok {
+			out[i].Amount.Amount += adjustment.Amount
+		}
+	}
+	return out
 }
 
-// NewNettedLedgerWithLinks creates a scope-local refund read model. An explicit
-// nil links slice means no refunds, independent of any legacy SetRefundLinks
-// caller. Pass this ledger in ViewInput.Ledger for deterministic evaluation.
-func NewNettedLedgerWithLinks(all []domain.Transaction, links []domain.TxnLink) NettedLedger {
-	return NettedLedger{transactions: txnlinks.NetTransactions(all, links)}
-}
+// Transactions returns the read-only ledger view without allocating or copying.
+// Keep its NettedLedger type when passing it to another budgeting evaluator so
+// reconstructing the read model remains idempotent. Never mutate this view.
+func (l NettedLedger) Transactions() NettedLedger { return l }

@@ -65,8 +65,10 @@ func budgetsSweepCard(_ struct{}) ui.Node {
 	hidden := ui.UseState("")
 	_ = uistate.UseActiveScope().Get()
 	memberID := uistate.ActiveMemberFromScope()
-	var monthKey, totalStr, goalName, base string
+	var monthKey, totalStr, goalName, base, capacityStr string
 	var amount int64
+	var planBudgetIDs []string
+	var capacityLimited bool
 	nav := router.UseNavigate()
 	onDismiss := ui.UseEvent(func() {
 		markSweepPromptHandledForMember(monthKey, memberID)
@@ -78,9 +80,11 @@ func budgetsSweepCard(_ struct{}) ui.Node {
 			return
 		}
 		if _, err := app.ApplyLeftoverSweep(uistate.SweepConfigGet().TargetGoalID, amount, base); err != nil {
-			uistate.PostNotice(err.Error(), true)
+			slog.Warn("apply leftover sweep", "err", err)
+			uistate.PostNotice(uistate.T("sweep.applyError"), true)
 			return
 		}
+		markSweepBudgetIDs(monthKey, planBudgetIDs, "swept")
 		markSweepPromptHandledForMember(monthKey, memberID)
 		uistate.BumpDataRevision()
 		uistate.RequestPersist()
@@ -114,7 +118,11 @@ func budgetsSweepCard(_ struct{}) ui.Node {
 	input.Period.PayCycleAnchor = budgetPayCycleAnchor(pr.PayCycleAnchor)
 	input.PoolRollover = pr.BudgetRolloverLeftover
 	base = input.Base
-	plan, err := budgeting.EvaluateSweep(app.Budgets(), input, cfg.Domain(), memberID, app.SweepAllowedForGoal)
+	budgets := app.Budgets()
+	domainCfg := cfg.Domain()
+	domainCfg.SweptBudgetIDs = sweepBudgetIDs(monthKey, domainCfg.BudgetIDs)
+	plan, err := budgeting.EvaluateSweepWithMethodology(budgets, input, domainCfg, memberID,
+		budgeting.Methodology(app.Settings().BudgetMethodology), app.SweepAllowedForGoal)
 	if err != nil {
 		slog.Error("calculate month-close sweep", "err", err)
 		return sweepHold(err)
@@ -122,11 +130,25 @@ func budgetsSweepCard(_ struct{}) ui.Node {
 	if !plan.HasLeftover() {
 		return Fragment()
 	}
+	for _, line := range plan.Lines {
+		planBudgetIDs = append(planBudgetIDs, line.BudgetID)
+	}
 
 	goalName = goalNameByID(app, cfg.TargetGoalID)
 	dec := currency.Decimals(base)
-	totalStr = money.FormatMinor(plan.Total.Amount, dec)
 	amount = plan.Total.Amount
+	if !plan.Blocked && cfg.TargetGoalID != "" {
+		capacity, capacityErr := app.LeftoverSweepCapacity(cfg.TargetGoalID, base)
+		if capacityErr != nil {
+			return sweepHold(capacityErr)
+		}
+		if capacity < amount {
+			amount = capacity
+			capacityLimited = true
+			capacityStr = money.FormatMinor(amount, dec)
+		}
+	}
+	totalStr = money.FormatMinor(amount, dec)
 
 	// The primary action, or — when the target goal's account is over-earmarked
 	// (XC7 gate) — a quiet explanation with a "Review goals" nudge instead.
@@ -161,6 +183,7 @@ func budgetsSweepCard(_ struct{}) ui.Node {
 				Div(css.Class("catchup-card-text"),
 					Strong(uistate.T("sweep.cardTitle")),
 					P(uistate.T("sweep.cardBody", totalStr, sweepBudgetCountPhrase(plan.BudgetCount()), goalName)),
+					IfElse(capacityLimited, P(css.Class("t-caption", tw.TextDim), uistate.T("sweep.capacityLimited", capacityStr)), Fragment()),
 				),
 			),
 			action,
@@ -190,9 +213,33 @@ func sweepMemberPromptKey(memberID string) string {
 	return "cashflux:budgets:sweepprompt:member:" + memberID
 }
 
+func sweepBudgetStatusKey(month, budgetID string) string {
+	return "cashflux:budgets:sweep:" + month + ":" + budgetID
+}
+
+func sweepBudgetIDs(month string, budgetIDs []string) []string {
+	var done []string
+	for _, id := range budgetIDs {
+		status := uistate.KVGet(sweepBudgetStatusKey(month, id))
+		if status == "swept" || status == "dismissed" {
+			done = append(done, id)
+		}
+	}
+	return done
+}
+
+func markSweepBudgetIDs(month string, budgetIDs []string, status string) {
+	for _, id := range budgetIDs {
+		if id != "" {
+			uistate.KVSet(sweepBudgetStatusKey(month, id), status)
+		}
+	}
+}
+
 func sweepHold(err error) ui.Node {
+	slog.Error("leftover sweep is unavailable", "err", err)
 	return Div(css.Class("catchup-card"), Attr("role", "status"), Attr("data-testid", "sweep-hold"),
-		Strong(uistate.T("sweep.cardTitle")), P(uistate.T("sweep.error", err.Error())))
+		Strong(uistate.T("sweep.cardTitle")), P(uistate.T("sweep.errorSafe")))
 }
 
 // budgetsSweepConfigModal renders the "Sweep leftovers" flip modal when its open
@@ -259,7 +306,7 @@ func sweepConfigFormReady(ready sweepConfigFormReadyProps) ui.Node {
 	onSave := ui.UseEvent(Prevent(func() {
 		ids := make([]string, 0, len(selected.Get()))
 		for _, b := range budgets { // stable, store order
-			if selected.Get()[b.ID] {
+			if selected.Get()[b.ID] && sweepBudgetEligible(b, app.Settings().BudgetMethodology) == "" {
 				ids = append(ids, b.ID)
 			}
 		}
@@ -292,8 +339,9 @@ func sweepConfigFormReady(ready sweepConfigFormReadyProps) ui.Node {
 		rows := make([]ui.Node, 0, len(budgets))
 		for _, b := range budgets {
 			bid := b.ID
+			reason := sweepBudgetEligible(b, app.Settings().BudgetMethodology)
 			rows = append(rows, ui.CreateElement(sweepBudgetCheckRow, sweepBudgetRowProps{
-				ID: bid, Name: b.Name, Checked: selected.Get()[bid],
+				ID: bid, Name: b.Name, Checked: selected.Get()[bid] && reason == "", Disabled: reason != "", Reason: reason,
 				OnToggle: func() {
 					next := map[string]bool{}
 					for k, v := range selected.Get() {
@@ -345,6 +393,8 @@ func sweepConfigFormReady(ready sweepConfigFormReadyProps) ui.Node {
 				Span(css.Class("t-caption", tw.TextDim), uistate.T("sweep.configBudgets")),
 				budgetRows,
 			),
+			IfElse(uistate.CurrentPrefs().BudgetRolloverLeftover,
+				P(css.Class("t-caption", tw.TextDim), uistate.T("sweep.poolRolloverOff")), Fragment()),
 			labeledField(uistate.T("sweep.configGoal"), goalPicker),
 		),
 		Div(css.Class("modal-foot"),
@@ -360,6 +410,8 @@ type sweepBudgetRowProps struct {
 	ID       string
 	Name     string
 	Checked  bool
+	Disabled bool
+	Reason   string
 	OnToggle func()
 }
 
@@ -371,10 +423,35 @@ func sweepBudgetCheckRow(props sweepBudgetRowProps) ui.Node {
 			props.OnToggle()
 		}
 	})
+	var disabled []any
+	if props.Disabled {
+		disabled = append(disabled, Attr("disabled", "disabled"), Attr("aria-disabled", "true"))
+	}
+	inputArgs := []any{css.Class("cf-check"), Type("checkbox"), Attr("aria-label", props.Name), OnChange(onChange)}
+	inputArgs = append(inputArgs, disabled...)
+	inputArgs = append(inputArgs, checkedAttr(props.Checked)...)
 	return Label(css.Class("sweep-check-row"),
 		Attr("data-testid", "sweep-config-budget-"+props.ID),
-		Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("aria-label", props.Name),
-			OnChange(onChange)}, checkedAttr(props.Checked)...)...),
-		Span(css.Class("t-body"), props.Name),
+		Input(inputArgs...),
+		Span(css.Class("t-body"), props.Name, IfElse(props.Reason != "", Span(css.Class("t-caption", tw.TextDim), " — ", props.Reason), Fragment())),
 	)
+}
+
+func sweepBudgetEligible(b domain.Budget, householdMethod string) string {
+	method := budgeting.ParseMethodology(householdMethod)
+	if b.Methodology != "" && budgeting.Methodology(b.Methodology).Valid() {
+		method = budgeting.Methodology(b.Methodology)
+	}
+	switch {
+	case b.IsSaving():
+		return uistate.T("sweep.ineligibleSaving")
+	case b.Rollover:
+		return uistate.T("sweep.ineligibleRollover")
+	case b.Period != domain.PeriodMonthly:
+		return uistate.T("sweep.ineligiblePeriod")
+	case method == budgeting.MethodEnvelope:
+		return uistate.T("sweep.ineligibleEnvelope")
+	default:
+		return ""
+	}
 }

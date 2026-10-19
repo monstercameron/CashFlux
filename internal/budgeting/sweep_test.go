@@ -5,6 +5,7 @@ package budgeting
 import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"testing"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -129,6 +130,31 @@ func TestSweepPlanHelpers(t *testing.T) {
 	}
 	if full.BudgetCount() != 1 {
 		t.Errorf("BudgetCount = %d, want 1", full.BudgetCount())
+	}
+}
+
+func TestEvaluateSweepExcludesEnvelopeAndAlreadySweptAcrossLenses(t *testing.T) {
+	ref := mustDate("2026-10-01")
+	in := ViewInput{Base: "USD", Rates: currency.Rates{Base: "USD"}, Period: ViewPeriod{Anchor: ref, Now: mustDate("2026-11-01"), WeekStart: time.Sunday}}
+	budgets := []domain.Budget{
+		{ID: "shared", Name: "Shared", Period: domain.PeriodMonthly, Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, Limit: money.New(10000, "USD")},
+		{ID: "alice", Name: "Alice", Period: domain.PeriodMonthly, Scope: domain.ScopeIndividual, OwnerID: "alice", Limit: money.New(10000, "USD")},
+		{ID: "env", Name: "Envelope", Period: domain.PeriodMonthly, Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, Limit: money.New(10000, "USD"), Methodology: string(MethodEnvelope)},
+	}
+	cfg := SweepConfig{Enabled: true, BudgetIDs: []string{"shared", "alice", "env"}, SweptBudgetIDs: []string{"shared"}}
+	plan, err := EvaluateSweepWithMethodology(budgets, in, cfg, "alice", MethodSimple, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.Lines) != 1 || plan.Lines[0].BudgetID != "alice" {
+		t.Fatalf("lines = %+v, want only Alice's unswept budget", plan.Lines)
+	}
+	plan, err = EvaluateSweepWithMethodology(budgets, in, cfg, "", MethodEnvelope, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.Lines) != 0 {
+		t.Fatalf("envelope method lines = %+v, want none", plan.Lines)
 	}
 }
 func checkedComputeSweep(t *testing.T, statuses []Status, cfg SweepConfig, base string, goalAllowed func(string) bool) SweepPlan {

@@ -9,7 +9,7 @@
 // spec/render pipeline, rather than one screen embedding a single widget. Because
 // each block is now an independent engine widget, the interaction state they used
 // to share through screen-local hooks (the bulk selection, the active sub-view,
-// the pending undo, the receipt being previewed) lives here as shared atoms so any
+// the receipt being previewed) lives here as shared atoms so any
 // tile can read or mutate it and every other tile re-renders in step.
 //
 // The transaction FILTER already has its own shared atom (txfilter.go); these are
@@ -28,7 +28,6 @@ const (
 	txnSelAnchorAtomID = "transactions:selAnchor"
 	txnBulkCatAtomID   = "transactions:bulkCat"
 	txnBulkMemAtomID   = "transactions:bulkMember"
-	txnUndoAtomID      = "transactions:undo"
 	txnPreviewAtomID   = "transactions:preview"
 	txnColsAtomID      = "transactions:cols"
 	txnColsModalAtomID = "transactions:colsModal"
@@ -182,15 +181,6 @@ func UseTransferReviewOpen() state.Atom[bool] {
 	return state.UseAtom("transactions:transferReview", false)
 }
 
-// BulkSnapshot is the before-state of the last bulk operation, captured so the
-// undo tile can restore it. Label is the human-readable description shown in the
-// undo banner ("Recategorized 5 transactions"); Prior holds the affected
-// transactions exactly as they were before the op.
-type BulkSnapshot struct {
-	Label string
-	Prior []domain.Transaction
-}
-
 // UseTxnSelection returns the shared atom holding the set of selected transaction
 // ids (id → true). The ledger-table tile toggles entries; the bulk-action tile
 // reads them to act on the selection and the surface host reads them to decide
@@ -210,10 +200,6 @@ func UseTxnBulkCat() state.Atom[string] { return state.UseAtom(txnBulkCatAtomID,
 // UseTxnBulkMember returns the shared atom holding the member id chosen in the
 // bulk-action tile's "assign to" picker (empty = nobody / unassigned).
 func UseTxnBulkMember() state.Atom[string] { return state.UseAtom(txnBulkMemAtomID, "") }
-
-// UseTxnUndo returns the shared atom holding the last bulk operation's snapshot.
-// A snapshot with no Prior rows means "nothing to undo" (the undo tile is hidden).
-func UseTxnUndo() state.Atom[BulkSnapshot] { return state.UseAtom(txnUndoAtomID, BulkSnapshot{}) }
 
 // UseTxnPreview returns the shared atom holding the receipt attachment currently
 // open in the preview overlay. A zero ref (empty ArtifactID) means no preview.

@@ -171,7 +171,7 @@ func TestExcludeFromReportsConfirms(t *testing.T) {
 			"reports, so an accidental click is invisible until a total quietly stops adding " +
 			"up (C562).")
 	}
-	if !strings.Contains(body, "postUndoStory") {
+	if !strings.Contains(body, "commitUndoable(") {
 		t.Error("excluding/including no longer captures an undo point.\n" +
 			"Both directions must be reversible from Ctrl+Z / Activity (C562).")
 	}

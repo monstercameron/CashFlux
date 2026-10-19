@@ -85,7 +85,9 @@ func ProjectPace(status Status, start, end, now time.Time) Pace {
 
 	overBy := money.Zero(cur)
 	onTrack := true
-	if projAmt > limit.Amount {
+	if status.Budget.IsSaving() {
+		onTrack = projAmt >= limit.Amount
+	} else if projAmt > limit.Amount {
 		overBy, err = projected.Sub(limit)
 		if err != nil {
 			return Pace{Elapsed: frac, Error: err}
@@ -125,13 +127,17 @@ func ProjectBudgetPace(status Status, postedRecurring, scheduledRecurring money.
 	}
 	if !now.Before(end) {
 		endedOver := money.Zero(cur)
-		if status.Spent.Amount > limit.Amount {
+		if !status.Budget.IsSaving() && status.Spent.Amount > limit.Amount {
 			endedOver, err = status.Spent.Sub(limit)
 			if err != nil {
 				return Pace{Elapsed: frac, Error: err}
 			}
 		}
-		return Pace{Elapsed: 1, Projected: money.Zero(cur), OverBy: money.Zero(cur), OnTrack: true, Committed: money.New(committedAmount, cur), PeriodEnded: true, EndedOverBy: endedOver}
+		onTrack := true
+		if status.Budget.IsSaving() {
+			onTrack = status.Spent.Amount >= limit.Amount
+		}
+		return Pace{Elapsed: 1, Projected: money.Zero(cur), OverBy: money.Zero(cur), OnTrack: onTrack, Committed: money.New(committedAmount, cur), PeriodEnded: true, EndedOverBy: endedOver}
 	}
 	discretionary, err := money.Sub(status.Spent.Amount, postedRecurring.Amount)
 	if err != nil {
@@ -154,7 +160,9 @@ func ProjectBudgetPace(status Status, postedRecurring, scheduledRecurring money.
 	projected := money.New(projectedAmount, cur)
 	overBy := money.Zero(cur)
 	onTrack := projectedAmount <= limit.Amount
-	if !onTrack {
+	if status.Budget.IsSaving() {
+		onTrack = projectedAmount >= limit.Amount
+	} else if !onTrack {
 		overBy, err = projected.Sub(limit)
 		if err != nil {
 			return Pace{Elapsed: frac, Error: err}
@@ -263,7 +271,7 @@ func ProjectPaceMarker(status Status, committed money.Money, start, end, now tim
 		Elapsed:   frac,
 		Ideal:     money.New(idealAmt, cur),
 		Delta:     money.New(delta, cur),
-		Hot:       delta > 0,
+		Hot:       !status.Budget.IsSaving() && delta > 0,
 		MarkerPct: markerPct,
 	}
 }

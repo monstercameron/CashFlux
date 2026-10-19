@@ -13,11 +13,11 @@ package screens
 
 import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
-	"github.com/monstercameron/CashFlux/internal/auditview"
 	"github.com/monstercameron/CashFlux/internal/catname"
 	"github.com/monstercameron/CashFlux/internal/catsuggest"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/learntally"
+	"github.com/monstercameron/CashFlux/internal/txnreview"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/css"
 	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
@@ -109,6 +109,9 @@ func (inputs *txnCatSuggestInputs) suggestion(app *appstate.App, txn domain.Tran
 }
 
 func txnCatSuggestInputsFor(app *appstate.App, revision int) txnCatSuggestInputs {
+	if app != nil {
+		revision = int(app.Rev())
+	}
 	return txnCatSuggestCache.get(app, revision, func() txnCatSuggestInputs { return loadTxnCatSuggestInputs(app) })
 }
 
@@ -213,17 +216,18 @@ func applyCatSuggestion(app *appstate.App, txn domain.Transaction, categoryID st
 	if app == nil || categoryID == "" || txn.ID == "" {
 		return
 	}
-	auditview.CaptureNow()
-	t := txn
-	t.CategoryID = categoryID
-	if err := app.PutTransaction(t); err != nil {
-		uistate.PostNotice(err.Error(), true)
+	live, ok := app.TransactionByID(txn.ID)
+	if !ok || live.IsTransfer() {
 		return
 	}
-	rememberReviewChoice(txn, categoryID)
-	uistate.RequestPersist()
-	uistate.BumpDataRevision()
-	uistate.PostUndoable(uistate.T("catSuggest.filedUndo", catname.LabelByID(app.Categories(), categoryID)))
+	confirmed := txnreview.Confirm(live, categoryID)
+	_ = CommitUndoable(app, uistate.T("catSuggest.filedUndo", catname.LabelByID(app.Categories(), categoryID)), []string{txn.ID}, func() error {
+		if err := app.PutTransactionsAtomic([]domain.Transaction{confirmed}); err != nil {
+			return err
+		}
+		rememberReviewChoice(live, categoryID)
+		return nil
+	}, nil)
 }
 
 // txnByID finds a transaction by id in the live app state.

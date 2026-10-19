@@ -14,7 +14,6 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/artifacts"
-	"github.com/monstercameron/CashFlux/internal/auditview"
 	"github.com/monstercameron/CashFlux/internal/catname"
 	"github.com/monstercameron/CashFlux/internal/catsuggest"
 	"github.com/monstercameron/CashFlux/internal/currency"
@@ -30,6 +29,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/txnclassify"
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
 	"github.com/monstercameron/CashFlux/internal/txnlinks"
+	"github.com/monstercameron/CashFlux/internal/txnreview"
 	"github.com/monstercameron/CashFlux/internal/txnview"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -52,6 +52,14 @@ const (
 )
 
 var txnDerivedViewCache txnview.Cache
+
+var txnConversionIssuesCache struct {
+	app      *appstate.App
+	revision uint64
+	scope    string
+	issues   []txnfilter.ConversionIssue
+	valid    bool
+}
 
 func txnDerivedScope(app *appstate.App, criteria txnfilter.Criteria) string {
 	return fmt.Sprintf("%p|%q|%s", app, activeImportProfileWorkspaceID(), txnview.Scope(criteria))
@@ -94,11 +102,11 @@ func Transactions() ui.Node {
 
 func transactionsSurface(app *appstate.App) ui.Node {
 	defer txnPerfStart("page")()
+	_ = uistate.UseDataRevision().Get()
 
 	// Re-render the surface on any data mutation or shared-state change: a bulk op,
 	// a row edit/delete, a selection toggle, a sub-view switch, a pending undo, or a
 	// receipt preview opening all flow through these atoms.
-	dataRevision := uistate.UseDataRevision().Get()
 	selAtom := uistate.UseTxnSelection()
 	selAnchorAtom := uistate.UseTxnSelAnchor()
 	previewAtom := uistate.UseTxnPreview()
@@ -184,7 +192,9 @@ func transactionsSurface(app *appstate.App) ui.Node {
 			Account: accName, Category: catName, Payee: resolver.Resolve,
 			BaseCurrency: base, ToBase: func(m money.Money) (money.Money, error) { return rates.Convert(m, base) },
 		}
-		rows := deriveTxnRows(transactions, derivedFilter, labels, resolver.HasLearned, resolver.Resolve)
+		rows, issues := deriveTxnRowsWithIssues(transactions, derivedFilter, labels, resolver.HasLearned, resolver.Resolve)
+		txnConversionIssuesCache.app, txnConversionIssuesCache.revision, txnConversionIssuesCache.scope = app, app.Rev(), txnDerivedScope(app, derivedFilter)
+		txnConversionIssuesCache.issues, txnConversionIssuesCache.valid = issues, true
 		categoryFilter := derivedFilter
 		categoryFilter.Flow, categoryFilter.Category, categoryFilter.Uncategorized = "", "", false
 		categoryFilter.Sort, categoryFilter.Dir, categoryFilter.Page, categoryFilter.PageSize = "", "", 0, 0
@@ -195,7 +205,7 @@ func transactionsSurface(app *appstate.App) ui.Node {
 			txnDerivedViewCache = txnview.Cache{}
 		}
 		return txnV5RowTransfers(rows, txnV5RowAccountScoped(derivedFilter.Account, derivedFilter.Accounts))
-	}, app, app.Rev(), dataRevision, derivedFilter, activeImportProfileWorkspaceID())
+	}, app, app.Rev(), derivedFilter, activeImportProfileWorkspaceID())
 
 	// The engine render context: the live data every tile body reads from (§6). The
 	// SCOPED slices are the filtered ledger, so the table frame and the toolbar/bulk
@@ -205,7 +215,7 @@ func transactionsSurface(app *appstate.App) ui.Node {
 		App: app, Accounts: accounts, Txns: transactions,
 		ScopedAccounts: accounts, ScopedTxns: shown,
 		Rates: rates, Base: base,
-		Start: time.Time{}, End: time.Now(),
+		Start: time.Time{}, End: dateutil.CalendarDayUTC(time.Now()),
 	}
 
 	// The fixed placement set for the transactions surface. The toolbar is always
@@ -238,10 +248,7 @@ func transactionsSurface(app *appstate.App) ui.Node {
 			func(sp domain.WidgetSpec) ui.Node {
 				c := rctx
 				c.Spec = sp
-				if node, ok := safeRenderSpec(sp, c); ok {
-					return node
-				}
-				return Fragment()
+				return ui.CreateElement(txnPlacement, txnPlacementProps{Context: c, Revision: app.Rev(), Scope: fmt.Sprintf("%p|%s|%#v", app, activeImportProfileWorkspaceID(), f)})
 			},
 		),
 	)
@@ -251,6 +258,23 @@ func transactionsSurface(app *appstate.App) ui.Node {
 		// Pending-vs-posted: the month's still-unposted scheduled charges as
 		// ghost rows above the ledger (parity scan; billmatch-suppressed).
 		bento)
+}
+
+type txnPlacementProps struct {
+	Context  widgetrender.RenderCtx
+	Revision uint64
+	Scope    string
+}
+
+func txnPlacement(props txnPlacementProps) ui.Node {
+	c := props.Context
+	return ui.UseMemo(func() ui.Node {
+		defer txnPerfStart("placement-" + c.Spec.ID)()
+		if node, ok := safeRenderSpec(c.Spec, c); ok {
+			return node
+		}
+		return Fragment()
+	}, c.App, props.Revision, props.Scope, c.Spec.ID)
 }
 
 // init registers the transactions-surface widget bodies with the engine render
@@ -381,7 +405,7 @@ func txnTableWidget(props txnTableProps) ui.Node {
 	// Subscribe to the data revision: link changes (XC1/XC2 group/pair badges)
 	// mutate no row content, so without this the memoized table body renders
 	// stale badges after an ungroup/unpair.
-	txnDataRev := uistate.UseDataRevision().Get()
+	txnDataRev := int(props.App.Rev())
 	filterAtom := uistate.UseTxFilter()
 	f := filterAtom.Get()
 	memberLens := uistate.UseMemberLens()
@@ -572,17 +596,13 @@ func txnTableWidget(props txnTableProps) ui.Node {
 	// still captures an undo point and says what it did.
 	confirmCategory := func(id string) {
 		t, ok := props.App.TransactionByID(id)
-		if !ok || t.Reviewed {
-			return // missing or already the user's decision
-		}
-		t.Reviewed = true
-		if err := props.App.PutTransaction(t); err != nil {
-			uistate.PostNotice(err.Error(), true)
+		if !ok {
 			return
 		}
-		uistate.BumpDataRevision()
-		postUndoStory(uistate.T("transactions.confirmedCategory"))
+		confirmed := txnreview.Confirm(t, t.CategoryID)
+		_ = commitUndoable(uistate.T("transactions.confirmedCategory"), []string{id}, func() error { return props.App.PutTransactionsAtomic([]domain.Transaction{confirmed}) })
 	}
+
 	// TXC-1 / C562: flip a transaction's exclude-from-reports flag from the row kebab.
 	//
 	// Excluding is a reporting change with no visible trace on the row's own figures —
@@ -592,18 +612,18 @@ func txnTableWidget(props txnTableProps) ui.Node {
 	// is restorative, so it applies straight away; both directions capture an undo
 	// point and post an undoable toast, so either is reversible from Ctrl+Z/Activity.
 	applyExclude := func(t domain.Transaction, exclude bool) {
-		t.ExcludeFromReports = exclude
-		if err := props.App.PutTransaction(t); err != nil {
-			uistate.PostNotice(err.Error(), true)
+		live, ok := props.App.TransactionByID(t.ID)
+		if !ok {
 			return
 		}
-		uistate.BumpDataRevision()
+		live.ExcludeFromReports = exclude
 		key := "transactions.includedOne"
 		if exclude {
 			key = "transactions.excludedOne"
 		}
-		postUndoStory(uistate.T(key, txnShortLabel(t)))
+		_ = commitUndoable(uistate.T(key, txnShortLabel(live)), []string{t.ID}, func() error { return props.App.PutTransactionsAtomic([]domain.Transaction{live}) })
 	}
+
 	toggleExclude := func(id string) {
 		for _, t := range props.App.Transactions() {
 			if t.ID != id {
@@ -661,18 +681,11 @@ func txnTableWidget(props txnTableProps) ui.Node {
 				linked++
 			}
 		}
-		acctName := ""
-		if a, ok := domain.AccountByID(props.App.Accounts(), txn.AccountID); ok {
-			acctName = a.Name
-		}
+
 		// Name the row the way the user is looking at it: who, when, how much, and
 		// out of which account. "Delete this transaction?" is not enough to catch a
 		// misclick on the wrong row.
-		what := uistate.T("transactions.deleteConfirmDetail",
-			firstNonEmpty(txn.Payee, txn.Desc),
-			dateutil.FormatDate(txn.Date),
-			fmtMoney(txn.Amount),
-			acctName)
+		what := txnDeletePrompt(props.App, txn)
 		if linked > 0 {
 			what += " " + uistate.T("transactions.deleteConfirmTasks", linked)
 		}
@@ -680,14 +693,8 @@ func txnTableWidget(props txnTableProps) ui.Node {
 			if !ok {
 				return
 			}
-			// Capture BEFORE the write, so Undo has a point to return to.
-			auditview.CaptureNow()
-			if err := props.App.DeleteTransactionWithTransferPair(id); err != nil {
-				uistate.PostNotice(err.Error(), true)
-				return
-			}
-			uistate.BumpDataRevision()
-			uistate.PostUndoable(uistate.T("toast.txnDeleted"))
+			ids := props.App.ExpandTransferPairs([]string{id})
+			_ = commitUndoable(uistate.T("toast.txnDeleted"), ids, func() error { return props.App.DeleteTransactionWithTransferPair(id) })
 		})
 	}
 	viewReceipt := func(ref domain.AttachmentRef) { previewAtom.Set(ref) }
@@ -877,17 +884,10 @@ func txnTableWidget(props txnTableProps) ui.Node {
 	// decide in O(1) whether to show the spending-trend chip without rescanning the
 	// ledger on every sort / select / pagination re-render (the full stats still compute
 	// lazily only when a chip is opened).
-	finishMerchants := txnPerfStart("merchants")
-	merchantCounts := merchantChargeCountsMemo(props.App, int(props.App.Rev()))
-	finishMerchants()
 	// C579: which rows carry a category no person has confirmed, and which rule (if
 	// any) accounts for it. Classified once for the whole view — rows re-render on
 	// selection, sort and pagination, and none of those change the answer.
 	provenanceRules := props.App.Rules()
-	// The trend chips are a secondary affordance, so mount them just AFTER the table has
-	// painted (useAfterSettle) — this keeps the interactive-row cost off the initial
-	// route-settle so the ledger paints as fast as before, then the chips fade in.
-	trendReady := useAfterSettle("txn-trend")
 	// Category suggestions run rule matching and merchant history lookup. Let the
 	// ledger's first paint settle before mounting those row components.
 	suggestionsReady := useAfterSettle("txn-suggestions")
@@ -975,13 +975,7 @@ func txnTableWidget(props txnTableProps) ui.Node {
 				firstAtt = t.Attachments[0]
 			}
 		}
-		trendMerchant := ""
-		if t, ok := txByID[rid]; ok && !t.IsTransfer() && t.Amount.IsNegative() {
-			if m := strings.TrimSpace(payeeResolver.Resolve(firstNonEmpty(t.Payee, t.Desc))); m != "" &&
-				merchantCounts[strings.ToLower(m)] >= minTrendChipCharges {
-				trendMerchant = m
-			}
-		}
+
 		ledgerAmount, ledgerTone := fmtLedgerAmount(amt, txByID[rid].IsTransfer())
 		suggestedCategory := ""
 		rowTxn := txByID[rid]
@@ -1032,8 +1026,6 @@ func txnTableWidget(props txnTableProps) ui.Node {
 		return txnFrameRowProps{
 			ID:              rid,
 			AmountMoney:     amt,
-			TrendMerchant:   trendMerchant,
-			ShowTrend:       trendReady,
 			ShowSuggestions: suggestionsReady,
 			// .UTC() is load-bearing: txn dates are UTC-midnight calendar dates
 			// (dateutil), and time.Unix reconstructs in the LOCAL zone — west of
@@ -1928,24 +1920,25 @@ func applyTxnManualCategory(txnID, categoryID string) {
 		return
 	}
 	txn, ok := txnByID(app, txnID)
-	if !ok || txn.IsTransfer() || txn.CategoryID == categoryID {
+	if !ok || txn.IsTransfer() {
 		return
 	}
-	auditview.CaptureNow()
-	txn = txnCategoryAfterManualChoice(txn)
-	txn.CategoryID = categoryID
-	if err := app.PutTransaction(txn); err != nil {
-		uistate.PostNotice(err.Error(), true)
-		return
-	}
-	uistate.BumpDataRevision()
-	awaitTxnSave(app, []string{txnID}, func(err error) {
-		if err != nil {
-			uistate.PostNotice(uistate.T("txint.categoryNotSaved"), true)
-			return
+	confirmed := txnreview.Confirm(txn, categoryID)
+	_ = commitUndoable(uistate.T("r10w.categoryFiled", catname.LabelByID(app.Categories(), categoryID)), []string{txnID}, func() error { return app.PutTransactionsAtomic([]domain.Transaction{confirmed}) })
+}
+
+func txnDeletePrompt(app *appstate.App, txn domain.Transaction) string {
+	ids := app.ExpandTransferPairs([]string{txn.ID})
+	var prompts []string
+	for _, id := range ids {
+		row, ok := app.TransactionByID(id)
+		if !ok {
+			continue
 		}
-		uistate.PostUndoable(uistate.T("r10w.categoryFiled", catname.LabelByID(app.Categories(), categoryID)))
-	})
+		account, _ := domain.AccountByID(app.Accounts(), row.AccountID)
+		prompts = append(prompts, uistate.T("transactions.deleteConfirmDetail", firstNonEmpty(row.Payee, row.Desc), dateutil.FormatDate(row.Date), fmtMoney(row.Amount), account.Name))
+	}
+	return strings.Join(prompts, " ")
 }
 
 func ledgerDate(date time.Time, from, to string) string {

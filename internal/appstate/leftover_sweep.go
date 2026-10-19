@@ -8,7 +8,6 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
-	"github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 )
@@ -62,7 +61,71 @@ func (a *App) SweepAllowedForGoal(goalID string) bool {
 	if target.ID == "" {
 		return false
 	}
-	return goals.GoalSweepAllowed(target, all, a.linkedAccountBalances(all))
+	return a.leftoverSweepHeadroom(target, all) > 0
+}
+
+// LeftoverSweepCapacity returns the most that can be earmarked from cur without
+// reserving more than the linked account's remaining balance.
+func (a *App) LeftoverSweepCapacity(goalID, cur string) (int64, error) {
+	if cur == "" {
+		return 0, fmt.Errorf("appstate: leftover sweep: currency is required")
+	}
+	var target domain.Goal
+	all := a.Goals()
+	for _, goal := range all {
+		if goal.ID == goalID {
+			target = goal
+			break
+		}
+	}
+	if target.ID == "" {
+		return 0, fmt.Errorf("appstate: leftover sweep: goal %q not found", goalID)
+	}
+	linked := target.LinkedAccountIDs()
+	if len(linked) == 0 {
+		return 0, fmt.Errorf("appstate: leftover sweep: goal %q has no linked account", goalID)
+	}
+	account, ok := findAccount(a, linked[0])
+	if !ok {
+		return 0, fmt.Errorf("appstate: leftover sweep: linked account %q not found", linked[0])
+	}
+	headroom := a.leftoverSweepHeadroom(target, all)
+	if headroom <= 0 {
+		return 0, nil
+	}
+	rates := currency.Rates{Base: a.baseCurrency(), Rates: a.Settings().FXRates}
+	return maxSweepCapacityMinor(headroom, account.Currency, cur, rates)
+}
+
+func maxSweepCapacityMinor(headroom int64, accountCurrency, sweepCurrency string, rates currency.Rates) (int64, error) {
+	if headroom <= 0 {
+		return 0, nil
+	}
+	if accountCurrency == "" || sweepCurrency == "" {
+		return 0, fmt.Errorf("currency is required")
+	}
+	if accountCurrency == sweepCurrency {
+		return headroom, nil
+	}
+	upper, err := rates.Convert(money.New(headroom, accountCurrency), sweepCurrency)
+	if err != nil {
+		return 0, fmt.Errorf("convert account headroom: %w", err)
+	}
+	lo, hi := int64(0), upper.Amount
+	for lo < hi {
+		distance := hi - lo
+		mid := lo + distance/2 + distance%2
+		converted, convertErr := rates.Convert(money.New(mid, sweepCurrency), accountCurrency)
+		if convertErr != nil {
+			return 0, fmt.Errorf("check sweep capacity: %w", convertErr)
+		}
+		if converted.Amount <= headroom {
+			lo = mid
+		} else {
+			hi = mid - 1
+		}
+	}
+	return lo, nil
 }
 
 // ApplyLeftoverSweep earmarks totalMinor (in cur) of swept budget leftovers toward
@@ -92,14 +155,27 @@ func (a *App) ApplyLeftoverSweep(goalID string, totalMinor int64, cur string) (d
 	if len(linked) == 0 {
 		return domain.Goal{}, fmt.Errorf("appstate: leftover sweep: goal %q has no linked account to earmark against", goalID)
 	}
-	if !goals.GoalSweepAllowed(target, all, a.linkedAccountBalances(all)) {
-		return domain.Goal{}, fmt.Errorf("appstate: leftover sweep: goal %q linked account is over-earmarked", goalID)
-	}
-
 	acctID := linked[0]
 	base := a.baseCurrency()
 	rates := currency.Rates{Base: base, Rates: a.Settings().FXRates}
+	acct, ok := findAccount(a, acctID)
+	if !ok {
+		return domain.Goal{}, fmt.Errorf("appstate: leftover sweep: linked account %q not found", acctID)
+	}
+	accountCurrency := acct.Currency
+	if accountCurrency == "" {
+		accountCurrency = cur
+	}
+	sweepInAccountCurrency, err := rates.Convert(money.New(totalMinor, cur), accountCurrency)
+	if err != nil {
+		return domain.Goal{}, fmt.Errorf("appstate: leftover sweep: convert to linked account currency: %w", err)
+	}
+	headroom := a.leftoverSweepHeadroom(target, all)
+	if sweepInAccountCurrency.Amount > headroom {
+		return domain.Goal{}, fmt.Errorf("appstate: leftover sweep: amount exceeds linked account headroom")
+	}
 	// Merge into an existing earmark against the same account, or append a new one.
+	target.Allocations = append([]domain.GoalAllocation(nil), target.Allocations...)
 	merged := false
 	for i, al := range target.Allocations {
 		if al.AccountID == acctID {
@@ -113,9 +189,13 @@ func (a *App) ApplyLeftoverSweep(goalID string, totalMinor int64, cur string) (d
 		}
 	}
 	if !merged {
+		amount, err := rates.Convert(money.New(totalMinor, cur), accountCurrency)
+		if err != nil {
+			return domain.Goal{}, fmt.Errorf("appstate: leftover sweep: convert new allocation: %w", err)
+		}
 		target.Allocations = append(target.Allocations, domain.GoalAllocation{
 			AccountID: acctID,
-			Amount:    money.New(totalMinor, cur),
+			Amount:    amount,
 		})
 	}
 
@@ -124,6 +204,59 @@ func (a *App) ApplyLeftoverSweep(goalID string, totalMinor int64, cur string) (d
 	}
 	a.log.Info("leftover sweep earmarked to goal", "goal", goalID, "account", acctID, "amount", totalMinor)
 	return target, nil
+}
+
+// leftoverSweepHeadroom returns the first linked account's remaining earmark
+// capacity in that account's minor units. Conversion errors make the sweep fail
+// closed by returning zero.
+func (a *App) leftoverSweepHeadroom(target domain.Goal, all []domain.Goal) int64 {
+	linked := target.LinkedAccountIDs()
+	if len(linked) == 0 {
+		return 0
+	}
+	acct, ok := findAccount(a, linked[0])
+	if !ok {
+		return 0
+	}
+	cur := acct.Currency
+	if cur == "" {
+		return 0
+	}
+	rates := currency.Rates{Base: a.baseCurrency(), Rates: a.Settings().FXRates}
+	balances := a.linkedAccountBalances(all)
+	var earmarked int64
+	for _, goal := range all {
+		for _, allocation := range goal.Allocations {
+			if allocation.AccountID != acct.ID {
+				continue
+			}
+			amount := allocation.Amount
+			if amount.Currency == "" {
+				amount.Currency = cur
+			}
+			converted, err := rates.Convert(amount, cur)
+			if err != nil {
+				return 0
+			}
+			var errAdd error
+			earmarked, errAdd = addMinorChecked(earmarked, converted.Amount)
+			if errAdd != nil {
+				return 0
+			}
+		}
+	}
+	balance := balances[acct.ID]
+	if balance <= earmarked {
+		return 0
+	}
+	return balance - earmarked
+}
+
+func addMinorChecked(a, b int64) (int64, error) {
+	if b > 0 && a > int64(^uint64(0)>>1)-b || b < 0 && a < -int64(^uint64(0)>>1)-1-b {
+		return 0, fmt.Errorf("minor-unit amount overflow")
+	}
+	return a + b, nil
 }
 
 func mergeSweepAmount(allocation money.Money, totalMinor int64, sweepCurrency string, rates currency.Rates) (money.Money, error) {

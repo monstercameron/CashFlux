@@ -34,6 +34,7 @@ func liveHealthInputs(app *appstate.App, now time.Time) healthscore.Inputs {
 		base = "USD"
 	}
 	return engineenv.HealthInputs(engineenv.Data{
+		Ledger:   budgetLedgerForApp(app),
 		Accounts: app.Accounts(), Transactions: app.Transactions(),
 		Budgets: app.Budgets(), Categories: app.Categories(),
 		WeekStart: uistate.LoadPrefs().WeekStartWeekday(),

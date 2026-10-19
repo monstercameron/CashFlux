@@ -628,10 +628,11 @@ func currentBudgetStatusesWithTransactions(app *appstate.App, txns []domain.Tran
 	weekStart := uistate.CurrentPrefs().WeekStartWeekday()
 	cats := app.Categories()
 
+	ledger := budgeting.NewNettedLedger(txns, app.TxnLinks())
 	out := make([]budgeting.Status, 0, len(budgets))
 	for _, b := range budgets {
 		bs, be := budgeting.PeriodRange(b.Period, now, weekStart)
-		st, err := budgeting.EvaluateRollup(b, txns, bs, be, rates, budgeting.DefaultNearThreshold, categorytree.DescendantsOfAll(cats, b.TrackedCategoryIDs()))
+		st, err := budgeting.EvaluateRollup(b, ledger, bs, be, rates, budgeting.DefaultNearThreshold, categorytree.DescendantsOfAll(cats, b.TrackedCategoryIDs()))
 		if err != nil {
 			continue
 		}

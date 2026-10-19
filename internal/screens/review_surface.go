@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
-	"github.com/monstercameron/CashFlux/internal/auditview"
 	"github.com/monstercameron/CashFlux/internal/catsuggest"
 	"github.com/monstercameron/CashFlux/internal/dedupe"
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -153,13 +152,15 @@ func classifyRecurringLoanPayment(app *appstate.App, suggestion txnclassify.Paym
 	return nil
 }
 
+// recordRecurringLoanPayment is the durable, non-UI adapter for callers holding
+// an explicit App. The visible review action uses CommitUndoable below.
 func recordRecurringLoanPayment(app *appstate.App, suggestion txnclassify.PaymentSuggestion, done func(error)) {
-	auditview.CaptureNow()
 	if err := classifyRecurringLoanPayment(app, suggestion); err != nil {
 		done(err)
 		return
 	}
 	awaitTxnSave(app, []string{suggestion.TransactionID}, done)
+
 }
 
 type reviewLoanPaymentGroupProps struct {
@@ -575,13 +576,11 @@ func reviewSurfaceReady(_ struct{}) ui.Node {
 		// The existing single-row transfer conversion path updates the imported
 		// transaction in place; it does not invent a second leg from an expense
 		// that may already be represented in the liability's own feed.
-		recordRecurringLoanPayment(app, suggestion, func(err error) {
+		_ = CommitUndoable(app, uistate.T("r4loan1.recordedUndo"), []string{suggestion.TransactionID}, func() error { return classifyRecurringLoanPayment(app, suggestion) }, func(err error) {
 			if err != nil {
 				uistate.PostNotice(uistate.T("tc3w4.changesNotSaved"), true)
 				return
 			}
-			uistate.BumpDataRevision()
-			uistate.PostUndoable(uistate.T("r4loan1.recordedUndo"))
 		})
 	}
 	dismissLoanPayment := func(transactionID string) {
@@ -618,45 +617,39 @@ func reviewSurfaceReady(_ struct{}) ui.Node {
 		return ""
 	}
 
-	// applySelected writes every selected group in ONE bulk mutation with a
-	// single undo point, so a 40-merchant confirm is one reversible step.
+	// One request owns all selected merchants, so no subgroup can acknowledge
+	// success before the rest of the action has been validated and committed.
+	applying := ui.UseState(false)
 	doApply := func() {
-		sel := selected.Get()
-		if len(sel) == 0 {
+		if applying.Get() {
 			return
 		}
-		// Seal whatever came before into its own undo entry, so this batch does
-		// not merge with it.
-		auditview.CaptureNow()
-		total := 0
-		app.BulkMutate(func() {
-			for _, r := range idx.Rows {
-				if !sel[r.Group.Key] {
-					continue
-				}
-				cat := catFor(r)
-				if cat == "" {
-					continue
-				}
-				// C554: the ids the ROW drew, not everything the ledger holds under
-				// this merchant key. Under "Current view" the group already excludes
-				// charges outside the filter, and a write that re-derived its own
-				// population from the key would quietly reach past the scope the
-				// user chose — the same overreach C653 fixes one card at a time.
-				total += assignReviewToCharges(app, groupChargeIDs(r), cat)
+		assignments := map[string]string{}
+		for _, row := range idx.Rows {
+			if !selected.Get()[row.Group.Key] {
+				continue
 			}
-		})
-		if total > 0 {
-			// C508: seal THIS batch immediately too. Undo points are otherwise
-			// captured on the autosave tick, so two confirms inside one 4s window
-			// collapsed into a single entry and the earlier batch became
-			// unreachable — one-level undo wearing a multi-step coat.
-			auditview.CaptureNow()
-			uistate.PostUndoable(uistate.T("review.bulkApplied", total))
-			notice.Set(uistate.T("review.bulkApplied", total))
+			category := catFor(row)
+			if category == "" {
+				continue
+			}
+			for _, id := range groupChargeIDs(row) {
+				assignments[id] = category
+			}
 		}
-		selected.Set(map[string]bool{})
-		uistate.BumpDataRevision()
+		applying.Set(true)
+		accepted := commitReviewAssignments(app, assignments, func(total int, err error) {
+			applying.Set(false)
+			if err != nil {
+				notice.Set(uistate.T("review.commitFailed"))
+				return
+			}
+			notice.Set(uistate.T("review.bulkApplied", total))
+			selected.Set(map[string]bool{})
+		})
+		if accepted == 0 {
+			applying.Set(false)
+		}
 	}
 	applySelected := ui.UseEvent(doApply)
 
@@ -896,7 +889,11 @@ func reviewSurfaceReady(_ struct{}) ui.Node {
 		setCursorTo(at, curRow.Group.Key)
 		notice.Set("")
 	}
+	confirming := ui.UseState(false)
 	commitTargets := func(ids []string) {
+		if confirming.Get() {
+			return
+		}
 		if !reviewqueue.CanAssignCategory(cur) {
 			notice.Set(uistate.T("review.splitNeeded"))
 			return
@@ -911,11 +908,18 @@ func reviewSurfaceReady(_ struct{}) ui.Node {
 		// transaction stayed uncategorized — the queue count fell, the card moved
 		// on, and a reload brought the item straight back. Holding position with a
 		// stated reason is the honest behavior.
-		if !applyReviewChoice(app, ids, cat) {
+		confirming.Set(true)
+		if !applyReviewChoice(app, ids, cat, func(ok bool) {
+			confirming.Set(false)
+			if !ok {
+				notice.Set(uistate.T("review.commitFailed"))
+				return
+			}
+			settle()
+		}) {
+			confirming.Set(false)
 			notice.Set(uistate.T("review.commitFailed"))
-			return
 		}
-		settle()
 	}
 	doConfirm := func() {
 		if cur.ID == "" {

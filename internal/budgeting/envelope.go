@@ -14,11 +14,37 @@ import (
 // EnvelopeAvailableAnchored returns the available balance for the period containing curRef, using the shared rollover view and pay-cycle anchor.
 func EnvelopeAvailableAnchored(budget domain.Budget, all []domain.Transaction, curRef time.Time, weekStart time.Weekday, anchor time.Time, rates currency.Rates, covers map[string]bool) (money.Money, error) {
 	in := ViewInput{Period: ViewPeriod{Anchor: curRef, Now: curRef, WeekStart: weekStart, PayCycleAnchor: anchor}, Transactions: all, Rates: rates, Base: rates.Base}
+	return EnvelopeAvailableForView(budget, in, covers)
+}
+
+// EnvelopeAvailableForView returns the envelope balance using the same period
+// inputs as the budget card, including recurring-bill smoothing and an explicit
+// netted ledger when supplied.
+func EnvelopeAvailableForView(budget domain.Budget, in ViewInput, covers map[string]bool) (money.Money, error) {
+	if in.Ledger != nil {
+		in.Transactions = in.Ledger.Transactions()
+	}
 	view, err := EnvelopeRolloverView(budget, in, covers)
 	if err != nil {
 		return money.Money{}, err
 	}
-	return view.Current.EffectiveCap.Sub(view.Current.Spend)
+	remaining, err := view.Current.EffectiveCap.Sub(view.Current.Spend)
+	if err != nil {
+		return money.Money{}, fmt.Errorf("calculate envelope balance: %w", err)
+	}
+	start, end := PeriodRangeAnchored(budget.Period, in.Period.Anchor, in.Period.WeekStart, in.Period.PayCycleAnchor)
+	smoothingBudget := budget
+	smoothingBudget.CategoryIDs = ScopeOf(budget, covers).CategoryIDs
+	offset, _, err := SmoothingLandingItemsWithRates(smoothingBudget, in.Recurring, in.Transactions, start, end, in.Rates)
+	if err != nil {
+		return money.Money{}, fmt.Errorf("calculate envelope smoothing: %w", err)
+	}
+	status := Status{Budget: budget, Limit: view.Current.EffectiveCap, Spent: view.Current.Spend, Remaining: remaining}
+	status, err = ApplySmoothingOffsetChecked(status, offset, DefaultNearThreshold)
+	if err != nil {
+		return money.Money{}, fmt.Errorf("apply envelope smoothing: %w", err)
+	}
+	return status.Remaining, nil
 }
 
 // EnvelopeRolloverView uses the card carry engine and historical bases. Rollover budgets use their recorded or compatibility start; envelope-only budgets start with their first covered contribution and fund one period when empty.
@@ -36,7 +62,7 @@ func EnvelopeRolloverView(b domain.Budget, in ViewInput, covers map[string]bool)
 	} else {
 		ledger = NewNettedLedger(in.Transactions)
 	}
-	for _, t := range ledger.transactions {
+	for _, t := range ledger {
 		_, ok, err := ContributionChecked(b, t, func(id string) bool { return covers[id] })
 		if err != nil {
 			return RolloverView{}, fmt.Errorf("envelope first contribution: %w", err)

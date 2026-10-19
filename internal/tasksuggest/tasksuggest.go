@@ -64,7 +64,7 @@ type Suggestion struct {
 
 // Scan produces the current suggestions in a stable order (stale accounts,
 // review backlog, overspent budgets).
-func Scan(accounts []domain.Account, txns []domain.Transaction, budgets []domain.Budget,
+func Scan(accounts []domain.Account, txns budgeting.NettedLedger, budgets []domain.Budget,
 	windows freshness.Windows, rates currency.Rates, now time.Time, weekStart time.Weekday) []Suggestion {
 
 	var out []Suggestion

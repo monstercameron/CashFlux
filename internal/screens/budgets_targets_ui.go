@@ -155,7 +155,7 @@ func budgetTargetLine(s budgeting.Status) ui.Node {
 		return Fragment()
 	}
 	app := appstate.Default
-	need, err := budgetTargetNeed(app, b, s, s.Rollover.Current.Start)
+	need, err := budgetTargetNeed(app, b, s, s.Start)
 	if err != nil {
 		return Span(css.Class("budget-sub", tw.TextDown), Attr("role", "alert"), uistate.T("budgets.annualGridError"))
 	}

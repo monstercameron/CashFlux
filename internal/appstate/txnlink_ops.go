@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/reports"
@@ -164,14 +163,13 @@ func (a *App) PutTxnLink(l domain.TxnLink) error {
 	return nil
 }
 
-// SyncTxnLinkNetting installs the current refund-pair links into the budgeting
-// and reports read-model netting overlays (XC2), so a paired refund nets in its
+// SyncTxnLinkNetting installs the current refund-pair links into the reports
+// read-model overlay (XC2), so a paired refund nets in its
 // original purchase's period across budget bars and reports. It is idempotent
 // and cheap; it runs after every link change and once after each dataset
 // load/import/wipe (wired in New, ImportJSON, ImportJSONWithBlobs, Wipe).
 func (a *App) SyncTxnLinkNetting() {
 	links := a.TxnLinks()
-	budgeting.SetRefundLinks(links)
 	reports.SetRefundLinks(links)
 }
 

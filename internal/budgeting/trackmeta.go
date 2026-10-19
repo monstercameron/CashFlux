@@ -29,7 +29,7 @@ type TrackingMetadata struct {
 // half-open period [start, end). Split expenses count once per category line;
 // tags count the full transaction once per tag, matching the picker display.
 // Failed amounts are omitted and Error marks the result as incomplete.
-func ComputeTrackingMetadata(txns []domain.Transaction, start, end time.Time, base string, rates currency.Rates) TrackingMetadata {
+func ComputeTrackingMetadata(txns NettedLedger, start, end time.Time, base string, rates currency.Rates) TrackingMetadata {
 	result := TrackingMetadata{
 		CategoryCount: make(map[string]int),
 		CategoryTotal: make(map[string]int64),
@@ -49,7 +49,7 @@ func ComputeTrackingMetadata(txns []domain.Transaction, start, end time.Time, ba
 		target[key] = next
 		return true
 	}
-	for _, txn := range nettedForSpending(txns) {
+	for _, txn := range txns {
 		if !dateutil.InRange(txn.Date, start, end) {
 			continue
 		}

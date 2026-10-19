@@ -72,7 +72,7 @@ func unbudgetedStrip(props unbudgetedStripProps) ui.Node {
 			return unbudgetedStripData{}
 		}
 		rates := currency.Rates{Base: props.Base, Rates: app.Settings().FXRates}
-		computed, err := budgeting.ComputeUnbudgeted(app.Budgets(), app.Categories(), app.Transactions(), ms, me, rates)
+		computed, err := budgeting.ComputeUnbudgeted(app.Budgets(), app.Categories(), budgetLedgerForApp(app), ms, me, rates)
 		if err != nil {
 			return unbudgetedStripData{Err: err}
 		}
@@ -115,7 +115,7 @@ func unbudgetedStrip(props unbudgetedStripProps) ui.Node {
 	if userPrefs.PayCycleAnchor != "" {
 		payAnchor, _ = time.Parse("2006-01-02", userPrefs.PayCycleAnchor)
 	}
-	ledger := budgeting.NewNettedLedgerWithLinks(app.Transactions(), app.TxnLinks())
+	ledger := budgeting.NewNettedLedger(budgetLedgerForApp(app), app.TxnLinks())
 
 	chips := MapKeyed(cands, func(c unbudgetedCat) any { return c.CategoryID }, func(c unbudgetedCat) ui.Node {
 		// Only the four visible chips need a historical recommendation.

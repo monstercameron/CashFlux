@@ -62,7 +62,7 @@ func keptBudgetsLastMonth(app *appstate.App, rates currency.Rates, now time.Time
 		if b.Period != domain.PeriodMonthly {
 			continue // only monthly budgets have a clean "last month" to grade
 		}
-		spent, err := budgeting.Spent(b, app.Transactions(), start, end, rates)
+		spent, err := budgeting.Spent(b, budgetLedgerForApp(app), start, end, rates)
 		if err != nil {
 			continue
 		}

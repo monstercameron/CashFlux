@@ -6,6 +6,7 @@ package screens
 
 import (
 	"fmt"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -27,6 +28,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/reviewqueue"
 	"github.com/monstercameron/CashFlux/internal/txnclassify"
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
+	"github.com/monstercameron/CashFlux/internal/txnreview"
 	"github.com/monstercameron/CashFlux/internal/txnview"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -824,7 +826,7 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	memberLens := uistate.UseMemberLens()
 	f, lensOn := fOwn.WithOwnerLens(memberLens)
 
-	dataRevision := uistate.UseDataRevision().Get()
+	dataRevision := int(app.Rev())
 	accounts := app.Accounts()
 	categories := app.Categories()
 	members := app.Members()
@@ -1206,6 +1208,7 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	summaryCache := ui.UseMemo(func() *txnToolbarSummaryCache { return &txnToolbarSummaryCache{} }, app, app.Rev(), monthStart)
 	summary := summaryCache.get(dataRevision, txnSummaryScope(f), func() txnToolbarSummary {
 		defer txnPerfStart("summary")()
+		finishPresets := txnPerfStart("summary-presets")
 		result := txnToolbarSummary{
 			review: ledgerCounts.review,
 			presets: txnfilter.CountPresetsWithLabels(txns, f, txnfilter.PresetScope{
@@ -1217,6 +1220,8 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 			duplicates: ledgerCounts.duplicates,
 			suspects:   ledgerCounts.suspects,
 		}
+		finishPresets()
+		finishView := txnPerfStart("summary-view")
 		view, ok := txnDerivedViewCache.Lookup(app.Rev(), txnDerivedScope(app, f))
 		if !ok {
 			view, _ = txnview.Summarize(props.Shown, props.Rates, props.Base)
@@ -1224,12 +1229,21 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 		result.shownNet, result.spentMinor, result.incomeMinor = view.Net, view.Spent, view.Income
 		result.movedMinor, result.movedRows, result.unpairedRows = view.Transferred, view.MovedRows, view.UnpairedRows
 		result.unconverted = view.Unconverted
-		conversionScope := f
-		conversionScope.Page, conversionScope.PageSize = 0, 0
-		_, result.conversionIssues = txnfilter.ApplyWithLabelsChecked(txns, conversionScope, txnfilter.Labels{
-			Account: accName, Category: catName, Payee: app.PayeeResolver().Resolve,
-			BaseCurrency: props.Base, ToBase: func(m money.Money) (money.Money, error) { return props.Rates.Convert(m, props.Base) },
-		})
+		finishView()
+		finishConversion := txnPerfStart("summary-conversion")
+		cached := txnConversionIssuesCache
+		if cached.valid && cached.app == app && cached.revision == app.Rev() && cached.scope == txnDerivedScope(app, f) {
+			result.conversionIssues = cached.issues
+		} else {
+			conversionScope := f
+			conversionScope.Page, conversionScope.PageSize = 0, 0
+			conversionScope.Sort, conversionScope.Dir = "", ""
+			_, result.conversionIssues = txnfilter.ApplyWithLabelsChecked(txns, conversionScope, txnfilter.Labels{
+				Account: accName, Category: catName, Payee: app.PayeeResolver().Resolve, BaseCurrency: props.Base,
+				ToBase: func(m money.Money) (money.Money, error) { return props.Rates.Convert(m, props.Base) },
+			})
+		}
+		finishConversion()
 		return result
 	})
 	// Preset match counts — like the toolbar's "Review N", so each chip shows its
@@ -1826,7 +1840,6 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 	anchorAtom := uistate.UseTxnSelAnchor()
 	bulkCatAtom := uistate.UseTxnBulkCat()
 	checkpointSaving := ui.UseState(false)
-	undoAtom := uistate.UseTxnUndo()
 	tagOpen := ui.UseState(false)
 	tagValue := ui.UseState("")
 	categoryPickerOpen := ui.UseState(false)
@@ -1859,211 +1872,132 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 		}
 	}, selectionActive)
 
-	bulkSetCleared := func(val bool) {
-		sel := txnExpandedSelection(app, selAtom.Get())
-		var prior []domain.Transaction
-		for _, t := range app.Transactions() {
-			if sel[t.ID] && t.Cleared != val {
-				prior = append(prior, t)
-			}
+	// Every bulk edit validates all rows and commits one batch. Selection remains
+	// available on failure; there is one durable Undo affordance for the action.
+	applyBatch := func(label string, writes []domain.Transaction, done func()) {
+		if len(writes) == 0 {
+			return
 		}
-		app.BulkMutate(func() {
-			for _, t := range app.Transactions() {
-				if !sel[t.ID] || t.Cleared == val {
-					continue
-				}
-				t = t.MarkCleared(val, time.Now())
-				if err := app.PutTransaction(t); err != nil {
-					uistate.PostNotice(uistate.T("transactions.bulkClearErr", err.Error()), true)
-				}
+		ids := make([]string, len(writes))
+		for i, t := range writes {
+			ids[i] = t.ID
+		}
+		_ = CommitUndoable(app, label, ids, func() error { return app.PutTransactionsAtomic(writes) }, func(err error) {
+			if err != nil {
+				uistate.PostNotice(uistate.T("txint.changesNotSaved"), true)
+				return
+			}
+			clearSel()
+			if done != nil {
+				done()
 			}
 		})
-		opKey := "transactions.bulkOpCleared"
-		if !val {
-			opKey = "transactions.bulkOpUncleared"
+	}
+	bulkSetCleared := func(value bool) {
+		sel := txnExpandedSelection(app, selAtom.Get())
+		var writes []domain.Transaction
+		for _, t := range app.Transactions() {
+			if sel[t.ID] && t.Cleared != value {
+				writes = append(writes, t.MarkCleared(value, time.Now()))
+			}
 		}
-		setTxnBulkUndoAfterCommit(app, uistate.BulkSnapshot{Label: uistate.T(opKey, len(prior)), Prior: prior}, undoAtom.Set)
-		clearSel()
-		uistate.BumpDataRevision()
-		// C364: tell the undo story at the moment of risk.
-		if len(prior) > 0 {
-			postUndoStory(uistate.T(opKey, len(prior)))
+		key := "transactions.bulkOpCleared"
+		if !value {
+			key = "transactions.bulkOpUncleared"
 		}
+		applyBatch(uistate.T(key, len(writes)), writes, nil)
 	}
 	bulkMarkReviewedAction := func() {
 		sel := txnExpandedSelection(app, selAtom.Get())
-		var prior []domain.Transaction
+		var writes []domain.Transaction
 		for _, t := range app.Transactions() {
-			if sel[t.ID] && !t.Reviewed {
-				prior = append(prior, t)
-			}
-		}
-		app.BulkMutate(func() {
-			for _, t := range app.Transactions() {
-				if !sel[t.ID] || t.Reviewed {
-					continue
-				}
-				t.Reviewed = true
-				if err := app.PutTransaction(t); err != nil {
-					uistate.PostNotice(err.Error(), true)
+			if sel[t.ID] {
+				confirmed := txnreview.Confirm(t, t.CategoryID)
+				// A reviewed row can still carry a review tag; confirmation must remove it.
+				if !reflect.DeepEqual(t, confirmed) {
+					writes = append(writes, confirmed)
 				}
 			}
-		})
-		label := uistate.T("r1c.markedReviewed", len(prior))
-		setTxnBulkUndoAfterCommit(app, uistate.BulkSnapshot{Label: label, Prior: prior}, undoAtom.Set)
-		clearSel()
-		uistate.BumpDataRevision()
-		if len(prior) > 0 {
-			postUndoStory(label)
 		}
+		applyBatch(uistate.T("r1c.markedReviewed", len(writes)), writes, nil)
 	}
 	bulkMarkReviewed := ui.UseEvent(Prevent(bulkMarkReviewedAction))
-
-	// TXC-1: bulk exclude / include the selected transactions in budgets & reports —
-	// the main use case (a batch of reimbursements or internal transfers), so it
-	// doesn't have to be done one row at a time.
-	bulkSetExclude := func(val bool) {
+	bulkSetExclude := func(value bool) {
 		sel := txnExpandedSelection(app, selAtom.Get())
-		var prior []domain.Transaction
+		var writes []domain.Transaction
 		for _, t := range app.Transactions() {
-			if sel[t.ID] && t.ExcludeFromReports != val {
-				prior = append(prior, t)
+			if sel[t.ID] && t.ExcludeFromReports != value {
+				t.ExcludeFromReports = value
+				writes = append(writes, t)
 			}
 		}
-		app.BulkMutate(func() {
-			for _, t := range app.Transactions() {
-				if !sel[t.ID] || t.ExcludeFromReports == val {
-					continue
-				}
-				t.ExcludeFromReports = val
-				if err := app.PutTransaction(t); err != nil {
-					uistate.PostNotice(err.Error(), true)
-				}
-			}
-		})
-		opKey := "transactions.bulkOpExcluded"
-		if !val {
-			opKey = "transactions.bulkOpIncluded"
+		key := "transactions.bulkOpExcluded"
+		if !value {
+			key = "transactions.bulkOpIncluded"
 		}
-		setTxnBulkUndoAfterCommit(app, uistate.BulkSnapshot{Label: uistate.T(opKey, len(prior)), Prior: prior}, undoAtom.Set)
-		clearSel()
-		uistate.BumpDataRevision()
-		// C364: undo story for bulk exclude/include.
-		if len(prior) > 0 {
-			postUndoStory(uistate.T(opKey, len(prior)))
-		}
+		applyBatch(uistate.T(key, len(writes)), writes, nil)
 	}
-	// C561: "assign a category" and "clear the category" used to be the same button
-	// with the same blank default, so Categorize on a fresh selection wrote "" to every
-	// selected row — an immediate, unasked-for mutation whose only visible trace was the
-	// rows going uncategorized. They are two actions now: applyCategory needs a real
-	// choice (the button is disabled until there is one), and clearing is its own,
-	// confirmed action that says what it costs.
 	applyBulkCategory := func(cid string) {
 		if checkpointSaving.Get() {
 			return
 		}
 		sel := txnExpandedSelection(app, selAtom.Get())
 		checkpointSaving.Set(true)
-		uistate.SaveCheckpointThen(uistate.T("ckpt.beforeBulkRecat", plural(len(sel), "transaction")), func(_ string, checkpointErr error) {
+		uistate.SaveCheckpointThen(uistate.T("ckpt.beforeBulkRecat", plural(len(sel), "transaction")), func(_ string, err error) {
 			checkpointSaving.Set(false)
-			if checkpointErr != nil {
+			if err != nil {
 				uistate.PostNotice(uistate.T("enc34.checkpointFailed"), true)
 				return
 			}
-			var prior []domain.Transaction
+			var writes []domain.Transaction
 			for _, t := range app.Transactions() {
-				if sel[t.ID] && !t.IsTransfer() && t.CategoryID != cid {
-					prior = append(prior, t)
+				if sel[t.ID] && !t.IsTransfer() {
+					confirmed := txnreview.Confirm(t, cid)
+					if !reflect.DeepEqual(t, confirmed) {
+						writes = append(writes, confirmed)
+					}
 				}
 			}
-			app.BulkMutate(func() {
-				for _, t := range app.Transactions() {
-					if !sel[t.ID] || t.IsTransfer() || t.CategoryID == cid {
-						continue
-					}
-					if cid != "" {
-						t = txnCategoryAfterManualChoice(t)
-					}
-					t.CategoryID = cid
-					if err := app.PutTransaction(t); err != nil {
-						uistate.PostNotice(uistate.T("transactions.bulkRecatErr", err.Error()), true)
-					}
+			label := uistate.T("transactions.bulkOpClearedCat", len(writes))
+			if cid != "" {
+				label = uistate.T("transactions.bulkCatApplied", len(writes), bulkCatLabel(app, cid))
+			}
+			applyBatch(label, writes, func() {
+				if bulkCatAtom.Get() != "" {
+					bulkCatAtom.Set("")
 				}
 			})
-			// The result names the count AND the category it landed in — "Filed 12 under
-			// Housing > Mortgage" — so the commit is verifiable without re-reading the rows.
-			opLabel := uistate.T("transactions.bulkOpClearedCat", len(prior))
-			if cid != "" {
-				opLabel = uistate.T("transactions.bulkCatApplied", len(prior), bulkCatLabel(app, cid))
-			}
-			setTxnBulkUndoAfterCommit(app, uistate.BulkSnapshot{Label: opLabel, Prior: prior}, undoAtom.Set)
-			clearSel()
-			bulkCatAtom.Set("")
-			uistate.BumpDataRevision()
-			// C364: undo story for bulk recategorize.
-			if len(prior) > 0 {
-				postUndoStory(opLabel)
-			}
 		})
 	}
 	assignBulkOwners := func(owners []string) {
 		sel := txnExpandedSelection(app, selAtom.Get())
-		prior, err := assignSelectedTxnOwners(app, sel, owners)
-		if err != nil {
-			uistate.PostNotice(uistate.T("transactions.bulkAssignErr", err.Error()), true)
+		var writes []domain.Transaction
+		for _, t := range app.Transactions() {
+			if sel[t.ID] && !sameOwnerList(t.Owners(), owners) {
+				t.SetOwners(owners)
+				writes = append(writes, t)
+			}
 		}
-		setTxnBulkUndoAfterCommit(app, uistate.BulkSnapshot{Label: uistate.T("transactions.bulkOpAssigned", len(prior)), Prior: prior}, undoAtom.Set)
-		clearSel()
-		uistate.BumpDataRevision()
-		// C364: undo story for bulk member assignment.
-		if len(prior) > 0 {
-			postUndoStory(uistate.T("transactions.bulkOpAssigned", len(prior)))
-		}
+		applyBatch(uistate.T("transactions.bulkOpAssigned", len(writes)), writes, nil)
 	}
-
 	applyBulkTag := func(raw string) {
 		tag := strings.TrimSpace(raw)
 		if tag == "" {
 			return
 		}
 		sel := txnExpandedSelection(app, selAtom.Get())
-		var prior []domain.Transaction
+		var writes []domain.Transaction
 		for _, t := range app.Transactions() {
 			if sel[t.ID] && !txnHasTag(t.Tags, tag) {
-				t.Tags = append([]string(nil), t.Tags...)
-				prior = append(prior, t)
-			}
-		}
-		app.BulkMutate(func() {
-			for _, t := range app.Transactions() {
-				if !sel[t.ID] || txnHasTag(t.Tags, tag) {
-					continue
-				}
 				t.Tags = addTxnTag(t.Tags, tag)
-				if err := app.PutTransaction(t); err != nil {
-					uistate.PostNotice(err.Error(), true)
-				}
+				writes = append(writes, t)
 			}
-		})
-		label := uistate.T("r1c.tagged", len(prior), tag)
-		setTxnBulkUndoAfterCommit(app, uistate.BulkSnapshot{Label: label, Prior: prior}, undoAtom.Set)
-		clearSel()
-		tagValue.Set("")
-		tagOpen.Set(false)
-		uistate.BumpDataRevision()
-		if len(prior) > 0 {
-			postUndoStory(label)
 		}
+		applyBatch(uistate.T("r1c.tagged", len(writes), tag), writes, func() { tagValue.Set(""); tagOpen.Set(false) })
 	}
 	addTag := ui.UseEvent(Prevent(func() { applyBulkTag(tagValue.Get()) }))
 	onTagInput := ui.UseEvent(func(e ui.Event) { tagValue.Set(e.GetValue()) })
 	toggleTagInputAction := func() { tagOpen.Set(!tagOpen.Get()) }
-
-	// XC1: group the selected transactions into one logical purchase (an order
-	// that posted as several card charges). Order-group members keep their atoms;
-	// the link is a read-model overlay. First selected (in ledger order) is the
-	// group's primary/original.
 	bulkGroupOrder := func() {
 		sel := selAtom.Get()
 		var ids []string
@@ -2076,13 +2010,13 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 			uistate.PostNotice(uistate.T("txnlinks.groupNeedTwo"), true)
 			return
 		}
-		if err := app.PutTxnLink(domain.TxnLink{Kind: domain.TxnLinkOrderGroup, TxnIDs: ids}); err != nil {
-			uistate.PostNotice(uistate.T("txnlinks.groupErr", err.Error()), true)
-			return
-		}
-		uistate.PostNotice(uistate.T("txnlinks.grouped", len(ids)), false)
-		clearSel()
-		uistate.BumpDataRevision()
+		_ = CommitUndoable(app, uistate.T("txnlinks.grouped", len(ids)), ids, func() error { return app.PutTxnLink(domain.TxnLink{Kind: domain.TxnLinkOrderGroup, TxnIDs: ids}) }, func(err error) {
+			if err != nil {
+				uistate.PostNotice(uistate.T("txint.changesNotSaved"), true)
+				return
+			}
+			clearSel()
+		})
 	}
 
 	exportSelected := func() {
@@ -2133,68 +2067,17 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 					for id := range sel {
 						ids = append(ids, id)
 					}
-					// Snapshot what the delete will ACTUALLY remove, not what was ticked.
-					// DeleteTransactionsBulk takes the reciprocal leg of any selected transfer
-					// down with it, and a snapshot built from the selection alone left those
-					// counterparts out — so Undo restored one leg of a transfer and silently
-					// dropped the other, leaving that account permanently short by the transfer
-					// amount. The undo path is the last line of defence for a destructive bulk
-					// action; it has to cover the same rows the action does.
 					doomed := app.ExpandTransferPairs(ids)
-					doomedSet := make(map[string]bool, len(doomed))
-					for _, id := range doomed {
-						doomedSet[id] = true
-					}
-					var prior []domain.Transaction
-					priorByID := make(map[string]domain.Transaction, len(doomedSet))
-					for _, t := range app.Transactions() {
-						if doomedSet[t.ID] {
-							priorByID[t.ID] = t
-						}
-					}
-					deleted, err := app.DeleteTransactionsBulk(ids)
-					deletedSet := make(map[string]bool, len(deleted))
-					for _, id := range deleted {
-						deletedSet[id] = true
-						if txn, ok := priorByID[id]; ok {
-							prior = append(prior, txn)
-						}
-					}
-					remainingSelection := make(map[string]bool, len(sel))
-					for id := range sel {
-						if !deletedSet[id] {
-							remainingSelection[id] = true
-						}
-					}
-					if len(remainingSelection) == 0 {
-						clearSel()
-					} else {
-						selAtom.Set(remainingSelection)
-						if deletedSet[anchorAtom.Get()] {
-							anchorAtom.Set("")
-						}
-					}
-					if err != nil || len(deleted) != len(doomed) {
-						notDeleted := len(doomed) - len(deleted)
-						if notDeleted < 0 {
-							notDeleted = 0
-						}
-						message := uistate.TN("transactions.bulkDeleteOne", "transactions.bulkDeleteMany", len(deleted)) + " " +
-							uistate.TN("transactions.bulkNotDeletedOne", "transactions.bulkNotDeletedMany", notDeleted)
+					_ = CommitUndoable(app, uistate.T("transactions.bulkOpDeleted", len(doomed)), doomed, func() error {
+						_, err := app.DeleteTransactionsBulkExpanded(doomed)
+						return err
+					}, func(err error) {
 						if err != nil {
-							message += " " + err.Error()
+							uistate.PostNotice(uistate.T("txint.changesNotSaved"), true)
+							return
 						}
-						uistate.PostNotice(message, true)
-					}
-					if len(prior) > 0 {
-						undoLabel := uistate.T("transactions.bulkOpDeleted", len(prior))
-						setTxnBulkUndoAfterCommit(app, uistate.BulkSnapshot{Label: undoLabel, Prior: prior}, undoAtom.Set)
-						uistate.BumpDataRevision()
-						// C364: undo story naming the count + the reversal path (Ctrl+Z / Activity).
-						postUndoStory(undoLabel)
-					} else {
-						undoAtom.Set(uistate.BulkSnapshot{})
-					}
+						clearSel()
+					})
 				})
 			})
 	}
@@ -2455,29 +2338,22 @@ func sameOwnerList(left, right []string) bool {
 
 func assignSelectedTxnOwners(app *appstate.App, selected map[string]bool, owners []string) ([]domain.Transaction, error) {
 	var prior []domain.Transaction
-	var firstErr error
+	var writes []domain.Transaction
 	for _, txn := range app.Transactions() {
 		if selected[txn.ID] && !sameOwnerList(txn.Owners(), owners) {
 			prior = append(prior, txn)
+			txn.SetOwners(owners)
+			writes = append(writes, txn)
 		}
 	}
-	app.BulkMutate(func() {
-		for _, txn := range app.Transactions() {
-			if !selected[txn.ID] || sameOwnerList(txn.Owners(), owners) {
-				continue
-			}
-			txn.SetOwners(owners)
-			if err := app.PutTransaction(txn); err != nil && firstErr == nil {
-				firstErr = err
-			}
-		}
-	})
-	return prior, firstErr
+	if err := app.PutTransactionsAtomic(writes); err != nil {
+		return nil, err
+	}
+	return prior, nil
 }
 
 // txnCategoryAfterManualChoice records that a person explicitly chose this
 // transaction's category, without rewriting how the transaction entered the ledger.
 func txnCategoryAfterManualChoice(t domain.Transaction) domain.Transaction {
-	t.Reviewed = true
-	return t
+	return txnreview.Confirm(t, t.CategoryID)
 }

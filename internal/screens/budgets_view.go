@@ -59,6 +59,10 @@ func (builder *budgetViewBuilder) addIssues(issues []budgeting.ViewIssue) {
 		if issue.Field != "" {
 			args = append(args, "field", issue.Field)
 		}
+		if issue.Informational {
+			slog.Info(issue.Operation, args...)
+			continue
+		}
 		slog.Error(issue.Operation, args...)
 		// A budget-local failure travels on Status.Error/Issues. Incomplete is
 		// reserved for unavailable page-wide figures because existing widgets
@@ -234,7 +238,7 @@ func (builder *budgetViewBuilder) addEnvelopes(budgets []domain.Budget, househol
 		if method != budgeting.MethodEnvelope {
 			continue
 		}
-		available, err := budgeting.EnvelopeAvailableAnchored(b, in.Transactions, p.Anchor, p.WeekStart, p.PayCycleAnchor, in.Rates, categorytree.DescendantsOfAll(in.Categories, b.TrackedCategoryIDs()))
+		available, err := budgeting.EnvelopeAvailableForView(b, in, categorytree.DescendantsOfAll(in.Categories, b.TrackedCategoryIDs()))
 		if err != nil {
 			builder.addIssues([]budgeting.ViewIssue{{Operation: "calculate envelope availability", BudgetID: b.ID, Err: err}})
 			continue
@@ -242,7 +246,7 @@ func (builder *budgetViewBuilder) addEnvelopes(budgets []domain.Budget, househol
 		if available.IsNegative() {
 			v.EnvAvail[b.ID] = fmtMoney(available.Abs()) + " " + uistate.T("budgets.overdrawnWord")
 			_, end := budgeting.PeriodRangeAnchored(b.Period, p.Anchor, p.WeekStart, p.PayCycleAnchor)
-			v.EnvDebtStart[b.ID] = uistate.T("budgets.envelopeDebtStart", budgetMonthName(end, false), fmtMoney(available.Abs()))
+			v.EnvDebtStart[b.ID] = uistate.T("budgets.envelopeDebtStartPeriod", uistate.LoadPrefs().FormatDate(end), fmtMoney(available.Abs()))
 		} else {
 			v.EnvAvail[b.ID] = fmtMoney(available)
 		}

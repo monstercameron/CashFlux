@@ -59,7 +59,7 @@ func AutoBudgetBody(_ struct{}) ui.Node {
 	}
 	anchor := budgetViewAnchor(uistate.UsePeriod().Get(), time.Now())
 	suggestions := ui.UseMemo(func() autoBudgetSuggestionMemo {
-		rows, err := budgeting.SuggestBudgets(app.Categories(), app.Transactions(), anchor, months, rates, m)
+		rows, err := budgeting.SuggestBudgets(app.Categories(), budgetLedgerForApp(app), anchor, months, rates, m)
 		return autoBudgetSuggestionMemo{Rows: rows, Err: err}
 	}, dataRevision, anchor.Format("2006-01"), months, m, rates.Base, app.Rev())
 	suggestionRows, suggestionErr := suggestions.Rows, suggestions.Err
@@ -164,7 +164,7 @@ func AutoBudgetBody(_ struct{}) ui.Node {
 	pr := uistate.CurrentPrefs()
 	period := budgeting.ResolveViewPeriod(viewFrom, viewTo, time.Now(), pr.WeekStartWeekday(), parsePayCycleAnchor(pr.PayCycleAnchor))
 	period.Anchor = anchor
-	autoIncome, incomeErr := budgeting.ResolveViewIncome(budgeting.ViewIncomeBasis{Mode: pr.BudgetIncomeMode, PaycheckMin: pr.BudgetPaycheckMinMinor, Fixed: pr.MonthlyIncomeMinor, CategoryIDs: pr.BudgetIncomeCategoryIDs, AverageMonths: pr.BudgetIncomeAvgMonths}, app.Transactions(), app.Categories(), period, base, rates)
+	autoIncome, incomeErr := budgeting.ResolveViewIncome(budgeting.ViewIncomeBasis{Mode: pr.BudgetIncomeMode, PaycheckMin: pr.BudgetPaycheckMinMinor, Fixed: pr.MonthlyIncomeMinor, CategoryIDs: pr.BudgetIncomeCategoryIDs, AverageMonths: pr.BudgetIncomeAvgMonths}, budgetLedgerForApp(app), app.Categories(), period, base, rates)
 	if incomeErr != nil {
 		slog.Error("calculate auto-budget income", "error", incomeErr)
 	}

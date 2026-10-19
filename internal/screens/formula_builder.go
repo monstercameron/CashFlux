@@ -83,6 +83,7 @@ func liveEngineVarsRaw(app *appstate.App) map[string]float64 {
 	}
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 	return engineenv.Vars(engineenv.Data{
+		Ledger:   budgetLedgerForApp(app),
 		Accounts: app.Accounts(), Transactions: app.Transactions(), Members: app.Members(),
 		Budgets: app.Budgets(), Goals: app.Goals(), Tasks: app.Tasks(), Recurring: app.Recurring(),
 		Categories: app.Categories(), WeekStart: uistate.LoadPrefs().WeekStartWeekday(),

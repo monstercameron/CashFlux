@@ -10,6 +10,7 @@ import (
 	"syscall/js"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/budgetplan"
 	"github.com/monstercameron/CashFlux/internal/categorytree"
@@ -31,7 +32,9 @@ import (
 // and Goals feed the future-month projection (C394).
 type budgetAnnualGridProps struct {
 	Budgets    []domain.Budget
-	Txns       []domain.Transaction
+	Txns       budgeting.NettedLedger
+	App        *appstate.App
+	Scope      string
 	Cats       []domain.Category
 	Recurrings []domain.Recurring
 	Goals      []domain.Goal
@@ -113,6 +116,12 @@ func BudgetAnnualGrid(props budgetAnnualGridProps) ui.Node {
 		covers map[string]map[string]bool
 		err    error
 	}
+	deps := []any{revision, props.App, props.Scope, props.WeekStart, props.Now.Format("2006-01-02"), year.Get(), open.Get()}
+	if props.App != nil {
+		deps = append(deps, props.App.Rev())
+	} else {
+		deps = append(deps, props.Budgets, props.Txns, props.Cats, props.Rates)
+	}
 	build := ui.UseMemo(func() annualGridBuild {
 		if !open.Get() {
 			return annualGridBuild{}
@@ -123,7 +132,7 @@ func BudgetAnnualGrid(props budgetAnnualGridProps) ui.Node {
 		}
 		grid, err := budgeting.BuildAnnualGrid(props.Budgets, props.Txns, year.Get(), props.Rates, props.WeekStart, props.Now, covers)
 		return annualGridBuild{grid: grid, covers: covers, err: err}
-	}, revision, props.Budgets, props.Txns, props.Cats, props.Rates, props.WeekStart, props.Now, year.Get(), open.Get())
+	}, deps...)
 
 	// A proper collapsible-section toggle framed as "Plan the year" (C371): a
 	// rotating disclosure caret, a clear title, and a hint of what it opens.

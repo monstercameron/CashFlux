@@ -34,6 +34,10 @@ const (
 
 // Status is the evaluated state of a budget for a period.
 type Status struct {
+	// Start and End bound the evaluated period, including non-rollover budgets.
+	Start, End time.Time
+	// Base is the viewed period's standing plan before carry or temporary boosts.
+	Base money.Money
 	// Error prevents failed budgets from silently contributing zero to totals.
 	Error *BudgetEvaluationError
 	// Issues holds deduplicated diagnostics for optional figures such as pace.
@@ -128,20 +132,7 @@ func ownsSplitScope(budget domain.Budget, txn domain.Transaction, split domain.C
 // category passes covers count, and never the whole-transaction category — so a
 // grocery receipt split into produce/household lands in the right budgets without
 // double-counting.
-func spentCovered(budget domain.Budget, all []domain.Transaction, start, end time.Time, rates currency.Rates, covers func(string) bool) (money.Money, error) {
-	return spentCoveredNetted(budget, nettedForSpending(all), start, end, rates, covers)
-}
-
-// NettedLedger holds the refund-pair netting result so repeated period slices
-// can share the one ledger-wide pass.
-type NettedLedger struct{ transactions []domain.Transaction }
-
-// NewNettedLedger nets refund pairs once for reuse across budget period slices.
-func NewNettedLedger(all []domain.Transaction) NettedLedger {
-	return NettedLedger{transactions: nettedForSpending(all)}
-}
-
-func spentCoveredNetted(budget domain.Budget, all []domain.Transaction, start, end time.Time, rates currency.Rates, covers func(string) bool) (money.Money, error) {
+func spentCovered(budget domain.Budget, all NettedLedger, start, end time.Time, rates currency.Rates, covers func(string) bool) (money.Money, error) {
 	limit := normalizedLimit(budget, rates)
 	total := money.Zero(limit.Currency)
 	for _, t := range all {
@@ -170,7 +161,7 @@ func spentCoveredNetted(budget domain.Budget, all []domain.Transaction, start, e
 
 // Spent returns the total spent against a budget within [start, end), in the
 // budget's limit currency (the budget's tracked categories only).
-func Spent(budget domain.Budget, all []domain.Transaction, start, end time.Time, rates currency.Rates) (money.Money, error) {
+func Spent(budget domain.Budget, all NettedLedger, start, end time.Time, rates currency.Rates) (money.Money, error) {
 	return spentCovered(budget, all, start, end, rates, budget.TracksCategory)
 }
 
@@ -181,21 +172,16 @@ func Spent(budget domain.Budget, all []domain.Transaction, start, end time.Time,
 // one — has to use this rather than Spent, or a parent-category budget whose
 // spend sits in sub-categories reports two different totals for the same budget
 // on the same screen (C667). An empty covers is exactly Spent.
-func SpentRollup(budget domain.Budget, all []domain.Transaction, start, end time.Time, rates currency.Rates, covers map[string]bool) (money.Money, error) {
+func SpentRollup(budget domain.Budget, all NettedLedger, start, end time.Time, rates currency.Rates, covers map[string]bool) (money.Money, error) {
 	return spentCovered(budget, all, start, end, rates, func(id string) bool {
 		return budget.TracksCategory(id) || covers[id]
 	})
 }
 
 // evaluateWith builds the Status using the given category-cover predicate.
-func evaluateWith(budget domain.Budget, all []domain.Transaction, start, end time.Time, rates currency.Rates, nearThreshold float64, covers func(string) bool) (Status, error) {
-	return evaluateNettedWith(budget, nettedForSpending(all), start, end, rates, nearThreshold, covers)
-}
-
-func evaluateNettedWith(budget domain.Budget, all []domain.Transaction, start, end time.Time, rates currency.Rates, nearThreshold float64, covers func(string) bool) (Status, error) {
-
+func evaluateWith(budget domain.Budget, all NettedLedger, start, end time.Time, rates currency.Rates, nearThreshold float64, covers func(string) bool) (Status, error) {
 	limit := normalizedLimit(budget, rates)
-	spent, err := spentCoveredNetted(budget, all, start, end, rates, covers)
+	spent, err := spentCovered(budget, all, start, end, rates, covers)
 	if err != nil {
 		return Status{}, err
 	}
@@ -204,7 +190,8 @@ func evaluateNettedWith(budget domain.Budget, all []domain.Transaction, start, e
 		return Status{}, err
 	}
 	return Status{
-		Budget:    budget,
+		Budget: budget,
+		Start:  start, End: end, Base: limit,
 		Spent:     spent,
 		Remaining: remaining,
 		Limit:     limit,
@@ -244,7 +231,7 @@ func classifyDirected(dir domain.BudgetDirection, contributed, target money.Mone
 // Evaluate returns the full Status for a budget over [start, end), counting only
 // the budget's own category. nearThreshold is the fraction of the limit
 // considered "near"; pass DefaultNearThreshold for the standard 80%.
-func Evaluate(budget domain.Budget, all []domain.Transaction, start, end time.Time, rates currency.Rates, nearThreshold float64) (Status, error) {
+func Evaluate(budget domain.Budget, all NettedLedger, start, end time.Time, rates currency.Rates, nearThreshold float64) (Status, error) {
 	return evaluateWith(budget, all, start, end, rates, nearThreshold, budget.TracksCategory)
 }
 
@@ -253,7 +240,7 @@ func Evaluate(budget domain.Budget, all []domain.Transaction, start, end time.Ti
 // (from categorytree.Descendants) — so a parent-category budget includes its
 // sub-categories' spend (D5). An empty covers falls back to the budget's own
 // category.
-func EvaluateRollup(budget domain.Budget, all []domain.Transaction, start, end time.Time, rates currency.Rates, nearThreshold float64, covers map[string]bool) (Status, error) {
+func EvaluateRollup(budget domain.Budget, all NettedLedger, start, end time.Time, rates currency.Rates, nearThreshold float64, covers map[string]bool) (Status, error) {
 	return evaluateWith(budget, all, start, end, rates, nearThreshold, func(id string) bool {
 		return budget.TracksCategory(id) || covers[id]
 	})
@@ -356,19 +343,6 @@ func PeriodRangeAnchored(p domain.Period, ref time.Time, weekStart time.Weekday,
 	return start, start.AddDate(0, 0, 14)
 }
 
-// EvaluateAll evaluates a set of budgets over the same period.
-func EvaluateAll(budgets []domain.Budget, all []domain.Transaction, start, end time.Time, rates currency.Rates, nearThreshold float64) ([]Status, error) {
-	out := make([]Status, 0, len(budgets))
-	for _, b := range budgets {
-		s, err := Evaluate(b, all, start, end, rates, nearThreshold)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, s)
-	}
-	return out, nil
-}
-
 func percent(spent, limit money.Money) int {
 	if limit.Amount <= 0 {
 		if spent.Amount > 0 {
@@ -428,7 +402,7 @@ type RollupSummary struct {
 	// Excluded counts budgets omitted because a calculation or conversion failed.
 	Excluded int
 	// OverCount and NearCount count statuses past or approaching their directed
-	// thresholds. For a saving target, StateOver means the goal was met or exceeded.
+	// thresholds. For a saving target, StateOver means the contribution target is short.
 	OverCount, NearCount int
 	// SpentMinor and LimitMinor cover the SPENDING budgets only.
 	SpentMinor, LimitMinor int64

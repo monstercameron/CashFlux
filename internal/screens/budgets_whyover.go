@@ -79,11 +79,10 @@ func budgetWhyOver(status budgeting.Status, anchor time.Time, drivers []budgetin
 	start, end := budgeting.PeriodRangeAnchored(b.Period, anchor, weekStart, payAnchor)
 	prevStart, prevEnd := budgeting.PreviousPeriodRangeAnchored(b.Period, anchor, weekStart, payAnchor)
 
-	txns := app.Transactions()
 	descendants := categorytree.DescendantsOfAll(app.Categories(), b.TrackedCategoryIDs())
 	covers := func(id string) bool { return b.TracksCategory(id) || descendants[id] }
 
-	prior, err := budgeting.EvaluateRollup(b, txns, prevStart, prevEnd, rates, budgeting.DefaultNearThreshold, descendants)
+	prior, err := budgeting.EvaluateRollup(b, budgetLedgerForApp(app), prevStart, prevEnd, rates, budgeting.DefaultNearThreshold, descendants)
 	if err != nil {
 		return whyOverFacts{}, false
 	}
@@ -93,8 +92,8 @@ func budgetWhyOver(status budgeting.Status, anchor time.Time, drivers []budgetin
 		topLabel, topMinor = drivers[0].Label, drivers[0].Amount
 	}
 	res, ok := explainWhyOverStatus(status, topMinor,
-		budgeting.ContributingCount(b, txns, start, end, covers), prior.Spent.Amount,
-		budgeting.ContributingCount(b, txns, prevStart, prevEnd, covers))
+		budgeting.ContributingCount(b, budgetLedgerForApp(app), start, end, covers), prior.Spent.Amount,
+		budgeting.ContributingCount(b, budgetLedgerForApp(app), prevStart, prevEnd, covers))
 	if !ok {
 		return whyOverFacts{}, false
 	}

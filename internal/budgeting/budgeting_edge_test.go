@@ -56,7 +56,7 @@ func TestEvaluateConvertError(t *testing.T) {
 	}
 }
 
-func TestEvaluateAll(t *testing.T) {
+func TestEvaluateViewBudgets(t *testing.T) {
 	start, end := june()
 	rates := currency.Rates{Base: "USD"}
 	budgets := []domain.Budget{
@@ -68,9 +68,15 @@ func TestEvaluateAll(t *testing.T) {
 		expense(20000, "USD", "rent", "", "2026-06-04"), // ok
 	}
 
-	statuses, err := EvaluateAll(budgets, all, start, end, rates, DefaultNearThreshold)
-	if err != nil {
-		t.Fatalf("error: %v", err)
+	ledger := NewNettedLedger(all)
+	input := ViewInput{Ledger: &ledger, Rates: rates, Base: rates.Base, Period: ResolveViewPeriod(start, end, start, time.Sunday, time.Time{})}
+	var statuses []Status
+	for _, b := range budgets {
+		view := EvaluateViewBudget(b, input)
+		if view.Error != nil {
+			t.Fatal(view.Error)
+		}
+		statuses = append(statuses, view.Status)
 	}
 	if len(statuses) != 2 {
 		t.Fatalf("got %d statuses, want 2", len(statuses))
@@ -83,14 +89,16 @@ func TestEvaluateAll(t *testing.T) {
 	}
 }
 
-func TestEvaluateAllError(t *testing.T) {
+func TestEvaluateViewBudgetError(t *testing.T) {
 	start, end := june()
 	rates := currency.Rates{Base: "USD"}
 	budgets := []domain.Budget{{CategoryID: "food", Scope: domain.ScopeShared, Limit: usd(50000)}}
 	all := []domain.Transaction{expense(1000, "JPY", "food", "", "2026-06-03")}
 
-	if _, err := EvaluateAll(budgets, all, start, end, rates, DefaultNearThreshold); err == nil {
-		t.Error("EvaluateAll should surface a per-budget evaluation error")
+	ledger := NewNettedLedger(all)
+	view := EvaluateViewBudget(budgets[0], ViewInput{Ledger: &ledger, Rates: rates, Base: rates.Base, Period: ResolveViewPeriod(start, end, start, time.Sunday, time.Time{})})
+	if view.Error == nil || view.Status.Error == nil || view.Status.State != StateUnavailable {
+		t.Error("view must retain the budget and surface its evaluation error")
 	}
 }
 

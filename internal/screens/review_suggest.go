@@ -101,14 +101,21 @@ func reviewWhy(s catsuggest.Suggestion) string {
 // the store took 122 — and a mis-derived key (C616) could just as easily take
 // none. The caller now hands over the exact charges it drew and counted, which is
 // the only version of this the user can predict.
-func applyReviewChoice(app *appstate.App, ids []string, categoryID string) bool {
+// applyReviewChoice returns whether the atomic write was accepted. UI callers
+// advance only from done after the durable result, never from that return value.
+func applyReviewChoice(app *appstate.App, ids []string, categoryID string, done ...func(bool)) bool {
 	if app == nil || categoryID == "" || len(ids) == 0 {
 		return false
 	}
-	n := assignReviewToCharges(app, ids, categoryID)
-	if n > 0 {
-		postCategorizedUndo(app, categoryID, n)
+	assignments := make(map[string]string, len(ids))
+	for _, id := range ids {
+		assignments[id] = categoryID
 	}
+	n := commitReviewAssignments(app, assignments, func(n int, err error) {
+		if len(done) > 0 {
+			done[0](n > 0 && err == nil)
+		}
+	})
 	return n > 0
 }
 

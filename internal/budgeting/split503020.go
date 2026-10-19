@@ -135,8 +135,8 @@ type Split5030Result struct {
 // the three complete months before now. Split lines are attributed to their own
 // categories, and unsupported currencies fail rather than being added as if they
 // shared a minor unit.
-func trailingSpend(catID string, txns []domain.Transaction, now time.Time, rates currency.Rates) (int64, error) {
-	txns = nettedForSpending(txns)
+func trailingSpend(catID string, txns NettedLedger, now time.Time, rates currency.Rates) (int64, error) {
+
 	// Window: the 3 complete calendar months before the current month.
 	curMonthStart := dateutil.MonthStart(now)
 	windowEnd := curMonthStart
@@ -236,14 +236,14 @@ func distribute(target int64, weights []int64) []int64 {
 // WantsTarget (integer remainder goes to savings). Within each bucket the
 // target is distributed proportionally by trailing spend; ties (all zero
 // spend) are split evenly. An income of ≤ 0 returns an empty result.
-func Generate5030(income int64, cats []domain.Category, txns []domain.Transaction, now time.Time) Split5030Result {
+func Generate5030(income int64, cats []domain.Category, txns NettedLedger, now time.Time) Split5030Result {
 	result, _ := Generate5030WithRates(income, cats, txns, now, currency.Rates{Base: "USD"})
 	return result
 }
 
 // Generate5030WithRates builds the 50/30/20 proposal using checked split-aware
 // contributions converted into the selected base currency.
-func Generate5030WithRates(income int64, cats []domain.Category, txns []domain.Transaction, now time.Time, rates currency.Rates) (Split5030Result, error) {
+func Generate5030WithRates(income int64, cats []domain.Category, txns NettedLedger, now time.Time, rates currency.Rates) (Split5030Result, error) {
 	if income <= 0 {
 		return Split5030Result{}, nil
 	}

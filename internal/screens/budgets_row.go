@@ -274,7 +274,7 @@ func budgetRowCompact(props budgetRowCompactProps) ui.Node {
 		Div(css.Class("budget-crow-figures"),
 			Span(css.Class("budget-crow-amt fig"),
 				Span(css.Class("budget-crow-spent"), barSpent),
-				Span(css.Class("budget-crow-limit"), " of "),
+				Span(css.Class("budget-crow-limit"), uistate.T("bc5b9.budgetRowOf")),
 				Button(css.Class("budget-limit-btn", "budget-crow-limit-btn"), Type("button"), Ref(props.LimitButtonRef), Attr("data-testid", "budget-limit-btn-"+s.Budget.ID),
 					Title(uistate.T("budgets.limitEditTitle")), Attr("aria-label", uistate.T("budgets.limitEditAria", fmtMoney(limit), title)),
 					OnClick(startLimitEdit), fmtMoney(limit)),
@@ -303,7 +303,7 @@ func budgetRowCompact(props budgetRowCompactProps) ui.Node {
 		Div(css.Class("budget-crow-rollover"), props.RolloverDetail),
 		If(props.LimitEditing, budgetLimitEditor(
 			s.Budget.ID, s.Budget.Name, props.LimitInputRef, props.LimitDraft, onLimitDraft, saveLimitEdit, cancelLimitEdit,
-			limitKeyDown, limitErrID, limitErrMsg, limit,
+			limitKeyDown, limitErrID, limitErrMsg, limit, s.Base,
 		)),
 	)
 	return row
@@ -434,11 +434,11 @@ func budgetCadenceSuffix(period domain.Period) string {
 	}
 }
 
-func budgetLimitEditor(id, budgetName string, inputRef ui.DOMRef, draft string, onDraft, save, cancel, keyDown any, errID, errMsg string, effective money.Money) ui.Node {
+func budgetLimitEditor(id, budgetName string, inputRef ui.DOMRef, draft string, onDraft, save, cancel, keyDown any, errID, errMsg string, effective money.Money, base ...money.Money) ui.Node {
 	return Form(css.Class("budget-limit-editor"), Attr("data-testid", "budget-limit-editor-"+id), OnSubmit(save),
 		Strong(css.Class("budget-limit-editor-title"), budgetName+" "+uistate.T("budgets.limitTitleSuffix")),
 		Div(css.Class("budget-limit-editor-cap"),
-			Strong(Attr("data-testid", "budget-limit-effective-"+id), budgetEffectiveCapCopy(id, effective))),
+			Strong(Attr("data-testid", "budget-limit-effective-"+id), budgetEffectiveCapCopy(id, effective, base...))),
 		Div(css.Class("budget-limit-editor-base"),
 			Label(For("budget-limit-input-"+id), uistate.T("budgets.baseLimitLabel")),
 			Input(append(append([]any{css.Class("field", "budget-limit-input"), Type("number"),
@@ -454,7 +454,7 @@ func budgetLimitEditor(id, budgetName string, inputRef ui.DOMRef, draft string, 
 	)
 }
 
-func budgetEffectiveCapCopy(id string, effective money.Money) string {
+func budgetEffectiveCapCopy(id string, effective money.Money, viewedBase ...money.Money) string {
 	base := effective
 	if app := appstate.Default; app != nil {
 		for _, budget := range app.Budgets() {
@@ -463,6 +463,9 @@ func budgetEffectiveCapCopy(id string, effective money.Money) string {
 				break
 			}
 		}
+	}
+	if len(viewedBase) > 0 && viewedBase[0].Currency != "" {
+		base = viewedBase[0]
 	}
 	delta, err := money.Sub(effective.Amount, base.Amount)
 	if err != nil || delta == 0 {
@@ -707,7 +710,7 @@ func budgetTopDriversFor(b domain.Budget, n int, anchor time.Time) ([]budgeting.
 	// Group charges by the clean merchant name (payee aliases + rule-pack normalization)
 	// so a store under several raw descriptors, or many small charges, reads as one line.
 	normalize := app.PayeeResolver().Resolve
-	drivers, err := budgeting.TopDrivers(b, app.Transactions(), start, end, rates, covers, n, normalize)
+	drivers, err := budgeting.TopDrivers(b, budgetLedgerForApp(app), start, end, rates, covers, n, normalize)
 	if err != nil {
 		return nil, base
 	}

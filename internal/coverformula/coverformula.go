@@ -9,6 +9,8 @@
 package coverformula
 
 import (
+	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -25,12 +27,23 @@ import (
 // top of it (via engineenv.BudgetVars + Merge).
 type Context struct {
 	Base           map[string]float64
-	Txns           []domain.Transaction
+	Txns           budgeting.NettedLedger
 	Rates          currency.Rates
 	Now            time.Time
 	WeekStart      time.Weekday
 	PayCycleAnchor time.Time
 	Defs           []customfields.Def
+	Categories     []domain.Category
+	Recurring      []domain.Recurring
+	PoolRollover   bool
+}
+
+// ViewInput returns the shared budget evaluator inputs for formulas and covers.
+func (c Context) ViewInput() budgeting.ViewInput {
+	return budgeting.ViewInput{Ledger: &c.Txns, Transactions: c.Txns,
+		Categories: c.Categories, Recurring: c.Recurring, Rates: c.Rates, Base: c.Rates.Base,
+		PoolRollover: c.PoolRollover,
+		Period:       budgeting.ViewPeriod{Anchor: c.Now, Now: c.Now, WeekStart: c.WeekStart, PayCycleAnchor: c.PayCycleAnchor}}
 }
 
 // EvalInBudget evaluates expr in b's context and returns the numeric result in MAJOR
@@ -42,18 +55,18 @@ func (c Context) EvalInBudget(expr string, b domain.Budget) (float64, error) {
 	if expr == "" {
 		return 0, nil
 	}
-	bs, be := budgeting.PeriodRangeAnchored(b.Period, c.Now, c.WeekStart, c.PayCycleAnchor)
-	st, err := budgeting.EvaluateRollup(b, c.Txns, bs, be, c.Rates, budgeting.DefaultNearThreshold, nil)
+	v := budgeting.EvaluateViewBudget(b, c.ViewInput())
+	if !v.Valid {
+		return 0, v.Error
+	}
+	st := v.Status
+	dec := currency.Decimals(st.Limit.Currency)
+	ctxVars := engineenv.BudgetVars(b, minorToMajor(st.Spent.Amount, dec), minorToMajor(st.Limit.Amount, dec), c.Defs)
+	value, err := formula.Eval(expr, formula.Env{Vars: engineenv.Merge(c.Base, ctxVars)})
 	if err != nil {
 		return 0, err
 	}
-	dec := currency.Decimals(b.Limit.Currency)
-	ctxVars := engineenv.BudgetVars(b, minorToMajor(st.Spent.Amount, dec), minorToMajor(b.Limit.Amount, dec), c.Defs)
-	v, err := formula.Eval(expr, formula.Env{Vars: engineenv.Merge(c.Base, ctxVars)})
-	if err != nil {
-		return 0, err
-	}
-	return asNumber(v)
+	return asNumber(value)
 }
 
 // AmountMinor evaluates a cover-amount formula in the destination budget's context and
@@ -64,8 +77,12 @@ func (c Context) AmountMinor(expr string, dest domain.Budget) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	dec := currency.Decimals(dest.Limit.Currency)
-	minor := int64(roundHalfAway(major * pow10(dec)))
+	dec := currency.Decimals(dest.WithBaseCurrency(c.Rates.Base).Limit.Currency)
+	scaled := math.Round(major * pow10(dec))
+	if math.IsNaN(scaled) || math.IsInf(scaled, 0) || scaled >= float64(math.MaxInt64) || scaled < float64(math.MinInt64) {
+		return 0, fmt.Errorf("cover formula amount is outside the supported range")
+	}
+	minor := int64(scaled)
 	if minor < 0 {
 		minor = 0
 	}
@@ -79,11 +96,14 @@ func (c Context) Weight(expr string, src domain.Budget) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	w := int(roundHalfAway(v))
-	if w < 0 {
-		w = 0
+	rounded := math.Round(v)
+	if math.IsNaN(rounded) || math.IsInf(rounded, 0) || rounded >= float64(int(^uint(0)>>1)) {
+		return 0, fmt.Errorf("cover formula weight is outside the supported range")
 	}
-	return w, nil
+	if rounded <= 0 {
+		return 0, nil
+	}
+	return int(rounded), nil
 }
 
 func minorToMajor(minor int64, dec int) float64 { return float64(minor) / pow10(dec) }
@@ -94,13 +114,6 @@ func pow10(n int) float64 {
 		d *= 10
 	}
 	return d
-}
-
-func roundHalfAway(f float64) float64 {
-	if f < 0 {
-		return -roundHalfAway(-f)
-	}
-	return float64(int64(f + 0.5))
 }
 
 // asNumber coerces a formula Value (number or bool) to float64.
@@ -114,5 +127,5 @@ func asNumber(v formula.Value) (float64, error) {
 		}
 		return 0, nil
 	}
-	return 0, nil
+	return 0, fmt.Errorf("cover formula must return a number or a yes/no value")
 }

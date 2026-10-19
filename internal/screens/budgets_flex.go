@@ -14,6 +14,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/catname"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -33,7 +34,7 @@ import (
 // (XC3 smoothed accruals). It reads the live store and evaluates through the pure
 // budgeting.EvaluateFlex read model.
 func budgetFlexWidget(props budgetSummaryProps) ui.Node {
-	_ = uistate.UseDataRevision().Get()
+	dataRevision := uistate.UseDataRevision().Get()
 	app := props.App
 	_ = uistate.UsePrefs().Get()
 	vw := uistate.UsePeriod().Get()
@@ -47,7 +48,7 @@ func budgetFlexWidget(props budgetSummaryProps) ui.Node {
 		base = budgetBaseCurrency(base)
 	}
 	dec := currency.Decimals(base)
-	now := time.Now()
+	now := budgetNow()
 	start, end := vw.Range()
 	// The flex number is edited inline (staged in local state, saved on click).
 	editing := ui.UseState(false)
@@ -75,27 +76,78 @@ func budgetFlexWidget(props budgetSummaryProps) ui.Node {
 	// its setter invoked from the event handler — never call UseAtom inside a callback.
 	flexSheet := uistate.UseFlexSheetOpen()
 	openSheet := ui.UseEvent(func() { flexSheet.Set(true) })
+	var appRevision uint64
+	var rates currency.Rates
+	if app != nil {
+		settings := app.Settings()
+		appRevision = app.Rev()
+		rates = currency.Rates{Base: base, Rates: settings.FXRates}
+	}
+	evaluation := ui.UseMemo(func() flexEvaluationMemo {
+		if app == nil {
+			return flexEvaluationMemo{}
+		}
+		windowTarget, err := flexTargetForWindow(target, start, end, base)
+		if err != nil {
+			return flexEvaluationMemo{Err: err}
+		}
+		view, err := budgeting.EvaluateFlex(app.Categories(), budgetLedgerForApp(app), app.Recurring(), windowTarget.Amount, rates, start, end)
+		if err != nil {
+			return flexEvaluationMemo{Err: err}
+		}
+		return flexEvaluationMemo{View: view, Target: windowTarget.Amount}
+	}, app, appRevision, dataRevision, target, base, start.UnixNano(), end.UnixNano())
 	if app == nil {
 		return Fragment()
 	}
-
-	settings := app.Settings()
-	rates := currency.Rates{Base: base, Rates: settings.FXRates}
-	view, err := budgeting.EvaluateFlexWithLinks(app.Categories(), app.Transactions(), app.TxnLinks(), app.Recurring(), target, rates, start, end)
-	if err != nil {
+	if evaluation.Err != nil {
 		return Div(css.Class("budgets-flex"), Attr("data-testid", "budget-flex"),
 			P(css.Class("budget-sub is-error"), Attr("role", "status"), uistate.T("flex.calculationFailed")))
 	}
 
-	m := newFlexMeter(view, target, now, start, end)
+	m := newFlexMeter(evaluation.View, evaluation.Target, now, start, end)
 
 	return Div(css.Class("budgets-flex"), Attr("data-testid", "budget-flex"),
-		flexHero(view, m, editing.Get(), draft.Get(), onEdit, onDraft, onSaveTarget, openSheet),
+		flexHero(evaluation.View, m, editing.Get(), draft.Get(), onEdit, onDraft, onSaveTarget, openSheet, uistate.T("flex.windowLabel", vw.Label())),
 		Div(css.Class("bflex-ledgers"),
-			flexFixedSection(view),
-			flexNonMonthlySection(view),
+			flexFixedSection(evaluation.View),
+			flexNonMonthlySection(evaluation.View),
 		),
 	)
+}
+
+type flexEvaluationMemo struct {
+	View   budgeting.FlexView
+	Target int64
+	Err    error
+}
+
+// flexTargetForWindow scales the configured monthly target by the calendar days
+// covered in each month, using checked integer arithmetic throughout.
+func flexTargetForWindow(monthly int64, start, end time.Time, base string) (money.Money, error) {
+	total := money.Zero(base)
+	start = dateutil.CalendarDayUTC(start)
+	end = dateutil.CalendarDayUTC(end)
+	for cursor := start; cursor.Before(end); {
+		monthStart := dateutil.MonthStart(cursor)
+		nextMonth := dateutil.AddMonths(monthStart, 1)
+		segmentEnd := end
+		if segmentEnd.After(nextMonth) {
+			segmentEnd = nextMonth
+		}
+		days := int64(dateutil.DaysBetween(cursor, segmentEnd))
+		monthDays := int64(dateutil.DaysBetween(monthStart, nextMonth))
+		segment, err := money.New(monthly, base).MulDiv(days, monthDays, money.RoundHalfAwayFromZero)
+		if err != nil {
+			return money.Money{}, fmt.Errorf("scale flex target for %s: %w", monthStart.Format("2006-01"), err)
+		}
+		total, err = total.Add(segment)
+		if err != nil {
+			return money.Money{}, fmt.Errorf("sum flex target window: %w", err)
+		}
+		cursor = segmentEnd
+	}
+	return total, nil
 }
 
 // flexMeter is the pure, view-derived read that drives the signature meter: how
@@ -154,12 +206,12 @@ func newFlexMeter(view budgeting.FlexView, target int64, now, start, end time.Ti
 
 // flexHero renders the top band: the eyebrow + classify action, and — depending on
 // state — the invitation (no number yet), the inline editor, or the live reading.
-func flexHero(view budgeting.FlexView, m flexMeter, editing bool, draft string, onEdit, onDraft, onSave, openSheet ui.Handler) ui.Node {
+func flexHero(view budgeting.FlexView, m flexMeter, editing bool, draft string, onEdit, onDraft, onSave, openSheet ui.Handler, periodLabel string) ui.Node {
 	eyebrow := Div(css.Class("bflex-eyebrow"),
 		Div(css.Class("bflex-kicker"),
 			Span(css.Class("bflex-kicker-label"), uistate.T("flex.eyebrow")),
 			Span(css.Class("bflex-kicker-dot")),
-			Span(css.Class("bflex-kicker-period"), uistate.T("flex.thisMonth"))),
+			Span(css.Class("bflex-kicker-period"), periodLabel)),
 		Button(css.Class("btn btn-tool bflex-classify"), Type("button"),
 			Attr("data-testid", "flex-classify"), Title(uistate.T("flex.classifyTitle")), OnClick(openSheet),
 			uiw.Icon(icon.Filter, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("flex.classify"))))

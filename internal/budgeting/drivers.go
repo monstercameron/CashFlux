@@ -38,12 +38,12 @@ type Driver struct {
 // collapse to one line, and ten small coffee runs rank as their true combined total.
 // `covers` is the category predicate — pass a rollup descendant set (EvaluateRollup)
 // or budget.TracksCategory.
-func TopDrivers(budget domain.Budget, all []domain.Transaction, start, end time.Time, rates currency.Rates, covers func(string) bool, n int, normalize func(string) string) ([]Driver, error) {
+func TopDrivers(budget domain.Budget, all NettedLedger, start, end time.Time, rates currency.Rates, covers func(string) bool, n int, normalize func(string) string) ([]Driver, error) {
 	if n <= 0 {
 		return nil, nil
 	}
 	limit := normalizedLimit(budget, rates)
-	all = nettedForSpending(all)
+
 	rawLabel := func(t domain.Transaction) string {
 		if s := strings.TrimSpace(t.Payee); s != "" {
 			return s

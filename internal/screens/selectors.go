@@ -15,6 +15,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
 
@@ -75,8 +76,17 @@ func usePeriodTotals(app *appstate.App, txns []domain.Transaction, start, end ti
 
 // useBudgetHealth returns the memoized per-budget status (health) for the period.
 func useBudgetHealth(app *appstate.App, budgets []domain.Budget, txns []domain.Transaction, start, end time.Time, rates currency.Rates, nearThreshold float64) []budgeting.Status {
+	pr := uistate.UsePrefs().Get()
+	memberID := uistate.ActiveMemberFromScope()
 	return ui.UseMemo(func() []budgeting.Status {
-		st, _ := budgeting.EvaluateAll(budgets, txns, start, end, rates, nearThreshold)
-		return st
-	}, app.Rev(), start.Unix(), end.Unix())
+		ledger := budgetLedgerForApp(app)
+		input := budgeting.ViewInput{Ledger: &ledger, Categories: app.Categories(), Recurring: app.Recurring(), Rates: rates, Base: rates.Base,
+			Period: budgeting.ResolveViewPeriod(start, end, budgetNow(), pr.WeekStartWeekday(), budgetPayCycleAnchor(pr.PayCycleAnchor)), PoolRollover: pr.BudgetRolloverLeftover}
+		visible := budgeting.ViewBudgets(budgets, memberID)
+		statuses := make([]budgeting.Status, 0, len(visible))
+		for _, b := range visible {
+			statuses = append(statuses, budgeting.EvaluateViewBudget(b, input).Status)
+		}
+		return statuses
+	}, app, app.Rev(), start.Unix(), end.Unix(), memberID, pr.WeekStart, pr.PayCycleAnchor, pr.BudgetRolloverLeftover, budgetNow().Format("2006-01-02"))
 }

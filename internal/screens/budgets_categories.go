@@ -47,7 +47,7 @@ func budgetTrackMeta(app *appstate.App, from, to time.Time) (catMeta map[string]
 		mStart = dateutil.MonthStart(time.Now())
 		mEnd = dateutil.AddMonths(mStart, 1)
 	}
-	metadata := budgeting.ComputeTrackingMetadata(app.Transactions(), mStart, mEnd, base, rates)
+	metadata := budgeting.ComputeTrackingMetadata(budgetLedgerForApp(app), mStart, mEnd, base, rates)
 	tagCount = metadata.TagCount
 	for id, count := range metadata.CategoryCount {
 		catMeta[id] = fmt.Sprintf("%d · %s", count, fmtMoney(money.New(metadata.CategoryTotal[id], base)))

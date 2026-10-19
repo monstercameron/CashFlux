@@ -7,7 +7,9 @@ package screens
 import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/txnreview"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+	"reflect"
 )
 
 // markTxnReviewedFromKeyboard confirms the focused ledger transaction. The
@@ -18,7 +20,7 @@ func markTxnReviewedFromKeyboard(txnID string) {
 		return
 	}
 	txn, ok := app.TransactionByID(txnID)
-	if !ok || txn.Reviewed {
+	if !ok {
 		return
 	}
 	var changed bool
@@ -26,18 +28,12 @@ func markTxnReviewedFromKeyboard(txnID string) {
 	if !changed {
 		return
 	}
-	if err := app.PutTransaction(txn); err != nil {
-		uistate.PostNotice(err.Error(), true)
-		return
-	}
-	uistate.BumpDataRevision()
-	uistate.PostNotice(uistate.T("txnkeys.reviewedToast"), false)
+	_ = commitUndoable(uistate.T("txnkeys.reviewedToast"), []string{txnID}, func() error {
+		return app.PutTransactionsAtomic([]domain.Transaction{txn})
+	})
 }
 
 func txnReviewed(txn domain.Transaction) (domain.Transaction, bool) {
-	if txn.Reviewed {
-		return txn, false
-	}
-	txn.Reviewed = true
-	return txn, true
+	confirmed := txnreview.Confirm(txn, txn.CategoryID)
+	return confirmed, !reflect.DeepEqual(txn, confirmed)
 }

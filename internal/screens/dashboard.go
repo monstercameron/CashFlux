@@ -174,7 +174,8 @@ func periodChartAnchor(start, end time.Time) time.Time {
 // blocks show the same figures as the scoped KPI tiles.
 func frameDataCtx(ctx widgetrender.RenderCtx) widgetengine.DataCtx {
 	return widgetengine.DataCtx{
-		Vars: ctx.Vars, Base: ctx.Base,
+		Ledger: budgetLedgerForTransactions(ctx.App, ctx.ScopedTxns),
+		Vars:   ctx.Vars, Base: ctx.Base,
 		Accounts:     ctx.ScopedAccounts,
 		Transactions: ctx.ScopedTxns,
 		Budgets:      ctx.App.Budgets(),
@@ -195,6 +196,7 @@ func frameDataCtx(ctx widgetrender.RenderCtx) widgetengine.DataCtx {
 			key := revKey(ctx.App) + "|" + acctSig(ctx.ScopedAccounts)
 			return memoMonthVars(key, s, e, func() map[string]float64 {
 				return engineenv.Vars(engineenv.Data{
+					Ledger:   budgetLedgerForTransactions(ctx.App, ctx.ScopedTxns),
 					Accounts: ctx.ScopedAccounts, Transactions: ctx.ScopedTxns,
 					Members: ctx.App.Members(), Budgets: ctx.App.Budgets(), Goals: ctx.App.Goals(), Tasks: ctx.App.Tasks(),
 					Recurring: ctx.App.Recurring(), Categories: ctx.App.Categories(), Rates: ctx.Rates,
@@ -807,6 +809,7 @@ func Dashboard() ui.Node {
 	if dashReady {
 		vars = memoEngineVars(varsKey, func() map[string]float64 {
 			return engineenv.Vars(engineenv.Data{
+				Ledger:   budgetLedgerForTransactions(app, kpiTxns),
 				Accounts: scopedAccounts, Transactions: kpiTxns,
 				Members: app.Members(), Budgets: app.Budgets(), Goals: app.Goals(), Tasks: app.Tasks(),
 				Recurring: app.Recurring(), Rates: rates, Now: time.Now(),
@@ -2255,10 +2258,11 @@ func attentionWidget(app *appstate.App, txns []domain.Transaction, rates currenc
 	// Budget statuses (near/over are what the digest keeps), rolled up like the
 	// Budgets widget so parent budgets include sub-category spend.
 	cats := app.Categories()
+	budgetLedger := budgetLedgerForTransactions(app, txns)
 	statuses := make([]budgeting.Status, 0, len(app.Budgets()))
 	bs, be := dateutil.MonthRange(now)
 	for _, b := range app.Budgets() {
-		if st, err := budgeting.EvaluateRollup(b, txns, bs, be, rates, budgeting.DefaultNearThreshold, categorytree.DescendantsOfAll(cats, b.TrackedCategoryIDs())); err == nil {
+		if st, err := budgeting.EvaluateRollup(b, budgetLedger, bs, be, rates, budgeting.DefaultNearThreshold, categorytree.DescendantsOfAll(cats, b.TrackedCategoryIDs())); err == nil {
 			statuses = append(statuses, st)
 		}
 	}

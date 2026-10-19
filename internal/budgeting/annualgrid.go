@@ -57,7 +57,7 @@ type AnnualGrid struct {
 // sub-category rollup set for a budget (nil → the budget's own categories). The
 // plan per cell is the budget's monthly-equivalent limit. Row, column, and grand
 // totals are accumulated in the shared grid currency (the rate table's base).
-func BuildAnnualGrid(budgets []domain.Budget, all []domain.Transaction, year int, rates currency.Rates, weekStart time.Weekday, now time.Time, covers map[string]map[string]bool) (AnnualGrid, error) {
+func BuildAnnualGrid(budgets []domain.Budget, all NettedLedger, year int, rates currency.Rates, weekStart time.Weekday, now time.Time, covers map[string]map[string]bool) (AnnualGrid, error) {
 	cur := rates.Base
 	if cur == "" {
 		cur = "USD"

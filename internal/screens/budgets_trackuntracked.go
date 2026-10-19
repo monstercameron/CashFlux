@@ -176,7 +176,7 @@ func trackUntrackedForm(_ trackUntrackedFormProps) ui.Node {
 		if app == nil {
 			return trackScanMemo{}
 		}
-		ledger := budgeting.NewNettedLedgerWithLinks(app.Transactions(), app.TxnLinks())
+		ledger := budgetLedgerForApp(app)
 		hint := func(catID string) (int64, domain.Period, bool) {
 			if sug, err := contextCategoryBudgetMedian(catID, app.Categories(), ledger.Transactions(), wStart,
 				rates, pr.WeekStartWeekday(), payAnchor); err == nil && sug > 0 {

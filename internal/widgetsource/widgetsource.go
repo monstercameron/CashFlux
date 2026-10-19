@@ -34,7 +34,7 @@ import (
 // (bool). Parent budgets roll up sub-categories. atRisk drops on-track budgets;
 // limit caps rows (0 = no cap). The tone column lets the renderer color the bar
 // straight from the data.
-func BudgetStatus(budgets []domain.Budget, cats []domain.Category, txns []domain.Transaction, rates currency.Rates, start, end time.Time, atRisk bool, limit int) domain.Frame {
+func BudgetStatus(budgets []domain.Budget, cats []domain.Category, txns budgeting.NettedLedger, rates currency.Rates, start, end time.Time, atRisk bool, limit int) domain.Frame {
 	catName := make(map[string]string, len(cats))
 	for _, c := range cats {
 		catName[c.ID] = c.Name

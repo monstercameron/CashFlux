@@ -4,6 +4,7 @@ package budgeting
 
 import (
 	"fmt"
+
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -25,6 +26,9 @@ type SweepConfig struct {
 	BudgetIDs []string
 	// TargetGoalID is the goal the swept total is earmarked toward.
 	TargetGoalID string
+	// SweptBudgetIDs are budget IDs already processed for the closed month.
+	// They are supplied by the state layer because this package is pure.
+	SweptBudgetIDs []string
 }
 
 // Participates reports whether a budget is in the sweep set.
@@ -37,11 +41,15 @@ func (c SweepConfig) Participates(budgetID string) bool {
 	return false
 }
 
-// SuppressesRollover reports whether the sweep policy overrides a budget's own
-// rollover setting. Sweep and rollover are mutually exclusive per budget, and
-// sweep wins when both are enabled: a participating budget's leftover is swept to
-// the goal instead of carried into next period. Callers advancing rollover math
-// should skip Carryover for a budget this returns true for.
+func (c SweepConfig) alreadySwept(budgetID string) bool {
+	for _, id := range c.SweptBudgetIDs {
+		if id == budgetID {
+			return true
+		}
+	}
+	return false
+}
+
 // SweepLine is one budget's contribution to a sweep: the positive amount it left
 // unspent this period.
 type SweepLine struct {
@@ -72,6 +80,17 @@ type SweepPlan struct {
 	Blocked bool
 }
 
+// eligibleForSweep excludes budgets whose leftovers already carry forward,
+// belong to a savings goal, use another cadence, or use envelope methodology.
+func (c SweepConfig) eligibleForSweep(b domain.Budget, householdMethod Methodology) bool {
+	budgetID := b.ID
+	method := ParseMethodology(string(householdMethod))
+	if b.Methodology != "" && Methodology(b.Methodology).Valid() {
+		method = Methodology(b.Methodology)
+	}
+	return c.Participates(budgetID) && !c.alreadySwept(budgetID) && !b.IsSaving() && !b.Rollover && b.Period == domain.PeriodMonthly && method != MethodEnvelope
+}
+
 // HasLeftover reports whether the plan has anything worth sweeping.
 func (p SweepPlan) HasLeftover() bool {
 	return p.Error == nil && p.Total.Amount > 0 && len(p.Lines) > 0
@@ -82,9 +101,6 @@ func (p SweepPlan) BudgetCount() int {
 	return len(p.Lines)
 }
 
-// ComputeSweep is the single-currency compatibility wrapper. Foreign currency,
-// overflow or a failed status produces a blocked plan with Error. Use
-// ComputeSweepWithRates for household FX.
 // ComputeSweepWithRates computes checked leftovers from evaluated card statuses.
 // Month-close sweeps only monthly spending budgets; weekly, quarterly, yearly
 // and saving budgets are excluded. Every line and Total use rates.Base.
@@ -105,7 +121,7 @@ func ComputeSweepWithRates(statuses []Status, cfg SweepConfig, rates currency.Ra
 		// Rollover already gives this remainder to the next period. Sweeping it
 		// as well would count the same dollars twice (once for the goal and once
 		// as carry-in). Sweep and per-budget rollover are mutually exclusive.
-		if !cfg.Participates(b.ID) || b.IsSaving() || b.Rollover || b.Period != domain.PeriodMonthly {
+		if !cfg.eligibleForSweep(b, MethodSimple) {
 			continue
 		}
 		if s.Error != nil {
@@ -136,6 +152,12 @@ func ComputeSweepWithRates(statuses []Status, cfg SweepConfig, rates currency.Ra
 // EvaluateSweep evaluates the closed month through the same carry, boost,
 // descendant and smoothing model as cards, retaining the active member lens.
 func EvaluateSweep(budgets []domain.Budget, in ViewInput, cfg SweepConfig, memberID string, goalAllowed func(string) bool) (SweepPlan, error) {
+	return EvaluateSweepWithMethodology(budgets, in, cfg, memberID, MethodSimple, goalAllowed)
+}
+
+// EvaluateSweepWithMethodology evaluates the closed month while excluding
+// rollover, envelope-methodology, already-swept, saving, and non-monthly budgets.
+func EvaluateSweepWithMethodology(budgets []domain.Budget, in ViewInput, cfg SweepConfig, memberID string, householdMethod Methodology, goalAllowed func(string) bool) (SweepPlan, error) {
 	// Pooled rollover carries prior-period slack from every eligible budget.
 	// A sweep over that same remainder would allocate it a second time.
 	if in.PoolRollover {
@@ -143,7 +165,7 @@ func EvaluateSweep(budgets []domain.Budget, in ViewInput, cfg SweepConfig, membe
 	}
 	var statuses []Status
 	for _, b := range ViewBudgets(budgets, memberID) {
-		if !cfg.Participates(b.ID) || b.Period != domain.PeriodMonthly || b.IsSaving() || b.Rollover {
+		if !cfg.eligibleForSweep(b, householdMethod) {
 			continue
 		}
 		statuses = append(statuses, EvaluateViewBudget(b, in).Status)

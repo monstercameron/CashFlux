@@ -21,6 +21,7 @@ package widgetengine
 import (
 	"errors"
 	"fmt"
+	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"sort"
 	"strings"
 	"time"
@@ -36,6 +37,8 @@ import (
 // DataCtx is everything the hydrator needs to resolve a spec against live data. The
 // surface computes it once and reuses it for every spec it hydrates.
 type DataCtx struct {
+	// Ledger is the scope-local refund-netted budget read model.
+	Ledger budgeting.NettedLedger
 	// Vars is the engine variable surface (engineenv.Vars) — scoped, period-windowed
 	// figures KPI formulas and sub-label templates evaluate against.
 	Vars map[string]float64
@@ -275,7 +278,11 @@ func resolveSource(s domain.Source, dc DataCtx) (domain.Frame, error) {
 	case domain.SourceCollection:
 		switch s.Collection {
 		case "budgets":
-			return widgetsource.BudgetStatus(dc.Budgets, dc.Categories, dc.Transactions, dc.Rates, dc.Start, dc.End, false, 0), nil
+			ledger := dc.Ledger
+			if ledger == nil {
+				ledger = budgeting.NewNettedLedger(dc.Transactions)
+			}
+			return widgetsource.BudgetStatus(dc.Budgets, dc.Categories, ledger, dc.Rates, dc.Start, dc.End, false, 0), nil
 		case "accounts":
 			return widgetsource.AccountBalances(dc.Accounts, dc.Transactions, s.Cleared, 0), nil
 		case "transactions":

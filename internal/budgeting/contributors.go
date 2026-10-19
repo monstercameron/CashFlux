@@ -27,14 +27,14 @@ import (
 // covers is the category predicate — pass budget.TracksCategory for a plain
 // budget, or the descendant-aware predicate EvaluateRollup builds for a parent.
 // A nil covers falls back to the budget's own category.
-func ContributingCount(budget domain.Budget, all []domain.Transaction, start, end time.Time, covers func(string) bool) int {
+func ContributingCount(budget domain.Budget, all NettedLedger, start, end time.Time, covers func(string) bool) int {
 	if covers == nil {
 		covers = budget.TracksCategory
 	}
 	// The same refund-pair netting Spent applies (XC2). Without it a refunded
 	// charge would still be counted as a trip while contributing no money, and the
 	// count would quietly disagree with the figure it is shown beside.
-	all = nettedForSpending(all)
+
 	n := 0
 	for _, t := range all {
 		if !t.CountsInReports() || !matchesScope(budget, t, start, end) {

@@ -14,12 +14,12 @@ import (
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
-	"github.com/monstercameron/CashFlux/internal/auditview"
 	"github.com/monstercameron/CashFlux/internal/catname"
 	"github.com/monstercameron/CashFlux/internal/catsuggest"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/reviewqueue"
 	"github.com/monstercameron/CashFlux/internal/smartai"
+	"github.com/monstercameron/CashFlux/internal/txnreview"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -280,36 +280,28 @@ func applyCatSuggestionToMerchant(app *appstate.App, txn domain.Transaction, cat
 		applyCatSuggestion(app, txn, categoryID)
 		return
 	}
-	auditview.CaptureNow()
-	n := 0
+	var writes []domain.Transaction
+	var ids []string
 	for _, t := range app.Transactions() {
-		// The charge in hand always moves — it is the one the user was looking at.
-		// Every OTHER charge must match the merchant AND still be uncategorized,
-		// which is exactly the predicate the count in the checkbox label was built
-		// from, so the number agreed to is the number that moves.
-		if t.ID != txn.ID {
-			if t.CategoryID != "" || t.IsTransfer() || reviewqueue.MerchantKey(t) != key {
-				continue
-			}
-		}
-		u := t
-		u.CategoryID = categoryID
-		if err := app.PutTransaction(u); err != nil {
-			uistate.PostNotice(err.Error(), true)
+		if t.IsTransfer() || (t.ID != txn.ID && (t.CategoryID != "" || reviewqueue.MerchantKey(t) != key)) {
 			continue
 		}
-		n++
+		writes = append(writes, txnreview.Confirm(t, categoryID))
+		ids = append(ids, t.ID)
 	}
-	if n == 0 {
+	if len(writes) == 0 {
 		return
 	}
-	rememberReviewChoice(txn, categoryID)
-	uistate.RequestPersist()
-	uistate.BumpDataRevision()
 	name := catname.LabelByID(app.Categories(), categoryID)
-	if n > 1 {
-		uistate.PostUndoable(uistate.T("catSuggest.filedBatchUndo", n, name))
-		return
+	label := uistate.T("catSuggest.filedUndo", name)
+	if len(writes) > 1 {
+		label = uistate.T("catSuggest.filedBatchUndo", len(writes), name)
 	}
-	uistate.PostUndoable(uistate.T("catSuggest.filedUndo", name))
+	_ = CommitUndoable(app, label, ids, func() error {
+		if err := app.PutTransactionsAtomic(writes); err != nil {
+			return err
+		}
+		rememberReviewChoice(txn, categoryID)
+		return nil
+	}, nil)
 }

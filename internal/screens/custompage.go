@@ -511,7 +511,8 @@ func cpDataCtx(ctx pageCtx) widgetengine.DataCtx {
 	start := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
 	app := ctx.App
 	return widgetengine.DataCtx{
-		Vars: ctx.Vars, Base: ctx.Base,
+		Ledger: budgetLedgerForTransactions(app, app.Transactions()),
+		Vars:   ctx.Vars, Base: ctx.Base,
 		Accounts: app.Accounts(), Transactions: app.Transactions(),
 		Budgets: app.Budgets(), Categories: app.Categories(), Recurring: app.Recurring(),
 		Rates: ctx.Rates, Start: start, End: start.AddDate(0, 1, 0), Now: now,
@@ -522,6 +523,7 @@ func cpDataCtx(ctx pageCtx) widgetengine.DataCtx {
 		MonthVars: func(s, e time.Time) map[string]float64 {
 			return memoMonthVars(revKey(app)+"|custompage", s, e, func() map[string]float64 {
 				return engineenv.Vars(engineenv.Data{
+					Ledger:   budgetLedgerForTransactions(ctx.App, app.Transactions()),
 					Accounts: app.Accounts(), Transactions: app.Transactions(),
 					Members: app.Members(), Budgets: app.Budgets(), Goals: app.Goals(), Tasks: app.Tasks(),
 					Recurring: app.Recurring(), Categories: app.Categories(), Rates: ctx.Rates,

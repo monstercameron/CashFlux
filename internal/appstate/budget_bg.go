@@ -48,7 +48,7 @@ func (a *App) BudgetMemberShares(budgetID string, start, end time.Time, covers m
 	if b.ID == "" {
 		return nil, fmt.Errorf("appstate: budget %q not found", budgetID)
 	}
-	return budgeting.AttributeByMember(b, a.Transactions(), start, end, a.bgRates(), covers)
+	return budgeting.AttributeByMember(b, budgeting.NewNettedLedger(a.Transactions(), a.TxnLinks()), start, end, a.bgRates(), covers)
 }
 
 // CardPaymentFunding returns the BG7 payment-envelope read for every credit card, for the
