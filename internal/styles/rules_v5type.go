@@ -13,7 +13,7 @@ func registerV5Type() {
 		fontSize("var(--fs-figure)"),
 		fontWeight("600"),
 	)
-	rule(".rvs, .rvs button, .rvs input, .rvs select, .rvs textarea, .rvs summary, .rvs p, .rvs span, .rvs [class*='rvw-'], .txn-cal, .txn-cal *, .txn-edit .mtrend-spark-xaxis, .txn-edit .mtrend-spark-yaxis, .txn-edit .mtrend-spark-meta",
+	rule(".rvs, .rvs button, .rvs input, .rvs select, .rvs textarea, .rvs summary, .rvs p, .rvs span, .rvs [class*='rvw-'], .cf-overlay__surface--modal, .cf-overlay__surface--sheet, .txn-cal, .txn-cal *, .txn-edit .mtrend-spark-xaxis, .txn-edit .mtrend-spark-yaxis, .txn-edit .mtrend-spark-meta",
 		fontFamily("Inter, sans-serif"),
 	)
 	rule(".rvs button, .txn-form-add label, .txn-form-edit label",
