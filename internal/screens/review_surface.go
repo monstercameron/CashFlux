@@ -13,23 +13,19 @@
 package screens
 
 import (
-	"encoding/json"
 	"fmt"
 	"strconv"
-	"strings"
 	"syscall/js"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/catsuggest"
-	"github.com/monstercameron/CashFlux/internal/dedupe"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
-	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/CashFlux/internal/reviewqueue"
 	"github.com/monstercameron/CashFlux/internal/reviewscope"
-	"github.com/monstercameron/CashFlux/internal/rules"
+	"github.com/monstercameron/CashFlux/internal/reviewview"
 	"github.com/monstercameron/CashFlux/internal/smartai"
 	"github.com/monstercameron/CashFlux/internal/txnclassify"
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
@@ -38,6 +34,7 @@ import (
 	"github.com/monstercameron/GoWebComponents/v5/css"
 	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/v5/router"
+	"github.com/monstercameron/GoWebComponents/v5/state"
 	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
 
@@ -51,100 +48,42 @@ const (
 const recurringLoanPaymentDismissalsKey = "review:recurring-loan-payment-dismissals"
 
 func loadRecurringLoanPaymentDismissals() map[string]bool {
-	var dismissed map[string]bool
-	if err := json.Unmarshal([]byte(uistate.KVGet(recurringLoanPaymentDismissalsKey)), &dismissed); err != nil || dismissed == nil {
-		return map[string]bool{}
-	}
-	return dismissed
+	return reviewview.DecodeDismissals(uistate.KVGet(recurringLoanPaymentDismissalsKey))
 }
 
 func saveRecurringLoanPaymentDismissals(dismissed map[string]bool) {
-	data, err := json.Marshal(dismissed)
-	if err != nil {
-		return
-	}
-	uistate.KVSet(recurringLoanPaymentDismissalsKey, string(data))
+	uistate.KVSet(recurringLoanPaymentDismissalsKey, reviewview.EncodeDismissals(dismissed))
 	uistate.RequestPersist()
 }
 
 func visibleRecurringLoanPaymentSuggestions(all []txnclassify.PaymentSuggestion, dismissed map[string]bool) []txnclassify.PaymentSuggestion {
-	visible := make([]txnclassify.PaymentSuggestion, 0, len(all))
-	for _, suggestion := range all {
-		if !dismissed[suggestion.TransactionID] {
-			visible = append(visible, suggestion)
-		}
-	}
-	return visible
+	return reviewview.VisibleLoanPayments(all, dismissed)
 }
 
 type recurringLoanPaymentSuggestionMemo struct {
-	app         *appstate.App
-	revision    uint64
-	initialized bool
-	suggestions []txnclassify.PaymentSuggestion
+	memo reviewview.Memo[*appstate.App, []txnclassify.PaymentSuggestion]
 }
 
 func (memo *recurringLoanPaymentSuggestionMemo) get(app *appstate.App, revision uint64, load func() []txnclassify.PaymentSuggestion) []txnclassify.PaymentSuggestion {
-	if !memo.initialized || memo.app != app || memo.revision != revision {
-		memo.app = app
-		memo.revision = revision
-		memo.suggestions = load()
-		memo.initialized = true
-	}
-	return memo.suggestions
+	return memo.memo.Get(app, revision, load)
 }
 
 func pruneRecurringLoanPaymentDismissals(dismissed map[string]bool, suggestions []txnclassify.PaymentSuggestion) (map[string]bool, bool) {
-	active := make(map[string]struct{}, len(suggestions))
-	for _, suggestion := range suggestions {
-		active[suggestion.TransactionID] = struct{}{}
-	}
-	pruned := make(map[string]bool, len(dismissed))
-	changed := false
-	for id, value := range dismissed {
-		if _, ok := active[id]; ok && value {
-			pruned[id] = true
-		} else {
-			changed = true
-		}
-	}
-	return pruned, changed
+	return reviewview.PruneDismissals(dismissed, suggestions)
 }
 
 func reviewEmptyCopy(scope reviewscope.Scope, queueTotal int, suggestionCount int) (string, string) {
-	title, sub := uistate.T("review.emptyTitle"), uistate.T("review.emptySub")
-	if suggestionCount > 0 {
-		title = uistate.T("r4loan1.suggestionOnlyTitle")
-		sub = uistate.T("r4loan1.suggestionOnlySub")
-	}
-	if scope == reviewscope.ScopeCurrentView && queueTotal > 0 {
-		title = uistate.T("review.emptyViewTitle")
-		sub = uistate.T("review.emptyViewSub", reviewLeftPhrase(queueTotal))
-	}
-	return title, sub
+	return reviewview.Text(uistate.T).EmptyCopy(scope, queueTotal, suggestionCount)
 }
 
 func classifyRecurringLoanPayment(app *appstate.App, suggestion txnclassify.PaymentSuggestion) error {
 	if app == nil {
 		return fmt.Errorf("review: app is not ready")
 	}
-	current := false
-	for _, candidate := range app.RecurringPaymentSuggestions() {
-		if candidate.TransactionID == suggestion.TransactionID && candidate.AccountID == suggestion.AccountID {
-			current = true
-			break
-		}
-	}
-	if !current {
-		return fmt.Errorf("review: loan payment suggestion is no longer available")
-	}
-	txn, ok := app.TransactionByID(suggestion.TransactionID)
-	if !ok {
-		return fmt.Errorf("review: transaction %q was not found", suggestion.TransactionID)
-	}
-	classified, err := txnclassify.Apply(txn, suggestion.AccountID, true, app.Accounts())
+	txn, found := app.TransactionByID(suggestion.TransactionID)
+	classified, err := reviewview.LoanPayment(suggestion, app.RecurringPaymentSuggestions(), txn, found, app.Accounts())
 	if err != nil {
-		return fmt.Errorf("review: classify loan payment: %w", err)
+		return err
 	}
 	if err := app.PutTransactionWithTransferPair(txn, classified); err != nil {
 		return fmt.Errorf("review: save loan payment transfer: %w", err)
@@ -204,133 +143,25 @@ func reviewLoanPaymentRow(props reviewLoanPaymentRowProps) ui.Node {
 }
 
 // reviewTier buckets a merchant group by the confidence of its suggestion.
-type reviewTier int
+type reviewTier = reviewview.Tier
 
 const (
-	tierNone  reviewTier = iota // nothing local could answer
-	tierLook                    // suggested, but worth a glance
-	tierReady                   // safe to confirm in bulk
+	tierNone  = reviewview.TierNone
+	tierLook  = reviewview.TierLook
+	tierReady = reviewview.TierReady
 )
 
-// reviewRow is one merchant group with everything the UI needs, computed once
-// per render. C510: building this ONCE and passing it down is what keeps a
-// 250-row list from being O(n²) — sibling counts, suggestions and merchant
-// lookups all used to be recomputed per row.
-type reviewRow struct {
-	Group              reviewqueue.Group
-	Tier               reviewTier
-	Suggestion         catsuggest.Suggestion
-	HasSugg            bool
-	SuggestionConflict bool
-}
+type reviewRow = reviewview.Row
 
 // sharedReviewSuggestion promotes a per-charge result to a merchant-wide
 // suggestion only when every charge resolves to the same category. Rules can
 // depend on account, amount and date, so merchant identity alone is insufficient.
 func sharedReviewSuggestion(g reviewqueue.Group, byID map[string]catsuggest.Suggestion) (catsuggest.Suggestion, bool, bool) {
-	var shared catsuggest.Suggestion
-	foundAny, missing := false, false
-	for _, txn := range g.Items {
-		s, ok := byID[txn.ID]
-		if !ok || s.CategoryID == "" {
-			missing = true
-			continue
-		}
-		if !foundAny {
-			shared = s
-			foundAny = true
-			continue
-		}
-		if s.CategoryID != shared.CategoryID {
-			return catsuggest.Suggestion{}, false, true
-		}
-		if s.Confidence < shared.Confidence {
-			shared.Confidence = s.Confidence
-		}
-	}
-	if foundAny && missing {
-		return catsuggest.Suggestion{}, false, true
-	}
-	return shared, foundAny && len(g.Items) > 0, false
+	return reviewview.SharedSuggestion(g, byID)
 }
 
 // reviewIndex is the whole surface's data for one render.
-type reviewIndex struct {
-	Rows  []reviewRow
-	Total int // charges still queued IN THE ACTIVE SCOPE
-	Scope reviewscope.Scope
-	// QueueTotal and ViewTotal are the two denominators the scope selector offers
-	// (C554): everything awaiting review, and the part of it the ledger's own
-	// search/filters/period currently show. Both are computed every build so the
-	// selector can state the count of the scope you are NOT in — a choice between
-	// two options where only one has a number attached is not really a choice.
-	QueueTotal int
-	ViewTotal  int
-	Byid       map[string]reviewRow
-	// TxnByID lets the context band resolve link members without rescanning
-	// every transaction per row (it was an O(links x transactions) nested loop).
-	TxnByID map[string]domain.Transaction
-	// Dupes maps a transaction id to the ids it looks like a duplicate of.
-	// Computed once here rather than re-running duplicate detection over the
-	// whole ledger on every render of the single-charge view.
-	Dupes map[string][]string
-}
-
-// tierOf maps a resolver confidence onto a display tier.
-func tierOf(s catsuggest.Suggestion, ok bool) reviewTier {
-	if !ok || s.CategoryID == "" {
-		return tierNone
-	}
-	if s.Confidence >= catsuggest.ConfHigh {
-		return tierReady
-	}
-	return tierLook
-}
-
-// ledgerVisibleIDs is the ids of the transactions the ledger's own filters
-// currently select, in ledger order.
-//
-// C554: Review used to read app.Transactions() and nothing else, so a ledger
-// narrowed to one payee and one month opened a Review of the whole world. Rather
-// than teach Review about search, tags, categories, members, periods and
-// money-in/out, it asks txnfilter — the same code the ledger itself uses — and
-// intersects by id. One implementation of "what am I looking at", so the two can
-// never disagree.
-//
-// Pagination is deliberately dropped: paging is a property of the ledger's
-// SCREEN, not of the working set. Someone who filtered to 300 charges and pressed
-// Review means all 300, not the 25 on page one. (Apply does not paginate, so this
-// is a statement of intent as much as a change — Page/PageSize are cleared so a
-// future paginating Apply cannot silently narrow the queue.)
-func ledgerVisibleIDs(txns []domain.Transaction, c txnfilter.Criteria) []string {
-	c.Page, c.PageSize = 1, txnfilter.PageSizeAll
-	shown := txnfilter.Apply(txns, c)
-	out := make([]string, 0, len(shown))
-	for _, t := range shown {
-		out = append(out, t.ID)
-	}
-	return out
-}
-
-// restrictQueue keeps only the queued charges the ledger is currently showing,
-// in queue order.
-func restrictQueue(queue []domain.Transaction, visible []string) []domain.Transaction {
-	ids := make([]string, 0, len(queue))
-	for _, t := range queue {
-		ids = append(ids, t.ID)
-	}
-	keep := make(map[string]bool, len(queue))
-	for _, id := range reviewscope.Restrict(ids, visible) {
-		keep[id] = true
-	}
-	out := make([]domain.Transaction, 0, len(keep))
-	for _, t := range queue {
-		if keep[t.ID] {
-			out = append(out, t)
-		}
-	}
-	return out
-}
+type reviewIndex = reviewview.Index
 
 // buildReviewIndex resolves every queued charge once in its own account, amount,
 // and date context, then promotes a result to the merchant group only when all
@@ -344,70 +175,23 @@ func buildReviewIndex(app *appstate.App, scope reviewscope.Scope, ledger txnfilt
 }
 
 func buildReviewIndexScoped(app *appstate.App, scope reviewscope.Scope, ledger txnfilter.Criteria, fallbackEmptyView bool) reviewIndex {
-	scope = reviewscope.Normalize(scope)
-	idx := reviewIndex{Byid: map[string]reviewRow{}, Scope: scope}
 	if app == nil {
-		return idx
+		return reviewview.BuildIndex(reviewview.Input{Scope: scope})
 	}
-	res := uistate.LoadReviewResolutions()
 	txns := app.Transactions()
-	queue := reviewqueue.QueueOpen(txns, res, time.Now())
-	idx.QueueTotal = len(queue)
-	inView := restrictQueue(queue, ledgerVisibleIDs(txns, ledger))
-	idx.ViewTotal = len(inView)
-	if fallbackEmptyView && scope == reviewscope.ScopeCurrentView && idx.ViewTotal == 0 && idx.QueueTotal > 0 {
-		scope = reviewscope.ScopeEntireQueue
-		idx.Scope = scope
+	in := reviewview.Input{
+		Transactions: txns, Resolutions: uistate.LoadReviewResolutions(),
+		Scope: scope, Ledger: ledger, FallbackEmptyView: fallbackEmptyView, Now: time.Now(),
 	}
-	if reviewscope.Normalize(scope) == reviewscope.ScopeCurrentView {
-		queue = inView
-	}
-	idx.Total = len(queue)
-
-	// Load the expensive inputs ONCE. Each of these is a KV read plus a JSON
-	// unmarshal, and they used to happen once per merchant.
-	tally := uistate.LoadLearnTally()
-	threshold := uistate.LoadLearnThreshold()
-	cats := app.Categories()
-
-	idx.TxnByID = make(map[string]domain.Transaction, len(txns))
-	for _, t := range txns {
-		idx.TxnByID[t.ID] = t
-	}
-	idx.Dupes = map[string][]string{}
-	for _, g := range dedupe.FindDuplicates(txns) {
-		if len(g.IDs) < 2 {
-			continue
-		}
-		for _, id := range g.IDs {
-			idx.Dupes[id] = g.IDs
+	suggestions := make(map[string]catsuggest.Suggestion, len(txns))
+	tally, threshold, cats := uistate.LoadLearnTally(), uistate.LoadLearnThreshold(), app.Categories()
+	for _, t := range reviewview.Candidates(in) {
+		if suggestion, ok := reviewSuggestionWith(app, t, tally, threshold, cats); ok {
+			suggestions[t.ID] = suggestion
 		}
 	}
-
-	// Resolve every charge in its own rule context. Account, amount and date can
-	// change a rule result even when two charges share a merchant.
-	suggByID := make(map[string]catsuggest.Suggestion, len(queue))
-	ranked := make([]reviewqueue.Ranked, 0, len(queue))
-	for _, t := range queue {
-		s, ok := reviewSuggestionWith(app, t, tally, threshold, cats)
-		if ok {
-			suggByID[t.ID] = s
-		}
-		conf := 0
-		if ok {
-			conf = int(s.Confidence)
-		}
-		ranked = append(ranked, reviewqueue.Ranked{Txn: t, Confidence: conf})
-	}
-
-	for _, g := range reviewqueue.GroupByMerchant(ranked) {
-		s, ok, conflict := sharedReviewSuggestion(g, suggByID)
-		row := reviewRow{Group: g, Tier: tierOf(s, ok), Suggestion: s, HasSugg: ok,
-			SuggestionConflict: conflict}
-		idx.Rows = append(idx.Rows, row)
-		idx.Byid[g.Key] = row
-	}
-	return idx
+	in.Suggestions = suggestions
+	return reviewview.BuildIndex(in)
 }
 
 // buildReviewIndexForOpen keeps an unchosen default from opening on an empty
@@ -431,151 +215,131 @@ func ReviewSurfaceBody(_ struct{}) ui.Node {
 	return ui.CreateElement(reviewSurfaceReady, struct{}{})
 }
 
-func reviewSurfaceReady(_ struct{}) ui.Node {
-	app := appstate.Default
+// reviewController contains browser state and persistence adapters only. Domain
+// decisions are derived by reviewview from explicit snapshots.
+type reviewController struct {
+	app                                            *appstate.App
+	pr                                             prefs.Prefs
+	session                                        state.Atom[uistate.ReviewSession]
+	sess                                           uistate.ReviewSession
+	ledgerOwn, ledgerEff                           txnfilter.Criteria
+	scope                                          reviewscope.Scope
+	ledgerFiltered                                 bool
+	idx                                            reviewIndex
+	card                                           reviewview.Card
+	selected, openGroups                           ui.State[map[string]bool]
+	manual, aiProposals                            ui.State[map[string]string]
+	picker, notice, confirmAll, scanState, scanErr ui.State[string]
+	pickerRev, focusRow                            ui.State[int]
+	applying, confirming                           ui.State[bool]
+	scanStats                                      ui.State[[2]int]
+	gapRows                                        []reviewRow
+	gapCharges                                     int
+	hasProvider                                    bool
+	navigate                                       func(string)
+	scan                                           func()
+	loanPaymentGroup                               ui.Node
+	loanPaymentSuggestions                         int
+}
+
+func useReviewController() *reviewController {
+	c := &reviewController{app: appstate.Default}
 	rev := uistate.UseDataRevision().Get()
 	open := uistate.UseReviewInbox()
-	pr := uistate.UsePrefs().Get()
-	// C554: the ledger's own working set, so Review can offer to inherit it. The
-	// member lens is layered in exactly as the ledger layers it, or "Current view"
-	// would mean something subtly different on the two screens.
-	ledgerOwn := uistate.UseTxFilter().Get()
-	ledgerEff, _ := ledgerOwn.WithOwnerLens(uistate.UseMemberLens())
-	// C559: mode, card position and scope live in an atom so a trip to Categories
-	// or Rules can come back to the same place.
-	sessAtom := uistate.UseReviewSession()
+	c.pr = uistate.UsePrefs().Get()
+	c.ledgerOwn = uistate.UseTxFilter().Get()
+	c.ledgerEff, _ = c.ledgerOwn.WithOwnerLens(uistate.UseMemberLens())
+	c.session = uistate.UseReviewSession()
+	c.selected = ui.UseState(map[string]bool{})
+	c.openGroups = ui.UseState(map[string]bool{})
+	c.picker = ui.UseState("")
+	c.pickerRev = ui.UseState(0)
+	c.manual = ui.UseState(map[string]string{})
+	c.focusRow = ui.UseState(0)
+	c.notice = ui.UseState("")
+	c.confirmAll = ui.UseState("")
+	c.scanState = ui.UseState("idle")
+	c.scanErr = ui.UseState("")
+	c.aiProposals = ui.UseState(map[string]string{})
+	c.scanStats = ui.UseState([2]int{})
+	c.applying = ui.UseState(false)
+	c.confirming = ui.UseState(false)
+	c.navigate = router.UseNavigate().Navigate
+	c.sess = c.session.Get().Normalized()
+	c.scope, c.ledgerFiltered = reviewview.ActiveScope(c.ledgerEff, c.sess.ScopeChosen, c.sess.Scope)
+	c.idx = ui.UseMemo(func() reviewIndex {
+		return buildReviewIndexForOpen(c.app, c.scope, c.sess.ScopeChosen, c.ledgerEff)
+	}, c.app, rev, c.app.Rev(), open.Get(), string(c.scope), c.sess.ScopeChosen, c.ledgerEff)
+	c.scope = c.idx.Scope
+	c.loanPaymentGroup = c.useLoanPayments()
+	c.gapRows, c.gapCharges = reviewview.Gaps(c.idx.Rows)
+	c.scan = c.useScan()
+	c.card = reviewview.CurrentCard(c.idx.Rows, c.sess.Cursor, c.sess.CursorKey, c.sess.CommitKey, c.sess.Commit)
+	c.installKeys()
+	return c
+}
 
-	// All hooks unconditional, before any early return.
-	selected := ui.UseState(map[string]bool{})
-	openGroups := ui.UseState(map[string]bool{})
-	picker := ui.UseState("") // merchant key whose picker is open, "" = closed
-	// Bumped whenever the picker closes. A <select> is a CONTROLLED input the
-	// browser also mutates: choosing the "+ New category" sentinel sets the live
-	// value, and re-rendering the same node does not put it back, so the row was
-	// left displaying a sentinel that is not a category. Re-keying the rows on
-	// this counter recreates them and restores the real value.
-	pickerRev := ui.UseState(0)
-	manual := ui.UseState(map[string]string{})
-	focusRow := ui.UseState(0) // bulk: which merchant row the keyboard is on
-	notice := ui.UseState("")
-	// C653: the merchant-wide commit is a second, explicit step. This holds the
-	// merchant key awaiting that confirmation, so the footer can state exactly what
-	// is about to happen instead of a button doing it on the first click.
-	confirmAll := ui.UseState("")
-	// SMART+ scan state (C504). Proposals live apart from `manual` so a model
-	// answer is never mistaken for something the user chose by hand.
-	scanState := ui.UseState("idle")
-	scanErr := ui.UseState("")
-	aiProposals := ui.UseState(map[string]string{})
-	scanStats := ui.UseState([2]int{})
+func (c *reviewController) setScope(scope string) {
+	c.session.Set(uistate.ReviewSession(reviewview.Session(c.session.Get()).WithScope(scope)))
+	c.confirmAll.Set("")
+	c.notice.Set("")
+}
 
-	// The session is read once per render and written through one mutator, so the
-	// scope/mode/cursor triple can never be half-updated.
-	sess := sessAtom.Get().Normalized()
-	setSession := func(mut func(*uistate.ReviewSession)) {
-		s := sessAtom.Get().Normalized()
-		mut(&s)
-		sessAtom.Set(s.Normalized())
-	}
-	// C554: an unchosen scope FOLLOWS the ledger rather than being written to the
-	// session on open. Deriving it keeps a filter the user changes between visits
-	// honest, and means nothing is persisted until they actually decide.
-	ledgerFiltered := len(ledgerEff.PageFilters()) > 0
-	scope := reviewscope.Default(ledgerFiltered)
-	if sess.ScopeChosen {
-		scope = sess.Scope
-	}
-	setScope := func(s string) {
-		// Both halves of the card position reset: index 3 of the old population is
-		// not a meaningful place in the new one, and a merchant that was in view may
-		// not be in the whole queue's first card either.
-		setSession(func(x *uistate.ReviewSession) {
-			x.ScopeChosen, x.Scope = true, reviewscope.Normalize(reviewscope.Scope(s))
-			x.Cursor, x.CursorKey = 0, ""
-		})
-		confirmAll.Set("")
-		notice.Set("")
-	}
-	setMode := func(m string) {
-		setSession(func(x *uistate.ReviewSession) { x.Mode = m })
-		confirmAll.Set("")
-		notice.Set("")
-	}
-	setCursorTo := func(n int, key string) {
-		setSession(func(x *uistate.ReviewSession) { x.Cursor, x.CursorKey = n, key })
-		confirmAll.Set("")
-	}
-	onSingle := ui.UseEvent(func() { setMode(reviewModeSingle) })
-	onBulk := ui.UseEvent(func() { setMode(reviewModeBulk) })
-	// Closing the surface with the queue cleared ENDS the session; closing it to go
-	// and create a category does not (C559), which is why the reset lives here and
-	// not in CloseReviewInbox.
-	closeSurface := ui.UseEvent(func() {
-		uistate.ResetReviewSession()
-		uistate.CloseReviewInbox()
-	})
+func (c *reviewController) setMode(mode string) {
+	c.session.Set(uistate.ReviewSession(reviewview.Session(c.session.Get()).WithMode(mode)))
+	c.confirmAll.Set("")
+	c.notice.Set("")
+}
 
-	toggleGroup := func(k string) {
-		m := openGroups.Get()
-		nm := make(map[string]bool, len(m)+1)
-		for kk, v := range m {
-			nm[kk] = v
-		}
-		nm[k] = !nm[k]
-		openGroups.Set(nm)
-	}
-	toggleSelect := func(k string) {
-		m := selected.Get()
-		nm := make(map[string]bool, len(m)+1)
-		for kk, v := range m {
-			nm[kk] = v
-		}
-		nm[k] = !nm[k]
-		selected.Set(nm)
-	}
-	setManual := func(k, catID string) {
-		if catID == catSelectNew {
-			picker.Set(k)
-			return
-		}
-		m := manual.Get()
-		nm := make(map[string]string, len(m)+1)
-		for kk, v := range m {
-			nm[kk] = v
-		}
-		nm[k] = catID
-		manual.Set(nm)
-	}
-	clearSel := ui.UseEvent(func() { selected.Set(map[string]bool{}) })
-	nav := router.UseNavigate()
+func (c *reviewController) setCursorTo(position int, key string) {
+	c.session.Set(uistate.ReviewSession(reviewview.Session(c.session.Get()).WithCursor(position, key)))
+	c.confirmAll.Set("")
+}
 
-	// Rebuild ONLY when the data actually changes. Selecting a merchant, expanding
-	// a row or switching mode are pure view state, and re-deriving the whole queue
-	// for them is what made every interaction cost ~100-300ms. The scope and the
-	// ledger filter join the keys because both change WHICH charges are in play.
-	idx := ui.UseMemo(func() reviewIndex {
-		return buildReviewIndexForOpen(app, scope, sess.ScopeChosen, ledgerEff)
-	},
-		rev, open.Get(), string(scope), ledgerEff)
-	scope = idx.Scope
-	loanPaymentMemo := ui.UseState(&recurringLoanPaymentSuggestionMemo{}).Get()
-	allLoanPaymentSuggestions := loanPaymentMemo.get(app, app.Rev(), app.RecurringPaymentSuggestions)
-	dismissalSeed := ui.UseMemo(loadRecurringLoanPaymentDismissals, app)
-	dismissalState := ui.UseState(dismissalSeed)
-	dismissedLoanPayments := dismissalState.Get()
+func (c *reviewController) setCommit(scope string) {
+	c.session.Set(uistate.ReviewSession(reviewview.Session(c.session.Get()).WithCommit(scope, c.card.Row.Group.Key)))
+	c.confirmAll.Set("")
+	c.notice.Set("")
+}
+
+func (c *reviewController) toggleGroup(key string) {
+	c.openGroups.Set(reviewview.Toggle(c.openGroups.Get(), key))
+}
+func (c *reviewController) toggleSelect(key string) {
+	c.selected.Set(reviewview.Toggle(c.selected.Get(), key))
+}
+func (c *reviewController) clearSelection() { c.selected.Set(map[string]bool{}) }
+func (c *reviewController) catFor(row reviewRow) string {
+	return reviewview.Category(row, c.manual.Get(), c.aiProposals.Get())
+}
+
+func (c *reviewController) setManual(key, category string) {
+	if category == catSelectNew {
+		c.picker.Set(key)
+		return
+	}
+	c.manual.Set(reviewview.Choose(c.manual.Get(), key, category))
+}
+
+func (c *reviewController) selectTier(tier reviewTier) {
+	c.selected.Set(reviewview.SelectTier(c.idx.Rows, c.selected.Get(), tier, c.manual.Get(), c.aiProposals.Get()))
+}
+
+func (c *reviewController) useLoanPayments() ui.Node {
+	app := c.app
+	memo := ui.UseState(&recurringLoanPaymentSuggestionMemo{}).Get()
+	all := memo.get(app, app.Rev(), app.RecurringPaymentSuggestions)
+	seed := ui.UseMemo(loadRecurringLoanPaymentDismissals, app)
+	dismissed := ui.UseState(seed)
 	ui.UseEffect(func() func() {
-		pruned, changed := pruneRecurringLoanPaymentDismissals(dismissalState.Get(), allLoanPaymentSuggestions)
+		pruned, changed := pruneRecurringLoanPaymentDismissals(dismissed.Get(), all)
 		if changed {
-			dismissalState.Set(pruned)
+			dismissed.Set(pruned)
 			saveRecurringLoanPaymentDismissals(pruned)
 		}
 		return nil
 	}, app, app.Rev())
-	loanPaymentSuggestions := visibleRecurringLoanPaymentSuggestions(allLoanPaymentSuggestions, dismissedLoanPayments)
-	recordLoanPayment := func(suggestion txnclassify.PaymentSuggestion) {
-		// The existing single-row transfer conversion path updates the imported
-		// transaction in place; it does not invent a second leg from an expense
-		// that may already be represented in the liability's own feed.
+	record := func(suggestion txnclassify.PaymentSuggestion) {
 		_ = CommitUndoable(app, uistate.T("r4loan1.recordedUndo"), []string{suggestion.TransactionID}, func() error { return classifyRecurringLoanPayment(app, suggestion) }, func(err error) {
 			if err != nil {
 				uistate.PostNotice(uistate.T("tc3w4.changesNotSaved"), true)
@@ -583,581 +347,306 @@ func reviewSurfaceReady(_ struct{}) ui.Node {
 			}
 		})
 	}
-	dismissLoanPayment := func(transactionID string) {
-		active := make(map[string]bool, len(dismissedLoanPayments)+1)
-		for id, value := range dismissedLoanPayments {
-			active[id] = value
-		}
-		active[transactionID] = true
-		pruned, _ := pruneRecurringLoanPaymentDismissals(active, allLoanPaymentSuggestions)
-		dismissalState.Set(pruned)
+	dismiss := func(transactionID string) {
+		active := reviewview.Dismiss(dismissed.Get(), transactionID)
+		pruned, _ := pruneRecurringLoanPaymentDismissals(active, all)
+		dismissed.Set(pruned)
 		saveRecurringLoanPaymentDismissals(pruned)
 	}
-	loanPaymentGroup := ui.CreateElement(reviewLoanPaymentGroup, reviewLoanPaymentGroupProps{
-		Suggestions: loanPaymentSuggestions, OnRecord: recordLoanPayment, OnDismiss: dismissLoanPayment,
+	c.loanPaymentSuggestions = len(visibleRecurringLoanPaymentSuggestions(all, dismissed.Get()))
+	return ui.CreateElement(reviewLoanPaymentGroup, reviewLoanPaymentGroupProps{
+		Suggestions: visibleRecurringLoanPaymentSuggestions(all, dismissed.Get()), OnRecord: record, OnDismiss: dismiss,
 	})
+}
 
-	// catFor resolves what a group will be categorized as: a hand edit wins over
-	// the suggestion, always.
-	catFor := func(r reviewRow) string {
-		if v, ok := manual.Get()[r.Group.Key]; ok {
-			return v
-		}
-		if r.HasSugg {
-			return r.Suggestion.CategoryID
-		}
-		if r.SuggestionConflict {
-			return ""
-		}
-		// SMART+ is consulted LAST — only for what the free sources could not
-		// answer, which is what keeps the paid pass small (C515 precedence).
-		if v, ok := aiProposals.Get()[r.Group.Key]; ok {
-			return v
-		}
-		return ""
+func (c *reviewController) apply() {
+	if c.applying.Get() {
+		return
 	}
-
-	// One request owns all selected merchants, so no subgroup can acknowledge
-	// success before the rest of the action has been validated and committed.
-	applying := ui.UseState(false)
-	doApply := func() {
-		if applying.Get() {
+	assignments := reviewview.Assignments(c.idx.Rows, c.selected.Get(), c.manual.Get(), c.aiProposals.Get())
+	c.applying.Set(true)
+	accepted := commitReviewAssignments(c.app, assignments, func(total int, err error) {
+		c.applying.Set(false)
+		if err != nil {
+			c.notice.Set(uistate.T("review.commitFailed"))
 			return
 		}
-		assignments := map[string]string{}
-		for _, row := range idx.Rows {
-			if !selected.Get()[row.Group.Key] {
-				continue
-			}
-			category := catFor(row)
-			if category == "" {
-				continue
-			}
-			for _, id := range groupChargeIDs(row) {
-				assignments[id] = category
-			}
-		}
-		applying.Set(true)
-		accepted := commitReviewAssignments(app, assignments, func(total int, err error) {
-			applying.Set(false)
-			if err != nil {
-				notice.Set(uistate.T("review.commitFailed"))
-				return
-			}
-			notice.Set(uistate.T("review.bulkApplied", total))
-			selected.Set(map[string]bool{})
-		})
-		if accepted == 0 {
-			applying.Set(false)
-		}
+		c.notice.Set(uistate.T("review.bulkApplied", total))
+		c.selected.Set(map[string]bool{})
+	})
+	if accepted == 0 {
+		c.applying.Set(false)
 	}
-	applySelected := ui.UseEvent(doApply)
+}
 
-	// ---- SMART+ scan (C504/C509) ---------------------------------------------
-	// Scanned set = merchants the LOCAL sources could not answer. Paying a model
-	// to re-derive what a rule already knows is the waste this avoids.
-	gapRows := make([]reviewRow, 0)
-	for _, r := range idx.Rows {
-		if !r.HasSugg && !r.SuggestionConflict {
-			gapRows = append(gapRows, r)
-		}
-	}
-	gapCharges := 0
-	for _, r := range gapRows {
-		gapCharges += len(r.Group.Items)
-	}
-
-	backendAI := uistate.BackendConnectionActive(pr)
-	hasProvider := aiProviderConfigured(app, backendAI)
-	aiConn := resolveAIConn(app, backendAI, pr.ServerURL, pr.ServerToken)
-	catalog := smartCatalog(app.Categories())
-
-	doScan := func() {
-		if !hasProvider {
-			// Land on the AI tab, not the settings default. Sending someone to a
-			// page that says nothing about keys, after closing the surface they
-			// were working in, is why "Connect a key" read as a button that does
-			// nothing. Settings tabs are routable as /settings/<tab>.
+func (c *reviewController) useScan() func() {
+	backend := uistate.BackendConnectionActive(c.pr)
+	c.hasProvider = aiProviderConfigured(c.app, backend)
+	connection := resolveAIConn(c.app, backend, c.pr.ServerURL, c.pr.ServerToken)
+	catalog := smartCatalog(c.app.Categories())
+	return func() {
+		if !c.hasProvider {
 			uistate.CloseReviewInbox()
-			nav.Navigate(uistate.RoutePath("/settings/ai"))
+			c.navigate(uistate.RoutePath("/settings/ai"))
 			return
 		}
-		if len(gapRows) == 0 || scanState.Get() == "scanning" {
+		if !reviewview.CanScan(len(c.gapRows), c.scanState.Get()) {
 			return
 		}
-		// Clear a previous verdict so "Scan again" visibly restarts rather than
-		// leaving the old result on screen.
-		scanStats.Set([2]int{})
-		// One representative charge per MERCHANT, not per charge: every charge in
-		// a group shares a payee, so asking about all of them buys nothing and
-		// costs linearly.
-		sample := gapRows
-		if len(sample) > smartCatScanCap {
-			sample = sample[:smartCatScanCap]
-		}
-		var lines strings.Builder
-		incomeByRef := make(map[int]bool, len(sample))
-		for i, r := range sample {
-			t := r.Group.Items[0]
-			lines.WriteString(strconv.Itoa(i+1) + " | " + strings.TrimSpace(r.Group.Merchant) +
-				" | " + reviewMoneyText(t.Amount) + "\n")
-			incomeByRef[i+1] = t.Amount.Amount > 0
-		}
-		scanState.Set("scanning")
-		scanErr.Set("")
-		runSmartAI(aiConn, smartai.AutoCategorize(lines.String(), catalog.Prompt()),
-			func(text string) {
-				parsed := smartai.RejectSignMismatches(
-					smartai.ParseCategoryAssignments(text, len(sample), catalog), incomeByRef)
-				out := map[string]string{}
-				for k, v := range aiProposals.Get() {
-					out[k] = v
-				}
-				filled := 0
-				for _, a := range parsed {
-					if a.Ref < 1 || a.Ref > len(sample) || a.CategoryID == "" {
-						continue
-					}
-					out[sample[a.Ref-1].Group.Key] = a.CategoryID
-					filled++
-				}
-				aiProposals.Set(out)
-				scanStats.Set([2]int{filled, len(sample) - filled})
-				scanState.Set("done")
-				uistate.BumpDataRevision()
-			},
-			func(e string) { scanErr.Set(e); scanState.Set("done"); uistate.BumpDataRevision() })
+		c.scanStats.Set([2]int{})
+		draft := reviewview.DraftScan(c.gapRows, smartCatScanCap, reviewMoneyText)
+		c.scanState.Set("scanning")
+		c.scanErr.Set("")
+		runSmartAI(connection, smartai.AutoCategorize(draft.Lines, catalog.Prompt()), func(answer string) {
+			proposals, stats := reviewview.ScanResult(draft, answer, catalog, c.aiProposals.Get())
+			c.aiProposals.Set(proposals)
+			c.scanStats.Set(stats)
+			c.scanState.Set("done")
+			uistate.BumpDataRevision()
+		}, func(err string) { c.scanErr.Set(err); c.scanState.Set("done"); uistate.BumpDataRevision() })
 	}
-	scan := ui.UseEvent(doScan)
+}
 
-	// Accept the scan's answers: they move into `manual` (so they are applied and
-	// marked) and their merchants are selected, leaving Confirm as the next click.
-	useScan := ui.UseEvent(func() {
-		props := aiProposals.Get()
-		if len(props) == 0 {
-			return
-		}
-		nm := make(map[string]string, len(manual.Get())+len(props))
-		for k, v := range manual.Get() {
-			nm[k] = v
-		}
-		ns := make(map[string]bool, len(selected.Get())+len(props))
-		for k, v := range selected.Get() {
-			ns[k] = v
-		}
-		for k, v := range props {
-			// Never overwrite a hand edit with a model answer.
-			if _, edited := manual.Get()[k]; edited {
-				continue
-			}
-			nm[k], ns[k] = v, true
-		}
-		manual.Set(nm)
-		selected.Set(ns)
-		notice.Set(uistate.T("review.filledN", len(props)))
-	})
+func (c *reviewController) acceptScan() {
+	proposals := c.aiProposals.Get()
+	if len(proposals) == 0 {
+		return
+	}
+	manual, selected := reviewview.AcceptScan(c.manual.Get(), c.selected.Get(), proposals)
+	c.manual.Set(manual)
+	c.selected.Set(selected)
+	c.notice.Set(uistate.T("review.filledN", len(proposals)))
+}
 
-	// C506: the fastest way to clear a queue is to stop charges entering it.
-	// One action both files the visible batch AND writes the rule that files the
-	// next one — the user is already looking at a merchant-grouped set, so the
-	// match text and the category are both already decided.
-	doMakeRules := func() {
-		sel := selected.Get()
-		if len(sel) == 0 {
-			return
-		}
-		made := 0
-		for _, r := range idx.Rows {
-			if !sel[r.Group.Key] || len(r.Group.Items) == 0 {
-				continue
-			}
-			cat := catFor(r)
-			if cat == "" {
-				continue
-			}
-			// Match on the CLEANED merchant name: the raw descriptor carries a
-			// per-charge reference, so a rule built from it would match exactly
-			// one transaction and never fire again.
-			match := strings.TrimSpace(r.Group.Merchant)
-			if match == "" {
-				continue
-			}
-			if err := app.PutRule(rules.Rule{
-				ID: id.New(), Match: match, SetCategoryID: cat, Order: 1000 + made,
-			}); err != nil {
-				uistate.PostNotice(err.Error(), true)
-				continue
-			}
-			made++
-		}
-		if made > 0 {
-			notice.Set(uistate.T("review.rulesMade", made))
-			uistate.RequestPersist()
-		}
-		// Apply the batch too: making a rule should not leave the charges that
-		// prompted it sitting in the queue.
-		doApply()
+func (c *reviewController) makeRules() {
+	if len(c.selected.Get()) == 0 {
+		return
 	}
-	makeRules := ui.UseEvent(doMakeRules)
+	made := 0
+	for _, draft := range reviewview.RuleDrafts(c.idx.Rows, c.selected.Get(), c.manual.Get(), c.aiProposals.Get()) {
+		draft.ID, draft.Order = id.New(), 1000+made
+		if err := c.app.PutRule(draft); err != nil {
+			uistate.PostNotice(err.Error(), true)
+			continue
+		}
+		made++
+	}
+	if made > 0 {
+		c.notice.Set(uistate.T("review.rulesMade", made))
+		uistate.RequestPersist()
+	}
+	c.apply()
+}
 
-	selectTier := func(t reviewTier) {
-		m := make(map[string]bool, len(idx.Rows))
-		for k, v := range selected.Get() {
-			m[k] = v
-		}
-		for _, r := range idx.Rows {
-			if r.Tier == t && catFor(r) != "" {
-				m[r.Group.Key] = true
-			}
-		}
-		selected.Set(m)
+func (c *reviewController) gotoCard(position int) {
+	if len(c.idx.Rows) == 0 {
+		return
 	}
-	selReady := ui.UseEvent(func() { selectTier(tierReady) })
-	selLook := ui.UseEvent(func() { selectTier(tierLook) })
+	at, key := reviewview.MoveCard(c.idx.Rows, position)
+	c.setCursorTo(at, key)
+}
 
-	// ---- single mode actions -------------------------------------------------
-	singleRows := idx.Rows
-	// The card's position is held by MERCHANT first, index second. The index alone
-	// is not a place in this list: GroupByMerchant ranks groups by (confidence,
-	// size, key), so categorizing one charge shrinks its group and can drop it below
-	// a same-confidence neighbour — and a cursor that stayed at index 3 would then
-	// be showing a merchant the user has never seen, which is the "one click, an
-	// unpredictable outcome" C653 exists to end. Falling back to the index when the
-	// key no longer matches is right, not a compromise: the merchant is gone from
-	// the queue, so the work at that position IS the next thing to look at.
-	rowKeys := make([]string, 0, len(singleRows))
-	for _, r := range singleRows {
-		rowKeys = append(rowKeys, r.Group.Key)
-	}
-	at := reviewscope.CardIndex(rowKeys, sess.Cursor, sess.CursorKey)
-	var cur domain.Transaction
-	var curRow reviewRow
-	if len(singleRows) > 0 && len(singleRows[at].Group.Items) > 0 {
-		curRow = singleRows[at]
-		cur = curRow.Group.Items[0]
-	}
-	// gotoCard moves the card and records BOTH halves of where it landed.
-	gotoCard := func(n int) {
-		if len(singleRows) == 0 {
-			return
-		}
-		if n < 0 {
-			n = 0
-		}
-		if n >= len(singleRows) {
-			n = len(singleRows) - 1
-		}
-		setCursorTo(n, singleRows[n].Group.Key)
-	}
-	groupIDs := groupChargeIDs(curRow)
+func (c *reviewController) settle() {
+	c.setCursorTo(c.card.At, c.card.Row.Group.Key)
+	c.notice.Set("")
+}
 
-	// C653: which charges one click changes, and it is the CARD's answer, not the
-	// write path's. The card depicts a single charge, so a single charge is the
-	// default; the merchant-wide option has to be chosen, and the choice expires
-	// with the card it was made on (CommitKey) so it can never be inherited by a
-	// merchant the user has not looked at.
-	commit := reviewscope.CommitCharge
-	if sess.CommitKey != "" && sess.CommitKey == curRow.Group.Key {
-		commit = reviewscope.NormalizeCommit(sess.Commit)
+func (c *reviewController) commitTargets(ids []string) {
+	if c.confirming.Get() {
+		return
 	}
-	if len(groupIDs) <= 1 {
-		// A merchant with one queued charge has no second scope; offering "all 1"
-		// would be a control with nothing behind it.
-		commit = reviewscope.CommitCharge
+	if !reviewqueue.CanAssignCategory(c.card.Txn) {
+		c.notice.Set(uistate.T("review.splitNeeded"))
+		return
 	}
-	setCommit := func(v string) {
-		setSession(func(x *uistate.ReviewSession) {
-			x.Commit, x.CommitKey = reviewscope.NormalizeCommit(reviewscope.CommitScope(v)), curRow.Group.Key
-		})
-		confirmAll.Set("")
-		notice.Set("")
+	category := c.catFor(c.card.Row)
+	if category == "" {
+		c.notice.Set(uistate.T("review.chooseFirst"))
+		return
 	}
-	targets := reviewscope.Targets(commit, cur.ID, groupIDs)
+	c.confirming.Set(true)
+	if !applyReviewChoice(c.app, ids, category, func(ok bool) {
+		c.confirming.Set(false)
+		if !ok {
+			c.notice.Set(uistate.T("review.commitFailed"))
+			return
+		}
+		c.settle()
+	}) {
+		c.confirming.Set(false)
+		c.notice.Set(uistate.T("review.commitFailed"))
+	}
+}
 
-	// The queue itself moves when an action lands — the charge (or the whole
-	// merchant) leaves it, so the card at this cursor position is already the next
-	// piece of work. Incrementing the cursor here as well is how the old code
-	// SKIPPED a merchant per confirmation: rows shifted down by one and the cursor
-	// stepped over the shift. Staying put is what "and next" actually means.
-	settle := func() {
-		// Pin the position to THIS merchant and this slot. If the group survived the
-		// action (a per-charge commit on a merchant with siblings left) the next
-		// render finds it by key and stays put, whatever the re-ranking did to its
-		// index. If the group is gone (a merchant-wide commit, a snooze, the last
-		// charge) the key matches nothing and the slot takes over, which is the next
-		// piece of work. Both cases without moving the cursor by hand.
-		setCursorTo(at, curRow.Group.Key)
-		notice.Set("")
+func (c *reviewController) confirm() {
+	decision := reviewview.Confirm(c.card.Txn, c.catFor(c.card.Row), len(c.card.Targets), c.confirmAll.Get(), c.card.Row.Group.Key)
+	if decision.NoticeKey != "" {
+		c.notice.Set(uistate.T(decision.NoticeKey))
+		return
 	}
-	confirming := ui.UseState(false)
-	commitTargets := func(ids []string) {
-		if confirming.Get() {
-			return
-		}
-		if !reviewqueue.CanAssignCategory(cur) {
-			notice.Set(uistate.T("review.splitNeeded"))
-			return
-		}
-		cat := catFor(curRow)
-		if cat == "" {
-			notice.Set(uistate.T("review.chooseFirst"))
-			return
-		}
-		// C553: settle ONLY on a write that landed. This used to advance
-		// unconditionally, so a failed write moved to the next card while the
-		// transaction stayed uncategorized — the queue count fell, the card moved
-		// on, and a reload brought the item straight back. Holding position with a
-		// stated reason is the honest behavior.
-		confirming.Set(true)
-		if !applyReviewChoice(app, ids, cat, func(ok bool) {
-			confirming.Set(false)
-			if !ok {
-				notice.Set(uistate.T("review.commitFailed"))
-				return
-			}
-			settle()
-		}) {
-			confirming.Set(false)
-			notice.Set(uistate.T("review.commitFailed"))
-		}
+	if decision.Ask {
+		c.confirmAll.Set(c.card.Row.Group.Key)
+		return
 	}
-	doConfirm := func() {
-		if cur.ID == "" {
-			return
-		}
-		if !reviewqueue.CanAssignCategory(cur) {
-			notice.Set(uistate.T("review.splitNeeded"))
-			return
-		}
-		// A merchant-wide write is a second, explicit step: the first click asks,
-		// naming the count, the category, the total and the dates it covers; the
-		// second one writes. An inline strip rather than a modal, because this
-		// surface is already a modal and one stacked on another is where "no
-		// confirmation appeared" reports come from.
-		if len(targets) > 1 && confirmAll.Get() != curRow.Group.Key {
-			if catFor(curRow) == "" {
-				notice.Set(uistate.T("review.chooseFirst"))
-				return
-			}
-			confirmAll.Set(curRow.Group.Key)
-			return
-		}
-		commitTargets(targets)
+	if decision.Commit {
+		c.commitTargets(c.card.Targets)
 	}
-	confirmOne := ui.UseEvent(doConfirm)
-	cancelAll := ui.UseEvent(func() { confirmAll.Set("") })
-	// The single card's category <select>. Registered HERE, unconditionally, rather
-	// than inside reviewSingleView — that function is a plain call, so a hook in it
-	// belongs to this fiber and would exist only in single mode.
-	pickCategory := ui.UseEvent(func(e ui.Event) { setManual(curRow.Group.Key, e.GetValue()) })
-	// C556: the single card's own path to a category that does not exist yet. The
-	// picker is separate state, so the card, its cursor and any pending choice are
-	// all still here when it closes — cancelled or saved.
-	newCatSingle := ui.UseEvent(func() {
-		if curRow.Group.Key != "" {
-			picker.Set(curRow.Group.Key)
-		}
-	})
-	// Snooze and dismiss follow the SAME scope as the confirm, so one control
-	// describes every action on the card. Acting on one charge of a 122-charge
-	// merchant used to leave 121 behind and read as a broken button; acting on all
-	// 122 from a card showing one is the C653 defect in a different button.
-	doSkip := func() {
-		if cur.ID == "" {
-			return
-		}
-		// C493: a durable snooze, not an in-memory skip that vanishes on reload.
-		until := time.Now().AddDate(0, 0, 7)
-		for _, id := range targets {
-			uistate.SnoozeReviewItem(id, until)
-		}
-		uistate.BumpDataRevision()
-		settle()
-	}
-	skipOne := ui.UseEvent(doSkip)
-	doDismiss := func() {
-		if cur.ID == "" {
-			return
-		}
-		for _, id := range targets {
-			uistate.DismissReviewItem(id)
-		}
-		uistate.BumpDataRevision()
-		settle()
-	}
-	dismissOne := ui.UseEvent(doDismiss)
+}
 
-	// C559: the two corrections that legitimately leave Review. Each names its
-	// destination, leaves a restorable crumb (route + working set + row + "reopen
-	// Review"), and returns to this same card because the session outlives the
-	// surface. Nothing is replayed: the ledger filter and the session are both
-	// still where the user left them.
-	leaveReview := func(to string) {
-		uistate.SetReturnTo(uistate.ReturnTo{
-			From: "/transactions", To: to, Label: reviewReturnLabel(scope, idx),
-			TxnID: cur.ID, ReopenReview: true,
-		})
-		uistate.CloseReviewInbox()
+func (c *reviewController) skip() {
+	if c.card.Txn.ID == "" {
+		return
 	}
-	toCategories := ui.UseEvent(func(e ui.Event) {
-		if !isPlainLeftClick(e) {
-			return
-		}
-		leaveReview("/categories")
-	})
-	toRules := ui.UseEvent(func(e ui.Event) {
-		if !isPlainLeftClick(e) {
-			return
-		}
-		// Hand the rule form the merchant and the category already on the card, so
-		// the trip starts from the decision rather than from an empty form (C622's
-		// contract, from the other surface).
-		uistate.SetRuleDraft(strings.TrimSpace(curRow.Group.Merchant), catFor(curRow))
-		leaveReview("/rules")
-	})
+	until := reviewview.SnoozeUntil(time.Now())
+	for _, id := range c.card.Targets {
+		uistate.SnoozeReviewItem(id, until)
+	}
+	uistate.BumpDataRevision()
+	c.settle()
+}
 
-	// ---- keyboard (C507) -----------------------------------------------------
-	// The hint in the header promises these; a surface that advertises keys it
-	// does not implement is worse than one with none.
-	clampFocus := func(n int) int {
-		if len(idx.Rows) == 0 {
-			return 0
-		}
-		if n < 0 {
-			return len(idx.Rows) - 1
-		}
-		if n >= len(idx.Rows) {
-			return 0
-		}
-		return n
+func (c *reviewController) dismiss() {
+	if c.card.Txn.ID == "" {
+		return
 	}
-	keys := reviewKeyActions{
-		Bulk:   func() { setMode(reviewModeBulk) },
-		Single: func() { setMode(reviewModeSingle) },
+	for _, id := range c.card.Targets {
+		uistate.DismissReviewItem(id)
 	}
-	if isBulkMode := sess.Mode == reviewModeBulk; isBulkMode {
-		keys.Next = func() { focusRow.Set(clampFocus(focusRow.Get() + 1)) }
-		keys.Prev = func() { focusRow.Set(clampFocus(focusRow.Get() - 1)) }
+	uistate.BumpDataRevision()
+	c.settle()
+}
+
+func (c *reviewController) leaveReview(to string) {
+	uistate.SetReturnTo(uistate.ReturnTo{From: "/transactions", To: to,
+		Label: reviewReturnLabel(c.scope, c.idx), TxnID: c.card.Txn.ID, ReopenReview: true})
+	uistate.CloseReviewInbox()
+}
+
+func (c *reviewController) toCategories(event ui.Event) {
+	if isPlainLeftClick(event) {
+		c.leaveReview("/categories")
+	}
+}
+
+func (c *reviewController) toRules(event ui.Event) {
+	if !isPlainLeftClick(event) {
+		return
+	}
+	uistate.SetRuleDraft(reviewview.MerchantName(c.card.Row), c.catFor(c.card.Row))
+	c.leaveReview("/rules")
+}
+
+func (c *reviewController) installKeys() {
+	keys := reviewKeyActions{Bulk: func() { c.setMode(reviewModeBulk) }, Single: func() { c.setMode(reviewModeSingle) }}
+	if c.sess.Mode == reviewModeBulk {
+		keys.Next = func() { c.focusRow.Set(reviewview.Focus(c.focusRow.Get()+1, len(c.idx.Rows))) }
+		keys.Prev = func() { c.focusRow.Set(reviewview.Focus(c.focusRow.Get()-1, len(c.idx.Rows))) }
 		keys.Toggle = func() {
-			if r := clampFocus(focusRow.Get()); r < len(idx.Rows) {
-				toggleSelect(idx.Rows[r].Group.Key)
+			if at := reviewview.Focus(c.focusRow.Get(), len(c.idx.Rows)); at < len(c.idx.Rows) {
+				c.toggleSelect(c.idx.Rows[at].Group.Key)
 			}
 		}
-		keys.Confirm = doApply
+		keys.Confirm = c.apply
 	} else {
-		keys.Next = func() { gotoCard(at + 1) }
-		keys.Prev = func() { gotoCard(at - 1) }
-		keys.Confirm = doConfirm
-		keys.Skip = doSkip
-		keys.Dismiss = doDismiss
+		keys.Next = func() { c.gotoCard(c.card.At + 1) }
+		keys.Prev = func() { c.gotoCard(c.card.At - 1) }
+		keys.Confirm, keys.Skip, keys.Dismiss = c.confirm, c.skip, c.dismiss
 	}
 	setReviewKeys(keys)
-	closeSurfaceClick := OnClick(closeSurface)
+}
 
-	// ---- render --------------------------------------------------------------
-	// C554: the scope strip. It states which population is being reviewed AND the
-	// size of the other one, so switching is an informed decision rather than a
-	// guess, and it is rendered above the empty state as well — "nothing here"
-	// means something quite different when 251 charges are waiting one click away.
+func reviewSurfaceReady(_ struct{}) ui.Node {
+	c := useReviewController()
+	return c.render()
+}
+
+func (c *reviewController) singleArgs() reviewSingleArgs {
+	return reviewSingleArgs{App: c.app, Index: c.idx, Row: c.card.Row, Txn: c.card.Txn,
+		CatFor: c.catFor, PickCategory: func(event ui.Event) { c.setManual(c.card.Row.Group.Key, event.GetValue()) },
+		Confirm: c.confirm, Skip: c.skip, Dismiss: c.dismiss,
+		NewCat: func() {
+			if c.card.Row.Group.Key != "" {
+				c.picker.Set(c.card.Row.Group.Key)
+			}
+		},
+		CancelAll: func() { c.confirmAll.Set("") }, ToCategories: c.toCategories, ToRules: c.toRules,
+		Notice: c.notice.Get(), Prefs: c.pr, Commit: c.card.Commit, GroupSize: len(c.card.IDs), Targets: len(c.card.Targets),
+		Confirming: reviewview.PendingConfirmation(c.card.Row.Group.Key, c.confirmAll.Get(), len(c.card.Targets)), OnCommitScope: c.setCommit,
+	}
+}
+
+func (c *reviewController) render() ui.Node {
 	scopeStrip := ui.CreateElement(reviewScopeStrip, reviewScopeStripProps{
-		Scope: scope, ViewTotal: idx.ViewTotal, QueueTotal: idx.QueueTotal,
-		LedgerFiltered: ledgerFiltered, Working: reviewWorkingSetPhrase(ledgerOwn),
-		OnSelect: setScope,
+		Scope: c.scope, ViewTotal: c.idx.ViewTotal, QueueTotal: c.idx.QueueTotal, LedgerFiltered: c.ledgerFiltered,
+		Working: reviewWorkingSetPhrase(c.ledgerOwn), OnSelect: c.setScope,
 	})
-
-	if idx.Total == 0 {
-		// An empty SCOPE is not an empty queue. Saying "all caught up" while the
-		// entire-queue count sits at 251 is the app congratulating the user for a
-		// filter they may not remember setting.
-		title, sub := reviewEmptyCopy(scope, idx.QueueTotal, len(loanPaymentSuggestions))
-		return Div(css.Class("rvs rvs-done"), Attr("data-testid", "review-inbox"),
-			scopeStrip,
-			loanPaymentGroup,
-			P(css.Class("rvw-done-title"), title),
-			P(css.Class("rvw-done-sub"), sub),
-			Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "review-done"),
-				closeSurfaceClick, uistate.T("review.done")),
-		)
+	if c.idx.Total == 0 {
+		title, sub := reviewEmptyCopy(c.scope, c.idx.QueueTotal, c.loanPaymentSuggestions)
+		return ui.CreateElement(reviewEmptyView, reviewEmptyViewProps{Scope: scopeStrip, Loans: c.loanPaymentGroup, Title: title, Sub: sub})
 	}
-
-	isBulk := sess.Mode == reviewModeBulk
-	kbdHint := uistate.T("review.keyboardHintSinglePlain")
-	if isBulk {
-		kbdHint = uistate.T("review.keyboardHintBulkPlain")
-	}
-	head := Div(css.Class("rvs-head"),
-		uiw.Segmented(uiw.SegmentedProps{
-			Label:    uistate.T("review.modeLabel"),
-			Selected: sess.Mode,
-			Options: []uiw.SegOption{
-				{Value: reviewModeSingle, Label: uistate.T("review.modeSingle"), TestID: "review-mode-single"},
-				{Value: reviewModeBulk, Label: uistate.T("review.modeBulk"), TestID: "review-mode-bulk"},
-			},
-			OnSelect: setMode,
-		}),
-		reviewKeyboardDisclosure(kbdHint),
-	)
-	_, _ = onSingle, onBulk
-
+	head := ui.CreateElement(reviewModeHeader, reviewModeHeaderProps{Mode: c.sess.Mode, OnSelect: c.setMode})
 	var body, foot ui.Node
-	if isBulk {
+	if c.sess.Mode == reviewModeBulk {
 		var setupLink ui.Node = Fragment()
-		if !hasProvider {
-			setupLink = reviewAISetupLink(scan)
+		if !c.hasProvider {
+			setupLink = ui.CreateElement(reviewAISetup, reviewAISetupProps{OnClick: c.scan})
 		}
-		body, foot = reviewBulkView(app, idx, selected.Get(), openGroups.Get(), manual.Get(),
-			catFor, toggleGroup, toggleSelect, setManual, selReady, selLook,
-			applySelected, clearSel, makeRules, notice.Get(), pr, clampFocus(focusRow.Get()),
+		body, foot = reviewBulkView(c.app, c.idx, c.selected.Get(), c.openGroups.Get(), c.manual.Get(),
+			c.catFor, c.toggleGroup, c.toggleSelect, c.setManual,
+			func() { c.selectTier(tierReady) }, func() { c.selectTier(tierLook) }, c.apply, c.clearSelection, c.makeRules,
+			c.notice.Get(), c.pr, reviewview.Focus(c.focusRow.Get(), len(c.idx.Rows)),
 			ui.CreateElement(reviewScanStrip, reviewScanStripProps{
-				Gaps: len(gapRows), GapCharges: gapCharges, State: scanState.Get(),
-				Filled: scanStats.Get()[0], Skipped: scanStats.Get()[1], Err: scanErr.Get(),
-				HasProvider: hasProvider, OnScan: scan, OnUse: useScan,
-				CanUse: len(aiProposals.Get()) > 0,
-			}), setupLink, pickerRev.Get())
+				Gaps: len(c.gapRows), GapCharges: c.gapCharges, State: c.scanState.Get(),
+				Filled: c.scanStats.Get()[0], Skipped: c.scanStats.Get()[1], Err: c.scanErr.Get(),
+				HasProvider: c.hasProvider, OnScan: c.scan, OnUse: c.acceptScan, CanUse: len(c.aiProposals.Get()) > 0,
+			}), setupLink, c.pickerRev.Get())
 	} else {
-		body, foot = reviewSingleView(reviewSingleArgs{
-			App: app, Index: idx, Row: curRow, Txn: cur, CatFor: catFor, PickCategory: pickCategory,
-			Confirm: confirmOne, Skip: skipOne, Dismiss: dismissOne, NewCat: newCatSingle,
-			CancelAll: cancelAll, ToCategories: toCategories, ToRules: toRules,
-			Notice: notice.Get(), Prefs: pr,
-			Commit: commit, GroupSize: len(groupIDs), Targets: len(targets),
-			// The strip is only ever the second step of a MULTI-charge write. Guarding
-			// on len(targets) as well as the key covers the case where the group shrank
-			// under a pending confirmation (a sibling categorized elsewhere) —
-			// otherwise it would sit there asking "Categorize all 1 charges?".
-			Confirming:    curRow.Group.Key != "" && confirmAll.Get() == curRow.Group.Key && len(targets) > 1,
-			OnCommitScope: setCommit,
-		})
+		body, foot = reviewSingleView(c.singleArgs())
 	}
-	body = Div(css.Class("rvs-with-loan-payments"), loanPaymentGroup, body)
-
+	body = Div(css.Class("rvs-with-loan-payments"), c.loanPaymentGroup, body)
 	var pick ui.Node = Fragment()
-	if k := picker.Get(); k != "" {
-		kind := domain.KindExpense
-		if r, ok := idx.Byid[k]; ok && len(r.Group.Items) > 0 && r.Group.Items[0].Amount.Amount > 0 {
-			kind = domain.KindIncome
-		}
-		pick = ui.CreateElement(CategoryPicker, CategoryPickerProps{
-			Kind:     kind,
-			Selected: manual.Get()[k],
-			OnPick:   func(catID string) { setManual(k, catID); picker.Set("") },
-			OnClose:  func() { picker.Set("") },
+	if key := c.picker.Get(); key != "" {
+		pick = ui.CreateElement(CategoryPicker, CategoryPickerProps{Kind: reviewview.PickerKind(c.idx, key), Selected: c.manual.Get()[key],
+			OnPick: func(category string) { c.setManual(key, category); c.picker.Set("") }, OnClose: func() { c.picker.Set("") },
 		})
 	}
-
 	return Div(css.Class("rvs"), Attr("data-testid", "review-inbox"),
-		// LOAD-BEARING, not diagnostic: without a changed prop on the root the
-		// reconciler skipped diffing the keyed merchant rows, so moving the
-		// keyboard focus updated no class. It doubles as the value a test can
-		// assert on without reaching into the list.
-		Attr("data-focus", strconv.Itoa(clampFocus(focusRow.Get()))),
-		scopeStrip,
-		head,
-		Div(css.Class("rvs-body"), body),
-		Div(css.Class("rvs-foot modal-foot"), foot),
-		pick,
+		Attr("data-focus", strconv.Itoa(reviewview.Focus(c.focusRow.Get(), len(c.idx.Rows)))), scopeStrip, head,
+		Div(css.Class("rvs-body"), body), Div(css.Class("rvs-foot modal-foot"), foot), pick,
 	)
 }
+
+type reviewEmptyViewProps struct {
+	Scope, Loans ui.Node
+	Title, Sub   string
+}
+
+func reviewEmptyView(p reviewEmptyViewProps) ui.Node {
+	close := ui.UseEvent(func() { uistate.ResetReviewSession(); uistate.CloseReviewInbox() })
+	return Div(css.Class("rvs rvs-done"), Attr("data-testid", "review-inbox"), p.Scope, p.Loans,
+		P(css.Class("rvw-done-title"), p.Title), P(css.Class("rvw-done-sub"), p.Sub),
+		Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "review-done"), OnClick(close), uistate.T("review.done")),
+	)
+}
+
+type reviewModeHeaderProps struct {
+	Mode     string
+	OnSelect func(string)
+}
+
+func reviewModeHeader(p reviewModeHeaderProps) ui.Node {
+	return Div(css.Class("rvs-head"), uiw.Segmented(uiw.SegmentedProps{
+		Label: uistate.T("review.modeLabel"), Selected: p.Mode,
+		Options: []uiw.SegOption{
+			{Value: reviewModeSingle, Label: uistate.T("review.modeSingle"), TestID: "review-mode-single"},
+			{Value: reviewModeBulk, Label: uistate.T("review.modeBulk"), TestID: "review-mode-bulk"},
+		}, OnSelect: p.OnSelect,
+	}), reviewKeyboardDisclosure(reviewview.Text(uistate.T).KeyboardHint(p.Mode == reviewModeBulk)))
+}
+
+type reviewAISetupProps struct{ OnClick func() }
+
+func reviewAISetup(p reviewAISetupProps) ui.Node { return reviewAISetupLink(p.OnClick) }
 
 func reviewKeyboardDisclosure(hint string) ui.Node {
 	return Details(css.Class("rvs-kbd"), Attr("data-testid", "review-kbd"),
@@ -1166,27 +655,12 @@ func reviewKeyboardDisclosure(hint string) ui.Node {
 	)
 }
 
-// groupChargeIDs is the ids of the charges a merchant row is standing in for —
-// the row's OWN items, already narrowed to the active scope. Every write in this
-// surface is aimed with this rather than with a merchant key, so the number the
-// user was shown and the number written are the same list (C554/C653).
-func groupChargeIDs(r reviewRow) []string {
-	out := make([]string, 0, len(r.Group.Items))
-	for _, t := range r.Group.Items {
-		out = append(out, t.ID)
-	}
-	return out
-}
-
 // reviewReturnLabel names the review task a cross-page trip is stepping out of,
 // for the return crumb: which scope, and how much of it is left. "Back to Review
 // (current view, 12 left)" tells the user which job they are returning to;
 // "Back" alone is what C581 already found wanting on the ledger.
 func reviewReturnLabel(scope reviewscope.Scope, idx reviewIndex) string {
-	if scope == reviewscope.ScopeCurrentView {
-		return uistate.T("review.returnLabelView", idx.Total)
-	}
-	return uistate.T("review.returnLabelQueue", idx.Total)
+	return reviewview.Text(uistate.T).ReturnLabel(scope, idx)
 }
 
 // reviewScopeStripProps drive the scope strip.
@@ -1242,13 +716,7 @@ func reviewScopeStrip(props reviewScopeStripProps) ui.Node {
 // fact, different grammatical slot, so a second phrasing rather than a shared one
 // that is wrong in both places.
 func reviewWorkingSetPhrase(c txnfilter.Criteria) string {
-	if q := strings.TrimSpace(c.Text); q != "" {
-		return uistate.T("review.scopeBySearch", q)
-	}
-	if n := len(c.PageFilters()); n > 0 {
-		return uistate.T("review.scopeByFilters", plural(n, "filter"))
-	}
-	return uistate.T("review.scopeByView")
+	return reviewview.Text(uistate.T).WorkingSetPhrase(c)
 }
 
 // reviewScopeNote is the sentence under the scope control: what the selected
@@ -1256,68 +724,20 @@ func reviewWorkingSetPhrase(c txnfilter.Criteria) string {
 // only its own size leaves the reader unable to tell a small queue from a narrow
 // filter.
 func reviewScopeNote(scope reviewscope.Scope, view, queue int, working string) string {
-	outside := queue - view
-	if outside < 0 {
-		outside = 0
-	}
-	if scope == reviewscope.ScopeCurrentView {
-		if outside == 0 {
-			return uistate.T("review.scopeViewNoteAll", plural(view, "charge"), working)
-		}
-		return uistate.T("review.scopeViewNote", plural(view, "charge"), working, reviewWaitingPhrase(outside))
-	}
-	return uistate.T("review.scopeQueueNote", plural(queue, "charge"), plural(view, "charge"), working)
-}
-
-// reviewWaitingPhrase is the "N more are" / "1 more is" fragment. Literal keys on
-// both branches, not a key held in a variable — the i18n coverage scan only sees
-// literal keys passed to T, and a dynamic key is a missing string nobody notices
-// until it renders as its own name.
-func reviewWaitingPhrase(n int) string {
-	if n == 1 {
-		return uistate.T("review.waitingOne")
-	}
-	return uistate.T("review.waitingMany", n)
-}
-
-// reviewLeftPhrase is the "N are" / "1 is" fragment for the empty-view sentence.
-func reviewLeftPhrase(n int) string {
-	if n == 1 {
-		return uistate.T("review.leftOne")
-	}
-	return uistate.T("review.leftMany", n)
+	return reviewview.Text(uistate.T).ScopeNote(scope, view, queue, working)
 }
 
 // fmtTierCount renders "N merchants · M charges" for a tier header.
 func fmtTierCount(rows []reviewRow, t reviewTier) (merchants, charges int) {
-	for _, r := range rows {
-		if r.Tier != t {
-			continue
-		}
-		merchants++
-		charges += len(r.Group.Items)
-	}
-	return
+	return reviewview.TierCount(rows, t)
 }
 
 func tierLabel(t reviewTier) string {
-	switch t {
-	case tierReady:
-		return uistate.T("review.tierReady")
-	case tierLook:
-		return uistate.T("review.tierLook")
-	}
-	return uistate.T("review.tierNone")
+	return reviewview.Text(uistate.T).TierLabel(t)
 }
 
 func tierMod(t reviewTier) string {
-	switch t {
-	case tierReady:
-		return "is-ready"
-	case tierLook:
-		return "is-look"
-	}
-	return "is-none"
+	return reviewview.TierClass(t)
 }
 
 func reviewIntro(charges, merchants int) ui.Node {
@@ -1334,12 +754,35 @@ func reviewBulkView(
 	sel map[string]bool, openG map[string]bool, manual map[string]string,
 	catFor func(reviewRow) string,
 	toggleGroup, toggleSelect func(string), setManual func(string, string),
-	selReady, selLook, applySel, clearSel, makeRules any, notice string, pr prefs.Prefs, focused int,
+	selReady, selLook, applySel, clearSel, makeRules func(), notice string, pr prefs.Prefs, focused int,
 	scanStrip, setupLink ui.Node, rev int,
 ) (ui.Node, ui.Node) {
+	props := reviewBulkProps{App: app, Index: idx, Selected: sel, Open: openG, Manual: manual,
+		CatFor: catFor, ToggleGroup: toggleGroup, ToggleSelect: toggleSelect, SetManual: setManual,
+		SelectReady: selReady, SelectLook: selLook, Apply: applySel, Clear: clearSel, MakeRules: makeRules,
+		Notice: notice, Prefs: pr, Focused: focused, ScanStrip: scanStrip, SetupLink: setupLink, Revision: rev,
+	}
+	return ui.CreateElement(reviewBulkBody, props), ui.CreateElement(reviewBulkFooter, props)
+}
+
+type reviewBulkProps struct {
+	App                                              *appstate.App
+	Index                                            reviewIndex
+	Selected, Open                                   map[string]bool
+	Manual                                           map[string]string
+	CatFor                                           func(reviewRow) string
+	ToggleGroup, ToggleSelect                        func(string)
+	SetManual                                        func(string, string)
+	SelectReady, SelectLook, Apply, Clear, MakeRules func()
+	Notice                                           string
+	Prefs                                            prefs.Prefs
+	Focused, Revision                                int
+	ScanStrip, SetupLink                             ui.Node
+}
+
+func reviewBulkBody(p reviewBulkProps) ui.Node {
+	idx, notice, scanStrip := p.Index, p.Notice, p.ScanStrip
 	decisions := len(idx.Rows)
-	selectReadyClick := OnClick(selReady)
-	selectLookClick := OnClick(selLook)
 
 	var tiers []ui.Node
 	for _, t := range []reviewTier{tierReady, tierLook, tierNone} {
@@ -1347,49 +790,10 @@ func reviewBulkView(
 		if m == 0 {
 			continue
 		}
-		rows := make([]reviewRow, 0, m)
-		focusKey := ""
-		if focused >= 0 && focused < len(idx.Rows) {
-			focusKey = idx.Rows[focused].Group.Key
-		}
-		for _, r := range idx.Rows {
-			if r.Tier == t {
-				rows = append(rows, r)
-			}
-		}
-		var act ui.Node = Fragment()
-		switch t {
-		case tierReady:
-			act = Button(css.Class("btn btn-primary btn-sm"), Type("button"),
-				Attr("data-testid", "review-selectall-ready"), selectReadyClick,
-				uistate.T("review.selectAll", m))
-		case tierLook:
-			act = Button(css.Class("btn btn-sm"), Type("button"),
-				Attr("data-testid", "review-selectall-look"), selectLookClick,
-				uistate.T("review.selectAll", m))
-		}
-		tiers = append(tiers, Div(css.Class("rvs-tier "+tierMod(t)), Attr("data-tier", tierMod(t)),
-			Attr("role", "group"), Attr("aria-label", tierLabel(t)),
-			Div(css.Class("rvs-tier-head"),
-				Span(css.Class("rvs-tier-mark")),
-				Span(css.Class("rvs-tier-name"), tierLabel(t)),
-				Span(css.Class("rvs-tier-count"), uistate.T("review.tierCountPlain", plural(m, "merchant"), plural(c, "charge"))),
-				Span(css.Class("rvs-tier-act"), act),
-			),
-			Div(css.Class("rvs-groups"),
-				MapKeyed(rows, func(r reviewRow) any { return r.Group.Key + "#" + strconv.Itoa(rev) }, func(r reviewRow) ui.Node {
-					return ui.CreateElement(reviewGroupRow, reviewGroupRowProps{
-						Row: r, App: app, Selected: sel[r.Group.Key], Open: openG[r.Group.Key], Focused: r.Group.Key == focusKey,
-						CategoryID: catFor(r), Manual: manual[r.Group.Key] != "",
-						Prefs: pr, OnToggleOpen: toggleGroup, OnToggleSelect: toggleSelect,
-						OnCategory: setManual,
-					})
-				}),
-			),
-		))
+		tiers = append(tiers, ui.CreateElement(reviewBulkTier, reviewBulkTierProps{Bulk: p, Tier: t, Merchants: m, Charges: c}))
 	}
 
-	body := Div(
+	return Div(
 		reviewIntro(idx.Total, decisions),
 		P(css.Class("rvs-note"), uistate.T("review.collapseNote")),
 		scanStrip,
@@ -1403,44 +807,82 @@ func reviewBulkView(
 		Fragment(nodesToAny(tiers)...),
 	)
 
+}
+
+type reviewBulkTierProps struct {
+	Bulk               reviewBulkProps
+	Tier               reviewTier
+	Merchants, Charges int
+}
+
+func reviewBulkTier(props reviewBulkTierProps) ui.Node {
+	p, t, m, c := props.Bulk, props.Tier, props.Merchants, props.Charges
+	app, idx, focused, rev, pr := p.App, p.Index, p.Focused, p.Revision, p.Prefs
+	sel, openG, manual, catFor := p.Selected, p.Open, p.Manual, p.CatFor
+	toggleGroup, toggleSelect, setManual := p.ToggleGroup, p.ToggleSelect, p.SetManual
+	rows, focusKey := reviewview.TierRows(idx.Rows, t, focused)
+	selectReadyClick := OnClick(p.SelectReady)
+	selectLookClick := OnClick(p.SelectLook)
+
+	var act ui.Node = Fragment()
+	switch t {
+	case tierReady:
+		act = Button(css.Class("btn btn-primary btn-sm"), Type("button"),
+			Attr("data-testid", "review-selectall-ready"), selectReadyClick,
+			uistate.T("review.selectAll", m))
+	case tierLook:
+		act = Button(css.Class("btn btn-sm"), Type("button"),
+			Attr("data-testid", "review-selectall-look"), selectLookClick,
+			uistate.T("review.selectAll", m))
+	}
+	return Div(css.Class("rvs-tier "+tierMod(t)), Attr("data-tier", tierMod(t)),
+		Attr("role", "group"), Attr("aria-label", tierLabel(t)),
+		Div(css.Class("rvs-tier-head"),
+			Span(css.Class("rvs-tier-mark")),
+			Span(css.Class("rvs-tier-name"), tierLabel(t)),
+			Span(css.Class("rvs-tier-count"), uistate.T("review.tierCountPlain", plural(m, "merchant"), plural(c, "charge"))),
+			Span(css.Class("rvs-tier-act"), act),
+		),
+		Div(css.Class("rvs-groups"),
+			MapKeyed(rows, func(r reviewRow) any { return r.Group.Key + "#" + strconv.Itoa(rev) }, func(r reviewRow) ui.Node {
+				return ui.CreateElement(reviewGroupRow, reviewGroupRowProps{
+					Row: r, App: app, Selected: sel[r.Group.Key], Open: openG[r.Group.Key], Focused: r.Group.Key == focusKey,
+					CategoryID: catFor(r), Manual: manual[r.Group.Key] != "",
+					Prefs: pr, OnToggleOpen: toggleGroup, OnToggleSelect: toggleSelect,
+					OnCategory: setManual,
+				})
+			}),
+		),
+	)
+}
+
+func reviewBulkFooter(p reviewBulkProps) ui.Node {
 	// Footer: selection summary + the actions.
-	selMerchants, selCharges := 0, 0
-	for _, r := range idx.Rows {
-		if sel[r.Group.Key] {
-			selMerchants++
-			selCharges += len(r.Group.Items)
-		}
-	}
-	label := uistate.T("review.nothingPicked")
-	sub := uistate.T("review.pickHint")
-	confirm := uistate.T("review.confirm")
-	if selMerchants > 0 {
-		label = uistate.T("review.selectionCountPlain", plural(selMerchants, "merchant"), plural(selCharges, "charge"))
-		sub = uistate.T("review.undoAvailable")
-		confirm = uistate.T("review.confirmN", selCharges)
-	}
+	selMerchants, selCharges := reviewview.SelectionCount(p.Index.Rows, p.Selected)
+	label, sub, confirm := reviewview.Text(uistate.T).SelectionLabels(selMerchants, selCharges)
+	makeRulesClick := OnClick(p.MakeRules)
+
 	var disabled any
 	if selMerchants == 0 {
 		disabled = Attr("disabled", "disabled")
 	}
-	foot := Fragment(
+	return Fragment(
 		Span(css.Class("rvs-foot-n"), Attr("data-testid", "review-selection"),
 			Attr("role", "status"), Attr("aria-live", "polite"), label),
 		Span(css.Class("rvs-foot-sub"), sub),
-		setupLink,
+		p.SetupLink,
 		Span(css.Class("rvs-foot-acts"),
 			If(selMerchants > 0,
 				Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "review-makerule"),
-					OnClick(makeRules), uistate.T("review.makeRule"))),
+					makeRulesClick, uistate.T("review.makeRule"))),
 			Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "review-clear"),
 				disabled,
-				OnClick(clearSel), uistate.T("review.clear")),
+				OnClick(p.Clear), uistate.T("review.clear")),
 			Button(css.Class("btn btn-primary btn-sm"), Type("button"),
 				Attr("data-testid", "review-apply"), disabled,
-				OnClick(applySel), confirm),
+				OnClick(p.Apply), confirm),
 		),
 	)
-	return body, foot
 }
 
 // reviewSingleArgs is reviewSingleView's argument bag. It grew past the point
@@ -1452,13 +894,11 @@ type reviewSingleArgs struct {
 	Row    reviewRow
 	Txn    domain.Transaction
 	CatFor func(reviewRow) string
-	// Handlers. `any` because these are framework event handles, not plain funcs.
-	// PickCategory is the category <select>'s OnChange. It is threaded in rather
-	// than registered here because this function is not a component: a hook called
-	// inside it belongs to the surface's fiber and would exist only in single mode.
-	Confirm, Skip, Dismiss, NewCat, CancelAll, ToCategories, ToRules, PickCategory any
-	Notice                                                                         string
-	Prefs                                                                          prefs.Prefs
+	// Each child registers its plain callbacks at stable hook positions.
+	Confirm, Skip, Dismiss, NewCat, CancelAll func()
+	ToCategories, ToRules, PickCategory       func(ui.Event)
+	Notice                                    string
+	Prefs                                     prefs.Prefs
 	// C653: the commit scope, the size of the merchant group behind this card, and
 	// how many charges the primary action will actually write. GroupSize and
 	// Targets are separate because a one-charge merchant has a group of 1 and no
@@ -1472,43 +912,88 @@ type reviewSingleArgs struct {
 
 // reviewSingleView renders one charge with its context band and pinned actions.
 func reviewSingleView(a reviewSingleArgs) (ui.Node, ui.Node) {
-	app, idx, row, cur, catFor := a.App, a.Index, a.Row, a.Txn, a.CatFor
-	notice, pr := a.Notice, a.Prefs
-	if cur.ID == "" {
+	if a.Txn.ID == "" {
 		return P(css.Class("rvs-note"), uistate.T("review.emptySub")), Fragment()
 	}
-	kind := domain.KindExpense
-	if cur.Amount.Amount > 0 {
-		kind = domain.KindIncome
-	}
+	return ui.CreateElement(reviewSingleBody, a), ui.CreateElement(reviewSingleFooter, a)
+}
+
+func reviewSingleBody(a reviewSingleArgs) ui.Node {
+	return Div(css.Class("rvs-single"),
+		Div(ui.CreateElement(reviewSingleCard, a), ui.CreateElement(reviewSingleAssignment, a)),
+		ui.CreateElement(reviewCommitScope, a), ui.CreateElement(reviewSingleLinks, a),
+		ui.CreateElement(reviewContextBand, reviewContextBandProps{App: a.App, Index: a.Index, Row: a.Row, Txn: a.Txn, Prefs: a.Prefs}),
+	)
+}
+
+func reviewSingleCard(a reviewSingleArgs) ui.Node {
+	app, row, cur, pr := a.App, a.Row, a.Txn, a.Prefs
 	reason := reviewqueue.ReasonFor(cur)
-	canCategorize := reviewqueue.CanAssignCategory(cur)
-	// The OnChange handler is built by the SURFACE and threaded in, like every other
-	// handler in this struct. It used to be `ui.UseEvent(...)` inline here — and
-	// this function is a plain call, not a component, so that hook belonged to
-	// ReviewSurfaceBody's fiber and ran only in single mode. Hooks are matched
-	// across renders by call order per fiber, so a hook that appears in one mode and
-	// not the other is the framework's cardinal sin; it happened to be the last hook
-	// in the render, which made it harmless right up until the next hook was added
-	// after it. Same defect reviewConfirmAll was extracted to avoid, three functions
-	// down, in the same change.
+	return Div(css.Class("rvw-card"),
+		Div(css.Class("rvw-card-top"),
+			// C600: "Queued: no category yet" — a reason for being here, not a
+			// claim about the row. The bare word sat directly above a Category
+			// control that could already read "Dining" (a suggestion), so the card
+			// asserted two contradictory things about one charge with nothing to
+			// mark one as stored state and the other as a pending decision.
+			Span(css.Class("rvw-reason is-uncat"), Attr("data-testid", "review-reason"),
+				uistate.T("review.reasonLead", reviewReasonLabel(reason))),
+			Span(css.Class("rvw-date"), pr.FormatDate(cur.Date)),
+		),
+		Div(css.Class("rvw-payee"), Attr("data-testid", "review-payee"), row.Group.Merchant),
+		Div(css.Class("rvw-rawpayee"), rawPayeeOf(cur)),
+		Div(css.Class("rvw-meta"),
+			reviewMoneyNode("rvw-amount", cur.Amount),
+			If(reviewAcctName(app, cur.AccountID) != "",
+				Span(css.Class("rvw-acct"), reviewAcctName(app, cur.AccountID))),
+		),
+	)
+}
+
+func reviewSingleAssignment(a reviewSingleArgs) ui.Node {
+	row, notice := a.Row, a.Notice
+	canCategorize := reviewqueue.CanAssignCategory(a.Txn)
+	catFor := a.CatFor
 	selArgs := []any{css.Class("field"), Attr("data-testid", "review-category-select"),
 		Attr("aria-label", uistate.T("review.categoryLabel")), OnChange(a.PickCategory)}
 	if !canCategorize {
 		selArgs = append(selArgs, Attr("disabled", "disabled"))
 	}
-	selArgs = append(selArgs, categorySelectNodes(app.Categories(), kind, catFor(row))...)
+	selArgs = append(selArgs, categorySelectNodes(a.App.Categories(), reviewview.Kind(a.Txn), a.CatFor(a.Row))...)
 
-	// C653: the scope control. It only exists when there is genuinely a second
-	// scope, it defaults to the charge the card is showing, and both options carry
-	// their count — "1 selected charge" versus "122 merchant charges" — because the
-	// complaint was never the merchant-wide write itself, it was that one button
-	// silently meant either.
-	// The scope line is ALWAYS here, control or not. A merchant with one queued
-	// charge has no second scope to offer, but dropping the whole row on those
-	// cards made the card's lower half jump as you paged the queue, and — worse —
-	// left the one card where the scope is unambiguous as the one card that does
-	// not state it. So the label stays and the control is replaced by the answer.
+	return Div(css.Class("rvs-assign"),
+		Div(css.Class("rvw-assign-label"), uistate.T("review.categoryLabel")),
+		Div(css.Class("rvs-assign-row"),
+			Select(selArgs...),
+			// C556: the single card's own escape hatch to a category that does
+			// not exist yet. The control was written and wired months ago and
+			// simply never rendered here, so creating "Housing › Home
+			// maintenance" mid-review meant leaving Review, visiting Categories,
+			// returning to Transactions and reopening the queue. A button, not a
+			// <select> sentinel, for the reason catSelectNew documents.
+			Button(css.Class("btn btn-sm rvs-newcat"), Type("button"),
+				Attr("data-testid", "review-new-category"),
+				Attr("aria-label", uistate.T("review.newCategoryAria")),
+				Attr("disabled", disabledIf(!canCategorize)),
+				OnClick(a.NewCat), uistate.T("review.newCategory")),
+		),
+		If(row.HasSugg, Div(css.Class("rvs-why"), Attr("data-testid", "review-suggest-why"),
+			reviewWhy(row.Suggestion))),
+		// C600: the third axis. "Queued: no category yet" is the stored state
+		// and the select is the pending decision; this says the decision has
+		// not landed, which is what separates "has no category" from "has one
+		// nobody has confirmed". Shown only when something is actually pending.
+		If(catFor(row) != "", P(css.Class("rvs-pending"), Attr("data-testid", "review-pending-note"),
+			uistate.T("review.pendingNote"))),
+		If(!canCategorize,
+			P(css.Class("rvs-warn"), Attr("data-testid", "review-split-warn"),
+				uistate.T("review.splitNeeded"))),
+		If(notice != "", P(css.Class("rvs-notice"), Attr("role", "alert"),
+			Attr("data-testid", "review-commit-err"), notice)),
+	)
+}
+
+func reviewCommitScope(a reviewSingleArgs) ui.Node {
 	scopeLine := []any{css.Class("rvs-cscope"), Attr("data-testid", "review-commit-scope")}
 	if a.GroupSize > 1 {
 		scopeLine = append(scopeLine, uiw.Segmented(uiw.SegmentedProps{
@@ -1518,7 +1003,7 @@ func reviewSingleView(a reviewSingleArgs) (ui.Node, ui.Node) {
 				{Value: string(reviewscope.CommitCharge), Label: uistate.T("review.scopeThisCharge"),
 					TestID: "review-scope-charge"},
 				{Value: string(reviewscope.CommitMerchant),
-					Label:  uistate.T("review.scopeAllMerchant", a.GroupSize, strings.TrimSpace(row.Group.Merchant)),
+					Label:  uistate.T("review.scopeAllMerchant", a.GroupSize, reviewview.MerchantName(a.Row)),
 					TestID: "review-scope-merchant"},
 			},
 			OnSelect: a.OnCommitScope,
@@ -1529,19 +1014,14 @@ func reviewSingleView(a reviewSingleArgs) (ui.Node, ui.Node) {
 			Span(css.Class("rvs-cscope-fixed"), Attr("data-testid", "review-scope-only"),
 				uistate.T("review.scopeThisCharge")))
 	}
-	scopePicker := Div(scopeLine...)
+	return Div(scopeLine...)
 
-	// C559: the corrections that legitimately leave this surface, each naming
-	// where it goes. The return crumb they leave brings back this card, this
-	// scope and this ledger filter.
-	// The ↗ and the accessible name both say these LEAVE. They sit a few
-	// millimetres from "New category", which looks identical and does not leave, so
-	// a user who has just created a category without losing their place has every
-	// reason to expect the same here — and would find out otherwise only after the
-	// modal closed under them.
+}
+
+func reviewSingleLinks(a reviewSingleArgs) ui.Node {
 	leaveGlyph := Span(css.Class("rvs-links-out"), Attr("aria-hidden", "true"),
 		uistate.T("review.leavesReviewGlyph"))
-	crossLinks := Div(css.Class("rvs-links"), Attr("data-testid", "review-cross-links"),
+	return Div(css.Class("rvs-links"), Attr("data-testid", "review-cross-links"),
 		Span(css.Class("rvs-links-lead"), uistate.T("review.linksLead")),
 		reviewDestinationLink("review-goto-categories", "/categories", uistate.T("review.gotoCategories"),
 			uistate.T("review.leavesReviewAria", uistate.T("review.gotoCategories")), a.ToCategories, leaveGlyph),
@@ -1549,102 +1029,47 @@ func reviewSingleView(a reviewSingleArgs) (ui.Node, ui.Node) {
 			uistate.T("review.leavesReviewAria", uistate.T("review.gotoRules")), a.ToRules, leaveGlyph),
 	)
 
-	body := Div(css.Class("rvs-single"),
-		Div(
-			Div(css.Class("rvw-card"),
-				Div(css.Class("rvw-card-top"),
-					// C600: "Queued: no category yet" — a reason for being here, not a
-					// claim about the row. The bare word sat directly above a Category
-					// control that could already read "Dining" (a suggestion), so the card
-					// asserted two contradictory things about one charge with nothing to
-					// mark one as stored state and the other as a pending decision.
-					Span(css.Class("rvw-reason is-uncat"), Attr("data-testid", "review-reason"),
-						uistate.T("review.reasonLead", reviewReasonLabel(reason))),
-					Span(css.Class("rvw-date"), pr.FormatDate(cur.Date)),
-				),
-				Div(css.Class("rvw-payee"), Attr("data-testid", "review-payee"), row.Group.Merchant),
-				Div(css.Class("rvw-rawpayee"), rawPayeeOf(cur)),
-				Div(css.Class("rvw-meta"),
-					reviewMoneyNode("rvw-amount", cur.Amount),
-					If(reviewAcctName(app, cur.AccountID) != "",
-						Span(css.Class("rvw-acct"), reviewAcctName(app, cur.AccountID))),
-				),
-			),
-			Div(css.Class("rvs-assign"),
-				Div(css.Class("rvw-assign-label"), uistate.T("review.categoryLabel")),
-				Div(css.Class("rvs-assign-row"),
-					Select(selArgs...),
-					// C556: the single card's own escape hatch to a category that does
-					// not exist yet. The control was written and wired months ago and
-					// simply never rendered here, so creating "Housing › Home
-					// maintenance" mid-review meant leaving Review, visiting Categories,
-					// returning to Transactions and reopening the queue. A button, not a
-					// <select> sentinel, for the reason catSelectNew documents.
-					Button(css.Class("btn btn-sm rvs-newcat"), Type("button"),
-						Attr("data-testid", "review-new-category"),
-						Attr("aria-label", uistate.T("review.newCategoryAria")),
-						Attr("disabled", disabledIf(!canCategorize)),
-						OnClick(a.NewCat), uistate.T("review.newCategory")),
-				),
-				If(row.HasSugg, Div(css.Class("rvs-why"), Attr("data-testid", "review-suggest-why"),
-					reviewWhy(row.Suggestion))),
-				// C600: the third axis. "Queued: no category yet" is the stored state
-				// and the select is the pending decision; this says the decision has
-				// not landed, which is what separates "has no category" from "has one
-				// nobody has confirmed". Shown only when something is actually pending.
-				If(catFor(row) != "", P(css.Class("rvs-pending"), Attr("data-testid", "review-pending-note"),
-					uistate.T("review.pendingNote"))),
-				If(!canCategorize,
-					P(css.Class("rvs-warn"), Attr("data-testid", "review-split-warn"),
-						uistate.T("review.splitNeeded"))),
-				If(notice != "", P(css.Class("rvs-notice"), Attr("role", "alert"),
-					Attr("data-testid", "review-commit-err"), notice)),
-			),
-		),
-		scopePicker,
-		crossLinks,
-		ui.CreateElement(reviewContextBand, reviewContextBandProps{App: app, Index: idx, Row: row, Txn: cur, Prefs: pr}),
-	)
+}
 
-	// C653: every action label carries its own count, so nothing on this card
-	// promises one scope and performs another.
-	confirmLabel := uistate.T("review.categorizeNext")
-	snoozeLabel, dismissLabel := uistate.T("review.snooze"), uistate.T("review.dismiss")
-	if a.Targets > 1 {
-		confirmLabel = uistate.T("review.categorizeAllN", a.Targets)
-		snoozeLabel = uistate.T("review.snoozeN", a.Targets)
-		dismissLabel = uistate.T("review.dismissN", a.Targets)
-	}
+func reviewSingleActions(a reviewSingleArgs) ui.Node {
+	canCategorize := reviewqueue.CanAssignCategory(a.Txn)
+	confirmLabel, snoozeLabel, dismissLabel := reviewview.Text(uistate.T).ActionLabels(a.Targets)
+	confirmClick := OnClick(a.Confirm)
 	var commitControl ui.Node
 	if canCategorize {
 		commitControl = Button(css.Class("btn btn-primary btn-sm"), Type("button"),
-			Attr("data-testid", "review-commit"), OnClick(a.Confirm), confirmLabel)
+			Attr("data-testid", "review-commit"), confirmClick, confirmLabel)
 	} else {
 		commitControl = Span(css.Class("rvs-warn"), Attr("data-testid", "review-split-action"), uistate.T("review.splitNeeded"))
 	}
-	acts := Span(css.Class("rvs-foot-acts"),
+	return Span(css.Class("rvs-foot-acts"),
 		Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "review-dismiss"),
 			OnClick(a.Dismiss), dismissLabel),
 		Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "review-skip"),
 			OnClick(a.Skip), snoozeLabel),
 		commitControl,
 	)
+}
+
+func reviewSingleFooter(a reviewSingleArgs) ui.Node {
+	app, idx, row, pr, catFor := a.App, a.Index, a.Row, a.Prefs, a.CatFor
+	canCategorize := reviewqueue.CanAssignCategory(a.Txn)
+	acts := ui.CreateElement(reviewSingleActions, a)
 	if canCategorize && a.Confirming {
 		acts = ui.CreateElement(reviewConfirmAll, reviewConfirmAllProps{
 			Targets:  a.Targets,
-			Merchant: strings.TrimSpace(row.Group.Merchant),
+			Merchant: reviewview.MerchantName(row),
 			Category: reviewCatName(app, catFor(row)),
 			Facts:    reviewGroupFacts(row, pr),
 			OnCancel: a.CancelAll, OnGo: a.Confirm,
 		})
 	}
-	foot := Fragment(
+	return Fragment(
 		Span(css.Class("rvs-foot-sub"), Attr("data-testid", "review-progress"),
 			uistate.T("review.leftCount", idx.Total)),
 		Span(css.Class("rvs-hidden"), Attr("data-testid", "review-total"), strconv.Itoa(idx.Total)),
 		acts,
 	)
-	return body, foot
 }
 
 // reviewAISetupLink keeps the Smart+ key invitation discoverable without taking
@@ -1659,13 +1084,14 @@ func reviewAISetupLink(onClick any) ui.Node {
 // isPlainLeftClick keeps link side effects scoped to the same clicks that the global
 // router interceptor handles. Modified clicks remain native and leave this surface intact.
 func isPlainLeftClick(e ui.Event) bool {
-	jsEvent := e.JSValue()
-	button := jsEvent.Get("button")
-	if button.Type() == js.TypeNumber && button.Int() != 0 {
-		return false
+	event := e.JSValue()
+	button := event.Get("button")
+	numeric := button.Type() == js.TypeNumber
+	value := 0
+	if numeric {
+		value = button.Int()
 	}
-	return !jsEvent.Get("metaKey").Truthy() && !jsEvent.Get("ctrlKey").Truthy() &&
-		!jsEvent.Get("shiftKey").Truthy() && !jsEvent.Get("altKey").Truthy()
+	return reviewview.PlainLeftClick(value, numeric, event.Get("metaKey").Truthy(), event.Get("ctrlKey").Truthy(), event.Get("shiftKey").Truthy(), event.Get("altKey").Truthy())
 }
 
 // reviewDestinationLink renders a cross-surface destination as a real router link.
@@ -1744,35 +1170,9 @@ func reviewConfirmAll(props reviewConfirmAllProps) ui.Node {
 // date range stretching back further than they expected, is how you notice the
 // button is aimed at more than you meant.
 func reviewGroupFacts(row reviewRow, pr prefs.Prefs) string {
-	items := row.Group.Items
-	if len(items) == 0 {
-		return ""
-	}
-	var total int64
-	first, last := items[0].Date, items[0].Date
-	cur := items[0].Amount.Currency
-	for _, t := range items {
-		total += t.Amount.Amount
-		if t.Date.Before(first) {
-			first = t.Date
-		}
-		if t.Date.After(last) {
-			last = t.Date
-		}
-	}
-	span := pr.FormatDate(first)
-	if !first.Equal(last) {
-		span = uistate.T("review.dateRange", pr.FormatDate(first), pr.FormatDate(last))
-	}
-	return uistate.T("review.applyAllFacts", reviewMoneyText(money.Money{Amount: total, Currency: cur}), span)
+	return reviewview.Text(uistate.T).GroupFacts(row, pr, reviewMoneyText)
 }
 
 func reviewReasonLabel(r reviewqueue.Reason) string {
-	switch r {
-	case reviewqueue.ReasonFlagged:
-		return uistate.T("review.reasonFlagged")
-	case reviewqueue.ReasonSplitUnbalanced:
-		return uistate.T("review.reasonSplit")
-	}
-	return uistate.T("review.reasonUncategorized")
+	return reviewview.Text(uistate.T).ReasonLabel(r)
 }
