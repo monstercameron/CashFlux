@@ -90,6 +90,14 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Static files cannot escape their folder (CI2).** The self-host portal and console serve files through a contained
+  filesystem, rejecting `..`, encoded traversal, backslashes and drive paths; the operator command-line tools clean and
+  validate the paths they are given.
+- **Unusual flags come from the new detector (UNU3).** The Smart engine and the Transactions row flag now use the
+  merchant-first detector with its four signals; your existing on/off and mute choices carry over, old dismissals do not,
+  and debt-payment principal is never flagged as spending.
+- **Import profiles are always tied to a workspace (IMPB.1),** and debt-payment links and rules now travel with the
+  dataset through saves, exports, backups and sync, and are cleaned up when a transaction or account is deleted (DS1).
 - **Money arithmetic can no longer silently overflow or round (MONEY1).** `internal/money` now has checked add, subtract,
   negate, absolute value, multiply, multiply-then-divide with an explicit rounding mode, ceiling division and sums that
   return an error instead of wrapping; exact decimal parsing that rejects excess precision and out-of-range values

@@ -73,9 +73,12 @@ func normalizeMoneyStyle(style MoneyStyle) MoneyStyle {
 func moneyFigMagnitude(amount int64, decimals int) string {
 	var magnitude uint64
 	if amount < 0 {
-		magnitude = uint64(-(amount + 1)) + 1
+		// amount+1 is representable even for MinInt64, so this negation is safe;
+		// its result is non-negative before conversion to uint64.
+		magnitude = uint64(-(amount + 1)) + 1 // #nosec G115 -- adding one before negation keeps MinInt64 representable; the negated value is non-negative and fits uint64.
 	} else {
-		magnitude = uint64(amount)
+		// The branch proves amount is in [0, MaxInt64], within uint64's range.
+		magnitude = uint64(amount) // #nosec G115 -- this branch restricts amount to non-negative int64, which is within uint64's range.
 	}
 	if decimals <= 0 {
 		return money.Group(strconv.FormatUint(magnitude, 10))

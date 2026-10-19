@@ -4,9 +4,6 @@ package server
 
 import (
 	"net/http"
-	"os"
-	"path/filepath"
-	"strings"
 	"time"
 )
 
@@ -15,17 +12,7 @@ import (
 // served directly, and unknown sub-paths fall back to index.html for SPA routing.
 // The same path-traversal guard as consoleHandler applies.
 func portalHandler(cfg Config) http.Handler {
-	dir := cfg.PortalDir
-	fs := http.FileServer(http.Dir(dir))
-	return http.StripPrefix("/portal/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		rel := filepath.Clean("/" + filepath.FromSlash(strings.TrimPrefix(r.URL.Path, "/")))
-		path := filepath.Join(dir, rel)
-		if _, err := os.Stat(path); os.IsNotExist(err) {
-			http.ServeFile(w, r, filepath.Join(dir, "index.html"))
-			return
-		}
-		fs.ServeHTTP(w, r)
-	}))
+	return spaStaticHandler("/portal/", cfg.PortalDir)
 }
 
 // MeResponse is the customer portal's one-call dashboard payload: the authenticated

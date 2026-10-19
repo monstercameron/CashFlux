@@ -14,7 +14,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/checkpoints"
@@ -33,7 +35,16 @@ type row struct {
 }
 
 func main() {
-	raw, err := os.ReadFile(os.Args[1])
+	if len(os.Args) != 2 {
+		fmt.Fprintln(os.Stderr, "usage: timeline <dump.b64>")
+		os.Exit(2)
+	}
+	path, err := inputPath(os.Args[1])
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "input path: %v\n", err)
+		os.Exit(2)
+	}
+	raw, err := os.ReadFile(path) // #nosec G304 -- this operator diagnostic intentionally reads the named dump after inputPath cleans and validates it.
 	if err != nil {
 		panic(err)
 	}
@@ -125,6 +136,24 @@ func main() {
 			r.when[:19], trunc(r.user, 23), r.ver, r.txns, r.cats, r.last,
 			float64(r.net)/100, float64(r.checking)/100, float64(r.apple)/100, r.note)
 	}
+}
+
+func inputPath(name string) (string, error) {
+	if strings.TrimSpace(name) == "" {
+		return "", fmt.Errorf("path is empty")
+	}
+	clean, err := filepath.Abs(filepath.Clean(name))
+	if err != nil {
+		return "", fmt.Errorf("resolve %q: %w", name, err)
+	}
+	info, err := os.Stat(clean)
+	if err != nil {
+		return "", fmt.Errorf("stat %q: %w", clean, err)
+	}
+	if !info.Mode().IsRegular() {
+		return "", fmt.Errorf("%q is not a regular file", clean)
+	}
+	return clean, nil
 }
 
 func decrypt(blob, pass []byte) ([]byte, error) {

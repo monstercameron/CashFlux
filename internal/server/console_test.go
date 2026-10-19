@@ -99,6 +99,58 @@ func TestConsoleHandlerSPAFallback(t *testing.T) {
 	}
 }
 
+func TestStaticHandlersRejectTraversal(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte("console"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		name string
+		path string
+	}{
+		{name: "dot dot", path: "/console/../etc/passwd"},
+		{name: "encoded dot dot", path: "/console/%2e%2e/etc/passwd"},
+		{name: "backslash", path: "/console/..%5c..%5cetc/passwd"},
+		{name: "literal backslash", path: "/console/..\\..\\etc/passwd"},
+		{name: "drive path", path: "/console/C:%5cWindows%5cwin.ini"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			for name, handler := range map[string]http.Handler{
+				"console": consoleHandler(Config{ConsoleDir: dir}),
+				"portal":  portalHandler(Config{PortalDir: dir}),
+			} {
+				path := strings.Replace(tc.path, "/console/", "/"+name+"/", 1)
+				req := httptest.NewRequest(http.MethodGet, path, nil)
+				rr := httptest.NewRecorder()
+				handler.ServeHTTP(rr, req)
+				if rr.Code != http.StatusBadRequest {
+					t.Errorf("%s status = %d, want 400 (body %q)", name, rr.Code, rr.Body.String())
+				}
+			}
+		})
+	}
+}
+
+func TestStaticHandlersDoNotUseSPAFallbackForMissingAsset(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte("console"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	for name, handler := range map[string]http.Handler{
+		"console": consoleHandler(Config{ConsoleDir: dir}),
+		"portal":  portalHandler(Config{PortalDir: dir}),
+	} {
+		path := "/" + name + "/missing.js"
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+		if rr.Code != http.StatusNotFound {
+			t.Errorf("%s asset status = %d, want 404", name, rr.Code)
+		}
+	}
+}
+
 func TestConsoleRedirectNoTrailingSlash(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte("<!doctype html><html><body>console</body></html>"), 0644); err != nil {

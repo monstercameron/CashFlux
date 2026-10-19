@@ -105,11 +105,18 @@ func joinLengthPrefixed(parts ...[]byte) []byte {
 	out := make([]byte, 0, total)
 	var lenBuf [4]byte
 	for _, p := range parts {
-		binary.BigEndian.PutUint32(lenBuf[:], uint32(len(p)))
+		binary.BigEndian.PutUint32(lenBuf[:], aadLength(uint64(len(p))))
 		out = append(out, lenBuf[:]...)
 		out = append(out, p...)
 	}
 	return out
+}
+
+func aadLength(length uint64) uint32 {
+	if length > uint64(^uint32(0)) {
+		panic("keyring: AAD field exceeds 32-bit length prefix")
+	}
+	return uint32(length) // #nosec G115 -- the preceding bound check proves length is representable as uint32.
 }
 
 // newGCM returns an AES-256-GCM AEAD for a 32-byte key.

@@ -4,9 +4,13 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
+	"io/fs"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 )
@@ -15,21 +19,59 @@ import (
 // SPA from cfg.ConsoleDir under the /console/ prefix.
 // Unknown sub-paths (non-asset requests) fall back to index.html for SPA routing.
 func consoleHandler(cfg Config) http.Handler {
-	dir := cfg.ConsoleDir
-	fs := http.FileServer(http.Dir(dir))
-	return http.StripPrefix("/console/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Serve the file if it exists; fall back to index.html for SPA routes.
-		// Clean the request path as if rooted at "/" BEFORE joining, so a crafted
-		// "../.." can't escape ConsoleDir (path traversal). filepath.Clean("/"+rel)
-		// collapses any leading "../" against the root, keeping the join contained.
-		rel := filepath.Clean("/" + filepath.FromSlash(strings.TrimPrefix(r.URL.Path, "/")))
-		path := filepath.Join(dir, rel)
-		if _, err := os.Stat(path); os.IsNotExist(err) {
-			http.ServeFile(w, r, filepath.Join(dir, "index.html"))
+	return spaStaticHandler("/console/", cfg.ConsoleDir)
+}
+
+// spaStaticHandler serves files from dir while keeping every request inside its
+// fs.FS root. Missing extensionless paths use index.html for client-side routes.
+func spaStaticHandler(prefix, dir string) http.Handler {
+	root, err := fs.Sub(os.DirFS(dir), ".")
+	if err != nil {
+		return http.NotFoundHandler()
+	}
+	files := http.FileServer(http.FS(root))
+	return http.StripPrefix(prefix, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rel := strings.TrimPrefix(r.URL.Path, "/")
+		if !safeStaticPath(r.URL, rel) {
+			http.Error(w, "invalid path", http.StatusBadRequest)
 			return
 		}
-		fs.ServeHTTP(w, r)
+		clean := path.Clean(rel)
+		if clean == "." {
+			clean = "index.html"
+		}
+		if _, err := fs.Stat(root, clean); err == nil {
+			files.ServeHTTP(w, r)
+			return
+		} else if !errors.Is(err, fs.ErrNotExist) {
+			http.NotFound(w, r)
+			return
+		}
+		if path.Ext(clean) != "" {
+			http.NotFound(w, r)
+			return
+		}
+		fallback := r.Clone(r.Context())
+		fallback.URL.Path = "/"
+		files.ServeHTTP(w, fallback)
 	}))
+}
+
+func safeStaticPath(u *url.URL, rel string) bool {
+	if u == nil || strings.ContainsAny(rel, "\\") || strings.HasPrefix(rel, "/") || filepath.IsAbs(rel) || filepath.VolumeName(rel) != "" {
+		return false
+	}
+	for _, segment := range strings.Split(rel, "/") {
+		if segment == ".." {
+			return false
+		}
+	}
+	// URL.Path is decoded by net/http. Also reject a raw encoded separator so
+	// alternate parsing by a proxy cannot turn a checked name into traversal.
+	if strings.Contains(strings.ToLower(u.RawPath), "%5c") {
+		return false
+	}
+	return true
 }
 
 // devCredsResponse is the JSON body returned by GET /console/devcreds.

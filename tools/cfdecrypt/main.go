@@ -19,6 +19,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/cryptobox"
@@ -34,7 +35,10 @@ func main() {
 		fmt.Println("usage: cfdecrypt <envelope-file> [--write plain.json]")
 		os.Exit(2)
 	}
-	path := os.Args[1]
+	path, err := inputPath(os.Args[1])
+	if err != nil {
+		fail("input path: %v", err)
+	}
 	var writeTo string
 	for i := 2; i < len(os.Args)-1; i++ {
 		if os.Args[i] == "--write" {
@@ -42,7 +46,7 @@ func main() {
 		}
 	}
 
-	raw, err := os.ReadFile(path)
+	raw, err := os.ReadFile(path) // #nosec G304 -- the operator explicitly supplies the recovery file; inputPath cleans and validates it as a regular file.
 	if err != nil {
 		fail("read %s: %v", path, err)
 	}
@@ -137,11 +141,49 @@ func main() {
 	fmt.Printf("  artifacts         %d\n", len(ds.Artifacts))
 
 	if writeTo != "" {
-		if err := os.WriteFile(writeTo, plain, 0o600); err != nil {
+		writeTo, err = outputPath(writeTo)
+		if err != nil {
+			fail("output path: %v", err)
+		}
+		if err := os.WriteFile(writeTo, plain, 0o600); err != nil { // #nosec G304 -- the operator explicitly names the recovery output; outputPath makes it absolute and clean.
 			fail("write %s: %v", writeTo, err)
 		}
 		fmt.Printf("\nwrote decrypted dataset to %s (mode 0600)\n", writeTo)
 	}
+}
+
+func inputPath(name string) (string, error) {
+	if strings.TrimSpace(name) == "" {
+		return "", fmt.Errorf("path is empty")
+	}
+	clean, err := filepath.Abs(filepath.Clean(name))
+	if err != nil {
+		return "", fmt.Errorf("resolve %q: %w", name, err)
+	}
+	info, err := os.Stat(clean)
+	if err != nil {
+		return "", fmt.Errorf("stat %q: %w", clean, err)
+	}
+	if !info.Mode().IsRegular() {
+		return "", fmt.Errorf("%q is not a regular file", clean)
+	}
+	return clean, nil
+}
+
+func outputPath(name string) (string, error) {
+	if strings.TrimSpace(name) == "" {
+		return "", fmt.Errorf("path is empty")
+	}
+	clean, err := filepath.Abs(filepath.Clean(name))
+	if err != nil {
+		return "", fmt.Errorf("resolve %q: %w", name, err)
+	}
+	if info, err := os.Stat(clean); err == nil && !info.Mode().IsRegular() {
+		return "", fmt.Errorf("%q is not a regular file", clean)
+	} else if err != nil && !os.IsNotExist(err) {
+		return "", fmt.Errorf("stat %q: %w", clean, err)
+	}
+	return clean, nil
 }
 
 func fail(format string, args ...any) {
