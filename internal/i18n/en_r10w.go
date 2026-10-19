@@ -5,7 +5,7 @@ package i18n
 var r10wKeys = Catalog{
 	"r10w.choose":           "Choose…",
 	"r10w.chooseCategory":   "Choose a category",
-	"r10w.categoryFiled":    "Filed under %s. Undo",
+	"r10w.categoryFiled":    "Filed under %s",
 	"r10w.suggestionInline": "%s?",
 }
 

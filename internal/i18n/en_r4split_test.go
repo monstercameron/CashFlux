@@ -10,7 +10,7 @@ func TestR4SplitEnglishCopy(t *testing.T) {
 		"splitEditor.left":        "Left to assign: $64.00",
 		"splitEditor.ownerColumn": "Who",
 		"splitEditor.newCategory": "New category",
-		"splitEditor.cellLabel":   "Split · 2 categories",
+		"splitEditor.cellLabel":   "2 categories",
 		"splitEditor.r4Saved":     "Split saved",
 	} {
 		got := english[key]

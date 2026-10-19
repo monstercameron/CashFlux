@@ -41,7 +41,7 @@ var txnAuditKeys = Catalog{
 	"transactions.bulkClearCatTitle":   "Remove the category from the selected transactions, leaving them uncategorized.",
 	"transactions.bulkClearCatConfirm": "Clear the category on %d? They become uncategorized, so they drop out of every category budget and report until you file them again.",
 	"transactions.bulkOpClearedCat":    "Cleared the category on %d",
-	"transactions.bulkCatApplied":      "Set %d transactions to %s",
+	"transactions.bulkCatApplied":      "%d updated; filed under %s",
 
 	// --- C562: excluding from reports is a reporting change, so it asks ---------
 	"transactions.excludeConfirm":    "Exclude “%s” from budgets and reports? The account balance stays the same. This transaction is left out of budgets and reports.",

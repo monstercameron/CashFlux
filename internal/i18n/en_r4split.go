@@ -7,7 +7,7 @@ func init() {
 		"splitEditor.left":        "Left to assign: %s",
 		"splitEditor.ownerColumn": "Who",
 		"splitEditor.newCategory": "New category",
-		"splitEditor.cellLabel":   "Split · %d categories",
+		"splitEditor.cellLabel":   "%d categories",
 		"splitEditor.r4Saved":     "Split saved",
 	} {
 		english[key] = value

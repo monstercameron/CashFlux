@@ -18,7 +18,7 @@ var wseries1Keys = Catalog{
 	// C364 — the undo story. %s = the per-op summary (e.g. "12 transactions
 	// recategorized"). The trailing clause is the same everywhere so the reversal
 	// path reads consistently: keyboard undo, or the full history in Activity.
-	"toast.undoStory":    "%s · Undo (Ctrl+Z) · View in Activity",
+	"toast.undoStory":    "%s",
 	"activity.viewLink":  "View in Activity",
 	"activity.viewTitle": "Open the Activity timeline to review or undo this change",
 

@@ -29,7 +29,7 @@ var txnScopeKeys = Catalog{
 	"transactions.scopeMoved": "%s transferred between your accounts",
 	// The counterpart is not in THIS VIEW. It may exist outside the filter, so the
 	// wording describes the view rather than accusing the data of being broken.
-	"transactions.scopeUnpaired": "%d transfers have a hidden other side",
+	"transactions.scopeUnpaired": "%d transfers are missing their other account",
 
 	// The member lens, shown as its own chip rather than folded in with the page's
 	// filters — it comes from the top bar and its ✕ clears the top bar, not a filter.
@@ -44,7 +44,7 @@ var txnScopeKeys = Catalog{
 
 	// One reset, and it counts what it will remove. The toolbar's second "Clear
 	// filters" button did exactly the same thing as this and is gone.
-	"transactions.clearAllFiltersN": "Clear all %s",
+	"transactions.clearAllFiltersN": "Clear %s",
 
 	// The review backlog is measured across the whole household; the ledger beside
 	// it usually is not. The button says so on hover and to assistive tech.
@@ -75,7 +75,7 @@ var txnScopeKeys = Catalog{
 	"transactions.addFromFile": "Many at once",
 	// The global "+" menu names the same three kinds the page's Add menu does, so a
 	// user meets one vocabulary wherever they start (C573).
-	"addmenu.expense": "Expense — money going out",
+	"addmenu.expense": "Expense",
 	"addmenu.income":  "Income — money coming in",
 	// C604: headings that sort eleven creation actions by JOB. Money that moved
 	// leads and needs no heading; these two mark where the everyday stops.

@@ -90,6 +90,7 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- Clarify transaction, split, transfer, filter and Undo messages.
 - Validate receipt currency against its account and reject overflowing receipt totals.
 - Recognize international statement and CSV headers, including separate debit and credit columns.
 - **The transaction Link dialog is split into small components backed by a tested txnlink package (CSLINK).** No visible change.

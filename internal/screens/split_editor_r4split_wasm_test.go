@@ -109,7 +109,7 @@ func TestR4SplitCellLabelIncludesCategoryCountAndAmounts(t *testing.T) {
 	}}
 	label, tooltip := splitCellLabel(tx)
 	wantTooltip := fmtMoney(money.New(-2400, "USD")) + ", " + fmtMoney(money.New(-4000, "USD"))
-	if label != "Split · 2 categories" || tooltip != wantTooltip {
+	if label != "2 categories" || tooltip != wantTooltip {
 		t.Fatalf("split cell = (%q, %q), want compact count and both amounts", label, tooltip)
 	}
 }

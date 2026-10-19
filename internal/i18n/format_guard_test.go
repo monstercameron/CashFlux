@@ -52,10 +52,10 @@ func TestEverySmartCatalogKeyFormatsWithRepresentativeArguments(t *testing.T) {
 	}
 }
 
-func TestBV7ISmartU1TitleFormatsItsFeatureArgument(t *testing.T) {
+func TestBV7ISmartU1TitleFormatsItsFeatureArguments(t *testing.T) {
 	bundle := DefaultBundle()
-	got := bundle.T(English, "smart.u1.title", "Coffee shop")
-	if strings.Contains(got, "%!") || got != "Unusually large charge from Coffee shop" {
+	got := bundle.T(English, "smart.u1.title", "Coffee shop", "$120.00")
+	if strings.Contains(got, "%!") || got != "Coffee shop charge: $120.00" {
 		t.Fatalf("smart.u1.title formatted incorrectly: %q", got)
 	}
 }

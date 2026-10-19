@@ -93,7 +93,7 @@ func TestUXT5SplitCellUsesSharedLabelAndAmountsTooltip(t *testing.T) {
 		{CategoryID: "home", Amount: money.New(-2400, "USD")},
 	}}
 	label, tooltip := splitCellLabel(tx)
-	if label != "Split · 2 categories" || !strings.Contains(tooltip, "$40.00") || !strings.Contains(tooltip, "$24.00") {
+	if label != "2 categories" || !strings.Contains(tooltip, "$40.00") || !strings.Contains(tooltip, "$24.00") {
 		t.Fatalf("split label/tooltip = %q / %q", label, tooltip)
 	}
 	f := render.New(t)
