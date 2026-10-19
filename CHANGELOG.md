@@ -90,6 +90,9 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Transactions copy and the upcoming strip (TV7E.1, TC4N11).** "Search all dates" hides at zero, one filter reads "Clear
+  filter", the no-match hint appears only with other filters, the transfer "None" option explains itself, member roles show on
+  their own line, upcoming bills name their due date, and the overflow menu behaves.
 - **Calendar and summary agree (TC4N3, TC4N4).** Calendar cells, week totals and the summary strip pair transfers with FX the
   same way and treat excluded rows alike; a parity test checks summary, count line and calendar for one period.
 - **Bills due today stay in the upcoming strip in every time zone (TC4N1).**

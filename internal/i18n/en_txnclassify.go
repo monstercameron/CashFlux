@@ -40,7 +40,7 @@ var txnClassifyKeys = Catalog{
 	// The picker itself. Its first option is the way OUT of the classification,
 	// so it has to read as a real answer rather than an empty slot.
 	"transactions.classifyLabel": "Account on the other side",
-	"transactions.classifyNone":  "None — this is income or spending",
+	"transactions.classifyNone":  "None (income or spending)",
 	"transactions.classifyHint":  "Money you move between your own accounts was not earned or spent, so it drops out of income, spending, budgets and reports. Balances do not change either way.",
 	// C673: the sign is a property of the LEG, not a classification. The same move
 	// is negative where it left and positive where it arrived, so a reader looking

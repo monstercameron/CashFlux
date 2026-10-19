@@ -6,6 +6,7 @@ package screens
 
 import (
 	"strings"
+	"syscall/js"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -41,7 +42,7 @@ func txnUpcomingInline(struct{}) ui.Node {
 	// Hooks first and unconditionally, before any early return: the framework tracks
 	// hooks positionally, so a return above one shifts every later render's slots.
 	expanded := ui.UseState(uistate.KVGet(txnUpcomingOpenKV) == "1")
-	toggle := ui.UseEvent(Prevent(func() {
+	toggleAction := func() {
 		next := !expanded.Get()
 		expanded.Set(next)
 		v := "0"
@@ -50,23 +51,21 @@ func txnUpcomingInline(struct{}) ui.Node {
 		}
 		uistate.KVSet(txnUpcomingOpenKV, v)
 		uistate.RequestPersist()
-	}))
+	}
+	toggle := ui.UseEvent(Prevent(toggleAction))
 	open := expanded.Get()
 	if app == nil {
 		return Fragment()
 	}
 
-	now := time.Now()
+	now := dateutil.WallClockUTC(time.Now())
 	// C560: the strip is "what is about to hit THIS month". When the ledger is paged
 	// to a period that does not contain today, that band is answering a question the
 	// page is not asking — a row of future charges floating over March 2025 reads as
 	// part of that month. Nothing about a past period is upcoming, so the strip steps
 	// aside rather than projecting the present onto it.
-	if s := txnscope.Of(filterAtom.Get().From, filterAtom.Get().To, now); s.Kind != txnscope.All {
-		if (!s.From.IsZero() && now.Before(s.From)) ||
-			(!s.To.IsZero() && now.After(s.To.AddDate(0, 0, 1))) {
-			return Fragment()
-		}
+	if !txnUpcomingScopeIncludes(txnscope.Of(filterAtom.Get().From, filterAtom.Get().To, now), now) {
+		return Fragment()
 	}
 	monthEnd := dateutil.AddMonths(dateutil.MonthStart(now), 1)
 	all := bills.UpcomingAll(app.Accounts(), app.Recurring(), now)
@@ -151,27 +150,104 @@ func txnUpcomingInline(struct{}) ui.Node {
 			total = sum
 		}
 	}
-	// The magnitude, not the accounting negative: "($1,767.00) still to come" reads
-	// as a credit. The itemised rows below keep the parenthesised outflow form,
-	// where a column of figures is being compared.
-	summary := txnUpcomingSummary(len(pending), fmtMoney(total))
+	// State the date alongside the due amount so the collapsed band carries a
+	// useful date rather than requiring the reader to open it.
+	summary := txnUpcomingDueSummary(pending, fmtMoney(total), pr.FormatDate)
 
 	content := Div(css.Class("txn-upcoming-rows txn-count-upcoming-rows"), rows,
 		Span(css.Class("t-caption", tw.TextDim), uistate.T("transactions.upcomingNote")),
 		txnUpcomingScheduleLink())
-	return txnUpcomingDisclosure(open, summary, toggle, content)
+	return txnUpcomingDisclosure(open, summary, toggle, content, toggleAction)
 }
 
-func txnUpcomingDisclosure(open bool, summary string, toggle ui.Handler, content ui.Node) ui.Node {
-	return Div(ClassStr("txn-count-upcoming"+collapsedClass(open)),
+type txnUpcomingDisclosureProps struct {
+	open         bool
+	summary      string
+	toggle       ui.Handler
+	content      ui.Node
+	toggleAction func()
+}
+
+func txnUpcomingDisclosure(open bool, summary string, toggle ui.Handler, content ui.Node, toggleAction ...func()) ui.Node {
+	var action func()
+	if len(toggleAction) > 0 {
+		action = toggleAction[0]
+	}
+	return ui.CreateElement(txnUpcomingDisclosureComponent, txnUpcomingDisclosureProps{
+		open: open, summary: summary, toggle: toggle, content: content, toggleAction: action,
+	})
+}
+
+func txnUpcomingDisclosureComponent(props txnUpcomingDisclosureProps) ui.Node {
+	ui.UseEffect(func() func() {
+		if props.open {
+			focusUpcomingElement("txn-upcoming-popover")
+		}
+		return nil
+	}, props.open)
+	onPopoverKey := ui.UseEvent(func(e ui.KeyboardEvent) {
+		if e.GetKey() != "Escape" {
+			return
+		}
+		e.PreventDefault()
+		if props.toggleAction != nil {
+			props.toggleAction()
+		}
+		focusUpcomingElement("txn-upcoming-toggle")
+	})
+	return Div(ClassStr("txn-count-upcoming"+collapsedClass(props.open)),
 		Attr("data-testid", "txn-upcoming-strip"),
 		Button(css.Class("btn-link txn-upcoming-disc"), Type("button"),
 			Attr("data-testid", "txn-upcoming-toggle"), Attr("aria-controls", "txn-upcoming-popover"),
-			Attr("aria-expanded", ariaBool(open)), Attr("aria-label", discLabel(open, summary)),
-			OnClick(toggle), " · ", summary, " ›"),
-		If(open, Div(css.Class("txn-upcoming-popover"), Attr("id", "txn-upcoming-popover"), Attr("data-testid", "txn-upcoming-popover"),
-			Attr("data-uxt5-disclosure", "popover"), Attr("role", "dialog"), Attr("aria-label", summary), content)),
+			Attr("aria-expanded", ariaBool(props.open)), Attr("aria-label", discLabel(props.open, props.summary)),
+			OnClick(props.toggle), props.summary),
+		If(props.open, Div(css.Class("txn-upcoming-popover"), Attr("id", "txn-upcoming-popover"), Attr("data-testid", "txn-upcoming-popover"),
+			Attr("data-uxt5-disclosure", "popover"), Attr("role", "dialog"), Attr("aria-modal", "false"), Attr("aria-label", props.summary),
+			Attr("tabindex", "-1"), OnKeyDown(onPopoverKey), props.content)),
 	)
+}
+
+func txnUpcomingScopeIncludes(scope txnscope.Scope, now time.Time) bool {
+	if scope.Kind == txnscope.All {
+		return true
+	}
+	today := dateutil.CalendarDayUTC(now)
+	if !scope.From.IsZero() && today.Before(dateutil.CalendarDayUTC(scope.From)) {
+		return false
+	}
+	if !scope.To.IsZero() && today.After(dateutil.CalendarDayUTC(scope.To)) {
+		return false
+	}
+	return true
+}
+
+func focusUpcomingElement(id string) {
+	doc := js.Global().Get("document")
+	if !doc.Truthy() || doc.Get("getElementById").Type() != js.TypeFunction {
+		return
+	}
+	element := doc.Call("getElementById", id)
+	if element.Truthy() && element.Get("focus").Type() == js.TypeFunction {
+		element.Call("focus", map[string]any{"preventScroll": true})
+	}
+}
+
+func txnUpcomingDueSummary(items []bills.Bill, total string, formatDate func(time.Time) string) string {
+	if len(items) == 0 {
+		return ""
+	}
+	earliest := items[0].DueDate
+	for _, item := range items[1:] {
+		if item.DueDate.Before(earliest) {
+			earliest = item.DueDate
+		}
+	}
+	date := formatDate(earliest)
+	total = strings.TrimSuffix(total, ".00")
+	if len(items) == 1 {
+		return uistate.T("tv7e1.upcomingOne", total, date)
+	}
+	return uistate.T("tv7e1.upcomingMany", len(items), date, total)
 }
 
 func txnUpcomingSummary(count int, total string) string {

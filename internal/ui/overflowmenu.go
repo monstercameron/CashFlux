@@ -444,13 +444,7 @@ func overflowMenuItemBtn(props overflowMenuItemProps) uic.Node {
 		var cb js.Func
 		cb = js.FuncOf(func(js.Value, []js.Value) any {
 			defer cb.Release()
-			wrap := doc.Call("getElementById", itemID)
-			if wrap.Truthy() {
-				menu := wrap.Call("querySelector", ".add-submenu")
-				if menu.Truthy() {
-					focusMenuItem(menu.Call("querySelector", `[role="menuitem"]`))
-				}
-			}
+			focusOverflowSubmenu(doc, itemID)
 			return nil
 		})
 		js.Global().Call("setTimeout", cb, 0)
@@ -533,6 +527,22 @@ func overflowMenuItemBtn(props overflowMenuItemProps) uic.Node {
 	}
 	return Div(ClassStr("add-submenu-wrap"), Attr("id", itemID+"-wrap"), parent,
 		If(submenuOpen.Get(), Div(children...)))
+}
+
+// focusOverflowSubmenu moves focus into an opened submenu. The submenu is a
+// sibling of its parent button, so the lookup must start at the item's wrapper.
+func focusOverflowSubmenu(doc js.Value, itemID string) {
+	if !doc.Truthy() || doc.Get("getElementById").Type() != js.TypeFunction {
+		return
+	}
+	wrap := doc.Call("getElementById", itemID+"-wrap")
+	if !wrap.Truthy() || wrap.Get("querySelector").Type() != js.TypeFunction {
+		return
+	}
+	menu := wrap.Call("querySelector", ".add-submenu")
+	if menu.Truthy() && menu.Get("querySelector").Type() == js.TypeFunction {
+		focusMenuItem(menu.Call("querySelector", `[role="menuitem"]`))
+	}
 }
 
 func docMenuItem(id string) js.Value {

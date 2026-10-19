@@ -182,9 +182,7 @@ func txnCountLineComponent(props txnCountLineProps) ui.Node {
 		allDates := filter
 		allDates.From, allDates.To, allDates.PeriodPreset = "", "", txnfilter.PeriodAllDates
 		allCount := txnSearchAllDatesCount(allDates)
-		label := uistate.T("r4cnt.searchAllDates", txnCountNumber(allCount))
-		searchWidenAction = Button(css.Class("btn-link txn-count-search-widen"), Type("button"), Attr("data-testid", "txn-search-all-dates"),
-			searchWidenClick, label)
+		searchWidenAction = txnSearchAllDatesAction(allCount, searchWidenClick)
 	}
 	if searchWidenAction != nil {
 		band = append(band, searchWidenAction)
@@ -208,6 +206,14 @@ func txnCountLineComponent(props txnCountLineProps) ui.Node {
 	return txnCountRoot(announceFilterChange, strings.Join(accessible, ". "),
 		Div(css.Class("txn-countline", tw.MinW0), Attr("data-testid", "txn-count-line"),
 			Div(css.Class("txn-count-band"), band)))
+}
+
+func txnSearchAllDatesAction(count int, click any) ui.Node {
+	if count <= 0 {
+		return nil
+	}
+	label := uistate.T("r4cnt.searchAllDates", txnCountNumber(count))
+	return Button(css.Class("btn-link txn-count-search-widen"), Type("button"), Attr("data-testid", "txn-search-all-dates"), click, label)
 }
 
 func txnCountRoot(announce bool, sentence string, content ui.Node) ui.Node {

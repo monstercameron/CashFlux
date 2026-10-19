@@ -23,6 +23,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/debounce"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/txnfilter"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/css"
@@ -86,8 +87,20 @@ func txnNoMatch(props txnNoMatchProps) ui.Node {
 		Button(css.Class("btn btn-sm"), Type("button"),
 			Attr("data-testid", "txn-nomatch-clear"),
 			clearClick, uistate.T("action.clearSearch")),
-		P(css.Class("t-caption", tw.TextDim), uistate.T("transactions.noMatchKeepsFilters")),
+		If(txnNoMatchHasOtherFilters(filterAtom.Get()), P(css.Class("t-caption", tw.TextDim), uistate.T("transactions.noMatchKeepsFilters"))),
 	)
+}
+
+// txnNoMatchHasOtherFilters reports whether clearing a text search will leave
+// any non-search filter in place.
+func txnNoMatchHasOtherFilters(filter txnfilter.Criteria) bool {
+	return filter.Account != "" || filter.Category != "" || filter.Categories != "" ||
+		filter.Member != "" || filter.BillAccount != "" || filter.Subscription != "" ||
+		filter.Source != "" || filter.Tag != "" || filter.Accounts != "" ||
+		filter.Members != "" || filter.Sources != "" || filter.Tags != "" ||
+		filter.Cleared != "" || filter.Flow != "" || filter.CustomKey != "" ||
+		filter.CustomVal != "" || filter.AmountMin != "" || filter.AmountMax != "" ||
+		filter.Uncategorized || filter.ScopeAny
 }
 
 func txnScheduledGhostRows(items []bills.Bill, formatDate func(time.Time) string) []any {

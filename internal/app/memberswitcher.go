@@ -8,6 +8,7 @@ package app
 
 import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/memberrole"
 	"github.com/monstercameron/CashFlux/internal/scope"
@@ -77,13 +78,13 @@ func MemberSwitcher() uic.Node {
 	}
 	for _, m := range members {
 		m := m
-		role := memberrole.Label(memberrole.Resolve(m))
 		opts = append(opts, Option(
 			Value(m.ID),
 			SelectedIf(current == m.ID),
-			m.Name+" · "+role,
+			m.Name,
 		))
 	}
+	roleLine := memberSwitcherRole(current, members)
 
 	// The <select> is a VIEW LENS (scope the figures to one member's perspective),
 	// not an identity switch — label it "View as" so it no longer reads as a second
@@ -106,7 +107,11 @@ func MemberSwitcher() uic.Node {
 	// spells it out whenever a member lens is active), so the control reads as one
 	// compact standard select instead of a ~300px labelled cluster.
 	return Span(css.Class("cf-member-switcher-wrap"),
-		Select(args...),
+		Div(css.Class("cf-member-switcher-choice"),
+			Select(args...),
+			If(roleLine != "", Span(css.Class("member-switcher-role", tw.TextDim), Attr("data-testid", "member-switcher-role"),
+				Style(map[string]string{"display": "block", "fontSize": "11px", "lineHeight": "1.2"}), roleLine)),
+		),
 		Button(css.Class("icon-btn", tw.TextDim, tw.HoverTextFg),
 			Type("button"),
 			Attr("aria-label", uistate.T("profileSwitch.switchBtn")),
@@ -116,4 +121,16 @@ func MemberSwitcher() uic.Node {
 			ui.Icon(icon.Users, css.Class(tw.W5, tw.H5)),
 		),
 	)
+}
+
+func memberSwitcherRole(current string, members []domain.Member) string {
+	if current == "" || current == txnfilter.UnassignedMemberID {
+		return ""
+	}
+	for _, member := range members {
+		if member.ID == current {
+			return memberrole.Label(memberrole.Resolve(member))
+		}
+	}
+	return ""
 }
