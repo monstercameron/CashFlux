@@ -90,6 +90,10 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Goal money is allocated to budgets once (BR3GOAL).** New `goalfunded.AllocateAvailable` gives each goal's available
+  money to budgets deterministically — explicit goal–budget links first (split by observed contributions, or equally),
+  then the matching category — so the same "$420 from the Baby fund" can no longer appear in two budgets. It also flags
+  when a goal's purpose doesn't match the budget it funds. The Budgets rows adopt it in a follow-up.
 - **Review dialog is calm; the filter sheet scrolls once (UXT6).** The review dialog opens with a plain "Review categories"
   heading and a quiet "247 charges from 9 merchants" line instead of a big-number hero with an arrow, uses the app's
   accent instead of a fourth periwinkle colour, and names its first group exactly like its legend. The filter sheet is
