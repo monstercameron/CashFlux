@@ -53,8 +53,14 @@ func TestR4CalendarScheduledItemsShowAmountsAndMissedState(t *testing.T) {
 			missed = node
 		}
 	}
-	if missed == nil || !strings.Contains(missed.Attr("aria-label"), "not posted") || !strings.Contains(missed.Attr("aria-label"), "$220.00") {
-		t.Errorf("missed item's accessible description = %v, want status and amount", missed)
+	if missed == nil {
+		t.Fatal("missed scheduled item is missing")
+	}
+	if got := buttons[0].Attr("aria-label"); !strings.Contains(got, "Gym membership") || !strings.Contains(got, "$220.00") || !strings.Contains(got, "not posted") {
+		t.Errorf("missed item's day accessible name = %q, want status and amount", got)
+	}
+	if missed.Attr("aria-label") != "" || missed.Attr("title") != "" {
+		t.Errorf("missed item duplicates the day button's accessible description: aria-label=%q title=%q", missed.Attr("aria-label"), missed.Attr("title"))
 	}
 	for _, node := range f.AllByTag("div") {
 		if strings.Contains(node.Attr("class"), "txn-cal-ghost") {

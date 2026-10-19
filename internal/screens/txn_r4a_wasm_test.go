@@ -9,7 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/bills"
+	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -31,6 +33,14 @@ func TestR4APageFilterBadgeChipAndClearCountsAgree(t *testing.T) {
 }
 
 func TestR4ASearchAllDatesLinkWidensOnlyOnClick(t *testing.T) {
+	setupTxnCountCashflowFixture(t)
+	if err := appstate.Default.PutTransaction(domain.Transaction{
+		ID: "r4a-search-outside-period", AccountID: "checking",
+		Date: time.Date(2026, time.September, 15, 0, 0, 0, 0, time.UTC),
+		Desc: "Coffee outside October", Amount: money.New(-500, "USD"),
+	}); err != nil {
+		t.Fatalf("put matching transaction outside selected period: %v", err)
+	}
 	uistate.PersistTxFilter(txnfilter.Criteria{Text: "coffee", From: "2026-10-01", To: "2026-10-31", PeriodPreset: txnfilter.PeriodThisMonth})
 	f := render.New(t)
 	f.Render(txnCountLine(txnCountLineProps{Shown: 1, Total: 319, Net: money.New(0, "USD"),
@@ -41,7 +51,7 @@ func TestR4ASearchAllDatesLinkWidensOnlyOnClick(t *testing.T) {
 			link = button
 		}
 	}
-	if link == nil || !strings.Contains(link.Text(), "Search all dates (0)") {
+	if link == nil || !strings.Contains(link.Text(), "Search all dates (3)") {
 		t.Fatalf("search widen action = %v, want an explicit all-dates link", link)
 	}
 	if got := uistate.CurrentTxFilter().PeriodPreset; got != txnfilter.PeriodThisMonth {
