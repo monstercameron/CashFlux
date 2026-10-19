@@ -90,6 +90,8 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Document re-imports skip rows already in the ledger even when they carry a status (TC4N7).**
+- **Unusual-spend thresholds convert currency and each transaction yields one finding (TC4N8).**
 - **Budgets: Auto Budget opens, headline totals use one window, last month reads per period, row details explain themselves
   (BV7A, BV7C, BV7D, BV7E, BV7I, BV7J).** Auto Budget no longer crashes on open (eager error formatting removed across budget
   screens); the headline adds spending from one window only and a past month uses that month's limits; last-month view shows one

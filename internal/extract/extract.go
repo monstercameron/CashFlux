@@ -103,10 +103,11 @@ func statusString(m map[string]any) string {
 }
 
 // Signature keys a reviewed row by date, normalized amount, merchant, account,
-// currency, and any status supplied by the source.
+// and currency. Status is omitted because imported transaction status may differ
+// from the status stored in the ledger for the same transaction.
 func (r Row) Signature() string {
 	merchant := strings.ToLower(strings.Join(strings.Fields(strings.TrimSpace(r.Description)), " "))
-	return strings.TrimSpace(r.Date) + "|" + normalizeAmount(r.Amount) + "|" + merchant + "|" + strings.TrimSpace(r.AccountID) + "|" + strings.ToUpper(strings.TrimSpace(r.Currency)) + "|" + normalizedStatus(r.Status)
+	return strings.TrimSpace(r.Date) + "|" + normalizeAmount(r.Amount) + "|" + merchant + "|" + strings.TrimSpace(r.AccountID) + "|" + strings.ToUpper(strings.TrimSpace(r.Currency))
 }
 
 func normalizedStatus(s string) string {

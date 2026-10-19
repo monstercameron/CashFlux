@@ -64,8 +64,23 @@ func TestParseRowsKeepsSourceAccountCurrencyAndStatus(t *testing.T) {
 	if len(rows) != 2 || rows[0].AccountID != "checking" || rows[0].Currency != "USD" || rows[0].Status != "cleared" || rows[1].Status != "pending" {
 		t.Fatalf("parsed rows = %+v", rows)
 	}
-	if rows[0].Signature() == rows[1].Signature() {
-		t.Fatal("source-provided pending/cleared status must affect duplicate identity")
+}
+
+func TestFilterNewDoesNotReimportStatusRows(t *testing.T) {
+	ledgerRow := Row{
+		Date:        "2026-06-01",
+		Description: "Coffee Shop",
+		Amount:      "-4.50",
+		AccountID:   "checking",
+		Currency:    "USD",
+	}
+	seen := map[string]bool{ledgerRow.Signature(): true}
+	for _, status := range []string{"posted", "cleared", "pending"} {
+		row := ledgerRow
+		row.Status = status
+		if got := FilterNew([]Row{row}, seen); len(got) != 0 {
+			t.Errorf("status %q re-imported existing row: %+v", status, got)
+		}
 	}
 }
 
