@@ -131,6 +131,7 @@ func (s *SQLiteStore) Load(ds Dataset) error {
 	if err != nil {
 		return err
 	}
+	ds = backfillLegacyTransferGroups(ds)
 	ds = backfillBudgetCurrencies(ds)
 	if err := s.ensureDebtPaymentSchema(); err != nil {
 		return err

@@ -176,5 +176,6 @@ func migrate(ds Dataset) (Dataset, error) {
 	if err != nil {
 		return Dataset{}, err
 	}
+	ds = backfillLegacyTransferGroups(ds)
 	return backfillBudgetCurrencies(ds), nil
 }

@@ -1,0 +1,1 @@
+{"schemaVersion":2,"members":[{"id":"m1","name":"Household"}],"accounts":[{"id":"card","name":"Card","ownerId":"m1","scope":"individual","class":"liability","type":"credit_card","currency":"USD","openingBalance":{"Amount":-25000,"Currency":"USD"}}],"settings":{"baseCurrency":"USD"}}

@@ -111,7 +111,7 @@ func TestAccountEditRetainsLiabilitySign(t *testing.T) {
 	}
 }
 
-func TestUnknownLiabilitySignRejectedBeforeLoad(t *testing.T) {
+func TestUnknownLiabilitySignUsesSafeDefaultOnDatasetLoad(t *testing.T) {
 	st, err := NewMemory()
 	if err != nil {
 		t.Fatal(err)
@@ -123,21 +123,23 @@ func TestUnknownLiabilitySignRejectedBeforeLoad(t *testing.T) {
 	}
 	account.LiabilitySign = "future_convention"
 	ds := Dataset{Accounts: []domain.Account{account}}
-	if err := st.Load(ds); err == nil {
-		t.Fatal("Load accepted unknown convention")
+	if err := st.Load(ds); err != nil {
+		t.Fatalf("Load quarantined an unknown saved convention: %v", err)
 	}
-	if _, found, err := st.GetAccount("card"); err != nil || !found {
-		t.Fatal("failed Load removed existing account")
+	if got, found, err := st.GetAccount("card"); err != nil || !found || got.LiabilitySign != domain.LiabilityPositiveOwed {
+		t.Fatalf("Load did not use safe positive-owed default: account=%+v found=%v err=%v", got, found, err)
 	}
+	account.ID = "new-card"
 	if err := st.PutAccount(account); err == nil {
-		t.Fatal("PutAccount accepted unknown convention")
+		t.Fatal("PutAccount accepted a newly supplied unknown convention")
 	}
 	raw, err := json.Marshal(ds)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Import(raw); err == nil {
-		t.Fatal("Import accepted unknown convention")
+	imported, err := Import(raw)
+	if err != nil || imported.Accounts[0].LiabilitySign != domain.LiabilityPositiveOwed {
+		t.Fatalf("Import did not migrate unknown convention: account=%+v err=%v", imported.Accounts, err)
 	}
 }
 

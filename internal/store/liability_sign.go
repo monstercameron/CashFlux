@@ -4,6 +4,7 @@ package store
 
 import (
 	"fmt"
+	"log/slog"
 
 	"github.com/monstercameron/CashFlux/internal/domain"
 )
@@ -16,6 +17,12 @@ func backfillLiabilitySigns(ds Dataset) (Dataset, error) {
 	}
 	accounts := make([]domain.Account, len(ds.Accounts))
 	for i, account := range ds.Accounts {
+		if account.LiabilitySign != "" &&
+			account.LiabilitySign != domain.LiabilityPositiveOwed && account.LiabilitySign != domain.LiabilityNegativeOwed {
+			slog.Warn("unknown saved liability sign; using opening-balance default",
+				"account_id", account.ID, "liability_sign", account.LiabilitySign)
+			account.LiabilitySign = ""
+		}
 		accounts[i] = account.WithLiabilitySign()
 		if err := validateLiabilitySign(accounts[i]); err != nil {
 			return Dataset{}, err

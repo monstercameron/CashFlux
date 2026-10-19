@@ -1,0 +1,1 @@
+{"schemaVersion":1,"members":[{"id":"m1","name":"Household"}],"rules":[{"id":"spend","conditions":[{"field":"amount","op":"lt","value":"-5000"}]},{"id":"merchant","match":"netflix"}],"settings":{"baseCurrency":"USD"}}
