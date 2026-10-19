@@ -90,6 +90,11 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Count line and future-month rows read cleanly (R4CNT).** "Spent $4,363.75" (red, no double negative); a future month
+  ends "9 scheduled · $3,607.00 due"; the upcoming-bill note is hidden during a text search and "Search all dates" drops its
+  arrow. Scheduled rows show the pay-from account (or "—") instead of a payee in the Account column, loans read "Loan
+  payment", amounts use "−", the Scheduled pill is 12 px sentence case, and the actions column keeps its width with a
+  disabled pencil.
 - **Transactions copy says one thing one way; the calendar shows due and missed bills (R4COPY, R4CAL).** Saved-balance
   toasts format money ("$28,322.20"), delete confirmations have singular and plural variants, the period metric is
   "Spent"/"Income" everywhere (calendar included), the review queue is "Review", the first review group matches its legend,

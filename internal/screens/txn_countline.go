@@ -113,10 +113,10 @@ func txnCountLineComponent(props txnCountLineProps) ui.Node {
 			rates = currency.Rates{Base: base, Rates: settings.FXRates}
 		}
 		total, unconverted := txnFutureTotal(items, rates, base)
-		amount, tone := fmtLedgerAmount(money.New(-total.Amount, total.Currency), false)
+		amount := fmtMoney(total)
 		parts = append(parts, Span(css.Class("txn-count-main"),
 			uistate.T("fut2.futureSummary", period, txnCountNumber(0), txnCountNumber(scheduledCount)),
-			Span(css.Class(tw.ColorClass(tone)), amount)))
+			Span(css.Class("txn-count-due-amount"), amount), uistate.T("fut2.dueSuffix")))
 		if unconverted > 0 {
 			parts = append(parts, Span(css.Class("txn-count-sep"), Attr("aria-hidden", "true"), " · "),
 				Span(css.Class("txn-count-unconverted"), uistate.T("transactions.scopeUnconverted", unconverted)))
@@ -129,7 +129,7 @@ func txnCountLineComponent(props txnCountLineProps) ui.Node {
 				Span(css.Class("txn-count-sep"), Attr("aria-hidden", "true"), " · "),
 				Button(css.Class("txn-count-filter", "text-down"), Type("button"), Attr("data-testid", "txn-count-spent"),
 					Attr("aria-pressed", ariaBool(filter.Flow == "out")),
-					OnClick(onSpent), uistate.T("r2a.spent", fmtTxnSignedMoney(money.New(-spent.Amount, spent.Currency)))),
+					OnClick(onSpent), uistate.T("r2a.spent", fmtMoney(spent))),
 			)
 		}
 		if showCashflow && filter.Flow != "out" && (filter.Flow == "in" || income.Amount != 0 || spent.Amount == 0) {
@@ -151,7 +151,7 @@ func txnCountLineComponent(props txnCountLineProps) ui.Node {
 		allCount := txnSearchAllDatesCount(allDates)
 		searchWidenAction = Span(css.Class("txn-count-search-action"), Style(map[string]string{"marginLeft": "0.35rem"}),
 			Button(css.Class("btn-link txn-count-search-widen"), Type("button"), Attr("data-testid", "txn-search-all-dates"),
-				OnClick(onSearchAllDates), uistate.T("r5n.searchAllDates", txnCountNumber(allCount))))
+				OnClick(onSearchAllDates), uistate.T("r4cnt.searchAllDates", txnCountNumber(allCount))))
 	}
 	if props.Shown > 0 && filter.Flow == "" {
 		// Suppress a zero net when all visible rows are transfers.
@@ -191,7 +191,7 @@ func txnCountLineComponent(props txnCountLineProps) ui.Node {
 		parts = append(parts, Span(css.Class("txn-count-sep"), Attr("aria-hidden", "true"), "·"),
 			Span(css.Class("txn-count-lens"), uistate.T("transactions.scopeLens", props.Lens)))
 	}
-	if !(futurePeriod && props.Shown == 0) {
+	if !(futurePeriod && props.Shown == 0) && txnCountShouldShowUpcoming(filter) {
 		parts = append(parts, ui.CreateElement(txnUpcomingInline, struct{}{}))
 	}
 	if searchWidenAction != nil {
@@ -201,6 +201,10 @@ func txnCountLineComponent(props txnCountLineProps) ui.Node {
 		Attr("data-testid", "txn-count-line"),
 		Attr("role", "status"), Attr("aria-live", liveMode(announceFilterChange)), Attr("aria-atomic", "true"),
 		parts)
+}
+
+func txnCountShouldShowUpcoming(filter txnfilter.Criteria) bool {
+	return strings.TrimSpace(filter.Text) == ""
 }
 
 func txnFutureTotal(items []bills.Bill, rates currency.Rates, base string) (money.Money, int) {

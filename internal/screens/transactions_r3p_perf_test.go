@@ -155,7 +155,7 @@ func TestR3PCountLineUsesProvidedCashflow(t *testing.T) {
 		Spent: money.New(700, "USD"), Income: money.New(900, "USD"), CashflowProvided: true,
 	}))
 	got := f.Text()
-	for _, want := range []string{"Spent −$7.00", "Income $9.00"} {
+	for _, want := range []string{"Spent $7.00", "Income $9.00"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("provided cashflow: count line = %q, want %q", got, want)
 		}

@@ -15,11 +15,13 @@
 package screens
 
 import (
+	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/bills"
 	"github.com/monstercameron/CashFlux/internal/debounce"
+	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -100,12 +102,8 @@ func txnScheduledGhostRows(items []bills.Bill, formatDate func(time.Time) string
 		}
 	}
 	for _, item := range items {
-		account := accounts[item.AccountID]
-		category := ""
-		if app := appstate.Default; app != nil {
-			category = categories[billCategoryID(app, item)]
-		}
-		amount, tone := fmtLedgerAmount(money.New(-item.Amount.Amount, item.Amount.Currency), false)
+		category, account := txnScheduledRowDetails(appstate.Default, item, accounts, categories)
+		amount, tone := fmtTxnSignedMoney(money.New(-item.Amount.Abs().Amount, item.Amount.Currency)), "text-down"
 		rows = append(rows, ui.CreateElement(txnScheduledGhostRow, txnScheduledGhostRowProps{
 			Date: formatDate(item.DueDate), Name: item.Name, Category: category,
 			Account: account, Amount: amount, AmountTone: tone,
@@ -126,9 +124,9 @@ func txnScheduledGhostRow(props txnScheduledGhostRowProps) ui.Node {
 		Div(css.Class("td-date"), props.Date),
 		Div(css.Class("td-desc"),
 			Span(css.Class("txn-scheduled-name"), props.Name),
-			Span(css.Class("txn-scheduled-pill"), uistate.T("transactions.scheduledStatus"))),
+			Span(css.Class("txn-scheduled-pill"), Style(map[string]string{"fontSize": "12px", "textTransform": "none"}), uistate.T("transactions.scheduledStatus"))),
 		Div(css.Class("td-cat"), props.Category),
-		Div(css.Class("td-acct", "txn-scheduled-account"), Attr("title", props.Account), props.Account),
+		Div(css.Class("td-acct", "txn-scheduled-account"), Attr("title", props.Account), scheduledAccountLabel(props.Account)),
 		Div(css.Class("td-amount", tw.ColorClass(props.AmountTone)), props.Amount),
 		Div(css.Class("txn-scheduled-status"), ui.CreateElement(txnScheduledGhostMenu, struct{}{})),
 	)
@@ -144,9 +142,9 @@ func txnScheduledTableRow(props txnScheduledTableRowProps) ui.Node {
 	return Tr(css.Class("txn-row", "txn-scheduled-ghost"), Attr("data-testid", "txn-scheduled-ghost"), Attr("aria-disabled", "true"),
 		Td(ClassStr("td-select")),
 		Td(ClassStr("td-date"), props.Date),
-		Td(ClassStr("td-desc"), Span(css.Class("txn-scheduled-name"), props.Name), Span(css.Class("txn-scheduled-pill"), uistate.T("transactions.scheduledStatus"))),
+		Td(ClassStr("td-desc"), Span(css.Class("txn-scheduled-name"), props.Name), Span(css.Class("txn-scheduled-pill"), Style(map[string]string{"fontSize": "12px", "textTransform": "none"}), uistate.T("transactions.scheduledStatus"))),
 		If(props.Vis.Category, Td(ClassStr("td-cat"), props.Category)),
-		If(props.Vis.Account, Td(ClassStr("td-acct txn-scheduled-account"), Attr("title", props.Account), props.Account)),
+		If(props.Vis.Account, Td(ClassStr("td-acct txn-scheduled-account"), Attr("title", props.Account), scheduledAccountLabel(props.Account))),
 		If(props.ShowUser, Td(ClassStr("td-user"))),
 		If(props.Vis.Amount, Td(css.Class("td-amount", tw.ColorClass(props.AmountTone)), props.Amount)),
 		If(props.ShowBalance, Td(ClassStr("td-amount"))),
@@ -168,24 +166,58 @@ func txnScheduledTableRows(items []bills.Bill, formatDate func(time.Time) string
 	}
 	app := appstate.Default
 	for _, item := range items {
-		category := ""
-		if app != nil {
-			category = categories[billCategoryID(app, item)]
-		}
-		amount, tone := fmtLedgerAmount(money.New(-item.Amount.Amount, item.Amount.Currency), false)
+		category, account := txnScheduledRowDetails(app, item, accounts, categories)
+		amount, tone := fmtTxnSignedMoney(money.New(-item.Amount.Abs().Amount, item.Amount.Currency)), "text-down"
 		rows = append(rows, ui.CreateElement(txnScheduledTableRow, txnScheduledTableRowProps{
 			Date: formatDate(item.DueDate), Name: item.Name, Category: category,
-			Account: accounts[item.AccountID], Amount: amount, AmountTone: tone,
+			Account: account, Amount: amount, AmountTone: tone,
 			Vis: vis, ShowUser: showUser, ShowBalance: showBalance,
 		}))
 	}
 	return rows
 }
 
+func txnScheduledRowDetails(app *appstate.App, item bills.Bill, accounts, categories map[string]string) (category, account string) {
+	if app == nil {
+		return "", ""
+	}
+	if categoryID := billCategoryID(app, item); categoryID != "" {
+		category = categories[categoryID]
+	}
+	if strings.HasPrefix(item.AccountID, "recurring:") {
+		recurringID := strings.TrimPrefix(item.AccountID, "recurring:")
+		for _, recurring := range app.Recurring() {
+			if recurring.ID == recurringID {
+				account = accounts[recurring.AccountID]
+				break
+			}
+		}
+		return category, account
+	}
+	for _, candidate := range app.Accounts() {
+		if candidate.ID != item.AccountID {
+			continue
+		}
+		if candidate.Type == domain.TypeLoan || candidate.Type == domain.TypeMortgage {
+			category = uistate.T("r4cnt.loanPayment")
+		}
+		break
+	}
+	return category, ""
+}
+
+func scheduledAccountLabel(account string) string {
+	if strings.TrimSpace(account) == "" {
+		return "—"
+	}
+	return account
+}
+
 func txnScheduledGhostMenu(struct{}) ui.Node {
 	open := ui.UseState(false)
 	toggle := ui.UseEvent(Prevent(func() { open.Set(!open.Get()) }))
 	return Div(css.Class("txn-scheduled-menu"),
+		Button(css.Class("btn btn-icon txn-row-edit"), Type("button"), Attr("data-testid", "txn-scheduled-edit-disabled"), Attr("aria-label", uistate.T("transactions.rowEdit")), Attr("disabled", "disabled"), "✎"),
 		Button(css.Class("btn btn-icon"), Type("button"),
 			Attr("aria-label", uistate.T("fut2.scheduledMenuLabel")),
 			Attr("aria-expanded", ariaBool(open.Get())), Attr("data-testid", "txn-scheduled-menu-toggle"),
