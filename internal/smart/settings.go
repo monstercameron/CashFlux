@@ -7,7 +7,7 @@ import "time"
 // CurrentSettingsVersion is the current schema version for Settings. A stored
 // row with Version==0 is a legacy pre-C254 record and will be upgraded by
 // Migrate the next time it is loaded.
-const CurrentSettingsVersion = 1
+const CurrentSettingsVersion = 2
 
 // Settings is the user's preference state for the SMART series. Free
 // (deterministic, on-device) features are enabled by default so users get value

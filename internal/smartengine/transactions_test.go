@@ -31,48 +31,6 @@ func TestT2Duplicates(t *testing.T) {
 	}
 }
 
-func TestT6SpendingSpike(t *testing.T) {
-	in := baseInput()
-	in.Categories = []domain.Category{{ID: "dining", Name: "Dining"}}
-	var txns []domain.Transaction
-	// Five typical $20 dining charges over prior months.
-	for i := range 5 {
-		txns = append(txns, domain.Transaction{
-			ID: "d" + itoa64(int64(i)), AccountID: "x", CategoryID: "dining",
-			Date: ref.AddDate(0, 0, -60+i*5), Amount: usd(-2000), Desc: "Lunch",
-		})
-	}
-	// A $200 dining charge this week — 10× the norm.
-	txns = append(txns, domain.Transaction{
-		ID: "spike", AccountID: "x", CategoryID: "dining",
-		Date: ref.AddDate(0, 0, -2), Amount: usd(-20000), Desc: "Steakhouse",
-	})
-	in.Transactions = txns
-	got := t6SpendingSpike(in)
-	if len(got) != 1 {
-		t.Fatalf("want 1 spike, got %d: %+v", len(got), got)
-	}
-	if got[0].Key != "SMART-T6:spike" {
-		t.Errorf("flagged wrong txn: %s", got[0].Key)
-	}
-}
-
-func TestT6NoSpikeWhenNormal(t *testing.T) {
-	in := baseInput()
-	in.Categories = []domain.Category{{ID: "dining", Name: "Dining"}}
-	var txns []domain.Transaction
-	for i := range 6 {
-		txns = append(txns, domain.Transaction{
-			ID: "d" + itoa64(int64(i)), AccountID: "x", CategoryID: "dining",
-			Date: ref.AddDate(0, 0, -30+i*4), Amount: usd(-2200), Desc: "Lunch",
-		})
-	}
-	in.Transactions = txns
-	if got := t6SpendingSpike(in); len(got) != 0 {
-		t.Errorf("steady spend — want 0, got %d: %+v", len(got), got)
-	}
-}
-
 func TestT7MissingTxn(t *testing.T) {
 	in := baseInput() // now June 15
 	// A monthly Netflix charge on the 5th, last seen in May → June charge overdue.

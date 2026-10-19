@@ -193,3 +193,35 @@ func TestMigrateIdempotent(t *testing.T) {
 		t.Errorf("Migrate is not idempotent: first=%+v second=%+v", first, second)
 	}
 }
+
+func TestMigrateT6PreferencesToUnusualWithoutDismissals(t *testing.T) {
+	legacy := Settings{Version: 1,
+		Enabled:   map[string]bool{"SMART-T6": true},
+		Muted:     map[string]bool{"SMART-T6": true},
+		Dismissed: map[string]bool{"SMART-T6:old": true, "SMART-T2:keep": true},
+		Schedules: map[string]Cadence{"SMART-T6": CadenceWeekly},
+		LastRun:   map[string]int64{"SMART-T6": 123},
+		Results:   map[string]string{"SMART-T6": "old result"},
+	}
+	got := Migrate(legacy)
+	if !got.IsEnabled("SMART-U1") || !got.IsMuted("SMART-U1") {
+		t.Fatalf("T6 on/mute preferences should migrate: %+v", got)
+	}
+	if got.IsEnabled("SMART-T6") || got.Muted["SMART-T6"] || got.Schedules["SMART-T6"] != "" || got.LastRun["SMART-T6"] != 0 || got.Results["SMART-T6"] != "" {
+		t.Fatalf("old T6 setting keys should be removed: %+v", got)
+	}
+	if got.IsDismissed("SMART-T6:old") || !got.IsDismissed("SMART-T2:keep") {
+		t.Fatalf("old T6 dismissals should be dropped without clearing other dismissals: %+v", got.Dismissed)
+	}
+}
+
+func TestMigrateT6ExplicitOffAndLegacyDefault(t *testing.T) {
+	explicitOff := Migrate(Settings{Version: 1, ExplicitOff: map[string]bool{"SMART-T6": true}})
+	if explicitOff.IsEnabled("SMART-U1") || !explicitOff.ExplicitOff["SMART-U1"] {
+		t.Fatalf("explicit T6 off should migrate to Unusual off: %+v", explicitOff)
+	}
+	legacyDefault := Migrate(Settings{})
+	if !legacyDefault.IsEnabled("SMART-U1") || !legacyDefault.Enabled["SMART-U1"] {
+		t.Fatalf("legacy default-on T6 behavior should remain on for Unusual: %+v", legacyDefault)
+	}
+}

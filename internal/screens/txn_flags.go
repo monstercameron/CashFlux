@@ -37,7 +37,7 @@ import (
 // ship, so there is no new free/AI pairing to introduce here.
 const (
 	dupeFlagCode  = "SMART-T2"
-	spikeFlagCode = "SMART-T6"
+	spikeFlagCode = "SMART-U1"
 )
 
 // txnRowFlags is the per-render index the table hands to its rows: which charges

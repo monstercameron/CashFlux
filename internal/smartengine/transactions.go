@@ -19,7 +19,6 @@ func mny(minor int64, cur string) money.Money { return money.New(minor, cur) }
 
 func init() {
 	register("SMART-T2", t2Duplicates)
-	register("SMART-T6", t6SpendingSpike)
 	register("SMART-T4", t4BulkEdit)
 	register("SMART-T7", t7MissingTxn)
 	register("SMART-T11", t11Timeline)
@@ -105,14 +104,11 @@ func t11Timeline(in Input) []smart.Insight {
 }
 
 const (
-	spikeFactor      = 4     // a txn this many× its category average is a spike
-	spikeMinMean     = 10_00 // ignore categories whose average is under $10
-	spikeMinSamples  = 4     // need this many prior txns to trust the average
-	spikeRecentDays  = 35    // only flag spikes in this recent window
-	missingGraceDays = 3     // days past expected before calling a charge missing
-	missingWindow    = 35    // ignore charges overdue longer than this (likely cancelled)
-	refundWindowDays = 60    // a refund matches a charge within this many days back
-	refundMinAmount  = 1_00  // ignore tiny refunds ($1)
+	spikeRecentDays  = 35   // shared rolling window for transaction and goal signals
+	missingGraceDays = 3    // days past expected before calling a charge missing
+	missingWindow    = 35   // ignore charges overdue longer than this (likely cancelled)
+	refundWindowDays = 60   // a refund matches a charge within this many days back
+	refundMinAmount  = 1_00 // ignore tiny refunds ($1)
 )
 
 // SMART-T2 — Smart duplicate detection. Surfaces groups of transactions that
@@ -133,56 +129,6 @@ func t2Duplicates(in Input) []smart.Insight {
 			WithAmount(mny(abs64(g.Amount), g.Currency)).
 			WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/transactions"}.
 				WithLabel("smart.t2.action", "Review transactions")))
-	}
-	return out
-}
-
-// SMART-T6 — Spending-spike alerts. Flags a recent transaction that is unusually
-// large versus its category's own average.
-func t6SpendingSpike(in Input) []smart.Insight {
-	names := categoryNames(in.Categories)
-	// Build each category's prior expense magnitudes (in base units).
-	mags := map[string][]int64{}
-	for _, t := range in.Transactions {
-		if t.IsTransfer() || !t.Amount.IsNegative() || t.CategoryID == "" {
-			continue
-		}
-		mags[t.CategoryID] = append(mags[t.CategoryID], in.toBaseMinor(-t.Amount.Amount, t.Amount.Currency))
-	}
-	recentCut := in.Now.AddDate(0, 0, -spikeRecentDays)
-	// For each recent expense, compare against its category mean excluding itself.
-	var out []smart.Insight
-	for _, t := range in.Transactions {
-		if t.IsTransfer() || !t.Amount.IsNegative() || t.CategoryID == "" {
-			continue
-		}
-		if t.Date.Before(recentCut) || t.Date.After(in.Now) {
-			continue
-		}
-		all := mags[t.CategoryID]
-		if len(all) <= spikeMinSamples {
-			continue
-		}
-		mag := in.toBaseMinor(-t.Amount.Amount, t.Amount.Currency)
-		mean := meanExcluding(all, mag)
-		if mean < spikeMinMean || mag < mean*spikeFactor {
-			continue
-		}
-		cat := names[t.CategoryID]
-		if cat == "" {
-			cat = "this category"
-		}
-		out = append(out, smart.Insight{
-			Feature:  "SMART-T6",
-			Page:     smart.PageTransactions,
-			Key:      "SMART-T6:" + t.ID,
-			Severity: smart.SeverityWarn,
-		}.
-			WithTitle("smart.t6.title", "%s in %s is unusually large", hmoneyc(mag, in.Base), cat).
-			WithDetail("smart.t6.detail", "%s on %s is about %s× the typical %s charge (%s).", txnLabel(t), t.Date.Format("Jan 2"), itoa64(mag/maxInt64(mean, 1)), cat, hmoneyc(mean, in.Base)).
-			WithAmount(mny(mag, in.Base)).
-			WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/transactions", RelatedType: "transaction", RelatedID: t.ID}.
-				WithLabel("smart.t6.action", "View transaction")))
 	}
 	return out
 }
@@ -292,25 +238,6 @@ func categoryNames(cats []domain.Category) map[string]string {
 		m[c.ID] = c.Name
 	}
 	return m
-}
-
-// meanExcluding returns the integer mean of xs with one occurrence of `one`
-// removed (the candidate transaction shouldn't inflate its own baseline).
-func meanExcluding(xs []int64, one int64) int64 {
-	var sum, n int64
-	removed := false
-	for _, x := range xs {
-		if !removed && x == one {
-			removed = true
-			continue
-		}
-		sum += x
-		n++
-	}
-	if n == 0 {
-		return 0
-	}
-	return sum / n
 }
 
 func maxInt64(a, b int64) int64 {

@@ -82,7 +82,7 @@ var catalog = []Feature{
 	ai("SMART-T3", PageTransactions, "Natural-language search (AI)", "When the local parser can't read a phrasing, the assistant compiles it into the same filter chips.", false, tokLanguageIn, tokLanguageOut),
 	rule("SMART-T4", PageTransactions, "Bulk-edit suggestions", "After one edit, offer to apply it to other similar untouched entries."),
 	ai("SMART-T5", PageTransactions, "Merchant name cleanup", "Normalize raw import gibberish into clean merchant names.", true, tokClassifyIn, tokClassifyOut),
-	rule("SMART-T6", PageTransactions, "Spending-spike alerts", "Flag a transaction that is unusually large for its category."),
+	rule("SMART-U1", PageTransactions, "Unusual", "Spot unusual charges, price changes, possible double charges, and large first-time purchases."),
 	rule("SMART-T7", PageTransactions, "Missing-transaction detection", "Notice when an expected recurring charge hasn't shown up."),
 	ai("SMART-T8", PageTransactions, "Receipt OCR", "Snap a receipt; extract merchant, amount, date, and line items.", false, tokVisionIn, tokVisionOut),
 	ai("SMART-T10", PageTransactions, "Smart import field-mapping", "Auto-detect which CSV columns are date/amount/merchant/category.", true, tokClassifyIn, tokClassifyOut),
