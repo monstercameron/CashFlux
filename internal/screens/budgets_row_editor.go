@@ -169,7 +169,38 @@ type budgetLimitSaveKey struct {
 	budgetID string
 }
 
-var budgetLimitSaveInFlight = map[budgetLimitSaveKey]bool{}
+type budgetLimitSaveRequest struct {
+	amount       int64
+	viewedPeriod period.Window
+}
+
+// budgetLimitSaveQueue serializes durable writes for one app and budget while
+// retaining only the most recent edit made during an in-flight write.
+type budgetLimitSaveQueue struct {
+	active  bool
+	pending *budgetLimitSaveRequest
+}
+
+func (q *budgetLimitSaveQueue) enqueue(request budgetLimitSaveRequest) bool {
+	if q.active {
+		q.pending = &request
+		return false
+	}
+	q.active = true
+	return true
+}
+
+func (q *budgetLimitSaveQueue) complete() (budgetLimitSaveRequest, bool) {
+	if q.pending != nil {
+		request := *q.pending
+		q.pending = nil
+		return request, true
+	}
+	q.active = false
+	return budgetLimitSaveRequest{}, false
+}
+
+var budgetLimitSaveInFlight = map[budgetLimitSaveKey]*budgetLimitSaveQueue{}
 
 func queueBudgetLimitSave(s budgeting.Status, amount int64, viewedPeriod period.Window, editing, restoreFocus ui.State[bool]) {
 	app := appstate.Default
@@ -177,39 +208,58 @@ func queueBudgetLimitSave(s budgeting.Status, amount int64, viewedPeriod period.
 		return
 	}
 	key := budgetLimitSaveKey{app: app, budgetID: s.Budget.ID}
-	if budgetLimitSaveInFlight[key] {
+	request := budgetLimitSaveRequest{amount: amount, viewedPeriod: viewedPeriod}
+	if queue := budgetLimitSaveInFlight[key]; queue != nil {
+		queue.enqueue(request)
+		editing.Set(false)
+		restoreFocus.Set(true)
 		return
 	}
+	queue := &budgetLimitSaveQueue{}
+	queue.enqueue(request)
+	budgetLimitSaveInFlight[key] = queue
+	startBudgetLimitSave(key, request, &editing, &restoreFocus)
+}
+
+func startBudgetLimitSave(key budgetLimitSaveKey, request budgetLimitSaveRequest, editing, restoreFocus *ui.State[bool]) {
+	app := key.app
 	var budget domain.Budget
 	found := false
 	for _, candidate := range app.Budgets() {
-		if candidate.ID == s.Budget.ID {
+		if candidate.ID == key.budgetID {
 			budget, found = candidate, true
 			break
 		}
 	}
 	if !found {
+		completeBudgetLimitSave(key)
 		return
 	}
-	priorBase, err := budgeting.BudgetBaseAt(budget, budgetViewAnchor(viewedPeriod, budgetNow()))
+	priorBase, err := budgeting.BudgetBaseAt(budget, budgetViewAnchor(request.viewedPeriod, budgetNow()))
 	if err != nil {
 		uistate.PostNotice(budgetErrorText(err), true)
+		completeBudgetLimitSave(key)
 		return
 	}
-	if priorBase.Amount == amount {
-		editing.Set(false)
-		restoreFocus.Set(true)
+	if priorBase.Amount == request.amount {
+		if editing != nil && restoreFocus != nil {
+			editing.Set(false)
+			restoreFocus.Set(true)
+		}
+		completeBudgetLimitSave(key)
 		return
 	}
 
-	budget.Limit = money.New(amount, budget.Limit.Currency)
-	if err := app.PutBudgetAt(budget, budgetViewAnchor(viewedPeriod, budgetNow())); err != nil {
+	budget.Limit = money.New(request.amount, budget.Limit.Currency)
+	if err := app.PutBudgetAt(budget, budgetViewAnchor(request.viewedPeriod, budgetNow())); err != nil {
 		uistate.PostNotice(budgetErrorText(err), true)
+		completeBudgetLimitSave(key)
 		return
 	}
-	budgetLimitSaveInFlight[key] = true
-	editing.Set(false)
-	restoreFocus.Set(true)
+	if editing != nil && restoreFocus != nil {
+		editing.Set(false)
+		restoreFocus.Set(true)
+	}
 
 	var slowTimer js.Func
 	saveFinished := false
@@ -228,15 +278,28 @@ func queueBudgetLimitSave(s budgeting.Status, amount int64, viewedPeriod period.
 		uistate.RequestPersist()
 		app.RequestDurable(func(result appstate.DurableResult) {
 			saveFinished = true
-			delete(budgetLimitSaveInFlight, key)
 			if result.Err != nil {
 				uistate.PostNotice(budgetErrorText(result.Err), true)
 			} else {
 				uistate.PostUndoable(uistate.T("budgets.limitChangedToast", fmtMoney(budget.Limit)))
 			}
+			completeBudgetLimitSave(key)
 		})
 		write.Release()
 		return nil
 	})
 	js.Global().Call("setTimeout", write, 0)
+}
+
+func completeBudgetLimitSave(key budgetLimitSaveKey) {
+	queue := budgetLimitSaveInFlight[key]
+	if queue == nil {
+		return
+	}
+	request, hasPending := queue.complete()
+	if !hasPending {
+		delete(budgetLimitSaveInFlight, key)
+		return
+	}
+	startBudgetLimitSave(key, request, nil, nil)
 }
