@@ -241,7 +241,6 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 	// C58: the split-into-categories editor, revealed by a toggle inside this modal
 	// so the breakdown is visible and editable without leaving the edit form.
 	splitOpen := ui.UseState(false)
-	toggleSplit := ui.UseEvent(func() { splitOpen.Set(!splitOpen.Get()) })
 	// saveSplits persists a breakdown set in the embedded SplitEditor. It writes the
 	// stored transaction directly (the editor validated Σ=amount), so it is
 	// independent of this form's unsaved field drafts.
@@ -316,6 +315,17 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 			newCatName.Set("")
 		}
 	})
+	applySuggestion := ui.UseEvent(Prevent(func() {
+		candidate := txn
+		candidateDirection := "expense"
+		if directionS.Get() == txnDirIn {
+			candidateDirection = "income"
+		}
+		candidate.Amount = money.New(signedEditAmount(amountS.Get(), candidateDirection, txn.Amount.Currency), txn.Amount.Currency)
+		if suggestion, ok := reviewSuggestion(app, candidate); ok {
+			catS.Set(suggestion.CategoryID)
+		}
+	}))
 
 	save := ui.UseEvent(Prevent(func() {
 		t := txn
@@ -540,23 +550,6 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 		}
 	}))
 
-	del := ui.UseEvent(Prevent(func() {
-		id := props.TxnID
-		uistate.ConfirmModal(uistate.T("transactions.deleteConfirm", txn.Desc), true, func(ok bool) {
-			if !ok {
-				return
-			}
-			if err := app.DeleteTransaction(id); err != nil {
-				errMsg.Set(err.Error())
-				return
-			}
-			uistate.BumpDataRevision()
-			if props.OnDone != nil {
-				props.OnDone()
-			}
-		})
-	}))
-
 	cancel := ui.UseEvent(Prevent(func() {
 		if props.OnDone != nil {
 			props.OnDone()
@@ -625,7 +618,7 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 	// transaction, and bump the shared data revision so both this modal and the
 	// table (whose paperclip opens the preview) reflect it. Operates on the stored
 	// transaction, so it persists independently of unsaved field edits in the form.
-	attach := ui.UseEvent(Prevent(func() {
+	attach := func() {
 		pickFile("image/*", func(name, mime string, data []byte) {
 			art := domain.Artifact{ID: id.New(), Name: name, Kind: "image", MIME: mime, Bytes: data, Size: len(data), CreatedAt: time.Now()}
 			if err := app.PutArtifact(art); err != nil {
@@ -641,8 +634,28 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 			uistate.BumpDataRevision()
 			uistate.PostNotice(uistate.T("transactions.attachReceiptTitle"), false)
 		})
-	}))
+	}
 
+	showHistory := func() { uistate.SetTxnHistory(txn.ID) }
+	showCategorize := func() { uistate.SetCatSuggest(txn.ID) }
+	showPayeeClean := func() { uistate.SetPayeeClean(txn.ID) }
+	createRuleAction := func() {
+		phrase := strings.TrimSpace(firstNonEmpty(txn.Payee, txn.Desc))
+		uistate.SetRuleDraft(phrase, txn.CategoryID)
+		if props.OnDone != nil {
+			props.OnDone()
+		}
+		router.Navigate(uistate.RoutePath("/rules"))
+	}
+	followUpAction := func() {
+		merchant := strings.TrimSpace(firstNonEmpty(txn.Payee, txn.Desc))
+		uistate.SetTaskAddSeed(uistate.TaskAddSeed{
+			Title:    uistate.T("transactions.followUpTaskTitle", merchant),
+			LinkType: string(domain.RelatedTransaction),
+			LinkID:   txn.ID,
+		})
+		uistate.SetAddTarget("task")
+	}
 	if !found {
 		return Div(css.Class("form-grid"),
 			P(css.Class("empty"), uistate.T("txnwidget.notFound")),
@@ -750,180 +763,155 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 		))
 	}
 
-	return Form(css.Class("form-grid txn-edit"), Attr("id", "txn-edit-form"), Attr("data-testid", "txn-edit-form"), OnSubmit(save),
-		labeledField(uistate.T("transactions.descPlaceholder"),
-			Input(css.Class("field"), Type("text"), Placeholder(uistate.T("transactions.descPlaceholder")), OnInput(onDesc), uiw.FieldValue(descS.Get()))),
-		labeledField(uistate.T("transactions.payeeLabel"),
-			Fragment(
-				Input(css.Class("field"), Type("text"), Attr("aria-label", uistate.T("transactions.payeeLabel")), Placeholder(uistate.T("transactions.payeeLabel")), OnInput(onPayee), uiw.FieldValue(payeeS.Get())),
-				// Parity: the ORIGINAL statement text stays visible beside the
-				// cleaned merchant — when the resolver (alias table + cleanup)
-				// displays this transaction under a different name, say what the
-				// bank actually printed, so categorization stays debuggable.
-				func() ui.Node {
-					raw := strings.TrimSpace(firstNonEmpty(txn.Payee, txn.Desc))
-					shown := strings.TrimSpace(app.PayeeResolver().Resolve(raw))
-					if raw == "" || shown == "" || strings.EqualFold(raw, shown) {
-						return Fragment()
-					}
-					return P(css.Class("muted", tw.TextXs, tw.Mt05), Attr("data-testid", "txn-original-statement"),
-						uistate.T("transactions.originalStatement", raw))
-				}(),
-			)),
-		// C561: a TEXT field with inputmode=decimal, NOT type=number with min=0.
-		//
-		// This input silently defeated C547. The Save button is a submit button bound
-		// to this form (`FormID: "txn-edit-form"`), so the browser runs constraint
-		// validation before submitting — and a typed "-32" is out of range for
-		// min="0". Submission was blocked, `OnSubmit` never fired, and the app's save
-		// handler never ran: no error banner, no toast, no change, nothing to see.
-		// The form appeared to accept the edit and silently discard it, which is
-		// worse than the rejection C547 removed.
-		//
-		// The magnitude rule now lives in amountmath.ParseSigned, which understands a
-		// sign; expressing it as an HTML range constraint contradicted that and could
-		// only fail silently. type=number was wrong for a second reason too: browsers
-		// report value === "" for a partially-typed number (a lone "-"), so the
-		// keystroke never reaches the Go state. Quick-add already used text +
-		// inputmode=decimal, which is exactly why C546 worked there and C547 did not
-		// work here.
-		labeledField(uistate.T("transactions.amountPlaceholder"),
-			Input(css.Class("field"), Type("text"), Attr("inputmode", "decimal"),
-				Attr("data-testid", "txn-edit-amount"),
-				Placeholder(uistate.T("transactions.amountPlaceholder")), OnInput(onAmount), uiw.FieldValue(amountS.Get()))),
-		// Direction sits beside the amount because together they ARE the amount.
-		If(!txn.IsTransfer(), labeledField(uistate.T("transactions.directionLabel"),
-			uiw.SelectInput(uiw.SelectInputProps{
-				Options: []uiw.SelectOption{
-					{Value: txnDirOut, Label: uistate.T("transactions.directionOut")},
-					{Value: txnDirIn, Label: uistate.T("transactions.directionIn")},
-				},
-				Selected:  directionS.Get(),
-				OnChange:  func(v string) { directionS.Set(v) },
-				AriaLabel: uistate.T("transactions.directionLabel"),
-				TestID:    "txn-edit-direction",
-			}))),
-		uiw.FormField(uistate.T("transactions.categoryLabel"),
-			Div(css.Class("txn-cat-picker"),
-				Div(css.Class("txn-cat-row"),
-					uiw.SelectInput(uiw.SelectInputProps{
-						Options:   catOpts,
-						Selected:  catS.Get(),
-						AriaLabel: uistate.T("transactions.categoryLabel"),
-						OnChange:  func(v string) { catS.Set(v) },
-					}),
-					Button(css.Class("btn btn-tool txn-cat-new", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
-						Attr("data-testid", "txn-edit-newcat-toggle"), Attr("aria-expanded", ariaBool(addingCat.Get())),
-						Title(uistate.T("transactions.newCategory")), OnClick(toggleAddCat),
-						uiw.Icon(icon.Plus, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-						Span(uistate.T("transactions.newCategory")))),
-				// Inline create: name field + Add; creates the category (typed to the
-				// transaction's flow) and selects it without leaving the modal.
-				If(addingCat.Get(),
-					Div(css.Class("txn-cat-add"),
-						Input(css.Class("field"), Type("text"), Attr("data-testid", "txn-edit-newcat-name"),
-							Attr("aria-label", uistate.T("transactions.newCategoryName")),
-							Placeholder(uistate.T("transactions.newCategoryName")), OnInput(onNewCatName), OnKeyDown(onNewCatKey), uiw.FieldValue(newCatName.Get())),
-						Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "txn-edit-newcat-add"),
-							OnClick(addCat), uistate.T("transactions.newCategoryAdd")),
-						Button(css.Class("btn btn-ghost"), Type("button"),
-							OnClick(toggleAddCat), uistate.T("transactions.newCategoryCancel")))))),
-		labeledField(uistate.T("transactions.dateLabel"),
-			Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("transactions.dateLabel")), OnInput(onDate), uiw.FieldValue(dateS.Get()))),
-		labeledField(uistate.T("transactions.tagsLabel"),
-			Input(css.Class("field"), Type("text"), Attr("aria-label", uistate.T("transactions.tagsLabel")), Placeholder(uistate.T("transactions.tagsPlaceholder")), OnInput(onTags), uiw.FieldValue(tagsS.Get()))),
-		If(len(members) > 1, uiw.FormField(uistate.T("transactions.whoLabel"),
-			uiw.SelectInput(uiw.SelectInputProps{
-				Options:   memberOpts,
-				Selected:  memberS.Get(),
-				AriaLabel: uistate.T("transactions.whoLabel"),
-				OnChange:  func(v string) { memberS.Set(v) },
-			}))),
-		Label(css.Class("txn-check"),
-			Input(Type("checkbox"), Attr("aria-label", uistate.T("txnwidget.clearedLabel")), CheckedIf(clearedS.Get()), OnChange(onCleared)),
-			Span(uistate.T("txnwidget.clearedLabel"))),
-		// TXC-2: a free-text memo for this transaction (distinct from the description).
-		uiw.FormField(uistate.T("transactions.noteLabel"),
-			Textarea(css.Class("field"), Attr("rows", "2"), Attr("data-testid", "txn-edit-note"),
-				Attr("aria-label", uistate.T("transactions.noteLabel")),
-				Attr("placeholder", uistate.T("transactions.notePlaceholder")), OnInput(onNote), noteS.Get())),
-		// Which account the row is POSTED to. Sits above the movement classifier
-		// because it answers a more basic question — whose ledger is this even on —
-		// and because confusing the two is easy: one names this row's account, the
-		// other names the account on the far side of a move.
-		accountField(app, txn, accountS.Get(), func(v string) { accountS.Set(v) }),
-		// The movement classifier sits directly above "exclude from budgets and
-		// reports" because the two answer the same question — should this row count
-		// as income or spending — and a person who reaches for the blunt exclude
-		// checkbox to silence a transfer should see the precise control first.
-		classifyField(app, txn, transferToS.Get(), debtPayS.Get(),
-			func(v string) {
-				transferToS.Set(v)
-				// A counterparty that cannot be paid down cannot carry a payment
-				// claim; drop the tick with the choice so the two never disagree.
-				if !isLiabilityAccount(app, v) {
-					debtPayS.Set(false)
-				}
-			}, onDebtPay),
-		// TXC-1: exclude from budgets & reports (still counts toward account balances).
-		// The hint sits on its own line BELOW the checkbox row so it never runs into
-		// the label; a hairline separates this "reporting" control from the "Cleared
-		// (reconciled)" checkbox above so the two aren't mistaken for each other.
-		Div(css.Class("txn-exclude-field", tw.FlexCol, tw.Gap1),
-			Label(css.Class("txn-check"),
-				Input(Type("checkbox"), Attr("data-testid", "txn-edit-exclude"), Attr("aria-label", uistate.T("transactions.excludeLabel")),
-					CheckedIf(excludeS.Get()), OnChange(onExclude)),
-				Span(uistate.T("transactions.excludeLabel"))),
-			Span(css.Class("muted", tw.Text12), uistate.T("transactions.excludeHint"))),
-		// TX6: the merchant context panel — the merchant's story (typical amount,
-		// this charge vs typical, visits this week/month, this month vs a typical
-		// month, a tiny sparkline). Read-only, omitted for transfers and one-off
-		// merchants (< 3 charges).
-		merchantContextPanel(app, txn),
-		// Receipts: attach a new image; existing receipts render as thumbnails that
-		// open a full view on click (TX5), so the modal shows the receipt itself, not
-		// just a count.
-		Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap2),
-			Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
-				Button(css.Class("btn"), Type("button"), Attr("data-testid", "txn-edit-attach"), OnClick(attach), uistate.T("transactions.attachReceiptTitle")),
-				If(len(txn.Attachments) > 0, Span(css.Class("muted"), receiptCountLabel(len(txn.Attachments)))),
-			),
-			If(len(txn.Attachments) > 0, receiptThumbnails(app, txn)),
-		),
-		// C58: split-into-categories, right in the modal — the current breakdown is
-		// always visible; the toggle reveals the full editor (kept as type=button
-		// children so nothing here submits the form).
-		Div(Attr("data-testid", "txn-edit-splits"),
-			If(len(splitLines) > 0, Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap1, tw.Mb2), splitLines)),
-			Button(css.Class("btn"), Type("button"), Attr("data-testid", "txn-edit-split-toggle"),
-				Attr("aria-expanded", ariaBool(splitOpen.Get())), OnClick(toggleSplit),
-				uistate.T(splitToggleKey(splitOpen.Get(), txn.HasSplits()))),
-			If(splitOpen.Get(), ui.CreateElement(SplitEditor, splitEditorProps{
-				Txn: txn, Categories: categories, Members: members, OnSave: saveSplits,
-			})),
-		),
-		// C520(b): this used to render at the bottom of a scrolling body, out of
-		// sight of the Save button that produced it — an error the user cannot see
-		// is the same as no error at all. Sticky to the foot of the body, so it is
-		// adjacent to the action whatever the scroll position. Sticky rather than an
-		// effect-driven scrollIntoView because UseEffect does not run for a
-		// component passed as a FlipPanel prop.
-		If(errMsg.Get() != "", Div(css.Class("form-err-sticky"), errText("txn-edit-err", errMsg.Get()))),
-		// Delete stays in the body (left-aligned, apart from the panel footer's
-		// Cancel/Save): the FlipPanel's pinned .set-foot owns Cancel + Save now (via
-		// FormID → native submit), fixing the old floating mid-panel button row.
-		//
-		// C580: but it is now STICKY to the foot of the scrolling body, the same
-		// treatment the error message got. In a plain block it sat at whatever depth
-		// the form happened to end — below the fold on a transaction with a merchant
-		// story, above it on a bare one — so the one destructive action in the dialog
-		// had no fixed place, while the two safe actions were pinned and always
-		// visible. Now it is always in view, always in the same spot, and separated
-		// from Save by the full width of the dialog.
-		Div(css.Class("txn-edit-danger"),
-			Button(css.Class("btn btn-del"), Type("button"), Attr("data-testid", "txn-edit-delete"), OnClick(del), uistate.T("action.delete")),
+	// Resolve the same local proposal used in review and ledger row editing. The
+	// shared resolver rejects a category whose kind does not match this row's
+	// current direction, including after the Expense/Income toggle changes.
+	suggestionTxn := txn
+	suggestionDirection := "expense"
+	if directionS.Get() == txnDirIn {
+		suggestionDirection = "income"
+	}
+	suggestionTxn.Amount = money.New(signedEditAmount(amountS.Get(), suggestionDirection, txn.Amount.Currency), txn.Amount.Currency)
+	suggested, hasSuggestion := reviewSuggestion(app, suggestionTxn)
+	suggestionName := ""
+	if hasSuggestion {
+		if category, ok := categoryByID(categories, suggested.CategoryID); ok {
+			suggestionName = category.Name
+		} else {
+			hasSuggestion = false
+		}
+	}
+	var newCategoryEditor ui.Node = Fragment()
+	if addingCat.Get() {
+		newCategoryEditor = Div(css.Class("txn-cat-add"),
+			Input(css.Class("field"), Type("text"), Attr("data-testid", "txn-edit-newcat-name"), Attr("aria-label", uistate.T("transactions.newCategoryName")),
+				Placeholder(uistate.T("transactions.newCategoryName")), OnInput(onNewCatName), OnKeyDown(onNewCatKey), uiw.FieldValue(newCatName.Get())),
+			Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "txn-edit-newcat-add"), OnClick(addCat), uistate.T("transactions.newCategoryAdd")),
+			Button(css.Class("btn btn-ghost"), Type("button"), OnClick(toggleAddCat), uistate.T("transactions.newCategoryCancel")),
+		)
+	}
+	categoryLabel := []any{Span(css.Class("t-caption", tw.TextDim), uistate.T("transactions.categoryLabel"))}
+	if hasSuggestion && suggested.CategoryID != catS.Get() {
+		categoryLabel = append(categoryLabel, Button(css.Class("txn-edit-category-suggestion"), Type("button"),
+			Attr("data-testid", "txn-edit-category-suggestion"), OnClick(applySuggestion),
+			uistate.T("r5e.suggestedCategory", suggestionName)))
+	}
+	categoryLabelArgs := []any{css.Class("txn-edit-category-label")}
+	categoryLabelArgs = append(categoryLabelArgs, categoryLabel...)
+	categoryPicker := Div(css.Class("labeled-field", "txn-edit-category-field"),
+		Div(categoryLabelArgs...),
+		Div(css.Class("txn-cat-picker"),
+			Div(css.Class("txn-cat-row"),
+				uiw.SelectInput(uiw.SelectInputProps{Options: catOpts, Selected: catS.Get(), AriaLabel: uistate.T("transactions.categoryLabel"), TestID: "txn-edit-category", OnChange: func(v string) { catS.Set(v) }}),
+				TxnNewCategoryAction("txn-edit-newcat-toggle", addingCat.Get(), toggleAddCat)),
+			newCategoryEditor,
 		),
 	)
+	amountField := labeledField(uistate.T("transactions.amountPlaceholder"), Input(css.Class("field"), Type("text"), Attr("inputmode", "decimal"), Attr("data-testid", "txn-edit-amount"),
+		Placeholder(uistate.T("transactions.amountPlaceholder")), OnInput(onAmount), uiw.FieldValue(amountS.Get())))
+	directionField := TxnDirectionToggle(TxnDirectionToggleProps{
+		Label: uistate.T("quickAdd.kind"), Value: directionS.Get(),
+		Options: []TxnDirectionOption{
+			{Value: txnDirOut, Label: uistate.T("quickAdd.expense"), TestID: "txn-edit-direction-expense"},
+			{Value: txnDirIn, Label: uistate.T("quickAdd.income"), TestID: "txn-edit-direction-income"},
+			{Value: "Transfer", Label: uistate.T("quickAdd.transfer"), TestID: "txn-edit-direction-transfer", Disabled: true, Title: uistate.T("r9f.transferEditUnavailable")},
+		},
+		OnSelect: func(value string) { directionS.Set(value) },
+	})
+	payeeField := labeledField(uistate.T("transactions.payeeLabel"),
+		Input(css.Class("field"), Type("text"), Attr("data-testid", "txn-edit-payee"), Attr("aria-label", uistate.T("transactions.payeeLabel")), Placeholder(uistate.T("transactions.payeeLabel")), OnInput(onPayee), uiw.FieldValue(payeeS.Get())))
+	dateField := labeledField(uistate.T("transactions.dateLabel"), Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("transactions.dateLabel")), OnInput(onDate), uiw.FieldValue(dateS.Get())))
+	accountControl := accountField(app, txn, accountS.Get(), func(v string) { accountS.Set(v) })
+	more := []ui.Node{
+		labeledField(uistate.T("transactions.descPlaceholder"), Input(css.Class("field"), Type("text"), Attr("data-testid", "txn-edit-description"),
+			Placeholder(uistate.T("transactions.descPlaceholder")), OnInput(onDesc), uiw.FieldValue(descS.Get()))),
+		labeledField(uistate.T("transactions.tagsLabel"), Input(css.Class("field"), Type("text"), Attr("data-testid", "txn-edit-tags"), Attr("aria-label", uistate.T("transactions.tagsLabel")),
+			Placeholder(uistate.T("transactions.tagsPlaceholder")), OnInput(onTags), uiw.FieldValue(tagsS.Get()))),
+		If(len(members) > 1, uiw.FormField(uistate.T("transactions.whoLabel"), uiw.SelectInput(uiw.SelectInputProps{Options: memberOpts, Selected: memberS.Get(), AriaLabel: uistate.T("transactions.whoLabel"), OnChange: func(v string) { memberS.Set(v) }}))),
+		uiw.FormField(uistate.T("transactions.noteLabel"), Textarea(css.Class("field"), Attr("rows", "2"), Attr("data-testid", "txn-edit-note"),
+			Attr("aria-label", uistate.T("transactions.noteLabel")), Attr("placeholder", uistate.T("transactions.notePlaceholder")), OnInput(onNote), noteS.Get())),
+		Label(css.Class("txn-check"), Input(Type("checkbox"), Attr("aria-label", uistate.T("txnwidget.clearedLabel")), CheckedIf(clearedS.Get()), OnChange(onCleared)), Span(uistate.T("txnwidget.clearedLabel"))),
+		Div(css.Class("txn-exclude-field", tw.FlexCol, tw.Gap1),
+			Label(css.Class("txn-check"), Input(Type("checkbox"), Attr("data-testid", "txn-edit-exclude"), Attr("aria-label", uistate.T("transactions.excludeLabel")), CheckedIf(excludeS.Get()), OnChange(onExclude)), Span(uistate.T("transactions.excludeLabel"))),
+			Span(css.Class("muted", tw.Text12), uistate.T("transactions.excludeHint"))),
+		classifyField(app, txn, transferToS.Get(), debtPayS.Get(), func(v string) {
+			transferToS.Set(v)
+			if !isLiabilityAccount(app, v) {
+				debtPayS.Set(false)
+			}
+		}, onDebtPay),
+		merchantContextPanel(app, txn),
+	}
+	rowActions := Div(css.Class("txn-edit-row-actions"), Attr("data-testid", "txn-edit-row-actions"),
+		uiw.OverflowMenu(uiw.OverflowMenuProps{
+			TriggerText:   uistate.T("r9f.tools"),
+			TriggerLabel:  uistate.T("r9f.tools"),
+			TriggerTestID: "txn-edit-more-actions",
+			TriggerClass:  "btn btn-tool",
+			Items: []uiw.OverflowMenuItem{
+				{Label: uistate.T("txnhistory.menuAction"), Icon: icon.History, TestID: "txn-history-open", OnSelect: showHistory},
+				{Label: uistate.T("r1b.catSuggest.menuAction"), Icon: icon.Tag, TestID: "txn-categorize-open", OnSelect: showCategorize, Hidden: txn.IsTransfer()},
+				{Label: uistate.T("payeeClean.menuAction"), Icon: icon.Pencil, TestID: "txn-cleanname-open", OnSelect: showPayeeClean, Hidden: txn.IsTransfer()},
+				{Label: uistate.T("transactions.createRule"), Icon: icon.Workflow, TestID: "txn-create-rule", OnSelect: createRuleAction, Hidden: txn.IsTransfer()},
+				{Label: uistate.T("transactions.followUpTask"), Icon: icon.PlusCircle, TestID: "txn-followup-task", OnSelect: followUpAction},
+				{Label: uistate.T(splitToggleKey(splitOpen.Get(), txn.HasSplits())), Icon: icon.PlusCircle, TestID: "txn-edit-split-toggle", OnSelect: func() { splitOpen.Set(!splitOpen.Get()) }},
+				{Label: uistate.T("transactions.attachReceiptTitle"), Icon: icon.PlusCircle, TestID: "txn-edit-attach", OnSelect: attach},
+			},
+		}),
+	)
+	attachments := Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap2),
+		If(len(txn.Attachments) > 0, Span(css.Class("muted"), receiptCountLabel(len(txn.Attachments)))),
+		If(len(txn.Attachments) > 0, receiptThumbnails(app, txn)),
+	)
+	splits := Div(Attr("data-testid", "txn-edit-splits"),
+		If(len(splitLines) > 0, Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap1, tw.Mb2), splitLines)),
+		If(splitOpen.Get(), ui.CreateElement(SplitEditor, splitEditorProps{Txn: txn, Categories: categories, Members: members, OnSave: saveSplits})),
+	)
+	return Form(css.Class("form-grid", "txn-edit"), Attr("id", "txn-edit-form"), Attr("data-testid", "txn-edit-form"), OnSubmit(save),
+		TxnSharedForm(TxnFormModel{Mode: TxnFormEdit, Amount: amountField, Direction: directionField, Payee: payeeField,
+			Category: categoryPicker, Date: dateField, Account: accountControl, More: more, MoreID: "txn-edit-more-" + txn.ID,
+			EditTools: rowActions, EditSummary: Div(splits, attachments)}),
+		If(errMsg.Get() != "", Div(css.Class("form-err-sticky"), errText("txn-edit-err", errMsg.Get()))),
+	)
+}
+
+// TxnEditDeleteFooter renders the named destructive action for the Edit panel footer.
+func TxnEditDeleteFooter(props TransactionEditFormProps) ui.Node {
+	return ui.CreateElement(txnEditDeleteFooter, props)
+}
+
+func txnEditDeleteFooter(props TransactionEditFormProps) ui.Node {
+	app := appstate.Default
+	if app == nil {
+		return Fragment()
+	}
+	var txn domain.Transaction
+	found := false
+	for _, candidate := range app.Transactions() {
+		if candidate.ID == props.TxnID {
+			txn, found = candidate, true
+			break
+		}
+	}
+	if !found {
+		return Fragment()
+	}
+	remove := ui.UseEvent(Prevent(func() {
+		uistate.ConfirmModal(uistate.T("transactions.deleteConfirm", txn.Desc), true, func(confirmed bool) {
+			if !confirmed {
+				return
+			}
+			if err := app.DeleteTransaction(props.TxnID); err != nil {
+				uistate.PostNotice(err.Error(), true)
+				return
+			}
+			uistate.BumpDataRevision()
+			if props.OnDone != nil {
+				props.OnDone()
+			}
+		})
+	}))
+	return Button(css.Class("btn btn-ghost txn-edit-delete"), Type("button"), Attr("data-testid", "txn-edit-delete"), OnClick(remove), uistate.T("r9f.deleteTransaction"))
 }
 
 // Transaction direction values for the edit form's sign control. They are the
@@ -1000,11 +988,11 @@ func accountField(app *appstate.App, txn domain.Transaction, selected string, on
 	}
 
 	return Div(css.Class("txn-account-field", tw.FlexCol, tw.Gap1), Attr("data-testid", "txn-edit-account-field"),
-		uiw.FormField(uistate.T("transactions.accountLabel"),
+		uiw.FormField(uistate.T("quickAdd.account"),
 			uiw.SelectInput(uiw.SelectInputProps{
 				Options:   opts,
 				Selected:  selected,
-				AriaLabel: uistate.T("transactions.accountLabel"),
+				AriaLabel: uistate.T("quickAdd.account"),
 				OnChange:  onSelect,
 				TestID:    "txn-edit-account",
 			})),

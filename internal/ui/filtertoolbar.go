@@ -60,6 +60,9 @@ type FilterToolbarProps struct {
 	// job is "undo what I typed" left the query on screen for the same window it
 	// was meant to end. Nil falls back to OnSearch("") — correct, just slower.
 	OnClearSearch func()
+	// FilterSheet presents this toolbar's fields in a fixed right-side overlay.
+	// It is opt-in so existing pages keep their inline disclosure layout.
+	FilterSheet bool
 
 	FiltersLabel string   // trigger button text, e.g. "Filters"
 	FiltersTitle string   // popover title + trigger tooltip
@@ -88,7 +91,13 @@ type FilterToolbarProps struct {
 	ClearAllLabel string
 	RemoveLabel   string // aria-label prefix for a chip's ✕
 
-	Actions []uic.Node // trailing toolbar buttons (e.g. Clear, Export CSV)
+	// SearchAddon is an optional control placed between Search and Filters on the
+	// primary row. Other callers retain the existing layout when it is nil.
+	SearchAddon uic.Node
+	// PrimaryActions are optional controls placed after Filters on the primary row.
+	// Actions remain the secondary row, preserving the established layout by default.
+	PrimaryActions []uic.Node
+	Actions        []uic.Node // trailing toolbar buttons (e.g. Clear, Export CSV)
 }
 
 // FilterToolbar is a portable, reusable compact filter UI: an always-visible
@@ -168,6 +177,7 @@ func setSearchStale(selector string, stale bool) {
 
 func filterToolbar(props FilterToolbarProps) uic.Node {
 	open := uic.UseState(false)
+	uid := uic.UseId()
 	// Escape closes the filter panel. Registered unconditionally (never inside the
 	// If that renders the panel) so the hook keeps a stable position.
 	//
@@ -182,12 +192,24 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 	onPanelKey := uic.UseEvent(func(e uic.KeyboardEvent) {
 		if e.GetKey() == "Escape" && open.Get() {
 			e.PreventDefault()
+			if doc := js.Global().Get("document"); doc.Truthy() {
+				if trigger := doc.Call("getElementById", "filter-trigger-"+uid); trigger.Truthy() {
+					trigger.Call("focus")
+				}
+			}
 			open.Set(false)
 		}
 	})
+	closePanel := func() {
+		if doc := js.Global().Get("document"); doc.Truthy() {
+			if trigger := doc.Call("getElementById", "filter-trigger-"+uid); trigger.Truthy() {
+				trigger.Call("focus")
+			}
+		}
+		open.Set(false)
+	}
 	// Stable ids for the two nodes the keystroke has to touch before the app can
 	// re-render (C628).
-	uid := uic.UseId()
 	searchID, pendingID := "fctrl-search-"+uid, "fctrl-pending-"+uid
 	onSearch := uic.UseEvent(func(v string) {
 		// Reveal the pending note NOW, in the keystroke, rather than waiting for the
@@ -200,13 +222,22 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 	})
 	// Unconditional handler for the search box's clear (×) so its hook sits at a stable
 	// position even though the button itself only renders when there's a query.
-	onClear := uic.UseEvent(func() {
+	clearSearchNow := func() {
 		if props.OnClearSearch != nil {
 			props.OnClearSearch()
 			return
 		}
 		if props.OnSearch != nil {
 			props.OnSearch("")
+		}
+	}
+	onClear := uic.UseEvent(clearSearchNow)
+	// M4: Escape is the keyboard equivalent of the clear button. It bypasses the
+	// search debounce so the old query cannot remain active after the field clears.
+	onSearchKey := uic.UseEvent(func(e uic.KeyboardEvent) {
+		if e.GetKey() == "Escape" {
+			e.PreventDefault()
+			clearSearchNow()
 		}
 	})
 	// Clear the stale marking on the render where the query has actually been
@@ -288,7 +319,7 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 		// button actually does. aria-haspopup="dialog" told assistive tech to expect a
 		// modal — focus moving in, Escape closing it — none of which an inline panel
 		// with no backdrop does or should do.
-		Attr("aria-expanded", expanded), Attr("aria-controls", "filter-inline-panel"),
+		Attr("id", "filter-trigger-"+uid), Attr("aria-expanded", expanded), Attr("aria-controls", "filter-inline-panel"),
 		Attr("aria-label", ariaLabel),
 		OnKeyDown(onPanelKey),
 		OnClick(func() { open.Set(!open.Get()) }),
@@ -315,6 +346,14 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 	if props.Search != "" {
 		searchCls += " is-active"
 	}
+	primaryActions := make([]any, 0, len(props.PrimaryActions))
+	for _, action := range props.PrimaryActions {
+		primaryActions = append(primaryActions, action)
+	}
+	panelTitle := props.FiltersTitle
+	if props.FilterSheet {
+		panelTitle = props.FiltersLabel
+	}
 	return Div(
 		// Standard two-row toolbar (every page): row 1 is the search field filling the
 		// line with the Filters trigger at its end; row 2 holds the remaining actions.
@@ -333,15 +372,15 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 					// the reconciler write it back meant the shared search — every list screen
 					// in the app — deleted characters mid-word, and the more the user typed
 					// the further behind the written-back value was.
-					Input(css.Class("fctrl-input"), Type("search"), FieldValue(props.Search),
+					Input(css.Class("fctrl-input"), Type("text"), FieldValue(props.Search),
 						Attr("id", searchID), Attr("aria-controls", pendingID),
-						Attr("aria-label", props.SearchLabel), Placeholder(props.SearchLabel),
+						Attr("role", "searchbox"), Attr("aria-label", props.SearchLabel), Placeholder(props.SearchLabel),
 						// C619: while the debounce is still pending the rows below are the
 						// PREVIOUS query's. aria-busy tells assistive tech the region is
 						// mid-update, and the visible note beside it tells everyone else,
 						// so nobody acts on a result the query has already excluded.
 						Attr("aria-busy", searchBusy),
-						OnInput(onSearch)),
+						OnInput(onSearch), OnKeyDown(onSearchKey)),
 					// C628: the note is ALWAYS in the DOM and hidden by a class, rather
 					// than conditionally rendered.
 					//
@@ -370,7 +409,9 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 						Attr("title", uistate.T("action.clearSearch")), OnClick(onClear),
 						Icon(icon.Close, css.Class(tw.W3, tw.H3)))),
 				),
+				If(props.SearchAddon != nil, props.SearchAddon),
 				trigger,
+				If(len(primaryActions) > 0, Fragment(primaryActions...)),
 			),
 			If(len(props.Actions) > 0, Div(css.Class("filter-toolbar-actions"), props.Actions)),
 		),
@@ -401,25 +442,46 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 		// C52: inline collapsible filter panel — no backdrop, no occlusion. The table
 		// remains visible below while the user adjusts filters. The panel mounts/unmounts
 		// with the open state (same as before for the FlipPanel) so it is keyed correctly.
-		If(open.Get(), Div(css.Class("filter-inline-panel"),
+		If(open.Get(), Div(ClassStr(filterPanelClass(props.FilterSheet)),
 			Attr("id", "filter-inline-panel"),
-			Attr("role", "region"), Attr("aria-label", props.FiltersTitle),
+			Attr("role", "region"), Attr("aria-label", panelTitle),
 			// Escape from anywhere inside the panel, not just from the trigger.
 			OnKeyDown(onPanelKey),
 			Div(css.Class("filter-inline-header"),
 				H3(css.Class("filter-inline-title", tw.Flex, tw.ItemsCenter, tw.Gap2),
-					Icon(icon.Filter, css.Class(tw.W4, tw.H4)), Span(props.FiltersTitle)),
+					Icon(icon.Filter, css.Class(tw.W4, tw.H4)), Span(panelTitle)),
 				// This ✕ closes the PANEL and changes no filter — worth saying, because
 				// it sits among controls that do remove things (C574).
 				Button(css.Class("set-close"), Type("button"),
 					Attr("data-testid", "filter-panel-close"),
 					Attr("aria-label", uistate.T("filters.closePanel")),
 					Attr("title", uistate.T("filters.closePanel")),
-					OnClick(func() { open.Set(false) }), Icon(icon.Close, css.Class(tw.W4, tw.H4))),
+					OnClick(closePanel), Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 			),
 			Div(css.Class("filter-inline-body"), props.FilterFields),
+			If(props.FilterSheet, Div(css.Class("filter-sheet-footer"),
+				Button(css.Class("btn-link filter-sheet-clear"), Type("button"),
+					Attr("data-testid", "filter-sheet-clear-all"),
+					OnClick(func() {
+						if props.OnClearAll != nil {
+							props.OnClearAll()
+						}
+					}),
+					uistate.T("transactions.clearAllFilters")),
+				Button(css.Class("btn btn-primary filter-sheet-done"), Type("button"),
+					Attr("data-testid", "filter-sheet-done"),
+					OnClick(closePanel),
+					uistate.T("action.done")),
+			)),
 		)),
 	)
+}
+
+func filterPanelClass(sheet bool) string {
+	if sheet {
+		return "filter-inline-panel filter-sheet"
+	}
+	return "filter-inline-panel"
 }
 
 // filterChipProps configures one chip. It is its own component so the remove

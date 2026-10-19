@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/catname"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -24,16 +26,19 @@ import (
 )
 
 type transactionRowProps struct {
-	Txn             domain.Transaction
-	Account         string
-	Category        string
-	Categories      []domain.Category // for the edit-mode category picker
-	Members         []domain.Member   // for the edit-mode "Who" picker (may be empty)
-	Selected        bool
-	ShowTags        bool // whether the Tags column is present this render (G2 §6)
-	OnDelete        func(string)
-	OnDuplicate     func(domain.Transaction)
-	OnSave          func(orig domain.Transaction, desc, payee, amount, categoryID, date, memberID, tags string) bool
+	Txn         domain.Transaction
+	Account     string
+	Category    string
+	Categories  []domain.Category // for the edit-mode category picker
+	Members     []domain.Member   // for the edit-mode "Who" picker (may be empty)
+	Selected    bool
+	ShowTags    bool // whether the Tags column is present this render (G2 §6)
+	OnDelete    func(string)
+	OnDuplicate func(domain.Transaction)
+	OnSave      func(orig domain.Transaction, desc, payee, amount, categoryID, date, memberID, tags string) bool
+	// OnSaveFull persists the complete edited record, including fields added to
+	// the shared form. It is optional while older screen hosts are migrated.
+	OnSaveFull      func(orig, updated domain.Transaction) bool
 	OnToggleSelect  func(id string, shift bool)
 	OnToggleCleared func(domain.Transaction)
 	// OnCreateRule navigates to the Rules screen with the add-form prefilled from
@@ -141,11 +146,27 @@ func TransactionRow(props transactionRowProps) ui.Node {
 	dateS := ui.UseState(dateISO)
 	memberS := ui.UseState(defaultRowMember)
 	tagsS := ui.UseState(strings.Join(t.Tags, ", ")) // C48: editable tags (comma-separated)
-	splitOpen := ui.UseState(t.HasSplits())          // C58: reveal the split-into-categories editor
+	directionS := ui.UseState(txnDirection(t))
+	clearedS := ui.UseState(t.Cleared)
+	excludeS := ui.UseState(t.ExcludeFromReports)
+	noteS := ui.UseState(transactionNote(t))
+	splitOpen := ui.UseState(false) // C58: reveal the split-into-categories editor
 	onDesc := ui.UseEvent(func(v string) { descS.Set(v) })
 	onPayee := ui.UseEvent(func(v string) { payeeS.Set(v) }) // C60
 	onAmount := ui.UseEvent(func(v string) { amountS.Set(v) })
 	onTags := ui.UseEvent(func(v string) { tagsS.Set(v) })
+	onNote := ui.UseEvent(func(v string) { noteS.Set(v) })
+	onCleared := ui.UseEvent(func(e ui.Event) { clearedS.Set(e.JSValue().Get("target").Get("checked").Bool()) })
+	onExclude := ui.UseEvent(func(e ui.Event) { excludeS.Set(e.JSValue().Get("target").Get("checked").Bool()) })
+	setExpense := ui.UseEvent(Prevent(func() { directionS.Set("expense") }))
+	setIncome := ui.UseEvent(Prevent(func() { directionS.Set("income") }))
+	applySuggestion := ui.UseEvent(Prevent(func() {
+		candidate := t
+		candidate.Amount = money.New(signedEditAmount(amountS.Get(), directionS.Get(), t.Amount.Currency), t.Amount.Currency)
+		if s, ok := reviewSuggestion(appstate.Default, candidate); ok {
+			catS.Set(s.CategoryID)
+		}
+	}))
 	toggleSplit := ui.UseEvent(Prevent(func() { splitOpen.Set(!splitOpen.Get()) })) // C58
 	// onCat and onMember hooks are preserved as anonymous stubs so the hook slot
 	// order is stable; the actual onChange is wired through uiw.SelectInput below.
@@ -160,6 +181,11 @@ func TransactionRow(props transactionRowProps) ui.Node {
 		dateS.Set(dateISO)
 		memberS.Set(defaultRowMember)
 		tagsS.Set(strings.Join(t.Tags, ", "))
+		directionS.Set(txnDirection(t))
+		clearedS.Set(t.Cleared)
+		excludeS.Set(t.ExcludeFromReports)
+		noteS.Set(transactionNote(t))
+		splitOpen.Set(false)
 		editing.Set(true)
 	}))
 	cancelEdit := ui.UseEvent(Prevent(func() { editing.Set(false) }))
@@ -167,10 +193,40 @@ func TransactionRow(props transactionRowProps) ui.Node {
 		// C59: only close the editor when OnSave signals success (returns true);
 		// a validation failure (e.g. amount = 0) keeps the form open so the user
 		// can correct the value.
-		if props.OnSave(t, descS.Get(), payeeS.Get(), amountS.Get(), catS.Get(), dateS.Get(), memberS.Get(), tagsS.Get()) {
+		saved := false
+		if props.OnSaveFull != nil {
+			updated := t
+			updated.Desc, updated.Payee = descS.Get(), payeeS.Get()
+			updated.CategoryID, updated.Date = catS.Get(), t.Date
+			updated.MemberID = memberS.Get()
+			updated.Tags = splitTags(tagsS.Get())
+			updated.Cleared, updated.ExcludeFromReports = clearedS.Get(), excludeS.Get()
+			updated.Custom = cloneTransactionCustom(t.Custom)
+			if strings.TrimSpace(noteS.Get()) == "" {
+				delete(updated.Custom, "note")
+			} else {
+				updated.Custom["note"] = strings.TrimSpace(noteS.Get())
+			}
+			updated.Amount = money.New(signedEditAmount(amountS.Get(), directionS.Get(), t.Amount.Currency), t.Amount.Currency)
+			if d, err := dateutil.ParseDate(strings.TrimSpace(dateS.Get())); err == nil {
+				updated.Date = d
+			}
+			saved = props.OnSaveFull(t, updated)
+		} else if directionS.Get() == txnDirection(t) && clearedS.Get() == t.Cleared && excludeS.Get() == t.ExcludeFromReports && noteS.Get() == transactionNote(t) {
+			saved = props.OnSave(t, descS.Get(), payeeS.Get(), amountS.Get(), catS.Get(), dateS.Get(), memberS.Get(), tagsS.Get())
+		} else {
+			uistate.PostNotice(uistate.T("r2e.fullEditUnavailable"), true)
+		}
+		if saved {
 			editing.Set(false)
 		}
 	}))
+	onEditKeyDown := ui.UseEvent(func(e ui.KeyboardEvent) {
+		if e.GetKey() == "Escape" {
+			e.PreventDefault()
+			editing.Set(false)
+		}
+	})
 
 	// Land the cursor in the first field when the inline editor opens (§6.7).
 	editKey := "closed"
@@ -185,6 +241,17 @@ func TransactionRow(props transactionRowProps) ui.Node {
 	}, editKey)
 
 	if editing.Get() {
+		candidate := t
+		candidate.Amount = money.New(signedEditAmount(amountS.Get(), directionS.Get(), t.Amount.Currency), t.Amount.Currency)
+		suggested, hasSuggestion := reviewSuggestion(appstate.Default, candidate)
+		suggestionName := ""
+		if hasSuggestion {
+			if c, ok := categoryByID(props.Categories, suggested.CategoryID); ok {
+				suggestionName = c.Name
+			} else {
+				hasSuggestion = false
+			}
+		}
 		catOpts := uiw.OptionsFrom(
 			props.Categories,
 			func(c domain.Category) string { return c.ID },
@@ -204,60 +271,49 @@ func TransactionRow(props transactionRowProps) ui.Node {
 		if props.ShowTags {
 			editColspan = "9"
 		}
-		// GM2-4: inline-edit had 0 labeled-field wrappers (description + amount were
-		// placeholder-only, invisible to screen readers once text is entered). Wrap
-		// each in labeledField() to match the entity add-form pattern.
-		onEditKeyDown := ui.UseEvent(func(e ui.KeyboardEvent) {
-			if e.GetKey() == "Escape" {
-				e.PreventDefault()
-				editing.Set(false)
+		primary := []ui.Node{
+			labeledField(uistate.T("transactions.amountPlaceholder"), Input(css.Class("field"), Type("number"), Step("0.01"), OnInput(onAmount), uiw.FieldValue(amountS.Get()))),
+			uiw.FormField(uistate.T("quickAdd.kind"), Div(css.Class("btn-group"),
+				Button(ClassStr("btn"), Type("button"), Attr("aria-label", uistate.T("quickAdd.expense")), Attr("aria-pressed", ariaBool(directionS.Get() == "expense")), OnClick(setExpense), uistate.T("quickAdd.expense")),
+				Button(ClassStr("btn"), Type("button"), Attr("aria-label", uistate.T("quickAdd.income")), Attr("aria-pressed", ariaBool(directionS.Get() == "income")), OnClick(setIncome), uistate.T("quickAdd.income")),
+			)),
+			labeledField(uistate.T("transactions.payeeLabel"), Input(css.Class("field"), Type("text"), Attr("data-testid", "txn-edit-payee"), Placeholder(uistate.T("transactions.payeeLabel")), OnInput(onPayee), uiw.FieldValue(payeeS.Get()))),
+			uiw.FormField(uistate.T("transactions.categoryLabel"), Fragment(
+				If(hasSuggestion && suggested.CategoryID != catS.Get(), Button(css.Class("txn-catsuggest"), Type("button"), Attr("data-testid", "txn-edit-category-suggestion"), OnClick(applySuggestion), uistate.T("r2e.useSuggestion", suggestionName))),
+				uiw.SelectInput(uiw.SelectInputProps{Options: catOpts, Selected: catS.Get(), AriaLabel: uistate.T("transactions.categoryLabel"), OnChange: func(v string) { catS.Set(v) }}),
+			)),
+			labeledField(uistate.T("transactions.dateLabel"), Input(css.Class("field"), Type("date"), OnInput(onDate), uiw.FieldValue(dateS.Get()))),
+			labeledField(uistate.T("quickAdd.account"), Input(css.Class("field"), Type("text"), Attr("readonly", "readonly"), Attr("aria-readonly", "true"), uiw.FieldValue(props.Account))),
+		}
+		more := []ui.Node{
+			labeledField(uistate.T("transactions.descPlaceholder"), Input(css.Class("field"), Attr("id", "txn-edit-"+t.ID), Type("text"), Placeholder(uistate.T("transactions.descPlaceholder")), OnInput(onDesc), uiw.FieldValue(descS.Get()))),
+			labeledField(uistate.T("transactions.tagsLabel"), Input(css.Class("field"), Type("text"), Attr("data-testid", "txn-edit-tags"), Placeholder(uistate.T("transactions.tagsPlaceholder")), OnInput(onTags), uiw.FieldValue(tagsS.Get()))),
+			If(len(props.Members) > 1, uiw.FormField(uistate.T("transactions.whoLabel"), uiw.SelectInput(uiw.SelectInputProps{Options: memberOpts, Selected: memberS.Get(), AriaLabel: uistate.T("transactions.whoLabel"), TestID: "txn-who-edit", OnChange: func(v string) { memberS.Set(v) }}))),
+			labeledField(uistate.T("quickAdd.note"), Input(css.Class("field"), Type("text"), Attr("data-testid", "txn-edit-note"), OnInput(onNote), uiw.FieldValue(noteS.Get()))),
+			Label(Input(Type("checkbox"), Checked(clearedS.Get()), OnChange(onCleared)), " "+uistate.T("quickAdd.cleared")),
+			Label(Input(Type("checkbox"), Checked(excludeS.Get()), OnChange(onExclude)), " "+uistate.T("quickAdd.exclude")),
+		}
+		entries := make([]ui.Node, 0, len(t.Splits)+len(t.Attachments))
+		for _, split := range t.Splits {
+			name := catname.LabelByID(props.Categories, split.CategoryID)
+			entries = append(entries, Div(Attr("data-testid", "txn-edit-split-entry"), name+" · "+fmtMoney(split.Amount)))
+		}
+		if len(t.Attachments) > 0 {
+			for _, receipt := range t.Attachments {
+				entries = append(entries, Div(Attr("data-testid", "txn-edit-receipt-entry"), receipt.Name))
 			}
-		})
-		return Tr(css.Class("row-edit"),
-			Td(Attr("colspan", editColspan),
-				Form(css.Class("form-grid"), OnSubmit(saveEdit), OnKeyDown(onEditKeyDown),
-					labeledField(uistate.T("transactions.descPlaceholder"),
-						Input(css.Class("field"), Attr("id", "txn-edit-"+t.ID), Type("text"), Placeholder(uistate.T("transactions.descPlaceholder")), OnInput(onDesc), uiw.FieldValue(descS.Get()))),
-					// C60: payee field in inline edit so the merchant name is editable.
-					labeledField(uistate.T("transactions.payeeLabel"),
-						Input(css.Class("field"), Type("text"), Attr("aria-label", uistate.T("transactions.payeeLabel")), Attr("data-testid", "txn-edit-payee"), Placeholder(uistate.T("transactions.payeeLabel")), OnInput(onPayee), uiw.FieldValue(payeeS.Get()))),
-					labeledField(uistate.T("transactions.amountPlaceholder"),
-						Input(css.Class("field"), Type("number"), Placeholder(uistate.T("transactions.amountPlaceholder")), Step("0.01"), OnInput(onAmount), uiw.FieldValue(amountS.Get()))),
-					uiw.FormField(uistate.T("transactions.categoryLabel"),
-						uiw.SelectInput(uiw.SelectInputProps{
-							Options:   catOpts,
-							Selected:  catS.Get(),
-							AriaLabel: uistate.T("transactions.categoryLabel"),
-							OnChange:  func(v string) { catS.Set(v) },
-						})),
-					Input(css.Class("field"), Type("date"), Attr("aria-label", uistate.T("transactions.dateLabel")), OnInput(onDate), uiw.FieldValue(dateS.Get())),
-					// C48: edit tags inline (comma-separated), matching the add/edit forms elsewhere.
-					labeledField(uistate.T("transactions.tagsLabel"),
-						Input(css.Class("field"), Type("text"), Attr("aria-label", uistate.T("transactions.tagsLabel")), Attr("data-testid", "txn-edit-tags"), Placeholder(uistate.T("transactions.tagsPlaceholder")), OnInput(onTags), uiw.FieldValue(tagsS.Get()))),
-					If(len(props.Members) > 1, uiw.FormField(uistate.T("transactions.whoLabel"),
-						uiw.SelectInput(uiw.SelectInputProps{
-							Options:   memberOpts,
-							Selected:  memberS.Get(),
-							AriaLabel: uistate.T("transactions.whoLabel"),
-							TestID:    "txn-who-edit",
-							OnChange:  func(v string) { memberS.Set(v) },
-						}))),
-					Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
-					Button(css.Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
-				),
-				// C58: split-transaction editor — a toggle reveals a self-contained
-				// SplitEditor child (kept outside the Form so its buttons never submit
-				// the inline edit). Shown only when a save handler is wired.
+		}
+		return Tr(css.Class("row-edit"), Td(Attr("colspan", editColspan),
+			Form(OnSubmit(saveEdit), OnKeyDown(onEditKeyDown),
+				Div(css.Class("txn-bank-text"), uistate.T("r2e.bankText", t.Desc)),
+				TxnSharedForm(TxnSharedFormProps{Primary: primary, More: more, AfterMore: entries, MoreID: "txn-edit-more-" + t.ID}),
 				If(props.OnSaveSplits != nil, Fragment(
-					Button(css.Class("btn", "btn-sm"), Style(map[string]string{"margin-top": "0.5rem"}), Type("button"),
-						Attr("data-testid", "txn-split-toggle"), Attr("aria-expanded", ariaBool(splitOpen.Get())),
-						OnClick(toggleSplit),
-						uistate.T(splitToggleKey(splitOpen.Get(), t.HasSplits()))),
-					If(splitOpen.Get(), ui.CreateElement(SplitEditor, splitEditorProps{
-						Txn: t, Categories: props.Categories, Members: props.Members, OnSave: props.OnSaveSplits,
-					})),
+					Button(css.Class("btn", "btn-sm"), Type("button"), Attr("data-testid", "txn-split-toggle"), OnClick(toggleSplit), uistate.T(splitToggleKey(splitOpen.Get(), t.HasSplits()))),
+					If(splitOpen.Get(), ui.CreateElement(SplitEditor, splitEditorProps{Txn: t, Categories: props.Categories, Members: props.Members, OnSave: props.OnSaveSplits})),
 				)),
-			),
+				Button(css.Class("btn"), Type("button"), OnClick(cancelEdit), uistate.T("action.cancel")),
+				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("action.save")),
+			)),
 		)
 	}
 
@@ -324,6 +380,7 @@ func TransactionRow(props transactionRowProps) ui.Node {
 			"padding-left": "0.25rem",
 		}))
 	}
+	amountText, amountTone := fmtLedgerAmount(props.Txn.Amount, props.Txn.IsTransfer())
 	rowArgs = append(rowArgs,
 		// C65: the row-select control was a bare glyph button — no accessible name, no
 		// pressed state, no row context. Give it an aria-label naming the row and an
@@ -335,8 +392,8 @@ func TransactionRow(props transactionRowProps) ui.Node {
 			Attr("aria-pressed", ariaBool(props.Selected)),
 			OnClick(sel), Span(Attr("aria-hidden", "true"), selectGlyph))),
 		Td(css.Class("td-date fig"), pr.FormatDate(props.Txn.Date)),
-		Td(ClassStr("td-amount fig "+amountClass(props.Txn.Amount)), fmtMoney(props.Txn.Amount)),
-		Td(css.Class("row-desc"), Span(props.Txn.Desc), descTags,
+		Td(ClassStr("td-amount fig "+tw.ColorClass(amountTone)), amountText),
+		Td(css.Class("row-desc"), Span(Attr("title", props.Txn.Desc), Attr("aria-label", props.Txn.Desc), props.Txn.Desc), descTags,
 			// C58-ui: show a small "Split" chip when the transaction has a category
 			// breakdown, so the user can see at a glance which rows are split without
 			// having to open the inline editor.
@@ -349,9 +406,11 @@ func TransactionRow(props transactionRowProps) ui.Node {
 			}))),
 		// Title mirrors the text: long names ("Education & Loans") ellipsize in
 		// their fixed columns with no way to read the rest (UI/UX task #37).
-		Td(css.Class("td-cat"), Title(cat), cat),
+		Td(css.Class("td-cat"), Title(cat), Attr("aria-label", cat), cat),
 		Td(css.Class("td-acct"), Title(props.Account), props.Account),
 		If(props.ShowTags, Td(css.Class("td-tags"), tagsText)),
+	)
+	rowArgs = append(rowArgs,
 		Td(css.Class("td-cleared"), Button(ClassStr(clearedCls), Type("button"), Title(clearedTitle), Attr("aria-pressed", ariaBool(t.Cleared)), Attr("aria-label", clearedTitle), OnClick(clr), clearedGlyph)),
 		Td(css.Class("td-actions"),
 			If(!props.Txn.IsTransfer(), Button(css.Class("btn btn-icon"), Type("button"), Attr("aria-label", uistate.T("transactions.editTitle")), Title(uistate.T("transactions.editTitle")), OnClick(startEdit), uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)))),
@@ -394,4 +453,58 @@ func rowSelectName(t domain.Transaction) string {
 		return s
 	}
 	return fmtMoney(t.Amount)
+}
+
+func txnDirection(t domain.Transaction) string {
+	if t.Amount.IsPositive() {
+		return "income"
+	}
+	return "expense"
+}
+
+func signedEditAmount(raw, direction, currencyCode string) int64 {
+	amount, err := money.ParseMinor(strings.TrimSpace(raw), currency.Decimals(currencyCode))
+	if err != nil {
+		return 0
+	}
+	if amount < 0 {
+		amount = -amount
+	}
+	if direction == "income" {
+		return amount
+	}
+	return -amount
+}
+
+func splitTags(raw string) []string {
+	parts := strings.FieldsFunc(raw, func(r rune) bool { return r == ',' })
+	seen := make(map[string]bool, len(parts))
+	tags := make([]string, 0, len(parts))
+	for _, part := range parts {
+		tag := strings.TrimSpace(part)
+		key := strings.ToLower(tag)
+		if tag != "" && !seen[key] {
+			seen[key] = true
+			tags = append(tags, tag)
+		}
+	}
+	return tags
+}
+
+func transactionNote(t domain.Transaction) string {
+	if t.Custom == nil {
+		return ""
+	}
+	if note, ok := t.Custom["note"].(string); ok {
+		return note
+	}
+	return ""
+}
+
+func cloneTransactionCustom(custom map[string]any) map[string]any {
+	copy := make(map[string]any, len(custom)+1)
+	for key, value := range custom {
+		copy[key] = value
+	}
+	return copy
 }

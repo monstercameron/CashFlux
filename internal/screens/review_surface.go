@@ -60,16 +60,48 @@ const (
 // 250-row list from being O(n²) — sibling counts, suggestions and merchant
 // lookups all used to be recomputed per row.
 type reviewRow struct {
-	Group      reviewqueue.Group
-	Tier       reviewTier
-	Suggestion catsuggest.Suggestion
-	HasSugg    bool
+	Group              reviewqueue.Group
+	Tier               reviewTier
+	Suggestion         catsuggest.Suggestion
+	HasSugg            bool
+	SuggestionConflict bool
+}
+
+// sharedReviewSuggestion promotes a per-charge result to a merchant-wide
+// suggestion only when every charge resolves to the same category. Rules can
+// depend on account, amount and date, so merchant identity alone is insufficient.
+func sharedReviewSuggestion(g reviewqueue.Group, byID map[string]catsuggest.Suggestion) (catsuggest.Suggestion, bool, bool) {
+	var shared catsuggest.Suggestion
+	foundAny, missing := false, false
+	for _, txn := range g.Items {
+		s, ok := byID[txn.ID]
+		if !ok || s.CategoryID == "" {
+			missing = true
+			continue
+		}
+		if !foundAny {
+			shared = s
+			foundAny = true
+			continue
+		}
+		if s.CategoryID != shared.CategoryID {
+			return catsuggest.Suggestion{}, false, true
+		}
+		if s.Confidence < shared.Confidence {
+			shared.Confidence = s.Confidence
+		}
+	}
+	if foundAny && missing {
+		return catsuggest.Suggestion{}, false, true
+	}
+	return shared, foundAny && len(g.Items) > 0, false
 }
 
 // reviewIndex is the whole surface's data for one render.
 type reviewIndex struct {
 	Rows  []reviewRow
 	Total int // charges still queued IN THE ACTIVE SCOPE
+	Scope reviewscope.Scope
 	// QueueTotal and ViewTotal are the two denominators the scope selector offers
 	// (C554): everything awaiting review, and the part of it the ledger's own
 	// search/filters/period currently show. Both are computed every build so the
@@ -143,16 +175,20 @@ func restrictQueue(queue []domain.Transaction, visible []string) []domain.Transa
 	return out
 }
 
-// buildReviewIndex resolves every queued charge ONCE, groups by merchant, and
-// ranks the groups. Suggestions are resolved per merchant rather than per charge
-// — every charge in a group shares a payee, so the answer is the same and the
-// work is O(groups) instead of O(charges).
+// buildReviewIndex resolves every queued charge once in its own account, amount,
+// and date context, then promotes a result to the merchant group only when all
+// charges agree. Shared lookup inputs are loaded once for the whole index.
 //
 // scope decides which charges are in play; ledger is the ledger's effective
 // filter, used both to narrow the queue under ScopeCurrentView and to count the
 // other scope's denominator under either (C554).
 func buildReviewIndex(app *appstate.App, scope reviewscope.Scope, ledger txnfilter.Criteria) reviewIndex {
-	idx := reviewIndex{Byid: map[string]reviewRow{}}
+	return buildReviewIndexScoped(app, scope, ledger, false)
+}
+
+func buildReviewIndexScoped(app *appstate.App, scope reviewscope.Scope, ledger txnfilter.Criteria, fallbackEmptyView bool) reviewIndex {
+	scope = reviewscope.Normalize(scope)
+	idx := reviewIndex{Byid: map[string]reviewRow{}, Scope: scope}
 	if app == nil {
 		return idx
 	}
@@ -162,6 +198,10 @@ func buildReviewIndex(app *appstate.App, scope reviewscope.Scope, ledger txnfilt
 	idx.QueueTotal = len(queue)
 	inView := restrictQueue(queue, ledgerVisibleIDs(txns, ledger))
 	idx.ViewTotal = len(inView)
+	if fallbackEmptyView && scope == reviewscope.ScopeCurrentView && idx.ViewTotal == 0 && idx.QueueTotal > 0 {
+		scope = reviewscope.ScopeEntireQueue
+		idx.Scope = scope
+	}
 	if reviewscope.Normalize(scope) == reviewscope.ScopeCurrentView {
 		queue = inView
 	}
@@ -187,30 +227,37 @@ func buildReviewIndex(app *appstate.App, scope reviewscope.Scope, ledger txnfilt
 		}
 	}
 
-	// Rank each charge by the confidence of its merchant's suggestion.
-	suggByKey := map[string]catsuggest.Suggestion{}
-	okByKey := map[string]bool{}
+	// Resolve every charge in its own rule context. Account, amount and date can
+	// change a rule result even when two charges share a merchant.
+	suggByID := make(map[string]catsuggest.Suggestion, len(queue))
 	ranked := make([]reviewqueue.Ranked, 0, len(queue))
 	for _, t := range queue {
-		k := reviewqueue.MerchantKey(t)
-		if _, seen := okByKey[k]; !seen {
-			s, ok := reviewSuggestionWith(app, t, tally, threshold, cats)
-			suggByKey[k], okByKey[k] = s, ok
+		s, ok := reviewSuggestionWith(app, t, tally, threshold, cats)
+		if ok {
+			suggByID[t.ID] = s
 		}
 		conf := 0
-		if okByKey[k] {
-			conf = int(suggByKey[k].Confidence)
+		if ok {
+			conf = int(s.Confidence)
 		}
 		ranked = append(ranked, reviewqueue.Ranked{Txn: t, Confidence: conf})
 	}
 
 	for _, g := range reviewqueue.GroupByMerchant(ranked) {
-		s, ok := suggByKey[g.Key], okByKey[g.Key]
-		row := reviewRow{Group: g, Tier: tierOf(s, ok), Suggestion: s, HasSugg: ok}
+		s, ok, conflict := sharedReviewSuggestion(g, suggByID)
+		row := reviewRow{Group: g, Tier: tierOf(s, ok), Suggestion: s, HasSugg: ok,
+			SuggestionConflict: conflict}
 		idx.Rows = append(idx.Rows, row)
 		idx.Byid[g.Key] = row
 	}
 	return idx
+}
+
+// buildReviewIndexForOpen keeps an unchosen default from opening on an empty
+// filtered view while review items wait outside it. An explicitly chosen scope
+// remains in force, including an intentionally empty current view.
+func buildReviewIndexForOpen(app *appstate.App, scope reviewscope.Scope, chosen bool, ledger txnfilter.Criteria) reviewIndex {
+	return buildReviewIndexScoped(app, scope, ledger, !chosen)
 }
 
 // ReviewSurfaceBody is the body of the review modal. The panel is NoFooter +
@@ -264,7 +311,7 @@ func ReviewSurfaceBody(_ struct{}) ui.Node {
 	// C554: an unchosen scope FOLLOWS the ledger rather than being written to the
 	// session on open. Deriving it keeps a filter the user changes between visits
 	// honest, and means nothing is persisted until they actually decide.
-	ledgerFiltered := len(ledgerEff.ActiveFilters()) > 0
+	ledgerFiltered := len(ledgerEff.PageFilters()) > 0
 	scope := reviewscope.Default(ledgerFiltered)
 	if sess.ScopeChosen {
 		scope = sess.Scope
@@ -345,8 +392,11 @@ func ReviewSurfaceBody(_ struct{}) ui.Node {
 	// a row or switching mode are pure view state, and re-deriving the whole queue
 	// for them is what made every interaction cost ~100-300ms. The scope and the
 	// ledger filter join the keys because both change WHICH charges are in play.
-	idx := ui.UseMemo(func() reviewIndex { return buildReviewIndex(app, scope, ledgerEff) },
+	idx := ui.UseMemo(func() reviewIndex {
+		return buildReviewIndexForOpen(app, scope, sess.ScopeChosen, ledgerEff)
+	},
 		rev, open.Get(), string(scope), ledgerEff)
+	scope = idx.Scope
 
 	// catFor resolves what a group will be categorized as: a hand edit wins over
 	// the suggestion, always.
@@ -356,6 +406,9 @@ func ReviewSurfaceBody(_ struct{}) ui.Node {
 		}
 		if r.HasSugg {
 			return r.Suggestion.CategoryID
+		}
+		if r.SuggestionConflict {
+			return ""
 		}
 		// SMART+ is consulted LAST — only for what the free sources could not
 		// answer, which is what keeps the paid pass small (C515 precedence).
@@ -412,7 +465,7 @@ func ReviewSurfaceBody(_ struct{}) ui.Node {
 	// to re-derive what a rule already knows is the waste this avoids.
 	gapRows := make([]reviewRow, 0)
 	for _, r := range idx.Rows {
-		if !r.HasSugg {
+		if !r.HasSugg && !r.SuggestionConflict {
 			gapRows = append(gapRows, r)
 		}
 	}
@@ -454,7 +507,7 @@ func ReviewSurfaceBody(_ struct{}) ui.Node {
 		for i, r := range sample {
 			t := r.Group.Items[0]
 			lines.WriteString(strconv.Itoa(i+1) + " | " + strings.TrimSpace(r.Group.Merchant) +
-				" | " + fmtMoney(t.Amount) + "\n")
+				" | " + reviewMoneyText(t.Amount) + "\n")
 			incomeByRef[i+1] = t.Amount.Amount > 0
 		}
 		scanState.Set("scanning")
@@ -644,6 +697,10 @@ func ReviewSurfaceBody(_ struct{}) ui.Node {
 		notice.Set("")
 	}
 	commitTargets := func(ids []string) {
+		if !reviewqueue.CanAssignCategory(cur) {
+			notice.Set(uistate.T("review.splitNeeded"))
+			return
+		}
 		cat := catFor(curRow)
 		if cat == "" {
 			notice.Set(uistate.T("review.chooseFirst"))
@@ -662,6 +719,10 @@ func ReviewSurfaceBody(_ struct{}) ui.Node {
 	}
 	doConfirm := func() {
 		if cur.ID == "" {
+			return
+		}
+		if !reviewqueue.CanAssignCategory(cur) {
+			notice.Set(uistate.T("review.splitNeeded"))
 			return
 		}
 		// A merchant-wide write is a second, explicit step: the first click asks,
@@ -733,10 +794,17 @@ func ReviewSurfaceBody(_ struct{}) ui.Node {
 			TxnID: cur.ID, ReopenReview: true,
 		})
 		uistate.CloseReviewInbox()
-		nav.Navigate(uistate.RoutePath(to))
 	}
-	toCategories := ui.UseEvent(func() { leaveReview("/categories") })
-	toRules := ui.UseEvent(func() {
+	toCategories := ui.UseEvent(func(e ui.Event) {
+		if !isPlainLeftClick(e) {
+			return
+		}
+		leaveReview("/categories")
+	})
+	toRules := ui.UseEvent(func(e ui.Event) {
+		if !isPlainLeftClick(e) {
+			return
+		}
 		// Hand the rule form the merchant and the category already on the card, so
 		// the trip starts from the decision rather than from an empty form (C622's
 		// contract, from the other surface).
@@ -831,6 +899,10 @@ func ReviewSurfaceBody(_ struct{}) ui.Node {
 
 	var body, foot ui.Node
 	if isBulk {
+		var setupLink ui.Node = Fragment()
+		if !hasProvider {
+			setupLink = reviewAISetupLink(scan)
+		}
 		body, foot = reviewBulkView(app, idx, selected.Get(), openGroups.Get(), manual.Get(),
 			catFor, toggleGroup, toggleSelect, setManual, selReady, selLook,
 			applySelected, clearSel, makeRules, notice.Get(), pr, clampFocus(focusRow.Get()),
@@ -839,7 +911,7 @@ func ReviewSurfaceBody(_ struct{}) ui.Node {
 				Filled: scanStats.Get()[0], Skipped: scanStats.Get()[1], Err: scanErr.Get(),
 				HasProvider: hasProvider, OnScan: scan, OnUse: useScan,
 				CanUse: len(aiProposals.Get()) > 0,
-			}), pickerRev.Get())
+			}), setupLink, pickerRev.Get())
 	} else {
 		body, foot = reviewSingleView(reviewSingleArgs{
 			App: app, Index: idx, Row: curRow, Txn: cur, CatFor: catFor, PickCategory: pickCategory,
@@ -930,8 +1002,7 @@ type reviewScopeStripProps struct {
 func reviewScopeStrip(props reviewScopeStripProps) ui.Node {
 	if !props.LedgerFiltered {
 		return Div(css.Class("rvs-scope"), Attr("data-testid", "review-scope"),
-			Attr("data-scope", string(props.Scope)),
-			Span(css.Class("rvs-scope-note"), uistate.T("review.scopeAllNote", plural(props.QueueTotal, "charge"))))
+			Attr("data-scope", string(props.Scope)))
 	}
 	return Div(css.Class("rvs-scope"), Attr("data-testid", "review-scope"),
 		Attr("data-scope", string(props.Scope)),
@@ -964,7 +1035,7 @@ func reviewWorkingSetPhrase(c txnfilter.Criteria) string {
 	if q := strings.TrimSpace(c.Text); q != "" {
 		return uistate.T("review.scopeBySearch", q)
 	}
-	if n := len(c.ActiveFilters()); n > 0 {
+	if n := len(c.PageFilters()); n > 0 {
 		return uistate.T("review.scopeByFilters", plural(n, "filter"))
 	}
 	return uistate.T("review.scopeByView")
@@ -1046,7 +1117,7 @@ func reviewBulkView(
 	catFor func(reviewRow) string,
 	toggleGroup, toggleSelect func(string), setManual func(string, string),
 	selReady, selLook, applySel, clearSel, makeRules any, notice string, pr prefs.Prefs, focused int,
-	scanStrip ui.Node, rev int,
+	scanStrip, setupLink ui.Node, rev int,
 ) (ui.Node, ui.Node) {
 	decisions := len(idx.Rows)
 
@@ -1144,6 +1215,7 @@ func reviewBulkView(
 		Span(css.Class("rvs-foot-n"), Attr("data-testid", "review-selection"),
 			Attr("role", "status"), Attr("aria-live", "polite"), label),
 		Span(css.Class("rvs-foot-sub"), sub),
+		setupLink,
 		Span(css.Class("rvs-foot-acts"),
 			If(selMerchants > 0,
 				Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "review-makerule"),
@@ -1195,6 +1267,8 @@ func reviewSingleView(a reviewSingleArgs) (ui.Node, ui.Node) {
 	if cur.Amount.Amount > 0 {
 		kind = domain.KindIncome
 	}
+	reason := reviewqueue.ReasonFor(cur)
+	canCategorize := reviewqueue.CanAssignCategory(cur)
 	// The OnChange handler is built by the SURFACE and threaded in, like every other
 	// handler in this struct. It used to be `ui.UseEvent(...)` inline here — and
 	// this function is a plain call, not a component, so that hook belonged to
@@ -1206,6 +1280,9 @@ func reviewSingleView(a reviewSingleArgs) (ui.Node, ui.Node) {
 	// down, in the same change.
 	selArgs := []any{css.Class("field"), Attr("data-testid", "review-category-select"),
 		Attr("aria-label", uistate.T("review.categoryLabel")), OnChange(a.PickCategory)}
+	if !canCategorize {
+		selArgs = append(selArgs, Attr("disabled", "disabled"))
+	}
 	selArgs = append(selArgs, categorySelectNodes(app.Categories(), kind, catFor(row))...)
 
 	// C653: the scope control. It only exists when there is genuinely a second
@@ -1252,17 +1329,12 @@ func reviewSingleView(a reviewSingleArgs) (ui.Node, ui.Node) {
 		uistate.T("review.leavesReviewGlyph"))
 	crossLinks := Div(css.Class("rvs-links"), Attr("data-testid", "review-cross-links"),
 		Span(css.Class("rvs-links-lead"), uistate.T("review.linksLead")),
-		Button(css.Class("btn-link"), Type("button"), Attr("data-testid", "review-goto-categories"),
-			Attr("aria-label", uistate.T("review.leavesReviewAria", uistate.T("review.gotoCategories"))),
-			Attr("title", uistate.T("review.leavesReviewAria", uistate.T("review.gotoCategories"))),
-			OnClick(a.ToCategories), uistate.T("review.gotoCategories"), leaveGlyph),
-		Button(css.Class("btn-link"), Type("button"), Attr("data-testid", "review-goto-rules"),
-			Attr("aria-label", uistate.T("review.leavesReviewAria", uistate.T("review.gotoRules"))),
-			Attr("title", uistate.T("review.leavesReviewAria", uistate.T("review.gotoRules"))),
-			OnClick(a.ToRules), uistate.T("review.gotoRules"), leaveGlyph),
+		reviewDestinationLink("review-goto-categories", "/categories", uistate.T("review.gotoCategories"),
+			uistate.T("review.leavesReviewAria", uistate.T("review.gotoCategories")), a.ToCategories, leaveGlyph),
+		reviewDestinationLink("review-goto-rules", "/rules", uistate.T("review.gotoRules"),
+			uistate.T("review.leavesReviewAria", uistate.T("review.gotoRules")), a.ToRules, leaveGlyph),
 	)
 
-	reason := reviewqueue.ReasonFor(cur)
 	body := Div(css.Class("rvs-single"),
 		Div(
 			Div(css.Class("rvw-card"),
@@ -1279,7 +1351,7 @@ func reviewSingleView(a reviewSingleArgs) (ui.Node, ui.Node) {
 				Div(css.Class("rvw-payee"), Attr("data-testid", "review-payee"), row.Group.Merchant),
 				Div(css.Class("rvw-rawpayee"), rawPayeeOf(cur)),
 				Div(css.Class("rvw-meta"),
-					Span(css.Class("rvw-amount is-expense"), fmtMoney(cur.Amount)),
+					reviewMoneyNode("rvw-amount", cur.Amount),
 					If(reviewAcctName(app, cur.AccountID) != "",
 						Span(css.Class("rvw-acct"), reviewAcctName(app, cur.AccountID))),
 				),
@@ -1297,6 +1369,7 @@ func reviewSingleView(a reviewSingleArgs) (ui.Node, ui.Node) {
 					Button(css.Class("btn btn-sm rvs-newcat"), Type("button"),
 						Attr("data-testid", "review-new-category"),
 						Attr("aria-label", uistate.T("review.newCategoryAria")),
+						Attr("disabled", disabledIf(!canCategorize)),
 						OnClick(a.NewCat), uistate.T("review.newCategory")),
 				),
 				If(row.HasSugg, Div(css.Class("rvs-why"), Attr("data-testid", "review-suggest-why"),
@@ -1307,7 +1380,7 @@ func reviewSingleView(a reviewSingleArgs) (ui.Node, ui.Node) {
 				// nobody has confirmed". Shown only when something is actually pending.
 				If(catFor(row) != "", P(css.Class("rvs-pending"), Attr("data-testid", "review-pending-note"),
 					uistate.T("review.pendingNote"))),
-				If(reason == reviewqueue.ReasonSplitUnbalanced,
+				If(!canCategorize,
 					P(css.Class("rvs-warn"), Attr("data-testid", "review-split-warn"),
 						uistate.T("review.splitNeeded"))),
 				If(notice != "", P(css.Class("rvs-notice"), Attr("role", "alert"),
@@ -1328,15 +1401,21 @@ func reviewSingleView(a reviewSingleArgs) (ui.Node, ui.Node) {
 		snoozeLabel = uistate.T("review.snoozeN", a.Targets)
 		dismissLabel = uistate.T("review.dismissN", a.Targets)
 	}
+	var commitControl ui.Node
+	if canCategorize {
+		commitControl = Button(css.Class("btn btn-primary btn-sm"), Type("button"),
+			Attr("data-testid", "review-commit"), OnClick(a.Confirm), confirmLabel)
+	} else {
+		commitControl = Span(css.Class("rvs-warn"), Attr("data-testid", "review-split-action"), uistate.T("review.splitNeeded"))
+	}
 	acts := Span(css.Class("rvs-foot-acts"),
 		Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "review-dismiss"),
 			OnClick(a.Dismiss), dismissLabel),
 		Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "review-skip"),
 			OnClick(a.Skip), snoozeLabel),
-		Button(css.Class("btn btn-primary btn-sm"), Type("button"),
-			Attr("data-testid", "review-commit"), OnClick(a.Confirm), confirmLabel),
+		commitControl,
 	)
-	if a.Confirming {
+	if canCategorize && a.Confirming {
 		acts = ui.CreateElement(reviewConfirmAll, reviewConfirmAllProps{
 			Targets:  a.Targets,
 			Merchant: strings.TrimSpace(row.Group.Merchant),
@@ -1352,6 +1431,43 @@ func reviewSingleView(a reviewSingleArgs) (ui.Node, ui.Node) {
 		acts,
 	)
 	return body, foot
+}
+
+// reviewAISetupLink keeps the Smart+ key invitation discoverable without taking
+// space away from the charges being reviewed.
+func reviewAISetupLink(onClick any) ui.Node {
+	return A(css.Class("btn-link rvs-ai-setup-link"),
+		Attr("data-testid", "review-ai-setup"),
+		Attr("href", uistate.RoutePath("/settings/ai")),
+		OnClick(onClick), uistate.T("review.connectAI"))
+}
+
+// isPlainLeftClick keeps link side effects scoped to the same clicks that the global
+// router interceptor handles. Modified clicks remain native and leave this surface intact.
+func isPlainLeftClick(e ui.Event) bool {
+	jsEvent := e.JSValue()
+	button := jsEvent.Get("button")
+	if button.Type() == js.TypeNumber && button.Int() != 0 {
+		return false
+	}
+	return !jsEvent.Get("metaKey").Truthy() && !jsEvent.Get("ctrlKey").Truthy() &&
+		!jsEvent.Get("shiftKey").Truthy() && !jsEvent.Get("altKey").Truthy()
+}
+
+// reviewDestinationLink renders a cross-surface destination as a real router link.
+// Its click handler only records the return context; the shared anchor interceptor
+// owns ordinary in-app navigation.
+func reviewDestinationLink(testID, route, label, accessibleName string, onClick any, trailing ui.Node) ui.Node {
+	args := []any{css.Class("btn-link"),
+		Attr("data-testid", testID),
+		Attr("href", uistate.RoutePath(route)),
+		Attr("aria-label", accessibleName),
+		Attr("title", accessibleName)}
+	if onClick != nil {
+		args = append(args, OnClick(onClick))
+	}
+	args = append(args, label, trailing)
+	return A(args...)
 }
 
 // reviewConfirmAllProps drive the merchant-wide confirmation strip.
@@ -1433,7 +1549,7 @@ func reviewGroupFacts(row reviewRow, pr prefs.Prefs) string {
 	if !first.Equal(last) {
 		span = uistate.T("review.dateRange", pr.FormatDate(first), pr.FormatDate(last))
 	}
-	return uistate.T("review.applyAllFacts", fmtMoney(money.Money{Amount: total, Currency: cur}), span)
+	return uistate.T("review.applyAllFacts", reviewMoneyText(money.Money{Amount: total, Currency: cur}), span)
 }
 
 func reviewReasonLabel(r reviewqueue.Reason) string {

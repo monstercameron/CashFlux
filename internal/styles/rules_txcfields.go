@@ -250,6 +250,7 @@ func registerTxcFieldsSurface() {
 		alignItems("center"),
 		gap("0.4rem"),
 		minWidth("0"),
+		flexWrap("nowrap"),
 	)
 	rule(".txn-table td.row-desc-cell .row-desc-text",
 		overflow("hidden"),
@@ -257,25 +258,15 @@ func registerTxcFieldsSurface() {
 		whiteSpace("nowrap"),
 		minWidth("0"),
 	)
-	// 2026-07-17 audit: the description is what a ledger is FOR — give its column
-	// the width priority (auto table layout yields the slack to the widest hint)
-	// and full-strength ink at a solid weight; the secondary columns (account,
-	// category, source, user) stay quiet, dimmed one tier and slightly smaller so
-	// the eye lands on payee + amount first.
-	// The ledger renders with table-layout:fixed (.bento-ledger), where column
-	// widths come from the HEADER row — so the priority width lives on the
-	// Description th (row-desc-col); the td hint below still covers any
-	// auto-layout use of the same table vocabulary.
-	rule(".bento-ledger .txn-table th.row-desc-col",
-		width("34%"),
-	)
-	rule(".txn-table td.row-desc-cell",
-		width("38%"),
-		minWidth("14rem"),
-	)
 	rule(".txn-table td.row-desc-cell .row-desc-text",
 		color("var(--text)"),
 		fontWeight("500"),
+		flex("1 1 auto"),
+	)
+	rule(".txn-table td.row-desc-cell .txn-desc-tags",
+		flex("0 1 auto"),
+		maxWidth("30%"),
+		overflow("hidden"),
 	)
 	rule(".txn-table .td-acct, .txn-table .td-cat, .txn-table .td-user",
 		color("var(--text-dim)"),
@@ -284,6 +275,10 @@ func registerTxcFieldsSurface() {
 		overflow("hidden"),
 		textOverflow("ellipsis"),
 		maxWidth("11rem"),
+	)
+	rule(".txn-table .td-user",
+		textAlign("center"),
+		fontWeight("600"),
 	)
 	rule(".txn-table td.row-desc-cell .row-desc-inner > :not(.row-desc-text):not(.txn-desc-tags)",
 		flex("none"),
@@ -299,6 +294,7 @@ func registerTxcFieldsSurface() {
 		minWidth("0"),
 		overflow("hidden"),
 		flex("0 1 auto"),
+		flexWrap("nowrap"),
 	)
 	rule(".txn-desc-tag",
 		flexShrink("0"),

@@ -52,14 +52,25 @@ func transferReviewSelKey(b txnclassify.Batch) string {
 	return key
 }
 
-// transferReviewTestKey is the STABLE half of the key, for test ids and DOM keys.
-// Those have to survive a membership change or every row in the panel remounts
-// under the user's cursor whenever the ledger moves.
+// transferReviewTestKey is the stable half — counterparty and currency — for DOM
+// keys and test ids. Those have to survive a membership change or every row in
+// the panel remounts under the user's cursor whenever the ledger moves.
 func transferReviewTestKey(b txnclassify.Batch) string {
-	if b.CounterpartyID == "" {
-		return "unrouted"
+	currency := b.Currency
+	if currency == "" {
+		currency = "unknown"
 	}
-	return b.CounterpartyID
+	// Keep the existing USD identifiers readable and stable. The USD suffix is
+	// implicit; every other currency is explicit so parallel batches never share
+	// a keyed-renderer identity or a test id.
+	suffix := ""
+	if currency != "USD" {
+		suffix = "-" + currency
+	}
+	if b.CounterpartyID == "" {
+		return "unrouted" + suffix
+	}
+	return b.CounterpartyID + suffix
 }
 
 // TransferReviewBody is the "Review transfers" panel, mounted at the shell root

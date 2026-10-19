@@ -112,10 +112,9 @@ func proposeFromRows(app *appstate.App, txn domain.Transaction, rows []extract.R
 	cats := app.Categories()
 	appRules := app.Rules()
 
-	// Pre-resolve each row to a category id using full row context (the vision
-	// category name, then rules on the description), then hand receiptsplit a simple
-	// name->category MatchFunc so the pure package stays rules-agnostic.
-	lineCat := make(map[string]string, len(rows))
+	// Resolve each row independently using full row context (the vision category
+	// name, then rules on the description). Keep the result on the row: descriptions
+	// can repeat while their categories differ.
 	items := make([]receiptsplit.LineItem, 0, len(rows))
 	for _, r := range rows {
 		name := strings.TrimSpace(r.Description)
@@ -129,15 +128,13 @@ func proposeFromRows(app *appstate.App, txn domain.Transaction, rows []extract.R
 				cid = m.SetCategoryID
 			}
 		}
-		lineCat[name] = cid
-		items = append(items, receiptsplit.LineItem{Name: name, Amount: money.New(minor, cur)})
+		items = append(items, receiptsplit.LineItem{Name: name, CategoryID: cid, Amount: money.New(minor, cur)})
 	}
 
-	match := func(name string) string { return lineCat[name] }
 	proposal, ok := receiptsplit.Propose(items, receiptsplit.Target{
 		Amount:     txn.Amount,
 		CategoryID: txn.CategoryID,
-	}, match)
+	}, nil)
 	if !ok {
 		uistate.PostNotice(uistate.T("receiptsplit.noProposal"), true)
 		return

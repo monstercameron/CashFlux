@@ -63,6 +63,7 @@ func transactionSplitForm(props TransactionSplitFormProps) ui.Node {
 	proposedNote := ui.UseState("")
 	seededTxn := ui.UseState(domain.Transaction{})
 	haveSeed := ui.UseState(false)
+	draftGeneration := ui.UseState(0)
 	ui.UseEffect(func() func() {
 		if splits, note, ok := uistate.TakeTxnSplitProposal(props.TxnID); ok {
 			t := txn
@@ -70,6 +71,7 @@ func transactionSplitForm(props TransactionSplitFormProps) ui.Node {
 			seededTxn.Set(t)
 			proposedNote.Set(note)
 			haveSeed.Set(true)
+			draftGeneration.Set(draftGeneration.Get() + 1)
 		}
 		return nil
 	}, "mount")
@@ -86,6 +88,7 @@ func transactionSplitForm(props TransactionSplitFormProps) ui.Node {
 		seededTxn.Set(t)
 		proposedNote.Set("")
 		haveSeed.Set(true)
+		draftGeneration.Set(draftGeneration.Get() + 1)
 	}
 
 	editorTxn := txn
@@ -126,6 +129,10 @@ func transactionSplitForm(props TransactionSplitFormProps) ui.Node {
 			OnSave:       save,
 			FooterFormID: SplitModalFormID,
 			OnCancel:     props.OnDone,
+			OnReceiptSplit: func(id string) {
+				startReceiptSplitFlow(app, txn)
+			},
+			DraftGeneration: draftGeneration.Get(),
 		}),
 	)
 }

@@ -65,13 +65,54 @@ func TxnLinkBody(_ struct{}) ui.Node {
 			}
 		}
 	}
+	base := "USD"
+	if app != nil && app.Settings().BaseCurrency != "" {
+		base = app.Settings().BaseCurrency
+	}
+	rates := currency.Rates{Base: base}
+	var detected []subscriptions.Subscription
+	if app != nil {
+		rates.Rates = app.Settings().FXRates
+		allTxns := app.Transactions()
+		allAccounts := app.Accounts()
+		prefs := uistate.LoadSubsDetectPrefs()
+		accountTypes := make(map[string]string, len(allAccounts))
+		for _, account := range allAccounts {
+			accountTypes[account.ID] = string(account.Type)
+		}
+		ignoredCategories := make(map[string]bool, len(prefs.IgnoredCategoryIDs))
+		for _, id := range prefs.IgnoredCategoryIDs {
+			ignoredCategories[id] = true
+		}
+		ignoredAccountTypes := make(map[string]bool, len(prefs.IgnoredAccountTypes))
+		for _, accountType := range prefs.IgnoredAccountTypes {
+			ignoredAccountTypes[accountType] = true
+		}
+		filteredTxns := make([]domain.Transaction, 0, len(allTxns))
+		for _, candidate := range allTxns {
+			if ignoredCategories[candidate.CategoryID] || ignoredAccountTypes[accountTypes[candidate.AccountID]] {
+				continue
+			}
+			filteredTxns = append(filteredTxns, candidate)
+		}
+		detected, _ = subscriptions.Detect(filteredTxns, rates, prefs.MinOccurrencesOrDefault())
+		categoryNames := make(map[string]string)
+		for _, category := range app.Categories() {
+			categoryNames[category.ID] = category.Name
+		}
+		detected = txnLinkFilterSubscriptionKinds(detected, filteredTxns, allTxns, allAccounts, categoryNames, loadConfirmedSubs(), app.IgnoredSubscriptions())
+	}
+	initialSubChoice := txn.SubscriptionName
+	if initialSubChoice == "" {
+		initialSubChoice = bestTxnSubscription(txn, detected, rates)
+	}
 
 	// All hooks are called unconditionally, before any early return, so the hook order
 	// is identical on every render (the GWC hooks rule) even if the transaction vanishes
 	// underneath us mid-edit.
 	mode := ui.UseState(target.Mode)
 	billChoice := ui.UseState(txn.BillAccountID)
-	subChoice := ui.UseState(txn.SubscriptionName)
+	subChoice := ui.UseState(initialSubChoice)
 	autoLink := ui.UseState(false)
 	onSave := ui.UseEvent(Prevent(func() {
 		// C565: refuse a semantic no-op even if the button is reached some other way
@@ -117,39 +158,29 @@ func TxnLinkBody(_ struct{}) ui.Node {
 				Button(css.Class("btn"), Type("button"), OnClick(onCancel), uistate.T("action.close"))))
 	}
 
-	// Bill-payment targets: ANY non-archived account (not just liabilities) — a bill can
-	// be paid toward any account the user tracks. Also build an id→name map for the
+	// Bill-payment targets are active liability accounts. Also build an id→name map for the
 	// summary's account line and the effect preview.
 	var billAccts []domain.Account
 	acctName := make(map[string]string)
 	for _, ac := range app.Accounts() {
 		acctName[ac.ID] = ac.Name
-		if !ac.Archived {
+		if !ac.Archived && ac.Class == domain.ClassLiability {
 			billAccts = append(billAccts, ac)
 		}
 	}
 
 	// Detected subscriptions (by name) — the subscription-payment targets. Detection
 	// mirrors the /subscriptions page so the names line up with what the user sees.
-	base := "USD"
-	if b := app.Settings().BaseCurrency; b != "" {
-		base = b
+	// Detection can surface a merchant once per currency; keep one option per
+	// subscription while preserving detector order.
+	subNames := txnLinkSubscriptionNames(detected)
+	seenSub := make(map[string]bool, len(subNames))
+	for _, name := range subNames {
+		seenSub[name] = true
 	}
-	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	detected, _ := subscriptions.Detect(app.Transactions(), rates, uistate.LoadSubsDetectPrefs().MinOccurrencesOrDefault())
-	// De-dupe names (a subscription can surface more than once across currencies) while
-	// preserving detection order.
-	seenSub := map[string]bool{}
-	var subNames []string
-	for _, s := range detected {
-		if s.Name == "" || seenSub[s.Name] {
-			continue
-		}
-		seenSub[s.Name] = true
-		subNames = append(subNames, s.Name)
-	}
-	// If the txn is already linked to a subscription that no longer detects (e.g. too
-	// few occurrences), keep its name selectable so the link is still editable.
+	// A new payment can be preselected only when both its merchant and amount agree
+	// with a detected subscription. Existing links remain editable even if the
+	// history no longer meets the detector's threshold.
 	if txn.SubscriptionName != "" && !seenSub[txn.SubscriptionName] {
 		subNames = append([]string{txn.SubscriptionName}, subNames...)
 	}
@@ -303,4 +334,100 @@ func txnLinkMerchant(t domain.Transaction) string {
 		return m
 	}
 	return uistate.T("transactions.uncategorized")
+}
+
+// bestTxnSubscription returns the detected subscription that matches the
+// transaction's payee or description and whose typical charge is within 10% of
+// the transaction amount. It returns an empty name when there is no confident
+// match; detection order is stable, so ties remain deterministic.
+func bestTxnSubscription(txn domain.Transaction, detected []subscriptions.Subscription, rates currency.Rates) string {
+	payee := strings.TrimSpace(txn.Payee)
+	description := strings.TrimSpace(txn.Desc)
+	if (payee == "" && description == "") || txn.Amount.Amount == 0 {
+		return ""
+	}
+	amount := txn.Amount.Abs()
+	if !strings.EqualFold(strings.TrimSpace(amount.Currency), strings.TrimSpace(rates.Base)) {
+		converted, err := rates.Convert(amount, rates.Base)
+		if err != nil {
+			return ""
+		}
+		amount = converted
+	}
+	want := amount.Amount
+	if want < 0 {
+		want = -want
+	}
+	bestName := ""
+	bestDiff := int64(-1)
+	for _, candidate := range detected {
+		name := strings.TrimSpace(candidate.Name)
+		if (!strings.EqualFold(name, payee) && !strings.EqualFold(name, description)) || candidate.Amount < 0 {
+			continue
+		}
+		diff := candidate.Amount - want
+		if diff < 0 {
+			diff = -diff
+		}
+		if diff <= want/10 && (bestDiff < 0 || diff < bestDiff) {
+			bestName, bestDiff = candidate.Name, diff
+		}
+	}
+	return bestName
+}
+
+// txnLinkSubscriptionNames returns the detected subscription kinds the picker
+// can link to, in detector order, without duplicates or blank labels.
+func txnLinkSubscriptionNames(detected []subscriptions.Subscription) []string {
+	seen := make(map[string]bool, len(detected))
+	var names []string
+	for _, candidate := range detected {
+		name := strings.TrimSpace(candidate.Name)
+		if name == "" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		names = append(names, name)
+	}
+	return names
+}
+
+// txnLinkFilterSubscriptionKinds keeps only real subscription commitments. The
+// recurring-charge detector also finds bills and habitual spending, so its raw
+// matches are not by themselves proof that a merchant is a subscription.
+func txnLinkFilterSubscriptionKinds(
+	detected []subscriptions.Subscription,
+	detectionTxns []domain.Transaction,
+	txns []domain.Transaction,
+	accounts []domain.Account,
+	categoryNames map[string]string,
+	confirmed map[string]bool,
+	ignored []domain.SubscriptionIgnore,
+) []subscriptions.Subscription {
+	ignoredNames := make(map[string]bool, len(ignored))
+	for _, item := range ignored {
+		ignoredNames[strings.ToLower(strings.TrimSpace(item.SubName))] = true
+	}
+	categoryName := func(id string) string { return categoryNames[id] }
+	filtered := make([]subscriptions.Subscription, 0, len(detected))
+	for _, candidate := range detected {
+		name := strings.TrimSpace(candidate.Name)
+		if name == "" || ignoredNames[strings.ToLower(name)] || subscriptions.IsLiabilityPayment(candidate, txns, accounts) {
+			continue
+		}
+		isSubscription := false
+		for _, txn := range detectionTxns {
+			if !strings.EqualFold(strings.TrimSpace(txn.Desc), name) {
+				continue
+			}
+			if subscriptions.IsSubscriptionCommitment(name, categoryName(txn.CategoryID), confirmed) {
+				isSubscription = true
+				break
+			}
+		}
+		if isSubscription {
+			filtered = append(filtered, candidate)
+		}
+	}
+	return filtered
 }

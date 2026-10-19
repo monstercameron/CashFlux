@@ -1,0 +1,155 @@
+// SPDX-License-Identifier: MIT
+
+//go:build js && wasm
+
+package screens
+
+import (
+	"strings"
+	"syscall/js"
+	"testing"
+	"time"
+
+	"github.com/monstercameron/GoWebComponents/v5/testkit/render"
+	"github.com/monstercameron/GoWebComponents/v5/ui"
+)
+
+func TestR3JUnmountedReviewActionsFallThroughToLedger(t *testing.T) {
+	calledReview, calledLedger := false, false
+	actions := reviewKeyActions{Next: func() { calledReview = true }}
+	got := dispatchReviewKey("j", actions, false, func(key string) bool {
+		calledLedger = key == "j"
+		return calledLedger
+	})
+	if !got || !calledLedger || calledReview {
+		t.Fatalf("closed Review dispatch = (handled %t, ledger %t, review %t), want (true, true, false)", got, calledLedger, calledReview)
+	}
+}
+
+func TestR3JMountedReviewOwnsItsActionsAndFallsBackForOtherKeys(t *testing.T) {
+	calledReview, calledLedger := false, false
+	actions := reviewKeyActions{Next: func() { calledReview = true }}
+	fallback := func(string) bool { calledLedger = true; return true }
+	if !dispatchReviewKey("j", actions, true, fallback) || !calledReview || calledLedger {
+		t.Fatal("mounted Review did not own its j action exclusively")
+	}
+	calledReview, calledLedger = false, false
+	if !dispatchReviewKey("x", actions, true, fallback) || calledReview || !calledLedger {
+		t.Fatal("mounted Review did not offer an unmapped key to the ledger")
+	}
+}
+
+func TestR3JFirstLedgerNavigationAndWrapping(t *testing.T) {
+	tests := []struct {
+		name       string
+		idx, count int
+		key        string
+		hasFocus   bool
+		want       int
+	}{
+		{name: "first j starts at first row", idx: -1, count: 3, key: "j", want: 0},
+		{name: "first k starts at last row", idx: -1, count: 3, key: "k", want: 2},
+		{name: "j advances", idx: 0, count: 3, key: "j", hasFocus: true, want: 1},
+		{name: "k moves backward", idx: 2, count: 3, key: "k", hasFocus: true, want: 1},
+		{name: "j wraps", idx: 2, count: 3, key: "j", hasFocus: true, want: 0},
+		{name: "k wraps", idx: 0, count: 3, key: "k", hasFocus: true, want: 2},
+		{name: "empty ledger", idx: -1, count: 0, key: "j", want: -1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := txnNextRowIndex(tt.idx, tt.count, tt.key, tt.hasFocus); got != tt.want {
+				t.Fatalf("txnNextRowIndex(%d, %d, %q, %t) = %d, want %d", tt.idx, tt.count, tt.key, tt.hasFocus, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestR3JEditShortcutUsesLiveRowID(t *testing.T) {
+	for _, tt := range []struct {
+		testID string
+		wantID string
+		wantOK bool
+	}{
+		{testID: "txn-row-r3j-1", wantID: "r3j-1", wantOK: true},
+		{testID: "txn-rowedit", wantOK: false},
+		{testID: "other-row-r3j-1", wantOK: false},
+		{testID: "txn-row-", wantOK: false},
+	} {
+		gotID, gotOK := txnRowID(tt.testID)
+		if gotID != tt.wantID || gotOK != tt.wantOK {
+			t.Errorf("txnRowID(%q) = (%q, %t), want (%q, %t)", tt.testID, gotID, gotOK, tt.wantID, tt.wantOK)
+		}
+	}
+}
+
+func TestTxnHelpQuestionMarkClosesOnlyItsOpenGuide(t *testing.T) {
+	for _, tt := range []struct {
+		key       string
+		guideOpen bool
+		want      bool
+	}{
+		{key: "?", guideOpen: true, want: true},
+		{key: "?", guideOpen: false, want: false},
+		{key: "Escape", guideOpen: true, want: false},
+		{key: "j", guideOpen: true, want: false},
+	} {
+		if got := txnHelpKeyCloses(tt.key, tt.guideOpen); got != tt.want {
+			t.Errorf("txnHelpKeyCloses(%q, %t) = %t, want %t", tt.key, tt.guideOpen, got, tt.want)
+		}
+	}
+}
+
+func TestTxnKeyHelpPanelRendersAndReleasesItsListenersAcrossOpens(t *testing.T) {
+	f := render.New(t)
+	host := ui.CreateElement(TxnKeyHelpHost, struct{}{})
+	f.Render(host)
+	if got := txnKeyHelpListenerCountForTest(); got != 0 {
+		t.Fatalf("closed guide listener count = %d, want 0", got)
+	}
+
+	for openNumber := 1; openNumber <= 2; openNumber++ {
+		SetTxnKeyHelpOpen(true)
+		f.Render(host)
+		text := f.Text()
+		if !strings.Contains(text, "transaction search") || !strings.Contains(text, "Close") {
+			t.Fatalf("open %d did not render the shortcut list and close action: %q", openNumber, text)
+		}
+		if dialog := f.ByRole("dialog", "Transaction keyboard shortcuts"); !dialog.Exists() {
+			t.Fatalf("open %d did not render the guide in the standard dialog component", openNumber)
+		}
+		if close := f.ByRole("button", "Close"); !close.Exists() {
+			t.Fatalf("open %d did not render the standard dialog Close button", openNumber)
+		}
+		if got := txnKeyHelpListenerCountForTest(); got != 2 {
+			t.Fatalf("open %d panel listener count = %d, want 2", openNumber, got)
+		}
+
+		SetTxnKeyHelpOpen(false)
+		f.Render(host)
+		if got := txnKeyHelpListenerCountForTest(); got != 0 {
+			t.Fatalf("close %d panel listener count = %d, want 0", openNumber, got)
+		}
+	}
+	if got := activeTxnFocusCallbacks.Load(); got != 0 {
+		t.Fatalf("active deferred-focus callbacks after guide cycles = %d, want 0", got)
+	}
+}
+
+func TestTxnFocusCallbackReleasesAfterItsTimerRuns(t *testing.T) {
+	if got := activeTxnFocusCallbacks.Load(); got != 0 {
+		t.Fatalf("active deferred-focus callbacks at test start = %d, want 0", got)
+	}
+	querySelector := js.FuncOf(func(js.Value, []js.Value) any { return js.Null() })
+	defer querySelector.Release()
+	doc := js.Global().Get("Object").New()
+	doc.Set("querySelector", querySelector)
+
+	scheduleTxnFocus(doc, "#missing-category")
+	if got := activeTxnFocusCallbacks.Load(); got != 1 {
+		t.Fatalf("active deferred-focus callbacks before timer = %d, want 1", got)
+	}
+	time.Sleep(20 * time.Millisecond)
+	if got := activeTxnFocusCallbacks.Load(); got != 0 {
+		t.Fatalf("active deferred-focus callbacks after timer = %d, want 0", got)
+	}
+}

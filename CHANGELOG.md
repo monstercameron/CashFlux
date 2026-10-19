@@ -59,6 +59,33 @@ and every commit updates this file under `Unreleased`.
   field; Description is optional and defaults to the payee (R4F). The typed-sentence box applies its
   fill on Enter (R2K). Add and Edit share one field layout, labels and direction toggle (R9F).
 
+### Changed
+- **The Transactions page, reworked through an adversarial review loop (5.5 → 7.8/10 so far).**
+  - Reading: expenses in plain ink, income green with "+", transfers neutral with "Transfer → Account"
+    in the category; no accounting parentheses anywhere (ledger, count line, calendar, review).
+    The Status column is gone (an amber "Review" pill sits beside the category); "Who" shows member
+    initials in their colour; columns fit their content and Description gets the rest.
+  - Period and filters: a fixed "‹ This month ›" control that names the month it shows and remembers
+    the choice as a preset; the count line reads "October 2026 · 14 transactions · Spent · Income ·
+    Net" with Spent/Income as toggles and "Search all dates (319) →" while searching; the period is
+    never counted as a filter, and Clear all keeps it. Filters open in a full-height right sheet.
+  - Actions: one row menu (Suggest a category, Split…, Link to…, Exclude from reports, Delete) that
+    mounts only when opened; a single-line bulk bar at the bottom of the pane with keyboard-safe
+    Category and Person pickers; the Edit modal uses the shared form, with Tools and Delete in the
+    footer; future months show scheduled items and a count line; the calendar shows the same
+    Spent / income / count lines every week.
+  - Keyboard and accessibility: j/k/x/e/c/r/? shortcuts that keep working after Review closes, a
+    shortcut guide in the standard dialog, labelled controls, sentence-case labels, no accent ring
+    around the whole pane on click.
+  - Speed (3,292 transactions): opening the page 1.85 s → 0.26 s, sorting 1.7 s → 0.18 s with about
+    200 DOM changes instead of 1,500; the count line no longer filters the ledger a second time.
+
+### Fixed
+- Selecting rows painted the whole page black (the bulk bar's tile kept its opaque surface); row
+  menus opening upward were drawn underneath the rows above; the More menu was always open; the
+  row menu silently dropped actions to stay short; the filter sheet was clipped to 90 px; the
+  bulk-bar pickers were clipped by the bar; "1 transactions"; "Clear all 3 filters" with one chip.
+
 ## [1.18.0] - 2026-08-31
 
 ### Changed

@@ -207,75 +207,65 @@ func registerTxnScope() {
 		paddingRight("0.5rem"),
 	)
 
-	// --- Row status badges say what they mean (C578) ------------------------------
-	// Glyph and word sit on one line and never wrap or shrink: a status split across
-	// two lines, or clipped to "Needs rev…", is worse than the bare dot it replaced.
-	// The word is the quiet half — the glyph carries the scan, the word removes the
-	// need to go and look up what the glyph meant.
-	rule(".bento-ledger .txn-table th.td-status, .bento-ledger .txn-table td.td-status",
-		width("104px"),
-	)
-	rule(".txn-table .td-status",
-		fontSize("var(--type-13)"),
-		whiteSpace("nowrap"),
-		overflow("hidden"),
-		textOverflow("ellipsis"),
-	)
-	// Colour is the second signal, never the only one: the word carries the meaning
-	// and this only speeds the scan. Only the state that wants a person is tinted —
-	// colouring every settled row would leave the row that needs attention with
-	// nothing to set it apart.
-	rule(".txn-table .td-status.txn-status-attention",
-		color("var(--text)"),
-		fontWeight("500"),
-	)
-
-	// --- Category provenance mark (C579) ------------------------------------------
-	// Room for the mark. The Category column has been 90px since the uxbatch6 pass,
-	// which already clipped ordinary names ("Guilty ple…", "Uncatego…") before
-	// anything was added beside them; a provenance mark in a cell that narrow would
-	// leave "Gro… auto". The 46px comes off the description's percentage share
-	// (40% → 36%), which is the only column with slack: at 1440px it drops from
-	// roughly 460px to 414px and still holds a full merchant line. Trading four
-	// points of a column that was not truncating for a column that was is the right
-	// direction.
-	rule(".bento-ledger .txn-table th.row-desc-col",
-		width("36%"),
-	)
-	rule(".bento-ledger .txn-table th.td-cat, .bento-ledger .txn-table td.td-cat",
-		width("136px"),
-	)
-	// 136px holds at every width, and that is a measured choice rather than a guess.
-	// Narrowing the category to 112px below 1400px was tried, to give the
-	// description its 40% back: at 1280px it moved five clipped descriptions off the
-	// board and put NINE clipped category names on. Same ink, worse total, and the
-	// column that lost was the one carrying a word plus a mark in a fixed cell.
-	// Description at 36% clips sooner than it did; category clips almost never.
-	// The category cell becomes "name + optional mark". The name truncates; the mark
-	// never does, because a clipped provenance signal is worse than none — it would
-	// read as part of the category.
+	// Category text and its optional suggestion/provenance marks remain on one line.
 	rule(".td-cat-inner",
 		display("flex"),
-		alignItems("baseline"),
+		alignItems("center"),
 		gap("0.3rem"),
 		minWidth("0"),
+		flexWrap("nowrap"),
 	)
 	rule(".td-cat-name",
 		overflow("hidden"),
 		textOverflow("ellipsis"),
 		whiteSpace("nowrap"),
+		minWidth("0"),
+		flex("0 1 auto"),
+	)
+	rule(".td-cat-inner .txn-auto-mark, .td-cat-inner .txn-catsuggest",
+		flex("0 0 auto"),
+		whiteSpace("nowrap"),
+	)
+	rule(".td-cat-inner .txn-auto-mark",
+		fontSize("12px"),
+		lineHeight("1"),
+		color("var(--text-dim)"),
+		border("0"),
+		padding("0"),
+	)
+	rule(".td-cat-inner .txn-catsuggest",
+		color("var(--accent)"),
+		background("transparent"),
+		border("0"),
+		padding("0"),
+		font("inherit"),
+		cursor("pointer"),
+	)
+	rule("#txn-ledger-anchor",
+		prop("scroll-margin-top", "calc(var(--dt-sticky-top, 3.5rem) + 0.5rem)"),
+	)
+	rule(".txn-skip-link",
+		position("absolute"),
+		left("-10000px"),
+		top("0"),
+		zIndex("100"),
+	)
+	rule(".txn-skip-link:focus",
+		left("0.75rem"),
+		top("0.75rem"),
+		padding("0.5rem 0.75rem"),
+		background("var(--bg-elev)"),
+		color("var(--text)"),
+		border("2px solid var(--accent)"),
+		borderRadius("var(--radius-md)"),
 	)
 	// Lower-case, dim and small: this marks the ORDINARY case (most imported rows
 	// are unconfirmed), so it must not shout. It earns its place by being a word
 	// rather than a colour, and by explaining itself on hover and to a screen reader.
 	rule(".txn-auto-mark",
-		fontSize("var(--type-11)"),
+		fontSize("12px"),
 		lineHeight("1"),
-		letterSpacing("0.02em"),
 		color("var(--text-dim)"),
-		border("1px solid var(--border)"),
-		borderRadius("var(--radius-pill)"),
-		padding("0.1rem 0.3rem"),
 		cursor("help"),
 	)
 }

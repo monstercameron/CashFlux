@@ -171,6 +171,13 @@ func useMarkerHover(wrapID, title, text string, onActivate func()) markerHover {
 	// popover does not flicker shut within one marker.
 	ui.UseEffect(func() func() {
 		doc := js.Global().Get("document")
+		// The testkit renderer deliberately has no browser document. The row and
+		// its glyph still mount there, so the optional native keyboard bridge must
+		// leave the effect inert when the browser event target is unavailable.
+		if !doc.Truthy() || doc.Get("addEventListener").Type() != js.TypeFunction ||
+			doc.Get("removeEventListener").Type() != js.TypeFunction {
+			return nil
+		}
 		inside := func(v js.Value) bool {
 			if !v.Truthy() {
 				return false
@@ -201,8 +208,10 @@ func useMarkerHover(wrapID, title, text string, onActivate func()) markerHover {
 		doc.Call("addEventListener", "focusin", onIn)
 		doc.Call("addEventListener", "focusout", onOut)
 		return func() {
-			doc.Call("removeEventListener", "focusin", onIn)
-			doc.Call("removeEventListener", "focusout", onOut)
+			if doc.Truthy() && doc.Get("removeEventListener").Type() == js.TypeFunction {
+				doc.Call("removeEventListener", "focusin", onIn)
+				doc.Call("removeEventListener", "focusout", onOut)
+			}
 			onIn.Release()
 			onOut.Release()
 		}

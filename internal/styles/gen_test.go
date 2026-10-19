@@ -16,6 +16,8 @@ func TestGeneratedHasKeyRules(t *testing.T) {
 
 	wants := []string{
 		":root{", "--bg:#0e0e0f", "--accent:#2e8b57",
+		"--control-border:#9a9aa2", "--control-border:#56565c",
+		".fctrl-input:focus-visible{outline:2px solid var(--accent);outline-offset:2px",
 		"*{", "box-sizing:border-box",
 		"body{", "#boot{", "@keyframes boot-spin{",
 		".btn{", ".bento", ".topbar", ".txn-table",
@@ -30,4 +32,18 @@ func TestGeneratedHasKeyRules(t *testing.T) {
 		t.Errorf("generated CSS unexpectedly small (%d bytes) — parser likely dropped rules", len(out))
 	}
 	t.Logf("generated CSS: %d bytes, %d rules", len(out), len(sheet))
+}
+
+func TestTransactionToolbarUsesControlBoundary(t *testing.T) {
+	resetSheet()
+	registerTxnToolbar()
+	out := Build()
+	for _, want := range []string{
+		".filter-panel{", "border:1px solid var(--control-border)",
+		".filter-pill{", "border:1px solid var(--control-border)",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("transaction toolbar CSS missing %q", want)
+		}
+	}
 }

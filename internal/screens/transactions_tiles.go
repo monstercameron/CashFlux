@@ -5,9 +5,11 @@
 package screens
 
 import (
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
+	"syscall/js"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -21,6 +23,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/nlfilter"
+	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/CashFlux/internal/reviewqueue"
 	"github.com/monstercameron/CashFlux/internal/txnclassify"
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
@@ -41,6 +44,81 @@ import (
 // chipKeySep joins a filter chip's field and value into its stable key (an unlikely
 // character so it never collides with an entity id, tag, or date value).
 const chipKeySep = "\x1f"
+
+type txnToolbarIndexes struct {
+	accountNames, categoryNames, memberNames       map[string]string
+	accountOptions, categoryOptions, memberOptions []uiw.SelectOption
+	sourceOptions, tagOptions                      []uiw.SelectOption
+	tags                                           []string
+}
+
+type txnToolbarSummary struct {
+	review, duplicates, suspects         int
+	presets                              txnfilter.PresetCounts
+	shownNet, movedMinor                 int64
+	spentMinor, incomeMinor              int64 // cashflow fold over Shown (R3P: feeds the count line)
+	unconverted, movedRows, unpairedRows int
+}
+
+// txnSummaryScope strips the fields that reorder or paginate the SAME set.
+// Nothing in txnToolbarSummary depends on them — sums and counts over a set
+// do not change when it is re-sorted or re-paged — so keying the summary
+// cache on the full filter re-ran its whole-ledger scans (review count,
+// duplicate scan, preset counts) on every sort click and page change (R3P).
+func txnSummaryScope(f uistate.TxFilter) uistate.TxFilter {
+	f.Sort, f.Dir = "", ""
+	f.Page, f.PageSize = 0, 0
+	return f
+}
+
+type txnToolbarSummaryCache struct {
+	revision int
+	filter   uistate.TxFilter
+	value    txnToolbarSummary
+	valid    bool
+}
+
+func (c *txnToolbarSummaryCache) get(revision int, filter uistate.TxFilter, compute func() txnToolbarSummary) txnToolbarSummary {
+	if !c.valid || c.revision != revision || c.filter != filter {
+		c.value = compute()
+		c.revision, c.filter, c.valid = revision, filter, true
+	}
+	return c.value
+}
+
+func buildTxnToolbarIndexes(accounts []domain.Account, categories []domain.Category, members []domain.Member, txns []domain.Transaction) txnToolbarIndexes {
+	indexes := txnToolbarIndexes{
+		accountNames: make(map[string]string, len(accounts)), categoryNames: make(map[string]string, len(categories)),
+		memberNames: make(map[string]string, len(members)),
+	}
+	for _, a := range accounts {
+		indexes.accountNames[a.ID] = a.Name
+	}
+	for _, c := range categories {
+		indexes.categoryNames[c.ID] = c.Name
+	}
+	for _, m := range members {
+		indexes.memberNames[m.ID] = m.Name
+	}
+	indexes.accountOptions = withAllOption(uistate.T("transactions.allAccounts"), uiw.OptionsFrom(accounts, func(a domain.Account) string { return a.ID }, func(a domain.Account) string { return a.Name }, ""))
+	indexes.categoryOptions = withAllOption(uistate.T("transactions.allCategories"), uiw.OptionsFrom(categories, func(c domain.Category) string { return c.ID }, func(c domain.Category) string { return c.Name }, ""))
+	indexes.memberOptions = withAllOption(uistate.T("transactions.allMembers"), uiw.OptionsFrom(members, func(m domain.Member) string { return m.ID }, func(m domain.Member) string { return m.Name }, ""))
+	indexes.sourceOptions = withAllOption(uistate.T("transactions.allSources"), uiw.OptionsFrom(domain.AllTxnSources, func(s domain.TxnSource) string { return string(s) }, func(s domain.TxnSource) string { return s.Label() }, ""))
+	tagSet := make(map[string]struct{})
+	for _, t := range txns {
+		for _, tag := range t.Tags {
+			if tag = strings.TrimSpace(tag); tag != "" {
+				tagSet[tag] = struct{}{}
+			}
+		}
+	}
+	for tag := range tagSet {
+		indexes.tags = append(indexes.tags, tag)
+	}
+	sort.Strings(indexes.tags)
+	indexes.tagOptions = withAllOption(uistate.T("transactions.allTags"), uiw.OptionsFrom(indexes.tags, func(s string) string { return s }, func(s string) string { return s }, ""))
+	return indexes
+}
 
 // withAllOption prepends the empty-value "all / none" choice to an option list.
 func withAllOption(allLabel string, opts []uiw.SelectOption) []uiw.SelectOption {
@@ -63,14 +141,73 @@ func filterSelect(label, selected string, opts []uiw.SelectOption, onPick func(s
 // dateField / amountField are labeled date / amount inputs. Their change hook is
 // created by the caller and passed in, since a text input fires on every keystroke
 // (so the handler must live at a stable position in the owning component).
-func dateField(label, value string, onInput ui.Handler) ui.Node {
-	return withFieldLabel(label, Input(css.Class("field"), Type("date"),
-		Attr("aria-label", label), OnInput(onInput), uiw.FieldValue(value)))
+func dateField(label, value string, style prefs.DateStyle, onPick func(string)) ui.Node {
+	onChange := ui.UseEvent(func(e ui.Event) {
+		raw := strings.TrimSpace(e.GetValue())
+		if raw == "" {
+			onPick("")
+			return
+		}
+		if parsed, ok := parseFilterDate(style, raw); ok {
+			onPick(parsed)
+		}
+	})
+	return withFieldLabel(label, Input(css.Class("field"), Type("text"),
+		Attr("aria-label", label),
+		Attr("data-testid", "txn-filter-date-"+strings.ToLower(strings.ReplaceAll(label, " ", "-"))),
+		Placeholder(filterDatePlaceholder(style)), OnChange(onChange), uiw.FieldValue(formatFilterDate(style, value))))
 }
 
 func amountField(label, placeholder, value string, onInput ui.Handler) ui.Node {
-	return withFieldLabel(label, Input(css.Class("field"), Type("number"), Step("0.01"), Attr("min", "0"),
-		Attr("aria-label", label), Placeholder(placeholder), OnInput(onInput), uiw.FieldValue(value)))
+	return withFieldLabel(label, Span(css.Class("filter-amount-control"),
+		Span(css.Class("filter-amount-prefix"), Attr("aria-hidden", "true"), "$"),
+		Input(css.Class("field"), Type("number"), Step("0.01"), Attr("min", "0"),
+			Attr("aria-label", label), Placeholder(placeholder), OnInput(onInput), uiw.FieldValue(value))))
+}
+
+func filterDatePlaceholder(style prefs.DateStyle) string {
+	return formatFilterDate(style, "2006-01-02")
+}
+
+func formatFilterDate(style prefs.DateStyle, value string) string {
+	parsed, err := time.Parse("2006-01-02", value)
+	if err != nil {
+		return value
+	}
+	layout := filterDateLayout(style)
+	return parsed.Format(layout)
+}
+
+func parseFilterDate(style prefs.DateStyle, value string) (string, bool) {
+	for _, layout := range []string{filterDateLayout(style), "2006-01-02"} {
+		parsed, err := time.Parse(layout, value)
+		if err == nil {
+			return parsed.Format("2006-01-02"), true
+		}
+	}
+	return "", false
+}
+
+func filterDateLayout(style prefs.DateStyle) string {
+	switch style {
+	case prefs.DateUS:
+		return "01/02/2006"
+	case prefs.DateEU:
+		return "02/01/2006"
+	case prefs.DateLong:
+		return "Jan 2, 2006"
+	default:
+		return "2006-01-02"
+	}
+}
+
+// applyParsedDateBounds replaces both bounds when a parsed date clause exists.
+// Empty bounds are meaningful: `since March` intentionally removes an older To.
+func applyParsedDateBounds(current *uistate.TxFilter, parsed txnfilter.Criteria) {
+	if parsed.From != "" || parsed.To != "" {
+		current.From, current.To = parsed.From, parsed.To
+		current.PeriodPreset = txnfilter.PeriodCustom
+	}
 }
 
 // containsStr reports whether ss contains v.
@@ -83,6 +220,72 @@ func containsStr(ss []string, v string) bool {
 	return false
 }
 
+func formatTxnChipDate(iso string) string {
+	return formatTxnChipDateWith(iso, uistate.LoadPrefs().FormatDate)
+}
+
+func formatTxnChipDateWith(iso string, format func(time.Time) string) string {
+	date, err := dateutil.ParseDate(iso)
+	if err != nil {
+		return iso
+	}
+	return format(date)
+}
+
+func txnSearchChipLabel(query string) string {
+	return uistate.T("transactions.chipFiltering", query)
+}
+
+// txnAmountChipLabel shows which bound a chip removes and formats its value in
+// the household's base currency. Invalid stored values remain visible for repair.
+func txnAmountChipLabel(bound, value, base string) string {
+	operator := ""
+	switch bound {
+	case "min":
+		operator = "≥"
+	case "max":
+		operator = "≤"
+	default:
+		return value
+	}
+	minor, err := money.ParseMinor(value, currency.Decimals(base))
+	if err != nil {
+		return uistate.T("transactions.chipAmountBound", operator, value)
+	}
+	return uistate.T("transactions.chipAmountBound", operator, fmtMoney(money.New(minor, base)))
+}
+
+// txnFilterRangeError explains a user-entered range whose lower bound exceeds its
+// upper bound. Malformed legacy values are left to the field and parser to handle.
+func txnFilterRangeError(filter uistate.TxFilter, base string) string {
+	if filter.AmountMin != "" && filter.AmountMax != "" {
+		min, minErr := money.ParseMinor(filter.AmountMin, currency.Decimals(base))
+		max, maxErr := money.ParseMinor(filter.AmountMax, currency.Decimals(base))
+		if minErr == nil && maxErr == nil && min > max {
+			return uistate.T("transactions.filterRangeAmountInvalid")
+		}
+	}
+	if filter.From != "" && filter.To != "" {
+		from, fromErr := dateutil.ParseDate(filter.From)
+		to, toErr := dateutil.ParseDate(filter.To)
+		if fromErr == nil && toErr == nil && from.After(to) {
+			return uistate.T("transactions.filterRangeDateInvalid")
+		}
+	}
+	return ""
+}
+
+// excludedTxnCount reports how many visible rows are omitted from reports.
+func excludedTxnCount(txns []domain.Transaction) int {
+	n := 0
+	for _, txn := range txns {
+		if txn.ExcludeFromReports {
+			n++
+		}
+	}
+	return n
+}
+
 // filterPillProps configures one toggle pill in a multi-select filter group. It is its
 // own component so its OnClick hook sits at a stable position (the pill list is
 // variable-length — see the framework loop-hook gotcha).
@@ -91,6 +294,7 @@ type filterPillProps struct {
 	Value    string
 	Label    string
 	Selected bool
+	Option   bool
 	OnToggle func(txnfilter.FilterField, string)
 }
 
@@ -104,7 +308,15 @@ func FilterPill(props filterPillProps) ui.Node {
 		cls = "filter-pill on"
 		pressed = "true"
 	}
-	return Button(css.Class(cls), Type("button"), Attr("aria-pressed", pressed), OnClick(onClick), props.Label)
+	args := []any{css.Class(cls), Type("button"), Attr("aria-pressed", pressed), OnClick(onClick), props.Label}
+	if props.Option {
+		selected := "false"
+		if props.Selected {
+			selected = "true"
+		}
+		args = append(args, Attr("role", "option"), Attr("aria-selected", selected))
+	}
+	return Button(args...)
 }
 
 // filterMultiGroup renders one filter dimension as a labelled group of toggle pills —
@@ -112,9 +324,69 @@ func FilterPill(props filterPillProps) ui.Node {
 // on at once (OR-within the dimension). The empty-value "All" option is skipped (an
 // empty set already means "all").
 func filterMultiGroup(label string, field txnfilter.FilterField, selected []string, opts []uiw.SelectOption, onToggle func(txnfilter.FilterField, string)) ui.Node {
+	if field == txnfilter.FieldAccount || field == txnfilter.FieldCategory || field == txnfilter.FieldTag {
+		return ui.CreateElement(filterSearchGroup, filterGroupProps{
+			Label: label, Field: field, Selected: selected, Opts: opts, OnToggle: onToggle,
+		})
+	}
 	return ui.CreateElement(filterGroup, filterGroupProps{
 		Label: label, Field: field, Selected: selected, Opts: opts, OnToggle: onToggle,
 	})
+}
+
+func filterSearchGroup(props filterGroupProps) ui.Node {
+	query := ui.UseState("")
+	onQuery := ui.UseEvent(func(e ui.Event) { query.Set(e.GetValue()) })
+	count := 0
+	for _, opt := range props.Opts {
+		if opt.Value != "" && containsStr(props.Selected, opt.Value) {
+			count++
+		}
+	}
+	needle := strings.ToLower(strings.TrimSpace(query.Get()))
+	visible := make([]uiw.SelectOption, 0, len(props.Opts))
+	for _, opt := range props.Opts {
+		if opt.Value == "" || (needle != "" && !strings.Contains(strings.ToLower(opt.Label), needle)) {
+			continue
+		}
+		visible = append(visible, opt)
+	}
+	items := MapKeyed(visible,
+		func(opt uiw.SelectOption) any { return opt.Value },
+		func(opt uiw.SelectOption) ui.Node {
+			return ui.CreateElement(FilterPill, filterPillProps{
+				Field: props.Field, Value: opt.Value, Label: opt.Label,
+				Selected: containsStr(props.Selected, opt.Value), Option: true, OnToggle: props.OnToggle,
+			})
+		},
+	)
+	fieldName := string(props.Field)
+	searchNoun := "items"
+	switch props.Field {
+	case txnfilter.FieldAccount:
+		searchNoun = "accounts"
+	case txnfilter.FieldCategory:
+		searchNoun = "categories"
+	case txnfilter.FieldTag:
+		searchNoun = "tags"
+	}
+	return Div(css.Class("filter-group", "filter-search-group"),
+		Div(css.Class("filter-group-head"),
+			Span(css.Class("filter-group-label"), props.Label),
+			If(count > 0, Span(css.Class("filter-group-selcount"), uistate.T("transactions.filterSelected", count))),
+		),
+		Input(css.Class("field", "filter-group-search"), Type("search"),
+			Attr("role", "combobox"), Attr("aria-autocomplete", "list"), Attr("aria-expanded", "true"),
+			Attr("aria-label", uistate.T("transactions.filterSearchAria", searchNoun)),
+			Attr("aria-controls", "filter-options-"+fieldName),
+			Attr("data-testid", "filter-search-"+fieldName),
+			Placeholder(uistate.T("transactions.filterSearchPlaceholder", searchNoun)),
+			uiw.FieldValue(query.Get()), OnInput(onQuery)),
+		Div(css.Class("filter-pills", "filter-search-options"), Attr("id", "filter-options-"+fieldName),
+			Attr("role", "listbox"), Attr("aria-multiselectable", "true"), items,
+			If(len(visible) == 0, Span(css.Class("filter-search-empty"), uistate.T("transactions.filterSearchEmpty"))),
+		),
+	)
 }
 
 // filterGroupCollapseThreshold is the option count above which a filter dimension
@@ -212,6 +484,60 @@ func filterGroup(props filterGroupProps) ui.Node {
 // "primary" (accent — the Add action), or "danger" (delete).
 func toolbarIconBtn(testID string, ic icon.Name, label string, onClick ui.Handler, variant string) ui.Node {
 	return toolbarIconBtnOpen(testID, ic, label, onClick, variant, false)
+}
+
+func toolbarIconLink(testID string, ic icon.Name, label, href string) ui.Node {
+	return A(css.Class("btn btn-tool"), Attr("data-testid", testID), Href(href), Attr("aria-label", label),
+		uiw.Icon(ic, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(label))
+}
+
+func txnBulkActionGroup(label string, children ...ui.Node) ui.Node {
+	args := []any{css.Class("bulk-action-group", tw.Flex, tw.ItemsCenter, tw.Gap1),
+		Span(css.Class("bulk-action-group-label", "muted"), label)}
+	for _, child := range children {
+		args = append(args, child)
+	}
+	return Div(args...)
+}
+
+// txnActiveFilterChips builds removable chips for filters that belong in the
+// summary row. The period control owns date bounds, so those bounds never appear
+// here or inflate the chip row.
+func txnActiveFilterChips(active []txnfilter.ActiveFilter, label func(txnfilter.ActiveFilter) string) []uiw.Chip {
+	chips := make([]uiw.Chip, 0, len(active))
+	for _, af := range active {
+		// PageFilters already excludes these. Keep the guard for callers that
+		// supply a pre-built chip list (and for legacy tests/data) directly.
+		if af.Field == txnfilter.FieldFrom || af.Field == txnfilter.FieldTo {
+			continue
+		}
+		chips = append(chips, uiw.Chip{Key: string(af.Field) + chipKeySep + af.Value, Label: label(af)})
+	}
+	return chips
+}
+
+// addTxnTag adds a tag once, comparing case-insensitively to avoid near-duplicate
+// values created by capitalization differences.
+func addTxnTag(tags []string, tag string) []string {
+	tag = strings.TrimSpace(tag)
+	if tag == "" {
+		return tags
+	}
+	for _, existing := range tags {
+		if strings.EqualFold(strings.TrimSpace(existing), tag) {
+			return tags
+		}
+	}
+	return append(append([]string(nil), tags...), tag)
+}
+
+func txnHasTag(tags []string, tag string) bool {
+	for _, existing := range tags {
+		if strings.EqualFold(strings.TrimSpace(existing), strings.TrimSpace(tag)) {
+			return true
+		}
+	}
+	return false
 }
 
 // toolbarIconBtnState is toolbarIconBtn with an explicit disabled state and a
@@ -332,9 +658,29 @@ func txnPresetChip(props txnPresetProps) ui.Node {
 		Span(css.Class("txn-preset-count"), Attr("aria-hidden", "true"), strconv.Itoa(props.Count)))
 }
 
+func txnPresetRow(uncategorized, flagged, large int, uncatActive, flaggedActive, largeActive bool, onUncategorized, onFlagged, onLarge func()) ui.Node {
+	return Div(css.Class("txn-presets"), Attr("data-testid", "txn-presets"),
+		Span(css.Class("txn-presets-label"), uistate.T("transactions.presetsLabel")),
+		ui.CreateElement(txnPresetChip, txnPresetProps{
+			Label: uistate.T("transactions.presetUncategorized"), TestID: "txn-preset-uncat", Active: uncatActive, Count: uncategorized,
+			OnToggle: onUncategorized,
+		}),
+		ui.CreateElement(txnPresetChip, txnPresetProps{
+			Label: uistate.T("transactions.presetNeedsReview"), TestID: "txn-preset-review", Active: flaggedActive, Count: flagged,
+			OnToggle: onFlagged,
+		}),
+		ui.CreateElement(txnPresetChip, txnPresetProps{
+			Label: uistate.T("transactions.presetLarge"), TestID: "txn-preset-large", Active: largeActive, Count: large,
+			OnToggle: onLarge,
+		}),
+		Span(css.Class("txn-presets-note"), Attr("data-testid", "txn-presets-note"), uistate.T("transactions.presetScopeNote")),
+	)
+}
+
 func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	app := props.App
 	filterAtom := uistate.UseTxFilter()
+	displayPrefs := uistate.UsePrefs().Get()
 	selAtom := uistate.UseTxnSelection()
 	colsModalAtom := uistate.UseTxnColsModalOpen()
 	smartCatAtom := uistate.UseTxnSmartCatOpen()
@@ -342,11 +688,13 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	importPanelAtom := uistate.UseImportPanelOpen()
 	dupModalAtom := uistate.UseDuplicatesModalOpen()
 	transferReviewAtom := uistate.UseTransferReviewOpen()
+	nav := router.UseNavigate()
+	// Keep the former Rules action's event slot stable while its callback now
+	// lives in the More menu.
+	ui.UseEvent(Prevent(func() { txnLeaveFor("/rules"); nav.Navigate(uistate.RoutePath("/rules")) }))
 	// C363: the Rules workbench (/rules) is a full first-class surface, but nothing
 	// on Transactions pointed there. A labeled toolbar entry (with the active-rule
 	// count) makes it reachable in one visible click.
-	nav := router.UseNavigate()
-	openRules := ui.UseEvent(Prevent(func() { txnLeaveFor("/rules"); nav.Navigate(uistate.RoutePath("/rules")) }))
 
 	// View-mode toggles: Calendar swaps the main slot (TX8); Register adds a running-
 	// balance column (TX12) and is only offered when the filter scopes to one account.
@@ -371,29 +719,21 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	memberLens := uistate.UseMemberLens()
 	f, lensOn := fOwn.WithOwnerLens(memberLens)
 
+	dataRevision := uistate.UseDataRevision().Get()
 	accounts := app.Accounts()
 	categories := app.Categories()
 	members := app.Members()
 	txns := app.Transactions()
-	reviewN := reviewqueue.Count(txns)
 	ruleCount := len(app.Rules()) // C363: active-rule count for the toolbar Rules entry
 
-	accName := make(map[string]string, len(accounts))
-	for _, a := range accounts {
-		accName[a.ID] = a.Name
-	}
-	catName := make(map[string]string, len(categories))
-	for _, c := range categories {
-		catName[c.ID] = c.Name
-	}
-	memberName := make(map[string]string, len(members))
-	for _, m := range members {
-		memberName[m.ID] = m.Name
-	}
+	indexes := ui.UseMemo(func() txnToolbarIndexes {
+		return buildTxnToolbarIndexes(accounts, categories, members, txns)
+	}, dataRevision, app.Rev())
+	accName, catName, memberName := indexes.accountNames, indexes.categoryNames, indexes.memberNames
 
 	setFilter := func(mut func(*uistate.TxFilter)) { setTxFilterOn(filterAtom, mut) }
 	clearAllFilters := func() {
-		cleared := uistate.TxFilter{}.Normalize()
+		cleared := filterAtom.Get().ClearPageFilters()
 		filterAtom.Set(cleared)
 		uistate.PersistTxFilter(cleared)
 	}
@@ -407,12 +747,10 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 		debounce.Call("txn-filter:"+key, delay, func() { setFilter(mut) })
 	}
 	debFilter := func(key string, mut func(*uistate.TxFilter)) { debFilterD(key, 250*time.Millisecond, mut) }
-	// Search gets a longer debounce than the numeric fields: it's the most-typed filter
-	// and re-filtering the whole ledger on each pause is the heaviest, so 400ms coalesces
-	// more keystrokes (including deliberate typing that pauses past the shorter delay).
-	// C619: the 400ms coalescing above is good for performance and bad for trust —
-	// during it the ledger still shows the PREVIOUS query's rows with nothing
-	// saying so, and people clicked them. Track the gap explicitly: pending goes up
+	// Search applies after a short pause so input stays immediate while the expensive
+	// filtered result is only rebuilt once per typing burst.
+	// C619: the ledger shows the PREVIOUS query's rows during the debounce, so the
+	// search control marks that interval explicitly. Pending goes up
 	// the moment a keystroke lands and comes down inside the debounced callback, so
 	// it spans exactly the window where what is on screen is out of date.
 	//
@@ -428,19 +766,19 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 		// ~1.5s on a 3,000-row household. Re-asserting `true` on every keystroke
 		// therefore bought one full re-filter per character to say something the
 		// screen was already saying: typing six characters cost six of them, about
-		// 9.5 seconds, and the 400ms debounce below could not help because it only
+		// 9.5 seconds, and the debounce below could not help because it only
 		// coalesces the FILTER write, not these renders. One raise per typing burst,
 		// one lower when it commits.
 		if !searchPending.Get() {
 			searchPending.Set(true)
 		}
-		debFilterD("text", 400*time.Millisecond, func(x *uistate.TxFilter) {
+		debFilterD("text", 150*time.Millisecond, func(x *uistate.TxFilter) {
 			x.Text = v
 			searchPending.Set(false)
 		})
 	}
 	// C628: the ✕ is the one control whose whole job is "undo what I just typed",
-	// and routing it through the same 400ms coalescing left the query on screen for
+	// and routing it through the same coalescing left the query on screen for
 	// exactly the window it was pressed to end. Cancel the pending call first —
 	// otherwise it fires afterwards and writes the query straight back.
 	clearSearchNow := func() {
@@ -450,8 +788,12 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	}
 	onFilterAmountMin := ui.UseEvent(func(v string) { debFilter("amtmin", func(x *uistate.TxFilter) { x.AmountMin = v }) })
 	onFilterAmountMax := ui.UseEvent(func(v string) { debFilter("amtmax", func(x *uistate.TxFilter) { x.AmountMax = v }) })
-	onFilterFrom := ui.UseEvent(func(v string) { setFilter(func(x *uistate.TxFilter) { x.From = v }) })
-	onFilterTo := ui.UseEvent(func(v string) { setFilter(func(x *uistate.TxFilter) { x.To = v }) })
+	onFilterFrom := func(v string) {
+		setFilter(func(x *uistate.TxFilter) { x.From, x.PeriodPreset = v, txnfilter.PeriodCustom })
+	}
+	onFilterTo := func(v string) {
+		setFilter(func(x *uistate.TxFilter) { x.To, x.PeriodPreset = v, txnfilter.PeriodCustom })
+	}
 	onFilterCustomValText := ui.UseEvent(func(v string) { debFilter("customval", func(x *uistate.TxFilter) { x.CustomVal = v }) })
 	onAdd := ui.UseEvent(Prevent(func() { uistate.SetQuickAdd(true) }))
 	// C573: the type-scoped entries behind the primary Add. Plain closures — the
@@ -520,30 +862,7 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 
 	// Filter option lists, built once from the entity slices via the reusable
 	// OptionsFrom helper (value extractor + label extractor) rather than per-field loops.
-	accOpts := withAllOption(uistate.T("transactions.allAccounts"),
-		uiw.OptionsFrom(accounts, func(a domain.Account) string { return a.ID }, func(a domain.Account) string { return a.Name }, ""))
-	catOpts := withAllOption(uistate.T("transactions.allCategories"),
-		uiw.OptionsFrom(categories, func(c domain.Category) string { return c.ID }, func(c domain.Category) string { return c.Name }, ""))
-	memberOpts := withAllOption(uistate.T("transactions.allMembers"),
-		uiw.OptionsFrom(members, func(m domain.Member) string { return m.ID }, func(m domain.Member) string { return m.Name }, ""))
-	sourceOpts := withAllOption(uistate.T("transactions.allSources"),
-		uiw.OptionsFrom(domain.AllTxnSources, func(s domain.TxnSource) string { return string(s) }, func(s domain.TxnSource) string { return s.Label() }, ""))
-
-	tagSet := map[string]struct{}{}
-	for _, t := range txns {
-		for _, tg := range t.Tags {
-			if s := strings.TrimSpace(tg); s != "" {
-				tagSet[s] = struct{}{}
-			}
-		}
-	}
-	tagList := make([]string, 0, len(tagSet))
-	for tg := range tagSet {
-		tagList = append(tagList, tg)
-	}
-	sort.Strings(tagList)
-	tagOpts := withAllOption(uistate.T("transactions.allTags"),
-		uiw.OptionsFrom(tagList, func(s string) string { return s }, func(s string) string { return s }, ""))
+	accOpts, catOpts, memberOpts, sourceOpts, tagOpts, tagList := indexes.accountOptions, indexes.categoryOptions, indexes.memberOptions, indexes.sourceOptions, indexes.tagOptions, indexes.tags
 
 	// The resting (empty) value reads as "no cleared-status filter" — the old
 	// "Cleared & not" label made the select look like an active filter at rest
@@ -563,10 +882,9 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	chipLabel := func(af txnfilter.ActiveFilter) string {
 		switch af.Field {
 		case txnfilter.FieldText:
-			// A text filter — whether just typed or carried in from earlier work —
-			// reads as an intentional, one-click-clearable "Filtering: …" chip so a
-			// retained search never looks like a stray leftover (detail-lane 2 #3).
-			return uistate.T("transactions.chipFiltering", af.Value)
+			// Search text is named directly so the chip reads clearly beside the
+			// toolbar's "Filtering by" summary.
+			return txnSearchChipLabel(af.Value)
 		case txnfilter.FieldAccount:
 			return uistate.T("transactions.chipAccount", accName[af.Value])
 		case txnfilter.FieldCategory:
@@ -578,13 +896,13 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 		case txnfilter.FieldTag:
 			return uistate.T("transactions.chipTag", af.Value)
 		case txnfilter.FieldAmountMin:
-			return uistate.T("transactions.chipAmountMin", af.Value)
+			return txnAmountChipLabel("min", af.Value, props.Base)
 		case txnfilter.FieldAmountMax:
-			return uistate.T("transactions.chipAmountMax", af.Value)
+			return txnAmountChipLabel("max", af.Value, props.Base)
 		case txnfilter.FieldFrom:
-			return uistate.T("transactions.chipFrom", af.Value)
+			return uistate.T("transactions.chipFrom", formatTxnChipDate(af.Value))
 		case txnfilter.FieldTo:
-			return uistate.T("transactions.chipTo", af.Value)
+			return uistate.T("transactions.chipTo", formatTxnChipDate(af.Value))
 		case txnfilter.FieldCleared:
 			if af.Value == "yes" {
 				return uistate.T("transactions.cleared")
@@ -610,7 +928,7 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	// its own below. Deriving them from the layered filter instead would offer a
 	// member chip whose ✕ calls RemoveValue on a criteria that never held the member —
 	// a control that names something and then removes nothing (C574).
-	active := fOwn.ActiveFilters()
+	active := fOwn.PageFilters()
 	// The lens goes in the summary row's PRE-chip slot: ahead of the "Filtering by"
 	// lead-in, outside the Filters badge count, and untouched by the reset — because
 	// it is the top bar's perspective, not one of this page's filters.
@@ -640,12 +958,8 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 			RemoveLabel: uistate.T("transactions.budgetDrillChipRemove"),
 		})
 	}
-	chips := make([]uiw.Chip, 0, len(active))
-	for _, af := range active {
-		// Key encodes field + value so a per-value chip ✕ removes just that value
-		// (RemoveValue), not the whole dimension.
-		chips = append(chips, uiw.Chip{Key: string(af.Field) + chipKeySep + af.Value, Label: chipLabel(af)})
-	}
+	// Date bounds are represented by the period control, never as removable chips.
+	chips := txnActiveFilterChips(active, chipLabel)
 
 	// Natural-language search (TX2 / SMART-T3F, Free tier): when the typed query
 	// compiles into at least one structured clause, offer a quiet row that turns
@@ -698,12 +1012,7 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 			if parsed.AmountMax != "" {
 				x.AmountMax = parsed.AmountMax
 			}
-			if parsed.From != "" {
-				x.From = parsed.From
-			}
-			if parsed.To != "" {
-				x.To = parsed.To
-			}
+			applyParsedDateBounds(x, parsed)
 			if parsed.Cleared != "" {
 				x.Cleared = parsed.Cleared
 			}
@@ -792,9 +1101,50 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	// as a separate always-on strip, so the resting page is just the toolbar row + the
 	// active-filter chips before the first ledger row.
 	monthStart := dateutil.MonthStart(time.Now())
-	monthFrom := dateutil.FormatDate(monthStart)
 	monthEndEx := dateutil.AddMonths(monthStart, 1)
-	monthTo := dateutil.FormatDate(monthEndEx.AddDate(0, 0, -1))
+	summaryCache := ui.UseMemo(func() *txnToolbarSummaryCache { return &txnToolbarSummaryCache{} }, app.Rev())
+	summary := summaryCache.get(dataRevision, txnSummaryScope(f), func() txnToolbarSummary {
+		result := txnToolbarSummary{
+			review: reviewqueue.Count(txns),
+			presets: txnfilter.CountPresets(txns, f, txnfilter.PresetScope{
+				ReviewTag:  reviewqueue.ReviewTag,
+				LargeFor:   func(t domain.Transaction) int64 { return currency.MinorFromMajor(100, t.Amount.Currency) },
+				MonthStart: monthStart, MonthEnd: monthEndEx,
+			}),
+			duplicates: dedupe.Count(dedupe.FindDuplicates(txns)),
+			suspects:   transferSuspectCount(app),
+		}
+		transferSummary := txnclassify.SummarizeVisibleTransfers(props.Shown)
+		for i, t := range props.Shown {
+			converted, err := props.Rates.Convert(t.Amount, props.Base)
+			if err != nil {
+				result.unconverted++
+				continue
+			}
+			if t.IsTransfer() {
+				if transferSummary.CountedRows[i] {
+					result.movedRows++
+					if converted.Amount < 0 {
+						result.movedMinor -= converted.Amount
+					} else {
+						result.movedMinor += converted.Amount
+					}
+				}
+				continue
+			}
+			result.shownNet += converted.Amount
+			// The count line's Spent/Income, folded in the same pass over the
+			// same rows (transfers already excluded above) so the line never
+			// needs a second filter pass of its own (R3P / C2-12).
+			if converted.Amount < 0 {
+				result.spentMinor -= converted.Amount
+			} else {
+				result.incomeMinor += converted.Amount
+			}
+		}
+		result.unpairedRows = transferSummary.UnpairedRows
+		return result
+	})
 	// Preset match counts — like the toolbar's "Review N", so each chip shows its
 	// payoff before the click.
 	//
@@ -802,55 +1152,28 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	// not over the whole ledger. A chip beside a search that reads "Large 1665" while
 	// the search shows twelve rows is describing a population no click can produce.
 	// The arithmetic lives in txnfilter.CountPresets, tested on native Go.
-	presetN := txnfilter.CountPresets(txns, f, txnfilter.PresetScope{
-		ReviewTag:  reviewqueue.ReviewTag,
-		LargeFor:   func(t domain.Transaction) int64 { return currency.MinorFromMajor(100, t.Amount.Currency) },
-		MonthStart: monthStart,
-		MonthEnd:   monthEndEx,
-	})
-	uncatN, reviewN2, largeN, monthN := presetN.Uncategorized, presetN.NeedsReview, presetN.Large, presetN.ThisMonth
-	presetsRow := Div(css.Class("txn-presets"), Attr("data-testid", "txn-presets"),
-		Span(css.Class("txn-presets-label"), uistate.T("transactions.presetsLabel")),
-		ui.CreateElement(txnPresetChip, txnPresetProps{
-			Label: uistate.T("transactions.presetUncategorized"), TestID: "txn-preset-uncat", Active: f.Uncategorized, Count: uncatN,
-			OnToggle: func() { setFilter(func(x *uistate.TxFilter) { x.Uncategorized = !x.Uncategorized }) }}),
-		ui.CreateElement(txnPresetChip, txnPresetProps{
-			Label: uistate.T("transactions.presetNeedsReview"), TestID: "txn-preset-review", Active: f.Tag == reviewqueue.ReviewTag, Count: reviewN2,
-			OnToggle: func() {
-				setFilter(func(x *uistate.TxFilter) {
-					if x.Tag == reviewqueue.ReviewTag {
-						x.Tag = ""
-					} else {
-						x.Tag = reviewqueue.ReviewTag
-					}
-				})
-			}}),
-		ui.CreateElement(txnPresetChip, txnPresetProps{
-			Label: uistate.T("transactions.presetLarge"), TestID: "txn-preset-large", Active: f.AmountMin == txnLargeThreshold, Count: largeN,
-			OnToggle: func() {
-				setFilter(func(x *uistate.TxFilter) {
-					if x.AmountMin == txnLargeThreshold {
-						x.AmountMin = ""
-					} else {
-						x.AmountMin = txnLargeThreshold
-					}
-				})
-			}}),
-		ui.CreateElement(txnPresetChip, txnPresetProps{
-			Label: uistate.T("transactions.presetThisMonth"), TestID: "txn-preset-month", Active: f.From == monthFrom && f.To == monthTo, Count: monthN,
-			OnToggle: func() {
-				setFilter(func(x *uistate.TxFilter) {
-					if x.From == monthFrom && x.To == monthTo {
-						x.From, x.To = "", ""
-					} else {
-						x.From, x.To = monthFrom, monthTo
-					}
-				})
-			}}),
-		// One quiet line saying what the numbers count, so the chips are self-describing
-		// rather than relying on the user inferring the scope from the rows below.
-		Span(css.Class("txn-presets-note"), Attr("data-testid", "txn-presets-note"),
-			uistate.T("transactions.presetScopeNote")),
+	uncatN, reviewN2, largeN := summary.presets.Uncategorized, summary.presets.NeedsReview, summary.presets.Large
+	presetsRow := txnPresetRow(uncatN, reviewN2, largeN,
+		f.Uncategorized, f.Tag == reviewqueue.ReviewTag, f.AmountMin == txnLargeThreshold,
+		func() { setFilter(func(x *uistate.TxFilter) { x.Uncategorized = !x.Uncategorized }) },
+		func() {
+			setFilter(func(x *uistate.TxFilter) {
+				if x.Tag == reviewqueue.ReviewTag {
+					x.Tag = ""
+				} else {
+					x.Tag = reviewqueue.ReviewTag
+				}
+			})
+		},
+		func() {
+			setFilter(func(x *uistate.TxFilter) {
+				if x.AmountMin == txnLargeThreshold {
+					x.AmountMin = ""
+				} else {
+					x.AmountMin = txnLargeThreshold
+				}
+			})
+		},
 	)
 
 	// Redesigned filter panel: quick-filter presets on top, then each categorical
@@ -873,10 +1196,11 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 			If(len(tagList) > 0, filterMultiGroup(uistate.T("transactions.filterTag"), txnfilter.FieldTag, fOwn.SelectedValues(txnfilter.FieldTag), tagOpts, onToggleFilter)),
 		),
 		Div(css.Class("filter-ranges"),
-			dateField(uistate.T("transactions.fromDate"), f.From, onFilterFrom),
-			dateField(uistate.T("transactions.toDate"), f.To, onFilterTo),
+			dateField(uistate.T("transactions.fromDate"), f.From, displayPrefs.DateStyle, onFilterFrom),
+			dateField(uistate.T("transactions.toDate"), f.To, displayPrefs.DateStyle, onFilterTo),
 			amountField(uistate.T("transactions.filterAmountMin"), uistate.T("transactions.filterAmountMinPh"), f.AmountMin, onFilterAmountMin),
 			amountField(uistate.T("transactions.filterAmountMax"), uistate.T("transactions.filterAmountMaxPh"), f.AmountMax, onFilterAmountMax),
+			If(txnFilterRangeError(fOwn, props.Base) != "", P(css.Class("field-error"), Attr("role", "alert"), txnFilterRangeError(fOwn, props.Base))),
 			filterSelect(uistate.T("transactions.clearedStatus"), f.Cleared, clearedOpts, func(v string) { setFilter(func(x *uistate.TxFilter) { x.Cleared = v }) }),
 			// C517: filtering by direction. The Criteria field, its matching logic
 			// and its chip label all already existed — the only way to reach any of
@@ -897,12 +1221,12 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	// panel to the filter instead would be worse than the mismatch: a duplicate pair
 	// is only visible when BOTH rows are in the population, so a filter that hides
 	// one half would hide the duplicate entirely.
-	dupCount := dedupe.Count(dedupe.FindDuplicates(txns))
+	dupCount := summary.duplicates
 	// C676: rows that look like transfers and are not linked. Counted over the
 	// WHOLE ledger like the duplicate count above, not the filtered view: the badge
 	// is a claim about the household's data, and one that shrank when you typed in
 	// the search box would be describing the search.
-	suspectCount := transferSuspectCount(app)
+	suspectCount := summary.suspects
 	importBtnLabel := uistate.T("transactions.importBtn")
 	dupBtnLabel := uistate.T("transactions.dupReviewBtn")
 	if dupCount > 0 {
@@ -928,7 +1252,12 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 		TriggerText:   uistate.T("transactions.moreActions"),
 		TriggerTestID: "txn-more-btn",
 		TriggerClass:  "btn btn-tool",
+		ExtraContent: ui.CreateElement(TxnSavedViewsMenu, txnSavedViewsMenuProps{
+			App: app, Filter: fOwn, Rates: props.Rates, Base: props.Base, Embedded: true,
+		}),
 		Items: []uiw.OverflowMenuItem{
+			{Label: uistate.T("transactions.rulesButton", ruleCount), Icon: icon.Workflow, TestID: "txn-rules-btn",
+				OnSelect: func() { txnLeaveFor("/rules"); nav.Navigate(uistate.RoutePath("/rules")) }},
 			{Label: regLabel, Icon: icon.List, TestID: "txn-register-btn", OnSelect: onRegister, Hidden: !(singleAcct && !calActive)},
 			{Label: importBtnLabel, Icon: icon.Upload, TestID: "txn-import-btn", OnSelect: func() { importPanelAtom.Set(true) }},
 			{Label: dupBtnLabel, Icon: icon.Copy, TestID: "txn-dupes-btn", OnSelect: func() { dupModalAtom.Set(true) }},
@@ -954,6 +1283,7 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 		ResultsSelector: ".data-table",
 		FiltersLabel:    uistate.T("transactions.filters"),
 		FiltersTitle:    uistate.T("transactions.filtersTitle"),
+		FilterSheet:     true,
 		ActiveAriaLabel: func(n int) string {
 			if n == 0 {
 				return uistate.T("transactions.filters")
@@ -989,6 +1319,7 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 					x.Tag, x.Tags = "", ""
 					x.ScopeAny = false
 					x.From, x.To = "", ""
+					x.PeriodPreset = txnfilter.PeriodAllDates
 				})
 				return
 			}
@@ -1000,61 +1331,19 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 		// only chip showing is the member lens, which it does not clear (C574).
 		ClearAllLabel: clearAllLabel(len(active)),
 		RemoveLabel:   uistate.T("transactions.removeFilter"),
-		// Standard labeled toolbar buttons (.btn-tool): a slightly-grayed leading glyph
-		// plus an always-visible text label, so each action reads at a glance instead of
-		// needing a hover to decode a bare icon. All left-justified as one group, with the
-		// primary "+ Add transaction" LAST so it anchors the right end of the group.
-		Actions: []ui.Node{
-			// Review inbox (CG-S2): the guided triage entry point, shown only when
-			// something needs review, with a live count so the backlog is visible.
-			// C575: the review backlog is counted across the WHOLE household and ignores
-			// every filter on this page, so beside a filtered ledger its number belongs
-			// to a different population than everything else on screen. The button keeps
-			// the count — it is the backlog's whole point — and says which population it
-			// is measuring, on hover and to assistive tech.
-			If(reviewN > 0, toolbarIconBtnTitled("txn-review-btn", icon.ScanLine,
-				uistate.T("review.button", reviewN), uistate.T("transactions.reviewScopeTitle", reviewN), openReview, "")),
-			// C363: first-class Rules entry — labeled, with the active-rule count, so
-			// the auto-categorization workbench is one visible click from the ledger.
-			toolbarIconBtn("txn-rules-btn", icon.Workflow, uistate.T("transactions.rulesButton", ruleCount), openRules, ""),
-			// There is no second "Clear filters" button here any more. It did exactly
-			// what the chip row's reset does, so the page offered two differently-worded
-			// controls ("Clear filters" / "Clear all filters") for one action, sitting a
-			// few centimetres apart — the ambiguity C574 is about. The reset now lives
-			// with the chips it removes, and counts them.
-			// Select-all, Calendar, and Register moved into the "⋯ More" overflow (2026-07
-			// command-bar consolidation): the resting row keeps only the everyday verbs plus
-			// the primary Add, so the page reads as a focused workspace, not a tool pile.
-			// Saved views / watchlists (TX3): list saved filter sets with their live
-			// count + total, one-tap apply, save-current, pin-to-dashboard, and per-view
-			// amount alerts. Own component so its popover + list hooks stay stable.
-			// fOwn, not f: "Save current view" writes the filter it is handed, and the
-			// member lens is a transient top-bar perspective, not part of the view the
-			// user is naming. Saving the layered filter would bake whoever the top bar
-			// happened to show into the saved view permanently, invisibly.
-			ui.CreateElement(TxnSavedViewsMenu, txnSavedViewsMenuProps{App: app, Filter: fOwn, Rates: props.Rates, Base: props.Base}),
-			// Secondary utilities (Import, Duplicates, Categorize, Export CSV, Columns)
-			// folded into the "⋯ More" overflow built above.
-			moreMenu,
-			// Primary action last → right end of the left-justified group.
-			//
+		// The ledger date scope sits between Search and Filters; the common optional
+		// slots leave every other FilterToolbar caller's established order untouched.
+		SearchAddon: ui.CreateElement(txnDateScope, struct{}{}),
+		// Standard labeled toolbar buttons (.btn-tool): the primary Add action is last
+		// on row one, while the secondary actions stay on row two.
+		PrimaryActions: []ui.Node{
 			// C573: the page offered three ways to start a transaction — this button,
 			// the top bar's "+", and "Add something else" — and all three opened the
-			// same neutral form, so none of them said what was about to be created.
-			// This is now the page's one primary, with a caret holding the three
-			// creation kinds by name. Pressing the button still opens the form in one
-			// click for the common case; pressing the caret says which kind first, and
-			// the form arrives already set that way, so the label is a promise the
-			// destination keeps.
+			// same neutral form. The page primary now stays with Search and Filters.
 			Div(css.Class("btn-split"),
 				toolbarIconBtn("txn-add-btn", icon.Plus, uistate.T("transactions.addTitle"), onAdd, "primary"),
 				uiw.OverflowMenu(uiw.OverflowMenuProps{
-					TriggerLabel: uistate.T("transactions.addKindLabel"),
-					// A chevron, not the app's ⋯. The default glyph means "more
-					// actions" and is what every row kebab and the toolbar's "More"
-					// wear — with it, this reads as one more generic overflow rather
-					// than "the button beside me has named variants", and nobody finds
-					// the kinds, which is the entire point of C573.
+					TriggerLabel:  uistate.T("transactions.addKindLabel"),
 					TriggerIcon:   icon.ChevronDown,
 					TriggerTestID: "txn-add-kind-btn",
 					TriggerClass:  "btn btn-primary btn-split-caret",
@@ -1067,6 +1356,33 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 					},
 				}),
 			),
+		},
+		Actions: []ui.Node{
+			// Review inbox (CG-S2): the guided triage entry point, shown only when
+			// something needs review, with a live count so the backlog is visible.
+			// C575: the review backlog is counted across the WHOLE household and ignores
+			// every filter on this page, so beside a filtered ledger its number belongs
+			// to a different population than everything else on screen. The button keeps
+			// the count — it is the backlog's whole point — and says which population it
+			// is measuring, on hover and to assistive tech.
+			If(summary.review > 0, Button(css.Class("txn-review-callout txn-review-callout-attention"), Type("button"),
+				Attr("data-testid", "txn-review-btn"), Attr("aria-label", uistate.T("r1c.reviewCallout", summary.review)),
+				OnClick(openReview), Span(css.Class("txn-review-dot"), Attr("aria-hidden", "true")),
+				Span(uistate.T("r1c.reviewCallout", summary.review)))),
+			// There is no second "Clear filters" button here any more. It did exactly
+			// what the chip row's reset does, so the page offered two differently-worded
+			// controls ("Clear filters" / "Clear all filters") for one action, sitting a
+			// few centimetres apart — the ambiguity C574 is about. The reset now lives
+			// with the chips it removes, and counts them.
+			// Select-all, Calendar, and Register moved into the "⋯ More" overflow (2026-07
+			// command-bar consolidation): the resting row keeps only the everyday verbs plus
+			// the primary Add, so the page reads as a focused workspace, not a tool pile.
+			// Saved Views is an extra group within More, not a separate toolbar stop.
+			// Secondary utilities (Import, Duplicates, Categorize, Export CSV, Columns)
+			// folded into the "⋯ More" overflow built above.
+			moreMenu,
+			// Keep the view switch at the right edge of the secondary row.
+			ui.CreateElement(txnViewToggle, struct{}{}),
 		},
 	})
 
@@ -1085,31 +1401,8 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	// Counted, not hidden, because a filtered view of one leg has to say something:
 	// silence about a row that is on screen is how someone concludes the ledger
 	// lost it.
-	var shownNet, movedMinor int64
-	unconverted, movedRows, unpairedRows := 0, 0, 0
-	for _, t := range props.Shown {
-		c, err := props.Rates.Convert(t.Amount, props.Base)
-		if err != nil {
-			unconverted++
-			continue
-		}
-		if t.IsTransfer() {
-			movedRows++
-			if c.Amount > 0 {
-				movedMinor += c.Amount
-			} else {
-				movedMinor -= c.Amount
-			}
-			// An "unpaired movement" is a leg whose far side is not in view. Its
-			// partner may exist elsewhere in the ledger, so this describes the
-			// VIEW, not the data — which is the honest claim to make from here.
-			if _, ok := txnclassify.FindReciprocal(t, t.TransferAccountID, props.Shown); !ok {
-				unpairedRows++
-			}
-			continue
-		}
-		shownNet += c.Amount
-	}
+	shownNet, movedMinor := summary.shownNet, summary.movedMinor
+	unconverted, movedRows, unpairedRows := summary.unconverted, summary.movedRows, summary.unpairedRows
 	// C575: the count line replaces the screen-reader-only summary that used to live
 	// here. It states the size of the view WITH its denominator and names the
 	// perspective, so a sighted user can explain the number the same way a screen
@@ -1123,27 +1416,24 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 		}
 	}
 	countLine := ui.CreateElement(txnCountLine, txnCountLineProps{
-		Shown: len(props.Shown), Total: len(txns),
+		Shown: len(props.Shown), Total: len(txns), Range: txnPageRange(f.Page, f.PageSize, len(props.Shown)),
 		Net: money.New(shownNet, props.Base), Lens: lensName,
-		Unconverted: unconverted,
-		Moved:       money.New(movedMinor, props.Base), MovedRows: movedRows, UnpairedRows: unpairedRows,
+		Unconverted: unconverted, Excluded: excludedTxnCount(props.Shown),
+		Moved: money.New(movedMinor, props.Base), MovedRows: movedRows, UnpairedRows: unpairedRows,
+		Spent: money.New(summary.spentMinor, props.Base), Income: money.New(summary.incomeMinor, props.Base),
+		CashflowProvided: true,
 	})
 
 	// Status-glyph legend: the compact ✓✓ / ✓ / • markers a row wears (reconciled /
 	// cleared / needs review) are otherwise undecoded shape+color, so a small key
 	// spells each one out — labelled, not color-or-shape alone (a11y).
 	//
-	// It is shown only when the rows actually WEAR those markers. With the Status
-	// column on (the default since C578) each row says its state in words and the
-	// glyphs are gone, so a key to them would explain symbols that are not on screen
-	// — and cost a line of chrome above the ledger to do it.
+	// Show it only when at least one visible row carries a cleared or reconciled
+	// glyph. Needs-review and unconfirmed states are written out elsewhere in the
+	// row, so they do not make this settlement-glyph legend relevant.
 	//
-	// The hook is read into a local FIRST: `len(props.Shown) > 0 && !UseTxnCols()…`
-	// short-circuits, so on a render with no rows the hook would not run at all and
-	// every atom slot after it would shift.
-	statusColOn := uistate.UseTxnCols().Get().Status
 	var legend ui.Node = Fragment()
-	if len(props.Shown) > 0 && !statusColOn {
+	if txnHasStatusGlyph(props.Shown) {
 		legend = txnStatusLegend()
 	}
 	// Count and legend share one row (C582): they are both "how to read the rows
@@ -1156,8 +1446,100 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 		// C560: the ledger's own period + view bar sits directly under the toolbar, so
 		// the scope the rows are in is stated on the page that shows them rather than
 		// by a top-bar pill reading different state.
-		Body: Div(toolbar, ui.CreateElement(txnScopeBar, struct{}{}), interpretRow, footRow),
+		Body: Div(toolbar,
+			// Scheduled activity is context for the ledger, so it sits below the
+			// controls and immediately before the count line and table.
+			ui.CreateElement(txnUpcomingStrip, struct{}{}), interpretRow, footRow),
 	})
+}
+
+func txnHasStatusGlyph(transactions []domain.Transaction) bool {
+	for _, txn := range transactions {
+		if txn.Cleared {
+			return true
+		}
+	}
+	return false
+}
+
+// txnUserColumnVisible limits the member column to an Everyone view with multiple
+// household members.
+func txnUserColumnVisible(enabled bool, memberScope string, memberCount int) bool {
+	return enabled && memberScope == "" && memberCount > 1
+}
+
+// txnColsForScope returns a copy of column visibility with User constrained to
+// Everyone views that can actually distinguish more than one member.
+func txnColsForScope(cols uistate.TxnCols, memberScope string, memberCount int) uistate.TxnCols {
+	cols.User = txnUserColumnVisible(cols.User, memberScope, memberCount)
+	return cols
+}
+
+// txnPageRange formats the non-interactive range summary shown beside the count
+// line. Pagination controls themselves remain at the bottom of the table.
+func txnPageRange(page, pageSize, total int) string {
+	if total <= 0 {
+		return ""
+	}
+	if pageSize == 0 {
+		pageSize = txnfilter.DefaultPageSize
+	}
+	if pageSize <= 0 || pageSize >= total {
+		return uistate.T("txu5.range", txnCountNumber(1), txnCountNumber(total), txnCountNumber(total))
+	}
+	if page < 1 {
+		page = 1
+	}
+	lastPage := (total + pageSize - 1) / pageSize
+	if page > lastPage {
+		page = lastPage
+	}
+	start := (page-1)*pageSize + 1
+	end := start + pageSize - 1
+	if end > total {
+		end = total
+	}
+	return uistate.T("txu5.range", txnCountNumber(start), txnCountNumber(end), txnCountNumber(total))
+}
+
+func txnCountNumber(n int) string {
+	digits := strconv.Itoa(n)
+	if len(digits) <= 3 {
+		return digits
+	}
+	first := len(digits) % 3
+	if first == 0 {
+		first = 3
+	}
+	var out strings.Builder
+	out.Grow(len(digits) + len(digits)/3)
+	out.WriteString(digits[:first])
+	for i := first; i < len(digits); i += 3 {
+		out.WriteByte(',')
+		out.WriteString(digits[i : i+3])
+	}
+	return out.String()
+}
+
+// txnMemberInitials keeps the optional member column compact while the cell's
+// accessible name retains the full name.
+func txnMemberInitials(name string) string {
+	parts := strings.Fields(name)
+	if len(parts) == 0 {
+		return "—"
+	}
+	first := []rune(parts[0])
+	if len(first) == 0 {
+		return "—"
+	}
+	initials := strings.ToUpper(string(first[0]))
+	if len(parts) > 1 {
+		last := []rune(parts[len(parts)-1])
+		if len(last) > 0 {
+			initials += strings.ToUpper(string(last[0]))
+		}
+	}
+	return initials
 }
 
 // txnStatusLegend is the compact key for the ledger's row status glyphs. Each item
@@ -1176,10 +1558,6 @@ func txnStatusLegend() ui.Node {
 		Span(css.Class("txn-legend-label"), uistate.T("acctxn.legendLabel")),
 		item("✓✓", uistate.T("acctxn.legendReconciled"), uistate.T("transactions.reconciledBadgeTitle"), "txn-legend-reconciled"),
 		item("✓", uistate.T("acctxn.legendCleared"), uistate.T("transactions.clearedBadgeTitle"), "txn-legend-cleared"),
-		item("•", uistate.T("acctxn.legendNeedsReview"), uistate.T("transactions.needsReviewBadgeTitle"), "txn-legend-review"),
-		// C618: the legend has to name both marks, or the new one reads as an
-		// unexplained glyph — which is the problem the legend exists to prevent.
-		item("◦", uistate.T("transactions.statusUnconfirmed"), uistate.T("transactions.statusUnconfirmedTitle"), "txn-legend-unconfirmed"),
 	)
 }
 
@@ -1199,7 +1577,6 @@ func TxnColumnsBody(_ struct{}) ui.Node {
 	category := ui.UseEvent(func() { c := colsAtom.Get(); c.Category = !c.Category; apply(c) })
 	source := ui.UseEvent(func() { c := colsAtom.Get(); c.Source = !c.Source; apply(c) })
 	user := ui.UseEvent(func() { c := colsAtom.Get(); c.User = !c.User; apply(c) })
-	status := ui.UseEvent(func() { c := colsAtom.Get(); c.Status = !c.Status; apply(c) })
 
 	row := func(label, hint, testID string, on bool, onClick ui.Handler) ui.Node {
 		return Label(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2), Style(map[string]string{"padding": "0.35rem 0", "cursor": "pointer"}),
@@ -1215,15 +1592,140 @@ func TxnColumnsBody(_ struct{}) ui.Node {
 		row(uistate.T("transactions.colCategory"), "", "col-toggle-category", cols.Category, category),
 		row(uistate.T("transactions.colSource"), "", "col-toggle-source", cols.Source, source),
 		row(uistate.T("transactions.colUser"), "", "col-toggle-user", cols.User, user),
-		// C578: the one column whose purpose is not obvious from its name gets a line
-		// saying what it buys you — it is the alternative to decoding the row glyphs.
-		row(uistate.T("transactions.colStatus"), uistate.T("transactions.colStatusHint"), "col-toggle-status", cols.Status, status),
 	)
 }
 
 // txnBulkBarProps carries the app the bulk tile mutates.
 type txnBulkBarProps struct {
 	App *appstate.App
+}
+
+type txnBulkPickerOption struct {
+	Value string
+	Label string
+}
+
+type txnBulkPickerProps struct {
+	ID          string
+	Label       string
+	Placeholder string
+	SearchLabel string
+	Options     []txnBulkPickerOption
+	OnChoose    func(string)
+}
+
+type txnBulkPickerOptionProps struct {
+	PickerID string
+	Index    int
+	Option   txnBulkPickerOption
+	Selected bool
+	OnChoose func(string)
+}
+
+func txnBulkPickerOptionRow(props txnBulkPickerOptionProps) ui.Node {
+	onChoose := ui.UseEvent(Prevent(func() { props.OnChoose(props.Option.Value) }))
+	return Button(css.Class("bulk-picker-option"), Type("button"),
+		Attr("role", "option"), Attr("id", fmt.Sprintf("%s-option-%d", props.PickerID, props.Index)),
+		Attr("aria-selected", ariaBool(props.Selected)), Attr("data-testid", props.PickerID+"-option"),
+		OnClick(onChoose), props.Option.Label)
+}
+
+// txnBulkPicker commits a bulk assignment only after an explicit Enter or click.
+func txnBulkPicker(props txnBulkPickerProps) ui.Node {
+	open := ui.UseState(false)
+	query := ui.UseState("")
+	active := ui.UseState(0)
+	filtered := make([]txnBulkPickerOption, 0, len(props.Options))
+	needle := strings.ToLower(strings.TrimSpace(query.Get()))
+	for _, option := range props.Options {
+		// Empty values are the button's placeholder / no-selection value, not a
+		// category or person that can be assigned to selected transactions.
+		if option.Value == "" {
+			continue
+		}
+		if needle == "" || strings.Contains(strings.ToLower(option.Label), needle) {
+			filtered = append(filtered, option)
+		}
+	}
+	activeIndex := active.Get()
+	if activeIndex >= len(filtered) {
+		activeIndex = 0
+	}
+	close := func() {
+		open.Set(false)
+		query.Set("")
+		active.Set(0)
+	}
+	ui.UseEffect(func() func() {
+		if open.Get() {
+			focusByID(props.ID + "-search")
+		}
+		return nil
+	}, open.Get())
+	choose := func(option txnBulkPickerOption) {
+		props.OnChoose(option.Value)
+		close()
+	}
+	onToggle := ui.UseEvent(Prevent(func() { open.Set(!open.Get()) }))
+	onTriggerKey := ui.UseEvent(func(e ui.KeyboardEvent) {
+		if e.GetKey() == "ArrowDown" {
+			e.PreventDefault()
+			open.Set(true)
+		}
+	})
+	onQuery := ui.UseEvent(func(e ui.Event) { query.Set(e.GetValue()); active.Set(0) })
+	onKey := ui.UseEvent(func(e ui.KeyboardEvent) {
+		switch e.GetKey() {
+		case "ArrowDown":
+			e.PreventDefault()
+			if len(filtered) > 0 {
+				active.Set((activeIndex + 1) % len(filtered))
+			}
+		case "ArrowUp":
+			e.PreventDefault()
+			if len(filtered) > 0 {
+				index := activeIndex - 1
+				if index < 0 {
+					index = len(filtered) - 1
+				}
+				active.Set(index)
+			}
+		case "Enter":
+			e.PreventDefault()
+			if len(filtered) > 0 {
+				choose(filtered[activeIndex])
+			}
+		case "Escape":
+			e.PreventDefault()
+			e.StopPropagation()
+			close()
+			focusByID(props.ID)
+		}
+	})
+	var popup ui.Node = Fragment()
+	if open.Get() {
+		options := make([]ui.Node, 0, len(filtered))
+		for i, option := range filtered {
+			options = append(options, ui.CreateElement(txnBulkPickerOptionRow, txnBulkPickerOptionProps{
+				PickerID: props.ID, Index: i, Option: option, Selected: i == activeIndex, OnChoose: func(value string) { choose(option) },
+			}))
+		}
+		popup = Div(css.Class("bulk-picker-popover"),
+			Input(css.Class("field", "bulk-picker-search"), Type("search"),
+				Attr("id", props.ID+"-search"), Attr("data-testid", props.ID+"-search"), Attr("role", "combobox"),
+				Attr("aria-label", props.SearchLabel), Attr("aria-expanded", "true"),
+				Attr("aria-controls", props.ID+"-listbox"), Attr("aria-activedescendant", fmt.Sprintf("%s-option-%d", props.ID, activeIndex)),
+				Attr("autofocus", true), Placeholder(props.SearchLabel), uiw.FieldValue(query.Get()), OnInput(onQuery), OnKeyDown(onKey)),
+			Div(css.Class("bulk-picker-options"), Attr("id", props.ID+"-listbox"), Attr("role", "listbox"),
+				If(len(options) == 0, Span(css.Class("bulk-picker-empty"), uistate.T("r5b.noMatches"))), options),
+		)
+	}
+	return Div(css.Class("bulk-picker"),
+		Button(css.Class("field", "bulk-picker-trigger"), Type("button"), Attr("id", props.ID), Attr("data-testid", props.ID),
+			Attr("aria-label", props.Label), Attr("aria-haspopup", "listbox"), Attr("aria-expanded", ariaBool(open.Get())),
+			OnClick(onToggle), OnKeyDown(onTriggerKey), props.Placeholder),
+		popup,
+	)
 }
 
 // txnBulkBarWidget is the txn-bulkbar tile, shown by the host when a selection
@@ -1237,11 +1739,34 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 	bulkCatAtom := uistate.UseTxnBulkCat()
 	bulkMemAtom := uistate.UseTxnBulkMember()
 	undoAtom := uistate.UseTxnUndo()
+	tagOpen := ui.UseState(false)
+	tagValue := ui.UseState("")
 
 	clearSel := func() {
 		selAtom.Set(map[string]bool{})
 		anchorAtom.Set("")
 	}
+	selectionActive := len(selAtom.Get()) > 0
+	ui.UseEffect(func() func() {
+		if !selectionActive {
+			return nil
+		}
+		doc := js.Global().Get("document")
+		if !doc.Truthy() || doc.Get("addEventListener").Type() != js.TypeFunction || doc.Get("removeEventListener").Type() != js.TypeFunction {
+			return nil
+		}
+		keyCB := js.FuncOf(func(_ js.Value, args []js.Value) any {
+			if len(args) > 0 && args[0].Get("key").String() == "Escape" {
+				clearSel()
+			}
+			return nil
+		})
+		doc.Call("addEventListener", "keydown", keyCB)
+		return func() {
+			doc.Call("removeEventListener", "keydown", keyCB)
+			keyCB.Release()
+		}
+	}, selectionActive)
 
 	bulkSetCleared := func(val bool) {
 		sel := selAtom.Get()
@@ -1274,8 +1799,33 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 			postUndoStory(uistate.T(opKey, len(prior)))
 		}
 	}
-	bulkMarkCleared := ui.UseEvent(Prevent(func() { bulkSetCleared(true) }))
-	bulkMarkUncleared := ui.UseEvent(Prevent(func() { bulkSetCleared(false) }))
+	bulkMarkReviewed := ui.UseEvent(Prevent(func() {
+		sel := selAtom.Get()
+		var prior []domain.Transaction
+		for _, t := range app.Transactions() {
+			if sel[t.ID] && !t.Reviewed {
+				prior = append(prior, t)
+			}
+		}
+		app.BulkMutate(func() {
+			for _, t := range app.Transactions() {
+				if !sel[t.ID] || t.Reviewed {
+					continue
+				}
+				t.Reviewed = true
+				if err := app.PutTransaction(t); err != nil {
+					uistate.PostNotice(err.Error(), true)
+				}
+			}
+		})
+		label := uistate.T("r1c.markedReviewed", len(prior))
+		undoAtom.Set(uistate.BulkSnapshot{Label: label, Prior: prior})
+		clearSel()
+		uistate.BumpDataRevision()
+		if len(prior) > 0 {
+			postUndoStory(label)
+		}
+	}))
 
 	// TXC-1: bulk exclude / include the selected transactions in budgets & reports —
 	// the main use case (a batch of reimbursements or internal transfers), so it
@@ -1311,9 +1861,6 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 			postUndoStory(uistate.T(opKey, len(prior)))
 		}
 	}
-	bulkExclude := ui.UseEvent(Prevent(func() { bulkSetExclude(true) }))
-	bulkInclude := ui.UseEvent(Prevent(func() { bulkSetExclude(false) }))
-
 	// C561: "assign a category" and "clear the category" used to be the same button
 	// with the same blank default, so Categorize on a fresh selection wrote "" to every
 	// selected row — an immediate, unasked-for mutation whose only visible trace was the
@@ -1334,6 +1881,9 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 			for _, t := range app.Transactions() {
 				if !sel[t.ID] || t.IsTransfer() || t.CategoryID == cid {
 					continue
+				}
+				if cid != "" {
+					t = txnCategoryAfterManualChoice(t)
 				}
 				t.CategoryID = cid
 				if err := app.PutTransaction(t); err != nil {
@@ -1356,33 +1906,8 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 			postUndoStory(opLabel)
 		}
 	}
-	bulkRecategorize := ui.UseEvent(Prevent(func() {
-		cid := bulkCatAtom.Get()
-		if cid == "" {
-			// Belt and braces: the button is disabled, so this is only reachable via a
-			// keyboard/e2e path. Say what is missing instead of writing a blank category.
-			uistate.PostNotice(uistate.T("transactions.bulkCatDisabled"), true)
-			return
-		}
-		applyBulkCategory(cid)
-	}))
-	bulkClearCategory := ui.UseEvent(Prevent(func() {
-		n := len(selAtom.Get())
-		uistate.ConfirmModalLabeled(
-			uistate.T("transactions.bulkClearCatConfirm", n),
-			uistate.T("transactions.bulkClearCat"),
-			true,
-			func(ok bool) {
-				if ok {
-					applyBulkCategory("")
-				}
-			},
-		)
-	}))
-
-	bulkAssignMember := ui.UseEvent(Prevent(func() {
+	assignBulkMember := func(mid string) {
 		sel := selAtom.Get()
-		mid := bulkMemAtom.Get()
 		var prior []domain.Transaction
 		for _, t := range app.Transactions() {
 			if sel[t.ID] && t.MemberID != mid {
@@ -1408,13 +1933,51 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 		if len(prior) > 0 {
 			postUndoStory(uistate.T("transactions.bulkOpAssigned", len(prior)))
 		}
-	}))
+	}
+
+	applyBulkTag := func(raw string) {
+		tag := strings.TrimSpace(raw)
+		if tag == "" {
+			return
+		}
+		sel := selAtom.Get()
+		var prior []domain.Transaction
+		for _, t := range app.Transactions() {
+			if sel[t.ID] && !txnHasTag(t.Tags, tag) {
+				t.Tags = append([]string(nil), t.Tags...)
+				prior = append(prior, t)
+			}
+		}
+		app.BulkMutate(func() {
+			for _, t := range app.Transactions() {
+				if !sel[t.ID] || txnHasTag(t.Tags, tag) {
+					continue
+				}
+				t.Tags = addTxnTag(t.Tags, tag)
+				if err := app.PutTransaction(t); err != nil {
+					uistate.PostNotice(err.Error(), true)
+				}
+			}
+		})
+		label := uistate.T("r1c.tagged", len(prior), tag)
+		undoAtom.Set(uistate.BulkSnapshot{Label: label, Prior: prior})
+		clearSel()
+		tagValue.Set("")
+		tagOpen.Set(false)
+		uistate.BumpDataRevision()
+		if len(prior) > 0 {
+			postUndoStory(label)
+		}
+	}
+	addTag := ui.UseEvent(Prevent(func() { applyBulkTag(tagValue.Get()) }))
+	onTagInput := ui.UseEvent(func(e ui.Event) { tagValue.Set(e.GetValue()) })
+	toggleTagInput := ui.UseEvent(Prevent(func() { tagOpen.Set(!tagOpen.Get()) }))
 
 	// XC1: group the selected transactions into one logical purchase (an order
 	// that posted as several card charges). Order-group members keep their atoms;
 	// the link is a read-model overlay. First selected (in ledger order) is the
 	// group's primary/original.
-	bulkGroupOrder := ui.UseEvent(Prevent(func() {
+	bulkGroupOrder := func() {
 		sel := selAtom.Get()
 		var ids []string
 		for _, t := range app.Transactions() {
@@ -1433,9 +1996,9 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 		uistate.PostNotice(uistate.T("txnlinks.grouped", len(ids)), false)
 		clearSel()
 		uistate.BumpDataRevision()
-	}))
+	}
 
-	exportSelected := ui.UseEvent(Prevent(func() {
+	exportSelected := func() {
 		sel := selAtom.Get()
 		if len(sel) == 0 {
 			return
@@ -1456,7 +2019,7 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 			return
 		}
 		downloadBytes("transactions-selected.csv", "text/csv", data)
-	}))
+	}
 
 	bulkDelete := ui.UseEvent(Prevent(func() {
 		sel := selAtom.Get()
@@ -1485,27 +2048,73 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 				doomedSet[id] = true
 			}
 			var prior []domain.Transaction
+			priorByID := make(map[string]domain.Transaction, len(doomedSet))
 			for _, t := range app.Transactions() {
 				if doomedSet[t.ID] {
-					prior = append(prior, t)
+					priorByID[t.ID] = t
 				}
 			}
-			if err := app.DeleteTransactionsBulk(ids); err != nil {
-				uistate.PostNotice(err.Error(), true)
+			deleted, err := app.DeleteTransactionsBulk(ids)
+			deletedSet := make(map[string]bool, len(deleted))
+			for _, id := range deleted {
+				deletedSet[id] = true
+				if txn, ok := priorByID[id]; ok {
+					prior = append(prior, txn)
+				}
 			}
-			undoAtom.Set(uistate.BulkSnapshot{Label: uistate.T("transactions.bulkOpDeleted", len(prior)), Prior: prior})
-			clearSel()
-			uistate.BumpDataRevision()
-			// C364: undo story naming the count + the reversal path (Ctrl+Z / Activity).
-			postUndoStory(uistate.T("transactions.bulkOpDeleted", len(prior)))
+			remainingSelection := make(map[string]bool, len(sel))
+			for id := range sel {
+				if !deletedSet[id] {
+					remainingSelection[id] = true
+				}
+			}
+			if len(remainingSelection) == 0 {
+				clearSel()
+			} else {
+				selAtom.Set(remainingSelection)
+				if deletedSet[anchorAtom.Get()] {
+					anchorAtom.Set("")
+				}
+			}
+			if err != nil || len(deleted) != len(doomed) {
+				notDeleted := len(doomed) - len(deleted)
+				if notDeleted < 0 {
+					notDeleted = 0
+				}
+				message := uistate.TN("transactions.bulkDeleteOne", "transactions.bulkDeleteMany", len(deleted)) + " " +
+					uistate.TN("transactions.bulkNotDeletedOne", "transactions.bulkNotDeletedMany", notDeleted)
+				if err != nil {
+					message += " " + err.Error()
+				}
+				uistate.PostNotice(message, true)
+			}
+			if len(prior) > 0 {
+				undoLabel := uistate.T("transactions.bulkOpDeleted", len(prior))
+				undoAtom.Set(uistate.BulkSnapshot{Label: undoLabel, Prior: prior})
+				uistate.BumpDataRevision()
+				// C364: undo story naming the count + the reversal path (Ctrl+Z / Activity).
+				postUndoStory(undoLabel)
+			} else {
+				undoAtom.Set(uistate.BulkSnapshot{})
+			}
 		})
 	}))
 
 	clearSelection := ui.UseEvent(Prevent(clearSel))
 
 	n := len(selAtom.Get())
-	onBulkCat := ui.UseEvent(func(e ui.Event) { bulkCatAtom.Set(e.GetValue()) })
-	onBulkMem := ui.UseEvent(func(e ui.Event) { bulkMemAtom.Set(e.GetValue()) })
+	onBulkCat := func(picked string) {
+		bulkCatAtom.Set(picked)
+		if picked != "" {
+			applyBulkCategory(picked)
+		}
+	}
+	onBulkMem := func(picked string) {
+		bulkMemAtom.Set(picked)
+		if picked != "" {
+			assignBulkMember(picked)
+		}
+	}
 
 	// Standard `.field` selects for the category / member to apply.
 	//
@@ -1513,47 +2122,78 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 	// used to read "No category", which is a real, destructive choice presented as the
 	// default. C570: the choices carry their full path, so two leaves with the same
 	// name are distinguishable here as they are in Review and Edit.
-	catSel := bulkCatAtom.Get()
-	catOpts := []any{css.Class("field"), Attr("data-testid", "bulk-category-select"), Attr("aria-label", uistate.T("transactions.categoryToApply")), OnChange(onBulkCat),
-		Option(Value(""), SelectedIf(catSel == ""), uistate.T("transactions.bulkPickCategory"))}
+	catOptions := []txnBulkPickerOption{{Value: "", Label: uistate.T("r1c.category")}}
 	for _, o := range CategoryPickOptions(app.Categories()) {
-		catOpts = append(catOpts, Option(Value(o.Value), SelectedIf(catSel == o.Value), o.Label))
+		catOptions = append(catOptions, txnBulkPickerOption{Value: o.Value, Label: o.Label})
 	}
-	memSel := bulkMemAtom.Get()
-	memOpts := []any{css.Class("field"), Attr("data-testid", "bulk-member-select"), Attr("aria-label", uistate.T("transactions.memberToAssign")), OnChange(onBulkMem),
-		Option(Value(""), SelectedIf(memSel == ""), uistate.T("transactions.bulkNoMember"))}
+	memOptions := []txnBulkPickerOption{{Value: "", Label: uistate.T("r1c.person")}}
 	for _, m := range app.Members() {
-		memOpts = append(memOpts, Option(Value(m.ID), SelectedIf(memSel == m.ID), m.Name))
+		memOptions = append(memOptions, txnBulkPickerOption{Value: m.ID, Label: m.Name})
 	}
 
-	// Bulk-action bar: the app's standard toolbar buttons (glyph + short label — the same
-	// `.btn btn-tool` the toolbar above uses) and standard `.field` selects. It wraps to a
-	// second row on narrow widths rather than scrolling or stacking into paragraphs.
-	body := Div(css.Class("bulk-bar", tw.Flex, tw.FlexWrap, tw.ItemsCenter, tw.Gap2),
+	moreActions := uiw.OverflowMenu(uiw.OverflowMenuProps{
+		TriggerLabel: uistate.T("r1c.moreActions"), TriggerTestID: "bulk-more-actions",
+		TriggerClass: "btn btn-tool bulk-more-trigger", TriggerText: "",
+		Items: []uiw.OverflowMenuItem{
+			{Label: uistate.T("txp3.bulkMarkCleared"), Icon: icon.CheckCircle, TestID: "bulk-mark-cleared", OnSelect: func() { bulkSetCleared(true) }},
+			{Label: uistate.T("txp3.bulkMarkUncleared"), Icon: icon.Ban, TestID: "bulk-mark-uncleared", OnSelect: func() { bulkSetCleared(false) }},
+			{Label: uistate.T("txp3.bulkClearCategory"), Icon: icon.Ban, TestID: "bulk-clear-category", OnSelect: func() {
+				uistate.ConfirmModalLabeled(uistate.T("transactions.bulkClearCatConfirm", len(selAtom.Get())), uistate.T("transactions.bulkClearCat"), true, func(ok bool) {
+					if ok {
+						applyBulkCategory("")
+					}
+				})
+			}},
+			{Label: uistate.T("txp3.bulkExcludeReports"), Icon: icon.Ban, TestID: "bulk-exclude", OnSelect: func() { bulkSetExclude(true) }},
+			{Label: uistate.T("txp3.bulkIncludeReports"), Icon: icon.Check, TestID: "bulk-include", OnSelect: func() { bulkSetExclude(false) }},
+			{Label: uistate.T("txp3.bulkGroupPurchase"), Icon: icon.Box, TestID: "bulk-group-order", OnSelect: func() { bulkGroupOrder() }},
+			{Label: uistate.T("txp3.bulkExportSelected"), Icon: icon.ArrowDown, TestID: "bulk-export-selected", OnSelect: func() { exportSelected() }},
+		},
+	})
+	var tagEditor ui.Node = Fragment()
+	if tagOpen.Get() {
+		tagEditor = Div(css.Class("bulk-tag-editor"),
+			Input(css.Class("field"), Type("text"), Attr("aria-label", uistate.T("r1c.tagInput")), Placeholder(uistate.T("r1c.tagInput")), OnInput(onTagInput), uiw.FieldValue(tagValue.Get())),
+			Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "bulk-apply-tag"), OnClick(addTag), uistate.T("r1c.addTag")),
+		)
+	}
+	// Keep the primary organization actions visible in one compact row; secondary
+	// bank/report/export operations live in the overflow menu.
+	body := Div(css.Class("bulk-bar bulk-bar-refined txn-bulkbar-overlay"), Style(map[string]string{
+		"box-sizing": "border-box", "display": "flex", "align-items": "center", "gap": "0.5rem",
+		"min-height": "48px", "padding": "0 1rem", "flex-wrap": "wrap",
+		"white-space": "normal",
+		"background":  "var(--bg-card)", "border-top": "1px solid var(--border)",
+	}),
 		Span(css.Class("bulk-count", tw.ShrinkO), Attr("aria-label", uistate.T("transactions.selected", plural(n, "transaction"))), uistate.T("transactions.bulkSelectedShort", n)),
-		Select(catOpts...),
-		// Categorize stays inert until a category is chosen, and says why on hover /
-		// to assistive tech. "Clear category" is the separate, confirmed way to make a
-		// selection uncategorized — the thing the blank default used to do by accident.
-		toolbarIconBtnState("bulk-apply-category", icon.Check, uistate.T("transactions.bulkCatShort"), bulkRecategorize, "",
-			catSel == "", uistate.T("transactions.bulkCatDisabled")),
-		toolbarIconBtnState("bulk-clear-category", icon.Ban, uistate.T("transactions.bulkClearCat"), bulkClearCategory, "",
-			false, uistate.T("transactions.bulkClearCatTitle")),
-		If(len(app.Members()) > 0, Select(memOpts...)),
-		If(len(app.Members()) > 0, toolbarIconBtn("bulk-assign-member", icon.Users, uistate.T("transactions.bulkAssignShort"), bulkAssignMember, "")),
-		toolbarIconBtn("bulk-mark-cleared", icon.CheckCircle, uistate.T("transactions.bulkClearedShort"), bulkMarkCleared, ""),
-		toolbarIconBtn("bulk-mark-uncleared", icon.Ban, uistate.T("transactions.bulkUnclearedShort"), bulkMarkUncleared, ""),
-		toolbarIconBtn("bulk-exclude", icon.Ban, uistate.T("transactions.bulkExcludeShort"), bulkExclude, ""),
-		toolbarIconBtn("bulk-include", icon.Check, uistate.T("transactions.bulkIncludeShort"), bulkInclude, ""),
-		toolbarIconBtn("bulk-group-order", icon.Box, uistate.T("transactions.bulkGroupShort"), bulkGroupOrder, ""),
-		toolbarIconBtn("bulk-export-selected", icon.ArrowDown, uistate.T("transactions.bulkExportShort"), exportSelected, ""),
-		toolbarIconBtn("bulk-delete", icon.Close, uistate.T("transactions.bulkDeleteShort"), bulkDelete, "danger"),
-		Button(css.Class("btn"), Type("button"), Attr("data-testid", "bulk-clear-selection"), OnClick(clearSelection), uistate.T("transactions.clearSelection")),
+		ui.CreateElement(txnBulkPicker, txnBulkPickerProps{ID: "bulk-category-picker", Label: uistate.T("transactions.categoryToApply"), Placeholder: uistate.T("r1c.category"), SearchLabel: uistate.T("r5b.searchCategories"), Options: catOptions, OnChoose: onBulkCat}),
+		If(len(app.Members()) > 0, ui.CreateElement(txnBulkPicker, txnBulkPickerProps{ID: "bulk-member-picker", Label: uistate.T("transactions.memberToAssign"), Placeholder: uistate.T("r1c.person"), SearchLabel: uistate.T("r5b.searchPeople"), Options: memOptions, OnChoose: onBulkMem})),
+		toolbarIconBtnTitled("bulk-mark-reviewed", icon.CheckCircle, uistate.T("r1c.markReviewed"), uistate.T("r1c.markReviewed"), bulkMarkReviewed, ""),
+		Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "bulk-add-tag"), Attr("aria-expanded", ariaBool(tagOpen.Get())), OnClick(toggleTagInput), uistate.T("r1c.addTagEllipsis")),
+		tagEditor,
+		moreActions,
+		toolbarIconBtnTitled("bulk-delete", icon.Trash, uistate.T("txp3.bulkDeleteSelected"), uistate.T("txp3.bulkDeleteSelected"), bulkDelete, "danger"),
+		Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "bulk-clear-selection"), Attr("aria-label", uistate.T("r1c.clearSelection")), OnClick(clearSelection), uistate.T("r1c.clearSelection")),
 	)
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "txn-bulkbar", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
-		Body: body,
+		Style: txnBulkBarWidgetStyle(),
+		Body:  body,
 	})
+}
+
+func txnBulkBarWidgetStyle() map[string]string {
+	return map[string]string{
+		"position": "fixed", "inset": "0", "z-index": "70", "pointer-events": "none",
+		"overflow": "visible", "background": "transparent", "border": "0", "box-shadow": "none",
+	}
+}
+
+// txnCategoryAfterManualChoice records that a person explicitly chose this
+// transaction's category, without rewriting how the transaction entered the ledger.
+func txnCategoryAfterManualChoice(t domain.Transaction) domain.Transaction {
+	t.Reviewed = true
+	return t
 }
 
 // txnUndoBarProps carries the app the undo tile restores into.
@@ -1566,7 +2206,6 @@ type txnUndoBarProps struct {
 func txnUndoBarWidget(props txnUndoBarProps) ui.Node {
 	undoAtom := uistate.UseTxnUndo()
 	snap := undoAtom.Get()
-	nav := router.UseNavigate()
 
 	undoLastBulk := ui.UseEvent(Prevent(func() {
 		s := undoAtom.Get()
@@ -1582,12 +2221,11 @@ func txnUndoBarWidget(props txnUndoBarProps) ui.Node {
 	}))
 	// C364: a working "View in Activity" link right on the undo bar, so the full
 	// change history (with per-change undo) is one click from the bulk op.
-	viewActivity := ui.UseEvent(Prevent(func() { txnLeaveFor("/activity"); nav.Navigate(uistate.RoutePath("/activity")) }))
 
 	body := Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter),
 		Span(css.Class("muted"), uistate.T("transactions.bulkUndoBanner", snap.Label)),
 		Button(css.Class("btn"), Type("button"), Attr("aria-label", uistate.T("transactions.undoTitle")), Title(uistate.T("transactions.undoTitle")), OnClick(undoLastBulk), uistate.T("transactions.undoButton")),
-		Button(css.Class("btn"), Type("button"), Attr("data-testid", "txn-undobar-activity"), Attr("aria-label", uistate.T("activity.viewTitle")), Title(uistate.T("activity.viewTitle")), OnClick(viewActivity), uistate.T("activity.viewLink")),
+		toolbarIconLink("txn-undobar-activity", icon.Clock, uistate.T("activity.viewLink"), uistate.RoutePath("/activity")),
 	)
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "txn-undobar", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,

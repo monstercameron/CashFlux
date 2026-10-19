@@ -46,6 +46,9 @@ type splitEditorProps struct {
 	// OnSave persists the transaction with its Splits set (empty slice clears the
 	// breakdown). The parent (transactions screen) wires it to PutTransaction.
 	OnSave func(domain.Transaction)
+	// OnReceiptSplit opens the receipt-assisted path from this editor, keeping
+	// manual and receipt-based splits under one ledger action.
+	OnReceiptSplit func(txnID string)
 	// FooterFormID, when set, renders the editor as a modal body <form> with that id
 	// and its own pinned Cancel/Save bar, dropping the inline layout's title and card
 	// border — the modal chrome supplies those. Empty (the default) keeps the
@@ -60,6 +63,9 @@ type splitEditorProps struct {
 	// OnCancel dismisses the modal from the editor's own footer. Only used with
 	// FooterFormID; the inline layout has no Cancel (it is not a modal).
 	OnCancel func()
+	// DraftGeneration changes only when a caller accepts a new proposal. Ordinary
+	// parent renders keep the user's in-progress draft; a generation change reseeds it.
+	DraftGeneration int
 }
 
 // SplitEditor (C58) is the split-transaction UI: it lets a single transaction be
@@ -95,6 +101,16 @@ func SplitEditor(props splitEditorProps) ui.Node {
 	// keep one Amt string; the mode decides how it is read. Percentages are
 	// fixed-point basis points (split.PercentScale), never floats.
 	pctMode := ui.UseState(false)
+	draftGeneration := ui.UseState(props.DraftGeneration)
+	ui.UseEffect(func() func() {
+		if draftGeneration.Get() != props.DraftGeneration {
+			splits.Set(seed())
+			errMsg.Set("")
+			pctMode.Set(false)
+			draftGeneration.Set(props.DraftGeneration)
+		}
+		return nil
+	}, props.DraftGeneration)
 
 	txnAbsEarly := absMinor(props.Txn.Amount.Amount)
 	// Switching modes converts each parseable row in place — amounts become the
@@ -401,19 +417,27 @@ func SplitEditor(props splitEditorProps) ui.Node {
 		remText = uistate.T("splitEditor.pctLeft", money.FormatMinor(remainder, 2))
 	case remainder > 0:
 		remTone = "neg"
-		remText = uistate.T("splitEditor.left", money.FormatMinor(remainder, dec))
+		remText = uistate.T("splitEditor.left", fmtMoney(money.New(remainder, props.Txn.Amount.Currency)))
 	case remainder < 0 && inPct:
 		remTone = "neg"
 		remText = uistate.T("splitEditor.pctOver", money.FormatMinor(-remainder, 2))
 	case remainder < 0:
 		remTone = "neg"
-		remText = uistate.T("splitEditor.over", money.FormatMinor(-remainder, dec))
+		remText = uistate.T("splitEditor.over", fmtMoney(money.New(-remainder, props.Txn.Amount.Currency)))
 	}
 
 	// The shared body: the hint, the split rows, and the "Add split" + live-remainder
 	// line, plus any validation error. Both layouts render these.
 	hint := P(css.Class("muted"), Style(map[string]string{"margin-bottom": "0.5rem"}),
 		uistate.T("splitEditor.hint", fmtMoney(money.New(txnAbs, props.Txn.Amount.Currency))))
+	receiptSplit := ui.UseEvent(func() {
+		if props.OnReceiptSplit != nil {
+			props.OnReceiptSplit(props.Txn.ID)
+		}
+	})
+	receiptAction := If(props.OnReceiptSplit != nil,
+		Button(css.Class("btn", "btn-sm"), Type("button"), Attr("data-testid", "txn-receipt-split-open"),
+			OnClick(receiptSplit), uistate.T("receiptsplit.menuAction")))
 	// Amounts / Percentages entry-mode toggle (aria-pressed segmented pair).
 	modeBtn := func(testid, key string, active bool, on ui.Handler) ui.Node {
 		cls := "btn btn-sm"
@@ -453,6 +477,7 @@ func SplitEditor(props splitEditorProps) ui.Node {
 			Attr("data-testid", "split-editor"), OnSubmit(save),
 			Div(css.Class("modal-scroll"),
 				hint,
+				receiptAction,
 				modeToggle,
 				rowsNode,
 				addRow2,
@@ -481,6 +506,7 @@ func SplitEditor(props splitEditorProps) ui.Node {
 		Style(map[string]string{"margin-top": "0.75rem", "padding": "0.75rem", "border": "1px solid var(--border)", "border-radius": "8px"}),
 		P(css.Class("hero-flanker-label"), Style(map[string]string{"margin-bottom": "0.4rem"}), uistate.T("splitEditor.title")),
 		hint,
+		receiptAction,
 		modeToggle,
 		rowsNode,
 		addRow2,

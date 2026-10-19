@@ -57,6 +57,8 @@ type FlipPanelProps struct {
 	// Cancel+Save forms; use FlushBody + a `.modal-foot` bar only when the footer needs an
 	// extra action (e.g. Delete).
 	FormID string
+	// LeftFooter is an optional action aligned before Cancel in the pinned footer.
+	LeftFooter uic.Node
 	// SaveLabel overrides the primary button text ("Save" by default) — e.g. "Add goal",
 	// "Apply". Applies to the FormID and the OnSave footers.
 	SaveLabel string
@@ -381,6 +383,7 @@ func flipPanel(props FlipPanelProps) uic.Node {
 			saveArgs = append(saveArgs, Attr("disabled", ""), Attr("aria-disabled", "true"))
 		}
 		foot = Div(css.Class("set-foot"),
+			props.LeftFooter,
 			Button(cancelArgs...),
 			Button(saveArgs...),
 		)

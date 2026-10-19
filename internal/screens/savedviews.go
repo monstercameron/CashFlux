@@ -52,14 +52,15 @@ func init() {
 	})
 }
 
-// baseAmountFunc returns an amount function that converts each transaction to the
-// base currency, so a view's total sums correctly across currencies.
-func baseAmountFunc(rates currency.Rates, base string) savedtxnview.AmountFunc {
-	return func(t domain.Transaction) int64 {
-		if c, err := rates.Convert(t.Amount, base); err == nil {
-			return c.Amount
+// baseConversionFunc converts each transaction into the base currency while
+// preserving conversion failures so summaries can exclude and disclose them.
+func baseConversionFunc(rates currency.Rates, base string) savedtxnview.ConversionFunc {
+	return func(t domain.Transaction) (int64, bool) {
+		converted, err := rates.Convert(t.Amount, base)
+		if err != nil {
+			return 0, false
 		}
-		return t.Amount.Amount
+		return converted.Amount, true
 	}
 }
 
@@ -69,6 +70,9 @@ type txnSavedViewsMenuProps struct {
 	Filter txnfilter.Criteria // current live ledger filter (for "Save current view…")
 	Rates  currency.Rates
 	Base   string
+	// Embedded renders the Views entry and its open contents inside the Transactions
+	// More menu, without adding a separate toolbar button.
+	Embedded bool
 }
 
 // TxnSavedViewsMenu renders the transactions toolbar's "Views" popover (TX3): a
@@ -83,7 +87,9 @@ func TxnSavedViewsMenu(props txnSavedViewsMenuProps) ui.Node {
 	open := openAtom.Get()
 
 	uiw.DismissPopover(open, "txn-saved-views", func() { openAtom.Set(false); formAtom.Set(false) })
-	uiw.AnchorPopover(open, "txn-saved-views")
+	if !props.Embedded {
+		uiw.AnchorPopover(open, "txn-saved-views")
+	}
 
 	toggle := ui.UseEvent(Prevent(func() { openAtom.Set(!openAtom.Get()) }))
 
@@ -99,6 +105,15 @@ func TxnSavedViewsMenu(props txnSavedViewsMenuProps) ui.Node {
 	var body ui.Node = Fragment()
 	if open {
 		body = savedViewsMenuBody(props)
+	}
+	if props.Embedded {
+		return Div(css.Class("saved-views-embedded"), Attr("id", "txn-saved-views"), Attr("role", "group"),
+			Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+				Attr("data-testid", "txn-views-btn"), Attr("aria-expanded", expanded), OnClick(toggle),
+				uiw.Icon(icon.List, css.Class(tw.W4, tw.H4)), Span(uistate.T("savedViews.button"))),
+			If(open, Div(css.Class("saved-views-menu"),
+				Attr("aria-label", uistate.T("savedViews.title")), body)),
+		)
 	}
 
 	return Div(css.Class("add-wrap"), Attr("id", "txn-saved-views"),
@@ -117,10 +132,10 @@ func savedViewsMenuBody(props txnSavedViewsMenuProps) ui.Node {
 	app := props.App
 	formAtom := uistate.UseSaveViewFormOpen()
 	views := app.SavedTxnViews()
-	amount := baseAmountFunc(props.Rates, props.Base)
+	convert := baseConversionFunc(props.Rates, props.Base)
 
 	// "Save current view…": disabled with an explanation when no filters are active.
-	hasFilters := props.Filter.ActiveCount() > 0
+	hasFilters := len(props.Filter.PageFilters()) > 0
 	var saveControl ui.Node
 	if formAtom.Get() && hasFilters {
 		saveControl = ui.CreateElement(saveViewForm, saveViewFormProps{App: app, Filter: props.Filter})
@@ -146,10 +161,10 @@ func savedViewsMenuBody(props txnSavedViewsMenuProps) ui.Node {
 		rows = append(rows, css.Class("saved-views-list"))
 		txns := app.Transactions()
 		for _, v := range views {
-			count, total := v.Summary(txns, amount)
+			count, total, unconverted := v.SummaryConverted(txns, convert)
 			rows = append(rows, ui.CreateElement(savedViewRow, savedViewRowProps{
-				App: app, View: v, Base: props.Base, Count: count, Total: total,
-				PriorTotals: savedViewPriorTotals(v, txns, amount),
+				App: app, View: v, Base: props.Base, Count: count, Total: total, Unconverted: unconverted,
+				PriorTotals: savedViewPriorTotals(v, txns, convert),
 			}))
 		}
 		list = Div(rows...)
@@ -219,11 +234,12 @@ func saveViewForm(props saveViewFormProps) ui.Node {
 
 // savedViewRowProps carries one saved view plus its freshly-computed live totals.
 type savedViewRowProps struct {
-	App   *appstate.App
-	View  savedtxnview.SavedTxnView
-	Base  string
-	Count int
-	Total int64
+	App         *appstate.App
+	View        savedtxnview.SavedTxnView
+	Base        string
+	Count       int
+	Total       int64
+	Unconverted int
 	// PriorTotals is this view's total in each COMPLETED prior month, oldest
 	// first — the baseline "usual" is measured against (WF8). Fewer than
 	// watchlist.MinPeriodsForAverage entries means no baseline is claimed.
@@ -267,6 +283,11 @@ func savedViewRow(props savedViewRowProps) ui.Node {
 
 	summary := uistate.T("savedViews.rowSummary",
 		fmtMoney(money.New(props.Total, props.Base)), savedViewMatches(props.Count))
+	var unconverted ui.Node = Fragment()
+	if props.Unconverted > 0 {
+		unconverted = Span(css.Class("saved-view-unconverted"),
+			uistate.T("transactions.scopeUnconverted", props.Unconverted))
+	}
 
 	// WF8: the threshold was binary — crossed or not — and a binary answer
 	// arrives too late to act on. This says where the total stands BEFORE it
@@ -338,7 +359,7 @@ func savedViewRow(props savedViewRowProps) ui.Node {
 			Button(css.Class("saved-view-apply"), Type("button"), Attr("data-testid", "saved-view-apply"),
 				Attr("aria-label", uistate.T("savedViews.applyAria", v.Name)), OnClick(apply),
 				Span(css.Class("saved-view-name"), Text(v.Name)),
-				Span(css.Class("saved-view-summary t-caption"), Text(summary))),
+				Span(css.Class("saved-view-summary t-caption"), Text(summary)), unconverted),
 			Div(css.Class("saved-view-actions"),
 				Button(css.Class("btn btn-icon"), Type("button"), Attr("data-testid", "saved-view-pin"),
 					Attr("aria-label", uistate.T("savedViews.pin")), Title(uistate.T("savedViews.pin")),
@@ -477,7 +498,7 @@ func savedViewPinnedTile(props savedViewTileProps) ui.Node {
 		})
 	}
 
-	count, total := v.Summary(props.Txns, baseAmountFunc(props.Rates, props.Base))
+	count, total, unconvertedCount := v.SummaryConverted(props.Txns, baseConversionFunc(props.Rates, props.Base))
 	// Resolve the filter atom in render — UseTxFilter is a hook; the handler only
 	// reads/sets the captured atom.
 	txFilterAtom := uistate.UseTxFilter()
@@ -505,6 +526,8 @@ func savedViewPinnedTile(props savedViewTileProps) ui.Node {
 				Div(css.Class("saved-view-tile-figs"),
 					Span(css.Class("saved-view-tile-total"), Text(fmtMoney(money.New(total, props.Base)))),
 					Span(css.Class("saved-view-tile-sub"), Text(savedViewMatches(count)))),
+				If(unconvertedCount > 0, Span(css.Class("saved-view-unconverted"),
+					uistate.T("transactions.scopeUnconverted", unconvertedCount))),
 				Span(css.Class("saved-view-tile-go"),
 					Span(Text(uistate.T("savedViews.open"))),
 					uiw.Icon(icon.ChevronRight, css.Class("saved-view-tile-go-ico")))),
@@ -528,7 +551,7 @@ func savedViewMatches(n int) string {
 // month against full ones would report every household as spending less than
 // usual until the 28th, which is the most reliable way to make a monitor useless.
 func savedViewPriorTotals(v savedtxnview.SavedTxnView, txns []domain.Transaction,
-	amount savedtxnview.AmountFunc) []int64 {
+	convert savedtxnview.ConversionFunc) []int64 {
 
 	const months = 6
 	now := time.Now()
@@ -549,7 +572,11 @@ func savedViewPriorTotals(v savedtxnview.SavedTxnView, txns []domain.Transaction
 			// month of zero spending — including it would drag every average down.
 			continue
 		}
-		_, total := v.Summary(window, amount)
+		_, total, unconverted := v.SummaryConverted(window, convert)
+		if unconverted > 0 {
+			// A partial month is not a useful baseline for a base-currency total.
+			continue
+		}
 		out = append(out, total)
 	}
 	return out

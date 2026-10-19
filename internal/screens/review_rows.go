@@ -5,6 +5,7 @@
 package screens
 
 import (
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -103,12 +104,12 @@ func reviewGroupRow(props reviewGroupRowProps) ui.Node {
 				Select(selArgs...),
 				Button(css.Class("rvs-newcat"), Type("button"),
 					Attr("data-testid", "review-newcat-"+key),
-					Attr("aria-label", uistate.T("catpick.newOption")),
-					Attr("title", uistate.T("catpick.newOption")),
+					Attr("aria-label", uistate.T("review.newCategory")),
+					Attr("title", uistate.T("review.newCategory")),
 					OnClick(onNewCat), "+"),
-				Span(css.Class("rvs-grp-total"), fmtMoney(money.Money{Amount: g.Total(), Currency: g.Items[0].Amount.Currency})),
+				reviewCurrencyTotalsNode(g.Items, props.App.Settings().BaseCurrency),
 				Button(css.Class("rvs-caret"), Type("button"), Attr("aria-expanded", boolAttr(props.Open)),
-					Attr("aria-label", uistate.T("review.expandAria", g.Merchant)),
+					Attr("aria-label", uistate.T("review.openCharges", g.Merchant)),
 					Attr("data-testid", "review-expand-"+key), OnClick(toggleOpen), "▸"),
 			),
 		),
@@ -117,7 +118,7 @@ func reviewGroupRow(props reviewGroupRowProps) ui.Node {
 				return Div(css.Class("rvs-mem"),
 					Span(css.Class("rvs-mem-date"), props.Prefs.FormatDate(t.Date)),
 					Span(css.Class("rvs-mem-desc"), rawPayeeOf(t)),
-					Span(css.Class("rvs-mem-amt"), fmtMoney(t.Amount)),
+					reviewMoneyNode("rvs-mem-amt", t.Amount),
 				)
 			}),
 			If(extra > 0, P(css.Class("rvs-more"), uistate.T("review.showOther", extra))),
@@ -159,14 +160,10 @@ func reviewContextBand(props reviewContextBandProps) ui.Node {
 			extra = len(shown) - 5
 			shown = shown[:5]
 		}
-		var total int64
-		for _, s := range sibs {
-			total += s.Amount.Amount
-		}
 		blocks = append(blocks, Div(css.Class("rvs-ctx"), Attr("data-testid", "review-siblings"),
 			Div(css.Class("rvs-ctx-t"),
 				Strong(uistate.T("review.sibTitle", len(sibs))),
-				Span(css.Class("rvs-ctx-why"), fmtMoney(money.Money{Amount: total, Currency: t.Amount.Currency})),
+				Span(css.Class("rvs-ctx-why"), reviewCurrencyTotals(sibs, app.Settings().BaseCurrency)),
 			),
 			Fragment(nodesToAny(mapTxnRows(shown, props.Prefs))...),
 			If(extra > 0, P(css.Class("rvs-more"), uistate.T("review.showOther", extra))),
@@ -259,12 +256,69 @@ func reviewContextBand(props reviewContextBandProps) ui.Node {
 	)
 }
 
+func reviewCurrencyTotals(txns []domain.Transaction, baseCurrency ...string) string {
+	base := ""
+	if len(baseCurrency) > 0 {
+		base = strings.ToUpper(strings.TrimSpace(baseCurrency[0]))
+	}
+	totals := make(map[string]int64)
+	for _, txn := range txns {
+		totals[txn.Amount.Currency] += txn.Amount.Amount
+	}
+	currencies := make([]string, 0, len(totals))
+	for code := range totals {
+		currencies = append(currencies, code)
+	}
+	sort.Strings(currencies)
+	parts := make([]string, 0, len(currencies))
+	for _, code := range currencies {
+		amount := reviewMoneyText(money.Money{Amount: totals[code], Currency: code})
+		if base == "" || !strings.EqualFold(code, base) {
+			amount += " " + code
+		}
+		parts = append(parts, amount)
+	}
+	return strings.Join(parts, " · ")
+}
+
+func reviewCurrencyTotalsNode(txns []domain.Transaction, baseCurrency string) ui.Node {
+	totals := make(map[string]int64)
+	for _, txn := range txns {
+		totals[txn.Amount.Currency] += txn.Amount.Amount
+	}
+	class := "rvs-grp-total"
+	income := len(totals) > 0
+	for _, total := range totals {
+		if total <= 0 {
+			income = false
+			break
+		}
+	}
+	if income {
+		class += " text-up"
+	}
+	return Span(css.Class(class), reviewCurrencyTotals(txns, baseCurrency))
+}
+
+func reviewMoneyText(m money.Money) string {
+	text, _ := fmtLedgerAmount(m, false)
+	return text
+}
+
+func reviewMoneyNode(class string, m money.Money) ui.Node {
+	text, tone := fmtLedgerAmount(m, false)
+	if tone != "" {
+		class += " " + tone
+	}
+	return Span(css.Class(class), text)
+}
+
 func mapTxnRows(in []domain.Transaction, pr prefs.Prefs) []ui.Node {
 	out := make([]ui.Node, 0, len(in))
 	for _, t := range in {
 		out = append(out, Div(css.Class("rvs-link-row"),
 			Span(pr.FormatDate(t.Date)),
-			Span(css.Class("rvs-link-amt"), fmtMoney(t.Amount)),
+			reviewMoneyNode("rvs-link-amt", t.Amount),
 			Span(css.Class("rvs-link-desc"), truncate(rawPayeeOf(t), 32)),
 		))
 	}
@@ -327,9 +381,7 @@ func reviewScanStrip(props reviewScanStripProps) ui.Node {
 
 	switch {
 	case !props.HasProvider:
-		sub = uistate.T("review.scanNoKey")
-		action = Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "review-scan-setup"),
-			OnClick(props.OnScan), uistate.T("review.scanConnect"))
+		return Fragment()
 	case props.Gaps == 0:
 		title = uistate.T("review.scanNoGaps")
 		sub = uistate.T("review.scanNoGapsSub")

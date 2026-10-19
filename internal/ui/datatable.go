@@ -225,7 +225,7 @@ func dataTable(props DataTableProps) ui.Node {
 	if len(props.PageSizes) > 0 {
 		minSize = props.PageSizes[0]
 	}
-	if props.Total > minSize {
+	if props.TopPager && props.Total > minSize {
 		return Div(pager(true), table, pager(false))
 	}
 	return Div(table, pager(false))

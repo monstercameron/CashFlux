@@ -6,61 +6,18 @@ package screens
 
 import "github.com/monstercameron/CashFlux/internal/uistate"
 
-// rowStatusWord is the ledger Status column's cell text: the row's reconciled /
-// cleared / needs-review state spelled out (C578).
-//
-// It says the same thing as the inline glyph, in words, in a lane where a repeated
-// value is expected. The two must not disagree, so the branch order here mirrors
-// the badge's exactly: reconciled outranks cleared (a reconciled row is also
-// cleared), and a transfer leg is never "needs review" because nothing reviews a
-// transfer leg.
-//
-// An em dash rather than an empty cell for the states with no word: a blank cell in
-// a status column reads as "we do not know", which is a different claim from "there
-// is nothing to say here".
+// rowStatusWord returns only the actionable status. Settled and reviewed rows
+// have no status text; their cleared state is shown by the row's check glyph.
 func rowStatusWord(p txnFrameRowProps) string {
-	// NEEDS REVIEW OUTRANKS SETTLEMENT. These are two different axes — whether the
-	// bank has settled the charge, and whether a person has looked at it — and a
-	// charge can be both cleared and unreviewed. Ranking cleared first meant the
-	// seeded known-bad control, which is cleared AND flagged, read simply "Cleared"
-	// in the ledger with no hint it was sitting in the review queue: the column said
-	// the row was fine while "Review inbox (249)" was counting it (C601).
-	//
-	// The one that asks for a person wins. Settlement is bookkeeping the ledger
-	// records; review is work the ledger is asking for, and a status column that
-	// hides the ask is worse than the bare dot it replaced. The settled state is not
-	// lost — statusDetail puts it in the cell's tooltip and accessible name.
-	switch {
-	// C618: "Needs review" is a claim about the REVIEW QUEUE — its own tooltip
-	// says "confirm it in the Review inbox". So it may only be said of a row the
-	// inbox actually holds. A rule-categorized charge (or one added without
-	// ticking "Mark as reviewed") has a category, so reviewqueue.Needs is false
-	// and no card exists for it; calling it "Needs review" sent people hunting a
-	// merchant group that was never in the dialog. It is unconfirmed instead —
-	// still an ask, still outranking settlement per C601, but an honest one with
-	// its own action (open the row) rather than a wrong destination.
-	case p.Queued && !p.IsTransfer:
+	if p.Queued && !p.IsTransfer {
 		return uistate.T("acctxn.legendNeedsReview")
-	case !p.Reviewed && !p.IsTransfer:
-		return uistate.T("transactions.statusUnconfirmed")
-	case p.Reconciled:
-		return uistate.T("acctxn.legendReconciled")
-	case p.Cleared:
-		return uistate.T("acctxn.legendCleared")
-	case p.Reviewed:
-		return uistate.T("transactions.statusReviewed")
 	}
-	return "—"
+	return ""
 }
 
-// statusDetail is the cell's full state in one sentence, for its tooltip and
-// accessible name — so the axis the word had to drop is still available.
-//
-// A row that is both settled and unreviewed reads "Needs review" and hovers
-// "Needs review · cleared". Without this the reordering above would trade one
-// hidden fact for another.
+// statusDetail supplies the accessible label and tooltip for a status cell.
 func statusDetail(p txnFrameRowProps) string {
-	return badgeStateLabel(p, rowStatusWord(p))
+	return rowStatusWord(p)
 }
 
 // badgeStateLabel appends the settlement axis to a word that dropped it, so the
@@ -105,5 +62,5 @@ func statusToneClass(p txnFrameRowProps) string {
 	if p.Queued && !p.IsTransfer {
 		return "txn-status-attention"
 	}
-	return "text-dim"
+	return ""
 }

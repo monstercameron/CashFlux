@@ -12,11 +12,13 @@ var txnScopeKeys = Catalog{
 	// for the user to reverse-engineer.
 	// (The DATE half of the scope is stated by the ledger's own period bar
 	// immediately above this line, so it is deliberately not repeated here.)
-	"transactions.scopeAll":      "Showing all %s",
-	"transactions.scopeNarrowed": "Showing %d of %s",
-	"transactions.scopeNet":      "net %s",
-	"transactions.scopeLens":     "viewing as %s",
-	"transactions.scopeAria":     "What this ledger is showing",
+	"transactions.scopeAll":         "Showing all %s transactions",
+	"transactions.scopeAllOne":      "Showing all 1 transaction",
+	"transactions.scopeNarrowed":    "Showing %s of %s transactions",
+	"transactions.scopeNarrowedOne": "Showing %s of 1 transaction",
+	"transactions.scopeNet":         "net %s",
+	"transactions.scopeLens":        "viewing as %s",
+	"transactions.scopeAria":        "What this ledger is showing",
 	// Said only when a row could not be folded into the base currency (no exchange
 	// rate saved for it). Without this the net silently covered fewer rows than the
 	// count printed beside it.

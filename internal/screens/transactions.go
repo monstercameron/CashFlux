@@ -621,15 +621,14 @@ func transactionsLegacy() ui.Node {
 	}
 
 	// Status text for the screen-reader live region: how many transactions match
-	// the current filters, announced as the filters change. Mirrors the visible
-	// summary, but also covers the zero-results case (the visible summary hides at
-	// zero, so without this the "no matches" outcome would never be announced).
+	// the current filters, announced as the filters change. The empty state below
+	// owns its own status role, so do not announce the no-match message twice.
 	filterStatus := ""
 	switch {
 	case len(txns) == 0:
 		filterStatus = ""
 	case len(shown) == 0:
-		filterStatus = uistate.T("transactions.noMatch")
+		filterStatus = ""
 	default:
 		filterStatus = uistate.T("transactions.summary", plural(len(shown), "transaction"), fmtMoney(money.New(shownNet, base)))
 	}
@@ -639,7 +638,10 @@ func transactionsLegacy() ui.Node {
 	case len(txns) == 0:
 		listBody = ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("transactions.empty"), CTALabel: uistate.T("transactions.addFirst"), AddTarget: "transaction", Icon: icon.Transactions, ImportLink: true})
 	case len(shown) == 0:
-		listBody = P(css.Class("empty"), uistate.T("transactions.noMatch"))
+		futurePeriod, scheduledCount := txnFutureScheduleCount(f, time.Now())
+		listBody = ui.CreateElement(txnNoMatch, txnNoMatchProps{
+			Search: strings.TrimSpace(f.Text), FuturePeriod: futurePeriod, ScheduledCount: scheduledCount,
+		})
 	default:
 		// Paginate the filtered set to the persisted page/size (C47), so a long
 		// ledger renders one page at a time.
@@ -841,7 +843,7 @@ func transactionsLegacy() ui.Node {
 		}
 		return af.Value
 	}
-	active := f.ActiveFilters()
+	active := f.PageFilters()
 	chips := make([]uiw.Chip, 0, len(active))
 	for _, af := range active {
 		chips = append(chips, uiw.Chip{Key: string(af.Field), Label: chipLabel(af)})
@@ -995,6 +997,7 @@ func transactionsLegacy() ui.Node {
 						OnSearch:     onFilterText,
 						FiltersLabel: uistate.T("transactions.filters"),
 						FiltersTitle: uistate.T("transactions.filtersTitle"),
+						FilterSheet:  true,
 						ActiveAriaLabel: func(n int) string { // C57
 							if n == 0 {
 								return uistate.T("transactions.filters")
@@ -1048,4 +1051,36 @@ func transactionsLegacy() ui.Node {
 				)),
 		}),
 	)
+}
+
+// markTxnReviewedFromKeyboard confirms the focused ledger transaction. The
+// write uses the same appstate persistence path as the row and review controls.
+func markTxnReviewedFromKeyboard(txnID string) {
+	app := appstate.Default
+	if app == nil {
+		return
+	}
+	txn, ok := app.TransactionByID(txnID)
+	if !ok || txn.Reviewed {
+		return
+	}
+	var changed bool
+	txn, changed = txnReviewed(txn)
+	if !changed {
+		return
+	}
+	if err := app.PutTransaction(txn); err != nil {
+		uistate.PostNotice(err.Error(), true)
+		return
+	}
+	uistate.BumpDataRevision()
+	uistate.PostNotice(uistate.T("txnkeys.reviewedToast"), false)
+}
+
+func txnReviewed(txn domain.Transaction) (domain.Transaction, bool) {
+	if txn.Reviewed {
+		return txn, false
+	}
+	txn.Reviewed = true
+	return txn, true
 }

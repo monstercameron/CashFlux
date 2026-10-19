@@ -36,6 +36,30 @@ func rawPayeeOf(t domain.Transaction) string {
 	return strings.TrimSpace(firstNonEmpty(t.Payee, t.Desc))
 }
 
+// savePayeeClean persists the selected cleanup before announcing success. The caller
+// keeps the modal open when this returns an error, so no success notice can outlive a
+// rejected write.
+func savePayeeClean(app *appstate.App, txn domain.Transaction, rawPayee, display, scope string, hasPayee bool) error {
+	if scope == "all" && hasPayee {
+		// Map every charge with this payee (past + future) via a payee alias — the
+		// same mechanism the /rules manager writes.
+		if err := app.PutPayeeAlias(domain.PayeeAlias{RawPayee: rawPayee, Display: display}); err != nil {
+			return err
+		}
+	} else {
+		// Just this transaction: rename what the ledger shows for it (the row's
+		// description is its display name, so set that).
+		txn.Desc = display
+		if err := app.PutTransaction(txn); err != nil {
+			return err
+		}
+	}
+	uistate.PostNotice(uistate.T("payeeClean.savedToast", display), false)
+	uistate.BumpDataRevision()
+	uistate.ClosePayeeClean()
+	return nil
+}
+
 // PayeeCleanBody is the body of the payee-cleanup flip modal (mounted at the shell root
 // by app.PayeeCleanHost). It renders as a <form> (PayeeCleanFormID) whose Save is the
 // FlipPanel's pinned footer button, so the footer stays fixed while the body scrolls.
@@ -158,25 +182,10 @@ func PayeeCleanBody(_ struct{}) ui.Node {
 			errText.Set(uistate.T("payeeClean.needName"))
 			return
 		}
-		if scope.Get() == "all" && hasPayee {
-			// Map every charge with this payee (past + future) via a payee alias — the
-			// same mechanism the /rules manager writes.
-			if err := app.PutPayeeAlias(domain.PayeeAlias{RawPayee: rawPayee, Display: disp}); err != nil {
-				errText.Set(err.Error())
-				return
-			}
-		} else {
-			// Just this transaction: rename what the ledger shows for it (the row's
-			// description is its display name, so set that).
-			t := txn
-			t.Desc = disp
-			if err := app.PutTransaction(t); err != nil {
-				errText.Set(err.Error())
-				return
-			}
+		if err := savePayeeClean(app, txn, rawPayee, disp, scope.Get(), hasPayee); err != nil {
+			errText.Set(err.Error())
+			return
 		}
-		uistate.BumpDataRevision()
-		uistate.ClosePayeeClean()
 	}))
 
 	// AI suggest button (only when a provider is configured + T5 enabled).

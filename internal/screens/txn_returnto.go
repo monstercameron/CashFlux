@@ -42,7 +42,7 @@ func txnWorkingSetLabel(c txnfilter.Criteria) string {
 	if q := strings.TrimSpace(c.Text); q != "" {
 		return uistate.T("returnTo.labelSearch", q)
 	}
-	if n := len(c.ActiveFilters()); n > 0 {
+	if n := len(c.PageFilters()); n > 0 {
 		return uistate.T("returnTo.labelFiltered", plural(n, "filter"))
 	}
 	return uistate.T("returnTo.labelPlain")

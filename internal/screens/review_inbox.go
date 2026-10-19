@@ -72,10 +72,15 @@ func assignReviewToCharges(app *appstate.App, ids []string, catID string) int {
 		return 0
 	}
 	var writeErr error
+	splitSkipped := false
 	n := 0
 	app.BulkMutate(func() {
 		for _, t := range app.Transactions() {
 			if !want[t.ID] || !reviewqueue.Needs(t) {
+				continue
+			}
+			if reviewqueue.ReasonFor(t) == reviewqueue.ReasonSplitUnbalanced {
+				splitSkipped = true
 				continue
 			}
 			t.CategoryID = catID
@@ -99,6 +104,9 @@ func assignReviewToCharges(app *appstate.App, ids []string, catID string) int {
 	})
 	if writeErr != nil {
 		uistate.PostNotice(writeErr.Error(), true)
+	}
+	if splitSkipped {
+		uistate.PostNotice(uistate.T("review.splitNeeded"), false)
 	}
 	// The caller showed a count before the click — "Categorize all 122" — and that
 	// count came from a memoized snapshot. If anything resolved one of these charges

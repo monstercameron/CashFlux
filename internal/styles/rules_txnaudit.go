@@ -8,6 +8,15 @@ package styles
 // items, and the quick-filter scope note. Theme tokens only — no hardcoded
 // colours outside the one legacy hover this file is correcting.
 func registerTxnAudit() {
+	// C1-15: keep the transaction row that owns an open action menu visually
+	// connected to the popover, including when the menu flips above its trigger.
+	rule(".txn-table tbody tr:has(.overflow-menu-open)",
+		background("color-mix(in srgb, var(--accent) 9%, var(--bg-card))"),
+	)
+	rule(".txn-table tbody tr:has(.overflow-menu-open) > td",
+		background("transparent"),
+	)
+
 	// --- C572: the row menu groups by what an action costs ---------------------
 	// A section heading doubles as the separator: the hairline above it is the rule
 	// between tiers, so the menu needs one device rather than two. The first heading

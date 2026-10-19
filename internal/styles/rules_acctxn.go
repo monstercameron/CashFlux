@@ -2,27 +2,10 @@
 
 package styles
 
-// registerAcctxn emits the styles for the 2026-07-19 Accounts + Transactions UX
-// refinement pass: wider description/account columns on the ledger so they stop
-// truncating, the ledger's row status-glyph legend, and a tighter "Upcoming"
+// registerAcctxn emits the ledger status legend and the tighter "Upcoming"
 // strip. Theme tokens only (works in light + dark); appended last in Register()
 // so its equal-specificity overrides win over the earlier ledger rules.
 func registerAcctxn() {
-	// --- Wider ledger columns (stop truncating description + account) -------------
-	// The ledger renders table-layout:fixed (.bento-ledger), so a column's width comes
-	// from its HEADER cell. Give the Description header more of the row and a larger
-	// floor, and let the Account column grow past the shared 11rem cap the secondary
-	// columns share — long merchant names and account names were clipping mid-word.
-	rule(".bento-ledger .txn-table th.row-desc-col",
-		width("40%"),
-	)
-	rule(".txn-table td.row-desc-cell",
-		minWidth("16rem"),
-	)
-	rule(".txn-table .td-acct",
-		maxWidth("15rem"),
-	)
-
 	// --- Row status-glyph legend --------------------------------------------------
 	// A single quiet line keying the ✓✓ / ✓ / • markers a row wears, so the status is
 	// decoded in words rather than shape+color alone.

@@ -15,6 +15,9 @@ func init() {
 		"railsearch.countMany": "%d destinations match",
 		"railsearch.noMatch":   "Nothing in the menu matches “%s”.",
 		"railsearch.clear":     "Clear the filter",
+		// A force push that refuses says why. "Make my copy win" doing nothing at
+		// all is indistinguishable from a broken button.
+		"sync.forceRefused": "This device's copy was not sent: %s.",
 		// Named for what it does rather than what it is: the hint sits under an
 		// empty result and tells you the one thing that will help.
 		"railsearch.hintShorter": "Try a shorter word.",

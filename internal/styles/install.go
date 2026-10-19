@@ -132,6 +132,12 @@ func Register() {
 	registerHealthAnalysis()
 	registerTxnScope()
 	registerVSweep()
+	registerR3K()
+	registerR4G()
+	registerR5E()
+	registerR6F()
+	registerR6M()
+	registerR7Z()
 	inject(Build())
 }
 

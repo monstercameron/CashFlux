@@ -20,6 +20,7 @@ func registerGenerated() {
 		// used it (kebab/overflow menu items, glyph toolbar buttons) had no background.
 		customProp("--hover", "#26262b"),
 		customProp("--border", "#2a2a2c"),
+		customProp("--control-border", "#9a9aa2"),
 		customProp("--text", "#f4f4f5"),
 		// 2026-07-17 audit: secondary text ran below comfortable contrast (account
 		// metadata, task notes, notification copy, chart labels). Both tiers rise
@@ -1195,6 +1196,7 @@ func registerGenerated() {
 		customProp("--bg-elev", "#efede8"),
 		customProp("--bg-card", "#ffffff"),
 		customProp("--border", "#e4e2dd"),
+		customProp("--control-border", "#56565c"),
 		customProp("--text", "#1c1c1e"),
 		customProp("--text-dim", "#4e4e55"),
 		// Audit contrast raise: the light faint tier steps from ~5.2:1 to ~6.1:1.
@@ -2225,21 +2227,15 @@ func registerGenerated() {
 		display("table-row"),
 	)
 	rule(".txn-table tbody tr.row",
-		minHeight("44px"),
+		height("44px"),
+		maxHeight("44px"),
 	)
 	rule(".txn-table tbody td",
-		padding("0.45rem 0.6rem"),
+		padding("0.3rem 0.6rem"),
 		borderBottom("1px solid var(--border)"),
 		verticalAlign("middle"),
-	)
-	rule(".txn-table tbody tr.selected",
-		background("var(--accent-dim)"),
-	)
-	rule(".txn-table tbody tr.row:nth-child(even)",
-		background("rgba(255,255,255,0.055)"),
-	)
-	rule("[data-theme=\"light\"] .txn-table tbody tr.row:nth-child(even)",
-		background("rgba(0,0,0,0.04)"),
+		overflow("hidden"),
+		whiteSpace("nowrap"),
 	)
 	rule("[data-theme=\"light\"] .txn-table thead th",
 		background("#f7f6f3 !important"),
@@ -2260,9 +2256,58 @@ func registerGenerated() {
 	rule(".txn-table tbody tr.row:hover",
 		background("var(--bg-elev)"),
 	)
+	rule(".txn-table tbody tr.row.selected, .txn-table tbody tr.row.selected:nth-child(even)",
+		background("var(--accent-dim)"),
+	)
+	rule(".txn-table .txn-amount-expense",
+		color("var(--text)"),
+	)
+	rule(".txn-table .row-desc-inner .mtrend-chip",
+		opacity("0"),
+		pointerEvents("none"),
+	)
+	rule(".txn-table tbody tr.row:hover .row-desc-inner .mtrend-chip, .txn-table tbody tr.row:focus-within .row-desc-inner .mtrend-chip",
+		opacity("1"),
+		pointerEvents("auto"),
+	)
 	rule(".txn-table .td-date",
 		whiteSpace("nowrap"),
 		color("var(--text-dim)"),
+	)
+	// The count line carries the two direct cash-flow filters without making its
+	// links look like a second toolbar. Upcoming is a disclosure in the same band;
+	// its expanded list wraps below the summary.
+	rule(".txn-count-filter",
+		padding("0"),
+		border("0"),
+		background("transparent"),
+		color("var(--text)"),
+		font("inherit"),
+		cursor("pointer"),
+		whiteSpace("nowrap"),
+	)
+	rule(".txn-count-filter:hover",
+		color("var(--accent)"),
+		textDecoration("underline"),
+	)
+	rule(".txn-count-filter:focus-visible",
+		outline("2px solid var(--accent)"),
+		outlineOffset("2px"),
+	)
+	rule(".txn-count-upcoming",
+		display("contents"),
+	)
+	rule(".txn-count-upcoming .txn-upcoming-disc",
+		padding("0"),
+		whiteSpace("nowrap"),
+	)
+	rule(".txn-countline .txn-count-upcoming-rows",
+		flex("1 0 100%"),
+		width("100%"),
+		marginTop("0.15rem"),
+		padding("0.25rem 0.5rem"),
+		border("1px solid var(--border)"),
+		borderRadius("var(--radius-md)"),
 	)
 	rule(".txn-table .td-cat, .txn-table .td-acct, .txn-table .td-tags",
 		color("var(--text-dim)"),
@@ -2274,7 +2319,7 @@ func registerGenerated() {
 		fontWeight("600"),
 	)
 	rule(".txn-table td.row-desc",
-		maxWidth("280px"),
+		maxWidth("none"),
 		whiteSpace("nowrap"),
 		overflow("hidden"),
 		textOverflow("ellipsis"),
@@ -2320,8 +2365,6 @@ func registerGenerated() {
 	rule(".txn-table .td-actions",
 		whiteSpace("nowrap"),
 		textAlign("right"),
-		width("96px"),
-		maxWidth("96px"),
 	)
 	rule(".txn-table .clr-toggle",
 		background("transparent"),
@@ -2590,6 +2633,162 @@ func registerGenerated() {
 		marginBottom("0.8rem"),
 		overflow("hidden"),
 	)
+	// Transactions can opt into a right-side sheet without changing the shared
+	// toolbar's default inline disclosure on other pages.
+	rule(".filter-inline-panel.filter-sheet",
+		position("fixed"),
+		top("3.5rem"),
+		right("0"),
+		bottom("0"),
+		zIndex("var(--z-modal)"),
+		width("min(380px, 100vw)"),
+		height("calc(100dvh - 3.5rem)"),
+		minHeight("0"),
+		margin("0"),
+		borderRadius("0"),
+		boxShadow("-12px 0 36px rgba(0,0,0,.22)"),
+		display("flex"),
+		flexDirection("column"),
+	)
+	// Bento tiles normally clip their contents and use will-change: transform.
+	// Both properties make a fixed descendant behave like it is fixed to that
+	// short tile, which clipped the sheet to roughly the toolbar height. Release
+	// the owning tile while its sheet is mounted so the panel uses the viewport.
+	rule(".w:has(.filter-sheet)",
+		overflow("visible"),
+		willChange("auto"),
+	)
+	rule(".w:not(.drag):has(.filter-sheet):hover",
+		transform("none"),
+	)
+	rule(".filter-inline-panel.filter-sheet .filter-inline-body",
+		flex("1 1 0"),
+		minHeight("0"),
+		overflowY("auto"),
+		alignContent("flex-start"),
+	)
+	rule(".filter-sheet-footer",
+		display("flex"),
+		alignItems("center"),
+		justifyContent("space-between"),
+		gap(".75rem"),
+		padding(".75rem .9rem"),
+		borderTop("1px solid var(--border)"),
+		background("var(--bg-elev)"),
+	)
+	rule(".filter-sheet-clear",
+		color("var(--text-dim)"),
+	)
+	rule(".filter-sheet-done",
+		minWidth("6rem"),
+	)
+	rule(".filter-inline-panel.filter-sheet .filter-inline-body .filter-fields",
+		gridTemplateColumns("minmax(0, 1fr)"),
+		alignContent("start"),
+		gap("1rem"),
+	)
+	rule(".filter-inline-panel.filter-sheet .filter-inline-body .filter-fields .field-label",
+		flexDirection("column"),
+		alignItems("stretch"),
+		gap(".35rem"),
+		padding("0"),
+		background("transparent"),
+		border("0"),
+		borderRadius("0"),
+		fontSize("var(--type-14)"),
+		fontWeight("500"),
+		letterSpacing("normal"),
+		prop("text-transform", "none"),
+		color("var(--text-dim)"),
+		whiteSpace("normal"),
+	)
+	rule(".filter-inline-panel.filter-sheet .filter-inline-body .filter-fields .field-label .field",
+		width("100%"),
+		minHeight("44px"),
+		padding(".55rem .65rem"),
+		background("var(--bg-card)"),
+		border("1px solid var(--border)"),
+		borderRadius("var(--radius-md)"),
+	)
+	rule(".filter-inline-panel.filter-sheet .filter-panel",
+		border("0"),
+		padding("0"),
+		background("transparent"),
+	)
+	rule(".filter-inline-panel.filter-sheet .filter-groups",
+		display("flex"),
+		flexDirection("column"),
+		gap("1rem"),
+	)
+	rule(".filter-inline-panel.filter-sheet .filter-group",
+		border("0"),
+		padding("0"),
+	)
+	rule(".filter-inline-panel.filter-sheet .filter-group-label",
+		fontSize("var(--type-14)"),
+		letterSpacing("normal"),
+		textTransform("none"),
+	)
+	rule(".filter-inline-panel.filter-sheet .txn-presets-label",
+		fontSize("var(--type-12)"),
+		letterSpacing("normal"),
+		textTransform("none"),
+	)
+	rule(".filter-inline-panel.filter-sheet .filter-group-search",
+		width("100%"),
+		minHeight("44px"),
+	)
+	rule(".filter-inline-panel.filter-sheet .filter-search-options",
+		alignContent("start"),
+	)
+	rule(".filter-inline-panel.filter-sheet .filter-amount-control",
+		position("relative"),
+		display("flex"),
+		alignItems("center"),
+	)
+	rule(".filter-inline-panel.filter-sheet .filter-amount-prefix",
+		position("absolute"),
+		left(".7rem"),
+		color("var(--muted)"),
+		pointerEvents("none"),
+	)
+	rule(".filter-inline-panel.filter-sheet .filter-amount-control .field",
+		paddingLeft("1.6rem"),
+	)
+	rule(".txn-period-control",
+		width("12rem"),
+		minWidth("12rem"),
+		position("relative"),
+		display("flex"),
+		flexDirection("column"),
+		alignItems("stretch"),
+	)
+	rule(".txn-period-select",
+		width("100%"),
+		minWidth("0"),
+		fontWeight("600"),
+	)
+	rule(".txn-period-custom",
+		position("absolute"),
+		top("calc(100% + .35rem)"),
+		left("0"),
+		zIndex("var(--z-dropdown)"),
+		width("min(20rem, 90vw)"),
+		display("grid"),
+		gridTemplateColumns("1fr 1fr"),
+		gap(".55rem"),
+		padding(".75rem"),
+		background("var(--bg-elev)"),
+		border("1px solid var(--border)"),
+		borderRadius("var(--radius-lg)"),
+		boxShadow("0 8px 28px rgba(0,0,0,.22)"),
+	)
+	rule(".txn-period-date",
+		display("grid"),
+		gap(".25rem"),
+		fontSize("var(--type-12)"),
+		color("var(--text-dim)"),
+	)
 	rule(".filter-inline-header",
 		display("flex"),
 		alignItems("center"),
@@ -2783,7 +2982,7 @@ func registerGenerated() {
 		padding("0.5rem 0.6rem"),
 		minHeight("44px"),
 		background("var(--bg-elev)"),
-		border("1px solid var(--border)"),
+		border("1px solid var(--control-border)"),
 		borderRadius("var(--radius-md)"),
 		color("var(--text)"),
 		font("inherit"),
@@ -2799,7 +2998,7 @@ func registerGenerated() {
 		minHeight("44px"),
 		padding("0.5rem 0.6rem"),
 		background("var(--bg-elev)"),
-		border("1px solid var(--border)"),
+		border("1px solid var(--control-border)"),
 		borderRadius("var(--radius-md)"),
 		color("var(--text)"),
 		font("inherit"),
@@ -7768,6 +7967,11 @@ func registerGenerated() {
 		color("var(--text)"),
 		fontSize("0.9rem"),
 	)
+	rule(".fctrl-input:focus-visible",
+		outline("2px solid var(--accent)"),
+		outlineOffset("2px"),
+		borderRadius("var(--radius-xs)"),
+	)
 	rule(".todo-search-input::placeholder, .fctrl-input::placeholder",
 		color("var(--text-faint)"),
 	)
@@ -9247,24 +9451,6 @@ func registerGenerated() {
 		textOverflow("ellipsis"),
 		whiteSpace("nowrap"),
 	)
-	rule(".bento-ledger .txn-table th:nth-child(1), .bento-ledger .txn-table td:nth-child(1)",
-		width("40px"),
-	)
-	rule(".bento-ledger .txn-table th:nth-child(2), .bento-ledger .txn-table td:nth-child(2)",
-		width("116px"),
-	)
-	rule(".bento-ledger .txn-table th:nth-child(3), .bento-ledger .txn-table td:nth-child(3)",
-		width("120px"),
-	)
-	rule(".bento-ledger .txn-table th:nth-child(5), .bento-ledger .txn-table td:nth-child(5)",
-		width("184px"),
-	)
-	rule(".bento-ledger .txn-table th:nth-child(6), .bento-ledger .txn-table td:nth-child(6)",
-		width("150px"),
-	)
-	rule(".bento-ledger .txn-table th:nth-child(7), .bento-ledger .txn-table td:nth-child(7)",
-		width("118px"),
-	)
 	rule(".w",
 		position("relative"),
 		background("#121214"),
@@ -9738,6 +9924,7 @@ func registerGenerated() {
 		height("24px"),
 		borderRadius("var(--radius-pill)"),
 		background("#34343a"),
+		outline("1px solid var(--control-border)"),
 		position("relative"),
 		cursor("pointer"),
 		transition("background .2s"),

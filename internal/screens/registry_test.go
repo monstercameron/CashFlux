@@ -78,9 +78,10 @@ func TestEveryRailGroupHasScreens(t *testing.T) {
 	}
 }
 
-// TestToolsSubGroups verifies the C67 sub-group data layer: every Tools route maps
-// to exactly one known sub-group, no non-Tools route carries one, and each declared
-// sub-group is non-empty (so the rail never renders an empty sub-section header).
+// TestToolsSubGroups verifies the C67 navigation sub-group data layer: every
+// on-rail route maps to exactly one known sub-group, and each declared sub-group
+// has at least one route. The current rail uses sub-groups for every primary and
+// Tools route, with the system routes also grouped under Setup.
 func TestToolsSubGroups(t *testing.T) {
 	valid := map[string]bool{}
 	for _, sg := range ToolsSubGroups {
@@ -88,14 +89,12 @@ func TestToolsSubGroups(t *testing.T) {
 	}
 	counts := map[string]int{}
 	for _, r := range All() {
-		if r.Group == GroupTools {
+		if r.Group != "" {
 			if !valid[r.SubGroup] {
-				t.Errorf("Tools route %q has missing/unknown sub-group %q", r.Path, r.SubGroup)
+				t.Errorf("on-rail route %q has missing/unknown sub-group %q", r.Path, r.SubGroup)
 				continue
 			}
 			counts[r.SubGroup]++
-		} else if r.SubGroup != "" {
-			t.Errorf("non-Tools route %q must not carry a sub-group (got %q)", r.Path, r.SubGroup)
 		}
 	}
 	for _, sg := range ToolsSubGroups {
@@ -103,17 +102,17 @@ func TestToolsSubGroups(t *testing.T) {
 			t.Errorf("Tools sub-group %q has no screens", sg)
 		}
 	}
-	// Sanity: the four sub-groups partition all Tools routes (nothing orphaned).
-	var toolsTotal, subTotal int
+	// Sanity: the declared sub-groups cover every on-rail route (nothing orphaned).
+	var railTotal, subTotal int
 	for _, r := range All() {
-		if r.Group == GroupTools {
-			toolsTotal++
+		if r.Group != "" {
+			railTotal++
 		}
 	}
 	for _, n := range counts {
 		subTotal += n
 	}
-	if toolsTotal != subTotal {
-		t.Errorf("sub-groups cover %d Tools routes, want all %d", subTotal, toolsTotal)
+	if railTotal != subTotal {
+		t.Errorf("sub-groups cover %d on-rail routes, want all %d", subTotal, railTotal)
 	}
 }

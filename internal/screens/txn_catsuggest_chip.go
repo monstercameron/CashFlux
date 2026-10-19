@@ -17,7 +17,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/catname"
 	"github.com/monstercameron/CashFlux/internal/catsuggest"
 	"github.com/monstercameron/CashFlux/internal/domain"
-	"github.com/monstercameron/CashFlux/internal/ui/tw"
+	"github.com/monstercameron/CashFlux/internal/learntally"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/css"
 	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
@@ -44,11 +44,72 @@ type txnCatSuggestChipProps struct {
 	TxnID string
 }
 
+type txnCatSuggestInputs struct {
+	byID        map[string]domain.Transaction
+	suggestions map[string]txnCatSuggestion
+	categories  []domain.Category
+	tally       learntally.Tally
+	threshold   int
+}
+
+type txnCatSuggestion struct {
+	value catsuggest.Suggestion
+	ok    bool
+}
+
+type txnCatSuggestInputsCache struct {
+	app      *appstate.App
+	revision int
+	inputs   txnCatSuggestInputs
+	valid    bool
+}
+
+func (c *txnCatSuggestInputsCache) get(app *appstate.App, revision int, build func() txnCatSuggestInputs) txnCatSuggestInputs {
+	if !c.valid || c.app != app || c.revision != revision {
+		c.app, c.revision, c.inputs, c.valid = app, revision, build(), true
+	}
+	return c.inputs
+}
+
+var txnCatSuggestCache txnCatSuggestInputsCache
+
+func loadTxnCatSuggestInputs(app *appstate.App) txnCatSuggestInputs {
+	inputs := txnCatSuggestInputs{
+		byID:        make(map[string]domain.Transaction),
+		suggestions: make(map[string]txnCatSuggestion),
+	}
+	if app == nil {
+		return inputs
+	}
+	txns := app.Transactions()
+	inputs.byID = make(map[string]domain.Transaction, len(txns))
+	for _, txn := range txns {
+		inputs.byID[txn.ID] = txn
+	}
+	inputs.categories = app.Categories()
+	inputs.tally = uistate.LoadLearnTally()
+	inputs.threshold = uistate.LoadLearnThreshold()
+	return inputs
+}
+
+func (inputs *txnCatSuggestInputs) suggestion(app *appstate.App, txn domain.Transaction) (catsuggest.Suggestion, bool) {
+	if cached, ok := inputs.suggestions[txn.ID]; ok {
+		return cached.value, cached.ok
+	}
+	suggestion, ok := reviewSuggestionWith(app, txn, inputs.tally, inputs.threshold, inputs.categories)
+	inputs.suggestions[txn.ID] = txnCatSuggestion{value: suggestion, ok: ok}
+	return suggestion, ok
+}
+
+func txnCatSuggestInputsFor(app *appstate.App, revision int) txnCatSuggestInputs {
+	return txnCatSuggestCache.get(app, revision, func() txnCatSuggestInputs { return loadTxnCatSuggestInputs(app) })
+}
+
 // txnCatSuggestChip renders the one-click suggestion for an uncategorized charge.
 // It is its own component because it owns a click hook, and a per-row hook inside
 // the table's variable-length row loop is the framework's cardinal sin.
 func txnCatSuggestChip(props txnCatSuggestChipProps) ui.Node {
-	_ = uistate.UseDataRevision().Get()
+	revision := uistate.UseDataRevision().Get()
 	app := appstate.Default
 
 	// The click hook is registered unconditionally (stable hook order) before any
@@ -59,12 +120,13 @@ func txnCatSuggestChip(props txnCatSuggestChipProps) ui.Node {
 		if a == nil {
 			return
 		}
-		txn, ok := txnByID(a, props.TxnID)
+		current := txnCatSuggestInputsFor(a, uistate.CurrentDataRevision())
+		txn, ok := current.byID[props.TxnID]
 		if !ok {
 			return
 		}
-		s, ok := reviewSuggestion(a, txn)
-		if !ok || s.CategoryID == "" {
+		s, ok := current.suggestion(a, txn)
+		if !ok || s.CategoryID == "" || !categorySuggestionMatchesDirection(txn, s.CategoryID, current.categories) {
 			return
 		}
 		applyCatSuggestion(a, txn, s.CategoryID)
@@ -73,12 +135,13 @@ func txnCatSuggestChip(props txnCatSuggestChipProps) ui.Node {
 	if app == nil || !uistate.LoadSmartSettings().IsEnabled(catSuggestFreeCode) {
 		return Fragment()
 	}
-	txn, ok := txnByID(app, props.TxnID)
+	inputs := txnCatSuggestInputsFor(app, revision)
+	txn, ok := inputs.byID[props.TxnID]
 	if !ok || txn.CategoryID != "" || txn.IsTransfer() {
 		return Fragment()
 	}
-	s, ok := reviewSuggestion(app, txn)
-	if !ok || s.CategoryID == "" {
+	s, ok := inputs.suggestion(app, txn)
+	if !ok || s.CategoryID == "" || !categorySuggestionMatchesDirection(txn, s.CategoryID, inputs.categories) {
 		return Fragment()
 	}
 	// A coin-flip history is a signal, not an answer: offering a one-click apply for
@@ -87,20 +150,33 @@ func txnCatSuggestChip(props txnCatSuggestChipProps) ui.Node {
 	if s.Confidence < catsuggest.ConfMedium {
 		return Fragment()
 	}
-	cats := app.Categories()
+	cats := inputs.categories
 	if _, ok := categoryByID(cats, s.CategoryID); !ok {
 		return Fragment()
 	}
 	name := catname.LabelByID(cats, s.CategoryID)
 
-	return Button(css.Class("txn-catsuggest", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+	return Button(css.Class("txn-catsuggest"), Type("button"),
 		Attr("data-testid", "txn-catsuggest-chip"),
-		Attr("aria-label", uistate.T("catSuggest.chipAria", name)),
+		Attr("aria-label", uistate.T("r1b.categorySuggestionAria", name)),
 		Title(uistate.T("catSuggest.chipHint")),
 		OnClick(apply),
-		smartGlyph(false, tw.Fold(tw.W3, tw.H3)),
-		Span(uistate.T("catSuggest.chipApply", name)),
+		uistate.T("r1b.categorySuggestionInline", name),
 	)
+}
+
+// categorySuggestionMatchesDirection prevents a rule with a mismatched category
+// kind from appearing as a suggestion on a transaction in the opposite direction.
+func categorySuggestionMatchesDirection(txn domain.Transaction, categoryID string, categories []domain.Category) bool {
+	category, ok := categoryByID(categories, categoryID)
+	if !ok {
+		return false
+	}
+	want := domain.KindExpense
+	if txn.Amount.IsPositive() {
+		want = domain.KindIncome
+	}
+	return category.Kind == want
 }
 
 // applyCatSuggestion files ONE charge under a category and makes it undoable.

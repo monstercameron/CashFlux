@@ -18,7 +18,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/css"
 	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/router"
 	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
 
@@ -31,10 +30,12 @@ import (
 // early payment never shows twice. These are schedule entries, not
 // transactions: they carry no checkbox, count in no totals, and click through
 // to /recurring where the schedule is managed.
-func txnUpcomingStrip(struct{}) ui.Node {
+// txnUpcomingStrip preserves the old widget slot as an empty anchor. The preview
+// now belongs to the count line and is rendered by txnUpcomingInline.
+func txnUpcomingStrip(struct{}) ui.Node { return Fragment() }
+
+func txnUpcomingInline(struct{}) ui.Node {
 	app := appstate.Default
-	nav := router.UseNavigate()
-	openRecurring := ui.UseEvent(func() { nav.Navigate(uistate.RoutePath("/recurring")) })
 	pr := uistate.UsePrefs().Get()
 	filterAtom := uistate.UseTxFilter()
 	// Hooks first and unconditionally, before any early return: the framework tracks
@@ -77,7 +78,9 @@ func txnUpcomingStrip(struct{}) ui.Node {
 	var posted []billmatch.Txn
 	settled := map[string]bool{}
 	for _, t := range app.Transactions() {
-		if t.Date.Before(monthStart) {
+		// Only transactions dated from this month's first day through today can
+		// settle this month's preview. Later-dated imports are still planned work.
+		if !txnUpcomingSettlementDate(t.Date, monthStart, now) {
 			continue
 		}
 		// An explicit bill link (or a transfer INTO the liability) settles that
@@ -151,26 +154,36 @@ func txnUpcomingStrip(struct{}) ui.Node {
 	// The magnitude, not the accounting negative: "($1,767.00) still to come" reads
 	// as a credit. The itemised rows below keep the parenthesised outflow form,
 	// where a column of figures is being compared.
-	summary := uistate.T("transactions.upcomingSummary", len(pending), fmtMoney(total))
+	summary := txnUpcomingSummary(len(pending), fmtMoney(total))
 
-	return Div(ClassStr("txn-upcoming"+collapsedClass(open)),
+	return Div(ClassStr("txn-count-upcoming"+collapsedClass(open)),
 		Attr("data-testid", "txn-upcoming-strip"),
-		Div(css.Class("txn-upcoming-head"),
-			Span(css.Class("txn-upcoming-badge"), uistate.T("transactions.upcomingBadge")),
-			Span(css.Class("txn-upcoming-heading"), summary),
-			If(open, Span(css.Class("t-caption", tw.TextDim), uistate.T("transactions.upcomingNote"))),
-			Button(css.Class("btn-link txn-upcoming-disc"), Type("button"),
-				Attr("data-testid", "txn-upcoming-toggle"),
-				Attr("aria-expanded", ariaBool(open)),
-				Attr("aria-label", discLabel(open, summary)),
-				OnClick(toggle), discText(open)),
-		),
-		If(open, Div(css.Class("txn-upcoming-rows"), rows,
-			Button(css.Class("btn-link txn-upcoming-link"), Type("button"),
-				Attr("data-testid", "txn-upcoming-schedule"),
-				Attr("title", uistate.T("transactions.upcomingTitle")),
-				OnClick(openRecurring), uistate.T("transactions.upcomingSeeSchedule")))),
+		Button(css.Class("btn-link txn-upcoming-disc"), Type("button"),
+			Attr("data-testid", "txn-upcoming-toggle"),
+			Attr("aria-expanded", ariaBool(open)),
+			Attr("aria-label", discLabel(open, summary)),
+			OnClick(toggle), " · ", summary, " ›"),
+		If(open, Div(css.Class("txn-upcoming-rows txn-count-upcoming-rows"), rows,
+			Span(css.Class("t-caption", tw.TextDim), uistate.T("transactions.upcomingNote")),
+			txnUpcomingScheduleLink())),
 	)
+}
+
+func txnUpcomingSummary(count int, total string) string {
+	key := "r2a.upcomingMany"
+	if count == 1 {
+		key = "r2a.upcomingOne"
+	}
+	return uistate.T(key, count, total)
+}
+
+// txnUpcomingScheduleLink renders the pending strip's destination as a real route link.
+func txnUpcomingScheduleLink() ui.Node {
+	return A(css.Class("btn-link txn-upcoming-link"),
+		Attr("data-testid", "txn-upcoming-schedule"),
+		Attr("title", uistate.T("transactions.upcomingTitle")),
+		Attr("href", uistate.RoutePath("/recurring")),
+		uistate.T("transactions.upcomingSeeSchedule"))
 }
 
 // txnUpcomingOpenKV remembers whether the pending band is expanded, so the choice

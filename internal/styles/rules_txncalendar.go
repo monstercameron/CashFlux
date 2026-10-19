@@ -24,6 +24,35 @@ func registerTxnCalendar() {
 		prop("min-width", "10rem"),
 		prop("text-align", "center"),
 	)
+	rule(".txn-cal-week-head, .txn-cal-week-row",
+		prop("display", "grid"),
+		prop("grid-template-columns", "repeat(7,minmax(0,1fr)) minmax(5rem,auto)"),
+		prop("gap", "4px"),
+	)
+	rule(".txn-cal-week-head",
+		prop("margin-top", ".5rem"),
+	)
+	rule(".txn-cal-week-total",
+		prop("display", "flex"),
+		prop("flex-direction", "column"),
+		prop("justify-content", "center"),
+		prop("gap", "4px"),
+		prop("min-height", "84px"),
+		prop("padding", "6px 8px"),
+		prop("border", "1px solid var(--border)"),
+		prop("border-radius", "var(--radius-lg)"),
+		prop("background", "var(--bg-card)"),
+	)
+	rule(".txn-cal-week-spent, .txn-cal-week-income, .txn-cal-week-count",
+		prop("font-size", "var(--type-13)"),
+		prop("font-variant-numeric", "tabular-nums"),
+	)
+	rule(".txn-cal-week-spent",
+		prop("font-weight", "600"),
+	)
+	rule(".txn-cal-week-income",
+		prop("font-weight", "500"),
+	)
 	// Day cells are buttons: reset the button chrome so they read as calendar cells,
 	// keep them keyboard-focusable, and give a clear focus ring.
 	rule(".txn-cal-cell",
@@ -61,6 +90,9 @@ func registerTxnCalendar() {
 		prop("font-size", "var(--type-13)"),
 		prop("font-weight", "600"),
 		prop("font-variant-numeric", "tabular-nums"),
+	)
+	rule(".txn-cal-net.txn-amount-expense",
+		prop("color", "var(--text)"),
 	)
 	rule(".txn-cal-dots",
 		prop("display", "flex"),

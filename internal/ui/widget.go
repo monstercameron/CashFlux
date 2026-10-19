@@ -620,18 +620,15 @@ type viewTitleProps struct {
 	Route string
 }
 
-// viewTitle renders a dashboard tile's title as a button that navigates to the
-// tile's data screen (C30). It is its own component so its click hook stays
-// stable across the many widgets rendered in a list (the On*-hooks-in-loops
-// rule), mirroring gearButton.
+// viewTitle renders a dashboard tile's title as a link to the tile's data
+// screen (C30). It is its own component so it can be rendered safely in a list.
 func viewTitle(props viewTitleProps) uic.Node {
 	route := props.Route
-	return Button(
+	return A(
 		css.Class("wh-title"),
-		Type("button"),
+		Attr("href", uistate.RoutePath(route)),
 		Attr("title", uistate.T("widget.open")),
 		Attr("aria-label", uistate.T("widget.openNamed", props.Title)),
-		OnClick(func() { router.Navigate(uistate.RoutePath(route)) }),
 		props.Title,
 	)
 }

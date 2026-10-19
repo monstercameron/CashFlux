@@ -4,6 +4,8 @@
 
 package screens
 
+import "syscall/js"
+
 // reviewKeyActions is what the surface exposes to the keyboard. A nil field
 // means the key does nothing in the current mode.
 type reviewKeyActions struct {
@@ -23,6 +25,18 @@ type reviewKeyActions struct {
 // actions here each pass instead of re-registering a fresh closure.
 var currentReviewKeys reviewKeyActions
 
+// reviewSurfaceMounted reports whether the review surface currently owns the
+// review-inbox node. The shell unmounts that surface on every close path, so
+// this check also protects against actions left behind by its last render.
+func reviewSurfaceMounted() bool {
+	doc := js.Global().Get("document")
+	if doc.IsNull() || doc.IsUndefined() {
+		return false
+	}
+	node := doc.Call("querySelector", "[data-testid='review-inbox']")
+	return !node.IsNull() && !node.IsUndefined()
+}
+
 // setReviewKeys publishes this render's actions to the live listener.
 func setReviewKeys(a reviewKeyActions) { currentReviewKeys = a }
 
@@ -37,7 +51,13 @@ func setReviewKeys(a reviewKeyActions) { currentReviewKeys = a }
 //
 // The caller has already excluded modifier combos and editable targets.
 func HandleReviewKey(key string) bool {
-	a := currentReviewKeys
+	return dispatchReviewKey(key, currentReviewKeys, reviewSurfaceMounted(), HandleTxnKey)
+}
+
+func dispatchReviewKey(key string, a reviewKeyActions, mounted bool, fallback func(string) bool) bool {
+	if !mounted {
+		return fallback(key)
+	}
 	var fn func()
 	switch key {
 	case "j", "ArrowDown":
@@ -58,7 +78,9 @@ func HandleReviewKey(key string) bool {
 		fn = a.Single
 	}
 	if fn == nil {
-		return false
+		// The app owns one global keydown listener. When the review surface has no
+		// action for a key, offer it to the ledger without changing review's map.
+		return fallback(key)
 	}
 	fn()
 	return true

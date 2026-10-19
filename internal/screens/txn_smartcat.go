@@ -17,7 +17,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/css"
 	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/router"
 	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
 
@@ -61,14 +60,15 @@ func TxnSmartCatBody(_ struct{}) ui.Node {
 	// before it grew a "Connect a key" button. A notice that names an action the
 	// reader cannot take from where they are is indistinguishable from a feature
 	// that is simply broken.
-	nav := router.UseNavigate()
-	goToAIKey := ui.UseEvent(Prevent(func() {
+	goToAIKey := ui.UseEvent(func(e ui.Event) {
+		if !isPlainLeftClick(e) {
+			return
+		}
 		// openAtom, captured during render — calling UseTxnSmartCatOpen() here
 		// would be a hook call from an event handler, which runs outside the
 		// render pass and does not resolve to this component's atom.
 		openAtom.Set(false)
-		nav.Navigate(uistate.RoutePath("/settings/ai"))
-	}))
+	})
 	mode := ui.UseState(smartCatSuggest)
 	loading := ui.UseState(false)
 	scanned := ui.UseState(false)
@@ -321,8 +321,7 @@ func TxnSmartCatBody(_ struct{}) ui.Node {
 	case !hasProvider:
 		results = Div(css.Class("smartcat-noprovider"), Attr("data-testid", "smartcat-no-provider"),
 			P(css.Class("smartcat-noprovider-text"), uistate.T("smart.aiNeedsProvider")),
-			Button(css.Class("btn btn-primary btn-sm"), Type("button"), Attr("data-testid", "smartcat-connect"),
-				OnClick(goToAIKey), uistate.T("review.scanConnect")))
+			smartCatConnectLink(goToAIKey))
 	case loading.Get():
 		results = P(css.Class("muted"), Attr("data-testid", "smartcat-loading"), uistate.T("smartcat.scanning"))
 	case errText.Get() != "":
@@ -401,6 +400,18 @@ func TxnSmartCatBody(_ struct{}) ui.Node {
 		results,
 		If(showApply, Button(applyArgs...)),
 	)
+}
+
+// smartCatConnectLink is the route destination for adding an AI provider.
+func smartCatConnectLink(onActivate any) ui.Node {
+	args := []any{css.Class("btn btn-primary btn-sm"),
+		Attr("data-testid", "smartcat-connect"),
+		Attr("href", uistate.RoutePath("/settings/ai"))}
+	if onActivate != nil {
+		args = append(args, OnClick(onActivate))
+	}
+	args = append(args, uistate.T("review.scanConnect"))
+	return A(args...)
 }
 
 // txnSmartCatRowProps drives one reviewable checklist row in the Smart+

@@ -16,7 +16,7 @@ var detail2Keys = Catalog{
 	// Retained-search chip (finding #3): a text filter carried in from earlier work
 	// reads as an intentional, one-click-clearable state rather than a stray search.
 	// %s = the retained query text.
-	"transactions.chipFiltering": "Filtering: \"%s\"",
+	"transactions.chipFiltering": "Search: %s",
 }
 
 func init() {

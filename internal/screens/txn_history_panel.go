@@ -40,10 +40,6 @@ type TxnHistoryPanelProps struct {
 	TxnID string
 }
 
-// txnHistoryScanLimit bounds how much of the persisted audit log the panel
-// scans — recent-first, so a transaction's newest changes always surface.
-const txnHistoryScanLimit = 500
-
 // TxnHistoryPanel lists everything the audit trail recorded about ONE
 // transaction — edits (with field-level before → after), rule applications,
 // imports, deletions — newest first. Derived entirely from the #54 audit
@@ -72,16 +68,8 @@ func txnHistoryPanel(props TxnHistoryPanelProps) ui.Node {
 		tf.Set(days)
 	}
 
-	var mine []auditlog.Entry
-	for _, e := range app.RecentAudit(txnHistoryScanLimit) {
-		if e.EntityID == props.TxnID {
-			mine = append(mine, e)
-		}
-	}
-	// RecentAudit returns oldest-first; show newest first.
-	for i, j := 0, len(mine)-1; i < j; i, j = i+1, j-1 {
-		mine[i], mine[j] = mine[j], mine[i]
-	}
+	// The transaction-scoped query returns the complete history, already newest first.
+	mine := app.TransactionAudit(props.TxnID)
 	// Apply the timeframe window (0 = all time).
 	days := tf.Get()
 	if days > 0 {

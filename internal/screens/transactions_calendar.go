@@ -12,16 +12,17 @@ package screens
 
 import (
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/txncalendar"
 	"github.com/monstercameron/CashFlux/internal/txnscope"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
-	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/css"
 	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
@@ -75,6 +76,7 @@ type txnCalMonthCellProps struct {
 	Today     bool
 	NetStr    string
 	NetTone   string
+	AriaLabel string
 	Count     int
 	Ghosts    []txncalendar.Ghost
 	OnPick    func(dateKey string)
@@ -103,7 +105,13 @@ func txnCalendarWidget(props txnCalendarProps) ui.Node {
 	scope := txnscope.Of(f.From, f.To, now)
 	anchor := scope.Anchor
 
-	weeks := txncalendar.Month(anchor, weekStart, props.Shown, props.App.Recurring())
+	// Keep recurring ghosts aligned with the same effective ledger scope. Their
+	// definitions can be matched by account/category and account ownership, but
+	// not by text, tags, source, or amount (those fields do not exist on Recurring).
+	effectiveFilter, _ := f.WithOwnerLens(uistate.UseMemberLens())
+	scopedRecurring := txncalendar.ScopeRecurring(props.App.Recurring(), effectiveFilter, props.App.Accounts())
+	rates := currency.Rates{Base: props.Base, Rates: props.App.Settings().FXRates}
+	weeks, projectionErr := txncalendar.MonthInBase(anchor, weekStart, props.Shown, scopedRecurring, rates)
 	todayKey := txncalendar.DayKey(now)
 
 	// Picking a day writes the ledger's own range, so the calendar and the scope bar
@@ -134,15 +142,19 @@ func txnCalendarWidget(props txnCalendarProps) ui.Node {
 		uistate.PostNotice(uistate.T("transactions.calPicked", day), false)
 	}
 
-	// Weekday header row (localized short names in week-start order).
-	head := []any{css.Class("cal-grid txn-cal-grid")}
+	// Weekday header row (localized short names in week-start order). It shares
+	// the weekly grid with the totals so each total stays aligned to its week.
+	head := []any{css.Class("txn-cal-week-head")}
 	for i := 0; i < 7; i++ {
 		wd := time.Weekday((int(weekStart) + i) % 7)
 		head = append(head, Div(css.Class("cal-head"), wd.String()[:3]))
 	}
+	head = append(head, Div(css.Class("cal-head"), uistate.T("transactions.calWeekTotal")))
+	weekRows := make([]any, 0, len(weeks))
 	for _, week := range weeks {
+		row := []any{css.Class("txn-cal-week-row")}
 		for _, day := range week {
-			head = append(head, ui.CreateElement(txnCalMonthCell, txnCalMonthCellProps{
+			row = append(row, ui.CreateElement(txnCalMonthCell, txnCalMonthCellProps{
 				DateKey: txncalendar.DayKey(day.Date),
 				Day:     day.Date.Day(),
 				InMonth: day.InMonth,
@@ -154,11 +166,25 @@ func txnCalendarWidget(props txnCalendarProps) ui.Node {
 				Today:     txncalendar.DayKey(day.Date) == todayKey,
 				NetStr:    calNetStr(day.Stat, props.Base),
 				NetTone:   calNetTone(day.Stat),
+				AriaLabel: calDayAria(day.Date.Day(), day.Stat, props.Base),
 				Count:     day.Stat.Count,
 				Ghosts:    day.Ghosts,
 				OnPick:    pickDay,
 			}))
 		}
+		weekTotal := txncalendar.WeekStat(week)
+		scheduled := 0
+		for _, day := range week {
+			scheduled += len(day.Ghosts)
+		}
+		spent, income := calWeekAmounts(week, props.Shown, rates)
+		weekOf := week[0].Date.Format("Jan 2")
+		future := dateutil.WeekStart(week[0].Date, weekStart).After(dateutil.WeekStart(now, weekStart))
+		row = append(row, ui.CreateElement(txnCalWeekTotal, txnCalWeekTotalProps{
+			Stat: weekTotal, Base: props.Base, Scheduled: scheduled,
+			Spent: spent, Income: income, WeekOf: weekOf, Future: future,
+		}))
+		weekRows = append(weekRows, Div(row...))
 	}
 
 	// C560: the calendar keeps a caption, not a second stepper. It used to carry its
@@ -179,11 +205,106 @@ func txnCalendarWidget(props txnCalendarProps) ui.Node {
 	nav := Div(css.Class("txn-cal-nav", "row"),
 		Span(css.Class("txn-cal-month"), Attr("data-testid", "txn-cal-month"), caption),
 	)
+	if projectionErr != nil {
+		return uiw.Widget(uiw.WidgetProps{
+			ID: "txn-calendar", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
+			Body: Div(css.Class("txn-cal"), nav,
+				Div(css.Class("text-dim"), Attr("role", "status"), Attr("data-testid", "txn-cal-fx-error"),
+					uistate.T("transactions.calFxMissingRate"))),
+		})
+	}
 
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "txn-calendar", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
-		Body: Div(css.Class("txn-cal"), nav, Div(head...)),
+		Body: Div(css.Class("txn-cal"), nav, Div(css.Class("txn-cal-weeks"), Div(head...), Fragment(weekRows...)),
+			Div(css.Class("txn-cal-legend"), Attr("style", "display:flex;align-items:center;gap:.4rem"),
+				Span(css.Class("txn-cal-legend-dots"), Attr("style", "display:inline-flex;align-items:center"),
+					Span(css.Class("cal-dot"), Attr("style", "position:static;width:7px;height:7px;border-radius:50%;background:var(--accent)"))),
+				Span(uistate.T("transactions.calDotsLegend"))),
+			Div(css.Class("text-dim"), uistate.T("transactions.calScheduledFilterNote"))),
 	})
+}
+
+type txnCalWeekTotalProps struct {
+	Stat      txncalendar.DayStat
+	Base      string
+	Scheduled int
+	Spent     int64
+	Income    int64
+	WeekOf    string
+	Future    bool
+}
+
+func txnCalWeekTotal(props txnCalWeekTotalProps) ui.Node {
+	spent, _ := fmtLedgerAmount(money.New(props.Spent, props.Base), false)
+	spent = strings.TrimPrefix(spent, "+")
+	spentClass := "txn-cal-week-spent"
+	if props.Spent == 0 {
+		spentClass += " text-dim"
+	}
+	lines := []any{Span(ClassStr(spentClass), uistate.T("r9c.weekSpent", spent))}
+	if props.Income > 0 {
+		income, _ := fmtLedgerAmount(money.New(props.Income, props.Base), false)
+		lines = append(lines, Span(css.Class("txn-cal-week-income text-up"), uistate.T("r9c.weekIncome", strings.TrimPrefix(income, "+"))))
+	}
+	lastLine := ""
+	if props.Stat.Count > 0 {
+		lastLine = uistate.T("r9c.weekTransactions", props.Stat.Count)
+		if props.Stat.Count == 1 {
+			lastLine = uistate.T("r9c.weekOneTransaction")
+		}
+	} else if props.Future && props.Scheduled > 0 {
+		lastLine = uistate.T("r6f.weekScheduled", props.Scheduled)
+	} else if props.Future {
+		lastLine = uistate.T("r9c.weekNothingYet")
+	} else if props.Scheduled > 0 {
+		lastLine = uistate.T("r6f.weekScheduled", props.Scheduled)
+	} else {
+		lastLine = uistate.T("transactions.calWeekCount", 0)
+	}
+	lastClass := "txn-cal-week-count"
+	if props.Stat.Count == 0 && props.Scheduled == 0 {
+		lastClass += " text-dim"
+	}
+	lines = append(lines, Span(ClassStr(lastClass), lastLine))
+	aria := uistate.T("r9c.weekAria", props.WeekOf, strings.TrimPrefix(spent, "+"), lastLine)
+	if props.Income > 0 {
+		income, _ := fmtLedgerAmount(money.New(props.Income, props.Base), false)
+		aria = uistate.T("r9c.weekAriaIncome", props.WeekOf, strings.TrimPrefix(spent, "+"), strings.TrimPrefix(income, "+"), lastLine)
+	}
+	return Div(css.Class("txn-cal-week-total"),
+		Attr("data-testid", "txn-cal-week-total"),
+		Attr("aria-label", aria),
+		Attr("title", aria),
+		Fragment(lines...),
+	)
+}
+
+// calWeekAmounts totals signed transaction amounts into separate spending and
+// income figures for the dates represented by the week. The caller has already
+// projected this same scoped transaction set through these rates successfully.
+func calWeekAmounts(week []txncalendar.Cell, txns []domain.Transaction, rates currency.Rates) (spent, income int64) {
+	days := make(map[string]struct{}, len(week))
+	for _, day := range week {
+		if day.InMonth {
+			days[txncalendar.DayKey(day.Date)] = struct{}{}
+		}
+	}
+	for _, txn := range txns {
+		if _, ok := days[txncalendar.DayKey(txn.Date)]; !ok || txn.TransferAccountID != "" {
+			continue
+		}
+		converted, err := rates.Convert(txn.Amount, rates.Base)
+		if err != nil {
+			continue
+		}
+		if converted.Amount < 0 {
+			spent -= converted.Amount
+		} else if converted.Amount > 0 {
+			income += converted.Amount
+		}
+	}
+	return spent, income
 }
 
 // calNetStr formats a day's net minor-unit amount for the cell, or "" for a day
@@ -192,19 +313,33 @@ func calNetStr(s txncalendar.DayStat, base string) string {
 	if s.Count == 0 {
 		return ""
 	}
-	return fmtMoney(money.New(s.Net, base))
+	text, _ := fmtLedgerAmount(money.New(s.Net, base), false)
+	return text
 }
 
-// calNetTone colours the day net: red for net spend (negative), green for net
-// income (positive), neutral for zero.
+// calNetTone colours positive net income green and leaves expense totals neutral.
 func calNetTone(s txncalendar.DayStat) string {
 	switch {
-	case s.Net < 0:
-		return "text-down"
 	case s.Net > 0:
 		return "text-up"
+	case s.Net < 0:
+		return "txn-amount-expense"
 	default:
 		return ""
+	}
+}
+
+func calDayAria(day int, s txncalendar.DayStat, base string) string {
+	amount, _ := fmtLedgerAmount(money.New(s.Net, base), false)
+	switch {
+	case s.Count == 0:
+		return uistate.T("transactions.calDayEmpty", strconv.Itoa(day))
+	case s.Net < 0:
+		return uistate.T("transactions.calDaySpent", strconv.Itoa(day), amount)
+	case s.Net > 0:
+		return uistate.T("transactions.calDayNet", strconv.Itoa(day), amount)
+	default:
+		return uistate.T("transactions.calDayZero", strconv.Itoa(day), amount)
 	}
 }
 
@@ -249,7 +384,10 @@ func txnCalMonthCell(props txnCalMonthCellProps) ui.Node {
 		ghostNodes = append(ghostNodes, Span(css.Class("txn-cal-ghost text-dim"), Attr("title", g.Label), g.Label))
 	}
 
-	label := uistate.T("transactions.calDayLabel", strconv.Itoa(props.Day), props.NetStr)
+	label := props.AriaLabel
+	if label == "" {
+		label = uistate.T("transactions.calDayLabel", strconv.Itoa(props.Day), props.NetStr)
+	}
 	// C603: a leading/trailing square names its own month and says it is not part
 	// of the month on show, so the grid's edges are unambiguous by reading as well
 	// as by dimming.
@@ -264,14 +402,22 @@ func txnCalMonthCell(props txnCalMonthCellProps) ui.Node {
 		Attr("aria-label", label),
 		Attr("title", label),
 	}
+	if props.Today {
+		// Shared calendar styling gives .cal-cell.today a filled wash, which makes
+		// today's marker read like a selected day. Keep it as an outline only.
+		args = append(args, Attr("style", "outline:2px solid var(--accent);outline-offset:-2px;background:var(--bg-card);box-shadow:none"))
+	}
 	if props.InMonth {
 		args = append(args, OnClick(pick))
+		if props.Today {
+			args = append(args, Attr("aria-current", "date"))
+		}
 	} else {
 		args = append(args, Disabled(true))
 	}
 	args = append(args,
 		Span(css.Class("cal-day"), strconv.Itoa(props.Day)),
-		If(props.NetStr != "", Span(ClassStr("txn-cal-net "+tw.ColorClass(props.NetTone)), props.NetStr)),
+		If(props.NetStr != "", Span(ClassStr("txn-cal-net "+props.NetTone), props.NetStr)),
 		Div(css.Class("txn-cal-dots"), Fragment(dotNodes...)),
 		Fragment(ghostNodes...),
 	)

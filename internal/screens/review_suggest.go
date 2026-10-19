@@ -46,7 +46,7 @@ func reviewSuggestionWith(
 	if r := app.AutoCategorizeTransaction(t); r.CategoryID != t.CategoryID {
 		ruleCat = r.CategoryID
 	}
-	return catsuggest.Resolve(catsuggest.Input{
+	suggestion, ok := catsuggest.Resolve(catsuggest.Input{
 		Payee:          t.Payee,
 		Desc:           t.Desc,
 		AmountMinor:    t.Amount.Amount,
@@ -55,6 +55,10 @@ func reviewSuggestionWith(
 		Threshold:      threshold,
 		Categories:     cats,
 	})
+	if !ok || !categorySuggestionMatchesDirection(t, suggestion.CategoryID, cats) {
+		return catsuggest.Suggestion{}, false
+	}
+	return suggestion, true
 }
 
 // reviewWhy renders the evidence behind a suggestion in plain English, so the

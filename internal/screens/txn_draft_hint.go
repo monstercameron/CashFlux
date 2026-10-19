@@ -19,6 +19,8 @@ package screens
 import (
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 
@@ -106,6 +108,23 @@ func TxnDraftHint(props TxnDraftHintProps) ui.Node {
 			props.OnApply(aiFill.Get())
 		}
 	}
+	applyOffer := func() {
+		if !aiFill.Get().Empty() {
+			applyAI()
+			return
+		}
+		applyLocal()
+	}
+	onKeyDown := ui.UseEvent(func(e ui.KeyboardEvent) {
+		if e.GetKey() != "Enter" {
+			return
+		}
+		// This field sits inside the quick-add panel. Enter is an apply gesture
+		// here, never a form submit or a request to close the panel.
+		e.PreventDefault()
+		e.StopPropagation()
+		applyOffer()
+	})
 	ask := ui.UseEvent(Prevent(func() {
 		a := appstate.Default
 		if a == nil || loading.Get() || raw == "" {
@@ -162,13 +181,7 @@ func TxnDraftHint(props TxnDraftHintProps) ui.Node {
 			Text:        txnDraftSummary(offer, pr.FormatDate),
 			Detail:      detail,
 			ActionLabel: uistate.T("sm15.action"),
-			OnAction: func() {
-				if fromAI {
-					applyAI()
-					return
-				}
-				applyLocal()
-			},
+			OnAction:    applyOffer,
 		})
 	}
 
@@ -188,9 +201,10 @@ func TxnDraftHint(props TxnDraftHintProps) ui.Node {
 	return Div(css.Class("sm15"), Attr("data-testid", "sm15-draft"),
 		Div(css.Class("sm15-row", tw.Flex, tw.ItemsCenter, tw.Gap2),
 			Input(css.Class("field field-wide"), Type("text"),
+				Attr("id", "sm15-input"),
 				Attr("data-testid", "sm15-input"),
 				Attr("aria-label", uistate.T("sm15.label")),
-				Placeholder(uistate.T("sm15.placeholder")), OnInput(onInput), uiw.FieldValue(sentence.Get())),
+				Placeholder(uistate.T("sm15.placeholder")), OnInput(onInput), OnKeyDown(onKeyDown), uiw.FieldValue(sentence.Get())),
 			askBtn,
 		),
 		hint,
@@ -227,20 +241,30 @@ func parseTxnSentence(raw string) TxnDraftFill {
 	}
 	first := drafts[0]
 	out.AmountMajor = first.MajorString
-	out.Payee = cleanDraftLabel(first.Label)
+	out.Payee = titleDraftLabel(cleanDraftLabel(first.Label))
 	out.Income = txnSentenceIsIncome(rest)
 	return out
 }
 
-// incomeWords are the only signals that flip a sentence to money IN.
-var incomeWords = []string{"got paid", "received", "refund", "paid me", "earned", "income", "deposit"}
+// incomePhrases are the only leading phrases that flip a sentence to money IN.
+var incomePhrases = []string{
+	"got paid", "got a refund", "received a refund", "received", "refund",
+	"paid me", "earned", "income", "deposit",
+}
 
 // txnSentenceIsIncome reports whether the sentence describes money coming in.
 func txnSentenceIsIncome(s string) bool {
-	low := strings.ToLower(s)
-	for _, w := range incomeWords {
-		if strings.Contains(low, w) {
-			return true
+	low := strings.ToLower(strings.TrimSpace(s))
+	for _, phrase := range incomePhrases {
+		if strings.HasPrefix(low, phrase) {
+			rest := strings.TrimPrefix(low, phrase)
+			if rest == "" {
+				return true
+			}
+			next, _ := utf8.DecodeRuneInString(rest)
+			if !unicode.IsLetter(next) && !unicode.IsDigit(next) && next != '_' {
+				return true
+			}
 		}
 	}
 	return false
@@ -264,6 +288,19 @@ func cleanDraftLabel(s string) string {
 	}
 	for len(words) > 0 && leadWords[strings.ToLower(words[len(words)-1])] {
 		words = words[:len(words)-1]
+	}
+	return strings.Join(words, " ")
+}
+
+// titleDraftLabel gives parsed merchant names readable display casing without
+// changing the original sentence or any transaction description.
+func titleDraftLabel(s string) string {
+	words := strings.Fields(strings.ToLower(strings.TrimSpace(s)))
+	for i, word := range words {
+		first, size := utf8.DecodeRuneInString(word)
+		if first != utf8.RuneError || size != 0 {
+			words[i] = string(unicode.ToTitle(first)) + word[size:]
+		}
 	}
 	return strings.Join(words, " ")
 }

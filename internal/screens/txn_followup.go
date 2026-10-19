@@ -5,6 +5,7 @@
 package screens
 
 import (
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -96,25 +97,45 @@ func followUpChipMod(open int) string {
 
 // toggleFollowUpTask flips a linked to-do's done state in place (open ↔ done) and bumps
 // the data revision so the transactions surface re-reads the counts. Mirrors the to-do
-// list's own check-off: completing goes through CompleteTask (which spawns a recurring
-// task's next occurrence atomically); re-opening is a plain PutTask.
-func toggleFollowUpTask(taskID string, currentlyDone bool) {
+// list's own check-off: completing goes through CompleteTask (which also spawns a
+// recurring task's next occurrence); re-opening is a plain PutTask.
+func toggleFollowUpTask(taskID string, currentlyDone bool) error {
 	app := appstate.Default
 	if app == nil {
-		return
+		return fmt.Errorf("follow-up task could not be updated: application is not ready")
 	}
 	if currentlyDone {
+		found := false
 		for _, t := range app.Tasks() {
 			if t.ID == taskID {
+				found = true
 				t.Status = domain.StatusOpen
-				_ = app.PutTask(t)
+				if err := app.PutTask(t); err != nil {
+					return fmt.Errorf("reopen follow-up task: %w", err)
+				}
 				break
 			}
 		}
+		if !found {
+			return fmt.Errorf("reopen follow-up task: task %q not found", taskID)
+		}
+		uistate.BumpDataRevision()
 	} else {
-		_ = app.CompleteTask(taskID, id.New(), time.Now())
+		if err := app.CompleteTask(taskID, id.New(), time.Now()); err != nil {
+			// CompleteTask may save the current occurrence before a recurring
+			// successor write fails. Keep the view in sync with any durable change
+			// while still reporting the operation's error to the user.
+			for _, task := range app.Tasks() {
+				if task.ID == taskID && task.Status == domain.StatusDone {
+					uistate.BumpDataRevision()
+					break
+				}
+			}
+			return fmt.Errorf("complete follow-up task: %w", err)
+		}
+		uistate.BumpDataRevision()
 	}
-	uistate.BumpDataRevision()
+	return nil
 }
 
 // txnFollowUpItemProps configure one to-do row inside the follow-up popover.
@@ -133,7 +154,9 @@ type txnFollowUpItemProps struct {
 func txnFollowUpItem(props txnFollowUpItemProps) ui.Node {
 	onToggle := ui.UseEvent(func(e ui.Event) {
 		e.StopPropagation()
-		toggleFollowUpTask(props.ID, props.Done)
+		if err := toggleFollowUpTask(props.ID, props.Done); err != nil {
+			uistate.PostNotice(err.Error(), true)
+		}
 	})
 	onOpen := ui.UseEvent(func(e ui.Event) {
 		e.StopPropagation()
@@ -263,9 +286,7 @@ func txnFollowUpChip(props txnFollowUpChipProps) ui.Node {
 		case props.Open > shown:
 			kids = append(kids, Div(css.Class("txnfu-more"), uistate.T("transactions.followUpsMore", props.Open-shown)))
 		}
-		kids = append(kids, Button(css.Class("txnfu-pop-foot"), Type("button"),
-			Attr("data-testid", "txn-followup-pop-link-"+props.TxnID), OnClick(onClick),
-			uistate.T("transactions.followUpsPopLink")))
+		kids = append(kids, txnFollowUpTodoLink(props.TxnID))
 		pop = Div(kids...)
 	}
 
@@ -282,4 +303,13 @@ func txnFollowUpChip(props txnFollowUpChipProps) ui.Node {
 			Span(followUpChipText(props.Open, props.Total))),
 		pop,
 	)
+}
+
+// txnFollowUpTodoLink is the popover's plain route link. The chip itself remains the
+// stateful shortcut that applies the transaction-linked To-do filter before navigating.
+func txnFollowUpTodoLink(txnID string) ui.Node {
+	return A(css.Class("txnfu-pop-foot"),
+		Attr("data-testid", "txn-followup-pop-link-"+txnID),
+		Attr("href", uistate.RoutePath("/todo")),
+		uistate.T("transactions.followUpsPopLink"))
 }
