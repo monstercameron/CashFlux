@@ -3,6 +3,7 @@
 package budgeting
 
 import (
+	"fmt"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"sort"
 	"time"
@@ -11,6 +12,63 @@ import (
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 )
+
+// BudgetCopyDefaults are the monetary and directional fields copied into a new
+// budget draft. Currency and cadence stay attached to the original limit.
+type BudgetCopyDefaults struct {
+	Limit     money.Money
+	Period    domain.Period
+	Direction domain.BudgetDirection
+}
+
+// AutoBudgetMatches returns one compatible household spending budget for each
+// category. It includes every cadence and multi-category tracking, while excluding
+// individual budgets so a household average never replaces one member's plan.
+// The most specific matching budget wins; ties are resolved by ID.
+func AutoBudgetMatches(budgets []domain.Budget) map[string]domain.Budget {
+	byCategory := make(map[string]domain.Budget)
+	for _, budget := range budgets {
+		if budget.Direction.IsSaving() || budget.Scope == domain.ScopeIndividual || budget.OwnerID != "" && budget.OwnerID != domain.GroupOwnerID {
+			continue
+		}
+		for _, categoryID := range budget.TrackedCategoryIDs() {
+			current, exists := byCategory[categoryID]
+			if !exists || autoBudgetMatchLess(budget, current, categoryID) {
+				byCategory[categoryID] = budget
+			}
+		}
+	}
+	return byCategory
+}
+
+func autoBudgetMatchLess(candidate, current domain.Budget, categoryID string) bool {
+	candidateExact := len(candidate.TrackedCategoryIDs()) == 1 && candidate.CategoryID == categoryID
+	currentExact := len(current.TrackedCategoryIDs()) == 1 && current.CategoryID == categoryID
+	if candidateExact != currentExact {
+		return candidateExact
+	}
+	return candidate.ID < current.ID
+}
+
+// CopyBudgetDefaults returns the fields whose meaning must survive copying a
+// budget into a new draft.
+func CopyBudgetDefaults(budget domain.Budget) BudgetCopyDefaults {
+	return BudgetCopyDefaults{Limit: budget.Limit, Period: budget.Period, Direction: budget.Direction}
+}
+
+// LimitForPeriod converts a limit to the target cadence and currency with
+// checked period arithmetic and the selected FX table.
+func LimitForPeriod(amount money.Money, from, to domain.Period, targetCurrency string, rates currency.Rates) (money.Money, error) {
+	equivalent, err := PeriodEquivalent(amount, from, to)
+	if err != nil {
+		return money.Money{}, fmt.Errorf("convert budget limit cadence: %w", err)
+	}
+	converted, err := rates.Convert(equivalent, targetCurrency)
+	if err != nil {
+		return money.Money{}, fmt.Errorf("convert budget limit currency: %w", err)
+	}
+	return converted, nil
+}
 
 // SuggestMethod selects how a per-category monthly budget is learned from history.
 type SuggestMethod string
@@ -62,6 +120,51 @@ func SuggestBudgets(categories []domain.Category, txns []domain.Transaction, now
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].MonthlyMinor > out[j].MonthlyMinor })
 	return out, nil
+}
+
+// FillAutoBudgetPercentages seeds suggestions that arrived after the form's
+// first render while preserving every slider value the user already changed.
+func FillAutoBudgetPercentages(current map[string]int, suggestions []BudgetSuggestion) map[string]int {
+	out := make(map[string]int, len(current)+len(suggestions))
+	for id, value := range current {
+		out[id] = value
+	}
+	for _, suggestion := range suggestions {
+		if _, exists := out[suggestion.CategoryID]; !exists {
+			out[suggestion.CategoryID] = 100
+		}
+	}
+	return out
+}
+
+// FillAutoBudgetSelection seeds newly available categories as selected only
+// when they have no compatible household budget, preserving existing choices.
+func FillAutoBudgetSelection(current map[string]bool, suggestions []BudgetSuggestion, existing map[string]domain.Budget) map[string]bool {
+	out := make(map[string]bool, len(current)+len(suggestions))
+	for id, value := range current {
+		out[id] = value
+	}
+	for _, suggestion := range suggestions {
+		if _, exists := out[suggestion.CategoryID]; !exists {
+			_, hasBudget := existing[suggestion.CategoryID]
+			out[suggestion.CategoryID] = !hasBudget
+		}
+	}
+	return out
+}
+
+// SelectedBudgetCategories returns the selected category IDs that are valid
+// for the budget direction. Saving budgets can track income categories;
+// spending budgets may track only expenses. IDs follow the category input order.
+func SelectedBudgetCategories(categories []domain.Category, selected map[string]bool, saving bool) []string {
+	var out []string
+	for _, category := range categories {
+		if !selected[category.ID] || !saving && category.Kind != domain.KindExpense {
+			continue
+		}
+		out = append(out, category.ID)
+	}
+	return out
 }
 
 // HealthyLimit proposes a monthly budget like SuggestLimit but drops the single highest

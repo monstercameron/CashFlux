@@ -141,8 +141,8 @@ type budgetRowPaceNotesResult struct {
 }
 
 // budgetRowPaceNotes builds the row pace notes section.
-func budgetRowPaceNotes(lastMonthMode bool, props budgetRowProps, s budgeting.Status, prefs prefs.Prefs, openEdit ui.Handler) budgetRowPaceNotesResult {
-	editOnClick := OnClick(openEdit)
+func budgetRowPaceNotes(lastMonthMode bool, props budgetRowProps, s budgeting.Status, prefs prefs.Prefs, legacyOpenEdit ...ui.Handler) budgetRowPaceNotesResult {
+	_ = legacyOpenEdit
 	// Pace projection (D2): a gentle heads-up when current spending would blow the
 	// budget by period end, shown only while the period is still in progress.
 	var paceLine ui.Node = Fragment()
@@ -150,10 +150,9 @@ func budgetRowPaceNotes(lastMonthMode bool, props budgetRowProps, s budgeting.St
 		paceLine = Span(css.Class("budget-sub", tw.TextDown), Attr("data-testid", "budget-projection-"+s.Budget.ID),
 			uistate.T("bud2.projectionOver", fmtMoney(s.Projection.OverBy)))
 	}
-	if !lastMonthMode && s.CommitmentError == nil && s.Committed.Required.Amount > 0 {
+	if !lastMonthMode && s.CommitmentError == nil && (s.Projection.Committed.Amount > 0 || s.Committed.Required.Amount > 0) {
 		free := formatFreeMoney(s.FreeAfterCommitted)
-		commitment := Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-free-after-committed-"+s.Budget.ID),
-			uistate.T("bud2.freeAfterCommitted", free, fmtMoney(s.Committed.Required)))
+		commitment := budgetRecurringStatusLine(s, free)
 		paceLine = Fragment(paceLine, commitment)
 	} else if !lastMonthMode && s.CommitmentError != nil {
 		paceLine = Fragment(paceLine, Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-free-after-committed-unknown-"+s.Budget.ID),
@@ -165,7 +164,7 @@ func budgetRowPaceNotes(lastMonthMode bool, props budgetRowProps, s budgeting.St
 	// shown while in progress and when the pace overspend warning isn't already owning
 	// the message (paceOver is the stronger signal).
 	var paceMarkLine ui.Node = Fragment()
-	if !lastMonthMode && props.PaceCaption != "" && props.PaceOver == "" {
+	if !lastMonthMode && props.PaceCaption != "" && props.PaceOver == "" && s.Projection.OverBy.Amount <= 0 {
 		tone := tw.TextFaint
 		if props.PaceHot {
 			tone = tw.TextWarn
@@ -175,33 +174,17 @@ func budgetRowPaceNotes(lastMonthMode bool, props budgetRowProps, s budgeting.St
 	}
 	var paceLegend ui.Node = Fragment()
 	if !lastMonthMode && props.PaceMarkerPct > 0 && s.Spent.Amount > 0 {
-		anchor := props.Anchor
-		if anchor.IsZero() {
-			anchor = time.Now()
-		}
-		from, to := budgeting.PeriodRangeAnchored(s.Budget.Period, anchor, prefs.WeekStartWeekday(), budgetPayCycleAnchor(prefs.PayCycleAnchor))
-		elapsed := 0
-		if total := to.Sub(from).Hours(); total > 0 {
-			elapsed = int(dateutil.WallClockUTC(time.Now()).Sub(from).Hours() / total * 100)
-			if elapsed < 0 {
-				elapsed = 0
-			} else if elapsed > 100 {
-				elapsed = 100
-			}
-		}
+		elapsed := int(s.Projection.Elapsed * 100)
 		paceLegend = Span(css.Class("budget-pace-legend"), Attr("data-testid", "budget-pace-legend-"+s.Budget.ID),
-			uistate.T("budgets.paceLegend", elapsed))
+			uistate.T("budgets.paceLegendPeriod", elapsed))
 	}
 
 	var rolloverLine ui.Node = Fragment()
 	for _, issue := range s.Issues {
 		if issue.Kind == budgeting.ViewIssueRolloverStartAssumed {
-			message := issue.Message
-			if message == "" {
-				message = uistate.T("bud2.rolloverStartAssumed")
-			}
-			rolloverLine = Fragment(rolloverLine, Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-rollover-start-assumed-"+s.Budget.ID),
-				message, " ", Button(css.Class("btn btn-sm"), Type("button"), Attr("aria-label", uistate.T("bud2.setStart")), editOnClick, uistate.T("bud2.setStart"))))
+			rolloverLine = Fragment(rolloverLine, ui.CreateElement(budgetRolloverStartPicker, budgetRolloverStartPickerProps{
+				BudgetID: s.Budget.ID, BudgetName: s.Budget.Name, AssumedStart: s.Rollover.Start,
+			}))
 			break
 		}
 	}
@@ -235,6 +218,22 @@ func budgetRowPaceNotes(lastMonthMode bool, props budgetRowProps, s budgeting.St
 	}
 }
 
+func budgetRecurringStatusLine(s budgeting.Status, free string) ui.Node {
+	if s.CommitmentError != nil || (s.Projection.Committed.Amount <= 0 && s.Committed.Required.Amount <= 0) {
+		return Fragment()
+	}
+	label := uistate.T("budgets.billsAlreadyPaid", fmtMoney(s.Projection.Committed))
+	if s.Committed.Required.Amount > 0 {
+		label = uistate.T("budgets.billsDueThisMonth", free, fmtMoney(s.Committed.Required))
+		if paid := s.Projection.Committed.Amount - s.Committed.Required.Amount; paid > 0 {
+			label = uistate.T("budgets.billsDueAndPaid", free, fmtMoney(s.Committed.Required), fmtMoney(money.New(paid, s.Projection.Committed.Currency)))
+		}
+	} else if free != "" {
+		label = uistate.T("budgets.billsPaidWithFree", free, fmtMoney(s.Projection.Committed))
+	}
+	return Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-free-after-committed-"+s.Budget.ID), label)
+}
+
 // budgetRowPeriodNotesResult carries the explicit results for budgetRowPeriodNotes.
 type budgetRowPeriodNotesResult struct {
 	proratedLine ui.Node
@@ -251,9 +250,9 @@ func budgetRowPeriodNotes(lastMonthMode bool, props budgetRowProps, s budgeting.
 	// still in the period, so the user knows the sustainable daily-ish pace instead
 	// of seeing only a lump remaining. Quiet faint line; only set while in-progress.
 	var proratedLine ui.Node = Fragment()
-	if !lastMonthMode && props.ProratedRest != "" {
+	if restPerDay, ok := budgetRowRestPerDay(s, props.Anchor, uistate.LoadPrefs(), time.Now()); !lastMonthMode && ok {
 		proratedLine = Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-prorated"),
-			uistate.T("br3row.restPerDay", props.ProratedRest))
+			uistate.T("br3row.restPerDay", fmtMoney(restPerDay)))
 	}
 
 	// "Last month's spend" overlay: an overline tag above the (now last-month) bar, plus a
@@ -273,7 +272,11 @@ func budgetRowPeriodNotes(lastMonthMode bool, props budgetRowProps, s budgeting.
 	isOver := s.State == budgeting.StateOver
 	var coverBtn ui.Node = Fragment()
 	if isOver {
-		coverBtn = Button(css.Class("btn"), Type("button"), Attr("data-testid", "budget-cover-btn-"+s.Budget.ID), Title(uistate.T("budgets.coverTitle")), coverOnClick, uistate.T("budgets.actionCoverFromOther"))
+		label := uistate.T("budgets.actionCoverFromOther")
+		if s.Budget.IsSaving() {
+			label = uistate.T("bc4b2.fundFromOther")
+		}
+		coverBtn = Button(css.Class("btn"), Type("button"), Attr("data-testid", "budget-cover-btn-"+s.Budget.ID), Title(uistate.T("budgets.coverTitle")), coverOnClick, label)
 	}
 	return budgetRowPeriodNotesResult{
 		proratedLine: proratedLine, lastMonthTag: lastMonthTag, thisMonthRef: thisMonthRef, isOver: isOver, coverBtn: coverBtn,
@@ -313,7 +316,8 @@ func budgetRowGoalFunding(lastMonthMode bool, s budgeting.Status, props budgetRo
 		pStart, pEnd := budgeting.PeriodRangeAnchored(s.Budget.Period, anchor,
 			uistate.LoadPrefs().WeekStartWeekday(), payAnchor)
 		split := memoGoalFunded(app, dataRevision, s.Budget.ID, pStart, pEnd, func() goalfunded.Split {
-			summary, err := budgetGoalFundedSummary(s.Budget, app.Transactions(), app.Categories(), pStart, pEnd,
+			transactions := budgetGoalFundingTransactions(app.Transactions(), app.TxnLinks())
+			summary, err := budgetGoalFundedSummary(s.Budget, transactions, app.Categories(), pStart, pEnd,
 				currency.Rates{Base: base, Rates: app.Settings().FXRates})
 			if err != nil {
 				slog.Error("calculate goal-funded budget contributions", "budget_id", s.Budget.ID, "error", err)
@@ -328,7 +332,9 @@ func budgetRowGoalFunding(lastMonthMode bool, s budgeting.Status, props budgetRo
 				slog.Error("convert goal-funded budget limit", "budget_id", s.Budget.ID, "error", err)
 				return Fragment(), ""
 			}
-			allocations := budgetGoalFundingForPeriod(app, pStart, pEnd, rates)
+			allocations := memoBudgetGoalFunding(app, dataRevision, pStart, pEnd, func() []goalfunded.BudgetFunding {
+				return budgetGoalFundingForPeriod(app, pStart, pEnd, rates)
+			})
 			fundedAmount := int64(0)
 			var fundedGoals []ui.Node
 			var allocatedNames []string
@@ -374,11 +380,84 @@ func budgetRowGoalFunding(lastMonthMode bool, s budgeting.Status, props budgetRo
 	return fundedLine, fundedChip
 }
 
+type budgetRolloverStartPickerProps struct {
+	BudgetID, BudgetName string
+	AssumedStart         time.Time
+}
+
+func budgetRolloverStartPicker(props budgetRolloverStartPickerProps) ui.Node {
+	open := ui.UseState(false)
+	month := ui.UseState(props.AssumedStart.Format("2006-01"))
+	errText := ui.UseState("")
+	toggle := ui.UseEvent(Prevent(func() { open.Set(!open.Get()); errText.Set("") }))
+	save := ui.UseEvent(Prevent(func() {
+		selected, err := parseBudgetStartPeriod(month.Get())
+		if err != nil {
+			errText.Set(uistate.T("bc4b2.chooseStartError"))
+			return
+		}
+		app := appstate.Default
+		if app == nil {
+			return
+		}
+		if err := app.SetRolloverStart(props.BudgetID, selected); err != nil {
+			uistate.PostNotice(budgetErrorText(err), true)
+			return
+		}
+		uistate.BumpDataRevision()
+		uistate.PostNotice(uistate.T("bc4b2.startSaved", props.BudgetName), false)
+		open.Set(false)
+	}))
+	return Div(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-rollover-start-assumed-"+props.BudgetID),
+		uistate.T("bc4b2.assumedStart", uistate.LoadPrefs().FormatDate(props.AssumedStart)), " ",
+		Button(css.Class("btn btn-sm"), Type("button"), Attr("aria-label", uistate.T("bc4b2.setStart")), OnClick(toggle), uistate.T("bc4b2.setStart")),
+		If(open.Get(), Div(css.Class("budget-rollover-start-picker"),
+			Label(Attr("for", "budget-rollover-start-"+props.BudgetID), uistate.T("bc4b2.startPeriod")),
+			Input(Type("month"), Attr("id", "budget-rollover-start-"+props.BudgetID), OnInput(func(value string) { month.Set(value) }), uiw.FieldValue(month.Get())),
+			If(errText.Get() != "", Span(Attr("role", "alert"), errText.Get())),
+			Button(css.Class("btn btn-sm"), Type("button"), OnClick(save), uistate.T("bc4b2.saveStart")),
+			Button(css.Class("btn btn-sm"), Type("button"), OnClick(toggle), uistate.T("common.cancel")),
+		)),
+	)
+}
+
+func parseBudgetStartPeriod(value string) (time.Time, error) {
+	selected, err := time.Parse("2006-01", strings.TrimSpace(value))
+	if err != nil {
+		return time.Time{}, fmt.Errorf("parse budget start period: %w", err)
+	}
+	return time.Date(selected.Year(), selected.Month(), 1, 0, 0, 0, 0, time.UTC), nil
+}
+
+func budgetRowRestPerDay(s budgeting.Status, anchor time.Time, pr prefs.Prefs, now time.Time) (money.Money, bool) {
+	if s.Remaining.Amount <= 0 || s.PeriodStatus == budgeting.PeriodEnded || s.PeriodStatus == budgeting.PeriodPlanned {
+		return money.Money{}, false
+	}
+	if anchor.IsZero() {
+		anchor = now
+	}
+	_, end := budgeting.PeriodRangeAnchored(s.Budget.Period, anchor, pr.WeekStartWeekday(), budgetPayCycleAnchor(pr.PayCycleAnchor))
+	now = dateutil.WallClockUTC(now)
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	lastDay := dateutil.WallClockUTC(end).Add(-time.Nanosecond)
+	lastDay = time.Date(lastDay.Year(), lastDay.Month(), lastDay.Day(), 0, 0, 0, 0, time.UTC)
+	days := int(lastDay.Sub(today).Hours()/24) + 1
+	if days <= 0 {
+		return money.Money{}, false
+	}
+	perDay, err := s.Remaining.MulDiv(1, int64(days), money.RoundTowardZero)
+	if err != nil {
+		return money.Money{}, false
+	}
+	return perDay, true
+}
+
 func budgetGoalFundingForPeriod(app *appstate.App, start, end time.Time, rates currency.Rates) []goalfunded.BudgetFunding {
 	if app == nil {
 		return nil
 	}
-	goals, budgets, categories, transactions := app.Goals(), app.Budgets(), app.Categories(), app.Transactions()
+	goals, budgets, categories := app.Goals(), app.Budgets(), app.Categories()
+	transactions := budgetGoalFundingTransactions(app.Transactions(), app.TxnLinks())
 	drawdowns := make(map[string]int64)
 	for _, drawdown := range goalfunded.ByGoal(transactions, start, end, rates) {
 		drawdowns[drawdown.GoalID] = drawdown.SpentMinor
@@ -419,6 +498,10 @@ func budgetGoalFundingForPeriod(app *appstate.App, start, end time.Time, rates c
 		}
 	}
 	return goalfunded.AllocateAvailable(goals, budgets, categories, available, contributions)
+}
+
+func budgetGoalFundingTransactions(transactions []domain.Transaction, links []domain.TxnLink) []domain.Transaction {
+	return budgeting.NewNettedLedgerWithLinks(transactions, links).Transactions()
 }
 
 func budgetGoalFundedOverBy(split goalfunded.Split, limit money.Money, rates currency.Rates) (money.Money, error) {

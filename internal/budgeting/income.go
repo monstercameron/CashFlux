@@ -13,46 +13,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 )
 
-// IncomeForBudgets resolves the monthly income figure that budgeting helpers
-// (50/30/20 split, safe-to-spend, envelope fill) should use as their base.
-//
-// Precedence rule — configured income wins:
-//
-//	If configuredMinor > 0 the caller's stated expected monthly income is
-//	returned unchanged. This lets the user anchor the budget to their
-//	take-home pay even in months where actual deposits do not match
-//	(e.g. a new job, a partial first month, or a pay-advance).
-//
-// Actual income fallback:
-//
-//	When configuredMinor == 0 (or negative) the function sums all income
-//	transactions in the half-open window [start, end), converting each one
-//	to base currency via the supplied FX rate table. Transfer transactions
-//	are excluded automatically because domain.Transaction.IsIncome() requires
-//	IsTransfer() == false and a positive amount.
-//
-// Income is summed inline (domain.Transaction.IsIncome + currency.ConvertBetween
-// over the same dateutil.InRange window ledger.PeriodTotals uses) rather than
-// calling ledger.PeriodTotals on purpose: budgeting must NOT import ledger,
-// because ledger's own tests import budgeting and the dependency would form an
-// import cycle in ledger's test build.
-//
-// The returned value is in minor units of base. Use IncomeForBudgetsChecked
-// when callers need to distinguish missing FX from genuine zero income.
-func IncomeForBudgets(
-	configuredMinor int64,
-	txns []domain.Transaction,
-	start, end time.Time,
-	base string,
-	rates currency.Rates,
-) int64 {
-	total, err := IncomeForBudgetsChecked(configuredMinor, txns, start, end, base, rates)
-	if err != nil {
-		return 0
-	}
-	return total
-}
-
 // IncomeForBudgetsChecked resolves actual or configured budget income and
 // reports FX failures instead of treating an incomplete total as zero.
 func IncomeForBudgetsChecked(configuredMinor int64, txns []domain.Transaction, start, end time.Time, base string, rates currency.Rates) (int64, error) {
@@ -76,35 +36,6 @@ func IncomeForBudgetsChecked(configuredMinor int64, txns []domain.Transaction, s
 		}
 	}
 	return total, nil
-}
-
-// AveragedIncome resolves the income basis averaged over the last `months` full months
-// ending at monthStart, so irregular income is budgeted off a steadier figure than one
-// month alone. It sums the chosen basis (ZeroBasedIncome) over [monthStart-months,
-// monthStart) and divides by months. months < 1 is treated as 1 (last month only). The
-// fixed basis is a set monthly figure, so it is returned as-is (never averaged).
-func AveragedIncome(
-	mode string,
-	paycheckMinMinor, configuredMinor int64,
-	sources IncomeSources,
-	txns []domain.Transaction,
-	monthStart time.Time,
-	months int,
-	base string,
-	rates currency.Rates,
-) int64 {
-	if months < 1 {
-		months = 1
-	}
-	if mode == IncomeModeFixed {
-		if configuredMinor > 0 {
-			return configuredMinor
-		}
-		return 0
-	}
-	start := dateutil.AddMonths(monthStart, -months)
-	sum := ZeroBasedIncome(mode, paycheckMinMinor, configuredMinor, sources, txns, start, monthStart, base, rates)
-	return sum / int64(months)
 }
 
 // AveragedIncomeChecked resolves an averaged income basis and reports missing

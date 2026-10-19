@@ -99,7 +99,7 @@ func budgetRowCard(p budgetRowCardProps) ui.Node {
 				// under-budget gap + period; otherwise the health status · money left · period.
 				IfElse(p.lastMonthMode,
 					Span(css.Class("budget-sub"+lastMonthSubTone(p.props.LastMonthOver)), p.props.LastMonthDelta+" · "+periodLabel(p.s.Budget.Period)),
-					Span(css.Class("budget-sub"), uistate.T("budgets.rowPrimary", p.label, budgetRemainPhrase(p.s.Remaining))+" · "+periodLabel(p.s.Budget.Period))),
+					Span(css.Class("budget-sub"), uistate.T("budgets.rowPrimary", p.label, budgetRowRemainPhrase(p.s))+" · "+periodLabel(p.s.Budget.Period))),
 				// C344: while the period is too young to judge, last period's outcome is the
 				// only reading here worth anything.
 				If(p.props.PeriodEarly && p.props.PriorSpent != "",
@@ -183,8 +183,8 @@ func budgetRowExpandedDetails(p budgetRowCardProps) ui.Node {
 	var body ui.Node = Fragment()
 	if p.detailsOpen.Get() {
 		var drivers ui.Node = Fragment()
-		if !p.lastMonthMode && (p.s.State == budgeting.StateOver || p.s.State == budgeting.StateNear) {
-			drivers = ui.CreateElement(budgetDriversPanel, budgetDriversPanelProps{Budget: p.s.Budget, Title: p.title, Anchor: p.props.Anchor})
+		if !p.lastMonthMode && !p.s.Budget.IsSaving() && (p.s.State == budgeting.StateOver || p.s.State == budgeting.StateNear) {
+			drivers = ui.CreateElement(budgetDriversPanel, budgetDriversPanelProps{Status: p.s, Budget: p.s.Budget, Title: p.title, Anchor: p.props.Anchor})
 		}
 		var suggestion ui.Node = Fragment()
 		if !p.lastMonthMode {

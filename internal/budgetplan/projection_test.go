@@ -3,6 +3,7 @@
 package budgetplan
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -112,7 +113,10 @@ func TestPerBudgetFold(t *testing.T) {
 	p := Project(recs, gs, 2026, 1, "USD", usdRates)
 
 	covers := map[string]map[string]bool{"b1": {"rent": true}}
-	per := p.PerBudget([]string{"b1"}, covers)
+	per, err := p.PerBudget([]string{"b1"}, covers)
+	if err != nil {
+		t.Fatal(err)
+	}
 	row := per["b1"]
 	// Feb (index 1): 12000 recurring + 5000 goal-by-category + 2000 goal-by-budget.
 	if row[1] != 12000+5000+2000 {
@@ -131,5 +135,58 @@ func TestProjectPastYearEmpty(t *testing.T) {
 	p := Project(recs, nil, 2026, 12, "USD", usdRates) // fromMonth past the year end
 	if len(p.Recurring) != 0 {
 		t.Fatalf("expected empty projection when fromMonth > 11, got %v", p.Recurring)
+	}
+}
+
+func TestProjectSkipsPausedRecurring(t *testing.T) {
+	r := domain.Recurring{ID: "paused", Amount: usd(-9000), Cadence: domain.CadenceMonthly,
+		NextDue: time.Date(2026, time.January, 5, 0, 0, 0, 0, time.UTC), CategoryID: "rent", Paused: true}
+	p := Project([]domain.Recurring{r}, nil, 2026, 0, "USD", usdRates)
+	if got := sumMonths(p.Recurring["rent"]); got != 0 {
+		t.Fatalf("paused bill projection = %d, want 0", got)
+	}
+}
+
+func TestScaleMonthlyIncomeAcrossWindow(t *testing.T) {
+	start := time.Date(2026, time.November, 1, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2027, time.February, 1, 0, 0, 0, 0, time.UTC)
+	got, err := ScaleMonthlyIncome(usd(500000), start, end)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Amount != 1500000 {
+		t.Fatalf("three-month income = %d, want 1500000", got.Amount)
+	}
+}
+
+func TestScaleMonthlyIncomeChecksOverflow(t *testing.T) {
+	start := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2027, time.January, 1, 0, 0, 0, 0, time.UTC)
+	if _, err := ScaleMonthlyIncome(usd(int64(^uint64(0)>>1)), start, end); err == nil {
+		t.Fatal("expected overflow error")
+	}
+}
+
+func TestTotalUniqueCountsOverlappingRecurringCategoryOnce(t *testing.T) {
+	p := Projection{Recurring: map[string]MonthAmounts{"rent": {0: 12000}}}
+	covers := map[string]map[string]bool{"a": {"rent": true}, "b": {"rent": true}}
+	got, err := p.TotalUnique([]string{"a", "b"}, covers)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got[0] != 12000 {
+		t.Fatalf("unique total = %d, want 12000", got[0])
+	}
+}
+
+func TestProjectReportsProjectionOverflow(t *testing.T) {
+	due := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
+	recs := []domain.Recurring{
+		{ID: "a", Amount: money.New(-math.MaxInt64, "USD"), Cadence: domain.CadenceMonthly, NextDue: due, CategoryID: "rent"},
+		{ID: "b", Amount: money.New(-math.MaxInt64, "USD"), Cadence: domain.CadenceMonthly, NextDue: due, CategoryID: "rent"},
+	}
+	p := Project(recs, nil, 2026, 0, "USD", usdRates)
+	if p.Error == nil {
+		t.Fatal("overflowing recurring projection must be incomplete")
 	}
 }

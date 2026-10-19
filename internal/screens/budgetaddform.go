@@ -32,6 +32,13 @@ import (
 // category" (named after the budget) instead of selecting an existing one.
 const budgetNewCatSentinel = "__new_category__"
 
+func budgetCountKey(prefix string, count int) string {
+	if count == 1 {
+		return prefix + ".one"
+	}
+	return prefix + ".many"
+}
+
 // parseTrackedTags splits a comma-separated tag input into a trimmed, "#"-stripped,
 // case-insensitively-deduped list — the cross-category tags a budget also tracks. The
 // dedupe means selecting the same tag twice never counts a charge twice.
@@ -144,6 +151,7 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 func budgetAddFormReady(componentProps budgetAddFormComponentProps) ui.Node {
 	props := componentProps.Props
 	app := componentProps.App
+	dataRevision := uistate.UseDataRevision().Get()
 
 	base := app.Settings().BaseCurrency
 	if base == "" {
@@ -176,6 +184,7 @@ func budgetAddFormReady(componentProps budgetAddFormComponentProps) ui.Node {
 	name := ui.UseState(props.Seed.Name)
 	ev := useEntityVarField(budgetVarKind, name, "")
 	limit := ui.UseState(props.Seed.LimitMajor)
+	limitCurrency := ui.UseState(base)
 	catID := ui.UseState(defaultCat)
 	newCatName := ui.UseState("")
 	// C535: creating a category is now something you ASK for, not the default
@@ -262,9 +271,12 @@ func budgetAddFormReady(componentProps budgetAddFormComponentProps) ui.Node {
 			if b.ID != bid {
 				continue
 			}
+			copyDefaults := budgeting.CopyBudgetDefaults(b)
 			name.Set(uistate.T("budgets.copySuffix", b.Name))
-			limit.Set(money.FormatMinor(b.Limit.Amount, currency.Decimals(b.Limit.Currency)))
-			period.Set(string(b.Period))
+			limit.Set(money.FormatMinor(copyDefaults.Limit.Amount, currency.Decimals(copyDefaults.Limit.Currency)))
+			limitCurrency.Set(copyDefaults.Limit.Currency)
+			period.Set(string(copyDefaults.Period))
+			direction.Set(string(copyDefaults.Direction))
 			owner.Set(b.OwnerID)
 			methodology.Set(b.Methodology)
 			rollover.Set(b.Rollover)
@@ -292,9 +304,9 @@ func budgetAddFormReady(componentProps budgetAddFormComponentProps) ui.Node {
 		}
 		// C666: the same parse the field and the Add button use, so the three agree
 		// on what "valid" means and the message names the actual problem.
-		amt, limitProb := budgeting.ParseLimitMajor(limit.Get(), currency.Decimals(base))
+		amt, limitProb := budgeting.ParseLimitMajor(limit.Get(), currency.Decimals(limitCurrency.Get()))
 		if !limitProb.OK() {
-			errMsg.Set(budgetLimitError(limitProb, base))
+			errMsg.Set(budgetLimitError(limitProb, limitCurrency.Get()))
 			return
 		}
 		// Reject a variable name that collides with an existing budget's handle.
@@ -378,7 +390,7 @@ func budgetAddFormReady(componentProps budgetAddFormComponentProps) ui.Node {
 		}
 		b := domain.Budget{
 			ID: id.New(), Name: strings.TrimSpace(name.Get()), Scope: scope, OwnerID: owner.Get(),
-			CategoryID: finalCatID, Period: domain.Period(period.Get()), Limit: money.New(amt, base),
+			CategoryID: finalCatID, Period: domain.Period(period.Get()), Limit: money.New(amt, limitCurrency.Get()),
 			Rollover: rollover.Get(), Methodology: methodVal, Custom: customValuesToMap(budgetDefs, customVals.Get()),
 			VarName: strings.TrimSpace(ev.VarName.Get()),
 		}
@@ -406,6 +418,7 @@ func budgetAddFormReady(componentProps budgetAddFormComponentProps) ui.Node {
 		name.Set("")
 		ev.Reset()
 		limit.Set("")
+		limitCurrency.Set(base)
 		rollover.Set(false)
 		methodology.Set("")
 		catID.Set(defaultCat)
@@ -431,42 +444,45 @@ func budgetAddFormReady(componentProps budgetAddFormComponentProps) ui.Node {
 	txns := app.Transactions()
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 	now := time.Now()
-	curStart := dateutil.MonthStart(now)
-	prevStart := dateutil.AddMonths(curStart, -1)
-	tmplIncome, tmplIncomeErr := budgeting.IncomeForBudgetsChecked(uistate.CurrentPrefs().MonthlyIncomeMinor, txns, prevStart, curStart, base, rates)
-	if tmplIncomeErr != nil {
-		slog.Error("calculate budget template income", "error", tmplIncomeErr)
-	}
-	var tmplProposals []budgeting.BudgetProposal
-	if tmplIncome > 0 {
-		res := budgeting.Generate5030(tmplIncome, categories, txns, now)
+	template := ui.UseMemo(func() budgetAddTemplateMemo {
+		curStart := dateutil.MonthStart(now)
+		prevStart := dateutil.AddMonths(curStart, -1)
+		income, err := budgeting.IncomeForBudgetsChecked(uistate.CurrentPrefs().MonthlyIncomeMinor, txns, prevStart, curStart, base, rates)
+		if err != nil {
+			return budgetAddTemplateMemo{Err: err}
+		}
+		if income <= 0 {
+			return budgetAddTemplateMemo{}
+		}
+		result, err := budgeting.Generate5030WithRates(income, categories, txns, now, rates)
+		if err != nil {
+			return budgetAddTemplateMemo{Err: err}
+		}
 		existing := map[string]bool{}
 		for _, b := range app.Budgets() {
-			existing[b.CategoryID] = true
-		}
-		for _, prop := range res.Proposals {
-			if prop.LimitMinor > 0 && !existing[prop.Category.ID] {
-				tmplProposals = append(tmplProposals, prop)
+			for _, categoryID := range b.TrackedCategoryIDs() {
+				existing[categoryID] = true
 			}
 		}
+		var proposals []budgeting.BudgetProposal
+		for _, proposal := range result.Proposals {
+			if proposal.LimitMinor > 0 && !existing[proposal.Category.ID] {
+				proposals = append(proposals, proposal)
+			}
+		}
+		return budgetAddTemplateMemo{Proposals: proposals}
+	}, dataRevision, app.Rev(), base, now.Format("2006-01"))
+	tmplProposals := template.Proposals
+	if template.Err != nil {
+		slog.Error("calculate 50/30/20 budget template", "error", template.Err)
 	}
 
 	// Apply the reviewed template: create only the checked proposals.
 	applyTmpl := ui.UseEvent(Prevent(func() {
-		excluded := tmplExcluded.Get()
-		n := 0
-		for _, prop := range tmplProposals {
-			if excluded[prop.Category.ID] {
-				continue
-			}
-			nb := domain.Budget{
-				ID: id.New(), Name: prop.Category.Name, CategoryID: prop.Category.ID,
-				Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID,
-				Period: domain.PeriodMonthly, Limit: money.New(prop.LimitMinor, base),
-			}
-			if err := app.PutBudget(nb); err == nil {
-				n++
-			}
+		n, err := applyBudgetTemplate(app, tmplProposals, tmplExcluded.Get(), base, now)
+		if err != nil {
+			uistate.PostNotice(budgetErrorText(err), true)
+			return
 		}
 		if n == 0 {
 			uistate.PostNotice(uistate.T("budgets.tmplNothingToAdd"), false)
@@ -474,7 +490,7 @@ func budgetAddFormReady(componentProps budgetAddFormComponentProps) ui.Node {
 		}
 		uistate.BumpDataRevision()
 		uistate.RequestPersist() // C584: a whole budget set is not worth losing to a fast reload
-		uistate.PostUndoable(uistate.T("budgets.tmplApplied", plural(n, "budget")))
+		uistate.PostUndoable(uistate.T("budgets.tmplApplied", uistate.T(budgetCountKey("budgets.addedCount", n), n)))
 		if props.OnDone != nil {
 			props.OnDone()
 		}
@@ -613,11 +629,26 @@ func budgetAddFormReady(componentProps budgetAddFormComponentProps) ui.Node {
 		sugCovers = categorytree.DescendantsOfAll(categories, []string{sugCatID})
 		sugCovers[sugCatID] = true
 	}
-	suggestion, _ := budgeting.SuggestLimitIn(sugCovers, txns, now, 6, rates)
-	useSuggestion := ui.UseEvent(Prevent(func() { limit.Set(money.FormatMinor(suggestion, currency.Decimals(base))) }))
+	suggestionMemo := ui.UseMemo(func() budgetAddSuggestionMemo {
+		monthly, err := budgeting.SuggestLimitIn(sugCovers, txns, now, 6, rates)
+		if err != nil {
+			return budgetAddSuggestionMemo{Err: err}
+		}
+		amount, err := budgeting.LimitForPeriod(money.New(monthly, base), domain.PeriodMonthly, domain.Period(period.Get()), limitCurrency.Get(), rates)
+		return budgetAddSuggestionMemo{Amount: amount, Err: err}
+	}, dataRevision, app.Rev(), sugCatID, period.Get(), limitCurrency.Get(), base, now.Format("2006-01"))
+	suggestion, suggestionErr := suggestionMemo.Amount, suggestionMemo.Err
+	if suggestionErr != nil {
+		slog.Error("calculate budget limit suggestion", "error", suggestionErr)
+	}
+	suggestAmount := suggestion.Amount
+	if suggestionErr != nil {
+		suggestAmount = 0
+	}
+	useSuggestion := ui.UseEvent(Prevent(func() { limit.Set(money.FormatMinor(suggestAmount, currency.Decimals(limitCurrency.Get()))) }))
 	suggestOnClick := OnClick(useSuggestion)
 	suggestScope := ""
-	if suggestion > 0 && len(sugCovers) > 1 {
+	if suggestAmount > 0 && len(sugCovers) > 1 {
 		for _, c := range categories {
 			if c.ID == sugCatID {
 				suggestScope = uistate.T("budgets.suggestScoped", uistate.T("budgets.scopeNoteCats", catname.Path(categories, c)))
@@ -628,7 +659,10 @@ func budgetAddFormReady(componentProps budgetAddFormComponentProps) ui.Node {
 	// With a brand-new category chosen, say plainly that there is nothing to
 	// average — silence there reads as "we found nothing worth telling you".
 	var suggestNote ui.Node = Fragment()
-	if wantNewCat && suggestion == 0 && typedCatName != "" {
+	if suggestionErr != nil {
+		suggestNote = Div(css.Class("ba-full"), P(css.Class("form-err"), Attr("role", "status"), uistate.T("budgets.incomplete")))
+	}
+	if wantNewCat && suggestAmount == 0 && typedCatName != "" {
 		suggestNote = Div(css.Class("ba-full"),
 			Span(css.Class("budget-cat-fate", tw.TextFaint), Attr("data-testid", "budget-suggest-none"),
 				uistate.T("budgets.suggestNoHistory")))
@@ -663,13 +697,13 @@ func budgetAddFormReady(componentProps budgetAddFormComponentProps) ui.Node {
 	// same rule: a blank category-name field falls back to the budget's name, so a
 	// nameless budget cannot mint a nameless category either.
 	nameMissing := strings.TrimSpace(name.Get()) == ""
-	_, limitProblem := budgeting.ParseLimitMajor(limit.Get(), currency.Decimals(base))
+	_, limitProblem := budgeting.ParseLimitMajor(limit.Get(), currency.Decimals(limitCurrency.Get()))
 	// A field-level message for a value that is present but unusable. A blank
 	// field is not an error yet — the required marker and the blocker line say so
 	// without shouting at a form the user has only just opened.
 	limitFieldErr := ""
 	if !limitProblem.OK() && limitProblem != budgeting.LimitBlank {
-		limitFieldErr = budgetLimitError(limitProblem, base)
+		limitFieldErr = budgetLimitError(limitProblem, limitCurrency.Get())
 	}
 	categoryMissing := !wantNewCat && strings.TrimSpace(catID.Get()) == ""
 	categoryAlreadyBudgeted := !wantNewCat && catID.Get() != "" && budgeting.IsDuplicateBudget(app.Budgets(), catID.Get(), period.Get(), owner.Get(), "")
@@ -714,16 +748,17 @@ func budgetAddFormReady(componentProps budgetAddFormComponentProps) ui.Node {
 		return Form(css.Class("budget-add-shell"), Attr("data-testid", "budget-tmpl-review"), applyTmplOnSubmit,
 			Div(css.Class("modal-scroll"),
 				P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0"}), uistate.T("budgets.tmplReviewHint")),
+				If(template.Err != nil, P(css.Class("form-err"), Attr("role", "status"), uistate.T("budgets.incomplete"))),
 				Div(css.Class("budget-tmpl-rows"), rows),
 				emptyNote,
 				If(checked > 0, P(css.Class("budget-tmpl-total"), Attr("data-testid", "budget-tmpl-total"),
-					uistate.T("budgets.tmplReviewTotal", fmtMoney(money.New(total, base)), plural(checked, "budget")))),
+					uistate.T("budgets.tmplReviewTotal", fmtMoney(money.New(total, base)), uistate.T(budgetCountKey("bc4b4.budgetCount", checked), checked)))),
 			),
 			Div(css.Class("modal-foot"),
 				Button(css.Class("btn"), Type("button"), Attr("data-testid", "budget-tmpl-back"), closeTmplOnClick, uistate.T("budgets.tmplBack")),
 				Button(css.Class("btn btn-primary", "ba-submit"), Type("submit"), Attr("data-testid", "budget-tmpl-apply"),
 					attrIf(checked == 0, "disabled", "disabled"),
-					uistate.T("budgets.tmplCreateN", plural(checked, "budget"))),
+					uistate.T("budgets.tmplCreateN", uistate.T(budgetCountKey("bc4b4.budgetCount", checked), checked))),
 			),
 		)
 	}
@@ -749,7 +784,7 @@ func budgetAddFormReady(componentProps budgetAddFormComponentProps) ui.Node {
 						TestID:    "budget-copy-existing",
 					})),
 				),
-				If(tmplIncomeErr != nil, P(css.Class("form-err"), Attr("role", "status"), Attr("data-testid", "budget-template-income-incomplete"), uistate.T("budgets.incomplete"))),
+				If(template.Err != nil, P(css.Class("form-err"), Attr("role", "status"), Attr("data-testid", "budget-template-income-incomplete"), uistate.T("budgets.incomplete"))),
 			),
 			Div(css.Class("budget-add-or"), Span(uistate.T("budgets.tmplOr"))),
 			Div(css.Class("form-grid", "budget-add-grid"),
@@ -794,7 +829,7 @@ func budgetAddFormReady(componentProps budgetAddFormComponentProps) ui.Node {
 					Control: func(a uiw.FieldA11y) ui.Node {
 						attrs := []any{css.Class("field"), Attr("id", a.ID), Type("number"), Attr("data-testid", "budget-add-limit"),
 							Attr("aria-required", "true"), Attr("aria-describedby", a.DescribedBy),
-							Placeholder(uistate.T("budgets.limitPlaceholder", base)), Step("0.01"), Attr("min", "0.01"), limitOnInput}
+							Placeholder(uistate.T("budgets.limitPlaceholder", limitCurrency.Get())), Step("0.01"), Attr("min", "0.01"), limitOnInput}
 						if strings.TrimSpace(props.Seed.LimitMajor) == "" {
 							attrs = append(attrs, Attr("autofocus", "autofocus"))
 						}
@@ -811,8 +846,8 @@ func budgetAddFormReady(componentProps budgetAddFormComponentProps) ui.Node {
 						OnChange:  func(v string) { period.Set(v) },
 						AriaLabel: uistate.T("budgets.period"),
 					})),
-				If(suggestion > 0, Div(css.Class("ba-full", "suggest-row"),
-					Span(css.Class("muted"), uistate.T("budgets.suggest", fmtMoney(money.New(suggestion, base)))),
+				If(suggestAmount > 0, Div(css.Class("ba-full", "suggest-row"),
+					Span(css.Class("muted"), uistate.T("budgets.suggest", fmtMoney(money.New(suggestAmount, limitCurrency.Get())))),
 					Button(css.Class("btn"), Type("button"), Attr("data-testid", "budget-use-suggest"), suggestOnClick, uistate.T("budgets.useSuggest")),
 				)),
 				// Where a rolled-up average came from, so it is never read as one
@@ -913,6 +948,41 @@ func budgetAddFormReady(componentProps budgetAddFormComponentProps) ui.Node {
 				disabledAttr(addBlocked)...)...),
 		),
 	)
+}
+
+func applyBudgetTemplate(app *appstate.App, proposals []budgeting.BudgetProposal, excluded map[string]bool, base string, now time.Time) (int, error) {
+	var writes []domain.Budget
+	for _, proposal := range proposals {
+		if excluded[proposal.Category.ID] {
+			continue
+		}
+		budget := domain.Budget{
+			ID: id.New(), Name: proposal.Category.Name, CategoryID: proposal.Category.ID,
+			Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID,
+			Period: domain.PeriodMonthly, Limit: money.New(proposal.LimitMinor, base),
+		}
+		if proposal.Bucket == budgeting.BucketSavings {
+			budget.Direction = domain.DirectionSave
+		}
+		writes = append(writes, budget)
+	}
+	if len(writes) == 0 {
+		return 0, nil
+	}
+	if err := app.PutBudgetsAtomicAt(writes, now); err != nil {
+		return 0, err
+	}
+	return len(writes), nil
+}
+
+type budgetAddTemplateMemo struct {
+	Proposals []budgeting.BudgetProposal
+	Err       error
+}
+
+type budgetAddSuggestionMemo struct {
+	Amount money.Money
+	Err    error
 }
 
 // attrIf returns the attribute option when cond holds, else a no-op fragment arg.

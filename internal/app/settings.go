@@ -820,6 +820,14 @@ func globalSettingsForm() uic.Node {
 	refreshLog := func() { logRev.Set(logRev.Get() + 1) }
 	savePrefs := func(p prefs.Prefs) {
 		p = p.Normalize()
+		old := prefsAtom.Get().Normalize()
+		if a := appstate.Default; a != nil && budgetPeriodPreferencesChanged(old, p) {
+			if err := rekeyBudgetPeriodPreferences(a, old, p, time.Now()); err != nil {
+				noticeAtom.Set(noticeAtom.Get().With(uistate.T("settings.budgetPeriodRekeyFailed"), true))
+				return
+			}
+			uistate.BumpDataRevision()
+		}
 		prefsAtom.Set(p)
 		uistate.PersistPrefs(p)
 		uistate.ApplyPrefs(p)
@@ -1868,10 +1876,8 @@ func wipeAfterSession(notify func(string, bool)) {
 		notify(uistate.T("settings.wipeErr", err.Error()), true)
 		return
 	}
-	// Nothing is loaded any more, so nobody owns it. Leaving a stale claim
-	// behind would make the next dataset look foreign to the very account
-	// that is about to create it.
-	releaseDatasetOwner()
+	// The durable wipe batch tombstones the owner with the dataset. Keep the
+	// existing claim until that transaction commits so a failed wipe retains it.
 	// The store wipe cleared the financial tables and the audit_log table, but two
 	// things live outside that sweep and would otherwise survive: (1) the in-memory
 	// activity feed (the Activity screen's preferred source, re-hydrated from the

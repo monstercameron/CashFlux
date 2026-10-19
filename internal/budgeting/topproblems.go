@@ -64,8 +64,13 @@ func TopProblems(statuses []Status, paceRisk map[string]bool, n int) []Problem {
 		if si != sj {
 			return si > sj
 		}
-		if si == 3 { // both over — the deepest overspend (in money) leads
-			if oi, oj := overBy(probs[i].Status), overBy(probs[j].Status); oi != oj {
+		if si == 3 { // compare overages only when they share a currency
+			ci, cj := probs[i].Status.Remaining.Currency, probs[j].Status.Remaining.Currency
+			if ci != cj {
+				return ci < cj
+			}
+			oi, oj := overBy(probs[i].Status), overBy(probs[j].Status)
+			if oi != oj {
 				return oi > oj
 			}
 		}

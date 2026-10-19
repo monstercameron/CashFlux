@@ -5,6 +5,7 @@
 package screens
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -51,6 +52,11 @@ import (
 //     the plan honest makes the headline look worse, and the footer says so.
 
 const trackScanMonths = 12
+
+type trackScanMemo struct {
+	Candidates []untracked.Candidate
+	Err        error
+}
 
 // trackRow is one resolved row: the scanned candidate plus the user's edits.
 type trackRow struct {
@@ -130,7 +136,7 @@ type trackUntrackedFormProps struct{}
 // trackUntrackedForm is the sheet body: the scan, one row per category, and a
 // footer stating the plan-level consequence before it can be applied.
 func trackUntrackedForm(_ trackUntrackedFormProps) ui.Node {
-	_ = uistate.UseDataRevision().Get()
+	dataRevision := uistate.UseDataRevision().Get()
 	app := appstate.Default
 	openAtom := uistate.UseTrackUntrackedOpen()
 	rowsAtom := uistate.UseTrackUntrackedRows()
@@ -149,32 +155,46 @@ func trackUntrackedForm(_ trackUntrackedFormProps) ui.Node {
 	closeOnClick := OnClick(closeSheet)
 	applyOnClick := OnClick(apply)
 
+	base := budgetBaseCurrency("")
+	rates := currency.Rates{Base: base}
+	appRevision := uint64(0)
+	if app != nil {
+		settings := app.Settings()
+		if settings.BaseCurrency != "" {
+			base = settings.BaseCurrency
+		}
+		rates = currency.Rates{Base: base, Rates: settings.FXRates}
+		appRevision = app.Rev()
+	}
+	wStart, wEnd := vw.Range()
+	from := wEnd.AddDate(0, -trackScanMonths, 0)
+	scan := ui.UseMemo(func() trackScanMemo {
+		if app == nil {
+			return trackScanMemo{}
+		}
+		hint := func(catID string) (int64, domain.Period, bool) {
+			if sug, err := budgeting.SuggestLimit(catID, app.Transactions(), wEnd, 6, rates); err == nil && sug > 0 {
+				return sug, domain.PeriodMonthly, true
+			}
+			return 0, "", false
+		}
+		candidates, err := untracked.Scan(app.Transactions(), app.Categories(), app.Budgets(), from, wEnd, rates, base, trackScanMonths, hint)
+		return trackScanMemo{Candidates: candidates, Err: err}
+	}, app, appRevision, dataRevision, from.Unix(), wEnd.Unix(), base)
 	if app == nil {
 		return Fragment()
 	}
 	v := computeBudgetView(app, activeMemberID, vw, pr, false)
-	base := v.Base
+	base = v.Base
 	if base == "" {
 		base = budgetBaseCurrency(base)
 	}
-	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-
-	// TWELVE months back from the viewed period's end, not the viewed period. A
-	// tidy-up that only sees this month leaves every non-monthly obligation behind.
-	_, wEnd := vw.Range()
-	from := wEnd.AddDate(0, -trackScanMonths, 0)
-
-	// The hint: a category's own suggested limit from real history, which beats the
-	// window's raw total for anything that does not bill monthly. SuggestLimit
-	// returns a per-period figure; window spend is the fallback inside Scan.
-	hint := func(catID string) (int64, domain.Period, bool) {
-		if sug, err := budgeting.SuggestLimit(catID, app.Transactions(), wEnd, 6, rates); err == nil && sug > 0 {
-			return sug, domain.PeriodMonthly, true
-		}
-		return 0, "", false
+	if scan.Err != nil {
+		return Div(css.Class("track-sheet"),
+			P(css.Class("budget-sub is-error"), Attr("role", "status"), uistate.T("track.scanFailed")),
+			Div(css.Class("modal-foot"), Button(css.Class("btn"), Type("button"), closeOnClick, uistate.T("action.close"))))
 	}
-
-	cands := untracked.Scan(app.Transactions(), app.Categories(), app.Budgets(), from, wEnd, rates, base, hint)
+	cands := scan.Candidates
 	if len(cands) == 0 {
 		return Div(css.Class("track-sheet"),
 			P(css.Class("budget-sub"), Attr("data-testid", "track-empty"), uistate.T("track.empty")),
@@ -209,7 +229,18 @@ func trackUntrackedForm(_ trackUntrackedFormProps) ui.Node {
 			CategoryID: r.Cand.CategoryID, AmountMinor: r.Amount, BudgetID: r.BudgetID, Raise: r.Raise,
 		})
 	}
-	effect := untracked.Impact(choices, v.BannerIncome+v.RolledOver, v.TotalLimit+v.SavingsAssigned)
+	pool, err := money.Add(v.BannerIncome, v.RolledOver)
+	if err != nil {
+		return trackUntrackedCalculationFailure(closeOnClick)
+	}
+	assigned, err := money.Add(v.TotalLimit, v.SavingsAssigned)
+	if err != nil {
+		return trackUntrackedCalculationFailure(closeOnClick)
+	}
+	effect, err := untracked.Impact(choices, pool, assigned)
+	if err != nil {
+		return trackUntrackedCalculationFailure(closeOnClick)
+	}
 
 	spentOf := map[string]int64{}
 	limitOf := map[string]int64{}
@@ -217,9 +248,12 @@ func trackUntrackedForm(_ trackUntrackedFormProps) ui.Node {
 		spentOf[st.Budget.ID] = st.Spent.Amount
 		limitOf[st.Budget.ID] = st.Limit.Amount
 	}
-	risky := untracked.OverspendRisk(choices,
+	risky, err := untracked.OverspendRisk(choices,
 		func(bid string) int64 { return spentOf[bid] },
 		func(bid string) int64 { return limitOf[bid] })
+	if err != nil {
+		return trackUntrackedCalculationFailure(closeOnClick)
+	}
 	riskyNames := make([]string, 0, len(risky))
 	for _, bid := range risky {
 		for _, b := range dests {
@@ -230,7 +264,9 @@ func trackUntrackedForm(_ trackUntrackedFormProps) ui.Node {
 	}
 
 	applyFn = func() {
-		applyTrackUntracked(app, cands, base, rowsAtom.Get, rowsAtom.Set, func() { openAtom.Set(false) })
+		if err := applyTrackUntracked(app, cands, base, rates, activeMemberID, wStart, rowsAtom.Get, rowsAtom.Set, func() { openAtom.Set(false) }); err != nil {
+			uistate.PostNotice(budgetErrorText(err), true)
+		}
 	}
 
 	body := renderTrackUntrackedRows(rows, base, dests, v.CatName, func(catID string, next trackRow) {
@@ -253,6 +289,12 @@ func trackUntrackedForm(_ trackUntrackedFormProps) ui.Node {
 	}
 
 	return renderTrackUntrackedSheet(body, effect, base, toAssign, riskNote, closeOnClick, applyOnClick)
+}
+
+func trackUntrackedCalculationFailure(closeOnClick any) ui.Node {
+	return Div(css.Class("track-sheet"),
+		P(css.Class("budget-sub is-error"), Attr("role", "status"), uistate.T("track.calculationFailed")),
+		Div(css.Class("modal-foot"), Button(css.Class("btn"), Type("button"), closeOnClick, uistate.T("action.close"))))
 }
 
 func renderTrackUntrackedRows(rows []trackRow, base string, dests []domain.Budget, catNames map[string]string, onChange func(string, trackRow)) []ui.Node {
@@ -284,49 +326,100 @@ func renderTrackUntrackedSheet(body []ui.Node, effect untracked.Effect, base str
 	)
 }
 
-func applyTrackUntracked(app *appstate.App, cands []untracked.Candidate, base string, readRows func() string, clearRows func(string), close func()) {
+func applyTrackUntracked(app *appstate.App, cands []untracked.Candidate, base string, rates currency.Rates, activeMemberID string, ref time.Time, readRows func() string, clearRows func(string), close func()) error {
 	live := parseTrackRows(readRows())
-	n := 0
+	creates, updates, err := planTrackUntracked(cands, live, app.Budgets(), base, rates, activeMemberID)
+	if err != nil {
+		return err
+	}
+	writes := append(updates, creates...)
+	n := len(writes)
+	if n > 0 {
+		if err := app.PutBudgetsAtomicAt(writes, ref); err != nil {
+			return fmt.Errorf("track untracked: save budgets: %w", err)
+		}
+		uistate.PostUndoable(uistate.TN("track.appliedOne", "track.appliedOther", n))
+		uistate.RequestPersist()
+		uistate.BumpDataRevision()
+	}
+	clearRows("")
+	close()
+	return nil
+}
+
+func planTrackUntracked(cands []untracked.Candidate, rows map[string]trackRow, budgets []domain.Budget, base string, rates currency.Rates, activeMemberID string) ([]domain.Budget, []domain.Budget, error) {
+	byID := make(map[string]domain.Budget, len(budgets))
+	for _, b := range budgets {
+		byID[b.ID] = b
+	}
+	updates := map[string]domain.Budget{}
+	var creates []domain.Budget
 	for _, c := range cands {
-		r := trackRow{Include: true, Amount: c.SuggestMinor, Raise: true}
-		if e, ok := live[c.CategoryID]; ok {
+		r := trackRow{Cand: c, Include: true, Amount: c.SuggestMinor, Raise: true}
+		if e, ok := rows[c.CategoryID]; ok {
 			r.Include, r.Amount, r.BudgetID, r.Raise = e.Include, e.Amount, e.BudgetID, e.Raise
 		}
 		if !r.Include || r.Amount <= 0 {
 			continue
 		}
 		if r.BudgetID == "" {
-			nb := domain.Budget{ID: id.New(), Name: c.Name, CategoryID: c.CategoryID, Limit: money.New(r.Amount, base), Period: c.Period}
-			if err := app.PutBudget(nb); err == nil {
-				n++
+			scope, owner := domain.ScopeShared, domain.GroupOwnerID
+			if activeMemberID != "" {
+				scope, owner = domain.ScopeIndividual, activeMemberID
 			}
+			creates = append(creates, domain.Budget{ID: id.New(), Name: c.Name, CategoryID: c.CategoryID,
+				Limit: money.New(r.Amount, base), Period: c.Period, Scope: scope, OwnerID: owner})
 			continue
 		}
-		for _, b := range app.Budgets() {
-			if b.ID != r.BudgetID {
-				continue
+		b, ok := updates[r.BudgetID]
+		if !ok {
+			b, ok = byID[r.BudgetID]
+		}
+		if !ok {
+			return nil, nil, fmt.Errorf("track untracked: destination budget %q no longer exists", r.BudgetID)
+		}
+		tracked := b.TrackedCategoryIDs()
+		found := false
+		for _, categoryID := range tracked {
+			if categoryID == c.CategoryID {
+				found = true
+				break
 			}
-			nb := b
-			nb.CategoryIDs = append(append([]string(nil), b.TrackedCategoryIDs()...), c.CategoryID)
-			if r.Raise {
-				nb.Limit = money.New(b.Limit.Amount+r.Amount, b.Limit.Currency)
-				if nb.Limit.Currency == "" {
-					nb.Limit = money.New(b.Limit.Amount+r.Amount, base)
-				}
+		}
+		if !found {
+			b.CategoryIDs = append(tracked, c.CategoryID)
+		}
+		if r.Raise {
+			budgetCurrency := b.Limit.Currency
+			if budgetCurrency == "" {
+				budgetCurrency = base
 			}
-			if err := app.PutBudget(nb); err == nil {
-				n++
+			amount, err := rates.Convert(money.New(r.Amount, base), budgetCurrency)
+			if err != nil {
+				return nil, nil, fmt.Errorf("track untracked: convert raise for %q: %w", b.Name, err)
 			}
-			break
+			amount, err = budgeting.PeriodEquivalent(amount, c.Period, b.Period)
+			if err != nil {
+				return nil, nil, fmt.Errorf("track untracked: scale raise for %q: %w", b.Name, err)
+			}
+			current := b.Limit
+			if current.Currency == "" {
+				current = money.New(current.Amount, budgetCurrency)
+			}
+			b.Limit, err = current.Add(amount)
+			if err != nil {
+				return nil, nil, fmt.Errorf("track untracked: add raise to %q: %w", b.Name, err)
+			}
+		}
+		updates[b.ID] = b
+	}
+	result := make([]domain.Budget, 0, len(updates))
+	for _, b := range budgets {
+		if updated, ok := updates[b.ID]; ok {
+			result = append(result, updated)
 		}
 	}
-	if n > 0 {
-		uistate.PostUndoable(uistate.T("track.applied", plural(n, "category")))
-		uistate.RequestPersist()
-		uistate.BumpDataRevision()
-	}
-	clearRows("")
-	close()
+	return creates, result, nil
 }
 
 type trackUntrackedRowProps struct {

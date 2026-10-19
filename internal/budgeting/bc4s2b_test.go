@@ -44,7 +44,7 @@ func TestComputeSweepExcludesRolloverStatus(t *testing.T) {
 		Budget:    domain.Budget{ID: "rollover", Name: "Rollover", Period: domain.PeriodMonthly, Rollover: true},
 		Remaining: money.New(15000, "USD"),
 	}
-	plan := ComputeSweep([]Status{rollover}, SweepConfig{Enabled: true, BudgetIDs: []string{"rollover"}}, "USD", nil)
+	plan := checkedComputeSweep(t, []Status{rollover}, SweepConfig{Enabled: true, BudgetIDs: []string{"rollover"}}, "USD", nil)
 	if plan.Total.Amount != 0 || len(plan.Lines) != 0 {
 		t.Fatalf("rollover remainder swept = %+v; want none", plan)
 	}

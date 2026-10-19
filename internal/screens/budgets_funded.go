@@ -149,7 +149,7 @@ func budgetFundedCallout(props budgetFundedProps) ui.Node {
 			// act from correcting the one you are living in, and naming the month is
 			// the only way the reader can tell which they are about to do.
 			Span(css.Class("budget-funded-body", tw.TextDim), Attr("data-testid", "budgets-funded-reconcile-summary"),
-				uistate.T(fundedReconcileSummaryKey(props.Historical), plural(props.ScalableCount, "budget"),
+				uistate.T(fundedReconcileSummaryKey(props.Historical), budgetCountPhrase(props.ScalableCount),
 					formatAdjustPct(math.Abs(reducePct)), periodLabel)),
 		)),
 	)

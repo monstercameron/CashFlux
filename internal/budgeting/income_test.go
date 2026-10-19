@@ -126,7 +126,7 @@ func TestAveragedIncome(t *testing.T) {
 		{"fixed is never averaged", IncomeModeFixed, 500000, nil, 3, 500000},
 	}
 	for _, tc := range cases {
-		if got := AveragedIncome(tc.mode, 0, tc.cfg, NewIncomeSources(nil, tc.cats), txns, monthStart, tc.months, "USD", rates); got != tc.want {
+		if got := checkedAveragedIncome(t, tc.mode, 0, tc.cfg, NewIncomeSources(nil, tc.cats), txns, monthStart, tc.months, "USD", rates); got != tc.want {
 			t.Errorf("%s: got %d, want %d", tc.name, got, tc.want)
 		}
 	}
@@ -243,9 +243,9 @@ func TestIncomeForBudgets(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := IncomeForBudgets(tc.configuredMinor, tc.txns, start, end, "USD", rates)
+			got := checkedIncomeForBudgets(t, tc.configuredMinor, tc.txns, start, end, "USD", rates)
 			if got != tc.wantMinor {
-				t.Errorf("IncomeForBudgets() = %d, want %d", got, tc.wantMinor)
+				t.Errorf("checkedIncomeForBudgets(t, ) = %d, want %d", got, tc.wantMinor)
 			}
 		})
 	}
@@ -373,4 +373,21 @@ func TestIncomeBasisSkipsExcludedFromReports(t *testing.T) {
 			t.Errorf("mode %s: excluded income must not count: got %d, want 300000", mode, got)
 		}
 	}
+}
+func checkedAveragedIncome(t *testing.T, mode string, paycheckMinMinor, configuredMinor int64, sources IncomeSources, txns []domain.Transaction, monthStart time.Time, months int, base string, rates currency.Rates) int64 {
+	t.Helper()
+	got, err := AveragedIncomeChecked(mode, paycheckMinMinor, configuredMinor, sources, txns, monthStart, months, base, rates)
+	if err != nil {
+		t.Fatalf("AveragedIncomeChecked: %v", err)
+	}
+	return got
+}
+
+func checkedIncomeForBudgets(t *testing.T, configuredMinor int64, txns []domain.Transaction, start, end time.Time, base string, rates currency.Rates) int64 {
+	t.Helper()
+	got, err := IncomeForBudgetsChecked(configuredMinor, txns, start, end, base, rates)
+	if err != nil {
+		t.Fatalf("IncomeForBudgetsChecked: %v", err)
+	}
+	return got
 }

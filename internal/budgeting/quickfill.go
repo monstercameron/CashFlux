@@ -123,8 +123,13 @@ func QuickFills(budget domain.Budget, all []domain.Transaction, in QuickFillInpu
 	// The previous period's effective budget: the base limit plus any one-time
 	// boost that applied to it. A plan, not spending — Kind says so, and the UI
 	// labels it apart from the three figures above.
-	lastLimit := normalizedLimit(budget, in.Rates).Amount + budget.PeriodBoost(prevStart)
-	out = append(out, QuickFill{Key: QuickFillPriorLimit, Kind: QuickFillLimit, Amount: money.New(lastLimit, cur)})
+	prior, err := BudgetBaseAt(budget.WithBaseCurrency(cur), prevStart)
+	if err == nil {
+		prior, err = prior.Add(money.New(budget.PeriodBoost(prevStart), cur))
+		if err == nil {
+			out = append(out, QuickFill{Key: QuickFillPriorLimit, Kind: QuickFillLimit, Amount: prior})
+		}
+	}
 
 	if in.HasUnderfunded {
 		out = append(out, QuickFill{Key: QuickFillUnderfunded, Kind: QuickFillTarget, Amount: money.New(in.Underfunded.Amount, cur)})

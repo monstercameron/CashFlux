@@ -1328,47 +1328,6 @@ func registerBudgetsSurface() {
 	// heavily the name still lost the fraction of a pixel that turns "Transportation"
 	// into "Transportati…" on a 2× display. With no deficit there is nothing to
 	// shrink, and the name is never charged for the note's presence.
-	// `flex: 1 1 0` gave this a ZERO basis, which was harmless while it was the
-	// head's flexible member and could grow into slack. Once the markers stopped
-	// shrinking there was no slack left, so the button computed to width 0 — and a
-	// zero-width button still PAINTS its 16px icon, straight through the marker
-	// beside it. The overlap is invisible to a bounding-box check because the box
-	// really is 0 wide; only the icon overflows it (Cam, 2026-08-31).
-	//
-	// The zero basis STAYS for wide rows: showing the note's own words there is the
-	// point of the marker, and it earns that space by taking only what is left over.
-	// What changes is that the box can no longer leak — overflow:hidden means a
-	// button squeezed to nothing clips its icon instead of painting it over the
-	// marker beside it — and that below the glyph threshold it stops flexing at all
-	// and simply sizes to the icon (see the narrow-width rule further down). Sizing
-	// to content at EVERY width was the wrong correction: it let the button grow to
-	// 736px on a wide row and shove the markers out of the cell.
-	rule(".budget-crow-notes",
-		display("inline-flex"),
-		alignItems("center"),
-		gap("0.3rem"),
-		flex("1 1 0"),
-		overflow("hidden"),
-		minWidth("0"),
-		padding("0"),
-		border("0"),
-		background("none"),
-		lineHeight("1"),
-		cursor("pointer"),
-		color("var(--muted)"),
-	)
-	// The note's text ellipsizes into whatever the name leaves behind.
-	rule(".budget-crow-notes .budget-crow-notes-text",
-		minWidth("0"),
-		overflow("hidden"),
-		textOverflow("ellipsis"),
-		whiteSpace("nowrap"),
-		fontSize("var(--type-12)"),
-	)
-	// Narrow panes drop the note text and keep the icon: at that width the row has
-	// already given up its meter and its "left" phrase, so prose is the wrong thing
-	// to spend the remaining space on. The note is still one click away.
-	ruleContentMax(860-railCollapsedPx, ".budget-crow-notes-text", display("none"))
 	// Below ~900px of content the six-column row cannot hold six legible columns:
 	// the first attempt kept all of them and simply shrank the flexible tracks,
 	// which produced "Groce…", "Transpor…" and markers ellipsized to one letter.
@@ -1379,8 +1338,6 @@ func registerBudgetsSurface() {
 	ruleContentMax(900, ".budget-crow-left", display("none"))
 	ruleContentMax(900, ".budget-crow",
 		gridTemplateColumns("minmax(7.5rem, 1fr) minmax(0, 1.2fr) 10.5rem 8.5rem 4.6rem"))
-	rule(".budget-crow-notes:hover", color("var(--text)"))
-	rule(".budget-crow-notes:focus-visible", color("var(--text)"))
 	// In the chip slot the LAST MONTH tag is an inline chip, not an overline above a bar.
 	rule(".budget-crow .budget-lastmonth-tag", margin("0"), alignSelf("center"))
 	// Narrow columns: drop the meter and the left phrase, keep name/amount/chip/menu

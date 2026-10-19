@@ -26,9 +26,12 @@ import (
 
 // recurringBudgetCoverage returns every category covered directly or through a
 // budget's parent category.
-func recurringBudgetCoverage(budgets []domain.Budget, categories []domain.Category) map[string]bool {
+func recurringBudgetCoverage(budgets []domain.Budget, categories []domain.Category, memberID string) map[string]bool {
 	roots := make([]string, 0)
 	for _, budget := range budgets {
+		if memberID != "" && budget.Scope == domain.ScopeIndividual && budget.OwnerID != memberID {
+			continue
+		}
 		roots = append(roots, budget.TrackedCategoryIDs()...)
 	}
 	return categorytree.DescendantsOfAll(categories, roots)
@@ -44,13 +47,14 @@ func recurringBudgetCoverage(budgets []domain.Budget, categories []domain.Catego
 func budgetRecurringWidget(props budgetSummaryProps) ui.Node {
 	_ = uistate.UseDataRevision().Get()
 	app := props.App
+	activeMember := uistate.UseActiveMember().Get()
 	nav := router.UseNavigate()
 	goToRecurring := ui.UseEvent(Prevent(func() { nav.Navigate(uistate.RoutePath("/recurring")) }))
 	open := ui.UseState(false)
 	toggleOpen := ui.UseEvent(Prevent(func() { open.Set(!open.Get()) }))
 	toggleOnClick := OnClick(toggleOpen)
 	manageOnClick := OnClick(goToRecurring)
-	recurNow := time.Now()
+	recurNow := time.Now().UTC()
 	recurStart, recurEnd := uistate.UsePeriod().Get().Range()
 
 	base := app.Settings().BaseCurrency
@@ -63,7 +67,7 @@ func budgetRecurringWidget(props budgetSummaryProps) ui.Node {
 	// category coverage is resolved so income can never inflate either section.
 	recs := make([]domain.Recurring, 0)
 	for _, r := range app.Recurring() {
-		if r.Active() && r.MonthlyEquivalent() < 0 {
+		if r.Active() && r.Amount.IsNegative() {
 			recs = append(recs, r)
 		}
 	}
@@ -71,9 +75,16 @@ func budgetRecurringWidget(props budgetSummaryProps) ui.Node {
 		return Fragment() // nothing detected yet — stay quiet
 	}
 	absMonthly := func(r domain.Recurring) int64 {
-		m := r.MonthlyEquivalent()
+		m, err := recurringMonthlyEquivalentChecked(r)
+		if err != nil {
+			return 0
+		}
 		if m < 0 {
-			return -m
+			abs, err := money.Abs(m)
+			if err != nil {
+				return 0
+			}
+			return abs
 		}
 		return m
 	}
@@ -86,22 +97,40 @@ func budgetRecurringWidget(props budgetSummaryProps) ui.Node {
 		catName[c.ID] = c.Name
 	}
 
-	coveredCategories := recurringBudgetCoverage(app.Budgets(), app.Categories())
+	coveredCategories := recurringBudgetCoverage(app.Budgets(), app.Categories(), activeMember)
 	covered := make([]domain.Recurring, 0, len(recs))
 	unbudgetedByCategory := make(map[string]int64)
 	var coveredMonthly, unbudgetedMonthly int64
+	validBillCount := 0
 	for _, r := range recs {
-		amount, err := currency.ConvertBetween(-r.MonthlyEquivalent(), r.Amount.Currency, base, rates)
+		amount, err := recurringMonthlyBase(r, base, rates)
 		if err != nil {
 			continue
 		}
+		validBillCount++
 		if coveredCategories[r.CategoryID] {
 			covered = append(covered, r)
-			coveredMonthly += amount
+			coveredMonthly, err = money.Add(coveredMonthly, amount)
+			if err != nil {
+				return Div(Attr("role", "alert"), uistate.T("budgets.annualGridError"))
+			}
 			continue
 		}
-		unbudgetedByCategory[r.CategoryID] += amount
-		unbudgetedMonthly += amount
+		unbudgetedByCategory[r.CategoryID], err = money.Add(unbudgetedByCategory[r.CategoryID], amount)
+		if err != nil {
+			return Div(Attr("role", "alert"), uistate.T("budgets.annualGridError"))
+		}
+		unbudgetedMonthly, err = money.Add(unbudgetedMonthly, amount)
+		if err != nil {
+			return Div(Attr("role", "alert"), uistate.T("budgets.annualGridError"))
+		}
+	}
+	if validBillCount == 0 {
+		return Fragment()
+	}
+	totalMonthly, err := money.Add(coveredMonthly, unbudgetedMonthly)
+	if err != nil {
+		return Div(Attr("role", "alert"), uistate.T("budgets.annualGridError"))
 	}
 	sort.SliceStable(covered, func(i, j int) bool {
 		return absMonthly(covered[i]) > absMonthly(covered[j])
@@ -139,9 +168,9 @@ func budgetRecurringWidget(props budgetSummaryProps) ui.Node {
 		Div(
 			Span(css.Class("brc-total-label", tw.TextDim), uistate.T("budgets.recurring.monthlyBillsLabel")),
 			Span(css.Class("brc-total-val fig", tw.Fold(tw.FontDisplay)),
-				uistate.T("budgets.recurring.totalVal", fmtMoney(money.New(coveredMonthly+unbudgetedMonthly, base)))),
+				uistate.T("budgets.recurring.totalVal", fmtMoney(money.New(totalMonthly, base)))),
 		),
-		Span(css.Class("brc-count", tw.TextDim), uistate.T("budgets.recurring.billCount", len(recs))),
+		Span(css.Class("brc-count", tw.TextDim), uistate.T("budgets.recurring.billCount", validBillCount)),
 	)
 
 	// Collapsible, like the two sections below it. This is the tallest tile on the
@@ -163,7 +192,7 @@ func budgetRecurringWidget(props budgetSummaryProps) ui.Node {
 			Span(css.Class("budget-fold-toggle-label"), uistate.T("budgets.recurring.allCategoriesTitle")),
 			Span(css.Class("budget-fold-toggle-hint"),
 				uistate.TN("budgets.recurring.billFoldOne", "budgets.recurring.billFoldMany",
-					len(recs), fmtMoney(money.New(coveredMonthly+unbudgetedMonthly, base)))),
+					validBillCount, fmtMoney(money.New(totalMonthly, base)))),
 		),
 	)
 
@@ -253,9 +282,10 @@ func budgetRecurringRow(r domain.Recurring, catName map[string]string, now, peri
 	// Amount block: the charge as-is, plus a per-month equivalent when the cadence
 	// isn't already monthly (so a $1,200 annual bill reads "≈ $100/mo" too).
 	amountNodes := []ui.Node{Span(css.Class("brc-amt fig", tw.Fold(tw.FontDisplay)), fmtMoney(r.Amount))}
-	if r.Cadence != domain.CadenceMonthly {
+	monthly, monthlyErr := recurringMonthlyEquivalentChecked(r)
+	if r.Cadence != domain.CadenceMonthly && monthlyErr == nil {
 		amountNodes = append(amountNodes, Span(css.Class("brc-permo fig", tw.TextFaint),
-			uistate.T("budgets.recurring.perMonth", fmtMoney(money.New(r.MonthlyEquivalent(), r.Amount.Currency)))))
+			uistate.T("budgets.recurring.perMonth", fmtMoney(money.New(monthly, r.Amount.Currency)))))
 	}
 
 	return Div(css.Class("brc-row"), Attr("data-testid", "budgets-recurring-row"),
@@ -266,6 +296,35 @@ func budgetRecurringRow(r domain.Recurring, catName map[string]string, now, peri
 		),
 		Div(css.Class("brc-amtcol"), amountNodes),
 	)
+}
+
+func recurringMonthlyEquivalentChecked(r domain.Recurring) (int64, error) {
+	switch r.Cadence {
+	case domain.CadenceWeekly:
+		return money.MulDiv(r.Amount.Amount, 52, 12, money.RoundTowardZero)
+	case domain.CadenceBiweekly:
+		return money.MulDiv(r.Amount.Amount, 26, 12, money.RoundTowardZero)
+	case domain.CadenceSemimonthly:
+		return money.MulDiv(r.Amount.Amount, 2, 1, money.RoundTowardZero)
+	case domain.CadenceQuarterly:
+		return money.MulDiv(r.Amount.Amount, 1, 3, money.RoundTowardZero)
+	case domain.CadenceYearly:
+		return money.MulDiv(r.Amount.Amount, 1, 12, money.RoundTowardZero)
+	default:
+		return r.Amount.Amount, nil
+	}
+}
+
+func recurringMonthlyBase(r domain.Recurring, base string, rates currency.Rates) (int64, error) {
+	monthly, err := recurringMonthlyEquivalentChecked(r)
+	if err != nil {
+		return 0, err
+	}
+	positive, err := money.Neg(monthly)
+	if err != nil {
+		return 0, err
+	}
+	return currency.ConvertBetween(positive, r.Amount.Currency, base, rates)
 }
 
 // recurDateKey / recurDateClass give each date state its own words and tone

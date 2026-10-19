@@ -23,13 +23,14 @@
 package untracked
 
 import (
+	"fmt"
 	"sort"
 	"time"
 
-	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/money"
 )
 
 // Candidate is one expense category with spending that no budget counts.
@@ -69,7 +70,10 @@ type Hint func(categoryID string) (minor int64, period domain.Period, ok bool)
 // mortgage payment recorded as a transfer to a liability is out of scope here for
 // exactly the reason it is out of scope there.
 func Scan(txns []domain.Transaction, cats []domain.Category, budgets []domain.Budget,
-	from, to time.Time, rates currency.Rates, base string, hint Hint) []Candidate {
+	from, to time.Time, rates currency.Rates, base string, fallbackMonths int, hint Hint) ([]Candidate, error) {
+	if fallbackMonths <= 0 {
+		return nil, fmt.Errorf("untracked scan: fallback period must be positive")
+	}
 
 	tracked := map[string]bool{}
 	for _, b := range budgets {
@@ -87,13 +91,20 @@ func Scan(txns []domain.Transaction, cats []domain.Category, budgets []domain.Bu
 		if !dateutil.InRange(t.Date, from, to) {
 			continue
 		}
-		conv, err := rates.Convert(t.Amount.Abs(), base)
+		magnitude, err := t.Amount.AbsChecked()
+		if err != nil {
+			return nil, fmt.Errorf("untracked scan: transaction %q amount: %w", t.ID, err)
+		}
+		conv, err := rates.Convert(magnitude, base)
 		if err != nil {
 			// One unconvertible transaction must not blank the whole category; skip
 			// just this line, the same way the summary's FX handling does.
 			continue
 		}
-		spent[t.CategoryID] += conv.Amount
+		spent[t.CategoryID], err = money.Add(spent[t.CategoryID], conv.Amount)
+		if err != nil {
+			return nil, fmt.Errorf("untracked scan: sum category %q: %w", t.CategoryID, err)
+		}
 		if t.Date.After(last[t.CategoryID]) {
 			last[t.CategoryID] = t.Date
 		}
@@ -109,12 +120,16 @@ func Scan(txns []domain.Transaction, cats []domain.Category, budgets []domain.Bu
 		if amt <= 0 {
 			continue
 		}
+		monthly, err := money.MulDiv(amt, 1, int64(fallbackMonths), money.RoundHalfAwayFromZero)
+		if err != nil {
+			return nil, fmt.Errorf("untracked scan: normalize category %q over %d months: %w", id, fallbackMonths, err)
+		}
 		c := Candidate{
 			CategoryID:   id,
 			Name:         name[id],
 			SpentMinor:   amt,
 			LastSeen:     last[id],
-			SuggestMinor: amt,
+			SuggestMinor: monthly,
 			Period:       domain.PeriodMonthly,
 		}
 		if hint != nil {
@@ -130,7 +145,7 @@ func Scan(txns []domain.Transaction, cats []domain.Category, budgets []domain.Bu
 		}
 		return out[i].Name < out[j].Name
 	})
-	return out
+	return out, nil
 }
 
 // Choice is one row's resolved decision: track this category, at this amount,
@@ -166,29 +181,44 @@ type Effect struct {
 	ToAssignAfterMinor  int64
 }
 
-// Impact projects a set of choices onto the plan.
+// Impact projects a set of choices onto the plan with checked minor-unit sums.
 //
 // pool is the income basis (plus any rollover) and assigned the current total
 // across budgets and savings — the same two numbers the summary's To Assign is
 // built from, so this can never disagree with the figure on screen.
-func Impact(choices []Choice, pool, assigned int64) Effect {
-	e := Effect{
-		ToAssignBeforeMinor: budgeting.ToAssign(pool, assigned),
+func Impact(choices []Choice, pool, assigned int64) (Effect, error) {
+	toAssignBefore, err := money.Sub(pool, assigned)
+	if err != nil {
+		return Effect{}, fmt.Errorf("untracked impact: calculate current To Assign: %w", err)
 	}
+	e := Effect{ToAssignBeforeMinor: toAssignBefore}
 	for _, c := range choices {
 		e.Categories++
-		e.TrackedMinor += c.AmountMinor
+		e.TrackedMinor, err = money.Add(e.TrackedMinor, c.AmountMinor)
+		if err != nil {
+			return Effect{}, fmt.Errorf("untracked impact: sum tracked amount: %w", err)
+		}
 		switch {
 		case c.BudgetID == "":
 			e.NewBudgets++
-			e.AssignedDeltaMinor += c.AmountMinor
+			e.AssignedDeltaMinor, err = money.Add(e.AssignedDeltaMinor, c.AmountMinor)
 		case c.Raise:
 			e.Raises++
-			e.AssignedDeltaMinor += c.AmountMinor
+			e.AssignedDeltaMinor, err = money.Add(e.AssignedDeltaMinor, c.AmountMinor)
+		}
+		if err != nil {
+			return Effect{}, fmt.Errorf("untracked impact: sum assigned change: %w", err)
 		}
 	}
-	e.ToAssignAfterMinor = budgeting.ToAssign(pool, assigned+e.AssignedDeltaMinor)
-	return e
+	newAssigned, err := money.Add(assigned, e.AssignedDeltaMinor)
+	if err != nil {
+		return Effect{}, fmt.Errorf("untracked impact: calculate new assigned total: %w", err)
+	}
+	e.ToAssignAfterMinor, err = money.Sub(pool, newAssigned)
+	if err != nil {
+		return Effect{}, fmt.Errorf("untracked impact: calculate new To Assign: %w", err)
+	}
+	return e, nil
 }
 
 // OverspendRisk reports the destinations that would be pushed over their limit by
@@ -196,22 +226,30 @@ func Impact(choices []Choice, pool, assigned int64) Effect {
 // exists to make visible. spentOf and limitOf report a budget's current figures.
 //
 // Returned budget IDs are sorted so the warning is stable between renders.
-func OverspendRisk(choices []Choice, spentOf, limitOf func(budgetID string) int64) []string {
+func OverspendRisk(choices []Choice, spentOf, limitOf func(budgetID string) int64) ([]string, error) {
 	add := map[string]int64{}
 	for _, c := range choices {
 		if c.BudgetID == "" || c.Raise {
 			continue
 		}
-		add[c.BudgetID] += c.AmountMinor
+		next, err := money.Add(add[c.BudgetID], c.AmountMinor)
+		if err != nil {
+			return nil, fmt.Errorf("untracked overspend risk: sum destination %q: %w", c.BudgetID, err)
+		}
+		add[c.BudgetID] = next
 	}
 	var out []string
 	for id, extra := range add {
-		if spentOf(id)+extra > limitOf(id) {
+		projected, err := money.Add(spentOf(id), extra)
+		if err != nil {
+			return nil, fmt.Errorf("untracked overspend risk: project destination %q: %w", id, err)
+		}
+		if projected > limitOf(id) {
 			out = append(out, id)
 		}
 	}
 	sort.Strings(out)
-	return out
+	return out, nil
 }
 
 // TotalSpent sums what the candidates spent in the scanned window.
@@ -220,10 +258,14 @@ func OverspendRisk(choices []Choice, spentOf, limitOf func(budgetID string) int6
 // money left the household outside any budget. Both used to derive that
 // separately — the strip inline in view code, the hero not at all — and two
 // places computing one fact is how they drift.
-func TotalSpent(cands []Candidate) int64 {
+func TotalSpent(cands []Candidate) (int64, error) {
 	var total int64
 	for _, c := range cands {
-		total += c.SpentMinor
+		var err error
+		total, err = money.Add(total, c.SpentMinor)
+		if err != nil {
+			return 0, fmt.Errorf("untracked total spent: %w", err)
+		}
 	}
-	return total
+	return total, nil
 }

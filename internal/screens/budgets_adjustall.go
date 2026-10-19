@@ -15,6 +15,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -90,7 +91,7 @@ func AdjustAllBody(_ struct{}) ui.Node {
 	// Whether the window being viewed has already closed — the same test the
 	// budgets hero uses to decide between "hasn't arrived yet" and "never arrived".
 	_, viewedEnd := vw.Range()
-	viewedClosed := !time.Now().Before(viewedEnd)
+	viewedClosed := adjustAllPeriodClosed(viewedEnd, time.Now())
 	// How far each budget's cap sits off its stored limit this period. Needed
 	// under BOTH scopes: a this-period write moves the cap directly, and a
 	// permanent one has to check that the limit it writes still clears whatever
@@ -145,7 +146,7 @@ func AdjustAllBody(_ struct{}) ui.Node {
 		n := len(writes)
 		uistate.BumpDataRevision()
 		uistate.RequestPersist()
-		uistate.PostUndoable(uistate.T(adjustAppliedKey(scope), plural(n, "budget"), formatAdjustPct(pct)))
+		uistate.PostUndoable(uistate.T(adjustAppliedKey(scope), budgetCountPhrase(n), formatAdjustPctCopy(pct)))
 		close()
 	}))
 
@@ -210,7 +211,7 @@ func adjustAllPreviewNode(app *appstate.App, preview budgeting.AdjustPreview, pc
 				}))
 	}
 	return Div(css.Class("adjustall-preview"), Attr("data-testid", "adjustall-preview"),
-		P(css.Class("adjustall-count"), Attr("data-testid", "adjustall-count"), uistate.T("budgets.adjustAllCount", plural(preview.Count(), "budget"), formatAdjustPct(pct))),
+		P(css.Class("adjustall-count"), Attr("data-testid", "adjustall-count"), uistate.T("budgets.adjustAllCount", budgetCountPhrase(preview.Count()), formatAdjustPctCopy(pct))),
 		totalNode, normalizedSummary, normalizedLines, Div(css.Class("adjustall-rows"), Attr("data-testid", "adjustall-rows"), rows))
 }
 
@@ -229,7 +230,7 @@ func adjustAllSkippedNode(app *appstate.App, preview budgeting.AdjustPreview, va
 			names = append(names, budgetTitle(s.Budget.Name, budgetCategoryName(app, s.Budget.CategoryID)))
 		}
 		lines = append(lines, P(css.Class("budget-cat-fate", tw.TextFaint), Attr("data-testid", "adjustall-skipped-"+string(reason)),
-			uistate.T(adjustSkipKey(reason), plural(len(skipped), "budget"), strings.Join(names, ", "))))
+			uistate.T(adjustSkipKey(reason), budgetCountPhrase(len(skipped)), strings.Join(names, ", "))))
 	}
 	if len(lines) == 0 {
 		return Fragment()
@@ -252,7 +253,18 @@ func adjustAllAckNode(needsAck bool, scope budgeting.AdjustScope, pct float64, c
 	}
 	return Label(css.Class("adjustall-ack"), Attr("data-testid", "adjustall-ack-label"),
 		Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "adjustall-ack"), Attr("style", "flex-shrink:0"), ackOnChange}, checkedAttr(ack)...)...),
-		Span(uistate.T(key, plural(count, "budget"), formatAdjustPct(math.Abs(pct)))))
+		Span(uistate.T(key, budgetCountPhrase(count), formatAdjustPctCopy(math.Abs(pct)))))
+}
+
+func adjustAllPeriodClosed(end, now time.Time) bool {
+	return !dateutil.WallClockUTC(now).Before(end)
+}
+
+func budgetCountPhrase(count int) string {
+	if count == 1 {
+		return uistate.T("budgets.countOne")
+	}
+	return uistate.T("budgets.countMany", count)
 }
 
 type adjustAllFormProps struct {
@@ -275,7 +287,6 @@ type adjustAllFormProps struct {
 func adjustAllFormNode(props adjustAllFormProps) ui.Node {
 	return Form(css.Class("acct-edit-form"), Attr("data-testid", "adjustall-form"), OnSubmit(props.OnApply),
 		Div(css.Class("modal-scroll"),
-			P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "adjustall-intro"), Style(map[string]string{"margin": "0"}), uistate.T(adjustIntroKey(props.Scope))),
 			labeledField(uistate.T("budgets.adjustAllFieldLabel"), Fragment(
 				Div(css.Class("adjustall-field"),
 					Input(css.Class("field"), Type("number"), Attr("data-testid", "adjustall-pct"), Attr("autofocus", ""), Attr("inputmode", "decimal"),
@@ -283,18 +294,15 @@ func adjustAllFormNode(props adjustAllFormProps) ui.Node {
 						Attr("max", formatAdjustPct(budgeting.AdjustMaxPct)), Step("0.5"), Placeholder("5"), OnInput(props.OnPct), uiw.FieldValue(props.PctText)),
 					Span(css.Class("adjustall-suffix", tw.TextFaint), "%")),
 				Span(css.Class("budget-owner-hint", tw.TextFaint), Attr("data-testid", "adjustall-hint"),
-					uistate.T("budgets.adjustAllFieldHint", formatAdjustPct(budgeting.AdjustMinPct), formatAdjustPct(budgeting.AdjustMaxPct))))),
-			labeledField(uistate.T("budgets.adjustAllScopeLabel"), uiw.Segmented(uiw.SegmentedProps{
-				Label: uistate.T("budgets.adjustAllScopeLabel"), Selected: string(props.Scope),
+					uistate.T("budgets.adjustAllFieldHint", formatAdjustPctCopy(budgeting.AdjustMinPct), formatAdjustPctCopy(budgeting.AdjustMaxPct))))),
+			labeledField(uistate.T("bv6g.adjust.scopeLabel"), uiw.Segmented(uiw.SegmentedProps{
+				Label: uistate.T("bv6g.adjust.scopeLabel"), Selected: string(props.Scope),
 				Options: []uiw.SegOption{
-					{Value: string(budgeting.AdjustThisPeriod), Label: uistate.T("budgets.adjustAllScopeThis"), TestID: "adjustall-scope-this"},
-					{Value: string(budgeting.AdjustEveryPeriod), Label: adjustEveryPeriodLabel(), TestID: "adjustall-scope-every"},
+					{Value: string(budgeting.AdjustThisPeriod), Label: uistate.T("bv6g.adjust.thisPeriod"), TestID: "adjustall-scope-this"},
+					{Value: string(budgeting.AdjustEveryPeriod), Label: uistate.T("bv6g.adjust.allPeriods"), TestID: "adjustall-scope-every"},
 				}, OnSelect: props.OnScope,
 			})),
-			P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "adjustall-scope-hint"), Style(map[string]string{"margin": "0"}), props.ImpactHint),
-			If(props.Scope == budgeting.AdjustThisPeriod,
-				P(ClassStr(adjustPeriodClass(props.ViewedClosed)), Attr("data-testid", "adjustall-period"), Style(map[string]string{"margin": "0"}),
-					uistate.T(adjustPeriodKey(props.ViewedClosed), props.PeriodLabel))),
+			P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "adjustall-scope-hint"), Style(map[string]string{"margin": "0"}), adjustScopeDescription(props.Scope)),
 			If(props.InlineError != "", P(ClassStr("form-err"), Attr("data-testid", "adjustall-err"), Attr("role", "alert"), props.InlineError)),
 			props.Preview, props.Skipped, props.Ack),
 		Div(css.Class("modal-foot"),
@@ -311,7 +319,7 @@ func adjustAllInlineError(raw string, parseErr error, pct float64, normalization
 	case pct == 0:
 		return uistate.T("budgets.adjustAllZero")
 	case !budgeting.ValidAdjustPct(pct):
-		return uistate.T("budgets.adjustAllOutOfRange", formatAdjustPct(budgeting.AdjustMinPct), formatAdjustPct(budgeting.AdjustMaxPct))
+		return uistate.T("budgets.adjustAllOutOfRange", formatAdjustPctCopy(budgeting.AdjustMinPct), formatAdjustPctCopy(budgeting.AdjustMaxPct))
 	case normalizationErr != nil || preview.Error != nil || deltaErr != nil:
 		return uistate.T("budgets.incomplete")
 	case preview.Count() == 0:
@@ -406,6 +414,21 @@ func adjustAppliedKey(scope budgeting.AdjustScope) string {
 // "5%" and "-12.5%" rather than "5.000000%".
 func formatAdjustPct(pct float64) string {
 	return strconv.FormatFloat(pct, 'f', -1, 64)
+}
+
+func formatAdjustPctCopy(pct float64) string {
+	value := formatAdjustPct(pct)
+	if strings.HasPrefix(value, "-") {
+		return "−" + strings.TrimPrefix(value, "-")
+	}
+	return value
+}
+
+func adjustScopeDescription(scope budgeting.AdjustScope) string {
+	if scope.IsPermanent() {
+		return uistate.T("bv6g.adjust.allHint")
+	}
+	return uistate.T("bv6g.adjust.thisHint")
 }
 
 // adjustDeltaKey / adjustDeltaTone name and tone the change to the total. A bulk

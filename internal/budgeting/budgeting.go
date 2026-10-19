@@ -141,11 +141,6 @@ func NewNettedLedger(all []domain.Transaction) NettedLedger {
 	return NettedLedger{transactions: nettedForSpending(all)}
 }
 
-// SpentFromNetted sums covered spend from a pre-netted ledger slice.
-func SpentFromNetted(budget domain.Budget, ledger NettedLedger, start, end time.Time, rates currency.Rates, covers map[string]bool) (money.Money, error) {
-	return spentCoveredNetted(budget, ledger.transactions, start, end, rates, func(id string) bool { return budget.TracksCategory(id) || covers[id] })
-}
-
 func spentCoveredNetted(budget domain.Budget, all []domain.Transaction, start, end time.Time, rates currency.Rates, covers func(string) bool) (money.Money, error) {
 	limit := normalizedLimit(budget, rates)
 	total := money.Zero(limit.Currency)
@@ -432,9 +427,8 @@ func IsDuplicateBudget(existing []domain.Budget, categoryID, period, ownerID, ex
 type RollupSummary struct {
 	// Excluded counts budgets omitted because a calculation or conversion failed.
 	Excluded int
-	// OverCount and NearCount are how many budgets are past or approaching their
-	// number. They key off State, so a SAVING budget's "over" means it exceeded
-	// its target — a success — exactly as classifyDirected intends.
+	// OverCount and NearCount count statuses past or approaching their directed
+	// thresholds. For a saving target, StateOver means the goal was met or exceeded.
 	OverCount, NearCount int
 	// SpentMinor and LimitMinor cover the SPENDING budgets only.
 	SpentMinor, LimitMinor int64
@@ -515,15 +509,4 @@ func SummarizeRollupChecked(statuses []Status) (RollupSummary, error) {
 		}
 	}
 	return s, nil
-}
-
-// SummarizeRollup preserves the original same-currency API. Invalid or mixed
-// currency input is refused by returning an empty summary; callers that need to
-// handle errors should use SummarizeRollupChecked.
-func SummarizeRollup(statuses []Status) RollupSummary {
-	s, err := SummarizeRollupChecked(statuses)
-	if err != nil {
-		return RollupSummary{}
-	}
-	return s
 }

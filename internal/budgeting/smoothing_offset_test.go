@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
 )
@@ -30,21 +31,21 @@ func TestSmoothingLandingOffset(t *testing.T) {
 	}
 
 	// Landing month, bill posted: full magnitude offsets.
-	if got, _ := SmoothingLandingItems(budget, []domain.Recurring{annual}, posted, juneStart, julyStart); got != 60000 {
+	if got, _ := checkedSmoothingLandingItems(t, budget, []domain.Recurring{annual}, posted, juneStart, julyStart); got != 60000 {
 		t.Errorf("landing offset = %d, want 60000", got)
 	}
 	// Landing month, bill NOT posted yet: nothing offsets (never hide real spending).
-	if got, _ := SmoothingLandingItems(budget, []domain.Recurring{annual}, nil, juneStart, julyStart); got != 0 {
+	if got, _ := checkedSmoothingLandingItems(t, budget, []domain.Recurring{annual}, nil, juneStart, julyStart); got != 0 {
 		t.Errorf("unposted offset = %d, want 0", got)
 	}
 	// Off month: no landing, no offset.
-	if got, _ := SmoothingLandingItems(budget, []domain.Recurring{annual}, posted, julyStart, augStart); got != 0 {
+	if got, _ := checkedSmoothingLandingItems(t, budget, []domain.Recurring{annual}, posted, julyStart, augStart); got != 0 {
 		t.Errorf("off-month offset = %d, want 0", got)
 	}
 	// Flag off: never offsets.
 	plain := annual
 	plain.SmoothIntoBudgets = false
-	if got, _ := SmoothingLandingItems(budget, []domain.Recurring{plain}, posted, juneStart, julyStart); got != 0 {
+	if got, _ := checkedSmoothingLandingItems(t, budget, []domain.Recurring{plain}, posted, juneStart, julyStart); got != 0 {
 		t.Errorf("non-smoothed offset = %d, want 0", got)
 	}
 }
@@ -53,12 +54,13 @@ func TestSmoothingLandingOffset(t *testing.T) {
 // offset never drives Spent below zero.
 func TestApplySmoothingOffset(t *testing.T) {
 	st := Status{
+		Limit:     money.New(20000, "USD"),
 		Spent:     money.New(70000, "USD"), // $700 spent (annual bill landed)
 		Remaining: money.New(-50000, "USD"),
 		Percent:   350,
 		State:     StateOver,
 	}
-	adj := ApplySmoothingOffset(st, 60000, DefaultNearThreshold)
+	adj := checkedApplySmoothingOffset(t, st, 60000, DefaultNearThreshold)
 	if adj.Spent.Amount != 10000 || adj.Remaining.Amount != 10000 {
 		t.Errorf("adjusted = spent %d remaining %d, want 10000/10000", adj.Spent.Amount, adj.Remaining.Amount)
 	}
@@ -66,21 +68,38 @@ func TestApplySmoothingOffset(t *testing.T) {
 		t.Errorf("adjusted state/percent = %s/%d, want ok/50", adj.State, adj.Percent)
 	}
 	// Offset larger than spent clamps to zero spent.
-	huge := ApplySmoothingOffset(st, 999999, DefaultNearThreshold)
+	huge := checkedApplySmoothingOffset(t, st, 999999, DefaultNearThreshold)
 	if huge.Spent.Amount != 0 {
 		t.Errorf("clamped spent = %d, want 0", huge.Spent.Amount)
 	}
 	// Zero offset is a no-op.
-	same := ApplySmoothingOffset(st, 0, DefaultNearThreshold)
+	same := checkedApplySmoothingOffset(t, st, 0, DefaultNearThreshold)
 	if same.Spent != st.Spent || same.Remaining != st.Remaining || same.State != st.State {
 		t.Errorf("zero offset changed the status")
 	}
 }
 
 func TestApplySmoothingOffsetUsesBudgetDirection(t *testing.T) {
-	st := Status{Budget: domain.Budget{Direction: domain.DirectionSave}, Spent: money.New(10000, "USD"), Remaining: money.New(40000, "USD"), Percent: 20, State: StateOK}
-	got := ApplySmoothingOffset(st, 1, DefaultNearThreshold)
+	st := Status{Budget: domain.Budget{Direction: domain.DirectionSave}, Limit: money.New(50000, "USD"), Spent: money.New(10000, "USD"), Remaining: money.New(40000, "USD"), Percent: 20, State: StateOK}
+	got := checkedApplySmoothingOffset(t, st, 1, DefaultNearThreshold)
 	if got.State != StateOver {
 		t.Fatalf("saving budget below its target should remain short after offset; got state %s", got.State)
 	}
+}
+func checkedSmoothingLandingItems(t *testing.T, budget domain.Budget, recurrings []domain.Recurring, posted []domain.Transaction, start, end time.Time) (int64, []CommittedItem) {
+	t.Helper()
+	offset, items, err := SmoothingLandingItemsWithRates(budget, recurrings, posted, start, end, currency.Rates{Base: budget.Limit.Currency})
+	if err != nil {
+		t.Fatalf("SmoothingLandingItemsWithRates: %v", err)
+	}
+	return offset, items
+}
+
+func checkedApplySmoothingOffset(t *testing.T, status Status, offset int64, nearThreshold float64) Status {
+	t.Helper()
+	got, err := ApplySmoothingOffsetChecked(status, offset, nearThreshold)
+	if err != nil {
+		t.Fatalf("ApplySmoothingOffsetChecked: %v", err)
+	}
+	return got
 }

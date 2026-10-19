@@ -8,6 +8,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/money"
 )
 
 func TestBuildAnnualGrid(t *testing.T) {
@@ -95,5 +96,53 @@ func TestMonthlyLimitEquivalent(t *testing.T) {
 		if got.Amount != tc.want {
 			t.Errorf("PeriodEquivalent(%s, %d) = %d, want %d", tc.period, tc.limit, got.Amount, tc.want)
 		}
+	}
+}
+
+func TestAnnualGridSavingRowsDoNotCountAsSpendingOrOver(t *testing.T) {
+	budget := domain.Budget{ID: "save", Name: "Emergency fund", Limit: usd(10000), Direction: domain.DirectionSave}
+	transaction := expense(15000, "USD", "savings", "", "2026-01-10")
+	budget.CategoryID = "savings"
+	grid, err := BuildAnnualGrid([]domain.Budget{budget}, []domain.Transaction{transaction}, 2026, currency.Rates{Base: "USD"}, time.Monday,
+		time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if grid.Rows[0].Cells[0].Actual.Amount != 15000 || grid.Rows[0].Cells[0].Over {
+		t.Fatal("an on-target saving row must not be toned as overspending")
+	}
+	if grid.GrandPlan.Amount != 0 || grid.GrandActual.Amount != 0 || grid.MonthPlanTotals[0].Amount != 0 {
+		t.Fatalf("saving row leaked into spending totals: grand=%+v/%+v month=%+v", grid.GrandPlan, grid.GrandActual, grid.MonthPlanTotals[0])
+	}
+}
+
+func TestAnnualGridUsesMonthlyLimitHistory(t *testing.T) {
+	budget := domain.Budget{
+		ID: "history", Limit: usd(10000), Period: domain.PeriodMonthly,
+		LimitHistory: map[string]int64{"2026-01-01": 10000, "2026-03-01": 25000},
+	}
+	grid, err := BuildAnnualGrid([]domain.Budget{budget}, nil, 2026, currency.Rates{Base: "USD"}, time.Monday, time.Time{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if grid.Rows[0].Cells[0].Plan.Amount != 10000 || grid.Rows[0].Cells[1].Plan.Amount != 10000 || grid.Rows[0].Cells[2].Plan.Amount != 25000 {
+		t.Fatalf("monthly plans ignored history: Jan=%d Feb=%d Mar=%d", grid.Rows[0].Cells[0].Plan.Amount, grid.Rows[0].Cells[1].Plan.Amount, grid.Rows[0].Cells[2].Plan.Amount)
+	}
+}
+
+func TestAnnualGridKeepsRowsWithFXFailuresVisible(t *testing.T) {
+	budgets := []domain.Budget{
+		{ID: "usd", Name: "Groceries", Limit: money.New(10000, "USD")},
+		{ID: "eur", Name: "Travel", Limit: money.New(10000, "EUR")},
+	}
+	grid, err := BuildAnnualGrid(budgets, nil, 2026, currency.Rates{Base: "USD"}, time.Monday, time.Time{}, nil)
+	if err != nil {
+		t.Fatalf("one missing rate should not fail the whole grid: %v", err)
+	}
+	if len(grid.Rows) != 2 || grid.Rows[0].Error != nil || grid.Rows[1].Error == nil {
+		t.Fatalf("row errors = [%v, %v], want first complete and second failed", grid.Rows[0].Error, grid.Rows[1].Error)
+	}
+	if grid.GrandPlan.Amount != 120000 {
+		t.Fatalf("grand plan = %d, want complete USD row only (120000)", grid.GrandPlan.Amount)
 	}
 }

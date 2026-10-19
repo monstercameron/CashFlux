@@ -3,11 +3,13 @@
 package budgetplan
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/goals"
+	"github.com/monstercameron/CashFlux/internal/money"
 )
 
 // Projection is the future-month projection for one year of the annual grid.
@@ -23,6 +25,9 @@ type Projection struct {
 	Recurring       map[string]MonthAmounts // categoryID ("" = uncategorized)
 	GoalsByCategory map[string]MonthAmounts // categoryID
 	GoalsByBudget   map[string]MonthAmounts // budgetID
+	// Error reports arithmetic that could not be represented. Partial amounts are
+	// retained for inspection but callers must not present them as complete.
+	Error error
 }
 
 // projectionSteps bounds the recurring-occurrence walk so a degenerate imported
@@ -60,10 +65,15 @@ func Project(recs []domain.Recurring, gs []domain.Goal, year, fromMonth int, bas
 	yearEnd := time.Date(year+1, time.January, 1, 0, 0, 0, 0, time.UTC) // exclusive
 
 	for _, r := range recs {
-		if !r.Amount.IsNegative() { // only bills / money-out are projected spend
+		if !r.Active() || !r.Amount.IsNegative() { // only active bills / money-out are projected spend
 			continue
 		}
-		minor, err := currency.ConvertBetween(r.Amount.Abs().Amount, r.Amount.Currency, base, rates)
+		absolute, err := r.Amount.AbsChecked()
+		if err != nil {
+			p.Error = fmt.Errorf("recurring %q amount: %w", r.ID, err)
+			continue
+		}
+		minor, err := currency.ConvertBetween(absolute.Amount, r.Amount.Currency, base, rates)
 		if err != nil || minor == 0 {
 			continue
 		}
@@ -75,7 +85,12 @@ func Project(recs []domain.Recurring, gs []domain.Goal, year, fromMonth int, bas
 		for i := 0; i < projectionSteps && d.Before(yearEnd); i++ {
 			if !d.Before(yearStart) {
 				if mi := int(d.Month()) - 1; mi >= fromMonth {
-					amt[mi] += minor
+					v, err := checkedAdd(amt[mi], minor, base)
+					if err != nil {
+						p.Error = fmt.Errorf("recurring category %q: %w", r.CategoryID, err)
+					} else {
+						amt[mi] = v
+					}
 				}
 			}
 			next := r.Cadence.Next(d)
@@ -106,9 +121,19 @@ func Project(recs []domain.Recurring, gs []domain.Goal, year, fromMonth int, bas
 			}
 			any = true
 			if hasCat {
-				byCat[m] += minor
+				v, err := checkedAdd(byCat[m], minor, base)
+				if err != nil {
+					p.Error = fmt.Errorf("goal category %q: %w", g.CategoryID, err)
+				} else {
+					byCat[m] = v
+				}
 			} else {
-				byBudget[m] += minor
+				v, err := checkedAdd(byBudget[m], minor, base)
+				if err != nil {
+					p.Error = fmt.Errorf("goal budget amount: %w", err)
+				} else {
+					byBudget[m] = v
+				}
 			}
 		}
 		if !any {
@@ -116,17 +141,55 @@ func Project(recs []domain.Recurring, gs []domain.Goal, year, fromMonth int, bas
 		}
 		if hasCat {
 			cur := p.GoalsByCategory[g.CategoryID]
-			addInto(&cur, byCat)
+			if err := mergeMonths(&cur, byCat, base); err != nil {
+				p.Error = fmt.Errorf("goal category %q totals: %w", g.CategoryID, err)
+			}
 			p.GoalsByCategory[g.CategoryID] = cur
 		} else {
 			for _, bID := range g.BudgetIDs {
 				cur := p.GoalsByBudget[bID]
-				addInto(&cur, byBudget)
+				if err := mergeMonths(&cur, byBudget, base); err != nil {
+					p.Error = fmt.Errorf("goal budget %q totals: %w", bID, err)
+				}
 				p.GoalsByBudget[bID] = cur
 			}
 		}
 	}
 	return p
+}
+
+func checkedAdd(a, b int64, cur string) (int64, error) {
+	_ = cur // retained for contextual call-site symmetry; amounts are already base minor units.
+	return money.Add(a, b)
+}
+
+// ScaleMonthlyIncome returns a monthly income estimate for a half-open date
+// window. Partial calendar months are prorated by their actual day count.
+func ScaleMonthlyIncome(monthly money.Money, start, end time.Time) (money.Money, error) {
+	if !end.After(start) {
+		return money.Zero(monthly.Currency), nil
+	}
+	total := money.Zero(monthly.Currency)
+	for cursor := start.UTC(); cursor.Before(end.UTC()); {
+		next := time.Date(cursor.Year(), cursor.Month()+1, 1, 0, 0, 0, 0, time.UTC)
+		segmentEnd := next
+		if end.UTC().Before(segmentEnd) {
+			segmentEnd = end.UTC()
+		}
+		monthStart := time.Date(cursor.Year(), cursor.Month(), 1, 0, 0, 0, 0, time.UTC)
+		monthDays := int64(next.Sub(monthStart).Hours() / 24)
+		days := int64(segmentEnd.Sub(cursor).Hours() / 24)
+		part, err := monthly.MulDiv(days, monthDays, money.RoundHalfAwayFromZero)
+		if err != nil {
+			return money.Money{}, fmt.Errorf("scale monthly income: %w", err)
+		}
+		total, err = total.Add(part)
+		if err != nil {
+			return money.Money{}, fmt.Errorf("sum window income: %w", err)
+		}
+		cursor = segmentEnd
+	}
+	return total, nil
 }
 
 // PerBudget folds the projection onto grid rows: for each budget it sums the
@@ -135,22 +198,65 @@ func Project(recs []domain.Recurring, gs []domain.Goal, year, fromMonth int, bas
 // budgeting.BuildAnnualGrid consumes it) plus any goals associated with the
 // budget directly. The returned per-budget MonthAmounts are the projected spend
 // a caller pre-fills into that budget's future cells.
-func (p Projection) PerBudget(budgetIDs []string, covers map[string]map[string]bool) map[string]MonthAmounts {
+func (p Projection) PerBudget(budgetIDs []string, covers map[string]map[string]bool) (map[string]MonthAmounts, error) {
 	out := make(map[string]MonthAmounts, len(budgetIDs))
 	for _, bID := range budgetIDs {
 		var row MonthAmounts
 		for cat := range covers[bID] {
 			if ra, ok := p.Recurring[cat]; ok {
-				addInto(&row, ra)
+				if err := mergeMonths(&row, ra, "USD"); err != nil {
+					return nil, err
+				}
 			}
 			if ga, ok := p.GoalsByCategory[cat]; ok {
-				addInto(&row, ga)
+				if err := mergeMonths(&row, ga, "USD"); err != nil {
+					return nil, err
+				}
 			}
 		}
 		if gb, ok := p.GoalsByBudget[bID]; ok {
-			addInto(&row, gb)
+			if err := mergeMonths(&row, gb, "USD"); err != nil {
+				return nil, err
+			}
 		}
 		out[bID] = row
 	}
-	return out
+	return out, p.Error
+}
+
+// TotalUnique sums category projections once across overlapping budget covers,
+// plus budget-linked goals once per budget. It is the correct footer total when
+// a category is tracked by more than one budget.
+func (p Projection) TotalUnique(budgetIDs []string, covers map[string]map[string]bool) (MonthAmounts, error) {
+	var total MonthAmounts
+	seen := map[string]bool{}
+	for _, id := range budgetIDs {
+		for categoryID := range covers[id] {
+			if seen[categoryID] {
+				continue
+			}
+			seen[categoryID] = true
+			if err := mergeMonths(&total, p.Recurring[categoryID], "USD"); err != nil {
+				return MonthAmounts{}, err
+			}
+			if err := mergeMonths(&total, p.GoalsByCategory[categoryID], "USD"); err != nil {
+				return MonthAmounts{}, err
+			}
+		}
+		if err := mergeMonths(&total, p.GoalsByBudget[id], "USD"); err != nil {
+			return MonthAmounts{}, err
+		}
+	}
+	return total, p.Error
+}
+
+func mergeMonths(dst *MonthAmounts, src MonthAmounts, base string) error {
+	for month, amount := range src {
+		value, err := checkedAdd(dst[month], amount, base)
+		if err != nil {
+			return err
+		}
+		dst[month] = value
+	}
+	return nil
 }

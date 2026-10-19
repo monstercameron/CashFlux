@@ -3652,32 +3652,9 @@ func (k transferDirection) reverse() transferDirection {
 	return transferDirection{AccountID: k.TransferAccountID, TransferAccountID: k.AccountID}
 }
 
-func (a *App) PutBudget(b domain.Budget) error {
-	if err := a.roleGuard(); err != nil {
-		return err
-	}
-	if is := validate.ValidateBudget(b); !is.OK() {
-		return is
-	}
-	if err := a.validateCustom("budget", b.Custom); err != nil {
-		return err
-	}
-	wasOver := false
-	for _, existing := range a.Budgets() {
-		if existing.ID == b.ID {
-			wasOver = a.isBudgetOver(existing)
-			break
-		}
-	}
-	if err := a.store.PutBudget(b); err != nil {
-		return err
-	}
-	a.log.Info("budget saved", "id", b.ID)
-	if !wasOver && !a.triggersSuspended && a.isBudgetOver(b) {
-		a.RunTriggered(workflow.TriggerBudgetExceeded, nil)
-	}
-	return nil
-}
+// PutBudget saves a budget and records any permanent limit change from the
+// application clock's period. All writers share the history-aware boundary.
+func (a *App) PutBudget(b domain.Budget) error { return a.PutBudgetAt(b, a.clock()) }
 func (a *App) DeleteBudget(id string) error {
 	if err := a.roleGuard(); err != nil {
 		return err
@@ -3685,47 +3662,11 @@ func (a *App) DeleteBudget(id string) error {
 	return a.del("budget", id, a.store.DeleteBudget)
 }
 
-// CoverBudget moves amt of budgeted money from the source budget's limit to the
-// destination's, covering an overspend without changing the household's total
-// budgeted amount (the balanced, explainable budgeting.Transfer). Both adjusted
-// budgets are persisted. The source must keep a positive limit — a budget with a
-// non-positive limit fails validation — so a move that would drain the source is
-// rejected.
+// CoverBudget moves amt between the budgets' current-period boosts atomically.
+// Standing limits and their history are unchanged. Each leg uses its own grid;
+// the source must retain positive available room after the cover.
 func (a *App) CoverBudget(fromID, toID string, amt money.Money) error {
-	budgets := a.Budgets()
-	var from, to domain.Budget
-	var haveFrom, haveTo bool
-	for _, b := range budgets {
-		switch b.ID {
-		case fromID:
-			from, haveFrom = b, true
-		case toID:
-			to, haveTo = b, true
-		}
-	}
-	if !haveFrom {
-		return fmt.Errorf("appstate: source budget %q not found", fromID)
-	}
-	if !haveTo {
-		return fmt.Errorf("appstate: destination budget %q not found", toID)
-	}
-	res, err := budgeting.Transfer(from, to, amt, false)
-	if err != nil {
-		return err
-	}
-	if !res.From.Limit.IsPositive() {
-		return fmt.Errorf("%w: %s would have nothing left", budgeting.ErrInsufficientSource, from.Name)
-	}
-	// Stamp the destination so the UI can flag it as covered this period (quick ref).
-	res.To.CoveredAt = time.Now()
-	if err := a.PutBudget(res.From); err != nil {
-		return err
-	}
-	if err := a.PutBudget(res.To); err != nil {
-		return err
-	}
-	a.log.Info("budget cover", "from", fromID, "to", toID, "amount", amt.String())
-	return nil
+	return a.coverBudgetsAt(toID, map[string]money.Money{fromID: amt}, a.clock(), false)
 }
 
 func (a *App) PutGoal(g domain.Goal) error {

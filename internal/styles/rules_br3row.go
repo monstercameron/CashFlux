@@ -23,7 +23,7 @@ func registerBR3Row() {
 	rule(".budget-crow-bar",
 		prop("grid-area", "bar"), position("relative"), display("block"),
 		width("100%"), minWidth("180px"), height("6px"), borderRadius("3px"),
-		background("var(--surface-3)"), overflow("visible"), alignSelf("center"),
+		background("var(--bg-elev)"), overflow("visible"), alignSelf("center"),
 	)
 	rule(".budget-crow-bar .bar-fill", height("6px"), borderRadius("3px"), maxWidth("100%"))
 	rule(".budget-crow-bar .bar-pace-tick", zIndex("1"), height("12px"), top("-3px"), width("2px"), background("var(--text-1, var(--text))"))
@@ -38,7 +38,7 @@ func registerBR3Row() {
 	rule(".budget-limit-editor-cap", fontVariantNumeric("tabular-nums"))
 	rule(".budget-crow-chip", minHeight("24px"))
 	rule(".budget-crow-actions button, .budget-crow-actions a", minWidth("24px"), minHeight("24px"))
-	rule(".budget-owner-initial", display("inline-flex"), alignItems("center"), justifyContent("center"), flex("0 0 24px"), width("24px"), height("24px"), borderRadius("50%"), background("var(--surface-3)"), color("var(--text-dim)"), fontSize("11px"), fontWeight("600"))
+	rule(".budget-owner-initial", display("inline-flex"), alignItems("center"), justifyContent("center"), flex("0 0 24px"), width("24px"), height("24px"), borderRadius("50%"), background("var(--bg-elev)"), color("var(--text-dim)"), fontSize("11px"), fontWeight("600"))
 	rule(".budget-cadence", color("var(--text-faint)"), fontSize("12px"), marginLeft("0.2rem"), whiteSpace("nowrap"))
 	rule(".budget-crow:has(.budget-rollover-detail[open]) .budget-rollover-carry", display("none"))
 

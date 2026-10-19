@@ -43,6 +43,10 @@ func (a *App) BudgetViewInput(ref time.Time) (budgeting.ViewInput, error) {
 	if err != nil {
 		return budgeting.ViewInput{}, err
 	}
+	return a.budgetViewInput(ref, p, anchor), nil
+}
+
+func (a *App) budgetViewInput(ref time.Time, p prefs.Prefs, anchor time.Time) budgeting.ViewInput {
 	settings := a.Settings()
 	base := settings.BaseCurrency
 	if base == "" {
@@ -54,48 +58,79 @@ func (a *App) BudgetViewInput(ref time.Time) (budgeting.ViewInput, error) {
 		Period:       budgeting.ViewPeriod{Anchor: ref, Now: a.clock(), WeekStart: p.WeekStartWeekday(), PayCycleAnchor: anchor},
 		Transactions: transactions, Categories: a.Categories(), Recurring: a.Recurring(),
 		Rates: currency.Rates{Base: base, Rates: settings.FXRates}, Base: base, PoolRollover: p.BudgetRolloverLeftover,
-	}, nil
+	}
 }
 
-func (a *App) prepareBudgetWrite(b domain.Budget, effective time.Time) (domain.Budget, error) {
-	p, anchor, err := a.budgetPreferences()
-	if err != nil {
-		return domain.Budget{}, err
+// prepareBudgetWrite is the single permanent-limit policy used by individual
+// and batch writes. Limit remains the editable standing amount; callers cannot
+// replace existing history by supplying their own map. A permanent edit replaces
+// all later scheduled amounts, so editing a past period also changes the future.
+// A cadence change starts a fresh funding grid: history, carry and boosts from
+// the old grid are not reinterpreted as amounts for the new cadence. Dated journal
+// notes are retained. Existing-budget currency changes remain refused.
+func prepareBudgetWrite(b domain.Budget, previous *domain.Budget, effective time.Time, weekStart time.Weekday, anchor time.Time) (domain.Budget, error) {
+	if effective.IsZero() {
+		return domain.Budget{}, fmt.Errorf("budget effective date is required")
 	}
-	start, _ := budgeting.PeriodRangeAnchored(b.Period, effective, p.WeekStartWeekday(), anchor)
-	var previous *domain.Budget
-	for _, old := range a.Budgets() {
-		if old.ID == b.ID {
-			copy := old
-			previous = &copy
-			break
-		}
-	}
+	start, _ := budgeting.PeriodRangeAnchored(b.Period, effective, weekStart, anchor)
 	history := make(map[string]int64)
 	if previous != nil {
-		if previous.Rollover && b.Rollover {
-			b.RolloverStart = previous.RolloverStart
-		}
 		for key, value := range previous.LimitHistory {
+			if _, err := time.Parse(time.DateOnly, key); err != nil {
+				return domain.Budget{}, fmt.Errorf("budget %q limit history: %w", b.ID, err)
+			}
 			history[key] = value
 		}
-		if previous.Limit.Currency != b.Limit.Currency && len(history) > 0 {
+		if previous.Limit.Currency != b.Limit.Currency {
 			return domain.Budget{}, fmt.Errorf("budget %q: changing currency would reinterpret limit history", b.ID)
 		}
-		if previous.Limit != b.Limit {
-			baseline, _ := budgeting.PreviousPeriodRangeAnchored(previous.Period, start, p.WeekStartWeekday(), anchor)
+		if previous.Period != b.Period {
+			b.RolloverStart = start
+			b.LimitHistory = map[string]int64{start.Format(time.DateOnly): b.Limit.Amount}
+			b.PeriodBoosts = nil
+			b.CoveredAt = time.Time{}
+			if b.RecurringCover != nil {
+				rc := *b.RecurringCover
+				rc.LastAppliedPeriod = ""
+				b.RecurringCover = &rc
+			}
+			return b, nil
+		}
+		// Repair rows written by older clients whose standing limit drifted
+		// away from their latest history entry, even on an unchanged re-save.
+		latest := ""
+		for key := range history {
+			if key > latest {
+				latest = key
+			}
+		}
+		if previous.Limit != b.Limit || latest != "" && history[latest] != b.Limit.Amount {
+			baseline, _ := budgeting.PreviousPeriodRangeAnchored(previous.Period, start, weekStart, anchor)
 			if !previous.RolloverStart.IsZero() && previous.RolloverStart.Before(baseline) {
 				baseline = previous.RolloverStart
 			}
-			key := baseline.Format(time.DateOnly)
-			if len(history) == 0 {
-				history[key] = previous.Limit.Amount
+			prior, err := budgeting.BudgetBaseAt(*previous, baseline)
+			if err != nil {
+				return domain.Budget{}, err
+			}
+			// BudgetBaseAt extends the earliest entry backwards. Preserve that
+			// implicit baseline when editing before the oldest recorded change.
+			hasEarlier := false
+			for key := range history {
+				if key < start.Format(time.DateOnly) {
+					hasEarlier = true
+					break
+				}
+			}
+			if !hasEarlier {
+				history[baseline.Format(time.DateOnly)] = prior.Amount
+			}
+			for key := range history {
+				if key >= start.Format(time.DateOnly) {
+					delete(history, key)
+				}
 			}
 			history[start.Format(time.DateOnly)] = b.Limit.Amount
-		}
-	} else {
-		for key, value := range b.LimitHistory {
-			history[key] = value
 		}
 	}
 	// Every new budget records its first funded period, because envelope mode
@@ -142,15 +177,9 @@ func BudgetOverTaskTitle(b domain.Budget) (string, []any) {
 // app clock's period. Creation and editor paths use this history-aware boundary.
 func (a *App) PutBudgetWithHistory(b domain.Budget) error { return a.PutBudgetAt(b, a.clock()) }
 
-// PutBudgetAt records limit history from the budget's own period containing ref
-// before saving. Use an explicit ref when editing a viewed past or planned period.
+// PutBudgetAt records a permanent change from the budget's period containing ref,
+// replacing later limit changes. Earlier periods retain their recorded amounts.
+// Use an explicit ref when editing a viewed past or planned period.
 func (a *App) PutBudgetAt(b domain.Budget, ref time.Time) error {
-	if err := a.roleGuard(); err != nil {
-		return err
-	}
-	prepared, err := a.prepareBudgetWrite(b, ref)
-	if err != nil {
-		return err
-	}
-	return a.PutBudget(prepared)
+	return a.putBudgetsAt([]domain.Budget{b}, ref, true)
 }

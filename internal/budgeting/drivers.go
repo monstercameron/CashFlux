@@ -19,11 +19,12 @@ import (
 // so a store that appears under several raw descriptors, or racks up many small
 // charges, surfaces as the single line a user means by "what's driving this".
 type Driver struct {
-	TxnID  string    // the merchant's most recent contributing transaction (for reference)
-	Label  string    // the merchant's normalized display name
-	Amount int64     // summed magnitude in the budget's limit currency (always positive)
-	Date   time.Time // the most recent contributing charge
-	Tags   []string  // union of the contributing charges' tags (so the UI can spot a recurring driver)
+	TxnID    string    // the merchant's most recent contributing transaction (for reference)
+	Label    string    // the merchant's normalized display name
+	Amount   int64     // summed magnitude in the budget's limit currency (always positive)
+	Currency string    // Currency of Amount, matching the budget's limit currency.
+	Date     time.Time // the most recent contributing charge
+	Tags     []string  // union of the contributing charges' tags (so the UI can spot a recurring driver)
 }
 
 // TopDrivers returns up to n of the largest MERCHANTS counting toward the budget
@@ -148,7 +149,7 @@ func TopDrivers(budget domain.Budget, all []domain.Transaction, start, end time.
 			tags = append(tags, tg)
 		}
 		sort.Strings(tags)
-		drivers = append(drivers, Driver{TxnID: a.txnID, Label: a.label, Amount: a.amount, Date: a.date, Tags: tags})
+		drivers = append(drivers, Driver{TxnID: a.txnID, Label: a.label, Amount: a.amount, Currency: limit.Currency, Date: a.date, Tags: tags})
 	}
 	// Largest first; ties broken by label so the order is deterministic despite the
 	// map grouping.

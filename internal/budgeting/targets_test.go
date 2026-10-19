@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
 )
@@ -99,6 +100,35 @@ func TestNeeded(t *testing.T) {
 				t.Errorf("Needed must never be negative, got %d", got.Needed.Amount)
 			}
 		})
+	}
+}
+
+func TestNeededWithRatesConvertsGoalCurrencyAndScalesCadence(t *testing.T) {
+	b := domain.Budget{Period: domain.PeriodWeekly, TargetKind: domain.TargetByDate,
+		TargetAmount: money.New(30000, "EUR"), TargetDate: time.Date(2026, time.June, 10, 0, 0, 0, 0, time.UTC)}
+	status := Status{Remaining: usd(0)}
+	rates := currency.Rates{Base: "USD", Rates: map[string]float64{"EUR": 1.1}}
+	got, err := NeededWithRates(b, status, time.Date(2026, time.March, 10, 0, 0, 0, 0, time.UTC), money.Zero("USD"), false, rates)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Target.Currency != "USD" || got.Target.Amount != 33000 {
+		t.Fatalf("converted target = %+v, want USD 33000", got.Target)
+	}
+	want, err := PeriodEquivalent(usd(11000), domain.PeriodMonthly, domain.PeriodWeekly)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Needed != want {
+		t.Fatalf("weekly target need = %+v, want %+v", got.Needed, want)
+	}
+}
+
+func TestNeededWithRatesReturnsMissingRate(t *testing.T) {
+	b := domain.Budget{TargetKind: domain.TargetRefillUpTo, TargetAmount: money.New(10000, "EUR")}
+	_, err := NeededWithRates(b, Status{Remaining: usd(0)}, time.Now(), money.Zero("USD"), false, currency.Rates{Base: "USD"})
+	if err == nil {
+		t.Fatal("missing FX rate must be reported")
 	}
 }
 

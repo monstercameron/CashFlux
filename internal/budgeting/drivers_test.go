@@ -83,6 +83,20 @@ func TestTopDriversNetsPositiveDiscountLine(t *testing.T) {
 	}
 }
 
+func TestTopDriversKeepBudgetCurrency(t *testing.T) {
+	start, end := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	b := domain.Budget{CategoryID: "food", Scope: domain.ScopeShared, Period: domain.PeriodMonthly, Limit: money.New(10000, "EUR")}
+	txn := domain.Transaction{ID: "market", Date: start.AddDate(0, 0, 2), CategoryID: "food", Payee: "Market", Amount: money.New(-11000, "USD")}
+	drivers, err := TopDrivers(b, []domain.Transaction{txn}, start, end,
+		currency.Rates{Base: "USD", Rates: map[string]float64{"EUR": 1.1}}, b.TracksCategory, 3, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(drivers) != 1 || drivers[0].Amount != 10000 || drivers[0].Currency != "EUR" {
+		t.Fatalf("driver amount/currency = %+v; want EUR 10000", drivers)
+	}
+}
+
 // TestTopDriversAggregatesByMerchant proves the panel groups a store's charges into
 // one line (via the normalize resolver) so a merchant appearing under several raw
 // descriptors, or through many small charges, surfaces as its true combined total —

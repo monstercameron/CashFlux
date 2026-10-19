@@ -19,9 +19,9 @@ import (
 // total by the difference, not by its own size. That arithmetic belongs here,
 // where it can be tested, rather than in a modal.
 //
-// Only MONTHLY budgets take part, matching what Auto budget writes; a weekly or
-// yearly limit is not a monthly figure and folding it in would produce a total
-// that means nothing.
+// Only household spending budgets take part. Saving-direction budgets are shown
+// separately from the spending plan, and individual plans are outside the page's
+// household allocation lens.
 type AutoBudgetImpact struct {
 	// BudgetedBefore / BudgetedAfter are the household's total monthly budgeted
 	// amount, in minor units of the base currency, without and with the run.
@@ -55,7 +55,7 @@ func AutoBudgetImpactOf(budgets []domain.Budget, income int64, limits map[string
 	out := AutoBudgetImpact{Income: income}
 	replaced := map[string]bool{}
 	for _, b := range budgets {
-		if b.Period != domain.PeriodMonthly {
+		if b.Period != domain.PeriodMonthly || !autoBudgetImpactEligible(b) {
 			continue
 		}
 		out.BudgetedBefore += b.Limit.Amount
@@ -79,27 +79,49 @@ func AutoBudgetImpactOf(budgets []domain.Budget, income int64, limits map[string
 // cadence remains in both normalized totals. limits are base-currency monthly
 // amounts, converted to a replaced budget's currency before normalization.
 func AutoBudgetImpactWithRates(budgets []domain.Budget, income int64, limits map[string]int64, rates currency.Rates) (AutoBudgetImpact, error) {
+	allTracked := trackedBudgetCategories(budgets)
+	budgets = householdSpendBudgets(budgets)
 	before, err := NormalizeBudgets(budgets, domain.PeriodMonthly, rates)
 	if err != nil {
 		return AutoBudgetImpact{}, fmt.Errorf("auto-budget before plan: %w", err)
 	}
 	after := append([]domain.Budget(nil), budgets...)
+	matches := AutoBudgetMatches(after)
 	replaced := map[string]bool{}
-	for i, b := range after {
-		next, ok := limits[b.CategoryID]
-		if b.Period != domain.PeriodMonthly || !ok || replaced[b.CategoryID] {
+	matchedAmounts := make(map[string]int64)
+	matchedBudgets := make(map[string]domain.Budget)
+	for categoryID, next := range limits {
+		b, ok := matches[categoryID]
+		if !ok {
 			continue
 		}
-		amount, err := rates.Convert(money.New(next, rates.Base), b.WithBaseCurrency(rates.Base).Limit.Currency)
+		matchedAmounts[b.ID], err = money.Add(matchedAmounts[b.ID], next)
+		if err != nil {
+			return AutoBudgetImpact{}, fmt.Errorf("sum auto-budget changes for %q: %w", b.ID, err)
+		}
+		matchedBudgets[b.ID] = b
+		replaced[categoryID] = true
+	}
+	for budgetID, monthlyAmount := range matchedAmounts {
+		b := matchedBudgets[budgetID]
+		periodAmount, err := PeriodEquivalent(money.New(monthlyAmount, rates.Base), domain.PeriodMonthly, b.Period)
+		if err != nil {
+			return AutoBudgetImpact{}, fmt.Errorf("auto-budget cadence replacement %q: %w", b.ID, err)
+		}
+		amount, err := rates.Convert(periodAmount, b.WithBaseCurrency(rates.Base).Limit.Currency)
 		if err != nil {
 			return AutoBudgetImpact{}, fmt.Errorf("auto-budget replacement %q: %w", b.ID, err)
 		}
-		after[i].Limit = amount
-		replaced[b.CategoryID] = true
+		for i := range after {
+			if after[i].ID == budgetID {
+				after[i].Limit = amount
+				break
+			}
+		}
 	}
 	for cat, amount := range limits {
-		if !replaced[cat] {
-			after = append(after, domain.Budget{ID: "auto:" + cat, CategoryID: cat, Period: domain.PeriodMonthly, Limit: money.New(amount, rates.Base)})
+		if !replaced[cat] && !allTracked[cat] {
+			after = append(after, domain.Budget{ID: "auto:" + cat, CategoryID: cat, Period: domain.PeriodMonthly, Limit: money.New(amount, rates.Base), Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID})
 		}
 	}
 	normalized, err := NormalizeBudgets(after, domain.PeriodMonthly, rates)
@@ -113,4 +135,28 @@ func AutoBudgetImpactWithRates(budgets []domain.Budget, income int64, limits map
 		}
 	}
 	return out, nil
+}
+
+func trackedBudgetCategories(budgets []domain.Budget) map[string]bool {
+	tracked := make(map[string]bool)
+	for _, budget := range budgets {
+		for _, categoryID := range budget.TrackedCategoryIDs() {
+			tracked[categoryID] = true
+		}
+	}
+	return tracked
+}
+
+func autoBudgetImpactEligible(b domain.Budget) bool {
+	return !b.Direction.IsSaving() && b.Scope != domain.ScopeIndividual && (b.OwnerID == "" || b.OwnerID == domain.GroupOwnerID)
+}
+
+func householdSpendBudgets(budgets []domain.Budget) []domain.Budget {
+	out := make([]domain.Budget, 0, len(budgets))
+	for _, b := range budgets {
+		if autoBudgetImpactEligible(b) {
+			out = append(out, b)
+		}
+	}
+	return out
 }

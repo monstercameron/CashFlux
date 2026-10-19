@@ -62,14 +62,16 @@ func sweepBudgetCountPhrase(n int) string {
 func budgetsSweepCard(_ struct{}) ui.Node {
 	app := appstate.Default
 	_ = uistate.UseDataRevision().Get()
-	hidden := ui.UseState(false)
+	hidden := ui.UseState("")
+	_ = uistate.UseActiveScope().Get()
+	memberID := uistate.ActiveMemberFromScope()
 	var monthKey, totalStr, goalName, base string
 	var amount int64
 	nav := router.UseNavigate()
 	onDismiss := ui.UseEvent(func() {
-		uistate.MarkSweepPromptHandled(monthKey)
+		markSweepPromptHandledForMember(monthKey, memberID)
 		uistate.RequestPersist()
-		hidden.Set(true)
+		hidden.Set(monthKey + ":" + memberID)
 	})
 	onSweep := ui.UseEvent(func() {
 		if app == nil {
@@ -79,11 +81,11 @@ func budgetsSweepCard(_ struct{}) ui.Node {
 			uistate.PostNotice(err.Error(), true)
 			return
 		}
-		uistate.MarkSweepPromptHandled(monthKey)
+		markSweepPromptHandledForMember(monthKey, memberID)
 		uistate.BumpDataRevision()
 		uistate.RequestPersist()
 		uistate.PostNotice(uistate.T("sweep.done", totalStr, goalName), false)
-		hidden.Set(true)
+		hidden.Set(monthKey + ":" + memberID)
 	})
 	onReview := ui.UseEvent(func() { nav.Navigate(uistate.RoutePath("/goals")) })
 	reviewOnClick := OnClick(onReview)
@@ -96,6 +98,9 @@ func budgetsSweepCard(_ struct{}) ui.Node {
 	cfg := uistate.SweepConfigGet()
 	now := time.Now()
 	_, _, monthKey = closedMonthRange(now)
+	if !sweepPromptDueForMember(monthKey, memberID, cfg) || hidden.Get() == monthKey+":"+memberID {
+		return Fragment()
+	}
 
 	mStart, _, _ := closedMonthRange(now)
 	input, err := app.BudgetViewInput(mStart)
@@ -109,15 +114,11 @@ func budgetsSweepCard(_ struct{}) ui.Node {
 	input.Period.PayCycleAnchor = budgetPayCycleAnchor(pr.PayCycleAnchor)
 	input.PoolRollover = pr.BudgetRolloverLeftover
 	base = input.Base
-	plan, err := budgeting.EvaluateSweep(app.Budgets(), input, cfg.Domain(), uistate.ActiveMemberFromScope(), app.SweepAllowedForGoal)
+	plan, err := budgeting.EvaluateSweep(app.Budgets(), input, cfg.Domain(), memberID, app.SweepAllowedForGoal)
 	if err != nil {
 		slog.Error("calculate month-close sweep", "err", err)
 		return sweepHold(err)
 	}
-	if !uistate.SweepPromptDue(monthKey, cfg) || hidden.Get() {
-		return Fragment()
-	}
-
 	if !plan.HasLeftover() {
 		return Fragment()
 	}
@@ -165,6 +166,28 @@ func budgetsSweepCard(_ struct{}) ui.Node {
 			action,
 		),
 	)
+}
+
+// Household prompts retain the legacy state. Individual lenses keep independent
+// handled months in app KV, so acting for one member cannot dismiss another's
+// prompt, or erase the household's handled month.
+func sweepPromptDueForMember(month, memberID string, cfg uistate.SweepConfig) bool {
+	if memberID == "" {
+		return uistate.SweepPromptDue(month, cfg)
+	}
+	return cfg.Enabled && month != "" && uistate.KVGet(sweepMemberPromptKey(memberID)) != month
+}
+
+func markSweepPromptHandledForMember(month, memberID string) {
+	if memberID == "" {
+		uistate.MarkSweepPromptHandled(month)
+		return
+	}
+	uistate.KVSet(sweepMemberPromptKey(memberID), month)
+}
+
+func sweepMemberPromptKey(memberID string) string {
+	return "cashflux:budgets:sweepprompt:member:" + memberID
 }
 
 func sweepHold(err error) ui.Node {

@@ -12,6 +12,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/GoWebComponents/v5/testkit/render"
 )
 
 func TestBUDQ51SundayWeeklyRaiseLimitUsesPageReadKey(t *testing.T) {
@@ -38,7 +39,7 @@ func TestBUDQ51SundayWeeklyRaiseLimitUsesPageReadKey(t *testing.T) {
 func TestBUDQ51RolloverTooltipKeepsSixPeriodsAndCountsEarlier(t *testing.T) {
 	chain := make([]budgeting.RolloverPeriodState, 8)
 	for i := range chain {
-		start := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, i)
+		start := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC).AddDate(0, i, 0)
 		amount := money.New(int64(100+i), "USD")
 		chain[i] = budgeting.RolloverPeriodState{
 			Start: start, Base: amount, CarryIn: money.Zero("USD"), EffectiveCap: amount,
@@ -46,17 +47,15 @@ func TestBUDQ51RolloverTooltipKeepsSixPeriodsAndCountsEarlier(t *testing.T) {
 		}
 	}
 
-	got := budgetRolloverChainLines(chain)
-	if !strings.Contains(got, "and 2 earlier") {
-		t.Fatalf("tooltip does not report the two hidden periods: %q", got)
+	view := budgeting.RolloverView{Prior: chain, Current: budgeting.RolloverPeriodState{}}
+	f := render.New(t)
+	f.Render(budgetRolloverTable(view, "chain"))
+	rows := f.AllByTag("tr")
+	if len(rows) != 5 {
+		t.Fatalf("rollover table rows = %d, want header + last four periods", len(rows))
 	}
-	if strings.Contains(got, "2026-01-01") || strings.Contains(got, "2026-01-02") {
-		t.Fatalf("tooltip still includes periods older than the visible six: %q", got)
-	}
-	if !strings.Contains(got, "2026-01-03") || !strings.Contains(got, "2026-01-08") {
-		t.Fatalf("tooltip does not show the last six periods: %q", got)
-	}
-	if count := strings.Count(got, "base"); count != 6 {
-		t.Fatalf("tooltip has %d period entries, want 6: %s", count, got)
+	text := byTestID(f, "table", "budget-rollover-table-chain").Text()
+	if strings.Contains(text, "Jan 2026") || !strings.Contains(text, "May 2026") || !strings.Contains(text, "Aug 2026") {
+		t.Fatalf("rendered table does not show the last four periods: %q", text)
 	}
 }

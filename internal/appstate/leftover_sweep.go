@@ -4,7 +4,9 @@ package appstate
 
 import (
 	"fmt"
+	"strings"
 
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/ledger"
@@ -72,6 +74,9 @@ func (a *App) ApplyLeftoverSweep(goalID string, totalMinor int64, cur string) (d
 	if totalMinor <= 0 {
 		return domain.Goal{}, fmt.Errorf("appstate: leftover sweep: amount must be positive")
 	}
+	if strings.TrimSpace(cur) == "" {
+		return domain.Goal{}, fmt.Errorf("appstate: leftover sweep: currency is required")
+	}
 	all := a.Goals()
 	var target domain.Goal
 	for _, g := range all {
@@ -92,11 +97,17 @@ func (a *App) ApplyLeftoverSweep(goalID string, totalMinor int64, cur string) (d
 	}
 
 	acctID := linked[0]
+	base := a.baseCurrency()
+	rates := currency.Rates{Base: base, Rates: a.Settings().FXRates}
 	// Merge into an existing earmark against the same account, or append a new one.
 	merged := false
 	for i, al := range target.Allocations {
 		if al.AccountID == acctID {
-			target.Allocations[i].Amount = money.New(al.Amount.Amount+totalMinor, al.Amount.Currency)
+			amount, err := mergeSweepAmount(al.Amount, totalMinor, cur, rates)
+			if err != nil {
+				return domain.Goal{}, fmt.Errorf("appstate: leftover sweep: merge allocation: %w", err)
+			}
+			target.Allocations[i].Amount = amount
 			merged = true
 			break
 		}
@@ -113,4 +124,23 @@ func (a *App) ApplyLeftoverSweep(goalID string, totalMinor int64, cur string) (d
 	}
 	a.log.Info("leftover sweep earmarked to goal", "goal", goalID, "account", acctID, "amount", totalMinor)
 	return target, nil
+}
+
+func mergeSweepAmount(allocation money.Money, totalMinor int64, sweepCurrency string, rates currency.Rates) (money.Money, error) {
+	allocationCurrency := allocation.Currency
+	if allocationCurrency == "" {
+		allocationCurrency = sweepCurrency
+	}
+	sweepAmount, err := rates.Convert(money.New(totalMinor, sweepCurrency), allocationCurrency)
+	if err != nil {
+		return money.Money{}, fmt.Errorf("convert amount to allocation currency: %w", err)
+	}
+	if allocation.Currency == "" {
+		allocation.Currency = allocationCurrency
+	}
+	merged, err := allocation.Add(sweepAmount)
+	if err != nil {
+		return money.Money{}, fmt.Errorf("add to allocation: %w", err)
+	}
+	return merged, nil
 }

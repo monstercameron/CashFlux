@@ -41,7 +41,8 @@ const (
 
 // whyOverFacts is one budget's finding plus the pieces the copy needs.
 type whyOverFacts struct {
-	Result whyover.Result
+	Result  whyover.Result
+	Drivers []budgeting.Driver
 	// TopLabel / TopAmount describe the biggest contributing merchant, formatted.
 	TopLabel  string
 	TopAmount string
@@ -59,7 +60,8 @@ type whyOverFacts struct {
 // PeriodRange, the same descendant category cover, the same rate table. A second
 // derivation here is how a sentence ends up disagreeing with the meter it sits
 // under, which is worse than having no sentence.
-func budgetWhyOver(b domain.Budget, anchor time.Time) (whyOverFacts, bool) {
+func budgetWhyOver(status budgeting.Status, anchor time.Time, drivers []budgeting.Driver) (whyOverFacts, bool) {
+	b := status.Budget
 	app := appstate.Default
 	if app == nil {
 		return whyOverFacts{}, false
@@ -81,43 +83,25 @@ func budgetWhyOver(b domain.Budget, anchor time.Time) (whyOverFacts, bool) {
 	descendants := categorytree.DescendantsOfAll(app.Categories(), b.TrackedCategoryIDs())
 	covers := func(id string) bool { return b.TracksCategory(id) || descendants[id] }
 
-	status, err := budgeting.EvaluateRollup(b, txns, start, end, rates, budgeting.DefaultNearThreshold, descendants)
-	if err != nil {
-		return whyOverFacts{}, false
-	}
 	prior, err := budgeting.EvaluateRollup(b, txns, prevStart, prevEnd, rates, budgeting.DefaultNearThreshold, descendants)
 	if err != nil {
 		return whyOverFacts{}, false
 	}
-	limit, err := status.Spent.Add(status.Remaining)
-	if err != nil {
-		return whyOverFacts{}, false
-	}
-
 	var topLabel string
 	var topMinor int64
-	if drivers, dbase := budgetTopDriversFor(b, 1, anchor); len(drivers) > 0 {
+	if len(drivers) > 0 {
 		topLabel, topMinor = drivers[0].Label, drivers[0].Amount
-		_ = dbase
 	}
-
-	pace := budgeting.ProjectPace(status, start, end, time.Now())
-	res, ok := whyover.Explain(whyover.Input{
-		LimitMinor:      limit.Amount,
-		SpentMinor:      status.Spent.Amount,
-		TopDriverMinor:  topMinor,
-		Count:           budgeting.ContributingCount(b, txns, start, end, covers),
-		PriorSpentMinor: prior.Spent.Amount,
-		PriorCount:      budgeting.ContributingCount(b, txns, prevStart, prevEnd, covers),
-		ElapsedBP:       int(pace.Elapsed * 10000),
-		ProjectedMinor:  pace.Projected.Amount,
-	})
+	res, ok := explainWhyOverStatus(status, topMinor,
+		budgeting.ContributingCount(b, txns, start, end, covers), prior.Spent.Amount,
+		budgeting.ContributingCount(b, txns, prevStart, prevEnd, covers))
 	if !ok {
 		return whyOverFacts{}, false
 	}
 	cur := status.Spent.Currency
 	return whyOverFacts{
 		Result:        res,
+		Drivers:       append([]budgeting.Driver(nil), drivers...),
 		TopLabel:      topLabel,
 		TopAmount:     fmtMoney(money.New(topMinor, cur)),
 		Over:          fmtMoney(money.New(res.OverMinor, cur)),
@@ -125,6 +109,19 @@ func budgetWhyOver(b domain.Budget, anchor time.Time) (whyOverFacts, bool) {
 		Avg:           fmtMoney(money.New(res.AvgMinor, cur)),
 		PriorAvg:      fmtMoney(money.New(res.PriorAvgMinor, cur)),
 	}, true
+}
+
+func explainWhyOverStatus(status budgeting.Status, topDriver int64, count int, priorSpent int64, priorCount int) (whyover.Result, bool) {
+	return whyover.Explain(whyover.Input{
+		LimitMinor:      status.Limit.Amount,
+		SpentMinor:      status.Spent.Amount,
+		TopDriverMinor:  topDriver,
+		Count:           count,
+		PriorSpentMinor: priorSpent,
+		PriorCount:      priorCount,
+		ElapsedBP:       int(status.Projection.Elapsed * 10000),
+		ProjectedMinor:  status.Projection.Projected.Amount,
+	})
 }
 
 // whyOverSentence renders the finding as one plain-English sentence. Returns ""
@@ -158,8 +155,10 @@ func whyOverSentence(f whyOverFacts) string {
 
 // budgetWhyOverProps carries the budget and the viewed period's anchor.
 type budgetWhyOverProps struct {
-	Budget domain.Budget
-	Anchor time.Time
+	Status  budgeting.Status
+	Budget  domain.Budget
+	Anchor  time.Time
+	Drivers []budgeting.Driver
 }
 
 // budgetWhyOverHint renders the reason sentence above the drivers list, plus the
@@ -174,7 +173,7 @@ func budgetWhyOverHint(props budgetWhyOverProps) ui.Node {
 	errText := ui.UseState("")
 
 	settings := uistate.LoadSmartSettings()
-	facts, ok := budgetWhyOver(props.Budget, props.Anchor)
+	facts, ok := budgetWhyOver(props.Status, props.Anchor, props.Drivers)
 	sentence := ""
 	if ok {
 		sentence = whyOverSentence(facts)
@@ -198,7 +197,7 @@ func budgetWhyOverHint(props budgetWhyOverProps) ui.Node {
 		// and asked for phrasing and a next step. It is explicitly told not to
 		// recompute, because a second opinion on arithmetic the app owns is not an
 		// improvement — it is a way for two numbers to disagree on one card.
-		ctx := whyOverContext(props.Budget, facts, props.Anchor)
+		ctx := whyOverContext(props.Budget, facts)
 		runSmartAI(aiConn, smartai.WhyOver(ctx),
 			func(text string) { loading.Set(false); aiText.Set(text) },
 			func(e string) { loading.Set(false); errText.Set(e) })
@@ -241,18 +240,17 @@ func budgetWhyOverHint(props budgetWhyOverProps) ui.Node {
 // whyOverContext formats the finding for the model: the budget, the figures the
 // app computed, and the merchants behind them. Nothing here asks the model to
 // derive anything — it is given the answer and asked to say it well.
-func whyOverContext(b domain.Budget, f whyOverFacts, anchor time.Time) string {
-	drivers, base := budgetTopDriversFor(b, 3, anchor)
+func whyOverContext(b domain.Budget, f whyOverFacts) string {
 	s := b.Name + "\n"
 	s += "Over by: " + f.Over + "\n"
 	s += "Diagnosis (already computed): " + f.Result.Reason.String() + "\n"
 	if f.Result.HasComparison {
 		s += "Average charge: " + f.Avg + " (previous period " + f.PriorAvg + ")\n"
 	}
-	if len(drivers) > 0 {
+	if len(f.Drivers) > 0 {
 		s += "Biggest contributors:\n"
-		for _, d := range drivers {
-			s += "- " + d.Label + ": " + fmtMoney(money.New(d.Amount, base)) + "\n"
+		for _, d := range f.Drivers {
+			s += "- " + d.Label + ": " + fmtMoney(money.New(d.Amount, d.Currency)) + "\n"
 		}
 	}
 	return s

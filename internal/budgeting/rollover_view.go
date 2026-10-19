@@ -64,7 +64,7 @@ func EvaluateRolloverView(b domain.Budget, in ViewInput, covers map[string]bool)
 	if first.After(current) {
 		first = current
 	}
-	ledger := NewNettedLedgerWithLinks(in.Transactions, nil)
+	var ledger NettedLedger
 	if in.Ledger != nil {
 		ledger = *in.Ledger
 	} else {

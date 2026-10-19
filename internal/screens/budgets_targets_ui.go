@@ -118,7 +118,7 @@ func budgetDraftTarget(b domain.Budget, d budgetTargetDraft) domain.Budget {
 
 // budgetTargetNeed evaluates a budget's funding-target need (BG1), resolving a
 // by-date target's pace from its linked goal when one is set.
-func budgetTargetNeed(app *appstate.App, b domain.Budget, status budgeting.Status, now time.Time) budgeting.TargetNeed {
+func budgetTargetNeed(app *appstate.App, b domain.Budget, status budgeting.Status, now time.Time) (budgeting.TargetNeed, error) {
 	var linked money.Money
 	hasLinked := false
 	if b.TargetKind == domain.TargetByDate && b.LinkedGoalID != "" && app != nil {
@@ -126,13 +126,24 @@ func budgetTargetNeed(app *appstate.App, b domain.Budget, status budgeting.Statu
 			if g.ID != b.LinkedGoalID {
 				continue
 			}
-			if m, ok, err := goals.MonthlyNeeded(g, now); err == nil && ok {
+			if m, ok, err := goals.MonthlyNeeded(g, now); err != nil {
+				return budgeting.TargetNeed{}, err
+			} else if ok {
 				linked, hasLinked = m, true
 			}
 			break
 		}
 	}
-	return budgeting.Needed(b, status, now, linked, hasLinked)
+	if app == nil {
+		return budgeting.Needed(b, status, now, linked, hasLinked), nil
+	}
+	settings := app.Settings()
+	base := settings.BaseCurrency
+	if base == "" {
+		base = budgetBaseCurrency(base)
+	}
+	return budgeting.NeededWithRates(b, status, now, linked, hasLinked,
+		currency.Rates{Base: base, Rates: settings.FXRates})
 }
 
 // budgetTargetLine renders the one-line target summary beneath a budget's bar (BG1)
@@ -144,7 +155,10 @@ func budgetTargetLine(s budgeting.Status) ui.Node {
 		return Fragment()
 	}
 	app := appstate.Default
-	need := budgetTargetNeed(app, b, s, time.Now())
+	need, err := budgetTargetNeed(app, b, s, s.Rollover.Current.Start)
+	if err != nil {
+		return Span(css.Class("budget-sub", tw.TextDown), Attr("role", "alert"), uistate.T("budgets.annualGridError"))
+	}
 	target := fmtMoney(need.Target)
 	remaining := fmtMoney(need.Needed)
 	pr := uistate.LoadPrefs()
@@ -275,7 +289,10 @@ func budgetQuickFillRow(app *appstate.App, b domain.Budget, status budgeting.Sta
 	// The target's remaining need is a forward-looking figure about today's
 	// funding, so it keeps the wall clock — the same reference budgetTargetLine
 	// uses on the card, which is the line this chip has to agree with.
-	need := budgetTargetNeed(app, budgetDraftTarget(b, draft), status, time.Now())
+	need, err := budgetTargetNeed(app, budgetDraftTarget(b, draft), status, anchor)
+	if err != nil {
+		return Fragment()
+	}
 	in := budgeting.QuickFillInput{
 		Now:            anchor,
 		WeekStart:      pr.WeekStartWeekday(),

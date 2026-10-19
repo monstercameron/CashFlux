@@ -56,6 +56,8 @@ type coverAllSource struct {
 	Name      string
 	Currency  string
 	Avail     money.Money // positive remaining this period
+	Remaining money.Money // actual remaining shown on the budget row
+	FreeRoom  money.Money // remaining after committed bills, used for donor ranking
 	ThisStart time.Time
 }
 
@@ -73,6 +75,10 @@ func coverAllData(app *appstate.App, member string, vw period.Window, pr prefs.P
 	}
 	weekStart := pr.WeekStartWeekday()
 	payAnchor := budgetPayCycleAnchor(pr.PayCycleAnchor)
+	rates := currency.Rates{Base: app.Settings().BaseCurrency, Rates: app.Settings().FXRates}
+	if rates.Base == "" {
+		rates.Base = base
+	}
 	// Anchor exactly like computeBudgetView: today when today is inside the viewed
 	// window, otherwise the window's start.
 	anchor := budgetViewAnchor(vw, dateutil.WallClockUTC(time.Now()))
@@ -84,23 +90,34 @@ func coverAllData(app *appstate.App, member string, vw period.Window, pr prefs.P
 		case st.State == budgeting.StateOver:
 			overs = append(overs, coverAllOver{ID: b.ID, Name: b.Name, Rollover: b.Rollover, Currency: b.Limit.Currency, Shortfall: budgeting.CoverAmount(st), ThisStart: bs, NextStart: be})
 		case st.State == budgeting.StateOK && st.Remaining.Amount > 0:
+			committed, err := budgeting.CommittedWithRates(b, app.Recurring(), app.Transactions(), st.Remaining, bs, be, rates)
+			if err != nil {
+				continue
+			}
+			funds := budgeting.SourceFundsOf(b.Limit, st.Remaining, committed.Committed)
+			if !funds.CanGive() {
+				continue
+			}
 			// Compare available room on a monthly-equivalent basis. A yearly
 			// budget's full remaining amount is not one month's available room.
 			avail, err := coverAllMonthlyRoom(st.Remaining, b.Period)
 			if err != nil || avail.Amount <= 0 {
 				continue
 			}
-			sources = append(sources, coverAllSource{ID: b.ID, Name: b.Name, Currency: avail.Currency, Avail: avail, ThisStart: bs})
+			sources = append(sources, coverAllSource{ID: b.ID, Name: b.Name, Currency: avail.Currency, Avail: avail,
+				Remaining: st.Remaining, FreeRoom: funds.Free, ThisStart: bs})
 		}
 	}
 	sort.Slice(overs, func(i, j int) bool { return overs[i].Name < overs[j].Name })
-	sort.SliceStable(sources, func(i, j int) bool {
-		if sources[i].Avail.Amount != sources[j].Avail.Amount {
-			return sources[i].Avail.Amount > sources[j].Avail.Amount
-		}
-		return sources[i].Name < sources[j].Name
-	})
+	sort.SliceStable(sources, func(i, j int) bool { return coverAllSourceLess(sources[i], sources[j]) })
 	return overs, sources, base
+}
+
+func coverAllSourceLess(a, b coverAllSource) bool {
+	if a.FreeRoom.Amount != b.FreeRoom.Amount {
+		return a.FreeRoom.Amount > b.FreeRoom.Amount
+	}
+	return a.Name < b.Name
 }
 
 func coverAllMonthlyRoom(remaining money.Money, cadence domain.Period) (money.Money, error) {
@@ -143,6 +160,28 @@ func coverAllSourcesFor(over coverAllOver, sources []coverAllSource) []coverAllS
 func coverAllHasDonor(chosen map[string]string) bool {
 	for _, source := range chosen {
 		if source != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func coverAllSelectedTotal(overs []coverAllOver, chosen map[string]string) (int64, int) {
+	var amount int64
+	count := 0
+	for _, over := range overs {
+		if chosen[over.ID] == "" {
+			continue
+		}
+		amount += over.Shortfall.Amount
+		count++
+	}
+	return amount, count
+}
+
+func coverAllHasNextMonthSelection(chosen map[string]string) bool {
+	for _, source := range chosen {
+		if source == coverAllNextSource {
 			return true
 		}
 	}
@@ -481,6 +520,12 @@ func coverAllForm(props coverAllFormProps) ui.Node {
 		intro = uistate.T("coverAll.currencyError")
 	}
 	canApply := coverAllHasDonor(choices.Get())
+	selectedAmount, _ := coverAllSelectedTotal(overs, choices.Get())
+	applyLabel := uistate.T("coverAll.apply")
+	if selectedAmount > 0 {
+		applyLabel = uistate.T("bv6g.cover.apply", fmtMoney(money.New(selectedAmount, base)))
+	}
+	showNextMonthHint := coverAllHasNextMonthSelection(choices.Get())
 
 	listArgs := []any{css.Class("cover-all-list")}
 	for _, o := range overs {
@@ -502,7 +547,7 @@ func coverAllForm(props coverAllFormProps) ui.Node {
 						reach: impactReach, movesFromSelectedBudgets: movesFromSelectedBudgets,
 					})),
 				Div(listArgs...),
-				If(!currencyError, P(css.Class("t-caption", tw.TextDim, "cover-all-hint"), uistate.T("coverAll.nextMonthHint"))),
+				If(showNextMonthHint, P(css.Class("t-caption", tw.TextDim, "cover-all-hint"), uistate.T("bv6g.cover.nextMonthHint"))),
 				If(currencyError, P(css.Class("err"), Attr("role", "alert"), Attr("data-testid", "cover-all-currency-error"), uistate.T("coverAll.currencyError"))),
 				If(errText.Get() != "", P(css.Class("err"), Attr("role", "alert"), errText.Get())),
 			)),
@@ -512,7 +557,7 @@ func coverAllForm(props coverAllFormProps) ui.Node {
 				Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "cover-all-close"), OnClick(onCancel), uistate.T("action.close")),
 				Fragment(
 					Button(css.Class("btn"), Type("button"), Attr("data-testid", "cover-all-cancel"), OnClick(onCancel), uistate.T("coverAll.cancel")),
-					buttonWithDisabled(checkpointSaving.Get() || !canApply || currencyError, []any{css.Class("btn btn-primary"), Type("submit"), Attr("data-testid", "cover-all-apply")}, IfElse(checkpointSaving.Get(), Text(uistate.T("enc34.saving")), Text(uistate.T("coverAll.apply")))),
+					buttonWithDisabled(checkpointSaving.Get() || !canApply || currencyError, []any{css.Class("btn btn-primary"), Type("submit"), Attr("data-testid", "cover-all-apply")}, IfElse(checkpointSaving.Get(), Text(uistate.T("enc34.saving")), Text(applyLabel))),
 				)),
 		),
 	)
@@ -538,7 +583,7 @@ func coverAllRow(props coverAllRowProps) ui.Node {
 		If(!o.Rollover, Option(Value(coverAllNextSource), SelectedIf(props.Selected == coverAllNextSource), uistate.T("coverAll.sourceNextMonth"))))
 	for _, s := range coverAllSourcesFor(o, props.Sources) {
 		opts = append(opts, Option(Value(s.ID), SelectedIf(props.Selected == s.ID),
-			uistate.T("coverAll.sourceBudget", s.Name, fmtMoney(money.New(s.Avail.Amount, s.Currency)))))
+			uistate.T("bv6g.cover.sourceBudget", s.Name, fmtMoney(s.Remaining), fmtMoney(s.Avail))))
 	}
 	return Div(css.Class("cover-all-row"), Attr("data-testid", "cover-all-row"),
 		Div(css.Class("cover-all-row-main"),

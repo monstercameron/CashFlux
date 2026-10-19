@@ -23,7 +23,7 @@ import (
 func TestBR2StripShowsUsableSubtotalAndDeduplicatedIssue(t *testing.T) {
 	problem := &budgeting.BudgetEvaluationError{BudgetID: "bad", Operation: "evaluate", Err: money.ErrCurrencyMismatch}
 	view := budgetView{Base: "USD", Statuses: []budgeting.Status{
-		{Budget: domain.Budget{ID: "ok", Name: "Food", Period: domain.PeriodMonthly}, Limit: money.New(7000, "USD")},
+		{Budget: domain.Budget{ID: "ok", Name: "Food", Period: domain.PeriodMonthly, Limit: money.New(7000, "USD")}, Limit: money.New(9000, "USD")},
 		{Budget: domain.Budget{ID: "bad", Name: "Trip", Period: domain.PeriodMonthly}, Error: problem,
 			Issues: []budgeting.ViewIssue{{BudgetID: "bad", Operation: "evaluate", Message: "Trip needs a currency rate."}}},
 	}}
@@ -44,7 +44,7 @@ func TestBR2StripShowsUsableSubtotalAndDeduplicatedIssue(t *testing.T) {
 		t.Fatalf("spent headline figure = %v, want $25.00", figure)
 	}
 	sentence := byTestID(strip, "span", "budgets-status-sentence")
-	if sentence == nil || !strings.Contains(sentence.Text(), "spent of $70.00 this month") || !strings.Contains(sentence.Text(), "excludes 1 budget") {
+	if sentence == nil || !strings.Contains(sentence.Text(), "spent of $70.00 monthly plan") || !strings.Contains(sentence.Text(), "excludes 1 budget") {
 		t.Fatalf("status sentence = %v, want monthly plan and one-budget exclusion", sentence)
 	}
 	if meter := byTestID(strip, "div", "budgets-status-meter"); meter == nil || meter.Attr("role") != "meter" {
@@ -120,7 +120,7 @@ func TestBR2ProjectionCommitmentsAndPlannedChip(t *testing.T) {
 	if projection := byTestID(f, "span", "budget-projection-future"); projection == nil || projection.Text() != "On pace to overspend by $576.00" {
 		t.Fatalf("projection copy = %v", projection)
 	}
-	if free := byTestID(f, "span", "budget-free-after-committed-future"); free == nil || free.Text() != "$1.99 free after $38.00 committed" {
+	if free := byTestID(f, "span", "budget-free-after-committed-future"); free == nil || free.Text() != "$1.99 free after $38.00 in bills due this month" {
 		t.Fatalf("free-after-commitments copy = %v", free)
 	}
 	if byTestID(f, "span", "budget-free-after-committed-unknown") != nil {

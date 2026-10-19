@@ -33,7 +33,7 @@ type pickerPosition struct {
 }
 
 func pickerPopoverRules(position pickerPosition) []css.Rule {
-	return []css.Rule{css.Position.Fixed, css.Top(css.Px(position.Top)), css.Left(css.Px(position.Left)), css.ZIndex(50), tw.MinW150, tw.RoundedXl, tw.BgBase, tw.P3, tw.ShadowLg}
+	return []css.Rule{css.Position.Fixed, css.Top(css.Px(position.Top)), css.Left(css.Px(position.Left)), tw.MinW150, tw.RoundedXl, tw.BgBase, tw.P3, tw.ShadowLg}
 }
 
 // PickerProps configures a searchable, explicit-commit picker.
@@ -126,6 +126,10 @@ func pickerComponent(componentProps pickerComponentProps) uic.Node {
 			closePicker()
 		}
 	})
+	onOpenOption := OnClick(onOpen)
+	onTriggerKeyOption := OnKeyDown(onTriggerKey)
+	onQueryOption := OnInput(onQuery)
+	onKeyOption := OnKeyDown(onKey)
 	uic.UseEffect(func() func() {
 		if open.Get() {
 			focusTarget := listID
@@ -185,17 +189,20 @@ func pickerComponent(componentProps pickerComponentProps) uic.Node {
 		css.Class("cf-picker-trigger", pickerTriggerStyles),
 		Attr("id", props.ID), Attr("type", "button"), Attr("aria-label", props.Label),
 		Attr("aria-haspopup", "listbox"), Attr("aria-expanded", boolAttr(open.Get())),
-		Attr("aria-controls", listID), OnClick(onOpen), OnKeyDown(onTriggerKey), triggerLabel,
+		Attr("aria-controls", listID), onOpenOption, onTriggerKeyOption, triggerLabel,
 	)
 	if props.TestID != "" {
 		trigger = Button(
 			css.Class("cf-picker-trigger", pickerTriggerStyles),
 			Attr("id", props.ID), Attr("type", "button"), Attr("aria-label", props.Label),
 			Attr("aria-haspopup", "listbox"), Attr("aria-expanded", boolAttr(open.Get())),
-			Attr("aria-controls", listID), Attr("data-testid", props.TestID), OnClick(onOpen), OnKeyDown(onTriggerKey), triggerLabel,
+			Attr("aria-controls", listID), Attr("data-testid", props.TestID), onOpenOption, onTriggerKeyOption, triggerLabel,
 		)
 	}
 	var popup uic.Node = Fragment()
+	positionRules := pickerPopoverRules(position.Get())
+	panelClass := "cf-picker-popover " + string(css.New(positionRules...))
+	var panel uic.Node = Fragment()
 	if open.Get() {
 		rows := make([]uic.Node, 0, len(filtered)+1)
 		for index, option := range filtered {
@@ -216,9 +223,9 @@ func pickerComponent(componentProps pickerComponentProps) uic.Node {
 			search = Input(css.Class("cf-picker-search", pickerSearchStyles),
 				Attr("id", searchID), Attr("type", "search"), Attr("role", "combobox"), Attr("aria-label", uistate.T("picker.search", props.Label)),
 				Attr("aria-controls", listID), Attr("aria-expanded", "true"), Attr("aria-autocomplete", "list"),
-				Attr("aria-activedescendant", activeID), Placeholder(props.Placeholder), Value(query.Get()), OnInput(onQuery), OnKeyDown(onKey))
+				Attr("aria-activedescendant", activeID), Placeholder(props.Placeholder), Value(query.Get()), onQueryOption, onKeyOption)
 		}
-		listboxArgs := []any{Attr("id", listID), Attr("role", "listbox"), Attr("tabindex", "0"), Attr("aria-label", props.Label), Attr("aria-activedescendant", activeID), css.Class("cf-picker-list", pickerListStyles), OnKeyDown(onKey)}
+		listboxArgs := []any{Attr("id", listID), Attr("role", "listbox"), Attr("tabindex", "0"), Attr("aria-label", props.Label), Attr("aria-activedescendant", activeID), css.Class("cf-picker-list", pickerListStyles), onKeyOption}
 		for _, row := range rows {
 			listboxArgs = append(listboxArgs, row)
 		}
@@ -230,17 +237,26 @@ func pickerComponent(componentProps pickerComponentProps) uic.Node {
 				OnChoose: func() { open.Set(false); focusPickerID(props.ID) },
 			}))
 		}
-		panelClassParts := []any{"cf-picker-popover"}
-		for _, rule := range pickerPopoverRules(position.Get()) {
-			panelClassParts = append(panelClassParts, rule)
-		}
-		panelArgs := []any{css.Class(panelClassParts...), Attr("id", props.ID+"-popover")}
+		panelArgs := make([]any, 0, len(panelChildren))
 		for _, child := range panelChildren {
 			panelArgs = append(panelArgs, child)
 		}
-		panel := Div(panelArgs...)
-		popup = uic.Portal(uic.PortalProps{Target: uic.PortalTarget{Selector: componentProps.PortalTarget}, Child: panel})
+		panel = Fragment(panelArgs...)
 	}
+	// Register the picker as an overlay surface so it participates in the shared
+	// overlay stack. Nested surfaces get a z-index above their dialog and own
+	// outside-click dismissal, so a click on an option cannot dismiss the dialog.
+	initialFocus := listID
+	if props.Searchable {
+		initialFocus = searchID
+	}
+	popup = uic.AccessibleOverlay(uic.AccessibleOverlayProps{
+		Open: open.Get(), Target: uic.PortalTarget{Selector: componentProps.PortalTarget},
+		SurfaceID: props.ID + "-surface", Kind: uic.OverlayKindPopover, Role: "region", LabelledBy: props.ID,
+		CloseOnEscape: true, CloseOnOutsideClick: true, RestoreFocus: true,
+		InitialFocusSelector: "#" + initialFocus, BaseZIndex: 3501,
+		SurfaceClass: panelClass, Child: panel, OnDismiss: closePicker,
+	})
 	return Div(css.Class("cf-picker", css.New(tw.Relative)), trigger, popup)
 }
 
@@ -325,12 +341,13 @@ func multiPickerComponent(componentProps multiPickerComponentProps) uic.Node {
 	listID := props.ID + "-listbox"
 	active := uic.UseState(0)
 	closePicker := func() { open.Set(false); focusPickerID(props.ID) }
+	onTrigger := OnClick(func() { active.Set(0); open.Set(true) })
 	trigger := Button(css.Class("cf-multipicker-trigger", pickerTriggerStyles),
-		Attr("id", props.ID), Attr("type", "button"), Attr("aria-label", props.Label), Attr("aria-haspopup", "listbox"), Attr("aria-expanded", boolAttr(open.Get())), Attr("aria-controls", listID), OnClick(func() { active.Set(0); open.Set(true) }),
+		Attr("id", props.ID), Attr("type", "button"), Attr("aria-label", props.Label), Attr("aria-haspopup", "listbox"), Attr("aria-expanded", boolAttr(open.Get())), Attr("aria-controls", listID), onTrigger,
 		props.Placeholder)
 	if props.TestID != "" {
 		trigger = Button(css.Class("cf-multipicker-trigger", pickerTriggerStyles),
-			Attr("id", props.ID), Attr("type", "button"), Attr("data-testid", props.TestID), Attr("aria-label", props.Label), Attr("aria-haspopup", "listbox"), Attr("aria-expanded", boolAttr(open.Get())), Attr("aria-controls", listID), OnClick(func() { active.Set(0); open.Set(true) }), props.Placeholder)
+			Attr("id", props.ID), Attr("type", "button"), Attr("data-testid", props.TestID), Attr("aria-label", props.Label), Attr("aria-haspopup", "listbox"), Attr("aria-expanded", boolAttr(open.Get())), Attr("aria-controls", listID), onTrigger, props.Placeholder)
 	}
 	options := FilterPickerOptions(props.Options, "")
 	var panel uic.Node = Fragment()

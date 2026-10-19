@@ -7,10 +7,12 @@ package screens
 import (
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/categorytree"
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
@@ -109,7 +111,11 @@ func (builder *budgetViewBuilder) addBudget(result budgeting.ViewBudget) {
 		v.PaceMark[b.ID] = mark
 	}
 	if result.RestPerDay > 0 {
-		v.ProratedRest[b.ID] = fmtMoney(money.New(result.RestPerDay, in.Base))
+		currency := result.Status.Remaining.Currency
+		if currency == "" {
+			currency = in.Base
+		}
+		v.ProratedRest[b.ID] = fmtMoney(money.New(result.RestPerDay, currency))
 	}
 }
 
@@ -210,7 +216,7 @@ func (builder *budgetViewBuilder) summarize() {
 	v.OverCount, v.NearCount = roll.OverCount, roll.NearCount
 	v.TotalSpent, v.TotalLimit, v.TotalOver = roll.SpentMinor, roll.LimitMinor, roll.OverMinor
 	v.SavingsBudgeted, v.SavingsMoved = roll.SavingsBudgetedMinor, roll.SavingsMovedMinor
-	if roll.Excluded > 0 && roll.Excluded == len(v.Statuses) && len(v.Incomplete) == 0 {
+	if roll.Excluded > 0 && len(v.Incomplete) == 0 {
 		v.Incomplete = []string{uistate.T("budgets.incomplete")}
 	}
 }
@@ -270,14 +276,47 @@ func (builder *budgetViewBuilder) addSavings(app *appstate.App, memberID string)
 	v, in := &builder.view, builder.input
 	v.SavingsAccts = computeSavingsAccounts(app, memberID, in.Period.Anchor, in.Base, in.Rates)
 	for _, account := range v.SavingsAccts {
-		v.SavingsAssigned += account.AssignedBase
+		var err error
+		v.SavingsAssigned, err = money.Add(v.SavingsAssigned, account.AssignedBase)
+		if err != nil {
+			builder.addIssues([]budgeting.ViewIssue{{Operation: "sum savings assignments", Err: err}})
+			v.SavingsIncomplete = true
+		}
+		if account.ConversionError != nil {
+			builder.addIssues([]budgeting.ViewIssue{{Operation: "convert savings assignment", Err: account.ConversionError}})
+			v.SavingsIncomplete = true
+		}
 	}
 	// Preserve the existing account/budget overlap until the savings reconciliation ticket.
-	v.SavingsAssigned += v.SavingsBudgeted
+	var savingsErr error
+	v.SavingsAssigned, savingsErr = money.Add(v.SavingsAssigned, v.SavingsBudgeted)
+	if savingsErr != nil {
+		builder.addIssues([]budgeting.ViewIssue{{Operation: "sum budget savings assignments", Err: savingsErr}})
+		v.SavingsIncomplete = true
+	}
 	for _, goal := range app.Goals() {
 		if goal.IsSinkingFund && !goal.Archived {
-			v.TotalFundSetAside += goalsvc.FundSetAsideMinor(goal, in.Period.Now)
+			amount, err := sinkingFundSetAsideBase(goal, in.Period.Now, in.Base, in.Rates)
+			if err == nil && amount == 0 {
+				continue
+			}
+			if err != nil {
+				builder.addIssues([]budgeting.ViewIssue{{Operation: "convert sinking-fund contribution", Err: err}})
+				continue
+			}
+			v.TotalFundSetAside, err = money.Add(v.TotalFundSetAside, amount)
+			if err != nil {
+				builder.addIssues([]budgeting.ViewIssue{{Operation: "sum sinking-fund contributions", Err: err}})
+			}
 		}
 	}
 	v.AgeMoney = computeAgeOfMoney(in.Transactions, in.Base, in.Rates)
+}
+
+func sinkingFundSetAsideBase(goal domain.Goal, now time.Time, base string, rates currency.Rates) (int64, error) {
+	amount := goalsvc.FundSetAsideMinor(goal, now)
+	if amount == 0 {
+		return 0, nil
+	}
+	return currency.ConvertBetween(amount, goal.TargetAmount.Currency, base, rates)
 }

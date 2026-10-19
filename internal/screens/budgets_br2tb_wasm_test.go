@@ -73,6 +73,51 @@ func TestBR2TBUsesGlobalMemberLensAndCountsRenderedBudgetRows(t *testing.T) {
 	}
 }
 
+func TestBV6BMobileToolbarPrecedesFirstBudgetInNaturalDocumentFlow(t *testing.T) {
+	app := bud2TestApp(t)
+	if err := app.PutBudget(domain.Budget{
+		ID: "mobile-flow", Name: "Groceries", CategoryID: "c-food",
+		OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared, Period: domain.PeriodMonthly,
+		Limit: money.New(45000, "USD"),
+	}); err != nil {
+		t.Fatalf("PutBudget: %v", err)
+	}
+	f := render.New(t)
+	f.Render(ui.CreateElement(br2tbBudgetListHarness, br2tbBudgetListHarnessProps{App: app}))
+
+	add := byTestID(f, "button", "budgets-add")
+	if add == nil {
+		t.Fatal("Add budget is missing from the list toolbar")
+	}
+	settings := byTestID(f, "button", "budgets-settings")
+	tools := byTestID(f, "button", "budgets-tools")
+	density := byTestID(f, "button", "budgets-density")
+	if settings == nil || tools == nil || density == nil {
+		t.Fatalf("toolbar controls missing: settings=%v tools=%v density=%v", settings, tools, density)
+	}
+
+	order := make([]string, 0, 8)
+	var visit func(*render.QueryNode)
+	visit = func(node *render.QueryNode) {
+		if node == nil {
+			return
+		}
+		if strings.Contains(node.Attr("class"), "budgets-tb") {
+			order = append(order, "toolbar")
+		}
+		if strings.HasPrefix(node.Attr("data-testid"), "budget-card-") {
+			order = append(order, "first budget")
+		}
+		for _, child := range node.Children() {
+			visit(child)
+		}
+	}
+	visit(f.Container())
+	if len(order) < 2 || order[0] != "toolbar" || order[1] != "first budget" {
+		t.Fatalf("toolbar and first budget document order = %v, want toolbar before first budget", order)
+	}
+}
+
 type br2tbBudgetListHarnessProps struct{ App *appstate.App }
 
 func br2tbBudgetListHarness(props br2tbBudgetListHarnessProps) ui.Node {

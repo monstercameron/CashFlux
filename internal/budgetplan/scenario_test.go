@@ -3,6 +3,7 @@
 package budgetplan
 
 import (
+	"math"
 	"reflect"
 	"testing"
 )
@@ -110,5 +111,16 @@ func TestEvaluateFundedBreakdown(t *testing.T) {
 	}
 	if !got.IsUnderfunded("b") || got.IsUnderfunded("a") {
 		t.Errorf("IsUnderfunded wrong: %v", got.Underfunded)
+	}
+}
+
+func TestEvaluateReportsMoneyOverflow(t *testing.T) {
+	got := Evaluate(ScenarioInput{IncomeMinor: math.MaxInt64, IncomeDeltaMinor: 1})
+	if got.Error == nil {
+		t.Fatal("expected income overflow to be reported")
+	}
+	got = Evaluate(ScenarioInput{IncomeMinor: math.MaxInt64, Plans: []BudgetPlan{{BudgetID: "a", PlanMinor: math.MaxInt64}, {BudgetID: "b", PlanMinor: 1}}})
+	if got.Error == nil {
+		t.Fatal("expected total-plan overflow to be reported")
 	}
 }

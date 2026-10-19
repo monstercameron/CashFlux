@@ -5,6 +5,7 @@
 package screens
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"sort"
@@ -66,7 +67,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	rowTitle := budgetRowTitle(s, rowBarValues.title, rowNavigation.drillScope, props)
 	customLine, envLine, envDebtLine := budgetRowMetadata(props, s, lastMonthMode)
 
-	rowPaceNotes := budgetRowPaceNotes(lastMonthMode, props, s, rowDisclosure.prefs, rowNavigation.openEdit)
+	rowPaceNotes := budgetRowPaceNotes(lastMonthMode, props, s, rowDisclosure.prefs)
 
 	rowPeriodNotes := budgetRowPeriodNotes(lastMonthMode, props, s, rowDetailActions.openCover)
 	kebabNode, actionsRow := budgetRowActions(budgetRowActionsProps{
@@ -151,7 +152,7 @@ type budgetRowCalculationErrorProps struct {
 
 func budgetRowCalculationError(props budgetRowCalculationErrorProps) ui.Node {
 	openRates := ui.UseEvent(Prevent(func() { uistate.OpenGlobalSettingsAt("household") }))
-	missingRate := props.Status.Error != nil && strings.Contains(strings.ToLower(props.Status.Error.Error()), "exchange rate")
+	missingRate := budgetErrorHasUnknownRate(props.Status.Error)
 	fixAction := props.OpenEdit
 	fixLabel := uistate.T("bud2.fixBudget")
 	if missingRate {
@@ -165,6 +166,8 @@ func budgetRowCalculationError(props budgetRowCalculationErrorProps) ui.Node {
 		Div(css.Class("budget-crow-actions"), props.Actions),
 	)
 }
+
+func budgetErrorHasUnknownRate(err error) bool { return errors.Is(err, currency.ErrUnknownRate) }
 
 type budgetRowCompactProps struct {
 	budgetRowProps
@@ -227,7 +230,7 @@ func budgetRowCompact(props budgetRowCompactProps) ui.Node {
 		if s.Remaining.IsNegative() {
 			leftCls += " " + tw.Fold(tw.TextDown)
 		}
-		crowLeft = Span(ClassStr(leftCls), budgetRemainPhrase(s.Remaining))
+		crowLeft = Span(ClassStr(leftCls), budgetRowRemainPhrase(s))
 		chipTone := ""
 		switch {
 		case s.State == budgeting.StateOver:
@@ -568,7 +571,7 @@ func budgetRolloverTable(view budgeting.RolloverView, id string) ui.Node {
 	}
 	rows := make([]ui.Node, 0, len(periods))
 	for _, state := range periods {
-		month := state.Start.Format("Jan") + " " + strconv.Itoa(state.Start.Year())
+		month := budgetRolloverMonthLabel(state.Start)
 		rows = append(rows, Tr(
 			Th(Attr("scope", "row"), month), Td(fmtMoney(state.EffectiveCap)), Td(formatSignedMoney(state.CarryIn)),
 			Td(fmtMoney(state.Spend)), Td(formatSignedMoney(state.CarryOut)),
@@ -584,26 +587,8 @@ func budgetRolloverTable(view budgeting.RolloverView, id string) ui.Node {
 	)
 }
 
-// budgetRolloverChainLines remains a pure text formatter for existing callers;
-// rendered budget rows use budgetRolloverTable with the already evaluated status.
-func budgetRolloverChainLines(chain []budgeting.RolloverPeriodState) string {
-	const visiblePeriods = 6
-	lines := make([]string, 0, visiblePeriods+1)
-	if earlier := len(chain) - visiblePeriods; earlier > 0 {
-		lines = append(lines, fmt.Sprintf("and %d earlier", earlier))
-		chain = chain[earlier:]
-	}
-	for _, state := range chain {
-		lines = append(lines, fmt.Sprintf("%s: base %s, carry-in %s, effective cap %s, spent %s, carry-out %s.",
-			state.Start.Format("2006-01-02"), fmtMoney(state.Base), formatSignedMoney(state.CarryIn), fmtMoney(state.EffectiveCap), fmtMoney(state.Spend), formatSignedMoney(state.CarryOut)))
-	}
-	return strings.Join(lines, "\n")
-}
-
-// budgetRolloverChainText provides the legacy diagnostic labels used by the old
-// helper tests. The row no longer calls it or scans ledger history for detail.
-func budgetRolloverChainText(domain.Budget, time.Time, int) string {
-	return "base · carry-in · effective cap · spent · carry-out"
+func budgetRolloverMonthLabel(start time.Time) string {
+	return budgetMonthName(start, true) + " " + strconv.Itoa(start.Year())
 }
 
 func formatSignedMoney(amount money.Money) string {
@@ -716,6 +701,7 @@ func recurringLabelSet() map[string]bool {
 
 // budgetDriversPanelProps configures the "what's driving this" disclosure.
 type budgetDriversPanelProps struct {
+	Status budgeting.Status
 	Budget domain.Budget
 	// Title is the budget's display title ("name · category"), which scopes the
 	// toggle's accessible name (C668). Several budgets can be near or over at
@@ -736,6 +722,7 @@ func budgetDriversPanel(props budgetDriversPanelProps) ui.Node {
 	toggle := ui.UseEvent(Prevent(func() { expanded.Set(!expanded.Get()) }))
 	nav := router.UseNavigate()
 	txFilter := uistate.UseTxFilter()
+	revision := uistate.UseDataRevision().Get()
 	open := expanded.Get()
 
 	discLabel := uistate.T("budgets.driversShow")
@@ -763,11 +750,19 @@ func budgetDriversPanel(props budgetDriversPanelProps) ui.Node {
 
 	var body ui.Node = Fragment()
 	if open {
-		drivers, base := budgetTopDriversFor(props.Budget, 3, props.Anchor)
+		anchor := props.Anchor
+		if anchor.IsZero() {
+			anchor = time.Now()
+		}
+		prefs := uistate.LoadPrefs()
+		start, end := budgeting.PeriodRangeAnchored(props.Budget.Period, anchor, prefs.WeekStartWeekday(), budgetPayCycleAnchor(prefs.PayCycleAnchor))
+		drivers, _ := memoBudgetDrivers(appstate.Default, revision, props.Budget.ID, start, end, func() ([]budgeting.Driver, string) {
+			return budgetTopDriversFor(props.Budget, 3, anchor)
+		})
 		// SM-4: name WHAT KIND of thing happened before listing who. The merchants
 		// answer "who", and the reader was left to infer the rest from three names.
 		reason := ui.CreateElement(budgetWhyOverHint, budgetWhyOverProps{
-			Budget: props.Budget, Anchor: props.Anchor,
+			Status: props.Status, Budget: props.Budget, Anchor: props.Anchor, Drivers: drivers,
 		})
 		if len(drivers) == 0 {
 			body = P(css.Class("budget-drivers-empty"), Attr("id", listID), Attr("data-testid", "budget-drivers-empty-"+props.Budget.ID),
@@ -794,7 +789,7 @@ func budgetDriversPanel(props budgetDriversPanelProps) ui.Node {
 				}(label, isRec)
 				rows = append(rows, ui.CreateElement(budgetDriverRow, budgetDriverRowProps{
 					BudgetID: props.Budget.ID, Label: label,
-					Amount: fmtMoney(money.New(d.Amount, base)), Recurring: isRec, OnDrill: drill,
+					Amount: fmtMoney(money.New(d.Amount, d.Currency)), Recurring: isRec, OnDrill: drill,
 				}))
 			}
 			body = Div(css.Class("budget-drivers-list"), Attr("id", listID), rows)
@@ -933,12 +928,18 @@ type budgetPeriodMemoKey struct {
 	end      string
 }
 
+type budgetDriverMemoValue struct {
+	drivers []budgeting.Driver
+	base    string
+}
+
 var budgetPeriodMemos = struct {
 	sync.Mutex
-	goal  map[budgetPeriodMemoKey]goalfunded.Split
-	pie   map[budgetPeriodMemoKey][]budgetSlice
-	chain map[budgetPeriodMemoKey]string
-}{goal: make(map[budgetPeriodMemoKey]goalfunded.Split), pie: make(map[budgetPeriodMemoKey][]budgetSlice), chain: make(map[budgetPeriodMemoKey]string)}
+	goal    map[budgetPeriodMemoKey]goalfunded.Split
+	funding map[budgetPeriodMemoKey][]goalfunded.BudgetFunding
+	drivers map[budgetPeriodMemoKey]budgetDriverMemoValue
+	pie     map[budgetPeriodMemoKey][]budgetSlice
+}{goal: make(map[budgetPeriodMemoKey]goalfunded.Split), funding: make(map[budgetPeriodMemoKey][]goalfunded.BudgetFunding), drivers: make(map[budgetPeriodMemoKey]budgetDriverMemoValue), pie: make(map[budgetPeriodMemoKey][]budgetSlice)}
 
 func periodMemoKey(app *appstate.App, revision int, budgetID string, start, end time.Time) budgetPeriodMemoKey {
 	return budgetPeriodMemoKey{app: app, revision: revision, budgetID: budgetID,
@@ -961,6 +962,42 @@ func memoGoalFunded(app *appstate.App, revision int, budgetID string, start, end
 	budgetPeriodMemos.goal[key] = value
 	budgetPeriodMemos.Unlock()
 	return value
+}
+
+func memoBudgetGoalFunding(app *appstate.App, revision int, start, end time.Time, calculate func() []goalfunded.BudgetFunding) []goalfunded.BudgetFunding {
+	key := periodMemoKey(app, revision, "goal-funding-allocation", start, end)
+	budgetPeriodMemos.Lock()
+	if value, ok := budgetPeriodMemos.funding[key]; ok {
+		budgetPeriodMemos.Unlock()
+		return append([]goalfunded.BudgetFunding(nil), value...)
+	}
+	budgetPeriodMemos.Unlock()
+	value := calculate()
+	budgetPeriodMemos.Lock()
+	if len(budgetPeriodMemos.funding) > 256 {
+		budgetPeriodMemos.funding = make(map[budgetPeriodMemoKey][]goalfunded.BudgetFunding)
+	}
+	budgetPeriodMemos.funding[key] = append([]goalfunded.BudgetFunding(nil), value...)
+	budgetPeriodMemos.Unlock()
+	return value
+}
+
+func memoBudgetDrivers(app *appstate.App, revision int, budgetID string, start, end time.Time, calculate func() ([]budgeting.Driver, string)) ([]budgeting.Driver, string) {
+	key := periodMemoKey(app, revision, budgetID, start, end)
+	budgetPeriodMemos.Lock()
+	if value, ok := budgetPeriodMemos.drivers[key]; ok {
+		budgetPeriodMemos.Unlock()
+		return append([]budgeting.Driver(nil), value.drivers...), value.base
+	}
+	budgetPeriodMemos.Unlock()
+	drivers, base := calculate()
+	budgetPeriodMemos.Lock()
+	if len(budgetPeriodMemos.drivers) > 256 {
+		budgetPeriodMemos.drivers = make(map[budgetPeriodMemoKey]budgetDriverMemoValue)
+	}
+	budgetPeriodMemos.drivers[key] = budgetDriverMemoValue{drivers: append([]budgeting.Driver(nil), drivers...), base: base}
+	budgetPeriodMemos.Unlock()
+	return drivers, base
 }
 
 func memoBudgetComposition(b domain.Budget, anchor time.Time, revision int) []budgetSlice {

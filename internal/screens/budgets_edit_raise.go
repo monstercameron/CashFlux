@@ -57,10 +57,15 @@ func budgetEditRaiseLimit(p budgetEditRaiseLimitProps) ui.Node {
 	// the arithmetic between them (the same string the card's cap line carries),
 	// and the duration hint states which one the top-up changes and what happens
 	// to it next period.
-	capLine, _ := budgetTopupCapCopy(fmtMoney(p.b.Limit), p.selfEffCap, p.selfCapMath, p.topupPermanentS.Get())
-	if p.b.Rollover && !p.topupPermanentS.Get() {
-		capLine = uistate.T("br3dlg.rolloverNextCap")
+	effectiveCap := p.selfEffCap
+	if effectiveCap == "" {
+		effectiveCap = fmtMoney(p.b.Limit)
 	}
+	capMath := p.selfCapMath
+	if capMath == "" {
+		capMath = uistate.T("budgets.topupCapPlain", fmtMoney(p.b.Limit))
+	}
+	capLine := uistate.T("bv6g.raise.cap", p.b.Name, effectiveCap, capMath)
 	var overPick, projectedPick int64
 	if app := appstate.Default; app != nil {
 		view := computeBudgetView(app, member, p.vw, pr, false)
@@ -98,9 +103,14 @@ func budgetEditRaiseLimit(p budgetEditRaiseLimitProps) ui.Node {
 	}
 	onPickCover := ui.UseEvent(Prevent(func() { p.topupAmt.Set(money.FormatMinor(overPick, p.dec)) }))
 	onPickProjected := ui.UseEvent(Prevent(func() { p.topupAmt.Set(money.FormatMinor(projectedPick, p.dec)) }))
+	parsedAmount, amountErr := money.ParseMinor(strings.TrimSpace(p.topupAmt.Get()), p.dec)
+	validAmount := budgetRaiseAmountValid(parsedAmount, amountErr)
+	applyLabel := uistate.T("budgets.raiseLimit")
+	if validAmount {
+		applyLabel = uistate.T("bv6g.raise.apply", fmtMoney(money.New(parsedAmount, p.cur)))
+	}
 	return Form(css.Class("acct-edit-form"), Attr("data-testid", "budget-raise-form"), OnSubmit(p.submitTopup),
 		Div(css.Class("modal-scroll"),
-			H3(Attr("data-testid", "budget-raise-title"), uistate.T("br3dlg.raiseTitle", p.b.Name)),
 			P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "topup-cap-math"),
 				Style(map[string]string{"margin": "0"}), capLine),
 			uiw.Field(uiw.FieldProps{ID: "budget-topup-amt", Label: uistate.T("budgets.raiseAmount"), Required: true,
@@ -157,10 +167,12 @@ func budgetEditRaiseLimit(p budgetEditRaiseLimitProps) ui.Node {
 		),
 		Div(css.Class("modal-foot"),
 			Button(css.Class("btn"), Type("button"), OnClick(p.cancel), uistate.T("action.cancel")),
-			Button(css.Class("btn btn-primary"), Type("submit"), Attr("data-testid", "budget-raise-submit"), uistate.T("budgets.raiseLimit")),
+			Button(append([]any{css.Class("btn btn-primary"), Type("submit"), Attr("data-testid", "budget-raise-submit"), applyLabel}, disabledAttr(!validAmount)...)...),
 		),
 	)
 }
+
+func budgetRaiseAmountValid(amount int64, err error) bool { return err == nil && amount > 0 }
 
 func budgetRaiseQuickPickAmounts(status budgeting.Status) (coverOverspend, projectedOverspend int64) {
 	coverOverspend = budgeting.CoverAmount(status).Amount

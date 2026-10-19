@@ -42,10 +42,6 @@ func (c SweepConfig) Participates(budgetID string) bool {
 // sweep wins when both are enabled: a participating budget's leftover is swept to
 // the goal instead of carried into next period. Callers advancing rollover math
 // should skip Carryover for a budget this returns true for.
-func (c SweepConfig) SuppressesRollover(budgetID string) bool {
-	return c.Enabled && c.Participates(budgetID)
-}
-
 // SweepLine is one budget's contribution to a sweep: the positive amount it left
 // unspent this period.
 type SweepLine struct {
@@ -89,15 +85,6 @@ func (p SweepPlan) BudgetCount() int {
 // ComputeSweep is the single-currency compatibility wrapper. Foreign currency,
 // overflow or a failed status produces a blocked plan with Error. Use
 // ComputeSweepWithRates for household FX.
-func ComputeSweep(statuses []Status, cfg SweepConfig, base string, goalAllowed func(string) bool) SweepPlan {
-	plan, err := ComputeSweepWithRates(statuses, cfg, currency.Rates{Base: base}, goalAllowed)
-	if err != nil {
-		plan.Error = err
-		plan.Blocked = true
-	}
-	return plan
-}
-
 // ComputeSweepWithRates computes checked leftovers from evaluated card statuses.
 // Month-close sweeps only monthly spending budgets; weekly, quarterly, yearly
 // and saving budgets are excluded. Every line and Total use rates.Base.

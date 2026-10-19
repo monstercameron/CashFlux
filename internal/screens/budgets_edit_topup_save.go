@@ -43,8 +43,8 @@ var errBudgetTopupCurrencyMismatch = errors.New("funding budgets must use the de
 
 // planFundedBudgetTopup creates every source and destination update before a
 // funded top-up is persisted. Period-only source boosts use that source's own
-// period key for the period containing destinationStart.
-func planFundedBudgetTopup(budgets []domain.Budget, shares map[string]int64, destinationID string, amount int64, permanent bool, destinationStart, payAnchor time.Time, weekStart time.Weekday) ([]domain.Budget, error) {
+// period key for the period containing viewAnchor.
+func planFundedBudgetTopup(budgets []domain.Budget, shares map[string]int64, destinationID string, amount int64, permanent bool, viewAnchor, payAnchor time.Time, weekStart time.Weekday) ([]domain.Budget, error) {
 	byID := make(map[string]domain.Budget, len(budgets))
 	for _, budget := range budgets {
 		byID[budget.ID] = budget
@@ -71,15 +71,12 @@ func planFundedBudgetTopup(budgets []domain.Budget, shares map[string]int64, des
 			}
 			source.Limit.Amount -= share
 		} else {
-			key := budgeting.PeriodKeyWithWeekStart(source.Period, destinationStart, payAnchor, weekStart)
+			key := budgeting.PeriodKeyWithWeekStart(source.Period, viewAnchor, payAnchor, weekStart)
 			start, err := time.Parse("2006-01-02", key)
 			if err != nil {
 				return nil, fmt.Errorf("source budget %q period key: %w", id, err)
 			}
-			if source.PeriodBoosts[key] < math.MinInt64+share {
-				return nil, fmt.Errorf("source budget %q period boost would overflow", id)
-			}
-			source, err = budgeting.WithPeriodBoostChecked(source, start, -share)
+			source, err = source.WithPeriodBoostChecked(start, -share)
 			if err != nil {
 				return nil, fmt.Errorf("source budget %q period boost: %w", id, err)
 			}
@@ -92,12 +89,15 @@ func planFundedBudgetTopup(budgets []domain.Budget, shares map[string]int64, des
 		}
 		destination.Limit.Amount += amount
 	} else {
-		key := budgeting.PeriodKeyWithWeekStart(destination.Period, destinationStart, payAnchor, weekStart)
+		key := budgeting.PeriodKeyWithWeekStart(destination.Period, viewAnchor, payAnchor, weekStart)
 		if destination.PeriodBoosts[key] > math.MaxInt64-amount {
 			return nil, fmt.Errorf("destination budget period boost would overflow")
 		}
-		var err error
-		destination, err = budgeting.WithPeriodBoostChecked(destination, destinationStart, amount)
+		destinationStart, err := time.Parse(time.DateOnly, key)
+		if err != nil {
+			return nil, fmt.Errorf("destination budget period key: %w", err)
+		}
+		destination, err = destination.WithPeriodBoostChecked(destinationStart, amount)
 		if err != nil {
 			return nil, fmt.Errorf("destination budget period boost: %w", err)
 		}
@@ -119,7 +119,7 @@ func useBudgetEditTopupSave(p budgetEditTopupSaveProps) ui.Handler {
 			return
 		}
 		permanent := p.topupPermanentS.Get()
-		periodStart := budgetPeriodKeyStartWithWeekStart(p.b.Period, p.viewAnchor, p.coverPayAnchor, p.pr.WeekStartWeekday())
+		viewAnchor := p.viewAnchor
 
 		// Optional funding: pull the amount from other budgets (equal split across the
 		// checked sources). Without any source, the top-up adds new limit from income.
@@ -157,7 +157,7 @@ func useBudgetEditTopupSave(p budgetEditTopupSaveProps) ui.Handler {
 				}
 			}
 			writes, planErr := planFundedBudgetTopup(p.app.Budgets(), shares, p.props.BudgetID,
-				amt, permanent, periodStart, p.coverPayAnchor, p.pr.WeekStartWeekday())
+				amt, permanent, viewAnchor, p.coverPayAnchor, p.pr.WeekStartWeekday())
 			if errors.Is(planErr, errBudgetTopupCurrencyMismatch) {
 				p.errS.Set(uistate.T("budgets.coverCurrencyMismatch"))
 				return
@@ -188,7 +188,8 @@ func useBudgetEditTopupSave(p budgetEditTopupSaveProps) ui.Handler {
 					nb.Limit = money.New(nb.Limit.Amount+amt, p.cur)
 				} else {
 					var boostErr error
-					nb, boostErr = budgeting.WithPeriodBoostChecked(nb, periodStart, amt)
+					periodStart := budgetPeriodKeyStartWithWeekStart(nb.Period, viewAnchor, p.coverPayAnchor, p.pr.WeekStartWeekday())
+					nb, boostErr = nb.WithPeriodBoostChecked(periodStart, amt)
 					if boostErr != nil {
 						p.errS.Set(budgetErrorText(boostErr))
 						return

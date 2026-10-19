@@ -101,7 +101,7 @@ func TestEnvelopeAvailableConvertError(t *testing.T) {
 	budget := domain.Budget{CategoryID: "food", Scope: domain.ScopeShared, Period: domain.PeriodMonthly, Limit: usd(50000)}
 	all := []domain.Transaction{expense(1000, "JPY", "food", "", "2026-06-03")}
 
-	if _, err := EnvelopeAvailable(budget, all, mustDate("2026-06-15"), time.Sunday, rates, nil); err == nil {
+	if _, err := EnvelopeAvailableAnchored(budget, all, mustDate("2026-06-15"), time.Sunday, time.Time{}, rates, nil); err == nil {
 		t.Error("EnvelopeAvailable should surface the conversion error from the loop")
 	}
 }

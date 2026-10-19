@@ -20,7 +20,9 @@ import (
 func TestSOLB2EditorSavesHistoryInViewedPeriod(t *testing.T) {
 	app := guardTestApp(t)
 	b := domain.Budget{ID: "solb2", Name: "Transport", CategoryID: "c-transport", OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared, Period: domain.PeriodMonthly, Limit: money.New(10000, "USD"), Rollover: true, RolloverStart: time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)}
-	if err := app.PutBudget(b); err != nil {
+	// Seed the recorded funding period explicitly; ordinary creation starts at
+	// its effective date rather than accepting a caller-supplied older start.
+	if err := app.PutBudgetAt(b, b.RolloverStart); err != nil {
 		t.Fatal(err)
 	}
 	f := render.New(t)

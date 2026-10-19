@@ -3,11 +3,14 @@
 package budgeting
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/money"
 )
 
 // Bucket is the 50/30/20 spending category that a budget category belongs to.
@@ -128,11 +131,12 @@ type Split5030Result struct {
 	Unclassified []domain.Category
 }
 
-// trailingSpend returns the total absolute expense amount (minor units) posted
-// against catID in txns, capped to the 3 full calendar months ending before
-// the month that contains now. Transfers and income transactions are excluded.
-// Integer math only; no FX conversion (all amounts summed as-is).
-func trailingSpend(catID string, txns []domain.Transaction, now time.Time) int64 {
+// trailingSpend returns the category's checked, base-currency contribution over
+// the three complete months before now. Split lines are attributed to their own
+// categories, and unsupported currencies fail rather than being added as if they
+// shared a minor unit.
+func trailingSpend(catID string, txns []domain.Transaction, now time.Time, rates currency.Rates) (int64, error) {
+	txns = nettedForSpending(txns)
 	// Window: the 3 complete calendar months before the current month.
 	curMonthStart := dateutil.MonthStart(now)
 	windowEnd := curMonthStart
@@ -140,20 +144,29 @@ func trailingSpend(catID string, txns []domain.Transaction, now time.Time) int64
 
 	var total int64
 	for _, t := range txns {
-		if !t.IsExpense() || t.CategoryID != catID {
+		if !t.IsExpense() || !t.CountsInReports() {
 			continue
 		}
 		if t.Date.Before(windowStart) || !t.Date.Before(windowEnd) {
 			continue
 		}
-		// Amount is negative for expenses; take absolute value.
-		amt := t.Amount.Amount
-		if amt < 0 {
-			amt = -amt
+		part, ok, err := ContributionChecked(domain.Budget{}, t, func(id string) bool { return id == catID })
+		if err != nil {
+			return 0, err
 		}
-		total += amt
+		if !ok {
+			continue
+		}
+		converted, err := rates.Convert(part, rates.Base)
+		if err != nil {
+			return 0, err
+		}
+		total, err = money.Add(total, converted.Amount)
+		if err != nil {
+			return 0, err
+		}
 	}
-	return total
+	return total, nil
 }
 
 // distribute spreads target proportionally across cats according to weight[i].
@@ -224,13 +237,32 @@ func distribute(target int64, weights []int64) []int64 {
 // target is distributed proportionally by trailing spend; ties (all zero
 // spend) are split evenly. An income of ≤ 0 returns an empty result.
 func Generate5030(income int64, cats []domain.Category, txns []domain.Transaction, now time.Time) Split5030Result {
+	result, _ := Generate5030WithRates(income, cats, txns, now, currency.Rates{Base: "USD"})
+	return result
+}
+
+// Generate5030WithRates builds the 50/30/20 proposal using checked split-aware
+// contributions converted into the selected base currency.
+func Generate5030WithRates(income int64, cats []domain.Category, txns []domain.Transaction, now time.Time, rates currency.Rates) (Split5030Result, error) {
 	if income <= 0 {
-		return Split5030Result{}
+		return Split5030Result{}, nil
 	}
 
-	needs := income * 50 / 100
-	wants := income * 30 / 100
-	savings := income - needs - wants // remainder → savings, so the three sum exactly to income
+	needs, err := money.MulDiv(income, 50, 100, money.RoundTowardZero)
+	if err != nil {
+		return Split5030Result{}, fmt.Errorf("calculate needs target: %w", err)
+	}
+	wants, err := money.MulDiv(income, 30, 100, money.RoundTowardZero)
+	if err != nil {
+		return Split5030Result{}, fmt.Errorf("calculate wants target: %w", err)
+	}
+	savings, err := money.Sub(income, needs)
+	if err == nil {
+		savings, err = money.Sub(savings, wants)
+	}
+	if err != nil {
+		return Split5030Result{}, fmt.Errorf("calculate savings target: %w", err)
+	}
 
 	result := Split5030Result{
 		Income:        income,
@@ -257,7 +289,10 @@ func Generate5030(income int64, cats []domain.Category, txns []domain.Transactio
 			continue // income categories are not budgeted
 		}
 		b := Classify(c, nil)
-		spend := trailingSpend(c.ID, txns, now)
+		spend, err := trailingSpend(c.ID, txns, now, rates)
+		if err != nil {
+			return Split5030Result{}, err
+		}
 		bucketEntries[b] = append(bucketEntries[b], catEntry{cat: c, bucket: b, spend: spend})
 	}
 
@@ -280,7 +315,10 @@ func Generate5030(income int64, cats []domain.Category, txns []domain.Transactio
 		for i, e := range entries {
 			weights[i] = e.spend
 		}
-		limits := distribute(target, weights)
+		limits, err := distributeChecked(target, weights)
+		if err != nil {
+			return Split5030Result{}, err
+		}
 		for i, e := range entries {
 			proposals = append(proposals, BudgetProposal{
 				Category:   e.cat,
@@ -291,5 +329,60 @@ func Generate5030(income int64, cats []domain.Category, txns []domain.Transactio
 	}
 
 	result.Proposals = proposals
-	return result
+	return result, nil
+}
+
+func distributeChecked(target int64, weights []int64) ([]int64, error) {
+	n := len(weights)
+	if n == 0 || target <= 0 {
+		return make([]int64, n), nil
+	}
+	var totalWeight int64
+	for _, weight := range weights {
+		if weight < 0 {
+			return nil, fmt.Errorf("negative spending weight")
+		}
+		var err error
+		totalWeight, err = money.Add(totalWeight, weight)
+		if err != nil {
+			return nil, fmt.Errorf("sum template spending weights: %w", err)
+		}
+	}
+	limits := make([]int64, n)
+	if totalWeight == 0 {
+		base := target / int64(n)
+		for i := range limits {
+			limits[i] = base
+		}
+		limits[0], _ = money.Add(limits[0], target-base*int64(n))
+		return limits, nil
+	}
+	var distributed int64
+	first := -1
+	for i, weight := range weights {
+		if weight > 0 && first < 0 {
+			first = i
+		}
+		value, err := money.MulDiv(target, weight, totalWeight, money.RoundTowardZero)
+		if err != nil {
+			return nil, fmt.Errorf("allocate template target: %w", err)
+		}
+		limits[i] = value
+		distributed, err = money.Add(distributed, value)
+		if err != nil {
+			return nil, fmt.Errorf("sum template allocation: %w", err)
+		}
+	}
+	remainder, err := money.Sub(target, distributed)
+	if err != nil {
+		return nil, fmt.Errorf("calculate template remainder: %w", err)
+	}
+	if first < 0 {
+		first = 0
+	}
+	limits[first], err = money.Add(limits[first], remainder)
+	if err != nil {
+		return nil, fmt.Errorf("apply template remainder: %w", err)
+	}
+	return limits, nil
 }

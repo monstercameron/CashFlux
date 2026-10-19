@@ -3,6 +3,7 @@
 package budgeting
 
 import (
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"testing"
 
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -94,7 +95,7 @@ func TestComputeSweep(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			plan := ComputeSweep(tt.statuses, tt.cfg, "USD", tt.allow)
+			plan := checkedComputeSweep(t, tt.statuses, tt.cfg, "USD", tt.allow)
 			if plan.Total.Amount != tt.wantTotal {
 				t.Errorf("Total = %d, want %d", plan.Total.Amount, tt.wantTotal)
 			}
@@ -111,32 +112,15 @@ func TestComputeSweep(t *testing.T) {
 	}
 }
 
-func TestSweepSuppressesRollover(t *testing.T) {
-	// A budget with rollover enabled that ALSO participates in the sweep: sweep
-	// wins (mutual exclusion, sweep precedence).
-	cfg := SweepConfig{Enabled: true, BudgetIDs: []string{"groceries"}}
-	if !cfg.SuppressesRollover("groceries") {
-		t.Error("participating budget should have rollover suppressed by sweep")
-	}
-	if cfg.SuppressesRollover("dining") {
-		t.Error("non-participating budget should keep its rollover")
-	}
-	// A disabled sweep never suppresses rollover.
-	off := SweepConfig{Enabled: false, BudgetIDs: []string{"groceries"}}
-	if off.SuppressesRollover("groceries") {
-		t.Error("disabled sweep must not suppress rollover")
-	}
-}
-
 func TestSweepPlanHelpers(t *testing.T) {
-	empty := ComputeSweep(nil, SweepConfig{Enabled: true}, "USD", nil)
+	empty := checkedComputeSweep(t, nil, SweepConfig{Enabled: true}, "USD", nil)
 	if empty.HasLeftover() {
 		t.Error("empty plan should not report leftover")
 	}
 	if empty.BudgetCount() != 0 {
 		t.Errorf("BudgetCount = %d, want 0", empty.BudgetCount())
 	}
-	full := ComputeSweep(
+	full := checkedComputeSweep(t,
 		[]Status{sweepStatus("g", "Groceries", 5000)},
 		SweepConfig{Enabled: true, BudgetIDs: []string{"g"}, TargetGoalID: "emg"},
 		"USD", nil)
@@ -146,4 +130,12 @@ func TestSweepPlanHelpers(t *testing.T) {
 	if full.BudgetCount() != 1 {
 		t.Errorf("BudgetCount = %d, want 1", full.BudgetCount())
 	}
+}
+func checkedComputeSweep(t *testing.T, statuses []Status, cfg SweepConfig, base string, goalAllowed func(string) bool) SweepPlan {
+	t.Helper()
+	plan, err := ComputeSweepWithRates(statuses, cfg, currency.Rates{Base: base}, goalAllowed)
+	if err != nil {
+		t.Fatalf("ComputeSweepWithRates: %v", err)
+	}
+	return plan
 }

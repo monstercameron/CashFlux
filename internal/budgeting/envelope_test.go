@@ -49,7 +49,7 @@ func TestEnvelopeAvailable(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := EnvelopeAvailable(monthly, tt.txns, curRef, time.Sunday, rates, nil)
+			got, err := EnvelopeAvailableAnchored(monthly, tt.txns, curRef, time.Sunday, time.Time{}, rates, nil)
 			if err != nil {
 				t.Fatalf("error: %v", err)
 			}
@@ -71,12 +71,30 @@ func TestEnvelopeAvailableUsesPriorEffectiveCapChain(t *testing.T) {
 		expense(63564, "USD", "groceries", "", "2026-09-10"), // effective Sep cap $205.20, leaving $430.44 debt.
 		expense(24250, "USD", "groceries", "", "2026-10-10"), // effective Oct cap $205.20, leaving $37.30 debt.
 	}
-	got, err := EnvelopeAvailable(b, txns, time.Date(2026, time.November, 15, 0, 0, 0, 0, time.UTC), time.Sunday, rates, nil)
+	got, err := EnvelopeAvailableAnchored(b, txns, time.Date(2026, time.November, 15, 0, 0, 0, 0, time.UTC), time.Sunday, time.Time{}, rates, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got.Amount != 41270 {
 		t.Errorf("November envelope = %d, want $412.70 after carrying October's $37.30 overage", got.Amount)
+	}
+}
+
+func TestEnvelopeAndCardUseSameRolloverStart(t *testing.T) {
+	start := mustDate("2026-01-01")
+	budget := domain.Budget{
+		ID: "fund", CategoryID: "food", Period: domain.PeriodMonthly,
+		Scope: domain.ScopeShared, Limit: usd(30000), Rollover: true, RolloverStart: start,
+	}
+	transactions := []domain.Transaction{expense(10000, "USD", "food", "", "2026-03-10")}
+	got, err := EnvelopeAvailableAnchored(budget, transactions, mustDate("2026-04-15"), time.Sunday, time.Time{}, currency.Rates{Base: "USD"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Jan and Feb each carry $300; March carries $200 after spending $100;
+	// April adds another $300. The card's rollover chain reports $1,100.
+	if got.Amount != 110000 {
+		t.Fatalf("envelope available = %d; want card-consistent $1,100.00", got.Amount)
 	}
 }
 
@@ -88,7 +106,7 @@ func TestEnvelopeAvailableRespectsScope(t *testing.T) {
 		expense(5000, "USD", "food", "m1", "2026-05-10"), // counts
 		expense(9000, "USD", "food", "m2", "2026-05-11"), // other member, excluded
 	}
-	got, err := EnvelopeAvailable(indiv, txns, curRef, time.Sunday, rates, nil)
+	got, err := EnvelopeAvailableAnchored(indiv, txns, curRef, time.Sunday, time.Time{}, rates, nil)
 	if err != nil {
 		t.Fatalf("error: %v", err)
 	}
@@ -104,7 +122,7 @@ func TestEnvelopeAvailableUsesReportAndTagInclusion(t *testing.T) {
 	b := domain.Budget{Period: domain.PeriodMonthly, Scope: domain.ScopeShared, Limit: usd(10000), CategoryID: "dining"}
 	excluded := expense(4000, "USD", "dining", "", "2026-01-05")
 	excluded.ExcludeFromReports = true
-	got, err := EnvelopeAvailable(b, []domain.Transaction{excluded}, curRef, time.Sunday, rates, nil)
+	got, err := EnvelopeAvailableAnchored(b, []domain.Transaction{excluded}, curRef, time.Sunday, time.Time{}, rates, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +133,7 @@ func TestEnvelopeAvailableUsesReportAndTagInclusion(t *testing.T) {
 	tagBudget := domain.Budget{Period: domain.PeriodMonthly, Scope: domain.ScopeShared, Limit: usd(10000), TrackedTags: []string{"trip"}}
 	tagged := expense(2000, "USD", "travel", "", "2026-05-05")
 	tagged.Tags = []string{"trip"}
-	got, err = EnvelopeAvailable(tagBudget, []domain.Transaction{tagged}, curRef, time.Sunday, rates, nil)
+	got, err = EnvelopeAvailableAnchored(tagBudget, []domain.Transaction{tagged}, curRef, time.Sunday, time.Time{}, rates, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,7 +146,7 @@ func TestEnvelopeAvailableIncludesHistoriesBeyondFormerWeeklyCap(t *testing.T) {
 	rates := currency.Rates{Base: "USD"}
 	b := domain.Budget{Period: domain.PeriodWeekly, Scope: domain.ScopeShared, Limit: usd(10000), CategoryID: "food"}
 	old := expense(1, "USD", "food", "", "2020-01-01")
-	got, err := EnvelopeAvailable(b, []domain.Transaction{old}, mustDate("2026-10-18"), time.Sunday, rates, nil)
+	got, err := EnvelopeAvailableAnchored(b, []domain.Transaction{old}, mustDate("2026-10-18"), time.Sunday, time.Time{}, rates, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

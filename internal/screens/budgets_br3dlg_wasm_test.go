@@ -18,11 +18,17 @@ import (
 	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
 
-func br3dlgRaiseHarness(_ struct{}) ui.Node {
-	permanent := ui.UseState(false)
+type br3dlgRaiseHarnessProps struct {
+	amountText string
+	permanent  bool
+}
+
+func br3dlgRaiseHarness(props br3dlgRaiseHarnessProps) ui.Node {
+	permanent := ui.UseState(props.permanent)
 	selected := ui.UseState(map[string]bool{})
 	coverOpen := ui.UseState(false)
 	amount := ui.UseState("")
+	amount.Set(props.amountText)
 	submit := ui.UseEvent(Prevent(func() {}))
 	input := ui.UseEvent(func(ui.Event) {})
 	toggle := ui.UseEvent(Prevent(func() {}))
@@ -34,17 +40,35 @@ func br3dlgRaiseHarness(_ struct{}) ui.Node {
 	})
 }
 
-func TestBR3DLGRaiseDialogNamesBudgetAndDoesNotRepeatFieldLabel(t *testing.T) {
+func TestBR3DLGRaiseBodyDoesNotRepeatDialogTitleAndDisablesEmptySubmit(t *testing.T) {
 	guardTestApp(t)
 	f := render.New(t)
-	f.Render(ui.CreateElement(br3dlgRaiseHarness, struct{}{}))
+	f.Render(ui.CreateElement(br3dlgRaiseHarness, br3dlgRaiseHarnessProps{}))
 	title := byTestID(f, "h3", "budget-raise-title")
 	field := byTestID(f, "input", "budget-topup-amt")
-	if title == nil || title.Text() != "Raise Groceries limit" {
-		t.Fatalf("raise dialog title = %v, want Raise Groceries limit", title)
+	if title != nil {
+		t.Fatalf("raise body repeats the outer dialog title: %q", title.Text())
 	}
 	if field == nil || field.Attr("placeholder") == uistate.T("budgets.raiseAmount") {
 		t.Fatalf("raise amount placeholder repeats its label: %v", field)
+	}
+	button := byTestID(f, "button", "budget-raise-submit")
+	if button == nil || !isDisabled(button) {
+		t.Fatalf("raise action should be disabled for an empty amount: %v", button)
+	}
+	capMath := byTestID(f, "p", "topup-cap-math")
+	if capMath == nil {
+		t.Fatal("raise dialog has no cap explanation")
+	}
+	monthCopy := capMath.Text()
+	f.Render(ui.CreateElement(br3dlgRaiseHarness, br3dlgRaiseHarnessProps{amountText: "37.30", permanent: true}))
+	button = byTestID(f, "button", "budget-raise-submit")
+	if button == nil || isDisabled(button) || button.Text() != "Raise by $37.30" {
+		t.Fatalf("valid raise action = %v, want enabled Raise by $37.30", button)
+	}
+	capMath = byTestID(f, "p", "topup-cap-math")
+	if capMath == nil || capMath.Text() != monthCopy {
+		t.Fatalf("cap explanation changed by duration: month %q, permanent %v", monthCopy, capMath)
 	}
 }
 

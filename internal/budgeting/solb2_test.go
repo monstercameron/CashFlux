@@ -19,7 +19,7 @@ func TestSOLB2EnvelopeStartAndPast(t *testing.T) {
 		date string
 		want int64
 	}{{"2026-09-15", 10000}, {"2026-10-15", 17000}} {
-		got, err := EnvelopeAvailable(b, tx, mustDate(tt.date), time.Monday, currency.Rates{Base: "USD"}, nil)
+		got, err := EnvelopeAvailableAnchored(b, tx, mustDate(tt.date), time.Monday, time.Time{}, currency.Rates{Base: "USD"}, nil)
 		if err != nil || got.Amount != tt.want {
 			t.Errorf("%s: %v, %v; want %d", tt.date, got, err, tt.want)
 		}
@@ -29,7 +29,7 @@ func TestSOLB2SavingEnvelope(t *testing.T) {
 	b := domain.Budget{CategoryID: "save", Period: domain.PeriodMonthly, Direction: domain.DirectionSave, Limit: usd(10000), RolloverStart: mustDate("2026-09-01")}
 	tx := expense(3000, "USD", "save", "", "2026-09-10")
 	tx.TransferAccountID = "pair"
-	got, err := EnvelopeAvailable(b, []domain.Transaction{tx}, mustDate("2026-10-15"), time.Monday, currency.Rates{Base: "USD"}, nil)
+	got, err := EnvelopeAvailableAnchored(b, []domain.Transaction{tx}, mustDate("2026-10-15"), time.Monday, time.Time{}, currency.Rates{Base: "USD"}, nil)
 	if err != nil || got.Amount != 17000 {
 		t.Fatalf("saving envelope: %v %v; want 17000", got, err)
 	}

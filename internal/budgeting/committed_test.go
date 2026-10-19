@@ -32,6 +32,31 @@ func TestCommittedWithRatesConvertsRecurringToBudgetCurrency(t *testing.T) {
 	}
 }
 
+func TestCommittedWithRatesScalesSmoothedAccrualToBudgetCadence(t *testing.T) {
+	annual := cmtRec("insurance", -60000, domain.CadenceYearly, cmtDate(2026, 12, 15), true)
+	for _, tc := range []struct {
+		period domain.Period
+		want   int64
+	}{
+		{domain.PeriodWeekly, 1154},
+		{domain.PeriodMonthly, 5000},
+		{domain.PeriodQuarterly, 15000},
+		{domain.PeriodYearly, 60000},
+	} {
+		t.Run(string(tc.period), func(t *testing.T) {
+			budget := cmtBudget(tc.period, 100_000)
+			got, err := CommittedWithRates(budget, []domain.Recurring{annual}, nil,
+				money.New(100_000, "USD"), cmtDate(2026, 6, 1), cmtDate(2026, 7, 1), currency.Rates{Base: "USD"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.Items[0].Amount.Amount != tc.want || got.Committed.Amount != tc.want {
+				t.Fatalf("period %s set-aside = %+v; committed=%d, want %d", tc.period, got.Items[0].Amount, got.Committed.Amount, tc.want)
+			}
+		})
+	}
+}
+
 func cmtBudget(period domain.Period, limitMinor int64) domain.Budget {
 	return domain.Budget{
 		ID: "b1", Name: "Entertainment", CategoryID: "cat1",

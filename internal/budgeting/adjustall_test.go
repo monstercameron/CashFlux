@@ -182,7 +182,7 @@ func TestApplyAdjustWritesPerScope(t *testing.T) {
 	}
 	starts := func(domain.Budget) time.Time { return periodStart }
 
-	perm := ApplyAdjust(preview, AdjustEveryPeriod, starts)
+	perm := checkedApplyAdjust(t, preview, AdjustEveryPeriod, starts)
 	if len(perm) != 2 {
 		t.Fatalf("permanent write returned %d budgets, want 2", len(perm))
 	}
@@ -193,7 +193,7 @@ func TestApplyAdjustWritesPerScope(t *testing.T) {
 		t.Errorf("a permanent adjustment must not leave a period boost: %v", perm[0].PeriodBoosts)
 	}
 
-	this := ApplyAdjust(preview, AdjustThisPeriod, starts)
+	this := checkedApplyAdjust(t, preview, AdjustThisPeriod, starts)
 	if len(this) != 2 {
 		t.Fatalf("this-period write returned %d budgets, want 2", len(this))
 	}
@@ -225,8 +225,9 @@ func TestApplyAdjustWritesPerScope(t *testing.T) {
 func TestApplyAdjustThisPeriodWithoutAPeriodWritesNothing(t *testing.T) {
 	budgets := []domain.Budget{{ID: "b1", CategoryID: "c1", Period: domain.PeriodMonthly, Limit: money.New(100000, "USD")}}
 	preview := AdjustAllPreviewFor(budgets, -40, AdjustEveryPeriod, zeroOverlays(budgets))
-	if got := ApplyAdjust(preview, AdjustThisPeriod, nil); len(got) != 0 {
-		t.Errorf("wrote %d budgets with no period resolver, want 0", len(got))
+	got, err := ApplyAdjustChecked(preview, AdjustThisPeriod, nil)
+	if err == nil || len(got) != 0 {
+		t.Errorf("ApplyAdjustChecked without period resolver = %d budgets, %v; want no writes and an error", len(got), err)
 	}
 }
 
@@ -252,7 +253,7 @@ func TestAdjustPreviewThisPeriodScalesTheEffectiveCap(t *testing.T) {
 
 	// And the write must land the cap exactly where the preview said.
 	start := time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC)
-	out := ApplyAdjust(p, AdjustThisPeriod, func(domain.Budget) time.Time { return start })
+	out := checkedApplyAdjust(t, p, AdjustThisPeriod, func(domain.Budget) time.Time { return start })
 	if len(out) != 1 {
 		t.Fatalf("write returned %d budgets, want 1", len(out))
 	}
@@ -290,7 +291,7 @@ func TestAdjustThisPeriodRepeatIsVisibleAndFloored(t *testing.T) {
 		if p.Lines[0].Before != capOf(b) {
 			t.Fatalf("pass %d previewed %d, want the current cap %d", i, p.Lines[0].Before, capOf(b))
 		}
-		out := ApplyAdjust(p, AdjustThisPeriod, starts)
+		out := checkedApplyAdjust(t, p, AdjustThisPeriod, starts)
 		b = out[0]
 		if got := capOf(b); got != p.Lines[0].After {
 			t.Fatalf("pass %d landed the cap on %d, want the previewed %d", i, got, p.Lines[0].After)
@@ -329,7 +330,7 @@ func TestAdjustPermanentRefusesToInvertACapCarryingABoost(t *testing.T) {
 
 	// Step 1: reconcile this period, -90%. Cap 10000 -> 1000, base untouched.
 	first := AdjustAllPreviewFor([]domain.Budget{b}, -90, AdjustThisPeriod, map[string]int64{"b1": 0})
-	b = ApplyAdjust(first, AdjustThisPeriod, starts)[0]
+	b = checkedApplyAdjust(t, first, AdjustThisPeriod, starts)[0]
 	cap := b.Limit.Amount + b.PeriodBoost(start)
 	if b.Limit.Amount != 10000 || cap != 1000 {
 		t.Fatalf("after the this-period pass: base %d cap %d, want 10000 / 1000", b.Limit.Amount, cap)
@@ -346,7 +347,7 @@ func TestAdjustPermanentRefusesToInvertACapCarryingABoost(t *testing.T) {
 		t.Fatalf("the budget was not reported as skipped-for-inversion: %+v", second.Skipped)
 	}
 	// And nothing is written for it.
-	if got := ApplyAdjust(second, AdjustEveryPeriod, starts); len(got) != 0 {
+	if got := checkedApplyAdjust(t, second, AdjustEveryPeriod, starts); len(got) != 0 {
 		t.Errorf("wrote %d budgets that the preview excluded", len(got))
 	}
 
@@ -355,7 +356,7 @@ func TestAdjustPermanentRefusesToInvertACapCarryingABoost(t *testing.T) {
 	if ok.Count() != 1 {
 		t.Fatalf("a raise the cap can absorb was refused: %+v", ok.Skipped)
 	}
-	out := ApplyAdjust(ok, AdjustEveryPeriod, starts)
+	out := checkedApplyAdjust(t, ok, AdjustEveryPeriod, starts)
 	if newCap := out[0].Limit.Amount + out[0].PeriodBoost(start); newCap < 1 {
 		t.Errorf("the surviving write still inverted the cap: %d", newCap)
 	}
@@ -427,7 +428,7 @@ func TestAdjustChainedScopesStayHonest(t *testing.T) {
 			t.Fatalf("%s %v%%: refused (%+v) — each of these is absorbable", step.scope, step.pct, p.Skipped)
 		}
 		overlay := capOf(b) - b.Limit.Amount //nolint:staticcheck // reused below for the permanent case
-		out := ApplyAdjust(p, step.scope, starts)
+		out := checkedApplyAdjust(t, p, step.scope, starts)
 		b = out[0]
 		want := p.Lines[0].After
 		if step.scope == AdjustEveryPeriod {
@@ -440,4 +441,12 @@ func TestAdjustChainedScopesStayHonest(t *testing.T) {
 			t.Fatalf("%s %v%%: cap inverted to %d", step.scope, step.pct, capOf(b))
 		}
 	}
+}
+func checkedApplyAdjust(t *testing.T, preview AdjustPreview, scope AdjustScope, periodStart func(domain.Budget) time.Time) []domain.Budget {
+	t.Helper()
+	out, err := ApplyAdjustChecked(preview, scope, periodStart)
+	if err != nil {
+		t.Fatalf("ApplyAdjustChecked: %v", err)
+	}
+	return out
 }

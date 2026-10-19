@@ -79,7 +79,13 @@ func budgetFlexWidget(props budgetSummaryProps) ui.Node {
 		return Fragment()
 	}
 
-	view := budgeting.EvaluateFlex(app.Categories(), app.Transactions(), app.Recurring(), target, base, start, end)
+	settings := app.Settings()
+	rates := currency.Rates{Base: base, Rates: settings.FXRates}
+	view, err := budgeting.EvaluateFlexWithLinks(app.Categories(), app.Transactions(), app.TxnLinks(), app.Recurring(), target, rates, start, end)
+	if err != nil {
+		return Div(css.Class("budgets-flex"), Attr("data-testid", "budget-flex"),
+			P(css.Class("budget-sub is-error"), Attr("role", "status"), uistate.T("flex.calculationFailed")))
+	}
 
 	m := newFlexMeter(view, target, now, start, end)
 

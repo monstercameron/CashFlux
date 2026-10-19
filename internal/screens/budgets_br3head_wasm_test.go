@@ -23,8 +23,8 @@ func TestBR3HeadHeadlineShapeForPastCurrentAndFuturePeriods(t *testing.T) {
 		hist   bool
 		want   string
 	}{
-		{name: "current", want: "spent of $3,313.53 this month"},
-		{name: "past", hist: true, want: "spent of $3,313.53 in Oct 2026"},
+		{name: "current", want: "spent of $3,313.53 monthly plan"},
+		{name: "past", hist: true, want: "spent of $3,313.53 monthly plan during Oct 2026"},
 		{name: "future", future: true, want: "Planned $3,313.53 · expected income $5,900.00"},
 	}
 	for _, tc := range cases {

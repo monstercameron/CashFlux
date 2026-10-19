@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/budgetplan"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -43,7 +44,7 @@ func budgetFutureWidget(props budgetSummaryProps) ui.Node {
 	prefs := uistate.UsePrefs().Get()
 	open := ui.UseState(false)
 	toggleOpen := ui.UseEvent(Prevent(func() { open.Set(!open.Get()) }))
-	return renderBudgetFutureWidget(props, w, time.Now(), activeMember, prefs, open.Get(), toggleOpen)
+	return renderBudgetFutureWidget(props, w, time.Now().UTC(), activeMember, prefs, open.Get(), toggleOpen)
 }
 
 func renderBudgetFutureWidget(props budgetSummaryProps, w period.Window, now time.Time, activeMember string, prefs prefs.Prefs, open bool, toggleOpen ui.Handler) ui.Node {
@@ -81,7 +82,11 @@ func renderBudgetFutureWidget(props budgetSummaryProps, w period.Window, now tim
 	// deposits remain visible as individual recurring rows, while this total is the
 	// plan's expected income, not a second estimate derived from the recurrence list.
 	view := computeBudgetView(app, activeMember, w, prefs, false)
-	expectedIncome := view.BannerIncome
+	expectedWindowIncome, err := budgetplan.ScaleMonthlyIncome(money.New(view.BannerIncome, base), start, end)
+	if err != nil {
+		return Div(css.Class("budget-future-error"), Attr("role", "alert"), uistate.T("budgets.annualGridError"))
+	}
+	expectedIncome := expectedWindowIncome.Amount
 	var outflow int64
 	for _, g := range ghosts {
 		conv, err := currency.ConvertBetween(g.Amount, curOf[g.RecurringID], base, rates)
@@ -89,21 +94,38 @@ func renderBudgetFutureWidget(props budgetSummaryProps, w period.Window, now tim
 			continue
 		}
 		if conv < 0 {
-			outflow += -conv
+			positive, err := money.Neg(conv)
+			if err != nil {
+				return Div(css.Class("budget-future-error"), Attr("role", "alert"), uistate.T("budgets.annualGridError"))
+			}
+			outflow, err = money.Add(outflow, positive)
+			if err != nil {
+				return Div(css.Class("budget-future-error"), Attr("role", "alert"), uistate.T("budgets.annualGridError"))
+			}
 		}
 	}
 	var receivedIncome int64
 	if lines, err := reports.IncomeByCategory(app.Transactions(), start, end, rates); err == nil {
 		for _, line := range lines {
-			receivedIncome += line.Amount
+			receivedIncome, err = money.Add(receivedIncome, line.Amount)
+			if err != nil {
+				return Div(css.Class("budget-future-error"), Attr("role", "alert"), uistate.T("budgets.annualGridError"))
+			}
 		}
 	}
-	planned := view.TotalLimit + view.SavingsAssigned
+	planned, err := money.Add(view.TotalLimit, view.SavingsAssigned)
+	if err != nil {
+		return Div(css.Class("budget-future-error"), Attr("role", "alert"), uistate.T("budgets.annualGridError"))
+	}
+	net, err := money.Sub(expectedIncome, outflow)
+	if err != nil {
+		return Div(css.Class("budget-future-error"), Attr("role", "alert"), uistate.T("budgets.annualGridError"))
+	}
 
 	stats := Div(css.Class("bfut-stats"),
 		bfutStat("budgets.future.expectedIncome", money.New(expectedIncome, base), "text-up"),
 		bfutStat("budgets.future.out", money.New(outflow, base), "text-down"),
-		bfutStat("budgets.future.net", money.New(expectedIncome-outflow, base), netTone(expectedIncome-outflow)),
+		bfutStat("budgets.future.net", money.New(net, base), netTone(net)),
 	)
 
 	var listBody ui.Node

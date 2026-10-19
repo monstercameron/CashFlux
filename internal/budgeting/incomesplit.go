@@ -54,20 +54,6 @@ func (s IncomeSplit) Overspent() bool { return s.Left < 0 }
 // Spent is everything that actually left, whatever it was budgeted against.
 func (s IncomeSplit) Spent() int64 { return s.WithinLimits + s.OverLimits + s.Untracked }
 
-// SplitIncome divides income into where it went.
-//
-// withinLimits and overLimits come from the per-budget rollup, so the parts agree
-// with the rows by construction rather than by a second calculation that has to
-// be kept in step.
-func SplitIncome(income, withinLimits, overLimits, untracked, savings int64) IncomeSplit {
-	s := IncomeSplit{
-		Income: income, WithinLimits: withinLimits, OverLimits: overLimits,
-		Untracked: untracked, Savings: savings,
-	}
-	s.Left = income - s.Spent() - savings
-	return s
-}
-
 // Pct returns part as a whole percentage of Income, clamped to 0..100 and never
 // dividing by a zero or negative income.
 //

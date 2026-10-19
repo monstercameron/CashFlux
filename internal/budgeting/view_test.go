@@ -67,9 +67,6 @@ func TestEvaluateViewBudget(t *testing.T) {
 			if b.Limit != before || got.Status.Budget.Limit != before || got.Status.Limit.Amount != tc.wantLimit {
 				t.Fatal("stored/effective cap distinction lost")
 			}
-			if got.ProratedRest <= 0 || got.ProratedRest >= got.Status.Remaining.Amount {
-				t.Fatalf("prorated rest = %d", got.ProratedRest)
-			}
 		})
 	}
 }

@@ -163,7 +163,7 @@ func budgetEditBasics(p budgetEditBasicsProps) ui.Node {
 					OnChange: func(v string) { p.periodS.Set(v) }, AriaLabel: uistate.T("budgets.period"),
 				}))),
 		If(periodChanged, P(css.Class(tw.TextWarn, tw.Text12), Attr("data-testid", "budget-period-hint"),
-			Style(map[string]string{"margin": "0"}), uistate.T("budgets.periodChangeHint"))),
+			Style(map[string]string{"margin": "0"}), uistate.T("budgets.periodChangeFreshStart"))),
 	)
 }
 

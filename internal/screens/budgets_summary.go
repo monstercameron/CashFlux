@@ -5,12 +5,14 @@
 package screens
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
+	"github.com/monstercameron/CashFlux/internal/categorytree"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -67,17 +69,67 @@ func budgetSummaryPlan(v budgetView, app *appstate.App, vw period.Window) budget
 	normalizationOK := normalizeErr == nil && len(v.Incomplete) == 0
 	planView := v
 	planView.TotalLimit = normalizedBudgetTotal
+	actualSpent, spendIssues := budgetSummaryActualSpend(app, v.Statuses, vw, v.LastMonthMode, rates, v.Base)
+	issues = append(issues, spendIssues...)
+	planView.TotalSpent = actualSpent
 	smartSettings := uistate.LoadSmartSettings()
 	// UX-05: a wholly-past view window flips the summary into past-tense wording —
 	// "Jun 2026 spending", "ended over budget" — because "so far this month" over a
 	// closed month reads as a live figure that will still move. Range is half-open,
 	// so the window is historical exactly when its end is not after now.
 	wStart, wEnd := vw.Range()
-	hist := !time.Now().Before(wEnd)
+	hist := !budgetNow().Before(wEnd)
 	return budgetSummaryPlanResult{
 		normalizedBudgetTotal: normalizedBudgetTotal, normalizationOK: normalizationOK, planView: planView,
 		smartSettings: smartSettings, wStart: wStart, wEnd: wEnd, hist: hist, excluded: excluded, issues: issues,
 	}
+}
+
+// budgetSummaryActualSpend totals posted spending for the selected calendar
+// window. Each budget keeps its own category and tag scope, while its cadence
+// affects only the plan figure. A future window has no posted spend yet.
+func budgetSummaryActualSpend(app *appstate.App, statuses []budgeting.Status, vw period.Window, previous bool, rates currency.Rates, base string) (int64, []budgeting.ViewIssue) {
+	if app == nil {
+		return 0, []budgeting.ViewIssue{{Operation: "read budget spending", Err: fmt.Errorf("budget app is unavailable")}}
+	}
+	start, end := vw.Range()
+	if previous {
+		start, end = start.AddDate(0, -1, 0), end.AddDate(0, -1, 0)
+	}
+	if budgetNow().Before(start) {
+		return 0, nil
+	}
+	transactions := budgeting.NewNettedLedgerWithLinks(app.Transactions(), app.TxnLinks()).Transactions()
+	categories := app.Categories()
+	var total int64
+	var issues []budgeting.ViewIssue
+	for _, status := range statuses {
+		if status.Error != nil || status.Budget.IsSaving() {
+			continue
+		}
+		covers := categorytree.DescendantsOfAll(categories, status.Budget.TrackedCategoryIDs())
+		scope := budgeting.ScopeOf(status.Budget, covers)
+		if scope.IsEmpty() {
+			continue
+		}
+		scoped, scopedCategories := suggestTransactionsForScope(covers, scope.Tags, transactions)
+		current, err := budgeting.EvaluateRollup(status.Budget, scoped, start, end, rates, budgeting.DefaultNearThreshold, scopedCategories)
+		if err != nil {
+			issues = append(issues, budgeting.ViewIssue{Operation: "evaluate selected-period budget spending", BudgetID: status.Budget.ID, Err: err})
+			continue
+		}
+		amount, err := rates.Convert(current.Spent, base)
+		if err != nil {
+			issues = append(issues, budgeting.ViewIssue{Operation: "convert selected-period budget spending", BudgetID: status.Budget.ID, Err: err})
+			continue
+		}
+		total, err = money.Add(total, amount.Amount)
+		if err != nil {
+			issues = append(issues, budgeting.ViewIssue{Operation: "sum selected-period budget spending", BudgetID: status.Budget.ID, Err: err})
+			return 0, budgeting.DeduplicateViewIssues(issues)
+		}
+	}
+	return total, budgeting.DeduplicateViewIssues(issues)
 }
 
 // budgetSummarySpendingBudgets returns evaluable spending budgets for the
@@ -89,9 +141,7 @@ func budgetSummarySpendingBudgets(statuses []budgeting.Status) []domain.Budget {
 		if status.Error != nil || status.Budget.IsSaving() {
 			continue
 		}
-		budget := status.Budget
-		budget.Limit = status.Limit
-		budgets = append(budgets, budget)
+		budgets = append(budgets, status.Budget)
 	}
 	return budgets
 }
@@ -380,7 +430,7 @@ func budgetSummaryAllocation(p budgetSummaryAllocationProps) budgetSummaryAlloca
 	// An invitation that reliably leads nowhere teaches people to ignore it
 	// (Cam, 2026-08-31).
 	var closeOffer ui.Node = Fragment()
-	if daysLeft := int(time.Until(p.wEnd).Hours() / 24); p.hist || (daysLeft >= 0 && daysLeft <= 5) {
+	if daysLeft := int(p.wEnd.Sub(budgetNow()).Hours() / 24); p.hist || (daysLeft >= 0 && daysLeft <= 5) {
 		// Built from figures this render already has — statuses, the over-assignment
 		// the rail uses, and the single income scan above — so the gate costs no
 		// extra passes over the ledger. Clean() stays the one definition of "nothing
@@ -468,10 +518,11 @@ func budgetSummaryStatus(p budgetSummaryStatusProps) ui.Node {
 			Label: label, Percent: p.funding.ReduceToFitPct(), TestID: "budgets-status-primary-action",
 		})
 	}
-	statusFigure := fmtMoney(money.New(p.v.TotalSpent, p.v.Base))
-	statusCopy := uistate.T("budgets.headlineSpentOf", fmtMoney(money.New(p.normalizedBudgetTotal, p.v.Base)))
+	spent, plan := budgetHeadlineAmounts(p.v, p.normalizedBudgetTotal)
+	statusFigure := fmtMoney(money.New(spent, p.v.Base))
+	statusCopy := uistate.T("budgets.headlineSpentMonthly", fmtMoney(money.New(plan, p.v.Base)))
 	if p.hist {
-		statusCopy = uistate.T("budgets.headlineSpentPast", fmtMoney(money.New(p.normalizedBudgetTotal, p.v.Base)), p.vw.Label())
+		statusCopy = uistate.T("budgets.headlineSpentMonthlyPast", fmtMoney(money.New(plan, p.v.Base)), p.vw.Label())
 	}
 	if p.futurePeriod {
 		statusCopy = uistate.T("budgets.future.planning",
@@ -484,7 +535,7 @@ func budgetSummaryStatus(p budgetSummaryStatusProps) ui.Node {
 	if p.excluded > 0 {
 		statusCopy += " · " + budgetExclusionsLabel(p.excluded)
 	}
-	fillPct := budgetHeadlinePercent(p.v.TotalSpent, p.normalizedBudgetTotal)
+	fillPct := budgetHeadlinePercent(spent, plan)
 	statusLine := Div(css.Class("bud3-headline"), Attr("data-state", statusState),
 		Div(css.Class("bud3-headline-copy"), Attr("role", "status"),
 			Span(css.Class("bud3-headline-figure"), Attr("data-testid", "budgets-status-figure"), statusFigure),
@@ -493,7 +544,7 @@ func budgetSummaryStatus(p budgetSummaryStatusProps) ui.Node {
 		Div(css.Class("bud3-headline-meter"), Attr("data-testid", "budgets-status-meter"), Attr("role", "meter"), Attr("aria-label", uistate.T("budgets.headlineMeterLabel")),
 			Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"), Attr("aria-valuenow", strconv.Itoa(fillPct)),
 			Div(css.Class("bud3-headline-meter-fill"), Attr("style", "width:"+strconv.Itoa(fillPct)+"%")),
-			If(!p.hist && !p.v.LastMonthMode && !p.futurePeriod, Div(css.Class("bud3-headline-pace"), Attr("aria-hidden", "true"), Attr("style", "left:"+strconv.Itoa(budgetPeriodElapsedPct(p.vw, time.Now()))+"%"))),
+			If(!p.hist && !p.v.LastMonthMode && !p.futurePeriod, Div(css.Class("bud3-headline-pace"), Attr("aria-hidden", "true"), Attr("style", "left:"+strconv.Itoa(budgetPeriodElapsedPct(p.vw, budgetNow()))+"%"))),
 		),
 		If(p.attnCount > 0 && !p.hist && !p.v.LastMonthMode,
 			Div(css.Class("bud3-headline-attention"),
@@ -519,6 +570,10 @@ func budgetSummaryStatus(p budgetSummaryStatusProps) ui.Node {
 		return statusLine
 	}
 	return Fragment(statusLine, P(css.Class("budget-sub", tw.TextWarn), Attr("data-testid", "budgets-status-issues"), strings.Join(issueText, " · ")))
+}
+
+func budgetHeadlineAmounts(v budgetView, normalizedPlan int64) (int64, int64) {
+	return v.TotalSpent, normalizedPlan
 }
 
 func budgetHeadlinePercent(spent, plan int64) int {

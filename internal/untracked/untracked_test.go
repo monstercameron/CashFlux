@@ -33,6 +33,14 @@ func income(catID string, minor int64, at time.Time) domain.Transaction {
 	}
 }
 
+func scanForTest(txns []domain.Transaction, categories []domain.Category, budgets []domain.Budget, from, to time.Time, rates currency.Rates, base string, hint Hint) []Candidate {
+	got, err := Scan(txns, categories, budgets, from, to, rates, base, 12, hint)
+	if err != nil {
+		panic(err)
+	}
+	return got
+}
+
 func cats(pairs ...string) []domain.Category {
 	var out []domain.Category
 	for i := 0; i+1 < len(pairs); i += 2 {
@@ -54,7 +62,7 @@ func TestScanFindsOnlyUntrackedExpenses(t *testing.T) {
 	}
 	budgets := []domain.Budget{{ID: "b1", CategoryID: "groceries"}}
 
-	got := Scan(txns, cats("auto", "Auto loans", "hoa", "HOA dues", "groceries", "Groceries"),
+	got := scanForTest(txns, cats("auto", "Auto loans", "hoa", "HOA dues", "groceries", "Groceries"),
 		budgets, from, to, rates(), base, nil)
 
 	if len(got) != 2 {
@@ -90,7 +98,7 @@ func TestScanRespectsExtraTrackedCategories(t *testing.T) {
 	// category it watches — including the one that would otherwise be primary.
 	multi := domain.Budget{ID: "b1", CategoryIDs: []string{"fuel", "parking"}}
 
-	got := Scan(txns, cats("fuel", "Fuel", "parking", "Parking"), []domain.Budget{multi},
+	got := scanForTest(txns, cats("fuel", "Fuel", "parking", "Parking"), []domain.Budget{multi},
 		from, to, rates(), base, nil)
 
 	if len(got) != 0 {
@@ -107,7 +115,7 @@ func TestScanPrimaryCategoryIsNotCoveredWhenCategoryIDsIsSet(t *testing.T) {
 	txns := []domain.Transaction{expense("fuel", 9000, day(2026, 8, 3))}
 	odd := domain.Budget{ID: "b1", CategoryID: "fuel", CategoryIDs: []string{"parking"}}
 
-	got := Scan(txns, cats("fuel", "Fuel", "parking", "Parking"), []domain.Budget{odd},
+	got := scanForTest(txns, cats("fuel", "Fuel", "parking", "Parking"), []domain.Budget{odd},
 		from, to, rates(), base, nil)
 
 	if len(got) != 1 || got[0].CategoryID != "fuel" {
@@ -122,7 +130,7 @@ func TestScanWindowExcludesOutsideDates(t *testing.T) {
 		expense("tax", 150000, day(2026, 9, 1)),  // on the exclusive end
 		expense("hoa", 38000, day(2026, 8, 1)),   // on the inclusive start
 	}
-	got := Scan(txns, cats("tax", "Property tax", "hoa", "HOA dues"), nil, from, to, rates(), base, nil)
+	got := scanForTest(txns, cats("tax", "Property tax", "hoa", "HOA dues"), nil, from, to, rates(), base, nil)
 
 	if len(got) != 1 || got[0].CategoryID != "hoa" {
 		t.Fatalf("got %+v, want only hoa — the range is half-open [from, to)", got)
@@ -139,11 +147,11 @@ func TestScanOverAYearFindsNonMonthlyObligations(t *testing.T) {
 	}
 	all := cats("ptax", "Property tax", "ins", "Home insurance", "hoa", "HOA dues")
 
-	month := Scan(txns, all, nil, day(2026, 8, 1), day(2026, 9, 1), rates(), base, nil)
+	month := scanForTest(txns, all, nil, day(2026, 8, 1), day(2026, 9, 1), rates(), base, nil)
 	if len(month) != 1 {
 		t.Fatalf("viewed-period scan got %d, want 1 — yearly items are invisible here", len(month))
 	}
-	year := Scan(txns, all, nil, day(2025, 9, 1), day(2026, 9, 1), rates(), base, nil)
+	year := scanForTest(txns, all, nil, day(2025, 9, 1), day(2026, 9, 1), rates(), base, nil)
 	if len(year) != 3 {
 		t.Fatalf("12-month scan got %d, want 3 — this is what makes yearly items visible", len(year))
 	}
@@ -163,7 +171,7 @@ func TestScanPrefersHintAmountAndPeriod(t *testing.T) {
 		}
 		return 0, "", false
 	}
-	got := Scan(txns, cats("ptax", "Property tax"), nil,
+	got := scanForTest(txns, cats("ptax", "Property tax"), nil,
 		day(2026, 8, 1), day(2026, 9, 1), rates(), base, hint)
 
 	if len(got) != 1 {
@@ -180,10 +188,10 @@ func TestScanPrefersHintAmountAndPeriod(t *testing.T) {
 func TestScanFallsBackWhenHintDeclines(t *testing.T) {
 	txns := []domain.Transaction{expense("misc", 4200, day(2026, 8, 12))}
 	hint := func(string) (int64, domain.Period, bool) { return 0, "", false }
-	got := Scan(txns, cats("misc", "Misc"), nil, day(2026, 8, 1), day(2026, 9, 1), rates(), base, hint)
+	got := scanForTest(txns, cats("misc", "Misc"), nil, day(2026, 8, 1), day(2026, 9, 1), rates(), base, hint)
 
-	if len(got) != 1 || got[0].SuggestMinor != 4200 {
-		t.Fatalf("got %+v, want suggest 4200 from window spend", got)
+	if len(got) != 1 || got[0].SuggestMinor != 350 {
+		t.Fatalf("got %+v, want 350 monthly from 4200 over 12 months", got)
 	}
 	if got[0].FromHint {
 		t.Error("FromHint = true without a hint")
@@ -193,7 +201,43 @@ func TestScanFallsBackWhenHintDeclines(t *testing.T) {
 	}
 }
 
+func TestScanReportsOverflowInsteadOfWrappingSpent(t *testing.T) {
+	_, err := Scan([]domain.Transaction{
+		{ID: "first", Date: day(2026, 8, 2), CategoryID: "misc", Amount: money.New(-int64(^uint64(0)>>1), base)},
+		{ID: "second", Date: day(2026, 8, 3), CategoryID: "misc", Amount: money.New(-1, base)},
+	}, cats("misc", "Misc"), nil, day(2026, 8, 1), day(2026, 9, 1), rates(), base, 12, nil)
+	if err == nil {
+		t.Fatal("Scan returned no error for an overflowing category total")
+	}
+}
+
+func TestScanRejectsInvalidFallbackPeriod(t *testing.T) {
+	for _, months := range []int{0, -1} {
+		if _, err := Scan(nil, nil, nil, day(2026, 8, 1), day(2026, 9, 1), rates(), base, months, nil); err == nil {
+			t.Errorf("Scan fallback period %d returned no error", months)
+		}
+	}
+}
+
+func TestScanReturnsErrorForUnrepresentableExpenseMagnitude(t *testing.T) {
+	_, err := Scan([]domain.Transaction{{
+		ID: "min", Date: day(2026, 8, 2), CategoryID: "misc", Amount: money.New(-int64(^uint64(0)>>1)-1, base),
+	}}, cats("misc", "Misc"), nil, day(2026, 8, 1), day(2026, 9, 1), rates(), base, 12, nil)
+	if err == nil {
+		t.Fatal("Scan returned no error for MinInt64 expense magnitude")
+	}
+}
+
 // --- Impact -----------------------------------------------------------------
+
+func impactForTest(t *testing.T, choices []Choice, pool, assigned int64) Effect {
+	t.Helper()
+	effect, err := Impact(choices, pool, assigned)
+	if err != nil {
+		t.Fatalf("Impact: %v", err)
+	}
+	return effect
+}
 
 // The zero-based consequence, stated before the write: tracking spending makes
 // To Assign WORSE, because the money was always going out and is only now counted.
@@ -204,7 +248,7 @@ func TestImpactNewBudgetsDriveToAssignNegative(t *testing.T) {
 		{CategoryID: "hoa", AmountMinor: 38000},
 		{CategoryID: "edu", AmountMinor: 32000},
 	}
-	e := Impact(choices, pool, assigned)
+	e := impactForTest(t, choices, pool, assigned)
 
 	if e.Categories != 3 || e.NewBudgets != 3 || e.Raises != 0 {
 		t.Fatalf("counts = %+v, want 3 categories / 3 new / 0 raises", e)
@@ -228,7 +272,7 @@ func TestImpactNewBudgetsDriveToAssignNegative(t *testing.T) {
 // landed on silently starts counting spend it has no limit for.
 func TestImpactExistingWithoutRaiseDoesNotMovePlan(t *testing.T) {
 	pool, assigned := int64(590000), int64(913020)
-	e := Impact([]Choice{{CategoryID: "auto", AmountMinor: 110000, BudgetID: "b-transport"}}, pool, assigned)
+	e := impactForTest(t, []Choice{{CategoryID: "auto", AmountMinor: 110000, BudgetID: "b-transport"}}, pool, assigned)
 
 	if e.AssignedDeltaMinor != 0 {
 		t.Errorf("assigned delta = %d, want 0 — no raise means no new assignment", e.AssignedDeltaMinor)
@@ -246,7 +290,7 @@ func TestImpactExistingWithoutRaiseDoesNotMovePlan(t *testing.T) {
 
 func TestImpactRaiseAssignsLikeANewBudget(t *testing.T) {
 	pool, assigned := int64(590000), int64(913020)
-	e := Impact([]Choice{{CategoryID: "auto", AmountMinor: 110000, BudgetID: "b-transport", Raise: true}}, pool, assigned)
+	e := impactForTest(t, []Choice{{CategoryID: "auto", AmountMinor: 110000, BudgetID: "b-transport", Raise: true}}, pool, assigned)
 
 	if e.Raises != 1 || e.NewBudgets != 0 {
 		t.Fatalf("counts = %+v, want 1 raise", e)
@@ -260,7 +304,7 @@ func TestImpactRaiseAssignsLikeANewBudget(t *testing.T) {
 }
 
 func TestImpactEmptyIsANoOp(t *testing.T) {
-	e := Impact(nil, 590000, 913020)
+	e := impactForTest(t, nil, 590000, 913020)
 	if e.Categories != 0 || e.AssignedDeltaMinor != 0 {
 		t.Fatalf("empty selection changed something: %+v", e)
 	}
@@ -280,13 +324,19 @@ func TestOverspendRiskFlagsTheUnraisedDestination(t *testing.T) {
 	spentOf := func(id string) int64 { return spent[id] }
 	limitOf := func(id string) int64 { return limit[id] }
 
-	risky := OverspendRisk([]Choice{{CategoryID: "auto", AmountMinor: 110000, BudgetID: "b-transport"}}, spentOf, limitOf)
+	risky, err := OverspendRisk([]Choice{{CategoryID: "auto", AmountMinor: 110000, BudgetID: "b-transport"}}, spentOf, limitOf)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(risky) != 1 || risky[0] != "b-transport" {
 		t.Fatalf("risky = %v, want [b-transport]: 110000 + 110000 > 130000", risky)
 	}
 
 	// With the raise on, the limit grows with the spend and nothing is flagged.
-	safe := OverspendRisk([]Choice{{CategoryID: "auto", AmountMinor: 110000, BudgetID: "b-transport", Raise: true}}, spentOf, limitOf)
+	safe, err := OverspendRisk([]Choice{{CategoryID: "auto", AmountMinor: 110000, BudgetID: "b-transport", Raise: true}}, spentOf, limitOf)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(safe) != 0 {
 		t.Errorf("risky = %v with the raise on, want none", safe)
 	}
@@ -295,10 +345,13 @@ func TestOverspendRiskFlagsTheUnraisedDestination(t *testing.T) {
 func TestOverspendRiskIgnoresNewBudgetsAndFittingAdds(t *testing.T) {
 	spentOf := func(string) int64 { return 1000 }
 	limitOf := func(string) int64 { return 100000 }
-	got := OverspendRisk([]Choice{
+	got, err := OverspendRisk([]Choice{
 		{CategoryID: "a", AmountMinor: 500},                    // new budget — created at its own amount
 		{CategoryID: "b", AmountMinor: 500, BudgetID: "roomy"}, // fits under the limit
 	}, spentOf, limitOf)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(got) != 0 {
 		t.Fatalf("risky = %v, want none", got)
 	}
@@ -309,10 +362,13 @@ func TestOverspendRiskIgnoresNewBudgetsAndFittingAdds(t *testing.T) {
 func TestOverspendRiskAccumulatesPerDestination(t *testing.T) {
 	spentOf := func(string) int64 { return 0 }
 	limitOf := func(string) int64 { return 10000 }
-	got := OverspendRisk([]Choice{
+	got, err := OverspendRisk([]Choice{
 		{CategoryID: "a", AmountMinor: 6000, BudgetID: "b1"},
 		{CategoryID: "b", AmountMinor: 6000, BudgetID: "b1"},
 	}, spentOf, limitOf)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(got) != 1 || got[0] != "b1" {
 		t.Fatalf("risky = %v, want [b1] — 6000 + 6000 > 10000 together", got)
 	}
@@ -321,11 +377,55 @@ func TestOverspendRiskAccumulatesPerDestination(t *testing.T) {
 func TestTotalSpentSumsTheWindow(t *testing.T) {
 	// The hero and the unbudgeted strip both need this number, and the whole point
 	// of it living here is that they cannot disagree about it.
-	got := TotalSpent([]Candidate{{SpentMinor: 310276}, {SpentMinor: 54348}, {SpentMinor: 4015}, {SpentMinor: 3723}})
+	got, err := TotalSpent([]Candidate{{SpentMinor: 310276}, {SpentMinor: 54348}, {SpentMinor: 4015}, {SpentMinor: 3723}})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if got != 372362 {
 		t.Errorf("TotalSpent = %d, want 372362", got)
 	}
-	if TotalSpent(nil) != 0 {
+	if got, err := TotalSpent(nil); err != nil || got != 0 {
 		t.Error("TotalSpent(nil) should be zero, not a panic or a stale sum")
+	}
+}
+
+func TestUntrackedCalculationsReportOverflow(t *testing.T) {
+	max := int64(^uint64(0) >> 1)
+	min := -max - 1
+	tests := []struct {
+		name string
+		run  func() error
+	}{
+		{name: "impact tracked sum", run: func() error {
+			_, err := Impact([]Choice{{AmountMinor: max}, {AmountMinor: 1}}, 0, 0)
+			return err
+		}},
+		{name: "impact To Assign subtraction", run: func() error {
+			_, err := Impact(nil, max, min)
+			return err
+		}},
+		{name: "impact assigned total", run: func() error {
+			_, err := Impact([]Choice{{AmountMinor: 1}}, 0, max)
+			return err
+		}},
+		{name: "overspend accumulation", run: func() error {
+			_, err := OverspendRisk([]Choice{{BudgetID: "b", AmountMinor: max}, {BudgetID: "b", AmountMinor: 1}}, func(string) int64 { return 0 }, func(string) int64 { return max })
+			return err
+		}},
+		{name: "overspend projection", run: func() error {
+			_, err := OverspendRisk([]Choice{{BudgetID: "b", AmountMinor: 1}}, func(string) int64 { return max }, func(string) int64 { return max })
+			return err
+		}},
+		{name: "spent total", run: func() error {
+			_, err := TotalSpent([]Candidate{{SpentMinor: max}, {SpentMinor: 1}})
+			return err
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.run(); err == nil {
+				t.Fatal("calculation returned no overflow error")
+			}
+		})
 	}
 }

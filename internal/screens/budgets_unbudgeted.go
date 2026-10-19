@@ -51,10 +51,8 @@ type unbudgetedCat = budgeting.UnbudgetedCategory
 // every spending category is already budgeted — the strip is an invitation, not
 // a fixture.
 func unbudgetedStrip(props unbudgetedStripProps) ui.Node {
+	dataRevision := uistate.UseDataRevision().Get()
 	app := props.App
-	if app == nil {
-		return Fragment()
-	}
 	now := time.Now()
 	// C607: the VIEWED period, not today's month. A zero range means the caller
 	// did not say, and falling back to this month is then honest rather than a
@@ -63,19 +61,43 @@ func unbudgetedStrip(props unbudgetedStripProps) ui.Node {
 	if ms.IsZero() || me.IsZero() {
 		ms, me = dateutil.MonthRange(now)
 	}
-	rates := currency.Rates{Base: props.Base, Rates: app.Settings().FXRates}
-
-	computed, err := budgeting.ComputeUnbudgeted(app.Budgets(), app.Categories(), app.Transactions(), ms, me, rates)
-	if err != nil {
-		slog.Error("calculate unbudgeted spending", "error", err)
+	appRevision := uint64(0)
+	if app != nil {
+		appRevision = app.Rev()
+	}
+	data := ui.UseMemo(func() unbudgetedStripData {
+		if app == nil {
+			return unbudgetedStripData{}
+		}
+		rates := currency.Rates{Base: props.Base, Rates: app.Settings().FXRates}
+		computed, err := budgeting.ComputeUnbudgeted(app.Budgets(), app.Categories(), app.Transactions(), ms, me, rates)
+		if err != nil {
+			return unbudgetedStripData{Err: err}
+		}
+		candidates := make([]unbudgetedCat, 0, len(computed.Categories))
+		suggestions := make(map[string]int64, len(computed.Categories))
+		for _, candidate := range computed.Categories {
+			if candidate.CategoryID == "" {
+				continue
+			}
+			candidates = append(candidates, candidate)
+			amount, err := budgeting.SuggestLimit(candidate.CategoryID, app.Transactions(), ms, 6, rates)
+			if err != nil {
+				slog.Error("suggest unbudgeted category limit", "category_id", candidate.CategoryID, "error", err)
+				continue
+			}
+			suggestions[candidate.CategoryID] = amount
+		}
+		return unbudgetedStripData{Candidates: candidates, Suggestions: suggestions}
+	}, dataRevision, appRevision, ms.Unix(), me.Unix(), props.Base)
+	if app == nil {
+		return Fragment()
+	}
+	if data.Err != nil {
+		slog.Error("calculate unbudgeted spending", "error", data.Err)
 		return P(css.Class("form-err"), Attr("role", "status"), uistate.T("budgets.incomplete"))
 	}
-	cands := make([]unbudgetedCat, 0, len(computed.Categories))
-	for _, candidate := range computed.Categories {
-		if candidate.CategoryID != "" {
-			cands = append(cands, candidate)
-		}
-	}
+	cands := append([]unbudgetedCat(nil), data.Candidates...)
 	if len(cands) == 0 {
 		return Fragment()
 	}
@@ -90,10 +112,8 @@ func unbudgetedStrip(props unbudgetedStripProps) ui.Node {
 	}
 
 	chips := MapKeyed(cands, func(c unbudgetedCat) any { return c.CategoryID }, func(c unbudgetedCat) ui.Node {
-		// Suggest from 6-month history ending at the VIEWED period, falling back to
-		// that period's actual spend — so the suggested limit describes the same
-		// window the chip's figure does (C607).
-		sug, _ := budgeting.SuggestLimit(c.CategoryID, app.Transactions(), ms, 6, rates)
+		// The suggestion is computed with the strip's memoized ledger snapshot.
+		sug := data.Suggestions[c.CategoryID]
 		if sug <= 0 {
 			sug = c.Amount.Amount
 		}
@@ -126,6 +146,12 @@ func unbudgetedStrip(props unbudgetedStripProps) ui.Node {
 		),
 		Div(css.Class("budget-unbudgeted-chips"), chips),
 	)
+}
+
+type unbudgetedStripData struct {
+	Candidates  []unbudgetedCat
+	Suggestions map[string]int64
+	Err         error
 }
 
 type trackAllButtonProps struct{ Total int }

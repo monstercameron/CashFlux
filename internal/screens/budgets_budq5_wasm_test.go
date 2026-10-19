@@ -95,16 +95,17 @@ func TestBUDQ5GoalFundedMemoUsesRevisionAndViewedPeriod(t *testing.T) {
 }
 
 func TestBUDQ5RolloverTooltipShowsChainEvidence(t *testing.T) {
-	app := guardTestApp(t)
-	b := quickFillFixtureBudget()
-	b.Rollover = true
-	if err := app.PutBudget(b); err != nil {
-		t.Fatalf("PutBudget: %v", err)
-	}
-	text := budgetRolloverChainText(b, time.Now(), 811)
-	for _, want := range []string{"base", "carry-in", "effective cap", "spent", "carry-out"} {
-		if !strings.Contains(text, want) {
-			t.Errorf("rollover chain is missing %q: %s", want, text)
+	start := time.Date(2026, time.October, 1, 0, 0, 0, 0, time.UTC)
+	state := budgeting.RolloverPeriodState{Start: start, Base: money.New(10000, "USD"),
+		EffectiveCap: money.New(12500, "USD"), CarryIn: money.New(2500, "USD"),
+		Spend: money.New(8000, "USD"), CarryOut: money.New(4500, "USD")}
+	f := render.New(t)
+	f.Render(budgetRolloverTable(budgeting.RolloverView{Current: state}, "food"))
+	table := byTestID(f, "table", "budget-rollover-table-food")
+	for _, want := range []string{uistate.T("bud2.rolloverLimit"), uistate.T("bud2.rolloverCarriedIn"),
+		uistate.T("bud2.rolloverSpent"), uistate.T("bud2.rolloverCarriedOut"), "Oct 2026"} {
+		if !strings.Contains(table.Text(), want) {
+			t.Errorf("rendered rollover table is missing %q: %s", want, table.Text())
 		}
 	}
 }

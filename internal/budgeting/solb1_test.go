@@ -228,7 +228,7 @@ func TestSOLB1MissingRolloverStartAssumesOnlyThePreviousPeriod(t *testing.T) {
 	if !got.Rollover.StartAssumed || !got.Rollover.Start.Equal(mustDate("2026-05-01")) {
 		t.Fatalf("fallback start=%+v", got.Rollover)
 	}
-	if len(got.Issues) != 1 || got.Issues[0].Kind != ViewIssueRolloverStartAssumed || got.Issues[0].Message != "Carry is counted from May 2026. Set when this budget started rolling over to include earlier months." {
+	if len(got.Issues) != 1 || got.Issues[0].Kind != ViewIssueRolloverStartAssumed || got.Issues[0].BudgetID != b.ID || got.Issues[0].Message != "" {
 		t.Fatalf("assumed-start diagnostic=%+v", got.Issues)
 	}
 }
@@ -310,17 +310,18 @@ func TestSOLB1CommitmentsIncludeTrackedSubcategories(t *testing.T) {
 }
 
 func TestSOLB1NormalizedRemainderReconciles(t *testing.T) {
-	// $0.01 per week -> $0.04 per month; the remainder is derived after rounding.
-	st := Status{Budget: domain.Budget{ID: "weekly", Period: domain.PeriodWeekly}, Spent: usd(1), Limit: usd(2), Remaining: usd(1), State: StateOver}
+	// Normalize the standing weekly plan, retaining actual posted window spend.
+	// The effective cap differs to prove it cannot inflate the standing plan.
+	st := Status{Budget: domain.Budget{ID: "weekly", Period: domain.PeriodWeekly, Limit: usd(2)}, Spent: usd(1), Limit: usd(3), Remaining: usd(2), State: StateOver}
 	got, issues, err := SummarizeViewStatusesForPeriod([]Status{st}, domain.PeriodMonthly, "USD", currency.Rates{Base: "USD"})
-	if err != nil || len(issues) != 0 || got.LimitMinor != 9 || got.SpentMinor != 4 {
+	if err != nil || len(issues) != 0 || got.LimitMinor != 9 || got.SpentMinor != 1 || got.LimitMinor-got.SpentMinor != 8 {
 		t.Fatalf("rollup=%+v issues=%v err=%v", got, issues, err)
 	}
 }
 
 func TestSOLB1RollupPreservesFXBase(t *testing.T) {
 	rates := currency.Rates{Base: "EUR", Rates: map[string]float64{"USD": 0.5}}
-	st := Status{Budget: domain.Budget{ID: "eur", Period: domain.PeriodMonthly}, Limit: money.New(100, "EUR"), Spent: money.Zero("EUR"), Remaining: money.New(100, "EUR")}
+	st := Status{Budget: domain.Budget{ID: "eur", Period: domain.PeriodMonthly, Limit: money.New(100, "EUR")}, Limit: money.New(150, "EUR"), Spent: money.Zero("EUR"), Remaining: money.New(150, "EUR")}
 	got, issues, err := SummarizeViewStatusesForPeriod([]Status{st}, domain.PeriodMonthly, "USD", rates)
 	if err != nil || len(issues) != 0 || got.LimitMinor != 200 {
 		t.Fatalf("rollup=%+v issues=%v err=%v", got, issues, err)

@@ -79,7 +79,6 @@ type ViewBudget struct {
 	HasPrior                          bool
 	PriorSpentBase, PriorLimitBase    int64
 	PaceOver                          money.Money
-	ProratedRest                      int64
 	RestPerDay                        int64
 	Issues                            []ViewIssue
 }
@@ -101,7 +100,7 @@ func (v *ViewBudget) fail(operation string, err error) {
 // The stored budget is never modified; Status.Limit carries the effective cap
 // while Status.Budget retains the standing plan for editing and annual totals.
 func EvaluateViewBudget(b domain.Budget, in ViewInput) ViewBudget {
-	ledger := NewNettedLedgerWithLinks(in.Transactions, nil)
+	var ledger NettedLedger
 	if in.Ledger != nil {
 		ledger = *in.Ledger
 	} else {
@@ -192,17 +191,11 @@ func EvaluateViewBudget(b domain.Budget, in ViewInput) ViewBudget {
 		v.PaceOver = pace.OverBy
 	}
 	if st.Remaining.Amount > 0 {
-		days, left := int(end.Sub(start).Hours()/24), int(end.Sub(p.Now).Hours()/24)
-		if left > 0 && left < days {
+		left := int((end.Sub(p.Now).Hours() + 23) / 24)
+		if left > 0 {
 			v.RestPerDay, err = money.MulDiv(st.Remaining.Amount, 1, int64(left), money.RoundTowardZero)
 			if err != nil {
 				v.issue("calculate remaining budget per day", err)
-			}
-			amount, err := money.MulDiv(st.Remaining.Amount, int64(left), int64(days), money.RoundTowardZero)
-			if err != nil {
-				v.issue("prorate budget remainder", err)
-			} else if amount > 0 && amount < st.Remaining.Amount {
-				v.ProratedRest = amount
 			}
 		}
 	}
@@ -266,7 +259,6 @@ func (v *ViewBudget) effectiveBudget(in ViewInput) domain.Budget {
 				Operation: "evaluate prior rollover period",
 				BudgetID:  b.ID,
 				Kind:      ViewIssueRolloverStartAssumed,
-				Message:   fmt.Sprintf("Carry is counted from %s. Set when this budget started rolling over to include earlier months.", chain.Start.Format("January 2006")),
 			})
 		}
 		eval.Limit = chain.Current.EffectiveCap
@@ -274,7 +266,16 @@ func (v *ViewBudget) effectiveBudget(in ViewInput) domain.Budget {
 		v.CarryDelta = v.Carry.Amount
 	} else if in.PoolRollover {
 		start, end := PreviousPeriodRangeAnchored(b.Period, p.Anchor, p.WeekStart, p.PayCycleAnchor)
-		prev, err := evaluateNettedWith(b, in.Transactions, start, end, in.Rates, DefaultNearThreshold, func(id string) bool { return b.TracksCategory(id) || v.Covers[id] })
+		previous := b
+		previousBase, err := BudgetBaseAt(b, start)
+		previous.Limit = previousBase
+		if err == nil {
+			previous.Limit, err = previous.Limit.Add(money.New(previous.PeriodBoost(start), previous.Limit.Currency))
+		}
+		var prev Status
+		if err == nil {
+			prev, err = evaluateNettedWith(previous, in.Transactions, start, end, in.Rates, DefaultNearThreshold, func(id string) bool { return previous.TracksCategory(id) || v.Covers[id] })
+		}
 		switch {
 		case err != nil:
 			v.issue("evaluate pooled rollover", err)
@@ -333,18 +334,14 @@ func (v *ViewBudget) previousPeriod(in ViewInput) {
 		v.issue("calculate previous smoothed spending", err)
 		return
 	}
-	spent, err := PeriodEquivalent(prev.Spent, eval.Period, domain.PeriodMonthly)
-	if err == nil {
-		v.PriorSpentBase, err = currency.ConvertBetween(spent.Amount, spent.Currency, in.Base, in.Rates)
-	}
+	spent := prev.Spent
+	v.PriorSpentBase, err = currency.ConvertBetween(spent.Amount, spent.Currency, in.Base, in.Rates)
 	if err != nil {
 		v.issue("convert previous budget spending", err)
 		return
 	}
-	limit, err := PeriodEquivalent(prev.Limit, eval.Period, domain.PeriodMonthly)
-	if err == nil {
-		v.PriorLimitBase, err = currency.ConvertBetween(limit.Amount, limit.Currency, in.Base, in.Rates)
-	}
+	limit := prev.Limit
+	v.PriorLimitBase, err = currency.ConvertBetween(limit.Amount, limit.Currency, in.Base, in.Rates)
 	if err != nil {
 		v.issue("convert previous budget limit", err)
 		return
@@ -421,7 +418,6 @@ func SummarizeViewStatusesForPeriod(statuses []Status, period domain.Period, bas
 		}
 		next := st
 		b := st.Budget
-		b.Limit = st.Limit
 		normalized, err := NormalizeBudgets([]domain.Budget{b}, period, rates)
 		if err != nil {
 			excluded++
@@ -435,10 +431,9 @@ func SummarizeViewStatusesForPeriod(statuses []Status, period domain.Period, bas
 			issues = append(issues, ViewIssue{Operation: "convert normalized budget limit", BudgetID: st.Budget.ID, Err: err})
 			continue
 		}
-		next.Spent, err = PeriodEquivalent(st.Spent, st.Budget.Period, period)
-		if err == nil {
-			next.Spent, err = rates.Convert(next.Spent, base)
-		}
+		// Spent is the actual amount in this view window. Cadence normalization
+		// applies to the standing plan only, never to posted money.
+		next.Spent, err = rates.Convert(st.Spent, base)
 		if err == nil {
 			// Round each independent amount once; derive the remainder so the
 			// normalized figures reconcile exactly even on a half-cent boundary.

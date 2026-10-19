@@ -45,9 +45,9 @@ func methodScopeText(i budgeting.MethodImpact) string {
 	case i.Total() == 0:
 		return uistate.T("budgets.methodScopeNone")
 	case i.Overriding == 0:
-		return uistate.T("budgets.methodScopeAll", plural(i.Following, "budget"))
+		return uistate.T("budgets.methodScopeAll", budgetCountPhrase(i.Following))
 	}
-	return uistate.T("budgets.methodScopeMixed", plural(i.Following, "budget"), plural(i.Overriding, "budget"))
+	return uistate.T("budgets.methodScopeMixed", budgetCountPhrase(i.Following), budgetCountPhrase(i.Overriding))
 }
 
 // budgetOwnMethodHint is the line under the PER-BUDGET method picker: which way

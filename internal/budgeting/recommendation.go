@@ -100,6 +100,13 @@ func overspentComparablePeriods(values []SuggestionMonth, limit int64) int {
 // callers. projectedMonthly is a current-pace gate only and never changes the
 // evidence-derived suggested amount.
 func RecommendBudgetLimit(budget domain.Budget, covers map[string]bool, txns []domain.Transaction, now time.Time, months int, projectedMonthly money.Money, rates currency.Rates) (LimitRecommendation, error) {
+	return RecommendBudgetLimitWithContext(budget, covers, nettedForSpending(txns), now, months, projectedMonthly, rates, time.Monday, time.Time{})
+}
+
+// RecommendBudgetLimitWithContext evaluates a recommendation against the same
+// budget scope and cadence grid used by the card. txns must be the caller's
+// refund-netted ledger snapshot; weekStart and payAnchor define its period grid.
+func RecommendBudgetLimitWithContext(budget domain.Budget, covers map[string]bool, txns []domain.Transaction, now time.Time, months int, projectedMonthly money.Money, rates currency.Rates, weekStart time.Weekday, payAnchor time.Time) (LimitRecommendation, error) {
 	limit := budget.Limit
 	if limit.Currency == "" {
 		limit = money.New(limit.Amount, rates.Base)
@@ -116,42 +123,52 @@ func RecommendBudgetLimit(budget domain.Budget, covers map[string]bool, txns []d
 	if err != nil {
 		return LimitRecommendation{}, fmt.Errorf("budget %q projected spend currency conversion: %w", budget.ID, err)
 	}
-	values, err := comparableBudgetSpend(budget.Period, covers, txns, now, months, rates)
+	values, err := comparableBudgetSpend(budget, covers, txns, now, months, rates, weekStart, payAnchor)
 	if err != nil {
 		return LimitRecommendation{}, err
 	}
 	return recommendFromComparableSpend(values, monthly.Amount, projection.Amount)
 }
 
-func comparableBudgetSpend(period domain.Period, covers map[string]bool, txns []domain.Transaction, now time.Time, periods int, rates currency.Rates) ([]SuggestionMonth, error) {
-	if len(covers) == 0 || periods <= 0 {
+// Transactions returns a defensive copy of a pre-netted ledger snapshot for
+// consumers that need to pass the same evidence into another pure evaluator.
+func (l NettedLedger) Transactions() []domain.Transaction {
+	return append([]domain.Transaction(nil), l.transactions...)
+}
+
+func comparableBudgetSpend(budget domain.Budget, covers map[string]bool, txns []domain.Transaction, now time.Time, periods int, rates currency.Rates, weekStart time.Weekday, payAnchor time.Time) ([]SuggestionMonth, error) {
+	if len(budget.TrackedCategoryIDs()) == 0 && len(covers) == 0 || periods <= 0 {
 		return nil, nil
 	}
-	start, _ := PeriodRange(period, now, time.Monday)
+	start, _ := PeriodRangeAnchored(budget.Period, now, weekStart, payAnchor)
 	values := make([]SuggestionMonth, 0, periods)
 	for k := periods; k >= 1; k-- {
 		windowEnd := start
 		for i := 0; i < k-1; i++ {
-			windowEnd, _ = PreviousPeriodRange(period, windowEnd, time.Monday)
+			windowEnd, _ = PreviousPeriodRangeAnchored(budget.Period, windowEnd, weekStart, payAnchor)
 		}
-		windowStart, windowEnd := PreviousPeriodRange(period, windowEnd, time.Monday)
+		windowStart, windowEnd := PreviousPeriodRangeAnchored(budget.Period, windowEnd, weekStart, payAnchor)
 		var amount int64
 		for _, txn := range txns {
 			if !txn.IsExpense() || !txn.CountsInReports() || !dateutil.InRange(txn.Date, windowStart, windowEnd) {
 				continue
 			}
-			part, ok, err := scopedSpend(txn, covers, rates)
+			part, ok, err := ContributionChecked(budget, txn, func(id string) bool { return covers[id] })
 			if err != nil {
 				return nil, err
 			}
 			if ok {
-				amount, err = money.Add(amount, part)
+				converted, convertErr := rates.Convert(part, rates.Base)
+				if convertErr != nil {
+					return nil, fmt.Errorf("convert budget contribution %q: %w", txn.ID, convertErr)
+				}
+				amount, err = money.Add(amount, converted.Amount)
 				if err != nil {
 					return nil, fmt.Errorf("sum budget spend for %s: %w", windowStart.Format("2006-01-02"), err)
 				}
 			}
 		}
-		monthly, err := PeriodEquivalent(money.New(amount, rates.Base), period, domain.PeriodMonthly)
+		monthly, err := PeriodEquivalent(money.New(amount, rates.Base), budget.Period, domain.PeriodMonthly)
 		if err != nil {
 			return nil, fmt.Errorf("normalize budget history for %s: %w", windowStart.Format("2006-01-02"), err)
 		}

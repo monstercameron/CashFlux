@@ -2,6 +2,12 @@
 
 package budgetplan
 
+import (
+	"fmt"
+
+	"github.com/monstercameron/CashFlux/internal/money"
+)
+
 // BudgetPlan is one budget's planned outflow for a single month, in
 // base-currency minor units, listed in the order funding is applied — the first
 // entry is funded first. The caller decides the order (the grid supplies its
@@ -47,6 +53,7 @@ type ScenarioResult struct {
 	ShortfallMinor      int64
 	Funded              []Funded
 	Underfunded         []string // budgetIDs with a shortfall, in input order
+	Error               error
 }
 
 // IsUnderfunded reports whether the given budget went underfunded in this result.
@@ -67,7 +74,10 @@ func (r ScenarioResult) IsUnderfunded(budgetID string) bool {
 // order-explicit — nothing is hidden, so a caller can show exactly which cells
 // the scenario cuts and by how much.
 func Evaluate(in ScenarioInput) ScenarioResult {
-	income := in.IncomeMinor + in.IncomeDeltaMinor
+	income, err := money.Add(in.IncomeMinor, in.IncomeDeltaMinor)
+	if err != nil {
+		return ScenarioResult{Error: fmt.Errorf("scenario income: %w", err)}
+	}
 	if income < 0 {
 		income = 0
 	}
@@ -76,12 +86,22 @@ func Evaluate(in ScenarioInput) ScenarioResult {
 	for _, p := range in.Plans {
 		plan := p.PlanMinor
 		if p.BudgetID == in.TargetBudgetID && in.TargetBudgetID != "" {
-			plan += in.CategoryDeltaMinor
+			adjusted, err := money.Add(plan, in.CategoryDeltaMinor)
+			if err != nil {
+				res.Error = fmt.Errorf("budget %q scenario plan: %w", p.BudgetID, err)
+				return res
+			}
+			plan = adjusted
 		}
 		if plan < 0 {
 			plan = 0
 		}
-		res.TotalPlanMinor += plan
+		total, err := money.Add(res.TotalPlanMinor, plan)
+		if err != nil {
+			res.Error = fmt.Errorf("scenario total plan: %w", err)
+			return res
+		}
+		res.TotalPlanMinor = total
 
 		funded := plan
 		if funded > remaining {
@@ -90,15 +110,29 @@ func Evaluate(in ScenarioInput) ScenarioResult {
 		if funded < 0 {
 			funded = 0
 		}
-		remaining -= funded
-		short := plan - funded
+		remainingMoney, err := money.Sub(remaining, funded)
+		if err != nil {
+			res.Error = fmt.Errorf("scenario remaining income: %w", err)
+			return res
+		}
+		remaining = remainingMoney
+		short, err := money.Sub(plan, funded)
+		if err != nil {
+			res.Error = fmt.Errorf("budget %q scenario shortfall: %w", p.BudgetID, err)
+			return res
+		}
 
 		res.Funded = append(res.Funded, Funded{
 			BudgetID: p.BudgetID, Name: p.Name,
 			PlanMinor: plan, FundedMinor: funded, ShortfallMinor: short,
 		})
 		if short > 0 {
-			res.ShortfallMinor += short
+			totalShort, err := money.Add(res.ShortfallMinor, short)
+			if err != nil {
+				res.Error = fmt.Errorf("scenario shortfall total: %w", err)
+				return res
+			}
+			res.ShortfallMinor = totalShort
 			res.Underfunded = append(res.Underfunded, p.BudgetID)
 		}
 	}

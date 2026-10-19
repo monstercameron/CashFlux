@@ -7,12 +7,12 @@ package screens
 import (
 	"log/slog"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/currency"
-	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -39,7 +39,7 @@ const (
 // until Save.
 func AutoBudgetBody(_ struct{}) ui.Node {
 	app := appstate.Default
-	_ = uistate.UseDataRevision().Get()
+	dataRevision := uistate.UseDataRevision().Get()
 	openAtom := uistate.UseBudgetAutoOpen()
 
 	base := budgetBaseCurrency("")
@@ -57,26 +57,33 @@ func AutoBudgetBody(_ struct{}) ui.Node {
 	if m == budgeting.MethodHealthy {
 		months = autoBudgetHealthyMonths
 	}
-	suggestions, suggestionErr := budgeting.SuggestBudgets(app.Categories(), app.Transactions(), time.Now(), months, rates, m)
+	anchor := budgetViewAnchor(uistate.UsePeriod().Get(), time.Now())
+	suggestions := ui.UseMemo(func() autoBudgetSuggestionMemo {
+		rows, err := budgeting.SuggestBudgets(app.Categories(), app.Transactions(), anchor, months, rates, m)
+		return autoBudgetSuggestionMemo{Rows: rows, Err: err}
+	}, dataRevision, anchor.Format("2006-01"), months, m, rates.Base, app.Rev())
+	suggestionRows, suggestionErr := suggestions.Rows, suggestions.Err
 
 	// Existing monthly budgets are keyed by category so updates never duplicate them.
-	existing := budgeting.MonthlyBudgetsByCategory(app.Budgets())
+	existing := budgeting.AutoBudgetMatches(app.Budgets())
 
 	// Seed per-category state: slider at 100% of the suggestion; include categories that
 	// don't already have a monthly budget (so Save never silently overwrites a budget the
 	// user tuned by hand — they can still tick those on deliberately).
-	seedPct := make(map[string]int, len(suggestions))
-	seedPicked := make(map[string]bool, len(suggestions))
-	for _, s := range suggestions {
+	seedPct := make(map[string]int, len(suggestionRows))
+	seedPicked := make(map[string]bool, len(suggestionRows))
+	for _, s := range suggestionRows {
 		seedPct[s.CategoryID] = 100
 		_, has := existing[s.CategoryID]
 		seedPicked[s.CategoryID] = !has
 	}
 	pct := ui.UseState(seedPct)
 	picked := ui.UseState(seedPicked)
+	currentPct := budgeting.FillAutoBudgetPercentages(pct.Get(), suggestionRows)
+	currentPicked := budgeting.FillAutoBudgetSelection(picked.Get(), suggestionRows, existing)
 
 	setPct := func(cid string, v int) {
-		m := pct.Get()
+		m := budgeting.FillAutoBudgetPercentages(pct.Get(), suggestionRows)
 		nm := make(map[string]int, len(m))
 		for k, val := range m {
 			nm[k] = val
@@ -85,7 +92,7 @@ func AutoBudgetBody(_ struct{}) ui.Node {
 		pct.Set(nm)
 	}
 	toggle := func(cid string) {
-		m := picked.Get()
+		m := budgeting.FillAutoBudgetSelection(picked.Get(), suggestionRows, existing)
 		nm := make(map[string]bool, len(m))
 		for k, val := range m {
 			nm[k] = val
@@ -96,13 +103,13 @@ func AutoBudgetBody(_ struct{}) ui.Node {
 
 	// amountFor is the tuned monthly amount (suggestion × slider %).
 	amountFor := func(s budgeting.BudgetSuggestion) int64 {
-		return s.MonthlyMinor * int64(pct.Get()[s.CategoryID]) / 100
+		return s.MonthlyMinor * int64(currentPct[s.CategoryID]) / 100
 	}
 
-	sel := picked.Get()
+	sel := currentPicked
 	nSel := 0
 	var totalMinor int64
-	for _, s := range suggestions {
+	for _, s := range suggestionRows {
 		if sel[s.CategoryID] {
 			nSel++
 			totalMinor += amountFor(s)
@@ -113,22 +120,22 @@ func AutoBudgetBody(_ struct{}) ui.Node {
 	// all / none and a reset that returns every slider to the learned figure —
 	// without them, undoing a run of tuning meant dragging each slider back by eye.
 	setAll := func(on bool) {
-		nm := make(map[string]bool, len(suggestions))
-		for _, s := range suggestions {
+		nm := make(map[string]bool, len(suggestionRows))
+		for _, s := range suggestionRows {
 			nm[s.CategoryID] = on
 		}
 		picked.Set(nm)
 	}
 	resetTuning := func() {
-		nm := make(map[string]int, len(suggestions))
-		for _, s := range suggestions {
+		nm := make(map[string]int, len(suggestionRows))
+		for _, s := range suggestionRows {
 			nm[s.CategoryID] = 100
 		}
 		pct.Set(nm)
 	}
 	tuned := 0
-	for _, s := range suggestions {
-		if pct.Get()[s.CategoryID] != 100 {
+	for _, s := range suggestionRows {
+		if currentPct[s.CategoryID] != 100 {
 			tuned++
 		}
 	}
@@ -139,7 +146,7 @@ func AutoBudgetBody(_ struct{}) ui.Node {
 	// after saving, on another page. This is the household's budgeted total and
 	// income basis WITH the pending changes folded in.
 	pending := map[string]int64{}
-	for _, s := range suggestions {
+	for _, s := range suggestionRows {
 		if sel[s.CategoryID] {
 			if amt := amountFor(s); amt > 0 {
 				pending[s.CategoryID] = amt
@@ -152,18 +159,22 @@ func AutoBudgetBody(_ struct{}) ui.Node {
 	// two different months' figures for the same question, on the same screen.
 	// Same anchor rule as computeBudgetView: today when the viewed window contains
 	// it, otherwise the window's start.
-	autoAnchor := budgetViewAnchor(uistate.UsePeriod().Get(), time.Now())
-	monthStart := dateutil.MonthStart(autoAnchor)
-	autoIncome, incomeErr := budgeting.IncomeForBudgetsChecked(uistate.CurrentPrefs().MonthlyIncomeMinor,
-		app.Transactions(), dateutil.AddMonths(monthStart, -1), monthStart, base, rates)
+	viewPeriod := uistate.UsePeriod().Get()
+	viewFrom, viewTo := viewPeriod.Range()
+	pr := uistate.CurrentPrefs()
+	period := budgeting.ResolveViewPeriod(viewFrom, viewTo, time.Now(), pr.WeekStartWeekday(), parsePayCycleAnchor(pr.PayCycleAnchor))
+	period.Anchor = anchor
+	autoIncome, incomeErr := budgeting.ResolveViewIncome(budgeting.ViewIncomeBasis{Mode: pr.BudgetIncomeMode, PaycheckMin: pr.BudgetPaycheckMinMinor, Fixed: pr.MonthlyIncomeMinor, CategoryIDs: pr.BudgetIncomeCategoryIDs, AverageMonths: pr.BudgetIncomeAvgMonths}, app.Transactions(), app.Categories(), period, base, rates)
 	if incomeErr != nil {
 		slog.Error("calculate auto-budget income", "error", incomeErr)
 	}
 	impact, impactErr := budgeting.AutoBudgetImpactWithRates(app.Budgets(), autoIncome, pending, rates)
 
 	apply := ui.UseEvent(Prevent(func() {
-		saveAutoBudget(app, suggestions, existing, base, rates, autoAnchor, amountFor,
-			func() map[string]bool { return picked.Get() }, suggestionErr, impactErr, incomeErr, func() { openAtom.Set(false) })
+		saveAutoBudget(app, suggestionRows, existing, base, rates, anchor, amountFor,
+			func() map[string]bool {
+				return budgeting.FillAutoBudgetSelection(picked.Get(), suggestionRows, existing)
+			}, suggestionErr, impactErr, incomeErr, func() { openAtom.Set(false) })
 	}))
 	onCancel := ui.UseEvent(Prevent(func() { openAtom.Set(false) }))
 	cancelOnClick := OnClick(onCancel)
@@ -175,16 +186,26 @@ func AutoBudgetBody(_ struct{}) ui.Node {
 	})
 
 	// ---- render ----
-	if len(suggestions) == 0 {
+	if len(suggestionRows) == 0 {
 		return autoBudgetEmptyState(cancelOnClick)
 	}
 
 	seg := autoBudgetMethodSelector(method.Get(), method.Set)
 	introKey := autoBudgetIntroKey(m)
 
-	return renderAutoBudgetRows(suggestions, existing, base, pct.Get(), sel, setPct, toggle, nSel,
+	return renderAutoBudgetRows(suggestionRows, existing, base, currentPct, sel, setPct, toggle, nSel,
 		totalMinor, tuned, suggestionErr, impactErr, incomeErr, impact, seg, introKey, months,
 		bulkBar, cancelOnClick, applyOnClick)
+}
+
+type autoBudgetSuggestionMemo struct {
+	Rows []budgeting.BudgetSuggestion
+	Err  error
+}
+
+func parsePayCycleAnchor(raw string) time.Time {
+	anchor, _ := time.Parse("2006-01-02", strings.TrimSpace(raw))
+	return anchor
 }
 
 func autoBudgetEmptyState(cancelOnClick any) ui.Node {
@@ -231,7 +252,7 @@ func renderAutoBudgetRows(suggestions []budgeting.BudgetSuggestion, existing map
 		if len(items) == 0 {
 			return Fragment()
 		}
-		return Fragment(Div(css.Class("autobudget-group"), Attr("data-testid", testID), uistate.T(titleKey, plural(len(items), "category"))),
+		return Fragment(Div(css.Class("autobudget-group"), Attr("data-testid", testID), uistate.T(titleKey, uistate.T(budgetCountKey("bc4b4.categoryCount", len(items)), len(items)))),
 			MapKeyed(items, func(s budgeting.BudgetSuggestion) any { return s.CategoryID }, renderRow))
 	}
 	rows := Fragment(group("budgets.autoGroupNew", fresh, "autobudget-group-new"), group("budgets.autoGroupExisting", rewrite, "autobudget-group-existing"))
@@ -271,7 +292,9 @@ func saveAutoBudget(app *appstate.App, suggestions []budgeting.BudgetSuggestion,
 	if suggestionErr != nil || impactErr != nil || incomeErr != nil {
 		return
 	}
-	saved := 0
+	var writes []domain.Budget
+	matchedAmounts := make(map[string]int64)
+	matchedBudgets := make(map[string]domain.Budget)
 	for _, s := range suggestions {
 		if !selected()[s.CategoryID] {
 			continue
@@ -281,30 +304,37 @@ func saveAutoBudget(app *appstate.App, suggestions []budgeting.BudgetSuggestion,
 			continue
 		}
 		if b, ok := existing[s.CategoryID]; ok {
-			converted, err := currency.ConvertBetween(amt, base, b.Limit.Currency, rates)
+			nextAmount, err := money.Add(matchedAmounts[b.ID], amt)
 			if err != nil {
 				uistate.PostNotice(budgetErrorText(err), true)
-				continue
+				return
 			}
-			b.Limit = money.New(converted, b.Limit.Currency)
-			b.Period = domain.PeriodMonthly
-			if err := app.PutBudgetAt(b, anchor); err != nil {
-				uistate.PostNotice(budgetErrorText(err), true)
-				continue
-			}
+			matchedAmounts[b.ID] = nextAmount
+			matchedBudgets[b.ID] = b
 		} else {
 			nb := domain.Budget{ID: id.New(), Name: s.CategoryName, CategoryID: s.CategoryID,
 				Period: domain.PeriodMonthly, Limit: money.New(amt, base), Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID}
-			if err := app.PutBudgetAt(nb, anchor); err != nil {
-				uistate.PostNotice(budgetErrorText(err), true)
-				continue
-			}
+			writes = append(writes, nb)
 		}
-		saved++
 	}
-	if saved > 0 {
-		uistate.PostNotice(uistate.T("budgets.autoSavedToast", plural(saved, "budget")), false)
+	for budgetID, monthlyAmount := range matchedAmounts {
+		b := matchedBudgets[budgetID]
+		converted, err := budgeting.LimitForPeriod(money.New(monthlyAmount, base), domain.PeriodMonthly, b.Period, b.WithBaseCurrency(base).Limit.Currency, rates)
+		if err != nil {
+			uistate.PostNotice(budgetErrorText(err), true)
+			return
+		}
+		b.Limit = converted
+		writes = append(writes, b)
 	}
+	if len(writes) == 0 {
+		return
+	}
+	if err := app.PutBudgetsAtomicAt(writes, anchor); err != nil {
+		uistate.PostNotice(budgetErrorText(err), true)
+		return
+	}
+	uistate.PostNotice(uistate.T("budgets.autoSavedToast", uistate.T(budgetCountKey("bc4b4.budgetCount", len(writes)), len(writes))), false)
 	uistate.BumpDataRevision()
 	close()
 }
@@ -324,7 +354,7 @@ func autoBudgetBulkControl(props autoBudgetBulkProps) ui.Node {
 		Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "autobudget-all"), OnClick(selectAll), uistate.T("budgets.autoSelectAll")),
 		Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "autobudget-none"), OnClick(selectNone), uistate.T("budgets.autoSelectNone")),
 		If(props.Tuned > 0, Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "autobudget-reset"),
-			resetOnClick, uistate.T("budgets.autoResetTuning", plural(props.Tuned, "slider")))))
+			resetOnClick, uistate.T("budgets.autoResetTuning", uistate.T(budgetCountKey("bc4b4.sliderCount", props.Tuned), props.Tuned)))))
 }
 
 // buttonWithDisabled builds a <button> that is disabled only when `disabled` is true —

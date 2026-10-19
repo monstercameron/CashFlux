@@ -14,11 +14,6 @@ import (
 // Dates and refund netting belong to the caller's immutable ledger/window.
 // Invalid money returns false; calculations must use ContributionChecked to
 // distinguish invalid data from an out-of-scope transaction.
-func Contribution(b domain.Budget, t domain.Transaction, covers func(string) bool) (money.Money, bool) {
-	amount, ok, err := ContributionChecked(b, t, covers)
-	return amount, ok && err == nil
-}
-
 // ContributionChecked is Contribution with explicit overflow and currency errors.
 func ContributionChecked(b domain.Budget, t domain.Transaction, covers func(string) bool) (money.Money, bool, error) {
 	if !t.CountsInReports() || !inScopeDirection(b, t) {

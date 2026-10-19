@@ -5,12 +5,14 @@
 package screens
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -84,6 +86,39 @@ func monthCloseSection(testid, title string, kids ...any) ui.Node {
 	return Div(append(args, kids...)...)
 }
 
+func monthClosePeriodEnded(end, now time.Time) bool {
+	return !dateutil.WallClockUTC(now).Before(end)
+}
+
+type monthCloseLeftoverLine struct {
+	name, amount, monthly string
+	rollover              bool
+}
+
+func monthCloseLeftovers(items []monthclose.Item, budgets []domain.Budget, base string) ([]monthCloseLeftoverLine, int64) {
+	byID := make(map[string]domain.Budget, len(budgets))
+	for _, budget := range budgets {
+		byID[budget.ID] = budget
+	}
+	lines := make([]monthCloseLeftoverLine, 0, len(items))
+	var total int64
+	for _, item := range items {
+		budget, ok := byID[item.BudgetID]
+		if !ok {
+			continue
+		}
+		monthly, err := budgeting.PeriodEquivalent(money.New(item.Minor, base), budget.Period, domain.PeriodMonthly)
+		if err != nil {
+			monthly = money.New(item.Minor, base)
+		}
+		total += monthly.Amount
+		lines = append(lines, monthCloseLeftoverLine{
+			name: item.Name, amount: fmtMoney(money.New(item.Minor, base)), monthly: fmtMoney(monthly), rollover: budget.Rollover,
+		})
+	}
+	return lines, total
+}
+
 func monthCloseOverBody(s monthclose.Summary, base string, tense func(string, string) string, coverOnClick any) []any {
 	if len(s.Overspends) == 0 {
 		return []any{P(css.Class("budget-sub"), uistate.T(tense("monthclose.overNoneLive", "monthclose.overNone")))}
@@ -104,18 +139,23 @@ func monthCloseOverBody(s monthclose.Summary, base string, tense func(string, st
 	}
 }
 
-func monthCloseLeftBody(s monthclose.Summary, base string, tense func(string, string) string, rolloverNote string, sweepOnClick any) []any {
+func monthCloseLeftBody(s monthclose.Summary, budgets []domain.Budget, base string, sweepOnClick any) []any {
 	if len(s.Leftovers) == 0 {
-		return []any{P(css.Class("budget-sub"), uistate.T(tense("monthclose.leftNoneLive", "monthclose.leftNone")))}
+		return []any{P(css.Class("budget-sub"), uistate.T("monthclose.leftNoneLive"))}
 	}
-	body := []any{P(css.Class("budget-sub"), uistate.TN(tense("monthclose.leftIntroLiveOne", "monthclose.leftIntroOne"),
-		tense("monthclose.leftIntroLiveMany", "monthclose.leftIntroMany"), len(s.Leftovers), fmtMoney(money.New(s.TotalLeftMinor, base))))}
-	if top := s.Leftovers[0]; len(s.Leftovers) > 1 && top.Minor*2 > s.TotalLeftMinor {
-		body = append(body, P(css.Class("budget-sub"), Attr("data-testid", "monthclose-left-top"),
-			uistate.T("monthclose.leftDominatedBy", top.Name, fmtMoney(money.New(top.Minor, base)), top.Minor*100/s.TotalLeftMinor)))
+	leftovers, monthlyTotal := monthCloseLeftovers(s.Leftovers, budgets, base)
+	rows := make([]ui.Node, 0, len(s.Leftovers))
+	for _, item := range leftovers {
+		key := "bv6g.monthclose.leftItemFresh"
+		if item.rollover {
+			key = "bv6g.monthclose.leftItemRollover"
+		}
+		rows = append(rows, Li(css.Class("wf-line"), uistate.T(key, item.name, item.amount),
+			Span(css.Class("wf-line-amt"), uistate.T("bv6g.monthclose.monthlyAmount", item.monthly))))
 	}
+	body := []any{Ul(css.Class("wf-lines"), rows), P(css.Class("budget-sub"), Attr("data-testid", "monthclose-left-total"),
+		uistate.T("bv6g.monthclose.leftTotal", fmtMoney(money.New(monthlyTotal, base)), len(leftovers)))}
 	return append(body,
-		P(css.Class("budget-sub"), Attr("data-testid", "monthclose-rollover-note"), rolloverNote),
 		Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt2),
 			Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "monthclose-sweep"),
 				Title(uistate.T("sweep.openConfig")), sweepOnClick, uistate.T("sweep.openConfig"))))
@@ -150,14 +190,8 @@ func monthCloseResolveBody(s monthclose.Summary, base string, deferred bool, all
 		Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.FlexWrap, tw.Mt2), choices)}
 }
 
-func monthCloseIncomeBody(s monthclose.Summary, base string) []any {
-	delta := s.IncomeDeltaMinor()
-	deltaText := uistate.T("monthclose.incomeMatched")
-	if delta > 0 {
-		deltaText = uistate.T("monthclose.incomeAhead", fmtMoney(money.New(delta, base)))
-	} else if delta < 0 {
-		deltaText = uistate.T("monthclose.incomeBehind", fmtMoney(money.New(-delta, base)))
-	}
+func monthCloseIncomeBody(s monthclose.Summary, base string, ended bool) []any {
+	deltaText := monthCloseIncomeDeltaText(s, base, ended)
 	return []any{
 		Ul(css.Class("wf-lines"),
 			Li(css.Class("wf-line"), Span(css.Class("wf-line-name"), uistate.T("monthclose.incomeExpected")),
@@ -166,6 +200,20 @@ func monthCloseIncomeBody(s monthclose.Summary, base string) []any {
 				Span(css.Class("wf-line-amt"), fmtMoney(money.New(s.ActualIncomeMinor, base))))),
 		P(css.Class("budget-sub"), Attr("data-testid", "monthclose-income-delta"), deltaText),
 	}
+}
+
+func monthCloseIncomeDeltaText(s monthclose.Summary, base string, ended bool) string {
+	delta := s.IncomeDeltaMinor()
+	if !ended {
+		return uistate.T("bv6g.monthclose.incomeLive", fmtMoney(money.New(s.ActualIncomeMinor, base)), fmtMoney(money.New(s.ExpectedIncomeMinor, base)))
+	}
+	if delta > 0 {
+		return uistate.T("monthclose.incomeAhead", fmtMoney(money.New(delta, base)))
+	}
+	if delta < 0 {
+		return uistate.T("monthclose.incomeBehind", fmtMoney(money.New(-delta, base)))
+	}
+	return uistate.T("monthclose.incomeMatched")
 }
 
 func monthCloseCopyBody(budgets []domain.Budget, catNames map[string]string, copyAll, copyPlan map[string]int64, excluded map[string]bool,
@@ -192,31 +240,23 @@ func monthCloseCopyBody(budgets []domain.Budget, catNames map[string]string, cop
 	}
 }
 
-func applyMonthCloseCopy(app *appstate.App, budgets []domain.Budget, v budgetView, anchor time.Time, weekStart time.Weekday, excluded func() string) {
-	plan := monthclose.CopyBoosts(budgets, func(b domain.Budget) (time.Time, time.Time) {
-		return monthclose.CarryTargets(b.Period, anchor, weekStart)
+func applyMonthCloseCopy(app *appstate.App, budgets []domain.Budget, anchor time.Time, weekStart time.Weekday, payAnchor time.Time, excluded func() string) error {
+	writes, err := monthclose.ApplyCopyBoosts(budgets, func(b domain.Budget) (time.Time, time.Time) {
+		return monthclose.CarryTargetsAnchored(b.Period, anchor, weekStart, payAnchor)
 	}, monthCloseExcludeSet(excluded()))
-	n := 0
-	for _, b := range budgets {
-		amt, ok := plan[b.ID]
-		if !ok {
-			continue
-		}
-		pr := uistate.CurrentPrefs()
-		key := budgeting.PeriodKeyWithWeekStart(b.Period, v.Anchor, budgetPayCycleAnchor(pr.PayCycleAnchor), pr.WeekStartWeekday())
-		thisStart, err := time.Parse("2006-01-02", key)
-		if err == nil {
-			err = app.PutBudget(b.WithPeriodBoost(thisStart, amt))
-		}
-		if err == nil {
-			n++
-		}
+	if err != nil {
+		return err
 	}
-	if n > 0 {
-		uistate.BumpDataRevision()
-		uistate.RequestPersist()
-		uistate.PostUndoable(uistate.T("monthclose.copyApplied", plural(n, "budget")))
+	if len(writes) == 0 {
+		return nil
 	}
+	if err := app.PutBudgetsAtomicAt(writes, anchor); err != nil {
+		return fmt.Errorf("save month-close top-ups: %w", err)
+	}
+	uistate.BumpDataRevision()
+	uistate.RequestPersist()
+	uistate.PostUndoable(uistate.T("monthclose.copyApplied", plural(len(writes), "budget")))
+	return nil
 }
 
 // monthCloseBody is the modal's content: the five ordered sections. Its own
@@ -241,7 +281,7 @@ func monthCloseBody(_ monthCloseBodyProps) ui.Node {
 	// switches tense on a closed period (budgets.histUnspent, incomeActualEnded);
 	// this flow never did (Cam, 2026-08-31). Half-open range: the period is closed
 	// only once now is at or past its exclusive end.
-	ended := !time.Now().Before(be)
+	ended := monthClosePeriodEnded(be, time.Now())
 	tense := func(live, past string) string {
 		if ended {
 			return past
@@ -305,13 +345,13 @@ func monthCloseBody(_ monthCloseBodyProps) ui.Node {
 	ws := pr.WeekStartWeekday()
 	anchor := v.Anchor
 	if anchor.IsZero() {
-		anchor = time.Now()
+		anchor = dateutil.WallClockUTC(time.Now())
 	}
 	// Carry FORWARD: the reviewed period's top-ups into the next one. See
 	// monthclose.CarryTargets for why the old (last, this) pair could never land
 	// usefully in the window this flow is offered.
 	periodStarts := func(b domain.Budget) (time.Time, time.Time) {
-		return monthclose.CarryTargets(b.Period, anchor, ws)
+		return monthclose.CarryTargetsAnchored(b.Period, anchor, ws, budgetPayCycleAnchor(pr.PayCycleAnchor))
 	}
 	var visibleBudgets []domain.Budget
 	for _, b := range app.Budgets() {
@@ -321,7 +361,11 @@ func monthCloseBody(_ monthCloseBodyProps) ui.Node {
 	}
 	copyAll := monthclose.CopyBoosts(visibleBudgets, periodStarts, nil)
 	copyPlan := monthclose.CopyBoosts(visibleBudgets, periodStarts, monthCloseExcludeSet(excluded.Get()))
-	applyCopy := ui.UseEvent(Prevent(func() { applyMonthCloseCopy(app, visibleBudgets, v, anchor, ws, excluded.Get) }))
+	applyCopy := ui.UseEvent(Prevent(func() {
+		if err := applyMonthCloseCopy(app, visibleBudgets, anchor, ws, budgetPayCycleAnchor(pr.PayCycleAnchor), excluded.Get); err != nil {
+			uistate.PostNotice(budgetErrorText(err), true)
+		}
+	}))
 	coverOnClick := OnClick(openCoverAll)
 	sweepOnClick := OnClick(openSweep)
 	allocateOnClick := OnClick(goAllocate)
@@ -336,17 +380,13 @@ func monthCloseBody(_ monthCloseBodyProps) ui.Node {
 
 	// 2 — Unused money + what rollover will do with it (the explanation BEFORE the
 	// month changes, not a surprise after).
-	rolloverNote := uistate.T("monthclose.rolloverOff")
-	if s.RolloverOn {
-		rolloverNote = uistate.T("monthclose.rolloverOn")
-	}
-	leftBody := monthCloseLeftBody(s, v.Base, tense, rolloverNote, sweepOnClick)
+	leftBody := monthCloseLeftBody(s, app.Budgets(), v.Base, sweepOnClick)
 
 	// 3 — Over-assignment with the honest choices inline.
 	resolveBody := monthCloseResolveBody(s, v.Base, deferred.Get(), allocateOnClick, basisOnClick, rolloverOnClick, deferOnClick)
 
 	// 4 — Actual vs expected income.
-	incomeBody := monthCloseIncomeBody(s, v.Base)
+	incomeBody := monthCloseIncomeBody(s, v.Base, ended)
 
 	// 5 — Copy last month's one-time top-ups, with per-budget exceptions.
 	copyBody := monthCloseCopyBody(visibleBudgets, v.CatName, copyAll, copyPlan, monthCloseExcludeSet(excluded.Get()), toggleExclude, applyCopyOnClick, v.Base)
@@ -354,7 +394,7 @@ func monthCloseBody(_ monthCloseBodyProps) ui.Node {
 	return Div(css.Class("modal-scroll", "mc-body"), Attr("data-testid", "monthclose-body"),
 		P(css.Class("budget-sub"), uistate.T("monthclose.intro", vw.Label())),
 		monthCloseSection("monthclose-overspends", uistate.T("monthclose.overTitle"), overBody...),
-		monthCloseSection("monthclose-leftovers", uistate.T("monthclose.leftTitle"), leftBody...),
+		monthCloseSection("monthclose-leftovers", uistate.T("bv6g.monthclose.leftTitle"), leftBody...),
 		monthCloseSection("monthclose-assign", uistate.T("monthclose.assignTitle"), resolveBody...),
 		monthCloseSection("monthclose-income", uistate.T("monthclose.incomeTitle2"), incomeBody...),
 		monthCloseSection("monthclose-copy", uistate.T("monthclose.copyTitle"), copyBody...),

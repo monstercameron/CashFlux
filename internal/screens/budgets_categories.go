@@ -132,12 +132,7 @@ func BudgetCategoriesBody(_ struct{}) ui.Node {
 
 	onCancel := ui.UseEvent(Prevent(func() { openAtom.Set("") }))
 	onSave := ui.UseEvent(Prevent(func() {
-		var sel []string
-		for _, c := range app.Categories() {
-			if c.Kind == domain.KindExpense && picked.Get()[c.ID] {
-				sel = append(sel, c.ID)
-			}
-		}
+		sel := budgeting.SelectedBudgetCategories(app.Categories(), picked.Get(), budget.IsSaving())
 		var tags []string
 		for k, on := range pickedTags.Get() {
 			if on && k != "" {
@@ -200,7 +195,7 @@ func BudgetCategoriesBody(_ struct{}) ui.Node {
 			Div(css.Class("budgettrack-section"),
 				Span(css.Class("budgettrack-head"), uistate.T("budgets.catsSection")),
 				ui.CreateElement(budgetCategoryPicker, budgetCategoryPickerProps{
-					Picked: picked.Get(), OnToggle: toggle, ExcludeBudgetID: budgetID, Meta: trackMeta.Categories,
+					Picked: picked.Get(), OnToggle: toggle, ExcludeBudgetID: budgetID, Meta: trackMeta.Categories, Saving: budget.IsSaving(),
 				})),
 			// Tags section — a searchable checklist of the tags already in use (cross-
 			// category), plus "add a new tag" from the search box.
@@ -213,8 +208,8 @@ func BudgetCategoriesBody(_ struct{}) ui.Node {
 		Div(css.Class("modal-foot", "autobudget-footer"),
 			Span(css.Class("autobudget-total", tw.TextDim), Attr("data-testid", "budgetcats-count"),
 				uistate.T("budgets.tracksCount",
-					fmt.Sprintf("%d %s", nSel, pluralWord(nSel, "category")),
-					fmt.Sprintf("%d %s", nTags, pluralWord(nTags, "tag")))),
+					uistate.T(budgetCountKey("bc4b4.categoryCount", nSel), nSel),
+					uistate.T(budgetCountKey("bc4b4.tagCount", nTags), nTags))),
 			Button(css.Class("btn"), Type("button"), Attr("data-testid", "budgetcats-cancel"), cancelOnClick, uistate.T("action.cancel")),
 			buttonWithDisabled(nSel == 0 && nTags == 0, []any{css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "budgetcats-save"), saveOnClick},
 				uistate.T("budgets.tracksSave"))))

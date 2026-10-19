@@ -488,7 +488,7 @@ func rollupStatus(name string, dir domain.BudgetDirection, spent, limit int64, s
 // limit into "budgeted" would claim the household plans to SPEND money it plans
 // to set aside (C538).
 func TestSummarizeRollupKeepsSavingOutOfTheSpendingTotals(t *testing.T) {
-	got := SummarizeRollup([]Status{
+	got := checkedSummarizeRollup(t, []Status{
 		rollupStatus("Dining", domain.DirectionSpend, 18000, 15000, StateOver),
 		rollupStatus("Fuel", domain.DirectionSpend, 9000, 10000, StateNear),
 		rollupStatus("Groceries", domain.DirectionSpend, 4000, 20000, StateOK),
@@ -517,7 +517,7 @@ func TestSummarizeRollupKeepsSavingOutOfTheSpendingTotals(t *testing.T) {
 // A budget that is over but whose Remaining is somehow not negative must not
 // contribute a nonsense overage.
 func TestSummarizeRollupOnlyCountsRealOverage(t *testing.T) {
-	got := SummarizeRollup([]Status{
+	got := checkedSummarizeRollup(t, []Status{
 		rollupStatus("Exactly at cap", domain.DirectionSpend, 10000, 10000, StateOver),
 	})
 	if got.OverCount != 1 {
@@ -529,9 +529,9 @@ func TestSummarizeRollupOnlyCountsRealOverage(t *testing.T) {
 }
 
 func TestSummarizeRollupEmpty(t *testing.T) {
-	got := SummarizeRollup(nil)
+	got := checkedSummarizeRollup(t, nil)
 	if got != (RollupSummary{}) {
-		t.Errorf("SummarizeRollup(nil) = %+v", got)
+		t.Errorf("checkedSummarizeRollup(t, nil) = %+v", got)
 	}
 }
 
@@ -558,4 +558,12 @@ func TestEvaluateSetsLimitConsistentlyWithSpentPlusRemaining(t *testing.T) {
 		t.Errorf("Spent+Remaining = %d but Limit = %d — the field and the old "+
 			"re-derivation disagree, which would move every existing figure", got, st.Limit.Amount)
 	}
+}
+func checkedSummarizeRollup(t *testing.T, statuses []Status) RollupSummary {
+	t.Helper()
+	got, err := SummarizeRollupChecked(statuses)
+	if err != nil {
+		t.Fatalf("SummarizeRollupChecked: %v", err)
+	}
+	return got
 }

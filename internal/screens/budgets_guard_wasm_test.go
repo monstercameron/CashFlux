@@ -921,9 +921,14 @@ func TestOverlaysSurviveAnUnevaluableBudget(t *testing.T) {
 	carrying := plain
 	carrying.ID, carrying.Name, carrying.Rollover = "b-carrying", "Groceries", true
 
-	// An empty view stands in for "no budget could be evaluated" — the shape an FX
-	// gap produces, without needing to break the FX table to get there.
-	overlays := budgetAdjustOverlays(budgetView{}, []domain.Budget{plain, carrying},
+	// Production retains failed budgets in Statuses, including their stored base
+	// limit. The failed rollover status must not turn that placeholder into a zero
+	// overlay that the bulk tool would then mistake for known carry.
+	failed := budgeting.Status{
+		Budget: carrying, Limit: carrying.Limit,
+		Error: &budgeting.BudgetEvaluationError{BudgetID: carrying.ID, Operation: "evaluate budget"},
+	}
+	overlays := budgetAdjustOverlays(budgetView{Statuses: []budgeting.Status{failed}}, []domain.Budget{plain, carrying},
 		func(domain.Budget) time.Time { return time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC) })
 
 	if _, ok := overlays[plain.ID]; !ok {
@@ -949,7 +954,7 @@ func TestOverlaysSurviveAnUnevaluableBudget(t *testing.T) {
 	// A boost the budget carries itself is still counted, evaluation or no.
 	start := time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC)
 	boosted := plain.WithPeriodBoost(start, -30000)
-	got := budgetAdjustOverlays(budgetView{}, []domain.Budget{boosted}, func(domain.Budget) time.Time { return start })
+	got := budgetAdjustOverlays(budgetView{Statuses: []budgeting.Status{{Budget: boosted, Limit: boosted.Limit, Error: failed.Error}}}, []domain.Budget{boosted}, func(domain.Budget) time.Time { return start })
 	if got[boosted.ID] != -30000 {
 		t.Errorf("overlay for a boosted budget = %d, want -30000", got[boosted.ID])
 	}

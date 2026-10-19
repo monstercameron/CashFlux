@@ -81,35 +81,3 @@ func ApplySmoothingOffsetChecked(st Status, offset int64, nearThreshold float64)
 	st.State = classifyDirected(st.Budget.Direction, spent, st.Limit, nearThreshold)
 	return st, nil
 }
-
-// SmoothingLandingItems returns the offset and per-recurring breakdown so the
-// budget row can explain the amount ("no black boxes"):
-// each item names the landed bill and the amount its set-aside covered.
-func SmoothingLandingItems(budget domain.Budget, recurrings []domain.Recurring, posted []domain.Transaction, start, end time.Time) (int64, []CommittedItem) {
-	offset, items, _ := SmoothingLandingItemsWithRates(budget, recurrings, posted, start, end, currency.Rates{Base: budget.Limit.Currency})
-	return offset, items
-}
-
-// ApplySmoothingOffset returns the Status adjusted by a landing-period offset:
-// Spent is reduced (never below zero), Remaining raised by the same amount, and
-// Percent/State re-derived with the standard thresholds so the row's tone and
-// meter agree with the adjusted figures. A zero or negative offset returns the
-// Status unchanged.
-func ApplySmoothingOffset(st Status, offset int64, nearThreshold float64) Status {
-	if st.Limit.Currency == "" {
-		limit, err := paceLimit(st)
-		if err != nil {
-			st.Error = &BudgetEvaluationError{BudgetID: st.Budget.ID, Operation: "smoothing", Err: err}
-			st.State = StateUnavailable
-			return st
-		}
-		st.Limit = limit
-	}
-	adjusted, err := ApplySmoothingOffsetChecked(st, offset, nearThreshold)
-	if err != nil {
-		st.Error = &BudgetEvaluationError{BudgetID: st.Budget.ID, Operation: "smoothing", Err: err}
-		st.State = StateUnavailable
-		return st
-	}
-	return adjusted
-}

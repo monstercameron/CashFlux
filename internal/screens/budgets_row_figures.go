@@ -36,7 +36,11 @@ func budgetRowBarValues(s budgeting.Status, props budgetRowProps, lastMonthMode 
 		label = uistate.T("budgets.nearLimit")
 	case budgeting.StateOver:
 		fillClass = "bar-fill over"
-		label = uistate.T("budgets.overBudget")
+		if s.Budget.IsSaving() {
+			label = uistate.T("bc4b2.needsFunding")
+		} else {
+			label = uistate.T("budgets.overBudget")
+		}
 	default:
 		// Not over/near yet, but the pace projection says this budget is trending
 		// to overspend — don't claim "On track" while also warning of an overspend
@@ -96,4 +100,14 @@ func budgetRowBarValues(s budgeting.Status, props budgetRowProps, lastMonthMode 
 	return budgetRowBarValuesResult{
 		barSpent: barSpent, barPct: barPct, width: width, fillClass: fillClass, label: label, title: title,
 	}
+}
+
+func budgetRowRemainPhrase(s budgeting.Status) string {
+	if !s.Budget.IsSaving() {
+		return budgetRemainPhrase(s.Remaining)
+	}
+	if s.Remaining.Amount > 0 {
+		return uistate.T("bc4b2.shortBy", fmtMoney(s.Remaining))
+	}
+	return uistate.T("bc4b2.targetMet")
 }

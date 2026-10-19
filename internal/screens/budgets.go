@@ -90,8 +90,9 @@ type budgetView struct {
 	// (Account.MonthlySavings), FX-converted to base minor units. Counts toward
 	// "assigned" in the zero-based view so To Assign spans expenses + savings.
 	// SavingsAccts is the per-account breakdown the savings section renders.
-	SavingsAssigned int64
-	SavingsAccts    []savingsAcct
+	SavingsAssigned   int64
+	SavingsIncomplete bool
+	SavingsAccts      []savingsAcct
 	// SavingsBudgeted is the total asked for by SAVING budgets this period, and
 	// SavingsMoved is how much has actually been set aside toward them. Kept apart
 	// from TotalLimit/TotalSpent because a contribution target is not a spending
@@ -137,6 +138,10 @@ func budgetBaseCurrency(base string) string {
 	}
 	return base
 }
+
+func budgetNow() time.Time { return budgetNowAt(time.Now()) }
+
+func budgetNowAt(now time.Time) time.Time { return dateutil.WallClockUTC(now) }
 
 // budgetNeedsAttention is the shared definition behind the attention count and
 // its list filter. Over-limit and near-limit budgets are both included.
@@ -187,12 +192,13 @@ type incomeSource struct {
 // equivalent, plus — when the account funds a goal — the plan-vs-reality read
 // (the goal's target-date pace vs. where this monthly rate actually lands).
 type savingsAcct struct {
-	AccountID    string
-	Name         string
-	Type         string // account type value, humanized for the row sublabel
-	Currency     string // account currency (also the monthly-savings currency)
-	Monthly      int64  // monthly savings budget, account-currency minor units
-	AssignedBase int64  // Monthly converted to base currency (0 when unconvertible)
+	AccountID       string
+	Name            string
+	Type            string // account type value, humanized for the row sublabel
+	Currency        string // account currency (also the monthly-savings currency)
+	Monthly         int64  // monthly savings budget, account-currency minor units
+	AssignedBase    int64  // Monthly converted to base currency (0 when unconvertible)
+	ConversionError error
 
 	// Plan-vs-reality against the account's funded goal (populated only when the
 	// account funds a financial goal visible to the active member).
@@ -268,10 +274,10 @@ func computeSavingsAccounts(app *appstate.App, activeMemberID string, asOf time.
 		if mCur == "" {
 			mCur = cur
 		}
-		assignedBase := savingsMonthlyBase(monthly, mCur, base, rates)
+		assignedBase, conversionErr := savingsMonthlyBaseChecked(monthly, mCur, base, rates)
 		sa := savingsAcct{
 			AccountID: ac.ID, Name: ac.Name, Type: humanizeType(string(ac.Type)),
-			Currency: cur, Monthly: monthly, AssignedBase: assignedBase,
+			Currency: cur, Monthly: monthly, AssignedBase: assignedBase, ConversionError: conversionErr,
 		}
 		// Plan-vs-reality against this account's funded goals: prefer the nearest still-
 		// incomplete goal for the projection; if every linked goal is already met, show a
@@ -332,14 +338,19 @@ func computeSavingsAccounts(app *appstate.App, activeMemberID string, asOf time.
 }
 
 func savingsMonthlyBase(monthly int64, monthlyCurrency, base string, rates currency.Rates) int64 {
+	converted, _ := savingsMonthlyBaseChecked(monthly, monthlyCurrency, base, rates)
+	return converted
+}
+
+func savingsMonthlyBaseChecked(monthly int64, monthlyCurrency, base string, rates currency.Rates) (int64, error) {
 	if monthly == 0 {
-		return 0
+		return 0, nil
 	}
 	converted, err := currency.ConvertBetween(monthly, monthlyCurrency, base, rates)
 	if err != nil {
-		return 0
+		return 0, err
 	}
-	return converted
+	return converted, nil
 }
 
 // computeBudgetView runs the full budget evaluation for the active member scope and
@@ -780,10 +791,14 @@ func adjustAllScope(app *appstate.App, activeMemberID string) []domain.Budget {
 // It is what a THIS-PERIOD bulk adjustment scales (C671): that write records a
 // boost, and a boost lands on this figure, not on the stored limit. Taking it
 // from the same Statuses the cards render means the preview cannot promise a cap
-// the cards would then disagree with.
+// the cards would then disagree with. Failed statuses are omitted because their
+// stored fallback Limit is not an evaluated effective cap.
 func budgetEffectiveCaps(v budgetView) budgetCaps {
 	caps := make(budgetCaps, len(v.Statuses))
 	for _, s := range v.Statuses {
+		if s.Error != nil {
+			continue
+		}
 		caps[s.Budget.ID] = s.Limit.Amount
 	}
 	return caps
@@ -813,7 +828,10 @@ func budgetAdjustOverlays(v budgetView, budgets []domain.Budget, periodStart fun
 	out := make(budgeting.AdjustOverlays, len(budgets))
 	for _, b := range budgets {
 		if cap, ok := caps[b.ID]; ok {
-			out[b.ID] = cap - b.Limit.Amount
+			delta, err := money.Sub(cap, b.Limit.Amount)
+			if err == nil {
+				out[b.ID] = delta
+			}
 			continue
 		}
 		if !b.Rollover && periodStart != nil {

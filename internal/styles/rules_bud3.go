@@ -141,7 +141,7 @@ func registerBud3() {
 		rowGap("0.15rem"),
 	)
 	ruleContentMax(860-railCollapsedPx, ".budget-crow-head", gridArea("name"))
-	ruleContentMax(860-railCollapsedPx, ".budget-crow-bar", display("none"))
+	ruleContentMax(860-railCollapsedPx, ".budget-crow-bar", gridColumn("1 / -1"), display("block"), width("100%"), minWidth("0"))
 	ruleContentMax(860-railCollapsedPx, ".budget-crow-amt", gridArea("amount"))
 	ruleContentMax(860-railCollapsedPx, ".budget-crow-left", display("block"), gridArea("left"))
 	ruleContentMax(860-railCollapsedPx, ".budget-crow-chip", gridArea("status"), justifySelf("start"))

@@ -29,6 +29,9 @@ type AnnualGridRow struct {
 	Cells       [12]AnnualGridCell // index 0 = January … 11 = December
 	PlanTotal   money.Money        // Σ of the row's monthly plans
 	ActualTotal money.Money        // Σ of the row's monthly actuals
+	// Error explains why this row is incomplete. Other budgets remain usable.
+	Error  error
+	Saving bool
 }
 
 // AnnualGrid is the categories×months plan-vs-actual matrix for a year (BG9): a
@@ -71,54 +74,73 @@ func BuildAnnualGrid(budgets []domain.Budget, all []domain.Transaction, year int
 	grid.GrandActual = money.Zero(cur)
 
 	for _, b := range budgets {
-		row := AnnualGridRow{BudgetID: b.ID, Name: b.Name}
+		row := AnnualGridRow{BudgetID: b.ID, Name: b.Name, Saving: b.IsSaving()}
 		row.PlanTotal = money.Zero(cur)
 		row.ActualTotal = money.Zero(cur)
-		plan, err := PeriodEquivalent(normalizedLimit(b, rates), b.Period, domain.PeriodMonthly)
-		if err != nil {
-			return AnnualGrid{}, fmt.Errorf("budget %q monthly plan: %w", b.ID, err)
-		}
 		cov := covers[b.ID]
 		for m := 0; m < 12; m++ {
 			start := time.Date(year, time.Month(m+1), 1, 0, 0, 0, 0, time.UTC)
 			end := time.Date(year, time.Month(m+2), 1, 0, 0, 0, 0, time.UTC)
+			baseLimit, err := BudgetBaseAt(b, start)
+			if err != nil {
+				row.Error = fmt.Errorf("budget %q limit for %s: %w", b.ID, start.Format("2006-01"), err)
+				break
+			}
+			if baseLimit.Currency == "" {
+				baseLimit.Currency = cur
+			}
+			plan, err := PeriodEquivalent(baseLimit, b.Period, domain.PeriodMonthly)
+			if err != nil {
+				row.Error = fmt.Errorf("budget %q monthly plan: %w", b.ID, err)
+				break
+			}
 			st, err := EvaluateRollup(b, all, start, end, rates, DefaultNearThreshold, cov)
 			if err != nil {
-				return AnnualGrid{}, err
+				row.Error = fmt.Errorf("budget %q actual for %s: %w", b.ID, start.Format("2006-01"), err)
+				break
 			}
-			// Convert the plan to the grid currency so mixed-currency budgets sum.
+			// Convert each month independently because budget history can change its plan.
 			planBase, err := rates.Convert(plan, cur)
 			if err != nil {
-				return AnnualGrid{}, err
+				row.Error = fmt.Errorf("budget %q plan currency: %w", b.ID, err)
+				break
 			}
 			actualBase, err := rates.Convert(st.Spent, cur)
 			if err != nil {
-				return AnnualGrid{}, err
+				row.Error = fmt.Errorf("budget %q actual currency: %w", b.ID, err)
+				break
 			}
 			cell := AnnualGridCell{
 				Plan:   planBase,
 				Actual: actualBase,
-				Over:   actualBase.Amount > planBase.Amount,
+				Over:   !b.IsSaving() && actualBase.Amount > planBase.Amount,
 			}
 			row.Cells[m] = cell
 			if row.PlanTotal, err = row.PlanTotal.Add(planBase); err != nil {
-				return AnnualGrid{}, err
+				row.Error = fmt.Errorf("budget %q plan total: %w", b.ID, err)
+				break
 			}
 			if row.ActualTotal, err = row.ActualTotal.Add(actualBase); err != nil {
-				return AnnualGrid{}, err
-			}
-			if grid.MonthPlanTotals[m], err = grid.MonthPlanTotals[m].Add(planBase); err != nil {
-				return AnnualGrid{}, err
-			}
-			if grid.MonthActualTotals[m], err = grid.MonthActualTotals[m].Add(actualBase); err != nil {
-				return AnnualGrid{}, err
+				row.Error = fmt.Errorf("budget %q actual total: %w", b.ID, err)
+				break
 			}
 		}
-		if grid.GrandPlan, err = grid.GrandPlan.Add(row.PlanTotal); err != nil {
-			return AnnualGrid{}, err
-		}
-		if grid.GrandActual, err = grid.GrandActual.Add(row.ActualTotal); err != nil {
-			return AnnualGrid{}, err
+		if row.Error == nil && !b.IsSaving() {
+			var err error
+			if grid.GrandPlan, err = grid.GrandPlan.Add(row.PlanTotal); err != nil {
+				return AnnualGrid{}, err
+			}
+			if grid.GrandActual, err = grid.GrandActual.Add(row.ActualTotal); err != nil {
+				return AnnualGrid{}, err
+			}
+			for m := range row.Cells {
+				if grid.MonthPlanTotals[m], err = grid.MonthPlanTotals[m].Add(row.Cells[m].Plan); err != nil {
+					return AnnualGrid{}, err
+				}
+				if grid.MonthActualTotals[m], err = grid.MonthActualTotals[m].Add(row.Cells[m].Actual); err != nil {
+					return AnnualGrid{}, err
+				}
+			}
 		}
 		grid.Rows = append(grid.Rows, row)
 	}

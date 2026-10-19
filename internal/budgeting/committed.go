@@ -69,11 +69,15 @@ func CommittedWithRates(budget domain.Budget, recurrings []domain.Recurring, pos
 			if err != nil {
 				return CommittedResult{}, err
 			}
-			committedRaw, err = money.Add(committedRaw, converted)
+			periodAccrual, err := PeriodEquivalent(money.New(converted, cur), domain.PeriodMonthly, budget.Period)
+			if err != nil {
+				return CommittedResult{}, fmt.Errorf("scale recurring %q set-aside to budget period: %w", r.ID, err)
+			}
+			committedRaw, err = money.Add(committedRaw, periodAccrual.Amount)
 			if err != nil {
 				return CommittedResult{}, fmt.Errorf("sum committed recurring amounts: %w", err)
 			}
-			items = append(items, CommittedItem{RecurringID: r.ID, Label: r.Label, Amount: money.New(converted, cur), Smoothed: true})
+			items = append(items, CommittedItem{RecurringID: r.ID, Label: r.Label, Amount: periodAccrual, Smoothed: true})
 			continue
 		}
 		expected := len(smoothing.OccurrencesIn(r, start, end))

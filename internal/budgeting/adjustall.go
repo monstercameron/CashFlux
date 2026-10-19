@@ -245,11 +245,6 @@ func AdjustNeedsAck(pct float64, scope AdjustScope) bool {
 // p MUST have been built by AdjustAllPreviewFor under the same scope — the
 // delta a this-period write records is only correct if the preview measured it
 // against the effective cap the boost lands on.
-func ApplyAdjust(p AdjustPreview, scope AdjustScope, periodStart func(domain.Budget) time.Time) []domain.Budget {
-	out, _ := ApplyAdjustChecked(p, scope, periodStart)
-	return out
-}
-
 // ApplyAdjustChecked builds every write before returning any, checking boost
 // accumulation as well as the preview. No partial write set escapes on failure.
 func ApplyAdjustChecked(p AdjustPreview, scope AdjustScope, periodStart func(domain.Budget) time.Time) ([]domain.Budget, error) {

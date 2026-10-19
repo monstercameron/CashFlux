@@ -62,7 +62,7 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 	// "Last month's spend" overlay: when on, the summary graph shows last period's total
 	// spend too (matching the tiles), not just this month.
 	showLM := uistate.UseBudgetsLastMonth().Get()
-	futurePeriod := isFuturePeriod(vw, time.Now())
+	futurePeriod := isFuturePeriod(vw, budgetNow())
 	// Income-basis modal opener. Called unconditionally (before any early return) so the
 	// hook order is stable across renders. Opening seeds the modal's draft from the
 	// current prefs, so the Save/Cancel modal starts from today's basis.
@@ -486,11 +486,16 @@ func minorToMajorStr(minor int64, base string) string {
 		return ""
 	}
 	dec := currency.Decimals(base)
-	mult := 1.0
+	mult := int64(1)
 	for i := 0; i < dec; i++ {
 		mult *= 10
 	}
-	return strconv.FormatFloat(float64(minor)/mult, 'f', -1, 64)
+	whole, fraction := minor/mult, minor%mult
+	if fraction == 0 {
+		return strconv.FormatInt(whole, 10)
+	}
+	frac := strings.TrimRight(fmt.Sprintf("%0*d", dec, fraction), "0")
+	return strconv.FormatInt(whole, 10) + "." + frac
 }
 
 // majorStrToMinor parses an edit-field major-unit string back to minor units;
@@ -830,8 +835,10 @@ func budgetSavingsWidget(props budgetSummaryProps) ui.Node {
 	goToAccounts := ui.UseEvent(Prevent(func() { nav.Navigate(uistate.RoutePath("/accounts")) }))
 	onSpread := ui.UseEvent(Prevent(func() {
 		vv := computeBudgetView(app, activeMemberID, vw, pr, false)
-		pool := vv.BannerIncome + vv.RolledOver
-		leftover := budgeting.ToAssign(pool, vv.TotalLimit+vv.SavingsAssigned)
+		leftover, complete := budgetSpreadAmount(vv)
+		if !complete {
+			return
+		}
 		rates := currency.Rates{Base: vv.Base, Rates: app.Settings().FXRates}
 		spreadLeftoverAcrossSavings(app, vv.SavingsAccts, leftover, vv.Base, rates)
 	}))
@@ -845,8 +852,10 @@ func budgetSavingsWidget(props budgetSummaryProps) ui.Node {
 		return Fragment() // only meaningful in zero-based mode with budgets present
 	}
 
-	pool := v.BannerIncome + v.RolledOver
-	leftover := budgeting.ToAssign(pool, v.TotalLimit+v.SavingsAssigned)
+	leftover := int64(0)
+	if amount, complete := budgetSpreadAmount(v); complete {
+		leftover = amount
+	}
 
 	var body ui.Node
 	if len(v.SavingsAccts) == 0 {
@@ -867,7 +876,7 @@ func budgetSavingsWidget(props budgetSummaryProps) ui.Node {
 	// The smart button appears only when there's unassigned money to place and at least
 	// one account to place it in — otherwise there's nothing to spread.
 	var spreadBtn ui.Node = Fragment()
-	if leftover > 0 && len(v.SavingsAccts) > 0 {
+	if leftover > 0 && len(v.SavingsAccts) > 0 && budgetSpreadReady(v) {
 		spreadBtn = Button(css.Class("btn btn-sm btn-accent zbb-savings-spread"), Type("button"),
 			Attr("data-testid", "budgets-savings-spread"), Attr("aria-label", uistate.T("budgets.savingsSpreadAria")),
 			Attr("title", uistate.T("budgets.savingsSpreadTitle")), spreadOnClick,
@@ -921,6 +930,37 @@ func budgetSavingsWidget(props budgetSummaryProps) ui.Node {
 		ID: "budget-savings", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
 		Body: Div(css.Class("zbb-savings budget-fold"), fold, foldBody),
 	})
+}
+
+func budgetSpreadReady(v budgetView) bool {
+	if len(v.Incomplete) > 0 || v.SavingsIncomplete {
+		return false
+	}
+	for _, status := range v.Statuses {
+		if status.Error != nil {
+			return false
+		}
+	}
+	return true
+}
+
+func budgetSpreadAmount(v budgetView) (int64, bool) {
+	if !budgetSpreadReady(v) {
+		return 0, false
+	}
+	pool, err := money.Add(v.BannerIncome, v.RolledOver)
+	if err != nil {
+		return 0, false
+	}
+	assigned, err := money.Add(v.TotalLimit, v.SavingsAssigned)
+	if err != nil {
+		return 0, false
+	}
+	leftover, err := money.Sub(pool, assigned)
+	if err != nil {
+		return 0, false
+	}
+	return leftover, true
 }
 
 type budgetSavingsAcctRowProps struct {
@@ -1125,7 +1165,11 @@ func spreadLeftoverAcrossSavings(app *appstate.App, accts []savingsAcct, leftove
 			}
 			addAcct = conv
 		}
-		ac.MonthlySavings = money.New(ac.MonthlySavings.Amount+addAcct, cur)
+		updated, err := money.Add(ac.MonthlySavings.Amount, addAcct)
+		if err != nil {
+			continue
+		}
+		ac.MonthlySavings = money.New(updated, cur)
 		if err := app.PutAccount(ac); err == nil {
 			changed = true
 		}
@@ -1584,7 +1628,7 @@ func budgetAnnualGridWidget(props budgetListProps) ui.Node {
 		Goals:      app.Goals(),
 		Rates:      currency.Rates{Base: v.Base, Rates: app.Settings().FXRates},
 		WeekStart:  pr.WeekStartWeekday(),
-		Now:        time.Now(),
+		Now:        budgetNow(),
 		OnCell:     drillMonth,
 	})
 	return uiw.Widget(uiw.WidgetProps{
@@ -1623,6 +1667,9 @@ func sortBudgetStatuses(sts []budgeting.Status, key string, categories map[strin
 		// over proportionally (% used) as a tiebreak. Budgets that aren't over (overAmt 0)
 		// fall to the end, keeping their health order.
 		sort.SliceStable(sts, func(i, j int) bool {
+			if sts[i].Remaining.Currency != sts[j].Remaining.Currency {
+				return sts[i].Remaining.Currency < sts[j].Remaining.Currency
+			}
 			oi, oj := overAmt(sts[i]), overAmt(sts[j])
 			if oi != oj {
 				return oi > oj
@@ -1639,7 +1686,12 @@ func sortBudgetStatuses(sts []budgeting.Status, key string, categories map[strin
 		// %) fall to the end.
 		sort.SliceStable(sts, func(i, j int) bool { return sts[i].Percent < sts[j].Percent })
 	case uistate.BudgetSortAmount:
-		sort.SliceStable(sts, func(i, j int) bool { return limitOf(sts[i]) > limitOf(sts[j]) })
+		sort.SliceStable(sts, func(i, j int) bool {
+			if sts[i].Limit.Currency != sts[j].Limit.Currency {
+				return sts[i].Limit.Currency < sts[j].Limit.Currency
+			}
+			return limitOf(sts[i]) > limitOf(sts[j])
+		})
 	case uistate.BudgetSortName:
 		sort.SliceStable(sts, func(i, j int) bool {
 			left := strings.ToLower(budgetTitle(sts[i].Budget.Name, categories[sts[i].Budget.CategoryID]))

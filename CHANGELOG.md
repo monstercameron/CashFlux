@@ -90,6 +90,18 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Budgets: every limit change moves the card; money moves hit the right period (BC4 code review, BV6 visual review).**
+  - One authoritative limit (BC4S1): every write records limit history, so the card editor, Apply suggestion, price-creep raise and
+    recurring cover change the card; covering a budget is a per-period boost that recurring cover cannot compound; changing a budget's
+    period starts it fresh (the editor says so); earlier periods keep their limits.
+  - Month-close copy writes the next period once; funded top-ups debit each source in the viewed period; week-start and pay-anchor
+    changes re-key boosts, notes and history through a dedicated migration (BC4S2A, BC4INT).
+  - Track untracked creates and raises budgets in one atomic write with owner and scope; flex and leftover sweep use the shared
+    contribution rules with FX and checked sums (BC4B3, BC4INT).
+  - Summary, roll-up, cards, forms, recommendations and planning tiles use standing plans, actual spending, budget currencies and
+    calendar days consistently; dead wrappers removed (BC4B1, BC4B2, BC4B4, BC4B5, BC4B6, BC4B6.1).
+  - Rows fit at 1024 and on phones; pickers inside dialogs open above the dialog and take keyboard focus; headline Spent is real
+    spending in the window and future months show none; dialog copy and flows tightened (BV6A, BV6B, BV6C, BV6F, BV6G, BCFIX).
 - **Saved rules keep matching after the rules update (TC3B9.2, TC3B9.3).** A rule pattern matches at the start of a word, so
   "uber" still matches "UberEats" but no longer "Huber"; a "contains" condition keeps its plain substring meaning.
 - **Saving a transaction skips task-resolution work when no task needs it (TC3B10).**

@@ -109,6 +109,7 @@ type budgetRowLimitKeyboardProps struct {
 
 // useBudgetRowLimitKeyboard registers the inline editor keyboard and input handlers.
 func useBudgetRowLimitKeyboard(p budgetRowLimitKeyboardProps) (ui.Handler, ui.Handler) {
+	viewedPeriod := uistate.UsePeriod().Get()
 	limitKeyDown := ui.UseEvent(func(e ui.KeyboardEvent) {
 		switch e.GetKey() {
 		case "Escape":
@@ -127,7 +128,7 @@ func useBudgetRowLimitKeyboard(p budgetRowLimitKeyboardProps) (ui.Handler, ui.Ha
 						if bb.ID == p.s.Budget.ID {
 							if bb.Limit.Amount != amt {
 								bb.Limit = money.New(amt, bb.Limit.Currency)
-								if err := app.PutBudget(bb); err == nil {
+								if err := app.PutBudgetAt(bb, budgetViewAnchor(viewedPeriod, budgetNow())); err == nil {
 									uistate.PostUndoable(uistate.T("budgets.limitChangedToast", fmtMoney(bb.Limit)))
 									uistate.BumpDataRevision()
 								} else {
@@ -162,6 +163,7 @@ type budgetRowLimitSaveProps struct {
 
 // useBudgetRowLimitSave registers the submit handler and focus-restoration effect.
 func useBudgetRowLimitSave(p budgetRowLimitSaveProps) ui.Handler {
+	viewedPeriod := uistate.UsePeriod().Get()
 	saveLimitEdit := ui.UseEvent(Prevent(func() {
 		amt, prob := budgeting.ParseLimitMajor(p.limitDraft.Get(), p.limitDec)
 		if !prob.OK() {
@@ -178,7 +180,7 @@ func useBudgetRowLimitSave(p budgetRowLimitSaveProps) ui.Handler {
 				}
 				if bb.Limit.Amount != amt {
 					bb.Limit = money.New(amt, bb.Limit.Currency)
-					if err := app.PutBudget(bb); err == nil {
+					if err := app.PutBudgetAt(bb, budgetViewAnchor(viewedPeriod, budgetNow())); err == nil {
 						uistate.PostUndoable(uistate.T("budgets.limitChangedToast", fmtMoney(bb.Limit)))
 						uistate.BumpDataRevision()
 					} else {

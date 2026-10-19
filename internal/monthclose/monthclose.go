@@ -9,6 +9,7 @@
 package monthclose
 
 import (
+	"fmt"
 	"sort"
 	"time"
 
@@ -145,8 +146,14 @@ func Resolutions(s Summary) []string {
 // period — no calendar arithmetic here, which is what keeps weekly, biweekly,
 // monthly and quarterly budgets all correct through the same call.
 func CarryTargets(p domain.Period, ref time.Time, weekStart time.Weekday) (source, target time.Time) {
-	thisStart, thisEnd := budgeting.PeriodRange(p, ref, weekStart)
-	nextStart, _ := budgeting.PeriodRange(p, thisEnd, weekStart)
+	return CarryTargetsAnchored(p, ref, weekStart, time.Time{})
+}
+
+// CarryTargetsAnchored resolves the reviewed and following period on a grid
+// that includes the configured biweekly pay-cycle anchor.
+func CarryTargetsAnchored(p domain.Period, ref time.Time, weekStart time.Weekday, payAnchor time.Time) (source, target time.Time) {
+	thisStart, thisEnd := budgeting.PeriodRangeAnchored(p, ref, weekStart, payAnchor)
+	nextStart, _ := budgeting.PeriodRangeAnchored(p, thisEnd, weekStart, payAnchor)
 	return thisStart, nextStart
 }
 
@@ -172,4 +179,24 @@ func CopyBoosts(budgets []domain.Budget, periodStarts func(domain.Budget) (last,
 		out[b.ID] = last
 	}
 	return out
+}
+
+// ApplyCopyBoosts returns the budget updates for the copy plan, keyed to each
+// budget's returned target period. Existing target boosts are never stacked.
+func ApplyCopyBoosts(budgets []domain.Budget, periodStarts func(domain.Budget) (source, target time.Time), exclude map[string]bool) ([]domain.Budget, error) {
+	plan := CopyBoosts(budgets, periodStarts, exclude)
+	writes := make([]domain.Budget, 0, len(plan))
+	for _, budget := range budgets {
+		amount, ok := plan[budget.ID]
+		if !ok {
+			continue
+		}
+		_, target := periodStarts(budget)
+		updated, err := budget.WithPeriodBoostChecked(target, amount)
+		if err != nil {
+			return nil, fmt.Errorf("copy top-up for budget %q: %w", budget.ID, err)
+		}
+		writes = append(writes, updated)
+	}
+	return writes, nil
 }

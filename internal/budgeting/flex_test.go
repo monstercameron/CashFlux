@@ -3,9 +3,11 @@
 package budgeting
 
 import (
+	"math"
 	"testing"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
 )
@@ -20,6 +22,15 @@ func flexCat(id, name string, class domain.CategoryClass) domain.Category {
 
 func flexTxn(catID string, minor int64, date time.Time) domain.Transaction {
 	return domain.Transaction{ID: "t" + catID + date.Format("0102"), AccountID: "a1", CategoryID: catID, Amount: money.New(minor, "USD"), Date: date}
+}
+
+func evaluateFlexForTest(t *testing.T, cats []domain.Category, txns []domain.Transaction, recs []domain.Recurring, target int64, base string, start, end time.Time) FlexView {
+	t.Helper()
+	view, err := EvaluateFlex(cats, txns, recs, target, base, start, end)
+	if err != nil {
+		t.Fatalf("EvaluateFlex: %v", err)
+	}
+	return view
 }
 
 func TestDefaultCategoryClass(t *testing.T) {
@@ -81,7 +92,7 @@ func TestEvaluateFlex(t *testing.T) {
 		{ID: "inc", AccountID: "a1", CategoryID: "salary", Amount: money.New(500000, "USD"), Date: flexDate(2026, 6, 1)},
 	}
 
-	view := EvaluateFlex(cats, txns, recs, 10000, "USD", start, end)
+	view := evaluateFlexForTest(t, cats, txns, recs, 10000, "USD", start, end)
 
 	if view.Spent.Amount != 6500 {
 		t.Errorf("flex spent = %d, want 6500", view.Spent.Amount)
@@ -116,7 +127,7 @@ func TestEvaluateFlexOverspent(t *testing.T) {
 	end := flexDate(2026, 7, 1)
 	cats := []domain.Category{flexCat("dining", "Dining", domain.ClassFlex)}
 	txns := []domain.Transaction{flexTxn("dining", -12000, flexDate(2026, 6, 5))}
-	view := EvaluateFlex(cats, txns, nil, 10000, "USD", start, end)
+	view := evaluateFlexForTest(t, cats, txns, nil, 10000, "USD", start, end)
 	if !view.Over {
 		t.Error("expected over")
 	}
@@ -139,11 +150,74 @@ func TestEvaluateFlexSplits(t *testing.T) {
 			{CategoryID: "rent", Amount: money.New(-4000, "USD")},
 		},
 	}}
-	view := EvaluateFlex(cats, txns, nil, 10000, "USD", start, end)
+	view := evaluateFlexForTest(t, cats, txns, nil, 10000, "USD", start, end)
 	if view.Spent.Amount != 6000 {
 		t.Errorf("flex spent from split = %d, want 6000", view.Spent.Amount)
 	}
 	if len(view.Fixed) != 1 || view.Fixed[0].Actual.Amount != 4000 {
 		t.Errorf("fixed actual from split = %+v, want 4000", view.Fixed)
+	}
+}
+
+func TestEvaluateFlexUsesContributionRulesFXAndRefundNetting(t *testing.T) {
+	start, end := flexDate(2026, 6, 1), flexDate(2026, 7, 1)
+	cats := []domain.Category{
+		flexCat("parent", "Flex parent", domain.ClassFlex),
+		{ID: "child", Name: "Child", ParentID: "parent", Kind: domain.KindExpense, CategoryClass: domain.ClassFlex},
+		flexCat("fixed", "Fixed", domain.ClassFlex),
+	}
+	txns := []domain.Transaction{
+		{ID: "yen", Date: flexDate(2026, 6, 2), CategoryID: "child", Amount: money.New(-10000, "JPY")},
+		{ID: "split", Date: flexDate(2026, 6, 3), Amount: money.New(-10000, "USD"), Splits: []domain.CategorySplit{
+			{CategoryID: "parent", Amount: money.New(-12000, "USD")},
+			{CategoryID: "fixed", Amount: money.New(2000, "USD")},
+		}},
+		{ID: "excluded", Date: flexDate(2026, 6, 4), CategoryID: "parent", Amount: money.New(-9000, "USD"), ExcludeFromReports: true},
+		{ID: "purchase", Date: flexDate(2026, 6, 5), CategoryID: "parent", Payee: "Shop", Amount: money.New(-5000, "USD")},
+		{ID: "refund", Date: flexDate(2026, 6, 6), CategoryID: "parent", Payee: "Shop", Amount: money.New(2000, "USD")},
+	}
+	links := []domain.TxnLink{{ID: "pair", Kind: domain.TxnLinkRefundPair, TxnIDs: []string{"purchase", "refund"}, Amount: money.New(2000, "USD")}}
+	rates := currency.Rates{Base: "USD", Rates: map[string]float64{"JPY": 0.01}}
+	view, err := EvaluateFlexWithLinks(cats, txns, links, nil, 50000, rates, start, end)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// ¥10,000 -> $100, the signed split nets to $100 of flex spend, and the
+	// refund pair nets $30. Excluded reimbursable spend and the fixed split line
+	// stay out. Together: $230.
+	if view.Spent.Amount != 23000 {
+		t.Fatalf("flex spent = %d, want 23000 USD cents", view.Spent.Amount)
+	}
+}
+
+func TestEvaluateFlexReturnsErrorsForMissingFXAndOverflow(t *testing.T) {
+	start, end := flexDate(2026, 6, 1), flexDate(2026, 7, 1)
+	tests := []struct {
+		name  string
+		txns  []domain.Transaction
+		rates currency.Rates
+	}{
+		{name: "missing rate", txns: []domain.Transaction{{ID: "eur", Date: start, CategoryID: "flex", Amount: money.New(-100, "EUR")}}, rates: currency.Rates{Base: "USD"}},
+		{name: "sum overflow", txns: []domain.Transaction{
+			{ID: "large1", Date: start, CategoryID: "flex", Amount: money.New(-math.MaxInt64, "USD")},
+			{ID: "large2", Date: start, CategoryID: "flex", Amount: money.New(-1, "USD")},
+		}, rates: currency.Rates{Base: "USD"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := EvaluateFlexWithLinks([]domain.Category{flexCat("flex", "Flex", domain.ClassFlex)}, tt.txns, nil, nil, 100, tt.rates, start, end)
+			if err == nil {
+				t.Fatal("EvaluateFlexWithLinks returned no error")
+			}
+		})
+	}
+}
+
+func TestFixedPaidDoesNotOverflowNearMaxInt64(t *testing.T) {
+	if !fixedPaid(math.MaxInt64, math.MaxInt64) {
+		t.Fatal("a payment equal to its expected amount must be settled")
+	}
+	if !fixedPaid(math.MaxInt64, math.MaxInt64-amountTolerance(math.MaxInt64)) {
+		t.Fatal("a payment within tolerance must be settled without overflowing")
 	}
 }

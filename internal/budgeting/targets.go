@@ -1,8 +1,10 @@
 package budgeting
 
 import (
+	"fmt"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
 )
@@ -94,6 +96,38 @@ func Needed(budget domain.Budget, status Status, from time.Time, linkedMonthly m
 		need.Needed = byDateMonthly(target, funded, from, budget.TargetDate)
 	}
 	return need
+}
+
+// NeededWithRates computes a target need in the evaluated budget currency and
+// expresses the monthly by-date pace in the budget's own cadence. FX omissions
+// are returned to the caller so foreign-currency goals are never relabelled.
+func NeededWithRates(budget domain.Budget, status Status, from time.Time, linkedMonthly money.Money, hasLinked bool, rates currency.Rates) (TargetNeed, error) {
+	cur := status.Remaining.Currency
+	if cur == "" {
+		cur = budget.TargetAmount.Currency
+	}
+	target, err := rates.Convert(budget.TargetAmount, cur)
+	if err != nil && budget.HasTarget() {
+		return TargetNeed{}, fmt.Errorf("convert budget target: %w", err)
+	}
+	linked := money.Zero(cur)
+	if hasLinked {
+		linked, err = rates.Convert(linkedMonthly, cur)
+		if err != nil {
+			return TargetNeed{}, fmt.Errorf("convert linked goal pace: %w", err)
+		}
+	}
+	copyBudget := budget
+	copyBudget.TargetAmount = target
+	need := Needed(copyBudget, status, from, linked, hasLinked)
+	if budget.TargetKind == domain.TargetByDate && need.Needed.IsPositive() {
+		cadenceNeed, err := PeriodEquivalent(need.Needed, domain.PeriodMonthly, budget.Period)
+		if err != nil {
+			return TargetNeed{}, fmt.Errorf("scale target pace to budget period: %w", err)
+		}
+		need.Needed = cadenceNeed
+	}
+	return need, nil
 }
 
 // byDateMonthly derives the per-month contribution to accumulate `target` by

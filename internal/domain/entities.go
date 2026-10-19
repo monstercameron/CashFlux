@@ -1158,6 +1158,30 @@ func (b Budget) WithPeriodBoost(periodStart time.Time, delta int64) Budget {
 	return b
 }
 
+// WithPeriodBoostChecked returns a copy with delta added to the period boost,
+// reporting overflow instead of wrapping the stored money amount.
+func (b Budget) WithPeriodBoostChecked(periodStart time.Time, delta int64) (Budget, error) {
+	key := periodStart.Format("2006-01-02")
+	amount, err := money.Add(b.PeriodBoosts[key], delta)
+	if err != nil {
+		return Budget{}, err
+	}
+	boosts := make(map[string]int64, len(b.PeriodBoosts)+1)
+	for k, v := range b.PeriodBoosts {
+		boosts[k] = v
+	}
+	if amount == 0 {
+		delete(boosts, key)
+	} else {
+		boosts[key] = amount
+	}
+	if len(boosts) == 0 {
+		boosts = nil
+	}
+	b.PeriodBoosts = boosts
+	return b, nil
+}
+
 // TrackedCategoryIDs is the set of categories a budget counts spend against: the
 // explicit CategoryIDs for a multi-category budget, otherwise the single CategoryID.
 // Always the source of truth for "what does this budget track" — callers should use it

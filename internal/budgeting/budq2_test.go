@@ -104,9 +104,6 @@ func TestSummarizeRollupRefusesMixedCurrencies(t *testing.T) {
 	if _, err := SummarizeRollupChecked(statuses); err == nil {
 		t.Fatal("mixed currencies should fail")
 	}
-	if got := SummarizeRollup(statuses); got != (RollupSummary{}) {
-		t.Fatalf("compat wrapper returned mixed sum: %+v", got)
-	}
 }
 
 func TestRecommendationMADFloorKeepsPlausibleHighMonth(t *testing.T) {
