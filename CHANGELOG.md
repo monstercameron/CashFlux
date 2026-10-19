@@ -90,6 +90,8 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Natural-language filters use the local calendar day when no clock is supplied (TC3B5).** "today", "yesterday" and "this
+  month" no longer jump to the next day after 8 pm west of UTC.
 - **A budget's leftover is given away once; cover-all offers only real room (BC4S2B).** Rollover budgets are no longer swept,
   and sweep is off while pooled rollover is on, so a leftover cannot both sweep to a goal and carry forward. Cover-all limits
   each source's offer to what is actually left in its own period (a weekly budget with $100 left offers $100, not $433.33),

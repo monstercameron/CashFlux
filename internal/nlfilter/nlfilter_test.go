@@ -132,3 +132,28 @@ func TestParseZeroContextStillParses(t *testing.T) {
 		t.Errorf("got %+v ok=%v, want AmountMin=40 ok=true", got, ok)
 	}
 }
+
+func TestParseZeroContextUsesLocalCalendarDate(t *testing.T) {
+	local := time.FixedZone("New York", -4*60*60)
+	clock := func() time.Time { return time.Date(2026, time.October, 31, 20, 30, 0, 0, local) }
+	tests := []struct {
+		query string
+		from  string
+		to    string
+	}{
+		{query: "today", from: "2026-10-31", to: "2026-10-31"},
+		{query: "yesterday", from: "2026-10-30", to: "2026-10-30"},
+		{query: "this month", from: "2026-10-01", to: "2026-10-31"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.query, func(t *testing.T) {
+			got, ok := parseWithClock(tc.query, Context{}, clock)
+			if !ok {
+				t.Fatal("expected a structured date filter")
+			}
+			if got.From != tc.from || got.To != tc.to {
+				t.Errorf("date range = %s..%s, want %s..%s", got.From, got.To, tc.from, tc.to)
+			}
+		})
+	}
+}

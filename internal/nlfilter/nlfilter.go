@@ -63,9 +63,15 @@ type Context struct {
 // real filter to extract. When ok is true the returned Criteria carries the
 // recognized clauses, with any unrecognized words left as the text search.
 func Parse(q string, ctx Context) (txnfilter.Criteria, bool) {
+	return parseWithClock(q, ctx, time.Now)
+}
+
+// parseWithClock keeps the zero-value clock fallback testable without making
+// the production parser depend on mutable package state.
+func parseWithClock(q string, ctx Context, clock func() time.Time) (txnfilter.Criteria, bool) {
 	now := ctx.Now
 	if now.IsZero() {
-		now = time.Now().UTC()
+		now = dateutil.WallClockUTC(clock())
 	}
 
 	// Normalize comparator symbols into standalone tokens so ">$20" and ">20"
