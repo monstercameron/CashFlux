@@ -49,7 +49,7 @@ async function openFirstTxnEdit(app) {
   const firstRow = app.locator('tr[data-testid^="txn-row-"]').first();
   await openVia(
     app,
-    firstRow.getByRole("button", { name: /^Edit / }),
+    firstRow.getByTestId("txn-rowedit"),
     app.getByTestId("txn-edit-amount"),
   );
 }
@@ -238,7 +238,7 @@ test.describe("C547 · the edit form reads a typed minus as direction", { tag: "
           .locator('tr[data-testid^="txn-row-"]')
           .filter({ hasText: "DIRPROBE" })
           .first()
-          .getByRole("button", { name: /^Edit / }),
+          .getByTestId("txn-rowedit"),
         app.getByTestId("txn-edit-amount"),
       );
     await openProbe();
