@@ -56,7 +56,7 @@ func TestEmptyMatchNeverFires(t *testing.T) {
 	}
 }
 
-func TestLegacyCategoryMatchUsesWordBoundaries(t *testing.T) {
+func TestRuleMatchUsesLeftWordBoundary(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
 		match string
@@ -67,16 +67,16 @@ func TestLegacyCategoryMatchUsesWordBoundaries(t *testing.T) {
 		{"does not match inside Current", "rent", "Current Electric", false},
 		{"does not match inside Currents", "rent", "Currents Coffee", false},
 		{"does not match inside Parent", "rent", "Parent Teacher Assoc", false},
-		{"does not match a word prefix", "rent", "Rental car SFO", false},
+		{"matches into the rest of a word", "rent", "Rental car SFO", true},
 		{"matches after punctuation", "rent", "SQ *RENT #4", true},
 		{"matches merchant name", "uber", "Uber ride", true},
-		{"does not match a merchant word prefix", "uber", "UberEats dinner", false},
+		{"matches merchant name prefix", "uber", "UberEats dinner", true},
 		{"matches uppercase merchant descriptor", "uber", "UBER *TRIP", true},
 		{"matches after a hyphen", "uber", "pay-uber", true},
 		{"does not match inside Huber", "uber", "Huber", false},
 		{"does not match inside Kuberbank", "uber", "Kuberbank", false},
 		{"matches multi-word pattern at word start", "whole foods", "Whole Foods Market", true},
-		{"unicode word prefix does not match", "über", "Überweisung", false},
+		{"unicode word prefix matches", "über", "Überweisung", true},
 		{"unicode letter prevents an inner match", "uber", "Käseuberweisung", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

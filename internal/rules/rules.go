@@ -71,18 +71,15 @@ type RuleCondition struct {
 // with that value, enabling a "clean up payee/description" action (C102).
 //
 // Structured conditions (C105): if Conditions is non-empty, all conditions are
-// evaluated with AND and the legacy Match field is ignored. If Conditions is
-// empty (nil or zero-length), matching falls back to the legacy substring match
-// against Match. This design is fully backward-compatible: existing rules with
-// no Conditions continue to work exactly as before.
+// evaluated with AND and the Match field is ignored. If Conditions is empty
+// (nil or zero-length), matching uses Match at a word start; the pattern may
+// continue through the rest of that word.
 type Rule struct {
-	ID    string
-	Match string // case-insensitive substring matched against payee + description
-	// LegacySubstring preserves the exact matching behavior of saved rules.
-	LegacySubstring bool `json:",omitempty"`
-	SetCategoryID   string
-	SetTags         []string
-	RenameDesc      string `json:",omitempty"` // when set, overwrites the transaction description on match
+	ID            string
+	Match         string // case-insensitive word-start match against payee + description
+	SetCategoryID string
+	SetTags       []string
+	RenameDesc    string `json:",omitempty"` // when set, overwrites the transaction description on match
 	// SetBillAccountID, when set, links a matching transaction as a BILL PAYMENT toward
 	// that account (Transaction.BillAccountID) — so future/imported payments to a merchant
 	// auto-tie to the account the user first linked one to. Applied only when the
@@ -160,13 +157,8 @@ func matchesRule(text, pattern string) bool {
 		return false
 	}
 	wordStart := unicode.IsLetter(patternRunes[0]) && !unicode.In(patternRunes[0], unicode.Han, unicode.Hiragana, unicode.Katakana, unicode.Thai)
-	wordEnd := isRuleWordRune(patternRunes[len(patternRunes)-1])
 	for start := 0; start+len(patternRunes) <= len(textRunes); start++ {
 		if wordStart && start > 0 && isRuleWordRune(textRunes[start-1]) {
-			continue
-		}
-		end := start + len(patternRunes)
-		if wordEnd && end < len(textRunes) && isRuleWordRune(textRunes[end]) {
 			continue
 		}
 		match := true
@@ -190,7 +182,8 @@ func isRuleWordRune(r rune) bool {
 	return unicode.IsLetter(r) || unicode.IsDigit(r)
 }
 
-// FirstMatch returns the first rule whose Match is found in text, or nil.
+// FirstMatch returns the first rule whose Match starts at a word boundary in
+// text, or nil.
 // Rules with structured Conditions are skipped by this function — use
 // FirstMatchFull when you have all transaction fields available.
 func FirstMatch(rs []Rule, text string) *Rule {
@@ -199,11 +192,7 @@ func FirstMatch(rs []Rule, text string) *Rule {
 		if len(rs[i].Conditions) > 0 {
 			continue
 		}
-		matched := matchesRule(text, rs[i].Match)
-		if rs[i].LegacySubstring {
-			matched = matches(text, rs[i].Match)
-		}
-		if matched {
+		if matchesRule(text, rs[i].Match) {
 			return &rs[i]
 		}
 	}
@@ -211,16 +200,16 @@ func FirstMatch(rs []Rule, text string) *Rule {
 }
 
 // FirstMatchFull returns the first rule that matches the full transaction
-// context: structured conditions when present, otherwise the legacy Match
-// substring. It supersedes FirstMatch at all call-sites that have a full
+// context: structured conditions when present, otherwise the word-start Match.
+// It supersedes FirstMatch at all call-sites that have a full
 // transaction view.
 func FirstMatchFull(rs []Rule, payee, desc string, amountMinor int64, accountID string, txnDate TxnDate) *Rule {
 	return FirstMatchFullWhere(rs, payee, desc, amountMinor, accountID, txnDate, nil)
 }
 
 // ruleMatchesFull reports whether one rule matches the full transaction context
-// (structured conditions when present, otherwise the legacy substring Match).
-// The legacy haystack includes the deterministically CLEANED payee alongside
+// (structured conditions when present, otherwise the word-start Match).
+// The haystack includes the deterministically CLEANED payee alongside
 // the raw one, so a rule written against the tidy merchant name ("Blue Bottle
 // Coffee") matches the processor descriptor ("SQ *BLUE BOTTLE #47") too —
 // commercial parity: rules target either the original or the cleaned value.
@@ -233,23 +222,15 @@ func ruleMatchesFullCurrency(r Rule, payee, desc string, amountMinor int64, curr
 		return MatchConditionsWithCurrency(r.Conditions, payee, desc, amountMinor, currency, accountID, txnDate)
 	}
 	haystack := payee + " " + desc + " " + cleanPayee
-	if r.LegacySubstring {
-		return matches(haystack, r.Match)
-	}
 	return matchesRule(haystack, r.Match)
 }
 
-// MigrateLegacyRuleSemantics upgrades pre-magnitude amount conditions and
-// preserves the substring matcher used by previously saved phrase rules.
+// MigrateLegacyRuleSemantics upgrades pre-magnitude amount conditions.
 func MigrateLegacyRuleSemantics(rs []Rule) ([]Rule, bool) {
 	out := append([]Rule(nil), rs...)
 	changed := false
 	for i := range out {
 		r := &out[i]
-		if !r.LegacySubstring && len(r.Conditions) == 0 && strings.TrimSpace(r.Match) != "" {
-			r.LegacySubstring = true
-			changed = true
-		}
 		conds := append([]RuleCondition(nil), r.Conditions...)
 		conditionChanged := false
 		for j := range conds {
@@ -372,7 +353,7 @@ func Conflicts(rs []Rule) []Conflict {
 }
 
 // Category returns the category id assigned by the first rule matching the
-// payee/description (legacy Match path only), or "" if none match.
+// payee/description (Match path only), or "" if none match.
 func Category(rs []Rule, payee, desc string) string {
 	if r := FirstMatch(rs, payee+" "+desc); r != nil {
 		return r.SetCategoryID

@@ -2,12 +2,12 @@ package rules
 
 import "testing"
 
-func TestLegacyRuleMigrationPreservesAmountAndPhraseBehavior(t *testing.T) {
+func TestLegacyRuleMigrationPreservesAmountBehavior(t *testing.T) {
 	legacy := []Rule{
 		{ID: "spend", Conditions: []RuleCondition{{Field: ConditionFieldAmount, Op: ConditionOpLt, Value: "-5000"}}},
 		{ID: "refund", Conditions: []RuleCondition{{Field: ConditionFieldAmount, Op: ConditionOpGt, Value: "5000"}}},
 		{ID: "cross-zero", Conditions: []RuleCondition{{Field: ConditionFieldAmount, Op: ConditionOpGt, Value: "-5000"}}},
-		{ID: "phrase", Match: "netflix"},
+		{ID: "merchant", Match: "netflix"},
 	}
 	migrated, changed := MigrateLegacyRuleSemantics(legacy)
 	if !changed {
@@ -33,30 +33,37 @@ func TestLegacyRuleMigrationPreservesAmountAndPhraseBehavior(t *testing.T) {
 			t.Errorf("%s amount %d matched %v, want %v", tc.id, tc.amount, got, tc.want)
 		}
 	}
-	if got := FirstMatchFull(migrated[3:], "POS1234NETFLIX", "", 0, "", TxnDate{}); got == nil || got.ID != "phrase" {
-		t.Fatalf("migrated phrase rule lost its old substring match: %+v", got)
+	if got := FirstMatchFull(migrated[3:], "POS1234NETFLIX", "", 0, "", TxnDate{}); got != nil {
+		t.Fatalf("rule matched inside a word: %+v", got)
+	}
+	if got := FirstMatchFull(migrated[3:], "NETFLIX.COM", "", 0, "", TxnDate{}); got == nil || got.ID != "merchant" {
+		t.Fatalf("word-start match failed: %+v", got)
 	}
 	again, changed := MigrateLegacyRuleSemantics(migrated)
 	if changed {
 		t.Fatal("migration was not idempotent")
 	}
-	if len(again[0].Conditions) != 2 || again[2].Conditions[0].Field != ConditionFieldLegacySignedAmount || !again[3].LegacySubstring {
+	if len(again[0].Conditions) != 2 || again[2].Conditions[0].Field != ConditionFieldLegacySignedAmount {
 		t.Fatalf("second migration changed saved semantics: %+v", again)
 	}
 }
 
-func TestNewWordMatchingHandlesBoundariesAndCJK(t *testing.T) {
+func TestWordStartMatchingHandlesLeftBoundaryAndCJK(t *testing.T) {
 	for _, tc := range []struct {
 		text, pattern string
 		want          bool
 	}{
-		{"Rental car SFO", "rent", false},
-		{"CHASE CREDIT CRD AUTOPAY", "auto", false},
+		{"Rental car SFO", "rent", true},
+		{"CHASE CREDIT CRD AUTOPAY", "auto", true},
 		{"上海星巴克咖啡", "星巴克", true},
 		{"渋谷のセブンイレブン", "セブンイレブン", true},
 		{"AMAZON.COM", ".com", true},
 		{"STORE#47", "#47", true},
 		{"POS1234NETFLIX", "netflix", false},
+		{"UberEats dinner", "uber", true},
+		{"UBER *TRIP", "uber", true},
+		{"Huber ride", "uber", false},
+		{"Kuberbank", "uber", false},
 	} {
 		if got := matchesRule(tc.text, tc.pattern); got != tc.want {
 			t.Errorf("matchesRule(%q, %q) = %v, want %v", tc.text, tc.pattern, got, tc.want)

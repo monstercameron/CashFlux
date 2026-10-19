@@ -422,16 +422,16 @@ func TestLegacyMatchHitsCleanedPayee(t *testing.T) {
 	}
 }
 
-// TestLegacyMatchUsesWordStarts keeps word-boundary matching limited to the
-// legacy Rule.Match pattern, where substring false positives were reported.
-func TestLegacyMatchUsesWordStarts(t *testing.T) {
+// TestRuleMatchUsesWordStarts checks that rule text matches at a word start,
+// while allowing the pattern to continue through the rest of that word.
+func TestRuleMatchUsesWordStarts(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		text string
 		want bool
 	}{
 		{name: "does not match inside Current", text: "Current", want: false},
-		{name: "does not match Rental prefix", text: "Rental", want: false},
+		{name: "matches the start of Rental", text: "Rental", want: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got := FirstMatchFull([]Rule{{Match: "rent"}}, tc.text, "", 0, "", TxnDate{})
