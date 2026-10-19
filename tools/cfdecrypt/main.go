@@ -46,7 +46,7 @@ func main() {
 		}
 	}
 
-	raw, err := os.ReadFile(path) // #nosec G304 -- the operator explicitly supplies the recovery file; inputPath cleans and validates it as a regular file.
+	raw, err := os.ReadFile(path) // #nosec G703 -- operator CLI reads the user-chosen path after inputPath cleans and validates it as a regular file.
 	if err != nil {
 		fail("read %s: %v", path, err)
 	}
@@ -145,7 +145,7 @@ func main() {
 		if err != nil {
 			fail("output path: %v", err)
 		}
-		if err := os.WriteFile(writeTo, plain, 0o600); err != nil { // #nosec G304 -- the operator explicitly names the recovery output; outputPath makes it absolute and clean.
+		if err := os.WriteFile(writeTo, plain, 0o600); err != nil { // #nosec G703 -- operator CLI writes the user-chosen path after outputPath cleans and validates it.
 			fail("write %s: %v", writeTo, err)
 		}
 		fmt.Printf("\nwrote decrypted dataset to %s (mode 0600)\n", writeTo)
@@ -160,7 +160,7 @@ func inputPath(name string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("resolve %q: %w", name, err)
 	}
-	info, err := os.Stat(clean)
+	info, err := os.Stat(clean) // #nosec G703 -- operator CLI stats the user-chosen path after cleaning it for regular-file validation.
 	if err != nil {
 		return "", fmt.Errorf("stat %q: %w", clean, err)
 	}
@@ -178,7 +178,7 @@ func outputPath(name string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("resolve %q: %w", name, err)
 	}
-	if info, err := os.Stat(clean); err == nil && !info.Mode().IsRegular() {
+	if info, err := os.Stat(clean); err == nil && !info.Mode().IsRegular() { // #nosec G703 -- operator CLI stats the user-chosen path after cleaning it for output validation.
 		return "", fmt.Errorf("%q is not a regular file", clean)
 	} else if err != nil && !os.IsNotExist(err) {
 		return "", fmt.Errorf("stat %q: %w", clean, err)

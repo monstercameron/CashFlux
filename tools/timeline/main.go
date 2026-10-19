@@ -44,7 +44,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "input path: %v\n", err)
 		os.Exit(2)
 	}
-	raw, err := os.ReadFile(path) // #nosec G304 -- this operator diagnostic intentionally reads the named dump after inputPath cleans and validates it.
+	raw, err := os.ReadFile(path) // #nosec G703 -- operator CLI reads the user-chosen path after inputPath cleans and validates it.
 	if err != nil {
 		panic(err)
 	}
@@ -146,7 +146,7 @@ func inputPath(name string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("resolve %q: %w", name, err)
 	}
-	info, err := os.Stat(clean)
+	info, err := os.Stat(clean) // #nosec G703 -- operator CLI stats the user-chosen path after cleaning it for regular-file validation.
 	if err != nil {
 		return "", fmt.Errorf("stat %q: %w", clean, err)
 	}

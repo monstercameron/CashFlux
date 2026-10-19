@@ -69,7 +69,7 @@ func (m Money) FormatChecked(decimals int) (string, error) {
 // magnitude returns an unsigned magnitude without negating MinInt64.
 func magnitude(amount int64) uint64 {
 	if amount < 0 {
-		return uint64(-(amount + 1)) + 1
+		return uint64(-(amount + 1)) + 1 // #nosec G115 -- amount is negative, so -(amount+1) is in [0, MaxInt64].
 	}
 	return uint64(amount)
 }

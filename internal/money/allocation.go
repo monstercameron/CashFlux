@@ -46,7 +46,7 @@ func Allocate(total int64, weights []int64) ([]int64, error) {
 	remainders := make([]uint64, len(weights))
 	left := amount
 	for i, weight := range weights {
-		hi, lo := bits.Mul64(amount, uint64(weight))
+		hi, lo := bits.Mul64(amount, uint64(weight)) // #nosec G115 -- weight is nonnegative after validation at line 23 and fits uint64.
 		// weight <= weightSum, so the quotient is <= amount <= 2^63.
 		// Consequently hi < denominator, as required by bits.Div64.
 		q, r := bits.Div64(hi, lo, denominator)
@@ -65,10 +65,10 @@ func Allocate(total int64, weights []int64) ([]int64, error) {
 			if q == uint64(1)<<63 {
 				shares[i] = math.MinInt64
 			} else {
-				shares[i] = -int64(q)
+				shares[i] = -int64(q) // #nosec G115 -- q is below 2^63 because q == 2^63 was handled above.
 			}
 		} else {
-			shares[i] = int64(q)
+			shares[i] = int64(q) // #nosec G115 -- q is at most MaxInt64 because total is positive int64.
 		}
 	}
 	return shares, nil
@@ -85,7 +85,7 @@ func remainderOrder(remainders []uint64) []int {
 	for shift := uint(0); shift < 64; shift += 8 {
 		var offsets [256]int
 		for _, index := range order {
-			key := 255 - byte(remainders[index]>>shift)
+			key := 255 - byte(remainders[index]>>shift) // #nosec G115 -- this intentional narrowing extracts only the current 8-bit radix digit.
 			offsets[key]++
 		}
 		position := 0
@@ -94,7 +94,7 @@ func remainderOrder(remainders []uint64) []int {
 			position += count
 		}
 		for _, index := range order {
-			key := 255 - byte(remainders[index]>>shift)
+			key := 255 - byte(remainders[index]>>shift) // #nosec G115 -- this intentional narrowing extracts only the current 8-bit radix digit.
 			scratch[offsets[key]] = index
 			offsets[key]++
 		}
