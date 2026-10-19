@@ -56,10 +56,7 @@ func budgetRowActions(p budgetRowActionsProps) (ui.Node, ui.Node) {
 	if !p.isOver {
 		topupBtn = Button(css.Class("btn"), Type("button"), Attr("data-testid", "budget-topup-btn-"+p.s.Budget.ID), Title(uistate.T("budgets.topupTitle")), OnClick(p.openTopup), topupLabel)
 	}
-	coverLabel := uistate.T("budgets.actionCoverFromOtherMenu")
-	if p.s.Budget.IsSaving() {
-		coverLabel = uistate.T("bc4b2.fundFromOther")
-	}
+	coverLabel := uistate.T("bv7g.cover.action")
 
 	// The row actions, rendered as the card's footer (pinned to the bottom by CSS) so the
 	// card reads top-to-bottom: title → amount → bar → status → actions. The footer keeps
@@ -80,7 +77,7 @@ func budgetRowActions(p budgetRowActionsProps) (ui.Node, ui.Node) {
 		Div(ClassStr("add-backdrop"+menuHidden), OnClick(p.closeMenu)),
 		Div(ClassStr("add-menu"+menuHidden), Attr("role", "menu"),
 			Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "budget-topup-btn-"+p.s.Budget.ID), Title(uistate.T("budgets.topupTitle")), OnClick(p.openTopup), topupLabel),
-			Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "budget-cover-btn-"+p.s.Budget.ID), Title(uistate.T("budgets.coverTitle")), OnClick(p.openCover), coverLabel),
+			Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "budget-cover-btn-"+p.s.Budget.ID), Title(uistate.T("bv7g.cover.action")), OnClick(p.openCover), coverLabel),
 			Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "edit-budget-btn-"+p.s.Budget.ID), Title(uistate.T("budgets.editTitle")), OnClick(p.openEdit), uistate.T("budgets.editAction")),
 			Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "edit-budget-cats-btn-"+p.s.Budget.ID), Title(uistate.T("budgets.catsTitle")), OnClick(p.openCategories), uistate.T("budgets.actionEditTracking")),
 			Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "budget-notes-btn-"+p.s.Budget.ID), Attr("aria-label", p.notesLabel+" — "+p.title), Title(uistate.T("budgets.notesTitle")), OnClick(p.openNotes), p.notesLabel),

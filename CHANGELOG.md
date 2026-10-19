@@ -90,6 +90,11 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Budget suggestions agree everywhere; Track untracked shows what it will track; dialogs explain themselves (BC4B4.2, BV7B, BV7G).**
+  The edit form, Track untracked and the Unbudgeted strip use the same context-aware median (sub-categories, cadence, pay anchor,
+  FX) and name their real window; the old suggestion functions are removed. Track untracked checkboxes show their real state and the
+  footer count matches. Cover ranks donors by real room in their own period; Month close shows leftovers with monthly equivalents and
+  the carry outcome; Adjust all states what a permanent change does; edit fields wrap cleanly.
 - **Budgets styles stay on theme tokens and one type scale (BV7H).** The attention link and review links use theme tokens, so a
   dark load and a theme switch keep readable contrast; figures, chips, rollover cells, the inline editor and help targets use the
   shared type scale and fixed tracks at 901-1100 px.

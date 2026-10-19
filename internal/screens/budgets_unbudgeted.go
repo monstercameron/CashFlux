@@ -77,20 +77,13 @@ func unbudgetedStrip(props unbudgetedStripProps) ui.Node {
 			return unbudgetedStripData{Err: err}
 		}
 		candidates := make([]unbudgetedCat, 0, len(computed.Categories))
-		suggestions := make(map[string]int64, len(computed.Categories))
 		for _, candidate := range computed.Categories {
 			if candidate.CategoryID == "" {
 				continue
 			}
 			candidates = append(candidates, candidate)
-			amount, err := budgeting.SuggestLimit(candidate.CategoryID, app.Transactions(), ms, 6, rates)
-			if err != nil {
-				slog.Error("suggest unbudgeted category limit", "category_id", candidate.CategoryID, "error", err)
-				continue
-			}
-			suggestions[candidate.CategoryID] = amount
 		}
-		return unbudgetedStripData{Candidates: candidates, Suggestions: suggestions}
+		return unbudgetedStripData{Candidates: candidates}
 	}, dataRevision, appRevision, ms.Unix(), me.Unix(), props.Base)
 	if app == nil {
 		return Fragment()
@@ -112,17 +105,32 @@ func unbudgetedStrip(props unbudgetedStripProps) ui.Node {
 	if len(cands) > maxChips {
 		cands = cands[:maxChips]
 	}
+	settings := app.Settings()
+	rates := currency.Rates{Base: props.Base, Rates: settings.FXRates}
+	if rates.Base == "" {
+		rates.Base = budgetBaseCurrency(rates.Base)
+	}
+	userPrefs := uistate.LoadPrefs()
+	var payAnchor time.Time
+	if userPrefs.PayCycleAnchor != "" {
+		payAnchor, _ = time.Parse("2006-01-02", userPrefs.PayCycleAnchor)
+	}
+	ledger := budgeting.NewNettedLedgerWithLinks(app.Transactions(), app.TxnLinks())
 
 	chips := MapKeyed(cands, func(c unbudgetedCat) any { return c.CategoryID }, func(c unbudgetedCat) ui.Node {
-		// The suggestion is computed with the strip's memoized ledger snapshot.
-		sug := data.Suggestions[c.CategoryID]
+		// Only the four visible chips need a historical recommendation.
+		sug, err := contextCategoryBudgetMedian(c.CategoryID, app.Categories(), ledger.Transactions(), ms,
+			rates, userPrefs.WeekStartWeekday(), payAnchor)
+		if err != nil {
+			slog.Error("suggest unbudgeted category limit", "category_id", c.CategoryID, "error", err)
+		}
 		if sug <= 0 {
 			sug = c.Amount.Amount
 		}
 		return ui.CreateElement(unbudgetedChip, unbudgetedChipProps{
 			CatID: c.CategoryID, CatName: c.Name,
 			SpentStr:   fmtMoney(c.Amount),
-			LimitMajor: money.FormatMinor(sug, currency.Decimals(props.Base)),
+			LimitMajor: money.FormatMinor(sug, currency.Decimals(rates.Base)),
 			Others:     hasMemberBudgetForCategory(app.Budgets(), app.Categories(), c.CategoryID),
 		})
 	})
@@ -152,9 +160,24 @@ func unbudgetedStrip(props unbudgetedStripProps) ui.Node {
 }
 
 type unbudgetedStripData struct {
-	Candidates  []unbudgetedCat
-	Suggestions map[string]int64
-	Err         error
+	Candidates []unbudgetedCat
+	Err        error
+}
+
+func contextCategoryBudgetMedian(categoryID string, categories []domain.Category, txns []domain.Transaction, anchor time.Time,
+	rates currency.Rates, weekStart time.Weekday, payAnchor time.Time) (int64, error) {
+	covers := categorytree.DescendantsOfAll(categories, []string{categoryID})
+	budget := domain.Budget{ID: "suggestion:" + categoryID, CategoryID: categoryID,
+		Period: domain.PeriodMonthly, Limit: money.Zero(rates.Base)}
+	recommendation, err := budgeting.RecommendBudgetLimitWithContext(budget, covers, txns, anchor, 3,
+		money.Zero(rates.Base), rates, weekStart, payAnchor)
+	if err != nil {
+		return 0, err
+	}
+	if !recommendation.HasEvidence {
+		return 0, nil
+	}
+	return recommendation.Median, nil
 }
 
 type trackAllButtonProps struct{ Total int }

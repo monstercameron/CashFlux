@@ -11,6 +11,12 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 )
 
+func recommendMonthlyForTest(covers map[string]bool, txns []domain.Transaction, now time.Time, periods int, limit, projection int64, rates currency.Rates) (LimitRecommendation, error) {
+	budget := domain.Budget{Period: domain.PeriodMonthly, Limit: money.New(limit, rates.Base)}
+	return RecommendBudgetLimitWithContext(budget, covers, NewNettedLedger(txns).Transactions(), now, periods,
+		money.New(projection, rates.Base), rates, time.Monday, time.Time{})
+}
+
 func TestRecommendLimitNamesDirectionAndExcludesOutlier(t *testing.T) {
 	now := time.Date(2026, time.July, 15, 0, 0, 0, 0, time.UTC)
 	amounts := []int64{20000, 21000, 19000, 12642, 20000, 22000}
@@ -19,7 +25,7 @@ func TestRecommendLimitNamesDirectionAndExcludesOutlier(t *testing.T) {
 		month := time.Date(2026, time.Month(6-i), 10, 0, 0, 0, 0, time.UTC)
 		txns = append(txns, domain.Transaction{ID: month.Format("2006-01"), CategoryID: "transport", Amount: money.New(-amount, "USD"), Date: month})
 	}
-	got, err := RecommendLimit(map[string]bool{"transport": true}, txns, now, 6, 15000, 0, currency.Rates{Base: "USD"})
+	got, err := recommendMonthlyForTest(map[string]bool{"transport": true}, txns, now, 6, 15000, 0, currency.Rates{Base: "USD"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,7 +44,7 @@ func TestRecommendLimitProjectionNeverDeterminesSuggestedAmount(t *testing.T) {
 		{ID: "b", CategoryID: "dining", Amount: money.New(-12642, "USD"), Date: time.Date(2026, time.May, 1, 0, 0, 0, 0, time.UTC)},
 		{ID: "c", CategoryID: "dining", Amount: money.New(-12600, "USD"), Date: time.Date(2026, time.April, 1, 0, 0, 0, 0, time.UTC)},
 	}
-	got, err := RecommendLimit(map[string]bool{"dining": true}, txns, now, 3, 30000, 188301, currency.Rates{Base: "USD"})
+	got, err := recommendMonthlyForTest(map[string]bool{"dining": true}, txns, now, 3, 30000, 188301, currency.Rates{Base: "USD"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +72,7 @@ func TestRecommendLimitSuppressesRaiseWithoutRepeatedOverspend(t *testing.T) {
 				month := time.Date(2026, time.Month(i+2), 10, 0, 0, 0, 0, time.UTC)
 				txns = append(txns, domain.Transaction{ID: month.Format("2006-01"), CategoryID: "shopping", Amount: money.New(-amount, "USD"), Date: month})
 			}
-			got, err := RecommendLimit(map[string]bool{"shopping": true}, txns, now, 5, 10000, tc.projection, currency.Rates{Base: "USD"})
+			got, err := recommendMonthlyForTest(map[string]bool{"shopping": true}, txns, now, 5, 10000, tc.projection, currency.Rates{Base: "USD"})
 			if err != nil || got.Direction != tc.want || (got.Direction == SuggestionRaise && got.Suggested != got.Median) {
 				t.Fatalf("recommendation=%+v err=%v; want %s with evidence-derived amount", got, err, tc.want)
 			}
@@ -80,7 +86,7 @@ func TestRecommendLimitCanSuggestALowerLimitWhenProjectionFits(t *testing.T) {
 		{ID: "a", CategoryID: "food", Amount: money.New(-20000, "USD"), Date: time.Date(2026, time.June, 1, 0, 0, 0, 0, time.UTC)},
 		{ID: "b", CategoryID: "food", Amount: money.New(-21000, "USD"), Date: time.Date(2026, time.May, 1, 0, 0, 0, 0, time.UTC)},
 	}
-	got, err := RecommendLimit(map[string]bool{"food": true}, txns, now, 2, 30000, 15000, currency.Rates{Base: "USD"})
+	got, err := recommendMonthlyForTest(map[string]bool{"food": true}, txns, now, 2, 30000, 15000, currency.Rates{Base: "USD"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +103,7 @@ func TestRecommendBudgetLimitComparesYearlyBaseAsMonthlyEquivalent(t *testing.T)
 		{ID: "c", CategoryID: "travel", Amount: money.New(-48000, "USD"), Date: time.Date(2026, time.April, 1, 0, 0, 0, 0, time.UTC)},
 	}
 	budget := domain.Budget{ID: "travel", Period: domain.PeriodYearly, Limit: money.New(600000, "USD")}
-	got, err := RecommendBudgetLimit(budget, map[string]bool{"travel": true}, txns, now, 3, money.New(40000, "USD"), currency.Rates{Base: "USD"})
+	got, err := RecommendBudgetLimitWithContext(budget, map[string]bool{"travel": true}, txns, now, 3, money.New(40000, "USD"), currency.Rates{Base: "USD"}, time.Monday, time.Time{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +122,7 @@ func TestRecommendBudgetLimitUsesComparableYearWindows(t *testing.T) {
 		{ID: "2026", CategoryID: "splurge", Amount: money.New(-500000, "USD"), Date: time.Date(2026, time.June, 1, 0, 0, 0, 0, time.UTC)},
 	}
 	budget := domain.Budget{ID: "splurge", Period: domain.PeriodYearly, Limit: money.New(888000, "USD")}
-	got, err := RecommendBudgetLimit(budget, map[string]bool{"splurge": true}, txns, now, 3, money.New(40000, "USD"), currency.Rates{Base: "USD"})
+	got, err := RecommendBudgetLimitWithContext(budget, map[string]bool{"splurge": true}, txns, now, 3, money.New(40000, "USD"), currency.Rates{Base: "USD"}, time.Monday, time.Time{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +140,7 @@ func TestRecommendBudgetLimitUsesComparableQuarterWindows(t *testing.T) {
 		{ID: "current", CategoryID: "home", Amount: money.New(-900000, "USD"), Date: time.Date(2026, time.October, 2, 0, 0, 0, 0, time.UTC)},
 	}
 	budget := domain.Budget{ID: "home", Period: domain.PeriodQuarterly, Limit: money.New(300000, "USD")}
-	got, err := RecommendBudgetLimit(budget, map[string]bool{"home": true}, txns, now, 3, money.New(80000, "USD"), currency.Rates{Base: "USD"})
+	got, err := RecommendBudgetLimitWithContext(budget, map[string]bool{"home": true}, txns, now, 3, money.New(80000, "USD"), currency.Rates{Base: "USD"}, time.Monday, time.Time{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +150,7 @@ func TestRecommendBudgetLimitUsesComparableQuarterWindows(t *testing.T) {
 }
 
 func TestRecommendLimitWithoutHistoryKeepsCurrentLimit(t *testing.T) {
-	got, err := RecommendLimit(map[string]bool{"new": true}, nil, time.Date(2026, time.July, 15, 0, 0, 0, 0, time.UTC), 6, 20000, 0, currency.Rates{Base: "USD"})
+	got, err := recommendMonthlyForTest(map[string]bool{"new": true}, nil, time.Date(2026, time.July, 15, 0, 0, 0, 0, time.UTC), 6, 20000, 0, currency.Rates{Base: "USD"})
 	if err != nil {
 		t.Fatal(err)
 	}

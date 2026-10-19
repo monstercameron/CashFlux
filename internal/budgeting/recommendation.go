@@ -41,20 +41,6 @@ type LimitRecommendation struct {
 	Outliers     []SuggestionMonth
 }
 
-// RecommendLimit estimates a budget limit from trailing full months, excludes
-// values farther than three median absolute deviations from the median, and
-// reports its direction and supporting months. A projected current-period
-// amount above the current limit prevents a lower recommendation: the suggestion
-// is raised to at least that projection. currentLimit and currentProjection are
-// base-currency minor units on the same cadence as the monthly history.
-func RecommendLimit(covers map[string]bool, txns []domain.Transaction, now time.Time, months int, currentLimit, currentProjection int64, rates currency.Rates) (LimitRecommendation, error) {
-	values, err := monthlyCoveredSpend(covers, txns, now, months, rates)
-	if err != nil {
-		return LimitRecommendation{}, err
-	}
-	return recommendFromComparableSpend(values, currentLimit, currentProjection)
-}
-
 func recommendFromComparableSpend(values []SuggestionMonth, currentLimit, currentProjection int64) (LimitRecommendation, error) {
 	if len(values) == 0 {
 		return LimitRecommendation{CurrentLimit: currentLimit, Suggested: currentLimit, Direction: SuggestionKeep, Projection: currentProjection}, nil
@@ -93,14 +79,6 @@ func overspentComparablePeriods(values []SuggestionMonth, limit int64) int {
 		}
 	}
 	return count
-}
-
-// RecommendBudgetLimit compares same-cadence historical windows, then expresses
-// the evidence and suggestion as monthly base-currency minor units for legacy UI
-// callers. projectedMonthly is a current-pace gate only and never changes the
-// evidence-derived suggested amount.
-func RecommendBudgetLimit(budget domain.Budget, covers map[string]bool, txns []domain.Transaction, now time.Time, months int, projectedMonthly money.Money, rates currency.Rates) (LimitRecommendation, error) {
-	return RecommendBudgetLimitWithContext(budget, covers, nettedForSpending(txns), now, months, projectedMonthly, rates, time.Monday, time.Time{})
 }
 
 // RecommendBudgetLimitWithContext evaluates a recommendation against the same
@@ -174,41 +152,6 @@ func comparableBudgetSpend(budget domain.Budget, covers map[string]bool, txns []
 		}
 		values = append(values, SuggestionMonth{Month: windowStart.Format("2006-01-02"), Amount: monthly.Amount})
 	}
-	first := 0
-	for first < len(values) && values[first].Amount == 0 {
-		first++
-	}
-	return values[first:], nil
-}
-
-func monthlyCoveredSpend(covers map[string]bool, txns []domain.Transaction, now time.Time, months int, rates currency.Rates) ([]SuggestionMonth, error) {
-	if len(covers) == 0 || months <= 0 {
-		return nil, nil
-	}
-	curStart := dateutil.MonthStart(now)
-	values := make([]SuggestionMonth, 0, months)
-	for k := months; k >= 1; k-- {
-		start := dateutil.AddMonths(curStart, -k)
-		end := dateutil.AddMonths(curStart, -(k - 1))
-		var amount int64
-		for _, txn := range txns {
-			if !txn.IsExpense() || !txn.CountsInReports() || !dateutil.InRange(txn.Date, start, end) {
-				continue
-			}
-			part, ok, err := scopedSpend(txn, covers, rates)
-			if err != nil {
-				return nil, err
-			}
-			if ok {
-				amount, err = money.Add(amount, part)
-				if err != nil {
-					return nil, fmt.Errorf("sum budget spend for %s: %w", start.Format("2006-01"), err)
-				}
-			}
-		}
-		values = append(values, SuggestionMonth{Month: start.Format("2006-01"), Amount: amount})
-	}
-	// Ignore only the empty leading history before the category first had spend.
 	first := 0
 	for first < len(values) && values[first].Amount == 0 {
 		first++

@@ -168,19 +168,25 @@ func trackUntrackedForm(_ trackUntrackedFormProps) ui.Node {
 	}
 	wStart, wEnd := vw.Range()
 	from := wEnd.AddDate(0, -trackScanMonths, 0)
+	var payAnchor time.Time
+	if pr.PayCycleAnchor != "" {
+		payAnchor, _ = time.Parse("2006-01-02", pr.PayCycleAnchor)
+	}
 	scan := ui.UseMemo(func() trackScanMemo {
 		if app == nil {
 			return trackScanMemo{}
 		}
+		ledger := budgeting.NewNettedLedgerWithLinks(app.Transactions(), app.TxnLinks())
 		hint := func(catID string) (int64, domain.Period, bool) {
-			if sug, err := budgeting.SuggestLimit(catID, app.Transactions(), wEnd, 6, rates); err == nil && sug > 0 {
+			if sug, err := contextCategoryBudgetMedian(catID, app.Categories(), ledger.Transactions(), wStart,
+				rates, pr.WeekStartWeekday(), payAnchor); err == nil && sug > 0 {
 				return sug, domain.PeriodMonthly, true
 			}
 			return 0, "", false
 		}
 		candidates, err := untracked.Scan(app.Transactions(), app.Categories(), app.Budgets(), from, wEnd, rates, base, trackScanMonths, hint)
 		return trackScanMemo{Candidates: candidates, Err: err}
-	}, app, appRevision, dataRevision, from.Unix(), wEnd.Unix(), base)
+	}, app, appRevision, dataRevision, from.Unix(), wEnd.Unix(), base, pr.WeekStartWeekday(), payAnchor.Format("2006-01-02"))
 	if app == nil {
 		return Fragment()
 	}
@@ -437,7 +443,11 @@ func trackUntrackedRow(props trackUntrackedRowProps) ui.Node {
 	r := props.Row
 	c := r.Cand
 
-	toggleInclude := ui.UseEvent(func() { next := r; next.Include = !r.Include; props.OnChange(next) })
+	setInclude := ui.UseEvent(func(e ui.ChangeEvent) {
+		next := r
+		next.Include = e.IsChecked()
+		props.OnChange(next)
+	})
 	toggleRaise := ui.UseEvent(func() { next := r; next.Raise = !r.Raise; props.OnChange(next) })
 	raiseOnChange := OnChange(toggleRaise)
 	setAmount := ui.UseEvent(func(s string) {
@@ -474,7 +484,7 @@ func trackUntrackedRow(props trackUntrackedRowProps) ui.Node {
 		Attr("data-testid", "track-row-"+c.CategoryID),
 		Label(css.Class("track-row-pick"),
 			Input(Type("checkbox"), Attr("data-testid", "track-include-"+c.CategoryID),
-				checkedAttr(r.Include), OnChange(toggleInclude)),
+				Checked(r.Include), OnChange(setInclude)),
 			Span(css.Class("track-row-name"), c.Name)),
 		Span(css.Class("track-row-sub"), sub),
 		Div(css.Class("track-row-controls"),

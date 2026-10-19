@@ -11,6 +11,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
+	"github.com/monstercameron/CashFlux/internal/categorytree"
 	"github.com/monstercameron/CashFlux/internal/coverformula"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
@@ -311,11 +312,28 @@ func budgetRecommendationLine(app *appstate.App, b domain.Budget, status budgeti
 	if err != nil {
 		return P(css.Class("t-caption", tw.TextWarn), Attr("data-testid", "budget-limit-recommendation-incomplete"), uistate.T("budgets.recommendationIncomplete"))
 	}
-	covers := make(map[string]bool)
-	for _, id := range b.TrackedCategoryIDs() {
-		covers[id] = true
+	userPrefs := uistate.LoadPrefs()
+	memberID := uistate.ActiveMemberFromScope()
+	visible := false
+	for _, visibleBudget := range budgeting.ViewBudgets(app.Budgets(), memberID) {
+		if visibleBudget.ID == b.ID {
+			visible = true
+			break
+		}
 	}
-	recommendation, err := budgeting.RecommendBudgetLimit(b, covers, app.Transactions(), anchor, 6, projected, rates)
+	if !visible {
+		return Fragment()
+	}
+	payAnchor, _ := time.Parse("2006-01-02", userPrefs.PayCycleAnchor)
+	covers := categorytree.DescendantsOfAll(app.Categories(), b.TrackedCategoryIDs())
+	scope := budgeting.ScopeOf(b, covers)
+	if scope.IsEmpty() {
+		return Fragment()
+	}
+	txns, suggestionCovers := suggestTransactionsForScope(covers, scope.Tags, app.Transactions())
+	ledger := budgeting.NewNettedLedgerWithLinks(txns, app.TxnLinks())
+	recommendation, err := budgeting.RecommendBudgetLimitWithContext(b, suggestionCovers, ledger.Transactions(), anchor, 3,
+		projected, rates, userPrefs.WeekStartWeekday(), payAnchor)
 	if err != nil {
 		return P(css.Class("t-caption", tw.TextWarn), Attr("data-testid", "budget-limit-recommendation-incomplete"), uistate.T("budgets.recommendationIncomplete"))
 	}
@@ -331,7 +349,39 @@ func budgetRecommendationLine(app *appstate.App, b domain.Budget, status budgeti
 		return P(css.Class("t-caption", tw.TextWarn), Attr("data-testid", "budget-limit-recommendation-incomplete"), uistate.T("budgets.recommendationIncomplete"))
 	}
 	return P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "budget-limit-recommendation"),
-		budgetRecommendationCopy(recommendation.Direction, fmtMoney(suggestedPeriod), len(recommendation.MonthsUsed)+len(recommendation.Outliers), len(recommendation.Outliers)))
+		budgetLimitRecommendationCopy(recommendation.Direction, fmtMoney(suggestedPeriod), b.Period, 3, len(recommendation.Outliers)))
+}
+
+func budgetLimitRecommendationCopy(direction budgeting.SuggestionDirection, amount string, period domain.Period, windows, outliers int) string {
+	verb := "keep"
+	switch direction {
+	case budgeting.SuggestionRaise:
+		verb = "raise"
+	case budgeting.SuggestionLower:
+		verb = "lower"
+	}
+	cadence := "periods"
+	switch period {
+	case domain.PeriodWeekly:
+		cadence = "weeks"
+	case domain.PeriodBiweekly:
+		cadence = "two-week periods"
+	case domain.PeriodMonthly:
+		cadence = "months"
+	case domain.PeriodQuarterly:
+		cadence = "quarters"
+	case domain.PeriodYearly:
+		cadence = "years"
+	}
+	copy := uistate.T("bc4b42.recommendation", uistate.T("bc4b42."+verb), amount,
+		uistate.T("bc4b42.window", windows, cadence))
+	if outliers == 1 {
+		return copy + " " + uistate.T("bc4b42.oneOutlier")
+	}
+	if outliers > 1 {
+		return copy + " " + uistate.T("bc4b42.manyOutliers", outliers)
+	}
+	return copy
 }
 
 // sourceAfterGiving is what a source would have left once its share is taken —

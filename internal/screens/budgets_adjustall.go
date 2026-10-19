@@ -298,8 +298,8 @@ func adjustAllFormNode(props adjustAllFormProps) ui.Node {
 			labeledField(uistate.T("bv6g.adjust.scopeLabel"), uiw.Segmented(uiw.SegmentedProps{
 				Label: uistate.T("bv6g.adjust.scopeLabel"), Selected: string(props.Scope),
 				Options: []uiw.SegOption{
-					{Value: string(budgeting.AdjustThisPeriod), Label: uistate.T("bv6g.adjust.thisPeriod"), TestID: "adjustall-scope-this"},
-					{Value: string(budgeting.AdjustEveryPeriod), Label: uistate.T("bv6g.adjust.allPeriods"), TestID: "adjustall-scope-every"},
+					{Value: string(budgeting.AdjustThisPeriod), Label: uistate.T("bv7g.adjust.thisPeriod"), TestID: "adjustall-scope-this"},
+					{Value: string(budgeting.AdjustEveryPeriod), Label: uistate.T("bv7g.adjust.everyPeriod"), TestID: "adjustall-scope-every"},
 				}, OnSelect: props.OnScope,
 			})),
 			P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "adjustall-scope-hint"), Style(map[string]string{"margin": "0"}), adjustScopeDescription(props.Scope)),
@@ -426,9 +426,9 @@ func formatAdjustPctCopy(pct float64) string {
 
 func adjustScopeDescription(scope budgeting.AdjustScope) string {
 	if scope.IsPermanent() {
-		return uistate.T("bv6g.adjust.allHint")
+		return uistate.T("bv7g.adjust.everyHint")
 	}
-	return uistate.T("bv6g.adjust.thisHint")
+	return uistate.T("bv7g.adjust.thisHint")
 }
 
 // adjustDeltaKey / adjustDeltaTone name and tone the change to the total. A bulk

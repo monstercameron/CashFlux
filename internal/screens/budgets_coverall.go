@@ -55,9 +55,9 @@ type coverAllSource struct {
 	ID        string
 	Name      string
 	Currency  string
-	Avail     money.Money // positive remaining this period
-	Remaining money.Money // actual remaining shown on the budget row
-	FreeRoom  money.Money // remaining after committed bills, used for donor ranking
+	Avail     money.Money // positive free room this period after committed bills
+	FreeRoom  money.Money // remaining after committed bills, normalized per month for ranking
+	Monthly   money.Money // free room normalized per month, for the donor label
 	ThisStart time.Time
 }
 
@@ -98,14 +98,12 @@ func coverAllData(app *appstate.App, member string, vw period.Window, pr prefs.P
 			if !funds.CanGive() {
 				continue
 			}
-			// Compare available room on a monthly-equivalent basis. A yearly
-			// budget's full remaining amount is not one month's available room.
-			avail, err := coverAllMonthlyRoom(st.Remaining, b.Period)
-			if err != nil || avail.Amount <= 0 {
+			monthlyFree, err := coverAllMonthlyEquivalent(funds.Free, b.Period)
+			if err != nil || monthlyFree.Amount < monthlyDonorMinimum(monthlyFree.Currency) {
 				continue
 			}
-			sources = append(sources, coverAllSource{ID: b.ID, Name: b.Name, Currency: avail.Currency, Avail: avail,
-				Remaining: st.Remaining, FreeRoom: funds.Free, ThisStart: bs})
+			sources = append(sources, coverAllSource{ID: b.ID, Name: b.Name, Currency: funds.Free.Currency, Avail: funds.Free,
+				FreeRoom: monthlyFree, Monthly: monthlyFree, ThisStart: bs})
 		}
 	}
 	sort.Slice(overs, func(i, j int) bool { return overs[i].Name < overs[j].Name })
@@ -120,18 +118,29 @@ func coverAllSourceLess(a, b coverAllSource) bool {
 	return a.Name < b.Name
 }
 
+func monthlyDonorMinimum(code string) int64 {
+	minimum := int64(1)
+	for range currency.Decimals(code) {
+		minimum *= 10
+	}
+	return minimum
+}
+
 func coverAllMonthlyRoom(remaining money.Money, cadence domain.Period) (money.Money, error) {
 	monthly, err := budgeting.PeriodEquivalent(remaining, cadence, domain.PeriodMonthly)
 	if err != nil {
 		return money.Money{}, err
 	}
-	// The displayed monthly equivalent is useful for comparing cadences, but
-	// cover-all debits the source in its actual current period. Never offer more
-	// than that period can give (weekly/biweekly equivalence is larger).
+	// The monthly equivalent ranks and describes a donor; the amount movable
+	// now remains capped at the actual period balance.
 	if monthly.Amount > remaining.Amount {
 		return remaining, nil
 	}
 	return monthly, nil
+}
+
+func coverAllMonthlyEquivalent(amount money.Money, cadence domain.Period) (money.Money, error) {
+	return budgeting.PeriodEquivalent(amount, cadence, domain.PeriodMonthly)
 }
 
 func coverAllCoveredAt(over coverAllOver) time.Time {
@@ -201,7 +210,7 @@ func coverAllBannerButton(_ coverAllButtonProps) ui.Node {
 		open.Set(true)
 	}))
 	return Button(css.Class("btn btn-tool cover-all-open", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
-		Attr("data-testid", "budgets-cover-all"), Title(uistate.T("br3dlg.coverTitle")), OnClick(onOpen),
+		Attr("data-testid", "budgets-cover-all"), Title(uistate.T("bv7g.cover.title")), OnClick(onOpen),
 		uiw.Icon(icon.Scale, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
 		Span(uistate.T("coverAll.button")))
 }
@@ -215,7 +224,7 @@ func budgetsCoverAllModal() ui.Node {
 		return Fragment()
 	}
 	return uiw.FlipPanel(uiw.FlipPanelProps{
-		Title:     uistate.T("br3dlg.coverTitle"),
+		Title:     uistate.T("bv7g.cover.title"),
 		Width:     uiw.FlipMediumW,
 		Height:    uiw.FlipMediumH,
 		NoFooter:  true,
@@ -521,9 +530,9 @@ func coverAllForm(props coverAllFormProps) ui.Node {
 	}
 	canApply := coverAllHasDonor(choices.Get())
 	selectedAmount, _ := coverAllSelectedTotal(overs, choices.Get())
-	applyLabel := uistate.T("coverAll.apply")
+	applyLabel := uistate.T("bv7g.cover.applyEmpty")
 	if selectedAmount > 0 {
-		applyLabel = uistate.T("bv6g.cover.apply", fmtMoney(money.New(selectedAmount, base)))
+		applyLabel = uistate.T("bv7g.cover.apply", fmtMoney(money.New(selectedAmount, base)))
 	}
 	showNextMonthHint := coverAllHasNextMonthSelection(choices.Get())
 
@@ -583,7 +592,7 @@ func coverAllRow(props coverAllRowProps) ui.Node {
 		If(!o.Rollover, Option(Value(coverAllNextSource), SelectedIf(props.Selected == coverAllNextSource), uistate.T("coverAll.sourceNextMonth"))))
 	for _, s := range coverAllSourcesFor(o, props.Sources) {
 		opts = append(opts, Option(Value(s.ID), SelectedIf(props.Selected == s.ID),
-			uistate.T("bv6g.cover.sourceBudget", s.Name, fmtMoney(s.Remaining), fmtMoney(s.Avail))))
+			uistate.T("bv7g.cover.sourceBudget", s.Name, fmtMoney(s.Avail), fmtMoney(s.Monthly))))
 	}
 	return Div(css.Class("cover-all-row"), Attr("data-testid", "cover-all-row"),
 		Div(css.Class("cover-all-row-main"),

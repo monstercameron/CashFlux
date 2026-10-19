@@ -92,6 +92,7 @@ func monthClosePeriodEnded(end, now time.Time) bool {
 
 type monthCloseLeftoverLine struct {
 	name, amount, monthly string
+	outcome               string
 	rollover              bool
 }
 
@@ -113,10 +114,18 @@ func monthCloseLeftovers(items []monthclose.Item, budgets []domain.Budget, base 
 		}
 		total += monthly.Amount
 		lines = append(lines, monthCloseLeftoverLine{
-			name: item.Name, amount: fmtMoney(money.New(item.Minor, base)), monthly: fmtMoney(monthly), rollover: budget.Rollover,
+			name: item.Name, amount: fmtMoney(money.New(item.Minor, base)), monthly: fmtMoney(monthly),
+			outcome: monthCloseLeftoverOutcomeKey(budget.Rollover), rollover: budget.Rollover,
 		})
 	}
 	return lines, total
+}
+
+func monthCloseLeftoverOutcomeKey(rollover bool) string {
+	if rollover {
+		return "bv7g.monthclose.carries"
+	}
+	return "bv7g.monthclose.resets"
 }
 
 func monthCloseOverBody(s monthclose.Summary, base string, tense func(string, string) string, coverOnClick any) []any {
@@ -134,7 +143,7 @@ func monthCloseOverBody(s monthclose.Summary, base string, tense func(string, st
 		Ul(css.Class("wf-lines"), rows),
 		Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt2),
 			Button(css.Class("btn btn-sm btn-primary"), Type("button"), Attr("data-testid", "monthclose-cover"),
-				Title(uistate.T("coverAll.title")), coverOnClick, uistate.T("monthclose.coverAction")),
+				Title(uistate.T("bv7g.cover.action")), coverOnClick, uistate.T("bv7g.cover.action")),
 			Span(css.Class("budget-sub"), uistate.T("monthclose.overLeaveNote"))),
 	}
 }
@@ -146,15 +155,19 @@ func monthCloseLeftBody(s monthclose.Summary, budgets []domain.Budget, base stri
 	leftovers, monthlyTotal := monthCloseLeftovers(s.Leftovers, budgets, base)
 	rows := make([]ui.Node, 0, len(s.Leftovers))
 	for _, item := range leftovers {
-		key := "bv6g.monthclose.leftItemFresh"
-		if item.rollover {
-			key = "bv6g.monthclose.leftItemRollover"
-		}
-		rows = append(rows, Li(css.Class("wf-line"), uistate.T(key, item.name, item.amount),
-			Span(css.Class("wf-line-amt"), uistate.T("bv6g.monthclose.monthlyAmount", item.monthly))))
+		rows = append(rows, Div(css.Class("mc-leftover-row"), Attr("role", "row"),
+			Span(css.Class("mc-leftover-name"), Attr("role", "cell"), item.name),
+			Span(css.Class("mc-leftover-amount"), Attr("role", "cell"), item.amount),
+			Span(css.Class("mc-leftover-monthly"), Attr("role", "cell"), item.monthly),
+			Span(css.Class("mc-leftover-outcome"), Attr("role", "cell"), uistate.T(item.outcome))))
 	}
-	body := []any{Ul(css.Class("wf-lines"), rows), P(css.Class("budget-sub"), Attr("data-testid", "monthclose-left-total"),
-		uistate.T("bv6g.monthclose.leftTotal", fmtMoney(money.New(monthlyTotal, base)), len(leftovers)))}
+	body := []any{Div(css.Class("mc-leftovers"), Attr("role", "table"), Attr("aria-label", uistate.T("bv7g.monthclose.leftTitle")),
+		Div(css.Class("mc-leftover-head"), Attr("role", "row"),
+			Span(Attr("role", "columnheader"), uistate.T("bv7g.monthclose.budget")), Span(Attr("role", "columnheader"), uistate.T("bv7g.monthclose.left")),
+			Span(Attr("role", "columnheader"), uistate.T("bv7g.monthclose.monthly")), Span(Attr("role", "columnheader"), uistate.T("bv7g.monthclose.nextPeriod"))),
+		Div(css.Class("mc-leftover-rows"), rows)),
+		P(css.Class("budget-sub"), Attr("data-testid", "monthclose-left-total"),
+			uistate.T("bv7g.monthclose.leftTotal", fmtMoney(money.New(monthlyTotal, base))))}
 	return append(body,
 		Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt2),
 			Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "monthclose-sweep"),
@@ -393,11 +406,11 @@ func monthCloseBody(_ monthCloseBodyProps) ui.Node {
 
 	return Div(css.Class("modal-scroll", "mc-body"), Attr("data-testid", "monthclose-body"),
 		P(css.Class("budget-sub"), uistate.T("monthclose.intro", vw.Label())),
-		monthCloseSection("monthclose-overspends", uistate.T("monthclose.overTitle"), overBody...),
-		monthCloseSection("monthclose-leftovers", uistate.T("bv6g.monthclose.leftTitle"), leftBody...),
-		monthCloseSection("monthclose-assign", uistate.T("monthclose.assignTitle"), resolveBody...),
-		monthCloseSection("monthclose-income", uistate.T("monthclose.incomeTitle2"), incomeBody...),
-		monthCloseSection("monthclose-copy", uistate.T("monthclose.copyTitle"), copyBody...),
+		monthCloseSection("monthclose-overspends", uistate.T("bv7g.monthclose.step1"), overBody...),
+		monthCloseSection("monthclose-leftovers", uistate.T("bv7g.monthclose.step2"), leftBody...),
+		monthCloseSection("monthclose-assign", uistate.T("bv7g.monthclose.step3"), resolveBody...),
+		monthCloseSection("monthclose-income", uistate.T("bv7g.monthclose.step4"), incomeBody...),
+		monthCloseSection("monthclose-copy", uistate.T("bv7g.monthclose.step5"), copyBody...),
 		Div(css.Class(tw.Flex, tw.JustifyEnd, tw.Mt3),
 			Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "monthclose-done"),
 				doneOnClick, uistate.T("monthclose.done"))),
