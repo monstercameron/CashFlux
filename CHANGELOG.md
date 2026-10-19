@@ -90,6 +90,8 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **The app shell loads and themes cleanly (TV8J).** The boot skeleton previews ledger rows; sidebar rail labels use sentence case; the
+  light theme carries a complete self-sufficient token set, so switching theme never keeps dark values.
 - **Budget card density keeps your earlier choice (BC6N4).** The old dataset-stored Compact/Full setting is copied once into the
   device preference store, so moving density to a device preference does not reset it.
 - **Budget money moves stay balanced across periods (BCS2); Budgets clean-up (BC5B9).** Covers and top-ups are stored as paired moves,

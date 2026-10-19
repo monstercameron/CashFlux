@@ -1204,6 +1204,10 @@ func registerGenerated() {
 		customProp("--muted", "#56565c"),
 		customProp("--accent-dim", "#e4f3ea"),
 		customProp("--hover", "#e8e6e1"),
+		// Keep fallback theme colors usable when the preference writer is unavailable.
+		customProp("--down", "#b3322f"),
+		customProp("--accent-ink", "#102318"),
+		customProp("--primary-button-ink", "#102318"),
 		colorScheme("light"),
 	)
 	rule(":root[data-theme=\"light\"]",

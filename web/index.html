@@ -96,9 +96,8 @@
       *,::before,::after{box-sizing:border-box}
       html,body{margin:0;height:100%}
       body{background:#0e0e0f;color:#f4f4f5;font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:14.5px;line-height:1.45;-webkit-font-smoothing:antialiased}
-      /* Page-shaped loading skeleton (#78): the boot layer previews the shell —
-         rail, top bar, hero + tile grid — instead of a centered splash card, so
-         the first paint already looks like the app that's about to appear. */
+      /* The boot layer previews a transaction ledger: rows, amounts and category
+         cells match the most data-heavy route without pretending every route is a dashboard. */
       #boot{position:fixed;inset:0;background:#0e0e0f;z-index:10;transition:opacity .28s ease,transform .28s ease}
       #boot.hidden{opacity:0;transform:scale(1.015);pointer-events:none}
       /* Auto-fade the skeleton the moment the app mounts content, independent of the
@@ -119,6 +118,14 @@
       .sk-brand-word{font-family:"Fraunces",Georgia,serif;font-weight:600;font-size:1.05rem}
       .sk-block{border-radius:8px;background:linear-gradient(100deg,#1a1a1d 40%,#232327 50%,#1a1a1d 60%);background-size:200% 100%;animation:sk-shimmer 1.4s ease-in-out infinite}
       .sk-nav-item{height:1.9rem}
+      .sk-ledger-head{height:2.8rem;margin-bottom:.65rem}
+      .sk-ledger-row{height:3.15rem;margin-bottom:.35rem}
+      .sk-ledger{display:grid;grid-template-columns:minmax(5rem,.65fr) minmax(12rem,2fr) minmax(8rem,1fr) minmax(6rem,.7fr);gap:.5rem;align-items:center}
+      .sk-ledger>span{height:.65rem;border-radius:999px;background:#303034;margin:0 .65rem}
+      .sk-ledger>span:nth-child(2){width:72%}
+      .sk-ledger>span:nth-child(3){width:56%}
+      .sk-ledger>span:nth-child(4){width:68%;justify-self:end}
+      [data-theme="light"] .sk-ledger>span{background:#d8d5ce}
       .sk-main{flex:1;min-width:0;display:flex;flex-direction:column}
       .sk-topbar{display:flex;align-items:center;gap:.85rem;height:3.5rem;flex:none;border-bottom:1px solid #1e1e21;padding:0 1.5rem}
       .sk-title{width:9rem;height:1.15rem}
@@ -174,15 +181,14 @@
             <div class="sk-block sk-dot"></div>
           </div>
           <div class="sk-content">
-            <div class="sk-block sk-hero"></div>
-            <div class="sk-grid">
-              <div class="sk-block sk-tile"></div>
-              <div class="sk-block sk-tile"></div>
-              <div class="sk-block sk-tile"></div>
-              <div class="sk-block sk-tile"></div>
-              <div class="sk-block sk-tile"></div>
-              <div class="sk-block sk-tile"></div>
-            </div>
+            <div class="sk-block sk-ledger-head sk-ledger"><span></span><span></span><span></span><span></span></div>
+            <div class="sk-block sk-ledger-row sk-ledger"><span></span><span></span><span></span><span></span></div>
+            <div class="sk-block sk-ledger-row sk-ledger"><span></span><span></span><span></span><span></span></div>
+            <div class="sk-block sk-ledger-row sk-ledger"><span></span><span></span><span></span><span></span></div>
+            <div class="sk-block sk-ledger-row sk-ledger"><span></span><span></span><span></span><span></span></div>
+            <div class="sk-block sk-ledger-row sk-ledger"><span></span><span></span><span></span><span></span></div>
+            <div class="sk-block sk-ledger-row sk-ledger"><span></span><span></span><span></span><span></span></div>
+            <div class="sk-block sk-ledger-row sk-ledger"><span></span><span></span><span></span><span></span></div>
           </div>
         </div>
         <div class="sk-tabbar">

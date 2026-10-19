@@ -552,7 +552,7 @@ func toolGroupHeader(props toolGroupHeaderProps) uic.Node {
 	if props.Collapsed {
 		chev = icon.ChevronRight
 	}
-	return Button(css.Class("rail-subhead rail-section", tw.Flex, tw.ItemsCenter, tw.Gap15, tw.WFull, tw.Px3, tw.Pt3, tw.Pb1, tw.Text11, tw.Uppercase, tw.Tracking008, tw.TextFaint, tw.HoverTextFg),
+	return Button(css.Class("rail-subhead rail-section", tw.Flex, tw.ItemsCenter, tw.Gap15, tw.WFull, tw.Px3, tw.Pt3, tw.Pb1, tw.Text12, tw.TextFaint, tw.HoverTextFg),
 		Type("button"), Attr("aria-expanded", fmt.Sprintf("%v", !props.Collapsed)),
 		OnClick(func() {
 			if props.OnToggle != nil {
@@ -560,7 +560,7 @@ func toolGroupHeader(props toolGroupHeaderProps) uic.Node {
 			}
 		}),
 		ui.Icon(chev, css.Class(tw.W3, tw.H3)),
-		Span(props.Label),
+		Span(railLabel(props.Label)),
 	)
 }
 
@@ -568,7 +568,19 @@ func toolGroupHeader(props toolGroupHeaderProps) uic.Node {
 // rail-section class lets the collapsed/mobile rules hide just these labels
 // (not the nav items, which the framework also wraps in a <div>) — see C15.
 func railHeader(label string) uic.Node {
-	return Div(css.Class("rail-section", tw.Px3, tw.Pt4, tw.Pb1, tw.Text11, tw.Uppercase, tw.Tracking008, tw.TextFaint), label)
+	return Div(css.Class("rail-section", tw.Px3, tw.Pt4, tw.Pb1, tw.Text12, tw.TextFaint), railLabel(label))
+}
+
+// railLabel makes section names readable sentence case even when older
+// translations stored them in all caps.
+func railLabel(label string) string {
+	label = strings.ToLower(strings.TrimSpace(label))
+	if label == "" {
+		return label
+	}
+	runes := []rune(label)
+	runes[0] = []rune(strings.ToUpper(string(runes[0])))[0]
+	return string(runes)
 }
 
 // Sidebar renders the left rail: brand header, primary navigation, the user's
