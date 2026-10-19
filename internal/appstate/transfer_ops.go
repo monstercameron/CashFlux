@@ -19,6 +19,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/validate"
 )
 
 // TransferParams holds the caller-supplied inputs for a transfer pair.
@@ -82,8 +83,9 @@ func (a *App) PutTransactionWithTransferPair(prior, next domain.Transaction) err
 	// Locate the counterpart against the PRE-edit values, while the pair still matches.
 	var pair domain.Transaction
 	found := false
+	rates := a.transactionPairRates()
 	for _, t := range a.Transactions() {
-		if isReciprocalTransferLeg(prior, t) {
+		if isReciprocalTransferLegWithRates(prior, t, rates) {
 			pair, found = t, true
 			break
 		}
@@ -103,16 +105,21 @@ func (a *App) PutTransactionWithTransferPair(prior, next domain.Transaction) err
 	}
 
 	// Suppress per-leg firings so the surface re-renders once, with both legs written.
-	prev := a.suppressTxnObservers
-	a.suppressTxnObservers = true
-	err := a.PutTransaction(next)
-	if err == nil {
-		err = a.PutTransaction(pair)
-	}
-	a.suppressTxnObservers = prev
-	if err != nil {
+	if err := a.roleGuard(); err != nil {
 		return err
 	}
+	for _, txn := range []domain.Transaction{next, pair} {
+		if issues := validate.ValidateTransaction(txn); !issues.OK() {
+			return issues
+		}
+		if err := a.validateCustom("transaction", txn.Custom); err != nil {
+			return err
+		}
+	}
+	if err := a.store.PutTransactionsAtomic([]domain.Transaction{next, pair}); err != nil {
+		return fmt.Errorf("save transfer pair: %w", err)
+	}
+	a.log.Info("transfer pair saved", "ids", []string{next.ID, pair.ID})
 	a.fireTxnMutated()
 	return nil
 }

@@ -5,6 +5,7 @@ package appstate
 import (
 	"fmt"
 
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/settle"
@@ -92,6 +93,18 @@ func (a *App) DeleteSettlement(id string) error {
 // member's net balance (positive = the group owes them) and the minimal set of
 // "X pays Y" transfers that zeroes everyone out. currency labels the amounts.
 func (a *App) SettleUp(currency string) (map[string]money.Money, []settle.Transfer) {
+	net, transfers, err := a.SettleUpChecked(currency)
+	if err != nil {
+		a.log.Error("settle-up unavailable", "currency", currency, "error", err)
+		return nil, nil
+	}
+	return net, transfers
+}
+
+// SettleUpChecked computes balances and suggested payments in the requested
+// currency. Recorded currencies are converted with the household FX table; an
+// unavailable rate returns an error instead of combining unlike minor units.
+func (a *App) SettleUpChecked(currencyCode string) (map[string]money.Money, []settle.Transfer, error) {
 	expenses := a.SharedExpenses()
 	settlements := a.Settlements()
 
@@ -108,6 +121,11 @@ func (a *App) SettleUp(currency string) (map[string]money.Money, []settle.Transf
 		ss = append(ss, settle.Settlement{From: s.FromID, To: s.ToID, Amount: s.Amount})
 	}
 
-	net := settle.Net(se, ss, currency)
-	return net, settle.Minimize(net)
+	settings := a.Settings()
+	rates := currency.Rates{Base: settings.BaseCurrency, Rates: settings.FXRates}
+	net, err := settle.NetWithRates(se, ss, rates, currencyCode)
+	if err != nil {
+		return nil, nil, err
+	}
+	return net, settle.Minimize(net), nil
 }

@@ -139,13 +139,12 @@ func (a *App) ExportJSONWithBlobs() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	ds.Settings.OpenAIKey = ""
 	a.rehydrateArtifactBytes(ds.Artifacts)
 	return store.Export(ds)
 }
 
-// ExportJSONRedactedWithBlobs is like ExportJSONWithBlobs but strips the
-// OpenAI key so the autosaved dataset snapshot never writes the secret to
-// localStorage.
+// ExportJSONRedactedWithBlobs is the redacted blob-bearing dataset export.
 func (a *App) ExportJSONRedactedWithBlobs() ([]byte, error) {
 	ds, err := a.store.Snapshot()
 	if err != nil {
@@ -164,6 +163,9 @@ func (a *App) ImportJSONWithBlobs(data []byte) error {
 	ds, err := store.Import(data)
 	if err != nil {
 		return err
+	}
+	if key := a.Settings().OpenAIKey; key != "" {
+		ds.Settings.OpenAIKey = key
 	}
 	// Move image bytes to the blob store before loading, so SQLite stores only
 	// the lightweight record.

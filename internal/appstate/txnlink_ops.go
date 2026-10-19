@@ -31,6 +31,9 @@ func (a *App) TxnLinks() []domain.TxnLink {
 //   - A transaction belongs to at most one order-group (a member already in a
 //     different group is rejected, naming the conflict).
 func (a *App) PutTxnLink(l domain.TxnLink) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
 	if !domain.KnownTxnLinkKind(l.Kind) {
 		return fmt.Errorf("appstate: unknown transaction-link kind %q", l.Kind)
 	}
@@ -52,6 +55,52 @@ func (a *App) PutTxnLink(l domain.TxnLink) error {
 	case domain.TxnLinkRefundPair:
 		if len(l.TxnIDs) != 2 {
 			return fmt.Errorf("appstate: a %s links exactly 2 transactions", l.Kind)
+		}
+		// The original and refund are ordered members. When both transactions
+		// are present, enforce the sign/currency contract at this persistence
+		// seam so callers cannot bypass the candidate picker. Legacy links with
+		// missing rows remain editable/removable without inventing transaction
+		// data, but a partial reference is rejected.
+		var original, refund *domain.Transaction
+		for _, txn := range a.Transactions() {
+			switch txn.ID {
+			case l.TxnIDs[0]:
+				copy := txn
+				original = &copy
+			case l.TxnIDs[1]:
+				copy := txn
+				refund = &copy
+			}
+		}
+		if (original == nil) != (refund == nil) {
+			return fmt.Errorf("appstate: refund pair transactions must both exist")
+		}
+		if original != nil {
+			if !original.IsExpense() {
+				return fmt.Errorf("appstate: refund pair original must be an expense")
+			}
+			if !refund.IsIncome() {
+				return fmt.Errorf("appstate: refund pair refund must be income")
+			}
+			if !strings.EqualFold(strings.TrimSpace(original.Amount.Currency), strings.TrimSpace(refund.Amount.Currency)) {
+				return fmt.Errorf("appstate: refund pair transactions must use the same currency")
+			}
+			if l.Amount.Amount != 0 {
+				if !strings.EqualFold(strings.TrimSpace(l.Amount.Currency), strings.TrimSpace(original.Amount.Currency)) {
+					return fmt.Errorf("appstate: refund amount must use the original transaction currency")
+				}
+				if l.Amount.Amount < 0 || l.Amount.Amount > absTxnAmount(original.Amount.Amount) || l.Amount.Amount > refund.Amount.Amount {
+					return fmt.Errorf("appstate: refund amount must be non-negative and no greater than either transaction")
+				}
+			}
+		}
+		for _, other := range a.TxnLinks() {
+			if other.ID == l.ID || other.Kind != domain.TxnLinkRefundPair || len(other.TxnIDs) != 2 {
+				continue
+			}
+			if other.TxnIDs[0] == l.TxnIDs[0] || other.TxnIDs[1] == l.TxnIDs[1] {
+				return fmt.Errorf("appstate: transaction is already in another refund pair")
+			}
 		}
 	case domain.TxnLinkBillMatch:
 		// A bill-match ties ONE transaction to ONE recurring occurrence (TX9): the
@@ -129,6 +178,9 @@ func (a *App) SyncTxnLinkNetting() {
 // DeleteTxnLink removes a transaction link by id, releasing its members. The
 // transactions are never deleted — only the relation between them.
 func (a *App) DeleteTxnLink(linkID string) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
 	if strings.TrimSpace(linkID) == "" {
 		return fmt.Errorf("appstate: transaction-link id is required")
 	}
@@ -137,4 +189,11 @@ func (a *App) DeleteTxnLink(linkID string) error {
 	}
 	a.SyncTxnLinkNetting()
 	return nil
+}
+
+func absTxnAmount(amount int64) int64 {
+	if amount < 0 {
+		return -amount
+	}
+	return amount
 }

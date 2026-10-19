@@ -179,15 +179,26 @@ func TestPutSettingsAndRedactedExport(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ExportJSON: %v", err)
 	}
-	if !bytes.Contains(full, []byte("sk-secret")) {
-		t.Error("the manual export should keep the key")
+	for name, export := range map[string]func() ([]byte, error){
+		"manual":              a.ExportJSON,
+		"redacted":            a.ExportJSONRedacted,
+		"with blobs":          a.ExportJSONWithBlobs,
+		"redacted with blobs": a.ExportJSONRedactedWithBlobs,
+	} {
+		data, err := export()
+		if err != nil {
+			t.Errorf("%s export: %v", name, err)
+			continue
+		}
+		if bytes.Contains(data, []byte("sk-secret")) {
+			t.Errorf("%s export must not contain the OpenAI key", name)
+		}
 	}
-	red, err := a.ExportJSONRedacted()
-	if err != nil {
-		t.Fatalf("ExportJSONRedacted: %v", err)
+	if err := a.ImportJSON(full); err != nil {
+		t.Fatalf("ImportJSON: %v", err)
 	}
-	if bytes.Contains(red, []byte("sk-secret")) {
-		t.Error("the redacted export must not contain the key")
+	if got := a.Settings().OpenAIKey; got != "sk-secret" {
+		t.Errorf("OpenAI key after importing keyless export = %q, want it preserved in memory", got)
 	}
 }
 

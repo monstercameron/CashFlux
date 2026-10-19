@@ -37,6 +37,13 @@ and every commit updates this file under `Unreleased`.
   follows the calendar, and empty values sort last (`txnfilter`, `savedtxnview`); calendar projection
   covers whole weeks (`txncalendar`); payee clean-up strips processor prefixes (`payeeclean`); theme
   tokens for the money tones (`theme`).
+- **Store and app state: atomic batches, audit trail, quarantine, device-only AI key.** Bulk
+  transaction writes run as one batch and report what did not apply (`DeleteTransactionsBulk` now
+  returns the failures); transfer, link and settlement edits are atomic; a transaction audit trail
+  records who changed what; recurring tasks complete atomically; a ledger snapshot backs undo. An
+  unreadable stored dataset is quarantined instead of being replaced by the sample (SV0.4). The OpenAI
+  key is never exported, synced, checkpointed or restored with data, and an import keeps the key
+  already in memory (SV0.8).
 
 ## [1.18.0] - 2026-08-31
 

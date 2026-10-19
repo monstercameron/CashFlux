@@ -143,19 +143,19 @@ func (a *App) Log() *slog.Logger { return a.log }
 // LogRing returns the in-app log ring buffer.
 func (a *App) LogRing() *logging.Ring { return a.ring }
 
-// ExportJSON serializes the whole dataset.
+// ExportJSON serializes the whole dataset with device credentials removed.
 func (a *App) ExportJSON() ([]byte, error) {
 	ds, err := a.store.Snapshot()
 	if err != nil {
 		return nil, err
 	}
+	ds.Settings.OpenAIKey = ""
 	return store.Export(ds)
 }
 
-// ExportJSONRedacted serializes the whole dataset for local persistence with the
-// OpenAI key removed, so the secret is never written to localStorage (it stays
-// session-only). The manual ExportJSON keeps the key, so a user's own backup is
-// complete.
+// ExportJSONRedacted serializes the whole dataset with the device credential
+// removed. It is retained for callers that distinguish local snapshots from
+// manual exports; both formats omit credentials.
 func (a *App) ExportJSONRedacted() ([]byte, error) {
 	ds, err := a.store.Snapshot()
 	if err != nil {
@@ -170,6 +170,11 @@ func (a *App) ImportJSON(data []byte) error {
 	ds, err := store.Import(data)
 	if err != nil {
 		return err
+	}
+	// OpenAI credentials belong to this device, so dataset imports (sync pulls,
+	// restores and user imports) cannot replace the live credential.
+	if key := a.Settings().OpenAIKey; key != "" {
+		ds.Settings.OpenAIKey = key
 	}
 	if err := a.store.Load(ds); err != nil {
 		return err
@@ -502,7 +507,7 @@ type appReadCaches struct {
 	members      revCache[domain.Member]
 	accounts     revCache[domain.Account]
 	categories   revCache[domain.Category]
-	transactions revCache[domain.Transaction]
+	transactions ledgerSnapshotCache
 	budgets      revCache[domain.Budget]
 	goals        revCache[domain.Goal]
 	tasks        revCache[domain.Task]
@@ -551,12 +556,43 @@ func (a *App) Categories() []domain.Category {
 		return catname.Sorted(v)
 	})
 }
+
+// Transactions returns the ledger snapshot for the current store revision.
+// The returned slice and its nested values are shared and read-only; callers must
+// not mutate them. Repeated calls within one revision return the same backing array.
 func (a *App) Transactions() []domain.Transaction {
 	return a.reads.transactions.get(a.store.Rev(), func() []domain.Transaction {
 		v, err := a.store.ListTransactions()
 		a.logErr("transactions", err)
 		return v
+	}).rows
+}
+
+// TransactionsByAccount returns the transactions whose primary account matches accountID.
+// The returned slice and its nested values are shared and read-only; callers must not
+// mutate them. The slice is cached for the current store mutation revision.
+func (a *App) TransactionsByAccount(accountID string) []domain.Transaction {
+	return a.reads.transactions.get(a.store.Rev(), func() []domain.Transaction {
+		v, err := a.store.ListTransactions()
+		a.logErr("transactions by account", err)
+		return v
+	}).byAccount[accountID]
+}
+
+// TransactionByID returns a transaction by ID using the current revision's ledger index.
+// The returned transaction and any nested slices are shared and read-only; callers must
+// not mutate them. The boolean is false when no transaction has that ID.
+func (a *App) TransactionByID(id string) (domain.Transaction, bool) {
+	snapshot := a.reads.transactions.get(a.store.Rev(), func() []domain.Transaction {
+		v, err := a.store.ListTransactions()
+		a.logErr("transaction by id", err)
+		return v
 	})
+	index, ok := snapshot.byID[id]
+	if !ok {
+		return domain.Transaction{}, false
+	}
+	return snapshot.rows[index], true
 }
 func (a *App) Budgets() []domain.Budget {
 	return a.reads.budgets.get(a.store.Rev(), func() []domain.Budget {
@@ -2853,9 +2889,37 @@ func (a *App) RestoreTransactions(txns []domain.Transaction) error {
 // leaving the other account permanently short.
 func (a *App) ExpandTransferPairs(ids []string) []string {
 	all := a.Transactions()
+	return expandTransferPairs(all, ids, a.transactionPairRates())
+}
+
+func (a *App) transactionPairRates() currency.Rates {
+	s := a.Settings()
+	base := s.BaseCurrency
+	if base == "" {
+		base = "USD"
+	}
+	return currency.Rates{Base: base, Rates: s.FXRates}
+}
+
+func expandTransferPairs(all []domain.Transaction, ids []string, rates currency.Rates) []string {
 	byID := make(map[string]domain.Transaction, len(all))
+	grouped := make(map[string]map[transferDirection]domain.Transaction)
+	legacy := make(map[legacyTransferIndexKey]domain.Transaction)
 	for _, t := range all {
 		byID[t.ID] = t
+		if !t.IsTransfer() {
+			continue
+		}
+		if t.TransferGroupID != "" {
+			if grouped[t.TransferGroupID] == nil {
+				grouped[t.TransferGroupID] = make(map[transferDirection]domain.Transaction)
+			}
+			grouped[t.TransferGroupID][transferDirectionKey(t)] = t
+			continue
+		}
+		if key, ok := legacyTransferPairKey(t, rates); ok {
+			legacy[key] = t
+		}
 	}
 	seen := make(map[string]bool, len(ids))
 	out := make([]string, 0, len(ids))
@@ -2868,8 +2932,18 @@ func (a *App) ExpandTransferPairs(ids []string) []string {
 	for _, id := range ids {
 		add(id)
 		if t, ok := byID[id]; ok && t.IsTransfer() {
-			for _, u := range all {
-				if isReciprocalTransferLeg(t, u) {
+			var candidates []domain.Transaction
+			if t.TransferGroupID != "" {
+				if candidate, ok := grouped[t.TransferGroupID][transferDirectionKey(t).reverse()]; ok {
+					candidates = append(candidates, candidate)
+				}
+			} else if key, ok := legacyTransferPairKey(t, rates); ok {
+				if candidate, exists := legacy[reverseLegacyTransferKey(key)]; exists {
+					candidates = append(candidates, candidate)
+				}
+			}
+			for _, u := range candidates {
+				if isReciprocalTransferLegWithRates(t, u, rates) {
 					add(u.ID)
 					break
 				}
@@ -2879,23 +2953,42 @@ func (a *App) ExpandTransferPairs(ids []string) []string {
 	return out
 }
 
-func (a *App) DeleteTransactionsBulk(ids []string) error {
-	toDel := make(map[string]bool, len(ids))
-	for _, id := range a.ExpandTransferPairs(ids) {
-		toDel[id] = true
+// DeleteTransactionsBulk removes the selected transactions and any transfer
+// partners atomically. It returns only the IDs that were actually deleted.
+func (a *App) DeleteTransactionsBulk(ids []string) ([]string, error) {
+	if err := a.roleGuard(); err != nil {
+		return nil, err
 	}
-	var firstErr error
-	a.BulkMutate(func() {
-		for id := range toDel {
-			if err := a.DeleteTransaction(id); err != nil && firstErr == nil {
-				firstErr = err
-			}
-		}
-	})
-	return firstErr
+	all := a.Transactions()
+	toDel := expandTransferPairs(all, ids, a.transactionPairRates())
+	return a.deleteTransactionsAtomic(toDel)
+}
+
+// DeleteTransactionsBulkExpanded deletes an already-expanded transaction set
+// atomically and returns the IDs that were actually deleted. It lets callers
+// use one pre-delete snapshot for both undo capture and deletion.
+func (a *App) DeleteTransactionsBulkExpanded(ids []string) ([]string, error) {
+	if err := a.roleGuard(); err != nil {
+		return nil, err
+	}
+	return a.deleteTransactionsAtomic(ids)
+}
+
+func (a *App) deleteTransactionsAtomic(ids []string) ([]string, error) {
+	deleted, err := a.store.DeleteTransactionsAtomic(ids)
+	if err != nil {
+		return nil, err
+	}
+	if len(deleted) > 0 {
+		a.fireTxnMutated()
+	}
+	return deleted, nil
 }
 
 func (a *App) DeleteTransactionWithTransferPair(id string) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
 	all := a.Transactions()
 	var target domain.Transaction
 	found := false
@@ -2905,27 +2998,21 @@ func (a *App) DeleteTransactionWithTransferPair(id string) error {
 			break
 		}
 	}
-	// Suppress per-leg firings; we'll fire once below after both legs are gone.
-	prev := a.suppressTxnObservers
-	a.suppressTxnObservers = true
-	err := a.DeleteTransaction(id)
-	if err != nil {
-		a.suppressTxnObservers = prev
-		return err
-	}
+	ids := []string{id}
 	if found && target.IsTransfer() {
-		for _, t := range all {
-			if isReciprocalTransferLeg(target, t) {
-				if err2 := a.DeleteTransaction(t.ID); err2 != nil {
-					a.suppressTxnObservers = prev
-					return err2
-				}
-				break
+		for _, partnerID := range expandTransferPairs(all, []string{id}, a.transactionPairRates())[1:] {
+			if partnerID != id {
+				ids = append(ids, partnerID)
 			}
 		}
 	}
-	a.suppressTxnObservers = prev
-	a.fireTxnMutated()
+	deleted, err := a.store.DeleteTransactionsAtomic(ids)
+	if err != nil {
+		return err
+	}
+	if len(deleted) > 0 {
+		a.fireTxnMutated()
+	}
 	return nil
 }
 
@@ -2938,10 +3025,15 @@ func (a *App) DeleteTransactionWithTransferPair(id string) error {
 // orphaned its partner), and a cross-currency pair NEVER matches it, because the
 // two legs carry different magnitudes by design.
 //
-// The resemblance test remains for rows written before the id existed and for a
-// leg someone classified by hand from an import. It is a fallback, not a peer:
-// a group id that disagrees with it wins.
+// The legacy fallback remains for rows written before the id existed and for a
+// leg someone classified by hand from an import. It requires exact amounts in
+// one currency, or equal FX-converted base amounts when rates are available. A
+// group id that disagrees with it wins.
 func isReciprocalTransferLeg(target, candidate domain.Transaction) bool {
+	return isReciprocalTransferLegWithRates(target, candidate, currency.Rates{})
+}
+
+func isReciprocalTransferLegWithRates(target, candidate domain.Transaction, rates currency.Rates) bool {
 	if candidate.ID == target.ID || !candidate.IsTransfer() {
 		return false
 	}
@@ -2951,10 +3043,65 @@ func isReciprocalTransferLeg(target, candidate domain.Transaction) bool {
 		// adopt a look-alike, which is how an unrelated row gets mutated.
 		return target.TransferGroupID != "" && target.TransferGroupID == candidate.TransferGroupID
 	}
-	return candidate.AccountID == target.TransferAccountID &&
-		candidate.TransferAccountID == target.AccountID &&
-		candidate.Amount.Amount == -target.Amount.Amount &&
-		candidate.Date.Equal(target.Date)
+	if candidate.AccountID != target.TransferAccountID ||
+		candidate.TransferAccountID != target.AccountID || !candidate.Date.Equal(target.Date) ||
+		candidate.Amount.IsNegative() == target.Amount.IsNegative() {
+		return false
+	}
+	if candidate.Amount.Currency == target.Amount.Currency {
+		return candidate.Amount.Amount == -target.Amount.Amount
+	}
+	if rates.Base == "" {
+		return false
+	}
+	targetBase, err := rates.Convert(target.Amount.Abs(), rates.Base)
+	if err != nil {
+		return false
+	}
+	candidateBase, err := rates.Convert(candidate.Amount.Abs(), rates.Base)
+	return err == nil && candidateBase.Amount == targetBase.Amount
+}
+
+func legacyTransferPairKey(t domain.Transaction, rates currency.Rates) (legacyTransferIndexKey, bool) {
+	if t.TransferGroupID != "" || !t.IsTransfer() || t.TransferAccountID == "" {
+		return legacyTransferIndexKey{}, false
+	}
+	abs := t.Amount.Abs()
+	amount, currencyCode := abs.Amount, abs.Currency
+	if rates.Base != "" {
+		if converted, err := rates.Convert(abs, rates.Base); err == nil {
+			amount, currencyCode = converted.Amount, rates.Base
+		}
+	}
+	key := legacyTransferIndexKey{AccountID: t.AccountID, TransferAccountID: t.TransferAccountID,
+		Date: t.Date.UnixNano(), Currency: currencyCode, Amount: amount, Negative: t.Amount.IsNegative()}
+	return key, true
+}
+
+type legacyTransferIndexKey struct {
+	AccountID, TransferAccountID string
+	Date                         int64
+	Currency                     string
+	Amount                       int64
+	Negative                     bool
+}
+
+func reverseLegacyTransferKey(key legacyTransferIndexKey) legacyTransferIndexKey {
+	key.AccountID, key.TransferAccountID = key.TransferAccountID, key.AccountID
+	key.Negative = !key.Negative
+	return key
+}
+
+type transferDirection struct {
+	AccountID, TransferAccountID string
+}
+
+func transferDirectionKey(t domain.Transaction) transferDirection {
+	return transferDirection{AccountID: t.AccountID, TransferAccountID: t.TransferAccountID}
+}
+
+func (k transferDirection) reverse() transferDirection {
+	return transferDirection{AccountID: k.TransferAccountID, TransferAccountID: k.AccountID}
 }
 
 func (a *App) PutBudget(b domain.Budget) error {
@@ -3185,6 +3332,9 @@ func (a *App) DeleteTask(id string) error {
 // Re-opening a done task (StatusDone → StatusOpen) must go through PutTask
 // directly; only the open→done transition spawns a successor.
 func (a *App) CompleteTask(taskID, nextID string, now time.Time) error {
+	if err := a.roleGuard(); err != nil {
+		return err
+	}
 	tasks := a.Tasks()
 	var found domain.Task
 	var ok bool
@@ -3199,14 +3349,16 @@ func (a *App) CompleteTask(taskID, nextID string, now time.Time) error {
 		return fmt.Errorf("task %q not found", taskID)
 	}
 	found.Status = domain.StatusDone
-	if err := a.PutTask(found); err != nil {
-		return fmt.Errorf("complete task: %w", err)
-	}
 	if next, spawn := taskrecur.NextOccurrence(found, nextID, now); spawn {
-		if err := a.PutTask(next); err != nil {
-			return fmt.Errorf("spawn next occurrence: %w", err)
+		if is := validate.ValidateTask(next); !is.OK() {
+			return fmt.Errorf("spawn next occurrence: %w", is)
+		}
+		if err := a.store.PutTasksAtomic(found, next); err != nil {
+			return fmt.Errorf("complete recurring task: %w", err)
 		}
 		a.log.Info("spawned recurring task", "from", taskID, "next", next.ID, "due", next.Due)
+	} else if err := a.PutTask(found); err != nil {
+		return fmt.Errorf("complete task: %w", err)
 	}
 	return nil
 }
