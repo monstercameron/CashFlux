@@ -90,6 +90,8 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Flex evaluation is split into small tested steps (CSFLEX).** Category indexing, pooled and per-category spending, FX and expected
+  occurrences are separate functions with their own tests; behaviour is unchanged.
 - **Statements decode in any common encoding (IME).** UTF-8 with BOM, UTF-16 and Windows-1252 statement files decode correctly, and OFX
   transaction IDs are carried through parsing for duplicate detection.
 - **The Split dialog lays out its rows (TV8D).** Split rows use a grid again so fields sit side by side, and the receipt action no longer

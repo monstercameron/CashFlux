@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/smoothing"
@@ -101,10 +102,33 @@ type FlexView struct {
 // recurring occurrences, and non-monthly categories show their smoothed accrual.
 // flexTarget is the single flex number (minor units) in the base currency.
 func EvaluateFlex(cats []domain.Category, ledger NettedLedger, recurrings []domain.Recurring, flexTarget int64, rates currency.Rates, start, end time.Time) (FlexView, error) {
-	base := rates.Base
-	if base == "" {
+	if rates.Base == "" {
 		return FlexView{}, fmt.Errorf("evaluate flex: base currency is empty")
 	}
+	categories := indexFlexCategories(cats)
+	spent, err := flexPoolSpending(categories, ledger, rates, start, end)
+	if err != nil {
+		return FlexView{}, err
+	}
+	spentByCat, err := flexCategorySpending(categories, ledger, rates, start, end)
+	if err != nil {
+		return FlexView{}, err
+	}
+	recurring, err := flexRecurringAmounts(categories, recurrings, rates, start, end)
+	if err != nil {
+		return FlexView{}, err
+	}
+	return assembleFlexView(categories, spent, spentByCat, recurring, flexTarget)
+}
+
+type flexCategoryIndex struct {
+	classByCat map[string]domain.CategoryClass
+	nameByCat  map[string]string
+	ownerByCat map[string]flexCategoryOwner
+	flexRoots  []string
+}
+
+func indexFlexCategories(cats []domain.Category) flexCategoryIndex {
 	// Index each expense category by its effective class.
 	classByCat := map[string]domain.CategoryClass{}
 	nameByCat := map[string]string{}
@@ -122,73 +146,96 @@ func EvaluateFlex(cats []domain.Category, ledger NettedLedger, recurrings []doma
 		}
 	}
 
+	return flexCategoryIndex{classByCat: classByCat, nameByCat: nameByCat, ownerByCat: ownerByCat, flexRoots: flexRoots}
+}
+
+// flexPoolSpending applies the common contribution rules to the entire flex pool.
+func flexPoolSpending(categories flexCategoryIndex, ledger NettedLedger, rates currency.Rates, start, end time.Time) (money.Money, error) {
+	base := rates.Base
 	// Net refunds once, then ask the common contribution predicate to select flex
 	// lines. This preserves report exclusions, signed split netting, and category
 	// descendants before converting each contribution into the display currency.
-	flexBudget := domain.Budget{CategoryIDs: flexRoots}
-	flexCovers := make(map[string]bool, len(ownerByCat))
-	for id, owner := range ownerByCat {
+	flexBudget := domain.Budget{CategoryIDs: categories.flexRoots}
+	flexCovers := make(map[string]bool, len(categories.ownerByCat))
+	for id, owner := range categories.ownerByCat {
 		if owner.class == domain.ClassFlex {
 			flexCovers[id] = true
 		}
 	}
 	flexSpent := money.Zero(base)
 	for _, t := range ledger {
-		if !inWindow(t.Date, start, end) {
+		if !dateutil.InRange(t.Date, start, end) {
 			continue
 		}
 		contribution, ok, err := ContributionChecked(flexBudget, t, func(id string) bool { return flexCovers[id] })
 		if err != nil {
-			return FlexView{}, fmt.Errorf("evaluate flex transaction %q: %w", t.ID, err)
+			return money.Money{}, fmt.Errorf("evaluate flex transaction %q: %w", t.ID, err)
 		}
 		if !ok {
 			continue
 		}
 		converted, err := rates.Convert(contribution, base)
 		if err != nil {
-			return FlexView{}, fmt.Errorf("convert flex transaction %q: %w", t.ID, err)
+			return money.Money{}, fmt.Errorf("convert flex transaction %q: %w", t.ID, err)
 		}
 		flexSpent, err = flexSpent.Add(converted)
 		if err != nil {
-			return FlexView{}, fmt.Errorf("sum flex spending: %w", err)
+			return money.Money{}, fmt.Errorf("sum flex spending: %w", err)
 		}
 	}
 
+	return flexSpent, nil
+}
+
+// flexCategorySpending keeps the checkoff ledgers separate from the pooled total.
+func flexCategorySpending(categories flexCategoryIndex, ledger NettedLedger, rates currency.Rates, start, end time.Time) (map[string]int64, error) {
+	base := rates.Base
 	// Posted expense per category over the window for the checkoff ledgers.
 	spentByCat := map[string]int64{}
-	for catID := range classByCat {
-		if ownerByCat[catID].id != catID {
+	for catID := range categories.classByCat {
+		if categories.ownerByCat[catID].id != catID {
 			continue
 		}
 		budget := domain.Budget{CategoryID: catID}
 		covers := make(map[string]bool)
-		for id, owner := range ownerByCat {
+		for id, owner := range categories.ownerByCat {
 			if owner.id == catID {
 				covers[id] = true
 			}
 		}
 		for _, t := range ledger {
-			if !inWindow(t.Date, start, end) {
+			if !dateutil.InRange(t.Date, start, end) {
 				continue
 			}
 			contribution, ok, err := ContributionChecked(budget, t, func(id string) bool { return covers[id] })
 			if err != nil {
-				return FlexView{}, fmt.Errorf("evaluate flex category %q transaction %q: %w", catID, t.ID, err)
+				return nil, fmt.Errorf("evaluate flex category %q transaction %q: %w", catID, t.ID, err)
 			}
 			if !ok {
 				continue
 			}
 			converted, err := rates.Convert(contribution, base)
 			if err != nil {
-				return FlexView{}, fmt.Errorf("convert flex category %q transaction %q: %w", catID, t.ID, err)
+				return nil, fmt.Errorf("convert flex category %q transaction %q: %w", catID, t.ID, err)
 			}
 			spentByCat[catID], err = money.Add(spentByCat[catID], converted.Amount)
 			if err != nil {
-				return FlexView{}, fmt.Errorf("sum flex category %q spending: %w", catID, err)
+				return nil, fmt.Errorf("sum flex category %q spending: %w", catID, err)
 			}
 		}
 	}
 
+	return spentByCat, nil
+}
+
+type flexRecurringTotals struct {
+	expectedByCat map[string]int64
+	accrualByCat  map[string]int64
+}
+
+// flexRecurringAmounts reserves fixed occurrences and smoothed monthly accruals.
+func flexRecurringAmounts(categories flexCategoryIndex, recurrings []domain.Recurring, rates currency.Rates, start, end time.Time) (flexRecurringTotals, error) {
+	base := rates.Base
 	// Expected recurring charges per fixed category, and accruals per non-monthly.
 	expectedByCat := map[string]int64{}
 	accrualByCat := map[string]int64{}
@@ -196,18 +243,18 @@ func EvaluateFlex(cats []domain.Category, ledger NettedLedger, recurrings []doma
 		if r.CategoryID == "" {
 			continue
 		}
-		if _, ok := classByCat[r.CategoryID]; !ok {
+		if _, ok := categories.classByCat[r.CategoryID]; !ok {
 			continue
 		}
-		owner := ownerByCat[r.CategoryID]
+		owner := categories.ownerByCat[r.CategoryID]
 		class := owner.class
 		magnitude, err := r.Amount.AbsChecked()
 		if err != nil {
-			return FlexView{}, fmt.Errorf("recurring %q amount: %w", r.ID, err)
+			return flexRecurringTotals{}, fmt.Errorf("recurring %q amount: %w", r.ID, err)
 		}
 		mag, err := rates.Convert(magnitude, base)
 		if err != nil {
-			return FlexView{}, fmt.Errorf("convert recurring %q: %w", r.ID, err)
+			return flexRecurringTotals{}, fmt.Errorf("convert recurring %q: %w", r.ID, err)
 		}
 		if mag.Amount == 0 {
 			continue
@@ -216,27 +263,33 @@ func EvaluateFlex(cats []domain.Category, ledger NettedLedger, recurrings []doma
 		case domain.ClassFixed:
 			amount, err := money.Mul(mag.Amount, int64(len(smoothing.OccurrencesIn(r, start, end))))
 			if err != nil {
-				return FlexView{}, fmt.Errorf("calculate recurring %q occurrences: %w", r.ID, err)
+				return flexRecurringTotals{}, fmt.Errorf("calculate recurring %q occurrences: %w", r.ID, err)
 			}
 			expectedByCat[owner.id], err = money.Add(expectedByCat[owner.id], amount)
 			if err != nil {
-				return FlexView{}, fmt.Errorf("sum expected recurring for %q: %w", owner.id, err)
+				return flexRecurringTotals{}, fmt.Errorf("sum expected recurring for %q: %w", owner.id, err)
 			}
 		case domain.ClassNonMonthly:
 			if r.Smooths() {
 				accrual := money.New(smoothing.MonthlyAccrual(r), r.Amount.Currency)
 				accrual, err = rates.Convert(accrual, base)
 				if err != nil {
-					return FlexView{}, fmt.Errorf("convert recurring accrual %q: %w", r.ID, err)
+					return flexRecurringTotals{}, fmt.Errorf("convert recurring accrual %q: %w", r.ID, err)
 				}
 				accrualByCat[owner.id], err = money.Add(accrualByCat[owner.id], accrual.Amount)
 				if err != nil {
-					return FlexView{}, fmt.Errorf("sum recurring accrual for %q: %w", owner.id, err)
+					return flexRecurringTotals{}, fmt.Errorf("sum recurring accrual for %q: %w", owner.id, err)
 				}
 			}
 		}
 	}
 
+	return flexRecurringTotals{expectedByCat: expectedByCat, accrualByCat: accrualByCat}, nil
+}
+
+// assembleFlexView derives the remaining pool and name-sorted checkoff rows.
+func assembleFlexView(categories flexCategoryIndex, flexSpent money.Money, spentByCat map[string]int64, recurring flexRecurringTotals, flexTarget int64) (FlexView, error) {
+	base := flexSpent.Currency
 	view := FlexView{
 		Target:    money.New(flexTarget, base),
 		Spent:     flexSpent,
@@ -251,17 +304,17 @@ func EvaluateFlex(cats []domain.Category, ledger NettedLedger, recurrings []doma
 
 	// Build fixed + non-monthly rows for each class owner, even with no recurring
 	// or spending yet, so the checklist is complete and stable without duplicates.
-	for catID, class := range classByCat {
-		if ownerByCat[catID].id != catID {
+	for catID, class := range categories.classByCat {
+		if categories.ownerByCat[catID].id != catID {
 			continue
 		}
 		switch class {
 		case domain.ClassFixed:
-			exp := expectedByCat[catID]
+			exp := recurring.expectedByCat[catID]
 			act := spentByCat[catID]
 			view.Fixed = append(view.Fixed, FixedRow{
 				CategoryID:   catID,
-				CategoryName: nameByCat[catID],
+				CategoryName: categories.nameByCat[catID],
 				Expected:     money.New(exp, base),
 				Actual:       money.New(act, base),
 				Paid:         fixedPaid(exp, act),
@@ -269,8 +322,8 @@ func EvaluateFlex(cats []domain.Category, ledger NettedLedger, recurrings []doma
 		case domain.ClassNonMonthly:
 			view.NonMonthly = append(view.NonMonthly, NonMonthlyRow{
 				CategoryID:   catID,
-				CategoryName: nameByCat[catID],
-				Accrual:      money.New(accrualByCat[catID], base),
+				CategoryName: categories.nameByCat[catID],
+				Accrual:      money.New(recurring.accrualByCat[catID], base),
 				Spent:        money.New(spentByCat[catID], base),
 			})
 		}
@@ -297,10 +350,6 @@ func flexCategoryOwners(cats []domain.Category) map[string]flexCategoryOwner {
 		owners[c.ID] = flexCategoryOwner{id: c.ID, class: c.ClassOf()}
 	}
 	return owners
-}
-
-func inWindow(date, start, end time.Time) bool {
-	return !date.Before(start) && date.Before(end)
 }
 
 // fixedPaid reports whether a fixed commitment reads as settled: actual spending

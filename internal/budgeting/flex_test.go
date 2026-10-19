@@ -3,7 +3,11 @@
 package budgeting
 
 import (
+	"encoding/json"
+	"errors"
 	"math"
+	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -245,5 +249,319 @@ func TestFixedPaidDoesNotOverflowNearMaxInt64(t *testing.T) {
 	}
 	if !fixedPaid(math.MaxInt64, math.MaxInt64-amountTolerance(math.MaxInt64)) {
 		t.Fatal("a payment within tolerance must be settled without overflowing")
+	}
+}
+
+func TestEvaluateFlexEmptyAndTargetLimits(t *testing.T) {
+	for _, target := range []int64{0, -1, 1, math.MinInt64, math.MaxInt64} {
+		t.Run(money.FormatMinor(target, 0), func(t *testing.T) {
+			got := evaluateFlexForTest(t, nil, nil, nil, target, "USD", time.Time{}, time.Time{})
+			want := FlexView{Target: money.New(target, "USD"), Spent: money.Zero("USD"), Remaining: money.New(target, "USD"), Over: target < 0}
+			if !reflect.DeepEqual(got, want) {
+				t.Fatalf("empty evaluation = %+v, want %+v", got, want)
+			}
+		})
+	}
+}
+
+func TestEvaluateFlexWindowBoundaries(t *testing.T) {
+	start, end := flexDate(2028, 2, 1), flexDate(2028, 3, 1)
+	west := time.FixedZone("west", -5*60*60)
+	tests := []struct {
+		name       string
+		start, end time.Time
+		date       time.Time
+		want       int64
+	}{
+		{"start included", start, end, start, 100},
+		{"before start excluded", start, end, start.Add(-time.Nanosecond), 0},
+		{"end excluded", start, end, end, 0},
+		{"before end included", start, end, end.Add(-time.Nanosecond), 100},
+		{"leap month end", start, end, flexDate(2028, 2, 29), 100},
+		{"same start instant in another zone", start, end, start.In(west), 100},
+		{"same end instant in another zone", start, end, end.In(west), 0},
+		{"empty window", start, start, start, 0},
+		{"reversed window", end, start, start, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cats := []domain.Category{flexCat("f", "Flex", domain.ClassFlex), flexCat("b", "Bill", domain.ClassFixed)}
+			txns := []domain.Transaction{flexTxn("f", -100, tt.date), flexTxn("b", -100, tt.date)}
+			got := evaluateFlexForTest(t, cats, txns, nil, 1000, "USD", tt.start, tt.end)
+			if got.Spent.Amount != tt.want || got.Fixed[0].Actual.Amount != tt.want {
+				t.Fatalf("window evaluation = %+v, want flex and fixed spending %d", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEvaluateFlexRecurringAndRows(t *testing.T) {
+	start, end := flexDate(2028, 2, 1), flexDate(2028, 3, 1)
+	cats := []domain.Category{
+		flexCat("z", "Z bill", domain.ClassFixed), flexCat("a", "A bill", domain.ClassFixed),
+		flexCat("q", "Quarterly", domain.ClassNonMonthly), flexCat("y", "Annual", domain.ClassNonMonthly),
+		flexCat("f", "Flex", domain.ClassFlex), {ID: "income", Kind: domain.KindIncome},
+	}
+	rec := func(id, cat string, amount int64, cadence domain.RecurringCadence, smooth bool) domain.Recurring {
+		return domain.Recurring{ID: id, CategoryID: cat, Amount: money.New(amount, "USD"), Cadence: cadence, NextDue: flexDate(2028, 2, 29), SmoothIntoBudgets: smooth}
+	}
+	recs := []domain.Recurring{
+		rec("monthly", "z", -100, domain.CadenceMonthly, false), rec("positive", "z", 200, domain.CadenceMonthly, false),
+		rec("quarterly", "q", -300, domain.CadenceQuarterly, true), rec("yearly", "y", 1200, domain.CadenceYearly, true),
+		rec("not smoothed", "q", -999, domain.CadenceMonthly, true), rec("zero", "z", 0, domain.CadenceMonthly, false),
+		rec("flex", "f", -100, domain.CadenceMonthly, false), rec("income", "income", math.MinInt64, domain.CadenceMonthly, false),
+		rec("unknown", "missing", math.MinInt64, domain.CadenceMonthly, false), rec("unassigned", "", math.MinInt64, domain.CadenceMonthly, false),
+	}
+	recs = append(recs, domain.Recurring{ID: "no due date", CategoryID: "a", Amount: money.New(-100, "USD")})
+	got := evaluateFlexForTest(t, cats, []domain.Transaction{flexTxn("z", -300, start)}, recs, 1000, "USD", start, end)
+	wantFixed := []FixedRow{
+		{CategoryID: "a", CategoryName: "A bill", Expected: money.Zero("USD"), Actual: money.Zero("USD")},
+		{CategoryID: "z", CategoryName: "Z bill", Expected: money.New(300, "USD"), Actual: money.New(300, "USD"), Paid: true},
+	}
+	wantNonMonthly := []NonMonthlyRow{
+		{CategoryID: "y", CategoryName: "Annual", Accrual: money.New(100, "USD"), Spent: money.Zero("USD")},
+		{CategoryID: "q", CategoryName: "Quarterly", Accrual: money.New(100, "USD"), Spent: money.Zero("USD")},
+	}
+	if !reflect.DeepEqual(got.Fixed, wantFixed) || !reflect.DeepEqual(got.NonMonthly, wantNonMonthly) {
+		t.Fatalf("rows = %+v / %+v, want %+v / %+v", got.Fixed, got.NonMonthly, wantFixed, wantNonMonthly)
+	}
+}
+
+func TestEvaluateFlexRecurringFX(t *testing.T) {
+	start, end := flexDate(2026, 6, 1), flexDate(2026, 7, 1)
+	for _, class := range []domain.CategoryClass{domain.ClassFixed, domain.ClassNonMonthly} {
+		t.Run(string(class), func(t *testing.T) {
+			cats := []domain.Category{flexCat("c", "Category", class)}
+			recs := []domain.Recurring{{ID: "foreign", CategoryID: "c", Amount: money.New(-12000, "EUR"), Cadence: domain.CadenceYearly, NextDue: start, SmoothIntoBudgets: true}}
+			rates := currency.Rates{Base: "USD", Rates: map[string]float64{"EUR": 1.5}}
+			got, err := EvaluateFlex(cats, NewNettedLedger([]domain.Transaction{flexTxn("c", -100, start)}), recs, 0, rates, start, end)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if class == domain.ClassFixed && got.Fixed[0].Expected.Amount != 18000 {
+				t.Fatalf("expected = %+v", got.Fixed)
+			}
+			if class == domain.ClassNonMonthly && got.NonMonthly[0].Accrual.Amount != 1500 {
+				t.Fatalf("accrual = %+v", got.NonMonthly)
+			}
+		})
+	}
+}
+
+func TestEvaluateFlexFailureContexts(t *testing.T) {
+	start, end := flexDate(2026, 6, 1), flexDate(2026, 7, 1)
+	badSplit := flexTxn("c", -1, start)
+	badSplit.Splits = []domain.CategorySplit{{CategoryID: "c", Amount: money.New(-1, "USD")}, {CategoryID: "c", Amount: money.New(-1, "EUR")}}
+	for _, class := range []domain.CategoryClass{domain.ClassFlex, domain.ClassFixed, domain.ClassNonMonthly} {
+		t.Run(string(class), func(t *testing.T) {
+			prefix := "evaluate flex transaction"
+			convertPrefix, sumPrefix := "convert flex transaction", "sum flex spending"
+			if class != domain.ClassFlex {
+				prefix = "evaluate flex category"
+				convertPrefix, sumPrefix = "convert flex category", "sum flex category"
+			}
+			tests := []struct {
+				name  string
+				txns  []domain.Transaction
+				want  string
+				cause error
+			}{
+				{"negation overflow", []domain.Transaction{flexTxn("c", math.MinInt64, start)}, prefix, money.ErrOverflow},
+				{"mixed split currencies", []domain.Transaction{badSplit}, prefix, money.ErrCurrencyMismatch},
+				{"missing FX", []domain.Transaction{{ID: "eur", Date: start, CategoryID: "c", Amount: money.New(-100, "EUR")}}, convertPrefix, currency.ErrUnknownRate},
+				{"sum overflow", []domain.Transaction{flexTxn("c", -math.MaxInt64, start), flexTxn("c", -1, start)}, sumPrefix, money.ErrOverflow},
+			}
+			for _, tt := range tests {
+				t.Run(tt.name, func(t *testing.T) {
+					got, err := EvaluateFlex([]domain.Category{flexCat("c", "Category", class)}, NewNettedLedger(tt.txns), nil, 0, currency.Rates{Base: "USD"}, start, end)
+					assertFlexError(t, got, err, tt.want, tt.cause)
+				})
+			}
+		})
+	}
+}
+
+func assertFlexError(t *testing.T, got FlexView, err error, prefix string, cause error) {
+	t.Helper()
+	if err == nil || !strings.HasPrefix(err.Error(), prefix) || cause != nil && !errors.Is(err, cause) {
+		t.Fatalf("error = %v, want prefix %q and cause %v", err, prefix, cause)
+	}
+	if !reflect.DeepEqual(got, FlexView{}) {
+		t.Fatalf("failure returned partial view: %+v", got)
+	}
+}
+
+func TestEvaluateFlexRecurringFailures(t *testing.T) {
+	start, end := flexDate(2026, 6, 1), flexDate(2026, 7, 1)
+	rec := func(amount int64, code string, cadence domain.RecurringCadence) domain.Recurring {
+		return domain.Recurring{ID: "r", CategoryID: "c", Amount: money.New(amount, code), Cadence: cadence, NextDue: start, SmoothIntoBudgets: true}
+	}
+	large := rec(-math.MaxInt64, "USD", domain.CadenceQuarterly)
+	tests := []struct {
+		name  string
+		class domain.CategoryClass
+		recs  []domain.Recurring
+		want  string
+		cause error
+	}{
+		{"minimum amount", domain.ClassFixed, []domain.Recurring{rec(math.MinInt64, "USD", domain.CadenceMonthly)}, "recurring \"r\" amount:", money.ErrOverflow},
+		{"missing rate", domain.ClassFlex, []domain.Recurring{rec(-1, "EUR", domain.CadenceMonthly)}, "convert recurring \"r\":", currency.ErrUnknownRate},
+		{"zero still needs rate", domain.ClassNonMonthly, []domain.Recurring{rec(0, "EUR", domain.CadenceYearly)}, "convert recurring \"r\":", currency.ErrUnknownRate},
+		{"occurrence multiplication", domain.ClassFixed, []domain.Recurring{rec(-math.MaxInt64, "USD", domain.CadenceDaily)}, "calculate recurring \"r\" occurrences:", money.ErrOverflow},
+		{"expected sum", domain.ClassFixed, []domain.Recurring{rec(-math.MaxInt64, "USD", domain.CadenceMonthly), rec(-1, "USD", domain.CadenceMonthly)}, "sum expected recurring for \"c\":", money.ErrOverflow},
+		{"accrual sum", domain.ClassNonMonthly, []domain.Recurring{large, large, large, large}, "sum recurring accrual for \"c\":", money.ErrOverflow},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := EvaluateFlex([]domain.Category{flexCat("c", "Category", tt.class)}, nil, tt.recs, 0, currency.Rates{Base: "USD"}, start, end)
+			assertFlexError(t, got, err, tt.want, tt.cause)
+		})
+	}
+}
+
+func TestEvaluateFlexBaseAndRemainingFailures(t *testing.T) {
+	start, end := flexDate(2026, 6, 1), flexDate(2026, 7, 1)
+	got, err := EvaluateFlex(nil, nil, nil, 0, currency.Rates{}, start, end)
+	assertFlexError(t, got, err, "evaluate flex: base currency is empty", nil)
+	got, err = EvaluateFlex([]domain.Category{flexCat("c", "Category", domain.ClassFlex)}, NewNettedLedger([]domain.Transaction{flexTxn("c", -1, start)}), nil, math.MinInt64, currency.Rates{Base: "USD"}, start, end)
+	assertFlexError(t, got, err, "calculate flex remaining:", money.ErrOverflow)
+}
+
+func TestEvaluateFlexSignedDiscountsAndReportExclusions(t *testing.T) {
+	start, end := flexDate(2026, 6, 1), flexDate(2026, 7, 1)
+	cats := []domain.Category{flexCat("f", "Flex", domain.ClassFlex), flexCat("b", "Bill", domain.ClassFixed)}
+	split := flexTxn("", -100, start)
+	split.Splits = []domain.CategorySplit{
+		{CategoryID: "f", Amount: money.New(-150, "USD")},
+		{CategoryID: "b", Amount: money.New(50, "USD")},
+	}
+	transfer := flexTxn("f", -999, start)
+	transfer.TransferAccountID = "other"
+	excluded := flexTxn("f", -999, start)
+	excluded.ExcludeFromReports = true
+	txns := []domain.Transaction{split, transfer, excluded, flexTxn("f", 999, start), flexTxn("missing", -999, start), flexTxn("f", 0, start)}
+	got := evaluateFlexForTest(t, cats, txns, nil, 100, "USD", start, end)
+	if got.Spent.Amount != 150 || got.Remaining.Amount != -50 || !got.Over || got.Fixed[0].Actual.Amount != -50 || got.Fixed[0].Paid {
+		t.Fatalf("signed split evaluation = %+v", got)
+	}
+	// A discount selected into flex can make its contribution negative, even
+	// while the overall transaction is an expense. Preserve checked subtraction
+	// on this side of the integer range too.
+	split.Splits[0].Amount.Amount = 50
+	split.Splits[1].Amount.Amount = -150
+	got, err := EvaluateFlex(cats, NewNettedLedger([]domain.Transaction{split}), nil, math.MaxInt64, currency.Rates{Base: "USD"}, start, end)
+	assertFlexError(t, got, err, "calculate flex remaining:", money.ErrOverflow)
+}
+
+func TestFixedPaidBoundaries(t *testing.T) {
+	tests := []struct {
+		expected, actual int64
+		want             bool
+	}{
+		{0, 0, false}, {0, 1, true}, {-1, 1, true}, {-1, -1, false},
+		{100, 98, false}, {100, 99, true}, {100, 101, true}, {1, 0, true},
+		{math.MaxInt64, math.MaxInt64, true}, {math.MaxInt64, math.MinInt64, false},
+	}
+	for _, tt := range tests {
+		if got := fixedPaid(tt.expected, tt.actual); got != tt.want {
+			t.Errorf("fixedPaid(%d, %d) = %v, want %v", tt.expected, tt.actual, got, tt.want)
+		}
+	}
+}
+
+func TestDefaultCategoryClassMixedSchedules(t *testing.T) {
+	cat := flexCat("c", "Category", domain.ClassFlex)
+	monthly := domain.Recurring{CategoryID: "c", Cadence: domain.CadenceMonthly}
+	annual := domain.Recurring{CategoryID: "c", Cadence: domain.CadenceYearly, SmoothIntoBudgets: true}
+	tests := []struct {
+		recs []domain.Recurring
+		want domain.CategoryClass
+	}{
+		{nil, domain.ClassFlex},
+		{[]domain.Recurring{monthly, annual}, domain.ClassNonMonthly},
+		{[]domain.Recurring{annual, monthly}, domain.ClassNonMonthly},
+		{[]domain.Recurring{{CategoryID: "other"}}, domain.ClassFlex},
+		{[]domain.Recurring{monthly}, domain.ClassFixed},
+	}
+	for _, tt := range tests {
+		if got := DefaultCategoryClass(cat, tt.recs); got != tt.want {
+			t.Errorf("DefaultCategoryClass(%+v) = %s, want %s", tt.recs, got, tt.want)
+		}
+	}
+}
+
+func FuzzEvaluateFlexReconcilesAndPreservesInputs(f *testing.F) {
+	f.Add([]byte{1, 2, 3, 4, 5, 6}, int64(1000))
+	f.Add([]byte{0, 255, 127}, int64(math.MinInt64))
+	f.Add([]byte{}, int64(-1))
+	f.Add([]byte("2"), int64(math.MinInt64+48))
+	f.Fuzz(func(t *testing.T, data []byte, target int64) {
+		if len(data) > 1024 {
+			data = data[:1024]
+		}
+		start, end := flexDate(2026, 6, 1), flexDate(2026, 7, 1)
+		cats := []domain.Category{flexCat("f", "Flex", domain.ClassFlex), flexCat("b", "Bill", domain.ClassFixed), flexCat("n", "Annual", domain.ClassNonMonthly)}
+		recs := []domain.Recurring{
+			{ID: "fixed", CategoryID: "b", Amount: money.New(-1000, "USD"), Cadence: domain.CadenceMonthly, NextDue: start},
+			{ID: "annual", CategoryID: "n", Amount: money.New(-1200, "EUR"), Cadence: domain.CadenceYearly, NextDue: start, SmoothIntoBudgets: true},
+		}
+		rates := currency.Rates{Base: "USD", Rates: map[string]float64{"EUR": 1.5}}
+		var txns []domain.Transaction
+		var totals [3]int64
+		for i, b := range data {
+			cat := i % len(cats)
+			amount := int64(b)
+			txn := flexTxn(cats[cat].ID, -amount, start)
+			txn.ExcludeFromReports = b%7 == 0
+			if !txn.ExcludeFromReports {
+				totals[cat] += amount
+			}
+			txns = append(txns, txn)
+		}
+		before, err := json.Marshal([]any{cats, txns, recs, rates})
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := EvaluateFlex(cats, NewNettedLedger(txns), recs, target, rates, start, end)
+		remaining, arithmeticErr := money.Sub(target, totals[0])
+		if arithmeticErr != nil {
+			assertFlexError(t, got, err, "calculate flex remaining:", money.ErrOverflow)
+		} else {
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.Spent.Amount != totals[0] || got.Remaining.Amount != remaining || got.Target.Amount != target || got.Over != (totals[0] > target) || got.Fixed[0].Actual.Amount != totals[1] || got.NonMonthly[0].Spent.Amount != totals[2] {
+				t.Fatalf("view = %+v, totals = %v, target = %d", got, totals, target)
+			}
+			if got.Fixed[0].Expected.Amount != 1000 || got.NonMonthly[0].Accrual.Amount != 150 {
+				t.Fatalf("recurring totals = %+v / %+v", got.Fixed, got.NonMonthly)
+			}
+		}
+		after, marshalErr := json.Marshal([]any{cats, txns, recs, rates})
+		if marshalErr != nil {
+			t.Fatal(marshalErr)
+		}
+		if string(before) != string(after) {
+			t.Fatal("evaluation mutated its inputs")
+		}
+		for i, j := 0, len(txns)-1; i < j; i, j = i+1, j-1 {
+			txns[i], txns[j] = txns[j], txns[i]
+		}
+		reversed, reverseErr := EvaluateFlex(cats, NewNettedLedger(txns), recs, target, rates, start, end)
+		if !reflect.DeepEqual(got, reversed) || (err == nil) != (reverseErr == nil) {
+			t.Fatal("ledger order changed evaluation")
+		}
+	})
+}
+
+func TestEvaluateFlexLargeLedger(t *testing.T) {
+	start, end := flexDate(2026, 6, 1), flexDate(2026, 7, 1)
+	txns := make([]domain.Transaction, 10000)
+	for i := range txns {
+		txns[i] = flexTxn("c", -1, start)
+	}
+	got := evaluateFlexForTest(t, []domain.Category{flexCat("c", "Flex", domain.ClassFlex)}, txns, nil, 10000, "USD", start, end)
+	if got.Spent.Amount != 10000 || got.Remaining.Amount != 0 || got.Over {
+		t.Fatalf("large ledger = %+v", got)
 	}
 }
