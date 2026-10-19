@@ -1551,9 +1551,6 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 	if !backendConnectionActive(pr) {
 		return
 	}
-	if !requireDatasetEncryption() {
-		return
-	}
 	r := loadRegistry()
 	w, ok := r.Active()
 	if !ok {
@@ -1581,7 +1578,13 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 		var resp backendrpc.GetWorkspaceResponse
-		err := invokeAuthed(ctx, pr, backendrpc.MethodSyncGetWorkspace, backendrpc.GetWorkspaceRequest{ID: w.ID}, &resp)
+		pullRPC := hostedPullWorkspaceRPC
+		if pullRPC == nil {
+			pullRPC = func(ctx context.Context, pr prefs.Prefs, req backendrpc.GetWorkspaceRequest, resp *backendrpc.GetWorkspaceResponse) error {
+				return invokeAuthed(ctx, pr, backendrpc.MethodSyncGetWorkspace, req, resp)
+			}
+		}
+		err := pullRPC(ctx, pr, backendrpc.GetWorkspaceRequest{ID: w.ID}, &resp)
 		if err != nil {
 			logSyncError("backend sync pull failed", err)
 			setSyncStatus(syncStatus{State: "error", Pending: pendingSyncCount(), Message: customSyncErrorMessage(err, "pull failed"), AuthFailed: isAuthError(err)})
@@ -1741,6 +1744,11 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 		}
 	}()
 }
+
+// hostedPullWorkspaceRPC is the read side of workspace hydration. Keeping this
+// boundary injectable lets wasm tests verify hosted first-open behavior without
+// opening a real services-worker connection.
+var hostedPullWorkspaceRPC func(context.Context, prefs.Prefs, backendrpc.GetWorkspaceRequest, *backendrpc.GetWorkspaceResponse) error
 
 func workspaceSort(r workspace.Registry, id string) int {
 	for i, w := range r.Workspaces {
