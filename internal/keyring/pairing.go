@@ -4,68 +4,14 @@ package keyring
 
 import (
 	"crypto/ecdh"
+	"crypto/hmac"
 	"crypto/hpke"
-	"crypto/rand"
-	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
 )
 
-// Device pairing transfers workspace key material from an existing device to
-// a new one without the server (which may relay the ciphertext) learning it.
-// The new device generates an ephemeral X25519 key pair and shows its public
-// key (for example as a QR code) plus a short confirmation code. The user
-// checks the same code on both devices — that binds the public key they are
-// looking at to the device in front of them, so a relay cannot substitute
-// its own key unnoticed. The old device then seals the key material to that
-// public key with HPKE (RFC 9180, base mode, DHKEM(X25519, HKDF-SHA-256),
-// HKDF-SHA-256, AES-256-GCM).
-//
-// Pairing is unauthenticated by design (HPKE base mode): the confirmation
-// code comparison by the user is the authentication. Do not skip it.
-
 // PairingPublicKeySize is the size in bytes of an X25519 pairing public key.
 const PairingPublicKeySize = 32
-
-// PairingRequest is a new device's half of a pairing: its ephemeral key pair
-// plus the human confirmation code derived from the public key. Keep the
-// private key on the new device only and discard the request after pairing.
-type PairingRequest struct {
-	// PrivateKey is the new device's ephemeral X25519 private key. Never
-	// send it anywhere.
-	PrivateKey *ecdh.PrivateKey
-	// PublicKey is the raw 32-byte X25519 public key to show the old device
-	// (typically as a QR code).
-	PublicKey []byte
-	// ConfirmationCode is the 6-digit code both devices display so the
-	// user can confirm they are looking at the same public key.
-	ConfirmationCode string
-}
-
-// NewPairingRequest generates a fresh ephemeral pairing key pair.
-func NewPairingRequest() (*PairingRequest, error) {
-	priv, err := ecdh.X25519().GenerateKey(rand.Reader)
-	if err != nil {
-		return nil, fmt.Errorf("keyring: generate pairing key: %w", err)
-	}
-	pub := priv.PublicKey().Bytes()
-	return &PairingRequest{
-		PrivateKey:       priv,
-		PublicKey:        cloneBytes(pub),
-		ConfirmationCode: ConfirmationCodeForPublicKey(pub),
-	}, nil
-}
-
-// ConfirmationCodeForPublicKey derives the 6-digit human confirmation code
-// for a pairing public key: the first four bytes of its SHA-256 hash, taken
-// modulo one million and zero-padded. Both devices derive it from the same
-// public key bytes; equal codes mean both sides hold the same key (to the
-// strength of a 6-digit code — a user-checked fingerprint, not a secret).
-func ConfirmationCodeForPublicKey(publicKey []byte) string {
-	sum := sha256.Sum256(publicKey)
-	n := binary.BigEndian.Uint32(sum[:4]) % 1_000_000
-	return fmt.Sprintf("%06d", n)
-}
 
 // ParsePairingPublicKey validates raw public key bytes received from a new
 // device (for example scanned from a QR code).
@@ -77,9 +23,9 @@ func ParsePairingPublicKey(raw []byte) (*ecdh.PublicKey, error) {
 	return pub, nil
 }
 
-// ParsePairingPrivateKey restores a pairing private key from its raw bytes
-// (PrivateKey.Bytes), for a pairing that spans an app restart on the new
-// device.
+// ParsePairingPrivateKey restores a raw key for low-level HPKE use. A SAS
+// exchange cannot be resumed with just a private key: restart it with fresh
+// state through NewPairingRequest after an interruption.
 func ParsePairingPrivateKey(raw []byte) (*ecdh.PrivateKey, error) {
 	priv, err := ecdh.X25519().NewPrivateKey(raw)
 	if err != nil {
@@ -88,10 +34,12 @@ func ParsePairingPrivateKey(raw []byte) (*ecdh.PrivateKey, error) {
 	return priv, nil
 }
 
-// SealForDevice seals key material (typically a WDK's Material) to the new
-// device's pairing public key. info binds the transfer to its context (use
+// SealForDevice seals bytes to a recipient's public key with HPKE base mode.
+// info binds the transfer to its context (use
 // PairingInfo); it must match on the receiving side. It returns the HPKE
 // encapsulated key and the ciphertext separately, ready to relay.
+// This low-level HPKE base-mode primitive does NOT authenticate a sender.
+// Workspace transfers must use SealWorkspaceKeyForDevice with a confirmed SAS.
 func SealForDevice(recipientPub, material, info []byte) (enc, ciphertext []byte, err error) {
 	return sealForDeviceAAD(recipientPub, material, info, nil)
 }
@@ -121,7 +69,8 @@ func sealForDeviceAAD(recipientPub, material, info, aad []byte) (enc, ciphertext
 
 // OpenOnDevice opens material sealed by SealForDevice, on the new device.
 // info must match the sender's. A mismatch of key, info, or ciphertext
-// returns an *AuthenticationError.
+// returns an *AuthenticationError. This primitive does not authenticate the
+// sender; use OpenWorkspaceKeyOnDevice for a workspace key transfer.
 func OpenOnDevice(priv *ecdh.PrivateKey, enc, ciphertext, info []byte) ([]byte, error) {
 	return openOnDeviceAAD(priv, enc, ciphertext, info, nil)
 }
@@ -147,7 +96,7 @@ func openOnDeviceAAD(priv *ecdh.PrivateKey, enc, ciphertext, info, aad []byte) (
 }
 
 // pairingInfoDomain labels pairing HPKE info strings.
-const pairingInfoDomain = "cfv2/pairing/v1"
+const pairingInfoDomain = "cfv2/pairing/v2"
 
 // PairingInfo builds the HPKE info for a pairing transfer, binding it to the
 // scope and workspace the key belongs to. Both devices must build it from
@@ -163,24 +112,53 @@ func PairingInfo(scope Scope, workspaceID string) []byte {
 }
 
 // SealWorkspaceKeyForDevice seals a whole workspace key (identity plus
-// material) for transfer to a new device. The payload is a length-prefixed
-// bundle of KeyID, version, and material; open it with
-// OpenWorkspaceKeyOnDevice. info should come from PairingInfo.
-func SealWorkspaceKeyForDevice(recipientPub []byte, wk *WorkspaceKey, info []byte) (enc, ciphertext []byte, err error) {
+// material) using a confirmed old-device session. It MACs the HPKE output and
+// keyring digest with the transcript-bound ECDH secret, authenticating the
+// sender as the peer whose SAS the user compared. keyringBlob must be Marshal's
+// authenticated current keyring. A confirmed session is consumed on any attempt.
+func SealWorkspaceKeyForDevice(session *PairingSession, wk *WorkspaceKey, keyringBlob []byte, highestSeen uint32) (enc, ciphertext, tag []byte, err error) {
+	if err := session.requireConfirmed(true); err != nil {
+		return nil, nil, nil, err
+	}
+	defer session.Destroy()
 	if wk.Destroyed() {
-		return nil, nil, fmt.Errorf("%w: workspace key has been destroyed", ErrInvalidKey)
+		return nil, nil, nil, fmt.Errorf("%w: workspace key has been destroyed", ErrInvalidKey)
+	}
+	if _, err := Parse(keyringBlob, wk, highestSeen); err != nil {
+		return nil, nil, nil, err
 	}
 	var versionBytes [4]byte
 	binary.BigEndian.PutUint32(versionBytes[:], wk.version)
 	payload := joinLengthPrefixed(wk.keyID[:], versionBytes[:], wk.material)
 	defer clearBytes(payload)
-	return SealForDevice(recipientPub, payload, info)
+	enc, ciphertext, err = SealForDevice(session.recipient, payload, session.info)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return enc, ciphertext, session.transferMAC(enc, ciphertext, keyringBlob), nil
 }
 
 // OpenWorkspaceKeyOnDevice reverses SealWorkspaceKeyForDevice, returning the
-// transferred workspace key ready to unwrap (or re-wrap for this device).
-func OpenWorkspaceKeyOnDevice(priv *ecdh.PrivateKey, enc, ciphertext, info []byte) (*WorkspaceKey, error) {
-	payload, err := OpenOnDevice(priv, enc, ciphertext, info)
+// transferred workspace key only after authenticating the sender, received key
+// identity/material against the keyring, full metadata and rollback floor.
+// A relayed keyring is untrusted until this succeeds. Persist the returned key's
+// version floor per scope/workspace before acknowledging pairing. The confirmed
+// new-device session is consumed on success or failure, preventing replay.
+func OpenWorkspaceKeyOnDevice(session *PairingSession, enc, ciphertext, tag, keyringBlob []byte, highestSeen uint32) (*WorkspaceKey, error) {
+	if err := session.requireConfirmed(false); err != nil {
+		return nil, err
+	}
+	defer session.Destroy()
+	// Bound work on relay-controlled data before hashing or decrypting. A
+	// workspace payload is exactly three length-prefixed, fixed-size fields.
+	const payloadSize = 3*4 + KeyIDSize + 4 + KeySize
+	if len(enc) != PairingPublicKeySize || len(ciphertext) != payloadSize+16 || len(tag) != KeySize || len(keyringBlob) == 0 || len(keyringBlob) > MaxKeyringSize {
+		return nil, &AuthenticationError{Operation: "pairing transfer size"}
+	}
+	if !hmac.Equal(tag, session.transferMAC(enc, ciphertext, keyringBlob)) {
+		return nil, &AuthenticationError{Operation: "pairing sender MAC"}
+	}
+	payload, err := OpenOnDevice(session.private, enc, ciphertext, session.info)
 	if err != nil {
 		return nil, err
 	}
@@ -197,7 +175,15 @@ func OpenWorkspaceKeyOnDevice(priv *ecdh.PrivateKey, enc, ciphertext, info []byt
 		return nil, fmt.Errorf("%w: pairing payload version is %d bytes", ErrInvalidKey, len(parts[1]))
 	}
 	version := binary.BigEndian.Uint32(parts[1])
-	return workspaceKeyFromMaterial(keyID, version, parts[2])
+	wk, err := workspaceKeyFromMaterial(keyID, version, parts[2])
+	if err != nil {
+		return nil, err
+	}
+	if _, err := Parse(keyringBlob, wk, highestSeen); err != nil {
+		wk.Destroy()
+		return nil, err
+	}
+	return wk, nil
 }
 
 // splitLengthPrefixed decodes exactly want length-prefixed parts produced by

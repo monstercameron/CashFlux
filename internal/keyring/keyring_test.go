@@ -154,7 +154,7 @@ func lowerAndStrip(s string) string {
 
 func TestWrongSecretsFailAndNeverMutate(t *testing.T) {
 	f := mustFullKeyring(t)
-	before, err := f.kr.Marshal()
+	before, err := f.kr.Marshal(f.wk)
 	if err != nil {
 		t.Fatalf("Marshal before: %v", err)
 	}
@@ -207,7 +207,7 @@ func TestWrongSecretsFailAndNeverMutate(t *testing.T) {
 		})
 	}
 
-	after, err := f.kr.Marshal()
+	after, err := f.kr.Marshal(f.wk)
 	if err != nil {
 		t.Fatalf("Marshal after: %v", err)
 	}
@@ -453,22 +453,22 @@ func TestWrapEntryMovedToAnotherVersionFails(t *testing.T) {
 
 func TestMarshalParseRoundTrip(t *testing.T) {
 	f := mustFullKeyring(t)
-	blob, err := f.kr.Marshal()
+	blob, err := f.kr.Marshal(f.wk)
 	if err != nil {
 		t.Fatalf("Marshal: %v", err)
 	}
-	blob2, err := f.kr.Marshal()
+	blob2, err := f.kr.Marshal(f.wk)
 	if err != nil {
 		t.Fatalf("Marshal again: %v", err)
 	}
 	if !bytes.Equal(blob, blob2) {
 		t.Fatal("Marshal is not canonical (two calls differ)")
 	}
-	parsed, err := Parse(blob)
+	parsed, err := Parse(blob, f.wk, 0)
 	if err != nil {
 		t.Fatalf("Parse: %v", err)
 	}
-	reblob, err := parsed.Marshal()
+	reblob, err := parsed.Marshal(f.wk)
 	if err != nil {
 		t.Fatalf("Marshal parsed: %v", err)
 	}
@@ -482,14 +482,14 @@ func TestMarshalParseRoundTrip(t *testing.T) {
 	sameKey(t, f.wk, got)
 
 	// JSON carries the documented field names.
-	if !bytes.Contains(blob, []byte(`"formatVersion":1`)) || !bytes.Contains(blob, []byte(`"currentVersion":1`)) {
+	if !bytes.Contains(blob, []byte(`"formatVersion":2`)) || !bytes.Contains(blob, []byte(`"currentVersion":1`)) {
 		t.Errorf("blob missing version fields: %s", blob)
 	}
 }
 
 func TestParseRejectsMalformedBlobs(t *testing.T) {
 	f := mustFullKeyring(t)
-	good, err := f.kr.Marshal()
+	good, err := f.kr.Marshal(f.wk)
 	if err != nil {
 		t.Fatalf("Marshal: %v", err)
 	}
@@ -515,7 +515,7 @@ func TestParseRejectsMalformedBlobs(t *testing.T) {
 		{"not json", []byte("hello"), ErrInvalidKeyring},
 		{"trailing data", append(cloneBytes(good), []byte(" {}")...), ErrInvalidKeyring},
 		{"unknown field", bytes.Replace(good, []byte(`{"formatVersion"`), []byte(`{"surprise":true,"formatVersion"`), 1), ErrInvalidKeyring},
-		{"duplicate field", bytes.Replace(good, []byte(`"formatVersion":1`), []byte(`"formatVersion":1,"formatVersion":1`), 1), ErrInvalidKeyring},
+		{"duplicate field", bytes.Replace(good, []byte(`"formatVersion":2`), []byte(`"formatVersion":2,"formatVersion":2`), 1), ErrInvalidKeyring},
 		{"noncanonical whitespace", append([]byte(" "), good...), ErrInvalidKeyring},
 		{"unsupported format", mutate(func(kr *Keyring) { kr.FormatVersion = 99 }), ErrUnsupportedFormat},
 		{"no keys", mutate(func(kr *Keyring) { kr.Keys = nil }), ErrInvalidKeyring},
@@ -553,7 +553,7 @@ func TestParseRejectsMalformedBlobs(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, err := Parse(tc.blob); !errors.Is(err, tc.want) {
+			if _, err := Parse(tc.blob, f.wk, 0); !errors.Is(err, tc.want) {
 				t.Fatalf("Parse err = %v, want %v", err, tc.want)
 			}
 		})
@@ -578,7 +578,7 @@ func TestParseBoundsJSONStructure(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			started := time.Now()
-			if _, err := Parse(tc.data); err == nil {
+			if _, err := Parse(tc.data, nil, 0); err == nil {
 				t.Fatal("Parse accepted a blob beyond a structural limit")
 			}
 			if elapsed := time.Since(started); elapsed >= 100*time.Millisecond {

@@ -11,7 +11,8 @@ import (
 )
 
 func FuzzParseKeyring(f *testing.F) {
-	wk, err := NewWorkspaceKey()
+	// Stable material makes authenticated seeds valid in every fuzz worker.
+	wk, err := workspaceKeyFromMaterial(KeyID{1}, 1, bytes.Repeat([]byte{0x41}, KeySize))
 	if err != nil {
 		f.Fatal(err)
 	}
@@ -23,7 +24,7 @@ func FuzzParseKeyring(f *testing.F) {
 	if err := kr.AddPasscodeWrap(wk, "fuzz seed", fastDeriver()); err != nil {
 		f.Fatal(err)
 	}
-	blob, err := kr.Marshal()
+	blob, err := kr.Marshal(wk)
 	if err != nil {
 		f.Fatal(err)
 	}
@@ -35,12 +36,15 @@ func FuzzParseKeyring(f *testing.F) {
 		timer := time.NewTimer(2 * time.Second)
 		defer timer.Stop()
 		go func() {
-			parsed, err := Parse(data)
+			// Exercise the private bounded decoder too: authenticated mutation
+			// normally stops at the MAC, but structural fuzz coverage still matters.
+			_, _ = parseUntrusted(data, 1)
+			parsed, err := Parse(data, wk, 1)
 			if err != nil {
 				done <- nil
 				return
 			}
-			encoded, err := parsed.Marshal()
+			encoded, err := parsed.Marshal(wk)
 			if err != nil {
 				done <- err
 				return

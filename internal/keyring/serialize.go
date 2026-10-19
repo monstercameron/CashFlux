@@ -4,6 +4,9 @@ package keyring
 
 import (
 	"bytes"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -39,8 +42,10 @@ const wrapCiphertextSize = KeySize + 16
 // marshal to identical bytes, which makes change-notification and
 // compare-and-swap on the server straightforward. Marshal validates first
 // and returns an error instead of writing a blob Parse would reject. The
-// receiver is not modified.
-func (kr *Keyring) Marshal() ([]byte, error) {
+// receiver is not modified. wk must be the current WDK; the metadata is
+// authenticated under its dedicated HKDF subkey. Unsigned v1 blobs are no
+// longer accepted and must never be silently upgraded from untrusted storage.
+func (kr *Keyring) Marshal(wk *WorkspaceKey) ([]byte, error) {
 	if kr == nil {
 		return nil, fmt.Errorf("%w: keyring is nil", ErrInvalidKeyring)
 	}
@@ -48,9 +53,20 @@ func (kr *Keyring) Marshal() ([]byte, error) {
 	if err := canonical.Validate(); err != nil {
 		return nil, err
 	}
+	if err := canonical.checkCurrentKey(wk); err != nil {
+		return nil, err
+	}
+	mac, err := canonical.metadataMAC(wk)
+	if err != nil {
+		return nil, err
+	}
+	canonical.MetadataMAC = mac
 	out, err := json.Marshal(canonical)
 	if err != nil {
 		return nil, fmt.Errorf("keyring: marshal: %w", err)
+	}
+	if len(out) > MaxKeyringSize {
+		return nil, fmt.Errorf("%w: encoded keyring exceeds %d bytes", ErrInvalidKeyring, MaxKeyringSize)
 	}
 	return out, nil
 }
@@ -78,9 +94,52 @@ func (kr *Keyring) canonical() *Keyring {
 
 // Parse decodes a keyring blob produced by Marshal. It is strict: unknown
 // JSON fields, trailing data, unknown format versions, duplicate or invalid
-// entries, and oversized blobs are all rejected. On error no partial
-// keyring is returned.
-func Parse(data []byte) (*Keyring, error) {
+// entries, oversized blobs, invalid metadata MACs and rollback below highestSeen
+// are rejected. wk must be the current WDK, obtained from trusted memory or
+// Unlock. Persist highestSeen per scope/workspace after successful verification,
+// durably before acknowledging use of the new version. Zero means first use.
+// On error no partial keyring is returned.
+func Parse(data []byte, wk *WorkspaceKey, highestSeen uint32) (*Keyring, error) {
+	kr, err := parseUntrusted(data, highestSeen)
+	if err != nil {
+		return nil, err
+	}
+	if err := kr.checkCurrentKey(wk); err != nil {
+		return nil, err
+	}
+	mac, err := kr.metadataMAC(wk)
+	if err != nil {
+		return nil, err
+	}
+	if !hmac.Equal(mac, kr.MetadataMAC) {
+		return nil, &AuthenticationError{Operation: "keyring metadata"}
+	}
+	return kr, nil
+}
+
+// Unlock bootstraps a locked keyring without exposing unauthenticated metadata.
+// It unwraps a candidate current WDK, then authenticates the whole blob and
+// version floor before returning either value. No partial result escapes on
+// failure. Treat an error as unreadable data, never as permission to overwrite.
+func Unlock(data []byte, highestSeen uint32, kind WrapKind, id string, secret UnwrapSecret) (*Keyring, *WorkspaceKey, error) {
+	kr, err := parseUntrusted(data, highestSeen)
+	if err != nil {
+		return nil, nil, err
+	}
+	wk, err := kr.Unwrap(kind, id, secret)
+	if err != nil {
+		return nil, nil, err
+	}
+	verified, err := Parse(data, wk, highestSeen)
+	if err != nil {
+		wk.Destroy()
+		return nil, nil, err
+	}
+	return verified, wk, nil
+}
+
+// parseUntrusted is private: callers must authenticate before using metadata.
+func parseUntrusted(data []byte, highestSeen uint32) (*Keyring, error) {
 	if len(data) == 0 {
 		return nil, fmt.Errorf("%w: keyring blob is empty", ErrInvalidKeyring)
 	}
@@ -102,7 +161,13 @@ func Parse(data []byte) (*Keyring, error) {
 	if err := kr.Validate(); err != nil {
 		return nil, err
 	}
-	canonical, err := kr.Marshal()
+	if kr.CurrentVersion < highestSeen {
+		return nil, fmt.Errorf("%w: current version %d is below highest seen %d", ErrRollback, kr.CurrentVersion, highestSeen)
+	}
+	if len(kr.MetadataMAC) != sha256.Size {
+		return nil, &AuthenticationError{Operation: "keyring metadata"}
+	}
+	canonical, err := json.Marshal(kr.canonical())
 	if err != nil {
 		return nil, err
 	}
@@ -110,6 +175,58 @@ func Parse(data []byte) (*Keyring, error) {
 		return nil, fmt.Errorf("%w: keyring blob is not canonically encoded", ErrInvalidKeyring)
 	}
 	return &kr, nil
+}
+
+// metadataMAC covers the canonical format, current version, entire version
+// list, key IDs/checks, wrap identities and wrap contents; only the MAC itself
+// is omitted. Encoding a fixed nil MAC avoids a second schema for signing.
+func (kr *Keyring) metadataMAC(wk *WorkspaceKey) ([]byte, error) {
+	key, err := wk.DeriveSubkey(SubkeyMetadata)
+	if err != nil {
+		return nil, err
+	}
+	defer clearBytes(key)
+	canonical := kr.canonical()
+	canonical.MetadataMAC = nil
+	data, err := json.Marshal(canonical)
+	if err != nil {
+		return nil, fmt.Errorf("keyring: encode metadata for MAC: %w", err)
+	}
+	mac := hmac.New(sha256.New, key)
+	mac.Write([]byte("cfv2/keyring-metadata/v2"))
+	mac.Write(data)
+	return mac.Sum(nil), nil
+}
+
+func (wk *WorkspaceKey) keyCheck() ([]byte, error) {
+	key, err := wk.DeriveSubkey(SubkeyKeyCheck)
+	if err != nil {
+		return nil, err
+	}
+	defer clearBytes(key)
+	var version [4]byte
+	binary.BigEndian.PutUint32(version[:], wk.version)
+	mac := hmac.New(sha256.New, key)
+	mac.Write(joinLengthPrefixed([]byte("cfv2/key-check/v2"), wk.keyID[:], version[:]))
+	return mac.Sum(nil), nil
+}
+
+func (kr *Keyring) checkCurrentKey(wk *WorkspaceKey) error {
+	if wk.Destroyed() {
+		return fmt.Errorf("%w: current workspace key is unavailable", ErrInvalidKey)
+	}
+	current := kr.Current()
+	if current == nil || current.Version != wk.version || current.KeyID != wk.keyID {
+		return &AuthenticationError{Operation: "keyring key identity"}
+	}
+	check, err := wk.keyCheck()
+	if err != nil {
+		return err
+	}
+	if !hmac.Equal(check, current.KeyCheck) {
+		return &AuthenticationError{Operation: "keyring key check"}
+	}
+	return nil
 }
 
 // preflightKeyringJSON bounds structural work before encoding/json allocates
@@ -228,6 +345,9 @@ func (kr *Keyring) Validate() error {
 	if len(kr.Keys) == 0 {
 		return fmt.Errorf("%w: keyring has no key versions", ErrInvalidKeyring)
 	}
+	if len(kr.Keys) > MaxKeyringVersions {
+		return fmt.Errorf("%w: too many key versions", ErrInvalidKeyring)
+	}
 	seenVersions := make(map[uint32]bool, len(kr.Keys))
 	seenIDs := make(map[KeyID]bool, len(kr.Keys))
 	var current *VersionedKey
@@ -235,6 +355,15 @@ func (kr *Keyring) Validate() error {
 		k := &kr.Keys[i]
 		if k.Version == 0 {
 			return fmt.Errorf("%w: key version is zero", ErrInvalidKeyring)
+		}
+		if k.Version > kr.CurrentVersion {
+			return fmt.Errorf("%w: current version is below retained version %d", ErrRollback, k.Version)
+		}
+		if len(k.KeyCheck) != sha256.Size {
+			return fmt.Errorf("%w: version %d has an invalid key check", ErrInvalidKeyring, k.Version)
+		}
+		if len(k.Wraps) > MaxWrapsPerVersion {
+			return fmt.Errorf("%w: version %d has too many wraps", ErrInvalidKeyring, k.Version)
 		}
 		if seenVersions[k.Version] {
 			return fmt.Errorf("%w: duplicate key version %d", ErrInvalidKeyring, k.Version)

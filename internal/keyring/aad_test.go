@@ -104,6 +104,18 @@ func TestAADHasNoAmbiguousConcatenation(t *testing.T) {
 	}
 }
 
+func TestAADLengthChecksUint32Boundary(t *testing.T) {
+	if got := aadLength(uint64(^uint32(0))); got != ^uint32(0) {
+		t.Fatalf("aadLength(max) = %d, want %d", got, ^uint32(0))
+	}
+	defer func() {
+		if recover() == nil {
+			t.Fatal("aadLength accepted a value larger than the encoded length field")
+		}
+	}()
+	aadLength(uint64(^uint32(0)) + 1)
+}
+
 func TestRecordAADBindsRecordTupleAndHasSeparateDomain(t *testing.T) {
 	scope := Scope{ServerID: "server", AccountID: "account"}
 	base := RecordAAD(scope, "workspace", "record", 2)

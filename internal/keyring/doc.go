@@ -49,6 +49,39 @@
 // and must keep old key versions in the keyring for as long as ciphertext
 // sealed under them exists.
 //
+// Authenticated keyring format (v2).
+//
+// Marshal requires the current WDK and MACs the entire canonical metadata under
+// SubkeyMetadata, including the current version, retained versions, key IDs,
+// key-check values and every wrap byte. Parse requires that WDK and a caller's
+// durably persisted highest-seen version for this scope/workspace. Unlock is the
+// bootstrap path when only a wrap secret is available: candidate metadata and
+// keys remain internal until the MAC and rollback floor are checked. Never use
+// encoding/json directly to load an untrusted Keyring. The old unsigned v1
+// format is rejected; this foundation is not yet integrated into the app.
+//
+// Pairing protocol (v2).
+//
+// B (new device) sends H(lp(domain), lp(pubB), lp(nonceB)) first. A (old device)
+// freezes that commitment, then sends pubA and nonceA. B freezes A's challenge,
+// then reveals pubB and nonceB. A verifies the commitment. Both hash a canonical
+// length-prefixed transcript binding the scope/workspace info, commitment,
+// pubA, pubB, nonceA and nonceB and display its eight-digit SAS. Transfer APIs
+// require explicit human confirmation of the OTHER device's code. A mismatch
+// aborts; a retry requires fresh keys and nonces. An active MITM's per-attempt
+// success probability is approximately 1 in 100 million, not zero. The caller
+// must limit retries and never automatically compare codes sent by the relay.
+//
+// A seals the current WDK's ID, version and material with HPKE base mode, then
+// MACs the encapsulated key, ciphertext, keyring digest and transcript with a
+// dedicated key derived from the ephemeral ECDH secret and transcript hash.
+// The transcript alone is public and is NOT a MAC key. B verifies this sender
+// MAC before opening HPKE, then checks the received WDK against the authenticated
+// keyring identity, key-check value and highest-seen version. Each confirmed
+// session permits one transfer attempt and is discarded on success or failure.
+// The exported low-level SealForDevice/OpenOnDevice helpers remain HPKE base
+// primitives; they do not authenticate a sender and must not transfer WDKs.
+//
 // This package is pure Go (plus an optional WebCrypto PBKDF2 accelerator on
 // js/wasm) and holds no global state. Secrets are copied defensively; callers
 // should Destroy workspace keys and zero KEKs when locking.

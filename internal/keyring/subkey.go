@@ -21,7 +21,7 @@ func hkdfSHA256(secret []byte, info string) ([]byte, error) {
 }
 
 // DeriveSubkey derives the 32-byte subkey for the given HKDF info label
-// (one of SubkeyData, SubkeyAttachments, SubkeyAttachMAC, SubkeyVault).
+// (one of the labels returned by SubkeyInfos).
 // Subkeys are deterministic for a given WDK and label; distinct labels give
 // independent keys, so one subkey leaking does not expose the others or the
 // WDK. Zero the result when done with it.
@@ -50,5 +50,5 @@ func (wk *WorkspaceKey) VaultKey() ([]byte, error) { return wk.DeriveSubkey(Subk
 // SubkeyInfos returns every HKDF info label used for workspace subkeys, in a
 // stable order.
 func SubkeyInfos() []string {
-	return []string{SubkeyData, SubkeyAttachments, SubkeyAttachMAC, SubkeyVault}
+	return []string{SubkeyData, SubkeyAttachments, SubkeyAttachMAC, SubkeyVault, SubkeyMetadata, SubkeyKeyCheck}
 }

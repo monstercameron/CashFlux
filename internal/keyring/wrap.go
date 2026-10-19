@@ -409,7 +409,11 @@ func (kr *Keyring) AddWrap(wk *WorkspaceKey, entry WrapEntry) error {
 	}
 	vk := kr.version(wk.version)
 	if vk == nil {
-		kr.Keys = append(kr.Keys, VersionedKey{KeyID: wk.keyID, Version: wk.version, Wraps: []WrapEntry{}})
+		check, err := wk.keyCheck()
+		if err != nil {
+			return err
+		}
+		kr.Keys = append(kr.Keys, VersionedKey{KeyID: wk.keyID, Version: wk.version, KeyCheck: check, Wraps: []WrapEntry{}})
 		vk = kr.version(wk.version)
 	}
 	if vk.KeyID != wk.keyID {
@@ -524,12 +528,22 @@ func (kr *Keyring) UnwrapVersion(version uint32, kind WrapKind, id string, secre
 	if entry == nil {
 		return nil, fmt.Errorf("%w: %s wrap %q in version %d", ErrWrapNotFound, kind, id, version)
 	}
-	return unwrapEntry(vk.Clone(), entry.Clone(), secret)
+	wk, err := unwrapEntry(vk.Clone(), entry.Clone(), secret)
+	if err != nil {
+		return nil, err
+	}
+	check, err := wk.keyCheck()
+	if err != nil || !bytesEqual(check, vk.KeyCheck) {
+		wk.Destroy()
+		return nil, &AuthenticationError{Operation: "unwrapped key check", Err: err}
+	}
+	return wk, nil
 }
 
 // UnwrapEntry opens a single detached wrap entry against an explicit key
 // identity. It is the seam for opening an entry before the rest of the
-// keyring has been loaded.
+// keyring has been loaded. It does not authenticate keyring metadata or enforce
+// a rollback floor; use Unlock when loading an untrusted persisted keyring.
 func UnwrapEntry(keyID KeyID, version uint32, entry WrapEntry, secret UnwrapSecret) (*WorkspaceKey, error) {
 	return unwrapEntry(VersionedKey{KeyID: keyID, Version: version}, entry, secret)
 }
@@ -599,10 +613,16 @@ func (kr *Keyring) Rotate() (*WorkspaceKey, error) {
 		return nil, err
 	}
 	next.version = maxVersion + 1
+	check, err := next.keyCheck()
+	if err != nil {
+		next.Destroy()
+		return nil, err
+	}
 	kr.Keys = append(kr.Keys, VersionedKey{
-		KeyID:   next.keyID,
-		Version: next.version,
-		Wraps:   []WrapEntry{},
+		KeyID:    next.keyID,
+		Version:  next.version,
+		KeyCheck: check,
+		Wraps:    []WrapEntry{},
 	})
 	kr.CurrentVersion = next.version
 	return next, nil

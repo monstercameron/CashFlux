@@ -13,7 +13,7 @@ import (
 )
 
 // FormatVersion is the current keyring blob format version.
-const FormatVersion = 1
+const FormatVersion = 2
 
 // KeySize is the size in bytes of a workspace data key and of every subkey.
 const KeySize = 32
@@ -48,6 +48,10 @@ const (
 	SubkeyAttachMAC = "cfv2/attach-mac"
 	// SubkeyVault labels the subkey that seals stored credentials (the vault).
 	SubkeyVault = "cfv2/vault"
+	// SubkeyMetadata authenticates the complete canonical keyring metadata.
+	SubkeyMetadata = "cfv2/keyring-metadata/v2"
+	// SubkeyKeyCheck authenticates a WDK's key ID and version.
+	SubkeyKeyCheck = "cfv2/key-check/v2"
 )
 
 // HKDF info strings for wrap key-encryption keys.
@@ -77,8 +81,8 @@ var (
 	// ErrUnwrapFailed reports that a wrap entry could not be unwrapped with
 	// the supplied secret.
 	ErrUnwrapFailed = errors.New("keyring: unwrap failed")
-	// ErrAuthenticationFailed reports an AES-GCM authentication failure:
-	// wrong key, wrong authenticated data, or corrupted ciphertext.
+	// ErrAuthenticationFailed reports a failed cryptographic authentication:
+	// wrong key, context, confirmation code, MAC or ciphertext.
 	ErrAuthenticationFailed = errors.New("keyring: authentication failed")
 	// ErrInvalidRecoveryCode reports a recovery code that is malformed or
 	// whose checksum does not match (most likely a typo).
@@ -86,10 +90,13 @@ var (
 	// ErrInvalidSecret reports an unwrap secret that does not match the wrap
 	// kind being opened (for example a missing passcode or PRF output).
 	ErrInvalidSecret = errors.New("keyring: invalid unwrap secret")
+	// ErrRollback reports a keyring older than the caller's persisted version floor.
+	ErrRollback = errors.New("keyring: rollback detected")
 )
 
-// AuthenticationError is returned when AES-GCM cannot authenticate a sealed
-// blob or a wrapped key. It matches ErrAuthenticationFailed with errors.Is.
+// AuthenticationError reports a failed cryptographic authentication, including
+// AES-GCM, metadata/transfer MACs and pairing SAS confirmation. It matches
+// ErrAuthenticationFailed with errors.Is.
 type AuthenticationError struct {
 	// Operation names what was being opened, for example "open" or "unwrap".
 	Operation string
@@ -266,6 +273,8 @@ type VersionedKey struct {
 	// Version is the key version number, starting at 1 and increasing by
 	// one per rotation.
 	Version uint32 `json:"version"`
+	// KeyCheck authenticates this key's identity and material under a WDK subkey.
+	KeyCheck []byte `json:"keyCheck"`
 	// Wraps holds the wrap entries for this version. It may be empty
 	// transiently (a freshly rotated key whose wraps are not yet added);
 	// Parse rejects a keyring whose current version has no wraps.
@@ -274,7 +283,7 @@ type VersionedKey struct {
 
 // Clone returns a deep copy of the versioned key.
 func (v VersionedKey) Clone() VersionedKey {
-	out := VersionedKey{KeyID: v.KeyID, Version: v.Version}
+	out := VersionedKey{KeyID: v.KeyID, Version: v.Version, KeyCheck: cloneBytes(v.KeyCheck)}
 	if v.Wraps != nil {
 		out.Wraps = make([]WrapEntry, len(v.Wraps))
 		for i, w := range v.Wraps {
@@ -304,6 +313,9 @@ type Keyring struct {
 	CurrentVersion uint32 `json:"currentVersion"`
 	// Keys holds every retained key version, oldest first.
 	Keys []VersionedKey `json:"keys"`
+	// MetadataMAC authenticates all fields above, including every wrap byte,
+	// under the current WDK. It is refreshed by Marshal, never trusted alone.
+	MetadataMAC []byte `json:"metadataMAC"`
 }
 
 // Clone returns a deep copy of the keyring.
@@ -311,7 +323,7 @@ func (kr *Keyring) Clone() *Keyring {
 	if kr == nil {
 		return nil
 	}
-	out := &Keyring{FormatVersion: kr.FormatVersion, CurrentVersion: kr.CurrentVersion}
+	out := &Keyring{FormatVersion: kr.FormatVersion, CurrentVersion: kr.CurrentVersion, MetadataMAC: cloneBytes(kr.MetadataMAC)}
 	if kr.Keys != nil {
 		out.Keys = make([]VersionedKey, len(kr.Keys))
 		for i, k := range kr.Keys {
@@ -435,13 +447,18 @@ func NewKeyring(wk *WorkspaceKey) (*Keyring, error) {
 	if wk.Destroyed() {
 		return nil, fmt.Errorf("%w: cannot build a keyring from a destroyed key", ErrInvalidKey)
 	}
+	check, err := wk.keyCheck()
+	if err != nil {
+		return nil, err
+	}
 	return &Keyring{
 		FormatVersion:  FormatVersion,
 		CurrentVersion: wk.version,
 		Keys: []VersionedKey{{
-			KeyID:   wk.keyID,
-			Version: wk.version,
-			Wraps:   []WrapEntry{},
+			KeyID:    wk.keyID,
+			Version:  wk.version,
+			KeyCheck: check,
+			Wraps:    []WrapEntry{},
 		}},
 	}, nil
 }
