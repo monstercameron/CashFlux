@@ -76,10 +76,32 @@ func setHostedHydration(next hostedHydrationStatus) {
 
 func markHostedHydrationLoading() {
 	cur := currentHostedHydration()
-	if !cur.Required {
+	if !cur.Required || (cur.Phase != hostedHydrationWaiting && cur.Phase != hostedHydrationLoading) {
 		return
 	}
 	setHostedHydration(hostedHydrationStatus{Required: true, Phase: hostedHydrationLoading})
+}
+
+// hostedHydrationPullHeld keeps watch events, wake-ups and reconnects from
+// replacing a result that needs the user's attention, or interrupting an apply.
+// Only an explicit retry or a verified unlock starts another hosted attempt.
+func hostedHydrationPullHeld() bool {
+	cur := currentHostedHydration()
+	return cur.Required && cur.Phase != hostedHydrationWaiting && cur.Phase != hostedHydrationLoading
+}
+
+func retryHostedHydration() {
+	cur := currentHostedHydration()
+	if !cur.Required || cur.Phase != hostedHydrationError {
+		return
+	}
+	setHostedHydration(hostedHydrationStatus{Required: true, Phase: hostedHydrationWaiting})
+	if cur.RetryWorkspaceList {
+		mergedRemoteWorkspaces = false
+		mergeRemoteWorkspaces(func() { pullActiveWorkspaceFromBackend(true) })
+		return
+	}
+	pullActiveWorkspaceFromBackend(true)
 }
 
 func markHostedHydrationLocked(snapshot []byte, message string) {
@@ -173,7 +195,7 @@ func unlockHostedHydrationWithAppLock(passcode string) {
 			markHostedHydrationLocked(cur.EncryptedSnapshot, "CashFlux could not enable App Lock on this device.")
 			return
 		}
-		markHostedHydrationLoading()
+		setHostedHydration(hostedHydrationStatus{Required: true, Phase: hostedHydrationWaiting})
 		pullActiveWorkspaceFromBackend(true)
 	}()
 }

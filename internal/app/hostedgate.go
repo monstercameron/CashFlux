@@ -174,10 +174,9 @@ func hostedAuthGateActive(props HostedAuthGateProps) uic.Node {
 
 	p := hostedGatePhase(phase.Get())
 	if p == hostedGateAllowed && refresh != "" {
-		if hostedHydrationRequired() {
-			return uic.CreateElement(hostedDataHydrationGate, props)
-		}
-		return props.Content
+		// Keep one subscribed boundary mounted even after Ready. Parent renders
+		// must not decide hydration from a non-reactive Required read.
+		return uic.CreateElement(hostedDataHydrationGate, props)
 	}
 
 	content := Fragment(
@@ -260,13 +259,7 @@ func hostedDataHydrationGate(props HostedAuthGateProps) uic.Node {
 	})
 	onRetry := uic.UseEvent(func() {
 		localError.Set("")
-		markHostedHydrationLoading()
-		if status.RetryWorkspaceList {
-			mergedRemoteWorkspaces = false
-			mergeRemoteWorkspaces(func() { pullActiveWorkspaceFromBackend(true) })
-			return
-		}
-		pullActiveWorkspaceFromBackend(true)
+		retryHostedHydration()
 	})
 	onStartBudget := uic.UseEvent(startHostedEmptyAccount)
 	onImportBackup := uic.UseEvent(restoreFromBackupEncrypted)

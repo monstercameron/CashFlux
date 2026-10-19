@@ -1544,16 +1544,28 @@ func adoptRemoteWorkspaceIfUntouched(remote []backendrpc.Workspace) bool {
 }
 
 func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
+	if hostedHydrationPullHeld() {
+		return
+	}
+	if hostedHydrationRequired() && mergingRemoteWorkspaces && !mergedRemoteWorkspaces {
+		// A reconnect may arrive while ListWorkspaces is still locating the
+		// account's workspace. Its completion callback owns the first pull;
+		// asking for this install's "default" now would race remote adoption.
+		return
+	}
 	if !backendSessionReady() {
+		markHostedHydrationError("CashFlux could not verify your session. Retry after signing in.")
 		return
 	}
 	pr := uistate.LoadPrefs().Normalize()
 	if !backendConnectionActive(pr) {
+		markHostedHydrationError("CashFlux is not connected to your server. Check your connection and retry.")
 		return
 	}
 	r := loadRegistry()
 	w, ok := r.Active()
 	if !ok {
+		markHostedHydrationError("CashFlux could not find the workspace to open. Reload this page and retry.")
 		return
 	}
 	requestedOwner := signedInUserID()
@@ -1605,6 +1617,13 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 			return
 		}
 		if !resp.Found || len(resp.Dataset) == 0 {
+			if hostedHydrationRequired() {
+				// A hosted first-open must wait for the person's start/import
+				// choice. Reconnects must neither hide that choice nor seed an
+				// invented workspace while existing data is still being located.
+				markHostedHydrationEmptyAccount()
+				return
+			}
 			// The server holds no snapshot for this workspace at all — the shape of a
 			// freshly activated device against an empty account. Seed it with what
 			// this device already has instead of waiting for the user's next edit to
