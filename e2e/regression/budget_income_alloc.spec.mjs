@@ -175,7 +175,10 @@ test.describe("adding a budget no longer mints a category behind your back", { t
     // tied to existing data rather than a hard-coded sample name.
     const picker = app.getByTestId("budget-existing-cat");
     await picker.click();
-    const firstOption = (await app.getByRole("option").first().innerText()).trim();
+    // Scope the option to this picker's listbox. The page's member-view <select>
+    // also exposes native <option> roles; its first item is "Everyone", which
+    // is not a category and would correctly preview as a new category.
+    const firstOption = (await app.getByRole("listbox", { name: /category/i }).getByRole("option").first().innerText()).trim();
     await app.keyboard.press("Escape");
     await app.getByTestId("budget-create-cat").check();
 

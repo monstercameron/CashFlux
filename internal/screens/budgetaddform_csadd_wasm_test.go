@@ -150,6 +150,24 @@ func TestCSADDCategory(t *testing.T) {
 		t.Fatal(f.Text())
 	}
 }
+
+func TestCSADDExistingCategoryPreview(t *testing.T) {
+	p := csaddView(t)
+	p.Draft.CreateCategory = true
+	p.Draft.NewCategoryName = "transportation"
+	p.Preview = budgetform.Inspect(p.Draft, p.Categories, nil, p.Members, "", "")
+	p = budgetAddMessages(p)
+
+	f := render.New(t)
+	defer f.Cleanup()
+	f.Render(ui.CreateElement(budgetAddCategory, p))
+
+	fate := byTestID(f, "span", "budget-cat-fate")
+	if fate == nil || !strings.Contains(strings.ToLower(fate.Text()), "existing") || strings.Contains(strings.ToLower(fate.Text()), "create") {
+		t.Fatalf("existing category preview = %q", f.Text())
+	}
+}
+
 func TestCSADDSuggestion(t *testing.T) {
 	p := csaddView(t)
 	f := render.New(t)
