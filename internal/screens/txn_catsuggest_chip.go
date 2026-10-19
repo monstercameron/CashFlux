@@ -144,6 +144,8 @@ func txnCatSuggestChip(props txnCatSuggestChipProps) ui.Node {
 			props.OnChoose(e)
 		}
 	})
+	applyClick := OnClick(apply)
+	chooseClick := OnClick(choose)
 
 	if app == nil || !uistate.LoadSmartSettings().IsEnabled(catSuggestFreeCode) {
 		return Fragment()
@@ -168,17 +170,16 @@ func txnCatSuggestChip(props txnCatSuggestChipProps) ui.Node {
 		return Fragment()
 	}
 	name := catname.LabelByID(cats, s.CategoryID)
-
 	return Fragment(Button(css.Class("txn-catsuggest"), Type("button"),
 		Attr("data-testid", "txn-catsuggest-chip"),
 		Attr("aria-label", uistate.T("r1b.categorySuggestionAria", name)),
 		Title(uistate.T("catSuggest.chipHint")),
-		OnClick(apply),
+		applyClick,
 		uistate.T("r10w.suggestionInline", name),
 	), Button(ClassStr("txn-cat-choose"), Type("button"),
 		Attr("data-testid", "txn-category-choose"),
 		Attr("aria-label", uistate.T("r10w.chooseCategory")),
-		OnClick(choose), uistate.T("r10w.choose")))
+		chooseClick, uistate.T("r10w.choose")))
 }
 
 // categorySuggestionMatchesDirection prevents a rule with a mismatched category

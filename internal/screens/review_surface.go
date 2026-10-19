@@ -264,6 +264,18 @@ func buildReviewIndexForOpen(app *appstate.App, scope reviewscope.Scope, chosen 
 // FlushBody, so this owns both the scrolling region and the pinned action bar.
 func ReviewSurfaceBody(_ struct{}) ui.Node {
 	app := appstate.Default
+	open := uistate.UseReviewInbox()
+	if app == nil || !open.Get() {
+		if !open.Get() {
+			ClearReviewKeys()
+		}
+		return Fragment()
+	}
+	return ui.CreateElement(reviewSurfaceReady, struct{}{})
+}
+
+func reviewSurfaceReady(_ struct{}) ui.Node {
+	app := appstate.Default
 	rev := uistate.UseDataRevision().Get()
 	open := uistate.UseReviewInbox()
 	pr := uistate.UsePrefs().Get()
@@ -379,14 +391,6 @@ func ReviewSurfaceBody(_ struct{}) ui.Node {
 	}
 	clearSel := ui.UseEvent(func() { selected.Set(map[string]bool{}) })
 	nav := router.UseNavigate()
-
-	if app == nil {
-		return Fragment()
-	}
-	if !open.Get() {
-		ClearReviewKeys()
-		return Fragment()
-	}
 
 	// Rebuild ONLY when the data actually changes. Selecting a merchant, expanding
 	// a row or switching mode are pure view state, and re-deriving the whole queue
@@ -848,6 +852,7 @@ func ReviewSurfaceBody(_ struct{}) ui.Node {
 		keys.Dismiss = doDismiss
 	}
 	setReviewKeys(keys)
+	closeSurfaceClick := OnClick(closeSurface)
 
 	// ---- render --------------------------------------------------------------
 	// C554: the scope strip. It states which population is being reviewed AND the
@@ -874,7 +879,7 @@ func ReviewSurfaceBody(_ struct{}) ui.Node {
 			P(css.Class("rvw-done-title"), title),
 			P(css.Class("rvw-done-sub"), sub),
 			Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "review-done"),
-				OnClick(closeSurface), uistate.T("review.done")),
+				closeSurfaceClick, uistate.T("review.done")),
 		)
 	}
 
@@ -1128,6 +1133,8 @@ func reviewBulkView(
 	scanStrip, setupLink ui.Node, rev int,
 ) (ui.Node, ui.Node) {
 	decisions := len(idx.Rows)
+	selectReadyClick := OnClick(selReady)
+	selectLookClick := OnClick(selLook)
 
 	var tiers []ui.Node
 	for _, t := range []reviewTier{tierReady, tierLook, tierNone} {
@@ -1149,11 +1156,11 @@ func reviewBulkView(
 		switch t {
 		case tierReady:
 			act = Button(css.Class("btn btn-primary btn-sm"), Type("button"),
-				Attr("data-testid", "review-selectall-ready"), OnClick(selReady),
+				Attr("data-testid", "review-selectall-ready"), selectReadyClick,
 				uistate.T("review.selectAll", m))
 		case tierLook:
 			act = Button(css.Class("btn btn-sm"), Type("button"),
-				Attr("data-testid", "review-selectall-look"), OnClick(selLook),
+				Attr("data-testid", "review-selectall-look"), selectLookClick,
 				uistate.T("review.selectAll", m))
 		}
 		tiers = append(tiers, Div(css.Class("rvs-tier "+tierMod(t)), Attr("data-tier", tierMod(t)),
@@ -1454,13 +1461,14 @@ func isPlainLeftClick(e ui.Event) bool {
 // Its click handler only records the return context; the shared anchor interceptor
 // owns ordinary in-app navigation.
 func reviewDestinationLink(testID, route, label, accessibleName string, onClick any, trailing ui.Node) ui.Node {
+	clickOption := OnClick(onClick)
 	args := []any{css.Class("btn-link"),
 		Attr("data-testid", testID),
 		Attr("href", uistate.RoutePath(route)),
 		Attr("aria-label", accessibleName),
 		Attr("title", accessibleName)}
 	if onClick != nil {
-		args = append(args, OnClick(onClick))
+		args = append(args, clickOption)
 	}
 	args = append(args, label, trailing)
 	return A(args...)

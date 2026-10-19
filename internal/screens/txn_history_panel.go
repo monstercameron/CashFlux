@@ -51,13 +51,34 @@ func TxnHistoryPanel(props TxnHistoryPanelProps) ui.Node {
 }
 
 func txnHistoryPanel(props TxnHistoryPanelProps) ui.Node {
+	// Register state before the not-ready exit so a later app initialization does
+	// not change this component's hook order.
+	tf := ui.UseState(txnHistoryTimeframe())
 	app := appstate.Default
+	onFollowUp := ui.UseEvent(func() {
+		merchant := ""
+		if app != nil {
+			for _, t := range app.Transactions() {
+				if t.ID == props.TxnID {
+					merchant = firstNonEmpty(t.Payee, t.Desc)
+					break
+				}
+			}
+		}
+		uistate.SetTaskAddSeed(uistate.TaskAddSeed{
+			Title:    uistate.T("transactions.followUpTaskTitle", merchant),
+			LinkType: string(domain.RelatedTransaction), LinkID: props.TxnID,
+		})
+		uistate.SetAddTarget("task")
+	})
+	followUpBtn := Div(css.Class(tw.Flex, tw.JustifyEnd, tw.Mb2),
+		Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "txn-history-followup"),
+			OnClick(onFollowUp), uistate.T("transactions.followUpTask")))
 	if app == nil {
 		return P(css.Class("empty"), uistate.T("common.notReady"))
 	}
 	// Configurable timeframe (feedback #7): the history can be scoped to a recent
 	// window instead of always showing everything. Persisted so it holds across reopens.
-	tf := ui.UseState(txnHistoryTimeframe())
 	setTf := func(days int) {
 		v := "all"
 		if days > 0 {
@@ -92,27 +113,6 @@ func txnHistoryPanel(props TxnHistoryPanelProps) ui.Node {
 		ui.CreateElement(txnHistTfButton, txnHistTfProps{Label: uistate.T("txnhistory.tf30"), Days: 30, Selected: days == 30, OnPick: setTf}),
 		ui.CreateElement(txnHistTfButton, txnHistTfProps{Label: uistate.T("txnhistory.tf7"), Days: 7, Selected: days == 7, OnPick: setTf}),
 	)
-
-	// A follow-up-task action right here in the history panel (coworker feedback): seed the add-task
-	// modal with a suggested title + this transaction pre-linked, matching the row ⋯-menu action.
-	merchant := ""
-	for _, t := range app.Transactions() {
-		if t.ID == props.TxnID {
-			merchant = firstNonEmpty(t.Payee, t.Desc)
-			break
-		}
-	}
-	onFollowUp := ui.UseEvent(func() {
-		uistate.SetTaskAddSeed(uistate.TaskAddSeed{
-			Title:    uistate.T("transactions.followUpTaskTitle", merchant),
-			LinkType: string(domain.RelatedTransaction),
-			LinkID:   props.TxnID,
-		})
-		uistate.SetAddTarget("task")
-	})
-	followUpBtn := Div(css.Class(tw.Flex, tw.JustifyEnd, tw.Mb2),
-		Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "txn-history-followup"),
-			OnClick(onFollowUp), uistate.T("transactions.followUpTask")))
 
 	if len(mine) == 0 {
 		emptyKey := "txnhistory.empty"

@@ -151,6 +151,9 @@ func TxnDraftHint(props TxnDraftHintProps) ui.Node {
 			},
 			func(e string) { loading.Set(false); errText.Set(e) })
 	}))
+	inputOption := OnInput(onInput)
+	keyDownOption := OnKeyDown(onKeyDown)
+	askOption := OnClick(ask)
 
 	if !freeEnabled && !aiEnabled {
 		return Fragment()
@@ -195,7 +198,7 @@ func TxnDraftHint(props TxnDraftHintProps) ui.Node {
 		}
 		askBtn = Button(css.Class("btn btn-sm btn-ghost", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
 			Attr("data-testid", "sm15-ai-btn"), Attr("aria-disabled", ariaBool(loading.Get())),
-			OnClick(ask), smartGlyph(true, tw.Fold(tw.W3, tw.H3)), Span(label))
+			askOption, smartGlyph(true, tw.Fold(tw.W3, tw.H3)), Span(label))
 	}
 
 	return Div(css.Class("sm15"), Attr("data-testid", "sm15-draft"),
@@ -204,7 +207,7 @@ func TxnDraftHint(props TxnDraftHintProps) ui.Node {
 				Attr("id", "sm15-input"),
 				Attr("data-testid", "sm15-input"),
 				Attr("aria-label", uistate.T("sm15.label")),
-				Placeholder(uistate.T("sm15.placeholder")), OnInput(onInput), OnKeyDown(onKeyDown), uiw.FieldValue(sentence.Get())),
+				Placeholder(uistate.T("sm15.placeholder")), inputOption, keyDownOption, uiw.FieldValue(sentence.Get())),
 			askBtn,
 		),
 		hint,

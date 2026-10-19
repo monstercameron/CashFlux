@@ -256,6 +256,8 @@ func txnFollowUpChip(props txnFollowUpChipProps) ui.Node {
 			props.OnOpen()
 		}
 	})
+	mouseEnter := OnMouseEnter(onEnter)
+	mouseLeave := OnMouseLeave(onLeave)
 
 	var pop ui.Node = Fragment()
 	if open.Get() {
@@ -263,7 +265,7 @@ func txnFollowUpChip(props txnFollowUpChipProps) ui.Node {
 			Attr("data-testid", "txn-followup-pop-"+props.TxnID),
 			// Hovering the popover keeps it open (cancels the grace-period close), so the
 			// pointer can move off the chip and read/interact with the list.
-			OnMouseEnter(onEnter), OnMouseLeave(onLeave),
+			mouseEnter, mouseLeave,
 			Div(css.Class("txnfu-pop-head"), uistate.T("transactions.followUpsPopHead", props.Open, props.Total)),
 		}
 		// Show at most the top 3 OPEN follow-ups (items are pre-sorted open-first by due),

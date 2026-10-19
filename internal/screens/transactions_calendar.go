@@ -455,8 +455,9 @@ func txnCalMonthCell(props txnCalMonthCellProps) ui.Node {
 		Attr("aria-label", label),
 		Attr("title", label),
 	}
+	click := OnClick(pick)
 	if props.InMonth {
-		args = append(args, OnClick(pick))
+		args = append(args, click)
 		if props.Today {
 			args = append(args, Attr("aria-current", "date"))
 		}

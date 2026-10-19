@@ -94,6 +94,7 @@ func txnCountLineComponent(props txnCountLineProps) ui.Node {
 			f.From, f.To, f.PeriodPreset = "", "", txnfilter.PeriodAllDates
 		})
 	}))
+	searchWidenClick := OnClick(onSearchAllDates)
 	if props.Total == 0 && !futurePeriod {
 		return Span(css.Class("txn-countline-slot"), Attr("aria-hidden", "true"), Style(map[string]string{"display": "none"}))
 	}
@@ -177,7 +178,7 @@ func txnCountLineComponent(props txnCountLineProps) ui.Node {
 		allCount := txnSearchAllDatesCount(allDates)
 		label := uistate.T("r4cnt.searchAllDates", txnCountNumber(allCount))
 		searchWidenAction = Button(css.Class("btn-link txn-count-search-widen"), Type("button"), Attr("data-testid", "txn-search-all-dates"),
-			OnClick(onSearchAllDates), label)
+			searchWidenClick, label)
 		secondaryText = append(secondaryText, label)
 	}
 	secondary = append(secondary, searchWidenAction)
@@ -198,6 +199,7 @@ func txnCountRoot(announce bool, sentence string, content ui.Node) ui.Node {
 }
 
 func txnCountFigure(kind, label, amount string, negative, pressed, interactive bool, onClick ui.Handler) ui.Node {
+	click := OnClick(onClick)
 	valueClass := "txn-count-value"
 	if negative || kind == "spent" {
 		valueClass += " txn-count-negative"
@@ -218,7 +220,7 @@ func txnCountFigure(kind, label, amount string, negative, pressed, interactive b
 		if kind == "spent" {
 			buttonClass += " text-down"
 		}
-		figure = Button(css.Class(buttonClass), Type("button"), Attr("data-testid", "txn-count-"+kind), Attr("aria-pressed", ariaBool(pressed)), OnClick(onClick),
+		figure = Button(css.Class(buttonClass), Type("button"), Attr("data-testid", "txn-count-"+kind), Attr("aria-pressed", ariaBool(pressed)), click,
 			value, Span(css.Class("txn-count-label"), label))
 	} else {
 		figure = Div(css.Class("txn-count-figure"), Attr("data-testid", "txn-count-"+kind), value, Span(css.Class("txn-count-label"), label))

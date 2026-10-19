@@ -75,12 +75,14 @@ func RefundPairBody(_ struct{}) ui.Node {
 		uistate.BumpDataRevision()
 		targetAtom.Set("")
 	}))
+	cancelClick := OnClick(onCancel)
+	saveClick := OnClick(onSave)
 
 	if !found {
 		return Div(css.Class(tw.FlexCol, tw.Gap3),
 			P(css.Class("muted"), Attr("data-testid", "refundpair-missing"), uistate.T("txnlinks.pairMissing")),
 			Div(css.Class("modal-sticky-foot"),
-				Button(css.Class("btn"), Type("button"), OnClick(onCancel), uistate.T("action.close"))))
+				Button(css.Class("btn"), Type("button"), cancelClick, uistate.T("action.close"))))
 	}
 
 	acctName := map[string]string{}
@@ -121,8 +123,8 @@ func RefundPairBody(_ struct{}) ui.Node {
 		summary,
 		body,
 		Div(css.Class("modal-sticky-foot"),
-			Button(css.Class("btn"), Type("button"), Attr("data-testid", "refundpair-cancel"), OnClick(onCancel), uistate.T("action.cancel")),
-			If(len(candidates) > 0, Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "refundpair-save"), OnClick(onSave), uistate.T("txnlinks.pairConfirm")))),
+			Button(css.Class("btn"), Type("button"), Attr("data-testid", "refundpair-cancel"), cancelClick, uistate.T("action.cancel")),
+			If(len(candidates) > 0, Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "refundpair-save"), saveClick, uistate.T("txnlinks.pairConfirm")))),
 	)
 }
 

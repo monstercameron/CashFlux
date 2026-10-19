@@ -164,6 +164,9 @@ func CatSuggestBody(_ struct{}) ui.Node {
 		}
 		uistate.CloseCatSuggest()
 	}))
+	askAIClick := OnClick(askAI)
+	saveSubmit := OnSubmit(save)
+	batchChange := OnChange(onBatch)
 	if !found {
 		return Fragment()
 	}
@@ -193,7 +196,7 @@ func CatSuggestBody(_ struct{}) ui.Node {
 			label = uistate.T("catSuggest.asking")
 		}
 		aiBtn = Button(css.Class("btn btn-sm btn-ghost", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
-			Attr("data-testid", "catsuggest-ai"), Attr("aria-disabled", ariaBool(loading.Get())), OnClick(askAI),
+			Attr("data-testid", "catsuggest-ai"), Attr("aria-disabled", ariaBool(loading.Get())), askAIClick,
 			smartGlyph(true, tw.Fold(tw.W35, tw.H35)), Span(label))
 	}
 
@@ -211,7 +214,7 @@ func CatSuggestBody(_ struct{}) ui.Node {
 		})
 	}
 	return Fragment(Form(css.Class("csug", tw.FlexCol, tw.Gap3),
-		Attr("id", CatSuggestFormID), Attr("data-testid", "catsuggest-modal"), OnSubmit(save),
+		Attr("id", CatSuggestFormID), Attr("data-testid", "catsuggest-modal"), saveSubmit,
 		// The charge itself, read-only, so it is clear what is being filed.
 		Div(css.Class("csug-txn"),
 			Div(css.Class(tw.Text12, tw.TextDim), uistate.T("catSuggest.txnLabel")),
@@ -243,7 +246,7 @@ func CatSuggestBody(_ struct{}) ui.Node {
 		If(others > 0, Label(css.Class("csug-batch", tw.Flex, tw.ItemsCenter, tw.Gap2),
 			Style(map[string]string{"cursor": "pointer"}),
 			Input(append([]any{css.Class("cf-check"), Type("checkbox"),
-				Attr("data-testid", "catsuggest-batch"), OnChange(onBatch)}, checkedAttr(batch.Get())...)...),
+				Attr("data-testid", "catsuggest-batch"), batchChange}, checkedAttr(batch.Get())...)...),
 			Span(css.Class(tw.Text13), uistate.T("catSuggest.batchLabel", others)))),
 		If(errText.Get() != "", P(css.Class("err"), Attr("role", "alert"), errText.Get())),
 	), pickerNode)

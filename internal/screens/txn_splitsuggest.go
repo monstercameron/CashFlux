@@ -131,6 +131,7 @@ func splitSuggestHint(props splitSuggestProps) ui.Node {
 			},
 			func(e string) { loading.Set(false); aiNote.Set(e) })
 	})
+	askClick := OnClick(askAI)
 
 	if app == nil || txn.ID == "" {
 		return Fragment()
@@ -180,7 +181,7 @@ func splitSuggestHint(props splitSuggestProps) ui.Node {
 		Attr("data-testid", "sm3-ask"),
 		Button(css.Class("btn btn-sm btn-ghost", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
 			Attr("data-testid", "sm3-ai-btn"), Attr("aria-disabled", ariaBool(loading.Get())),
-			OnClick(askAI), smartGlyph(true, tw.Fold(tw.W35, tw.H35)), Span(label)),
+			askClick, smartGlyph(true, tw.Fold(tw.W35, tw.H35)), Span(label)),
 		If(aiNote.Get() != "", Span(css.Class(tw.Text12, tw.TextDim), aiNote.Get())),
 	)
 }

@@ -150,12 +150,15 @@ func TxnLinkBody(_ struct{}) ui.Node {
 	}))
 	onCancel := ui.UseEvent(Prevent(func() { linkAtom.Set(uistate.TxnLinkTarget{}) }))
 	onToggleAutoLink := ui.UseEvent(func() { autoLink.Set(!autoLink.Get()) })
+	cancelClick := OnClick(onCancel)
+	saveClick := OnClick(onSave)
+	autoLinkChange := OnChange(onToggleAutoLink)
 
 	if !found {
 		return Div(css.Class(tw.FlexCol, tw.Gap3),
 			P(css.Class("muted"), Attr("data-testid", "txnlink-missing"), uistate.T("txnlink.missing")),
 			Div(css.Class("modal-sticky-foot"),
-				Button(css.Class("btn"), Type("button"), OnClick(onCancel), uistate.T("action.close"))))
+				Button(css.Class("btn"), Type("button"), cancelClick, uistate.T("action.close"))))
 	}
 
 	// Bill-payment targets are active liability accounts. Also build an id→name map for the
@@ -247,7 +250,7 @@ func TxnLinkBody(_ struct{}) ui.Node {
 				// Offer to remember this as a rule once a debt is chosen, so future
 				// payments to the same merchant auto-link (also applied on import).
 				If(billChoice.Get() != "", Label(css.Class("acct-liab-toggle", tw.Flex, tw.ItemsCenter, tw.Gap2), Style(map[string]string{"cursor": "pointer"}),
-					Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "txnlink-autolink"), OnChange(onToggleAutoLink)}, checkedAttr(autoLink.Get())...)...),
+					Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "txnlink-autolink"), autoLinkChange}, checkedAttr(autoLink.Get())...)...),
 					Div(css.Class("row-main"),
 						Span(uistate.T("txnlink.autoLink", txnLinkMerchant(txn))),
 						Span(css.Class("row-meta", tw.TextDim), uistate.T("txnlink.autoLinkHint"))))))
@@ -297,7 +300,7 @@ func TxnLinkBody(_ struct{}) ui.Node {
 		saveHint = P(css.Class("muted", tw.Text13), Attr("data-testid", "txnlink-clearhint"),
 			Style(map[string]string{"margin": "0"}), uistate.T("txnlink.clearHint"))
 	}
-	saveArgs := []any{css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "txnlink-save"), OnClick(onSave), saveLabel}
+	saveArgs := []any{css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "txnlink-save"), saveClick, saveLabel}
 	if !changed {
 		saveArgs = append(saveArgs, Disabled(true), Attr("aria-disabled", "true"))
 	}
@@ -309,7 +312,7 @@ func TxnLinkBody(_ struct{}) ui.Node {
 		preview,
 		saveHint,
 		Div(css.Class("modal-sticky-foot"),
-			Button(css.Class("btn"), Type("button"), Attr("data-testid", "txnlink-cancel"), OnClick(onCancel), uistate.T("action.cancel")),
+			Button(css.Class("btn"), Type("button"), Attr("data-testid", "txnlink-cancel"), cancelClick, uistate.T("action.cancel")),
 			Button(saveArgs...)),
 	)
 }

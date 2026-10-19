@@ -90,6 +90,11 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Stable hook order across the Transactions side panels (HOOKT).** The review dialog, link and refund-pair dialogs,
+  quick-add draft hint, category-suggestion chip and modal, split suggestion, smart-category body, follow-up popover,
+  calendar day cells, count line, empty-search notice and history panel now register every event handler at a fixed
+  position before any early return or branch, so their hooks can no longer shift when data changes. Scheduled bills that
+  pay a loan or card read "Transfer → <account>" (R4LOAN).
 - **Loan and card payments are transfers when they post (R4LOAN).** Paying a bill or auto-posting a recurring payment that
   matches one loan or card account (same currency, its minimum payment, and a shared word with the account name) now
   creates a transfer pair to that account instead of an expense, and only advances the schedule once the pair is saved;

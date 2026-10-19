@@ -61,6 +61,7 @@ func txnNoMatch(props txnNoMatchProps) ui.Node {
 		pending.Set(false)
 		setTxFilterOn(filterAtom, func(x *uistate.TxFilter) { x.Text = "" })
 	})
+	clearClick := OnClick(clear)
 
 	if props.FuturePeriod {
 		return Div(css.Class("empty", tw.Flex, tw.FlexCol, tw.ItemsCenter, tw.Gap2),
@@ -70,7 +71,7 @@ func txnNoMatch(props txnNoMatchProps) ui.Node {
 				Attr("aria-label", uistate.T("transactions.noMatchFutureListLabel")),
 				Fragment(txnScheduledGhostRows(props.ScheduledItems, prefs.FormatDate)...))),
 			If(props.Search != "", Button(css.Class("btn btn-sm"), Type("button"),
-				Attr("data-testid", "txn-nomatch-clear"), OnClick(clear), uistate.T("action.clearSearch"))),
+				Attr("data-testid", "txn-nomatch-clear"), clearClick, uistate.T("action.clearSearch"))),
 			A(css.Class("btn-link"), Href(uistate.RoutePath("/recurring")),
 				Attr("data-testid", "txn-nomatch-recurring"), uistate.T("transactions.noMatchFutureLink")),
 		)
@@ -84,7 +85,7 @@ func txnNoMatch(props txnNoMatchProps) ui.Node {
 		P(uistate.T("transactions.noMatchSearch", props.Search)),
 		Button(css.Class("btn btn-sm"), Type("button"),
 			Attr("data-testid", "txn-nomatch-clear"),
-			OnClick(clear), uistate.T("action.clearSearch")),
+			clearClick, uistate.T("action.clearSearch")),
 		P(css.Class("t-caption", tw.TextDim), uistate.T("transactions.noMatchKeepsFilters")),
 	)
 }
@@ -246,6 +247,9 @@ func txnFutureScheduledItems(filter uistate.TxFilter, now time.Time) []bills.Bil
 	items := bills.UpcomingAll(app.Accounts(), app.Recurring(), now)
 	filtered := make([]bills.Bill, 0, len(items))
 	for _, item := range items {
+		if item.TransferAccountID != "" {
+			item.Name = "Transfer → " + item.TransferAccountName
+		}
 		due := item.DueDate.Format("2006-01-02")
 		if due < filter.From || (filter.To != "" && due > filter.To) {
 			continue

@@ -404,11 +404,12 @@ func TxnSmartCatBody(_ struct{}) ui.Node {
 
 // smartCatConnectLink is the route destination for adding an AI provider.
 func smartCatConnectLink(onActivate any) ui.Node {
+	click := OnClick(onActivate)
 	args := []any{css.Class("btn btn-primary btn-sm"),
 		Attr("data-testid", "smartcat-connect"),
 		Attr("href", uistate.RoutePath("/settings/ai"))}
 	if onActivate != nil {
-		args = append(args, OnClick(onActivate))
+		args = append(args, click)
 	}
 	args = append(args, uistate.T("review.scanConnect"))
 	return A(args...)
