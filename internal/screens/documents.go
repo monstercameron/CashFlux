@@ -199,6 +199,25 @@ func statementParseOptions(dateOrder, numberFormat string) statement.ParseOption
 	return options
 }
 
+func importNumberFormatChoice(choice string) importmap.NumberFormat {
+	switch choice {
+	case "dot":
+		return importmap.NumberFormatDotDecimal
+	case "comma":
+		return importmap.NumberFormatCommaDecimal
+	default:
+		return importmap.NumberFormatAuto
+	}
+}
+
+func mapImportErrors(rows []importmap.RowError) []store.CSVRowError {
+	out := make([]store.CSVRowError, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, store.CSVRowError{Line: row.Index + 1, Reason: row.Error()})
+	}
+	return out
+}
+
 func validateCSVRowLimit(data []byte, limit int) error {
 	if limit <= 0 {
 		return nil
@@ -579,7 +598,25 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 			msg.Set(uistate.T("documents.csvEmpty"))
 			return
 		}
-		info := &csvPreflightInfo{Total: len(txns)}
+		accountCurrencies := make(map[string]string, len(app.Accounts()))
+		for _, account := range app.Accounts() {
+			accountCurrencies[account.ID] = account.Currency
+		}
+		baseCurrency := app.Settings().BaseCurrency
+		if baseCurrency == "" {
+			baseCurrency = "USD"
+		}
+		_, skipped, parseErr := store.TransactionsFromCSVResilientForAccounts(data, baseCurrency,
+			importAcct.Get(), accountCurrencies)
+		if parseErr != nil {
+			msg.Set(uistate.T("documents.csvError", strings.TrimPrefix(parseErr.Error(), "store: ")))
+			return
+		}
+		if len(txns) == 0 && len(skipped) == 0 {
+			msg.Set(uistate.T("documents.csvEmpty"))
+			return
+		}
+		info := &csvPreflightInfo{Total: len(txns) + len(skipped), Failures: skipped}
 		info.Whys = importsafe.Duplicates(txns, app.Transactions(), importAcct.Get())
 		info.Dupes = len(info.Whys)
 		// C689: the same rows, staged once through the app's one duplicate rule,
@@ -591,10 +628,11 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 			cur = s.BaseCurrency
 		}
 		inputs := make([]staging.Input, 0, len(txns))
-		for _, t := range txns {
+		for i := range txns {
+			t := txns[i]
 			inputs = append(inputs, staging.Input{
 				Date: t.Date, Description: t.Desc, AmountMinor: t.Amount.Amount,
-				HasAmount: true, AccountID: t.AccountID,
+				HasAmount: true, AccountID: t.AccountID, Transaction: &t,
 			})
 		}
 		info.Batch = staging.Stage(inputs, app.Transactions(), importAcct.Get(), cur)
@@ -605,8 +643,12 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 			if b, berr := ledger.Balance(acc, app.Transactions()); berr == nil {
 				info.HasBal = true
 				info.BeforeMinor = b.Amount
-				info.NetMinor, info.AfterMinor = importsafe.Impact(b.Amount, txns, acc.ID)
-				info.Jump = importsafe.JumpWarning(b.Amount, info.NetMinor)
+				info.NetMinor, info.AfterMinor, err = importsafe.Impact(b.Amount, txns, acc.ID, acc.Currency)
+				if err != nil {
+					info.HasBal = false
+				} else {
+					info.Jump = importsafe.JumpWarning(b.Amount, info.NetMinor)
+				}
 			}
 		}
 		pendingCSV.Set(data)
@@ -803,16 +845,17 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 			return v
 		}
 		p := importmap.Profile{
-			Name:        "manual",
-			DateCol:     atoi(wizardDate.Get()),
-			DescCol:     atoi(wizardDescCol.Get()),
-			AmountCol:   atoi(wizardAmount.Get()),
-			DebitCol:    atoi(wizardDebit.Get()),
-			CreditCol:   atoi(wizardCredit.Get()),
-			BalanceCol:  -1,
-			CurrencyCol: -1,
-			SkipRows:    0,
-			Decimals:    dec,
+			Name:         "manual",
+			DateCol:      atoi(wizardDate.Get()),
+			DescCol:      atoi(wizardDescCol.Get()),
+			AmountCol:    atoi(wizardAmount.Get()),
+			DebitCol:     atoi(wizardDebit.Get()),
+			CreditCol:    atoi(wizardCredit.Get()),
+			BalanceCol:   -1,
+			CurrencyCol:  -1,
+			SkipRows:     0,
+			Decimals:     dec,
+			NumberFormat: importNumberFormatChoice(numberFormatChoice.Get()),
 		}
 		rawRecs := wizardRawRows.Get()
 		// Flatten [][][]string to [][]string (each outer entry is one record set).
@@ -820,9 +863,9 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 		for _, group := range rawRecs {
 			flat = append(flat, group...)
 		}
-		stRows := importmap.Apply(p, flat)
+		stRows, rowErrors, rowWarnings := importmap.ApplyWithDiagnostics(p, flat)
 		if len(stRows) == 0 {
-			msg.Set("No rows matched — check your column assignments.")
+			msg.Set(uistate.T("documents.wizardNoRows", csvSkipDetail(mapImportErrors(rowErrors))))
 			return
 		}
 		rows := make([]extract.Row, 0, len(stRows))
@@ -835,7 +878,14 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 		}
 		wizardVisible.Set(false)
 		setDraft(rows)
-		msg.Set(uistate.T("documents.stmtParsed", plural(len(rows), "row")))
+		message := uistate.T("documents.stmtParsed", plural(len(rows), "row"))
+		if len(rowErrors) > 0 {
+			message += " " + csvSkipDetail(mapImportErrors(rowErrors))
+		}
+		if len(rowWarnings) > 0 {
+			message += " " + uistate.T("documents.ambiguousDates", len(rowWarnings))
+		}
+		msg.Set(message)
 		rev.Set(rev.Get() + 1)
 	}))
 
@@ -847,15 +897,16 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 		}
 		atoi := func(s string) int { v, _ := strconv.Atoi(s); return v }
 		p := importmap.Profile{
-			Name:        name,
-			DateCol:     atoi(wizardDate.Get()),
-			DescCol:     atoi(wizardDescCol.Get()),
-			AmountCol:   atoi(wizardAmount.Get()),
-			DebitCol:    atoi(wizardDebit.Get()),
-			CreditCol:   atoi(wizardCredit.Get()),
-			BalanceCol:  -1,
-			CurrencyCol: -1,
-			Decimals:    currency.Decimals(reviewCurrencyFor(app, accounts, importAcct.Get())),
+			Name:         name,
+			DateCol:      atoi(wizardDate.Get()),
+			DescCol:      atoi(wizardDescCol.Get()),
+			AmountCol:    atoi(wizardAmount.Get()),
+			DebitCol:     atoi(wizardDebit.Get()),
+			CreditCol:    atoi(wizardCredit.Get()),
+			BalanceCol:   -1,
+			CurrencyCol:  -1,
+			Decimals:     currency.Decimals(reviewCurrencyFor(app, accounts, importAcct.Get())),
+			NumberFormat: importNumberFormatChoice(numberFormatChoice.Get()),
 		}
 		saved, err := app.SaveImportProfile(importmap.SavedProfile{Profile: p}, activeImportProfileWorkspaceID())
 		if err != nil {
@@ -1658,7 +1709,7 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 								}
 								dec := currency.Decimals(reviewCurrencyFor(app, accounts, importAcct.Get()))
 								sp.Profile.Decimals = dec
-								stRows := importmap.Apply(sp.Profile, flat)
+								stRows, rowErrors, rowWarnings := importmap.ApplyWithDiagnostics(sp.Profile, flat)
 								if len(stRows) == 0 {
 									msg.Set("No rows matched with that profile — check column assignments.")
 									return
@@ -1673,7 +1724,14 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 								}
 								wizardVisible.Set(false)
 								setDraft(rows2)
-								msg.Set(uistate.T("documents.stmtParsed", plural(len(rows2), "row")))
+								message := uistate.T("documents.stmtParsed", plural(len(rows2), "row"))
+								if len(rowErrors) > 0 {
+									message += " " + csvSkipDetail(mapImportErrors(rowErrors))
+								}
+								if len(rowWarnings) > 0 {
+									message += " " + uistate.T("documents.ambiguousDates", len(rowWarnings))
+								}
+								msg.Set(message)
 								rev.Set(rev.Get() + 1)
 							},
 							func(id string) {

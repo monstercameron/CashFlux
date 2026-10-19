@@ -90,6 +90,10 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Imports are safer and faster (TC3B7).** Debit signs and totals use checked sums; preflight counts only writable rows and names
+  failed ones; staging keys duplicates on the parsed payee and currency; transfer-pair scanning is indexed for 3,000-row
+  files; malformed accounting signs, three-digit groups and ambiguous numeric dates are reported; mixed currencies and
+  overflow are refused in impact estimates; the number-format choice is kept in saved profiles.
 - **Budgets: every limit change moves the card; money moves hit the right period (BC4 code review, BV6 visual review).**
   - One authoritative limit (BC4S1): every write records limit history, so the card editor, Apply suggestion, price-creep raise and
     recurring cover change the card; covering a budget is a per-period boost that recurring cover cannot compound; changing a budget's

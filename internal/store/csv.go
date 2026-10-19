@@ -309,6 +309,12 @@ type CSVRowError struct {
 // valid rows. The semantics of column matching, id generation, and currency
 // defaulting are identical to TransactionsFromCSV.
 func TransactionsFromCSVResilient(data []byte, defaultCurrency string) (txns []domain.Transaction, skipped []CSVRowError, err error) {
+	return TransactionsFromCSVResilientForAccounts(data, defaultCurrency, "", nil)
+}
+
+// TransactionsFromCSVResilientForAccounts parses amounts using the currency of
+// the resolved account. It preserves row failures for the import preflight.
+func TransactionsFromCSVResilientForAccounts(data []byte, defaultCurrency, fallbackAccountID string, accountCurrencies map[string]string) (txns []domain.Transaction, skipped []CSVRowError, err error) {
 	r := csvReader(data)
 	records, csvErr := r.ReadAll()
 	if csvErr != nil {
@@ -369,6 +375,7 @@ func TransactionsFromCSVResilient(data []byte, defaultCurrency string) (txns []d
 		line := n + 2
 		nativeExport := isCashFluxExportRow(row)
 
+		accountID := colID(row, "account")
 		amtStr := col(row, "amount")
 		if amtStr == "" {
 			skipped = append(skipped, CSVRowError{Line: line, Reason: "amount is required"})
@@ -376,10 +383,24 @@ func TransactionsFromCSVResilient(data []byte, defaultCurrency string) (txns []d
 		}
 		curr := fieldCol(row, "currency", nativeExport)
 		if curr == "" {
-			curr = defaultCurrency
+			curr = accountCurrencies[accountID]
+			if curr == "" && accountID == "" {
+				curr = accountCurrencies[fallbackAccountID]
+			}
+			if curr == "" {
+				curr = defaultCurrency
+			}
 		}
 		if curr == "" {
 			skipped = append(skipped, CSVRowError{Line: line, Reason: "currency is required (add a currency column or set a base currency)"})
+			continue
+		}
+		accountIDForCurrency := accountID
+		if accountIDForCurrency == "" {
+			accountIDForCurrency = fallbackAccountID
+		}
+		if accountCurrency := accountCurrencies[accountIDForCurrency]; accountCurrency != "" && !strings.EqualFold(curr, accountCurrency) {
+			skipped = append(skipped, CSVRowError{Line: line, Reason: fmt.Sprintf("currency %s does not match account currency %s", curr, accountCurrency)})
 			continue
 		}
 		amt, parseErr := money.ParseMinor(amtStr, currency.Decimals(curr))
@@ -446,7 +467,7 @@ func TransactionsFromCSVResilient(data []byte, defaultCurrency string) (txns []d
 		}
 		txn := domain.Transaction{
 			ID:                tid,
-			AccountID:         colID(row, "account"),
+			AccountID:         accountID,
 			Date:              date,
 			Payee:             payee,
 			Desc:              desc,
@@ -494,158 +515,14 @@ func csvSource(raw string, columnPresent bool) domain.TxnSource {
 // are read from either the export's `*_id` headers or the friendly `account`/
 // `category`/`member` names; values given as names are resolved to ids by the
 // caller (appstate), which has the entity lists.
+// TransactionsFromCSV is the fail-fast compatibility wrapper around the resilient parser.
 func TransactionsFromCSV(data []byte, defaultCurrency string) ([]domain.Transaction, error) {
-	r := csvReader(data)
-	records, err := r.ReadAll()
+	txns, skipped, err := TransactionsFromCSVResilient(data, defaultCurrency)
 	if err != nil {
-		return nil, fmt.Errorf("store: csv read: %w", err)
+		return nil, err
 	}
-	if len(records) == 0 {
-		return nil, nil
+	if len(skipped) > 0 {
+		return nil, fmt.Errorf("store: csv line %d: %s", skipped[0].Line, skipped[0].Reason)
 	}
-
-	idx := make(map[string]int, len(records[0]))
-	for i, name := range records[0] {
-		idx[strings.ToLower(strings.TrimSpace(name))] = i
-	}
-	_, srcCol := idx["source"] // whether the file carries provenance (vs a foreign CSV)
-	col := func(row []string, name string) string {
-		if i, ok := idx[name]; ok && i < len(row) {
-			return strings.TrimSpace(row[i])
-		}
-		return ""
-	}
-	isCashFluxExportRow := func(row []string) bool {
-		i, ok := idx["cashflux_export"]
-		return ok && i < len(row) && isCashFluxCSVMarker(row[i])
-	}
-	isV2ExportRow := func(row []string) bool {
-		i, ok := idx["cashflux_export"]
-		return ok && i < len(row) && strings.TrimSpace(row[i]) == cashFluxCSVExportMarker
-	}
-	fieldCol := func(row []string, name string, nativeExport bool) string {
-		if i, ok := idx[name]; ok && i < len(row) {
-			value := row[i]
-			if nativeExport {
-				return csvsafe.Restore(value)
-			}
-			return strings.TrimSpace(value)
-		}
-		return ""
-	}
-	// colID reads an entity reference from either the export header (`<base>_id`)
-	// or the friendly documented name (`<base>`), preferring the explicit id.
-	colID := func(row []string, base string) string {
-		nativeExport := isCashFluxExportRow(row)
-		if v := fieldCol(row, base+"_id", nativeExport); v != "" {
-			return v
-		}
-		return fieldCol(row, base, nativeExport)
-	}
-	textCol := func(row []string, name string, nativeExport bool) string {
-		if i, ok := idx[name]; ok && i < len(row) {
-			value := row[i]
-			if nativeExport {
-				return csvsafe.Restore(value)
-			}
-			return strings.TrimSpace(value)
-		}
-		return ""
-	}
-
-	out := make([]domain.Transaction, 0, len(records)-1)
-	for n, row := range records[1:] {
-		line := n + 2
-		nativeExport := isCashFluxExportRow(row)
-
-		amtStr := col(row, "amount")
-		if amtStr == "" {
-			return nil, fmt.Errorf("store: csv line %d: amount is required", line)
-		}
-		curr := fieldCol(row, "currency", nativeExport)
-		if curr == "" {
-			curr = defaultCurrency
-		}
-		if curr == "" {
-			return nil, fmt.Errorf("store: csv line %d: currency is required (add a currency column or set a base currency)", line)
-		}
-		amt, err := money.ParseMinor(amtStr, currency.Decimals(curr))
-		if err != nil {
-			return nil, fmt.Errorf("store: csv line %d: %w", line, err)
-		}
-
-		var date time.Time
-		if ds := col(row, "date"); ds != "" {
-			if date, err = dateutil.ParseDate(ds); err != nil {
-				return nil, fmt.Errorf("store: csv line %d: %w", line, err)
-			}
-		}
-
-		cleared := false
-		if cs := col(row, "cleared"); cs != "" {
-			if cleared, err = strconv.ParseBool(cs); err != nil {
-				return nil, fmt.Errorf("store: csv line %d: invalid cleared %q", line, cs)
-			}
-		}
-
-		var tags []string
-		if ts := textCol(row, "tags", nativeExport); ts != "" {
-			for _, tg := range strings.Split(ts, ";") {
-				if !nativeExport {
-					tg = strings.TrimSpace(tg)
-				}
-				if tg != "" {
-					tags = append(tags, tg)
-				}
-			}
-		}
-
-		tid := fieldCol(row, "id", nativeExport)
-		if tid == "" {
-			tid = id.New()
-		}
-
-		// The documented "date,payee,amount,account" shape (C27) has no desc
-		// column, but the ledger requires a description — so fall back to the
-		// payee, which is the human-facing label, when desc is absent. An explicit
-		// desc column still takes precedence.
-		payee := textCol(row, "payee", nativeExport)
-		desc := textCol(row, "desc", nativeExport)
-		if desc == "" {
-			desc = payee
-		}
-
-		var owners []string
-		var ownerErr error
-		if isV2ExportRow(row) {
-			ownerErr = decodeCSVJSON(row, idx, "member_ids", true, &owners)
-		} else {
-			owners, ownerErr = parseCSVOwners(fieldCol(row, "member_ids", nativeExport), colID(row, "member"))
-		}
-		if ownerErr != nil {
-			return nil, fmt.Errorf("store: csv line %d: invalid member_ids: %w", line, ownerErr)
-		}
-		txn := domain.Transaction{
-			ID:                tid,
-			AccountID:         colID(row, "account"),
-			Date:              date,
-			Payee:             payee,
-			Desc:              desc,
-			CategoryID:        colID(row, "category"),
-			Amount:            money.New(amt, curr),
-			TransferAccountID: colID(row, "transfer_account"),
-			TransferGroupID:   colID(row, "transfer_group"),
-			Cleared:           cleared,
-			Tags:              tags,
-			MemberIDs:         owners,
-			Source:            csvSource(fieldCol(row, "source", nativeExport), srcCol),
-		}
-		if isV2ExportRow(row) {
-			if err := applyCSVV2Fields(&txn, row, idx, true); err != nil {
-				return nil, fmt.Errorf("store: csv line %d: %w", line, err)
-			}
-		}
-		out = append(out, txn)
-	}
-	return out, nil
+	return txns, nil
 }

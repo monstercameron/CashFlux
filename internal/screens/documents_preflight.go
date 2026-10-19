@@ -18,6 +18,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/receiptmatch"
 	"github.com/monstercameron/CashFlux/internal/staging"
+	"github.com/monstercameron/CashFlux/internal/store"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/css"
@@ -44,7 +45,8 @@ type csvPreflightInfo struct {
 	// normalized, hashed and given a verdict, from the app's one duplicate rule
 	// (C689). It is what the counts below are read from, so the preview cannot
 	// reach a different verdict from the import that follows it.
-	Batch staging.Batch
+	Batch    staging.Batch
+	Failures []store.CSVRowError
 }
 
 // csvPreflightCard renders the staged import's pre-commit preview with the
@@ -53,7 +55,7 @@ func csvPreflightCard(info *csvPreflightInfo, confirm, cancel ui.Handler) ui.Nod
 	if info == nil {
 		return Fragment()
 	}
-	newRows := info.Total - info.Dupes
+	newRows := info.Batch.Counts.New
 	signedNet := money.FormatMinor(info.NetMinor, info.Dec)
 	if info.NetMinor > 0 {
 		signedNet = "+" + signedNet
@@ -97,6 +99,14 @@ func csvPreflightCard(info *csvPreflightInfo, confirm, cancel ui.Handler) ui.Nod
 	if c.Unusable > 0 {
 		extra = append(extra, P(css.Class("t-caption"), Attr("data-testid", "csv-preflight-unusable"),
 			Attr("role", "alert"), uistate.T("documents.preflightUnusable", c.Unusable)))
+	}
+	if len(info.Failures) > 0 {
+		failureCopy := uistate.T("documents.preflightFailed", plural(len(info.Failures), "row"), csvSkipDetail(info.Failures))
+		if len(info.Failures) == 1 {
+			failureCopy = uistate.T("documents.preflightFailedOne", csvSkipDetail(info.Failures))
+		}
+		extra = append(extra, P(css.Class("t-caption"), Attr("data-testid", "csv-preflight-failures"),
+			failureCopy))
 	}
 
 	return Div(css.Class("notice", tw.Mt2), Attr("data-testid", "csv-preflight"),

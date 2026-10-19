@@ -180,6 +180,48 @@ func TestApplyWithErrorsReportsInvalidAmounts(t *testing.T) {
 	}
 }
 
+func TestApplyWithDiagnosticsDebitSignsAndCheckedSums(t *testing.T) {
+	p := Profile{DateCol: 0, DescCol: 1, AmountCol: -1, DebitCol: 2, CreditCol: 3, BalanceCol: -1, Decimals: 2}
+	rows, errs, _ := ApplyWithDiagnostics(p, [][]string{
+		{"2026-06-15", "positive debit", "45.00", ""},
+		{"2026-06-15", "negative debit", "-45.00", ""},
+		{"2026-06-15", "overflow", "", "92233720368547758.08"},
+	})
+	if len(rows) != 2 || rows[0].Amount != -4500 || rows[1].Amount != -4500 {
+		t.Fatalf("debit rows = %+v, want both signs mapped to -4500", rows)
+	}
+	if len(errs) != 1 || errs[0].Index != 2 || errs[0].Field != "credit" {
+		t.Fatalf("overflow errors = %+v, want the overflowing credit row", errs)
+	}
+}
+
+func TestAutoNumberFormatRejectsMalformedAccountingSignAndReadsThreeDigitGroups(t *testing.T) {
+	for _, tc := range []struct {
+		value string
+		want  int64
+		bad   bool
+	}{{"1,234", 1_234_000, false}, {"($-12.34)", 0, true}} {
+		got, err := parseMinorUnits(tc.value, 3, NumberFormatAuto)
+		if tc.bad && err == nil {
+			t.Errorf("%q unexpectedly parsed as %d", tc.value, got)
+		}
+		if !tc.bad && (err != nil || got != tc.want) {
+			t.Errorf("parse %q = %d, %v; want %d", tc.value, got, err, tc.want)
+		}
+	}
+}
+
+func TestAmbiguousNumericDateIsReported(t *testing.T) {
+	p := Profile{DateCol: 0, DescCol: 1, AmountCol: 2, BalanceCol: -1, Decimals: 2}
+	rows, errs, warnings := ApplyWithDiagnostics(p, [][]string{{"05/03/2024", "Cafe", "1.00"}})
+	if len(errs) != 0 || len(rows) != 1 || len(warnings) != 1 || warnings[0].Index != 0 {
+		t.Fatalf("rows=%+v errors=%+v warnings=%+v", rows, errs, warnings)
+	}
+	if rows[0].Date.Month() != time.May || rows[0].Date.Day() != 3 {
+		t.Errorf("ambiguous date parsed as %v, want May 3 with a warning", rows[0].Date)
+	}
+}
+
 func TestDefaultProfile(t *testing.T) {
 	tests := []struct {
 		header   []string

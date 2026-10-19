@@ -65,22 +65,39 @@ func (e RowError) Error() string {
 // ApplyWithErrors maps rows and reports every row that could not be converted.
 // Invalid amounts never become zero-valued rows.
 func ApplyWithErrors(p Profile, rows [][]string) ([]statement.Row, []RowError) {
+	parsed, errors, _ := ApplyWithDiagnostics(p, rows)
+	return parsed, errors
+}
+
+// RowWarning describes a value that parsed but could reasonably mean another value.
+type RowWarning struct {
+	Index   int
+	Field   string
+	Warning string
+}
+
+// ApplyWithDiagnostics maps rows and returns both unparseable rows and ambiguous values.
+func ApplyWithDiagnostics(p Profile, rows [][]string) ([]statement.Row, []RowError, []RowWarning) {
 	out := make([]statement.Row, 0, len(rows))
 	var rowErrors []RowError
+	var warnings []RowWarning
 	for i, cols := range rows {
-		row, ok, field, err := applyRow(p, cols)
+		row, ok, field, err, warning := applyRow(p, cols)
 		if ok {
 			out = append(out, row)
+			if warning != "" {
+				warnings = append(warnings, RowWarning{Index: i, Field: "date", Warning: warning})
+			}
 		} else if err != nil {
 			rowErrors = append(rowErrors, RowError{Index: i, Field: field, Err: err})
 		} else {
 			rowErrors = append(rowErrors, RowError{Index: i, Field: field, Err: fmt.Errorf("value is required")})
 		}
 	}
-	return out, rowErrors
+	return out, rowErrors, warnings
 }
 
-func applyRow(p Profile, cols []string) (statement.Row, bool, string, error) {
+func applyRow(p Profile, cols []string) (statement.Row, bool, string, error, string) {
 	get := func(idx int) string {
 		if idx < 0 || idx >= len(cols) {
 			return ""
@@ -92,7 +109,7 @@ func applyRow(p Profile, cols []string) (statement.Row, bool, string, error) {
 	var date time.Time
 	dateStr := get(p.DateCol)
 	if dateStr == "" {
-		return statement.Row{}, false, "date", nil
+		return statement.Row{}, false, "date", nil, ""
 	}
 	var err error
 	if p.DateLayout != "" {
@@ -101,8 +118,9 @@ func applyRow(p Profile, cols []string) (statement.Row, bool, string, error) {
 		date, err = autoParseDate(dateStr)
 	}
 	if err != nil {
-		return statement.Row{}, false, "date", err
+		return statement.Row{}, false, "date", err, ""
 	}
+	dateWarning := ambiguousDateWarning(dateStr, p.DateLayout)
 
 	// Description
 	desc := get(p.DescCol)
@@ -112,32 +130,46 @@ func applyRow(p Profile, cols []string) (statement.Row, bool, string, error) {
 	if p.AmountCol >= 0 {
 		amtStr := get(p.AmountCol)
 		if amtStr == "" {
-			return statement.Row{}, false, "amount", nil
+			return statement.Row{}, false, "amount", nil, ""
 		}
 		amount, err = parseMinorUnits(amtStr, p.Decimals, p.NumberFormat)
 		if err != nil {
-			return statement.Row{}, false, "amount", err
+			return statement.Row{}, false, "amount", err, ""
 		}
 	} else {
 		// Debit/Credit columns
 		debitStr := get(p.DebitCol)
 		creditStr := get(p.CreditCol)
 		if debitStr == "" && creditStr == "" {
-			return statement.Row{}, false, "amount", nil
+			return statement.Row{}, false, "amount", nil, ""
 		}
 		if debitStr != "" {
 			d, e := parseMinorUnits(debitStr, p.Decimals, p.NumberFormat)
 			if e != nil {
-				return statement.Row{}, false, "debit", e
+				return statement.Row{}, false, "debit", e, ""
 			}
-			amount -= d // debit is negative
+			d, e = money.Abs(d)
+			if e != nil {
+				return statement.Row{}, false, "debit", e, ""
+			}
+			amount, e = money.Sub(amount, d) // debit is negative even when the source includes a sign
+			if e != nil {
+				return statement.Row{}, false, "debit", e, ""
+			}
 		}
 		if creditStr != "" {
 			c, e := parseMinorUnits(creditStr, p.Decimals, p.NumberFormat)
 			if e != nil {
-				return statement.Row{}, false, "credit", e
+				return statement.Row{}, false, "credit", e, ""
 			}
-			amount += c
+			c, e = money.Abs(c)
+			if e != nil {
+				return statement.Row{}, false, "credit", e, ""
+			}
+			amount, e = money.Add(amount, c)
+			if e != nil {
+				return statement.Row{}, false, "credit", e, ""
+			}
 		}
 	}
 
@@ -149,7 +181,7 @@ func applyRow(p Profile, cols []string) (statement.Row, bool, string, error) {
 		if balStr != "" {
 			b, e := parseMinorUnits(balStr, p.Decimals, p.NumberFormat)
 			if e != nil {
-				return statement.Row{}, false, "balance", e
+				return statement.Row{}, false, "balance", e, ""
 			}
 			balance = b
 			hasBalance = true
@@ -162,7 +194,7 @@ func applyRow(p Profile, cols []string) (statement.Row, bool, string, error) {
 		Amount:      amount,
 		Balance:     balance,
 		HasBalance:  hasBalance,
-	}, true, "", nil
+	}, true, "", nil, dateWarning
 }
 
 // DefaultProfile returns a Profile pre-filled from header column names.
@@ -235,12 +267,30 @@ func autoParseDate(s string) (time.Time, error) {
 	return time.Time{}, strconv.ErrSyntax
 }
 
+func ambiguousDateWarning(value, layout string) string {
+	if layout != "" {
+		return ""
+	}
+	if len(value) != 10 || value[2] != '/' || value[5] != '/' || !digits(value[:2]) || !digits(value[3:5]) {
+		return ""
+	}
+	first, _ := strconv.Atoi(value[:2])
+	second, _ := strconv.Atoi(value[3:5])
+	if first > 12 || second > 12 || first == second {
+		return ""
+	}
+	return "This date can mean either month/day or day/month; it was read as month/day."
+}
+
 func parseMinorUnits(s string, decimals int, format NumberFormat) (int64, error) {
 	s = strings.TrimSpace(s)
 	negative := false
 	if strings.HasPrefix(s, "(") && strings.HasSuffix(s, ")") {
 		negative = true
 		s = strings.TrimSpace(s[1 : len(s)-1])
+		if strings.HasPrefix(s, "-") || strings.HasPrefix(s, "+") {
+			return 0, fmt.Errorf("accounting parentheses cannot include a sign")
+		}
 	} else if strings.ContainsAny(s, "()") {
 		return 0, fmt.Errorf("invalid accounting amount %q", s)
 	}
@@ -257,6 +307,9 @@ func parseMinorUnits(s string, decimals int, format NumberFormat) (int64, error)
 		s = strings.ReplaceAll(s, symbol, "")
 	}
 	s = strings.ReplaceAll(strings.TrimSpace(s), " ", "")
+	if negative && (strings.HasPrefix(s, "-") || strings.HasPrefix(s, "+")) {
+		return 0, fmt.Errorf("accounting parentheses cannot include a sign")
+	}
 	decimal, group, err := separators(s, decimals, format)
 	if err != nil {
 		return 0, err
@@ -304,6 +357,9 @@ func separators(s string, decimals int, format NumberFormat) (decimal, group run
 			}
 			return '.', ',', nil
 		case comma >= 0:
+			if decimals == 3 && comma == len(s)-4 && comma > 0 && digits(s[:comma]) && digits(s[comma+1:]) {
+				return '.', ',', nil
+			}
 			if shouldBeDecimal(s, comma, decimals) {
 				return ',', '.', nil
 			}

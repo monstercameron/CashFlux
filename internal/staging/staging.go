@@ -121,6 +121,9 @@ type Counts struct {
 
 // Input is one line as read from a statement, before staging.
 type Input struct {
+	// Transaction is the parsed row when available. It preserves payee, status,
+	// and the row's actual currency for the shared dedupe key.
+	Transaction *domain.Transaction
 	// Date is the row's date. Zero means the file did not give a usable one.
 	Date time.Time
 	// Description is the raw descriptor.
@@ -173,12 +176,21 @@ func Stage(inputs []Input, existing []domain.Transaction, fallbackAccountID, cur
 			continue
 		}
 
-		r.Hash = Hash(r.AccountID, r.Date, r.AmountMinor, r.Merchant)
-
-		key := dedupe.Key(domain.Transaction{
+		candidate := domain.Transaction{
 			AccountID: r.AccountID, Date: r.Date, Desc: in.Description,
 			Amount: money.New(r.AmountMinor, currency),
-		})
+		}
+		if in.Transaction != nil {
+			candidate = *in.Transaction
+			candidate.AccountID = r.AccountID
+		}
+		merchant := candidate.Payee
+		if strings.TrimSpace(merchant) == "" {
+			merchant = candidate.Desc
+		}
+		r.Merchant = Normalize(merchant)
+		r.Hash = HashTransaction(candidate)
+		key := dedupe.Key(candidate)
 		if dedupe.ConsumeExisting(remaining, key) {
 			r.Verdict = Duplicate
 			matched := len(matchIDs[key]) - remaining[key] - 1
@@ -241,6 +253,12 @@ func Hash(accountID string, date time.Time, amountMinor int64, merchant string) 
 	b.WriteByte(0)
 	b.WriteString(merchant)
 	sum := sha256.Sum256([]byte(b.String()))
+	return hex.EncodeToString(sum[:12])
+}
+
+// HashTransaction hashes the same complete identity fields used by dedupe.Key.
+func HashTransaction(tx domain.Transaction) string {
+	sum := sha256.Sum256([]byte(dedupe.Key(tx)))
 	return hex.EncodeToString(sum[:12])
 }
 

@@ -114,6 +114,34 @@ func TestRepeatedRowsConsumeOnlyMatchingLedgerOccurrences(t *testing.T) {
 	}
 }
 
+func TestStageUsesParsedPayeeAndCurrencyForImporterDuplicateKey(t *testing.T) {
+	have := existing("t1", "chk", "Statement memo", -8432, 3)
+	have.Payee = "Publix"
+	incoming := domain.Transaction{
+		AccountID: "chk", Date: on(3), Payee: "publix", Desc: "different raw memo",
+		Amount: money.New(-8432, "EUR"),
+	}
+	batch := Stage([]Input{{Transaction: &incoming, Date: incoming.Date, Description: incoming.Desc,
+		AmountMinor: incoming.Amount.Amount, HasAmount: true}},
+		[]domain.Transaction{have}, "chk", "USD")
+	if batch.Rows[0].Verdict != New {
+		t.Fatalf("different currency/payee identity classified as %s", batch.Rows[0].Verdict)
+	}
+	incoming.Amount.Currency = "USD"
+	batch = Stage([]Input{{Transaction: &incoming, Date: incoming.Date, Description: incoming.Desc,
+		AmountMinor: incoming.Amount.Amount, HasAmount: true}},
+		[]domain.Transaction{have}, "chk", "USD")
+	if batch.Rows[0].Verdict != Duplicate || batch.Rows[0].MatchID != "t1" {
+		t.Fatalf("matching parsed payee should match the importer key: %+v", batch.Rows[0])
+	}
+	if HashTransaction(incoming) == HashTransaction(domain.Transaction{
+		AccountID: incoming.AccountID, Date: incoming.Date, Payee: incoming.Payee,
+		Desc: incoming.Desc, Amount: money.New(incoming.Amount.Amount, "EUR"),
+	}) {
+		t.Fatal("transaction hash ignored currency")
+	}
+}
+
 // Writing a transaction to the wrong account is not something a person can fix by
 // looking at it later, so a row with no account is refused rather than guessed at.
 func TestARowWithNoAccountIsUnusable(t *testing.T) {

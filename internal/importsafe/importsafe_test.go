@@ -3,6 +3,7 @@
 package importsafe
 
 import (
+	"strconv"
 	"testing"
 	"time"
 
@@ -50,12 +51,28 @@ func TestImpact(t *testing.T) {
 		txn("2", "a1", "salary", 100000, "2026-07-02"),
 		txn("3", "OTHER", "elsewhere", -99999, "2026-07-03"), // different account — excluded
 	}
-	net, after := Impact(25000, rows, "a1")
+	net, after, err := Impact(25000, rows, "a1", "USD")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if net != 99500 || after != 124500 {
 		t.Fatalf("Impact = net %d after %d", net, after)
 	}
-	if net, after = Impact(0, nil, "a1"); net != 0 || after != 0 {
+	if net, after, err = Impact(0, nil, "a1", "USD"); err != nil || net != 0 || after != 0 {
 		t.Fatalf("empty Impact = %d/%d", net, after)
+	}
+}
+
+func TestImpactRejectsMixedCurrencyAndOverflow(t *testing.T) {
+	euro := txn("e", "a1", "EUR", 100, "2026-07-01")
+	euro.Amount.Currency = "EUR"
+	_, _, err := Impact(0, []domain.Transaction{euro}, "a1", "USD")
+	if err == nil {
+		t.Fatal("mixed-currency import was summed as USD")
+	}
+	_, _, err = Impact(1, []domain.Transaction{txn("e", "a1", "USD", int64(^uint64(0)>>1), "2026-07-01")}, "a1", "USD")
+	if err == nil {
+		t.Fatal("balance overflow was accepted")
 	}
 }
 
@@ -80,6 +97,15 @@ func TestJumpWarning(t *testing.T) {
 				t.Errorf("JumpWarning(%d, %d) = %v, want %v", tc.current, tc.net, got, tc.want)
 			}
 		})
+	}
+}
+
+func TestJumpWarningHandlesMinimumIntegerWithoutOverflow(t *testing.T) {
+	if !JumpWarning(0, -1<<63) {
+		t.Fatal("minimum int64 magnitude should exceed the warning floor")
+	}
+	if JumpWarning(1<<62, -1<<63) {
+		t.Fatal("exactly twice the balance should not trigger the three-times warning")
 	}
 }
 
@@ -138,5 +164,38 @@ func TestTransferPairs(t *testing.T) {
 	tr.TransferAccountID = "chk"
 	if got := TransferPairs([]domain.Transaction{tr}, existing, "card", 4); len(got) != 0 {
 		t.Errorf("transfer rows must be skipped: %+v", got)
+	}
+}
+
+func BenchmarkImport3000Rows(b *testing.B) {
+	incoming := make([]domain.Transaction, 3000)
+	existing := make([]domain.Transaction, 3000)
+	for i := range incoming {
+		incoming[i] = txn("in"+strconv.Itoa(i), "card", "payment", 100, "2026-07-03")
+		existing[i] = txn("ex"+strconv.Itoa(i), "checking", "transfer", -100, "2026-07-01")
+	}
+	b.Run("before-quadratic", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			benchmarkNaiveTransferPairs(incoming, existing)
+		}
+	})
+	b.Run("after-indexed", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			_ = TransferPairs(incoming, existing, "card", 4)
+		}
+	})
+}
+
+func benchmarkNaiveTransferPairs(incoming, existing []domain.Transaction) {
+	claimed := make(map[string]bool, len(incoming))
+	for _, in := range incoming {
+		for _, ex := range existing {
+			if !claimed[ex.ID] && ex.Amount.Amount == -in.Amount.Amount && ex.Amount.Currency == in.Amount.Currency {
+				claimed[ex.ID] = true
+				break
+			}
+		}
 	}
 }

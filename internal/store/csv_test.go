@@ -190,6 +190,25 @@ func TestTransactionsCSVV2RoundTripsEveryField(t *testing.T) {
 	}
 }
 
+func TestCSVResilientUsesAccountCurrencyBeforeParsingAmount(t *testing.T) {
+	data := []byte("date,account_id,amount\n2026-06-15,a1,-12.34\n")
+	txns, skipped, err := TransactionsFromCSVResilientForAccounts(data, "JPY", "a1", map[string]string{"a1": "USD"})
+	if err != nil || len(skipped) != 0 || len(txns) != 1 {
+		t.Fatalf("transactions=%+v skipped=%+v err=%v", txns, skipped, err)
+	}
+	if txns[0].Amount.Amount != -1234 || txns[0].Amount.Currency != "USD" {
+		t.Fatalf("amount = %+v, want -1234 USD", txns[0].Amount)
+	}
+}
+
+func TestCSVResilientReportsAccountCurrencyMismatchPerRow(t *testing.T) {
+	data := []byte("date,account_id,amount,currency\n2026-06-15,a1,-12.34,EUR\n2026-06-16,a1,-1.00,USD\n")
+	txns, skipped, err := TransactionsFromCSVResilientForAccounts(data, "USD", "a1", map[string]string{"a1": "USD"})
+	if err != nil || len(txns) != 1 || len(skipped) != 1 || skipped[0].Line != 2 {
+		t.Fatalf("transactions=%+v skipped=%+v err=%v", txns, skipped, err)
+	}
+}
+
 func TestTransactionsCSVV1RemainsReadable(t *testing.T) {
 	var buffer bytes.Buffer
 	w := csv.NewWriter(&buffer)
