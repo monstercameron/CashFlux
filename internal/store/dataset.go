@@ -33,6 +33,10 @@ const SchemaVersion = 1
 
 // Settings holds app-wide configuration persisted alongside the data.
 type Settings struct {
+	// DefaultAccountID is the household fallback account for new transactions.
+	// Missing or archived accounts are ignored at resolution time and the saved
+	// value is never rewritten as a side effect.
+	DefaultAccountID      string               `json:"defaultAccountId,omitempty"`
 	BaseCurrency          string               `json:"baseCurrency"`
 	FXRates               map[string]float64   `json:"fxRates,omitempty"`
 	FXUpdatedAt           map[string]time.Time `json:"fxUpdatedAt,omitempty"` // when each FX rate was last set (L4 staleness)

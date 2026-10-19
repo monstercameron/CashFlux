@@ -154,41 +154,45 @@ const (
 	TierNone Tier = "none"
 )
 
+// ResolveInput contains the persisted and contextual values used to select an
+// account for a new transaction.
+type ResolveInput struct {
+	Accounts           []domain.Account
+	Transactions       []domain.Transaction
+	ExplicitID         string
+	ActiveMemberID     string
+	Members            []domain.Member
+	WorkspaceDefaultID string
+}
+
 // Resolve selects an account for a new transaction using explicit, member,
 // workspace, heuristic, then first-account precedence. Saved defaults and
 // explicit choices are honored only when they identify an existing, non-archived
 // account. Invalid defaults are skipped without changing their stored values.
 // The heuristic is deterministic and uses only the supplied account and
 // transaction data; it does not consult wall-clock or device state.
-func Resolve(
-	accounts []domain.Account,
-	txns []domain.Transaction,
-	explicitID string,
-	activeMemberID string,
-	members []domain.Member,
-	workspaceDefaultID string,
-) (string, Tier) {
-	if validAccountID(accounts, explicitID) {
-		return explicitID, TierExplicit
+func Resolve(input ResolveInput) (string, Tier) {
+	if validAccountID(input.Accounts, input.ExplicitID) {
+		return input.ExplicitID, TierExplicit
 	}
 
-	if activeMemberID != "" {
-		for _, member := range members {
-			if member.ID == activeMemberID && validAccountID(accounts, member.Prefs.DefaultAccountID) {
+	if input.ActiveMemberID != "" {
+		for _, member := range input.Members {
+			if member.ID == input.ActiveMemberID && validAccountID(input.Accounts, member.Prefs.DefaultAccountID) {
 				return member.Prefs.DefaultAccountID, TierMember
 			}
 		}
 	}
 
-	if validAccountID(accounts, workspaceDefaultID) {
-		return workspaceDefaultID, TierWorkspace
+	if validAccountID(input.Accounts, input.WorkspaceDefaultID) {
+		return input.WorkspaceDefaultID, TierWorkspace
 	}
 
-	if id := DefaultID(accounts, txns, ""); id != "" {
+	if id := DefaultID(input.Accounts, input.Transactions, ""); id != "" {
 		return id, TierHeuristic
 	}
 
-	for _, account := range accounts {
+	for _, account := range input.Accounts {
 		if account.ID != "" && !account.Archived {
 			return account.ID, TierFirstAccount
 		}

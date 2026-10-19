@@ -1020,6 +1020,9 @@ func (a *App) PutAccount(ac domain.Account) error {
 	if err := a.validateCustom("account", ac.Custom); err != nil {
 		return err
 	}
+	// Archiving deliberately keeps saved defaults. The account resolver skips
+	// archived IDs without rewriting them, so restoring this account restores the
+	// household's prior choice.
 	// Record a BalanceSnapshot when the balance changes — compare against the
 	// prior persisted value before writing. For new accounts with a nonzero
 	// opening balance, treat the prior balance as 0.
@@ -1099,7 +1102,37 @@ func (a *App) DeleteAccount(id string) error {
 	if err := a.roleGuard(); err != nil {
 		return err
 	}
-	return a.del("account", id, a.store.DeleteAccount)
+	ds, err := a.store.Snapshot()
+	if err != nil {
+		return fmt.Errorf("appstate: snapshot before deleting account %q: %w", id, err)
+	}
+	accounts := ds.Accounts[:0]
+	found := false
+	for _, account := range ds.Accounts {
+		if account.ID == id {
+			found = true
+			continue
+		}
+		accounts = append(accounts, account)
+	}
+	if found {
+		for i := range ds.Members {
+			if ds.Members[i].Prefs.DefaultAccountID == id {
+				ds.Members[i].Prefs.DefaultAccountID = ""
+			}
+		}
+		if ds.Settings.DefaultAccountID == id {
+			ds.Settings.DefaultAccountID = ""
+		}
+		ds.Accounts = accounts
+		// Load replaces the account and its saved defaults inside one SQLite
+		// transaction, so observers never see a deleted account with stale defaults.
+		if err := a.store.Load(ds); err != nil {
+			return fmt.Errorf("appstate: delete account %q: %w", id, err)
+		}
+	}
+	a.log.Info("entity deleted", "entity", "account", "id", id, "existed", found)
+	return nil
 }
 
 func (a *App) PutCategory(c domain.Category) error {

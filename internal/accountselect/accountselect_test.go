@@ -330,7 +330,14 @@ func TestResolve(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			gotID, gotTier := accountselect.Resolve(tc.accounts, tc.txns, tc.explicitID, tc.activeMemberID, tc.members, tc.workspaceDefaultID)
+			gotID, gotTier := accountselect.Resolve(accountselect.ResolveInput{
+				Accounts:           tc.accounts,
+				Transactions:       tc.txns,
+				ExplicitID:         tc.explicitID,
+				ActiveMemberID:     tc.activeMemberID,
+				Members:            tc.members,
+				WorkspaceDefaultID: tc.workspaceDefaultID,
+			})
 			if gotID != tc.wantID || gotTier != tc.wantTier {
 				t.Errorf("Resolve() = (%q, %q), want (%q, %q)", gotID, gotTier, tc.wantID, tc.wantTier)
 			}

@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **A household default account is saved with the data (DF2).** `Settings.DefaultAccountID` round-trips through
+  exports, backups and checkpoints; deleting an account clears any member or household default that pointed at it in the
+  same write (archiving keeps it, since archived accounts are skipped). The account resolver takes one input struct.
 - **Component library: Pill, MemberAvatar, Field, AmountField and key bindings (LIB1D).** One `uiw.Pill` with semantic
   tones replaces a dozen hand-built badges; `MemberAvatar` gives initials in a stable colour or a named blank; `Field`
   wires label, hint, error and ARIA ids for any control; `AmountField` parses with integer minor units; `ActionFor` is a
