@@ -21,14 +21,14 @@ func FuzzBalancedConversion(f *testing.F) {
 		tx := transaction(-total, "JPY")
 		s := splitdraft.State{Lines: []splitdraft.Line{{Cat: "a", Amt: money.FormatMinor(part, 0)}, {Cat: "b", Amt: money.FormatMinor(total-part, 0)}}}
 		pct := s.Apply(splitdraft.Action{Kind: splitdraft.ToPercents}, tx)
-		if !pct.Percent || pct.View(tx).Remainder != 0 {
+		if !pct.Percent || view(pct, tx).Remainder != 0 {
 			t.Fatalf("conversion lost total: %+v", pct)
 		}
 		back := pct.Apply(splitdraft.Action{Kind: splitdraft.ToAmounts}, tx)
 		// An extremely small share can round to zero basis points. The existing
 		// converter leaves zero entries untouched; all positive represented shares
 		// must still carry the entire parent after conversion back.
-		if back.Percent || back.View(tx).Remainder != 0 {
+		if back.Percent || view(back, tx).Remainder != 0 {
 			t.Fatalf("reverse conversion lost total: %+v", back)
 		}
 		_, saved, ok := s.AttemptSave(tx, false)
@@ -49,9 +49,9 @@ func FuzzRawDraftNeverMutates(f *testing.F) {
 		s := splitdraft.State{Lines: []splitdraft.Line{{Cat: "a", Amt: a}, {Cat: "b", Amt: b}}}
 		before := append([]splitdraft.Line(nil), s.Lines...)
 		tx := transaction(total, "USD")
-		_ = s.View(tx)
+		_ = view(s, tx)
 		converted := s.Apply(splitdraft.Action{Kind: splitdraft.ToPercents}, tx)
-		_ = converted.View(tx)
+		_ = view(converted, tx)
 		_, saved, ok := s.AttemptSave(tx, false)
 		if !reflect.DeepEqual(before, s.Lines) {
 			t.Fatal("draft input mutated")

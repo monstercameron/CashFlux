@@ -7,6 +7,8 @@
 package splitdraft
 
 import (
+	"errors"
+
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -168,7 +170,7 @@ func convert(lines []Line, srcDec int, srcTotal int64, dstDec int, dstTotal int6
 	if len(indices) == 0 {
 		return out, true
 	}
-	if exact && sum == srcTotal {
+	if exact && split.Balanced(srcTotal, weights) {
 		shares, err := money.Allocate(dstTotal, weights)
 		if err != nil {
 			return nil, false
@@ -244,26 +246,17 @@ func build(tx domain.Transaction, draft []Line, percent bool) (domain.Transactio
 }
 
 func allocateValues(values []int64, total int64, percent bool) ([]int64, string) {
-	sum, err := money.SumMinor(values...)
-	if percent {
-		if err != nil || sum != split.PercentScale {
-			return nil, "splitEditor.pctMustBalance"
-		}
-		shares, err := money.Allocate(total, values)
-		if err != nil {
-			return nil, "splitEditor.pctMustBalance"
-		}
-		for _, amount := range shares {
-			if amount == 0 {
-				return nil, "splitEditor.pctTooSmall"
-			}
-		}
-		return shares, ""
+	shares, err := split.Reconcile(total, values, percent)
+	if errors.Is(err, split.ErrTooSmall) {
+		return nil, "splitEditor.pctTooSmall"
 	}
-	if err != nil || sum != total {
+	if err != nil {
+		if percent {
+			return nil, "splitEditor.pctMustBalance"
+		}
 		return nil, "splitEditor.mustBalance"
 	}
-	return values, ""
+	return shares, ""
 }
 
 // Clear proposes removing the breakdown without changing the current inputs.

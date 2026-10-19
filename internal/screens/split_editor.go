@@ -10,6 +10,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/split"
 	"github.com/monstercameron/CashFlux/internal/splitdraft"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -107,6 +108,12 @@ type splitEditorContentProps struct {
 func splitEditorContent(props splitEditorContentProps) ui.Node {
 	p, draft := props.Editor, props.Draft
 	view := draft.View(p.Txn)
+	splitLines := make([]split.Line, 0, len(draft.Lines))
+	for _, line := range draft.Lines {
+		splitLines = append(splitLines, split.Line{CategoryID: line.Cat, Value: line.Amt})
+	}
+	shape := split.Classify(splitLines)
+	view = draft.Present(view, shape, shape.Saveable(!view.ParseError, view.Remainder == 0), p.Txn.Amount.Currency)
 	categories := p.Categories
 	if app := appstate.Default; app != nil {
 		categories = app.Categories()

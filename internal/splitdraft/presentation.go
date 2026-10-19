@@ -29,9 +29,7 @@ func (s State) View(tx domain.Transaction) View {
 	if s.Percent {
 		v.Target = split.PercentScale
 	}
-	lines := make([]split.Line, 0, len(s.Lines))
 	for _, line := range s.Lines {
-		lines = append(lines, split.Line{CategoryID: line.Cat, Value: line.Amt})
 		if line.Amt == "" {
 			continue
 		}
@@ -48,13 +46,18 @@ func (s State) View(tx domain.Transaction) View {
 		v.Total = next
 	}
 	v.Remainder, _ = money.Sub(v.Target, v.Total) // Both operands are nonnegative int64.
-	v.Shape = split.Classify(lines)
-	v.CanSave = v.Shape.Saveable(!v.ParseError, v.Remainder == 0)
-	v.Tone, v.Key, v.Value = s.remainderText(v, tx.Amount.Currency)
 	v.PickerOpen = s.PickerLine >= 0 && s.PickerLine < len(s.Lines)
 	if v.PickerOpen {
 		v.PickerCategory = s.Lines[s.PickerLine].Cat
 	}
+	return v
+}
+
+// Present attaches the verdict shared with internal/split and formats the
+// remainder copy. The caller supplies the shared shape and Saveable result.
+func (s State) Present(v View, shape split.Draft, canSave bool, currency string) View {
+	v.Shape, v.CanSave = shape, canSave
+	v.Tone, v.Key, v.Value = s.remainderText(v, currency)
 	return v
 }
 

@@ -11,11 +11,22 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/split"
 	"github.com/monstercameron/CashFlux/internal/splitdraft"
 )
 
 func transaction(amount int64, code string) domain.Transaction {
 	return domain.Transaction{ID: "parent", CategoryID: "food", MemberID: "payer", Amount: money.New(amount, code)}
+}
+
+func view(s splitdraft.State, tx domain.Transaction) splitdraft.View {
+	v := s.View(tx)
+	lines := make([]split.Line, 0, len(s.Lines))
+	for _, line := range s.Lines {
+		lines = append(lines, split.Line{CategoryID: line.Cat, Value: line.Amt})
+	}
+	shape := split.Classify(lines)
+	return s.Present(v, shape, shape.Saveable(!v.ParseError, v.Remainder == 0), tx.Amount.Currency)
 }
 
 func TestNewAndReseed(t *testing.T) {
@@ -252,8 +263,8 @@ func TestLargeDraft(t *testing.T) {
 		s.Lines = append(s.Lines, splitdraft.Line{Cat: "a", Amt: "0.01"})
 	}
 	tx := transaction(-100000, "USD")
-	if view := s.View(tx); !view.CanSave || view.Total != 100000 || view.Shape.Complete != 100000 {
-		t.Fatalf("large draft = %+v", view)
+	if v := view(s, tx); !v.CanSave || v.Total != 100000 || v.Shape.Complete != 100000 {
+		t.Fatalf("large draft = %+v", v)
 	}
 	_, built, ok := s.AttemptSave(tx, false)
 	if !ok || len(built.Splits) != len(s.Lines) {

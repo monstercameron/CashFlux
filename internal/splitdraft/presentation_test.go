@@ -42,7 +42,7 @@ func TestView(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s := splitdraft.State{Lines: tc.lines, Percent: tc.percent, SaveAttempted: tc.attempted, PickerLine: -1}
-			v := s.View(transaction(tc.amount, "USD"))
+			v := view(s, transaction(tc.amount, "USD"))
 			if v.Total != tc.total || v.Remainder != tc.remainder || v.ParseError != tc.parse || v.CanSave != tc.save || v.Tone != tc.tone || v.Key != tc.key || v.Value != tc.value || v.PickerOpen {
 				t.Fatalf("View = %+v; want total %d remainder %d parse %v save %v text (%q,%q,%q)", v, tc.total, tc.remainder, tc.parse, tc.save, tc.tone, tc.key, tc.value)
 			}
@@ -50,7 +50,7 @@ func TestView(t *testing.T) {
 	}
 	for _, index := range []int{-1, 0, 1, math.MaxInt} {
 		s := splitdraft.State{Lines: []splitdraft.Line{{Cat: "a", Amt: ""}}, PickerLine: index}
-		v := s.View(transaction(-100, "EUR"))
+		v := view(s, transaction(-100, "EUR"))
 		if v.PickerOpen != (index == 0) || v.Hint != "€1.00" || (index == 0 && v.PickerCategory != "a") {
 			t.Fatalf("picker/hint view = %+v", v)
 		}
