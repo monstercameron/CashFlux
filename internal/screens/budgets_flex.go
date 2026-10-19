@@ -484,6 +484,7 @@ func flexAssignFormReady(ready flexAssignFormReadyProps) ui.Node {
 	}
 
 	onSave := ui.UseEvent(func() {
+		writes := make([]domain.Category, 0, len(cats))
 		for _, c := range cats {
 			cl := chosen.Get()[c.ID]
 			if !cl.Valid() {
@@ -493,12 +494,10 @@ func flexAssignFormReady(ready flexAssignFormReadyProps) ui.Node {
 				continue
 			}
 			c.CategoryClass = cl
-			// Stop on the first rejection rather than pressing on: the loop would
-			// otherwise leave some categories reclassified and some not, with one toast
-			// reporting the whole thing as done.
-			if budgetWriteFailed("save category class", app.PutCategory(c)) {
-				return
-			}
+			writes = append(writes, c)
+		}
+		if budgetWriteFailed("save category classes", app.PutCategoriesAtomic(writes)) {
+			return
 		}
 		uistate.RequestPersist()
 		uistate.BumpDataRevision()

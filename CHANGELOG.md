@@ -90,6 +90,7 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Flex category reclassification is all-or-nothing (BC6N6).**
 - **"Accept and raise" raises the budget the card names (BC6N1).** The price-creep preview returns its target budget and the raise
   writes exactly that one; price-creep tasks use catalog copy.
 - **The app shell loads and themes cleanly (TV8J).** The boot skeleton previews ledger rows; sidebar rail labels use sentence case; the
