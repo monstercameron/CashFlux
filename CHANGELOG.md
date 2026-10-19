@@ -14,6 +14,12 @@ and every commit updates this file under `Unreleased`.
   so a blob delivered to the wrong place fails to decrypt, and HPKE pairing helpers for adding a
   device. Native tests and fuzzing for the decoders; WebCrypto glue for the browser. Not wired into
   the app yet.
+- **Change model for sync v2 (SV2).** New pure package `internal/changes`: one batch per user
+  action (`ChangeID`, scope, device, hybrid logical clock, schema version, field-level ops with
+  tombstones), a per-field last-writer-wins merge keyed by (HLC, device) that converges in any order,
+  snapshots that carry field clocks, and a schema gate so a newer batch makes an older client
+  read-only instead of being dropped. Property tests over random permutations and clock skew. Not
+  wired into the app yet.
 
 ## [1.18.0] - 2026-08-31
 
