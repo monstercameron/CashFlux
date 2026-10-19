@@ -108,8 +108,8 @@ func (builder *budgetViewBuilder) addBudget(result budgeting.ViewBudget) {
 	if mark, ok := buildBudgetPaceMark(st, result.Committed, result.Start, result.End, in.Period.Now); ok {
 		v.PaceMark[b.ID] = mark
 	}
-	if result.ProratedRest > 0 {
-		v.ProratedRest[b.ID] = fmtMoney(money.New(result.ProratedRest, in.Base))
+	if result.RestPerDay > 0 {
+		v.ProratedRest[b.ID] = fmtMoney(money.New(result.RestPerDay, in.Base))
 	}
 }
 

@@ -87,7 +87,7 @@ func TestBR2RolloverTableUsesBoundedSignedStatus(t *testing.T) {
 	if table == nil || len(f.AllByTag("tr")) != 5 {
 		t.Fatalf("rollover table rows = %d, want 1 header + 4 periods", len(f.AllByTag("tr")))
 	}
-	if !strings.Contains(table.Text(), "−$37.30") || !strings.Contains(table.Text(), "August 2026") {
+	if !strings.Contains(table.Text(), "−$37.30") || !strings.Contains(table.Text(), "Aug 2026") {
 		t.Fatalf("rollover table lacks signed carry or localized month: %q", table.Text())
 	}
 }

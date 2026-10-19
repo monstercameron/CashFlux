@@ -140,8 +140,7 @@ func budgetRowFigures(p budgetRowCardProps) ui.Node {
 				Form(css.Class("budget-amount", "budget-limit-editform"), OnSubmit(p.saveLimitEdit),
 					Span(css.Class("budget-spent"), p.barSpent), Span(" / "),
 					Div(css.Class("budget-limit-edit-values"),
-						Span(css.Class("budget-limit-editor-cap"), uistate.T("budgets.effectiveCapLabel"), Strong(fmtMoney(p.limit))),
-						Span(css.Class("budget-limit-editor-base"), uistate.T("budgets.baseLimitLabel"), Strong(baseBudgetLimit(p.s.Budget.ID, p.s.Budget.Limit)))),
+						Span(css.Class("budget-limit-editor-cap"), Strong(budgetEffectiveCapCopy(p.s.Budget.ID, p.limit)))),
 					Input(append(append([]any{css.Class("field", "budget-limit-input"), Type("number"), OnKeyDown(p.limitKeyDown),
 						Attr("data-testid", "budget-limit-input-"+p.s.Budget.ID), Attr("aria-label", uistate.T("budgets.limitLabel")), Step("0.01"), Attr("min", "0.01"), OnInput(p.onLimitDraft)},
 						errAttrs(p.limitErrID, p.limitErrMsg)...), uiw.FieldValue(p.limitDraft.Get()))...),
@@ -205,7 +204,7 @@ func budgetRowExpandedDetails(p budgetRowCardProps) ui.Node {
 				Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-setaside-note-"+p.s.Budget.ID),
 					p.props.Committed.SetAsideNote)),
 			// BG1: funding-target summary ("Refill to $200 · $60 to go").
-			budgetTargetLine(p.s),
+			If(p.s.State != budgeting.StateOver, budgetTargetLine(p.s)),
 			p.thisMonthRef,
 			p.coverageLine,
 			p.ownerLine,

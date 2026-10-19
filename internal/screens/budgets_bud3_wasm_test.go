@@ -153,14 +153,14 @@ func TestBud3CompactLimitEditAndRolloverMenu(t *testing.T) {
 	if heading := f.ByText("Groceries limit"); heading == nil || heading.Tag() != "strong" || !renderContainsNode(editor, heading) {
 		t.Fatal("compact limit editor is missing its rendered Groceries limit heading")
 	}
-	if got := byTestID(f, "strong", "budget-limit-effective-"+b.ID); got == nil || got.Text() != "$205.20" {
-		t.Fatalf("effective cap = %v, want $205.20", got)
+	if got := byTestID(f, "strong", "budget-limit-effective-"+b.ID); got == nil || got.Text() != "Effective this month $205.20 (base − $244.80 carried)" {
+		t.Fatalf("effective cap = %v, want effective amount with carried-base breakdown", got)
 	}
 	if got := byTestID(f, "input", "budget-limit-input-"+b.ID); got == nil || got.Attr("aria-label") != "Groceries "+uistate.T("budgets.baseLimitNameSuffix") {
 		t.Fatal("base limit input is missing its budget-specific accessible name")
 	}
-	if text := byTestID(f, "form", "budget-limit-editor-"+b.ID).Text(); !strings.Contains(text, "$205.20") || !strings.Contains(text, "$450.00") {
-		t.Fatalf("editor does not show effective and base limits together: %q", text)
+	if text := byTestID(f, "form", "budget-limit-editor-"+b.ID).Text(); !strings.Contains(text, "Effective this month $205.20 (base − $244.80 carried)") || strings.Contains(text, "$450.00") {
+		t.Fatalf("editor does not show effective amount with carry while keeping the base value in the input: %q", text)
 	}
 	byTestID(f, "input", "budget-limit-input-"+b.ID).Dispatch("onkeydown", render.Event{Key: "Escape"})
 	f.Stabilize()

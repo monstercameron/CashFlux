@@ -99,6 +99,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 			LimitErrorID:   rowLimitDraft.limitErrID, LimitError: rowLimitDraft.limitErrMsg, FundedChip: fundedChip,
 			HasRecurring:   hasRecurring,
 			RolloverDetail: rowPaceNotes.rolloverLine,
+			ProjectionLine: budgetRowProjectionLine(s, props),
 			HasNote:        rowTitle.hasNote, NotesLabel: rowTitle.notesLabel, NoteText: rowTitle.noteText, OnOpenNotes: rowDetailActions.openNotesFn,
 		})
 	}
@@ -188,6 +189,7 @@ type budgetRowCompactProps struct {
 	FundedChip                                               string
 	HasRecurring                                             bool
 	RolloverDetail                                           ui.Node
+	ProjectionLine                                           ui.Node
 	HasNote                                                  bool
 	NotesLabel, NoteText                                     string
 	OnOpenNotes                                              func()
@@ -230,23 +232,17 @@ func budgetRowCompact(props budgetRowCompactProps) ui.Node {
 		switch {
 		case s.State == budgeting.StateOver:
 			chipTone = " is-danger"
-		case s.State == budgeting.StateNear || props.PaceOver != "":
+		case s.State == budgeting.StateNear:
 			chipTone = " is-warn"
 		}
-		var paceNotice ui.Node = Fragment()
-		if s.Projection.Error == nil && s.Projection.OverBy.Amount > 0 {
-			paceNotice = Span(css.Class("budget-sub", tw.TextDown), Attr("data-testid", "budget-projection-"+s.Budget.ID),
-				uistate.T("bud2.projectionOver", fmtMoney(s.Projection.OverBy)))
+		statusText := Fragment()
+		if label != uistate.T("budgets.onTrack") {
+			statusText = Span(css.Class("budget-crow-status-text"), label)
 		}
-		var commitmentNotice ui.Node = Fragment()
-		if s.CommitmentError == nil && s.Committed.Required.Amount > 0 {
-			commitmentNotice = Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-free-after-committed-"+s.Budget.ID),
-				uistate.T("bud2.freeAfterCommitted", formatFreeMoney(s.FreeAfterCommitted), fmtMoney(s.Committed.Required)))
-		} else if s.CommitmentError != nil {
-			commitmentNotice = Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-free-after-committed-unknown-"+s.Budget.ID),
-				uistate.T("bud2.freeAfterCommittedUnknown"))
-		}
-		crowChip = Fragment(Span(ClassStr("pill budget-crow-chip"+chipTone), label), paceNotice, commitmentNotice)
+		crowChip = Fragment(
+			If(chipTone != "", Span(ClassStr("pill budget-crow-chip"+chipTone), label)),
+			If(chipTone == "", statusText),
+		)
 	}
 	row := Div(ClassStr(crowCls), Attr("data-testid", "budget-card-"+s.Budget.ID),
 		// Name, status and actions stay on the first line at compact widths. The
@@ -287,19 +283,21 @@ func budgetRowCompact(props budgetRowCompactProps) ui.Node {
 				Button(css.Class("budget-limit-btn", "budget-crow-limit-btn"), Type("button"), Ref(props.LimitButtonRef), Attr("data-testid", "budget-limit-btn-"+s.Budget.ID),
 					Title(uistate.T("budgets.limitEditTitle")), Attr("aria-label", uistate.T("budgets.limitEditTitle")+" — "+title),
 					OnClick(startLimitEdit), fmtMoney(limit)),
+				If(budgetCadenceSuffix(s.Budget.Period) != "", Span(css.Class("budget-cadence"), budgetCadenceSuffix(s.Budget.Period))),
 				Span(css.Class("budget-crow-fig-separator"), " · "), crowLeft,
 			),
-			Div(css.Class("budget-crow-bar"), Attr("role", "progressbar"), Attr("aria-valuenow", strconv.Itoa(width)), Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"), Attr("aria-label", uistate.T("budgets.progressLabel")+" — "+title),
-				Div(ClassStr(fillClass), Attr("style", fmt.Sprintf("width:%d%%", width))),
-				If(!lastMonthMode && props.PaceMarkerPct > 0 && s.Spent.Amount > 0,
-					Div(css.Class("bar-pace-tick"), Attr("data-testid", "budget-pace-tick-"+s.Budget.ID), Attr("aria-hidden", "true"),
-						Attr("style", fmt.Sprintf("position:absolute;top:0;bottom:0;left:%d%%;width:2px;background:var(--text);opacity:0.65;pointer-events:none", props.PaceMarkerPct)))),
-			),
 		),
-		props.RolloverDetail,
+		Div(css.Class("budget-crow-bar"), Attr("role", "progressbar"), Attr("aria-valuenow", strconv.Itoa(width)), Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"), Attr("aria-label", uistate.T("budgets.progressLabel")+" — "+title),
+			Div(ClassStr(fillClass), Attr("style", fmt.Sprintf("width:%d%%", width))),
+			If(!lastMonthMode && s.PeriodStatus != budgeting.PeriodEnded && props.PaceMarkerPct > 0 && s.Spent.Amount > 0,
+				Div(css.Class("bar-pace-tick"), Attr("data-testid", "budget-pace-tick-"+s.Budget.ID), Attr("aria-hidden", "true"),
+					Attr("style", fmt.Sprintf("position:absolute;top:-3px;height:12px;left:%d%%;width:2px;background:var(--text-1,var(--text));pointer-events:none", props.PaceMarkerPct)))),
+		),
+		Div(css.Class("budget-crow-sub"), props.ProjectionLine),
+		Div(css.Class("budget-crow-rollover"), props.RolloverDetail),
 		If(props.LimitEditing, budgetLimitEditor(
 			s.Budget.ID, s.Budget.Name, props.LimitInputRef, props.LimitDraft, onLimitDraft, saveLimitEdit, cancelLimitEdit,
-			limitKeyDown, limitErrID, limitErrMsg, fmtMoney(limit), baseBudgetLimit(s.Budget.ID, s.Budget.Limit),
+			limitKeyDown, limitErrID, limitErrMsg, limit,
 		)),
 	)
 	return row
@@ -313,6 +311,7 @@ func budgetCompactNameCell(props budgetRowCompactProps, crowTitle ui.Node) ui.No
 	hasRecurring := props.HasRecurring
 	fundedChip := props.FundedChip
 	return Div(css.Class("budget-crow-head"),
+		If(s.Budget.Scope == domain.ScopeIndividual, budgetOwnerInitial(s.Budget.OwnerID, props.Members)),
 		crowTitle,
 		// The note marker rides the SAME hover system as every other marker in
 		// this cell: its words preview in the shared popover after the intent
@@ -379,35 +378,96 @@ func budgetCompactNameCell(props budgetRowCompactProps, crowTitle ui.Node) ui.No
 	)
 }
 
-func baseBudgetLimit(id string, fallback money.Money) string {
-	if app := appstate.Default; app != nil {
-		for _, budget := range app.Budgets() {
-			if budget.ID == id {
-				return fmtMoney(budget.Limit)
-			}
+func budgetOwnerInitial(ownerID string, members []domain.Member) ui.Node {
+	for _, member := range members {
+		if member.ID != ownerID {
+			continue
 		}
+		name := strings.TrimSpace(member.Name)
+		initial := "?"
+		if name != "" {
+			initial = strings.ToUpper(string([]rune(name)[0]))
+		}
+		return Span(css.Class("budget-owner-initial"), Attr("aria-label", member.Name), Attr("title", member.Name), initial)
 	}
-	return fmtMoney(fallback)
+	return Fragment()
 }
 
-func budgetLimitEditor(id, budgetName string, inputRef ui.DOMRef, draft string, onDraft, save, cancel, keyDown any, errID, errMsg, effective, base string) ui.Node {
+func budgetRowProjectionLine(s budgeting.Status, props budgetRowProps) ui.Node {
+	if s.PeriodStatus == budgeting.PeriodEnded && s.Projection.EndedOverBy.Amount > 0 {
+		return Span(css.Class("budget-sub", tw.TextDown), Attr("data-testid", "budget-projection-ended-"+s.Budget.ID),
+			uistate.T("br3row.endedOver", fmtMoney(s.Projection.EndedOverBy)))
+	}
+	if s.PeriodStatus == budgeting.PeriodEnded {
+		return Fragment()
+	}
+	if s.Projection.Error == nil && s.Projection.CommittedDominates && s.Projection.Committed.Amount > 0 {
+		return Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-projection-committed-"+s.Budget.ID),
+			uistate.T("br3row.committedDominates", fmtMoney(s.Projection.Committed)))
+	}
+	if s.Projection.Error == nil && s.Projection.OverBy.Amount > 0 {
+		return Span(css.Class("budget-sub", tw.TextDown), Attr("data-testid", "budget-projection-"+s.Budget.ID),
+			uistate.T("bud2.projectionOver", fmtMoney(s.Projection.OverBy)))
+	}
+	return Fragment()
+}
+
+func budgetCadenceSuffix(period domain.Period) string {
+	switch period {
+	case domain.PeriodWeekly:
+		return uistate.T("br3row.cadenceWeek")
+	case domain.PeriodQuarterly:
+		return uistate.T("br3row.cadenceQuarter")
+	case domain.PeriodYearly:
+		return uistate.T("br3row.cadenceYear")
+	default:
+		return ""
+	}
+}
+
+func budgetLimitEditor(id, budgetName string, inputRef ui.DOMRef, draft string, onDraft, save, cancel, keyDown any, errID, errMsg string, effective money.Money) ui.Node {
 	return Form(css.Class("budget-limit-editor"), Attr("data-testid", "budget-limit-editor-"+id), OnSubmit(save),
 		Strong(css.Class("budget-limit-editor-title"), budgetName+" "+uistate.T("budgets.limitTitleSuffix")),
 		Div(css.Class("budget-limit-editor-cap"),
-			Span(uistate.T("budgets.effectiveCapLabel")),
-			Strong(Attr("data-testid", "budget-limit-effective-"+id), effective)),
+			Strong(Attr("data-testid", "budget-limit-effective-"+id), budgetEffectiveCapCopy(id, effective))),
 		Div(css.Class("budget-limit-editor-base"),
 			Label(For("budget-limit-input-"+id), uistate.T("budgets.baseLimitLabel")),
-			Span(Strong(base), Input(append(append([]any{css.Class("field", "budget-limit-input"), Type("number"),
+			Input(append(append([]any{css.Class("field", "budget-limit-input"), Type("number"),
 				ID("budget-limit-input-" + id), Attr("data-testid", "budget-limit-input-"+id),
 				Attr("aria-label", budgetName+" "+uistate.T("budgets.baseLimitNameSuffix")), Ref(inputRef), Step("0.01"), Attr("min", "0.01"),
-				OnInput(onDraft), OnKeyDown(keyDown)}, errAttrs(errID, errMsg)...), uiw.FieldValue(draft))...))),
+				OnInput(onDraft), OnKeyDown(keyDown)}, errAttrs(errID, errMsg)...), uiw.FieldValue(draft))...),
+		),
 		Button(append([]any{css.Class("btn btn-sm budget-limit-save"), Type("submit"), Attr("data-testid", "budget-limit-save-"+id),
 			Attr("aria-label", uistate.T("action.save")), uistate.T("action.save")}, disabledAttr(errMsg != "")...)...),
 		Button(css.Class("btn btn-sm budget-limit-cancel"), Type("button"), Attr("data-testid", "budget-limit-cancel-"+id),
 			OnClick(cancel), uistate.T("action.cancel")),
 		errText(errID, errMsg),
 	)
+}
+
+func budgetEffectiveCapCopy(id string, effective money.Money) string {
+	base := effective
+	if app := appstate.Default; app != nil {
+		for _, budget := range app.Budgets() {
+			if budget.ID == id {
+				base = budget.Limit
+				break
+			}
+		}
+	}
+	delta, err := money.Sub(effective.Amount, base.Amount)
+	if err != nil || delta == 0 {
+		return uistate.T("br3row.effectiveBase", fmtMoney(effective))
+	}
+	sign := "+"
+	if delta < 0 {
+		sign = "−"
+		delta, err = money.Neg(delta)
+		if err != nil {
+			return uistate.T("br3row.effectiveBase", fmtMoney(effective))
+		}
+	}
+	return uistate.T("br3row.effectiveBaseCarry", fmtMoney(effective), sign, fmtMoney(money.New(delta, effective.Currency)))
 }
 
 // budgetRolloverBadgeProps configures the per-row rollover policy badge (C395).
@@ -508,7 +568,7 @@ func budgetRolloverTable(view budgeting.RolloverView, id string) ui.Node {
 	}
 	rows := make([]ui.Node, 0, len(periods))
 	for _, state := range periods {
-		month := budgetMonthName(state.Start, false) + " " + strconv.Itoa(state.Start.Year())
+		month := state.Start.Format("Jan") + " " + strconv.Itoa(state.Start.Year())
 		rows = append(rows, Tr(
 			Th(Attr("scope", "row"), month), Td(fmtMoney(state.EffectiveCap)), Td(formatSignedMoney(state.CarryIn)),
 			Td(fmtMoney(state.Spend)), Td(formatSignedMoney(state.CarryOut)),

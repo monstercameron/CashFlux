@@ -163,7 +163,7 @@ func unbudgetedChip(props unbudgetedChipProps) ui.Node {
 	return Button(css.Class("budget-unbudgeted-chip"), Type("button"),
 		Attr("data-testid", "budget-this-"+props.CatID),
 		Title(uistate.T("budgets.budgetThis")), OnClick(open),
-		Span(css.Class("budget-unbudgeted-cat"), uistate.T("budgets.unbudgetedChip", props.CatName, props.SpentStr)),
+		Span(css.Class("budget-unbudgeted-cat"), uistate.T("br3row.unbudgetedOthers", props.CatName), " · ", props.SpentStr),
 		Span(css.Class("budget-unbudgeted-cta"),
 			uiw.Icon(icon.Plus, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
 			uistate.T("budgets.budgetThis")),

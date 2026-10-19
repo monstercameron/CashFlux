@@ -90,6 +90,13 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Budget rows put the bar and its pace tick first (BR3ROW).** At 1440 px the progress bar has its own column (it was
+  1 px wide), with a 6 px bar and a pace tick that reads as a marker; projections move to a quiet second line. On phones
+  rows use explicit areas so the name is never squeezed to nothing. Only Over and Near get a status chip; limits carry
+  their cadence ("$25 / wk", "$600 / qtr"); individual budgets show their owner's initial; closed periods say "Ended $X
+  over" and bill-heavy budgets say how much is bills; the rollover detail and the limit editor open as full-width rows
+  with right-aligned tabular numbers; remaining-per-day is per budget; goal money is shown once per budget with a link to
+  the goal; the Unbudgeted chip reads "Shopping (others)" for budgets that cover only one member.
 - **The month's money is the first thing you read on Transactions (UXT1).** The dotted count line is replaced by a
   summary strip: Spent, Income and Net as three labelled figures at 17 px with tabular numbers, a thin bar under Spent
   split by the top five categories (clicking a segment filters the ledger, clicking again clears it, with an equivalent

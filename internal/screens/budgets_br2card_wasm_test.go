@@ -65,8 +65,8 @@ func br2FiguresHarness(p budgetRowCardProps) ui.Node {
 
 func TestBR2CardGoalFundingNamesGoalAndReconcilesLimit(t *testing.T) {
 	app := bud2TestApp(t)
-	if err := app.PutGoal(domain.Goal{ID: "goal-couch", Name: "New couch", OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared,
-		TargetAmount: money.New(50000, "USD")}); err != nil {
+	if err := app.PutGoal(domain.Goal{ID: "goal-couch", Name: "New couch", CategoryID: "c-food", OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared,
+		TargetAmount: money.New(50000, "USD"), CurrentAmount: money.New(50000, "USD")}); err != nil {
 		t.Fatalf("PutGoal: %v", err)
 	}
 	anchor := time.Now()
@@ -75,7 +75,10 @@ func TestBR2CardGoalFundingNamesGoalAndReconcilesLimit(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("PutTransaction: %v", err)
 	}
-	b := domain.Budget{ID: "br2-goal", Name: "Shopping", CategoryID: "c-food", Period: domain.PeriodMonthly, Limit: money.New(20000, "USD")}
+	b := domain.Budget{ID: "br2-goal", Name: "Shopping", CategoryID: "c-food", Period: domain.PeriodMonthly, Limit: money.New(20000, "USD"), Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID}
+	if err := app.PutBudget(b); err != nil {
+		t.Fatalf("PutBudget: %v", err)
+	}
 	line, chip := budgetRowGoalFunding(false, budgeting.Status{Budget: b, Limit: b.Limit}, budgetRowProps{Anchor: anchor}, int(app.Rev()))
 	f := render.New(t)
 	f.Render(line)
@@ -83,7 +86,7 @@ func TestBR2CardGoalFundingNamesGoalAndReconcilesLimit(t *testing.T) {
 	if got == nil {
 		t.Fatal("goal-funded note did not render")
 	}
-	want := "$420.00 from the 'New couch' goal is available here this month; this budget's limit remains $200.00."
+	want := "$80.00 available from New couch"
 	if got.Text() != want {
 		t.Fatalf("goal note = %q, want %q", got.Text(), want)
 	}

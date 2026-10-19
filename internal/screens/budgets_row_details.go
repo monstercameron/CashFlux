@@ -212,7 +212,7 @@ func budgetRowPaceNotes(lastMonthMode bool, props budgetRowProps, s budgeting.St
 		// A carried-in deficit is historical context about where the period STARTED, not a
 		// live alert — keep it quiet/neutral (TextDim) so an over-budget card has ONE colored
 		// signal (the red status line) rather than several caption lines competing for the eye.
-		cls := "budget-sub " + tw.Fold(tw.TextDim)
+		cls := "budget-sub budget-rollover-carry " + tw.Fold(tw.TextDim)
 		rolloverLine = Fragment(rolloverLine, Span(ClassStr(cls), uistate.T("budgets.rolloverCarry", props.RolloverCarry)))
 	}
 
@@ -251,7 +251,7 @@ func budgetRowPeriodNotes(lastMonthMode bool, props budgetRowProps, s budgeting.
 	var proratedLine ui.Node = Fragment()
 	if !lastMonthMode && props.ProratedRest != "" {
 		proratedLine = Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-prorated"),
-			uistate.T("budgets.proratedRest", props.ProratedRest))
+			uistate.T("br3row.restPerDay", props.ProratedRest))
 	}
 
 	// "Last month's spend" overlay: an overline tag above the (now last-month) bar, plus a
@@ -326,22 +326,97 @@ func budgetRowGoalFunding(lastMonthMode bool, s budgeting.Status, props budgetRo
 				slog.Error("convert goal-funded budget limit", "budget_id", s.Budget.ID, "error", err)
 				return Fragment(), ""
 			}
-			key := "budgets.goalFundedAvailableMany"
-			if len(split.Goals) == 1 {
-				key = "budgets.goalFundedAvailableOne"
+			allocations := budgetGoalFundingForPeriod(app, pStart, pEnd, rates)
+			fundedAmount := int64(0)
+			var fundedGoals []ui.Node
+			var allocatedNames []string
+			mismatch := false
+			for _, allocation := range allocations {
+				if allocation.BudgetID != s.Budget.ID {
+					continue
+				}
+				fundedAmount, err = money.Add(fundedAmount, allocation.AmountMinor)
+				if err != nil {
+					slog.Error("sum allocated goal funding", "budget_id", s.Budget.ID, "error", err)
+					return Fragment(), ""
+				}
+				mismatch = mismatch || allocation.PurposeMismatch
+				allocatedNames = append(allocatedNames, allocation.GoalName)
+				fundedGoals = append(fundedGoals, A(Href(uistate.RoutePath("/goals")), allocation.GoalName))
 			}
-			fundedTitle = uistate.T(key, fmtMoney(money.New(split.FundedMinor, base)), budgetGoalNames(app.Goals(), split.Goals), fmtMoney(s.Limit))
-			fundedChip = fundedTitle
+			if fundedAmount > 0 {
+				fundedTitle = uistate.T("br3row.goalAvailable", fmtMoney(money.New(fundedAmount, base)))
+				fundedChip = fundedTitle + " " + strings.Join(allocatedNames, ", ")
+			}
 			var ordinaryOverLine ui.Node = Fragment()
 			if ordinaryOver.Amount > 0 {
 				ordinaryOverLine = Span(css.Class("budget-sub", tw.TextDown), uistate.T("budgets.goalFundedOrdinaryOver", fmtMoney(ordinaryOver)))
 			}
+			var goalLinks ui.Node = Fragment()
+			if len(fundedGoals) > 0 {
+				linkArgs := []any{css.Class("budget-goal-links")}
+				for _, link := range fundedGoals {
+					linkArgs = append(linkArgs, link)
+				}
+				goalLinks = Span(linkArgs...)
+			}
+			var mismatchLine ui.Node = Fragment()
+			if mismatch {
+				mismatchLine = Span(css.Class("budget-sub", tw.TextWarn), uistate.T("br3row.goalMismatch"))
+			}
 			fundedLine = Span(css.Class("budget-sub", tw.TextDim),
-				Attr("data-testid", "budget-goalfunded-"+s.Budget.ID), fundedTitle, ordinaryOverLine)
+				Attr("data-testid", "budget-goalfunded-"+s.Budget.ID), fundedTitle, " ", goalLinks, mismatchLine, ordinaryOverLine)
 		}
 	}
 
 	return fundedLine, fundedChip
+}
+
+func budgetGoalFundingForPeriod(app *appstate.App, start, end time.Time, rates currency.Rates) []goalfunded.BudgetFunding {
+	if app == nil {
+		return nil
+	}
+	goals, budgets, categories, transactions := app.Goals(), app.Budgets(), app.Categories(), app.Transactions()
+	drawdowns := make(map[string]int64)
+	for _, drawdown := range goalfunded.ByGoal(transactions, start, end, rates) {
+		drawdowns[drawdown.GoalID] = drawdown.SpentMinor
+	}
+	available := make(map[string]int64, len(goals))
+	for _, goal := range goals {
+		if goal.Archived || goal.CurrentAmount.Amount <= 0 {
+			continue
+		}
+		balance, err := rates.ToBase(goal.CurrentAmount)
+		if err != nil {
+			continue
+		}
+		available[goal.ID] = goalfunded.RemainingMinor(balance.Amount, goalfunded.Drawdown{SpentMinor: drawdowns[goal.ID]})
+	}
+	var contributions []goalfunded.BudgetContribution
+	for _, budget := range budgets {
+		covers := categorytree.DescendantsOfAll(categories, budget.TrackedCategoryIDs())
+		rows, err := budgeting.ContributingTransactions(budget, transactions, start, end, covers)
+		if err != nil {
+			continue
+		}
+		for _, row := range rows {
+			if row.GoalID == "" {
+				continue
+			}
+			amount, err := rates.ToBase(row.Amount)
+			if err != nil {
+				continue
+			}
+			if amount.Amount < 0 {
+				amount.Amount, err = money.Abs(amount.Amount)
+				if err != nil {
+					continue
+				}
+			}
+			contributions = append(contributions, goalfunded.BudgetContribution{GoalID: row.GoalID, BudgetID: budget.ID, AmountMinor: amount.Amount})
+		}
+	}
+	return goalfunded.AllocateAvailable(goals, budgets, categories, available, contributions)
 }
 
 func budgetGoalFundedOverBy(split goalfunded.Split, limit money.Money, rates currency.Rates) (money.Money, error) {
@@ -360,25 +435,6 @@ func budgetGoalFundedSummary(b domain.Budget, transactions []domain.Transaction,
 		return goalfunded.Split{}, err
 	}
 	return goalfunded.Summarize(contributors, nil, start, end, rates), nil
-}
-
-func budgetGoalNames(goals []domain.Goal, ids []string) string {
-	namesByID := make(map[string]string, len(goals))
-	for _, goal := range goals {
-		namesByID[goal.ID] = strings.TrimSpace(goal.Name)
-	}
-	names := make([]string, 0, len(ids))
-	for _, id := range ids {
-		name := strings.TrimSpace(namesByID[id])
-		if name == "" {
-			name = uistate.T("budgets.goalFundedUnnamed")
-		}
-		names = append(names, "'"+name+"'")
-	}
-	if len(names) == 0 {
-		return uistate.T("budgets.goalFundedUnnamed")
-	}
-	return strings.Join(names, ", ")
 }
 
 // budgetRowNotesProps carries the explicit inputs for budgetRowNotes.
