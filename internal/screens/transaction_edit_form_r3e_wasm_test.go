@@ -56,7 +56,7 @@ func TestR3EEditFormUsesSharedOrderAndKeepsBodyActions(t *testing.T) {
 	}
 	for _, check := range []struct{ tag, id string }{
 		{"select", "txn-edit-account"}, {"select", "txn-edit-category"}, {"button", "txn-edit-direction-expense"}, {"button", "txn-edit-direction-income"},
-		{"div", "txn-edit-splits"}, {"button", "txn-edit-newcat-toggle"}, {"button", "txn-edit-delete"},
+		{"div", "txn-edit-splits"}, {"button", "txn-edit-delete"},
 	} {
 		if findByTestID(fixture, check.tag, check.id) == nil {
 			t.Errorf("edit form is missing %s", check.id)
@@ -102,9 +102,10 @@ func TestR3EEditFormUsesSharedOrderAndKeepsBodyActions(t *testing.T) {
 	if editGrid == nil || !strings.Contains(editGrid.Attr("class"), "txn-form-edit") {
 		t.Fatalf("Edit form is missing shared grid class: %#v", editGrid)
 	}
-	newCategory := findByTestID(fixture, "button", "txn-edit-newcat-toggle")
-	if newCategory.Attr("aria-label") != uistate.T("transactions.newCategory") || newCategory.Attr("title") != uistate.T("transactions.newCategory") {
-		t.Fatalf("New category control lacks its accessible name and tooltip: %#v", newCategory)
+	categoryOptions := findByTestID(fixture, "select", "txn-edit-category").Children()
+	newCategory := categoryOptions[len(categoryOptions)-1]
+	if newCategory.Text() != uistate.T("transactions.newCategoryOption") || newCategory.Property("value") != txnEditNewCategoryOption {
+		t.Fatalf("New category must be the labelled final category option: %#v", newCategory)
 	}
 	findByTestID(fixture, "button", "txn-edit-more-actions").Click()
 	for _, id := range []string{"txn-edit-split-toggle", "txn-edit-attach"} {

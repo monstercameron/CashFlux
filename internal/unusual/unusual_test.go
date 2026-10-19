@@ -72,7 +72,7 @@ func TestDoubleChargeBoundariesAndDeterministicOrder(t *testing.T) {
 		name string
 		days int
 		want bool
-	}{{"same day", 0, false}, {"one day", 1, true}, {"three days", 3, true}, {"four days", 4, false}} {
+	}{{"same day exact charges", 0, true}, {"one day", 1, true}, {"three days", 3, true}, {"four days", 4, false}} {
 		t.Run(tt.name, func(t *testing.T) {
 			input := Input{Now: testNow, Transactions: []domain.Transaction{txn("a", "Coffee Shop", "food", 1200, tt.days), txn("b", "coffee shop", "food", 1200, 0)}}
 			got := Detect(input)
@@ -87,6 +87,54 @@ func TestDoubleChargeBoundariesAndDeterministicOrder(t *testing.T) {
 	if len(got) != 2 || got[0].TxnID != "a" || got[1].TxnID != "z" {
 		t.Fatalf("order=%+v", got)
 	}
+}
+
+func TestRefundSuppressesNetSpikeAndThresholdScalesByCurrency(t *testing.T) {
+	t.Run("refund lowers candidate spend", func(t *testing.T) {
+		rows := []domain.Transaction{txn("candidate", "Cafe", "food", 20000, 4), txn("refund", "Cafe", "food", -18000, 2)}
+		for i, ago := range []int{40, 70, 100, 130} {
+			rows = append(rows, txn("history"+string(rune('a'+i)), "Cafe", "food", 2000, ago))
+		}
+		if got := Detect(Input{Now: testNow, Transactions: rows}); hasFinding(got, "candidate", Spike) {
+			t.Fatalf("refunded net spend still produced a spike: %+v", got)
+		}
+	})
+
+	t.Run("first merchant floor follows currency minor unit", func(t *testing.T) {
+		for _, tc := range []struct {
+			name  string
+			minor int64
+			want  bool
+		}{{"below 250 yen", 249, false}, {"at 250 yen", 250, true}} {
+			t.Run(tc.name, func(t *testing.T) {
+				input := Input{Now: testNow, Transactions: []domain.Transaction{{ID: "candidate", Payee: "Shop", Date: testNow.AddDate(0, 0, -1), Amount: money.New(-tc.minor, "JPY")}}}
+				if got := hasFinding(Detect(input), "candidate", FirstTimeMerchantLarge); got != tc.want {
+					t.Fatalf("first-time finding=%t, want %t", got, tc.want)
+				}
+			})
+		}
+	})
+
+	t.Run("spike floors follow currency minor unit", func(t *testing.T) {
+		for _, tc := range []struct {
+			name  string
+			minor int64
+			want  bool
+		}{{"below 50 yen", 49, false}, {"at 50 yen", 50, true}} {
+			t.Run(tc.name, func(t *testing.T) {
+				rows := []domain.Transaction{txn("candidate", "Cafe", "food", tc.minor, 1)}
+				for i, ago := range []int{31, 61, 91, 121} {
+					row := txn("history"+string(rune('a'+i)), "Cafe", "food", 10, ago)
+					row.Amount.Currency = "JPY"
+					rows = append(rows, row)
+				}
+				rows[0].Amount.Currency = "JPY"
+				if got := hasFinding(Detect(Input{Now: testNow, Transactions: rows}), "candidate", Spike); got != tc.want {
+					t.Fatalf("spike finding=%t, want %t", got, tc.want)
+				}
+			})
+		}
+	})
 }
 
 func TestExclusionsAndExpectationEvidence(t *testing.T) {

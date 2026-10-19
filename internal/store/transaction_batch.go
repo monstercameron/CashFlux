@@ -112,8 +112,8 @@ func (s *SQLiteStore) PutTransferBatchAtomic(operationID string, txns []domain.T
 	if err := tx.Commit(); err != nil {
 		return false, fmt.Errorf("store: commit transfer batch %s: %w", operationID, err)
 	}
+	mutationRev.Add(1) // the new operation receipt is data even when its rows already existed
 	if existingCount == 0 {
-		mutationRev.Add(1)
 		return true, nil
 	}
 	return false, nil

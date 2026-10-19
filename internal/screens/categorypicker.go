@@ -129,8 +129,22 @@ type CategoryPickerProps struct {
 // CategoryPicker is a search-and-create overlay over the category tree. It is
 // mounted by whichever surface needs it and dismissed via OnClose.
 func CategoryPicker(props CategoryPickerProps) ui.Node {
-	defer txnPerfStart("category-picker")()
 	app := appstate.Default
+	if app == nil {
+		return Fragment()
+	}
+	return ui.CreateElement(categoryPickerComponent, categoryPickerComponentProps{Props: props, App: app})
+}
+
+type categoryPickerComponentProps struct {
+	Props CategoryPickerProps
+	App   *appstate.App
+}
+
+func categoryPickerComponent(componentProps categoryPickerComponentProps) ui.Node {
+	props := componentProps.Props
+	app := componentProps.App
+	defer txnPerfStart("category-picker")()
 	_ = uistate.UseDataRevision().Get()
 
 	query := ui.UseState(props.InitialQuery)
@@ -168,9 +182,6 @@ func CategoryPicker(props CategoryPickerProps) ui.Node {
 		}
 	})
 
-	if app == nil {
-		return Fragment()
-	}
 	q := strings.ToLower(strings.TrimSpace(query.Get()))
 	all := categoryOptions(app.Categories(), props.Kind)
 	matches := make([]catOption, 0, len(all))

@@ -74,6 +74,8 @@ type MusicState struct {
 // Dataset is the complete CashFlux dataset: every entity plus settings. It is
 // the unit of export, import, and (later) sync.
 type Dataset struct {
+	// TransferOperations keeps durable transfer retries idempotent after hydration.
+	TransferOperations        []TransferOperationReceipt        `json:"transferOperations,omitempty"`
 	SchemaVersion             int                               `json:"schemaVersion"`
 	Members                   []domain.Member                   `json:"members"`
 	Accounts                  []domain.Account                  `json:"accounts"`

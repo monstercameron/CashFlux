@@ -20,7 +20,9 @@ import (
 // as a JSON document keyed by id, which keeps ingress (Load) and egress
 // (Snapshot) clean and round-trippable while still giving us SQL on top.
 type SQLiteStore struct {
-	db *sql.DB
+	db               *sql.DB
+	captureReady     bool
+	debtCaptureReady bool
 }
 
 const sqliteSchema = `
@@ -79,7 +81,12 @@ func NewMemory() (*SQLiteStore, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("store: schema: %w", err)
 	}
-	return &SQLiteStore{db: db}, nil
+	s := &SQLiteStore{db: db}
+	if err := s.installChangeCapture(); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	return s, nil
 }
 
 // Close releases the database.
@@ -276,6 +283,9 @@ func (s *SQLiteStore) Load(ds Dataset) error {
 	if err := replaceKVTable(tx, "settingskv", ds.SettingsKV); err != nil {
 		return err
 	}
+	if err := replaceTransferReceipts(tx, ds.TransferOperations); err != nil {
+		return err
+	}
 	if err := tx.Commit(); err != nil {
 		return err
 	}
@@ -295,6 +305,9 @@ func (s *SQLiteStore) Snapshot() (Dataset, error) {
 	}
 	var ds Dataset
 	var err error
+	if ds.TransferOperations, err = s.transferReceipts(); err != nil {
+		return Dataset{}, err
+	}
 	if ds.Members, err = loadRows[domain.Member](s.db, "members"); err != nil {
 		return Dataset{}, err
 	}

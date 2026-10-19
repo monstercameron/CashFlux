@@ -91,8 +91,8 @@ func TestR3NCountLinePluralizesAndRemainsVisibleForAnEmptyPeriod(t *testing.T) {
 	}
 	f := render.New(t)
 	f.Render(txnCountLine(txnCountLineProps{Shown: 0, Total: 3292}))
-	if node := r2aByTestID(f, "div", "txn-count-line"); node == nil || !strings.Contains(node.Text(), "0 transactions") {
-		t.Fatalf("empty-period count line missing or inaccurate: %v", node)
+	if node := r2aByTestID(f, "span", "txn-count-line"); node == nil || !strings.Contains(node.Text(), "0 transactions") {
+		t.Fatalf("empty-period accessible count line missing or inaccurate: %v", node)
 	}
 }
 
@@ -152,10 +152,10 @@ func TestR2ASignedNetUsesAnExplicitSign(t *testing.T) {
 }
 
 func TestR2AUpcomingSummaryUsesSingularAndPluralBillCopy(t *testing.T) {
-	if got := txnUpcomingSummary(1, "$220.00"); got != "1 bill still to come ($220.00)" {
+	if got := txnUpcomingSummary(1, "$220.00"); got != "1 bill due: $220.00" {
 		t.Errorf("single upcoming summary = %q", got)
 	}
-	if got := txnUpcomingSummary(2, "$440.00"); got != "2 bills still to come ($440.00)" {
+	if got := txnUpcomingSummary(2, "$440.00"); got != "2 bills due: $440.00" {
 		t.Errorf("plural upcoming summary = %q", got)
 	}
 }

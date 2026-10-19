@@ -97,7 +97,7 @@ func clearHostedUserSession(prefsAtom state.Atom[prefs.Prefs]) {
 	endPageSessionThen(p, func(err error) {
 		if err != nil {
 			logSyncError("remove hosted sign-in failed", err)
-			uistate.PostNotice("Sign-out could not be saved. Please try again.", true)
+			uistate.PostNotice(uistate.T("bv6d1.signOutSaveFailed"), true)
 			return
 		}
 		p.ServerToken, p.ServerCSRF = "", ""
@@ -106,7 +106,7 @@ func clearHostedUserSession(prefsAtom state.Atom[prefs.Prefs]) {
 		commitAuthPreferences(prefsAtom, p.Normalize(), func(err error) {
 			if err != nil {
 				logSyncError("save hosted sign-out failed", err)
-				uistate.PostNotice("Sign-out could not be saved. Please try again.", true)
+				uistate.PostNotice(uistate.T("bv6d1.signOutSaveFailed"), true)
 				return
 			}
 			reloadAfterIdentityChange("hosted session ended")

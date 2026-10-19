@@ -12,8 +12,8 @@ var r2aKeys = Catalog{
 	"r2a.month":        "%s %d",
 	"r2a.customRange":  "Custom range",
 	"r2a.member":       "Member",
-	"r2a.upcomingOne":  "%d bill still to come (%s)",
-	"r2a.upcomingMany": "%d bills still to come (%s)",
+	"r2a.upcomingOne":  "%d bill due: %s",
+	"r2a.upcomingMany": "%d bills due: %s",
 }
 
 func init() {

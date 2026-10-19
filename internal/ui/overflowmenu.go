@@ -103,6 +103,13 @@ func overflowMenu(props OverflowMenuProps) uic.Node {
 		triggerLabel = "More actions"
 	}
 	toggleOpen := uic.UseEvent(Prevent(func() { open.Set(!open.Get()) }))
+	openFromKeyboard := uic.UseEvent(func(e uic.KeyboardEvent) {
+		if e.GetKey() != "Enter" && e.GetKey() != " " {
+			return
+		}
+		e.PreventDefault()
+		open.Set(true)
+	})
 
 	// Keyboard + outside-click dismissal (WAI-ARIA menu button). Registered only
 	// while open, torn down on close/unmount (mirrors addmenu.go):
@@ -138,6 +145,7 @@ func overflowMenu(props OverflowMenuProps) uic.Node {
 		Attr("aria-label", triggerLabel),
 		Attr("aria-haspopup", "menu"),
 		Attr("aria-expanded", expanded),
+		OnKeyDown(openFromKeyboard),
 		OnClick(toggleOpen),
 		Icon(trigIcon, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
 	}
@@ -424,6 +432,30 @@ func overflowMenuItemBtn(props overflowMenuItemProps) uic.Node {
 	closeMenu := props.CloseMenu
 	onSelect := item.OnSelect
 	submenuOpen := uic.UseState(false)
+	itemID := uic.UseId()
+	uic.UseEffect(func() func() {
+		if !submenuOpen.Get() {
+			return nil
+		}
+		doc := js.Global().Get("document")
+		if !doc.Truthy() || doc.Get("getElementById").Type() != js.TypeFunction {
+			return nil
+		}
+		var cb js.Func
+		cb = js.FuncOf(func(js.Value, []js.Value) any {
+			defer cb.Release()
+			wrap := doc.Call("getElementById", itemID)
+			if wrap.Truthy() {
+				menu := wrap.Call("querySelector", ".add-submenu")
+				if menu.Truthy() {
+					focusMenuItem(menu.Call("querySelector", `[role="menuitem"]`))
+				}
+			}
+			return nil
+		})
+		js.Global().Call("setTimeout", cb, 0)
+		return nil
+	}, submenuOpen.Get())
 	onKey := uic.UseEvent(func(e uic.KeyboardEvent) {
 		switch e.GetKey() {
 		case "ArrowRight", "Enter":
@@ -440,6 +472,7 @@ func overflowMenuItemBtn(props overflowMenuItemProps) uic.Node {
 				e.PreventDefault()
 				e.StopPropagation()
 				props.CloseSubmenu()
+				focusMenuItem(docMenuItem(itemID))
 			}
 		}
 	})
@@ -454,6 +487,7 @@ func overflowMenuItemBtn(props overflowMenuItemProps) uic.Node {
 	btnArgs := []any{
 		ClassStr(cls),
 		Type("button"),
+		Attr("id", itemID),
 		Attr("role", "menuitem"),
 		OnKeyDown(onKey),
 		OnClick(func() {
@@ -476,13 +510,8 @@ func overflowMenuItemBtn(props overflowMenuItemProps) uic.Node {
 		}
 		btnArgs = append(btnArgs, Attr("aria-haspopup", "menu"), Attr("aria-expanded", expanded))
 	}
-	// The section heading is aria-hidden (it cannot be an owned child of role=menu),
-	// so each item restates its section in its own accessible name. Without this the
-	// grouping would be a purely visual cue and a screen-reader user would hear ten
-	// equally-weighted entries — the flat list C572 set out to fix.
-	if item.Section != "" {
-		btnArgs = append(btnArgs, Attr("aria-label", item.Label+" — "+item.Section))
-	}
+	// The visible item label is also its accessible name. Section headings remain a
+	// visual grouping and never leak into the action's name.
 	if item.TestID != "" {
 		btnArgs = append(btnArgs, Attr("data-testid", item.TestID))
 	}
@@ -491,14 +520,32 @@ func overflowMenuItemBtn(props overflowMenuItemProps) uic.Node {
 	}
 	btnArgs = append(btnArgs, item.Label)
 	parent := Button(btnArgs...)
-	if len(item.Submenu) == 0 || !submenuOpen.Get() {
-		return parent
-	}
 	children := []any{ClassStr("add-submenu"), Attr("role", "menu")}
-	for _, child := range item.Submenu {
-		children = append(children, uic.CreateElement(overflowMenuItemBtn, overflowMenuItemProps{
-			Item: child, CloseMenu: closeMenu, CloseSubmenu: func() { submenuOpen.Set(false) },
-		}))
+	if submenuOpen.Get() {
+		for _, child := range item.Submenu {
+			children = append(children, uic.CreateElement(overflowMenuItemBtn, overflowMenuItemProps{
+				Item: child, CloseMenu: closeMenu, CloseSubmenu: func() {
+					submenuOpen.Set(false)
+					focusMenuItem(docMenuItem(itemID))
+				},
+			}))
+		}
 	}
-	return Div(ClassStr("add-submenu-wrap"), parent, Div(children...))
+	return Div(ClassStr("add-submenu-wrap"), Attr("id", itemID+"-wrap"), parent,
+		If(submenuOpen.Get(), Div(children...)))
+}
+
+func docMenuItem(id string) js.Value {
+	doc := js.Global().Get("document")
+	if !doc.Truthy() || doc.Get("getElementById").Type() != js.TypeFunction {
+		return js.Null()
+	}
+	return doc.Call("getElementById", id)
+}
+
+func focusMenuItem(item js.Value) {
+	if item.IsNull() || item.IsUndefined() || item.Get("focus").Type() != js.TypeFunction {
+		return
+	}
+	item.Call("focus", map[string]any{"preventScroll": true})
 }

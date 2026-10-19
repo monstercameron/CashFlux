@@ -2,28 +2,18 @@
 
 //go:build js && wasm
 
-// Merchant spending-trend affordance for the transactions table (TX6b). The rich
-// merchant "story" (recent-charge sparkline, this-vs-typical, visit frequency, month
-// vs. a typical month) used to live only inside the edit modal — too hidden. This
-// surfaces it from the row itself: a subtle trend chip appears on rows whose merchant
-// has enough history; clicking it opens an anchored popover that shows a brief spinner
-// (the per-merchant stats compute lazily) and then the trend. The heavy work is not
-// done per row on render — only a cheap per-page charge count decides which rows get
-// the chip; the full stats compute on demand when a chip is opened.
+// Merchant spending context for the transaction editor. The shared story combines
+// recent charges, typical spending, visit frequency, and the current month's total.
 package screens
 
 import (
 	"strings"
-	"syscall/js"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
-	"github.com/monstercameron/CashFlux/internal/domain"
-	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/merchantstats"
 	"github.com/monstercameron/CashFlux/internal/money"
-	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/css"
@@ -226,247 +216,8 @@ func merchantSparkline(mags []int64, dates []time.Time, base string) ui.Node {
 	)
 }
 
-// merchantTrendChipProps configures a row's trend affordance.
-type merchantTrendChipProps struct {
-	Merchant string      // resolved merchant display name (row already knows it has history)
-	TxnID    string      // for stable ids/testids
-	Amount   money.Money // this row's amount, for the this-vs-typical delta
-}
-
-// mtrendState is the whole per-chip state in one struct, so a closed chip costs a
-// single UseState hook (not six) — 17 chips render on a table page, so the per-row
-// hook footprint matters for /transactions render cost.
-type mtrendState struct {
-	Open, Ready bool
-	Stats       merchantstats.Stats
-	Base        string
-	Mag         int64
-	HasMag      bool
-}
-
-// mtrendCached is a merchant's computed story, cached until the ledger revision changes.
-type mtrendCached struct {
-	stats merchantstats.Stats
-	base  string
-	ok    bool
-}
-
-var mtrendStatsCache = struct {
-	app     *appstate.App
-	rev     uint64
-	entries map[string]mtrendCached
-}{entries: map[string]mtrendCached{}}
-
-const mtrendStatsCacheLimit = 128
-
-func mtrendCacheEntries(app *appstate.App) map[string]mtrendCached {
-	if app == nil {
-		return nil
-	}
-	rev := app.Rev()
-	if mtrendStatsCache.app != app || mtrendStatsCache.rev != rev {
-		mtrendStatsCache.app = app
-		mtrendStatsCache.rev = rev
-		mtrendStatsCache.entries = make(map[string]mtrendCached)
-	}
-	return mtrendStatsCache.entries
-}
-
-func mtrendCacheGet(app *appstate.App, merchant string) (mtrendCached, bool) {
-	entries := mtrendCacheEntries(app)
-	if entries == nil {
-		return mtrendCached{}, false
-	}
-	value, ok := entries[strings.ToLower(strings.TrimSpace(merchant))]
-	return value, ok
-}
-
-func mtrendCachePut(app *appstate.App, merchant string, value mtrendCached) {
-	entries := mtrendCacheEntries(app)
-	if entries == nil {
-		return
-	}
-	key := strings.ToLower(strings.TrimSpace(merchant))
-	if key == "" {
-		return
-	}
-	if _, exists := entries[key]; !exists && len(entries) >= mtrendStatsCacheLimit {
-		clear(entries)
-	}
-	entries[key] = value
-}
-
 // minTrendChipCharges gates which rows show the trend chip. It's deliberately higher
 // than merchantstats.MinCharges (the edit-modal panel's bar): the chip is ambient on
 // the ledger, so it should stay selective — only merchants you transact with often
 // enough to have a real pattern — rather than appearing on nearly every row.
 const minTrendChipCharges = 5
-
-// merchantTrendChip is the per-row trend affordance: a small history glyph that toggles
-// an anchored popover. On the FIRST open it shows a brief spinner while this merchant's
-// stats compute lazily; repeat opens read the cache and show instantly. Its own
-// component so its hooks sit at stable positions, never inside the row's map loop.
-func merchantTrendChip(props merchantTrendChipProps) ui.Node {
-	st := ui.UseState(mtrendState{})
-	hovering := ui.UseRef(false) // pointer over the chip OR the popover (one hover region)
-	mounted := ui.UseRef(true)
-	ui.UseEffect(func() func() {
-		return func() {
-			mounted.Set(false)
-			hovering.Set(false)
-		}
-	}, "merchant-trend-mounted")
-	wrapID := "mtrend-" + props.TxnID
-
-	uiw.DismissPopover(st.Get().Open, wrapID, func() { st.Set(mtrendState{}) })
-	uiw.AnchorPopover(st.Get().Open, wrapID)
-
-	// openWith builds the open state from a (cached or freshly computed) result, adding
-	// this row's this-vs-typical delta (a cheap single FX convert, so not cached).
-	openWith := func(c mtrendCached) mtrendState {
-		ns := mtrendState{Open: true, Ready: true, Base: c.base}
-		if c.ok {
-			ns.Stats = c.stats
-			if app := appstate.Default; app != nil {
-				ns.Mag, ns.HasMag = toBaseMag(app, props.Amount, c.base)
-			}
-		}
-		return ns
-	}
-
-	// ensureOpen opens the popover, computing this merchant's stats lazily on the first
-	// open (brief spinner) and reading the cache thereafter. Idempotent — a no-op when
-	// already open, so hover-open and click-open (touch) share one path.
-	ensureOpen := func() {
-		if !mounted.Get() || st.Get().Open {
-			return
-		}
-		app := appstate.Default
-		if c, ok := mtrendCacheGet(app, props.Merchant); ok {
-			st.Set(openWith(c)) // cached — instant, no spinner
-			return
-		}
-		st.Set(mtrendState{Open: true}) // first compute — show the spinner beat
-		var cb js.Func
-		cb = js.FuncOf(func(js.Value, []js.Value) any {
-			c := mtrendCached{}
-			if app := appstate.Default; app != nil {
-				if stats, base, ok := computeMerchantStats(app, props.Merchant); ok {
-					c = mtrendCached{stats: stats, base: base, ok: true}
-				}
-				mtrendCachePut(app, props.Merchant, c)
-			}
-			// Only reveal the computed content if the popover is still open — the pointer
-			// may have left during the 400ms compute (the grace-close would have shut it).
-			if mounted.Get() && st.Get().Open {
-				st.Set(openWith(c))
-			}
-			cb.Release()
-			return nil
-		})
-		js.Global().Call("setTimeout", cb, 400)
-	}
-
-	// Hover-driven open/close, mirroring the transaction follow-up chip. `hovering` is the
-	// pointer being over the chip OR the popover, so the same handlers wire to both and the
-	// mouse can bridge the small gap between them without the popover despawning.
-	//
-	// enter: open only after 500ms of continuous hover (a pointer merely passing over the
-	// row never flashes it), and cancel any pending grace-close.
-	enter := func() {
-		hovering.Set(true)
-		if st.Get().Open {
-			return
-		}
-		var cb js.Func
-		cb = js.FuncOf(func(js.Value, []js.Value) any {
-			if mounted.Get() && hovering.Get() {
-				ensureOpen()
-			}
-			cb.Release()
-			return nil
-		})
-		js.Global().Call("setTimeout", cb, 500)
-	}
-	// leave: don't despawn instantly — wait a short grace period so the pointer can bridge
-	// the chip→popover gap; the callback re-reads the live flag, so re-entering keeps it open.
-	leave := func() {
-		hovering.Set(false)
-		var cb js.Func
-		cb = js.FuncOf(func(js.Value, []js.Value) any {
-			if mounted.Get() && !hovering.Get() {
-				st.Set(mtrendState{})
-			}
-			cb.Release()
-			return nil
-		})
-		js.Global().Call("setTimeout", cb, 240)
-	}
-	onEnter := ui.UseEvent(func(e ui.Event) { enter() })
-	onLeave := ui.UseEvent(func(e ui.Event) { leave() })
-	// Click also opens (touch has no hover), and stops propagation so it never triggers the
-	// row's open-edit handler. Dismissal is hover-out / click-outside / Escape — no ✕ button.
-	onClick := ui.UseEvent(func(e ui.Event) {
-		e.PreventDefault()
-		e.StopPropagation()
-		ensureOpen()
-	})
-	// Add-follow-up-task action inside the trend popover (parity with the ⋯ → History
-	// modal): seed the task add form pre-linked to this transaction, then close the
-	// popover. Its hook sits here at a stable position, never inside the row loop.
-	onFollowUp := ui.UseEvent(func(e ui.Event) {
-		e.PreventDefault()
-		e.StopPropagation()
-		uistate.SetTaskAddSeed(uistate.TaskAddSeed{
-			Title:    uistate.T("transactions.followUpTaskTitle", props.Merchant),
-			LinkType: string(domain.RelatedTransaction),
-			LinkID:   props.TxnID,
-		})
-		uistate.SetAddTarget("task")
-		st.Set(mtrendState{}) // close the popover; the task modal takes over
-	})
-
-	s := st.Get()
-	var pop ui.Node = Fragment()
-	if s.Open {
-		var body ui.Node
-		switch {
-		case !s.Ready:
-			body = Div(css.Class("mtrend-loading"),
-				Div(css.Class("mtrend-spinner"), Attr("role", "status"), Attr("aria-label", uistate.T("merchantTrend.loading"))))
-		case s.Base == "":
-			body = Span(css.Class("muted"), uistate.T("merchantTrend.none"))
-		default:
-			body = Div(css.Class("mtrend-card"),
-				merchantStoryNodes(s.Stats, props.Merchant, s.Base, s.Mag, s.HasMag),
-				Div(css.Class(tw.Mt2), Style(map[string]string{
-					"border-top": "1px solid var(--border)", "padding-top": "0.5rem", "margin-top": "0.5rem"}),
-					Button(css.Class("btn btn-sm"), Type("button"),
-						Style(map[string]string{"width": "100%", "justify-content": "center", "white-space": "nowrap"}),
-						Attr("data-testid", "mtrend-followup-"+props.TxnID),
-						OnClick(onFollowUp),
-						Span(uistate.T("transactions.followUpTask")))))
-		}
-		pop = Div(ClassStr("add-menu mtrend-pop"), Attr("role", "dialog"),
-			Attr("data-testid", "mtrend-pop-"+props.TxnID),
-			// Hovering the popover keeps it open (cancels the grace-close), so the pointer
-			// can move off the chip and read the trend.
-			OnMouseEnter(onEnter), OnMouseLeave(onLeave),
-			body)
-	}
-
-	return Span(ClassStr("mtrend-wrap add-wrap"), Attr("id", wrapID),
-		OnMouseEnter(onEnter), OnMouseLeave(onLeave),
-		Button(css.Class("mtrend-chip"), Type("button"),
-			Attr("data-testid", "mtrend-chip-"+props.TxnID),
-			Attr("aria-haspopup", "dialog"), Attr("aria-expanded", ariaBool(s.Open)),
-			// No native `title` — it would fight the hover popover with a second, redundant
-			// tooltip (same lesson as the follow-up chip). aria-label carries it for a11y.
-			Attr("aria-label", uistate.T("merchantTrend.label", props.Merchant)),
-			OnClick(onClick),
-			// A neutral history glyph — direction (up/down/flat) isn't known until the
-			// lazy compute, so the resting chip must not imply "spending increased".
-			uiw.Icon(icon.History, css.Class(tw.ShrinkO, tw.W35, tw.H35))),
-		pop,
-	)
-}

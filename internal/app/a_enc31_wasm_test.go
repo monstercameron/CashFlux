@@ -194,7 +194,7 @@ func TestENC31ProtectedBootAndAppLockLifecycle(t *testing.T) {
 		doc.Call("getElementById", "cf-applock-input").Set("value", oldPass)
 		doc.Call("getElementById", "cf-protected-unlock").Call("click")
 		deadline := time.Now().Add(20 * time.Second)
-		for !continued && time.Now().Before(deadline) {
+		for (!continued || !hydrationSucceeded || len(appstate.Default.Accounts()) != 1 || appLockActive()) && time.Now().Before(deadline) {
 			time.Sleep(5 * time.Millisecond)
 		}
 		if !continued || !hydrationSucceeded || len(appstate.Default.Accounts()) != 1 || appLockActive() {

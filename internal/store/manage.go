@@ -70,7 +70,7 @@ func (s *SQLiteStore) Wipe() error {
 			_ = rows.Close()
 			return err
 		}
-		if !preservedOnWipe[name] {
+		if !preservedOnWipe[name] && name != changeJournalTable {
 			tables = append(tables, name)
 		}
 	}

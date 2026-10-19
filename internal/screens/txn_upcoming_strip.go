@@ -156,16 +156,21 @@ func txnUpcomingInline(struct{}) ui.Node {
 	// where a column of figures is being compared.
 	summary := txnUpcomingSummary(len(pending), fmtMoney(total))
 
+	content := Div(css.Class("txn-upcoming-rows txn-count-upcoming-rows"), rows,
+		Span(css.Class("t-caption", tw.TextDim), uistate.T("transactions.upcomingNote")),
+		txnUpcomingScheduleLink())
+	return txnUpcomingDisclosure(open, summary, toggle, content)
+}
+
+func txnUpcomingDisclosure(open bool, summary string, toggle ui.Handler, content ui.Node) ui.Node {
 	return Div(ClassStr("txn-count-upcoming"+collapsedClass(open)),
 		Attr("data-testid", "txn-upcoming-strip"),
 		Button(css.Class("btn-link txn-upcoming-disc"), Type("button"),
-			Attr("data-testid", "txn-upcoming-toggle"),
-			Attr("aria-expanded", ariaBool(open)),
-			Attr("aria-label", discLabel(open, summary)),
+			Attr("data-testid", "txn-upcoming-toggle"), Attr("aria-controls", "txn-upcoming-popover"),
+			Attr("aria-expanded", ariaBool(open)), Attr("aria-label", discLabel(open, summary)),
 			OnClick(toggle), " · ", summary, " ›"),
-		If(open, Div(css.Class("txn-upcoming-rows txn-count-upcoming-rows"), rows,
-			Span(css.Class("t-caption", tw.TextDim), uistate.T("transactions.upcomingNote")),
-			txnUpcomingScheduleLink())),
+		If(open, Div(css.Class("txn-upcoming-popover"), Attr("id", "txn-upcoming-popover"), Attr("data-testid", "txn-upcoming-popover"),
+			Attr("data-uxt5-disclosure", "popover"), Attr("role", "dialog"), Attr("aria-label", summary), content)),
 	)
 }
 

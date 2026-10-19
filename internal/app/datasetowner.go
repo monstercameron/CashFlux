@@ -6,9 +6,12 @@ package app
 
 import (
 	"encoding/json"
-	"strings"
+	"fmt"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/browserstore"
+	"github.com/monstercameron/CashFlux/internal/cryptobox"
+	"github.com/monstercameron/CashFlux/internal/store"
 	"github.com/monstercameron/CashFlux/internal/syncstate"
 )
 
@@ -100,18 +103,84 @@ func foreignDatasetStashKey(owner syncstate.DatasetOwner) string {
 // stashForeignDataset parks the loaded dataset under its owner's key before
 // something else replaces it. A no-op when the dataset is unowned or already
 // belongs to the signed-in account.
-func stashForeignDataset() {
+func stashForeignDataset() error {
 	owner := datasetOwner()
 	if owner.UserID == "" || !datasetIsForeign() {
-		return
+		return nil
 	}
-	raw := lsGet(datasetStoreKey)
-	if strings.TrimSpace(raw) == "" {
-		return
+	raw, expected, err := materializeLocalDataset()
+	if err != nil {
+		quarantineDataset(expected[datasetStoreKey], "This account's saved changes could not be recovered: "+err.Error())
+		return fmt.Errorf("preserve previous account's dataset: %w", err)
 	}
-	lsSet(foreignDatasetStashKey(owner), raw)
+	if raw == "" {
+		return nil
+	}
+	observedOwner, _ := syncstate.ParseDatasetOwner(expected[datasetOwnerKey], owner.ServerID)
+	if observedOwner != owner {
+		return fmt.Errorf("previous account changed while preparing its recovery copy")
+	}
+	key := foreignDatasetStashKey(owner)
+	previous, _, err := browserstore.GetSecure(key)
+	if err != nil {
+		return fmt.Errorf("read previous account's recovery copy: %w", err)
+	}
+	expected[key] = previous
+	values := make(map[string]string, len(expected))
+	for key, raw := range expected {
+		values[key] = raw
+	}
+	values[key] = raw
+	if err := awaitSecureAction(func(done func(error)) {
+		browserstore.SetSecureBatch(values, expected, done)
+	}); err != nil {
+		return fmt.Errorf("save previous account's recovery copy: %w", err)
+	}
 	if app := appstate.Default; app != nil {
 		app.Log().Warn("parked another account's dataset before replacing it",
 			"owner_server", owner.ServerID, "owner_user", owner.UserID, "bytes", len(raw))
 	}
+	return nil
+}
+
+// materializeLocalDataset reads the authenticated persisted checkpoint and its
+// entire journal, never the live store (which may already belong to a new user).
+// Callers must compare all returned preconditions in their durable write. This
+// function can await legacy decryption and must run outside a JS event callback.
+func materializeLocalDataset() (string, map[string]string, error) {
+	expected := make(map[string]string)
+	for _, key := range []string{datasetStoreKey, datasetHeadKey, datasetGenKey, datasetOwnerKey, workspacesKey} {
+		raw, _, err := browserstore.GetSecure(key)
+		if err != nil {
+			return "", expected, fmt.Errorf("read saved dataset metadata: %w", err)
+		}
+		expected[key] = raw
+	}
+	checkpoint := expected[datasetStoreKey]
+	if checkpoint == "" && expected[datasetHeadKey] == "" {
+		return "", expected, nil
+	}
+	records, err := readDatasetRecords(checkpoint, expected[datasetHeadKey], expected[datasetGenKey], recordWorkspace(), browserstore.GetSecure)
+	if err != nil {
+		return "", expected, err
+	}
+	if cryptobox.IsEnvelope([]byte(checkpoint)) {
+		if activePasscode == "" {
+			return "", expected, errSyncDatasetLocked
+		}
+		plain, err := decryptEnvelopeSync([]byte(checkpoint), activePasscode)
+		if err != nil {
+			return "", expected, fmt.Errorf("open legacy dataset: %w", err)
+		}
+		checkpoint = string(plain)
+	}
+	portable, err := portableDatasetFromRecords(checkpoint, records)
+	if err != nil {
+		return "", expected, err
+	}
+	// A checkpoint without journal entries still needs schema/content validation.
+	if _, err := store.Import([]byte(portable)); err != nil {
+		return "", expected, fmt.Errorf("validate saved dataset: %w", err)
+	}
+	return portable, expected, nil
 }

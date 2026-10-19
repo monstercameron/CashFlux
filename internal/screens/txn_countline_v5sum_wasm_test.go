@@ -114,13 +114,13 @@ func TestV5SUMCategoryFilterSelectionAndScope(t *testing.T) {
 	f.Render(txnCountLine(props))
 	uncategorized := findCategoryButton(f, "txn-category-item", "")
 	uncatSegment := findCategoryButton(f, "txn-category-segment", "")
-	if uncatSegment == nil || uncatSegment.Attr("aria-pressed") != "false" {
-		t.Fatalf("Uncategorized must not appear selected without a category filter: %v", uncatSegment)
+	if uncatSegment == nil || uncatSegment.Attr("aria-hidden") != "true" || uncatSegment.Attr("tabindex") != "-1" {
+		t.Fatalf("category segments must be decorative: %v", uncatSegment)
 	}
 	if strings.Contains(uncatSegment.Attr("class"), "is-selected") {
 		t.Fatalf("needs-attention emphasis must not use selected style: %q", uncatSegment.Attr("class"))
 	}
-	if uncategorized == nil || !strings.Contains(uncategorized.Attr("class"), "needs-attention") {
+	if uncategorized == nil || uncategorized.Attr("aria-pressed") != "false" || !strings.Contains(uncategorized.Attr("class"), "needs-attention") {
 		t.Fatalf("Uncategorized needs-attention dot class missing: %v", uncategorized)
 	}
 	findCategoryButton(f, "txn-category-item", "v5sum-shop").Click()

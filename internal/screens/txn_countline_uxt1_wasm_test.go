@@ -17,7 +17,7 @@ import (
 	"github.com/monstercameron/GoWebComponents/v5/testkit/render"
 )
 
-func TestUXT1SummaryHasThreeLabelledFiguresAndQuietSecondaryFacts(t *testing.T) {
+func TestUXT1SummaryHasThreeLabelledFiguresAndVisibleSecondaryFacts(t *testing.T) {
 	setupTxnCountCashflowFixture(t)
 	f := render.New(t)
 	f.Render(txnCountLine(txnCountLineProps{
@@ -35,24 +35,47 @@ func TestUXT1SummaryHasThreeLabelledFiguresAndQuietSecondaryFacts(t *testing.T) 
 			t.Errorf("summary is missing %q label: %q", label, f.Text())
 		}
 	}
-	secondary := r2aByTestID(f, "div", "txn-count-secondary")
-	if secondary == nil {
-		t.Fatal("secondary facts line is missing")
+	if r2aByTestID(f, "div", "txn-count-visible-facts") == nil {
+		t.Fatal("countline must keep transfer, excluded, and conversion facts visible")
 	}
-	if got := secondary.Text(); strings.ContainsAny(got, "·→") {
-		t.Fatalf("secondary facts use decorative separators: %q", got)
-	}
-	for _, fact := range []string{"3 transactions", "transferred between", "left out of budgets", "not included"} {
-		if !strings.Contains(secondary.Text(), fact) {
-			t.Errorf("secondary facts missing %q: %q", fact, secondary.Text())
-		}
+	if !strings.Contains(f.Text(), "3 transactions") || !strings.Contains(f.Text(), "transferred between") {
+		t.Fatalf("accessible summary omits transaction facts: %q", f.Text())
 	}
 	if !strings.Contains(f.Text(), "Net −$25.00") {
 		t.Errorf("screen-reader summary must state the signed net once, got %q", f.Text())
 	}
 }
 
-func TestUXT1CategoryBarSegmentsFilterAndClearCategory(t *testing.T) {
+func TestCountLineTC3W13CategoryShareUsesBreakdownTotalWhenCategoryIsFiltered(t *testing.T) {
+	rows := []txnCategoryTotal{{ID: "groceries", Minor: 20_000}, {ID: "rent", Minor: 150_000}}
+	got := txnCategoryShare(rows[0].Minor, rows[0].Minor+rows[1].Minor)
+	if got < 11.7 || got > 11.8 {
+		t.Fatalf("selected category share = %.2f%%, want about 11.76%%", got)
+	}
+}
+
+func TestCountLineTC3W13UncategorizedControlTogglesDedicatedFilter(t *testing.T) {
+	setupTxnCountCashflowFixture(t)
+	f := render.New(t)
+	f.Render(txnCountLine(txnCountLineProps{Shown: 3, Total: 3, Spent: money.New(12_500, "USD")}))
+	item := findCategoryButton(f, "txn-category-item", "")
+	if item == nil {
+		t.Skip("fixture has no uncategorized expenses")
+	}
+	if item.Attr("aria-pressed") != "false" {
+		t.Fatalf("initial uncategorized pressed state = %q", item.Attr("aria-pressed"))
+	}
+	item.Click()
+	if !uistate.CurrentTxFilter().Uncategorized {
+		t.Fatal("uncategorized click did not enable the dedicated filter")
+	}
+	item = findCategoryButton(f, "txn-category-item", "")
+	if item == nil || item.Attr("aria-pressed") != "true" {
+		t.Fatalf("uncategorized pressed state after click = %v", item)
+	}
+}
+
+func TestUXT1CategoryLegendFiltersAndClearsCategory(t *testing.T) {
 	setupTxnCountCashflowFixture(t)
 	app := appstate.Default
 	if err := app.PutCategory(domain.Category{ID: "cat-food-uxt1", Name: "Food", Kind: domain.KindExpense}); err != nil {
@@ -74,11 +97,14 @@ func TestUXT1CategoryBarSegmentsFilterAndClearCategory(t *testing.T) {
 	if !strings.Contains(f.Text(), "Food") {
 		t.Fatalf("accessible category labels missing from summary: %q", f.Text())
 	}
-	segment.Click()
+	if segment.Attr("aria-hidden") != "true" || segment.Attr("tabindex") != "-1" {
+		t.Fatal("category bar segments must be decorative")
+	}
+	item.Click()
 	if got := uistate.CurrentTxFilter().Category; got != "cat-food-uxt1" {
 		t.Fatalf("category click filter = %q, want Food category", got)
 	}
-	findCategoryButton(f, "txn-category-segment", "cat-food-uxt1").Click()
+	findCategoryButton(f, "txn-category-item", "cat-food-uxt1").Click()
 	if got := uistate.CurrentTxFilter().Category; got != "" {
 		t.Fatalf("second category click filter = %q, want cleared", got)
 	}
@@ -99,7 +125,7 @@ func TestUXT1FuturePeriodKeepsScheduledAndDueFacts(t *testing.T) {
 	})
 	f := render.New(t)
 	f.Render(txnCountLine(txnCountLineProps{Total: 0}))
-	if !strings.Contains(f.Text(), "October 2099") || !strings.Contains(f.Text(), "0 scheduled · $0.00 due") {
+	if !strings.Contains(f.Text(), "0 posted. 0 scheduled. Due $0.00.") {
 		t.Fatalf("future-period summary lost its schedule and due facts: %q", f.Text())
 	}
 }

@@ -35,8 +35,17 @@ func TestR8SFilterGroupShowAllExpandsInPlace(t *testing.T) {
 	if expand == nil || expand.Text() != "Show all 14" || expand.Attr("aria-expanded") != "false" {
 		t.Fatalf("collapsed filter group toggle = %#v, want Show all 14 collapsed", expand)
 	}
-	if got := len(f.AllByTag("button")); got != 1 {
-		t.Fatalf("collapsed group rendered %d buttons, want only its expansion control", got)
+	if got := len(f.AllByTag("button")); got != 9 {
+		t.Fatalf("collapsed group rendered %d buttons, want 8 options and its expansion control", got)
+	}
+	optionButtons := 0
+	for _, button := range f.AllByTag("button") {
+		if button.Attr("class") == "filter-pill" {
+			optionButtons++
+		}
+	}
+	if optionButtons != 8 {
+		t.Fatalf("collapsed group rendered %d option buttons, want the first 8", optionButtons)
 	}
 
 	expand.Click()
@@ -53,5 +62,8 @@ func TestR8SFilterGroupShowAllExpandsInPlace(t *testing.T) {
 	}
 	if collapse == nil || collapse.Text() != "Show less" || collapse.Attr("aria-expanded") != "true" {
 		t.Fatalf("expanded filter group toggle = %#v, want Show less expanded", collapse)
+	}
+	if collapse.NodeID() != expand.NodeID() {
+		t.Fatalf("expanded filter group replaced its disclosure (node %d -> %d); focus must stay on the disclosure", expand.NodeID(), collapse.NodeID())
 	}
 }

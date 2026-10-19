@@ -19,12 +19,14 @@ import (
 	"github.com/monstercameron/CashFlux/internal/categorytree"
 	"github.com/monstercameron/CashFlux/internal/copytext"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/notify"
 	"github.com/monstercameron/CashFlux/internal/notifyfeed"
 	"github.com/monstercameron/CashFlux/internal/period"
 	"github.com/monstercameron/CashFlux/internal/reports"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+	"github.com/monstercameron/CashFlux/internal/unusual"
 )
 
 // notifyDeliveredKey is the localStorage key holding the delivered-notification
@@ -37,6 +39,11 @@ const notifyDeliveredKey = "cashflux:notify:delivered"
 // fires at most once per its natural period), and shows a single summary toast.
 // It is wrapped in a recover so a notification hiccup can never break app boot.
 func runNotifyCatchUp() {
+	scheduleNotifyCatchUp()
+}
+
+func publishNotifyCatchUp(app *appstate.App, now time.Time, ruleCfg notify.RuleConfig, cands []notify.Candidate) {
+
 	defer func() {
 		if r := recover(); r != nil {
 			slog.Error("runNotifyCatchUp panicked; boot continues",
@@ -47,15 +54,6 @@ func runNotifyCatchUp() {
 			uistate.PostNotice(uistate.T("notify.catchUpError"), true)
 		}
 	}()
-
-	app := appstate.Default
-	if app == nil {
-		return
-	}
-	now := time.Now()
-
-	ruleCfg := notify.UnmarshalRuleConfig(uistate.SettingKVGet(notify.RuleConfigKey()))
-	cands := buildNotifyCandidates(app, now, ruleCfg)
 
 	log := loadDeliveredLog()
 	out := notify.CatchUp(notify.EnabledRules(notify.DefaultRules(), ruleCfg), cands, now, log)
@@ -139,6 +137,14 @@ func runNotifyCatchUp() {
 // live run and the preview call it; only the live run does anything with the
 // result that persists.
 func buildNotifyCandidates(app *appstate.App, now time.Time, ruleCfg notify.RuleConfig) []notify.Candidate {
+	job := newNotifyCandidateJob(app, now, ruleCfg)
+	for !job.Step() {
+	}
+	return job.candidates
+}
+
+func notifyCandidateGenerators(app *appstate.App, txns []domain.Transaction, unusualCandidates []notify.Candidate, now time.Time, ruleCfg notify.RuleConfig) []func() []notify.Candidate {
+
 	accounts := app.Accounts()
 
 	// Resolve bill-due lead days: user override or rule default.
@@ -149,59 +155,61 @@ func buildNotifyCandidates(app *appstate.App, now time.Time, ruleCfg notify.Rule
 		}
 	}
 
-	var cands []notify.Candidate
-	cands = append(cands, notifyfeed.StaleBalanceCandidates("default-stale", accounts, app.FreshnessWindows(), now,
-		func(name string, days int) (title, body copytext.Text) {
-			return copytext.OfKey("notify.staleTitle", uistate.T("notify.staleTitle", name), name),
-				copytext.OfKey("notify.staleBody", uistate.T("notify.staleBody", days), days)
-		})...)
-	cands = append(cands, notifyfeed.BillDueCandidates("default-bill-due", bills.UpcomingAll(accounts, app.Recurring(), now), billLeadDays, now,
-		func(name string, days int) (title, body copytext.Text) {
-			switch days {
-			case 0:
-				body = copytext.OfKey("notify.billBodyToday", uistate.T("notify.billBodyToday"))
-			case 1:
-				body = copytext.OfKey("notify.billBodyTomorrow", uistate.T("notify.billBodyTomorrow"))
-			default:
-				body = copytext.OfKey("notify.billBody", uistate.T("notify.billBody", days), days)
-			}
-			return copytext.OfKey("notify.billTitle", uistate.T("notify.billTitle", name), name), body
-		})...)
-	cands = append(cands, notifyfeed.BudgetCandidates("default-budget", currentBudgetStatuses(app, now), now,
-		func(name string, over bool) (title, body copytext.Text) {
-			if over {
-				return copytext.OfKey("notify.budgetOverTitle", uistate.T("notify.budgetOverTitle", name), name),
-					copytext.OfKey("notify.budgetOverBody", uistate.T("notify.budgetOverBody"))
-			}
-			return copytext.OfKey("notify.budgetNearTitle", uistate.T("notify.budgetNearTitle", name), name),
-				copytext.OfKey("notify.budgetNearBody", uistate.T("notify.budgetNearBody"))
-		})...)
-	cands = append(cands, notifyfeed.TaskReminderCandidates("default-task-reminder", app.Tasks(), 0, now,
-		func(taskTitle string, days int) (title, body copytext.Text) {
-			switch {
-			case days < 0:
-				body = copytext.OfKey("notify.taskBodyOverdue", uistate.T("notify.taskBodyOverdue", -days), -days)
-			case days == 0:
-				body = copytext.OfKey("notify.taskBodyToday", uistate.T("notify.taskBodyToday"))
-			default:
-				body = copytext.OfKey("notify.taskBody", uistate.T("notify.taskBody", days), days)
-			}
-			return copytext.OfKey("notify.taskTitle", uistate.T("notify.taskTitle", taskTitle), taskTitle), body
-		})...)
-	cands = append(cands, digestCandidates(app, now, ruleCfg)...)
-	cands = append(cands, largeTransactionCandidates(app, now, ruleCfg)...)
-	cands = append(cands, unusualChargeCandidates(app, now, ruleCfg)...)
-	cands = append(cands, backupReminderCandidates(app, now)...)
-	cands = append(cands, lowBalanceCandidates(app, now, ruleCfg)...)
-	cands = append(cands, paycheckLandedCandidates(app, now, ruleCfg)...)
-	// C407: the member is stamped ONCE, here, from the rule config — not in each
-	// generator. A generator's job is to find occurrences; who an alert belongs to
-	// is a routing decision the household made in settings, and threading it
-	// through ten signatures would mean ten places to forget it.
-	for i := range cands {
-		cands[i].MemberID = ruleCfg.MemberFor(cands[i].RuleID)
+	return []func() []notify.Candidate{
+
+		func() []notify.Candidate {
+			return notifyfeed.StaleBalanceCandidates("default-stale", accounts, app.FreshnessWindows(), now,
+				func(name string, days int) (title, body copytext.Text) {
+					return copytext.OfKey("notify.staleTitle", uistate.T("notify.staleTitle", name), name),
+						copytext.OfKey("notify.staleBody", uistate.T("notify.staleBody", days), days)
+				})
+		},
+		func() []notify.Candidate {
+			return notifyfeed.BillDueCandidates("default-bill-due", bills.UpcomingAll(accounts, app.Recurring(), now), billLeadDays, now,
+				func(name string, days int) (title, body copytext.Text) {
+					switch days {
+					case 0:
+						body = copytext.OfKey("notify.billBodyToday", uistate.T("notify.billBodyToday"))
+					case 1:
+						body = copytext.OfKey("notify.billBodyTomorrow", uistate.T("notify.billBodyTomorrow"))
+					default:
+						body = copytext.OfKey("notify.billBody", uistate.T("notify.billBody", days), days)
+					}
+					return copytext.OfKey("notify.billTitle", uistate.T("notify.billTitle", name), name), body
+				})
+		},
+		func() []notify.Candidate {
+			return notifyfeed.BudgetCandidates("default-budget", currentBudgetStatusesWithTransactions(app, txns, now), now,
+				func(name string, over bool) (title, body copytext.Text) {
+					if over {
+						return copytext.OfKey("notify.budgetOverTitle", uistate.T("notify.budgetOverTitle", name), name),
+							copytext.OfKey("notify.budgetOverBody", uistate.T("notify.budgetOverBody"))
+					}
+					return copytext.OfKey("notify.budgetNearTitle", uistate.T("notify.budgetNearTitle", name), name),
+						copytext.OfKey("notify.budgetNearBody", uistate.T("notify.budgetNearBody"))
+				})
+		},
+		func() []notify.Candidate {
+			return notifyfeed.TaskReminderCandidates("default-task-reminder", app.Tasks(), 0, now,
+				func(taskTitle string, days int) (title, body copytext.Text) {
+					switch {
+					case days < 0:
+						body = copytext.OfKey("notify.taskBodyOverdue", uistate.T("notify.taskBodyOverdue", -days), -days)
+					case days == 0:
+						body = copytext.OfKey("notify.taskBodyToday", uistate.T("notify.taskBodyToday"))
+					default:
+						body = copytext.OfKey("notify.taskBody", uistate.T("notify.taskBody", days), days)
+					}
+					return copytext.OfKey("notify.taskTitle", uistate.T("notify.taskTitle", taskTitle), taskTitle), body
+				})
+		},
+		func() []notify.Candidate { return digestCandidatesWithTransactions(app, txns, now, ruleCfg) },
+		func() []notify.Candidate { return largeTransactionCandidatesWithTransactions(app, txns, now, ruleCfg) },
+		func() []notify.Candidate { return unusualCandidates },
+		func() []notify.Candidate { return backupReminderCandidatesWithTransactions(app, txns, now) },
+		func() []notify.Candidate { return lowBalanceCandidatesWithTransactions(app, txns, now, ruleCfg) },
+		func() []notify.Candidate { return paycheckLandedCandidatesWithTransactions(app, txns, now, ruleCfg) },
 	}
-	return cands
 }
 
 // postBrowserNotifications posts OS/browser notifications for the emitted items
@@ -244,6 +252,10 @@ func postBrowserNotifications(out []notify.Notification) {
 // month. It produces nothing when there was no activity, so a quiet period
 // doesn't nag.
 func digestCandidates(app *appstate.App, now time.Time, cfg notify.RuleConfig) []notify.Candidate {
+	return digestCandidatesWithTransactions(app, app.Transactions(), now, cfg)
+}
+
+func digestCandidatesWithTransactions(app *appstate.App, txns []domain.Transaction, now time.Time, cfg notify.RuleConfig) []notify.Candidate {
 	base := app.Settings().BaseCurrency
 	if base == "" {
 		base = "USD"
@@ -265,7 +277,7 @@ func digestCandidates(app *appstate.App, now time.Time, cfg notify.RuleConfig) [
 	}
 	prev := period.NewWindow(res, now, weekStart).Shift(-1)
 	ps, pe := prev.Range()
-	flow, err := reports.IncomeVsExpense(app.Transactions(), ps, pe, rates)
+	flow, err := reports.IncomeVsExpense(txns, ps, pe, rates)
 	if err != nil || (flow.Income == 0 && flow.Expense == 0) {
 		return nil
 	}
@@ -281,6 +293,10 @@ func digestCandidates(app *appstate.App, now time.Time, cfg notify.RuleConfig) [
 // from the user's override in cfg (if set and positive), otherwise the default-large
 // rule's built-in value; a zero/absent threshold disables the alert.
 func largeTransactionCandidates(app *appstate.App, now time.Time, cfg notify.RuleConfig) []notify.Candidate {
+	return largeTransactionCandidatesWithTransactions(app, app.Transactions(), now, cfg)
+}
+
+func largeTransactionCandidatesWithTransactions(app *appstate.App, txns []domain.Transaction, now time.Time, cfg notify.RuleConfig) []notify.Candidate {
 	var ruleDefault int64
 	for _, r := range notify.DefaultRules() {
 		if r.ID == "default-large" {
@@ -297,7 +313,7 @@ func largeTransactionCandidates(app *appstate.App, now time.Time, cfg notify.Rul
 	}
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 	since := now.AddDate(0, 0, -30)
-	out, err := notifyfeed.LargeTransactionCandidates("default-large", app.Transactions(), threshold, since, rates,
+	out, err := notifyfeed.LargeTransactionCandidates("default-large", txns, threshold, since, rates,
 		func(desc string, amount int64) (title, body copytext.Text) {
 			label := desc
 			if label == "" {
@@ -320,6 +336,10 @@ func largeTransactionCandidates(app *appstate.App, now time.Time, cfg notify.Rul
 // zero/absent floor disables the alert. Scoped to the last 30 days so the first
 // open doesn't replay the whole ledger; the baseline still uses all history.
 func unusualChargeCandidates(app *appstate.App, now time.Time, cfg notify.RuleConfig) []notify.Candidate {
+	return unusualChargeCandidatesWithTransactions(app, app.Transactions(), now, cfg)
+}
+
+func unusualChargeCandidatesWithTransactions(app *appstate.App, txns []domain.Transaction, now time.Time, cfg notify.RuleConfig) []notify.Candidate {
 	var ruleDefault int64
 	for _, r := range notify.DefaultRules() {
 		if r.ID == "default-unusual" {
@@ -336,7 +356,7 @@ func unusualChargeCandidates(app *appstate.App, now time.Time, cfg notify.RuleCo
 	}
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 	since := now.AddDate(0, 0, -30)
-	out, err := notifyfeed.UnusualChargeCandidates("default-unusual", app.Transactions(), floor, since, rates,
+	out, err := notifyfeed.UnusualChargeCandidates("default-unusual", txns, floor, since, rates,
 		func(payee string, amount, typical int64) (title, body copytext.Text) {
 			label := payee
 			if label == "" {
@@ -410,7 +430,11 @@ func lastBackupSummary() string {
 // backup is due for the default cadence (B28). It's suppressed when there are no
 // transactions yet (nothing worth backing up), so a fresh install isn't nagged.
 func backupReminderCandidates(app *appstate.App, now time.Time) []notify.Candidate {
-	if len(app.Transactions()) == 0 {
+	return backupReminderCandidatesWithTransactions(app, app.Transactions(), now)
+}
+
+func backupReminderCandidatesWithTransactions(app *appstate.App, txns []domain.Transaction, now time.Time) []notify.Candidate {
+	if len(txns) == 0 {
 		return nil
 	}
 	return notifyfeed.BackupCandidates("default-backup", loadBackupCadence(), loadLastBackup(), now,
@@ -447,6 +471,10 @@ func fmtBaseMoney(v int64, base string) string {
 // user-configured floor (or the default-low-balance rule's built-in value when
 // no override is set). A zero/absent threshold disables the alert.
 func lowBalanceCandidates(app *appstate.App, now time.Time, cfg notify.RuleConfig) []notify.Candidate {
+	return lowBalanceCandidatesWithTransactions(app, app.Transactions(), now, cfg)
+}
+
+func lowBalanceCandidatesWithTransactions(app *appstate.App, txns []domain.Transaction, now time.Time, cfg notify.RuleConfig) []notify.Candidate {
 	var ruleDefault int64
 	for _, r := range notify.DefaultRules() {
 		if r.ID == "default-low-balance" {
@@ -461,7 +489,7 @@ func lowBalanceCandidates(app *appstate.App, now time.Time, cfg notify.RuleConfi
 	if base == "" {
 		base = "USD"
 	}
-	out, err := notifyfeed.LowBalanceCandidates("default-low-balance", app.Accounts(), app.Transactions(), floor, now,
+	out, err := notifyfeed.LowBalanceCandidates("default-low-balance", app.Accounts(), txns, floor, now,
 		func(name string, balMinor int64) (title, body copytext.Text) {
 			bal := fmtBaseMoney(balMinor, base)
 			return copytext.OfKey("notify.lowBalTitle", uistate.T("notify.lowBalTitle", name), name),
@@ -545,6 +573,10 @@ func reconcileBillDueFeed(app *appstate.App, now time.Time) {
 // positive), otherwise the default-paycheck rule's built-in value; a zero/absent
 // threshold disables the alert.
 func paycheckLandedCandidates(app *appstate.App, now time.Time, cfg notify.RuleConfig) []notify.Candidate {
+	return paycheckLandedCandidatesWithTransactions(app, app.Transactions(), now, cfg)
+}
+
+func paycheckLandedCandidatesWithTransactions(app *appstate.App, txns []domain.Transaction, now time.Time, cfg notify.RuleConfig) []notify.Candidate {
 	var ruleDefault int64
 	for _, r := range notify.DefaultRules() {
 		if r.ID == "default-paycheck" {
@@ -559,7 +591,7 @@ func paycheckLandedCandidates(app *appstate.App, now time.Time, cfg notify.RuleC
 	if base == "" {
 		base = "USD"
 	}
-	out := notifyfeed.PaycheckLandedCandidates("default-paycheck", app.Transactions(), threshold, 3, now,
+	out := notifyfeed.PaycheckLandedCandidates("default-paycheck", txns, threshold, 3, now,
 		func(desc string, amount int64) (title, body copytext.Text) {
 			label := desc
 			if label == "" {
@@ -577,11 +609,14 @@ func paycheckLandedCandidates(app *appstate.App, now time.Time, cfg notify.RuleC
 // reflect the same near/over state the user sees. Parent budgets roll up their
 // sub-categories' spend (D5). Budgets that fail to evaluate are skipped.
 func currentBudgetStatuses(app *appstate.App, now time.Time) []budgeting.Status {
+	return currentBudgetStatusesWithTransactions(app, app.Transactions(), now)
+}
+
+func currentBudgetStatusesWithTransactions(app *appstate.App, txns []domain.Transaction, now time.Time) []budgeting.Status {
 	budgets := app.Budgets()
 	if len(budgets) == 0 {
 		return nil
 	}
-	txns := app.Transactions()
 	base := app.Settings().BaseCurrency
 	if base == "" {
 		base = "USD"
@@ -650,4 +685,25 @@ func dueDateFromDedupe(n notify.Notification) int64 {
 		return 0
 	}
 	return d.Unix()
+}
+
+func unusualNotificationCandidate(finding unusual.MerchantFinding, base string) notify.Candidate {
+	if base == "" {
+		base = "USD"
+	}
+	t := finding.Transaction
+	label := t.Payee
+	if strings.TrimSpace(label) == "" {
+		label = t.Desc
+	}
+	display := label
+	if display == "" {
+		display = uistate.T("notify.largeNoDesc")
+	}
+	amount, typical := fmtBaseMoney(finding.AmountMinor, base), fmtBaseMoney(finding.TypicalMinor, base)
+	title := copytext.OfKey("notify.unusualTitle", uistate.T("notify.unusualTitle", display), display)
+	body := copytext.OfKey("notify.unusualBody", uistate.T("notify.unusualBody", amount, typical), amount, typical)
+	return notify.Candidate{RuleID: "default-unusual", Event: notify.EventUnusualCharge,
+		Reason:        notify.Reason{Trigger: copytext.Of("why.unusual", "a charge was far above what this merchant normally bills"), Threshold: copytext.Of("why.unusualTypical", "normally %d", finding.TypicalMinor), Observed: copytext.Of("why.unusualNow", "this charge %d", finding.AmountMinor), EntityLabel: copytext.Plain(label), EntityHref: "/transactions"},
+		OccurrenceKey: "unusual:" + t.ID, At: t.Date, Title: title.String(), Body: body.String(), TitleText: title, BodyText: body, Severity: notify.SeverityWarning}
 }

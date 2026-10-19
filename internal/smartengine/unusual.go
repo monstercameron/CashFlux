@@ -4,9 +4,9 @@ package smartengine
 
 import (
 	"fmt"
+	"github.com/monstercameron/CashFlux/internal/debtpay"
 	"strings"
 
-	"github.com/monstercameron/CashFlux/internal/debtpay"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/smart"
 	"github.com/monstercameron/CashFlux/internal/unusual"
@@ -20,52 +20,47 @@ func init() { register(unusualCode, u1Unusual) }
 // contract. The key includes the typed signal so distinct findings on one
 // transaction remain independently identifiable.
 func u1Unusual(in Input) []smart.Insight {
-	principalIDs := debtPrincipalTxnIDs(in)
-	transactions := make([]domain.Transaction, 0, len(in.Transactions))
-	for _, txn := range in.Transactions {
-		if !principalIDs[txn.ID] {
-			transactions = append(transactions, txn)
-		}
+	job := NewUnusualJob(in)
+	for !job.Step(32) {
 	}
-	findings := unusual.Detect(unusual.Input{
-		Transactions: transactions,
-		Categories:   in.Categories,
-		Accounts:     in.Accounts,
-		Recurring:    in.Recurring,
-		Goals:        in.Goals,
-		Budgets:      in.Budgets,
-		Now:          in.Now,
-		Rates:        in.Rates,
-	})
-	byID := make(map[string]domain.Transaction, len(in.Transactions))
-	for _, txn := range in.Transactions {
-		byID[txn.ID] = txn
+	return job.Insights()
+}
+
+// DetectUnusualFindings returns raw unusual-spend findings after applying the
+// same debt-payment exclusion used by the production Smart engine.
+func DetectUnusualFindings(in Input, expectedTxnIDs ...map[string][]string) []unusual.Finding {
+	job := NewUnusualJob(in)
+	if len(expectedTxnIDs) > 0 {
+		job.expectedTxnIDs = expectedTxnIDs[0]
 	}
-	out := make([]smart.Insight, 0, len(findings))
-	for _, finding := range findings {
-		txn, ok := byID[finding.TxnID]
-		if !ok {
-			continue
-		}
-		amount := finding.Evidence.AmountMinor
-		currencyCode := finding.Evidence.CurrencyCode
-		if currencyCode == "" {
-			currencyCode = in.Base
-		}
-		ins := smart.Insight{
-			Feature:  unusualCode,
-			Page:     smart.PageTransactions,
-			Key:      unusualCode + ":" + string(finding.Signal) + ":" + finding.TxnID,
-			Severity: smart.SeverityWarn,
-		}.
-			WithTitle("smart.u1.title", "%s charge: %s", unusualSignalName(finding.Signal), hmoneyc(amount, currencyCode)).
-			WithDetail("smart.u1.detail", "%s on %s — %s", txnLabel(txn), txn.Date.Format("Jan 2, 2006"), unusualEvidence(finding)).
-			WithAmount(mny(amount, currencyCode)).
-			WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/transactions", RelatedType: "transaction", RelatedID: txn.ID}.
-				WithLabel("smart.u1.action", "View transaction"))
-		out = append(out, ins)
+	for !job.Step(256) {
 	}
-	return out
+	return append([]unusual.Finding(nil), job.findings...)
+}
+
+func adaptUnusualFinding(finding unusual.Finding, byID map[string]domain.Transaction, in Input) (smart.Insight, bool) {
+
+	txn, ok := byID[finding.TxnID]
+	if !ok {
+		return smart.Insight{}, false
+	}
+	amount := finding.Evidence.AmountMinor
+	currencyCode := finding.Evidence.CurrencyCode
+	if currencyCode == "" {
+		currencyCode = in.Base
+	}
+	ins := smart.Insight{
+		Feature:  unusualCode,
+		Page:     smart.PageTransactions,
+		Key:      unusualCode + ":" + string(finding.Signal) + ":" + finding.TxnID,
+		Severity: smart.SeverityWarn,
+	}.
+		WithTitle("smart.u1.title", "%s charge: %s", unusualSignalName(finding.Signal), hmoneyc(amount, currencyCode)).
+		WithDetail("smart.u1.detail", "%s on %s — %s", txnLabel(txn), txn.Date.Format("Jan 2, 2006"), unusualEvidence(finding)).
+		WithAmount(mny(amount, currencyCode)).
+		WithAction(smart.Action{Kind: smart.ActionNavigate, Route: "/transactions", RelatedType: "transaction", RelatedID: txn.ID}.
+			WithLabel("smart.u1.action", "View transaction"))
+	return ins, true
 }
 
 func unusualSignalName(signal unusual.Signal) string {
@@ -123,34 +118,6 @@ func unusualMethodText(method string) string {
 	default:
 		return strings.ReplaceAll(method, "_", " ")
 	}
-}
-
-// debtPrincipalTxnIDs returns cash-side debt-payment legs identified by the
-// committed debtpay classifier. These payments reduce debt principal rather
-// than represent ordinary purchases, so they must not enter unusual-spend
-// baselines or findings.
-func debtPrincipalTxnIDs(in Input) map[string]bool {
-	data := debtpay.Dataset{}
-	for _, account := range in.Accounts {
-		data.Accounts = append(data.Accounts, debtpay.Account{
-			ID: account.ID, Name: account.Name, Lender: account.Institution,
-			Currency: account.Currency, Liability: account.Class == domain.ClassLiability,
-		})
-	}
-	for _, txn := range in.Transactions {
-		data.Transactions = append(data.Transactions, debtTransaction(txn))
-	}
-	ids := make(map[string]bool)
-	for _, txn := range in.Transactions {
-		if !txn.Amount.IsNegative() {
-			continue
-		}
-		candidate := debtpay.Classify(debtTransaction(txn), data)
-		if candidate.Confidence != debtpay.ConfidenceNone {
-			ids[txn.ID] = true
-		}
-	}
-	return ids
 }
 
 func debtTransaction(txn domain.Transaction) debtpay.Transaction {

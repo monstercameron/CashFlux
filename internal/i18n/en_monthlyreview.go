@@ -5,7 +5,7 @@ package i18n
 // monthlyReviewKeys holds English copy for the guided month-end review (AG10).
 // Kept in its own file so it doesn't touch the concurrently-edited main catalog.
 var monthlyReviewKeys = Catalog{
-	"review.title": "Month in review",
+	"review.title": "Review",
 	// %d = the current step, %d = how many there are. Stated up front because the
 	// first thing anybody wants to know about a guided flow is how long it is.
 	"review.eyebrow": "Step %d of %d",

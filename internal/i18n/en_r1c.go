@@ -12,7 +12,7 @@ func init() {
 		"r1c.addTag":         "Add tag",
 		"r1c.tagInput":       "Tag name",
 		"r1c.clearSelection": "Clear selection",
-		"r1c.reviewCallout":  "%d to review →",
+		"r1c.reviewCallout":  "Review %d",
 		"r1c.markedReviewed": "Marked %d transactions reviewed.",
 		"r1c.tagged":         "Added “%s” to %d transactions.",
 	} {

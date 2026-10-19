@@ -39,6 +39,7 @@ func autosaveBlocked() bool {
 // quarantineDataset saves the exact unreadable bytes before enabling recovery
 // UI, reusing an existing record when its content hash matches.
 func quarantineDataset(raw, reason string) {
+	raw = datasetRecoveryCopy(raw, recoveryWorkspaceName(), browserstore.Keys(), browserstore.GetSecure)
 	if key, ok := findQuarantineRecord([]byte(raw)); ok {
 		quarantineRaw = browserstore.GetString(key)
 		quarantineAvailable = true

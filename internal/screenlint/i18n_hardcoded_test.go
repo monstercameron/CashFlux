@@ -117,7 +117,10 @@ var i18nPropFuncs = map[string]bool{
 // not just the first. helpTopicBody takes a variadic list of paragraphs; checking
 // only its first would have left the second line of every help topic unguarded.
 var i18nAllArgStringFuncs = map[string]bool{
-	"helpTopicBody": true,
+	"helpTopicBody":    true,
+	"PostNotice":       true,
+	"setTxnSaveStatus": true,
+	"txnCountFigure":   true,
 }
 
 var i18nDisplayFields = map[string]bool{
@@ -355,6 +358,25 @@ func TestNoNewHardcodedEnglish(t *testing.T) {
 			for _, f := range finds {
 				t.Logf("%s %s", dir, f)
 			}
+		}
+	}
+}
+
+func TestHardcodedEnglishScannerChecksNoticeStatusAndLabelHelpers(t *testing.T) {
+	dir := t.TempDir()
+	source := `package screens
+func sample() {
+	PostNotice("These changes are not saved. Try again.", true)
+	setTxnSaveStatus("txn", "Saving...")
+	txnCountFigure("spent", "Spent", 10)
+}`
+	if err := os.WriteFile(filepath.Join(dir, "sample.go"), []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	findings := strings.Join(i18nScanDir(t, dir), "\n")
+	for _, want := range []string{"These changes are not saved", "Saving...", "Spent"} {
+		if !strings.Contains(findings, want) {
+			t.Errorf("scanner missed %q; findings:\n%s", want, findings)
 		}
 	}
 }

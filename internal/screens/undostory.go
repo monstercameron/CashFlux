@@ -5,6 +5,7 @@
 package screens
 
 import (
+	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/auditview"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 )
@@ -33,5 +34,15 @@ import (
 // site instead of only via the transactions undo bar. Tracked in the lane report.
 func postUndoStory(summary string) {
 	auditview.CaptureNow()
-	uistate.PostUndoable(uistate.T("toast.undoStory", summary))
+
+	if appstate.Default == nil {
+		return
+	}
+	appstate.Default.RequestDurable(func(result appstate.DurableResult) {
+		if result.Err != nil {
+			uistate.PostNotice(uistate.T("txint.changesNotSaved"), true)
+			return
+		}
+		uistate.PostUndoable(uistate.T("toast.undoStory", summary))
+	})
 }

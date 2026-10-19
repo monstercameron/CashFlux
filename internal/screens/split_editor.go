@@ -37,6 +37,8 @@ type splitDraft struct {
 // leave FooterFormID empty and keep their own buttons.
 const SplitModalFormID = "txn-split-form"
 
+const splitNewCategoryOption = "__split_new_category__"
+
 type splitEditorProps struct {
 	Txn        domain.Transaction
 	Categories []domain.Category
@@ -47,6 +49,8 @@ type splitEditorProps struct {
 	// OnSave persists the transaction with its Splits set (empty slice clears the
 	// breakdown). The parent (transactions screen) wires it to PutTransaction.
 	OnSave func(domain.Transaction)
+	// Pending holds Save/Clear while the parent awaits its durable result.
+	Pending bool
 	// OnReceiptSplit opens the receipt-assisted path from this editor, keeping
 	// manual and receipt-based splits under one ledger action.
 	OnReceiptSplit func(txnID string)
@@ -264,6 +268,9 @@ func SplitEditor(props splitEditorProps) ui.Node {
 	canSave := shape.Saveable(!parseErr, remainder == 0)
 
 	save := ui.UseEvent(Prevent(func() {
+		if props.Pending {
+			return
+		}
 		saveAttempted.Set(true)
 		cur := splits.Get()
 		type line struct {
@@ -341,6 +348,9 @@ func SplitEditor(props splitEditorProps) ui.Node {
 	}))
 
 	clear := ui.UseEvent(func() {
+		if props.Pending {
+			return
+		}
 		t := props.Txn
 		t.Splits = nil
 		errMsg.Set("")
@@ -365,6 +375,7 @@ func SplitEditor(props splitEditorProps) ui.Node {
 	}
 	catOpts := append([]uiw.SelectOption{{Value: "", Label: uistate.T("transactions.noCategory")}},
 		CategoryPickOptions(categoriesForKind(categories, splitCategoryKind(props.Txn)))...)
+	catOpts = append(catOpts, uiw.SelectOption{Value: splitNewCategoryOption, Label: uistate.T("v5form.splitNewCategory")})
 
 	// Owner picker options (XC10): only when the household actually has members.
 	// The first option is "Same as transaction" (empty value → falls back to the
@@ -424,16 +435,16 @@ func SplitEditor(props splitEditorProps) ui.Node {
 	case saveAttempted.Get() && remainder == 0 && !canSave:
 		remTone, remText = "neg", uistate.T("splitEditor.needTwoShort")
 	case remainder > 0 && inPct:
-		remTone = "neg"
+		remTone = splitRemainderTone(saveAttempted.Get())
 		remText = uistate.T("splitEditor.pctLeft", money.FormatMinor(remainder, 2))
 	case remainder > 0:
-		remTone = "neg"
+		remTone = splitRemainderTone(saveAttempted.Get())
 		remText = uistate.T("splitEditor.left", fmtMoney(money.New(remainder, props.Txn.Amount.Currency)))
 	case remainder < 0 && inPct:
-		remTone = "neg"
+		remTone = splitRemainderTone(saveAttempted.Get())
 		remText = uistate.T("splitEditor.pctOver", money.FormatMinor(-remainder, 2))
 	case remainder < 0:
-		remTone = "neg"
+		remTone = splitRemainderTone(saveAttempted.Get())
 		remText = uistate.T("splitEditor.over", fmtMoney(money.New(-remainder, props.Txn.Amount.Currency)))
 	}
 
@@ -446,9 +457,7 @@ func SplitEditor(props splitEditorProps) ui.Node {
 			props.OnReceiptSplit(props.Txn.ID)
 		}
 	})
-	receiptAction := If(props.OnReceiptSplit != nil,
-		Button(css.Class("btn", "btn-sm"), Type("button"), Attr("data-testid", "txn-receipt-split-open"),
-			OnClick(receiptSplit), uistate.T("receiptsplit.menuAction")))
+	receiptAction := ui.CreateElement(splitReceiptAction, splitReceiptActionProps{Show: props.OnReceiptSplit != nil, OnClick: receiptSplit})
 	// Amounts / Percentages entry-mode toggle (aria-pressed segmented pair).
 	modeBtn := func(testid, key string, active bool, on ui.Handler) ui.Node {
 		cls := "btn btn-sm"
@@ -469,61 +478,75 @@ func SplitEditor(props splitEditorProps) ui.Node {
 	)
 	errNode := If(errMsg.Get() != "", P(css.Class("muted", "neg"), Attr("role", "alert"), errMsg.Get()))
 
-	// Modal layout: a body <form> whose id the FlipPanel's pinned Save footer submits.
-	// No inner title/border (the panel's chrome supplies them) and no inline Save
-	// button (the footer owns it); "Clear split" stays as a quiet body action since
-	// the standard footer is only Cancel + Save.
+	layout := splitEditorLayoutProps{Editor: props, Hint: hint, ReceiptAction: receiptAction, ModeToggle: modeToggle,
+		Rows: rowsNode, AddRow: addRow2, Error: errNode, Save: save, Clear: clear, Cancel: cancel, ShowOwner: showOwner, Picker: pickerNode}
 	if props.FooterFormID != "" {
-		modalSaveArgs := []any{css.Class("btn btn-primary"), Type("submit"), Attr("data-testid", "split-save"), uistate.T("splitEditor.save")}
-		return Fragment(Form(css.Class("split-editor split-editor-modal"), Attr("id", props.FooterFormID),
-			Attr("data-testid", "split-editor"), OnSubmit(save),
-			Div(css.Class("modal-scroll"),
-				hint,
-				receiptAction,
-				modeToggle,
-				splitColumnLabels(showOwner),
-				rowsNode,
-				addRow2,
-				errNode,
-				If(props.Txn.HasSplits(),
-					Div(css.Class("split-editor-clear"),
-						Style(map[string]string{"margin-top": "0.75rem", "padding-top": "0.6rem", "border-top": "1px solid var(--border)"}),
-						Button(css.Class("btn", "btn-sm", "btn-ghost"), Type("button"), Attr("data-testid", "split-clear"),
-							OnClick(clear), uistate.T("splitEditor.clear"))))),
-			Div(css.Class("modal-sticky-foot"),
-				Button(css.Class("btn"), Type("button"), Attr("data-testid", "split-cancel"),
-					OnClick(cancel), uistate.T("action.cancel")),
-				Button(modalSaveArgs...)),
-		), pickerNode)
+		return ui.CreateElement(splitEditorModal, layout)
 	}
+	return ui.CreateElement(splitEditorInline, layout)
+}
 
-	// Inline layout (edit-form / classic table): the self-contained bordered card with
-	// its own title and Save/Clear buttons.
-	saveArgs := []any{css.Class("btn", "btn-primary", "btn-sm"), Type("button"), Attr("data-testid", "split-save"), OnClick(save), uistate.T("splitEditor.save")}
-	return Fragment(Div(css.Class("split-editor"), Attr("data-testid", "split-editor"),
+type splitEditorLayoutProps struct {
+	Editor        splitEditorProps
+	Hint          ui.Node
+	ReceiptAction ui.Node
+	ModeToggle    ui.Node
+	Rows          ui.Node
+	AddRow        ui.Node
+	Error         ui.Node
+	Save          ui.Handler
+	Clear         ui.Handler
+	Cancel        ui.Handler
+	ShowOwner     bool
+	Picker        ui.Node
+}
+
+func splitEditorModal(props splitEditorLayoutProps) ui.Node {
+	p := props.Editor
+	var inert any
+	if p.Pending {
+		inert = Attr("inert", "")
+	}
+	clear := ui.CreateElement(splitClearButton, splitClearButtonProps{Show: p.Txn.HasSplits(), Pending: p.Pending, OnClick: props.Clear})
+	return Fragment(Form(css.Class("split-editor split-editor-modal"), inert, Attr("id", p.FooterFormID),
+		Attr("data-testid", "split-editor"), Attr("aria-busy", strconv.FormatBool(p.Pending)),
+		If(p.Pending, P(Attr("role", "status"), uistate.T("common.saving"))), OnSubmit(props.Save),
+		Div(css.Class("modal-scroll"), props.Hint, props.ReceiptAction, props.ModeToggle,
+			splitColumnLabels(props.ShowOwner), props.Rows, props.AddRow, props.Error,
+			If(p.Txn.HasSplits(), Div(css.Class("split-editor-clear"),
+				Style(map[string]string{"margin-top": "0.75rem", "padding-top": "0.6rem", "border-top": "1px solid var(--border)"}), clear))),
+		Div(css.Class("modal-sticky-foot"),
+			Button(css.Class("btn"), Type("button"), Attr("data-testid", "split-cancel"), OnClick(props.Cancel), uistate.T("action.cancel")),
+			Button(css.Class("btn btn-primary"), Type("submit"), Attr("data-testid", "split-save"), Disabled(p.Pending), uistate.T("splitEditor.save"))),
+	), props.Picker)
+}
+
+func splitEditorInline(props splitEditorLayoutProps) ui.Node {
+	p := props.Editor
+	var inert any
+	if p.Pending {
+		inert = Attr("inert", "")
+	}
+	save := Button(css.Class("btn", "btn-primary", "btn-sm"), Type("button"), Attr("data-testid", "split-save"), Disabled(p.Pending), OnClick(props.Save), uistate.T("splitEditor.save"))
+	clear := ui.CreateElement(splitClearButton, splitClearButtonProps{Show: p.Txn.HasSplits(), Pending: p.Pending, OnClick: props.Clear})
+	return Fragment(Div(css.Class("split-editor"), inert, Attr("data-testid", "split-editor"), Attr("aria-busy", strconv.FormatBool(p.Pending)),
+		If(p.Pending, P(Attr("role", "status"), uistate.T("common.saving"))),
 		Style(map[string]string{"margin-top": "0.75rem", "padding": "0.75rem", "border": "1px solid var(--border)", "border-radius": "8px"}),
 		P(css.Class("hero-flanker-label"), Style(map[string]string{"margin-bottom": "0.4rem", "text-align": "left"}), uistate.T("splitEditor.title")),
-		hint,
-		receiptAction,
-		modeToggle,
-		splitColumnLabels(showOwner),
-		rowsNode,
-		addRow2,
-		errNode,
-		Div(Style(map[string]string{"margin-top": "0.5rem", "display": "flex", "gap": "0.5rem"}),
-			Button(saveArgs...),
-			If(props.Txn.HasSplits(), Button(css.Class("btn", "btn-sm"), Type("button"), Attr("data-testid", "split-clear"), OnClick(clear), uistate.T("splitEditor.clear"))),
-		),
-	), pickerNode)
+		props.Hint, props.ReceiptAction, props.ModeToggle, splitColumnLabels(props.ShowOwner), props.Rows, props.AddRow, props.Error,
+		Div(Style(map[string]string{"margin-top": "0.5rem", "display": "flex", "gap": "0.5rem"}), save, clear),
+	), props.Picker)
 }
 
 func splitColumnLabels(showOwner bool) ui.Node {
 	owner := Fragment()
+	className := "split-column-labels"
 	if showOwner {
+		className += " has-owner"
 		owner = P(Attr("data-testid", "split-label-who"), uistate.T("splitEditor.ownerColumn"))
 	}
-	return Div(css.Class("split-column-labels"), Attr("data-testid", "split-labels"),
-		Style(map[string]string{"display": "grid", "grid-template-columns": splitColumns(showOwner), "gap": "0.5rem", "margin-bottom": "0.35rem", "font-size": "0.8rem", "font-weight": "600", "color": "var(--muted)"}),
+	return Div(css.Class(className), Attr("data-testid", "split-labels"),
+		Style(map[string]string{"display": "grid", "gap": "0.5rem", "margin-bottom": "0.35rem", "font-size": "0.8rem", "font-weight": "600", "color": "var(--muted)"}),
 		P(Attr("data-testid", "split-label-category"), uistate.T("splitEditor.category")),
 		owner,
 		P(Attr("data-testid", "split-label-amount"), uistate.T("splitEditor.amount")),
@@ -531,11 +554,47 @@ func splitColumnLabels(showOwner bool) ui.Node {
 	)
 }
 
+type splitReceiptActionProps struct {
+	Show    bool
+	OnClick ui.Handler
+}
+
+func splitReceiptAction(props splitReceiptActionProps) ui.Node {
+	click := OnClick(props.OnClick)
+	if !props.Show {
+		return Fragment()
+	}
+	return Button(css.Class("btn", "btn-sm"), Type("button"), Attr("data-testid", "txn-receipt-split-open"),
+		click, uistate.T("receiptsplit.menuAction"))
+}
+
+type splitClearButtonProps struct {
+	Show    bool
+	Pending bool
+	OnClick ui.Handler
+}
+
+func splitClearButton(props splitClearButtonProps) ui.Node {
+	click := OnClick(props.OnClick)
+	if !props.Show {
+		return Fragment()
+	}
+	return Button(css.Class("btn", "btn-sm", "btn-ghost"), Type("button"), Attr("data-testid", "split-clear"),
+		Disabled(props.Pending), click, uistate.T("splitEditor.clear"))
+}
+
 func splitColumns(showOwner bool) string {
 	if showOwner {
-		return "minmax(0, 1fr) minmax(0, 1fr) 8rem 2rem"
+		return "minmax(180px, 1fr) 160px 120px 32px"
 	}
-	return "minmax(0, 1fr) 8rem 2rem"
+	return "minmax(180px, 1fr) 120px 32px"
+}
+
+func splitRemainderTone(saveAttempted bool) string {
+	if saveAttempted {
+		return "neg"
+	}
+	return "split-remainder-neutral"
 }
 
 func splitCategoryKind(txn domain.Transaction) domain.CategoryKind {
@@ -593,8 +652,13 @@ type splitRowProps struct {
 // component so its OnChange/OnInput/OnClick hooks live at stable positions per row
 // instead of inside the parent's variable-length loop (the framework gotcha).
 func splitRow(props splitRowProps) ui.Node {
-	onCat := func(v string) { props.OnCat(props.Index, v) }
-	onNewCategory := ui.UseEvent(func() { props.OnNewCategory(props.Index) })
+	onCat := func(v string) {
+		if v == splitNewCategoryOption {
+			props.OnNewCategory(props.Index)
+			return
+		}
+		props.OnCat(props.Index, v)
+	}
 	onAmt := ui.UseEvent(func(v string) { props.OnAmt(props.Index, v) })
 	// TX16: on blur, evaluate an arithmetic entry ("12+8", "45.99*3") and replace
 	// it with the result; a plain number or a parse failure is left untouched.
@@ -607,9 +671,12 @@ func splitRow(props splitRowProps) ui.Node {
 	onRemove := ui.UseEvent(func() { props.OnRemove(props.Index) })
 	// A hairline + padding under each row visually separates the splits so multiple category
 	// breakdowns don't blur together (coworker feedback).
-	return Div(css.Class("split-row"), Attr("data-testid", "split-row"),
-		Style(map[string]string{"display": "grid", "grid-template-columns": splitColumns(props.ShowOwner), "gap": "0.5rem", "align-items": "center", "padding-bottom": "0.5rem", "margin-bottom": "0.5rem", "border-bottom": "1px solid var(--border)"}),
-		Div(Style(map[string]string{"min-width": "0", "display": "flex", "gap": "0.35rem", "align-items": "center"}),
+	rowClass := "split-row"
+	if props.ShowOwner {
+		rowClass += " has-owner"
+	}
+	return Div(css.Class(rowClass), Attr("data-testid", "split-row"),
+		Div(css.Class("split-category-control"),
 			uiw.SelectInput(uiw.SelectInputProps{
 				Options:   props.CatOpts,
 				Selected:  props.Cat,
@@ -617,9 +684,7 @@ func splitRow(props splitRowProps) ui.Node {
 				TestID:    "split-cat-" + strconv.Itoa(props.Index),
 				OnChange:  onCat,
 			}),
-			Button(css.Class("btn", "btn-tool", "txn-cat-new"), Type("button"),
-				Attr("data-testid", "split-new-category-"+strconv.Itoa(props.Index)),
-				Attr("aria-label", uistate.T("transactions.newCategory")), OnClick(onNewCategory), uistate.T("splitEditor.newCategory"))),
+		),
 		// XC10: optional per-line owner. Only rendered for multi-member households;
 		// "Same as transaction" (empty) keeps the pre-XC10 payer attribution.
 		If(props.ShowOwner, Div(Style(map[string]string{"min-width": "0"}),
@@ -630,10 +695,12 @@ func splitRow(props splitRowProps) ui.Node {
 				TestID:    "split-owner-" + strconv.Itoa(props.Index),
 				OnChange:  onOwner,
 			}))),
-		Input(css.Class("field"), Type("text"), Attr("inputmode", "decimal"), Style(map[string]string{"width": "100%", "min-width": "0"}),
-			Attr("aria-label", uistate.T(splitAmtKey(props.Percent))), Attr("data-testid", "split-amt-"+strconv.Itoa(props.Index)),
-			Placeholder(uistate.T(splitAmtKey(props.Percent))), OnInput(onAmt), OnBlur(onAmtBlur), uiw.FieldValue(props.Amt)),
-		If(props.Percent, Span(css.Class("muted"), Attr("aria-hidden", "true"), "%")),
+		Div(css.Class("split-amount-control"),
+			Input(css.Class("field"), Type("text"), Attr("inputmode", "decimal"),
+				Attr("aria-label", uistate.T(splitAmtKey(props.Percent))), Attr("data-testid", "split-amt-"+strconv.Itoa(props.Index)),
+				Placeholder(uistate.T(splitAmtKey(props.Percent))), OnInput(onAmt), OnBlur(onAmtBlur), uiw.FieldValue(props.Amt)),
+			If(props.Percent, Span(css.Class("muted"), Attr("aria-hidden", "true"), "%")),
+		),
 		Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("splitEditor.remove")),
 			Title(uistate.T("splitEditor.remove")), Attr("data-testid", "split-remove-"+strconv.Itoa(props.Index)),
 			OnClick(onRemove), "✕"),

@@ -6,6 +6,7 @@ package app
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"syscall/js"
 
@@ -57,6 +58,10 @@ var perWorkspaceKeys = []string{
 func lsGet(key string) string { return browserstore.GetString(key) }
 func lsSet(key, val string)   { browserstore.Set(key, val) }
 func lsSetThen(key, val string, done func()) {
+	if key == datasetStoreKey {
+		commitWorkspaceValuesThen(map[string]string{key: val}, done)
+		return
+	}
 	browserstore.SetThen(key, val, done)
 }
 func lsRemove(key string) { browserstore.Remove(key) }
@@ -95,7 +100,8 @@ func saveRegistryThen(r workspace.Registry, done func()) {
 }
 
 func applyBundleThen(b map[string]string, done func()) {
-	values := make(map[string]string, len(perWorkspaceKeys))
+	values := make(map[string]string, len(perWorkspaceKeys)+1)
+	values[datasetHeadKey] = ""
 	for _, key := range perWorkspaceKeys {
 		values[key] = b[key]
 	}
@@ -103,17 +109,37 @@ func applyBundleThen(b map[string]string, done func()) {
 }
 
 func commitWorkspaceValuesThen(values map[string]string, done func()) {
-	browserstore.SetSecureBatch(values, nil, func(err error) {
+	values, expected := prepareWorkspaceCommit(values, readDatasetGen())
+	browserstore.SetSecureBatch(values, expected, func(err error) {
 		if err != nil {
 			if app := appstate.Default; app != nil {
 				app.Log().Error("workspace could not be committed", "err", err)
 			}
 			return
 		}
+		if generation, ok := values[datasetGenKey]; ok {
+			datasetMyGen = generation
+		}
 		if done != nil {
 			done()
 		}
 	})
+}
+
+func prepareWorkspaceCommit(values map[string]string, generation string) (map[string]string, map[string]string) {
+	updates := make(map[string]string, len(values)+2)
+	for key, value := range values {
+		updates[key] = value
+	}
+	var expected map[string]string
+	if _, replaces := values[datasetStoreKey]; replaces {
+		updates[datasetHeadKey] = ""
+		if updates[datasetGenKey] == "" {
+			updates[datasetGenKey] = id.New()
+		}
+		expected = map[string]string{datasetGenKey: generation}
+	}
+	return updates, expected
 }
 
 func reloadWorkspaceAfterWrites() {
@@ -171,14 +197,54 @@ func ensureWorkspaceRegistry() workspace.Registry {
 // so nothing is lost. No reload is needed: nothing has mounted or read the keys
 // yet, so hydrateDataset simply loads the swapped-in context.
 func applyStartupWorkspace() {
+	// Boot runs on a Go goroutine before hydration. Await the strict transaction
+	// here so no reader can observe a partly adopted workspace.
+	generation := readDatasetGen()
+	registryRaw := lsGet(workspacesKey)
 	r := loadRegistry()
 	target := r.StartupTarget()
 	if target == "" || target == r.ActiveID {
 		return
 	}
-	saveBlob(r.ActiveID, bundleCurrent())
-	applyBundle(loadBlob(target))
-	saveRegistry(r.SetActive(target))
+	current := bundleCurrent()
+	if current == nil {
+		return
+	}
+	currentRaw, err := json.Marshal(current)
+	if err != nil {
+		return
+	}
+	nextRaw, err := json.Marshal(r.SetActive(target))
+	if err != nil {
+		return
+	}
+	targetKey := wsBlobKey(target)
+	targetRaw := lsGet(targetKey)
+	bundle := map[string]string{}
+	if targetRaw != "" {
+		if err := json.Unmarshal([]byte(targetRaw), &bundle); err != nil || bundle == nil {
+			if app := appstate.Default; app != nil {
+				app.Log().Error("startup workspace could not be read; current workspace was kept", "err", err)
+			}
+			return
+		}
+	}
+	values := map[string]string{
+		wsBlobKey(r.ActiveID): string(currentRaw),
+		workspacesKey:         string(nextRaw),
+		targetKey:             targetRaw,
+	}
+	expected := map[string]string{
+		datasetGenKey:         generation,
+		workspacesKey:         registryRaw,
+		targetKey:             targetRaw,
+		wsBlobKey(r.ActiveID): lsGet(wsBlobKey(r.ActiveID)),
+	}
+	if err := applyBundle(bundle, values, expected); err != nil {
+		if app := appstate.Default; app != nil {
+			app.Log().Error("startup workspace could not be committed; current workspace was kept", "err", err)
+		}
+	}
 }
 
 // setStartupWorkspace records which workspace the app opens on launch ("" =
@@ -228,6 +294,9 @@ func exportWorkspace(wsID string) {
 	bundle := loadBlob(wsID)
 	if wsID == r.ActiveID {
 		bundle = bundleCurrent()
+		if bundle == nil {
+			return
+		}
 	}
 	env := wsExport{Version: wsExportVersion, Name: w.Name, Color: w.Color, Bundle: stripConnectionPrefs(bundle)}
 	data, err := json.MarshalIndent(env, "", "  ")
@@ -252,6 +321,9 @@ func importWorkspace(data []byte) bool {
 	r := loadRegistry()
 	suspendAutosave = true
 	current := bundleCurrent()
+	if current == nil {
+		return false
+	}
 	newID := id.NewWithPrefix("ws")
 	color := env.Color
 	if color == "" {
@@ -307,19 +379,40 @@ func bundleCurrent() map[string]string {
 			out[k] = v
 		}
 	}
+	if raw := out[datasetStoreKey]; raw != "" {
+		data, err := portableDatasetForBundle(raw)
+		if err != nil {
+			uistate.PostNotice(uistate.T("bv6d1.workspaceCopyFailed"), true)
+			return nil
+		}
+		out[datasetStoreKey] = data
+	}
 	return out
 }
 
-// applyBundle writes a bundle back into the canonical keys, removing any key the
-// bundle doesn't carry (so a workspace with no saved layout boots to defaults).
-func applyBundle(b map[string]string) {
-	for _, k := range perWorkspaceKeys {
-		if v, ok := b[k]; ok {
-			lsSet(k, v)
-		} else {
-			lsRemove(k)
-		}
+// applyBundle atomically replaces the canonical keys together with the supplied
+// workspace metadata. Missing bundle keys become empty tombstones (defaults).
+// It blocks until commit and adopts the new generation only after success; call
+// it from the boot goroutine, never from a JavaScript event callback.
+func applyBundle(b, metadata, expected map[string]string) error {
+	values := make(map[string]string, len(metadata)+len(perWorkspaceKeys))
+	for key, value := range metadata {
+		values[key] = value
 	}
+	for _, key := range perWorkspaceKeys {
+		values[key] = b[key]
+	}
+	values, condition := prepareWorkspaceCommit(values, expected[datasetGenKey])
+	for key, value := range expected {
+		condition[key] = value
+	}
+	done := make(chan error, 1)
+	browserstore.SetSecureBatch(values, condition, func(err error) { done <- err })
+	if err := <-done; err != nil {
+		return fmt.Errorf("replace startup workspace: %w", err)
+	}
+	datasetMyGen = values[datasetGenKey]
+	return nil
 }
 
 func saveBlob(wsID string, b map[string]string) {
@@ -345,6 +438,10 @@ func switchWorkspace(targetID string) {
 	}
 	suspendAutosave = true
 	current := bundleCurrent()
+	if current == nil {
+		suspendAutosave = false
+		return
+	}
 	target := loadBlob(targetID)
 	next := r.SetActive(targetID)
 	saveBlobThen(r.ActiveID, current, func() {
@@ -362,6 +459,9 @@ func switchWorkspace(targetID string) {
 func createWorkspace(name string) {
 	r := loadRegistry()
 	current := bundleCurrent()
+	if current == nil {
+		return
+	}
 	newID := id.NewWithPrefix("ws")
 	next := r.Add(newID, name).SetActive(newID).SetColor(newID, paletteColor(len(r.Workspaces)))
 	data, err := store.Export(store.EmptyDataset())
@@ -385,6 +485,10 @@ func duplicateWorkspace(name string) {
 	r := loadRegistry()
 	suspendAutosave = true
 	cur := bundleCurrent()
+	if cur == nil {
+		suspendAutosave = false
+		return
+	}
 	newID := id.NewWithPrefix("ws")
 	next := r.Add(newID, name).SetActive(newID).SetColor(newID, paletteColor(len(r.Workspaces)))
 	saveBlobThen(r.ActiveID, cur, func() {

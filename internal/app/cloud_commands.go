@@ -36,6 +36,7 @@ func cloudCommitPreferences(atom state.Atom[prefs.Prefs], next prefs.Prefs, done
 		return
 	}
 	suspendAutosave = true
+	generation := datasetMyGen
 	data, err := cloudPreferenceSnapshot(a, string(raw))
 	if err != nil {
 		suspendAutosave = false
@@ -48,19 +49,24 @@ func cloudCommitPreferences(atom state.Atom[prefs.Prefs], next prefs.Prefs, done
 			done(err)
 			return
 		}
-		datasetMyGen = bumpDatasetGen()
 		atom.Set(next.Normalize())
 		uistate.PersistPrefs(next)
 		suspendAutosave = false
 		done(nil)
 	}
 	write := func(data []byte) {
-		if readDatasetGen() != datasetMyGen {
+		if readDatasetGen() != generation || datasetMyGen != generation {
 			finish(errors.New("another tab changed the dataset"))
 			return
 		}
 		cloudWritePreferenceSnapshot(a, string(raw), data, func(data []byte, done func(error)) {
-			browserstore.SetDurable(datasetStoreKey, string(data), done)
+			values, expected := prepareWorkspaceCommit(map[string]string{datasetStoreKey: string(data)}, generation)
+			browserstore.SetSecureBatch(values, expected, func(err error) {
+				if err == nil {
+					datasetMyGen = values[datasetGenKey]
+				}
+				done(err)
+			})
 		}, finish)
 	}
 	if datasetEncryptionActive() {

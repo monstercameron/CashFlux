@@ -199,6 +199,10 @@ type recordReplacement struct {
 	expected   *string
 }
 
+func recordChangedAt(key, stage string) error {
+	return fmt.Errorf("protected record %q changed during %s: %w", key, stage, atrest.ErrRecordChanged)
+}
+
 func writeSecureBatch(values, expected map[string]string) error {
 	var keys []string
 	for key := range expected {
@@ -229,7 +233,7 @@ func writeSecureBatch(values, expected map[string]string) error {
 				}
 			}
 			if plain != want {
-				return atrest.ErrRecordChanged
+				return recordChangedAt(key, "plaintext generation condition")
 			}
 		}
 		var prior *string
@@ -254,7 +258,7 @@ func writeSecureBatch(values, expected map[string]string) error {
 				v := req.Get("result")
 				present := !v.IsUndefined() && !v.IsNull()
 				if (u.expected == nil && present) || (u.expected != nil && (!present || v.Type() != js.TypeString || v.String() != *u.expected)) {
-					fail(atrest.ErrRecordChanged)
+					fail(recordChangedAt(u.key, "encrypted prior-record comparison"))
 					tx.Call("abort")
 					return nil
 				}

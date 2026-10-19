@@ -51,7 +51,7 @@ func TestR4CNTCountLineHidesUpcomingBillsDuringTextSearch(t *testing.T) {
 	if line == nil {
 		t.Fatal("count line is missing")
 	}
-	if strings.Contains(line.Text(), "bill still to come") {
+	if strings.Contains(line.Text(), "bill due") {
 		t.Fatalf("count line includes an unrelated scheduled bill while searching: %q", line.Text())
 	}
 }
@@ -92,7 +92,7 @@ func TestR4CNTFutureCountLineEndsWithScheduledAmountDue(t *testing.T) {
 	f := render.New(t)
 	f.Render(txnCountLine(txnCountLineProps{}))
 	line := r2aByTestID(f, "span", "txn-count-line")
-	if line == nil || !strings.Contains(line.Text(), "9 scheduled · $3,607.00 due") {
+	if line == nil || !strings.Contains(line.Text(), "9 scheduled. Due $3,607.00.") {
 		if line == nil {
 			t.Fatal("future count line is missing")
 		}

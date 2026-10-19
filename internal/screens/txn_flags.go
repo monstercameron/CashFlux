@@ -18,10 +18,16 @@
 package screens
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dedupe"
+	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/smart"
 	"github.com/monstercameron/CashFlux/internal/smartengine"
@@ -64,35 +70,90 @@ func (f txnRowFlags) Any() bool { return len(f.Duplicate) > 0 || len(f.Spike) > 
 // on a density change would be wasted work either way.
 func buildTxnRowFlags(app *appstate.App, settings smart.Settings, weekStart time.Weekday) txnRowFlags {
 	defer txnPerfStart("flag-recompute")()
-	out := txnRowFlags{}
 	if app == nil {
-		return out
+		return txnRowFlags{}
 	}
+	work := newTxnFlagsWork(txnFlagsInput(app, weekStart), settings)
+	for !work.step() {
+	}
+	return work.value
+}
+
+// txnFlagsInput gathers only the data consumed by Unusual. Other Smart-page
+// inputs (tasks, cancellations and paid occurrences) are irrelevant to row flags.
+// Read directly from this App to avoid cross-store reuse at equal revisions.
+func txnFlagsInput(app *appstate.App, weekStart time.Weekday) smartengine.Input {
+	settings := app.Settings()
+	base := settings.BaseCurrency
+	if base == "" {
+		base = "USD"
+	}
+	return smartengine.Input{Now: time.Now(), Base: base, WeekStart: weekStart,
+		Rates:    currency.Rates{Base: base, Rates: settings.FXRates},
+		Accounts: app.Accounts(), Transactions: app.Transactions(), Categories: app.Categories(),
+		Budgets: app.Budgets(), Goals: app.Goals(), Recurring: app.Recurring()}
+}
+
+// txnFlagsWork uses the duplicate detector's canonical key and the complete
+// cooperative Unusual adapter. Nothing partial escapes while either is working.
+type txnFlagsWork struct {
+	input    smartengine.Input
+	settings smart.Settings
+	unusual  *smartengine.UnusualJob
+	first    map[string]string
+	position int
+	value    txnRowFlags
+	done     bool
+}
+
+func newTxnFlagsWork(input smartengine.Input, settings smart.Settings) *txnFlagsWork {
+	w := &txnFlagsWork{input: input, settings: settings}
 	if settings.IsEnabled(dupeFlagCode) && !settings.IsMuted(dupeFlagCode) {
-		out.Duplicate = map[string]bool{}
-		for _, g := range dedupe.FindDuplicates(app.Transactions()) {
-			for _, id := range g.IDs {
-				out.Duplicate[id] = true
-			}
-		}
+		w.first = map[string]string{}
+		w.value.Duplicate = map[string]bool{}
+	} else {
+		w.position = len(input.Transactions)
 	}
 	if settings.IsEnabled(spikeFlagCode) && !settings.IsMuted(spikeFlagCode) {
-		out.Spike = map[string]string{}
-		in := buildSmartInput(app, weekStart)
-		// The row needs only Unusual. Running every transaction-page engine here
-		// also computes subscription, clearing and refund insights that are thrown
-		// away, including their independent full-ledger scans.
-		for _, ins := range smartengine.RunPage(in, txnFlagEngineSettings(settings), smart.PageTransactions) {
-			if ins.Feature != spikeFlagCode || ins.Action == nil || ins.Action.RelatedID == "" {
+		w.unusual = smartengine.NewUnusualJob(input)
+	}
+	return w
+}
+
+func (w *txnFlagsWork) step() bool {
+	if w.done {
+		return true
+	}
+	if w.position < len(w.input.Transactions) {
+		end := min(w.position+8, len(w.input.Transactions))
+		for ; w.position < end; w.position++ {
+			row := w.input.Transactions[w.position]
+			if row.IsTransfer() {
 				continue
 			}
-			// The detector's own sentence, not a second one written here. It already
-			// states the multiple and the category's typical charge, and a paraphrase
-			// on the row would be a second place for that wording to drift.
-			out.Spike[ins.Action.RelatedID] = ins.Detail
+			key := dedupe.Key(row)
+			if first, ok := w.first[key]; ok {
+				w.value.Duplicate[first] = true
+				w.value.Duplicate[row.ID] = true
+			} else {
+				w.first[key] = row.ID
+			}
+		}
+		return false
+	}
+	if w.unusual != nil {
+		if !w.unusual.Step(8) {
+			return false
+		}
+		w.value.Spike = map[string]string{}
+		for _, ins := range w.unusual.ActiveInsights(w.settings) {
+			if ins.Feature == spikeFlagCode && ins.Action != nil && ins.Action.RelatedID != "" {
+				w.value.Spike[ins.Action.RelatedID] = ins.Detail
+			}
 		}
 	}
-	return out
+	w.done = true
+	return true
 }
 
 func txnFlagEngineSettings(settings smart.Settings) smart.Settings {
@@ -117,6 +178,154 @@ type txnFlagChipProps struct {
 	SpikeWhy string
 }
 
+type txnBadgePriority uint8
+
+const (
+	txnBadgeNone txnBadgePriority = iota
+	txnBadgeSpike
+	txnBadgeReview
+	txnBadgeDuplicate
+)
+
+func txnDescriptionBadge(duplicate, review, spike bool) txnBadgePriority {
+	switch {
+	case duplicate:
+		return txnBadgeDuplicate
+	case review:
+		return txnBadgeReview
+	case spike:
+		return txnBadgeSpike
+	default:
+		return txnBadgeNone
+	}
+}
+
+func txnRowInfoText(openFollowUps, followUpTotal, receipts int, hasNote bool) string {
+	var items []string
+	if followUpTotal > 0 {
+		key := "uxt5.openFollowUps"
+		if openFollowUps == 1 {
+			key = "uxt5.openFollowUp"
+		}
+		items = append(items, uistate.T(key, openFollowUps))
+	}
+	if receipts > 0 {
+		key := "uxt5.receipts"
+		if receipts == 1 {
+			key = "uxt5.receipt"
+		}
+		items = append(items, uistate.T(key, receipts))
+	}
+	if hasNote {
+		items = append(items, uistate.T("uxt5.hasNote"))
+	}
+	return strings.Join(items, ". ")
+}
+
+func appendTxnInfo(current, item string) string {
+	if strings.TrimSpace(item) == "" {
+		return current
+	}
+	if current == "" {
+		return item
+	}
+	return current + ". " + item
+}
+
+func txnCategoryTooltip(txn domain.Transaction, counterparty string) string {
+	if txn.HasSplits() {
+		_, tooltip := splitCellLabel(txn)
+		return tooltip
+	}
+	if txn.IsTransfer() {
+		props := txnFrameRowProps{IsTransfer: true, TransferWith: counterparty, AmountMoney: txn.Amount}
+		return uistate.T(transferCategoryKey(props), counterparty)
+	}
+	return ""
+}
+
+func txnRowFlashKey(txn domain.Transaction) string {
+	encoded, err := json.Marshal(txn)
+	if err != nil {
+		return txn.ID
+	}
+	digest := sha256.Sum256(encoded)
+	return txn.ID + ":" + hex.EncodeToString(digest[:])
+}
+
+type txnRowInfoProps struct {
+	Text         string
+	HasReceipt   bool
+	HasFollowUps bool
+	OnReceipt    func()
+	OnFollowUps  func()
+}
+
+func txnRowInfo(props txnRowInfoProps) ui.Node {
+	open := ui.UseState(false)
+	popoverID := ui.UseId()
+	hasPopup := "false"
+	if props.HasReceipt && props.HasFollowUps {
+		hasPopup = "true"
+	}
+	toggle := ui.UseEvent(Prevent(func() {
+		if props.HasReceipt && props.HasFollowUps {
+			open.Set(!open.Get())
+			return
+		}
+		if props.HasReceipt && props.OnReceipt != nil {
+			props.OnReceipt()
+		} else if props.HasFollowUps && props.OnFollowUps != nil {
+			props.OnFollowUps()
+		}
+	}))
+	viewReceipt := ui.UseEvent(Prevent(func() {
+		open.Set(false)
+		if props.OnReceipt != nil {
+			props.OnReceipt()
+		}
+	}))
+	openFollowUps := ui.UseEvent(Prevent(func() {
+		open.Set(false)
+		if props.OnFollowUps != nil {
+			props.OnFollowUps()
+		}
+	}))
+	closePopover := func() { open.Set(false) }
+	viewReceiptClick := OnClick(viewReceipt)
+	openFollowUpsClick := OnClick(openFollowUps)
+	toggleClick := OnClick(toggle)
+	var popover ui.Node = Fragment()
+	var content ui.Node
+	if !props.HasReceipt && !props.HasFollowUps {
+		if strings.TrimSpace(props.Text) == "" {
+			content = Fragment()
+		} else {
+			content = Span(css.Class("txn-row-info-text"), Attr("data-testid", "txn-row-info-text"), props.Text)
+		}
+	} else {
+		if props.HasReceipt && props.HasFollowUps {
+			popover = uiw.Overlay(uiw.OverlayProps{
+				Open: open.Get(), Kind: uiw.OverlayPopover,
+				Title: uistate.T("uxt5.info", props.Text), AnchorID: popoverID,
+				OnClose: closePopover,
+				TestID:  "txn-row-info-popover",
+				Body: Div(css.Class("txn-row-info-popover"),
+					Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "txn-info-receipt"), viewReceiptClick, uistate.T("uxt5.viewReceipt")),
+					Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "txn-info-followups"), openFollowUpsClick, uistate.T("uxt5.openFollowUpsAction"))),
+			})
+		}
+		content = Div(css.Class("txn-row-info-wrap"),
+			Button(css.Class("txn-row-info"), ID(popoverID), Type("button"),
+				Attr("data-testid", "txn-row-info"), Attr("aria-label", uistate.T("uxt5.info", props.Text)),
+				Attr("aria-haspopup", hasPopup),
+				Attr("aria-expanded", ariaBool(open.Get())), Title(props.Text), toggleClick, "i"),
+			popover,
+		)
+	}
+	return content
+}
+
 // txnFlagChip renders the row's strongest flag as a compact chip. Its own
 // component: it owns a click hook and renders inside the table's row loop.
 //
@@ -128,6 +337,8 @@ func txnFlagChip(props txnFlagChipProps) ui.Node {
 
 	openDupes := ui.UseEvent(func() { dupOpen.Set(true) })
 	openTxn := ui.UseEvent(func() { uistate.SetTxnEdit(props.TxnID) })
+	openDupesClick := OnClick(openDupes)
+	openTxnClick := OnClick(openTxn)
 
 	settings := uistate.LoadSmartSettings()
 	if !settings.DensityOrDefault().Shows(smart.AffordanceBadge) {
@@ -139,7 +350,7 @@ func txnFlagChip(props txnFlagChipProps) ui.Node {
 			Attr("data-testid", "txn-flag-dupe"),
 			Attr("aria-label", uistate.T("sm8.hint")+": "+uistate.T("sm8.chip")),
 			Title(uistate.T("sm8.detail")),
-			OnClick(openDupes),
+			openDupesClick,
 			uiw.Icon(icon.Copy, css.Class(tw.ShrinkO, tw.W3, tw.H3)),
 			Span(uistate.T("sm8.chip")))
 	}
@@ -148,7 +359,7 @@ func txnFlagChip(props txnFlagChipProps) ui.Node {
 			Attr("data-testid", "txn-flag-spike"),
 			Attr("aria-label", props.SpikeWhy+": "+uistate.T("sm10.chip")),
 			Title(props.SpikeWhy),
-			OnClick(openTxn),
+			openTxnClick,
 			uiw.Icon(icon.TrendingUp, css.Class(tw.ShrinkO, tw.W3, tw.H3)),
 			Span(uistate.T("sm10.chip")))
 	}

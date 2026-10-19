@@ -297,7 +297,7 @@ func widget(props WidgetProps) uic.Node {
 		style["box-shadow"] = "none"
 	}
 	args = append(args, Style(style))
-	if props.Draggable {
+	dragOptions := func() []any {
 		id := props.ID
 		// Roving tabindex: the grid is a SINGLE Tab stop — only the "current" tile is
 		// tabbable (tabindex 0), the rest are -1 — so Tab no longer steps through all
@@ -322,7 +322,7 @@ func widget(props WidgetProps) uic.Node {
 		if layoutEditable {
 			dragAttr = "true"
 		}
-		args = append(args,
+		return []any{
 			Attr("draggable", dragAttr),
 			Attr("tabindex", tabidx),
 			Attr("aria-grabbed", grabbedAttr),
@@ -478,7 +478,10 @@ func widget(props WidgetProps) uic.Node {
 					uistate.PersistLayoutMode(dashlayout.ModeCustom)
 				}
 			}),
-		)
+		}
+	}()
+	if props.Draggable {
+		args = append(args, dragOptions...)
 	}
 	// The title drills into the tile's data screen when one exists (C30); it stays
 	// a plain heading otherwise. Distinct from the grip (drag) and gear (settings).

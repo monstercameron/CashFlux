@@ -15,6 +15,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
+	"github.com/monstercameron/CashFlux/internal/txnview"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/css"
@@ -48,6 +49,10 @@ type txnCountLineProps struct {
 	Spent, Income money.Money
 	// CashflowProvided remains for callers compiled against the prior props shape.
 	CashflowProvided bool
+	// Revision identifies the app snapshot used to calculate the summary.
+	Revision uint64
+	// CategoryTotals carries the category breakdown calculated for this revision.
+	CategoryTotals []txnCategoryTotal
 }
 
 // txnCountLine summarizes the visible transaction scope and its totals.
@@ -104,73 +109,70 @@ func txnCountLineComponent(props txnCountLineProps) ui.Node {
 		items := txnFutureScheduledItems(filter, time.Now())
 		base, rates := txnCountCurrency()
 		total, unconverted := txnFutureTotal(items, rates, base)
-		parts := []ui.Node{Span(css.Class("txn-count-main"),
-			uistate.T("fut2.futureSummary", period, txnCountNumber(props.Shown), txnCountNumber(scheduledCount)),
-			Span(css.Class("txn-count-due-amount"), fmtMoney(total)), uistate.T("fut2.dueSuffix"))}
+		parts := []ui.Node{Span(css.Class("txn-count-main"), uistate.T("tv7b.due", fmtMoney(total)))}
+		parts = append(parts, txnSecondaryFact("txn-count-future-scheduled", "tv7b.scheduled", txnCountNumber(scheduledCount)))
 		if unconverted > 0 {
 			parts = append(parts, txnSecondaryFact("txn-count-unconverted", "transactions.scopeUnconverted", unconverted))
 		}
-		return txnCountRoot(announceFilterChange, period+" · "+txnCountNumber(props.Shown)+" posted · "+txnCountNumber(scheduledCount)+" scheduled · "+fmtMoney(total)+" due",
-			Div(css.Class("txn-countline txn-countline-future", tw.MinW0), Attr("data-testid", "txn-count-line"), parts))
+		accessibleFuture := uistate.T("tv7b.futureAccessible", txnCountNumber(props.Shown), txnCountNumber(scheduledCount), fmtMoney(total))
+		return txnCountRoot(announceFilterChange, accessibleFuture,
+			Div(css.Class("txn-countline txn-countline-future", tw.MinW0), Attr("data-testid", "txn-count-line"), Div(css.Class("txn-count-band", "txn-count-future-band"), parts)))
 	}
 
 	base, _ := txnCountCurrency()
 	spent := txnCountWithCurrency(props.Spent, base)
 	income := txnCountWithCurrency(props.Income, base)
 	net := txnCountWithCurrency(props.Net, base)
-	categories := txnCountCategories(filter, memberLens)
+	categories := props.CategoryTotals
+	if categories == nil {
+		categories = txnCountCategories(filter, memberLens)
+	}
 	categoryFiltered := filter.Category != ""
-	figures := []ui.Node{txnCountFigure("spent", "Spent", fmtMoney(spent), true, filter.Flow == "out", true, onSpent)}
-	if !categoryFiltered {
+	figures := []ui.Node{txnCountFigure("spent", uistate.T("tc3w13.spent"), fmtMoney(spent), true, filter.Flow == "out", true, onSpent)}
+	if !categoryFiltered && !filter.Uncategorized {
 		figures = append(figures,
-			txnCountFigure("income", "Income", fmtMoney(income), false, filter.Flow == "in", true, onIncome),
-			txnCountFigure("net", "Net", signedTxnMoney(net), net.Amount < 0, false, false, ui.Handler{}),
+			txnCountFigure("income", uistate.T("tc3w13.income"), fmtMoney(income), false, filter.Flow == "in", true, onIncome),
+			txnCountFigure("net", uistate.T("tc3w13.net"), signedTxnMoney(net), net.Amount < 0, false, false, ui.Handler{}),
 		)
 	}
 	band := []ui.Node{Div(css.Class("txn-count-figures"), figures)}
 	if len(categories) > 0 {
-		band = append(band, txnCategoryBreakdown(categories, filter.Category, spent.Amount))
+		selectedCategory := filter.Category
+		if filter.Uncategorized {
+			selectedCategory = "__uncategorized__"
+		}
+		band = append(band, txnCategoryBreakdown(categories, selectedCategory, spent.Amount))
 	}
 
-	secondary := []ui.Node{
-		Span(css.Class("txn-count-fact"), Attr("data-testid", "txn-count-transaction-total"), txnCountTransactionCount(props.Shown)),
-	}
 	secondaryText := []string{txnCountTransactionCount(props.Shown)}
 	if props.MovedRows > 0 {
 		label := uistate.T("transactions.scopeMoved", fmtMoney(props.Moved))
-		secondary = append(secondary, Span(css.Class("txn-count-fact"), Attr("data-testid", "txn-count-moved"), label))
 		secondaryText = append(secondaryText, label)
 		if props.UnpairedRows > 0 {
 			label = uistate.T("transactions.scopeUnpaired", props.UnpairedRows)
-			secondary = append(secondary, Span(css.Class("txn-count-fact"), Attr("data-testid", "txn-count-unpaired"), label))
 			secondaryText = append(secondaryText, label)
 		}
 	}
 	if props.Unconverted > 0 {
 		label := uistate.T("transactions.scopeUnconverted", props.Unconverted)
-		secondary = append(secondary, Span(css.Class("txn-count-fact"), Attr("data-testid", "txn-count-unconverted"), label))
 		secondaryText = append(secondaryText, label)
 	}
 	for _, issue := range txnConversionIssueCounts(props.ConversionIssues) {
 		label := uistate.T("tc2e.rowsCannotCompare", issue.count, issue.currency)
-		secondary = append(secondary, Span(css.Class("txn-count-fact"), Attr("data-testid", "txn-count-conversion-issues"), label))
 		secondaryText = append(secondaryText, label)
 	}
 	if props.Excluded > 0 {
 		label := uistate.T("transactions.scopeExcluded", props.Excluded)
-		secondary = append(secondary, Span(css.Class("txn-count-fact"), Attr("data-testid", "txn-count-excluded"), label))
 		secondaryText = append(secondaryText, label)
 	}
 	if props.Lens != "" {
 		label := uistate.T("transactions.scopeLens", props.Lens)
-		secondary = append(secondary, Span(css.Class("txn-count-fact"), label))
 		secondaryText = append(secondaryText, label)
 	}
 	var upcoming ui.Node
 	if !categoryFiltered && txnCountShouldShowUpcoming(filter) {
 		upcoming = ui.CreateElement(txnUpcomingInline, struct{}{})
 	}
-
 	var searchWidenAction ui.Node
 	preset := filter.PeriodPreset
 	if preset == "" {
@@ -183,9 +185,17 @@ func txnCountLineComponent(props txnCountLineProps) ui.Node {
 		label := uistate.T("r4cnt.searchAllDates", txnCountNumber(allCount))
 		searchWidenAction = Button(css.Class("btn-link txn-count-search-widen"), Type("button"), Attr("data-testid", "txn-search-all-dates"),
 			searchWidenClick, label)
-		secondaryText = append(secondaryText, label)
 	}
-	secondary = append(secondary, searchWidenAction)
+	if searchWidenAction != nil {
+		band = append(band, searchWidenAction)
+	}
+	if len(secondaryText) > 0 {
+		visibleFacts := make([]ui.Node, 0, len(secondaryText))
+		for _, fact := range secondaryText {
+			visibleFacts = append(visibleFacts, Span(css.Class("txn-count-fact"), fact))
+		}
+		band = append(band, Div(css.Class("txn-count-secondary", "txn-count-visible-facts"), Attr("data-testid", "txn-count-visible-facts"), visibleFacts))
+	}
 	if upcoming != nil {
 		band = append(band, Div(css.Class("txn-count-upcoming-fact"), upcoming))
 	}
@@ -197,8 +207,7 @@ func txnCountLineComponent(props txnCountLineProps) ui.Node {
 	accessible = append(accessible, secondaryText...)
 	return txnCountRoot(announceFilterChange, strings.Join(accessible, ". "),
 		Div(css.Class("txn-countline", tw.MinW0), Attr("data-testid", "txn-count-line"),
-			Div(css.Class("txn-count-band"), band),
-			Div(css.Class("txn-count-secondary"), Attr("data-testid", "txn-count-secondary"), secondary)))
+			Div(css.Class("txn-count-band"), band)))
 }
 
 func txnCountRoot(announce bool, sentence string, content ui.Node) ui.Node {
@@ -229,7 +238,7 @@ func txnCountFigure(kind, label, amount string, negative, pressed, interactive b
 		if kind == "spent" {
 			buttonClass += " text-down"
 		}
-		figure = Button(css.Class(buttonClass), Type("button"), Attr("data-testid", "txn-count-"+kind), Attr("aria-pressed", ariaBool(pressed)), click,
+		figure = Button(css.Class(buttonClass), Type("button"), Attr("data-testid", "txn-count-"+kind), Attr("aria-label", label+" "+amount), Attr("aria-pressed", ariaBool(pressed)), click,
 			value, Span(css.Class("txn-count-label"), label))
 	} else {
 		figure = Div(css.Class("txn-count-figure"), Attr("data-testid", "txn-count-"+kind), value, Span(css.Class("txn-count-label"), label))
@@ -244,28 +253,68 @@ type txnCategoryTotal struct {
 	Share float64
 }
 
-func txnCategoryBreakdown(categories []txnCategoryTotal, selected string, spent int64) ui.Node {
+func txnCategoryBreakdown(categories []txnCategoryTotal, selected string, _ int64) ui.Node {
+	return ui.CreateElement(txnCategoryBreakdownComponent, txnCategoryBreakdownProps{Categories: categories, Selected: selected})
+}
+
+type txnCategoryBreakdownProps struct {
+	Categories []txnCategoryTotal
+	Selected   string
+}
+
+func txnCategoryBreakdownComponent(props txnCategoryBreakdownProps) ui.Node {
+	expanded := ui.UseState(false)
+	onToggle := ui.UseEvent(Prevent(func() { expanded.Set(!expanded.Get()) }))
+	toggleClick := OnClick(onToggle)
+	categories, selected := props.Categories, props.Selected
+	var total int64
+	for _, category := range categories {
+		if category.Minor <= 0 {
+			continue
+		}
+		var err error
+		total, err = money.Add(total, category.Minor)
+		if err != nil {
+			total = 0
+			break
+		}
+	}
 	segments := make([]ui.Node, 0, len(categories))
 	items := make([]ui.Node, 0, len(categories))
 	accessibleItems := make([]ui.Node, 0, len(categories))
-	hiddenCount := 0
+	visibleCount := 3
 	for _, category := range categories {
-		category.Share = txnCategoryShare(category.Minor, spent)
-		isSelected := selected != "" && category.ID == selected
+		category.Share = txnCategoryShare(category.Minor, total)
+		isSelected := selected == "__uncategorized__" && category.ID == "" || selected != "" && selected != "__uncategorized__" && category.ID == selected
 		props := txnCategorySegmentProps{Category: category, Selected: isSelected, Dimmed: selected != "" && !isSelected}
 		segments = append(segments, ui.CreateElement(txnCategorySegment, props))
 		items = append(items, ui.CreateElement(txnCategoryListItem, props))
 		accessibleItems = append(accessibleItems, Div(Attr("role", "listitem"), category.Name, " ", fmtMoney(money.New(category.Minor, txnCountBaseCurrency()))))
-		if category.ID != "__other__" && len(items) > 3 {
-			hiddenCount++
+	}
+	if !expanded.Get() && len(categories) > visibleCount {
+		for i := range items {
+			if categories[i].ID == "__other__" && i >= visibleCount {
+				items[visibleCount-1], items[i] = items[i], items[visibleCount-1]
+				break
+			}
 		}
 	}
-	if hiddenCount > 0 {
-		items = append(items, Span(css.Class("txn-category-more"), Attr("data-testid", "txn-category-more"), uistate.T("v5sum.more", hiddenCount)))
+	if len(categories) > visibleCount {
+		if !expanded.Get() {
+			items = items[:visibleCount]
+		}
+		label := uistate.T("v5sum.more", len(categories)-visibleCount)
+		if expanded.Get() {
+			label = uistate.T("tv7b.less")
+		}
+		items = append(items, Button(css.Class("txn-category-more"), Type("button"), Attr("data-testid", "txn-category-more"), Attr("aria-expanded", ariaBool(expanded.Get())), toggleClick, label))
 	}
 	breakdownClass := "txn-category-breakdown"
 	if selected != "" {
 		breakdownClass += " is-filtered"
+	}
+	if expanded.Get() {
+		breakdownClass += " is-expanded"
 	}
 	return Div(css.Class(breakdownClass),
 		Div(css.Class("txn-category-bar"), Attr("role", "group"), Attr("aria-label", uistate.T("uxt1.categoryBreakdown")), segments),
@@ -280,13 +329,7 @@ type txnCategorySegmentProps struct {
 }
 
 func txnCategorySegment(props txnCategorySegmentProps) ui.Node {
-	filterAtom := uistate.UseTxFilter()
 	isOther := props.Category.ID == "__other__"
-	onClick := ui.UseEvent(Prevent(func() {
-		if !isOther {
-			toggleTxnCategoryFilter(filterAtom, props.Category.ID)
-		}
-	}))
 	class := "txn-category-segment"
 	if isOther {
 		class += " txn-category-segment-other"
@@ -304,13 +347,13 @@ func txnCategorySegment(props txnCategorySegmentProps) ui.Node {
 	if isOther {
 		label = props.Category.Name + " " + fmtMoney(money.New(props.Category.Minor, txnCountBaseCurrency()))
 	}
-	options := []any{css.Class(class), Type("button"), Attr("data-testid", "txn-category-segment"), Attr("data-category-id", props.Category.ID), Attr("aria-label", label), Attr("aria-pressed", ariaBool(props.Selected))}
-	if isOther {
-		options = append(options, Attr("disabled", "disabled"))
-	}
-	options = append(options, Attr("title", props.Category.Name+" "+fmtMoney(money.New(props.Category.Minor, txnCountBaseCurrency()))),
-		Style(map[string]string{"width": strconvTxnPercent(props.Category.Share)}), OnClick(onClick), Span(css.Class("sr-only"), props.Category.Name))
-	return Button(options...)
+	filterAtom := uistate.UseTxFilter()
+	onClick := ui.UseEvent(Prevent(func() {
+		if !isOther {
+			toggleTxnCategoryFilter(filterAtom, props.Category.ID)
+		}
+	}))
+	return Button(css.Class(class), Type("button"), Attr("data-testid", "txn-category-segment"), Attr("data-category-id", props.Category.ID), Attr("aria-hidden", "true"), Attr("tabindex", "-1"), Attr("title", label), Style(map[string]string{"width": strconvTxnPercent(props.Category.Share)}), OnClick(onClick))
 }
 
 func txnCategoryListItem(props txnCategorySegmentProps) ui.Node {
@@ -345,6 +388,11 @@ func txnCategoryListItem(props txnCategorySegmentProps) ui.Node {
 
 func toggleTxnCategoryFilter(atom state.Atom[uistate.TxFilter], category string) {
 	setTxFilterOn(atom, func(filter *uistate.TxFilter) {
+		if category == "" {
+			filter.Uncategorized = !filter.Uncategorized
+			filter.Category = ""
+			return
+		}
 		if filter.Category == category {
 			filter.Category = ""
 		} else {
@@ -368,15 +416,15 @@ func txnCountCategories(filter txnfilter.Criteria, memberLens []string) []txnCat
 		return nil
 	}
 	criteria, _ := filter.WithOwnerLens(memberLens)
-	selectedCategory := criteria.Category
-	criteria.Flow, criteria.Category = "", ""
+	viewScope := txnDerivedScope(app, criteria)
+	criteria.Flow, criteria.Category, criteria.Uncategorized = "", "", false
 	criteria.Sort, criteria.Dir, criteria.Page, criteria.PageSize = "", "", 0, 0
 	base, rates := txnCountCurrency()
-	scope := fmt.Sprintf("%#v|%s|%s", criteria, strings.Join(memberLens, "\x00"), selectedCategory)
+	scope := fmt.Sprintf("%#v|%s", criteria, strings.Join(memberLens, "\x00"))
 	rev := app.Rev()
 	memo := &txnCountCategoryMemo
 	if memo.valid && memo.app == app && memo.rev == rev && memo.scope == scope && memo.currency == base {
-		return memo.rows
+		return append([]txnCategoryTotal(nil), memo.rows...)
 	}
 	categories := app.Categories()
 	categoryNames := make(map[string]string, len(categories))
@@ -388,35 +436,21 @@ func txnCountCategories(filter txnfilter.Criteria, memberLens []string) []txnCat
 	for _, account := range accounts {
 		accountNames[account.ID] = account.Name
 	}
-	labels := txnfilter.Labels{Account: accountNames, Category: categoryNames, Payee: app.PayeeResolver().Resolve, BaseCurrency: base, ToBase: func(value money.Money) (money.Money, error) { return rates.Convert(value, base) }}
-	visible := txnfilter.ApplyWithLabels(app.Transactions(), criteria, labels)
-	totals := make(map[string]int64)
-	for _, transaction := range visible {
-		if transaction.TransferAccountID != "" || transaction.Amount.Amount >= 0 {
-			continue
+	var categoryTotals []txnview.CategoryTotal
+	if view, ok := txnDerivedViewCache.Lookup(rev, viewScope); ok {
+		categoryTotals = view.Categories
+	} else {
+		labels := txnfilter.Labels{Account: accountNames, Category: categoryNames, Payee: app.PayeeResolver().Resolve, BaseCurrency: base, ToBase: func(value money.Money) (money.Money, error) { return rates.Convert(value, base) }}
+		visible := txnfilter.ApplyWithLabels(app.Transactions(), criteria, labels)
+		view, err := txnview.Summarize(visible, rates, base)
+		if err != nil {
+			return nil
 		}
-		if len(transaction.Splits) == 0 {
-			converted, err := rates.Convert(transaction.Amount, base)
-			if err == nil {
-				totals[transaction.CategoryID] += absTxnAmount(converted.Amount)
-			}
-			continue
-		}
-		for _, split := range transaction.Splits {
-			if split.Amount.Amount >= 0 {
-				continue
-			}
-			converted, err := rates.Convert(split.Amount, base)
-			if err == nil {
-				totals[split.CategoryID] += absTxnAmount(converted.Amount)
-			}
-		}
+		categoryTotals = view.Categories
 	}
-	result := make([]txnCategoryTotal, 0, len(totals))
-	for id, amount := range totals {
-		if amount <= 0 {
-			continue
-		}
+	result := make([]txnCategoryTotal, 0, len(categoryTotals))
+	for _, category := range categoryTotals {
+		id, amount := category.ID, category.Minor
 		name := categoryNames[id]
 		if name == "" {
 			name = uistate.T("uxt1.uncategorized")
@@ -429,7 +463,6 @@ func txnCountCategories(filter txnfilter.Criteria, memberLens []string) []txnCat
 		}
 		return result[i].Minor > result[j].Minor
 	})
-	result = txnCategoryTopFive(result, selectedCategory)
 	memo.app, memo.rev, memo.scope, memo.currency, memo.rows, memo.valid = app, rev, scope, base, result, true
 	return result
 }

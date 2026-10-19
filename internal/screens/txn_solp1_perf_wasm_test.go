@@ -56,6 +56,10 @@ func TestSOLP1Profile3300(t *testing.T) {
 	clear(counts)
 	clear(elapsed)
 	persists, captures := 0, 0
+	app.SetDurableWriter(func(revision uint64, done func(appstate.DurableResult)) {
+		persists++
+		done(appstate.DurableResult{Revision: revision})
+	})
 	uistate.CapturePersistNow(func() { persists++ })
 	auditview.CaptureNow = func() { captures++ }
 	r3pTime(t, "SOLP1 production recategorise+render", 1, func() {

@@ -286,6 +286,14 @@ type dtHeaderProps struct {
 // dtHeader renders one column header — a plain <th> or a sortable header button.
 func dtHeader(props dtHeaderProps) ui.Node {
 	c := props.Col
+	key := c.SortKey
+	on := ui.UseEvent(func(e ui.Event) {
+		e.PreventDefault()
+		if props.OnSort != nil {
+			props.OnSort(key)
+		}
+	})
+	onClick := OnClick(on)
 	args := []any{Attr("scope", "col")}
 	if c.Class != "" {
 		args = append(args, ClassStr(c.Class))
@@ -314,10 +322,8 @@ func dtHeader(props dtHeaderProps) ui.Node {
 	if props.Sorting {
 		caretIcon = Span(css.Class("dt-spin dt-spin-sm"), Attr("aria-hidden", "true"))
 	}
-	key := c.SortKey
-	on := ui.UseEvent(func(e ui.Event) { e.PreventDefault(); props.OnSort(key) })
 	args = append(args, Attr("aria-sort", ariaSort),
-		Button(css.Class("th-sort"), Type("button"), OnClick(on), c.Label, caretIcon))
+		Button(css.Class("th-sort"), Type("button"), onClick, c.Label, caretIcon))
 	return Th(args...)
 }
 

@@ -32,7 +32,7 @@ var tableStateKeys = Catalog{
 	// rather than a list: naming three of the ten dimensions leaves the reader
 	// wondering about the seven it skipped, which is the opposite of reassurance.
 	"transactions.noMatchSearch":       "Nothing matches “%s”.",
-	"transactions.noMatchKeepsFilters": "This clears only the search — your other filters stay as they are.",
+	"transactions.noMatchKeepsFilters": "Clearing the search keeps your other filters.",
 }
 
 func init() {

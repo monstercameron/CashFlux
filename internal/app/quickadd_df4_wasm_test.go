@@ -76,7 +76,7 @@ func TestQuickAddSaveAndAnotherResolvesAccountAgainDF4(t *testing.T) {
 	f.Render(Body(ID("df4-body"), ui.CreateElement(QuickAddHost)))
 	uistate.SetQuickAdd(true)
 	f.Render(Body(ID("df4-body"), ui.CreateElement(QuickAddHost)))
-	if !quickAddAccountSelected(f, "Checking B · Checking") {
+	if !quickAddAccountSelected(f, "Checking B") {
 		t.Fatal("initial account selection is not Checking B")
 	}
 	findAppTestID(f, "input", "txn-add-amount").Input("12.50")
@@ -86,7 +86,7 @@ func TestQuickAddSaveAndAnotherResolvesAccountAgainDF4(t *testing.T) {
 	if got := appState.Transactions(); len(got) != 1 || got[0].AccountID != "checking-b" {
 		t.Fatalf("transactions after Save & add another = %#v, want one on checking-b", got)
 	}
-	if !quickAddAccountSelected(f, "Checking B · Checking") {
+	if !quickAddAccountSelected(f, "Checking B") {
 		t.Fatal("account after Save & add another is not Checking B")
 	}
 }

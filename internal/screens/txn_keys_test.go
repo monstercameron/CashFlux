@@ -57,6 +57,24 @@ func TestTxnShortcutBlocked(t *testing.T) {
 	}
 }
 
+func TestTxnRowKeyTargetIgnoredForInteractiveControls(t *testing.T) {
+	for _, tt := range []struct {
+		tag  string
+		want bool
+	}{
+		{tag: "BUTTON", want: true},
+		{tag: "button", want: true},
+		{tag: "INPUT", want: true},
+		{tag: "SELECT", want: true},
+		{tag: "TR"},
+		{tag: "DIV"},
+	} {
+		if got := txnRowKeyTargetIgnored(tt.tag); got != tt.want {
+			t.Errorf("txnRowKeyTargetIgnored(%q) = %t, want %t", tt.tag, got, tt.want)
+		}
+	}
+}
+
 func TestTxnDialogConsumesShortcutsWithoutRunningThem(t *testing.T) {
 	tests := []struct {
 		name       string

@@ -10,15 +10,20 @@ import "github.com/monstercameron/CashFlux/internal/appstate"
 // Retain a single immutable export per revision instead of reading every table
 // again for each consumer. A failed export never advances the cache key.
 var datasetExportMemo struct {
-	app  *appstate.App
-	rev  uint64
-	data []byte
+	app    *appstate.App
+	rev    uint64
+	cursor uint64
+	data   []byte
 }
 
 var persistPerfObserve func(stage string)
 
 func localDatasetExport(app *appstate.App) ([]byte, error) {
-	if datasetExportMemo.app == app && datasetExportMemo.rev == app.Rev() && datasetExportMemo.data != nil {
+	cursor, err := app.Store().ChangeCursor()
+	if err != nil {
+		return nil, err
+	}
+	if datasetExportMemo.app == app && datasetExportMemo.rev == app.Rev() && datasetExportMemo.cursor == cursor && datasetExportMemo.data != nil {
 		return datasetExportMemo.data, nil
 	}
 	if persistPerfObserve != nil {
@@ -28,6 +33,6 @@ func localDatasetExport(app *appstate.App) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	datasetExportMemo.app, datasetExportMemo.rev, datasetExportMemo.data = app, app.Rev(), data
+	datasetExportMemo.app, datasetExportMemo.rev, datasetExportMemo.data, datasetExportMemo.cursor = app, app.Rev(), data, cursor
 	return data, nil
 }

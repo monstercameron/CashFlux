@@ -228,14 +228,14 @@ const (
 	BudgetDensityCompact     = "compact"
 )
 
-// budgetDensityStoreID keys the persisted density choice in localStorage.
+// budgetDensityStoreID identifies the persisted presentation preference.
 const budgetDensityStoreID = "cashflux:budgets:density"
 
 // UseBudgetDensity returns the shared atom holding the /budgets list density, seeded
-// from localStorage — unlike sort, density is a lasting workspace preference (how you
+// from encrypted device preferences — unlike sort, density is a lasting workspace preference (how you
 // read the page), not a transient view tweak, so it survives reloads.
 func UseBudgetDensity() state.Atom[string] {
-	d := kvGet(budgetDensityStoreID)
+	d := chromePreferenceGet(budgetDensityStoreID)
 	if d != BudgetDensityCompact {
 		d = BudgetDensityComfortable
 	}
@@ -243,11 +243,10 @@ func UseBudgetDensity() state.Atom[string] {
 }
 
 // PersistBudgetDensity saves the density choice so the next visit opens the same way.
-// kvSet writes into the SQLite dataset, which only reaches IndexedDB on the autosave
-// ticker/pagehide — RequestPersist flushes it now so a prompt reload keeps the choice.
+// This is device presentation state, stored independently of household records.
+// The strict write starts after the click returns and never exports the dataset.
 func PersistBudgetDensity(d string) {
-	kvSet(budgetDensityStoreID, d)
-	RequestPersist()
+	chromePreferenceSet(budgetDensityStoreID, d)
 }
 
 // UseBudgetsLastMonth returns the shared atom for the budgets "Last month's spend"

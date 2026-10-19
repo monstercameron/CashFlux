@@ -22,6 +22,12 @@ import (
 
 func TestSOL1EditOverlayFooterAndModalContract(t *testing.T) {
 	app := sol1FormApp(t)
+	var durableRevision uint64
+	var completeDurable func(appstate.DurableResult)
+	app.SetDurableWriter(func(revision uint64, done func(appstate.DurableResult)) {
+		durableRevision = revision
+		completeDurable = done
+	})
 	closed := 0
 	close := func() { closed++ }
 	formProps := screens.TransactionEditFormProps{App: app, TxnID: "sol1-txn", OnDone: close}
@@ -56,6 +62,10 @@ func TestSOL1EditOverlayFooterAndModalContract(t *testing.T) {
 	}
 	f.ByID("txn-edit-amount").Input("8.50")
 	f.ByID("txn-edit-form").Submit()
+	if closed != 2 || completeDurable == nil {
+		t.Fatal("edit closed before its durable write completed")
+	}
+	completeDurable(appstate.DurableResult{Revision: durableRevision})
 	if closed != 3 || app.Transactions()[0].Amount.Amount != -850 {
 		t.Fatal("native form submission did not save and close")
 	}

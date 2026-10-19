@@ -79,7 +79,7 @@ func TryActivationHandoff() {
 		persistAuthSessionWithCommitThen(p, origin, out, true, commitCapturedAuthPreferences, func(err error) {
 			if err != nil {
 				logSyncError("activation handoff sign-in could not be saved", err)
-				uistate.PostNotice("Sign-in could not be saved. Please try again; your saved data is unchanged.", true)
+				uistate.PostNotice(uistate.T("bv6d1.signInSaveFailed"), true)
 				return
 			}
 			uistate.PostNotice(uistate.T("authCards.activated"), false)

@@ -23,7 +23,7 @@ func ReviewInboxHost() uic.Node {
 		return Fragment()
 	}
 	return uiw.FlipPanel(uiw.FlipPanelProps{
-		Title: uistate.T("review.title"),
+		Title: reviewInboxTitle(),
 		// C500: 90% of the viewport. A 460px column cannot host the bulk list, and
 		// both modes share ONE size so switching mode never resizes the container.
 		Width:  uiw.FlipFullW,
@@ -35,4 +35,8 @@ func ReviewInboxHost() uic.Node {
 		OnClose:   func() { uistate.CloseReviewInbox() },
 		Back:      uic.CreateElement(screens.ReviewSurfaceBody, struct{}{}),
 	})
+}
+
+func reviewInboxTitle() string {
+	return uistate.T("reviewInbox.title")
 }

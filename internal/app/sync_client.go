@@ -1682,7 +1682,13 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 		// so nothing is destroyed by being overruled.
 		localIsUsers := hadLocalDataset && !uistate.SampleActive()
 		if datasetIsForeign() {
-			stashForeignDataset()
+			if err := stashForeignDataset(); err != nil {
+				logSyncError("previous account's dataset could not be preserved", err)
+				message := "CashFlux could not keep the previous account's saved changes. Download or recover that copy before replacing it."
+				setSyncStatus(syncStatus{State: "error", Message: message})
+				markHostedHydrationError(message)
+				return
+			}
 			localIsUsers = false
 		}
 		if !syncstate.ShouldApplyRemote(localUpdatedAt, hasLocalMeta, localIsUsers, remoteUpdatedAt, true) {
@@ -1714,19 +1720,7 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 		// cleared this flag, so a freshly signed-in browser showed a wipe affordance
 		// over freshly arrived real records.
 		uistate.SetSampleActive(false)
-		// This account's own copy is now what is loaded, so record that it owns it.
-		claimDatasetForCurrentUser()
-		// Deliberate same-tab dataset replacement: advance the cross-tab generation
-		// (other tabs must stop overwriting) and this tab's own write entitlement.
-		datasetMyGen = bumpDatasetGen()
-		hadLocalDataset = true
 		meta = syncMeta{UpdatedAt: resp.Workspace.UpdatedAt, Version: resp.Workspace.Version, Hash: datasetHash(dataset), Owner: requestedOwner}
-		// A remote snapshot actually landed on this device — real traffic, same as an
-		// accepted push. (Seen only when reloadOnApply is false; an applying pull that
-		// reloads the page takes the flash with it, which is fine — the reload is a
-		// far louder signal that something arrived.)
-		noteSyncActivity()
-		setSyncStatus(syncStatus{State: "synced", Pending: pendingSyncCount(), LastSyncedAt: time.Now().UTC().Format(time.RFC3339Nano)})
 		if hostedHydrationRequired() {
 			// The financial shell is still unmounted. Persist the authoritative
 			// snapshot first, then release the hosted gate without a reload so the
@@ -1795,11 +1789,9 @@ func saveSyncMeta(workspaceID string, meta syncMeta) {
 // boundary together: a dataset without its server timestamp/hash is treated as
 // unsynced local work and correctly protected from later remote overwrites.
 func saveSyncedDatasetThen(workspaceID string, dataset []byte, meta syncMeta, done func()) {
+	generation := datasetMyGen
 	data, err := json.Marshal(meta)
 	if err != nil {
-		if done != nil {
-			done()
-		}
 		return
 	}
 	payload := dataset
@@ -1814,8 +1806,30 @@ func saveSyncedDatasetThen(workspaceID string, dataset []byte, meta syncMeta, do
 			return
 		}
 	}
-	lsSetThen(datasetStoreKey, string(payload), func() {
-		lsSetThen(syncMetaKey(workspaceID), string(data), done)
+	values, expected := prepareWorkspaceCommit(map[string]string{datasetStoreKey: string(payload), syncMetaKey(workspaceID): string(data)}, generation)
+	owner := currentDatasetOwner()
+	if owner.ServerID != "" && owner.UserID != "" {
+		encoded, err := json.Marshal(owner)
+		if err != nil {
+			return
+		}
+		values[datasetOwnerKey] = string(encoded)
+	}
+	browserstore.SetSecureBatch(values, expected, func(err error) {
+		if err != nil {
+			logSyncError("backend sync local replacement failed", err)
+			message := "CashFlux could not save your server data on this device. Keep this page open and retry."
+			setSyncStatus(syncStatus{State: "error", Message: message})
+			markHostedHydrationError(message)
+			return
+		}
+		datasetMyGen = values[datasetGenKey]
+		hadLocalDataset = true
+		noteSyncActivity()
+		setSyncStatus(syncStatus{State: "synced", Pending: pendingSyncCount(), LastSyncedAt: time.Now().UTC().Format(time.RFC3339Nano)})
+		if done != nil {
+			done()
+		}
 	})
 }
 
@@ -2110,22 +2124,19 @@ func resolveConflictUseServer() {
 			}
 			return
 		}
-		// Deliberate same-tab dataset replacement: advance the cross-tab generation
-		// (other tabs must stop overwriting) and this tab's own write entitlement.
-		datasetMyGen = bumpDatasetGen()
-		hadLocalDataset = true
 		meta := syncMeta{
 			UpdatedAt: resp.Workspace.UpdatedAt,
 			Version:   resp.Workspace.Version,
 			Hash:      datasetHash(dataset),
 			Owner:     requestedOwner,
 		}
-		// Only discard the stash after the import has succeeded — the user's local
-		// edit is recoverable until this point.
-		clearConflictBackup(wID)
-		setSyncStatus(syncStatus{State: "synced", LastSyncedAt: time.Now().UTC().Format(time.RFC3339Nano)})
-		uistate.PostNotice(uistate.T("sync.conflictResolvedUseServer"), false)
-		saveSyncedDatasetThen(wID, dataset, meta, reloadPage)
+		// Retain the recovery copy and the old generation until the replacement
+		// is durable; an in-memory import alone cannot acknowledge resolution.
+		saveSyncedDatasetThen(wID, dataset, meta, func() {
+			clearConflictBackup(wID)
+			uistate.PostNotice(uistate.T("sync.conflictResolvedUseServer"), false)
+			reloadPage()
+		})
 	}()
 }
 

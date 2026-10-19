@@ -87,7 +87,10 @@ type App struct {
 	Notifier func(string)
 	// txnMutatedFns is the set of observers registered via OnTxnMutated, called
 	// after any successful transaction add, edit, or delete (C122).
-	txnMutatedFns []func()
+	txnMutatedFns                  []func()
+	durableWriter                  func(uint64, func(DurableResult))
+	transactionDurabilityObservers []func(TransactionDurability)
+	transactionDurabilityOperation uint64
 	// suppressTxnObservers, when true, causes fireTxnMutated to return early
 	// without calling any observer — used during bulk import so the re-evaluation
 	// fires at most once per batch rather than once per row.
@@ -713,33 +716,17 @@ func (a *App) Categories() []domain.Category {
 // The returned slice and its nested values are shared and read-only; callers must
 // not mutate them. Repeated calls within one revision return the same backing array.
 func (a *App) Transactions() []domain.Transaction {
-	return a.reads.transactions.get(a.store.Rev(), func() []domain.Transaction {
-		v, err := a.store.ListTransactions()
-		a.logErr("transactions", err)
-		return v
-	}).rows
+	return a.ledgerSnapshot().rows
 }
 
-// TransactionsByAccount returns the transactions whose primary account matches accountID.
-// The returned slice and its nested values are shared and read-only; callers must not
-// mutate them. The slice is cached for the current store mutation revision.
+// TransactionsByAccount returns an immutable snapshot of one account's rows.
 func (a *App) TransactionsByAccount(accountID string) []domain.Transaction {
-	return a.reads.transactions.get(a.store.Rev(), func() []domain.Transaction {
-		v, err := a.store.ListTransactions()
-		a.logErr("transactions by account", err)
-		return v
-	}).byAccount[accountID]
+	return a.ledgerSnapshot().byAccount[accountID]
 }
 
-// TransactionByID returns a transaction by ID using the current revision's ledger index.
-// The returned transaction and any nested slices are shared and read-only; callers must
-// not mutate them. The boolean is false when no transaction has that ID.
+// TransactionByID returns a shared, read-only transaction and whether it exists.
 func (a *App) TransactionByID(id string) (domain.Transaction, bool) {
-	snapshot := a.reads.transactions.get(a.store.Rev(), func() []domain.Transaction {
-		v, err := a.store.ListTransactions()
-		a.logErr("transaction by id", err)
-		return v
-	})
+	snapshot := a.ledgerSnapshot()
 	index, ok := snapshot.byID[id]
 	if !ok {
 		return domain.Transaction{}, false

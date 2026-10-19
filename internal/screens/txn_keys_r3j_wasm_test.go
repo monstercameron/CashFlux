@@ -153,3 +153,82 @@ func TestTxnFocusCallbackReleasesAfterItsTimerRuns(t *testing.T) {
 		t.Fatalf("active deferred-focus callbacks after timer = %d, want 0", got)
 	}
 }
+
+func TestUXT4RowShortcutsOpenCategoryPickerAndGuide(t *testing.T) {
+	row := js.Global().Get("Object").New()
+	row.Set("getAttribute", txnKeyTestFunc(t, func(_ js.Value, args []js.Value) any {
+		if args[0].String() == "data-testid" {
+			return "txn-row-uxt4-1"
+		}
+		return js.Null()
+	}))
+	target := js.Global().Get("Object").New()
+	target.Set("tagName", "TR")
+	target.Set("closest", txnKeyTestFunc(t, func(_ js.Value, args []js.Value) any {
+		if args[0].String() == ".txn-table tbody tr.row" {
+			return row
+		}
+		return js.Null()
+	}))
+	focused := false
+	field := js.Global().Get("Object").New()
+	field.Set("focus", txnKeyTestFunc(t, func(js.Value, []js.Value) any { focused = true; return nil }))
+	doc := js.Global().Get("Object").New()
+	doc.Set("querySelector", txnKeyTestFunc(t, func(_ js.Value, args []js.Value) any {
+		if args[0].String() == "input[data-testid='catpick-search']" {
+			return field
+		}
+		return js.Null()
+	}))
+	var categoryID string
+	if !handleTxnTableShortcut("c", target, doc, func(id string) { categoryID = id }, nil) {
+		t.Fatal("c on the row was not handled")
+	}
+	time.Sleep(20 * time.Millisecond)
+	if categoryID != "uxt4-1" || !focused {
+		t.Fatalf("category picker open = %q, search focused = %t; want uxt4-1 and focus", categoryID, focused)
+	}
+	helpOpened := false
+	if !handleTxnTableShortcut("?", target, doc, nil, func() { helpOpened = true }) || !helpOpened {
+		t.Fatal("? on the row did not open the keyboard guide")
+	}
+}
+
+func TestUXT4RowShortcutsIgnoreControlsAndUnrelatedTargets(t *testing.T) {
+	for _, tag := range []string{"BUTTON", "INPUT", "SELECT"} {
+		target := js.Global().Get("Object").New()
+		target.Set("tagName", tag)
+		if handleTxnTableShortcut("c", target, js.Null(), func(string) { t.Errorf("category opened from %s", tag) }, nil) {
+			t.Errorf("shortcut on %s should be ignored", tag)
+		}
+	}
+	target := js.Global().Get("Object").New()
+	target.Set("tagName", "BODY")
+	target.Set("closest", txnKeyTestFunc(t, func(js.Value, []js.Value) any { return js.Null() }))
+	if handleTxnTableShortcut("?", target, js.Null(), nil, func() { t.Error("help opened outside a transaction row") }) {
+		t.Fatal("shortcut outside a transaction row should be ignored")
+	}
+}
+
+func TestUXT4CategoryPickerRestoresOpenerWithoutScrolling(t *testing.T) {
+	focused := false
+	preventScroll := false
+	opener := js.Global().Get("Object").New()
+	opener.Set("isConnected", true)
+	opener.Set("focus", txnKeyTestFunc(t, func(_ js.Value, args []js.Value) any {
+		focused = true
+		preventScroll = len(args) > 0 && args[0].Get("preventScroll").Bool()
+		return nil
+	}))
+	focusTxnOpener(opener)
+	if !focused || !preventScroll {
+		t.Fatalf("picker opener restored = %t, preventScroll = %t; want true and true", focused, preventScroll)
+	}
+}
+
+func txnKeyTestFunc(t *testing.T, fn func(js.Value, []js.Value) any) js.Func {
+	t.Helper()
+	owned := js.FuncOf(fn)
+	t.Cleanup(owned.Release)
+	return owned
+}

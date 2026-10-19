@@ -90,6 +90,17 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Transactions: saves are journaled and never silent; rows, summary and dialogs are correct and fast (held bundle).**
+  - Local saves write only changed records to an encrypted journal with an atomic generation check, never the whole dataset, and
+    every replacement path (account switch, cloud preferences, app-lock passcode change, sync, wipe, startup workspace) keeps
+    journaled edits (SOLP2, SOLP2.1–2.3). A failed save shows a persistent "Changes aren't saved yet — Retry" banner and success
+    toasts wait for durability; budget density is a device preference (BV6D, BV6D.1). Rejected saves name the key and stage.
+  - Editing a transaction no longer rebuilds the ledger; unrelated writes cost under a millisecond; row flags compute in slices
+    of at most ~12 ms (SOLP3).
+  - Clearing a search no longer corrupts rows (TV7A); transfers show as one row and count once (V5ROW, TC3W13); the summary
+    strip re-renders on every write with readable labels and an explained Other (TV7B); the bulk bar applies on choose with Undo
+    (V5BULK, TV7F); split and edit dialogs share one field builder (V5FORM, TV7D); review suggestions are memoized (TC3B6);
+    keyboard, toolbar and badges (UXT3/4/5); hook order fixed and linted (HOOKX, TC2D); copy and strings (TC3W4, TV7E, TXINT).
 - **The calendar shows every scheduled payment in its day (TV7C).** A scheduled liability payment such as the Oct 22 card
   payment projects into its day as "Due $220.00"; calendar labels use the meta size and tabular figures.
 - **Budgets pages read the same on every row (BV6H).** Zero-spend rows show the pace tick; rollover details open on click with

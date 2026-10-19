@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/atrest"
 	"github.com/monstercameron/CashFlux/internal/browserstore"
 	"github.com/monstercameron/CashFlux/internal/cryptobox"
 	"github.com/monstercameron/CashFlux/internal/id"
@@ -76,24 +77,30 @@ var keptOnWipeKeys = map[string]bool{
 var keptOnWipePrefixes = []string{
 	"cashflux:ws-data:",
 	"cashflux:sync-meta:",
+	"cashflux:ui-preference:",
 }
 
-// wipeFinancialLocalState makes a data wipe authoritative and reload-proof. Call it
-// AFTER the SQLite store's tables are cleared (app.Wipe). It (1) overwrites the
-// persisted dataset blob with the now-empty SQLite snapshot so a reload can't
-// restore it, then (2) removes every other "cashflux:" localStorage key that holds
-// financial data or anything derived from it, preserving only genuine settings and
-// the workspace/sync infrastructure (see keptOnWipeKeys / keptOnWipePrefixes).
-//
-// The persisted dataset stays the single source of truth in SQLite; this just stops
-// the satellite keys from resurrecting wiped data.
-// wipeFinancialLocalState clears the non-settings browser-store keys, persists the
-// emptied dataset, and then runs `then` (typically a page reload) ONCE the dataset
-// write has actually committed to IndexedDB — so the reload can't race the async
-// write and re-hydrate the old data.
+// wipeFinancialLocalState commits the already-wiped SQLite snapshot, cleared
+// journal head, fresh generation and financial satellite tombstones atomically.
+// Failure retains the original checkpoint and journal and keeps autosave paused:
+// the emptied in-memory store must not overwrite the recoverable durable copy.
+// then (usually a reload) runs only after the entire wipe is durable.
 func wipeFinancialLocalState(then func()) {
+	generation := datasetMyGen
+	suspendAutosave = true
+	app := appstate.Default
+	if app == nil {
+		return
+	}
+	data, err := app.ExportJSONRedacted()
+	if err != nil {
+		app.Log().Error("data wipe could not be serialized; reload was stopped", "err", err)
+		return
+	}
+	values := map[string]string{datasetStoreKey: string(data)}
 	var remove []string
-	// 1) Remove every non-preserved cashflux:* key (bootstrap/settings stay).
+	// Empty values are encrypted tombstones, just like a cleared journal head.
+	// Nothing is removed before the generation-conditional replacement commits.
 	for _, key := range browserstore.Keys() {
 		if !strings.HasPrefix(key, "cashflux:") || key == datasetStoreKey || keptOnWipeKeys[key] {
 			continue
@@ -106,33 +113,31 @@ func wipeFinancialLocalState(then func()) {
 			}
 		}
 		if !kept {
-			remove = append(remove, key)
+			if atrest.Classify(key) == atrest.ShouldNotPersist {
+				remove = append(remove, key)
+			} else {
+				values[key] = ""
+			}
 		}
 	}
-	// 2) Persist the emptied store, then continue (reload) after it commits. A
-	// deliberate wipe also bumps the cross-tab generation so any other open tab
-	// stops autosaving its pre-wipe copy back over the emptied dataset.
-	if app := appstate.Default; app != nil {
-		if data, err := app.ExportJSONRedacted(); err == nil {
-			removeFinancialKeysThen(remove, func() {
-				generation := id.New()
-				browserstore.SetSecureBatch(map[string]string{datasetStoreKey: string(data), datasetGenKey: generation}, nil, func(err error) {
-					if err != nil {
-						app.Log().Error("data wipe could not be committed", "err", err)
-						return
-					}
-					datasetMyGen = generation
-					if then != nil {
-						then()
-					}
-				})
-			})
+	values, expected := prepareWorkspaceCommit(values, generation)
+	browserstore.SetSecureBatch(values, expected, func(err error) {
+		if err != nil {
+			app.Log().Error("data wipe could not be committed; saved data was kept", "err", err)
 			return
 		}
-	}
-	if app := appstate.Default; app != nil {
-		app.Log().Error("data wipe could not be serialized; reload was stopped")
-	}
+		if appstate.Default != app {
+			return
+		}
+		datasetMyGen = values[datasetGenKey]
+		// Transient secrets cannot be written even as tombstones. Remove them
+		// afterwards; failure retains the paused page and never reloads.
+		removeFinancialKeysThen(remove, func() {
+			if appstate.Default == app && datasetMyGen == values[datasetGenKey] && readDatasetGen() == values[datasetGenKey] && then != nil {
+				then()
+			}
+		})
+	})
 }
 
 func removeFinancialKeysThen(keys []string, done func()) {
@@ -210,6 +215,15 @@ func hydrateDataset() {
 	}
 	loadQuarantineRecord()
 	raw := browserstore.GetString(datasetStoreKey)
+	if raw == "" {
+		head, _, err := browserstore.GetSecure(datasetHeadKey)
+		if err != nil || head != "" {
+			quarantineDataset(raw, "Saved changes are missing their dataset checkpoint. The saved records have been kept.")
+			uistate.SetSampleActive(false)
+			initializeHostedHydration(hostedDocument())
+			return
+		}
+	}
 	// Encrypted-at-rest dataset (C45): defer hydration until the passcode gate is
 	// satisfied. We stash the ciphertext and leave the store empty; the autosave is
 	// held off (see save's pendingEnvelopeRaw guard) so it can't overwrite it, and
@@ -239,7 +253,11 @@ func hydrateDataset() {
 	switch decideHydrate(raw, seededBefore, allowSample) {
 	case hydrateImport:
 		hadLocalDataset = true
-		if err := app.ImportJSON([]byte(raw)); err != nil {
+		dataset, _, err := checkpointDatasetJSON([]byte(raw))
+		if err == nil {
+			err = app.ImportJSON(dataset)
+		}
+		if err != nil {
 			app.Log().Error("dataset hydrate failed", "err", err)
 			hadLocalDataset = false
 			reason := unreadableDatasetReason([]byte(raw))
@@ -248,6 +266,11 @@ func hydrateDataset() {
 			}
 			quarantineDataset(raw, reason)
 			uistate.SetSampleActive(false)
+			initializeHostedHydration(hostedDocument())
+			return
+		}
+		if err := replayDurableDatasetRecords(app, raw); err != nil {
+			quarantineDataset(raw, "Saved changes could not be recovered: "+err.Error())
 			initializeHostedHydration(hostedDocument())
 			return
 		}
@@ -295,10 +318,9 @@ func migrateStandaloneAIKey() {
 	hydrateDeviceAIKey()
 }
 
-// startDatasetAutosave persists the dataset (OpenAI key redacted) to IndexedDB
-// so it survives a reload. It snapshots on a short ticker — which catches every
-// mutation regardless of code path, without instrumenting each write — and on
-// page hide, writing only when the serialized bytes change.
+// startDatasetAutosave flushes changed records through encrypted strict storage.
+// Revision and cursor guards make repeated idle requests no-ops. Checkpoints are
+// written for bootstrap, explicit rewrites and the one-time format upgrade.
 func startDatasetAutosave() {
 	app := appstate.Default
 	if app == nil {
@@ -331,159 +353,7 @@ func newDatasetAutosave(app *appstate.App,
 	commit func(map[string]string, map[string]string, func(error)),
 	push func([]byte, time.Time),
 ) (func(), func()) {
-	last := ""
-	var savedRevision uint64
-	hasSavedRevision := false
-	var forceVersion uint64
-	var savedForceVersion uint64
-	saveInFlight := false
-	if hadLocalDataset {
-		data, err := localDatasetExport(app)
-		if err != nil {
-			return func() {}, func() {}
-		}
-		last = string(data)
-		savedRevision, hasSavedRevision = app.Rev(), true
-	}
-	// Seed this tab's write entitlement from the store's current generation.
-	datasetMyGen = readDatasetGen()
-	save := func() {
-		if saveInFlight {
-			return
-		}
-		if hasSavedRevision && savedRevision == app.Rev() {
-			return
-		}
-		if suspendAutosave {
-			return // a workspace switch is rewriting storage; don't clobber it
-		}
-		if hostedHydrationRequired() {
-			// A hosted first boot owns no authoritative local dataset yet.
-			// Persisting the temporary empty store would make the next reload
-			// mistake it for user data and skip the required server check.
-			return
-		}
-		if pendingEnvelopeRaw != "" {
-			return // an encrypted dataset is awaiting unlock — never overwrite it
-		}
-		if autosaveBlocked() {
-			app.Log().Warn("dataset autosave refused because hydration did not succeed or unreadable data is quarantined")
-			return
-		}
-		if g := readDatasetGen(); g != datasetMyGen {
-			// Another tab saved after this one loaded. Overwriting would silently
-			// revert its changes (whole-dataset last-writer-wins), so this tab
-			// stops persisting and says so once — reload to pick up the latest.
-			if !datasetStaleNotified {
-				datasetStaleNotified = true
-				app.Log().Warn("dataset updated by another tab; this tab will not overwrite — reload to continue saving here")
-				uistate.PostNotice(uistate.T("app.staleTabNotice"), true)
-			}
-			return
-		}
-		// localStorage.setItem can throw (e.g. quota exceeded on a very large
-		// dataset), which surfaces as a Go panic — don't let it crash the app.
-		defer func() {
-			if r := recover(); r != nil {
-				app.Log().Error("dataset autosave failed", "err", r)
-			}
-		}()
-		// Capture first so the audit entry belongs to the same durable snapshot;
-		// the revision cache shares the export when capture makes no audit write.
-		captureUndoPoint()
-		data, err := localDatasetExport(app)
-		if err != nil {
-			return
-		}
-		s := string(data)
-		targetRevision := app.Rev()
-		targetForceVersion := forceVersion
-		if s == last && savedForceVersion == forceVersion {
-			savedRevision, hasSavedRevision = targetRevision, true
-			return
-		}
-		// afterWrite mirrors the post-save bookkeeping (backend push / first-save
-		// flag) shared by the plaintext and encrypted paths. The cloud copy is always
-		// redacted so the OpenAI key never leaves the device.
-		afterWrite := func() {
-			if hadLocalDataset {
-				// Push exactly the snapshot whose durable commit completed. Reading
-				// live state here both re-exports the entire ledger and can publish
-				// a newer mutation that has not committed locally yet.
-				push(data, time.Now().UTC())
-			} else {
-				hadLocalDataset = true
-			}
-		}
-		write := func(value, target string) {
-			if persistPerfObserve != nil {
-				persistPerfObserve("durable-write")
-			}
-			saveInFlight = true
-			nextGeneration := id.New()
-			commit(map[string]string{
-				datasetStoreKey: value, datasetGenKey: nextGeneration,
-			}, map[string]string{datasetGenKey: datasetMyGen}, func(err error) {
-				saveInFlight = false
-				if err != nil {
-					app.Log().Error("dataset commit failed; changes remain unsaved", "err", err)
-					return
-				}
-				last = target
-				savedForceVersion = targetForceVersion
-				savedRevision, hasSavedRevision = targetRevision, true
-				if forceVersion != targetForceVersion {
-					hasSavedRevision = false
-				}
-				datasetMyGen = nextGeneration
-				afterWrite()
-			})
-		}
-		if datasetEncryptionActive() {
-			// Encrypt at rest (C45). Encryption is async; skip a tick if a prior one
-			// is still running. `last` advances only on a successful write, so a
-			// failed encrypt is retried on the next change.
-			if encSaving {
-				return
-			}
-			encSaving = true
-			saveInFlight = true
-			plaintext := append([]byte(nil), data...)
-			target := s
-			encryptDataset(plaintext, activePasscode, func(env []byte, encErr error) {
-				encSaving = false
-				saveInFlight = false
-				if encErr != nil {
-					app.Log().Error("dataset encrypt failed; not writing this tick", "err", encErr)
-					return
-				}
-				// Encryption is async — re-check the stamp at write time so a save
-				// that raced another tab's write still refuses to clobber it.
-				if g := readDatasetGen(); g != datasetMyGen {
-					return
-				}
-				defer func() {
-					if r := recover(); r != nil {
-						app.Log().Error("encrypted dataset write failed", "err", r)
-					}
-				}()
-				write(string(env), target)
-			})
-			return
-		}
-		write(s, s)
-	}
-	// resaveDataset forces an immediate rewrite even when the dataset bytes are
-	// unchanged — used when the encryption mode flips (passcode set/removed) so the
-	// at-rest copy migrates plaintext↔envelope right away instead of waiting for the
-	// next edit (C45).
-	force := func() {
-		forceVersion++
-		last = ""
-		hasSavedRevision = false
-		save()
-	}
-	return save, force
+	return newRecordAutosave(app, commit, push)
 }
 
 // dataRevisionTick is how often the watcher looks for new edits. It is also the

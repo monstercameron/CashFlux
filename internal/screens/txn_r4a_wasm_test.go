@@ -111,7 +111,7 @@ func TestR4AFutureCountLineStaysVisibleWithoutPostedRows(t *testing.T) {
 	f := render.New(t)
 	f.Render(txnCountLine(txnCountLineProps{Shown: 0, Total: 0}))
 	line := r2aByTestID(f, "span", "txn-count-line")
-	if line == nil || !strings.Contains(line.Text(), "November 2026 · 0 posted · 0 scheduled · $0.00") {
+	if line == nil || !strings.Contains(line.Text(), "0 posted. 0 scheduled. Due $0.00.") {
 		if line == nil {
 			t.Fatal("future period count line is missing")
 		}
@@ -126,7 +126,7 @@ func TestR4AFutureCountLineStaysVisibleWithoutPostedRows(t *testing.T) {
 		if strings.Contains(span.Attr("class"), "txn-count-main") {
 			summary = span
 		}
-		if span.Text() == "$0.00" {
+		if span.Text() == "Due $0.00" {
 			amount = span
 		}
 	}

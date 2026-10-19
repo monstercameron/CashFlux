@@ -59,13 +59,15 @@ func Calendar(props CalendarProps) uic.Node {
 			props.OnNextMonth()
 		}
 	}))
+	prevClick := OnClick(prev)
+	nextClick := OnClick(next)
 
 	prevArgs := []any{css.Class("uical-nav-btn"), Type("button"), Attr("aria-label", uistate.T("uical.prevMonth"))}
 	if props.TestIDPrefix != "" {
 		prevArgs = append(prevArgs, Attr("data-testid", props.TestIDPrefix+"-prev"))
 	}
 	if props.OnPrevMonth != nil {
-		prevArgs = append(prevArgs, OnClick(prev))
+		prevArgs = append(prevArgs, prevClick)
 	} else {
 		prevArgs = append(prevArgs, Disabled(true))
 	}
@@ -76,7 +78,7 @@ func Calendar(props CalendarProps) uic.Node {
 		nextArgs = append(nextArgs, Attr("data-testid", props.TestIDPrefix+"-next"))
 	}
 	if props.OnNextMonth != nil {
-		nextArgs = append(nextArgs, OnClick(next))
+		nextArgs = append(nextArgs, nextClick)
 	} else {
 		nextArgs = append(nextArgs, Disabled(true))
 	}
@@ -186,9 +188,10 @@ func calDayCell(props calDayCellProps) uic.Node {
 		Span(css.Class("uical-daynum"), strconv.Itoa(props.Date.Day())),
 		Div(css.Class("uical-daycontent"), content),
 	)
+	clickOption := OnClick(click)
 
 	if props.OnClick != nil {
-		return Button(append([]any{Type("button"), OnClick(click)}, common...)...)
+		return Button(append([]any{Type("button"), clickOption}, common...)...)
 	}
 	return Div(common...)
 }

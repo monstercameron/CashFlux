@@ -67,8 +67,11 @@ func TestSOL1EditRecordSummaryAndAssociatedValidation(t *testing.T) {
 	defer f.Cleanup()
 	f.Render(TransactionEditForm(TransactionEditFormProps{App: app, TxnID: "sol1-record"}))
 	record := findByTestID(f, "div", "txn-edit-record")
-	if record == nil || !strings.Contains(record.Text(), "Corner store") || !strings.Contains(record.Text(), "$6.75") || !strings.Contains(record.Text(), "2026") {
-		t.Fatalf("record summary does not identify merchant, date and amount: %q", record.Text())
+	if record == nil || !strings.Contains(record.Text(), "CORNER STORE 123") || !strings.Contains(record.Text(), "Corner store") || !strings.Contains(record.Text(), "2026") {
+		t.Fatalf("record summary does not identify description, merchant and date: %q", record.Text())
+	}
+	if amount := f.ByID("txn-edit-amount"); amount == nil || amount.Attr("data-cf-value") != "6.75" {
+		t.Fatalf("editable amount must retain the transaction amount: %v", amount)
 	}
 	for _, tc := range []struct{ id, label string }{
 		{"txn-edit-amount", uistate.T("quickAdd.amount")},

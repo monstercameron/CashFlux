@@ -62,7 +62,7 @@ func TestR1CCopyUsesUSSpellingAndAttentionCallout(t *testing.T) {
 	if got := uistate.T("txp3.bulkCategorise"); got != "Categorize" {
 		t.Fatalf("bulk category label = %q, want US spelling", got)
 	}
-	if got := uistate.T("r1c.reviewCallout", 249); got != "249 to review →" {
+	if got := uistate.T("r1c.reviewCallout", 249); got != "Review 249" {
 		t.Fatalf("review callout = %q, want concise attention copy", got)
 	}
 }

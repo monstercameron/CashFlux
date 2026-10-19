@@ -24,6 +24,16 @@ func (s *SQLiteStore) ensureDebtPaymentSchema() error {
 	if _, err := s.db.Exec(debtPaymentSchema); err != nil {
 		return fmt.Errorf("store: create debt-payment schema: %w", err)
 	}
+	if s.captureReady && !s.debtCaptureReady {
+		for _, table := range recordTables() {
+			if table.name == "debt_payment_links" || table.name == "debt_payee_rules" || table.name == "debt_payment_link_txns" {
+				if err := s.installTableCapture(table); err != nil {
+					return err
+				}
+			}
+		}
+		s.debtCaptureReady = true
+	}
 	return nil
 }
 

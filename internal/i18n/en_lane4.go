@@ -95,7 +95,7 @@ var lane4Keys = Catalog{
 
 	// #63 — transaction trust details.
 	// %s ×2 = account name, its new balance.
-	"transactions.savedImpact":          "Saved — %s is now %s.",
+	"transactions.savedImpact":          "Saved. %s is now %s.",
 	"transactions.reconciledBadgeTitle": "Reconciled — vouched for by a recorded statement reconciliation.",
 	// %s ×3 = from-account, amount, to-account.
 	"accounts.xferSemanticsAsset":     "Moves %s down by %s and %s up by the same — your total money doesn't change, and neither side counts as spending.",

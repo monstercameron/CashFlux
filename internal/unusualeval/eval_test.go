@@ -8,6 +8,10 @@ import (
 	"sort"
 	"testing"
 	"time"
+
+	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/smartengine"
 )
 
 func TestFixtureSetIsCompleteAndWellLabelled(t *testing.T) {
@@ -91,6 +95,21 @@ func TestSignalLabels(t *testing.T) {
 				t.Errorf("ValidSignal(%q) = %t, want %t", test.label, got, test.valid)
 			}
 		})
+	}
+}
+
+func TestUNU2UsesProductionDebtPaymentFilter(t *testing.T) {
+	now := time.Date(2026, 10, 18, 0, 0, 0, 0, time.UTC)
+	fixture := Fixture{Candidate: "payment", Input: smartengine.Input{
+		Now: now,
+		Accounts: []domain.Account{
+			{ID: "checking", Currency: "USD", Class: domain.ClassAsset},
+			{ID: "loan", Name: "Auto loan", Currency: "USD", Class: domain.ClassLiability},
+		},
+		Transactions: []domain.Transaction{{ID: "payment", AccountID: "checking", BillAccountID: "loan", Date: now.AddDate(0, 0, -1), Payee: "Auto loan", Amount: money.New(-30000, "USD")}},
+	}}
+	if got := UNU2(fixture); len(got) != 0 {
+		t.Fatalf("evaluation bypassed production debt-payment filter: %+v", got)
 	}
 }
 

@@ -65,7 +65,7 @@ func persistAuthSession(prefsAtom state.Atom[prefs.Prefs], serverURL string, pai
 	persistAuthSessionThen(prefsAtom, serverURL, pair, startSync, func(err error) {
 		if err != nil {
 			logSyncError("complete sign-in failed", err)
-			uistate.PostNotice("Sign-in could not be saved. Please try again; your saved data is unchanged.", true)
+			uistate.PostNotice(uistate.T("bv6d1.signInSaveFailed"), true)
 		}
 	})
 }
@@ -351,7 +351,7 @@ func PasswordAuthCard(props PasswordAuthCardProps) uic.Node {
 				persistAuthSessionThen(prefsAtom, pr.ServerURL, out, true, func(err error) {
 					submitting.Set(false)
 					if err != nil {
-						notify("Sign-in could not be saved. Please try again.", true)
+						notify(uistate.T("bv6d1.signInSaveFailedRetry"), true)
 						return
 					}
 					signedIn.Set(true)
@@ -377,7 +377,7 @@ func PasswordAuthCard(props PasswordAuthCardProps) uic.Node {
 		persistAuthSessionThen(prefsAtom, pr.ServerURL, pair, true, func(err error) {
 			submitting.Set(false)
 			if err != nil {
-				notify("Sign-in could not be saved. Please try again.", true)
+				notify(uistate.T("bv6d1.signInSaveFailedRetry"), true)
 				return
 			}
 			recoveryCode.Set("")

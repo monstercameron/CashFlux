@@ -40,6 +40,19 @@ func QuickAddHost() uic.Node {
 	return uic.CreateElement(quickAddHost, appstate.Default)
 }
 
+func quickAddCategoryIsValid(categories []domain.Category, categoryID, direction string) bool {
+	want := domain.KindExpense
+	if direction == "Income" {
+		want = domain.KindIncome
+	}
+	for _, category := range categories {
+		if category.ID == categoryID {
+			return category.Kind == want
+		}
+	}
+	return false
+}
+
 func quickAddHost(app *appstate.App) uic.Node {
 	open := uistate.UseQuickAdd()
 	if app == nil {
@@ -86,6 +99,13 @@ func quickAddForm(props quickAddFormProps) uic.Node {
 	clearedS := uic.UseState(false)
 	excludeS := uic.UseState(false)
 	categoryPickerOpen := uic.UseState(false)
+	setKind := func(next string) {
+		selected := catID.Get()
+		if selected != "" && !quickAddCategoryIsValid(app.Categories(), selected, next) {
+			catID.Set("")
+		}
+		kind.Set(next)
+	}
 
 	onReviewed := uic.UseEvent(func(e uic.Event) { needsReview.Set(e.IsChecked()) })
 	onTags := uic.UseEvent(func(v string) { tagsS.Set(v) })
@@ -102,7 +122,7 @@ func quickAddForm(props quickAddFormProps) uic.Node {
 		// "show the resulting sign before commit" option the ticket allows, and it
 		// is safe in an INPUT handler (setting state mid-save is what loses writes).
 		if strings.HasPrefix(strings.TrimSpace(v), "-") && kind.Get() != "Expense" {
-			kind.Set("Expense")
+			setKind("Expense")
 		}
 	}
 	// TX16: on blur/Enter, evaluate an arithmetic entry ("45.99*3", "(12+8)*2")
@@ -191,7 +211,7 @@ func quickAddForm(props quickAddFormProps) uic.Node {
 			return nil
 		}
 		if k := uistate.TakeQuickAddKind(); k != "" {
-			kind.Set(k)
+			setKind(k)
 		}
 		return nil
 	}, "quickadd-seed:"+strconv.FormatBool(open.Get())+":"+seedKind.Get())
@@ -293,9 +313,9 @@ func quickAddForm(props quickAddFormProps) uic.Node {
 			acctID.Set(t.AccountID)
 		}
 		if t.IsExpense() {
-			kind.Set("Expense")
+			setKind("Expense")
 		} else {
-			kind.Set("Income")
+			setKind("Income")
 		}
 		if t.AmountMinor != 0 {
 			mag := t.AmountMinor
@@ -308,7 +328,11 @@ func quickAddForm(props quickAddFormProps) uic.Node {
 		if t.Note != "" {
 			desc.Set(t.Note)
 		}
-		catID.Set(t.CategoryID)
+		if quickAddCategoryIsValid(app.Categories(), t.CategoryID, kind.Get()) {
+			catID.Set(t.CategoryID)
+		} else {
+			catID.Set("")
+		}
 	}
 
 	// Build the draft field set the "Save as template" action snapshots from the
@@ -337,28 +361,25 @@ func quickAddForm(props quickAddFormProps) uic.Node {
 	}, nil)
 
 	acctOpts := make([]uic.Node, 0, len(accounts))
-	for _, a := range accounts {
-		// C41: don't offer archived accounts as a destination for a NEW transaction —
-		// they're retired. Keep one only if it's somehow the current selection, so we
-		// never silently drop the effective account out from under the user.
-		if a.Archived && a.ID != effAcct {
-			continue
-		}
-		// C45: append a type cue ("Everyday · Checking") so two similarly-named
-		// accounts (e.g. business vs personal checking) are distinguishable in the
-		// dropdown instead of being truncated to identical names.
-		label := a.Name
-		if cue := quickAddTypeCue(a.Type); cue != "" {
-			label = a.Name + " · " + cue
-		}
-		acctOpts = append(acctOpts, Option(Value(a.ID), SelectedIf(effAcct == a.ID), label))
+	for _, option := range screens.TxnFormAccountOptions(accounts, effAcct) {
+		acctOpts = append(acctOpts, Option(Value(option.Value), SelectedIf(effAcct == option.Value), option.Label))
 	}
 	// C570: the same qualified, naturally-sorted category list Review, Edit and the
 	// split editor use — "Housing > Mortgage", not a bare "Mortgage". Quick-add is
 	// where most transactions get their category, so it was the worst place to make
 	// two same-named leaves indistinguishable.
+	categoryKind := domain.KindExpense
+	if kind.Get() == "Income" {
+		categoryKind = domain.KindIncome
+	}
+	matchingCategories := make([]domain.Category, 0, len(app.Categories()))
+	for _, category := range app.Categories() {
+		if category.Kind == categoryKind {
+			matchingCategories = append(matchingCategories, category)
+		}
+	}
 	catOpts := []uic.Node{Option(Value(""), SelectedIf(catID.Get() == ""), uistate.T("quickAdd.noCategory"))}
-	for _, o := range screens.CategoryPickOptions(app.Categories()) {
+	for _, o := range screens.CategoryPickOptions(matchingCategories) {
 		catOpts = append(catOpts, Option(Value(o.Value), SelectedIf(catID.Get() == o.Value), o.Label))
 	}
 
@@ -391,7 +412,7 @@ func quickAddForm(props quickAddFormProps) uic.Node {
 	//     so the chip reads "Use 'Groceries'" rather than an opaque ID.
 	suggestedCatID := rules.Category(app.Rules(), "", strings.TrimSpace(rawDesc))
 	var catSuggestion string
-	if suggestedCatID != "" && catID.Get() == "" {
+	if suggestedCatID != "" && catID.Get() == "" && quickAddCategoryIsValid(app.Categories(), suggestedCatID, kind.Get()) {
 		for _, c := range app.Categories() {
 			if c.ID == suggestedCatID {
 				catSuggestion = c.Name
@@ -400,7 +421,9 @@ func quickAddForm(props quickAddFormProps) uic.Node {
 		}
 	}
 	catAssist := screens.SmartFieldAssist(qaSmartSettings, "qa-cat", catSuggestion, func() {
-		catID.Set(suggestedCatID)
+		if quickAddCategoryIsValid(app.Categories(), suggestedCatID, kind.Get()) {
+			catID.Set(suggestedCatID)
+		}
 	})
 
 	// (c) C34: self-learning category assist — when no rule matched and the user
@@ -416,7 +439,8 @@ func quickAddForm(props quickAddFormProps) uic.Node {
 	}
 	var learnedCatAssist uic.Node = Fragment()
 	if suggestedCatID == "" && catID.Get() == "" {
-		if learnedCatID, ok := learnTally.ShouldSuggest(learnPayeeKey, learnThreshold); ok {
+		if learnedCatID, ok := learnTally.ShouldSuggest(learnPayeeKey, learnThreshold); ok &&
+			quickAddCategoryIsValid(app.Categories(), learnedCatID, kind.Get()) {
 			var learnedCatName string
 			for _, c := range app.Categories() {
 				if c.ID == learnedCatID {
@@ -435,8 +459,8 @@ func quickAddForm(props quickAddFormProps) uic.Node {
 	}
 
 	// TX17: entry-time budget impact. When a category and a non-zero amount are both
-	// present, show a live caption ("Leaves $142 in Dining this month · safe to spend
-	// $890"). Computed on render (the engine surface is memoized); the helper returns
+	// present, show a live caption with the amount left in that budget. Computed on render
+	// (the engine surface is memoized); the helper returns
 	// an empty fragment until both inputs exist.
 	var impactMinor int64
 	if acc, ok := accountByID(accounts, effAcct); ok {
@@ -530,13 +554,13 @@ func quickAddForm(props quickAddFormProps) uic.Node {
 			if !f.Date.IsZero() {
 				date.Set(dateutil.FormatDate(f.Date))
 			}
-			if f.CategoryID != "" {
-				catID.Set(f.CategoryID)
-			}
 			if f.Income {
-				kind.Set("Income")
+				setKind("Income")
 			} else if f.AmountMajor != "" {
-				kind.Set("Expense")
+				setKind("Expense")
+			}
+			if f.CategoryID != "" && quickAddCategoryIsValid(app.Categories(), f.CategoryID, kind.Get()) {
+				catID.Set(f.CategoryID)
 			}
 			focusField.Set(quickAddNextFocusR4F(accounts, effAcct, amount.Get(), payee.Get(), desc.Get(), f))
 		},
@@ -553,12 +577,7 @@ func quickAddForm(props quickAddFormProps) uic.Node {
 				screens.TxnNewCategoryAction("txn-add-newcat-toggle", categoryPickerOpen.Get(), toggleNewCategory)),
 			catAssist, learnedCatAssist, budgetImpact,
 			If(categoryPickerOpen.Get(), uic.CreateElement(screens.CategoryPicker, screens.CategoryPickerProps{
-				Kind: func() domain.CategoryKind {
-					if kind.Get() == "Income" {
-						return domain.KindIncome
-					}
-					return domain.KindExpense
-				}(),
+				Kind:     categoryKind,
 				Selected: catID.Get(),
 				OnPick:   func(categoryID string) { catID.Set(categoryID); categoryPickerOpen.Set(false) },
 				OnClose:  func() { categoryPickerOpen.Set(false) },
@@ -584,7 +603,7 @@ func quickAddForm(props quickAddFormProps) uic.Node {
 				transferOpen.Set(true)
 				return
 			}
-			kind.Set(v)
+			setKind(v)
 		},
 	})
 	payeeField := ui.Field(ui.FieldProps{ID: "txn-add-payee", Label: uistate.T("quickAdd.payee"),
@@ -652,16 +671,13 @@ func quickAddForm(props quickAddFormProps) uic.Node {
 		),
 	}
 	templatesSlot := Div(css.Class("txt-zone"),
-		screens.TxnTemplatePicker(onPick),
+		If(len(app.Transactions()) > 0 || len(uistate.TxnTemplates()) > 0, screens.TxnTemplatePicker(onPick)),
 		// DP-F5c: the save action sits beside the PICKER, so it is genuinely
 		// ambiguous whether it saves the template you just picked or the form you
 		// just filled. The zone's move to the bottom (TXT) fixed the ordering
 		// complaint; this fixes the remaining one, which is that the button's own
 		// label cannot say what it snapshots. One line does.
-		Div(css.Class("txt-save-row"),
-			saveTemplateBtn,
-			Span(css.Class(tw.TextFaint, tw.Text12), uistate.T("txnTemplates.saveHint")),
-		),
+		Div(css.Class("txt-save-row"), saveTemplateBtn),
 	)
 	body := Div(
 		screens.TxnSharedForm(screens.TxnFormModel{Mode: screens.TxnFormAdd, Amount: amountField, Direction: directionField,
@@ -810,15 +826,4 @@ func focusQuickAddField(id string) {
 	if !field.IsNull() && !field.IsUndefined() {
 		field.Call("focus")
 	}
-}
-
-// quickAddTypeCue returns a short human label for an account type to disambiguate
-// the quick-add account dropdown (C45), e.g. "checking" → "Checking". Empty for an
-// unset type (no cue rather than a stray separator).
-func quickAddTypeCue(t domain.AccountType) string {
-	s := strings.ReplaceAll(string(t), "_", " ")
-	if s == "" {
-		return ""
-	}
-	return strings.ToUpper(s[:1]) + s[1:]
 }

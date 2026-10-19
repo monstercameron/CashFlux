@@ -5,8 +5,11 @@
 package app
 
 import (
+	"encoding/json"
+	"fmt"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/history"
+	"github.com/monstercameron/CashFlux/internal/store"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/CashFlux/internal/undosnap"
 )
@@ -24,6 +27,8 @@ var lastUndoSnap history.Snapshot
 // to the dataset, preventing captureUndoPoint (triggered by the autosave) from
 // recording the restoration itself as a new undo step.
 var applyingUndo bool
+var undoPersistencePending bool
+var undoDurableCursor uint64
 
 var lastUndoCaptureApp *appstate.App
 var lastUndoCaptureRev uint64
@@ -37,17 +42,14 @@ func initUndo() {
 		return
 	}
 	lastUndoSnap = snap
+	undoCaptureCursor, _ = appstate.Default.Store().ChangeCursor()
+	undoPending = nil
 	lastUndoCaptureApp, lastUndoCaptureRev = appstate.Default, appstate.Default.Rev()
 }
 
-// captureUndoPoint diffs the current dataset against the last recorded snapshot
-// and pushes a new entry onto the stack when anything changed.  It is called
-// from the autosave's save() function whenever the serialized dataset changes,
-// so every mutation is automatically captured without instrumenting individual
-// write paths.
-//
-// The call is a no-op while an undo/redo application is in flight (guarded by
-// applyingUndo) so the restoration doesn't become its own undo step.
+// captureUndoPoint prepares history from changed records only. It updates the
+// live baseline and stages undo/audit changes; persistence publishes staged undo
+// points only after the strict commit succeeds. Replay does not capture itself.
 func captureUndoPoint() {
 	if applyingUndo {
 		return
@@ -55,28 +57,15 @@ func captureUndoPoint() {
 	if app := appstate.Default; app != nil && lastUndoCaptureApp == app && lastUndoCaptureRev == app.Rev() {
 		return
 	}
-	snap, err := currentSnapshot()
-	if err != nil {
-		appstate.Default.Log().Error("captureUndoPoint: snapshot failed", "err", err)
-		return
+	if app := appstate.Default; app != nil {
+		if lastUndoCaptureApp != app || lastUndoSnap == nil {
+			initUndo()
+			return
+		}
+		if err := captureIncrementalUndo(app); err != nil {
+			app.Log().Error("capture undo changes failed", "err", err)
+		}
 	}
-	cs := history.Diff(lastUndoSnap, snap)
-	// Drop derived UI state (the dashboard's placement mirror) BEFORE it reaches
-	// the undo stack + activity feed. The dashboard re-persists its layout on
-	// every render, so a captured "Added 17 dashboard layout records" entry both
-	// clutters the feed and has a self-healing Undo (the revert is instantly
-	// re-written) — it read as "Undo does nothing". Absorb such changes into the
-	// baseline instead: not undoable, not shown, no phantom entry.
-	cs = filterCapturedChanges(cs)
-	lastUndoSnap = snap // absorb everything (incl. the dropped derived changes)
-	lastUndoCaptureApp, lastUndoCaptureRev = appstate.Default, appstate.Default.Rev()
-	if cs.IsEmpty() {
-		return
-	}
-	undoStack.Push(cs)
-	// Feed the audit log so the Activity timeline shows a per-change entry (C78).
-	RecordAuditPoint(cs)
-	lastUndoCaptureRev = appstate.Default.Rev()
 }
 
 // capturedSkipCollections are dataset collections that mutate as DERIVED UI
@@ -87,8 +76,9 @@ func captureUndoPoint() {
 // into an auditEntries-only undo step — the stack's top entry then undoes
 // nothing the user can see, so the toast's "Undo" silently no-ops.
 var capturedSkipCollections = map[string]bool{
-	"placements":   true,
-	"auditEntries": true,
+	"transferOperations": true,
+	"placements":         true,
+	"auditEntries":       true,
 }
 
 // derivedKVKeys maps the dataset's scalar KV collections to the keys inside
@@ -159,49 +149,168 @@ func derivedKVOnly(cs history.ChangeSet) bool {
 
 // undoLastChange pops the most recent change from the stack, applies its
 // inverse to the dataset, and bumps the UI revision so screens re-render.
-// Returns true when an undo was performed, false when the stack is empty.
+// Returns true when an undo request was accepted; completion is asynchronous.
 func undoLastChange() bool {
-	cs, ok := undoStack.Undo()
-	if !ok {
+	if applyingUndo || (!undoPersistencePending && !undoStack.CanUndo()) {
 		return false
 	}
-	// cs from Stack.Undo() is already the inverted change set (moves backward).
-	newSnap := cs.Apply(lastUndoSnap)
-	return applySnapshot(newSnap)
+	undoLastChangeThen(false, func(err error) {
+		if err != nil {
+			uistate.PostNotice(uistate.T("bv6d1.undoTheSaveFailed"), true)
+		}
+	})
+	return true
 }
 
-// redoLastChange re-applies the most recently undone change to the dataset and
-// bumps the UI revision.  Returns true when a redo was performed.
-func redoLastChange() bool {
-	cs, ok := undoStack.Redo()
-	if !ok {
-		return false
+func undoLastChangeThen(redo bool, done func(error)) {
+	app := appstate.Default
+	if app == nil || applyingUndo {
+		done(fmt.Errorf("another change is still being saved"))
+		return
 	}
-	// cs from Stack.Redo() is the forward change set (re-applies the mutation).
-	newSnap := cs.Apply(lastUndoSnap)
-	return applySnapshot(newSnap)
-}
 
-// applySnapshot writes newSnap into the live dataset, updates lastUndoSnap,
-// and triggers a UI re-render.  Returns true on success.
-func applySnapshot(newSnap history.Snapshot) bool {
-	data, err := undosnap.ToJSON(newSnap)
+	if undoPersistencePending {
+		app.RequestDurable(func(result appstate.DurableResult) {
+			if result.Err == nil {
+				undoPersistencePending = false
+			}
+			done(result.Err)
+		})
+		return
+	}
+
+	captureUndoPoint()
+	if len(undoPending) > 0 {
+		applyingUndo = true
+		app.RequestDurable(func(result appstate.DurableResult) {
+			applyingUndo = false
+			if result.Err != nil {
+				done(result.Err)
+				return
+			}
+			undoLastChangeThen(redo, done)
+		})
+		return
+	}
+	var cs history.ChangeSet
+	var ok bool
+	if redo {
+		cs, ok = undoStack.Redo()
+	} else {
+		cs, ok = undoStack.Undo()
+	}
+	if !ok {
+		done(fmt.Errorf("there is no change to undo"))
+		return
+	}
+	restoreCursor := func() {
+		if redo {
+			_, _ = undoStack.Undo()
+		} else {
+			_, _ = undoStack.Redo()
+		}
+	}
+	records, err := undoRecordChanges(cs)
 	if err != nil {
-		appstate.Default.Log().Error("applySnapshot: ToJSON failed", "err", err)
-		// Roll the stack cursor back so the stack stays consistent.
-		return false
+		restoreCursor()
+		done(err)
+		return
 	}
 	applyingUndo = true
-	defer func() { applyingUndo = false }()
-
-	if err := appstate.Default.ImportJSON(data); err != nil {
-		appstate.Default.Log().Error("applySnapshot: ImportJSON failed", "err", err)
-		return false
+	undoPersistencePending = true
+	if err = app.Store().ReplayChangesExpected(records); err != nil {
+		applyingUndo = false
+		undoPersistencePending = false
+		restoreCursor()
+		done(err)
+		return
 	}
-	lastUndoSnap = newSnap
-	lastUndoCaptureApp, lastUndoCaptureRev = appstate.Default, appstate.Default.Rev()
-	uistate.BumpDataRevision() // re-render screens after the dataset is replaced
-	return true
+	if _, err = applyCapturedRecords(lastUndoSnap, records); err != nil {
+		applyingUndo = false
+		done(err)
+		return
+	}
+	undoCaptureCursor, _ = app.Store().ChangeCursor()
+	undoDurableCursor = undoCaptureCursor
+	lastUndoCaptureApp, lastUndoCaptureRev = app, app.Rev()
+	uistate.BumpDataRevision()
+	app.SyncTxnLinkNetting()
+	runNotifyCatchUp()
+	ids := []string{}
+	for _, record := range records {
+		if record.Table == "transactions" {
+			ids = append(ids, record.ID)
+		}
+	}
+	app.RequestTransactionsDurable(ids, func(result appstate.DurableResult) {
+		applyingUndo = false
+		if result.Err == nil {
+			undoPersistencePending = false
+		}
+		// On failure retain the live restoration and dirty capture. A second undo
+		// must not move the cursor farther until this restoration has committed.
+		done(result.Err)
+	})
+}
+
+func undoRecordChanges(cs history.ChangeSet) ([]store.RecordChange, error) {
+	tables := map[string]string{}
+	for table, collection := range recordCollections {
+		tables[collection] = table
+	}
+	var records []store.RecordChange
+	for _, c := range cs.Changes {
+		if c.Collection == "_meta:settings" {
+			records = append(records, store.RecordChange{Table: "settings", ID: "app", Before: c.Before, After: c.After})
+			continue
+		}
+		if c.Collection == "_meta:appState" || c.Collection == "_meta:settingsState" {
+			table := "appkv"
+			if c.Collection == "_meta:settingsState" {
+				table = "settingskv"
+			}
+			before, after := map[string]string{}, map[string]string{}
+			if len(c.Before) > 0 {
+				if err := json.Unmarshal(c.Before, &before); err != nil {
+					return nil, err
+				}
+			}
+			if len(c.After) > 0 {
+				if err := json.Unmarshal(c.After, &after); err != nil {
+					return nil, err
+				}
+			}
+			keys := map[string]bool{}
+			for key := range before {
+				keys[key] = true
+			}
+			for key := range after {
+				keys[key] = true
+			}
+			for key := range keys {
+				b, bok := before[key]
+				a, aok := after[key]
+				if bok == aok && a == b {
+					continue
+				}
+				record := store.RecordChange{Table: table, ID: key}
+				if bok {
+					record.Before, _ = json.Marshal(b)
+				}
+				if aok {
+					record.After, _ = json.Marshal(a)
+				}
+				records = append(records, record)
+			}
+			continue
+		}
+		table, ok := tables[c.Collection]
+		if !ok {
+			return nil, fmt.Errorf("cannot undo collection %q", c.Collection)
+		}
+		records = append(records, store.RecordChange{Table: table, ID: c.ID, Before: c.Before, After: c.After})
+	}
+	return records, nil
 }
 
 // currentSnapshot converts the shared credential-free export into an undo
@@ -212,4 +321,25 @@ func currentSnapshot() (history.Snapshot, error) {
 		return nil, err
 	}
 	return undosnap.ToSnapshot(data)
+}
+
+func requestUndoNotice(redo bool) {
+	available := undoStack.CanUndo()
+	emptyKey, successKey := "cmd.nothingToUndo", "cmd.undone"
+	if redo {
+		available = undoStack.CanRedo()
+		emptyKey, successKey = "cmd.nothingToRedo", "cmd.redone"
+	}
+	if !available && !undoPersistencePending && len(undoPending) == 0 {
+		paletteNotify(uistate.T(emptyKey), false)
+		return
+	}
+	paletteNotify("Saving undo...", false)
+	undoLastChangeThen(redo, func(err error) {
+		if err != nil {
+			paletteNotify("This undo is not saved. Keep this page open and try again.", true)
+			return
+		}
+		paletteNotify(uistate.T(successKey), false)
+	})
 }

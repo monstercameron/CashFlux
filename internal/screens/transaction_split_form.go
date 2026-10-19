@@ -47,6 +47,12 @@ func transactionSplitForm(props TransactionSplitFormProps) ui.Node {
 
 	// Consume a receipt-derived proposal once so the editor can review its lines.
 	proposedNote := ui.UseState("")
+	saving := ui.UseState(false)
+	saveLease := useTxnFormLease(props.TxnID)
+	ui.UseEffect(func() func() {
+		saving.Set(false)
+		return nil
+	}, props.TxnID)
 	seededTxn := ui.UseState(domain.Transaction{})
 	haveSeed := ui.UseState(false)
 	draftGeneration := ui.UseState(0)
@@ -97,15 +103,33 @@ func transactionSplitForm(props TransactionSplitFormProps) ui.Node {
 	}
 
 	save := func(updated domain.Transaction) {
+		if saving.Get() {
+			return
+		}
 		if err := app.PutTransaction(updated); err != nil {
 			uistate.PostNotice(err.Error(), true)
 			return
 		}
+		isCurrent := saveLease.check()
 		uistate.BumpDataRevision()
-		postTransactionSplitNotice(updated.HasSplits())
-		if props.OnDone != nil {
-			props.OnDone()
-		}
+		saving.Set(true)
+		awaitTxnSave(app, []string{updated.ID}, func(err error) {
+			if !isCurrent() {
+				if err != nil {
+					uistate.PostNotice(uistate.T("txint.splitNotSaved"), true)
+				}
+				return
+			}
+			saving.Set(false)
+			if err != nil {
+				uistate.PostNotice(uistate.T("txint.splitNotSaved"), true)
+				return
+			}
+			postTransactionSplitNotice(updated.HasSplits())
+			if props.OnDone != nil {
+				props.OnDone()
+			}
+		})
 	}
 
 	return Fragment(
@@ -121,6 +145,7 @@ func transactionSplitForm(props TransactionSplitFormProps) ui.Node {
 			Categories:   app.Categories(),
 			Members:      app.Members(),
 			OnSave:       save,
+			Pending:      saving.Get(),
 			FooterFormID: SplitModalFormID,
 			OnCancel:     props.OnDone,
 			OnReceiptSplit: func(id string) {

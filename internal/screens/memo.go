@@ -6,6 +6,7 @@ package screens
 
 import (
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -32,11 +33,29 @@ func useAfterSettle(key string) bool {
 	// leave deferred content missing on a return visit.
 	ui.UseEffect(func() func() {
 		if !ready.Get() {
-			time.AfterFunc(300*time.Millisecond, func() { ready.Set(true) })
+			return afterSettleTimer(300*time.Millisecond, func() { ready.Set(true) })
 		}
 		return nil
 	}, ready.Get())
 	return ready.Get()
+}
+
+func afterSettleTimer(delay time.Duration, settled func()) func() {
+	var mu sync.Mutex
+	active := true
+	timer := time.AfterFunc(delay, func() {
+		mu.Lock()
+		defer mu.Unlock()
+		if active {
+			settled()
+		}
+	})
+	return func() {
+		mu.Lock()
+		active = false
+		mu.Unlock()
+		timer.Stop()
+	}
 }
 
 // memoByRev caches a derived view by a string key. The key MUST include the store's

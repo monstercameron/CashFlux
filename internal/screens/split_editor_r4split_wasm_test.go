@@ -54,8 +54,14 @@ func TestR4SplitSaveValidatesAndLabelsColumns(t *testing.T) {
 			t.Errorf("column label %q = %v, want %q", id, got, want)
 		}
 	}
-	if button := byTestID(f, "button", "split-new-category-0"); button == nil || button.Text() != "New category" {
-		t.Errorf("new-category control is not visibly labelled: %v", button)
+	newCategoryOption := false
+	for _, option := range f.AllByTag("option") {
+		if option.Property("value") == splitNewCategoryOption && option.Text() == "New category…" {
+			newCategoryOption = true
+		}
+	}
+	if !newCategoryOption {
+		t.Error("category select is missing the New category… option")
 	}
 	byTestID(f, "button", "split-save").Click()
 	f.Stabilize()

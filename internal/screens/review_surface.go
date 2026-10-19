@@ -68,11 +68,7 @@ func saveRecurringLoanPaymentDismissals(dismissed map[string]bool) {
 	uistate.RequestPersist()
 }
 
-func visibleRecurringLoanPaymentSuggestions(app *appstate.App, dismissed map[string]bool) []txnclassify.PaymentSuggestion {
-	if app == nil {
-		return nil
-	}
-	all := app.RecurringPaymentSuggestions()
+func visibleRecurringLoanPaymentSuggestions(all []txnclassify.PaymentSuggestion, dismissed map[string]bool) []txnclassify.PaymentSuggestion {
 	visible := make([]txnclassify.PaymentSuggestion, 0, len(all))
 	for _, suggestion := range all {
 		if !dismissed[suggestion.TransactionID] {
@@ -80,6 +76,53 @@ func visibleRecurringLoanPaymentSuggestions(app *appstate.App, dismissed map[str
 		}
 	}
 	return visible
+}
+
+type recurringLoanPaymentSuggestionMemo struct {
+	app         *appstate.App
+	revision    uint64
+	initialized bool
+	suggestions []txnclassify.PaymentSuggestion
+}
+
+func (memo *recurringLoanPaymentSuggestionMemo) get(app *appstate.App, revision uint64, load func() []txnclassify.PaymentSuggestion) []txnclassify.PaymentSuggestion {
+	if !memo.initialized || memo.app != app || memo.revision != revision {
+		memo.app = app
+		memo.revision = revision
+		memo.suggestions = load()
+		memo.initialized = true
+	}
+	return memo.suggestions
+}
+
+func pruneRecurringLoanPaymentDismissals(dismissed map[string]bool, suggestions []txnclassify.PaymentSuggestion) (map[string]bool, bool) {
+	active := make(map[string]struct{}, len(suggestions))
+	for _, suggestion := range suggestions {
+		active[suggestion.TransactionID] = struct{}{}
+	}
+	pruned := make(map[string]bool, len(dismissed))
+	changed := false
+	for id, value := range dismissed {
+		if _, ok := active[id]; ok && value {
+			pruned[id] = true
+		} else {
+			changed = true
+		}
+	}
+	return pruned, changed
+}
+
+func reviewEmptyCopy(scope reviewscope.Scope, queueTotal int, suggestionCount int) (string, string) {
+	title, sub := uistate.T("review.emptyTitle"), uistate.T("review.emptySub")
+	if suggestionCount > 0 {
+		title = uistate.T("r4loan1.suggestionOnlyTitle")
+		sub = uistate.T("r4loan1.suggestionOnlySub")
+	}
+	if scope == reviewscope.ScopeCurrentView && queueTotal > 0 {
+		title = uistate.T("review.emptyViewTitle")
+		sub = uistate.T("review.emptyViewSub", reviewLeftPhrase(queueTotal))
+	}
+	return title, sub
 }
 
 func classifyRecurringLoanPayment(app *appstate.App, suggestion txnclassify.PaymentSuggestion) error {
@@ -108,6 +151,15 @@ func classifyRecurringLoanPayment(app *appstate.App, suggestion txnclassify.Paym
 		return fmt.Errorf("review: save loan payment transfer: %w", err)
 	}
 	return nil
+}
+
+func recordRecurringLoanPayment(app *appstate.App, suggestion txnclassify.PaymentSuggestion, done func(error)) {
+	auditview.CaptureNow()
+	if err := classifyRecurringLoanPayment(app, suggestion); err != nil {
+		done(err)
+		return
+	}
+	awaitTxnSave(app, []string{suggestion.TransactionID}, done)
 }
 
 type reviewLoanPaymentGroupProps struct {
@@ -505,25 +557,42 @@ func reviewSurfaceReady(_ struct{}) ui.Node {
 	},
 		rev, open.Get(), string(scope), ledgerEff)
 	scope = idx.Scope
-	dismissedLoanPayments := loadRecurringLoanPaymentDismissals()
-	loanPaymentSuggestions := visibleRecurringLoanPaymentSuggestions(app, dismissedLoanPayments)
+	loanPaymentMemo := ui.UseState(&recurringLoanPaymentSuggestionMemo{}).Get()
+	allLoanPaymentSuggestions := loanPaymentMemo.get(app, app.Rev(), app.RecurringPaymentSuggestions)
+	dismissalSeed := ui.UseMemo(loadRecurringLoanPaymentDismissals, app)
+	dismissalState := ui.UseState(dismissalSeed)
+	dismissedLoanPayments := dismissalState.Get()
+	ui.UseEffect(func() func() {
+		pruned, changed := pruneRecurringLoanPaymentDismissals(dismissalState.Get(), allLoanPaymentSuggestions)
+		if changed {
+			dismissalState.Set(pruned)
+			saveRecurringLoanPaymentDismissals(pruned)
+		}
+		return nil
+	}, app, app.Rev())
+	loanPaymentSuggestions := visibleRecurringLoanPaymentSuggestions(allLoanPaymentSuggestions, dismissedLoanPayments)
 	recordLoanPayment := func(suggestion txnclassify.PaymentSuggestion) {
 		// The existing single-row transfer conversion path updates the imported
 		// transaction in place; it does not invent a second leg from an expense
 		// that may already be represented in the liability's own feed.
-		auditview.CaptureNow()
-		if err := classifyRecurringLoanPayment(app, suggestion); err != nil {
-			uistate.PostNotice(err.Error(), true)
-			return
-		}
-		uistate.BumpDataRevision()
-		uistate.RequestPersist()
-		uistate.PostUndoable(uistate.T("r4loan1.recordedUndo"))
+		recordRecurringLoanPayment(app, suggestion, func(err error) {
+			if err != nil {
+				uistate.PostNotice(uistate.T("tc3w4.changesNotSaved"), true)
+				return
+			}
+			uistate.BumpDataRevision()
+			uistate.PostUndoable(uistate.T("r4loan1.recordedUndo"))
+		})
 	}
 	dismissLoanPayment := func(transactionID string) {
-		dismissedLoanPayments[transactionID] = true
-		saveRecurringLoanPaymentDismissals(dismissedLoanPayments)
-		uistate.BumpDataRevision()
+		active := make(map[string]bool, len(dismissedLoanPayments)+1)
+		for id, value := range dismissedLoanPayments {
+			active[id] = value
+		}
+		active[transactionID] = true
+		pruned, _ := pruneRecurringLoanPaymentDismissals(active, allLoanPaymentSuggestions)
+		dismissalState.Set(pruned)
+		saveRecurringLoanPaymentDismissals(pruned)
 	}
 	loanPaymentGroup := ui.CreateElement(reviewLoanPaymentGroup, reviewLoanPaymentGroupProps{
 		Suggestions: loanPaymentSuggestions, OnRecord: recordLoanPayment, OnDismiss: dismissLoanPayment,
@@ -992,19 +1061,11 @@ func reviewSurfaceReady(_ struct{}) ui.Node {
 		OnSelect: setScope,
 	})
 
-	if idx.Total == 0 && len(loanPaymentSuggestions) == 0 {
+	if idx.Total == 0 {
 		// An empty SCOPE is not an empty queue. Saying "all caught up" while the
 		// entire-queue count sits at 251 is the app congratulating the user for a
 		// filter they may not remember setting.
-		title, sub := uistate.T("review.emptyTitle"), uistate.T("review.emptySub")
-		if len(loanPaymentSuggestions) > 0 {
-			title = uistate.T("r4loan1.suggestionOnlyTitle")
-			sub = uistate.T("r4loan1.suggestionOnlySub")
-		}
-		if scope == reviewscope.ScopeCurrentView && idx.QueueTotal > 0 {
-			title = uistate.T("review.emptyViewTitle")
-			sub = uistate.T("review.emptyViewSub", reviewLeftPhrase(idx.QueueTotal))
-		}
+		title, sub := reviewEmptyCopy(scope, idx.QueueTotal, len(loanPaymentSuggestions))
 		return Div(css.Class("rvs rvs-done"), Attr("data-testid", "review-inbox"),
 			scopeStrip,
 			loanPaymentGroup,
@@ -1016,9 +1077,9 @@ func reviewSurfaceReady(_ struct{}) ui.Node {
 	}
 
 	isBulk := sess.Mode == reviewModeBulk
-	kbdHint := uistate.T("review.keyboardHintSingle")
+	kbdHint := uistate.T("review.keyboardHintSinglePlain")
 	if isBulk {
-		kbdHint = uistate.T("review.keyboardHintBulk")
+		kbdHint = uistate.T("review.keyboardHintBulkPlain")
 	}
 	head := Div(css.Class("rvs-head"),
 		uiw.Segmented(uiw.SegmentedProps{
@@ -1030,7 +1091,7 @@ func reviewSurfaceReady(_ struct{}) ui.Node {
 			},
 			OnSelect: setMode,
 		}),
-		Span(css.Class("rvs-kbd"), Attr("data-testid", "review-kbd"), kbdHint),
+		reviewKeyboardDisclosure(kbdHint),
 	)
 	_, _ = onSingle, onBulk
 
@@ -1091,6 +1152,13 @@ func reviewSurfaceReady(_ struct{}) ui.Node {
 		Div(css.Class("rvs-body"), body),
 		Div(css.Class("rvs-foot modal-foot"), foot),
 		pick,
+	)
+}
+
+func reviewKeyboardDisclosure(hint string) ui.Node {
+	return Details(css.Class("rvs-kbd"), Attr("data-testid", "review-kbd"),
+		Summary(uistate.T("shortcuts.title")),
+		Span(Attr("data-testid", "review-kbd-hint"), hint),
 	)
 }
 
@@ -1301,7 +1369,7 @@ func reviewBulkView(
 			Div(css.Class("rvs-tier-head"),
 				Span(css.Class("rvs-tier-mark")),
 				Span(css.Class("rvs-tier-name"), tierLabel(t)),
-				Span(css.Class("rvs-tier-count"), uistate.T("review.tierCount", plural(m, "merchant"), plural(c, "charge"))),
+				Span(css.Class("rvs-tier-count"), uistate.T("review.tierCountPlain", plural(m, "merchant"), plural(c, "charge"))),
 				Span(css.Class("rvs-tier-act"), act),
 			),
 			Div(css.Class("rvs-groups"),
@@ -1343,9 +1411,13 @@ func reviewBulkView(
 	sub := uistate.T("review.pickHint")
 	confirm := uistate.T("review.confirm")
 	if selMerchants > 0 {
-		label = uistate.T("review.selCount", plural(selMerchants, "merchant"), plural(selCharges, "charge"))
-		sub = uistate.T("review.undoStays", "")
+		label = uistate.T("review.selectionCountPlain", plural(selMerchants, "merchant"), plural(selCharges, "charge"))
+		sub = uistate.T("review.undoAvailable")
 		confirm = uistate.T("review.confirmN", selCharges)
+	}
+	var disabled any
+	if selMerchants == 0 {
+		disabled = Attr("disabled", "disabled")
 	}
 	foot := Fragment(
 		Span(css.Class("rvs-foot-n"), Attr("data-testid", "review-selection"),
@@ -1357,9 +1429,11 @@ func reviewBulkView(
 				Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "review-makerule"),
 					OnClick(makeRules), uistate.T("review.makeRule"))),
 			Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "review-clear"),
+				disabled,
 				OnClick(clearSel), uistate.T("review.clear")),
 			Button(css.Class("btn btn-primary btn-sm"), Type("button"),
-				Attr("data-testid", "review-apply"), OnClick(applySel), confirm),
+				Attr("data-testid", "review-apply"), disabled,
+				OnClick(applySel), confirm),
 		),
 	)
 	return body, foot

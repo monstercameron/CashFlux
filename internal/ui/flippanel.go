@@ -191,14 +191,8 @@ func flipPanel(props FlipPanelProps) uic.Node {
 					}
 				}
 			}
-			target := fs[0]
-			for _, el := range fs {
-				if el.Call("hasAttribute", "autofocus").Bool() {
-					target = el
-					break
-				}
-			}
-			target.Call("focus")
+			target := flipPanelInitialFocusTarget(fs)
+			target.Call("focus", map[string]any{"preventScroll": true})
 			return true
 		}
 		if !tryFocus() {
@@ -367,6 +361,7 @@ func flipPanel(props FlipPanelProps) uic.Node {
 	if saveTestID == "" {
 		saveTestID = "flip-save"
 	}
+	saveClick := OnClick(save)
 	cancelArgs := []any{css.Class("set-btn cancel"), Type("button"), OnClick(cancel), uistate.T("action.cancel")}
 	if props.CancelTestID != "" {
 		cancelArgs = append(cancelArgs, Attr("data-testid", props.CancelTestID))
@@ -393,10 +388,10 @@ func flipPanel(props FlipPanelProps) uic.Node {
 		// GM2-10: use .set-btn.close (neutral dismiss styling) not .set-btn.save
 		// (green/primary styling) — so the button reads as "dismiss" not "submit".
 		foot = Div(css.Class("set-foot"),
-			Button(css.Class("set-btn close"), Type("button"), OnClick(save), uistate.T("action.close")),
+			Button(css.Class("set-btn close"), Type("button"), saveClick, uistate.T("action.close")),
 		)
 	default:
-		saveArgs := []any{css.Class("set-btn save"), Type("button"), Attr("data-testid", saveTestID), OnClick(save), saveLabel}
+		saveArgs := []any{css.Class("set-btn save"), Type("button"), Attr("data-testid", saveTestID), saveClick, saveLabel}
 		if props.SaveDisabled {
 			saveArgs = append(saveArgs, Attr("disabled", ""), Attr("aria-disabled", "true"))
 		}
@@ -438,10 +433,7 @@ func flipPanel(props FlipPanelProps) uic.Node {
 					Div(css.Class("set-h"),
 						Span(Style(map[string]string{"width": "1.5rem"})), // balance the close button so the title centers
 						H3(Attr("id", titleID), props.Title),
-						// GM4-17: tabindex="-1" removes the close button from the Tab order so
-						// initial focus lands on the first form control (a setting), not the ×
-						// button. The button remains fully mouse/click accessible.
-						Button(css.Class("set-close"), Type("button"), Attr("title", uistate.T("action.close")), Attr("tabindex", "-1"),
+						Button(css.Class("set-close"), Type("button"), Attr("title", uistate.T("action.close")), Attr("aria-label", uistate.T("action.close")),
 							OnClick(func() {
 								if onClose != nil {
 									onClose()
@@ -456,6 +448,24 @@ func flipPanel(props FlipPanelProps) uic.Node {
 			),
 		),
 	)
+}
+
+func flipPanelInitialFocusTarget(focusables []js.Value) js.Value {
+	if len(focusables) == 0 {
+		return js.Null()
+	}
+	for _, el := range focusables {
+		if el.Call("hasAttribute", "autofocus").Bool() {
+			return el
+		}
+	}
+	for _, el := range focusables {
+		switch strings.ToUpper(el.Get("tagName").String()) {
+		case "INPUT", "SELECT", "TEXTAREA":
+			return el
+		}
+	}
+	return focusables[0]
 }
 
 // focusRestoreTarget returns the original opener when it remains in the page.

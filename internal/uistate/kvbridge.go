@@ -5,11 +5,15 @@
 package uistate
 
 import (
+	"crypto/sha256"
+	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/browserstore"
 	"github.com/monstercameron/CashFlux/internal/debounce"
+	"github.com/monstercameron/CashFlux/internal/workspace"
 )
 
 // This bridge routes app/UI persistence through the SQLite-backed key-value stores
@@ -45,6 +49,9 @@ import (
 //     These are scoped to this device/authenticator and must not travel in a shared blob.
 //   - Sync identity/transport — "cashflux:sync-device-id/status/queue". Per-device
 //     transport bookkeeping, not user content; sharing it across clients is meaningless.
+//   - Device presentation — budget density and rail collapse choices. Independent,
+//     encrypted records with frozen server/account/workspace keys; a chrome click
+//     does not mutate, export or sync the household dataset.
 //
 // Two more categories are NOT exemptions — the state DOES live in the dataset, with a
 // browser-store copy kept only as a fast device-local cache:
@@ -58,6 +65,9 @@ import (
 // kvGet returns the persisted value for key (empty when absent), preferring SQLite
 // and migrating a legacy browser-store value into it on first read.
 func kvGet(key string) string {
+	if isChromePreference(key) {
+		return chromePreferenceGet(key)
+	}
 	if app := appstate.Default; app != nil {
 		if v, ok := app.GetKV(key); ok {
 			return v
@@ -98,6 +108,9 @@ func KVDelete(key string)     { kvDelete(key) }
 // SQLite dataset's PRESERVED settings KV (theme, fonts, language, prefs, muzak, …):
 // in SQLite like everything else, but survives a wipe.
 func SettingKVGet(key string) string {
+	if isChromePreference(key) {
+		return chromePreferenceGet(key)
+	}
 	if app := appstate.Default; app != nil {
 		if v, ok := app.GetSettingKV(key); ok {
 			return v
@@ -113,6 +126,10 @@ func SettingKVGet(key string) string {
 }
 
 func SettingKVSet(key, val string) {
+	if isChromePreference(key) {
+		chromePreferenceSet(key, val)
+		return
+	}
 	if app := appstate.Default; app != nil {
 		_ = app.SetSettingKV(key, val)
 		// A SetSettingKV write only lands in the in-memory SQLite dataset; it reaches
@@ -190,6 +207,10 @@ func flushSettingsPersist() {
 // immediately and durable storage on the debounce, the autosave tick, or the
 // pagehide flush — all of which already exist.
 func SettingKVSetDeferred(key, val string) {
+	if isChromePreference(key) {
+		chromePreferenceSet(key, val)
+		return
+	}
 	if app := appstate.Default; app != nil {
 		_ = app.SetSettingKV(key, val)
 		moreSinceLeadingPersist = true
@@ -197,6 +218,139 @@ func SettingKVSetDeferred(key, val string) {
 		return
 	}
 	browserstore.Set(key, val)
+}
+
+// Chrome choices are intentionally outside portable household data. Their keys
+// include the page's frozen server/account/workspace tuple even in legacy profiles
+// whose physical IndexedDB database is shared by several accounts.
+func isChromePreference(key string) bool {
+	return key == budgetDensityStoreID || key == "cashflux:rail-collapsed" || key == "cashflux:rail-tool-groups"
+}
+
+type chromePreference struct {
+	app            *appstate.App
+	value          string
+	version, saved uint64
+	running        bool
+	err            error
+	waiters        []func(error)
+}
+
+var chromePreferences = map[string]*chromePreference{}
+var chromeScopeApp *appstate.App
+var chromeScope string
+
+func chromePreferenceKey(key string) string {
+	if chromeScope == "" || chromeScopeApp != appstate.Default {
+		var registry workspace.Registry
+		_ = json.Unmarshal([]byte(browserstore.GetString("cashflux:workspaces")), &registry)
+		if registry.ActiveID == "" {
+			registry.ActiveID = "default"
+		}
+		tuple, _ := json.Marshal([]string{LoadPrefs().ServerURL, browserstore.GetString("cashflux:auth:user-id"), registry.ActiveID})
+		chromeScope = fmt.Sprintf("%x", sha256.Sum256(tuple))
+		chromeScopeApp = appstate.Default
+	}
+	return "cashflux:ui-preference:" + chromeScope + ":" + key
+}
+
+func chromePreferenceGet(key string) string {
+	storageKey := chromePreferenceKey(key)
+	if pending := chromePreferences[storageKey]; pending != nil && pending.app == appstate.Default {
+		return pending.value
+	}
+	if v, ok := browserstore.Get(storageKey); ok {
+		return v
+	}
+	// Read old dataset preferences without mutating SQL during render. Keep the
+	// source intact until an explicit choice supersedes it in the scoped store.
+	if app := appstate.Default; app != nil {
+		if v, ok := app.GetSettingKV(key); ok {
+			return v
+		}
+		if v, ok := app.GetKV(key); ok {
+			return v
+		}
+	}
+	return browserstore.GetString(key)
+}
+
+func chromePreferenceSet(key, value string) {
+	storageKey := chromePreferenceKey(key)
+	p := chromePreferences[storageKey]
+	if p == nil || p.app != appstate.Default {
+		p = &chromePreference{app: appstate.Default}
+		chromePreferences[storageKey] = p
+	}
+	p.value, p.version = value, p.version+1
+	// A timer, rather than a goroutine alone, yields the JS event handler.
+	time.AfterFunc(time.Millisecond, func() { writeChromePreference(storageKey, p) })
+}
+
+func writeChromePreference(key string, p *chromePreference) {
+	if p.running || p.saved == p.version || p.app != appstate.Default || chromePreferences[key] != p {
+		return
+	}
+	p.running = true
+	version, value := p.version, p.value
+	browserstore.SetSecure(key, value, func(err error) {
+		p.running, p.err = false, err
+		if p.app != appstate.Default || chromePreferences[key] != p {
+			return
+		}
+		if err != nil {
+			ReportPersistFailure(key, func() { time.AfterFunc(time.Millisecond, func() { writeChromePreference(key, p) }) })
+		} else {
+			p.saved = version
+			if p.saved != p.version {
+				time.AfterFunc(time.Millisecond, func() { writeChromePreference(key, p) })
+				return
+			}
+			ClearPersistFailure(key)
+		}
+		waiters := p.waiters
+		p.waiters = nil
+		for _, done := range waiters {
+			done(err)
+		}
+	})
+}
+
+func retryChromePreferences() {
+	for key, p := range chromePreferences {
+		if p.app == appstate.Default && p.err != nil && !p.running {
+			p.err = nil
+			time.AfterFunc(time.Millisecond, func() { writeChromePreference(key, p) })
+		}
+	}
+}
+
+// RequestPreferenceDurable waits for current presentation writes. The feedback
+// surface combines this result with dataset durability before reporting success.
+func RequestPreferenceDurable(done func(error)) {
+	remaining := 1
+	var firstError error
+	finish := func(err error) {
+		if firstError == nil {
+			firstError = err
+		}
+		remaining--
+		if remaining == 0 {
+			done(firstError)
+		}
+	}
+	for _, p := range chromePreferences {
+		if p.app != appstate.Default || p.saved == p.version {
+			continue
+		}
+		remaining++
+		if p.err != nil && !p.running {
+			finish(p.err)
+		} else {
+			p.waiters = append(p.waiters, finish)
+		}
+	}
+	finish(nil)
 }
 
 // trailingSettingsPersist writes the tail of a burst, and nothing at all when the

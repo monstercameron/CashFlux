@@ -29,7 +29,7 @@ func TestSplitLineNewCategoryCreatesIntoOpeningLine(t *testing.T) {
 	f.Render(ui.CreateElement(SplitEditor, splitEditorProps{
 		Txn: txn, Categories: app.Categories(), OnSave: func(updated domain.Transaction) { saved = updated },
 	}))
-	byTestID(f, "button", "split-new-category-1").Click()
+	byTestID(f, "select", "split-cat-1").Change(splitNewCategoryOption)
 	f.Stabilize()
 	if byTestID(f, "div", "catpick") == nil {
 		t.Fatal("split line New category did not open CategoryPicker")

@@ -74,17 +74,9 @@ func wireKeyboardShortcuts() {
 		if (evBool(e, "metaKey") || evBool(e, "ctrlKey")) && !evBool(e, "altKey") && e.Get("code").String() == "KeyZ" {
 			e.Call("preventDefault")
 			if evBool(e, "shiftKey") {
-				if redoLastChange() {
-					paletteNotify(uistate.T("cmd.redone"), false)
-				} else {
-					paletteNotify(uistate.T("cmd.nothingToRedo"), false)
-				}
+				requestUndoNotice(true)
 			} else {
-				if undoLastChange() {
-					paletteNotify(uistate.T("cmd.undone"), false)
-				} else {
-					paletteNotify(uistate.T("cmd.nothingToUndo"), false)
-				}
+				requestUndoNotice(false)
 			}
 			return nil
 		}
@@ -354,18 +346,10 @@ func buildPaletteCommands() []paletteCmd {
 		// of returning nothing. Routes to /help (topics, what's-new, bug-report path).
 		paletteCmd{label: uistate.T("nav.help"), keywords: []string{"help", "support", "feedback", "bug", "report", "contact", "docs", "documentation", "faq", "guide"}, run: func() { uistate.NavigateTo("/help") }},
 		paletteCmd{label: uistate.T("cmd.undo"), keywords: []string{"undo", "revert", "back"}, run: func() {
-			if undoLastChange() {
-				paletteNotify(uistate.T("cmd.undone"), false)
-			} else {
-				paletteNotify(uistate.T("cmd.nothingToUndo"), false)
-			}
+			requestUndoNotice(false)
 		}},
 		paletteCmd{label: uistate.T("cmd.redo"), keywords: []string{"redo", "forward", "repeat"}, run: func() {
-			if redoLastChange() {
-				paletteNotify(uistate.T("cmd.redone"), false)
-			} else {
-				paletteNotify(uistate.T("cmd.nothingToRedo"), false)
-			}
+			requestUndoNotice(true)
 		}},
 	)
 	// Workspace management straight from the palette.

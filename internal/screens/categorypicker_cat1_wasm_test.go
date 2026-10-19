@@ -44,10 +44,10 @@ func TestEditCategoryPickerCreatesAndSelectsSubcategoryCAT1(t *testing.T) {
 	if selectNode == nil || !strings.Contains(selectNode.Text(), "Pay") || strings.Contains(selectNode.Text(), "Groceries") || strings.Contains(selectNode.Text(), "Utilities") {
 		t.Fatalf("income options should refresh after switching direction: %q", selectNode.Text())
 	}
-	findByTestID(f, "button", "txn-edit-newcat-toggle").Click()
+	selectNode.Change(txnEditNewCategoryOption)
 	f.Stabilize()
 	if findByTestID(f, "div", "catpick") == nil {
-		t.Fatal("Edit + did not open CategoryPicker")
+		t.Fatal("New category option did not open CategoryPicker")
 	}
 	findByTestID(f, "input", "catpick-search").Input("Side work")
 	f.Stabilize()

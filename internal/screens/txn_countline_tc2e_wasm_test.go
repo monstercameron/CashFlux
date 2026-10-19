@@ -30,8 +30,8 @@ func TestTC2ECountLineReportsRowsThatCouldNotBeCompared(t *testing.T) {
 	if got := f.Text(); !strings.Contains(got, "2 rows can't be compared (no EUR rate)") {
 		t.Fatalf("count line = %q, want conversion issue summary", got)
 	}
-	if node := byTestID(f, "span", "txn-count-conversion-issues"); node == nil {
-		t.Fatal("conversion issue summary is missing its test id")
+	if byTestID(f, "div", "txn-count-secondary") != nil {
+		t.Fatal("countline still renders secondary facts inside the summary band")
 	}
 }
 

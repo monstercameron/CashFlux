@@ -23,6 +23,7 @@ func TestBULK2BulkBarKeepsPrimaryControlsInlineAndNamesActionsOnce(t *testing.T)
 		t.Fatal(err)
 	}
 	f := render.New(t)
+	defer f.Cleanup()
 	f.Render(ui.CreateElement(txnBulkBarSelectionHarness, app))
 
 	var bar *render.QueryNode
@@ -41,10 +42,13 @@ func TestBULK2BulkBarKeepsPrimaryControlsInlineAndNamesActionsOnce(t *testing.T)
 	if !strings.Contains(bar.Text(), "Owners") {
 		t.Error("Owners picker label is missing from the bulk action row")
 	}
-	for _, id := range []string{"bulk-category-picker", "bulk-owner-picker", "bulk-apply-owners", "bulk-mark-reviewed", "bulk-delete", "bulk-more-actions", "bulk-clear-selection"} {
+	for _, id := range []string{"bulk-category-picker", "bulk-owner-picker", "bulk-mark-reviewed", "bulk-delete", "bulk-more-actions", "bulk-clear-selection"} {
 		if bulk2ByTestID(f, "button", id) == nil {
 			t.Errorf("primary bulk control %q is missing", id)
 		}
+	}
+	if bulk2ByTestID(f, "button", "bulk-apply-owners") != nil {
+		t.Error("owner choices apply when the picker closes; a separate Apply control must not render")
 	}
 	for _, id := range []string{"bulk-mark-reviewed", "bulk-delete"} {
 		button := bulk2ByTestID(f, "button", id)

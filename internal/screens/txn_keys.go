@@ -63,6 +63,62 @@ func txnShortcutConsumedWithoutAction(editable, dialogOpen bool, key string) boo
 	return !editable && dialogOpen && txnActionForKey(key) != txnKeyNone
 }
 
+func txnRowKeyTargetIgnored(tag string) bool {
+	switch strings.ToUpper(tag) {
+	case "BUTTON", "INPUT", "SELECT":
+		return true
+	default:
+		return false
+	}
+}
+
+func handleTxnTableShortcut(key string, target, doc js.Value, openCategory func(string), openHelp func()) bool {
+	if key != "c" && key != "?" || target.IsNull() || target.IsUndefined() {
+		return false
+	}
+	if tag := target.Get("tagName"); !tag.IsNull() && !tag.IsUndefined() && txnRowKeyTargetIgnored(tag.String()) {
+		return false
+	}
+	if target.Get("closest").Type() == js.TypeFunction {
+		interactive := target.Call("closest", "button,input,select")
+		if !interactive.IsNull() && !interactive.IsUndefined() {
+			return false
+		}
+	}
+	row := target.Call("closest", ".txn-table tbody tr.row")
+	if row.IsNull() || row.IsUndefined() {
+		return false
+	}
+	if key == "?" {
+		if openHelp == nil {
+			return false
+		}
+		openHelp()
+		return true
+	}
+	testID := row.Call("getAttribute", "data-testid")
+	if testID.IsNull() || testID.IsUndefined() {
+		return false
+	}
+	id, ok := txnRowID(testID.String())
+	if !ok || openCategory == nil {
+		return false
+	}
+	openCategory(id)
+	scheduleTxnFocus(doc, "input[data-testid='catpick-search']")
+	return true
+}
+
+func focusTxnOpener(opener js.Value) {
+	if opener.IsNull() || opener.IsUndefined() || opener.Get("focus").Type() != js.TypeFunction {
+		return
+	}
+	if connected := opener.Get("isConnected"); !connected.IsUndefined() && !connected.Bool() {
+		return
+	}
+	opener.Call("focus", map[string]any{"preventScroll": true})
+}
+
 func txnHelpKeyCloses(key string, guideOpen bool) bool {
 	return key == "?" && guideOpen
 }

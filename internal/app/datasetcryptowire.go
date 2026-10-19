@@ -216,6 +216,11 @@ func hydrateFromPasscodeThen(passcode string, done func(error)) {
 		// clearing the pending envelope, which otherwise releases the autosave guard.
 		activePasscode = passcode
 		hydrationSucceeded = true
+		if err := replayDurableDatasetRecords(app, pendingEnvelopeRaw); err != nil {
+			quarantinePendingEnvelope("Saved changes could not be recovered: " + err.Error())
+			done(err)
+			return
+		}
 		hadLocalDataset = true
 		pendingEnvelopeRaw = "" // releases the autosave and unblocks normal operation
 		// Re-seed the PREFS ATOM from the just-imported settings KV. The lock screen
@@ -288,6 +293,17 @@ func prepareSecureLockTransition(passcode string, config applock.Config, discard
 			t.Values[key] = raw
 		}
 	}
+	dataset, preconditions, err := materializeLocalDataset()
+	if err != nil {
+		return nil, fmt.Errorf("prepare complete dataset for App Lock: %w", err)
+	}
+	for key, raw := range preconditions {
+		t.Expected[key] = raw
+		if key == datasetOwnerKey || key == workspacesKey {
+			t.Values[key] = raw
+		}
+	}
+	t.Values[datasetStoreKey] = dataset
 	// The legacy vault and dataset still have an inner passcode envelope.
 	// Prepare replacements in memory; never expose a half-rekeyed vault.
 	if raw := t.Values[credVaultStoreKey]; raw != "" && !discardVault {
@@ -312,20 +328,12 @@ func prepareSecureLockTransition(passcode string, config applock.Config, discard
 	if discardVault {
 		t.Values[credVaultStoreKey] = ""
 	}
-	if raw := t.Values[datasetStoreKey]; cryptobox.IsEnvelope([]byte(raw)) {
-		plain, err := decryptEnvelopeSync([]byte(raw), activePasscode)
+	if cryptobox.IsEnvelope([]byte(t.Expected[datasetStoreKey])) && passcode != "" {
+		next, err := encryptDatasetSync([]byte(dataset), passcode)
 		if err != nil {
-			return nil, fmt.Errorf("prepare legacy dataset: %w", err)
+			return nil, err
 		}
-		if passcode == "" {
-			t.Values[datasetStoreKey] = string(plain)
-		} else {
-			next, err := encryptDatasetSync(plain, passcode)
-			if err != nil {
-				return nil, err
-			}
-			t.Values[datasetStoreKey] = string(next)
-		}
+		t.Values[datasetStoreKey] = string(next)
 	}
 	if raw := t.Values[aiCredentialStoreKey]; raw != "" {
 		record, err := aicred.Parse([]byte(raw))
@@ -362,6 +370,9 @@ func prepareSecureLockTransition(passcode string, config applock.Config, discard
 	for _, key := range []string{webauthnCredKey, webauthnSaltKey, webauthnVaultKey} {
 		t.Values[key] = ""
 	}
+	// The re-keyed checkpoint supersedes its journal atomically. A journal-only
+	// edit in another tab must reject this transition just like a changed vault.
+	t.Values, _ = prepareWorkspaceCommit(t.Values, preconditions[datasetGenKey])
 	return t, nil
 }
 
@@ -388,6 +399,7 @@ func commitSecureLockTransition(t *secureLockTransition, journal string) error {
 	if err := awaitSecureAction(func(done func(error)) { browserstore.SetSecureBatch(t.Values, t.Expected, done) }); err != nil {
 		return err
 	}
+	datasetMyGen = t.Values[datasetGenKey]
 	activePasscode = t.Passcode
 	lockedPasskey = [3]string{}
 	clearDatasetKeyCache()
@@ -444,8 +456,29 @@ func recoverSecureLockTransition() (string, bool, error) {
 			return "", false, errors.New("pending App Lock preconditions are incomplete")
 		}
 	}
-	if len(t.Values) != 7 || len(t.Expected) != 7 {
-		return "", false, errors.New("pending App Lock data has unexpected records")
+	if len(t.Values) == 7 && len(t.Expected) == 7 {
+		// A transition prepared by a pre-journal bundle is safe only without a
+		// journal. Never let its checkpoint discard newer record-only writes.
+		head, _, err := browserstore.GetSecure(datasetHeadKey)
+		if err != nil || head != "" {
+			return "", false, errors.New("the older App Lock change needs dataset recovery")
+		}
+		t.Values, _ = prepareWorkspaceCommit(t.Values, readDatasetGen())
+		t.Expected[datasetGenKey], t.Expected[datasetHeadKey] = readDatasetGen(), ""
+	} else {
+		for _, key := range []string{datasetHeadKey, datasetGenKey} {
+			if _, ok := t.Values[key]; !ok {
+				return "", false, errors.New("pending App Lock checkpoint is incomplete")
+			}
+		}
+		for _, key := range []string{datasetHeadKey, datasetGenKey, datasetOwnerKey, workspacesKey} {
+			if _, ok := t.Expected[key]; !ok {
+				return "", false, errors.New("pending App Lock checkpoint preconditions are incomplete")
+			}
+		}
+		if len(t.Values) != 11 || len(t.Expected) != 11 || t.Values[datasetHeadKey] != "" || t.Values[datasetGenKey] == "" {
+			return "", false, errors.New("pending App Lock data has unexpected records")
+		}
 	}
 	if err := commitSecureLockTransition(&t, raw); err != nil {
 		return "", false, err
