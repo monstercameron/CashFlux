@@ -13,14 +13,146 @@ package txncalendar
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
 )
+
+// Cashflow contains converted cash-flow figures for a day or calendar week.
+// Spent, Income, and Moved are non-negative minor-unit amounts in the base
+// currency; Count includes every transaction, including transfers.
+type Cashflow struct {
+	Spent  int64
+	Income int64
+	Moved  int64
+	Count  int
+	Net    int64
+}
+
+// CashflowCell pairs a calendar day with its cash-flow figures and recurring
+// markers. Padding days have zero figures.
+type CashflowCell struct {
+	Date     time.Time
+	InMonth  bool
+	Cashflow Cashflow
+	Ghosts   []Ghost
+}
+
+// CashflowWeek contains seven calendar cells and their checked total.
+type CashflowWeek struct {
+	Days  []CashflowCell
+	Total Cashflow
+}
+
+// RateIssue identifies a transaction whose amount could not be converted to
+// the selected base currency. Its count remains represented in the calendar.
+type RateIssue struct {
+	TransactionID string
+	Date          time.Time
+	Currency      string
+	Err           error
+}
+
+// CashflowMonth is the month calendar projection. RateIssues makes any partial
+// subtotal explicit instead of silently dropping unconvertible transactions.
+type CashflowMonth struct {
+	Weeks      []CashflowWeek
+	RateIssues []RateIssue
+}
+
+// MonthCashflow folds transactions once into day cash-flow cells, then derives
+// week totals from those cells. Transfers contribute to Moved, never Spent or
+// Income. Amounts use rates.Base and every sum is checked for overflow.
+func MonthCashflow(anchor time.Time, weekStart time.Weekday, txns []domain.Transaction, recurring []domain.Recurring, rates currency.Rates) (CashflowMonth, error) {
+	monthStart := dateutil.MonthStart(anchor)
+	monthEnd := dateutil.AddMonths(monthStart, 1)
+	grid := month(anchor, weekStart, nil, recurring, nil)
+	byDay := make(map[string]Cashflow, len(txns))
+	result := CashflowMonth{Weeks: make([]CashflowWeek, len(grid))}
+	for _, txn := range txns {
+		if txn.Date.Before(monthStart) || !txn.Date.Before(monthEnd) {
+			continue
+		}
+		key := DayKey(txn.Date)
+		day := byDay[key]
+		if day.Count == math.MaxInt {
+			return CashflowMonth{}, fmt.Errorf("count transactions on %s: %w", key, money.ErrOverflow)
+		}
+		day.Count++
+		converted, err := rates.Convert(txn.Amount, rates.Base)
+		if err != nil {
+			result.RateIssues = append(result.RateIssues, RateIssue{TransactionID: txn.ID, Date: txn.Date, Currency: txn.Amount.Currency, Err: err})
+			byDay[key] = day
+			continue
+		}
+		var amount int64
+		switch {
+		case txn.IsTransfer():
+			amount, err = money.Abs(converted.Amount)
+			if err == nil {
+				day.Moved, err = money.Add(day.Moved, amount)
+			}
+		case converted.Amount < 0:
+			amount, err = money.Neg(converted.Amount)
+			if err == nil {
+				day.Spent, err = money.Add(day.Spent, amount)
+			}
+		case converted.Amount > 0:
+			day.Income, err = money.Add(day.Income, converted.Amount)
+		}
+		if err != nil {
+			return CashflowMonth{}, fmt.Errorf("sum transaction %q on %s: %w", txn.ID, key, err)
+		}
+		byDay[key] = day
+	}
+	for wi, week := range grid {
+		out := CashflowWeek{Days: make([]CashflowCell, len(week))}
+		for di, cell := range week {
+			cash := Cashflow{}
+			if cell.InMonth {
+				cash = byDay[DayKey(cell.Date)]
+				var err error
+				cash.Net, err = money.Sub(cash.Income, cash.Spent)
+				if err != nil {
+					return CashflowMonth{}, fmt.Errorf("calculate net cash flow on %s: %w", DayKey(cell.Date), err)
+				}
+			}
+			out.Days[di] = CashflowCell{Date: cell.Date, InMonth: cell.InMonth, Cashflow: cash, Ghosts: cell.Ghosts}
+			if err := addCashflow(&out.Total, cash); err != nil {
+				return CashflowMonth{}, fmt.Errorf("sum week %s: %w", DayKey(week[0].Date), err)
+			}
+		}
+		result.Weeks[wi] = out
+	}
+	return result, nil
+}
+
+func addCashflow(total *Cashflow, day Cashflow) error {
+	var err error
+	if total.Spent, err = money.Add(total.Spent, day.Spent); err != nil {
+		return fmt.Errorf("spent: %w", err)
+	}
+	if total.Income, err = money.Add(total.Income, day.Income); err != nil {
+		return fmt.Errorf("income: %w", err)
+	}
+	if total.Moved, err = money.Add(total.Moved, day.Moved); err != nil {
+		return fmt.Errorf("moved: %w", err)
+	}
+	if total.Net, err = money.Add(total.Net, day.Net); err != nil {
+		return fmt.Errorf("net: %w", err)
+	}
+	if day.Count > math.MaxInt-total.Count {
+		return fmt.Errorf("count: %w", money.ErrOverflow)
+	}
+	total.Count += day.Count
+	return nil
+}
 
 // DayKey returns the canonical calendar-day key (YYYY-MM-DD, UTC) used to bucket
 // a transaction or a ghost onto a day. Transaction dates are UTC-midnight

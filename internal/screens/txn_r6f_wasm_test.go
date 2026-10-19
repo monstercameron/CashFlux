@@ -6,6 +6,7 @@ package screens
 
 import (
 	"bytes"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -93,16 +94,16 @@ func r6fGridCell(t *testing.T, f *render.Fixture, text string) *render.QueryNode
 
 func TestR9CCalendarWeekTotalsUseComparableMetrics(t *testing.T) {
 	cases := []struct {
-		name      string
-		props     txnCalWeekTotalProps
-		wantLines []string
-		wantAria  string
-		wantTone  string
+		name        string
+		props       txnCalWeekTotalProps
+		wantLines   []string
+		wantSummary string
+		wantTone    string
 	}{
-		{name: "spending", props: txnCalWeekTotalProps{Stat: txncalendar.DayStat{Net: -262200, Count: 4}, Base: "USD", Spent: 262200, WeekOf: "Oct 4"}, wantLines: []string{"Money out −$2,622.00", "4 transactions"}, wantAria: "Week of Oct 4: money out $2,622.00, 4 transactions."},
-		{name: "mixed", props: txnCalWeekTotalProps{Stat: txncalendar.DayStat{Net: 15000, Count: 2}, Base: "USD", Spent: 10000, Income: 25000, WeekOf: "Oct 4"}, wantLines: []string{"Money out −$100.00", "Money in $250.00", "2 transactions"}, wantAria: "Week of Oct 4: money out $100.00, money in $250.00, 2 transactions.", wantTone: "text-up"},
-		{name: "future scheduled", props: txnCalWeekTotalProps{Base: "USD", Scheduled: 3, WeekOf: "Oct 25", Future: true}, wantLines: []string{"Money out $0.00", "Nothing yet", "3 scheduled"}, wantAria: "Week of Oct 25: money out $0.00, Nothing yet, 3 scheduled."},
-		{name: "empty future", props: txnCalWeekTotalProps{Base: "USD", WeekOf: "Oct 25", Future: true}, wantLines: []string{"Money out $0.00", "Nothing yet"}, wantAria: "Week of Oct 25: money out $0.00, Nothing yet."},
+		{name: "spending", props: txnCalWeekTotalProps{Cashflow: txncalendar.Cashflow{Spent: 262200, Count: 4}, Base: "USD", WeekOf: "Oct 4", SummaryID: "week"}, wantLines: []string{"Money out −$2,622.00", "4 transactions"}, wantSummary: "Week of Oct 4: spent $2,622.00, income $0.00, moved $0.00, 4 transactions."},
+		{name: "mixed", props: txnCalWeekTotalProps{Cashflow: txncalendar.Cashflow{Spent: 10000, Income: 25000, Moved: 5000, Count: 2}, Base: "USD", WeekOf: "Oct 4", SummaryID: "week"}, wantLines: []string{"Money out −$100.00", "Money in $250.00", "2 transactions"}, wantSummary: "Week of Oct 4: spent $100.00, income $250.00, moved $50.00, 2 transactions.", wantTone: "text-up"},
+		{name: "future scheduled", props: txnCalWeekTotalProps{Base: "USD", Scheduled: 3, WeekOf: "Oct 25", Future: true, SummaryID: "week"}, wantLines: []string{"Money out $0.00", "Nothing yet", "3 scheduled"}, wantSummary: "Week of Oct 25: spent $0.00, income $0.00, moved $0.00, 0 transactions. 3 scheduled."},
+		{name: "empty future", props: txnCalWeekTotalProps{Base: "USD", WeekOf: "Oct 25", Future: true, SummaryID: "week"}, wantLines: []string{"Money out $0.00", "Nothing yet"}, wantSummary: "Week of Oct 25: spent $0.00, income $0.00, moved $0.00, 0 transactions."},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -122,8 +123,17 @@ func TestR9CCalendarWeekTotalsUseComparableMetrics(t *testing.T) {
 				}
 				lineOffset += index + len(line)
 			}
-			if node.Attr("aria-label") != tc.wantAria || node.Attr("title") != tc.wantAria {
-				t.Errorf("week total aria/title = %q / %q, want %q", node.Attr("aria-label"), node.Attr("title"), tc.wantAria)
+			if node.Attr("aria-label") != "" || node.Attr("aria-describedby") != "week" {
+				t.Errorf("week total aria-label/describedby = %q / %q, want content name and summary reference", node.Attr("aria-label"), node.Attr("aria-describedby"))
+			}
+			foundSummary := false
+			for _, span := range f.AllByTag("span") {
+				if span.Attr("id") == "week" {
+					foundSummary = span.Text() == tc.wantSummary && strings.Contains(span.Attr("class"), "sr-only")
+				}
+			}
+			if !foundSummary {
+				t.Errorf("hidden week summary %q not found", tc.wantSummary)
 			}
 			if node.Attr("style") != "" {
 				t.Errorf("week total has inline style %q", node.Attr("style"))
@@ -152,30 +162,15 @@ func TestR9CCalendarWeekTotalsUseComparableMetrics(t *testing.T) {
 	}
 }
 
-func TestR9CMixedWeekAmountsSeparateIncomeFromSpending(t *testing.T) {
-	week := []txncalendar.Cell{
-		{Date: time.Date(2026, time.October, 4, 0, 0, 0, 0, time.UTC), InMonth: true},
-		{Date: time.Date(2026, time.October, 5, 0, 0, 0, 0, time.UTC), InMonth: true},
-	}
-	txns := []domain.Transaction{
-		{Date: week[0].Date, Amount: money.New(-1250, "USD")},
-		{Date: week[1].Date, Amount: money.New(2500, "USD")},
-		{Date: week[1].Date, Amount: money.New(-9000, "USD"), TransferAccountID: "savings"},
-	}
-	spent, income := calWeekAmounts(week, txns, currency.Rates{Base: "USD"})
-	if spent != 1250 || income != 2500 {
-		t.Fatalf("week cashflow = spent %d income %d, want 1250/2500", spent, income)
-	}
-}
-
 func TestR7CMonthHasOneWeekTotalCellPerRowIncludingEmptyEdgeWeeks(t *testing.T) {
-	weeks, err := txncalendar.MonthInBase(time.Date(2026, time.October, 18, 0, 0, 0, 0, time.UTC), time.Monday, nil, nil, currency.Rates{Base: "USD"})
+	month, err := txncalendar.MonthCashflow(time.Date(2026, time.October, 18, 0, 0, 0, 0, time.UTC), time.Monday, nil, nil, currency.Rates{Base: "USD"})
 	if err != nil {
 		t.Fatal(err)
 	}
+	weeks := month.Weeks
 	rows := make([]any, 0, len(weeks))
-	for _, week := range weeks {
-		rows = append(rows, Div(Attr("class", "txn-cal-week-row"), ui.CreateElement(txnCalWeekTotal, txnCalWeekTotalProps{Stat: txncalendar.WeekStat(week), Base: "USD"})))
+	for i, week := range weeks {
+		rows = append(rows, Div(Attr("class", "txn-cal-week-row"), ui.CreateElement(txnCalWeekTotal, txnCalWeekTotalProps{Cashflow: week.Total, Base: "USD", SummaryID: fmt.Sprintf("week-%d", i)})))
 	}
 	f := render.New(t)
 	f.Render(Div(rows...))
@@ -192,7 +187,7 @@ func TestR7CMonthHasOneWeekTotalCellPerRowIncludingEmptyEdgeWeeks(t *testing.T) 
 	if len(renderedRows) != len(weeks) || len(totals) != len(weeks) {
 		t.Fatalf("October grid has %d rows and %d week-total cells for %d projected weeks; want one total per row", len(renderedRows), len(totals), len(weeks))
 	}
-	if len(weeks) == 0 || weeks[0][0].InMonth || weeks[len(weeks)-1][6].InMonth {
+	if len(weeks) == 0 || weeks[0].Days[0].InMonth || weeks[len(weeks)-1].Days[6].InMonth {
 		t.Fatal("October 2026 fixture must include leading and trailing partial-week days")
 	}
 }

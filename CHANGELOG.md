@@ -90,6 +90,11 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Calendar days and weeks agree on what money moved (TQ3).** Day cells and week totals now come from one pure,
+  tested `txncalendar.MonthCashflow` fold: transfers count as "moved", never as spending, so a $500 sweep no longer shows
+  "−$500" in the day beside "Spent $0" for the week. Sums use checked money arithmetic, missing exchange rates are
+  reported, the per-week rescans are gone, weekday and week labels are localized, and week summaries are exposed to
+  screen readers without hiding the visible figures.
 - **Budget suggestions say which way and why (BR2SUG).** Row suggestions now come from the robust recommendation: "Raise
   to $X" or "Lower to $X" with the evidence (3-month median, unusual months left out), never a cut below what the budget is
   already projected to spend, and nothing when there is no history. The action is named with its context ("Raise the

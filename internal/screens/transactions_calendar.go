@@ -76,6 +76,7 @@ type txnCalMonthCellProps struct {
 	Today     bool
 	NetStr    string
 	NetTone   string
+	MovedStr  string
 	AriaLabel string
 	Count     int
 	Ghosts    []txncalendar.Ghost
@@ -111,7 +112,8 @@ func txnCalendarWidget(props txnCalendarProps) ui.Node {
 	effectiveFilter, _ := f.WithOwnerLens(uistate.UseMemberLens())
 	scopedRecurring := txncalendar.ScopeRecurring(props.App.Recurring(), effectiveFilter, props.App.Accounts())
 	rates := currency.Rates{Base: props.Base, Rates: props.App.Settings().FXRates}
-	weeks, projectionErr := txncalendar.MonthInBase(anchor, weekStart, props.Shown, scopedRecurring, rates)
+	projection, projectionErr := txncalendar.MonthCashflow(anchor, weekStart, props.Shown, scopedRecurring, rates)
+	weeks := projection.Weeks
 	todayKey := txncalendar.DayKey(now)
 
 	// Picking a day writes the ledger's own range, so the calendar and the scope bar
@@ -147,13 +149,13 @@ func txnCalendarWidget(props txnCalendarProps) ui.Node {
 	head := []any{css.Class("txn-cal-week-head")}
 	for i := 0; i < 7; i++ {
 		wd := time.Weekday((int(weekStart) + i) % 7)
-		head = append(head, Div(css.Class("cal-head"), wd.String()[:3]))
+		head = append(head, Div(css.Class("cal-head"), Attr("role", "columnheader"), Attr("aria-label", calendarWeekday(wd, true)), calendarWeekday(wd, false)))
 	}
 	head = append(head, Div(css.Class("cal-head"), uistate.T("transactions.calWeekTotal")))
 	weekRows := make([]any, 0, len(weeks))
 	for _, week := range weeks {
 		row := []any{css.Class("txn-cal-week-row")}
-		for _, day := range week {
+		for _, day := range week.Days {
 			row = append(row, ui.CreateElement(txnCalMonthCell, txnCalMonthCellProps{
 				DateKey: txncalendar.DayKey(day.Date),
 				Day:     day.Date.Day(),
@@ -162,27 +164,26 @@ func txnCalendarWidget(props txnCalendarProps) ui.Node {
 				// trailing day is dimmed and disabled, but its accessible name was the
 				// bare number — so "29, 30, 1, 2" read as one continuous month to
 				// anyone not seeing the dimming, and to everyone as an ambiguous grid.
-				MonthName: day.Date.Format("January 2006"),
+				MonthName: calendarMonthYear(day.Date),
 				Today:     txncalendar.DayKey(day.Date) == todayKey,
-				NetStr:    calNetStr(day.Stat, props.Base),
-				NetTone:   calNetTone(day.Stat),
-				AriaLabel: calDayAria(day.Date.Day(), day.Stat, props.Base),
-				Count:     day.Stat.Count,
+				NetStr:    calDayNetStr(day.Cashflow, props.Base),
+				NetTone:   calNetTone(txncalendar.DayStat{Net: day.Cashflow.Net, Count: day.Cashflow.Count}),
+				MovedStr:  calMovedStr(day.Cashflow.Moved, props.Base),
+				AriaLabel: calDayAria(day.Date.Day(), day.Cashflow, props.Base),
+				Count:     day.Cashflow.Count,
 				Ghosts:    day.Ghosts,
 				OnPick:    pickDay,
 			}))
 		}
-		weekTotal := txncalendar.WeekStat(week)
 		scheduled := 0
-		for _, day := range week {
+		for _, day := range week.Days {
 			scheduled += len(day.Ghosts)
 		}
-		spent, income := calWeekAmounts(week, props.Shown, rates)
-		weekOf := week[0].Date.Format("Jan 2")
-		future := dateutil.WeekStart(week[0].Date, weekStart).After(dateutil.WeekStart(now, weekStart))
+		weekOf := pr.FormatDate(week.Days[0].Date)
+		future := dateutil.WeekStart(week.Days[0].Date, weekStart).After(dateutil.WeekStart(now, weekStart))
 		row = append(row, ui.CreateElement(txnCalWeekTotal, txnCalWeekTotalProps{
-			Stat: weekTotal, Base: props.Base, Scheduled: scheduled,
-			Spent: spent, Income: income, WeekOf: weekOf, Future: future,
+			Cashflow: week.Total, Base: props.Base, Scheduled: scheduled,
+			WeekOf: weekOf, Future: future, SummaryID: "txn-cal-week-" + txncalendar.DayKey(week.Days[0].Date),
 		}))
 		weekRows = append(weekRows, Div(row...))
 	}
@@ -197,7 +198,7 @@ func txnCalendarWidget(props txnCalendarProps) ui.Node {
 	// range that is not exactly one month, that scope does not name the month the
 	// GRID is drawing, and the user is left reading a wall of day numbers with no
 	// month anywhere on screen. When the two differ, both are stated.
-	gridMonth := anchor.Format("January 2006")
+	gridMonth := calendarMonthYear(anchor)
 	caption := txnScopeLabel(scope)
 	if scope.Kind != txnscope.Month {
 		caption = uistate.T("transactions.calShowingMonth", caption, gridMonth)
@@ -214,9 +215,12 @@ func txnCalendarWidget(props txnCalendarProps) ui.Node {
 		})
 	}
 
+	fxNotice := If(len(projection.RateIssues) > 0,
+		Div(css.Class("text-dim"), Attr("role", "status"), Attr("data-testid", "txn-cal-fx-warning"),
+			uistate.T("transactions.tq3.monthFxMissing", len(projection.RateIssues))))
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "txn-calendar", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
-		Body: Div(css.Class("txn-cal"), nav, Div(css.Class("txn-cal-weeks"), Div(head...), Fragment(weekRows...)),
+		Body: Div(css.Class("txn-cal"), nav, fxNotice, Div(css.Class("txn-cal-weeks"), Div(head...), Fragment(weekRows...)),
 			Div(css.Class("txn-cal-legend"), Attr("style", "display:flex;align-items:center;gap:.4rem"),
 				Span(css.Class("txn-cal-legend-dots"), Attr("style", "display:inline-flex;align-items:center"),
 					Span(css.Class("cal-dot"), Attr("style", "position:static;width:7px;height:7px;border-radius:50%;background:var(--accent)"))),
@@ -226,92 +230,70 @@ func txnCalendarWidget(props txnCalendarProps) ui.Node {
 }
 
 type txnCalWeekTotalProps struct {
-	Stat      txncalendar.DayStat
+	Cashflow  txncalendar.Cashflow
 	Base      string
 	Scheduled int
-	Spent     int64
-	Income    int64
 	WeekOf    string
 	Future    bool
+	SummaryID string
 }
 
 func txnCalWeekTotal(props txnCalWeekTotalProps) ui.Node {
-	spent, _ := fmtLedgerAmount(money.New(-props.Spent, props.Base), false)
+	spent, _ := fmtLedgerAmount(money.New(-props.Cashflow.Spent, props.Base), false)
 	spentClass := "txn-cal-week-spent"
-	if props.Spent == 0 {
+	if props.Cashflow.Spent == 0 {
 		spentClass += " text-dim"
 	} else {
 		spentClass += " text-down"
 	}
 	lines := []any{Span(ClassStr(spentClass), uistate.T("r9c.weekSpent", spent))}
-	if props.Income > 0 {
-		income, _ := fmtLedgerAmount(money.New(props.Income, props.Base), false)
+	if props.Cashflow.Income > 0 {
+		income, _ := fmtLedgerAmount(money.New(props.Cashflow.Income, props.Base), false)
 		lines = append(lines, Span(css.Class("txn-cal-week-income text-up"), uistate.T("r9c.weekIncome", strings.TrimPrefix(income, "+"))))
 	}
+	if props.Cashflow.Moved > 0 {
+		moved, _ := fmtLedgerAmount(money.New(props.Cashflow.Moved, props.Base), false)
+		lines = append(lines, Span(css.Class("txn-cal-week-moved"), uistate.T("transactions.tq3.weekMoved", strings.TrimPrefix(moved, "+"))))
+	}
 	lastLine := ""
-	if props.Stat.Count > 0 {
-		lastLine = uistate.T("r9c.weekTransactions", props.Stat.Count)
-		if props.Stat.Count == 1 {
-			lastLine = uistate.T("r9c.weekOneTransaction")
+	if props.Cashflow.Count > 0 {
+		lastLine = uistate.T("transactions.tq3.weekCount", props.Cashflow.Count)
+		if props.Cashflow.Count == 1 {
+			lastLine = uistate.T("transactions.tq3.weekOne")
 		}
 	} else if props.Future {
-		lastLine = uistate.T("r9c.weekNothingYet")
+		lastLine = uistate.T("transactions.tq3.weekEmpty")
 	} else if props.Scheduled > 0 {
-		lastLine = uistate.T("r6f.weekScheduled", props.Scheduled)
+		lastLine = uistate.T("transactions.tq3.weekScheduled", props.Scheduled)
 	} else {
-		lastLine = uistate.T("transactions.calWeekCount", 0)
+		lastLine = uistate.T("transactions.tq3.weekCount", 0)
 	}
 	lastClass := "txn-cal-week-count"
-	if props.Stat.Count == 0 && props.Scheduled == 0 {
+	if props.Cashflow.Count == 0 && props.Scheduled == 0 {
 		lastClass += " text-dim"
 	}
 	lines = append(lines, Span(ClassStr(lastClass), lastLine))
-	if props.Future && props.Stat.Count == 0 && props.Scheduled > 0 {
+	if props.Future && props.Cashflow.Count == 0 && props.Scheduled > 0 {
 		lines = append(lines, Span(css.Class("txn-cal-week-count"), uistate.T("r6f.weekScheduled", props.Scheduled)))
 	}
-	ariaSpent := strings.TrimPrefix(spent, "−")
-	ariaLastLine := lastLine
-	if props.Future && props.Stat.Count == 0 && props.Scheduled > 0 {
-		ariaLastLine += ", " + uistate.T("r6f.weekScheduled", props.Scheduled)
+	ariaSpent := strings.TrimPrefix(strings.TrimPrefix(spent, "−"), "+")
+	income, _ := fmtLedgerAmount(money.New(props.Cashflow.Income, props.Base), false)
+	moved, _ := fmtLedgerAmount(money.New(props.Cashflow.Moved, props.Base), false)
+	countSummary := uistate.T("transactions.tq3.weekManySummary", props.Cashflow.Count)
+	if props.Cashflow.Count == 1 {
+		countSummary = uistate.T("transactions.tq3.weekOneSummary")
 	}
-	aria := uistate.T("r9c.weekAria", props.WeekOf, ariaSpent, ariaLastLine)
-	if props.Income > 0 {
-		income, _ := fmtLedgerAmount(money.New(props.Income, props.Base), false)
-		aria = uistate.T("r9c.weekAriaIncome", props.WeekOf, ariaSpent, strings.TrimPrefix(income, "+"), ariaLastLine)
+	scheduledSummary := ""
+	if props.Scheduled > 0 {
+		scheduledSummary = uistate.T("transactions.tq3.weekSummaryScheduled", props.Scheduled)
 	}
+	aria := uistate.T("transactions.tq3.weekSummary", props.WeekOf, ariaSpent, strings.TrimPrefix(income, "+"), strings.TrimPrefix(moved, "+"), countSummary, scheduledSummary)
 	return Div(css.Class("txn-cal-week-total"),
 		Attr("data-testid", "txn-cal-week-total"),
-		Attr("aria-label", aria),
-		Attr("title", aria),
+		Attr("aria-describedby", props.SummaryID),
+		Span(css.Class("sr-only"), Attr("id", props.SummaryID), aria),
 		Fragment(lines...),
 	)
-}
-
-// calWeekAmounts totals signed transaction amounts into separate spending and
-// income figures for the dates represented by the week. The caller has already
-// projected this same scoped transaction set through these rates successfully.
-func calWeekAmounts(week []txncalendar.Cell, txns []domain.Transaction, rates currency.Rates) (spent, income int64) {
-	days := make(map[string]struct{}, len(week))
-	for _, day := range week {
-		if day.InMonth {
-			days[txncalendar.DayKey(day.Date)] = struct{}{}
-		}
-	}
-	for _, txn := range txns {
-		if _, ok := days[txncalendar.DayKey(txn.Date)]; !ok || txn.TransferAccountID != "" {
-			continue
-		}
-		converted, err := rates.Convert(txn.Amount, rates.Base)
-		if err != nil {
-			continue
-		}
-		if converted.Amount < 0 {
-			spent -= converted.Amount
-		} else if converted.Amount > 0 {
-			income += converted.Amount
-		}
-	}
-	return spent, income
 }
 
 // calNetStr formats a day's net minor-unit amount for the cell, or "" for a day
@@ -322,6 +304,21 @@ func calNetStr(s txncalendar.DayStat, base string) string {
 	}
 	text, _ := fmtLedgerAmount(money.New(s.Net, base), false)
 	return text
+}
+
+func calDayNetStr(cash txncalendar.Cashflow, base string) string {
+	if cash.Count == 0 || (cash.Spent == 0 && cash.Income == 0) {
+		return ""
+	}
+	return calNetStr(txncalendar.DayStat{Net: cash.Net, Count: cash.Count}, base)
+}
+
+func calMovedStr(amount int64, base string) string {
+	if amount <= 0 {
+		return ""
+	}
+	formatted, _ := fmtLedgerAmount(money.New(amount, base), false)
+	return uistate.T("transactions.tq3.dayMoved", strings.TrimPrefix(formatted, "+"))
 }
 
 // calNetTone colors positive net income green and expenses red.
@@ -336,18 +333,31 @@ func calNetTone(s txncalendar.DayStat) string {
 	}
 }
 
-func calDayAria(day int, s txncalendar.DayStat, base string) string {
-	amount, _ := fmtLedgerAmount(money.New(s.Net, base), false)
-	switch {
-	case s.Count == 0:
-		return uistate.T("transactions.calDayEmpty", strconv.Itoa(day))
-	case s.Net < 0:
-		return uistate.T("transactions.calDaySpent", strconv.Itoa(day), strings.TrimPrefix(amount, "−"))
-	case s.Net > 0:
-		return uistate.T("transactions.calDayNet", strconv.Itoa(day), amount)
-	default:
-		return uistate.T("transactions.calDayZero", strconv.Itoa(day), amount)
+func calDayAria(day int, cash txncalendar.Cashflow, base string) string {
+	if cash.Count == 0 {
+		return uistate.T("transactions.tq3.dayEmpty", strconv.Itoa(day))
 	}
+	spent, _ := fmtLedgerAmount(money.New(cash.Spent, base), false)
+	income, _ := fmtLedgerAmount(money.New(cash.Income, base), false)
+	moved, _ := fmtLedgerAmount(money.New(cash.Moved, base), false)
+	count := uistate.T("transactions.tq3.dayMany", cash.Count)
+	if cash.Count == 1 {
+		count = uistate.T("transactions.tq3.dayOne")
+	}
+	return uistate.T("transactions.tq3.dayCashflow", strconv.Itoa(day), strings.TrimPrefix(spent, "+"), strings.TrimPrefix(income, "+"), strings.TrimPrefix(moved, "+"), count)
+}
+
+func calendarMonthYear(t time.Time) string {
+	return budgetMonthName(t, false) + " " + strconv.Itoa(t.Year())
+}
+
+func calendarWeekday(day time.Weekday, full bool) string {
+	keys := [...]string{"sun", "mon", "tue", "wed", "thu", "fri", "sat"}
+	suffix := ""
+	if full {
+		suffix = ".full"
+	}
+	return uistate.T("transactions.tq3.weekday." + keys[int(day)] + suffix)
 }
 
 // txnCalMonthCell renders one day button. It owns its click hook so it is safe
@@ -425,6 +435,7 @@ func txnCalMonthCell(props txnCalMonthCellProps) ui.Node {
 	args = append(args,
 		Span(css.Class("cal-day"), strconv.Itoa(props.Day)),
 		If(props.NetStr != "", Span(ClassStr("txn-cal-net "+props.NetTone), props.NetStr)),
+		If(props.MovedStr != "", Span(css.Class("txn-cal-moved text-dim"), props.MovedStr)),
 		Div(css.Class("txn-cal-dots"), Fragment(dotNodes...)),
 		Fragment(ghostNodes...),
 	)
