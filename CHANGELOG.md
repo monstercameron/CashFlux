@@ -90,6 +90,12 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **One crisp favicon everywhere (FAV1).** The "C" is now drawn as a path instead of system-font text, so it looks the same
+  on every machine and stays centred at 16 px. A deterministic Go generator (`tools/genicons`, byte-identical output
+  tested) produces `favicon.ico` (16/32/48), 16 and 32 px PNGs, 192/512 icons, separate full-bleed maskable icons (so
+  Android no longer crops the C) and the 180 px Apple icon. The app shell, admin console, portal and the emergency pack
+  export all carry the same icon links; the server and the e2e server serve `/favicon.ico` as `image/x-icon` instead of
+  the offline page; the service worker precaches the new set under a new cache name.
 - **Weekly raise-limits respect the week start (BUDQ5.1).** Raise-limit, release-unused and recurring "last applied" writes
   now use the same week-start-aware period key the page reads, so a "this week" raise on a Sunday-start household is no
   longer saved where the page never looks. The rollover carry tooltip shows the latest six periods plus "and N earlier".

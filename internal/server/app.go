@@ -140,6 +140,9 @@ func setAppAssetHeaders(w http.ResponseWriter, rel string) {
 	case ext == ".webmanifest":
 		w.Header().Set("Cache-Control", "no-cache")
 		w.Header().Set("Content-Type", "application/manifest+json")
+	case base == "favicon.ico":
+		w.Header().Set("Cache-Control", "public, max-age=3600")
+		w.Header().Set("Content-Type", "image/x-icon")
 	default:
 		w.Header().Set("Cache-Control", "public, max-age=3600")
 		if contentType := mime.TypeByExtension(ext); contentType != "" {

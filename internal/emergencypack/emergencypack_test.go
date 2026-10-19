@@ -65,6 +65,22 @@ func TestHTMLEscapesUserContent(t *testing.T) {
 	}
 }
 
+func TestHTMLRenderUsesCashFluxFaviconSet(t *testing.T) {
+	out := RenderHTML(samplePack())
+	for _, link := range []string{
+		`type="image/svg+xml" href="data:image/svg+xml,`,
+		`href="/favicon.ico" sizes="48x48"`,
+		`href="/favicon-32.png"`,
+		`href="/apple-touch-icon.png"`,
+		`rel="mask-icon" href="/favicon.svg" color="#2e8b57"`,
+		`name="theme-color" content="#2e8b57"`,
+	} {
+		if !strings.Contains(out, link) {
+			t.Errorf("emergency pack HTML missing favicon markup %q", link)
+		}
+	}
+}
+
 func TestNoVaultLineWhenEmpty(t *testing.T) {
 	p := samplePack()
 	p.VaultHasEntries = false

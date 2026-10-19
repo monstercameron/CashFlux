@@ -231,6 +231,8 @@ func RenderHTML(p Pack) string {
 
 	w("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">")
 	w("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">")
+	w("<link rel=\"icon\" type=\"image/svg+xml\" href=\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%232e8b57'/%3E%3Cpath d='M77 30C70 22 59 18 48 20 32 23 23 35 23 50s9 27 25 30c11 2 22-2 29-10' fill='none' stroke='%23052e13' stroke-width='14' stroke-linecap='round'/%3E%3C/svg%3E\" sizes=\"any\">")
+	w("<link rel=\"icon\" href=\"/favicon.ico\" sizes=\"48x48\"><link rel=\"icon\" type=\"image/png\" sizes=\"32x32\" href=\"/favicon-32.png\"><link rel=\"apple-touch-icon\" href=\"/apple-touch-icon.png\"><link rel=\"mask-icon\" href=\"/favicon.svg\" color=\"#2e8b57\"><meta name=\"theme-color\" content=\"#2e8b57\">")
 	w("<title>" + e(title) + "</title><style>")
 	w("body{font:16px/1.6 -apple-system,Segoe UI,Roboto,sans-serif;color:#1a1a1a;background:#fff;max-width:44rem;margin:2rem auto;padding:0 1.25rem}")
 	w("h1{font-size:1.7rem;margin:0 0 .25rem}h2{font-size:1.1rem;border-bottom:1px solid #ddd;padding-bottom:.3rem;margin-top:2rem}")

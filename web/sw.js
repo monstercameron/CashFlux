@@ -27,7 +27,8 @@
 // straight through. build.json is never cached or intercepted: every
 // freshness decision depends on reading the server's current copy.
 
-const CACHE_PREFIX = "cashflux-";
+const CACHE_PREFIX = "cashflux-fav1-";
+const LEGACY_CACHE_PREFIX = "cashflux-";
 const DEV_BUILD = "dev";
 const COMPLETE_ENTRY = "./__cashflux_complete__.json";
 
@@ -38,7 +39,7 @@ const COMPLETE_ENTRY = "./__cashflux_complete__.json";
 // boot path.
 const CORE_REQUIRED = [
   "./", "./index.html", "./wasm_exec.js", "./manifest.webmanifest",
-  "./favicon.svg", "./fonts.css",
+  "./favicon.ico", "./favicon.svg", "./favicon-32.png", "./fonts.css",
 ];
 // The wasm binary is boot-critical too. Prefer the loader's negotiated URL:
 // the browser transparently decodes its Content-Encoding, so that response
@@ -50,7 +51,8 @@ const CORE_WASM_ALTERNATIVES = ["./bin/main.wasm", "./bin/main.wasm.gz"];
 // view offline; it must not block the whole update.
 const CORE_OPTIONAL = [
   "./services-worker.js", "./bin/services.wasm.gz", "./bin/services.wasm",
-  "./icon-192.png", "./icon-512.png", "./apple-touch-icon.png",
+  "./icon-192.png", "./icon-512.png", "./icon-maskable-192.png",
+  "./icon-maskable-512.png", "./apple-touch-icon.png", "./favicon-16.png",
   "./chart.js", "./muzak.js", "./wonder.js", "./countup.js", "./mermaid.min.js", "./mermaid.js",
   "./marked.min.js", "./purify.min.js", "./d3.min.js",
 ];
@@ -297,7 +299,8 @@ self.addEventListener("activate", (event) => {
     // Only this app's caches are evicted. Caches are origin-wide: other
     // apps on the same origin keep theirs.
     await Promise.all(
-      keys.filter((k) => k.startsWith(CACHE_PREFIX) && k !== keep).map((k) => caches.delete(k))
+      keys.filter((k) => (k.startsWith(CACHE_PREFIX) || k.startsWith(LEGACY_CACHE_PREFIX)) && k !== keep)
+        .map((k) => caches.delete(k))
     );
     await self.clients.claim();
     // Tell open pages which build now controls them; pages that asked for

@@ -20,6 +20,7 @@ func writeHostedAppFixture(t *testing.T) string {
 	}
 	for name, body := range map[string]string{
 		"index.html":         "<!doctype html><html><head><title>CashFlux hosted</title></head></html>",
+		"favicon.ico":        "ico fixture bytes",
 		"services-worker.js": "self.onmessage = function () {};",
 		"app.css":            "body { color: green; }",
 		"bin/main.wasm":      "\x00asm",
@@ -29,6 +30,92 @@ func writeHostedAppFixture(t *testing.T) string {
 		}
 	}
 	return dir
+}
+
+func TestHostedAppServesFaviconICOWithExplicitTypeAndCache(t *testing.T) {
+	appDir := writeHostedAppFixture(t)
+	h := appHandler(Config{AppDir: appDir})
+	req := httptest.NewRequest(http.MethodGet, "/favicon.ico", nil)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK || rr.Body.String() != "ico fixture bytes" {
+		t.Fatalf("favicon response = %d %q", rr.Code, rr.Body.String())
+	}
+	if got := rr.Header().Get("Content-Type"); got != "image/x-icon" {
+		t.Errorf("Content-Type = %q, want image/x-icon", got)
+	}
+	if got := rr.Header().Get("Cache-Control"); got != "public, max-age=3600" {
+		t.Errorf("Cache-Control = %q, want cacheable favicon", got)
+	}
+
+	missingDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(missingDir, "index.html"), []byte("<html><head></head></html>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	missing := httptest.NewRecorder()
+	appHandler(Config{AppDir: missingDir}).ServeHTTP(missing, req)
+	if missing.Code != http.StatusNotFound || strings.Contains(missing.Body.String(), "<html>") {
+		t.Fatalf("missing favicon fell through to SPA: %d %q", missing.Code, missing.Body.String())
+	}
+}
+
+func TestStaticAndServerHTMLSurfacesHaveCashFluxIcons(t *testing.T) {
+	for _, name := range []string{"index.html", "admin/index.html", "portal/index.html"} {
+		data, err := os.ReadFile(filepath.Join("..", "..", "web", filepath.FromSlash(name)))
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		assertCashFluxIconLinks(t, name, string(data))
+	}
+}
+
+func TestManifestSeparatesAnyAndMaskableIcons(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", "web", "manifest.webmanifest"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var manifest struct {
+		Icons []struct {
+			Src     string `json:"src"`
+			Purpose string `json:"purpose"`
+		} `json:"icons"`
+	}
+	if err := json.Unmarshal(data, &manifest); err != nil {
+		t.Fatalf("decode manifest: %v", err)
+	}
+	want := map[string]string{
+		"./icon-192.png":          "any",
+		"./icon-512.png":          "any",
+		"./icon-maskable-192.png": "maskable",
+		"./icon-maskable-512.png": "maskable",
+	}
+	for _, icon := range manifest.Icons {
+		if purpose, ok := want[icon.Src]; ok {
+			if icon.Purpose != purpose {
+				t.Errorf("%s purpose = %q, want %q", icon.Src, icon.Purpose, purpose)
+			}
+			delete(want, icon.Src)
+		}
+	}
+	for missing := range want {
+		t.Errorf("manifest missing %s", missing)
+	}
+}
+
+func assertCashFluxIconLinks(t *testing.T, surface, body string) {
+	t.Helper()
+	for _, link := range []string{
+		`href="/favicon.ico" sizes="48x48"`,
+		`type="image/svg+xml" href="/favicon.svg"`,
+		`type="image/png" sizes="32x32" href="/favicon-32.png"`,
+		`rel="apple-touch-icon" href="/apple-touch-icon.png"`,
+		`rel="mask-icon" href="/favicon.svg" color="#2e8b57"`,
+		`name="theme-color" content="#2e8b57"`,
+	} {
+		if !strings.Contains(body, link) {
+			t.Errorf("%s missing icon markup %q", surface, link)
+		}
+	}
 }
 
 func TestHostedAppServesRootDeepLinksAndAssets(t *testing.T) {

@@ -130,6 +130,10 @@ func main() {
 		if strings.HasSuffix(clean, ".webmanifest") {
 			w.Header().Set("Content-Type", "application/manifest+json")
 		}
+		if filepath.Base(clean) == "favicon.ico" {
+			w.Header().Set("Content-Type", "image/x-icon")
+			w.Header().Set("Cache-Control", "public, max-age=3600")
+		}
 		if info, err := os.Stat(full); err == nil && !info.IsDir() {
 			http.ServeFile(w, r, full)
 			return
