@@ -90,6 +90,10 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **A funded "this period" top-up moves money instead of inventing it (BQ8, BQ8.1).** Each source budget is debited
+  under its own period key (a weekly source funding a monthly budget lowers its own current week), cross-currency sources
+  are refused with a plain message, and the destination and all sources are written together in one SQLite transaction
+  (`PutBudgetsAtomic`, ~1.8 ms with 3,300 transactions, no full-dataset rewrite) — a failure changes nothing.
 - **Budget math is right everywhere; one bad budget never blanks the page (SOLB1, SOLB1.1).** An empty budget currency
   now means the household currency (backfilled on load and import, and on every save). A budget that genuinely can't be
   evaluated stays in the results with a typed error instead of disappearing, and totals exclude it and say so rather than

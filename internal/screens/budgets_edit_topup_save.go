@@ -5,10 +5,14 @@
 package screens
 
 import (
+	"errors"
+	"fmt"
+	"math"
 	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/prefs"
@@ -33,6 +37,66 @@ type budgetEditTopupSaveProps struct {
 	coverSrcs       []budgetCoverSource
 	cur             string
 	props           BudgetEditFormProps
+}
+
+var errBudgetTopupCurrencyMismatch = errors.New("funding budgets must use the destination currency")
+
+// planFundedBudgetTopup creates every source and destination update before a
+// funded top-up is persisted. Period-only source boosts use that source's own
+// period key for the period containing destinationStart.
+func planFundedBudgetTopup(budgets []domain.Budget, shares map[string]int64, destinationID string, amount int64, permanent bool, destinationStart, payAnchor time.Time, weekStart time.Weekday) ([]domain.Budget, error) {
+	byID := make(map[string]domain.Budget, len(budgets))
+	for _, budget := range budgets {
+		byID[budget.ID] = budget
+	}
+	destination, ok := byID[destinationID]
+	if !ok {
+		return nil, fmt.Errorf("destination budget %q not found", destinationID)
+	}
+	writes := make([]domain.Budget, 0, len(shares)+1)
+	for id, share := range shares {
+		if share <= 0 {
+			continue
+		}
+		source, ok := byID[id]
+		if !ok {
+			return nil, fmt.Errorf("source budget %q not found", id)
+		}
+		if source.Limit.Currency != destination.Limit.Currency {
+			return nil, errBudgetTopupCurrencyMismatch
+		}
+		if permanent {
+			if share >= source.Limit.Amount {
+				return nil, fmt.Errorf("source budget %q would have nothing left", id)
+			}
+			source.Limit.Amount -= share
+		} else {
+			key := budgeting.PeriodKeyWithWeekStart(source.Period, destinationStart, payAnchor, weekStart)
+			start, err := time.Parse("2006-01-02", key)
+			if err != nil {
+				return nil, fmt.Errorf("source budget %q period key: %w", id, err)
+			}
+			if source.PeriodBoosts[key] < math.MinInt64+share {
+				return nil, fmt.Errorf("source budget %q period boost would overflow", id)
+			}
+			source = source.WithPeriodBoost(start, -share)
+		}
+		writes = append(writes, source)
+	}
+	if permanent {
+		if amount > 0 && destination.Limit.Amount > math.MaxInt64-amount {
+			return nil, fmt.Errorf("destination budget limit would overflow")
+		}
+		destination.Limit.Amount += amount
+	} else {
+		key := budgeting.PeriodKeyWithWeekStart(destination.Period, destinationStart, payAnchor, weekStart)
+		if destination.PeriodBoosts[key] > math.MaxInt64-amount {
+			return nil, fmt.Errorf("destination budget period boost would overflow")
+		}
+		destination = destination.WithPeriodBoost(destinationStart, amount)
+	}
+	writes = append(writes, destination)
+	return writes, nil
 }
 
 // useBudgetEditTopupSave registers funded and unfunded limit increases.
@@ -85,46 +149,35 @@ func useBudgetEditTopupSave(p budgetEditTopupSaveProps) ui.Handler {
 					}
 				}
 			}
-			for _, sc := range p.coverSrcs {
-				share, ok := shares[sc.ID]
-				if !ok || share <= 0 {
-					continue
-				}
-				if permanent {
-					// CoverBudget moves limit source→dest permanently (adds to dest.Limit too).
-					if err := p.app.CoverBudget(sc.ID, p.props.BudgetID, money.New(share, p.cur)); err != nil {
-						p.errS.Set(budgetErrorText(err))
-						return
-					}
-				} else {
-					// This period only: reduce the source's effective cap for this period.
-					// The error is fatal to the whole operation, not to this source: the
-					// destination is raised further down, so continuing past a rejected
-					// source write would raise the destination without lowering anybody —
-					// which does not fail to move the money, it invents it. The permanent
-					// branch above already returned here; this one used to discard.
-					for _, nb := range p.app.Budgets() {
-						if nb.ID == sc.ID {
-							if err := p.app.PutBudget(nb.WithPeriodBoost(periodStart, -share)); err != nil {
-								p.errS.Set(budgetErrorText(err))
-								return
-							}
-							break
-						}
-					}
-				}
+			writes, planErr := planFundedBudgetTopup(p.app.Budgets(), shares, p.props.BudgetID,
+				amt, permanent, periodStart, p.coverPayAnchor, p.pr.WeekStartWeekday())
+			if errors.Is(planErr, errBudgetTopupCurrencyMismatch) {
+				p.errS.Set(uistate.T("budgets.coverCurrencyMismatch"))
+				return
+			}
+			if planErr != nil {
+				p.errS.Set(budgetErrorText(planErr))
+				return
+			}
+			if err := p.app.PutBudgetsAtomic(writes); err != nil {
+				p.errS.Set(budgetErrorText(err))
+				return
 			}
 		}
 
 		// Raise the destination. For a permanent FUNDED top-up, CoverBudget already added
 		// the amount to dest.Limit, so don't double-count — only the unfunded-permanent and
 		// the this-month cases still need to bump the destination here.
-		if !(permanent && funded) {
+		if !funded {
 			for _, nb := range p.app.Budgets() {
 				if nb.ID != p.props.BudgetID {
 					continue
 				}
 				if permanent {
+					if amt > 0 && nb.Limit.Amount > math.MaxInt64-amt {
+						p.errS.Set(budgetErrorText(fmt.Errorf("destination budget limit would overflow")))
+						return
+					}
 					nb.Limit = money.New(nb.Limit.Amount+amt, p.cur)
 				} else {
 					nb = nb.WithPeriodBoost(periodStart, amt)
