@@ -74,7 +74,7 @@ func budgetFutureWidget(props budgetSummaryProps) ui.Node {
 	prefs := uistate.UsePrefs().Get()
 	open := ui.UseState(false)
 	toggleOpen := ui.UseEvent(Prevent(func() { open.Set(!open.Get()) }))
-	return renderBudgetFutureWidget(props, w, time.Now().UTC(), activeMember, prefs, open.Get(), toggleOpen)
+	return renderBudgetFutureWidget(props, w, dateutil.WallClockUTC(time.Now()), activeMember, prefs, open.Get(), toggleOpen)
 }
 
 func renderBudgetFutureWidget(props budgetSummaryProps, w period.Window, now time.Time, activeMember string, prefs prefs.Prefs, open bool, toggleOpen ui.Handler) ui.Node {
@@ -230,7 +230,7 @@ func cachedBudgetFutureView(app *appstate.App, member string, w period.Window, p
 		weekStart: p.WeekStartWeekday(), rollover: p.BudgetRolloverLeftover,
 		incomeMode: p.BudgetIncomeMode, paycheckMin: p.BudgetPaycheckMinMinor,
 		fixedIncome: p.MonthlyIncomeMinor, avgMonths: p.BudgetIncomeAvgMonths,
-		payAnchor: p.PayCycleAnchor, viewAnchor: dateutil.FormatDate(budgetViewAnchor(w, time.Now())),
+		payAnchor: p.PayCycleAnchor, viewAnchor: dateutil.FormatDate(dateutil.WallClockUTC(time.Now())),
 		categoryIDs: strings.Join(p.BudgetIncomeCategoryIDs, "\x00"),
 	}
 	if view, ok := budgetFutureViews[key]; ok {
@@ -257,7 +257,7 @@ func calculateBudgetFutureTotals(app *appstate.App, member string, w period.Wind
 	base := budgetBaseCurrency(settings.BaseCurrency)
 	rates := currency.Rates{Base: base, Rates: settings.FXRates}
 	start, end := w.Range()
-	now := time.Now()
+	now := dateutil.WallClockUTC(time.Now())
 	transactions := app.Transactions()
 	categories := app.Categories()
 	input := budgeting.ViewInput{
@@ -286,13 +286,14 @@ func calculateBudgetFutureTotals(app *appstate.App, member string, w period.Wind
 		Fixed: p.MonthlyIncomeMinor, CategoryIDs: p.BudgetIncomeCategoryIDs,
 		AverageMonths: p.BudgetIncomeAvgMonths,
 	}
-	income, err := budgeting.ResolveViewIncome(basis, transactions, categories, input.Period, base, rates)
+	incomePeriod := budgetFutureIncomePeriod(input.Period, now)
+	income, err := budgeting.ResolveViewIncome(basis, transactions, categories, incomePeriod, base, rates)
 	if err != nil {
 		return budgetFutureTotals{}, err
 	}
 	explicitIncome := basis.Mode == budgeting.IncomeModeAll || basis.Mode == budgeting.IncomeModePaychecks || basis.Mode == budgeting.IncomeModeFixed || basis.Mode == budgeting.IncomeModeCategories
 	if !explicitIncome && income == 0 {
-		monthStart, _ := budgeting.PeriodRange(domain.PeriodMonthly, input.Period.Anchor, input.Period.WeekStart)
+		monthStart, _ := budgeting.PeriodRange(domain.PeriodMonthly, incomePeriod.Anchor, incomePeriod.WeekStart)
 		if prior, _, priorErr := ledger.PeriodTotals(transactions, dateutil.AddMonths(monthStart, -1), monthStart, rates); priorErr == nil {
 			income = prior.Amount
 		}
@@ -314,10 +315,24 @@ func calculateBudgetFutureTotals(app *appstate.App, member string, w period.Wind
 	return budgetFutureTotals{TotalLimit: rollup.LimitMinor, SavingsAssigned: savingsAssigned, BannerIncome: income}, nil
 }
 
+// budgetFutureIncomePeriod keeps income history anchored to the current wall-clock
+// day while future budgets and savings remain anchored to the selected window.
+func budgetFutureIncomePeriod(view budgeting.ViewPeriod, now time.Time) budgeting.ViewPeriod {
+	view.Anchor = dateutil.WallClockUTC(now)
+	return view
+}
+
+// budgetWindowIsHistorical reports whether the selected window has ended as of
+// the user's wall-clock calendar day.
+func budgetWindowIsHistorical(end, now time.Time) bool {
+	return !dateutil.WallClockUTC(now).Before(end)
+}
+
 // isFuturePeriod reports whether the viewed window starts after today. Budgets uses
 // this same decision to replace present-tense funding alarms with planning language.
 func isFuturePeriod(w period.Window, now time.Time) bool {
 	start, _ := w.Range()
+	now = dateutil.WallClockUTC(now)
 	return start.After(now)
 }
 

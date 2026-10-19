@@ -13,6 +13,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/categorytree"
 
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -55,7 +56,7 @@ func budgetRecurringWidget(props budgetSummaryProps) ui.Node {
 	toggleOpen := ui.UseEvent(Prevent(func() { open.Set(!open.Get()) }))
 	toggleOnClick := OnClick(toggleOpen)
 	manageOnClick := OnClick(goToRecurring)
-	recurNow := time.Now().UTC()
+	recurNow := dateutil.WallClockUTC(time.Now())
 	recurStart, recurEnd := uistate.UsePeriod().Get().Range()
 
 	base := app.Settings().BaseCurrency
@@ -317,7 +318,7 @@ func budgetRecurringRow(r domain.Recurring, catName map[string]string, now, peri
 	}
 	// C609: the date carries its own meaning — overdue, due inside the period on
 	// screen, or the schedule's next date after it.
-	if state := budgeting.ClassifyRecurDate(r.NextDue, now, periodStart, periodEnd); state != budgeting.RecurUnscheduled {
+	if state := recurringDateState(r.NextDue, now, periodStart, periodEnd); state != budgeting.RecurUnscheduled {
 		when := uistate.LoadPrefs().FormatDate(r.NextDue)
 		meta = append(meta, Span(ClassStr(recurDateClass(state)), Attr("data-testid", "brc-date-"+string(state)),
 			", "+uistate.T(recurDateKey(state), when)))
@@ -340,6 +341,12 @@ func budgetRecurringRow(r domain.Recurring, catName map[string]string, now, peri
 		),
 		Div(css.Class("brc-amtcol"), amountNodes),
 	)
+}
+
+// recurringDateState compares date-only recurring dates against the user's
+// wall-clock day rather than the UTC date of the current instant.
+func recurringDateState(next, now, periodStart, periodEnd time.Time) budgeting.RecurDateState {
+	return budgeting.ClassifyRecurDate(next, dateutil.WallClockUTC(now), periodStart, periodEnd)
 }
 
 func recurringMonthlyEquivalentChecked(r domain.Recurring) (int64, error) {

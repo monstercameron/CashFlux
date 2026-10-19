@@ -116,7 +116,7 @@ func budgetListFilled(props budgetListFilledProps) ui.Node {
 	start, end := props.Period.Range()
 	unbudgeted := ui.CreateElement(unbudgetedStrip, unbudgetedStripProps{
 		App: props.App, Base: props.View.Base, CatName: props.View.CatName,
-		From: start, To: end, Label: props.Period.Label(), Historical: !time.Now().Before(end),
+		From: start, To: end, Label: props.Period.Label(), Historical: budgetWindowIsHistorical(end, time.Now()),
 	})
 	listClass := "budget-grid"
 	if props.Compact {
