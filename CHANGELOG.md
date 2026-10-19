@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Local store for v2 (SV3a; not wired into the app yet).** New package `internal/localdb`: one IndexedDB
+  database per scope with separate object stores for the keyring, metadata, change log, snapshots, drafts and
+  quarantine. Appends are inserts in one strict-durability transaction, so two tabs never overwrite each other;
+  nothing is published in memory until the transaction commits; quota and other storage errors keep their
+  names; durability is never silently downgraded. An in-memory store shares the same conformance suite, and
+  the IndexedDB adapter runs it under Node through a test shim.
 - **Keyring for encrypted local-first storage (v2, SV1).** New pure package `internal/keyring`: a
   random workspace data key wrapped by each key-encryption key (passcode via PBKDF2-SHA-256 at
   600k rounds, a printable recovery key, a passkey PRF output, a device key), HKDF subkeys for
