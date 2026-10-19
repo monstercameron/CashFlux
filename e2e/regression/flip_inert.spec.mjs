@@ -1,25 +1,17 @@
-// flip_inert.spec.mjs — a flip modal that is open must be usable (C611).
+// flip_inert.spec.mjs — Quick Add must open as a usable modal (C611).
 //
-// A flip modal mounts unrevealed and a mount effect adds `.show` so the card
-// animates in. Driving this directly shows that reveal is NOT reliable on a cold
-// first open: with a single click the backdrop can still be `flip-backdrop` (no
-// `.show`) more than a second later, and focus never enters the dialog. A second
-// click — or any other event that re-renders — reveals it.
-//
-// These tests open through `openVia`, which RETRIES the click, so they assert the
-// weaker but still meaningful property: once the panel is open it is genuinely
-// usable — on screen, hit-testable, and leaving nothing behind when closed. The
-// single-click reveal itself is tracked as C611 and is deliberately NOT asserted
-// here; a test that passes only because the harness clicked twice would be
-// claiming something untrue.
+// Quick Add uses the shared AccessibleOverlay, whose modal backdrop is
+// `.cf-overlay__backdrop--modal`. It does not use FlipPanel's `.flip-backdrop`
+// or its `.show` reveal class.
 import { test, expect, nav, openVia } from "./fixtures.mjs";
 
 // panelState reports what a user (and an assistive technology) would actually
 // find, independent of how it was achieved.
 async function panelState(app) {
   return app.evaluate(() => {
-    const backdrop = document.querySelector(".flip-backdrop");
-    if (!backdrop) return { present: false };
+    const dialog = document.querySelector('[data-testid="txn-add-dialog"]');
+    const backdrop = document.querySelector(".cf-overlay__backdrop--modal");
+    if (!dialog || !backdrop) return { present: false };
     const cs = getComputedStyle(backdrop);
     const amount = document.querySelector('[data-testid="txn-add-amount"]');
     let hitTestable = false;
@@ -30,7 +22,7 @@ async function panelState(app) {
     }
     return {
       present: true,
-      revealed: backdrop.classList.contains("show"),
+      revealed: cs.visibility === "visible" && cs.display !== "none",
       visibility: cs.visibility,
       opacity: cs.opacity,
       hitTestable,
@@ -38,11 +30,10 @@ async function panelState(app) {
   });
 }
 
-test.describe("C611 · an open flip modal is usable", { tag: "@prod" }, () => {
+test.describe("C611 · Quick Add modal is usable", { tag: "@prod" }, () => {
   test("quick-add from the dashboard is on screen once open", async ({ app }) => {
-    // The dashboard is the heaviest route, so it is where the reveal is slowest
-    // and the failure was first seen.
-    await openVia(app, app.getByTestId("add-transaction-btn"), app.locator(".flip-backdrop.show"));
+    // The dashboard is the heaviest route, so it is where the failure was first seen.
+    await openVia(app, app.getByTestId("add-transaction-btn"), app.getByTestId("txn-add-dialog"));
 
     const s = await panelState(app);
     expect(s.present).toBe(true);
@@ -55,7 +46,7 @@ test.describe("C611 · an open flip modal is usable", { tag: "@prod" }, () => {
 
   test("quick-add from the ledger is on screen once open", async ({ app }) => {
     await nav(app, "/transactions");
-    await openVia(app, app.getByTestId("add-transaction-btn"), app.locator(".flip-backdrop.show"));
+    await openVia(app, app.getByTestId("add-transaction-btn"), app.getByTestId("txn-add-dialog"));
 
     const s = await panelState(app);
     expect(s.revealed).toBe(true);
@@ -63,20 +54,16 @@ test.describe("C611 · an open flip modal is usable", { tag: "@prod" }, () => {
     expect(s.hitTestable).toBe(true);
   });
 
-  // BLOCKED BY C611. A dialog must take focus when it opens, or a keyboard/screen
-  // reader user is left behind it. Driven directly, focus stays on the trigger
-  // button — `document.activeElement` is still `add-transaction-btn` and is not
-  // inside `.flip-backdrop`. It shares a root cause with the unreliable reveal
-  // (the panel's mount effects not completing on a cold open), so it is recorded
-  // rather than worked around: focusing on a timer would hide the real defect.
-  test.fixme("opening a panel lands focus inside it", async ({ app }) => {
+  // Focus placement is a separate follow-up: AccessibleOverlay currently starts
+  // on the sentence field rather than honoring Quick Add's Amount autofocus.
+  test.fixme("opening Quick Add focuses the Amount field", async ({ app }) => {
     await nav(app, "/transactions");
-    await openVia(app, app.getByTestId("add-transaction-btn"), app.locator(".flip-backdrop.show"));
+    await openVia(app, app.getByTestId("add-transaction-btn"), app.getByTestId("txn-add-dialog"));
 
     const focus = await app.evaluate(() => {
       const el = document.activeElement;
       return {
-        insidePanel: !!(el && el.closest && el.closest(".flip-backdrop")),
+        insidePanel: !!(el && el.closest && el.closest('[data-testid="txn-add-dialog"]')),
         testid: el ? el.getAttribute("data-testid") : null,
       };
     });
@@ -88,7 +75,7 @@ test.describe("C611 · an open flip modal is usable", { tag: "@prod" }, () => {
 
   test("a closed panel leaves nothing focusable behind", async ({ app }) => {
     await nav(app, "/transactions");
-    await openVia(app, app.getByTestId("add-transaction-btn"), app.getByTestId("txn-add-amount"));
+    await openVia(app, app.getByTestId("add-transaction-btn"), app.getByTestId("txn-add-dialog"));
     await expect(app.getByTestId("txn-add-amount")).toBeVisible();
 
     await app.keyboard.press("Escape");
@@ -96,7 +83,7 @@ test.describe("C611 · an open flip modal is usable", { tag: "@prod" }, () => {
 
     const landedInPanel = await app.evaluate(() => {
       const el = document.activeElement;
-      return !!(el && el.closest && el.closest(".flip-backdrop"));
+      return !!(el && el.closest && el.closest('[data-testid="txn-add-dialog"]'));
     });
     expect(landedInPanel).toBe(false);
   });
