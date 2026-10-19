@@ -89,6 +89,13 @@ func TestApplyRules(t *testing.T) {
 	if err := a.PutAccount(acc); err != nil {
 		t.Fatalf("PutAccount: %v", err)
 	}
+	target := acc
+	target.ID = "a2"
+	target.Name = "Savings"
+	if err := a.PutAccount(target); err != nil {
+		t.Fatal(err)
+	}
+
 	if err := a.PutRule(rules.Rule{ID: "r1", Match: "uber", SetCategoryID: "transport", SetTags: []string{"travel"}}); err != nil {
 		t.Fatalf("PutRule: %v", err)
 	}
@@ -157,6 +164,13 @@ func TestApplyRulesWithCounts(t *testing.T) {
 	if err := a.PutAccount(acc); err != nil {
 		t.Fatalf("PutAccount: %v", err)
 	}
+	target := acc
+	target.ID = "other"
+	target.Name = "Savings"
+	if err := a.PutAccount(target); err != nil {
+		t.Fatal(err)
+	}
+
 	// Two rules so we can verify per-rule counts.
 	if err := a.PutRule(rules.Rule{ID: "r-uber", Match: "uber", SetCategoryID: "transport"}); err != nil {
 		t.Fatalf("PutRule uber: %v", err)

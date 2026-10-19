@@ -3,12 +3,85 @@
 package store
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 
 	"github.com/monstercameron/CashFlux/internal/domain"
 )
+
+// PutRecurringOccurrenceAtomic records an occurrence receipt, its transaction
+// rows, and the schedule advance together. The exact schedule before-image
+// guards against a concurrent edit; an existing receipt never posts again,
+// including after its transaction was edited or deleted.
+func (s *SQLiteStore) PutRecurringOccurrenceAtomic(operationID string, before, after domain.Recurring, txns []domain.Transaction) (bool, error) {
+	if operationID == "" || before.ID == "" || before.ID != after.ID || len(txns) == 0 || !after.NextDue.After(before.NextDue) {
+		return false, fmt.Errorf("store: invalid recurring occurrence")
+	}
+	prior, err := json.Marshal(before)
+	if err != nil {
+		return false, fmt.Errorf("store: encode recurring before-image: %w", err)
+	}
+	next, err := json.Marshal(after)
+	if err != nil {
+		return false, fmt.Errorf("store: encode recurring advance: %w", err)
+	}
+	receipt, err := json.Marshal(txns)
+	if err != nil {
+		return false, fmt.Errorf("store: encode recurring receipt: %w", err)
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return false, fmt.Errorf("store: begin recurring occurrence: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	var current string
+	if err := tx.QueryRow("SELECT data FROM recurring WHERE id=?", before.ID).Scan(&current); err != nil {
+		return false, fmt.Errorf("store: read recurring occurrence: %w", err)
+	}
+	var compact bytes.Buffer
+	if err := json.Compact(&compact, []byte(current)); err != nil {
+		return false, fmt.Errorf("store: decode recurring before-image: %w", err)
+	}
+	var existing string
+	err = tx.QueryRow("SELECT v FROM appkv WHERE k=?", "recurring-occurrence:"+operationID).Scan(&existing)
+	posted := err == sql.ErrNoRows
+	if err != nil && err != sql.ErrNoRows {
+		return false, fmt.Errorf("store: read recurring receipt: %w", err)
+	}
+	if !bytes.Equal(compact.Bytes(), prior) {
+		if !posted {
+			return false, nil
+		} // already posted; never rewind a newer schedule
+		return false, fmt.Errorf("store: recurring %s changed before posting", before.ID)
+	}
+	if posted {
+		for _, txn := range txns {
+			if txn.ID == "" {
+				return false, fmt.Errorf("store: recurring transaction id is required")
+			}
+			data, err := json.Marshal(txn)
+			if err != nil {
+				return false, fmt.Errorf("store: encode recurring transaction: %w", err)
+			}
+			if _, err := tx.Exec("INSERT INTO transactions(id,data) VALUES(?,?)", txn.ID, string(data)); err != nil {
+				return false, fmt.Errorf("store: insert recurring transaction: %w", err)
+			}
+		}
+		if _, err := tx.Exec("INSERT INTO appkv(k,v) VALUES(?,?)", "recurring-occurrence:"+operationID, string(receipt)); err != nil {
+			return false, fmt.Errorf("store: record recurring occurrence: %w", err)
+		}
+	}
+	if _, err := tx.Exec("UPDATE recurring SET data=? WHERE id=?", string(next), before.ID); err != nil {
+		return false, fmt.Errorf("store: advance recurring: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return false, fmt.Errorf("store: commit recurring occurrence: %w", err)
+	}
+	mutationRev.Add(1)
+	return posted, nil
+}
 
 // PutTransactionsAtomic stores all transactions together or stores none of them.
 func (s *SQLiteStore) PutTransactionsAtomic(txns []domain.Transaction) error {

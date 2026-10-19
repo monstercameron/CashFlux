@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/rules"
 )
 
@@ -51,19 +52,6 @@ func (a *App) creditOneRule(ruleID string, n int) error {
 	return a.CreditRuleHits(map[string]int{ruleID: n})
 }
 
-// autoRuleFor reports which rule would file this transaction on entry, so an
-// import batch can tally hits without re-deriving the match. It mirrors
-// AutoCategorizeTransaction's primary (category) match exactly — the bill-link
-// action is applied independently there and is not what "this rule filed it"
-// means.
-func (a *App) autoRuleFor(payee, desc string, amountMinor int64, accountID string, td rules.TxnDate) string {
-	r := rules.FirstMatchFull(a.transactionAutoRules(), payee, desc, amountMinor, accountID, td)
-	if r == nil {
-		return ""
-	}
-	return r.ID
-}
-
 // TouchAccountBalance records that an account's balance has been confirmed as of
 // `at`, without changing the balance itself (C409).
 //
@@ -91,4 +79,19 @@ func (a *App) TouchAccountBalance(accountID string, at time.Time) error {
 	}
 	a.log.Info("account balance confirmed", "accountId", accountID, "asOf", at.Format("2006-01-02"))
 	return nil
+}
+
+// autoRuleForTransaction mirrors the primary entry action, including owner-only
+// rules. Previewing never credits hits; only approved committed rows do.
+func (a *App) autoRuleForTransaction(t domain.Transaction) string {
+	r := rules.FirstMatchFullWhereCurrency(a.transactionAutoRules(), t.Payee, t.Desc, t.Amount.Amount, t.Amount.Currency, t.AccountID, rules.NewTxnDate(t.Date), func(r rules.Rule) bool {
+		return primaryTransactionRule(r)
+	})
+	if r == nil {
+		r = rules.FirstMatchFullWhereCurrency(a.transactionAutoRules(), t.Payee, t.Desc, t.Amount.Amount, t.Amount.Currency, t.AccountID, rules.NewTxnDate(t.Date), func(r rules.Rule) bool { return r.SetBillAccountID != "" })
+	}
+	if r == nil {
+		return ""
+	}
+	return r.ID
 }

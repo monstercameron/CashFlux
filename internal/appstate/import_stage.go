@@ -7,19 +7,28 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/auditview"
+	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
+	"github.com/monstercameron/CashFlux/internal/dedupe"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/engineenv"
 	"github.com/monstercameron/CashFlux/internal/extract"
+	"github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
-	"github.com/monstercameron/CashFlux/internal/rules"
+	"github.com/monstercameron/CashFlux/internal/payeebase"
 	"github.com/monstercameron/CashFlux/internal/staging"
 	"github.com/monstercameron/CashFlux/internal/store"
+	"github.com/monstercameron/CashFlux/internal/taskrecur"
+	"github.com/monstercameron/CashFlux/internal/taskresolve"
 	"github.com/monstercameron/CashFlux/internal/validate"
 	"github.com/monstercameron/CashFlux/internal/workflow"
 )
@@ -85,7 +94,7 @@ func (a *App) StageCSV(data []byte, accountID string) (StagedImport, error) {
 		line := csvSourceLine(i, failed)
 		rowID := fmt.Sprintf("csv-row-%d", line)
 		if !tx.IsTransfer() {
-			ruleIDs[rowID] = a.autoRuleFor(tx.Payee, tx.Desc, tx.Amount.Amount, tx.AccountID, rules.NewTxnDate(tx.Date))
+			ruleIDs[rowID] = a.autoRuleForTransaction(tx)
 		}
 		description := tx.Desc
 		tx = a.AutoCategorizeTransaction(tx)
@@ -131,6 +140,7 @@ func (a *App) Stage(kind domain.DocumentKind, rows []extract.Row, accountID stri
 	accounts := a.Accounts()
 	resolve := idResolver(accountPairs(accounts))
 	inputs := make([]staging.Input, 0, len(rows))
+	ruleIDs := map[string]string{}
 	for i, row := range rows {
 		rowID := row.ID
 		if rowID == "" {
@@ -152,6 +162,7 @@ func (a *App) Stage(kind domain.DocumentKind, rows []extract.Row, accountID stri
 			if err != nil {
 				input.Error = err.Error()
 			} else {
+				ruleIDs[rowID] = a.autoRuleForTransaction(domain.Transaction{Payee: "", Desc: strings.TrimSpace(row.Description), AccountID: tx.AccountID, Date: tx.Date, Amount: tx.Amount})
 				input = importInput(tx, rowID, i+1)
 				input.Description = row.Description
 				input.RawDate, input.RawAmount, input.RawCurrency, input.RawAccount = row.Date, row.Amount, row.Currency, row.AccountID
@@ -160,7 +171,18 @@ func (a *App) Stage(kind domain.DocumentKind, rows []extract.Row, accountID stri
 		}
 		inputs = append(inputs, input)
 	}
-	return a.stageImport(kind, accountID, inputs)
+	batch, err := a.stageImport(kind, accountID, inputs)
+	if err != nil {
+		return StagedImport{}, err
+	}
+	for _, row := range batch.Rows {
+		if row.Approved() {
+			if rid := ruleIDs[row.ID]; rid != "" {
+				batch.ruleHits[rid]++
+			}
+		}
+	}
+	return batch, nil
 }
 
 func accountPairs(accounts []domain.Account) [][2]string {
@@ -195,12 +217,19 @@ func (a *App) stageImport(kind domain.DocumentKind, accountID string, inputs []s
 	if err != nil {
 		return StagedImport{}, fmt.Errorf("stage import: read ledger: %w", err)
 	}
+	existingIDs := make(map[string]domain.Transaction, len(existing))
+	for _, txn := range existing {
+		existingIDs[txn.ID] = txn
+	}
 	transactionIDs := map[string]bool{}
 	for i := range inputs {
 		if inputs[i].Error != "" || inputs[i].Transaction == nil {
 			continue
 		}
 		transactionID := inputs[i].Transaction.ID
+		if prior, exists := existingIDs[transactionID]; exists && dedupe.Key(prior) != dedupe.Key(*inputs[i].Transaction) {
+			inputs[i].Error = "import row was not saved: transaction ID already belongs to a ledger row; remove the ID to import a different transaction"
+		}
 		if transactionIDs[transactionID] {
 			inputs[i].Error = "transaction ID is repeated in this file"
 		}
@@ -320,9 +349,13 @@ func (a *App) Commit(batch StagedImport, documentID, checkpointID string) (CSVIm
 			Extracted: documentRowsFromExtract(extracted), RowCount: len(prepared),
 			SkippedCount: result.Duplicates + len(result.Failed), DuplicateCount: result.Duplicates, FailedCount: len(result.Failed)}
 	}
+	plan, err := a.planImportAutomation(prepared, batch.ruleHits)
+	if err != nil {
+		return CSVImportResult{}, err
+	}
 	auditview.SetSessionActor(auditview.ActorImport)
 	defer func() { auditview.CaptureNow(); auditview.SetSessionActor("") }()
-	if err := a.store.PutImportBatch(prepared, doc); err != nil {
+	if err := a.store.PutImportBatchWithChanges(prepared, doc, plan.changes); err != nil {
 		for _, i := range preparedOutcomes {
 			outcome := &result.Outcomes[i]
 			outcome.Status, outcome.Reason = "failed", "import batch was not saved: "+err.Error()
@@ -332,21 +365,29 @@ func (a *App) Commit(batch StagedImport, documentID, checkpointID string) (CSVIm
 		return result, fmt.Errorf("commit import: %w", err)
 	}
 	result.Imported = len(prepared)
+	if len(plan.resolveChanges) > 0 {
+		lastAutoResolve = &lastAutoResolveState{app: a, changes: plan.resolveChanges, titles: plan.resolvedTitles}
+	}
 	for j, i := range preparedOutcomes {
 		result.Outcomes[i].Status = "imported"
 		result.Outcomes[i].TransactionID = prepared[j].ID
 	}
+	// Dataset actions are batch actions, even when many rows matched. They
+	// run only after the import transaction commits, with triggers suspended.
+	previous := a.triggersSuspended
+	previousObservers := a.suppressTxnObservers
+	a.triggersSuspended = true
+	a.suppressTxnObservers = true
+	for _, effect := range plan.deferred {
+		a.applyEffect(effect)
+	}
+	a.triggersSuspended = previous
+	a.suppressTxnObservers = previousObservers
 	if result.Imported > 0 {
 		a.fireTxnMutated()
 	}
-	for i := range prepared {
-		a.applySinkingFundDrawdown(prepared[i])
-		a.RunTriggered(workflow.TriggerTxnAdded, &prepared[i])
-		a.resolveTasksForTxn(prepared[i])
-	}
-	if err := a.CreditRuleHits(batch.ruleHits); err != nil {
-		a.log.Error("credit rule hits after import", "err", err)
-	}
+	a.publishImportNotices(plan.notices)
+
 	return result, nil
 }
 
@@ -399,7 +440,11 @@ func (a *App) CommitDurable(batch StagedImport, documentID, checkpointID string,
 		done(CSVImportResult{}, ErrDurabilityUnavailable)
 		return
 	}
+	previousNotifier := a.Notifier
+	var notices []string
+	a.Notifier = func(message string) { notices = append(notices, message) }
 	result, err := a.Commit(batch, documentID, checkpointID)
+	a.Notifier = previousNotifier
 	if err != nil {
 		done(result, err)
 		return
@@ -415,6 +460,293 @@ func (a *App) CommitDurable(batch StagedImport, documentID, checkpointID string,
 			done(result, fmt.Errorf("save imported rows: %w", durable.Err))
 			return
 		}
+		if previousNotifier != nil && len(notices) > 0 {
+			previousNotifier(strings.Join(notices, "\n"))
+		}
 		done(result, nil)
 	})
+}
+
+// importAutomationPlan retains all row-local writes and audit runs for one SQL
+// transaction. Dataset-wide actions are deduplicated and run once afterwards.
+type importAutomationPlan struct {
+	importEffects
+	deferred       []workflow.Effect
+	resolveChanges []store.RecordChange
+	resolvedTitles []string
+}
+
+// importAutomationContext belongs to one immutable batch, rather than a store
+// revision. Its own planned writes cannot invalidate the aggregate values.
+type importAutomationContext struct {
+	vars                 map[string]float64
+	defs                 []customfields.Def
+	accounts, categories map[string]string
+	merchants            map[string][]int64
+	positions            map[string]int
+}
+
+func (a *App) newImportAutomationContext(txns []domain.Transaction) importAutomationContext {
+	all := append(append([]domain.Transaction(nil), a.Transactions()...), txns...)
+	accounts, categories := a.Accounts(), a.Categories()
+	base := a.Settings().BaseCurrency
+	if base == "" {
+		base = "USD"
+	}
+	c := importAutomationContext{defs: a.CustomFieldDefsFor("transaction"), accounts: map[string]string{}, categories: map[string]string{}, merchants: map[string][]int64{}, positions: map[string]int{}}
+	// The engine sees the complete imported ledger once, before automation. Row
+	// fields override this frozen aggregate surface in event().
+	c.vars = engineenv.Vars(engineenv.Data{
+		Ledger: budgeting.NewNettedLedger(all, a.TxnLinks()), Accounts: accounts,
+		Transactions: all, Members: a.Members(), Budgets: a.Budgets(), Goals: a.Goals(), Tasks: a.Tasks(),
+		Recurring: a.Recurring(), Categories: categories, CustomDefs: a.CustomFieldDefs(), Molecules: a.Molecules(),
+		Rates: currency.Rates{Base: base, Rates: a.Settings().FXRates}, Now: a.clock(),
+	})
+	for _, account := range accounts {
+		c.accounts[account.ID] = account.Name
+	}
+	for _, category := range categories {
+		c.categories[category.ID] = category.Name
+	}
+	groups := map[string][]domain.Transaction{}
+	for _, txn := range all {
+		if !txn.IsExpense() || payeebase.Key(txn) == "" {
+			continue
+		}
+		groups[importMerchantKey(txn)] = append(groups[importMerchantKey(txn)], txn)
+	}
+	for key, rows := range groups {
+		sort.Slice(rows, func(i, j int) bool { return rows[i].Amount.Amount > rows[j].Amount.Amount })
+		for _, txn := range rows {
+			magnitude, err := txn.Amount.AbsChecked()
+			if err != nil {
+				continue
+			} // unusable history is never a baseline
+			c.positions[txn.ID] = len(c.merchants[key])
+			c.merchants[key] = append(c.merchants[key], magnitude.Amount)
+		}
+	}
+	return c
+}
+
+func importMerchantKey(txn domain.Transaction) string {
+	return txn.Amount.Currency + "\x00" + payeebase.Key(txn)
+}
+
+func (c importAutomationContext) event(txn domain.Transaction) workflow.Context {
+	ctx := workflow.Context{Vars: taskResolveEventVars(c.vars, txn, nil, c.defs), Strs: map[string]string{}, TxnID: txn.ID}
+	ctx.Strs["txn_payee"], ctx.Strs["txn_desc"] = txn.Payee, txn.Desc
+	ctx.Strs["txn_tags"] = strings.Join(txn.Tags, ",")
+	ctx.Strs["txn_account"], ctx.Strs["txn_category"] = c.accounts[txn.AccountID], c.categories[txn.CategoryID]
+	for _, def := range c.defs {
+		if def.Type != customfields.TypeNumber && def.Type != customfields.TypeBool {
+			ctx.Strs["cf_txn_"+def.Key], _ = txn.Custom[def.Key].(string)
+		}
+	}
+	values := c.merchants[importMerchantKey(txn)]
+	position, present := c.positions[txn.ID]
+	n := len(values)
+	if present {
+		n--
+	}
+	if n >= payeebase.MinHistory {
+		at := func(i int) int64 {
+			if present && i >= position {
+				i++
+			}
+			return values[i]
+		}
+		median := at(n / 2)
+		if n%2 == 0 {
+			low := at(n/2 - 1)
+			median = low + (median-low)/2
+		}
+		if median > 0 {
+			div := math.Pow10(currency.Decimals(txn.Amount.Currency))
+			ctx.Vars["txn_payee_typical"] = float64(median) / div
+			ctx.Vars["txn_vs_typical"] = math.Abs(float64(txn.Amount.Amount)) / float64(median)
+		}
+	}
+	return ctx
+}
+
+func (a *App) planImportAutomation(txns []domain.Transaction, ruleHits map[string]int) (importAutomationPlan, error) {
+	plan := importAutomationPlan{}
+	if len(txns) == 0 {
+		return plan, nil
+	}
+	context := a.newImportAutomationContext(txns)
+	datasetActions := map[workflow.ActionKind]bool{}
+	born := map[string]int{}
+	originalTxns := append([]domain.Transaction(nil), txns...)
+	appendChange := func(table, recordID string, before, after any) error {
+		change, err := importChange(table, recordID, before, after)
+		if err == nil {
+			plan.changes = append(plan.changes, change)
+		}
+		return err
+	}
+	var local []workflow.Workflow
+	for _, w := range a.Workflows() {
+		if !w.Enabled || !workflow.Match(w.Trigger, workflow.TriggerTxnAdded) {
+			continue
+		}
+		local = append(local, w)
+	}
+
+	tasks := a.Tasks()
+	openTaskTitles := make(map[string]bool, len(tasks))
+	for _, task := range tasks {
+		if task.Status == domain.StatusOpen {
+			openTaskTitles[task.Title] = true
+		}
+	}
+
+	for i := range txns {
+		original := txns[i]
+		ctx := context.event(original)
+		for _, w := range local {
+			effects, matched, err := workflow.Plan(w, ctx)
+			if err != nil {
+				a.logErr("workflowTriggered", err)
+				continue
+			}
+			if !matched {
+				continue
+			}
+			for _, effect := range effects {
+				switch effect.Kind {
+				case workflow.ActionSetCategory:
+					txns[i].CategoryID = effect.CategoryID
+				case workflow.ActionAddTag:
+					txns[i].Tags = addTagUnique(txns[i].Tags, effect.Tag)
+				case workflow.ActionFlagReview:
+					if !txns[i].Reviewed {
+						txns[i].Tags = addTagUnique(txns[i].Tags, effect.Tag)
+					}
+				case workflow.ActionCreateTask:
+					if !openTaskTitles[effect.Title] {
+						task := domain.Task{ID: id.New(), Title: effect.Title, Notes: effect.Notes, Status: domain.StatusOpen, Priority: domain.PriorityMedium, Source: domain.SourceManual}
+						if effect.ResolveCondition != "" {
+							task.Resolve = &domain.TaskResolve{Condition: effect.ResolveCondition}
+						}
+						if issues := validate.ValidateTask(task); !issues.OK() {
+							a.logErr("workflowCreateTask", issues)
+							continue
+						}
+						if err := a.validateCustom("task", task.Custom); err != nil {
+							a.logErr("workflowCreateTask", err)
+							continue
+						}
+						openTaskTitles[task.Title] = true
+						born[task.ID] = i
+						tasks = append(tasks, task)
+						if err := appendChange("tasks", task.ID, nil, task); err != nil {
+							return plan, err
+						}
+					}
+				case workflow.ActionApplyRules, workflow.ActionPostRecurring, workflow.ActionFlagBudgetOver:
+					if !datasetActions[effect.Kind] {
+						datasetActions[effect.Kind] = true
+						plan.deferred = append(plan.deferred, effect)
+					}
+				case workflow.ActionAgentRun, workflow.ActionTransfer:
+					return plan, fmt.Errorf("this workflow action requires a scheduled run, not a transaction import")
+				case workflow.ActionNotify:
+					plan.notices = append(plan.notices, effect.Message)
+				}
+			}
+			run := workflow.Run{ID: id.New(), WorkflowID: w.ID, At: a.clock().Format(time.RFC3339), Matched: true, Effects: effects}
+			if err := appendChange("workflowruns", run.ID, nil, run); err != nil {
+				return plan, err
+			}
+		}
+
+	}
+	// Resolve against the same batch context used by workflows. Each task is
+	// completed at most once; tasks created by row i cannot see earlier events.
+	for _, task := range tasks {
+		if task.Status != domain.StatusOpen || task.Resolve == nil {
+			continue
+		}
+		for _, original := range originalTxns[born[task.ID]:] {
+			ctx := context.event(original)
+			ev := taskresolve.Event{Vars: ctx.Vars, Strs: ctx.Strs, Txn: &taskresolve.TxnEvent{Payee: txnPayeeOrDesc(original), AmountMinor: original.Amount.Amount, Currency: original.Amount.Currency}}
+			resolved, err := taskresolve.Resolves(*task.Resolve, ev)
+			if err != nil {
+				a.log.Warn("task resolve condition failed", "task", task.ID, "err", err)
+				break
+			}
+			if !resolved {
+				continue
+			}
+			completed := task
+			completed.Status = domain.StatusDone
+			if err := appendChange("tasks", task.ID, task, completed); err != nil {
+				return plan, err
+			}
+			plan.resolveChanges = append(plan.resolveChanges, plan.changes[len(plan.changes)-1])
+			plan.resolvedTitles = append(plan.resolvedTitles, task.Title)
+			if next, spawn := taskrecur.NextOccurrence(completed, id.New(), a.clock()); spawn {
+				if issues := validate.ValidateTask(next); !issues.OK() {
+					return plan, fmt.Errorf("resolve imported task: %w", issues)
+				}
+				if err := appendChange("tasks", next.ID, nil, next); err != nil {
+					return plan, err
+				}
+				plan.resolveChanges = append(plan.resolveChanges, plan.changes[len(plan.changes)-1])
+			}
+			plan.notices = append(plan.notices, "Done for you: "+task.Title)
+			break
+		}
+	}
+	// Drawdown uses the staged category, before transaction-added workflows,
+	// matching the ordinary transaction write path. Aggregate each goal once.
+	base := a.Settings().BaseCurrency
+	if base == "" {
+		base = "USD"
+	}
+	rates := currency.Rates{Base: base, Rates: a.Settings().FXRates}
+	for _, goal := range a.Goals() {
+		if !goal.IsSinkingFund || goal.Archived {
+			continue
+		}
+		updated := goal
+		for _, txn := range originalTxns {
+			if txn.IsTransfer() || !txn.Amount.IsNegative() || txn.CategoryID != goal.CategoryID || txn.CategoryID == "" {
+				continue
+			}
+			amount, err := txn.Amount.AbsChecked()
+			if err != nil {
+				return plan, fmt.Errorf("plan imported sinking-fund amount: %w", err)
+			}
+			if amount.Currency != updated.CurrentAmount.Currency {
+				converted, err := rates.Convert(amount, updated.CurrentAmount.Currency)
+				if err != nil {
+					a.log.Warn("sinking-fund drawdown skipped: no FX rate", "goal", goal.ID, "err", err)
+					continue
+				}
+				amount = converted
+			}
+			updated, err = goals.DrawDownFund(updated, amount.Amount)
+			if err != nil {
+				return plan, fmt.Errorf("plan imported sinking-fund drawdown: %w", err)
+			}
+		}
+		if updated.CurrentAmount != goal.CurrentAmount {
+			if err := appendChange("goals", goal.ID, goal, updated); err != nil {
+				return plan, err
+			}
+		}
+	}
+	if len(ruleHits) > 0 {
+		for _, rule := range a.Rules() {
+			if count := ruleHits[rule.ID]; count > 0 {
+				if err := appendChange("rules", rule.ID, rule, rule.RecordHits(count, a.clock())); err != nil {
+					return plan, err
+				}
+			}
+		}
+	}
+	return plan, nil
 }

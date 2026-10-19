@@ -11,6 +11,7 @@ package appstate
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -29,6 +30,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/catname"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/engineenv"
 	"github.com/monstercameron/CashFlux/internal/extract"
@@ -1120,6 +1122,10 @@ func (a *App) SuggestTransactionFields(text, categoryID string, tags []string) (
 // the full structured-condition path (C105), which evaluates field/op/value
 // conditions when present and falls back to the legacy Match substring otherwise.
 // Transfers are excluded from categorization.
+func primaryTransactionRule(r rules.Rule) bool {
+	return r.SetCategoryID != "" || len(r.SetTags) > 0 || r.RenameDesc != "" || r.SetMemberID != "" || r.SetReviewed || r.SetExcludeFromReports
+}
+
 func ruleOwnerForApplyOnce(t domain.Transaction) string {
 	owners := t.Owners()
 	if len(owners) != 1 {
@@ -1139,19 +1145,19 @@ func (a *App) AutoCategorizeTransaction(t domain.Transaction) domain.Transaction
 	// shadowed by an earlier rule whose only job is a category/tag. Applied only when the
 	// transaction has no bill link yet — a manual link is never overwritten.
 	if t.BillAccountID == "" {
-		if br := rules.FirstMatchFullWhere(rs, t.Payee, t.Desc, t.Amount.Amount, t.AccountID, td,
+		if br := rules.FirstMatchFullWhereCurrency(rs, t.Payee, t.Desc, t.Amount.Amount, t.Amount.Currency, t.AccountID, td,
 			func(r rules.Rule) bool { return r.SetBillAccountID != "" }); br != nil {
 			t.BillAccountID = br.SetBillAccountID
 		}
 	}
-	r := rules.FirstMatchFullWhere(rs, t.Payee, t.Desc, t.Amount.Amount, t.AccountID, td, func(rule rules.Rule) bool {
+	r := rules.FirstMatchFullWhereCurrency(rs, t.Payee, t.Desc, t.Amount.Amount, t.Amount.Currency, t.AccountID, td, func(rule rules.Rule) bool {
 		return rule.SetCategoryID != "" || len(rule.SetTags) > 0 || rule.RenameDesc != "" || rule.SetMemberID != "" || rule.SetReviewed || rule.SetExcludeFromReports
 	})
 	if r == nil {
 		return t
 	}
 	if strings.TrimSpace(t.CategoryID) == "" {
-		if categoryRule := rules.FirstMatchFullWhere(rs, t.Payee, t.Desc, t.Amount.Amount, t.AccountID, td, func(rule rules.Rule) bool {
+		if categoryRule := rules.FirstMatchFullWhereCurrency(rs, t.Payee, t.Desc, t.Amount.Amount, t.Amount.Currency, t.AccountID, td, func(rule rules.Rule) bool {
 			return rule.SetCategoryID != ""
 		}); categoryRule != nil {
 			t.CategoryID = categoryRule.SetCategoryID
@@ -1370,7 +1376,7 @@ func (a *App) PutRecurring(r domain.Recurring) error {
 // "recurring:<id>"), it posts the recurring's amount to its account/category and
 // advances the recurring's NextDue so it's no longer shown as due.
 func (a *App) RecordBillPayment(accountID, name string, amount money.Money) error {
-	now := time.Now()
+	now := a.clock()
 	if rid, ok := strings.CutPrefix(accountID, "recurring:"); ok {
 		for _, r := range a.Recurring() {
 			if r.ID != rid {
@@ -1379,25 +1385,11 @@ func (a *App) RecordBillPayment(accountID, name string, amount money.Money) erro
 			if r.AccountID == "" {
 				return fmt.Errorf("appstate: recurring %q has no account to post to", r.Label)
 			}
-			if destination, ok := txnclassify.RecurringLiabilityDestination(r, a.Accounts()); ok {
-				if _, _, err := a.CreateTransferPair(TransferParams{
-					Source: domain.TxnSourceRecurring, FromAccountID: r.AccountID,
-					ToAccountID: destination.ID, AmountMinor: r.Amount.Abs().Amount,
-					Date: now, Desc: r.Label,
-				}); err != nil {
-					return fmt.Errorf("appstate: post recurring payment %q: %w", r.Label, err)
-				}
-				return a.PutRecurring(r.Advance())
+			posted, err := a.postRecurringOccurrence(r, now)
+			if err == nil && posted {
+				a.fireTxnMutated()
 			}
-			t := domain.Transaction{
-				ID: id.New(), AccountID: r.AccountID, CategoryID: r.CategoryID,
-				Amount: r.Amount, Date: now, Payee: r.Label, Desc: r.Label,
-				Source: domain.TxnSourceRecurring,
-			}
-			if err := a.PutTransaction(t); err != nil {
-				return err
-			}
-			return a.PutRecurring(r.Advance())
+			return err
 		}
 		return fmt.Errorf("appstate: recurring bill not found")
 	}
@@ -2129,50 +2121,96 @@ func (a *App) DatasetBytes() int {
 // PostDueRecurring posts a transaction for each autopost recurring whose NextDue
 // is on or before asOf, advancing NextDue past asOf — catching up any missed
 // periods (bounded). A recurring needs an account to post into; ones without one,
-// or without autopost, are skipped. Returns how many transactions were created.
+// or without autopost, are skipped. Returns the number of posted occurrences.
+// Each occurrence commits its receipt, ledger rows and schedule advance together.
+// Failed occurrences remain due; independent recurring items continue posting.
 func (a *App) PostDueRecurring(asOf time.Time) (int, error) {
+	if err := a.roleGuard(); err != nil {
+		return 0, err
+	}
 	posted := 0
+	var failures []error
+	through := dateutil.CalendarDayUTC(asOf)
 	for _, r := range a.Recurring() {
-		if !r.Autopost || r.AccountID == "" {
+		if !r.Active() || !r.Autopost || r.AccountID == "" {
 			continue
 		}
-		changed := false
-		for guard := 0; !r.NextDue.After(asOf) && guard < 600; guard++ {
-			if destination, ok := txnclassify.RecurringLiabilityDestination(r, a.Accounts()); ok {
-				if _, _, err := a.CreateTransferPair(TransferParams{
-					Source: domain.TxnSourceRecurring, FromAccountID: r.AccountID,
-					ToAccountID: destination.ID, AmountMinor: r.Amount.Abs().Amount,
-					Date: r.NextDue, Desc: r.Label,
-				}); err != nil {
-					return posted, fmt.Errorf("appstate: auto-post recurring payment %q: %w", r.Label, err)
+		for guard := 0; !dateutil.CalendarDayUTC(r.NextDue).After(through) && guard < 600; guard++ {
+			created, err := a.postRecurringOccurrence(r, r.NextDue)
+			if err != nil {
+				failure := fmt.Errorf("auto-post recurring %q: %w", r.Label, err)
+				failures = append(failures, failure)
+				a.log.Error("recurring occurrence was not posted", "recurring", r.ID, "due", dateutil.FormatDate(r.NextDue), "err", err)
+				if a.Notifier != nil {
+					a.Notifier("Could not post " + r.Label + ": " + err.Error())
 				}
-				r = r.Advance()
+				break
+			}
+			if created {
 				posted++
-				changed = true
-				continue
 			}
-			t := domain.Transaction{
-				ID: id.New(), AccountID: r.AccountID, CategoryID: r.CategoryID,
-				Date: r.NextDue, Amount: r.Amount, Desc: r.Label,
-				Source: domain.TxnSourceRecurring,
-			}
-			if err := a.store.PutTransaction(t); err != nil {
-				return posted, err
-			}
-			posted++
 			r = r.Advance()
-			changed = true
-		}
-		if changed {
-			if err := a.store.PutRecurring(r); err != nil {
-				return posted, err
-			}
 		}
 	}
 	if posted > 0 {
+		a.fireTxnMutated()
 		a.log.Info("posted due recurring", "count", posted)
 	}
-	return posted, nil
+	return posted, errors.Join(failures...)
+}
+
+// postRecurringOccurrence shares one durable identity between manual bill
+// payment and automatic posting. Calendar dates, rather than clock instants,
+// identify scheduled occurrences and determine when they become due.
+func (a *App) postRecurringOccurrence(r domain.Recurring, when time.Time) (bool, error) {
+	if err := a.roleGuard(); err != nil {
+		return false, err
+	}
+	if !r.Active() {
+		return false, fmt.Errorf("this recurring item is paused")
+	}
+	if r.NextDue.IsZero() {
+		return false, fmt.Errorf("the next due date is missing")
+	}
+	if _, err := r.Amount.AbsChecked(); err != nil {
+		return false, fmt.Errorf("recurring amount: %w", err)
+	}
+	operationID := fmt.Sprintf("recurring:%q:%s", r.ID, dateutil.FormatDate(r.NextDue))
+	when = dateutil.CalendarDayUTC(when)
+	txns := []domain.Transaction{{ID: transferID(operationID, "transaction"), AccountID: r.AccountID,
+		CategoryID: r.CategoryID, Date: when, Amount: r.Amount, Desc: r.Label, Source: domain.TxnSourceRecurring}}
+	accounts := a.Accounts()
+	if destination, ok := txnclassify.RecurringLiabilityDestination(r, accounts); ok {
+		magnitude, err := r.Amount.AbsChecked()
+		if err != nil {
+			return false, fmt.Errorf("recurring payment amount: %w", err)
+		}
+		from, to, err := a.transferAccounts(r.AccountID, destination.ID)
+		if err != nil {
+			return false, err
+		}
+		outAmount, inAmount, err := a.transferLegs(from, to, magnitude.Amount, 0)
+		if err != nil {
+			return false, err
+		}
+		group := transferID(operationID, "group")
+		txns = []domain.Transaction{
+			{ID: transferID(operationID, "out"), AccountID: from.ID, TransferAccountID: to.ID, TransferGroupID: group, Amount: outAmount, Date: when, Desc: r.Label, Payee: to.Name, Reviewed: true, Source: domain.TxnSourceRecurring},
+			{ID: transferID(operationID, "in"), AccountID: to.ID, TransferAccountID: from.ID, TransferGroupID: group, Amount: inAmount, Date: when, Desc: r.Label, Payee: from.Name, Reviewed: true, Source: domain.TxnSourceRecurring},
+		}
+	}
+	for _, txn := range txns {
+		if _, ok := domain.AccountByID(accounts, txn.AccountID); !ok {
+			return false, fmt.Errorf("choose an existing account")
+		}
+		if issues := validate.ValidateTransaction(txn, accounts...); !issues.OK() {
+			return false, issues
+		}
+		if err := a.validateCustom("transaction", txn.Custom); err != nil {
+			return false, err
+		}
+	}
+	return a.store.PutRecurringOccurrenceAtomic(operationID, r, r.Advance(), txns)
 }
 
 // RunDueScheduledWorkflows finds every enabled scheduled workflow whose NextRun
@@ -2318,7 +2356,7 @@ func (a *App) FireBillDueTrigger(asOf time.Time) {
 		return
 	}
 	for _, r := range a.Recurring() {
-		if !r.NextDue.After(asOf) {
+		if r.Active() && !r.NextDue.IsZero() && !dateutil.CalendarDayUTC(r.NextDue).After(dateutil.CalendarDayUTC(asOf)) {
 			a.RunTriggered(workflow.TriggerBillDue, nil)
 			return
 		}
@@ -2353,10 +2391,14 @@ func (a *App) ApplyRulesWithCounts() (total int, perRule map[string]int, err err
 		}
 		// C105: use full structured-condition matching so condition-bearing rules
 		// are evaluated with amount/account/date context on the backfill path.
-		r := rules.FirstMatchFull(rs, t.Payee, t.Desc, t.Amount.Amount, t.AccountID, rules.NewTxnDate(t.Date))
-		categoryRule := rules.FirstMatchFullWhere(rs, t.Payee, t.Desc, t.Amount.Amount, t.AccountID, rules.NewTxnDate(t.Date), func(rr rules.Rule) bool {
+		r := rules.FirstMatchFullWhereCurrency(rs, t.Payee, t.Desc, t.Amount.Amount, t.Amount.Currency, t.AccountID, rules.NewTxnDate(t.Date), primaryTransactionRule)
+		categoryRule := rules.FirstMatchFullWhereCurrency(rs, t.Payee, t.Desc, t.Amount.Amount, t.Amount.Currency, t.AccountID, rules.NewTxnDate(t.Date), func(rr rules.Rule) bool {
 			return rr.SetCategoryID != ""
 		})
+		billRule := rules.FirstMatchFullWhereCurrency(rs, t.Payee, t.Desc, t.Amount.Amount, t.Amount.Currency, t.AccountID, rules.NewTxnDate(t.Date), func(rr rules.Rule) bool { return rr.SetBillAccountID != "" })
+		if r == nil {
+			r = billRule
+		}
 		if r == nil && categoryRule == nil {
 			continue
 		}
@@ -2392,8 +2434,7 @@ func (a *App) ApplyRulesWithCounts() (total int, perRule map[string]int, err err
 		// The bill link applies independently of the category winner (first matching rule
 		// that sets it), and only onto unlinked transactions — never clobber a manual link.
 		if t.BillAccountID == "" {
-			if br := rules.FirstMatchFullWhere(rs, t.Payee, t.Desc, t.Amount.Amount, t.AccountID, rules.NewTxnDate(t.Date),
-				func(rr rules.Rule) bool { return rr.SetBillAccountID != "" }); br != nil {
+			if br := billRule; br != nil {
 				t.BillAccountID = br.SetBillAccountID
 				changed = true
 			}
@@ -2407,7 +2448,7 @@ func (a *App) ApplyRulesWithCounts() (total int, perRule map[string]int, err err
 		} else if categoryRule != nil {
 			ruleID = categoryRule.ID
 		}
-		if is := validate.ValidateTransaction(t); !is.OK() {
+		if is := validate.ValidateTransaction(t, a.Accounts()...); !is.OK() {
 			return total, perRule, fmt.Errorf("apply rule %q to transaction %q: %w", ruleID, t.ID, is)
 		}
 		if err = a.validateCustom("transaction", t.Custom); err != nil {
@@ -2458,41 +2499,43 @@ func (a *App) ApplyOneRule(ruleID string) (int, error) {
 		if t.IsTransfer() || t.Reviewed {
 			continue
 		}
-		r := rules.FirstMatchFullWhere(rs, t.Payee, t.Desc, t.Amount.Amount, t.AccountID, rules.NewTxnDate(t.Date), func(candidate rules.Rule) bool {
-			return candidate.ID == ruleID
-		})
-		if r == nil {
+		td := rules.NewTxnDate(t.Date)
+		primary := rules.FirstMatchFullWhereCurrency(rs, t.Payee, t.Desc, t.Amount.Amount, t.Amount.Currency, t.AccountID, td, primaryTransactionRule)
+		categoryRule := rules.FirstMatchFullWhereCurrency(rs, t.Payee, t.Desc, t.Amount.Amount, t.Amount.Currency, t.AccountID, td, func(r rules.Rule) bool { return r.SetCategoryID != "" })
+		billRule := rules.FirstMatchFullWhereCurrency(rs, t.Payee, t.Desc, t.Amount.Amount, t.Amount.Currency, t.AccountID, td, func(r rules.Rule) bool { return r.SetBillAccountID != "" })
+		primaryApplies := primary != nil && primary.ID == ruleID
+		if !primaryApplies && (categoryRule == nil || categoryRule.ID != ruleID) && (billRule == nil || billRule.ID != ruleID) {
 			continue
 		}
+		r := target
 		changed := false
-		categoryRule := rules.FirstMatchFullWhere(rs, t.Payee, t.Desc, t.Amount.Amount, t.AccountID, rules.NewTxnDate(t.Date), func(candidate rules.Rule) bool {
-			return candidate.SetCategoryID != ""
-		})
+
 		if categoryRule != nil && categoryRule.ID == ruleID && t.CategoryID != r.SetCategoryID {
 			t.CategoryID = r.SetCategoryID
 			changed = true
 		}
-		for _, tag := range r.SetTags {
-			before := len(t.Tags)
-			t.Tags = addTagUnique(t.Tags, tag)
-			if len(t.Tags) != before {
+		if primaryApplies {
+			for _, tag := range r.SetTags {
+				before := len(t.Tags)
+				t.Tags = addTagUnique(t.Tags, tag)
+				if len(t.Tags) != before {
+					changed = true
+				}
+			}
+			if r.RenameDesc != "" && t.Desc != r.RenameDesc {
+				t.Desc = r.RenameDesc
 				changed = true
 			}
 		}
-		if r.RenameDesc != "" && t.Desc != r.RenameDesc {
-			t.Desc = r.RenameDesc
-			changed = true
-		}
+
 		if t.BillAccountID == "" {
-			if billRule := rules.FirstMatchFullWhere(rs, t.Payee, t.Desc, t.Amount.Amount, t.AccountID, rules.NewTxnDate(t.Date), func(candidate rules.Rule) bool {
-				return candidate.SetBillAccountID != ""
-			}); billRule != nil && billRule.ID == ruleID {
+			if billRule != nil && billRule.ID == ruleID {
 				t.BillAccountID = billRule.SetBillAccountID
 				changed = true
 			}
 		}
 		// C373: member / reviewed / exclude, through the shared apply-once rule.
-		if ap := r.ApplyOnce(ruleOwnerForApplyOnce(t), t.Reviewed, t.ExcludeFromReports); ap.Any() {
+		if ap := r.ApplyOnce(ruleOwnerForApplyOnce(t), t.Reviewed, t.ExcludeFromReports); primaryApplies && ap.Any() {
 			if ap.MemberID != "" {
 				t.SetOwners([]string{ap.MemberID}) // TODO(WHO2): rule assignment remains single-owner.
 			}
@@ -2503,7 +2546,7 @@ func (a *App) ApplyOneRule(ruleID string) (int, error) {
 		if !changed {
 			continue
 		}
-		if is := validate.ValidateTransaction(t); !is.OK() {
+		if is := validate.ValidateTransaction(t, a.Accounts()...); !is.OK() {
 			return total, fmt.Errorf("apply rule %q to transaction %q: %w", r.ID, t.ID, is)
 		}
 		if err := a.validateCustom("transaction", t.Custom); err != nil {
@@ -2535,7 +2578,7 @@ func (a *App) ApplyRuleScoped(r rules.Rule, scope ruleapply.Scope, since time.Ti
 	if err := a.roleGuard(); err != nil {
 		return nil, err
 	}
-	changes := ruleapply.Plan(r, a.Transactions(), scope, since)
+	changes := ruleapply.Plan(r, a.Transactions(), scope, since, a.Rules())
 	if err := a.applyRuleChanges(changes); err != nil {
 		return nil, err
 	}
@@ -2565,12 +2608,13 @@ func (a *App) applyRuleChanges(changes []ruleapply.Change) error {
 		return nil
 	}
 	auditview.SetSessionActor(auditview.ActorRule)
-	defer auditview.CaptureNow()
+	defer func() { auditview.CaptureNow(); auditview.SetSessionActor("") }()
 
 	byID := make(map[string]domain.Transaction, len(changes))
 	for _, t := range a.Transactions() {
 		byID[t.ID] = t
 	}
+	var updated []domain.Transaction
 	for _, c := range changes {
 		t, ok := byID[c.TxnID]
 		if !ok {
@@ -2579,11 +2623,19 @@ func (a *App) applyRuleChanges(changes []ruleapply.Change) error {
 			// and a row that no longer exists cannot be put back.
 			continue
 		}
-		t.CategoryID = c.ToCategoryID
-		if err := a.store.PutTransaction(t); err != nil {
-			return fmt.Errorf("appstate: apply rule change: %w", err)
+		if t.CategoryID != c.FromCategoryID {
+			return fmt.Errorf("transaction %q changed since this rule application; its category was preserved", t.ID)
 		}
+		t.CategoryID = c.ToCategoryID
+		updated = append(updated, t)
 	}
+	if err := a.store.PutTransactionsAtomic(updated); err != nil {
+		return fmt.Errorf("apply rule changes: %w", err)
+	}
+	if len(updated) > 0 {
+		a.fireTxnMutated()
+	}
+
 	return nil
 }
 
@@ -2601,10 +2653,14 @@ func (a *App) PreviewApplyRules() (total int, perRule map[string]int) {
 		if t.IsTransfer() || t.Reviewed {
 			continue
 		}
-		r := rules.FirstMatchFull(rs, t.Payee, t.Desc, t.Amount.Amount, t.AccountID, rules.NewTxnDate(t.Date))
-		categoryRule := rules.FirstMatchFullWhere(rs, t.Payee, t.Desc, t.Amount.Amount, t.AccountID, rules.NewTxnDate(t.Date), func(rr rules.Rule) bool {
+		r := rules.FirstMatchFullWhereCurrency(rs, t.Payee, t.Desc, t.Amount.Amount, t.Amount.Currency, t.AccountID, rules.NewTxnDate(t.Date), primaryTransactionRule)
+		categoryRule := rules.FirstMatchFullWhereCurrency(rs, t.Payee, t.Desc, t.Amount.Amount, t.Amount.Currency, t.AccountID, rules.NewTxnDate(t.Date), func(rr rules.Rule) bool {
 			return rr.SetCategoryID != ""
 		})
+		billRule := rules.FirstMatchFullWhereCurrency(rs, t.Payee, t.Desc, t.Amount.Amount, t.Amount.Currency, t.AccountID, rules.NewTxnDate(t.Date), func(rr rules.Rule) bool { return rr.SetBillAccountID != "" })
+		if r == nil {
+			r = billRule
+		}
 		if r == nil && categoryRule == nil {
 			continue
 		}
@@ -2623,8 +2679,7 @@ func (a *App) PreviewApplyRules() (total int, perRule map[string]int) {
 			changed = true
 		}
 		if t.BillAccountID == "" {
-			if br := rules.FirstMatchFullWhere(rs, t.Payee, t.Desc, t.Amount.Amount, t.AccountID, rules.NewTxnDate(t.Date),
-				func(rr rules.Rule) bool { return rr.SetBillAccountID != "" }); br != nil {
+			if br := billRule; br != nil {
 				changed = true
 			}
 		}
@@ -2717,7 +2772,7 @@ func (a *App) PutTransaction(t domain.Transaction) error {
 		return err
 	}
 	t.Date = normalizeTransactionDate(t.Date)
-	if is := validate.ValidateTransaction(t); !is.OK() {
+	if is := validate.ValidateTransaction(t, a.Accounts()...); !is.OK() {
 		return is
 	}
 	if err := a.validateCustom("transaction", t.Custom); err != nil {

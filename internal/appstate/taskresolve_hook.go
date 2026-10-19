@@ -21,6 +21,8 @@ import (
 var lastAutoResolve *lastAutoResolveState
 
 type lastAutoResolveState struct {
+	app      *App
+	changes  []store.RecordChange
 	snapshot *store.Dataset
 	titles   []string
 }
@@ -85,7 +87,7 @@ func (a *App) resolveTasksForTxn(t domain.Transaction) {
 	}
 	// Snapshot for single-step undo before mutating.
 	if snap, err := a.store.Snapshot(); err == nil {
-		st := &lastAutoResolveState{snapshot: &snap}
+		st := &lastAutoResolveState{app: a, snapshot: &snap}
 		for _, tk := range resolved {
 			st.titles = append(st.titles, tk.Title)
 		}
@@ -203,11 +205,25 @@ func addTaskResolveTransactionStrings(a *App, strs map[string]string, txn domain
 // and whether an undo was available. Single-step: only the latest pass can be
 // undone, and it is consumed once used.
 func (a *App) UndoLastAutoResolve() ([]string, bool) {
-	if lastAutoResolve == nil {
+	if lastAutoResolve == nil || lastAutoResolve.app != a {
 		return nil, false
 	}
 	st := lastAutoResolve
 	lastAutoResolve = nil
+	if len(st.changes) > 0 {
+		undo := make([]store.RecordChange, 0, len(st.changes))
+		for i := len(st.changes) - 1; i >= 0; i-- {
+			change := st.changes[i]
+			change.Before, change.After = change.After, change.Before
+			undo = append(undo, change)
+		}
+		if err := a.store.ReplayChangesExpected(undo); err != nil {
+			a.logErr("autoResolveUndoChanges", err)
+			return nil, false
+		}
+		a.fireTxnMutated()
+		return st.titles, true
+	}
 	if st.snapshot == nil {
 		return nil, false
 	}
