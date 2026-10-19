@@ -6,7 +6,6 @@ package screens
 
 import (
 	"fmt"
-	"reflect"
 	"strconv"
 	"strings"
 	"syscall/js"
@@ -15,21 +14,16 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/artifacts"
 	"github.com/monstercameron/CashFlux/internal/catname"
-	"github.com/monstercameron/CashFlux/internal/catsuggest"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
-	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
-	"github.com/monstercameron/CashFlux/internal/pagination"
-	"github.com/monstercameron/CashFlux/internal/reconcile"
-	"github.com/monstercameron/CashFlux/internal/reviewqueue"
 	"github.com/monstercameron/CashFlux/internal/smart"
-	"github.com/monstercameron/CashFlux/internal/txnclassify"
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
 	"github.com/monstercameron/CashFlux/internal/txnlinks"
 	"github.com/monstercameron/CashFlux/internal/txnreview"
+	"github.com/monstercameron/CashFlux/internal/txntable"
 	"github.com/monstercameron/CashFlux/internal/txnview"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -43,9 +37,6 @@ import (
 )
 
 const (
-	// txnVirtualizeThreshold is the row count above which the "All" view switches to a
-	// windowed (virtualized) body — below it, rendering every row is cheap enough.
-	txnVirtualizeThreshold = 100
 	// txnRowHeight is the fixed ledger row height in px the virtual window measures
 	// against (the table rows are uniform: nowrap + table-layout:fixed).
 	txnRowHeight = 44
@@ -68,10 +59,7 @@ func txnDerivedScope(app *appstate.App, criteria txnfilter.Criteria) string {
 // txnTableSortKey hides sortable affordances when register mode fixes the ledger
 // to chronological order. An empty key makes DataTable render a plain header.
 func txnTableSortKey(registerActive bool, key string) string {
-	if registerActive {
-		return ""
-	}
-	return key
+	return txntable.SortKey(registerActive, key)
 }
 
 // Transactions is the widgetized global ledger. Per the "everything on the page is
@@ -103,86 +91,53 @@ func Transactions() ui.Node {
 func transactionsSurface(app *appstate.App) ui.Node {
 	defer txnPerfStart("page")()
 	_ = uistate.UseDataRevision().Get()
-
-	// Re-render the surface on any data mutation or shared-state change: a bulk op,
-	// a row edit/delete, a selection toggle, a sub-view switch, a pending undo, or a
-	// receipt preview opening all flow through these atoms.
 	selAtom := uistate.UseTxnSelection()
-	selAnchorAtom := uistate.UseTxnSelAnchor()
+	anchorAtom := uistate.UseTxnSelAnchor()
 	previewAtom := uistate.UseTxnPreview()
 	filterAtom := uistate.UseTxFilter()
+	f, _ := filterAtom.Get().WithOwnerLens(uistate.UseMemberLens())
+	useTxnSelectionScope(f, selAtom, anchorAtom)
+	_, single := f.SingleAccount()
+	registerMode := uistate.UseTxnRegisterMode().Get()
+	register := single && registerMode
+	f = txntable.EffectiveCriteria(f, register, hiddenSortKeys(uistate.UseTxnCols().Get()))
+	rctx := useTxnSurfaceContext(app, f)
+	selected := len(selAtom.Get()) > 0
+	specs := txnSurfaceSpecs(txntable.SurfaceIDs(selected, uistate.UseTxnViewMode().Get() == uistate.TxnViewCalendar))
+	bento := Div(css.Class(txntable.SurfaceClass(selected)),
+		MapKeyed(specs, func(sp domain.WidgetSpec) any { return sp.ID }, func(sp domain.WidgetSpec) ui.Node {
+			c := rctx
+			c.Spec = sp
+			return ui.CreateElement(txnPlacement, txnPlacementProps{Context: c, Revision: app.Rev(), Scope: fmt.Sprintf("%p|%s|%#v", app, activeImportProfileWorkspaceID(), f)})
+		}),
+	)
+	return Div(txnReceiptPreviewOverlay(app, previewAtom),
+		A(css.Class("txn-skip-link"), Attr("href", "#txn-ledger-anchor"), uistate.T("txw1.skipToTransactions")), bento)
+}
 
-	accounts := app.Accounts()
-	categories := app.Categories()
-
-	base := app.Settings().BaseCurrency
-	if base == "" {
-		base = "USD"
-	}
-	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-
-	f := filterAtom.Get()
-	// Honour the top-bar member perspective (L21): scope to the lensed member(s)
-	// only when the per-screen filter has no member of its own. The persisted filter
-	// is never mutated. Read through UseMemberLens, not the retired UseActiveMember
-	// atom — nothing has written that atom since the app moved to ActiveScope, so
-	// this layering was silently a no-op and the switcher did not scope the ledger
-	// at all (C574).
-	f, _ = f.WithOwnerLens(uistate.UseMemberLens())
-
-	// C13: a bulk selection must not outlive the filter/search it was made under. A
-	// quick-filter (or search, saved view, or member switch) that hides the selected
-	// rows would otherwise leave the "N selected" bulk bar — Delete included — acting
-	// on rows the user can no longer see. So drop the selection whenever the effective
-	// result-set scope changes (its filter fields + search text), while leaving sort
-	// and pagination alone: those reorder/paginate the SAME set without hiding rows.
-	selScope := f
-	selScope.Page, selScope.PageSize = 0, 0
-	selScope.Sort, selScope.Dir = "", ""
-	lastSelScope := ui.UseState(selScope)
+func useTxnSelectionScope(f txnfilter.Criteria, selAtom state.Atom[map[string]bool], anchorAtom state.Atom[string]) {
+	scope := txntable.SelectionScope(f)
+	previous := ui.UseState(scope)
 	ui.UseEffect(func() func() {
-		if lastSelScope.Get() != selScope {
-			lastSelScope.Set(selScope)
+		if previous.Get() != scope {
+			previous.Set(scope)
 			if len(selAtom.Get()) > 0 {
 				selAtom.Set(map[string]bool{})
-				selAnchorAtom.Set("")
+				anchorAtom.Set("")
 			}
 		}
 		return nil
-	}, selScope)
+	}, scope)
+}
 
-	// Register mode (TX12): when the filter scopes to exactly one account, the
-	// running-balance column is available; while it's ON the ledger is forced into
-	// chronological order (date ascending) so each row's running figure reads down
-	// the column. The override lives here so the frame the table hydrates is already
-	// in register order; the table restores the user's sort on exit (register off).
-	_, singleAcct := f.SingleAccount()
-	registerActive := singleAcct && uistate.UseTxnRegisterMode().Get()
-	if registerActive {
-		f.Sort, f.Dir = "date", txnfilter.Asc
-	}
-	// A hidden column cannot order the table. Four of the six sortable columns can
-	// be switched off in Columns, and hiding the one you had sorted by used to leave
-	// its order in force with NO header showing a sort indicator — the rows were
-	// arranged by something that was not on screen, and it survived a reload. The
-	// STORED preference is untouched, so putting the column back restores the sort
-	// rather than discarding it the moment the user freed up some width.
-	f.Sort, f.Dir = txnfilter.EffectiveSort(f, hiddenSortKeys(uistate.UseTxnCols().Get()))
+func txnSurfaceSpecs(ids []string) []domain.WidgetSpec { return txntable.SurfaceSpecs(ids) }
 
-	// The filtered + sorted set drives both the engine frame (the table) and the
-	// duplicate/selection affordances in the toolbar/bulk tiles. RichTransactions
-	// preserves this order, so the filter's sort flows straight through the frame.
-	accName := make(map[string]string, len(accounts))
-	for _, a := range accounts {
-		accName[a.ID] = a.Name
-	}
-	catName := make(map[string]string, len(categories))
-	for _, c := range categories {
-		catName[c.ID] = c.Name
-	}
-	// Pass the payee-alias resolver so text search matches the CLEANED merchant name
-	// (TX1/SM-1), not just the raw payee/desc — otherwise a renamed merchant's charges
-	// wouldn't surface when you search the clean name you now see in the ledger.
+func useTxnSurfaceContext(app *appstate.App, f txnfilter.Criteria) widgetrender.RenderCtx {
+	accounts, categories := app.Accounts(), app.Categories()
+	base := txntable.BaseCurrency(app.Settings().BaseCurrency)
+	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
+	index := txntable.BuildIndex(nil, accounts, categories, nil, nil, nil)
+	accName, catName := index.AccountNames, index.CategoryNames
 	transactions := app.Transactions()
 	resolver := app.PayeeResolver()
 	derivedFilter := f
@@ -192,72 +147,23 @@ func transactionsSurface(app *appstate.App) ui.Node {
 			Account: accName, Category: catName, Payee: resolver.Resolve,
 			BaseCurrency: base, ToBase: func(m money.Money) (money.Money, error) { return rates.Convert(m, base) },
 		}
-		rows, issues := deriveTxnRowsWithIssues(transactions, derivedFilter, labels, resolver.HasLearned, resolver.Resolve)
+		finish := txnPerfStart("filter-sort")
+		rows, issues := txntable.DeriveRows(transactions, derivedFilter, labels, resolver.HasLearned, resolver.Resolve)
+		finish()
 		txnConversionIssuesCache.app, txnConversionIssuesCache.revision, txnConversionIssuesCache.scope = app, app.Rev(), txnDerivedScope(app, derivedFilter)
 		txnConversionIssuesCache.issues, txnConversionIssuesCache.valid = issues, true
-		categoryFilter := derivedFilter
-		categoryFilter.Flow, categoryFilter.Category, categoryFilter.Uncategorized = "", "", false
-		categoryFilter.Sort, categoryFilter.Dir, categoryFilter.Page, categoryFilter.PageSize = "", "", 0, 0
+		categoryFilter := txntable.CategoryCriteria(derivedFilter)
 		categoryRows := txnfilter.ApplyWithLabels(transactions, categoryFilter, labels)
 		if _, err := txnDerivedViewCache.GetWithCategories(app.Rev(), txnDerivedScope(app, derivedFilter), rows, categoryRows, rates, base); err != nil {
 			// Invalid arithmetic leaves the summary empty rather than exposing a
 			// partial total. The table remains available for correcting the row.
 			txnDerivedViewCache = txnview.Cache{}
 		}
-		return txnV5RowTransfers(rows, txnV5RowAccountScoped(derivedFilter.Account, derivedFilter.Accounts), rates)
+		return txntable.VisibleTransfers(rows, derivedFilter, rates)
 	}, app, app.Rev(), derivedFilter, activeImportProfileWorkspaceID())
 
-	// The engine render context: the live data every tile body reads from (§6). The
-	// SCOPED slices are the filtered ledger, so the table frame and the toolbar/bulk
-	// tiles all operate on the same set. Each tile is a registered renderer dispatched
-	// by spec below — there are no surface-local closures.
-	rctx := widgetrender.RenderCtx{
-		App: app, Accounts: accounts, Txns: transactions,
-		ScopedAccounts: accounts, ScopedTxns: shown,
-		Rates: rates, Base: base,
-		Start: time.Time{}, End: dateutil.CalendarDayUTC(time.Now()),
-	}
-
-	// The fixed placement set for the transactions surface. The toolbar is always
-	// present; the bulk and undo tiles appear with selection / a pending undo; the main
-	// slot is always the ledger table. Import and duplicates review both open as shell-
-	// root flip modals over the ledger now, so there are no in-place sub-views left.
-	specs := []domain.WidgetSpec{txnNativeSpec("txn-toolbar")}
-	if len(selAtom.Get()) > 0 {
-		specs = append(specs, txnNativeSpec("txn-bulkbar"))
-	}
-	// The main slot is the ledger table, or the month calendar (TX8) when the view
-	// mode is set to it. The calendar is a Native tile projecting the same filtered
-	// set (ScopedTxns) — so active filter chips scope it exactly like the table.
-	if uistate.UseTxnViewMode().Get() == uistate.TxnViewCalendar {
-		specs = append(specs, txnNativeSpec("txn-calendar"))
-	} else {
-		specs = append(specs, txnTableSpec())
-	}
-
-	// Render each spec through the engine's per-widget error boundary. Keyed on the
-	// spec id so inserting the bulk/undo tiles never shifts the table's identity (its
-	// hooks stay aligned across renders).
-	bentoClass := "bento bento-ledger"
-	if len(selAtom.Get()) > 0 {
-		bentoClass += " txn-has-selection"
-	}
-	bento := Div(css.Class(bentoClass),
-		MapKeyed(specs,
-			func(sp domain.WidgetSpec) any { return sp.ID },
-			func(sp domain.WidgetSpec) ui.Node {
-				c := rctx
-				c.Spec = sp
-				return ui.CreateElement(txnPlacement, txnPlacementProps{Context: c, Revision: app.Rev(), Scope: fmt.Sprintf("%p|%s|%#v", app, activeImportProfileWorkspaceID(), f)})
-			},
-		),
-	)
-
-	return Div(txnReceiptPreviewOverlay(app, previewAtom),
-		A(css.Class("txn-skip-link"), Attr("href", "#txn-ledger-anchor"), uistate.T("txw1.skipToTransactions")),
-		// Pending-vs-posted: the month's still-unposted scheduled charges as
-		// ghost rows above the ledger (parity scan; billmatch-suppressed).
-		bento)
+	return widgetrender.RenderCtx{App: app, Accounts: accounts, Txns: transactions, ScopedAccounts: accounts, ScopedTxns: shown,
+		Rates: rates, Base: base, Start: time.Time{}, End: dateutil.CalendarDayUTC(time.Now())}
 }
 
 type txnPlacementProps struct {
@@ -300,25 +206,6 @@ func init() {
 	})
 }
 
-// txnNativeSpec builds the seed spec for a Native transactions tile. The surface is
-// fixed (not user-reconfigurable or persisted), so the spec is constructed inline
-// rather than catalogued in widgetregistry (which would surface these tiles in the
-// dashboard's add-widget picker).
-func txnNativeSpec(id string) domain.WidgetSpec {
-	return domain.WidgetSpec{SchemaVersion: domain.WidgetSpecVersion, ID: id, Kind: domain.KindNative, NativeID: id}
-}
-
-// txnTableSpec builds the data-driven table spec: a Kind==Table widget whose
-// Pipeline sources the rich all-transactions frame, hydrated by the engine over the
-// host's filtered ledger (RenderCtx.ScopedTxns) and painted by the txn-table
-// FrameRenderer.
-func txnTableSpec() domain.WidgetSpec {
-	return domain.WidgetSpec{
-		SchemaVersion: domain.WidgetSpecVersion, ID: "txn-table", Kind: domain.KindTable,
-		Pipeline: &domain.Pipeline{Source: domain.Source{Kind: domain.SourceCollection, Collection: "transactions-full"}},
-	}
-}
-
 // setTxFilterOn applies a mutation to the shared transaction filter atom, resetting
 // the page if the scope changed and persisting the result. Shared by the tiles that
 // write the filter (the toolbar's field handlers, the table's sort/pagination).
@@ -342,14 +229,7 @@ func txnReceiptPreviewOverlay(app *appstate.App, previewAtom state.Atom[domain.A
 	if ref.ArtifactID == "" {
 		return Fragment()
 	}
-	var art *domain.Artifact
-	for i := range app.Artifacts() {
-		if app.Artifacts()[i].ID == ref.ArtifactID {
-			a := app.Artifacts()[i]
-			art = &a
-			break
-		}
-	}
+	art := txntable.PreviewArtifact(ref.ArtifactID, app.Artifacts())
 	var body ui.Node
 	if art != nil && len(art.Bytes) > 0 {
 		body = Img(Attr("src", artifacts.DataURL(art.MIME, art.Bytes)), Attr("alt", uistate.T("transactions.previewAlt", ref.Name)), css.Class(tw.MaxWFull))
@@ -377,6 +257,38 @@ type txnTableProps struct {
 	Base  string
 }
 
+type txnTableController struct {
+	props                                txnTableProps
+	filter                               txnfilter.Criteria
+	filterAtom                           state.Atom[uistate.TxFilter]
+	selection                            state.Atom[map[string]bool]
+	anchor                               state.Atom[string]
+	preview                              state.Atom[domain.AttachmentRef]
+	columns                              uistate.TxnCols
+	register                             bool
+	registerID                           string
+	searchPending                        bool
+	page                                 txntable.Page
+	frame                                txntable.FrameColumns
+	index                                txntable.Index
+	rowContext                           txntable.RowContext
+	smart                                txnRowFlags
+	suggestionsReady, suggestionsEnabled bool
+	followUps                            map[string]txntable.FollowUpInfo
+	visible                              []string
+	actions                              txnTableActions
+}
+
+type txnTableActions struct {
+	openEdit, openSplit, createRule, confirmCategory, toggleExclude, deleteRow func(string)
+	pairRefund, unpair, ungroup, unlinkBill                                    func(string)
+	openLink                                                                   func(string, string)
+	viewReceipt                                                                func(domain.AttachmentRef)
+	openFollowUps                                                              func()
+	tagFilter                                                                  func(string)
+	toggleSelect                                                               func(string, bool)
+}
+
 // txnTableWidget is the txn-table FrameRenderer body: the engine-hydrated ledger
 // frame, paginated and painted as a sortable, selectable DataTable inside a widget
 // tile. It owns its sort/pagination/selection hooks (the surface host passes only
@@ -385,247 +297,149 @@ type txnTableProps struct {
 // toggles bulk selection; the paperclip opens a receipt.
 func txnTableWidget(props txnTableProps) ui.Node {
 	defer txnPerfStart("table")()
-	categoryTarget := ui.UseState("")
-	categoryOpener := ui.UseRef(js.Null())
-	chooseCategory := ui.UseCallback(func(id string) {
-		categoryOpener.Set(js.Global().Get("document").Get("activeElement"))
-		categoryTarget.Set(id)
-		scheduleTxnFocus(js.Global().Get("document"), "input[data-testid='catpick-search']")
-	}, props.App)
-	txnKeyDown := ui.UseEvent(func(e ui.KeyboardEvent) {
-		if handleTxnTableShortcut(e.GetKey(), e.JSValue().Get("target"), js.Global().Get("document"),
-			func(id string) {
-				categoryOpener.Set(js.Global().Get("document").Get("activeElement"))
-				categoryTarget.Set(id)
-			}, func() { SetTxnKeyHelpOpen(true) }) {
-			e.PreventDefault()
-			e.StopPropagation()
-		}
+	c := useTxnTableController(props)
+	useTxnTableData(c)
+	useTxnTableActions(c)
+	category := useTxnTableCategoryTarget(props.App)
+	renderRow := useTxnTableRows(c, category.Choose)
+	body := ui.CreateElement(txnTableBody, txnTableBodyProps{App: props.App, Filter: c.filter, Columns: c.columns,
+		Page: c.page, Total: props.Frame.Rows, Visible: c.visible, ShowBalance: c.rowContext.Balances != nil, Register: c.register,
+		SearchPending: c.searchPending, RenderRow: renderRow, IDAt: func(i int) any { return c.frame.ID.Str(i) },
+		OnSort: func(key string) {
+			setTxFilterOn(c.filterAtom, func(f *uistate.TxFilter) { *f = txntable.SortBy(*f, key, c.register) })
+		},
+		OnPage: func(p int) { setTxFilterOn(c.filterAtom, func(f *uistate.TxFilter) { f.Page = p }) },
+		OnPageSize: func(size int) {
+			setTxFilterOn(c.filterAtom, func(f *uistate.TxFilter) { f.PageSize, f.Page = size, 1 })
+		},
 	})
-	// Subscribe to the data revision: link changes (XC1/XC2 group/pair badges)
-	// mutate no row content, so without this the memoized table body renders
-	// stale badges after an ungroup/unpair.
-	txnDataRev := int(props.App.Rev())
-	filterAtom := uistate.UseTxFilter()
-	f := filterAtom.Get()
-	memberLens := uistate.UseMemberLens()
-	f, _ = f.WithOwnerLens(memberLens)
-	// C628: true while a typed search is still inside its debounce window, i.e.
-	// while the rows this table is about to render answer the previous query.
-	searchPending := uistate.UseTxnSearchPending().Get()
-	selAtom := uistate.UseTxnSelection()
-	anchorAtom := uistate.UseTxnSelAnchor()
-	previewAtom := uistate.UseTxnPreview()
-	colVis := uistate.UseTxnCols().Get() // which optional columns are shown
-	// Register mode (TX12) forces the rows into chronological order so each running
-	// balance reads down the column. The HOST applies that force when it builds the
-	// frame; this tile did not, so the headers went on advertising the user's stored
-	// sort — caret, aria-sort and all — over rows that were in a different order
-	// entirely. Whatever orders the rows has to order the header too, so the same
-	// force is applied here, before the effective-sort fallback below.
-	regID, singleAcct := f.SingleAccount()
-	registerActive := singleAcct && uistate.UseTxnRegisterMode().Get()
-	if registerActive {
-		f.Sort, f.Dir = "date", txnfilter.Asc
-	}
-	// The headers must claim the order the ROWS are actually in. The surface host
-	// applies the same fallback when it builds the frame, so reading it here too is
-	// what stops a hidden column's sort from being announced by a header that is no
-	// longer rendered — or, worse, by no header at all while the rows stay ordered.
-	f.Sort, f.Dir = txnfilter.EffectiveSort(f, hiddenSortKeys(colVis))
+	return ui.CreateElement(txnTableRegion, txnTableRegionProps{App: props.App, Body: body, Filter: c.filter, Shown: props.Shown, Base: props.Base, Category: category})
+}
 
-	// A row's "N follow-ups" chip links to the To-do list pre-filtered to transaction-
-	// linked tasks (the closest the shared link filter gets to "this charge's tasks").
+func useTxnTableController(props txnTableProps) *txnTableController {
+	c := &txnTableController{props: props}
+	c.filterAtom = uistate.UseTxFilter()
+	c.filter, _ = c.filterAtom.Get().WithOwnerLens(uistate.UseMemberLens())
+	c.searchPending = uistate.UseTxnSearchPending().Get()
+	c.selection = uistate.UseTxnSelection()
+	c.anchor = uistate.UseTxnSelAnchor()
+	c.preview = uistate.UseTxnPreview()
+	c.columns = uistate.UseTxnCols().Get()
+	id, single := c.filter.SingleAccount()
+	registerMode := uistate.UseTxnRegisterMode().Get()
+	c.registerID, c.register = id, single && registerMode
+	c.filter = txntable.EffectiveCriteria(c.filter, c.register, hiddenSortKeys(c.columns))
+	c.page = txntable.Paginate(c.filter.Page, c.filter.PageSize, props.Frame.Rows)
+	c.frame = txntable.ReadFrame(props.Frame)
+	return c
+}
+
+func useTxnTableData(c *txnTableController) {
+	props := c.props
+	c.index = ui.UseMemo(func() txntable.Index {
+		return txntable.BuildIndex(props.Shown, props.App.Accounts(), props.App.Categories(), props.App.Members(), props.App.TxnLinks(), props.App.Events())
+	}, props.App, props.App.Rev(), c.filter, props.Shown, len(props.Shown))
+	balances := ui.UseMemo(func() map[string]money.Money {
+		return txntable.RegisterBalances(c.register, c.registerID, props.App.Accounts(), props.App.Transactions())
+	}, props.App, props.App.Rev(), c.registerID, c.register)
+	groups := txnlinks.GroupsByTxn(props.App.TxnLinks())
+	resolver := props.App.PayeeResolver()
+	c.rowContext = txntable.RowContext{Index: c.index, Filter: c.filter, Now: time.Now(),
+		Labels: txntable.Labels{T: uistate.T, Ledger: fmtLedgerAmount, Money: fmtMoney}, Learned: resolver.HasLearned, Resolve: resolver.Resolve,
+		Balances: balances, Groups: groups, GroupTransactions: txnGroupMembersMemo(props.App, int(props.App.Rev()), groups),
+		Rates: currency.Rates{Base: props.Base, Rates: props.App.Settings().FXRates},
+	}
+	settings := uistate.LoadSmartSettings()
+	finish := txnPerfStart("flags")
+	c.smart = useTxnRowFlags(props.App, int(props.App.Rev()), settings, uistate.LoadPrefs().WeekStartWeekday())
+	finish()
+	c.suggestionsReady = useAfterSettle("txn-suggestions")
+	c.suggestionsEnabled = settings.IsEnabled(catSuggestFreeCode)
+	useTxnFocusRow(txnFocusRowHint{Virtual: c.page.Virtual, RowHeight: txnRowHeight, Scroller: "main.cf-scroll", IndexOf: c.frame.IndexOf})
+	c.followUps = txntable.FollowUps(props.App.Tasks(), uistate.UsePrefs().Get().FormatDate)
+	c.visible = ui.UseMemo(func() []string { return txntable.IDs(c.frame.ID, c.page.SelectionStart, c.page.SelectionEnd) },
+		props.App, props.App.Rev(), c.filter, c.frame.ID, len(c.frame.ID.Values), c.page.SelectionStart, c.page.SelectionEnd)
+}
+
+func useTxnTableActions(c *txnTableController) {
+	useTxnTableNavigation(c)
+	useTxnTableSelection(c)
+	useTxnTableMutations(c)
+	useTxnTableLinks(c)
+}
+
+func useTxnTableSelection(c *txnTableController) {
+	c.actions.toggleSelect = ui.UseCallback(func(id string, shift bool) {
+		var order []string
+		if shift && c.anchor.Get() != "" && c.anchor.Get() != id {
+			order = txntable.IDs(c.frame.ID, c.page.SelectionStart, c.page.SelectionEnd)
+		}
+		c.selection.Set(txntable.ToggleSelection(c.selection.Get(), c.anchor.Get(), id, shift, order))
+		c.anchor.Set(id)
+	}, c.filter, c.props.App, c.props.App.Rev(), c.frame.ID, len(c.frame.ID.Values), c.page.SelectionStart, c.page.SelectionEnd)
+	c.actions.openEdit = ui.UseCallback(func(id string) { uistate.SetTxnEdit(id) }, c.props.App)
+	c.actions.openSplit = ui.UseCallback(func(id string) { uistate.SetTxnSplit(id) }, c.props.App)
+	c.actions.viewReceipt = ui.UseCallback(func(ref domain.AttachmentRef) { c.preview.Set(ref) }, c.preview)
+}
+
+func useTxnTableNavigation(c *txnTableController) {
 	nav := router.UseNavigate()
-	// Plain closure (the row component owns the click hook — never register On* here in
-	// the row loop). Filters the To-do list to transaction-linked tasks, then navigates.
-	openFollowUps := func() {
+	memberLens := uistate.UseMemberLens()
+	c.actions.openFollowUps = ui.UseCallback(func() {
 		uistate.SetTodoFilterLink(uistate.TodoLinkTransaction)
-		txnLeaveFor("/todo") // C581: leave a named way back to this working set
+		txnLeaveFor("/todo")
 		nav.Navigate(uistate.RoutePath("/todo"))
-	}
-	// Clicking a tag chip on a row narrows the ledger to that single tag (replacing any
-	// multi-tag selection). Plain closure — the tag chip component owns its click hook.
-	//
-	// C651: the action was reported as a no-op from a row the search had already
-	// narrowed to one result — and on that view it genuinely cannot move the count,
-	// because the one matching row is the one carrying the tag. What it can do, and
-	// did not, is SAY it happened. The criteria change is now announced as well as
-	// charted: a filter that changes no visible row and posts no word is
-	// indistinguishable from a dead button.
-	onTagFilter := func(tag string) {
-		prev := filterAtom.Get()
-		setTxFilterOn(filterAtom, func(x *uistate.TxFilter) { *x = x.DrillToTag(tag) })
-		next := filterAtom.Get()
-		// Speak ONLY when the user would otherwise see nothing. A toast on every
-		// drill would be noise for the ordinary case — where a chip appears and the
-		// row count moves, which is how every other filter change in the app
-		// communicates — to fix the case where neither does. So the test is not
-		// "did the criteria change" but "did anything VISIBLE change", which is the
-		// reported situation exactly: a search already narrowed to the one row that
-		// carries the tag, so the chip is the only difference and the count is
-		// identical. Reuse the current lensed result count and derive only the next
-		// scope, using the same alias and currency context as the displayed rows.
-		if txnfilter.ScopeChanged(prev, next) {
-			effective, _ := next.WithOwnerLens(memberLens)
-			settings := props.App.Settings()
-			rates := currency.Rates{Base: props.Base, Rates: settings.FXRates}
-			rows, _ := txnfilter.ApplyWithLabelsChecked(props.App.Transactions(), effective, txnfilter.Labels{
-				Payee: props.App.PayeeResolver().Resolve, BaseCurrency: props.Base,
-				ToBase: func(m money.Money) (money.Money, error) { return rates.Convert(m, props.Base) },
-			})
-			if len(rows) != len(props.Shown) {
-				return
-			}
-		}
-		uistate.PostNotice(uistate.T("transactions.tagFilterApplied", tag), false)
-	}
-
-	// Register mode (TX12): when the ledger is scoped to exactly one account and the
-	// toggle is on, compute each transaction's running balance from the account's FULL
-	// chronological history (ledger.RegisterBalances), so a paginated/filtered slice
-	// still shows the TRUE figure. A multi-currency account (whose fold errors) leaves
-	// runBal nil, and the column is simply not shown. (regID/registerActive are
-	// resolved above, where they also force the header's sort to match the rows.)
-	runBal := ui.UseMemo(func() map[string]money.Money {
-		if registerActive {
-			for _, a := range props.App.Accounts() {
-				if a.ID == regID {
-					if m, err := ledger.RegisterBalances(a, props.App.Transactions()); err == nil {
-						return m
-					}
-					break
-				}
-			}
-		}
-		return nil
-	}, props.App, props.App.Rev(), regID, registerActive)
-	showBalance := runBal != nil
-
-	setPage := func(p int) { setTxFilterOn(filterAtom, func(x *uistate.TxFilter) { x.Page = p }) }
-	setPageSize := func(s int) { setTxFilterOn(filterAtom, func(x *uistate.TxFilter) { x.PageSize, x.Page = s, 1 }) }
-	// A plain sort handler — the spinner-while-sorting behaviour is the DataTable's
-	// standard SortSpinner config (it defers this call so the spinner paints first).
-	sortBy := func(key string) {
-		if registerActive {
-			return
-		}
-		setTxFilterOn(filterAtom, func(x *uistate.TxFilter) {
-			if x.Sort == key {
-				if x.Dir == txnfilter.Asc {
-					x.Dir = txnfilter.Desc
-				} else {
-					x.Dir = txnfilter.Asc
-				}
-			} else {
-				x.Sort, x.Dir = key, txnfilter.DefaultDir(key)
-			}
-		})
-	}
-
-	// visibleOrder is filled below (after pagination) and captured by toggleSelect so
-	// the header can represent the current scope. Shift-range selection builds its
-	// own ordered ids lazily, only when a shift-click actually asks for them.
-	var visibleOrder []string
-	var rangeOrder func() []string
-	toggleSelect := func(txnID string, shift bool) {
-		m := selAtom.Get()
-		nm := make(map[string]bool, len(m)+1)
-		for k, v := range m {
-			if v {
-				nm[k] = v
-			}
-		}
-		if shift && anchorAtom.Get() != "" && anchorAtom.Get() != txnID {
-			if rangeOrder != nil {
-				visibleOrder = rangeOrder()
-			}
-			ai, bi := -1, -1
-			for i, id := range visibleOrder {
-				if id == anchorAtom.Get() {
-					ai = i
-				}
-				if id == txnID {
-					bi = i
-				}
-			}
-			if ai >= 0 && bi >= 0 {
-				if ai > bi {
-					ai, bi = bi, ai
-				}
-				for _, id := range visibleOrder[ai : bi+1] {
-					nm[id] = true
-				}
-				selAtom.Set(nm)
-				anchorAtom.Set(txnID)
-				return
-			}
-		}
-		if nm[txnID] {
-			delete(nm, txnID)
-		} else {
-			nm[txnID] = true
-		}
-		selAtom.Set(nm)
-		anchorAtom.Set(txnID)
-	}
-	openEdit := func(id string) { uistate.SetTxnEdit(id) }
-	openSplit := func(id string) { uistate.SetTxnSplit(id) }
-	// C363: author a rule from a row — prefill the Rules workbench add-form with
-	// this transaction's cleaned merchant (falling back to its description) and
-	// current category, then jump to /rules so it can be confirmed in one click.
-	createRuleFromTxn := func(id string) {
-		t, ok := props.App.TransactionByID(id)
+	}, nav)
+	c.actions.createRule = ui.UseCallback(func(id string) {
+		row, ok := c.props.App.TransactionByID(id)
 		if !ok {
 			return
 		}
-		phrase := strings.TrimSpace(firstNonEmpty(t.Payee, t.Desc))
-		uistate.SetRuleDraft(phrase, t.CategoryID)
-		// C581: writing a rule from a row is the deepest side trip the ledger
-		// offers — a different page, a form to fill, and the filtered view you
-		// were working through left behind. Leave a named way back — to THIS
-		// row (C605), since that is the charge the trip was about.
+		uistate.SetRuleDraft(txntable.RulePhrase(row), row.CategoryID)
 		txnLeaveForRow("/rules", id)
 		nav.Navigate(uistate.RoutePath("/rules"))
-	}
-	// C579: accept an automatic category as the user's own decision. Reviewed is
-	// exactly that fact — the flag the review queue and the provenance mark both
-	// read — so confirming here is one write and the "auto" mark disappears from the
-	// row. It is restorative rather than destructive (nothing about the money
-	// changes, only who owns the classification), so it applies immediately, but it
-	// still captures an undo point and says what it did.
+	}, c.props.App, nav)
+	c.actions.tagFilter = ui.UseCallback(func(tag string) {
+		prev := c.filterAtom.Get()
+		setTxFilterOn(c.filterAtom, func(f *uistate.TxFilter) { *f = f.DrillToTag(tag) })
+		next := c.filterAtom.Get()
+		effective, _ := next.WithOwnerLens(memberLens)
+		rates := currency.Rates{Base: c.props.Base, Rates: c.props.App.Settings().FXRates}
+		labels := txnfilter.Labels{Payee: c.props.App.PayeeResolver().Resolve, BaseCurrency: c.props.Base, ToBase: func(m money.Money) (money.Money, error) { return rates.Convert(m, c.props.Base) }}
+		if !txntable.TagFilterNotice(prev, next, effective, c.props.App.Transactions(), labels, len(c.props.Shown)) {
+			return
+		}
+
+		uistate.PostNotice(uistate.T("transactions.tagFilterApplied", tag), false)
+	}, c.props.App, c.props.App.Rev(), c.filter, memberLens, c.props.Shown, len(c.props.Shown), c.props.Base)
+}
+
+func useTxnTableMutations(c *txnTableController) {
 	confirmCategory := func(id string) {
-		t, ok := props.App.TransactionByID(id)
+		t, ok := c.props.App.TransactionByID(id)
 		if !ok {
 			return
 		}
 		confirmed := txnreview.Confirm(t, t.CategoryID)
-		_ = commitUndoable(uistate.T("transactions.confirmedCategory"), []string{id}, func() error { return props.App.PutTransactionsAtomic([]domain.Transaction{confirmed}) })
+		_ = commitUndoable(uistate.T("transactions.confirmedCategory"), []string{id}, func() error { return c.props.App.PutTransactionsAtomic([]domain.Transaction{confirmed}) })
 	}
+	c.actions.confirmCategory = ui.UseCallback(confirmCategory, c.props.App)
+	c.actions.toggleExclude = ui.UseCallback(txnTableExcludeAction(c.props.App), c.props.App)
+	c.actions.deleteRow = ui.UseCallback(txnTableDeleteAction(c.props.App), c.props.App)
+}
 
-	// TXC-1 / C562: flip a transaction's exclude-from-reports flag from the row kebab.
-	//
-	// Excluding is a reporting change with no visible trace on the row's own figures —
-	// balances are untouched — so an accidental click used to silently move money out
-	// of every budget, spending total and report with nothing but a relabelled menu
-	// entry to show for it. It now states that boundary and asks first. Re-INCLUDING
-	// is restorative, so it applies straight away; both directions capture an undo
-	// point and post an undoable toast, so either is reversible from Ctrl+Z/Activity.
+func txnTableExcludeAction(app *appstate.App) func(string) {
 	applyExclude := func(t domain.Transaction, exclude bool) {
-		live, ok := props.App.TransactionByID(t.ID)
+		live, ok := app.TransactionByID(t.ID)
 		if !ok {
 			return
 		}
 		live.ExcludeFromReports = exclude
-		key := "transactions.includedOne"
-		if exclude {
-			key = "transactions.excludedOne"
-		}
-		_ = commitUndoable(uistate.T(key, txnShortLabel(live)), []string{t.ID}, func() error { return props.App.PutTransactionsAtomic([]domain.Transaction{live}) })
+		key := txntable.ExcludeNoticeKey(exclude)
+		_ = commitUndoable(uistate.T(key, txnShortLabel(live)), []string{t.ID}, func() error { return app.PutTransactionsAtomic([]domain.Transaction{live}) })
 	}
-
 	toggleExclude := func(id string) {
-		for _, t := range props.App.Transactions() {
+		for _, t := range app.Transactions() {
 			if t.ID != id {
 				continue
 			}
@@ -647,26 +461,14 @@ func txnTableWidget(props txnTableProps) ui.Node {
 			return
 		}
 	}
-	// deleteRow removes the transaction (and its transfer pair).
-	//
-	// C620: this used to commit on the single ⋯-menu click, on the theory that the
-	// undoable toast was enough soft-safety. It was not, for two reasons. The toast
-	// only renders an Undo button when the undo stack is non-empty, and this
-	// handler never called auditview.CaptureNow() — the very function whose doc
-	// says delete handlers must call it "right before showing an Undo toast so the
-	// undo stack is ready when the user clicks Undo". So the one affordance the
-	// no-confirm decision rested on was the one that wasn't wired. Meanwhile BULK
-	// delete has had a confirm, a checkpoint and a snapshot all along, which left
-	// the riskier per-row path as the unguarded one.
-	//
-	// C621: deleting also strands any follow-up task pointing at this transaction —
-	// tasklink.EntityName returns ok=false for a missing id, so the task simply
-	// stops showing its link. The count goes in the confirmation, so the effect on
-	// other work is stated BEFORE the click rather than discovered later.
+	return toggleExclude
+}
+
+func txnTableDeleteAction(app *appstate.App) func(string) {
 	deleteRow := func(id string) {
 		var txn domain.Transaction
 		found := false
-		for _, t := range props.App.Transactions() {
+		for _, t := range app.Transactions() {
 			if t.ID == id {
 				txn, found = t, true
 				break
@@ -675,166 +477,28 @@ func txnTableWidget(props txnTableProps) ui.Node {
 		if !found {
 			return
 		}
-		linked := 0
-		for _, tk := range props.App.Tasks() {
-			if tk.RelatedType == domain.RelatedTransaction && tk.RelatedID == id && tk.Status != domain.StatusDone {
-				linked++
-			}
-		}
+		linked := txntable.OpenTaskCount(app.Tasks(), id)
 
-		// Name the row the way the user is looking at it: who, when, how much, and
-		// out of which account. "Delete this transaction?" is not enough to catch a
-		// misclick on the wrong row.
-		what := txnDeletePrompt(props.App, txn)
-		if linked > 0 {
-			what += " " + uistate.T("transactions.deleteConfirmTasks", linked)
-		}
+		what := txntable.DeletePrompt(app.ExpandTransferPairs([]string{txn.ID}), app.Transactions(), app.Accounts(), linked, txntable.Labels{T: uistate.T, Money: fmtMoney})
 		uistate.ConfirmModal(what, true, func(ok bool) {
 			if !ok {
 				return
 			}
-			ids := props.App.ExpandTransferPairs([]string{id})
-			_ = commitUndoable(uistate.T("toast.txnDeleted"), ids, func() error { return props.App.DeleteTransactionWithTransferPair(id) })
+			ids := app.ExpandTransferPairs([]string{id})
+			_ = commitUndoable(uistate.T("toast.txnDeleted"), ids, func() error { return app.DeleteTransactionWithTransferPair(id) })
 		})
 	}
-	viewReceipt := func(ref domain.AttachmentRef) { previewAtom.Set(ref) }
+	return deleteRow
+}
 
-	frame := props.Frame
-	total := frame.Rows
-	pageSize := f.PageSize
-	if pageSize == 0 {
-		pageSize = txnfilter.DefaultPageSize
-	}
-	curPage := 1
-	start, end := 0, total
-	if pageSize > 0 {
-		curPage = pagination.Clamp(f.Page, total, pageSize)
-		start = (curPage - 1) * pageSize
-		end = start + pageSize
-		if start > total {
-			start = total
-		}
-		if end > total {
-			end = total
-		}
-	}
-
-	idCol, _ := frame.Column("id")
-	dateCol, _ := frame.Column("date")
-	amtCol, _ := frame.Column("amount")
-	curCol, _ := frame.Column("currency")
-	payeeCol, _ := frame.Column("payee")
-	descFull, _ := frame.Column("desc")
-	accCol, _ := frame.Column("account")
-	catCol, _ := frame.Column("category")
-	clearedCol, _ := frame.Column("cleared")
-	srcCol, _ := frame.Column("source")
-
-	// Resolve row enrichment from the exact supplied row set. The filter atom
-	// may notify this child before its parent supplies the matching Shown slice;
-	// filter/revision alone can therefore cache a narrow search under the cleared
-	// filter. Keep the slice and its length in the key (hooks compare slice bases).
-	txByID := ui.UseMemo(func() map[string]domain.Transaction {
-		byID := make(map[string]domain.Transaction, len(props.Shown))
-		for _, t := range props.Shown {
-			byID[t.ID] = t
-		}
-		return byID
-	}, props.App, props.App.Rev(), txnDataRev, f, props.Shown, len(props.Shown))
-	// Payee-alias resolver (TX1): raw payee → clean display name (learned alias →
-	// rule pack → raw). Applied at DISPLAY only; the raw payee stays on the txn.
-	payeeResolver := props.App.PayeeResolver()
-	// #63: per-account reconciled-through dates — a cleared row dated at or
-	// before its account's newest reconciliation wears the stronger ✓✓ chip.
-	reconThrough := make(map[string]time.Time)
-	for _, ac := range props.App.Accounts() {
-		if th, ok := reconcile.Through(ac.Reconciliations); ok {
-			reconThrough[ac.ID] = th
-		}
-	}
-	// Account id → name, so a transfer row can name its counterparty rather than
-	// just claim to be a transfer (C675).
-	accName := make(map[string]string)
-	for _, a := range props.App.Accounts() {
-		accName[a.ID] = a.Name
-	}
-	// Member id → name, for the optional "User" column (the frame carries no member).
-	memberNames := make(map[string]string)
-	memberColors := make(map[string]string)
-	for _, m := range props.App.Members() {
-		memberNames[m.ID] = m.Name
-		memberColors[m.ID] = m.Color
-	}
-	// Category id → name, so a split row can list its per-line categories.
-	catName := make(map[string]string)
-	for _, c := range props.App.Categories() {
-		catName[c.ID] = c.Name
-	}
-	// C672: rows that look like transfers but were never linked. They are counting
-	// as income or spending right now, so the ledger marks them instead of leaving
-	// the reader to notice that "Transfer to Savings" is sitting in their spending.
-	// The mark never removes the row from a total; only a person can do that.
-	//
-	// R3P: the check runs per RENDERED row inside rowPropsAt, not as a scan over
-	// every shown row on every render — decorating a 25-row page must not cost
-	// a 3,292-row classification pass on each sort, keystroke or selection.
-	// openLink opens the payment-link flip modal (shell-root host) for a transaction,
-	// pre-set to Bill or Subscription mode. The modal owns the actual write, so the row
-	// ⋯ menu just sets the shared target atom.
+func useTxnTableLinks(c *txnTableController) {
 	linkAtom := uistate.UseTxnLinkTarget()
-	openLink := func(txnID, linkMode string) {
-		linkAtom.Set(uistate.TxnLinkTarget{TxnID: txnID, Mode: linkMode})
-	}
-
-	// XC1/XC2 transaction links: per-row badge data + the ⋯-menu actions. The atom
-	// is captured during render (never inside a callback); handlers mutate through
-	// appstate and bump the revision so every consumer re-reads.
 	refundAtom := uistate.UseRefundPairTarget()
-	links := props.App.TxnLinks()
-	groupByTxn := txnlinks.GroupsByTxn(links)
-	// C-fix: an order group's TOTAL has to be measured against the group, not
-	// against whatever the current filter happens to show. txByID above is built
-	// from props.Shown (the filtered, searched, lensed page), and
-	// txnlinks.GroupMembers silently drops any id missing from the map it is
-	// given — so filtering to a category that matched only some members left the
-	// badge reading "3 items · $47.00" when the three items really totalled
-	// $65.00: a count and a money figure printed side by side, measured against
-	// different populations. The group's membership is filter-independent, so its
-	// sum is resolved against the whole ledger.
-	// R3P: resolve ONLY the group members (a handful of ids), memoised per app
-	// and data revision. This used to allocate a Shown-sized map on every
-	// render and, when any group existed, a second whole-ledger map — which
-	// renderRow then never read, so the badge total was still measured
-	// against the filtered page the comment above says it must not use.
-	groupTxByID := txnGroupMembersMemo(props.App, txnDataRev, groupByTxn)
-	refundSide, refundedSide := map[string]bool{}, map[string]bool{}
-	billMatched := map[string]bool{} // TX9: rows that settle a recurring occurrence
-	// TX10: map each transaction to the name of the event it belongs to, so the row
-	// shows a small event chip. A transaction maps to at most one link per event; the
-	// first event found wins the chip.
-	eventName := map[string]string{}
-	eventNameByID := map[string]string{}
-	for _, e := range props.App.Events() {
-		eventNameByID[e.ID] = e.Name
-	}
-	for _, l := range links {
-		if l.Kind == domain.TxnLinkRefundPair && len(l.TxnIDs) == 2 {
-			refundedSide[l.TxnIDs[0]] = true // the original purchase
-			refundSide[l.TxnIDs[1]] = true   // the refund
-		}
-		if l.Kind == domain.TxnLinkBillMatch && len(l.TxnIDs) == 1 {
-			billMatched[l.TxnIDs[0]] = true
-		}
-		if l.Kind == domain.TxnLinkEventTxn && len(l.TxnIDs) == 1 && l.EventID != "" {
-			if _, ok := eventName[l.TxnIDs[0]]; !ok {
-				eventName[l.TxnIDs[0]] = eventNameByID[l.EventID]
-			}
-		}
-	}
+	c.actions.openLink = ui.UseCallback(func(id, mode string) { linkAtom.Set(uistate.TxnLinkTarget{TxnID: id, Mode: mode}) }, linkAtom)
 	pairRefundRow := func(id string) { refundAtom.Set(id) }
 	ungroupRow := func(id string) {
-		if l, ok := txnlinks.GroupOf(id, props.App.TxnLinks()); ok {
-			if err := props.App.DeleteTxnLink(l.ID); err != nil {
+		if l, ok := txnlinks.GroupOf(id, c.props.App.TxnLinks()); ok {
+			if err := c.props.App.DeleteTxnLink(l.ID); err != nil {
 				uistate.PostNotice(uistate.T("txnlinks.groupErr", err.Error()), true)
 				return
 			}
@@ -843,8 +507,8 @@ func txnTableWidget(props txnTableProps) ui.Node {
 		}
 	}
 	unpairRow := func(id string) {
-		if l, ok := txnlinks.PairOf(id, props.App.TxnLinks()); ok {
-			if err := props.App.DeleteTxnLink(l.ID); err != nil {
+		if l, ok := txnlinks.PairOf(id, c.props.App.TxnLinks()); ok {
+			if err := c.props.App.DeleteTxnLink(l.ID); err != nil {
 				uistate.PostNotice(uistate.T("txnlinks.pairErr", err.Error()), true)
 				return
 			}
@@ -852,445 +516,250 @@ func txnTableWidget(props txnTableProps) ui.Node {
 			uistate.BumpDataRevision()
 		}
 	}
-	// TX9: release a bill-match link so the occurrence reads unpaid again.
 	unlinkBillRow := func(id string) {
-		if err := props.App.UnlinkBill(id); err != nil {
+		if err := c.props.App.UnlinkBill(id); err != nil {
 			uistate.PostNotice(err.Error(), true)
 			return
 		}
 		uistate.PostNotice(uistate.T("billmatch.unlinkLogged"), false)
 		uistate.BumpDataRevision()
 	}
+	c.actions.pairRefund = ui.UseCallback(pairRefundRow, c.props.App)
+	c.actions.ungroup = ui.UseCallback(ungroupRow, c.props.App)
+	c.actions.unpair = ui.UseCallback(unpairRow, c.props.App)
+	c.actions.unlinkBill = ui.UseCallback(unlinkBillRow, c.props.App)
+}
 
-	// SM-8 / SM-10: resolve the duplicate and spike flags ONCE for the whole table.
-	// Both answers cost a full ledger scan, so asking them per rendered row is how a
-	// helpful flag becomes a scroll stutter. Each half self-gates on its feature, so
-	// this is free for anyone who has neither turned on.
-	//
-	// R3P: "once for the whole table" still meant once per table RENDER — every
-	// sort, selection toggle and page change re-ran duplicate detection and the
-	// smart engine over the full ledger, though neither answer can change
-	// without a data write. Memoised per app + data revision + the two
-	// features' on/off state; the settings value is loaded once and shared
-	// with the suggestion gate below (it was loaded twice per render).
-	smartSettings := uistate.LoadSmartSettings()
-	finishFlags := txnPerfStart("flags")
-	smartFlags := useTxnRowFlags(props.App, txnDataRev, smartSettings, uistate.LoadPrefs().WeekStartWeekday())
-	finishFlags()
-
-	sel := selAtom.Get()
-
-	// TX6b: per-merchant charge counts (memoized on the data revision), so each row can
-	// decide in O(1) whether to show the spending-trend chip without rescanning the
-	// ledger on every sort / select / pagination re-render (the full stats still compute
-	// lazily only when a chip is opened).
-	// C579: which rows carry a category no person has confirmed, and which rule (if
-	// any) accounts for it. Classified once for the whole view — rows re-render on
-	// selection, sort and pagination, and none of those change the answer.
-	provenanceRules := props.App.Rules()
-	// Category suggestions run rule matching and merchant history lookup. Let the
-	// ledger's first paint settle before mounting those row components.
-	suggestionsReady := useAfterSettle("txn-suggestions")
-	suggestionsEnabled := smartSettings.IsEnabled(catSuggestFreeCode)
-	// C605: if the user came back here from a side trip that started on a row, land
-	// on that row. Unconditional hook, at a stable position.
-	// Virtualize the heavy "All" view (only the rows near the viewport are rendered);
-	// the bounded pages (25/50/100) are already small, so render the slice directly.
-	// Computed here rather than beside the table body because the focus helper below
-	// needs it too, and two copies of the rule would eventually disagree.
-	virtualize := pageSize <= 0 && total > txnVirtualizeThreshold
-	// C605: if the user came back here from a side trip that started on a row, land
-	// on that row. Unconditional hook, at a stable position.
-	//
-	// The hint is what makes it work on the virtualized view: there, the row may not
-	// be in the DOM at all, so the helper has to move the scroller to where the row
-	// WILL render before it can look for it. IndexOf is the frame's own ordering, so
-	// the position is the one the user would have scrolled to.
-	useTxnFocusRow(txnFocusRowHint{
-		Virtual:   virtualize,
-		RowHeight: txnRowHeight,
-		Scroller:  "main.cf-scroll",
-		IndexOf: func(id string) (int, bool) {
-			for i := 0; i < total; i++ {
-				if idCol.Str(i) == id {
-					return i, true
-				}
-			}
-			return 0, false
-		},
-	})
-
-	// Follow-up tasks linked to each transaction (open/total + the items behind them), so
-	// a row can surface a chip + hover popover. Built once from the task list, read O(1)
-	// per row.
-	followUps := followUpInfoByTxn(props.App.Tasks(), uistate.UsePrefs().Get().FormatDate)
-	rowPropsCache := ui.UseRef(&txnFrameRowPropsCache{rows: make(map[string]*txnFrameRowProps)})
-
-	// Keep callback identities stable across selection/preview renders. These hooks
-	// live at the table component's fixed level (never inside the variable row loop).
-	openFollowUps = ui.UseCallback(openFollowUps, nav)
-	onTagFilter = ui.UseCallback(onTagFilter, props.App, props.App.Rev(), txnDataRev, f, memberLens)
-	toggleSelect = ui.UseCallback(toggleSelect, f, txnDataRev)
-	openEdit = ui.UseCallback(openEdit, props.App)
-	openSplit = ui.UseCallback(openSplit, props.App)
-	createRuleFromTxn = ui.UseCallback(createRuleFromTxn, props.App, nav)
-	confirmCategory = ui.UseCallback(confirmCategory, props.App)
-	toggleExclude = ui.UseCallback(toggleExclude, props.App)
-	deleteRow = ui.UseCallback(deleteRow, props.App)
-	viewReceipt = ui.UseCallback(viewReceipt, previewAtom)
-	openLink = ui.UseCallback(openLink, linkAtom)
-	pairRefundRow = ui.UseCallback(pairRefundRow, props.App)
-	unpairRow = ui.UseCallback(unpairRow, props.App)
-	ungroupRow = ui.UseCallback(ungroupRow, props.App)
-	unlinkBillRow = ui.UseCallback(unlinkBillRow, props.App)
-
-	// rowPropsAt builds one row's display props from the frame on demand. Factored out
-	// so the paginated body and the virtualized window build rows identically — and so
-	// the window only materializes the slice it actually shows.
-	rowPropsAt := func(i int) txnFrameRowProps {
-		rid := idCol.Str(i)
-		amt := money.New(amtCol.Int64(i), curCol.Str(i))
-		desc := txnDisplayDescription(descFull.Str(i), payeeCol.Str(i), payeeResolver.HasLearned, payeeResolver.Resolve)
-		cat := catCol.Str(i)
-		if strings.TrimSpace(cat) == "" {
-			cat = uistate.T("transactions.uncategorized")
-		}
-		// A split transaction uses the shared concise label; its line amounts remain
-		// available in the category cell tooltip.
-		if t, ok := txByID[rid]; ok && t.HasSplits() {
-			cat, _ = splitCellLabel(t)
-		}
-		if t, ok := txByID[rid]; ok && t.IsTransfer() {
-			account, _ := domain.AccountByID(props.App.Accounts(), t.AccountID)
-			cat = txnV5RowTransferLabel(accName[t.AccountID], accName[t.TransferAccountID], txnclassify.TransferOutgoing(t, account))
-		}
-		cleared := false
-		if b, ok := clearedCol.Values[i].(bool); ok {
-			cleared = b
-		}
-		var firstAtt domain.AttachmentRef
-		nAtt := 0
-		if t, ok := txByID[rid]; ok {
-			nAtt = len(t.Attachments)
-			if nAtt > 0 {
-				firstAtt = t.Attachments[0]
-			}
-		}
-
-		ledgerAmount, ledgerTone := fmtLedgerAmount(amt, txByID[rid].IsTransfer())
-		suggestedCategory := ""
-		rowTxn := txByID[rid]
-		if suggestionsReady && suggestionsEnabled && rowTxn.CategoryID == "" && !rowTxn.HasSplits() && !rowTxn.IsTransfer() {
-			inputs := txnCatSuggestInputsFor(props.App, txnDataRev)
-			if suggestion, ok := inputs.suggestion(props.App, rowTxn); ok &&
-				suggestion.Confidence >= catsuggest.ConfMedium &&
-				categorySuggestionMatchesDirection(rowTxn, suggestion.CategoryID, inputs.categories) {
-				suggestedCategory = catName[suggestion.CategoryID]
-			}
-		}
-		// C672 suspect-transfer mark, answered for this rendered row only (R3P).
-		_, suspectTransfer := txnclassify.Suspected(rowTxn, catName[rowTxn.CategoryID])
-		autoProv := txnAutoByID(props.App, []domain.Transaction{rowTxn}, provenanceRules, int(props.App.Rev()))
-		info := txnRowInfoText(followUps[rid].Open, followUps[rid].Total, nAtt, rowTxn.Note != "")
-		if autoProv[rid].IsAutomatic() {
-			key := "uxt5.autoAdded"
-			if reviewqueue.Needs(rowTxn) {
-				key = "uxt5.autoNeedsReview"
-			}
-			info = appendTxnInfo(info, uistate.T(key))
-		}
-		if cleared {
-			info = appendTxnInfo(info, uistate.T("uxt5.cleared"))
-		}
-		if cleared && !reconThrough[txByID[rid].AccountID].IsZero() && !txByID[rid].Date.After(reconThrough[txByID[rid].AccountID]) {
-			info = appendTxnInfo(info, uistate.T("uxt5.reconciled"))
-		}
-		if smartFlags.Duplicate[rid] {
-			info = appendTxnInfo(info, uistate.T("sm8.detail"))
-		}
-		if reviewqueue.Needs(rowTxn) && (smartFlags.Duplicate[rid] || smartFlags.Spike[rid] != "") {
-			info = appendTxnInfo(info, uistate.T("uxt5.review"))
-		}
-		if smartFlags.Spike[rid] != "" && (smartFlags.Duplicate[rid] || reviewqueue.Needs(rowTxn)) {
-			info = appendTxnInfo(info, smartFlags.Spike[rid])
-		}
-		if suspectTransfer {
-			info = appendTxnInfo(info, uistate.T("transactions.badgeSuspectTransferTitle"))
-		}
-		if eventName[rid] != "" {
-			info = appendTxnInfo(info, uistate.T("events.chipTitle", eventName[rid]))
-		}
-		if rowTxn.HasSplits() {
-			_, splitTooltip := splitCellLabel(rowTxn)
-			info = appendTxnInfo(info, splitTooltip)
-		}
-		return txnFrameRowProps{
-			ID:              rid,
-			AmountMoney:     amt,
-			ShowSuggestions: suggestionsReady,
-			// .UTC() is load-bearing: txn dates are UTC-midnight calendar dates
-			// (dateutil), and time.Unix reconstructs in the LOCAL zone — west of
-			// UTC that rendered every ledger date a day early (Jul 1 → "Jun 30")
-			// while /reports showed Jul 1 for the same transaction (C339).
-			Date:              ledgerDate(time.Unix(int64(dateCol.Num(i)), 0).UTC(), f.From, f.To),
-			Amount:            ledgerAmount,
-			AmtTone:           ledgerTone,
-			Desc:              desc,
-			Tags:              txByID[rid].Tags,
-			Account:           accCol.Str(i),
-			Category:          cat,
-			CategoryTooltip:   txnCategoryTooltip(rowTxn, accName[rowTxn.TransferAccountID]),
-			CategoryID:        txByID[rid].CategoryID,
-			SuggestedCategory: suggestedCategory,
-			Source:            srcCol.Str(i),
-			MemberNames:       txnOwnerNames(txByID[rid].Owners(), memberNames),
-			MemberColors:      txnOwnerColors(txByID[rid].Owners(), memberColors),
-			OwnersResolved:    true,
-			Cleared:           cleared,
-			Reconciled: cleared && !reconThrough[txByID[rid].AccountID].IsZero() &&
-				!txByID[rid].Date.After(reconThrough[txByID[rid].AccountID]),
-			Reviewed:            txByID[rid].Reviewed,
-			Queued:              reviewqueue.Needs(txByID[rid]),
-			Duplicate:           smartFlags.Duplicate[rid],
-			SpikeWhy:            smartFlags.Spike[rid],
-			Unfiled:             txByID[rid].CategoryID == "" && !txByID[rid].HasSplits(),
-			AutoCategory:        autoProv[rid].IsAutomatic(),
-			Selected:            sel[rid],
-			Receipts:            nAtt,
-			Attachment:          firstAtt,
-			Vis:                 txnColsForScope(colVis, f.Member, len(memberNames)),
-			BillAccountID:       txByID[rid].BillAccountID,
-			SubscriptionName:    txByID[rid].SubscriptionName,
-			ExcludedFromReports: txByID[rid].ExcludeFromReports,
-			HasNote:             txByID[rid].Note != "",
-			HasSplits:           txByID[rid].HasSplits(),
-			IsTransfer:          txByID[rid].IsTransfer(),
-			TransferWith:        accName[txByID[rid].TransferAccountID],
-			IsDebtPayment:       txByID[rid].BillAccountID != "",
-			SuspectTransfer:     suspectTransfer,
-			IsIncome:            txByID[rid].IsIncome(),
-			IsRefund:            refundSide[rid],
-			IsRefunded:          refundedSide[rid],
-			IsBillMatched:       billMatched[rid],
-			EventName:           eventName[rid],
-			ShowBalance:         showBalance,
-			Balance:             balanceStr(runBal, rid),
-			BalTone:             balanceTone(runBal, rid),
-			FollowUpOpen:        followUps[rid].Open,
-			FollowUpTotal:       followUps[rid].Total,
-			FollowUps:           followUps[rid].Items,
-			InfoText:            info,
-			FlashKey:            txnRowFlashKey(rowTxn),
-		}
-	}
-	renderRow := func(i int) ui.Node {
-		r := rowPropsAt(i)
-		// C626: only the windowed body needs to state an absolute position — a
-		// rendered page's DOM order already is one. +2 because ARIA counts the
-		// header as row 1.
-		if virtualize {
-			r.RowIndex = i + 2
-		}
-		if g, ok := groupByTxn[r.ID]; ok {
-			r.GroupSize = len(g.TxnIDs)
-			r.GroupTotal = fmtMoney(txnlinks.GroupSum(txnlinks.GroupMembers(g, groupTxByID)))
-		}
-		r.OnOpen = openEdit
-		r.OnTagClick = onTagFilter
-		r.OnToggleSelect = toggleSelect
-		r.OnViewReceipt = viewReceipt
-		r.OnOpenLink = openLink
-		r.OnOpenSplit = openSplit
-		r.OnToggleExclude = toggleExclude
-		r.OnConfirmCategory = confirmCategory
+func useTxnTableRows(c *txnTableController, choose func(string)) func(int) ui.Node {
+	cache := ui.UseRef(&txnFrameRowPropsCache{rows: make(map[string]*txnFrameRowProps)})
+	return func(i int) ui.Node {
+		in := c.frame.RowAt(i)
+		row := c.index.Transactions[in.ID]
+		in.SuggestionsReady = c.suggestionsReady
+		in.Selected = c.selection.Get()[in.ID]
+		in.Duplicate, in.Spike = c.smart.Duplicate[in.ID], c.smart.Spike[in.ID]
+		in.Automatic = txnAutoByID(c.props.App, []domain.Transaction{row}, c.props.App.Rules(), int(c.props.App.Rev()))[in.ID].IsAutomatic()
+		in.FollowUpOpen, in.FollowUpTotal = c.followUps[in.ID].Open, c.followUps[in.ID].Total
+		in.SuggestedCategory = txnTableSuggestedCategory(c, row)
+		derived := txntable.DeriveRow(c.rowContext, in)
+		r := txnFramePropsFromRow(derived)
+		r.Vis = txnColsForScope(c.columns, c.filter.Member, len(c.index.MemberNames))
+		r.FollowUps = txnTableFollowUpItems(c.followUps[in.ID].Items)
+		r.RowIndex = c.page.RowIndex(i)
+		c.actions.bind(&r)
+		r.OnChooseCategory = choose
 		r.OnSuggestCategory = func(id string) { uistate.SetCatSuggest(id) }
-		// C564: resolve against the LIVE ledger, not the render-time page map. txByID
-		// is built from the shown slice, so a row whose data moved underneath the
-		// render (a rule applied, a sync landed) yielded a zero Transaction that the
-		// flow then tried to split. The flow rejects an unresolved id out loud.
-		r.OnReceiptSplit = func(id string) {
-			for _, t := range props.App.Transactions() {
-				if t.ID == id {
-					startReceiptSplitFlow(props.App, t)
-					return
-				}
-			}
-			uistate.PostNotice(uistate.T("receiptsplit.noTxn"), true)
-		}
-		r.OnPairRefund = pairRefundRow
-		r.OnUnpair = unpairRow
-		r.OnUngroup = ungroupRow
-		r.OnUnlinkBill = unlinkBillRow
-		r.OnOpenFollowUps = openFollowUps
-		if r.IsDebtPayment {
-			r.InfoText = appendTxnInfo(r.InfoText, uistate.T("transactions.badgeDebtPaymentTitle", firstNonEmpty(r.TransferWith, uistate.T("transactions.badgeDebtPayment"))))
-		}
-		if r.GroupSize > 1 {
-			r.InfoText = appendTxnInfo(r.InfoText, uistate.T("txnlinks.groupBadgeTitle", r.GroupSize, r.GroupTotal))
-		}
-		if r.IsRefund {
-			r.InfoText = appendTxnInfo(r.InfoText, uistate.T("txnlinks.refundBadge"))
-		} else if r.IsRefunded {
-			r.InfoText = appendTxnInfo(r.InfoText, uistate.T("txnlinks.refundedBadge"))
-		}
-		if r.ExcludedFromReports {
-			r.InfoText = appendTxnInfo(r.InfoText, uistate.T("transactions.excludeHint"))
-		}
-		r.OnCreateRule = createRuleFromTxn
-		r.OnDelete = deleteRow
-		r.OnChooseCategory = chooseCategory
-		return ui.CreateElement(txnFrameRow, rowPropsCache.Get().reuse(r))
+		r.OnReceiptSplit = func(id string) { txnTableReceiptSplit(c.props.App, id) }
+		return ui.CreateElement(txnFrameRow, cache.Get().reuse(r))
 	}
+}
 
-	// visibleOrder (for the select-all header) spans the rows in the current view:
-	// the whole list when virtualized ("All"), otherwise the current page. Range
-	// selection has a separate lazy order builder so ordinary renders do no full-ledger
-	// ID walk just to preserve a future shift-click.
-	vStart, vEnd := start, end
-	if virtualize {
-		vStart, vEnd = 0, total
+func txnTableSuggestedCategory(c *txnTableController, row domain.Transaction) string {
+	if !txntable.SuggestionEligible(row, c.suggestionsReady, c.suggestionsEnabled) {
+		return ""
 	}
-	rangeOrder = func() []string {
-		ids := make([]string, 0, vEnd-vStart)
-		for i := vStart; i < vEnd; i++ {
-			ids = append(ids, idCol.Str(i))
-		}
-		return ids
-	}
-	visibleOrder = ui.UseMemo(func() []string {
-		ids := make([]string, 0, vEnd-vStart)
-		for i := vStart; i < vEnd; i++ {
-			ids = append(ids, idCol.Str(i))
-		}
-		return ids
-	}, props.App, props.App.Rev(), txnDataRev, f, idCol, virtualize, vStart, vEnd)
+	inputs := txnCatSuggestInputsFor(c.props.App, int(c.props.App.Rev()))
+	suggestion, ok := inputs.suggestion(c.props.App, row)
+	return txntable.SuggestedCategory(row, suggestion, ok, inputs.categories, c.index.CategoryNames)
+}
 
-	var tableBody ui.Node
+func txnTableReceiptSplit(app *appstate.App, id string) {
+	row, ok := app.TransactionByID(id)
+	if !ok {
+		uistate.PostNotice(uistate.T("receiptsplit.noTxn"), true)
+		return
+	}
+	startReceiptSplitFlow(app, row)
+}
+
+func (a txnTableActions) bind(r *txnFrameRowProps) {
+	r.OnOpen, r.OnOpenSplit, r.OnCreateRule = a.openEdit, a.openSplit, a.createRule
+	r.OnConfirmCategory, r.OnToggleExclude, r.OnDelete = a.confirmCategory, a.toggleExclude, a.deleteRow
+	r.OnPairRefund, r.OnUnpair, r.OnUngroup, r.OnUnlinkBill = a.pairRefund, a.unpair, a.ungroup, a.unlinkBill
+	r.OnOpenLink, r.OnViewReceipt, r.OnOpenFollowUps = a.openLink, a.viewReceipt, a.openFollowUps
+	r.OnTagClick, r.OnToggleSelect = a.tagFilter, a.toggleSelect
+}
+
+func txnFramePropsFromRow(r txntable.Row) txnFrameRowProps {
+	return txnFrameRowProps{
+		ID:                  r.ID,
+		AmountMoney:         r.AmountMoney,
+		ShowSuggestions:     r.ShowSuggestions,
+		Date:                r.Date,
+		Amount:              r.Amount,
+		AmtTone:             r.AmtTone,
+		Desc:                r.Desc,
+		Tags:                r.Tags,
+		Account:             r.Account,
+		Category:            r.Category,
+		CategoryTooltip:     r.CategoryTooltip,
+		CategoryID:          r.CategoryID,
+		SuggestedCategory:   r.SuggestedCategory,
+		Source:              r.Source,
+		MemberNames:         r.MemberNames,
+		MemberColors:        r.MemberColors,
+		OwnersResolved:      r.OwnersResolved,
+		Cleared:             r.Cleared,
+		Reconciled:          r.Reconciled,
+		Reviewed:            r.Reviewed,
+		Queued:              r.Queued,
+		Duplicate:           r.Duplicate,
+		SpikeWhy:            r.SpikeWhy,
+		Unfiled:             r.Unfiled,
+		AutoCategory:        r.AutoCategory,
+		Selected:            r.Selected,
+		Receipts:            r.Receipts,
+		Attachment:          r.Attachment,
+		BillAccountID:       r.BillAccountID,
+		SubscriptionName:    r.SubscriptionName,
+		ExcludedFromReports: r.ExcludedFromReports,
+		HasNote:             r.HasNote,
+		HasSplits:           r.HasSplits,
+		IsTransfer:          r.IsTransfer,
+		TransferWith:        r.TransferWith,
+		IsDebtPayment:       r.IsDebtPayment,
+		SuspectTransfer:     r.SuspectTransfer,
+		IsIncome:            r.IsIncome,
+		IsRefund:            r.IsRefund,
+		IsRefunded:          r.IsRefunded,
+		IsBillMatched:       r.IsBillMatched,
+		EventName:           r.EventName,
+		ShowBalance:         r.ShowBalance,
+		Balance:             r.Balance,
+		BalTone:             r.BalTone,
+		FollowUpOpen:        r.FollowUpOpen,
+		FollowUpTotal:       r.FollowUpTotal,
+		InfoText:            r.InfoText,
+		FlashKey:            r.FlashKey,
+		GroupSize:           r.GroupSize,
+		GroupTotal:          r.GroupTotal,
+	}
+}
+
+type txnTableBodyProps struct {
+	App                                  *appstate.App
+	Filter                               txnfilter.Criteria
+	Columns                              uistate.TxnCols
+	Page                                 txntable.Page
+	Total                                int
+	Visible                              []string
+	ShowBalance, Register, SearchPending bool
+	RenderRow                            func(int) ui.Node
+	IDAt                                 func(int) any
+	OnSort                               func(string)
+	OnPage, OnPageSize                   func(int)
+}
+
+func txnTableColumns(props txnTableBodyProps) []uiw.Column {
+	cols := []uiw.Column{
+		{Head: ui.CreateElement(txnSelectAllHeader, txnSelectAllHeaderProps{Visible: props.Visible}), Class: "td-select"},
+		{Label: uistate.T("transactions.colDate"), SortKey: txnTableSortKey(props.Register, "date"), Class: "td-date"},
+	}
+	cols = append(cols, uiw.Column{Label: uistate.T("transactions.colDescription"), SortKey: txnTableSortKey(props.Register, "payee"), Class: "row-desc-col txn-col-description"})
+	if props.Columns.Category {
+		cols = append(cols, uiw.Column{Label: uistate.T("transactions.colCategory"), SortKey: txnTableSortKey(props.Register, "category"), Class: "td-cat"})
+	}
+	if props.Columns.Account {
+		cols = append(cols, uiw.Column{Label: uistate.T("transactions.colAccount"), SortKey: txnTableSortKey(props.Register, "account"), Class: "td-acct txn-col-account"})
+	}
+	members := props.App.Members()
+	showUser := txnUserColumnVisible(props.Columns.User, props.Filter.Member, len(members))
+	if showUser {
+		cols = append(cols, uiw.Column{Head: txnWhoHeader(), Class: "td-user txn-col-who"})
+	}
+	if props.Columns.Amount {
+		cols = append(cols, uiw.Column{Label: uistate.T("transactions.colAmount"), SortKey: txnTableSortKey(props.Register, "amount"), Class: "td-amount txn-col-amount"})
+	}
+	if props.ShowBalance {
+		cols = append(cols, uiw.Column{Label: uistate.T("transactions.colBalance"), Class: "td-amount"})
+	}
+	if props.Columns.Source {
+		cols = append(cols, uiw.Column{Label: uistate.T("transactions.colSource"), SortKey: txnTableSortKey(props.Register, "source"), Class: "td-source"})
+	}
+	cols = append(cols, uiw.Column{Head: Span(css.Class(tw.SrOnly), uistate.T("transactions.colActions")), Class: "td-actions txn-col-actions"})
+	return cols
+}
+
+func txnTableBody(props txnTableBodyProps) ui.Node {
+	if len(props.App.Transactions()) == 0 {
+		return ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("transactions.empty"), CTALabel: uistate.T("transactions.addFirst"), AddTarget: "transaction", Icon: icon.Transactions, ImportLink: true})
+	}
+	cols := txnTableColumns(props)
+	dtp := uiw.DataTableProps{Class: "txn-table", StickyHead: true, Columns: cols, Sort: props.Filter.Sort, Dir: props.Filter.Dir, SortSpinner: true,
+		Busy: props.SearchPending, BusyLabel: uistate.T("filters.searchPending"), Page: props.Page.Number, Total: props.Total,
+		PageSize: props.Page.Size, PageSizes: txnfilter.PageSizes, OnPage: props.OnPage, OnPageSize: props.OnPageSize, TopPager: false, AnchorID: "txn-ledger-anchor"}
+	if !props.Register {
+		dtp.OnSort = props.OnSort
+	}
+	var body ui.Node
 	switch {
-	case len(props.App.Transactions()) == 0:
-		tableBody = ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("transactions.empty"), CTALabel: uistate.T("transactions.addFirst"), AddTarget: "transaction", Icon: icon.Transactions, ImportLink: true})
+	case props.Total == 0:
+		body = txnTableEmptyBody(props, dtp)
+	case props.Page.Virtual:
+		dtp.Virtual = &uiw.VirtualSpec{Count: props.Total, RowHeight: txnRowHeight, ColSpan: len(cols), Scroller: "main.cf-scroll", RowAt: props.RenderRow, KeyAt: props.IDAt}
+		body = uiw.DataTable(dtp)
 	default:
-		// Header columns, built to match the row cells' conditional set exactly (same
-		// order): Select + Date + Description are always shown; the rest follow the
-		// user's column-visibility choice.
-		// The select column's header is a real control, not a screen-reader-only
-		// caption: one checkbox that selects or clears every row in view, sitting
-		// directly above the per-row boxes it commands. Its own component, so its
-		// hooks stay isolated from this variable-length column list.
-		cols := []uiw.Column{
-			{Head: ui.CreateElement(txnSelectAllHeader, txnSelectAllHeaderProps{Visible: visibleOrder}), Class: "td-select"},
-			{Label: uistate.T("transactions.colDate"), SortKey: txnTableSortKey(registerActive, "date"), Class: "td-date"},
-		}
-		// row-desc-col: the fixed-layout ledger sizes columns from the header row, so
-		// the width-priority rule (2026-07-17 audit — description reads first) must
-		// live on the th, not the td.
-		cols = append(cols, uiw.Column{Label: uistate.T("transactions.colDescription"), SortKey: txnTableSortKey(registerActive, "payee"), Class: "row-desc-col txn-col-description"})
-		// The secondary columns carry their td-* class on the header too, so the
-		// fixed-layout ledger sizes each column by class (not by fragile positional
-		// nth-child that misaligns when a column's visibility toggles).
-		if colVis.Category {
-			cols = append(cols, uiw.Column{Label: uistate.T("transactions.colCategory"), SortKey: txnTableSortKey(registerActive, "category"), Class: "td-cat"})
-		}
-		if colVis.Account {
-			cols = append(cols, uiw.Column{Label: uistate.T("transactions.colAccount"), SortKey: txnTableSortKey(registerActive, "account"), Class: "td-acct txn-col-account"})
-		}
-		// "Who" is useful only for an Everyone view in a real household.
-		members := props.App.Members()
-		showUser := txnUserColumnVisible(colVis.User, f.Member, len(members))
-		if showUser {
-			cols = append(cols, uiw.Column{Head: txnWhoHeader(), Class: "td-user txn-col-who"})
-		}
-		if colVis.Amount {
-			cols = append(cols, uiw.Column{Label: uistate.T("transactions.colAmount"), SortKey: txnTableSortKey(registerActive, "amount"), Class: "td-amount txn-col-amount"})
-		}
-		// Register mode (TX12): a running-balance column follows Amount. No SortKey.
-		if showBalance {
-			cols = append(cols, uiw.Column{Label: uistate.T("transactions.colBalance"), Class: "td-amount"})
-		}
-		if colVis.Source {
-			cols = append(cols, uiw.Column{Label: uistate.T("transactions.colSource"), SortKey: txnTableSortKey(registerActive, "source"), Class: "td-source"})
-		}
-		cols = append(cols, uiw.Column{Head: Span(css.Class(tw.SrOnly), uistate.T("transactions.colActions")), Class: "td-actions txn-col-actions"})
-		dtp := uiw.DataTableProps{
-			Class:       "txn-table",
-			StickyHead:  true,
-			Columns:     cols,
-			Sort:        f.Sort,
-			Dir:         f.Dir,
-			OnSort:      nil,
-			SortSpinner: true,
-			// C628: while a typed search is still inside its debounce the rows below
-			// answer the PREVIOUS query. The toolbar already said so in words; the
-			// table now dims them and drops their pointer events for the same window,
-			// so the stale rows cannot be acted on — which is what "explicitly marked
-			// as pending" has to mean for a row whose Edit button still worked.
-			Busy:       searchPending,
-			BusyLabel:  uistate.T("filters.searchPending"),
-			Page:       curPage,
-			Total:      total,
-			PageSize:   pageSize,
-			PageSizes:  txnfilter.PageSizes,
-			OnPage:     setPage,
-			OnPageSize: setPageSize,
-			// Keep the interactive pager below the table to reduce tab stops before rows.
-			TopPager: false,
-			// Paging from the bottom pager scrolls the list back to the top, so the user
-			// sees the new page's first rows instead of being stranded at the bottom.
-			AnchorID: "txn-ledger-anchor",
-		}
-		if !registerActive {
-			dtp.OnSort = sortBy
-		}
-		if total == 0 {
-			futurePeriod, _ := txnFutureScheduleCount(f, time.Now())
-			if futurePeriod {
-				items := txnFutureScheduledItems(f, time.Now())
-				dtp.Body = Fragment(txnScheduledTableRows(items,
-					func(date time.Time) string { return ledgerDate(date, f.From, f.To) },
-					colVis, showUser, showBalance)...)
-				tableBody = Fragment(ui.CreateElement(txnNoMatch, txnNoMatchProps{
-					Search: strings.TrimSpace(f.Text), FuturePeriod: true, InTable: true,
-				}), uiw.DataTable(dtp))
-			} else {
-				tableBody = ui.CreateElement(txnNoMatch, txnNoMatchProps{Search: strings.TrimSpace(f.Text)})
-			}
-		} else if virtualize {
-			dtp.Virtual = &uiw.VirtualSpec{
-				Count:     total,
-				RowHeight: txnRowHeight,
-				ColSpan:   len(cols),
-				Scroller:  "main.cf-scroll",
-				RowAt:     renderRow,
-				KeyAt:     func(i int) any { return idCol.Str(i) },
-			}
-			tableBody = uiw.DataTable(dtp)
-		} else {
-			idxs := make([]int, 0, end-start)
-			for i := start; i < end; i++ {
-				idxs = append(idxs, i)
-			}
-			dtp.Body = MapKeyed(idxs, func(i int) any { return idCol.Str(i) }, renderRow)
-			tableBody = uiw.DataTable(dtp)
-		}
+		dtp.Body = MapKeyed(txntable.Indices(props.Page.Start, props.Page.End), props.IDAt, props.RenderRow)
+		body = uiw.DataTable(dtp)
 	}
+	if props.Page.OnePage {
+		return Div(css.Class("txn-onepage"), body)
+	}
+	return body
+}
 
-	// When the whole filtered set fits within the smallest page size, no rows-per-page
-	// choice could ever create a second page — so the pager (range + size buttons +
-	// disabled prev/next + "Page 1 of 1") is pure noise. Wrap the table in a marker
-	// class that hides it (July 2026 review: hide unnecessary pagination). Above that
-	// threshold the pager stays, so a user on "All" can always page back down.
-	body := tableBody
-	if total > 0 && total <= txnfilter.PageSizes[0] {
-		body = Div(css.Class("txn-onepage"), tableBody)
+func txnTableEmptyBody(props txnTableBodyProps, dtp uiw.DataTableProps) ui.Node {
+	future, _ := txnFutureScheduleCount(props.Filter, time.Now())
+	if !future {
+		return ui.CreateElement(txnNoMatch, txnNoMatchProps{Search: strings.TrimSpace(props.Filter.Text)})
 	}
-	return uiw.Widget(uiw.WidgetProps{
-		ID: "txn-table", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
-		Body: Div(Attr("role", "region"), Attr("aria-label", uistate.T("txw1.tableRegion")), OnKeyDown(txnKeyDown),
-			txnTableScopedCountFacts(props.App, f, props.Shown, props.Base, props.App.Settings().FXRates), body,
-			ui.CreateElement(txnPageCategoryPicker, txnPageCategoryPickerProps{App: props.App, ID: categoryTarget.Get(), Close: func() {
-				categoryTarget.Set("")
-				focusTxnOpener(categoryOpener.Get())
-			}})),
+	items := txnFutureScheduledItems(props.Filter, time.Now())
+	showUser := txnUserColumnVisible(props.Columns.User, props.Filter.Member, len(props.App.Members()))
+	dtp.Body = Fragment(txnScheduledTableRows(items, func(date time.Time) string { return ledgerDate(date, props.Filter.From, props.Filter.To) }, props.Columns, showUser, props.ShowBalance)...)
+	return Fragment(ui.CreateElement(txnNoMatch, txnNoMatchProps{Search: strings.TrimSpace(props.Filter.Text), FuturePeriod: true, InTable: true}), uiw.DataTable(dtp))
+}
+
+type txnTableCategoryTarget struct {
+	ID       string
+	Choose   func(string)
+	Shortcut func(string)
+	Close    func()
+}
+
+func useTxnTableCategoryTarget(app *appstate.App) txnTableCategoryTarget {
+	target := ui.UseState("")
+	opener := ui.UseRef(js.Null())
+	choose := ui.UseCallback(func(id string) {
+		opener.Set(js.Global().Get("document").Get("activeElement"))
+		target.Set(id)
+		scheduleTxnFocus(js.Global().Get("document"), "input[data-testid='catpick-search']")
+	}, app)
+	return txnTableCategoryTarget{ID: target.Get(), Choose: choose, Shortcut: func(id string) {
+		opener.Set(js.Global().Get("document").Get("activeElement"))
+		target.Set(id)
+	}, Close: func() { target.Set(""); focusTxnOpener(opener.Get()) }}
+}
+
+type txnTableRegionProps struct {
+	App      *appstate.App
+	Body     ui.Node
+	Filter   txnfilter.Criteria
+	Shown    []domain.Transaction
+	Base     string
+	Category txnTableCategoryTarget
+}
+
+func txnTableRegion(props txnTableRegionProps) ui.Node {
+	keyDown := ui.UseEvent(func(e ui.KeyboardEvent) {
+		if handleTxnTableShortcut(e.GetKey(), e.JSValue().Get("target"), js.Global().Get("document"), props.Category.Shortcut, func() { SetTxnKeyHelpOpen(true) }) {
+			e.PreventDefault()
+			e.StopPropagation()
+		}
+	})
+	return uiw.Widget(uiw.WidgetProps{ID: "txn-table", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
+		Body: Div(Attr("role", "region"), Attr("aria-label", uistate.T("txw1.tableRegion")), OnKeyDown(keyDown),
+			txnTableScopedCountFacts(props.App, props.Filter, props.Shown, props.Base, props.App.Settings().FXRates), props.Body,
+			ui.CreateElement(txnPageCategoryPicker, txnPageCategoryPickerProps{App: props.App, ID: props.Category.ID, Close: props.Category.Close})),
 	})
 }
 
@@ -1306,27 +775,16 @@ func txnTableScopedCountFacts(app *appstate.App, criteria txnfilter.Criteria, ro
 }
 
 func txnTableCountFacts(rows []domain.Transaction, base string, fxRates map[string]float64, cached ...txnview.View) ui.Node {
-	facts := []ui.Node{Span(css.Class("txn-count-fact"), Attr("data-testid", "txn-count-transaction-total"), txnCountTransactionCount(len(rows)))}
-	var view txnview.View
-	if len(cached) == 1 {
-		view = cached[0]
-	} else {
-		view, _ = txnview.Summarize(rows, currency.Rates{Base: base, Rates: fxRates}, base)
+	facts := txntable.CountFacts(rows, base, fxRates, cached, txntable.Labels{T: uistate.T, Money: fmtMoney}, txnCountTransactionCount)
+	nodes := make([]ui.Node, 0, len(facts))
+	for _, fact := range facts {
+		args := []any{css.Class(fact.Class)}
+		if fact.TestID != "" {
+			args = append(args, Attr("data-testid", fact.TestID))
+		}
+		nodes = append(nodes, Span(append(args, fact.Text)...))
 	}
-	if view.Transferred > 0 {
-		label := uistate.T("transactions.scopeMoved", fmtMoney(money.New(view.Transferred, base)))
-		facts = append(facts, Span(css.Class("txn-count-fact"), Attr("data-testid", "txn-count-moved"), label))
-	}
-	if view.UnpairedRows > 0 {
-		facts = append(facts, txnSecondaryFact("txn-count-unpaired", "transactions.scopeUnpaired", view.UnpairedRows))
-	}
-	if view.Unconverted > 0 {
-		facts = append(facts, Span(css.Class("txn-count-fact"), Attr("data-testid", "txn-count-unconverted"), uistate.T("transactions.scopeUnconverted", view.Unconverted)))
-	}
-	if view.Excluded > 0 {
-		facts = append(facts, Span(css.Class("txn-count-fact"), Attr("data-testid", "txn-count-excluded"), uistate.T("transactions.scopeExcluded", view.Excluded)))
-	}
-	return Div(css.Class("txn-count-secondary"), Attr("data-testid", "txn-table-count-facts"), facts)
+	return Div(css.Class("txn-count-secondary"), Attr("data-testid", "txn-table-count-facts"), nodes)
 }
 
 // txnRowFlagsMemo is the synchronous compatibility cache. Like the sliced job,
@@ -1384,28 +842,13 @@ func txnGroupMembersMemo(app *appstate.App, rev int, groupByTxn map[string]domai
 // pass. The wanted set is the union of every group's TxnIDs — a handful of
 // ids, versus a whole-ledger index map.
 func collectTxnGroupMembers(groupByTxn map[string]domain.TxnLink, all []domain.Transaction) map[string]domain.Transaction {
-	out := make(map[string]domain.Transaction)
-	if len(groupByTxn) == 0 {
-		return out
-	}
-	wanted := make(map[string]bool)
-	for _, link := range groupByTxn {
-		for _, id := range link.TxnIDs {
-			wanted[id] = true
-		}
-	}
-	for _, t := range all {
-		if wanted[t.ID] {
-			out[t.ID] = t
-		}
-	}
-	return out
+	return txntable.GroupMembers(groupByTxn, all)
 }
 
 // txnRowActionName gives a row action enough visible context to distinguish
 // repeated merchants while navigating the ledger with a screen reader.
 func txnRowActionName(action, description, date, amount string) string {
-	return uistate.T("txw1.rowAction", action, description, date, amount)
+	return txntable.ActionName(action, description, date, amount, uistate.T)
 }
 
 // txnFrameRowProps configures one rendered row of the transactions table tile.
@@ -1574,44 +1017,9 @@ type txnFrameRowPropsCache struct {
 const txnRowPropsCacheLimit = 256
 
 func (c *txnFrameRowPropsCache) reuse(next txnFrameRowProps) *txnFrameRowProps {
-	if previous, ok := c.rows[next.ID]; ok && sameTxnFrameRowValues(*previous, next) {
-		return previous
-	}
-	if _, ok := c.rows[next.ID]; !ok {
-		c.order = append(c.order, next.ID)
-	}
-	current := new(txnFrameRowProps)
-	*current = next
-	c.rows[next.ID] = current
-	for len(c.order) > txnRowPropsCacheLimit {
-		delete(c.rows, c.order[0])
-		c.order = c.order[1:]
-	}
-	return current
-}
-
-func sameTxnFrameRowValues(a, b txnFrameRowProps) bool {
-	// Function values are deliberately excluded: callbacks are kept stable with
-	// UseCallback, while reflect.DeepEqual considers any non-nil function unequal.
-	a.OnTagClick, b.OnTagClick = nil, nil
-	a.OnConfirmCategory, b.OnConfirmCategory = nil, nil
-	a.OnSuggestCategory, b.OnSuggestCategory = nil, nil
-	a.OnOpenLink, b.OnOpenLink = nil, nil
-	a.OnToggleExclude, b.OnToggleExclude = nil, nil
-	a.OnOpenFollowUps, b.OnOpenFollowUps = nil, nil
-	a.OnOpenSplit, b.OnOpenSplit = nil, nil
-	a.OnReceiptSplit, b.OnReceiptSplit = nil, nil
-	a.OnOpen, b.OnOpen = nil, nil
-	a.OnToggleSelect, b.OnToggleSelect = nil, nil
-	a.OnViewReceipt, b.OnViewReceipt = nil, nil
-	a.OnCreateRule, b.OnCreateRule = nil, nil
-	a.OnDelete, b.OnDelete = nil, nil
-	a.OnPairRefund, b.OnPairRefund = nil, nil
-	a.OnUnpair, b.OnUnpair = nil, nil
-	a.OnUngroup, b.OnUngroup = nil, nil
-	a.OnUnlinkBill, b.OnUnlinkBill = nil, nil
-	a.OnChooseCategory, b.OnChooseCategory = nil, nil
-	return reflect.DeepEqual(a, b)
+	row, rows, order := txntable.RetainRow(c.rows, c.order, next.ID, next, txnRowPropsCacheLimit)
+	c.rows, c.order = rows, order
+	return row
 }
 
 // txnFrameRow renders one transaction row. It owns its edit/select/
@@ -1648,225 +1056,164 @@ func txnFrameRow(props *txnFrameRowProps) ui.Node {
 	saveStatus := useTxnSaveStatus(props.ID)
 	defer txnPerfStart("row")()
 	pickerOpen := ui.UseState(false)
-	lastFlashKey := ui.UseRef(props.FlashKey)
-	ui.UseEffect(func() func() {
-		if lastFlashKey.Get() == props.FlashKey {
-			return nil
-		}
-		lastFlashKey.Set(props.FlashKey)
-		doc := js.Global().Get("document")
-		if doc.Truthy() {
-			return flashTransactionRow(doc, props.ID)
-		}
-		return nil
-	}, props.FlashKey)
-	openCategoryPicker := func(ui.Event) {
+	useTxnRowFlash(props.ID, props.FlashKey)
+	choose := func(ui.Event) {
 		if props.OnChooseCategory != nil {
 			props.OnChooseCategory(props.ID)
 			return
 		}
 		pickerOpen.Set(true)
 	}
-	applyManualCategory := func(categoryID string) {
-		pickerOpen.Set(false)
-		applyTxnManualCategory(props.ID, categoryID)
-	}
-	// Description and pencil share one explicit edit action. The row itself is
-	// not interactive, so selecting text or clicking a date cannot open the editor.
-	editRow := ui.UseEvent(func(e ui.Event) {
-		e.StopPropagation()
-		props.OnOpen(props.ID)
-	})
-	selToggle := ui.UseEvent(func(e ui.Event) {
-		// Read shiftKey defensively: a `change` event has no shiftKey property, so
-		// .Bool() on the undefined value PANICS (aborting the handler — selection then
-		// silently never registers). Truthy() is undefined-safe; the handler is wired to
-		// OnClick (which carries shiftKey) so shift-range select works.
-		shift := e.JSValue().Get("shiftKey").Truthy()
-		props.OnToggleSelect(props.ID, shift)
-	})
-	stop := ui.UseEvent(func(e ui.Event) { e.StopPropagation() })
-
-	rowClass := "row txn-ledger-row"
-	if props.Selected {
-		rowClass += " selected"
-	}
-	if props.Cleared {
-		rowClass += " cleared"
-	}
-	if props.ExcludedFromReports {
-		rowClass += " txn-excluded" // TXC-1: muted, marked out of budgets/reports
-	}
-
-	badgeKind := txnDescriptionBadge(props.Duplicate, props.Queued && !props.IsTransfer, props.SpikeWhy != "")
-	var badgeNode ui.Node
-	switch badgeKind {
-	case txnBadgeDuplicate:
-		badgeNode = ui.CreateElement(txnFlagChip, txnFlagChipProps{TxnID: props.ID, Duplicate: true})
-	case txnBadgeReview:
-		badgeNode = Span(css.Class("txn-review-pill"), Attr("data-testid", "txn-review-pill"),
-			Attr("role", "img"), Attr("title", statusDetail(*props)), Attr("aria-label", statusDetail(*props)), uistate.T("r4c.review"))
-	case txnBadgeSpike:
-		badgeNode = ui.CreateElement(txnFlagChip, txnFlagChipProps{TxnID: props.ID, SpikeWhy: props.SpikeWhy})
-	}
-
-	// Tags appended after the description: up to 3 small chips in a shrinkable,
-	// overflow-hidden group so they never widen the column or spill — extras collapse
-	// to a "+N". The whole group can flex-shrink (min-width:0), so a tight row clips
-	// the tags cleanly rather than stretching the cell.
-	var tagsNode ui.Node = Fragment()
-	if len(props.Tags) > 0 {
-		const maxTags = 3
-		kids := []any{ClassStr("txn-desc-tags"), Attr("data-testid", "txn-row-tags")}
-		for i, tg := range props.Tags {
-			if i >= maxTags {
-				break
-			}
-			// Own component so each chip's click hook sits at a stable position (never an
-			// On* option inside this variable-length loop).
-			kids = append(kids, ui.CreateElement(txnTagChip, txnTagChipProps{Tag: tg, Description: props.Desc, OnClick: props.OnTagClick}))
-		}
-		if extra := len(props.Tags) - maxTags; extra > 0 {
-			kids = append(kids, Span(css.Class("txn-desc-tag txn-desc-tag-more"),
-				Attr("title", uistate.T("transactions.tagsMoreTitle", extra)), "+"+strconv.Itoa(extra)))
-		}
-		tagsNode = Span(kids...)
-	}
-
-	// Untagged rows show a muted em dash so "where did this come from?" reads as
-	// "not recorded" rather than a real source.
-	srcClass := "td-source"
-	if props.Source == "" || props.Source == "—" {
-		srcClass += " text-dim"
-	}
-
-	// Cells are rendered in the same conditional order as the table header
-	// (transactions_widget.go's `cols`): Select, Date, [Amount], Description,
-	// [Account], [Category], [Source], [Who]. An unassigned member stays blank
-	// while the cell keeps a useful accessible name.
-	accountCellArgs := []any{ClassStr("td-acct txn-col-account")}
-	if txnAccountNeedsTooltip(props.Account) {
-		accountCellArgs = append(accountCellArgs, Attr("title", props.Account))
-	}
-	accountCellArgs = append(accountCellArgs, props.Account)
-	accountCell := Td(accountCellArgs...)
-	categoryAccessibleName := props.Category
-	if props.Unfiled && props.SuggestedCategory != "" {
-		categoryAccessibleName = uistate.T("r5w.suggestedCategory", props.Category, props.SuggestedCategory)
-	}
-	categoryCellArgs := []any{ClassStr("td-cat"), Attr("aria-label", categoryAccessibleName)}
-	if props.Unfiled && props.SuggestedCategory != "" {
-		categoryCellArgs = append(categoryCellArgs, Attr("title", categoryAccessibleName))
-	}
-	if props.CategoryTooltip != "" {
-		categoryCellArgs = append(categoryCellArgs, Attr("title", props.CategoryTooltip))
-	} else if !props.IsTransfer && txnCategoryNeedsTooltip(props.Category) {
-		categoryCellArgs = append(categoryCellArgs, Attr("title", props.Category))
-	}
-	categoryCellArgs = append(categoryCellArgs,
-		Span(css.Class("td-cat-inner"), Style(map[string]string{"min-height": "1.5rem", "width": "100%"}),
-			If(props.IsTransfer, Span(css.Class("txn-transfer-category"),
-				Attr("data-testid", "txn-transfer-category"),
-				Attr("title", firstNonEmpty(props.CategoryTooltip, uistate.T("r4c.transferCounterparty", props.TransferWith))),
-				txnV5RowTransferDisplay(props.Category, props.TransferWith, props.AmountMoney.Amount < 0))),
-			If(!props.IsTransfer && !(props.Unfiled && props.SuggestedCategory != ""),
-				ui.CreateElement(txnCategoryChoose, txnCategoryChooseProps{Label: props.Category, Description: props.Desc, OnChoose: openCategoryPicker})),
-			If(props.Unfiled && props.SuggestedCategory != "", Span(css.Class("td-cat-name td-cat-uncategorized"), props.Category)),
-			If(props.ShowSuggestions && props.Unfiled && !props.IsTransfer,
-				ui.CreateElement(txnCatSuggestChip, txnCatSuggestChipProps{TxnID: props.ID, OnChoose: openCategoryPicker}),
-			),
-		))
-	categoryCell := Td(categoryCellArgs...)
-	rowArgs := []any{ClassStr(rowClass), Attr("data-testid", "txn-row-"+props.ID), Attr("aria-busy", strconv.FormatBool(saveStatus == "Saving..."))}
-	// C626: this row's ABSOLUTE position in the match set, not its position in the
-	// DOM. In the virtualized "All" view those two differ by however far the user
-	// has scrolled, and without the absolute one assistive tech reads "row 3 of
-	// 3284" for a row three thousand entries down. Set only when the caller is
-	// windowing — a fully rendered page needs no correction, and asserting one
-	// that matched the DOM anyway would be noise.
-	if props.RowIndex > 0 {
-		rowArgs = append(rowArgs, Attr("aria-rowindex", strconv.Itoa(props.RowIndex)))
-	}
-	// XC1: a grouped member reads as a physical grouping — a quiet accent tie-line
-	// on the left rail shared by every member of the purchase.
-	if props.GroupSize > 1 {
-		rowArgs = append(rowArgs, Style(map[string]string{"box-shadow": "inset 3px 0 0 0 var(--accent)"}))
-	}
-	rowArgs = append(rowArgs,
-		Td(ClassStr("td-select"), OnClick(stop),
-			Input(Type("checkbox"), Attr("aria-label", uistate.T("v5row.select", props.Desc)), CheckedIf(props.Selected), OnClick(selToggle))),
-		Td(ClassStr("td-date"), props.Date),
-		// The description cell is a flex row: the description text truncates (min-width:0),
-		// while the badges and the follow-up pill after it stay at natural size so they're
-		// never clipped by a long description.
-		Td(ClassStr("row-desc-cell txn-col-description"),
-			Div(css.Class("row-desc-inner"),
-				Div(css.Class("txn-desc-mainline"),
-					Button(css.Class("row-desc-text txn-description-edit"), Type("button"),
-						Attr("data-testid", "txn-description-edit"), Title(props.Desc),
-						Attr("aria-label", txnRowActionName(uistate.T("transactions.rowEdit"), props.Desc, props.Date, props.Amount)),
-						OnClick(editRow), props.Desc),
-					Span(ClassStr("txn-desc-account"), props.Account),
-					badgeNode,
-					If(saveStatus != "", Span(ClassStr("muted"), Attr("role", "status"), saveStatus)),
-					If(props.InfoText != "", ui.CreateElement(txnRowInfo, txnRowInfoProps{
-						Text: props.InfoText, HasReceipt: props.Receipts > 0,
-						HasFollowUps: props.FollowUpTotal > 0, OnReceipt: func() {
-							if props.OnViewReceipt != nil {
-								props.OnViewReceipt(props.Attachment)
-							}
-						}, OnFollowUps: props.OnOpenFollowUps,
-					})),
-				),
-				tagsNode,
-			),
-		),
-		// td-acct/td-cat mark the secondary columns so the stylesheet can dim them
-		// (2026-07-17 audit: the description column carries the reading priority).
-		// The provenance mark sits IN the category cell, at the point of trust: the
-		// question it answers ("did a person decide this?") is about that word, and a
-		// badge parked over in the description column would not be read as being
-		// about the category at all (C579).
-		If(props.Vis.Category, categoryCell),
-		If(props.Vis.Account, accountCell),
-		If(props.Vis.User, txnWhoCellForRow(props)),
-		If(props.Vis.Amount, Td(ClassStr("td-amount txn-col-amount "+tw.ColorClass(props.AmtTone)), props.Amount)),
-		If(props.ShowBalance, Td(ClassStr("td-amount "+tw.ColorClass(props.BalTone)), props.Balance)),
-		If(props.Vis.Source, Td(ClassStr(srcClass), props.Source)),
-		Td(ClassStr("td-actions txn-col-actions"), OnClick(stop),
-			// The testid deliberately avoids the `txn-row-` prefix: `[data-testid^=
-			// "txn-row-"]` is how the suite selects ROWS, and a per-row child sharing
-			// that prefix aliases into the row list — nth(7) stops being the seventh
-			// row and starts being a button inside the third. The pre-existing
-			// tags/note/receipt ids are conditional, so they only ever perturbed a few
-			// rows; an Edit control on EVERY row would shift the whole index space.
-			Button(css.Class("btn btn-icon txn-row-edit"), Type("button"),
-				Attr("data-testid", "txn-rowedit"),
-				Attr("aria-label", txnRowActionName(uistate.T("transactions.rowEdit"), props.Desc, props.Date, props.Amount)),
-				Title(uistate.T("transactions.rowEditHint")),
-				OnClick(editRow),
-				uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-				Span(css.Class("txn-row-edit-label"), uistate.T("transactions.rowEdit"))),
-			txnRowMenu(*props)),
-	)
-	row := Tr(rowArgs...)
-	pickerTarget := props.CategoryPickerTarget
-	if pickerTarget.Selector == "" && pickerTarget.Node == nil {
-		pickerTarget = ui.PortalTarget{Selector: "body"}
-	}
+	apply := func(id string) { pickerOpen.Set(false); applyTxnManualCategory(props.ID, id) }
 	var picker ui.Node
 	if pickerOpen.Get() {
-		picker = ui.Portal(ui.PortalProps{
-			Target: pickerTarget,
-			Child: ui.CreateElement(CategoryPicker, CategoryPickerProps{
-				Kind:     txnCategoryKind(props.AmountMoney),
-				Selected: props.CategoryID,
-				OnPick:   applyManualCategory,
-				OnClose:  func() { pickerOpen.Set(false) },
-			}),
-		})
+		target := props.CategoryPickerTarget
+		if target.Selector == "" && target.Node == nil {
+			target = ui.PortalTarget{Selector: "body"}
+		}
+		picker = ui.Portal(ui.PortalProps{Target: target, Child: ui.CreateElement(CategoryPicker, CategoryPickerProps{
+			Kind: txnCategoryKind(props.AmountMoney), Selected: props.CategoryID, OnPick: apply, OnClose: func() { pickerOpen.Set(false) },
+		})})
 	}
-	return Fragment(row, picker)
+	return Fragment(ui.CreateElement(txnFrameRowCells, txnFrameRowCellsProps{Row: props, SaveStatus: saveStatus, Choose: choose}), picker)
+}
+
+func useTxnRowFlash(id, key string) {
+	last := ui.UseRef(key)
+	ui.UseEffect(func() func() {
+		if last.Get() == key {
+			return nil
+		}
+		last.Set(key)
+		doc := js.Global().Get("document")
+		if doc.Truthy() {
+			return flashTransactionRow(doc, id)
+		}
+		return nil
+	}, key)
+}
+
+type txnFrameRowCellsProps struct {
+	Row        *txnFrameRowProps
+	SaveStatus string
+	Choose     func(ui.Event)
+}
+
+func txnFrameRowCells(props txnFrameRowCellsProps) ui.Node {
+	r := props.Row
+	args := []any{ClassStr(txntable.RowClass(r.Selected, r.Cleared, r.ExcludedFromReports)), Attr("data-testid", "txn-row-"+r.ID), Attr("aria-busy", strconv.FormatBool(props.SaveStatus == "Saving..."))}
+	if r.RowIndex > 0 {
+		args = append(args, Attr("aria-rowindex", strconv.Itoa(r.RowIndex)))
+	}
+	if r.GroupSize > 1 {
+		args = append(args, Style(map[string]string{"box-shadow": "inset 3px 0 0 0 var(--accent)"}))
+	}
+	args = append(args,
+		ui.CreateElement(txnRowSelectionCell, r),
+		Td(ClassStr("td-date"), r.Date),
+		ui.CreateElement(txnRowDescriptionCell, props),
+		If(r.Vis.Category, ui.CreateElement(txnRowCategoryCell, props)),
+		If(r.Vis.Account, txnRowAccountCell(r.Account)),
+		If(r.Vis.User, txnWhoCellForRow(r)),
+		If(r.Vis.Amount, Td(ClassStr("td-amount txn-col-amount "+tw.ColorClass(r.AmtTone)), r.Amount)),
+		If(r.ShowBalance, Td(ClassStr("td-amount "+tw.ColorClass(r.BalTone)), r.Balance)),
+		If(r.Vis.Source, Td(ClassStr(txntable.SourceClass(r.Source)), r.Source)),
+		ui.CreateElement(txnRowActionsCell, r),
+	)
+	return Tr(args...)
+}
+
+func txnRowSelectionCell(props *txnFrameRowProps) ui.Node {
+	stop := ui.UseEvent(func(e ui.Event) { e.StopPropagation() })
+	toggle := ui.UseEvent(func(e ui.Event) { props.OnToggleSelect(props.ID, e.JSValue().Get("shiftKey").Truthy()) })
+	return Td(ClassStr("td-select"), OnClick(stop),
+		Input(Type("checkbox"), Attr("aria-label", uistate.T("v5row.select", props.Desc)), CheckedIf(props.Selected), OnClick(toggle)))
+}
+
+func txnRowDescriptionCell(props txnFrameRowCellsProps) ui.Node {
+	r := props.Row
+	edit := ui.UseEvent(func(e ui.Event) { e.StopPropagation(); r.OnOpen(r.ID) })
+	return Td(ClassStr("row-desc-cell txn-col-description"),
+		Div(css.Class("row-desc-inner"),
+			Div(css.Class("txn-desc-mainline"),
+				Button(css.Class("row-desc-text txn-description-edit"), Type("button"), Attr("data-testid", "txn-description-edit"), Title(r.Desc),
+					Attr("aria-label", txnRowActionName(uistate.T("transactions.rowEdit"), r.Desc, r.Date, r.Amount)), OnClick(edit), r.Desc),
+				Span(ClassStr("txn-desc-account"), r.Account),
+				txnRowDescriptionBadge(r),
+				If(props.SaveStatus != "", Span(ClassStr("muted"), Attr("role", "status"), props.SaveStatus)),
+				If(r.InfoText != "", ui.CreateElement(txnRowInfo, txnRowInfoProps{Text: r.InfoText, HasReceipt: r.Receipts > 0, HasFollowUps: r.FollowUpTotal > 0,
+					OnReceipt: func() {
+						if r.OnViewReceipt != nil {
+							r.OnViewReceipt(r.Attachment)
+						}
+					}, OnFollowUps: r.OnOpenFollowUps})),
+			),
+			ui.CreateElement(txnRowTags, r),
+		),
+	)
+}
+
+func txnRowDescriptionBadge(props *txnFrameRowProps) ui.Node {
+	switch txntable.DescriptionBadge(props.Duplicate, props.Queued && !props.IsTransfer, props.SpikeWhy != "") {
+	case txntable.BadgeDuplicate:
+		return ui.CreateElement(txnFlagChip, txnFlagChipProps{TxnID: props.ID, Duplicate: true})
+	case txntable.BadgeReview:
+		return Span(css.Class("txn-review-pill"), Attr("data-testid", "txn-review-pill"), Attr("role", "img"), Attr("title", txntable.ReviewLabel(props.Queued, props.IsTransfer, uistate.T)), Attr("aria-label", txntable.ReviewLabel(props.Queued, props.IsTransfer, uistate.T)), uistate.T("r4c.review"))
+	case txntable.BadgeSpike:
+		return ui.CreateElement(txnFlagChip, txnFlagChipProps{TxnID: props.ID, SpikeWhy: props.SpikeWhy})
+	}
+	return nil
+}
+
+func txnRowTags(props *txnFrameRowProps) ui.Node {
+	if len(props.Tags) == 0 {
+		return Fragment()
+	}
+	tags, extra := txntable.TagWindow(props.Tags)
+	kids := []any{ClassStr("txn-desc-tags"), Attr("data-testid", "txn-row-tags")}
+	for _, tag := range tags {
+		kids = append(kids, ui.CreateElement(txnTagChip, txnTagChipProps{Tag: tag, Description: props.Desc, OnClick: props.OnTagClick}))
+	}
+	if extra > 0 {
+		kids = append(kids, Span(css.Class("txn-desc-tag txn-desc-tag-more"), Attr("title", uistate.T("transactions.tagsMoreTitle", extra)), "+"+strconv.Itoa(extra)))
+	}
+	return Span(kids...)
+}
+
+func txnRowAccountCell(account string) ui.Node {
+	args := []any{ClassStr("td-acct txn-col-account")}
+	if txnAccountNeedsTooltip(account) {
+		args = append(args, Attr("title", account))
+	}
+	return Td(append(args, account)...)
+}
+
+func txnRowCategoryCell(props txnFrameRowCellsProps) ui.Node {
+	r := props.Row
+	name, title := txntable.CategoryDisplay(r.Category, r.SuggestedCategory, r.CategoryTooltip, r.Unfiled, r.IsTransfer, uistate.T)
+	args := []any{ClassStr("td-cat"), Attr("aria-label", name)}
+	if title != "" {
+		args = append(args, Attr("title", title))
+	}
+	args = append(args, Span(css.Class("td-cat-inner"), Style(map[string]string{"min-height": "1.5rem", "width": "100%"}),
+		If(r.IsTransfer, Span(css.Class("txn-transfer-category"), Attr("data-testid", "txn-transfer-category"),
+			Attr("title", txntable.TransferTooltip(r.CategoryTooltip, r.TransferWith, uistate.T)),
+			txntable.TransferDisplay(r.Category, r.TransferWith, r.AmountMoney.Amount < 0, uistate.T))),
+		If(!r.IsTransfer && !(r.Unfiled && r.SuggestedCategory != ""), ui.CreateElement(txnCategoryChoose, txnCategoryChooseProps{Label: r.Category, Description: r.Desc, OnChoose: props.Choose})),
+		If(r.Unfiled && r.SuggestedCategory != "", Span(css.Class("td-cat-name td-cat-uncategorized"), r.Category)),
+		If(r.ShowSuggestions && r.Unfiled && !r.IsTransfer, ui.CreateElement(txnCatSuggestChip, txnCatSuggestChipProps{TxnID: r.ID, OnChoose: props.Choose})),
+	))
+	return Td(args...)
+}
+
+func txnRowActionsCell(props *txnFrameRowProps) ui.Node {
+	stop := ui.UseEvent(func(e ui.Event) { e.StopPropagation() })
+	edit := ui.UseEvent(func(e ui.Event) { e.StopPropagation(); props.OnOpen(props.ID) })
+	return Td(ClassStr("td-actions txn-col-actions"), OnClick(stop),
+		Button(css.Class("btn btn-icon txn-row-edit"), Type("button"), Attr("data-testid", "txn-rowedit"),
+			Attr("aria-label", txnRowActionName(uistate.T("transactions.rowEdit"), props.Desc, props.Date, props.Amount)), Title(uistate.T("transactions.rowEditHint")), OnClick(edit),
+			uiw.Icon(icon.Pencil, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(css.Class("txn-row-edit-label"), uistate.T("transactions.rowEdit"))),
+		txnRowMenu(*props))
 }
 
 func flashTransactionRow(doc js.Value, txnID string) func() {
@@ -1909,10 +1256,7 @@ func txnCategoryChoose(props txnCategoryChooseProps) ui.Node {
 }
 
 func txnCategoryKind(amount money.Money) domain.CategoryKind {
-	if amount.IsPositive() {
-		return domain.KindIncome
-	}
-	return domain.KindExpense
+	return txntable.CategoryKind(amount)
 }
 
 func applyTxnManualCategory(txnID, categoryID string) {
@@ -1929,58 +1273,28 @@ func applyTxnManualCategory(txnID, categoryID string) {
 }
 
 func txnDeletePrompt(app *appstate.App, txn domain.Transaction) string {
-	ids := app.ExpandTransferPairs([]string{txn.ID})
-	var prompts []string
-	for _, id := range ids {
-		row, ok := app.TransactionByID(id)
-		if !ok {
-			continue
-		}
-		account, _ := domain.AccountByID(app.Accounts(), row.AccountID)
-		prompts = append(prompts, uistate.T("transactions.deleteConfirmDetail", firstNonEmpty(row.Payee, row.Desc), dateutil.FormatDate(row.Date), fmtMoney(row.Amount), account.Name))
-	}
-	return strings.Join(prompts, " ")
+	return txntable.DeletePrompt(app.ExpandTransferPairs([]string{txn.ID}), app.Transactions(), app.Accounts(), 0,
+		txntable.Labels{T: uistate.T, Money: fmtMoney})
 }
 
 func ledgerDate(date time.Time, from, to string) string {
-	format := "Jan 2, 2006"
-	start, startErr := time.Parse("2006-01-02", from)
-	end, endErr := time.Parse("2006-01-02", to)
-	if startErr == nil && endErr == nil && start.Year() == time.Now().Year() && end.Year() == start.Year() {
-		format = "Jan 2"
-	}
-	return date.Format(format)
+	return txntable.LedgerDate(date, from, to, time.Now())
 }
 
 func transferCategoryKey(props txnFrameRowProps) string {
-	if props.AmountMoney.Amount < 0 {
-		return "r4c.transferTo"
-	}
-	return "r4c.transferFrom"
+	return txntable.TransferCategoryKey(props.AmountMoney)
 }
 
 func txnCategoryNeedsTooltip(category string) bool {
-	return len([]rune(category)) > 23
+	return txntable.NeedsTooltip(category, 23)
 }
 
 func txnAccountNeedsTooltip(account string) bool {
-	return len([]rune(account)) > 20
+	return txntable.NeedsTooltip(account, 20)
 }
 
 func txnWhoHeader() ui.Node {
 	return Span(uistate.T("r4c.who"))
-}
-
-func txnOwnerNames(ownerIDs []string, memberNames map[string]string) []string {
-	names := make([]string, 0, len(ownerIDs))
-	for _, id := range ownerIDs {
-		name := strings.TrimSpace(memberNames[id])
-		if name == "" {
-			name = id
-		}
-		names = append(names, name)
-	}
-	return names
 }
 
 func txnWhoCell(names []string) ui.Node {
@@ -1988,13 +1302,11 @@ func txnWhoCell(names []string) ui.Node {
 }
 
 func txnWhoCellWithColors(names []string, colors []string) ui.Node {
-	label := uistate.T("who2.unassigned")
+	label := txntable.OwnerLabel(names, uistate.T)
 	var avatar ui.Node = uiw.MemberUnassigned(label, "txn-who-unassigned")
 	if len(names) == 1 {
-		label = names[0]
 		avatar = uiw.MemberAvatar(uiw.MemberAvatarProps{Name: label, Title: label, Color: ownerColor(colors, 0), TestID: "txn-who-avatar"})
 	} else if len(names) > 1 {
-		label = uistate.T("who2.sharedBy", whoNames(names))
 		members := make([]uiw.MemberAvatarProps, 0, len(names))
 		for i, name := range names {
 			members = append(members, uiw.MemberAvatarProps{Name: name, Color: ownerColor(colors, i)})
@@ -2005,18 +1317,7 @@ func txnWhoCellWithColors(names []string, colors []string) ui.Node {
 }
 
 func ownerColor(colors []string, index int) string {
-	if index < 0 || index >= len(colors) {
-		return ""
-	}
-	return colors[index]
-}
-
-func txnOwnerColors(ownerIDs []string, memberColors map[string]string) []string {
-	colors := make([]string, 0, len(ownerIDs))
-	for _, id := range ownerIDs {
-		colors = append(colors, memberColors[id])
-	}
-	return colors
+	return txntable.OwnerColor(colors, index)
 }
 
 func txnWhoCellForRow(props *txnFrameRowProps) ui.Node {
@@ -2025,10 +1326,9 @@ func txnWhoCellForRow(props *txnFrameRowProps) ui.Node {
 	}
 	// Keep direct legacy row callers working while the ledger frame supplies the
 	// complete resolved owner list on every production row.
-	label := uistate.T("r4c.unassigned")
+	label, assigned := txntable.LegacyOwnerLabel(props.Member, uistate.T)
 	var avatar ui.Node = Fragment()
-	if strings.TrimSpace(props.Member) != "" {
-		label = uistate.T("txu5.member", props.Member)
+	if assigned {
 		avatar = Span(css.Class("txn-member-avatar"), Attr("style", "--txn-member-color: "+props.MemberColor), txnMemberInitials(props.Member))
 	}
 	return Td(ClassStr("td-user txn-col-who"), Attr("aria-label", label), avatar)
@@ -2063,6 +1363,7 @@ func txnRowMenu(props txnFrameRowProps) ui.Node {
 
 func txnRowMenuItems(props txnFrameRowProps) []uiw.OverflowMenuItem {
 	var items []uiw.OverflowMenuItem
+	menu := txnMenuDecisions(props)
 	organize := uistate.T(txnMenuOrganize)
 	links := uistate.T(txnMenuLinks)
 	reports := uistate.T(txnMenuReports)
@@ -2074,14 +1375,14 @@ func txnRowMenuItems(props txnFrameRowProps) []uiw.OverflowMenuItem {
 	// Accepting it here is one click and needs no trip to the Rules page; disagreeing
 	// is the Edit button the row already has. Offered only on rows that actually read
 	// as automatic, so it never appears as a no-op.
-	if props.AutoCategory && props.OnConfirmCategory != nil {
+	if menu.Confirm {
 		items = append(items, uiw.OverflowMenuItem{
 			Label: uistate.T("transactions.confirmCategory"), Icon: icon.Check, Section: organize,
 			TestID:   "txn-confirm-category",
 			OnSelect: func() { props.OnConfirmCategory(props.ID) },
 		})
 	}
-	if props.OnSuggestCategory != nil && !props.IsTransfer {
+	if menu.Suggest {
 		items = append(items, uiw.OverflowMenuItem{
 			Label: uistate.T("r5w.suggestCategorySmart"), Icon: icon.Tag, Section: organize,
 			TestID:   "txn-categorize-open",
@@ -2089,9 +1390,9 @@ func txnRowMenuItems(props txnFrameRowProps) []uiw.OverflowMenuItem {
 		})
 	}
 	// Split-into-categories: not offered on transfer legs (no category to split).
-	if props.OnOpenSplit != nil && !props.IsTransfer {
+	if menu.Split {
 		splitLabel := uistate.T("r4k.split")
-		if props.HasSplits {
+		if menu.SplitChecked {
 			splitLabel = "✓ " + splitLabel
 		}
 		items = append(items, uiw.OverflowMenuItem{
@@ -2113,13 +1414,13 @@ func txnRowMenuItems(props txnFrameRowProps) []uiw.OverflowMenuItem {
 	// toward account balances either way). The label states the action to perform.
 	// Excluding wears the danger tier: it leaves this row looking untouched while
 	// rewriting figures on four other surfaces (C562 makes it confirm as well).
-	if props.OnToggleExclude != nil {
+	if menu.Exclude {
 		excLabel := uistate.T("transactions.kebabExclude")
-		if props.ExcludedFromReports {
+		if menu.Include {
 			excLabel = uistate.T("transactions.kebabInclude")
 		}
 		excIcon := icon.Ban
-		if props.ExcludedFromReports {
+		if menu.Include {
 			excIcon = icon.Check
 		}
 		items = append(items, uiw.OverflowMenuItem{
@@ -2133,7 +1434,7 @@ func txnRowMenuItems(props txnFrameRowProps) []uiw.OverflowMenuItem {
 	// --- Remove: the charge stops existing -------------------------------------
 	// Destructive action last: delete this transaction (and its transfer pair). Undoable via the
 	// toast, so no modal — consistent with the card view's single delete.
-	if props.OnDelete != nil {
+	if menu.Delete {
 		items = append(items, uiw.OverflowMenuItem{
 			Label: uistate.T("action.delete"), Icon: icon.Trash, Section: remove, Danger: true,
 			TestID:   "txn-delete",
@@ -2148,23 +1449,40 @@ func txnRowMenuItems(props txnFrameRowProps) []uiw.OverflowMenuItem {
 
 func txnLinkMenuItems(props txnFrameRowProps) []uiw.OverflowMenuItem {
 	var items []uiw.OverflowMenuItem
-	if props.OnOpenLink != nil {
+	menu := txnMenuDecisions(props)
+	if menu.Link {
 		items = append(items,
 			uiw.OverflowMenuItem{Label: uistate.T("transactions.markBill"), TestID: "txn-markbill-open", OnSelect: func() { props.OnOpenLink(props.ID, uistate.TxnLinkModeBill) }},
 			uiw.OverflowMenuItem{Label: uistate.T("transactions.markSub"), TestID: "txn-marksub-open", OnSelect: func() { props.OnOpenLink(props.ID, uistate.TxnLinkModeSub) }},
 		)
 	}
-	if props.OnPairRefund != nil && props.IsIncome && !props.IsRefund && !props.IsTransfer {
+	if menu.Pair {
 		items = append(items, uiw.OverflowMenuItem{Label: uistate.T("txnlinks.pairAction"), TestID: "txn-pair-refund", OnSelect: func() { props.OnPairRefund(props.ID) }})
 	}
-	if props.OnUnpair != nil && (props.IsRefund || props.IsRefunded) {
+	if menu.Unpair {
 		items = append(items, uiw.OverflowMenuItem{Label: uistate.T("txnlinks.unpairAction"), TestID: "txn-unpair", OnSelect: func() { props.OnUnpair(props.ID) }})
 	}
-	if props.OnUnlinkBill != nil && props.IsBillMatched {
+	if menu.UnlinkBill {
 		items = append(items, uiw.OverflowMenuItem{Label: uistate.T("billmatch.unlink"), TestID: "txn-unlink-bill", OnSelect: func() { props.OnUnlinkBill(props.ID) }})
 	}
-	if props.OnUngroup != nil && props.GroupSize > 1 {
+	if menu.Ungroup {
 		items = append(items, uiw.OverflowMenuItem{Label: uistate.T("txnlinks.ungroupAction"), TestID: "txn-ungroup", OnSelect: func() { props.OnUngroup(props.ID) }})
 	}
 	return items
+}
+
+func txnMenuDecisions(props txnFrameRowProps) txntable.Menu {
+	return txntable.DecideMenu(txntable.MenuState{Automatic: props.AutoCategory, Transfer: props.IsTransfer, Split: props.HasSplits,
+		Excluded: props.ExcludedFromReports, Income: props.IsIncome, Refund: props.IsRefund, Refunded: props.IsRefunded, BillMatched: props.IsBillMatched, GroupSize: props.GroupSize,
+		Confirm: props.OnConfirmCategory != nil, Suggest: props.OnSuggestCategory != nil, OpenSplit: props.OnOpenSplit != nil,
+		ToggleExclude: props.OnToggleExclude != nil, Delete: props.OnDelete != nil, OpenLink: props.OnOpenLink != nil,
+		PairRefund: props.OnPairRefund != nil, Unpair: props.OnUnpair != nil, Ungroup: props.OnUngroup != nil, UnlinkBill: props.OnUnlinkBill != nil})
+}
+
+func txnTableFollowUpItems(items []txntable.FollowUpItem) []followUpItem {
+	result := make([]followUpItem, 0, len(items))
+	for _, item := range items {
+		result = append(result, followUpItem{ID: item.ID, Title: item.Title, Done: item.Done, Due: item.Due, dueT: item.DueDate})
+	}
+	return result
 }
