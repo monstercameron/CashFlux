@@ -50,7 +50,7 @@ func TestBR2StripShowsUsableSubtotalAndDeduplicatedIssue(t *testing.T) {
 	if meter := byTestID(strip, "div", "budgets-status-meter"); meter == nil || meter.Attr("role") != "meter" {
 		t.Fatalf("headline meter = %v, want accessible meter", meter)
 	}
-	if attention := byTestID(strip, "button", "budgets-hero-attn"); attention == nil || attention.Text() != "2 budgets need attention" {
+	if attention := byTestID(strip, "button", "budgets-hero-attn"); attention == nil || attention.Text() != "Budgets needing attention: 2" {
 		t.Fatalf("attention line = %v, want the new attention headline", attention)
 	}
 	issues := byTestID(strip, "p", "budgets-status-issues")
@@ -120,7 +120,7 @@ func TestBR2ProjectionCommitmentsAndPlannedChip(t *testing.T) {
 	if projection := byTestID(f, "span", "budget-projection-future"); projection == nil || projection.Text() != "On pace to overspend by $576.00" {
 		t.Fatalf("projection copy = %v", projection)
 	}
-	if free := byTestID(f, "span", "budget-free-after-committed-future"); free == nil || free.Text() != "$1.99 free after $38.00 in bills due this month" {
+	if free := byTestID(f, "span", "budget-free-after-committed-future"); free == nil || free.Text() != "$1.99 free after $38.00 in committed bills" {
 		t.Fatalf("free-after-commitments copy = %v", free)
 	}
 	if byTestID(f, "span", "budget-free-after-committed-unknown") != nil {

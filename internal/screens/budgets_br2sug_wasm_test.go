@@ -31,7 +31,12 @@ func TestBR2SUGOverPaceRecommendationDoesNotCutBelowProjection(t *testing.T) {
 		date := monthStart.AddDate(0, -(i + 1), 10)
 		br2sugPutExpense(t, app, "history-"+date.Format("2006-01"), date, -amount)
 	}
-	br2sugPutExpense(t, app, "current-pace", now, -10000)
+	// Keep the projected month over the current $1,000 limit while below the
+	// $1,200 historical median, so both the raise gate and projection floor are
+	// exercised without making projection the source of the recommendation.
+	daysInMonth := time.Date(now.Year(), now.Month()+1, 0, 0, 0, 0, 0, now.Location()).Day()
+	currentSpend := int64(110000 * now.Day() / daysInMonth)
+	br2sugPutExpense(t, app, "current-pace", now, -currentSpend)
 	rec, shown, ok := budgetRecommendationAt(app, budget, monthStart)
 	if !ok {
 		t.Fatal("expected a history-backed recommendation")
@@ -87,15 +92,18 @@ func TestBR2SUGProjectionIncludesScheduledRecurringSpend(t *testing.T) {
 		br2sugPutExpense(t, app, "recurring-history-"+date.Format("2006-01"), date, -amount)
 	}
 	if err := app.PutRecurring(domain.Recurring{ID: "scheduled-gas", Label: "Scheduled gas", CategoryID: "transport-cat",
-		Amount: money.New(-25000, "USD"), Cadence: domain.CadenceMonthly, NextDue: monthStart.AddDate(0, 1, -1)}); err != nil {
+		Amount: money.New(-125000, "USD"), Cadence: domain.CadenceMonthly, NextDue: monthStart.AddDate(0, 1, -1)}); err != nil {
 		t.Fatalf("PutRecurring: %v", err)
 	}
 	rec, _, ok := budgetRecommendationAt(app, budget, monthStart)
 	if !ok {
 		t.Fatal("expected a history-backed recommendation")
 	}
-	if rec.Projection != 25000 {
-		t.Fatalf("monthly projection gate = %d, want scheduled recurring spend 25000", rec.Projection)
+	if rec.Direction != budgeting.SuggestionRaise {
+		t.Fatalf("scheduled recurring projection over the limit should allow a raise, got %q", rec.Direction)
+	}
+	if rec.Projection != 125000 {
+		t.Fatalf("monthly projection gate = %d, want scheduled recurring spend 125000", rec.Projection)
 	}
 }
 

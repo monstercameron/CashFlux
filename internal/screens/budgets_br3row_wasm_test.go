@@ -53,11 +53,12 @@ func TestBR3RowProjectionUsesEndedAndCommittedCopy(t *testing.T) {
 	if got := strings.Join(strings.Fields(f.Text()), " "); got != "Ended $244.80 over" {
 		t.Fatalf("ended projection = %q", got)
 	}
-	live := budgeting.Status{Budget: domain.Budget{ID: "live"}, PeriodStatus: budgeting.PeriodActive}
+	live := budgeting.Status{Budget: domain.Budget{ID: "live"}, PeriodStatus: budgeting.PeriodActive,
+		Committed: budgeting.CommittedResult{Required: money.New(110000, "USD")}, FreeAfterCommitted: money.New(20000, "USD")}
 	live.Projection.CommittedDominates = true
 	live.Projection.Committed = money.New(110000, "USD")
 	f.Rerender(budgetRowProjectionLine(live, budgetRowProps{}))
-	if got := strings.Join(strings.Fields(f.Text()), " "); got != "On track — $1,100.00 of this is bills" {
+	if got := strings.Join(strings.Fields(f.Text()), " "); got != "$200.00 free after $1,100.00 in committed bills" {
 		t.Fatalf("committed projection = %q", got)
 	}
 }

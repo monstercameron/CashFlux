@@ -72,7 +72,7 @@ func recurringBillsHarness(props budgetSummaryProps) ui.Node {
 }
 
 func TestAnnualPlanHintNamesCalendarYear(t *testing.T) {
-	if got := uistate.T("budgets.planYearStableHint", 2026, "$39,190.00"); got != "2026 plan · $39,190.00" {
+	if got := uistate.T("budgets.planYearStableHint", 2026, "$39,190.00"); got != "2026 plan, $39,190.00" {
 		t.Fatalf("annual plan hint = %q", got)
 	}
 	app := guardTestApp(t)

@@ -99,6 +99,9 @@ func TestBudgetBC4SuggestionApplyWritesHistory(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	if err := a.Store().PutTransaction(domain.Transaction{ID: "current-period-overspend", CategoryID: b.CategoryID, Date: now, Amount: money.New(-40000, "USD")}); err != nil {
+		t.Fatal(err)
+	}
 	atom := state.NewGlobalAtom("dashboard:period", period.Window{})
 	prior := atom.Get()
 	t.Cleanup(func() { atom.Set(prior) })

@@ -57,7 +57,7 @@ func TestBR3HeadHeadlineShapeForPastCurrentAndFuturePeriods(t *testing.T) {
 				t.Errorf("spent figure = %q", figure.Text())
 			}
 			attn := byTestID(f, "button", "budgets-hero-attn")
-			if !tc.hist && (attn == nil || attn.Text() != "2 budgets need attention") {
+			if !tc.hist && (attn == nil || attn.Text() != "Budgets needing attention: 2") {
 				t.Errorf("attention link = %#v", attn)
 			}
 			if meter := byTestID(f, "div", "budgets-status-meter"); meter == nil {

@@ -79,10 +79,10 @@ func TestBV6FRecurringLineNamesDueAndPaidBills(t *testing.T) {
 		status budgeting.Status
 		want   string
 	}{
-		{name: "due", status: budgeting.Status{Spent: money.New(0, "USD"), Remaining: money.New(130000, "USD"),
-			Committed:  budgeting.CommittedResult{Required: money.New(110000, "USD")},
-			Projection: budgeting.Pace{Committed: money.New(110000, "USD")}}, want: "$200.00 free after $1,100.00 in bills due this month"},
-		{name: "paid", status: budgeting.Status{Spent: money.New(110000, "USD"), Remaining: money.New(20000, "USD"), FreeAfterCommitted: money.New(110000, "USD"),
+		{name: "due", status: budgeting.Status{Budget: domain.Budget{ID: "due"}, Spent: money.New(0, "USD"), Remaining: money.New(130000, "USD"),
+			Committed:          budgeting.CommittedResult{Required: money.New(110000, "USD")},
+			FreeAfterCommitted: money.New(20000, "USD"), Projection: budgeting.Pace{Committed: money.New(110000, "USD")}}, want: "$200.00 free after $1,100.00 in committed bills"},
+		{name: "paid", status: budgeting.Status{Budget: domain.Budget{ID: "paid"}, Spent: money.New(110000, "USD"), Remaining: money.New(20000, "USD"), FreeAfterCommitted: money.New(110000, "USD"),
 			Committed:  budgeting.CommittedResult{Required: money.Zero("USD")},
 			Projection: budgeting.Pace{Committed: money.New(110000, "USD")}}, want: "$200.00 free; $1,100.00 in bills already paid"},
 	}
@@ -90,7 +90,7 @@ func TestBV6FRecurringLineNamesDueAndPaidBills(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			f := render.New(t)
 			f.Render(budgetRecurringStatusLine(tc.status, "$200.00"))
-			line := byTestID(f, "span", "budget-free-after-committed-")
+			line := byTestID(f, "span", "budget-free-after-committed-"+tc.status.Budget.ID)
 			if line == nil || line.Text() != tc.want {
 				t.Fatalf("recurring line = %v, want %q", line, tc.want)
 			}
