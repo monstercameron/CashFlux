@@ -6,8 +6,8 @@ package i18n
 // via the init-merge pattern (kept separate from en.go which has concurrent WIP).
 var payeeACKeys = Catalog{
 	// Quick-Add payee field label and placeholder.
-	"quickAdd.payee":            "Payee",
-	"quickAdd.payeePlaceholder": "Who did you pay? (optional)",
+	"quickAdd.payee":            "Merchant or payee",
+	"quickAdd.payeePlaceholder": "Who did you pay or receive money from?",
 }
 
 func init() {

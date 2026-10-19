@@ -25,13 +25,13 @@ var qaPolishKeys = Catalog{
 	// save-then-reopen, available at creation.
 	"quickAdd.moreDetails": "More details (tags, member, note…)",
 	"quickAdd.tags":        "Tags",
-	"quickAdd.tagsPh":      "vacation, reimbursable…",
-	"quickAdd.member":      "Member",
+	"quickAdd.tagsPh":      "e.g. groceries, shared",
+	"quickAdd.member":      "Household member",
 	"quickAdd.memberAuto":  "From the account (default)",
 	"quickAdd.note":        "Note",
-	"quickAdd.notePh":      "A memo for this one transaction",
-	"quickAdd.cleared":     "Cleared (settled at the bank)",
-	"quickAdd.exclude":     "Exclude from reports and spending totals",
+	"quickAdd.notePh":      "Add a note for this transaction",
+	"quickAdd.cleared":     "Cleared",
+	"quickAdd.exclude":     "Exclude from budgets and reports",
 }
 
 func init() {

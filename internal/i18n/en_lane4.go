@@ -101,7 +101,7 @@ var lane4Keys = Catalog{
 	"accounts.xferSemanticsAsset":     "Moves %s down by %s and %s up by the same — your total money doesn't change, and neither side counts as spending.",
 	"accounts.xferSemanticsLiability": "Takes %s down by %s and reduces what you owe on %s by the same — a debt payment, not spending.",
 	"txnhistory.title":                "Transaction history",
-	"txnhistory.menuAction":           "History",
+	"txnhistory.menuAction":           "Change history",
 	"txnhistory.empty":                "No recorded changes for this transaction yet. Edits, rule applications, and imports made from now on are tracked here.",
 	"txnhistory.scopeNote":            "Every change this device recorded for this transaction, newest first.",
 	"txnhistory.actorYou":             "You",

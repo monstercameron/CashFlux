@@ -8,12 +8,12 @@ package i18n
 var txcFieldKeys = Catalog{
 	// TXC-2 memo.
 	"transactions.noteLabel":       "Note",
-	"transactions.notePlaceholder": "Add a memo (e.g. split with Priya, she owes half)…",
+	"transactions.notePlaceholder": "Add a note (e.g. shared dinner)",
 	"transactions.hasNote":         "Has a note",
 
 	// TXC-1 exclude from budgets & reports.
-	"transactions.excludeLabel":     "Exclude from budgets & reports",
-	"transactions.excludeHint":      "Still counts toward account balances — just not budgets, spend, or reports.",
+	"transactions.excludeLabel":     "Exclude from budgets and reports",
+	"transactions.excludeHint":      "Still changes the account balance, but is left out of budgets and reports.",
 	"transactions.excludedBadge":    "Excluded",
 	"transactions.kebabExclude":     "Exclude from reports",
 	"transactions.kebabInclude":     "Include in reports",
@@ -33,7 +33,7 @@ var txcFieldKeys = Catalog{
 	// Transaction → follow-up task (kebab): create a to-do linked to this charge. The
 	// title is just the merchant/description (no "Follow up:" prefix) — the transaction
 	// link already says it's a follow-up, and the prefix wastes the popover's limited room.
-	"transactions.followUpTask":      "Add follow-up task…",
+	"transactions.followUpTask":      "Add follow-up task",
 	"transactions.followUpTaskTitle": "%s",
 	// Per-row follow-up indicator + quick link to the filtered to-dos.
 	// %d open, %d total.

@@ -6,7 +6,7 @@ package i18n
 // opened from a transaction row's kebab. Merged via init so this file does not touch en.go.
 var payeeCleanKeys = Catalog{
 	"payeeClean.title":      "Clean up merchant name",
-	"payeeClean.menuAction": "Clean up name…",
+	"payeeClean.menuAction": "Edit merchant name",
 	"payeeClean.rawLabel":   "As it appears on the transaction",
 	"payeeClean.nameLabel":  "Clean name",
 	"payeeClean.scopeLabel": "Apply to",

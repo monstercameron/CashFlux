@@ -13,7 +13,7 @@ var wseries1Keys = Catalog{
 	// C363 — surfacing Rules from Transactions.
 	// %d = number of active auto-categorization rules.
 	"transactions.rulesButton": "Rules (%d)",
-	"transactions.createRule":  "Create rule from this transaction",
+	"transactions.createRule":  "Create a rule from this transaction",
 
 	// C364 — the undo story. %s = the per-op summary (e.g. "12 transactions
 	// recategorized"). The trailing clause is the same everywhere so the reversal

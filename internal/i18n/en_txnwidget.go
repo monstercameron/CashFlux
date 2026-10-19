@@ -18,7 +18,7 @@ var txnWidgetKeys = Catalog{
 
 	// Edit modal.
 	"txnwidget.notFound":     "That transaction could not be found.",
-	"txnwidget.clearedLabel": "Cleared (reconciled)",
+	"txnwidget.clearedLabel": "Cleared",
 
 	// Filters panel — the Cleared-status select's neutral resting label (review #19):
 	// empty value = no cleared-status filter, so it must not read as an active pick.

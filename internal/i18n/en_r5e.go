@@ -5,7 +5,7 @@ package i18n
 func init() {
 	for key, value := range map[string]string{
 		"r5e.moreActions":       "More actions",
-		"r5e.suggestedCategory": "Suggested: %s · Use",
+		"r5e.suggestedCategory": "Suggested: %s — Use this category",
 	} {
 		english[key] = value
 	}

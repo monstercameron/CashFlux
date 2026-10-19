@@ -3,7 +3,7 @@
 package i18n
 
 var r1bKeys = Catalog{
-	"r1b.catSuggest.menuAction":    "Suggest a category (Smart)",
+	"r1b.catSuggest.menuAction":    "Suggest a category",
 	"r1b.categorySuggestionInline": " · %s?",
 	"r1b.categorySuggestionAria":   "Apply suggested category: %s",
 	"r1b.autoFiledByRule":          "Filed by rule: %s",
