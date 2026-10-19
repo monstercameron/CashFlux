@@ -25,7 +25,16 @@
 // Pure Go, no syscall/js; unit-tested on native Go.
 package copytext
 
-import "fmt"
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"log/slog"
+	"strings"
+	"sync"
+)
+
+var formattingWarning sync.Once
 
 // Translator renders a catalog key with arguments. It is the shape of
 // uistate.T, injected so pure packages never import the UI layer.
@@ -34,10 +43,8 @@ type Translator func(key string, args ...any) string
 // Text is one piece of user-facing copy.
 //
 // The JSON form is what a persisted notification stores, so history can be
-// re-rendered in a language chosen later. Note that Args round-trip through
-// JSON as their JSON types — a number returns as a float64 — so producers pass
-// pre-formatted strings for anything whose formatting is locale-sensitive
-// (money, dates), and the key's placeholders are %s.
+// re-rendered in a language chosen later. Integral arguments are restored as
+// int64 values so catalog verbs such as %d keep working after a round trip.
 type Text struct {
 	Key      string `json:"key,omitempty"`
 	Args     []any  `json:"args,omitempty"`
@@ -48,6 +55,65 @@ type Text struct {
 // have written, and the arguments that fill both.
 func Of(key, format string, args ...any) Text {
 	return Text{Key: key, Args: args, Fallback: fmt.Sprintf(format, args...)}
+}
+
+// OfKey builds a Text when the translated string is already rendered and its
+// format is not a compile-time constant. It keeps the key and arguments for
+// future re-translation while storing rendered as the English fallback.
+func OfKey(key, rendered string, args ...any) Text {
+	return Text{Key: key, Args: args, Fallback: rendered}
+}
+
+// MarshalJSON preserves the existing persisted field names for a Text.
+func (t Text) MarshalJSON() ([]byte, error) {
+	type textAlias Text
+	data, err := json.Marshal(textAlias(t))
+	if err != nil {
+		return nil, fmt.Errorf("encode copy text: %w", err)
+	}
+	return data, nil
+}
+
+// UnmarshalJSON restores numeric argument types from the persisted JSON form.
+// JSON has one number syntax, so integral values become int64 and fractional
+// values become float64. Other JSON types retain their usual Go types.
+func (t *Text) UnmarshalJSON(data []byte) error {
+	type textFields struct {
+		Key      string          `json:"key,omitempty"`
+		Args     json.RawMessage `json:"args,omitempty"`
+		Fallback string          `json:"text,omitempty"`
+	}
+	var fields textFields
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return fmt.Errorf("decode copy text: %w", err)
+	}
+	t.Key = fields.Key
+	t.Fallback = fields.Fallback
+	t.Args = nil
+	if len(fields.Args) == 0 || bytes.Equal(bytes.TrimSpace(fields.Args), []byte("null")) {
+		return nil
+	}
+	decoder := json.NewDecoder(bytes.NewReader(fields.Args))
+	decoder.UseNumber()
+	if err := decoder.Decode(&t.Args); err != nil {
+		return fmt.Errorf("decode copy text arguments: %w", err)
+	}
+	for i, arg := range t.Args {
+		number, ok := arg.(json.Number)
+		if !ok {
+			continue
+		}
+		if integer, err := number.Int64(); err == nil {
+			t.Args[i] = integer
+			continue
+		}
+		floating, err := number.Float64()
+		if err != nil {
+			return fmt.Errorf("decode copy text argument %d: %w", i, err)
+		}
+		t.Args[i] = floating
+	}
+	return nil
 }
 
 // Plain wraps a finished sentence that has no catalog key yet. It is the
@@ -74,6 +140,12 @@ func (t Text) Resolve(tr Translator) string {
 	}
 	got := tr(t.Key, t.Args...)
 	if got == "" || got == t.Key {
+		return t.Fallback
+	}
+	if strings.Contains(got, "%!") {
+		formattingWarning.Do(func() {
+			slog.Warn("translated copy contains a formatting error; using stored fallback", "key", t.Key)
+		})
 		return t.Fallback
 	}
 	return got

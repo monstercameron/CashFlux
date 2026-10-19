@@ -21,6 +21,13 @@ and every commit updates this file under `Unreleased`.
   read-only instead of being dropped. Property tests over random permutations and clock skew. Not
   wired into the app yet.
 
+### Fixed
+- **Notification copy kept its numbers through a reload, and `go vet` passes again (SV0.9).**
+  Persisted notification text stored its arguments as JSON, so a count came back as a float and a
+  `%d` placeholder rendered as `%!d(float64=3)`. `copytext.Text` now restores whole numbers as
+  integers, and translated strings whose format is chosen at run time go through the new
+  `copytext.OfKey` instead of `Of`, which `go vet` rightly flagged as non-constant format strings.
+
 ## [1.18.0] - 2026-08-31
 
 ### Changed

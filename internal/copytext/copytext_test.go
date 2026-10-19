@@ -4,6 +4,7 @@ package copytext
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 )
 
@@ -107,5 +108,78 @@ func TestRoundTripsThroughJSONWithEnoughToReTranslate(t *testing.T) {
 	}
 	if got, want := back.Resolve(fr), "Votre salaire est arrivé — $4,700.00"; got != want {
 		t.Errorf("re-render = %q, want %q", got, want)
+	}
+}
+
+func TestNumericAndScalarArgumentsRoundTripWithTheirFormattingTypes(t *testing.T) {
+	orig := Of("test.scalarArgs", "%d|%d|%.1f|%s|%t", int(7), int64(8), 2.5, "hello", true)
+	blob, err := json.Marshal(orig)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var back Text
+	if err := json.Unmarshal(blob, &back); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if got, want := fmt.Sprintf("%T", back.Args[0]), "int64"; got != want {
+		t.Errorf("decoded int type = %q, want %q", got, want)
+	}
+	if got, want := fmt.Sprintf("%T", back.Args[1]), "int64"; got != want {
+		t.Errorf("decoded int64 type = %q, want %q", got, want)
+	}
+	if got, want := fmt.Sprintf("%T", back.Args[2]), "float64"; got != want {
+		t.Errorf("decoded float type = %q, want %q", got, want)
+	}
+	if got, want := fmt.Sprintf("%T", back.Args[3]), "string"; got != want {
+		t.Errorf("decoded string type = %q, want %q", got, want)
+	}
+	if got, want := fmt.Sprintf("%T", back.Args[4]), "bool"; got != want {
+		t.Errorf("decoded bool type = %q, want %q", got, want)
+	}
+	translator := func(_ string, args ...any) string {
+		return fmt.Sprintf("%d|%d|%.1f|%s|%t", args...)
+	}
+	if got, want := back.Resolve(translator), "7|8|2.5|hello|true"; got != want {
+		t.Errorf("resolved = %q, want %q", got, want)
+	}
+}
+
+func TestOverdueIntegerRendersAfterRoundTrip(t *testing.T) {
+	orig := Of("notify.taskBodyOverdue", "Overdue by %d days.", 26)
+	blob, err := json.Marshal(orig)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var back Text
+	if err := json.Unmarshal(blob, &back); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	translator := func(_ string, args ...any) string {
+		return fmt.Sprintf("Overdue by %d days.", args...)
+	}
+	if got, want := back.Resolve(translator), "Overdue by 26 days."; got != want {
+		t.Errorf("resolved = %q, want %q", got, want)
+	}
+}
+
+func TestOldStoredIntegralNumberRendersAsInteger(t *testing.T) {
+	const oldFeed = `{"key":"notify.taskBodyOverdue","args":[26],"text":"Overdue by 26 days."}`
+	var back Text
+	if err := json.Unmarshal([]byte(oldFeed), &back); err != nil {
+		t.Fatalf("unmarshal old feed: %v", err)
+	}
+	translator := func(_ string, args ...any) string {
+		return fmt.Sprintf("Overdue by %d days.", args...)
+	}
+	if got, want := back.Resolve(translator), "Overdue by 26 days."; got != want {
+		t.Errorf("resolved = %q, want %q", got, want)
+	}
+}
+
+func TestResolveUsesFallbackForTranslatorFormattingError(t *testing.T) {
+	txt := Of("notify.taskBodyOverdue", "Overdue by %d days.", 26)
+	translator := func(_ string, _ ...any) string { return "Overdue by %!d(float64=26) days." }
+	if got, want := txt.Resolve(translator), "Overdue by 26 days."; got != want {
+		t.Errorf("resolved = %q, want fallback %q", got, want)
 	}
 }
