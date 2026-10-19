@@ -6,6 +6,7 @@ package ui
 
 import (
 	"hash/fnv"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -217,6 +218,8 @@ func pillToneClass(tone PillTone) string {
 // MemberAvatarProps configures a member avatar. Name is also its accessible name.
 type MemberAvatarProps struct {
 	Name   string
+	Title  string
+	Color  string
 	Blank  bool
 	TestID string
 }
@@ -225,7 +228,10 @@ type MemberAvatarProps struct {
 // A blank name renders an empty, named avatar rather than inventing initials.
 func MemberAvatar(props MemberAvatarProps) uic.Node {
 	name := strings.TrimSpace(props.Name)
-	attrs := []any{css.Class("cf-member-avatar", memberAvatarTone(name), memberAvatarBaseRules(), memberAvatarSheet(name)), Attr("role", "img"), Attr("aria-label", name)}
+	attrs := []any{css.Class("cf-member-avatar", memberAvatarTone(name), memberAvatarBaseRules(), memberAvatarSheet(name, props.Color)), Attr("role", "img"), Attr("aria-label", name)}
+	if props.Title != "" {
+		attrs = append(attrs, Title(props.Title))
+	}
 	if props.TestID != "" {
 		attrs = append(attrs, Attr("data-testid", props.TestID))
 	}
@@ -235,6 +241,64 @@ func MemberAvatar(props MemberAvatarProps) uic.Node {
 	return Span(append(attrs, memberInitials(name))...)
 }
 
+// AvatarStackProps configures a compact, accessible stack of member avatars.
+type AvatarStackProps struct {
+	Members []MemberAvatarProps
+	Label   string
+	Title   string
+	TestID  string
+}
+
+// AvatarStack shows up to three overlapping member avatars and a count chip for any remainder.
+func AvatarStack(props AvatarStackProps) uic.Node {
+	css.Inject("cf-member-avatar-stack", avatarStackCSS)
+	label := strings.TrimSpace(props.Label)
+	if label == "" {
+		var names []string
+		for _, member := range props.Members {
+			if name := strings.TrimSpace(member.Name); name != "" {
+				names = append(names, name)
+			}
+		}
+		label = strings.Join(names, ", ")
+	}
+	args := []any{css.Class("cf-member-avatar-stack"), Attr("role", "img"), Attr("aria-label", label)}
+	if props.Title != "" {
+		args = append(args, Title(props.Title))
+	}
+	if props.TestID != "" {
+		args = append(args, Attr("data-testid", props.TestID))
+	}
+	shown := len(props.Members)
+	if shown > 3 {
+		shown = 3
+	}
+	for i := 0; i < shown; i++ {
+		member := props.Members[i]
+		member.TestID = ""
+		args = append(args, Span(css.Class("cf-member-avatar-stack-item"), Attr("aria-hidden", "true"), MemberAvatar(member)))
+	}
+	if extra := len(props.Members) - shown; extra > 0 {
+		args = append(args, Span(css.Class("cf-member-avatar-stack-more"), Attr("aria-hidden", "true"), "+"+strconv.Itoa(extra)))
+	}
+	return Span(args...)
+}
+
+// MemberUnassigned renders the compact named marker used when a transaction has no owner.
+func MemberUnassigned(label, testID string) uic.Node {
+	css.Inject("cf-member-avatar-stack", avatarStackCSS)
+	return Span(css.Class("cf-member-unassigned"), Attr("role", "img"), Attr("aria-label", label), Title(label), Attr("data-testid", testID), "—")
+}
+
+const avatarStackCSS = `
+.cf-member-avatar-stack { display: inline-flex; align-items: center; white-space: nowrap; }
+.cf-member-avatar-stack-item { display: inline-flex; margin-inline-start: calc(var(--space-3) * -1); border: 2px solid var(--txn-row-surface, var(--bg-card)); border-radius: 999px; }
+.cf-member-avatar-stack-item:first-of-type { margin-inline-start: 0; }
+.cf-member-avatar-stack .cf-member-avatar { width: var(--space-8); height: var(--space-8); }
+.cf-member-avatar-stack-more { display: inline-flex; align-items: center; justify-content: center; min-width: var(--space-8); height: var(--space-8); margin-inline-start: calc(var(--space-3) * -1); border: 2px solid var(--txn-row-surface, var(--bg-card)); border-radius: 999px; background: var(--bg-elev); color: var(--text-dim); font-size: var(--type-12); }
+.cf-member-unassigned { display: inline-flex; width: var(--space-8); height: var(--space-8); align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: 999px; color: var(--text-dim); }
+`
+
 func memberAvatarTone(name string) string {
 	const paletteSize = 6
 	h := fnv.New32a()
@@ -242,7 +306,10 @@ func memberAvatarTone(name string) string {
 	return "cf-member-avatar--" + string(rune('1'+h.Sum32()%paletteSize))
 }
 
-func memberAvatarSheet(name string) css.Sheet {
+func memberAvatarSheet(name, customColor string) css.Sheet {
+	if background, foreground, ok := memberAvatarCustomColors(customColor); ok {
+		return css.New(css.Bg(css.Color(background)), css.TextColor(css.Color(foreground)))
+	}
 	const paletteSize = 6
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(strings.ToLower(strings.TrimSpace(name))))
@@ -260,6 +327,23 @@ func memberAvatarSheet(name string) css.Sheet {
 	default:
 		return css.New(css.Bg(css.Color("var(--member-avatar-bg-6, #ffedd5)")), css.TextColor(css.Color("var(--member-avatar-fg-6, #7c2d12)")))
 	}
+}
+
+func memberAvatarCustomColors(color string) (background, foreground string, ok bool) {
+	color = strings.TrimSpace(color)
+	if len(color) != 7 || color[0] != '#' {
+		return "", "", false
+	}
+	rgb, err := strconv.ParseUint(color[1:], 16, 32)
+	if err != nil {
+		return "", "", false
+	}
+	r, g, b := float64((rgb>>16)&0xff), float64((rgb>>8)&0xff), float64(rgb&0xff)
+	foreground = "#ffffff"
+	if 0.299*r+0.587*g+0.114*b > 150 {
+		foreground = "#172033"
+	}
+	return color, foreground, true
 }
 
 func memberAvatarBaseRules() css.Sheet {

@@ -700,11 +700,11 @@ func txnTableWidget(props txnTableProps) ui.Node {
 		accName[a.ID] = a.Name
 	}
 	// Member id → name, for the optional "User" column (the frame carries no member).
-	memberName := make(map[string]string)
-	memberColor := make(map[string]string)
+	memberNames := make(map[string]string)
+	memberColors := make(map[string]string)
 	for _, m := range props.App.Members() {
-		memberName[m.ID] = m.Name
-		memberColor[m.ID] = m.Color
+		memberNames[m.ID] = m.Name
+		memberColors[m.ID] = m.Color
 	}
 	// Category id → name, so a split row can list its per-line categories.
 	catName := make(map[string]string)
@@ -976,8 +976,9 @@ func txnTableWidget(props txnTableProps) ui.Node {
 			CategoryID:        txByID[rid].CategoryID,
 			SuggestedCategory: suggestedCategory,
 			Source:            srcCol.Str(i),
-			Member:            memberName[txByID[rid].PrimaryOwner()],  // TODO(WHO2): widget shows only the first owner.
-			MemberColor:       memberColor[txByID[rid].PrimaryOwner()], // TODO(WHO2): widget shows only the first owner.
+			MemberNames:       txnOwnerNames(txByID[rid].Owners(), memberNames),
+			MemberColors:      txnOwnerColors(txByID[rid].Owners(), memberColors),
+			OwnersResolved:    true,
 			Cleared:           cleared,
 			Reconciled: cleared && !reconThrough[txByID[rid].AccountID].IsZero() &&
 				!txByID[rid].Date.After(reconThrough[txByID[rid].AccountID]),
@@ -991,7 +992,7 @@ func txnTableWidget(props txnTableProps) ui.Node {
 			Selected:            sel[rid],
 			Receipts:            nAtt,
 			Attachment:          firstAtt,
-			Vis:                 txnColsForScope(colVis, f.Member, len(memberName)),
+			Vis:                 txnColsForScope(colVis, f.Member, len(memberNames)),
 			BillAccountID:       txByID[rid].BillAccountID,
 			SubscriptionName:    txByID[rid].SubscriptionName,
 			ExcludedFromReports: txByID[rid].ExcludeFromReports,
@@ -1308,10 +1309,13 @@ type txnFrameRowProps struct {
 	Account           string
 	Category          string
 	CategoryID        string
-	SuggestedCategory string          // resolved inline suggestion, for the category cell's accessible name
-	Source            string          // provenance label ("Manual"/"Imported"/…, "—" if unset)
-	Member            string          // assigned household member's name ("" if unassigned)
-	MemberColor       string          // assigned member's configured avatar color
+	SuggestedCategory string   // resolved inline suggestion, for the category cell's accessible name
+	Source            string   // provenance label ("Manual"/"Imported"/…, "—" if unset)
+	Member            string   // compatibility for row callers that supply one owner name
+	MemberColor       string   // compatibility for legacy row tests/callers; library avatars choose their palette
+	MemberNames       []string // assigned household member names in stable owner order
+	MemberColors      []string
+	OwnersResolved    bool            // true when owner ids were resolved by the ledger frame
 	Vis               uistate.TxnCols // which optional columns to render (must match the header)
 	Cleared           bool
 	// Reconciled marks a cleared row dated at or before its account's
@@ -1670,21 +1674,12 @@ func txnFrameRow(props *txnFrameRowProps) ui.Node {
 	// (transactions_widget.go's `cols`): Select, Date, [Amount], Description,
 	// [Account], [Category], [Source], [Who]. An unassigned member stays blank
 	// while the cell keeps a useful accessible name.
-	member := props.Member
-	memberUnassigned := strings.TrimSpace(member) == ""
 	accountCellArgs := []any{ClassStr("td-acct")}
 	if txnAccountNeedsTooltip(props.Account) {
 		accountCellArgs = append(accountCellArgs, Attr("title", props.Account))
 	}
 	accountCellArgs = append(accountCellArgs, props.Account)
 	accountCell := Td(accountCellArgs...)
-	memberCellLabel := uistate.T("txu5.member", member)
-	var memberAvatar ui.Node = Fragment()
-	if memberUnassigned {
-		memberCellLabel = uistate.T("r4c.unassigned")
-	} else {
-		memberAvatar = Span(css.Class("txn-member-avatar"), Attr("style", "--txn-member-color: "+props.MemberColor), txnMemberInitials(member))
-	}
 	categoryAccessibleName := props.Category
 	if props.Unfiled && props.SuggestedCategory != "" {
 		categoryAccessibleName = uistate.T("r5w.suggestedCategory", props.Category, props.SuggestedCategory)
@@ -1792,7 +1787,7 @@ func txnFrameRow(props *txnFrameRowProps) ui.Node {
 		// about the category at all (C579).
 		If(props.Vis.Category, categoryCell),
 		If(props.Vis.Account, accountCell),
-		If(props.Vis.User, Td(ClassStr("td-user"), Attr("aria-label", memberCellLabel), memberAvatar)),
+		If(props.Vis.User, txnWhoCellForRow(props)),
 		If(props.Vis.Amount, Td(ClassStr("td-amount "+tw.ColorClass(props.AmtTone)), props.Amount)),
 		If(props.ShowBalance, Td(ClassStr("td-amount "+tw.ColorClass(props.BalTone)), props.Balance)),
 		If(props.Vis.Source, Td(ClassStr(srcClass), props.Source)),
@@ -1899,6 +1894,69 @@ func txnAccountNeedsTooltip(account string) bool {
 
 func txnWhoHeader() ui.Node {
 	return Span(uistate.T("r4c.who"))
+}
+
+func txnOwnerNames(ownerIDs []string, memberNames map[string]string) []string {
+	names := make([]string, 0, len(ownerIDs))
+	for _, id := range ownerIDs {
+		name := strings.TrimSpace(memberNames[id])
+		if name == "" {
+			name = id
+		}
+		names = append(names, name)
+	}
+	return names
+}
+
+func txnWhoCell(names []string) ui.Node {
+	return txnWhoCellWithColors(names, nil)
+}
+
+func txnWhoCellWithColors(names []string, colors []string) ui.Node {
+	label := uistate.T("who2.unassigned")
+	var avatar ui.Node = uiw.MemberUnassigned(label, "txn-who-unassigned")
+	if len(names) == 1 {
+		label = names[0]
+		avatar = uiw.MemberAvatar(uiw.MemberAvatarProps{Name: label, Title: label, Color: ownerColor(colors, 0), TestID: "txn-who-avatar"})
+	} else if len(names) > 1 {
+		label = uistate.T("who2.sharedBy", whoNames(names))
+		members := make([]uiw.MemberAvatarProps, 0, len(names))
+		for i, name := range names {
+			members = append(members, uiw.MemberAvatarProps{Name: name, Color: ownerColor(colors, i)})
+		}
+		avatar = uiw.AvatarStack(uiw.AvatarStackProps{Members: members, Label: label, Title: label, TestID: "txn-who-stack"})
+	}
+	return Td(ClassStr("td-user"), Attr("aria-label", label), Title(label), avatar)
+}
+
+func ownerColor(colors []string, index int) string {
+	if index < 0 || index >= len(colors) {
+		return ""
+	}
+	return colors[index]
+}
+
+func txnOwnerColors(ownerIDs []string, memberColors map[string]string) []string {
+	colors := make([]string, 0, len(ownerIDs))
+	for _, id := range ownerIDs {
+		colors = append(colors, memberColors[id])
+	}
+	return colors
+}
+
+func txnWhoCellForRow(props *txnFrameRowProps) ui.Node {
+	if props.OwnersResolved {
+		return txnWhoCellWithColors(props.MemberNames, props.MemberColors)
+	}
+	// Keep direct legacy row callers working while the ledger frame supplies the
+	// complete resolved owner list on every production row.
+	label := uistate.T("r4c.unassigned")
+	var avatar ui.Node = Fragment()
+	if strings.TrimSpace(props.Member) != "" {
+		label = uistate.T("txu5.member", props.Member)
+		avatar = Span(css.Class("txn-member-avatar"), Attr("style", "--txn-member-color: "+props.MemberColor), txnMemberInitials(props.Member))
+	}
+	return Td(ClassStr("td-user"), Attr("aria-label", label), avatar)
 }
 
 // txnRowMenu is the row's ⋯ kebab: its Link to… submenu goes straight to the

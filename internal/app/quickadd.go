@@ -78,9 +78,9 @@ func quickAddForm(props quickAddFormProps) uic.Node {
 	// note, cleared, report exclusion) is available at creation, folded behind a
 	// collapsed "More details" disclosure so the fast path stays five fields.
 	tagsS := uic.UseState("")
-	memberS := uic.UseState("")
-	memberChosen := uic.UseState(false)
 	activeMember := uistate.UseActiveMember().Get()
+	ownersS := uic.UseState(quickAddOwnerDefaults(activeMember))
+	ownersTouched := uic.UseState(false)
 	noteS := uic.UseState("")
 	clearedS := uic.UseState(false)
 	excludeS := uic.UseState(false)
@@ -88,7 +88,6 @@ func quickAddForm(props quickAddFormProps) uic.Node {
 
 	onReviewed := uic.UseEvent(func(e uic.Event) { needsReview.Set(e.IsChecked()) })
 	onTags := uic.UseEvent(func(v string) { tagsS.Set(v) })
-	onMember := uic.UseEvent(func(e uic.Event) { memberS.Set(e.GetValue()); memberChosen.Set(true) })
 	onNote := uic.UseEvent(func(v string) { noteS.Set(v) })
 	onCleared := uic.UseEvent(func(e uic.Event) { clearedS.Set(e.IsChecked()) })
 	onExclude := uic.UseEvent(func(e uic.Event) { excludeS.Set(e.IsChecked()) })
@@ -202,8 +201,8 @@ func quickAddForm(props quickAddFormProps) uic.Node {
 		saveAttempted.Set(false)
 		focusField.Set("")
 		tagsS.Set("")
-		memberS.Set("")
-		memberChosen.Set(false)
+		ownersS.Set(quickAddOwnerDefaults(activeMember))
+		ownersTouched.Set(false)
 		noteS.Set("")
 		clearedS.Set(false)
 		excludeS.Set(false)
@@ -265,19 +264,10 @@ func quickAddForm(props quickAddFormProps) uic.Node {
 		if derr != nil {
 			d = time.Now()
 		}
-		member := ""
-		if acc.Scope == domain.ScopeIndividual {
-			member = acc.OwnerID
-		}
-		// QA M7: an explicit member pick from "More details" overrides the
-		// account-derived default.
-		if m := quickAddMemberValue(activeMember, memberS.Get(), memberChosen.Get()); m != "" {
-			member = m
-		}
 		t := domain.Transaction{
 			ID: id.New(), AccountID: acc.ID, Date: d, Payee: strings.TrimSpace(payee.Get()),
 			Desc: quickAddDescriptionR4F(payee.Get(), desc.Get()), CategoryID: catID.Get(),
-			Amount: money.New(amt, acc.Currency), MemberID: member, Reviewed: quickAddReviewedValue(needsReview.Get()),
+			Amount: money.New(amt, acc.Currency), MemberIDs: quickAddOwnerSelection(ownersS.Get(), activeMember, acc, ownersTouched.Get()), Reviewed: quickAddReviewedValue(needsReview.Get()),
 			Source:             domain.TxnSourceManual,
 			Tags:               textutil.CommaFields(tagsS.Get()),
 			Note:               strings.TrimSpace(noteS.Get()),
@@ -667,16 +657,18 @@ func quickAddForm(props quickAddFormProps) uic.Node {
 			ui.FormField(uistate.T("quickAdd.tags"),
 				Input(css.Class("field"), Type("text"), Attr("data-testid", "txn-add-tags"), Attr("aria-label", uistate.T("quickAdd.tags")),
 					Placeholder(uistate.T("quickAdd.tagsPh")), OnInput(onTags), ui.FieldValue(tagsS.Get()))),
-			If(len(app.Members()) > 0, ui.FormField(uistate.T("quickAdd.member"),
-				Select(css.Class("field"), Attr("data-testid", "txn-add-member"), Attr("aria-label", uistate.T("quickAdd.member")), OnChange(onMember),
-					func() []uic.Node {
-						selectedMember := quickAddMemberValue(activeMember, memberS.Get(), memberChosen.Get())
-						opts := []uic.Node{Option(Value(""), SelectedIf(selectedMember == ""), uistate.T("quickAdd.memberAuto"))}
-						for _, m := range app.Members() {
-							opts = append(opts, Option(Value(m.ID), SelectedIf(selectedMember == m.ID), m.Name))
-						}
-						return opts
-					}()))),
+			If(len(app.Members()) > 0, screens.TxnWhoField(screens.TxnWhoFieldProps{
+				ID: "txn-add-who", Owners: quickAddOwnerSelection(ownersS.Get(), activeMember, accountForQuickAdd(accounts, effAcct), ownersTouched.Get()), Colors: quickAddMemberColors(app.Members()), Options: func() []ui.PickerOption {
+					options := make([]ui.PickerOption, 0, len(app.Members()))
+					for _, member := range app.Members() {
+						options = append(options, ui.PickerOption{Value: member.ID, Label: member.Name})
+					}
+					return options
+				}(), OnToggle: func(owner string) {
+					ownersS.Set(quickAddToggleOwner(ownersS.Get(), owner))
+					ownersTouched.Set(true)
+				},
+			})),
 			ui.FormField(uistate.T("quickAdd.note"),
 				Input(css.Class("field"), Type("text"), Attr("data-testid", "txn-add-note"), Attr("aria-label", uistate.T("quickAdd.note")),
 					Placeholder(uistate.T("quickAdd.notePh")), OnInput(onNote), ui.FieldValue(noteS.Get()))),
@@ -787,6 +779,48 @@ func quickAddMemberValue(activeMember, selected string, explicitlySelected bool)
 		return selected
 	}
 	return activeMember
+}
+
+func quickAddOwnerDefaults(activeMember string) []string {
+	if activeMember == "" {
+		return nil
+	}
+	return []string{activeMember}
+}
+
+func quickAddOwnerSelection(owners []string, activeMember string, account domain.Account, touched bool) []string {
+	if touched || len(owners) > 0 {
+		return append([]string(nil), owners...)
+	}
+	if activeMember != "" {
+		return []string{activeMember}
+	}
+	if account.Scope == domain.ScopeIndividual && account.OwnerID != "" {
+		return []string{account.OwnerID}
+	}
+	return nil
+}
+
+func accountForQuickAdd(accounts []domain.Account, accountID string) domain.Account {
+	account, _ := accountByID(accounts, accountID)
+	return account
+}
+
+func quickAddMemberColors(members []domain.Member) map[string]string {
+	colors := make(map[string]string, len(members))
+	for _, member := range members {
+		colors[member.ID] = member.Color
+	}
+	return colors
+}
+
+func quickAddToggleOwner(owners []string, owner string) []string {
+	for i, current := range owners {
+		if current == owner {
+			return append(append([]string(nil), owners[:i]...), owners[i+1:]...)
+		}
+	}
+	return append(append([]string(nil), owners...), owner)
 }
 
 func quickAddReviewedValue(needsReview bool) bool {

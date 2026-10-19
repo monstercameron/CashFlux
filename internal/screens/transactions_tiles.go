@@ -1718,13 +1718,13 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 	selAtom := uistate.UseTxnSelection()
 	anchorAtom := uistate.UseTxnSelAnchor()
 	bulkCatAtom := uistate.UseTxnBulkCat()
-	bulkMemAtom := uistate.UseTxnBulkMember()
 	undoAtom := uistate.UseTxnUndo()
 	tagOpen := ui.UseState(false)
 	tagValue := ui.UseState("")
 	categoryPickerOpen := ui.UseState(false)
 	categoryPickerQuery := ui.UseState("")
 	categoryPickerKind := ui.UseState(domain.KindExpense)
+	bulkOwners := ui.UseState([]string(nil))
 
 	clearSel := func() {
 		selAtom.Set(map[string]bool{})
@@ -1890,28 +1890,15 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 			postUndoStory(opLabel)
 		}
 	}
-	assignBulkMember := func(mid string) {
+	assignBulkOwners := func(owners []string) {
 		sel := selAtom.Get()
-		var prior []domain.Transaction
-		for _, t := range app.Transactions() {
-			if sel[t.ID] && (len(t.Owners()) != 1 || t.PrimaryOwner() != mid) {
-				prior = append(prior, t)
-			}
+		prior, err := assignSelectedTxnOwners(app, sel, owners)
+		if err != nil {
+			uistate.PostNotice(uistate.T("transactions.bulkAssignErr", err.Error()), true)
 		}
-		app.BulkMutate(func() {
-			for _, t := range app.Transactions() {
-				if !sel[t.ID] || (len(t.Owners()) == 1 && t.PrimaryOwner() == mid) {
-					continue
-				}
-				t.SetOwners([]string{mid}) // TODO(WHO2): bulk picker still assigns one owner.
-				if err := app.PutTransaction(t); err != nil {
-					uistate.PostNotice(uistate.T("transactions.bulkAssignErr", err.Error()), true)
-				}
-			}
-		})
 		undoAtom.Set(uistate.BulkSnapshot{Label: uistate.T("transactions.bulkOpAssigned", len(prior)), Prior: prior})
 		clearSel()
-		bulkMemAtom.Set("")
+		bulkOwners.Set(nil)
 		uistate.BumpDataRevision()
 		// C364: undo story for bulk member assignment.
 		if len(prior) > 0 {
@@ -2107,12 +2094,6 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 		categoryPickerKind.Set(kind)
 		categoryPickerOpen.Set(true)
 	}
-	onBulkMem := func(picked string) {
-		bulkMemAtom.Set(picked)
-		if picked != "" {
-			assignBulkMember(picked)
-		}
-	}
 
 	// Standard `.field` selects for the category / member to apply.
 	//
@@ -2124,9 +2105,9 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 	for _, o := range CategoryPickOptions(app.Categories()) {
 		catOptions = append(catOptions, txnBulkPickerOption{Value: o.Value, Label: o.Label})
 	}
-	memOptions := []txnBulkPickerOption{{Value: "", Label: uistate.T("r1c.person")}}
+	ownerOptions := make([]uiw.PickerOption, 0, len(app.Members()))
 	for _, m := range app.Members() {
-		memOptions = append(memOptions, txnBulkPickerOption{Value: m.ID, Label: m.Name})
+		ownerOptions = append(ownerOptions, uiw.PickerOption{Value: m.ID, Label: m.Name})
 	}
 
 	moreActions := uiw.OverflowMenu(uiw.OverflowMenuProps{
@@ -2165,7 +2146,11 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 	}),
 		Span(css.Class("bulk-count", tw.ShrinkO), Attr("aria-label", uistate.T("transactions.selected", plural(n, "transaction"))), uistate.T("transactions.bulkSelectedShort", n)),
 		ui.CreateElement(txnBulkPicker, txnBulkPickerProps{ID: "bulk-category-picker", Label: uistate.T("transactions.categoryToApply"), Placeholder: uistate.T("r1c.category"), SearchLabel: uistate.T("r5b.searchCategories"), Options: catOptions, OnChoose: onBulkCat, OnCreate: onCreateBulkCategory}),
-		If(len(app.Members()) > 0, ui.CreateElement(txnBulkPicker, txnBulkPickerProps{ID: "bulk-member-picker", Label: uistate.T("transactions.memberToAssign"), Placeholder: uistate.T("r1c.person"), SearchLabel: uistate.T("r5b.searchPeople"), Options: memOptions, OnChoose: onBulkMem})),
+		Div(css.Class("bulk-owner-actions"),
+			uiw.MultiPicker(uiw.MultiPickerProps{ID: "bulk-member-picker", Label: uistate.T("who2.setOwnersTo"), Placeholder: uistate.T("who2.chooseOwners"), Options: ownerOptions, Selected: bulkOwners.Get(), OnToggle: func(owner string) { bulkOwners.Set(toggleTxnOwner(bulkOwners.Get(), owner)) }, TestID: "bulk-owner-picker"}),
+			Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "bulk-set-owners"), Disabled(len(bulkOwners.Get()) == 0), OnClick(func() { assignBulkOwners(bulkOwners.Get()) }), uistate.T("who2.setOwners")),
+			Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "bulk-set-unassigned"), OnClick(func() { assignBulkOwners(nil) }), uistate.T("who2.unassigned")),
+		),
 		toolbarIconBtnTitled("bulk-mark-reviewed", icon.CheckCircle, uistate.T("r1c.markReviewed"), uistate.T("r1c.markReviewed"), bulkMarkReviewed, ""),
 		Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "bulk-add-tag"), Attr("aria-expanded", ariaBool(tagOpen.Get())), OnClick(toggleTagInput), uistate.T("r1c.addTagEllipsis")),
 		tagEditor,
@@ -2189,6 +2174,40 @@ func txnBulkBarWidgetStyle() map[string]string {
 		"position": "fixed", "inset": "0", "z-index": "70", "pointer-events": "none",
 		"overflow": "visible", "background": "transparent", "border": "0", "box-shadow": "none",
 	}
+}
+
+func sameOwnerList(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for i := range left {
+		if left[i] != right[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func assignSelectedTxnOwners(app *appstate.App, selected map[string]bool, owners []string) ([]domain.Transaction, error) {
+	var prior []domain.Transaction
+	var firstErr error
+	for _, txn := range app.Transactions() {
+		if selected[txn.ID] && !sameOwnerList(txn.Owners(), owners) {
+			prior = append(prior, txn)
+		}
+	}
+	app.BulkMutate(func() {
+		for _, txn := range app.Transactions() {
+			if !selected[txn.ID] || sameOwnerList(txn.Owners(), owners) {
+				continue
+			}
+			txn.SetOwners(owners)
+			if err := app.PutTransaction(txn); err != nil && firstErr == nil {
+				firstErr = err
+			}
+		}
+	})
+	return prior, firstErr
 }
 
 // txnCategoryAfterManualChoice records that a person explicitly chose this

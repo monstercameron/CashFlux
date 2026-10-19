@@ -90,6 +90,10 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Keyring hardened before device pairing ships (SV1.1).** Pairing now uses a commit-then-reveal exchange with fresh nonces
+  and ephemeral keys on both devices and an eight-digit code derived from the whole transcript, so a relay cannot substitute
+  a key unnoticed; the handed-over key is authenticated and checked against the keyring; keyring metadata is authenticated
+  and an older keyring version is rejected (rollback protection).
 - **Static files cannot escape their folder (CI2).** The self-host portal and console serve files through a contained
   filesystem, rejecting `..`, encoded traversal, backslashes and drive paths; the operator command-line tools clean and
   validate the paths they are given.
@@ -210,6 +214,13 @@ and every commit updates this file under `Unreleased`.
   complete build in charge.
 
 ### Changed
+- **Who owns a transaction, at a glance (WHO2).** The Who column shows a quiet "Unassigned" marker, one member avatar, or a
+  layered stack for shared transactions (up to three, then "+N", each ringed in the row colour so the overlap reads
+  cleanly), and screen readers hear every owner. Add and Edit have a Who picker for several people (none = Unassigned),
+  and the bulk bar can set owners for a selection with Undo.
+- **Choose a default account in one click (DF3).** Each account's menu can make it the default for new transactions —
+  for the household or for a member — and a "Default" pill marks it; member edit and Settings → Household show and change
+  the defaults. Archived accounts cannot become the default.
 - **Settings → Cloud is rebuilt around status and a guided setup (CLOUD1).** The page opens with one status card — Sync
   is off / Finish setting up / Synced (last sync, this device, other devices) / Paused / Needs attention — and the single
   next action. Turning sync on is a four-step setup that resumes after a reload: choose where (with a connection test),

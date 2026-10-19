@@ -219,7 +219,7 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 	catS := ui.UseState(txn.CategoryID)
 	categoryPickerOpen := ui.UseState(false)
 	dateS := ui.UseState(dateISO)
-	memberS := ui.UseState(txn.PrimaryOwner()) // TODO(WHO2): edit picker still accepts one owner.
+	memberS := ui.UseState(txn.Owners())
 	tagsS := ui.UseState(strings.Join(txn.Tags, ", "))
 	clearedS := ui.UseState(txn.Cleared)
 	noteS := ui.UseState(txn.Note)                  // TXC-2: free-text memo
@@ -356,9 +356,7 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 		}
 		t.CategoryID = catS.Get()
 		t.Date = date
-		if memberS.Get() != "" {
-			t.SetOwners([]string{memberS.Get()}) // TODO(WHO2): edit picker still assigns one owner.
-		}
+		t.SetOwners(memberS.Get())
 		t.Tags = textutil.CommaFields(tagsS.Get())
 		// C601: a confirmed category also leaves the review queue — exactly what the
 		// same decision does in the review surface, where assignReviewCategory has
@@ -689,12 +687,12 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 	}
 	catOpts = append([]uiw.SelectOption{{Value: "", Label: uistate.T("transactions.noCategory")}}, catOpts...)
 
-	memberOpts := uiw.OptionsFrom(
-		members,
-		func(m domain.Member) string { return m.ID },
-		func(m domain.Member) string { return m.Name },
-		memberS.Get(),
-	)
+	memberOpts := make([]uiw.PickerOption, 0, len(members))
+	memberColors := make(map[string]string, len(members))
+	for _, member := range members {
+		memberOpts = append(memberOpts, uiw.PickerOption{Value: member.ID, Label: member.Name})
+		memberColors[member.ID] = member.Color
+	}
 
 	// The current breakdown, listed read-only so a split is visible the moment the
 	// modal opens; the full editor is one tap away on the toggle. Category id → name
@@ -824,7 +822,7 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 			}}),
 		labeledField(uistate.T("transactions.tagsLabel"), Input(css.Class("field"), Type("text"), Attr("data-testid", "txn-edit-tags"), Attr("aria-label", uistate.T("transactions.tagsLabel")),
 			Placeholder(uistate.T("transactions.tagsPlaceholder")), OnInput(onTags), uiw.FieldValue(tagsS.Get()))),
-		If(len(members) > 1, uiw.FormField(uistate.T("transactions.whoLabel"), uiw.SelectInput(uiw.SelectInputProps{Options: memberOpts, Selected: memberS.Get(), AriaLabel: uistate.T("transactions.whoLabel"), OnChange: func(v string) { memberS.Set(v) }}))),
+		If(len(members) > 0, TxnWhoField(TxnWhoFieldProps{ID: "txn-edit-who", Owners: memberS.Get(), Options: memberOpts, Colors: memberColors, OnToggle: func(owner string) { memberS.Set(toggleTxnOwner(memberS.Get(), owner)) }})),
 		uiw.FormField(uistate.T("transactions.noteLabel"), Textarea(css.Class("field"), Attr("rows", "2"), Attr("data-testid", "txn-edit-note"),
 			Attr("aria-label", uistate.T("transactions.noteLabel")), Attr("placeholder", uistate.T("transactions.notePlaceholder")), OnInput(onNote), noteS.Get())),
 		Div(css.Class("txn-form-check-field"),

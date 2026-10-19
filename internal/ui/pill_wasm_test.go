@@ -86,3 +86,22 @@ func TestMemberAvatarInitialsColorAndBlankName(t *testing.T) {
 		t.Fatalf("blank avatar should retain its accessible name; text=%q exists=%t", blank.Text(), blank.Exists())
 	}
 }
+
+func TestMemberAvatarUsesConfiguredColorAndAvatarStackCapsAtThree(t *testing.T) {
+	background, foreground, ok := memberAvatarCustomColors("#7357C8")
+	if !ok || background != "#7357C8" || foreground != "#ffffff" {
+		t.Fatalf("custom member color = %q/%q/%t", background, foreground, ok)
+	}
+	if _, _, ok := memberAvatarCustomColors("url(javascript:alert(1))"); ok {
+		t.Fatal("avatar accepted a non-hex custom color")
+	}
+	f := render.New(t)
+	f.Render(AvatarStack(AvatarStackProps{
+		Members: []MemberAvatarProps{{Name: "Marcus Hartley"}, {Name: "Priya Hartley"}, {Name: "Nadia Hartley"}, {Name: "Alex Hartley"}, {Name: "Sam Hartley"}},
+		Label:   "Shared by Marcus Hartley, Priya Hartley, Nadia Hartley, Alex Hartley, and Sam Hartley",
+	}))
+	stack := f.ByRole("img", "Shared by Marcus Hartley, Priya Hartley, Nadia Hartley, Alex Hartley, and Sam Hartley")
+	if !stack.Exists() || !strings.Contains(stack.Text(), "+2") {
+		t.Fatalf("stack text=%q exists=%t", stack.Text(), stack.Exists())
+	}
+}

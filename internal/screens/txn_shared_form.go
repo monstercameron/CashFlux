@@ -5,6 +5,8 @@
 package screens
 
 import (
+	"strings"
+
 	"github.com/monstercameron/CashFlux/internal/icon"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -31,6 +33,75 @@ type TxnFormModel struct {
 	EditTools, EditSummary                            ui.Node
 	MoreID                                            string
 	OpenMore                                          bool
+}
+
+// TxnWhoFieldProps configures the shared owner picker used by Add and Edit.
+type TxnWhoFieldProps struct {
+	ID       string
+	Owners   []string
+	Options  []uiw.PickerOption
+	Colors   map[string]string
+	OnToggle func(string)
+}
+
+// TxnWhoField renders the selected owner stack and the accessible multi-picker.
+func TxnWhoField(props TxnWhoFieldProps) ui.Node {
+	label := uistate.T("who2.label")
+	selected := make([]string, 0, len(props.Owners))
+	byID := make(map[string]string, len(props.Options))
+	for _, option := range props.Options {
+		byID[option.Value] = option.Label
+	}
+	avatars := make([]uiw.MemberAvatarProps, 0, len(props.Owners))
+	for _, id := range props.Owners {
+		if id == "" {
+			continue
+		}
+		name := byID[id]
+		if name == "" {
+			name = id
+		}
+		selected = append(selected, id)
+		avatars = append(avatars, uiw.MemberAvatarProps{Name: name, Color: props.Colors[id]})
+	}
+	accessible := uistate.T("who2.unassigned")
+	var summary ui.Node = uiw.MemberUnassigned(accessible, props.ID+"-unassigned")
+	if len(avatars) > 0 {
+		names := make([]string, 0, len(avatars))
+		for _, avatar := range avatars {
+			names = append(names, avatar.Name)
+		}
+		accessible = names[0]
+		if len(names) > 1 {
+			accessible = uistate.T("who2.sharedBy", whoNames(names))
+		}
+		summary = uiw.AvatarStack(uiw.AvatarStackProps{Members: avatars, Label: accessible, Title: accessible, TestID: props.ID + "-avatars"})
+	}
+	return uiw.FormField(label, Div(css.Class("txn-who-field"), summary,
+		uiw.MultiPicker(uiw.MultiPickerProps{ID: props.ID, Label: label, Placeholder: accessible, Options: props.Options, Selected: selected, OnToggle: props.OnToggle, TestID: props.ID + "-picker"}),
+	))
+}
+
+func whoNames(names []string) string {
+	switch len(names) {
+	case 0:
+		return ""
+	case 1:
+		return names[0]
+	case 2:
+		return names[0] + " and " + names[1]
+	default:
+		return strings.Join(names[:len(names)-1], ", ") + ", and " + names[len(names)-1]
+	}
+}
+
+func toggleTxnOwner(owners []string, owner string) []string {
+	for i, current := range owners {
+		if current == owner {
+			return append(append([]string(nil), owners[:i]...), owners[i+1:]...)
+		}
+	}
+	return append(append([]string(nil), owners...), owner)
 }
 
 // TxnSharedFormProps remains as a compatibility alias for callers compiled during migration.
