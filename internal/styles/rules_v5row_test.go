@@ -12,12 +12,18 @@ func TestV5RowControlsHaveAtLeast32PixelTargets(t *testing.T) {
 	registerV5Row()
 	css := Build()
 	for _, want := range []string{
-		".bento-ledger .txn-ledger-row button, .bento-ledger .txn-ledger-row input[type=checkbox]{box-sizing:border-box;min-width:32px;min-height:32px;",
-		".bento-ledger .txn-ledger-row .txn-row-menu button, .bento-ledger .txn-ledger-row .txn-row-edit{width:32px;height:32px;min-width:32px;min-height:32px;",
+		".bento-ledger .txn-ledger-row button{box-sizing:border-box;min-width:32px;min-height:32px;",
+		".bento-ledger .txn-ledger-row .txn-row-menu > button[aria-haspopup], .bento-ledger .txn-ledger-row .txn-row-edit{width:32px;height:32px;min-width:32px;min-height:32px;",
+		".bento-ledger .txn-ledger-row .txn-row-menu [role=menuitem]{width:100%;min-width:160px;min-height:32px;}",
+		".bento-ledger .txn-ledger-row input[type=checkbox]{box-sizing:border-box;width:16px;height:16px;min-width:16px;min-height:16px;padding:0;appearance:none;",
+		".bento-ledger .txn-ledger-row input[type=checkbox]:checked{background:var(--accent);border-color:var(--accent);}",
 	} {
 		if !strings.Contains(css, want) {
 			t.Errorf("missing 32×32 transaction target rule %q", want)
 		}
+	}
+	if strings.Contains(css, ".txn-row-menu button{width:32px;") {
+		t.Fatal("menu items must not inherit the 32px trigger width")
 	}
 }
 
