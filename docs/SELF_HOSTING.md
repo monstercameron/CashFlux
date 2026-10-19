@@ -226,6 +226,12 @@ under the proxy's single IP; a directly internet-facing deployment must leave it
 `X-Forwarded-For` to bypass the limiter. The server speaks plain HTTP and expects the proxy to terminate TLS —
 never expose it directly without one.
 
+In Docker, the proxy's requests arrive from the bridge network gateway (for example `172.20.0.1`), not from
+`127.0.0.1`, even when nginx proxies to a port published on loopback. Include the Docker range
+(`172.16.0.0/12`) in `CASHFLUX_SERVER_TRUSTED_PROXIES`, or the server treats every request as plain HTTP and
+refuses session sign-in with "secure same-origin request is required" (403). The value lives in the host env
+file, so changing it needs only a container restart, not a new release.
+
 Do not expose a default token or example master key in production. Generate real token material with `rotate-token`, set the SHA-256 digest in the env file, and store the plaintext token in a password manager.
 
 Set `CASHFLUX_SERVER_MASTER_KEY` from a secret manager, KMS-backed secret, or password manager entry that is
