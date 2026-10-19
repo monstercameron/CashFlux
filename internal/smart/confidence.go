@@ -60,9 +60,10 @@ var inferredFeatures = map[string]Confidence{
 	// Duplicate detection compares payee/amount/date proximity. Two genuine
 	// same-day charges at the same merchant are common and read identically.
 	"SMART-T2": ConfidencePossible,
-	// A spending "spike" is a threshold over a rolling average — a real but
-	// intended splurge trips it exactly as an anomaly does.
-	"SMART-T6": ConfidencePossible,
+	// Unusual findings are inferences over merchant history and transaction
+	// patterns. The detector adds a more specific confidence to each finding;
+	// this is the cautious feature-level fallback.
+	"SMART-U1": ConfidencePossible,
 	// A missing transaction is inferred from a schedule the household never
 	// declared; a bill genuinely skipped this month looks the same as one missed.
 	"SMART-T7": ConfidenceLikely,

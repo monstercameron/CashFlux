@@ -23,7 +23,7 @@ func TestInferredFindingsCarryTheirHedge(t *testing.T) {
 		want    Confidence
 	}{
 		{"SMART-T2", ConfidencePossible},  // duplicates
-		{"SMART-T6", ConfidencePossible},  // spending spike
+		{"SMART-U1", ConfidencePossible},  // unusual transaction findings
 		{"SMART-T7", ConfidenceLikely},    // missing transaction
 		{"SMART-A1", ConfidenceLikely},    // balance anomaly
 		{"SMART-T20", ConfidencePossible}, // new subscription
