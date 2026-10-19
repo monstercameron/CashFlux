@@ -117,6 +117,26 @@ func TestUncategorizedTreatsCategorizedSplitAsCategorized(t *testing.T) {
 	}
 }
 
+func TestUncategorizedIncludesPartlyCategorizedSplits(t *testing.T) {
+	date := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	txns := []domain.Transaction{
+		{ID: "partial", Date: date, Amount: money.New(-1000, "USD"), Splits: []domain.CategorySplit{
+			{CategoryID: "food", Amount: money.New(-700, "USD")},
+			{Amount: money.New(-300, "USD")},
+		}},
+		{ID: "complete", Date: date, Amount: money.New(-1000, "USD"), Splits: []domain.CategorySplit{
+			{CategoryID: "food", Amount: money.New(-1000, "USD")},
+		}},
+	}
+	filtered := Apply(txns, Criteria{Uncategorized: true})
+	if len(filtered) != 1 || filtered[0].ID != "partial" {
+		t.Fatalf("uncategorized filter = %#v, want partly categorized split", filtered)
+	}
+	if got := CountPresets(txns, Criteria{}, PresetScope{}).Uncategorized; got != 1 {
+		t.Fatalf("uncategorized preset count = %d, want 1", got)
+	}
+}
+
 // The ticket names search, member and period as the scopes that must be honoured.
 // Search is covered above; these are the other two, plus the multi-value
 // dimensions the filter panel writes as pills.

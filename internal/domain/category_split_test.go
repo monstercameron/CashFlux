@@ -63,6 +63,20 @@ func TestSplitsReconcile(t *testing.T) {
 	}
 }
 
+func TestSplitsReconcileRejectsOverflowThatWrapsToAmount(t *testing.T) {
+	splits := []CategorySplit{
+		split("first", int64(^uint64(0)>>1)),
+		split("second", int64(^uint64(0)>>1)),
+		split("offset", -98),
+	}
+	if SplitsReconcile(money.New(-100, "USD"), splits) {
+		t.Fatal("overflowed split total must not reconcile to a wrapped amount")
+	}
+	if _, err := SplitsTotalChecked(splits); err == nil {
+		t.Fatal("SplitsTotalChecked() error = nil, want overflow")
+	}
+}
+
 func TestTransactionSplitHelpers(t *testing.T) {
 	plain := Transaction{Amount: money.New(1500, "USD")}
 	if plain.HasSplits() {

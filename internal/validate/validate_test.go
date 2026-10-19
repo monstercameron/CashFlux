@@ -90,6 +90,7 @@ func TestValidateTransactionAccountAndSplits(t *testing.T) {
 	}{
 		{name: "account must exist", txn: func() domain.Transaction { v := base; v.AccountID = "missing"; return v }(), wantField: "accountId"},
 		{name: "currency must match account", txn: func() domain.Transaction { v := base; v.Amount = money.New(-1000, "EUR"); return v }(), wantField: "amount"},
+		{name: "transfer destination must exist", txn: func() domain.Transaction { v := base; v.TransferAccountID = "missing"; return v }(), wantField: "transferAccountId"},
 		{name: "splits must reconcile", txn: func() domain.Transaction {
 			v := base
 			v.Splits = []domain.CategorySplit{{CategoryID: "food", Amount: usd(-900)}}

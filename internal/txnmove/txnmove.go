@@ -26,10 +26,10 @@
 //     one leg and the other still points at the account the money is no longer on,
 //     so the pair stops describing a real movement. The partner comes along.
 //   - Currency is not cosmetic. Balances fold every row into the account's own
-//     currency, and a mismatch does not just skip the row — ledger.bulkBalances
-//     drops the whole ACCOUNT from the result. A move that mixed currencies would
-//     silently blank a balance, so it is refused outright rather than converted:
-//     converting would rewrite what the bank actually recorded.
+//     currency, and a mismatch makes that account's balance unavailable (while
+//     other accounts still compute). A move that mixed currencies would make the
+//     destination balance unavailable, so it is refused outright rather than
+//     converted: converting would rewrite what the bank actually recorded.
 package txnmove
 
 import (
@@ -112,9 +112,9 @@ func PlanMove(t domain.Transaction, toAccountID string, accounts []domain.Accoun
 		p.Err, p.Reason = fmt.Errorf("txnmove: %s is already the other side of this transfer", to.Name), ReasonSelfTransfer
 		return p
 	}
-	// Currency: refused, not converted. See the package doc — a mismatch drops the
-	// whole account out of the balance map, and converting would rewrite what the
-	// bank recorded.
+	// Currency: refused, not converted. See the package doc — a mismatch makes the
+	// destination account's balance unavailable, and converting would rewrite what
+	// the bank recorded.
 	if t.Amount.Currency != "" && to.Currency != "" && t.Amount.Currency != to.Currency {
 		p.Err, p.Reason = fmt.Errorf("txnmove: row is %s, account %s is %s",
 			t.Amount.Currency, to.Name, to.Currency), ReasonCurrency

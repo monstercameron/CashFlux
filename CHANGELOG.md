@@ -90,6 +90,9 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Split, ledger and filter totals are exact (TC3B4).** Split reconciliation rejects an overflow that wraps back to the
+  amount; category spend series count uncategorized split spending and skip refund lines; preset counts match the filter;
+  transfer targets are validated against known accounts.
 - **Cleared transactions no longer hide duplicates (TC3B8).** Duplicate detection ignores the cleared flag, so an
   imported copy of a row already marked cleared is still caught.
 - **A bill due today stays due in every time zone (TC3B1).** Due and reference dates compare on the calendar day, so a

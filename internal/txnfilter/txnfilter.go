@@ -871,7 +871,7 @@ func matchesCriteria(t domain.Transaction, c Criteria, labels Labels, ft, tagF s
 	if !c.ScopeAny && c.Categories == "" && c.Category != "" && !matchesCategory(t, func(id string) bool { return id == c.Category }) {
 		return false
 	}
-	if c.Uncategorized && (matchesCategory(t, func(id string) bool { return id != "" }) || t.IsTransfer()) {
+	if c.Uncategorized && (!hasUncategorizedCategory(t) || t.IsTransfer()) {
 		return false
 	}
 	if c.Members != "" && !matchesMemberSelection(c.Members, t) || c.Members == "" && c.Member != "" && !matchesMemberSelection(c.Member, t) {
@@ -913,6 +913,21 @@ func matchesCriteria(t domain.Transaction, c Criteria, labels Labels, ft, tagF s
 		}
 	}
 	return ft == "" || matchTextWithLabels(t, ft, labels)
+}
+
+// hasUncategorizedCategory reports whether a transaction has at least one
+// uncategorized category line. For split transactions the lines, rather than
+// the parent category, determine whether the breakdown is incomplete.
+func hasUncategorizedCategory(t domain.Transaction) bool {
+	if len(t.Splits) == 0 {
+		return t.CategoryID == ""
+	}
+	for _, split := range t.Splits {
+		if split.CategoryID == "" {
+			return true
+		}
+	}
+	return false
 }
 
 func calendarDayAfter(date, bound time.Time) bool {

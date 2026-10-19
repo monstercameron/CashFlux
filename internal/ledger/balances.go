@@ -15,9 +15,10 @@ import (
 // Balance once per account — opening balance plus the account's transactions,
 // in the account's native currency — but O(A + T) instead of O(A × T), which
 // matters when a variable surface needs many balances over a large ledger.
-// An account whose balance errors (corrupt opening balance, currency mismatch)
-// is absent from the map; the first such error is returned alongside the map,
-// which still holds every account that computed cleanly.
+// An account whose balance errors (corrupt opening balance or transaction
+// currency mismatch) is absent from the map; the first such error is returned
+// alongside the map, which still holds every account that computed cleanly. A
+// bad account does not remove other accounts from the result.
 func Balances(accounts []domain.Account, all []domain.Transaction) (map[string]money.Money, error) {
 	return bulkBalances(accounts, all, false)
 }

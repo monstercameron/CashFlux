@@ -87,16 +87,31 @@ func (s CategorySplit) LineOwner(txnMember string) string {
 	return txnMember
 }
 
-// SplitsTotal returns the sum of the splits, in the currency of the first split
-// (an empty list totals zero with an empty currency). Splits are assumed to share
-// a currency; mixed currencies are summed by minor amount only.
-func SplitsTotal(splits []CategorySplit) money.Money {
+// SplitsTotalChecked returns the sum of the splits, in the currency of the first
+// split (an empty list totals zero with an empty currency). Splits are assumed to
+// share a currency; mixed currencies are summed by minor amount only.
+func SplitsTotalChecked(splits []CategorySplit) (money.Money, error) {
 	if len(splits) == 0 {
-		return money.Money{}
+		return money.Money{}, nil
 	}
 	total := money.Zero(splits[0].Amount.Currency)
 	for _, s := range splits {
-		total.Amount += s.Amount.Amount
+		amount, err := money.Add(total.Amount, s.Amount.Amount)
+		if err != nil {
+			return money.Money{}, err
+		}
+		total.Amount = amount
+	}
+	return total, nil
+}
+
+// SplitsTotal returns the sum of the splits, or the zero Money value if the
+// total overflows. Callers that need to distinguish overflow should use
+// SplitsTotalChecked.
+func SplitsTotal(splits []CategorySplit) money.Money {
+	total, err := SplitsTotalChecked(splits)
+	if err != nil {
+		return money.Money{}
 	}
 	return total
 }
@@ -109,7 +124,8 @@ func SplitsReconcile(amount money.Money, splits []CategorySplit) bool {
 	if len(splits) == 0 {
 		return true
 	}
-	return SplitsTotal(splits).Amount == amount.Amount
+	total, err := SplitsTotalChecked(splits)
+	return err == nil && total.Amount == amount.Amount
 }
 
 // HasSplits reports whether the transaction carries a category breakdown.

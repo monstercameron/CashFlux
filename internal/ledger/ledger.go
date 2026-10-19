@@ -175,19 +175,30 @@ func CategorySpendSeries(all []domain.Transaction, bounds []time.Time, rates cur
 		}
 		if t.HasSplits() {
 			for _, split := range t.Splits {
-				if split.CategoryID == "" {
+				// Split lines carry their own direction. Positive lines are
+				// refunds/credits and do not contribute to spend, even when the
+				// parent transaction is an expense.
+				if split.Amount.Amount >= 0 {
 					continue
 				}
 				splitValue, splitErr := rates.Convert(split.Amount, rates.Base)
 				if splitErr != nil {
 					return nil, splitErr
 				}
+				value, splitErr := splitValue.AbsChecked()
+				if splitErr != nil {
+					return nil, fmt.Errorf("ledger: split spend: %w", splitErr)
+				}
 				series := out[split.CategoryID]
 				if series == nil {
 					series = make([]int64, n)
 					out[split.CategoryID] = series
 				}
-				series[idx] += splitValue.Abs().Amount
+				next, addErr := money.Add(series[idx], value.Amount)
+				if addErr != nil {
+					return nil, fmt.Errorf("ledger: category %q spend: %w", split.CategoryID, addErr)
+				}
+				series[idx] = next
 			}
 			continue
 		}
@@ -196,7 +207,15 @@ func CategorySpendSeries(all []domain.Transaction, bounds []time.Time, rates cur
 			series = make([]int64, n)
 			out[t.CategoryID] = series
 		}
-		series[idx] += conv.Abs().Amount
+		value, err := conv.AbsChecked()
+		if err != nil {
+			return nil, fmt.Errorf("ledger: category %q spend: %w", t.CategoryID, err)
+		}
+		next, err := money.Add(series[idx], value.Amount)
+		if err != nil {
+			return nil, fmt.Errorf("ledger: category %q spend: %w", t.CategoryID, err)
+		}
+		series[idx] = next
 	}
 	return out, nil
 }

@@ -59,3 +59,30 @@ func TestExcludeFromReports_AnalyticsNotBalance(t *testing.T) {
 		t.Errorf("NetWorth = %d, want 93000 (excluded txn still counts toward net worth)", net.Amount)
 	}
 }
+
+func TestCategorySpendSeriesCountsUncategorizedSplitSpendAndSkipsRefundLines(t *testing.T) {
+	d := time.Date(2026, time.June, 5, 0, 0, 0, 0, time.UTC)
+	txn := domain.Transaction{
+		ID: "mixed-split", Date: d, Amount: money.New(-7000, "USD"),
+		Splits: []domain.CategorySplit{
+			{CategoryID: "food", Amount: money.New(-5000, "USD")},
+			{CategoryID: "", Amount: money.New(-3000, "USD")},
+			{CategoryID: "refund", Amount: money.New(1000, "USD")},
+		},
+	}
+	series, err := CategorySpendSeries([]domain.Transaction{txn}, []time.Time{
+		time.Date(2026, time.June, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
+	}, currency.Rates{Base: "USD"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for key, want := range map[string]int64{"food": 5000, "": 3000} {
+		if got := series[key][0]; got != want {
+			t.Errorf("series[%q] = %d, want %d", key, got, want)
+		}
+	}
+	if _, ok := series["refund"]; ok {
+		t.Fatalf("refund split should not appear in spend: %#v", series)
+	}
+}

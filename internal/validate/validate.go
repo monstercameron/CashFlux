@@ -201,7 +201,9 @@ func ValidateTransaction(t domain.Transaction, accounts ...domain.Account) Issue
 	is.requireCurrency("amount", t.Amount.Currency)
 	if len(accounts) > 0 {
 		found := false
+		accountByID := make(map[string]domain.Account, len(accounts))
 		for _, account := range accounts {
+			accountByID[account.ID] = account
 			if account.ID != t.AccountID {
 				continue
 			}
@@ -213,6 +215,11 @@ func ValidateTransaction(t domain.Transaction, accounts ...domain.Account) Issue
 		}
 		if !found {
 			is.add("accountId", "does not match an existing account")
+		}
+		if t.IsTransfer() {
+			if _, ok := accountByID[t.TransferAccountID]; !ok {
+				is.add("transferAccountId", "does not match an existing account")
+			}
 		}
 	}
 	if !t.SplitsReconcile() {
