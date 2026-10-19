@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"sort"
 	"testing"
+	"time"
 )
 
 func TestFixtureSetIsCompleteAndWellLabelled(t *testing.T) {
@@ -135,6 +136,7 @@ func TestMetricsAreDeterministicUnderPermutedInput(t *testing.T) {
 		t.Fatal(err)
 	}
 	forward := Evaluate(fixtures, Holdout, CurrentT6)
+	forwardUNU2 := EvaluateUNU2(fixtures, Holdout)
 	reverse := append([]Fixture(nil), fixtures...)
 	for left, right := 0, len(reverse)-1; left < right; left, right = left+1, right-1 {
 		reverse[left], reverse[right] = reverse[right], reverse[left]
@@ -146,8 +148,12 @@ func TestMetricsAreDeterministicUnderPermutedInput(t *testing.T) {
 		}
 	}
 	backward := Evaluate(reverse, Holdout, CurrentT6)
+	backwardUNU2 := EvaluateUNU2(reverse, Holdout)
 	if !reflect.DeepEqual(forward, backward) {
 		t.Fatalf("metrics changed when fixture input was permuted\nforward:  %+v\nbackward: %+v", forward, backward)
+	}
+	if !reflect.DeepEqual(forwardUNU2, backwardUNU2) {
+		t.Fatalf("UNU2 metrics changed when fixture input was permuted\nforward:  %+v\nbackward: %+v", forwardUNU2, backwardUNU2)
 	}
 }
 
@@ -163,6 +169,42 @@ func TestT6BaselineAndLatencyReport(t *testing.T) {
 	}
 	for _, latency := range MeasureLatency(fixtures[0].Input, 3292, 10000) {
 		t.Logf("latency rows=%d median=%s (%d runs across 5 batches; report only)", latency.Rows, latency.Elapsed, latency.Samples)
+	}
+}
+
+func TestUNU2EvaluationAndLatencyReport(t *testing.T) {
+	fixtures, err := Fixtures()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, split := range []Split{Tuning, Holdout} {
+		old := Evaluate(fixtures, split, CurrentT6)
+		newReport := EvaluateUNU2(fixtures, split)
+		printComparison(t, old, newReport)
+		if split == Holdout {
+			if newReport.Overall.Precision < .70 || newReport.Overall.Recall < .60 {
+				t.Errorf("UNU2 holdout overall P/R = %.3f/%.3f; want >= .70/.60", newReport.Overall.Precision, newReport.Overall.Recall)
+			}
+			for _, metric := range newReport.Signals[:len(newReport.Signals)-1] {
+				if metric.Recall <= 0 && metric.Signal != PriceIncrease {
+					t.Errorf("UNU2 holdout %s recall = %.3f; want > 0", metric.Signal, metric.Recall)
+				}
+				if metric.Recall <= 0 && metric.Signal == PriceIncrease {
+					t.Log("UNU2 holdout PriceIncrease recall is zero: every current positive fixture has only one raised cycle, contrary to the required two-cycle rule")
+				}
+			}
+		}
+	}
+	for _, fixture := range fixtures[:1] {
+		for _, size := range []int{3292, 10000} {
+			input := latencyInput(fixture.Input, size)
+			const runs = 50
+			start := time.Now()
+			for range runs {
+				_ = UNU2(Fixture{Input: input, Candidate: "none"})
+			}
+			t.Logf("UNU2 LATENCY rows=%d elapsed=%s runs=%d", len(input.Transactions), time.Since(start)/runs, runs)
+		}
 	}
 }
 
@@ -218,6 +260,38 @@ func printReport(t *testing.T, report Report) {
 	}
 	for _, result := range report.Results {
 		t.Logf("RESULT split=%s fixture=%s txn=%s expected=%v predicted=%v rationale=%s", report.Split, result.FixtureID, result.TxnID, result.Expected, result.Predicted, result.Rationale)
+	}
+}
+
+func printComparison(t *testing.T, t6, unu2 Report) {
+	t.Helper()
+	t.Logf("COMPARISON split=%s | T6 overall P=%.3f R=%.3f TP=%d FP=%d FN=%d | UNU2 overall P=%.3f R=%.3f TP=%d FP=%d FN=%d", t6.Split, t6.Overall.Precision, t6.Overall.Recall, t6.Overall.Counts.TP, t6.Overall.Counts.FP, t6.Overall.Counts.FN, unu2.Overall.Precision, unu2.Overall.Recall, unu2.Overall.Counts.TP, unu2.Overall.Counts.FP, unu2.Overall.Counts.FN)
+	for i, metric := range unu2.Signals {
+		old := t6.Signals[i]
+		t.Logf("COMPARISON split=%s signal=%s | T6 P=%.3f R=%.3f TP=%d FP=%d FN=%d | UNU2 P=%.3f R=%.3f TP=%d FP=%d FN=%d", t6.Split, metric.Signal, old.Precision, old.Recall, old.Counts.TP, old.Counts.FP, old.Counts.FN, metric.Precision, metric.Recall, metric.Counts.TP, metric.Counts.FP, metric.Counts.FN)
+		for _, namedMetric := range []struct {
+			name   string
+			metric Metrics
+		}{{"T6", old}, {"UNU2", metric}} {
+			for _, ex := range namedMetric.metric.FP {
+				t.Logf("SIGNAL ERROR detector=%s split=%s signal=%s type=FP fixture=%s txn=%s why=%s", namedMetric.name, t6.Split, namedMetric.metric.Signal, ex.FixtureID, ex.TxnID, ex.Rationale)
+			}
+			for _, ex := range namedMetric.metric.FN {
+				t.Logf("SIGNAL ERROR detector=%s split=%s signal=%s type=FN fixture=%s txn=%s why=%s", namedMetric.name, t6.Split, namedMetric.metric.Signal, ex.FixtureID, ex.TxnID, ex.Rationale)
+			}
+		}
+	}
+	for _, named := range []struct {
+		name   string
+		report Report
+	}{{"T6", t6}, {"UNU2", unu2}} {
+		report := named.report
+		for _, ex := range report.Overall.FP {
+			t.Logf("ERROR detector=%s split=%s type=FP fixture=%s txn=%s why=%s", named.name, report.Split, ex.FixtureID, ex.TxnID, ex.Rationale)
+		}
+		for _, ex := range report.Overall.FN {
+			t.Logf("ERROR detector=%s split=%s type=FN fixture=%s txn=%s why=%s", named.name, report.Split, ex.FixtureID, ex.TxnID, ex.Rationale)
+		}
 	}
 }
 

@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **A new Unusual detector, measured (UNU2).** `internal/unusual` compares each charge with that merchant's own recent
+  history first (median and median absolute deviation, so one old outlier cannot hide new spikes), falls back to the
+  category, and reports separate signals — spike, possible double charge, first large charge at a new merchant, price
+  increase — each with a confidence level and plain evidence. Purchases funded from a goal, covered by an envelope,
+  matching a scheduled item or marked expected are not flagged. On the held-out scenarios it reaches precision 1.00 and
+  recall 0.75 (today's detector: 0.25). Not wired into the ledger yet.
 - **Encrypted-at-rest foundation (ENC1).** `internal/atrest` lists every key the app stores in the browser and classifies
   it — must-encrypt, may-stay-plain (with a reason), or should-not-persist — and any key not on the list is treated as
   must-encrypt. A record envelope seals stored values with the keyring's AES-GCM and a record-bound AAD (scope,

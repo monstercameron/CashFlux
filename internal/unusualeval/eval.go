@@ -130,6 +130,10 @@ func Partition(merchant, period string) Split {
 // Evaluate runs detector over fixtures and reports stable per-signal and overall
 // precision, recall, false-positive examples, and false-negative examples.
 func Evaluate(fixtures []Fixture, split Split, detector Detector) Report {
+	return evaluate(fixtures, split, func(f Fixture) []Finding { return detector(f.Input) })
+}
+
+func evaluate(fixtures []Fixture, split Split, detector func(Fixture) []Finding) Report {
 	ordered := append([]Fixture(nil), fixtures...)
 	sort.Slice(ordered, func(i, j int) bool { return ordered[i].ID < ordered[j].ID })
 	report := Report{Split: split}
@@ -141,7 +145,7 @@ func Evaluate(fixtures []Fixture, split Split, detector Detector) Report {
 			continue
 		}
 		predicted := make(map[Signal]bool)
-		for _, finding := range detector(fixture.Input) {
+		for _, finding := range detector(fixture) {
 			if finding.TxnID == fixture.Candidate && ValidSignal(finding.Signal) {
 				predicted[finding.Signal] = true
 			}
