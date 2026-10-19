@@ -44,7 +44,7 @@ func persistAuthSession(prefsAtom state.Atom[prefs.Prefs], serverURL string, pai
 	p.ServerURL = serverURL
 	p.ServerToken = strings.TrimSpace(pair.AccessToken)
 	p.ServerMode = prefs.ServerSelfHosted
-	p.BackendDisabled = false
+	p.BackendDisabled = cloudAuthDisablesSync(p.BackendDisabled, cloudSetupPending(), datasetEncryptionActive())
 	p = p.Normalize()
 	prefsAtom.Set(p)
 	uistate.PersistPrefs(p)

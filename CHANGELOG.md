@@ -172,6 +172,14 @@ and every commit updates this file under `Unreleased`.
   complete build in charge.
 
 ### Changed
+- **Settings → Cloud is rebuilt around status and a guided setup (CLOUD1).** The page opens with one status card — Sync
+  is off / Finish setting up / Synced (last sync, this device, other devices) / Paused / Needs attention — and the single
+  next action. Turning sync on is a four-step setup that resumes after a reload: choose where (with a connection test),
+  sign in, protect your data (encryption is required — there is no way to upload readable data), first sync with real
+  progress. When synced it shows account and household, pending changes, Sync now, what syncs, devices with a named
+  revoke, protection status and an encrypted-backup action. Conflicts open a review that defaults to "Keep both for now".
+  Advanced options (custom address, access codes, AI key forwarding, billing, diagnostics) are tucked away, and "Turn off
+  sync on this device" / "Delete server copy" sit in a separate danger zone that asks you to type the household name.
 - **A transaction can belong to several people, or to nobody (WHO1).** Ownership is a list (older single-owner data
   migrates automatically); filtering by a person shows every transaction they share; per-person totals in budgets and
   reports split a shared amount evenly with exact cents, so the household total never double-counts (a $10.01 shared

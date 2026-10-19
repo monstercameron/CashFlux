@@ -5,38 +5,20 @@
 package app
 
 import (
-	"strings"
 	"syscall/js"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
-	"github.com/monstercameron/CashFlux/internal/backendauth"
-	"github.com/monstercameron/CashFlux/internal/icon"
+	"time"
+
 	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/CashFlux/internal/screens"
-	"github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/css"
 	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v5/state"
 	uic "github.com/monstercameron/GoWebComponents/v5/ui"
 )
-
-// statusLabelColor returns the alarm color for a genuine sync error, or nil
-// (silently ignored by css.Class) for every other status — a status that is
-// merely offline/syncing/conflicted doesn't warrant the same visual alarm as
-// one the app has confirmed actually failed.
-func statusLabelColor(state string) any {
-	if state == "error" {
-		return tw.TextDanger
-	}
-	if state == syncStateRebind {
-		// Warning, not danger: nothing has failed and nothing is lost. Something
-		// is waiting on a decision, and colouring that as an error would push
-		// the reader toward "retry", which is the one response that cannot work.
-		return tw.TextWarn
-	}
-	return nil
-}
 
 // currentPageOrigin returns the browser's document origin (e.g.
 // "https://earlcameron.com"), matching the pattern already used by
@@ -67,9 +49,7 @@ func SyncRedirect() uic.Node {
 	return Fragment()
 }
 
-// discoveryPhase tracks where the Cloud tab's automatic /v1/version capability
-// check currently is. Only meaningful for the Local/Remote segments — the
-// Commercial segment (CashFlux Cloud) skips discovery entirely.
+// discoveryPhase tracks the explicit or returning-device connection check.
 type discoveryPhase string
 
 const (
@@ -88,685 +68,93 @@ func segmentFor(p prefs.Prefs) string {
 	return string(p.Normalize().ConnectionSegment)
 }
 
-// CloudConnectionPane is the Settings → Cloud tab body: the single place to
-// connect a backend, toggle sync on or off, manage sign-in, and (for CashFlux
-// Cloud) subscribe. It replaces two previously-drifted implementations — the
-// old routed /sync page and the old Cloud tab's raw-bearer-token-only UI
-// (2026-07-24 unification) — with one capability-aware surface, self-contained
-// like PasswordAuthCard/DeviceLinkCard rather than prop-driven, since every
-// field here is this pane's own concern.
-//
-// What syncs: the whole dataset (the workspace snapshot pushed to the backend) AND
-// attached artifact files (uploaded as content-addressed blobs). When a passcode
-// lock is active the dataset is encrypted on this device first.
-//
-// Three segments, not a single address field:
-//   - Local: same-origin auto-probe by default (your own infrastructure at the
-//     obvious address), with a manual fallback for unusual URLs (subdomains).
-//   - Remote: always a manually-typed address, with an explicit trust
-//     disclosure — this may be someone else's server.
-//   - Commercial: the CashFlux Cloud subscription. Skips discovery entirely
-//     (goes straight to OAuth/token sign-in + billing) since a paid backend's
-//     capabilities are a known quantity, not something to probe for.
-//
-// Within Local/Remote, sign-in method is chosen by capability, not a manually
-// picked mode: the page asks the connected server what it actually supports
-// (CustomAuthEnabled → password/pairing; AuthProviders → OAuth; neither → a
-// fixed access token) and shows exactly that.
+// CloudConnectionPane composes the encrypted-sync setup and management views.
+// Transport/authentication remain in their existing services; presentation only
+// receives snapshots and callbacks. No action in this pane enables plaintext sync.
 func CloudConnectionPane() uic.Node {
 	prefsAtom := uistate.UsePrefs()
-	noticeAtom := uistate.UseNotice()
-	dataRev := uistate.UseDataRevision()
-	// Re-render on any sync activity (push/pull bump the shared revision) so the
-	// live status card/devices list/conflict backup reflect reality without a
-	// manual refresh.
-	_ = dataRev.Get()
-	pr := prefsAtom.Get().Normalize()
-
-	segment := uic.UseState(segmentFor(pr))
-	serverURL := uic.UseState(pr.ServerURL)
-	serverToken := uic.UseState(pr.ServerToken)
-	backendOn := uic.UseState(!pr.BackendDisabled)
-
-	discovery := uic.UseState(backendauth.Discovery{})
-	discoveryState := uic.UseState(discoveryIdle)
-	discoveryMsg := uic.UseState("")
-	// Every address/segment change can start an asynchronous capability probe.
-	// Only the newest probe may update the UI; otherwise a slow failure from the
-	// old/default address can erase a successful password form for the current
-	// server after sign-out.
-	discoveryGeneration := uic.UseRef(0)
-	advancedTokenOpen := uic.UseState(false)
-	billingInterval := uic.UseState("annual")
-	billingProvider := uic.UseState("stripe")
-	keySet := uic.UseState(lsGet(cloudAIKeySetKey) != "")
-	// manualAddressOpen gates the server-address field for the Local segment:
-	// false means "still trying (or succeeded at) auto-detecting a same-origin
-	// backend, nothing to type" — true means the user needs to (or chose to)
-	// enter an address by hand. The Remote segment always starts (and stays)
-	// manual — there is no same-origin assumption for someone else's server.
-	// Local starts true for anyone who already has a REAL configured address (a
-	// returning self-host user) so their existing setup is never silently
-	// overridden by the same-origin probe; compared against
-	// prefs.DefaultServerURL, not "", since prefs.Default() itself already
-	// fills ServerURL with that placeholder for a never-persisted user.
-	manualAddressOpen := uic.UseState(segment.Get() == "remote" ||
-		strings.TrimSpace(pr.ServerURL) != prefs.DefaultServerURL)
-
-	notify := func(text string, isErr bool) { noticeAtom.Set(noticeAtom.Get().With(text, isErr)) }
-	// sessionToken resolves the bearer token to send RIGHT NOW, at call time, from
-	// prefs plus any rotated access token. The serverToken UseState is seeded once at
-	// mount, so a handler reading it would send the token this pane opened with — an
-	// empty string for anyone who signed in without leaving the tab.
-	sessionToken := func() string { return effectiveServerToken(prefsAtom.Get().Normalize()) }
-	bump := func() { dataRev.Update(func(n int) int { return n + 1 }) }
-	persist := func(p prefs.Prefs) {
-		p = p.Normalize()
-		prefsAtom.Set(p)
-		uistate.PersistPrefs(p)
-	}
-
-	// runDiscovery asks the currently-typed server what it supports. Called on
-	// mount and whenever the server address's HOST actually changes (not on
-	// every keystroke — see onURL below) so it never spams the network while
-	// someone is still typing. Never called for the Commercial segment.
-	runDiscovery := func() {
-		generation := discoveryGeneration.Get() + 1
-		discoveryGeneration.Set(generation)
-		url := strings.TrimSpace(serverURL.Get())
-		if url == "" {
-			discoveryState.Set(discoveryIdle)
-			return
-		}
-		discoveryState.Set(discoveryChecking)
-		testBackendConnection(url, serverToken.Get(), func(d backendauth.Discovery) {
-			if discoveryGeneration.Get() != generation {
-				return
-			}
-			discovery.Set(d)
-			discoveryState.Set(discoveryOK)
-		}, func(msg string) {
-			if discoveryGeneration.Get() != generation {
-				return
-			}
-			discoveryMsg.Set(strings.TrimSpace(msg))
-			discoveryState.Set(discoveryError)
-		})
-	}
-
-	// probeSameOrigin tries this document's own origin as the backend address
-	// BEFORE ever asking the user to type anything — the zero-config path for
-	// "this page is served by the same server that runs the sync bridge" (e.g.
-	// CashFlux mounted at /budget/ on a site whose backend also serves /grpc).
-	// Local segment only; failure just falls through to the manual address
-	// field — the normal, non-embedded desktop-app case.
-	probeSameOrigin := func() {
-		generation := discoveryGeneration.Get() + 1
-		discoveryGeneration.Set(generation)
-		origin := currentPageOrigin()
-		discoveryState.Set(discoveryChecking)
-		testBackendConnection(origin, "", func(d backendauth.Discovery) {
-			if discoveryGeneration.Get() != generation {
-				return
-			}
-			serverURL.Set(origin)
-			p := prefsAtom.Get()
-			p.ServerURL = origin
-			persist(p)
-			discovery.Set(d)
-			discoveryState.Set(discoveryOK)
-		}, func(string) {
-			if discoveryGeneration.Get() != generation {
-				return
-			}
-			manualAddressOpen.Set(true)
-			discoveryState.Set(discoveryIdle)
-		})
-	}
-
-	connect := func() {
-		if !backendOn.Get() || segment.Get() == "commercial" {
-			return
-		}
-		if manualAddressOpen.Get() {
-			runDiscovery()
-		} else {
-			probeSameOrigin()
-		}
-	}
-
-	uic.UseEffect(func() func() {
-		connect()
-		return nil
-	}, "cloud-tab-discovery-mount")
-
-	onUseDifferentAddress := uic.UseEvent(func() { manualAddressOpen.Set(true) })
-
-	// onSelectSegment switches between Local/Remote/Commercial. Each is a
-	// distinct trust/discovery posture, so switching drops any in-flight
-	// discovery result from the PREVIOUS segment's server rather than
-	// reinterpreting it under the new one.
-	onSelectSegment := func(v string) {
-		discoveryGeneration.Set(discoveryGeneration.Get() + 1)
-		segment.Set(v)
-		p := prefsAtom.Get()
-		switch v {
-		case "commercial":
-			p.ServerMode = prefs.ServerCloud
-		case "remote":
-			p.ServerMode = prefs.ServerSelfHosted
-			p.ConnectionSegment = prefs.ConnectionRemote
-		default: // "local"
-			p.ServerMode = prefs.ServerSelfHosted
-			p.ConnectionSegment = prefs.ConnectionLocal
-		}
-		persist(p)
-		discovery.Set(backendauth.Discovery{})
-		discoveryState.Set(discoveryIdle)
-		manualAddressOpen.Set(v == "remote")
-		restartBackendSync()
-		connect()
-	}
-
-	// The connect switch: off cleanly stops every sync/AI-proxy connection even with
-	// a URL/token saved, so an unreachable server never throws websocket errors the
-	// user can't dismiss. On kicks an immediate connect so the user sees it work.
-	onToggle := func(v bool) {
-		backendOn.Set(v)
-		p := prefsAtom.Get()
-		p.BackendDisabled = !v
-		persist(p)
-		restartBackendSync()
-		if v {
-			connect()
-		}
-	}
-	onURL := uic.UseEvent(func(v string) {
-		serverURL.Set(v)
-		p := prefsAtom.Get()
-		next := strings.TrimSpace(v)
-		// Pointing at a different server (host change) signs out of the old one — a
-		// token issued by one server is meaningless to another — and re-checks what
-		// the new host actually supports.
-		hostChanged := backendHost(next) != backendHost(p.ServerURL)
-		if !hostChanged {
-			p.ServerURL = next
-			persist(p)
-			return
-		}
-		// A new host is a new SCOPE (SV0.2), not just a new address for the old
-		// session. Clearing only prefs.ServerToken (the previous behaviour) left
-		// the old server's rotated access token in storage — and
-		// EffectiveServerToken prefers that token — so the old server's JWT, its
-		// signed-in user ID, its queued pushes and its sync bookmarks were all
-		// presented to the new server as if they belonged there.
-		// resetScopeForServerChange tears down the live connection and clears
-		// exactly those keys (see authtoken.go); the prefs-level credentials go
-		// here because they ride the prefs write.
-		hadPrefsSession := p.ServerToken != "" || p.ServerCSRF != ""
-		p.ServerToken = ""
-		p.ServerCSRF = ""
-		p.ServerURL = next
-		serverToken.Set("")
-		keySet.Set(false)
-		persist(p)
-		hadScope := resetScopeForServerChange() || hadPrefsSession
-		setSyncStatus(syncStatus{State: "offline"})
-		notify(uistate.T("settings.serverSwitched"), false)
-		if hadScope {
-			// The page itself is still running in the old server's scope —
-			// every atom and socket resolved its identity against it — so the
-			// switch finishes the one way scope changes are allowed to finish
-			// (SV principle 1): a full reload into the new scope. Discovery
-			// for the new host runs on the reloaded page's mount, so it is
-			// deliberately not started here.
-			//
-			// hadScope is the gate because this handler fires per keystroke:
-			// the first keystroke that moves the host clears the old scope
-			// and reloads; a device that never had a session (a first-time
-			// address being typed) has no scope to leave, and reloading on
-			// every keystroke would make the address field unusable.
-			reloadAfterIdentityChange("server-url-changed")
-			return
-		}
-		if segment.Get() != "commercial" {
-			runDiscovery()
-		}
-	})
-	onToken := uic.UseEvent(func(v string) {
-		serverToken.Set(v)
-		p := prefsAtom.Get()
-		p.ServerToken = strings.TrimSpace(v)
-		persist(p)
-	})
-	saveOAuthSession := func(token, csrf, userID string) {
-		// An OAuth completion delivers a 15-minute ACCESS token, its user ID
-		// and a CSRF token; the refresh token stays in the server's HttpOnly
-		// cookie and never reaches this page (internal/server
-		// handleOAuthCallback). Storing the access token as
-		// prefs.ServerToken — the previous behaviour — treated it as a
-		// static self-host token that nothing ever refreshes, so OAuth
-		// sessions stopped syncing 15 minutes after sign-in, and the user
-		// ID was thrown away, leaving queued work unowned. The session is
-		// now stored as the rotatable cookie session it is (authtoken.go),
-		// through the same storage password sessions use. The expiry is 0
-		// (= use the documented fallback) because startOAuthLogin does not
-		// forward the postMessage's expiresIn yet — see the SV0.2 report.
-		persistOAuthCookieSession(prefsAtom, serverURL.Get(), token, csrf, userID, 0)
-		// The raw-token field edits the STATIC self-host token; an OAuth
-		// access token is not that, and leaving it in the field would let a
-		// later edit persist a rotating credential as if it were static.
-		serverToken.Set("")
-		if strings.TrimSpace(userID) == "" {
-			notify(uistate.T("settings.oauthSignedIn"), false)
-		} else {
-			notify(uistate.T("settings.oauthSignedInAs", userID), false)
-		}
-		// A sign-in is a scope change: the page must reload so sync starts
-		// by re-resolving WHO this session is (SV principle 1), rather than
-		// an in-page restart that keeps whatever identity the page booted
-		// with (usually none).
-		reloadAfterIdentityChange("oauth-sign-in")
-	}
-	onSignInGoogle := uic.UseEvent(func() {
-		startOAuthLogin(serverURL.Get(), "google", saveOAuthSession, func(msg string) { notify(msg, true) })
-	})
-	onSignInGitHub := uic.UseEvent(func() {
-		startOAuthLogin(serverURL.Get(), "github", saveOAuthSession, func(msg string) { notify(msg, true) })
-	})
-	// The body is a plain closure so both the button's handler and the rebind
-	// card can run it. The card offers "sign in to the other account", which is
-	// this same teardown — duplicating it would be a second place for session
-	// cleanup to drift out of step.
-	doSignOut := func() {
-		p := prefsAtom.Get()
-		// Present the token the session is ACTUALLY using (a rotated access token
-		// outranks prefs.ServerToken), or the server has nothing to revoke.
-		// cookieSessionCSRF, not p.ServerCSRF directly: a cookie session's
-		// CSRF token rotates with every refresh (SV0.2), and the freshest
-		// value is tracked beside the tokens — prefs can be one rotation
-		// behind, which would make the server refuse the logout itself.
-		signOutBackendSession(serverURL.Get(), sessionToken(), cookieSessionCSRF(p), func() {
-			// Drop the rotated pair too, not just prefs — see clearAuthSession. The
-			// sync toggle deliberately stays ON: signing out is "this device needs a
-			// new code", not "turn cloud sync off".
-			clearAuthSession()
-			// The cookie-session keys (SV0.2) — clearAuthSession lives in
-			// sync_client.go and does not know about them yet; leaving the
-			// refresh-mode marker behind would classify the NEXT sign-in on
-			// this device as a cookie session it is not.
-			lsRemove(authRefreshModeKey)
-			lsRemove(authCSRFKey)
-			p.ServerToken = ""
-			p.ServerCSRF = ""
-			persist(p)
-			serverToken.Set("")
-			notify(uistate.T("settings.oauthSignedOut"), false)
-		})
-	}
-	onSignOut := uic.UseEvent(doSignOut)
-	onEnablePasscode := uic.UseEvent(func() { setPasscodeFlow() })
-	onToggleAdvancedToken := uic.UseEvent(func() { advancedTokenOpen.Set(!advancedTokenOpen.Get()) })
-	onTest := uic.UseEvent(func() {
-		testBackendConnection(serverURL.Get(), serverToken.Get(), func(d backendauth.Discovery) {
-			discovery.Set(d)
-			discoveryState.Set(discoveryOK)
-			notify(uistate.T("settings.serverTestOK", d.AuthMode), false)
-		}, func(msg string) {
-			discoveryMsg.Set(strings.TrimSpace(msg))
-			discoveryState.Set(discoveryError)
-			notify(uistate.T("settings.serverTestFailed", strings.TrimSpace(msg)), true)
-		})
-	})
-	onSyncNow := uic.UseEvent(func() {
-		requestBackendSyncNow()
-		notify(uistate.T("sync.syncingNow"), false)
-	})
-	uploadKey := uic.UseEvent(func() {
-		key := ""
-		if a := appstate.Default; a != nil {
-			key = a.Settings().OpenAIKey
-		}
-		uploadOpenAIKeyToBackend(serverURL.Get(), sessionToken(), key, func() {
-			lsSet(cloudAIKeySetKey, "1")
-			keySet.Set(true)
-			notify(uistate.T("settings.serverKeyStored"), false)
-		}, func(msg string) {
-			notify(uistate.T("settings.serverKeyFailed", strings.TrimSpace(msg)), true)
-		})
-	})
-	removeKey := uic.UseEvent(func() {
-		removeOpenAIKeyFromBackend(serverURL.Get(), sessionToken(), func() {
-			lsSet(cloudAIKeySetKey, "")
-			keySet.Set(false)
-			notify(uistate.T("settings.serverKeyRemoved"), false)
-		}, func(msg string) {
-			notify(uistate.T("settings.serverKeyFailed", strings.TrimSpace(msg)), true)
-		})
-	})
-	startCheckout := uic.UseEvent(func() {
-		startBillingCheckout(serverURL.Get(), sessionToken(), billingInterval.Get(), billingProvider.Get(), func(msg string) {
-			notify(uistate.T("settings.billingFailed", strings.TrimSpace(msg)), true)
-		})
-	})
-	openPortal := uic.UseEvent(func() {
-		openBillingPortal(serverURL.Get(), sessionToken(), func(msg string) {
-			notify(uistate.T("settings.billingFailed", strings.TrimSpace(msg)), true)
-		})
-	})
-	// C309: restore / discard a local edit that lost an LWW conflict.
-	activeWsID := loadRegistry().ActiveID
-	onRestoreConflict := uic.UseEvent(func() {
-		if restoreConflictBackup(activeWsID) {
-			notify(uistate.T("sync.conflictRestored"), false)
-		}
-		bump()
-	})
-	onDiscardConflict := uic.UseEvent(func() {
-		clearConflictBackup(activeWsID)
-		notify(uistate.T("sync.conflictDiscarded"), false)
-		bump()
-	})
-
-	status := loadSyncStatus()
-	d := discovery.Get()
-	phase := discoveryState.Get()
-	// Re-render when the stored credential changes, including in another tab.
-	// Without this the pane keeps whatever was true at mount, which is how one
-	// tab could sit on "Request access" while another had signed in.
+	rev := uistate.UseDataRevision()
+	_ = rev.Get()
+	_ = state.UseAtom(syncRevAtomID, 0).Get()
+	_ = state.UseAtom(syncClockAtomID, 0).Get()
 	uistate.CaptureAuthRevision(uistate.UseAuthRevision())
-
-	seg := segment.Get()
-	commercial := seg == "commercial"
-	// signedIn asks the SESSION, not preferences. Preferences hold the static
-	// self-host token; a Custom Sync session's credential is the rotated access
-	// token in browserstore, and prefs.ServerToken can be empty for a device that
-	// is signed in and syncing right now. Deciding from prefs told exactly those
-	// devices to "Request access" — while still offering "Set a password", which
-	// is only ever shown to a device that is already authorized. Two contradictory
-	// prompts on one screen were two definitions of one fact (2026-08-18).
-	//
-	// The raw-token FIELD still binds to serverToken: that is an editable value,
-	// not a claim about the session.
+	pr := prefsAtom.Get().Normalize()
+	status := loadSyncStatus()
 	signedIn := uistate.Session(pr.ServerToken).Present() && !status.AuthFailed
-	showPassword := !commercial && !signedIn && phase == discoveryOK && d.CustomAuthEnabled
-	// Commercial always offers OAuth — a paid backend's capabilities are a known
-	// quantity, not something to probe for — so discovery is never even run.
-	showOAuth := !signedIn && (commercial || (phase == discoveryOK && len(d.AuthProviders) > 0))
-	// tokenOnly is purely informational (see sync.tokenFieldPrimary below) —
-	// it never auto-reveals the token field itself. True only once discovery
-	// has actually SUCCEEDED and confirmed this server offers nothing else;
-	// while checking, idle, or errored, we simply don't know yet, so nothing
-	// token-related is claimed or shown by default.
-	tokenOnly := !commercial && !signedIn && phase == discoveryOK && !showPassword && !showOAuth
-	// showPendingPairing offers the admin-approved pairing bootstrap
-	// (TODOS.md C454) only where it's the actual answer to "I have no
-	// credentials yet": a self-hosted server with password/pairing auth but
-	// Register disabled (an invite-only, pairingOnlyAuthServer deployment —
-	// see grpcbridge.go). On a server with open self-signup, PasswordAuthCard's
-	// own Register mode already covers that case with no admin needed.
-	showPendingPairing := showPassword && !d.RegistrationOpen
-	// activationOnly: this server has no self-signup at all, so a first-time
-	// user must request operator approval. That request is the primary path.
-	// Password login/recovery and manually entering an existing pairing code
-	// remain secondary options for accounts that already exist.
-	activationOnly := showPendingPairing
-	cloudPrice := uistate.T("settings.cloudPriceAnnual")
-	if billingInterval.Get() == "monthly" {
-		cloudPrice = uistate.T("settings.cloudPriceMonthly")
+	protected := datasetEncryptionActive()
+	workspaceID := activeWorkspaceID()
+	bump := func() { rev.Update(func(n int) int { return n + 1 }) }
+	setup := useCloudSetup(prefsAtom, status, signedIn, protected, bump)
+	connection := useCloudServer(prefsAtom, setup.Step)
+	auth := useCloudAuth(prefsAtom, connection.URL, bump)
+	devices := useCloudDevices(pr, signedIn)
+	facts := cloudFacts{Disabled: pr.BackendDisabled, SignedIn: signedIn, Protected: protected,
+		Setup: setup.Saved, State: status.State, Pending: status.Pending}
+	step := cloudNextStep(facts)
+	action := cloudActionProps{Label: uistate.T("cloud1.syncNow"), TestID: "sync-now", Kind: cloudActionPrimary, OnClick: setup.SyncNow, Disabled: !cloudCanSync(facts) || setup.Busy}
+	switch {
+	case step == cloudOff:
+		action = cloudActionProps{Label: uistate.T("cloud1.start"), TestID: "cloud-setup-start", Kind: cloudActionPrimary, OnClick: setup.Start, Disabled: setup.Busy}
+	case status.State == "conflict":
+		action = cloudActionProps{Label: uistate.T("cloud1.review"), TestID: "cloud-review-conflicts", OnClick: openSyncConflict}
+	case status.State == syncStateIdentityUnknown:
+		action = cloudActionProps{Label: uistate.T("cloud1.signInAgain"), TestID: "cloud-signin-again", OnClick: auth.SignOut}
+	case step == cloudProtect || status.State == "locked" || status.State == syncStateLockedDifferentPasscode:
+		action = cloudActionProps{Label: uistate.T("cloud1.protectAction"), TestID: "sync-locked-enable-passcode", OnClick: setup.Protect}
+	case step == cloudWhere || step == cloudSignIn || step == cloudFirst:
+		action = cloudActionProps{}
 	}
-
-	tokenField := Fragment(
-		Input(css.Class("set-input"), Type("password"),
-			Attr("aria-label", uistate.T("settings.backendToken")), Attr("data-testid", "sync-server-token"),
-			Placeholder(uistate.T("settings.backendToken")), OnInput(onToken), ui.FieldValue(serverToken.Get())),
-		Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Mt1),
-			Button(css.Class("btn"), Type("button"), Attr("data-testid", "sync-test"), OnClick(onTest), uistate.T("settings.testBackend")),
-			Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "sync-now"), OnClick(onSyncNow), uistate.T("settings.syncNow")),
-		),
-	)
-
+	var statusAction uic.Node
+	if action.Label != "" {
+		statusAction = uic.CreateElement(cloudAction, action)
+	}
+	peers := ""
+	if devices.Phase == cloudDevicesReady && len(devices.Devices) > 0 {
+		peers = uistate.T("cloud1.otherDevices", devices.OtherCount)
+	}
+	protection := uic.CreateElement(cloudProtectionView, cloudProtectionProps{Protected: protected, OnProtect: setup.Protect, OnPasskey: showPasskeyManager, OnBackup: backupEverythingEncrypted})
+	where := uic.CreateElement(cloudWhereView, cloudWhereProps{Connection: connection, OnContinue: setup.Continue, Busy: setup.Busy})
+	signin := uic.CreateElement(cloudSignInView, cloudSignInProps{Connection: connection, Auth: auth, Protected: protected, OnProtect: setup.Protect})
+	first := uic.CreateElement(cloudFirstView, cloudFirstProps{Facts: facts, Busy: setup.Busy, OnStart: setup.Enable, OnRetry: setup.SyncNow})
 	return Div(css.Class("cloud-tab", tw.Flex, tw.FlexCol, tw.Gap4),
-		H4(css.Class("set-label"), uistate.T("settings.backendTitle")),
-		P(css.Class(tw.TextDim, tw.Text14), uistate.T("settings.cloudSectionIntro")),
-		P(css.Class(tw.TextFaint, tw.Text12), uistate.T("settings.cloudDataDisclosure")),
+		H2(css.Class(tw.Text18, tw.FontSemibold), uistate.T("cloud1.title")),
+		uic.CreateElement(cloudStatusView, cloudStatusProps{Facts: facts, Step: step, LastSync: syncLastSyncedLabel(status.LastSyncedAt, time.Now()), Device: customSyncDeviceLabel(), Peers: peers, Action: statusAction}),
+		If(setup.Error != "", P(css.Class(tw.Text14, tw.TextDanger), Attr("role", "alert"), setup.Error)),
+		If(status.AuthFailed && uistate.Session(pr.ServerToken).Present(), uic.CreateElement(cloudAction, cloudActionProps{Label: uistate.T("settings.clearInvalidToken"), TestID: "settings-clear-invalid-token", OnClick: auth.SignOut})),
+		uic.CreateElement(RebindCard, rebindProps{ServerURL: pr.ServerURL, Status: status, OnSignOut: auth.SignOut, OnDisconnect: setup.Pause, OnRetry: setup.SyncNow}),
+		If(status.State == syncStateLockedDifferentPasscode, uic.CreateElement(cloudAction, cloudActionProps{Label: uistate.T("sync.replaceServerCopyAction"), TestID: "sync-replace-server-copy", Kind: cloudActionDanger, OnClick: ReplaceServerCopyWithThisDevice, Disabled: !protected})),
+		If(step != cloudOff && step != cloudDone, uic.CreateElement(cloudSetupView, cloudSetupProps{Step: step, Where: where, SignIn: signin, Protect: protection, First: first})),
+		If(step == cloudDone, cloudHouseholdSummary()),
+		If(step == cloudDone || step == cloudOff, protection),
+		If(status.State == "conflict" || hasConflictBackup(workspaceID), uic.CreateElement(cloudConflictEntry, cloudConflictEntryProps{OnReview: openSyncConflict})),
+		If(signedIn, uic.CreateElement(cloudDevicesView, devices)),
+		If(signedIn, uic.CreateElement(cloudAccountView, cloudAccountProps{Account: signedInUserID(), Server: backendHost(pr.ServerURL), OnSignOut: auth.SignOut})),
+		uic.CreateElement(cloudDisclosure, cloudDisclosureProps{Title: uistate.T("cloud1.advanced"), TestID: "cloud-advanced", Body: Fragment(
+			uic.CreateElement(cloudAction, cloudActionProps{Label: uistate.T("cloud1.changeConnection"), TestID: "cloud-change-connection", OnClick: setup.Start, Disabled: setup.Busy}),
+			If(status.Message != "", P(css.Class(tw.Text12, tw.TextDim), Attr("data-testid", "sync-status-detail"), status.Message)),
+			If(signedIn, uic.CreateElement(cloudAISettings)),
+			If(segmentFor(pr) == "commercial", uic.CreateElement(cloudBillingView, cloudBillingProps{SignedIn: signedIn})),
+		)}),
+		If(signedIn || !pr.BackendDisabled, uic.CreateElement(cloudDangerView, cloudDangerProps{Household: cloudHouseholdName(), Server: backendHost(pr.ServerURL), OnPause: setup.PauseThen, OnDelete: func(done func(error)) { cloudDeleteCopy(pr, workspaceID, setup.PauseThen, done) }})),
+	)
+}
 
-		// Live status card.
-		Div(css.Class("sync-status-card", tw.Flex, tw.ItemsCenter, tw.Gap3, tw.Px3, tw.Py2, tw.Rounded4, tw.Border, tw.BorderLine),
-			Attr("role", "status"), Attr("data-testid", "sync-status-card"),
-			ui.Icon(icon.Cloud, css.Class(tw.W5, tw.H5, tw.ShrinkO, IfElseValue(status.State == "error", tw.TextDanger,
-				IfElseValue(status.State == syncStateRebind || status.State == syncStateLockedDifferentPasscode || status.State == syncStateIdentityUnknown, tw.TextWarn, tw.TextDim)))),
-			Div(css.Class(tw.Flex, tw.FlexCol, tw.MinW0),
-				Span(css.Class(tw.Text15, tw.FontSemibold,
-					IfElseValue(status.State == syncStateRebind || status.State == syncStateLockedDifferentPasscode || status.State == syncStateIdentityUnknown, tw.TextWarn,
-						IfElseValue(status.State == "error", tw.TextDanger, tw.TextDim))), syncStatusLabel()),
-				If(status.Pending > 0, Span(css.Class(tw.Text12, tw.TextFaint),
-					uistate.T("sync.pendingCount", status.Pending))),
-				If(status.Message != "", Span(css.Class(tw.Text12, IfElseValue(status.State == "error", tw.TextDanger, tw.TextFaint)), Attr("data-testid", "sync-status-detail"),
-					uistate.T("sync.statusDetail", status.Message))),
-				If(status.State == syncStateLockedDifferentPasscode,
-					Button(css.Class("btn btn-sm btn-danger", tw.Mt1), Type("button"), Attr("data-testid", "sync-replace-server-copy"),
-						OnClick(uic.UseEvent(func() { ReplaceServerCopyWithThisDevice() })),
-						uistate.T("sync.replaceServerCopyAction"))),
-			),
-		),
+func cloudHouseholdName() string {
+	if w, ok := loadRegistry().Active(); ok {
+		return w.Name
+	}
+	return uistate.T("cloud1.household")
+}
 
-		// Account/workspace mismatch recovery (C694/C697). This is the state where
-		// the server is right to refuse and the client cannot fix it by trying
-		// again: the signed-in account does not own this workspace. The card
-		// states which account, which server, which workspace and when this last
-		// worked, and offers the decisions that actually resolve it.
-		uic.CreateElement(RebindCard, rebindProps{
-			ServerURL:    serverURL.Get(),
-			Status:       status,
-			OnSignOut:    doSignOut,
-			OnDisconnect: func() { onToggle(false) },
-			OnRetry:      func() { flushBackendSyncQueue() },
-		}),
-
-		// Locked recovery. "unlock to sync encrypted data" in the status card named an
-		// action this device cannot perform: unlocking runs from the passcode GATE,
-		// which never renders on a device with no lock configured. The way out is to
-		// SET the matching passcode, so say that, and put the control right here.
-		If(status.State == "locked", Div(css.Class("card", tw.Flex, tw.FlexCol, tw.Gap2, tw.Mt1),
-			Attr("data-testid", "sync-locked-recovery"),
-			Span(css.Class(tw.Text15, tw.FontSemibold), uistate.T("sync.lockedTitle")),
-			P(css.Class(tw.Text12, tw.TextDim), uistate.T("sync.lockedHint")),
-			Div(Button(css.Class("btn btn-sm btn-primary"), Type("button"), Attr("data-testid", "sync-locked-enable-passcode"),
-				OnClick(onEnablePasscode), uistate.T("sync.encEnable"))),
-		)),
-
-		ui.ToggleRow(ui.ToggleRowProps{Label: uistate.T("sync.connectToggle"), On: backendOn.Get(), OnChange: onToggle}),
-		If(!backendOn.Get(), P(css.Class(tw.TextFaint, tw.Text12), uistate.T("settings.backendOffHint"))),
-
-		If(backendOn.Get(), Fragment(
-			ui.Segmented(ui.SegmentedProps{
-				Label: uistate.T("sync.segmentLabel"),
-				Options: []ui.SegOption{
-					{Value: "local", Label: uistate.T("sync.segmentLocal")},
-					{Value: "remote", Label: uistate.T("sync.segmentRemote")},
-					{Value: "commercial", Label: uistate.T("sync.segmentCommercial")},
-				},
-				Selected: seg,
-				OnSelect: onSelectSegment,
-			}),
-			If(seg == "local", P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("sync.segmentLocalHint"))),
-			If(seg == "remote", P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("sync.segmentRemoteHint"))),
-			If(commercial, P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("sync.segmentCommercialHint"))),
-
-			// Local: zero-config path when a same-origin backend was found — no
-			// address field at all, just a quiet way to override it.
-			If(seg == "local" && !manualAddressOpen.Get() && phase == discoveryOK,
-				Button(css.Class("btn-link", tw.Text12, tw.TextDim), Type("button"),
-					Attr("data-testid", "sync-use-different-address"), OnClick(onUseDifferentAddress), uistate.T("sync.useDifferentAddress"))),
-
-			// Local (manual fallback) and Remote (always manual) both need the
-			// address field; Commercial gets its own below.
-			If(seg != "commercial" && manualAddressOpen.Get(), Fragment(
-				If(seg == "remote", P(css.Class(tw.Text12, tw.TextDanger), uistate.T("sync.remoteTrustDisclosure"))),
-				If(seg == "local", P(css.Class(tw.TextFaint, tw.Text12), uistate.T("sync.serverAddressIntro"))),
-				Input(css.Class("set-input"), Type("url"), Attr("aria-label", uistate.T("settings.backendURL")),
-					Attr("data-testid", "sync-server-url"),
-					Placeholder(defaultBackendURL), OnInput(onURL), ui.FieldValue(serverURL.Get())),
-			)),
-			If(seg != "commercial", Fragment(
-				If(phase == discoveryChecking, P(css.Class(tw.TextFaint, tw.Text12), Attr("data-testid", "sync-discovery-checking"), uistate.T("sync.discoveryChecking"))),
-				// "Connected." is a claim about the SERVER, not about this device —
-				// it is set by an unauthenticated /v1/version probe. Saying it to a
-				// device with no session reads as "you're done", which is exactly the
-				// wrong thing to tell someone whose next job is to enter a code. So
-				// the unsigned-in case names the next action instead.
-				If(phase == discoveryOK && !activationOnly, P(css.Class(tw.TextFaint, tw.Text12), Attr("data-testid", "sync-discovery-ok"), uistate.T("sync.discoveryOK"))),
-				If(phase == discoveryOK && activationOnly, P(css.Class(tw.TextFaint, tw.Text12), Attr("data-testid", "sync-discovery-ok"), uistate.T("sync.discoveryNeedsActivation"))),
-				If(phase == discoveryError, P(css.Class(tw.Text12, tw.TextFaint), Attr("data-testid", "sync-discovery-error"), uistate.T("settings.serverTestFailed", discoveryMsg.Get()))),
-			)),
-
-			// Commercial: a fixed-shape backend — address field (defaults to
-			// whatever's saved, since CashFlux Cloud isn't a single hardcoded
-			// domain yet), then straight to sign-in, no capability probing.
-			If(commercial, Input(css.Class("set-input"), Type("url"), Attr("aria-label", uistate.T("settings.backendURL")),
-				Attr("data-testid", "sync-server-url"),
-				Placeholder(defaultBackendURL), OnInput(onURL), ui.FieldValue(serverURL.Get()))),
-			If(commercial && !signedIn,
-				P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.cloudPricingTeaser", cloudPrice))),
-
-			// Exactly one primary sign-in surface, chosen by what the server
-			// actually reports supporting. The raw access-token field is NEVER
-			// auto-revealed, in ANY phase — Cam: "I didn't ask for a bearer
-			// token field... I want a clean UI that doesn't confuse the
-			// user." Earlier logic showed it by default whenever discovery
-			// hadn't succeeded (checking/idle/a plain network error) as well
-			// as whenever a server turned out to be token-only — surfacing
-			// raw infrastructure UI for the single most common case (still
-			// typing a URL, or a same-origin/network hiccup). It is always a
-			// deliberate, one-click "advanced" disclosure now — the exact
-			// same toggle regardless of WHY nothing else is showing.
-			If(activationOnly, uic.CreateElement(PendingDeviceCard, PendingDeviceCardProps{Primary: true})),
-			If(showPassword && !activationOnly, uic.CreateElement(PasswordAuthCard, PasswordAuthCardProps{AllowRegistration: true})),
-			If(showOAuth, Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap2, tw.Mt1),
-				Button(css.Class("btn"), Type("button"), Attr("data-testid", "sync-oauth-google"), OnClick(onSignInGoogle), uistate.T("settings.signInGoogle")),
-				Button(css.Class("btn"), Type("button"), Attr("data-testid", "sync-oauth-github"), OnClick(onSignInGitHub), uistate.T("settings.signInGitHub")),
-			)),
-			If(tokenOnly, P(css.Class(tw.TextFaint, tw.Text12), uistate.T("sync.tokenFieldPrimary"))),
-
-			// Secondary options. On an approval-gated server, the first-time path is
-			// Request access; existing-account password login/recovery, a previously
-			// issued pairing code, and the raw token field collapse behind one "More
-			// ways to sign in" link rather than competing with it. A closed
-			// disclosure disappears once signed in. An OPEN raw-token editor stays
-			// mounted while its OnInput persists the token, however; otherwise the
-			// first keystroke would classify the session as signed in and detach the
-			// field (and its Test/Sync controls) from under the user.
-			If(!commercial && (!signedIn || advancedTokenOpen.Get()), Div(css.Class(tw.Mt2, tw.Flex, tw.FlexCol, tw.Gap1),
-				If(!signedIn && !activationOnly && showPassword, Span(css.Class(tw.Text11, tw.Uppercase, tw.Tracking008, tw.TextFaint), uistate.T("sync.otherWaysHeading"))),
-				If(!signedIn && !activationOnly && showPassword, uic.CreateElement(DeviceLinkCard, DeviceLinkCardProps{})),
-				If(!advancedTokenOpen.Get(), Div(Button(css.Class("btn-link", tw.Text12, tw.TextDim), Type("button"),
-					Attr("data-testid", "sync-advanced-token-toggle"), OnClick(onToggleAdvancedToken),
-					IfElseValue(activationOnly, uistate.T("sync.moreWaysToggle"), uistate.T("sync.advancedTokenToggle"))))),
-				If(advancedTokenOpen.Get(), Fragment(
-					If(!signedIn && activationOnly, Span(css.Class(tw.Text11, tw.Uppercase, tw.Tracking008, tw.TextFaint), uistate.T("sync.otherWaysHeading"))),
-					If(!signedIn && activationOnly, uic.CreateElement(PasswordAuthCard, PasswordAuthCardProps{AllowRegistration: false})),
-					If(!signedIn && activationOnly, uic.CreateElement(DeviceLinkCard, DeviceLinkCardProps{})),
-					tokenField,
-				)),
-			)),
-
-			// Sign out / clear-invalid-token — "Sign out" implies an active session,
-			// misleading once the server has explicitly rejected the saved token.
-			// Read from prefs, not the mount-seeded serverToken state: a device that
-			// just signed in this session had no Sign out button until the pane
-			// remounted, which reads as the sign-in not having taken.
-			// Signed in: offer to attach a credential so the next sign-in needs no
-			// code from the operator. Collapsed — it is an option, not a chore.
-			If(signedIn, uic.CreateElement(SetPasswordCard)),
-			If(signedIn,
-				Button(css.Class("btn", tw.Mt1), Type("button"), OnClick(onSignOut), uistate.T("settings.signOut"))),
-			If(uistate.Session(pr.ServerToken).Present() && status.AuthFailed,
-				Button(css.Class("btn", tw.Mt1), Type("button"), Attr("data-testid", "settings-clear-invalid-token"), OnClick(onSignOut), uistate.T("settings.clearInvalidToken"))),
-
-			If(seg != "commercial", Div(css.Class(tw.Mt1),
-				A(css.Class("btn"), Attr("href", "https://github.com/monstercameron/CashFlux/blob/main/docs/SELF_HOSTING.md"), Attr("target", "_blank"), Attr("rel", "noreferrer"), uistate.T("settings.deploySelfHost")),
-			)),
-		)),
-
-		// C309: recoverable conflict backup — when a local edit lost an LWW
-		// conflict (server had newer changes), offer to restore the saved local
-		// copy or discard the backup, so the change is never silently lost.
-		If(hasConflictBackup(activeWsID), Div(css.Class("conflict-restore", tw.Flex, tw.FlexCol, tw.Gap1, tw.Mt1, tw.Px3, tw.Py2, tw.Rounded4, tw.BorderL),
-			Attr("role", "status"), Attr("data-testid", "sync-conflict-restore"),
-			P(css.Class(tw.Text12, tw.TextDim), uistate.T("sync.restoreConflictHint")),
-			Div(css.Class(tw.Flex, tw.Gap2, tw.Mt1),
-				Button(css.Class("btn", "btn-sm", "btn-primary"), Type("button"), OnClick(onRestoreConflict), uistate.T("sync.restoreConflict")),
-				Button(css.Class("btn", "btn-sm"), Type("button"), OnClick(onDiscardConflict), uistate.T("sync.discardConflict")),
-			),
-		)),
-
-		// Cloud AI-key status: "Key set" + Remove/Upload, shown once authenticated (§7.11).
-		If(signedIn, Fragment(
-			If(keySet.Get(), Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt1),
-				Span(css.Class(tw.Text12, tw.TextDim), uistate.T("settings.serverKeySet")),
-				Button(css.Class("btn", "btn-sm", "btn-del"), Type("button"), OnClick(removeKey), uistate.T("settings.removeKey")),
-			)),
-			If(!keySet.Get(), Button(css.Class("btn", "btn-sm", tw.Mt1), Type("button"), OnClick(uploadKey), uistate.T("settings.uploadKey"))),
-			// Signed-in devices list + per-device revoke (§7.11).
-			uic.CreateElement(DevicesList),
-		)),
-
-		// Commercial-only: subscription surface.
-		If(commercial, Fragment(
-			If(signedIn, Fragment(
-				H4(css.Class("set-label"), uistate.T("settings.manageSubTitle")),
-				P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.manageSubHint")),
-				Button(css.Class("btn", tw.Mt045), Type("button"),
-					Attr("data-testid", "manage-subscription"),
-					OnClick(openPortal),
-					uistate.T("settings.manageSub"),
-				),
-			)),
-			If(!signedIn, Fragment(
-				H4(css.Class("set-label"), uistate.T("settings.cloudPlanTitle")),
-				P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.cloudPlanNote")),
-				Div(css.Class(tw.Text18, tw.FontSemibold, tw.Mt045), cloudPrice),
-				P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.cloudTrialNote")),
-				ui.Segmented(ui.SegmentedProps{
-					Label: uistate.T("settings.cloudPlanBilling"),
-					Options: []ui.SegOption{
-						{Value: "annual", Label: uistate.T("settings.cloudPlanAnnual")},
-						{Value: "monthly", Label: uistate.T("settings.cloudPlanMonthly")},
-					},
-					Selected: billingInterval.Get(),
-					OnSelect: func(v string) { billingInterval.Set(v) },
-				}),
-				ui.Segmented(ui.SegmentedProps{
-					Label: uistate.T("settings.cloudPayWith"),
-					Options: []ui.SegOption{
-						{Value: "stripe", Label: uistate.T("settings.cloudPayStripe")},
-						{Value: "paypal", Label: uistate.T("settings.cloudPayPayPal")},
-					},
-					Selected: billingProvider.Get(),
-					OnSelect: func(v string) { billingProvider.Set(v) },
-				}),
-				Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Mt045),
-					Button(css.Class("btn btn-primary"), Type("button"), OnClick(startCheckout), uistate.T("settings.cloudSubscribe")),
-				),
-				P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.cloudTrustLine")),
-			)),
-		)),
-
-		// What syncs — the honest disclosure, always visible.
-		P(css.Class(tw.TextFaint, tw.Text12), uistate.T("sync.whatSyncs")),
-
-		// Privacy / end-to-end encryption status — always visible so the user can make the
-		// zero-knowledge decision.
-		Div(css.Class("card", tw.Mt1, tw.Flex, tw.FlexCol, tw.Gap2),
-			Span(css.Class(tw.Text12, tw.TextFaint), uistate.T("sync.encTitle")),
-			If(loadAppLock().Active(), P(css.Class(tw.Text12), uistate.T("sync.encOn"))),
-			If(!loadAppLock().Active(), Fragment(
-				P(css.Class(tw.Text12), uistate.T("sync.encOff")),
-				Div(css.Class(tw.Mt1),
-					Button(css.Class("btn btn-sm btn-primary"), Type("button"), Attr("data-testid", "sync-enable-passcode"),
-						OnClick(onEnablePasscode), uistate.T("sync.encEnable"))),
-			)),
-		),
+func cloudHouseholdSummary() uic.Node {
+	counts := ""
+	if a := appstate.Default; a != nil {
+		counts = uistate.T("cloud1.contents", len(a.Accounts()), len(a.Transactions()), len(a.Budgets()), len(a.Artifacts()))
+	}
+	return Section(css.Class(cloudSectionRules()),
+		H3(css.Class(tw.Text15, tw.FontSemibold), cloudHouseholdName()),
+		P(css.Class(tw.Text14, tw.TextDim), uistate.T("cloud1.whatSyncs")),
+		P(css.Class(tw.Text12, tw.TextDim), counts),
+		P(css.Class(tw.Text12, tw.TextDim), uistate.T("cloud1.sizeHint")),
 	)
 }
