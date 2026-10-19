@@ -229,6 +229,13 @@ func flipPanel(props FlipPanelProps) uic.Node {
 					case "TEXTAREA", "BUTTON", "SELECT":
 						return nil
 					}
+					// Let the innermost form own Enter. In the import review, for
+					// example, a draft-row editor can sit inside the modal's
+					// FormID flow. Submitting the modal here would commit the draft
+					// before the row editor gets to save its own value.
+					if !flipPanelHandlesEnterInForm(active, formID) {
+						return nil
+					}
 				}
 				e.Call("preventDefault")
 				// A FormID footer submits its form (native submit → OnSubmit); the form's
@@ -371,6 +378,12 @@ func flipPanel(props FlipPanelProps) uic.Node {
 	case props.NoFooter:
 		// The Back body owns its own actions; render no footer at all.
 		foot = Fragment()
+	case props.CloseOnly:
+		// CloseOnly wins while an import stage has nothing visible to save,
+		// even if the caller keeps FormID configured for later stages.
+		foot = Div(css.Class("set-foot"),
+			Button(css.Class("set-btn close"), Type("button"), saveClick, uistate.T("action.close")),
+		)
 	case props.FormID != "":
 		// Standard pinned footer whose Save is a native submit for the body form — the
 		// form does the work in OnSubmit and closes via OnDone, so no auto-close here.
@@ -382,13 +395,6 @@ func flipPanel(props FlipPanelProps) uic.Node {
 			props.LeftFooter,
 			Button(cancelArgs...),
 			Button(saveArgs...),
-		)
-	case props.CloseOnly:
-		// Nothing to save: a single Close button (no Cancel/Save pair).
-		// GM2-10: use .set-btn.close (neutral dismiss styling) not .set-btn.save
-		// (green/primary styling) — so the button reads as "dismiss" not "submit".
-		foot = Div(css.Class("set-foot"),
-			Button(css.Class("set-btn close"), Type("button"), saveClick, uistate.T("action.close")),
 		)
 	default:
 		saveArgs := []any{css.Class("set-btn save"), Type("button"), Attr("data-testid", saveTestID), saveClick, saveLabel}
@@ -465,7 +471,26 @@ func flipPanelInitialFocusTarget(focusables []js.Value) js.Value {
 			return el
 		}
 	}
+	// The header Close control is first in DOM order. Skip it when choosing a
+	// default so a choice screen opens on its first choice, not on the exit.
+	for _, el := range focusables {
+		if !strings.Contains(" "+strings.TrimSpace(el.Get("className").String())+" ", " set-close ") {
+			return el
+		}
+	}
 	return focusables[0]
+}
+
+// flipPanelHandlesEnterInForm reports whether FlipPanel should intercept Enter
+// for the active control. A form other than the configured footer form keeps
+// its native submit behavior; a panel without FormID never intercepts form
+// submissions.
+func flipPanelHandlesEnterInForm(active js.Value, formID string) bool {
+	form := active.Get("form")
+	if form.IsNull() || form.IsUndefined() {
+		return true
+	}
+	return formID != "" && form.Get("id").String() == formID
 }
 
 // focusRestoreTarget returns the original opener when it remains in the page.
