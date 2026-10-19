@@ -48,6 +48,9 @@ type OverflowMenuItem struct {
 	// Exclude never look like Rename. It is a visual tier, not a behaviour — the
 	// item's own handler still owns any confirmation.
 	Danger bool
+	// Submenu contains actions nested under this item. The parent remains a
+	// menuitem; Enter/Right opens its child menu and Left/Escape closes it.
+	Submenu []OverflowMenuItem
 }
 
 // OverflowMenuProps configures an OverflowMenu trigger + popover.
@@ -411,14 +414,35 @@ func anchorOverflowMenu(isOpen bool, wrapID string) {
 // per-item sub-component. The sub-component owns its click hook so we never
 // call On* inside the item loop (the On*-in-loop rule).
 type overflowMenuItemProps struct {
-	Item      OverflowMenuItem
-	CloseMenu func()
+	Item         OverflowMenuItem
+	CloseMenu    func()
+	CloseSubmenu func()
 }
 
 func overflowMenuItemBtn(props overflowMenuItemProps) uic.Node {
 	item := props.Item
 	closeMenu := props.CloseMenu
 	onSelect := item.OnSelect
+	submenuOpen := uic.UseState(false)
+	onKey := uic.UseEvent(func(e uic.KeyboardEvent) {
+		switch e.GetKey() {
+		case "ArrowRight", "Enter":
+			if len(item.Submenu) > 0 {
+				e.PreventDefault()
+				submenuOpen.Set(true)
+			}
+		case "ArrowLeft", "Escape":
+			if submenuOpen.Get() {
+				e.PreventDefault()
+				e.StopPropagation()
+				submenuOpen.Set(false)
+			} else if props.CloseSubmenu != nil {
+				e.PreventDefault()
+				e.StopPropagation()
+				props.CloseSubmenu()
+			}
+		}
+	})
 
 	// `.danger` is the app's existing destructive overflow-item class (the accounts
 	// kebab's Delete already uses it) — reused rather than forked, so every menu in
@@ -431,7 +455,12 @@ func overflowMenuItemBtn(props overflowMenuItemProps) uic.Node {
 		ClassStr(cls),
 		Type("button"),
 		Attr("role", "menuitem"),
+		OnKeyDown(onKey),
 		OnClick(func() {
+			if len(item.Submenu) > 0 {
+				submenuOpen.Set(!submenuOpen.Get())
+				return
+			}
 			if closeMenu != nil {
 				closeMenu()
 			}
@@ -439,6 +468,13 @@ func overflowMenuItemBtn(props overflowMenuItemProps) uic.Node {
 				onSelect()
 			}
 		}),
+	}
+	if len(item.Submenu) > 0 {
+		expanded := "false"
+		if submenuOpen.Get() {
+			expanded = "true"
+		}
+		btnArgs = append(btnArgs, Attr("aria-haspopup", "menu"), Attr("aria-expanded", expanded))
 	}
 	// The section heading is aria-hidden (it cannot be an owned child of role=menu),
 	// so each item restates its section in its own accessible name. Without this the
@@ -454,5 +490,15 @@ func overflowMenuItemBtn(props overflowMenuItemProps) uic.Node {
 		btnArgs = append(btnArgs, Icon(item.Icon, css.Class(tw.W4, tw.H4)))
 	}
 	btnArgs = append(btnArgs, item.Label)
-	return Button(btnArgs...)
+	parent := Button(btnArgs...)
+	if len(item.Submenu) == 0 || !submenuOpen.Get() {
+		return parent
+	}
+	children := []any{ClassStr("add-submenu"), Attr("role", "menu")}
+	for _, child := range item.Submenu {
+		children = append(children, uic.CreateElement(overflowMenuItemBtn, overflowMenuItemProps{
+			Item: child, CloseMenu: closeMenu, CloseSubmenu: func() { submenuOpen.Set(false) },
+		}))
+	}
+	return Div(ClassStr("add-submenu-wrap"), parent, Div(children...))
 }

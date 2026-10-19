@@ -96,6 +96,11 @@ and every commit updates this file under `Unreleased`.
   complete build in charge.
 
 ### Changed
+- **Recategorize from the ledger, and link in two clicks (R10W, CAT7).** An uncategorized row shows
+  "Uncategorized" with its suggestion and a "Choose…" button; clicking a category opens the shared picker,
+  including creating a new category, and applies it with one write and an Undo. "Link to…" in the row menu is a
+  submenu again (bill, subscription, refund, unlink, ungroup) with Right/Left/Escape keyboard support, instead of
+  a separate dialog.
 - **Create a category wherever you choose one (CAT1, CAT3–CAT5).** Add and Edit use the shared category
   picker, so a new category can be a sub-category and inherits its kind; Edit lists only categories of the
   transaction's direction, with full paths. Split lines, the Smart category suggestion and the rule form gain the

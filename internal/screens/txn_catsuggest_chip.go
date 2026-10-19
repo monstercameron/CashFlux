@@ -41,7 +41,8 @@ const (
 // suggestion itself rather than taking one as a prop, so the table's row builder
 // does not pay for a resolve on every row it renders — only mounted chips resolve.
 type txnCatSuggestChipProps struct {
-	TxnID string
+	TxnID    string
+	OnChoose func(ui.Event)
 }
 
 type txnCatSuggestInputs struct {
@@ -131,6 +132,12 @@ func txnCatSuggestChip(props txnCatSuggestChipProps) ui.Node {
 		}
 		applyCatSuggestion(a, txn, s.CategoryID)
 	})
+	choose := ui.UseEvent(func(e ui.Event) {
+		e.StopPropagation()
+		if props.OnChoose != nil {
+			props.OnChoose(e)
+		}
+	})
 
 	if app == nil || !uistate.LoadSmartSettings().IsEnabled(catSuggestFreeCode) {
 		return Fragment()
@@ -156,13 +163,16 @@ func txnCatSuggestChip(props txnCatSuggestChipProps) ui.Node {
 	}
 	name := catname.LabelByID(cats, s.CategoryID)
 
-	return Button(css.Class("txn-catsuggest"), Type("button"),
+	return Fragment(Button(css.Class("txn-catsuggest"), Type("button"),
 		Attr("data-testid", "txn-catsuggest-chip"),
 		Attr("aria-label", uistate.T("r1b.categorySuggestionAria", name)),
 		Title(uistate.T("catSuggest.chipHint")),
 		OnClick(apply),
-		uistate.T("r1b.categorySuggestionInline", name),
-	)
+		uistate.T("r10w.suggestionInline", name),
+	), Button(ClassStr("txn-cat-choose"), Type("button"),
+		Attr("data-testid", "txn-category-choose"),
+		Attr("aria-label", uistate.T("r10w.chooseCategory")),
+		OnClick(choose), uistate.T("r10w.choose")))
 }
 
 // categorySuggestionMatchesDirection prevents a rule with a mismatched category

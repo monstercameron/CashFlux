@@ -139,7 +139,7 @@ func TestR4CTooltipsAreReservedForLongNames(t *testing.T) {
 	}
 }
 
-func TestR5WCategorySuggestionReplacesUncategorizedAndKeepsReview(t *testing.T) {
+func TestR10WUncategorizedRemainsBesideSuggestionAndReview(t *testing.T) {
 	f := render.New(t)
 	defer f.Cleanup()
 	props := r4cRow("suggested-review")
@@ -150,11 +150,14 @@ func TestR5WCategorySuggestionReplacesUncategorizedAndKeepsReview(t *testing.T) 
 	props.ShowSuggestions = true
 	f.Render(ui.CreateElement(txnFrameRow, &props))
 
-	if strings.Contains(f.Text(), "Uncategorized") {
-		t.Fatalf("visible category still includes Uncategorized: %q", f.Text())
+	if !strings.Contains(f.Text(), "Uncategorized") {
+		t.Fatalf("uncategorized label is missing beside suggestion: %q", f.Text())
 	}
 	if !strings.Contains(f.Text(), "Review") {
 		t.Fatalf("review pill missing from suggested row: %q", f.Text())
+	}
+	if strings.Contains(f.Text(), "·") {
+		t.Fatalf("stray suggestion separator remains: %q", f.Text())
 	}
 	var cell *render.QueryNode
 	for _, candidate := range f.AllByTag("td") {

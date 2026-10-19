@@ -8,12 +8,12 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
-	"syscall/js"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/artifacts"
 	"github.com/monstercameron/CashFlux/internal/auditview"
+	"github.com/monstercameron/CashFlux/internal/catname"
 	"github.com/monstercameron/CashFlux/internal/catsuggest"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
@@ -973,6 +973,7 @@ func txnTableWidget(props txnTableProps) ui.Node {
 			Tags:              txByID[rid].Tags,
 			Account:           accCol.Str(i),
 			Category:          cat,
+			CategoryID:        txByID[rid].CategoryID,
 			SuggestedCategory: suggestedCategory,
 			Source:            srcCol.Str(i),
 			Member:            memberName[txByID[rid].MemberID],
@@ -1283,6 +1284,9 @@ func txnRowActionName(action, description, date, amount string) string {
 // they pass safely through MapKeyed. The row owns its own interaction hooks.
 type txnFrameRowProps struct {
 	ID string
+	// CategoryPickerTarget is normally empty (the overlay portals to body); a
+	// component test may supply its fixture root as the portal target.
+	CategoryPickerTarget ui.PortalTarget
 	// RowIndex is this row's 1-based ARIA position in the whole match set,
 	// counting the header as row 1 — so the first data row is 2. Zero means "do
 	// not claim a position", which is correct for a fully rendered page where the
@@ -1303,6 +1307,7 @@ type txnFrameRowProps struct {
 	OnTagClick        func(tag string) // click a tag chip → filter the ledger to that tag
 	Account           string
 	Category          string
+	CategoryID        string
 	SuggestedCategory string          // resolved inline suggestion, for the category cell's accessible name
 	Source            string          // provenance label ("Manual"/"Imported"/…, "—" if unset)
 	Member            string          // assigned household member's name ("" if unassigned)
@@ -1506,6 +1511,12 @@ func txnTagChip(props txnTagChipProps) ui.Node {
 
 func txnFrameRow(props *txnFrameRowProps) ui.Node {
 	open := ui.UseEvent(func() { props.OnOpen(props.ID) })
+	pickerOpen := ui.UseState(false)
+	openCategoryPicker := func(ui.Event) { pickerOpen.Set(true) }
+	applyManualCategory := func(categoryID string) {
+		pickerOpen.Set(false)
+		applyTxnManualCategory(props.ID, categoryID)
+	}
 	// C563: the whole row opened the edit modal, and nothing said so. There was no
 	// Edit label, no icon, and the <tr> is not focusable — so the single most common
 	// action on the ledger was reachable only by guessing, and not at all by keyboard.
@@ -1695,9 +1706,12 @@ func txnFrameRow(props *txnFrameRowProps) ui.Node {
 				Attr("data-testid", "txn-transfer-category"),
 				Attr("title", uistate.T("r4c.transferCounterparty", props.TransferWith)),
 				uistate.T(transferCategoryKey(*props), props.TransferWith))),
-			If(!props.IsTransfer && !(props.Unfiled && props.SuggestedCategory != ""), Span(css.Class("td-cat-name"), props.Category)),
+			If(!props.IsTransfer && !(props.Unfiled && props.SuggestedCategory != ""),
+				ui.CreateElement(txnCategoryChoose, txnCategoryChooseProps{Label: props.Category, OnChoose: openCategoryPicker})),
+			If(props.Unfiled && props.SuggestedCategory != "", Span(css.Class("td-cat-name td-cat-uncategorized"), props.Category)),
 			If(props.ShowSuggestions && props.Unfiled && !props.IsTransfer,
-				ui.CreateElement(txnCatSuggestChip, txnCatSuggestChipProps{TxnID: props.ID})),
+				ui.CreateElement(txnCatSuggestChip, txnCatSuggestChipProps{TxnID: props.ID, OnChoose: openCategoryPicker}),
+			),
 			If(props.Queued && !props.IsTransfer, Span(css.Class("txn-review-pill"),
 				Attr("data-testid", "txn-review-pill"), Attr("role", "img"),
 				Attr("title", statusDetail(*props)),
@@ -1799,7 +1813,64 @@ func txnFrameRow(props *txnFrameRowProps) ui.Node {
 				Span(css.Class("txn-row-edit-label"), uistate.T("transactions.rowEdit"))),
 			txnRowMenu(*props)),
 	)
-	return Tr(rowArgs...)
+	row := Tr(rowArgs...)
+	pickerTarget := props.CategoryPickerTarget
+	if pickerTarget.Selector == "" && pickerTarget.Node == nil {
+		pickerTarget = ui.PortalTarget{Selector: "body"}
+	}
+	return Fragment(row, If(pickerOpen.Get(), ui.Portal(ui.PortalProps{
+		Target: pickerTarget,
+		Child: CategoryPicker(CategoryPickerProps{
+			Kind:     txnCategoryKind(props.AmountMoney),
+			Selected: props.CategoryID,
+			OnPick:   applyManualCategory,
+			OnClose:  func() { pickerOpen.Set(false) },
+		}),
+	})))
+}
+
+type txnCategoryChooseProps struct {
+	Label    string
+	OnChoose func(ui.Event)
+}
+
+func txnCategoryChoose(props txnCategoryChooseProps) ui.Node {
+	choose := ui.UseEvent(func(e ui.Event) {
+		e.StopPropagation()
+		if props.OnChoose != nil {
+			props.OnChoose(e)
+		}
+	})
+	return Button(ClassStr("txn-cat-choose"), Type("button"), Attr("aria-label", uistate.T("r10w.chooseCategory")),
+		Attr("data-testid", "txn-category-choose"), OnClick(choose), props.Label)
+}
+
+func txnCategoryKind(amount money.Money) domain.CategoryKind {
+	if amount.IsPositive() {
+		return domain.KindIncome
+	}
+	return domain.KindExpense
+}
+
+func applyTxnManualCategory(txnID, categoryID string) {
+	app := appstate.Default
+	if app == nil || txnID == "" || categoryID == "" {
+		return
+	}
+	txn, ok := txnByID(app, txnID)
+	if !ok || txn.IsTransfer() || txn.CategoryID == categoryID {
+		return
+	}
+	auditview.CaptureNow()
+	txn = txnCategoryAfterManualChoice(txn)
+	txn.CategoryID = categoryID
+	if err := app.PutTransaction(txn); err != nil {
+		uistate.PostNotice(err.Error(), true)
+		return
+	}
+	uistate.RequestPersist()
+	uistate.BumpDataRevision()
+	uistate.PostUndoable(uistate.T("r10w.categoryFiled", catname.LabelByID(app.Categories(), categoryID)))
 }
 
 func ledgerDate(date time.Time, from, to string) string {
@@ -1831,11 +1902,9 @@ func txnWhoHeader() ui.Node {
 	return Span(uistate.T("r4c.who"))
 }
 
-// txnRowMenu is the row's ⋯ kebab: entries that open the payment-link flip modal
-// (pre-set to Bill or Subscription mode) and the split-into-categories flip modal.
-// A ✓ prefixes an entry whose link/breakdown is already set. The picking/clearing
-// happens in the modal, so the menu stays short. Built with OverflowMenu
-// (loop-safe: it owns each item's click hook).
+// txnRowMenu is the row's ⋯ kebab: its Link to… submenu goes straight to the
+// payment-link editor, and the split action opens the split editor. Built with
+// OverflowMenu (loop-safe: it owns each item's click hook).
 //
 // The actions stay in the order of their workflow; Delete remains visually separated
 // at the bottom and keeps its destructive styling. Section labels stay on each item
@@ -1848,11 +1917,7 @@ const (
 )
 
 func txnRowMenu(props txnFrameRowProps) ui.Node {
-	linkChooser := ui.UseState(false)
-	items := txnRowMenuItems(props, func() {
-		focusTxnRowMenuTrigger(props.ID)
-		linkChooser.Set(true)
-	})
+	items := txnRowMenuItems(props)
 	if len(items) == 0 {
 		return Fragment()
 	}
@@ -1861,117 +1926,10 @@ func txnRowMenu(props txnFrameRowProps) ui.Node {
 		TriggerLabel:  txnRowActionName(uistate.T("transactions.rowActions"), props.Desc, props.Date, props.Amount),
 		TriggerTestID: "txn-kebab-" + props.ID,
 	})
-	return Fragment(Div(ClassStr("txn-row-menu"), menu), If(linkChooser.Get(), ui.CreateElement(txnLinkChooser, txnLinkChooserProps{
-		Row:     props,
-		OnClose: func() { linkChooser.Set(false) },
-	})))
+	return Div(ClassStr("txn-row-menu"), menu)
 }
 
-func focusTxnRowMenuTrigger(txnID string) {
-	doc := js.Global().Get("document")
-	if !doc.Truthy() {
-		return
-	}
-	triggers := doc.Call("querySelectorAll", "[data-testid]")
-	want := "txn-kebab-" + txnID
-	for i := 0; i < triggers.Length(); i++ {
-		trigger := triggers.Index(i)
-		if trigger.Call("getAttribute", "data-testid").String() == want && trigger.Get("focus").Type() == js.TypeFunction {
-			trigger.Call("focus")
-			return
-		}
-	}
-}
-
-type txnLinkChooserProps struct {
-	Row     txnFrameRowProps
-	OnClose func()
-	Target  ui.PortalTarget
-}
-
-// txnLinkChooser keeps the less frequent relationship actions together without
-// dropping them from the ledger. Every option is one click after “Link to…”.
-func txnLinkChooser(props txnLinkChooserProps) ui.Node {
-	row := props.Row
-	target := props.Target
-	if target.Selector == "" && target.Node == nil {
-		target = ui.PortalTarget{Selector: "body"}
-	}
-	close := func() {
-		if props.OnClose != nil {
-			props.OnClose()
-		}
-	}
-	bill := ui.UseEvent(func() {
-		close()
-		if row.OnOpenLink != nil {
-			row.OnOpenLink(row.ID, uistate.TxnLinkModeBill)
-		}
-	})
-	sub := ui.UseEvent(func() {
-		close()
-		if row.OnOpenLink != nil {
-			row.OnOpenLink(row.ID, uistate.TxnLinkModeSub)
-		}
-	})
-	pair := ui.UseEvent(func() {
-		close()
-		if row.OnPairRefund != nil {
-			row.OnPairRefund(row.ID)
-		}
-	})
-	unpair := ui.UseEvent(func() {
-		close()
-		if row.OnUnpair != nil {
-			row.OnUnpair(row.ID)
-		}
-	})
-	unlink := ui.UseEvent(func() {
-		close()
-		if row.OnUnlinkBill != nil {
-			row.OnUnlinkBill(row.ID)
-		}
-	})
-	ungroup := ui.UseEvent(func() {
-		close()
-		if row.OnUngroup != nil {
-			row.OnUngroup(row.ID)
-		}
-	})
-	onEscape := ui.UseEvent(func(e ui.KeyboardEvent) {
-		if e.GetKey() == "Escape" {
-			e.PreventDefault()
-			close()
-		}
-	})
-	content := Div(ClassStr("txn-link-chooser"), css.Class(tw.FlexCol, tw.Gap1), Attr("data-testid", "txn-link-chooser-content"), OnKeyDown(onEscape),
-		If(row.OnOpenLink != nil,
-			Div(css.Class(tw.FlexCol, tw.Gap1),
-				Button(ClassStr("btn"), Type("button"), Attr("data-testid", "txn-link-chooser-bill"), OnClick(bill), uistate.T("transactions.markBill")),
-				Button(ClassStr("btn"), Type("button"), Attr("data-testid", "txn-link-chooser-sub"), OnClick(sub), uistate.T("transactions.markSub")))),
-		If(row.OnPairRefund != nil && row.IsIncome && !row.IsRefund && !row.IsTransfer,
-			Button(ClassStr("btn"), Type("button"), Attr("data-testid", "txn-link-chooser-pair"), OnClick(pair), uistate.T("txnlinks.pairAction"))),
-		If(row.OnUnpair != nil && (row.IsRefund || row.IsRefunded),
-			Button(ClassStr("btn"), Type("button"), Attr("data-testid", "txn-link-chooser-unpair"), OnClick(unpair), uistate.T("txnlinks.unpairAction"))),
-		If(row.OnUnlinkBill != nil && row.IsBillMatched,
-			Button(ClassStr("btn"), Type("button"), Attr("data-testid", "txn-link-chooser-unlink-bill"), OnClick(unlink), uistate.T("billmatch.unlink"))),
-		If(row.OnUngroup != nil && row.GroupSize > 1,
-			Button(ClassStr("btn"), Type("button"), Attr("data-testid", "txn-link-chooser-ungroup"), OnClick(ungroup), uistate.T("txnlinks.ungroupAction"))),
-	)
-	return ui.Portal(ui.PortalProps{
-		Target: target,
-		Child: uiw.FlipPanel(uiw.FlipPanelProps{
-			Title:     uistate.T("r4k.linkChooser"),
-			Width:     uiw.FlipSmallW,
-			Height:    "min(80vh, 440px)",
-			CloseOnly: true,
-			OnClose:   close,
-			Back:      content,
-		}),
-	})
-}
-
-func txnRowMenuItems(props txnFrameRowProps, showChooser ...func()) []uiw.OverflowMenuItem {
+func txnRowMenuItems(props txnFrameRowProps) []uiw.OverflowMenuItem {
 	var items []uiw.OverflowMenuItem
 	organize := uistate.T(txnMenuOrganize)
 	links := uistate.T(txnMenuLinks)
@@ -2011,15 +1969,10 @@ func txnRowMenuItems(props txnFrameRowProps, showChooser ...func()) []uiw.Overfl
 		})
 	}
 	// --- Links: what this charge is FOR, which other surfaces read -------------
-	if props.OnOpenLink != nil || props.OnPairRefund != nil || props.OnUnpair != nil || props.OnUnlinkBill != nil || props.OnUngroup != nil {
+	if linkItems := txnLinkMenuItems(props); len(linkItems) > 0 {
 		items = append(items, uiw.OverflowMenuItem{
 			Label: uistate.T("r3k.linkTo"), Icon: icon.Bills, Section: links,
-			TestID: "txn-link-open",
-			OnSelect: func() {
-				if len(showChooser) > 0 && showChooser[0] != nil {
-					showChooser[0]()
-				}
-			},
+			TestID: "txn-link-open", Submenu: linkItems,
 		})
 	}
 
@@ -2057,6 +2010,29 @@ func txnRowMenuItems(props txnFrameRowProps, showChooser ...func()) []uiw.Overfl
 	}
 	if len(items) == 0 {
 		return nil
+	}
+	return items
+}
+
+func txnLinkMenuItems(props txnFrameRowProps) []uiw.OverflowMenuItem {
+	var items []uiw.OverflowMenuItem
+	if props.OnOpenLink != nil {
+		items = append(items,
+			uiw.OverflowMenuItem{Label: uistate.T("transactions.markBill"), TestID: "txn-markbill-open", OnSelect: func() { props.OnOpenLink(props.ID, uistate.TxnLinkModeBill) }},
+			uiw.OverflowMenuItem{Label: uistate.T("transactions.markSub"), TestID: "txn-marksub-open", OnSelect: func() { props.OnOpenLink(props.ID, uistate.TxnLinkModeSub) }},
+		)
+	}
+	if props.OnPairRefund != nil && props.IsIncome && !props.IsRefund && !props.IsTransfer {
+		items = append(items, uiw.OverflowMenuItem{Label: uistate.T("txnlinks.pairAction"), TestID: "txn-pair-refund", OnSelect: func() { props.OnPairRefund(props.ID) }})
+	}
+	if props.OnUnpair != nil && (props.IsRefund || props.IsRefunded) {
+		items = append(items, uiw.OverflowMenuItem{Label: uistate.T("txnlinks.unpairAction"), TestID: "txn-unpair", OnSelect: func() { props.OnUnpair(props.ID) }})
+	}
+	if props.OnUnlinkBill != nil && props.IsBillMatched {
+		items = append(items, uiw.OverflowMenuItem{Label: uistate.T("billmatch.unlink"), TestID: "txn-unlink-bill", OnSelect: func() { props.OnUnlinkBill(props.ID) }})
+	}
+	if props.OnUngroup != nil && props.GroupSize > 1 {
+		items = append(items, uiw.OverflowMenuItem{Label: uistate.T("txnlinks.ungroupAction"), TestID: "txn-ungroup", OnSelect: func() { props.OnUngroup(props.ID) }})
 	}
 	return items
 }
