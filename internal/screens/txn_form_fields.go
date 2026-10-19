@@ -3,9 +3,10 @@
 package screens
 
 import (
-	"sort"
 	"strings"
+	"unicode"
 
+	"github.com/monstercameron/CashFlux/internal/acctsort"
 	"github.com/monstercameron/CashFlux/internal/domain"
 )
 
@@ -17,24 +18,49 @@ type TxnFormOption struct {
 }
 
 // TxnFormAccountOptions returns active accounts, plus a selected archived
-// account when necessary, sorted by their visible names. The account type is
-// deliberately omitted so Add and Edit show the same concise option text.
-func TxnFormAccountOptions(accounts []domain.Account, selectedID string) []TxnFormOption {
-	options := make([]TxnFormOption, 0, len(accounts))
-	for _, account := range accounts {
-		if account.Archived && account.ID != selectedID {
+// account when necessary, in the account picker order. When same-named accounts
+// have different types, their labels include the type so users can distinguish
+// them.
+func TxnFormAccountOptions(accounts []domain.Account, selectedID string, retainedArchivedIDs ...string) []TxnFormOption {
+	ordered := acctsort.ForPicker(accounts)
+	visible := make([]domain.Account, 0, len(ordered))
+	nameTypes := make(map[string]map[domain.AccountType]struct{}, len(ordered))
+	for _, account := range ordered {
+		retainArchived := account.ID == selectedID
+		for _, id := range retainedArchivedIDs {
+			retainArchived = retainArchived || account.ID == id
+		}
+		if account.Archived && !retainArchived {
 			continue
 		}
-		options = append(options, TxnFormOption{Value: account.ID, Label: account.Name})
-	}
-	sort.SliceStable(options, func(i, j int) bool {
-		left, right := strings.ToLower(strings.TrimSpace(options[i].Label)), strings.ToLower(strings.TrimSpace(options[j].Label))
-		if left != right {
-			return left < right
+		visible = append(visible, account)
+		name := strings.ToLower(strings.TrimSpace(account.Name))
+		if nameTypes[name] == nil {
+			nameTypes[name] = make(map[domain.AccountType]struct{})
 		}
-		return options[i].Value < options[j].Value
-	})
+		nameTypes[name][account.Type] = struct{}{}
+	}
+
+	options := make([]TxnFormOption, 0, len(visible))
+	for _, account := range visible {
+		label := account.Name
+		name := strings.ToLower(strings.TrimSpace(account.Name))
+		if len(nameTypes[name]) > 1 {
+			label += " · " + txnAccountTypeCue(account.Type)
+		}
+		options = append(options, TxnFormOption{Value: account.ID, Label: label})
+	}
 	return options
+}
+
+func txnAccountTypeCue(accountType domain.AccountType) string {
+	label := strings.ReplaceAll(string(accountType), "_", " ")
+	if label == "" {
+		return "Other"
+	}
+	runes := []rune(label)
+	runes[0] = unicode.ToUpper(runes[0])
+	return string(runes)
 }
 
 // TxnEditHeading returns the row description and, when it adds information, its

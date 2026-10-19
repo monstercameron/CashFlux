@@ -38,6 +38,7 @@ type splitDraft struct {
 const SplitModalFormID = "txn-split-form"
 
 const splitNewCategoryOption = "__split_new_category__"
+const splitCategoryResetOption = "__split_category_reset__"
 
 type splitEditorProps struct {
 	Txn        domain.Transaction
@@ -395,6 +396,7 @@ func SplitEditor(props splitEditorProps) ui.Node {
 		rows = append(rows, ui.CreateElement(splitRow, splitRowProps{
 			Index:         i,
 			Cat:           d.Cat,
+			PickerOpen:    pickerLine.Get() == i,
 			Amt:           d.Amt,
 			Owner:         d.Owner,
 			CatOpts:       catOpts,
@@ -641,6 +643,7 @@ type splitRowProps struct {
 	Dec       int
 	// Percent renders the value input as a percentage entry (percent mode).
 	Percent       bool
+	PickerOpen    bool
 	OnCat         func(int, string)
 	OnNewCategory func(int)
 	OnAmt         func(int, string)
@@ -652,13 +655,24 @@ type splitRowProps struct {
 // component so its OnChange/OnInput/OnClick hooks live at stable positions per row
 // instead of inside the parent's variable-length loop (the framework gotcha).
 func splitRow(props splitRowProps) ui.Node {
-	onCat := func(v string) {
+	selectedCategory := ui.UseState(props.Cat)
+	ui.UseEffect(func() func() {
+		selectedCategory.Set(props.Cat)
+		return nil
+	}, props.Cat, props.PickerOpen)
+	onCat := ui.UseEvent(func(e ui.Event) {
+		v := e.GetValue()
 		if v == splitNewCategoryOption {
+			// The sentinel opens the picker; it is not the split category. Move the
+			// controlled select away from the sentinel, then the picker-open render
+			// restores the current category before the overlay is dismissed.
+			selectedCategory.Set(splitCategoryResetOption)
 			props.OnNewCategory(props.Index)
 			return
 		}
+		selectedCategory.Set(v)
 		props.OnCat(props.Index, v)
-	}
+	})
 	onAmt := ui.UseEvent(func(v string) { props.OnAmt(props.Index, v) })
 	// TX16: on blur, evaluate an arithmetic entry ("12+8", "45.99*3") and replace
 	// it with the result; a plain number or a parse failure is left untouched.
@@ -677,13 +691,13 @@ func splitRow(props splitRowProps) ui.Node {
 	}
 	return Div(css.Class(rowClass), Attr("data-testid", "split-row"),
 		Div(css.Class("split-category-control"),
-			uiw.SelectInput(uiw.SelectInputProps{
-				Options:   props.CatOpts,
-				Selected:  props.Cat,
-				AriaLabel: uistate.T("splitEditor.category"),
-				TestID:    "split-cat-" + strconv.Itoa(props.Index),
-				OnChange:  onCat,
-			}),
+			Select(append([]any{
+				css.Class("field"),
+				Value(selectedCategory.Get()),
+				Attr("aria-label", uistate.T("splitEditor.category")),
+				Attr("data-testid", "split-cat-"+strconv.Itoa(props.Index)),
+				OnChange(onCat),
+			}, splitCategoryOptionNodes(props.CatOpts, selectedCategory.Get())...)...),
 		),
 		// XC10: optional per-line owner. Only rendered for multi-member households;
 		// "Same as transaction" (empty) keeps the pre-XC10 payer attribution.
@@ -705,6 +719,14 @@ func splitRow(props splitRowProps) ui.Node {
 			Title(uistate.T("splitEditor.remove")), Attr("data-testid", "split-remove-"+strconv.Itoa(props.Index)),
 			OnClick(onRemove), "✕"),
 	)
+}
+
+func splitCategoryOptionNodes(options []uiw.SelectOption, selected string) []any {
+	nodes := make([]any, 0, len(options))
+	for _, option := range options {
+		nodes = append(nodes, Option(Value(option.Value), SelectedIf(selected == option.Value), option.Label))
+	}
+	return nodes
 }
 
 // splitAmtKey picks the value input's label: percent-mode rows read "Percent",
