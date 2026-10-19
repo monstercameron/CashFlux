@@ -90,6 +90,9 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Budgets styles stay on theme tokens and one type scale (BV7H).** The attention link and review links use theme tokens, so a
+  dark load and a theme switch keep readable contrast; figures, chips, rollover cells, the inline editor and help targets use the
+  shared type scale and fixed tracks at 901-1100 px.
 - **Transactions: saves are journaled and never silent; rows, summary and dialogs are correct and fast (held bundle).**
   - Local saves write only changed records to an encrypted journal with an atomic generation check, never the whole dataset, and
     every replacement path (account switch, cloud preferences, app-lock passcode change, sync, wipe, startup workspace) keeps

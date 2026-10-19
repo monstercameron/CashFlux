@@ -41,7 +41,7 @@ func registerBR3Head() {
 	rule(".bento-budgets .bud3-attention-separator", color("var(--text-faint)"))
 	rule(".bento-budgets .bud3-attention-link",
 		minWidth("24px"), minHeight("24px"), padding("0"), border("0"), background("transparent"),
-		color("var(--text-dim)"), font("inherit"), textDecoration("underline"), textUnderlineOffset("2px"), cursor("pointer"),
+		color("var(--text-dim) !important"), font("inherit"), textDecoration("underline"), textUnderlineOffset("2px"), cursor("pointer"),
 	)
 	rule(".bento-budgets .bud3-age-explain",
 		fontSize("12px"), fontWeight("400"), color("var(--text-dim)"), whiteSpace("nowrap"),
