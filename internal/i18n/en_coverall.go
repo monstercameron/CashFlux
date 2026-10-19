@@ -15,7 +15,7 @@ var coverAllKeys = Catalog{
 	"coverAll.button": "Cover overages",
 
 	// Modal shell.
-	"coverAll.title": "Cover budget overages",
+	"coverAll.title": "Cover overages from other budgets",
 	// %d = number over, %s = total overage amount.
 	"coverAll.intro":    "%d budgets are over by %s total. Choose how to cover each, then apply them together.",
 	"coverAll.introOne": "1 budget is over by %s. Choose how to cover it.",

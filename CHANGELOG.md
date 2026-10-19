@@ -90,6 +90,10 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **One name for each Budgets action, in every dialog title (BR3DLG.1).** The dialog title names the budget ("Raise
+  Groceries limit", "Cover Groceries from another budget"); the full-card button now matches the row menu ("Cover from
+  another budget"); covering several budgets at once is titled "Cover overages from other budgets"; and focus returns to
+  the cover trigger after Escape, Cancel or applying.
 - **Review offers to fix past loan payments; scheduled loan payments are neutral (R4LOAN.1).** Review has a "Possible loan
   payments" group: "Looks like a payment to Priya's Car Loan — record as a transfer?" with "Record as transfer" (converted
   in place, with undo) and "Not a loan payment" (remembered). Scheduled payments to a loan or card show "Transfer →

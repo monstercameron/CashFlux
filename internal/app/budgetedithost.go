@@ -26,6 +26,31 @@ import (
 // off-centre. Here there is no transformed ancestor, so the modal centres on the
 // viewport. The editor form owns its own Save/Cancel (NoFooter) and calls OnDone on
 // completion, which clears the atom.
+func budgetName(id string) string {
+	app := appstate.Default
+	if app == nil || id == "" {
+		return ""
+	}
+	for _, b := range app.Budgets() {
+		if b.ID == id {
+			return b.Name
+		}
+	}
+	return ""
+}
+
+func budgetEditDialogTitle(mode, id string) string {
+	name := budgetName(id)
+	switch mode {
+	case uistate.BudgetEditModeTopup:
+		return uistate.T("br3dlg.raiseTitle", name)
+	case uistate.BudgetEditModeCover:
+		return uistate.T("br3dlg.coverBudgetTitle", name)
+	default:
+		return ""
+	}
+}
+
 // budgetHasNote reports whether the budget already carries a note, so the editor
 // can say whether it is about to create one or change one.
 func budgetHasNote(id string) bool {
@@ -65,9 +90,9 @@ func BudgetEditHost() uic.Node {
 	title, width, height := uistate.T("budgets.editTitle"), uiw.FlipMediumW, uiw.FlipMediumH
 	switch e.Mode {
 	case uistate.BudgetEditModeTopup:
-		title = uistate.T("budgets.topupTitle")
+		title = budgetEditDialogTitle(e.Mode, e.ID)
 	case uistate.BudgetEditModeCover:
-		title = uistate.T("budgets.coverModalTitle")
+		title = budgetEditDialogTitle(e.Mode, e.ID)
 	case uistate.BudgetEditModeNotes:
 		// Name the action, and name it by state: the same editor either creates a
 		// note or overwrites one, and "Budget notes" said neither. The row's ⋯ item

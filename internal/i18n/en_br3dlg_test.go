@@ -7,11 +7,12 @@ import "testing"
 func TestBR3DLGBudgetDialogCopyIsConsistent(t *testing.T) {
 	for key, want := range map[string]string{
 		"br3dlg.raiseTitle":                "Raise %s limit",
-		"br3dlg.pickCover":                 "+%s (cover overspend)",
+		"br3dlg.pickCover":                 "+%s (shortfall)",
 		"br3dlg.pickProjected":             "+%s (projected)",
 		"br3dlg.rolloverNextCap":           "Next period's cap is the base limit plus carry.",
 		"br3dlg.raisedToast":               "%s limit raised",
-		"br3dlg.coverTitle":                "Cover from another budget",
+		"br3dlg.coverTitle":                "Cover overages from other budgets",
+		"br3dlg.coverBudgetTitle":          "Cover %s from another budget",
 		"budgets.actionCoverFromOtherMenu": "Cover from another budget",
 	} {
 		if got := english[key]; got != want {
