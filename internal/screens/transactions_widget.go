@@ -39,10 +39,6 @@ import (
 	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
 
-// keep the legacy full-page ledger referenced so it is not flagged as dead by
-// linters during the transition (its handlers remain a useful reference).
-var _ = transactionsLegacy
-
 const (
 	// txnVirtualizeThreshold is the row count above which the "All" view switches to a
 	// windowed (virtualized) body — below it, rendering every row is cheap enough.

@@ -104,15 +104,6 @@ func toggleTxnOwner(owners []string, owner string) []string {
 	return append(append([]string(nil), owners...), owner)
 }
 
-// TxnSharedFormProps remains as a compatibility alias for callers compiled during migration.
-type TxnSharedFormProps struct {
-	Primary               []ui.Node
-	More                  []ui.Node
-	BeforeMore, AfterMore []ui.Node
-	OpenMore              bool
-	MoreID                string
-}
-
 // TxnDirectionOption is one choice in the shared Add/Edit direction toggle.
 type TxnDirectionOption struct {
 	Value    string
@@ -196,18 +187,8 @@ func TxnNewCategoryAction(testID string, expanded bool, onClick ui.Handler) ui.N
 
 // TxnSharedForm renders the common Add/Edit field hierarchy: everyday fields
 // first, followed by a single disclosure for supporting details.
-func TxnSharedForm(input any) ui.Node {
+func TxnSharedForm(model TxnFormModel) ui.Node {
 	css.Inject("cf-transaction-form", txnFormCSS)
-	model, legacy := input.(TxnFormModel)
-	if !legacy {
-		old, ok := input.(TxnSharedFormProps)
-		if ok {
-			model = TxnFormModel{More: old.More, MoreID: old.MoreID, OpenMore: old.OpenMore,
-				EditSummary: Fragment()}
-			return legacyTxnSharedForm(old)
-		}
-		return Fragment()
-	}
 	moreID := model.MoreID
 	if moreID == "" {
 		moreID = "txn-add-more"
@@ -231,18 +212,6 @@ func TxnSharedForm(input any) ui.Node {
 		model.EditSummary,
 		If(model.AddTemplates != nil, model.AddTemplates),
 	)
-}
-
-func legacyTxnSharedForm(props TxnSharedFormProps) ui.Node {
-	moreID := props.MoreID
-	if moreID == "" {
-		moreID = "txn-add-more"
-	}
-	details := []any{css.Class("csv-help"), Attr("id", moreID), Attr("data-testid", moreID), Summary(uistate.T("r1e.moreDetails")), Div(css.Class("form-grid"), props.More)}
-	if props.OpenMore {
-		details = append(details[:3], append([]any{Attr("open", "open")}, details[3:]...)...)
-	}
-	return Div(css.Class("form-grid", "qa-grid"), props.Primary, props.BeforeMore, Details(details...), props.AfterMore)
 }
 
 // The shared form owns layout; callers supply controlled fields and action slots.

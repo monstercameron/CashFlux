@@ -90,6 +90,10 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Dead legacy ledger deleted (R3D).** The unreachable `transactionsLegacy()` page (1,086 lines) and its row editor (510
+  lines) are gone, with their row-only tests and the legacy shared-form entry point; `TxnSharedForm` now takes the typed
+  `TxnFormModel`. The four helpers the live page still uses moved to `txn_reviewed.go` and `txn_row_helpers.go` with new
+  table tests.
 - **Transfers never invent a rate or half-save (MONEYC).** A cross-currency transfer with no saved exchange rate and no
   received amount now fails with a typed error before anything is written (it used to book −10,000 USD as +10,000 JPY).
   The transfer legs and optional fee are written in one store transaction under an operation ID: a failure on any leg
