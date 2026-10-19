@@ -22,6 +22,10 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **An imported or synced dataset can no longer plant an OpenAI key (SEC1).** Every import path (JSON,
+  JSON with attachments, SQLite, restore, sync pull) now always keeps the device's own key, even when
+  the device has none; before, an empty device key let the imported dataset's key through, so a
+  crafted backup or a compromised sync peer could route AI requests through someone else's account.
 - **Notification copy kept its numbers through a reload, and `go vet` passes again (SV0.9).**
   Persisted notification text stored its arguments as JSON, so a count came back as a float and a
   `%d` placeholder rendered as `%!d(float64=3)`. `copytext.Text` now restores whole numbers as

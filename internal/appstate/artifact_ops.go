@@ -164,9 +164,9 @@ func (a *App) ImportJSONWithBlobs(data []byte) error {
 	if err != nil {
 		return err
 	}
-	if key := a.Settings().OpenAIKey; key != "" {
-		ds.Settings.OpenAIKey = key
-	}
+	// Credentials are device-scoped. Always overwrite the dataset value, even
+	// when the device has no key, so imports cannot plant one.
+	ds.Settings.OpenAIKey = a.Settings().OpenAIKey
 	// Move image bytes to the blob store before loading, so SQLite stores only
 	// the lightweight record.
 	a.stashArtifactBytes(ds.Artifacts)
@@ -248,6 +248,9 @@ func (a *App) ImportSQLite(data []byte) error {
 	if err != nil {
 		return err
 	}
+	// SQLite backups can carry legacy dataset-scoped credentials too. Keep the
+	// current device credential and discard the imported value unconditionally.
+	ds.Settings.OpenAIKey = a.Settings().OpenAIKey
 	a.stashArtifactBytes(ds.Artifacts)
 	if err := a.store.Load(ds); err != nil {
 		return err

@@ -171,11 +171,10 @@ func (a *App) ImportJSON(data []byte) error {
 	if err != nil {
 		return err
 	}
-	// OpenAI credentials belong to this device, so dataset imports (sync pulls,
-	// restores and user imports) cannot replace the live credential.
-	if key := a.Settings().OpenAIKey; key != "" {
-		ds.Settings.OpenAIKey = key
-	}
+	// OpenAI credentials belong to this device, so every dataset import (sync
+	// pulls, restores and user imports) must replace the incoming value even when
+	// this device has no credential. Otherwise an imported key would be adopted.
+	ds.Settings.OpenAIKey = a.Settings().OpenAIKey
 	if err := a.store.Load(ds); err != nil {
 		return err
 	}
