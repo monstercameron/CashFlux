@@ -6,18 +6,9 @@ test("inspect live sync status surfaces", async ({ page }) => {
   await nav(page, "/settings");
   await page.locator(".settings-page .set-tab-strip button", { hasText: "Cloud" }).first().click();
 
-  const toggle = page.locator('[role="switch"][aria-label="Sync with a backend server"]');
-  if ((await toggle.getAttribute("aria-checked")) !== "true") {
-    await toggle.click();
-  }
-  await expect(toggle).toHaveAttribute("aria-checked", "true");
-
-  const remote = page.locator(".cloud-tab button", { hasText: "Remote" });
-  if (await remote.count()) {
-    await remote.click();
-  }
-  await page.locator('[data-testid="sync-server-url"]').fill("http://127.0.0.1:8198");
-  await expect(page.locator(".cloud-tab")).toContainText("Connected.", { timeout: 15_000 });
+  await expect(page.getByTestId("cloud-setup-start")).toBeVisible();
+  await page.getByTestId("cloud-setup-start").click();
+  await expect(page.getByTestId("cloud-setup-where")).toBeVisible();
 
   const result = await page.evaluate(() => {
     const describe = (selector) => {

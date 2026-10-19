@@ -15,22 +15,30 @@ const HOSTED_PASSWORD = "CashFlux-Hosted-5732";
 const HOSTED_NEW_PASSWORD = "CashFlux-Hosted-New-6843";
 const BOOTSTRAP_USERNAME = "cashflux-owner";
 const BOOTSTRAP_PASSWORD = "CashFlux-Owner-6291";
+const SYNC_PASSCODE = "CashFlux-Standalone-7294";
 
 async function openCloud(page) {
   await nav(page, "/settings");
   await page.locator(".settings-page .set-tab-strip button", { hasText: "Cloud" }).first().click();
-  const remote = page.locator(".cloud-tab button", { hasText: "Remote" });
-  for (let attempt = 0; attempt < 3 && !(await remote.isVisible()); attempt += 1) {
-    const toggle = page.locator('[role="switch"]').first();
-    if ((await toggle.getAttribute("aria-checked")) !== "true") {
-      await toggle.press("Space", { timeout: 10_000 });
-    }
-    await expect(remote).toBeVisible({ timeout: 5_000 }).catch(() => {});
-  }
-  await expect(remote).toBeVisible();
-  await remote.click({ force: true, timeout: 10_000 });
+  await unlockIfNeeded(page);
+  const start = page.getByTestId("cloud-setup-start");
+  if (await start.isVisible()) await start.click();
+  await expect(page.getByTestId("cloud-setup-where")).toBeVisible({ timeout: 15_000 });
+  await page.getByRole("radio", { name: "Your own server", exact: true }).click();
+  await page.getByTestId("cloud-address-advanced").click();
   await page.getByTestId("sync-server-url").fill(`${BACKEND}/`);
+  await page.getByTestId("sync-test").click();
   await expect(page.getByTestId("sync-discovery-ok")).toBeVisible({ timeout: 20_000 });
+  await page.getByTestId("cloud-where-continue").click();
+}
+
+async function unlockIfNeeded(page) {
+  const gate = page.locator("#cf-applock-gate");
+  if (await gate.isVisible().catch(() => false)) {
+    await page.locator("#cf-applock-input").fill(SYNC_PASSCODE);
+    await gate.getByRole("button", { name: "Unlock" }).click();
+    await expect(gate).toBeHidden({ timeout: 10_000 });
+  }
 }
 
 async function openPasswordForm(page) {
@@ -47,11 +55,20 @@ async function openPasswordForm(page) {
 }
 
 async function rediscoverBackend(page) {
-  // Re-selecting Remote deliberately restarts discovery with the persisted
-  // address. Clearing/refilling the field would launch an empty-address probe
-  // that can race and overwrite the successful result.
-  await page.locator(".cloud-tab button", { hasText: "Remote" }).click({ force: true, timeout: 10_000 });
+  await unlockIfNeeded(page);
+  const start = page.getByTestId("cloud-setup-start");
+  if (await start.isVisible()) await start.click();
+  else {
+    await page.getByTestId("cloud-advanced").click();
+    await page.getByTestId("cloud-change-connection").click();
+    await expect(page.locator("#cf-dialog-confirm")).toBeVisible();
+    await page.locator("#cf-dialog-confirm").click();
+  }
+  await expect(page.getByTestId("cloud-setup-where")).toBeVisible({ timeout: 15_000 });
+  await page.getByTestId("cloud-address-advanced").click();
+  await page.getByTestId("sync-test").click();
   await expect(page.getByTestId("sync-discovery-ok")).toBeVisible({ timeout: 20_000 });
+  await page.getByTestId("cloud-where-continue").click();
 }
 
 async function choosePasswordMode(page, name) {
@@ -106,15 +123,30 @@ async function submitPassword(page) {
 }
 
 async function passwordLogin(page, username, password) {
+  await unlockIfNeeded(page);
   await choosePasswordMode(page, "Log in");
   await fillStable(page.getByTestId("password-auth-username"), username);
   await fillStable(page.getByTestId("password-auth-password"), password);
   await submitPassword(page);
+  const protect = page.getByTestId("sync-enable-passcode");
+  if (await protect.isVisible().catch(() => false)) {
+    await protect.click();
+    await page.locator("#cf-al-pass").fill(SYNC_PASSCODE);
+    await page.locator("#cf-al-confirm").fill(SYNC_PASSCODE);
+    await page.locator("#cf-al-ok").click();
+  }
+  const start = page.getByTestId("cloud-start-encrypted-sync");
+  if (await start.isVisible().catch(() => false)) {
+    await start.click();
+    await expect(page.getByTestId("sync-pulse")).toHaveAttribute("data-sync-state", "synced", { timeout: 30_000 });
+  }
 }
 
 async function passwordSignOut(page) {
   const button = page.getByRole("button", { name: "Sign out", exact: true });
   await button.click();
+  await expect(page.locator("#cf-dialog-confirm")).toBeVisible();
+  await page.locator("#cf-dialog-confirm").click();
   await expect(button).toHaveCount(0);
 }
 

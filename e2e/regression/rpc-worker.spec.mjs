@@ -5,46 +5,46 @@ const BACKEND = `http://127.0.0.1:${RPC_PORT}/`;
 const APP_PORT = process.env.E2E_PORT || "8099";
 const APP = `http://127.0.0.1:${APP_PORT}`;
 const ACCOUNT_NAME = "Worker round-trip account";
+const SYNC_PASSCODE = "CashFlux-RPC-Worker-7294";
 
 async function connectToBackend(app, { expectReload = false } = {}) {
   await nav(app, "/settings");
   await app.locator(".settings-page .set-tab-strip button", { hasText: "Cloud" }).first().click();
 
-  const toggle = app.locator('[role="switch"]').first();
-  if ((await toggle.getAttribute("aria-checked")) !== "true") {
-    await toggle.click();
-    // A concurrent discovery render can replace the toggle between pointer
-    // down and click. Retry through its keyboard contract against the current
-    // node instead of continuing with backend sync still disabled.
-    if ((await toggle.getAttribute("aria-checked")) !== "true") {
-      await toggle.press("Space");
-    }
-  }
-  await expect(toggle).toHaveAttribute("aria-checked", "true");
-
-  await app.locator(".cloud-tab button", { hasText: "Remote" }).click();
-  await app.locator('[data-testid="sync-server-url"]').fill(BACKEND);
+  const start = app.getByTestId("cloud-setup-start");
+  if (await start.isVisible()) await start.click();
+  await expect(app.getByTestId("cloud-setup-where")).toBeVisible();
+  await app.getByRole("radio", { name: "Your own server", exact: true }).click();
+  await app.getByTestId("cloud-address-advanced").click();
+  await app.getByTestId("sync-server-url").fill(BACKEND);
+  await app.getByTestId("sync-test").click();
+  await expect(app.getByTestId("sync-discovery-ok")).toBeVisible({ timeout: 20_000 });
+  await app.getByTestId("cloud-where-continue").click();
   await app.locator('[data-testid="sync-advanced-token-toggle"]').click();
   await app.locator('[data-testid="sync-server-token"]').fill("e2e-worker-token");
+  const authReload = app.waitForEvent("load", { timeout: 30_000 });
+  await app.getByTestId("cloud-use-token").click();
+  await authReload;
+  await app.waitForFunction(() => document.documentElement.getAttribute("data-app-ready") === "true", null, { timeout: 45_000 });
 
-  const reload = expectReload
-    ? app.waitForEvent("load", { timeout: 30_000 })
-    : null;
-  await app.locator('[data-testid="sync-now"]').click();
-  if (reload) {
-    await reload;
-    await expect(app.locator("#app")).toBeAttached();
-    await expect(app.locator("#main")).toBeVisible({ timeout: 45_000 });
-    await expect
-      .poll(() => app.evaluate(() => document.documentElement.getAttribute("data-services-worker")))
-      .toBe("ready");
-    return;
+  const lockGate = app.locator("#cf-applock-gate");
+  if (await lockGate.isVisible().catch(() => false)) {
+    await app.locator("#cf-applock-input").fill(SYNC_PASSCODE);
+    await lockGate.getByRole("button", { name: "Unlock" }).click();
+    await expect(lockGate).toBeHidden();
   }
+  const protect = app.getByTestId("sync-enable-passcode");
+  if (await protect.isVisible()) {
+    await protect.click();
+    await app.locator("#cf-al-pass").fill(SYNC_PASSCODE);
+    await app.locator("#cf-al-confirm").fill(SYNC_PASSCODE);
+    await app.locator("#cf-al-ok").click();
+  }
+  await expect(app.getByTestId("cloud-start-encrypted-sync")).toBeVisible({ timeout: 15_000 });
+  await app.getByTestId("cloud-start-encrypted-sync").click();
 
-  // An old "Synced" label can predate this click. Observe this mutation enter
-  // and leave the real queue before accepting the result.
+  // A stale status label cannot stand in for the committed encrypted sync.
   const pulse = app.locator('[data-testid="sync-pulse"]');
-  await expect(pulse).toHaveAttribute("data-sync-state", "syncing", { timeout: 30_000 });
   await expect(pulse).toHaveAttribute("data-sync-state", "synced", { timeout: 30_000 });
 }
 

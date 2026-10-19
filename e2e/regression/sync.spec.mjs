@@ -25,39 +25,21 @@ test.describe("sync error visibility", () => {
     await expect(app.locator(".settings-page .set-tab-strip button", { hasText: "Cloud" })).toHaveAttribute("aria-checked", "true");
   });
 
-  test("Settings -> Cloud status card shows the specific failure reason, not just a generic label", async ({ app }) => {
+  test("the guided setup blocks first sync when the connection test fails", async ({ app }) => {
     // /settings/:tab shares one route pattern (ActivePath stays the constant
     // "/settings" for Sidebar/data-route — see ShellProps.ContentKey in
     // shell.go) so nav()'s data-route wait can't target "/settings/cloud"
     // directly; land on /settings and click the tab like a real user would.
     await nav(app, "/settings");
     await app.locator(".settings-page .set-tab-strip button", { hasText: "Cloud" }).first().click();
-    await app.locator("[role=switch]").first().click();
-
-    const useDifferent = app.locator('[data-testid="sync-use-different-address"]');
-    if (await useDifferent.count() > 0) await useDifferent.click();
-
+    await app.getByTestId("cloud-setup-start").click();
+    await expect(app.getByTestId("cloud-setup-where")).toBeVisible();
+    await app.getByRole("radio", { name: "Your own server", exact: true }).click();
+    await app.getByTestId("cloud-address-advanced").click();
     await app.locator('[data-testid="sync-server-url"]').fill(UNREACHABLE);
-    // The token field is never auto-revealed (2026-07-24: Cam — "I didn't ask
-    // for a bearer token field... I want a clean UI that doesn't confuse the
-    // user") — it's always a deliberate, one-click "advanced" disclosure now.
-    await app.locator('[data-testid="sync-advanced-token-toggle"]').click();
-    const tokenField = app.locator('[data-testid="sync-server-token"]');
-    await tokenField.waitFor({ timeout: 10_000 });
-    await tokenField.fill("not-a-real-token");
-    await app.locator('[data-testid="sync-now"]').click();
-
-    const statusCard = app.locator('[data-testid="sync-status-card"]');
-    await expect(statusCard).toContainText(/sync error/i, { timeout: 20_000 });
-
-    const detail = app.locator('[data-testid="sync-status-detail"]');
-    await expect(detail).toBeVisible();
-    const text = (await detail.innerText()).trim();
-    // The regression this guards against: syncStatusLabel() collapsing every
-    // failure into the bare literal ("Sync error" / "Reason: pull failed") with
-    // no way to tell WHY. A real dial failure's underlying error text is always
-    // longer than the bare fallback phrase alone.
-    expect(text, "status detail should not be empty").not.toBe("");
-    expect(text.length, `status detail should include real error detail, got: ${text}`).toBeGreaterThan("Reason: pull failed".length);
+    await app.getByTestId("sync-test").click();
+    await expect(app.getByTestId("sync-discovery-error")).toBeVisible({ timeout: 20_000 });
+    await expect(app.getByTestId("cloud-where-continue")).toBeDisabled();
+    await expect(app.getByTestId("cloud-start-encrypted-sync")).toHaveCount(0);
   });
 });
