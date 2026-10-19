@@ -20,9 +20,9 @@ func TestApplyOnceFillsOnlyWhatIsMissing(t *testing.T) {
 		t.Error("Any() = false when three actions applied")
 	}
 
-	// Set member replaces an existing single owner.
-	if got := r.ApplyOnce("m-marcus", false, false); got.MemberID != "m-priya" {
-		t.Errorf("replacement member = %q, want m-priya", got.MemberID)
+	// A rule only fills a missing owner; it never silently reassigns one.
+	if got := r.ApplyOnce("m-marcus", false, false); got.MemberID != "" {
+		t.Errorf("existing member change = %q, want no change", got.MemberID)
 	}
 
 	// Already reviewed / already excluded: flags are unchanged, while the member
@@ -31,8 +31,25 @@ func TestApplyOnceFillsOnlyWhatIsMissing(t *testing.T) {
 	if got.Reviewed || got.ExcludeFromReports {
 		t.Errorf("re-applied flags that were already set: %+v", got)
 	}
-	if got.MemberID != "m-priya" || !got.Any() {
-		t.Error("member replacement should remain active while flags are already set")
+	if got.MemberID != "" || got.Any() {
+		t.Error("existing member and flags should remain unchanged")
+	}
+}
+
+func TestApplyOnceFillsMissingMemberWithoutReplacingExistingOwner(t *testing.T) {
+	r := Rule{SetMemberID: "new-owner"}
+	for _, tc := range []struct {
+		name, current, want string
+	}{
+		{"missing", "", "new-owner"},
+		{"existing", "alice", ""},
+		{"already configured", "new-owner", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := r.ApplyOnce(tc.current, false, false).MemberID; got != tc.want {
+				t.Fatalf("member action = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }
 

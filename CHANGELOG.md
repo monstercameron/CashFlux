@@ -90,6 +90,10 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Rules match whole phrases, respect currency and keep amount sizes (TC3B9).** Payee/description matching uses whole
+  phrases; an amount condition with a currency only matches that currency and still compares amount sizes, so saved rules
+  keep working; actions fill a missing member without replacing an owner; the planner honours category precedence and skips
+  transfers; suggestions use cleaned merchant keys.
 - **Split, ledger and filter totals are exact (TC3B4).** Split reconciliation rejects an overflow that wraps back to the
   amount; category spend series count uncategorized split spending and skip refund lines; preset counts match the filter;
   transfer targets are validated against known accounts.

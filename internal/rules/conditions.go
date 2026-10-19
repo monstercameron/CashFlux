@@ -99,8 +99,14 @@ func NewTxnDate(t time.Time) TxnDate { return TxnDate{t: t} }
 //   - accountID: the account ID the transaction belongs to
 //   - txnDate: the transaction date (zero value disables date conditions)
 func MatchConditions(conditions []RuleCondition, payee, desc string, amountMinor int64, accountID string, txnDate TxnDate) bool {
+	return MatchConditionsWithCurrency(conditions, payee, desc, amountMinor, "", accountID, txnDate)
+}
+
+// MatchConditionsWithCurrency evaluates conditions against a transaction whose
+// amount is expressed in the supplied currency's minor units.
+func MatchConditionsWithCurrency(conditions []RuleCondition, payee, desc string, amountMinor int64, currency, accountID string, txnDate TxnDate) bool {
 	for _, c := range conditions {
-		if !matchOneCondition(c, payee, desc, amountMinor, accountID, txnDate) {
+		if !matchOneCondition(c, payee, desc, amountMinor, currency, accountID, txnDate) {
 			return false
 		}
 	}
@@ -110,7 +116,7 @@ func MatchConditions(conditions []RuleCondition, payee, desc string, amountMinor
 // matchOneCondition evaluates a single RuleCondition. Returns false if the value
 // cannot be parsed for numeric/date operators — an unparseable condition does not
 // crash; it simply does not match.
-func matchOneCondition(c RuleCondition, payee, desc string, amountMinor int64, accountID string, txnDate TxnDate) bool {
+func matchOneCondition(c RuleCondition, payee, desc string, amountMinor int64, currency, accountID string, txnDate TxnDate) bool {
 	switch c.Field {
 	case ConditionFieldPayee:
 		// The payee condition tests the raw descriptor AND its deterministic
@@ -126,13 +132,34 @@ func matchOneCondition(c RuleCondition, payee, desc string, amountMinor int64, a
 	case ConditionFieldDescription:
 		return matchText(desc, c.Op, c.Value)
 	case ConditionFieldAmount:
+		if c.Currency != "" && !strings.EqualFold(strings.TrimSpace(c.Currency), strings.TrimSpace(currency)) {
+			return false
+		}
 		return matchAmount(amountMagnitude(amountMinor), c.Op, c.Value)
+	case ConditionFieldFlow:
+		return matchFlow(amountMinor, c.Op, c.Value)
 	case ConditionFieldAccount:
 		return matchAccount(accountID, c.Op, c.Value)
 	case ConditionFieldDate:
 		return matchDate(txnDate.t, c.Op, c.Value)
 	default:
 		// Unknown field: treat as not-matching so users notice typos.
+		return false
+	}
+}
+
+// matchFlow evaluates a direction condition from the signed amount. Zero has
+// no flow direction and does not match either value.
+func matchFlow(amountMinor int64, op ConditionOp, value string) bool {
+	if op != ConditionOpEquals {
+		return false
+	}
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "inflow":
+		return amountMinor > 0
+	case "outflow":
+		return amountMinor < 0
+	default:
 		return false
 	}
 }
@@ -149,10 +176,9 @@ func matchText(fieldVal string, op ConditionOp, value string) bool {
 	}
 }
 
-// matchAmount evaluates a numeric condition against the amount's magnitude in
-// minor units. The condition value uses the transaction currency's minor unit
-// (for example, cents for USD); signs never change the comparison.
-func matchAmount(amountMinor int64, op ConditionOp, value string) bool {
+// matchAmount evaluates a numeric condition against the amount magnitude in
+// minor units. The condition value uses the transaction currency's minor unit.
+func matchAmount(magnitudeMinor int64, op ConditionOp, value string) bool {
 	v, err := strconv.ParseInt(strings.TrimSpace(value), 10, 64)
 	if err != nil {
 		return false
@@ -160,22 +186,23 @@ func matchAmount(amountMinor int64, op ConditionOp, value string) bool {
 	v = amountMagnitude(v)
 	switch op {
 	case ConditionOpEq:
-		return amountMinor == v
+		return magnitudeMinor == v
 	case ConditionOpNeq:
-		return amountMinor != v
+		return magnitudeMinor != v
 	case ConditionOpLt:
-		return amountMinor < v
+		return magnitudeMinor < v
 	case ConditionOpGt:
-		return amountMinor > v
+		return magnitudeMinor > v
 	case ConditionOpLte:
-		return amountMinor <= v
+		return magnitudeMinor <= v
 	case ConditionOpGte:
-		return amountMinor >= v
+		return magnitudeMinor >= v
 	default:
 		return false
 	}
 }
 
+// amountMagnitude returns the absolute value without overflowing for MinInt64.
 func amountMagnitude(amount int64) int64 {
 	if amount == -1<<63 {
 		return 1<<63 - 1

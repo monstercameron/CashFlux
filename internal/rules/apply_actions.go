@@ -29,7 +29,7 @@ func (a Applied) Any() bool {
 // curExcluded its current flags.
 func (r Rule) ApplyOnce(curMember string, curReviewed, curExcluded bool) Applied {
 	var out Applied
-	if r.SetMemberID != "" && curMember != r.SetMemberID {
+	if r.SetMemberID != "" && curMember == "" {
 		out.MemberID = r.SetMemberID
 	}
 	if r.SetReviewed && !curReviewed {

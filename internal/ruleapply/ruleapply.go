@@ -93,19 +93,30 @@ type Change struct {
 // Ordered by transaction ID so the same rule against the same ledger always
 // produces the same plan — a bulk edit that shuffles between runs cannot be
 // diffed, reviewed, or trusted.
-func Plan(r rules.Rule, txns []domain.Transaction, scope Scope, since time.Time) []Change {
+func Plan(r rules.Rule, txns []domain.Transaction, scope Scope, since time.Time, ruleSets ...[]rules.Rule) []Change {
 	if strings.TrimSpace(r.SetCategoryID) == "" {
 		// A rule with no category to set has nothing to apply here. Its other
 		// actions (tags, rename, member) are apply-once by design and are not this
 		// package's business.
 		return nil
 	}
+	precedence := []rules.Rule{r}
+	if len(ruleSets) > 0 {
+		precedence = append([]rules.Rule(nil), ruleSets[0]...)
+	}
+	sort.SliceStable(precedence, func(i, j int) bool { return precedence[i].Order < precedence[j].Order })
 	var out []Change
 	for _, t := range txns {
 		if !InScope(t, scope, since) {
 			continue
 		}
-		if !r.MatchesTxn(ctxOf(t)) || t.CategoryID == r.SetCategoryID {
+		if t.IsTransfer() || t.CategoryID == r.SetCategoryID {
+			continue
+		}
+		categoryRule := rules.FirstMatchFullWhereCurrency(precedence, t.Payee, t.Desc, t.Amount.Amount, t.Amount.Currency, t.AccountID, rules.NewTxnDate(t.Date), func(candidate rules.Rule) bool {
+			return strings.TrimSpace(candidate.SetCategoryID) != ""
+		})
+		if categoryRule == nil || categoryRule.ID != r.ID {
 			continue
 		}
 		out = append(out, Change{TxnID: t.ID, FromCategoryID: t.CategoryID, ToCategoryID: r.SetCategoryID})

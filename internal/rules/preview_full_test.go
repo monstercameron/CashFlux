@@ -19,7 +19,7 @@ func fullCtxs() []TxnCtx {
 }
 
 func TestMatchCountFullConditions(t *testing.T) {
-	// amount magnitude > 10000 (large transactions in either flow direction) — a condition rule the legacy MatchCount
+	// amount > 10000 (magnitude, so large transactions in either flow direction) — a condition rule the legacy MatchCount
 	// reads as 0 because its Match phrase is empty/ignored.
 	r := Rule{
 		ID:            "big",
@@ -46,7 +46,7 @@ func TestCoveredFullMixedRules(t *testing.T) {
 		{ID: "big", SetCategoryID: "shopping", Conditions: []RuleCondition{{Field: ConditionFieldAmount, Op: ConditionOpGt, Value: "10000"}}},
 		{ID: "cafe", Match: "cafe", SetCategoryID: "dining"},
 	}
-	// Two Big Store rows and payroll (condition) + Corner Cafe (phrase) = 4 of 4.
+	// Both Big Store outflows and payroll match by magnitude; Corner Cafe matches the phrase rule.
 	if got := CoveredFull(rs, fullCtxs()); got != 4 {
 		t.Fatalf("CoveredFull = %d, want 4", got)
 	}

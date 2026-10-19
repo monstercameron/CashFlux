@@ -79,6 +79,38 @@ func TestSuggestUsesDescWhenNoPayee(t *testing.T) {
 	}
 }
 
+func TestSuggestUsesCleanedMerchantKeysAndAvoidsConflictingSubstrings(t *testing.T) {
+	txns := []domain.Transaction{
+		tx("SQ *UBER", "ride", "transport"),
+		tx("SQ *UBER", "ride", "transport"),
+		tx("SQ *UBER", "ride", "transport"),
+		tx("Uber Eats", "meal", "dining"),
+		tx("Uber Eats", "meal", "dining"),
+		tx("Uber Eats", "meal", "dining"),
+		tx("SQ *BLUE BOTTLE #47", "coffee", "cafe"),
+		tx("SQ *BLUE BOTTLE #47", "coffee", "cafe"),
+		tx("SQ *BLUE BOTTLE #47", "coffee", "cafe"),
+	}
+	got := Suggest(txns, nil, 3)
+	if len(got) != 2 {
+		t.Fatalf("suggestions = %+v, want Uber Eats and cleaned Blue Bottle keys", got)
+	}
+	seenBlueBottle, seenUberEats := false, false
+	for _, s := range got {
+		switch s.Rule.Match {
+		case "Blue Bottle":
+			seenBlueBottle = s.Rule.SetCategoryID == "cafe"
+		case "Uber Eats":
+			seenUberEats = s.Rule.SetCategoryID == "dining"
+		case "Uber":
+			t.Fatal("short Uber key was suggested despite Uber Eats' conflicting category")
+		}
+	}
+	if !seenBlueBottle || !seenUberEats {
+		t.Fatalf("cleaned/long suggestions missing: %+v", got)
+	}
+}
+
 // TestSuggestSkipsConditionCoveredKeys proves a condition-bearing rule (which
 // the legacy substring check can't see) suppresses suggestions for a key whose
 // transactions it already governs.

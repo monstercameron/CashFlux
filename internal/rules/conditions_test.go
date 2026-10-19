@@ -3,6 +3,7 @@
 package rules
 
 import (
+	"strconv"
 	"testing"
 	"time"
 )
@@ -88,9 +89,9 @@ func TestMatchConditions(t *testing.T) {
 			desc:       "Morning Coffee",
 			want:       true,
 		},
-		// 5. Amount > condition (greater than in minor units).
+		// 5. Amount > condition (greater than in magnitude, in minor units).
 		{
-			name:        "amount > passes",
+			name:        "negative spending amount > 5000 matches by magnitude",
 			conditions:  []RuleCondition{{Field: ConditionFieldAmount, Op: ConditionOpGt, Value: "5000"}},
 			amountMinor: -7500,
 			want:        true,
@@ -98,11 +99,11 @@ func TestMatchConditions(t *testing.T) {
 		{
 			name:        "amount > fails",
 			conditions:  []RuleCondition{{Field: ConditionFieldAmount, Op: ConditionOpGt, Value: "5000"}},
-			amountMinor: -3000,
+			amountMinor: 3000,
 			want:        false,
 		},
 		{
-			name:        "legacy signed threshold compares by magnitude",
+			name:        "negative threshold compares by magnitude",
 			conditions:  []RuleCondition{{Field: ConditionFieldAmount, Op: ConditionOpGt, Value: "-5000"}},
 			amountMinor: -7500,
 			want:        true,
@@ -117,7 +118,7 @@ func TestMatchConditions(t *testing.T) {
 		{
 			name:        "amount < fails",
 			conditions:  []RuleCondition{{Field: ConditionFieldAmount, Op: ConditionOpLt, Value: "100"}},
-			amountMinor: -500,
+			amountMinor: 500,
 			want:        false,
 		},
 		// 7. Account is / is-not.
@@ -208,7 +209,7 @@ func TestMatchConditions(t *testing.T) {
 			},
 			payee:       "Uber Eats",
 			accountID:   "acc-1",
-			amountMinor: 500, // positive, so LT 0 fails
+			amountMinor: 500, // magnitude 500 is not less than zero
 			want:        false,
 		},
 		// 12. Unparseable amount value: safe non-match.
@@ -228,7 +229,7 @@ func TestMatchConditions(t *testing.T) {
 		{
 			name:        "amount == mismatch",
 			conditions:  []RuleCondition{{Field: ConditionFieldAmount, Op: ConditionOpEq, Value: "2500"}},
-			amountMinor: 2501,
+			amountMinor: -2501,
 			want:        false,
 		},
 	}
@@ -238,6 +239,61 @@ func TestMatchConditions(t *testing.T) {
 			got := MatchConditions(tc.conditions, tc.payee, tc.desc, tc.amountMinor, tc.accountID, tc.txnDate)
 			if got != tc.want {
 				t.Errorf("MatchConditions = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestAmountConditionsRespectSignAndCurrency(t *testing.T) {
+	tests := []struct {
+		name, txnCurrency, conditionCurrency string
+		op                                   ConditionOp
+		amount, threshold                    int64
+		want                                 bool
+	}{
+		{"negative spending amount compares by magnitude", "USD", "USD", ConditionOpGt, -12_000, 10_000, true},
+		{"positive income amount compares by magnitude", "USD", "USD", ConditionOpGt, 12_000, 10_000, true},
+		{"same minor units in another currency do not match", "JPY", "USD", ConditionOpGt, -12_000, 10_000, false},
+		{"currency comparison ignores case and surrounding spaces", "usd", " USD ", ConditionOpGt, -12_000, 10_000, true},
+		{"missing condition currency is currency agnostic", "JPY", "", ConditionOpGt, -12_000, 10_000, true},
+		{"negative threshold compares by magnitude", "USD", "USD", ConditionOpGt, -12_000, -10_000, true},
+		{"minimum int amount does not overflow", "USD", "USD", ConditionOpGt, -1 << 63, 9_000_000_000_000_000_000, true},
+		{"minimum int threshold does not overflow", "USD", "USD", ConditionOpEq, 1<<63 - 1, -1 << 63, true},
+		{"minimum int magnitudes saturate safely", "USD", "USD", ConditionOpGt, -1 << 63, 1<<63 - 1, false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			condition := RuleCondition{Field: ConditionFieldAmount, Op: tc.op, Value: strconv.FormatInt(tc.threshold, 10), Currency: tc.conditionCurrency}
+			got := MatchConditionsWithCurrency([]RuleCondition{condition}, "", "", tc.amount, tc.txnCurrency, "", TxnDate{})
+			if got != tc.want {
+				t.Fatalf("match = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestFlowConditionsDistinguishInflowsFromOutflows(t *testing.T) {
+	tests := []struct {
+		name   string
+		amount int64
+		op     ConditionOp
+		value  string
+		want   bool
+	}{
+		{"spending is an outflow", -5_000, ConditionOpEquals, "outflow", true},
+		{"refund is an inflow", 5_000, ConditionOpEquals, "inflow", true},
+		{"outflow does not match inflow", -5_000, ConditionOpEquals, "inflow", false},
+		{"inflow does not match outflow", 5_000, ConditionOpEquals, "outflow", false},
+		{"zero has no flow direction", 0, ConditionOpEquals, "inflow", false},
+		{"flow value comparison ignores case and spaces", 1, ConditionOpEquals, " INFLOW ", true},
+		{"unsupported flow operator does not match", -1, ConditionOpGt, "outflow", false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			condition := RuleCondition{Field: ConditionFieldFlow, Op: tc.op, Value: tc.value}
+			got := MatchConditions([]RuleCondition{condition}, "", "", tc.amount, "", TxnDate{})
+			if got != tc.want {
+				t.Fatalf("match = %v, want %v", got, tc.want)
 			}
 		})
 	}

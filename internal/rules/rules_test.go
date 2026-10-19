@@ -56,6 +56,27 @@ func TestEmptyMatchNeverFires(t *testing.T) {
 	}
 }
 
+func TestLegacyCategoryMatchUsesWordBoundaries(t *testing.T) {
+	for _, tc := range []struct {
+		text string
+		want bool
+	}{
+		{"Rent payment", true},
+		{"Current Electric", false},
+		{"Currents Coffee", false},
+		{"Parent Teacher Assoc", false},
+		{"Rental car SFO", false},
+		{"SQ *RENT #4", true},
+	} {
+		t.Run(tc.text, func(t *testing.T) {
+			got := FirstMatchFull([]Rule{{Match: "rent", SetCategoryID: "housing"}}, tc.text, "", 0, "", TxnDate{}) != nil
+			if got != tc.want {
+				t.Fatalf("rule matched=%v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 // TestFirstMatchIgnoresCurrentCategory verifies that FirstMatch (which drives the
 // backfill path) returns a rule regardless of whether the transaction already has a
 // category. The caller — not this package — decides whether to overwrite; the match

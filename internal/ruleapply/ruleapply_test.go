@@ -74,6 +74,29 @@ func TestAllScopeChangesOnlyWhatActuallyDiffers(t *testing.T) {
 	}
 }
 
+func TestPlanHonorsCategoryPrecedenceAndSkipsTransfers(t *testing.T) {
+	transactions := []domain.Transaction{
+		txn("prime", "Amazon Prime", "old", d(2025, time.June, 1)),
+		txn("market", "Amazon Marketplace", "old", d(2025, time.June, 2)),
+		txn("transfer", "Coffee transfer", "old", d(2025, time.June, 3)),
+	}
+	transactions[2].TransferAccountID = "other-account"
+	ruleset := []rules.Rule{
+		{ID: "amazon", Match: "Amazon", SetCategoryID: "shopping", Order: 2},
+		{ID: "prime", Match: "Amazon Prime", SetCategoryID: "subscriptions", Order: 1},
+		{ID: "coffee", Match: "Coffee", SetCategoryID: "dining", Order: 3},
+	}
+
+	got := Plan(ruleset[0], transactions, ScopeAll, time.Time{}, ruleset)
+	if len(got) != 1 || got[0].TxnID != "market" {
+		t.Fatalf("lower-priority Amazon plan = %+v, want only market", got)
+	}
+	got = Plan(ruleset[2], transactions, ScopeAll, time.Time{}, ruleset)
+	if len(got) != 0 {
+		t.Fatalf("transfer leg plan = %+v, want no changes", got)
+	}
+}
+
 func TestSinceScopeStartsOnTheChosenDay(t *testing.T) {
 	changes := Plan(coffeeRule(), ledger(), ScopeSince, d(2025, time.January, 1))
 	if len(changes) != 1 || changes[0].TxnID != "t2" {

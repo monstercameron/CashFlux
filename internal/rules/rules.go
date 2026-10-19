@@ -9,6 +9,7 @@ package rules
 import (
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/monstercameron/CashFlux/internal/payeeclean"
 )
@@ -20,6 +21,7 @@ const (
 	ConditionFieldPayee       ConditionField = "payee"
 	ConditionFieldDescription ConditionField = "description"
 	ConditionFieldAmount      ConditionField = "amount"
+	ConditionFieldFlow        ConditionField = "flow"
 	ConditionFieldAccount     ConditionField = "account"
 	ConditionFieldDate        ConditionField = "date"
 )
@@ -28,10 +30,10 @@ const (
 type ConditionOp string
 
 const (
-	// Text operators (payee, description).
+	// Text operators; equals also compares flow direction.
 	ConditionOpContains ConditionOp = "contains"
 	ConditionOpEquals   ConditionOp = "equals"
-	// Numeric operators (amount — matched against the signed amount in minor units).
+	// Numeric operators (amount — matched against magnitude in minor units).
 	ConditionOpEq  ConditionOp = "=="
 	ConditionOpNeq ConditionOp = "!="
 	ConditionOpLt  ConditionOp = "<"
@@ -49,13 +51,17 @@ const (
 )
 
 // RuleCondition is a single structured condition on one transaction field.
-// Value is always stored as a string; the matching logic parses it to float64
-// or a date when the field/op requires it. An invalid parse causes the
+// Value is stored as a string; the matching logic parses it as minor units or a
+// date when the field/operator requires it. Amount comparisons use magnitude;
+// flow conditions use "inflow" or "outflow". An invalid parse causes the
 // condition to be treated as not-matching.
 type RuleCondition struct {
 	Field ConditionField `json:"field"`
 	Op    ConditionOp    `json:"op"`
 	Value string         `json:"value"`
+	// Currency scopes amount conditions to this currency. Value remains integer
+	// minor units; an empty currency preserves transaction-local matching.
+	Currency string `json:"currency,omitempty"`
 }
 
 // Rule matches transaction text and assigns a category and/or tags. When
@@ -141,6 +147,34 @@ func matches(text, pattern string) bool {
 	return strings.Contains(strings.ToLower(text), strings.ToLower(pattern))
 }
 
+// matchesRule reports whether pattern occurs as a whole phrase in text. Unicode
+// letters and digits form words; punctuation and whitespace separate them.
+func matchesRule(text, pattern string) bool {
+	textRunes, patternRunes := []rune(strings.ToLower(text)), []rune(strings.ToLower(strings.TrimSpace(pattern)))
+	if len(patternRunes) == 0 || len(patternRunes) > len(textRunes) {
+		return false
+	}
+	for start := 0; start+len(patternRunes) <= len(textRunes); start++ {
+		if start > 0 && isRuleWordRune(textRunes[start-1]) {
+			continue
+		}
+		match := true
+		for i, r := range patternRunes {
+			if textRunes[start+i] != r {
+				match = false
+				break
+			}
+		}
+		end := start + len(patternRunes)
+		if match && (end == len(textRunes) || !isRuleWordRune(textRunes[end])) {
+			return true
+		}
+	}
+	return false
+}
+
+func isRuleWordRune(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) }
+
 // FirstMatch returns the first rule whose Match is found in text, or nil.
 // Rules with structured Conditions are skipped by this function — use
 // FirstMatchFull when you have all transaction fields available.
@@ -150,7 +184,7 @@ func FirstMatch(rs []Rule, text string) *Rule {
 		if len(rs[i].Conditions) > 0 {
 			continue
 		}
-		if matches(text, rs[i].Match) {
+		if matchesRule(text, rs[i].Match) {
 			return &rs[i]
 		}
 	}
@@ -172,10 +206,14 @@ func FirstMatchFull(rs []Rule, payee, desc string, amountMinor int64, accountID 
 // Coffee") matches the processor descriptor ("SQ *BLUE BOTTLE #47") too —
 // commercial parity: rules target either the original or the cleaned value.
 func ruleMatchesFull(r Rule, payee, desc string, amountMinor int64, accountID string, txnDate TxnDate) bool {
+	return ruleMatchesFullCurrency(r, payee, desc, amountMinor, "", accountID, txnDate, payeeclean.Suggest(payee))
+}
+
+func ruleMatchesFullCurrency(r Rule, payee, desc string, amountMinor int64, currency, accountID string, txnDate TxnDate, cleanPayee string) bool {
 	if len(r.Conditions) > 0 {
-		return MatchConditions(r.Conditions, payee, desc, amountMinor, accountID, txnDate)
+		return MatchConditionsWithCurrency(r.Conditions, payee, desc, amountMinor, currency, accountID, txnDate)
 	}
-	return matches(payee+" "+desc+" "+payeeclean.Suggest(payee), r.Match)
+	return matchesRule(payee+" "+desc+" "+cleanPayee, r.Match)
 }
 
 // FirstMatchFullWhere returns the first rule that both matches the transaction and
@@ -184,11 +222,18 @@ func ruleMatchesFull(r Rule, payee, desc string, amountMinor int64, accountID st
 // bill account — so that action isn't shadowed by an earlier rule whose only job is a
 // different action (category/tags/rename). Preserves first-match-wins ordering.
 func FirstMatchFullWhere(rs []Rule, payee, desc string, amountMinor int64, accountID string, txnDate TxnDate, pred func(Rule) bool) *Rule {
+	return FirstMatchFullWhereCurrency(rs, payee, desc, amountMinor, "", accountID, txnDate, pred)
+}
+
+// FirstMatchFullWhereCurrency returns the first matching rule with the
+// transaction amount currency available to structured amount conditions.
+func FirstMatchFullWhereCurrency(rs []Rule, payee, desc string, amountMinor int64, currency, accountID string, txnDate TxnDate, pred func(Rule) bool) *Rule {
+	cleanPayee := payeeclean.Suggest(payee)
 	for i := range rs {
 		if pred != nil && !pred(rs[i]) {
 			continue
 		}
-		if ruleMatchesFull(rs[i], payee, desc, amountMinor, accountID, txnDate) {
+		if ruleMatchesFullCurrency(rs[i], payee, desc, amountMinor, currency, accountID, txnDate, cleanPayee) {
 			return &rs[i]
 		}
 	}
@@ -224,7 +269,7 @@ func Conflicts(rs []Rule) []Conflict {
 				continue
 			}
 			earlier := strings.ToLower(strings.TrimSpace(rs[i].Match))
-			if earlier != "" && strings.Contains(later, earlier) {
+			if earlier != "" && matchesRule(later, earlier) {
 				out = append(out, Conflict{Index: j, ShadowedBy: i})
 				break
 			}

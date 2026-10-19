@@ -12,8 +12,10 @@ package rulesuggest
 import (
 	"sort"
 	"strings"
+	"unicode"
 
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/payeeclean"
 	"github.com/monstercameron/CashFlux/internal/rules"
 )
 
@@ -21,6 +23,14 @@ import (
 // category before it's worth suggesting (so the odd miscategorized txn doesn't
 // block a clear pattern, but a genuinely mixed key is skipped).
 const consistency = 0.8
+
+type suggestionAggregate struct {
+	key     string
+	display string
+	total   int
+	covered int
+	byCat   map[string]int
+}
 
 // Suggestion is a proposed rule plus the evidence behind it: how many of the
 // matching transactions support it and the total seen for that key.
@@ -40,52 +50,57 @@ func Suggest(txns []domain.Transaction, existing []rules.Rule, minCount int) []S
 		minCount = 2
 	}
 
-	// Per normalized key: the first-seen original text, total count, per-category
-	// counts, and how many of the key's transactions an existing rule ALREADY
-	// catches under full structured-condition matching — a condition-bearing rule
-	// (invisible to the legacy substring check) can govern a key just as well.
-	type agg struct {
-		display string
-		total   int
-		covered int
-		byCat   map[string]int
-	}
-	keys := map[string]*agg{}
+	// Per normalized key: display text, counts, and existing-rule coverage.
+	keys := map[string]*suggestionAggregate{}
 	for _, t := range txns {
 		if t.IsTransfer() || t.CategoryID == "" {
 			continue
 		}
-		text := t.Payee
-		if strings.TrimSpace(text) == "" {
-			text = t.Desc
+		text := strings.TrimSpace(t.Payee)
+		if text == "" {
+			text = strings.TrimSpace(t.Desc)
+		} else {
+			text = strings.TrimSpace(payeeclean.Suggest(text))
 		}
-		text = strings.TrimSpace(text)
 		norm := strings.ToLower(text)
 		if len(norm) < 3 {
 			continue // too short to be a meaningful match
 		}
 		a := keys[norm]
 		if a == nil {
-			a = &agg{display: text, byCat: map[string]int{}}
+			a = &suggestionAggregate{key: norm, display: text, byCat: map[string]int{}}
 			keys[norm] = a
 		}
 		a.total++
 		a.byCat[t.CategoryID]++
-		if rules.FirstMatchFull(existing, t.Payee, t.Desc, t.Amount.Amount, t.AccountID, rules.NewTxnDate(t.Date)) != nil {
+		if rules.FirstMatchFullWhereCurrency(existing, t.Payee, t.Desc, t.Amount.Amount, t.Amount.Currency, t.AccountID, rules.NewTxnDate(t.Date), nil) != nil {
 			a.covered++
 		}
 	}
 
+	dominant := make(map[string]string, len(keys))
+	for key, a := range keys {
+		bestCat, bestN := "", 0
+		for cat, n := range a.byCat {
+			if n > bestN || (n == bestN && cat < bestCat) {
+				bestCat, bestN = cat, n
+			}
+		}
+		if a.total >= minCount && bestCat != "" && float64(bestN)/float64(a.total) >= consistency {
+			dominant[key] = bestCat
+		}
+	}
+	conflicting := conflictingKeys(keys, dominant)
 	var out []Suggestion
 	for _, a := range keys {
 		if a.total < minCount {
 			continue
 		}
 		// Find the dominant category for this key.
-		bestCat, bestN := "", 0
+		bestCat, bestN := dominant[a.key], 0
 		for cat, n := range a.byCat {
-			if n > bestN || (n == bestN && cat < bestCat) {
-				bestCat, bestN = cat, n
+			if cat == bestCat {
+				bestN = n
 			}
 		}
 		if bestCat == "" || float64(bestN)/float64(a.total) < consistency {
@@ -100,6 +115,9 @@ func Suggest(txns []domain.Transaction, existing []rules.Rule, minCount int) []S
 			continue
 		}
 		if float64(a.covered)/float64(a.total) >= consistency {
+			continue
+		}
+		if conflicting[a.key] {
 			continue
 		}
 		out = append(out, Suggestion{
@@ -117,6 +135,39 @@ func Suggest(txns []domain.Transaction, existing []rules.Rule, minCount int) []S
 	})
 	return out
 }
+
+// conflictingKeys rejects broad short keys contained as whole phrases in
+// longer keys with a different dominant category. It indexes substrings of each
+// merchant key instead of comparing every pair of keys.
+func conflictingKeys(keys map[string]*suggestionAggregate, dominant map[string]string) map[string]bool {
+	conflicting := make(map[string]bool)
+	for longer, otherCategory := range dominant {
+		if otherCategory == "" {
+			continue
+		}
+		runes := []rune(longer)
+		for start := 0; start < len(runes); start++ {
+			if start > 0 && merchantWordRune(runes[start-1]) {
+				continue
+			}
+			for end := start + 1; end <= len(runes); end++ {
+				if end < len(runes) && merchantWordRune(runes[end]) {
+					continue
+				}
+				if end-start == len(runes) {
+					continue
+				}
+				short := string(runes[start:end])
+				if _, exists := keys[short]; exists && dominant[short] != otherCategory {
+					conflicting[short] = true
+				}
+			}
+		}
+	}
+	return conflicting
+}
+
+func merchantWordRune(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) }
 
 // ForPayee returns the rule suggestion for ONE payee, or ok=false when that
 // payee does not clear the same bar a bulk suggestion has to (LF-10).
