@@ -1,3 +1,25 @@
+## 2026-10-19 - Transactions page critic loop, Phase 0 landed, first security follow-ups
+
+The Transactions page went through three rounds of an adversarial critic (5.5 → 6.8 → 7.8 out of 10) with Luna and
+Wonder lanes doing the fixes and every finding filed in TODOS.md. Three lessons worth keeping. First, a lane can "fix"
+dead code: R2E migrated `transactions_row.go`, which only the unreachable `transactionsLegacy()` renders, while the live
+pencil opens `transaction_edit_form.go`; the legacy ledger is now ticketed for deletion (R3D). Second, CSS fixes must be
+checked in a browser, not only by style tests: the bulk bar's black page survived a "fix" because the rule targeted
+`#txn-bulkbar` while `uiw.Widget` renders `data-widget`, and an `overflow-x:auto` on the bar silently turned the other
+axis into a scroll container that clipped every picker. Third, "≤ 8 menu items" was met once by truncating the list,
+which dropped features; targets must say "consolidate, never drop".
+
+Committing a tree that ~70 lanes touched could not be one commit per ticket: many files carry several lanes' hunks.
+It went in as dependency-ordered groups (pure logic, store/appstate, client app, UI, server, release stamping), each
+local commit labelled with its lanes, and the batch was pushed only after a HEAD export passed the native build, the
+wasm build of the app and the services worker, wasm vet and `go test ./...`.
+
+The automated security review of those pushes found real issues: an import could plant an OpenAI key when the device
+had none (fixed, SEC1); the 30-second refresh-token reuse grace is not bound to the requester (SEC2); the AI credential
+is not re-keyed when App Lock changes, and a server-URL change clears the dataset owner (SEC3); the keyring's pairing
+code is too short and its metadata unauthenticated (SV1.1, before pairing ships). SV3a's IndexedDB adapter failed review
+and stays uncommitted until SV3a.1 lands.
+
 ## 2026-10-18 - why storage, sync and identity keep breaking, and the v2 plan
 
 Cam reported four symptoms together: edits lost or reverted, sync stuck or erroring, devices showing

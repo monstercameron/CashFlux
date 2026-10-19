@@ -12594,7 +12594,7 @@ acceptance checks pass on a clean HEAD and the diff has been reviewed.
   boot = decrypt snapshot → load → replay; leader Web Lock `cashflux:leader:<scope>`; BroadcastChannel per scope;
   compaction at idle in chunks. Accept: fake-store tests for append/replay/compaction/quarantine; wasm test for
   two tabs appending concurrently converging.
-- [ ] **SV4 [W][SERVER] Schema v18 blind change log.** Depends SV0.3 landed. New `internal/server/blobsync*.go`,
+- [ ] **SV4 [W][SERVER] Schema v19 blind change log.** Depends SV0.3 landed. New `internal/server/blobsync*.go`,
   migration in `store.go`: `change_log`, `ws_snapshot`, `keyring`, `pairing_relay`, workspace tombstones; RPCs
   `AppendChanges` (one `BEGIN IMMEDIATE` tx, dedupe by change_id, gap-free seq), `ListChanges`, `PutSnapshot`
   (only if covers_seq advances), `GetSnapshot`, `Get/PutKeyring` (CAS), `DeleteWorkspace`, `Watch`; scope check on
@@ -12634,3 +12634,410 @@ acceptance checks pass on a clean HEAD and the diff has been reviewed.
 - [ ] **SV9 [L+Opus][SECURITY] Review.** Read-only Luna reviewer lanes, one module each (keyring, localdb, syncv2,
   server blobsync, auth), findings only with a concrete trigger; Opus triage; fixes become SV9.x tickets; protocol
   and key notes go into existing `SECURITY.md` and `docs/SELF_HOSTING.md`.
+
+### SV review findings (each one becomes a lane; added as reviews land)
+
+- [ ] **SVR1 [L][PERSIST] Quarantine follow-ups from the SV0.4 review.** Files: `internal/app/quarantine.go`,
+  `internal/app/persist.go`. (a) Every reload of a still-corrupt dataset writes ANOTHER full copy under a new
+  `cashflux:quarantine:<ts>` key — dedupe by SHA-256 of the bytes and reuse the existing record. (b) After a
+  reload the banner's "Download" works only for the in-session copy — load the newest quarantine record at boot.
+  (c) Replace `window.confirm` with the app's `uistate.ConfirmModalLabeled`. (d) In hosted mode the server is
+  authoritative: quarantine the unreadable local cache but still let the hosted gate pull the account's data
+  (today `initializeHostedHydration(false)` strands a hosted user with no data). (e) The banner is imperative DOM
+  with hard-coded hex colours — render it with theme tokens (CSS variables) so it works in dark mode.
+- [ ] **SVR2 [L][PERSIST] Quarantine an encrypted dataset that fails after a verified unlock.** File:
+  `internal/app/datasetcryptowire.go`. In `hydrateFromPasscode`, once the passcode is verified, a decrypt or
+  `ImportJSON` failure must call `quarantineDataset(pendingEnvelopeRaw, reason)` instead of leaving the app in an
+  undefined state; a successful import sets `hydrationSucceeded = true`. A wrong passcode must NOT quarantine.
+- [ ] **SVR3 [L][STORAGE] Awaited writes must report failure.** Files: `internal/browserstore/*.go`.
+  `SetThen` calls its callback on IndexedDB commit AND on error/abort, so no caller can tell durable from failed
+  (breaks SV principle 2). Add `SetDurable(key, val string, done func(error))` using a `readwrite` transaction with
+  `durability: "strict"`, calling `done(nil)` only on `complete` and `done(err)` on `error`/`abort`; same for
+  `RemoveDurable`. Keep `SetThen` for compatibility but implement it on top. Tests in the existing wasm test style.
+- [ ] **SVR4 [L][APPLOCK] App Lock follow-ups from the SV0.7 review.** Files: `internal/app/applocksettings.go`,
+  `internal/app/shortcuts.go` (after SV0.5 lands), `internal/app/applock.go`. (a) Settings and the command palette
+  call `disableAppLock()` and refresh / announce "removed" immediately, before the new vault confirmation — pass
+  the completion callback instead. (b) A corrupt vault now blocks every passcode change with no way forward —
+  offer "Change passcode and discard the unreadable bank-login vault" behind a named confirmation (keep a raw
+  copy under a quarantine key first).
+- [ ] **SVR5 [L][STORAGE] Keep `SetThen`'s old cache semantics (SVR3 review).** File:
+  `internal/browserstore/browserstore.go`. SVR3 re-implemented `SetThen` on top of `SetDurable`, so the in-memory
+  cache now changes only after commit, and in fallback mode (no IndexedDB) never — a caller that writes with
+  `SetThen` and reads the key before the callback (or any session without IndexedDB) now sees the OLD value. Keep
+  `SetDurable`/`RemoveDurable` as written; make `SetThen` update the cache and publish immediately as before, then
+  persist via the durable path and log failures. Audit every `SetThen` caller (`grep -rn "SetThen(" internal`) and
+  list any that read back before the callback. Test: wasm test that `GetString` right after `SetThen` returns the
+  new value, including fallback mode.
+
+## TX — Transactions page bug hunt (2026-10-18) ★
+
+Found by 13 read-only reviewer lanes (one per module) plus a hands-on browser pass. Full evidence per finding
+(file:line, trigger, expected vs actual, fix) lives in the review reports; each ticket lists its finding IDs.
+Every fix lane must first reproduce the defect with a failing test, then fix it.
+
+- [ ] **TXB1 [L] Scope-line summary and NL date apply.** `internal/screens/transactions_tiles.go` (~701, ~1088-1106),
+  `txn_countline.go`, `internal/txnclassify/pair.go`. "$X moved between your accounts" adds BOTH legs of every
+  transfer, doubling the figure (TXR1-1, TXR3-1); the unpaired-leg count matches look-alikes instead of
+  `TransferGroupID` (TXR3-2) and is O(n²) per render (TXR3-3, 10.9M inspections at 3,300 rows); applying a
+  natural-language "since March" keeps a stale end date (TXR6-1).
+- [ ] **TXB2 [L] Multi-row writes are not atomic.** `internal/appstate/appstate.go`, `internal/appstate/transfer_ops.go`.
+  Deleting a transfer whose second leg fails leaves a half-deleted pair and skips the change notification
+  (TXR11-4); editing a transfer pair persists leg one then returns on leg-two error without restoring (TXR8-1);
+  bulk delete failure still clears selection and offers undo for rows never deleted (TXR11-5); legacy
+  cross-currency transfer legs are not recognised as a pair (TXR4-3); pair expansion is O(selected × ledger) (TXR4-4).
+- [ ] **TXB3 [L] Upcoming strip marks a bill settled by a future-dated transaction** (TXR1-2).
+  `internal/screens/txn_upcoming_strip.go` ~80-96.
+- [ ] **TXB4 [L] Ledger sorting.** `internal/screens/transactions_widget.go`. Description sorts by raw `Desc`, not the
+  rendered text (TXR2-1); register mode keeps sortable headers that do nothing (TXR2-2).
+- [ ] **TXB5 [L] Inline row edit adds a hook conditionally** (TXR4-1). `internal/screens/transactions_row.go` ~210:
+  `ui.UseEvent` only while editing — violates fixed hook order; register it unconditionally.
+- [ ] **TXB6 [L] Quick-add turns "Spent 40 at Refund Center" into income** (TXR4-2). `internal/screens/txn_draft_hint.go`
+  ~235-246, `internal/app/quickadd.go` ~534-538: substring "refund" anywhere flips the sign.
+- [ ] **TXB7 [L] Calendar view.** `internal/screens/transactions_calendar.go`, `internal/txncalendar/`. Day totals add
+  minor units across currencies (TXR5-1); recurring ghosts ignore the member scope (TXR5-2) and show paused
+  series (TXR5-3); the 400-step catch-up cap drops valid occurrences for old schedules (TXR5-4).
+- [ ] **TXB8 [L] Saved-view totals add unconvertible amounts as base currency** (TXR6-2). `internal/screens/savedviews.go`,
+  `internal/savedtxnview/`.
+- [ ] **TXB9 [L] Balance math.** `internal/engineenv/engineenv.go` ~336-340: one bad account zeroes assets/liabilities
+  (TXR7-1); `internal/ledger/ledger.go` ~79-84 reconcile adjustment overflows to MinInt64 with ok=true (TXR7-2).
+- [ ] **TXB10 [L] Transfer pairing and review.** `internal/transferpair/transferpair.go` ~311 treats an ungrouped
+  look-alike as the declared counterpart (TXR8-2); `internal/screens/transfer_review.go` ~215 duplicate render keys
+  and test IDs across currencies (TXR8-3).
+- [ ] **TXB11 [L] Review inbox.** `internal/screens/review_surface.go`, `review_suggest.go`, `review_rows.go`,
+  `review_inbox.go`, `internal/reviewqueue/`, `internal/screens/txn_catsuggest_chip.go`, `internal/uistate/learntally_store.go`.
+  An account-specific rule is suggested for other accounts (TXR9-1); group totals add mixed currencies (TXR9-2);
+  categorising an unbalanced split never resolves its review item (TXR9-3); per-row suggestion chips make "All"
+  quadratic — measured ~12 s to render (TXR12-1).
+- [ ] **TXB12 [L] Refund links.** `internal/txnlinks/`, `internal/appstate/txnlink_ops.go`, `internal/screens/txn_refundpair.go`.
+  A refund can be paired twice and netted twice (TXR11-1); cross-currency matching compares raw minor units
+  (TXR11-2); link writes bypass the read-only role guard (TXR11-3).
+- [ ] **TXB13 [L] Splits.** `internal/screens/split_editor.go`, `transaction_split_form.go`, `receipt_split_flow.go`,
+  `internal/settle/settle.go`, `internal/appstate/settle.go`. The editor never re-seeds from an accepted proposal
+  (TXR10-1); settle-up nets mixed currencies (TXR10-2); two receipt lines with the same name share one category (TXR10-3).
+- [ ] **TXB14 [L] History, provenance, follow-ups.** `internal/screens/txn_history_panel.go` shows oldest first while
+  claiming newest first (TXR13-1) and silently drops events beyond the newest 500 global entries (TXR13-2);
+  `txn_provenance.go` memo key collides across views (TXR13-3); `txn_followup.go` discards write errors (TXR13-4).
+- [ ] **MZ1 [L] Background music ("muzak") must be OFF by default.** A missing `cashflux:muzak` setting is treated as
+  "on" everywhere: `internal/app/muzakpersist.go` ~43 and ~100 (`MusicState{Enabled: true}`),
+  `internal/app/applockgate.go` ~147 and ~246 (`== "0"` checks), the `uistate` atom default, and `web/muzak.js`.
+  New installs (and anyone who never touched the toggle) must start silent; only an explicit "1" turns it on. Keep
+  an explicit user choice as is. Test the default and the explicit on/off round trip.
+- [ ] **TXU1 [L] Empty and future-month states; search box.** `internal/screens/transactions.go`, `txn_nomatch.go`,
+  the search input component. A future month (e.g. November) prints "No matching transactions." TWICE and says
+  nothing about the bills already scheduled that month — show one empty state, and when the period is in the
+  future say how many scheduled items fall in it with a link to Bills & recurring. The search field shows TWO clear
+  buttons (the browser's native `type=search` cancel button plus the app's "Clear search") — keep only the app's.
+- [ ] **TXU2 [L] Filter chips and bulk bar clarity** (after TXB1/TXB4). `internal/screens/transactions_tiles.go`,
+  `internal/i18n/en_detail2.go`. The search chip reads `Filtering: "coffee"` inside a row already labelled
+  "FILTERING BY" — say `Search: coffee`. Date chips show ISO (`From 2026-10-01`) — use the household date style.
+  The bulk bar wraps to two rows of 13 controls; the member picker defaults to "No one", and "Group", "Cleared /
+  Uncleared", "Exclude / Include" are unexplained — give each a verb label + tooltip, group them (Categorise ·
+  Assign · Status · More), keep Delete separate and last.
+- [ ] **TXU3 [L] Add-transaction form** (after TXB6). `internal/app/quickadd*.go` and its screen. Saving with an
+  empty amount silently focuses the field — show an inline error and set `aria-invalid`. There are two competing
+  primary buttons ("Save & add another" full width, "Save" bottom right) — one primary. The quick-entry sentence
+  box has a placeholder but no label. A transaction the user typed in is tagged `#needs-review` unless "Mark as
+  reviewed" is ticked, and gets no member — default to reviewed and to the current member.
+- [ ] **TXU4 [L] Row cells** (after TXB4/TXB5). `internal/screens/transactions_row.go`, `transactions_widget.go`, row CSS.
+  The "auto" badge truncates the category name ("Everyday …"); the category-suggestion chip ("Dining?") and tag
+  chips ("#coffe", "#needs-") are clipped; every Edit button for same-named rows has the same label ("Edit Coffee"
+  ×20) — include date and amount in the accessible name. The edit modal does not offer the row's suggested category.
+- [ ] **SVR6 [L][SYNC] Embedded sync bridges never resolve identity, so SV0.1's fail-closed rule would stop every
+  push.** `internal/server/grpcbridge.go` `NewSyncBridgeHandler` / `NewSyncAndAuthBridgeHandler` (used by
+  `pkg/embed`, e.g. the PersonalWebsite embed) serve only `/grpc` and `/v1/version`, not `GET /v1/me`; the client
+  learns its user ID only from `/v1/me` (`internal/app/sync_identity.go` `refreshSignedInUserID`). Serve `/v1/me`
+  (the same `handleMe`, with CORS) from both bridge handlers, and on the client, when identity cannot be resolved
+  (404, network, auth), set a visible sync status ("Can't confirm which account this is — sync is paused") instead
+  of silently parking the queue. Tests: bridge handler answers `/v1/me` for a static token; client status on failure.
+- [ ] **SVR7 [L][MODEL] A fuzz input hangs the change-batch decoder.** `go test ./internal/changes -fuzz
+  '^FuzzUnmarshalBatch$'` stops executing (190,464 execs, then 0/sec indefinitely) — some input never returns
+  from `UnmarshalBatch` (or validation/canonicalisation it calls). The decoder will read server-supplied bytes, so
+  this is a denial-of-service bug. Find the input (wrap the fuzz body in a goroutine with a deadline that fails and
+  prints the input), add it to the seed corpus as a regression, fix the root cause (bounded loops, size/depth limits
+  before work), and make a 60 s fuzz run complete.
+- [ ] **SVR8 [L][CRYPTO] A fuzz input hangs the keyring parser.** `go test ./internal/keyring -fuzz '^FuzzParseKeyring$'`
+  stalls after ~6 s (113,764 execs, then 0/sec); the fuzz body only calls `Parse` and `Marshal`. The keyring blob
+  comes back from the server, so this is a denial-of-service bug. Same symptom as SVR7 in `internal/changes` —
+  likely the same hand-rolled strict-JSON token loop. Same method and acceptance as SVR7.
+- [ ] **SVR9 [L][AUTH] OAuth cookie refresh lacks the 30 s reuse grace.** `internal/server/oauth_http.go`
+  `handleOAuthRefresh` still consumes then issues; SV0.3 added `Store.RotateRefreshSession` with a grace window for
+  the gRPC path only. Use it here so a duplicate refresh within 30 s returns the same successor pair and later
+  reuse revokes the family. HTTP tests for both outcomes.
+- [ ] **SVR10 [L][PERSIST] SVR1 removed `store.UnreadableDatasetReason` but `internal/app/hydrate.go` still calls it
+  — the app does not compile.** Restore the classifier (corrupt JSON, truncated envelope, future schema, whitespace)
+  in `internal/store/quarantine.go` beside SVR1's record helpers, with its table tests, and keep `hydrate.go` calling it.
+- [ ] **INT1 [L] Integration breaks between lanes + the new sync states in the UI.** (a) `sync_client.go` calls
+  `removeQueuedSyncMutationFor(user, workspace, hash)` (~1124, ~1145) but only `removeQueuedSyncMutation(workspace,
+  hash)` exists — add the owner-scoped version and use it everywhere an acknowledgement removes a queue entry.
+  (b) `transactions_tiles.go` ~1494 ignores the second return of `DeleteTransactionsBulk` (TXB2 now returns the IDs
+  actually deleted): keep selection/undo accurate to those IDs. (c) Surface the new sync states from SV0.1/SVR6 —
+  `locked-different-passcode` (with the "Replace the server copy with this device's data" action behind a named
+  confirmation, calling `ReplaceServerCopyWithThisDevice`) and `identity-unknown` — in `syncStatusLabel()`,
+  `syncchip.go` and the Cloud settings card (`cloudtab.go`).
+- [ ] **TXB15 [L] Per-transaction audit query; atomic task completion** (after TXB2). From the TXB14 review:
+  `App.TransactionAudit` reads the whole audit table — add an entity-filtered query in `internal/store/crud.go`
+  (with an index if the table supports it). `CompleteTask` marks a recurring task done and then creates its successor
+  in a separate write, so a failed successor write leaves a completed task with no next occurrence — make both one
+  store transaction (`internal/appstate`).
+- [ ] **TXU5 [W] Reorder the Transactions page by importance** (after TXB1/TXB4/TXB5/TXU2/TXU4 land; one lane owns all
+  touched files). Decisions (Opus, 2026-10-18), most-used first:
+  1. **Toolbar row 1:** Search (widest) · date scope (‹ Month › with "This month" / "All dates") · Filters (count) ·
+     **Add transaction** (the one primary button, right). Keep the header's global "+" quick-add; remove nothing else.
+  2. **Row 2:** Review inbox becomes an attention callout shown only when N > 0 ("249 charges need review — Review
+     now"); Rules and Views move into the "More" menu; Ledger / Calendar toggle on the right.
+  3. **Upcoming strip** sits below the toolbar, one line, collapsible (remembered per device).
+  4. **Count line** ("Showing X of Y · net · moved") stays directly above the table.
+  5. **Pagination** lives at the bottom only; the top keeps a plain "1–25 of 3,292" text. Fewer Tab stops before the
+     first row.
+  6. **Columns:** select · Date · Description (payee/merchant + tags on a second line, flexible width) · Category ·
+     Account · Amount (right-aligned) · Status · actions. "User" shows only when viewing Everyone in a household with
+     more than one member, as a narrow initials badge with the full name in the accessible name.
+  Measure after: Tab stops before the first row ≤ 15 at 1440 px; nothing truncated in Description at 1200 px.
+- [ ] **TXP-BASE (baseline, 2026-10-18, isolated HEAD build, 3,292 rows):** route switch to /transactions 1.85 s; each
+  search keystroke 1.0–1.9 s; sort by Amount 1.7 s; "All" rows for a 319-row search ~12 s. Targets after the
+  performance tickets: route switch < 300 ms, keystroke < 100 ms (debounced), sort < 150 ms, All < 1 s.
+
+### TX — accessibility, links and performance (Transactions page only, 2026-10-18)
+Evidence: reviewer reports TXA1 (a11y), TXL1 (links), TXP1 (performance), plus the coordinator's browser baseline.
+- [ ] **TXL2 [L] Shell links on this page are real router links.** `internal/app/shell.go`, `custompagesnav.go`,
+  `internal/ui/widget.go`. Sidebar/mobile nav anchors call `Prevent(navigate)` unconditionally, blocking
+  Ctrl/Cmd/Shift/middle-click "open in new tab" (TXL1-1); Help, Customize and Notifications are buttons that navigate
+  (TXL1-2); custom-page links (TXL1-3, TXL1-4). Plain left-click → router (`anchorintercept.go`); modified clicks →
+  browser. Sidebar link accessible names include the whole "Alt and the up or down arrow…" hint — move it to
+  `aria-describedby` once per list.
+- [ ] **TXL3 [L] Page links.** `txn_followup.go` ~290, `txn_upcoming_strip.go` ~171-175, `review_surface.go` ~469 and
+  ~1304-1308, `txn_smartcat.go` ~324 — destinations rendered as buttons/`location` changes become `<a href>` with
+  router interception (TXL1-6..9).
+- [ ] **TXA2 [L] Contrast and focus tokens.** The shared `--border` control-boundary token is 1.31:1 (dark) / 1.29:1
+  (light) against cards — below the 3:1 non-text minimum (TXA1-6); add a control-outline token ≥ 3:1 for inputs,
+  selects and filter panels in both themes (keep row separators calm). The Transactions search input shows no focus
+  indicator — use the shared focus ring.
+- [ ] **TXA3 [L] Table a11y** (after TXB4/TXB5): TXA1-1..5 in `transactions_widget.go` (sort state, unique row-action
+  names with date + amount, truncated description readable in full, duplicate keyboard handler at
+  `transactions.go` ~922-947 vs widget ~319-344). Add "Skip to transactions" and keep pagination after the table.
+- [ ] **TXP2 [L] Table rendering** (after TXB4/TXB5/TXA3): TXP1-1..3 — filter/sort once per (data revision, filter)
+  and memoize; rows re-render only when their own transaction changes; no full-ledger ID slice per render.
+- [ ] **TXP3 [L] Toolbar rendering** (after INT1): TXP1-4/5 + TXL1-5 + TXU2 in `transactions_tiles.go` — one shared
+  derived summary per (revision, filter), filter options memoized, search debounced (~150 ms) without blocking input.
+- [ ] **TXP4 [L] Shared ledger cache** (after TXB15): TXP1-6 — `App.Transactions()` copies all rows per call; return a
+  shared read-only snapshot keyed by data revision (document immutability) and give callers an index by ID.
+- [ ] **SVR11 [L][TEST] Tests left behind by SV0.3/SVR9.** (a) `internal/server/http_test.go` ~1418
+  `TestOAuthCallbackIssuesSessionAndRefreshLogout` still expects an immediate refresh-token reuse to fail; with the
+  30 s grace it must return the same successor pair — update it with a controllable clock, assert reuse after 30 s
+  revokes the family, and add a test that the grace NEVER applies after logout or explicit revocation (a logged-out
+  refresh token is rejected even within 30 s; if that fails, fix the server). (b) `pkg/embed/admin_test.go` ~329, ~430
+  call `PutSnapshot` without a workspace row and now hit the foreign key — create the workspace first (or use the
+  atomic write API), keeping what the tests assert.
+
+### TX — functional test pass (2026-10-18, isolated working-tree build, every input and feature on /transactions)
+- [ ] **TXT1 [L] Searching a tag as displayed ("#coffee-run") finds nothing**; "coffee-run" finds 197. Strip a leading
+  `#` (and match tags exactly or by prefix) in the search matcher (`internal/txnfilter`).
+- [ ] **TXT2 [L] Two empty-state messages.** With no matches the count line says "No matching transactions." AND the
+  empty card says "Nothing matches…" — keep only the card (`txn_countline.go`, `txn_nomatch.go`).
+- [ ] **TXT3 [L] Inverted amount range silently returns nothing.** Min 500 / Max 100 shows zero rows with no message;
+  chips read "≥ 500" / "≤ 100" with no field name or currency. Show an inline "Minimum is larger than maximum"
+  (or swap), and label chips "Amount ≥ $500" (filter panel + chips in `transactions_tiles.go`).
+- [ ] **TXT4 [L] Inverted date range accepted.** From Oct 31 / To Oct 1 → period label "Oct 31, 2026 – Oct 1, 2026" and
+  zero rows. Validate or swap (same files as TXT3).
+- [ ] **TXT5 [L] "Money in (income)" includes transfer legs** — 481 incoming transfer legs (mortgage payments into the
+  Mortgage account, owner's draws) and a net of "$385,943.00 income". Direction filters must exclude transfers unless
+  a "Transfers" option is chosen (`internal/txnfilter`).
+- [ ] **TXT6 [L] Intermittent console error "call to released function"** seen once after Clear all + "Money in" filter +
+  All rows with the filter panel open; not reproduced in isolation. Audit `js.FuncOf`/`Release` in the filter panel and
+  toolbar for handlers released while their elements stay in the DOM.
+- [ ] **TXT7 [L] Split editor "14.00 left to assign"** lacks the currency — format with the transaction's currency.
+- [ ] **TXT8 [L] Bulk categorize marks rows "auto".** Filing two rows under Dining from the bulk bar shows the "auto"
+  (automation) badge on both — a user's explicit choice must record a manual source (`transactions_tiles.go` bulk
+  handler, `txn_provenance.go`).
+- [ ] **TXT9 [L] The count line's net includes "excluded from reports" rows without saying so** — either exclude them
+  or append "(includes 1 excluded)".
+- [ ] **TXT10 [L] Member scope hides unassigned transactions.** Marcus 2,578 + Priya 711 = 3,289 of 3,292; the 3
+  unassigned ($1,420) appear under no member and there is no "Unassigned" choice — add one.
+- [ ] **TXT11 [L] Review dialog opens on an empty "This view (0)"** when the page filters exclude every review item
+  while 247 wait elsewhere — open on "Everything" when the current view has none (`review_surface.go`).
+- [ ] **TXT12 [L] Amount search** — "6.75" / "$6.75" find nothing; support exact-amount search (`internal/txnfilter`).
+- [ ] **TXT13 [L] Page number input** — typing letters blanks the field; restore the current page on blur.
+- [ ] **GATE1 [L] Native gate failures (2026-10-18).** (a) `internal/appstate/appstate_more_test.go:183`
+  `TestPutSettingsAndRedactedExport` still expects the manual JSON export to keep the OpenAI key; SV0.8 made every
+  export omit it by design — update the test to assert the key is absent from every export and still present in
+  memory after `ImportJSON`. (b) `internal/screenlint` `TestNoNewHardcodedEnglish`: 1 new hardcoded user-facing
+  string in `internal/app`, 2 in `internal/screens` — move them into the i18n catalog (`uistate.T` + a NEW
+  `internal/i18n/en_*.go`); keep the baseline at 0.
+- [ ] **TXU6 [L] Finish the reorder (from the TXU5 review).** Shared components TXU5 could not edit: (a)
+  `internal/ui/filtertoolbar.go` + `internal/screens/transactions_scopebar.go` — row one is Search → date scope →
+  Filters → Add (keyboard order too), row two holds Ledger/Calendar, the review callout and More; (b)
+  `internal/ui/overflowmenu.go` + `internal/screens/savedviews.go` — Saved Views lives inside More; (c) the page range
+  appears twice in different formats ("1–25 of 3,292" in the count line and "1–25 of 3292" above the table) — show it
+  once, with grouped digits.
+- [ ] **GATE2 [L] wasm component test failures (2026-10-18).** (a) `internal/screens/registry_test.go:98`
+  `TestToolsSubGroups` (pre-existing, July) — every primary route now carries a sidebar sub-group (daily/plan/next/
+  insights/setup) by design; update the test to the current IA. (b) `txn_followup_txb14_test.go:26` fixture builds a
+  task with an invalid priority. (c) `TestTXF6PageJumpAllowsInvalidDraftAndRestoresCurrentPage`
+  (`internal/ui/pager_txf6_test.go:37`): the page input is `type=number` again — a later lane undid TXF6; restore it.
+  (d) `TestSV07VaultRekeysFromOldPasscodeToNewPasscode` times out waiting for Web Crypto and the `internal/app` wasm
+  test binary then hangs for 10 minutes — make Web-Crypto tests await without blocking the JS event loop (or skip with
+  a clear reason when `crypto.subtle` is missing in the runner), and give every async wasm test a hard deadline.
+
+### TX — critic refinement loop (target 9/10; round 1 = 5.5/10, 2026-10-18)
+Full critic findings C1-1..C1-20 + coordinator M-items: C:\Users\mreca\cfsv2\critic\round1_result.md (copied into
+each lane brief's reading list). Lanes (disjoint files):
+- [ ] **R1A [L] Top-of-page compaction** — C1-1 (datatable TopPager bug, fold Upcoming into the count line, first row
+  ≤ 300 px), C1-8 (default This month, Spent/Income/Net line, digit grouping), C1-20 aria-live only on filter change.
+- [ ] **R1B [L→W review] Table body** — C1-2 amounts, C1-3 status/cleared vocabulary, C1-9 single column-width file,
+  C1-10 selected tint/no zebra, C1-12 44 px single-line rows, C1-15 menu item names/order/trigger names, M5.
+- [ ] **R1C [L] Bulk bar + chips + callout** — C1-4, C1-13, C1-16, chips part of C1-7 (period never a chip).
+- [ ] **R1D [L] Period dropdown + filter sheet** — C1-7 (scopebar), C1-11 (filter sheet), M4 (Esc clears search).
+- [ ] **R1E [L→W review] Shared Add/Edit form** — C1-5, C1-18, M2.
+- [ ] **R1F [L] Ledger keyboard workflow** — C1-14.
+- [ ] **R1G [L] Review dialog polish** — C1-17.
+- [ ] **R1H [L] Calendar + future ghost rows** — C1-19, C1-20 calendar part.
+- [ ] **R1I [L] Row menu component** — C1-15 anchoring/flip/owning-row highlight in `internal/ui/overflowmenu.go`, M6 effect panic.
+- [ ] **R1J [L] Merchant name cleanup** — M11 strip processor prefixes/store numbers; M12 confirmation toast.
+- [ ] **R1P [W] Performance to targets** — C1-6 (after R1A/R1B/R1C land).
+- [ ] **R2Q [L] Link-payment picker and sentence payee case** — Q4: `txn_link.go` / `internal/app/txnlinkhost.go` list
+  every recurring series as a subscription and never preselect the matching one; filter by kind (subscriptions for
+  "Subscription", bills for "Bill payment") and preselect the best match (same payee/description, amount within 10%).
+  Q2: `txn_draft_hint.go` sentence parse returns a lowercase merchant ("whole foods") — title-case it.
+- [ ] **R2K [L] Enter in the quick-add sentence box discards the entry** (Q1). Typing a sentence and pressing Enter
+  closes the Add dialog and saves nothing. Enter must apply the parsed fill (same as "Fill it in") and keep the dialog
+  open; Enter elsewhere in the form keeps today's behaviour.
+- [ ] **R2E [L] Edit modal on the shared form** — C1-5 remainder: the ledger Edit modal (`transactions_row.go`) still
+  uses the old order, no bank text, scrolls at 900 px; migrate it to `TxnSharedForm`; Q3 suggestions ignore direction.
+- [ ] **R2A [L] Layout regressions + count line** — B1-B5 in `my_findings_r2.md` (date/User clipping, truncation,
+  "Month · N transactions · Spent · Income · Net", fold Upcoming into the count line, first row ≤ 300 px, ≥ 16 rows).
+- [ ] **R2F [L] Filter sheet on Transactions** — wire `FilterSheet: true` and finish C1-11 content.
+- [ ] **GATE3 [L] Tests after round 2 + zero-net format bug.** Outdated assertions superseded by later decisions:
+  `rules_r1b_test.go:24` (widths changed by R2A), `transactions_tiles_txp3_wasm_test.go:46` ("Categorise" → US
+  "Categorize", C1-16), `transactions_txu5_wasm_test.go:106` / `transactions_txu6_wasm_test.go:23` (range text removed
+  from the count line by R2A, B4), `txf2_validation_wasm_test.go:60` (excluded wording), `txn_countline_r1a_wasm_test.go:19`
+  (new count-line format). Real bug: a zero net renders "Net +0.00" without the currency symbol — must read "Net $0.00".
+
+Round 2 capture (2026-10-18 ~22:50Z, evidence `cfsv2/critic/round2.md`) found these; round-2 critic score pending.
+- [ ] **R3E [L] The live Edit modal is `transaction_edit_form.go`, not `transactions_row.go`.** R2E migrated the legacy
+  row editor, which only `transactionsLegacy()` renders (dead code). The ledger pencil opens `TxnEditHost` →
+  `TransactionEditForm`, which still has the old order, no pre-offered suggestion, no bank text, and scrolls at 900 px.
+  Rebuild it on `TxnSharedForm`.
+- [ ] **R3N [L] Counts, period and review scope.** "1 transactions" (count line uses a bare plural key); Filters badge 1
+  vs "Clear all 3 filters" (period bounds still counted); "Later month" shows the period select as "Custom range";
+  empty future month drops the count line; "249 to review →" opens the dialog on "This view (2) … match your 2
+  filters"; review dialog amounts still red "($6.75)"; unlabelled "+" beside the category select.
+- [ ] **R3S [L] Filter sheet clipped to ~90 px at the top right; Description column truncates** since Category and
+  Account went to 210 px.
+- [ ] **R3M [L] Calendar still shows red parenthesised day and week totals** ("($6.75)", "($2,622.00)").
+- [ ] **R3K [L] Row menu mounts all 10 items in every closed row** (perf, ~250 hidden nodes per page); still 10 items
+  (target ≤ 8); bulk bar is inline and pushes rows instead of a bottom overlay.
+- [ ] **R3D [L] Delete the dead legacy ledger.** `transactionsLegacy()` (`transactions.go`) and `TransactionRow`
+  (`transactions_row.go`) are kept alive only by `var _ = transactionsLegacy` (`transactions_widget.go:41`). Lanes keep
+  fixing them by mistake (R2E). Move any helper the live screen still calls into its own file, delete the rest and
+  their tests. Run after the R3 lanes land.
+- [ ] **R3J [L] Ledger keys die after the Review dialog closes.** `HandleReviewKey` keeps the closed dialog's j/k/Enter
+  actions (`ClearReviewKeys` only runs if the unmounted surface re-renders); first `j` skips row 1; closing the "?"
+  guide drops focus to the body; `e`/`c` target the legacy inline editor's selectors.
+
+Critic round 2 (2026-10-18 ~23:05Z): **6.8/10**, ITERATE (usefulness 7.5, readability 7, clarity 6, polish 6.5,
+workflows 6.5, a11y/perf 5.5). Full result: `cfsv2/critic/round2_result.md` (C2-1..C2-22). Already in flight: R3E
+(C2-3), R3N (C2-1, C2-4, C2-6 screen side, C2-13 review, C2-15), R3S (C2-2, C2-8), R3M (C2-13 calendar), R3K (C2-11,
+C2-12 menu, C2-18), R3J (C2-21 partly). Queued for round 4, each starting when its files are free:
+- [ ] **R4A [L] Period is a preset, page filters exclude it** — C2-5 (saved "This month" stored as absolute dates goes
+  stale next month; store the preset), C2-6 remainder (`transactions_tiles.go:910/1302` still use `ActiveFilters()`
+  including the period; Clear all keeps the period), C2-7 ("Search all dates (N) →" when a search is limited to the
+  period), coordinator N1-N4 (`cfsv2/critic/my_findings_r3.md`: Clear all resets the period; Spent/Income do not toggle
+  and lack aria-pressed; off-direction total shown under a direction filter; empty values sort first), C2-19 (future
+  month in the ledger layout).
+- [ ] **R4C [L] Columns and transfers** — C2-9 (drop the Status column, "Review" pill in Category), C2-10 (transfer legs
+  read "Transfer → Mortgage", one sign rule), C2-16 (Member header named, no pawn glyph; empty member blank), C2-17
+  (review callout attention style), Date 100 px without the year when the period is one year.
+- [ ] **R4F [L] Add form requires a hidden field** — C2-14: Description is required but hidden under More details while
+  Payee says "(optional)"; one of Payee/Description required and visible.
+- [ ] **R4G [L] Main pane chrome** — C2-20 (`scrollbar-gutter: stable` on the main pane), C2-22 (accent outline around
+  the whole main pane, likely the focus ring on `#main[tabindex=-1]`).
+- [ ] **R3P [W] Perf root cause** (after the Muse quota reset at 00:00Z) — C2-12: count line runs a second full filter
+  pass; ~1,500 DOM mutations per sort; targets route ≤ 0.3 s, sort ≤ 0.15 s, keystroke ≤ 0.1 s.
+- [ ] **R4K [L] Row menu truncates instead of consolidating** — R3K added `capTxnRowMenuItems(items, 8)`, which drops
+  actions that do not fit (split from receipt, history, follow-up task…). Delete it; merge the two splits, move History to
+  the Edit modal, add a Link chooser; test that every HEAD action stays reachable.
+- [ ] **GLYPH1 [L] budgetGoalGlyph effect panic** in every screens wasm run (`Value.Call on undefined`).
+- [ ] **INSTALL1 [L] New rule files never registered** — `registerR3K()` / `registerR4G()` not called from `install.go`;
+  add a test that every register* function is called.
+- [ ] **OV1 [L] "More" menu always open** — R3K lazy mount renders `.add-menu` whenever `ExtraContent` is set and dropped
+  the `hidden-menu` class; the menu covers the table on load with `aria-expanded=false`.
+- [ ] **R5W [L] Row cells** — incoming transfer legs green "+$1,480.00" (`fmtLedgerAmount` ignores the transfer flag);
+  Date 100 px truncates "Oct 17, 2…" when the year shows; "Unc… · Dining? · Review" truncates; grey "Not confirmed" dot on
+  most rows; "Who" header "W…"; restore "Suggest a category (Smart)" in the row menu.
+- [ ] **R5B [L] Bulk bar covers the sidebar** (fixed to the viewport, x=12…1428) and its native selects apply on every
+  arrow key.
+- [ ] **R5N [L] Count line order** — "Search all dates (319) →" sits mid-sentence; Net shown when only one direction has
+  money; explicit period markers in the scope bar; two stale tests.
+- [ ] **R5E [L] Edit modal polish** — still scrolls (R4K "More actions" row of 5 wrapping buttons); Expense/Income toggle
+  has no visible pressed state; "Bank text" repeats the description (no original-descriptor field); cramped suggestion strip.
+- [ ] **R6M [L] Row menu headings + Link chooser** — one heading per item; chooser clipped inside the transformed tile.
+- [ ] **R6F [L] Ghost rows dim/italic, no category; calendar week totals unlabelled.**
+- [ ] **R6B [L] Bulk picker** — focus lands on a DIV, placeholder listed as an option, Escape clears the whole selection.
+- [ ] **R6E [L] Edit modal still scrolls** (Split / Attach receipt full-width buttons) and the New category gap.
+- [ ] **GATE4 [L] Suites green after rounds 3–6** (count-line fixtures, TXU6, legacy quick-add helper, dead Status toggle).
+- [ ] **R7Z/R7Y [L] Bulk selection blacked out the page** — the fixed bulk tile kept the opaque `.w` surface; the fix first
+  targeted `#txn-bulkbar` but `uiw.Widget` renders `data-widget`, not an id. Upward row menu painted under earlier rows
+  (`rules_txcfields.go` z-index 51 description cell).
+- [ ] **R7C [L] Calendar week-total column has holes** for weeks without activity.
+- [ ] **R7F [L] Add and Edit still differ** (grid, "Account" label, toggle, New category control); Delete not styled as
+  destructive.
+- [ ] **CSS1 [L] Consolidate ledger CSS** — overrides now stack across rules_gen / uxbatch6 / txnscope / txcfields / r3k /
+  r5e / r6m / r7z with z-index escalation (51/60/61) and !important; fold into one ledger rules file. After R3P.
+- [ ] **R3D [L] Delete the dead legacy ledger** (still open; after R3P).
+
+Critic round 3 (2026-10-19 ~00:10Z): **7.8/10**, ITERATE (usefulness 8.3, readability 8, clarity 7.5, polish 7.2, workflows
+7.8, a11y/perf 7). Full result `cfsv2/critic/round3_result.md`. In flight: R8B (bulk pickers clipped by the bar's
+overflow — verified in the browser), R8S (nested scroll in the filter sheet), R8Q (search preview lost dates after
+ActiveFilters became PageFilters), R8K ("?" guide via the dialog component, callback leaks), R7C, R7F, R3P.
+- [ ] **R9L [L] Remove the STATUS legend line** (`transactions_tiles.go:1413`); cleared/reconciled glyph in a fixed dim
+  slot beside the amount; first row ≤ 300 px. After R3P.
+- [ ] **R9U [L] Show "Uncategorized" beside the "Dining?" suggestion**; remove the stray "·". After R3P.
+- [ ] **R9P [L] Period control shifts when the Filters badge appears** (`rules_gen.go:2500` search width). After R3P.
+- [ ] **R9M [L] "Link to…" as a submenu / inline items** — the chooser made linking three steps. After R3P.
+- [ ] **R9G [L] Future-month scheduled rows inside the real ledger table** with a Scheduled pill; valid ARIA. After R3P.
+- [ ] **R9F [L] TxnSharedForm owns the fields** (one layout/labels/direction set for Add and Edit); Delete as a red
+  footer button. After R7F.
+- [ ] **R9C [L] Calendar week cells consistent** (same Spent / income / count lines every week; i18n for the empty-week
+  label at `transactions_calendar.go:246`). After R7C.
+- [ ] **SV1.1 [W] Keyring hardening before pairing ships (security review of b82165e1 parent).** (1) Pairing SAS is 20
+  bits from SHA-256 of the relayed public key — use a commitment-based SAS (old device commits to a nonce first; SAS from
+  both contributions + transcript) or ≥ 80-bit fingerprint via QR only. (2) `OpenWorkspaceKeyOnDevice` does not
+  authenticate the sender — HPKE auth/PSK mode keyed from the confirmation step, plus a key-check value so the received
+  KeyID/version must match the keyring. (3) `Parse` trusts keyring metadata — MAC it under a WDK subkey and reject a
+  CurrentVersion lower than the highest seen (rollback). Not exploitable now: nothing calls the keyring yet.
+
+### TX — "add a category wherever you categorize" (Cam, 2026-10-19; audit of every category control reachable from /transactions)
+Only Edit, Add and the two Review modes can create a category on the spot. The shared overlay `CategoryPicker`
+(`screens/categorypicker.go:114-235`, search + "Make '<typed>'" with a parent select) and the one create helper
+`CreateCategory(app, name, parentID, kind)` (`:90-112`) already exist; Review uses them (`review_surface.go:931-943`).
+Every new create control below must open `CategoryPicker` (never an option inside a `<select>`, per `catSelectNew`),
+create through `CreateCategory`, then select the new category in the control that opened it.
+- [ ] **CAT1 [L] Edit and Add use their own top-level-only copies of category creation** (`transaction_edit_form.go:270-317`,
+  `quickadd.go:112-146`) — move both onto `CategoryPicker` + `CreateCategory` (sub-categories, kind inherited from the
+  parent); Edit's option list is bare names without a kind filter (`transaction_edit_form.go:713-719`) — use the
+  kind-filtered, full-path builder. Closes the C499 consolidation note.
+- [ ] **CAT2 [L] Bulk bar category picker** (`transactions_tiles.go:1634-1729`, `:2169`) shows "No matches" for a new
+  name — add a "Create '<typed>'" row that opens `CategoryPicker` prefilled with the search text; applying keeps the
+  toast + Undo.
+- [ ] **CAT3 [L] Split editor lines** (`split_editor.go:559-565`) — each line's category select gets the compact
+  "New category" + button (`TxnNewCategoryAction`) opening `CategoryPicker`; receipt-split lines that came in blank
+  benefit most.
+- [ ] **CAT4 [L] Smart category suggestion modal** (`txn_catsuggest_modal.go:204-212`; row menu "Suggest a category
+  (Smart)" and Edit → Tools) — add the + New category control beside its dropdown.
+- [ ] **CAT5 [L] Create rule from a transaction** (`ruleaddform.go:327-333`, prefilled from the row) — add the create
+  control to the "Choose a category" select; also switch its options to the kind-filtered builder.
+- [ ] **CAT6 [L] Import draft review rows** (`documents.go:1623`, "+ Category" at `:1659-1661` only opens a select of
+  existing names, which reads as "create") — make it open `CategoryPicker` so it really can create, or rename it.
+- [ ] **CAT7 [L] Ledger category cell and the "Dining?" chip** (`transactions_widget.go:1692-1708`,
+  `txn_catsuggest_chip.go:159-165`) — the cell is display-only; clicking it (or a "Choose…" beside the suggestion chip)
+  opens `CategoryPicker` to recategorize in place, including creating a new category. Keyboard: `c` already opens Edit;
+  keep that.
+- Not adding: the filter sheet's category filter (a new category matches nothing) — at most a "Manage categories" link.
+
+### Security review follow-ups (automated review of the 2026-10-19 pushes)
+- [x] **SEC1** imported/synced datasets could plant an OpenAI key when the device had none — fixed, pushed.
+- [ ] **SEC2 [L] Refresh-token reuse grace is not bound to the requester** — a stolen token replayed within 30 s gets
+  the live successor (`authservice.go`, `oauth_http.go`). Verify token hash, bind to device/CSRF, 10 s window, audit.
+- [ ] **SEC3 [L] AI credential not re-keyed when App Lock turns on/off or the passcode changes; server-URL change clears
+  `datasetOwnerKey`** so the next account adopts and pushes foreign data.
+- [ ] **IMP1 [L] Import pipeline never reviewed** (CSV/OFX/vision/order import, dedupe, dataset restore) — review lane.
