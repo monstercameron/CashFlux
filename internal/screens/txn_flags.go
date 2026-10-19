@@ -88,7 +88,8 @@ func txnFlagsInput(app *appstate.App, weekStart time.Weekday) smartengine.Input 
 	if base == "" {
 		base = "USD"
 	}
-	return smartengine.Input{Now: time.Now(), Base: base, WeekStart: weekStart,
+	return smartengine.Input{
+		Ledger: budgetLedgerForApp(app), Now: time.Now(), Base: base, WeekStart: weekStart,
 		Rates:    currency.Rates{Base: base, Rates: settings.FXRates},
 		Accounts: app.Accounts(), Transactions: app.Transactions(), Categories: app.Categories(),
 		Budgets: app.Budgets(), Goals: app.Goals(), Recurring: app.Recurring()}

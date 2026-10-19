@@ -47,13 +47,6 @@ func txnV5RowAccountScoped(criteriaAccount, criteriaAccounts string) bool {
 	return strings.TrimSpace(criteriaAccount) != "" || strings.TrimSpace(criteriaAccounts) != ""
 }
 
-func txnV5RowCountTotal(rows []domain.Transaction, criteriaAccount, criteriaAccounts string) int {
-	if txnV5RowAccountScoped(criteriaAccount, criteriaAccounts) {
-		return len(rows)
-	}
-	return len(txnV5RowTransfers(rows, false))
-}
-
 func txnEditBalanceAccountCount(before, after domain.Transaction) int {
 	if before.AccountID != after.AccountID || before.IsTransfer() || after.IsTransfer() {
 		return 2

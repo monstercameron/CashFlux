@@ -37,20 +37,6 @@ func TestV5RowTransferShowsOnceByDefaultAndKeepsAccountLeg(t *testing.T) {
 	}
 }
 
-func TestV5RowCountTotalDeduplicatesOnlyWithoutAccountFilter(t *testing.T) {
-	rows := []domain.Transaction{
-		{ID: "out", AccountID: "checking", TransferAccountID: "savings", TransferGroupID: "move-1", Amount: money.New(-5000, "USD")},
-		{ID: "in", AccountID: "savings", TransferAccountID: "checking", TransferGroupID: "move-1", Amount: money.New(5000, "USD")},
-		{ID: "coffee", AccountID: "checking", Amount: money.New(-500, "USD")},
-	}
-	if got := txnV5RowCountTotal(rows, "", ""); got != 2 {
-		t.Fatalf("unfiltered total = %d, want 2 unique transactions", got)
-	}
-	if got := txnV5RowCountTotal(rows, "checking", ""); got != 3 {
-		t.Fatalf("account-filtered total = %d, want all 3 ledger legs", got)
-	}
-}
-
 func TestTC3W13V5RowKeepsEveryLegacyTransferLeg(t *testing.T) {
 	rows := []domain.Transaction{
 		{ID: "legacy-out", AccountID: "checking", TransferAccountID: "savings", Date: time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC), Amount: money.New(-50_000, "USD")},

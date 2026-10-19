@@ -21,45 +21,6 @@ import (
 	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
 
-// merchantChargeCounts returns, keyed by lowercased resolved-merchant name, how many
-// qualifying expense charges each merchant has across the whole ledger. Cheap O(txns)
-// pass computed once per list render so a row can decide (O(1)) whether to show the
-// trend chip without each row scanning the ledger itself.
-func merchantChargeCounts(app *appstate.App) map[string]int {
-	resolver := app.PayeeResolver()
-	counts := map[string]int{}
-	for _, t := range app.Transactions() {
-		if t.IsTransfer() || !t.Amount.IsNegative() {
-			continue
-		}
-		key := strings.ToLower(strings.TrimSpace(resolver.Resolve(firstNonEmpty(t.Payee, t.Desc))))
-		if key == "" {
-			continue
-		}
-		counts[key]++
-	}
-	return counts
-}
-
-// merchant-charge-count memo: the count map depends only on the full ledger (+ payee
-// aliases), which change together with the data revision — so recompute it only when
-// the revision moves, not on every sort / select / pagination re-render of the table.
-var (
-	mccCache map[string]int
-	mccRev   = -1
-)
-
-// merchantChargeCountsMemo returns the per-merchant charge counts, recomputing only
-// when the data revision has changed since the last call. Safe to share (read-only).
-func merchantChargeCountsMemo(app *appstate.App, dataRev int) map[string]int {
-	if dataRev == mccRev && mccCache != nil {
-		return mccCache
-	}
-	mccCache = merchantChargeCounts(app)
-	mccRev = dataRev
-	return mccCache
-}
-
 // toBaseMag converts a money amount to a positive magnitude in the base currency.
 func toBaseMag(app *appstate.App, m money.Money, base string) (int64, bool) {
 	if m.Currency == "" || m.Currency == base {
@@ -215,9 +176,3 @@ func merchantSparkline(mags []int64, dates []time.Time, base string) ui.Node {
 			uistate.T("merchantTrend.sparkMeta", len(mags), fmtMoney(money.New(latest, base)))),
 	)
 }
-
-// minTrendChipCharges gates which rows show the trend chip. It's deliberately higher
-// than merchantstats.MinCharges (the edit-modal panel's bar): the chip is ambient on
-// the ledger, so it should stay selective — only merchants you transact with often
-// enough to have a real pattern — rather than appearing on nearly every row.
-const minTrendChipCharges = 5

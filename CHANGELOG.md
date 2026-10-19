@@ -90,6 +90,9 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **The Edit budget dialog says what a limit change does (BV7G1).** A note under Limit explains the change applies from this period on
+  and shows the evaluated cap with any carry or boost.
+- **Transactions clean-up (TC4W3).** Unused merchant-trend counts and helpers removed; the after-settle memo is tested.
 - **A stale tab never strands edits; the save journal compacts (TC4N9).** When another tab has saved newer data, this tab shows a
   non-retryable "This tab is out of date" state and keeps its unsaved edits as a downloadable recovery copy instead of offering a Retry
   that cannot succeed; the encrypted journal checkpoints every 128 records; toasts read the current saved-balance copy; the toast

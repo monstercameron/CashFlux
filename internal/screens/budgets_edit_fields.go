@@ -5,12 +5,14 @@
 package screens
 
 import (
+	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -156,7 +158,7 @@ func budgetEditBasics(p budgetEditBasicsProps) ui.Node {
 					Input(append(append([]any{css.Class("field"), Type("number"), Attr("data-testid", "budget-edit-limit"), Attr("aria-label", uistate.T("budgets.limitLabel")),
 						Placeholder(uistate.T("budgets.limitLabel")), Step("0.01"), Attr("min", "0.01"), Attr("aria-required", "true"), OnInput(p.onLimit)},
 						errAttrs("budget-edit-limit-err", p.limitErrMsg)...), uiw.FieldValue(p.limitS.Get()))...),
-					errText("budget-edit-limit-err", p.limitErrMsg))),
+					errText("budget-edit-limit-err", p.limitErrMsg), budgetEditEffectiveCapNote(p.budgetEditFieldsProps))),
 			labeledField(uistate.T("budgets.period"),
 				uiw.SelectInput(uiw.SelectInputProps{
 					Options: periodOptions(p.periodS.Get()), Selected: p.periodS.Get(),
@@ -165,6 +167,52 @@ func budgetEditBasics(p budgetEditBasicsProps) ui.Node {
 		If(periodChanged, P(css.Class(tw.TextWarn, tw.Text12), Attr("data-testid", "budget-period-hint"),
 			Style(map[string]string{"margin": "0"}), uistate.T("budgets.periodChangeFreshStart"))),
 	)
+}
+
+// budgetEditEffectiveCapNote shows the evaluated cap beside the base limit when
+// rollover or a period adjustment makes the two different.
+func budgetEditEffectiveCapNote(p budgetEditFieldsProps) ui.Node {
+	if !p.selfFound || p.selfStatus.Error != nil {
+		return Fragment()
+	}
+
+	status := p.selfStatus
+	if status.Limit.Amount == status.Base.Amount {
+		return Fragment()
+	}
+	carry := status.Rollover.Current.CarryIn.Amount
+	boost, err := money.Sub(status.Limit.Amount, status.Base.Amount)
+	if err != nil {
+		return Fragment()
+	}
+	boost, err = money.Sub(boost, carry)
+	if err != nil {
+		return Fragment()
+	}
+
+	parts := []string{uistate.T("budgets.capMathLimit", fmtMoney(status.Base))}
+	if carry > 0 {
+		parts = append(parts, uistate.T("budgets.capMathCarryPlus", fmtMoney(money.New(carry, status.Limit.Currency))))
+	} else if carry < 0 {
+		magnitude, negErr := money.Neg(carry)
+		if negErr != nil {
+			return Fragment()
+		}
+		parts = append(parts, uistate.T("budgets.capMathCarryMinus", fmtMoney(money.New(magnitude, status.Limit.Currency))))
+	}
+	if boost > 0 {
+		parts = append(parts, uistate.T("budgets.capMathBoost", fmtMoney(money.New(boost, status.Limit.Currency))))
+	} else if boost < 0 {
+		magnitude, negErr := money.Neg(boost)
+		if negErr != nil {
+			return Fragment()
+		}
+		parts = append(parts, uistate.T("budgets.capMathBoostMinus", fmtMoney(money.New(magnitude, status.Limit.Currency))))
+	}
+
+	return P(css.Class("budget-edit-effective-cap", "budget-sub", tw.TextFaint),
+		Attr("data-testid", "budget-edit-effective-cap"),
+		uistate.T("budgets.effectiveCapMath", fmtMoney(status.Limit), strings.Join(parts, " ")))
 }
 
 // budgetEditTracking renders one stable section of the full budget editor.
