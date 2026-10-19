@@ -89,8 +89,6 @@ func budgetToolbarSettings(props budgetToolbarSettingsProps) ui.Node {
 type budgetToolbarToolsProps struct{ HasBudgets bool }
 
 func budgetToolbarTools(props budgetToolbarToolsProps) ui.Node {
-	lastMonth := uistate.UseBudgetsLastMonth()
-	toggleLastMonth := ui.UseEvent(Prevent(func() { lastMonth.Set(!lastMonth.Get()) }))
 	auto := uistate.UseBudgetAutoOpen()
 	openAuto := ui.UseEvent(Prevent(func() { auto.Set(true) }))
 	monthClose := uistate.UseMonthCloseOpen()
@@ -105,8 +103,8 @@ func budgetToolbarTools(props budgetToolbarToolsProps) ui.Node {
 	uiw.DismissPopover(open.Get(), "budgets-tools-wrap", func() { open.Set(false) })
 	uiw.AnchorPopover(open.Get(), "budgets-tools-wrap")
 	menu := ui.CreateElement(budgetToolbarToolsMenu, budgetToolbarToolsMenuProps{
-		HasBudgets: props.HasBudgets, LastMonth: lastMonth.Get(), OnClose: close,
-		OnLastMonth: toggleLastMonth, OnAuto: openAuto, OnMonthClose: openMonthClose, OnSweep: openSweep, OnAdjust: openAdjust,
+		HasBudgets: props.HasBudgets, OnClose: close,
+		OnAuto: openAuto, OnMonthClose: openMonthClose, OnSweep: openSweep, OnAdjust: openAdjust,
 	})
 	return Div(ClassStr("add-wrap"), Attr("id", "budgets-tools-wrap"),
 		Button(css.Class("btn btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
@@ -121,9 +119,7 @@ func budgetToolbarTools(props budgetToolbarToolsProps) ui.Node {
 
 type budgetToolbarToolsMenuProps struct {
 	HasBudgets   bool
-	LastMonth    bool
 	OnClose      ui.Handler
-	OnLastMonth  ui.Handler
 	OnAuto       ui.Handler
 	OnMonthClose ui.Handler
 	OnSweep      ui.Handler
@@ -132,9 +128,6 @@ type budgetToolbarToolsMenuProps struct {
 
 func budgetToolbarToolsMenu(props budgetToolbarToolsMenuProps) ui.Node {
 	return Div(css.Class("bud-set-sec"), OnClick(props.OnClose),
-		Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "budgets-last-month"),
-			Attr("aria-pressed", ariaBool(props.LastMonth)), Title(uistate.T("budgets.lastMonthTitle")), OnClick(props.OnLastMonth),
-			uiw.Icon(icon.History, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("bud2.lastMonth"))),
 		Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "budgets-autobudget"),
 			Title(uistate.T("budgets.autoTitleAction")), OnClick(props.OnAuto), uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("bud2.autoBudget"))),
 		Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "budgets-month-close"),

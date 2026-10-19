@@ -276,7 +276,7 @@ func budgetRowCompact(props budgetRowCompactProps) ui.Node {
 				Span(css.Class("budget-crow-spent"), barSpent),
 				Span(css.Class("budget-crow-limit"), " of "),
 				Button(css.Class("budget-limit-btn", "budget-crow-limit-btn"), Type("button"), Ref(props.LimitButtonRef), Attr("data-testid", "budget-limit-btn-"+s.Budget.ID),
-					Title(uistate.T("budgets.limitEditTitle")), Attr("aria-label", uistate.T("budgets.limitEditTitle")+" — "+title),
+					Title(uistate.T("budgets.limitEditTitle")), Attr("aria-label", uistate.T("budgets.limitEditAria", fmtMoney(limit), title)),
 					OnClick(startLimitEdit), fmtMoney(limit)),
 				If(budgetCadenceSuffix(s.Budget.Period) != "", Span(css.Class("budget-cadence"), budgetCadenceSuffix(s.Budget.Period))),
 				Span(css.Class("budget-crow-fig-separator"), " — "), crowLeft,
@@ -298,7 +298,8 @@ func budgetRowCompact(props budgetRowCompactProps) ui.Node {
 				uiw.Icon(icon.Receipt, css.Class(tw.ShrinkO, tw.W4, tw.H4)))),
 			kebabNode,
 		),
-		Div(css.Class("budget-crow-sub"), props.ProjectionLine),
+		Div(css.Class("budget-crow-sub"), props.ProjectionLine,
+			If(!lastMonthMode && budgetTargetLineVisible(s), budgetTargetLine(s))),
 		Div(css.Class("budget-crow-rollover"), props.RolloverDetail),
 		If(props.LimitEditing, budgetLimitEditor(
 			s.Budget.ID, s.Budget.Name, props.LimitInputRef, props.LimitDraft, onLimitDraft, saveLimitEdit, cancelLimitEdit,
@@ -405,6 +406,9 @@ func budgetRowProjectionLine(s budgeting.Status, props budgetRowProps) ui.Node {
 	}
 	if s.PeriodStatus == budgeting.PeriodEnded {
 		return Fragment()
+	}
+	if s.CommitmentError == nil && (s.Committed.Required.Amount > 0 || s.Projection.Committed.Amount > 0) {
+		return budgetRecurringStatusLine(s, formatFreeMoney(s.FreeAfterCommitted))
 	}
 	if s.Projection.Error == nil && s.Projection.CommittedDominates && s.Projection.Committed.Amount > 0 {
 		return Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-projection-committed-"+s.Budget.ID),

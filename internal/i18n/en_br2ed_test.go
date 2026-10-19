@@ -6,8 +6,8 @@ import "testing"
 
 func TestBR2EDBudgetRowCopy(t *testing.T) {
 	for key, want := range map[string]string{
-		"budgets.actionEditFormulasPlain":  "Calculate the limit with a formula",
-		"budgets.pauseBudgetForMonth":      "Pause this budget for a month",
+		"budgets.actionEditFormulasPlain":  "Calculate limit with formula",
+		"budgets.pauseBudgetForMonth":      "Pause for one month",
 		"budgets.actionCoverFromOtherMenu": "Cover from another budget",
 		"budgets.limitTitleSuffix":         "limit",
 		"budgets.baseLimitNameSuffix":      "base limit",

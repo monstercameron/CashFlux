@@ -14,7 +14,7 @@ var wSeries5Keys = Catalog{
 	// C395 — per-row rollover policy badge (states: off / rolls over / capped N periods).
 	"budgetsRollover.badgeOff":    "No rollover",
 	"budgetsRollover.badgeOn":     "Rolls over",
-	"budgetsRollover.badgeCapped": "Rolls over · cap %d",
+	"budgetsRollover.badgeCapped": "Rolls over, cap %d",
 	"budgetsRollover.badgeAria":   "Rollover policy: %s. Show this period's carryover math.",
 
 	// C395 — the carryover-math popover (deterministic, no black boxes): each line is
@@ -28,7 +28,7 @@ var wSeries5Keys = Catalog{
 	"budgetsRollover.capThisPeriod": "This period's cap: %s (%s).",
 
 	// --- C397: the budgets list header "Smart" control now reads as navigation ---
-	"budgets.smartNavLabel":   "Smart features →",
+	"budgets.smartNavLabel":   "Smart features",
 	"budgets.smartNavTooltip": "Open the Smart page — insights and automations for your budgets",
 	"budgets.smartNavAria":    "Smart features — opens the Smart page",
 }

@@ -159,6 +159,18 @@ func budgetTargetLine(s budgeting.Status) ui.Node {
 	if err != nil {
 		return Span(css.Class("budget-sub", tw.TextDown), Attr("role", "alert"), uistate.T("budgets.annualGridError"))
 	}
+	// A refill target restores the effective cap. Spending against this period's
+	// cap must not make the carry shortfall appear larger than the carried debt.
+	if b.TargetKind == domain.TargetRefillUpTo && b.Rollover && s.Rollover.Current.CarryIn.Amount < 0 {
+		gap, gapErr := need.Target.Sub(s.Limit)
+		if gapErr != nil {
+			return Span(css.Class("budget-sub", tw.TextDown), Attr("role", "alert"), uistate.T("budgets.annualGridError"))
+		}
+		if gap.IsNegative() {
+			gap = money.Zero(gap.Currency)
+		}
+		need.Needed = gap
+	}
 	target := fmtMoney(need.Target)
 	remaining := fmtMoney(need.Needed)
 	pr := uistate.LoadPrefs()

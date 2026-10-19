@@ -276,15 +276,22 @@ func renderAutoBudgetRows(suggestions []budgeting.BudgetSuggestion, existing map
 	return Div(css.Class("acct-edit-form"),
 		Div(css.Class("modal-scroll"), seg,
 			P(css.Class("muted", tw.Text13), Style(map[string]string{"margin": "0"}), Attr("data-testid", "autobudget-intro"), uistate.T(introKey, uistate.T("budgets.autoMonths", strconv.Itoa(months)))),
-			If(suggestionErr != nil, P(css.Class("form-err"), Attr("role", "status"), Attr("data-testid", "autobudget-suggestion-error"), uistate.T("budgets.autoError", suggestionErr.Error()))),
-			If(impactErr != nil, P(css.Class("form-err"), Attr("role", "status"), Attr("data-testid", "autobudget-impact-error"), uistate.T("budgets.autoError", impactErr.Error()))),
-			If(incomeErr != nil, P(css.Class("form-err"), Attr("role", "status"), Attr("data-testid", "autobudget-income-incomplete"), uistate.T("budgets.autoError", incomeErr.Error()))),
+			autoBudgetErrorNode(suggestionErr, "autobudget-suggestion-error"),
+			autoBudgetErrorNode(impactErr, "autobudget-impact-error"),
+			autoBudgetErrorNode(incomeErr, "autobudget-income-incomplete"),
 			impactNode, bulkBar, Div(css.Class("autobudget-rows"), Attr("data-testid", "autobudget-rows"), rows)),
 		Div(css.Class("modal-foot", "autobudget-footer"),
 			Span(css.Class("autobudget-total", tw.TextDim), Attr("data-testid", "autobudget-total"), uistate.T("budgets.autoTotal", fmtMoney(money.New(totalMinor, base)))),
 			Button(css.Class("btn"), Type("button"), Attr("data-testid", "autobudget-cancel"), cancelOnClick, uistate.T("action.cancel")),
 			buttonWithDisabled(selectedCount == 0 || suggestionErr != nil || impactErr != nil || incomeErr != nil,
 				[]any{css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "autobudget-save"), applyOnClick}, uistate.T("budgets.autoSave", strconv.Itoa(selectedCount)))))
+}
+
+func autoBudgetErrorNode(err error, testID string) ui.Node {
+	if err == nil {
+		return Fragment()
+	}
+	return P(css.Class("form-err"), Attr("role", "status"), Attr("data-testid", testID), uistate.T("budgets.autoError", err.Error()))
 }
 
 func saveAutoBudget(app *appstate.App, suggestions []budgeting.BudgetSuggestion, existing map[string]domain.Budget, base string, rates currency.Rates, anchor time.Time,

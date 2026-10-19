@@ -168,6 +168,8 @@ func Register() {
 	registerTV7F()
 	registerBV7H()
 	registerBV7G()
+	registerBV7C()
+	registerRulesBV7E()
 	inject(Build())
 }
 

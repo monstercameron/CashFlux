@@ -10,7 +10,7 @@ import (
 
 func TestBV6HEnglishCopyUsesPlainNamesAndCorrectGrammar(t *testing.T) {
 	for key, want := range map[string]string{
-		"budgets.trackAllCategoryCount":   "Review %d untracked categories",
+		"budgets.trackAllCategoryCount":   "Review untracked categories: %d",
 		"budgets.recurring.excludedOne":   "%d bill excluded",
 		"budgets.recurring.excludedMany":  "%d bills excluded",
 		"budgets.attention.one":           "%d budget needs attention",

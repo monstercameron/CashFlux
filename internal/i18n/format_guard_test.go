@@ -52,6 +52,14 @@ func TestEverySmartCatalogKeyFormatsWithRepresentativeArguments(t *testing.T) {
 	}
 }
 
+func TestBV7ISmartU1TitleFormatsItsFeatureArgument(t *testing.T) {
+	bundle := DefaultBundle()
+	got := bundle.T(English, "smart.u1.title", "Coffee shop")
+	if strings.Contains(got, "%!") || got != "Unusually large charge from Coffee shop" {
+		t.Fatalf("smart.u1.title formatted incorrectly: %q", got)
+	}
+}
+
 func representativeFormatArgs(template string) []any {
 	var args []any
 	for _, match := range formatVerb.FindAllStringSubmatch(template, -1) {

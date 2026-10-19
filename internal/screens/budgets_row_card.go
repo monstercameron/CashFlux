@@ -204,7 +204,7 @@ func budgetRowExpandedDetails(p budgetRowCardProps) ui.Node {
 				Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-setaside-note-"+p.s.Budget.ID),
 					p.props.Committed.SetAsideNote)),
 			// BG1: funding-target summary ("Refill to $200 · $60 to go").
-			If(p.s.State != budgeting.StateOver, budgetTargetLine(p.s)),
+			If(budgetTargetLineVisible(p.s), budgetTargetLine(p.s)),
 			p.thisMonthRef,
 			p.coverageLine,
 			p.ownerLine,

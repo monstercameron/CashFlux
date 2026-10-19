@@ -18,7 +18,7 @@ import (
 )
 
 var (
-	pickerTriggerStyles = css.New(tw.InlineFlex, tw.ItemsCenter, tw.JustifyBetween, tw.Gap2, tw.Px3, tw.Py2, tw.Rounded, tw.BgBase, tw.TextFg)
+	pickerTriggerStyles = css.New(tw.InlineFlex, tw.ItemsCenter, tw.JustifyBetween, tw.Gap2, tw.Px3, tw.Py2, tw.Rounded, tw.BgBase, tw.TextFg, css.Raw("box-sizing", "border-box"), css.Raw("border", "1px solid var(--border)"))
 	pickerSearchStyles  = css.New(tw.WFull, tw.Px3, tw.Py2, tw.Rounded)
 	pickerListStyles    = css.New(tw.MaxH55vh, tw.OverflowYAuto, tw.Py1)
 	pickerOptionStyles  = css.New(tw.Flex, tw.WFull, tw.ItemsCenter, tw.Gap2, tw.Rounded, tw.Px2, tw.Py1, tw.TextLeft)
@@ -29,11 +29,42 @@ var (
 )
 
 type pickerPosition struct {
-	Top, Left int
+	Top, Left, MaxHeight int
 }
 
 func pickerPopoverRules(position pickerPosition) []css.Rule {
-	return []css.Rule{css.Position.Fixed, css.Top(css.Px(position.Top)), css.Left(css.Px(position.Left)), tw.MinW150, tw.RoundedXl, tw.BgBase, tw.P3, tw.ShadowLg}
+	return []css.Rule{css.Position.Fixed, css.Top(css.Px(position.Top)), css.Left(css.Px(position.Left)), css.Raw("max-height", strconv.Itoa(position.MaxHeight)+"px"), css.Raw("overflow-y", "auto"), tw.MinW150, tw.RoundedXl, tw.BgBase, tw.P3, tw.ShadowLg}
+}
+
+func pickerViewportPosition(top, bottom, panelHeight, viewportHeight float64) pickerPosition {
+	const margin = 16.0
+	const maxPopoverHeight = 420.0
+	if viewportHeight < 0 {
+		viewportHeight = 0
+	}
+	if panelHeight < 0 {
+		panelHeight = 0
+	}
+	panelHeight = math.Min(panelHeight, maxPopoverHeight)
+	spaceBelow := math.Max(0, viewportHeight-bottom-margin)
+	spaceAbove := math.Max(0, top-margin)
+	openAbove := spaceBelow < panelHeight && spaceAbove > spaceBelow
+	available := spaceBelow
+	popoverTop := bottom
+	if openAbove {
+		available = spaceAbove
+	}
+	maxHeight := int(math.Round(math.Min(maxPopoverHeight, available)))
+	if maxHeight < 0 {
+		maxHeight = 0
+	}
+	if openAbove {
+		popoverTop = top - math.Min(panelHeight, float64(maxHeight))
+		if popoverTop < margin {
+			popoverTop = margin
+		}
+	}
+	return pickerPosition{Top: int(math.Round(popoverTop)), MaxHeight: maxHeight}
 }
 
 // PickerProps configures a searchable, explicit-commit picker.
@@ -63,7 +94,7 @@ func pickerComponent(componentProps pickerComponentProps) uic.Node {
 	open := uic.UseState(false)
 	query := uic.UseState("")
 	active := uic.UseState(-1)
-	position := uic.UseState(pickerPosition{})
+	position := uic.UseState(pickerPosition{MaxHeight: 420})
 	filtered := FilterPickerOptions(props.Options, query.Get())
 	activeIndex := active.Get()
 	if activeIndex < 0 || activeIndex >= len(filtered) || filtered[activeIndex].Disabled {
@@ -154,17 +185,23 @@ func pickerComponent(componentProps pickerComponentProps) uic.Node {
 				return
 			}
 			bounds := trigger.Call("getBoundingClientRect")
-			top := bounds.Get("bottom").Float()
-			left := bounds.Get("left").Float()
-			panel := document.Call("getElementById", props.ID+"-popover")
+			panelHeight := 420.0
+			panel := document.Call("getElementById", props.ID+"-surface")
 			if panel.Truthy() && panel.Get("getBoundingClientRect").Type() == js.TypeFunction {
-				panelHeight := panel.Call("getBoundingClientRect").Get("height").Float()
-				viewportHeight := js.Global().Get("window").Get("innerHeight").Float()
-				if top+panelHeight > viewportHeight && bounds.Get("top").Float() > panelHeight {
-					top = bounds.Get("top").Float() - panelHeight
+				measuredHeight := panel.Call("getBoundingClientRect").Get("height").Float()
+				contentHeight := panel.Get("scrollHeight")
+				if contentHeight.Type() == js.TypeNumber && contentHeight.Float() > measuredHeight {
+					measuredHeight = contentHeight.Float()
+				}
+				if measuredHeight > 0 {
+					panelHeight = measuredHeight
 				}
 			}
-			position.Set(pickerPosition{Top: int(math.Round(top)), Left: int(math.Round(left))})
+			window := js.Global().Get("window")
+			viewportHeight := window.Get("innerHeight").Float()
+			placement := pickerViewportPosition(bounds.Get("top").Float(), bounds.Get("bottom").Float(), panelHeight, viewportHeight)
+			placement.Left = int(math.Round(bounds.Get("left").Float()))
+			position.Set(placement)
 		}
 		reposition()
 		window := js.Global().Get("window")
@@ -187,14 +224,14 @@ func pickerComponent(componentProps pickerComponentProps) uic.Node {
 	}
 	trigger := Button(
 		css.Class("cf-picker-trigger", pickerTriggerStyles),
-		Attr("id", props.ID), Attr("type", "button"), Attr("aria-label", props.Label),
+		Attr("id", props.ID), Attr("type", "button"), Attr("aria-label", props.Label), Attr("style", "border: 1px solid var(--border); box-sizing: border-box"),
 		Attr("aria-haspopup", "listbox"), Attr("aria-expanded", boolAttr(open.Get())),
 		Attr("aria-controls", listID), onOpenOption, onTriggerKeyOption, triggerLabel,
 	)
 	if props.TestID != "" {
 		trigger = Button(
 			css.Class("cf-picker-trigger", pickerTriggerStyles),
-			Attr("id", props.ID), Attr("type", "button"), Attr("aria-label", props.Label),
+			Attr("id", props.ID), Attr("type", "button"), Attr("aria-label", props.Label), Attr("style", "border: 1px solid var(--border); box-sizing: border-box"),
 			Attr("aria-haspopup", "listbox"), Attr("aria-expanded", boolAttr(open.Get())),
 			Attr("aria-controls", listID), Attr("data-testid", props.TestID), onOpenOption, onTriggerKeyOption, triggerLabel,
 		)
@@ -343,11 +380,11 @@ func multiPickerComponent(componentProps multiPickerComponentProps) uic.Node {
 	closePicker := func() { open.Set(false); focusPickerID(props.ID) }
 	onTrigger := OnClick(func() { active.Set(0); open.Set(true) })
 	trigger := Button(css.Class("cf-multipicker-trigger", pickerTriggerStyles),
-		Attr("id", props.ID), Attr("type", "button"), Attr("aria-label", props.Label), Attr("aria-haspopup", "listbox"), Attr("aria-expanded", boolAttr(open.Get())), Attr("aria-controls", listID), onTrigger,
+		Attr("id", props.ID), Attr("type", "button"), Attr("aria-label", props.Label), Attr("style", "border: 1px solid var(--border); box-sizing: border-box"), Attr("aria-haspopup", "listbox"), Attr("aria-expanded", boolAttr(open.Get())), Attr("aria-controls", listID), onTrigger,
 		props.Placeholder)
 	if props.TestID != "" {
 		trigger = Button(css.Class("cf-multipicker-trigger", pickerTriggerStyles),
-			Attr("id", props.ID), Attr("type", "button"), Attr("data-testid", props.TestID), Attr("aria-label", props.Label), Attr("aria-haspopup", "listbox"), Attr("aria-expanded", boolAttr(open.Get())), Attr("aria-controls", listID), onTrigger, props.Placeholder)
+			Attr("id", props.ID), Attr("type", "button"), Attr("data-testid", props.TestID), Attr("aria-label", props.Label), Attr("style", "border: 1px solid var(--border); box-sizing: border-box"), Attr("aria-haspopup", "listbox"), Attr("aria-expanded", boolAttr(open.Get())), Attr("aria-controls", listID), onTrigger, props.Placeholder)
 	}
 	options := FilterPickerOptions(props.Options, "")
 	var panel uic.Node = Fragment()

@@ -91,7 +91,7 @@ var incomeAllocKeys = Catalog{
 	"categories.mergeConfirm": "Merge",
 	// C538: which way money has to move for a budget to be doing well.
 	"budgets.directionLabel":    "What this budget measures",
-	"budgets.directionSpend":    "Spending — stay under the amount",
+	"budgets.directionSpend":    "Spending: stay under the amount",
 	"budgets.directionSave":     "Saving — reach the amount",
 	"budgets.directionSaveHint": "Money you move into savings or investments counts toward it, including transfers between your own accounts.",
 	// C524: the per-category spend report already exists in full — a magnitude

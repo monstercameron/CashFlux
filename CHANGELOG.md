@@ -90,6 +90,11 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Budgets: Auto Budget opens, headline totals use one window, last month reads per period, row details explain themselves
+  (BV7A, BV7C, BV7D, BV7E, BV7I, BV7J).** Auto Budget no longer crashes on open (eager error formatting removed across budget
+  screens); the headline adds spending from one window only and a past month uses that month's limits; last-month view shows one
+  period per row; row details, targets and suggestions read the evaluated card; budget copy is pluralized and plain; the category
+  picker behaves inside dialogs.
 - **Budget suggestions agree everywhere; Track untracked shows what it will track; dialogs explain themselves (BC4B4.2, BV7B, BV7G).**
   The edit form, Track untracked and the Unbudgeted strip use the same context-aware median (sub-categories, cadence, pay anchor,
   FX) and name their real window; the old suggestion functions are removed. Track untracked checkboxes show their real state and the

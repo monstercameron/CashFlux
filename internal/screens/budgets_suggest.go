@@ -283,9 +283,11 @@ func budgetRecommendationAtMember(app *appstate.App, b domain.Budget, anchor tim
 			if err == nil {
 				recommendation, err = budgeting.RecommendBudgetLimitWithContext(b, suggestedCovers, suggestedTxns, anchor, suggestLimitMonths, projected, rates, weekStart, payCycleAnchor)
 			}
-			if err == nil && recommendation.Direction == budgeting.SuggestionRaise &&
-				budgetRecommendationOverspends(b, covers, scope.Tags, app.Transactions(), start, weekStart, payCycleAnchor, rates) < 2 {
-				return budgeting.LimitRecommendation{}, money.Money{}, false
+			if err == nil && recommendation.Direction == budgeting.SuggestionRaise {
+				overCount := budgetRecommendationOverspends(b, covers, scope.Tags, app.Transactions(), start, weekStart, payCycleAnchor, rates)
+				if !budgetRaiseAllowed(overCount, view.Projection.Projected, view.Status.Limit) {
+					return budgeting.LimitRecommendation{}, money.Money{}, false
+				}
 			}
 			if err == nil && recommendation.HasEvidence && recommendation.Direction != budgeting.SuggestionKeep {
 				periodAmount, convErr := budgeting.PeriodEquivalent(money.New(recommendation.Suggested, base), domain.PeriodMonthly, b.Period)
@@ -314,6 +316,12 @@ func budgetRecommendationAtMember(app *appstate.App, b domain.Budget, anchor tim
 		return budgeting.LimitRecommendation{}, money.Money{}, false
 	}
 	return entry.recommendation, entry.displayAmount, true
+}
+
+// budgetRaiseAllowed permits a raise only after repeated overspending and when
+// the current period's projection is over its effective limit.
+func budgetRaiseAllowed(overCount int, projected, limit money.Money) bool {
+	return overCount >= 2 && projected.Currency == limit.Currency && projected.Amount > limit.Amount
 }
 
 func budgetSuggestionBillFloor(suggested, required money.Money, targetCurrency string, rates currency.Rates) (money.Money, error) {

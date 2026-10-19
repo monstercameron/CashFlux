@@ -224,14 +224,27 @@ func budgetRecurringStatusLine(s budgeting.Status, free string) ui.Node {
 	}
 	label := uistate.T("budgets.billsAlreadyPaid", fmtMoney(s.Projection.Committed))
 	if s.Committed.Required.Amount > 0 {
-		label = uistate.T("budgets.billsDueThisMonth", free, fmtMoney(s.Committed.Required))
+		label = uistate.T("bv7e.billsFreeAfterRequired", free, fmtMoney(s.Committed.Required))
 		if paid := s.Projection.Committed.Amount - s.Committed.Required.Amount; paid > 0 {
-			label = uistate.T("budgets.billsDueAndPaid", free, fmtMoney(s.Committed.Required), fmtMoney(money.New(paid, s.Projection.Committed.Currency)))
+			label = uistate.T("bv7e.billsFreeAfterRequiredAndPaid", free, fmtMoney(s.Committed.Required), fmtMoney(money.New(paid, s.Projection.Committed.Currency)))
 		}
 	} else if free != "" {
 		label = uistate.T("budgets.billsPaidWithFree", free, fmtMoney(s.Projection.Committed))
 	}
 	return Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-free-after-committed-"+s.Budget.ID), label)
+}
+
+// budgetTargetLineVisible avoids repeating a refill target that merely restates
+// the effective limit when there is no carry to explain.
+func budgetTargetLineVisible(s budgeting.Status) bool {
+	b := s.Budget
+	if !b.HasTarget() {
+		return false
+	}
+	if b.TargetKind != domain.TargetRefillUpTo || b.TargetAmount.Amount != s.Limit.Amount {
+		return true
+	}
+	return s.Rollover.Current.CarryIn.Amount != 0
 }
 
 // budgetRowPeriodNotesResult carries the explicit results for budgetRowPeriodNotes.
@@ -246,14 +259,9 @@ type budgetRowPeriodNotesResult struct {
 // budgetRowPeriodNotes builds the row period notes section.
 func budgetRowPeriodNotes(lastMonthMode bool, props budgetRowProps, s budgeting.Status, openCover ui.Handler) budgetRowPeriodNotesResult {
 	coverOnClick := OnClick(openCover)
-	// C143: even-pace guidance — how much of what's left can be spent over the days
-	// still in the period, so the user knows the sustainable daily-ish pace instead
-	// of seeing only a lump remaining. Quiet faint line; only set while in-progress.
+	// The full-card metric strip is the single place that shows a daily allowance.
+	// Repeating it beside the bar gave the same fact two values and two labels.
 	var proratedLine ui.Node = Fragment()
-	if restPerDay, ok := budgetRowRestPerDay(s, props.Anchor, uistate.LoadPrefs(), time.Now()); !lastMonthMode && ok {
-		proratedLine = Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-prorated"),
-			uistate.T("br3row.restPerDay", fmtMoney(restPerDay)))
-	}
 
 	// "Last month's spend" overlay: an overline tag above the (now last-month) bar, plus a
 	// faint reference line showing what THIS month has actually spent — so the tile leads
@@ -441,15 +449,31 @@ func budgetRowRestPerDay(s budgeting.Status, anchor time.Time, pr prefs.Prefs, n
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
 	lastDay := dateutil.WallClockUTC(end).Add(-time.Nanosecond)
 	lastDay = time.Date(lastDay.Year(), lastDay.Month(), lastDay.Day(), 0, 0, 0, 0, time.UTC)
-	days := int(lastDay.Sub(today).Hours()/24) + 1
+	days := budgetDaysRemaining(today, lastDay)
 	if days <= 0 {
 		return money.Money{}, false
 	}
-	perDay, err := s.Remaining.MulDiv(1, int64(days), money.RoundTowardZero)
+	remaining := s.Remaining
+	if s.CommitmentError == nil && (s.Committed.Required.Amount > 0 || s.Projection.Committed.Amount > 0) {
+		remaining = s.FreeAfterCommitted
+	}
+	if remaining.Amount <= 0 {
+		return money.Money{}, false
+	}
+	perDay, err := remaining.MulDiv(1, int64(days), money.RoundTowardZero)
 	if err != nil {
 		return money.Money{}, false
 	}
 	return perDay, true
+}
+
+// budgetDaysRemaining returns the inclusive number of calendar days from today
+// through the last day in the viewed period.
+func budgetDaysRemaining(today, lastDay time.Time) int {
+	if lastDay.Before(today) {
+		return 0
+	}
+	return int(lastDay.Sub(today).Hours()/24) + 1
 }
 
 func budgetGoalFundingForPeriod(app *appstate.App, start, end time.Time, rates currency.Rates) []goalfunded.BudgetFunding {
@@ -587,7 +611,10 @@ func budgetRowMetrics(lastMonthMode bool, props budgetRowProps, s budgeting.Stat
 				budgetMetric(uistate.T("budgetMetrics.elapsed"), "0%", ""),
 			)
 		default: // the viewed period contains today — live pacing
-			daysLeft := int(pEnd.Sub(nowT).Hours() / 24)
+			today := time.Date(nowT.Year(), nowT.Month(), nowT.Day(), 0, 0, 0, 0, time.UTC)
+			lastDay := dateutil.WallClockUTC(pEnd).Add(-time.Nanosecond)
+			lastDay = time.Date(lastDay.Year(), lastDay.Month(), lastDay.Day(), 0, 0, 0, 0, time.UTC)
+			daysLeft := budgetDaysRemaining(today, lastDay)
 			if daysLeft < 1 {
 				daysLeft = 1
 			}
@@ -600,12 +627,12 @@ func budgetRowMetrics(lastMonthMode bool, props budgetRowProps, s budgeting.Stat
 					elapsed = 100
 				}
 			}
-			perDay := int64(0)
-			if s.Remaining.Amount > 0 {
-				perDay = s.Remaining.Amount / int64(daysLeft)
+			perDay := money.Zero(s.Remaining.Currency)
+			if daily, ok := budgetRowRestPerDay(s, anchorT, prefs, nowT); ok {
+				perDay = daily
 			}
 			metricsStrip = Div(css.Class("budget-metrics"), Attr("data-testid", "budget-metrics-"+s.Budget.ID),
-				budgetMetric(uistate.T("budgetMetrics.perDay"), fmtMoney(money.New(perDay, s.Remaining.Currency)), ""),
+				budgetMetric(uistate.T("budgetMetrics.perDay"), fmtMoney(perDay), ""),
 				budgetMetric(uistate.T("budgetMetrics.daysLeft"), strconv.Itoa(daysLeft), prefs.FormatDate(pEnd)),
 				budgetMetric(uistate.T("budgetMetrics.elapsed"), fmt.Sprintf("%d%%", elapsed), ""),
 			)
