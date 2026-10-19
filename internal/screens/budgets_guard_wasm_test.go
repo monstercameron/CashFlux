@@ -677,13 +677,17 @@ func TestReconcileSeedsThisPeriodScope(t *testing.T) {
 
 // TestAdjustScopeCopyTracksTheScope pins the three moments that have to agree on
 // how long a change lasts: the hint under the control, the commit button, and the
-// undo banner. The toolbar's own default is unchanged — only the seeded path moves.
+// undo banner. The ordinary Adjust-all form defaults to this period; explicit
+// seeds from other actions remain honored.
 func TestAdjustScopeCopyTracksTheScope(t *testing.T) {
-	if got := defaultAdjustScope(""); got != string(budgeting.AdjustEveryPeriod) {
-		t.Errorf("an unseeded open resolved to %q — the toolbar's historical default must not move", got)
+	if got := defaultAdjustScope(""); got != string(budgeting.AdjustThisPeriod) {
+		t.Errorf("an unseeded open resolved to %q, want safe this-period default", got)
 	}
-	if got := defaultAdjustScope("nonsense"); got != string(budgeting.AdjustEveryPeriod) {
+	if got := defaultAdjustScope("nonsense"); got != string(budgeting.AdjustThisPeriod) {
 		t.Errorf("an unparseable seed resolved to %q, want the safe default", got)
+	}
+	if got := adjustEveryPeriodLabel(); got != uistate.T("budgets.adjustAllScopeEveryPast") {
+		t.Errorf("permanent scope label = %q, want explicit past-period warning", got)
 	}
 
 	this := budgeting.AdjustThisPeriod

@@ -90,6 +90,11 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Budgets: safer Adjust all, readable warnings, focus returns to the opener (BUD6).** Adjust all now starts on "This
+  period only", and the option that rewrites history says "Also change past periods". Light-theme warning amber is darker
+  (`#8a5a00`, ≥ 4.5:1 on page and card); dark theme unchanged. The Smart "safe to spend" title no longer logs a copy
+  formatting error. Closing a dialog whose opener was re-rendered now returns focus to the new opener (matched by id or
+  test id) instead of the page body.
 - **Keyring hardened before device pairing ships (SV1.1).** Pairing now uses a commit-then-reveal exchange with fresh nonces
   and ephemeral keys on both devices and an eight-digit code derived from the whole transcript, so a relay cannot substitute
   a key unnoticed; the handed-over key is authenticated and checked against the keyring; keyring metadata is authenticated

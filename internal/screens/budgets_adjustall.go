@@ -46,11 +46,8 @@ func AdjustAllBody(_ struct{}) ui.Node {
 	// is already known — the form starts with it filled in and previewed, rather
 	// than asking the user to compute a percentage from two figures.
 	//
-	// C671: the SCOPE arrives with it. That reconcile action is about one
-	// underfunded period, so it seeds this-period; the toolbar's own Adjust-all
-	// keeps its historical every-period default. Either way the control below says
-	// which, before anything is written, instead of the form silently being a
-	// permanent rewrite in both cases.
+	// An action can seed a scope when it has made a specific promise. An ordinary
+	// Adjust-all open defaults to this period so past limits are safe.
 	seedPct, seedScope := uistate.TakeBudgetAdjustSeed()
 	pctStr := ui.UseState(seedPct)
 	onPct := ui.UseEvent(func(v string) { pctStr.Set(v) })
@@ -279,7 +276,7 @@ func AdjustAllBody(_ struct{}) ui.Node {
 					Selected: string(scope),
 					Options: []uiw.SegOption{
 						{Value: string(budgeting.AdjustThisPeriod), Label: uistate.T("budgets.adjustAllScopeThis"), TestID: "adjustall-scope-this"},
-						{Value: string(budgeting.AdjustEveryPeriod), Label: uistate.T("budgets.adjustAllScopeEvery"), TestID: "adjustall-scope-every"},
+						{Value: string(budgeting.AdjustEveryPeriod), Label: adjustEveryPeriodLabel(), TestID: "adjustall-scope-every"},
 					},
 					OnSelect: func(v string) { scopeS.Set(v); ack.Set(false) },
 				})),
@@ -310,8 +307,7 @@ func AdjustAllBody(_ struct{}) ui.Node {
 }
 
 // defaultAdjustScope resolves the scope the form opens on: whatever the action
-// that opened it promised, or the historical every-period default when it
-// promised nothing (the toolbar's own "Adjust all").
+// that opened it promised, or this period when it promised nothing.
 //
 // The seed exists so a caller cannot advertise one reach and open a form set to
 // another — the C671 defect in one sentence.
@@ -319,8 +315,11 @@ func defaultAdjustScope(seed string) string {
 	if s := budgeting.AdjustScope(seed); s.Valid() {
 		return string(s)
 	}
-	return string(budgeting.AdjustEveryPeriod)
+	return string(budgeting.AdjustThisPeriod)
 }
+
+// adjustEveryPeriodLabel makes the effect on already-closed periods explicit.
+func adjustEveryPeriodLabel() string { return uistate.T("budgets.adjustAllScopeEveryPast") }
 
 // adjustIntroKey, adjustScopeHintKey, adjustApplyKey and adjustAppliedKey name
 // the copy for each scope: what the form does, what the control will do, what the

@@ -71,3 +71,26 @@ func TestFaintTextPassesAAOnElevatedSurface(t *testing.T) {
 		}
 	}
 }
+
+func TestWarningTextContrastForLightThemes(t *testing.T) {
+	for _, th := range presets {
+		if !th.IsLight() {
+			continue
+		}
+		got := th.derivedVars()["--warn"]
+		for _, surface := range []struct{ name, color string }{
+			{"base", th.BgBase}, {"card", th.BgCard},
+		} {
+			ratio, err := contrast.Ratio(got, surface.color)
+			if err != nil {
+				t.Fatalf("%s on %s: contrast ratio: %v", th.Name, surface.name, err)
+			}
+			if ratio < 4.5 {
+				t.Errorf("%s --warn %s on %s %s = %.2f:1, want >= 4.5:1", th.Name, got, surface.name, surface.color, ratio)
+			}
+		}
+	}
+	if got := Default().derivedVars()["--warn"]; got != warnToken {
+		t.Errorf("dark --warn = %q, want unchanged %q", got, warnToken)
+	}
+}

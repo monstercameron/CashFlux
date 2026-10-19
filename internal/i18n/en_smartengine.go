@@ -55,6 +55,7 @@ var smartEngineKeys = Catalog{
 	"smart.b7.title":     "%s spending is seasonal",
 	"smart.b8.lowDetail": "Your spendable cash is %s — well below the level needed to cover upcoming bills and goal contributions.",
 	"smart.b8.lowTitle":  "Liquid cash is very low",
+	"smart.b8.title":     "%s is safe to spend",
 	"smart.b9.action":    "Open budgets",
 	"smart.b9.detail":    "%s is projected to exceed budget by %s this period. Slowing spending now would keep it closer to plan.",
 	"smart.b9.title":     "%s is on pace to exceed its budget",
@@ -223,6 +224,11 @@ var smartEngineKeys = Catalog{
 	"smart.t7.title":     "%s hasn't posted yet",
 }
 
+var budgetAdjustLabelKeys = Catalog{
+	"budgets.adjustAllScopeEveryPast": "Also change past periods",
+}
+
 func init() {
 	maps.Copy(english, smartEngineKeys)
+	maps.Copy(english, budgetAdjustLabelKeys)
 }

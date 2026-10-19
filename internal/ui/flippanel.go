@@ -304,12 +304,13 @@ func flipPanel(props FlipPanelProps) uic.Node {
 			doc.Call("removeEventListener", "click", backdropCb)
 			backdropCb.Release()
 			if !prevFocus.IsNull() && !prevFocus.IsUndefined() {
-				prevFocus.Call("focus")
+				target := focusRestoreTarget(doc, prevFocus)
+				target.Call("focus")
 				// #67: the trigger may have vanished by close time (e.g. an add-menu
 				// item inside a since-closed popover) — focus() then silently no-ops
 				// and keyboard users land on <body>. Fall back to the main content
 				// landmark so focus resumes at the page, not nowhere.
-				if !doc.Get("activeElement").Equal(prevFocus) {
+				if !doc.Get("activeElement").Equal(target) {
 					if m := doc.Call("getElementById", "main"); !m.IsNull() && !m.IsUndefined() {
 						m.Call("setAttribute", "tabindex", "-1")
 						m.Call("focus")
@@ -455,6 +456,41 @@ func flipPanel(props FlipPanelProps) uic.Node {
 			),
 		),
 	)
+}
+
+// focusRestoreTarget returns the original opener when it remains in the page.
+// If a render replaced that node while the panel was open, it finds the current
+// control with the same stable id or test id before the caller falls back to main.
+func focusRestoreTarget(doc, previous js.Value) js.Value {
+	if previous.IsNull() || previous.IsUndefined() {
+		return previous
+	}
+	connected := previous.Get("isConnected")
+	if connected.IsUndefined() || connected.Bool() {
+		return previous
+	}
+	attribute := func(name string) string {
+		value := previous.Call("getAttribute", name)
+		if value.IsNull() || value.IsUndefined() {
+			return ""
+		}
+		return value.String()
+	}
+	if id := attribute("id"); id != "" {
+		if match := doc.Call("getElementById", id); !match.IsNull() && !match.IsUndefined() {
+			return match
+		}
+	}
+	if testID := attribute("data-testid"); testID != "" {
+		matches := doc.Call("querySelectorAll", "[data-testid]")
+		for i := 0; i < matches.Get("length").Int(); i++ {
+			match := matches.Index(i)
+			if match.Call("getAttribute", "data-testid").String() == testID {
+				return match
+			}
+		}
+	}
+	return previous
 }
 
 // slugifyTitle lower-cases a dialog title and keeps [a-z0-9-] so it can serve

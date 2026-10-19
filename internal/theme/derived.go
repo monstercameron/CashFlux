@@ -13,6 +13,10 @@ import (
 // from the palette — the shell can reference var(--warn) regardless of theme.
 const warnToken = "#e0a93b"
 
+// warnTokenLight is dark enough to read as text on light surfaces. Dark themes
+// retain the brighter amber warnToken.
+const warnTokenLight = "#8a5a00"
+
 // mixHex blends two sRGB hex colors, returning a's color at t=0 and b's at t=1
 // (t clamped to [0,1]), formatted as "#rrggbb". If either color can't be parsed it
 // returns a unchanged, so a malformed token degrades to a real color rather than an
@@ -103,6 +107,7 @@ func (t Theme) derivedVars() map[string]string {
 	// surfaces apply). Dark themes keep their prior fallback behavior (unset), so
 	// dark mode is unchanged.
 	if t.IsLight() {
+		m["--warn"] = warnTokenLight
 		m["--muted"] = t.TextDim
 		m["--hover"] = mixHex(t.bgElev(), t.Text, 0.05)
 		// On a light background a larger mix washes the faint tone toward the bg

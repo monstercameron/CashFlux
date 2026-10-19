@@ -38,6 +38,19 @@ func TestTFormatsArgs(t *testing.T) {
 	}
 }
 
+func TestSmartB8TitleFormatsSafeToSpendAmount(t *testing.T) {
+	got := DefaultBundle().T(English, "smart.b8.title", "$125.00")
+	if want := "$125.00 is safe to spend"; got != want {
+		t.Fatalf("smart.b8.title = %q, want %q", got, want)
+	}
+}
+
+func TestAdjustAllEveryPeriodLabelNamesPastPeriods(t *testing.T) {
+	if got := DefaultBundle().T(English, "budgets.adjustAllScopeEveryPast"); got != "Also change past periods" {
+		t.Fatalf("permanent Adjust-all label = %q, want explicit past-period wording", got)
+	}
+}
+
 func TestEmptyTranslationFallsBack(t *testing.T) {
 	b := NewBundle(English)
 	b.Set(English, "k", "English")
