@@ -90,6 +90,10 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Review dialog is calm; the filter sheet scrolls once (UXT6).** The review dialog opens with a plain "Review categories"
+  heading and a quiet "247 charges from 9 merchants" line instead of a big-number hero with an arrow, uses the app's
+  accent instead of a fourth periwinkle colour, and names its first group exactly like its legend. The filter sheet is
+  the only scroll area (no nested scrolling lists) and its Source group is labelled like the others.
 - **Transactions opens and saves much faster (SOLP1, part 1).** Measured with a 3,300-transaction fixture: the page mounts
   its rows in ~0.24 s (was ~2.2 s) and a recategorise costs ~0.7 s of work (was ~2.7 s). Rows no longer build a hidden
   category picker each (one page-level picker mounts only while open), filtering and sorting run once per change with

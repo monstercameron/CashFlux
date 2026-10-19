@@ -1110,6 +1110,14 @@ func tierMod(t reviewTier) string {
 	return "is-none"
 }
 
+func reviewIntro(charges, merchants int) ui.Node {
+	return Div(css.Class("rvs-intro"), Attr("data-testid", "review-intro"),
+		H2(css.Class("rvs-intro-title"), uistate.T("reviewInbox.categoriesTitle")),
+		P(css.Class("rvs-intro-count"), Attr("data-testid", "review-total-line"),
+			uistate.T("reviewInbox.countLine", charges, merchants)),
+	)
+}
+
 // reviewBulkView renders the tiered merchant list and its pinned footer.
 func reviewBulkView(
 	app *appstate.App, idx reviewIndex,
@@ -1170,19 +1178,7 @@ func reviewBulkView(
 	}
 
 	body := Div(
-		Div(css.Class("rvs-collapse"),
-			Span(css.Class("rvs-big"), Attr("data-testid", "review-total"), strconv.Itoa(idx.Total)),
-			Span(css.Class("rvs-unit"), uistate.T("review.charges")),
-			// C602: the relationship is WRITTEN, not implied by an arrow. Carrying
-			// "grouped into" as the arrow's tooltip and accessible name left the
-			// sighted reader — the one who reported the header as unclear — with two
-			// numbers and a glyph between them. The words are on the line now, quiet
-			// enough not to compete with the figures they join.
-			Span(css.Class("rvs-arrow"), Attr("aria-hidden", "true"), "→"),
-			Span(css.Class("rvs-joiner"), uistate.T("review.groupedInto")),
-			Span(css.Class("rvs-big is-accent"), strconv.Itoa(decisions)),
-			Span(css.Class("rvs-unit"), uistate.T("review.decisions")),
-		),
+		reviewIntro(idx.Total, decisions),
 		P(css.Class("rvs-note"), uistate.T("review.collapseNote")),
 		scanStrip,
 		Div(css.Class("rvs-legend"),

@@ -458,7 +458,7 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 					Attr("title", uistate.T("filters.closePanel")),
 					OnClick(closePanel), Icon(icon.Close, css.Class(tw.W4, tw.H4))),
 			),
-			Div(css.Class("filter-inline-body"), props.FilterFields),
+			Div(css.Class("filter-inline-body"), Attr("data-scroll-owner", "sheet"), props.FilterFields),
 			If(props.FilterSheet, Div(css.Class("filter-sheet-footer"),
 				Button(css.Class("btn-link filter-sheet-clear"), Type("button"),
 					Attr("data-testid", "filter-sheet-clear-all"),
