@@ -124,12 +124,22 @@ func budgetSuggestHint(props budgetSuggestProps) ui.Node {
 		Key:                   "sm12:" + b.ID,
 		TestID:                "sm12-" + b.ID,
 		Text:                  uistate.T("sm12.directionalHint", verb, amount),
-		Detail:                uistate.T(reasonKey, len(recommendation.MonthsUsed)+len(recommendation.Outliers), len(recommendation.Outliers)),
+		Detail:                budgetSuggestionEvidence(reasonKey, len(recommendation.MonthsUsed)+len(recommendation.Outliers), len(recommendation.Outliers)),
 		ActionLabel:           uistate.T(verbKey+"AccessibleAction", b.Name, amount),
 		AccessibleActionLabel: uistate.T(verbKey+"AccessibleAction", b.Name, amount),
 		OnAction:              apply,
 		Dismissible:           true,
 	})
+}
+
+// budgetSuggestionEvidence formats the selected evidence template with exactly
+// the values that template uses. The no-outlier variant needs only the window;
+// the other variants also need the excluded-month count.
+func budgetSuggestionEvidence(key string, window, outliers int) string {
+	if key == "sm12.reasonNoOutliers" {
+		return uistate.T(key, window)
+	}
+	return uistate.T(key, window, outliers)
 }
 
 // budgetSuggestRowHint renders SM-12 with a contextual accessible action name.

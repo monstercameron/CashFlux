@@ -53,6 +53,7 @@ var smartEngineKeys = Catalog{
 	"smart.b7.action":    "Open budgets",
 	"smart.b7.detail":    "%s ranged from %s to %s/mo across recent months. A month-specific budget fits it better than a flat number.",
 	"smart.b7.title":     "%s spending is seasonal",
+	"smart.b8.detail":    "After the bills still due this month (%s) and your goal contributions (%s), about %s of your %s liquid cash is genuinely free.",
 	"smart.b8.lowDetail": "Your spendable cash is %s — well below the level needed to cover upcoming bills and goal contributions.",
 	"smart.b8.lowTitle":  "Liquid cash is very low",
 	"smart.b8.title":     "%s is safe to spend",

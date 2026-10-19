@@ -90,6 +90,10 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **No more format errors in suggestion copy, and a lint that catches them (BR3FMT).** Budget suggestions no longer show
+  "%!(EXTRA int=0)"; the Smart "safe to spend" detail has its missing template. New guards render every suggestion
+  variant and every `smart.*` string and fail on "%!", and a screenlint scan compares each `uistate.T` call's argument
+  count with its template's verbs.
 - **Projections treat bills as fixed; suggestions only raise budgets that really overspend (BR3PROJ).** A budget's
   projection keeps matched recurring charges fixed and extrapolates only discretionary spending, so two monthly car
   payments no longer read as "on pace to overspend by $588". The projection reports when committed bills dominate, and a
