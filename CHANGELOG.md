@@ -90,6 +90,7 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Bills due today stay in the upcoming strip in every time zone (TC4N1).**
 - **Imports keep amounts, accounts and dates honest (TC4N6).** Import mapping, the resilient CSV parser and the documents
   preflight/review report what they could not read, keep account currency and refuse silent guesses.
 - **Liability signs, recurring dates, transfer receipts and saved rules are migrated, not guessed (TCS1, TC4N2, TC4N5, TC4N10).**

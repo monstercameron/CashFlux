@@ -125,3 +125,15 @@ func TestOccurrencesWithinRecurringBillDueTodayInNewYork(t *testing.T) {
 		t.Errorf("today's occurrence = due %s, days until %d; want %s and 0", got[0].DueDate, got[0].DaysUntil, due)
 	}
 }
+
+func TestOccurrencesWithinSkipsPausedRecurring(t *testing.T) {
+	now := time.Date(2026, time.June, 10, 12, 0, 0, 0, time.UTC)
+	recurring := []domain.Recurring{{
+		ID: "netflix", Label: "Netflix", Amount: money.New(-1599, "USD"),
+		Cadence: domain.CadenceMonthly, NextDue: now, Paused: true,
+	}}
+
+	if got := OccurrencesWithin(nil, recurring, now, now.AddDate(0, 0, 60)); len(got) != 0 {
+		t.Fatalf("occurrences = %+v, want no occurrences for paused recurring", got)
+	}
+}

@@ -152,7 +152,7 @@ func Upcoming(accounts []domain.Account, now time.Time) []Bill {
 func UpcomingAll(accounts []domain.Account, recurring []domain.Recurring, now time.Time) []Bill {
 	out := Upcoming(accounts, now)
 	for _, r := range recurring {
-		if !r.Amount.IsNegative() {
+		if !r.Active() || !r.Amount.IsNegative() {
 			continue
 		}
 		due, ok := nextRecurringDue(r, now)

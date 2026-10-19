@@ -66,3 +66,24 @@ func TestPendingInWindow(t *testing.T) {
 		})
 	}
 }
+
+func TestPendingInWindowKeepsBillDueTodayInNewYork(t *testing.T) {
+	newYork, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Fatalf("load New York location: %v", err)
+	}
+	now := time.Date(2026, time.October, 20, 10, 0, 0, 0, newYork)
+	due := time.Date(2026, time.October, 20, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2026, time.October, 21, 0, 0, 0, 0, time.UTC)
+	all := []Bill{{
+		AccountID: "recurring:rent",
+		Name:      "Rent",
+		Amount:    money.New(150000, "USD"),
+		DueDate:   due,
+	}}
+
+	got := PendingInWindow(all, nil, nil, now, end)
+	if len(got) != 1 || got[0].Name != "Rent" {
+		t.Fatalf("pending bills = %+v, want today's Rent bill", got)
+	}
+}

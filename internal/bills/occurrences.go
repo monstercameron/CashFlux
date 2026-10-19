@@ -59,7 +59,7 @@ func occurrencesRaw(accounts []domain.Account, recurring []domain.Recurring, now
 		}
 	}
 	for _, r := range recurring {
-		if !r.Amount.IsNegative() {
+		if !r.Active() || !r.Amount.IsNegative() {
 			continue
 		}
 		due, ok := nextRecurringDue(r, now)

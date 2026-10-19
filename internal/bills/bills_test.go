@@ -190,6 +190,18 @@ func TestUpcomingAllSkipsInvalidRecurring(t *testing.T) {
 	}
 }
 
+func TestUpcomingAllSkipsPausedRecurring(t *testing.T) {
+	now := d(2026, time.June, 10)
+	recurring := []domain.Recurring{{
+		ID: "netflix", Label: "Netflix", Amount: money.New(-1599, "USD"),
+		Cadence: domain.CadenceMonthly, NextDue: now, Paused: true,
+	}}
+
+	if got := UpcomingAll(nil, recurring, now); len(got) != 0 {
+		t.Fatalf("upcoming bills = %+v, want no bills for paused recurring", got)
+	}
+}
+
 func TestUpcomingAllRecurringBillDueTodayInNewYork(t *testing.T) {
 	newYork, err := time.LoadLocation("America/New_York")
 	if err != nil {

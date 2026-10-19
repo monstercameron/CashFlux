@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/billmatch"
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 )
 
 // PendingInWindow returns the bills due in [now, end) that do NOT already have
@@ -25,8 +26,9 @@ import (
 // the fuzzy identity check can't bridge.
 func PendingInWindow(all []Bill, txns []billmatch.Txn, settledAccounts map[string]bool, now, end time.Time) []Bill {
 	var out []Bill
+	today := dateutil.CalendarDayUTC(now)
 	for _, b := range all {
-		if b.DueDate.Before(day(now)) || !b.DueDate.Before(end) {
+		if b.DueDate.Before(today) || !b.DueDate.Before(end) {
 			continue
 		}
 		if b.AccountID != "" && settledAccounts[b.AccountID] {
@@ -44,9 +46,4 @@ func PendingInWindow(all []Bill, txns []billmatch.Txn, settledAccounts map[strin
 		out = append(out, b)
 	}
 	return out
-}
-
-// day truncates t to its calendar date (bills compare by date, not clock time).
-func day(t time.Time) time.Time {
-	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
 }
