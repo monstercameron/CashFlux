@@ -90,6 +90,8 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Saved rules keep matching after the rules update (TC3B9.2, TC3B9.3).** A rule pattern matches at the start of a word, so
+  "uber" still matches "UberEats" but no longer "Huber"; a "contains" condition keeps its plain substring meaning.
 - **Saving a transaction skips task-resolution work when no task needs it (TC3B10).**
 - **Loan-payment suggestions skip the paying account and recent transfers (TC3B3).** A recurring payment never pairs with
   its own source account, and a payment already recorded as a nearby transfer is not suggested again.

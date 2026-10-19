@@ -147,8 +147,9 @@ func matches(text, pattern string) bool {
 	return strings.Contains(strings.ToLower(text), strings.ToLower(pattern))
 }
 
-// matchesRule reports whether pattern occurs as a whole phrase in text. Unicode
-// letters and digits form words; punctuation and whitespace separate them.
+// matchesRule reports whether pattern occurs in text beginning at a word
+// boundary. The pattern may continue into the rest of a word. Unicode letters
+// and digits form words; punctuation and whitespace separate them.
 func matchesRule(text, pattern string) bool {
 	textRunes, patternRunes := []rune(strings.ToLower(text)), []rune(strings.ToLower(strings.TrimSpace(pattern)))
 	if len(patternRunes) == 0 || len(patternRunes) > len(textRunes) {
@@ -165,8 +166,7 @@ func matchesRule(text, pattern string) bool {
 				break
 			}
 		}
-		end := start + len(patternRunes)
-		if match && (end == len(textRunes) || !isRuleWordRune(textRunes[end])) {
+		if match {
 			return true
 		}
 	}

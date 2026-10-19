@@ -58,18 +58,29 @@ func TestEmptyMatchNeverFires(t *testing.T) {
 
 func TestLegacyCategoryMatchUsesWordBoundaries(t *testing.T) {
 	for _, tc := range []struct {
-		text string
-		want bool
+		name  string
+		match string
+		text  string
+		want  bool
 	}{
-		{"Rent payment", true},
-		{"Current Electric", false},
-		{"Currents Coffee", false},
-		{"Parent Teacher Assoc", false},
-		{"Rental car SFO", false},
-		{"SQ *RENT #4", true},
+		{"matches at a word start", "rent", "Rent payment", true},
+		{"does not match inside Current", "rent", "Current Electric", false},
+		{"does not match inside Currents", "rent", "Currents Coffee", false},
+		{"does not match inside Parent", "rent", "Parent Teacher Assoc", false},
+		{"matches a word prefix", "rent", "Rental car SFO", true},
+		{"matches after punctuation", "rent", "SQ *RENT #4", true},
+		{"matches merchant name", "uber", "Uber ride", true},
+		{"matches a merchant word prefix", "uber", "UberEats dinner", true},
+		{"matches uppercase merchant descriptor", "uber", "UBER *TRIP", true},
+		{"matches after a hyphen", "uber", "pay-uber", true},
+		{"does not match inside Huber", "uber", "Huber", false},
+		{"does not match inside Kuberbank", "uber", "Kuberbank", false},
+		{"matches multi-word pattern at word start", "whole foods", "Whole Foods Market", true},
+		{"unicode word prefix matches", "über", "Überweisung", true},
+		{"unicode letter prevents an inner match", "uber", "Käseuberweisung", false},
 	} {
-		t.Run(tc.text, func(t *testing.T) {
-			got := FirstMatchFull([]Rule{{Match: "rent", SetCategoryID: "housing"}}, tc.text, "", 0, "", TxnDate{}) != nil
+		t.Run(tc.name, func(t *testing.T) {
+			got := FirstMatchFull([]Rule{{Match: tc.match, SetCategoryID: "housing"}}, tc.text, "", 0, "", TxnDate{}) != nil
 			if got != tc.want {
 				t.Fatalf("rule matched=%v, want %v", got, tc.want)
 			}

@@ -77,6 +77,30 @@ func TestMatchConditions(t *testing.T) {
 			want:       true,
 		},
 		{
+			name:       "payee contains matches inside a word",
+			conditions: []RuleCondition{{Field: ConditionFieldPayee, Op: ConditionOpContains, Value: "uber"}},
+			payee:      "Huber Market",
+			want:       true,
+		},
+		{
+			name:       "payee contains bucks in Starbucks",
+			conditions: []RuleCondition{{Field: ConditionFieldPayee, Op: ConditionOpContains, Value: "bucks"}},
+			payee:      "Starbucks",
+			want:       true,
+		},
+		{
+			name:       "description contains matches a word prefix",
+			conditions: []RuleCondition{{Field: ConditionFieldDescription, Op: ConditionOpContains, Value: "whole foods"}},
+			desc:       "Whole Foods Market",
+			want:       true,
+		},
+		{
+			name:       "description equals rejects a longer value",
+			conditions: []RuleCondition{{Field: ConditionFieldDescription, Op: ConditionOpEquals, Value: "whole foods"}},
+			desc:       "Whole Foods Market",
+			want:       false,
+		},
+		{
 			name:       "payee contains no match",
 			conditions: []RuleCondition{{Field: ConditionFieldPayee, Op: ConditionOpContains, Value: "uber"}},
 			payee:      "Starbucks NYC",
@@ -88,6 +112,12 @@ func TestMatchConditions(t *testing.T) {
 			conditions: []RuleCondition{{Field: ConditionFieldDescription, Op: ConditionOpEquals, Value: "morning coffee"}},
 			desc:       "Morning Coffee",
 			want:       true,
+		},
+		{
+			name:       "description equals does not match a substring",
+			conditions: []RuleCondition{{Field: ConditionFieldDescription, Op: ConditionOpEquals, Value: "coffee"}},
+			desc:       "Morning Coffee",
+			want:       false,
 		},
 		// 5. Amount > condition (greater than in magnitude, in minor units).
 		{
@@ -389,5 +419,25 @@ func TestLegacyMatchHitsCleanedPayee(t *testing.T) {
 	}
 	if none := FirstMatchFull([]Rule{{Match: "chipotle"}}, "SQ *BLUE BOTTLE COFFEE #47", "", -1200, "acct1", TxnDate{}); none != nil {
 		t.Fatal("unrelated rule matched")
+	}
+}
+
+// TestLegacyMatchUsesWordStarts keeps word-boundary matching limited to the
+// legacy Rule.Match pattern, where substring false positives were reported.
+func TestLegacyMatchUsesWordStarts(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		text string
+		want bool
+	}{
+		{name: "does not match inside Current", text: "Current", want: false},
+		{name: "matches Rental", text: "Rental", want: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := FirstMatchFull([]Rule{{Match: "rent"}}, tc.text, "", 0, "", TxnDate{})
+			if (got != nil) != tc.want {
+				t.Fatalf("legacy Match(%q) matched = %v, want %v", tc.text, got != nil, tc.want)
+			}
+		})
 	}
 }
