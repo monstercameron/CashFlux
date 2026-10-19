@@ -5,14 +5,10 @@
 package screens
 
 import (
-	"strings"
-
 	"github.com/monstercameron/CashFlux/internal/appstate"
-	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
-	"github.com/monstercameron/CashFlux/internal/rules"
-	"github.com/monstercameron/CashFlux/internal/subscriptions"
+	"github.com/monstercameron/CashFlux/internal/txnlink"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -21,416 +17,236 @@ import (
 	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
 
-// ensureBillRule persists a rule that auto-links future transactions matching `phrase`
-// (payee/description, contains) as bill payments toward accountID, unless an equivalent
-// rule already exists. Returns whether a new rule was created.
-func ensureBillRule(app *appstate.App, phrase, accountID string) bool {
-	phrase = strings.TrimSpace(phrase)
-	if app == nil || phrase == "" || accountID == "" {
-		return false
-	}
-	for _, r := range app.Rules() {
-		if r.SetBillAccountID == accountID && strings.EqualFold(strings.TrimSpace(r.Match), phrase) {
-			return false // an equivalent rule already covers this merchant → account
-		}
-	}
-	if err := app.PutRule(rules.Rule{ID: id.New(), Match: phrase, SetBillAccountID: accountID, Order: app.NextRuleOrder()}); err != nil {
-		uistate.PostNotice(err.Error(), true)
-		return false
-	}
-	return true
-}
-
-// TxnLinkBody is the body of the payment-link flip modal (mounted at the shell root
-// by app.TxnLinkHost). It links one transaction to a liability (as a recurring BILL
-// payment) and/or to a subscription (as a subscription payment), via a Bill /
-// Subscription toggle. The row ⋯ menu opens it to the chosen mode; both links save
-// together so the modal reads as "what this payment is for". Saving is the write
-// step — nothing changes until the user clicks Save.
+// TxnLinkBody is the payment-link modal's state and persistence shell. Both links
+// remain pending across tab changes and are saved together only on Save.
 func TxnLinkBody(_ struct{}) ui.Node {
 	app := appstate.Default
 	_ = uistate.UseDataRevision().Get()
 	linkAtom := uistate.UseTxnLinkTarget()
 	target := linkAtom.Get()
-
-	// Resolve the target transaction. If it's gone (deleted underneath us), show a
-	// gentle empty state rather than a broken form.
-	var txn domain.Transaction
-	found := false
-	if app != nil {
-		for _, t := range app.Transactions() {
-			if t.ID == target.TxnID {
-				txn, found = t, true
-				break
-			}
-		}
-	}
-	base := "USD"
-	if app != nil && app.Settings().BaseCurrency != "" {
-		base = app.Settings().BaseCurrency
-	}
-	rates := currency.Rates{Base: base}
-	var detected []subscriptions.Subscription
-	if app != nil {
-		rates.Rates = app.Settings().FXRates
-		allTxns := app.Transactions()
-		allAccounts := app.Accounts()
-		prefs := uistate.LoadSubsDetectPrefs()
-		accountTypes := make(map[string]string, len(allAccounts))
-		for _, account := range allAccounts {
-			accountTypes[account.ID] = string(account.Type)
-		}
-		ignoredCategories := make(map[string]bool, len(prefs.IgnoredCategoryIDs))
-		for _, id := range prefs.IgnoredCategoryIDs {
-			ignoredCategories[id] = true
-		}
-		ignoredAccountTypes := make(map[string]bool, len(prefs.IgnoredAccountTypes))
-		for _, accountType := range prefs.IgnoredAccountTypes {
-			ignoredAccountTypes[accountType] = true
-		}
-		filteredTxns := make([]domain.Transaction, 0, len(allTxns))
-		for _, candidate := range allTxns {
-			if ignoredCategories[candidate.CategoryID] || ignoredAccountTypes[accountTypes[candidate.AccountID]] {
-				continue
-			}
-			filteredTxns = append(filteredTxns, candidate)
-		}
-		detected, _ = subscriptions.Detect(filteredTxns, rates, prefs.MinOccurrencesOrDefault())
-		categoryNames := make(map[string]string)
-		for _, category := range app.Categories() {
-			categoryNames[category.ID] = category.Name
-		}
-		detected = txnLinkFilterSubscriptionKinds(detected, filteredTxns, allTxns, allAccounts, categoryNames, loadConfirmedSubs(), app.IgnoredSubscriptions())
-	}
-	initialSubChoice := txn.SubscriptionName
-	if initialSubChoice == "" {
-		initialSubChoice = bestTxnSubscription(txn, detected, rates)
-	}
-
-	// All hooks are called unconditionally, before any early return, so the hook order
-	// is identical on every render (the GWC hooks rule) even if the transaction vanishes
-	// underneath us mid-edit.
+	model := loadTxnLinkModel(app, target.TxnID)
+	// Keep all state hooks unconditional when the payment disappears mid-edit.
 	mode := ui.UseState(target.Mode)
-	billChoice := ui.UseState(txn.BillAccountID)
-	subChoice := ui.UseState(initialSubChoice)
-	autoLink := ui.UseState(false)
-	onSave := ui.UseEvent(Prevent(func() {
-		// C565: refuse a semantic no-op even if the button is reached some other way
-		// (an Enter keypress, an e2e click on a disabled node). Save commits a change
-		// or it does nothing at all — it never posts "saved" over an unchanged record.
-		if billChoice.Get() == txn.BillAccountID && subChoice.Get() == txn.SubscriptionName &&
-			!(autoLink.Get() && billChoice.Get() != "") {
-			uistate.PostNotice(uistate.T("txnlink.nothingToSave"), true)
-			return
-		}
-		t := txn
-		t.BillAccountID = billChoice.Get()
-		t.SubscriptionName = subChoice.Get()
-		if err := app.PutTransaction(t); err != nil {
-			uistate.PostNotice(err.Error(), true)
-			return
-		}
-		// "Auto-link future payments like this" — persist a rule matching this merchant
-		// (payee, contains) that sets the bill account, so future/imported payments tie
-		// to it automatically. Created once per (merchant, account) pair.
-		ruleMade := false
-		if autoLink.Get() && billChoice.Get() != "" {
-			ruleMade = ensureBillRule(app, firstNonEmpty(txn.Payee, txn.Desc), billChoice.Get())
-		}
-		switch {
-		case ruleMade:
-			uistate.PostNotice(uistate.T("txnlink.savedWithRule"), false)
-		case t.BillAccountID == "" && t.SubscriptionName == "":
-			uistate.PostNotice(uistate.T("txnlink.cleared"), false)
-		default:
-			uistate.PostNotice(uistate.T("txnlink.saved"), false)
-		}
-		uistate.BumpDataRevision()
-		linkAtom.Set(uistate.TxnLinkTarget{})
-	}))
-	onCancel := ui.UseEvent(Prevent(func() { linkAtom.Set(uistate.TxnLinkTarget{}) }))
-	onToggleAutoLink := ui.UseEvent(func() { autoLink.Set(!autoLink.Get()) })
-	cancelClick := OnClick(onCancel)
-	saveClick := OnClick(onSave)
-	autoLinkChange := OnChange(onToggleAutoLink)
-
-	if !found {
-		return Div(css.Class(tw.FlexCol, tw.Gap3),
-			P(css.Class("muted"), Attr("data-testid", "txnlink-missing"), uistate.T("txnlink.missing")),
-			Div(css.Class("modal-sticky-foot"),
-				Button(css.Class("btn"), Type("button"), cancelClick, uistate.T("action.close"))))
+	draft := ui.UseState(model.Initial)
+	close := func() { linkAtom.Set(uistate.TxnLinkTarget{}) }
+	if !model.Found {
+		return ui.CreateElement(txnLinkMissing, txnLinkMissingProps{Close: close})
 	}
-
-	// Bill-payment targets are active liability accounts. Also build an id→name map for the
-	// summary's account line and the effect preview.
-	var billAccts []domain.Account
-	acctName := make(map[string]string)
-	for _, ac := range app.Accounts() {
-		acctName[ac.ID] = ac.Name
-		if !ac.Archived && ac.Class == domain.ClassLiability {
-			billAccts = append(billAccts, ac)
-		}
-	}
-
-	// Detected subscriptions (by name) — the subscription-payment targets. Detection
-	// mirrors the /subscriptions page so the names line up with what the user sees.
-	// Detection can surface a merchant once per currency; keep one option per
-	// subscription while preserving detector order.
-	subNames := txnLinkSubscriptionNames(detected)
-	seenSub := make(map[string]bool, len(subNames))
-	for _, name := range subNames {
-		seenSub[name] = true
-	}
-	// A new payment can be preselected only when both its merchant and amount agree
-	// with a detected subscription. Existing links remain editable even if the
-	// history no longer meets the detector's threshold.
-	if txn.SubscriptionName != "" && !seenSub[txn.SubscriptionName] {
-		subNames = append([]string{txn.SubscriptionName}, subNames...)
-	}
-
-	// Mode toggle: Bill payment ↔ Subscription. Both links persist on Save; the toggle
-	// just chooses which picker is shown.
-	seg := uiw.Segmented(uiw.SegmentedProps{
-		Label:    uistate.T("txnlink.modeLabel"),
-		Selected: mode.Get(),
-		Options: []uiw.SegOption{
-			{Value: uistate.TxnLinkModeBill, Label: uistate.T("txnlink.modeBill"), TestID: "txnlink-mode-bill"},
-			{Value: uistate.TxnLinkModeSub, Label: uistate.T("txnlink.modeSub"), TestID: "txnlink-mode-sub"},
-		},
-		OnSelect: func(m string) { mode.Set(m) },
-	})
-
-	// Transaction summary — the payment is the hero: description + date/account on the
-	// left, the amount as a display figure on the right, so the user sees exactly what
-	// they're linking at a glance.
-	acctLine := uistate.LoadPrefs().FormatDate(txn.Date)
-	if an := acctName[txn.AccountID]; an != "" {
-		acctLine += " · " + an
-	}
-	summary := Div(css.Class("txnlink-summary"), Attr("data-testid", "txnlink-summary"),
-		Div(css.Class("txnlink-summary-main"),
-			Span(css.Class("txnlink-summary-desc"), txnLinkDesc(txn)),
-			Span(css.Class("txnlink-summary-meta", tw.TextDim), acctLine)),
-		Span(css.Class("txnlink-summary-amount", tw.FontDisplay, tw.ColorClass(figTone(txn.Amount))), fmtMoney(txn.Amount)))
-
+	pending := draft.Get()
+	decision := pending.Evaluate(model.Transaction)
+	summary := txnlink.Summarize(model.Transaction, model.AccountNames, uistate.LoadPrefs(), uistate.T("transactions.uncategorized"))
 	var picker ui.Node
 	if mode.Get() == uistate.TxnLinkModeSub {
-		if len(subNames) == 0 {
-			picker = P(css.Class("muted"), Attr("data-testid", "txnlink-no-subs"), uistate.T("txnlink.noSubs"))
-		} else {
-			opts := []uiw.SelectOption{{Value: "", Label: uistate.T("txnlink.noneSub")}}
-			for _, n := range subNames {
-				opts = append(opts, uiw.SelectOption{Value: n, Label: n})
-			}
-			picker = Div(css.Class(tw.FlexCol, tw.Gap15),
-				Label(css.Class(tw.Text13, tw.TextDim), uistate.T("txnlink.subLabel")),
-				uiw.SelectInput(uiw.SelectInputProps{
-					Options: opts, Selected: subChoice.Get(),
-					OnChange:  func(v string) { subChoice.Set(v) },
-					AriaLabel: uistate.T("txnlink.subLabel"), TestID: "txnlink-sub-select",
-				}),
-				P(css.Class("muted", tw.Text13), Style(map[string]string{"margin": "0"}), uistate.T("txnlink.subHint")))
-		}
+		picker = ui.CreateElement(txnLinkSubscriptionPicker, txnLinkSubscriptionPickerProps{
+			Options: model.Subscriptions, Selected: pending.SubscriptionName,
+			Change: func(v string) {
+				draft.Update(func(d txnlink.Draft) txnlink.Draft { return d.WithSubscription(v) })
+			},
+		})
 	} else {
-		if len(billAccts) == 0 {
-			picker = P(css.Class("muted"), Attr("data-testid", "txnlink-no-debts"), uistate.T("txnlink.noDebts"))
-		} else {
-			opts := []uiw.SelectOption{{Value: "", Label: uistate.T("txnlink.noneBill")}}
-			for _, a := range billAccts {
-				opts = append(opts, uiw.SelectOption{Value: a.ID, Label: a.Name})
-			}
-			picker = Div(css.Class(tw.FlexCol, tw.Gap15),
-				Label(css.Class(tw.Text13, tw.TextDim), uistate.T("txnlink.billLabel")),
-				uiw.SelectInput(uiw.SelectInputProps{
-					Options: opts, Selected: billChoice.Get(),
-					OnChange:  func(v string) { billChoice.Set(v) },
-					AriaLabel: uistate.T("txnlink.billLabel"), TestID: "txnlink-bill-select",
-				}),
-				P(css.Class("muted", tw.Text13), Style(map[string]string{"margin": "0"}), uistate.T("txnlink.billHint")),
-				// Offer to remember this as a rule once a debt is chosen, so future
-				// payments to the same merchant auto-link (also applied on import).
-				If(billChoice.Get() != "", Label(css.Class("acct-liab-toggle", tw.Flex, tw.ItemsCenter, tw.Gap2), Style(map[string]string{"cursor": "pointer"}),
-					Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "txnlink-autolink"), autoLinkChange}, checkedAttr(autoLink.Get())...)...),
-					Div(css.Class("row-main"),
-						Span(uistate.T("txnlink.autoLink", txnLinkMerchant(txn))),
-						Span(css.Class("row-meta", tw.TextDim), uistate.T("txnlink.autoLinkHint"))))))
-		}
+		picker = ui.CreateElement(txnLinkBillPicker, txnLinkBillPickerProps{
+			Options: model.Bills, Selected: pending.BillAccountID, AutoLink: pending.AutoLink,
+			ShowAutoLink: decision.HasBill,
+			Merchant:     txnlink.Merchant(model.Transaction, uistate.T("transactions.uncategorized")),
+			Change: func(v string) {
+				draft.Update(func(d txnlink.Draft) txnlink.Draft { return d.WithBill(v) })
+			},
+			ToggleAutoLink: func() {
+				draft.Update(txnlink.Draft.ToggleAutoLink)
+			},
+		})
 	}
-
-	// Live "will link to" preview — both a bill and a subscription link save together,
-	// so echo every pending link as a chip regardless of the active tab. This makes the
-	// commit transparent: the user sees exactly what Save will do.
-	preview := Fragment()
-	previewArgs := []any{css.Class("txnlink-preview"), Attr("data-testid", "txnlink-preview"),
-		Span(css.Class("txnlink-preview-label", tw.TextDim), uistate.T("txnlink.previewLabel"))}
-	linked := false
-	if aid := billChoice.Get(); aid != "" {
-		previewArgs = append(previewArgs, Span(css.Class("txnlink-chip"), uistate.T("txnlink.chipBill", acctName[aid])))
-		linked = true
-	}
-	if name := subChoice.Get(); name != "" {
-		previewArgs = append(previewArgs, Span(css.Class("txnlink-chip"), uistate.T("txnlink.chipSub", name)))
-		linked = true
-	}
-	if linked {
-		preview = Div(previewArgs...)
-	}
-
-	// C565: the pickers open on "Not a bill payment" / "Not a subscription payment",
-	// which is the correct resting choice for an UNLINKED payment — and it made Save a
-	// live button that could only ever do nothing. Save now commits a CHANGE, so it is
-	// enabled exactly when the pending choices differ from what the transaction already
-	// carries, and it names what it will do: linking, or removing a link that exists.
-	// A "nothing chosen yet" line explains the disabled state rather than leaving the
-	// user to discover it by clicking.
-	changed := billChoice.Get() != txn.BillAccountID ||
-		subChoice.Get() != txn.SubscriptionName ||
-		(autoLink.Get() && billChoice.Get() != "")
-	clearing := !linked && (txn.BillAccountID != "" || txn.SubscriptionName != "")
-	saveLabel := uistate.T("txnlink.save")
-	if clearing {
-		saveLabel = uistate.T("txnlink.saveRemove")
-	}
-	var saveHint ui.Node = Fragment()
-	switch {
-	case !changed:
-		saveHint = P(css.Class("muted", tw.Text13), Attr("data-testid", "txnlink-nothing"),
-			Style(map[string]string{"margin": "0"}), uistate.T("txnlink.nothingToSave"))
-	case clearing:
-		saveHint = P(css.Class("muted", tw.Text13), Attr("data-testid", "txnlink-clearhint"),
-			Style(map[string]string{"margin": "0"}), uistate.T("txnlink.clearHint"))
-	}
-	saveArgs := []any{css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "txnlink-save"), saveClick, saveLabel}
-	if !changed {
-		saveArgs = append(saveArgs, Disabled(true), Attr("aria-disabled", "true"))
-	}
-
 	return Div(css.Class(tw.FlexCol, tw.Gap3),
-		summary,
-		seg,
+		ui.CreateElement(txnLinkSummary, summary),
+		ui.CreateElement(txnLinkMode, txnLinkModeProps{Selected: mode.Get(), Change: func(v string) { mode.Set(v) }}),
 		picker,
-		preview,
-		saveHint,
-		Div(css.Class("modal-sticky-foot"),
-			Button(css.Class("btn"), Type("button"), Attr("data-testid", "txnlink-cancel"), cancelClick, uistate.T("action.cancel")),
-			Button(saveArgs...)),
+		ui.CreateElement(txnLinkPreview, txnLinkPreviewProps{Decision: decision, AccountNames: model.AccountNames}),
+		ui.CreateElement(txnLinkFooter, txnLinkFooterProps{Decision: decision, Cancel: close, Save: func() {
+			saveTxnLink(app, model.Transaction, draft.Get(), close)
+		}}),
 	)
 }
 
-// txnLinkDesc is the transaction's display description for the link modal summary,
-// preferring the description and falling back to the payee.
+// loadTxnLinkModel only reads platform state; dataset decisions belong to txnlink.
+func loadTxnLinkModel(app *appstate.App, txnID string) txnlink.Model {
+	if app == nil {
+		return txnlink.Prepare(txnlink.Input{}, txnID)
+	}
+	settings := app.Settings()
+	prefs := uistate.LoadSubsDetectPrefs()
+	return txnlink.Prepare(txnlink.Input{
+		Transactions: app.Transactions(), Accounts: app.Accounts(), Categories: app.Categories(),
+		BaseCurrency: settings.BaseCurrency, FXRates: settings.FXRates,
+		IgnoredCategoryIDs: prefs.IgnoredCategoryIDs, IgnoredAccountTypes: prefs.IgnoredAccountTypes,
+		MinOccurrences: prefs.MinOccurrencesOrDefault(), Confirmed: loadConfirmedSubs(), Ignored: app.IgnoredSubscriptions(),
+	}, txnID)
+}
+
+// saveTxnLink applies the pure decision through the existing persistence path.
+func saveTxnLink(app *appstate.App, txn domain.Transaction, draft txnlink.Draft, close func()) {
+	decision := draft.Evaluate(txn)
+	if !decision.Changed {
+		uistate.PostNotice(uistate.T("txnlink.nothingToSave"), true)
+		return
+	}
+	if err := app.PutTransaction(decision.Transaction); err != nil {
+		uistate.PostNotice(err.Error(), true)
+		return
+	}
+	ruleMade := false
+	if rule, ok := txnlink.BillRule(app.Rules(), txn, draft, id.New(), app.NextRuleOrder()); ok {
+		if err := app.PutRule(rule); err != nil {
+			uistate.PostNotice(err.Error(), true)
+		} else {
+			ruleMade = true
+		}
+	}
+	uistate.PostNotice(uistate.T(decision.NoticeKey(ruleMade)), false)
+	uistate.BumpDataRevision()
+	close()
+}
+
+type txnLinkMissingProps struct{ Close func() }
+
+func txnLinkMissing(p txnLinkMissingProps) ui.Node {
+	closeClick := OnClick(ui.UseEvent(Prevent(p.Close)))
+	return Div(css.Class(tw.FlexCol, tw.Gap3),
+		P(css.Class("muted"), Attr("data-testid", "txnlink-missing"), uistate.T("txnlink.missing")),
+		Div(css.Class("modal-sticky-foot"),
+			Button(css.Class("btn"), Type("button"), closeClick, uistate.T("action.close"))))
+}
+
+func txnLinkSummary(p txnlink.Summary) ui.Node {
+	return Div(css.Class("txnlink-summary"), Attr("data-testid", "txnlink-summary"),
+		Div(css.Class("txnlink-summary-main"),
+			Span(css.Class("txnlink-summary-desc"), p.Description),
+			Span(css.Class("txnlink-summary-meta", tw.TextDim), p.AccountLine)),
+		Span(css.Class("txnlink-summary-amount", tw.FontDisplay, tw.ColorClass(p.Tone)), p.Amount))
+}
+
+type txnLinkModeProps struct {
+	Selected string
+	Change   func(string)
+}
+
+func txnLinkMode(p txnLinkModeProps) ui.Node {
+	return uiw.Segmented(uiw.SegmentedProps{
+		Label: uistate.T("txnlink.modeLabel"), Selected: p.Selected,
+		Options: []uiw.SegOption{
+			{Value: uistate.TxnLinkModeBill, Label: uistate.T("txnlink.modeBill"), TestID: "txnlink-mode-bill"},
+			{Value: uistate.TxnLinkModeSub, Label: uistate.T("txnlink.modeSub"), TestID: "txnlink-mode-sub"},
+		}, OnSelect: p.Change,
+	})
+}
+
+type txnLinkSubscriptionPickerProps struct {
+	Options  []txnlink.Option
+	Selected string
+	Change   func(string)
+}
+
+func txnLinkSubscriptionPicker(p txnLinkSubscriptionPickerProps) ui.Node {
+	if len(p.Options) == 0 {
+		return P(css.Class("muted"), Attr("data-testid", "txnlink-no-subs"), uistate.T("txnlink.noSubs"))
+	}
+	return Div(css.Class(tw.FlexCol, tw.Gap15),
+		Label(css.Class(tw.Text13, tw.TextDim), uistate.T("txnlink.subLabel")),
+		uiw.SelectInput(uiw.SelectInputProps{
+			Options: txnLinkOptions(p.Options, "txnlink.noneSub"), Selected: p.Selected, OnChange: p.Change,
+			AriaLabel: uistate.T("txnlink.subLabel"), TestID: "txnlink-sub-select",
+		}),
+		P(css.Class("muted", tw.Text13), Style(map[string]string{"margin": "0"}), uistate.T("txnlink.subHint")))
+}
+
+type txnLinkBillPickerProps struct {
+	Options            []txnlink.Option
+	Selected, Merchant string
+	AutoLink           bool
+	ShowAutoLink       bool
+	Change             func(string)
+	ToggleAutoLink     func()
+}
+
+func txnLinkBillPicker(p txnLinkBillPickerProps) ui.Node {
+	// Register the checkbox hook before any empty-state or selection branch.
+	autoLinkChange := OnChange(ui.UseEvent(p.ToggleAutoLink))
+	if len(p.Options) == 0 {
+		return P(css.Class("muted"), Attr("data-testid", "txnlink-no-debts"), uistate.T("txnlink.noDebts"))
+	}
+	return Div(css.Class(tw.FlexCol, tw.Gap15),
+		Label(css.Class(tw.Text13, tw.TextDim), uistate.T("txnlink.billLabel")),
+		uiw.SelectInput(uiw.SelectInputProps{
+			Options: txnLinkOptions(p.Options, "txnlink.noneBill"), Selected: p.Selected, OnChange: p.Change,
+			AriaLabel: uistate.T("txnlink.billLabel"), TestID: "txnlink-bill-select",
+		}),
+		P(css.Class("muted", tw.Text13), Style(map[string]string{"margin": "0"}), uistate.T("txnlink.billHint")),
+		If(p.ShowAutoLink, Label(css.Class("acct-liab-toggle", tw.Flex, tw.ItemsCenter, tw.Gap2), Style(map[string]string{"cursor": "pointer"}),
+			Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "txnlink-autolink"), autoLinkChange}, checkedAttr(p.AutoLink)...)...),
+			Div(css.Class("row-main"),
+				Span(uistate.T("txnlink.autoLink", p.Merchant)),
+				Span(css.Class("row-meta", tw.TextDim), uistate.T("txnlink.autoLinkHint"))))))
+}
+
+// txnLinkOptions maps pure options to the UI's option nodes without changing order.
+func txnLinkOptions(options []txnlink.Option, noneKey string) []uiw.SelectOption {
+	out := []uiw.SelectOption{{Value: "", Label: uistate.T(noneKey)}}
+	for _, option := range options {
+		out = append(out, uiw.SelectOption{Value: option.Value, Label: option.Label})
+	}
+	return out
+}
+
+type txnLinkPreviewProps struct {
+	Decision     txnlink.Decision
+	AccountNames map[string]string
+}
+
+func txnLinkPreview(p txnLinkPreviewProps) ui.Node {
+	if !p.Decision.Linked {
+		return Fragment()
+	}
+	txn := p.Decision.Transaction
+	args := []any{css.Class("txnlink-preview"), Attr("data-testid", "txnlink-preview"),
+		Span(css.Class("txnlink-preview-label", tw.TextDim), uistate.T("txnlink.previewLabel"))}
+	if p.Decision.HasBill {
+		args = append(args, Span(css.Class("txnlink-chip"), uistate.T("txnlink.chipBill", p.AccountNames[txn.BillAccountID])))
+	}
+	if p.Decision.HasSubscription {
+		args = append(args, Span(css.Class("txnlink-chip"), uistate.T("txnlink.chipSub", txn.SubscriptionName)))
+	}
+	return Div(args...)
+}
+
+type txnLinkFooterProps struct {
+	Decision     txnlink.Decision
+	Save, Cancel func()
+}
+
+func txnLinkFooter(p txnLinkFooterProps) ui.Node {
+	cancelClick := OnClick(ui.UseEvent(Prevent(p.Cancel)))
+	saveClick := OnClick(ui.UseEvent(Prevent(p.Save)))
+	hint := Fragment()
+	if p.Decision.HintKey != "" {
+		hint = P(css.Class("muted", tw.Text13), Attr("data-testid", p.Decision.HintTestID),
+			Style(map[string]string{"margin": "0"}), uistate.T(p.Decision.HintKey))
+	}
+	args := []any{css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "txnlink-save"), saveClick, uistate.T(p.Decision.SaveKey)}
+	if !p.Decision.Changed {
+		args = append(args, Disabled(true), Attr("aria-disabled", "true"))
+	}
+	return Fragment(hint, Div(css.Class("modal-sticky-foot"),
+		Button(css.Class("btn"), Type("button"), Attr("data-testid", "txnlink-cancel"), cancelClick, uistate.T("action.cancel")),
+		Button(args...)))
+}
+
+// txnLinkDesc is retained for the refund dialog; its display decision is pure.
 func txnLinkDesc(t domain.Transaction) string {
-	if d := t.Desc; d != "" {
-		return d
-	}
-	if t.Payee != "" {
-		return t.Payee
-	}
-	return uistate.T("transactions.uncategorized")
+	return txnlink.Description(t, uistate.T("transactions.uncategorized"))
 }
 
-// txnLinkMerchant is the phrase the auto-link rule matches on — the payee, falling back
-// to the description. Shown in the toggle label so the user sees exactly what "like
-// this" means.
-func txnLinkMerchant(t domain.Transaction) string {
-	if m := strings.TrimSpace(firstNonEmpty(t.Payee, t.Desc)); m != "" {
-		return m
-	}
-	return uistate.T("transactions.uncategorized")
-}
-
-// bestTxnSubscription returns the detected subscription that matches the
-// transaction's payee or description and whose typical charge is within 10% of
-// the transaction amount. It returns an empty name when there is no confident
-// match; detection order is stable, so ties remain deterministic.
-func bestTxnSubscription(txn domain.Transaction, detected []subscriptions.Subscription, rates currency.Rates) string {
-	payee := strings.TrimSpace(txn.Payee)
-	description := strings.TrimSpace(txn.Desc)
-	if (payee == "" && description == "") || txn.Amount.Amount == 0 {
-		return ""
-	}
-	amount := txn.Amount.Abs()
-	if !strings.EqualFold(strings.TrimSpace(amount.Currency), strings.TrimSpace(rates.Base)) {
-		converted, err := rates.Convert(amount, rates.Base)
-		if err != nil {
-			return ""
-		}
-		amount = converted
-	}
-	want := amount.Amount
-	if want < 0 {
-		want = -want
-	}
-	bestName := ""
-	bestDiff := int64(-1)
-	for _, candidate := range detected {
-		name := strings.TrimSpace(candidate.Name)
-		if (!strings.EqualFold(name, payee) && !strings.EqualFold(name, description)) || candidate.Amount < 0 {
-			continue
-		}
-		diff := candidate.Amount - want
-		if diff < 0 {
-			diff = -diff
-		}
-		if diff <= want/10 && (bestDiff < 0 || diff < bestDiff) {
-			bestName, bestDiff = candidate.Name, diff
-		}
-	}
-	return bestName
-}
-
-// txnLinkSubscriptionNames returns the detected subscription kinds the picker
-// can link to, in detector order, without duplicates or blank labels.
-func txnLinkSubscriptionNames(detected []subscriptions.Subscription) []string {
-	seen := make(map[string]bool, len(detected))
-	var names []string
-	for _, candidate := range detected {
-		name := strings.TrimSpace(candidate.Name)
-		if name == "" || seen[name] {
-			continue
-		}
-		seen[name] = true
-		names = append(names, name)
-	}
-	return names
-}
-
-// txnLinkFilterSubscriptionKinds keeps only real subscription commitments. The
-// recurring-charge detector also finds bills and habitual spending, so its raw
-// matches are not by themselves proof that a merchant is a subscription.
-func txnLinkFilterSubscriptionKinds(
-	detected []subscriptions.Subscription,
-	detectionTxns []domain.Transaction,
-	txns []domain.Transaction,
-	accounts []domain.Account,
-	categoryNames map[string]string,
-	confirmed map[string]bool,
-	ignored []domain.SubscriptionIgnore,
-) []subscriptions.Subscription {
-	ignoredNames := make(map[string]bool, len(ignored))
-	for _, item := range ignored {
-		ignoredNames[strings.ToLower(strings.TrimSpace(item.SubName))] = true
-	}
-	categoryName := func(id string) string { return categoryNames[id] }
-	filtered := make([]subscriptions.Subscription, 0, len(detected))
-	for _, candidate := range detected {
-		name := strings.TrimSpace(candidate.Name)
-		if name == "" || ignoredNames[strings.ToLower(name)] || subscriptions.IsLiabilityPayment(candidate, txns, accounts) {
-			continue
-		}
-		isSubscription := false
-		for _, txn := range detectionTxns {
-			if !strings.EqualFold(strings.TrimSpace(txn.Desc), name) {
-				continue
-			}
-			if subscriptions.IsSubscriptionCommitment(name, categoryName(txn.CategoryID), confirmed) {
-				isSubscription = true
-				break
-			}
-		}
-		if isSubscription {
-			filtered = append(filtered, candidate)
-		}
-	}
-	return filtered
-}
+// Keep private helper names used by the unchanged R2Q wasm regression tests.
+var (
+	bestTxnSubscription            = txnlink.BestSubscription
+	txnLinkSubscriptionNames       = txnlink.SubscriptionNames
+	txnLinkFilterSubscriptionKinds = txnlink.FilterSubscriptionKinds
+)
