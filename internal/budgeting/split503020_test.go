@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
 )
@@ -36,28 +37,13 @@ func TestClassify(t *testing.T) {
 		catName string
 		want    Bucket
 	}{
-		// Needs keywords
-		{"rent", "Rent", BucketNeeds},
-		{"housing", "Housing", BucketNeeds},
-		{"groceries", "Groceries", BucketNeeds},
-		{"health", "Health & Medical", BucketNeeds},
-		{"transport", "Transport", BucketNeeds},
-		{"utilities", "Utilities", BucketNeeds},
-		{"insurance", "Car Insurance", BucketNeeds},
-		{"childcare", "Childcare", BucketNeeds},
-		// Savings keywords
-		{"savings", "Savings", BucketSavings},
-		{"investment", "Investment", BucketSavings},
-		{"emergency fund", "Emergency Fund", BucketSavings},
-		{"retirement", "Retirement", BucketSavings},
-		// Wants keywords
-		{"dining", "Dining Out", BucketWants},
-		{"entertainment", "Entertainment", BucketWants},
-		{"shopping", "Shopping", BucketWants},
-		{"subscription", "Subscriptions", BucketWants},
-		{"personal", "Personal Care", BucketWants},
-		// Default → Wants
-		{"unknown", "Miscellaneous", BucketWants},
+		{"rent", "Rent", BucketWants},
+		{"groceries", "Groceries", BucketWants},
+		{"business lunch", "Business lunches", BucketWants},
+		{"travel", "Las Vegas trip", BucketWants},
+		{"family", "Parents support", BucketWants},
+		{"refunds", "Refunds", BucketWants},
+		{"misc", "Miscellaneous", BucketWants},
 	}
 
 	for _, tt := range tests {
@@ -68,6 +54,36 @@ func TestClassify(t *testing.T) {
 				t.Errorf("Classify(%q) = %s, want %s", tt.catName, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestClassifyOverrideSelectsUserChosenBucket(t *testing.T) {
+	category := expCat("trip", "Las Vegas trip")
+	for _, bucket := range []Bucket{BucketNeeds, BucketWants, BucketSavings} {
+		if got := Classify(category, map[string]Bucket{category.ID: bucket}); got != bucket {
+			t.Errorf("Classify override = %s, want %s", got, bucket)
+		}
+	}
+}
+
+func TestGenerate5030UsesReviewedBucketOverride(t *testing.T) {
+	categories := []domain.Category{expCat("vegas", "Las Vegas trip"), expCat("lunch", "Business lunches")}
+	result, err := Generate5030WithRatesAndOverrides(100_000, categories, nil, time.Date(2026, 10, 19, 0, 0, 0, 0, time.UTC), currency.Rates{Base: "USD"}, map[string]Bucket{
+		"vegas": BucketNeeds,
+		"lunch": BucketSavings,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]BudgetProposal{}
+	for _, proposal := range result.Proposals {
+		got[proposal.Category.ID] = proposal
+	}
+	if got["vegas"].Bucket != BucketNeeds || got["vegas"].LimitMinor != result.NeedsTarget {
+		t.Errorf("reviewed needs proposal = %+v, target %d", got["vegas"], result.NeedsTarget)
+	}
+	if got["lunch"].Bucket != BucketSavings || got["lunch"].LimitMinor != result.SavingsTarget {
+		t.Errorf("reviewed savings proposal = %+v, target %d", got["lunch"], result.SavingsTarget)
 	}
 }
 
@@ -147,7 +163,12 @@ func TestGenerate5030Percentages(t *testing.T) {
 		expCat("dining", "Dining Out"),
 	}
 	now := mustDate("2026-06-25")
-	r := Generate5030(income, cats, nil, now)
+	r, err := Generate5030WithRatesAndOverrides(income, cats, nil, now, currency.Rates{Base: "USD"}, map[string]Bucket{
+		"rent": BucketNeeds, "food": BucketNeeds, "util": BucketNeeds,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if r.NeedsTarget != 300000 { // 50%
 		t.Errorf("NeedsTarget = %d, want 300000", r.NeedsTarget)
@@ -214,7 +235,14 @@ func TestGenerate5030ProportionalDistribution(t *testing.T) {
 	}
 
 	income := int64(100000) // 1000.00
-	r := Generate5030(income, cats, txns, now)
+	r, err := Generate5030WithRatesAndOverrides(income, cats, NettedLedger(txns), now, currency.Rates{Base: "USD"}, map[string]Bucket{
+		"rent": BucketNeeds, "food": BucketNeeds, "util": BucketNeeds,
+		"dining": BucketWants, "entert": BucketWants,
+		"savings": BucketSavings, "invest": BucketSavings,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Wants target = 30% of 100000 = 30000.
 	// Weights: dining=3000, entert=1000; total=4000.
@@ -248,7 +276,12 @@ func TestGenerate5030EvenSplitNoSpend(t *testing.T) {
 	}
 	now := mustDate("2026-06-25")
 	income := int64(300000) // 3000.00
-	r := Generate5030(income, cats, nil, now)
+	r, err := Generate5030WithRatesAndOverrides(income, cats, nil, now, currency.Rates{Base: "USD"}, map[string]Bucket{
+		"rent": BucketNeeds, "food": BucketNeeds, "util": BucketNeeds,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// NeedsTarget = 50% of 300000 = 150000; 3 categories → 50000 each.
 	// (150000 / 3 = 50000 with 0 remainder).
@@ -286,7 +319,14 @@ func TestGenerate5030ProposalsSumToBucketTarget(t *testing.T) {
 	}
 	income := int64(500000)
 	now := mustDate("2026-06-25")
-	r := Generate5030(income, cats, txns, now)
+	r, err := Generate5030WithRatesAndOverrides(income, cats, NettedLedger(txns), now, currency.Rates{Base: "USD"}, map[string]Bucket{
+		"rent": BucketNeeds, "food": BucketNeeds, "util": BucketNeeds,
+		"dining": BucketWants, "entert": BucketWants,
+		"savings": BucketSavings, "invest": BucketSavings,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	bucketTotals := map[Bucket]int64{}
 	for _, p := range r.Proposals {
@@ -359,4 +399,29 @@ func TestDistributeZeroTarget(t *testing.T) {
 			t.Errorf("distribute(0,...) should return all zeros, got %v", limits)
 		}
 	}
+}
+
+func TestDistributeClampsNegativeWeightsToZero(t *testing.T) {
+	if got, want := distribute(60, []int64{-4, 2, 0}), []int64{0, 60, 0}; !equalInt64s(got, want) {
+		t.Fatalf("distribute with negative weight = %v, want %v", got, want)
+	}
+	got, err := distributeChecked(60, []int64{-4, 2, 0})
+	if err != nil {
+		t.Fatalf("distributeChecked rejected a negative weight: %v", err)
+	}
+	if want := []int64{0, 60, 0}; !equalInt64s(got, want) {
+		t.Fatalf("distributeChecked with negative weight = %v, want %v", got, want)
+	}
+}
+
+func equalInt64s(got, want []int64) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	for i := range got {
+		if got[i] != want[i] {
+			return false
+		}
+	}
+	return true
 }

@@ -4,7 +4,6 @@ package budgeting
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/currency"
@@ -41,63 +40,13 @@ func (b Bucket) String() string {
 	}
 }
 
-// needsKeywords are lower-case substrings found in category names that map to
-// BucketNeeds. The list is intentionally broad so typical out-of-the-box
-// category sets classify correctly without manual overrides.
-var needsKeywords = []string{
-	"housing", "rent", "mortgage", "utilities", "utility", "electric",
-	"gas", "water", "groceries", "grocery", "supermarket",
-	"insurance", "health", "medical", "pharmacy", "doctor",
-	"transport", "transit", "bus", "subway", "metro", "commute",
-	"fuel", "petrol", "childcare", "education", "tuition",
-}
-
-// wantsKeywords are lower-case substrings found in category names that map to
-// BucketWants (evaluated only when needsKeywords didn't match, so a category
-// named "dining/groceries" goes to Needs first).
-var wantsKeywords = []string{
-	"dining", "restaurant", "cafe", "coffee", "takeout", "takeaway",
-	"entertainment", "movie", "cinema", "concert", "gaming", "games",
-	"shopping", "clothing", "fashion", "apparel", "accessories",
-	"personal", "beauty", "haircut", "gym", "fitness",
-	"subscription", "streaming", "netflix", "spotify", "hulu",
-	"hobbies", "hobby", "travel", "vacation", "holiday",
-	"bar", "pub", "alcohol", "beer", "wine",
-}
-
-// savingsKeywords are lower-case substrings found in category names that map
-// to BucketSavings.
-var savingsKeywords = []string{
-	"savings", "saving", "investment", "invest", "retirement",
-	"emergency", "pension", "401k", "ira", "brokerage",
-	"reserve", "fund",
-}
-
 // Classify returns the 50/30/20 bucket for a category. When the category ID is
-// present in overrides, that value wins unconditionally. Otherwise the category
-// Name is matched (case-insensitively) against a built-in keyword table: Needs
-// keywords are tried first, then Savings, then Wants. Income categories are
-// treated as Wants (they are excluded from budget proposals by Generate5030).
-// The default for an unmatched expense category is Wants.
+// present in overrides, that value wins unconditionally. Names are deliberately
+// not used to guess intent: an expense category defaults to Wants for review,
+// and income categories are excluded by Generate5030.
 func Classify(c domain.Category, overrides map[string]Bucket) Bucket {
 	if b, ok := overrides[c.ID]; ok {
 		return b
-	}
-	name := strings.ToLower(c.Name)
-	for _, kw := range needsKeywords {
-		if strings.Contains(name, kw) {
-			return BucketNeeds
-		}
-	}
-	for _, kw := range savingsKeywords {
-		if strings.Contains(name, kw) {
-			return BucketSavings
-		}
-	}
-	for _, kw := range wantsKeywords {
-		if strings.Contains(name, kw) {
-			return BucketWants
-		}
 	}
 	return BucketWants
 }
@@ -184,6 +133,9 @@ func distribute(target int64, weights []int64) []int64 {
 
 	var totalWeight int64
 	for _, w := range weights {
+		if w < 0 {
+			w = 0
+		}
 		totalWeight += w
 	}
 
@@ -203,6 +155,9 @@ func distribute(target int64, weights []int64) []int64 {
 	var distributed int64
 	firstNonZero := -1
 	for i, w := range weights {
+		if w < 0 {
+			w = 0
+		}
 		if w > 0 && firstNonZero < 0 {
 			firstNonZero = i
 		}
@@ -244,6 +199,13 @@ func Generate5030(income int64, cats []domain.Category, txns NettedLedger, now t
 // Generate5030WithRates builds the 50/30/20 proposal using checked split-aware
 // contributions converted into the selected base currency.
 func Generate5030WithRates(income int64, cats []domain.Category, txns NettedLedger, now time.Time, rates currency.Rates) (Split5030Result, error) {
+	return Generate5030WithRatesAndOverrides(income, cats, txns, now, rates, nil)
+}
+
+// Generate5030WithRatesAndOverrides builds a 50/30/20 proposal using explicit
+// category buckets when supplied. Unclassified expense categories default to
+// Wants so the review starts with a clear, editable choice rather than a name guess.
+func Generate5030WithRatesAndOverrides(income int64, cats []domain.Category, txns NettedLedger, now time.Time, rates currency.Rates, overrides map[string]Bucket) (Split5030Result, error) {
 	if income <= 0 {
 		return Split5030Result{}, nil
 	}
@@ -288,7 +250,7 @@ func Generate5030WithRates(income int64, cats []domain.Category, txns NettedLedg
 		if c.Kind == domain.KindIncome {
 			continue // income categories are not budgeted
 		}
-		b := Classify(c, nil)
+		b := Classify(c, overrides)
 		spend, err := trailingSpend(c.ID, txns, now, rates)
 		if err != nil {
 			return Split5030Result{}, err
@@ -340,7 +302,7 @@ func distributeChecked(target int64, weights []int64) ([]int64, error) {
 	var totalWeight int64
 	for _, weight := range weights {
 		if weight < 0 {
-			return nil, fmt.Errorf("negative spending weight")
+			weight = 0
 		}
 		var err error
 		totalWeight, err = money.Add(totalWeight, weight)
@@ -360,6 +322,9 @@ func distributeChecked(target int64, weights []int64) ([]int64, error) {
 	var distributed int64
 	first := -1
 	for i, weight := range weights {
+		if weight < 0 {
+			weight = 0
+		}
 		if weight > 0 && first < 0 {
 			first = i
 		}

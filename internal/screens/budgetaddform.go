@@ -6,6 +6,7 @@ package screens
 
 import (
 	"log/slog"
+	"strconv"
 	"strings"
 	"time"
 
@@ -233,6 +234,20 @@ func budgetAddFormReady(componentProps budgetAddFormComponentProps) ui.Node {
 	openTmpl := ui.UseEvent(Prevent(func() { tmplOpen.Set(true) }))
 	closeTmpl := ui.UseEvent(Prevent(func() { tmplOpen.Set(false) }))
 	tmplExcluded := ui.UseState(map[string]bool{})
+	tmplBuckets := ui.UseState(map[string]budgeting.Bucket{})
+	setTmplBucket := func(id, raw string) {
+		value, err := strconv.Atoi(raw)
+		if err != nil || value < int(budgeting.BucketNeeds) || value > int(budgeting.BucketSavings) {
+			return
+		}
+		buckets := tmplBuckets.Get()
+		next := make(map[string]budgeting.Bucket, len(buckets)+1)
+		for key, bucket := range buckets {
+			next[key] = bucket
+		}
+		next[id] = budgeting.Bucket(value)
+		tmplBuckets.Set(next)
+	}
 	toggleTmpl := func(id string) {
 		m := tmplExcluded.Get()
 		nm := make(map[string]bool, len(m)+1)
@@ -454,7 +469,7 @@ func budgetAddFormReady(componentProps budgetAddFormComponentProps) ui.Node {
 		if income <= 0 {
 			return budgetAddTemplateMemo{}
 		}
-		result, err := budgeting.Generate5030WithRates(income, categories, budgetLedgerForApp(app), now, rates)
+		result, err := budgeting.Generate5030WithRatesAndOverrides(income, categories, budgetLedgerForApp(app), now, rates, tmplBuckets.Get())
 		if err != nil {
 			return budgetAddTemplateMemo{Err: err}
 		}
@@ -471,7 +486,7 @@ func budgetAddFormReady(componentProps budgetAddFormComponentProps) ui.Node {
 			}
 		}
 		return budgetAddTemplateMemo{Proposals: proposals}
-	}, dataRevision, app.Rev(), base, now.Format("2006-01"))
+	}, dataRevision, app.Rev(), base, now.Format("2006-01"), tmplBuckets.Get())
 	tmplProposals := template.Proposals
 	if template.Err != nil {
 		slog.Error("calculate 50/30/20 budget template", "error", template.Err)
@@ -732,7 +747,7 @@ func budgetAddFormReady(componentProps budgetAddFormComponentProps) ui.Node {
 		rows := MapKeyed(tmplProposals, func(p budgeting.BudgetProposal) any { return p.Category.ID }, func(p budgeting.BudgetProposal) ui.Node {
 			return ui.CreateElement(tmplReviewRow, tmplReviewRowProps{
 				ID: p.Category.ID, Label: p.Category.Name, AmountStr: fmtMoney(money.New(p.LimitMinor, base)),
-				Checked: !excluded[p.Category.ID], OnToggle: toggleTmpl,
+				Checked: !excluded[p.Category.ID], Bucket: p.Bucket, OnToggle: toggleTmpl, OnBucketChange: setTmplBucket,
 			})
 		})
 		for _, p := range tmplProposals {
@@ -747,7 +762,7 @@ func budgetAddFormReady(componentProps budgetAddFormComponentProps) ui.Node {
 		}
 		return Form(css.Class("budget-add-shell"), Attr("data-testid", "budget-tmpl-review"), applyTmplOnSubmit,
 			Div(css.Class("modal-scroll"),
-				P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0"}), uistate.T("budgets.tmplReviewHint")),
+				P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0"}), uistate.T("bc6n7.reviewHint")),
 				If(template.Err != nil, P(css.Class("form-err"), Attr("role", "status"), uistate.T("budgets.incomplete"))),
 				Div(css.Class("budget-tmpl-rows"), rows),
 				emptyNote,
@@ -997,16 +1012,27 @@ func attrIf(cond bool, k, v string) any {
 type tmplReviewRowProps struct {
 	ID, Label, AmountStr string
 	Checked              bool
+	Bucket               budgeting.Bucket
 	OnToggle             func(string) // plain func — never an On* hook (no-On*-in-loop rule)
+	OnBucketChange       func(string, string)
 }
 
 // tmplReviewRow is one checkbox row of the template review: include/exclude the
 // proposed budget. Its own component so the change hook sits at a stable call-site.
 func tmplReviewRow(props tmplReviewRowProps) ui.Node {
 	toggle := ui.UseEvent(func() { props.OnToggle(props.ID) })
-	return Label(css.Class("budget-tmpl-row"),
+	return Div(css.Class("budget-tmpl-row"),
 		Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "tmpl-pick-"+props.ID), OnChange(toggle)}, checkedAttr(props.Checked)...)...),
 		Span(css.Class("budget-tmpl-name"), props.Label),
+		uiw.SelectInput(uiw.SelectInputProps{
+			Options: []uiw.SelectOption{
+				{Value: strconv.Itoa(int(budgeting.BucketNeeds)), Label: uistate.T("bc6n7.bucketNeeds")},
+				{Value: strconv.Itoa(int(budgeting.BucketWants)), Label: uistate.T("bc6n7.bucketWants")},
+				{Value: strconv.Itoa(int(budgeting.BucketSavings)), Label: uistate.T("bc6n7.bucketSavings")},
+			},
+			Selected: strconv.Itoa(int(props.Bucket)), OnChange: func(value string) { props.OnBucketChange(props.ID, value) },
+			AriaLabel: uistate.T("bc6n7.bucketFor", props.Label), Class: "budget-tmpl-bucket", TestID: "tmpl-bucket-" + props.ID,
+		}),
 		Span(css.Class("budget-tmpl-amt"), props.AmountStr),
 	)
 }
