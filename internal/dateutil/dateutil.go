@@ -46,6 +46,10 @@ func midnight(t time.Time) time.Time {
 // used for date-only bucketing (e.g. per-day balance series).
 func DayStart(t time.Time) time.Time { return midnight(t) }
 
+// CalendarDayUTC returns t's calendar date in t's location at UTC midnight.
+// Use it for date-only period boundaries compared with stored UTC dates.
+func CalendarDayUTC(t time.Time) time.Time { return midnight(t) }
+
 // MonthStart returns the first day of t's month at 00:00 UTC.
 func MonthStart(t time.Time) time.Time {
 	y, m, _ := t.Date()

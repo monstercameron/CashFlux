@@ -14,6 +14,8 @@ import (
 // I stay within budget?" — the forward-looking complement to Status, which only
 // reports spend to date.
 type Pace struct {
+	// Error reports invalid status arithmetic, if the supplied status is inconsistent.
+	Error error
 	// Elapsed is the fraction of the period that has passed, in [0, 1].
 	Elapsed float64
 	// Projected is the spend forecast for the whole period at the current rate.
@@ -56,7 +58,10 @@ func ProjectPace(status Status, start, end, now time.Time) Pace {
 	cur := status.Spent.Currency
 	frac := elapsedFraction(start, end, now)
 
-	limit, _ := status.Spent.Add(status.Remaining) // limit = spent + (limit − spent)
+	limit, err := status.Spent.Add(status.Remaining) // compatibility for callers constructing Status directly
+	if err != nil {
+		return Pace{Error: err}
+	}
 
 	projAmt := status.Spent.Amount
 	if frac > 0 {
@@ -94,6 +99,8 @@ func ProjectPace(status Status, start, end, now time.Time) Pace {
 // is likewise measured net of committed. The tick position (MarkerPct) is still
 // expressed against the FULL limit so it lines up with the meter's overall scale.
 type PaceMarker struct {
+	// Error reports invalid status arithmetic, if the supplied status is inconsistent.
+	Error error
 	// Elapsed is the fraction of the period that has passed, in [0, 1].
 	Elapsed float64
 	// Ideal is the even-pace spend-to-date: discretionary limit × elapsed.
@@ -119,7 +126,10 @@ func ProjectPaceMarker(status Status, committed money.Money, start, end, now tim
 	cur := status.Spent.Currency
 	frac := elapsedFraction(start, end, now)
 
-	limit, _ := status.Spent.Add(status.Remaining) // limit = spent + remaining
+	limit, err := status.Spent.Add(status.Remaining) // compatibility for callers constructing Status directly
+	if err != nil {
+		return PaceMarker{Error: err}
+	}
 
 	// Discretionary limit and discretionary spend both net out committed money.
 	discLimit := limit.Amount - committed.Amount

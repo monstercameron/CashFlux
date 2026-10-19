@@ -103,7 +103,7 @@ func monthlyCoveredSpend(covers map[string]bool, txns []domain.Transaction, now 
 	if len(covers) == 0 || months <= 0 {
 		return nil, nil
 	}
-	curStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	curStart := dateutil.MonthStart(now)
 	values := make([]SuggestionMonth, 0, months)
 	for k := months; k >= 1; k-- {
 		start := dateutil.AddMonths(curStart, -k)
@@ -163,8 +163,17 @@ func excludeSpendOutliers(values []SuggestionMonth) (used, excluded []Suggestion
 		if deviation < 0 {
 			deviation = -deviation
 		}
-		// With MAD zero, only values equal to the median remain. For positive
-		// MAD, the three-MAD fence uses checked multiplication.
+		// A small floor keeps plausible consistent months when MAD is zero.
+		floor, mulErr := money.MulDiv(median, 5, 100, money.RoundHalfAwayFromZero)
+		if mulErr != nil {
+			return nil, nil, 0, mulErr
+		}
+		if floor < 1 && median > 0 {
+			floor = 1
+		}
+		if mad < floor {
+			mad = floor
+		}
 		limit, mulErr := money.Mul(mad, 3)
 		if mulErr != nil {
 			return nil, nil, 0, mulErr

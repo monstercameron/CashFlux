@@ -46,8 +46,15 @@ func budgetCoversTxn(budget domain.Budget, t domain.Transaction, pred func(strin
 //
 // With no covered spend yet, the envelope holds exactly one period's limit.
 func EnvelopeAvailable(budget domain.Budget, all []domain.Transaction, curRef time.Time, weekStart time.Weekday, rates currency.Rates, covers map[string]bool) (money.Money, error) {
+	return EnvelopeAvailableAnchored(budget, all, curRef, weekStart, time.Time{}, rates, covers)
+}
+
+// EnvelopeAvailableAnchored is EnvelopeAvailable with a pay-cycle anchor for
+// biweekly budgets.
+func EnvelopeAvailableAnchored(budget domain.Budget, all []domain.Transaction, curRef time.Time, weekStart time.Weekday, anchor time.Time, rates currency.Rates, covers map[string]bool) (money.Money, error) {
 	limit := normalizedLimit(budget, rates)
 	pred := func(id string) bool { return budget.TracksCategory(id) || covers[id] }
+	ledger := NewNettedLedger(all)
 
 	// Earliest covered, in-scope expense — the period funding starts from here.
 	var earliest time.Time
@@ -64,16 +71,16 @@ func EnvelopeAvailable(budget domain.Budget, all []domain.Transaction, curRef ti
 		}
 	}
 	if !found {
-		start, _ := PeriodRange(budget.Period, curRef, weekStart)
+		start, _ := PeriodRangeAnchored(budget.Period, curRef, weekStart, anchor)
 		return limit.Add(money.New(budget.PeriodBoost(start), limit.Currency)) // funded once, nothing spent
 	}
 
-	curStart, _ := PeriodRange(budget.Period, curRef, weekStart)
+	curStart, _ := PeriodRangeAnchored(budget.Period, curRef, weekStart, anchor)
 	periods := make([]RolloverPeriod, 0)
 	ref := earliest
 	for {
-		ps, pe := PeriodRange(budget.Period, ref, weekStart)
-		spent, err := spentCovered(budget, all, ps, pe, rates, pred)
+		ps, pe := PeriodRangeAnchored(budget.Period, ref, weekStart, anchor)
+		spent, err := spentCoveredNetted(budget, ledger.transactions, ps, pe, rates, pred)
 		if err != nil {
 			return money.Money{}, err
 		}

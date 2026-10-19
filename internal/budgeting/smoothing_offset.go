@@ -10,20 +10,8 @@ import (
 	"github.com/monstercameron/CashFlux/internal/smoothing"
 )
 
-// SmoothingLandingOffset returns the minor-unit amount by which a budget's
-// posted spend is offset in a smoothed bill's LANDING period (XC3): the off
-// periods accrued the bill as committed set-asides, so when the large charge
-// finally posts, the row should read roughly on-pace instead of a one-period
-// blowout. For each smoothed recurring the budget tracks that lands in
-// [start, end), the offset is the recurring's magnitude per POSTED occurrence —
-// an unposted bill offsets nothing, so ordinary spending is never hidden.
-func SmoothingLandingOffset(budget domain.Budget, recurrings []domain.Recurring, posted []domain.Transaction, start, end time.Time) int64 {
-	total, _ := SmoothingLandingItems(budget, recurrings, posted, start, end)
-	return total
-}
-
-// SmoothingLandingItems is SmoothingLandingOffset with the per-recurring
-// breakdown, so the budget row can explain the offset ("no black boxes"):
+// SmoothingLandingItems returns the offset and per-recurring breakdown so the
+// budget row can explain the amount ("no black boxes"):
 // each item names the landed bill and the amount its set-aside covered.
 func SmoothingLandingItems(budget domain.Budget, recurrings []domain.Recurring, posted []domain.Transaction, start, end time.Time) (int64, []CommittedItem) {
 	var offset int64

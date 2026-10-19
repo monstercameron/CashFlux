@@ -10,6 +10,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/money"
 )
 
 // TrueUp thresholds. A drift below these is normal variation and never flagged, so the
@@ -112,11 +113,12 @@ func SuggestTrueUps(budgets []domain.Budget, txns []domain.Transaction, cats []d
 // the budget's limit currency over the covered categories, honouring splits.
 func learnedMonthlySpend(b domain.Budget, txns []domain.Transaction, cats []domain.Category, now time.Time, rates currency.Rates, covers map[string]bool) (learned int64, months int, seasonal bool, err error) {
 	tracks := func(id string) bool { return b.TracksCategory(id) || covers[id] }
-	curStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	curStart := dateutil.MonthStart(now)
 
 	// How many completed months of history exist (from the earliest covered expense).
 	earliest := time.Time{}
-	for _, t := range nettedForSpending(txns) {
+	netted := NewNettedLedger(txns)
+	for _, t := range netted.transactions {
 		if !t.IsExpense() || t.Date.After(now) {
 			continue
 		}
@@ -175,20 +177,34 @@ func learnedMonthlySpend(b domain.Budget, txns []domain.Transaction, cats []doma
 func sumCoveredInRange(b domain.Budget, txns []domain.Transaction, start, end time.Time, rates currency.Rates, tracks func(string) bool) (int64, error) {
 	limit := normalizedLimit(b, rates)
 	var total int64
-	for _, t := range nettedForSpending(txns) {
+	netted := NewNettedLedger(txns)
+	for _, t := range netted.transactions {
 		if !t.IsExpense() || !dateutil.InRange(t.Date, start, end) {
 			continue
 		}
 		if t.HasSplits() {
+			lines := make([]money.Money, 0, len(t.Splits))
 			for _, s := range t.Splits {
 				if !tracks(s.CategoryID) {
 					continue
 				}
-				conv, err := rates.Convert(s.Amount.Abs(), limit.Currency)
-				if err != nil {
-					return 0, err
-				}
-				total += conv.Amount
+				lines = append(lines, s.Amount)
+			}
+			signed, err := signedLineTotal(lines)
+			if err != nil {
+				return 0, err
+			}
+			contribution, err := expenseContribution(signed)
+			if err != nil {
+				return 0, err
+			}
+			conv, err := rates.Convert(contribution, limit.Currency)
+			if err != nil {
+				return 0, err
+			}
+			total, err = money.Add(total, conv.Amount)
+			if err != nil {
+				return 0, err
 			}
 			continue
 		}
@@ -199,7 +215,10 @@ func sumCoveredInRange(b domain.Budget, txns []domain.Transaction, start, end ti
 		if err != nil {
 			return 0, err
 		}
-		total += conv.Amount
+		total, err = money.Add(total, conv.Amount)
+		if err != nil {
+			return 0, err
+		}
 	}
 	return total, nil
 }

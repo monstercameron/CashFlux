@@ -90,6 +90,14 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Budget periods on calendar dates, pay-cycle keys, no mixed-currency sums (BUDQ2).** Every budget period boundary
+  (biweekly, semimonthly, quarterly, yearly, annual grid, auto-budget, 50/30/20, suggestions, true-up) is now built at UTC
+  midnight from the calendar date, so in New York a charge dated the 1st no longer lands in the previous half-month or
+  quarter. Spent and true-up net signed split lines (a receipt discount lowers spend). New anchor-aware
+  `PreviousPeriodRangeAnchored`, `EnvelopeAvailableAnchored` and one shared `PeriodKey` for boost and release keys;
+  `SummarizeRollupChecked` refuses mixed currencies instead of adding raw minor units. The full ledger is netted once per
+  scan, pace exposes arithmetic errors, the recommendation's outlier rule has a 5%-of-median floor, and unused sinking-fund
+  and smoothing helpers are removed.
 - **Budgets: calmer future months (BUD4).** Viewing a future month, the "Projected for <month>" panel starts collapsed
   behind a one-line summary (bills expected and their total), and when expanded it shows planned budgets, expected income
   and received income separately. Expected income now comes from the same source as the page headline, so the two figures

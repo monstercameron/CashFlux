@@ -7,6 +7,21 @@ import (
 	"time"
 )
 
+func TestCalendarDayUTCUsesReferenceCalendarDate(t *testing.T) {
+	for _, name := range []string{"America/New_York", "Asia/Tokyo"} {
+		loc, err := time.LoadLocation(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ref := time.Date(2026, time.October, 1, 20, 0, 0, 0, loc)
+		got := CalendarDayUTC(ref)
+		want := time.Date(2026, time.October, 1, 0, 0, 0, 0, time.UTC)
+		if !got.Equal(want) || got.Location() != time.UTC {
+			t.Errorf("%s calendar day = %s (%s), want %s UTC", name, got, got.Location(), want)
+		}
+	}
+}
+
 func date(s string) time.Time {
 	t, err := ParseDate(s)
 	if err != nil {

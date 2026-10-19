@@ -80,7 +80,7 @@ func HealthyLimit(categoryID string, txns []domain.Transaction, now time.Time, m
 		return 0, nil
 	}
 	covers := map[string]bool{categoryID: true}
-	curStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	curStart := dateutil.MonthStart(now)
 
 	monthSums := make([]int64, months+1)
 	for k := 1; k <= months; k++ {

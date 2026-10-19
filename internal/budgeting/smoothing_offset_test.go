@@ -30,21 +30,21 @@ func TestSmoothingLandingOffset(t *testing.T) {
 	}
 
 	// Landing month, bill posted: full magnitude offsets.
-	if got := SmoothingLandingOffset(budget, []domain.Recurring{annual}, posted, juneStart, julyStart); got != 60000 {
+	if got, _ := SmoothingLandingItems(budget, []domain.Recurring{annual}, posted, juneStart, julyStart); got != 60000 {
 		t.Errorf("landing offset = %d, want 60000", got)
 	}
 	// Landing month, bill NOT posted yet: nothing offsets (never hide real spending).
-	if got := SmoothingLandingOffset(budget, []domain.Recurring{annual}, nil, juneStart, julyStart); got != 0 {
+	if got, _ := SmoothingLandingItems(budget, []domain.Recurring{annual}, nil, juneStart, julyStart); got != 0 {
 		t.Errorf("unposted offset = %d, want 0", got)
 	}
 	// Off month: no landing, no offset.
-	if got := SmoothingLandingOffset(budget, []domain.Recurring{annual}, posted, julyStart, augStart); got != 0 {
+	if got, _ := SmoothingLandingItems(budget, []domain.Recurring{annual}, posted, julyStart, augStart); got != 0 {
 		t.Errorf("off-month offset = %d, want 0", got)
 	}
 	// Flag off: never offsets.
 	plain := annual
 	plain.SmoothIntoBudgets = false
-	if got := SmoothingLandingOffset(budget, []domain.Recurring{plain}, posted, juneStart, julyStart); got != 0 {
+	if got, _ := SmoothingLandingItems(budget, []domain.Recurring{plain}, posted, juneStart, julyStart); got != 0 {
 		t.Errorf("non-smoothed offset = %d, want 0", got)
 	}
 }

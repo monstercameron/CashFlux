@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 )
 
@@ -133,9 +134,9 @@ type Split5030Result struct {
 // Integer math only; no FX conversion (all amounts summed as-is).
 func trailingSpend(catID string, txns []domain.Transaction, now time.Time) int64 {
 	// Window: the 3 complete calendar months before the current month.
-	curMonthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	curMonthStart := dateutil.MonthStart(now)
 	windowEnd := curMonthStart
-	windowStart := time.Date(now.Year(), now.Month()-3, 1, 0, 0, 0, 0, now.Location())
+	windowStart := dateutil.AddMonths(curMonthStart, -3)
 
 	var total int64
 	for _, t := range txns {

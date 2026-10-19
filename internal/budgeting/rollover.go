@@ -3,9 +3,9 @@
 package budgeting
 
 import (
-	"fmt"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
 )
@@ -55,8 +55,21 @@ func CappedCarryover(prevRemaining, limit money.Money, capPeriods int) (money.Mo
 // containing ref. It keeps rollover UI and tests on the same period math as
 // Evaluate/EnvelopeAvailable.
 func PreviousPeriodRange(period domain.Period, ref time.Time, weekStart time.Weekday) (start, end time.Time) {
-	curStart, _ := PeriodRange(period, ref, weekStart)
-	return PeriodRange(period, curStart.Add(-time.Nanosecond), weekStart)
+	return PreviousPeriodRangeAnchored(period, ref, weekStart, time.Time{})
+}
+
+// PreviousPeriodRangeAnchored returns the period immediately before the
+// anchored period containing ref. The anchor applies to biweekly periods.
+func PreviousPeriodRangeAnchored(period domain.Period, ref time.Time, weekStart time.Weekday, anchor time.Time) (start, end time.Time) {
+	curStart, _ := PeriodRangeAnchored(period, ref, weekStart, anchor)
+	return PeriodRangeAnchored(period, curStart.Add(-time.Nanosecond), weekStart, anchor)
+}
+
+// PeriodKey returns the stable UTC calendar-date key for the period containing
+// ref. Persisted boosts and recurring-period markers should all use this key.
+func PeriodKey(period domain.Period, ref time.Time, anchor time.Time) string {
+	start, _ := PeriodRangeAnchored(period, ref, time.Monday, anchor)
+	return dateutil.FormatDate(start)
 }
 
 // SinkingFundContribution returns the amount to set aside each period to reach
@@ -77,40 +90,4 @@ func SinkingFundContribution(target money.Money, periods int) money.Money {
 		per++ // ceil so the full target is reached by the deadline
 	}
 	return money.New(per, target.Currency)
-}
-
-// SinkingFundAccrued returns the balance saved after contributing the per-period
-// amount for made periods (contribution × made). The result never exceeds
-// target, so the ceiling-rounded final contribution from SinkingFundContribution
-// doesn't overshoot the goal. A non-positive made returns zero. It fails on a
-// currency mismatch or if the multiplication would overflow int64.
-func SinkingFundAccrued(contribution, target money.Money, made int) (money.Money, error) {
-	if contribution.Currency != target.Currency {
-		return money.Money{}, fmt.Errorf("%w: %q vs %q", money.ErrCurrencyMismatch, contribution.Currency, target.Currency)
-	}
-	if made <= 0 {
-		return money.Zero(contribution.Currency), nil
-	}
-	accrued := contribution.Amount * int64(made)
-	if accrued/int64(made) != contribution.Amount {
-		return money.Money{}, fmt.Errorf("%w: %d * %d", money.ErrOverflow, contribution.Amount, made)
-	}
-	if accrued > target.Amount {
-		accrued = target.Amount
-	}
-	return money.New(accrued, contribution.Currency), nil
-}
-
-// SinkingFundProgress returns how far a sinking fund has accrued toward its
-// target, as a percent (0–100, capped). A non-positive target reports 100 when
-// anything is saved and 0 otherwise.
-func SinkingFundProgress(accrued, target money.Money) int {
-	p := percent(accrued, target)
-	if p > 100 {
-		return 100
-	}
-	if p < 0 {
-		return 0
-	}
-	return p
 }

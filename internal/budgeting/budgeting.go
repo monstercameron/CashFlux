@@ -8,6 +8,7 @@
 package budgeting
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/currency"
@@ -111,8 +112,25 @@ func ownsSplitScope(budget domain.Budget, txn domain.Transaction, split domain.C
 // grocery receipt split into produce/household lands in the right budgets without
 // double-counting.
 func spentCovered(budget domain.Budget, all []domain.Transaction, start, end time.Time, rates currency.Rates, covers func(string) bool) (money.Money, error) {
+	return spentCoveredNetted(budget, nettedForSpending(all), start, end, rates, covers)
+}
+
+// NettedLedger holds the refund-pair netting result so repeated period slices
+// can share the one ledger-wide pass.
+type NettedLedger struct{ transactions []domain.Transaction }
+
+// NewNettedLedger nets refund pairs once for reuse across budget period slices.
+func NewNettedLedger(all []domain.Transaction) NettedLedger {
+	return NettedLedger{transactions: nettedForSpending(all)}
+}
+
+// SpentFromNetted sums covered spend from a pre-netted ledger slice.
+func SpentFromNetted(budget domain.Budget, ledger NettedLedger, start, end time.Time, rates currency.Rates, covers map[string]bool) (money.Money, error) {
+	return spentCoveredNetted(budget, ledger.transactions, start, end, rates, func(id string) bool { return budget.TracksCategory(id) || covers[id] })
+}
+
+func spentCoveredNetted(budget domain.Budget, all []domain.Transaction, start, end time.Time, rates currency.Rates, covers func(string) bool) (money.Money, error) {
 	limit := normalizedLimit(budget, rates)
-	all = nettedForSpending(all) // XC2: fold refund-pair netting into read-model spend
 	total := money.Zero(limit.Currency)
 	add := func(amt money.Money) error {
 		conv, err := rates.Convert(amt.Abs(), limit.Currency)
@@ -146,6 +164,7 @@ func spentCovered(budget domain.Budget, all []domain.Transaction, start, end tim
 			continue
 		}
 		if t.HasSplits() {
+			lines := make([]money.Money, 0, len(t.Splits))
 			for _, s := range t.Splits {
 				if !covers(s.CategoryID) {
 					continue
@@ -157,9 +176,23 @@ func spentCovered(budget domain.Budget, all []domain.Transaction, start, end tim
 				if !ownsSplitScope(budget, t, s) {
 					continue
 				}
-				if err := add(s.Amount); err != nil {
-					return money.Money{}, err
-				}
+				lines = append(lines, s.Amount)
+			}
+			signed, err := signedLineTotal(lines)
+			if err != nil {
+				return money.Money{}, err
+			}
+			contribution, err := expenseContribution(signed)
+			if err != nil {
+				return money.Money{}, err
+			}
+			conv, err := rates.Convert(contribution, limit.Currency)
+			if err != nil {
+				return money.Money{}, err
+			}
+			total, err = total.Add(conv)
+			if err != nil {
+				return money.Money{}, err
 			}
 			continue
 		}
@@ -291,7 +324,7 @@ func PeriodRange(p domain.Period, ref time.Time, weekStart time.Weekday) (start,
 			anchor = anchor.AddDate(0, 0, offset)
 		}
 		// Use UTC-normalised day counts to avoid DST ambiguity at boundaries.
-		refDay := ref.In(time.UTC).Truncate(24 * time.Hour)
+		refDay := dateutil.CalendarDayUTC(ref)
 		ancDay := anchor.In(time.UTC)
 		diff := int(refDay.Sub(ancDay).Hours()) / 24
 		if diff < 0 {
@@ -299,30 +332,29 @@ func PeriodRange(p domain.Period, ref time.Time, weekStart time.Weekday) (start,
 			diff = diff - 13
 		}
 		fortnight := (diff / 14) * 14
-		start = ancDay.AddDate(0, 0, fortnight).In(ref.Location())
+		start = ancDay.AddDate(0, 0, fortnight)
 		return start, start.AddDate(0, 0, 14)
 
 	case domain.PeriodSemimonthly:
 		// First half: [1st, 16th); second half: [16th, 1st of next month).
 		y, m, d := ref.Date()
-		loc := ref.Location()
 		if d <= 15 {
-			start = time.Date(y, m, 1, 0, 0, 0, 0, loc)
-			return start, time.Date(y, m, 16, 0, 0, 0, 0, loc)
+			start = time.Date(y, m, 1, 0, 0, 0, 0, time.UTC)
+			return start, time.Date(y, m, 16, 0, 0, 0, 0, time.UTC)
 		}
-		start = time.Date(y, m, 16, 0, 0, 0, 0, loc)
-		return start, time.Date(y, m+1, 1, 0, 0, 0, 0, loc)
+		start = time.Date(y, m, 16, 0, 0, 0, 0, time.UTC)
+		return start, time.Date(y, m+1, 1, 0, 0, 0, 0, time.UTC)
 
 	case domain.PeriodQuarterly:
 		y, m, _ := ref.Date()
 		qm := ((int(m)-1)/3)*3 + 1
-		start = time.Date(y, time.Month(qm), 1, 0, 0, 0, 0, ref.Location())
+		start = time.Date(y, time.Month(qm), 1, 0, 0, 0, 0, time.UTC)
 		return start, dateutil.AddMonths(start, 3)
 
 	case domain.PeriodYearly:
 		y := ref.Year()
-		start = time.Date(y, time.January, 1, 0, 0, 0, 0, ref.Location())
-		return start, time.Date(y+1, time.January, 1, 0, 0, 0, 0, ref.Location())
+		start = time.Date(y, time.January, 1, 0, 0, 0, 0, time.UTC)
+		return start, time.Date(y+1, time.January, 1, 0, 0, 0, 0, time.UTC)
 
 	default:
 		return dateutil.MonthRange(ref)
@@ -347,8 +379,8 @@ func PeriodRangeAnchored(p domain.Period, ref time.Time, weekStart time.Weekday,
 	}
 	// Normalise both dates to UTC midnight so DST transitions inside a fortnight
 	// never shift the boundary by an hour.
-	refDay := ref.In(time.UTC).Truncate(24 * time.Hour)
-	ancDay := anchor.In(time.UTC).Truncate(24 * time.Hour)
+	refDay := dateutil.CalendarDayUTC(ref)
+	ancDay := dateutil.CalendarDayUTC(anchor)
 	diff := int(refDay.Sub(ancDay).Hours()) / 24
 	if diff < 0 {
 		// Integer division truncates toward zero for negative values; adjust so
@@ -356,7 +388,7 @@ func PeriodRangeAnchored(p domain.Period, ref time.Time, weekStart time.Weekday,
 		diff = diff - 13
 	}
 	fortnight := (diff / 14) * 14
-	start = ancDay.AddDate(0, 0, fortnight).In(ref.Location())
+	start = ancDay.AddDate(0, 0, fortnight)
 	return start, start.AddDate(0, 0, 14)
 }
 
@@ -453,25 +485,70 @@ type RollupSummary struct {
 // out of the spending totals entirely (C538). Folding its limit into "budgeted"
 // would claim the household plans to spend money it plans to set aside, and
 // folding its contributions into "spent" would do the same to the other figure.
-func SummarizeRollup(statuses []Status) RollupSummary {
+// SummarizeRollupChecked aggregates statuses only when every amount shares one
+// currency. Convert statuses to one currency with the rate table before calling
+// this function when the household uses multiple currencies.
+func SummarizeRollupChecked(statuses []Status) (RollupSummary, error) {
 	var s RollupSummary
+	currency := ""
 	for _, st := range statuses {
+		if st.Spent.Currency == "" || st.Limit.Currency != st.Spent.Currency || st.Remaining.Currency != st.Spent.Currency {
+			return RollupSummary{}, fmt.Errorf("budget %q has inconsistent or missing rollup currency", st.Budget.ID)
+		}
+		if currency == "" {
+			currency = st.Spent.Currency
+		}
+		if currency != st.Spent.Currency {
+			return RollupSummary{}, fmt.Errorf("mixed rollup currencies %q and %q", currency, st.Spent.Currency)
+		}
 		switch st.State {
 		case StateOver:
 			s.OverCount++
 			if st.Remaining.IsNegative() {
-				s.OverMinor += -st.Remaining.Amount
+				overage, err := st.Remaining.NegChecked()
+				if err != nil {
+					return RollupSummary{}, fmt.Errorf("negate budget overage: %w", err)
+				}
+				s.OverMinor, err = money.Add(s.OverMinor, overage.Amount)
+				if err != nil {
+					return RollupSummary{}, fmt.Errorf("sum budget overage: %w", err)
+				}
 			}
 		case StateNear:
 			s.NearCount++
 		}
 		if st.Budget.IsSaving() {
-			s.SavingsBudgetedMinor += st.Limit.Amount
-			s.SavingsMovedMinor += st.Spent.Amount
+			var err error
+			s.SavingsBudgetedMinor, err = money.Add(s.SavingsBudgetedMinor, st.Limit.Amount)
+			if err != nil {
+				return RollupSummary{}, fmt.Errorf("sum savings budgets: %w", err)
+			}
+			s.SavingsMovedMinor, err = money.Add(s.SavingsMovedMinor, st.Spent.Amount)
+			if err != nil {
+				return RollupSummary{}, fmt.Errorf("sum savings contributions: %w", err)
+			}
 			continue
 		}
-		s.SpentMinor += st.Spent.Amount
-		s.LimitMinor += st.Limit.Amount
+		var err error
+		s.SpentMinor, err = money.Add(s.SpentMinor, st.Spent.Amount)
+		if err != nil {
+			return RollupSummary{}, fmt.Errorf("sum budget spending: %w", err)
+		}
+		s.LimitMinor, err = money.Add(s.LimitMinor, st.Limit.Amount)
+		if err != nil {
+			return RollupSummary{}, fmt.Errorf("sum budget limits: %w", err)
+		}
+	}
+	return s, nil
+}
+
+// SummarizeRollup preserves the original same-currency API. Invalid or mixed
+// currency input is refused by returning an empty summary; callers that need to
+// handle errors should use SummarizeRollupChecked.
+func SummarizeRollup(statuses []Status) RollupSummary {
+	s, err := SummarizeRollupChecked(statuses)
+	if err != nil {
+		return RollupSummary{}
 	}
 	return s
 }

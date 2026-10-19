@@ -80,8 +80,8 @@ func BuildAnnualGrid(budgets []domain.Budget, all []domain.Transaction, year int
 		}
 		cov := covers[b.ID]
 		for m := 0; m < 12; m++ {
-			start := time.Date(year, time.Month(m+1), 1, 0, 0, 0, 0, now.Location())
-			end := time.Date(year, time.Month(m+2), 1, 0, 0, 0, 0, now.Location())
+			start := time.Date(year, time.Month(m+1), 1, 0, 0, 0, 0, time.UTC)
+			end := time.Date(year, time.Month(m+2), 1, 0, 0, 0, 0, time.UTC)
 			st, err := EvaluateRollup(b, all, start, end, rates, DefaultNearThreshold, cov)
 			if err != nil {
 				return AnnualGrid{}, err

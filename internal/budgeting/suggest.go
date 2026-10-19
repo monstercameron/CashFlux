@@ -48,7 +48,7 @@ func SuggestLimitIn(covers map[string]bool, txns []domain.Transaction, now time.
 	if len(covers) == 0 || months <= 0 {
 		return 0, nil
 	}
-	curStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	curStart := dateutil.MonthStart(now)
 	monthSums := make([]int64, months+1)
 	for k := 1; k <= months; k++ {
 		ms, me := dateutil.AddMonths(curStart, -k), dateutil.AddMonths(curStart, -(k-1))
