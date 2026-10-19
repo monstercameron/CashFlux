@@ -322,12 +322,16 @@ func TestCloudSetupFocusMovesOnlyWhenTheTaskChanges(t *testing.T) {
 // Each test owns and releases this tiny DOM seam; no app/store globals are used.
 func cloudTestMeasurementDOM(t *testing.T) {
 	t.Helper()
-	previous := js.Global().Get("document")
-	doc := js.Global().Get("Object").New()
+	enc31FakeDocument(t)
+	doc := js.Global().Get("document")
+	// Segmented's measurement lookup intentionally finds no real element in
+	// testkit, while the framework CSS sink still needs usable style elements.
 	lookup := js.FuncOf(func(js.Value, []js.Value) any { return js.Null() })
-	create := js.FuncOf(func(js.Value, []js.Value) any { return js.Global().Get("Object").New() })
+	listen := js.FuncOf(func(js.Value, []js.Value) any { return nil })
 	doc.Set("getElementById", lookup)
-	doc.Set("createElement", create)
-	js.Global().Set("document", doc)
-	t.Cleanup(func() { js.Global().Set("document", previous); lookup.Release(); create.Release() })
+	doc.Set("querySelector", lookup)
+	doc.Set("addEventListener", listen)
+	doc.Set("head", doc.Get("createElement").Invoke("head"))
+	doc.Set("documentElement", doc.Get("createElement").Invoke("html"))
+	t.Cleanup(func() { lookup.Release(); listen.Release() })
 }

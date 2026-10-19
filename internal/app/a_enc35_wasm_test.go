@@ -66,9 +66,34 @@ func enc35ResetPage() {
 	clearRefreshMemory()
 }
 
+// enc35Storage gives each test that persists scoped credentials its own
+// initialized Node IndexedDB fixture and clears any one-shot fault left by a
+// prior test in the shared wasm process.
+func enc35Storage(t *testing.T) {
+	t.Helper()
+	solp22Storage(t)
+	browserstore.Barrier()
+	control := js.Global().Get("__fakeIDB")
+	resetFaults := func() {
+		for _, field := range []string{"_failNext", "_failNextWrite", "_failNextOpen", "_failNextTransaction"} {
+			control.Set(field, js.Null())
+		}
+	}
+	resetFaults()
+	// Credential persistence lazily creates a device ID. Complete that write
+	// before tests install their own one-shot IndexedDB failures.
+	syncDeviceID()
+	browserstore.Barrier()
+	t.Cleanup(func() {
+		browserstore.Barrier()
+		resetFaults()
+	})
+}
+
 // Uses the page-wide ENC31 storage fixture, rather than installing a second KV
 // store. All requests are local mocks; no server or paid API is contacted.
 func TestENC35LiveSessionBoundaries(t *testing.T) {
+	enc35Storage(t)
 	if !browserstore.Durable() {
 		t.Fatal("page storage fixture is unavailable")
 	}
@@ -273,6 +298,7 @@ func TestENC35LiveSessionBoundaries(t *testing.T) {
 }
 
 func TestENC35CookieExchangeAndOAuthCode(t *testing.T) {
+	enc35Storage(t)
 	oldFetch, oldLocation, oldDocument := js.Global().Get("fetch"), js.Global().Get("location"), js.Global().Get("document")
 	js.Global().Set("location", map[string]any{"origin": "https://app.test"})
 	js.Global().Set("document", map[string]any{"cookie": "cashflux_csrf=enc35-csrf"})
@@ -398,6 +424,7 @@ func TestENC35OAuthPopupModesAndSourceBinding(t *testing.T) {
 }
 
 func TestENC35ServerChangeAndLockedBoot(t *testing.T) {
+	enc35Storage(t)
 	// Keep the production page KV store, using unique scoped auth databases.
 	a := enc33Scope(t, "enc35-change-server", "enc35-change-account")
 	b := a
