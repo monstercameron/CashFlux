@@ -33,6 +33,10 @@ type toastDismissProps struct {
 	Atom state.Atom[uistate.Notice]
 }
 
+type toastUndoProps struct {
+	Atom state.Atom[uistate.Notice]
+}
+
 func toastDismissButton(props toastDismissProps) uic.Node {
 	dismiss := uic.UseEvent(func() { props.Atom.Set(props.Atom.Get().Cleared()) })
 	return Button(css.Class("toast-x"), Attr("type", "button"), Attr("title", uistate.T("action.dismiss")), Attr("aria-label", uistate.T("action.dismiss")), OnClick(dismiss), "×")
@@ -42,14 +46,14 @@ func toastDismissButton(props toastDismissProps) uic.Node {
 // registered at a stable (non-loop) call-site — required by the GoWebComponents
 // framework (CLAUDE.md §"CRITICAL gotchas"). It renders the "Undo" button
 // inside a Toast whose notice represents an undoable change.
-func toastUndoButton() uic.Node {
+func toastUndoButton(props toastUndoProps) uic.Node {
 	pending := uic.UseState(false)
 	doUndo := uic.UseEvent(func() {
 		if pending.Get() {
 			return
 		}
 		pending.Set(true)
-		commitToastUndo(func(error) { pending.Set(false) })
+		commitToastUndo(props.Atom, func(error) { pending.Set(false) })
 	})
 
 	label := uistate.T("toast.undoBtn")
@@ -252,7 +256,7 @@ func Toast() uic.Node {
 	return withSaveFailureBanner(Div(ClassStr(cls), Attr("data-testid", "app-notice"), Attr("role", role), Attr("aria-live", live),
 		Span(css.Class("toast-msg"), message),
 		If(balanceLine != "", Span(css.Class("toast-balance"), balanceLine)),
-		If(showUndo, uic.CreateElement(toastUndoButton)),
+		If(showUndo, uic.CreateElement(toastUndoButton, toastUndoProps{Atom: atom})),
 		uic.CreateElement(toastDismissButton, toastDismissProps{Atom: atom}),
 	))
 }
@@ -278,12 +282,27 @@ func toastTimeoutFor(n uistate.Notice) int {
 // commitToastUndo uses the same commit completion boundary as forward actions.
 // Replay owns the history cursor and strict durable request; failed persistence
 // must retry that restoration rather than pop a second history entry.
-func commitToastUndo(done func(error)) {
-	commitUndoFeedback(false, done)
+func commitToastUndo(atom state.Atom[uistate.Notice], done func(error)) {
+	commitUndoFeedbackWithFailure(false, func(err error) {
+		if err == nil {
+			if n := atom.Get(); !n.Durable || n.Text != uistate.T("tv8h.undone") {
+				atom.Set(n.WithDurable(uistate.T("tv8h.undone"), false))
+			}
+		}
+		if done != nil {
+			done(err)
+		}
+	}, func() {
+		atom.Set(atom.Get().With(uistate.T("tv8h.undoNotSaved"), true))
+	})
 }
 
 // commitUndoFeedback also supports the keyboard and Activity entry points.
 func commitUndoFeedback(redo bool, done func(error)) {
+	commitUndoFeedbackWithFailure(redo, done, nil)
+}
+
+func commitUndoFeedbackWithFailure(redo bool, done func(error), showFailure func()) {
 	app := appstate.Default
 	label := uistate.T("tv8h.undone")
 	if redo {
@@ -315,7 +334,11 @@ func commitUndoFeedback(redo bool, done func(error)) {
 					}
 					uistate.ReportPersistFailure("transaction-undo", retry)
 				}
-				uistate.PostNotice(uistate.T("tv8h.undoNotSaved"), true)
+				if showFailure != nil {
+					showFailure()
+				} else {
+					uistate.PostNotice(uistate.T("tv8h.undoNotSaved"), true)
+				}
 			} else {
 				uistate.ClearPersistFailure("transaction-undo")
 			}

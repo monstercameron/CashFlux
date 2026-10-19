@@ -82,7 +82,7 @@ func TestTV8HToastUndoFailureIsRetryableWithoutPoppingAgain(t *testing.T) {
 				t.Fatal("durable write has no Undo")
 			}
 			completed := make(chan error, 2)
-			commitToastUndo(func(err error) { completed <- err })
+			commitToastUndo(notice, func(err error) { completed <- err })
 			// Undo schedules notification catch-up independently of the save. Keep this
 			// fixture focused on write feedback rather than sample-household reminders.
 			notifySchedule.epoch++
