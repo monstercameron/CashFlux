@@ -90,6 +90,8 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Budget card density keeps your earlier choice (BC6N4).** The old dataset-stored Compact/Full setting is copied once into the
+  device preference store, so moving density to a device preference does not reset it.
 - **Budget money moves stay balanced across periods (BCS2); Budgets clean-up (BC5B9).** Covers and top-ups are stored as paired moves,
   so month-close copy and cadence resets treat both sides as one unit and never create or destroy money; changing the week start or
   pay anchor re-keys boosts by period midpoint (no more sliding into last week) and re-keys recurring covers so they do not replay;

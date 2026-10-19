@@ -5,6 +5,8 @@
 package uistate
 
 import (
+	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/browserstore"
 	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/GoWebComponents/v5/state"
 )
@@ -235,11 +237,35 @@ const budgetDensityStoreID = "cashflux:budgets:density"
 // from encrypted device preferences — unlike sort, density is a lasting workspace preference (how you
 // read the page), not a transient view tweak, so it survives reloads.
 func UseBudgetDensity() state.Atom[string] {
-	d := chromePreferenceGet(budgetDensityStoreID)
-	if d != BudgetDensityCompact {
-		d = BudgetDensityComfortable
-	}
+	d := loadBudgetDensityPreference()
 	return state.UseAtom("budgets:density", d)
+}
+
+// loadBudgetDensityPreference migrates a recognized legacy dataset value into
+// the device-scoped preference store the first time it is read. A preference
+// already in the scoped store, including a pending write, always takes priority.
+func loadBudgetDensityPreference() string {
+	storageKey := chromePreferenceKey(budgetDensityStoreID)
+	if pending := chromePreferences[storageKey]; pending != nil && pending.app == appstate.Default {
+		return normalizeBudgetDensity(pending.value)
+	}
+	if _, ok := browserstore.Get(storageKey); ok {
+		return normalizeBudgetDensity(chromePreferenceGet(budgetDensityStoreID))
+	}
+
+	legacy := chromePreferenceGet(budgetDensityStoreID)
+	if legacy == BudgetDensityCompact || legacy == BudgetDensityComfortable {
+		PersistBudgetDensity(legacy)
+		return legacy
+	}
+	return BudgetDensityComfortable
+}
+
+func normalizeBudgetDensity(d string) string {
+	if d == BudgetDensityCompact {
+		return d
+	}
+	return BudgetDensityComfortable
 }
 
 // PersistBudgetDensity saves the density choice so the next visit opens the same way.
