@@ -294,9 +294,8 @@ const avatarStackCSS = `
 .cf-member-avatar-stack { display: inline-flex; align-items: center; white-space: nowrap; }
 .cf-member-avatar-stack-item { display: inline-flex; margin-inline-start: calc(var(--space-3) * -1); border: 2px solid var(--txn-row-surface, var(--bg-card)); border-radius: 999px; }
 .cf-member-avatar-stack-item:first-of-type { margin-inline-start: 0; }
-.cf-member-avatar-stack .cf-member-avatar { width: var(--space-8); height: var(--space-8); }
-.cf-member-avatar-stack-more { display: inline-flex; align-items: center; justify-content: center; min-width: var(--space-8); height: var(--space-8); margin-inline-start: calc(var(--space-3) * -1); border: 2px solid var(--txn-row-surface, var(--bg-card)); border-radius: 999px; background: var(--bg-elev); color: var(--text-dim); font-size: var(--type-12); }
-.cf-member-unassigned { display: inline-flex; width: var(--space-8); height: var(--space-8); align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: 999px; color: var(--text-dim); }
+.cf-member-avatar-stack-more { display: inline-flex; align-items: center; justify-content: center; min-width: var(--txn-avatar-size); height: var(--txn-avatar-size); margin-inline-start: calc(var(--space-3) * -1); border: 2px solid var(--txn-row-surface, var(--bg-card)); border-radius: 999px; background: var(--bg-elev); color: var(--text-dim); font-size: 10px; line-height: 1; }
+.cf-member-unassigned { display: inline-flex; width: var(--txn-avatar-size); height: var(--txn-avatar-size); align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: 999px; color: var(--text-dim); font-size: 10px; line-height: 1; }
 `
 
 func memberAvatarTone(name string) string {

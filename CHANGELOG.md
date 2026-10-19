@@ -90,6 +90,10 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Unassigned rows back to 44 px (WHO3).** The "—" Unassigned placeholder in the Who column was sized with the 64 px
+  `--space-8` spacing token, stretching every row with no owner to 74 px. Avatars, the overflow chip and the placeholder
+  now share one `--txn-avatar-size` (22 px) token and the same type size; a style test guards against spacing tokens
+  being used as component sizes.
 - **Budgets code cleanup, part 1 (BUDQ6).** Explicit income modes use the new checked `AveragedIncomeChecked` /
   `ZeroBasedIncomeChecked`, so a missing exchange rate shows "incomplete" instead of $0. The effective cap is read from
   `Status.Limit` everywhere instead of being re-derived; ~19 scattered "USD" fallbacks go through one
