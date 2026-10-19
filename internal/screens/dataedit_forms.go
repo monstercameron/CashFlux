@@ -195,7 +195,7 @@ func MemberEditForm(props MemberEditFormProps) ui.Node {
 			})),
 		labeledField(uistate.T("members.prefDefaultAccount"),
 			uiw.SelectInput(uiw.SelectInputProps{
-				Options:   memberDefaultAccountOptions(),
+				Options:   memberDefaultAccountOptionsForEditor(defAcctS.Get()),
 				Selected:  defAcctS.Get(),
 				OnChange:  func(v string) { defAcctS.Set(v) },
 				AriaLabel: uistate.T("members.prefDefaultAccount"),
@@ -215,6 +215,23 @@ func MemberEditForm(props MemberEditFormProps) ui.Node {
 			Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
 		),
 	)
+}
+
+func memberDefaultAccountOptionsForEditor(selected string) []uiw.SelectOption {
+	opts := []uiw.SelectOption{{Value: "", Label: uistate.T("members.prefInherit")}}
+	if app := appstate.Default; app != nil {
+		for _, account := range app.Accounts() {
+			if account.Archived && account.ID != selected {
+				continue
+			}
+			label := account.Name
+			if account.Archived {
+				label += " — " + uistate.T("accounts.archived")
+			}
+			opts = append(opts, uiw.SelectOption{Value: account.ID, Label: label})
+		}
+	}
+	return opts
 }
 
 // ── Category editor ───────────────────────────────────────────────────────────

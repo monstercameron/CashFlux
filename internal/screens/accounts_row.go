@@ -44,15 +44,23 @@ type accountRowProps struct {
 	// a single "Most accounts need a balance update — Mark all updated" summary line
 	// leads the list, so the warning keeps its prioritising force instead of becoming
 	// wallpaper. Below that threshold it's false and the full badge shows as before.
-	StaleCollapsed bool
-	Members        []domain.Member
-	Accounts       []domain.Account // all non-archived accounts (for Transfer to-picker)
-	Categories     []domain.Category
-	OnDelete       func(string)
-	OnArchive      func(domain.Account)
-	OnRefresh      func(domain.Account)
-	OnSave         func(domain.Account)
-	OnView         func(string)
+	StaleCollapsed          bool
+	Members                 []domain.Member
+	Accounts                []domain.Account // all non-archived accounts (for Transfer to-picker)
+	Categories              []domain.Category
+	OnDelete                func(string)
+	OnArchive               func(domain.Account)
+	OnRefresh               func(domain.Account)
+	OnSave                  func(domain.Account)
+	OnView                  func(string)
+	DefaultHousehold        bool
+	DefaultMembers          []string
+	OnSetDefaultHousehold   func(string)
+	OnClearDefaultHousehold func()
+	DefaultMemberID         string
+	DefaultMemberName       string
+	OnSetDefaultMember      func(accountID, memberID string)
+	OnClearDefaultMember    func(memberID string)
 	// OnSetBalance: newBalStr is the typed target; catID is the optional category;
 	// asOfISO is the date the balance was TRUE as of (C684), empty meaning today
 	// to attach to the adjustment transaction (empty = uncategorized).
@@ -101,6 +109,38 @@ type accountRowProps struct {
 	// row can color its edge and show a chip for Account.InstitutionID. Nil or a
 	// miss renders nothing extra — free-text-only institutions are unaffected.
 	InstByID map[string]domain.Institution
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
+func defaultAccountPillTitle(props accountRowProps) string {
+	if props.DefaultHousehold && len(props.DefaultMembers) > 0 {
+		return uistate.T("defaultAccount.pillTitleBoth", strings.Join(defaultMemberNames(props.Members, props.DefaultMembers), ", "))
+	}
+	if props.DefaultHousehold {
+		return uistate.T("defaultAccount.pillTitleHousehold")
+	}
+	return uistate.T("defaultAccount.pillTitleMembers", strings.Join(defaultMemberNames(props.Members, props.DefaultMembers), ", "))
+}
+
+func defaultMemberNames(members []domain.Member, ids []string) []string {
+	names := make([]string, 0, len(ids))
+	for _, id := range ids {
+		for _, member := range members {
+			if member.ID == id {
+				names = append(names, member.Name)
+				break
+			}
+		}
+	}
+	return names
 }
 
 // moneyMajorOrEmpty renders a money value as a major-unit string, or "" when zero.
@@ -276,6 +316,30 @@ func AccountRow(props accountRowProps) ui.Node {
 	arch := ui.UseEvent(Prevent(func() { menuOpen.Set(false); props.OnArchive(a) }))
 	refresh := ui.UseEvent(Prevent(func() { menuOpen.Set(false); props.OnRefresh(a) }))
 	view := ui.UseEvent(Prevent(func() { menuOpen.Set(false); props.OnView(a.ID) }))
+	setHouseholdDefault := ui.UseEvent(Prevent(func() {
+		menuOpen.Set(false)
+		if props.OnSetDefaultHousehold != nil {
+			props.OnSetDefaultHousehold(a.ID)
+		}
+	}))
+	clearHouseholdDefault := ui.UseEvent(Prevent(func() {
+		menuOpen.Set(false)
+		if props.OnClearDefaultHousehold != nil {
+			props.OnClearDefaultHousehold()
+		}
+	}))
+	setMemberDefault := ui.UseEvent(Prevent(func() {
+		menuOpen.Set(false)
+		if props.OnSetDefaultMember != nil && props.DefaultMemberID != "" {
+			props.OnSetDefaultMember(a.ID, props.DefaultMemberID)
+		}
+	}))
+	clearMemberDefault := ui.UseEvent(Prevent(func() {
+		menuOpen.Set(false)
+		if props.OnClearDefaultMember != nil && props.DefaultMemberID != "" {
+			props.OnClearDefaultMember(props.DefaultMemberID)
+		}
+	}))
 	// C365: investment/retirement/crypto rows deep-link to their holdings + growth
 	// card on /investments. The row navigates itself (like budgets_row) and sets the
 	// deep-link focus so the destination card scrolls into view and flashes once the
@@ -549,6 +613,7 @@ func AccountRow(props accountRowProps) ui.Node {
 			Div(css.Class("acct-row-id"),
 				Div(css.Class("acct-row-name"),
 					Span(css.Class("row-desc"), a.Name),
+					If(props.DefaultHousehold || len(props.DefaultMembers) > 0, uiw.Pill(uiw.PillProps{Label: uistate.T("defaultAccount.pill"), Tone: uiw.PillDim, Title: defaultAccountPillTitle(props)})),
 					// #66: shared vs individually-owned must be visible in the list —
 					// group-owned, shared-scope, or fractionally-shared accounts wear a
 					// quiet badge. Scope is checked too: seeded/imported data can mark
@@ -619,6 +684,10 @@ func AccountRow(props accountRowProps) ui.Node {
 					Button(css.Class("btn"), Type("button"), Attr("title", uistate.T("accounts.moreActions")), Attr("aria-label", uistate.T("accounts.moreActions")+" — "+a.Name), Attr("aria-haspopup", "menu"), Attr("aria-expanded", ariaBool(menuOpen.Get())), OnClick(toggleMenu), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
 					Div(ClassStr("add-backdrop"+menuHidden), OnClick(closeMenu)),
 					Div(ClassStr("add-menu"+menuHidden), Attr("role", "menu"),
+						If(!a.Archived && !props.DefaultHousehold, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "acct-default-household-"+a.ID), OnClick(setHouseholdDefault), uistate.T("defaultAccount.makeHousehold"))),
+						If(!a.Archived && props.DefaultHousehold, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "acct-clear-household-default-"+a.ID), OnClick(clearHouseholdDefault), uistate.T("defaultAccount.clearHousehold"))),
+						If(!a.Archived && props.DefaultMemberID != "" && !containsString(props.DefaultMembers, props.DefaultMemberID), Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "acct-default-member-"+a.ID), OnClick(setMemberDefault), uistate.T("defaultAccount.makeMember", props.DefaultMemberName))),
+						If(!a.Archived && props.DefaultMemberID != "" && containsString(props.DefaultMembers, props.DefaultMemberID), Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "acct-clear-member-default-"+a.ID), OnClick(clearMemberDefault), uistate.T("defaultAccount.clearMember", props.DefaultMemberName))),
 						// C412: the demoted "Update value/balance" action leads the menu for
 						// the rows that actively need it (stale / valuation assets); it stamps
 						// the same set-balance editor the balance figure opens.

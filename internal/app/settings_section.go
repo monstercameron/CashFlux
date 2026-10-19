@@ -10,6 +10,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/ai"
 	"github.com/monstercameron/CashFlux/internal/aiprovider"
+	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/backup"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/prefs"
@@ -45,6 +46,7 @@ func settingsHouseholdPane(p settingsLeftProps) uic.Node {
 		// she doesn't use before diving into currency/budget config.
 		H4(css.Class("set-label"), uistate.T("settings.householdMembers")),
 		Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1), p.MemberChips),
+		uic.CreateElement(settingsDefaultAccountControl, struct{}{}),
 		H4(css.Class("set-label"), uistate.T("settings.screens")),
 		P(css.Class(tw.TextFaint, tw.Text12), uistate.T("settings.screensHint")),
 		Div(css.Class("set-toggle-list"), p.ScreenToggles),
@@ -65,6 +67,49 @@ func settingsHouseholdPane(p settingsLeftProps) uic.Node {
 		If(len(p.FXRows) == 0, P(css.Class(tw.TextFaint, tw.Text12), uistate.T("settings.noRates"))),
 		Div(p.FXRows),
 		p.FXAIFetch,
+	)
+}
+
+func settingsDefaultAccountControl(_ struct{}) uic.Node {
+	app := appstate.Default
+	if app == nil {
+		return uic.Fragment()
+	}
+	selected := app.DefaultAccountID()
+	options := []any{Option(Value(""), SelectedIf(selected == ""), uistate.T("defaultAccount.none"))}
+	for _, account := range app.Accounts() {
+		if account.Archived && account.ID != selected {
+			continue
+		}
+		label := account.Name
+		if account.Archived {
+			label += " — " + uistate.T("accounts.archived")
+		}
+		options = append(options, Option(Value(account.ID), SelectedIf(selected == account.ID), label))
+	}
+	onChange := uic.UseEvent(func(id string) {
+		var err error
+		if strings.TrimSpace(id) == "" {
+			err = app.ClearDefaultAccountID()
+		} else {
+			err = app.SetDefaultAccountID(id)
+		}
+		if err != nil {
+			uistate.PostNotice(err.Error(), true)
+			return
+		}
+		uistate.BumpDataRevision()
+		uistate.RequestPersist()
+		if strings.TrimSpace(id) == "" {
+			uistate.PostNotice(uistate.T("defaultAccount.householdCleared"), false)
+		} else {
+			uistate.PostNotice(uistate.T("defaultAccount.householdSet"), false)
+		}
+	})
+	return Div(css.Class("set-default-account"),
+		H4(css.Class("set-label"), uistate.T("defaultAccount.householdLabel")),
+		P(css.Class(tw.TextFaint, tw.Text12), uistate.T("defaultAccount.householdHint")),
+		Select(css.Class("set-input"), Attr("data-testid", "settings-default-account"), Attr("aria-label", uistate.T("defaultAccount.householdLabel")), OnChange(onChange), options),
 	)
 }
 

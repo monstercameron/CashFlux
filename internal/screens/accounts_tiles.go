@@ -134,12 +134,16 @@ func partitionAssetAccounts(accounts []domain.Account, txns []domain.Transaction
 // store and bump the shared data revision so the whole surface re-renders in step;
 // OnView is supplied separately by the tile (it closes over the router + tx filter).
 type acctRowCallbacks struct {
-	OnDelete     func(string)
-	OnArchive    func(domain.Account)
-	OnRefresh    func(domain.Account)
-	OnSave       func(domain.Account)
-	OnSetBalance func(ac domain.Account, current money.Money, newBalStr, catID, asOfISO string)
-	OnTransfer   func(fromID, toID, amountStr, dateStr, desc string)
+	OnDelete                func(string)
+	OnArchive               func(domain.Account)
+	OnRefresh               func(domain.Account)
+	OnSave                  func(domain.Account)
+	OnSetBalance            func(ac domain.Account, current money.Money, newBalStr, catID, asOfISO string)
+	OnTransfer              func(fromID, toID, amountStr, dateStr, desc string)
+	OnSetDefaultHousehold   func(string)
+	OnClearDefaultHousehold func()
+	OnSetDefaultMember      func(accountID, memberID string)
+	OnClearDefaultMember    func(memberID string)
 }
 
 // buildAcctRowCallbacks wires the store mutations for AccountRow. Errors surface
@@ -210,6 +214,69 @@ func buildAcctRowCallbacks(app *appstate.App) acctRowCallbacks {
 				return
 			}
 			uistate.BumpDataRevision()
+		},
+		OnSetDefaultHousehold: func(accountID string) {
+			if err := app.SetDefaultAccountID(accountID); err != nil {
+				uistate.PostNotice(err.Error(), true)
+				return
+			}
+			uistate.BumpDataRevision()
+			uistate.RequestPersist()
+			uistate.PostNotice(uistate.T("defaultAccount.householdSet"), false)
+		},
+		OnClearDefaultHousehold: func() {
+			if err := app.ClearDefaultAccountID(); err != nil {
+				uistate.PostNotice(err.Error(), true)
+				return
+			}
+			uistate.BumpDataRevision()
+			uistate.RequestPersist()
+			uistate.PostNotice(uistate.T("defaultAccount.householdCleared"), false)
+		},
+		OnSetDefaultMember: func(accountID, memberID string) {
+			accountFound := false
+			for _, account := range app.Accounts() {
+				if account.ID == accountID && !account.Archived {
+					accountFound = true
+					break
+				}
+			}
+			if !accountFound {
+				uistate.PostNotice(uistate.T("defaultAccount.archivedError"), true)
+				return
+			}
+			for _, member := range app.Members() {
+				if member.ID != memberID {
+					continue
+				}
+				member.Prefs.DefaultAccountID = accountID
+				if err := app.PutMember(member); err != nil {
+					uistate.PostNotice(err.Error(), true)
+					return
+				}
+				uistate.BumpDataRevision()
+				uistate.RequestPersist()
+				uistate.PostNotice(uistate.T("defaultAccount.memberSet", member.Name), false)
+				return
+			}
+			uistate.PostNotice(uistate.T("defaultAccount.memberMissing"), true)
+		},
+		OnClearDefaultMember: func(memberID string) {
+			for _, member := range app.Members() {
+				if member.ID != memberID {
+					continue
+				}
+				member.Prefs.DefaultAccountID = ""
+				if err := app.PutMember(member); err != nil {
+					uistate.PostNotice(err.Error(), true)
+					return
+				}
+				uistate.BumpDataRevision()
+				uistate.RequestPersist()
+				uistate.PostNotice(uistate.T("defaultAccount.memberCleared", member.Name), false)
+				return
+			}
+			uistate.PostNotice(uistate.T("defaultAccount.memberMissing"), true)
 		},
 		OnSetBalance: func(ac domain.Account, currentBal money.Money, newStr, catID, asOfISO string) {
 			dec := currency.Decimals(ac.Currency)
@@ -1174,6 +1241,7 @@ func acctListWidget(props acctListProps) ui.Node {
 	cbs := buildAcctRowCallbacks(app)
 	viewTxns := acctViewTransactions(nav, txFilter)
 	viewBills := acctViewBillPayments(nav, txFilter)
+	householdDefaultID := app.DefaultAccountID()
 	// AC10: index the institution directory once so every row can color its edge
 	// and show a chip for its Account.InstitutionID.
 	instByID := domain.InstitutionByID(app.Institutions())
@@ -1194,6 +1262,15 @@ func acctListWidget(props acctListProps) ui.Node {
 	const allWindowCapDays = 366 * 20
 
 	renderRow := func(ac domain.Account) ui.Node {
+		defaultMemberID, defaultMemberName := accountDefaultMemberTarget(ac, members, activeMemberID)
+		var defaultMemberIDs []string
+		if !ac.Archived {
+			for _, member := range members {
+				if member.Prefs.DefaultAccountID == ac.ID {
+					defaultMemberIDs = append(defaultMemberIDs, member.ID)
+				}
+			}
+		}
 		bal, _ := ledger.Balance(ac, txns)
 		cleared, _ := ledger.ClearedBalance(ac, txns)
 		// C413: size the range picker's windows. Only compute the wider series when
@@ -1212,7 +1289,12 @@ func acctListWidget(props acctListProps) ui.Node {
 			Members:        members, Accounts: accounts, Categories: categories,
 			OnDelete: cbs.OnDelete, OnArchive: cbs.OnArchive, OnRefresh: cbs.OnRefresh,
 			OnSave: cbs.OnSave, OnView: viewTxns, OnSetBalance: cbs.OnSetBalance, OnTransfer: cbs.OnTransfer,
-			SmartSettings: smartSettings, SmartByEntity: accountByEntity, ValuationHistory: app.BalanceHistory(ac.ID),
+			DefaultHousehold: !ac.Archived && householdDefaultID == ac.ID, DefaultMembers: defaultMemberIDs,
+			DefaultMemberID: defaultMemberID, DefaultMemberName: defaultMemberName,
+			OnSetDefaultHousehold: cbs.OnSetDefaultHousehold, OnClearDefaultHousehold: cbs.OnClearDefaultHousehold,
+			OnSetDefaultMember:   cbs.OnSetDefaultMember,
+			OnClearDefaultMember: cbs.OnClearDefaultMember,
+			SmartSettings:        smartSettings, SmartByEntity: accountByEntity, ValuationHistory: app.BalanceHistory(ac.ID),
 			AccountDefs: accDefs, InstByID: instByID,
 			BillPayment: ledger.BillPaymentForAccount(ac.ID, txns), OnViewBills: viewBills,
 			Sparkline:    accountflow.BalanceSeries(ac, txns, now, acctseries.Days90),
@@ -1363,6 +1445,22 @@ func acctListWidget(props acctListProps) ui.Node {
 		ID: "acct-list", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
 		Body: Div(investBanner, section, debtLink),
 	})
+}
+
+func accountDefaultMemberTarget(account domain.Account, members []domain.Member, activeID string) (string, string) {
+	want := strings.TrimSpace(activeID)
+	for _, member := range members {
+		if want != "" && member.ID == want {
+			return member.ID, member.Name
+		}
+	}
+	want = strings.TrimSpace(account.OwnerID)
+	for _, member := range members {
+		if member.ID == want {
+			return member.ID, member.Name
+		}
+	}
+	return "", ""
 }
 
 // acctInvestmentsBanner renders the Accounts investment-section header (C365): a
