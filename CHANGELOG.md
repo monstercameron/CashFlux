@@ -90,6 +90,8 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Loan-payment suggestions skip the paying account and recent transfers (TC3B3).** A recurring payment never pairs with
+  its own source account, and a payment already recorded as a nearby transfer is not suggested again.
 - **Transfers pair only with a matching amount; the calendar follows (TC3B2).** Legacy transfer legs pair by account
   pair, opposite sign, equal (FX-converted) amount and date window, so a real row is never hidden as a partner; excluded
   transfers add nothing to Moved; ghost items are valid markup inside day buttons.

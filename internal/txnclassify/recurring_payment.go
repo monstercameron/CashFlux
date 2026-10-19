@@ -3,10 +3,13 @@
 package txnclassify
 
 import (
+	"sort"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/money"
 )
 
 // PaymentSuggestion identifies an existing expense that appears to be a
@@ -16,7 +19,6 @@ type PaymentSuggestion struct {
 	TransactionID string
 	AccountID     string
 	AccountName   string
-	Message       string
 }
 
 // RecurringLiabilityDestination resolves a recurring payment to a liability
@@ -27,10 +29,18 @@ func RecurringLiabilityDestination(r domain.Recurring, accounts []domain.Account
 	if r.ID == "" || !r.Amount.IsNegative() {
 		return domain.Account{}, false
 	}
+	paymentAmount, err := money.Abs(r.Amount.Amount)
+	if err != nil {
+		return domain.Account{}, false
+	}
 	labelWords := meaningfulWords(r.Label)
 	var match domain.Account
 	for _, account := range accounts {
-		if account.Class != domain.ClassLiability || account.Archived || account.MinPayment.Amount == 0 || account.Currency != r.Amount.Currency || account.MinPayment.Abs().Amount != r.Amount.Abs().Amount {
+		if account.ID == r.AccountID || account.Class != domain.ClassLiability || account.Archived || account.MinPayment.Amount == 0 || account.Currency != r.Amount.Currency {
+			continue
+		}
+		minimum, err := money.Abs(account.MinPayment.Amount)
+		if err != nil || minimum != paymentAmount {
 			continue
 		}
 		if !overlap(labelWords, meaningfulWords(account.Name)) {
@@ -47,29 +57,96 @@ func RecurringLiabilityDestination(r domain.Recurring, accounts []domain.Account
 // FindRecurringPaymentSuggestions flags expense rows whose payee matches a
 // recurring liability payment. It never rewrites transactions.
 func FindRecurringPaymentSuggestions(transactions []domain.Transaction, accounts []domain.Account, recurring []domain.Recurring) []PaymentSuggestion {
+	transfers := recurringTransferIndex(transactions)
+	rules := make([]recurringPaymentRule, 0, len(recurring))
+	for _, rule := range recurring {
+		destination, ok := RecurringLiabilityDestination(rule, accounts)
+		if !ok {
+			continue
+		}
+		amount, err := money.Abs(rule.Amount.Amount)
+		if err != nil {
+			continue
+		}
+		rules = append(rules, recurringPaymentRule{
+			labelWords:  meaningfulWords(rule.Label),
+			destination: destination,
+			amount:      amount,
+			currency:    rule.Amount.Currency,
+		})
+	}
+
 	var suggestions []PaymentSuggestion
 	for _, txn := range transactions {
 		if txn.ID == "" || txn.IsTransfer() || !txn.Amount.IsNegative() {
 			continue
 		}
-		for _, rule := range recurring {
-			destination, ok := RecurringLiabilityDestination(rule, accounts)
-			if !ok || txn.Amount.Currency != rule.Amount.Currency || txn.Amount.Abs().Amount != rule.Amount.Abs().Amount {
+		amount, err := money.Abs(txn.Amount.Amount)
+		if err != nil {
+			continue
+		}
+		payeeWords := meaningfulWords(txn.Payee)
+		for _, rule := range rules {
+			if txn.Amount.Currency != rule.currency || amount != rule.amount {
 				continue
 			}
-			if !overlap(meaningfulWords(txn.Payee), meaningfulWords(rule.Label)) {
+			if !overlap(payeeWords, rule.labelWords) {
+				continue
+			}
+			if hasNearbyRecurringTransfer(transfers, rule.destination.ID, txn.Amount.Currency, amount, txn.Date) {
 				continue
 			}
 			suggestions = append(suggestions, PaymentSuggestion{
 				TransactionID: txn.ID,
-				AccountID:     destination.ID,
-				AccountName:   destination.Name,
-				Message:       "Looks like a payment to " + destination.Name + " — record as a transfer?",
+				AccountID:     rule.destination.ID,
+				AccountName:   rule.destination.Name,
 			})
 			break
 		}
 	}
 	return suggestions
+}
+
+type recurringPaymentRule struct {
+	labelWords  map[string]struct{}
+	destination domain.Account
+	amount      int64
+	currency    string
+}
+
+type recurringTransferKey struct {
+	destination string
+	currency    string
+	amount      int64
+}
+
+func recurringTransferIndex(transactions []domain.Transaction) map[recurringTransferKey][]time.Time {
+	index := make(map[recurringTransferKey][]time.Time)
+	for _, txn := range transactions {
+		if !txn.IsTransfer() || txn.TransferAccountID == "" {
+			continue
+		}
+		amount, err := money.Abs(txn.Amount.Amount)
+		if err != nil {
+			continue
+		}
+		key := recurringTransferKey{destination: txn.TransferAccountID, currency: txn.Amount.Currency, amount: amount}
+		index[key] = append(index[key], txn.Date)
+	}
+	for key := range index {
+		sort.Slice(index[key], func(i, j int) bool { return index[key][i].Before(index[key][j]) })
+	}
+	return index
+}
+
+func hasNearbyRecurringTransfer(index map[recurringTransferKey][]time.Time, destination, currency string, amount int64, date time.Time) bool {
+	dates := index[recurringTransferKey{destination: destination, currency: currency, amount: amount}]
+	if len(dates) == 0 {
+		return false
+	}
+	start := date.Add(-PairWindow)
+	position := sort.Search(len(dates), func(i int) bool { return !dates[i].Before(start) })
+	return position < len(dates) && !dates[position].After(date.Add(PairWindow))
 }
 
 func meaningfulWords(value string) map[string]struct{} {

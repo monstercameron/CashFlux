@@ -58,10 +58,50 @@ func TestFindRecurringPaymentSuggestionsFlagsSampleExpenseWithoutRewriting(t *te
 	if len(got) != 1 {
 		t.Fatalf("suggestions = %#v, want exactly the matching expense", got)
 	}
-	if got[0].TransactionID != rows[0].ID || got[0].AccountID != "priya-car" || got[0].Message != "Looks like a payment to Priya's Car Loan — record as a transfer?" {
+	if got[0].TransactionID != rows[0].ID || got[0].AccountID != "priya-car" || got[0].AccountName != "Priya's Car Loan" {
 		t.Fatalf("suggestion = %#v", got[0])
 	}
 	if rows[0].TransferAccountID != "" || rows[0].CategoryID != "" {
 		t.Fatal("suggestion rewrote transaction history")
+	}
+}
+
+func TestRecurringLiabilityDestinationSkipsSourceAccount(t *testing.T) {
+	card := domain.Account{ID: "card", Name: "Priya Credit Card", Class: domain.ClassLiability, Currency: "USD", MinPayment: money.New(48000, "USD")}
+	rule := domain.Recurring{ID: "card-payment", Label: "Priya card payment", AccountID: "card", Amount: money.New(-48000, "USD")}
+	if got, ok := RecurringLiabilityDestination(rule, []domain.Account{card}); ok {
+		t.Fatalf("source account was selected as its own destination: %+v", got)
+	}
+}
+
+func TestFindRecurringPaymentSuggestionsSkipsNearbyRecordedTransfer(t *testing.T) {
+	base := time.Date(2026, time.October, 17, 0, 0, 0, 0, time.UTC)
+	accounts := []domain.Account{{ID: "priya-car", Name: "Priya's Car Loan", Class: domain.ClassLiability, Currency: "USD", MinPayment: money.New(48000, "USD")}}
+	recurring := []domain.Recurring{{ID: "car-p", Label: "Car payment Priya", AccountID: "checking", Amount: money.New(-48000, "USD")}}
+	expense := domain.Transaction{ID: "imported-expense", AccountID: "checking", Payee: "Car payment Priya", Amount: money.New(-48000, "USD"), Date: base}
+	transfer := domain.Transaction{ID: "posted-transfer", AccountID: "checking", TransferAccountID: "priya-car", Amount: money.New(-48000, "USD"), Date: base.Add(4 * 24 * time.Hour)}
+
+	if got := FindRecurringPaymentSuggestions([]domain.Transaction{expense, transfer}, accounts, recurring); len(got) != 0 {
+		t.Fatalf("nearby transfer still offered a duplicate suggestion: %+v", got)
+	}
+
+	transfer.Date = base.Add(5 * 24 * time.Hour)
+	got := FindRecurringPaymentSuggestions([]domain.Transaction{expense, transfer}, accounts, recurring)
+	if len(got) != 1 || got[0].TransactionID != expense.ID {
+		t.Fatalf("transfer outside PairWindow suppressed suggestion: %+v", got)
+	}
+}
+
+func TestFindRecurringPaymentSuggestionsPreparesEachRecurringDestinationOnce(t *testing.T) {
+	// Multiple expenses should reuse the prepared destination and label data.
+	accounts := []domain.Account{{ID: "priya-car", Name: "Priya's Car Loan", Class: domain.ClassLiability, Currency: "USD", MinPayment: money.New(48000, "USD")}}
+	recurring := []domain.Recurring{{ID: "car-p", Label: "Car payment Priya", AccountID: "checking", Amount: money.New(-48000, "USD")}}
+	rows := []domain.Transaction{
+		{ID: "expense-1", Payee: "Car payment Priya", Amount: money.New(-48000, "USD")},
+		{ID: "expense-2", Payee: "Car payment Priya", Amount: money.New(-48000, "USD")},
+	}
+	got := FindRecurringPaymentSuggestions(rows, accounts, recurring)
+	if len(got) != 2 {
+		t.Fatalf("suggestions = %+v, want one per expense", got)
 	}
 }
