@@ -60,11 +60,7 @@ func Signature(t domain.Transaction) string {
 		merchant = t.Desc
 	}
 	norm := strings.ToLower(strings.Join(strings.Fields(strings.TrimSpace(merchant)), " "))
-	status := "pending"
-	if t.Cleared {
-		status = "cleared"
-	}
-	return day + "|" + strconv.FormatInt(t.Amount.Amount, 10) + "|" + strings.ToUpper(t.Amount.Currency) + "|" + norm + "|" + status
+	return day + "|" + strconv.FormatInt(t.Amount.Amount, 10) + "|" + strings.ToUpper(t.Amount.Currency) + "|" + norm
 }
 
 // AmbiguityKey groups rows with equal date, signed amount, currency, and account

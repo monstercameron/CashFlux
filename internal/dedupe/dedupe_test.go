@@ -65,7 +65,7 @@ func TestFindDuplicatesNone(t *testing.T) {
 	}
 }
 
-func TestFindDuplicatesIncludesMerchantCurrencyAccountAndStatus(t *testing.T) {
+func TestFindDuplicatesIncludesMerchantCurrencyAndAccount(t *testing.T) {
 	d := day(2026, time.June, 1)
 	base := txn("a", "Coffee", -450, d)
 	base.AccountID, base.Payee = "checking", "Cafe North"
@@ -75,16 +75,47 @@ func TestFindDuplicatesIncludesMerchantCurrencyAccountAndStatus(t *testing.T) {
 	differentAccount.ID, differentAccount.AccountID = "c", "card"
 	differentCurrency := base
 	differentCurrency.ID, differentCurrency.Amount = "d", money.New(-450, "CAD")
-	cleared := base
-	cleared.ID, cleared.Cleared = "e", true
-	got := FindDuplicates([]domain.Transaction{base, differentMerchant, differentAccount, differentCurrency, cleared})
+	got := FindDuplicates([]domain.Transaction{base, differentMerchant, differentAccount, differentCurrency})
 	if len(got) != 0 {
-		t.Fatalf("distinct merchant/account/currency/status should not group: %+v", got)
+		t.Fatalf("distinct merchant/account/currency should not group: %+v", got)
 	}
 	base2 := base
 	base2.ID = "f"
 	if got := FindDuplicates([]domain.Transaction{base, base2}); len(got) != 1 {
 		t.Fatalf("matching rows should group: %+v", got)
+	}
+}
+
+func TestClearedStatusDoesNotPreventDuplicateDetection(t *testing.T) {
+	d := day(2026, time.June, 1)
+	tests := []struct {
+		name            string
+		existingCleared bool
+		incomingCleared bool
+	}{
+		{name: "cleared existing matches pending import", existingCleared: true},
+		{name: "pending existing matches cleared import", incomingCleared: true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			existing := txn("existing", "Coffee", -450, d)
+			existing.AccountID = "checking"
+			existing.Cleared = tc.existingCleared
+			incoming := txn("incoming", "Coffee", -450, d)
+			incoming.AccountID = "checking"
+			incoming.Cleared = tc.incomingCleared
+
+			if Key(existing) != Key(incoming) {
+				t.Fatalf("cleared state changed duplicate key: existing %q, incoming %q", Key(existing), Key(incoming))
+			}
+			if got := CountIncomingDuplicates([]domain.Transaction{incoming}, []domain.Transaction{existing}, ""); got != 1 {
+				t.Errorf("CountIncomingDuplicates = %d, want 1", got)
+			}
+			groups := FindDuplicates([]domain.Transaction{existing, incoming})
+			if len(groups) != 1 || len(groups[0].IDs) != 2 {
+				t.Errorf("FindDuplicates = %+v, want both rows grouped", groups)
+			}
+		})
 	}
 }
 
