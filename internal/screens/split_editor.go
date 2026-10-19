@@ -7,6 +7,7 @@ package screens
 import (
 	"strconv"
 
+	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -96,6 +97,8 @@ func SplitEditor(props splitEditorProps) ui.Node {
 	}
 
 	splits := ui.UseState(seed())
+	pickerLine := ui.UseState(-1)
+	_ = uistate.UseDataRevision().Get()
 	errMsg := ui.UseState("")
 	// Entry mode: exact amounts (the default) or percentages of the whole. Rows
 	// keep one Amt string; the mode decides how it is read. Percentages are
@@ -203,6 +206,7 @@ func SplitEditor(props splitEditorProps) ui.Node {
 			splits.Set(cur)
 		}
 	}
+	openCategoryPicker := func(i int) { pickerLine.Set(i) }
 	addRow := ui.UseEvent(func() { splits.Set(append(append([]splitDraft(nil), splits.Get()...), splitDraft{})) })
 	removeRow := func(i int) {
 		cur := splits.Get()
@@ -360,8 +364,12 @@ func SplitEditor(props splitEditorProps) ui.Node {
 
 	// C570: qualified paths ("Housing > Mortgage"), not bare leaf names — a split is
 	// exactly where two categories called "Gas" have to be told apart.
+	categories := props.Categories
+	if app := appstate.Default; app != nil {
+		categories = app.Categories()
+	}
 	catOpts := append([]uiw.SelectOption{{Value: "", Label: uistate.T("transactions.noCategory")}},
-		CategoryPickOptions(props.Categories)...)
+		CategoryPickOptions(categories)...)
 
 	// Owner picker options (XC10): only when the household actually has members.
 	// The first option is "Same as transaction" (empty value → falls back to the
@@ -379,20 +387,33 @@ func SplitEditor(props splitEditorProps) ui.Node {
 	var rows []ui.Node
 	for i, d := range splits.Get() {
 		rows = append(rows, ui.CreateElement(splitRow, splitRowProps{
-			Index:     i,
-			Cat:       d.Cat,
-			Amt:       d.Amt,
-			Owner:     d.Owner,
-			CatOpts:   catOpts,
-			OwnerOpts: ownerOpts,
-			ShowOwner: showOwner,
-			Dec:       dec,
-			Percent:   inPct,
-			OnCat:     setCat,
-			OnAmt:     setAmt,
-			OnOwner:   setOwner,
-			OnRemove:  removeRow,
+			Index:         i,
+			Cat:           d.Cat,
+			Amt:           d.Amt,
+			Owner:         d.Owner,
+			CatOpts:       catOpts,
+			OwnerOpts:     ownerOpts,
+			ShowOwner:     showOwner,
+			Dec:           dec,
+			Percent:       inPct,
+			OnCat:         setCat,
+			OnNewCategory: openCategoryPicker,
+			OnAmt:         setAmt,
+			OnOwner:       setOwner,
+			OnRemove:      removeRow,
 		}))
+	}
+	pickerNode := Fragment()
+	if i := pickerLine.Get(); i >= 0 && i < len(splits.Get()) {
+		kind := domain.KindExpense
+		if props.Txn.Amount.Amount > 0 {
+			kind = domain.KindIncome
+		}
+		pickerNode = ui.CreateElement(CategoryPicker, CategoryPickerProps{
+			Kind: kind, Selected: splits.Get()[i].Cat,
+			OnPick:  func(categoryID string) { setCat(i, categoryID); pickerLine.Set(-1) },
+			OnClose: func() { pickerLine.Set(-1) },
+		})
 	}
 
 	// Remainder phrasing: balanced (green), or "$X left"/"$X over" — "X% left" in
@@ -473,7 +494,7 @@ func SplitEditor(props splitEditorProps) ui.Node {
 			modalSaveArgs = append(modalSaveArgs, Disabled(true), Attr("aria-disabled", "true"),
 				Title(uistate.T("splitEditor.cannotSaveYet")))
 		}
-		return Form(css.Class("split-editor split-editor-modal"), Attr("id", props.FooterFormID),
+		return Fragment(Form(css.Class("split-editor split-editor-modal"), Attr("id", props.FooterFormID),
 			Attr("data-testid", "split-editor"), OnSubmit(save),
 			Div(css.Class("modal-scroll"),
 				hint,
@@ -492,7 +513,7 @@ func SplitEditor(props splitEditorProps) ui.Node {
 				Button(css.Class("btn"), Type("button"), Attr("data-testid", "split-cancel"),
 					OnClick(cancel), uistate.T("action.cancel")),
 				Button(modalSaveArgs...)),
-		)
+		), pickerNode)
 	}
 
 	// Inline layout (edit-form / classic table): the self-contained bordered card with
@@ -502,7 +523,7 @@ func SplitEditor(props splitEditorProps) ui.Node {
 		saveArgs = append(saveArgs, Disabled(true), Attr("aria-disabled", "true"),
 			Title(uistate.T("splitEditor.cannotSaveYet")))
 	}
-	return Div(css.Class("split-editor"), Attr("data-testid", "split-editor"),
+	return Fragment(Div(css.Class("split-editor"), Attr("data-testid", "split-editor"),
 		Style(map[string]string{"margin-top": "0.75rem", "padding": "0.75rem", "border": "1px solid var(--border)", "border-radius": "8px"}),
 		P(css.Class("hero-flanker-label"), Style(map[string]string{"margin-bottom": "0.4rem"}), uistate.T("splitEditor.title")),
 		hint,
@@ -516,7 +537,7 @@ func SplitEditor(props splitEditorProps) ui.Node {
 			Button(saveArgs...),
 			If(props.Txn.HasSplits(), Button(css.Class("btn", "btn-sm"), Type("button"), Attr("data-testid", "split-clear"), OnClick(clear), uistate.T("splitEditor.clear"))),
 		),
-	)
+	), pickerNode)
 }
 
 type splitRowProps struct {
@@ -529,11 +550,12 @@ type splitRowProps struct {
 	ShowOwner bool
 	Dec       int
 	// Percent renders the value input as a percentage entry (percent mode).
-	Percent  bool
-	OnCat    func(int, string)
-	OnAmt    func(int, string)
-	OnOwner  func(int, string)
-	OnRemove func(int)
+	Percent       bool
+	OnCat         func(int, string)
+	OnNewCategory func(int)
+	OnAmt         func(int, string)
+	OnOwner       func(int, string)
+	OnRemove      func(int)
 }
 
 // splitRow is one editable split line (category + amount + remove). It is its own
@@ -541,6 +563,7 @@ type splitRowProps struct {
 // instead of inside the parent's variable-length loop (the framework gotcha).
 func splitRow(props splitRowProps) ui.Node {
 	onCat := func(v string) { props.OnCat(props.Index, v) }
+	onNewCategory := ui.UseEvent(func() { props.OnNewCategory(props.Index) })
 	onAmt := ui.UseEvent(func(v string) { props.OnAmt(props.Index, v) })
 	// TX16: on blur, evaluate an arithmetic entry ("12+8", "45.99*3") and replace
 	// it with the result; a plain number or a parse failure is left untouched.
@@ -555,14 +578,15 @@ func splitRow(props splitRowProps) ui.Node {
 	// breakdowns don't blur together (coworker feedback).
 	return Div(css.Class("split-row"), Attr("data-testid", "split-row"),
 		Style(map[string]string{"display": "flex", "gap": "0.5rem", "align-items": "center", "padding-bottom": "0.5rem", "margin-bottom": "0.5rem", "border-bottom": "1px solid var(--border)", "flex-wrap": "wrap"}),
-		Div(Style(map[string]string{"flex": "1 1 auto"}),
+		Div(Style(map[string]string{"flex": "1 1 auto", "display": "flex", "gap": "0.35rem", "align-items": "center"}),
 			uiw.SelectInput(uiw.SelectInputProps{
 				Options:   props.CatOpts,
 				Selected:  props.Cat,
 				AriaLabel: uistate.T("splitEditor.category"),
 				TestID:    "split-cat-" + strconv.Itoa(props.Index),
 				OnChange:  onCat,
-			})),
+			}),
+			TxnNewCategoryAction("split-new-category-"+strconv.Itoa(props.Index), false, onNewCategory)),
 		// XC10: optional per-line owner. Only rendered for multi-member households;
 		// "Same as transaction" (empty) keeps the pre-XC10 payer attribution.
 		If(props.ShowOwner, Div(Style(map[string]string{"flex": "1 1 auto"}),

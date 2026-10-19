@@ -13041,3 +13041,40 @@ create through `CreateCategory`, then select the new category in the control tha
 - [ ] **SEC3 [L] AI credential not re-keyed when App Lock turns on/off or the passcode changes; server-URL change clears
   `datasetOwnerKey`** so the next account adopts and pushes foreign data.
 - [ ] **IMP1 [L] Import pipeline never reviewed** (CSV/OFX/vision/order import, dedupe, dataset restore) — review lane.
+
+### TX — reusable component library from the Transactions page (Cam, 2026-10-19)
+Goal: group like components into configurable ones, clean up code quality, faster iteration, fewer bugs; scope is
+the Transactions page only. Muse Wonder lanes for research and implementation.
+- [ ] **LIB0 [W] Research + design** — inventory every UI pattern on the page by family (pickers, menus, overlays,
+  money display, pills/chips, form fields, toolbar controls, cells, empty states, keyboard, toasts), one configurable
+  component per family (check GoWebComponents first), cleanup list (dead legacy ledger, duplicated helpers, CSS
+  override stacking, inline styles, 2k-line files), and a wave plan with disjoint file ownership. Output in
+  cfsv2/lanes/LIB0/design.md (outside the repo).
+- [ ] **LIB1..n [W] Implementation waves** — briefed from the approved design after the current page lanes land.
+- [ ] **LIB0A [W] Anti-pattern audit** — ranked anti-patterns on the page (logic in views, globals, god files, DOM-query
+  coupling, duplicated state, hook misuse, swallowed errors, inline styles/z-index/#id, colliding fixtures, flag props)
+  with well-known replacements and 10-15 checkable rules every implementation wave must follow
+  (cfsv2/lib_common.md carries the standing rules).
+
+### Import pipeline review (IMP1, 2026-10-19) — 17 findings, cfsv2/lanes/IMP1/report.md
+- [ ] **IMPA [L] Parsers** — OFX amounts through float64; comma-decimal and trailing-minus amounts mangled; ambiguous
+  MM/DD vs DD/MM chosen silently (findings 1-3).
+- [ ] **IMPB [L] Writes** — invalid extracted date becomes today; same-day same-amount purchases deduped away; pending vs
+  posted collapsed; CSV and document imports drop failed rows silently / half-apply; preview skips the rules commit
+  applies; mapping profiles are process-global (findings 4-6, 8, 9, 16, 17).
+- [ ] **IMPC [L] UI** — column wizard splits quoted CSV wrongly; no date-order / number-format controls; every import
+  error shown as "Choose an account"; no file-size caps (CSV/JSON/SQLite); vision import does not say the image goes to
+  OpenAI; + Category on draft rows cannot create (CAT6) (findings 9, 10, 12-15).
+- [ ] **IMPD [L] CSV formula injection on export** — imported payees like `=HYPERLINK(...)` export verbatim (finding 11).
+- [ ] **IMP7 [L] Imported transfer legs are detected but never linked** (finding 7) — after IMPB.
+- [ ] **SV3a.3 [L] localdb** — ambiguous per-scope database names; remote batches appended before validation.
+- [ ] **SEC2.1 [L]** — two server tests stale after SEC2 (schema 20, OAuth callback without device cookie); the client
+  never sends `x-cashflux-device-id`, so the gRPC refresh grace never applies. After SEC3.
+
+### Wording (LBL1 review, 2026-10-19 — cfsv2/lanes/LBL1/report.md)
+- [ ] **LBL2 [L] Apply the wording review** — one glossary (Needs review / Mark reviewed; Cleared = bank status only;
+  Exclude from budgets and reports; Transfer; Scheduled), High/Medium rows of the table, label-in-name for aria. Keep
+  "Tools" distinct from "More details". After R10W/R10T/CAT1/IMPC land.
+- [ ] **SEC4 [L] CSV formula injection beyond payee/description/tags** — guard every free-text and ID column in
+  `TransactionsToCSV` (category, account, member, currency; or restrict IDs/currency to strict charsets on import), and in
+  `internal/reports/csv.go`, `reports/deductible.go`, `reports/investperf.go`, `split/csv.go`, `subscriptions/csv.go`.

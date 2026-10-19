@@ -211,6 +211,7 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 	directionS := ui.UseState(dirOut)
 
 	catS := ui.UseState(txn.CategoryID)
+	categoryPickerOpen := ui.UseState(false)
 	dateS := ui.UseState(dateISO)
 	memberS := ui.UseState(txn.MemberID)
 	tagsS := ui.UseState(strings.Join(txn.Tags, ", "))
@@ -267,54 +268,10 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 	onExclude := ui.UseEvent(func(e ui.Event) { excludeS.Set(e.IsChecked()) })
 	onDebtPay := ui.UseEvent(func(e ui.Event) { debtPayS.Set(e.IsChecked()) })
 
-	// Quick-add a category right from the picker — faster than leaving to /categories.
-	// A toggle reveals a name field; adding creates the category (matching the
-	// transaction's income/expense flow) and immediately selects it on this form.
-	addingCat := ui.UseState(false)
-	newCatName := ui.UseState("")
-	onNewCatName := ui.UseEvent(func(v string) { newCatName.Set(v) })
-	toggleAddCat := ui.UseEvent(func() {
-		addingCat.Set(!addingCat.Get())
-		newCatName.Set("")
+	toggleAddCat := ui.UseEvent(Prevent(func() {
+		categoryPickerOpen.Set(true)
 		errMsg.Set("")
-	})
-	// doAddCat creates the typed category and selects it. A plain closure so both the
-	// Add button and the Enter key (which must NOT submit the outer edit form) run it.
-	doAddCat := func() {
-		n := strings.TrimSpace(newCatName.Get())
-		if n == "" {
-			errMsg.Set(uistate.T("categories.nameRequired"))
-			return
-		}
-		kind := domain.KindExpense
-		if txn.IsIncome() {
-			kind = domain.KindIncome
-		}
-		c := domain.Category{ID: id.New(), Name: n, Kind: kind}
-		if err := app.PutCategory(c); err != nil {
-			errMsg.Set(err.Error())
-			return
-		}
-		catS.Set(c.ID) // select the just-created category on this form
-		newCatName.Set("")
-		addingCat.Set(false)
-		errMsg.Set("")
-		uistate.RequestPersist()
-		uistate.BumpDataRevision()
-		uistate.PostNotice(uistate.T("categories.addedToast", n), false)
-	}
-	addCat := ui.UseEvent(Prevent(func() { doAddCat() }))
-	onNewCatKey := ui.UseEvent(func(e ui.KeyboardEvent) {
-		switch e.GetKey() {
-		case "Enter":
-			e.PreventDefault() // add the category instead of submitting the edit form
-			doAddCat()
-		case "Escape":
-			e.PreventDefault()
-			addingCat.Set(false)
-			newCatName.Set("")
-		}
-	})
+	}))
 	applySuggestion := ui.UseEvent(Prevent(func() {
 		candidate := txn
 		candidateDirection := "expense"
@@ -710,12 +667,20 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 		)
 	}
 
-	catOpts := uiw.OptionsFrom(
-		categories,
-		func(c domain.Category) string { return c.ID },
-		func(c domain.Category) string { return c.Name },
-		catS.Get(),
-	)
+	categoryKind := domain.KindExpense
+	if directionS.Get() == txnDirIn {
+		categoryKind = domain.KindIncome
+	}
+	matchingCategories := make([]domain.Category, 0, len(categories))
+	for _, category := range categories {
+		if category.Kind == categoryKind {
+			matchingCategories = append(matchingCategories, category)
+		}
+	}
+	catOpts := make([]uiw.SelectOption, 0, len(matchingCategories)+1)
+	for _, option := range CategoryPickOptions(matchingCategories) {
+		catOpts = append(catOpts, option)
+	}
 	catOpts = append([]uiw.SelectOption{{Value: "", Label: uistate.T("transactions.noCategory")}}, catOpts...)
 
 	memberOpts := uiw.OptionsFrom(
@@ -781,15 +746,6 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 			hasSuggestion = false
 		}
 	}
-	var newCategoryEditor ui.Node = Fragment()
-	if addingCat.Get() {
-		newCategoryEditor = Div(css.Class("txn-cat-add"),
-			Input(css.Class("field"), Type("text"), Attr("data-testid", "txn-edit-newcat-name"), Attr("aria-label", uistate.T("transactions.newCategoryName")),
-				Placeholder(uistate.T("transactions.newCategoryName")), OnInput(onNewCatName), OnKeyDown(onNewCatKey), uiw.FieldValue(newCatName.Get())),
-			Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "txn-edit-newcat-add"), OnClick(addCat), uistate.T("transactions.newCategoryAdd")),
-			Button(css.Class("btn btn-ghost"), Type("button"), OnClick(toggleAddCat), uistate.T("transactions.newCategoryCancel")),
-		)
-	}
 	categoryLabel := []any{Span(css.Class("t-caption", tw.TextDim), uistate.T("transactions.categoryLabel"))}
 	if hasSuggestion && suggested.CategoryID != catS.Get() {
 		categoryLabel = append(categoryLabel, Button(css.Class("txn-edit-category-suggestion"), Type("button"),
@@ -803,8 +759,12 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 		Div(css.Class("txn-cat-picker"),
 			Div(css.Class("txn-cat-row"),
 				uiw.SelectInput(uiw.SelectInputProps{Options: catOpts, Selected: catS.Get(), AriaLabel: uistate.T("transactions.categoryLabel"), TestID: "txn-edit-category", OnChange: func(v string) { catS.Set(v) }}),
-				TxnNewCategoryAction("txn-edit-newcat-toggle", addingCat.Get(), toggleAddCat)),
-			newCategoryEditor,
+				TxnNewCategoryAction("txn-edit-newcat-toggle", categoryPickerOpen.Get(), toggleAddCat)),
+			If(categoryPickerOpen.Get(), ui.CreateElement(CategoryPicker, CategoryPickerProps{
+				Kind: categoryKind, Selected: catS.Get(),
+				OnPick:  func(categoryID string) { catS.Set(categoryID); categoryPickerOpen.Set(false) },
+				OnClose: func() { categoryPickerOpen.Set(false) },
+			})),
 		),
 	)
 	amountField := labeledField(uistate.T("transactions.amountPlaceholder"), Input(css.Class("field"), Type("text"), Attr("inputmode", "decimal"), Attr("data-testid", "txn-edit-amount"),

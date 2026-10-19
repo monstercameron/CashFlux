@@ -118,6 +118,8 @@ type CategoryPickerProps struct {
 	Kind domain.CategoryKind
 	// Selected is the currently chosen category id, if any.
 	Selected string
+	// InitialQuery pre-fills the search field when the picker mounts.
+	InitialQuery string
 	// OnPick receives the chosen (or newly created) category id.
 	OnPick func(categoryID string)
 	// OnClose dismisses the picker without choosing.
@@ -130,7 +132,7 @@ func CategoryPicker(props CategoryPickerProps) ui.Node {
 	app := appstate.Default
 	_ = uistate.UseDataRevision().Get()
 
-	query := ui.UseState("")
+	query := ui.UseState(props.InitialQuery)
 	parentID := ui.UseState("")
 
 	onQuery := ui.UseEvent(func(v string) { query.Set(v) })

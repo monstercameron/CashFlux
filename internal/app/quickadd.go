@@ -44,6 +44,7 @@ func QuickAddHost() uic.Node {
 	transferOpen := uistate.UseAcctTransferOpen()
 	notice := uistate.UseNotice()
 	dataRev := uistate.UseDataRevision()
+	_ = dataRev.Get()
 	app := appstate.Default
 
 	acctID := uic.UseState("")
@@ -66,8 +67,7 @@ func QuickAddHost() uic.Node {
 	noteS := uic.UseState("")
 	clearedS := uic.UseState(false)
 	excludeS := uic.UseState(false)
-	addingCategory := uic.UseState(false)
-	newCategoryName := uic.UseState("")
+	categoryPickerOpen := uic.UseState(false)
 
 	onReviewed := uic.UseEvent(func(e uic.Event) { needsReview.Set(e.IsChecked()) })
 	onTags := uic.UseEvent(func(v string) { tagsS.Set(v) })
@@ -109,41 +109,7 @@ func QuickAddHost() uic.Node {
 	onPayee := uic.UseEvent(func(v string) { payee.Set(v) })
 	onDesc := uic.UseEvent(func(v string) { desc.Set(v) })
 	onCat := uic.UseEvent(func(e uic.Event) { catID.Set(e.GetValue()) })
-	onNewCategoryName := uic.UseEvent(func(v string) { newCategoryName.Set(v) })
-	toggleNewCategory := uic.UseEvent(func(uic.Event) { addingCategory.Set(!addingCategory.Get()) })
-	createCategory := func() {
-		name := strings.TrimSpace(newCategoryName.Get())
-		if name == "" {
-			return
-		}
-		categoryKind := domain.KindExpense
-		if kind.Get() == "Income" {
-			categoryKind = domain.KindIncome
-		}
-		category := domain.Category{ID: id.New(), Name: name, Kind: categoryKind}
-		if err := app.PutCategory(category); err != nil {
-			notice.Set(notice.Get().With(err.Error(), true))
-			return
-		}
-		catID.Set(category.ID)
-		newCategoryName.Set("")
-		addingCategory.Set(false)
-		uistate.RequestPersist()
-		uistate.PostNotice(uistate.T("categories.addedToast", name), false)
-		dataRev.Update(func(v int) int { return v + 1 })
-	}
-	addCategory := uic.UseEvent(func(uic.Event) { createCategory() })
-	onNewCategoryKey := uic.UseEvent(func(e uic.KeyboardEvent) {
-		switch e.GetKey() {
-		case "Enter":
-			e.PreventDefault()
-			createCategory()
-		case "Escape":
-			e.PreventDefault()
-			addingCategory.Set(false)
-			newCategoryName.Set("")
-		}
-	})
+	toggleNewCategory := uic.UseEvent(Prevent(func() { categoryPickerOpen.Set(true) }))
 	onDate := uic.UseEvent(func(v string) { date.Set(v) })
 	uic.UseEffect(func() func() {
 		if id := focusField.Get(); id != "" {
@@ -218,8 +184,7 @@ func QuickAddHost() uic.Node {
 		desc.Set("")
 		catID.Set("")
 		date.Set("")
-		addingCategory.Set(false)
-		newCategoryName.Set("")
+		categoryPickerOpen.Set(false)
 		needsReview.Set(false)
 		saveAttempted.Set(false)
 		focusField.Set("")
@@ -615,23 +580,25 @@ func QuickAddHost() uic.Node {
 		draftHint,
 	)
 
-	categoryAddEditor := Fragment()
-	if addingCategory.Get() {
-		categoryAddEditor = Div(css.Class("txn-cat-add"),
-			Input(css.Class("field"), Type("text"), Attr("data-testid", "txn-add-newcat-name"), Attr("aria-label", uistate.T("transactions.newCategoryName")),
-				Placeholder(uistate.T("transactions.newCategoryName")), OnInput(onNewCategoryName), OnKeyDown(onNewCategoryKey), ui.FieldValue(newCategoryName.Get())),
-			Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "txn-add-newcat-add"), OnClick(addCategory), uistate.T("transactions.newCategoryAdd")),
-			Button(css.Class("btn btn-ghost"), Type("button"), OnClick(toggleNewCategory), uistate.T("transactions.newCategoryCancel")),
-		)
-	}
 	categoryField := Div(css.Class("labeled-field", "txn-edit-category-field"),
 		Div(css.Class("txn-edit-category-label"), Span(css.Class("t-caption", tw.TextDim), uistate.T("quickAdd.category")),
 			// Kept beside the category label so it matches Edit without adding a grid row.
-			screens.TxnNewCategoryAction("txn-add-newcat-toggle", addingCategory.Get(), toggleNewCategory),
+			screens.TxnNewCategoryAction("txn-add-newcat-toggle", categoryPickerOpen.Get(), toggleNewCategory),
 		),
 		Div(css.Class("txn-cat-picker"),
 			Div(css.Class("txn-cat-row"), Select(css.Class("field"), Attr("data-testid", "txn-add-category"), Attr("aria-label", uistate.T("quickAdd.category")), OnChange(onCat), catOpts)),
-			catAssist, learnedCatAssist, budgetImpact, categoryAddEditor,
+			catAssist, learnedCatAssist, budgetImpact,
+			If(categoryPickerOpen.Get(), uic.CreateElement(screens.CategoryPicker, screens.CategoryPickerProps{
+				Kind: func() domain.CategoryKind {
+					if kind.Get() == "Income" {
+						return domain.KindIncome
+					}
+					return domain.KindExpense
+				}(),
+				Selected: catID.Get(),
+				OnPick:   func(categoryID string) { catID.Set(categoryID); categoryPickerOpen.Set(false) },
+				OnClose:  func() { categoryPickerOpen.Set(false) },
+			})),
 		),
 	)
 	amountField :=

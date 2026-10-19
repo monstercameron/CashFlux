@@ -20,14 +20,23 @@ import (
 	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
 
-// categorySelectOptions builds a []uiw.SelectOption for a category picker
-// (a leading "choose" placeholder, then every category by name).
+// categorySelectOptions builds a kind-filtered category list with full paths.
 func categorySelectOptions(cats []domain.Category, selected string) []uiw.SelectOption {
 	opts := []uiw.SelectOption{{Value: "", Label: uistate.T("rules.chooseCategory")}}
-	for _, c := range cats {
-		opts = append(opts, uiw.SelectOption{Value: c.ID, Label: c.Name})
+	kind := ruleCategoryKind(cats, selected)
+	for _, c := range categoryOptions(cats, kind) {
+		opts = append(opts, uiw.SelectOption{Value: c.ID, Label: c.Path})
 	}
 	return opts
+}
+
+func ruleCategoryKind(cats []domain.Category, selected string) domain.CategoryKind {
+	for _, c := range cats {
+		if c.ID == selected {
+			return c.Kind
+		}
+	}
+	return domain.KindExpense
 }
 
 // RuleAddFormProps configures the RuleAddForm component.
@@ -139,6 +148,7 @@ func ruleAddForm(props RuleAddFormProps) ui.Node {
 	}
 	match := ui.UseState(seedMatch)
 	categoryID := ui.UseState(seedCategory)
+	pickerOpen := ui.UseState(false)
 	tags := ui.UseState("")
 	billAcct := ui.UseState("")
 	// C373: the three actions the benchmark audit found missing. All three are
@@ -190,6 +200,7 @@ func ruleAddForm(props RuleAddFormProps) ui.Node {
 	onMatch := ui.UseEvent(func(v string) { match.Set(v) })
 	// onCategory hook slot kept for stable hook ordering; SelectInput owns the event.
 	ui.UseEvent(func(e ui.Event) { categoryID.Set(e.GetValue()) })
+	onNewCategory := ui.UseEvent(func() { pickerOpen.Set(true) })
 	onTags := ui.UseEvent(func(v string) { tags.Set(v) })
 
 	// Slot 1 handlers — stable hook positions, not in a loop.
@@ -299,6 +310,15 @@ func ruleAddForm(props RuleAddFormProps) ui.Node {
 	}))
 
 	catOpts := categorySelectOptions(cats, categoryID.Get())
+	kind := ruleCategoryKind(cats, categoryID.Get())
+	pickerNode := Fragment()
+	if pickerOpen.Get() {
+		pickerNode = ui.CreateElement(CategoryPicker, CategoryPickerProps{
+			Kind: kind, Selected: categoryID.Get(),
+			OnPick:  func(catID string) { categoryID.Set(catID); pickerOpen.Set(false) },
+			OnClose: func() { pickerOpen.Set(false) },
+		})
+	}
 
 	// Only the AddHost modal instance carries the shared form id (its FlipPanel
 	// footer Save submits by id); the inline instance owns its submit button, so
@@ -325,12 +345,16 @@ func ruleAddForm(props RuleAddFormProps) ui.Node {
 			}(),
 		),
 		uiw.FormField(uistate.T("rules.categoryFieldLabel"),
-			uiw.SelectInput(uiw.SelectInputProps{
-				Options:   catOpts,
-				Selected:  categoryID.Get(),
-				OnChange:  func(v string) { categoryID.Set(v) },
-				AriaLabel: uistate.T("rules.categoryFieldLabel"),
-			})),
+			Div(css.Class("txn-cat-row"),
+				uiw.SelectInput(uiw.SelectInputProps{
+					Options:   catOpts,
+					Selected:  categoryID.Get(),
+					OnChange:  func(v string) { categoryID.Set(v) },
+					AriaLabel: uistate.T("rules.categoryFieldLabel"),
+					TestID:    "rule-add-category-select",
+				}),
+				TxnNewCategoryAction("rule-add-new-category", pickerOpen.Get(), onNewCategory),
+			)),
 		uiw.FormField(uistate.T("rules.tagsFieldLabel"),
 			Input(css.Class("field"), Type("text"), Placeholder(uistate.T("rules.tagsPlaceholder")), OnInput(onTags), uiw.FieldValue(tags.Get())),
 		),
@@ -420,7 +444,7 @@ func ruleAddForm(props RuleAddFormProps) ui.Node {
 			Div(css.Class("fg-span"), Button(css.Class("btn btn-primary"), Type("submit"), Attr("data-testid", "rule-add-submit"),
 				uistate.T("rules.addRule")))),
 	)
-	return Form(formArgs...)
+	return Fragment(Form(formArgs...), pickerNode)
 }
 
 // ruleTxnCtxs projects the household's non-transfer transactions into the

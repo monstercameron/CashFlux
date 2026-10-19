@@ -96,6 +96,10 @@ and every commit updates this file under `Unreleased`.
   complete build in charge.
 
 ### Changed
+- **Create a category wherever you choose one (CAT1, CAT3–CAT5).** Add and Edit use the shared category
+  picker, so a new category can be a sub-category and inherits its kind; Edit lists only categories of the
+  transaction's direction, with full paths. Split lines, the Smart category suggestion and the rule form gain the
+  same "New category" button, and the new category is selected in the control that opened the picker.
 - **The Transactions page, reworked through an adversarial review loop (5.5 → 7.8/10 so far).**
   - Reading: expenses in plain ink, income green with "+", transfers neutral with "Transfer → Account"
     in the category; no accounting parentheses anywhere (ledger, count line, calendar, review).

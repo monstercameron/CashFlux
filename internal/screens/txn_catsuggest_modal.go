@@ -42,6 +42,7 @@ func CatSuggestBody(_ struct{}) ui.Node {
 
 	// Hooks first, unconditionally, before any early return.
 	chosen := ui.UseState("")
+	pickerOpen := ui.UseState(false)
 	batch := ui.UseState(false)
 	loading := ui.UseState(false)
 	errText := ui.UseState("")
@@ -105,6 +106,7 @@ func CatSuggestBody(_ struct{}) ui.Node {
 	aiConn := resolveAIConn(app, backendAI, pr.ServerURL, pr.ServerToken)
 
 	onPick := func(v string) { chosen.Set(v); errText.Set("") }
+	onNewCategory := ui.UseEvent(func() { pickerOpen.Set(true) })
 	onBatch := ui.UseEvent(func() { batch.Set(!batch.Get()) })
 
 	askAI := ui.UseEvent(Prevent(func() {
@@ -188,7 +190,15 @@ func CatSuggestBody(_ struct{}) ui.Node {
 		kind = domain.KindIncome
 	}
 
-	return Form(css.Class("csug", tw.FlexCol, tw.Gap3),
+	pickerNode := Fragment()
+	if pickerOpen.Get() {
+		pickerNode = ui.CreateElement(CategoryPicker, CategoryPickerProps{
+			Kind: kind, Selected: chosen.Get(),
+			OnPick:  func(categoryID string) { chosen.Set(categoryID); errText.Set(""); pickerOpen.Set(false) },
+			OnClose: func() { pickerOpen.Set(false) },
+		})
+	}
+	return Fragment(Form(css.Class("csug", tw.FlexCol, tw.Gap3),
 		Attr("id", CatSuggestFormID), Attr("data-testid", "catsuggest-modal"), OnSubmit(save),
 		// The charge itself, read-only, so it is clear what is being filed.
 		Div(css.Class("csug-txn"),
@@ -210,6 +220,7 @@ func CatSuggestBody(_ struct{}) ui.Node {
 					OnChange:  onPick,
 					TestID:    "catsuggest-pick",
 				}),
+				TxnNewCategoryAction("catsuggest-new-category", pickerOpen.Get(), onNewCategory),
 				aiBtn,
 			),
 		),
@@ -223,7 +234,7 @@ func CatSuggestBody(_ struct{}) ui.Node {
 				Attr("data-testid", "catsuggest-batch"), OnChange(onBatch)}, checkedAttr(batch.Get())...)...),
 			Span(css.Class(tw.Text13), uistate.T("catSuggest.batchLabel", others)))),
 		If(errText.Get() != "", P(css.Class("err"), Attr("role", "alert"), errText.Get())),
-	)
+	), pickerNode)
 }
 
 // catSuggestOptions builds the picker's options: a "choose" placeholder, then
