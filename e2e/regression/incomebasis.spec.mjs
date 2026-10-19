@@ -4,13 +4,22 @@
 // reboot — the boot path where the prefs atom used to seed from an empty store.
 import { test, expect, nav } from "./fixtures.mjs";
 
+async function openBudgetIncome(app) {
+  await nav(app, "/budgets");
+  const details = app.getByTestId("budgets-status-details");
+  if (!(await details.getAttribute("open"))) {
+    await details.locator("summary").click();
+  }
+  await expect(details).toHaveAttribute("open", "");
+}
+
 test.describe("budgets: income-basis modal persists selections", { tag: "@prod" }, () => {
   // Cam report 2026-07-17: "Income to budget with doesn't persist when making a
   // selection". Locks the whole loop: pick a basis in the modal, Save, and the
   // choice must (a) drive the page's income figure immediately and (b) survive
   // reopening the modal and a full reload.
   test("fixed-income basis saves, updates the page, and survives reopen + reload", async ({ app }) => {
-    await nav(app, "/budgets");
+    await openBudgetIncome(app);
     const openBtn = app.locator('[data-testid="budgets-basis-open"]').first();
     await openBtn.scrollIntoViewIfNeeded();
     await openBtn.click();
@@ -35,7 +44,7 @@ test.describe("budgets: income-basis modal persists selections", { tag: "@prod" 
     await app.evaluate(() => history.pushState({}, "", "/"));
     await app.reload();
     await app.waitForFunction(() => document.documentElement.getAttribute("data-app-ready") === "true", null, { timeout: 45000 });
-    await nav(app, "/budgets");
+    await openBudgetIncome(app);
     await expect(app.locator("#main")).toContainText("$6,000.00");
     await app.locator('[data-testid="budgets-basis-open"]').first().click();
     await expect(mode).toHaveValue("fixed");
@@ -70,7 +79,7 @@ test.describe("budgets: income basis survives a passcode-locked reboot", { tag: 
     // (the setup dialog's own passcode field shares the same aria-label).
     const gate0 = app.locator("#cf-applock-gate input").first();
     if (await gate0.count()) { await gate0.fill(PIN); await gate0.press("Enter"); await app.waitForTimeout(1500); }
-    await nav(app, "/budgets");
+    await openBudgetIncome(app);
     const openBtn = app.locator('[data-testid="budgets-basis-open"]').first();
     await openBtn.scrollIntoViewIfNeeded();
     await app.waitForTimeout(900); // let entrance animations settle (stable-element click)

@@ -11,6 +11,13 @@ import { test, expect, nav } from "./fixtures.mjs";
 async function openBudgets(app) {
   await nav(app, "/budgets");
   await expect(app.getByTestId("budgets-status-strip")).toBeVisible();
+  // The allocation read lives in the intentional "More details" disclosure.
+  // Open it before asserting the read or using its income-basis control.
+  const details = app.getByTestId("budgets-status-details");
+  if (!(await details.getAttribute("open"))) {
+    await details.locator("summary").click();
+  }
+  await expect(details).toHaveAttribute("open", "");
 }
 
 test.describe("income allocation read", { tag: "@prod" }, () => {
@@ -163,7 +170,13 @@ test.describe("adding a budget no longer mints a category behind your back", { t
     await openAddBudget(app);
 
     // Read a real category name straight out of the picker.
-    const firstOption = (await app.getByTestId("budget-existing-cat").locator("option").first().innerText()).trim();
+    // This is an accessible searchable picker, not a native <select>. Open it
+    // and read a real category from its listbox so the duplicate check remains
+    // tied to existing data rather than a hard-coded sample name.
+    const picker = app.getByTestId("budget-existing-cat");
+    await picker.click();
+    const firstOption = (await app.getByRole("option").first().innerText()).trim();
+    await app.keyboard.press("Escape");
     await app.getByTestId("budget-create-cat").check();
 
     // Case and spacing must not defeat the match — "groceries" is "Groceries",

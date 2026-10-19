@@ -42,7 +42,7 @@ test.describe("C611 · an open flip modal is usable", { tag: "@prod" }, () => {
   test("quick-add from the dashboard is on screen once open", async ({ app }) => {
     // The dashboard is the heaviest route, so it is where the reveal is slowest
     // and the failure was first seen.
-    await openVia(app, app.getByTestId("add-transaction-btn"), app.getByTestId("txn-add-amount"));
+    await openVia(app, app.getByTestId("add-transaction-btn"), app.locator(".flip-backdrop.show"));
 
     const s = await panelState(app);
     expect(s.present).toBe(true);
@@ -55,7 +55,7 @@ test.describe("C611 · an open flip modal is usable", { tag: "@prod" }, () => {
 
   test("quick-add from the ledger is on screen once open", async ({ app }) => {
     await nav(app, "/transactions");
-    await openVia(app, app.getByTestId("add-transaction-btn"), app.getByTestId("txn-add-amount"));
+    await openVia(app, app.getByTestId("add-transaction-btn"), app.locator(".flip-backdrop.show"));
 
     const s = await panelState(app);
     expect(s.revealed).toBe(true);
@@ -71,7 +71,7 @@ test.describe("C611 · an open flip modal is usable", { tag: "@prod" }, () => {
   // rather than worked around: focusing on a timer would hide the real defect.
   test.fixme("opening a panel lands focus inside it", async ({ app }) => {
     await nav(app, "/transactions");
-    await openVia(app, app.getByTestId("add-transaction-btn"), app.getByTestId("txn-add-amount"));
+    await openVia(app, app.getByTestId("add-transaction-btn"), app.locator(".flip-backdrop.show"));
 
     const focus = await app.evaluate(() => {
       const el = document.activeElement;
