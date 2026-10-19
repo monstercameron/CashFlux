@@ -17,6 +17,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/catsuggest"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/learntally"
+	"github.com/monstercameron/CashFlux/internal/smartcatview"
 	"github.com/monstercameron/CashFlux/internal/txnreview"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/css"
@@ -59,23 +60,15 @@ type txnCatSuggestion struct {
 }
 
 type txnCatSuggestInputsCache struct {
-	app           *appstate.App
-	revision      int
-	storeRevision uint64
-	inputs        txnCatSuggestInputs
-	valid         bool
+	value smartcatview.RevisionCache[*appstate.App, txnCatSuggestInputs]
 }
 
 func (c *txnCatSuggestInputsCache) get(app *appstate.App, revision int, build func() txnCatSuggestInputs) txnCatSuggestInputs {
-	storeRevision := uint64(0)
+	var storeRevision uint64
 	if app != nil {
 		storeRevision = app.Rev()
 	}
-	if !c.valid || c.app != app || c.revision != revision || c.storeRevision != storeRevision {
-		c.app, c.revision, c.inputs, c.valid = app, revision, build(), true
-		c.storeRevision = storeRevision
-	}
-	return c.inputs
+	return c.value.Get(app, revision, storeRevision, build)
 }
 
 var txnCatSuggestCache txnCatSuggestInputsCache
@@ -89,10 +82,7 @@ func loadTxnCatSuggestInputs(app *appstate.App) txnCatSuggestInputs {
 		return inputs
 	}
 	txns := app.Transactions()
-	inputs.byID = make(map[string]domain.Transaction, len(txns))
-	for _, txn := range txns {
-		inputs.byID[txn.ID] = txn
-	}
+	inputs.byID = smartcatview.IndexTransactions(txns)
 	inputs.categories = app.Categories()
 	inputs.tally = uistate.LoadLearnTally()
 	inputs.threshold = uistate.LoadLearnThreshold()
@@ -100,12 +90,11 @@ func loadTxnCatSuggestInputs(app *appstate.App) txnCatSuggestInputs {
 }
 
 func (inputs *txnCatSuggestInputs) suggestion(app *appstate.App, txn domain.Transaction) (catsuggest.Suggestion, bool) {
-	if cached, ok := inputs.suggestions[txn.ID]; ok {
-		return cached.value, cached.ok
-	}
-	suggestion, ok := reviewSuggestionWith(app, txn, inputs.tally, inputs.threshold, inputs.categories)
-	inputs.suggestions[txn.ID] = txnCatSuggestion{value: suggestion, ok: ok}
-	return suggestion, ok
+	result := smartcatview.Memo(inputs.suggestions, txn.ID, func() txnCatSuggestion {
+		suggestion, ok := reviewSuggestionWith(app, txn, inputs.tally, inputs.threshold, inputs.categories)
+		return txnCatSuggestion{value: suggestion, ok: ok}
+	})
+	return result.value, result.ok
 }
 
 func txnCatSuggestInputsFor(app *appstate.App, revision int) txnCatSuggestInputs {
@@ -155,23 +144,14 @@ func txnCatSuggestChip(props txnCatSuggestChipProps) ui.Node {
 	}
 	inputs := txnCatSuggestInputsFor(app, revision)
 	txn, ok := inputs.byID[props.TxnID]
-	if !ok || txn.CategoryID != "" || txn.IsTransfer() {
+	if !smartcatview.EligibleTransaction(txn, ok) {
 		return Fragment()
 	}
 	s, ok := inputs.suggestion(app, txn)
-	if !ok || s.CategoryID == "" || !categorySuggestionMatchesDirection(txn, s.CategoryID, inputs.categories) {
-		return Fragment()
-	}
-	// A coin-flip history is a signal, not an answer: offering a one-click apply for
-	// it would train the user to accept without reading. Those charges keep the
-	// kebab's modal (where the evidence is spelled out) as their only path.
-	if s.Confidence < catsuggest.ConfMedium {
+	if !smartcatview.ChipVisible(txn, s, ok, inputs.categories) {
 		return Fragment()
 	}
 	cats := inputs.categories
-	if _, ok := categoryByID(cats, s.CategoryID); !ok {
-		return Fragment()
-	}
 	name := catname.LabelByID(cats, s.CategoryID)
 	return Fragment(Button(css.Class("txn-catsuggest"), Type("button"),
 		Attr("data-testid", "txn-catsuggest-chip"),
@@ -188,15 +168,7 @@ func txnCatSuggestChip(props txnCatSuggestChipProps) ui.Node {
 // categorySuggestionMatchesDirection prevents a rule with a mismatched category
 // kind from appearing as a suggestion on a transaction in the opposite direction.
 func categorySuggestionMatchesDirection(txn domain.Transaction, categoryID string, categories []domain.Category) bool {
-	category, ok := categoryByID(categories, categoryID)
-	if !ok {
-		return false
-	}
-	want := domain.KindExpense
-	if txn.Amount.IsPositive() {
-		want = domain.KindIncome
-	}
-	return category.Kind == want
+	return smartcatview.MatchesDirection(txn, categoryID, categories)
 }
 
 // applyCatSuggestion files ONE charge under a category and makes it undoable.
@@ -240,13 +212,5 @@ func txnByID(app *appstate.App, id string) (domain.Transaction, bool) {
 
 // categoryByID finds a category by id in a category slice.
 func categoryByID(cats []domain.Category, id string) (domain.Category, bool) {
-	if id == "" {
-		return domain.Category{}, false
-	}
-	for _, c := range cats {
-		if c.ID == id {
-			return c, true
-		}
-	}
-	return domain.Category{}, false
+	return smartcatview.CategoryByID(cats, id)
 }

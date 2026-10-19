@@ -17,18 +17,13 @@
 package screens
 
 import (
-	"strings"
 	"time"
-	"unicode"
-	"unicode/utf8"
-
-	uiw "github.com/monstercameron/CashFlux/internal/ui"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
-	"github.com/monstercameron/CashFlux/internal/duedate"
-	"github.com/monstercameron/CashFlux/internal/rapidcapture"
 	"github.com/monstercameron/CashFlux/internal/smart"
 	"github.com/monstercameron/CashFlux/internal/smartai"
+	"github.com/monstercameron/CashFlux/internal/smartcatview"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/css"
@@ -36,293 +31,127 @@ import (
 	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
 
-// The free and paid halves of SM-15.
-const (
-	txnDraftFreeCode = "SMART-T22F"
-	txnDraftAICode   = "SMART-T22"
-)
-
-// TxnDraftFill is what a parse hands back to the form. Every field is optional:
-// the form leaves any zero field exactly as the user left it, so a partial parse
-// never wipes something already typed.
-type TxnDraftFill struct {
-	// AmountMajor is the amount as a major-unit decimal string, unsigned.
-	AmountMajor string
-	// Income is true when the sentence described money coming IN.
-	Income bool
-	Payee  string
-	// Date is zero when the sentence named none.
-	Date time.Time
-	// CategoryID is set only by the Smart+ path, and only when the model named a
-	// category the household actually has.
-	CategoryID string
-}
-
-// Empty reports whether the parse found nothing worth applying.
-func (f TxnDraftFill) Empty() bool {
-	return f.AmountMajor == "" && f.Payee == "" && f.Date.IsZero() && f.CategoryID == ""
-}
+// TxnDraftFill contains optional fields to merge into a quick-add draft.
+type TxnDraftFill = smartcatview.DraftFill
 
 // TxnDraftHintProps carries the callback that fills the quick-add form.
-type TxnDraftHintProps struct {
-	OnApply func(TxnDraftFill)
-}
+type TxnDraftHintProps struct{ OnApply func(TxnDraftFill) }
 
-// TxnDraftHint renders the sentence field and the fill affordance. Its own
-// component so its state and request hooks sit at stable positions inside the
-// quick-add panel.
+// TxnDraftHint hosts the sentence state and optional AI request.
 func TxnDraftHint(props TxnDraftHintProps) ui.Node {
 	pr := uistate.UsePrefs().Get()
 	app := appstate.Default
-
 	sentence := ui.UseState("")
 	aiFill := ui.UseState(TxnDraftFill{})
 	loading := ui.UseState(false)
 	errText := ui.UseState("")
-
 	settings := uistate.LoadSmartSettings()
-	raw := strings.TrimSpace(sentence.Get())
-
-	backendAI := app != nil && aiProviderConfigured(app, uistate.BackendConnectionActive(pr))
-	aiEnabled := backendAI && settings.IsEnabled(txnDraftAICode) && !settings.IsMuted(txnDraftAICode)
-	freeEnabled := settings.IsEnabled(txnDraftFreeCode) && !settings.IsMuted(txnDraftFreeCode)
-	aiConn := smartAIConn{}
+	provider := app != nil && aiProviderConfigured(app, uistate.BackendConnectionActive(pr))
+	local := parseTxnSentence(sentence.Get())
+	view := smartcatview.PresentDraft(sentence.Get(), local, aiFill.Get(), provider, loading.Get(), settings)
+	var conn smartAIConn
 	if app != nil {
-		aiConn = resolveAIConn(app, uistate.BackendConnectionActive(pr), pr.ServerURL, pr.ServerToken)
+		conn = resolveAIConn(app, uistate.BackendConnectionActive(pr), pr.ServerURL, pr.ServerToken)
 	}
-
-	local := parseTxnSentence(raw)
-
-	onInput := ui.UseEvent(func(v string) {
-		sentence.Set(v)
-		aiFill.Set(TxnDraftFill{})
-		errText.Set("")
-	})
-	applyLocal := func() {
-		if props.OnApply != nil && !local.Empty() {
-			props.OnApply(local)
+	apply := func() {
+		offer := smartcatview.PresentDraft(sentence.Get(), local, aiFill.Get(), provider, loading.Get(), settings).Offer
+		if props.OnApply != nil && !offer.Empty() {
+			props.OnApply(offer)
 		}
 	}
-	applyAI := func() {
-		if props.OnApply != nil && !aiFill.Get().Empty() {
-			props.OnApply(aiFill.Get())
-		}
-	}
-	applyOffer := func() {
-		if !aiFill.Get().Empty() {
-			applyAI()
-			return
-		}
-		applyLocal()
-	}
-	onKeyDown := ui.UseEvent(func(e ui.KeyboardEvent) {
-		if e.GetKey() != "Enter" {
-			return
-		}
-		// This field sits inside the quick-add panel. Enter is an apply gesture
-		// here, never a form submit or a request to close the panel.
-		e.PreventDefault()
-		e.StopPropagation()
-		applyOffer()
-	})
-	ask := ui.UseEvent(Prevent(func() {
+	ask := func() {
 		a := appstate.Default
-		if a == nil || loading.Get() || raw == "" {
+		if a == nil || loading.Get() || view.Raw == "" {
 			return
 		}
 		loading.Set(true)
 		errText.Set("")
-		catalog := smartCatalog(a.Categories())
-		runSmartAI(aiConn, smartai.TxnDraftRequest(raw, catalog.Prompt(), time.Now()),
-			func(text string) {
-				loading.Set(false)
-				d, ok := smartai.ParseTxnDraft(strings.TrimSpace(text), catalog, time.Now())
-				if !ok {
-					errText.Set(uistate.T("sm15.aiNoAnswer"))
-					return
-				}
-				aiFill.Set(TxnDraftFill{
-					AmountMajor: d.AmountMajor,
-					Income:      !d.Negative,
-					Payee:       d.Payee,
-					Date:        d.Date,
-					CategoryID:  d.CategoryID,
-				})
-			},
-			func(e string) { loading.Set(false); errText.Set(e) })
-	}))
-	inputOption := OnInput(onInput)
-	keyDownOption := OnKeyDown(onKeyDown)
-	askOption := OnClick(ask)
-
-	if !freeEnabled && !aiEnabled {
+		catalog := smartcatview.Catalog(a.Categories())
+		runSmartAI(conn, smartai.TxnDraftRequest(view.Raw, catalog.Prompt(), time.Now()), func(text string) {
+			loading.Set(false)
+			fill, ok := smartcatview.ParseAIDraft(text, catalog, time.Now())
+			if !ok {
+				errText.Set(uistate.T("sm15.aiNoAnswer"))
+				return
+			}
+			aiFill.Set(fill)
+		}, func(message string) { loading.Set(false); errText.Set(message) })
+	}
+	if !view.Visible {
 		return Fragment()
 	}
-	if !settings.DensityOrDefault().Shows(smart.AffordanceFieldAssist) {
-		return Fragment()
-	}
-
-	// The AI answer, when there is one, replaces the local offer: the user asked
-	// for it explicitly and it is strictly the better-informed parse.
-	offer := local
-	fromAI := false
-	if f := aiFill.Get(); !f.Empty() {
-		offer, fromAI = f, true
-	}
-
-	var hint ui.Node = Fragment()
-	if !offer.Empty() {
-		detail := uistate.T("sm15.readLocal")
-		code := txnDraftFreeCode
-		if fromAI {
-			detail = uistate.T("catSuggest.aiSource")
-			code = txnDraftAICode
-		}
-		hint = smartRowHintFor(settings, code, smart.AffordanceFieldAssist, smartRowHintProps{
-			Key:         "sm15:" + raw,
-			TestID:      "sm15",
-			Text:        txnDraftSummary(offer, pr.FormatDate),
-			Detail:      detail,
-			ActionLabel: uistate.T("sm15.action"),
-			OnAction:    applyOffer,
-		})
-	}
-
-	var askBtn ui.Node = Fragment()
-	// The model is offered when it could add something the local parsers cannot:
-	// a sentence they read nothing from, or one they read but could not categorize.
-	if aiEnabled && raw != "" && !fromAI {
-		label := uistate.T("sm15.aiAction")
-		if loading.Get() {
-			label = uistate.T("sm15.aiPending")
-		}
-		askBtn = Button(css.Class("btn btn-sm btn-ghost", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
-			Attr("data-testid", "sm15-ai-btn"), Attr("aria-disabled", ariaBool(loading.Get())),
-			askOption, smartGlyph(true, tw.Fold(tw.W3, tw.H3)), Span(label))
-	}
-
 	return Div(css.Class("sm15"), Attr("data-testid", "sm15-draft"),
 		Div(css.Class("sm15-row", tw.Flex, tw.ItemsCenter, tw.Gap2),
-			Input(css.Class("field field-wide"), Type("text"),
-				Attr("id", "sm15-input"),
-				Attr("data-testid", "sm15-input"),
-				Attr("aria-label", uistate.T("sm15.label")),
-				Placeholder(uistate.T("sm15.placeholder")), inputOption, keyDownOption, uiw.FieldValue(sentence.Get())),
-			askBtn,
+			ui.CreateElement(txnDraftSentenceInput, txnDraftSentenceInputProps{
+				Sentence: sentence.Get(), OnInput: func(value string) { sentence.Set(value); aiFill.Set(TxnDraftFill{}); errText.Set("") },
+				OnApply: apply,
+			}),
+			ui.CreateElement(txnDraftAIAction, txnDraftAIActionProps{Visible: view.ShowAsk, Loading: loading.Get(), LabelKey: view.AskKey, OnAsk: ask}),
 		),
-		hint,
+		ui.CreateElement(txnDraftOffer, txnDraftOfferProps{View: view, Settings: settings, FormatDate: pr.FormatDate, OnApply: apply}),
 		If(errText.Get() != "", P(css.Class("err", tw.Text12), Attr("role", "alert"), errText.Get())),
 	)
 }
 
-// parseTxnSentence is the FREE parse: rapidcapture for the amount and the
-// merchant words, duedate for the date word. Neither package knew about the
-// other, and between them they read the sentence people actually type.
-//
-// The sign convention follows the app's: a bare "40 at whole foods" is money out.
-// Only an explicit income word flips it, because guessing income from a bare
-// number is the mistake that quietly corrupts the income/expense split.
-func parseTxnSentence(raw string) TxnDraftFill {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return TxnDraftFill{}
-	}
-	out := TxnDraftFill{}
-	// The date first, so its words are lifted out before the merchant label is read
-	// and "yesterday" cannot end up as part of the payee.
-	d := duedate.Parse(raw, time.Now())
-	if !d.Due.IsZero() {
-		out.Date = d.Due
-	}
-	rest := d.Title
-	if rest == "" {
-		rest = raw
-	}
-	drafts := rapidcapture.Parse(rest)
-	if len(drafts) == 0 {
-		return out
-	}
-	first := drafts[0]
-	out.AmountMajor = first.MajorString
-	out.Payee = titleDraftLabel(cleanDraftLabel(first.Label))
-	out.Income = txnSentenceIsIncome(rest)
-	return out
+type txnDraftSentenceInputProps struct {
+	Sentence string
+	OnInput  func(string)
+	OnApply  func()
 }
 
-// incomePhrases are the only leading phrases that flip a sentence to money IN.
-var incomePhrases = []string{
-	"got paid", "got a refund", "received a refund", "received", "refund",
-	"paid me", "earned", "income", "deposit",
-}
-
-// txnSentenceIsIncome reports whether the sentence describes money coming in.
-func txnSentenceIsIncome(s string) bool {
-	low := strings.ToLower(strings.TrimSpace(s))
-	for _, phrase := range incomePhrases {
-		if strings.HasPrefix(low, phrase) {
-			rest := strings.TrimPrefix(low, phrase)
-			if rest == "" {
-				return true
-			}
-			next, _ := utf8.DecodeRuneInString(rest)
-			if !unicode.IsLetter(next) && !unicode.IsDigit(next) && next != '_' {
-				return true
-			}
+func txnDraftSentenceInput(p txnDraftSentenceInputProps) ui.Node {
+	input := ui.UseEvent(p.OnInput)
+	keyDown := ui.UseEvent(func(e ui.KeyboardEvent) {
+		if e.GetKey() != "Enter" {
+			return
 		}
-	}
-	return false
+		e.PreventDefault()
+		e.StopPropagation()
+		p.OnApply()
+	})
+	return Input(css.Class("field field-wide"), Type("text"),
+		Attr("id", "sm15-input"), Attr("data-testid", "sm15-input"), Attr("aria-label", uistate.T("sm15.label")),
+		Placeholder(uistate.T("sm15.placeholder")), OnInput(input), OnKeyDown(keyDown), uiw.FieldValue(p.Sentence))
 }
 
-// leadWords are the verbs and prepositions that glue a capture sentence together
-// and are never part of a merchant's name.
-var leadWords = map[string]bool{
-	"spent": true, "paid": true, "bought": true, "at": true, "on": true, "for": true,
-	"from": true, "to": true, "in": true, "a": true, "an": true, "the": true, "got": true,
+type txnDraftAIActionProps struct {
+	Visible, Loading bool
+	LabelKey         string
+	OnAsk            func()
 }
 
-// cleanDraftLabel strips the sentence's connective words from the merchant label,
-// leaving "whole foods" rather than "spent at whole foods". Words are removed only
-// from the ENDS: a merchant genuinely called "The Home Depot" keeps its "The"
-// because the stripping stops at the first word that isn't connective.
-func cleanDraftLabel(s string) string {
-	words := strings.Fields(s)
-	for len(words) > 0 && leadWords[strings.ToLower(words[0])] {
-		words = words[1:]
+func txnDraftAIAction(p txnDraftAIActionProps) ui.Node {
+	ask := ui.UseEvent(Prevent(p.OnAsk))
+	click := OnClick(ask)
+	if !p.Visible {
+		return Fragment()
 	}
-	for len(words) > 0 && leadWords[strings.ToLower(words[len(words)-1])] {
-		words = words[:len(words)-1]
-	}
-	return strings.Join(words, " ")
+	return Button(css.Class("btn btn-sm btn-ghost", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+		Attr("data-testid", "sm15-ai-btn"), Attr("aria-disabled", ariaBool(p.Loading)),
+		click, smartGlyph(true, tw.Fold(tw.W3, tw.H3)), Span(uistate.T(p.LabelKey)))
 }
 
-// titleDraftLabel gives parsed merchant names readable display casing without
-// changing the original sentence or any transaction description.
-func titleDraftLabel(s string) string {
-	words := strings.Fields(strings.ToLower(strings.TrimSpace(s)))
-	for i, word := range words {
-		first, size := utf8.DecodeRuneInString(word)
-		if first != utf8.RuneError || size != 0 {
-			words[i] = string(unicode.ToTitle(first)) + word[size:]
-		}
-	}
-	return strings.Join(words, " ")
+type txnDraftOfferProps struct {
+	View       smartcatview.DraftView
+	Settings   smart.Settings
+	FormatDate func(time.Time) string
+	OnApply    func()
 }
 
-// txnDraftSummary renders the parse as the one line the hint shows.
-func txnDraftSummary(f TxnDraftFill, fmtDate func(time.Time) string) string {
-	parts := []string{}
-	if f.Payee != "" {
-		parts = append(parts, f.Payee)
+func txnDraftOffer(p txnDraftOfferProps) ui.Node {
+	if p.View.Offer.Empty() {
+		return Fragment()
 	}
-	if f.AmountMajor != "" {
-		if f.Income {
-			parts = append(parts, uistate.T("sm15.amountIn", f.AmountMajor))
-		} else {
-			parts = append(parts, uistate.T("sm15.amountOut", f.AmountMajor))
-		}
-	}
-	if !f.Date.IsZero() && fmtDate != nil {
-		parts = append(parts, fmtDate(f.Date))
-	}
-	return strings.Join(parts, " · ")
+	return smartRowHintFor(p.Settings, p.View.Code, smart.AffordanceFieldAssist, smartRowHintProps{
+		Key: "sm15:" + p.View.Raw, TestID: "sm15", Text: txnDraftSummary(p.View.Offer, p.FormatDate),
+		Detail: uistate.T(p.View.DetailKey), ActionLabel: uistate.T("sm15.action"), OnAction: p.OnApply,
+	})
+}
+
+// parseTxnSentence forwards the legacy private entry point to the pure parser.
+func parseTxnSentence(raw string) TxnDraftFill { return smartcatview.ParseSentence(raw, time.Now()) }
+
+// txnDraftSummary adapts the user's translation and date preferences.
+func txnDraftSummary(f TxnDraftFill, format func(time.Time) string) string {
+	return smartcatview.DraftSummary(f, format, uistate.T)
 }

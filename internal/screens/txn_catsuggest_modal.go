@@ -11,15 +11,12 @@
 package screens
 
 import (
-	"strings"
-
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/catname"
 	"github.com/monstercameron/CashFlux/internal/catsuggest"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/reviewqueue"
-	"github.com/monstercameron/CashFlux/internal/smartai"
-	"github.com/monstercameron/CashFlux/internal/txnreview"
+	"github.com/monstercameron/CashFlux/internal/smartcatview"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -28,20 +25,16 @@ import (
 	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
 
-// CatSuggestFormID is shared by the modal's body <form> and the FlipPanel
-// footer's Save button, so the pinned footer submits while the body scrolls.
+// CatSuggestFormID links the form to the modal's pinned Save button.
 const CatSuggestFormID = "catsuggest-form"
 
-// CatSuggestBody is the body of the categorize flip modal (mounted at the shell
-// root by app.CatSuggestHost).
+// CatSuggestBody hosts the category suggestion modal's state and app effects.
 func CatSuggestBody(_ struct{}) ui.Node {
 	app := appstate.Default
 	_ = uistate.UseDataRevision().Get()
-	openAtom := uistate.UseCatSuggest()
-	txnID := openAtom.Get()
+	open := uistate.UseCatSuggest()
+	txnID := open.Get()
 	pr := uistate.UsePrefs().Get()
-
-	// Hooks first, unconditionally, before any early return.
 	chosen := ui.UseState("")
 	pickerOpen := ui.UseState(false)
 	batch := ui.UseState(false)
@@ -49,101 +42,59 @@ func CatSuggestBody(_ struct{}) ui.Node {
 	errText := ui.UseState("")
 	aiNote := ui.UseState("")
 	seeded := ui.UseState("")
-
 	var txn domain.Transaction
-	found := false
 	var cats []domain.Category
+	var txns []domain.Transaction
+	found := false
 	if app != nil && txnID != "" {
 		txn, found = txnByID(app, txnID)
 		if found {
 			cats = app.Categories()
+			txns = app.Transactions()
 		}
 	}
-
-	// The local suggestion and the evidence for it. Resolved every render (it is a
-	// cheap in-memory read) so a correction made elsewhere is reflected on reopen.
-	var sugg catsuggest.Suggestion
-	hasSugg := false
+	var suggestion catsuggest.Suggestion
+	hasSuggestion := false
 	if found {
-		sugg, hasSugg = reviewSuggestion(app, txn)
+		suggestion, hasSuggestion = reviewSuggestion(app, txn)
 	}
 	why := ""
-	if hasSugg {
-		why = reviewWhy(sugg)
+	if hasSuggestion {
+		why = reviewWhy(suggestion)
 	}
-
-	// Seed the picker from the suggestion the first time this charge's modal opens
-	// (re-seed when reopened for a different charge). An already-categorized charge
-	// seeds from its own category, so reopening confirms what is set rather than
-	// silently proposing a change.
 	if found && seeded.Get() != txnID {
-		switch {
-		case txn.CategoryID != "":
-			chosen.Set(txn.CategoryID)
-		case hasSugg:
-			chosen.Set(sugg.CategoryID)
-		default:
-			chosen.Set("")
-		}
+		chosen.Set(smartcatview.SeedCategory(txn, suggestion, hasSuggestion))
 		batch.Set(false)
 		errText.Set("")
 		aiNote.Set("")
 		seeded.Set(txnID)
 	}
-
-	// How many OTHER charges share this merchant — the batch offer's scope. It uses
-	// reviewqueue.MerchantKey (payee-alias normalized, lower-cased), never the raw
-	// descriptor: a merchant that stamps a per-charge reference would otherwise
-	// Normalized merchant keys keep charge references from breaking a merchant match.
-	key := reviewqueue.MerchantKey(txn)
-	others := 0
-	if found && key != "" {
-		for _, t := range app.Transactions() {
-			if t.ID != txn.ID && t.CategoryID == "" && !t.IsTransfer() && reviewqueue.MerchantKey(t) == key {
-				others++
-			}
-		}
-	}
-
-	// Smart+ availability: a configured provider plus the AI half enabled. The
-	// deterministic half above needed neither.
-	backendAI := pr.Normalize().BackendActive()
-	aiEnabled := app != nil && aiProviderConfigured(app, backendAI) && uistate.LoadSmartSettings().IsEnabled(catSuggestAICode)
-	var aiConn smartAIConn
+	others := smartcatview.MerchantOthers(txn, txns)
+	backend := pr.Normalize().BackendActive()
+	aiEnabled := app != nil && aiProviderConfigured(app, backend) && uistate.LoadSmartSettings().IsEnabled(catSuggestAICode)
+	var conn smartAIConn
 	if app != nil {
-		aiConn = resolveAIConn(app, backendAI, pr.ServerURL, pr.ServerToken)
+		conn = resolveAIConn(app, backend, pr.ServerURL, pr.ServerToken)
 	}
-
-	onPick := func(v string) { chosen.Set(v); errText.Set("") }
-	onNewCategory := ui.UseEvent(func() { pickerOpen.Set(true) })
-	onBatch := ui.UseEvent(func() { batch.Set(!batch.Get()) })
-
-	askAI := ui.UseEvent(Prevent(func() {
+	ask := func() {
 		if loading.Get() {
 			return
 		}
 		loading.Set(true)
 		errText.Set("")
 		aiNote.Set("")
-		catalog := smartCatalog(cats)
-		runSmartAI(aiConn, smartai.Categorize(txnLabelOf(txn)+" "+fmtMoney(txn.Amount), catalog.Prompt()),
-			func(text string) {
-				loading.Set(false)
-				answer := strings.TrimSpace(text)
-				// The model's answer is resolved against the household's REAL
-				// categories and dropped when it does not match. It may not invent
-				// one here any more than it may in T16.
-				if hit, ok := catalog.Lookup(answer); ok {
-					chosen.Set(hit.ID)
-					aiNote.Set(uistate.T("catSuggest.aiSource"))
-					return
-				}
-				aiNote.Set(uistate.T("catSuggest.aiUnmatched", answer))
-			},
-			func(e string) { loading.Set(false); errText.Set(e) })
-	}))
-
-	save := ui.UseEvent(Prevent(func() {
+		runSmartAI(conn, smartcatview.CategorizeRequest(txn, cats), func(text string) {
+			loading.Set(false)
+			id, key, answer := smartcatview.CategoryAnswer(text, cats)
+			if id != "" {
+				chosen.Set(id)
+				aiNote.Set(uistate.T(key))
+				return
+			}
+			aiNote.Set(uistate.T(key, answer))
+		}, func(message string) { loading.Set(false); errText.Set(message) })
+	}
+	save := func() {
 		catID := chosen.Get()
 		if catID == "" {
 			errText.Set(uistate.T("catSuggest.needCategory"))
@@ -163,140 +114,146 @@ func CatSuggestBody(_ struct{}) ui.Node {
 			applyCatSuggestion(a, cur, catID)
 		}
 		uistate.CloseCatSuggest()
-	}))
-	askAIClick := OnClick(askAI)
-	saveSubmit := OnSubmit(save)
-	batchChange := OnChange(onBatch)
+	}
 	if !found {
 		return Fragment()
 	}
+	return ui.CreateElement(catSuggestForm, catSuggestFormProps{
+		Txn: txn, Categories: cats, Suggestion: suggestion, HasSuggestion: hasSuggestion, Why: why,
+		Chosen: chosen.Get(), PickerOpen: pickerOpen.Get(), Batch: batch.Get(), Others: others,
+		AIEnabled: aiEnabled, Loading: loading.Get(), AINote: aiNote.Get(), Error: errText.Get(),
+		OnSave: save, OnAsk: ask, OnPick: func(id string) { chosen.Set(id); errText.Set("") },
+		OnNewCategory: func() { pickerOpen.Set(true) }, OnBatch: func() { batch.Set(!batch.Get()) },
+		OnPickerPick:  func(id string) { chosen.Set(id); errText.Set(""); pickerOpen.Set(false) },
+		OnPickerClose: func() { pickerOpen.Set(false) },
+	})
+}
 
-	// The suggestion block: the proposal plus WHY, so the user judges it rather
-	// than trusts it. Absent when nothing local matched — which is exactly the
-	// case Smart+ exists for, so the copy says so instead of showing an empty row.
-	var suggestNode ui.Node
-	if hasSugg {
-		suggestNode = Div(css.Class("csug-suggest"), Attr("data-testid", "catsuggest-suggestion"),
-			Div(css.Class(tw.Text12, tw.TextDim), uistate.T("catSuggest.suggestedLabel")),
-			Div(css.Class("csug-suggest-row", tw.Flex, tw.ItemsCenter, tw.Gap2),
-				smartGlyph(false, tw.Fold(tw.W35, tw.H35)),
-				Span(css.Class("csug-suggest-name"), catname.LabelByID(cats, sugg.CategoryID)),
-			),
-			If(why != "", P(css.Class("csug-why", tw.Text12, tw.TextDim), why)),
-		)
-	} else {
-		suggestNode = P(css.Class("csug-none", tw.Text13, tw.TextDim),
-			Attr("data-testid", "catsuggest-none"), uistate.T("catSuggest.noSuggestion"))
-	}
+type catSuggestFormProps struct {
+	Txn                                                  domain.Transaction
+	Categories                                           []domain.Category
+	Suggestion                                           catsuggest.Suggestion
+	HasSuggestion                                        bool
+	Why, Chosen, AINote, Error                           string
+	PickerOpen, Batch, AIEnabled, Loading                bool
+	Others                                               int
+	OnSave, OnAsk, OnNewCategory, OnBatch, OnPickerClose func()
+	OnPick, OnPickerPick                                 func(string)
+}
 
-	var aiBtn ui.Node = Fragment()
-	if aiEnabled {
-		label := uistate.T("catSuggest.suggestAI")
-		if loading.Get() {
-			label = uistate.T("catSuggest.asking")
-		}
-		aiBtn = Button(css.Class("btn btn-sm btn-ghost", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
-			Attr("data-testid", "catsuggest-ai"), Attr("aria-disabled", ariaBool(loading.Get())), askAIClick,
-			smartGlyph(true, tw.Fold(tw.W35, tw.H35)), Span(label))
-	}
-
-	kind := domain.KindExpense
-	if txn.Amount.Amount > 0 {
-		kind = domain.KindIncome
-	}
-
-	pickerNode := Fragment()
-	if pickerOpen.Get() {
-		pickerNode = ui.CreateElement(CategoryPicker, CategoryPickerProps{
-			Kind: kind, Selected: chosen.Get(),
-			OnPick:  func(categoryID string) { chosen.Set(categoryID); errText.Set(""); pickerOpen.Set(false) },
-			OnClose: func() { pickerOpen.Set(false) },
+func catSuggestForm(p catSuggestFormProps) ui.Node {
+	save := ui.UseEvent(Prevent(p.OnSave))
+	newCategory := ui.UseEvent(p.OnNewCategory)
+	kind := smartcatview.CategoryKind(p.Txn)
+	picker := Fragment()
+	if p.PickerOpen {
+		picker = ui.CreateElement(CategoryPicker, CategoryPickerProps{
+			Kind: kind, Selected: p.Chosen, OnPick: p.OnPickerPick, OnClose: p.OnPickerClose,
 		})
 	}
 	return Fragment(Form(css.Class("csug", tw.FlexCol, tw.Gap3),
-		Attr("id", CatSuggestFormID), Attr("data-testid", "catsuggest-modal"), saveSubmit,
-		// The charge itself, read-only, so it is clear what is being filed.
+		Attr("id", CatSuggestFormID), Attr("data-testid", "catsuggest-modal"), OnSubmit(save),
 		Div(css.Class("csug-txn"),
 			Div(css.Class(tw.Text12, tw.TextDim), uistate.T("catSuggest.txnLabel")),
 			Div(css.Class("csug-txn-val"),
-				Span(css.Class("csug-txn-payee"), txnLabelOf(txn)),
-				Span(css.Class("csug-txn-amt"), fmtMoney(txn.Amount)),
+				Span(css.Class("csug-txn-payee"), smartcatview.TransactionLabel(p.Txn)),
+				Span(css.Class("csug-txn-amt"), smartcatview.TransactionAmount(p.Txn)),
 			),
 		),
-		suggestNode,
-		// The full list, so a wrong suggestion costs one dropdown rather than a
-		// trip to the edit modal.
+		ui.CreateElement(catSuggestEvidence, catSuggestEvidenceProps{
+			Available: p.HasSuggestion, Name: catname.LabelByID(p.Categories, p.Suggestion.CategoryID), Why: p.Why,
+		}),
 		uiw.FormField(uistate.T("catSuggest.pickLabel"),
 			Div(css.Class("csug-pick-row", tw.Flex, tw.ItemsCenter, tw.Gap2),
 				uiw.SelectInput(uiw.SelectInputProps{
-					AriaLabel: uistate.T("catSuggest.pickLabel"),
-					Selected:  chosen.Get(),
-					Options:   catSuggestOptions(cats, kind),
-					OnChange:  onPick,
-					TestID:    "catsuggest-pick",
+					AriaLabel: uistate.T("catSuggest.pickLabel"), Selected: p.Chosen,
+					Options: catSuggestOptions(p.Categories, kind), OnChange: p.OnPick, TestID: "catsuggest-pick",
 				}),
-				TxnNewCategoryAction("catsuggest-new-category", pickerOpen.Get(), onNewCategory),
-				aiBtn,
+				TxnNewCategoryAction("catsuggest-new-category", p.PickerOpen, newCategory),
+				ui.CreateElement(catSuggestAIAction, catSuggestAIActionProps{Enabled: p.AIEnabled, Loading: p.Loading, OnAsk: p.OnAsk}),
 			),
 		),
-		If(aiNote.Get() != "", P(css.Class("csug-ainote", tw.Text12, tw.TextDim),
-			Attr("data-testid", "catsuggest-ainote"), aiNote.Get())),
-		// One decision, every charge from this merchant. Offered only when there
-		// ARE others, so it is never a no-op dressed as a choice.
-		If(others > 0, Label(css.Class("csug-batch", tw.Flex, tw.ItemsCenter, tw.Gap2),
-			Style(map[string]string{"cursor": "pointer"}),
-			Input(append([]any{css.Class("cf-check"), Type("checkbox"),
-				Attr("data-testid", "catsuggest-batch"), batchChange}, checkedAttr(batch.Get())...)...),
-			Span(css.Class(tw.Text13), uistate.T("catSuggest.batchLabel", others)))),
-		If(errText.Get() != "", P(css.Class("err"), Attr("role", "alert"), errText.Get())),
-	), pickerNode)
+		If(p.AINote != "", P(css.Class("csug-ainote", tw.Text12, tw.TextDim), Attr("data-testid", "catsuggest-ainote"), p.AINote)),
+		ui.CreateElement(catSuggestBatch, catSuggestBatchProps{Others: p.Others, Checked: p.Batch, OnChange: p.OnBatch}),
+		If(p.Error != "", P(css.Class("err"), Attr("role", "alert"), p.Error)),
+	), picker)
 }
 
-// catSuggestOptions builds the picker's options: a "choose" placeholder, then
-// every category of the charge's own kind as a qualified label. Filtering by kind
-// is what stops an expense being handed an income category — the same sign rule
-// catsuggest and the Smart+ parsers enforce.
+type catSuggestEvidenceProps struct {
+	Available bool
+	Name, Why string
+}
+
+func catSuggestEvidence(p catSuggestEvidenceProps) ui.Node {
+	if !p.Available {
+		return P(css.Class("csug-none", tw.Text13, tw.TextDim), Attr("data-testid", "catsuggest-none"), uistate.T("catSuggest.noSuggestion"))
+	}
+	return Div(css.Class("csug-suggest"), Attr("data-testid", "catsuggest-suggestion"),
+		Div(css.Class(tw.Text12, tw.TextDim), uistate.T("catSuggest.suggestedLabel")),
+		Div(css.Class("csug-suggest-row", tw.Flex, tw.ItemsCenter, tw.Gap2),
+			smartGlyph(false, tw.Fold(tw.W35, tw.H35)), Span(css.Class("csug-suggest-name"), p.Name),
+		),
+		If(p.Why != "", P(css.Class("csug-why", tw.Text12, tw.TextDim), p.Why)),
+	)
+}
+
+type catSuggestAIActionProps struct {
+	Enabled, Loading bool
+	OnAsk            func()
+}
+
+func catSuggestAIAction(p catSuggestAIActionProps) ui.Node {
+	ask := ui.UseEvent(Prevent(p.OnAsk))
+	click := OnClick(ask)
+	if !p.Enabled {
+		return Fragment()
+	}
+	label := uistate.T(smartcatview.CategoryAskKey(p.Loading))
+	return Button(css.Class("btn btn-sm btn-ghost", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
+		Attr("data-testid", "catsuggest-ai"), Attr("aria-disabled", ariaBool(p.Loading)), click,
+		smartGlyph(true, tw.Fold(tw.W35, tw.H35)), Span(label))
+}
+
+type catSuggestBatchProps struct {
+	Others   int
+	Checked  bool
+	OnChange func()
+}
+
+func catSuggestBatch(p catSuggestBatchProps) ui.Node {
+	change := ui.UseEvent(p.OnChange)
+	option := OnChange(change)
+	return If(p.Others > 0, Label(css.Class("csug-batch", tw.Flex, tw.ItemsCenter, tw.Gap2),
+		Style(map[string]string{"cursor": "pointer"}),
+		Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "catsuggest-batch"), option}, checkedAttr(p.Checked)...)...),
+		Span(css.Class(tw.Text13), uistate.T("catSuggest.batchLabel", p.Others))))
+}
+
+// catSuggestOptions adapts the pure option values to the framework's props.
 func catSuggestOptions(cats []domain.Category, kind domain.CategoryKind) []uiw.SelectOption {
-	out := []uiw.SelectOption{{Value: "", Label: uistate.T("review.choose")}}
-	for _, o := range categoryOptions(cats, kind) {
-		out = append(out, uiw.SelectOption{Value: o.ID, Label: o.Path})
+	options := smartcatview.CategoryOptions(cats, kind, uistate.T("review.choose"))
+	out := make([]uiw.SelectOption, 0, len(options))
+	for _, o := range options {
+		out = append(out, uiw.SelectOption{Value: o.Value, Label: o.Label})
 	}
 	return out
 }
 
-// applyCatSuggestionToMerchant files every UNCATEGORIZED charge from the same
-// merchant, plus the one in hand, under a category — one undo point for the lot.
-//
-// It deliberately leaves already-categorized charges alone. "Also file the other
-// N" is an offer to finish the job, not to overwrite decisions the user already
-// made, and the count in the label is built from the same predicate so the number
-// they agreed to is the number that moves.
+// applyCatSuggestionToMerchant persists one undoable, merchant-scoped confirmation.
 func applyCatSuggestionToMerchant(app *appstate.App, txn domain.Transaction, categoryID string) {
 	if app == nil || categoryID == "" {
 		return
 	}
-	key := reviewqueue.MerchantKey(txn)
-	if key == "" {
+	if reviewqueue.MerchantKey(txn) == "" {
 		applyCatSuggestion(app, txn, categoryID)
 		return
 	}
-	var writes []domain.Transaction
-	var ids []string
-	for _, t := range app.Transactions() {
-		if t.IsTransfer() || (t.ID != txn.ID && (t.CategoryID != "" || reviewqueue.MerchantKey(t) != key)) {
-			continue
-		}
-		writes = append(writes, txnreview.Confirm(t, categoryID))
-		ids = append(ids, t.ID)
-	}
+	writes, ids := smartcatview.MerchantWrites(txn, app.Transactions(), categoryID)
 	if len(writes) == 0 {
 		return
 	}
 	name := catname.LabelByID(app.Categories(), categoryID)
-	label := uistate.T("catSuggest.filedUndo", name)
-	if len(writes) > 1 {
-		label = uistate.T("catSuggest.filedBatchUndo", len(writes), name)
-	}
+	label := smartcatview.FiledLabel(len(writes), name, uistate.T)
 	_ = CommitUndoable(app, label, ids, func() error {
 		if err := app.PutTransactionsAtomic(writes); err != nil {
 			return err

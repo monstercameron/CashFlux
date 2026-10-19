@@ -90,6 +90,7 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- Move category suggestions and transaction drafts into tested pure logic.
 - Extract transaction review decisions and split review screens into stable components.
 - Extract recurring bill calculations and presentation into tested pure logic.
 - Extract budget cover selection, planning and presentation into tested pure logic.
