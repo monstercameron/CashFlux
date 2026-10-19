@@ -187,12 +187,13 @@ func txnCountLineComponent(props txnCountLineProps) ui.Node {
 	if searchWidenAction != nil {
 		band = append(band, searchWidenAction)
 	}
+	var visibleFacts ui.Node
 	if len(secondaryText) > 0 {
-		visibleFacts := make([]ui.Node, 0, len(secondaryText))
+		factNodes := make([]ui.Node, 0, len(secondaryText))
 		for _, fact := range secondaryText {
-			visibleFacts = append(visibleFacts, Span(css.Class("txn-count-fact"), fact))
+			factNodes = append(factNodes, Span(css.Class("txn-count-fact"), fact))
 		}
-		band = append(band, Div(css.Class("txn-count-secondary", "txn-count-visible-facts"), Attr("data-testid", "txn-count-visible-facts"), visibleFacts))
+		visibleFacts = Div(css.Class("txn-count-secondary", "txn-count-visible-facts"), Attr("data-testid", "txn-count-visible-facts"), factNodes)
 	}
 	if upcoming != nil {
 		band = append(band, Div(css.Class("txn-count-upcoming-fact"), upcoming))
@@ -202,10 +203,12 @@ func txnCountLineComponent(props txnCountLineProps) ui.Node {
 		accessibleSummary = uistate.T("v5sum.filteredSummary", period, txnCountTransactionCount(props.Shown), fmtMoney(spent))
 	}
 	accessible := []string{accessibleSummary}
-	accessible = append(accessible, secondaryText...)
+	if len(secondaryText) > 1 {
+		accessible = append(accessible, secondaryText[1:]...)
+	}
 	return txnCountRoot(announceFilterChange, strings.Join(accessible, ". "),
 		Div(css.Class("txn-countline", tw.MinW0), Attr("data-testid", "txn-count-line"),
-			Div(css.Class("txn-count-band"), band)))
+			Div(css.Class("txn-count-band"), Attr("data-testid", "txn-count-band"), band), visibleFacts))
 }
 
 func txnSearchAllDatesAction(count int, click any) ui.Node {
@@ -285,35 +288,37 @@ func txnCategoryBreakdownComponent(props txnCategoryBreakdownProps) ui.Node {
 			break
 		}
 	}
-	segments := make([]ui.Node, 0, len(categories))
+	barCategories := txnCategoryTopFive(categories, selected)
+	segments := make([]ui.Node, 0, len(barCategories))
 	items := make([]ui.Node, 0, len(categories))
 	accessibleItems := make([]ui.Node, 0, len(categories))
 	visibleCount := 3
-	for _, category := range categories {
+	for _, category := range barCategories {
 		category.Share = txnCategoryShare(category.Minor, total)
 		isSelected := selected == "__uncategorized__" && category.ID == "" || selected != "" && selected != "__uncategorized__" && category.ID == selected
 		props := txnCategorySegmentProps{Category: category, Selected: isSelected, Dimmed: selected != "" && !isSelected}
 		segments = append(segments, ui.CreateElement(txnCategorySegment, props))
-		items = append(items, ui.CreateElement(txnCategoryListItem, props))
+	}
+	for _, category := range categories {
+		category.Share = txnCategoryShare(category.Minor, total)
+		isSelected := selected == "__uncategorized__" && category.ID == "" || selected != "" && selected != "__uncategorized__" && category.ID == selected
+		itemProps := txnCategorySegmentProps{Category: category, Selected: isSelected, Dimmed: selected != "" && !isSelected}
+		items = append(items, ui.CreateElement(txnCategoryListItem, itemProps))
 		accessibleItems = append(accessibleItems, Div(Attr("role", "listitem"), category.Name, " ", fmtMoney(money.New(category.Minor, txnCountBaseCurrency()))))
 	}
-	if !expanded.Get() && len(categories) > visibleCount {
-		for i := range items {
-			if categories[i].ID == "__other__" && i >= visibleCount {
+	if len(categories) > visibleCount {
+		for i, category := range categories {
+			if category.ID == "__other__" && i >= visibleCount {
 				items[visibleCount-1], items[i] = items[i], items[visibleCount-1]
 				break
 			}
 		}
-	}
-	if len(categories) > visibleCount {
-		if !expanded.Get() {
-			items = items[:visibleCount]
-		}
+		items = items[:visibleCount]
 		label := uistate.T("v5sum.more", len(categories)-visibleCount)
 		if expanded.Get() {
-			label = uistate.T("tv7b.less")
+			label = uistate.T("tv8c.closeList")
 		}
-		items = append(items, Button(css.Class("txn-category-more"), Type("button"), Attr("data-testid", "txn-category-more"), Attr("aria-expanded", ariaBool(expanded.Get())), toggleClick, label))
+		items = append(items, Button(css.Class("txn-category-more"), Type("button"), Attr("data-testid", "txn-category-more"), Attr("aria-controls", "txn-category-popover"), Attr("aria-haspopup", "dialog"), Attr("aria-expanded", ariaBool(expanded.Get())), toggleClick, label))
 	}
 	breakdownClass := "txn-category-breakdown"
 	if selected != "" {
@@ -322,10 +327,26 @@ func txnCategoryBreakdownComponent(props txnCategoryBreakdownProps) ui.Node {
 	if expanded.Get() {
 		breakdownClass += " is-expanded"
 	}
+	var popover ui.Node
+	if expanded.Get() {
+		allItems := make([]ui.Node, 0, len(categories))
+		for _, category := range categories {
+			category.Share = txnCategoryShare(category.Minor, total)
+			isSelected := selected == "__uncategorized__" && category.ID == "" || selected != "" && selected != "__uncategorized__" && category.ID == selected
+			allItems = append(allItems, ui.CreateElement(txnCategoryPopoverItem, txnCategorySegmentProps{Category: category, Selected: isSelected, Dimmed: selected != "" && !isSelected}))
+		}
+		popover = Div(css.Class("txn-category-popover"), Attr("id", "txn-category-popover"), Attr("role", "dialog"), Attr("aria-label", uistate.T("tv8c.categoryList")), Attr("data-testid", "txn-category-popover"), allItems)
+	}
 	return Div(css.Class(breakdownClass),
 		Div(css.Class("txn-category-bar"), Attr("role", "group"), Attr("aria-label", uistate.T("uxt1.categoryBreakdown")), segments),
 		Div(css.Class("txn-category-list"), items),
+		popover,
 		Div(css.Class("sr-only", "txn-category-accessible-list"), Attr("role", "list"), accessibleItems))
+}
+
+func txnCategoryPopoverItem(props txnCategorySegmentProps) ui.Node {
+	item := txnCategoryListItem(props)
+	return Div(css.Class("txn-category-popover-row"), item, Span(css.Class("txn-category-share"), fmt.Sprintf("%.1f%%", props.Category.Share)))
 }
 
 type txnCategorySegmentProps struct {
@@ -489,7 +510,11 @@ func txnCategoryTopFive(categories []txnCategoryTotal, selected string) []txnCat
 			selectedFound = true
 			continue
 		}
-		other.Minor += category.Minor
+		var err error
+		other.Minor, err = money.Add(other.Minor, category.Minor)
+		if err != nil {
+			return categories
+		}
 	}
 	if other.Minor == 0 {
 		return result

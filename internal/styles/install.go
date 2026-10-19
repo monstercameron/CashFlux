@@ -177,6 +177,7 @@ func Register() {
 	registerTV8J()
 	registerTV8B()
 	registerTV8D()
+	registerTV8C()
 	inject(Build())
 }
 

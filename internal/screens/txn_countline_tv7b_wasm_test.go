@@ -21,7 +21,7 @@ func TestTV7BMoreCategoriesIsKeyboardActionAndRevealsFullList(t *testing.T) {
 	f := render.New(t)
 	f.Render(txnCategoryBreakdown(categories, "", 20000))
 	more := r2aByTestID(f, "button", "txn-category-more")
-	if more == nil || more.Attr("aria-expanded") != "false" {
+	if more == nil || more.Attr("aria-expanded") != "false" || more.Attr("aria-haspopup") != "dialog" {
 		t.Fatalf("more categories control is not an accessible button: %v", more)
 	}
 	segment := findCategoryButton(f, "txn-category-segment", "a")
@@ -33,8 +33,11 @@ func TestTV7BMoreCategoriesIsKeyboardActionAndRevealsFullList(t *testing.T) {
 	if expanded := r2aByTestID(f, "button", "txn-category-more"); expanded == nil || expanded.Attr("aria-expanded") != "true" {
 		t.Fatalf("disclosure did not open: %v", expanded)
 	}
+	if popover := r2aByTestID(f, "div", "txn-category-popover"); popover == nil || popover.Attr("role") != "dialog" {
+		t.Fatal("more categories should open a labeled popover")
+	}
 	if item := findCategoryButton(f, "txn-category-item", "e"); item == nil {
-		t.Fatal("expanded category list omitted Health")
+		t.Fatal("category popover omitted Health")
 	}
 }
 
