@@ -417,10 +417,6 @@ func (c Criteria) AllCriteria() []ActiveFilter {
 	return append(out, c.PageFilters()...)
 }
 
-// ActiveFilters returns all active criteria, including date bounds. Use
-// PageFilters for page-level chips, badges, and clear-all behavior.
-func (c Criteria) ActiveFilters() []ActiveFilter { return c.AllCriteria() }
-
 // ActiveCount is the number of engaged filters — the number shown on the
 // "Filters" trigger badge.
 func (c Criteria) ActiveCount() int { return len(c.PageFilters()) }

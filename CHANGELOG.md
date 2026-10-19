@@ -99,6 +99,11 @@ and every commit updates this file under `Unreleased`.
   complete build in charge.
 
 ### Changed
+- **A steadier toolbar and creating from the bulk picker (R10T, CAT2).** The "STATUS: Reconciled / Cleared"
+  legend line is gone (each glyph keeps its tooltip and accessible name), so the first row sits higher; the
+  Filters button keeps one width with or without its badge, so nothing shifts while searching; the bulk Category
+  picker offers "Create '<typed>'" when nothing matches, opening the shared picker prefilled and applying the
+  new category to the selection with Undo.
 - **Recategorize from the ledger, and link in two clicks (R10W, CAT7).** An uncategorized row shows
   "Uncategorized" with its suggestion and a "Choose…" button; clicking a category opens the shared picker,
   including creating a new category, and applies it with one write and an Undo. "Link to…" in the row menu is a

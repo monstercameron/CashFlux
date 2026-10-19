@@ -2489,7 +2489,10 @@ func registerGenerated() {
 		minWidth("0"),
 	)
 	rule(".filter-toolbar-primary .filters-trigger",
-		flexShrink("0"),
+		width("7.5rem"),
+		flex("0 0 7.5rem"),
+		boxSizing("border-box"),
+		justifyContent("center"),
 	)
 	rule(".filter-toolbar-actions",
 		display("flex"),

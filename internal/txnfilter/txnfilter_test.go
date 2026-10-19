@@ -190,9 +190,6 @@ func TestPeriodBoundsDoNotCountAsActiveUserFilters(t *testing.T) {
 	if got := c.AllCriteria(); len(got) != len(wantAll) || got[0] != wantAll[0] || got[1] != wantAll[1] || got[2] != wantAll[2] {
 		t.Fatalf("AllCriteria() = %+v, want From and To followed by the text filter", got)
 	}
-	if got := c.ActiveFilters(); len(got) != 3 || got[0].Field != FieldFrom || got[1].Field != FieldTo {
-		t.Fatalf("ActiveFilters() = %+v, want all criteria including dates", got)
-	}
 }
 
 func TestPageFiltersAndClearKeepPeriod(t *testing.T) {

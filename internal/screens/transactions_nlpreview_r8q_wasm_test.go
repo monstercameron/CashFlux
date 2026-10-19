@@ -27,7 +27,7 @@ func TestNaturalLanguagePreviewIncludesQueryDateBounds(t *testing.T) {
 	}
 
 	var preview []string
-	for _, criterion := range parsed.ActiveFilters() {
+	for _, criterion := range parsed.AllCriteria() {
 		switch criterion.Field {
 		case txnfilter.FieldFrom:
 			preview = append(preview, uistate.T("transactions.chipFrom", formatTxnChipDateWith(criterion.Value, func(date time.Time) string { return date.Format("Jan 2") })))

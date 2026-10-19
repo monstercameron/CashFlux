@@ -47,3 +47,23 @@ func TestTransactionToolbarUsesControlBoundary(t *testing.T) {
 		}
 	}
 }
+
+func TestR10TFiltersTriggerKeepsItsWidthWhenBadgeAppears(t *testing.T) {
+	resetSheet()
+	registerGenerated()
+	css := Build()
+	start := strings.Index(css, ".filter-toolbar-primary .filters-trigger{")
+	if start < 0 {
+		t.Fatal("filters trigger rule is missing")
+	}
+	end := strings.Index(css[start:], "}")
+	if end < 0 {
+		t.Fatal("filters trigger rule is incomplete")
+	}
+	rule := css[start : start+end+1]
+	for _, want := range []string{"width:7.5rem", "flex:0 0 7.5rem", "box-sizing:border-box"} {
+		if !strings.Contains(rule, want) {
+			t.Errorf("filters trigger rule %q does not reserve a fixed badge slot (%s)", rule, want)
+		}
+	}
+}

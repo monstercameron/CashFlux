@@ -1031,7 +1031,7 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	if q := strings.TrimSpace(f.Text); q != "" && uistate.LoadSmartSettings().IsEnabled("SMART-T3F") {
 		if parsed, nlOK := nlfilter.Parse(q, nlContext()); nlOK {
 			var previews []string
-			for _, af := range parsed.ActiveFilters() {
+			for _, af := range parsed.AllCriteria() {
 				previews = append(previews, chipLabel(af))
 			}
 			preview := strings.Join(previews, " · ")
@@ -1424,22 +1424,7 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 		CashflowProvided: true,
 	})
 
-	// Status-glyph legend: the compact ✓✓ / ✓ / • markers a row wears (reconciled /
-	// cleared / needs review) are otherwise undecoded shape+color, so a small key
-	// spells each one out — labelled, not color-or-shape alone (a11y).
-	//
-	// Show it only when at least one visible row carries a cleared or reconciled
-	// glyph. Needs-review and unconfirmed states are written out elsewhere in the
-	// row, so they do not make this settlement-glyph legend relevant.
-	//
-	var legend ui.Node = Fragment()
-	if txnHasStatusGlyph(props.Shown) {
-		legend = txnStatusLegend()
-	}
-	// Count and legend share one row (C582): they are both "how to read the rows
-	// below", and above the ledger every row of chrome is a row the user scrolls
-	// past to reach the thing they came for.
-	footRow := Div(css.Class("txn-toolbar-foot"), countLine, legend)
+	footRow := txnToolbarFoot(countLine)
 
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "txn-toolbar", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
@@ -1453,17 +1438,12 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 	})
 }
 
-func txnHasStatusGlyph(transactions []domain.Transaction) bool {
-	for _, txn := range transactions {
-		if txn.Cleared {
-			return true
-		}
-	}
-	return false
-}
-
 // txnUserColumnVisible limits the member column to an Everyone view with multiple
 // household members.
+func txnToolbarFoot(countLine ui.Node) ui.Node {
+	return Div(css.Class("txn-toolbar-foot"), countLine)
+}
+
 func txnUserColumnVisible(enabled bool, memberScope string, memberCount int) bool {
 	return enabled && memberScope == "" && memberCount > 1
 }
@@ -1542,25 +1522,6 @@ func txnMemberInitials(name string) string {
 	return initials
 }
 
-// txnStatusLegend is the compact key for the ledger's row status glyphs. Each item
-// pairs the exact glyph a row renders (✓✓ reconciled, ✓ cleared, • needs review)
-// with a plain-English label and the same full-sentence tooltip the row badge uses,
-// so the markers never rely on shape or color alone. It's a single quiet line, kept
-// out of the resting toolbar rows so the ledger stays close to the top.
-func txnStatusLegend() ui.Node {
-	item := func(glyph, label, title, testID string) ui.Node {
-		return Span(css.Class("txn-legend-item"), Attr("data-testid", testID), Attr("title", title),
-			Span(css.Class("txn-legend-glyph"), Attr("aria-hidden", "true"), glyph),
-			Span(css.Class("txn-legend-text"), label))
-	}
-	return Div(css.Class("txn-legend"), Attr("data-testid", "txn-status-legend"),
-		Attr("role", "note"), Attr("aria-label", uistate.T("acctxn.legendAria")),
-		Span(css.Class("txn-legend-label"), uistate.T("acctxn.legendLabel")),
-		item("✓✓", uistate.T("acctxn.legendReconciled"), uistate.T("transactions.reconciledBadgeTitle"), "txn-legend-reconciled"),
-		item("✓", uistate.T("acctxn.legendCleared"), uistate.T("transactions.clearedBadgeTitle"), "txn-legend-cleared"),
-	)
-}
-
 // TxnColumnsBody is the body of the "show / hide columns" flip modal: a checkbox
 // per optional ledger column, writing the persisted visibility atom so the table
 // re-renders in step. Date and Description are the row's identity and always show,
@@ -1601,8 +1562,9 @@ type txnBulkBarProps struct {
 }
 
 type txnBulkPickerOption struct {
-	Value string
-	Label string
+	Value  string
+	Label  string
+	Create bool
 }
 
 type txnBulkPickerProps struct {
@@ -1612,6 +1574,7 @@ type txnBulkPickerProps struct {
 	SearchLabel string
 	Options     []txnBulkPickerOption
 	OnChoose    func(string)
+	OnCreate    func(string)
 }
 
 type txnBulkPickerOptionProps struct {
@@ -1619,15 +1582,24 @@ type txnBulkPickerOptionProps struct {
 	Index    int
 	Option   txnBulkPickerOption
 	Selected bool
-	OnChoose func(string)
+	OnChoose func(txnBulkPickerOption)
 }
 
 func txnBulkPickerOptionRow(props txnBulkPickerOptionProps) ui.Node {
-	onChoose := ui.UseEvent(Prevent(func() { props.OnChoose(props.Option.Value) }))
+	onChoose := ui.UseEvent(Prevent(func() { props.OnChoose(props.Option) }))
 	return Button(css.Class("bulk-picker-option"), Type("button"),
 		Attr("role", "option"), Attr("id", fmt.Sprintf("%s-option-%d", props.PickerID, props.Index)),
 		Attr("aria-selected", ariaBool(props.Selected)), Attr("data-testid", props.PickerID+"-option"),
 		OnClick(onChoose), props.Option.Label)
+}
+
+func txnBulkCategoryPicker(initialQuery string, kind domain.CategoryKind, onPick func(string), onClose func()) ui.Node {
+	return ui.CreateElement(CategoryPicker, CategoryPickerProps{
+		Kind:         kind,
+		InitialQuery: initialQuery,
+		OnPick:       onPick,
+		OnClose:      onClose,
+	})
 }
 
 // txnBulkPicker commits a bulk assignment only after an explicit Enter or click.
@@ -1647,6 +1619,11 @@ func txnBulkPicker(props txnBulkPickerProps) ui.Node {
 			filtered = append(filtered, option)
 		}
 	}
+	if props.OnCreate != nil && needle != "" && len(filtered) == 0 {
+		filtered = append(filtered, txnBulkPickerOption{
+			Value: "__create_category__", Label: uistate.T("r10t.createCategory", strings.TrimSpace(query.Get())), Create: true,
+		})
+	}
 	activeIndex := active.Get()
 	if activeIndex >= len(filtered) {
 		activeIndex = 0
@@ -1663,7 +1640,11 @@ func txnBulkPicker(props txnBulkPickerProps) ui.Node {
 		return nil
 	}, open.Get())
 	choose := func(option txnBulkPickerOption) {
-		props.OnChoose(option.Value)
+		if option.Create {
+			props.OnCreate(strings.TrimSpace(query.Get()))
+		} else {
+			props.OnChoose(option.Value)
+		}
 		close()
 	}
 	onToggle := ui.UseEvent(Prevent(func() { open.Set(!open.Get()) }))
@@ -1707,7 +1688,7 @@ func txnBulkPicker(props txnBulkPickerProps) ui.Node {
 		options := make([]ui.Node, 0, len(filtered))
 		for i, option := range filtered {
 			options = append(options, ui.CreateElement(txnBulkPickerOptionRow, txnBulkPickerOptionProps{
-				PickerID: props.ID, Index: i, Option: option, Selected: i == activeIndex, OnChoose: func(value string) { choose(option) },
+				PickerID: props.ID, Index: i, Option: option, Selected: i == activeIndex, OnChoose: choose,
 			}))
 		}
 		popup = Div(css.Class("bulk-picker-popover"),
@@ -1741,6 +1722,9 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 	undoAtom := uistate.UseTxnUndo()
 	tagOpen := ui.UseState(false)
 	tagValue := ui.UseState("")
+	categoryPickerOpen := ui.UseState(false)
+	categoryPickerQuery := ui.UseState("")
+	categoryPickerKind := ui.UseState(domain.KindExpense)
 
 	clearSel := func() {
 		selAtom.Set(map[string]bool{})
@@ -2109,6 +2093,20 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 			applyBulkCategory(picked)
 		}
 	}
+	onCreateBulkCategory := func(name string) {
+		categoryPickerQuery.Set(name)
+		kind := domain.KindExpense
+		for _, txn := range app.Transactions() {
+			if selAtom.Get()[txn.ID] && !txn.IsTransfer() {
+				if txn.Amount.Amount > 0 {
+					kind = domain.KindIncome
+				}
+				break
+			}
+		}
+		categoryPickerKind.Set(kind)
+		categoryPickerOpen.Set(true)
+	}
 	onBulkMem := func(picked string) {
 		bulkMemAtom.Set(picked)
 		if picked != "" {
@@ -2166,7 +2164,7 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 		"background":  "var(--bg-card)", "border-top": "1px solid var(--border)",
 	}),
 		Span(css.Class("bulk-count", tw.ShrinkO), Attr("aria-label", uistate.T("transactions.selected", plural(n, "transaction"))), uistate.T("transactions.bulkSelectedShort", n)),
-		ui.CreateElement(txnBulkPicker, txnBulkPickerProps{ID: "bulk-category-picker", Label: uistate.T("transactions.categoryToApply"), Placeholder: uistate.T("r1c.category"), SearchLabel: uistate.T("r5b.searchCategories"), Options: catOptions, OnChoose: onBulkCat}),
+		ui.CreateElement(txnBulkPicker, txnBulkPickerProps{ID: "bulk-category-picker", Label: uistate.T("transactions.categoryToApply"), Placeholder: uistate.T("r1c.category"), SearchLabel: uistate.T("r5b.searchCategories"), Options: catOptions, OnChoose: onBulkCat, OnCreate: onCreateBulkCategory}),
 		If(len(app.Members()) > 0, ui.CreateElement(txnBulkPicker, txnBulkPickerProps{ID: "bulk-member-picker", Label: uistate.T("transactions.memberToAssign"), Placeholder: uistate.T("r1c.person"), SearchLabel: uistate.T("r5b.searchPeople"), Options: memOptions, OnChoose: onBulkMem})),
 		toolbarIconBtnTitled("bulk-mark-reviewed", icon.CheckCircle, uistate.T("r1c.markReviewed"), uistate.T("r1c.markReviewed"), bulkMarkReviewed, ""),
 		Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "bulk-add-tag"), Attr("aria-expanded", ariaBool(tagOpen.Get())), OnClick(toggleTagInput), uistate.T("r1c.addTagEllipsis")),
@@ -2174,6 +2172,10 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 		moreActions,
 		toolbarIconBtnTitled("bulk-delete", icon.Trash, uistate.T("txp3.bulkDeleteSelected"), uistate.T("txp3.bulkDeleteSelected"), bulkDelete, "danger"),
 		Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "bulk-clear-selection"), Attr("aria-label", uistate.T("r1c.clearSelection")), OnClick(clearSelection), uistate.T("r1c.clearSelection")),
+		If(categoryPickerOpen.Get(), txnBulkCategoryPicker(categoryPickerQuery.Get(), categoryPickerKind.Get(),
+			func(categoryID string) { categoryPickerOpen.Set(false); onBulkCat(categoryID) },
+			func() { categoryPickerOpen.Set(false) },
+		)),
 	)
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "txn-bulkbar", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,

@@ -5,31 +5,22 @@
 package screens
 
 import (
-	"strings"
 	"testing"
 
-	"github.com/monstercameron/CashFlux/internal/domain"
+	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/v5/testkit/render"
 	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
 
-func TestGATE4StatusLegendTracksRenderedSettlementGlyphs(t *testing.T) {
-	if txnHasStatusGlyph([]domain.Transaction{{Reviewed: false}, {Tags: []string{"needs-review"}}}) {
-		t.Fatal("rows without cleared settlement state should not show the glyph legend")
-	}
-	if !txnHasStatusGlyph([]domain.Transaction{{Cleared: true}}) {
-		t.Fatal("a cleared row renders a settlement glyph and should show the legend")
-	}
-
+func TestR10TRemovesStatusLegendAboveLedger(t *testing.T) {
 	f := render.New(t)
-	f.Render(txnStatusLegend())
-	got := f.Text()
-	if !strings.Contains(got, "Cleared") || !strings.Contains(got, "Reconciled") {
-		t.Fatalf("settlement legend is missing an indicator actually rendered by rows: %q", got)
+	f.Render(txnToolbarFoot(P("October 2026 · 14 transactions")))
+	if got := f.Text(); got != "October 2026 · 14 transactions" {
+		t.Fatalf("toolbar foot text = %q, want only the count line", got)
 	}
-	for _, node := range f.AllByTag("span") {
-		if id := node.Attr("data-testid"); id == "txn-legend-review" || id == "txn-legend-unconfirmed" {
-			t.Fatalf("legend still lists non-glyph row states: %s", id)
+	for _, node := range f.AllByTag("div") {
+		if node.Attr("data-testid") == "txn-status-legend" {
+			t.Fatal("status legend still renders above the ledger")
 		}
 	}
 }
