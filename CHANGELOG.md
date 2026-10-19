@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Component library, first piece: menu logic (LIB1E).** `internal/ui/menu_pure.go` holds the platform-free rules
+  every menu will share — hide only what is explicitly hidden, group adjacent sections, drop a heading over a single
+  item, keep submenus — with a property test proving no visible action is ever dropped or reordered (the bug that once
+  cut the row menu to eight items). Not wired into a menu yet.
 - **One rule for which account a new transaction starts on (DF1).** `accountselect.Resolve` picks a valid explicit
   choice, then the active member's default, then the workspace default, then the existing most-used heuristic, and
   reports which tier chose it; missing or archived defaults are skipped, never rewritten. Not wired in yet.
