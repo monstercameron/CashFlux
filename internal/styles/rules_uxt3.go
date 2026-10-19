@@ -7,7 +7,7 @@ func registerRulesUXT3() {
 		display("none"),
 	)
 	ruleMedia("(max-width: 1180px)", ".txn-responsive-toolbar .filter-toolbar-primary",
-		flexWrap("nowrap"),
+		flexWrap("wrap"),
 	)
 	ruleMedia("(max-width: 1180px)", ".txn-responsive-toolbar .filter-toolbar-primary .fctrl-search",
 		flex("1 1 0"),
@@ -17,7 +17,7 @@ func registerRulesUXT3() {
 		whiteSpace("nowrap"),
 	)
 	ruleMedia("(max-width: 1180px)", ".txn-responsive-toolbar .filter-toolbar-actions",
-		flexWrap("nowrap"),
+		flexWrap("wrap"),
 		minWidth("0"),
 	)
 	ruleMedia("(max-width: 1180px)", ".txn-responsive-toolbar .filter-toolbar-actions, .txn-responsive-toolbar .filter-toolbar-actions *",
@@ -51,6 +51,13 @@ func registerRulesUXT3() {
 		tableLayout("fixed"),
 		width("100%"),
 	)
+	ruleMedia("(max-width: 1180px)", ".bento-ledger .txn-table tbody tr.row",
+		display("table-row"),
+	)
+	ruleMedia("(max-width: 1180px)", ".bento-ledger .txn-table tbody tr.row > td",
+		display("table-cell"),
+		verticalAlign("middle"),
+	)
 	ruleMedia("(max-width: 1180px)", ".bento-ledger .txn-table thead",
 		display("table-header-group !important"),
 	)
@@ -77,6 +84,13 @@ func registerRulesUXT3() {
 	ruleMedia("(max-width: 1180px)", ".txn-table .row-desc-inner",
 		flexWrap("wrap"),
 	)
+	ruleMedia("(max-width: 1180px)", ".txn-table .txn-desc-mainline",
+		flexWrap("wrap"),
+	)
+	ruleMedia("(max-width: 1180px)", ".txn-table .txn-desc-mainline .row-desc-text",
+		flex("1 1 120px"),
+		minWidth("120px"),
+	)
 	ruleMedia("(max-width: 1180px)", ".txn-table .txn-col-amount",
 		width("112px"),
 		minWidth("112px"),
@@ -85,6 +99,7 @@ func registerRulesUXT3() {
 	ruleMedia("(max-width: 1180px)", ".txn-table .txn-col-actions",
 		width("76px"),
 		minWidth("76px"),
+		whiteSpace("nowrap"),
 	)
 	ruleMedia("(max-width: 1180px)", ".txn-table .td-date",
 		width("94px"),

@@ -11,11 +11,15 @@ func registerUXT5() {
 		fontSize("16px"), lineHeight("1"), cursor("pointer"),
 	)
 	rule(".txn-row-info-wrap", position("relative"), flex("0 0 24px"), width("24px"), height("24px"))
+	rule(".txn-row-info-text",
+		display("block"), flex("1 0 100%"), maxWidth("100%"), marginTop(".15rem"),
+		fontSize("12px"), lineHeight("1.3"), fontWeight("400"), color("var(--text-dim)"),
+	)
 	rule(".txn-table td.row-desc-cell .row-desc-inner",
 		flexDirection("column"), alignItems("stretch"), gap("0"),
 	)
 	rule(".txn-table td.row-desc-cell .txn-desc-mainline",
-		display("flex"), alignItems("center"), gap("0.4rem"), minWidth("0"), width("100%"),
+		display("flex"), flexWrap("wrap"), alignItems("center"), gap("0.4rem"), minWidth("0"), width("100%"),
 	)
 	rule(".txn-table td.row-desc-cell .txn-desc-tags",
 		alignSelf("flex-start"), maxWidth("100%"), width("100%"), height("19px"), flex("0 0 19px"),
