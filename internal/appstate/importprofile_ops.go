@@ -52,12 +52,33 @@ func (a *App) writeImportProfiles(profiles []scopedImportProfile) error {
 
 // ImportProfiles returns the current list of saved import profiles.
 // The returned slice is a copy; mutations do not affect the registry.
-func (a *App) ImportProfiles(workspaceID ...string) []importmap.SavedProfile {
-	scope := profileWorkspace(workspaceID)
+func (a *App) ImportProfiles(workspaceID string) []importmap.SavedProfile {
+	scope := strings.TrimSpace(workspaceID)
+	if scope == "" {
+		a.log.Error("list import profiles", "err", "workspace ID is required")
+		return nil
+	}
 	profiles, err := a.readImportProfiles()
 	if err != nil {
 		a.log.Error("list import profiles", "err", err)
 		return nil
+	}
+	// Older releases saved profiles without a workspace scope. Adopt those
+	// records into the first workspace that loads the profile list, and persist
+	// the move before returning them so a failed write cannot be mistaken for a
+	// completed migration.
+	migrated := false
+	for i := range profiles {
+		if profiles[i].WorkspaceID == "" {
+			profiles[i].WorkspaceID = scope
+			migrated = true
+		}
+	}
+	if migrated {
+		if err := a.writeImportProfiles(profiles); err != nil {
+			a.log.Error("migrate import profiles", "err", err)
+			return nil
+		}
 	}
 	var out []importmap.SavedProfile
 	for _, record := range profiles {
@@ -68,19 +89,15 @@ func (a *App) ImportProfiles(workspaceID ...string) []importmap.SavedProfile {
 	return out
 }
 
-func profileWorkspace(workspaceID []string) string {
-	if len(workspaceID) == 0 {
-		return ""
-	}
-	return strings.TrimSpace(workspaceID[0])
-}
-
 // SaveImportProfile adds or updates a saved import profile. If sp.ID is empty
 // a new ID is assigned. If a profile with that ID already exists it is
 // replaced. The profile name must not be blank.
-func (a *App) SaveImportProfile(sp importmap.SavedProfile, workspaceID ...string) (importmap.SavedProfile, error) {
+func (a *App) SaveImportProfile(sp importmap.SavedProfile, workspaceID string) (importmap.SavedProfile, error) {
 	if err := a.roleGuard(); err != nil {
 		return importmap.SavedProfile{}, err
+	}
+	if strings.TrimSpace(workspaceID) == "" {
+		return importmap.SavedProfile{}, fmt.Errorf("appstate: workspace ID is required")
 	}
 	if strings.TrimSpace(sp.Profile.Name) == "" {
 		return importmap.SavedProfile{}, fmt.Errorf("appstate: import profile name is required")
@@ -92,7 +109,7 @@ func (a *App) SaveImportProfile(sp importmap.SavedProfile, workspaceID ...string
 	if err != nil {
 		return importmap.SavedProfile{}, err
 	}
-	scope := profileWorkspace(workspaceID)
+	scope := strings.TrimSpace(workspaceID)
 	for i, existing := range profiles {
 		if existing.WorkspaceID == scope && existing.Profile.ID == sp.ID {
 			profiles[i].Profile = sp
@@ -113,15 +130,18 @@ func (a *App) SaveImportProfile(sp importmap.SavedProfile, workspaceID ...string
 
 // DeleteImportProfile removes the saved profile with the given ID. It is a
 // no-op (and returns nil) when no profile with that ID exists.
-func (a *App) DeleteImportProfile(profileID string, workspaceID ...string) error {
+func (a *App) DeleteImportProfile(profileID string, workspaceID string) error {
 	if err := a.roleGuard(); err != nil {
 		return err
+	}
+	if strings.TrimSpace(workspaceID) == "" {
+		return fmt.Errorf("appstate: workspace ID is required")
 	}
 	profiles, err := a.readImportProfiles()
 	if err != nil {
 		return err
 	}
-	scope := profileWorkspace(workspaceID)
+	scope := strings.TrimSpace(workspaceID)
 	next := make([]scopedImportProfile, 0, len(profiles))
 	for _, record := range profiles {
 		if record.Profile.ID == profileID && record.WorkspaceID == scope {

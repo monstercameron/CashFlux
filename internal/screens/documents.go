@@ -7,6 +7,7 @@ package screens
 import (
 	"encoding/base64"
 	"encoding/csv"
+	"encoding/json"
 	"errors"
 	"io"
 	"strconv"
@@ -18,6 +19,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/ai"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/artifacts"
+	"github.com/monstercameron/CashFlux/internal/browserstore"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -38,6 +40,7 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+	"github.com/monstercameron/CashFlux/internal/workspace"
 	"github.com/monstercameron/GoWebComponents/v5/css"
 	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/v5/router"
@@ -828,7 +831,7 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 			CurrencyCol: -1,
 			Decimals:    currency.Decimals(reviewCurrencyFor(app, accounts, importAcct.Get())),
 		}
-		saved, err := app.SaveImportProfile(importmap.SavedProfile{Profile: p})
+		saved, err := app.SaveImportProfile(importmap.SavedProfile{Profile: p}, activeImportProfileWorkspaceID())
 		if err != nil {
 			msg.Set("Couldn't save: " + err.Error())
 			return
@@ -1650,7 +1653,7 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 								rev.Set(rev.Get() + 1)
 							},
 							func(id string) {
-								_ = app.DeleteImportProfile(id)
+								_ = app.DeleteImportProfile(id, activeImportProfileWorkspaceID())
 								rev.Set(rev.Get() + 1)
 							},
 						),
@@ -2471,7 +2474,7 @@ func savedProfilesCard(
 	onApply func(importmap.SavedProfile),
 	onDelete func(string),
 ) ui.Node {
-	profiles := app.ImportProfiles()
+	profiles := app.ImportProfiles(activeImportProfileWorkspaceID())
 	return uiw.Card(uiw.CardProps{
 		Header: Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter),
 			H2(css.Class("card-title"), uistate.T("documents.profileLoadTitle")),
@@ -2494,6 +2497,23 @@ func savedProfilesCard(
 			),
 		),
 	})
+}
+
+// activeImportProfileWorkspaceID reads the workspace registry used by the app
+// shell, so saved mappings follow the same active dataset as the Documents page.
+func activeImportProfileWorkspaceID() string {
+	raw, ok := browserstore.Get("cashflux:workspaces")
+	if !ok || raw == "" {
+		return ""
+	}
+	var registry workspace.Registry
+	if err := json.Unmarshal([]byte(raw), &registry); err != nil {
+		return ""
+	}
+	if active, ok := registry.Active(); ok {
+		return active.ID
+	}
+	return registry.ActiveID
 }
 
 // profileRowProps configures a ProfileRow component.
