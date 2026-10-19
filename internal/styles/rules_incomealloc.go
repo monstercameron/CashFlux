@@ -440,12 +440,6 @@ func registerGoalGlyph() {
 	// row drifted apart from each other (Cam, 2026-08-31). Tighten the gap so the
 	// glyphs group, and give the name a little air on its right instead — the
 	// separation the reader needs is name-from-markers, not marker-from-marker.
-	// Below the glyph threshold the note marker is an icon too, so it sizes to the
-	// icon rather than flexing into space that no longer exists. Its prose goes at
-	// the SAME width the pills do, so the whole head switches to symbols at once
-	// instead of in two stages.
-	ruleContentMax(900, ".budget-crow-notes", flex("0 0 auto"))
-	ruleContentMax(900, ".budget-crow-notes-text", display("none"))
 	ruleContentMax(900, ".budget-crow-head", gap("0.15rem"))
 	ruleContentMax(900, ".budget-crow-head .budget-crow-name", prop("margin-right", "0.3rem"))
 	// The badge wrapper adds its own box around the pill; with the pill gone it
@@ -491,31 +485,6 @@ func registerGoalGlyph() {
 	// the delay still runs, so the popover behaves identically — it just stops
 	// advertising the wait.
 	rawBlock(`@media (prefers-reduced-motion: reduce){.budget-goalglyph-spin{animation:none;border-top-color:transparent;background:color-mix(in srgb, var(--accent) 18%, transparent)}}`)
-}
-
-// registerNotesMarkerWrap styles the note marker's new wrapper. It became a
-// component (to share the row's one hover system) and so gained a Span around the
-// button; without this the wrapper, not the button, would be the flex child the
-// head sizes — and the careful 0-basis/auto-basis split would apply to the wrong
-// element.
-func registerNotesMarkerWrap() {
-	rule(".budget-crow-notes-wrap",
-		display("inline-flex"),
-		alignItems("center"),
-		flex("1 1 0"),
-		minWidth("0"),
-		overflow("hidden"),
-	)
-	ruleContentMax(900, ".budget-crow-notes-wrap", flex("0 0 auto"))
-	// The button fills whatever the wrapper was given, so the text ellipsizes
-	// against the wrapper's width rather than the button's intrinsic one.
-	rule(".budget-crow-notes-wrap .budget-crow-notes",
-		flex("1 1 auto"),
-		minWidth("0"),
-	)
-	// The spinner needs a positioned ancestor; the note button is not round like
-	// the glyph, so its ring follows the button's own shape.
-	rule(".budget-crow-notes", position("relative"), borderRadius("var(--radius-md)"))
 }
 
 // registerMarkerWrap styles the shared marker wrapper. The pill and the glyph are
