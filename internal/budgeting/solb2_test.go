@@ -136,6 +136,10 @@ func TestSOLB2SweepUsesCardStatus(t *testing.T) {
 	saving := b
 	saving.ID = "saving"
 	saving.Direction = domain.DirectionSave
+	ordinary := b
+	ordinary.ID = "ordinary"
+	ordinary.Rollover = false
+	ordinary.PeriodBoosts = nil
 	other := b
 	other.ID = "other"
 	other.OwnerID = "bob"
@@ -146,11 +150,11 @@ func TestSOLB2SweepUsesCardStatus(t *testing.T) {
 	euro.Rollover = false
 	euro.PeriodBoosts = nil
 	in := ViewInput{Base: "USD", Rates: currency.Rates{Base: "USD", Rates: map[string]float64{"EUR": 2}}, Period: ViewPeriod{Anchor: mustDate("2026-09-01"), Now: mustDate("2026-10-19"), WeekStart: time.Monday}, Categories: []domain.Category{{ID: "food"}, {ID: "child", ParentID: "food"}}, Transactions: []domain.Transaction{expense(28000, "USD", "child", "", "2026-08-10"), expense(28000, "USD", "child", "", "2026-09-10")}}
-	// Sept cap = 30000 + 2000 Aug carry + 1000 boost; remainder 5000.
-	cfg := SweepConfig{Enabled: true, BudgetIDs: []string{"food", "annual", "saving", "other", "eur"}}
-	plan, err := EvaluateSweep([]domain.Budget{b, annual, saving, other, euro}, in, cfg, "alice", nil)
-	// EUR budget has negative remaining after converted spend; only Food contributes.
-	if err != nil || plan.Total.Amount != 5000 || plan.BudgetCount() != 1 {
+	// Sept cap = 30000 + 2000 Aug carry + 1000 boost; its remainder is not swept.
+	cfg := SweepConfig{Enabled: true, BudgetIDs: []string{"food", "annual", "saving", "ordinary", "other", "eur"}}
+	plan, err := EvaluateSweep([]domain.Budget{b, annual, saving, ordinary, other, euro}, in, cfg, "alice", nil)
+	// Rollover budgets are excluded so a leftover cannot be both swept and carried.
+	if err != nil || plan.Total.Amount != 2000 || plan.BudgetCount() != 1 || len(plan.Lines) != 1 || plan.Lines[0].BudgetID != "ordinary" {
 		t.Fatalf("sweep=%+v %v", plan, err)
 	}
 	fx := Status{Budget: domain.Budget{ID: "eur", Period: domain.PeriodMonthly}, Remaining: money.New(100, "EUR")}

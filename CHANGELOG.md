@@ -90,6 +90,11 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **A budget's leftover is given away once; cover-all offers only real room (BC4S2B).** Rollover budgets are no longer swept,
+  and sweep is off while pooled rollover is on, so a leftover cannot both sweep to a goal and carry forward. Cover-all limits
+  each source's offer to what is actually left in its own period (a weekly budget with $100 left offers $100, not $433.33),
+  resolves the period from the viewed anchor, and stamps the cover with the receiving budget's period. The unused carryover
+  wrappers are removed; their tests now exercise the live rollover chain.
 - **Net worth and liquid cash are unavailable when an account balance cannot be computed (NATFIX).** Formula and Smart
   variables no longer report a partial total when one account's balance fails or overflows. The rule-suggestion test fixture
   now uses the documented magnitude semantics for amount conditions.

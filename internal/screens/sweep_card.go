@@ -47,7 +47,7 @@ func goalNameByID(app *appstate.App, id string) string {
 }
 
 // budgetCountPhrase renders "1 budget" / "N budgets".
-func budgetCountPhrase(n int) string {
+func sweepBudgetCountPhrase(n int) string {
 	if n == 1 {
 		return uistate.T("sweep.budgetsOne")
 	}
@@ -159,7 +159,7 @@ func budgetsSweepCard(_ struct{}) ui.Node {
 				Span(css.Class("catchup-card-icon"), "🧹"),
 				Div(css.Class("catchup-card-text"),
 					Strong(uistate.T("sweep.cardTitle")),
-					P(uistate.T("sweep.cardBody", totalStr, budgetCountPhrase(plan.BudgetCount()), goalName)),
+					P(uistate.T("sweep.cardBody", totalStr, sweepBudgetCountPhrase(plan.BudgetCount()), goalName)),
 				),
 			),
 			action,

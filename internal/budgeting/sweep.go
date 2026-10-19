@@ -115,7 +115,10 @@ func ComputeSweepWithRates(statuses []Status, cfg SweepConfig, rates currency.Ra
 	}
 	for _, s := range statuses {
 		b := s.Budget
-		if !cfg.Participates(b.ID) || b.IsSaving() || b.Period != domain.PeriodMonthly {
+		// Rollover already gives this remainder to the next period. Sweeping it
+		// as well would count the same dollars twice (once for the goal and once
+		// as carry-in). Sweep and per-budget rollover are mutually exclusive.
+		if !cfg.Participates(b.ID) || b.IsSaving() || b.Rollover || b.Period != domain.PeriodMonthly {
 			continue
 		}
 		if s.Error != nil {
@@ -146,9 +149,14 @@ func ComputeSweepWithRates(statuses []Status, cfg SweepConfig, rates currency.Ra
 // EvaluateSweep evaluates the closed month through the same carry, boost,
 // descendant and smoothing model as cards, retaining the active member lens.
 func EvaluateSweep(budgets []domain.Budget, in ViewInput, cfg SweepConfig, memberID string, goalAllowed func(string) bool) (SweepPlan, error) {
+	// Pooled rollover carries prior-period slack from every eligible budget.
+	// A sweep over that same remainder would allocate it a second time.
+	if in.PoolRollover {
+		return SweepPlan{Total: money.Zero(in.Rates.Base), GoalID: cfg.TargetGoalID}, nil
+	}
 	var statuses []Status
 	for _, b := range ViewBudgets(budgets, memberID) {
-		if !cfg.Participates(b.ID) || b.Period != domain.PeriodMonthly || b.IsSaving() {
+		if !cfg.Participates(b.ID) || b.Period != domain.PeriodMonthly || b.IsSaving() || b.Rollover {
 			continue
 		}
 		statuses = append(statuses, EvaluateViewBudget(b, in).Status)

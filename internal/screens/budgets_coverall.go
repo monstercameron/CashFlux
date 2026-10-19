@@ -13,6 +13,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -74,12 +75,7 @@ func coverAllData(app *appstate.App, member string, vw period.Window, pr prefs.P
 	payAnchor := budgetPayCycleAnchor(pr.PayCycleAnchor)
 	// Anchor exactly like computeBudgetView: today when today is inside the viewed
 	// window, otherwise the window's start.
-	viewFrom, viewTo := vw.Range()
-	anchor := viewFrom
-	now := time.Now()
-	if !now.Before(viewFrom) && now.Before(viewTo) {
-		anchor = now
-	}
+	anchor := budgetViewAnchor(vw, dateutil.WallClockUTC(time.Now()))
 	for _, st := range v.Statuses {
 		b := st.Budget
 		var bs, be time.Time
@@ -108,7 +104,21 @@ func coverAllData(app *appstate.App, member string, vw period.Window, pr prefs.P
 }
 
 func coverAllMonthlyRoom(remaining money.Money, cadence domain.Period) (money.Money, error) {
-	return budgeting.PeriodEquivalent(remaining, cadence, domain.PeriodMonthly)
+	monthly, err := budgeting.PeriodEquivalent(remaining, cadence, domain.PeriodMonthly)
+	if err != nil {
+		return money.Money{}, err
+	}
+	// The displayed monthly equivalent is useful for comparing cadences, but
+	// cover-all debits the source in its actual current period. Never offer more
+	// than that period can give (weekly/biweekly equivalence is larger).
+	if monthly.Amount > remaining.Amount {
+		return remaining, nil
+	}
+	return monthly, nil
+}
+
+func coverAllCoveredAt(over coverAllOver) time.Time {
+	return over.ThisStart
 }
 
 func coverAllDefaultSource(over coverAllOver, sources []coverAllSource) string {
@@ -324,6 +334,7 @@ func coverAllForm(props coverAllFormProps) ui.Node {
 				delta int64
 			}
 			byBudget := map[string][]pboost{}
+			coveredPeriods := map[string]time.Time{}
 			add := func(id string, start time.Time, delta int64) {
 				byBudget[id] = append(byBudget[id], pboost{start, delta})
 			}
@@ -337,6 +348,7 @@ func coverAllForm(props coverAllFormProps) ui.Node {
 				// A budget landing exactly on its limit now classifies "near", not "over",
 				// so the extra clearing cent is no longer needed.
 				cover := o.Shortfall.Amount
+				coveredPeriods[o.ID] = coverAllCoveredAt(o)
 				switch src {
 				case coverAllNextSource:
 					// Borrow from next month's same budget: raise this period, lower the next.
@@ -409,7 +421,7 @@ func coverAllForm(props coverAllFormProps) ui.Node {
 				// badge was dead in that path (Cam, 2026-08-31). A budget that GAVE
 				// (delta < 0) is not covered by the transaction; only a receiver is.
 				if gained {
-					b.CoveredAt = time.Now()
+					b.CoveredAt = coveredPeriods[id]
 				}
 				if is := validate.ValidateBudget(b); !is.OK() {
 					errText.Set(budgetErrorText(is))

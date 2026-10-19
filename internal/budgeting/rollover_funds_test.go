@@ -3,7 +3,6 @@
 package budgeting
 
 import (
-	"errors"
 	"testing"
 	"time"
 
@@ -11,34 +10,42 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 )
 
-func TestCarryover(t *testing.T) {
+func TestRolloverChainCarriesRemainingFunds(t *testing.T) {
 	tests := []struct {
 		name          string
-		prevRemaining money.Money
-		limit         money.Money
+		prevRemaining int64
+		limit         int64
 		want          int64
 	}{
-		{"unspent rolls forward", money.New(3000, "USD"), money.New(10000, "USD"), 13000},
-		{"overspend carries as debt", money.New(-2000, "USD"), money.New(10000, "USD"), 8000},
-		{"exactly spent", money.New(0, "USD"), money.New(10000, "USD"), 10000},
-		{"deep overdraw goes negative", money.New(-15000, "USD"), money.New(10000, "USD"), -5000},
+		{"unspent rolls forward", 3000, 10000, 13000},
+		{"overspend carries as debt", -2000, 10000, 8000},
+		{"exactly spent", 0, 10000, 10000},
+		{"deep overdraw goes negative", -15000, 10000, -5000},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := Carryover(tc.prevRemaining, tc.limit)
+			base := money.New(tc.limit, "USD")
+			spent := money.New(tc.limit-tc.prevRemaining, "USD")
+			states, err := BuildRolloverChain([]RolloverPeriod{
+				{Start: mustDate("2026-08-01"), Base: base, Spend: spent},
+				{Start: mustDate("2026-09-01"), Base: base, Spend: money.Zero("USD")},
+			}, 0)
 			if err != nil {
-				t.Fatalf("Carryover: %v", err)
+				t.Fatalf("BuildRolloverChain: %v", err)
 			}
-			if got.Amount != tc.want || got.Currency != "USD" {
-				t.Errorf("Carryover = %v, want %d USD", got, tc.want)
+			if got := states[1].EffectiveCap.Amount; got != tc.want {
+				t.Errorf("next effective cap = %d, want %d", got, tc.want)
 			}
 		})
 	}
 }
 
-func TestCarryoverCurrencyMismatch(t *testing.T) {
-	if _, err := Carryover(money.New(100, "USD"), money.New(100, "EUR")); !errors.Is(err, money.ErrCurrencyMismatch) {
-		t.Errorf("err = %v, want ErrCurrencyMismatch", err)
+func TestRolloverChainRejectsCurrencyMismatch(t *testing.T) {
+	_, err := BuildRolloverChain([]RolloverPeriod{{
+		Start: mustDate("2026-08-01"), Base: money.New(100, "USD"), Spend: money.New(100, "EUR"),
+	}}, 0)
+	if err == nil {
+		t.Fatal("rollover chain accepted mismatched currencies")
 	}
 }
 
@@ -69,7 +76,7 @@ func TestSinkingFundContribution(t *testing.T) {
 		want    int64
 	}{
 		{"even split", 120000, 12, 10000},
-		{"ceils the remainder", 100000, 12, 8334}, // 8333.33 → round up so 12×8334 ≥ target
+		{"ceils the remainder", 100000, 12, 8334},
 		{"single period", 5000, 1, 5000},
 		{"zero periods funds all now", 5000, 0, 5000},
 		{"negative periods funds all now", 5000, -3, 5000},
@@ -87,7 +94,6 @@ func TestSinkingFundContribution(t *testing.T) {
 }
 
 func TestSinkingFundContributionReachesTarget(t *testing.T) {
-	// The ceiling guarantee: periods × contribution must always cover the target.
 	cases := []struct {
 		target  int64
 		periods int
