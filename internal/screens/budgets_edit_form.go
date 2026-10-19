@@ -50,12 +50,7 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 	activeMemberID := uistate.UseActiveMember().Get()
 	vw := uistate.UsePeriod().Get()
 	pr := uistate.UsePrefs().Get()
-	var coverPayAnchor time.Time
-	if pr.PayCycleAnchor != "" {
-		if t, e := time.Parse("2006-01-02", pr.PayCycleAnchor); e == nil {
-			coverPayAnchor = t
-		}
-	}
+	coverPayAnchor := budgetPayCycleAnchor(pr.PayCycleAnchor)
 
 	app := appstate.Default
 	done := props.OnDone
@@ -94,6 +89,7 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 	// several. Computed for every mode so the useState seeds below can read it (cheap;
 	// keeps hooks stable).
 	var coverSrcs []budgetCoverSource
+	coverIncomplete := false
 	coverDefaultStr, coverShortfallStr := "", ""
 	var selfStatus budgeting.Status // this budget's live status (for the formulas view)
 	selfFound := false
@@ -129,7 +125,16 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 			// offer the whole limit under the word "available", which is the plan's
 			// size, not money.
 			bs, be := budgeting.PeriodRangeAnchored(s.Budget.Period, cv.Anchor, pr.WeekStartWeekday(), coverPayAnchor)
-			committed := budgeting.Committed(s.Budget, app.Recurring(), app.Transactions(), s.Remaining, bs, be).Committed
+			rates := currency.Rates{Base: app.Settings().BaseCurrency, Rates: app.Settings().FXRates}
+			if rates.Base == "" {
+				rates.Base = "USD"
+			}
+			committedResult, commitErr := budgeting.CommittedWithRates(s.Budget, app.Recurring(), app.Transactions(), s.Remaining, bs, be, rates)
+			if commitErr != nil {
+				coverIncomplete = true
+				continue
+			}
+			committed := committedResult.Committed
 			funds := budgeting.SourceFundsOf(s.Budget.Limit, s.Remaining, committed)
 			if !funds.CanGive() {
 				continue // an overspent or exhausted budget has nothing to offer
@@ -343,7 +348,6 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 		}
 		// Save / clear the standing recurring arrangement per the toggle (re-fetch the
 		// destination since CoverBudget just mutated the budget set).
-		start, _ := budgeting.PeriodRange(b.Period, time.Now(), pr.WeekStartWeekday())
 		for _, nb := range app.Budgets() {
 			if nb.ID != props.BudgetID {
 				continue
@@ -365,7 +369,7 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 						srcs = append(srcs, domain.CoverShare{BudgetID: sc.ID, Weight: w, WeightFormula: wtFormula})
 					}
 				}
-				rc := &domain.RecurringCover{Sources: srcs, LastAppliedPeriod: start.Format("2006-01-02")}
+				rc := &domain.RecurringCover{Sources: srcs, LastAppliedPeriod: budgeting.PeriodKey(b.Period, viewAnchor, coverPayAnchor)}
 				if amtFxS.Get() {
 					rc.AmountFormula = strings.TrimSpace(amtFormulaS.Get())
 				}
@@ -613,7 +617,7 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 			return
 		}
 		permanent := topupPermanentS.Get()
-		periodStart, _ := budgeting.PeriodRangeAnchored(b.Period, viewAnchor, pr.WeekStartWeekday(), coverPayAnchor)
+		periodStart := budgetPeriodKeyStart(b.Period, viewAnchor, coverPayAnchor)
 
 		// Optional funding: pull the amount from other budgets (equal split across the
 		// checked sources). Without any source, the top-up adds new limit from income.
@@ -768,7 +772,9 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 	// --- Cover: spread the overspend across one or more source budgets. ---
 	if props.Mode == uistate.BudgetEditModeCover {
 		if len(coverSrcs) == 0 {
-			return Div(css.Class("acct-edit-form"), P(css.Class("empty"), uistate.T("budgets.coverNoSources")))
+			return Div(css.Class("acct-edit-form"),
+				If(coverIncomplete, P(css.Class("err"), Attr("role", "status"), Attr("data-testid", "budget-cover-incomplete"), uistate.T("budgets.committedIncomplete"))),
+				P(css.Class("empty"), uistate.T("budgets.coverNoSources")))
 		}
 		// Effective amount + live preview: in formula mode evaluate the amount formula in
 		// this budget's context; otherwise parse the number. The shares below use it.
@@ -1009,6 +1015,7 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 							uistate.T("budgets.topupCoverSplit", plural(selCount, "budget")))),
 					)),
 				)),
+				If(coverIncomplete, P(css.Class("err"), Attr("role", "status"), Attr("data-testid", "budget-cover-incomplete"), uistate.T("budgets.committedIncomplete"))),
 				errLine,
 			),
 			Div(css.Class("modal-foot"),
@@ -1095,6 +1102,7 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 				Kind: targetKindS.Get(), Amount: targetAmtS.Get(), Date: targetDateS.Get(),
 				GoalID: linkedGoalS.Get(), Decimals: dec, Currency: cur,
 			}, onFillPick),
+			If(app != nil && selfFound, budgetRecommendationLine(app, b, selfStatus, viewAnchor)),
 			// BG1: optional funding target (refill-up-to, set-aside, or by-date via a goal).
 			budgetTargetSection(app, budgetTargetDraft{
 				Kind: targetKindS.Get(), Amount: targetAmtS.Get(), Date: targetDateS.Get(),
@@ -1320,6 +1328,50 @@ func committedCaveat(sc budgetCoverSource, cur string) string {
 	}
 	return uistate.T("budgets.coverCommittedNote",
 		fmtMoney(money.New(sc.CommittedMinor, cur)), fmtMoney(money.New(sc.FreeMinor, cur)))
+}
+
+func budgetRecommendationLine(app *appstate.App, b domain.Budget, status budgeting.Status, anchor time.Time) ui.Node {
+	base := app.Settings().BaseCurrency
+	if base == "" {
+		base = "USD"
+	}
+	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
+	projected, err := budgeting.PeriodEquivalent(status.Spent, b.Period, domain.PeriodMonthly)
+	if err != nil {
+		return P(css.Class("t-caption", tw.TextWarn), Attr("data-testid", "budget-limit-recommendation-incomplete"), uistate.T("budgets.recommendationIncomplete"))
+	}
+	projected, err = rates.Convert(projected, base)
+	if err != nil {
+		return P(css.Class("t-caption", tw.TextWarn), Attr("data-testid", "budget-limit-recommendation-incomplete"), uistate.T("budgets.recommendationIncomplete"))
+	}
+	covers := make(map[string]bool)
+	for _, id := range b.TrackedCategoryIDs() {
+		covers[id] = true
+	}
+	recommendation, err := budgeting.RecommendBudgetLimit(b, covers, app.Transactions(), anchor, 6, projected, rates)
+	if err != nil {
+		return P(css.Class("t-caption", tw.TextWarn), Attr("data-testid", "budget-limit-recommendation-incomplete"), uistate.T("budgets.recommendationIncomplete"))
+	}
+	if !recommendation.HasEvidence {
+		return Fragment()
+	}
+	suggestedPeriod, err := budgeting.PeriodEquivalent(money.New(recommendation.Suggested, base), domain.PeriodMonthly, b.Period)
+	if err != nil {
+		return P(css.Class("t-caption", tw.TextWarn), Attr("data-testid", "budget-limit-recommendation-incomplete"), uistate.T("budgets.recommendationIncomplete"))
+	}
+	suggestedPeriod, err = rates.Convert(suggestedPeriod, b.Limit.Currency)
+	if err != nil {
+		return P(css.Class("t-caption", tw.TextWarn), Attr("data-testid", "budget-limit-recommendation-incomplete"), uistate.T("budgets.recommendationIncomplete"))
+	}
+	direction := "budgets.recommendationKeep"
+	switch recommendation.Direction {
+	case budgeting.SuggestionRaise:
+		direction = "budgets.recommendationRaise"
+	case budgeting.SuggestionLower:
+		direction = "budgets.recommendationLower"
+	}
+	return P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "budget-limit-recommendation"),
+		uistate.T("budgets.recommendationEvidence", uistate.T(direction), fmtMoney(suggestedPeriod), len(recommendation.MonthsUsed), len(recommendation.Outliers)))
 }
 
 // sourceAfterGiving is what a source would have left once its share is taken —

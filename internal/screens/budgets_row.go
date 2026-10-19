@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall/js"
 	"time"
 
@@ -34,6 +35,7 @@ import (
 // hooks (declared unconditionally) so the edit toggle never disturbs hook order.
 func BudgetRow(props budgetRowProps) ui.Node {
 	s := props.Status
+	dataRevision := uistate.UseDataRevision().Get()
 
 	// The everyday actions are labelled tool buttons surfaced inline (the full-width
 	// card has the room); the DESTRUCTIVE actions (Remove recurring, Delete) live in a
@@ -119,13 +121,18 @@ func BudgetRow(props budgetRowProps) ui.Node {
 								if err := app.PutBudget(bb); err == nil {
 									uistate.PostUndoable(uistate.T("budgets.limitChangedToast", fmtMoney(bb.Limit)))
 									uistate.BumpDataRevision()
+								} else {
+									uistate.PostNotice(budgetErrorText(err), true)
+									return
 								}
 							}
 							break
 						}
 					}
 				}
-				limitEditing.Set(false)
+				if limitEditing.Get() {
+					limitEditing.Set(false)
+				}
 			}
 		}
 	})
@@ -149,6 +156,9 @@ func BudgetRow(props budgetRowProps) ui.Node {
 					if err := app.PutBudget(bb); err == nil {
 						uistate.PostUndoable(uistate.T("budgets.limitChangedToast", fmtMoney(bb.Limit)))
 						uistate.BumpDataRevision()
+					} else {
+						uistate.PostNotice(budgetErrorText(err), true)
+						return
 					}
 				}
 				break
@@ -271,7 +281,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 				if b.ID != s.Budget.ID {
 					continue
 				}
-				start, _ := budgeting.PeriodRange(b.Period, time.Now(), uistate.LoadPrefs().WeekStartWeekday())
+				start := budgetPeriodKeyStart(b.Period, props.Anchor, budgetPayCycleAnchor(uistate.LoadPrefs().PayCycleAnchor))
 				if err := app.PutBudget(b.WithPeriodBoost(start, -remaining.Amount)); err != nil {
 					uistate.PostNotice(budgetErrorText(err), true)
 					return
@@ -640,10 +650,17 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		// page does — from the budget's own period against the household's week
 		// start. Re-deriving here rather than threading a new prop keeps this
 		// additive, and both paths call the same function so they cannot disagree.
-		pStart, pEnd := budgeting.PeriodRange(s.Budget.Period, time.Now(),
-			uistate.LoadPrefs().WeekStartWeekday())
-		split := goalfunded.Summarize(app.Transactions(), cats, pStart, pEnd,
-			currency.Rates{Base: base, Rates: app.Settings().FXRates})
+		anchor := props.Anchor
+		if anchor.IsZero() {
+			anchor = time.Now()
+		}
+		payAnchor := budgetPayCycleAnchor(uistate.LoadPrefs().PayCycleAnchor)
+		pStart, pEnd := budgeting.PeriodRangeAnchored(s.Budget.Period, anchor,
+			uistate.LoadPrefs().WeekStartWeekday(), payAnchor)
+		split := memoGoalFunded(app, dataRevision, s.Budget.ID, pStart, pEnd, func() goalfunded.Split {
+			return goalfunded.Summarize(app.Transactions(), cats, pStart, pEnd,
+				currency.Rates{Base: base, Rates: app.Settings().FXRates})
+		})
 		if split.HasFunded() {
 			key := "budgets.goalFunded"
 			if _, rescued := split.OverBy(s.Limit.Amount); rescued {
@@ -885,7 +902,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 
 	// A composite budget (multi-category, cats+tags, or multi-tag) gets a spend-composition
 	// donut UNDER the full-width status bar; a single-dimension budget shows none.
-	pieNode, hasPie := budgetPie(s.Budget, props.Anchor)
+	pieNode, hasPie := budgetPie(s.Budget, props.Anchor, dataRevision)
 	cardCls := "budget " + budgetRowStateClass(s, props.PaceOver)
 	if hasPie {
 		cardCls += " budget-has-pie"
@@ -1122,6 +1139,7 @@ type budgetRolloverBadgeProps struct {
 	Rollover     bool   // whether this budget carries unused money into the next period
 	CapPeriods   int    // RolloverCapPeriods; > 0 caps the carried surplus at N× the limit
 	Carry        string // formatted previous-period remaining ("$50.00 left" / "$32.00 over"); "" when none
+	Chain        string // auditable period-by-period carry chain
 	EffectiveCap string // this period's effective cap when it differs from the base limit; "" otherwise
 	CapMath      string // the effective cap's arithmetic ("$200 limit + $50 carried over")
 }
@@ -1163,6 +1181,9 @@ func budgetRolloverBadge(props budgetRolloverBadgeProps) ui.Node {
 		if props.EffectiveCap != "" && props.CapMath != "" {
 			parts = append(parts, uistate.T("budgetsRollover.capThisPeriod", props.EffectiveCap, props.CapMath))
 		}
+		if props.Chain != "" {
+			parts = append(parts, uistate.T("budgets.rolloverChain", props.Chain))
+		}
 	}
 
 	// Same two renderings as the goal marker, one visible at a time by content
@@ -1186,14 +1207,137 @@ func budgetRolloverBadge(props budgetRolloverBadgeProps) ui.Node {
 // budgetRolloverBadgeFor builds the rollover badge element for a row from its status
 // and the row props, reading the policy straight off the domain budget.
 func budgetRolloverBadgeFor(props budgetRowProps) ui.Node {
+	chain := budgetRolloverChainText(props.Status.Budget, props.Anchor, uistate.CurrentDataRevision())
 	return ui.CreateElement(budgetRolloverBadge, budgetRolloverBadgeProps{
 		BudgetID:     props.Status.Budget.ID,
 		Rollover:     props.Status.Budget.Rollover,
 		CapPeriods:   props.Status.Budget.RolloverCapPeriods,
 		Carry:        props.RolloverCarry,
+		Chain:        chain,
 		EffectiveCap: props.EffectiveCap,
 		CapMath:      props.EffectiveCapMath,
 	})
+}
+
+func budgetRolloverChainText(b domain.Budget, anchor time.Time, revision int) string {
+	app := appstate.Default
+	if app == nil {
+		return ""
+	}
+	prefs := uistate.LoadPrefs()
+	if anchor.IsZero() {
+		anchor = time.Now()
+	}
+	start, end := budgeting.PeriodRangeAnchored(b.Period, anchor, prefs.WeekStartWeekday(), budgetPayCycleAnchor(prefs.PayCycleAnchor))
+	key := periodMemoKey(app, revision, b.ID, start, end)
+	budgetPeriodMemos.Lock()
+	if value, ok := budgetPeriodMemos.chain[key]; ok {
+		budgetPeriodMemos.Unlock()
+		return value
+	}
+	budgetPeriodMemos.Unlock()
+	value := buildBudgetRolloverChainText(b, anchor)
+	budgetPeriodMemos.Lock()
+	if len(budgetPeriodMemos.chain) > 256 {
+		budgetPeriodMemos.chain = make(map[budgetPeriodMemoKey]string)
+	}
+	budgetPeriodMemos.chain[key] = value
+	budgetPeriodMemos.Unlock()
+	return value
+}
+
+func buildBudgetRolloverChainText(b domain.Budget, anchor time.Time) string {
+	if !b.Rollover {
+		return ""
+	}
+	app := appstate.Default
+	if app == nil {
+		return ""
+	}
+	if anchor.IsZero() {
+		anchor = time.Now()
+	}
+	prefs := uistate.LoadPrefs()
+	payAnchor := budgetPayCycleAnchor(prefs.PayCycleAnchor)
+	currentStart, _ := budgeting.PeriodRangeAnchored(b.Period, anchor, prefs.WeekStartWeekday(), payAnchor)
+	txns := app.Transactions()
+	trackedCats, trackedTags := make(map[string]bool), b.TrackedTagSet()
+	earliest := currentStart
+	found := false
+	for _, id := range b.TrackedCategoryIDs() {
+		trackedCats[id] = true
+	}
+	for _, txn := range txns {
+		if !txn.IsExpense() || !txn.CountsInReports() || (b.Scope == domain.ScopeIndividual && !txn.HasOwner(b.OwnerID)) {
+			continue
+		}
+		matchesBudget := b.TracksCategory(txn.CategoryID) || b.TracksAnyTag(txn.Tags)
+		if !matchesBudget {
+			for _, split := range txn.Splits {
+				if !b.TracksCategory(split.CategoryID) {
+					continue
+				}
+				if b.Scope != domain.ScopeIndividual || split.LineOwner(txn.MemberID) == b.OwnerID {
+					matchesBudget = true
+					break
+				}
+			}
+		}
+		if !matchesBudget {
+			continue
+		}
+		start, _ := budgeting.PeriodRangeAnchored(b.Period, txn.Date, prefs.WeekStartWeekday(), payAnchor)
+		if start.Before(currentStart) && (!found || start.Before(earliest)) {
+			earliest, found = start, true
+		}
+	}
+	if !found {
+		earliest = currentStart
+	}
+	base := app.Settings().BaseCurrency
+	if base == "" {
+		base = "USD"
+	}
+	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
+	ledger := budgeting.NewNettedLedger(txns)
+	covers := make(map[string]bool, len(trackedCats)+len(trackedTags))
+	for id := range trackedCats {
+		covers[id] = true
+	}
+	for tag := range trackedTags {
+		covers[tag] = true
+	}
+	var periods []budgeting.RolloverPeriod
+	for start := earliest; !start.After(currentStart); {
+		_, end := budgeting.PeriodRangeAnchored(b.Period, start, prefs.WeekStartWeekday(), payAnchor)
+		spend, err := budgeting.SpentFromNetted(b, ledger, start, end, rates, covers)
+		if err != nil {
+			return ""
+		}
+		periodAmount, err := money.Add(b.Limit.Amount, b.PeriodBoost(start))
+		if err != nil {
+			return ""
+		}
+		periodBase, err := rates.Convert(money.New(periodAmount, b.Limit.Currency), base)
+		if err != nil {
+			return ""
+		}
+		periods = append(periods, budgeting.RolloverPeriod{Start: start, Base: periodBase, Spend: spend})
+		if !end.After(start) {
+			return ""
+		}
+		start = end
+	}
+	chain, err := budgeting.BuildRolloverChain(periods, b.RolloverCapPeriods)
+	if err != nil {
+		return ""
+	}
+	lines := make([]string, 0, len(chain))
+	for _, state := range chain {
+		lines = append(lines, uistate.T("budgets.rolloverChainEntry", state.Start.Format("2006-01-02"), fmtMoney(state.Base),
+			fmtMoney(state.CarryIn), fmtMoney(state.EffectiveCap), fmtMoney(state.Spend), fmtMoney(state.CarryOut)))
+	}
+	return strings.Join(lines, " ")
 }
 
 // budgetDrillScope resolves what a budget's "Transactions" drill-through should
@@ -1251,7 +1395,8 @@ func budgetTopDriversFor(b domain.Budget, n int, anchor time.Time) ([]budgeting.
 		anchor = time.Now()
 	}
 	// The drivers describe the VIEWED period (QA CF-05), not necessarily today's.
-	start, end := budgeting.PeriodRange(b.Period, anchor, uistate.LoadPrefs().WeekStartWeekday())
+	prefs := uistate.LoadPrefs()
+	start, end := budgeting.PeriodRangeAnchored(b.Period, anchor, prefs.WeekStartWeekday(), budgetPayCycleAnchor(prefs.PayCycleAnchor))
 	descendants := categorytree.DescendantsOfAll(app.Categories(), b.TrackedCategoryIDs())
 	covers := func(id string) bool { return descendants[id] }
 	// Group charges by the clean merchant name (payee aliases + rule-pack normalization)
@@ -1491,6 +1636,71 @@ type budgetSlice struct {
 	ValStr string
 }
 
+type budgetPeriodMemoKey struct {
+	app      *appstate.App
+	revision int
+	budgetID string
+	start    string
+	end      string
+}
+
+var budgetPeriodMemos = struct {
+	sync.Mutex
+	goal  map[budgetPeriodMemoKey]goalfunded.Split
+	pie   map[budgetPeriodMemoKey][]budgetSlice
+	chain map[budgetPeriodMemoKey]string
+}{goal: make(map[budgetPeriodMemoKey]goalfunded.Split), pie: make(map[budgetPeriodMemoKey][]budgetSlice), chain: make(map[budgetPeriodMemoKey]string)}
+
+func periodMemoKey(app *appstate.App, revision int, budgetID string, start, end time.Time) budgetPeriodMemoKey {
+	return budgetPeriodMemoKey{app: app, revision: revision, budgetID: budgetID,
+		start: start.UTC().Format(time.RFC3339Nano), end: end.UTC().Format(time.RFC3339Nano)}
+}
+
+func memoGoalFunded(app *appstate.App, revision int, budgetID string, start, end time.Time, calculate func() goalfunded.Split) goalfunded.Split {
+	key := periodMemoKey(app, revision, budgetID, start, end)
+	budgetPeriodMemos.Lock()
+	if value, ok := budgetPeriodMemos.goal[key]; ok {
+		budgetPeriodMemos.Unlock()
+		return value
+	}
+	budgetPeriodMemos.Unlock()
+	value := calculate()
+	budgetPeriodMemos.Lock()
+	if len(budgetPeriodMemos.goal) > 256 {
+		budgetPeriodMemos.goal = make(map[budgetPeriodMemoKey]goalfunded.Split)
+	}
+	budgetPeriodMemos.goal[key] = value
+	budgetPeriodMemos.Unlock()
+	return value
+}
+
+func memoBudgetComposition(b domain.Budget, anchor time.Time, revision int) []budgetSlice {
+	app := appstate.Default
+	if app == nil {
+		return nil
+	}
+	if anchor.IsZero() {
+		anchor = time.Now()
+	}
+	start, end := budgeting.PeriodRangeAnchored(b.Period, anchor, uistate.LoadPrefs().WeekStartWeekday(),
+		budgetPayCycleAnchor(uistate.LoadPrefs().PayCycleAnchor))
+	key := periodMemoKey(app, revision, b.ID, start, end)
+	budgetPeriodMemos.Lock()
+	if value, ok := budgetPeriodMemos.pie[key]; ok {
+		budgetPeriodMemos.Unlock()
+		return value
+	}
+	budgetPeriodMemos.Unlock()
+	value := budgetCompositionSlices(b, anchor)
+	budgetPeriodMemos.Lock()
+	if len(budgetPeriodMemos.pie) > 256 {
+		budgetPeriodMemos.pie = make(map[budgetPeriodMemoKey][]budgetSlice)
+	}
+	budgetPeriodMemos.pie[key] = append([]budgetSlice(nil), value...)
+	budgetPeriodMemos.Unlock()
+	return value
+}
+
 // budgetOwnsScope mirrors the budgeting engine's scope rule for the pie: a shared budget
 // counts everyone; an individual budget counts only its owner's spend.
 func budgetOwnsScope(b domain.Budget, member string) bool {
@@ -1520,7 +1730,8 @@ func budgetCompositionSlices(b domain.Budget, anchor time.Time) []budgetSlice {
 		anchor = time.Now()
 	}
 	// Composition follows the VIEWED period (QA CF-05), matching the card's bar.
-	start, end := budgeting.PeriodRange(b.Period, anchor, uistate.LoadPrefs().WeekStartWeekday())
+	prefs := uistate.LoadPrefs()
+	start, end := budgeting.PeriodRangeAnchored(b.Period, anchor, prefs.WeekStartWeekday(), budgetPayCycleAnchor(prefs.PayCycleAnchor))
 	catName := map[string]string{}
 	for _, c := range app.Categories() {
 		catName[c.ID] = c.Name
@@ -1606,11 +1817,11 @@ var budgetPiePalette = []string{"#4f9d69", "#e0a458", "#5b8def", "#c05e5e", "#8b
 // tracked dimensions — multi-category, cats+tags, or multi-tag). Returns (node, shown):
 // shown is false for a single-dimension budget or when there's no spend yet, so the caller
 // omits the pie column entirely.
-func budgetPie(b domain.Budget, anchor time.Time) (ui.Node, bool) {
+func budgetPie(b domain.Budget, anchor time.Time, revision int) (ui.Node, bool) {
 	if len(b.TrackedCategoryIDs())+len(b.TrackedTags) < 2 {
 		return Fragment(), false // not composite — the bar already tells the whole story
 	}
-	slices := budgetCompositionSlices(b, anchor)
+	slices := memoBudgetComposition(b, anchor, revision)
 	var total int64
 	for _, s := range slices {
 		total += s.Amount

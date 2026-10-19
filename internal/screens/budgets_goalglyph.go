@@ -6,7 +6,10 @@ package screens
 
 import (
 	"syscall/js"
+	"time"
 
+	"github.com/monstercameron/CashFlux/internal/budgeting"
+	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -15,6 +18,22 @@ import (
 	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
+
+// budgetPeriodKeyStart returns the UTC day represented by the shared persisted
+// budget period key. Boost writes store period starts, so routing them through
+// PeriodKey keeps writes aligned with the key used by budget reads.
+func budgetPeriodKeyStart(period domain.Period, ref, anchor time.Time) time.Time {
+	if ref.IsZero() {
+		ref = time.Now()
+	}
+	key := budgeting.PeriodKey(period, ref, anchor)
+	start, err := time.Parse("2006-01-02", key)
+	if err == nil {
+		return start
+	}
+	start, _ = budgeting.PeriodRangeAnchored(period, ref, time.Monday, anchor)
+	return start
+}
 
 // budgets_goalglyph.go is the compact row's goal-funded marker.
 //

@@ -90,6 +90,12 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Budget rows and Edit form: no silent failures, pay-cycle keys, explained carry (BUDQ5).** A rejected inline limit save
+  now shows the error and keeps the editor open with your value. Release-unused, raise-limit and recurring
+  "last applied" writes use the shared pay-cycle period key. The goal-funded note follows the viewed period and, like the
+  composite spend pie, is computed once per data change instead of on every render. Rollover budgets show their carry
+  chain (base, carry-in, effective cap, spend, carry-out per period). The Edit form's suggestion gives a direction, amount,
+  months used and excluded outliers, and committed amounts report missing exchange rates.
 - **Budgets page uses the corrected math everywhere (BUDQ4).** The page, cover-all, month close and "why over" now use the
   pay-cycle-anchored previous period, envelope and one shared boost key (honouring the week-start setting), with one shared
   pay-anchor parser. Roll-ups and prior-period totals convert each budget to the base currency first; a budget that
