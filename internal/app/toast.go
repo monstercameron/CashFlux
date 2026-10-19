@@ -23,9 +23,10 @@ import (
 
 // Notices stay visible for eight seconds of active reading time.
 const (
-	toastTimeoutMS    = 8000
-	toastErrTimeoutMS = 8000
-	toastTickMS       = 100
+	toastTimeoutMS     = 8000
+	toastUndoTimeoutMS = 10000
+	toastErrTimeoutMS  = 8000
+	toastTickMS        = 100
 )
 
 type toastDismissProps struct {
@@ -163,7 +164,7 @@ func Toast() uic.Node {
 		if n.Text == "" {
 			return nil
 		}
-		timeout := toastTimeoutMS
+		timeout := toastTimeoutFor(n)
 		if n.Err {
 			timeout = toastErrTimeoutMS
 		}
@@ -262,6 +263,16 @@ func toastNeedsDurable(n uistate.Notice, app *appstate.App) bool {
 
 func toastOffersUndo(n uistate.Notice) bool {
 	return !n.Err && !n.NonDataset && n.Undoable && auditview.CanUndoFunc()
+}
+
+func toastTimeoutFor(n uistate.Notice) int {
+	if n.Undoable && !n.Err && !n.NonDataset {
+		return toastUndoTimeoutMS
+	}
+	if n.Err {
+		return toastErrTimeoutMS
+	}
+	return toastTimeoutMS
 }
 
 // commitToastUndo uses the same commit completion boundary as forward actions.
