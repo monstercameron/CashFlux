@@ -11,6 +11,7 @@ import (
 	"syscall/js"
 
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
+	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/css"
 	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
 	uic "github.com/monstercameron/GoWebComponents/v5/ui"
@@ -213,7 +214,7 @@ func pickerComponent(componentProps pickerComponentProps) uic.Node {
 		var search uic.Node = Fragment()
 		if props.Searchable {
 			search = Input(css.Class("cf-picker-search", pickerSearchStyles),
-				Attr("id", searchID), Attr("type", "search"), Attr("role", "combobox"), Attr("aria-label", "Search "+props.Label),
+				Attr("id", searchID), Attr("type", "search"), Attr("role", "combobox"), Attr("aria-label", uistate.T("picker.search", props.Label)),
 				Attr("aria-controls", listID), Attr("aria-expanded", "true"), Attr("aria-autocomplete", "list"),
 				Attr("aria-activedescendant", activeID), Placeholder(props.Placeholder), Value(query.Get()), OnInput(onQuery), OnKeyDown(onKey))
 		}
@@ -284,7 +285,7 @@ type pickerCreateRowProps struct {
 
 func pickerCreateRow(props pickerCreateRowProps) uic.Node {
 	return Button(css.Class("cf-picker-create", css.New(tw.Flex, tw.WFull, tw.ItemsCenter, tw.Gap2, tw.Rounded, tw.Px2, tw.Py2, tw.TextLeft, tw.TextFg)),
-		Attr("id", props.ID), Attr("type", "button"), Attr("aria-label", "Create "+props.Query),
+		Attr("id", props.ID), Attr("type", "button"), Attr("aria-label", uistate.T("picker.createAria", props.Query)),
 		OnClick(func() {
 			if props.OnCreate != nil {
 				props.OnCreate(props.Query)
@@ -293,7 +294,7 @@ func pickerCreateRow(props pickerCreateRowProps) uic.Node {
 				props.OnChoose()
 			}
 		}),
-		"Create '", props.Query, "'",
+		uistate.T("picker.create", props.Query),
 	)
 }
 

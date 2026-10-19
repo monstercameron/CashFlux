@@ -55,6 +55,9 @@ func TestPickerKeyboardNavigationAndExplicitCommit(t *testing.T) {
 	if got := search.Attr("aria-controls"); got != "category-picker-listbox" {
 		t.Fatalf("search controls %q, want category listbox", got)
 	}
+	if got := search.Attr("aria-label"); got != "Search Category" {
+		t.Fatalf("search accessible name %q, want Search Category", got)
+	}
 	if got := f.ByID("category-picker-option-0").Text(); got != "Food" {
 		t.Fatalf("first option is %q, want Food (no placeholder option)", got)
 	}
@@ -164,6 +167,12 @@ func TestPickerCreateRowIsOptionalAndLast(t *testing.T) {
 	search.Input("Travel")
 	if !f.ByID("create-picker-create").Exists() {
 		t.Fatal("typed query did not show create row")
+	}
+	if got := f.ByID("create-picker-create").Attr("aria-label"); got != "Create Travel" {
+		t.Fatalf("create accessible name %q, want Create Travel", got)
+	}
+	if got := f.ByID("create-picker-create").Text(); got != "Create 'Travel'" {
+		t.Fatalf("create action text %q, want Create 'Travel'", got)
 	}
 	if f.ByID("create-picker-option-1").Exists() {
 		t.Fatal("create action appeared among selectable options")
