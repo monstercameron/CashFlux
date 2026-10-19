@@ -363,15 +363,19 @@ func SampleDatasetAt(now time.Time) Dataset {
 				Payee: payee, Desc: desc, CategoryID: cat, Amount: usd(amt), MemberID: member, Cleared: cleared(dt),
 			})
 		}
-		addTransferBetween := func(slot string, d int, from, to, label string, amt int64) {
+		addTransferBetween := func(slot string, d int, from, to, label string, amt int64, source ...domain.TxnSource) {
 			dt := date(y, m, d)
+			var provenance domain.TxnSource
+			if len(source) > 0 {
+				provenance = source[0]
+			}
 			add(domain.Transaction{
 				ID: fmt.Sprintf("tx-%s-%s-out", tag, slot), AccountID: from, Date: dt,
-				Payee: label, Desc: label, Amount: usd(-amt), MemberID: marcus, TransferAccountID: to, Cleared: cleared(dt),
+				Payee: label, Desc: label, Amount: usd(-amt), MemberID: marcus, TransferAccountID: to, Cleared: cleared(dt), Source: provenance,
 			})
 			add(domain.Transaction{
 				ID: fmt.Sprintf("tx-%s-%s-in", tag, slot), AccountID: to, Date: dt,
-				Payee: label, Desc: label, Amount: usd(amt), MemberID: marcus, TransferAccountID: from, Cleared: cleared(dt),
+				Payee: label, Desc: label, Amount: usd(amt), MemberID: marcus, TransferAccountID: from, Cleared: cleared(dt), Source: provenance,
 			})
 		}
 		addTransfer := func(slot, dest, label string, amt int64) {
@@ -515,10 +519,10 @@ func SampleDatasetAt(now time.Time) Dataset {
 		// opening balances. The in-leg posts a positive amount to the loan account,
 		// reducing the outstanding balance (which started as a negative opening bal).
 		if i >= 42 { // Marcus's expensive car — financed Jan 2025 (bad decision #2)
-			addTransferBetween("carpay-m", 15, checking, carM, "Car payment (Marcus)", 62000)
+			addTransferBetween("carpay-m", 15, checking, carM, "Car payment (Marcus)", 62000, domain.TxnSourceRecurring)
 		}
 		if i >= 50 { // Priya's car — financed Sep 2025 (bad decision #3)
-			addTransferBetween("carpay-p", 17, checking, carP, "Car payment (Priya)", 48000)
+			addTransferBetween("carpay-p", 17, checking, carP, "Car payment (Priya)", 48000, domain.TxnSourceRecurring)
 		}
 		// Car insurance: quarterly, and steps up once both cars are on the policy.
 		if int(m)%3 == 0 {

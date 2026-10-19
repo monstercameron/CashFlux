@@ -53,6 +53,24 @@ func TestAnnualAmounts(t *testing.T) {
 	}
 }
 
+func TestUpcomingAllClassifiesRecurringLiabilityPaymentAsTransfer(t *testing.T) {
+	accounts := []domain.Account{
+		{ID: "checking", Name: "Joint Checking", Class: domain.ClassAsset, Currency: "USD"},
+		{ID: "mortgage", Name: "Mortgage", Class: domain.ClassLiability, Currency: "USD", MinPayment: money.New(148000, "USD")},
+	}
+	recurring := []domain.Recurring{{
+		ID: "mortgage-payment", Label: "Mortgage payment", Amount: money.New(-148000, "USD"),
+		Cadence: domain.CadenceMonthly, NextDue: d(2026, time.November, 1), AccountID: "checking",
+	}}
+	got := UpcomingAll(accounts, recurring, d(2026, time.October, 20))
+	if len(got) != 1 {
+		t.Fatalf("upcoming bills = %d, want one", len(got))
+	}
+	if got[0].TransferAccountID != "mortgage" || got[0].TransferAccountName != "Mortgage" {
+		t.Fatalf("scheduled transfer = %#v", got[0])
+	}
+}
+
 func TestNextDue(t *testing.T) {
 	cases := []struct {
 		name   string

@@ -90,6 +90,12 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Loan and card payments are transfers when they post (R4LOAN).** Paying a bill or auto-posting a recurring payment that
+  matches one loan or card account (same currency, its minimum payment, and a shared word with the account name) now
+  creates a transfer pair to that account instead of an expense, and only advances the schedule once the pair is saved;
+  ambiguous matches stay expenses. Scheduled bills carry the same destination, the sample's October car payments are
+  transfers like September's, and a review-only check (`RecurringPaymentSuggestions`) finds past expense rows that look
+  like such payments without rewriting them.
 - **Transaction writes respect the local day, transfer partners and splits (TC2A).** A transaction written in the evening
   west of UTC keeps its local calendar day. Clearing the transfer on one leg also clears its partner, and a cross-currency
   liability edit signs the partner from the edited leg's own amount. Validation can check the account exists, the

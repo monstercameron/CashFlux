@@ -18,6 +18,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/txnclassify"
 )
 
 // Bill is one upcoming payment derived from an account.
@@ -28,6 +29,10 @@ type Bill struct {
 	DueDate   time.Time   // the next due date on or after the reference time
 	DaysUntil int         // whole days from the reference date to DueDate (0 = due today)
 	Autopay   bool        // C154/C157: biller charges this automatically (recurring-derived bills only)
+	// TransferAccountID is the unambiguous liability destination of a recurring
+	// payment. Empty means the scheduled item remains ordinary spending.
+	TransferAccountID   string
+	TransferAccountName string
 	// AnchorAccountID is set by DedupeObligations when this bill absorbed the
 	// liability-statement bill for the SAME real payment: it names the liability
 	// account the payment settles, so a surface can still offer the account
@@ -153,14 +158,19 @@ func UpcomingAll(accounts []domain.Account, recurring []domain.Recurring, now ti
 		if !ok {
 			continue
 		}
-		out = append(out, Bill{
+		bill := Bill{
 			AccountID: recurringAccountPrefix + r.ID,
 			Name:      r.Label,
 			Amount:    r.Amount.Abs(),
 			DueDate:   due,
 			DaysUntil: daysBetween(now, due),
 			Autopay:   r.Autopay,
-		})
+		}
+		if destination, ok := txnclassify.RecurringLiabilityDestination(r, accounts); ok {
+			bill.TransferAccountID = destination.ID
+			bill.TransferAccountName = destination.Name
+		}
+		out = append(out, bill)
 	}
 	// One merge rule for the whole app (C340). This function used to run its own
 	// dedupe with the OPPOSITE survivor — it dropped the recurring flow and kept

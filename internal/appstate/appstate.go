@@ -47,6 +47,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/store"
 	"github.com/monstercameron/CashFlux/internal/taskrecur"
 	"github.com/monstercameron/CashFlux/internal/tasksort"
+	"github.com/monstercameron/CashFlux/internal/txnclassify"
 	"github.com/monstercameron/CashFlux/internal/validate"
 	"github.com/monstercameron/CashFlux/internal/workflow"
 )
@@ -1856,6 +1857,16 @@ func (a *App) RecordBillPayment(accountID, name string, amount money.Money) erro
 			if r.AccountID == "" {
 				return fmt.Errorf("appstate: recurring %q has no account to post to", r.Label)
 			}
+			if destination, ok := txnclassify.RecurringLiabilityDestination(r, a.Accounts()); ok {
+				if _, _, err := a.CreateTransferPair(TransferParams{
+					Source: domain.TxnSourceRecurring, FromAccountID: r.AccountID,
+					ToAccountID: destination.ID, AmountMinor: r.Amount.Abs().Amount,
+					Date: now, Desc: r.Label,
+				}); err != nil {
+					return fmt.Errorf("appstate: post recurring payment %q: %w", r.Label, err)
+				}
+				return a.PutRecurring(r.Advance())
+			}
 			t := domain.Transaction{
 				ID: id.New(), AccountID: r.AccountID, CategoryID: r.CategoryID,
 				Amount: r.Amount, Date: now, Payee: r.Label, Desc: r.Label,
@@ -1883,6 +1894,13 @@ func (a *App) RecordBillPayment(accountID, name string, amount money.Money) erro
 		Source: domain.TxnSourceRecurring,
 	}
 	return a.PutTransaction(t)
+}
+
+// RecurringPaymentSuggestions returns review-only suggestions for expense rows
+// that exactly match a recurring payment to a liability account. It never
+// changes transaction history.
+func (a *App) RecurringPaymentSuggestions() []txnclassify.PaymentSuggestion {
+	return txnclassify.FindRecurringPaymentSuggestions(a.Transactions(), a.Accounts(), a.Recurring())
 }
 
 // DeleteRecurring removes a recurring cash flow.
@@ -2597,6 +2615,19 @@ func (a *App) PostDueRecurring(asOf time.Time) (int, error) {
 		}
 		changed := false
 		for guard := 0; !r.NextDue.After(asOf) && guard < 600; guard++ {
+			if destination, ok := txnclassify.RecurringLiabilityDestination(r, a.Accounts()); ok {
+				if _, _, err := a.CreateTransferPair(TransferParams{
+					Source: domain.TxnSourceRecurring, FromAccountID: r.AccountID,
+					ToAccountID: destination.ID, AmountMinor: r.Amount.Abs().Amount,
+					Date: r.NextDue, Desc: r.Label,
+				}); err != nil {
+					return posted, fmt.Errorf("appstate: auto-post recurring payment %q: %w", r.Label, err)
+				}
+				r = r.Advance()
+				posted++
+				changed = true
+				continue
+			}
 			t := domain.Transaction{
 				ID: id.New(), AccountID: r.AccountID, CategoryID: r.CategoryID,
 				Date: r.NextDue, Amount: r.Amount, Desc: r.Label,
