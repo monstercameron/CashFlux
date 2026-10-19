@@ -8,11 +8,13 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/goalfunded"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -292,21 +294,37 @@ func budgetRowGoalFunding(lastMonthMode bool, s budgeting.Status, props budgetRo
 				currency.Rates{Base: base, Rates: app.Settings().FXRates})
 		})
 		if split.HasFunded() {
-			key := "budgets.goalFunded"
-			if _, rescued := split.OverBy(s.Limit.Amount); rescued {
-				// The sentence worth showing: without the goal this would read as
-				// overspent, and saying so is the difference between a budget that
-				// understands the plan and one that only counts.
-				key = "budgets.goalFundedRescued"
+			key := "budgets.goalFundedAvailableMany"
+			if len(split.Goals) == 1 {
+				key = "budgets.goalFundedAvailableOne"
 			}
-			fundedTitle = uistate.T(key, fmtMoney(money.New(split.FundedMinor, base)))
-			fundedChip = uistate.T("budgets.goalFundedChip")
+			fundedTitle = uistate.T(key, fmtMoney(money.New(split.FundedMinor, base)), budgetGoalNames(app.Goals(), split.Goals), fmtMoney(s.Limit))
+			fundedChip = fundedTitle
 			fundedLine = Span(css.Class("budget-sub", tw.TextDim),
 				Attr("data-testid", "budget-goalfunded-"+s.Budget.ID), fundedTitle)
 		}
 	}
 
 	return fundedLine, fundedChip
+}
+
+func budgetGoalNames(goals []domain.Goal, ids []string) string {
+	namesByID := make(map[string]string, len(goals))
+	for _, goal := range goals {
+		namesByID[goal.ID] = strings.TrimSpace(goal.Name)
+	}
+	names := make([]string, 0, len(ids))
+	for _, id := range ids {
+		name := strings.TrimSpace(namesByID[id])
+		if name == "" {
+			name = uistate.T("budgets.goalFundedUnnamed")
+		}
+		names = append(names, "'"+name+"'")
+	}
+	if len(names) == 0 {
+		return uistate.T("budgets.goalFundedUnnamed")
+	}
+	return strings.Join(names, ", ")
 }
 
 // budgetRowNotesProps carries the explicit inputs for budgetRowNotes.
@@ -416,7 +434,12 @@ type budgetRowFollowUpsProps struct {
 func budgetRowFollowUps(p budgetRowFollowUpsProps) (ui.Node, bool) {
 	// any) — check-off in place, like the transaction follow-ups. Shown whenever either
 	// exists; otherwise the column is omitted and the main content fills the width.
-	linkedTodos := budgetLinkedTodos(p.s.Budget.ID)
+	var linkedTodos []followUpItem
+	if app := appstate.Default; app != nil {
+		linkedTodos = memoBudgetFollowUps(app, app.Rev(), p.s.Budget.ID, func() []followUpItem {
+			return budgetLinkedTodos(p.s.Budget.ID)
+		})
+	}
 	var todosPanel ui.Node = Fragment()
 	if len(linkedTodos) > 0 {
 		const maxTodos = 5
@@ -435,11 +458,12 @@ func budgetRowFollowUps(p budgetRowFollowUpsProps) (ui.Node, bool) {
 		kids := []any{css.Class("budget-todos"), Attr("data-testid", "budget-todos-"+p.s.Budget.ID),
 			Button(css.Class("budget-todos-head"), Type("button"),
 				Attr("data-testid", "budget-todos-toggle-"+p.s.Budget.ID),
+				Attr("aria-label", uistate.T("budgets.followUpsHead", open, len(linkedTodos))),
 				Attr("aria-expanded", ariaBool(p.todosOpen.Get())), Title(toggleHint), OnClick(p.toggleTodos),
 				Style(map[string]string{"background": "transparent", "border": "0", "padding": "0", "margin": "0",
 					"font": "inherit", "color": "inherit", "cursor": "pointer",
-					"display": "inline-flex", "align-items": "center", "gap": "0.25rem"}),
-				Span(css.Class("budget-followup-count"), Attr("aria-label", uistate.T("budgets.followUpsHead", open, len(linkedTodos))), strconv.Itoa(open)),
+					"display": "inline-flex", "align-items": "center", "gap": "0.25rem", "width": "fit-content", "min-width": "0"}),
+				Span(css.Class("budget-followup-count"), strconv.Itoa(open)),
 				uiw.Icon(chev, css.Class(tw.ShrinkO, tw.W35, tw.H35)))}
 		if p.todosOpen.Get() {
 			for i, it := range linkedTodos {
@@ -458,4 +482,33 @@ func budgetRowFollowUps(p budgetRowFollowUpsProps) (ui.Node, bool) {
 	hasSide := p.hasNotes || len(linkedTodos) > 0
 
 	return todosPanel, hasSide
+}
+
+type budgetFollowUpMemoKey struct {
+	app      *appstate.App
+	revision uint64
+	budgetID string
+}
+
+var budgetFollowUpMemos = struct {
+	sync.Mutex
+	values map[budgetFollowUpMemoKey][]followUpItem
+}{values: make(map[budgetFollowUpMemoKey][]followUpItem)}
+
+func memoBudgetFollowUps(app *appstate.App, revision uint64, budgetID string, calculate func() []followUpItem) []followUpItem {
+	key := budgetFollowUpMemoKey{app: app, revision: revision, budgetID: budgetID}
+	budgetFollowUpMemos.Lock()
+	if value, ok := budgetFollowUpMemos.values[key]; ok {
+		budgetFollowUpMemos.Unlock()
+		return value
+	}
+	budgetFollowUpMemos.Unlock()
+	value := calculate()
+	budgetFollowUpMemos.Lock()
+	if len(budgetFollowUpMemos.values) > 512 {
+		budgetFollowUpMemos.values = make(map[budgetFollowUpMemoKey][]followUpItem)
+	}
+	budgetFollowUpMemos.values[key] = append([]followUpItem(nil), value...)
+	budgetFollowUpMemos.Unlock()
+	return value
 }

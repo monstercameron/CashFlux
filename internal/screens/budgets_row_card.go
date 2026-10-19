@@ -84,9 +84,8 @@ func budgetRowCard(p budgetRowCardProps) ui.Node {
 		),
 		// Overline tag naming the bar as last month's, when the overlay is on.
 		p.lastMonthTag,
-		// The card's "loader": a taller progress bar with the spent/limit amount (left) and
-		// the percent-used (right) rendered inside it, over the fill. In last-month mode the
-		// figures are last period's spend against this month's budget.
+		// Keep the amount row in normal document flow. The bar itself is only five pixels
+		// tall, so putting figures inside it makes them cover the pace legend below.
 		ui.CreateElement(budgetRowFigures, p),
 		p.paceLegend,
 		// Everything below the bar sits in a flex row so a budget WITH a note can put the
@@ -121,17 +120,6 @@ func budgetRowCard(p budgetRowCardProps) ui.Node {
 				// stack all of it between the bar and the actions, so "how much is left?"
 				// competed with a dozen explanations of how it was arrived at. ---
 				ui.CreateElement(budgetRowExpandedDetails, p),
-				// "What's driving this?" stays OUT of the disclosure: it is offered only when
-				// a budget is near or over — exactly when "why" is the question — and it is
-				// already collapsed and lazy.
-				If(!p.lastMonthMode && (p.s.State == budgeting.StateOver || p.s.State == budgeting.StateNear),
-					ui.CreateElement(budgetDriversPanel, budgetDriversPanelProps{Budget: p.s.Budget, Title: p.title, Anchor: p.props.Anchor})),
-				// SM-12: this budget's own trailing average, when the limit has drifted
-				// far enough from it to be worth saying. Not shown in last-month mode:
-				// the figures there describe a closed period, and offering to rewrite a
-				// limit from a historical view is a change you cannot see the effect of.
-				If(!p.lastMonthMode,
-					ui.CreateElement(budgetSuggestHint, budgetSuggestProps{Budget: p.s.Budget})),
 				p.actionsRow,
 			),
 			If(p.hasSide, Div(css.Class("budget-side-col"),
@@ -144,31 +132,13 @@ func budgetRowCard(p budgetRowCardProps) ui.Node {
 
 // budgetRowFigures renders the bar, figures, and inline base-limit editor.
 func budgetRowFigures(p budgetRowCardProps) ui.Node {
-	return Div(css.Class("budget-card-loader"), Attr("role", "progressbar"), Attr("aria-valuenow", strconv.Itoa(p.width)), Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"), Attr("aria-label", uistate.T("budgets.progressLabel")+" — "+p.title),
-		Div(ClassStr(p.fillClass), Attr("style", fmt.Sprintf("width:%d%%", p.width))),
-		// XC4: the committed band sits just past the spent fill (hidden in last-month
-		// mode, where the bar shows a different period's spend).
-		If(!p.lastMonthMode && p.props.HasCommitted && p.props.Committed.CommittedPct > 0,
-			Div(css.Class("bar-committed"), Attr("data-testid", "budget-committed-seg-"+p.s.Budget.ID),
-				Attr("style", fmt.Sprintf("left:%d%%;width:%d%%", p.props.Committed.SpentPct, p.props.Committed.CommittedPct)))),
-		// BG3: the even-pace tick — a thin vertical marker at where discretionary
-		// spending SHOULD be right now (committed money excluded). Hidden in
-		// last-month mode (the bar then shows a different period).
-		If(!p.lastMonthMode && p.props.PaceMarkerPct > 0,
-			Div(css.Class("bar-pace-tick"), Attr("data-testid", "budget-pace-tick-"+p.s.Budget.ID),
-				Attr("aria-hidden", "true"),
-				Attr("style", fmt.Sprintf("position:absolute;top:0;bottom:0;left:%d%%;width:2px;background:var(--text);opacity:0.55;pointer-events:none", p.props.PaceMarkerPct)))),
+	return Fragment(
 		Div(css.Class("budget-card-loader-figs"),
 			// Spent carries foreground weight; the "/ limit" reads as muted context.
-			// The limit figure is a direct affordance: click it to edit in place (G1) —
-			// the most frequent budget change never costs a modal round-trip.
+			// The limit figure is a direct affordance: click it to edit in place (G1).
 			IfElse(p.limitEditing.Get(),
 				Form(css.Class("budget-amount", "budget-limit-editform"), OnSubmit(p.saveLimitEdit),
 					Span(css.Class("budget-spent"), p.barSpent), Span(" / "),
-					// When carry/boost make the cap differ from the base limit, the button
-					// face shows the CAP but this input edits the BASE — label it so the
-					// number swap on open doesn't read as a glitch (the capmath line below
-					// carries the arithmetic).
 					Div(css.Class("budget-limit-edit-values"),
 						Span(css.Class("budget-limit-editor-cap"), uistate.T("budgets.effectiveCapLabel"), Strong(fmtMoney(p.limit))),
 						Span(css.Class("budget-limit-editor-base"), uistate.T("budgets.baseLimitLabel"), Strong(baseBudgetLimit(p.s.Budget.ID, p.s.Budget.Limit)))),
@@ -180,7 +150,6 @@ func budgetRowFigures(p budgetRowCardProps) ui.Node {
 						uiw.Icon(icon.Check, css.Class(tw.W35, tw.H35))}, disabledAttr(p.limitErrMsg != "")...)...),
 					Button(css.Class("btn btn-sm", "budget-limit-cancel"), Type("button"), Attr("data-testid", "budget-limit-cancel-"+p.s.Budget.ID),
 						Attr("aria-label", uistate.T("action.cancel")), Title(uistate.T("action.cancel")), OnClick(p.cancelLimitEdit), uiw.Icon(icon.Close, css.Class(tw.W35, tw.H35))),
-					// C665: say why ✓ is dead, right where the number was typed.
 					errText(p.limitErrID, p.limitErrMsg),
 				),
 				Span(css.Class("budget-amount"),
@@ -192,18 +161,37 @@ func budgetRowFigures(p budgetRowCardProps) ui.Node {
 			// Percent-used, capped for display (e.g. "112%" when over).
 			Span(css.Class("budget-pct"), strconv.Itoa(p.barPct)+"%"),
 		),
+		Div(css.Class("budget-card-loader"), Attr("role", "progressbar"), Attr("aria-valuenow", strconv.Itoa(p.width)), Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"), Attr("aria-label", uistate.T("budgets.progressLabel")+" — "+p.title),
+			Div(ClassStr(p.fillClass), Attr("style", fmt.Sprintf("width:%d%%", p.width))),
+			// XC4: the committed band sits just past the spent fill (hidden in last-month
+			// mode, where the bar shows a different period's spend).
+			If(!p.lastMonthMode && p.props.HasCommitted && p.props.Committed.CommittedPct > 0,
+				Div(css.Class("bar-committed"), Attr("data-testid", "budget-committed-seg-"+p.s.Budget.ID),
+					Attr("style", fmt.Sprintf("left:%d%%;width:%d%%", p.props.Committed.SpentPct, p.props.Committed.CommittedPct)))),
+			// BG3: the even-pace tick — a thin vertical marker at where discretionary
+			// spending SHOULD be right now (committed money excluded). Hidden in
+			// last-month mode (the bar then shows a different period).
+			If(!p.lastMonthMode && p.props.PaceMarkerPct > 0,
+				Div(css.Class("bar-pace-tick"), Attr("data-testid", "budget-pace-tick-"+p.s.Budget.ID),
+					Attr("aria-hidden", "true"),
+					Attr("style", fmt.Sprintf("position:absolute;top:0;bottom:0;left:%d%%;width:2px;background:var(--text);opacity:0.55;pointer-events:none", p.props.PaceMarkerPct)))),
+		),
 	)
 }
 
 // budgetRowExpandedDetails keeps explanatory content behind its existing disclosure.
 func budgetRowExpandedDetails(p budgetRowCardProps) ui.Node {
-	return Fragment(
-		Button(css.Class("btn cf-adv-toggle budget-details-toggle"), Type("button"),
-			Attr("data-testid", "budget-details-"+p.s.Budget.ID),
-			Attr("aria-expanded", ariaBool(p.detailsOpen.Get())),
-			Attr("aria-label", uistate.T("budgets.detailsAria", p.title)),
-			OnClick(p.toggleDetails), uistate.T(budgetDetailsKey(p.detailsOpen.Get()))),
-		If(p.detailsOpen.Get(), Div(css.Class("budget-details"), Attr("data-testid", "budget-details-body-"+p.s.Budget.ID),
+	var body ui.Node = Fragment()
+	if p.detailsOpen.Get() {
+		var drivers ui.Node = Fragment()
+		if !p.lastMonthMode && (p.s.State == budgeting.StateOver || p.s.State == budgeting.StateNear) {
+			drivers = ui.CreateElement(budgetDriversPanel, budgetDriversPanelProps{Budget: p.s.Budget, Title: p.title, Anchor: p.props.Anchor})
+		}
+		var suggestion ui.Node = Fragment()
+		if !p.lastMonthMode {
+			suggestion = ui.CreateElement(budgetSuggestHint, budgetSuggestProps{Budget: p.s.Budget})
+		}
+		body = Div(css.Class("budget-details"), Attr("data-testid", "budget-details-body-"+p.s.Budget.ID),
 			// Spend-composition donut for a composite budget.
 			p.pieNode,
 			// Multi-category budgets: the categories the combined total is made of.
@@ -229,6 +217,16 @@ func budgetRowExpandedDetails(p budgetRowCardProps) ui.Node {
 			p.proratedLine,
 			p.rolloverLine,
 			p.metricsStrip,
-		)),
+			drivers,
+			suggestion,
+		)
+	}
+	return Fragment(
+		Button(css.Class("btn cf-adv-toggle budget-details-toggle"), Type("button"),
+			Attr("data-testid", "budget-details-"+p.s.Budget.ID),
+			Attr("aria-expanded", ariaBool(p.detailsOpen.Get())),
+			Attr("aria-label", uistate.T("budgets.detailsAria", p.title)),
+			OnClick(p.toggleDetails), uistate.T(budgetDetailsKey(p.detailsOpen.Get()))),
+		body,
 	)
 }

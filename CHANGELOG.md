@@ -90,6 +90,11 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Budgets Full cards: figures above the bar, lazy details, honest goal note (BR2CARD).** The spent/limit and percent row
+  now sits in normal flow above the progress bar, so it no longer covers the pace legend. Spending drivers and suggestions
+  only mount when a card's details are opened, and follow-ups are cached per data change, cutting the work done when
+  switching to Full cards. The goal note names the goal and says the money is available this month without changing the
+  limit; the follow-ups button is named on the button itself.
 - **Budgets: names that start with what you see, bigger targets (BR2A11Y).** "Budget income", "See where it went", "Review
   all … untracked" and "View all" now have accessible names that begin with their visible text (WCAG 2.5.3), and those
   controls are at least 24×24 px (44×44 on touch). The Budgets toolbar test follows the single member lens.
