@@ -3,6 +3,7 @@
 package screens
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 
@@ -39,6 +40,29 @@ func TestDeriveTxnRowsSortsDisplayedDescriptionWithStableTies(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestDeriveTxnRowsReportsUncomparableAmounts(t *testing.T) {
+	input := []domain.Transaction{
+		{ID: "usd", Amount: money.New(-12000, "USD")},
+		{ID: "eur", Amount: money.New(-12000, "EUR")},
+	}
+	labels := txnfilter.Labels{
+		BaseCurrency: "USD",
+		ToBase: func(value money.Money) (money.Money, error) {
+			if value.Currency == "EUR" {
+				return money.Money{}, errors.New("missing EUR rate")
+			}
+			return value, nil
+		},
+	}
+	rows, issues := deriveTxnRowsWithIssues(input, txnfilter.Criteria{AmountMin: "100"}, labels, nil, nil)
+	if len(rows) != 1 || rows[0].ID != "usd" {
+		t.Fatalf("matching rows = %#v, want only USD transaction", rows)
+	}
+	if len(issues) != 1 || issues[0].Transaction.ID != "eur" {
+		t.Fatalf("conversion issues = %#v, want the excluded EUR transaction", issues)
 	}
 }
 

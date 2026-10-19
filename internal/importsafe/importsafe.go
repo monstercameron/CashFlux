@@ -65,8 +65,8 @@ type WhyDup struct {
 	Desc        string
 	AmountMinor int64
 	Currency    string
-	// InBatch is true when the collision is with an EARLIER ROW OF THE SAME
-	// IMPORT (the file itself repeats the row) rather than the existing ledger.
+	// InBatch is retained for compatibility. The importer counts existing
+	// occurrences only, so additional same-file repetitions are new and this is false.
 	InBatch bool
 }
 
@@ -75,12 +75,11 @@ type WhyDup struct {
 // exactly (per-account signature vs the ledger, then vs earlier batch rows), so
 // len(Duplicates(...)) always equals the preview count.
 func Duplicates(incoming, existing []domain.Transaction, accountID string) []WhyDup {
-	seen := make(map[string]bool, len(existing))
+	remaining := make(map[string]int, len(existing))
 	for _, t := range existing {
-		seen[dedupe.Key(t)] = true
+		remaining[dedupe.Key(t)]++
 	}
 	var out []WhyDup
-	batch := make(map[string]bool, len(incoming))
 	for _, t := range incoming {
 		acct := t.AccountID
 		if acct == "" {
@@ -91,14 +90,9 @@ func Duplicates(incoming, existing []domain.Transaction, accountID string) []Why
 		scoped := t
 		scoped.AccountID = acct
 		sig := dedupe.Key(scoped)
-		switch {
-		case seen[sig]:
+		if dedupe.ConsumeExisting(remaining, sig) {
 			out = append(out, WhyDup{Date: t.Date.Format("2006-01-02"), Desc: strings.TrimSpace(t.Desc),
-				AmountMinor: t.Amount.Amount, Currency: t.Amount.Currency, InBatch: batch[sig]})
-			batch[sig] = true
-		default:
-			seen[sig] = true
-			batch[sig] = true
+				AmountMinor: t.Amount.Amount, Currency: t.Amount.Currency})
 		}
 	}
 	return out

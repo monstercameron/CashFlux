@@ -3,42 +3,84 @@
 package importmap
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/statement"
+)
+
+// NumberFormat selects the decimal and grouping separators used by a bank export.
+type NumberFormat string
+
+const (
+	// NumberFormatAuto detects the format from the amount's separators.
+	NumberFormatAuto NumberFormat = "auto"
+	// NumberFormatDotDecimal uses a dot for decimals and a comma for grouping.
+	NumberFormatDotDecimal NumberFormat = "dot-decimal"
+	// NumberFormatCommaDecimal uses a comma for decimals and a dot for grouping.
+	NumberFormatCommaDecimal NumberFormat = "comma-decimal"
 )
 
 // Profile describes how a particular bank's CSV export maps to statement rows.
 type Profile struct {
-	Name        string // e.g. "Chase Checking"
-	DateCol     int    // 0-based column index, -1 if absent
-	DescCol     int    // 0-based column index
-	AmountCol   int    // 0-based column index, -1 if absent
-	DebitCol    int    // -1 if absent; used when no AmountCol
-	CreditCol   int    // -1 if absent
-	BalanceCol  int    // -1 if absent
-	CurrencyCol int    // -1 if absent (informational)
-	SkipRows    int    // header rows to skip before data rows
-	Decimals    int    // minor-unit precision, default 2
-	DateLayout  string // Go time layout; empty = auto-detect
+	Name         string       // e.g. "Chase Checking"
+	DateCol      int          // 0-based column index, -1 if absent
+	DescCol      int          // 0-based column index
+	AmountCol    int          // 0-based column index, -1 if absent
+	DebitCol     int          // -1 if absent; used when no AmountCol
+	CreditCol    int          // -1 if absent
+	BalanceCol   int          // -1 if absent
+	CurrencyCol  int          // -1 if absent (informational)
+	SkipRows     int          // header rows to skip before data rows
+	Decimals     int          // minor-unit precision, default 2
+	DateLayout   string       // Go time layout; empty = auto-detect
+	NumberFormat NumberFormat // decimal separator choice; empty behaves as auto-detect
 }
 
 // Apply maps raw CSV rows (already split, after SkipRows) to []statement.Row.
-// Rows that cannot be parsed (bad date, bad amount) are silently skipped.
+// Rows that cannot be parsed are skipped; use ApplyWithErrors to report them.
 func Apply(p Profile, rows [][]string) []statement.Row {
-	out := make([]statement.Row, 0, len(rows))
-	for _, cols := range rows {
-		row, ok := applyRow(p, cols)
-		if ok {
-			out = append(out, row)
-		}
-	}
+	out, _ := ApplyWithErrors(p, rows)
 	return out
 }
 
-func applyRow(p Profile, cols []string) (statement.Row, bool) {
+// RowError describes a mapping row that could not be converted.
+type RowError struct {
+	// Index is the zero-based position in the supplied rows.
+	Index int
+	// Field names the value that could not be parsed.
+	Field string
+	// Err explains why the value could not be parsed.
+	Err error
+}
+
+// Error returns a row-oriented description suitable for a review message.
+func (e RowError) Error() string {
+	return fmt.Sprintf("row %d %s: %v", e.Index+1, e.Field, e.Err)
+}
+
+// ApplyWithErrors maps rows and reports every row that could not be converted.
+// Invalid amounts never become zero-valued rows.
+func ApplyWithErrors(p Profile, rows [][]string) ([]statement.Row, []RowError) {
+	out := make([]statement.Row, 0, len(rows))
+	var rowErrors []RowError
+	for i, cols := range rows {
+		row, ok, field, err := applyRow(p, cols)
+		if ok {
+			out = append(out, row)
+		} else if err != nil {
+			rowErrors = append(rowErrors, RowError{Index: i, Field: field, Err: err})
+		} else {
+			rowErrors = append(rowErrors, RowError{Index: i, Field: field, Err: fmt.Errorf("value is required")})
+		}
+	}
+	return out, rowErrors
+}
+
+func applyRow(p Profile, cols []string) (statement.Row, bool, string, error) {
 	get := func(idx int) string {
 		if idx < 0 || idx >= len(cols) {
 			return ""
@@ -50,7 +92,7 @@ func applyRow(p Profile, cols []string) (statement.Row, bool) {
 	var date time.Time
 	dateStr := get(p.DateCol)
 	if dateStr == "" {
-		return statement.Row{}, false
+		return statement.Row{}, false, "date", nil
 	}
 	var err error
 	if p.DateLayout != "" {
@@ -59,7 +101,7 @@ func applyRow(p Profile, cols []string) (statement.Row, bool) {
 		date, err = autoParseDate(dateStr)
 	}
 	if err != nil {
-		return statement.Row{}, false
+		return statement.Row{}, false, "date", err
 	}
 
 	// Description
@@ -70,30 +112,32 @@ func applyRow(p Profile, cols []string) (statement.Row, bool) {
 	if p.AmountCol >= 0 {
 		amtStr := get(p.AmountCol)
 		if amtStr == "" {
-			return statement.Row{}, false
+			return statement.Row{}, false, "amount", nil
 		}
-		amount, err = parseMinorUnits(amtStr, p.Decimals)
+		amount, err = parseMinorUnits(amtStr, p.Decimals, p.NumberFormat)
 		if err != nil {
-			return statement.Row{}, false
+			return statement.Row{}, false, "amount", err
 		}
 	} else {
 		// Debit/Credit columns
 		debitStr := get(p.DebitCol)
 		creditStr := get(p.CreditCol)
 		if debitStr == "" && creditStr == "" {
-			return statement.Row{}, false
+			return statement.Row{}, false, "amount", nil
 		}
 		if debitStr != "" {
-			d, e := parseMinorUnits(debitStr, p.Decimals)
-			if e == nil {
-				amount -= d // debit is negative
+			d, e := parseMinorUnits(debitStr, p.Decimals, p.NumberFormat)
+			if e != nil {
+				return statement.Row{}, false, "debit", e
 			}
+			amount -= d // debit is negative
 		}
 		if creditStr != "" {
-			c, e := parseMinorUnits(creditStr, p.Decimals)
-			if e == nil {
-				amount += c
+			c, e := parseMinorUnits(creditStr, p.Decimals, p.NumberFormat)
+			if e != nil {
+				return statement.Row{}, false, "credit", e
 			}
+			amount += c
 		}
 	}
 
@@ -103,11 +147,12 @@ func applyRow(p Profile, cols []string) (statement.Row, bool) {
 	if p.BalanceCol >= 0 {
 		balStr := get(p.BalanceCol)
 		if balStr != "" {
-			b, e := parseMinorUnits(balStr, p.Decimals)
-			if e == nil {
-				balance = b
-				hasBalance = true
+			b, e := parseMinorUnits(balStr, p.Decimals, p.NumberFormat)
+			if e != nil {
+				return statement.Row{}, false, "balance", e
 			}
+			balance = b
+			hasBalance = true
 		}
 	}
 
@@ -117,7 +162,7 @@ func applyRow(p Profile, cols []string) (statement.Row, bool) {
 		Amount:      amount,
 		Balance:     balance,
 		HasBalance:  hasBalance,
-	}, true
+	}, true, "", nil
 }
 
 // DefaultProfile returns a Profile pre-filled from header column names.
@@ -190,25 +235,104 @@ func autoParseDate(s string) (time.Time, error) {
 	return time.Time{}, strconv.ErrSyntax
 }
 
-func parseMinorUnits(s string, decimals int) (int64, error) {
-	// Remove currency symbols and commas
-	s = strings.ReplaceAll(s, ",", "")
-	s = strings.TrimLeft(s, "$£€¥")
+func parseMinorUnits(s string, decimals int, format NumberFormat) (int64, error) {
 	s = strings.TrimSpace(s)
-	f, err := strconv.ParseFloat(s, 64)
+	negative := false
+	if strings.HasPrefix(s, "(") && strings.HasSuffix(s, ")") {
+		negative = true
+		s = strings.TrimSpace(s[1 : len(s)-1])
+	} else if strings.ContainsAny(s, "()") {
+		return 0, fmt.Errorf("invalid accounting amount %q", s)
+	}
+	if s != "" && (s[0] == '-' || s[0] == '+') {
+		if s[0] == '-' {
+			if negative {
+				return 0, fmt.Errorf("amount has multiple negative signs")
+			}
+			negative = true
+		}
+		s = strings.TrimSpace(s[1:])
+	}
+	for _, symbol := range []string{"$", "£", "€", "¥"} {
+		s = strings.ReplaceAll(s, symbol, "")
+	}
+	s = strings.ReplaceAll(strings.TrimSpace(s), " ", "")
+	decimal, group, err := separators(s, decimals, format)
 	if err != nil {
 		return 0, err
 	}
-	factor := 1.0
-	for i := 0; i < decimals; i++ {
-		factor *= 10
+	if group != 0 {
+		parts := strings.Split(s, string(decimal))
+		if len(parts) > 2 {
+			return 0, fmt.Errorf("invalid amount %q", s)
+		}
+		whole := parts[0]
+		if strings.ContainsRune(whole, group) {
+			groups := strings.Split(whole, string(group))
+			if len(groups[0]) < 1 || len(groups[0]) > 3 || !digits(groups[0]) {
+				return 0, fmt.Errorf("invalid digit grouping in %q", s)
+			}
+			for _, part := range groups[1:] {
+				if len(part) != 3 || !digits(part) {
+					return 0, fmt.Errorf("invalid digit grouping in %q", s)
+				}
+			}
+		}
+		s = strings.ReplaceAll(s, string(group), "")
 	}
-	// Round to nearest
-	v := f * factor
-	if v < 0 {
-		v -= 0.5
-	} else {
-		v += 0.5
+	if decimal == ',' {
+		s = strings.ReplaceAll(s, ",", ".")
 	}
-	return int64(v), nil
+	value, err := money.ParseMinor(s, decimals)
+	if err != nil {
+		return 0, fmt.Errorf("invalid amount %q: %w", s, err)
+	}
+	if negative && value > 0 {
+		value = -value
+	}
+	return value, nil
+}
+
+func separators(s string, decimals int, format NumberFormat) (decimal, group rune, err error) {
+	switch format {
+	case "", NumberFormatAuto:
+		comma, dot := strings.LastIndexByte(s, ','), strings.LastIndexByte(s, '.')
+		switch {
+		case comma >= 0 && dot >= 0:
+			if comma > dot {
+				return ',', '.', nil
+			}
+			return '.', ',', nil
+		case comma >= 0:
+			if shouldBeDecimal(s, comma, decimals) {
+				return ',', '.', nil
+			}
+			return '.', ',', nil
+		default:
+			return '.', ',', nil
+		}
+	case NumberFormatDotDecimal:
+		return '.', ',', nil
+	case NumberFormatCommaDecimal:
+		return ',', '.', nil
+	default:
+		return 0, 0, fmt.Errorf("unsupported number format %q", format)
+	}
+}
+
+func shouldBeDecimal(s string, sep int, decimals int) bool {
+	digitsAfter := len(s) - sep - 1
+	return digitsAfter > 0 && digitsAfter <= decimals
+}
+
+func digits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }

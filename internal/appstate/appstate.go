@@ -503,9 +503,14 @@ func (a *App) ParseCSVForPreview(data []byte, fallbackAccountID string) ([]domai
 	if s := a.Settings(); s.BaseCurrency != "" {
 		base = s.BaseCurrency
 	}
-	txns, _, parseErr := store.TransactionsFromCSVResilient(data, base)
+	txns, skipped, parseErr := store.TransactionsFromCSVResilient(data, base)
 	if parseErr != nil {
 		return nil, parseErr
+	}
+	missingCurrency := csvRowsMissingCurrency(data, skipped)
+	accountCurrency := make(map[string]string, len(a.Accounts()))
+	for _, account := range a.Accounts() {
+		accountCurrency[account.ID] = account.Currency
 	}
 	// Apply the same account/category/member resolution so AccountIDs match.
 	accPairs := make([][2]string, 0, len(a.Accounts()))
@@ -521,10 +526,21 @@ func (a *App) ParseCSVForPreview(data []byte, fallbackAccountID string) ([]domai
 		memPairs = append(memPairs, [2]string{m.ID, m.Name})
 	}
 	resolveAcc, resolveCat, resolveMem := idResolver(accPairs), idResolver(catPairs), idResolver(memPairs)
+	parsed := make([]domain.Transaction, 0, len(txns))
 	for i := range txns {
 		txns[i].AccountID = resolveAcc(txns[i].AccountID)
 		if txns[i].AccountID == "" && fallbackAccountID != "" {
 			txns[i].AccountID = fallbackAccountID
+		}
+		if i < len(missingCurrency) && missingCurrency[i].missing {
+			if curr := accountCurrency[txns[i].AccountID]; curr != "" {
+				minor, err := money.ParseMinor(missingCurrency[i].amount, currency.Decimals(curr))
+				if err != nil {
+					// The importer records this row as failed instead of writing it.
+					continue
+				}
+				txns[i].Amount = money.New(minor, curr)
+			}
 		}
 		txns[i].TransferAccountID = resolveAcc(txns[i].TransferAccountID)
 		txns[i].CategoryID = resolveCat(txns[i].CategoryID)
@@ -534,8 +550,9 @@ func (a *App) ParseCSVForPreview(data []byte, fallbackAccountID string) ([]domai
 		}
 		txns[i].SetOwners(owners)
 		txns[i] = a.AutoCategorizeTransaction(txns[i])
+		parsed = append(parsed, txns[i])
 	}
-	return txns, nil
+	return parsed, nil
 }
 
 // idResolver builds a function that maps a CSV reference cell to an entity id:

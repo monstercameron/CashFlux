@@ -90,6 +90,14 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **The calendar counts a transfer once; imports preview exactly what they import; the summary names rows it can't
+  compare (TC2B, TC2C, TC2E).** Calendar day and week figures use the same pairing rule as the summary strip, so a $500
+  sweep shows "$500 moved", not $1,000, and excluded rows no longer count as spending; scheduled and not-posted bills are
+  part of each day's accessible name. The import preview counts same-file repeats like the importer does and parses
+  amounts at the account's precision (a JPY account no longer previews 100× off); the column-mapping importer parses money
+  exactly (decimal comma or dot, "−$12.50", "(12.50)") and reports unparsable amounts instead of reading them as 0. The
+  summary strip can name rows that couldn't be compared for lack of an exchange rate, "Search all dates" counts with the
+  household currency and refreshes on every change, and the merchant trend cache refreshes with the data and is bounded.
 - **One cover flow and honest dialog copy (BQ10A, BQ10A.1).** "Cover overages" and the row's "Cover from another budget"
   open the same flow: donors are offered safest first with the same "left" figures as the rows, rollover budgets never
   default to borrowing from next month, and mixed currencies are refused. Every funds-moving dialog (adjust all, cover,

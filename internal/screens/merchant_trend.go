@@ -244,17 +244,57 @@ type mtrendState struct {
 	HasMag      bool
 }
 
-// mtrendCached is a merchant's computed story, cached across opens so re-opening the
-// same merchant is instant (no spinner) — the spinner is only paid on a genuine first
-// compute. Session-scoped (cleared on reload); slight staleness on a repeat open is a
-// fine trade for a read-only trend viz.
+// mtrendCached is a merchant's computed story, cached until the ledger revision changes.
 type mtrendCached struct {
 	stats merchantstats.Stats
 	base  string
 	ok    bool
 }
 
-var mtrendStatsCache = map[string]mtrendCached{}
+var mtrendStatsCache = struct {
+	app     *appstate.App
+	rev     uint64
+	entries map[string]mtrendCached
+}{entries: map[string]mtrendCached{}}
+
+const mtrendStatsCacheLimit = 128
+
+func mtrendCacheEntries(app *appstate.App) map[string]mtrendCached {
+	if app == nil {
+		return nil
+	}
+	rev := app.Rev()
+	if mtrendStatsCache.app != app || mtrendStatsCache.rev != rev {
+		mtrendStatsCache.app = app
+		mtrendStatsCache.rev = rev
+		mtrendStatsCache.entries = make(map[string]mtrendCached)
+	}
+	return mtrendStatsCache.entries
+}
+
+func mtrendCacheGet(app *appstate.App, merchant string) (mtrendCached, bool) {
+	entries := mtrendCacheEntries(app)
+	if entries == nil {
+		return mtrendCached{}, false
+	}
+	value, ok := entries[strings.ToLower(strings.TrimSpace(merchant))]
+	return value, ok
+}
+
+func mtrendCachePut(app *appstate.App, merchant string, value mtrendCached) {
+	entries := mtrendCacheEntries(app)
+	if entries == nil {
+		return
+	}
+	key := strings.ToLower(strings.TrimSpace(merchant))
+	if key == "" {
+		return
+	}
+	if _, exists := entries[key]; !exists && len(entries) >= mtrendStatsCacheLimit {
+		clear(entries)
+	}
+	entries[key] = value
+}
 
 // minTrendChipCharges gates which rows show the trend chip. It's deliberately higher
 // than merchantstats.MinCharges (the edit-modal panel's bar): the chip is ambient on
@@ -269,6 +309,13 @@ const minTrendChipCharges = 5
 func merchantTrendChip(props merchantTrendChipProps) ui.Node {
 	st := ui.UseState(mtrendState{})
 	hovering := ui.UseRef(false) // pointer over the chip OR the popover (one hover region)
+	mounted := ui.UseRef(true)
+	ui.UseEffect(func() func() {
+		return func() {
+			mounted.Set(false)
+			hovering.Set(false)
+		}
+	}, "merchant-trend-mounted")
 	wrapID := "mtrend-" + props.TxnID
 
 	uiw.DismissPopover(st.Get().Open, wrapID, func() { st.Set(mtrendState{}) })
@@ -291,10 +338,11 @@ func merchantTrendChip(props merchantTrendChipProps) ui.Node {
 	// open (brief spinner) and reading the cache thereafter. Idempotent — a no-op when
 	// already open, so hover-open and click-open (touch) share one path.
 	ensureOpen := func() {
-		if st.Get().Open {
+		if !mounted.Get() || st.Get().Open {
 			return
 		}
-		if c, ok := mtrendStatsCache[props.Merchant]; ok {
+		app := appstate.Default
+		if c, ok := mtrendCacheGet(app, props.Merchant); ok {
 			st.Set(openWith(c)) // cached — instant, no spinner
 			return
 		}
@@ -306,11 +354,11 @@ func merchantTrendChip(props merchantTrendChipProps) ui.Node {
 				if stats, base, ok := computeMerchantStats(app, props.Merchant); ok {
 					c = mtrendCached{stats: stats, base: base, ok: true}
 				}
+				mtrendCachePut(app, props.Merchant, c)
 			}
-			mtrendStatsCache[props.Merchant] = c
 			// Only reveal the computed content if the popover is still open — the pointer
 			// may have left during the 400ms compute (the grace-close would have shut it).
-			if st.Get().Open {
+			if mounted.Get() && st.Get().Open {
 				st.Set(openWith(c))
 			}
 			cb.Release()
@@ -332,7 +380,7 @@ func merchantTrendChip(props merchantTrendChipProps) ui.Node {
 		}
 		var cb js.Func
 		cb = js.FuncOf(func(js.Value, []js.Value) any {
-			if hovering.Get() {
+			if mounted.Get() && hovering.Get() {
 				ensureOpen()
 			}
 			cb.Release()
@@ -346,7 +394,7 @@ func merchantTrendChip(props merchantTrendChipProps) ui.Node {
 		hovering.Set(false)
 		var cb js.Func
 		cb = js.FuncOf(func(js.Value, []js.Value) any {
-			if !hovering.Get() {
+			if mounted.Get() && !hovering.Get() {
 				st.Set(mtrendState{})
 			}
 			cb.Release()

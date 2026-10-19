@@ -98,7 +98,26 @@ func registerTxnCalendar() {
 	)
 	rule(".txn-cal-cell.today",
 		prop("border-color", "var(--accent)"),
-		prop("box-shadow", "inset 0 0 0 1px var(--accent)"),
+		prop("outline", "2px solid var(--accent)"),
+		prop("outline-offset", "-2px"),
+		prop("background", "var(--bg-card)"),
+		prop("box-shadow", "none"),
+	)
+	rule(".txn-cal-legend",
+		prop("display", "flex"),
+		prop("align-items", "center"),
+		prop("gap", ".4rem"),
+	)
+	rule(".txn-cal-legend-dots",
+		prop("display", "inline-flex"),
+		prop("align-items", "center"),
+	)
+	rule(".txn-cal-legend-dot",
+		prop("position", "static"),
+		prop("width", "7px"),
+		prop("height", "7px"),
+		prop("border-radius", "50%"),
+		prop("background", "var(--accent)"),
 	)
 	rule(".txn-cal-net",
 		prop("font-size", "var(--type-13)"),

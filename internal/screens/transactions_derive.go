@@ -6,7 +6,10 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
 )
 
@@ -14,13 +17,40 @@ import (
 // by the text it displays. The input is not mutated; the returned slice is owned by
 // the caller and can be retained by a render memo until its dependencies change.
 func deriveTxnRows(txns []domain.Transaction, criteria txnfilter.Criteria, labels txnfilter.Labels, hasLearned func(string) bool, resolve func(string) string) []domain.Transaction {
+	rows, _ := deriveTxnRowsWithIssues(txns, criteria, labels, hasLearned, resolve)
+	return rows
+}
+
+// deriveTxnRowsWithIssues applies the ledger criteria and returns rows that could not
+// be compared because their currency could not be converted. The input is not mutated.
+func deriveTxnRowsWithIssues(txns []domain.Transaction, criteria txnfilter.Criteria, labels txnfilter.Labels, hasLearned func(string) bool, resolve func(string) string) ([]domain.Transaction, []txnfilter.ConversionIssue) {
 	defer txnPerfStart("filter-sort")()
 	labels.Payee = memoTxnLabel(labels.Payee)
-	rows, _ := txnfilter.ApplyWithLabelsChecked(txns, criteria, labels)
+	rows, issues := txnfilter.ApplyWithLabelsChecked(txns, criteria, labels)
 	if criteria.Normalize().Sort == "payee" {
 		sortTxnDescriptions(rows, criteria.Normalize().Dir, hasLearned, resolve)
 	}
-	return rows
+	return rows, issues
+}
+
+// txnLabelsForApp builds the labels and currency conversion used by transaction
+// filtering. Account and category names are optional because some filters do not use
+// those labels.
+func txnLabelsForApp(app *appstate.App, accounts, categories map[string]string) txnfilter.Labels {
+	if app == nil {
+		return txnfilter.Labels{Account: accounts, Category: categories}
+	}
+	settings := app.Settings()
+	base := settings.BaseCurrency
+	if base == "" {
+		base = "USD"
+	}
+	rates := currency.Rates{Base: base, Rates: settings.FXRates}
+	return txnfilter.Labels{
+		Account: accounts, Category: categories,
+		Payee: app.PayeeResolver().Resolve, BaseCurrency: base,
+		ToBase: func(value money.Money) (money.Money, error) { return rates.Convert(value, base) },
+	}
 }
 
 func memoTxnLabel(resolve func(string) string) func(string) string {

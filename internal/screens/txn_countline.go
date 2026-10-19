@@ -33,6 +33,9 @@ type txnCountLineProps struct {
 	Lens  string
 	// Unconverted counts visible rows that could not be folded into the base currency.
 	Unconverted int
+	// ConversionIssues are rows excluded by a filter because they could not be
+	// converted to the household currency for comparison.
+	ConversionIssues []txnfilter.ConversionIssue
 	// Excluded counts visible rows intentionally omitted from reports and budgets.
 	Excluded int
 	// Moved is the total magnitude of each visible transfer once.
@@ -141,6 +144,11 @@ func txnCountLineComponent(props txnCountLineProps) ui.Node {
 	if props.Unconverted > 0 {
 		label := uistate.T("transactions.scopeUnconverted", props.Unconverted)
 		secondary = append(secondary, Span(css.Class("txn-count-fact"), Attr("data-testid", "txn-count-unconverted"), label))
+		secondaryText = append(secondaryText, label)
+	}
+	for _, issue := range txnConversionIssueCounts(props.ConversionIssues) {
+		label := uistate.T("tc2e.rowsCannotCompare", issue.count, issue.currency)
+		secondary = append(secondary, Span(css.Class("txn-count-fact"), Attr("data-testid", "txn-count-conversion-issues"), label))
 		secondaryText = append(secondaryText, label)
 	}
 	if props.Excluded > 0 {
@@ -418,7 +426,7 @@ func txnCountTransactionCount(n int) string {
 // txnSearchAllDatesMemo caches the count widened beyond the current date range.
 var txnSearchAllDatesMemo struct {
 	app    *appstate.App
-	rev    int
+	rev    uint64
 	filter txnfilter.Criteria
 	count  int
 	valid  bool
@@ -429,14 +437,40 @@ func txnSearchAllDatesCount(allDates txnfilter.Criteria) int {
 	if app == nil {
 		return 0
 	}
-	rev := uistate.CurrentDataRevision()
+	rev := app.Rev()
 	m := &txnSearchAllDatesMemo
 	if m.valid && m.app == app && m.rev == rev && m.filter == allDates {
 		return m.count
 	}
-	count := len(txnfilter.ApplyWithLabels(app.Transactions(), allDates, txnfilter.Labels{Payee: app.PayeeResolver().Resolve}))
+	count := len(txnfilter.ApplyWithLabels(app.Transactions(), allDates, txnLabelsForApp(app, nil, nil)))
 	m.app, m.rev, m.filter, m.count, m.valid = app, rev, allDates, count, true
 	return count
+}
+
+type txnConversionIssueCount struct {
+	currency string
+	count    int
+}
+
+func txnConversionIssueCounts(issues []txnfilter.ConversionIssue) []txnConversionIssueCount {
+	counts := make(map[string]int)
+	for _, issue := range issues {
+		code := strings.ToUpper(strings.TrimSpace(issue.Transaction.Amount.Currency))
+		if code == "" {
+			code = "unknown"
+		}
+		counts[code]++
+	}
+	currencies := make([]string, 0, len(counts))
+	for code := range counts {
+		currencies = append(currencies, code)
+	}
+	sort.Strings(currencies)
+	result := make([]txnConversionIssueCount, 0, len(currencies))
+	for _, code := range currencies {
+		result = append(result, txnConversionIssueCount{currency: code, count: counts[code]})
+	}
+	return result
 }
 
 func txnCountPeriod(filter txnfilter.Criteria) string {

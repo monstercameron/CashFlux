@@ -6,13 +6,42 @@ import (
 	"testing"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/dedupe"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/importmap"
 	"github.com/monstercameron/CashFlux/internal/money"
 )
 
 func txn(id, acct, desc string, minor int64, date string) domain.Transaction {
 	d, _ := time.Parse("2006-01-02", date)
 	return domain.Transaction{ID: id, AccountID: acct, Desc: desc, Date: d, Amount: money.New(minor, "USD")}
+}
+
+func TestDecimalCommaMappingPreviewMatchesImporterDuplicateCount(t *testing.T) {
+	mapped, errs := importmap.ApplyWithErrors(importmap.Profile{
+		DateCol: 0, DescCol: 1, AmountCol: 2, DebitCol: -1, CreditCol: -1,
+		BalanceCol: -1, Decimals: 2, NumberFormat: importmap.NumberFormatCommaDecimal,
+	}, [][]string{
+		{"2026-07-01", "Cafe", "(12,50)"},
+		{"2026-07-01", "Cafe", "(12,50)"},
+	})
+	if len(errs) != 0 || len(mapped) != 2 {
+		t.Fatalf("mapping rows=%d errors=%+v", len(mapped), errs)
+	}
+	incoming := make([]domain.Transaction, 0, len(mapped))
+	for _, row := range mapped {
+		incoming = append(incoming, domain.Transaction{
+			AccountID: "acc", Date: row.Date, Desc: row.Description, Amount: money.New(row.Amount, "EUR"),
+		})
+	}
+	preview := Duplicates(incoming, nil, "acc")
+	importer := dedupe.CountIncomingDuplicates(incoming, nil, "acc")
+	if len(preview) != importer || importer != 0 {
+		t.Fatalf("preview duplicates=%d, importer duplicates=%d; same-file repeats should both import", len(preview), importer)
+	}
+	if incoming[0].Amount.Amount != -1250 {
+		t.Errorf("decimal-comma amount = %d, want -1250 EUR minor units", incoming[0].Amount.Amount)
+	}
 }
 
 func TestImpact(t *testing.T) {
@@ -63,14 +92,20 @@ func TestDuplicatesMirrorsDedupeCountAndExplains(t *testing.T) {
 		txn("", "a2", "Netflix", -1599, "2026-07-01"), // other account — NOT a dup
 	}
 	dups := Duplicates(incoming, existing, "a1")
-	if len(dups) != 2 {
-		t.Fatalf("got %d dups, want 2: %+v", len(dups), dups)
+	if len(dups) != dedupe.CountIncomingDuplicates(incoming, existing, "a1") {
+		t.Fatalf("detail count %d differs from importer count %d: %+v", len(dups), dedupe.CountIncomingDuplicates(incoming, existing, "a1"), dups)
+	}
+	if len(dups) != 1 {
+		t.Fatalf("got %d dups, want 1: %+v", len(dups), dups)
 	}
 	if dups[0].Desc != "NETFLIX" || dups[0].AmountMinor != -1599 || dups[0].Date != "2026-07-01" || dups[0].InBatch {
 		t.Errorf("ledger dup detail wrong: %+v", dups[0])
 	}
-	if dups[1].Desc != "gym" || !dups[1].InBatch {
-		t.Errorf("batch dup should be flagged InBatch: %+v", dups[1])
+	if dups[0].InBatch {
+		t.Errorf("a match against the existing ledger should not be flagged InBatch: %+v", dups[0])
+	}
+	if got := Duplicates(incoming[1:3], nil, "a1"); len(got) != 0 {
+		t.Errorf("same-file repeats with no matching existing row must both import: %+v", got)
 	}
 }
 

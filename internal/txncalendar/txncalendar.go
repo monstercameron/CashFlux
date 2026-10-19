@@ -21,6 +21,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/txnclassify"
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
 )
 
@@ -74,8 +75,9 @@ func MonthCashflow(anchor time.Time, weekStart time.Weekday, txns []domain.Trans
 	monthEnd := dateutil.AddMonths(monthStart, 1)
 	grid := month(anchor, weekStart, nil, recurring, nil)
 	byDay := make(map[string]Cashflow, len(txns))
+	transferRows := txnclassify.SummarizeVisibleTransfers(txns).CountedRows
 	result := CashflowMonth{Weeks: make([]CashflowWeek, len(grid))}
-	for _, txn := range txns {
+	for i, txn := range txns {
 		if txn.Date.Before(monthStart) || !txn.Date.Before(monthEnd) {
 			continue
 		}
@@ -94,10 +96,17 @@ func MonthCashflow(anchor time.Time, weekStart time.Weekday, txns []domain.Trans
 		var amount int64
 		switch {
 		case txn.IsTransfer():
+			if !transferRows[i] {
+				byDay[key] = day
+				continue
+			}
 			amount, err = money.Abs(converted.Amount)
 			if err == nil {
 				day.Moved, err = money.Add(day.Moved, amount)
 			}
+		case txn.ExcludeFromReports:
+			// Excluded rows still count as visible ledger activity, but do not
+			// contribute to analytical cash-flow totals.
 		case converted.Amount < 0:
 			amount, err = money.Neg(converted.Amount)
 			if err == nil {

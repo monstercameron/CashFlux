@@ -3,6 +3,7 @@
 package importmap
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -133,6 +134,49 @@ func TestApply_CustomDateLayout(t *testing.T) {
 	want := time.Date(2026, 6, 15, 0, 0, 0, 0, time.UTC)
 	if !got[0].Date.Equal(want) {
 		t.Errorf("date: got %v want %v", got[0].Date, want)
+	}
+}
+
+func TestApplyWithErrorsParsesExactMoneyFormats(t *testing.T) {
+	p := Profile{DateCol: 0, DescCol: 1, AmountCol: 2, DebitCol: -1, CreditCol: -1,
+		BalanceCol: -1, Decimals: 2, NumberFormat: NumberFormatAuto}
+	cases := []struct {
+		name   string
+		amount string
+		want   int64
+	}{
+		{"dot decimal", "1,234.56", 123456},
+		{"comma decimal", "1.234,56", 123456},
+		{"detected decimal comma", "12,50", 1250},
+		{"sign before currency", "-$12.50", -1250},
+		{"accounting negative", "(12.50)", -1250},
+		{"accounting negative with currency", "($12.50)", -1250},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rows, errs := ApplyWithErrors(p, [][]string{{"2026-06-15", "Test", tc.amount}})
+			if len(errs) != 0 {
+				t.Fatalf("ApplyWithErrors returned errors: %+v", errs)
+			}
+			if len(rows) != 1 || rows[0].Amount != tc.want {
+				t.Fatalf("amount = %+v, want %d", rows, tc.want)
+			}
+		})
+	}
+}
+
+func TestApplyWithErrorsReportsInvalidAmounts(t *testing.T) {
+	p := Profile{DateCol: 0, DescCol: 1, AmountCol: 2, DebitCol: -1, CreditCol: -1,
+		BalanceCol: -1, Decimals: 2, NumberFormat: NumberFormatDotDecimal}
+	rows, errs := ApplyWithErrors(p, [][]string{
+		{"2026-06-15", "Bad", "not money"},
+		{"2026-06-16", "Good", "3.00"},
+	})
+	if len(rows) != 1 || rows[0].Amount != 300 {
+		t.Fatalf("rows = %+v, want only the valid $3.00 row", rows)
+	}
+	if len(errs) != 1 || errs[0].Index != 0 || errs[0].Field != "amount" || !strings.Contains(errs[0].Error(), "row 1 amount") {
+		t.Fatalf("errors = %+v, want a reported row 1 amount error", errs)
 	}
 }
 

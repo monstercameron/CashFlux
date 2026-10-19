@@ -51,8 +51,8 @@ func TestR1HTodayCalendarCellHasCurrentDateSemantics(t *testing.T) {
 	if got := buttons[0].Attr("aria-current"); got != "date" {
 		t.Fatalf("today cell aria-current = %q, want date", got)
 	}
-	if style := buttons[0].Attr("style"); !strings.Contains(style, "outline:2px solid") || !strings.Contains(style, "background:var(--bg-card)") {
-		t.Fatalf("today cell style = %q, want outline-only marker", style)
+	if className := buttons[0].Attr("class"); !strings.Contains(className, "txn-cal-cell") || !strings.Contains(className, "today") {
+		t.Fatalf("today cell class = %q, want token-styled today marker", className)
 	}
 }
 

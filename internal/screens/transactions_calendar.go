@@ -229,9 +229,9 @@ func txnCalendarWidget(props txnCalendarProps) ui.Node {
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "txn-calendar", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
 		Body: Div(css.Class("txn-cal"), nav, fxNotice, Div(css.Class("txn-cal-weeks"), Div(head...), Fragment(weekRows...)),
-			Div(css.Class("txn-cal-legend"), Attr("style", "display:flex;align-items:center;gap:.4rem"),
-				Span(css.Class("txn-cal-legend-dots"), Attr("style", "display:inline-flex;align-items:center"),
-					Span(css.Class("cal-dot"), Attr("style", "position:static;width:7px;height:7px;border-radius:50%;background:var(--accent)"))),
+			Div(css.Class("txn-cal-legend"),
+				Span(css.Class("txn-cal-legend-dots"),
+					Span(css.Class("cal-dot txn-cal-legend-dot"))),
 				Span(uistate.T("transactions.calDotsLegend"))),
 			If(showScheduled, Div(css.Class("text-dim"), uistate.T("transactions.calScheduledFilterNote")))),
 	})
@@ -403,17 +403,23 @@ func txnCalMonthCell(props txnCalMonthCellProps) ui.Node {
 	// Ghost markers: dimmed labels for recurrings due this day, no interaction beyond
 	// a title/tooltip.
 	ghostNodes := make([]any, 0, len(props.Ghosts))
+	ghostAriaLabels := make([]string, 0, len(props.Ghosts))
 	for _, g := range props.Ghosts {
 		amount := money.New(g.Amount, g.Currency)
+		amountValid := true
 		if g.NotPosted {
-			amount.Amount, _ = money.Abs(amount.Amount)
+			var err error
+			amount.Amount, err = money.Abs(amount.Amount)
+			amountValid = err == nil
 		}
-		converted, err := props.Rates.Convert(amount, props.Rates.Base)
 		amountText := uistate.T("transactions.calScheduledAmountUnavailable")
-		if err == nil {
-			amountText, _ = fmtLedgerAmount(converted, false)
-			if g.NotPosted {
-				amountText = strings.TrimPrefix(amountText, "+")
+		if amountValid {
+			converted, err := props.Rates.Convert(amount, props.Rates.Base)
+			if err == nil {
+				amountText, _ = fmtLedgerAmount(converted, false)
+				if g.NotPosted {
+					amountText = strings.TrimPrefix(amountText, "+")
+				}
 			}
 		}
 		text := uistate.T("transactions.calScheduledDue", amountText, g.Label)
@@ -424,6 +430,7 @@ func txnCalMonthCell(props txnCalMonthCellProps) ui.Node {
 			className = "txn-cal-ghost txn-cal-ghost-missed"
 			aria = uistate.T("transactions.calNotPostedAria", g.Label, amountText)
 		}
+		ghostAriaLabels = append(ghostAriaLabels, aria)
 		ghostNodes = append(ghostNodes, Span(css.Class(className), Attr("aria-label", aria), Attr("title", aria), text))
 	}
 
@@ -437,6 +444,9 @@ func txnCalMonthCell(props txnCalMonthCellProps) ui.Node {
 	if !props.InMonth && props.MonthName != "" {
 		label = uistate.T("transactions.calDayOtherMonth", strconv.Itoa(props.Day), props.MonthName)
 	}
+	if len(ghostAriaLabels) > 0 {
+		label += ". " + strings.Join(ghostAriaLabels, ". ")
+	}
 	args := []any{
 		ClassStr(cls),
 		Type("button"),
@@ -444,11 +454,6 @@ func txnCalMonthCell(props txnCalMonthCellProps) ui.Node {
 		Attr("data-testid", "txn-cal-day-"+props.DateKey),
 		Attr("aria-label", label),
 		Attr("title", label),
-	}
-	if props.Today {
-		// Shared calendar styling gives .cal-cell.today a filled wash, which makes
-		// today's marker read like a selected day. Keep it as an outline only.
-		args = append(args, Attr("style", "outline:2px solid var(--accent);outline-offset:-2px;background:var(--bg-card);box-shadow:none"))
 	}
 	if props.InMonth {
 		args = append(args, OnClick(pick))

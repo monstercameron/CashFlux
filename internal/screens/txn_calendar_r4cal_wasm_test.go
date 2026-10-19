@@ -5,6 +5,7 @@
 package screens
 
 import (
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -35,6 +36,11 @@ func TestR4CalendarScheduledItemsShowAmountsAndMissedState(t *testing.T) {
 	if len(buttons) != 2 {
 		t.Fatalf("calendar cells = %d, want 2", len(buttons))
 	}
+	for i, want := range []string{"Not posted yet", "Electric bill"} {
+		if got := buttons[i].Attr("aria-label"); !strings.Contains(got, want) {
+			t.Errorf("day %d accessible name = %q, want scheduled item %q", i, got, want)
+		}
+	}
 	if got := buttons[0].Text(); !strings.Contains(got, "Not posted yet · $220.00 · Gym membership") {
 		t.Errorf("missed scheduled item = %q, want label, missed state, and amount", got)
 	}
@@ -49,6 +55,23 @@ func TestR4CalendarScheduledItemsShowAmountsAndMissedState(t *testing.T) {
 	}
 	if missed == nil || !strings.Contains(missed.Attr("aria-label"), "Not posted yet") || !strings.Contains(missed.Attr("aria-label"), "$220.00") {
 		t.Errorf("missed item's accessible description = %v, want status and amount", missed)
+	}
+}
+
+func TestR4CalendarReportsUnavailableAmountWhenMissedGhostMagnitudeOverflows(t *testing.T) {
+	f := render.New(t)
+	f.Render(ui.CreateElement(txnCalMonthCell, txnCalMonthCellProps{
+		DateKey: "2026-10-03", Day: 3, InMonth: true,
+		Rates:  currency.Rates{Base: "USD"},
+		Ghosts: []txncalendar.Ghost{{Label: "Large bill", Amount: math.MinInt64, Currency: "USD", NotPosted: true}},
+	}))
+	buttons := f.AllByTag("button")
+	if len(buttons) != 1 {
+		t.Fatalf("calendar cells = %d, want 1", len(buttons))
+	}
+	want := uistate.T("transactions.calScheduledAmountUnavailable")
+	if got := buttons[0].Attr("aria-label"); !strings.Contains(got, want) || !strings.Contains(got, "Large bill") {
+		t.Errorf("day accessible name = %q, want unavailable amount and bill name", got)
 	}
 }
 
