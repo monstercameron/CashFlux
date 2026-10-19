@@ -211,12 +211,14 @@ func ValidateTransaction(t domain.Transaction, accounts ...domain.Account) Issue
 			if t.Amount.Currency != account.Currency {
 				is.add("amount", "currency must match the account")
 			}
-			break
 		}
 		if !found {
 			is.add("accountId", "does not match an existing account")
 		}
-		if t.IsTransfer() {
+		// TransferAccountID is the transfer marker and names the counterparty
+		// account. TransferGroupID only links two rows; it is not a substitute
+		// target (legacy and hand-classified transfers may have no group ID).
+		if t.TransferAccountID != "" {
 			if _, ok := accountByID[t.TransferAccountID]; !ok {
 				is.add("transferAccountId", "does not match an existing account")
 			}
@@ -234,7 +236,7 @@ func ValidateTransaction(t domain.Transaction, accounts ...domain.Account) Issue
 	if t.Date.IsZero() {
 		is.add("date", "is required")
 	}
-	if t.IsTransfer() && t.TransferAccountID == t.AccountID {
+	if t.TransferAccountID != "" && t.TransferAccountID == t.AccountID {
 		is.add("transferAccountId", "must differ from the source account")
 	}
 	return is

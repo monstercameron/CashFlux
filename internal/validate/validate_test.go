@@ -106,6 +106,116 @@ func TestValidateTransactionAccountAndSplits(t *testing.T) {
 	}
 }
 
+func TestValidateTransactionTransferShapes(t *testing.T) {
+	accounts := []domain.Account{
+		{ID: "checking", Currency: "USD"},
+		{ID: "savings", Currency: "USD"},
+		{ID: "loan", Currency: "USD"},
+		{ID: "card", Currency: "USD"},
+	}
+	date := time.Date(2026, time.October, 19, 0, 0, 0, 0, time.UTC)
+	base := domain.Transaction{AccountID: "checking", Desc: "Account move", Amount: usd(-1000), Date: date}
+	tests := []struct {
+		name string
+		txn  domain.Transaction
+	}{
+		{
+			name: "created transfer outgoing leg",
+			txn: func() domain.Transaction {
+				txn := base
+				txn.TransferAccountID, txn.TransferGroupID = "savings", "pair-1"
+				return txn
+			}(),
+		},
+		{
+			name: "created transfer incoming leg",
+			txn:  domain.Transaction{AccountID: "savings", TransferAccountID: "checking", TransferGroupID: "pair-1", Desc: base.Desc, Amount: usd(1000), Date: date},
+		},
+		{
+			name: "legacy imported transfer without group",
+			txn: func() domain.Transaction {
+				txn := base
+				txn.TransferAccountID = "savings"
+				return txn
+			}(),
+		},
+		{
+			name: "positive-stored liability payment leg",
+			txn:  domain.Transaction{AccountID: "checking", TransferAccountID: "loan", TransferGroupID: "loan-payment", Desc: "Loan payment", Amount: usd(-1000), Date: date},
+		},
+		{
+			name: "negative-stored liability payment leg",
+			txn:  domain.Transaction{AccountID: "loan", TransferAccountID: "checking", TransferGroupID: "loan-payment", Desc: "Loan payment", Amount: usd(1000), Date: date},
+		},
+		{
+			name: "card payment leg",
+			txn:  domain.Transaction{AccountID: "checking", TransferAccountID: "card", TransferGroupID: "card-payment", Desc: "Card payment", Amount: usd(-1000), Date: date},
+		},
+		{
+			name: "split transfer leg",
+			txn: func() domain.Transaction {
+				txn := base
+				txn.TransferAccountID = "savings"
+				txn.Splits = []domain.CategorySplit{{CategoryID: "memo", Amount: usd(-1000)}}
+				return txn
+			}(),
+		},
+		{
+			name: "direct bill payment is not a transfer",
+			txn: func() domain.Transaction {
+				txn := base
+				txn.AccountID, txn.Desc = "loan", "Bill payment"
+				txn.Amount = usd(1000)
+				return txn
+			}(),
+		},
+		{
+			name: "group without target is not a transfer",
+			txn: func() domain.Transaction {
+				txn := base
+				txn.TransferGroupID = "legacy-group"
+				return txn
+			}(),
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if issues := ValidateTransaction(tc.txn, accounts...); !issues.OK() {
+				t.Fatalf("valid transaction rejected: %v", issues)
+			}
+		})
+	}
+}
+
+func TestValidateTransactionRejectsInvalidTransferTarget(t *testing.T) {
+	accounts := []domain.Account{{ID: "checking", Currency: "USD"}, {ID: "savings", Currency: "USD"}}
+	base := domain.Transaction{AccountID: "checking", Desc: "Move", Amount: usd(-1000), Date: time.Now()}
+	tests := []struct {
+		name      string
+		target    string
+		wantIssue string
+	}{
+		{name: "unknown target", target: "missing", wantIssue: "does not match an existing account"},
+		{name: "self transfer", target: "checking", wantIssue: "must differ from the source account"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			txn := base
+			txn.TransferAccountID = tc.target
+			issues := ValidateTransaction(txn, accounts...)
+			if !hasField(issues, "transferAccountId") {
+				t.Fatalf("issues = %v, want transferAccountId", issues)
+			}
+			for _, issue := range issues {
+				if issue.Field == "transferAccountId" && issue.Message == tc.wantIssue {
+					return
+				}
+			}
+			t.Fatalf("issues = %v, want transferAccountId message %q", issues, tc.wantIssue)
+		})
+	}
+}
+
 func TestValidateBudget(t *testing.T) {
 	good := domain.Budget{Name: "Food", OwnerID: "g", CategoryID: "c", Scope: domain.ScopeShared, Period: domain.PeriodMonthly, Limit: usd(50000)}
 	if is := ValidateBudget(good); !is.OK() {
