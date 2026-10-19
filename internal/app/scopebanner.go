@@ -88,7 +88,7 @@ func ScopeBanner() uic.Node {
 			css.Class("scope-banner-btn"),
 			Type("button"),
 			Attr("title", viewAllTitle),
-			Attr("aria-label", viewAllTitle),
+			Attr("aria-label", uistate.T("scope.viewAll")+" — "+viewAllTitle),
 			Attr("data-testid", "scope-banner-clear"),
 			OnClick(clearScope),
 			uistate.T("scope.viewAll"),

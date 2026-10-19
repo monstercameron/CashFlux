@@ -27,7 +27,7 @@ var incomeBasisKeys = Catalog{
 	"budgets.zbbAllocAria":         "How your income is allocated across expenses, savings, and what's left to assign",
 	"budgets.zbbAllocAriaOver":     "Your income is fully assigned and over — the marker shows where income runs out; the fill past it is over-assigned",
 	"budgets.basisButton":          "Budget income",
-	"budgets.basisButtonTitle":     "Choose which income funds your budget",
+	"budgets.basisButtonTitle":     "Budget income — choose which income funds your budget",
 	"budgets.basisModalTitle":      "Income to budget with",
 	"budgets.basisModalHelp":       "Pick the income your budget is built on. Include a steady paycheck, hold aside irregular side income, or set a fixed monthly figure.",
 }

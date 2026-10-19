@@ -11,7 +11,7 @@ var scopeBannerKeys = Catalog{
 	// CTA to clear the active-member filter and return to the full household view.
 	"scope.viewAll": "View all",
 	// Accessible description of the "view all" action for screen readers.
-	"scope.viewAllTitle": "Clear member filter and return to everyone's view",
+	"scope.viewAllTitle": "View all — clear the member filter and return to everyone's view",
 	// aria-label for the banner itself.
 	"scope.bannerLabel": "Member scope active",
 }

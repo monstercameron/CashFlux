@@ -90,6 +90,9 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Budgets: names that start with what you see, bigger targets (BR2A11Y).** "Budget income", "See where it went", "Review
+  all … untracked" and "View all" now have accessible names that begin with their visible text (WCAG 2.5.3), and those
+  controls are at least 24×24 px (44×44 on touch). The Budgets toolbar test follows the single member lens.
 - **Hooks are unconditional, enforced by a lint; Transactions side files tidied (TQ6, TQ6.1).** A new screenlint check
   fails the build on any `On*(func…)` handler inside an `if`, `switch` or loop (each registers a hook conditionally); the
   count line, category-suggestion modal, split form, Insights, Debt, Plan and Custom pages now create their handlers up

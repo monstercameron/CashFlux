@@ -142,7 +142,7 @@ func trackAllButton(props trackAllButtonProps) ui.Node {
 		label = uistate.T("budgets.trackAllCount", props.Total)
 	}
 	return Button(css.Class("budget-unbudgeted-all"), Type("button"),
-		Attr("data-testid", "budgets-track-all"), OnClick(onOpen), label)
+		Attr("data-testid", "budgets-track-all"), Attr("aria-label", label), OnClick(onOpen), label)
 }
 
 // unbudgetedChipProps drives one category chip in the unbudgeted strip.

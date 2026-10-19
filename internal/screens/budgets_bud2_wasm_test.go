@@ -6,13 +6,16 @@ package screens
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/scope"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/v5/testkit/render"
 	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
@@ -111,19 +114,17 @@ func TestBudgetMemberLensAndMenuSplit(t *testing.T) {
 	uistate.SetActiveMember("m-priya")
 	t.Cleanup(func() { uistate.SetActiveMember("") })
 	f := render.New(t)
-	f.Render(ui.CreateElement(budgetToolbarContent, budgetToolbarProps{App: app}))
-	lens := byTestID(f, "select", "budgets-member-lens")
-	if lens == nil {
-		t.Fatal("member lens did not render")
+	f.Render(ui.CreateElement(bud2GlobalLensToolbarHarness, br2tbBudgetListHarnessProps{App: app}))
+	if got := byTestID(f, "select", "budgets-member-lens"); got != nil {
+		t.Fatal("duplicate list-level member selector rendered")
 	}
-	if lens.Attr("aria-label") != uistate.T("bud2.viewAsMember") {
-		t.Fatalf("member lens accessible name = %q, want %q", lens.Attr("aria-label"), uistate.T("bud2.viewAsMember"))
-	}
-	if label := byTestID(f, "span", "budgets-member-label"); label == nil || label.Text() != uistate.T("bud2.viewAs") {
-		t.Fatalf("visible member lens label = %v, want %q", label, uistate.T("bud2.viewAs"))
-	}
-	if label := byTestID(f, "p", "budgets-member-share"); label == nil || label.Text() != uistate.T("bud2.sharedCount", "Priya", 1, 2) {
-		t.Fatalf("share sentence = %v, want %q", label, uistate.T("bud2.sharedCount", "Priya", 1, 2))
+	if header := byTestID(f, "p", "budgets-member-scope"); header == nil ||
+		!strings.HasPrefix(header.Text(), "Showing Priya's budgets:") ||
+		!strings.Contains(header.Text(), "amounts are household totals") {
+		if header == nil {
+			t.Fatal("global-lens header did not render")
+		}
+		t.Fatalf("global-lens header = %q", header.Text())
 	}
 	if method := byTestID(f, "select", "budgets-method"); method == nil {
 		t.Fatal("Settings menu does not contain the household budgeting method")
@@ -137,7 +138,16 @@ func TestBudgetMemberLensAndMenuSplit(t *testing.T) {
 	if toolsMenu := byTestID(f, "div", "budgets-tools-menu"); toolsMenu == nil || toolsMenu.Attr("role") != "menu" {
 		t.Fatal("Tools menu was not rendered separately from Settings")
 	}
-	if adjust := byTestID(f, "button", "budgets-adjust-all"); adjust == nil || adjust.Text() != uistate.T("bud2.adjustAll") {
+	if adjust := byTestID(f, "button", "budgets-adjust-all"); adjust == nil || adjust.Text() != "Adjust every budget" {
 		t.Fatalf("Tools menu does not expose the plain-language adjust-all action: %v", adjust)
 	}
+}
+
+func bud2GlobalLensToolbarHarness(props br2tbBudgetListHarnessProps) ui.Node {
+	scopeAtom := uistate.UseActiveScope()
+	scopeAtom.Set(scope.ReportScope{Owners: []string{"m-priya"}})
+	return Fragment(
+		ui.CreateElement(budgetListWidget, budgetListProps{App: props.App}),
+		ui.CreateElement(budgetToolbarContent, budgetToolbarProps{App: props.App}),
+	)
 }

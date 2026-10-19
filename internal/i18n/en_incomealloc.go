@@ -131,7 +131,7 @@ var incomeAllocKeys = Catalog{
 	// Rendering nothing made this indistinguishable from the assistant being
 	// broken, which is exactly how it was reported.
 	"insights.emptyReply":   "The model returned no text this time — the request was charged but produced nothing to show. Try asking again, or rephrase the question.",
-	"budgets.seeSpendTitle": "Spending broken down by category, with last period alongside",
+	"budgets.seeSpendTitle": "See where it went — spending broken down by category, with last period alongside",
 	// C521: the tracked-categories page inside the budget editor.
 	"budgets.editCatsBack":         "← Back to budget",
 	"budgets.editCatsBackHint":     "Your other changes are still here.",
