@@ -3,6 +3,7 @@
 package browserstore
 
 import (
+	"context"
 	"fmt"
 	"syscall/js"
 	"time"
@@ -14,24 +15,22 @@ import (
 // The writer still compares those exact bytes inside its strict transaction:
 // reading together is an optimization, never a substitute for generation CAS.
 func readSecureBatch(keys []string) (map[string]string, error) {
+	return readSecureBatchContext(context.Background(), keys)
+}
+
+func readSecureBatchContext(ctx context.Context, keys []string) (map[string]string, error) {
 	values := make(map[string]string, len(keys))
-	err := recordTransaction(false, func(tx js.Value, retain func(js.Func), fail func(error)) {
-		os := tx.Call("objectStore", idbStoreName)
-		for _, key := range keys {
-			req := os.Call("get", key)
-			fn := js.FuncOf(func(js.Value, []js.Value) any {
-				value := req.Get("result")
-				if value.Type() == js.TypeString {
-					values[key] = value.String()
-				} else if !value.IsUndefined() && !value.IsNull() {
-					fail(fmt.Errorf("protected record %q has an invalid stored type", key))
-					tx.Call("abort")
-				}
-				return nil
-			})
-			retain(fn)
-			req.Set("onsuccess", fn)
-		}
+	err := recordTransactionContext(ctx, false, func(tx js.Value, retain func(js.Func), fail func(error)) {
+		readRecordRequests(tx, keys, retain, fail, func(key string, value js.Value) bool {
+			if value.Type() == js.TypeString {
+				values[key] = value.String()
+			} else if !value.IsUndefined() && !value.IsNull() {
+				fail(fmt.Errorf("protected record %q has an invalid stored type", key))
+				tx.Call("abort")
+				return false
+			}
+			return true
+		})
 	})
 	return values, err
 }
@@ -62,6 +61,7 @@ func publishBatch(keys []string) {
 }
 
 func reloadPublishedBatch(keys []string) {
+	keys = reloadDeferredNames(keys)
 	stored, readErr := readSecureBatch(keys)
 	values := make(map[string]string, len(keys))
 	failures := make(map[string]error, len(keys))

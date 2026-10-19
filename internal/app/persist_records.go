@@ -260,7 +260,7 @@ func newRecordAutosave(app *appstate.App, commit func(map[string]string, map[str
 			if err != nil {
 				if errors.Is(err, appstate.ErrStaleDataset) {
 					uistate.ClearPersistFailure("dataset")
-					preserveStaleDatasetEdits(app, workspace)
+					preserveStaleDatasetEdits(app, workspace, writerOwner)
 				} else {
 					uistate.ReportPersistFailure("dataset", func() { save() })
 				}

@@ -263,6 +263,7 @@ func Run() {
 	})
 
 	r.Mount("#app")
+	startRecoveryMaintenance()
 
 	// Wire the dashboard bento drag-reorder coordinator + FLIP reflow animation
 	// (the in-Go replacement for the former web/flip.js helper): registers the

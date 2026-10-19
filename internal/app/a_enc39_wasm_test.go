@@ -36,6 +36,18 @@ type enc39Transport struct{ account string }
 func enc39Page(t *testing.T) {
 	t.Helper()
 	solp22Storage(t)
+	// Storage is shared for this Node page. Drain earlier writes before clearing
+	// one-shot fault injections; resetting the database would detach its live
+	// browserstore connection and key service.
+	browserstore.Barrier()
+	control := js.Global().Get("__fakeIDB")
+	for _, field := range []string{"_failNext", "_failNextWrite", "_failNextOpen", "_failNextTransaction"} {
+		control.Set(field, js.Null())
+	}
+	// Credential persistence lazily creates this ID. Make its independent write
+	// durable before any test arms failNextWrite for the credential transaction.
+	syncDeviceID()
+	browserstore.Barrier()
 	enc31FakeDocument(t)
 	document := js.Global().Get("document")
 	document.Set("baseURI", "https://app.test/")
@@ -58,6 +70,9 @@ func enc39Page(t *testing.T) {
 	}
 	t.Cleanup(func() {
 		browserstore.Barrier()
+		for _, field := range []string{"_failNext", "_failNextWrite", "_failNextOpen", "_failNextTransaction"} {
+			control.Set(field, js.Null())
+		}
 		enc35ResetPage()
 		js.Global().Set("Worker", oldWorker)
 		js.Global().Set("__enc35RPC", oldRPC)

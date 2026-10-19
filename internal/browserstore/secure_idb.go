@@ -3,9 +3,13 @@
 package browserstore
 
 import (
+	"context"
 	"errors"
+	"fmt"
+	"log/slog"
 	"sync"
 	"syscall/js"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/atrest"
 )
@@ -89,14 +93,33 @@ func mutateRecord(key string, value, expected *string) error {
 	})
 }
 
-func recordTransaction(write bool, issue func(js.Value, func(js.Func), func(error))) (err error) {
+// transactionWaitLimit bounds missing browser completion events, including a
+// transaction queued behind a stalled writer in another tab.
+var transactionWaitLimit = 30 * time.Second
+
+func recordTransaction(write bool, issue func(js.Value, func(js.Func), func(error))) error {
+	return recordTransactionContext(context.Background(), write, issue)
+}
+
+func recordTransactionContext(ctx context.Context, write bool, issue func(js.Value, func(js.Func), func(error))) (err error) {
+	ctx, cancel := context.WithTimeout(ctx, transactionWaitLimit)
+	defer cancel()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if !db.Truthy() {
 		return errors.New("IndexedDB is unavailable; write was not persisted")
 	}
 	var callbacks []js.Func
-	defer func() {
+	var abandoned bool
+	release := func() {
 		for _, fn := range callbacks {
 			fn.Release()
+		}
+	}
+	defer func() {
+		if !abandoned {
+			release()
 		}
 		if r := recover(); r != nil {
 			err = jsPanicError("IndexedDB record transaction", r)
@@ -134,5 +157,24 @@ func recordTransaction(write bool, issue func(js.Value, func(js.Func), func(erro
 		return nil
 	})
 	issue(tx, retain, func(err error) { failure = err })
-	return <-done
+	select {
+	case result := <-done:
+		return result
+	case <-ctx.Done():
+		err := fmt.Errorf("IndexedDB transaction did not settle: %w", ctx.Err())
+		// An unknown write outcome must never grant autosave authority. Abort also
+		// releases transactions queued behind this one. A late complete is NOT an
+		// acknowledgement; the page stays paused until it reopens storage.
+		if write {
+			secureInitErr = err
+		}
+		slog.Error("protected storage transaction paused", "write", write, "error", err)
+		abandoned = true
+		func() { defer func() { _ = recover() }(); tx.Call("abort") }()
+		// Keep callbacks alive until the terminal event, even when abort delivery is
+		// delayed. Releasing them on timeout would make late browser events call a
+		// released Go function. If the browser never settles, retain this small set.
+		go func() { <-done; release() }()
+		return err
+	}
 }

@@ -45,10 +45,21 @@ func TestMigrationSealsEveryExistingSensitiveCatalogueEntry(t *testing.T) {
 	if err := initializeSecure(); err != nil {
 		t.Fatal(err)
 	}
-	if len(MigratedKeys()) != len(want) {
-		t.Fatalf("migrated %d want %d", len(MigratedKeys()), len(want))
+	active := 0
+	for _, key := range want {
+		if !recoveryValueKey(key) {
+			active++
+		}
+	}
+	if len(MigratedKeys()) != active {
+		t.Fatalf("migrated %d want %d active records", len(MigratedKeys()), active)
 	}
 	for _, key := range want {
+		if recoveryValueKey(key) {
+			if _, _, err := GetSecure(key); err != nil {
+				t.Fatal(err)
+			}
+		}
 		raw, present, err := (idbRecords{}).Read(key)
 		if err != nil || !present || !atrest.IsSealed(raw) || strings.Contains(raw, "Blue Bottle") {
 			t.Fatalf("unsealed key %s: %v", key, err)

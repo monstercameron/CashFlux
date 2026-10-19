@@ -1886,7 +1886,7 @@ func wipeAfterSession(notify func(string, bool)) {
 	// store, then reload (after the IndexedDB write commits) so all in-memory state
 	// re-hydrates from the clean slate (nothing survives the wipe).
 	suspendAutosave = true
-	wipeFinancialLocalState(reloadPage)
+	wipeFinancialLocalState(reloadPage, wipeEraseEverything)
 }
 
 // endPageSessionForWipeThen ends the current session locally before an erase.

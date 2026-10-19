@@ -4,12 +4,29 @@ package browserstore
 
 import (
 	"fmt"
+	"log/slog"
 	"strings"
 	"syscall/js"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/aicred"
 	"github.com/monstercameron/CashFlux/internal/atrest"
 )
+
+var secureInitWaitLimit = 90 * time.Second
+
+func initializeSecureBounded() error {
+	slog.Info("protected storage boot stage", "stage", "key and migration verification", "status", "started")
+	done := make(chan error, 1)
+	go func() { done <- initializeSecure() }()
+	select {
+	case err := <-done:
+		slog.Info("protected storage boot stage", "stage", "key and migration verification", "status", "complete", "error", err)
+		return err
+	case <-time.After(secureInitWaitLimit):
+		return fmt.Errorf("protected storage key/migration verification did not finish within %s; saved records were kept", secureInitWaitLimit)
+	}
+}
 
 func initializeSecure() error {
 	// Include both databases' legacy values and staged encrypted migration copies
@@ -18,8 +35,15 @@ func initializeSecure() error {
 	if err != nil {
 		return err
 	}
+	slog.Info("protected storage boot stage", "stage", "inspect records", "records", len(keys))
 	existing := false
 	for _, key := range keys {
+		if recoveryValueKey(strings.TrimPrefix(key, atrest.MigrationPrefix)) {
+			// Opaque recovery data is evidence of an existing key.
+			// Never create replacement keys after losing the live checkpoint.
+			existing = true
+			continue
+		}
 		value, _, err := (idbRecords{}).Read(key)
 		if err != nil {
 			return err
@@ -70,7 +94,10 @@ func finishSecureMigration() error {
 	if err != nil {
 		return err
 	}
-	migratedKeys, err = storage().Migrate()
+	slog.Info("protected storage boot stage", "stage", "migrate records", "records", len(keys))
+	active := storage()
+	active.Backend = bootRecords{}
+	migratedKeys, err = active.Migrate()
 	if err != nil {
 		return err
 	}
@@ -80,6 +107,7 @@ func finishSecureMigration() error {
 	if err := importLegacyValues(legacy); err != nil {
 		return err
 	}
+	slog.Info("protected storage boot stage", "stage", "load authenticated cache")
 	return loadSecureCache()
 }
 
@@ -89,15 +117,29 @@ func loadSecureCache() error {
 		return err
 	}
 	values := map[string]string{}
+	deferred := map[string]bool{}
+	sliceStart := time.Now()
 	for _, key := range keys {
+		if time.Since(sliceStart) >= 12*time.Millisecond {
+			time.Sleep(time.Millisecond)
+			sliceStart = time.Now()
+		}
+		if recoveryValueKey(key) {
+			deferred[key] = true
+			continue
+		}
 		if strings.HasPrefix(key, atrest.MigrationPrefix) {
 			continue
 		}
-		value, present, err := storage().Get(key)
+		encoded, present, err := (idbRecords{}).Read(key)
 		if err != nil {
 			return &RecordError{Key: key, Err: err}
 		}
 		if present {
+			value, err := decodeSecureRecord(key, encoded)
+			if err != nil {
+				return &RecordError{Key: key, Err: err}
+			}
 			values[key] = value
 		}
 	}
@@ -108,9 +150,26 @@ func loadSecureCache() error {
 		}
 	}
 	cache = values
+	deferredKeys = deferred
 	readErrors = map[string]error{}
 	mu.Unlock()
+	slog.Info("protected storage boot stage", "stage", "load authenticated cache", "status", "complete", "records", len(values), "deferred", len(deferred))
 	return nil
+}
+
+// bootRecords leaves recovery originals and staged migrations untouched until
+// explicitly opened. It never reads their values during ordinary boot.
+type bootRecords struct{ idbRecords }
+
+func (bootRecords) Keys() ([]string, error) {
+	keys, err := (idbRecords{}).Keys()
+	active := keys[:0]
+	for _, key := range keys {
+		if !recoveryValueKey(strings.TrimPrefix(key, atrest.MigrationPrefix)) {
+			active = append(active, key)
+		}
+	}
+	return active, err
 }
 
 func legacyValues() (values map[string]string, err error) {

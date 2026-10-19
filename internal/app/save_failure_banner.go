@@ -43,7 +43,7 @@ func resetStaleDatasetState() {
 // preserveStaleDatasetEdits stores the stale tab's live data under a unique,
 // encrypted recovery key before presenting Reload. It never replaces the
 // generation-owned dataset or another recovery copy.
-func preserveStaleDatasetEdits(app *appstate.App, workspace string) {
+func preserveStaleDatasetEdits(app *appstate.App, workspace string, owners ...string) {
 	if staleDatasetBlocked {
 		return
 	}
@@ -59,12 +59,17 @@ func preserveStaleDatasetEdits(app *appstate.App, workspace string) {
 		app.Log().Error("stale tab edits could not be prepared for recovery", "err", err)
 		return
 	}
-	staleDatasetRecoveryKey = fmt.Sprintf("cashflux:stale-recovery:%s:%s", checkpointHash(workspace), id.New())
-	browserstore.SetSecure(staleDatasetRecoveryKey, string(data), func(err error) {
+	owner := browserstore.GetString(datasetOwnerKey)
+	if len(owners) > 0 {
+		owner = owners[0]
+	}
+	staleDatasetRecoveryKey = fmt.Sprintf("cashflux:stale-recovery:%s:%s:%s", checkpointHash(workspace), checkpointHash(owner), id.New())
+	browserstore.RetainRecovery(staleDatasetRecoveryKey, string(data), "", describeRecoveryPayload, liveRecoveryVersions(), func(key string, err error) {
 		if err != nil {
 			app.Log().Error("stale tab recovery copy could not be saved", "err", err)
 			return
 		}
+		staleDatasetRecoveryKey = key
 		staleRecoveryReady = true
 		staleDatasetNoticeRev++
 		if staleDatasetNoticeLive {
@@ -132,7 +137,9 @@ func retrySaveBanner() ui.Node {
 			OnClick(retry), uistate.T("bv6d.retry")))
 }
 
-func downloadStaleRecovery() {
+func downloadStaleRecovery() { go downloadStaleRecoveryAsync() }
+
+func downloadStaleRecoveryAsync() {
 	if staleDatasetRecoveryKey == "" {
 		return
 	}

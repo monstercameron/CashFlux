@@ -5,6 +5,7 @@
 package app
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/browserstore"
+	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/store"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 )
@@ -40,19 +42,32 @@ func autosaveBlocked() bool {
 // quarantineDataset saves the exact unreadable bytes before enabling recovery
 // UI, reusing an existing record when its content hash matches.
 func quarantineDataset(raw, reason string) {
-	raw = datasetRecoveryCopy(raw, recoveryWorkspaceName(), browserstore.Keys(), browserstore.GetSecure)
-	if key, ok := findQuarantineRecord([]byte(raw)); ok {
-		quarantineRaw = browserstore.GetString(key)
-		quarantineAvailable = true
-		datasetQuarantined = true
-		showQuarantineBanner()
-		return
+	workspace, owner := recoveryWorkspaceName(), browserstore.GetString(datasetOwnerKey)
+	var supplied recordRecovery
+	suppliedCopy := json.Unmarshal([]byte(raw), &supplied) == nil && supplied.Format == "v1"
+	raw = datasetRecoveryCopy(raw, workspace, browserstore.Keys(), browserstore.GetSecure)
+	var copy recordRecovery
+	if json.Unmarshal([]byte(raw), &copy) == nil && copy.Format == "v1" && copy.Workspace != "" {
+		workspace = copy.Workspace
+		if suppliedCopy {
+			owner = copy.Owner
+		} else {
+			copy.Owner = owner
+			encoded, err := json.Marshal(copy)
+			if err != nil {
+				return
+			}
+			raw = string(encoded)
+		}
 	}
 	quarantinePending = true
-	key := quarantineKey(time.Now().Unix())
+	// Scope is part of the durable name, including for opaque bytes which have
+	// no parseable owner metadata. Random suffixes prevent simultaneous tabs
+	// from claiming the same timestamp-based recovery key.
+	key := quarantineKey(time.Now().Unix()) + ":" + checkpointHash(workspace) + ":" + checkpointHash(owner) + ":" + id.New()
 	quarantineRaw = raw
 	quarantineAvailable = true
-	browserstore.SetSecureBatch(map[string]string{key: raw, key + ":reason": reason}, nil, func(err error) {
+	browserstore.RetainRecovery(key, raw, reason, describeRecoveryPayload, browserstore.RecoveryLive{}, func(key string, err error) {
 		if err != nil {
 			if app := appstate.Default; app != nil {
 				app.Log().Error("recovery copy could not be committed", "err", err)
@@ -86,6 +101,7 @@ func findQuarantineRecord(raw []byte) (string, bool) {
 }
 
 func quarantineRecords() []store.QuarantineRecord {
+	browserstore.Barrier()
 	keys := browserstore.Keys()
 	records := make([]store.QuarantineRecord, 0, len(keys))
 	for _, key := range keys {
@@ -97,7 +113,11 @@ func quarantineRecords() []store.QuarantineRecord {
 			continue
 		}
 		raw, present := browserstore.Get(key)
-		if !present {
+		var err error
+		if browserstore.Durable() {
+			raw, present, err = browserstore.GetSecure(key)
+		}
+		if err != nil || !present || raw == "" {
 			continue
 		}
 		records = append(records, store.QuarantineRecord{
@@ -108,7 +128,8 @@ func quarantineRecords() []store.QuarantineRecord {
 }
 
 func parseQuarantineKey(key string) (int64, int64, bool) {
-	parts := strings.SplitN(strings.TrimPrefix(key, quarantinePrefix), "-", 2)
+	base := strings.SplitN(strings.TrimPrefix(key, quarantinePrefix), ":", 2)[0]
+	parts := strings.SplitN(base, "-", 2)
 	createdAt, err := strconv.ParseInt(parts[0], 10, 64)
 	if err != nil {
 		return 0, 0, false
@@ -123,7 +144,14 @@ func parseQuarantineKey(key string) (int64, int64, bool) {
 func quarantineKey(unixSeconds int64) string {
 	key := fmt.Sprintf("%s%d", quarantinePrefix, unixSeconds)
 	for suffix := int64(1); ; suffix++ {
-		if _, exists := browserstore.Get(key); !exists {
+		exists := false
+		for _, saved := range browserstore.Keys() {
+			if saved == key {
+				exists = true
+				break
+			}
+		}
+		if !exists {
 			return key
 		}
 		key = fmt.Sprintf("%s%d-%d", quarantinePrefix, unixSeconds, suffix)
@@ -193,7 +221,9 @@ func hideQuarantineBanner() {
 	}
 }
 
-func downloadQuarantinedDataset() {
+func downloadQuarantinedDataset() { go downloadQuarantinedDatasetAsync() }
+
+func downloadQuarantinedDatasetAsync() {
 	if !quarantineAvailable {
 		return
 	}
@@ -216,7 +246,41 @@ func quarantinedDownloadBytes() []byte {
 	if !quarantineAvailable {
 		return nil
 	}
-	return []byte(quarantineRaw)
+	if quarantineRaw != "" {
+		return []byte(quarantineRaw)
+	}
+	return lazyRecoveryDownload()
+}
+
+func clearQuarantineState() {
+	datasetQuarantined = false
+	quarantinePending = false
+	quarantineRaw = ""
+	quarantineAvailable = false
+	quarantineBannerHidden = true
+	if doc := js.Global().Get("document"); doc.Truthy() {
+		if banner := doc.Call("getElementById", "cashflux-quarantine-banner"); banner.Truthy() {
+			banner.Call("remove")
+		}
+	}
+}
+
+func clearEmptyQuarantineState() {
+	if quarantinePending || quarantineRaw != "" {
+		return
+	}
+	for _, key := range browserstore.Keys() {
+		if (!strings.HasPrefix(key, quarantinePrefix) && !strings.HasPrefix(key, journalRecoveryPrefix)) || strings.HasSuffix(key, ":reason") {
+			continue
+		}
+		// A missing cache value is an opaque deferred record, not evidence
+		// that the recovery copy is empty. Maintenance resolves it after paint.
+		raw, present := browserstore.Get(key)
+		if !present || raw != "" {
+			return
+		}
+	}
+	clearQuarantineState()
 }
 
 func startFreshAfterQuarantine() {

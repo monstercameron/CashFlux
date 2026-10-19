@@ -79,16 +79,25 @@ var keptOnWipePrefixes = []string{
 	"cashflux:ws-data:",
 	"cashflux:sync-meta:",
 	"cashflux:ui-preference:",
-	quarantinePrefix,
-	journalRecoveryPrefix,
 }
+
+type wipeMode uint8
+
+const (
+	wipeKeepRecoveryCopies wipeMode = iota
+	wipeEraseEverything
+)
 
 // wipeFinancialLocalState commits the already-wiped SQLite snapshot, cleared
 // journal head, fresh generation and financial satellite tombstones atomically.
 // Failure retains the original checkpoint and journal and keeps autosave paused:
 // the emptied in-memory store must not overwrite the recoverable durable copy.
 // then (usually a reload) runs only after the entire wipe is durable.
-func wipeFinancialLocalState(then func()) {
+func wipeFinancialLocalState(then func(), modes ...wipeMode) {
+	mode := wipeKeepRecoveryCopies
+	if len(modes) > 0 {
+		mode = modes[0]
+	}
 	generation := datasetMyGen
 	suspendAutosave = true
 	app := appstate.Default
@@ -115,6 +124,9 @@ func wipeFinancialLocalState(then func()) {
 				break
 			}
 		}
+		if mode == wipeKeepRecoveryCopies && (strings.HasPrefix(key, quarantinePrefix) || strings.HasPrefix(key, journalRecoveryPrefix)) {
+			kept = true
+		}
 		if !kept {
 			if atrest.Classify(key) == atrest.ShouldNotPersist {
 				remove = append(remove, key)
@@ -133,6 +145,9 @@ func wipeFinancialLocalState(then func()) {
 			return
 		}
 		datasetMyGen = values[datasetGenKey]
+		if mode == wipeEraseEverything {
+			clearQuarantineState()
+		}
 		// Transient secrets cannot be written even as tombstones. Remove them
 		// afterwards; failure retains the paused page and never reloads.
 		removeFinancialKeysThen(remove, func() {
@@ -211,29 +226,31 @@ func hydrateDataset() {
 	if app == nil {
 		return
 	}
-	hydrationSucceeded = false
+	hydrationSucceeded, hadLocalDataset = false, false
 	if err := browserstore.InitError(); err != nil {
 		app.Log().Error("dataset hydration requires protected storage recovery", "err", err)
 		return
 	}
-	loadQuarantineRecord()
 	snapshot, snapshotErr := readDurableDatasetSnapshot()
 	if snapshotErr != nil {
-		app.Log().Error("saved dataset could not be read consistently", "err", snapshotErr)
+		pauseDatasetHydration(app, "snapshot read", snapshotErr)
 		return
 	}
+	loadSnapshotQuarantine(snapshot)
+	clearEmptyQuarantineState()
 	raw := snapshot.Values[datasetStoreKey]
 	if raw == "" && (snapshot.Errors[datasetStoreKey] != nil || snapshot.Values[datasetCheckpointBackupKey] != "") {
 		err := hydrateDurableDataset(app, snapshot)
 		if err == nil {
 			hadLocalDataset, hydrationSucceeded = true, true
-			loadJournalRecoveryCopies()
+			loadJournalRecoveryCopies(hydratedDatasetState.snapshot)
+			clearEmptyQuarantineState()
 			initializeHostedHydration(false)
 			return
 		}
 		if !errors.Is(err, errNoDatasetCheckpoint) {
 			hadLocalDataset = false
-			app.Log().Error("checkpoint recovery is paused; the authenticated backup was kept", "err", err)
+			pauseDatasetHydration(app, "checkpoint recovery", err)
 			return
 		}
 		quarantineDataset(raw, "No authenticated dataset checkpoint could be read. The protected records have been kept.")
@@ -276,7 +293,7 @@ func hydrateDataset() {
 			app.Log().Error("dataset hydrate failed", "err", err)
 			hadLocalDataset = false
 			if !errors.Is(err, errNoDatasetCheckpoint) {
-				app.Log().Error("saved dataset recovery is paused; original data was kept", "err", err)
+				pauseDatasetHydration(app, "journal recovery", err)
 				initializeHostedHydration(hostedDocument())
 				return
 			}
@@ -318,7 +335,12 @@ func hydrateDataset() {
 			tryRecoverQuarantinedDataset(app, current)
 		}
 	}
-	loadJournalRecoveryCopies()
+	if hydratedDatasetState.app == app {
+		loadJournalRecoveryCopies(hydratedDatasetState.snapshot)
+	} else {
+		loadJournalRecoveryCopies(snapshot)
+	}
+	clearEmptyQuarantineState()
 	// A hosted first boot (including a sample cached by an older build) must not
 	// mount financial screens until the account's server workspace is resolved.
 	initializeHostedHydration(hostedDocument() && (!hadLocalDataset || uistate.SampleActive()))
@@ -357,6 +379,7 @@ func startDatasetAutosave() {
 	})
 	js.Global().Call("addEventListener", "pagehide", cb)
 	js.Global().Call("addEventListener", "visibilitychange", cb)
+	app.Log().Info("dataset hydration stage", "stage", "autosave armed", "paused", autosaveBlocked())
 	save()
 	go func() {
 		for {
@@ -405,4 +428,11 @@ func watchDataRevision(save func()) {
 			save()
 		}
 	}
+}
+
+func pauseDatasetHydration(app *appstate.App, stage string, err error) {
+	hadLocalDataset, hydrationSucceeded = false, false
+	app.Log().Error("dataset hydration paused; saved data was kept", "stage", stage, "err", err)
+	uistate.ReportPersistFailure("dataset", nil)
+	uistate.PostNotice(uistate.T("boot2.savedDataKept"), true)
 }

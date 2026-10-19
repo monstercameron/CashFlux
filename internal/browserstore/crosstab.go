@@ -5,9 +5,11 @@
 package browserstore
 
 import (
-	"github.com/monstercameron/CashFlux/internal/atrest"
+	"context"
 	"sync"
 	"syscall/js"
+
+	"github.com/monstercameron/CashFlux/internal/atrest"
 )
 
 // Cross-tab coherence for the in-memory cache.
@@ -178,6 +180,7 @@ func notifyWatchers(key, value string, present bool) {
 // convergence: before deciding whether another tab has already rotated a
 // single-use credential, for instance.
 func Reload(keys ...string) {
+	keys = reloadDeferredNames(keys)
 	if !db.Truthy() {
 		return
 	}
@@ -221,9 +224,23 @@ func Reload(keys ...string) {
 // after the puts cannot complete before they have. Blocks, so goroutines only —
 // see Reload.
 func Barrier() {
+	// Keep the legacy durability guarantee: returning from this no-error API
+	// cannot mean that a timeout was mistaken for a successful commit.
+	_ = BarrierContext(context.Background())
+}
+
+// BarrierContext waits for prior writes to commit or reports cancellation. A
+// timeout is never evidence that writes committed; callers must keep saving
+// paused until storage can be reopened and its durable state read again.
+func BarrierContext(ctx context.Context) error {
 	done := make(chan struct{})
 	enqueue(func() { close(done) })
-	<-done
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // NotifyForTest delivers a change notification for key as if it had arrived from

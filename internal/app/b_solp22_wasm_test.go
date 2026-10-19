@@ -53,6 +53,12 @@ func solp22Storage(t *testing.T) {
 	if !browserstore.Durable() {
 		t.Fatal("fixture has no strict durable backend")
 	}
+	// Other incident tests intentionally leave this page's cache stale. A new
+	// fixture starts from durable scope/generation metadata, just as a reload
+	// would, rather than granting its writer an obsolete cached generation.
+	browserstore.Barrier()
+	browserstore.Reload(datasetGenKey, datasetHeadKey, datasetOwnerKey, workspacesKey)
+	boot2FixtureRanges(t)
 }
 
 func solp22Batch(t *testing.T, values, expected map[string]string) {

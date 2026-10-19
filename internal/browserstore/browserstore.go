@@ -20,6 +20,7 @@ import (
 	"strings"
 	"sync"
 	"syscall/js"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/atrest"
 )
@@ -43,6 +44,8 @@ var (
 	durable bool
 )
 
+var openWaitLimit = 30 * time.Second
+
 // Init opens IndexedDB, loads all entries into the in-memory cache, and migrates
 // any legacy localStorage "cashflux:" keys in on first run. It BLOCKS until the
 // load completes — safe because callers invoke it from the boot goroutine after the
@@ -52,14 +55,16 @@ func Init() {
 	if ready {
 		return
 	}
+	slog.Info("protected storage boot stage", "stage", "open", "status", "started")
 	defer func() {
 		ready = true
-		if durable {
-			if err := initializeSecure(); err != nil {
+		if durable && secureInitErr == nil {
+			if err := initializeSecureBounded(); err != nil {
 				secureInitErr = err
 				slog.Error("protected storage requires recovery", "error", err)
 			}
 		}
+		slog.Info("protected storage boot stage", "stage", "open", "status", "complete", "error", secureInitErr)
 	}()
 	// Start listening before the load, so a write another tab makes while this
 	// one is still opening IndexedDB is not missed.
@@ -109,30 +114,18 @@ func Init() {
 			return nil
 		}
 		durable = true
-		tx := db.Call("transaction", idbStoreName, "readonly")
-		os := tx.Call("objectStore", idbStoreName)
-		keysReq := os.Call("getAllKeys")
-		valsReq := os.Call("getAll")
-		valsReq.Set("onsuccess", js.FuncOf(func(js.Value, []js.Value) any {
-			keys, vals := keysReq.Get("result"), valsReq.Get("result")
-			n := keys.Get("length").Int()
-			mu.Lock()
-			for i := 0; i < n; i++ {
-				cache[keys.Index(i).String()] = vals.Index(i).String()
-			}
-			mu.Unlock()
-			finish()
-			return nil
-		}))
-		valsReq.Set("onerror", js.FuncOf(func(js.Value, []js.Value) any {
-			durable = false
-			mirrorLocalStorage()
-			finish()
-			return nil
-		}))
+		// Secure initialization reads only active values. getAll here would
+		// clone every recovery blob before hydration even starts.
+		finish()
 		return nil
 	}))
-	<-done
+	select {
+	case <-done:
+	case <-time.After(openWaitLimit):
+		secureInitErr = fmt.Errorf("IndexedDB open/load did not finish within %s", openWaitLimit)
+		durable = false
+		slog.Error("protected storage boot paused; saved records were kept", "error", secureInitErr)
+	}
 }
 
 // Durable reports whether IndexedDB is available as the persistence backend.
@@ -344,7 +337,15 @@ func RegisterJSBridge() {
 func Keys() []string {
 	mu.Lock()
 	defer mu.Unlock()
-	out := make([]string, 0, len(cache))
+	out := make([]string, 0, len(cache)+len(deferredKeys))
+	for k := range deferredKeys {
+		if !db.Truthy() {
+			break
+		}
+		if _, cached := cache[k]; !cached {
+			out = append(out, k)
+		}
+	}
 	for k := range cache {
 		out = append(out, k)
 	}

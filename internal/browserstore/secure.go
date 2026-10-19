@@ -3,6 +3,7 @@
 package browserstore
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
@@ -142,6 +143,8 @@ func enqueue(fn func()) {
 // SetSecure encrypts according to the catalogue and reports success only after
 // the strict IndexedDB commit. It is nonblocking and safe in a JS event handler.
 // SHOULD-NOT-PERSIST keys are refused; use SetMemory for transient credentials.
+// Completion callbacks run outside the serial writer, so they can safely await
+// another durable action without holding up the worker that must run it.
 func SetSecure(key, value string, done func(error)) {
 	SetSecureBatch(map[string]string{key: value}, nil, done)
 }
@@ -156,6 +159,10 @@ func SetSecureBatch(values, expected map[string]string, done func(error)) {
 }
 
 func setSecureBatch(values, expected map[string]string, ciphertexts map[string]*string, done func(error)) {
+	setSecureBatchContext(context.Background(), values, expected, ciphertexts, done)
+}
+
+func setSecureBatchContext(ctx context.Context, values, expected map[string]string, ciphertexts map[string]*string, done func(error)) {
 	updates := make(map[string]string, len(values))
 	conditions := make(map[string]string, len(expected))
 	for key, value := range values {
@@ -166,6 +173,9 @@ func setSecureBatch(values, expected map[string]string, ciphertexts map[string]*
 	}
 	enqueue(func() {
 		err := secureInitErr
+		if err == nil {
+			err = ctx.Err()
+		}
 		mu.Lock()
 		locked := secureLocked
 		mu.Unlock()
@@ -178,7 +188,7 @@ func setSecureBatch(values, expected map[string]string, ciphertexts map[string]*
 			}
 		}
 		if err == nil {
-			err = writeSecureBatchCompared(updates, conditions, ciphertexts)
+			err = writeSecureBatchComparedContext(ctx, updates, conditions, ciphertexts)
 		}
 		if err == nil {
 			mu.Lock()
@@ -197,7 +207,7 @@ func setSecureBatch(values, expected map[string]string, ciphertexts map[string]*
 			publishBatch(keys)
 		}
 		if done != nil {
-			done(err)
+			go done(err)
 		}
 	})
 }
@@ -217,6 +227,10 @@ func writeSecureBatch(values, expected map[string]string) error {
 }
 
 func writeSecureBatchCompared(values, expected map[string]string, ciphertexts map[string]*string) error {
+	return writeSecureBatchComparedContext(context.Background(), values, expected, ciphertexts)
+}
+
+func writeSecureBatchComparedContext(ctx context.Context, values, expected map[string]string, ciphertexts map[string]*string) error {
 	var keys []string
 	for key := range ciphertexts {
 		if _, write := values[key]; !write {
@@ -234,13 +248,35 @@ func writeSecureBatchCompared(values, expected map[string]string, ciphertexts ma
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
-	priorRecords, err := readSecureBatch(keys)
+	// Snapshot read-only conditions already supply their exact prior bytes.
+	// Only the final strict transaction needs to fetch and compare them.
+	var readKeys []string
+	snapshotPriors := map[string]string{}
+	for _, key := range keys {
+		prior, compared := ciphertexts[key]
+		_, write := values[key]
+		_, plainCondition := expected[key]
+		if compared && !write && !plainCondition {
+			if prior != nil {
+				snapshotPriors[key] = *prior
+			}
+			continue
+		}
+		readKeys = append(readKeys, key)
+	}
+	priorRecords, err := readSecureBatchContext(ctx, readKeys)
 	if err != nil {
 		return err
+	}
+	for key, prior := range snapshotPriors {
+		priorRecords[key] = prior
 	}
 	updates := make([]recordReplacement, 0, len(keys))
 	sliceStart := time.Now()
 	for i, key := range keys {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		old, have := priorRecords[key]
 		if want, conditional := ciphertexts[key]; conditional {
 			if (want == nil && have) || (want != nil && (!have || old != *want)) {
@@ -262,7 +298,7 @@ func writeSecureBatchCompared(values, expected map[string]string, ciphertexts ma
 		plain, write := values[key]
 		var value string
 		if write {
-			value, err = storage().Encode(key, plain)
+			value, err = encodeSecureRecord(key, plain)
 			if err != nil {
 				return err
 			}
@@ -280,33 +316,25 @@ func writeSecureBatchCompared(values, expected map[string]string, ciphertexts ma
 			sliceStart = time.Now()
 		}
 	}
-	return recordTransaction(true, func(tx js.Value, retain func(js.Func), fail func(error)) {
+	return recordTransactionContext(ctx, true, func(tx js.Value, retain func(js.Func), fail func(error)) {
 		os := tx.Call("objectStore", idbStoreName)
+		byKey := make(map[string]recordReplacement, len(updates))
 		for _, update := range updates {
-			u := update
-			req := os.Call("get", u.key)
-			fn := js.FuncOf(func(js.Value, []js.Value) any {
-				defer func() {
-					if r := recover(); r != nil {
-						fail(jsPanicError("write protected batch", r))
-						tx.Call("abort")
-					}
-				}()
-				v := req.Get("result")
-				present := !v.IsUndefined() && !v.IsNull()
-				if (u.expected == nil && present) || (u.expected != nil && (!present || v.Type() != js.TypeString || v.String() != *u.expected)) {
-					fail(recordChangedAt(u.key, "encrypted prior-record comparison"))
-					tx.Call("abort")
-					return nil
-				}
-				if u.write {
-					os.Call("put", u.value, u.key)
-				}
-				return nil
-			})
-			retain(fn)
-			req.Set("onsuccess", fn)
+			byKey[update.key] = update
 		}
+		readRecordRequests(tx, keys, retain, fail, func(key string, value js.Value) bool {
+			u := byKey[key]
+			present := !value.IsUndefined() && !value.IsNull()
+			if (u.expected == nil && present) || (u.expected != nil && (!present || value.Type() != js.TypeString || value.String() != *u.expected)) {
+				fail(recordChangedAt(u.key, "encrypted prior-record comparison"))
+				tx.Call("abort")
+				return false
+			}
+			if u.write {
+				os.Call("put", u.value, u.key)
+			}
+			return true
+		})
 	})
 }
 
@@ -324,11 +352,12 @@ func RemoveSecure(key string, done func(error)) {
 				delete(cache, key)
 			}
 			delete(readErrors, key)
+			delete(deferredKeys, key)
 			mu.Unlock()
 			publish(key)
 		}
 		if done != nil {
-			done(err)
+			go done(err)
 		}
 	})
 }
@@ -350,6 +379,11 @@ func GetSecure(key string) (string, bool, error) {
 	mu.Unlock()
 	if locked && atrest.Classify(key) == atrest.MustEncrypt {
 		return "", true, &RecordError{Key: key, Err: atrest.ErrLocked}
+	}
+	if recoveryValueKey(key) {
+		if err := openDeferredRecord(key); err != nil {
+			return "", true, &RecordError{Key: key, Err: err}
+		}
 	}
 	value, present, err := storage().Get(key)
 	if err != nil {
@@ -381,7 +415,7 @@ func LockSecureThen(done func()) {
 			secureKeys.Lock()
 		}
 		if done != nil {
-			done()
+			go done()
 		}
 	})
 }
@@ -428,7 +462,7 @@ func unlockSecure(action func(*atrest.KeyService) error, done func(error)) {
 			mu.Unlock()
 		}
 		if done != nil {
-			done(err)
+			go done(err)
 		}
 	})
 }
@@ -460,7 +494,7 @@ func keyAction(action func(*atrest.KeyService) error, done func(error)) {
 			}
 		}
 		if done != nil {
-			done(err)
+			go done(err)
 		}
 	})
 }

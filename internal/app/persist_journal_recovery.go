@@ -5,13 +5,16 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/atrest"
 	"github.com/monstercameron/CashFlux/internal/browserstore"
 	"github.com/monstercameron/CashFlux/internal/cryptobox"
 	"github.com/monstercameron/CashFlux/internal/id"
@@ -65,10 +68,26 @@ func snapshotWorkspace(raw string) (string, error) {
 
 // Metadata and immutable journal records are read in one transaction. In
 // particular, compaction cannot tombstone a node between head and record reads.
+var hydrationWaitLimit = 90 * time.Second
+
 func readDurableDatasetSnapshot() (durableDatasetSnapshot, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), hydrationWaitLimit)
+	defer cancel()
+	return readDurableDatasetSnapshotContext(ctx)
+}
+
+func readDurableDatasetSnapshotContext(ctx context.Context, recovery ...bool) (durableDatasetSnapshot, error) {
 	scope := recordWorkspace()
 	for range 3 {
-		snapshot, err := browserstore.ReadSecureSnapshot([]string{datasetStoreKey, datasetHeadKey, datasetGenKey, datasetOwnerKey, workspacesKey, datasetCheckpointBackupKey, datasetRecoverySourceKey}, []string{recordWorkspacePrefix(scope), quarantinePrefix, journalRecoveryPrefix})
+		keys := []string{datasetStoreKey, datasetHeadKey, datasetGenKey, datasetOwnerKey, workspacesKey, datasetRecoverySourceKey}
+		prefixes := []string{recordWorkspacePrefix(scope)}
+		if len(recovery) > 0 && recovery[0] {
+			keys = append(keys, datasetCheckpointBackupKey)
+		}
+		if len(recovery) > 1 && recovery[1] {
+			prefixes = append(prefixes, quarantinePrefix, journalRecoveryPrefix)
+		}
+		snapshot, err := browserstore.ReadSecureSnapshotContext(ctx, keys, prefixes)
 		result := durableDatasetSnapshot{snapshot, scope}
 		if err != nil {
 			return result, err
@@ -83,6 +102,11 @@ func readDurableDatasetSnapshot() (durableDatasetSnapshot, error) {
 			return result, err
 		}
 		if actual == scope {
+			if len(recovery) == 0 && snapshot.Values[datasetStoreKey] == "" {
+				// A missing live checkpoint is an actual recovery case. Read
+				// its backup coherently instead of seeding over it.
+				return readDurableDatasetSnapshotContext(ctx, true)
+			}
 			return result, nil
 		}
 		scope = actual
@@ -318,7 +342,7 @@ func snapshotRecoveryCopy(s durableDatasetSnapshot) string {
 	}
 	copy.ProtectedRecords = map[string]string{}
 	for key, err := range s.Errors {
-		if key == datasetStoreKey || key == datasetHeadKey || key == datasetGenKey || strings.HasPrefix(key, recordWorkspacePrefix(s.workspace)) {
+		if key == datasetStoreKey || key == datasetHeadKey || key == datasetGenKey || key == datasetCheckpointBackupKey || strings.HasPrefix(key, recordWorkspacePrefix(s.workspace)) {
 			copy.ReadErrors[key] = err.Error()
 			if raw, present := s.EncodedRecord(key); present {
 				copy.ProtectedRecords[key] = raw
@@ -333,24 +357,64 @@ func snapshotRecoveryCopy(s durableDatasetSnapshot) string {
 // CAS it read. The recovery copy and repaired checkpoint commit together before
 // hydration releases autosave. A concurrent winner forces a fresh snapshot.
 func hydrateDurableDataset(app *appstate.App, s durableDatasetSnapshot) error {
+	ctx, cancel := context.WithTimeout(context.Background(), hydrationWaitLimit)
+	defer cancel()
 	for range 3 {
 		if appstate.Default != app || recordWorkspace() != s.workspace {
 			return appstate.ErrStaleDataset
 		}
+		app.Log().Info("dataset hydration stage", "stage", "replay", "status", "started", "workspace", s.workspace)
 		portable, repair, err := recoverDatasetSnapshot(s)
+		// The backup is deliberately excluded from normal hydration. Only an
+		// unreadable checkpoint or a repair needs its bytes and ciphertext CAS.
+		if err != nil || repair {
+			if _, have := s.EncodedRecord(datasetCheckpointBackupKey); !have && s.Errors[datasetCheckpointBackupKey] == nil {
+				extended, readErr := browserstore.ExtendSecureSnapshotContext(ctx, s.SecureSnapshot, []string{datasetCheckpointBackupKey}, []string{datasetHeadKey, datasetGenKey, datasetOwnerKey, workspacesKey})
+				if errors.Is(readErr, atrest.ErrRecordChanged) {
+					next, retryErr := readDurableDatasetSnapshotContext(ctx)
+					if retryErr != nil {
+						return retryErr
+					}
+					if next.workspace != s.workspace || next.Values[datasetOwnerKey] != s.Values[datasetOwnerKey] {
+						return appstate.ErrStaleDataset
+					}
+					s = next
+					continue
+				}
+				if readErr != nil {
+					return readErr
+				}
+				s.SecureSnapshot = extended
+				// A valid live checkpoint already supplied the replayed
+				// dataset. The added backup is only a guarded repair input.
+				if err != nil {
+					portable, repair, err = recoverDatasetSnapshot(s)
+				}
+			}
+		}
 		if err != nil {
 			return err
 		}
+		app.Log().Info("dataset hydration stage", "stage", "replay", "status", "complete", "repair", repair)
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if repair {
+			app.Log().Info("dataset hydration stage", "stage", "repair", "status", "started")
 			copy := snapshotRecoveryCopy(s)
 			key := journalRecoveryPrefix + id.New()
 			generation := id.New()
 			checkpoint := encodeRecordCheckpointGeneration([]byte(portable), generation)
 			values := map[string]string{key: copy, datasetStoreKey: checkpoint, datasetHeadKey: "", datasetGenKey: generation, datasetCheckpointBackupKey: encodeCheckpointBackup(s.workspace, checkpoint, s.Values[datasetOwnerKey])}
 			conditions := []string{datasetStoreKey, datasetHeadKey, datasetGenKey, datasetOwnerKey, workspacesKey, datasetCheckpointBackupKey}
-			for key := range s.Values {
+			for key, value := range s.Values {
 				if strings.HasPrefix(key, recordWorkspacePrefix(s.workspace)) {
-					values[key] = ""
+					// Existing tombstones need only a ciphertext condition.
+					// Re-encrypting empty padding adds no recovery protection
+					// and makes repair cost grow with old journal history.
+					if value != "" {
+						values[key] = ""
+					}
 					conditions = append(conditions, key)
 				}
 			}
@@ -361,13 +425,16 @@ func hydrateDurableDataset(app *appstate.App, s durableDatasetSnapshot) error {
 				}
 			}
 			done := make(chan error, 1)
-			browserstore.SetSecureSnapshotBatch(values, s.SecureSnapshot, conditions, func(err error) { done <- err })
-			if err := <-done; err != nil {
-				next, readErr := readDurableDatasetSnapshot()
+			browserstore.SetSecureSnapshotBatchContext(ctx, values, s.SecureSnapshot, conditions, func(err error) { done <- err })
+			if err := awaitHydrationCommit(ctx, done); err != nil {
+				if ctx.Err() != nil {
+					return fmt.Errorf("journal repair paused: %w", err)
+				}
+				next, readErr := readDurableDatasetSnapshotContext(ctx)
 				if readErr != nil {
 					return readErr
 				}
-				if next.workspace != s.workspace {
+				if next.workspace != s.workspace || next.Values[datasetOwnerKey] != s.Values[datasetOwnerKey] {
 					return appstate.ErrStaleDataset
 				}
 				if next.Values[datasetGenKey] == s.Values[datasetGenKey] {
@@ -376,6 +443,7 @@ func hydrateDurableDataset(app *appstate.App, s durableDatasetSnapshot) error {
 				s = next
 				continue
 			}
+			app.Log().Info("dataset hydration stage", "stage", "repair", "status", "complete")
 			app.Log().Warn("saved dataset recovered; unchained records retained", "key", key, "workspace", s.workspace)
 			quarantineRaw, quarantineAvailable = copy, true
 			for key, value := range values {
@@ -393,9 +461,14 @@ func hydrateDurableDataset(app *appstate.App, s durableDatasetSnapshot) error {
 		if appstate.Default != app || recordWorkspace() != s.workspace {
 			return appstate.ErrStaleDataset
 		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		app.Log().Info("dataset hydration stage", "stage", "import", "status", "started")
 		if err := app.ImportJSON([]byte(portable)); err != nil {
 			return fmt.Errorf("load recovered dataset: %w", err)
 		}
+		app.Log().Info("dataset hydration stage", "stage", "import", "status", "complete")
 		app.SyncTxnLinkNetting()
 		hydratedRecordApp = app
 		hydratedRecordCursor, _ = app.Store().ChangeCursor()
@@ -410,28 +483,16 @@ func hydrateDurableDataset(app *appstate.App, s durableDatasetSnapshot) error {
 	return appstate.ErrStaleDataset
 }
 
-func loadJournalRecoveryCopies() {
-	copies := map[string]string{}
+func loadJournalRecoveryCopies(snapshots ...durableDatasetSnapshot) {
+	// Names are sufficient for the recovery affordance. Authentication and
+	// scope checks happen when the user requests the download.
 	for _, key := range browserstore.Keys() {
-		if !strings.HasPrefix(key, journalRecoveryPrefix) {
-			continue
-		}
-		raw, have, err := browserstore.GetSecure(key)
-		var copy recordRecovery
-		if err == nil && have && json.Unmarshal([]byte(raw), &copy) == nil && recoveryCopyMatchesScope(copy, recordWorkspace(), browserstore.GetString(datasetOwnerKey), hostedDocument()) {
-			copies[key] = raw
+		if strings.HasPrefix(key, journalRecoveryPrefix) {
+			quarantineAvailable = true
+			showQuarantineBanner()
+			return
 		}
 	}
-	if len(copies) == 0 {
-		return
-	}
-	raw, _ := json.Marshal(struct {
-		SchemaVersion int               `json:"schemaVersion"`
-		Format        string            `json:"cashfluxRecoveryCopies"`
-		Copies        map[string]string `json:"copies"`
-	}{store.SchemaVersion + 1, "v1", copies})
-	quarantineRaw, quarantineAvailable = string(raw), true
-	showQuarantineBanner()
 }
 
 func recoveryCopyMatchesScope(copy recordRecovery, workspace, owner string, hosted bool) bool {
@@ -451,6 +512,13 @@ func tryRecoverQuarantinedDataset(app *appstate.App, live durableDatasetSnapshot
 	if err != nil || liveDataset.KV["cashflux:sampleActive"] != "1" {
 		return false
 	}
+	ctxRead, cancelRead := context.WithTimeout(context.Background(), hydrationWaitLimit)
+	defer cancelRead()
+	recovery, readErr := readDurableDatasetSnapshotContext(ctxRead, true, true)
+	if readErr != nil || recovery.workspace != live.workspace || recovery.Values[datasetGenKey] != live.Values[datasetGenKey] {
+		return false
+	}
+	live = recovery
 	var selected, source string
 	for key, raw := range live.Values {
 		if !strings.HasPrefix(key, quarantinePrefix) || strings.HasSuffix(key, ":reason") || raw == "" || key == live.Values[datasetRecoverySourceKey] {
@@ -490,9 +558,11 @@ func tryRecoverQuarantinedDataset(app *appstate.App, live durableDatasetSnapshot
 	// made while the old application still displayed the sample-data banner.
 	values[journalRecoveryPrefix+id.New()] = snapshotRecoveryCopy(live)
 	conditions := []string{datasetStoreKey, datasetHeadKey, datasetGenKey, datasetOwnerKey, workspacesKey, source, datasetRecoverySourceKey}
+	ctx, cancel := context.WithTimeout(context.Background(), hydrationWaitLimit)
+	defer cancel()
 	done := make(chan error, 1)
-	browserstore.SetSecureSnapshotBatch(values, live.SecureSnapshot, conditions, func(err error) { done <- err })
-	if err := <-done; err != nil {
+	browserstore.SetSecureSnapshotBatchContext(ctx, values, live.SecureSnapshot, conditions, func(err error) { done <- err })
+	if err := awaitHydrationCommit(ctx, done); err != nil {
 		app.Log().Warn("saved quarantine recovery was not applied", "err", err)
 		return false
 	}
@@ -511,4 +581,25 @@ func tryRecoverQuarantinedDataset(app *appstate.App, live durableDatasetSnapshot
 	datasetMyGen = generation
 	app.Log().Warn("household restored from retained quarantine copy", "key", source, "workspace", live.workspace)
 	return true
+}
+
+// Cancellation never authorizes a late queued repair: the same context follows
+// the job through encryption and into its strict transaction.
+func awaitHydrationCommit(ctx context.Context, done <-chan error) error {
+	select {
+	case err := <-done:
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func loadSnapshotQuarantine(snapshot durableDatasetSnapshot) {
+	for _, key := range browserstore.Keys() {
+		if strings.HasPrefix(key, quarantinePrefix) && !strings.HasSuffix(key, ":reason") {
+			quarantineAvailable = true
+			showQuarantineBanner()
+			return
+		}
+	}
 }
