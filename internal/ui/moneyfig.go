@@ -15,7 +15,6 @@ import (
 var (
 	moneyFigBaseRule     css.Rule = css.Raw("font-variant-numeric", "tabular-nums")
 	moneyFigPositiveRule css.Rule = tw.TextUp
-	moneyFigNeutralRule  css.Rule = tw.TextDim
 )
 
 // MoneyFigProps configures the amount and its presentation convention.
@@ -37,8 +36,8 @@ func MoneyFig(props MoneyFigProps) uic.Node {
 	rules := []css.Rule{moneyFigBaseRule}
 	if tone == "text-up" {
 		rules = append(rules, moneyFigPositiveRule)
-	} else if tone == "txn-amount-expense" {
-		rules = append(rules, moneyFigNeutralRule)
+	} else if tone == "text-down" {
+		rules = append(rules, tw.TextDown)
 	}
 	return Span(css.Class("cf-money-fig", tone, css.New(rules...)), Attr("aria-label", label), text)
 }

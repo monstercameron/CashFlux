@@ -40,6 +40,23 @@ func TestOwnerLensNarrowsTheLedger(t *testing.T) {
 	}
 }
 
+func TestOwnerLensShowsSharedTransactionsInEachOwnersLens(t *testing.T) {
+	txns := []domain.Transaction{
+		{ID: "shared", MemberIDs: []string{"m-priya", "m-marcus"}},
+		{ID: "unassigned"},
+	}
+	for _, owner := range []string{"m-priya", "m-marcus"} {
+		c, applied := txnfilter.Criteria{}.WithOwnerLens([]string{owner})
+		if !applied {
+			t.Fatal("owner lens did not apply")
+		}
+		got := txnfilter.Apply(txns, c)
+		if len(got) != 1 || got[0].ID != "shared" {
+			t.Fatalf("owner %q lens returned %#v", owner, got)
+		}
+	}
+}
+
 // A member the user picked in the page's own filter panel is a local, deliberate
 // decision; the ambient top-bar perspective must not silently override it.
 func TestOwnerLensYieldsToAnExplicitMemberFilter(t *testing.T) {

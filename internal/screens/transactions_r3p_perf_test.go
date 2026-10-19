@@ -194,12 +194,12 @@ func TestR3PCountLineUsesProvidedCashflow(t *testing.T) {
 		Spent: money.New(700, "USD"), Income: money.New(900, "USD"), CashflowProvided: true,
 	}))
 	got := f.Text()
-	for _, want := range []string{"Spent $7.00", "Income $9.00"} {
+	for _, want := range []string{"Spent −$7.00", "Income $9.00"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("provided cashflow: count line = %q, want %q", got, want)
 		}
 	}
-	if strings.Contains(got, "Spent $100.00") {
+	if strings.Contains(got, "Spent −$100.00") {
 		t.Errorf("provided cashflow: count line = %q, ledger's own total leaked in (second pass still running)", got)
 	}
 	f.Cleanup()
@@ -208,7 +208,7 @@ func TestR3PCountLineUsesProvidedCashflow(t *testing.T) {
 	defer f2.Cleanup()
 	f2.Render(txnCountLine(txnCountLineProps{Shown: 1250, Total: 3292, Net: money.New(42500, "USD")}))
 	got = f2.Text()
-	for _, want := range []string{"Spent $100.00", "Income $525.00"} {
+	for _, want := range []string{"Spent −$100.00", "Income $525.00"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("fallback cashflow: count line = %q, want %q", got, want)
 		}

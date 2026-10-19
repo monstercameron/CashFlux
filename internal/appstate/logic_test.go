@@ -82,8 +82,31 @@ func TestReassignOwnerAllEntityTypes(t *testing.T) {
 		}
 	}
 	for _, tr := range a.Transactions() {
-		if tr.ID == "t1" && tr.MemberID != "m2" {
-			t.Errorf("transaction member = %q, want m2", tr.MemberID)
+		if tr.ID == "t1" && (len(tr.Owners()) != 1 || tr.Owners()[0] != "m2") {
+			t.Errorf("transaction owners = %v, want [m2]", tr.Owners())
+		}
+	}
+}
+
+func TestReassignTransactionOwnerPreservesOtherOwners(t *testing.T) {
+	a := newApp(t, false)
+	for _, member := range []domain.Member{{ID: "m1", Name: "One"}, {ID: "m2", Name: "Two"}, {ID: "m3", Name: "Three"}} {
+		if err := a.PutMember(member); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := a.PutTransaction(domain.Transaction{
+		ID: "shared", AccountID: "a1", Desc: "Shared expense", Amount: money.New(-1001, "USD"),
+		Date: time.Date(2026, time.June, 10, 0, 0, 0, 0, time.UTC), MemberIDs: []string{"m1", "m2"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.ReassignOwner("m1", "m3"); err != nil {
+		t.Fatal(err)
+	}
+	for _, txn := range a.Transactions() {
+		if txn.ID == "shared" && (len(txn.Owners()) != 2 || txn.Owners()[0] != "m3" || txn.Owners()[1] != "m2") {
+			t.Fatalf("reassigned owners = %v, want [m3 m2]", txn.Owners())
 		}
 	}
 }
@@ -173,7 +196,7 @@ func TestSetDefaultMemberAndDeleteAfterReassign(t *testing.T) {
 		}
 	}
 	for _, tx := range a.Transactions() {
-		if tx.MemberID == "m1" {
+		if tx.HasOwner("m1") {
 			t.Fatalf("transaction %s orphaned to deleted member", tx.ID)
 		}
 	}

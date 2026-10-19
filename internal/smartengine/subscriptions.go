@@ -245,7 +245,7 @@ func categoriesByMerchant(txns []domain.Transaction) map[string]string {
 func merchantsWithMember(txns []domain.Transaction) map[string]bool {
 	out := map[string]bool{}
 	for _, t := range txns {
-		if t.MemberID == "" {
+		if t.IsUnassigned() {
 			continue
 		}
 		out[merchantKey(txnLabel(t))] = true

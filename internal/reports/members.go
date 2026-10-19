@@ -9,6 +9,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/memberallocation"
 )
 
 // MemberSpend is one household member's total expense over the reporting period,
@@ -33,7 +34,13 @@ func SpendingByMember(txns []domain.Transaction, start, end time.Time, rates cur
 		if err != nil {
 			return nil, err
 		}
-		totals[t.MemberID] += conv.Abs().Amount
+		shares := memberallocation.SplitAmount(conv.Abs().Amount, t.Owners())
+		if len(shares) == 0 {
+			totals[""] += conv.Abs().Amount
+		}
+		for _, share := range shares {
+			totals[share.MemberID] += share.Amount
+		}
 	}
 
 	out := make([]MemberSpend, 0, len(totals))

@@ -2260,7 +2260,7 @@ func registerGenerated() {
 		background("var(--accent-dim)"),
 	)
 	rule(".txn-table .txn-amount-expense",
-		color("var(--text)"),
+		color("var(--money-negative)"),
 	)
 	rule(".txn-table .row-desc-inner .mtrend-chip",
 		opacity("0"),

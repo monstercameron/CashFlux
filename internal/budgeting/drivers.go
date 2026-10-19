@@ -97,7 +97,7 @@ func TopDrivers(budget domain.Budget, all []domain.Transaction, start, end time.
 			continue
 		}
 		if budget.TracksAnyTag(t.Tags) {
-			if !ownsScope(budget, t.MemberID) {
+			if !ownsTransactionScope(budget, t) {
 				continue
 			}
 			if err := push(t, t.Amount); err != nil {
@@ -107,7 +107,7 @@ func TopDrivers(budget domain.Budget, all []domain.Transaction, start, end time.
 		}
 		if t.HasSplits() {
 			for _, s := range t.Splits {
-				if !covers(s.CategoryID) || !ownsScope(budget, s.LineOwner(t.MemberID)) {
+				if !covers(s.CategoryID) || !ownsSplitScope(budget, t, s) {
 					continue
 				}
 				if err := push(t, s.Amount); err != nil {
@@ -116,7 +116,7 @@ func TopDrivers(budget domain.Budget, all []domain.Transaction, start, end time.
 			}
 			continue
 		}
-		if !ownsScope(budget, t.MemberID) || !covers(t.CategoryID) {
+		if !ownsTransactionScope(budget, t) || !covers(t.CategoryID) {
 			continue
 		}
 		if err := push(t, t.Amount); err != nil {

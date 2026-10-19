@@ -92,3 +92,21 @@ func TestAttributeByMemberSplitLineOwner(t *testing.T) {
 		t.Errorf("split owner attribution wrong: %+v", got)
 	}
 }
+
+func TestAttributeByMemberSplitsSharedTransactionMinorUnits(t *testing.T) {
+	rates := currency.Rates{Base: "USD"}
+	start := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	mid := time.Date(2026, 7, 15, 0, 0, 0, 0, time.UTC)
+	budget := domain.Budget{ID: "b1", Scope: domain.ScopeShared, CategoryID: "dining", Limit: money.New(50000, "USD")}
+	txns := []domain.Transaction{{
+		ID: "shared", Date: mid, CategoryID: "dining", Amount: money.New(-1001, "USD"), MemberIDs: []string{"you", "priya"},
+	}}
+	shares, err := AttributeByMember(budget, txns, start, end, rates, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(shares) != 2 || shares[0].MemberID != "you" || shares[0].Spent.Amount != 501 || shares[1].MemberID != "priya" || shares[1].Spent.Amount != 500 {
+		t.Fatalf("$10.01 shared spend attributed as %#v", shares)
+	}
+}

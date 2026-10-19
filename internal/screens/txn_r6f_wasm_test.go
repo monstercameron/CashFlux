@@ -49,6 +49,10 @@ func TestR6FScheduledGhostShowsCategoryAccountAndStatusPill(t *testing.T) {
 	if !strings.Contains(row.Text(), "Family loan") || !strings.Contains(row.Text(), "Scheduled") {
 		t.Fatalf("category or scheduled pill missing from row: %q", row.Text())
 	}
+	amount := r6fGridCell(t, f, "−$125.00")
+	if amount == nil || !strings.Contains(amount.Attr("class"), "text-down") {
+		t.Fatalf("scheduled amount cell = %v, want −$125.00 in negative tone", amount)
+	}
 	account := r6fGridCell(t, f, "Loan from Priya's parents")
 	if account.Attr("title") != "Loan from Priya's parents" || !strings.Contains(account.Attr("class"), "txn-scheduled-account") {
 		t.Fatalf("account cell lacks single-line tooltip marker: %#v", account)
@@ -83,8 +87,8 @@ func TestR9CCalendarWeekTotalsUseComparableMetrics(t *testing.T) {
 		wantAria  string
 		wantTone  string
 	}{
-		{name: "spending", props: txnCalWeekTotalProps{Stat: txncalendar.DayStat{Net: -262200, Count: 4}, Base: "USD", Spent: 262200, WeekOf: "Oct 4"}, wantLines: []string{"Spent $2,622.00", "4 transactions"}, wantAria: "Week of Oct 4: spent $2,622.00, 4 transactions."},
-		{name: "mixed", props: txnCalWeekTotalProps{Stat: txncalendar.DayStat{Net: 15000, Count: 2}, Base: "USD", Spent: 10000, Income: 25000, WeekOf: "Oct 4"}, wantLines: []string{"Spent $100.00", "+$250.00 in", "2 transactions"}, wantAria: "Week of Oct 4: spent $100.00, +$250.00 in, 2 transactions.", wantTone: "text-up"},
+		{name: "spending", props: txnCalWeekTotalProps{Stat: txncalendar.DayStat{Net: -262200, Count: 4}, Base: "USD", Spent: 262200, WeekOf: "Oct 4"}, wantLines: []string{"Spent −$2,622.00", "4 transactions"}, wantAria: "Week of Oct 4: spent $2,622.00, 4 transactions."},
+		{name: "mixed", props: txnCalWeekTotalProps{Stat: txncalendar.DayStat{Net: 15000, Count: 2}, Base: "USD", Spent: 10000, Income: 25000, WeekOf: "Oct 4"}, wantLines: []string{"Spent −$100.00", "+$250.00 in", "2 transactions"}, wantAria: "Week of Oct 4: spent $100.00, +$250.00 in, 2 transactions.", wantTone: "text-up"},
 		{name: "future scheduled", props: txnCalWeekTotalProps{Base: "USD", Scheduled: 3, WeekOf: "Oct 25", Future: true}, wantLines: []string{"Spent $0.00", "3 scheduled"}, wantAria: "Week of Oct 25: spent $0.00, 3 scheduled."},
 		{name: "empty future", props: txnCalWeekTotalProps{Base: "USD", WeekOf: "Oct 25", Future: true}, wantLines: []string{"Spent $0.00", "Nothing yet"}, wantAria: "Week of Oct 25: spent $0.00, Nothing yet."},
 	}

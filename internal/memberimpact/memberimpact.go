@@ -58,7 +58,7 @@ func Compute(memberID string, accounts []domain.Account, budgets []domain.Budget
 		}
 	}
 	for _, t := range txns {
-		if t.MemberID == memberID {
+		if t.HasOwner(memberID) {
 			b.TxnCount++
 		}
 	}

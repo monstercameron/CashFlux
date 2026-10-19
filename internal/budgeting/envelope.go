@@ -18,13 +18,13 @@ import (
 func budgetCoversTxn(budget domain.Budget, t domain.Transaction, pred func(string) bool) bool {
 	if t.HasSplits() {
 		for _, s := range t.Splits {
-			if pred(s.CategoryID) && ownsScope(budget, s.LineOwner(t.MemberID)) {
+			if pred(s.CategoryID) && ownsSplitScope(budget, t, s) {
 				return true
 			}
 		}
 		return false
 	}
-	return pred(t.CategoryID) && ownsScope(budget, t.MemberID)
+	return pred(t.CategoryID) && ownsTransactionScope(budget, t)
 }
 
 // maxEnvelopePeriods caps how far back the envelope accumulation looks, so a

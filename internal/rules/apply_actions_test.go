@@ -20,21 +20,19 @@ func TestApplyOnceFillsOnlyWhatIsMissing(t *testing.T) {
 		t.Error("Any() = false when three actions applied")
 	}
 
-	// Already attributed to someone else: the rule must NOT reassign. A standing
-	// instruction that silently changes whose spending something was is the one
-	// behaviour these actions exist to avoid.
-	if got := r.ApplyOnce("m-marcus", false, false); got.MemberID != "" {
-		t.Errorf("reassigned an attributed transaction to %q", got.MemberID)
+	// Set member replaces an existing single owner.
+	if got := r.ApplyOnce("m-marcus", false, false); got.MemberID != "m-priya" {
+		t.Errorf("replacement member = %q, want m-priya", got.MemberID)
 	}
 
-	// Already reviewed / already excluded: nothing to do, and nothing to undo.
-	// (Member is already someone else's too, so there is genuinely nothing left.)
+	// Already reviewed / already excluded: flags are unchanged, while the member
+	// action still replaces the current owner.
 	got = r.ApplyOnce("m-marcus", true, true)
 	if got.Reviewed || got.ExcludeFromReports {
 		t.Errorf("re-applied flags that were already set: %+v", got)
 	}
-	if got.Any() {
-		t.Error("Any() = true when there was nothing left to change")
+	if got.MemberID != "m-priya" || !got.Any() {
+		t.Error("member replacement should remain active while flags are already set")
 	}
 }
 

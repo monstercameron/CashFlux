@@ -20,6 +20,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/bills"
 	"github.com/monstercameron/CashFlux/internal/debounce"
+	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/css"
@@ -121,6 +122,7 @@ func txnScheduledGhostRows(items []bills.Bill, formatDate func(time.Time) string
 		if app := appstate.Default; app != nil {
 			category = categories[billCategoryID(app, item)]
 		}
+		amount, tone := fmtLedgerAmount(money.New(-item.Amount.Amount, item.Amount.Currency), false)
 		rows = append(rows, Div(css.Class("txn-row txn-scheduled-ghost"),
 			Attr("style", "display:grid;grid-template-columns:var(--txn-col-date,7rem) minmax(12rem,1fr) var(--txn-col-category,10rem) var(--txn-col-account,10rem) var(--txn-col-amount,7rem) var(--txn-col-status,7rem);align-items:center;gap:.5rem;padding:.45rem .6rem;border-bottom:1px solid var(--border)"),
 			Attr("role", "row"), Attr("data-testid", "txn-scheduled-ghost"),
@@ -128,7 +130,7 @@ func txnScheduledGhostRows(items []bills.Bill, formatDate func(time.Time) string
 			Div(css.Class("td-desc"), Attr("role", "gridcell"), item.Name),
 			Div(css.Class("td-cat"), Attr("role", "gridcell"), category),
 			Div(css.Class("td-acct txn-scheduled-account"), Attr("role", "gridcell"), Attr("title", account), account),
-			Div(css.Class("td-amount"), Attr("role", "gridcell"), fmtMoney(item.Amount)),
+			Div(css.Class("td-amount", tw.ColorClass(tone)), Attr("role", "gridcell"), amount),
 			Div(css.Class("txn-scheduled-status"), Attr("role", "gridcell"),
 				Span(css.Class("txn-scheduled-pill"), uistate.T("transactions.scheduledStatus"))),
 		))

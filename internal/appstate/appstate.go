@@ -269,7 +269,11 @@ func (a *App) ImportTransactionsCSV(data []byte, fallbackAccountID, docID string
 		}
 		txns[i].TransferAccountID = resolveAcc(txns[i].TransferAccountID)
 		txns[i].CategoryID = resolveCat(txns[i].CategoryID)
-		txns[i].MemberID = resolveMem(txns[i].MemberID)
+		owners := txns[i].Owners()
+		for j := range owners {
+			owners[j] = resolveMem(owners[j])
+		}
+		txns[i].SetOwners(owners)
 		if !txns[i].IsTransfer() {
 			ruleByIndex[i] = a.autoRuleFor(txns[i].Payee, txns[i].Desc, txns[i].Amount.Amount, txns[i].AccountID, rules.NewTxnDate(txns[i].Date))
 		}
@@ -456,7 +460,11 @@ func (a *App) ParseCSVForPreview(data []byte, fallbackAccountID string) ([]domai
 		}
 		txns[i].TransferAccountID = resolveAcc(txns[i].TransferAccountID)
 		txns[i].CategoryID = resolveCat(txns[i].CategoryID)
-		txns[i].MemberID = resolveMem(txns[i].MemberID)
+		owners := txns[i].Owners()
+		for j := range owners {
+			owners[j] = resolveMem(owners[j])
+		}
+		txns[i].SetOwners(owners)
 		txns[i] = a.AutoCategorizeTransaction(txns[i])
 	}
 	return txns, nil
@@ -981,17 +989,48 @@ func (a *App) ReassignOwner(oldID, newID string) (int, error) {
 			moved++
 		}
 	}
+	validMembers := make(map[string]bool)
+	for _, member := range a.Members() {
+		validMembers[member.ID] = true
+	}
+	transactionUpdates := make([]domain.Transaction, 0)
 	for _, t := range a.Transactions() {
-		if t.MemberID == oldID {
-			t.MemberID = memberID
-			if err := a.store.PutTransaction(t); err != nil {
-				return moved, err
+		owners := t.Owners()
+		updated := make([]string, 0, len(owners))
+		for _, owner := range owners {
+			if owner == oldID {
+				if memberID != "" && validMembers[memberID] {
+					updated = append(updated, memberID)
+				}
+				continue
 			}
-			moved++
+			if validMembers[owner] {
+				updated = append(updated, owner)
+			}
+		}
+		if !sameOwnerIDs(owners, updated) {
+			t.SetOwners(updated)
+			transactionUpdates = append(transactionUpdates, t)
 		}
 	}
+	if err := a.store.PutTransactionsAtomic(transactionUpdates); err != nil {
+		return moved, fmt.Errorf("reassign transaction owners: %w", err)
+	}
+	moved += len(transactionUpdates)
 	a.log.Info("reassigned owner", "from", oldID, "to", newID, "moved", moved)
 	return moved, nil
+}
+
+func sameOwnerIDs(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // DeleteMemberAfterReassign moves every owned record away from oldID, deletes the
@@ -1262,6 +1301,14 @@ func (a *App) SuggestTransactionFields(text, categoryID string, tags []string) (
 // the full structured-condition path (C105), which evaluates field/op/value
 // conditions when present and falls back to the legacy Match substring otherwise.
 // Transfers are excluded from categorization.
+func ruleOwnerForApplyOnce(t domain.Transaction) string {
+	owners := t.Owners()
+	if len(owners) != 1 {
+		return ""
+	}
+	return owners[0]
+}
+
 func (a *App) AutoCategorizeTransaction(t domain.Transaction) domain.Transaction {
 	if t.IsTransfer() {
 		return t
@@ -1290,9 +1337,9 @@ func (a *App) AutoCategorizeTransaction(t domain.Transaction) domain.Transaction
 	}
 	// C373: the apply-once actions (member, reviewed, exclude), evaluated by the
 	// one shared predicate so entry-time and the two backfills cannot drift.
-	if ap := r.ApplyOnce(t.MemberID, t.Reviewed, t.ExcludeFromReports); ap.Any() {
+	if ap := r.ApplyOnce(ruleOwnerForApplyOnce(t), t.Reviewed, t.ExcludeFromReports); ap.Any() {
 		if ap.MemberID != "" {
-			t.MemberID = ap.MemberID
+			t.SetOwners([]string{ap.MemberID}) // TODO(WHO2): rule assignment remains single-owner.
 		}
 		if ap.Reviewed {
 			t.Reviewed = true
@@ -2649,9 +2696,9 @@ func (a *App) ApplyRulesWithCounts() (total int, perRule map[string]int, err err
 			changed = true
 		}
 		// C373: member / reviewed / exclude, through the shared apply-once rule.
-		if ap := r.ApplyOnce(t.MemberID, t.Reviewed, t.ExcludeFromReports); ap.Any() {
+		if ap := r.ApplyOnce(ruleOwnerForApplyOnce(t), t.Reviewed, t.ExcludeFromReports); ap.Any() {
 			if ap.MemberID != "" {
-				t.MemberID = ap.MemberID
+				t.SetOwners([]string{ap.MemberID}) // TODO(WHO2): rule assignment remains single-owner.
 			}
 			t.Reviewed = t.Reviewed || ap.Reviewed
 			t.ExcludeFromReports = t.ExcludeFromReports || ap.ExcludeFromReports
@@ -2729,9 +2776,9 @@ func (a *App) ApplyOneRule(ruleID string) (int, error) {
 			changed = true
 		}
 		// C373: member / reviewed / exclude, through the shared apply-once rule.
-		if ap := r.ApplyOnce(t.MemberID, t.Reviewed, t.ExcludeFromReports); ap.Any() {
+		if ap := r.ApplyOnce(ruleOwnerForApplyOnce(t), t.Reviewed, t.ExcludeFromReports); ap.Any() {
 			if ap.MemberID != "" {
-				t.MemberID = ap.MemberID
+				t.SetOwners([]string{ap.MemberID}) // TODO(WHO2): rule assignment remains single-owner.
 			}
 			t.Reviewed = t.Reviewed || ap.Reviewed
 			t.ExcludeFromReports = t.ExcludeFromReports || ap.ExcludeFromReports
@@ -2855,7 +2902,7 @@ func (a *App) PreviewApplyRules() (total int, perRule map[string]int) {
 		}
 		// C373: the preview must agree with the apply about what counts as a
 		// change, or the blast-radius number it promises is not the one delivered.
-		if r.ApplyOnce(t.MemberID, t.Reviewed, t.ExcludeFromReports).Any() {
+		if r.ApplyOnce(ruleOwnerForApplyOnce(t), t.Reviewed, t.ExcludeFromReports).Any() {
 			changed = true
 		}
 		if !changed {

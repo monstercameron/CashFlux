@@ -69,3 +69,21 @@ func TestSpendingByMemberEmpty(t *testing.T) {
 		t.Errorf("empty input should yield no rows, got %+v", got)
 	}
 }
+
+func TestSpendingByMemberSplitsSharedAmount(t *testing.T) {
+	start, end := dt(2026, time.June, 1), dt(2026, time.July, 1)
+	txns := []domain.Transaction{{
+		ID: "shared", MemberIDs: []string{"alice", "bob"},
+		Amount: money.New(-1001, "USD"), Date: dt(2026, time.June, 10),
+	}}
+	got, err := SpendingByMember(txns, start, end, usdRates())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].MemberID != "alice" || got[0].Amount != 501 || got[1].MemberID != "bob" || got[1].Amount != 500 {
+		t.Fatalf("shared $10.01 spend = %#v, want alice $5.01 and bob $5.00", got)
+	}
+	if got[0].Amount+got[1].Amount != 1001 {
+		t.Fatal("per-member shares did not preserve the household total")
+	}
+}

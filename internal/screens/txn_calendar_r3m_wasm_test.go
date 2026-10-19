@@ -40,8 +40,8 @@ func TestR3MCalendarMoneyUsesLedgerDisplayAndAccessibleDescriptions(t *testing.T
 	if len(buttons) != 2 {
 		t.Fatalf("calendar day buttons = %d, want 2", len(buttons))
 	}
-	if got := buttons[0].Text(); !strings.Contains(got, "$6.75") || strings.Contains(got, "(") || strings.Contains(got, "-$") {
-		t.Fatalf("expense calendar day text = %q, want neutral $6.75 without parentheses or minus", got)
+	if got := buttons[0].Text(); !strings.Contains(got, "−$6.75") || strings.Contains(got, "(") || strings.Contains(got, "-$") {
+		t.Fatalf("expense calendar day text = %q, want −$6.75 with the typographic minus", got)
 	}
 	if got := buttons[0].Attr("aria-label"); !strings.Contains(got, "spent $6.75") {
 		t.Fatalf("expense calendar day aria-label = %q, want spent $6.75", got)
@@ -61,8 +61,8 @@ func TestR3MCalendarMoneyUsesLedgerDisplayAndAccessibleDescriptions(t *testing.T
 	if len(netSpans) != 2 {
 		t.Fatalf("rendered calendar day figures = %d, want 2", len(netSpans))
 	}
-	if got := netSpans[0].Attr("class"); !strings.Contains(got, "txn-amount-expense") || strings.Contains(got, "text-down") {
-		t.Fatalf("expense day net class = %q, want neutral expense style", got)
+	if got := netSpans[0].Attr("class"); !strings.Contains(got, "text-down") {
+		t.Fatalf("expense day net class = %q, want negative tone", got)
 	}
 	if got := netSpans[1].Attr("class"); !strings.Contains(got, "text-up") {
 		t.Fatalf("income day net class = %q, want text-up", got)
@@ -77,7 +77,7 @@ func TestR3MCalendarMoneyUsesLedgerDisplayAndAccessibleDescriptions(t *testing.T
 	if len(totals) != 2 {
 		t.Fatalf("calendar week totals = %d, want 2", len(totals))
 	}
-	if got := totals[0].Text(); !strings.Contains(got, "Spent $6.75") {
+	if got := totals[0].Text(); !strings.Contains(got, "Spent −$6.75") {
 		t.Fatalf("expense week total text = %q, want spent $6.75", got)
 	}
 	if got := totals[0].Attr("aria-label"); !strings.Contains(got, "spent $6.75") || !strings.Contains(got, "1 transaction") {

@@ -5,7 +5,6 @@ package store
 import (
 	"encoding/csv"
 	"fmt"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -22,7 +21,7 @@ func TestTransactionsCSVRoundTrip(t *testing.T) {
 		{
 			ID: "t1", AccountID: "a1", Date: day, Payee: "Store, Inc.", Desc: "Groceries",
 			CategoryID: "food", Amount: money.New(-24055, "USD"), Cleared: true,
-			Tags: []string{"weekly", "essentials"}, MemberID: "m1",
+			Tags: []string{"weekly", "essentials"}, MemberIDs: []string{"m1", "m2"},
 		},
 		{
 			ID: "t2", AccountID: "a1", Date: day2, Desc: "Transfer to savings",
@@ -42,8 +41,19 @@ func TestTransactionsCSVRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("from csv: %v", err)
 	}
-	if !reflect.DeepEqual(got, txns) {
-		t.Errorf("round trip mismatch:\n got: %+v\nwant: %+v", got, txns)
+	if len(got) != len(txns) {
+		t.Fatalf("round trip rows = %d, want %d", len(got), len(txns))
+	}
+	for i := range got {
+		want := txns[i]
+		want.NormalizeOwners()
+		if got[i].ID != want.ID || got[i].AccountID != want.AccountID || !got[i].Date.Equal(want.Date) ||
+			got[i].Payee != want.Payee || got[i].Desc != want.Desc || got[i].CategoryID != want.CategoryID ||
+			got[i].Amount != want.Amount || got[i].TransferAccountID != want.TransferAccountID ||
+			got[i].Cleared != want.Cleared || strings.Join(got[i].Tags, ",") != strings.Join(want.Tags, ",") ||
+			strings.Join(got[i].Owners(), ",") != strings.Join(want.Owners(), ",") {
+			t.Errorf("round trip row %d mismatch:\n got: %+v\nwant: %+v", i, got[i], want)
+		}
 	}
 }
 
@@ -173,7 +183,7 @@ func TestCSVImportDefaultsCurrencyAndFriendlyColumns(t *testing.T) {
 	if g.Amount.Amount != -450 || g.Amount.Currency != "USD" {
 		t.Errorf("amount = %v, want -450 USD (defaulted)", g.Amount)
 	}
-	if g.Payee != "Coffee Bar" || g.AccountID != "Checking" || g.CategoryID != "Food" || g.MemberID != "Alex" {
+	if g.Payee != "Coffee Bar" || g.AccountID != "Checking" || g.CategoryID != "Food" || !g.HasOwner("Alex") {
 		t.Errorf("friendly columns not read: %+v", g)
 	}
 	// The payee fills the (required) description when no desc column is present,

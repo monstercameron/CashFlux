@@ -257,8 +257,8 @@ func TestMergeIsNonLossy(t *testing.T) {
 	if m.Payee != "Corner Store" || m.Note != "split w/ Priya" {
 		t.Errorf("payee/note not filled: %q / %q", m.Payee, m.Note)
 	}
-	if m.BillAccountID != "cc" || m.MemberID != "m1" {
-		t.Errorf("bill/member link not preserved: %q / %q", m.BillAccountID, m.MemberID)
+	if m.BillAccountID != "cc" || !m.HasOwner("m1") {
+		t.Errorf("bill/member link not preserved: %q / %v", m.BillAccountID, m.Owners())
 	}
 	if !m.Cleared {
 		t.Error("Cleared should be true (either side cleared)")

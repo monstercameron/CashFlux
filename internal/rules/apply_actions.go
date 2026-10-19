@@ -11,10 +11,8 @@ package rules
 // bill-link's "only when empty" rule inline, and each new action would have
 // needed the same care in three places.
 //
-// The rules encoded here are deliberate and identical for all four actions: a
-// standing instruction may FILL something in, and may never reverse a person's
-// explicit choice. So a member is assigned only where there is none, and the two
-// flags only ever go false → true.
+// A rule replaces transaction ownership with its configured single member; the
+// two flags only ever go false → true.
 type Applied struct {
 	MemberID           string // non-empty when the member should be set
 	Reviewed           bool   // true when the transaction should be marked reviewed
@@ -31,7 +29,7 @@ func (a Applied) Any() bool {
 // curExcluded its current flags.
 func (r Rule) ApplyOnce(curMember string, curReviewed, curExcluded bool) Applied {
 	var out Applied
-	if r.SetMemberID != "" && curMember == "" {
+	if r.SetMemberID != "" && curMember != r.SetMemberID {
 		out.MemberID = r.SetMemberID
 	}
 	if r.SetReviewed && !curReviewed {

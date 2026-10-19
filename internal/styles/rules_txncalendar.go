@@ -91,8 +91,8 @@ func registerTxnCalendar() {
 		prop("font-weight", "600"),
 		prop("font-variant-numeric", "tabular-nums"),
 	)
-	rule(".txn-cal-net.txn-amount-expense",
-		prop("color", "var(--text)"),
+	rule(".txn-cal-net.text-down",
+		prop("color", "var(--money-negative)"),
 	)
 	rule(".txn-cal-dots",
 		prop("display", "flex"),

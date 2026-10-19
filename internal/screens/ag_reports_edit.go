@@ -151,7 +151,7 @@ func agRunTxnFilter(c agRptCtx, f agTxnFilter) ([]domain.Transaction, string) {
 		if accSet && t.AccountID != accID && t.TransferAccountID != accID {
 			continue
 		}
-		if memSet && t.MemberID != memID {
+		if memSet && !t.HasOwner(memID) {
 			continue
 		}
 		if contains != "" && !strings.Contains(strings.ToLower(t.Payee+" "+t.Desc), contains) {
@@ -292,9 +292,9 @@ func agApplyTxnEdit(c agRptCtx, prior domain.Transaction, e agTxnEdit) (domain.T
 				return prior, nil, fmt.Errorf("no household member matching %q", name)
 			}
 		}
-		if newID != prior.MemberID {
-			next.MemberID = newID
-			changes = append(changes, fmt.Sprintf("person %s → %s", c.memberOf(prior.MemberID), c.memberOf(newID)))
+		if newID != prior.PrimaryOwner() || len(prior.Owners()) > 1 {
+			next.SetOwners([]string{newID}) // TODO(WHO2): command edit accepts one owner.
+			changes = append(changes, fmt.Sprintf("person %s → %s", c.memberOf(prior.PrimaryOwner()), c.memberOf(newID)))
 		}
 	}
 	if e.Tags != nil {

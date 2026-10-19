@@ -412,10 +412,13 @@ type Transaction struct {
 	// usually takes to clear a charge, and without that there is no window to be
 	// late against. Set it through MarkCleared rather than by hand, so the flag
 	// and the moment can never disagree.
-	ClearedAt   time.Time `json:"clearedAt,omitempty"`
-	Tags        []string  `json:"tags,omitempty"`
-	MemberID    string    `json:"memberId,omitempty"`
-	SourceDocID string    `json:"sourceDocId,omitempty"`
+	ClearedAt time.Time `json:"clearedAt,omitempty"`
+	Tags      []string  `json:"tags,omitempty"`
+	// MemberIDs is the source of truth for transaction ownership. MemberID is
+	// retained only to migrate older datasets; transaction JSON canonicalizes it.
+	MemberIDs   []string `json:"memberIds,omitempty"`
+	MemberID    string   `json:"memberId,omitempty"`
+	SourceDocID string   `json:"sourceDocId,omitempty"`
 	// Source records how this transaction entered the ledger (manual entry, CSV
 	// import, document scan, recurring rule, AI assistant). Empty = not recorded
 	// (e.g. created before provenance tracking); reads as "—". See domain.TxnSource.

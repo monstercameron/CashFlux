@@ -236,11 +236,12 @@ type txnCalWeekTotalProps struct {
 }
 
 func txnCalWeekTotal(props txnCalWeekTotalProps) ui.Node {
-	spent, _ := fmtLedgerAmount(money.New(props.Spent, props.Base), false)
-	spent = strings.TrimPrefix(spent, "+")
+	spent, _ := fmtLedgerAmount(money.New(-props.Spent, props.Base), false)
 	spentClass := "txn-cal-week-spent"
 	if props.Spent == 0 {
 		spentClass += " text-dim"
+	} else {
+		spentClass += " text-down"
 	}
 	lines := []any{Span(ClassStr(spentClass), uistate.T("r9c.weekSpent", spent))}
 	if props.Income > 0 {
@@ -267,10 +268,11 @@ func txnCalWeekTotal(props txnCalWeekTotalProps) ui.Node {
 		lastClass += " text-dim"
 	}
 	lines = append(lines, Span(ClassStr(lastClass), lastLine))
-	aria := uistate.T("r9c.weekAria", props.WeekOf, strings.TrimPrefix(spent, "+"), lastLine)
+	ariaSpent := strings.TrimPrefix(spent, "−")
+	aria := uistate.T("r9c.weekAria", props.WeekOf, ariaSpent, lastLine)
 	if props.Income > 0 {
 		income, _ := fmtLedgerAmount(money.New(props.Income, props.Base), false)
-		aria = uistate.T("r9c.weekAriaIncome", props.WeekOf, strings.TrimPrefix(spent, "+"), strings.TrimPrefix(income, "+"), lastLine)
+		aria = uistate.T("r9c.weekAriaIncome", props.WeekOf, ariaSpent, strings.TrimPrefix(income, "+"), lastLine)
 	}
 	return Div(css.Class("txn-cal-week-total"),
 		Attr("data-testid", "txn-cal-week-total"),
@@ -317,13 +319,13 @@ func calNetStr(s txncalendar.DayStat, base string) string {
 	return text
 }
 
-// calNetTone colours positive net income green and leaves expense totals neutral.
+// calNetTone colors positive net income green and expenses red.
 func calNetTone(s txncalendar.DayStat) string {
 	switch {
 	case s.Net > 0:
 		return "text-up"
 	case s.Net < 0:
-		return "txn-amount-expense"
+		return "text-down"
 	default:
 		return ""
 	}
@@ -335,7 +337,7 @@ func calDayAria(day int, s txncalendar.DayStat, base string) string {
 	case s.Count == 0:
 		return uistate.T("transactions.calDayEmpty", strconv.Itoa(day))
 	case s.Net < 0:
-		return uistate.T("transactions.calDaySpent", strconv.Itoa(day), amount)
+		return uistate.T("transactions.calDaySpent", strconv.Itoa(day), strings.TrimPrefix(amount, "−"))
 	case s.Net > 0:
 		return uistate.T("transactions.calDayNet", strconv.Itoa(day), amount)
 	default:

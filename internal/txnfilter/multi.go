@@ -36,13 +36,28 @@ func (m MultiCriteria) Matches(t domain.Transaction) bool {
 	if !inSetOrEmpty(m.Categories, t.CategoryID) {
 		return false
 	}
-	if !inSetOrEmpty(m.Members, t.MemberID) {
+	if len(m.Members) > 0 && !hasAnyOwner(t, m.Members) {
 		return false
 	}
 	if len(m.Tags) > 0 && !anyShared(m.Tags, t.Tags) {
 		return false
 	}
 	return true
+}
+
+func hasAnyOwner(t domain.Transaction, selected []string) bool {
+	for _, id := range selected {
+		if id == UnassignedMemberID {
+			if t.IsUnassigned() {
+				return true
+			}
+			continue
+		}
+		if t.HasOwner(id) {
+			return true
+		}
+	}
+	return false
 }
 
 // Filter returns the transactions that Match, preserving input order (sorting and

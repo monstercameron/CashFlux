@@ -75,7 +75,7 @@ func TestReviewCurrencyTotalsDoNotCombineDifferentCurrencies(t *testing.T) {
 		{Amount: money.New(-2000, "USD")},
 		{Amount: money.New(-2000, "EUR")},
 	}
-	if got, want := reviewCurrencyTotals(txns), "\u20ac20.00 EUR \u00b7 $20.00 USD"; got != want {
+	if got, want := reviewCurrencyTotals(txns), "−€20.00 EUR · −$20.00 USD"; got != want {
 		t.Fatalf("reviewCurrencyTotals() = %q, want %q", got, want)
 	}
 }

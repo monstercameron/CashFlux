@@ -93,6 +93,17 @@ func ownsScope(budget domain.Budget, member string) bool {
 	return budget.Scope != domain.ScopeIndividual || member == budget.OwnerID
 }
 
+func ownsTransactionScope(budget domain.Budget, txn domain.Transaction) bool {
+	return budget.Scope != domain.ScopeIndividual || txn.HasOwner(budget.OwnerID)
+}
+
+func ownsSplitScope(budget domain.Budget, txn domain.Transaction, split domain.CategorySplit) bool {
+	if split.MemberID != "" {
+		return ownsScope(budget, split.MemberID)
+	}
+	return ownsTransactionScope(budget, txn)
+}
+
 // spentCovered sums spend against the budget for transactions whose category
 // passes covers, in the budget's limit currency. For a split transaction (C58)
 // each split line is attributed to its own category — only the lines whose
@@ -126,7 +137,7 @@ func spentCovered(budget domain.Budget, all []domain.Transaction, start, end tim
 		// carries, and taking priority over category/split matching so a charge that matches
 		// both a tracked tag and a tracked category is never double-counted.
 		if budget.TracksAnyTag(t.Tags) {
-			if !ownsScope(budget, t.MemberID) {
+			if !ownsTransactionScope(budget, t) {
 				continue
 			}
 			if err := add(t.Amount); err != nil {
@@ -143,7 +154,7 @@ func spentCovered(budget domain.Budget, all []domain.Transaction, start, end tim
 				// MemberID, or the transaction's payer when the line carries none).
 				// An individual budget counts only the lines it owns — so a shared
 				// receipt paid by A can still feed B's personal budget line.
-				if !ownsScope(budget, s.LineOwner(t.MemberID)) {
+				if !ownsSplitScope(budget, t, s) {
 					continue
 				}
 				if err := add(s.Amount); err != nil {
@@ -152,7 +163,7 @@ func spentCovered(budget domain.Budget, all []domain.Transaction, start, end tim
 			}
 			continue
 		}
-		if !ownsScope(budget, t.MemberID) {
+		if !ownsTransactionScope(budget, t) {
 			continue
 		}
 		if !covers(t.CategoryID) {

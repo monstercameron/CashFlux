@@ -203,7 +203,20 @@ func Merge(survivor domain.Transaction, others []domain.Transaction) domain.Tran
 	fill(&out.CategoryID, func(t domain.Transaction) string { return t.CategoryID })
 	fill(&out.Payee, func(t domain.Transaction) string { return t.Payee })
 	fill(&out.Note, func(t domain.Transaction) string { return t.Note })
-	fill(&out.MemberID, func(t domain.Transaction) string { return t.MemberID })
+	owners := out.Owners()
+	seenOwners := make(map[string]bool, len(owners))
+	for _, owner := range owners {
+		seenOwners[owner] = true
+	}
+	for _, other := range others {
+		for _, owner := range other.Owners() {
+			if !seenOwners[owner] {
+				owners = append(owners, owner)
+				seenOwners[owner] = true
+			}
+		}
+	}
+	out.SetOwners(owners)
 	fill(&out.BillAccountID, func(t domain.Transaction) string { return t.BillAccountID })
 	fill(&out.SubscriptionName, func(t domain.Transaction) string { return t.SubscriptionName })
 	fill(&out.SourceDocID, func(t domain.Transaction) string { return t.SourceDocID })

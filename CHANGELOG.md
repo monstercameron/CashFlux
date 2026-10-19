@@ -172,6 +172,14 @@ and every commit updates this file under `Unreleased`.
   complete build in charge.
 
 ### Changed
+- **A transaction can belong to several people, or to nobody (WHO1).** Ownership is a list (older single-owner data
+  migrates automatically); filtering by a person shows every transaction they share; per-person totals in budgets and
+  reports split a shared amount evenly with exact cents, so the household total never double-counts (a $10.01 shared
+  charge is $5.01 and $5.00). Deleting a member removes them from every transaction's owners. The Who column and the
+  multi-select editing come next (WHO2).
+- **Spending is red with a minus sign on the Transactions page (RED1).** Expenses read "−$480.00" in the negative tone
+  (a true minus sign, screen readers hear "minus"); income stays green with "+"; transfers stay neutral; the calendar,
+  count line, future month, Review dialog and split lines follow the same rule. This replaces the earlier neutral style.
 - **Choose any OpenAI model (MODELS1).** The model picker lists every model your key can use, grouped by likely type
   instead of hidden, with search across all of them and a field for a custom model id; reloading keeps your choice and
   marks it if the latest list no longer includes it. A model that cannot do chat now fails with a plain explanation

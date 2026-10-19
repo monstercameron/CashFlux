@@ -98,7 +98,7 @@ func membersBody() ui.Node {
 		// transaction tag still routes through reassign-before-delete (which clears
 		// those MemberIDs) instead of being deleted out from under them.
 		for _, t := range app.Transactions() {
-			if t.MemberID == memberID {
+			if t.HasOwner(memberID) {
 				owned++
 			}
 		}

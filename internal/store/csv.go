@@ -5,6 +5,7 @@ package store
 import (
 	"bytes"
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -18,6 +19,33 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 )
 
+func firstOwner(t domain.Transaction) string {
+	owners := t.Owners()
+	if len(owners) == 0 {
+		return ""
+	}
+	return owners[0]
+}
+
+func ownerList(id string) []string {
+	if id == "" {
+		return nil
+	}
+	return []string{id}
+}
+
+func parseCSVOwners(encoded, legacy string) ([]string, error) {
+	if strings.TrimSpace(encoded) == "" {
+		return ownerList(legacy), nil
+	}
+	var owners []string
+	if err := json.Unmarshal([]byte(encoded), &owners); err != nil {
+		return nil, err
+	}
+	txn := domain.Transaction{MemberIDs: owners}
+	return txn.Owners(), nil
+}
+
 // csvHeader is the stable column order for transaction CSV export.
 var csvHeader = []string{
 	"id", "date", "account_id", "payee", "desc", "category_id",
@@ -27,6 +55,7 @@ var csvHeader = []string{
 	// cashflux_export is internal round-trip metadata and stays after that column.
 	"transfer_group_id",
 	"cashflux_export",
+	"member_ids",
 }
 
 const cashFluxCSVExportMarker = "cashflux-csv-v1"
@@ -40,6 +69,10 @@ func TransactionsToCSV(txns []domain.Transaction) ([]byte, error) {
 		return nil, err
 	}
 	for _, t := range txns {
+		owners, err := json.Marshal(t.Owners())
+		if err != nil {
+			return nil, fmt.Errorf("store: csv transaction %s owners: %w", t.ID, err)
+		}
 		row := []string{
 			t.ID,
 			dateutil.FormatDate(t.Date),
@@ -52,10 +85,11 @@ func TransactionsToCSV(txns []domain.Transaction) ([]byte, error) {
 			t.TransferAccountID,
 			strconv.FormatBool(t.Cleared),
 			strings.Join(t.Tags, ";"),
-			t.MemberID,
+			firstOwner(t), // TODO(WHO2): keep the legacy column while the full list uses member_ids.
 			string(t.Source),
 			t.TransferGroupID,
 			cashFluxCSVExportMarker,
+			string(owners),
 		}
 		row[3] = csvsafe.Guard(row[3])
 		row[4] = csvsafe.Guard(row[4])
@@ -196,6 +230,11 @@ func TransactionsFromCSVResilient(data []byte, defaultCurrency string) (txns []d
 			desc = payee
 		}
 
+		owners, ownerErr := parseCSVOwners(col(row, "member_ids"), colID(row, "member"))
+		if ownerErr != nil {
+			skipped = append(skipped, CSVRowError{Line: line, Reason: fmt.Sprintf("invalid member_ids: %v", ownerErr)})
+			continue
+		}
 		out = append(out, domain.Transaction{
 			ID:                tid,
 			AccountID:         colID(row, "account"),
@@ -208,7 +247,7 @@ func TransactionsFromCSVResilient(data []byte, defaultCurrency string) (txns []d
 			TransferGroupID:   colID(row, "transfer_group"),
 			Cleared:           cleared,
 			Tags:              tags,
-			MemberID:          colID(row, "member"),
+			MemberIDs:         owners,
 			Source:            csvSource(col(row, "source"), srcCol),
 		})
 	}
@@ -346,6 +385,10 @@ func TransactionsFromCSV(data []byte, defaultCurrency string) ([]domain.Transact
 			desc = payee
 		}
 
+		owners, ownerErr := parseCSVOwners(col(row, "member_ids"), colID(row, "member"))
+		if ownerErr != nil {
+			return nil, fmt.Errorf("store: csv line %d: invalid member_ids: %w", line, ownerErr)
+		}
 		out = append(out, domain.Transaction{
 			ID:                tid,
 			AccountID:         colID(row, "account"),
@@ -358,7 +401,7 @@ func TransactionsFromCSV(data []byte, defaultCurrency string) ([]domain.Transact
 			TransferGroupID:   colID(row, "transfer_group"),
 			Cleared:           cleared,
 			Tags:              tags,
-			MemberID:          colID(row, "member"),
+			MemberIDs:         owners,
 			Source:            csvSource(col(row, "source"), srcCol),
 		})
 	}

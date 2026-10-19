@@ -48,7 +48,7 @@ func categoryTotals(txns []domain.Transaction, start, end time.Time, rates curre
 		//
 		// XC10 limitation: a split line may carry its own owner (MemberID), but
 		// this aggregation is NOT member-scoped — report member scoping happens
-		// upstream on whole transactions (the caller pre-filters by t.MemberID
+		// upstream on whole transactions (the caller pre-filters by t.Owners()
 		// before passing txns here). A member-scoped report therefore attributes a
 		// shared transaction's split lines by the payer, not by each line's owner.
 		// Enforcing per-line owner here would require threading the member scope

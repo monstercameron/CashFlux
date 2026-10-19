@@ -135,9 +135,9 @@ func TransactionRow(props transactionRowProps) ui.Node {
 		}
 	}))
 	pr := uistate.UsePrefs().Get()
-	// Resolve the default member for this row: the transaction's own MemberID if
+	// Resolve the default member for this row: its first owner if
 	// set, otherwise the account owner via MemberForNewTransaction.
-	defaultRowMember := t.MemberID
+	defaultRowMember := t.PrimaryOwner() // TODO(WHO2): the editor picker still accepts one owner.
 	editing := ui.UseState(false)
 	descS := ui.UseState(t.Desc)
 	payeeS := ui.UseState(t.Payee) // C60: editable payee in inline edit
@@ -198,7 +198,7 @@ func TransactionRow(props transactionRowProps) ui.Node {
 			updated := t
 			updated.Desc, updated.Payee = descS.Get(), payeeS.Get()
 			updated.CategoryID, updated.Date = catS.Get(), t.Date
-			updated.MemberID = memberS.Get()
+			updated.SetOwners([]string{memberS.Get()}) // TODO(WHO2): inline picker still assigns one owner.
 			updated.Tags = splitTags(tagsS.Get())
 			updated.Cleared, updated.ExcludeFromReports = clearedS.Get(), excludeS.Get()
 			updated.Custom = cloneTransactionCustom(t.Custom)

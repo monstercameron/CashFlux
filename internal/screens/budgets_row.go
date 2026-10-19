@@ -1435,7 +1435,7 @@ func budgetCompositionSlices(b domain.Budget, anchor time.Time) []budgetSlice {
 		if t.Date.Before(start) || !t.Date.Before(end) {
 			continue
 		}
-		if !budgetOwnsScope(b, t.MemberID) {
+		if b.Scope == domain.ScopeIndividual && !t.HasOwner(b.OwnerID) {
 			continue
 		}
 		// Tag priority (dedupe): the first tracked tag this charge carries wins the whole

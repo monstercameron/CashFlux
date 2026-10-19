@@ -295,7 +295,7 @@ func transactionsLegacy() ui.Node {
 		orig.CategoryID = catID
 		orig.Date = date
 		if memberID != "" {
-			orig.MemberID = memberID
+			orig.SetOwners([]string{memberID}) // TODO(WHO2): inline picker still assigns one owner.
 		}
 		orig.Tags = textutil.CommaFields(tagsStr) // C48: parse comma-separated tags (empty clears)
 		if err := app.PutTransaction(orig); err != nil {

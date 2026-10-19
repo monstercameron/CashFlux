@@ -256,8 +256,8 @@ func TestTransactionsCSVAndImport(t *testing.T) {
 			break
 		}
 	}
-	if imported.AccountID != "a1" || imported.CategoryID != "food" || imported.MemberID != "m1" {
-		t.Errorf("friendly columns resolved to account/category/member = %q/%q/%q", imported.AccountID, imported.CategoryID, imported.MemberID)
+	if imported.AccountID != "a1" || imported.CategoryID != "food" || !imported.HasOwner("m1") {
+		t.Errorf("friendly columns resolved to account/category/owners = %q/%q/%v", imported.AccountID, imported.CategoryID, imported.Owners())
 	}
 	if imported.Amount.Amount != -1234 || imported.Amount.Currency != "USD" {
 		t.Errorf("amount = %+v, want -12.34 USD", imported.Amount)

@@ -41,21 +41,21 @@ func ContributingCount(budget domain.Budget, all []domain.Transaction, start, en
 			continue
 		}
 		if budget.TracksAnyTag(t.Tags) {
-			if ownsScope(budget, t.MemberID) {
+			if ownsTransactionScope(budget, t) {
 				n++
 			}
 			continue
 		}
 		if t.HasSplits() {
 			for _, s := range t.Splits {
-				if covers(s.CategoryID) && ownsScope(budget, s.LineOwner(t.MemberID)) {
+				if covers(s.CategoryID) && ownsSplitScope(budget, t, s) {
 					n++
 					break // one trip, however many lines it was broken into
 				}
 			}
 			continue
 		}
-		if ownsScope(budget, t.MemberID) && covers(t.CategoryID) {
+		if ownsTransactionScope(budget, t) && covers(t.CategoryID) {
 			n++
 		}
 	}

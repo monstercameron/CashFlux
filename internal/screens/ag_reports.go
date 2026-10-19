@@ -1018,7 +1018,7 @@ func agRptTraceMember(c agRptCtx, row string) ([]domain.Transaction, string) {
 		return nil, ""
 	}
 	return agCollect(c, func(t domain.Transaction) bool {
-		return t.IsExpense() && t.MemberID == id
+		return t.IsExpense() && t.HasOwner(id)
 	}), "spending by " + c.memberOf(id)
 }
 
@@ -1213,8 +1213,8 @@ func agRenderTxns(c agRptCtx, rows []domain.Transaction, header string, limit in
 		}
 		line := fmt.Sprintf("  %s  %s  %s  %s  [%s]",
 			agShortID(t.ID), t.Date.Format("2006-01-02"), label, fmtMoney(t.Amount), c.nameOf(t.CategoryID))
-		if t.MemberID != "" {
-			line += " {" + c.memberOf(t.MemberID) + "}"
+		if owner := t.PrimaryOwner(); owner != "" {
+			line += " {" + c.memberOf(owner) + "}" // TODO(WHO2): report output shows only the first owner.
 		}
 		if len(t.Tags) > 0 {
 			line += " #" + strings.Join(t.Tags, " #")

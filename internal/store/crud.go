@@ -145,6 +145,7 @@ func (s *SQLiteStore) ListCategories() ([]domain.Category, error) {
 // --- Transactions ---
 
 func (s *SQLiteStore) PutTransaction(t domain.Transaction) error {
+	t.NormalizeOwners()
 	return putJSON(s.db, "transactions", t.ID, t)
 }
 func (s *SQLiteStore) GetTransaction(id string) (domain.Transaction, bool, error) {
@@ -171,8 +172,17 @@ func (s *SQLiteStore) TransactionsByCategory(categoryID string) ([]domain.Transa
 
 // TransactionsByMember returns transactions attributed to a member.
 func (s *SQLiteStore) TransactionsByMember(memberID string) ([]domain.Transaction, error) {
-	return queryRows[domain.Transaction](s.db,
-		"SELECT data FROM transactions WHERE json_extract(data, '$.memberId') = ? ORDER BY id", memberID)
+	all, err := s.ListTransactions()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]domain.Transaction, 0)
+	for _, txn := range all {
+		if txn.HasOwner(memberID) {
+			out = append(out, txn)
+		}
+	}
+	return out, nil
 }
 
 // TransactionsByDateRange returns transactions whose date falls in [start, end).

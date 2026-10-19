@@ -1894,16 +1894,16 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 		sel := selAtom.Get()
 		var prior []domain.Transaction
 		for _, t := range app.Transactions() {
-			if sel[t.ID] && t.MemberID != mid {
+			if sel[t.ID] && (len(t.Owners()) != 1 || t.PrimaryOwner() != mid) {
 				prior = append(prior, t)
 			}
 		}
 		app.BulkMutate(func() {
 			for _, t := range app.Transactions() {
-				if !sel[t.ID] || t.MemberID == mid {
+				if !sel[t.ID] || (len(t.Owners()) == 1 && t.PrimaryOwner() == mid) {
 					continue
 				}
-				t.MemberID = mid
+				t.SetOwners([]string{mid}) // TODO(WHO2): bulk picker still assigns one owner.
 				if err := app.PutTransaction(t); err != nil {
 					uistate.PostNotice(uistate.T("transactions.bulkAssignErr", err.Error()), true)
 				}

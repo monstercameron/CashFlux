@@ -18,16 +18,16 @@ func TestFormatMoneyFig(t *testing.T) {
 		wantText string
 		wantTone string
 	}{
-		{name: "ledger expense is unsigned and neutral", amount: money.New(-48000, "USD"), style: MoneyLedger, wantText: "$480.00", wantTone: "txn-amount-expense"},
+		{name: "ledger expense is red and signed", amount: money.New(-48000, "USD"), style: MoneyLedger, wantText: "−$480.00", wantTone: "text-down"},
 		{name: "ledger income is signed and green", amount: money.New(123456, "USD"), style: MoneyLedger, wantText: "+$1,234.56", wantTone: "text-up"},
 		{name: "transfer out is unsigned and neutral", amount: money.New(-2500, "USD"), style: MoneyLedger, transfer: true, wantText: "$25.00"},
 		{name: "transfer in is unsigned and neutral", amount: money.New(2500, "USD"), style: MoneyLedger, transfer: true, wantText: "$25.00"},
 		{name: "zero keeps its symbol", amount: money.Zero("USD"), style: MoneyLedger, wantText: "$0.00"},
 		{name: "JPY uses zero decimals", amount: money.Zero("JPY"), style: MoneySigned, wantText: "¥0"},
 		{name: "signed net is positive", amount: money.New(8500, "USD"), style: MoneySigned, wantText: "+$85.00", wantTone: "text-up"},
-		{name: "signed net is negative", amount: money.New(-1200, "USD"), style: MoneySigned, wantText: "−$12.00", wantTone: "txn-amount-expense"},
+		{name: "signed net is negative", amount: money.New(-1200, "USD"), style: MoneySigned, wantText: "−$12.00", wantTone: "text-down"},
 		{name: "signed zero keeps its symbol", amount: money.Zero("USD"), style: MoneySigned, wantText: "$0.00"},
-		{name: "minimum int formats without overflow", amount: money.New(math.MinInt64, "JPY"), style: MoneyLedger, wantText: "¥9,223,372,036,854,775,808", wantTone: "txn-amount-expense"},
+		{name: "minimum int formats without overflow", amount: money.New(math.MinInt64, "JPY"), style: MoneyLedger, wantText: "−¥9,223,372,036,854,775,808", wantTone: "text-down"},
 		{name: "accounting negative uses parentheses", amount: money.New(-48000, "USD"), style: MoneyAccounting, wantText: "($480.00)"},
 		{name: "accounting positive has no sign", amount: money.New(48000, "USD"), style: MoneyAccounting, wantText: "$480.00"},
 		{name: "accounting JPY keeps zero decimals", amount: money.New(-1200, "JPY"), style: MoneyAccounting, wantText: "(¥1,200)"},
@@ -53,7 +53,7 @@ func TestMoneyFigAccessibleLabelSpellsDirection(t *testing.T) {
 		text     string
 		want     string
 	}{
-		{name: "ledger expense", amount: money.New(-2500, "USD"), style: MoneyLedger, text: "$25.00", want: "Minus $25.00"},
+		{name: "ledger expense", amount: money.New(-2500, "USD"), style: MoneyLedger, text: "−$25.00", want: "Minus $25.00"},
 		{name: "ledger income", amount: money.New(2500, "USD"), style: MoneyLedger, text: "+$25.00", want: "Plus $25.00"},
 		{name: "transfer", amount: money.New(-2500, "USD"), style: MoneyLedger, transfer: true, text: "$25.00", want: "Transfer $25.00"},
 		{name: "signed net", amount: money.New(-2500, "USD"), style: MoneySigned, text: "−$25.00", want: "Minus $25.00"},

@@ -130,15 +130,16 @@ func txnCountLineComponent(props txnCountLineProps) ui.Node {
 				}
 			}
 		}
-		parts = append(parts, Span(css.Class("txn-count-main"), uistate.T("r4a.futureSummary",
-			period, txnCountNumber(0), txnCountNumber(scheduledCount), fmtMoney(total))))
+		amount, tone := fmtLedgerAmount(money.New(-total.Amount, total.Currency), false)
+		parts = append(parts, Span(css.Class("txn-count-main", tw.ColorClass(tone)), uistate.T("r4a.futureSummary",
+			period, txnCountNumber(0), txnCountNumber(scheduledCount), amount)))
 	} else {
 		parts = append(parts, Span(css.Class("txn-count-main"), period, " · ", txnCountTransactionCount(props.Shown)))
 		showCashflow := spent.Amount != 0 || income.Amount != 0
 		if showCashflow && filter.Flow != "in" {
 			parts = append(parts,
 				Span(css.Class("txn-count-sep"), Attr("aria-hidden", "true"), " · "),
-				Button(css.Class("txn-count-filter"), Type("button"), Attr("data-testid", "txn-count-spent"),
+				Button(css.Class("txn-count-filter", "text-down"), Type("button"), Attr("data-testid", "txn-count-spent"),
 					Attr("aria-pressed", ariaBool(filter.Flow == "out")),
 					OnClick(Prevent(func() {
 						setTxFilterOn(filterAtom, func(f *uistate.TxFilter) {
@@ -148,7 +149,7 @@ func txnCountLineComponent(props txnCountLineProps) ui.Node {
 								f.Flow = "out"
 							}
 						})
-					})), uistate.T("r2a.spent", fmtMoney(spent))),
+					})), uistate.T("r2a.spent", fmtTxnSignedMoney(money.New(-spent.Amount, spent.Currency)))),
 			)
 		}
 		if showCashflow && filter.Flow != "out" && (filter.Flow == "in" || income.Amount != 0 || spent.Amount == 0) {

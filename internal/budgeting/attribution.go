@@ -8,6 +8,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/memberallocation"
 	"github.com/monstercameron/CashFlux/internal/money"
 )
 
@@ -52,6 +53,20 @@ func AttributeByMember(budget domain.Budget, all []domain.Transaction, start, en
 		byMember[member] += conv.Amount
 		return nil
 	}
+	addToOwners := func(owners []string, amt money.Money) error {
+		conv, err := rates.Convert(amt.Abs(), limit.Currency)
+		if err != nil {
+			return err
+		}
+		if len(owners) == 0 {
+			byMember[UnassignedMemberID] += conv.Amount
+			return nil
+		}
+		for _, share := range memberallocation.SplitAmount(conv.Amount, owners) {
+			byMember[share.MemberID] += share.Amount
+		}
+		return nil
+	}
 
 	for _, t := range all {
 		if !matchesScope(budget, t, start, end) {
@@ -60,7 +75,7 @@ func AttributeByMember(budget domain.Budget, all []domain.Transaction, start, en
 		// Mirror spentCovered's cross-category tag tracking: a tag-matched charge attributes
 		// in full to its payer, once, ahead of category/split matching (no double count).
 		if budget.TracksAnyTag(t.Tags) {
-			if err := addTo(t.MemberID, t.Amount); err != nil {
+			if err := addToOwners(t.Owners(), t.Amount); err != nil {
 				return nil, err
 			}
 			continue
@@ -70,7 +85,13 @@ func AttributeByMember(budget domain.Budget, all []domain.Transaction, start, en
 				if !tracks(s.CategoryID) {
 					continue
 				}
-				if err := addTo(s.LineOwner(t.MemberID), s.Amount); err != nil {
+				if s.MemberID != "" {
+					if err := addTo(s.MemberID, s.Amount); err != nil {
+						return nil, err
+					}
+					continue
+				}
+				if err := addToOwners(t.Owners(), s.Amount); err != nil {
 					return nil, err
 				}
 			}
@@ -79,7 +100,7 @@ func AttributeByMember(budget domain.Budget, all []domain.Transaction, start, en
 		if !tracks(t.CategoryID) {
 			continue
 		}
-		if err := addTo(t.MemberID, t.Amount); err != nil {
+		if err := addToOwners(t.Owners(), t.Amount); err != nil {
 			return nil, err
 		}
 	}

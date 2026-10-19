@@ -15,6 +15,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/screens"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/v5/testkit/render"
 	uic "github.com/monstercameron/GoWebComponents/v5/ui"
 )
@@ -46,9 +47,9 @@ func TestTxnAddAndEditSharePrimaryRowsAndLabels(t *testing.T) {
 	func() {
 		addFixture := render.New(t)
 		defer addFixture.Cleanup()
-		addFixture.Render(uic.CreateElement(QuickAddHost))
+		addFixture.Render(Body(ID("shared-form-body"), uic.CreateElement(QuickAddHost)))
 		uistate.SetQuickAdd(true)
-		addFixture.Render(uic.CreateElement(QuickAddHost))
+		addFixture.Render(Body(ID("shared-form-body"), uic.CreateElement(QuickAddHost)))
 		assertTxnPrimaryRowsAndLabels(t, addFixture, []string{
 			uistate.T("quickAdd.amount"), uistate.T("quickAdd.kind"), uistate.T("quickAdd.expense"), uistate.T("quickAdd.income"), uistate.T("quickAdd.transfer"),
 			uistate.T("quickAdd.payee"), uistate.T("quickAdd.category"), uistate.T("quickAdd.date"), uistate.T("quickAdd.account"),

@@ -99,12 +99,17 @@ func TestReviewMoneyUsesLedgerDisplay(t *testing.T) {
 	for _, tc := range []struct {
 		amount int64
 		want   string
-	}{{amount: -675, want: "$6.75"}, {amount: 675, want: "+$6.75"}} {
+	}{{amount: -675, want: "−$6.75"}, {amount: 675, want: "+$6.75"}} {
 		if got := reviewMoneyText(money.New(tc.amount, "USD")); got != tc.want {
 			t.Errorf("reviewMoneyText(%d) = %q, want %q", tc.amount, got, tc.want)
 		}
 	}
 	f := render.New(t)
+	f.Render(reviewMoneyNode("review-expense", money.New(-675, "USD")))
+	expense := f.AllByTag("span")[0]
+	if expense.Text() != "−$6.75" || !strings.Contains(expense.Attr("class"), "text-down") {
+		t.Fatalf("expense display text/class = %q / %q, want −$6.75 in negative tone", expense.Text(), expense.Attr("class"))
+	}
 	f.Render(reviewMoneyNode("review-amount", money.New(675, "USD")))
 	node := f.AllByTag("span")[0]
 	if node.Text() != "+$6.75" || !strings.Contains(node.Attr("class"), "text-up") {

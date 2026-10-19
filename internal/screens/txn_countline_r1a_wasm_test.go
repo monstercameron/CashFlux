@@ -22,10 +22,14 @@ func TestR1ACountLineGroupsTransactionCounts(t *testing.T) {
 	f := render.New(t)
 	f.Render(txnCountLine(txnCountLineProps{Shown: 1250, Total: 3292, Net: money.New(42500, "USD")}))
 	got := f.Text()
-	for _, want := range []string{"October 2026 · 1,250 transactions", "Spent $100.00", "Income $525.00", "Net +$425.00"} {
+	for _, want := range []string{"October 2026 · 1,250 transactions", "Spent −$100.00", "Income $525.00", "Net +$425.00"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("count line = %q, want current summary format containing %q", got, want)
 		}
+	}
+	spent := renderedButton(f, "txn-count-spent")
+	if spent == nil || !strings.Contains(spent.Attr("class"), "text-down") {
+		t.Fatalf("spent count-line class = %v, want negative tone", spent)
 	}
 	if strings.Contains(got, "of 3,292") {
 		t.Fatalf("count line = %q, want R2A format without an all-ledger denominator", got)

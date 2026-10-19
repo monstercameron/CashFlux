@@ -14,7 +14,7 @@ import (
 type MoneyStyle int
 
 const (
-	// MoneyLedger shows income with a plus sign and leaves expenses unsigned.
+	// MoneyLedger shows income with a plus sign and expenses with a minus sign.
 	MoneyLedger MoneyStyle = iota
 	// MoneySigned shows an explicit plus or minus sign. Use it for net summaries.
 	MoneySigned
@@ -41,13 +41,13 @@ func FormatMoneyFig(m money.Money, style MoneyStyle, isTransfer bool) (text, ton
 		if m.Amount > 0 {
 			return "+" + symbol + amount, "text-up"
 		}
-		return symbol + amount, "txn-amount-expense"
+		return "−" + symbol + amount, "text-down"
 	case MoneySigned:
 		switch {
 		case m.Amount > 0:
 			return "+" + symbol + amount, "text-up"
 		case m.Amount < 0:
-			return "−" + symbol + amount, "txn-amount-expense"
+			return "−" + symbol + amount, "text-down"
 		default:
 			return symbol + amount, ""
 		}
@@ -97,10 +97,12 @@ func moneyFigAccessibleLabel(value money.Money, style MoneyStyle, transfer bool,
 		return "Transfer " + strings.ReplaceAll(text, "−", "")
 	}
 	switch {
-	case style == MoneySigned && value.Amount < 0, style == MoneyAccounting && value.Amount < 0:
-		return "Minus " + strings.Trim(text, "()−")
+	case style == MoneySigned && value.Amount < 0:
+		return "Minus " + strings.TrimPrefix(text, "−")
+	case style == MoneyAccounting && value.Amount < 0:
+		return "Minus " + strings.Trim(text, "()")
 	case value.Amount < 0 && style == MoneyLedger:
-		return "Minus " + text
+		return "Minus " + strings.TrimPrefix(text, "−")
 	case value.Amount > 0 && (style == MoneySigned || style == MoneyLedger):
 		return "Plus " + strings.TrimPrefix(text, "+")
 	default:

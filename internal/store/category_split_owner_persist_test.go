@@ -59,10 +59,10 @@ func TestTransactionSplitOwnerRoundTrip(t *testing.T) {
 		t.Errorf("owned line lost its owner: got %q, want B", got.Splits[1].MemberID)
 	}
 	// The effective owner resolves correctly after the round-trip.
-	if o := got.Splits[0].LineOwner(got.MemberID); o != "A" {
+	if o := got.Splits[0].LineOwner(got.Owners()[0]); o != "A" {
 		t.Errorf("unowned line owner = %q, want payer A", o)
 	}
-	if o := got.Splits[1].LineOwner(got.MemberID); o != "B" {
+	if o := got.Splits[1].LineOwner(got.Owners()[0]); o != "B" {
 		t.Errorf("owned line owner = %q, want B", o)
 	}
 }

@@ -809,8 +809,8 @@ func ApplyWithLabels(txns []domain.Transaction, c Criteria, labels Labels) []dom
 		case !c.ScopeAny && c.Categories != "" && !matchesCategory(t, func(id string) bool { return csvHas(c.Categories, id) }):
 		case !c.ScopeAny && c.Categories == "" && c.Category != "" && !matchesCategory(t, func(id string) bool { return id == c.Category }):
 		case c.Uncategorized && (t.CategoryID != "" || t.IsTransfer()):
-		case c.Members != "" && !matchesMemberSelection(c.Members, t.MemberID):
-		case c.Members == "" && c.Member != "" && t.MemberID != c.Member:
+		case c.Members != "" && !matchesMemberSelection(c.Members, t):
+		case c.Members == "" && c.Member != "" && !matchesMemberSelection(c.Member, t):
 		case c.Sources != "" && !csvHas(c.Sources, string(t.Source)):
 		case c.Sources == "" && c.Source != "" && string(t.Source) != c.Source:
 		case !c.ScopeAny && c.Tags != "" && !hasAnyTagCSV(t, c.Tags):
@@ -873,15 +873,15 @@ func emptySortValue(t domain.Transaction, key string) bool {
 // matchesMemberSelection matches an OR-set of member IDs. The reserved
 // UnassignedMemberID selection represents rows whose actual MemberID is empty;
 // other values continue to match member IDs exactly.
-func matchesMemberSelection(selected, memberID string) bool {
+func matchesMemberSelection(selected string, txn domain.Transaction) bool {
 	for _, id := range splitCSV(selected) {
 		if id == UnassignedMemberID {
-			if memberID == "" {
+			if txn.IsUnassigned() {
 				return true
 			}
 			continue
 		}
-		if id == memberID {
+		if txn.HasOwner(id) {
 			return true
 		}
 	}
