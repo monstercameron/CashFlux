@@ -45,18 +45,19 @@ test.describe("what a budget measures", { tag: "@prod" }, () => {
       await app.getByRole("button", { name: "Category" }).click();
       await expect(app.getByRole("listbox", { name: "Category" })).toBeVisible();
     };
+    const categoryPicker = app.getByRole("listbox", { name: "Category" });
 
     // The add form uses the shared searchable picker rather than a native select.
     // Assert the category-direction contract against the choices users see.
     await openCategoryPicker();
-    await expect(app.getByRole("option", { name: /Groceries/ })).toBeVisible();
-    await expect(app.getByRole("option", { name: /Salary/ })).toHaveCount(0);
+    await expect(categoryPicker.getByRole("option", { name: /Groceries/ })).toBeVisible();
+    await expect(categoryPicker.getByRole("option", { name: /Salary/ })).toHaveCount(0);
     await app.keyboard.press("Escape");
 
     await app.getByTestId("budget-direction").selectOption("save");
     await openCategoryPicker();
-    await expect(app.getByRole("option", { name: /Salary/ })).toBeVisible();
-    await expect(app.getByRole("option", { name: /Groceries/ })).toBeVisible();
+    await expect(categoryPicker.getByRole("option", { name: /Salary/ })).toBeVisible();
+    await expect(categoryPicker.getByRole("option", { name: /Groceries/ })).toBeVisible();
     await app.keyboard.press("Escape");
 
     // ...and switching back re-restricts it. A spending budget tracking an income
@@ -64,8 +65,8 @@ test.describe("what a budget measures", { tag: "@prod" }, () => {
     // would ship a budget broken by construction.
     await app.getByTestId("budget-direction").selectOption("");
     await openCategoryPicker();
-    await expect(app.getByRole("option", { name: /Groceries/ })).toBeVisible();
-    await expect(app.getByRole("option", { name: /Salary/ })).toHaveCount(0);
+    await expect(categoryPicker.getByRole("option", { name: /Groceries/ })).toBeVisible();
+    await expect(categoryPicker.getByRole("option", { name: /Salary/ })).toHaveCount(0);
   });
 
   test("the picker stops apologising once income categories are allowed", async ({ app }) => {

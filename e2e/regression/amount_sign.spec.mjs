@@ -267,6 +267,10 @@ test.describe("C547 · the edit form reads a typed minus as direction", { tag: "
 
     // Reading a minus as direction must not weaken the zero guard — and the
     // message still has to be on screen next to the button that produced it.
-    await expect(app.locator(".form-err-sticky")).toBeInViewport({ timeout: 10000 });
+    const amountError = app
+      .getByTestId("txn-edit-form")
+      .getByRole("alert")
+      .filter({ hasText: /Enter an amount greater than zero/ });
+    await expect(amountError).toBeInViewport({ timeout: 10000 });
   });
 });
