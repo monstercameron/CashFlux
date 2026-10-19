@@ -90,6 +90,13 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Budgets: readable rows and bars (BUD3).** Limit and percentage figures sit beside a thin progress track instead of on
+  the coloured fill (≥ 4.5:1 in light and dark), and "$X over" / "$X left" is always written out. In compact rows the
+  limit is a button that opens a separate inline editor showing the effective cap and base limit side by side; Enter
+  saves, Escape cancels and focus returns to the limit. The pace marker gets a labelled legend (hidden at 0% spent);
+  "Release unused funds" only appears on rollover budgets; follow-ups collapse to a count; row actions use plain, distinct
+  verbs ("Raise limit", "Cover from another budget"). Controls are at least 24 px (44 px on touch) and the small uppercase
+  strip labels are now readable sentence case.
 - **Budgets: one status strip, budgets first, clearer menus (BUD2, BUD2.1).** The three overlapping banners are replaced by
   one status strip with one figure, one sentence and one action; allocation, funding and issues move into an expandable
   details section that names every non-monthly budget converted to the month. The "need attention" count and its filter

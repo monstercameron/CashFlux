@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"syscall/js"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -60,6 +61,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	// edit never costs a modal round-trip. Edits the BASE limit; the effective-cap
 	// line explains any carry/boost delta.
 	limitEditing := ui.UseState(false)
+	limitRestoreFocus := ui.UseState(false)
 	limitDraft := ui.UseState("")
 	limitDec := currency.Decimals(s.Budget.Limit.Currency)
 	// C665: the field advertises min="0.01" and the browser's own validation does
@@ -92,7 +94,41 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		limitDraft.Set(money.FormatMinor(seed.Amount, limitDec))
 		limitEditing.Set(true)
 	}))
-	cancelLimitEdit := ui.UseEvent(Prevent(func() { limitEditing.Set(false) }))
+	cancelLimitEdit := ui.UseEvent(Prevent(func() {
+		limitRestoreFocus.Set(true)
+		limitEditing.Set(false)
+	}))
+	limitKeyDown := ui.UseEvent(func(e ui.KeyboardEvent) {
+		switch e.GetKey() {
+		case "Escape":
+			e.PreventDefault()
+			limitRestoreFocus.Set(true)
+			limitEditing.Set(false)
+		case "Enter":
+			e.PreventDefault()
+			// The form submit owns validation and persistence.
+			amt, prob := budgeting.ParseLimitMajor(limitDraft.Get(), limitDec)
+			if prob.OK() {
+				limitRestoreFocus.Set(true)
+				// Invoke the same save path as the submit button.
+				if app := appstate.Default; app != nil {
+					for _, bb := range app.Budgets() {
+						if bb.ID == s.Budget.ID {
+							if bb.Limit.Amount != amt {
+								bb.Limit = money.New(amt, bb.Limit.Currency)
+								if err := app.PutBudget(bb); err == nil {
+									uistate.PostUndoable(uistate.T("budgets.limitChangedToast", fmtMoney(bb.Limit)))
+									uistate.BumpDataRevision()
+								}
+							}
+							break
+						}
+					}
+				}
+				limitEditing.Set(false)
+			}
+		}
+	})
 	onLimitDraft := ui.UseEvent(func(v string) { limitDraft.Set(v) })
 	saveLimitEdit := ui.UseEvent(Prevent(func() {
 		amt, prob := budgeting.ParseLimitMajor(limitDraft.Get(), limitDec)
@@ -119,7 +155,29 @@ func BudgetRow(props budgetRowProps) ui.Node {
 			}
 		}
 		limitEditing.Set(false)
+		limitRestoreFocus.Set(true)
 	}))
+	ui.UseEffect(func() func() {
+		if !limitRestoreFocus.Get() {
+			return nil
+		}
+		cb := js.FuncOf(func(js.Value, []js.Value) any {
+			doc := js.Global().Get("document")
+			if doc.Truthy() {
+				button := doc.Call("querySelector", `[data-testid="budget-limit-btn-`+s.Budget.ID+`"]`)
+				if button.Truthy() {
+					button.Call("focus")
+				}
+			}
+			limitRestoreFocus.Set(false)
+			return nil
+		})
+		handle := js.Global().Call("setTimeout", cb, 0)
+		return func() {
+			js.Global().Call("clearTimeout", handle)
+			cb.Release()
+		}
+	}, limitRestoreFocus.Get())
 
 	del := ui.UseEvent(Prevent(func() { menuOpen.Set(false); props.OnDelete(s.Budget.ID) }))
 	// C585: the drill-through carries the budget's WHOLE spend scope — tracked
@@ -430,6 +488,25 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		paceMarkLine = Span(css.Class("budget-sub", tone), Attr("data-testid", "budget-pace-caption-"+s.Budget.ID),
 			Attr("role", "status"), props.PaceCaption)
 	}
+	var paceLegend ui.Node = Fragment()
+	if !lastMonthMode && props.PaceMarkerPct > 0 && s.Spent.Amount > 0 {
+		anchor := props.Anchor
+		if anchor.IsZero() {
+			anchor = time.Now()
+		}
+		from, to := budgeting.PeriodRange(s.Budget.Period, anchor, prefs.WeekStartWeekday())
+		elapsed := 0
+		if total := to.Sub(from).Hours(); total > 0 {
+			elapsed = int(time.Since(from).Hours() / total * 100)
+			if elapsed < 0 {
+				elapsed = 0
+			} else if elapsed > 100 {
+				elapsed = 100
+			}
+		}
+		paceLegend = Span(css.Class("budget-pace-legend"), Attr("data-testid", "budget-pace-legend-"+s.Budget.ID),
+			uistate.T("budgets.paceLegend", elapsed))
+	}
 
 	var rolloverLine ui.Node = Fragment()
 	if !lastMonthMode && props.RolloverCarry != "" {
@@ -479,13 +556,13 @@ func BudgetRow(props budgetRowProps) ui.Node {
 	isOver := s.State == budgeting.StateOver
 	var coverBtn ui.Node = Fragment()
 	if isOver {
-		coverBtn = Button(css.Class("btn"), Type("button"), Attr("data-testid", "budget-cover-btn-"+s.Budget.ID), Title(uistate.T("budgets.coverTitle")), OnClick(openCover), uistate.T("budgets.coverBtn"))
+		coverBtn = Button(css.Class("btn"), Type("button"), Attr("data-testid", "budget-cover-btn-"+s.Budget.ID), Title(uistate.T("budgets.coverTitle")), OnClick(openCover), uistate.T("budgets.actionCoverFromOther"))
 	}
 	// Top up is a visible card button (the frequent proactive action) on budgets that
 	// aren't over.
 	var topupBtn ui.Node = Fragment()
 	if !isOver {
-		topupBtn = Button(css.Class("btn"), Type("button"), Attr("data-testid", "budget-topup-btn-"+s.Budget.ID), Title(uistate.T("budgets.topupTitle")), OnClick(openTopup), uistate.T("budgets.topupBtn"))
+		topupBtn = Button(css.Class("btn"), Type("button"), Attr("data-testid", "budget-topup-btn-"+s.Budget.ID), Title(uistate.T("budgets.topupTitle")), OnClick(openTopup), uistate.T("budgets.actionRaiseLimit"))
 	}
 
 	// The row actions, rendered as the card's footer (pinned to the bottom by CSS) so the
@@ -506,13 +583,13 @@ func BudgetRow(props budgetRowProps) ui.Node {
 		Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "budget-kebab-"+s.Budget.ID), Attr("title", uistate.T("budgets.moreActions")), Attr("aria-label", uistate.T("budgets.moreActions")+" — "+title), Attr("aria-haspopup", "menu"), Attr("aria-expanded", ariaBool(menuOpen.Get())), OnClick(toggleMenu), uiw.Icon(icon.MoreH, css.Class(tw.W4, tw.H4))),
 		Div(ClassStr("add-backdrop"+menuHidden), OnClick(closeMenu)),
 		Div(ClassStr("add-menu"+menuHidden), Attr("role", "menu"),
-			If(props.Compact && isOver, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "budget-cover-btn-"+s.Budget.ID), Title(uistate.T("budgets.coverTitle")), OnClick(openCover), uistate.T("budgets.coverBtn"))),
-			If(props.Compact && !isOver, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "budget-topup-btn-"+s.Budget.ID), Title(uistate.T("budgets.topupTitle")), OnClick(openTopup), uistate.T("budgets.topupBtn"))),
+			If(props.Compact && isOver, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "budget-cover-btn-"+s.Budget.ID), Title(uistate.T("budgets.coverTitle")), OnClick(openCover), uistate.T("budgets.actionCoverFromOther"))),
+			If(props.Compact && !isOver, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "budget-topup-btn-"+s.Budget.ID), Title(uistate.T("budgets.topupTitle")), OnClick(openTopup), uistate.T("budgets.actionRaiseLimit"))),
 			Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "edit-budget-btn-"+s.Budget.ID), Title(uistate.T("budgets.editTitle")), OnClick(openEdit), uistate.T("budgets.editAction")),
-			Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "edit-budget-cats-btn-"+s.Budget.ID), Title(uistate.T("budgets.catsTitle")), OnClick(openCategories), uistate.T("budgets.catsAction")),
+			Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "edit-budget-cats-btn-"+s.Budget.ID), Title(uistate.T("budgets.catsTitle")), OnClick(openCategories), uistate.T("budgets.actionEditTracking")),
 			Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "budget-notes-btn-"+s.Budget.ID), Attr("aria-label", notesLabel+" — "+title), Title(uistate.T("budgets.notesTitle")), OnClick(openNotes), notesLabel),
-			Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "budget-formulas-btn-"+s.Budget.ID), Title(uistate.T("budgets.formulasTitle")), OnClick(openFormulas), uistate.T("budgets.formulasAction")),
-			If(s.Remaining.Amount > 0, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
+			Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"), Attr("data-testid", "budget-formulas-btn-"+s.Budget.ID), Title(uistate.T("budgets.formulasTitle")), OnClick(openFormulas), uistate.T("budgets.actionEditFormulas")),
+			If(s.Budget.Rollover && s.Remaining.Amount > 0, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
 				Attr("data-testid", "budget-release-btn-"+s.Budget.ID), Title(uistate.T("budgets.releaseTitle")),
 				OnClick(releaseUnused), uistate.T("budgets.releaseAction"))),
 			// WF17: pause a funding target instead of deleting it to stop the
@@ -613,7 +690,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 			}
 			crowChip = Span(ClassStr("pill budget-crow-chip"+chipTone), label)
 		}
-		return Div(ClassStr(crowCls), Attr("data-testid", "budget-card-"+s.Budget.ID),
+		row := Div(ClassStr(crowCls), Attr("data-testid", "budget-card-"+s.Budget.ID),
 			// Name cell: the title and the conditional C395 rollover badge share ONE
 			// grid cell, so the row is always exactly six children. The badge used to
 			// be a seventh top-level child in a six-column template — every later cell
@@ -706,7 +783,10 @@ func BudgetRow(props budgetRowProps) ui.Node {
 			// card loader's figures.
 			Span(css.Class("budget-crow-amt fig"),
 				Span(css.Class("budget-crow-spent"), barSpent),
-				Span(css.Class("budget-crow-limit"), " / "+fmtMoney(limit)),
+				Span(css.Class("budget-crow-limit"), " / "),
+				Button(css.Class("budget-limit-btn", "budget-crow-limit-btn"), Type("button"), Attr("data-testid", "budget-limit-btn-"+s.Budget.ID),
+					Title(uistate.T("budgets.limitEditTitle")), Attr("aria-label", uistate.T("budgets.limitEditTitle")+" — "+title),
+					OnClick(startLimitEdit), fmtMoney(limit)),
 			),
 			crowLeft,
 			crowChip,
@@ -722,6 +802,10 @@ func BudgetRow(props budgetRowProps) ui.Node {
 				kebabNode,
 			),
 		)
+		return Fragment(row, If(limitEditing.Get(), budgetLimitEditor(
+			s.Budget.ID, limitDraft.Get(), onLimitDraft, saveLimitEdit, cancelLimitEdit,
+			limitKeyDown, limitErrID, limitErrMsg, fmtMoney(limit), baseBudgetLimit(s.Budget.ID, s.Budget.Limit),
+		)))
 	}
 
 	// Readable, clickable-to-expand notes line (the attached note itself), shown on the
@@ -833,7 +917,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 				Style(map[string]string{"background": "transparent", "border": "0", "padding": "0", "margin": "0",
 					"font": "inherit", "color": "inherit", "cursor": "pointer",
 					"display": "inline-flex", "align-items": "center", "gap": "0.25rem"}),
-				Span(uistate.T("budgets.followUpsHead", open, len(linkedTodos))),
+				Span(css.Class("budget-followup-count"), Attr("aria-label", uistate.T("budgets.followUpsHead", open, len(linkedTodos))), strconv.Itoa(open)),
 				uiw.Icon(chev, css.Class(tw.ShrinkO, tw.W35, tw.H35)))}
 		if todosOpen.Get() {
 			for i, it := range linkedTodos {
@@ -893,8 +977,10 @@ func BudgetRow(props budgetRowProps) ui.Node {
 						// face shows the CAP but this input edits the BASE — label it so the
 						// number swap on open doesn't read as a glitch (the capmath line below
 						// carries the arithmetic).
-						If(props.EffectiveCap != "", Span(css.Class("budget-limit-basetag"), Attr("data-testid", "budget-limit-basetag-"+s.Budget.ID), uistate.T("budgets.baseLimitTag"))),
-						Input(append(append([]any{css.Class("field", "budget-limit-input"), Attr("autofocus", ""), Type("number"),
+						Div(css.Class("budget-limit-edit-values"),
+							Span(css.Class("budget-limit-editor-cap"), uistate.T("budgets.effectiveCapLabel"), Strong(fmtMoney(limit))),
+							Span(css.Class("budget-limit-editor-base"), uistate.T("budgets.baseLimitLabel"), Strong(baseBudgetLimit(s.Budget.ID, s.Budget.Limit)))),
+						Input(append(append([]any{css.Class("field", "budget-limit-input"), Type("number"), OnKeyDown(limitKeyDown),
 							Attr("data-testid", "budget-limit-input-"+s.Budget.ID), Attr("aria-label", uistate.T("budgets.limitLabel")), Step("0.01"), Attr("min", "0.01"), OnInput(onLimitDraft)},
 							errAttrs(limitErrID, limitErrMsg)...), uiw.FieldValue(limitDraft.Get()))...),
 						Button(append([]any{css.Class("btn btn-sm", "budget-limit-save"), Type("submit"), Attr("data-testid", "budget-limit-save-"+s.Budget.ID),
@@ -915,6 +1001,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 				Span(css.Class("budget-pct"), strconv.Itoa(barPct)+"%"),
 			),
 		),
+		paceLegend,
 		// Everything below the bar sits in a flex row so a budget WITH a note can put the
 		// note in a right-hand column (the lower-left content is short, leaving that space
 		// empty). No note → the note column is omitted and the main content fills the width.
@@ -934,7 +1021,7 @@ func BudgetRow(props budgetRowProps) ui.Node {
 						Attr("data-testid", "budget-prior-"+s.Budget.ID),
 						uistate.T("budgets.priorPeriodOutcome", props.PriorSpent, props.PriorDelta))),
 				// C395: the rollover policy badge — a glanceable chip, not a caption.
-				budgetRolloverBadgeFor(props),
+				If(s.Budget.Rollover, budgetRolloverBadgeFor(props)),
 				// A cap that differs from the base limit, an envelope balance, an envelope in
 				// debt, a projected overspend: each re-reads the big number above it, so
 				// hiding them would hide the headline's meaning.
@@ -996,6 +1083,36 @@ func BudgetRow(props budgetRowProps) ui.Node {
 				todosPanel,
 			)),
 		),
+	)
+}
+
+func baseBudgetLimit(id string, fallback money.Money) string {
+	if app := appstate.Default; app != nil {
+		for _, budget := range app.Budgets() {
+			if budget.ID == id {
+				return fmtMoney(budget.Limit)
+			}
+		}
+	}
+	return fmtMoney(fallback)
+}
+
+func budgetLimitEditor(id, draft string, onDraft, save, cancel, keyDown any, errID, errMsg, effective, base string) ui.Node {
+	return Form(css.Class("budget-limit-editor"), Attr("data-testid", "budget-limit-editor-"+id), OnSubmit(save),
+		Div(css.Class("budget-limit-editor-cap"),
+			Span(uistate.T("budgets.effectiveCapLabel")),
+			Strong(Attr("data-testid", "budget-limit-effective-"+id), effective)),
+		Div(css.Class("budget-limit-editor-base"),
+			Label(For("budget-limit-input-"+id), uistate.T("budgets.baseLimitLabel")),
+			Span(Strong(base), Input(append(append([]any{css.Class("field", "budget-limit-input"), Type("number"),
+				ID("budget-limit-input-" + id), Attr("data-testid", "budget-limit-input-"+id),
+				Attr("aria-label", uistate.T("budgets.baseLimitLabel")), Step("0.01"), Attr("min", "0.01"),
+				OnInput(onDraft), OnKeyDown(keyDown)}, errAttrs(errID, errMsg)...), uiw.FieldValue(draft))...))),
+		Button(append([]any{css.Class("btn btn-sm budget-limit-save"), Type("submit"), Attr("data-testid", "budget-limit-save-"+id),
+			Attr("aria-label", uistate.T("action.save")), uistate.T("action.save")}, disabledAttr(errMsg != "")...)...),
+		Button(css.Class("btn btn-sm budget-limit-cancel"), Type("button"), Attr("data-testid", "budget-limit-cancel-"+id),
+			OnClick(cancel), uistate.T("action.cancel")),
+		errText(errID, errMsg),
 	)
 }
 

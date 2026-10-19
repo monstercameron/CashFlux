@@ -140,6 +140,7 @@ func Register() {
 	registerR7Z()
 	registerR10W()
 	registerSOL1()
+	registerBud3()
 	inject(Build())
 }
 
