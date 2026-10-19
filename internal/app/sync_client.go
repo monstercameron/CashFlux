@@ -1623,7 +1623,10 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 		// imports into SQLite, all of it CPU on the renderer's thread.
 		yieldToBrowser()
 		payload := resp.Dataset
-		if datasetEncryptionActive() && !cryptobox.IsEnvelope(payload) {
+		// Fail closed on plaintext whether or not this device has App Lock yet:
+		// uploads are always encrypted (SEC6), so an unprotected server copy is a
+		// downgrade, never data a device without a passcode should import.
+		if !cryptobox.IsEnvelope(payload) {
 			message := "The server returned an unprotected copy. CashFlux did not load it."
 			setSyncStatus(syncStatus{State: "error", Pending: pendingSyncCount(), Message: message})
 			markHostedHydrationError(message)
