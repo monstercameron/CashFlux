@@ -6,6 +6,9 @@ package localdb
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"sync"
@@ -16,10 +19,25 @@ import (
 )
 
 var (
-	ErrNotFound = errors.New("localdb: not found")
-	ErrConflict = errors.New("localdb: compare-and-swap conflict")
-	ErrInvalid  = errors.New("localdb: invalid record")
+	ErrNotFound      = errors.New("localdb: not found")
+	ErrConflict      = errors.New("localdb: compare-and-swap conflict")
+	ErrInvalid       = errors.New("localdb: invalid record")
+	ErrScopeMismatch = errors.New("localdb: scope mismatch")
 )
+
+// ScopeMismatchError reports that a database's stored scope differs from the
+// scope requested by its opener.
+type ScopeMismatchError struct {
+	Expected Scope
+	Actual   Scope
+}
+
+func (e *ScopeMismatchError) Error() string {
+	return fmt.Sprintf("localdb: database scope mismatch: stored %v, requested %v", e.Actual, e.Expected)
+}
+
+// Is allows callers to classify scope mismatch failures with errors.Is.
+func (e *ScopeMismatchError) Is(target error) bool { return target == ErrScopeMismatch }
 
 // QuotaError identifies browser storage exhaustion. It is returned only for
 // the IndexedDB QuotaExceededError failure, never for other storage errors,
@@ -114,16 +132,28 @@ func storageErrorName(err error) string {
 // Scope is the account boundary shared by keyring and changes.
 type Scope = keyring.Scope
 
-// DBName returns the stable IndexedDB name for scope.
+// DBName returns the stable IndexedDB name for scope. Local scopes use
+// "cfv2:local". Other scopes use "cfv2:" followed by the lowercase hex
+// SHA-256 of the uint64-length-prefixed ServerID and AccountID byte strings.
+// Length-prefixing prevents delimiter ambiguity and hashing keeps names
+// independent of the IDs' contents and length.
 func DBName(scope Scope) string {
 	if scope.ServerID == "" || scope.ServerID == keyring.LocalServerID {
 		return "cfv2:local"
 	}
-	return "cfv2:" + scope.ServerID + ":" + scope.AccountID
+	h := sha256.New()
+	for _, field := range []string{scope.ServerID, scope.AccountID} {
+		var size [8]byte
+		binary.BigEndian.PutUint64(size[:], uint64(len(field)))
+		_, _ = h.Write(size[:])
+		_, _ = h.Write([]byte(field))
+	}
+	return "cfv2:" + hex.EncodeToString(h.Sum(nil))
 }
 
 // Meta stores device and synchronization cursors for one scope.
 type Meta struct {
+	Scope         Scope       `json:"scope"`
 	DeviceID      string      `json:"deviceId"`
 	HLC           changes.HLC `json:"hlc"`
 	ServerCursor  uint64      `json:"serverCursor"`
@@ -161,6 +191,7 @@ type Store interface {
 	Pending(limit int) ([]LogEntry, error)
 	MarkAcked(localSeq, serverSeq uint64) error
 	AppendRemote(workspaceID, changeID string, sealed []byte, serverSeq uint64, created changes.HLC) (uint64, error)
+	IsQuarantined(raw []byte) (bool, error)
 	Since(localSeq uint64) ([]LogEntry, error)
 	LatestSnapshot(workspaceID string) (Snapshot, error)
 	Compact(workspaceID string, sealed []byte, coversLocalSeq, coversServerSeq uint64) error
@@ -203,6 +234,10 @@ func (m *MemStore) Open(s Scope) error {
 		return fmt.Errorf("open scope: %w", ErrConflict)
 	}
 	m.scope = s
+	if m.meta.Scope != (Scope{}) && m.meta.Scope != s {
+		return &ScopeMismatchError{Expected: s, Actual: m.meta.Scope}
+	}
+	m.meta.Scope = s
 	m.opened = true
 	return nil
 }
@@ -226,6 +261,7 @@ func (m *MemStore) PutMeta(v Meta) error {
 	if e := m.ready(); e != nil {
 		return e
 	}
+	v.Scope = m.scope
 	v.Version = m.meta.Version + 1
 	m.meta = v
 	return nil
@@ -425,6 +461,21 @@ func (m *MemStore) Quarantine(b []byte, r string) error {
 	}
 	m.quarantine = append(m.quarantine, quarantineEntry{clone(b), r, time.Now().UTC()})
 	return nil
+}
+
+// IsQuarantined reports whether raw bytes were already recorded in quarantine.
+func (m *MemStore) IsQuarantined(raw []byte) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if e := m.ready(); e != nil {
+		return false, e
+	}
+	for _, entry := range m.quarantine {
+		if bytes.Equal(entry.Raw, raw) {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 func (m *MemStore) RequestPersistence() (bool, error) {
 	if e := m.ready(); e != nil {

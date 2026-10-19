@@ -28,6 +28,10 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Local store hardening (SV3a.3).** Each scope's database name now encodes every scope field
+  unambiguously and the database records its own scope, refusing to open for a different one; a remote
+  change is validated before it is stored, an invalid one is quarantined instead, and boot skips
+  quarantined entries so one bad record cannot lock a scope.
 - **An imported or synced dataset can no longer plant an OpenAI key (SEC1).** Every import path (JSON,
   JSON with attachments, SQLite, restore, sync pull) now always keeps the device's own key, even when
   the device has none; before, an empty device key let the imported dataset's key through, so a

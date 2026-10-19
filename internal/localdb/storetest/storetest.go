@@ -28,7 +28,7 @@ func Conformance(t *testing.T, makeStore Factory) {
 		t.Fatal(err)
 	}
 	meta, err := s.Meta()
-	if err != nil || meta.DeviceID != "dev" || meta.Version == 0 {
+	if err != nil || meta.DeviceID != "dev" || meta.Version == 0 || meta.Scope != keyring.LocalScope("acct") {
 		t.Fatalf("meta=%+v err=%v", meta, err)
 	}
 	if err = s.PutKeyring([]byte("keyring"), 0); err != nil {
@@ -87,5 +87,8 @@ func Conformance(t *testing.T, makeStore Factory) {
 	}
 	if err = s.Quarantine([]byte("raw"), "bad"); err != nil {
 		t.Fatal(err)
+	}
+	if quarantined, err := s.IsQuarantined([]byte("raw")); err != nil || !quarantined {
+		t.Fatalf("IsQuarantined = %v, err = %v", quarantined, err)
 	}
 }

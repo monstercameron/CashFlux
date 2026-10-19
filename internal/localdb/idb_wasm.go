@@ -342,7 +342,50 @@ func (s *IDBStore) Open(scope Scope) error {
 		// legacy record is untouched because migration is one transaction.
 		return err
 	}
+	if err := s.ensureScopeLocked(); err != nil {
+		return err
+	}
 	s.opened = true
+	return nil
+}
+
+// ensureScopeLocked creates the scope binding in the meta record on first
+// open and refuses a database whose recorded scope differs. It is a single
+// transaction so concurrent tabs cannot observe an unbound database.
+func (s *IDBStore) ensureScopeLocked() error {
+	tx, w, err := s.newTx([]string{idbStoreMeta}, "readwrite")
+	if err != nil {
+		return err
+	}
+	value, found, err := getInTx(tx, idbStoreMeta, idbMetaKey)
+	if err != nil {
+		abortTx(tx, w)
+		return fmt.Errorf("read local scope metadata: %w", err)
+	}
+	meta := Meta{Scope: s.scope}
+	if found {
+		if err := json.Unmarshal([]byte(value.String()), &meta); err != nil {
+			abortTx(tx, w)
+			return fmt.Errorf("decode local scope metadata: %w", err)
+		}
+		if meta.Scope != s.scope {
+			abortTx(tx, w)
+			return &ScopeMismatchError{Expected: s.scope, Actual: meta.Scope}
+		}
+	} else {
+		encoded, err := marshalRecord(meta)
+		if err != nil {
+			abortTx(tx, w)
+			return err
+		}
+		if err := putInTx(tx, idbStoreMeta, encoded, idbMetaKey); err != nil {
+			abortTx(tx, w)
+			return err
+		}
+	}
+	if err := w.wait(); err != nil {
+		return fmt.Errorf("store local scope metadata: %w", err)
+	}
 	return nil
 }
 
@@ -541,7 +584,7 @@ func (s *IDBStore) migrateLegacyLocked() error {
 		return nil
 	}
 	if legacy.Scope != s.scope {
-		return fmt.Errorf("legacy local state scope mismatch: %w", ErrInvalid)
+		return &ScopeMismatchError{Expected: s.scope, Actual: legacy.Scope}
 	}
 	tx, w, err := s.newTx(idbAllStores, "readwrite")
 	if err != nil {
@@ -551,6 +594,7 @@ func (s *IDBStore) migrateLegacyLocked() error {
 		abortTx(tx, w)
 		return fmt.Errorf("migrate legacy local state: %w", err)
 	}
+	legacy.Meta.Scope = legacy.Scope
 	metaJSON, err := marshalRecord(legacy.Meta)
 	if err != nil {
 		return fail(err)
@@ -665,6 +709,7 @@ func (s *IDBStore) PutMeta(v Meta) error {
 	if err := s.readyLocked(); err != nil {
 		return err
 	}
+	v.Scope = s.scope
 	tx, w, err := s.newTx([]string{idbStoreMeta}, "readwrite")
 	if err != nil {
 		return err
@@ -1178,6 +1223,52 @@ func (s *IDBStore) Quarantine(raw []byte, reason string) error {
 		return err
 	}
 	return w.wait()
+}
+
+// IsQuarantined reports whether raw bytes were already durably recorded in
+// quarantine. Boot uses this to avoid retrying a rejected log entry forever.
+func (s *IDBStore) IsQuarantined(raw []byte) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.readyLocked(); err != nil {
+		return false, err
+	}
+	tx, w, err := s.newTx([]string{idbStoreQuarantine}, "readonly")
+	if err != nil {
+		return false, err
+	}
+	store, err := txStore(tx, idbStoreQuarantine)
+	if err != nil {
+		abortTx(tx, w)
+		return false, err
+	}
+	req, err := callValue(func() js.Value { return store.Call("getAll") })
+	if err != nil {
+		abortTx(tx, w)
+		return false, err
+	}
+	values, err := awaitRequest(req)
+	if err != nil {
+		abortTx(tx, w)
+		return false, err
+	}
+	for i := 0; i < values.Length(); i++ {
+		var entry quarantineEntry
+		if err := json.Unmarshal([]byte(values.Index(i).String()), &entry); err != nil {
+			abortTx(tx, w)
+			return false, fmt.Errorf("decode quarantine entry: %w", err)
+		}
+		if bytes.Equal(entry.Raw, raw) {
+			if err := w.wait(); err != nil {
+				return false, err
+			}
+			return true, nil
+		}
+	}
+	if err := w.wait(); err != nil {
+		return false, err
+	}
+	return false, nil
 }
 
 // RequestPersistence asks the browser to keep this origin's storage

@@ -83,6 +83,13 @@ func (e *Engine) Boot(wdk *keyring.WorkspaceKey) error {
 		if entry.WorkspaceID != e.workspace {
 			continue
 		}
+		quarantined, checkErr := e.store.IsQuarantined(entry.Sealed)
+		if checkErr != nil {
+			return fmt.Errorf("check local change quarantine: %w", checkErr)
+		}
+		if quarantined {
+			continue
+		}
 		plain, openErr := keyring.Open(key, keyring.AAD(e.scope, e.workspace, entry.ChangeID, wdk.Version()), entry.Sealed)
 		if openErr != nil {
 			return quarantine(e.store, entry.Sealed, "change authentication failed", fmt.Errorf("open local change %s: %w", entry.ChangeID, openErr))
@@ -157,6 +164,10 @@ func (e *Engine) ApplyRemote(changeID string, sealed []byte, serverSeq uint64) e
 	}
 	if batch.ChangeID != changeID || batch.Scope != (changes.Scope{ServerID: e.scope.ServerID, AccountID: e.scope.AccountID}) || batch.WorkspaceID != e.workspace {
 		return quarantine(e.store, sealed, "remote change scope mismatch", fmt.Errorf("remote scope/workspace mismatch: %w", changes.ErrScopeMismatch))
+	}
+	validator := changes.NewScopedState(changes.Scope{ServerID: e.scope.ServerID, AccountID: e.scope.AccountID}, e.workspace)
+	if err := validator.Apply(batch); err != nil {
+		return quarantine(e.store, sealed, "remote change validation failed", fmt.Errorf("validate remote change: %w", err))
 	}
 	if _, err := e.store.AppendRemote(e.workspace, batch.ChangeID, sealed, serverSeq, batch.HLC); err != nil {
 		return fmt.Errorf("append remote change: %w", err)
