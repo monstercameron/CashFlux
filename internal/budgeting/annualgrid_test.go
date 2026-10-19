@@ -88,9 +88,12 @@ func TestMonthlyLimitEquivalent(t *testing.T) {
 		{domain.PeriodSemimonthly, 10000, 20000},
 	}
 	for _, tc := range tests {
-		got := monthlyLimitEquivalent(tc.period, usd(tc.limit))
+		got, err := PeriodEquivalent(usd(tc.limit), tc.period, domain.PeriodMonthly)
+		if err != nil {
+			t.Fatalf("PeriodEquivalent(%s, %d): %v", tc.period, tc.limit, err)
+		}
 		if got.Amount != tc.want {
-			t.Errorf("monthlyLimitEquivalent(%s, %d) = %d, want %d", tc.period, tc.limit, got.Amount, tc.want)
+			t.Errorf("PeriodEquivalent(%s, %d) = %d, want %d", tc.period, tc.limit, got.Amount, tc.want)
 		}
 	}
 }

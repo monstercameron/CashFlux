@@ -3,6 +3,7 @@
 package budgeting
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -67,7 +68,11 @@ func TopDrivers(budget domain.Budget, all []domain.Transaction, start, end time.
 	byKey := map[string]*agg{}
 	var order []string // first-seen order, for deterministic tie-breaks
 	push := func(t domain.Transaction, amt money.Money) error {
-		conv, err := rates.Convert(amt.Abs(), limit.Currency)
+		contribution, err := expenseContribution(amt)
+		if err != nil {
+			return err
+		}
+		conv, err := rates.Convert(contribution, limit.Currency)
 		if err != nil {
 			return err
 		}
@@ -82,7 +87,10 @@ func TopDrivers(budget domain.Budget, all []domain.Transaction, start, end time.
 			byKey[key] = a
 			order = append(order, key)
 		}
-		a.amount += conv.Amount
+		a.amount, err = money.Add(a.amount, conv.Amount)
+		if err != nil {
+			return fmt.Errorf("sum driver %q: %w", disp, err)
+		}
 		if t.Date.After(a.date) {
 			a.date = t.Date
 			a.txnID = t.ID
@@ -106,11 +114,19 @@ func TopDrivers(budget domain.Budget, all []domain.Transaction, start, end time.
 			continue
 		}
 		if t.HasSplits() {
+			var lines []money.Money
 			for _, s := range t.Splits {
 				if !covers(s.CategoryID) || !ownsSplitScope(budget, t, s) {
 					continue
 				}
-				if err := push(t, s.Amount); err != nil {
+				lines = append(lines, s.Amount)
+			}
+			if len(lines) > 0 {
+				net, err := signedLineTotal(lines)
+				if err != nil {
+					return nil, err
+				}
+				if err := push(t, net); err != nil {
 					return nil, err
 				}
 			}

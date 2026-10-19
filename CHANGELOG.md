@@ -90,6 +90,15 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Budget math: period-equivalent totals, honest rollover, signed split lines (BUD1, BUDQ1).** New checked helpers
+  convert any cadence to the viewed period with one half-away-from-zero rounding (`PeriodEquivalent`, `NormalizeBudgets`,
+  `AdjustAllPreviewNormalized`), so a $6,000 yearly cap counts as $500 a month. Rollover now carries the prior period's
+  effective cap minus its spend through an auditable chain (`BuildRolloverChain`), fixing the Sep → Oct → Nov carry
+  contradiction. `RecommendBudgetLimit` gives a direction, median-based limit with outliers excluded and never cuts below
+  the current projection. Discount lines inside split receipts now reduce spend in attribution, drivers and Unbudgeted;
+  envelopes, member attribution, Unbudgeted and income skip non-reporting transactions and honour tag tracking; the
+  240-period envelope cap is gone; committed amounts and income can report missing exchange rates
+  (`CommittedWithRates`, `IncomeForBudgetsChecked`); saving budgets keep the saving verdict after smoothing.
 - **Budgets: safer Adjust all, readable warnings, focus returns to the opener (BUD6).** Adjust all now starts on "This
   period only", and the option that rewrites history says "Also change past periods". Light-theme warning amber is darker
   (`#8a5a00`, ≥ 4.5:1 on page and card); dark theme unchanged. The Smart "safe to spend" title no longer logs a copy

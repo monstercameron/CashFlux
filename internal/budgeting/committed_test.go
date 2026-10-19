@@ -6,12 +6,30 @@ import (
 	"testing"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
 )
 
 func cmtDate(y int, m time.Month, d int) time.Time {
 	return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
+}
+
+func TestCommittedWithRatesConvertsRecurringToBudgetCurrency(t *testing.T) {
+	b := cmtBudget(domain.PeriodMonthly, 10000)
+	r := cmtRec("eur", -1000, domain.CadenceMonthly, cmtDate(2026, 6, 15), false)
+	r.Amount.Currency = "EUR"
+	rates := currency.Rates{Base: "USD", Rates: map[string]float64{"EUR": 1.1}}
+	got, err := CommittedWithRates(b, []domain.Recurring{r}, nil, money.New(9000, "USD"), cmtDate(2026, 6, 1), cmtDate(2026, 7, 1), rates)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Committed.Amount != 1100 || got.Committed.Currency != "USD" || len(got.Items) != 1 || got.Items[0].Amount.Currency != "USD" {
+		t.Fatalf("recurring should convert to $11.00, got %+v", got)
+	}
+	if _, err := CommittedWithRates(b, []domain.Recurring{r}, nil, money.New(9000, "USD"), cmtDate(2026, 6, 1), cmtDate(2026, 7, 1), currency.Rates{Base: "USD"}); err == nil {
+		t.Fatal("missing recurring FX rate must return an error")
+	}
 }
 
 func cmtBudget(period domain.Period, limitMinor int64) domain.Budget {

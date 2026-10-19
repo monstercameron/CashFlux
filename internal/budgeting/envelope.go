@@ -3,6 +3,7 @@
 package budgeting
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/currency"
@@ -16,6 +17,12 @@ import (
 // scope; for an atomic transaction, its category passes pred and its payer is in
 // scope.
 func budgetCoversTxn(budget domain.Budget, t domain.Transaction, pred func(string) bool) bool {
+	if !t.CountsInReports() || !t.IsExpense() {
+		return false
+	}
+	if budget.TracksAnyTag(t.Tags) {
+		return ownsTransactionScope(budget, t)
+	}
 	if t.HasSplits() {
 		for _, s := range t.Splits {
 			if pred(s.CategoryID) && ownsSplitScope(budget, t, s) {
@@ -26,11 +33,6 @@ func budgetCoversTxn(budget domain.Budget, t domain.Transaction, pred func(strin
 	}
 	return pred(t.CategoryID) && ownsTransactionScope(budget, t)
 }
-
-// maxEnvelopePeriods caps how far back the envelope accumulation looks, so a
-// budget with very old (or bad) transaction dates can't loop unboundedly. 240
-// covers 20 years of monthly periods.
-const maxEnvelopePeriods = 240
 
 // EnvelopeAvailable returns the envelope balance available for the period
 // containing curRef under envelope budgeting (D6): every period from the first
@@ -51,9 +53,6 @@ func EnvelopeAvailable(budget domain.Budget, all []domain.Transaction, curRef ti
 	var earliest time.Time
 	found := false
 	for _, t := range all {
-		if !t.IsExpense() {
-			continue
-		}
 		// XC10: a split transaction is covered when any owned line matches; an
 		// atomic transaction uses its own category and payer. Mirrors spentCovered
 		// so the envelope's first-funded period lines up with what it draws down.
@@ -65,29 +64,38 @@ func EnvelopeAvailable(budget domain.Budget, all []domain.Transaction, curRef ti
 		}
 	}
 	if !found {
-		return limit, nil // funded once, nothing spent
+		start, _ := PeriodRange(budget.Period, curRef, weekStart)
+		return limit.Add(money.New(budget.PeriodBoost(start), limit.Currency)) // funded once, nothing spent
 	}
 
 	curStart, _ := PeriodRange(budget.Period, curRef, weekStart)
-	available := money.Zero(limit.Currency)
+	periods := make([]RolloverPeriod, 0)
 	ref := earliest
-	for i := 0; i < maxEnvelopePeriods; i++ {
+	for {
 		ps, pe := PeriodRange(budget.Period, ref, weekStart)
 		spent, err := spentCovered(budget, all, ps, pe, rates, pred)
 		if err != nil {
 			return money.Money{}, err
 		}
-		leftover, err := limit.Sub(spent)
+		base, err := limit.Add(money.New(budget.PeriodBoost(ps), limit.Currency))
 		if err != nil {
-			return money.Money{}, err
+			return money.Money{}, fmt.Errorf("period %s effective base: %w", ps.Format("2006-01-02"), err)
 		}
-		if available, err = available.Add(leftover); err != nil {
-			return money.Money{}, err
-		}
+		periods = append(periods, RolloverPeriod{Start: ps, Base: base, Spend: spent})
 		if !ps.Before(curStart) {
 			break // reached the current period (or beyond) — stop after funding it
 		}
+		if !pe.After(ps) {
+			return money.Money{}, fmt.Errorf("envelope: period %s did not advance from %s", budget.Period, ps.Format("2006-01-02"))
+		}
 		ref = pe // step to the next period
 	}
-	return available, nil
+	chain, err := BuildRolloverChain(periods, budget.RolloverCapPeriods)
+	if err != nil {
+		return money.Money{}, fmt.Errorf("build rollover chain: %w", err)
+	}
+	if len(chain) == 0 {
+		return money.Zero(limit.Currency), nil
+	}
+	return chain[len(chain)-1].EffectiveCap.Sub(chain[len(chain)-1].Spend)
 }

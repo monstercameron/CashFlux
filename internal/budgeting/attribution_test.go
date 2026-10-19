@@ -26,6 +26,7 @@ func TestAttributeByMember(t *testing.T) {
 		{ID: "3", Date: mid, CategoryID: "dining", Amount: money.New(-2000, "USD")},                     // unassigned
 		{ID: "4", Date: before, CategoryID: "dining", Amount: money.New(-9000, "USD"), MemberID: "you"}, // out of period
 		{ID: "5", Date: mid, CategoryID: "groceries", Amount: money.New(-5000, "USD"), MemberID: "you"}, // wrong category
+		{ID: "6", Date: mid, CategoryID: "dining", Amount: money.New(-7000, "USD"), MemberID: "you", ExcludeFromReports: true},
 	}
 
 	shares, err := AttributeByMember(budget, txns, start, end, rates, nil)
@@ -60,6 +61,31 @@ func TestAttributeByMember(t *testing.T) {
 	}
 }
 
+func TestAttributeByMemberExclusionsReconcileWithSpent(t *testing.T) {
+	rates := currency.Rates{Base: "USD"}
+	start, end := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	b := domain.Budget{ID: "b", Scope: domain.ScopeShared, CategoryID: "dining", Limit: money.New(50000, "USD")}
+	txns := []domain.Transaction{
+		{ID: "included", Date: start.AddDate(0, 0, 1), CategoryID: "dining", Amount: money.New(-2500, "USD"), MemberID: "m1"},
+		{ID: "excluded", Date: start.AddDate(0, 0, 2), CategoryID: "dining", Amount: money.New(-9000, "USD"), MemberID: "m2", ExcludeFromReports: true},
+	}
+	shares, err := AttributeByMember(b, txns, start, end, rates, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	status, err := Evaluate(b, txns, start, end, rates, DefaultNearThreshold)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sum int64
+	for _, share := range shares {
+		sum += share.Spent.Amount
+	}
+	if sum != status.Spent.Amount || sum != 2500 {
+		t.Fatalf("shares %d != Spent %d; want 2500", sum, status.Spent.Amount)
+	}
+}
+
 func TestAttributeByMemberSplitLineOwner(t *testing.T) {
 	rates := currency.Rates{Base: "USD"}
 	start := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
@@ -90,6 +116,44 @@ func TestAttributeByMemberSplitLineOwner(t *testing.T) {
 	}
 	if got["you"] != 6000 || got["priya"] != 4000 {
 		t.Errorf("split owner attribution wrong: %+v", got)
+	}
+}
+
+func TestAttributeByMemberNetsPositiveDiscountLine(t *testing.T) {
+	rates := currency.Rates{Base: "USD"}
+	start, end := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	b := domain.Budget{CategoryID: "food", Scope: domain.ScopeShared, Limit: money.New(20000, "USD")}
+	txn := domain.Transaction{ID: "receipt", Date: start.AddDate(0, 0, 2), CategoryID: "food", MemberID: "m1", Amount: money.New(-10000, "USD"), Splits: []domain.CategorySplit{
+		{CategoryID: "food", Amount: money.New(-12000, "USD")},
+		{CategoryID: "food", Amount: money.New(2000, "USD")},
+	}}
+	shares, err := AttributeByMember(b, []domain.Transaction{txn}, start, end, rates, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(shares) != 1 || shares[0].Spent.Amount != 10000 {
+		t.Fatalf("discount line should net to $100.00, got %+v", shares)
+	}
+}
+
+func TestAttributeByMemberDiscountAcrossOwnersReconciles(t *testing.T) {
+	rates := currency.Rates{Base: "USD"}
+	start, end := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	b := domain.Budget{CategoryID: "food", Scope: domain.ScopeShared, Limit: money.New(20000, "USD")}
+	txn := domain.Transaction{ID: "receipt", Date: start.AddDate(0, 0, 2), CategoryID: "food", Amount: money.New(-10000, "USD"), Splits: []domain.CategorySplit{
+		{CategoryID: "food", Amount: money.New(-12000, "USD"), MemberID: "payer"},
+		{CategoryID: "food", Amount: money.New(2000, "USD"), MemberID: "discount"},
+	}}
+	shares, err := AttributeByMember(b, []domain.Transaction{txn}, start, end, rates, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	byMember := map[string]int64{}
+	for _, share := range shares {
+		byMember[share.MemberID] = share.Spent.Amount
+	}
+	if byMember["payer"] != 12000 || byMember["discount"] != -2000 || byMember["payer"]+byMember["discount"] != 10000 {
+		t.Fatalf("signed owner shares should net to $100 spend: shares=%v", byMember)
 	}
 }
 

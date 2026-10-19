@@ -96,3 +96,25 @@ func TestComputeUnbudgetedSplitsAndNoBudgets(t *testing.T) {
 		t.Errorf("split breakdown wrong: %+v", got)
 	}
 }
+
+func TestComputeUnbudgetedHonorsTagsExclusionsAndSignedSplits(t *testing.T) {
+	rates := currency.Rates{Base: "USD"}
+	start, end := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	date := start.AddDate(0, 0, 3)
+	budgets := []domain.Budget{{ID: "tag", TrackedTags: []string{"planned"}, Limit: money.New(20000, "USD")}}
+	txns := []domain.Transaction{
+		{ID: "tagged", Date: date, CategoryID: "travel", Amount: money.New(-4000, "USD"), Tags: []string{"planned"}},
+		{ID: "excluded", Date: date, CategoryID: "pets", Amount: money.New(-5000, "USD"), ExcludeFromReports: true},
+		{ID: "split", Date: date, CategoryID: "food", Amount: money.New(-10000, "USD"), Splits: []domain.CategorySplit{
+			{CategoryID: "food", Amount: money.New(-12000, "USD")},
+			{CategoryID: "food", Amount: money.New(2000, "USD")},
+		}},
+	}
+	u, err := ComputeUnbudgeted(budgets, nil, txns, start, end, rates)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u.Total.Amount != 10000 || len(u.Categories) != 1 || u.Categories[0].CategoryID != "food" || u.Categories[0].Amount.Amount != 10000 {
+		t.Fatalf("want only $100 net split food expense unbudgeted, got %+v", u)
+	}
+}

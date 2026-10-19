@@ -3,8 +3,10 @@
 package budgeting
 
 import (
+	"fmt"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/smoothing"
@@ -23,6 +25,88 @@ type CommittedItem struct {
 	// Smoothed is true when this is an off-period sinking-fund set-aside (XC3)
 	// rather than a directly-expected recurring charge (XC4).
 	Smoothed bool
+}
+
+// CommittedWithRates is the FX-aware committed calculation. Recurring amounts
+// and smoothing accruals are converted into the budget's remaining currency;
+// missing rates and arithmetic overflow are returned as errors.
+func CommittedWithRates(budget domain.Budget, recurrings []domain.Recurring, posted []domain.Transaction, remaining money.Money, start, end time.Time, rates currency.Rates) (CommittedResult, error) {
+	cur := remaining.Currency
+	var committedRaw int64
+	var items []CommittedItem
+	convert := func(amount int64, from, id string) (int64, error) {
+		mag, err := money.Abs(amount)
+		if err != nil {
+			return 0, fmt.Errorf("recurring %q amount: %w", id, err)
+		}
+		converted, err := rates.Convert(money.New(mag, from), cur)
+		if err != nil {
+			return 0, fmt.Errorf("convert recurring %q to %s: %w", id, cur, err)
+		}
+		return converted.Amount, nil
+	}
+	for _, r := range recurrings {
+		if r.CategoryID == "" || !budget.TracksCategory(r.CategoryID) {
+			continue
+		}
+		mag, err := money.Abs(r.Amount.Amount)
+		if err != nil {
+			return CommittedResult{}, fmt.Errorf("recurring %q magnitude: %w", r.ID, err)
+		}
+		if mag == 0 {
+			continue
+		}
+		if r.Smooths() {
+			if smoothing.LandsIn(r, start, end) {
+				continue
+			}
+			accrual := smoothing.MonthlyAccrual(r)
+			if accrual <= 0 {
+				continue
+			}
+			converted, err := convert(accrual, r.Amount.Currency, r.ID)
+			if err != nil {
+				return CommittedResult{}, err
+			}
+			committedRaw, err = money.Add(committedRaw, converted)
+			if err != nil {
+				return CommittedResult{}, fmt.Errorf("sum committed recurring amounts: %w", err)
+			}
+			items = append(items, CommittedItem{RecurringID: r.ID, Label: r.Label, Amount: money.New(converted, cur), Smoothed: true})
+			continue
+		}
+		expected := len(smoothing.OccurrencesIn(r, start, end))
+		if expected == 0 {
+			continue
+		}
+		postedCount := countPostedMatches(budget, posted, r, mag, start, end)
+		notPosted := expected - postedCount
+		if notPosted <= 0 {
+			continue
+		}
+		converted, err := convert(mag, r.Amount.Currency, r.ID)
+		if err != nil {
+			return CommittedResult{}, err
+		}
+		amount, err := money.Mul(converted, int64(notPosted))
+		if err != nil {
+			return CommittedResult{}, fmt.Errorf("scale recurring %q commitment: %w", r.ID, err)
+		}
+		committedRaw, err = money.Add(committedRaw, amount)
+		if err != nil {
+			return CommittedResult{}, fmt.Errorf("sum committed recurring amounts: %w", err)
+		}
+		items = append(items, CommittedItem{RecurringID: r.ID, Label: r.Label, Amount: money.New(amount, cur)})
+	}
+	rem := remaining.Amount
+	if rem <= 0 {
+		return CommittedResult{Committed: money.Zero(cur), Free: remaining, Items: items}, nil
+	}
+	committed := committedRaw
+	if committed > rem {
+		committed = rem
+	}
+	return CommittedResult{Committed: money.New(committed, cur), Free: money.New(rem-committed, cur), Items: items}, nil
 }
 
 // CommittedResult splits a budget's remaining money into the part already

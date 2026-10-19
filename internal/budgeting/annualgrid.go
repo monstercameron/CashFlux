@@ -3,6 +3,7 @@
 package budgeting
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/currency"
@@ -47,29 +48,6 @@ type AnnualGrid struct {
 	CurrentMonth int
 }
 
-// monthlyLimitEquivalent normalizes a budget's per-period limit to a monthly
-// figure so a weekly or quarterly budget's plan compares on the same scale as a
-// monthly one in the annual grid. It rounds to the nearest minor unit.
-func monthlyLimitEquivalent(period domain.Period, limit money.Money) money.Money {
-	amt := limit.Amount
-	var scaled int64
-	switch period {
-	case domain.PeriodWeekly:
-		scaled = (amt*52 + 6) / 12
-	case domain.PeriodBiweekly:
-		scaled = (amt*26 + 6) / 12
-	case domain.PeriodSemimonthly:
-		scaled = amt * 2
-	case domain.PeriodQuarterly:
-		scaled = (amt + 1) / 3
-	case domain.PeriodYearly:
-		scaled = (amt + 6) / 12
-	default: // monthly (and any unknown period falls back to monthly)
-		scaled = amt
-	}
-	return money.New(scaled, limit.Currency)
-}
-
 // BuildAnnualGrid projects every budget's plan vs actual across the twelve
 // calendar months of year (BG9). Actual spend per cell is the rollup-aware
 // EvaluateRollup spend over that calendar month; covers[budgetID] supplies the
@@ -96,7 +74,10 @@ func BuildAnnualGrid(budgets []domain.Budget, all []domain.Transaction, year int
 		row := AnnualGridRow{BudgetID: b.ID, Name: b.Name}
 		row.PlanTotal = money.Zero(cur)
 		row.ActualTotal = money.Zero(cur)
-		plan := monthlyLimitEquivalent(b.Period, normalizedLimit(b, rates))
+		plan, err := PeriodEquivalent(normalizedLimit(b, rates), b.Period, domain.PeriodMonthly)
+		if err != nil {
+			return AnnualGrid{}, fmt.Errorf("budget %q monthly plan: %w", b.ID, err)
+		}
 		cov := covers[b.ID]
 		for m := 0; m < 12; m++ {
 			start := time.Date(year, time.Month(m+1), 1, 0, 0, 0, 0, now.Location())
@@ -133,7 +114,6 @@ func BuildAnnualGrid(budgets []domain.Budget, all []domain.Transaction, year int
 				return AnnualGrid{}, err
 			}
 		}
-		var err error
 		if grid.GrandPlan, err = grid.GrandPlan.Add(row.PlanTotal); err != nil {
 			return AnnualGrid{}, err
 		}

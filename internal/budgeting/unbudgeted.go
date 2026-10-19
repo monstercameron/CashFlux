@@ -44,10 +44,10 @@ func CoveredCategories(budgets []domain.Budget, cats []domain.Category) map[stri
 	return covered
 }
 
-// ComputeUnbudgeted sums period expense in every category NO budget covers, in base
-// currency. It honours split lines (each line lands in its own category) and XC2 refund
-// netting, exactly like the budget bars, so the catch-all and the budget rows partition the
-// period's spend without overlap or gap. Uncategorized spend (empty CategoryID) is reported
+// ComputeUnbudgeted sums reportable period expense in every category and tag NO budget
+// covers, in base currency. It honours split lines, tracked tags, report exclusions, and
+// XC2 refund netting. Overlapping budget scopes can mean budget totals overlap, so this
+// catch-all is not guaranteed to partition total spending with budget rows. Uncategorized spend (empty CategoryID) is reported
 // as one row with an empty CategoryID. Categories are sorted by amount, largest first, then
 // by id; categories that net to zero or below are omitted.
 func ComputeUnbudgeted(budgets []domain.Budget, cats []domain.Category, all []domain.Transaction, start, end time.Time, rates currency.Rates) (Unbudgeted, error) {
@@ -58,26 +58,52 @@ func ComputeUnbudgeted(budgets []domain.Budget, cats []domain.Category, all []do
 	}
 
 	all = nettedForSpending(all)
-	byCat := make(map[string]int64)
+	byCat := make(map[string]money.Money)
 	add := func(categoryID string, amt money.Money) error {
 		if covered[categoryID] {
 			return nil
 		}
-		conv, err := rates.Convert(amt.Abs(), rates.Base)
+		contribution, err := expenseContribution(amt)
 		if err != nil {
 			return err
 		}
-		byCat[categoryID] += conv.Amount
+		conv, err := rates.Convert(contribution, rates.Base)
+		if err != nil {
+			return err
+		}
+		current := byCat[categoryID]
+		if current.Currency == "" {
+			current = money.Zero(rates.Base)
+		}
+		byCat[categoryID], err = current.Add(conv)
 		return nil
 	}
 
 	for _, t := range all {
-		if !t.IsExpense() || !dateutil.InRange(t.Date, start, end) {
+		if !t.CountsInReports() || !t.IsExpense() || !dateutil.InRange(t.Date, start, end) {
+			continue
+		}
+		trackedTag := false
+		for _, budget := range budgets {
+			if budget.TracksAnyTag(t.Tags) {
+				trackedTag = true
+				break
+			}
+		}
+		if trackedTag {
 			continue
 		}
 		if t.HasSplits() {
+			linesByCategory := make(map[string][]money.Money)
 			for _, s := range t.Splits {
-				if err := add(s.CategoryID, s.Amount); err != nil {
+				linesByCategory[s.CategoryID] = append(linesByCategory[s.CategoryID], s.Amount)
+			}
+			for categoryID, lines := range linesByCategory {
+				net, err := signedLineTotal(lines)
+				if err != nil {
+					return Unbudgeted{}, err
+				}
+				if err := add(categoryID, net); err != nil {
 					return Unbudgeted{}, err
 				}
 			}
@@ -89,14 +115,18 @@ func ComputeUnbudgeted(budgets []domain.Budget, cats []domain.Category, all []do
 	}
 
 	out := Unbudgeted{Total: money.Zero(rates.Base)}
-	for id, minor := range byCat {
-		if minor <= 0 {
+	for id, amount := range byCat {
+		if amount.Amount <= 0 {
 			continue
 		}
 		out.Categories = append(out.Categories, UnbudgetedCategory{
-			CategoryID: id, Name: nameByID[id], Amount: money.New(minor, rates.Base),
+			CategoryID: id, Name: nameByID[id], Amount: amount,
 		})
-		out.Total.Amount += minor
+		var err error
+		out.Total, err = out.Total.Add(amount)
+		if err != nil {
+			return Unbudgeted{}, err
+		}
 	}
 	sort.SliceStable(out.Categories, func(i, j int) bool {
 		if out.Categories[i].Amount.Amount != out.Categories[j].Amount.Amount {

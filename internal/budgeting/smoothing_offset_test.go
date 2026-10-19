@@ -76,3 +76,11 @@ func TestApplySmoothingOffset(t *testing.T) {
 		t.Errorf("zero offset changed the status")
 	}
 }
+
+func TestApplySmoothingOffsetUsesBudgetDirection(t *testing.T) {
+	st := Status{Budget: domain.Budget{Direction: domain.DirectionSave}, Spent: money.New(10000, "USD"), Remaining: money.New(40000, "USD"), Percent: 20, State: StateOK}
+	got := ApplySmoothingOffset(st, 1, DefaultNearThreshold)
+	if got.State != StateOver {
+		t.Fatalf("saving budget below its target should remain short after offset; got state %s", got.State)
+	}
+}

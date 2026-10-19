@@ -49,29 +49,33 @@ func SuggestLimitIn(covers map[string]bool, txns []domain.Transaction, now time.
 		return 0, nil
 	}
 	curStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
-
-	monthSums := make([]int64, months+1) // monthSums[k] = spend in the k-th prior full month
+	monthSums := make([]int64, months+1)
 	for k := 1; k <= months; k++ {
-		ms := dateutil.AddMonths(curStart, -k)
-		me := dateutil.AddMonths(curStart, -(k - 1))
-		for _, t := range txns {
-			if !t.IsExpense() || !dateutil.InRange(t.Date, ms, me) {
+		ms, me := dateutil.AddMonths(curStart, -k), dateutil.AddMonths(curStart, -(k-1))
+		for _, txn := range txns {
+			if !txn.IsExpense() || !txn.CountsInReports() || !dateutil.InRange(txn.Date, ms, me) {
 				continue
 			}
-			amt, ok, err := scopedSpend(t, covers, rates)
+			amount, ok, err := scopedSpend(txn, covers, rates)
 			if err != nil {
 				return 0, err
 			}
 			if ok {
-				monthSums[k] += amt
+				monthSums[k], err = money.Add(monthSums[k], amount)
+				if err != nil {
+					return 0, err
+				}
 			}
 		}
 	}
-
-	oldest := 0 // largest k that had any spend → span end
+	oldest := 0
 	var total int64
 	for k := 1; k <= months; k++ {
-		total += monthSums[k]
+		var err error
+		total, err = money.Add(total, monthSums[k])
+		if err != nil {
+			return 0, err
+		}
 		if monthSums[k] > 0 {
 			oldest = k
 		}

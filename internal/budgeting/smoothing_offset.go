@@ -72,6 +72,6 @@ func ApplySmoothingOffset(st Status, offset int64, nearThreshold float64) Status
 	st.Remaining = money.New(st.Remaining.Amount+offset, st.Remaining.Currency)
 	limit := money.New(st.Spent.Amount+st.Remaining.Amount, st.Spent.Currency)
 	st.Percent = percent(st.Spent, limit)
-	st.State = classify(st.Spent, limit, nearThreshold)
+	st.State = classifyDirected(st.Budget.Direction, st.Spent, limit, nearThreshold)
 	return st
 }

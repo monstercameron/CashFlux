@@ -225,6 +225,23 @@ func TestIncomeForBudgets(t *testing.T) {
 	}
 }
 
+func TestIncomeForBudgetsCheckedReportsExclusionsAndFXFailure(t *testing.T) {
+	rates := makeRates(nil)
+	start, end := jan(1), jan(31)
+	excluded := incomeTxn(5, 30000, "USD")
+	excluded.ExcludeFromReports = true
+	got, err := IncomeForBudgetsChecked(0, []domain.Transaction{excluded, incomeTxn(6, 12000, "USD")}, start, end, "USD", rates)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != 12000 {
+		t.Fatalf("excluded deposit included: got %d want 12000", got)
+	}
+	if _, err := IncomeForBudgetsChecked(0, []domain.Transaction{incomeTxn(7, 10000, "EUR")}, start, end, "USD", rates); err == nil {
+		t.Fatal("missing FX rate must be reported instead of returning a partial total")
+	}
+}
+
 // TestIncomeSourcesExpandsDescendants is C532. Ticking a parent income category
 // is the obvious thing to do when deposits are filed under its children, and it
 // used to count nothing at all because the match was an exact id test while every

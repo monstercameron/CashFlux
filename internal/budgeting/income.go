@@ -3,6 +3,7 @@
 package budgeting
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/categorytree"
@@ -36,9 +37,8 @@ import (
 // because ledger's own tests import budgeting and the dependency would form an
 // import cycle in ledger's test build.
 //
-// On an FX conversion failure (e.g. a missing rate) the function returns 0 so
-// callers can surface a "configure your income" prompt rather than silently
-// computing a wrong budget. The returned value is in minor units of base.
+// The returned value is in minor units of base. Use IncomeForBudgetsChecked
+// when callers need to distinguish missing FX from genuine zero income.
 func IncomeForBudgets(
 	configuredMinor int64,
 	txns []domain.Transaction,
@@ -46,22 +46,36 @@ func IncomeForBudgets(
 	base string,
 	rates currency.Rates,
 ) int64 {
+	total, err := IncomeForBudgetsChecked(configuredMinor, txns, start, end, base, rates)
+	if err != nil {
+		return 0
+	}
+	return total
+}
+
+// IncomeForBudgetsChecked resolves actual or configured budget income and
+// reports FX failures instead of treating an incomplete total as zero.
+func IncomeForBudgetsChecked(configuredMinor int64, txns []domain.Transaction, start, end time.Time, base string, rates currency.Rates) (int64, error) {
 	if configuredMinor > 0 {
-		return configuredMinor
+		return configuredMinor, nil
 	}
 
 	var total int64
 	for _, t := range txns {
-		if !t.IsIncome() || !dateutil.InRange(t.Date, start, end) {
+		if !t.CountsInReports() || !t.IsIncome() || !dateutil.InRange(t.Date, start, end) {
 			continue
 		}
 		conv, err := currency.ConvertBetween(t.Amount.Amount, t.Amount.Currency, base, rates)
 		if err != nil {
-			return 0
+			return 0, fmt.Errorf("convert budget income transaction %q: %w", t.ID, err)
 		}
-		total += conv
+		var addErr error
+		total, addErr = money.Add(total, conv)
+		if addErr != nil {
+			return 0, fmt.Errorf("sum budget income: %w", addErr)
+		}
 	}
-	return total
+	return total, nil
 }
 
 // AveragedIncome resolves the income basis averaged over the last `months` full months

@@ -60,6 +60,26 @@ func TestEnvelopeAvailable(t *testing.T) {
 	}
 }
 
+func TestEnvelopeAvailableUsesPriorEffectiveCapChain(t *testing.T) {
+	rates := currency.Rates{Base: "USD"}
+	b := domain.Budget{CategoryID: "groceries", Period: domain.PeriodMonthly, Scope: domain.ScopeShared, Limit: usd(45000)}
+	sep := time.Date(2026, time.September, 1, 0, 0, 0, 0, time.UTC)
+	oct := time.Date(2026, time.October, 1, 0, 0, 0, 0, time.UTC)
+	b = b.WithPeriodBoost(sep, -24480)
+	b = b.WithPeriodBoost(oct, 18564)
+	txns := []domain.Transaction{
+		expense(63564, "USD", "groceries", "", "2026-09-10"), // effective Sep cap $205.20, leaving $430.44 debt.
+		expense(24250, "USD", "groceries", "", "2026-10-10"), // effective Oct cap $205.20, leaving $37.30 debt.
+	}
+	got, err := EnvelopeAvailable(b, txns, time.Date(2026, time.November, 15, 0, 0, 0, 0, time.UTC), time.Sunday, rates, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Amount != 41270 {
+		t.Errorf("November envelope = %d, want $412.70 after carrying October's $37.30 overage", got.Amount)
+	}
+}
+
 func TestEnvelopeAvailableRespectsScope(t *testing.T) {
 	rates := currency.Rates{Base: "USD"}
 	curRef := mustDate("2026-06-15")
@@ -75,5 +95,44 @@ func TestEnvelopeAvailableRespectsScope(t *testing.T) {
 	// May leftover = 10000 - 5000 = 5000; June leftover = 10000 (no m1 spend) → 15000.
 	if got.Amount != 15000 {
 		t.Errorf("scoped envelope = %d, want 15000", got.Amount)
+	}
+}
+
+func TestEnvelopeAvailableUsesReportAndTagInclusion(t *testing.T) {
+	rates := currency.Rates{Base: "USD"}
+	curRef := mustDate("2026-06-15")
+	b := domain.Budget{Period: domain.PeriodMonthly, Scope: domain.ScopeShared, Limit: usd(10000), CategoryID: "dining"}
+	excluded := expense(4000, "USD", "dining", "", "2026-01-05")
+	excluded.ExcludeFromReports = true
+	got, err := EnvelopeAvailable(b, []domain.Transaction{excluded}, curRef, time.Sunday, rates, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Amount != 10000 {
+		t.Fatalf("excluded old spend must not start funding history; got %d want 10000", got.Amount)
+	}
+
+	tagBudget := domain.Budget{Period: domain.PeriodMonthly, Scope: domain.ScopeShared, Limit: usd(10000), TrackedTags: []string{"trip"}}
+	tagged := expense(2000, "USD", "travel", "", "2026-05-05")
+	tagged.Tags = []string{"trip"}
+	got, err = EnvelopeAvailable(tagBudget, []domain.Transaction{tagged}, curRef, time.Sunday, rates, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Amount != 18000 {
+		t.Fatalf("tracked tag spend should establish May funding history; got %d want 18000", got.Amount)
+	}
+}
+
+func TestEnvelopeAvailableIncludesHistoriesBeyondFormerWeeklyCap(t *testing.T) {
+	rates := currency.Rates{Base: "USD"}
+	b := domain.Budget{Period: domain.PeriodWeekly, Scope: domain.ScopeShared, Limit: usd(10000), CategoryID: "food"}
+	old := expense(1, "USD", "food", "", "2020-01-01")
+	got, err := EnvelopeAvailable(b, []domain.Transaction{old}, mustDate("2026-10-18"), time.Sunday, rates, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Amount <= 240*10000 {
+		t.Fatalf("weekly history beyond 240 periods was truncated: got %d", got.Amount)
 	}
 }

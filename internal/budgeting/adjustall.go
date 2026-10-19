@@ -3,9 +3,11 @@
 package budgeting
 
 import (
+	"fmt"
 	"math"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
 )
@@ -84,6 +86,13 @@ type AdjustPreview struct {
 	Lines       []AdjustLine
 	TotalBefore int64
 	TotalAfter  int64
+	// NormalizedPeriod, NormalizedBefore, NormalizedAfter and NormalizedLines
+	// expose the preview totals on a comparable cadence and in the rate table's
+	// base currency. They are populated by AdjustAllPreviewNormalized.
+	NormalizedPeriod domain.Period
+	NormalizedBefore money.Money
+	NormalizedAfter  money.Money
+	NormalizedLines  []AdjustNormalizedLine
 	// Currency is the shared currency of the affected budgets, or "" when they
 	// disagree — in which case the totals are not meaningful and the form shows
 	// per-budget lines only.
@@ -94,6 +103,59 @@ type AdjustPreview struct {
 	// Skipped lists the budgets the adjustment will not touch, and why, so the
 	// form can say so instead of quietly showing fewer rows than expected.
 	Skipped []AdjustSkip
+}
+
+// AdjustNormalizedLine is one adjustment line expressed on the preview cadence.
+type AdjustNormalizedLine struct {
+	BudgetID string
+	Name     string
+	Before   money.Money
+	After    money.Money
+}
+
+// AdjustAllPreviewNormalized builds an adjustment preview whose totals compare
+// budgets at the same period cadence and in rates.Base. Each budget's actual
+// write remains in its own cadence; only the displayed comparison is normalized.
+func AdjustAllPreviewNormalized(budgets []domain.Budget, pct float64, scope AdjustScope, overlays AdjustOverlays, viewedPeriod domain.Period, rates currency.Rates) (AdjustPreview, error) {
+	p := AdjustAllPreviewFor(budgets, pct, scope, overlays)
+	p.NormalizedPeriod = viewedPeriod
+	p.NormalizedBefore = money.Zero(rates.Base)
+	p.NormalizedAfter = money.Zero(rates.Base)
+	p.NormalizedLines = make([]AdjustNormalizedLine, 0, len(p.Lines))
+	for _, line := range p.Lines {
+		before := money.New(line.Before, line.Budget.Limit.Currency)
+		after := money.New(line.After, line.Budget.Limit.Currency)
+		if before.Currency == "" {
+			before.Currency = rates.Base
+			after.Currency = rates.Base
+		}
+		before, err := PeriodEquivalent(before, line.Budget.Period, viewedPeriod)
+		if err != nil {
+			return AdjustPreview{}, fmt.Errorf("budget %q before amount: %w", line.Budget.ID, err)
+		}
+		after, err = PeriodEquivalent(after, line.Budget.Period, viewedPeriod)
+		if err != nil {
+			return AdjustPreview{}, fmt.Errorf("budget %q after amount: %w", line.Budget.ID, err)
+		}
+		before, err = rates.Convert(before, rates.Base)
+		if err != nil {
+			return AdjustPreview{}, fmt.Errorf("budget %q before currency conversion: %w", line.Budget.ID, err)
+		}
+		after, err = rates.Convert(after, rates.Base)
+		if err != nil {
+			return AdjustPreview{}, fmt.Errorf("budget %q after currency conversion: %w", line.Budget.ID, err)
+		}
+		p.NormalizedBefore, err = p.NormalizedBefore.Add(before)
+		if err != nil {
+			return AdjustPreview{}, fmt.Errorf("sum normalized before amounts: %w", err)
+		}
+		p.NormalizedAfter, err = p.NormalizedAfter.Add(after)
+		if err != nil {
+			return AdjustPreview{}, fmt.Errorf("sum normalized after amounts: %w", err)
+		}
+		p.NormalizedLines = append(p.NormalizedLines, AdjustNormalizedLine{BudgetID: line.Budget.ID, Name: line.Budget.Name, Before: before, After: after})
+	}
+	return p, nil
 }
 
 // SkippedFor returns the budgets left out for one reason.

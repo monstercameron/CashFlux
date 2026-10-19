@@ -3,6 +3,7 @@
 package budgeting
 
 import (
+	"fmt"
 	"sort"
 	"time"
 
@@ -45,31 +46,47 @@ func AttributeByMember(budget domain.Budget, all []domain.Transaction, start, en
 	tracks := func(id string) bool { return budget.TracksCategory(id) || covers[id] }
 
 	byMember := make(map[string]int64)
+	accumulate := func(member string, amount int64) error {
+		updated, err := money.Add(byMember[member], amount)
+		if err != nil {
+			return fmt.Errorf("sum attribution for member %q: %w", member, err)
+		}
+		byMember[member] = updated
+		return nil
+	}
 	addTo := func(member string, amt money.Money) error {
-		conv, err := rates.Convert(amt.Abs(), limit.Currency)
+		contribution, err := expenseContribution(amt)
 		if err != nil {
 			return err
 		}
-		byMember[member] += conv.Amount
-		return nil
+		conv, err := rates.Convert(contribution, limit.Currency)
+		if err != nil {
+			return err
+		}
+		return accumulate(member, conv.Amount)
 	}
 	addToOwners := func(owners []string, amt money.Money) error {
-		conv, err := rates.Convert(amt.Abs(), limit.Currency)
+		contribution, err := expenseContribution(amt)
+		if err != nil {
+			return err
+		}
+		conv, err := rates.Convert(contribution, limit.Currency)
 		if err != nil {
 			return err
 		}
 		if len(owners) == 0 {
-			byMember[UnassignedMemberID] += conv.Amount
-			return nil
+			return accumulate(UnassignedMemberID, conv.Amount)
 		}
 		for _, share := range memberallocation.SplitAmount(conv.Amount, owners) {
-			byMember[share.MemberID] += share.Amount
+			if err := accumulate(share.MemberID, share.Amount); err != nil {
+				return err
+			}
 		}
 		return nil
 	}
 
 	for _, t := range all {
-		if !matchesScope(budget, t, start, end) {
+		if !t.CountsInReports() || !matchesScope(budget, t, start, end) {
 			continue
 		}
 		// Mirror spentCovered's cross-category tag tracking: a tag-matched charge attributes
@@ -81,17 +98,33 @@ func AttributeByMember(budget domain.Budget, all []domain.Transaction, start, en
 			continue
 		}
 		if t.HasSplits() {
+			byOwner := make(map[string][]money.Money)
+			var fallback []money.Money
 			for _, s := range t.Splits {
 				if !tracks(s.CategoryID) {
 					continue
 				}
 				if s.MemberID != "" {
-					if err := addTo(s.MemberID, s.Amount); err != nil {
-						return nil, err
-					}
+					byOwner[s.MemberID] = append(byOwner[s.MemberID], s.Amount)
 					continue
 				}
-				if err := addToOwners(t.Owners(), s.Amount); err != nil {
+				fallback = append(fallback, s.Amount)
+			}
+			for member, lines := range byOwner {
+				net, err := signedLineTotal(lines)
+				if err != nil {
+					return nil, err
+				}
+				if err := addTo(member, net); err != nil {
+					return nil, err
+				}
+			}
+			if len(fallback) > 0 {
+				net, err := signedLineTotal(fallback)
+				if err != nil {
+					return nil, err
+				}
+				if err := addToOwners(t.Owners(), net); err != nil {
 					return nil, err
 				}
 			}
