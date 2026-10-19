@@ -5,7 +5,6 @@
 package app
 
 import (
-	"fmt"
 	"strings"
 	"syscall/js"
 	"time"
@@ -13,6 +12,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/browserstore"
 	"github.com/monstercameron/CashFlux/internal/cryptobox"
+	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 )
 
@@ -92,6 +92,7 @@ var keptOnWipePrefixes = []string{
 // write has actually committed to IndexedDB — so the reload can't race the async
 // write and re-hydrate the old data.
 func wipeFinancialLocalState(then func()) {
+	var remove []string
 	// 1) Remove every non-preserved cashflux:* key (bootstrap/settings stay).
 	for _, key := range browserstore.Keys() {
 		if !strings.HasPrefix(key, "cashflux:") || key == datasetStoreKey || keptOnWipeKeys[key] {
@@ -105,7 +106,7 @@ func wipeFinancialLocalState(then func()) {
 			}
 		}
 		if !kept {
-			browserstore.Remove(key)
+			remove = append(remove, key)
 		}
 	}
 	// 2) Persist the emptied store, then continue (reload) after it commits. A
@@ -113,49 +114,59 @@ func wipeFinancialLocalState(then func()) {
 	// stops autosaving its pre-wipe copy back over the emptied dataset.
 	if app := appstate.Default; app != nil {
 		if data, err := app.ExportJSONRedacted(); err == nil {
-			bumpDatasetGen()
-			browserstore.SetThen(datasetStoreKey, string(data), then)
+			removeFinancialKeysThen(remove, func() {
+				generation := id.New()
+				browserstore.SetSecureBatch(map[string]string{datasetStoreKey: string(data), datasetGenKey: generation}, nil, func(err error) {
+					if err != nil {
+						app.Log().Error("data wipe could not be committed", "err", err)
+						return
+					}
+					datasetMyGen = generation
+					if then != nil {
+						then()
+					}
+				})
+			})
 			return
 		}
 	}
-	then()
+	if app := appstate.Default; app != nil {
+		app.Log().Error("data wipe could not be serialized; reload was stopped")
+	}
 }
 
-// datasetGenKey is a tiny cross-tab GENERATION STAMP for the autosaved dataset,
-// kept in raw localStorage (deliberately NOT browserstore, whose in-memory cache
-// is per-tab and never sees another tab's writes). Every dataset write bumps it;
-// a tab may only overwrite the dataset while the stamp still matches the one it
-// loaded (or last wrote). This is what stops a second, older tab — whose boot
-// bookkeeping (recurring advancement etc.) dirties its own serialization — from
-// flushing a stale whole-dataset copy over changes saved in the active tab
-// (Cam's "Income to budget with doesn't persist", 2026-07-17: last-writer-wins
-// clobber from a lingering tab).
+func removeFinancialKeysThen(keys []string, done func()) {
+	if len(keys) == 0 {
+		done()
+		return
+	}
+	browserstore.RemoveSecure(keys[0], func(err error) {
+		if err != nil {
+			if app := appstate.Default; app != nil {
+				app.Log().Error("data wipe could not remove saved state", "err", err)
+			}
+			return
+		}
+		removeFinancialKeysThen(keys[1:], done)
+	})
+}
+
+// datasetGenKey is an encrypted cross-tab generation identifier. Autosave writes
+// it atomically with the dataset and conditionally compares the old generation
+// inside the same transaction. Broadcast cache convergence is only a fast hint;
+// the durable comparison prevents a stale tab from overwriting a newer save.
 const datasetGenKey = "cashflux:dataset:gen"
 
-// readDatasetGen reads the live cross-tab generation stamp ("" when unset).
+// readDatasetGen reads the last observed generation ("" when unset).
 func readDatasetGen() string {
-	defer func() { _ = recover() }()
-	ls := js.Global().Get("localStorage")
-	if !ls.Truthy() {
-		return ""
-	}
-	if v := ls.Call("getItem", datasetGenKey); v.Truthy() {
-		return v.String()
-	}
-	return ""
+	return browserstore.GetString(datasetGenKey)
 }
 
 // bumpDatasetGen stamps a fresh generation and returns it — called after every
 // successful dataset write so other tabs know their in-memory copy is stale.
-var datasetGenSeq int
-
 func bumpDatasetGen() string {
-	datasetGenSeq++
-	g := fmt.Sprintf("%d-%d", time.Now().UnixNano(), datasetGenSeq)
-	defer func() { _ = recover() }()
-	if ls := js.Global().Get("localStorage"); ls.Truthy() {
-		ls.Call("setItem", datasetGenKey, g)
-	}
+	g := id.New()
+	browserstore.Set(datasetGenKey, g)
 	return g
 }
 
@@ -193,6 +204,10 @@ func hydrateDataset() {
 		return
 	}
 	hydrationSucceeded = false
+	if err := browserstore.InitError(); err != nil {
+		app.Log().Error("dataset hydration requires protected storage recovery", "err", err)
+		return
+	}
 	loadQuarantineRecord()
 	raw := browserstore.GetString(datasetStoreKey)
 	// Encrypted-at-rest dataset (C45): defer hydration until the passcode gate is
@@ -296,6 +311,7 @@ func startDatasetAutosave() {
 		return
 	}
 	last := ""
+	saveInFlight := false
 	if hadLocalDataset {
 		data, err := localDatasetExport(app)
 		if err != nil {
@@ -306,6 +322,9 @@ func startDatasetAutosave() {
 	// Seed this tab's write entitlement from the store's current generation.
 	datasetMyGen = readDatasetGen()
 	save := func() {
+		if saveInFlight {
+			return
+		}
 		if suspendAutosave {
 			return // a workspace switch is rewriting storage; don't clobber it
 		}
@@ -361,6 +380,22 @@ func startDatasetAutosave() {
 				hadLocalDataset = true
 			}
 		}
+		write := func(value, target string) {
+			saveInFlight = true
+			nextGeneration := id.New()
+			browserstore.SetSecureBatch(map[string]string{
+				datasetStoreKey: value, datasetGenKey: nextGeneration,
+			}, map[string]string{datasetGenKey: datasetMyGen}, func(err error) {
+				saveInFlight = false
+				if err != nil {
+					app.Log().Error("dataset commit failed; changes remain unsaved", "err", err)
+					return
+				}
+				last = target
+				datasetMyGen = nextGeneration
+				afterWrite()
+			})
+		}
 		if datasetEncryptionActive() {
 			// Encrypt at rest (C45). Encryption is async; skip a tick if a prior one
 			// is still running. `last` advances only on a successful write, so a
@@ -369,10 +404,12 @@ func startDatasetAutosave() {
 				return
 			}
 			encSaving = true
+			saveInFlight = true
 			plaintext := append([]byte(nil), data...)
 			target := s
 			encryptDataset(plaintext, activePasscode, func(env []byte, encErr error) {
 				encSaving = false
+				saveInFlight = false
 				if encErr != nil {
 					app.Log().Error("dataset encrypt failed; not writing this tick", "err", encErr)
 					return
@@ -387,17 +424,11 @@ func startDatasetAutosave() {
 						app.Log().Error("encrypted dataset write failed", "err", r)
 					}
 				}()
-				browserstore.Set(datasetStoreKey, string(env))
-				datasetMyGen = bumpDatasetGen()
-				last = target
-				afterWrite()
+				write(string(env), target)
 			})
 			return
 		}
-		last = s
-		browserstore.Set(datasetStoreKey, s)
-		datasetMyGen = bumpDatasetGen()
-		afterWrite()
+		write(s, s)
 	}
 	// resaveDataset forces an immediate rewrite even when the dataset bytes are
 	// unchanged — used when the encryption mode flips (passcode set/removed) so the

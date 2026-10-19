@@ -180,7 +180,7 @@ func budgetWhyOverHint(props budgetWhyOverProps) ui.Node {
 		sentence = whyOverSentence(facts)
 	}
 
-	backendAI := pr.Normalize().BackendActive()
+	backendAI := uistate.BackendConnectionActive(pr)
 	aiEnabled := app != nil && aiProviderConfigured(app, backendAI) &&
 		settings.IsEnabled(whyOverAICode) && !settings.IsMuted(whyOverAICode)
 	aiConn := smartAIConn{}

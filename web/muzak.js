@@ -91,6 +91,7 @@
   var errStreak = 0; // consecutive load errors → back off
   var inited = false; // resume point applied once
   var pendingResume = 0; // seconds to seek the first track to on startup
+  var pendingPosition = null; // in-memory checkpoint until the encrypted store bridge is ready
   var lastSave = 0; // throttle position writes
 
   // ---- Resume persistence: remember the track + position across reloads ------
@@ -101,12 +102,14 @@
     var now = Date.now();
     if (!force && now - lastSave < 4000) return;
     lastSave = now;
-    // Persist through the IndexedDB-backed store (no localStorage). Falls back to
-    // localStorage only if the wasm store bridge hasn't registered yet.
+    // Keep the latest position in memory until the encrypted browserstore bridge
+    // is available. There is deliberately no web-storage fallback.
+    pendingPosition = { i: pl.index, t: el.currentTime };
     try {
-      var posStr = JSON.stringify({ i: pl.index, t: el.currentTime });
-      if (typeof window.cashfluxStoreSet === "function") window.cashfluxStoreSet(POS_KEY, posStr);
-      else localStorage.setItem(POS_KEY, posStr);
+      if (typeof window.cashfluxStoreSet === "function") {
+        window.cashfluxStoreSet(POS_KEY, JSON.stringify(pendingPosition));
+        pendingPosition = null;
+      }
     } catch (e) {}
     // At coarse checkpoints, ask Go to mirror the state into the dataset so it
     // travels with export/import + backups (not streamed — only on force).
@@ -116,9 +119,8 @@
   }
   function loadPos() {
     try {
-      var raw = (typeof window.cashfluxStoreGet === "function")
-        ? window.cashfluxStoreGet(POS_KEY)
-        : localStorage.getItem(POS_KEY);
+      var raw = pendingPosition ? JSON.stringify(pendingPosition)
+        : (typeof window.cashfluxStoreGet === "function" ? window.cashfluxStoreGet(POS_KEY) : null);
       var o = JSON.parse(raw || "null");
       if (o && typeof o.i === "number" && typeof o.t === "number") return o;
     } catch (e) {}

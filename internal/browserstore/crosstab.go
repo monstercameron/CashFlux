@@ -5,6 +5,7 @@
 package browserstore
 
 import (
+	"github.com/monstercameron/CashFlux/internal/atrest"
 	"sync"
 	"syscall/js"
 )
@@ -84,6 +85,12 @@ func StartCrossTab() {
 			// for — the same deadlock internal/app/tokenlock.go documents.
 			go func() {
 				Reload(k)
+				mu.Lock()
+				err := cachedError(k)
+				mu.Unlock()
+				if err != nil {
+					return
+				}
 				v, present := Get(k)
 				notifyWatchers(k, v, present)
 			}()
@@ -150,52 +157,28 @@ func notifyWatchers(key, value string, present bool) {
 // convergence: before deciding whether another tab has already rotated a
 // single-use credential, for instance.
 func Reload(keys ...string) {
-	if len(keys) == 0 || !db.Truthy() {
+	if !db.Truthy() {
 		return
 	}
-	done := make(chan struct{})
-	var once sync.Once
-	finish := func() { once.Do(func() { close(done) }) }
-	defer func() {
-		if r := recover(); r != nil {
-			finish()
-		}
-	}()
-
-	tx := db.Call("transaction", idbStoreName, "readonly")
-	os := tx.Call("objectStore", idbStoreName)
-	remaining := len(keys)
 	for _, key := range keys {
-		k := key
-		req := os.Call("get", k)
-		settle := func() {
-			remaining--
-			if remaining == 0 {
-				finish()
+		if atrest.Classify(key) == atrest.ShouldNotPersist {
+			continue
+		}
+		value, present, err := GetSecure(key)
+		mu.Lock()
+		if err != nil {
+			delete(cache, key)
+			readErrors[key] = err
+		} else {
+			delete(readErrors, key)
+			if present {
+				cache[key] = value
+			} else {
+				delete(cache, key)
 			}
 		}
-		req.Set("onsuccess", js.FuncOf(func(js.Value, []js.Value) any {
-			res := req.Get("result")
-			mu.Lock()
-			if res.Type() == js.TypeString {
-				cache[k] = res.String()
-			} else if res.IsUndefined() || res.IsNull() {
-				// Absent in IndexedDB means another tab removed it — a sign-out
-				// elsewhere. Dropping it here is the point: keeping a cached
-				// credential that has been deleted is how a signed-out tab goes
-				// on presenting a dead session as a live one.
-				delete(cache, k)
-			}
-			mu.Unlock()
-			settle()
-			return nil
-		}))
-		req.Set("onerror", js.FuncOf(func(js.Value, []js.Value) any {
-			settle()
-			return nil
-		}))
+		mu.Unlock()
 	}
-	<-done
 }
 
 // Barrier blocks until every write issued by this tab before the call has
@@ -217,24 +200,8 @@ func Reload(keys ...string) {
 // after the puts cannot complete before they have. Blocks, so goroutines only —
 // see Reload.
 func Barrier() {
-	if !db.Truthy() {
-		return
-	}
 	done := make(chan struct{})
-	var once sync.Once
-	finish := func() { once.Do(func() { close(done) }) }
-	defer func() {
-		if r := recover(); r != nil {
-			finish()
-		}
-	}()
-	tx := db.Call("transaction", idbStoreName, "readwrite")
-	tx.Set("oncomplete", js.FuncOf(func(js.Value, []js.Value) any { finish(); return nil }))
-	tx.Set("onerror", js.FuncOf(func(js.Value, []js.Value) any { finish(); return nil }))
-	tx.Set("onabort", js.FuncOf(func(js.Value, []js.Value) any { finish(); return nil }))
-	// A transaction with no request still completes; touching the store keeps the
-	// scope explicit and the ordering guarantee obvious to a reader.
-	tx.Call("objectStore", idbStoreName)
+	enqueue(func() { close(done) })
 	<-done
 }
 

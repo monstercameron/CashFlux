@@ -274,7 +274,7 @@ func Allocate() ui.Node {
 	// --- AI narrative ---
 	aiKey := settings.OpenAIKey
 	pr := uistate.UsePrefs().Get().Normalize()
-	useBackendAI := pr.BackendActive()
+	useBackendAI := uistate.BackendConnectionActive(pr)
 	aiModel := settings.OpenAIModel
 	if aiModel == "" {
 		aiModel = "gpt-5.4-mini"
@@ -322,6 +322,7 @@ func Allocate() ui.Node {
 	applyMsg := ui.UseState("")
 	applyErr := ui.UseState("")
 	applyDidApply := ui.UseState(false)
+	applySaving := ui.UseState(false)
 	liabilityIDs := map[string]bool{}
 	for _, a := range app.Accounts() {
 		if a.Class == domain.ClassLiability {
@@ -349,6 +350,9 @@ func Allocate() ui.Node {
 	}))
 	cancelConfirm := ui.UseEvent(Prevent(func() { applyConfirming.Set(false) }))
 	doApply := ui.UseEvent(Prevent(func() {
+		if applySaving.Get() {
+			return
+		}
 		actions := planActions()
 		if len(actions) == 0 {
 			applyErr.Set(uistate.T("allocate.applyNoPlans"))
@@ -357,31 +361,38 @@ func Allocate() ui.Node {
 		}
 		// #55: checkpoint before the allocation writes (goal contributions +
 		// earmarks land across many entities in one go).
-		uistate.SaveCheckpoint(uistate.T("ckpt.beforeAllocation", plural(len(actions), "plan")))
-		result, err := app.ApplyAllocation(actions)
-		if err != nil {
-			applyErr.Set(uistate.T("allocate.applyErr", err.Error()))
+		applySaving.Set(true)
+		uistate.SaveCheckpointThen(uistate.T("ckpt.beforeAllocation", plural(len(actions), "plan")), func(_ string, checkpointErr error) {
+			applySaving.Set(false)
+			if checkpointErr != nil {
+				uistate.PostNotice(uistate.T("enc34.checkpointFailed"), true)
+				return
+			}
+			result, err := app.ApplyAllocation(actions)
+			if err != nil {
+				applyErr.Set(uistate.T("allocate.applyErr", err.Error()))
+				applyConfirming.Set(false)
+				return
+			}
 			applyConfirming.Set(false)
-			return
-		}
-		applyConfirming.Set(false)
-		applyDidApply.Set(true)
-		applyErr.Set("")
-		goalAmt := fmtMoney(money.New(result.GoalDollars, base))
-		earmarkAmt := fmtMoney(money.New(result.EarmarkDollars, base))
-		var msg string
-		switch {
-		case result.GoalsFunded > 0 && result.EarmarksMade > 0:
-			msg = uistate.T("allocate.applySuccess", result.GoalsFunded, goalAmt, earmarkAmt)
-		case result.GoalsFunded > 0:
-			msg = uistate.T("allocate.applySuccessNoEarmark", result.GoalsFunded, goalAmt)
-		default:
-			msg = uistate.T("allocate.applySuccessNoGoal", earmarkAmt, result.EarmarksMade)
-		}
-		if result.Overflow > 0 {
-			msg += " " + uistate.T("allocate.applyOverflow", fmtMoney(money.New(result.Overflow, base)))
-		}
-		applyMsg.Set(msg)
+			applyDidApply.Set(true)
+			applyErr.Set("")
+			goalAmt := fmtMoney(money.New(result.GoalDollars, base))
+			earmarkAmt := fmtMoney(money.New(result.EarmarkDollars, base))
+			var msg string
+			switch {
+			case result.GoalsFunded > 0 && result.EarmarksMade > 0:
+				msg = uistate.T("allocate.applySuccess", result.GoalsFunded, goalAmt, earmarkAmt)
+			case result.GoalsFunded > 0:
+				msg = uistate.T("allocate.applySuccessNoEarmark", result.GoalsFunded, goalAmt)
+			default:
+				msg = uistate.T("allocate.applySuccessNoGoal", earmarkAmt, result.EarmarksMade)
+			}
+			if result.Overflow > 0 {
+				msg += " " + uistate.T("allocate.applyOverflow", fmtMoney(money.New(result.Overflow, base)))
+			}
+			applyMsg.Set(msg)
+		})
 	}))
 	doUndo := ui.UseEvent(Prevent(func() {
 		if err := app.UndoLastAllocation(); err != nil {

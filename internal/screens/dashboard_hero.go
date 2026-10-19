@@ -472,7 +472,7 @@ func heroQuote(_ struct{}) ui.Node {
 			model = m
 		}
 	}
-	useBackend := prefs.BackendActive()
+	useBackend := uistate.BackendConnectionActive(prefs)
 	hasProvider := aiKey != "" || useBackend
 
 	// Handlers (declared unconditionally for stable hook order).

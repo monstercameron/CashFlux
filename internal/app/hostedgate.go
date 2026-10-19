@@ -69,7 +69,7 @@ func configureHostedPrefs() {
 }
 
 func initialHostedGatePhase() hostedGatePhase {
-	refresh := strings.TrimSpace(lsGet(authRefreshTokenKey))
+	refresh := hostedSessionKey()
 	if refresh == "" {
 		return hostedGateSignIn
 	}
@@ -79,19 +79,39 @@ func initialHostedGatePhase() hostedGatePhase {
 	return hostedGateChecking
 }
 
+func hostedSessionKey() string {
+	if !backendSessionReady() {
+		return ""
+	}
+	if hasCookieSession() {
+		return strings.TrimSpace(lsGet(authAccessTokenKey))
+	}
+	if hasRotatableSession() {
+		return strings.TrimSpace(lsGet(authRefreshTokenKey))
+	}
+	return ""
+}
+
 func clearHostedUserSession(prefsAtom state.Atom[prefs.Prefs]) {
-	clearAuthSession()
 	p := prefsAtom.Get()
-	p.ServerToken = ""
-	p.ServerCSRF = ""
-	p.BackendDisabled = false
-	p.ServerURL = appOrigin()
-	p.ServerMode = prefs.ServerSelfHosted
-	p.ConnectionSegment = prefs.ConnectionLocal
-	p = p.Normalize()
-	prefsAtom.Set(p)
-	uistate.PersistPrefs(p)
-	reloadAfterIdentityChange("hosted session ended")
+	endPageSessionThen(p, func(err error) {
+		if err != nil {
+			logSyncError("remove hosted sign-in failed", err)
+			uistate.PostNotice("Sign-out could not be saved. Please try again.", true)
+			return
+		}
+		p.ServerToken, p.ServerCSRF = "", ""
+		p.BackendDisabled = false
+		p.ServerURL, p.ServerMode, p.ConnectionSegment = appOrigin(), prefs.ServerSelfHosted, prefs.ConnectionLocal
+		commitAuthPreferences(prefsAtom, p.Normalize(), func(err error) {
+			if err != nil {
+				logSyncError("save hosted sign-out failed", err)
+				uistate.PostNotice("Sign-out could not be saved. Please try again.", true)
+				return
+			}
+			reloadAfterIdentityChange("hosted session ended")
+		})
+	})
 }
 
 // HostedAuthGate prevents every routed financial screen from mounting until a
@@ -112,7 +132,7 @@ func hostedAuthGateActive(props HostedAuthGateProps) uic.Node {
 	retry := uic.UseState(0)
 
 	pr := prefsAtom.Get().Normalize()
-	refresh := strings.TrimSpace(lsGet(authRefreshTokenKey))
+	refresh := hostedSessionKey()
 	sessionKey := pr.ServerURL + "\x00" + pr.ServerToken + "\x00" + refresh + "\x00" + itoa(retry.Get())
 
 	uic.UseEffect(func() func() {
@@ -133,7 +153,7 @@ func hostedAuthGateActive(props HostedAuthGateProps) uic.Node {
 			var out backendrpc.ListDevicesResponse
 			err := invokeAuthed(ctx, pr, backendrpc.MethodAuthListDevices, backendrpc.ListDevicesRequest{}, &out)
 			if err == nil {
-				hostedValidatedRefreshToken = strings.TrimSpace(lsGet(authRefreshTokenKey))
+				hostedValidatedRefreshToken = hostedSessionKey()
 				errMsg.Set("")
 				phase.Set(string(hostedGateAllowed))
 				return

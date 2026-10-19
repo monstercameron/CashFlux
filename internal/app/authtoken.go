@@ -19,45 +19,18 @@ import (
 	"github.com/monstercameron/GoWebComponents/v5/state"
 )
 
-// This file holds the SV0.2 client half of OAuth (Google/GitHub) sessions
-// and of the server-scope reset.
-//
-// An OAuth sign-in does NOT work like a password/pairing sign-in. The
-// server's OAuth callback (internal/server/oauth_http.go
-// handleOAuthCallback) issues a stored session pair, but only the ACCESS
-// token reaches the page — via the `cashflux.oauth` postMessage, together
-// with its lifetime, the user ID and a CSRF token. The refresh token is
-// set as an HttpOnly cookie (`cashflux_refresh`, path /v1/auth) that
-// JavaScript can neither read nor copy, and rotation happens by POSTing
-// /v1/auth/refresh with credentials included: the server consumes the
-// cookie, rotates the family, sets fresh cookies, and answers with a new
-// access token JSON body.
-//
-// Until SV0.2 the app stored that access token in prefs.ServerToken as if
-// it were a static self-host token. Nothing ever refreshed it, so fifteen
-// minutes after an OAuth sign-in every sync call failed Unauthenticated
-// and the session silently stopped syncing. The fix is to record the
-// session as what it is — a rotatable session whose refresh credential
-// lives in the cookie — in the same storage password sessions use, plus a
-// marker saying which refresh path applies.
+// Session refresh has two explicit modes: same-origin HTTPS uses the server's
+// HttpOnly cookie; cross-origin uses a device-wrapped per-account record.
+// Access and CSRF tokens stay in page memory. Lifecycle integration uses the
+// durable callback helpers below and bootstrapScopedSession before sync starts.
 
-// authRefreshModeKey records HOW the current rotatable session refreshes.
-// Absent (the default, and every session stored before this key existed)
-// means a locally held refresh token under authRefreshTokenKey, refreshed
-// with the AuthService.RefreshToken RPC. authRefreshModeCookie means an
-// OAuth session whose refresh token is the server's HttpOnly cookie,
-// refreshed via POST /v1/auth/refresh (see refreshCookieAccessToken).
+// authRefreshModeKey is the current session's refresh-mode metadata.
 const authRefreshModeKey = "cashflux:auth:refresh-mode"
 
 // authRefreshModeCookie is the authRefreshModeKey value for OAuth sessions.
 const authRefreshModeCookie = "cookie"
 
-// authCSRFKey holds the latest double-submit CSRF token for the cookie
-// session. The server rotates the CSRF cookie on every refresh and returns
-// the new value in the X-CashFlux-CSRF response header (CORS-exposed); the
-// next refresh must present that value, so it is tracked here, beside the
-// tokens, in preference to the prefs copy — prefs can be a render-cycle
-// stale by the time a proactive refresh fires.
+// authCSRFKey holds a transient double-submit token. It is never saved in prefs.
 const authCSRFKey = "cashflux:auth:csrf"
 
 // cloudAIKeySetKey records that an OpenAI key has been uploaded to the
@@ -76,6 +49,56 @@ const cloudAIKeySetKey = "cashflux:cloud-ai-key-set"
 // that carries the real expiresIn and replaces it.
 const oauthFallbackExpiresInSeconds int64 = 900
 
+// persistOAuthCookieSessionThen is the durable OAuth sign-in boundary. The
+// callback's account ID and the selected server ID must be resolved before this
+// call. The caller commits its preferences and reloads only after done(nil).
+func persistOAuthCookieSessionThen(prefsAtom state.Atom[prefs.Prefs], previous *refreshScope, target refreshScope, accessToken, csrf string, expiresInSeconds int64, done func(error)) {
+	selected, err := newRefreshScope(target.ServerID, target.AccountID, target.Endpoint, currentPageOrigin())
+	if err != nil || selected != target || target.Mode != authRefreshModeCookie {
+		done(errors.New("session refresh: OAuth cookie sign-in requires the same secure origin"))
+		return
+	}
+	if expiresInSeconds <= 0 {
+		expiresInSeconds = oauthFallbackExpiresInSeconds
+	}
+	pair := backendrpc.TokenPairResponse{AccessToken: accessToken, ExpiresInSeconds: expiresInSeconds}
+	saveScopedSessionThen(previous, target, pair, func(err error) {
+		if err == nil {
+			persistOAuthCookieSession(prefsAtom, target.Endpoint, accessToken, csrf, target.AccountID, expiresInSeconds)
+		}
+		done(err)
+	})
+}
+
+// clearScopedSessionThen stops live session work and durably removes this
+// scope's credential before clearing generic metadata. The caller handles its
+// server logout first and reloads only after done(nil).
+func clearScopedSessionThen(scope refreshScope, done func(error)) {
+	stopBackendWatch()
+	stopProactiveRefreshTimer()
+	dropSharedConn()
+	(scopedRefreshSession{scope: scope}).clearThen(func(err error) {
+		if err == nil {
+			clearAuthSession()
+			lsRemove(authRefreshModeKey)
+			lsRemove(authCSRFKey)
+		}
+		done(err)
+	})
+}
+
+// resetScopeForServerChangeThen must receive the outgoing page's fixed scope,
+// rather than looking it up after new server preferences have been committed.
+func resetScopeForServerChangeThen(previous refreshScope, done func(bool, error)) {
+	clearScopedSessionThen(previous, func(err error) {
+		if err != nil {
+			done(false, err)
+			return
+		}
+		done(resetScopeForServerChange(), nil)
+	})
+}
+
 // hasCookieSession reports whether the current session is an OAuth cookie
 // session — the counterpart of hasRotatableSession for the session type
 // whose refresh token is not in local storage.
@@ -83,34 +106,9 @@ func hasCookieSession() bool {
 	return strings.TrimSpace(lsGet(authRefreshModeKey)) == authRefreshModeCookie
 }
 
-// persistOAuthCookieSession stores a completed OAuth sign-in as a rotatable
-// cookie session, through the same storage persistAuthSession uses for
-// password/pairing sessions: the access token lands under
-// authAccessTokenKey (so EffectiveServerToken and Session see it), the
-// expiry under authExpiresInKey with the proactive countdown armed, and
-// the user ID under syncUserIDKey so queued work is bound to the right
-// account from the first push.
-//
-// Two deliberate differences from a token-pair session:
-//
-//   - No refresh token is stored, and any refresh token left behind by a
-//     previous session on this device is REMOVED. Leaving one behind would
-//     make hasRotatableSession keep reporting the old session type and
-//     replay a credential from a different sign-in (possibly a different
-//     server) against this one.
-//   - The refresh-mode marker and the CSRF token are stored, so the
-//     refresh path (refreshCookieAccessToken) can find them after the
-//     page reload the sign-in ends with.
-//
-// Unlike persistAuthSession, this path deliberately leaves ServerToken empty:
-// OAuth access tokens are rotating credentials, never static server tokens.
-// The sync lane must treat a stored rotatable session as backend-active and
-// use EffectiveServerToken for its access token.
-//
-// The caller ends the sign-in with reloadAfterIdentityChange, so sync is
-// deliberately NOT started here (startSync=false): the reloaded page's
-// startBackendSync re-resolves identity and brings sync up in the new
-// scope, which is the SV rule that scope is fixed for the life of a page.
+// persistOAuthCookieSession applies legacy OAuth preference and memory state.
+// New sign-in callers must use persistOAuthCookieSessionThen so the scoped
+// cookie marker is durable before this state is adopted and the page reloads.
 func persistOAuthCookieSession(prefsAtom state.Atom[prefs.Prefs], serverURL, accessToken, csrf, userID string, expiresInSeconds int64) {
 	if expiresInSeconds <= 0 {
 		expiresInSeconds = oauthFallbackExpiresInSeconds
@@ -121,7 +119,7 @@ func persistOAuthCookieSession(prefsAtom state.Atom[prefs.Prefs], serverURL, acc
 	// belongs in the same browser storage keys used by persistAuthSession.
 	p.ServerURL = serverURL
 	p.ServerToken = ""
-	p.ServerCSRF = strings.TrimSpace(csrf)
+	p.ServerCSRF = ""
 	p.BackendDisabled = false
 	// OAuth can use a commercial endpoint too; preserve the selected mode
 	// and segment while applying the same normalization as password sign-in.
@@ -145,29 +143,8 @@ func persistOAuthCookieSession(prefsAtom state.Atom[prefs.Prefs], serverURL, acc
 	setSignedInUserID(userID)
 }
 
-// refreshCookieAccessToken is the cookie-session counterpart of
-// sync_client.go's refreshAccessToken: it performs (or, if another tab wins
-// the race, waits for and reuses the result of) a single POST
-// /v1/auth/refresh round trip, guarded by the same cross-tab Web Locks
-// guard so open tabs never race the rotation. The guard matters here for
-// the same reason as for token pairs: the server consumes a presented
-// refresh credential exactly once and treats a replay as compromise.
-// Two tabs POSTing /v1/auth/refresh at once send the SAME cookie value
-// (the browser attaches the stored cookie for both until one response
-// lands), so unguarded tabs would revoke each other's session family.
-//
-// "Another tab already refreshed" is decided by syncstate.DecideRefresh on
-// the ACCESS token — the refresh cookie itself is HttpOnly and invisible,
-// so a changed stored access token is the only rotation signal a waiting
-// tab can observe. It returns false when there is no cookie session, the
-// session vanished while waiting, or the refresh attempt failed.
-//
-// Integration note (SV0.2): sync_client.go's refreshAccessToken and
-// hasRotatableSession do not yet branch on the refresh-mode marker, so
-// today this function is reached only where cloudtab/authtoken code calls
-// it directly. The exact branch sync_client.go needs is listed in the
-// SV0.2 report under "Requests for other files" — that file belongs to
-// lane SV0.1.
+// refreshCookieAccessToken rotates a same-origin cookie session under the
+// cross-tab lock. The browser commits the HttpOnly cookie before fetch settles.
 func refreshCookieAccessToken(ctx context.Context, pr prefs.Prefs) bool {
 	if !hasCookieSession() {
 		return false
@@ -175,12 +152,10 @@ func refreshCookieAccessToken(ctx context.Context, pr prefs.Prefs) bool {
 	startingAccess := strings.TrimSpace(lsGet(authAccessTokenKey))
 	ok := false
 	withTokenRefreshLock(func() {
-		// Re-read from storage before deciding: browserstore's cache is
-		// per-tab, so without this the comparison could only ever see our
-		// own starting value and every waiting tab would POST its own
-		// refresh with the same cookie. Same rule (and same reason) as
-		// refreshAccessToken in sync_client.go.
-		browserstore.Reload(authAccessTokenKey, authRefreshModeKey, authCSRFKey)
+		// Only metadata is shared. A waiting tab sends the browser's latest
+		// cookie and gets its own access token; access/CSRF are never shared
+		// through IndexedDB. A same-page refresh may already have completed.
+		browserstore.Reload(authRefreshModeKey)
 		if !hasCookieSession() {
 			return
 		}
@@ -211,8 +186,23 @@ type cookieRefreshResult struct {
 // only while holding the token-refresh lock (via refreshCookieAccessToken)
 // so it is never invoked twice concurrently for the same session.
 func doCookieRefresh(ctx context.Context, pr prefs.Prefs) bool {
+	return doCookieRefreshForAccount(ctx, pr, "")
+}
+
+// doCookieRefreshForAccount is also used by pre-sync boot, where accepting a
+// cookie for another account would cross the page's fixed identity boundary.
+func doCookieRefreshForAccount(ctx context.Context, pr prefs.Prefs, accountID string) bool {
+	mode, err := newRefreshScope("cookie-server", "cookie-account", pr.ServerURL, currentPageOrigin())
+	if err != nil || mode.Mode != authRefreshModeCookie {
+		return false
+	}
 	endpoint := normalizedBackendEndpoint(pr.ServerURL)
-	res, completed := fetchCookieRefresh(ctx, endpoint, cookieSessionCSRF(pr))
+	csrf := cookieSessionCSRF(pr)
+	if csrf == "" {
+		logSyncError("cookie token refresh failed", errors.New("session refresh: the same-origin CSRF cookie is unavailable"))
+		return false
+	}
+	res, completed := fetchCookieRefresh(ctx, endpoint, csrf)
 	if !completed {
 		// The caller's deadline went first. The request may still land and
 		// rotate the cookie server-side; a later refresh re-reads storage
@@ -241,43 +231,67 @@ func doCookieRefresh(ctx context.Context, pr prefs.Prefs) bool {
 			fmt.Errorf("server returned HTTP %d", res.status))
 		return false
 	}
+	if accountID != "" && strings.TrimSpace(res.userID) != accountID {
+		logSyncError("cookie token refresh failed", errors.New("session refresh: cookie belongs to another account"))
+		return false
+	}
 	expires := res.expiresIn
 	if expires <= 0 {
 		expires = oauthFallbackExpiresInSeconds
 	}
-	storeAuthTokenPair(backendrpc.TokenPairResponse{
-		AccessToken:      res.accessToken,
-		ExpiresInSeconds: expires,
-	})
+	if accountID == "" {
+		storeAuthTokenPair(backendrpc.TokenPairResponse{AccessToken: res.accessToken, ExpiresInSeconds: expires})
+	} else {
+		// Boot publishes only memory state. Its caller starts sync after the
+		// fixed identity has been checked, so no watch is started here.
+		browserstore.SetMemory(authAccessTokenKey, res.accessToken)
+		browserstore.SetMemory(authExpiresInKey, fmt.Sprint(expires))
+		dropSharedConn()
+	}
 	// storeAuthTokenPair only writes a refresh token when the pair carries
 	// one; a cookie session must never have one in storage (it would flip
 	// hasRotatableSession to the token-pair meaning), so be sure.
 	lsRemove(authRefreshTokenKey)
 	if strings.TrimSpace(res.csrf) != "" {
 		lsSet(authCSRFKey, strings.TrimSpace(res.csrf))
-		fresh := uistate.LoadPrefs()
-		fresh.ServerCSRF = strings.TrimSpace(res.csrf)
-		uistate.PersistPrefs(fresh.Normalize())
 	}
 	if strings.TrimSpace(res.userID) != "" {
-		setSignedInUserID(res.userID)
+		if accountID == "" {
+			setSignedInUserID(res.userID)
+		} else {
+			browserstore.SetMemory(syncUserIDKey, accountID)
+		}
 	}
-	// Same write-side rule as doRefreshAccessToken: do not release the
-	// cross-tab lock until the rotated access token has COMMITTED, or the
-	// next tab re-reads the old token, decides nothing rotated, and POSTs
-	// a second refresh presenting the cookie this call just consumed.
-	browserstore.Barrier()
+	// The fetch Promise has settled, so the browser has installed the rotated
+	// HttpOnly cookie. Access and CSRF remain page memory only.
+	uistate.BumpAuthRevision()
 	return true
 }
 
-// cookieSessionCSRF resolves the double-submit token to present with a
-// cookie-session request: the latest value tracked beside the tokens
-// wins, falling back to the prefs copy from the original sign-in.
+// cookieSessionCSRF reads the current same-origin cookie, then page memory.
+// A persisted preference is never a credential source.
 func cookieSessionCSRF(pr prefs.Prefs) string {
+	scope, err := newRefreshScope("cookie-server", "cookie-account", pr.ServerURL, currentPageOrigin())
+	if err != nil || scope.Mode != authRefreshModeCookie {
+		return ""
+	}
+	// Read on every request: another tab may have refreshed the cookie while
+	// this tab waited for the lock. The server must expose this non-HttpOnly
+	// double-submit cookie at Path=/ so the SPA can read it after a reload.
+	doc := js.Global().Get("document")
+	if doc.Truthy() && doc.Get("cookie").Type() == js.TypeString {
+		for _, part := range strings.Split(doc.Get("cookie").String(), ";") {
+			pair := strings.SplitN(strings.TrimSpace(part), "=", 2)
+			if len(pair) == 2 && pair[0] == "cashflux_csrf" && pair[1] != "" {
+				browserstore.SetMemory(authCSRFKey, pair[1])
+				return pair[1]
+			}
+		}
+	}
 	if v := strings.TrimSpace(lsGet(authCSRFKey)); v != "" {
 		return v
 	}
-	return strings.TrimSpace(pr.ServerCSRF)
+	return ""
 }
 
 // fetchCookieRefresh POSTs to {endpoint}/v1/auth/refresh with cookies
@@ -302,6 +316,11 @@ func fetchCookieRefresh(ctx context.Context, endpoint, csrf string) (cookieRefre
 	opts.Set("method", "POST")
 	opts.Set("credentials", "include")
 	opts.Set("headers", headers)
+	controller := js.Undefined()
+	if constructor := js.Global().Get("AbortController"); constructor.Truthy() {
+		controller = constructor.New()
+		opts.Set("signal", controller.Get("signal"))
+	}
 
 	var onResponse, onJSON, onError js.Func
 	release := func() {
@@ -361,9 +380,14 @@ func fetchCookieRefresh(ctx context.Context, endpoint, csrf string) (cookieRefre
 	case res := <-done:
 		return res, true
 	case <-ctx.Done():
-		// The Promise chain may still settle; its terminal callback sends
-		// into the buffered channel and releases the funcs itself, so
-		// abandoning it here blocks nothing and leaks nothing.
+		// A canceled fetch must settle before its refresh lock is released.
+		// Otherwise the next tab could rotate while this response is still
+		// installing a cookie. Modern browsers abort; older ones wait for
+		// the outstanding exchange rather than release its lock early.
+		if controller.Truthy() {
+			controller.Call("abort")
+		}
+		<-done
 		return cookieRefreshResult{}, false
 	}
 }

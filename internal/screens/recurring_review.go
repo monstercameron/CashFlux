@@ -390,7 +390,7 @@ func rhyReviewSection(_ rhyReviewProps) ui.Node {
 	// ── Group B — Smart+ (opt-in) ──
 	settings := app.Settings()
 	pr := uistate.LoadPrefs().Normalize()
-	hasKey := settings.OpenAIKey != "" || pr.BackendActive()
+	hasKey := settings.OpenAIKey != "" || uistate.BackendConnectionActive(pr)
 	payload := rhyLeftoverPayload(leftovers, base)
 	estTokens := len(payload) / 4
 
@@ -412,7 +412,7 @@ func rhyReviewSection(_ rhyReviewProps) ui.Node {
 		}
 		done := func(c string, _ ai.Usage) { aiLoading.Set(false); aiText.Set(c) }
 		fail := func(e string) { aiLoading.Set(false); aiErr.Set(e) }
-		if pr.BackendActive() {
+		if uistate.BackendConnectionActive(pr) {
 			ai.SendProxyChat(pr.ServerURL, uistate.EffectiveServerToken(pr.ServerToken), model, messages, 0.4, done, fail)
 		} else {
 			ai.SendChat(settings.OpenAIKey, ai.DefaultBaseURL, model, messages, 0.4, done, fail)

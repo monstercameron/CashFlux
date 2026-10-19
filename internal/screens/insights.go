@@ -69,7 +69,7 @@ func Insights() ui.Node {
 	// MIA-extend (#445-9): read the active scope at a stable hook slot so all
 	// spend calcs below can be pre-filtered consistently.
 	insightsScopeAtom := uistate.UseActiveScope()
-	useBackendAI := pr.BackendActive()
+	useBackendAI := uistate.BackendConnectionActive(pr)
 	// Model + thinking level are adjustable inline from the assistant header (a quick
 	// switch, no trip to Settings). Seed from the saved settings; picks persist back so
 	// they stick and stay in sync with Settings. modelList is populated live from

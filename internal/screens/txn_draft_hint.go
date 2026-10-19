@@ -83,12 +83,12 @@ func TxnDraftHint(props TxnDraftHintProps) ui.Node {
 	settings := uistate.LoadSmartSettings()
 	raw := strings.TrimSpace(sentence.Get())
 
-	backendAI := app != nil && aiProviderConfigured(app, pr.Normalize().BackendActive())
+	backendAI := app != nil && aiProviderConfigured(app, uistate.BackendConnectionActive(pr))
 	aiEnabled := backendAI && settings.IsEnabled(txnDraftAICode) && !settings.IsMuted(txnDraftAICode)
 	freeEnabled := settings.IsEnabled(txnDraftFreeCode) && !settings.IsMuted(txnDraftFreeCode)
 	aiConn := smartAIConn{}
 	if app != nil {
-		aiConn = resolveAIConn(app, pr.Normalize().BackendActive(), pr.ServerURL, pr.ServerToken)
+		aiConn = resolveAIConn(app, uistate.BackendConnectionActive(pr), pr.ServerURL, pr.ServerToken)
 	}
 
 	local := parseTxnSentence(raw)

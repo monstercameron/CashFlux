@@ -5,7 +5,10 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -72,6 +75,34 @@ func datasetServerIDForURL(serverURL string) string {
 	datasetServerIDCache.ids[endpoint] = serverID
 	datasetServerIDCache.Unlock()
 	return serverID
+}
+
+// stableSessionServerID refuses URL fallbacks for credential scope selection.
+func stableSessionServerID(ctx context.Context, endpoint string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint+"/v1/version", nil)
+	if err != nil {
+		return "", fmt.Errorf("resolve session server: %w", err)
+	}
+	resp, err := (&http.Client{Timeout: 15 * time.Second}).Do(req)
+	if err != nil {
+		return "", fmt.Errorf("resolve session server: %w", err)
+	}
+	defer resp.Body.Close()
+	var version serverVersionIdentity
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("resolve session server: HTTP %d", resp.StatusCode)
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<16)).Decode(&version); err != nil {
+		return "", fmt.Errorf("resolve session server: %w", err)
+	}
+	id := strings.TrimSpace(version.ServerID)
+	if id == "" {
+		return "", errors.New("session refresh: the server did not provide a stable identity")
+	}
+	datasetServerIDCache.Lock()
+	datasetServerIDCache.ids[normalizedDatasetServerURL(endpoint)] = id
+	datasetServerIDCache.Unlock()
+	return id, nil
 }
 
 func normalizedDatasetServerURL(serverURL string) string {
@@ -194,7 +225,7 @@ func refreshSignedInUserID(serverURL, token string) (string, bool) {
 // to a DIFFERENT account is left exactly where it is: it is a decision the user
 // has not made yet, and a sync layer that quietly deleted it would destroy the
 // very thing a rebind exists to rescue.
-func adoptIdentityForSync(serverURL, token string) {
+func adoptIdentityForSync(serverURL, token string) bool {
 	userID, ok := refreshSignedInUserID(serverURL, token)
 	if !ok {
 		setSyncStatus(syncStatus{
@@ -202,18 +233,23 @@ func adoptIdentityForSync(serverURL, token string) {
 			Pending: pendingSyncCount(),
 			Message: uistate.T("sync.identityUnknown"),
 		})
-		return
+		return false
+	}
+	if scope := outgoingRefreshScope(); scope != nil && (scope.AccountID != userID || scope.Endpoint != normalizedBackendEndpoint(serverURL)) {
+		setSyncStatus(syncStatus{State: syncStateIdentityUnknown, Message: uistate.T("sync.identityUnknown")})
+		return false
 	}
 	changed := setSignedInUserID(userID)
 	queue := loadSyncQueue()
 	if len(queue) == 0 {
-		return
+		return true
 	}
 	adopted := adoptQueueOwnership(queue, userID)
 	if changed || !sameQueueOwnership(queue, adopted) {
 		saveSyncQueue(adopted)
 	}
 	refreshRebindStatus()
+	return true
 }
 
 // adoptQueueOwnership stamps unowned entries with userID.
@@ -461,4 +497,154 @@ func reloadAfterIdentityChange(reason string) {
 		browserstore.Barrier()
 		reloadPage()
 	}()
+}
+
+// pageRefreshState is selected once during boot, including failed boot. It must
+// never be replaced by an in-page sign-in; that identity takes effect on reload.
+var pageRefreshState struct {
+	sync.Mutex
+	scope   *refreshScope
+	ready   bool
+	blocked bool
+}
+
+func outgoingRefreshScope() *refreshScope {
+	pageRefreshState.Lock()
+	defer pageRefreshState.Unlock()
+	if pageRefreshState.scope == nil {
+		return nil
+	}
+	scope := *pageRefreshState.scope
+	return &scope
+}
+
+func beginSessionTransition() {
+	pageRefreshState.Lock()
+	pageRefreshState.blocked = true
+	pageRefreshState.Unlock()
+	stopBackendWatch()
+	stopProactiveRefreshTimer()
+	dropSharedConn()
+}
+
+func backendSessionReady() bool {
+	pageRefreshState.Lock()
+	defer pageRefreshState.Unlock()
+	return !pageRefreshState.blocked && (pageRefreshState.scope == nil || pageRefreshState.ready)
+}
+
+// bootstrapSelectedSession uses only the protected routing account metadata and
+// the configured server's stable identity. It never enumerates credentials or
+// uses the dataset owner to select a session.
+func bootstrapSelectedSession(ctx context.Context) error {
+	pr := uistate.LoadPrefs().Normalize()
+	browserstore.Reload(syncUserIDKey, authRefreshModeKey)
+	accountRaw, _, accountErr := browserstore.GetSecure(syncUserIDKey)
+	modeRaw, _, modeErr := browserstore.GetSecure(authRefreshModeKey)
+	if accountErr != nil || modeErr != nil {
+		beginSessionTransition()
+		clearRefreshMemory()
+		return fmt.Errorf("read saved session route: %w", errors.Join(accountErr, modeErr))
+	}
+	account := strings.TrimSpace(accountRaw)
+	if account == "" {
+		clearRefreshMemory()
+		if strings.TrimSpace(modeRaw) != "" {
+			beginSessionTransition()
+			return errors.New("session refresh: the saved session has no routing account")
+		}
+		return nil
+	}
+	if strings.TrimSpace(pr.ServerToken) != "" && strings.TrimSpace(modeRaw) == "" {
+		clearRefreshMemory()
+		return nil // explicitly configured static self-host credential
+	}
+	pageRefreshState.Lock()
+	pageRefreshState.blocked = true
+	pageRefreshState.Unlock()
+	endpoint := normalizedBackendEndpoint(pr.ServerURL)
+	// The encrypted routing descriptor lets sign-out delete the known outgoing
+	// scope even offline. It never authorizes sync without /v1/version validation.
+	var saved refreshScope
+	savedRaw := strings.TrimSpace(modeRaw)
+	haveSaved := strings.HasPrefix(savedRaw, "{")
+	if haveSaved {
+		if err := json.Unmarshal([]byte(savedRaw), &saved); err != nil || saved.validate() != nil || saved.AccountID != account {
+			clearRefreshMemory()
+			return errors.New("session refresh: the saved account route needs recovery")
+		}
+		pageRefreshState.Lock()
+		pageRefreshState.scope = &saved
+		pageRefreshState.Unlock()
+		if saved.Endpoint != endpoint {
+			clearRefreshMemory()
+			return errors.New("session refresh: the saved session belongs to another server address")
+		}
+	}
+	serverID, err := stableSessionServerID(ctx, endpoint)
+	if err != nil {
+		clearRefreshMemory()
+		return err
+	}
+	scope, err := newRefreshScope(serverID, account, endpoint, currentPageOrigin())
+	if err != nil {
+		clearRefreshMemory()
+		return err
+	}
+	if haveSaved && scope != saved {
+		clearRefreshMemory()
+		return errors.New("session refresh: the server identity or session mode changed; sign in again")
+	}
+	pageRefreshState.Lock()
+	pageRefreshState.scope = &scope
+	pageRefreshState.Unlock()
+	if err := bootstrapScopedSession(ctx, scope); err != nil {
+		clearRefreshMemory()
+		return err
+	}
+	verified, ok := refreshSignedInUserID(scope.Endpoint, lsGet(authAccessTokenKey))
+	if !ok || verified != account {
+		clearRefreshMemory()
+		return errors.New("session refresh: the refreshed account could not be confirmed")
+	}
+	browserstore.SetMemory(syncUserIDKey, account)
+	pageRefreshState.Lock()
+	pageRefreshState.ready, pageRefreshState.blocked = true, false
+	pageRefreshState.Unlock()
+	return nil
+}
+
+// resolveAuthScope verifies the freshly issued access token before constructing
+// the target. No unverified JWT claim or OAuth message chooses an account.
+func resolveAuthScope(ctx context.Context, endpoint, access string) (refreshScope, error) {
+	endpoint = normalizedBackendEndpoint(endpoint)
+	account, ok := refreshSignedInUserID(endpoint, access)
+	if !ok {
+		return refreshScope{}, errors.New("Sign-in could not confirm your account. Please try again.")
+	}
+	serverID, err := stableSessionServerID(ctx, endpoint)
+	if err != nil {
+		return refreshScope{}, err
+	}
+	return newRefreshScope(serverID, account, endpoint, currentPageOrigin())
+}
+
+// saveSessionRoutingThen persists only account routing metadata. The credential
+// has already committed; a routing failure never reloads into a different scope.
+func saveSessionRoutingThen(scope refreshScope, done func(error)) {
+	if err := scope.validate(); err != nil {
+		done(err)
+		return
+	}
+	raw, err := json.Marshal(scope)
+	if err != nil {
+		done(fmt.Errorf("encode session routing: %w", err))
+		return
+	}
+	browserstore.SetSecureBatch(map[string]string{syncUserIDKey: scope.AccountID, authRefreshModeKey: string(raw)}, nil, func(err error) {
+		if err == nil {
+			browserstore.SetMemory(authRefreshModeKey, scope.Mode)
+		}
+		done(err)
+	})
 }

@@ -47,5 +47,5 @@ func AIKeyConfigured() bool {
 	if app == nil {
 		return false
 	}
-	return app.Settings().OpenAIKey != "" || uistate.LoadPrefs().Normalize().BackendActive()
+	return app.Settings().OpenAIKey != "" || uistate.BackendConnectionActive(uistate.LoadPrefs().Normalize())
 }

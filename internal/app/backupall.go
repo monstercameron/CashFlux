@@ -11,6 +11,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/backup"
+	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/restorepreview"
 	"github.com/monstercameron/CashFlux/internal/store"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -160,9 +161,13 @@ func applyBackup(env backup.Envelope) {
 			}
 		}
 	}
+	generation := id.New()
+	if activeDataset != "" {
+		writes = append(writes, workspaceKeyValue{datasetGenKey, generation})
+	}
 	reloadAfterDurableWrites(func(done func()) { writeKeyValuesThen(writes, done) }, func() {
 		if activeDataset != "" {
-			datasetMyGen = bumpDatasetGen()
+			datasetMyGen = generation
 		}
 	}, reloadPage)
 }

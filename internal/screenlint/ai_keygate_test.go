@@ -105,7 +105,7 @@ func TestEveryGrandfatheredSurfaceChecksBothHalves(t *testing.T) {
 			if strings.Contains(line, "Backend") || strings.Contains(line, "backend") {
 				continue
 			}
-			if strings.Contains(text, "BackendActive()") {
+			if strings.Contains(text, "BackendActive()") || strings.Contains(text, "BackendConnectionActive(") {
 				continue
 			}
 			t.Errorf("%s: %q refuses on the direct key alone and the file never consults the backend",

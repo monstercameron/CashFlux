@@ -31,11 +31,21 @@ func registerR3K() {
 		prop("min-height", "48px"),
 		prop("padding", "0 1rem"),
 		prop("overflow", "visible"),
-		prop("flex-wrap", "wrap"),
-		prop("white-space", "normal"),
-		prop("background", "var(--bg-card)"),
-		prop("border-top", "1px solid var(--border)"),
+		prop("flex-wrap", "nowrap"),
+		prop("white-space", "nowrap"),
+		prop("background", "var(--bg-elev)"),
+		prop("border", "1px solid var(--border)"),
+		prop("border-radius", "var(--radius-lg)"),
 		prop("box-shadow", "0 -4px 18px rgba(0,0,0,.18)"),
+	)
+	ruleMedia("(min-width: 1280px)", `.txn-bulkbar-overlay .add-item[data-testid="bulk-mark-reviewed-menu"], .txn-bulkbar-overlay .add-item[data-testid="bulk-delete-menu"]`, display("none"))
+	ruleMedia("(max-width: 1279px)", `.txn-bulkbar-overlay .txn-bulk-inline-reviewed, .txn-bulkbar-overlay .txn-bulk-inline-delete`, display("none"))
+	ruleMedia("(max-width: 1279px)", `.txn-bulkbar-overlay .add-item[data-testid="bulk-mark-reviewed-menu"], .txn-bulkbar-overlay .add-item[data-testid="bulk-delete-menu"]`, display("flex"))
+	rule(".txn-bulkbar-overlay .bulk-owner-actions",
+		display("flex"), alignItems("center"), gap("0.5rem"), flex("0 1 auto"), whiteSpace("nowrap"),
+	)
+	rule(".txn-bulkbar-overlay .cf-multipicker-trigger",
+		prop("max-width", "12rem"), prop("overflow", "hidden"), prop("text-overflow", "ellipsis"),
 	)
 	// The shell mirrors the live rail state onto html.cf-rail-c. Deriving the
 	// overlay's left edge and available width from that state keeps its center

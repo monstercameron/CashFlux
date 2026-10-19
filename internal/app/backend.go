@@ -248,28 +248,33 @@ func startOAuthLogin(endpoint, provider string, onDone func(token, csrf, userID 
 	}
 }
 
-func signOutBackendOAuth(endpoint, token, csrf string, onDone func()) {
+func signOutBackendOAuth(endpoint, token, csrf string, onDone func(error)) {
+	csrf = strings.TrimSpace(csrf)
+	if csrf == "" {
+		onDone(fmt.Errorf("cookie sign-out requires the CSRF security cookie"))
+		return
+	}
 	endpoint = normalizedBackendEndpoint(endpoint)
 	headers := js.Global().Get("Headers").New()
 	if strings.TrimSpace(token) != "" {
 		headers.Call("set", "Authorization", "Bearer "+strings.TrimSpace(token))
 	}
-	if strings.TrimSpace(csrf) != "" {
-		headers.Call("set", "X-CashFlux-CSRF", strings.TrimSpace(csrf))
-	}
+	headers.Call("set", "X-CashFlux-CSRF", csrf)
 	opts := js.Global().Get("Object").New()
 	opts.Set("method", "POST")
 	opts.Set("credentials", "include")
 	opts.Set("headers", headers)
-	js.Global().Call("fetch", endpoint+"/v1/auth/logout", opts)
-	onDone()
+	go func() {
+		err := fetchRequestStatus(endpoint+"/v1/auth/refresh/logout", opts, "cookie sign-out")
+		onDone(err)
+	}()
 }
 
 // signOutBackendSession revokes the credential family that actually backs the
 // current client. Password/pairing sessions keep their refresh credential in
 // browser storage and must use AuthService.Logout; OAuth sessions retain the
 // existing cookie-backed HTTP logout path.
-func signOutBackendSession(endpoint, token, csrf string, onDone func()) {
+func signOutBackendSession(endpoint, token, csrf string, onDone func(error)) {
 	refresh := strings.TrimSpace(lsGet(authRefreshTokenKey))
 	if refresh == "" {
 		signOutBackendOAuth(endpoint, token, csrf, onDone)
@@ -283,10 +288,41 @@ func signOutBackendSession(endpoint, token, csrf string, onDone func()) {
 			dialToken = "refresh"
 		}
 		var out backendrpc.LogoutResponse
-		_ = invokeWorkerRPC(ctx, normalizedBackendEndpoint(endpoint), dialToken,
+		err := invokeWorkerRPC(ctx, normalizedBackendEndpoint(endpoint), dialToken,
 			backendrpc.MethodAuthLogout, backendrpc.LogoutRequest{RefreshToken: refresh}, &out)
-		onDone()
+		onDone(err)
 	}()
+}
+
+// fetchRequestStatus awaits a browser fetch and returns only after the response
+// status is known. Cookie-backed session changes must not be acknowledged before
+// the server confirms the durable operation.
+func fetchRequestStatus(endpoint string, opts js.Value, operation string) error {
+	type result struct {
+		status int
+		err    error
+	}
+	done := make(chan result, 1)
+	var received, failed js.Func
+	received = js.FuncOf(func(_ js.Value, args []js.Value) any {
+		done <- result{status: args[0].Get("status").Int()}
+		return nil
+	})
+	failed = js.FuncOf(func(_ js.Value, _ []js.Value) any {
+		done <- result{err: fmt.Errorf("%s request could not reach the server", operation)}
+		return nil
+	})
+	defer received.Release()
+	defer failed.Release()
+	js.Global().Call("fetch", endpoint, opts).Call("then", received).Call("catch", failed)
+	res := <-done
+	if res.err != nil {
+		return res.err
+	}
+	if res.status < 200 || res.status >= 300 {
+		return fmt.Errorf("%s failed: HTTP %d", operation, res.status)
+	}
+	return nil
 }
 
 func startBillingCheckout(endpoint, token, interval, provider string, onError func(string)) {

@@ -2,30 +2,21 @@
 
 //go:build js && wasm
 
-// Package app — boot/persist wiring for dataset-at-rest encryption (C45).
-//
-// Design (safety first — the app must never lock a user out of their own data):
-//
-//   - Encryption is opt-in and rides the existing passcode lock. The dataset is
-//     encrypted at rest ONLY while the lock is active (enabled and not suspended)
-//     AND the session passcode is known. With no passcode the dataset stays
-//     plaintext, exactly as before — IsEnvelope is an O(4) marker check, so every
-//     existing (plaintext, "{"-prefixed) dataset flows through untouched.
-//   - The derived AES key never leaves the JS runtime; only salt+IV+ciphertext are
-//     persisted (see internal/cryptobox + datasetcrypto.go).
-//   - On boot, an encrypted dataset is detected and its hydration is DEFERRED until
-//     the passcode gate is satisfied. The autosave is held off while a decrypt is
-//     pending so it can never overwrite the ciphertext with an empty plaintext
-//     dataset.
-//   - A wrong passcode never changes the pending ciphertext. Once the stored
-//     passcode check succeeds, unreadable encrypted bytes are quarantined so the
-//     app cannot seed or autosave over them.
+// The browserstore boundary always encrypts local records. The legacy inner
+// passcode envelope remains for v1 migration and SEC6 transport encryption.
 package app
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"errors"
+	"fmt"
 
+	"github.com/monstercameron/CashFlux/internal/aicred"
+	"github.com/monstercameron/CashFlux/internal/applock"
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/atrest"
+	"github.com/monstercameron/CashFlux/internal/browserstore"
 	"github.com/monstercameron/CashFlux/internal/cryptobox"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 )
@@ -33,7 +24,7 @@ import (
 // errSyncDatasetLocked is returned by the backend hydrate path when a pulled
 // snapshot is an encryption envelope but the session passcode is not known (the
 // app is locked). The caller must NOT apply or drop it — the server keeps the
-// snapshot and a fresh pull runs after the next unlock (see onAppUnlocked).
+// snapshot and a fresh pull runs after the next secure unlock.
 var errSyncDatasetLocked = errors.New("encrypted sync: dataset locked (passcode unknown)")
 
 // errSyncEncryptEmpty guards the push path: if encryption yields empty or non-envelope
@@ -105,27 +96,78 @@ func migrateDatasetAtRest() {
 	forceBackendResyncActiveWorkspace()
 }
 
-// datasetEncryptionActive reports whether the dataset should be encrypted at rest:
+// datasetEncryptionActive is SEC6's unchanged v1 transport/inner-envelope gate:
 // the lock is active (enabled and not suspended) and the session passcode is known.
-// When false the dataset is written as plaintext (the historical behaviour), which
-// also performs the reverse migration after the lock is removed.
+// The outer browserstore boundary always encrypts local records in both modes.
 func datasetEncryptionActive() bool {
 	return loadAppLock().Active() && activePasscode != ""
 }
 
-// onAppUnlocked records the verified passcode for the session and, when a dataset
-// envelope is waiting, decrypts and hydrates it. Called from the passcode gate the
-// moment a correct passcode is entered.
-func onAppUnlocked(passcode string) {
-	activePasscode = passcode
-	if pendingEnvelopeRaw != "" {
-		hydrateFromPasscode(passcode)
+// unlockProtectedSession opens the WDK and authenticated cache before any
+// legacy passcode envelope is hydrated or the caller dismisses the gate.
+func unlockProtectedSession(secret string, recovery bool, done func(error)) {
+	unlocked := func(err error) {
+		if err != nil {
+			done(err)
+			return
+		}
+		go func() {
+			passcode := secret
+			if recovery {
+				passcode = ""
+			}
+			restored, changed, err := recoverSecureLockTransition()
+			if err != nil {
+				done(err)
+				return
+			}
+			if changed {
+				passcode = restored
+			}
+			activePasscode = passcode
+			if pendingEnvelopeRaw != "" {
+				hydrateFromPasscodeThen(passcode, done)
+				return
+			}
+			if appstate.Default != nil {
+				hydrateDeviceAIKey()
+				if backendConnectionActive(uistate.LoadPrefs().Normalize()) {
+					pullActiveWorkspaceFromBackend(true)
+				}
+			}
+			done(nil)
+		}()
 	}
-	// Now that the passcode is known, fetch any encrypted server snapshot a pull
-	// deferred while locked (errSyncDatasetLocked). Harmless no-op if the backend
-	// is off or there is nothing newer to apply.
-	if uistate.LoadPrefs().Normalize().BackendActive() {
-		pullActiveWorkspaceFromBackend(true)
+	if recovery {
+		browserstore.UnlockRecoverySecure(secret, unlocked)
+	} else {
+		browserstore.UnlockSecureThen(secret, unlocked)
+	}
+}
+
+// unlockLegacyProfile upgrades a v1 UI-only lock to a passcode-wrapped WDK.
+// Verify the retained legacy credential before changing any key metadata.
+func unlockLegacyProfile(passcode string, done func(error)) {
+	if !loadAppLock().Verify(passcode) {
+		done(errLegacyDatasetLocked)
+		return
+	}
+	opened := func(err error) {
+		if err != nil {
+			done(err)
+			return
+		}
+		activePasscode = passcode
+		if pendingEnvelopeRaw != "" {
+			hydrateFromPasscodeThen(passcode, done)
+		} else {
+			done(nil)
+		}
+	}
+	if state := browserstore.SecureKeyState(); state != nil && !state.AppLock {
+		browserstore.EnableAppLockSecure(passcode, opened)
+	} else {
+		opened(nil)
 	}
 }
 
@@ -134,33 +176,45 @@ func onAppUnlocked(passcode string) {
 // leaves the ciphertext pending; after the passcode is verified, unreadable or
 // unimportable data is quarantined before autosave is released.
 func hydrateFromPasscode(passcode string) {
+	hydrateFromPasscodeThen(passcode, func(error) {})
+}
+
+// hydrateFromPasscodeThen acknowledges only an imported dataset. Failure keeps
+// the gate closed, even when the outer WDK was unlocked successfully.
+func hydrateFromPasscodeThen(passcode string, done func(error)) {
 	app := appstate.Default
 	if app == nil {
+		done(errors.New("dataset hydration is unavailable"))
 		return
 	}
 	if !loadAppLock().Verify(passcode) {
 		app.Log().Error("encrypted dataset: passcode verification failed; keeping ciphertext")
+		done(errLegacyDatasetLocked)
 		return
 	}
 	env, ok := cryptobox.Parse([]byte(pendingEnvelopeRaw))
 	if !ok {
 		app.Log().Error("encrypted dataset: envelope unreadable after verified passcode; quarantining ciphertext")
 		quarantinePendingEnvelope("The encrypted dataset envelope is unreadable after the passcode was verified.")
+		done(errors.New("legacy dataset envelope is unreadable"))
 		return
 	}
 	decryptDataset(env, passcode, func(plain []byte, err error) {
 		if err != nil {
 			app.Log().Error("encrypted dataset: decrypt failed after verified passcode; quarantining ciphertext", "err", err)
 			quarantinePendingEnvelope("The encrypted dataset could not be decrypted after the passcode was verified.")
+			done(err)
 			return
 		}
 		if err := app.ImportJSON(plain); err != nil {
 			app.Log().Error("encrypted dataset: import after decrypt failed; quarantining ciphertext", "err", err)
 			quarantinePendingEnvelope("The decrypted dataset could not be imported.")
+			done(err)
 			return
 		}
 		// Grant autosave authority only after import succeeds. Set both flags before
 		// clearing the pending envelope, which otherwise releases the autosave guard.
+		activePasscode = passcode
 		hydrationSucceeded = true
 		hadLocalDataset = true
 		pendingEnvelopeRaw = "" // releases the autosave and unblocks normal operation
@@ -184,6 +238,7 @@ func hydrateFromPasscode(passcode string) {
 		// The OpenAI key is now decrypted and available — refresh the lock-screen
 		// quote-of-the-day cache so the next lock shows a fresh AI quote (C: lock quote).
 		refreshDailyLockQuote()
+		done(nil)
 	})
 }
 
@@ -193,4 +248,207 @@ func quarantinePendingEnvelope(reason string) {
 	raw := pendingEnvelopeRaw
 	pendingEnvelopeRaw = ""
 	quarantineDataset(raw, reason)
+}
+
+// secureLockTransition bridges the durable keyring commit and the atomic record
+// commit. The journal itself is always encrypted by the WDK. If the page closes
+// between them, either surviving wrap opens this journal and completes the same
+// prepared migration before any protected preference/dataset is consumed.
+// Passcode is never logged, exported or stored outside this encrypted record.
+type secureLockTransition struct {
+	Passcode string            `json:"passcode"`
+	Values   map[string]string `json:"values"`
+	Expected map[string]string `json:"expected"`
+}
+
+const secureLockTransitionKey = "cashflux:applock-transition"
+
+// awaitSecureAction is goroutine-only; it must never park a JS event callback
+// or the browserstore queue worker waiting for a later job on that same queue.
+func awaitSecureAction(start func(func(error))) error {
+	done := make(chan error, 1)
+	start(func(err error) { done <- err })
+	return <-done
+}
+
+func prepareSecureLockTransition(passcode string, config applock.Config, discardVault bool) (*secureLockTransition, error) {
+	t := &secureLockTransition{Passcode: passcode, Values: map[string]string{}, Expected: map[string]string{}}
+	configRaw, err := json.Marshal(config)
+	if err != nil {
+		return nil, fmt.Errorf("prepare App Lock settings: %w", err)
+	}
+	t.Values[appLockKey] = string(configRaw)
+	for _, key := range []string{appLockKey, datasetStoreKey, credVaultStoreKey, aiCredentialStoreKey, webauthnCredKey, webauthnSaltKey, webauthnVaultKey} {
+		raw, _, err := browserstore.GetSecure(key)
+		if err != nil {
+			return nil, err
+		}
+		t.Expected[key] = raw
+		if key != appLockKey {
+			t.Values[key] = raw
+		}
+	}
+	// The legacy vault and dataset still have an inner passcode envelope.
+	// Prepare replacements in memory; never expose a half-rekeyed vault.
+	if raw := t.Values[credVaultStoreKey]; raw != "" && !discardVault {
+		encoded, err := base64.StdEncoding.DecodeString(raw)
+		if err != nil {
+			return nil, fmt.Errorf("%w: invalid base64", errCredVaultUnreadable)
+		}
+		plain, err := decryptEnvelopeSync(encoded, activePasscode)
+		if err != nil {
+			return nil, fmt.Errorf("%w: %v", errCredVaultUnreadable, err)
+		}
+		var vault credVault
+		if err := json.Unmarshal(plain, &vault); err != nil {
+			return nil, fmt.Errorf("%w: invalid contents", errCredVaultUnreadable)
+		}
+		next, err := encryptDatasetSync(plain, passcode)
+		if err != nil {
+			return nil, err
+		}
+		t.Values[credVaultStoreKey] = base64.StdEncoding.EncodeToString(next)
+	}
+	if discardVault {
+		t.Values[credVaultStoreKey] = ""
+	}
+	if raw := t.Values[datasetStoreKey]; cryptobox.IsEnvelope([]byte(raw)) {
+		plain, err := decryptEnvelopeSync([]byte(raw), activePasscode)
+		if err != nil {
+			return nil, fmt.Errorf("prepare legacy dataset: %w", err)
+		}
+		if passcode == "" {
+			t.Values[datasetStoreKey] = string(plain)
+		} else {
+			next, err := encryptDatasetSync(plain, passcode)
+			if err != nil {
+				return nil, err
+			}
+			t.Values[datasetStoreKey] = string(next)
+		}
+	}
+	if raw := t.Values[aiCredentialStoreKey]; raw != "" {
+		record, err := aicred.Parse([]byte(raw))
+		if err != nil {
+			return nil, fmt.Errorf("prepare AI credential: %w", err)
+		}
+		key := record.Key
+		if record.Envelope != "" {
+			plain, err := decryptEnvelopeSync([]byte(record.Envelope), activePasscode)
+			if err != nil {
+				return nil, fmt.Errorf("prepare AI credential: %w", err)
+			}
+			key = string(plain)
+		}
+		envelope := ""
+		if passcode != "" {
+			encrypted, err := encryptDatasetSync([]byte(key), passcode)
+			if err != nil {
+				return nil, err
+			}
+			envelope, key = string(encrypted), ""
+		}
+		next, err := aicred.New(key, envelope, record.Remember)
+		if err != nil {
+			return nil, err
+		}
+		encoded, err := aicred.Marshal(next)
+		if err != nil {
+			return nil, err
+		}
+		t.Values[aiCredentialStoreKey] = string(encoded)
+	}
+	// Invalidate stale PRF passcode envelopes in the same record commit.
+	for _, key := range []string{webauthnCredKey, webauthnSaltKey, webauthnVaultKey} {
+		t.Values[key] = ""
+	}
+	return t, nil
+}
+
+func commitSecureLockTransition(t *secureLockTransition, journal string) error {
+	state := browserstore.SecureKeyState()
+	if state == nil {
+		return atrest.ErrRecoveryRequired
+	}
+	if t.Passcode != "" {
+		if state.AppLock {
+			if err := awaitSecureAction(func(done func(error)) { browserstore.ChangePasscodeSecure(t.Passcode, done) }); err != nil {
+				return err
+			}
+		} else if err := awaitSecureAction(func(done func(error)) { browserstore.EnableAppLockSecure(t.Passcode, done) }); err != nil {
+			return err
+		}
+	} else if state.AppLock {
+		if err := awaitSecureAction(browserstore.DisableAppLockSecure); err != nil {
+			return err
+		}
+	}
+	t.Values[secureLockTransitionKey] = ""
+	t.Expected[secureLockTransitionKey] = journal
+	if err := awaitSecureAction(func(done func(error)) { browserstore.SetSecureBatch(t.Values, t.Expected, done) }); err != nil {
+		return err
+	}
+	activePasscode = t.Passcode
+	lockedPasskey = [3]string{}
+	clearDatasetKeyCache()
+	clearArtifactKeyCache()
+	return nil
+}
+
+func runSecureLockTransition(passcode string, config applock.Config, discardVault bool) error {
+	browserstore.Barrier()
+	if existing, _, err := browserstore.GetSecure(secureLockTransitionKey); err != nil {
+		return err
+	} else if existing != "" {
+		return errors.New("an App Lock change needs to finish before another can start")
+	}
+	t, err := prepareSecureLockTransition(passcode, config, discardVault)
+	if err != nil {
+		return err
+	}
+	raw, err := json.Marshal(t)
+	if err != nil {
+		return fmt.Errorf("prepare App Lock transition: %w", err)
+	}
+	journal := string(raw)
+	if err := awaitSecureAction(func(done func(error)) {
+		browserstore.SetSecureBatch(map[string]string{secureLockTransitionKey: journal}, map[string]string{secureLockTransitionKey: ""}, done)
+	}); err != nil {
+		return err
+	}
+	return commitSecureLockTransition(t, journal)
+}
+
+func recoverSecureLockTransition() (string, bool, error) {
+	raw, _, err := browserstore.GetSecure(secureLockTransitionKey)
+	if err != nil || raw == "" {
+		return "", false, err
+	}
+	var t secureLockTransition
+	if err := json.Unmarshal([]byte(raw), &t); err != nil {
+		return "", false, fmt.Errorf("read pending App Lock change: %w", err)
+	}
+	var config applock.Config
+	if err := json.Unmarshal([]byte(t.Values[appLockKey]), &config); err != nil || config.Enabled != (t.Passcode != "") {
+		return "", false, errors.New("pending App Lock settings are inconsistent")
+	}
+	if config.Enabled && !config.Verify(t.Passcode) {
+		return "", false, errors.New("pending App Lock passcode does not match its settings")
+	}
+	// Refuse a damaged journal rather than acknowledging a key-only transition.
+	for _, key := range []string{appLockKey, datasetStoreKey, credVaultStoreKey, aiCredentialStoreKey, webauthnCredKey, webauthnSaltKey, webauthnVaultKey} {
+		if _, ok := t.Values[key]; !ok {
+			return "", false, errors.New("pending App Lock data is incomplete")
+		}
+		if _, ok := t.Expected[key]; !ok {
+			return "", false, errors.New("pending App Lock preconditions are incomplete")
+		}
+	}
+	if len(t.Values) != 7 || len(t.Expected) != 7 {
+		return "", false, errors.New("pending App Lock data has unexpected records")
+	}
+	if err := commitSecureLockTransition(&t, raw); err != nil {
+		return "", false, err
+	}
+	return t.Passcode, true, nil
 }

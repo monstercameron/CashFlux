@@ -6,7 +6,6 @@ package app
 
 import (
 	"context"
-	"strings"
 	"syscall/js"
 
 	"github.com/monstercameron/CashFlux/internal/backendrpc"
@@ -72,15 +71,19 @@ func TryActivationHandoff() {
 		// lifecycle, the watch and the first pull all behave identically to a code
 		// typed by hand. The server URL is set explicitly because a device arriving
 		// this way may never have had one.
-		p := uistate.LoadPrefs()
+		p := uistate.LoadPrefs().Normalize()
 		p.ServerURL = origin
 		p.ServerMode = prefs.ServerSelfHosted
-		p.ServerToken = strings.TrimSpace(out.AccessToken)
+		p.ServerToken, p.ServerCSRF = "", ""
 		p.BackendDisabled = false
-		uistate.PersistPrefs(p.Normalize())
-		storeAuthTokenPair(out)
-		reloadAfterIdentityChange("device activation sign-in")
-		uistate.PostNotice(uistate.T("authCards.activated"), false)
+		persistAuthSessionWithCommitThen(p, origin, out, true, commitCapturedAuthPreferences, func(err error) {
+			if err != nil {
+				logSyncError("activation handoff sign-in could not be saved", err)
+				uistate.PostNotice("Sign-in could not be saved. Please try again; your saved data is unchanged.", true)
+				return
+			}
+			uistate.PostNotice(uistate.T("authCards.activated"), false)
+		})
 	}()
 }
 

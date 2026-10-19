@@ -61,7 +61,7 @@ func coverAllData(app *appstate.App, member string, vw period.Window, pr prefs.P
 	v := computeBudgetView(app, member, vw, pr, showLastMonth)
 	base = v.Base
 	if base == "" {
-		base = "USD"
+		base = budgetBaseCurrency(base)
 	}
 	weekStart := pr.WeekStartWeekday()
 	payAnchor := budgetPayCycleAnchor(pr.PayCycleAnchor)
@@ -143,10 +143,11 @@ func coverAllForm(props coverAllFormProps) ui.Node {
 	showLM := uistate.UseBudgetsLastMonth().Get()
 	choices := ui.UseState(map[string]string{})
 	errText := ui.UseState("")
+	checkpointSaving := ui.UseState(false)
 	seededSig := ui.UseState("")
 	var overs []coverAllOver
 	var sources []coverAllSource
-	base := "USD"
+	base := budgetBaseCurrency("")
 	if app != nil {
 		overs, sources, base = coverAllData(app, member, vw, pr, showLM)
 	}
@@ -185,6 +186,9 @@ func coverAllForm(props coverAllFormProps) ui.Node {
 	}
 
 	apply := ui.UseEvent(Prevent(func() {
+		if checkpointSaving.Get() {
+			return
+		}
 		if app == nil {
 			return
 		}
@@ -208,120 +212,127 @@ func coverAllForm(props coverAllFormProps) ui.Node {
 
 		// #55: checkpoint before the multi-budget rewrite so Settings → Data can
 		// roll the whole cover-all back in one click.
-		uistate.SaveCheckpoint(uistate.T("ckpt.beforeCoverAll", plural(len(overs), "budget")))
-
-		// Accumulate per-period boost deltas per budget so multiple rows drawing on the
-		// same source (or the same over) net correctly, then write each budget once.
-		type pboost struct {
-			start time.Time
-			delta int64
-		}
-		byBudget := map[string][]pboost{}
-		add := func(id string, start time.Time, delta int64) {
-			byBudget[id] = append(byBudget[id], pboost{start, delta})
-		}
-		applied := 0
-		for _, o := range overs {
-			src := sel[o.ID]
-			if src == "" || o.Shortfall.Amount <= 0 {
-				continue
-			}
-			// Cover the EXACT shortfall (QA L1: a $49.64 overage used to move $49.65).
-			// A budget landing exactly on its limit now classifies "near", not "over",
-			// so the extra clearing cent is no longer needed.
-			cover := o.Shortfall.Amount
-			switch src {
-			case coverAllNextSource:
-				// Borrow from next month's same budget: raise this period, lower the next.
-				add(o.ID, o.ThisStart, cover)
-				add(o.ID, o.NextStart, -cover)
-			default:
-				s, ok := srcByID[src]
-				if !ok {
-					continue
-				}
-				// Move this period's slack from the source budget to the over budget.
-				add(o.ID, o.ThisStart, cover)
-				add(s.ID, s.ThisStart, -cover)
-			}
-			applied++
-		}
-		if applied == 0 {
-			errText.Set(uistate.T("coverAll.doneNone"))
-			return
-		}
-		// Build every budget first and check them ALL before writing any of them.
-		//
-		// This loop moves money between budgets: it lowers a source's cap for the
-		// period and raises the over budget's by the same amount. Writing as it went
-		// meant a rejection partway through left the earlier pairs applied and the
-		// rest not — some budgets robbed with nobody paid. The checkpoint above makes
-		// that recoverable from Settings → Data, but recoverable is not the same as
-		// not happening, and it asks the user to notice first.
-		//
-		// The two failures that can be seen coming are handled here: a viewing role,
-		// which is one check for the whole batch rather than one per budget, and
-		// validation, which is decidable before any write. A storage failure mid-loop
-		// is still possible — the store has no transaction across entities — and that
-		// is what the checkpoint is for.
-		if !app.CanEdit() {
-			errText.Set(uistate.T("budgets.writeReadOnly"))
-			return
-		}
-		var writes []domain.Budget
-		for id, ops := range byBudget {
-			var b domain.Budget
-			found := false
-			for _, bb := range app.Budgets() {
-				if bb.ID == id {
-					b, found = bb, true
-					break
-				}
-			}
-			if !found {
-				continue
-			}
-			gained := false
-			for _, op := range ops {
-				key := budgeting.PeriodKeyWithWeekStart(b.Period, op.start, payAnchor, weekStart)
-				keyStart, _ := time.Parse("2006-01-02", key)
-				b = b.WithPeriodBoost(keyStart, op.delta)
-				if op.delta > 0 {
-					gained = true
-				}
-			}
-			// Stamp the RECEIVING budget so it can be flagged as covered this period.
-			// Only appstate.CoverBudget did this, and cover-all does not go through it
-			// — it writes period boosts directly — so the flag never lit from the one
-			// control most people actually use, and the card's "Covered this period"
-			// badge was dead in that path (Cam, 2026-08-31). A budget that GAVE
-			// (delta < 0) is not covered by the transaction; only a receiver is.
-			if gained {
-				b.CoveredAt = time.Now()
-			}
-			if is := validate.ValidateBudget(b); !is.OK() {
-				errText.Set(budgetErrorText(is))
-				return // nothing has been written yet
-			}
-			writes = append(writes, b)
-		}
-		for _, b := range writes {
-			if err := app.PutBudget(b); err != nil {
-				slog.Error("budgets: cover-all write rejected", "id", b.ID, "err", err)
-				errText.Set(budgetErrorText(err))
+		checkpointSaving.Set(true)
+		uistate.SaveCheckpointThen(uistate.T("ckpt.beforeCoverAll", plural(len(overs), "budget")), func(_ string, checkpointErr error) {
+			checkpointSaving.Set(false)
+			if checkpointErr != nil {
+				uistate.PostNotice(uistate.T("enc34.checkpointFailed"), true)
 				return
 			}
-		}
-		uistate.RequestPersist()
-		uistate.BumpDataRevision()
-		msg := uistate.T("coverAll.doneMany", applied)
-		if applied == 1 {
-			msg = uistate.T("coverAll.doneOne")
-		}
-		uistate.PostNotice(msg, false)
-		if props.OnDone != nil {
-			props.OnDone()
-		}
+
+			// Accumulate per-period boost deltas per budget so multiple rows drawing on the
+			// same source (or the same over) net correctly, then write each budget once.
+			type pboost struct {
+				start time.Time
+				delta int64
+			}
+			byBudget := map[string][]pboost{}
+			add := func(id string, start time.Time, delta int64) {
+				byBudget[id] = append(byBudget[id], pboost{start, delta})
+			}
+			applied := 0
+			for _, o := range overs {
+				src := sel[o.ID]
+				if src == "" || o.Shortfall.Amount <= 0 {
+					continue
+				}
+				// Cover the EXACT shortfall (QA L1: a $49.64 overage used to move $49.65).
+				// A budget landing exactly on its limit now classifies "near", not "over",
+				// so the extra clearing cent is no longer needed.
+				cover := o.Shortfall.Amount
+				switch src {
+				case coverAllNextSource:
+					// Borrow from next month's same budget: raise this period, lower the next.
+					add(o.ID, o.ThisStart, cover)
+					add(o.ID, o.NextStart, -cover)
+				default:
+					s, ok := srcByID[src]
+					if !ok {
+						continue
+					}
+					// Move this period's slack from the source budget to the over budget.
+					add(o.ID, o.ThisStart, cover)
+					add(s.ID, s.ThisStart, -cover)
+				}
+				applied++
+			}
+			if applied == 0 {
+				errText.Set(uistate.T("coverAll.doneNone"))
+				return
+			}
+			// Build every budget first and check them ALL before writing any of them.
+			//
+			// This loop moves money between budgets: it lowers a source's cap for the
+			// period and raises the over budget's by the same amount. Writing as it went
+			// meant a rejection partway through left the earlier pairs applied and the
+			// rest not — some budgets robbed with nobody paid. The checkpoint above makes
+			// that recoverable from Settings → Data, but recoverable is not the same as
+			// not happening, and it asks the user to notice first.
+			//
+			// The two failures that can be seen coming are handled here: a viewing role,
+			// which is one check for the whole batch rather than one per budget, and
+			// validation, which is decidable before any write. A storage failure mid-loop
+			// is still possible — the store has no transaction across entities — and that
+			// is what the checkpoint is for.
+			if !app.CanEdit() {
+				errText.Set(uistate.T("budgets.writeReadOnly"))
+				return
+			}
+			var writes []domain.Budget
+			for id, ops := range byBudget {
+				var b domain.Budget
+				found := false
+				for _, bb := range app.Budgets() {
+					if bb.ID == id {
+						b, found = bb, true
+						break
+					}
+				}
+				if !found {
+					continue
+				}
+				gained := false
+				for _, op := range ops {
+					key := budgeting.PeriodKeyWithWeekStart(b.Period, op.start, payAnchor, weekStart)
+					keyStart, _ := time.Parse("2006-01-02", key)
+					b = b.WithPeriodBoost(keyStart, op.delta)
+					if op.delta > 0 {
+						gained = true
+					}
+				}
+				// Stamp the RECEIVING budget so it can be flagged as covered this period.
+				// Only appstate.CoverBudget did this, and cover-all does not go through it
+				// — it writes period boosts directly — so the flag never lit from the one
+				// control most people actually use, and the card's "Covered this period"
+				// badge was dead in that path (Cam, 2026-08-31). A budget that GAVE
+				// (delta < 0) is not covered by the transaction; only a receiver is.
+				if gained {
+					b.CoveredAt = time.Now()
+				}
+				if is := validate.ValidateBudget(b); !is.OK() {
+					errText.Set(budgetErrorText(is))
+					return // nothing has been written yet
+				}
+				writes = append(writes, b)
+			}
+			for _, b := range writes {
+				if err := app.PutBudget(b); err != nil {
+					slog.Error("budgets: cover-all write rejected", "id", b.ID, "err", err)
+					errText.Set(budgetErrorText(err))
+					return
+				}
+			}
+			uistate.RequestPersist()
+			uistate.BumpDataRevision()
+			msg := uistate.T("coverAll.doneMany", applied)
+			if applied == 1 {
+				msg = uistate.T("coverAll.doneOne")
+			}
+			uistate.PostNotice(msg, false)
+			if props.OnDone != nil {
+				props.OnDone()
+			}
+		})
 	}))
 	onCancel := ui.UseEvent(func() {
 		if props.OnDone != nil {
@@ -366,7 +377,7 @@ func coverAllForm(props coverAllFormProps) ui.Node {
 		),
 		Div(css.Class("modal-foot"),
 			Button(css.Class("btn"), Type("button"), Attr("data-testid", "cover-all-cancel"), OnClick(onCancel), uistate.T("coverAll.cancel")),
-			Button(css.Class("btn btn-primary"), Type("submit"), Attr("data-testid", "cover-all-apply"), uistate.T("coverAll.apply")),
+			buttonWithDisabled(checkpointSaving.Get(), []any{css.Class("btn btn-primary"), Type("submit"), Attr("data-testid", "cover-all-apply")}, IfElse(checkpointSaving.Get(), Text(uistate.T("enc34.saving")), Text(uistate.T("coverAll.apply")))),
 		),
 	)
 }

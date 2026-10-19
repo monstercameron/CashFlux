@@ -5,6 +5,10 @@
 package app
 
 import (
+	"context"
+	"errors"
+	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 	"syscall/js"
@@ -13,7 +17,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/ai"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/auditview"
+	"github.com/monstercameron/CashFlux/internal/backendrpc"
 	"github.com/monstercameron/CashFlux/internal/backup"
+	"github.com/monstercameron/CashFlux/internal/browserstore"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dashlayout"
@@ -1821,35 +1827,133 @@ func wipeData(onChange func(), notify func(string, bool)) {
 		if !ok {
 			return
 		}
-		app := appstate.Default
-		if app == nil {
-			return
-		}
-		if err := app.Wipe(); err != nil {
+		eraseDataThen(notify)
+	})
+}
+
+func eraseDataThen(notify func(string, bool)) {
+	endPageSessionForWipeThen(uistate.LoadPrefs().Normalize(), func(revokeErr, err error) {
+		if err != nil {
 			notify(uistate.T("settings.wipeErr", err.Error()), true)
 			return
 		}
-		// Nothing is loaded any more, so nobody owns it. Leaving a stale claim
-		// behind would make the next dataset look foreign to the very account
-		// that is about to create it.
-		releaseDatasetOwner()
-		// The store wipe cleared the financial tables and the audit_log table, but two
-		// things live outside that sweep and would otherwise survive: (1) the in-memory
-		// activity feed (the Activity screen's preferred source, re-hydrated from the
-		// table at boot), and (2) the data-derived SMART content — cached AI "messages",
-		// dismissals, last-run stamps, and the digest log — which sit in the PRESERVED
-		// settings KV. Clear both now, before the dataset export below, so a stale feed
-		// or stale smart message can't reappear after the reload.
-		auditview.Feed.Clear()
-		uistate.ClearSmartGenerated()
-		// A wipe means the user is starting fresh — hide the sample banner (L6).
-		uistate.SetSampleActive(false)
-		// Make the wipe authoritative: clear non-settings keys and persist the emptied
-		// store, then reload (after the IndexedDB write commits) so all in-memory state
-		// re-hydrates from the clean slate (nothing survives the wipe).
-		suspendAutosave = true
-		wipeFinancialLocalState(reloadPage)
+		reportWipeRevokeFailure(revokeErr, notify)
+		p := uistate.LoadPrefs().Normalize()
+		p.ServerToken, p.ServerCSRF = "", ""
+		p.BackendDisabled = true
+		commitCapturedAuthPreferences(p, func(err error) {
+			if err != nil {
+				notify(uistate.T("settings.wipeErr", err.Error()), true)
+				return
+			}
+			wipeAfterSession(notify)
+		})
 	})
+}
+
+func reportWipeRevokeFailure(err error, notify func(string, bool)) {
+	if err == nil {
+		return
+	}
+	slog.Warn("server session revoke failed before data erase; session will expire", "error", err)
+	notify(uistate.T("enc39.revokeFailed"), false)
+}
+
+func wipeAfterSession(notify func(string, bool)) {
+	app := appstate.Default
+	if app == nil {
+		return
+	}
+	if err := app.Wipe(); err != nil {
+		notify(uistate.T("settings.wipeErr", err.Error()), true)
+		return
+	}
+	// Nothing is loaded any more, so nobody owns it. Leaving a stale claim
+	// behind would make the next dataset look foreign to the very account
+	// that is about to create it.
+	releaseDatasetOwner()
+	// The store wipe cleared the financial tables and the audit_log table, but two
+	// things live outside that sweep and would otherwise survive: (1) the in-memory
+	// activity feed (the Activity screen's preferred source, re-hydrated from the
+	// table at boot), and (2) the data-derived SMART content — cached AI "messages",
+	// dismissals, last-run stamps, and the digest log — which sit in the PRESERVED
+	// settings KV. Clear both now, before the dataset export below, so a stale feed
+	// or stale smart message can't reappear after the reload.
+	auditview.Feed.Clear()
+	uistate.ClearSmartGenerated()
+	// A wipe means the user is starting fresh — hide the sample banner (L6).
+	uistate.SetSampleActive(false)
+	// Make the wipe authoritative: clear non-settings keys and persist the emptied
+	// store, then reload (after the IndexedDB write commits) so all in-memory state
+	// re-hydrates from the clean slate (nothing survives the wipe).
+	suspendAutosave = true
+	wipeFinancialLocalState(reloadPage)
+}
+
+// endPageSessionForWipeThen ends the current session locally before an erase.
+// Server revocation is best effort, but every local credential and route delete
+// must be durable before the caller is allowed to wipe the household data.
+func endPageSessionForWipeThen(pr prefs.Prefs, done func(revokeErr, localErr error)) {
+	scope := outgoingRefreshScope()
+	if scope == nil {
+		endPageSessionThen(pr, func(err error) { done(nil, err) })
+		return
+	}
+
+	beginSessionTransition()
+	go func() {
+		var revokeErr, credentialErr error
+		withTokenRefreshLock(func() {
+			if scope.Mode == authRefreshModeCookie {
+				csrf := cookieSessionCSRF(prefs.Prefs{ServerURL: scope.Endpoint})
+				if csrf == "" {
+					return
+				}
+				result, completed := fetchCookieRefresh(context.Background(), scope.Endpoint, csrf)
+				if !completed || result.err != nil {
+					revokeErr = result.err
+					if revokeErr == nil {
+						revokeErr = errors.New("server session could not be checked")
+					}
+					return
+				}
+				if result.status != 200 || result.userID != scope.AccountID {
+					return
+				}
+				revokeErr = sessionHTTP(context.Background(), scope.Endpoint, "/v1/auth/refresh/logout", result.accessToken,
+					cookieSessionCSRF(prefs.Prefs{ServerURL: scope.Endpoint}), true, nil, nil)
+				return
+			}
+
+			credential, _, have, err := (scopedRefreshSession{scope: *scope}).load()
+			if err != nil {
+				credentialErr = fmt.Errorf("read local session credential before erase: %w", err)
+				return
+			}
+			if have {
+				var out backendrpc.LogoutResponse
+				revokeErr = invokeWorkerRPC(context.Background(), scope.Endpoint, "refresh", backendrpc.MethodAuthLogout,
+					backendrpc.LogoutRequest{RefreshToken: credential.Token}, &out)
+			}
+		})
+		if credentialErr != nil {
+			done(nil, credentialErr)
+			return
+		}
+		clearScopedSessionThen(*scope, func(err error) {
+			if err != nil {
+				done(nil, err)
+				return
+			}
+			browserstore.RemoveSecure(syncUserIDKey, func(err error) {
+				if err == nil {
+					clearAuthSession()
+					clearRefreshMemory()
+				}
+				done(revokeErr, err)
+			})
+		})
+	}()
 }
 
 // dataBtnProps configures a data-action button.

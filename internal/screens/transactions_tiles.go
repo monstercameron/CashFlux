@@ -1718,6 +1718,7 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 	selAtom := uistate.UseTxnSelection()
 	anchorAtom := uistate.UseTxnSelAnchor()
 	bulkCatAtom := uistate.UseTxnBulkCat()
+	checkpointSaving := ui.UseState(false)
 	undoAtom := uistate.UseTxnUndo()
 	tagOpen := ui.UseState(false)
 	tagValue := ui.UseState("")
@@ -1783,7 +1784,7 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 			postUndoStory(uistate.T(opKey, len(prior)))
 		}
 	}
-	bulkMarkReviewed := ui.UseEvent(Prevent(func() {
+	bulkMarkReviewedAction := func() {
 		sel := selAtom.Get()
 		var prior []domain.Transaction
 		for _, t := range app.Transactions() {
@@ -1809,7 +1810,8 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 		if len(prior) > 0 {
 			postUndoStory(label)
 		}
-	}))
+	}
+	bulkMarkReviewed := ui.UseEvent(Prevent(bulkMarkReviewedAction))
 
 	// TXC-1: bulk exclude / include the selected transactions in budgets & reports —
 	// the main use case (a batch of reimbursements or internal transfers), so it
@@ -1852,43 +1854,52 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 	// choice (the button is disabled until there is one), and clearing is its own,
 	// confirmed action that says what it costs.
 	applyBulkCategory := func(cid string) {
-		sel := selAtom.Get()
-		// #55: checkpoint before the bulk recategorize.
-		uistate.SaveCheckpoint(uistate.T("ckpt.beforeBulkRecat", plural(len(sel), "transaction")))
-		var prior []domain.Transaction
-		for _, t := range app.Transactions() {
-			if sel[t.ID] && !t.IsTransfer() && t.CategoryID != cid {
-				prior = append(prior, t)
-			}
+		if checkpointSaving.Get() {
+			return
 		}
-		app.BulkMutate(func() {
+		sel := selAtom.Get()
+		checkpointSaving.Set(true)
+		uistate.SaveCheckpointThen(uistate.T("ckpt.beforeBulkRecat", plural(len(sel), "transaction")), func(_ string, checkpointErr error) {
+			checkpointSaving.Set(false)
+			if checkpointErr != nil {
+				uistate.PostNotice(uistate.T("enc34.checkpointFailed"), true)
+				return
+			}
+			var prior []domain.Transaction
 			for _, t := range app.Transactions() {
-				if !sel[t.ID] || t.IsTransfer() || t.CategoryID == cid {
-					continue
+				if sel[t.ID] && !t.IsTransfer() && t.CategoryID != cid {
+					prior = append(prior, t)
 				}
-				if cid != "" {
-					t = txnCategoryAfterManualChoice(t)
+			}
+			app.BulkMutate(func() {
+				for _, t := range app.Transactions() {
+					if !sel[t.ID] || t.IsTransfer() || t.CategoryID == cid {
+						continue
+					}
+					if cid != "" {
+						t = txnCategoryAfterManualChoice(t)
+					}
+					t.CategoryID = cid
+					if err := app.PutTransaction(t); err != nil {
+						uistate.PostNotice(uistate.T("transactions.bulkRecatErr", err.Error()), true)
+					}
 				}
-				t.CategoryID = cid
-				if err := app.PutTransaction(t); err != nil {
-					uistate.PostNotice(uistate.T("transactions.bulkRecatErr", err.Error()), true)
-				}
+			})
+			// The result names the count AND the category it landed in — "Filed 12 under
+			// Housing > Mortgage" — so the commit is verifiable without re-reading the rows.
+			opLabel := uistate.T("transactions.bulkOpClearedCat", len(prior))
+			if cid != "" {
+				opLabel = uistate.T("transactions.bulkCatApplied", len(prior), bulkCatLabel(app, cid))
+			}
+			undoAtom.Set(uistate.BulkSnapshot{Label: opLabel, Prior: prior})
+			clearSel()
+			bulkCatAtom.Set("")
+			uistate.BumpDataRevision()
+			// C364: undo story for bulk recategorize.
+			if len(prior) > 0 {
+				postUndoStory(opLabel)
 			}
 		})
-		// The result names the count AND the category it landed in — "Filed 12 under
-		// Housing > Mortgage" — so the commit is verifiable without re-reading the rows.
-		opLabel := uistate.T("transactions.bulkOpClearedCat", len(prior))
-		if cid != "" {
-			opLabel = uistate.T("transactions.bulkCatApplied", len(prior), bulkCatLabel(app, cid))
-		}
-		undoAtom.Set(uistate.BulkSnapshot{Label: opLabel, Prior: prior})
-		clearSel()
-		bulkCatAtom.Set("")
-		uistate.BumpDataRevision()
-		// C364: undo story for bulk recategorize.
-		if len(prior) > 0 {
-			postUndoStory(opLabel)
-		}
 	}
 	assignBulkOwners := func(owners []string) {
 		sel := selAtom.Get()
@@ -1942,7 +1953,7 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 	}
 	addTag := ui.UseEvent(Prevent(func() { applyBulkTag(tagValue.Get()) }))
 	onTagInput := ui.UseEvent(func(e ui.Event) { tagValue.Set(e.GetValue()) })
-	toggleTagInput := ui.UseEvent(Prevent(func() { tagOpen.Set(!tagOpen.Get()) }))
+	toggleTagInputAction := func() { tagOpen.Set(!tagOpen.Get()) }
 
 	// XC1: group the selected transactions into one logical purchase (an order
 	// that posted as several card charges). Order-group members keep their atoms;
@@ -1992,7 +2003,10 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 		downloadBytes("transactions-selected.csv", "text/csv", data)
 	}
 
-	bulkDelete := ui.UseEvent(Prevent(func() {
+	bulkDeleteAction := func() {
+		if checkpointSaving.Get() {
+			return
+		}
 		sel := selAtom.Get()
 		count := len(sel)
 		uistate.ConfirmModal(uistate.T("transactions.bulkDeleteConfirm", count), true, func(ok bool) {
@@ -2001,75 +2015,83 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 			}
 			// #55: whole-dataset checkpoint before the bulk delete (restorable
 			// from Settings → Data even after the session undo stack is gone).
-			uistate.SaveCheckpoint(uistate.T("ckpt.beforeBulkDelete", plural(count, "transaction")))
-			ids := make([]string, 0, len(sel))
-			for id := range sel {
-				ids = append(ids, id)
-			}
-			// Snapshot what the delete will ACTUALLY remove, not what was ticked.
-			// DeleteTransactionsBulk takes the reciprocal leg of any selected transfer
-			// down with it, and a snapshot built from the selection alone left those
-			// counterparts out — so Undo restored one leg of a transfer and silently
-			// dropped the other, leaving that account permanently short by the transfer
-			// amount. The undo path is the last line of defence for a destructive bulk
-			// action; it has to cover the same rows the action does.
-			doomed := app.ExpandTransferPairs(ids)
-			doomedSet := make(map[string]bool, len(doomed))
-			for _, id := range doomed {
-				doomedSet[id] = true
-			}
-			var prior []domain.Transaction
-			priorByID := make(map[string]domain.Transaction, len(doomedSet))
-			for _, t := range app.Transactions() {
-				if doomedSet[t.ID] {
-					priorByID[t.ID] = t
+			checkpointSaving.Set(true)
+			uistate.SaveCheckpointThen(uistate.T("ckpt.beforeBulkDelete", plural(count, "transaction")), func(_ string, checkpointErr error) {
+				checkpointSaving.Set(false)
+				if checkpointErr != nil {
+					uistate.PostNotice(uistate.T("enc34.checkpointFailed"), true)
+					return
 				}
-			}
-			deleted, err := app.DeleteTransactionsBulk(ids)
-			deletedSet := make(map[string]bool, len(deleted))
-			for _, id := range deleted {
-				deletedSet[id] = true
-				if txn, ok := priorByID[id]; ok {
-					prior = append(prior, txn)
+				ids := make([]string, 0, len(sel))
+				for id := range sel {
+					ids = append(ids, id)
 				}
-			}
-			remainingSelection := make(map[string]bool, len(sel))
-			for id := range sel {
-				if !deletedSet[id] {
-					remainingSelection[id] = true
+				// Snapshot what the delete will ACTUALLY remove, not what was ticked.
+				// DeleteTransactionsBulk takes the reciprocal leg of any selected transfer
+				// down with it, and a snapshot built from the selection alone left those
+				// counterparts out — so Undo restored one leg of a transfer and silently
+				// dropped the other, leaving that account permanently short by the transfer
+				// amount. The undo path is the last line of defence for a destructive bulk
+				// action; it has to cover the same rows the action does.
+				doomed := app.ExpandTransferPairs(ids)
+				doomedSet := make(map[string]bool, len(doomed))
+				for _, id := range doomed {
+					doomedSet[id] = true
 				}
-			}
-			if len(remainingSelection) == 0 {
-				clearSel()
-			} else {
-				selAtom.Set(remainingSelection)
-				if deletedSet[anchorAtom.Get()] {
-					anchorAtom.Set("")
+				var prior []domain.Transaction
+				priorByID := make(map[string]domain.Transaction, len(doomedSet))
+				for _, t := range app.Transactions() {
+					if doomedSet[t.ID] {
+						priorByID[t.ID] = t
+					}
 				}
-			}
-			if err != nil || len(deleted) != len(doomed) {
-				notDeleted := len(doomed) - len(deleted)
-				if notDeleted < 0 {
-					notDeleted = 0
+				deleted, err := app.DeleteTransactionsBulk(ids)
+				deletedSet := make(map[string]bool, len(deleted))
+				for _, id := range deleted {
+					deletedSet[id] = true
+					if txn, ok := priorByID[id]; ok {
+						prior = append(prior, txn)
+					}
 				}
-				message := uistate.TN("transactions.bulkDeleteOne", "transactions.bulkDeleteMany", len(deleted)) + " " +
-					uistate.TN("transactions.bulkNotDeletedOne", "transactions.bulkNotDeletedMany", notDeleted)
-				if err != nil {
-					message += " " + err.Error()
+				remainingSelection := make(map[string]bool, len(sel))
+				for id := range sel {
+					if !deletedSet[id] {
+						remainingSelection[id] = true
+					}
 				}
-				uistate.PostNotice(message, true)
-			}
-			if len(prior) > 0 {
-				undoLabel := uistate.T("transactions.bulkOpDeleted", len(prior))
-				undoAtom.Set(uistate.BulkSnapshot{Label: undoLabel, Prior: prior})
-				uistate.BumpDataRevision()
-				// C364: undo story naming the count + the reversal path (Ctrl+Z / Activity).
-				postUndoStory(undoLabel)
-			} else {
-				undoAtom.Set(uistate.BulkSnapshot{})
-			}
+				if len(remainingSelection) == 0 {
+					clearSel()
+				} else {
+					selAtom.Set(remainingSelection)
+					if deletedSet[anchorAtom.Get()] {
+						anchorAtom.Set("")
+					}
+				}
+				if err != nil || len(deleted) != len(doomed) {
+					notDeleted := len(doomed) - len(deleted)
+					if notDeleted < 0 {
+						notDeleted = 0
+					}
+					message := uistate.TN("transactions.bulkDeleteOne", "transactions.bulkDeleteMany", len(deleted)) + " " +
+						uistate.TN("transactions.bulkNotDeletedOne", "transactions.bulkNotDeletedMany", notDeleted)
+					if err != nil {
+						message += " " + err.Error()
+					}
+					uistate.PostNotice(message, true)
+				}
+				if len(prior) > 0 {
+					undoLabel := uistate.T("transactions.bulkOpDeleted", len(prior))
+					undoAtom.Set(uistate.BulkSnapshot{Label: undoLabel, Prior: prior})
+					uistate.BumpDataRevision()
+					// C364: undo story naming the count + the reversal path (Ctrl+Z / Activity).
+					postUndoStory(undoLabel)
+				} else {
+					undoAtom.Set(uistate.BulkSnapshot{})
+				}
+			})
 		})
-	}))
+	}
+	bulkDelete := ui.UseEvent(Prevent(bulkDeleteAction))
 
 	clearSelection := ui.UseEvent(Prevent(clearSel))
 
@@ -2095,7 +2117,8 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 		categoryPickerOpen.Set(true)
 	}
 
-	// Standard `.field` selects for the category / member to apply.
+	// Options for the category and owner pickers. The owner list includes the
+	// explicit unassigned value so it shares the same commit path as members.
 	//
 	// C561: the resting option reads "Choose a category" — a prompt, not a value. It
 	// used to read "No category", which is a real, destructive choice presented as the
@@ -2105,15 +2128,13 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 	for _, o := range CategoryPickOptions(app.Categories()) {
 		catOptions = append(catOptions, txnBulkPickerOption{Value: o.Value, Label: o.Label})
 	}
-	ownerOptions := make([]uiw.PickerOption, 0, len(app.Members()))
-	for _, m := range app.Members() {
-		ownerOptions = append(ownerOptions, uiw.PickerOption{Value: m.ID, Label: m.Name})
-	}
+	ownerOptions := txnBulkOwnerPickerOptions(app.Members())
 
 	moreActions := uiw.OverflowMenu(uiw.OverflowMenuProps{
 		TriggerLabel: uistate.T("r1c.moreActions"), TriggerTestID: "bulk-more-actions",
 		TriggerClass: "btn btn-tool bulk-more-trigger", TriggerText: "",
 		Items: []uiw.OverflowMenuItem{
+			{Label: uistate.T("r1c.addTagEllipsis"), Icon: icon.Tag, TestID: "bulk-add-tag-menu", OnSelect: toggleTagInputAction},
 			{Label: uistate.T("txp3.bulkMarkCleared"), Icon: icon.CheckCircle, TestID: "bulk-mark-cleared", OnSelect: func() { bulkSetCleared(true) }},
 			{Label: uistate.T("txp3.bulkMarkUncleared"), Icon: icon.Ban, TestID: "bulk-mark-uncleared", OnSelect: func() { bulkSetCleared(false) }},
 			{Label: uistate.T("txp3.bulkClearCategory"), Icon: icon.Ban, TestID: "bulk-clear-category", OnSelect: func() {
@@ -2127,6 +2148,8 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 			{Label: uistate.T("txp3.bulkIncludeReports"), Icon: icon.Check, TestID: "bulk-include", OnSelect: func() { bulkSetExclude(false) }},
 			{Label: uistate.T("txp3.bulkGroupPurchase"), Icon: icon.Box, TestID: "bulk-group-order", OnSelect: func() { bulkGroupOrder() }},
 			{Label: uistate.T("txp3.bulkExportSelected"), Icon: icon.ArrowDown, TestID: "bulk-export-selected", OnSelect: func() { exportSelected() }},
+			{Label: uistate.T("r1c.markReviewed"), Icon: icon.CheckCircle, TestID: "bulk-mark-reviewed-menu", OnSelect: bulkMarkReviewedAction},
+			{Label: uistate.T("txp3.bulkDeleteSelected"), Icon: icon.Trash, TestID: "bulk-delete-menu", Danger: true, OnSelect: bulkDeleteAction},
 		},
 	})
 	var tagEditor ui.Node = Fragment()
@@ -2140,23 +2163,27 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 	// bank/report/export operations live in the overflow menu.
 	body := Div(css.Class("bulk-bar bulk-bar-refined txn-bulkbar-overlay"), Style(map[string]string{
 		"box-sizing": "border-box", "display": "flex", "align-items": "center", "gap": "0.5rem",
-		"min-height": "48px", "padding": "0 1rem", "flex-wrap": "wrap",
-		"white-space": "normal",
-		"background":  "var(--bg-card)", "border-top": "1px solid var(--border)",
+		"min-height": "48px", "padding": "0 1rem", "flex-wrap": "nowrap",
+		"white-space": "nowrap",
+		"background":  "var(--bg-elev)", "border": "1px solid var(--border)",
+		"border-radius": "var(--radius-lg)",
 	}),
 		Span(css.Class("bulk-count", tw.ShrinkO), Attr("aria-label", uistate.T("transactions.selected", plural(n, "transaction"))), uistate.T("transactions.bulkSelectedShort", n)),
 		ui.CreateElement(txnBulkPicker, txnBulkPickerProps{ID: "bulk-category-picker", Label: uistate.T("transactions.categoryToApply"), Placeholder: uistate.T("r1c.category"), SearchLabel: uistate.T("r5b.searchCategories"), Options: catOptions, OnChoose: onBulkCat, OnCreate: onCreateBulkCategory}),
-		Div(css.Class("bulk-owner-actions"),
-			uiw.MultiPicker(uiw.MultiPickerProps{ID: "bulk-member-picker", Label: uistate.T("who2.setOwnersTo"), Placeholder: uistate.T("who2.chooseOwners"), Options: ownerOptions, Selected: bulkOwners.Get(), OnToggle: func(owner string) { bulkOwners.Set(toggleTxnOwner(bulkOwners.Get(), owner)) }, TestID: "bulk-owner-picker"}),
-			Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "bulk-set-owners"), Disabled(len(bulkOwners.Get()) == 0), OnClick(func() { assignBulkOwners(bulkOwners.Get()) }), uistate.T("who2.setOwners")),
-			Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "bulk-set-unassigned"), OnClick(func() { assignBulkOwners(nil) }), uistate.T("who2.unassigned")),
+		Div(css.Class("bulk-owner-actions", "txn-bulk-primary"),
+			uiw.MultiPicker(uiw.MultiPickerProps{ID: "bulk-member-picker", Label: uistate.T("bulk2.owners"), Placeholder: uistate.T("bulk2.owners"), Options: ownerOptions, Selected: bulkOwners.Get(), OnToggle: func(owner string) { bulkOwners.Set(toggleTxnBulkOwner(bulkOwners.Get(), owner)) }, TestID: "bulk-owner-picker"}),
+			Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "bulk-apply-owners"), Disabled(len(bulkOwners.Get()) == 0), OnClick(func() { assignBulkOwners(txnBulkAppliedOwners(bulkOwners.Get())) }), uistate.T("bulk2.apply")),
 		),
-		toolbarIconBtnTitled("bulk-mark-reviewed", icon.CheckCircle, uistate.T("r1c.markReviewed"), uistate.T("r1c.markReviewed"), bulkMarkReviewed, ""),
-		Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "bulk-add-tag"), Attr("aria-expanded", ariaBool(tagOpen.Get())), OnClick(toggleTagInput), uistate.T("r1c.addTagEllipsis")),
+		Button(css.Class("btn btn-tool", "txn-bulk-primary", "txn-bulk-inline-reviewed"), Type("button"), Attr("data-testid", "bulk-mark-reviewed"), Attr("aria-label", uistate.T("r1c.markReviewed")), OnClick(bulkMarkReviewed), uiw.Icon(icon.CheckCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("r1c.markReviewed"))),
 		tagEditor,
 		moreActions,
-		toolbarIconBtnTitled("bulk-delete", icon.Trash, uistate.T("txp3.bulkDeleteSelected"), uistate.T("txp3.bulkDeleteSelected"), bulkDelete, "danger"),
-		Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "bulk-clear-selection"), Attr("aria-label", uistate.T("r1c.clearSelection")), OnClick(clearSelection), uistate.T("r1c.clearSelection")),
+		buttonWithDisabled(checkpointSaving.Get(), []any{
+			css.Class("btn btn-tool bt-danger", "txn-bulk-primary", "txn-bulk-inline-delete"), Type("button"), Attr("data-testid", "bulk-delete"),
+			Attr("aria-label", uistate.T("txp3.bulkDeleteSelected")),
+			Title(uistate.T("txp3.bulkDeleteSelected")),
+			OnClick(bulkDelete),
+		}, IfElse(checkpointSaving.Get(), Text(uistate.T("enc34.saving")), Fragment(uiw.Icon(icon.Trash, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("txp3.bulkDeleteSelected"))))),
+		Button(css.Class("btn btn-tool", "bulk-clear-selection"), Type("button"), Attr("data-testid", "bulk-clear-selection"), Attr("aria-label", uistate.T("r1c.clearSelection")), Title(uistate.T("r1c.clearSelection")), OnClick(clearSelection), Text("×")),
 		If(categoryPickerOpen.Get(), txnBulkCategoryPicker(categoryPickerQuery.Get(), categoryPickerKind.Get(),
 			func(categoryID string) { categoryPickerOpen.Set(false); onBulkCat(categoryID) },
 			func() { categoryPickerOpen.Set(false) },
@@ -2167,6 +2194,51 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 		Style: txnBulkBarWidgetStyle(),
 		Body:  body,
 	})
+}
+
+const txnBulkUnassignedOwner = "__bulk_unassigned__"
+
+func txnBulkOwnerPickerOptions(members []domain.Member) []uiw.PickerOption {
+	options := make([]uiw.PickerOption, 0, len(members)+1)
+	options = append(options, uiw.PickerOption{Value: txnBulkUnassignedOwner, Label: uistate.T("bulk2.unassigned")})
+	for _, member := range members {
+		options = append(options, uiw.PickerOption{Value: member.ID, Label: member.Name})
+	}
+	return options
+}
+
+func toggleTxnBulkOwner(selected []string, value string) []string {
+	if value == txnBulkUnassignedOwner {
+		if len(selected) == 1 && selected[0] == value {
+			return nil
+		}
+		return []string{value}
+	}
+	result := make([]string, 0, len(selected)+1)
+	found := false
+	for _, owner := range selected {
+		if owner == txnBulkUnassignedOwner {
+			continue
+		}
+		if owner == value {
+			found = true
+			continue
+		}
+		result = append(result, owner)
+	}
+	if !found {
+		result = append(result, value)
+	}
+	return result
+}
+
+func txnBulkAppliedOwners(selected []string) []string {
+	for _, owner := range selected {
+		if owner == txnBulkUnassignedOwner {
+			return nil
+		}
+	}
+	return append([]string(nil), selected...)
 }
 
 func txnBulkBarWidgetStyle() map[string]string {

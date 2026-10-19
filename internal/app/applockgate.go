@@ -5,532 +5,284 @@
 package app
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 	"syscall/js"
 
 	"github.com/monstercameron/CashFlux/internal/applock"
+	"github.com/monstercameron/CashFlux/internal/atrest"
 	"github.com/monstercameron/CashFlux/internal/browserstore"
-	"github.com/monstercameron/CashFlux/internal/lockquotes"
+	"github.com/monstercameron/CashFlux/internal/i18n"
+	"github.com/monstercameron/CashFlux/internal/keyring"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/CashFlux/internal/version"
 )
 
 const appLockGateID = "cf-applock-gate"
+const smartQuoteCode = "SMART-QUOTE"
 
-// appLockActive reports whether the unlock gate is currently covering the app.
-// Global shortcut handlers consult it so a locked app can't be driven by keyboard.
+var errProtectedStorageUnavailable = errors.New("protected storage is unavailable")
+var errLegacyDatasetLocked = errors.New("legacy dataset requires its original passcode")
+var appLockClosing bool
+var protectedGateCallbacks []js.Func
+var errPendingLockTransition = errors.New("an App Lock change needs to finish")
+
+// protectedGateText uses only the built-in English catalogue. uistate.T would
+// initialize language preferences by reading protected records before unlock.
+var protectedGateCatalog = i18n.DefaultBundle()
+
+func protectedGateText(key string) string { return protectedGateCatalog.T(i18n.English, key) }
+
 func appLockActive() bool {
 	doc := js.Global().Get("document")
-	if doc.IsNull() || doc.IsUndefined() {
-		return false
+	if !doc.Truthy() {
+		return appLockClosing
 	}
-	g := doc.Call("getElementById", appLockGateID)
-	return !g.IsNull() && !g.IsUndefined() && g.Get("style").Get("display").String() != "none"
+	gate := doc.Call("getElementById", appLockGateID)
+	return appLockClosing || gate.Truthy() && gate.Get("style").Get("display").String() != "none"
 }
 
-// unlockGate dismisses the gate with a brief blur→fade so the app behind appears
-// to sharpen into focus, then hides it and resets the styles for next time.
-// Respects prefers-reduced-motion (then it just hides immediately).
-func unlockGate(doc, gate js.Value) {
-	setMuzakLocked(false) // let the ambient music resume (if it was on) now we're unlocked
-	st := gate.Get("style")
-	reduce := false
-	if m := js.Global().Call("matchMedia", "(prefers-reduced-motion: reduce)"); !m.IsNull() && !m.IsUndefined() {
-		reduce = m.Get("matches").Bool()
-	}
-	if reduce {
-		st.Set("display", "none")
-		return
-	}
-	st.Set("transition", "opacity 0.35s ease, filter 0.35s ease, transform 0.35s ease")
-	st.Set("opacity", "0")
-	st.Set("filter", "blur(10px)")
-	st.Set("transform", "scale(1.03)")
-	var done js.Func
-	done = js.FuncOf(func(js.Value, []js.Value) any {
-		st.Set("display", "none")
-		st.Set("opacity", "")
-		st.Set("filter", "")
-		st.Set("transform", "")
-		st.Set("transition", "")
-		done.Release()
-		return nil
-	})
-	js.Global().Call("setTimeout", done, 380)
-}
-
-// maybeLockOnBoot shows the passcode gate at startup when the lock is enabled, so
-// the app's content stays covered until the right passcode is entered. Called once
-// from Run after mount.
-func maybeLockOnBoot() {
-	if loadAppLock().Active() {
-		showAppLockGate()
-	}
-}
-
-// showAppLockGate covers the whole app with a modal passcode gate (building it on
-// first use). A correct passcode hides it. No-op when the lock isn't enabled.
-// animateGateIn fades the lock gate in with a faint scale settle — the mirror of
-// the unlock fade-out — so the gate doesn't pop. No-op under reduced motion.
-func animateGateIn(gate js.Value) {
-	if m := js.Global().Call("matchMedia", "(prefers-reduced-motion: reduce)"); !m.IsNull() && !m.IsUndefined() && m.Get("matches").Bool() {
-		return
-	}
-	gate.Call("animate",
-		[]any{
-			map[string]any{"opacity": 0, "transform": "scale(1.01)"},
-			map[string]any{"opacity": 1, "transform": "scale(1)"},
-		},
-		map[string]any{"duration": 220, "easing": "ease-out"},
-	)
-}
-
-// setMuzakLocked tells the ambient-music player whether the lock gate is up, so it
-// stays silent behind the gate and resumes (if it was on) after unlock. No-op when the
-// player isn't loaded or predates the setLocked hook.
 func setMuzakLocked(on bool) {
-	muzak := js.Global().Get("cashfluxMuzak")
-	if !muzak.Truthy() {
-		return
-	}
-	if sl := muzak.Get("setLocked"); sl.Truthy() {
+	if muzak := js.Global().Get("cashfluxMuzak"); muzak.Truthy() && muzak.Get("setLocked").Truthy() {
 		muzak.Call("setLocked", on)
 	}
 }
 
+func unlockGate(doc, gate js.Value) {
+	gate.Get("style").Set("display", "none")
+	if root := doc.Call("getElementById", "app"); root.Truthy() {
+		root.Set("inert", false)
+	}
+	setMuzakLocked(false)
+}
+
+// showAppLockGate waits for the secure write queue and key destruction before
+// offering unlock. Gate visibility also blocks shortcuts while that work runs.
 func showAppLockGate() {
-	if !loadAppLock().Active() {
+	if appLockClosing || appLockActive() {
 		return
 	}
-	setMuzakLocked(true) // silence the ambient music while the gate is up
+	state := browserstore.SecureKeyState()
+	if state == nil || !state.AppLock {
+		return
+	}
+	appLockClosing = true
+	suspendAutosave = true
+	rememberPasskeyForLock()
+	setMuzakLocked(true)
+	if root := js.Global().Get("document").Call("getElementById", "app"); root.Truthy() {
+		root.Set("inert", true)
+	}
+	go func() {
+		// Finish writes already queued before LockSecureThen stops cache access.
+		browserstore.Barrier()
+		browserstore.LockSecureThen(func() {
+			activePasscode = ""
+			clearDatasetKeyCache()
+			clearArtifactKeyCache()
+			appLockClosing = false
+			showProtectedStorageGate(atrest.ErrLocked, func() { suspendAutosave = false })
+		})
+	}()
+}
+
+// showProtectedStorageGate reads public key metadata only. It never seeds,
+// deletes, repairs automatically, or offers a destructive reset action.
+func showProtectedStorageGate(cause error, onReady func()) {
 	doc := js.Global().Get("document")
-	if gate := doc.Call("getElementById", appLockGateID); !gate.IsNull() && !gate.IsUndefined() {
-		gate.Get("style").Set("display", "grid")
-		refreshLockMeta(doc)
-		// If a key is remembered on this device it's readable while locked, so try to
-		// refresh the quote now; the result swaps in live when it arrives.
-		refreshDailyLockQuote()
-		refreshLockMute(doc)
-		resetAppLockInput(doc)
-		animateGateIn(gate)
-		return
+	for _, callback := range protectedGateCallbacks {
+		callback.Release()
 	}
-	buildAppLockGate(doc)
-}
-
-// refreshLockMute shows/labels the lock-screen mute button: hidden when no tracks are
-// configured, "🔊 Mute music" when music is on, "🔇 Unmute music" when muted — so the
-// speaker glyph in the label reflects the muted state. Called when the gate is built
-// and each time it is shown. The track count comes from the live player, but the muted
-// state is read from the PERSISTED source of truth (cashflux:muzak, "0" = muted), not
-// muzak's transient in-memory `enabled` — which can still be false at gate-build time
-// (before the player is seeded), which made the icon show muted while music was on.
-func refreshLockMute(doc js.Value) {
-	btn := doc.Call("getElementById", "cf-lock-mute")
-	if btn.IsNull() || btn.IsUndefined() {
-		return
+	protectedGateCallbacks = nil
+	if old := doc.Call("getElementById", appLockGateID); old.Truthy() {
+		old.Call("remove")
 	}
-	size := 0
-	if muzak := js.Global().Get("cashfluxMuzak"); muzak.Truthy() {
-		if st := muzak.Call("state"); st.Truthy() {
-			if s := st.Get("size"); s.Truthy() {
-				size = s.Int()
-			}
-		}
-	}
-	if size == 0 {
-		btn.Get("style").Set("display", "none")
-		return
-	}
-	btn.Get("style").Set("display", "")
-	if !uistate.MuzakEnabledFromSetting(uistate.SettingKVGet(muzakEnabledKey)) {
-		btn.Set("textContent", uistate.T("applock.unmuteMusic")) // 🔇 — currently muted
-	} else {
-		btn.Set("textContent", uistate.T("applock.muteMusic")) // 🔊 — currently on
-	}
-}
-
-func resetAppLockInput(doc js.Value) {
-	if inp := doc.Call("getElementById", "cf-applock-input"); !inp.IsNull() && !inp.IsUndefined() {
-		inp.Set("value", "")
-		inp.Call("focus")
-	}
-	if msg := doc.Call("getElementById", "cf-applock-msg"); !msg.IsNull() && !msg.IsUndefined() {
-		msg.Set("textContent", uistate.T("applock.unlockPrompt"))
-		msg.Get("style").Set("color", "")
-	}
-	if hb := doc.Call("getElementById", "cf-lock-hint-btn"); !hb.IsNull() && !hb.IsUndefined() {
-		hb.Get("style").Set("display", "none")
-	}
-}
-
-func buildAppLockGate(doc js.Value) {
 	gate := doc.Call("createElement", "div")
 	gate.Set("id", appLockGateID)
-	gate.Get("style").Set("cssText", "position:fixed;inset:0;z-index:1000;display:grid;place-items:center;background:var(--bg,#0e0e0f);")
 	gate.Call("setAttribute", "role", "dialog")
 	gate.Call("setAttribute", "aria-modal", "true")
-	gate.Call("setAttribute", "aria-label", uistate.T("applock.gateAriaLabel"))
-
+	gate.Call("setAttribute", "aria-labelledby", "cf-protected-title")
+	gate.Get("style").Set("cssText", "position:fixed;inset:0;z-index:2147483647;display:grid;place-items:center;background:var(--bg,#111);color:var(--text,#f4f4f5);padding:1rem;")
 	card := doc.Call("createElement", "div")
-	card.Get("style").Set("cssText", "display:flex;flex-direction:column;gap:0.8rem;width:min(90vw,320px);text-align:center;color:var(--text,#f4f4f5);background:var(--bg-elev,#1a1a1d);border-radius:12px;padding:2rem 1.5rem;box-shadow:0 8px 32px rgba(0,0,0,0.5);")
-	card.Set("innerHTML", `<div id="cf-lock-greeting" style="font-size:1rem;opacity:0.85;"></div>`+
-		`<div id="cf-lock-date" style="font-size:0.82rem;opacity:0.55;margin-bottom:0.3rem;"></div>`+
-		`<div style="font-family:Fraunces,Georgia,serif;font-size:1.4rem;font-weight:600;">CashFlux</div>`+
-		`<div id="cf-applock-msg" aria-live="polite" role="status" style="font-size:0.9rem;opacity:0.7;">`+htmlEscaper.Replace(uistate.T("applock.unlockPrompt"))+`</div>`)
-
-	inp := doc.Call("createElement", "input")
-	inp.Set("id", "cf-applock-input")
-	inp.Set("type", "password")
-	inp.Call("setAttribute", "inputmode", "numeric")
-	inp.Call("setAttribute", "aria-label", "Passcode")
-	inp.Get("style").Set("cssText", "width:100%;box-sizing:border-box;padding:0.6rem 0.8rem;text-align:center;font-size:1.1rem;letter-spacing:0.2em;background:var(--bg-elev,#1a1a1d);border:1px solid var(--border,#2a2a2c);border-radius:8px;color:inherit;")
-	card.Call("appendChild", inp)
-
-	btn := doc.Call("createElement", "button")
-	btn.Set("type", "button")
-	btn.Set("textContent", uistate.T("applock.unlock"))
-	btn.Get("style").Set("cssText", "padding:0.75rem 0.8rem;min-height:44px;border-radius:8px;border:0;background:var(--accent,#2e8b57);color:#052e13;font-weight:600;cursor:pointer;")
-	card.Call("appendChild", btn)
-
-	// --- WebAuthn passkey unlock (C282) ---
-	// Shown only when a credential is already registered (hasPasskey()), so
-	// users who never set up a passkey see no change. The passcode input above
-	// stays unconditionally visible — this button is purely additive.
-	passkeyBtn := js.Undefined()
-	if hasPasskey() {
-		passkeyBtn = doc.Call("createElement", "button")
-		passkeyBtn.Set("type", "button")
-		passkeyBtn.Set("textContent", uistate.T("webauthn.unlockBtn"))
-		passkeyBtn.Get("style").Set("cssText", "padding:0.75rem 0.8rem;min-height:44px;border-radius:8px;border:1px solid var(--accent,#2e8b57);background:transparent;color:var(--accent,#2e8b57);font-weight:600;cursor:pointer;")
-		passkeyBtn.Call("setAttribute", "aria-label", uistate.T("webauthn.unlockBtn"))
-		pkBtnRef := passkeyBtn // capture for closure
-		pkCb := js.FuncOf(func(js.Value, []js.Value) any {
-			// Show "Verifying…" in the shared message area while the ceremony runs.
-			if msg := doc.Call("getElementById", "cf-applock-msg"); !msg.IsNull() && !msg.IsUndefined() {
-				msg.Set("textContent", uistate.T("webauthn.unlockTitle"))
-				msg.Get("style").Set("color", "")
-			}
-			pkBtnRef.Set("disabled", true)
-			unlockWithPasskey(doc, gate, func(err error) {
-				pkBtnRef.Set("disabled", false)
-				if err != nil {
-					if msg := doc.Call("getElementById", "cf-applock-msg"); !msg.IsNull() && !msg.IsUndefined() {
-						msg.Set("textContent", uistate.T("webauthn.unlockFail"))
-						msg.Get("style").Set("color", "var(--danger,#d8716f)")
-					}
-				}
-			})
-			return nil
-		})
-		passkeyBtn.Call("addEventListener", "click", pkCb)
-		card.Call("appendChild", passkeyBtn)
+	card.Get("style").Set("cssText", "display:flex;flex-direction:column;gap:1rem;width:min(90vw,380px);padding:1.5rem;background:var(--bg-elev,#1a1a1d);border:1px solid var(--border,#444);border-radius:12px;")
+	gate.Call("appendChild", card)
+	add := func(tag, id, text string) js.Value {
+		e := doc.Call("createElement", tag)
+		e.Set("id", id)
+		e.Set("textContent", text)
+		card.Call("appendChild", e)
+		return e
+	}
+	add("h1", "cf-protected-title", protectedGateText("enc31.title"))
+	message := add("p", "cf-applock-msg", protectedGateText("enc31.preserved"))
+	message.Call("setAttribute", "role", "status")
+	message.Call("setAttribute", "aria-live", "polite")
+	input := add("input", "cf-applock-input", "")
+	input.Set("type", "password")
+	input.Call("setAttribute", "aria-label", protectedGateText("enc31.passcode"))
+	input.Call("setAttribute", "autocomplete", "current-password")
+	unlock := add("button", "cf-protected-unlock", protectedGateText("enc31.unlock"))
+	recovery := add("button", "cf-protected-recovery", protectedGateText("enc31.recovery"))
+	passkey := add("button", "cf-protected-passkey", protectedGateText("enc31.passkey"))
+	passkey.Get("style").Set("display", "none")
+	if lockedPasskey[0] != "" {
+		passkey.Get("style").Set("display", "block")
 	}
 
-	forgot := doc.Call("createElement", "button")
-	forgot.Set("type", "button")
-	forgot.Set("textContent", uistate.T("applock.forgot"))
-	forgot.Get("style").Set("cssText", "display:none;background:transparent;border:0;color:var(--text-faint,#888890);font-size:0.8rem;cursor:pointer;text-decoration:underline;")
-	card.Call("appendChild", forgot)
-
-	// Mute toggle: silence (or resume) the ambient music from the lock screen without
-	// unlocking, so the app can be locked but quiet. Hidden when no music is set up.
-	muteBtn := doc.Call("createElement", "button")
-	muteBtn.Set("id", "cf-lock-mute")
-	muteBtn.Set("type", "button")
-	muteBtn.Get("style").Set("cssText", "display:none;background:transparent;border:0;color:var(--text-faint,#888890);font-size:0.8rem;cursor:pointer;")
-	muteCb := js.FuncOf(func(js.Value, []js.Value) any {
-		// Toggle off the PERSISTED source of truth (matches refreshLockMute), not muzak's
-		// transient in-memory `enabled`: currently muted → turn on, currently on → mute.
-		newEnabled := !uistate.MuzakEnabledFromSetting(uistate.SettingKVGet(muzakEnabledKey))
-		// Persist the new on/off choice BEFORE telling the player, so the player's hard
-		// mute-check (musicMuted) reads the fresh value: on unmute it sees "1" and plays;
-		// on mute it sees "0" and refuses. Driving the shared atom (not just persisting)
-		// also keeps the top-bar toggle and player effect in sync so they don't re-enable
-		// the music behind the gate.
-		uistate.SetMuzakEnabled(newEnabled)
-		if muzak := js.Global().Get("cashfluxMuzak"); muzak.Truthy() {
-			muzak.Call("setEnabled", newEnabled)
+	repair := add("button", "cf-protected-repair", protectedGateText("enc31.repair"))
+	repair.Get("style").Set("display", "none")
+	help := add("button", "cf-protected-help", protectedGateText("enc31.help"))
+	state := browserstore.SecureKeyState()
+	legacy := errors.Is(cause, errLegacyDatasetLocked)
+	pendingChange := errors.Is(cause, errPendingLockTransition)
+	unlock.Set("disabled", !legacy && !pendingChange && (state == nil || !state.AppLock))
+	canRecover := false
+	if state != nil && state.Ring != nil {
+		for _, w := range state.Ring.Current().Wraps {
+			if w.Kind == keyring.WrapRecovery {
+				canRecover = true
+			}
 		}
-		refreshLockMute(doc)
-		return nil
-	})
-	muteBtn.Call("addEventListener", "click", muteCb)
-	card.Call("appendChild", muteBtn)
-
-	gate.Call("appendChild", card)
-	doc.Get("body").Call("appendChild", gate)
-	refreshLockMute(doc)
-	// The music player may finish initialising (loading its tracks) just after the
-	// gate builds; re-check once shortly after so the mute button appears/labels
-	// correctly even when it wasn't ready at build time.
-	var lateMute js.Func
-	lateMute = js.FuncOf(func(js.Value, []js.Value) any {
-		refreshLockMute(doc)
-		lateMute.Release()
-		return nil
-	})
-	js.Global().Call("setTimeout", lateMute, 800)
-	animateGateIn(gate)
-
-	fails := 0
-	hintBtnEl := func() js.Value { return doc.Call("getElementById", "cf-lock-hint-btn") }
-	attempt := func() {
-		// C284: a successful unlock is the only moment the plaintext passcode is in
-		// hand, so it is the only moment a hash on a superseded scheme can be
-		// re-derived. VerifyAndUpgrade does both; Verify alone left every
-		// pre-argon2id credential on its old scheme forever.
-		entered := inp.Get("value").String()
-		if okUnlock, upgraded, changed := loadAppLock().VerifyAndUpgrade(entered); okUnlock {
-			if changed {
-				saveAppLock(upgraded)
-			}
-			// Record the verified passcode for the session and, if the dataset on
-			// disk is encrypted (C45), decrypt + hydrate it now.
-			onAppUnlocked(entered)
-			unlockGate(doc, gate)
-			fails = 0
-			if hb := hintBtnEl(); !hb.IsNull() && !hb.IsUndefined() {
-				hb.Get("style").Set("display", "none")
-			}
-			forgot.Get("style").Set("display", "none")
+	}
+	recovery.Set("disabled", legacy || pendingChange || !canRecover)
+	if pendingChange {
+		unlock.Set("textContent", protectedGateText("enc31.retry"))
+		input.Set("disabled", true)
+	}
+	useRecovery, busy, explicitlyUnlocked, finished := false, false, false, false
+	needsRepair := errors.Is(cause, atrest.ErrMissingDeviceKey)
+	finish := func() {
+		if finished {
 			return
 		}
-		fails++
-		if msg := doc.Call("getElementById", "cf-applock-msg"); !msg.IsNull() && !msg.IsUndefined() {
-			msg.Set("textContent", uistate.T("applock.wrong"))
-			msg.Get("style").Set("color", "var(--danger,#d8716f)")
+		finished = true
+		input.Set("value", "")
+		unlockGate(doc, gate)
+		if onReady != nil {
+			onReady()
 		}
-		// Shake the field on a wrong passcode — the familiar "no" cue. Web Animations
-		// API so it needs no stylesheet; skipped under prefers-reduced-motion.
-		if m := js.Global().Call("matchMedia", "(prefers-reduced-motion: reduce)"); m.IsNull() || m.IsUndefined() || !m.Get("matches").Bool() {
-			inp.Call("animate",
-				[]any{
-					map[string]any{"transform": "translateX(0)"},
-					map[string]any{"transform": "translateX(-6px)"},
-					map[string]any{"transform": "translateX(6px)"},
-					map[string]any{"transform": "translateX(-4px)"},
-					map[string]any{"transform": "translateX(4px)"},
-					map[string]any{"transform": "translateX(0)"},
-				},
-				map[string]any{"duration": 280, "easing": "ease-in-out"},
-			)
-		}
-		// After a few misses, offer the hint — but only if one was set.
-		if fails >= 3 && loadAppLock().Hint != "" {
-			if hb := hintBtnEl(); !hb.IsNull() && !hb.IsUndefined() {
-				hb.Get("style").Set("display", "block")
-			}
-		}
-		// Reveal "Forgot passcode?" progressively — only after several failures so
-		// it isn't the first thing a stranger sees at the lock screen (GX10-F3).
-		if fails >= 5 {
-			forgot.Get("style").Set("display", "block")
-		}
-		inp.Set("value", "")
-		inp.Call("focus")
 	}
-
-	btnCb := js.FuncOf(func(js.Value, []js.Value) any { attempt(); return nil })
-	btn.Call("addEventListener", "click", btnCb)
-	keyCb := js.FuncOf(func(_ js.Value, a []js.Value) any {
-		if len(a) > 0 && a[0].Get("key").String() == "Enter" {
-			a[0].Call("preventDefault")
+	completed := func(err error) {
+		busy = false
+		if err != nil {
+			message.Set("textContent", protectedGateText("enc31.failed"))
+			input.Set("value", "")
+			input.Call("focus")
+			return
+		}
+		explicitlyUnlocked = true
+		if needsRepair {
+			message.Set("textContent", protectedGateText("enc31.repairPrompt"))
+			repair.Get("style").Set("display", "block")
+			unlock.Set("textContent", protectedGateText("enc31.continue"))
+			recovery.Set("disabled", true)
+			input.Set("value", "")
+			input.Set("disabled", true)
+			return
+		}
+		finish()
+	}
+	attempt := func() {
+		if busy {
+			return
+		}
+		if explicitlyUnlocked {
+			finish()
+			return
+		}
+		if unlock.Get("disabled").Bool() {
+			return
+		}
+		busy = true
+		secret := input.Get("value").String()
+		message.Set("textContent", protectedGateText("enc31.opening"))
+		if pendingChange {
+			go func() { _, _, err := recoverSecureLockTransition(); completed(err) }()
+		} else if legacy {
+			unlockLegacyProfile(secret, completed)
+		} else {
+			unlockProtectedSession(secret, useRecovery, completed)
+		}
+	}
+	listen := func(e js.Value, event string, f func()) {
+		cb := js.FuncOf(func(js.Value, []js.Value) any { f(); return nil })
+		e.Call("addEventListener", event, cb)
+		protectedGateCallbacks = append(protectedGateCallbacks, cb)
+	}
+	listen(unlock, "click", attempt)
+	listen(passkey, "click", func() {
+		if busy || explicitlyUnlocked {
+			return
+		}
+		busy = true
+		unlockWithPasskey(doc, gate, completed)
+	})
+	listen(recovery, "click", func() {
+		if busy || recovery.Get("disabled").Bool() {
+			return
+		}
+		useRecovery = !useRecovery
+		label := "enc31.passcode"
+		action := "enc31.recovery"
+		if useRecovery {
+			label = "enc31.recoveryLabel"
+			action = "enc31.usePasscode"
+		}
+		recovery.Set("textContent", protectedGateText(action))
+		input.Call("setAttribute", "aria-label", protectedGateText(label))
+		unlock.Set("disabled", false)
+		input.Set("value", "")
+		input.Call("focus")
+	})
+	listen(repair, "click", func() {
+		if busy || !explicitlyUnlocked {
+			return
+		}
+		busy = true
+		browserstore.RepairDeviceSecure(func(err error) {
+			busy = false
+			if err != nil {
+				message.Set("textContent", protectedGateText("enc31.repairFailed"))
+				return
+			}
+			finish()
+		})
+	})
+	listen(help, "click", func() { message.Set("textContent", protectedGateText("enc31.helpText")) })
+	key := js.FuncOf(func(_ js.Value, args []js.Value) any {
+		if len(args) > 0 && args[0].Get("key").String() == "Enter" {
+			args[0].Call("preventDefault")
 			attempt()
 		}
-		return nil
-	})
-	inp.Call("addEventListener", "keydown", keyCb)
-
-	// Forgot passcode → wipe & reset. The dataset is encrypted at rest with a key
-	// derived from the passcode (C45), so without it the data is unrecoverable —
-	// erasing local data is the only honest recovery from a lost passcode.
-	forgotCb := js.FuncOf(func(js.Value, []js.Value) any {
-		// Exception to C42: the lock gate is pre-Shell imperative DOM, so the in-app
-		// DialogHost isn't mounted here — a native confirm is the only option.
-		if js.Global().Call("confirm", uistate.T("applock.forgotConfirm")).Bool() {
-			// Halt the autosave first: otherwise the dying page's pagehide save would
-			// re-write the in-memory dataset back into the storage we just cleared,
-			// silently undoing the wipe (L6 — a wipe must actually stay wiped).
-			suspendAutosave = true
-			pr := uistate.LoadPrefs().Normalize()
-			finish := js.FuncOf(func(js.Value, []js.Value) any {
-				clearAuthSession()
-				wipeAllLocalData(reloadPage)
-				return nil
-			})
-			var completed bool
-			complete := func() {
-				if completed {
-					return
+		if len(args) > 0 && args[0].Get("key").String() == "Tab" {
+			controls := []js.Value{input, unlock, recovery, passkey, repair, help}
+			var enabled []js.Value
+			for _, e := range controls {
+				if !e.Get("disabled").Truthy() && e.Get("style").Get("display").String() != "none" {
+					enabled = append(enabled, e)
 				}
-				completed = true
-				finish.Invoke()
-				finish.Release()
 			}
-			// Revoke the server session before local credentials are erased. The
-			// wipe proceeds after the request returns or after this short deadline.
-			signOutBackendSession(pr.ServerURL, effectiveServerToken(pr), pr.ServerCSRF, complete)
-			var timeout js.Func
-			timeout = js.FuncOf(func(js.Value, []js.Value) any {
-				complete()
-				timeout.Release()
-				return nil
-			})
-			js.Global().Call("setTimeout", timeout, 2000)
-		}
-		return nil
-	})
-	forgot.Call("addEventListener", "click", forgotCb)
-
-	// Hidden until a few failed attempts; reveals the (passcode-safe) hint.
-	hintBtn := doc.Call("createElement", "button")
-	hintBtn.Set("id", "cf-lock-hint-btn")
-	hintBtn.Set("type", "button")
-	hintBtn.Set("textContent", uistate.T("applock.showHint"))
-	hintBtn.Get("style").Set("cssText", "display:none;background:transparent;border:0;color:var(--text-faint,#888890);font-size:0.8rem;cursor:pointer;text-decoration:underline;")
-	card.Call("appendChild", hintBtn)
-	hintCb := js.FuncOf(func(js.Value, []js.Value) any {
-		if h := loadAppLock().Hint; h != "" {
-			if msg := doc.Call("getElementById", "cf-applock-msg"); !msg.IsNull() && !msg.IsUndefined() {
-				msg.Set("textContent", uistate.T("applock.hintPrefix")+h)
-				msg.Get("style").Set("color", "")
+			if len(enabled) > 0 {
+				first, last := enabled[0], enabled[len(enabled)-1]
+				if args[0].Get("shiftKey").Bool() && doc.Get("activeElement").Equal(first) {
+					args[0].Call("preventDefault")
+					last.Call("focus")
+				} else if !args[0].Get("shiftKey").Bool() && doc.Get("activeElement").Equal(last) {
+					args[0].Call("preventDefault")
+					first.Call("focus")
+				}
 			}
 		}
 		return nil
 	})
-	hintBtn.Call("addEventListener", "click", hintCb)
-
-	quoteEl := doc.Call("createElement", "div")
-	quoteEl.Set("id", "cf-lock-quote")
-	quoteEl.Get("style").Set("cssText", "font-size:0.8rem;opacity:0.5;font-style:italic;margin-top:0.6rem;line-height:1.4;")
-	card.Call("appendChild", quoteEl)
-
-	// A quiet version tag at the foot of the card (e.g. "v1.0.11"), so the running
-	// build is identifiable from the lock screen without unlocking.
-	verEl := doc.Call("createElement", "div")
-	verEl.Set("id", "cf-lock-version")
-	verEl.Set("textContent", version.Label())
-	verEl.Get("style").Set("cssText", "font-size:0.7rem;opacity:0.4;letter-spacing:0.06em;margin-top:0.9rem;")
-	card.Call("appendChild", verEl)
-
-	// Focus trap: keep Tab within the gate's controls so a locked app's covered
-	// background can't be reached by keyboard (mirrors the FlipPanel trap).
-	// Include the passkey button in the trap when it is present.
-	focusables := []js.Value{inp, btn}
-	if !passkeyBtn.IsUndefined() {
-		focusables = append(focusables, passkeyBtn)
+	gate.Call("addEventListener", "keydown", key)
+	protectedGateCallbacks = append(protectedGateCallbacks, key)
+	doc.Get("body").Call("appendChild", gate)
+	if root := doc.Call("getElementById", "app"); root.Truthy() {
+		root.Set("inert", true)
 	}
-	focusables = append(focusables, forgot)
-	trapCb := js.FuncOf(func(_ js.Value, a []js.Value) any {
-		if len(a) == 0 || a[0].Get("key").String() != "Tab" {
-			return nil
-		}
-		e := a[0]
-		active := doc.Get("activeElement")
-		first, last := focusables[0], focusables[len(focusables)-1]
-		if e.Get("shiftKey").Bool() {
-			if active.Equal(first) {
-				e.Call("preventDefault")
-				last.Call("focus")
-			}
-		} else if active.Equal(last) {
-			e.Call("preventDefault")
-			first.Call("focus")
-		}
-		return nil
-	})
-	gate.Call("addEventListener", "keydown", trapCb)
-
-	refreshLockMeta(doc)
-	resetAppLockInput(doc)
-}
-
-// refreshLockMeta fills the lock screen's safe, non-financial metadata — a
-// time-of-day greeting, the date, and the day's rotating quote (deterministic via
-// the day ordinal, no randomness) — honoring the Settings toggles. Recomputed each
-// time the gate is shown.
-func refreshLockMeta(doc js.Value) {
-	cfg := loadAppLock()
-	set := func(id, text string, show bool) {
-		e := doc.Call("getElementById", id)
-		if e.IsNull() || e.IsUndefined() {
-			return
-		}
-		if show {
-			e.Set("textContent", text)
-			e.Get("style").Set("display", "block")
-		} else {
-			e.Get("style").Set("display", "none")
-		}
-	}
-	now := js.Global().Get("Date").New()
-	greeting := uistate.T("applock.greetingEvening")
-	switch h := now.Call("getHours").Int(); {
-	case h < 12:
-		greeting = uistate.T("applock.greetingMorning")
-	case h < 18:
-		greeting = uistate.T("applock.greetingAfternoon")
-	}
-	showMeta := !cfg.HideMeta
-	set("cf-lock-greeting", greeting, showMeta)
-	set("cf-lock-date", now.Call("toLocaleDateString", js.Undefined(),
-		map[string]any{"weekday": "long", "month": "long", "day": "numeric"}).String(), showMeta)
-	dayOrdinal := int(js.Global().Get("Date").Call("now").Float() / 86400000)
-	set("cf-lock-quote", lockQuoteText(dayOrdinal), !cfg.HideQuotes)
-}
-
-// smartQuoteCode is the SMART-series feature code for the AI "quote of the day".
-const smartQuoteCode = "SMART-QUOTE"
-
-// lockQuoteText picks the lock-screen quote: the Smart+ "quote of the day" engine's
-// latest generated quote when one exists, otherwise the static day-rotating quote.
-// The Smart settings + cached result live in their own browserstore key
-// (cashflux:smart-settings), so they're readable even while the dataset is locked.
-// refreshDailyLockQuote generates + caches the quote whenever an AI provider is
-// configured (boot/unlock/key-save), so the lock screen just displays whatever it
-// last produced. We show any cached quote unless the user explicitly turned the
-// feature off — the fallback is the static quote when AI isn't configured yet.
-func lockQuoteText(dayOrdinal int) string {
-	if s := uistate.LoadSmartSettings(); !s.ExplicitOff[smartQuoteCode] {
-		if q := strings.TrimSpace(s.ResultFor(smartQuoteCode)); q != "" {
-			return q
-		}
-	}
-	return lockquotes.ForIndex(dayOrdinal) // fallback: static, when no AI quote is cached
-}
-
-// wipeAllLocalData removes every cashflux:* entry from the browser store (and any
-// lingering localStorage copy) — the reset path for a forgotten passcode. The caller
-// reloads afterward (boot then re-seeds a fresh sample, as on first run).
-func wipeAllLocalData(then func()) {
-	queue := browserstore.GetString("cashflux:sync-queue")
-	for _, k := range browserstore.Keys() {
-		if strings.HasPrefix(k, "cashflux:") && k != "cashflux:sync-queue" {
-			browserstore.Remove(k)
-		}
-	}
-	// Belt-and-suspenders: clear any localStorage copies left from before migration.
-	ls := js.Global().Get("localStorage")
-	if !ls.IsNull() && !ls.IsUndefined() {
-		var keys []string
-		for i := 0; i < ls.Get("length").Int(); i++ {
-			if k := ls.Call("key", i); !k.IsNull() && !k.IsUndefined() && strings.HasPrefix(k.String(), "cashflux:") {
-				keys = append(keys, k.String())
-			}
-		}
-		for _, k := range keys {
-			if k == "cashflux:sync-queue" {
-				continue
-			}
-			ls.Call("removeItem", k)
-		}
-	}
-	// IndexedDB serializes transactions against this object store. Committing
-	// the preserved queue rewrite fences all preceding delete transactions.
-	datasetMyGen = bumpDatasetGen()
-	browserstore.SetThen("cashflux:sync-queue", queue, then)
+	setMuzakLocked(true)
+	input.Call("focus")
 }
 
 // setPasscodeFlow opens the in-app passcode setup form (no refresh callback —

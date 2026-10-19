@@ -50,15 +50,19 @@ func quarantineDataset(raw, reason string) {
 	key := quarantineKey(time.Now().Unix())
 	quarantineRaw = raw
 	quarantineAvailable = true
-	browserstore.SetThen(key, raw, func() {
-		browserstore.SetThen(key+":reason", reason, func() {
-			quarantinePending = false
-			datasetQuarantined = true
+	browserstore.SetSecureBatch(map[string]string{key: raw, key + ":reason": reason}, nil, func(err error) {
+		if err != nil {
 			if app := appstate.Default; app != nil {
-				app.Log().Error("unreadable dataset quarantined", "reason", reason, "key", key)
+				app.Log().Error("recovery copy could not be committed", "err", err)
 			}
-			showQuarantineBanner()
-		})
+			return
+		}
+		quarantinePending = false
+		datasetQuarantined = true
+		if app := appstate.Default; app != nil {
+			app.Log().Error("unreadable dataset quarantined", "reason", reason, "key", key)
+		}
+		showQuarantineBanner()
 	})
 }
 

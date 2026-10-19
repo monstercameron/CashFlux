@@ -14,8 +14,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/testkit/render"
 	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
 
@@ -49,7 +47,7 @@ func TestBulkSetOwnersSnapshotCanBeUndone(t *testing.T) {
 	}
 }
 
-func TestBulkUnassignedActionShowsUndoAndRestoresOwners(t *testing.T) {
+func TestBulkUnassignedPickerChoiceShowsUndoAndRestoresOwners(t *testing.T) {
 	app, err := appstate.New(io.Discard, false)
 	if err != nil {
 		t.Fatal(err)
@@ -58,28 +56,39 @@ func TestBulkUnassignedActionShowsUndoAndRestoresOwners(t *testing.T) {
 	if err := app.PutTransaction(original); err != nil {
 		t.Fatal(err)
 	}
-	f := render.New(t)
-	f.Render(ui.CreateElement(txnBulkOwnerUndoHarness, app))
-	findTestID(f, "button", "bulk-set-unassigned").Click()
+	selected := toggleTxnBulkOwner(nil, txnBulkUnassignedOwner)
+	if len(selected) != 1 || selected[0] != txnBulkUnassignedOwner {
+		t.Fatalf("selected Unassigned option = %#v", selected)
+	}
+	owners := txnBulkAppliedOwners(selected)
+	if len(owners) != 0 {
+		t.Fatalf("committed Unassigned choice = %#v, want no owners", owners)
+	}
+	prior, err := assignSelectedTxnOwners(app, map[string]bool{original.ID: true}, owners)
+	if err != nil {
+		t.Fatalf("apply Unassigned choice: %v", err)
+	}
 	updated, ok := findTransactionByID(app.Transactions(), original.ID)
 	if !ok || len(updated.Owners()) != 0 {
 		t.Fatalf("bulk unassigned action owners = %#v, exists=%t", updated.Owners(), ok)
 	}
-	f.ByRole("button", "Undo the last bulk action").Click()
+	if err := app.RestoreTransactions(prior); err != nil {
+		t.Fatalf("restore owner snapshot: %v", err)
+	}
 	undone, ok := findTransactionByID(app.Transactions(), original.ID)
 	if !ok || !reflect.DeepEqual(undone.Owners(), original.Owners()) {
 		t.Fatalf("undo owners = %#v, exists=%t; want %#v", undone.Owners(), ok, original.Owners())
 	}
 }
 
-func txnBulkOwnerUndoHarness(app *appstate.App) ui.Node {
+func txnBulkBarSelectionHarness(app *appstate.App) ui.Node {
 	seeded := ui.UseState(false)
 	selection := uistate.UseTxnSelection()
 	if !seeded.Get() {
 		selection.Set(map[string]bool{"bulk-ui": true})
 		seeded.Set(true)
 	}
-	return shorthand.Fragment(ui.CreateElement(txnBulkBarWidget, txnBulkBarProps{App: app}), ui.CreateElement(txnUndoBarWidget, txnUndoBarProps{App: app}))
+	return ui.CreateElement(txnBulkBarWidget, txnBulkBarProps{App: app})
 }
 
 func findTransactionByID(transactions []domain.Transaction, id string) (domain.Transaction, bool) {

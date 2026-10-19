@@ -52,8 +52,28 @@ const vbDragShimJS = `
   if (window.__wbCanvasInit) return;
   window.__wbCanvasInit = true;
   var POS_KEY = "cashflux:wb-canvas-pos", VIEW_KEY = "cashflux:wb-canvas-view";
-  function load(k){ try { var r = (typeof window.cashfluxDataGet==="function") ? window.cashfluxDataGet(k) : ((typeof window.cashfluxStoreGet==="function") ? window.cashfluxStoreGet(k) : localStorage.getItem(k)); return JSON.parse(r || "{}"); } catch(e){ return {}; } }
-  function save(k,v){ try { var s = JSON.stringify(v); if (typeof window.cashfluxDataSet==="function") window.cashfluxDataSet(k,s); else if (typeof window.cashfluxStoreSet==="function") window.cashfluxStoreSet(k,s); else localStorage.setItem(k,s); } catch(e){} }
+  var pending = window.__wbPendingStorage = window.__wbPendingStorage || {};
+  var memory = window.__wbStorageMemory = window.__wbStorageMemory || {};
+  var statusId = "wb-storage-status";
+  function reportUnavailable(show){
+    var status = document.getElementById(statusId);
+    if (!show) { if (status) status.remove(); return; }
+    if (!status) {
+      status = document.createElement("div"); status.id = statusId; status.setAttribute("role", "status");
+      status.setAttribute("aria-live", "polite");
+      status.style.cssText = "position:fixed;bottom:1rem;left:1rem;z-index:1000;padding:.55rem .8rem;border-radius:8px;background:var(--bg-elev,#1a1a1d);color:var(--text,#eee);border:1px solid var(--border,#555);font:13px sans-serif";
+      status.textContent = "Canvas changes are waiting to save."; document.body.appendChild(status);
+    }
+  }
+  function flush(){
+    var write = typeof window.cashfluxDataSet === "function" ? window.cashfluxDataSet : (typeof window.cashfluxStoreSet === "function" ? window.cashfluxStoreSet : null);
+    if (!write) { if (Object.keys(pending).length) reportUnavailable(true); return; }
+    Object.keys(pending).forEach(function(k){ try { write(k, pending[k]); memory[k] = pending[k]; delete pending[k]; } catch(e) {} });
+    reportUnavailable(Object.keys(pending).length > 0);
+  }
+  function load(k){ try { var read = typeof window.cashfluxDataGet === "function" ? window.cashfluxDataGet : (typeof window.cashfluxStoreGet === "function" ? window.cashfluxStoreGet : null); var r = read ? read(k) : (Object.prototype.hasOwnProperty.call(memory,k) ? memory[k] : "{}"); return JSON.parse(r || "{}"); } catch(e){ return Object.prototype.hasOwnProperty.call(memory,k) ? JSON.parse(memory[k] || "{}") : {}; } }
+  function save(k,v){ var s = JSON.stringify(v); memory[k] = s; pending[k] = s; flush(); }
+  window.setInterval(flush, 500);
   function getView(){ var v = load(VIEW_KEY); return { tx: v.tx||0, ty: v.ty||0, s: v.s||1 }; }
   function applyView(world, v){ world.style.transformOrigin="0 0"; world.style.transform="translate("+v.tx+"px,"+v.ty+"px) scale("+v.s+")"; }
   function clampS(s){ return Math.max(0.3, Math.min(2.5, s)); }

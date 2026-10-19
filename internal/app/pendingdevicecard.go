@@ -253,11 +253,16 @@ func pendingDeviceWatcher() uic.Node {
 	onDismissRecovery := uic.UseEvent(func() {
 		pair := pendingPair.Get()
 		pr := prefsAtom.Get().Normalize()
-		setPwRecovery.Set("")
-		pendingPair.Set(backendrpc.TokenPairResponse{})
-		persistAuthSession(prefsAtom, pr.ServerURL, pair, true)
-		notify(uistate.T("authCards.pendingSetPasswordSuccess"), false)
-		phase.Set(string(pendingPhaseDone))
+		persistAuthSessionThen(prefsAtom, pr.ServerURL, pair, true, func(err error) {
+			if err != nil {
+				setPwErr.Set("Sign-in could not be saved. Keep this recovery code open and try again.")
+				return
+			}
+			setPwRecovery.Set("")
+			pendingPair.Set(backendrpc.TokenPairResponse{})
+			notify(uistate.T("authCards.pendingSetPasswordSuccess"), false)
+			phase.Set(string(pendingPhaseDone))
+		})
 	})
 
 	p := pendingPhase(phase.Get())

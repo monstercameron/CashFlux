@@ -57,33 +57,51 @@ func useCloudServer(atom state.Atom[prefs.Prefs], step cloudStep) cloudConnectio
 				next.ServerMode = prefs.ServerSelfHosted
 				next.ConnectionSegment = prefs.ConnectionSegment(segment.Get())
 			}
-			hostChanged := backendHost(next.ServerURL) != backendHost(atom.Get().ServerURL)
+			hostChanged := normalizedBackendEndpoint(next.ServerURL) != normalizedBackendEndpoint(atom.Get().ServerURL)
 			hadSession := uistate.Session(atom.Get().ServerToken).Present()
 			if hostChanged {
 				next.ServerToken = ""
 				next.ServerCSRF = ""
 			}
-			cloudCommitPreferences(atom, next, func(err error) {
-				if err != nil {
-					logSyncError("save cloud connection failed", err)
-					if generation.Get() == g {
-						phase.Set(discoveryError)
+			outgoing := outgoingRefreshScope()
+			commit := func() {
+				cloudCommitPreferences(atom, next, func(err error) {
+					if err != nil {
+						logSyncError("save cloud connection failed", err)
+						if generation.Get() == g {
+							phase.Set(discoveryError)
+						}
+						return
 					}
-					return
-				}
-				// A newer draft may suppress feedback, never the scope teardown
-				// required by an address that already committed successfully.
-				if hostChanged {
-					hadScope := resetScopeForServerChange()
-					if hadScope || hadSession {
+					if hostChanged && (outgoing != nil || hadSession) {
 						reloadAfterIdentityChange("cloud server changed")
 						return
 					}
+					if generation.Get() == g {
+						complete()
+					}
+				})
+			}
+			if hostChanged {
+				if outgoing != nil {
+					beginSessionTransition()
+					resetScopeForServerChangeThen(*outgoing, func(_ bool, err error) {
+						if err != nil {
+							logSyncError("remove outgoing server session failed", err)
+							phase.Set(discoveryError)
+							return
+						}
+						commit()
+					})
+				} else if !backendSessionReady() {
+					phase.Set(discoveryError)
+				} else {
+					resetScopeForServerChange()
+					commit()
 				}
-				if generation.Get() == g {
-					complete()
-				}
-			})
+			} else {
+				commit()
+			}
 		}, func(string) {
 			if generation.Get() == g {
 				phase.Set(discoveryError)
@@ -123,15 +141,32 @@ func useCloudServer(atom state.Atom[prefs.Prefs], step cloudStep) cloudConnectio
 		}
 		next := atom.Get()
 		next.ServerToken = strings.TrimSpace(token.Get())
-		cloudCommitPreferences(atom, next, func(err error) {
-			if err != nil {
-				logSyncError("save cloud access code failed", err)
-				phase.Set(discoveryError)
-				return
-			}
+		commit := func() {
+			cloudCommitPreferences(atom, next, func(err error) {
+				if err != nil {
+					logSyncError("save cloud access code failed", err)
+					phase.Set(discoveryError)
+					return
+				}
+				reloadAfterIdentityChange("cloud access code sign-in")
+			})
+		}
+		if outgoing := outgoingRefreshScope(); outgoing != nil {
+			beginSessionTransition()
+			resetScopeForServerChangeThen(*outgoing, func(_ bool, err error) {
+				if err != nil {
+					logSyncError("remove outgoing session failed", err)
+					phase.Set(discoveryError)
+					return
+				}
+				commit()
+			})
+		} else if backendSessionReady() {
 			resetScopeForServerChange()
-			reloadAfterIdentityChange("cloud access code sign-in")
-		})
+			commit()
+		} else {
+			phase.Set(discoveryError)
+		}
 	}
 	return cloudConnection{Segment: segment.Get(), URL: url.Get(), Token: token.Get(), Discovery: discovery.Get(), Phase: phase.Get(),
 		OnSegment: func(v string) { segment.Set(v); phase.Set(discoveryIdle); generation.Set(generation.Get() + 1) },

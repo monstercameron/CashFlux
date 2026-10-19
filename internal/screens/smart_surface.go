@@ -68,7 +68,7 @@ func SmartSurface() ui.Node {
 
 	pr := uistate.UsePrefs().Get()
 	weekStart := pr.WeekStartWeekday()
-	backendAI := pr.Normalize().BackendActive()
+	backendAI := uistate.BackendConnectionActive(pr)
 	hasProvider := aiProviderConfigured(app, backendAI)
 	conn := resolveAIConn(app, backendAI, pr.ServerURL, pr.ServerToken)
 

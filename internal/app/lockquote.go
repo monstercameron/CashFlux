@@ -67,7 +67,7 @@ func refreshDailyLockQuote() {
 	// isn't available, so no fresh quote is generated then — the last cached quote shows
 	// and a new one is generated right after unlock (see hydrateFromPasscode).
 	prefs := uistate.LoadPrefs().Normalize()
-	useBackend := prefs.BackendActive()
+	useBackend := backendConnectionActive(prefs)
 	aiKey := strings.TrimSpace(app.Settings().OpenAIKey)
 	if aiKey == "" && !useBackend {
 		return

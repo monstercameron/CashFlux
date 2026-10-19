@@ -56,8 +56,10 @@ import (
 	"encoding/base64"
 	"fmt"
 	"log/slog"
+	"sync"
 	"syscall/js"
 
+	"github.com/monstercameron/CashFlux/internal/browserstore"
 	"github.com/monstercameron/CashFlux/internal/cryptobox"
 )
 
@@ -65,28 +67,98 @@ import (
 // artifact salt (base64-encoded 16 bytes).
 const artifactSaltKey = "cf.artifactSalt"
 
+// artifactSaltStoreKey is the encrypted browserstore record holding the stable
+// per-install artifact salt.
+const artifactSaltStoreKey = "cashflux:artifact:salt"
+
 // artifactKeyCache caches derived js.Value CryptoKeys keyed by saltB64 so
 // that PBKDF2 key derivation (600 000 iterations) is paid at most once per
 // unique salt per session.
 var artifactKeyCache = map[string]js.Value{}
 
+var artifactSaltMu sync.Mutex
+
 // artifactSalt returns (and lazily creates) the stable per-install artifact
-// salt. The salt is stored as standard base64 in localStorage so it survives
-// page reloads.
+// salt. Legacy localStorage data remains until its encrypted browserstore
+// replacement has been committed and read back successfully.
 func artifactSalt() (string, error) {
-	ls := js.Global().Get("localStorage")
-	if v := ls.Call("getItem", artifactSaltKey); !v.IsNull() && !v.IsUndefined() {
-		if s := v.String(); s != "" {
-			return s, nil
+	artifactSaltMu.Lock()
+	defer artifactSaltMu.Unlock()
+
+	stored, present, err := browserstore.GetSecure(artifactSaltStoreKey)
+	if err != nil {
+		return "", fmt.Errorf("artifact salt: read encrypted storage: %w", err)
+	}
+	legacy := legacyArtifactSalt()
+	if present && stored != "" {
+		if legacy != "" {
+			if legacy != stored {
+				return "", fmt.Errorf("artifact salt: legacy and encrypted values differ; preserving both copies")
+			}
+			if err := removeLegacyArtifactSaltAfterVerification(stored); err != nil {
+				slog.Warn("legacy artifact salt retained after migration", "error", err)
+			}
 		}
+		return stored, nil
+	}
+	if legacy != "" {
+		if err := persistArtifactSalt(legacy); err != nil {
+			return "", fmt.Errorf("artifact salt: migrate legacy value: %w", err)
+		}
+		return legacy, nil
 	}
 	raw := make([]byte, 16)
 	if err := cryptoGetRandomValues(raw); err != nil {
 		return "", fmt.Errorf("artifact salt: generate random bytes: %w", err)
 	}
 	b64 := base64.StdEncoding.EncodeToString(raw)
-	ls.Call("setItem", artifactSaltKey, b64)
+	if err := persistArtifactSalt(b64); err != nil {
+		return "", fmt.Errorf("artifact salt: persist new value: %w", err)
+	}
 	return b64, nil
+}
+
+func legacyArtifactSalt() string {
+	ls := js.Global().Get("localStorage")
+	if !ls.Truthy() {
+		return ""
+	}
+	v := ls.Call("getItem", artifactSaltKey)
+	if v.IsNull() || v.IsUndefined() {
+		return ""
+	}
+	return v.String()
+}
+
+func persistArtifactSalt(value string) error {
+	done := make(chan error, 1)
+	browserstore.SetSecure(artifactSaltStoreKey, value, func(err error) { done <- err })
+	if err := <-done; err != nil {
+		return fmt.Errorf("commit encrypted salt: %w", err)
+	}
+	got, present, err := browserstore.GetSecure(artifactSaltStoreKey)
+	if err != nil {
+		return fmt.Errorf("verify encrypted salt: %w", err)
+	}
+	if !present || got != value {
+		return fmt.Errorf("verify encrypted salt: durable value differs")
+	}
+	return removeLegacyArtifactSaltAfterVerification(value)
+}
+
+func removeLegacyArtifactSaltAfterVerification(expected string) error {
+	got, present, err := browserstore.GetSecure(artifactSaltStoreKey)
+	if err != nil {
+		return fmt.Errorf("verify encrypted salt before legacy removal: %w", err)
+	}
+	if !present || got != expected {
+		return fmt.Errorf("verify encrypted salt before legacy removal: durable value differs")
+	}
+	ls := js.Global().Get("localStorage")
+	if ls.Truthy() {
+		ls.Call("removeItem", artifactSaltKey)
+	}
+	return nil
 }
 
 // cachedArtifactKey returns the cached CryptoKey for saltB64, or derives and
@@ -130,7 +202,10 @@ func encryptArtifactSync(plain []byte) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("encryptArtifactSync: %w", err)
 	}
+	return encryptArtifactWithSalt(plain, saltB64)
+}
 
+func encryptArtifactWithSalt(plain []byte, saltB64 string) ([]byte, error) {
 	key, err := cachedArtifactKey(saltB64)
 	if err != nil {
 		return nil, fmt.Errorf("encryptArtifactSync: %w", err)

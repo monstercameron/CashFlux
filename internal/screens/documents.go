@@ -462,73 +462,91 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 	recordDocument := func(kind domain.DocumentKind, accountID string, rows []extract.Row, rowCount, skipped int, cpID string) {
 		recordDocumentAs(app, id.New(), kind, accountID, rows, rowCount, skipped, 0, 0, cpID)
 	}
+	checkpointSaving := ui.UseState(false)
+	checkpointRun := func(label string, operation func(string)) {
+		if checkpointSaving.Get() {
+			return
+		}
+		checkpointSaving.Set(true)
+		uistate.SaveCheckpointThen(label, func(cpID string, err error) {
+			checkpointSaving.Set(false)
+			if err != nil {
+				uistate.PostNotice(uistate.T("enc34.checkpointFailed"), true)
+				return
+			}
+			operation(cpID)
+		})
+	}
 
 	// commitCSVImport is the shared write path used by both the paste and file-picker
 	// flows after any duplicate warning has been acknowledged. It calls
 	// ImportTransactionsCSV, resets the dup-warning state, and posts the summary.
-	commitCSVImport := func(data []byte) bool {
+	commitCSVImport := func(data []byte) {
 		// #55: checkpoint the dataset before the import writes so a bad file can
 		// be rolled back in one click from Settings → Data (or from the import
 		// history's per-run roll-back, which is why the ID rides the record).
-		cpID := uistate.SaveCheckpoint(uistate.T("ckpt.beforeCSVImport"))
-		// #57: capture the pre-import balance so the summary can state the move.
-		var beforeMinor int64
-		var balDec int
-		haveBal := false
-		if acc, ok := domain.AccountByID(app.Accounts(), importAcct.Get()); ok {
-			balDec = currency.Decimals(acc.Currency)
-			if b, berr := ledger.Balance(acc, app.Transactions()); berr == nil {
-				beforeMinor, haveBal = b.Amount, true
-			}
-		}
-		// C687: the run's id is minted BEFORE the import so every row it writes can
-		// be stamped with it. Recording the document afterwards, as this used to,
-		// left the rows with no way to say which import created them — which is
-		// exactly why "688 imported" and "565 in the ledger" could not be
-		// reconciled.
-		docID := id.New()
-		res, err := app.ImportTransactionsCSV(data, importAcct.Get(), docID)
-		n, skipped := res.Imported, res.Failed
-		csvDupWarn.Set("")
-		pendingCSV.Set(nil)
-		csvPreflightS.Set(nil)
-		if err != nil {
-			friendly := strings.TrimPrefix(err.Error(), "store: ")
-			msg.Set(uistate.T("documents.csvError", friendly))
-			return false
-		}
-		if n > 0 || res.Duplicates > 0 || len(skipped) > 0 {
-			// Recorded even when nothing landed: an import where every row was a
-			// duplicate is a thing that happened, and a history that only shows
-			// successful runs cannot explain a ledger that did not change.
-			recordDocumentAs(app, docID, domain.DocCSV, importAcct.Get(), nil,
-				n, res.Duplicates+len(skipped), res.Duplicates, len(skipped), cpID)
-		}
-		summary := csvImportSummary(accounts, importAcct.Get(), n)
-		if len(skipped) > 0 {
-			summary += " " + uistate.T("documents.importedCsvSkipped", plural(len(skipped), "row"))
-			if d := csvSkipDetail(skipped); d != "" {
-				summary += " " + d
-			}
-		}
-		// #57: full result — say where the balance landed.
-		if haveBal && n > 0 {
+		checkpointRun(uistate.T("ckpt.beforeCSVImport"), func(cpID string) {
+			// #57: capture the pre-import balance so the summary can state the move.
+			var beforeMinor int64
+			var balDec int
+			haveBal := false
 			if acc, ok := domain.AccountByID(app.Accounts(), importAcct.Get()); ok {
-				if after, aerr := ledger.Balance(acc, app.Transactions()); aerr == nil {
-					summary += " " + uistate.T("documents.balanceMoved",
-						money.FormatMinor(beforeMinor, balDec), money.FormatMinor(after.Amount, balDec))
+				balDec = currency.Decimals(acc.Currency)
+				if b, berr := ledger.Balance(acc, app.Transactions()); berr == nil {
+					beforeMinor, haveBal = b.Amount, true
 				}
 			}
-		}
-		msg.Set(summary)
-		// C364: name the reversal path (Ctrl+Z / Activity) at the moment a CSV
-		// import commits, so a bad file is reversible from the moment of risk.
-		if n > 0 {
-			postUndoStory(uistate.T("documents.importUndo", plural(n, "transaction")))
-		}
-		csvText.Set("") // clear the paste box after a successful import
-		rev.Set(rev.Get() + 1)
-		return true
+			// C687: the run's id is minted BEFORE the import so every row it writes can
+			// be stamped with it. Recording the document afterwards, as this used to,
+			// left the rows with no way to say which import created them — which is
+			// exactly why "688 imported" and "565 in the ledger" could not be
+			// reconciled.
+			docID := id.New()
+			res, err := app.ImportTransactionsCSV(data, importAcct.Get(), docID)
+			n, skipped := res.Imported, res.Failed
+			csvDupWarn.Set("")
+			pendingCSV.Set(nil)
+			csvPreflightS.Set(nil)
+			if err != nil {
+				friendly := strings.TrimPrefix(err.Error(), "store: ")
+				msg.Set(uistate.T("documents.csvError", friendly))
+				return
+			}
+			if n > 0 || res.Duplicates > 0 || len(skipped) > 0 {
+				// Recorded even when nothing landed: an import where every row was a
+				// duplicate is a thing that happened, and a history that only shows
+				// successful runs cannot explain a ledger that did not change.
+				recordDocumentAs(app, docID, domain.DocCSV, importAcct.Get(), nil,
+					n, res.Duplicates+len(skipped), res.Duplicates, len(skipped), cpID)
+			}
+			summary := csvImportSummary(accounts, importAcct.Get(), n)
+			if len(skipped) > 0 {
+				summary += " " + uistate.T("documents.importedCsvSkipped", plural(len(skipped), "row"))
+				if d := csvSkipDetail(skipped); d != "" {
+					summary += " " + d
+				}
+			}
+			// #57: full result — say where the balance landed.
+			if haveBal && n > 0 {
+				if acc, ok := domain.AccountByID(app.Accounts(), importAcct.Get()); ok {
+					if after, aerr := ledger.Balance(acc, app.Transactions()); aerr == nil {
+						summary += " " + uistate.T("documents.balanceMoved",
+							money.FormatMinor(beforeMinor, balDec), money.FormatMinor(after.Amount, balDec))
+					}
+				}
+			}
+			msg.Set(summary)
+			// C364: name the reversal path (Ctrl+Z / Activity) at the moment a CSV
+			// import commits, so a bad file is reversible from the moment of risk.
+			if n > 0 {
+				postUndoStory(uistate.T("documents.importUndo", plural(n, "transaction")))
+			}
+			csvText.Set("") // clear the paste box after a successful import
+			if importModalOpen.Get() {
+				importModalOpen.Set(false)
+			}
+			rev.Set(rev.Get() + 1)
+		})
 	}
 
 	// confirmCSV is the preflight's "Import now" handler: commits the pending
@@ -899,7 +917,7 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 
 	settings := app.Settings()
 	pr := uistate.UsePrefs().Get().Normalize()
-	useBackendAI := pr.BackendActive()
+	useBackendAI := uistate.BackendConnectionActive(pr)
 	aiModel := settings.OpenAIModel
 	if aiModel == "" || aiModel == "gpt-5.4-mini" {
 		aiModel = "gpt-5.5" // vision/receipt extraction: use the flagship vision model
@@ -1165,70 +1183,70 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 	// Returns whether the import succeeded (false leaves the modal open so the error
 	// shows). Wrapped by importDraft (the draft card's button) and reused by the
 	// modal footer's Save.
-	doImportDraft := func() bool {
+	doImportDraft := func() {
 		rows := draft.Get()
 		// #55: checkpoint before the reviewed-rows import commits.
-		cpID := uistate.SaveCheckpoint(uistate.T("ckpt.beforeDocImport", plural(len(rows), "row")))
-		result, err := app.ImportReviewedDocumentRows(domain.DocImage, importAcct.Get(), rows)
-		if err != nil {
-			aiErr.Set(strings.TrimPrefix(err.Error(), "appstate: "))
-			return false
-		}
-		// #57: attach the pre-import checkpoint to the history record appstate
-		// just created, so this run's roll-back is one click from the history.
-		if cpID != "" && result.DocumentID != "" {
-			for _, d := range app.Documents() {
-				if d.ID == result.DocumentID {
-					d.CheckpointID = cpID
-					_ = app.PutDocument(d)
-					break
+		checkpointRun(uistate.T("ckpt.beforeDocImport", plural(len(rows), "row")), func(cpID string) {
+			result, err := app.ImportReviewedDocumentRows(domain.DocImage, importAcct.Get(), rows)
+			if err != nil {
+				aiErr.Set(strings.TrimPrefix(err.Error(), "appstate: "))
+				return
+			}
+			// #57: attach the pre-import checkpoint to the history record appstate
+			// just created, so this run's roll-back is one click from the history.
+			if cpID != "" && result.DocumentID != "" {
+				for _, d := range app.Documents() {
+					if d.ID == result.DocumentID {
+						d.CheckpointID = cpID
+						_ = app.PutDocument(d)
+						break
+					}
 				}
 			}
-		}
-		// If the draft came from a statement PDF and the user asked to keep a copy,
-		// store the source PDF in the Artifacts vault. Its bytes go to the IndexedDB
-		// blob store (not the SQLite dataset) via StoreBlobForArtifact, so the record
-		// stays lightweight; the Put blocks on IDB, so run it off the event goroutine.
-		if pdfSaveCopy.Get() && len(pdfBytes.Get()) > 0 {
-			pdf := domain.Artifact{
-				ID: id.New(), Name: firstNonEmpty(pdfName.Get(), "statement.pdf"),
-				Kind: artifacts.KindPDF, MIME: "application/pdf",
-				Bytes: pdfBytes.Get(), CreatedAt: time.Now(),
+			// If the draft came from a statement PDF and the user asked to keep a copy,
+			// store the source PDF in the Artifacts vault. Its bytes go to the IndexedDB
+			// blob store (not the SQLite dataset) via StoreBlobForArtifact, so the record
+			// stays lightweight; the Put blocks on IDB, so run it off the event goroutine.
+			if pdfSaveCopy.Get() && len(pdfBytes.Get()) > 0 {
+				pdf := domain.Artifact{
+					ID: id.New(), Name: firstNonEmpty(pdfName.Get(), "statement.pdf"),
+					Kind: artifacts.KindPDF, MIME: "application/pdf",
+					Bytes: pdfBytes.Get(), CreatedAt: time.Now(),
+				}
+				pdf.Size = artifacts.Size(pdf)
+				go func() {
+					stored, serr := app.StoreBlobForArtifact(pdf)
+					if serr != nil {
+						uistate.PostNotice(serr.Error(), true)
+						return
+					}
+					if perr := app.PutArtifact(stored); perr != nil {
+						uistate.PostNotice(perr.Error(), true)
+						return
+					}
+					app.RefreshBlobUsage()
+					uistate.RequestPersist()
+				}()
 			}
-			pdf.Size = artifacts.Size(pdf)
-			go func() {
-				stored, serr := app.StoreBlobForArtifact(pdf)
-				if serr != nil {
-					uistate.PostNotice(serr.Error(), true)
-					return
-				}
-				if perr := app.PutArtifact(stored); perr != nil {
-					uistate.PostNotice(perr.Error(), true)
-					return
-				}
-				app.RefreshBlobUsage()
-				uistate.RequestPersist()
-			}()
-		}
-		setDraft([]extract.Row{})
-		imageURL.Set("")
-		imageDraftAtom.Set("") // C98: clear persisted image after successful import
-		pdfData.Set("")
-		pdfBytes.Set(nil)
-		pdfName.Set("")
-		pdfSaveCopy.Set(false)
-		aiErr.Set("")
-		summary := uistate.T("impc.importSummary", result.Imported, result.Skipped, len(result.Failed), len(result.PossibleDuplicates))
-		if detail := csvSkipDetail(result.Failed); detail != "" {
-			summary += " " + detail
-		}
-		msg.Set(summary)
-		// C364: undo story for a committed image/statement import.
-		if result.Imported > 0 {
-			postUndoStory(uistate.T("documents.importUndo", plural(result.Imported, "transaction")))
-		}
-		rev.Set(rev.Get() + 1)
-		return true
+			setDraft([]extract.Row{})
+			imageURL.Set("")
+			imageDraftAtom.Set("") // C98: clear persisted image after successful import
+			pdfData.Set("")
+			pdfBytes.Set(nil)
+			pdfName.Set("")
+			pdfSaveCopy.Set(false)
+			aiErr.Set("")
+			summary := uistate.T("impc.importSummary", result.Imported, result.Skipped, len(result.Failed), len(result.PossibleDuplicates))
+			if detail := csvSkipDetail(result.Failed); detail != "" {
+				summary += " " + detail
+			}
+			msg.Set(summary)
+			// C364: undo story for a committed image/statement import.
+			if result.Imported > 0 {
+				postUndoStory(uistate.T("documents.importUndo", plural(result.Imported, "transaction")))
+			}
+			rev.Set(rev.Get() + 1)
+		})
 	}
 	importDraft := ui.UseEvent(Prevent(func() { doImportDraft() }))
 
@@ -1237,7 +1255,7 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 	// doImportReceipt imports the reviewed lines as ONE transaction split across
 	// categories (receipt mode). Returns whether it succeeded. Wrapped by
 	// importReceipt and reused by the modal footer's Save.
-	doImportReceipt := func() bool {
+	doImportReceipt := func() {
 		rows := draft.Get()
 		lines := make([]extract.ReceiptLine, 0, len(rows))
 		for _, r := range rows {
@@ -1245,28 +1263,28 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 		}
 		rec := extract.Receipt{Merchant: strings.TrimSpace(receiptMerchant.Get()), Total: absAmount(receiptTotal.Get()), Lines: lines}
 		// #55: checkpoint before the receipt import commits.
-		cpID := uistate.SaveCheckpoint(uistate.T("ckpt.beforeReceiptImport"))
-		tx, err := app.ImportReceipt(rec, importAcct.Get(), time.Now())
-		if err != nil {
-			aiErr.Set(strings.TrimPrefix(err.Error(), "appstate: "))
-			return false
-		}
-		recordDocument(domain.DocImage, importAcct.Get(), rows, len(rows), 0, cpID)
-		// #58: a confirmed create also teaches the learn tally this merchant's
-		// category choices, same as an attach.
-		learnReceiptChoices(rec.Merchant, tx.Splits)
-		setDraft([]extract.Row{})
-		imageURL.Set("")
-		imageDraftAtom.Set("") // C98: clear persisted image after successful import
-		receiptTotal.Set("")
-		receiptMerchant.Set("")
-		receiptMode.Set(false)
-		aiErr.Set("")
-		msg.Set("Imported the receipt as one transaction split across " + plural(len(tx.Splits), "category") + ".")
-		// C364: undo story for a committed receipt import.
-		postUndoStory(uistate.T("documents.receiptImportUndo"))
-		rev.Set(rev.Get() + 1)
-		return true
+		checkpointRun(uistate.T("ckpt.beforeReceiptImport"), func(cpID string) {
+			tx, err := app.ImportReceipt(rec, importAcct.Get(), time.Now())
+			if err != nil {
+				aiErr.Set(strings.TrimPrefix(err.Error(), "appstate: "))
+				return
+			}
+			recordDocument(domain.DocImage, importAcct.Get(), rows, len(rows), 0, cpID)
+			// #58: a confirmed create also teaches the learn tally this merchant's
+			// category choices, same as an attach.
+			learnReceiptChoices(rec.Merchant, tx.Splits)
+			setDraft([]extract.Row{})
+			imageURL.Set("")
+			imageDraftAtom.Set("") // C98: clear persisted image after successful import
+			receiptTotal.Set("")
+			receiptMerchant.Set("")
+			receiptMode.Set(false)
+			aiErr.Set("")
+			msg.Set("Imported the receipt as one transaction split across " + plural(len(tx.Splits), "category") + ".")
+			// C364: undo story for a committed receipt import.
+			postUndoStory(uistate.T("documents.receiptImportUndo"))
+			rev.Set(rev.Get() + 1)
+		})
 	}
 	importReceipt := ui.UseEvent(Prevent(func() { doImportReceipt() }))
 
@@ -1278,24 +1296,22 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 	// is the pinned footer action the standardized modals all have. It submits a
 	// dedicated hidden form (importModalFormID) so FlipPanel's footer Save can drive it.
 	saveModalImport := ui.UseEvent(Prevent(func() {
-		ok := true
 		switch {
 		case len(draft.Get()) > 0 && receiptMode.Get():
-			ok = doImportReceipt()
+			doImportReceipt()
 		case len(draft.Get()) > 0:
-			ok = doImportDraft()
+			doImportDraft()
 		default:
 			if raw := []byte(strings.TrimSpace(csvText.Get())); len(raw) > 0 {
-				ok = commitCSVImport(raw)
+				commitCSVImport(raw)
 			} else if staged := pendingCSV.Get(); len(staged) > 0 {
 				// QA H2/CF-03: a chosen CSV file awaiting the duplicate confirmation
 				// counts as "something entered" — footer Save commits it rather than
 				// silently closing over the staged import.
-				ok = commitCSVImport(staged)
+				commitCSVImport(staged)
+			} else {
+				importModalOpen.Set(false)
 			}
-		}
-		if ok {
-			importModalOpen.Set(false)
 		}
 	}))
 
@@ -1740,6 +1756,7 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 				OnReceiptMerchant: onReceiptMerchant,
 				OnImportDraft:     importDraft,
 				OnImportReceipt:   importReceipt,
+				SavingCheckpoint:  checkpointSaving.Get(),
 				OnRemoveDraft:     removeDraft,
 				OnUpdateDraft:     updateDraft,
 			}),
@@ -1775,6 +1792,7 @@ type draftReviewProps struct {
 	ReceiptMode       bool
 	ReceiptTotal      string
 	ReceiptMerchant   string
+	SavingCheckpoint  bool
 	RecBaseCur        string
 	ClearDraft        ui.Handler
 	Toggle            ui.Node
@@ -1863,7 +1881,7 @@ func paginatedDraftReview(props draftReviewProps) ui.Node {
 					Placeholder(uistate.T("documents.receiptTotal")), OnInput(props.OnReceiptTotal), uiw.FieldValue(props.ReceiptTotal)),
 				Select(css.Class("field"), Attr("aria-label", uistate.T("documents.importAccount")), OnChange(props.OnAcctChange), draftAccountOptions(props.Accounts, props.ImportAcctID)),
 				receiptStatus,
-				buttonWithDisabled(!reconciled, []any{css.Class("btn btn-primary"), Type("submit")}, uistate.T("documents.importReceipt")),
+				buttonWithDisabled(!reconciled || props.SavingCheckpoint, []any{css.Class("btn btn-primary"), Type("submit")}, IfElse(props.SavingCheckpoint, Text(uistate.T("enc34.saving")), Text(uistate.T("documents.importReceipt")))),
 			),
 		)
 	} else {
@@ -1892,8 +1910,7 @@ func paginatedDraftReview(props draftReviewProps) ui.Node {
 				draftSumNet(inMinor-outMinor, props.ReviewCur)),
 			Form(css.Class("draft-actionrow"), OnSubmit(props.OnImportDraft),
 				Select(css.Class("field"), Attr("aria-label", uistate.T("documents.importAccount")), OnChange(props.OnAcctChange), draftAccountOptions(props.Accounts, props.ImportAcctID)),
-				Button(css.Class("btn btn-primary"), Type("submit"), Attr("data-testid", "draft-import-all"),
-					uistate.T("impc.importAllRows", len(props.Rows))),
+				buttonWithDisabled(props.SavingCheckpoint, []any{css.Class("btn btn-primary"), Type("submit"), Attr("data-testid", "draft-import-all")}, IfElse(props.SavingCheckpoint, Text(uistate.T("enc34.saving")), Text(uistate.T("impc.importAllRows", len(props.Rows))))),
 			),
 		)
 	}

@@ -7,6 +7,7 @@
 package app
 
 import (
+	"context"
 	"strings"
 	"syscall/js"
 
@@ -93,7 +94,9 @@ func Run() {
 	// data into it FIRST — before anything reads persisted state. After this the app
 	// depends on no localStorage at all; every Get/Set/Remove routes through SQLite
 	// (the dataset) or this store (the dataset blob + bootstrap keys).
+	configureLegacyProfileStorage()
 	browserstore.Init()
+	awaitProtectedStorageBoot()
 	browserstore.RegisterJSBridge() // let vendored JS (music player) persist via IndexedDB too
 	configureHostedPrefs()
 
@@ -118,7 +121,14 @@ func Run() {
 	// localStorage JSON blob. This must run before hydrateDataset so the blob store
 	// is ready when artifact bytes are migrated on load.
 	initBlobStore()
-	hydrateDataset()
+	hydrateOpenedProtectedStorage()
+	awaitLegacyDatasetUnlock()
+	// Restore and refresh the selected account before any identity, sync or watch.
+	// Failure leaves household data intact and the connection behind sign-in.
+	if err := bootstrapSelectedSession(context.Background()); err != nil {
+		logSyncError("restore sign-in failed", err)
+		setSyncStatus(syncStatus{State: syncStateIdentityUnknown, AuthFailed: true, Message: uistate.T("sync.identityUnknown")})
+	}
 	initUndo() // capture the baseline undo snapshot after hydration (C78)
 	if appstate.Default != nil {
 		appstate.Default.LoadAuditIntoFeed() // restore persisted audit history into the Activity feed (C78)
@@ -286,9 +296,7 @@ func Run() {
 	// Keep the top-bar offline indicator in sync with browser connectivity.
 	wireOnlineStatus()
 
-	// If a passcode lock is set, cover the app with the unlock gate, and arm the
-	// inactivity auto-lock timer.
-	maybeLockOnBoot()
+	// Boot has already passed the protected-data gate. Arm inactivity locking.
 	wireAutoLock()
 
 	// Persist the dataset to localStorage so it survives a reload.
@@ -388,4 +396,83 @@ func Run() {
 	js.Global().Set("__cashfluxReady", true)
 
 	utils.WaitForever()
+}
+
+// configureLegacyProfileStorage is the sole future ConfigureScope integration
+// point. v1 deliberately retains browserstore's legacy local profile. v2 must
+// resolve its fixed scope here before Init, rather than inventing an identity.
+func configureLegacyProfileStorage() {}
+
+var bootOpenedAfterProtectedError bool
+
+// awaitProtectedStorageBoot runs before any protected preference, workspace or
+// dataset read. Nothing resumes until the gate reports a successful unlock.
+func awaitProtectedStorageBoot() {
+	err := browserstore.InitError()
+	if err == nil && browserstore.Durable() {
+		if passcode, changed, recoveryErr := recoverSecureLockTransition(); recoveryErr != nil {
+			err = recoveryErr
+		} else if changed {
+			activePasscode = passcode
+		}
+	}
+	if err == nil && !browserstore.Durable() {
+		err = errProtectedStorageUnavailable
+	}
+	resumeProtectedBoot(err, func(err error, resume func()) {
+		bootOpenedAfterProtectedError = true
+		done := make(chan struct{}, 1)
+		showProtectedStorageGate(err, func() { done <- struct{}{} })
+		<-done
+		resume()
+	}, func() {})
+	// A migrated v1 lock config predates the secure WDK lifecycle. Ask for its
+	// passcode before any financial hydration, then upgrade its wrap explicitly.
+	if state := browserstore.SecureKeyState(); state != nil && !state.AppLock && loadAppLock().Active() {
+		done := make(chan struct{}, 1)
+		showProtectedStorageGate(errLegacyDatasetLocked, func() { done <- struct{}{} })
+		<-done
+	}
+}
+
+// resumeProtectedBoot keeps the continuation behind the gate even for errors
+// whose underlying storage/key-service type is not recognized by this build.
+func resumeProtectedBoot(err error, gate func(error, func()), resume func()) {
+	if err != nil {
+		gate(err, resume)
+		return
+	}
+	resume()
+}
+
+// awaitLegacyDatasetUnlock handles the inner passcode envelope from v1 only
+// after the always-encrypted outer store has opened. Recovery of the WDK alone
+// cannot decrypt this older envelope, so it must never be treated as empty data.
+func awaitLegacyDatasetUnlock() {
+	if pendingEnvelopeRaw == "" {
+		return
+	}
+	if activePasscode != "" {
+		done := make(chan error, 1)
+		hydrateFromPasscodeThen(activePasscode, func(err error) { done <- err })
+		if <-done == nil {
+			return
+		}
+	}
+	done := make(chan struct{}, 1)
+	showProtectedStorageGate(errLegacyDatasetLocked, func() { done <- struct{}{} })
+	<-done
+}
+
+// hydrateOpenedProtectedStorage never treats an absent dataset after recovery
+// as permission to seed a replacement household. A recovered empty profile
+// opens empty; hosted mode still waits for its account's authoritative data.
+func hydrateOpenedProtectedStorage() {
+	if bootOpenedAfterProtectedError && browserstore.GetString(datasetStoreKey) == "" {
+		hydrationSucceeded, hadLocalDataset = true, false
+		uistate.SetSampleActive(false)
+		initializeHostedHydration(hostedDocument())
+		return
+	}
+	hydrateDataset()
 }

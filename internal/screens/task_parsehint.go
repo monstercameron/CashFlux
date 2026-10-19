@@ -67,11 +67,11 @@ func taskParseHint(props taskParseHintProps) ui.Node {
 	raw := strings.TrimSpace(props.Raw)
 	local := duedate.Parse(raw, time.Now())
 
-	backendAI := app != nil && aiProviderConfigured(app, pr.Normalize().BackendActive())
+	backendAI := app != nil && aiProviderConfigured(app, uistate.BackendConnectionActive(pr))
 	aiEnabled := backendAI && settings.IsEnabled(taskParseAICode) && !settings.IsMuted(taskParseAICode)
 	aiConn := smartAIConn{}
 	if app != nil {
-		aiConn = resolveAIConn(app, pr.Normalize().BackendActive(), pr.ServerURL, pr.ServerToken)
+		aiConn = resolveAIConn(app, uistate.BackendConnectionActive(pr), pr.ServerURL, pr.ServerToken)
 	}
 
 	applyLocal := func() {

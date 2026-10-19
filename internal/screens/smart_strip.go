@@ -71,7 +71,7 @@ func SmartStrip(props smartStripProps) ui.Node {
 	// click-before-run analysis on the page itself, not only the hub). Only on a
 	// concrete page, not the Dashboard cross-page summary.
 	var aiFeats []smart.Feature
-	backendAI := pr.Normalize().BackendActive()
+	backendAI := uistate.BackendConnectionActive(pr)
 	if props.Page != "" {
 		aiFeats = enabledPageAIFeatures(settings, props.Page)
 	}

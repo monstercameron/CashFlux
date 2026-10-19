@@ -73,6 +73,7 @@ var catalogue = []Entry{
 	{"websearch-key", ShouldNotPersist, "Raw search API keys must not be persisted in JavaScript-readable storage."},
 	{"cloud-ai-key-set", MustEncrypt, "AI credential presence reveals configured private services."},
 	{"cred:openai", MustEncrypt, "Remembered AI credentials require encryption at rest."},
+	{"cred:refresh:", MustEncrypt, "Scope-bound self-host refresh credentials require encryption at rest."},
 	{"credvault", MustEncrypt, "Contains bank-login usernames, passwords, and security notes."},
 	{"chat-system-prompt", MustEncrypt, "User-authored AI prompts may contain personal information."},
 	{"applock", MustEncrypt, "Contains passcode verifier material and lock configuration."},

@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math/rand"
 	"strconv"
 	"strings"
@@ -192,16 +193,25 @@ var (
 // One definition, in uistate, because the screens cannot import this package
 // (internal/app imports internal/screens) and every Smart+ feature over there
 // needs the same answer. See uistate.EffectiveServerToken.
+func backendConnectionActive(pr prefs.Prefs) bool {
+	return backendSessionReady() && !pr.BackendDisabled && strings.TrimSpace(pr.ServerURL) != "" && effectiveServerToken(pr) != ""
+}
+
 func effectiveServerToken(pr prefs.Prefs) string {
+	if scope := outgoingRefreshScope(); scope != nil && normalizedBackendEndpoint(pr.ServerURL) != scope.Endpoint {
+		// The next address may have an explicitly supplied static credential,
+		// but it must never inherit this page's rotating bearer.
+		return strings.TrimSpace(pr.ServerToken)
+	}
 	return uistate.EffectiveServerToken(pr.ServerToken)
 }
 
-// hasRotatableSession reports whether a Custom Sync refresh token is on
+// hasRotatableSession reports whether encrypted-record mode has a token on
 // hand — the signal that this device's credential can be refreshed/degraded,
 // as opposed to a static self-host token, which never rotates and is left
 // entirely alone by this machinery.
 func hasRotatableSession() bool {
-	return strings.TrimSpace(lsGet(authRefreshTokenKey)) != ""
+	return strings.TrimSpace(lsGet(authRefreshModeKey)) == authRefreshModeEncrypted && strings.TrimSpace(lsGet(authRefreshTokenKey)) != ""
 }
 
 // dropSharedConn tells services.wasm to cancel active operations and close its
@@ -229,6 +239,12 @@ func isAuthError(err error) bool {
 // refreshAccessToken, then — only if that succeeded — resets the worker connection
 // pool and retries the original call exactly once under the refreshed token.
 func invokeAuthed(ctx context.Context, pr prefs.Prefs, method string, req, resp any) error {
+	if !backendSessionReady() {
+		return errors.New("sign-in must be restored before contacting the server")
+	}
+	if scope := outgoingRefreshScope(); scope != nil && normalizedBackendEndpoint(pr.ServerURL) != scope.Endpoint {
+		return errors.New("server address changed; reopen this connection before continuing")
+	}
 	err := invokeWorkerRPC(ctx, pr.ServerURL, effectiveServerToken(pr), method, req, resp)
 	if !isAuthError(err) {
 		return err
@@ -246,82 +262,51 @@ func invokeAuthed(ctx context.Context, pr prefs.Prefs, method string, req, resp 
 // race the server for a refresh. It returns false when there is no
 // rotatable session to refresh, or the refresh attempt failed.
 func refreshAccessToken(ctx context.Context, pr prefs.Prefs) bool {
-	startingRefresh := strings.TrimSpace(lsGet(authRefreshTokenKey))
-	if startingRefresh == "" {
+	scope := outgoingRefreshScope()
+	if scope == nil || !backendSessionReady() || normalizedBackendEndpoint(pr.ServerURL) != scope.Endpoint {
 		return false
 	}
-	ok := false
-	withTokenRefreshLock(func() {
-		// Re-read from storage before deciding. The guard below compares against
-		// what ANOTHER tab may have written while we waited for the lock, and
-		// browserstore's cache is per-tab and frozen at boot — so without this
-		// the comparison could only ever see our own starting value, always
-		// concluded "unchanged", and replayed a refresh token the other tab had
-		// already consumed. The server treats a replayed refresh token as a
-		// compromise signal and revokes the whole session family, so this
-		// omission could sign the user out of every device simply for having a
-		// second tab open (2026-08-18).
-		browserstore.Reload(authRefreshTokenKey, authAccessTokenKey)
-		// Reuse without replaying: another tab may have already refreshed
-		// while we waited for the lock. A refresh token is single-use —
-		// replaying our now-stale copy would trip the server's reuse/
-		// compromise detection and revoke the WHOLE session family. If the
-		// stored refresh token has moved on, there is already fresh state
-		// to use; nothing left for us to do.
-		if strings.TrimSpace(lsGet(authRefreshTokenKey)) != startingRefresh {
-			ok = true
-			return
+	var ok bool
+	if scope.Mode == authRefreshModeCookie {
+		ok = (scopedRefreshSession{*scope}).refreshCookieAccessToken(ctx, pr)
+	} else {
+		err := (scopedRefreshSession{*scope}).refreshFirst(ctx, func(ctx context.Context, token string) (backendrpc.TokenPairResponse, error) {
+			var pair backendrpc.TokenPairResponse
+			err := invokeWorkerRPC(ctx, scope.Endpoint, "refresh", backendrpc.MethodAuthRefreshToken, backendrpc.RefreshTokenRequest{RefreshToken: token}, &pair)
+			return pair, err
+		})
+		if err != nil {
+			if isAuthError(err) {
+				degradeToLocalOnly()
+			} else {
+				logSyncError("token refresh failed", err)
+			}
+			return false
 		}
-		ok = doRefreshAccessToken(ctx, pr, startingRefresh)
-	})
+		ok = true
+	}
+	if ok {
+		restoreTokenLifecycleOnBoot()
+		dropSharedConn()
+		stopBackendWatch()
+		startBackendWatch()
+	}
 	return ok
 }
 
-// doRefreshAccessToken makes the actual AuthService.RefreshToken call. It
-// must run only while holding the token-refresh lock (via refreshAccessToken)
-// so it is never invoked twice concurrently for the same session.
-//
-// RefreshToken/Logout are exempt from the server's auth interceptor (see
-// authinterceptor_skip.go), so the tunnel dial below only needs SOME
-// non-empty token to satisfy syncbridge's handshake requirement — it need
-// not itself be valid, which matters because this is exactly the call made
-// when the access token has expired.
-func doRefreshAccessToken(ctx context.Context, pr prefs.Prefs, refreshToken string) bool {
-	dialCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
-	defer cancel()
-	token := effectiveServerToken(pr)
-	if token == "" {
-		token = "refresh"
-	}
-	var resp backendrpc.TokenPairResponse
-	err := invokeWorkerRPC(dialCtx, pr.ServerURL, token, backendrpc.MethodAuthRefreshToken,
-		backendrpc.RefreshTokenRequest{RefreshToken: refreshToken}, &resp)
-	if err != nil {
-		if isAuthError(err) {
-			// C427 graceful degrade: the refresh token itself is
-			// expired/revoked, not just the access token. There is no
-			// credential left to recover — drop to local-only silently. No
-			// error dialog, no data loss: the encrypted dataset on disk
-			// stays fully usable, just no longer synced.
-			degradeToLocalOnly()
-		} else {
-			logSyncError("token refresh failed", err)
-		}
+// refreshCookieAccessToken is the fixed-account runtime counterpart of the
+// legacy cookie adapter. Publishing access stays behind the account check;
+// refreshAccessToken rearms the timer and watch only after the lock settles.
+func (s scopedRefreshSession) refreshCookieAccessToken(ctx context.Context, pr prefs.Prefs) bool {
+	if s.scope.Mode != authRefreshModeCookie || normalizedBackendEndpoint(pr.ServerURL) != s.scope.Endpoint {
 		return false
 	}
-	storeAuthTokenPair(resp)
-	// Do not release the cross-tab lock until the rotated pair has actually
-	// COMMITTED. Set persists asynchronously, so returning here would let the
-	// next tab acquire the lock and re-read an IndexedDB that still holds the
-	// old refresh token — it would then conclude nothing had rotated and replay
-	// a token the server has already consumed, which revokes the entire session
-	// family. Found by adversarial review, 2026-08-18: the Reload added earlier
-	// closed the read side of that race and left the write side open.
-	browserstore.Barrier()
-	return true
+	ok := false
+	withTokenRefreshLock(func() { ok = doCookieRefreshForAccount(ctx, pr, s.scope.AccountID) })
+	return ok
 }
 
-// storeAuthTokenPair persists a freshly (re)issued token pair and rearms the
+// storeAuthTokenPair publishes a token pair in page memory and rearms the
 // proactive countdown. C425: an already-open watch stream authenticated
 // with the OLD token has no reason to keep running under it — cycle it
 // through the existing reconnect/backoff machinery (stopBackendWatch/
@@ -330,13 +315,13 @@ func doRefreshAccessToken(ctx context.Context, pr prefs.Prefs, refreshToken stri
 // eventually gets rejected on its own.
 func storeAuthTokenPair(pair backendrpc.TokenPairResponse) {
 	if strings.TrimSpace(pair.AccessToken) != "" {
-		lsSet(authAccessTokenKey, pair.AccessToken)
+		browserstore.SetMemory(authAccessTokenKey, pair.AccessToken)
 	}
 	if strings.TrimSpace(pair.RefreshToken) != "" {
-		lsSet(authRefreshTokenKey, pair.RefreshToken)
+		browserstore.SetMemory(authRefreshTokenKey, pair.RefreshToken)
 	}
 	if pair.ExpiresInSeconds > 0 {
-		lsSet(authExpiresInKey, strconv.FormatInt(pair.ExpiresInSeconds, 10))
+		browserstore.SetMemory(authExpiresInKey, strconv.FormatInt(pair.ExpiresInSeconds, 10))
 		armProactiveRefresh(pair.ExpiresInSeconds)
 	}
 	// services.wasm keys its pooled connections by endpoint and bearer. Explicitly
@@ -368,7 +353,7 @@ func armProactiveRefresh(expiresInSeconds int64) {
 	}
 	proactiveRefreshTimer = time.AfterFunc(d, func() {
 		pr := uistate.LoadPrefs().Normalize()
-		if !pr.BackendActive() || !hasRotatableSession() {
+		if !backendSessionReady() || (!hasRotatableSession() && !hasCookieSession()) {
 			return
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -426,17 +411,18 @@ func clearAuthSession() {
 }
 
 func degradeToLocalOnly() {
-	clearAuthSession()
 	pr := uistate.LoadPrefs()
-	pr.ServerToken = ""
-	pr.BackendDisabled = true
-	uistate.PersistPrefs(pr.Normalize())
-	setSyncStatus(syncStatus{State: "local"})
-	// A forced sign-out is an identity change like any other (SV0.1): the
-	// session that just ended must not leave its scope — queued owners, sync
-	// bookmarks, watch state — interpretable by whatever happens next in this
-	// page. Reload once the cleared credentials above have committed.
-	reloadAfterIdentityChange("session ended: refresh token rejected")
+	endPageSessionThen(pr, func(err error) {
+		if err != nil {
+			logSyncError("remove rejected sign-in failed", err)
+			return
+		}
+		pr.ServerToken, pr.ServerCSRF = "", ""
+		pr.BackendDisabled = true
+		uistate.PersistPrefs(pr.Normalize())
+		setSyncStatus(syncStatus{State: "local"})
+		reloadAfterIdentityChange("session ended: refresh credential rejected")
+	})
 }
 
 // restoreTokenLifecycleOnBoot rearms the proactive refresh countdown for a
@@ -448,7 +434,7 @@ func degradeToLocalOnly() {
 // that restarted countdown undershoots and the access token expires before
 // it fires.
 func restoreTokenLifecycleOnBoot() {
-	if !hasRotatableSession() {
+	if !hasRotatableSession() && !hasCookieSession() {
 		return
 	}
 	raw := strings.TrimSpace(lsGet(authExpiresInKey))
@@ -463,10 +449,13 @@ func restoreTokenLifecycleOnBoot() {
 }
 
 func startBackendSync() {
+	if !backendSessionReady() {
+		return
+	}
 	// Don't wire up auto-sync (or its visibility/focus/online listeners) when the
 	// backend is off or unconfigured — otherwise the app dials a websocket on load
 	// and surfaces connection errors the user can't act on (C81 follow-up).
-	if !uistate.LoadPrefs().Normalize().BackendActive() {
+	if !backendConnectionActive(uistate.LoadPrefs().Normalize()) {
 		return
 	}
 	// Keep account-session lifecycle and metadata watch behavior available, but
@@ -514,7 +503,10 @@ func startBackendSync() {
 	// pushes nothing under a stale or unknown identity.
 	go func() {
 		pr := uistate.LoadPrefs().Normalize()
-		adoptIdentityForSync(pr.ServerURL, effectiveServerToken(pr))
+		if !adoptIdentityForSync(pr.ServerURL, effectiveServerToken(pr)) {
+			return
+		}
+		startBackendWatch()
 		flushBackendSyncQueue()
 		// Reconcile the account's workspaces BEFORE pulling. The pull addresses
 		// whichever workspace is open, so running it first on a freshly signed-in
@@ -524,7 +516,6 @@ func startBackendSync() {
 		// account already had the real one.
 		mergeRemoteWorkspaces(func() { pullActiveWorkspaceFromBackend(true) })
 	}()
-	startBackendWatch()
 }
 
 // syncListenersWired guards the one-time registration of the page lifecycle
@@ -705,6 +696,9 @@ const idleTimeoutMS = 1500
 // The window only has to outlast the burst, not rate-limit real use: a genuine
 // second visit a second later still reconciles.
 func wakeSync() {
+	if !backendSessionReady() {
+		return
+	}
 	wakeMu.Lock()
 	if time.Since(lastWakeAt) < wakeCoalesceWindow {
 		wakeMu.Unlock()
@@ -738,7 +732,7 @@ var (
 
 func pushActiveWorkspaceToBackend(dataset []byte, updatedAt time.Time) {
 	pr := uistate.LoadPrefs().Normalize()
-	if !pr.BackendActive() {
+	if !backendConnectionActive(pr) {
 		return
 	}
 	if reason := pushBlockedReason(); reason != "" {
@@ -837,7 +831,7 @@ func ReplaceServerCopyWithThisDevice() {
 
 func queueActiveWorkspaceAtServerVersion(force bool) {
 	pr := uistate.LoadPrefs().Normalize()
-	if !pr.BackendActive() {
+	if !backendConnectionActive(pr) {
 		return
 	}
 	if reason := pushBlockedReasonAllowing(force); reason != "" {
@@ -919,6 +913,9 @@ func queueActiveWorkspaceAtServerVersion(force bool) {
 }
 
 func requestBackendSyncNow() {
+	if !backendSessionReady() {
+		return
+	}
 	// Seed the queue with the CURRENT dataset before flushing. The queue is only ever
 	// filled by an autosave (pushActiveWorkspaceToBackend), so on a device that has
 	// signed in but not edited anything since, "Sync now" used to find an empty queue,
@@ -945,7 +942,7 @@ func requestBackendSyncNow() {
 // sync-meta hash forces the next push through; prepareBackendSyncDataset then
 // (re)encrypts or (re)plaintexts per the now-current mode.
 func forceBackendResyncActiveWorkspace() {
-	if !uistate.LoadPrefs().Normalize().BackendActive() {
+	if !backendConnectionActive(uistate.LoadPrefs().Normalize()) {
 		return
 	}
 	r := loadRegistry()
@@ -987,8 +984,11 @@ func forceBackendSeedActiveWorkspace() {
 }
 
 func flushBackendSyncQueue() {
+	if !backendSessionReady() {
+		return
+	}
 	pr := uistate.LoadPrefs().Normalize()
-	if !pr.BackendActive() {
+	if !backendConnectionActive(pr) {
 		return
 	}
 	if !requireDatasetEncryption() {
@@ -999,7 +999,17 @@ func flushBackendSyncQueue() {
 		defer timePhase("flush.total")()
 		syncPushMu.Lock()
 		defer syncPushMu.Unlock()
-		queue := loadSyncQueue()
+		// Only upload queue entries that have actually committed. The legacy
+		// synchronous cache can also contain tentative, not-yet-durable edits.
+		browserstore.Barrier()
+		queue, queueErr := loadDurableSyncQueue()
+		if queueErr != nil {
+			setSyncStatus(syncStatus{State: "error", Message: uistate.T("sync.error")})
+			if app := appstate.Default; app != nil {
+				app.Log().Error("sync queue read failed", "err", queueErr)
+			}
+			return
+		}
 		if len(queue) == 0 {
 			setSyncStatus(syncStatus{State: "synced", LastSyncedAt: time.Now().UTC().Format(time.RFC3339Nano)})
 			return
@@ -1208,13 +1218,16 @@ var (
 // the backend is active — so it doubles as the restart primitive after a pref
 // change. Safe to call repeatedly.
 func startBackendWatch() {
+	if !backendSessionReady() {
+		return
+	}
 	watchMu.Lock()
 	defer watchMu.Unlock()
 	if watchCancel != nil {
 		watchCancel()
 		watchCancel = nil
 	}
-	if !uistate.LoadPrefs().Normalize().BackendActive() {
+	if !backendConnectionActive(uistate.LoadPrefs().Normalize()) {
 		return
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -1238,7 +1251,7 @@ func stopBackendWatch() {
 // pulls, and restarts the watch against the fresh prefs when it is on. Callers are
 // the Sync page and Settings → Cloud toggles.
 func restartBackendSync() {
-	if !uistate.LoadPrefs().Normalize().BackendActive() {
+	if !backendConnectionActive(uistate.LoadPrefs().Normalize()) {
 		stopBackendWatch()
 		// Backend switched off: nothing should hold a socket open to it.
 		dropSharedConn()
@@ -1289,7 +1302,7 @@ func runBackendWatch(ctx context.Context) {
 		// Re-read prefs each iteration so a runtime URL/token change is picked up on
 		// the next (re)connect, and a disable exits the loop.
 		pr := uistate.LoadPrefs().Normalize()
-		if !pr.BackendActive() {
+		if !backendConnectionActive(pr) {
 			return
 		}
 		stream, err := openWorkerRPCStream(ctx, pr.ServerURL, effectiveServerToken(pr),
@@ -1397,7 +1410,7 @@ func mergeRemoteWorkspaces(done func()) {
 		}
 	}
 	pr := uistate.LoadPrefs().Normalize()
-	if !pr.BackendActive() || mergedRemoteWorkspaces || mergingRemoteWorkspaces {
+	if !backendConnectionActive(pr) || mergedRemoteWorkspaces || mergingRemoteWorkspaces {
 		finish()
 		return
 	}
@@ -1506,8 +1519,11 @@ func adoptRemoteWorkspaceIfUntouched(remote []backendrpc.Workspace) bool {
 }
 
 func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
+	if !backendSessionReady() {
+		return
+	}
 	pr := uistate.LoadPrefs().Normalize()
-	if !pr.BackendActive() {
+	if !backendConnectionActive(pr) {
 		return
 	}
 	if !requireDatasetEncryption() {
@@ -1822,6 +1838,23 @@ func loadSyncQueue() []queuedSyncMutation {
 	return queue
 }
 
+// loadDurableSyncQueue is for worker goroutines, after the write barrier. A
+// locked/unreadable queue is an error, never an empty queue that looks synced.
+func loadDurableSyncQueue() ([]queuedSyncMutation, error) {
+	raw, present, err := browserstore.GetSecure(syncQueueKey)
+	if err != nil {
+		return nil, err
+	}
+	if !present {
+		return nil, nil
+	}
+	var queue []queuedSyncMutation
+	if err := json.Unmarshal([]byte(raw), &queue); err != nil {
+		return nil, fmt.Errorf("decode protected sync queue: %w", err)
+	}
+	return queue, nil
+}
+
 func saveSyncQueue(queue []queuedSyncMutation) {
 	// Every write is also the authoritative count, so pendingSyncCount never has to
 	// re-parse to answer "how many are waiting?".
@@ -1901,7 +1934,7 @@ func hasConflictBackup(workspaceID string) bool {
 // the server's version check remains the conflict guard.
 func resolveConflictKeepLocal() {
 	pr := uistate.LoadPrefs().Normalize()
-	if !pr.BackendActive() {
+	if !backendConnectionActive(pr) {
 		return
 	}
 	r := loadRegistry()
@@ -1958,7 +1991,7 @@ func queueConflictBackupAtCurrentVersion(pr prefs.Prefs, workspaceID string, ite
 // SyncConflictHost's "Use server version" action. (C309 / #464)
 func resolveConflictUseServer() {
 	pr := uistate.LoadPrefs().Normalize()
-	if !pr.BackendActive() {
+	if !backendConnectionActive(pr) {
 		return
 	}
 	if !requireDatasetEncryption() {
@@ -2150,7 +2183,10 @@ func loadSyncStatus() syncStatus {
 	// off), there is nothing to report — force an empty state so SyncChip stays
 	// invisible. This also discards a stale "synced" left in localStorage from a
 	// previously-active backend, which would otherwise read as a false "Synced".
-	if !uistate.LoadPrefs().Normalize().BackendActive() {
+	if !backendSessionReady() {
+		return syncStatus{State: syncStateIdentityUnknown, AuthFailed: true, Message: uistate.T("sync.identityUnknown")}
+	}
+	if !backendConnectionActive(uistate.LoadPrefs().Normalize()) {
 		status.State = ""
 		return status
 	}

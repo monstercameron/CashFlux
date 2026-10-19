@@ -474,7 +474,7 @@ func ReviewSurfaceBody(_ struct{}) ui.Node {
 		gapCharges += len(r.Group.Items)
 	}
 
-	backendAI := pr.Normalize().BackendActive()
+	backendAI := uistate.BackendConnectionActive(pr)
 	hasProvider := aiProviderConfigured(app, backendAI)
 	aiConn := resolveAIConn(app, backendAI, pr.ServerURL, pr.ServerToken)
 	catalog := smartCatalog(app.Categories())

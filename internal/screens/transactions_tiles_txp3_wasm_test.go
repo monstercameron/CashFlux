@@ -30,16 +30,16 @@ func TestTxnDateChipUsesHouseholdFormatter(t *testing.T) {
 	}
 }
 
-func TestTxnBulkBarGroupsHavePlainLabelsAndVerbActions(t *testing.T) {
+func TestTxnBulkBarActionLabelsUseCurrentTerms(t *testing.T) {
 	f := render.New(t)
 	f.Render(Div(
-		txnBulkActionGroup(uistate.T("txp3.bulkCategorise"), Button(uistate.T("txp3.bulkApplyCategory"))),
-		txnBulkActionGroup(uistate.T("txp3.bulkAssign"), Select(Option(Value(""), uistate.T("txp3.bulkChoosePerson"))), Button(uistate.T("txp3.bulkAssignPerson"))),
-		txnBulkActionGroup(uistate.T("txp3.bulkStatus"), Button(uistate.T("txp3.bulkMarkCleared"))),
-		txnBulkActionGroup(uistate.T("txp3.bulkMore"), Button(uistate.T("txp3.bulkGroupPurchase"))),
+		txnBulkActionGroup(uistate.T("transactions.categoryToApply"), Button(uistate.T("r1c.category"))),
+		txnBulkActionGroup(uistate.T("bulk2.owners"), Button(uistate.T("bulk2.apply"))),
+		txnBulkActionGroup("Primary actions", Button(uistate.T("r1c.markReviewed"))),
+		txnBulkActionGroup(uistate.T("r1c.moreActions"), Button(uistate.T("txp3.bulkMarkCleared"))),
 		Button(Attr("data-testid", "bulk-delete"), uistate.T("txp3.bulkDeleteSelected")),
 	))
-	labels := []string{"Categorize", "Assign", "Status", "More", "Choose a person", "Apply category", "Assign person", "Mark as cleared", "Group as one purchase", "Delete selected"}
+	labels := []string{"Category", "Owners", "Apply", "Mark reviewed", uistate.T("r1c.moreActions"), "Mark as cleared", "Delete selected"}
 	text := f.Text()
 	for _, label := range labels {
 		if !strings.Contains(text, label) {

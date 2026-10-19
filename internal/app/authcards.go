@@ -6,9 +6,13 @@ package app
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"strings"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/backendrpc"
+	"github.com/monstercameron/CashFlux/internal/browserstore"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/CashFlux/internal/ui"
@@ -30,31 +34,118 @@ const (
 	passwordAuthRecover  passwordAuthMode = "recover"
 )
 
-// persistAuthSession is the single place every AuthService success handler in
-// this file (Register, Login, RedeemPairingCode) lands a fresh
-// TokenPairResponse: it keeps prefs.ServerToken/ServerMode/BackendDisabled in
-// lockstep so prefs.BackendActive() (and the plain self-host token display
-// elsewhere in Settings) stay correct, and — the part that must never be
-// reinvented a third way — hands the pair to sync_client.go's
-// storeAuthTokenPair, which persists the rotating refresh token, arms the
-// proactive-refresh countdown, and cycles the backend watch onto the new
-// session.
-func persistAuthSession(prefsAtom state.Atom[prefs.Prefs], serverURL string, pair backendrpc.TokenPairResponse, startSync bool) {
-	p := prefsAtom.Get()
-	p.ServerURL = serverURL
-	p.ServerToken = strings.TrimSpace(pair.AccessToken)
-	p.ServerMode = prefs.ServerSelfHosted
-	p.BackendDisabled = cloudAuthDisablesSync(p.BackendDisabled, cloudSetupPending(), datasetEncryptionActive())
-	p = p.Normalize()
-	prefsAtom.Set(p)
-	uistate.PersistPrefs(p)
-	storeAuthTokenPair(pair)
-	// An identity change ends this page's scope. Boot resolves the new identity
-	// before it can flush or pull, so sign-in always reloads after the credential
-	// writes are durable.
-	if startSync {
-		reloadAfterIdentityChange("sign-in")
+// authPrefsAtom is captured by rendered auth cards so boot-time handoffs and
+// destructive settings callbacks can use the same durable preference commit
+// without calling a UI hook outside render.
+var authPrefsAtom state.Atom[prefs.Prefs]
+var authPrefsAtomCaptured bool
+
+func captureAuthPrefsAtom(atom state.Atom[prefs.Prefs]) {
+	authPrefsAtom = atom
+	authPrefsAtomCaptured = true
+}
+
+func commitCapturedAuthPreferences(next prefs.Prefs, done func(error)) {
+	if !authPrefsAtomCaptured {
+		if atom, ok := uistate.CurrentPrefsAtom(); ok {
+			captureAuthPrefsAtom(atom)
+		}
 	}
+	if !authPrefsAtomCaptured {
+		done(errors.New("preferences are not ready for a durable session change"))
+		return
+	}
+	commitAuthPreferences(authPrefsAtom, next, done)
+}
+
+// persistAuthSession verifies the new account, commits its scoped refresh
+// credential and routing metadata, then commits preferences before reloading.
+// It is safe to call from an event handler; failures retain the page for retry.
+func persistAuthSession(prefsAtom state.Atom[prefs.Prefs], serverURL string, pair backendrpc.TokenPairResponse, startSync bool) {
+	persistAuthSessionThen(prefsAtom, serverURL, pair, startSync, func(err error) {
+		if err != nil {
+			logSyncError("complete sign-in failed", err)
+			uistate.PostNotice("Sign-in could not be saved. Please try again; your saved data is unchanged.", true)
+		}
+	})
+}
+
+func persistAuthSessionThen(prefsAtom state.Atom[prefs.Prefs], serverURL string, pair backendrpc.TokenPairResponse, startSync bool, done func(error)) {
+	captureAuthPrefsAtom(prefsAtom)
+	persistAuthSessionWithCommitThen(prefsAtom.Get(), serverURL, pair, startSync,
+		func(next prefs.Prefs, done func(error)) { commitAuthPreferences(prefsAtom, next, done) }, done)
+}
+
+// persistAuthSessionWithCommitThen is the sign-in core for event handlers that
+// cannot retain a render hook. The caller supplies the current prefs and the
+// app's durable commit callback; completion and reload happen only after it.
+func persistAuthSessionWithCommitThen(current prefs.Prefs, serverURL string, pair backendrpc.TokenPairResponse, startSync bool, commit func(prefs.Prefs, func(error)), done func(error)) {
+	previous := outgoingRefreshScope()
+	beginSessionTransition()
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		target, err := resolveAuthScope(ctx, serverURL, pair.AccessToken)
+		if err != nil {
+			done(err)
+			return
+		}
+		pair, err = installSessionCookie(ctx, target, pair)
+		if err != nil {
+			done(err)
+			return
+		}
+		saveScopedSessionThen(previous, target, pair, func(err error) {
+			if err != nil {
+				done(err)
+				return
+			}
+			saveSessionRoutingThen(target, func(err error) {
+				if err != nil {
+					done(err)
+					return
+				}
+				p := current
+				p.ServerURL = target.Endpoint
+				p.ServerToken, p.ServerCSRF = "", ""
+				mode, segment := p.ServerMode, p.ConnectionSegment
+				p.ServerMode = prefs.ServerSelfHosted
+				p.BackendDisabled = cloudAuthDisablesSync(p.BackendDisabled, cloudSetupPending(), datasetEncryptionActive())
+				p = p.Normalize()
+				if mode == prefs.ServerCloud {
+					p.ServerMode, p.ConnectionSegment = mode, segment
+					p = p.Normalize()
+				}
+				commit(p, func(err error) {
+					done(err)
+					if err == nil && startSync {
+						reloadAfterIdentityChange("sign-in")
+					}
+				})
+			})
+		})
+	}()
+}
+
+// Hosted sign-in may precede dataset hydration; its protected bootstrap prefs
+// still need an explicit durable receipt without serializing household data.
+func commitAuthPreferences(atom state.Atom[prefs.Prefs], p prefs.Prefs, done func(error)) {
+	if hostedDocument() {
+		raw, err := json.Marshal(p.Normalize())
+		if err != nil {
+			done(err)
+			return
+		}
+		browserstore.SetSecure("cashflux:prefs", string(raw), func(err error) {
+			if err == nil {
+				atom.Set(p.Normalize())
+				uistate.PersistPrefs(p.Normalize())
+			}
+			done(err)
+		})
+		return
+	}
+	cloudCommitPreferences(atom, p, done)
 }
 
 // sessionFromSetPassword lifts the replacement session out of a SetPassword
@@ -88,6 +179,7 @@ type PasswordAuthCardProps struct {
 
 func PasswordAuthCard(props PasswordAuthCardProps) uic.Node {
 	prefsAtom := uistate.UsePrefs()
+	captureAuthPrefsAtom(prefsAtom)
 	noticeAtom := uistate.UseNotice()
 
 	expanded := uic.UseState(props.InitiallyExpanded)
@@ -255,9 +347,16 @@ func PasswordAuthCard(props PasswordAuthCardProps) uic.Node {
 					notify(uistate.T("authCards.resetSuccess"), false)
 				}
 			} else {
-				persistAuthSession(prefsAtom, pr.ServerURL, out, true)
-				signedIn.Set(true)
-				notify(uistate.T("authCards.loggedInAs", u), false)
+				submitting.Set(true)
+				persistAuthSessionThen(prefsAtom, pr.ServerURL, out, true, func(err error) {
+					submitting.Set(false)
+					if err != nil {
+						notify("Sign-in could not be saved. Please try again.", true)
+						return
+					}
+					signedIn.Set(true)
+					notify(uistate.T("authCards.loggedInAs", u), false)
+				})
 			}
 		}()
 	})
@@ -274,10 +373,17 @@ func PasswordAuthCard(props PasswordAuthCardProps) uic.Node {
 	onDismissRecovery := uic.UseEvent(func() {
 		pair := pendingPair.Get()
 		pr := prefsAtom.Get().Normalize()
-		recoveryCode.Set("")
-		pendingPair.Set(backendrpc.TokenPairResponse{})
-		persistAuthSession(prefsAtom, pr.ServerURL, pair, true)
-		signedIn.Set(true)
+		submitting.Set(true)
+		persistAuthSessionThen(prefsAtom, pr.ServerURL, pair, true, func(err error) {
+			submitting.Set(false)
+			if err != nil {
+				notify("Sign-in could not be saved. Please try again.", true)
+				return
+			}
+			recoveryCode.Set("")
+			pendingPair.Set(backendrpc.TokenPairResponse{})
+			signedIn.Set(true)
+		})
 	})
 
 	registering := passwordAuthMode(mode.Get()) == passwordAuthRegister
@@ -464,13 +570,16 @@ func DeviceLinkCard(props DeviceLinkCardProps) uic.Node {
 				notify(customSyncErrorMessage(err, uistate.T("authCards.linkFailed")), true)
 				return
 			}
-			persistAuthSession(prefsAtom, pr.ServerURL, out, true)
-			linked.Set(true)
-			// The Primary card unmounts the instant this succeeds — the pane hides
-			// every sign-in surface once a session exists — so the toast is the only
-			// confirmation the user gets, and it has to say what actually happened
-			// rather than the device-linking wording.
-			notify(IfElseValue(props.Primary, uistate.T("authCards.activated"), uistate.T("authCards.deviceLinked")), false)
+			submitting.Set(true)
+			persistAuthSessionThen(prefsAtom, pr.ServerURL, out, true, func(err error) {
+				submitting.Set(false)
+				if err != nil {
+					notify("Sign-in could not be saved. Please try again.", true)
+					return
+				}
+				linked.Set(true)
+				notify(IfElseValue(props.Primary, uistate.T("authCards.activated"), uistate.T("authCards.deviceLinked")), false)
+			})
 		}()
 	})
 
@@ -579,7 +688,18 @@ func SetPasswordCard() uic.Node {
 			// Adopt the replacement session before anything else touches the
 			// backend: the token this call was made with has just been revoked.
 			if pair, ok := sessionFromSetPassword(out); ok {
-				persistAuthSession(prefsAtom, pr.ServerURL, pair, true)
+				submitting.Set(true)
+				persistAuthSessionThen(prefsAtom, pr.ServerURL, pair, true, func(err error) {
+					submitting.Set(false)
+					if err != nil {
+						errMsg.Set("Your password changed, but this device could not save its replacement sign-in. Sign in again to reconnect.")
+						return
+					}
+					recoveryCode.Set(strings.TrimSpace(out.RecoveryCode))
+					done.Set(true)
+					notify(uistate.T("authCards.pendingSetPasswordSuccess"), false)
+				})
+				return
 			}
 			recoveryCode.Set(strings.TrimSpace(out.RecoveryCode))
 			done.Set(true)

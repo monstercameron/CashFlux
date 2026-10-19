@@ -2,21 +2,10 @@
 
 //go:build js && wasm
 
-// Package app — WebAuthn PRF passkey registration and unlock (C282).
-//
-// Design: the PRF-derived key wraps the session passcode, not the dataset
-// directly. On unlock, the recovered passcode is handed to onAppUnlocked()
-// — the exact same call the passcode-input gate makes — so the dataset
-// decryption path (datasetcrypto.go) is never touched.
-//
-// Three localStorage keys hold the passkey state:
-//   - cashflux:webauthn-credid  (base64 credential ID)
-//   - cashflux:webauthn-salt    (base64 32-byte PRF salt, constant per credential)
-//   - cashflux:webauthn-vault   (JSON-encoded prfVault: IV + AES-GCM ciphertext of passcode)
-//
-// All three are preserved across financial data wipes (persist.go keptOnWipeKeys).
-// clearPasskey() removes all three and is called whenever the passcode changes or
-// the lock is disabled, so a stale vault can never permanently block access.
+// WebAuthn PRF passkeys wrap the legacy session passcode. Same-page unlock
+// recovers it from a page-memory metadata snapshot, then unlocks the secure WDK
+// before hydration. Cold-boot PRF unlock needs a key-service passkey-wrap API.
+// All three persisted passkey records are protected by browserstore.
 package app
 
 import (
@@ -26,11 +15,12 @@ import (
 	"fmt"
 	"syscall/js"
 
+	"github.com/monstercameron/CashFlux/internal/browserstore"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/CashFlux/internal/webauthn"
 )
 
-// localStorage key names for the WebAuthn PRF passkey state.
+// Protected browserstore key names for the WebAuthn PRF passkey state.
 const (
 	webauthnCredKey  = "cashflux:webauthn-credid"
 	webauthnSaltKey  = "cashflux:webauthn-salt"
@@ -48,21 +38,36 @@ func webauthnRPID() string {
 	return hostname
 }
 
+// lockedPasskey is a page-memory snapshot of already decrypted PRF metadata.
+// Cold boot cannot read the legacy protected records until the WDK is open;
+// supporting that case requires a PRF wrap in the secure key-service API.
+var lockedPasskey [3]string
+
+func rememberPasskeyForLock() {
+	lockedPasskey = [3]string{lsGet(webauthnCredKey), lsGet(webauthnSaltKey), lsGet(webauthnVaultKey)}
+}
+
 // hasPasskey reports whether all three passkey state keys are present in
-// localStorage. True iff a credential was successfully registered.
+// the protected store or page-memory lock snapshot. True iff a credential was successfully registered.
 func hasPasskey() bool {
-	return lsGet(webauthnCredKey) != "" &&
+	return (lockedPasskey[0] != "" && lockedPasskey[1] != "" && lockedPasskey[2] != "") || lsGet(webauthnCredKey) != "" &&
 		lsGet(webauthnSaltKey) != "" &&
 		lsGet(webauthnVaultKey) != ""
 }
 
-// clearPasskey removes the credential ID, PRF salt, and vault from localStorage,
-// effectively deregistering the passkey. Must be called on passcode change and
-// on lock disable so a stale vault can never permanently block access.
-func clearPasskey() {
-	lsRemove(webauthnCredKey)
-	lsRemove(webauthnSaltKey)
-	lsRemove(webauthnVaultKey)
+// clearPasskeyThen invalidates all PRF metadata atomically, acknowledging only
+// the durable encrypted commit. Failed removal retains the session snapshot.
+func clearPasskeyThen(done func(error)) {
+	browserstore.SetSecureBatch(map[string]string{
+		webauthnCredKey: "", webauthnSaltKey: "", webauthnVaultKey: "",
+	}, nil, func(err error) {
+		if err == nil {
+			lockedPasskey = [3]string{}
+		}
+		if done != nil {
+			done(err)
+		}
+	})
 }
 
 // registerPasskey runs the full registration ceremony:
@@ -72,7 +77,7 @@ func clearPasskey() {
 //     32-byte PRF output.
 //  4. Calls encryptVaultWithPRF() to wrap the active session passcode.
 //  5. Persists credential ID (base64), salt (base64), and vault (JSON) to
-//     localStorage.
+//     the encrypted browser store.
 //
 // A non-nil error means any step failed; the passcode gate is unaffected.
 // registerPasskey must only be called when the lock is enabled (activePasscode
@@ -123,26 +128,31 @@ func registerPasskey(onDone func(err error)) {
 					onDone(fmt.Errorf("webauthn register: vault encrypt: %w", err))
 					return
 				}
-				// Persist all three keys atomically (best-effort; localStorage
-				// is synchronous, so all three either succeed or the user will
-				// see hasPasskey()==false and can retry).
-				lsSet(webauthnCredKey, base64.StdEncoding.EncodeToString(credentialID))
-				lsSet(webauthnSaltKey, saltB64)
-				lsSet(webauthnVaultKey, string(vaultJSON))
-				onDone(nil)
+				if activePasscode != passcodeSnapshot {
+					onDone(errors.New("webauthn register: passcode changed during registration"))
+					return
+				}
+				browserstore.SetSecureBatch(map[string]string{
+					webauthnCredKey:  base64.StdEncoding.EncodeToString(credentialID),
+					webauthnSaltKey:  saltB64,
+					webauthnVaultKey: string(vaultJSON),
+				}, nil, onDone)
 			})
 		})
 	})
 }
 
 // unlockWithPasskey runs the authentication ceremony to recover the passcode
-// from the PRF vault, then calls onAppUnlocked and dismisses the lock gate.
+// from the PRF vault, then unlocks protected storage before reporting success.
 // A non-nil error means any step failed — the caller must keep the passcode
 // gate visible and functional. Never panics; never wipes data.
 func unlockWithPasskey(doc, gate js.Value, onDone func(err error)) {
 	credB64 := lsGet(webauthnCredKey)
 	saltB64 := lsGet(webauthnSaltKey)
 	vaultRaw := lsGet(webauthnVaultKey)
+	if lockedPasskey[0] != "" {
+		credB64, saltB64, vaultRaw = lockedPasskey[0], lockedPasskey[1], lockedPasskey[2]
+	}
 
 	if credB64 == "" || saltB64 == "" || vaultRaw == "" {
 		onDone(errors.New("webauthn unlock: passkey not registered"))
@@ -174,19 +184,13 @@ func unlockWithPasskey(doc, gate js.Value, onDone func(err error)) {
 				return
 			}
 
-			// Verify the recovered passcode matches the stored hash. If the
-			// passcode changed since the vault was sealed, the vault is stale —
-			// clear it and fall back to the passcode input gate (no lockout).
-			if !loadAppLock().Verify(passcode) {
-				clearPasskey()
-				onDone(errors.New("webauthn unlock: vault passcode mismatch — passkey cleared; use passcode to unlock"))
-				return
-			}
-
-			// Passcode verified: unlock the app exactly as the passcode gate does.
-			onAppUnlocked(passcode)
-			unlockGate(doc, gate)
-			onDone(nil)
+			unlockProtectedSession(passcode, false, func(err error) {
+				if err != nil {
+					onDone(fmt.Errorf("webauthn unlock: protected storage: %w", err))
+					return
+				}
+				onDone(nil)
+			})
 		})
 	})
 }
@@ -301,9 +305,14 @@ func wirePasskeyMgrButtons(doc js.Value, registered, available bool) {
 			if !js.Global().Call("confirm", uistate.T("webauthn.removeConfirm")).Bool() {
 				return nil
 			}
-			clearPasskey()
-			setPasskeyMgrStatus(doc, uistate.T("webauthn.removedOK"), false)
-			wirePasskeyMgrButtons(doc, false, available)
+			clearPasskeyThen(func(err error) {
+				if err != nil {
+					setPasskeyMgrStatus(doc, uistate.T("webauthn.unlockFail"), true)
+					return
+				}
+				setPasskeyMgrStatus(doc, uistate.T("webauthn.removedOK"), false)
+				wirePasskeyMgrButtons(doc, false, available)
+			})
 			return nil
 		})
 		removeBtn.Call("addEventListener", "click", removeCb)

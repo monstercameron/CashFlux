@@ -245,20 +245,37 @@
       <strong>'Add to Home Screen'</strong> to install CashFlux.
     </div>
     <script>
-      // iOS A2HS hint: shown only on iOS Safari outside standalone mode, once
-      // per browser (localStorage flag prevents re-showing after dismiss).
+      // iOS A2HS hint: wait for the encrypted browserstore bridge before reading
+      // its dismissal state. A dismissal made earlier stays pending in memory.
       (function () {
         var IOS_KEY = 'cashflux:ios-hint-dismissed';
         if (!/iP(hone|ad|od)/i.test(navigator.userAgent)) return;
         if (navigator.standalone) return;
-        if (localStorage.getItem(IOS_KEY)) return;
         var banner = document.getElementById('iosHintBanner');
         var close  = document.getElementById('iosHintClose');
-        if (banner) banner.style.display = 'block';
+        var pendingDismissal = false;
+        var dismissedInMemory = false;
+        function syncDismissal() {
+          if (dismissedInMemory && !pendingDismissal) return;
+          if (typeof window.cashfluxStoreGet !== 'function' || typeof window.cashfluxStoreSet !== 'function') {
+            window.setTimeout(syncDismissal, 250);
+            return;
+          }
+          if (pendingDismissal) {
+            window.cashfluxStoreSet(IOS_KEY, '1');
+            pendingDismissal = false;
+            return;
+          }
+          if (window.cashfluxStoreGet(IOS_KEY)) return;
+          if (banner) banner.style.display = 'block';
+        }
+        syncDismissal();
         if (close) {
           close.addEventListener('click', function () {
-            localStorage.setItem(IOS_KEY, '1');
+            pendingDismissal = true;
+            dismissedInMemory = true;
             if (banner) banner.style.display = 'none';
+            syncDismissal();
           });
         }
       })();

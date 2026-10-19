@@ -5,6 +5,7 @@
 package uistate
 
 import (
+	"errors"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -26,16 +27,32 @@ const (
 	ckptBlobPrefix = "cashflux:checkpoint-data:"
 )
 
+var checkpointCommit = browserstore.SetSecureBatch
+
+// SetCheckpointCommitForTest replaces the checkpoint storage callback so WASM
+// integration tests can hold or fail a commit. The returned function restores
+// the previous callback and should be deferred immediately by the test.
+func SetCheckpointCommitForTest(commit func(values, expected map[string]string, done func(error))) func() {
+	previous := checkpointCommit
+	if commit == nil {
+		checkpointCommit = browserstore.SetSecureBatch
+	} else {
+		checkpointCommit = commit
+	}
+	return func() { checkpointCommit = previous }
+}
+
 // Checkpoints returns the saved checkpoint ring, oldest-first.
 func Checkpoints() []checkpoint.Checkpoint {
 	return checkpoint.DecodeIndex(browserstore.GetString(ckptIndexKey))
 }
 
-// SaveCheckpoint snapshots the current dataset under the given plain-English
-// label ("Before applying rules to 12 transactions") and returns the new
-// checkpoint's ID ("" on failure) so callers can associate the snapshot with
-// what they're about to do (#57: per-import roll-back). Oldest checkpoints
-// beyond the ring cap are deleted, blob and all.
+// SaveCheckpoint starts a snapshot under the given plain-English label and
+// returns its pending ID ("" on export failure). Returning an ID does not mean
+// the write committed. Oldest checkpoints beyond the ring cap are evicted.
+//
+// Deprecated: use SaveCheckpointThen and wait for durable success before a risky
+// operation, including imports that associate a rollback checkpoint with changes.
 func SaveCheckpoint(label string) string {
 	app := appstate.Default
 	if app == nil {
@@ -54,6 +71,45 @@ func SaveCheckpoint(label string) string {
 	browserstore.Set(ckptBlobPrefix+cp.ID, string(data))
 	browserstore.Set(ckptIndexKey, checkpoint.EncodeIndex(kept))
 	return cp.ID
+}
+
+// SaveCheckpointThen commits the snapshot and index atomically before returning
+// its ID through done. Callers must begin the protected operation only when err
+// is nil. Unlike SaveCheckpoint's pending handle, this callback is a save receipt.
+func SaveCheckpointThen(label string, done func(checkpointID string, err error)) {
+	finish := func(id string, err error) {
+		if done != nil {
+			done(id, err)
+		}
+	}
+	app := appstate.Default
+	if app == nil {
+		finish("", errors.New("checkpoint: no household is open"))
+		return
+	}
+	data, err := app.ExportJSONRedacted()
+	if err != nil {
+		finish("", err)
+		return
+	}
+	previous := browserstore.GetString(ckptIndexKey)
+	cp := checkpoint.Checkpoint{ID: id.New(), At: time.Now(), Label: label, Size: len(data)}
+	kept, dropped := checkpoint.Push(checkpoint.DecodeIndex(previous), cp, checkpoint.MaxEntries)
+	checkpointCommit(map[string]string{
+		ckptBlobPrefix + cp.ID: string(data), ckptIndexKey: checkpoint.EncodeIndex(kept),
+	}, map[string]string{ckptIndexKey: previous}, func(err error) {
+		if err != nil {
+			app.Log().Error("checkpoint commit failed", "err", err)
+			finish("", err)
+			return
+		}
+		// Eviction happens after the new snapshot is durable. A failed cleanup
+		// may retain an old encrypted blob, but cannot destroy the new checkpoint.
+		for _, old := range dropped {
+			browserstore.Remove(ckptBlobPrefix + old.ID)
+		}
+		finish(cp.ID, nil)
+	})
 }
 
 // HasCheckpoint reports whether cpID is still in the ring (its blob restorable).

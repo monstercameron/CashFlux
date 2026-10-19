@@ -15,12 +15,13 @@
 package browserstore
 
 import (
-	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
 	"sync"
 	"syscall/js"
+
+	"github.com/monstercameron/CashFlux/internal/atrest"
 )
 
 const (
@@ -28,14 +29,15 @@ const (
 	// (internal/artifactstore) — sharing a name + version means whichever opens first
 	// creates its object store and the other's onupgradeneeded never fires, so its
 	// store is missing and transactions throw. A separate database avoids that.
-	idbName      = "cashflux-kv"
 	idbStoreName = "kv"
 	keyPrefix    = "cashflux:"
 )
 
 var (
+	idbName = "cashflux-kv"
 	mu      sync.Mutex
 	cache   = map[string]string{}
+	pending = map[string]int{}
 	db      js.Value
 	ready   bool
 	durable bool
@@ -50,7 +52,15 @@ func Init() {
 	if ready {
 		return
 	}
-	defer func() { ready = true }()
+	defer func() {
+		ready = true
+		if durable {
+			if err := initializeSecure(); err != nil {
+				secureInitErr = err
+				slog.Error("protected storage requires recovery", "error", err)
+			}
+		}
+	}()
 	// Start listening before the load, so a write another tab makes while this
 	// one is still opening IndexedDB is not missed.
 	StartCrossTab()
@@ -110,11 +120,7 @@ func Init() {
 			for i := 0; i < n; i++ {
 				cache[keys.Index(i).String()] = vals.Index(i).String()
 			}
-			empty := len(cache) == 0
 			mu.Unlock()
-			if empty {
-				migrateLocalStorage()
-			}
 			finish()
 			return nil
 		}))
@@ -137,6 +143,9 @@ func Durable() bool { return durable }
 // mirrorLocalStorage copies localStorage cashflux:* entries into the cache without
 // touching localStorage — the no-IndexedDB fallback path.
 func mirrorLocalStorage() {
+	if idbName != "cashflux-kv" {
+		return
+	}
 	ls := js.Global().Get("localStorage")
 	if !ls.Truthy() {
 		return
@@ -153,62 +162,15 @@ func mirrorLocalStorage() {
 	}
 }
 
-// migrateLocalStorage copies every cashflux:* localStorage entry into the cache +
-// IndexedDB, then removes the localStorage original so the app depends on no
-// localStorage at all. Every persistence site now routes through this store, so the
-// copy is authoritative; the cache holds the live value, so an interrupted migration
-// can't lose data (it re-persists on the next write). Idempotent: only fills keys
-// IndexedDB doesn't already have.
-func migrateLocalStorage() {
-	ls := js.Global().Get("localStorage")
-	if !ls.Truthy() {
-		return
-	}
-	var keys []string
-	for i := 0; i < ls.Get("length").Int(); i++ {
-		k := ls.Call("key", i)
-		if k.Truthy() && strings.HasPrefix(k.String(), keyPrefix) {
-			keys = append(keys, k.String())
-		}
-	}
-	for _, key := range keys {
-		mu.Lock()
-		_, have := cache[key]
-		mu.Unlock()
-		if !have {
-			if v := ls.Call("getItem", key); v.Truthy() {
-				mu.Lock()
-				cache[key] = v.String()
-				mu.Unlock()
-				idbPut(key, v.String())
-			}
-		}
-		ls.Call("removeItem", key)
-	}
-}
-
-func idbPut(k, v string) {
-	if !db.Truthy() {
-		return
-	}
-	defer func() { _ = recover() }()
-	tx := db.Call("transaction", idbStoreName, "readwrite")
-	tx.Call("objectStore", idbStoreName).Call("put", v, k)
-}
-
-func idbDelete(k string) {
-	if !db.Truthy() {
-		return
-	}
-	defer func() { _ = recover() }()
-	tx := db.Call("transaction", idbStoreName, "readwrite")
-	tx.Call("objectStore", idbStoreName).Call("delete", k)
-}
-
 // Get returns the value for key and whether present.
+// A protected-storage failure panics with *RecordError instead of pretending
+// data is absent. Error-aware callers should use GetSecure from a goroutine.
 func Get(key string) (string, bool) {
 	mu.Lock()
 	defer mu.Unlock()
+	if err := cachedError(key); err != nil {
+		panic(&RecordError{Key: key, Err: err})
+	}
 	v, ok := cache[key]
 	return v, ok
 }
@@ -216,30 +178,41 @@ func Get(key string) (string, bool) {
 // GetString returns the value for key, or "" when absent (localStorage-style).
 func GetString(key string) string { v, _ := Get(key); return v }
 
-// Set writes key→val to the cache and persists to IndexedDB.
+// Set is the compatibility entry point to encrypted persistence. Its cache is
+// tentative, allowing existing synchronous read/modify/write callers to compose
+// pending changes. Returning does not acknowledge a save. Use SetSecure for a
+// durable result, and GetSecure to read the committed value. Transient keys stay
+// in memory. There is no raw persistent Set API.
 func Set(key, val string) {
+	if atrest.Classify(key) == atrest.ShouldNotPersist || !db.Truthy() {
+		SetMemory(key, val)
+		return
+	}
 	mu.Lock()
 	cache[key] = val
+	pending[key]++
 	mu.Unlock()
-	idbPut(key, val)
-	publish(key)
+	SetSecure(key, val, func(err error) {
+		mu.Lock()
+		pending[key]--
+		if pending[key] == 0 {
+			delete(pending, key)
+		}
+		mu.Unlock()
+		logWriteError(key)(err)
+	})
 }
 
-// SetThen updates the in-memory cache and publishes key→val immediately, then
-// invokes done() after the IndexedDB transaction completes or fails. The cache
-// remains readable immediately even when IndexedDB is unavailable. Use
-// SetDurable when the caller needs to distinguish durable success from failure.
+// SetThen encrypts and commits key→val, then invokes done() only on success.
+// Failures leave the committed cache unchanged and are logged. Use SetSecure
+// when the caller also needs an error callback.
 // It does NOT block, which matters because calls from JS-invoked handlers would
 // deadlock the event loop if they waited for the IndexedDB callback.
 func SetThen(key, val string, done func()) {
-	mu.Lock()
-	cache[key] = val
-	mu.Unlock()
-	publish(key)
-
 	SetDurable(key, val, func(err error) {
 		if err != nil {
 			slog.Error("browserstore write failed", "key", key, "error", err)
+			return
 		}
 		if done != nil {
 			done()
@@ -253,7 +226,7 @@ func SetThen(key, val string, done func()) {
 // left unchanged and done receives an error. The callback is asynchronous when
 // IndexedDB is available and never blocks the browser event loop.
 func SetDurable(key, val string, done func(error)) {
-	writeDurable(key, done, func(os js.Value) { os.Call("put", val, key) }, func() { cache[key] = val })
+	SetSecure(key, val, done)
 }
 
 // RemoveDurable removes key in a strict-durability IndexedDB transaction. The
@@ -261,45 +234,7 @@ func SetDurable(key, val string, done func(error)) {
 // IndexedDB is unavailable, or the transaction errors or aborts, the cache is
 // left unchanged and done receives an error.
 func RemoveDurable(key string, done func(error)) {
-	writeDurable(key, done, func(os js.Value) { os.Call("delete", key) }, func() { delete(cache, key) })
-}
-
-func writeDurable(key string, done func(error), issue func(js.Value), applyCache func()) {
-	finish := func(err error) {
-		if done != nil {
-			done(err)
-		}
-	}
-	if !db.Truthy() {
-		finish(errors.New("IndexedDB is unavailable; write was not persisted"))
-		return
-	}
-	tx, err := openReadwriteTransaction()
-	if err != nil {
-		finish(err)
-		return
-	}
-	var once sync.Once
-	settle := func(err error) {
-		once.Do(func() {
-			if err == nil {
-				mu.Lock()
-				applyCache()
-				mu.Unlock()
-				publish(key)
-			}
-			finish(err)
-		})
-	}
-	tx.Set("oncomplete", js.FuncOf(func(js.Value, []js.Value) any { settle(nil); return nil }))
-	tx.Set("onerror", js.FuncOf(func(js.Value, []js.Value) any { settle(transactionFailure(tx, "error")); return nil }))
-	tx.Set("onabort", js.FuncOf(func(js.Value, []js.Value) any { settle(transactionFailure(tx, "abort")); return nil }))
-	defer func() {
-		if recovered := recover(); recovered != nil {
-			settle(jsPanicError("IndexedDB request failed", recovered))
-		}
-	}()
-	issue(tx.Call("objectStore", idbStoreName))
+	RemoveSecure(key, done)
 }
 
 func openReadwriteTransaction() (tx js.Value, err error) {
@@ -310,23 +245,8 @@ func openReadwriteTransaction() (tx js.Value, err error) {
 	}()
 	options := js.Global().Get("Object").New()
 	options.Set("durability", "strict")
-	defer func() {
-		if recovered := recover(); recovered != nil {
-			if isOptionError(recovered) {
-				tx = db.Call("transaction", idbStoreName, "readwrite")
-				err = nil
-			} else {
-				err = jsPanicError("open IndexedDB transaction", recovered)
-			}
-		}
-	}()
 	tx = db.Call("transaction", idbStoreName, "readwrite", options)
 	return tx, nil
-}
-
-func isOptionError(recovered any) bool {
-	name := jsExceptionName(recovered)
-	return name == "TypeError" || name == "NotSupportedError"
 }
 
 func transactionFailure(tx js.Value, event string) error {
@@ -371,11 +291,25 @@ func jsExceptionName(recovered any) string {
 
 // Remove deletes a key from the cache and IndexedDB.
 func Remove(key string) {
+	if !db.Truthy() || atrest.Classify(key) == atrest.ShouldNotPersist {
+		mu.Lock()
+		delete(cache, key)
+		mu.Unlock()
+		return
+	}
 	mu.Lock()
 	delete(cache, key)
+	pending[key]++
 	mu.Unlock()
-	idbDelete(key)
-	publish(key)
+	RemoveSecure(key, func(err error) {
+		mu.Lock()
+		pending[key]--
+		if pending[key] == 0 {
+			delete(pending, key)
+		}
+		mu.Unlock()
+		logWriteError(key)(err)
+	})
 }
 
 // RegisterJSBridge exposes the store to vendored JS (the music player, the

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"syscall/js"
 
+	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/browserstore"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/store"
@@ -70,16 +71,16 @@ func writeKeyValuesThen(values []workspaceKeyValue, done func()) {
 		}
 		return
 	}
-	first := values[0]
-	lsSetThen(first.key, first.value, func() { writeKeyValuesThen(values[1:], done) })
+	updates := make(map[string]string, len(values))
+	for _, value := range values {
+		updates[value.key] = value.value
+	}
+	commitWorkspaceValuesThen(updates, done)
 }
 
 func saveBlobThen(wsID string, b map[string]string, done func()) {
 	data, err := json.Marshal(b)
 	if err != nil {
-		if done != nil {
-			done()
-		}
 		return
 	}
 	lsSetThen(wsBlobKey(wsID), string(data), done)
@@ -88,26 +89,39 @@ func saveBlobThen(wsID string, b map[string]string, done func()) {
 func saveRegistryThen(r workspace.Registry, done func()) {
 	data, err := json.Marshal(r)
 	if err != nil {
-		if done != nil {
-			done()
-		}
 		return
 	}
 	lsSetThen(workspacesKey, string(data), done)
 }
 
 func applyBundleThen(b map[string]string, done func()) {
-	values := make([]workspaceKeyValue, 0, len(perWorkspaceKeys))
+	values := make(map[string]string, len(perWorkspaceKeys))
 	for _, key := range perWorkspaceKeys {
-		values = append(values, workspaceKeyValue{key: key, value: b[key]})
+		values[key] = b[key]
 	}
-	writeKeyValuesThen(values, done)
+	commitWorkspaceValuesThen(values, done)
+}
+
+func commitWorkspaceValuesThen(values map[string]string, done func()) {
+	browserstore.SetSecureBatch(values, nil, func(err error) {
+		if err != nil {
+			if app := appstate.Default; app != nil {
+				app.Log().Error("workspace could not be committed", "err", err)
+			}
+			return
+		}
+		if done != nil {
+			done()
+		}
+	})
 }
 
 func reloadWorkspaceAfterWrites() {
-	bumpAndReloadWorkspace(bumpDatasetGen, func(generation string) {
+	generation := id.New()
+	browserstore.SetThen(datasetGenKey, generation, func() {
 		datasetMyGen = generation
-	}, reloadPage)
+		reloadPage()
+	})
 }
 
 func bumpAndReloadWorkspace(bump func() string, adopt func(string), reload func()) {

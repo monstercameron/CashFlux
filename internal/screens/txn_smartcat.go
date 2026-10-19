@@ -77,7 +77,7 @@ func TxnSmartCatBody(_ struct{}) ui.Node {
 	assigns := ui.UseState([]txnSmartCatAssign(nil))
 	picked := ui.UseState(map[int]bool{})
 
-	backendAI := pr.Normalize().BackendActive()
+	backendAI := uistate.BackendConnectionActive(pr)
 	hasProvider := app != nil && aiProviderConfigured(app, backendAI)
 	aiConn := resolveAIConn(app, backendAI, pr.ServerURL, pr.ServerToken)
 

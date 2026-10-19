@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/browserstore"
+	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/GoWebComponents/v5/state"
 )
 
@@ -62,6 +63,20 @@ func Session(staticToken string) SessionState {
 		return SessionState{Source: CredentialStatic, Token: t}
 	}
 	return SessionState{Source: CredentialNone}
+}
+
+// BackendConnectionActive reports whether a configured backend can be used by
+// screens. Rotating access tokens live in page memory, so prefs-only checks
+// incorrectly hide backend features after scoped-session restoration.
+func BackendConnectionActive(pr prefs.Prefs) bool {
+	pr = pr.Normalize()
+	return !pr.BackendDisabled && strings.TrimSpace(pr.ServerURL) != "" && Session(pr.ServerToken).Present()
+}
+
+// CurrentPrefsAtom returns the preferences atom captured by a rendered
+// component so app lifecycle callbacks can commit settings without a hook call.
+func CurrentPrefsAtom() (state.Atom[prefs.Prefs], bool) {
+	return capturedPrefs, prefsCaptured
 }
 
 // authRevAtomID ticks whenever the stored credential changes — including from

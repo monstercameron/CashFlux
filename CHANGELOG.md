@@ -90,6 +90,19 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Everything the app keeps in the browser is encrypted at rest, and sign-in survives reloads (ENC3–ENC3.9).** All
+  browser storage now goes through one encrypted boundary (`browserstore` secure records sealed with the device-wrapped
+  key, unknown keys fail closed, strict-durability IndexedDB writes, success reported only after commit); existing
+  plaintext records migrate in place and are verified before the originals are removed, and a source guard test fails on
+  any raw web-storage write. Startup shows an unlock/recovery gate on a storage error and never seeds or resets data;
+  App Lock enable, change and disable rewrap the key without orphaning the bank-login vault, and an interrupted change
+  resumes. Sign-in tokens are memory-only: a per-server, per-account refresh credential is stored encrypted (or as an
+  HttpOnly cookie on same-origin hosts) and restored before sync starts; sign-in, OAuth (with PKCE codes), activation
+  links, sign-out, server changes and Erase data all await the scoped credential before reloading. Risky operations
+  (imports, allocation, rules, cover-all, bulk recategorize/delete) start only after their restore point is saved.
+- **Transactions bulk bar fits on one line (BULK2).** Category, Owners, Mark reviewed and Delete stay inline (others in
+  ⋯, nothing dropped); one Owners picker with members and "Unassigned" replaces three buttons; the bar has a raised
+  surface and border; accessible names match the visible labels.
 - **Server side of reload-safe sign-in (ENC3.6).** The refresh cookie is HttpOnly, Secure (insecure only in explicit
   localhost dev mode), SameSite=Strict and scoped to `/v1/auth/refresh`; the double-submit CSRF cookie moves to `Path=/`
   so the app can read it after a reload, and legacy `/v1/auth` cookies are expired. New rate-limited endpoints:

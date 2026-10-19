@@ -54,7 +54,7 @@ func Rules() ui.Node {
 	// SMART-T14: Smart+ rule suggestions — an opt-in AI scan of the transactions
 	// no rule covers yet. Hooks declared unconditionally at stable positions.
 	pr := uistate.UsePrefs().Get()
-	backendAI := pr.Normalize().BackendActive()
+	backendAI := uistate.BackendConnectionActive(pr)
 	hasProvider := aiProviderConfigured(app, backendAI)
 	aiConn := resolveAIConn(app, backendAI, pr.ServerURL, pr.ServerToken)
 	smartOn := uistate.LoadSmartSettings().IsEnabled("SMART-T14")
@@ -263,7 +263,11 @@ func Rules() ui.Node {
 		bump()
 	}
 
+	checkpointSaving := ui.UseState(false)
 	applyExisting := ui.UseEvent(Prevent(func() {
+		if checkpointSaving.Get() {
+			return
+		}
 		currentRules := app.Rules()
 		total, perRule := app.PreviewApplyRules()
 		if total == 0 {
@@ -286,16 +290,23 @@ func Rules() ui.Node {
 			}
 			// #55: checkpoint the dataset before the bulk overwrite so it can
 			// be rolled back from Settings → Data even after the undo stack.
-			uistate.SaveCheckpoint(uistate.T("ckpt.beforeApplyRules", plural(total, "transaction")))
-			n, _, err := app.ApplyRulesWithCounts()
-			if err != nil {
-				notice.Set(notice.Get().With(err.Error(), true))
-				return
-			}
-			// C364: a bulk rules-apply is a large overwrite — tell the undo story
-			// (Ctrl+Z / Activity) instead of a silent "applied" confirmation.
-			postUndoStory(uistate.T("rules.applied", plural(n, "transaction")))
-			bump()
+			checkpointSaving.Set(true)
+			uistate.SaveCheckpointThen(uistate.T("ckpt.beforeApplyRules", plural(total, "transaction")), func(_ string, checkpointErr error) {
+				checkpointSaving.Set(false)
+				if checkpointErr != nil {
+					uistate.PostNotice(uistate.T("enc34.checkpointFailed"), true)
+					return
+				}
+				n, _, err := app.ApplyRulesWithCounts()
+				if err != nil {
+					notice.Set(notice.Get().With(err.Error(), true))
+					return
+				}
+				// C364: a bulk rules-apply is a large overwrite — tell the undo story
+				// (Ctrl+Z / Activity) instead of a silent "applied" confirmation.
+				postUndoStory(uistate.T("rules.applied", plural(n, "transaction")))
+				bump()
+			})
 		})
 	}))
 
@@ -524,7 +535,7 @@ func Rules() ui.Node {
 
 	// Section header actions: apply-to-existing + the add-rule modal button.
 	headerActions := Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
-		If(len(rs) > 0, Button(css.Class("btn"), Type("button"), Title(uistate.T("rules.applyExistingTitle")), OnClick(applyExisting), uistate.T("rules.applyExisting"))),
+		If(len(rs) > 0, buttonWithDisabled(checkpointSaving.Get(), []any{css.Class("btn"), Type("button"), Title(uistate.T("rules.applyExistingTitle")), OnClick(applyExisting)}, IfElse(checkpointSaving.Get(), Text(uistate.T("enc34.saving")), Text(uistate.T("rules.applyExisting"))))),
 		Button(css.Class("btn btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
 			Attr("data-testid", "rules-add"), Title(uistate.T("rules.add")), OnClick(addRule),
 			uiw.Icon(icon.Plus, css.Class(tw.ShrinkO, tw.W4, tw.H4)),

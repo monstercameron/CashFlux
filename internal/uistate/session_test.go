@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/monstercameron/CashFlux/internal/browserstore"
+	"github.com/monstercameron/CashFlux/internal/prefs"
 )
 
 // The bug this encodes: the Cloud pane decided "signed in" from the STATIC
@@ -40,6 +41,27 @@ func TestSessionPrefersTheCredentialSyncActuallySends(t *testing.T) {
 	}
 	if s.Token != EffectiveServerToken("static-xyz") {
 		t.Fatalf("Session and EffectiveServerToken disagree: %q vs %q", s.Token, EffectiveServerToken("static-xyz"))
+	}
+}
+
+func TestBackendConnectionActiveRecognizesMemoryOnlySession(t *testing.T) {
+	browserstore.Remove(AuthAccessTokenKey)
+	browserstore.SetMemory(AuthAccessTokenKey, "memory-access")
+	t.Cleanup(func() { browserstore.SetMemory(AuthAccessTokenKey, "") })
+	pr := prefs.Default()
+	pr.ServerURL = "https://cashflux.example"
+	pr.BackendDisabled = false
+	if !BackendConnectionActive(pr) {
+		t.Fatal("backend should be active with a configured URL and memory-only access token")
+	}
+	pr.BackendDisabled = true
+	if BackendConnectionActive(pr) {
+		t.Fatal("disabled backend must not be active")
+	}
+	pr.BackendDisabled = false
+	pr.ServerURL = " "
+	if BackendConnectionActive(pr) {
+		t.Fatal("backend without a configured URL must not be active")
 	}
 }
 
