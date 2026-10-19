@@ -90,6 +90,11 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **The Transactions summary strip is true and compact (V5SUM).** The category breakdown recomputes on every transaction
+  change (recategorising updates it in the same render). The bar adds a neutral "Other" segment so segments are each
+  category's share of Spent. Only an active category filter looks selected; uncategorized spending gets a small amber dot.
+  While filtering by category, every category stays visible (others dimmed) and Income/Net/bills are hidden. Spent / Income /
+  Net sit in one band of at most 64 px with a 6 px bar, and the positive tone meets 4.5:1 in the light theme.
 - **Transactions keeps one type scale and a flat primary button; the calendar says one thing one way (V5TYPE, V5CAL).**
   Transactions text uses four sizes (12/14/17/24 px tokens) and weights up to 600, and a style test fails on anything
   else. Primary buttons are a flat accent fill with black or white text chosen for contrast. Calendar week totals read

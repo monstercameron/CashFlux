@@ -12,11 +12,20 @@ func registerUXT1() {
 	rule(".txn-countline",
 		display("flex"),
 		flexDirection("column"),
-		gap("0.65rem"),
+		gap("0.25rem"),
 		width("100%"),
 		minWidth("0"),
 		color("var(--text)"),
 		fontSize("var(--type-14)"),
+	)
+	rule(".txn-count-band",
+		display("flex"),
+		alignItems("center"),
+		gap("1rem"),
+		width("100%"),
+		minWidth("0"),
+		minHeight("44px"),
+		maxHeight("64px"),
 	)
 	rule(".txn-countline-future",
 		flexDirection("row"),
@@ -34,16 +43,16 @@ func registerUXT1() {
 		fontWeight("500"),
 	)
 	rule(".txn-count-figures",
-		display("grid"),
-		gridTemplateColumns("repeat(3, minmax(0, 1fr))"),
+		display("flex"),
+		alignItems("baseline"),
 		gap("1rem"),
-		width("100%"),
+		flex("0 0 auto"),
 	)
 	rule(".txn-count-figure",
 		display("flex"),
-		flexDirection("column"),
-		alignItems("flex-start"),
-		gap("0.15rem"),
+		flexDirection("row"),
+		alignItems("baseline"),
+		gap("0.35rem"),
 		minWidth("0"),
 		padding("0"),
 		border("0"),
@@ -77,19 +86,22 @@ func registerUXT1() {
 		color("var(--danger, #d95757)"),
 	)
 	rule(".txn-count-positive",
-		color("var(--success, #3fa56e)"),
+		color("var(--positive, var(--up-ink))"),
 	)
 	rule(".txn-category-breakdown",
 		display("flex"),
 		flexDirection("column"),
-		gap("0.35rem"),
-		maxWidth("calc((100% - 2rem) / 3)"),
+		justifyContent("center"),
+		gap("0.3rem"),
+		flex("1 1 0"),
+		minWidth("0"),
+		maxWidth("none"),
 	)
 	rule(".txn-category-bar",
 		display("flex"),
 		width("100%"),
-		height("4px"),
-		minHeight("4px"),
+		height("6px"),
+		minHeight("6px"),
 		overflow("hidden"),
 		borderRadius("999px"),
 		background("var(--border)"),
@@ -97,8 +109,8 @@ func registerUXT1() {
 	rule(".txn-category-segment",
 		display("block"),
 		flex("0 0 auto"),
-		minWidth("2px"),
-		height("4px"),
+		minWidth("0"),
+		height("6px"),
 		padding("0"),
 		border("0"),
 		borderRadius("0"),
@@ -112,13 +124,23 @@ func registerUXT1() {
 	rule(".txn-category-segment.is-selected",
 		background("var(--accent)"),
 	)
+	rule(".txn-category-segment.is-dimmed",
+		opacity("0.35"),
+	)
+	rule(".txn-category-bar .txn-category-segment-other, .txn-category-bar .txn-category-segment-other:hover",
+		background("var(--border)"),
+		cursor("default"),
+	)
 	rule(".txn-category-segment:hover",
 		background("var(--accent)"),
 	)
 	rule(".txn-category-list",
 		display("flex"),
-		flexDirection("column"),
-		gap("0.1rem"),
+		alignItems("center"),
+		gap("0.75rem"),
+		minWidth("0"),
+		overflow("hidden"),
+		whiteSpace("nowrap"),
 	)
 	rule(".txn-category-item",
 		display("flex"),
@@ -134,6 +156,35 @@ func registerUXT1() {
 		fontWeight("500"),
 		textAlign("left"),
 		cursor("pointer"),
+		maxWidth("22%"),
+		whiteSpace("nowrap"),
+	)
+	rule(".txn-category-item:nth-child(n+4):not(.txn-category-other)", display("none"))
+	rule(".txn-category-breakdown.is-filtered .txn-category-item:nth-child(n+4):not(.txn-category-other)", display("flex"))
+	rule(".txn-category-breakdown.is-filtered .txn-category-item", maxWidth("16%"))
+	rule(".txn-category-item.is-dimmed", opacity("0.45"))
+	rule(".txn-category-item.needs-attention .txn-category-name::before",
+		content("\"\""),
+		display("inline-block"),
+		width("6px"),
+		height("6px"),
+		marginRight("0.3rem"),
+		borderRadius("50%"),
+		background("var(--warn)"),
+		verticalAlign("middle"),
+	)
+	rule(".txn-category-other",
+		cursor("default"),
+		color("var(--text-dim)"),
+	)
+	rule(".txn-category-item.txn-category-other, .txn-category-item.txn-category-other:hover",
+		color("var(--text-dim)"),
+		cursor("default"),
+	)
+	rule(".txn-category-more",
+		flex("0 0 auto"),
+		color("var(--text-dim)"),
+		fontSize("12px"),
 	)
 	rule(".txn-category-item.is-selected, .txn-category-item:hover",
 		color("var(--accent)"),
@@ -177,25 +228,26 @@ func registerUXT1() {
 		border("0"),
 		fontSize("inherit"),
 	)
+	rule(".txn-count-upcoming-fact",
+		flex("0 0 auto"),
+		marginLeft("auto"),
+		fontSize("12px"),
+	)
+	rule(".txn-count-secondary",
+		paddingLeft("0"),
+	)
 
-	ruleMedia("(max-width: 1024px)", ".txn-count-figures",
-		gridTemplateColumns("repeat(3, minmax(0, 1fr))"),
-		gap("0.75rem"),
-	)
-	ruleMedia("(max-width: 1024px)", ".txn-category-breakdown",
-		maxWidth("calc((100% - 1.5rem) / 3)"),
-	)
 	ruleMedia("(max-width: 560px)", ".txn-count-figures",
-		gridTemplateColumns("1fr"),
-		gap("0.65rem"),
+		gap("0.5rem"),
 	)
-	ruleMedia("(max-width: 560px)", ".txn-count-figure",
-		flexDirection("row"),
-		alignItems("baseline"),
-		justifyContent("space-between"),
-		gap("0.75rem"),
+	ruleMedia("(max-width: 760px)", ".txn-count-band",
+		flexWrap("wrap"),
+		maxHeight("none"),
+		gap("0.5rem 0.75rem"),
 	)
-	ruleMedia("(max-width: 560px)", ".txn-category-breakdown",
-		maxWidth("100%"),
+	ruleMedia("(max-width: 760px)", ".txn-category-breakdown",
+		flexBasis("100%"),
+		order("3"),
 	)
+	ruleMedia("(max-width: 760px)", ".txn-count-upcoming-fact", order("4"))
 }
