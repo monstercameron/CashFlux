@@ -19,7 +19,21 @@ func TestBudgetEditDialogTitlesNameTheBudget(t *testing.T) {
 	if err != nil {
 		t.Fatalf("appstate.New: %v", err)
 	}
-	if err := app.PutBudget(domain.Budget{ID: "groceries", Name: "Groceries", Limit: money.New(45000, "USD")}); err != nil {
+	if err := app.PutMember(domain.Member{ID: "member-cam", Name: "Cam"}); err != nil {
+		t.Fatalf("PutMember: %v", err)
+	}
+	if err := app.PutCategory(domain.Category{ID: "category-groceries", Name: "Groceries", Kind: domain.KindExpense}); err != nil {
+		t.Fatalf("PutCategory: %v", err)
+	}
+	if err := app.PutBudget(domain.Budget{
+		ID:         "groceries",
+		Name:       "Groceries",
+		OwnerID:    "member-cam",
+		CategoryID: "category-groceries",
+		Scope:      domain.ScopeIndividual,
+		Period:     domain.PeriodMonthly,
+		Limit:      money.New(45000, "USD"),
+	}); err != nil {
 		t.Fatalf("PutBudget: %v", err)
 	}
 	previous := appstate.Default
