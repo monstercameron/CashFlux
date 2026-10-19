@@ -200,12 +200,9 @@ func budgetRowCompact(props budgetRowCompactProps) ui.Node {
 		crowChip = Span(ClassStr("pill budget-crow-chip"+chipTone), label)
 	}
 	row := Div(ClassStr(crowCls), Attr("data-testid", "budget-card-"+s.Budget.ID),
-		// Name cell: the title and the conditional C395 rollover badge share ONE
-		// grid cell, so the row is always exactly six children. The badge used to
-		// be a seventh top-level child in a six-column template — every later cell
-		// shifted a column right and the kebab wrapped onto an implicit row.
-		// Name cell: the title, the note marker, and the conditional C395
-		// rollover badge.
+		// Name, status and actions stay on the first line at compact widths. The
+		// figures are grouped below them so the row can narrow without hiding the
+		// remaining amount or forcing a marker into the kebab column.
 		//
 		// C545: the note's TEXT belongs to the card layout, but showing no trace
 		// of it in compact meant saving a note in the DEFAULT density produced no
@@ -222,18 +219,6 @@ func budgetRowCompact(props budgetRowCompactProps) ui.Node {
 		// is — something the budget HAS, next to its name — rather than a third
 		// thing to do.
 		budgetCompactNameCell(props, crowTitle),
-		Div(css.Class("budget-crow-bar"), Attr("role", "progressbar"), Attr("aria-valuenow", strconv.Itoa(width)), Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"), Attr("aria-label", uistate.T("budgets.progressLabel")+" — "+title),
-			Div(ClassStr(fillClass), Attr("style", fmt.Sprintf("width:%d%%", width)))),
-		// Spent carries the weight, the "/ limit" reads muted — same voice as the
-		// card loader's figures.
-		Span(css.Class("budget-crow-amt fig"),
-			Span(css.Class("budget-crow-spent"), barSpent),
-			Span(css.Class("budget-crow-limit"), " / "),
-			Button(css.Class("budget-limit-btn", "budget-crow-limit-btn"), Type("button"), Attr("data-testid", "budget-limit-btn-"+s.Budget.ID),
-				Title(uistate.T("budgets.limitEditTitle")), Attr("aria-label", uistate.T("budgets.limitEditTitle")+" — "+title),
-				OnClick(startLimitEdit), fmtMoney(limit)),
-		),
-		crowLeft,
 		crowChip,
 		// One action cell: the labelled Transactions drill (icon + accessible
 		// name) and the ⋯ overflow, so the compact row keeps a one-click path to
@@ -245,6 +230,22 @@ func budgetRowCompact(props budgetRowCompactProps) ui.Node {
 				Title(drillTitle), OnClick(drill),
 				uiw.Icon(icon.Receipt, css.Class(tw.ShrinkO, tw.W4, tw.H4)))),
 			kebabNode,
+		),
+		Div(css.Class("budget-crow-figures"),
+			Span(css.Class("budget-crow-amt fig"),
+				Span(css.Class("budget-crow-spent"), barSpent),
+				Span(css.Class("budget-crow-limit"), " of "),
+				Button(css.Class("budget-limit-btn", "budget-crow-limit-btn"), Type("button"), Attr("data-testid", "budget-limit-btn-"+s.Budget.ID),
+					Title(uistate.T("budgets.limitEditTitle")), Attr("aria-label", uistate.T("budgets.limitEditTitle")+" — "+title),
+					OnClick(startLimitEdit), fmtMoney(limit)),
+				Span(css.Class("budget-crow-fig-separator"), " · "), crowLeft,
+			),
+			Div(css.Class("budget-crow-bar"), Attr("role", "progressbar"), Attr("aria-valuenow", strconv.Itoa(width)), Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"), Attr("aria-label", uistate.T("budgets.progressLabel")+" — "+title),
+				Div(ClassStr(fillClass), Attr("style", fmt.Sprintf("width:%d%%", width))),
+				If(!lastMonthMode && props.PaceMarkerPct > 0 && s.Spent.Amount > 0,
+					Div(css.Class("bar-pace-tick"), Attr("data-testid", "budget-pace-tick-"+s.Budget.ID), Attr("aria-hidden", "true"),
+						Attr("style", fmt.Sprintf("position:absolute;top:0;bottom:0;left:%d%%;width:2px;background:var(--text);opacity:0.65;pointer-events:none", props.PaceMarkerPct)))),
+			),
 		),
 	)
 	return Fragment(row, If(props.LimitEditing, budgetLimitEditor(

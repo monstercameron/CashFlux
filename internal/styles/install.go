@@ -144,6 +144,7 @@ func Register() {
 	registerBud2Surface()
 	registerFUT2()
 	registerForm3()
+	registerBR2MOB()
 	inject(Build())
 }
 

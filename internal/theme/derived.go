@@ -97,6 +97,7 @@ func (t Theme) derivedVars() map[string]string {
 		// accent (#2e8b57 by default) lands ~4.4:1 as small text on dark cards
 		// (#67 axe gate); fills/buttons keep using --accent unchanged.
 		"--accent-ink": accentInk(t.Accent, t.Text, t.bgElev()),
+		"--up-ink":     accentInk(t.Up, t.Text, t.bgElev()),
 		"--warn":       warnToken,
 		"--danger":     t.Down,
 	}

@@ -90,6 +90,12 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Budgets compact rows work on phones and at 1024 px (BR2MOB).** On narrow screens a compact row puts the name, status
+  and actions on one line and readable figures ("$1,100 of $1,300 · $200 left") on the next; only the name shrinks with an
+  ellipsis, so no figure is pushed off screen. A thin bar stays visible at 1024 px, compact bars show the pace tick when
+  there is spending, the topbar wraps so "Sample data · Start fresh" stays reachable, and Back to top and the quick-add
+  button no longer cover the last row. Green link text ("Budget this", "Rolls over") uses a new `--up-ink` token that
+  meets 4.5:1 in light and dark themes.
 - **Transaction CSV export round-trips every field; imports accept BOM and semicolons (TQ8, TQ8.1).** Exports now write
   `cashflux-csv-v2` with every transaction field (splits, custom fields, attachments, owners, provenance, report flags,
   bill/subscription links, timestamps); importing it gives back identical transactions, and v1 files still import. Bank
