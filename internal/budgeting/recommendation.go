@@ -52,6 +52,10 @@ func RecommendLimit(covers map[string]bool, txns []domain.Transaction, now time.
 	if err != nil {
 		return LimitRecommendation{}, err
 	}
+	return recommendFromComparableSpend(values, currentLimit, currentProjection)
+}
+
+func recommendFromComparableSpend(values []SuggestionMonth, currentLimit, currentProjection int64) (LimitRecommendation, error) {
 	if len(values) == 0 {
 		return LimitRecommendation{CurrentLimit: currentLimit, Suggested: currentLimit, Direction: SuggestionKeep, Projection: currentProjection}, nil
 	}
@@ -60,25 +64,41 @@ func RecommendLimit(covers map[string]bool, txns []domain.Transaction, now time.
 		return LimitRecommendation{}, err
 	}
 	recommended := median
-	if currentProjection > currentLimit && recommended < currentProjection {
-		recommended = currentProjection
-	}
 	direction := SuggestionKeep
 	switch {
 	case recommended > currentLimit:
-		direction = SuggestionRaise
+		// A raise needs either current-period overspend or repeated evidence in
+		// at least two of the last three comparable periods. The projection is
+		// a gate only; it never supplies the suggested amount.
+		if currentProjection > currentLimit || overspentComparablePeriods(values, currentLimit) >= 2 {
+			direction = SuggestionRaise
+		} else {
+			recommended = currentLimit
+		}
 	case recommended < currentLimit:
 		direction = SuggestionLower
-	}
-	if currentProjection > currentLimit && direction == SuggestionLower {
-		return LimitRecommendation{}, fmt.Errorf("projected spend exceeds current limit but recommendation would lower it")
 	}
 	return LimitRecommendation{CurrentLimit: currentLimit, Suggested: recommended, Direction: direction, HasEvidence: true, Projection: currentProjection, Median: median, MonthsUsed: used, Outliers: outliers}, nil
 }
 
-// RecommendBudgetLimit normalizes the budget's current limit to monthly
-// base-currency minor units before deriving a recommendation. projectedMonthly
-// must also be in rates.Base and stated as a monthly amount.
+func overspentComparablePeriods(values []SuggestionMonth, limit int64) int {
+	start := len(values) - 3
+	if start < 0 {
+		start = 0
+	}
+	count := 0
+	for _, value := range values[start:] {
+		if value.Amount > limit {
+			count++
+		}
+	}
+	return count
+}
+
+// RecommendBudgetLimit compares same-cadence historical windows, then expresses
+// the evidence and suggestion as monthly base-currency minor units for legacy UI
+// callers. projectedMonthly is a current-pace gate only and never changes the
+// evidence-derived suggested amount.
 func RecommendBudgetLimit(budget domain.Budget, covers map[string]bool, txns []domain.Transaction, now time.Time, months int, projectedMonthly money.Money, rates currency.Rates) (LimitRecommendation, error) {
 	limit := budget.Limit
 	if limit.Currency == "" {
@@ -96,7 +116,52 @@ func RecommendBudgetLimit(budget domain.Budget, covers map[string]bool, txns []d
 	if err != nil {
 		return LimitRecommendation{}, fmt.Errorf("budget %q projected spend currency conversion: %w", budget.ID, err)
 	}
-	return RecommendLimit(covers, txns, now, months, monthly.Amount, projection.Amount, rates)
+	values, err := comparableBudgetSpend(budget.Period, covers, txns, now, months, rates)
+	if err != nil {
+		return LimitRecommendation{}, err
+	}
+	return recommendFromComparableSpend(values, monthly.Amount, projection.Amount)
+}
+
+func comparableBudgetSpend(period domain.Period, covers map[string]bool, txns []domain.Transaction, now time.Time, periods int, rates currency.Rates) ([]SuggestionMonth, error) {
+	if len(covers) == 0 || periods <= 0 {
+		return nil, nil
+	}
+	start, _ := PeriodRange(period, now, time.Monday)
+	values := make([]SuggestionMonth, 0, periods)
+	for k := periods; k >= 1; k-- {
+		windowEnd := start
+		for i := 0; i < k-1; i++ {
+			windowEnd, _ = PreviousPeriodRange(period, windowEnd, time.Monday)
+		}
+		windowStart, windowEnd := PreviousPeriodRange(period, windowEnd, time.Monday)
+		var amount int64
+		for _, txn := range txns {
+			if !txn.IsExpense() || !txn.CountsInReports() || !dateutil.InRange(txn.Date, windowStart, windowEnd) {
+				continue
+			}
+			part, ok, err := scopedSpend(txn, covers, rates)
+			if err != nil {
+				return nil, err
+			}
+			if ok {
+				amount, err = money.Add(amount, part)
+				if err != nil {
+					return nil, fmt.Errorf("sum budget spend for %s: %w", windowStart.Format("2006-01-02"), err)
+				}
+			}
+		}
+		monthly, err := PeriodEquivalent(money.New(amount, rates.Base), period, domain.PeriodMonthly)
+		if err != nil {
+			return nil, fmt.Errorf("normalize budget history for %s: %w", windowStart.Format("2006-01-02"), err)
+		}
+		values = append(values, SuggestionMonth{Month: windowStart.Format("2006-01-02"), Amount: monthly.Amount})
+	}
+	first := 0
+	for first < len(values) && values[first].Amount == 0 {
+		first++
+	}
+	return values[first:], nil
 }
 
 func monthlyCoveredSpend(covers map[string]bool, txns []domain.Transaction, now time.Time, months int, rates currency.Rates) ([]SuggestionMonth, error) {

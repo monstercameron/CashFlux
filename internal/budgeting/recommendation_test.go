@@ -31,7 +31,7 @@ func TestRecommendLimitNamesDirectionAndExcludesOutlier(t *testing.T) {
 	}
 }
 
-func TestRecommendLimitNeverCutsBelowCurrentProjection(t *testing.T) {
+func TestRecommendLimitProjectionNeverDeterminesSuggestedAmount(t *testing.T) {
 	now := time.Date(2026, time.July, 15, 0, 0, 0, 0, time.UTC)
 	txns := []domain.Transaction{
 		{ID: "a", CategoryID: "dining", Amount: money.New(-12000, "USD"), Date: time.Date(2026, time.June, 1, 0, 0, 0, 0, time.UTC)},
@@ -42,8 +42,35 @@ func TestRecommendLimitNeverCutsBelowCurrentProjection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Direction != SuggestionRaise || got.Suggested != 188301 {
-		t.Errorf("projected recommendation = %s to %d, want raise to at least projected 188301", got.Direction, got.Suggested)
+	if got.Direction != SuggestionLower || got.Suggested != 12600 || got.Projection != 188301 {
+		t.Errorf("projection-derived recommendation = %+v, want historical 12600 and recorded projection 188301", got)
+	}
+}
+
+func TestRecommendLimitSuppressesRaiseWithoutRepeatedOverspend(t *testing.T) {
+	now := time.Date(2026, time.July, 15, 0, 0, 0, 0, time.UTC)
+	for _, tc := range []struct {
+		name       string
+		lastThree  []int64
+		projection int64
+		want       SuggestionDirection
+	}{
+		{"on pace with one overspend", []int64{12000, 8000, 8000}, 9000, SuggestionKeep},
+		{"on pace with repeated overspend", []int64{12000, 11000, 8000}, 9000, SuggestionRaise},
+		{"currently over pace", []int64{12000, 8000, 8000}, 11000, SuggestionRaise},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			amounts := []int64{20000, 20000, tc.lastThree[0], tc.lastThree[1], tc.lastThree[2]}
+			txns := make([]domain.Transaction, 0, len(amounts))
+			for i, amount := range amounts {
+				month := time.Date(2026, time.Month(i+2), 10, 0, 0, 0, 0, time.UTC)
+				txns = append(txns, domain.Transaction{ID: month.Format("2006-01"), CategoryID: "shopping", Amount: money.New(-amount, "USD"), Date: month})
+			}
+			got, err := RecommendLimit(map[string]bool{"shopping": true}, txns, now, 5, 10000, tc.projection, currency.Rates{Base: "USD"})
+			if err != nil || got.Direction != tc.want || (got.Direction == SuggestionRaise && got.Suggested != got.Median) {
+				t.Fatalf("recommendation=%+v err=%v; want %s with evidence-derived amount", got, err, tc.want)
+			}
+		})
 	}
 }
 
@@ -76,6 +103,43 @@ func TestRecommendBudgetLimitComparesYearlyBaseAsMonthlyEquivalent(t *testing.T)
 	}
 	if got.CurrentLimit != 50000 || got.Direction != SuggestionKeep || got.Suggested != 50000 {
 		t.Errorf("yearly budget recommendation = current %d, %s to %d; want monthly equivalent 50000 and keep", got.CurrentLimit, got.Direction, got.Suggested)
+	}
+}
+
+func TestRecommendBudgetLimitUsesComparableYearWindows(t *testing.T) {
+	now := time.Date(2026, time.October, 19, 0, 0, 0, 0, time.UTC)
+	txns := []domain.Transaction{
+		{ID: "2023", CategoryID: "splurge", Amount: money.New(-900000, "USD"), Date: time.Date(2023, time.June, 1, 0, 0, 0, 0, time.UTC)},
+		{ID: "2024", CategoryID: "splurge", Amount: money.New(-1000000, "USD"), Date: time.Date(2024, time.June, 1, 0, 0, 0, 0, time.UTC)},
+		{ID: "2025", CategoryID: "splurge", Amount: money.New(-800000, "USD"), Date: time.Date(2025, time.June, 1, 0, 0, 0, 0, time.UTC)},
+		// A large current-year transaction must not leak into the closed-year evidence.
+		{ID: "2026", CategoryID: "splurge", Amount: money.New(-500000, "USD"), Date: time.Date(2026, time.June, 1, 0, 0, 0, 0, time.UTC)},
+	}
+	budget := domain.Budget{ID: "splurge", Period: domain.PeriodYearly, Limit: money.New(888000, "USD")}
+	got, err := RecommendBudgetLimit(budget, map[string]bool{"splurge": true}, txns, now, 3, money.New(40000, "USD"), currency.Rates{Base: "USD"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.MonthsUsed) != 3 || got.MonthsUsed[0].Month != "2023-01-01" || got.MonthsUsed[2].Month != "2025-01-01" || got.Median != 75000 || got.Direction != SuggestionRaise || got.Suggested != 75000 {
+		t.Fatalf("yearly evidence=%+v; want three comparable annual windows and a monthly-equivalent median of 75000", got)
+	}
+}
+
+func TestRecommendBudgetLimitUsesComparableQuarterWindows(t *testing.T) {
+	now := time.Date(2026, time.October, 19, 0, 0, 0, 0, time.UTC)
+	txns := []domain.Transaction{
+		{ID: "q1", CategoryID: "home", Amount: money.New(-330000, "USD"), Date: time.Date(2026, time.January, 15, 0, 0, 0, 0, time.UTC)},
+		{ID: "q2", CategoryID: "home", Amount: money.New(-300000, "USD"), Date: time.Date(2026, time.April, 15, 0, 0, 0, 0, time.UTC)},
+		{ID: "q3", CategoryID: "home", Amount: money.New(-360000, "USD"), Date: time.Date(2026, time.July, 15, 0, 0, 0, 0, time.UTC)},
+		{ID: "current", CategoryID: "home", Amount: money.New(-900000, "USD"), Date: time.Date(2026, time.October, 2, 0, 0, 0, 0, time.UTC)},
+	}
+	budget := domain.Budget{ID: "home", Period: domain.PeriodQuarterly, Limit: money.New(300000, "USD")}
+	got, err := RecommendBudgetLimit(budget, map[string]bool{"home": true}, txns, now, 3, money.New(80000, "USD"), currency.Rates{Base: "USD"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.MonthsUsed) != 3 || got.MonthsUsed[0].Month != "2026-01-01" || got.MonthsUsed[2].Month != "2026-07-01" || got.Median != 110000 || got.Direction != SuggestionRaise || got.Suggested != 110000 {
+		t.Fatalf("quarterly evidence=%+v; want three comparable quarters and a monthly-equivalent median of 110000", got)
 	}
 }
 

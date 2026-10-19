@@ -147,6 +147,51 @@ func TestEvaluateViewBudgetSmoothingAndCarryCap(t *testing.T) {
 	}
 }
 
+func TestEvaluateViewBudgetProjectionTreatsRecurringChargesAsFixed(t *testing.T) {
+	in := viewTestInput()
+	in.Period.Anchor = mustDate("2026-10-01")
+	in.Period.Now = mustDate("2026-10-19")
+	b := cmtBudget(domain.PeriodMonthly, 120000)
+	in.Recurring = []domain.Recurring{
+		cmtRec("car-a", -62000, domain.CadenceMonthly, mustDate("2026-10-05"), false),
+		cmtRec("car-b", -48000, domain.CadenceMonthly, mustDate("2026-10-20"), false),
+	}
+	in.Transactions = []domain.Transaction{cmtTxn(-62000, mustDate("2026-10-06"))}
+	got := EvaluateViewBudget(b, in)
+	if !got.Valid || got.Status.Spent.Amount != 62000 || got.Committed.Required.Amount != 48000 {
+		t.Fatalf("car payment inputs = %+v", got)
+	}
+	if got.Projection.Projected.Amount != 110000 || !got.Projection.OnTrack || got.PaceOver.IsPositive() {
+		t.Fatalf("projection=%+v pace over=%v; want fixed $1,100 car costs within $1,200", got.Projection, got.PaceOver)
+	}
+	if !got.Projection.CommittedDominates || got.Projection.Committed.Amount != 110000 {
+		t.Fatalf("committed explanation=%+v; want recurring charges to dominate projection", got.Projection)
+	}
+}
+
+func TestEvaluateViewBudgetClosedPeriodExposesEndedOverByWithoutPace(t *testing.T) {
+	in := viewTestInput()
+	in.Period.Anchor = mustDate("2026-09-01")
+	in.Period.Now = mustDate("2026-10-19")
+	in.Transactions = []domain.Transaction{cmtTxn(-10500, mustDate("2026-09-10"))}
+	got := EvaluateViewBudget(cmtBudget(domain.PeriodMonthly, 10000), in)
+	if !got.Valid || got.PeriodStatus != PeriodEnded || !got.Projection.PeriodEnded || got.Projection.Projected.Amount != 0 || got.Projection.OverBy.Amount != 0 || got.Projection.EndedOverBy.Amount != 500 {
+		t.Fatalf("closed-period projection=%+v status=%s; want ended over by $5 without pace", got.Projection, got.PeriodStatus)
+	}
+}
+
+func TestEvaluateViewBudgetRestPerDayIsPerBudget(t *testing.T) {
+	in := viewTestInput()
+	in.Period.Now = mustDate("2026-06-15")
+	in.Transactions = []domain.Transaction{cmtTxn(-1000, mustDate("2026-06-10"))}
+	a := cmtBudget(domain.PeriodMonthly, 10000)
+	b := cmtBudget(domain.PeriodMonthly, 20000)
+	first, second := EvaluateViewBudget(a, in), EvaluateViewBudget(b, in)
+	if first.RestPerDay == 0 || second.RestPerDay == 0 || first.RestPerDay == second.RestPerDay {
+		t.Fatalf("rest-per-day values first=%d second=%d; expected independent budget values", first.RestPerDay, second.RestPerDay)
+	}
+}
+
 func TestViewSelectionAndAttention(t *testing.T) {
 	all := []domain.Budget{{ID: "shared", OwnerID: domain.GroupOwnerID}, {ID: "a", OwnerID: "a"}, {ID: "b", OwnerID: "b"}}
 	for _, tc := range []struct {

@@ -90,6 +90,12 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Projections treat bills as fixed; suggestions only raise budgets that really overspend (BR3PROJ).** A budget's
+  projection keeps matched recurring charges fixed and extrapolates only discretionary spending, so two monthly car
+  payments no longer read as "on pace to overspend by $588". The projection reports when committed bills dominate, and a
+  closed period reports what it actually ended over by instead of a forecast. Suggested limits come only from the trimmed
+  historical median over same-length windows (quarters and years compared like with like); a raise while on pace needs
+  at least two overspends in the last three comparable periods. Remaining-per-day is computed per budget.
 - **Budgets rows, summary and search follow the shared rules (BQ10B).** Saving budgets are counted once in To Assign. The
   budget evaluation uses an explicit refund-netted ledger; a missing exchange rate leaves a savings account unassigned
   instead of treating foreign minor units as base currency. The spending breakdown uses signed slices in the budget's

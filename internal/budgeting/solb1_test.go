@@ -93,8 +93,8 @@ func TestSOLB1ProjectionCommitmentsAndFuture(t *testing.T) {
 		state                                 PeriodStatus
 	}{
 		{"transport ahead of pace", "2026-10-01", "2026-10-19", 130000, 110000, 0, 189444, 20000, PeriodActive},
-		{"subscriptions committed", "2026-10-01", "2026-10-19", 3999, 0, 3800, 0, 199, PeriodActive},
-		{"November planned", "2026-11-01", "2026-10-19", 3999, 0, 3800, 0, 199, PeriodPlanned},
+		{"subscriptions committed", "2026-10-01", "2026-10-19", 3999, 0, 3800, 3800, 199, PeriodActive},
+		{"November planned", "2026-11-01", "2026-10-19", 3999, 0, 3800, 3800, 199, PeriodPlanned},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			in := viewTestInput()

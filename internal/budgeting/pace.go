@@ -25,6 +25,15 @@ type Pace struct {
 	OverBy money.Money
 	// OnTrack reports whether the projection lands within the limit.
 	OnTrack bool
+	// Committed is recurring spend already posted or still due in this period.
+	Committed money.Money
+	// CommittedDominates reports that recurring obligations are at least half
+	// of the projected period spend.
+	CommittedDominates bool
+	// PeriodEnded marks a closed period, where no pace projection is meaningful.
+	PeriodEnded bool
+	// EndedOverBy is actual spend above the limit for a closed period.
+	EndedOverBy money.Money
 }
 
 // elapsedFraction returns how far now is through the half-open period
@@ -90,6 +99,72 @@ func ProjectPace(status Status, start, end, now time.Time) Pace {
 		OverBy:    overBy,
 		OnTrack:   onTrack,
 	}
+}
+
+// ProjectBudgetPace combines fixed recurring charges with a linear projection
+// of discretionary spend. postedRecurring is the matched recurring spend already
+// included in status.Spent; scheduledRecurring is the matched recurring amount
+// still due. All amounts must use the status currency.
+func ProjectBudgetPace(status Status, postedRecurring, scheduledRecurring money.Money, start, end, now time.Time) Pace {
+	cur := status.Spent.Currency
+	if postedRecurring.Currency != cur || scheduledRecurring.Currency != cur {
+		return Pace{Error: money.ErrCurrencyMismatch}
+	}
+	limit, err := paceLimit(status)
+	if err != nil {
+		return Pace{Error: err}
+	}
+	now = dateutil.WallClockUTC(now)
+	frac := elapsedFraction(start, end, now)
+	committedAmount, err := money.Add(postedRecurring.Amount, scheduledRecurring.Amount)
+	if err != nil {
+		return Pace{Elapsed: frac, Error: err}
+	}
+	if now.Before(start) {
+		committedAmount = scheduledRecurring.Amount
+	}
+	if !now.Before(end) {
+		endedOver := money.Zero(cur)
+		if status.Spent.Amount > limit.Amount {
+			endedOver, err = status.Spent.Sub(limit)
+			if err != nil {
+				return Pace{Elapsed: frac, Error: err}
+			}
+		}
+		return Pace{Elapsed: 1, Projected: money.Zero(cur), OverBy: money.Zero(cur), OnTrack: true, Committed: money.New(committedAmount, cur), PeriodEnded: true, EndedOverBy: endedOver}
+	}
+	discretionary, err := money.Sub(status.Spent.Amount, postedRecurring.Amount)
+	if err != nil {
+		return Pace{Elapsed: frac, Error: err}
+	}
+	if discretionary < 0 {
+		discretionary = 0
+	}
+	projectedDiscretionary := discretionary
+	if frac > 0 && frac < 1 {
+		projectedDiscretionary, err = money.MulDiv(discretionary, int64(end.Sub(start)), int64(now.Sub(start)), money.RoundHalfAwayFromZero)
+		if err != nil {
+			return Pace{Elapsed: frac, Error: err}
+		}
+	}
+	projectedAmount, err := money.Add(committedAmount, projectedDiscretionary)
+	if err != nil {
+		return Pace{Elapsed: frac, Error: err}
+	}
+	projected := money.New(projectedAmount, cur)
+	overBy := money.Zero(cur)
+	onTrack := projectedAmount <= limit.Amount
+	if !onTrack {
+		overBy, err = projected.Sub(limit)
+		if err != nil {
+			return Pace{Elapsed: frac, Error: err}
+		}
+	}
+	dominates := false
+	if projectedAmount > 0 {
+		dominates = committedAmount >= projectedAmount/2+projectedAmount%2
+	}
+	return Pace{Elapsed: frac, Projected: projected, OverBy: overBy, OnTrack: onTrack, Committed: money.New(committedAmount, cur), CommittedDominates: dominates}
 }
 
 // PaceMarker locates the even-pace line for a budget: where spending SHOULD be

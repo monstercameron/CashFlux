@@ -80,6 +80,7 @@ type ViewBudget struct {
 	PriorSpentBase, PriorLimitBase    int64
 	PaceOver                          money.Money
 	ProratedRest                      int64
+	RestPerDay                        int64
 	Issues                            []ViewIssue
 }
 
@@ -166,17 +167,37 @@ func EvaluateViewBudget(b domain.Budget, in ViewInput) ViewBudget {
 	if in.ShowPrior || v.Early {
 		v.previousPeriod(in)
 	}
-	pace := ProjectPace(st, start, end, p.Now)
+	postedRecurring, matchErr := matchedRecurringPosted(eval, in.Recurring, in.Transactions, start, end, st.Spent.Currency, in.Rates)
+	if matchErr != nil {
+		v.issue("match posted recurring spending", matchErr)
+	}
+	scheduledRecurring := v.Committed.Required
+	if scheduledRecurring.Currency == "" {
+		scheduledRecurring = money.Zero(st.Spent.Currency)
+	}
+	var pace Pace
+	switch {
+	case matchErr != nil:
+		pace = Pace{Error: matchErr}
+	case v.CommitmentError != nil:
+		pace = Pace{Error: v.CommitmentError}
+	default:
+		pace = ProjectBudgetPace(st, postedRecurring, scheduledRecurring, start, end, p.Now)
+	}
 	v.Projection = pace
 	if pace.Error != nil {
 		v.issue("project budget pace", pace.Error)
 	}
-	if !pace.OnTrack && pace.Elapsed > 0 && pace.Elapsed < 1 && st.State != StateOver {
+	if !pace.PeriodEnded && !pace.OnTrack && pace.Elapsed > 0 && pace.Elapsed < 1 && st.State != StateOver {
 		v.PaceOver = pace.OverBy
 	}
 	if st.Remaining.Amount > 0 {
 		days, left := int(end.Sub(start).Hours()/24), int(end.Sub(p.Now).Hours()/24)
 		if left > 0 && left < days {
+			v.RestPerDay, err = money.MulDiv(st.Remaining.Amount, 1, int64(left), money.RoundTowardZero)
+			if err != nil {
+				v.issue("calculate remaining budget per day", err)
+			}
 			amount, err := money.MulDiv(st.Remaining.Amount, int64(left), int64(days), money.RoundTowardZero)
 			if err != nil {
 				v.issue("prorate budget remainder", err)
@@ -194,6 +215,34 @@ func EvaluateViewBudget(b domain.Budget, in ViewInput) ViewBudget {
 	v.Issues = DeduplicateViewIssues(v.Issues)
 	v.Status.Issues = v.Issues
 	return v
+}
+
+func matchedRecurringPosted(budget domain.Budget, recurrings []domain.Recurring, posted []domain.Transaction, start, end time.Time, targetCurrency string, rates currency.Rates) (money.Money, error) {
+	total := money.Zero(targetCurrency)
+	for _, recurring := range recurrings {
+		if !recurring.Active() || !recurring.Amount.IsNegative() || recurring.CategoryID == "" || !budget.TracksCategory(recurring.CategoryID) || recurring.Smooths() {
+			continue
+		}
+		magnitude, err := money.Abs(recurring.Amount.Amount)
+		if err != nil {
+			return money.Money{}, fmt.Errorf("recurring %q magnitude: %w", recurring.ID, err)
+		}
+		contributions, err := postedContributions(budget, posted, recurring, magnitude, start, end, rates)
+		if err != nil {
+			return money.Money{}, err
+		}
+		for _, contribution := range contributions {
+			converted, err := rates.Convert(contribution, targetCurrency)
+			if err != nil {
+				return money.Money{}, fmt.Errorf("convert posted recurring %q: %w", recurring.ID, err)
+			}
+			total, err = total.Add(converted)
+			if err != nil {
+				return money.Money{}, fmt.Errorf("sum posted recurring spend: %w", err)
+			}
+		}
+	}
+	return total, nil
 }
 
 func (v *ViewBudget) effectiveBudget(in ViewInput) domain.Budget {
