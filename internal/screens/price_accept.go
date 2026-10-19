@@ -38,7 +38,10 @@ func PriceAcceptCard(props PriceAcceptProps) ui.Node {
 	if app == nil {
 		return nil
 	}
-	imp := app.PriceCreepBudgetImpact(props.RecurringID, props.NewMinor)
+	imp, budgetID, impactErr := app.PriceCreepBudgetImpactTarget(props.RecurringID, props.NewMinor)
+	if impactErr != nil {
+		app.Log().Error("price creep budget impact", "recurring", props.RecurringID, "err", impactErr)
+	}
 
 	done := func() {
 		if props.OnDone != nil {
@@ -57,17 +60,13 @@ func PriceAcceptCard(props PriceAcceptProps) ui.Node {
 		done()
 	})
 	onAcceptRaise := ui.UseEvent(func() {
-		if err := app.AcceptNewPrice(props.RecurringID, props.NewMinor); err != nil {
-			uistate.PostNotice(err.Error(), true)
-			return
-		}
-		if err := app.RaiseBudgetForCreep(props.RecurringID, props.NewMinor); err != nil {
-			uistate.PostNotice(err.Error(), true)
+		if err := app.AcceptPriceAndRaiseBudgetForCreep(props.RecurringID, budgetID, props.NewMinor); err != nil {
+			uistate.PostNotice(uistate.T("pricecreep.saveFailed"), true)
 			return
 		}
 		uistate.RequestPersist()
 		uistate.BumpDataRevision()
-		uistate.PostNotice(uistate.T("pricecreep.accepted", props.Label,
+		uistate.PostNotice(uistate.T("pricecreep.acceptedAndRaised", props.Label,
 			fmtMoney(money.New(props.NewMinor, props.Currency))), false)
 		done()
 	})
