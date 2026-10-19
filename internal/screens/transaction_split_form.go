@@ -102,11 +102,7 @@ func transactionSplitForm(props TransactionSplitFormProps) ui.Node {
 			return
 		}
 		uistate.BumpDataRevision()
-		if updated.HasSplits() {
-			uistate.PostNotice(uistate.T("splitEditor.saved"), false)
-		} else {
-			uistate.PostNotice(uistate.T("splitEditor.cleared"), false)
-		}
+		postTransactionSplitNotice(updated.HasSplits())
 		if props.OnDone != nil {
 			props.OnDone()
 		}
@@ -133,4 +129,12 @@ func transactionSplitForm(props TransactionSplitFormProps) ui.Node {
 			DraftGeneration: draftGeneration.Get(),
 		}),
 	)
+}
+
+func postTransactionSplitNotice(hasSplits bool) {
+	if hasSplits {
+		uistate.PostNotice(uistate.T("splitEditor.r4Saved"), false)
+		return
+	}
+	uistate.PostNotice(uistate.T("splitEditor.cleared"), false)
 }

@@ -90,6 +90,11 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Split opens calmly and shows what's left (R4SPLIT).** The split dialog no longer opens with two error messages; rows
+  are validated on Save. A live "Left to assign: $64.00" turns into "Balanced" when the parts add up (checked money in the
+  transaction's currency). Columns are labelled Category, Who and Amount, the New category action is named, the category
+  list matches the transaction's direction, and saving says "Split saved". A `splitCellLabel` helper ("Split · 2
+  categories", amounts in the tooltip) is ready for the ledger row.
 - **Count line and future-month rows read cleanly (R4CNT).** "Spent $4,363.75" (red, no double negative); a future month
   ends "9 scheduled · $3,607.00 due"; the upcoming-bill note is hidden during a text search and "Search all dates" drops its
   arrow. Scheduled rows show the pay-from account (or "—") instead of a payee in the Account column, loans read "Loan

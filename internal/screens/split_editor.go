@@ -6,6 +6,7 @@ package screens
 
 import (
 	"strconv"
+	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
@@ -13,7 +14,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/split"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
-	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/css"
 	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
@@ -91,7 +91,7 @@ func SplitEditor(props splitEditorProps) ui.Node {
 		// category, plus a blank line to split off, so the common "carve a piece out"
 		// flow is one tap away.
 		return []splitDraft{
-			{Cat: props.Txn.CategoryID, Amt: money.FormatMinor(absMinor(props.Txn.Amount.Amount), dec)},
+			{Cat: props.Txn.CategoryID, Amt: ""},
 			{Cat: "", Amt: ""},
 		}
 	}
@@ -100,6 +100,7 @@ func SplitEditor(props splitEditorProps) ui.Node {
 	pickerLine := ui.UseState(-1)
 	_ = uistate.UseDataRevision().Get()
 	errMsg := ui.UseState("")
+	saveAttempted := ui.UseState(false)
 	// Entry mode: exact amounts (the default) or percentages of the whole. Rows
 	// keep one Amt string; the mode decides how it is read. Percentages are
 	// fixed-point basis points (split.PercentScale), never floats.
@@ -255,13 +256,6 @@ func SplitEditor(props splitEditorProps) ui.Node {
 		target = split.PercentScale
 	}
 	remainder := target - total
-
-	// C566: a line is only a real split line when it carries BOTH a category and an
-	// amount. The editor seeds a blank second line so "carve a piece out" is one tap
-	// away, and the amount total ignored it — so the footer read "Balanced" and offered
-	// Save while the split could not actually be saved (save then failed with "needs at
-	// least two lines"). Both the footer text and the Save state read ONE verdict from
-	// split.Classify/Saveable (pure, table-driven-tested), so they cannot disagree.
 	draftLines := make([]split.Line, 0, len(splits.Get()))
 	for _, d := range splits.Get() {
 		draftLines = append(draftLines, split.Line{CategoryID: d.Cat, Value: d.Amt})
@@ -270,6 +264,7 @@ func SplitEditor(props splitEditorProps) ui.Node {
 	canSave := shape.Saveable(!parseErr, remainder == 0)
 
 	save := ui.UseEvent(Prevent(func() {
+		saveAttempted.Set(true)
 		cur := splits.Get()
 		type line struct {
 			cat, owner string
@@ -369,7 +364,7 @@ func SplitEditor(props splitEditorProps) ui.Node {
 		categories = app.Categories()
 	}
 	catOpts := append([]uiw.SelectOption{{Value: "", Label: uistate.T("transactions.noCategory")}},
-		CategoryPickOptions(categories)...)
+		CategoryPickOptions(categoriesForKind(categories, splitCategoryKind(props.Txn)))...)
 
 	// Owner picker options (XC10): only when the household actually has members.
 	// The first option is "Same as transaction" (empty value → falls back to the
@@ -405,10 +400,7 @@ func SplitEditor(props splitEditorProps) ui.Node {
 	}
 	pickerNode := Fragment()
 	if i := pickerLine.Get(); i >= 0 && i < len(splits.Get()) {
-		kind := domain.KindExpense
-		if props.Txn.Amount.Amount > 0 {
-			kind = domain.KindIncome
-		}
+		kind := splitCategoryKind(props.Txn)
 		pickerNode = ui.CreateElement(CategoryPicker, CategoryPickerProps{
 			Kind: kind, Selected: splits.Get()[i].Cat,
 			OnPick:  func(categoryID string) { setCat(i, categoryID); pickerLine.Set(-1) },
@@ -416,22 +408,20 @@ func SplitEditor(props splitEditorProps) ui.Node {
 		})
 	}
 
-	// Remainder phrasing: balanced (green), or "$X left"/"$X over" — "X% left" in
-	// percent mode — so the user knows exactly what to adjust. Save is gated on a
-	// true balance, so this is the guide.
+	// Remainder phrasing stays arithmetic while the user edits. Validation details
+	// appear only after Save is attempted.
 	//
-	// C566: the unfinished-line cases are tested FIRST, because they are the ones the
-	// arithmetic cannot see. A blank line contributes nothing to the total, so without
-	// these branches a half-written split reports itself as balanced.
+	// A blank seeded line is a draft, not an error. Show the arithmetic remainder
+	// while the user is editing; validation messages appear only after Save.
 	remTone, remText := "pos", uistate.T("splitEditor.balanced")
 	switch {
-	case parseErr && inPct:
+	case saveAttempted.Get() && parseErr && inPct:
 		remTone, remText = "neg", uistate.T("splitEditor.badPercent")
-	case parseErr:
+	case saveAttempted.Get() && parseErr:
 		remTone, remText = "neg", uistate.T("splitEditor.badAmount")
-	case shape.Incomplete > 0:
+	case saveAttempted.Get() && remainder == 0 && !canSave && shape.Incomplete > 0:
 		remTone, remText = "neg", uistate.T("splitEditor.incomplete")
-	case remainder == 0 && shape.Complete < split.MinSplitLines:
+	case saveAttempted.Get() && remainder == 0 && !canSave:
 		remTone, remText = "neg", uistate.T("splitEditor.needTwoShort")
 	case remainder > 0 && inPct:
 		remTone = "neg"
@@ -477,11 +467,6 @@ func SplitEditor(props splitEditorProps) ui.Node {
 		Button(css.Class("btn", "btn-sm"), Type("button"), Attr("data-testid", "split-add"), OnClick(addRow), uistate.T("splitEditor.add")),
 		Span(ClassStr("hero-stat-sub "+remTone), Attr("data-testid", "split-remainder"), Attr("role", "status"), remText),
 	)
-	// The seeded blank line is named as the draft it is, so it reads as "yours to fill
-	// in" rather than as a row the editor forgot about.
-	draftNote := If(shape.Blank > 0 && shape.Incomplete == 0,
-		P(css.Class("muted", tw.Text13), Attr("data-testid", "split-draft-note"),
-			Style(map[string]string{"margin": "0.35rem 0 0"}), uistate.T("splitEditor.draftRow")))
 	errNode := If(errMsg.Get() != "", P(css.Class("muted", "neg"), Attr("role", "alert"), errMsg.Get()))
 
 	// Modal layout: a body <form> whose id the FlipPanel's pinned Save footer submits.
@@ -490,19 +475,15 @@ func SplitEditor(props splitEditorProps) ui.Node {
 	// the standard footer is only Cancel + Save.
 	if props.FooterFormID != "" {
 		modalSaveArgs := []any{css.Class("btn btn-primary"), Type("submit"), Attr("data-testid", "split-save"), uistate.T("splitEditor.save")}
-		if !canSave {
-			modalSaveArgs = append(modalSaveArgs, Disabled(true), Attr("aria-disabled", "true"),
-				Title(uistate.T("splitEditor.cannotSaveYet")))
-		}
 		return Fragment(Form(css.Class("split-editor split-editor-modal"), Attr("id", props.FooterFormID),
 			Attr("data-testid", "split-editor"), OnSubmit(save),
 			Div(css.Class("modal-scroll"),
 				hint,
 				receiptAction,
 				modeToggle,
+				splitColumnLabels(showOwner),
 				rowsNode,
 				addRow2,
-				draftNote,
 				errNode,
 				If(props.Txn.HasSplits(),
 					Div(css.Class("split-editor-clear"),
@@ -519,25 +500,75 @@ func SplitEditor(props splitEditorProps) ui.Node {
 	// Inline layout (edit-form / classic table): the self-contained bordered card with
 	// its own title and Save/Clear buttons.
 	saveArgs := []any{css.Class("btn", "btn-primary", "btn-sm"), Type("button"), Attr("data-testid", "split-save"), OnClick(save), uistate.T("splitEditor.save")}
-	if !canSave {
-		saveArgs = append(saveArgs, Disabled(true), Attr("aria-disabled", "true"),
-			Title(uistate.T("splitEditor.cannotSaveYet")))
-	}
 	return Fragment(Div(css.Class("split-editor"), Attr("data-testid", "split-editor"),
 		Style(map[string]string{"margin-top": "0.75rem", "padding": "0.75rem", "border": "1px solid var(--border)", "border-radius": "8px"}),
-		P(css.Class("hero-flanker-label"), Style(map[string]string{"margin-bottom": "0.4rem"}), uistate.T("splitEditor.title")),
+		P(css.Class("hero-flanker-label"), Style(map[string]string{"margin-bottom": "0.4rem", "text-align": "left"}), uistate.T("splitEditor.title")),
 		hint,
 		receiptAction,
 		modeToggle,
+		splitColumnLabels(showOwner),
 		rowsNode,
 		addRow2,
-		draftNote,
 		errNode,
 		Div(Style(map[string]string{"margin-top": "0.5rem", "display": "flex", "gap": "0.5rem"}),
 			Button(saveArgs...),
 			If(props.Txn.HasSplits(), Button(css.Class("btn", "btn-sm"), Type("button"), Attr("data-testid", "split-clear"), OnClick(clear), uistate.T("splitEditor.clear"))),
 		),
 	), pickerNode)
+}
+
+func splitColumnLabels(showOwner bool) ui.Node {
+	owner := Fragment()
+	if showOwner {
+		owner = P(Attr("data-testid", "split-label-who"), uistate.T("splitEditor.ownerColumn"))
+	}
+	return Div(css.Class("split-column-labels"), Attr("data-testid", "split-labels"),
+		Style(map[string]string{"display": "grid", "grid-template-columns": splitColumns(showOwner), "gap": "0.5rem", "margin-bottom": "0.35rem", "font-size": "0.8rem", "font-weight": "600", "color": "var(--muted)"}),
+		P(Attr("data-testid", "split-label-category"), uistate.T("splitEditor.category")),
+		owner,
+		P(Attr("data-testid", "split-label-amount"), uistate.T("splitEditor.amount")),
+		Span(Attr("aria-hidden", "true")),
+	)
+}
+
+func splitColumns(showOwner bool) string {
+	if showOwner {
+		return "minmax(0, 1fr) minmax(0, 1fr) 8rem 2rem"
+	}
+	return "minmax(0, 1fr) 8rem 2rem"
+}
+
+func splitCategoryKind(txn domain.Transaction) domain.CategoryKind {
+	if txn.Amount.Amount > 0 {
+		return domain.KindIncome
+	}
+	return domain.KindExpense
+}
+
+func categoriesForKind(categories []domain.Category, kind domain.CategoryKind) []domain.Category {
+	filtered := make([]domain.Category, 0, len(categories))
+	for _, category := range categories {
+		if category.Kind == kind {
+			filtered = append(filtered, category)
+		}
+	}
+	return filtered
+}
+
+// splitCellLabel returns the compact category-cell label and the split amounts
+// for its tooltip. The transaction row can keep its normal category display for
+// unsplit transactions.
+func splitCellLabel(tx domain.Transaction) (label, tooltip string) {
+	if !tx.HasSplits() {
+		return "", ""
+	}
+	categoryIDs := make(map[string]struct{}, len(tx.Splits))
+	amounts := make([]string, 0, len(tx.Splits))
+	for _, line := range tx.Splits {
+		categoryIDs[line.CategoryID] = struct{}{}
+		amounts = append(amounts, fmtMoney(line.Amount))
+	}
+	return uistate.T("splitEditor.cellLabel", len(categoryIDs)), strings.Join(amounts, ", ")
 }
 
 type splitRowProps struct {
@@ -577,8 +608,8 @@ func splitRow(props splitRowProps) ui.Node {
 	// A hairline + padding under each row visually separates the splits so multiple category
 	// breakdowns don't blur together (coworker feedback).
 	return Div(css.Class("split-row"), Attr("data-testid", "split-row"),
-		Style(map[string]string{"display": "flex", "gap": "0.5rem", "align-items": "center", "padding-bottom": "0.5rem", "margin-bottom": "0.5rem", "border-bottom": "1px solid var(--border)", "flex-wrap": "wrap"}),
-		Div(Style(map[string]string{"flex": "1 1 auto", "display": "flex", "gap": "0.35rem", "align-items": "center"}),
+		Style(map[string]string{"display": "grid", "grid-template-columns": splitColumns(props.ShowOwner), "gap": "0.5rem", "align-items": "center", "padding-bottom": "0.5rem", "margin-bottom": "0.5rem", "border-bottom": "1px solid var(--border)"}),
+		Div(Style(map[string]string{"min-width": "0", "display": "flex", "gap": "0.35rem", "align-items": "center"}),
 			uiw.SelectInput(uiw.SelectInputProps{
 				Options:   props.CatOpts,
 				Selected:  props.Cat,
@@ -586,10 +617,12 @@ func splitRow(props splitRowProps) ui.Node {
 				TestID:    "split-cat-" + strconv.Itoa(props.Index),
 				OnChange:  onCat,
 			}),
-			TxnNewCategoryAction("split-new-category-"+strconv.Itoa(props.Index), false, onNewCategory)),
+			Button(css.Class("btn", "btn-tool", "txn-cat-new"), Type("button"),
+				Attr("data-testid", "split-new-category-"+strconv.Itoa(props.Index)),
+				Attr("aria-label", uistate.T("transactions.newCategory")), OnClick(onNewCategory), uistate.T("splitEditor.newCategory"))),
 		// XC10: optional per-line owner. Only rendered for multi-member households;
 		// "Same as transaction" (empty) keeps the pre-XC10 payer attribution.
-		If(props.ShowOwner, Div(Style(map[string]string{"flex": "1 1 auto"}),
+		If(props.ShowOwner, Div(Style(map[string]string{"min-width": "0"}),
 			uiw.SelectInput(uiw.SelectInputProps{
 				Options:   props.OwnerOpts,
 				Selected:  props.Owner,
@@ -597,7 +630,7 @@ func splitRow(props splitRowProps) ui.Node {
 				TestID:    "split-owner-" + strconv.Itoa(props.Index),
 				OnChange:  onOwner,
 			}))),
-		Input(css.Class("field"), Type("text"), Attr("inputmode", "decimal"), Style(map[string]string{"max-width": "8rem"}),
+		Input(css.Class("field"), Type("text"), Attr("inputmode", "decimal"), Style(map[string]string{"width": "100%", "min-width": "0"}),
 			Attr("aria-label", uistate.T(splitAmtKey(props.Percent))), Attr("data-testid", "split-amt-"+strconv.Itoa(props.Index)),
 			Placeholder(uistate.T(splitAmtKey(props.Percent))), OnInput(onAmt), OnBlur(onAmtBlur), uiw.FieldValue(props.Amt)),
 		If(props.Percent, Span(css.Class("muted"), Attr("aria-hidden", "true"), "%")),
