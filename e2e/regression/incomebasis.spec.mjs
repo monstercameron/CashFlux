@@ -100,7 +100,10 @@ test.describe("budgets: income basis survives a passcode-locked reboot", { tag: 
     await gi.press("Enter");
     await app.locator("#cf-applock-gate").waitFor({ state: "hidden", timeout: 10000 });
     await app.waitForTimeout(1500);
-    await nav(app, "/budgets");
+    // A full reload resets this native disclosure to its default closed state.
+    // Reopen it just as the first half of this test does before clicking its
+    // nested income-basis control.
+    await openBudgetIncome(app);
     const reopenBtn = app.locator('[data-testid="budgets-basis-open"]').first();
     await reopenBtn.scrollIntoViewIfNeeded();
     await app.waitForTimeout(900);
