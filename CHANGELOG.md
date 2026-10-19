@@ -90,6 +90,7 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- Move split draft decisions into pure logic and stable editor components.
 - Move category suggestions and transaction drafts into tested pure logic.
 - Extract transaction review decisions and split review screens into stable components.
 - Extract recurring bill calculations and presentation into tested pure logic.

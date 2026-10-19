@@ -6,30 +6,17 @@ package screens
 
 import (
 	"strconv"
-	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
-	"github.com/monstercameron/CashFlux/internal/money"
-	"github.com/monstercameron/CashFlux/internal/split"
+	"github.com/monstercameron/CashFlux/internal/splitdraft"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/css"
 	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
-
-// splitDraft is one editable line of a transaction's category breakdown: a
-// category id and the amount (major-unit string, sign-agnostic — the parent
-// applies the transaction's sign on save).
-type splitDraft struct {
-	Cat string
-	Amt string
-	// Owner is the member id this line is attributed to (XC10), or "" for "same as
-	// the transaction" — the parent applies the fallback to the txn's payer.
-	Owner string
-}
 
 // SplitModalFormID is the id shared by the split modal's body <form> and the
 // FlipPanel footer's Save (type=submit form=…) button, so the pinned footer drives
@@ -74,418 +61,153 @@ type splitEditorProps struct {
 	DraftGeneration int
 }
 
-// SplitEditor (C58) is the split-transaction UI: it lets a single transaction be
-// broken into per-category amounts (e.g. a Costco receipt → groceries + shopping).
-// The domain model (domain.CategorySplit, SplitsTotal/SplitsReconcile), persistence
-// (store round-trip), and sample data already existed; this is the missing thin
-// shell over them. It is its own component so its hooks never sit inside the
-// variable-length split-row loop, and each row is a further child component
-// (splitRow) that owns its per-row input hooks.
+// SplitEditor wires the pure splitdraft state to its host's persistence callback.
+// Child components own the controls; each splitRow owns its own input hooks.
 func SplitEditor(props splitEditorProps) ui.Node {
-	dec := currency.Decimals(props.Txn.Amount.Currency)
-
-	seed := func() []splitDraft {
-		if props.Txn.HasSplits() {
-			out := make([]splitDraft, 0, len(props.Txn.Splits))
-			for _, s := range props.Txn.Splits {
-				out = append(out, splitDraft{Cat: s.CategoryID, Amt: money.FormatMinor(absMinor(s.Amount.Amount), dec), Owner: s.MemberID})
-			}
-			return out
-		}
-		// No splits yet: start with the whole amount on the transaction's current
-		// category, plus a blank line to split off, so the common "carve a piece out"
-		// flow is one tap away.
-		return []splitDraft{
-			{Cat: props.Txn.CategoryID, Amt: ""},
-			{Cat: "", Amt: ""},
-		}
-	}
-
-	splits := ui.UseState(seed())
-	pickerLine := ui.UseState(-1)
+	draft := ui.UseState(splitdraft.New(props.Txn, props.DraftGeneration))
 	_ = uistate.UseDataRevision().Get()
-	errMsg := ui.UseState("")
-	saveAttempted := ui.UseState(false)
-	// Entry mode: exact amounts (the default) or percentages of the whole. Rows
-	// keep one Amt string; the mode decides how it is read. Percentages are
-	// fixed-point basis points (split.PercentScale), never floats.
-	pctMode := ui.UseState(false)
-	draftGeneration := ui.UseState(props.DraftGeneration)
 	ui.UseEffect(func() func() {
-		if draftGeneration.Get() != props.DraftGeneration {
-			splits.Set(seed())
-			errMsg.Set("")
-			pctMode.Set(false)
-			draftGeneration.Set(props.DraftGeneration)
+		if draft.Get().Generation != props.DraftGeneration {
+			draft.Set(draft.Get().Reseed(props.Txn, props.DraftGeneration))
 		}
 		return nil
 	}, props.DraftGeneration)
-
-	txnAbsEarly := absMinor(props.Txn.Amount.Amount)
-	// Switching modes converts each parseable row in place — amounts become the
-	// percentage they represent, percentages become their share of the total — so
-	// the draft carries over instead of resetting.
-	//
-	// C632: converting each row on its own with plain integer division truncates
-	// PER ROW, so a draft that summed exactly to the parent before the toggle was
-	// short by a cent or more after it — the editor told the user their split no
-	// longer balanced when the only thing they had changed was the display mode.
-	// When the draft IS exactly balanced in the source mode, convert the whole set
-	// together through the largest-remainder helper (the same Hamilton
-	// apportionment split.ByPercents/ByWeights use), which sums to the destination
-	// target exactly. An already-unbalanced draft has no exact answer to preserve,
-	// so it keeps the cheap per-row conversion and stays unbalanced.
-	convertRows := func(cur []splitDraft, srcDec int, srcTotal int64, dstDec int, dstTotal int64) {
-		// Read every row that carries a parseable positive value; blanks are left
-		// alone, and anything unparseable means the draft cannot be balanced.
-		idx := make([]int, 0, len(cur))
-		weights := make([]split.WeightedMember, 0, len(cur))
-		var sum int64
-		exact := true
-		for i, d := range cur {
-			if d.Amt == "" {
-				continue
-			}
-			v, err := money.ParseMinor(d.Amt, srcDec)
-			if err != nil || v <= 0 {
-				exact = false
-				continue
-			}
-			idx = append(idx, i)
-			weights = append(weights, split.WeightedMember{MemberID: strconv.Itoa(i), Weight: absMinor(v)})
-			sum += absMinor(v)
-		}
-		if len(idx) == 0 || srcTotal == 0 {
-			return
-		}
-		if exact && sum == srcTotal {
-			if shares := split.ByWeights(dstTotal, weights); shares != nil {
-				for k, i := range idx {
-					cur[i].Amt = money.FormatMinor(shares[k].Amount, dstDec)
-				}
-				return
-			}
-		}
-		// Fallback: proportional per-row conversion for a draft that does not
-		// balance, so the numbers still carry over between modes.
-		for k, i := range idx {
-			cur[i].Amt = money.FormatMinor((weights[k].Weight*dstTotal+srcTotal/2)/srcTotal, dstDec)
+	change := func(action splitdraft.Action) { draft.Set(draft.Get().Apply(action, props.Txn)) }
+	save := func() {
+		next, transaction, ok := draft.Get().AttemptSave(props.Txn, props.Pending)
+		draft.Set(next)
+		if ok && props.OnSave != nil {
+			props.OnSave(transaction)
 		}
 	}
-	toAmounts := ui.UseEvent(func() {
-		if !pctMode.Get() || txnAbsEarly == 0 {
-			return
-		}
-		cur := append([]splitDraft(nil), splits.Get()...)
-		convertRows(cur, 2, split.PercentScale, dec, txnAbsEarly)
-		splits.Set(cur)
-		pctMode.Set(false)
-	})
-	toPercents := ui.UseEvent(func() {
-		if pctMode.Get() || txnAbsEarly == 0 {
-			return
-		}
-		cur := append([]splitDraft(nil), splits.Get()...)
-		convertRows(cur, dec, txnAbsEarly, 2, split.PercentScale)
-		splits.Set(cur)
-		pctMode.Set(true)
-	})
-
-	setCat := func(i int, v string) {
-		cur := append([]splitDraft(nil), splits.Get()...)
-		if i >= 0 && i < len(cur) {
-			cur[i].Cat = v
-			splits.Set(cur)
+	clear := func() {
+		next, transaction, ok := draft.Get().Clear(props.Txn, props.Pending)
+		draft.Set(next)
+		if ok && props.OnSave != nil {
+			props.OnSave(transaction)
 		}
 	}
-	setAmt := func(i int, v string) {
-		cur := append([]splitDraft(nil), splits.Get()...)
-		if i >= 0 && i < len(cur) {
-			cur[i].Amt = v
-			splits.Set(cur)
-		}
-	}
-	setOwner := func(i int, v string) {
-		cur := append([]splitDraft(nil), splits.Get()...)
-		if i >= 0 && i < len(cur) {
-			cur[i].Owner = v
-			splits.Set(cur)
-		}
-	}
-	openCategoryPicker := func(i int) { pickerLine.Set(i) }
-	addRow := ui.UseEvent(func() { splits.Set(append(append([]splitDraft(nil), splits.Get()...), splitDraft{})) })
-	removeRow := func(i int) {
-		cur := splits.Get()
-		if i < 0 || i >= len(cur) {
-			return
-		}
-		out := append(append([]splitDraft(nil), cur[:i]...), cur[i+1:]...)
-		splits.Set(out)
-	}
-
-	// Live total of the entered split values and the target they must reach —
-	// minor units against the transaction amount in amounts mode, basis points
-	// against 100% in percent mode — so the remainder line tells the user how
-	// much is still unallocated before they can save.
-	inPct := pctMode.Get()
-	valDec := dec
-	if inPct {
-		valDec = 2 // percent entries: two decimals = basis points
-	}
-	var total int64
-	parseErr := false
-	for _, d := range splits.Get() {
-		if d.Amt == "" {
-			continue
-		}
-		v, err := money.ParseMinor(d.Amt, valDec)
-		if err != nil {
-			parseErr = true
-			continue
-		}
-		// C634: a split line has to be a positive share of the parent. Taking the
-		// magnitude here let a negative entry ADD to the running total, so a draft
-		// containing "-5" could reach the target and read "Balanced" with Save
-		// enabled — and then fail on the click, because save rejects it. A value
-		// that save will refuse must fail the same check the footer and the Save
-		// button read, not a friendlier one.
-		if v <= 0 {
-			parseErr = true
-			continue
-		}
-		total += v
-	}
-	txnAbs := absMinor(props.Txn.Amount.Amount)
-	target := txnAbs
-	if inPct {
-		target = split.PercentScale
-	}
-	remainder := target - total
-	draftLines := make([]split.Line, 0, len(splits.Get()))
-	for _, d := range splits.Get() {
-		draftLines = append(draftLines, split.Line{CategoryID: d.Cat, Value: d.Amt})
-	}
-	shape := split.Classify(draftLines)
-	canSave := shape.Saveable(!parseErr, remainder == 0)
-
-	save := ui.UseEvent(Prevent(func() {
-		if props.Pending {
-			return
-		}
-		saveAttempted.Set(true)
-		cur := splits.Get()
-		type line struct {
-			cat, owner string
-			val        int64 // minor units (amounts mode) or basis points (percent mode)
-		}
-		lines := make([]line, 0, len(cur))
-		usePct := pctMode.Get()
-		parseDec := dec
-		if usePct {
-			parseDec = 2
-		}
-		for _, d := range cur {
-			if d.Cat == "" || d.Amt == "" {
-				continue
-			}
-			v, err := money.ParseMinor(d.Amt, parseDec)
-			if err != nil || v <= 0 {
-				if usePct {
-					errMsg.Set(uistate.T("splitEditor.badPercent"))
-				} else {
-					errMsg.Set(uistate.T("splitEditor.badAmount"))
-				}
-				return
-			}
-			lines = append(lines, line{cat: d.Cat, owner: d.Owner, val: v})
-		}
-		if len(lines) < 2 {
-			errMsg.Set(uistate.T("splitEditor.needTwo"))
-			return
-		}
-		amounts := make([]int64, len(lines))
-		if usePct {
-			bps := make([]int64, len(lines))
-			for i, l := range lines {
-				bps[i] = l.val
-			}
-			shares, err := split.ByPercents(txnAbs, bps)
-			if err != nil {
-				errMsg.Set(uistate.T("splitEditor.pctMustBalance"))
-				return
-			}
-			for _, s := range shares {
-				if s == 0 {
-					errMsg.Set(uistate.T("splitEditor.pctTooSmall"))
-					return
-				}
-			}
-			amounts = shares
-		} else {
-			var sum int64
-			for i, l := range lines {
-				amounts[i] = l.val
-				sum += l.val
-			}
-			if sum != txnAbs {
-				errMsg.Set(uistate.T("splitEditor.mustBalance"))
-				return
-			}
-		}
-		built := make([]domain.CategorySplit, 0, len(lines))
-		for i, l := range lines {
-			signed := amounts[i]
-			if props.Txn.Amount.IsNegative() {
-				signed = -signed
-			}
-			built = append(built, domain.CategorySplit{CategoryID: l.cat, Amount: money.New(signed, props.Txn.Amount.Currency), MemberID: l.owner})
-		}
-		t := props.Txn
-		t.Splits = built
-		errMsg.Set("")
-		if props.OnSave != nil {
-			props.OnSave(t)
-		}
-	}))
-
-	clear := ui.UseEvent(func() {
-		if props.Pending {
-			return
-		}
-		t := props.Txn
-		t.Splits = nil
-		errMsg.Set("")
-		if props.OnSave != nil {
-			props.OnSave(t)
-		}
-	})
-	// Registered unconditionally even though only the modal layout renders it: the
-	// two layouts are branches of ONE component, so a hook created inside either
-	// branch would shift the hook order between them (the GWC hooks rule).
-	cancel := ui.UseEvent(Prevent(func() {
+	cancel := func() {
 		if props.OnCancel != nil {
 			props.OnCancel()
 		}
-	}))
+	}
+	return ui.CreateElement(splitEditorContent, splitEditorContentProps{
+		Editor: props, Draft: draft.Get(), Change: change, Save: save, Clear: clear, Cancel: cancel,
+	})
+}
 
-	// C570: qualified paths ("Housing > Mortgage"), not bare leaf names — a split is
-	// exactly where two categories called "Gas" have to be told apart.
-	categories := props.Categories
+type splitEditorContentProps struct {
+	Editor              splitEditorProps
+	Draft               splitdraft.State
+	Change              func(splitdraft.Action)
+	Save, Clear, Cancel func()
+}
+
+func splitEditorContent(props splitEditorContentProps) ui.Node {
+	p, draft := props.Editor, props.Draft
+	view := draft.View(p.Txn)
+	categories := p.Categories
 	if app := appstate.Default; app != nil {
 		categories = app.Categories()
 	}
 	catOpts := append([]uiw.SelectOption{{Value: "", Label: uistate.T("transactions.noCategory")}},
-		CategoryPickOptions(categoriesForKind(categories, splitCategoryKind(props.Txn)))...)
+		CategoryPickOptions(splitdraft.CategoriesForKind(categories, splitdraft.CategoryKind(p.Txn)))...)
 	catOpts = append(catOpts, uiw.SelectOption{Value: splitNewCategoryOption, Label: uistate.T("v5form.splitNewCategory")})
-
-	// Owner picker options (XC10): only when the household actually has members.
-	// The first option is "Same as transaction" (empty value → falls back to the
-	// txn's payer at attribution time).
-	var ownerOpts []uiw.SelectOption
-	showOwner := len(props.Members) > 0
-	if showOwner {
-		ownerOpts = uiw.OptionsFrom(props.Members,
-			func(m domain.Member) string { return m.ID },
-			func(m domain.Member) string { return m.Name },
-			"")
-		ownerOpts = append([]uiw.SelectOption{{Value: "", Label: uistate.T("splitEditor.ownerSameAsTxn")}}, ownerOpts...)
+	ownerOpts := splitOwnerOptions(p.Members)
+	showOwner := splitdraft.ShowOwner(p.Members)
+	setCat := func(i int, v string) {
+		props.Change(splitdraft.Action{Kind: splitdraft.SetCategory, Index: i, Value: v})
 	}
-
+	setAmt := func(i int, v string) { props.Change(splitdraft.Action{Kind: splitdraft.SetAmount, Index: i, Value: v}) }
+	setOwner := func(i int, v string) { props.Change(splitdraft.Action{Kind: splitdraft.SetOwner, Index: i, Value: v}) }
+	openPicker := func(i int) { props.Change(splitdraft.Action{Kind: splitdraft.OpenPicker, Index: i}) }
+	remove := func(i int) { props.Change(splitdraft.Action{Kind: splitdraft.Remove, Index: i}) }
 	var rows []ui.Node
-	for i, d := range splits.Get() {
+	for i, line := range draft.Lines {
 		rows = append(rows, ui.CreateElement(splitRow, splitRowProps{
-			Index:         i,
-			Cat:           d.Cat,
-			PickerOpen:    pickerLine.Get() == i,
-			Amt:           d.Amt,
-			Owner:         d.Owner,
-			CatOpts:       catOpts,
-			OwnerOpts:     ownerOpts,
-			ShowOwner:     showOwner,
-			Dec:           dec,
-			Percent:       inPct,
-			OnCat:         setCat,
-			OnNewCategory: openCategoryPicker,
-			OnAmt:         setAmt,
-			OnOwner:       setOwner,
-			OnRemove:      removeRow,
+			Index: i, Cat: line.Cat, Amt: line.Amt, Owner: line.Owner, PickerOpen: draft.PickerLine == i,
+			CatOpts: catOpts, OwnerOpts: ownerOpts, ShowOwner: showOwner, Dec: currency.Decimals(p.Txn.Amount.Currency),
+			Percent: draft.Percent, OnCat: setCat, OnNewCategory: openPicker, OnAmt: setAmt, OnOwner: setOwner, OnRemove: remove,
 		}))
 	}
-	pickerNode := Fragment()
-	if i := pickerLine.Get(); i >= 0 && i < len(splits.Get()) {
-		kind := splitCategoryKind(props.Txn)
-		pickerNode = ui.CreateElement(CategoryPicker, CategoryPickerProps{
-			Kind: kind, Selected: splits.Get()[i].Cat,
-			OnPick:  func(categoryID string) { setCat(i, categoryID); pickerLine.Set(-1) },
-			OnClose: func() { pickerLine.Set(-1) },
+	picker := Fragment()
+	if view.PickerOpen {
+		picker = ui.CreateElement(CategoryPicker, CategoryPickerProps{
+			Kind: splitdraft.CategoryKind(p.Txn), Selected: view.PickerCategory,
+			OnPick: func(id string) {
+				props.Change(splitdraft.Action{Kind: splitdraft.PickCategory, Index: draft.PickerLine, Value: id})
+			},
+			OnClose: func() { props.Change(splitdraft.Action{Kind: splitdraft.ClosePicker}) },
 		})
 	}
-
-	// Remainder phrasing stays arithmetic while the user edits. Validation details
-	// appear only after Save is attempted.
-	//
-	// A blank seeded line is a draft, not an error. Show the arithmetic remainder
-	// while the user is editing; validation messages appear only after Save.
-	remTone, remText := "pos", uistate.T("splitEditor.balanced")
-	switch {
-	case saveAttempted.Get() && parseErr && inPct:
-		remTone, remText = "neg", uistate.T("splitEditor.badPercent")
-	case saveAttempted.Get() && parseErr:
-		remTone, remText = "neg", uistate.T("splitEditor.badAmount")
-	case saveAttempted.Get() && remainder == 0 && !canSave && shape.Incomplete > 0:
-		remTone, remText = "neg", uistate.T("splitEditor.incomplete")
-	case saveAttempted.Get() && remainder == 0 && !canSave:
-		remTone, remText = "neg", uistate.T("splitEditor.needTwoShort")
-	case remainder > 0 && inPct:
-		remTone = splitRemainderTone(saveAttempted.Get())
-		remText = uistate.T("splitEditor.pctLeft", money.FormatMinor(remainder, 2))
-	case remainder > 0:
-		remTone = splitRemainderTone(saveAttempted.Get())
-		remText = uistate.T("splitEditor.left", fmtMoney(money.New(remainder, props.Txn.Amount.Currency)))
-	case remainder < 0 && inPct:
-		remTone = splitRemainderTone(saveAttempted.Get())
-		remText = uistate.T("splitEditor.pctOver", money.FormatMinor(-remainder, 2))
-	case remainder < 0:
-		remTone = splitRemainderTone(saveAttempted.Get())
-		remText = uistate.T("splitEditor.over", fmtMoney(money.New(-remainder, props.Txn.Amount.Currency)))
-	}
-
-	// The shared body: the hint, the split rows, and the "Add split" + live-remainder
-	// line, plus any validation error. Both layouts render these.
-	hint := P(css.Class("muted"), Style(map[string]string{"margin-bottom": "0.5rem"}),
-		uistate.T("splitEditor.hint", fmtMoney(money.New(txnAbs, props.Txn.Amount.Currency))))
-	receiptSplit := ui.UseEvent(func() {
-		if props.OnReceiptSplit != nil {
-			props.OnReceiptSplit(props.Txn.ID)
+	receipt := ui.UseEvent(func() {
+		if p.OnReceiptSplit != nil {
+			p.OnReceiptSplit(p.Txn.ID)
 		}
 	})
-	receiptAction := ui.CreateElement(splitReceiptAction, splitReceiptActionProps{Show: props.OnReceiptSplit != nil, OnClick: receiptSplit})
-	// Amounts / Percentages entry-mode toggle (aria-pressed segmented pair).
-	modeBtn := func(testid, key string, active bool, on ui.Handler) ui.Node {
-		cls := "btn btn-sm"
-		if active {
-			cls += " btn-primary"
-		}
-		return Button(ClassStr(cls), Type("button"), Attr("data-testid", testid),
-			Attr("aria-pressed", ariaBool(active)), OnClick(on), uistate.T(key))
+	layout := splitEditorLayoutProps{
+		Editor: p, Hint: P(css.Class("muted"), Style(map[string]string{"margin-bottom": "0.5rem"}), uistate.T("splitEditor.hint", view.Hint)),
+		ReceiptAction: ui.CreateElement(splitReceiptAction, splitReceiptActionProps{Show: p.OnReceiptSplit != nil, OnClick: receipt}),
+		ModeToggle:    ui.CreateElement(splitModeToggle, splitModeToggleProps{Percent: draft.Percent, Change: props.Change}),
+		Rows:          Div(css.Class("split-rows"), rows),
+		AddRow:        ui.CreateElement(splitDraftStatus, splitDraftStatusProps{View: view, Change: props.Change}),
+		Error:         splitErrorNode(draft.ErrorKey), Save: props.Save, Clear: props.Clear, Cancel: props.Cancel, ShowOwner: showOwner, Picker: picker,
 	}
-	modeToggle := Div(Style(map[string]string{"display": "flex", "gap": "0.35rem", "margin-bottom": "0.5rem"}),
-		modeBtn("split-mode-amount", "splitEditor.modeAmounts", !inPct, toAmounts),
-		modeBtn("split-mode-percent", "splitEditor.modePercents", inPct, toPercents),
-	)
-	rowsNode := Div(css.Class("split-rows"), rows)
-	addRow2 := Div(Style(map[string]string{"margin-top": "0.5rem", "display": "flex", "gap": "0.5rem", "align-items": "center", "flex-wrap": "wrap"}),
-		Button(css.Class("btn", "btn-sm"), Type("button"), Attr("data-testid", "split-add"), OnClick(addRow), uistate.T("splitEditor.add")),
-		Span(ClassStr("hero-stat-sub "+remTone), Attr("data-testid", "split-remainder"), Attr("role", "status"), remText),
-	)
-	errNode := If(errMsg.Get() != "", P(css.Class("muted", "neg"), Attr("role", "alert"), errMsg.Get()))
-
-	layout := splitEditorLayoutProps{Editor: props, Hint: hint, ReceiptAction: receiptAction, ModeToggle: modeToggle,
-		Rows: rowsNode, AddRow: addRow2, Error: errNode, Save: save, Clear: clear, Cancel: cancel, ShowOwner: showOwner, Picker: pickerNode}
-	if props.FooterFormID != "" {
+	if p.FooterFormID != "" {
 		return ui.CreateElement(splitEditorModal, layout)
 	}
 	return ui.CreateElement(splitEditorInline, layout)
+}
+
+func splitOwnerOptions(members []domain.Member) []uiw.SelectOption {
+	if !splitdraft.ShowOwner(members) {
+		return nil
+	}
+	options := uiw.OptionsFrom(members, func(m domain.Member) string { return m.ID }, func(m domain.Member) string { return m.Name }, "")
+	return append([]uiw.SelectOption{{Value: "", Label: uistate.T("splitEditor.ownerSameAsTxn")}}, options...)
+}
+
+func splitErrorNode(key string) ui.Node {
+	if key == "" {
+		return Fragment()
+	}
+	return P(css.Class("muted", "neg"), Attr("role", "alert"), uistate.T(key))
+}
+
+type splitModeToggleProps struct {
+	Percent bool
+	Change  func(splitdraft.Action)
+}
+
+func splitModeToggle(props splitModeToggleProps) ui.Node {
+	amounts := ui.UseEvent(func() { props.Change(splitdraft.Action{Kind: splitdraft.ToAmounts}) })
+	percents := ui.UseEvent(func() { props.Change(splitdraft.Action{Kind: splitdraft.ToPercents}) })
+	return Div(Style(map[string]string{"display": "flex", "gap": "0.35rem", "margin-bottom": "0.5rem"}),
+		Button(ClassStr(splitdraft.ModeClass(!props.Percent)), Type("button"), Attr("data-testid", "split-mode-amount"),
+			Attr("aria-pressed", ariaBool(!props.Percent)), OnClick(amounts), uistate.T("splitEditor.modeAmounts")),
+		Button(ClassStr(splitdraft.ModeClass(props.Percent)), Type("button"), Attr("data-testid", "split-mode-percent"),
+			Attr("aria-pressed", ariaBool(props.Percent)), OnClick(percents), uistate.T("splitEditor.modePercents")),
+	)
+}
+
+type splitDraftStatusProps struct {
+	View   splitdraft.View
+	Change func(splitdraft.Action)
+}
+
+func splitDraftStatus(props splitDraftStatusProps) ui.Node {
+	add := ui.UseEvent(func() { props.Change(splitdraft.Action{Kind: splitdraft.Add}) })
+	var text string
+	if props.View.Value != "" {
+		text = uistate.T(props.View.Key, props.View.Value)
+	} else {
+		text = uistate.T(props.View.Key)
+	}
+	return Div(Style(map[string]string{"margin-top": "0.5rem", "display": "flex", "gap": "0.5rem", "align-items": "center", "flex-wrap": "wrap"}),
+		Button(css.Class("btn", "btn-sm"), Type("button"), Attr("data-testid", "split-add"), OnClick(add), uistate.T("splitEditor.add")),
+		Span(ClassStr("hero-stat-sub "+props.View.Tone), Attr("data-testid", "split-remainder"), Attr("role", "status"), text),
+	)
 }
 
 type splitEditorLayoutProps struct {
@@ -496,41 +218,46 @@ type splitEditorLayoutProps struct {
 	Rows          ui.Node
 	AddRow        ui.Node
 	Error         ui.Node
-	Save          ui.Handler
-	Clear         ui.Handler
-	Cancel        ui.Handler
+	Save          func()
+	Clear         func()
+	Cancel        func()
 	ShowOwner     bool
 	Picker        ui.Node
 }
 
 func splitEditorModal(props splitEditorLayoutProps) ui.Node {
+	save := ui.UseEvent(Prevent(props.Save))
+	clearAction := ui.UseEvent(props.Clear)
+	cancel := ui.UseEvent(Prevent(props.Cancel))
 	p := props.Editor
 	var inert any
 	if p.Pending {
 		inert = Attr("inert", "")
 	}
-	clear := ui.CreateElement(splitClearButton, splitClearButtonProps{Show: p.Txn.HasSplits(), Pending: p.Pending, OnClick: props.Clear})
+	clear := ui.CreateElement(splitClearButton, splitClearButtonProps{Show: p.Txn.HasSplits(), Pending: p.Pending, OnClick: clearAction})
 	return Fragment(Form(css.Class("split-editor split-editor-modal"), inert, Attr("id", p.FooterFormID),
 		Attr("data-testid", "split-editor"), Attr("aria-busy", strconv.FormatBool(p.Pending)),
-		If(p.Pending, P(Attr("role", "status"), uistate.T("common.saving"))), OnSubmit(props.Save),
+		If(p.Pending, P(Attr("role", "status"), uistate.T("common.saving"))), OnSubmit(save),
 		Div(css.Class("modal-scroll"), props.Hint, props.ReceiptAction, props.ModeToggle,
 			splitColumnLabels(props.ShowOwner), props.Rows, props.AddRow, props.Error,
 			If(p.Txn.HasSplits(), Div(css.Class("split-editor-clear"),
 				Style(map[string]string{"margin-top": "0.75rem", "padding-top": "0.6rem", "border-top": "1px solid var(--border)"}), clear))),
 		Div(css.Class("modal-sticky-foot"),
-			Button(css.Class("btn"), Type("button"), Attr("data-testid", "split-cancel"), OnClick(props.Cancel), uistate.T("action.cancel")),
+			Button(css.Class("btn"), Type("button"), Attr("data-testid", "split-cancel"), OnClick(cancel), uistate.T("action.cancel")),
 			Button(css.Class("btn btn-primary"), Type("submit"), Attr("data-testid", "split-save"), Disabled(p.Pending), uistate.T("splitEditor.save"))),
 	), props.Picker)
 }
 
 func splitEditorInline(props splitEditorLayoutProps) ui.Node {
+	saveAction := ui.UseEvent(Prevent(props.Save))
+	clearAction := ui.UseEvent(props.Clear)
 	p := props.Editor
 	var inert any
 	if p.Pending {
 		inert = Attr("inert", "")
 	}
-	save := Button(css.Class("btn", "btn-primary", "btn-sm"), Type("button"), Attr("data-testid", "split-save"), Disabled(p.Pending), OnClick(props.Save), uistate.T("splitEditor.save"))
-	clear := ui.CreateElement(splitClearButton, splitClearButtonProps{Show: p.Txn.HasSplits(), Pending: p.Pending, OnClick: props.Clear})
+	save := Button(css.Class("btn", "btn-primary", "btn-sm"), Type("button"), Attr("data-testid", "split-save"), Disabled(p.Pending), OnClick(saveAction), uistate.T("splitEditor.save"))
+	clear := ui.CreateElement(splitClearButton, splitClearButtonProps{Show: p.Txn.HasSplits(), Pending: p.Pending, OnClick: clearAction})
 	return Fragment(Div(css.Class("split-editor"), inert, Attr("data-testid", "split-editor"), Attr("aria-busy", strconv.FormatBool(p.Pending)),
 		If(p.Pending, P(Attr("role", "status"), uistate.T("common.saving"))),
 		Style(map[string]string{"margin-top": "0.75rem", "padding": "0.75rem", "border": "1px solid var(--border)", "border-radius": "8px"}),
@@ -585,51 +312,18 @@ func splitClearButton(props splitClearButtonProps) ui.Node {
 		Disabled(props.Pending), click, uistate.T("splitEditor.clear"))
 }
 
-func splitColumns(showOwner bool) string {
-	if showOwner {
-		return "minmax(180px, 1fr) 160px 120px 32px"
-	}
-	return "minmax(180px, 1fr) 120px 32px"
-}
+// Compatibility adapters retain existing callers while decisions live in splitdraft.
+func splitColumns(showOwner bool) string { return splitdraft.Columns(showOwner) }
 
-func splitRemainderTone(saveAttempted bool) string {
-	if saveAttempted {
-		return "neg"
-	}
-	return "split-remainder-neutral"
-}
+func splitRemainderTone(saveAttempted bool) string { return splitdraft.RemainderTone(saveAttempted) }
 
-func splitCategoryKind(txn domain.Transaction) domain.CategoryKind {
-	if txn.Amount.Amount > 0 {
-		return domain.KindIncome
-	}
-	return domain.KindExpense
-}
-
-func categoriesForKind(categories []domain.Category, kind domain.CategoryKind) []domain.Category {
-	filtered := make([]domain.Category, 0, len(categories))
-	for _, category := range categories {
-		if category.Kind == kind {
-			filtered = append(filtered, category)
-		}
-	}
-	return filtered
-}
-
-// splitCellLabel returns the compact category-cell label and the split amounts
-// for its tooltip. The transaction row can keep its normal category display for
-// unsplit transactions.
+// splitCellLabel translates the pure summary for existing transaction-row callers.
 func splitCellLabel(tx domain.Transaction) (label, tooltip string) {
-	if !tx.HasSplits() {
+	count, tooltip := splitdraft.CellSummary(tx)
+	if count == 0 {
 		return "", ""
 	}
-	categoryIDs := make(map[string]struct{}, len(tx.Splits))
-	amounts := make([]string, 0, len(tx.Splits))
-	for _, line := range tx.Splits {
-		categoryIDs[line.CategoryID] = struct{}{}
-		amounts = append(amounts, fmtMoney(line.Amount))
-	}
-	return uistate.T("splitEditor.cellLabel", len(categoryIDs)), strings.Join(amounts, ", ")
+	return uistate.T("splitEditor.cellLabel", count), tooltip
 }
 
 type splitRowProps struct {
@@ -729,32 +423,8 @@ func splitCategoryOptionNodes(options []uiw.SelectOption, selected string) []any
 	return nodes
 }
 
-// splitAmtKey picks the value input's label: percent-mode rows read "Percent",
-// amounts-mode rows read "Amount".
-func splitAmtKey(percent bool) string {
-	if percent {
-		return "splitEditor.percent"
-	}
-	return "splitEditor.amount"
-}
+// splitAmtKey translates the pure input-label decision for existing callers.
+func splitAmtKey(percent bool) string { return splitdraft.AmountKey(percent) }
 
-// splitToggleKey picks the toggle-button label: open vs closed, and "Edit" vs
-// "Split" depending on whether the transaction already has a breakdown.
-func splitToggleKey(open, hasSplits bool) string {
-	switch {
-	case open:
-		return "splitEditor.hide"
-	case hasSplits:
-		return "splitEditor.edit"
-	default:
-		return "splitEditor.toggle"
-	}
-}
-
-// absMinor returns the absolute value of a minor-unit amount.
-func absMinor(v int64) int64 {
-	if v < 0 {
-		return -v
-	}
-	return v
-}
+// absMinor retains the shared legacy magnitude helper for other screens.
+func absMinor(v int64) int64 { return splitdraft.Magnitude(v) }
