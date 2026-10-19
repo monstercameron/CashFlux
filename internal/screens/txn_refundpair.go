@@ -89,7 +89,7 @@ func RefundPairBody(_ struct{}) ui.Node {
 	}
 
 	// The refund is the hero: description + date on the left, the amount on the right.
-	acctLine := refund.Date.Format("Jan 2, 2006")
+	acctLine := uistate.LoadPrefs().FormatDate(refund.Date)
 	if an := acctName[refund.AccountID]; an != "" {
 		acctLine += " · " + an
 	}
@@ -129,5 +129,5 @@ func RefundPairBody(_ struct{}) ui.Node {
 // refundCandidateLabel is a candidate original purchase's picker label: its
 // description (or payee) plus date and amount, so the user recognizes the buy.
 func refundCandidateLabel(t domain.Transaction) string {
-	return txnLinkDesc(t) + " · " + t.Date.Format("Jan 2") + " · " + fmtMoney(t.Amount)
+	return txnLinkDesc(t) + " · " + uistate.LoadPrefs().FormatDate(t.Date) + " · " + fmtMoney(t.Amount)
 }

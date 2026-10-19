@@ -373,7 +373,7 @@ func filterToolbar(props FilterToolbarProps) uic.Node {
 					// in the app — deleted characters mid-word, and the more the user typed
 					// the further behind the written-back value was.
 					Input(css.Class("fctrl-input"), Type("text"), FieldValue(props.Search),
-						Attr("id", searchID), Attr("aria-controls", pendingID),
+						Attr("id", searchID), Attr("data-testid", "filter-toolbar-search"), Attr("aria-controls", pendingID),
 						Attr("role", "searchbox"), Attr("aria-label", props.SearchLabel), Placeholder(props.SearchLabel),
 						// C619: while the debounce is still pending the rows below are the
 						// PREVIOUS query's. aria-busy tells assistive tech the region is

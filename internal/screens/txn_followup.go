@@ -297,7 +297,7 @@ func txnFollowUpChip(props txnFollowUpChipProps) ui.Node {
 			Attr("aria-haspopup", "dialog"), Attr("aria-expanded", ariaBool(open.Get())),
 			// No native `title` here — it would fight the hover popover with a second,
 			// redundant tooltip. aria-label carries the summary for screen readers.
-			Attr("aria-label", uistate.T("transactions.followUpsAria", props.Open)),
+			Attr("aria-label", followUpChipText(props.Open, props.Total)+" — "+uistate.T("transactions.followUpsAria", props.Open)),
 			OnClick(onClick),
 			uiw.Icon(icon.CheckCircle, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
 			Span(followUpChipText(props.Open, props.Total))),

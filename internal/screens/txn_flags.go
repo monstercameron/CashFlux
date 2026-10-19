@@ -120,7 +120,7 @@ func txnFlagChip(props txnFlagChipProps) ui.Node {
 	if props.Duplicate {
 		return Button(css.Class("txn-flag is-dupe", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
 			Attr("data-testid", "txn-flag-dupe"),
-			Attr("aria-label", uistate.T("sm8.hint")),
+			Attr("aria-label", uistate.T("sm8.hint")+": "+uistate.T("sm8.chip")),
 			Title(uistate.T("sm8.detail")),
 			OnClick(openDupes),
 			uiw.Icon(icon.Copy, css.Class(tw.ShrinkO, tw.W3, tw.H3)),
@@ -129,7 +129,7 @@ func txnFlagChip(props txnFlagChipProps) ui.Node {
 	if props.SpikeWhy != "" {
 		return Button(css.Class("txn-flag is-spike", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
 			Attr("data-testid", "txn-flag-spike"),
-			Attr("aria-label", props.SpikeWhy),
+			Attr("aria-label", props.SpikeWhy+": "+uistate.T("sm10.chip")),
 			Title(props.SpikeWhy),
 			OnClick(openTxn),
 			uiw.Icon(icon.TrendingUp, css.Class(tw.ShrinkO, tw.W3, tw.H3)),

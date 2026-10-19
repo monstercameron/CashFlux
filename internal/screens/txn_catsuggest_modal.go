@@ -2,7 +2,7 @@
 
 //go:build js && wasm
 
-// "Categorize this" flip modal (SM-2), opened from a transaction row's kebab. The
+// "Categorize this" flip modal, opened from a transaction row's kebab. The
 // row chip (txn_catsuggest_chip.go) is the one-click path for a confident local
 // suggestion; this is the fuller one — it states the EVIDENCE behind the
 // suggestion, offers the whole category list when the suggestion is wrong, lets
@@ -16,6 +16,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/auditview"
 	"github.com/monstercameron/CashFlux/internal/catname"
+	"github.com/monstercameron/CashFlux/internal/catsuggest"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/reviewqueue"
 	"github.com/monstercameron/CashFlux/internal/smartai"
@@ -49,18 +50,23 @@ func CatSuggestBody(_ struct{}) ui.Node {
 	aiNote := ui.UseState("")
 	seeded := ui.UseState("")
 
-	if app == nil || txnID == "" {
-		return Fragment()
+	var txn domain.Transaction
+	found := false
+	var cats []domain.Category
+	if app != nil && txnID != "" {
+		txn, found = txnByID(app, txnID)
+		if found {
+			cats = app.Categories()
+		}
 	}
-	txn, found := txnByID(app, txnID)
-	if !found {
-		return Fragment()
-	}
-	cats := app.Categories()
 
 	// The local suggestion and the evidence for it. Resolved every render (it is a
 	// cheap in-memory read) so a correction made elsewhere is reflected on reopen.
-	sugg, hasSugg := reviewSuggestion(app, txn)
+	var sugg catsuggest.Suggestion
+	hasSugg := false
+	if found {
+		sugg, hasSugg = reviewSuggestion(app, txn)
+	}
 	why := ""
 	if hasSugg {
 		why = reviewWhy(sugg)
@@ -70,7 +76,7 @@ func CatSuggestBody(_ struct{}) ui.Node {
 	// (re-seed when reopened for a different charge). An already-categorized charge
 	// seeds from its own category, so reopening confirms what is set rather than
 	// silently proposing a change.
-	if seeded.Get() != txnID {
+	if found && seeded.Get() != txnID {
 		switch {
 		case txn.CategoryID != "":
 			chosen.Set(txn.CategoryID)
@@ -88,10 +94,10 @@ func CatSuggestBody(_ struct{}) ui.Node {
 	// How many OTHER charges share this merchant — the batch offer's scope. It uses
 	// reviewqueue.MerchantKey (payee-alias normalized, lower-cased), never the raw
 	// descriptor: a merchant that stamps a per-charge reference would otherwise
-	// match nothing, including the very charge the key came from (C616).
+	// Normalized merchant keys keep charge references from breaking a merchant match.
 	key := reviewqueue.MerchantKey(txn)
 	others := 0
-	if key != "" {
+	if found && key != "" {
 		for _, t := range app.Transactions() {
 			if t.ID != txn.ID && t.CategoryID == "" && !t.IsTransfer() && reviewqueue.MerchantKey(t) == key {
 				others++
@@ -102,8 +108,11 @@ func CatSuggestBody(_ struct{}) ui.Node {
 	// Smart+ availability: a configured provider plus the AI half enabled. The
 	// deterministic half above needed neither.
 	backendAI := pr.Normalize().BackendActive()
-	aiEnabled := aiProviderConfigured(app, backendAI) && uistate.LoadSmartSettings().IsEnabled(catSuggestAICode)
-	aiConn := resolveAIConn(app, backendAI, pr.ServerURL, pr.ServerToken)
+	aiEnabled := app != nil && aiProviderConfigured(app, backendAI) && uistate.LoadSmartSettings().IsEnabled(catSuggestAICode)
+	var aiConn smartAIConn
+	if app != nil {
+		aiConn = resolveAIConn(app, backendAI, pr.ServerURL, pr.ServerToken)
+	}
 
 	onPick := func(v string) { chosen.Set(v); errText.Set("") }
 	onNewCategory := ui.UseEvent(func() { pickerOpen.Set(true) })
@@ -155,6 +164,9 @@ func CatSuggestBody(_ struct{}) ui.Node {
 		}
 		uistate.CloseCatSuggest()
 	}))
+	if !found {
+		return Fragment()
+	}
 
 	// The suggestion block: the proposal plus WHY, so the user judges it rather
 	// than trusts it. Absent when nothing local matched — which is exactly the

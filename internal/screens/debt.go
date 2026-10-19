@@ -45,9 +45,24 @@ func DebtStrategyPanel(props DebtStrategyPanelProps) ui.Node {
 		}
 	}
 	dec := currency.Decimals(base)
+	app := appstate.Default
+	var currentOwed int64
 
 	// All hooks must be declared unconditionally — even when app is nil.
 	rev := ui.UseState(0)
+	onResetTracking := ui.UseEvent(func() {
+		if app != nil {
+			_ = app.ClearPayoffTracking()
+			rev.Set(rev.Get() + 1)
+		}
+	})
+	onStartTracking := ui.UseEvent(func() {
+		if app != nil {
+			_ = app.StartPayoffTracking(currentOwed, base)
+			rev.Set(rev.Get() + 1)
+		}
+	})
+
 	// Subscribe to the shared data revision so the comparison redraws when the /debt
 	// tuner changes the plan (they share one canonical extra-payment value).
 	_ = uistate.UseDataRevision().Get()
@@ -69,7 +84,6 @@ func DebtStrategyPanel(props DebtStrategyPanelProps) ui.Node {
 		uistate.BumpDataRevision()
 	})
 
-	app := appstate.Default
 	if app == nil {
 		return Fragment()
 	}
@@ -87,7 +101,6 @@ func DebtStrategyPanel(props DebtStrategyPanelProps) ui.Node {
 	debts, missingDebtRates := payoff.AggregateDebts(app.Accounts(), txns, base, rates)
 
 	// Payoff progress vs a stored baseline (L5 gap 5): "paid off $X of $Y".
-	var currentOwed int64
 	for _, d := range debts {
 		currentOwed += d.Balance
 	}
@@ -101,13 +114,12 @@ func DebtStrategyPanel(props DebtStrategyPanelProps) ui.Node {
 		progressNode = Div(Style(map[string]string{"margin-top": "0.6rem"}),
 			P(css.Class("budget-sub", tw.FontDisplay), uistate.T("debt.paidOffSince", fmtMoney(money.New(prog.PaidOff, base)), fmtMoney(money.New(prog.Baseline, base)), prog.Percent, since.Format("Jan 2, 2006"))),
 			Div(css.Class("bar"), Div(css.Class("bar-fill"), Attr("style", fmt.Sprintf("width:%d%%", w)))),
-			Button(css.Class("btn"), Type("button"), Style(map[string]string{"margin-top": "0.4rem"}), OnClick(func() { _ = app.ClearPayoffTracking(); rev.Set(rev.Get() + 1) }), uistate.T("debt.resetProgress")),
+			Button(css.Class("btn"), Type("button"), Style(map[string]string{"margin-top": "0.4rem"}), OnClick(onResetTracking), uistate.T("debt.resetProgress")),
 		)
 	} else if len(debts) > 0 {
-		owed := currentOwed
 		progressNode = Div(Style(map[string]string{"margin-top": "0.6rem"}),
 			Button(css.Class("btn"), Type("button"), Title(uistate.T("planning.snapshotTitle")),
-				OnClick(func() { _ = app.StartPayoffTracking(owed, base); rev.Set(rev.Get() + 1) }), uistate.T("debt.startTracking")),
+				OnClick(onStartTracking), uistate.T("debt.startTracking")),
 		)
 	}
 

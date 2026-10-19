@@ -20,7 +20,8 @@ import (
 func TestR1ACountLineGroupsTransactionCounts(t *testing.T) {
 	setupTxnCountCashflowFixture(t)
 	f := render.New(t)
-	f.Render(txnCountLine(txnCountLineProps{Shown: 1250, Total: 3292, Net: money.New(42500, "USD")}))
+	f.Render(txnCountLine(txnCountLineProps{Shown: 1250, Total: 3292, Net: money.New(42500, "USD"),
+		Spent: money.New(10000, "USD"), Income: money.New(52500, "USD"), CashflowProvided: true}))
 	got := f.Text()
 	for _, want := range []string{"October 2026 · 1,250 transactions", "Spent −$100.00", "Income $525.00", "Net +$425.00"} {
 		if !strings.Contains(got, want) {
@@ -45,6 +46,11 @@ func setupTxnCountCashflowFixture(t *testing.T) {
 	previous := appstate.Default
 	previousFilter := uistate.CurrentTxFilter()
 	appstate.Default = app
+	settings := app.Settings()
+	settings.BaseCurrency = "USD"
+	if err := app.PutSettings(settings); err != nil {
+		t.Fatalf("set fixture base currency: %v", err)
+	}
 	uistate.PersistTxFilter(txnfilter.Criteria{From: "2026-10-01", To: "2026-10-31", PeriodPreset: txnfilter.PeriodThisMonth})
 	t.Cleanup(func() {
 		appstate.Default = previous

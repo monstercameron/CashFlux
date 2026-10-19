@@ -64,7 +64,7 @@ func txnNoMatch(props txnNoMatchProps) ui.Node {
 		return Div(css.Class("empty", tw.Flex, tw.FlexCol, tw.ItemsCenter, tw.Gap2),
 			Attr("data-testid", "txn-nomatch"), Attr("role", "status"),
 			P(css.Class("txn-future-empty-line"), uistate.T("fut2.futureEmptyLine")),
-			If(!props.InTable && len(props.ScheduledItems) > 0, Div(Attr("role", "rowgroup"),
+			If(!props.InTable && len(props.ScheduledItems) > 0, Div(
 				Attr("aria-label", uistate.T("transactions.noMatchFutureListLabel")),
 				Fragment(txnScheduledGhostRows(props.ScheduledItems, prefs.FormatDate)...))),
 			If(props.Search != "", Button(css.Class("btn btn-sm"), Type("button"),
@@ -122,15 +122,15 @@ type txnScheduledGhostRowProps struct {
 // its overflow menu the one supported action: open the schedule that owns it.
 func txnScheduledGhostRow(props txnScheduledGhostRowProps) ui.Node {
 	return Div(css.Class("txn-row", "txn-scheduled-ghost"),
-		Attr("role", "row"), Attr("data-testid", "txn-scheduled-ghost"), Attr("aria-disabled", "true"),
-		Div(css.Class("td-date"), Attr("role", "gridcell"), props.Date),
-		Div(css.Class("td-desc"), Attr("role", "gridcell"),
+		Attr("data-testid", "txn-scheduled-ghost"), Attr("aria-disabled", "true"),
+		Div(css.Class("td-date"), props.Date),
+		Div(css.Class("td-desc"),
 			Span(css.Class("txn-scheduled-name"), props.Name),
 			Span(css.Class("txn-scheduled-pill"), uistate.T("transactions.scheduledStatus"))),
-		Div(css.Class("td-cat"), Attr("role", "gridcell"), props.Category),
-		Div(css.Class("td-acct", "txn-scheduled-account"), Attr("role", "gridcell"), Attr("title", props.Account), props.Account),
-		Div(css.Class("td-amount", tw.ColorClass(props.AmountTone)), Attr("role", "gridcell"), props.Amount),
-		Div(css.Class("txn-scheduled-status"), Attr("role", "gridcell"), ui.CreateElement(txnScheduledGhostMenu, struct{}{})),
+		Div(css.Class("td-cat"), props.Category),
+		Div(css.Class("td-acct", "txn-scheduled-account"), Attr("title", props.Account), props.Account),
+		Div(css.Class("td-amount", tw.ColorClass(props.AmountTone)), props.Amount),
+		Div(css.Class("txn-scheduled-status"), ui.CreateElement(txnScheduledGhostMenu, struct{}{})),
 	)
 }
 

@@ -90,6 +90,14 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Hooks are unconditional, enforced by a lint; Transactions side files tidied (TQ6, TQ6.1).** A new screenlint check
+  fails the build on any `On*(func…)` handler inside an `if`, `switch` or loop (each registers a hook conditionally); the
+  count line, category-suggestion modal, split form, Insights, Debt, Plan and Custom pages now create their handlers up
+  front. The count line no longer re-scans the ledger, its future total reports FX failures and uses the household
+  currency, partial date ranges are labelled correctly and its aria-label no longer hides the live sentence. Flag and
+  follow-up chips are named with their visible text, scheduled rows lose orphan grid roles, dates follow the date-format
+  preference, the split form shows save failures as errors, the "/" shortcut finds search by a stable test id, and dead
+  helpers are removed.
 - **Budgets toolbar: one member lens, readable Tools menu (BR2TB).** The Budgets list now follows the single member lens
   from the top bar (the duplicate list selector is gone), and its header says how many budgets include that member with
   counts that match the rows. The Tools menu is wide enough that no item wraps, "Adjust every budget" matches its dialog,

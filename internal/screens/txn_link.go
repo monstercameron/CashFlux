@@ -200,7 +200,7 @@ func TxnLinkBody(_ struct{}) ui.Node {
 	// Transaction summary — the payment is the hero: description + date/account on the
 	// left, the amount as a display figure on the right, so the user sees exactly what
 	// they're linking at a glance.
-	acctLine := txn.Date.Format("Jan 2, 2006")
+	acctLine := uistate.LoadPrefs().FormatDate(txn.Date)
 	if an := acctName[txn.AccountID]; an != "" {
 		acctLine += " · " + an
 	}

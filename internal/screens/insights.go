@@ -50,6 +50,8 @@ import (
 // "Explain my month" narrative generated from the user's live figures.
 func Insights() ui.Node {
 	app := appstate.Default
+	nav := router.UseNavigate()
+	onScopeChange := ui.UseEvent(func() { nav.Navigate(uistate.RoutePath("/reports")) })
 	if app == nil {
 		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("common.notReady"))})
 	}
@@ -230,7 +232,6 @@ func Insights() ui.Node {
 		})
 	}, app.Rev(), fmt.Sprintf("%v", insightsSc), mStart.Unix())
 
-	nav := router.UseNavigate()
 	// The no-key hint is a clear call to action that hops to Settings (where the AI
 	// key lives), not a dead-end sentence (C59; same fix as C54). Built fresh per
 	// use so the two placements get independent button nodes.
@@ -1718,7 +1719,7 @@ func Insights() ui.Node {
 				Type("button"),
 				css.Class("btn-link t-caption text-dim"),
 				Attr("data-testid", "insights-scope-change"),
-				OnClick(func() { nav.Navigate(uistate.RoutePath("/reports")) }),
+				OnClick(onScopeChange),
 				uistate.T("insights.scopeChangeReports"),
 			),
 		)

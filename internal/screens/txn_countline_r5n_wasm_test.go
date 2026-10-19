@@ -20,7 +20,8 @@ func TestTxnCountSearchWidenIsATrailingStandaloneAction(t *testing.T) {
 		Text: "coffee", From: "2026-10-01", To: "2026-10-31", PeriodPreset: txnfilter.PeriodThisMonth,
 	})
 	f := render.New(t)
-	f.Render(txnCountLine(txnCountLineProps{Shown: 1, Total: 319, Net: money.New(-675, "USD")}))
+	f.Render(txnCountLine(txnCountLineProps{Shown: 1, Total: 319, Net: money.New(-675, "USD"),
+		Spent: money.New(675, "USD"), CashflowProvided: true}))
 	line := f.Text()
 	searchAt := strings.Index(line, "Search all dates (")
 	if searchAt < 0 {

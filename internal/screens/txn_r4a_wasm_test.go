@@ -33,7 +33,8 @@ func TestR4APageFilterBadgeChipAndClearCountsAgree(t *testing.T) {
 func TestR4ASearchAllDatesLinkWidensOnlyOnClick(t *testing.T) {
 	uistate.PersistTxFilter(txnfilter.Criteria{Text: "coffee", From: "2026-10-01", To: "2026-10-31", PeriodPreset: txnfilter.PeriodThisMonth})
 	f := render.New(t)
-	f.Render(txnCountLine(txnCountLineProps{Shown: 1, Total: 319, Net: money.New(0, "USD")}))
+	f.Render(txnCountLine(txnCountLineProps{Shown: 1, Total: 319, Net: money.New(0, "USD"),
+		Spent: money.New(100, "USD"), Income: money.New(100, "USD"), CashflowProvided: true}))
 	var link *render.QueryNode
 	for _, button := range f.AllByTag("button") {
 		if button.Attr("data-testid") == "txn-search-all-dates" {
@@ -56,7 +57,8 @@ func TestR4ASpentAndIncomeToggleWithPressedState(t *testing.T) {
 	setupTxnCountCashflowFixture(t)
 	uistate.PersistTxFilter(txnfilter.Criteria{From: "2026-10-01", To: "2026-10-31", PeriodPreset: txnfilter.PeriodThisMonth})
 	f := render.New(t)
-	f.Render(txnCountLine(txnCountLineProps{Shown: 2, Total: 10}))
+	f.Render(txnCountLine(txnCountLineProps{Shown: 2, Total: 10,
+		Spent: money.New(100, "USD"), Income: money.New(100, "USD"), CashflowProvided: true}))
 	spent := r2aByTestID(f, "button", "txn-count-spent")
 	income := r2aByTestID(f, "button", "txn-count-income")
 	if spent == nil || income == nil || spent.Attr("aria-pressed") != "false" || income.Attr("aria-pressed") != "false" {
@@ -83,17 +85,17 @@ func TestR4AFutureScheduledRowsUseLedgerCells(t *testing.T) {
 	for _, row := range ghosts {
 		if row.Attr("data-testid") == "txn-scheduled-ghost" {
 			found = true
-			if row.Attr("role") != "row" || strings.Count(row.Text(), "Rent") != 1 || !strings.Contains(row.Text(), "Scheduled") || !strings.Contains(row.Text(), "$1,200.00") {
+			if row.Attr("role") != "" || strings.Count(row.Text(), "Rent") != 1 || !strings.Contains(row.Text(), "Scheduled") || !strings.Contains(row.Text(), "$1,200.00") {
 				t.Fatalf("scheduled ghost row does not read like a ledger row: %q", row.Text())
 			}
 			cells := 0
 			for _, child := range f.AllByTag("div") {
-				if child.Attr("role") == "gridcell" {
+				if child.Attr("role") == "gridcell" || child.Attr("role") == "row" {
 					cells++
 				}
 			}
-			if cells != 6 {
-				t.Fatalf("ghost row has %d cells, want 6 ledger columns", cells)
+			if cells != 0 {
+				t.Fatalf("ghost row has %d orphan grid roles, want none", cells)
 			}
 		}
 	}
@@ -103,13 +105,17 @@ func TestR4AFutureScheduledRowsUseLedgerCells(t *testing.T) {
 }
 
 func TestR4AFutureCountLineStaysVisibleWithoutPostedRows(t *testing.T) {
+	setupTxnCountCashflowFixture(t)
 	period := txnfilter.Criteria{From: "2026-11-01", To: "2026-11-30", PeriodPreset: txnfilter.MonthPeriodPreset(2026, time.November)}
 	uistate.PersistTxFilter(period)
 	f := render.New(t)
 	f.Render(txnCountLine(txnCountLineProps{Shown: 0, Total: 0}))
 	line := r2aByTestID(f, "span", "txn-count-line")
 	if line == nil || !strings.Contains(line.Text(), "November 2026 · 0 posted · 0 scheduled · $0.00") {
-		t.Fatalf("future period count line = %v, want posted/scheduled summary", line)
+		if line == nil {
+			t.Fatal("future period count line is missing")
+		}
+		t.Fatalf("future period count line = %q, want posted/scheduled summary", line.Text())
 	}
 	main := r2aByTestID(f, "span", "txn-count-line")
 	if main == nil {

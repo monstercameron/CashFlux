@@ -33,6 +33,9 @@ func TestTXU6FilterToolbarPrimaryRowAndKeyboardOrder(t *testing.T) {
 	if len(inputs) == 0 || inputs[0].Attr("role") != "searchbox" {
 		t.Fatal("search field is not the first keyboard control")
 	}
+	if got := inputs[0].Attr("data-testid"); got != "filter-toolbar-search" {
+		t.Fatalf("search field test id = %q, want filter-toolbar-search", got)
+	}
 	buttons := f.AllByTag("button")
 	want := []string{"date-scope", "", "add", "secondary"}
 	if len(buttons) != len(want) {

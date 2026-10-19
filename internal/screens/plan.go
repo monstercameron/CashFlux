@@ -134,12 +134,19 @@ func answeredBool(v string) (answered, yes bool) {
 // on-boarding check, and free credit-score links.
 func PlanScreen() ui.Node {
 	app := appstate.Default
+	nav := router.UseNavigate()
+	route := ""
+	onConfirmPlan := ui.UseEvent(func() { smoothScrollToSection("sec-plan-q") })
+	onNavigatePlan := ui.UseEvent(func() {
+		if route != "" {
+			nav.Navigate(uistate.RoutePath(route))
+		}
+	})
 	if app == nil {
 		return Div(css.Class("bento bento-sys"),
 			rptTile("plan-empty", "1 / span 4", P(css.Class("empty"), uistate.T("common.notReady"))))
 	}
 	_ = uistate.UseDataRevision().Get()
-	nav := router.UseNavigate()
 
 	// Persisted choices, hydrated once from the KV store.
 	fw := ui.UseState(func() finplan.Framework {
@@ -203,15 +210,16 @@ func PlanScreen() ui.Node {
 			heroValue = uistate.T("plan.hero.confirmValue")
 			heroDetail = uistate.T("plan.hero.confirmDetail")
 			heroCTA = Button(css.Class("btn"), Type("button"), Attr("data-testid", "plan-cta"),
-				OnClick(func() { smoothScrollToSection("sec-plan-q") }),
+				OnClick(onConfirmPlan),
 				uistate.T("plan.hero.confirmCTA"))
 		} else {
 			// A real, assessed next move: lead with the plain-English one-liner.
 			heroValue = uistate.T(planStepKey(framework, cur.Num, "title"))
 			heroDetail = uistate.T(planStepKey(framework, cur.Num, "plain"))
-			if route := planStepRoute(framework, cur.Num); route != "" {
+			route = planStepRoute(framework, cur.Num)
+			if route != "" {
 				heroCTA = Button(css.Class("btn"), Type("button"), Attr("data-testid", "plan-cta"),
-					OnClick(func() { nav.Navigate(uistate.RoutePath(route)) }),
+					OnClick(onNavigatePlan),
 					uistate.T("plan.fw.pick"))
 			}
 		}

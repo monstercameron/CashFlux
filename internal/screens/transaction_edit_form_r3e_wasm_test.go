@@ -36,9 +36,9 @@ func TestR3EEditFormUsesSharedOrderAndKeepsBodyActions(t *testing.T) {
 		ui.CreateElement(TxnEditDeleteFooter, TransactionEditFormProps{TxnID: txn.ID})))
 	text := fixture.Text()
 	ordered := []string{
-		uistate.T("transactions.amountPlaceholder"), uistate.T("quickAdd.expense"),
-		uistate.T("transactions.payeeLabel"), uistate.T("transactions.categoryLabel"),
-		uistate.T("transactions.dateLabel"), uistate.T("quickAdd.account"),
+		uistate.T("quickAdd.amount"), uistate.T("quickAdd.expense"),
+		uistate.T("quickAdd.payee"), uistate.T("quickAdd.date"),
+		uistate.T("quickAdd.category"), uistate.T("quickAdd.account"),
 		uistate.T("r1e.moreDetails"), uistate.T("transactions.descPlaceholder"),
 		uistate.T("transactions.tagsLabel"), uistate.T("transactions.noteLabel"),
 		uistate.T("txnwidget.clearedLabel"), uistate.T("transactions.excludeLabel"),
@@ -83,8 +83,24 @@ func TestR3EEditFormUsesSharedOrderAndKeepsBodyActions(t *testing.T) {
 		t.Fatal("Edit menu should be named Tools")
 	}
 	transferChoice := findByTestID(fixture, "button", "txn-edit-direction-transfer")
-	if transferChoice == nil || transferChoice.Attr("disabled") == "" || transferChoice.Attr("title") == "" {
-		t.Fatalf("Edit transfer conversion must remain visible with an explanation: %#v", transferChoice)
+	if transferChoice == nil || transferChoice.Attr("disabled") != "" || transferChoice.Attr("title") == "" {
+		t.Fatalf("Edit transfer choice must be enabled with an explanation: %#v", transferChoice)
+	}
+	if strings.Contains(text, "Use Type to choose money in or money out.") {
+		t.Fatalf("redundant Amount helper remains in Edit form: %q", text)
+	}
+	if !strings.Contains(text, "No category") || strings.Contains(text, "— No category —") {
+		t.Fatalf("Edit category option should read No category without decoration: %q", text)
+	}
+	var editGrid *render.QueryNode
+	for _, node := range fixture.AllByTag("div") {
+		if strings.Contains(node.Attr("class"), "txn-form-grid") {
+			editGrid = node
+			break
+		}
+	}
+	if editGrid == nil || !strings.Contains(editGrid.Attr("class"), "txn-form-edit") {
+		t.Fatalf("Edit form is missing shared grid class: %#v", editGrid)
 	}
 	newCategory := findByTestID(fixture, "button", "txn-edit-newcat-toggle")
 	if newCategory.Attr("aria-label") != uistate.T("transactions.newCategory") || newCategory.Attr("title") != uistate.T("transactions.newCategory") {

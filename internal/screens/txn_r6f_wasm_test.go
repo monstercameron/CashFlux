@@ -50,11 +50,11 @@ func TestR6FScheduledGhostShowsCategoryAccountAndStatusPill(t *testing.T) {
 	if !strings.Contains(row.Text(), "Family loan") || !strings.Contains(row.Text(), "Scheduled") {
 		t.Fatalf("category or scheduled pill missing from row: %q", row.Text())
 	}
-	amount := r6fGridCell(t, f, "−$125.00")
+	amount := r6fGhostCell(t, f, "−$125.00")
 	if amount == nil || !strings.Contains(amount.Attr("class"), "text-down") {
 		t.Fatalf("scheduled amount cell = %v, want −$125.00 in negative tone", amount)
 	}
-	account := r6fGridCell(t, f, "Loan from Priya's parents")
+	account := r6fGhostCell(t, f, "Loan from Priya's parents")
 	if account.Attr("title") != "Loan from Priya's parents" || !strings.Contains(account.Attr("class"), "txn-scheduled-account") {
 		t.Fatalf("account cell lacks single-line tooltip marker: %#v", account)
 	}
@@ -81,10 +81,10 @@ func TestR6FScheduledGhostShowsCategoryAccountAndStatusPill(t *testing.T) {
 	}
 }
 
-func r6fGridCell(t *testing.T, f *render.Fixture, text string) *render.QueryNode {
+func r6fGhostCell(t *testing.T, f *render.Fixture, text string) *render.QueryNode {
 	t.Helper()
 	for _, node := range f.AllByTag("div") {
-		if node.Attr("role") == "gridcell" && node.Text() == text {
+		if node.Attr("role") == "" && node.Text() == text {
 			return node
 		}
 	}

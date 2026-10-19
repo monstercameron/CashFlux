@@ -18,10 +18,7 @@ import (
 	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
 
-// txnScopeLabel renders a ledger scope as the sentence the bar shows. It is what
-// makes the label incapable of disagreeing with the rows: every branch is derived
-// from the same From/To the ledger filters on, so a scope that is not a whole month
-// says what it really is instead of naming a month it only partly covers.
+// txnScopeLabel describes the ledger's active date filter.
 func txnScopeLabel(s txnscope.Scope) string {
 	switch s.Kind {
 	case txnscope.All:
@@ -29,39 +26,17 @@ func txnScopeLabel(s txnscope.Scope) string {
 	case txnscope.Month:
 		return monthLabel(s.Anchor)
 	case txnscope.Day:
-		return uistate.T("txnperiod.oneDay", s.From.Format("Jan 2, 2006"))
+		return uistate.T("txnperiod.oneDay", uistate.LoadPrefs().FormatDate(s.From))
 	default:
 		from, to := "…", "…"
 		if !s.From.IsZero() {
-			from = s.From.Format("Jan 2, 2006")
+			from = uistate.LoadPrefs().FormatDate(s.From)
 		}
 		if !s.To.IsZero() {
-			to = s.To.Format("Jan 2, 2006")
+			to = uistate.LoadPrefs().FormatDate(s.To)
 		}
 		return uistate.T("txnperiod.customRange", from, to)
 	}
-}
-
-// txnScopeBar is the ledger's period + view bar (C560).
-//
-// The page used to show the top bar's reporting-period pill, which stores a snapped
-// period.Window that cannot express what the ledger's date filter can — so the pill
-// could read "Jul 2026" over August rows, and stepping it moved neither the rows nor
-// the totals nor the calendar. This bar replaces it with a control over the ledger's
-// OWN scope: the label is derived from the same From/To the rows are filtered by, so
-// the two are the same fact rendered twice rather than two states hoping to agree.
-//
-// It also owns the Ledger/Calendar switch. That was an entry buried in "⋯ More" with
-// no return path, which is how a user ends up in the calendar unsure how to leave; a
-// two-button segmented pair with a pressed state says which view is showing and
-// makes the way back a single visible click.
-// It takes an empty props bag so it can be mounted with ui.CreateElement, which
-// isolates its hooks from the toolbar tile that hosts it.
-func txnScopeBar(_ struct{}) ui.Node {
-	return Div(css.Class("txn-scopebar-wrap"),
-		ui.CreateElement(txnDateScope, struct{}{}),
-		ui.CreateElement(txnViewToggle, struct{}{}),
-	)
 }
 
 // txnDateScope renders the ledger period controls independently so the

@@ -754,6 +754,7 @@ func addWidgetBar(props addWidgetBarProps) ui.Node {
 	onType := ui.UseEvent(func(v string) { wtype.Set(v) })
 	onTitle := ui.UseEvent(func(v string) { title.Set(v) })
 	onBind := ui.UseEvent(func(v string) { bind.Set(v) })
+	onOpen := ui.UseEvent(func() { open.Set(true) })
 
 	addWidget := func() {
 		app := appstate.Default
@@ -795,7 +796,7 @@ func addWidgetBar(props addWidgetBarProps) ui.Node {
 
 	if !open.Get() {
 		return Div(css.Class(tw.Mb3),
-			Button(css.Class("btn btn-primary"), Type("button"), OnClick(func() { open.Set(true) }),
+			Button(css.Class("btn btn-primary"), Type("button"), OnClick(onOpen),
 				uistate.T("pages.addWidget")),
 		)
 	}

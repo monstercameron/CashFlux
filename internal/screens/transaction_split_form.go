@@ -34,37 +34,32 @@ func TransactionSplitForm(props TransactionSplitFormProps) ui.Node {
 
 func transactionSplitForm(props TransactionSplitFormProps) ui.Node {
 	app := appstate.Default
-	if app == nil {
-		return P(css.Class("empty"), uistate.T("common.notReady"))
-	}
-
-	// Look the transaction up live so the editor always seeds from current data.
 	var txn domain.Transaction
 	found := false
-	for _, t := range app.Transactions() {
-		if t.ID == props.TxnID {
-			txn, found = t, true
-			break
+	if app != nil {
+		for _, t := range app.Transactions() {
+			if t.ID == props.TxnID {
+				txn, found = t, true
+				break
+			}
 		}
-	}
-	if !found {
-		// Deleted out from under the modal (e.g. by another member/agent) — nothing
-		// to split; close.
-		if props.OnDone != nil {
-			props.OnDone()
-		}
-		return Fragment()
 	}
 
-	// XC11: if a receipt-derived proposal is waiting for this transaction, capture it
-	// once (on mount) so the editor pre-fills with the proposed lines for review. The
-	// note explains any remainder/mismatch. Held in component state so it survives the
-	// host's re-renders without re-consuming the (already cleared) handoff.
+	// Consume a receipt-derived proposal once so the editor can review its lines.
 	proposedNote := ui.UseState("")
 	seededTxn := ui.UseState(domain.Transaction{})
 	haveSeed := ui.UseState(false)
 	draftGeneration := ui.UseState(0)
 	ui.UseEffect(func() func() {
+		if app != nil && !found {
+			if props.OnDone != nil {
+				props.OnDone()
+			}
+			return nil
+		}
+		if app == nil || !found {
+			return nil
+		}
 		if splits, note, ok := uistate.TakeTxnSplitProposal(props.TxnID); ok {
 			t := txn
 			t.Splits = splits
@@ -74,11 +69,15 @@ func transactionSplitForm(props TransactionSplitFormProps) ui.Node {
 			draftGeneration.Set(draftGeneration.Get() + 1)
 		}
 		return nil
-	}, "mount")
+	}, props.TxnID, found)
+	if app == nil {
+		return P(css.Class("empty"), uistate.T("common.notReady"))
+	}
+	if !found {
+		return Fragment()
+	}
 
-	// SM-3: accepting the split proposal seeds the editor through the SAME state
-	// the receipt-derived proposal (XC11) uses, so there is one path by which a
-	// proposal reaches these fields rather than two that can diverge.
+	// Route local suggestions and receipt proposals through the same editor state.
 	useProposal := func(lines []domain.CategorySplit) {
 		if len(lines) == 0 {
 			return
@@ -99,7 +98,7 @@ func transactionSplitForm(props TransactionSplitFormProps) ui.Node {
 
 	save := func(updated domain.Transaction) {
 		if err := app.PutTransaction(updated); err != nil {
-			uistate.PostNotice(err.Error(), false)
+			uistate.PostNotice(err.Error(), true)
 			return
 		}
 		uistate.BumpDataRevision()
@@ -114,8 +113,7 @@ func transactionSplitForm(props TransactionSplitFormProps) ui.Node {
 	}
 
 	return Fragment(
-		// SM-3: the merchant's usual breakdown, offered as a hint above the editor.
-		// Its own component (it owns click + request hooks).
+		// Keep suggestion handlers in their own component.
 		ui.CreateElement(splitSuggestHint, splitSuggestProps{Txn: editorTxn, OnUse: useProposal}),
 		If(proposedNote.Get() != "",
 			Div(css.Class("callout"), Attr("role", "status"), Attr("data-testid", "receipt-split-note"),

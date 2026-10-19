@@ -48,27 +48,6 @@ func r3pFixture(n int) []domain.Transaction {
 	return txns
 }
 
-// r3pOldCountlineCashflow replicates the pre-R3P count-line path: a second
-// full ApplyWithLabels pass over the whole ledger, then a fold. Kept in the
-// test as the "before" comparator for BenchmarkTxnCashflow* below.
-func r3pOldCountlineCashflow(txns []domain.Transaction, filter txnfilter.Criteria, rates currency.Rates, base string) (spent, income int64) {
-	for _, t := range txnfilter.ApplyWithLabels(txns, filter, txnfilter.Labels{}) {
-		if t.IsTransfer() {
-			continue
-		}
-		converted, err := rates.Convert(t.Amount, base)
-		if err != nil {
-			continue
-		}
-		if converted.Amount < 0 {
-			spent -= converted.Amount
-		} else {
-			income += converted.Amount
-		}
-	}
-	return spent, income
-}
-
 func r3pTime(t *testing.T, label string, iters int, fn func()) {
 	t.Helper()
 	start := time.Now()
@@ -79,30 +58,15 @@ func r3pTime(t *testing.T, label string, iters int, fn func()) {
 }
 
 // TestR3PPerfTimings3292 logs the per-render pure-work costs on a 3,292-row
-// ledger. It asserts only correctness (old and new cashflow totals agree);
-// the timings are evidence for the before/after table, since wall-time
-// assertions would flake across machines.
+// ledger. Timings are logged as evidence; wall-time assertions would flake.
 func TestR3PPerfTimings3292(t *testing.T) {
 	txns := r3pFixture(3292)
-	rates := currency.Rates{Base: "USD"}
 	filter := txnfilter.Criteria{Sort: "amount", Dir: txnfilter.Asc}
 
 	shown := deriveTxnRows(txns, filter, txnfilter.Labels{}, nil, func(s string) string { return s })
-	oldSpent, oldIncome := r3pOldCountlineCashflow(txns, filter, rates, "USD")
-	newSpent, newIncome := txnCashflowFromShown(shown, rates, "USD")
-	if oldSpent != newSpent.Amount || oldIncome != newIncome.Amount {
-		t.Fatalf("cashflow from shown = (%d,%d), want old full-pass (%d,%d)",
-			newSpent.Amount, newIncome.Amount, oldSpent, oldIncome)
-	}
 
 	r3pTime(t, "filter+amount-sort 3292 (deriveTxnRows)", 20, func() {
 		_ = deriveTxnRows(txns, filter, txnfilter.Labels{}, nil, func(s string) string { return s })
-	})
-	r3pTime(t, "OLD countline: ApplyWithLabels+fold 3292", 20, func() {
-		_, _ = r3pOldCountlineCashflow(txns, filter, rates, "USD")
-	})
-	r3pTime(t, "NEW cashflow fold over shown 3292", 100, func() {
-		_, _ = txnCashflowFromShown(shown, rates, "USD")
 	})
 	r3pTime(t, "toolbar cold scans: review+dupes+presets", 5, func() {
 		_ = reviewqueue.Count(txns)
@@ -182,10 +146,7 @@ func TestR3PRowRendersOnSelectionChange(t *testing.T) {
 	t.Logf("R3P-PERF deselect re-render: %v", time.Since(start))
 }
 
-// TestR3PCountLineUsesProvidedCashflow proves the live path renders the
-// caller's folded Spent/Income: the fixture ledger's own totals ($100/$525)
-// must NOT appear when different totals are provided, and must appear when
-// they are not (the direct-mount fallback still works).
+// TestR3PCountLineUsesProvidedCashflow verifies the line renders its caller's fold.
 func TestR3PCountLineUsesProvidedCashflow(t *testing.T) {
 	setupTxnCountCashflowFixture(t)
 	f := render.New(t)
@@ -204,15 +165,6 @@ func TestR3PCountLineUsesProvidedCashflow(t *testing.T) {
 	}
 	f.Cleanup()
 
-	f2 := render.New(t)
-	defer f2.Cleanup()
-	f2.Render(txnCountLine(txnCountLineProps{Shown: 1250, Total: 3292, Net: money.New(42500, "USD")}))
-	got = f2.Text()
-	for _, want := range []string{"Spent −$100.00", "Income $525.00"} {
-		if !strings.Contains(got, want) {
-			t.Errorf("fallback cashflow: count line = %q, want %q", got, want)
-		}
-	}
 }
 
 // TestR3PSummaryCacheSurvivesSortAndPage proves sort/page changes no longer
@@ -260,47 +212,5 @@ func TestR3PCollectGroupMembersWholeLedger(t *testing.T) {
 	}
 	if got := collectTxnGroupMembers(nil, all); len(got) != 0 {
 		t.Errorf("no groups collected %d members, want 0", len(got))
-	}
-}
-
-// TestR3PCashflowFromShownSkipsTransfersAndUnconverted pins the fold's
-// contract: transfer legs are not cash flow, and a row with no FX rate is
-// skipped (the caller reports it via the unconverted count).
-func TestR3PCashflowFromShownSkipsTransfersAndUnconverted(t *testing.T) {
-	shown := []domain.Transaction{
-		{ID: "out", Amount: money.New(-2500, "USD")},
-		{ID: "in", Amount: money.New(10000, "USD")},
-		{ID: "xfer", Amount: money.New(-4000, "USD"), TransferAccountID: "acct-9"},
-		{ID: "eur", Amount: money.New(-1000, "EUR")},
-	}
-	spent, income := txnCashflowFromShown(shown, currency.Rates{Base: "USD"}, "USD")
-	if spent.Amount != 2500 || income.Amount != 10000 {
-		t.Fatalf("fold = spent %d income %d, want 2500/10000", spent.Amount, income.Amount)
-	}
-	if spent.Currency != "USD" || income.Currency != "USD" {
-		t.Fatalf("fold currencies = %q/%q, want USD", spent.Currency, income.Currency)
-	}
-}
-
-func BenchmarkTxnCashflowOldFullPass3292(b *testing.B) {
-	txns := r3pFixture(3292)
-	rates := currency.Rates{Base: "USD"}
-	filter := txnfilter.Criteria{Sort: "amount", Dir: txnfilter.Asc}
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, _ = r3pOldCountlineCashflow(txns, filter, rates, "USD")
-	}
-}
-
-func BenchmarkTxnCashflowFromShown3292(b *testing.B) {
-	txns := r3pFixture(3292)
-	rates := currency.Rates{Base: "USD"}
-	filter := txnfilter.Criteria{Sort: "amount", Dir: txnfilter.Asc}
-	shown := deriveTxnRows(txns, filter, txnfilter.Labels{}, nil, func(s string) string { return s })
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, _ = txnCashflowFromShown(shown, rates, "USD")
 	}
 }

@@ -141,7 +141,7 @@ func txnHistoryPanel(props TxnHistoryPanelProps) ui.Node {
 			Style(map[string]string{"display": "block", "padding": "0.5rem 0"}),
 			Div(css.Class(tw.Flex, tw.JustifyBetween, tw.Gap2),
 				Span(e.Summary),
-				Span(css.Class(tw.TextFaint, tw.Text12, tw.ShrinkO), e.At.Local().Format("Jan 2, 2006 3:04 PM"))),
+				Span(css.Class(tw.TextFaint, tw.Text12, tw.ShrinkO), uistate.LoadPrefs().FormatDate(e.At.Local())+" "+e.At.Local().Format("3:04 PM"))),
 			P(css.Class(tw.TextFaint, tw.Text12), who),
 			Div(details),
 		))

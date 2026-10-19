@@ -117,7 +117,7 @@ func HandleTxnKey(key string) bool {
 
 	switch txnActionForKey(key) {
 	case txnKeySearch:
-		search := doc.Call("querySelector", ".txn-toolbar input[type='search'], input[type='search'], input[aria-label*='Search']")
+		search := doc.Call("querySelector", "input[data-testid='filter-toolbar-search']")
 		if search.IsNull() || search.IsUndefined() {
 			return false
 		}

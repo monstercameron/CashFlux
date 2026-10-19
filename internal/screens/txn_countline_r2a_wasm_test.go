@@ -7,8 +7,11 @@ package screens
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/bills"
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -20,7 +23,8 @@ func TestR2ACountLineUsesPeriodTotalsAndOmitsPageRange(t *testing.T) {
 	f := render.New(t)
 	f.Render(txnCountLine(txnCountLineProps{
 		Shown: 14, Total: 3292, Range: "1–14 of 14",
-		Net: money.New(42500, "USD"),
+		Net: money.New(42500, "USD"), Spent: money.New(12500, "USD"),
+		Income: money.New(55000, "USD"), CashflowProvided: true,
 	}))
 	got := f.Text()
 	for _, want := range []string{"transactions", "14 transactions", "Spent", "Income", "Net +$425.00"} {
@@ -33,6 +37,20 @@ func TestR2ACountLineUsesPeriodTotalsAndOmitsPageRange(t *testing.T) {
 	}
 	if r2aByTestID(f, "button", "txn-count-spent") == nil || r2aByTestID(f, "button", "txn-count-income") == nil {
 		t.Fatal("Spent and Income totals must be interactive filters")
+	}
+}
+
+func TestTxnFutureTotalKeepsHouseholdCurrencyAndCountsFXFailures(t *testing.T) {
+	items := []bills.Bill{
+		{Amount: money.New(1000, "USD")},
+		{Amount: money.New(2000, "EUR")},
+	}
+	total, unconverted := txnFutureTotal(items, currency.Rates{Base: "GBP", Rates: map[string]float64{"USD": 1.27}}, "GBP")
+	if total.Currency != "GBP" || total.Amount != 1270 {
+		t.Errorf("future total = %+v, want 1270 GBP", total)
+	}
+	if unconverted != 1 {
+		t.Errorf("unconverted count = %d, want 1", unconverted)
 	}
 }
 
@@ -93,7 +111,10 @@ func TestR2ACountLinePeriodLabels(t *testing.T) {
 	}{
 		{name: "all dates", want: "All dates"},
 		{name: "month", filter: txnfilter.Criteria{From: "2026-10-01", To: "2026-10-31"}, want: "October 2026"},
-		{name: "custom range", filter: txnfilter.Criteria{From: "2026-09-30", To: "2026-10-02"}, want: "Custom range"},
+		{name: "custom range", filter: txnfilter.Criteria{From: "2026-09-30", To: "2026-10-02"}, want: uistate.T("txnperiod.customRange", uistate.LoadPrefs().FormatDate(mustTxnDate("2026-09-30")), uistate.LoadPrefs().FormatDate(mustTxnDate("2026-10-02")))},
+		{name: "partial month range", filter: txnfilter.Criteria{From: "2026-10-08", To: "2026-10-10"}, want: uistate.T("txnperiod.customRange", uistate.LoadPrefs().FormatDate(mustTxnDate("2026-10-08")), uistate.LoadPrefs().FormatDate(mustTxnDate("2026-10-10")))},
+		{name: "from only", filter: txnfilter.Criteria{From: "2026-10-01"}, want: uistate.T("txnTQ6.fromDate", uistate.LoadPrefs().FormatDate(mustTxnDate("2026-10-01")))},
+		{name: "through only", filter: txnfilter.Criteria{To: "2026-10-31"}, want: uistate.T("txnTQ6.throughDate", uistate.LoadPrefs().FormatDate(mustTxnDate("2026-10-31")))},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -102,6 +123,14 @@ func TestR2ACountLinePeriodLabels(t *testing.T) {
 			}
 		})
 	}
+}
+
+func mustTxnDate(value string) time.Time {
+	t, err := time.Parse("2006-01-02", value)
+	if err != nil {
+		panic(err)
+	}
+	return t
 }
 
 func TestR2ASignedNetUsesAnExplicitSign(t *testing.T) {
