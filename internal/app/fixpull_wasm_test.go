@@ -107,21 +107,47 @@ func TestFIXPULLHostedDeviceWithoutAppLockPullsEncryptedSnapshot(t *testing.T) {
 
 // A device without App Lock may hold an encrypted snapshot behind the lock form,
 // but it must never import a plaintext server copy (encryption downgrade).
-func TestFIXPULLPlaintextPullIsRefusedWithoutAppLock(t *testing.T) {
-	fixpullFixture(t)
-	oldRPC := hostedPullWorkspaceRPC
-	t.Cleanup(func() { hostedPullWorkspaceRPC = oldRPC })
-	hostedPullWorkspaceRPC = func(_ context.Context, _ prefs.Prefs, req backendrpc.GetWorkspaceRequest, out *backendrpc.GetWorkspaceResponse) error {
-		out.Found = true
-		out.Workspace.ID = req.ID
-		out.Dataset = []byte(`{"schemaVersion":2,"accounts":[]}`)
-		return nil
+// Accounts that synced before encryption was required hold a legacy plaintext
+// snapshot. A device without App Lock must be able to open it (refusing it locked
+// the owner out in 1.19.3); a device with App Lock still refuses any plaintext.
+func TestFIXPULLLegacyPlaintextLoadsWithoutAppLockOnly(t *testing.T) {
+	plaintext := []byte(`{"schemaVersion":2,"accounts":[]}`)
+	serve := func() {
+		hostedPullWorkspaceRPC = func(_ context.Context, _ prefs.Prefs, req backendrpc.GetWorkspaceRequest, out *backendrpc.GetWorkspaceResponse) error {
+			out.Found = true
+			out.Workspace.ID = req.ID
+			out.Dataset = plaintext
+			return nil
+		}
 	}
-	pullActiveWorkspaceFromBackend(false)
-	fixpullWait(t, func() bool { return currentHostedHydration().Phase == hostedHydrationError })
-	if got := currentHostedHydration(); len(got.EncryptedSnapshot) != 0 || got.Message == "" {
-		t.Fatalf("hosted hydration state = %#v, want an error that loads nothing", got)
-	}
+	const refused = "The server returned an unprotected copy. CashFlux did not load it."
+
+	t.Run("without App Lock the legacy copy is not refused", func(t *testing.T) {
+		fixpullFixture(t)
+		oldRPC := hostedPullWorkspaceRPC
+		t.Cleanup(func() { hostedPullWorkspaceRPC = oldRPC })
+		serve()
+		pullActiveWorkspaceFromBackend(false)
+		fixpullWait(t, func() bool { return currentHostedHydration().Phase != hostedHydrationLoading })
+		if got := currentHostedHydration(); got.Message == refused {
+			t.Fatalf("legacy plaintext was refused without App Lock: %#v", got)
+		}
+	})
+	t.Run("with App Lock plaintext is refused", func(t *testing.T) {
+		fixpullFixture(t)
+		oldRPC, oldPass := hostedPullWorkspaceRPC, activePasscode
+		t.Cleanup(func() { hostedPullWorkspaceRPC, activePasscode = oldRPC, oldPass })
+		activePasscode = "known-app-lock"
+		if !datasetEncryptionActive() {
+			t.Skip("fixture cannot activate dataset encryption via activePasscode")
+		}
+		serve()
+		pullActiveWorkspaceFromBackend(false)
+		fixpullWait(t, func() bool { return currentHostedHydration().Phase == hostedHydrationError })
+		if got := currentHostedHydration(); got.Message != refused {
+			t.Fatalf("hosted hydration state = %#v, want the unprotected-copy refusal", got)
+		}
+	})
 }
 
 func TestFIXPULLAppLockKeepsExistingEncryptedPullHandling(t *testing.T) {
