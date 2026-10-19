@@ -469,6 +469,10 @@ func startBackendSync() {
 	if !uistate.LoadPrefs().Normalize().BackendActive() {
 		return
 	}
+	// Keep account-session lifecycle and metadata watch behavior available, but
+	// publish the protection status immediately. Dataset pushes and pulls have
+	// their own hard gates below.
+	requireDatasetEncryption()
 	restoreTokenLifecycleOnBoot()
 	// Credentials rotate, and they rotate in whichever tab happened to get there
 	// first. Every other tab is left holding a bearer that is about to stop
@@ -614,6 +618,21 @@ func pushBlockedReasonAllowing(allowLockedDifferent bool) string {
 		}
 	}
 	return ""
+}
+
+// requireDatasetEncryption is the final policy check shared by every dataset
+// sync path. The server must never receive plaintext, even for legacy queues.
+func requireDatasetEncryption() bool {
+	decision := syncstate.DecideEncryptedUpload(datasetEncryptionActive())
+	if decision.Allowed {
+		return true
+	}
+	setSyncStatus(syncStatus{
+		State:   string(decision.Status),
+		Pending: pendingSyncCount(),
+		Message: decision.Message,
+	})
+	return false
 }
 
 // yieldToBrowser hands the main thread back to JavaScript for one macrotask.
@@ -842,6 +861,19 @@ func queueActiveWorkspaceAtServerVersion(force bool) {
 		setSyncStatus(syncStatus{State: "error", Message: customSyncErrorMessage(err, "could not read this device's data")})
 		return
 	}
+	if !requireDatasetEncryption() {
+		meta := loadSyncMeta(w.ID)
+		scope := syncstate.CaptureScope(w.ID, signedInUserID(), meta.Version)
+		enqueueSyncMutation(queuedSyncMutation{
+			UserID: scope.OwnerUserID, WorkspaceID: scope.WorkspaceID,
+			Name: w.Name, Color: w.Color, Sort: workspaceSort(r, w.ID),
+			DeviceID: syncDeviceID(), Dataset: string(dataset),
+			ClientUpdatedAt: time.Now().UTC().Format(time.RFC3339Nano),
+			Hash:            datasetHash(dataset), Force: force, BaseVersion: scope.BaseVersion,
+		})
+		requireDatasetEncryption() // enqueueSyncMutation marks the queue as syncing
+		return
+	}
 	// Clear the dedup hash as well as marking the item forced: the hash guard sits
 	// in pushActiveWorkspaceToBackend, and a force whose bytes match this device's
 	// last successful push would otherwise be dropped before it was ever queued.
@@ -957,6 +989,9 @@ func forceBackendSeedActiveWorkspace() {
 func flushBackendSyncQueue() {
 	pr := uistate.LoadPrefs().Normalize()
 	if !pr.BackendActive() {
+		return
+	}
+	if !requireDatasetEncryption() {
 		return
 	}
 	go func() {
@@ -1475,6 +1510,9 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 	if !pr.BackendActive() {
 		return
 	}
+	if !requireDatasetEncryption() {
+		return
+	}
 	r := loadRegistry()
 	w, ok := r.Active()
 	if !ok {
@@ -1541,6 +1579,12 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 		// imports into SQLite, all of it CPU on the renderer's thread.
 		yieldToBrowser()
 		payload := resp.Dataset
+		if datasetEncryptionActive() && !cryptobox.IsEnvelope(payload) {
+			message := "The server returned an unprotected copy. CashFlux did not load it."
+			setSyncStatus(syncStatus{State: "error", Pending: pendingSyncCount(), Message: message})
+			markHostedHydrationError(message)
+			return
+		}
 		if cryptobox.IsEnvelope(payload) && activePasscode != "" {
 			decrypted, decryptErr := decryptEnvelopeSync(payload, activePasscode)
 			if decryptErr != nil {
@@ -1882,6 +1926,9 @@ func resolveConflictKeepLocal() {
 }
 
 func queueConflictBackupAtCurrentVersion(pr prefs.Prefs, workspaceID string, item queuedSyncMutation) {
+	if !requireDatasetEncryption() {
+		return
+	}
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
@@ -1912,6 +1959,9 @@ func queueConflictBackupAtCurrentVersion(pr prefs.Prefs, workspaceID string, ite
 func resolveConflictUseServer() {
 	pr := uistate.LoadPrefs().Normalize()
 	if !pr.BackendActive() {
+		return
+	}
+	if !requireDatasetEncryption() {
 		return
 	}
 	r := loadRegistry()
@@ -1951,6 +2001,11 @@ func resolveConflictUseServer() {
 			return
 		}
 		payload := resp.Dataset
+		if datasetEncryptionActive() && !cryptobox.IsEnvelope(payload) {
+			message := "The server returned an unprotected copy. CashFlux did not load it."
+			setSyncStatus(syncStatus{State: "error", Pending: pendingSyncCount(), Message: message})
+			return
+		}
 		if cryptobox.IsEnvelope(payload) && activePasscode != "" {
 			decrypted, decryptErr := decryptEnvelopeSync(payload, activePasscode)
 			if decryptErr != nil {
@@ -2117,6 +2172,8 @@ func loadSyncStatus() syncStatus {
 func syncStatusLabel() string {
 	status := loadSyncStatus()
 	switch status.State {
+	case string(syncstate.StatusNeedsDataProtection):
+		return syncstate.DataProtectionMessage
 	case "syncing":
 		return "Syncing"
 	case "offline":

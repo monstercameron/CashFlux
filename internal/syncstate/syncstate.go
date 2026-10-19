@@ -5,6 +5,35 @@ package syncstate
 
 import "time"
 
+// EncryptionStatus is the typed sync state used when cloud sync is configured
+// but this device cannot encrypt the dataset with its passcode.
+type EncryptionStatus string
+
+const (
+	// StatusNeedsDataProtection tells the client UI to ask the user to protect
+	// their data before attempting cloud sync.
+	StatusNeedsDataProtection EncryptionStatus = "needs-data-protection"
+	// DataProtectionMessage is the user-facing explanation paired with
+	// StatusNeedsDataProtection.
+	DataProtectionMessage = "Protect your data to turn on sync"
+)
+
+// EncryptionDecision describes whether a dataset may be sent to the server.
+type EncryptionDecision struct {
+	Allowed bool
+	Status  EncryptionStatus
+	Message string
+}
+
+// DecideEncryptedUpload refuses dataset uploads unless the passcode-backed
+// encryption path is ready. Content is never sent as plaintext as a fallback.
+func DecideEncryptedUpload(encryptionReady bool) EncryptionDecision {
+	if !encryptionReady {
+		return EncryptionDecision{Status: StatusNeedsDataProtection, Message: DataProtectionMessage}
+	}
+	return EncryptionDecision{Allowed: true}
+}
+
 // ShouldResetBackoff decides whether the watch-stream reconnect backoff counter
 // should reset to zero after a stream ends. Resetting on mere stream
 // ESTABLISHMENT is wrong: a stream that opens and then immediately errors (the

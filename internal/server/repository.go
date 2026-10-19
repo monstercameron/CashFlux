@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/cryptobox"
 	"github.com/monstercameron/CashFlux/internal/syncstate"
 )
 
@@ -1116,8 +1117,8 @@ WHERE user_id = ? AND id = ? AND deleted = 0`, formatTime(updatedAt), deviceID, 
 	return n > 0, nil
 }
 
-// PutSnapshot stores the current dataset snapshot, retaining the previous
-// current snapshot in history and trimming that history to historyLimit entries.
+// PutSnapshot stores the current dataset snapshot, retaining prior versions and
+// removing plaintext history when an encrypted snapshot is accepted.
 func (s *Store) PutSnapshot(snapshot Snapshot, maxBytes, historyLimit int) error {
 	if strings.TrimSpace(snapshot.WorkspaceID) == "" {
 		return fmt.Errorf("server store: snapshot workspace id is required")
@@ -1145,6 +1146,7 @@ func (s *Store) PutSnapshot(snapshot Snapshot, maxBytes, historyLimit int) error
 // history) together — a version is never durable without its dataset.
 // Size validation stays with the callers (each has its own limit source).
 func putSnapshotTx(tx *sql.Tx, snapshot Snapshot, historyLimit int) error {
+	encrypted := cryptobox.IsEnvelope(snapshot.Dataset)
 	if snapshot.UpdatedAt.IsZero() {
 		snapshot.UpdatedAt = time.Now().UTC()
 	}
@@ -1176,8 +1178,52 @@ ON CONFLICT(user_id, workspace_id) DO UPDATE SET
 		snapshot.UserID, snapshot.WorkspaceID, snapshot.Dataset, snapshot.Version, formatTime(snapshot.UpdatedAt)); err != nil {
 		return fmt.Errorf("server store: put snapshot: %w", err)
 	}
+	if encrypted {
+		// Once an encrypted version is durably accepted, remove every older
+		// snapshot for this workspace. Otherwise history would keep plaintext
+		// copies after the current row had migrated to ciphertext. This runs in
+		// the same version-checked transaction as the accepted write.
+		if err := purgePlaintextSnapshotHistoryTx(tx, snapshot.UserID, snapshot.WorkspaceID); err != nil {
+			return err
+		}
+	}
 	if err := trimSnapshotHistory(tx, snapshot.UserID, snapshot.WorkspaceID, historyLimit); err != nil {
 		return err
+	}
+	return nil
+}
+
+func purgePlaintextSnapshotHistoryTx(tx *sql.Tx, userID, workspaceID string) error {
+	rows, err := tx.Query(`SELECT id, dataset_json FROM snapshot_history WHERE user_id = ? AND workspace_id = ?`, userID, workspaceID)
+	if err != nil {
+		return fmt.Errorf("server store: read snapshot history for encryption migration: %w", err)
+	}
+	type historyRow struct {
+		id      int64
+		dataset []byte
+	}
+	var plaintext []historyRow
+	for rows.Next() {
+		var row historyRow
+		if err := rows.Scan(&row.id, &row.dataset); err != nil {
+			_ = rows.Close()
+			return fmt.Errorf("server store: read snapshot history row: %w", err)
+		}
+		if !cryptobox.IsEnvelope(row.dataset) {
+			plaintext = append(plaintext, row)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return fmt.Errorf("server store: iterate snapshot history: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return fmt.Errorf("server store: close snapshot history rows: %w", err)
+	}
+	for _, row := range plaintext {
+		if _, err := tx.Exec(`DELETE FROM snapshot_history WHERE id = ? AND user_id = ? AND workspace_id = ?`, row.id, userID, workspaceID); err != nil {
+			return fmt.Errorf("server store: purge plaintext snapshot history: %w", err)
+		}
 	}
 	return nil
 }

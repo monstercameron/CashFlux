@@ -450,6 +450,44 @@ func TestSnapshotStoreCanDropHistory(t *testing.T) {
 	}
 }
 
+func TestEncryptedSnapshotPurgesPlaintextHistoryButKeepsCiphertext(t *testing.T) {
+	s := openTestStore(t)
+	now := time.Date(2026, time.October, 18, 12, 0, 0, 0, time.UTC)
+	if err := s.UpsertUser(User{ID: "u1", Provider: "github", Subject: "alice", CreatedAt: now}); err != nil {
+		t.Fatalf("UpsertUser: %v", err)
+	}
+	if err := s.PutWorkspace(Workspace{ID: "w1", UserID: "u1", Name: "Home", UpdatedAt: now}); err != nil {
+		t.Fatalf("PutWorkspace: %v", err)
+	}
+	envelope := cryptobox.Marshal(cryptobox.Envelope{
+		V: cryptobox.CurrentVersion, Alg: cryptobox.AlgAESGCM,
+		Salt: "c2FsdA==", IV: "aXYxMjM0NTY3OA==", Cipher: "Y2lwaGVydGV4dA==",
+	})
+	if err := s.PutSnapshot(Snapshot{UserID: "u1", WorkspaceID: "w1", Dataset: []byte(`{"plaintext":true}`), Version: 1, UpdatedAt: now}, 0, 10); err != nil {
+		t.Fatalf("PutSnapshot plaintext: %v", err)
+	}
+	if err := s.PutSnapshot(Snapshot{UserID: "u1", WorkspaceID: "w1", Dataset: envelope, Version: 2, UpdatedAt: now.Add(time.Minute)}, 0, 10); err != nil {
+		t.Fatalf("PutSnapshot encrypted migration: %v", err)
+	}
+	history, err := s.SnapshotHistory("u1", "w1", 0)
+	if err != nil {
+		t.Fatalf("SnapshotHistory after migration: %v", err)
+	}
+	if len(history) != 0 {
+		t.Fatalf("plaintext history remained after encrypted snapshot: %+v", history)
+	}
+	if err := s.PutSnapshot(Snapshot{UserID: "u1", WorkspaceID: "w1", Dataset: envelope, Version: 3, UpdatedAt: now.Add(2 * time.Minute)}, 0, 10); err != nil {
+		t.Fatalf("PutSnapshot encrypted successor: %v", err)
+	}
+	history, err = s.SnapshotHistory("u1", "w1", 0)
+	if err != nil {
+		t.Fatalf("SnapshotHistory after encrypted successor: %v", err)
+	}
+	if len(history) != 1 || !cryptobox.IsEnvelope(history[0].Dataset) || history[0].Version != 2 {
+		t.Fatalf("encrypted history = %+v, want ciphertext version 2 retained", history)
+	}
+}
+
 func TestBlobStoreContentAddressingLinksAndGC(t *testing.T) {
 	s := openTestStore(t)
 	root := filepath.Join(t.TempDir(), "blobs")

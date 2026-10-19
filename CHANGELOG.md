@@ -71,6 +71,11 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Sync never uploads readable data (SEC6).** Every path that sends household data to a server — the sync queue,
+  "Keep my changes", "Replace the server copy", conflict actions and pulls — now requires the passcode-backed
+  encryption first; without it, changes stay safely queued on this device and sync shows "Protect your data to turn on
+  sync". Once encryption is on, an unencrypted server copy is never imported, and the first encrypted write removes any
+  older plain-text snapshot history for that workspace on the server.
 - **CI is green-able again (CI1).** Go 1.26.9 and upgraded `golang.org/x/net` (0.60), gRPC (1.83.1) and OpenTelemetry
   (1.45) clear the 15 reachable vulnerabilities govulncheck reported. The budget view cache now keys on the app
   instance, so two datasets in one process can no longer return each other's budgets (it showed up as a yearly budget
