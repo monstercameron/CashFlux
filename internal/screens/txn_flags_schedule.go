@@ -42,7 +42,7 @@ func makeTxnFlagsKey(app *appstate.App, dataRevision int, settings smart.Setting
 // Only a complete, still-current result is published. cancel stops every slice.
 func scheduleTxnFlags(key txnFlagsKey, settings smart.Settings, current func() bool, publish func(txnRowFlags)) func() {
 	cancelled := false
-	var timer *time.Timer
+	var cancelTimer func()
 	var work *txnFlagsWork
 	var run func()
 	run = func() {
@@ -70,13 +70,13 @@ func scheduleTxnFlags(key txnFlagsKey, settings smart.Settings, current func() b
 				break
 			}
 		}
-		timer = time.AfterFunc(time.Millisecond, run)
+		cancelTimer = afterSettleTimer(time.Millisecond, run)
 	}
-	timer = time.AfterFunc(300*time.Millisecond, run)
+	cancelTimer = afterSettleTimer(300*time.Millisecond, run)
 	return func() {
 		cancelled = true
-		if timer != nil {
-			timer.Stop()
+		if cancelTimer != nil {
+			cancelTimer()
 		}
 	}
 }

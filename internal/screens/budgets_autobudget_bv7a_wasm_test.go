@@ -39,8 +39,10 @@ func TestAutoBudgetOpensWithoutErrorWhenSuggestionsSucceed(t *testing.T) {
 	previous := appstate.Default
 	appstate.Default = app
 	t.Cleanup(func() { appstate.Default = previous })
+	t.Cleanup(func() { _ = app.Store().Close() })
 
 	f := render.New(t)
+	defer f.Cleanup()
 	f.Render(ui.CreateElement(AutoBudgetBody, struct{}{}))
 	if row := byTestID(f, "div", "autobudget-row-groceries"); row == nil {
 		t.Fatalf("Auto Budget did not render its spending suggestion: %q", f.Text())

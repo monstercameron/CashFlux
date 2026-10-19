@@ -6,7 +6,7 @@ package screens
 
 import (
 	"strconv"
-	"sync"
+	"syscall/js"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -19,7 +19,7 @@ import (
 func revKey(app *appstate.App) string { return strconv.FormatUint(app.Rev(), 10) }
 
 // useAfterSettle returns false on a component's first paint and true ~300ms later (past
-// the 160ms route cross-fade), via a Go timer. Gate a page's heavy secondary / below-
+// the 160ms route cross-fade), via a browser timer. Gate a page's heavy secondary / below-
 // the-fold content on it so the primary content paints immediately on mount and the
 // rest fills in once the page has settled — keeping expensive work (full-transaction
 // scans, chart builds, long lists) off the mount critical path. `key` just names the
@@ -41,20 +41,24 @@ func useAfterSettle(key string) bool {
 }
 
 func afterSettleTimer(delay time.Duration, settled func()) func() {
-	var mu sync.Mutex
 	active := true
-	timer := time.AfterFunc(delay, func() {
-		mu.Lock()
-		defer mu.Unlock()
+	var callback js.Func
+	callback = js.FuncOf(func(js.Value, []js.Value) any {
 		if active {
+			active = false
 			settled()
 		}
+		callback.Release()
+		return nil
 	})
+	timer := js.Global().Call("setTimeout", callback, delay.Milliseconds())
 	return func() {
-		mu.Lock()
+		if !active {
+			return
+		}
 		active = false
-		mu.Unlock()
-		timer.Stop()
+		js.Global().Call("clearTimeout", timer)
+		callback.Release()
 	}
 }
 
