@@ -90,6 +90,9 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Budgets dialogs split into small components (BUDQ6.3).** Adjust all (315 → 132 lines), Auto Budget (305 → 150), Month close
+  (298 → 144) and Track untracked (211 → 126) compose named sections; Auto Budget's monthly budget lookup is a pure, tested
+  budgeting helper. No visible change.
 - **Budgets toolbar and list split into small components (BUDQ6.2).** `budgetToolbarContent` (269 → 30 lines) and
   `budgetListWidget` (215 → 64) compose child components for settings, tools, density, add, search and attention chips; the
   search/attention filtering is a pure, table-tested function. No visible change.

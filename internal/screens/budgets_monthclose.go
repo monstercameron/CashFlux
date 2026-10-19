@@ -77,6 +77,148 @@ func budgetsMonthCloseModal(_ struct{}) ui.Node {
 
 type monthCloseBodyProps struct{}
 
+func monthCloseSection(testid, title string, kids ...any) ui.Node {
+	args := []any{css.Class("mc-section"), Attr("data-testid", testid),
+		Style(map[string]string{"padding": "0.85rem 1.1rem", "border-bottom": "1px solid color-mix(in srgb, var(--border) 60%, transparent)"}),
+		H3(css.Class("mc-section-title"), Style(map[string]string{"margin": "0 0 0.4rem", "font-size": "0.95rem", "font-weight": "600", "color": "var(--text)"}), title)}
+	return Div(append(args, kids...)...)
+}
+
+func monthCloseOverBody(s monthclose.Summary, base string, tense func(string, string) string, coverOnClick any) []any {
+	if len(s.Overspends) == 0 {
+		return []any{P(css.Class("budget-sub"), uistate.T(tense("monthclose.overNoneLive", "monthclose.overNone")))}
+	}
+	rows := make([]ui.Node, 0, len(s.Overspends))
+	for _, it := range s.Overspends {
+		rows = append(rows, Li(css.Class("wf-line"), Span(css.Class("wf-line-name"), it.Name),
+			Span(css.Class("wf-line-amt"), fmtMoney(money.New(it.Minor, base)))))
+	}
+	return []any{
+		P(css.Class("budget-sub"), uistate.TN(tense("monthclose.overIntroLiveOne", "monthclose.overIntroOne"),
+			tense("monthclose.overIntroLiveMany", "monthclose.overIntroMany"), len(s.Overspends), fmtMoney(money.New(s.TotalOverMinor, base)))),
+		Ul(css.Class("wf-lines"), rows),
+		Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt2),
+			Button(css.Class("btn btn-sm btn-primary"), Type("button"), Attr("data-testid", "monthclose-cover"),
+				Title(uistate.T("coverAll.title")), coverOnClick, uistate.T("monthclose.coverAction")),
+			Span(css.Class("budget-sub"), uistate.T("monthclose.overLeaveNote"))),
+	}
+}
+
+func monthCloseLeftBody(s monthclose.Summary, base string, tense func(string, string) string, rolloverNote string, sweepOnClick any) []any {
+	if len(s.Leftovers) == 0 {
+		return []any{P(css.Class("budget-sub"), uistate.T(tense("monthclose.leftNoneLive", "monthclose.leftNone")))}
+	}
+	body := []any{P(css.Class("budget-sub"), uistate.TN(tense("monthclose.leftIntroLiveOne", "monthclose.leftIntroOne"),
+		tense("monthclose.leftIntroLiveMany", "monthclose.leftIntroMany"), len(s.Leftovers), fmtMoney(money.New(s.TotalLeftMinor, base))))}
+	if top := s.Leftovers[0]; len(s.Leftovers) > 1 && top.Minor*2 > s.TotalLeftMinor {
+		body = append(body, P(css.Class("budget-sub"), Attr("data-testid", "monthclose-left-top"),
+			uistate.T("monthclose.leftDominatedBy", top.Name, fmtMoney(money.New(top.Minor, base)), top.Minor*100/s.TotalLeftMinor)))
+	}
+	return append(body,
+		P(css.Class("budget-sub"), Attr("data-testid", "monthclose-rollover-note"), rolloverNote),
+		Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt2),
+			Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "monthclose-sweep"),
+				Title(uistate.T("sweep.openConfig")), sweepOnClick, uistate.T("sweep.openConfig"))))
+}
+
+func monthCloseResolveBody(s monthclose.Summary, base string, deferred bool, allocateOnClick, basisOnClick, rolloverOnClick, deferOnClick any) []any {
+	if s.OverAssignedMinor == 0 {
+		return []any{P(css.Class("budget-sub"), uistate.T("monthclose.assignFits"))}
+	}
+	if deferred {
+		return []any{P(css.Class("budget-sub"), Attr("data-testid", "monthclose-deferred"),
+			uistate.T("monthclose.deferredNote", fmtMoney(money.New(s.OverAssignedMinor, base))))}
+	}
+	choices := make([]ui.Node, 0, 4)
+	for _, r := range monthclose.Resolutions(s) {
+		switch r {
+		case monthclose.ResolveReduce:
+			choices = append(choices, Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "monthclose-resolve-reduce"),
+				Title(uistate.T("monthclose.reduceTitle")), allocateOnClick, uistate.T("monthclose.reduce")))
+		case monthclose.ResolveIncome:
+			choices = append(choices, Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "monthclose-resolve-income"),
+				Title(uistate.T("monthclose.incomeTitle")), basisOnClick, uistate.T("monthclose.income")))
+		case monthclose.ResolveRollover:
+			choices = append(choices, Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "monthclose-resolve-rollover"),
+				Title(uistate.T("monthclose.rolloverTitle")), rolloverOnClick, uistate.T("monthclose.rollover")))
+		case monthclose.ResolveDefer:
+			choices = append(choices, Button(css.Class("btn btn-ghost btn-sm"), Type("button"), Attr("data-testid", "monthclose-resolve-defer"),
+				Title(uistate.T("monthclose.deferTitle")), deferOnClick, uistate.T("monthclose.defer")))
+		}
+	}
+	return []any{P(css.Class("budget-sub"), uistate.T("monthclose.assignOver", fmtMoney(money.New(s.OverAssignedMinor, base)))),
+		Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.FlexWrap, tw.Mt2), choices)}
+}
+
+func monthCloseIncomeBody(s monthclose.Summary, base string) []any {
+	delta := s.IncomeDeltaMinor()
+	deltaText := uistate.T("monthclose.incomeMatched")
+	if delta > 0 {
+		deltaText = uistate.T("monthclose.incomeAhead", fmtMoney(money.New(delta, base)))
+	} else if delta < 0 {
+		deltaText = uistate.T("monthclose.incomeBehind", fmtMoney(money.New(-delta, base)))
+	}
+	return []any{
+		Ul(css.Class("wf-lines"),
+			Li(css.Class("wf-line"), Span(css.Class("wf-line-name"), uistate.T("monthclose.incomeExpected")),
+				Span(css.Class("wf-line-amt"), fmtMoney(money.New(s.ExpectedIncomeMinor, base)))),
+			Li(css.Class("wf-line"), Span(css.Class("wf-line-name"), uistate.T("monthclose.incomeActual")),
+				Span(css.Class("wf-line-amt"), fmtMoney(money.New(s.ActualIncomeMinor, base))))),
+		P(css.Class("budget-sub"), Attr("data-testid", "monthclose-income-delta"), deltaText),
+	}
+}
+
+func monthCloseCopyBody(budgets []domain.Budget, catNames map[string]string, copyAll, copyPlan map[string]int64, excluded map[string]bool,
+	toggleExclude func(string), applyCopyOnClick any, base string) []any {
+	if len(copyAll) == 0 {
+		return []any{P(css.Class("budget-sub"), uistate.T("monthclose.copyNone"))}
+	}
+	rows := make([]ui.Node, 0, len(copyAll))
+	for _, b := range budgets {
+		amt, ok := copyAll[b.ID]
+		if !ok {
+			continue
+		}
+		rows = append(rows, ui.CreateElement(monthCloseCopyRow, monthCloseCopyRowProps{
+			ID: b.ID, Name: budgetTitle(b.Name, catNames[b.CategoryID]), Amount: fmtMoney(money.New(amt, base)),
+			Included: !excluded[b.ID], OnToggle: toggleExclude,
+		}))
+	}
+	return []any{
+		P(css.Class("budget-sub"), uistate.T("monthclose.copyIntro")),
+		Div(css.Class("mc-copy-rows"), rows),
+		Button(css.Class("btn btn-sm btn-primary", tw.Mt2), Type("button"), Attr("data-testid", "monthclose-copy-apply"),
+			Title(uistate.T("monthclose.copyApplyTitle")), applyCopyOnClick, uistate.T("monthclose.copyApply", len(copyPlan))),
+	}
+}
+
+func applyMonthCloseCopy(app *appstate.App, budgets []domain.Budget, v budgetView, anchor time.Time, weekStart time.Weekday, excluded func() string) {
+	plan := monthclose.CopyBoosts(budgets, func(b domain.Budget) (time.Time, time.Time) {
+		return monthclose.CarryTargets(b.Period, anchor, weekStart)
+	}, monthCloseExcludeSet(excluded()))
+	n := 0
+	for _, b := range budgets {
+		amt, ok := plan[b.ID]
+		if !ok {
+			continue
+		}
+		pr := uistate.CurrentPrefs()
+		key := budgeting.PeriodKeyWithWeekStart(b.Period, v.Anchor, budgetPayCycleAnchor(pr.PayCycleAnchor), pr.WeekStartWeekday())
+		thisStart, err := time.Parse("2006-01-02", key)
+		if err == nil {
+			err = app.PutBudget(b.WithPeriodBoost(thisStart, amt))
+		}
+		if err == nil {
+			n++
+		}
+	}
+	if n > 0 {
+		uistate.BumpDataRevision()
+		uistate.RequestPersist()
+		uistate.PostUndoable(uistate.T("monthclose.copyApplied", plural(n, "budget")))
+	}
+}
+
 // monthCloseBody is the modal's content: the five ordered sections. Its own
 // component so every hook (state + click handlers) sits at a stable position.
 func monthCloseBody(_ monthCloseBodyProps) ui.Node {
@@ -179,30 +321,7 @@ func monthCloseBody(_ monthCloseBodyProps) ui.Node {
 	}
 	copyAll := monthclose.CopyBoosts(visibleBudgets, periodStarts, nil)
 	copyPlan := monthclose.CopyBoosts(visibleBudgets, periodStarts, monthCloseExcludeSet(excluded.Get()))
-	applyCopy := ui.UseEvent(Prevent(func() {
-		plan := monthclose.CopyBoosts(visibleBudgets, periodStarts, monthCloseExcludeSet(excluded.Get()))
-		n := 0
-		for _, b := range visibleBudgets {
-			amt, ok := plan[b.ID]
-			if !ok {
-				continue
-			}
-			pr := uistate.CurrentPrefs()
-			key := budgeting.PeriodKeyWithWeekStart(b.Period, v.Anchor, budgetPayCycleAnchor(pr.PayCycleAnchor), pr.WeekStartWeekday())
-			thisStart, err := time.Parse("2006-01-02", key)
-			if err == nil {
-				err = app.PutBudget(b.WithPeriodBoost(thisStart, amt))
-			}
-			if err == nil {
-				n++
-			}
-		}
-		if n > 0 {
-			uistate.BumpDataRevision()
-			uistate.RequestPersist()
-			uistate.PostUndoable(uistate.T("monthclose.copyApplied", plural(n, "budget")))
-		}
-	}))
+	applyCopy := ui.UseEvent(Prevent(func() { applyMonthCloseCopy(app, visibleBudgets, v, anchor, ws, excluded.Get) }))
 	coverOnClick := OnClick(openCoverAll)
 	sweepOnClick := OnClick(openSweep)
 	allocateOnClick := OnClick(goAllocate)
@@ -212,40 +331,8 @@ func monthCloseBody(_ monthCloseBodyProps) ui.Node {
 	applyCopyOnClick := OnClick(applyCopy)
 	doneOnClick := OnClick(closeDone)
 
-	// Inline-styled section chrome (a handful of elements — not worth a styles-
-	// registry entry that would entangle a shared file under concurrent lanes).
-	section := func(testid, title string, kids ...any) ui.Node {
-		args := []any{css.Class("mc-section"), Attr("data-testid", testid),
-			Style(map[string]string{"padding": "0.85rem 1.1rem", "border-bottom": "1px solid color-mix(in srgb, var(--border) 60%, transparent)"}),
-			H3(css.Class("mc-section-title"),
-				Style(map[string]string{"margin": "0 0 0.4rem", "font-size": "0.95rem", "font-weight": "600", "color": "var(--text)"}),
-				title)}
-		return Div(append(args, kids...)...)
-	}
-
 	// 1 — Overspending.
-	var overBody []any
-	if len(s.Overspends) == 0 {
-		overBody = append(overBody, P(css.Class("budget-sub"),
-			uistate.T(tense("monthclose.overNoneLive", "monthclose.overNone"))))
-	} else {
-		overBody = append(overBody, P(css.Class("budget-sub"),
-			uistate.TN(
-				tense("monthclose.overIntroLiveOne", "monthclose.overIntroOne"),
-				tense("monthclose.overIntroLiveMany", "monthclose.overIntroMany"),
-				len(s.Overspends), fmtMoney(money.New(s.TotalOverMinor, v.Base)))))
-		var rows []ui.Node
-		for _, it := range s.Overspends {
-			rows = append(rows, Li(css.Class("wf-line"),
-				Span(css.Class("wf-line-name"), it.Name),
-				Span(css.Class("wf-line-amt"), fmtMoney(money.New(it.Minor, v.Base)))))
-		}
-		overBody = append(overBody, Ul(css.Class("wf-lines"), rows),
-			Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt2),
-				Button(css.Class("btn btn-sm btn-primary"), Type("button"), Attr("data-testid", "monthclose-cover"),
-					Title(uistate.T("coverAll.title")), coverOnClick, uistate.T("monthclose.coverAction")),
-				Span(css.Class("budget-sub"), uistate.T("monthclose.overLeaveNote"))))
-	}
+	overBody := monthCloseOverBody(s, v.Base, tense, coverOnClick)
 
 	// 2 — Unused money + what rollover will do with it (the explanation BEFORE the
 	// month changes, not a surprise after).
@@ -253,123 +340,24 @@ func monthCloseBody(_ monthCloseBodyProps) ui.Node {
 	if s.RolloverOn {
 		rolloverNote = uistate.T("monthclose.rolloverOn")
 	}
-	var leftBody []any
-	if len(s.Leftovers) == 0 {
-		leftBody = append(leftBody, P(css.Class("budget-sub"),
-			uistate.T(tense("monthclose.leftNoneLive", "monthclose.leftNone"))))
-	} else {
-		leftBody = append(leftBody, P(css.Class("budget-sub"),
-			// TN puts the count first, so these keys use explicit argument indexes
-			// to keep the money-first reading order.
-			uistate.TN(
-				tense("monthclose.leftIntroLiveOne", "monthclose.leftIntroOne"),
-				tense("monthclose.leftIntroLiveMany", "monthclose.leftIntroMany"),
-				len(s.Leftovers), fmtMoney(money.New(s.TotalLeftMinor, v.Base)))))
-		// Name the biggest contributor when it dominates the total. A single
-		// long-horizon budget can BE most of this figure — on the sample household
-		// "$4,525 unspent across 8 budgets" is 73% one goal-funded budget with a
-		// $6,000 limit — and the headline then reads as reallocatable money that
-		// mostly is not (Cam, 2026-08-31). Naming the outlier costs one line and is
-		// honest without needing to classify every budget's purpose.
-		if top := s.Leftovers[0]; len(s.Leftovers) > 1 && top.Minor*2 > s.TotalLeftMinor {
-			leftBody = append(leftBody, P(css.Class("budget-sub"), Attr("data-testid", "monthclose-left-top"),
-				uistate.T("monthclose.leftDominatedBy", top.Name,
-					fmtMoney(money.New(top.Minor, v.Base)),
-					top.Minor*100/s.TotalLeftMinor)))
-		}
-		leftBody = append(leftBody,
-			P(css.Class("budget-sub"), Attr("data-testid", "monthclose-rollover-note"), rolloverNote),
-			Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt2),
-				Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "monthclose-sweep"),
-					Title(uistate.T("sweep.openConfig")), sweepOnClick, uistate.T("sweep.openConfig"))))
-	}
+	leftBody := monthCloseLeftBody(s, v.Base, tense, rolloverNote, sweepOnClick)
 
 	// 3 — Over-assignment with the honest choices inline.
-	var resolveBody []any
-	switch {
-	case s.OverAssignedMinor == 0:
-		resolveBody = append(resolveBody, P(css.Class("budget-sub"), uistate.T("monthclose.assignFits")))
-	case deferred.Get():
-		resolveBody = append(resolveBody, P(css.Class("budget-sub"), Attr("data-testid", "monthclose-deferred"),
-			uistate.T("monthclose.deferredNote", fmtMoney(money.New(s.OverAssignedMinor, v.Base)))))
-	default:
-		resolveBody = append(resolveBody, P(css.Class("budget-sub"),
-			uistate.T("monthclose.assignOver", fmtMoney(money.New(s.OverAssignedMinor, v.Base)))))
-		var choices []ui.Node
-		for _, r := range monthclose.Resolutions(s) {
-			switch r {
-			case monthclose.ResolveReduce:
-				choices = append(choices, Button(css.Class("btn btn-sm"), Type("button"),
-					Attr("data-testid", "monthclose-resolve-reduce"), Title(uistate.T("monthclose.reduceTitle")),
-					allocateOnClick, uistate.T("monthclose.reduce")))
-			case monthclose.ResolveIncome:
-				choices = append(choices, Button(css.Class("btn btn-sm"), Type("button"),
-					Attr("data-testid", "monthclose-resolve-income"), Title(uistate.T("monthclose.incomeTitle")),
-					basisOnClick, uistate.T("monthclose.income")))
-			case monthclose.ResolveRollover:
-				choices = append(choices, Button(css.Class("btn btn-sm"), Type("button"),
-					Attr("data-testid", "monthclose-resolve-rollover"), Title(uistate.T("monthclose.rolloverTitle")),
-					rolloverOnClick, uistate.T("monthclose.rollover")))
-			case monthclose.ResolveDefer:
-				choices = append(choices, Button(css.Class("btn btn-ghost btn-sm"), Type("button"),
-					Attr("data-testid", "monthclose-resolve-defer"), Title(uistate.T("monthclose.deferTitle")),
-					deferOnClick, uistate.T("monthclose.defer")))
-			}
-		}
-		resolveBody = append(resolveBody, Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.FlexWrap, tw.Mt2), choices))
-	}
+	resolveBody := monthCloseResolveBody(s, v.Base, deferred.Get(), allocateOnClick, basisOnClick, rolloverOnClick, deferOnClick)
 
 	// 4 — Actual vs expected income.
-	delta := s.IncomeDeltaMinor()
-	deltaTxt := uistate.T("monthclose.incomeMatched")
-	if delta > 0 {
-		deltaTxt = uistate.T("monthclose.incomeAhead", fmtMoney(money.New(delta, v.Base)))
-	} else if delta < 0 {
-		deltaTxt = uistate.T("monthclose.incomeBehind", fmtMoney(money.New(-delta, v.Base)))
-	}
-	incomeBody := []any{
-		Ul(css.Class("wf-lines"),
-			Li(css.Class("wf-line"),
-				Span(css.Class("wf-line-name"), uistate.T("monthclose.incomeExpected")),
-				Span(css.Class("wf-line-amt"), fmtMoney(money.New(s.ExpectedIncomeMinor, v.Base)))),
-			Li(css.Class("wf-line"),
-				Span(css.Class("wf-line-name"), uistate.T("monthclose.incomeActual")),
-				Span(css.Class("wf-line-amt"), fmtMoney(money.New(s.ActualIncomeMinor, v.Base)))),
-		),
-		P(css.Class("budget-sub"), Attr("data-testid", "monthclose-income-delta"), deltaTxt),
-	}
+	incomeBody := monthCloseIncomeBody(s, v.Base)
 
 	// 5 — Copy last month's one-time top-ups, with per-budget exceptions.
-	var copyBody []any
-	if len(copyAll) == 0 {
-		copyBody = append(copyBody, P(css.Class("budget-sub"), uistate.T("monthclose.copyNone")))
-	} else {
-		copyBody = append(copyBody, P(css.Class("budget-sub"), uistate.T("monthclose.copyIntro")))
-		exSet := monthCloseExcludeSet(excluded.Get())
-		var rows []ui.Node
-		for _, b := range visibleBudgets {
-			amt, ok := copyAll[b.ID]
-			if !ok {
-				continue
-			}
-			rows = append(rows, ui.CreateElement(monthCloseCopyRow, monthCloseCopyRowProps{
-				ID: b.ID, Name: budgetTitle(b.Name, v.CatName[b.CategoryID]),
-				Amount: fmtMoney(money.New(amt, v.Base)), Included: !exSet[b.ID], OnToggle: toggleExclude,
-			}))
-		}
-		copyBody = append(copyBody, Div(css.Class("mc-copy-rows"), rows),
-			Button(css.Class("btn btn-sm btn-primary", tw.Mt2), Type("button"), Attr("data-testid", "monthclose-copy-apply"),
-				Title(uistate.T("monthclose.copyApplyTitle")), applyCopyOnClick,
-				uistate.T("monthclose.copyApply", len(copyPlan))))
-	}
+	copyBody := monthCloseCopyBody(visibleBudgets, v.CatName, copyAll, copyPlan, monthCloseExcludeSet(excluded.Get()), toggleExclude, applyCopyOnClick, v.Base)
 
 	return Div(css.Class("modal-scroll", "mc-body"), Attr("data-testid", "monthclose-body"),
 		P(css.Class("budget-sub"), uistate.T("monthclose.intro", vw.Label())),
-		section("monthclose-overspends", uistate.T("monthclose.overTitle"), overBody...),
-		section("monthclose-leftovers", uistate.T("monthclose.leftTitle"), leftBody...),
-		section("monthclose-assign", uistate.T("monthclose.assignTitle"), resolveBody...),
-		section("monthclose-income", uistate.T("monthclose.incomeTitle2"), incomeBody...),
-		section("monthclose-copy", uistate.T("monthclose.copyTitle"), copyBody...),
+		monthCloseSection("monthclose-overspends", uistate.T("monthclose.overTitle"), overBody...),
+		monthCloseSection("monthclose-leftovers", uistate.T("monthclose.leftTitle"), leftBody...),
+		monthCloseSection("monthclose-assign", uistate.T("monthclose.assignTitle"), resolveBody...),
+		monthCloseSection("monthclose-income", uistate.T("monthclose.incomeTitle2"), incomeBody...),
+		monthCloseSection("monthclose-copy", uistate.T("monthclose.copyTitle"), copyBody...),
 		Div(css.Class(tw.Flex, tw.JustifyEnd, tw.Mt3),
 			Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "monthclose-done"),
 				doneOnClick, uistate.T("monthclose.done"))),

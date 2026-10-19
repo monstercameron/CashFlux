@@ -59,14 +59,8 @@ func AutoBudgetBody(_ struct{}) ui.Node {
 	}
 	suggestions, suggestionErr := budgeting.SuggestBudgets(app.Categories(), app.Transactions(), time.Now(), months, rates, m)
 
-	// Existing MONTHLY budgets by category — so we update rather than duplicate, and can
-	// mark a category as already-budgeted (and not overwrite it unless the user opts in).
-	existing := make(map[string]domain.Budget)
-	for _, b := range app.Budgets() {
-		if b.Period == domain.PeriodMonthly {
-			existing[b.CategoryID] = b
-		}
-	}
+	// Existing monthly budgets are keyed by category so updates never duplicate them.
+	existing := budgeting.MonthlyBudgetsByCategory(app.Budgets())
 
 	// Seed per-category state: slider at 100% of the suggestion; include categories that
 	// don't already have a monthly budget (so Save never silently overwrites a budget the
@@ -125,15 +119,13 @@ func AutoBudgetBody(_ struct{}) ui.Node {
 		}
 		picked.Set(nm)
 	}
-	selectAll := ui.UseEvent(Prevent(func() { setAll(true) }))
-	selectNone := ui.UseEvent(Prevent(func() { setAll(false) }))
-	resetTuning := ui.UseEvent(Prevent(func() {
+	resetTuning := func() {
 		nm := make(map[string]int, len(suggestions))
 		for _, s := range suggestions {
 			nm[s.CategoryID] = 100
 		}
 		pct.Set(nm)
-	}))
+	}
 	tuned := 0
 	for _, s := range suggestions {
 		if pct.Get()[s.CategoryID] != 100 {
@@ -170,83 +162,58 @@ func AutoBudgetBody(_ struct{}) ui.Node {
 	impact, impactErr := budgeting.AutoBudgetImpactWithRates(app.Budgets(), autoIncome, pending, rates)
 
 	apply := ui.UseEvent(Prevent(func() {
-		saved := 0
-		if suggestionErr != nil || impactErr != nil || incomeErr != nil {
-			return
-		}
-		for _, s := range suggestions {
-			if !picked.Get()[s.CategoryID] {
-				continue
-			}
-			amt := amountFor(s)
-			if amt <= 0 {
-				continue
-			}
-			if b, ok := existing[s.CategoryID]; ok {
-				converted, err := currency.ConvertBetween(amt, base, b.Limit.Currency, rates)
-				if err != nil {
-					uistate.PostNotice(budgetErrorText(err), true)
-					continue
-				}
-				b.Limit = money.New(converted, b.Limit.Currency)
-				b.Period = domain.PeriodMonthly
-				if err := app.PutBudgetAt(b, autoAnchor); err != nil {
-					uistate.PostNotice(budgetErrorText(err), true)
-					continue
-				}
-			} else {
-				nb := domain.Budget{
-					ID: id.New(), Name: s.CategoryName, CategoryID: s.CategoryID,
-					Period: domain.PeriodMonthly, Limit: money.New(amt, base),
-					Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID,
-				}
-				if err := app.PutBudgetAt(nb, autoAnchor); err != nil {
-					uistate.PostNotice(budgetErrorText(err), true)
-					continue
-				}
-			}
-			saved++
-		}
-		if saved > 0 {
-			uistate.PostNotice(uistate.T("budgets.autoSavedToast", plural(saved, "budget")), false)
-		}
-		uistate.BumpDataRevision()
-		openAtom.Set(false)
+		saveAutoBudget(app, suggestions, existing, base, rates, autoAnchor, amountFor,
+			func() map[string]bool { return picked.Get() }, suggestionErr, impactErr, incomeErr, func() { openAtom.Set(false) })
 	}))
 	onCancel := ui.UseEvent(Prevent(func() { openAtom.Set(false) }))
 	cancelOnClick := OnClick(onCancel)
-	selectAllOnClick := OnClick(selectAll)
-	selectNoneOnClick := OnClick(selectNone)
-	resetOnClick := OnClick(resetTuning)
 	applyOnClick := OnClick(apply)
+	bulkBar := ui.CreateElement(autoBudgetBulkControl, autoBudgetBulkProps{
+		Tuned:    tuned,
+		OnSetAll: setAll,
+		OnReset:  resetTuning,
+	})
 
 	// ---- render ----
 	if len(suggestions) == 0 {
-		return Div(css.Class(tw.FlexCol, tw.Gap3),
-			P(css.Class("muted"), Attr("data-testid", "autobudget-empty"), uistate.T("budgets.autoEmpty")),
-			Div(css.Class("autobudget-footer"),
-				Button(css.Class("btn"), Type("button"), cancelOnClick, uistate.T("action.close"))))
+		return autoBudgetEmptyState(cancelOnClick)
 	}
 
-	seg := uiw.Segmented(uiw.SegmentedProps{
-		Label:    uistate.T("budgets.autoMethodLabel"),
-		Selected: method.Get(),
+	seg := autoBudgetMethodSelector(method.Get(), method.Set)
+	introKey := autoBudgetIntroKey(m)
+
+	return renderAutoBudgetRows(suggestions, existing, base, pct.Get(), sel, setPct, toggle, nSel,
+		totalMinor, tuned, suggestionErr, impactErr, incomeErr, impact, seg, introKey, months,
+		bulkBar, cancelOnClick, applyOnClick)
+}
+
+func autoBudgetEmptyState(cancelOnClick any) ui.Node {
+	return Div(css.Class(tw.FlexCol, tw.Gap3),
+		P(css.Class("muted"), Attr("data-testid", "autobudget-empty"), uistate.T("budgets.autoEmpty")),
+		Div(css.Class("autobudget-footer"), Button(css.Class("btn"), Type("button"), cancelOnClick, uistate.T("action.close"))))
+}
+
+func autoBudgetMethodSelector(selected string, onSelect func(string)) ui.Node {
+	return uiw.Segmented(uiw.SegmentedProps{
+		Label: uistate.T("budgets.autoMethodLabel"), Selected: selected,
 		Options: []uiw.SegOption{
 			{Value: string(budgeting.MethodRecent), Label: uistate.T("budgets.autoMethodRecent"), TestID: "autobudget-method-recent"},
 			{Value: string(budgeting.MethodHealthy), Label: uistate.T("budgets.autoMethodHealthy"), TestID: "autobudget-method-healthy"},
-		},
-		OnSelect: func(v string) { method.Set(v) },
+		}, OnSelect: onSelect,
 	})
-	introKey := "budgets.autoIntroRecent"
-	if m == budgeting.MethodHealthy {
-		introKey = "budgets.autoIntroHealthy"
-	}
+}
 
-	keyOf := func(s budgeting.BudgetSuggestion) any { return s.CategoryID }
-	// C593: the list is split into what this run would CREATE and what it would
-	// REWRITE. Both were one undifferentiated column, distinguished only by a
-	// small tag on the rows that already had a budget — which is the difference
-	// between "add these" and "overwrite the numbers you tuned by hand".
+func autoBudgetIntroKey(method budgeting.SuggestMethod) string {
+	if method == budgeting.MethodHealthy {
+		return "budgets.autoIntroHealthy"
+	}
+	return "budgets.autoIntroRecent"
+}
+
+func renderAutoBudgetRows(suggestions []budgeting.BudgetSuggestion, existing map[string]domain.Budget, base string,
+	pct map[string]int, selected map[string]bool, setPct func(string, int), toggle func(string), selectedCount int, totalMinor int64,
+	tuned int, suggestionErr, impactErr, incomeErr error, impact budgeting.AutoBudgetImpact, seg ui.Node, introKey string, months int,
+	bulkBar, cancelOnClick, applyOnClick any) ui.Node {
 	var fresh, rewrite []budgeting.BudgetSuggestion
 	for _, s := range suggestions {
 		if _, has := existing[s.CategoryID]; has {
@@ -257,86 +224,107 @@ func AutoBudgetBody(_ struct{}) ui.Node {
 	}
 	renderRow := func(s budgeting.BudgetSuggestion) ui.Node {
 		_, has := existing[s.CategoryID]
-		return ui.CreateElement(autoBudgetRow, autoBudgetRowProps{
-			CategoryID: s.CategoryID, CategoryName: s.CategoryName,
-			SuggestedMinor: s.MonthlyMinor, Base: base,
-			Pct: pct.Get()[s.CategoryID], Picked: sel[s.CategoryID], HasExisting: has,
-			OnPct: setPct, OnToggle: toggle,
-		})
+		return ui.CreateElement(autoBudgetRow, autoBudgetRowProps{CategoryID: s.CategoryID, CategoryName: s.CategoryName,
+			SuggestedMinor: s.MonthlyMinor, Base: base, Pct: pct[s.CategoryID], Picked: selected[s.CategoryID], HasExisting: has, OnPct: setPct, OnToggle: toggle})
 	}
 	group := func(titleKey string, items []budgeting.BudgetSuggestion, testID string) ui.Node {
 		if len(items) == 0 {
 			return Fragment()
 		}
-		return Fragment(
-			Div(css.Class("autobudget-group"), Attr("data-testid", testID),
-				uistate.T(titleKey, plural(len(items), "category"))),
-			MapKeyed(items, keyOf, renderRow),
-		)
+		return Fragment(Div(css.Class("autobudget-group"), Attr("data-testid", testID), uistate.T(titleKey, plural(len(items), "category"))),
+			MapKeyed(items, func(s budgeting.BudgetSuggestion) any { return s.CategoryID }, renderRow))
 	}
-	rows := Fragment(
-		group("budgets.autoGroupNew", fresh, "autobudget-group-new"),
-		group("budgets.autoGroupExisting", rewrite, "autobudget-group-existing"),
-	)
-
-	// The bulk controls, above the list: tick or clear everything, and put every
-	// slider back to what was learned.
-	bulkBar := Div(css.Class("autobudget-bulk"), Attr("data-testid", "autobudget-bulk"),
-		Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "autobudget-all"),
-			selectAllOnClick, uistate.T("budgets.autoSelectAll")),
-		Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "autobudget-none"),
-			selectNoneOnClick, uistate.T("budgets.autoSelectNone")),
-		If(tuned > 0, Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "autobudget-reset"),
-			resetOnClick, uistate.T("budgets.autoResetTuning", plural(tuned, "slider")))),
-	)
-
-	// The plan-level consequence, kept in view above the list: what the household
-	// budgets now, what it would budget after saving, and what that leaves of the
-	// income the plan is measured against.
+	rows := Fragment(group("budgets.autoGroupNew", fresh, "autobudget-group-new"), group("budgets.autoGroupExisting", rewrite, "autobudget-group-existing"))
 	var impactNode ui.Node = Fragment()
-	if nSel > 0 && suggestionErr == nil && impactErr == nil && incomeErr == nil {
+	if selectedCount > 0 && suggestionErr == nil && impactErr == nil && incomeErr == nil {
 		var leftLine ui.Node = Fragment()
-		if impactErr == nil && incomeErr == nil && impact.HasIncome() {
-			leftKey := "budgets.autoImpactLeft"
-			leftCls := "autobudget-impact-left"
+		if impact.HasIncome() {
+			leftKey, leftCls := "budgets.autoImpactLeft", "autobudget-impact-left"
 			if impact.LeftAfter() < 0 {
 				leftKey, leftCls = "budgets.autoImpactOver", "autobudget-impact-left is-over"
 			}
 			leftLine = Span(ClassStr(leftCls), Attr("data-testid", "autobudget-impact-left"),
-				uistate.T(leftKey, fmtMoney(money.New(absMinor(impact.LeftAfter()), base)),
-					fmtMoney(money.New(impact.Income, base))))
+				uistate.T(leftKey, fmtMoney(money.New(absMinor(impact.LeftAfter()), base)), fmtMoney(money.New(impact.Income, base))))
 		}
 		impactNode = Div(css.Class("autobudget-impact"), Attr("data-testid", "autobudget-impact"),
 			Span(css.Class("autobudget-impact-lbl"), uistate.T("budgets.autoImpactLabel")),
 			Span(css.Class("autobudget-impact-before", tw.TextFaint), fmtMoney(money.New(impact.BudgetedBefore, base))),
 			Span(css.Class(tw.TextFaint), "→"),
-			Span(css.Class("autobudget-impact-after", tw.FontDisplay), Attr("data-testid", "autobudget-impact-after"),
-				fmtMoney(money.New(impact.BudgetedAfter, base))),
-			leftLine,
-		)
+			Span(css.Class("autobudget-impact-after", tw.FontDisplay), Attr("data-testid", "autobudget-impact-after"), fmtMoney(money.New(impact.BudgetedAfter, base))), leftLine)
 	}
-
-	// Use the standard modal shell (.acct-edit-form: min-height:100% flex column) so the
-	// .modal-scroll body fills the FlushBody panel and the .modal-foot stays pinned to
-	// the bottom even when few categories are listed — matching the Add-budget modal.
 	return Div(css.Class("acct-edit-form"),
-		Div(css.Class("modal-scroll"),
-			seg,
-			P(css.Class("muted", tw.Text13), Style(map[string]string{"margin": "0"}),
-				Attr("data-testid", "autobudget-intro"),
-				uistate.T(introKey, uistate.T("budgets.autoMonths", strconv.Itoa(months)))),
+		Div(css.Class("modal-scroll"), seg,
+			P(css.Class("muted", tw.Text13), Style(map[string]string{"margin": "0"}), Attr("data-testid", "autobudget-intro"), uistate.T(introKey, uistate.T("budgets.autoMonths", strconv.Itoa(months)))),
 			If(suggestionErr != nil, P(css.Class("form-err"), Attr("role", "status"), Attr("data-testid", "autobudget-suggestion-error"), uistate.T("budgets.autoError", suggestionErr.Error()))),
 			If(impactErr != nil, P(css.Class("form-err"), Attr("role", "status"), Attr("data-testid", "autobudget-impact-error"), uistate.T("budgets.autoError", impactErr.Error()))),
 			If(incomeErr != nil, P(css.Class("form-err"), Attr("role", "status"), Attr("data-testid", "autobudget-income-incomplete"), uistate.T("budgets.autoError", incomeErr.Error()))),
-			impactNode,
-			bulkBar,
-			Div(css.Class("autobudget-rows"), Attr("data-testid", "autobudget-rows"), rows)),
+			impactNode, bulkBar, Div(css.Class("autobudget-rows"), Attr("data-testid", "autobudget-rows"), rows)),
 		Div(css.Class("modal-foot", "autobudget-footer"),
-			Span(css.Class("autobudget-total", tw.TextDim), Attr("data-testid", "autobudget-total"),
-				uistate.T("budgets.autoTotal", fmtMoney(money.New(totalMinor, base)))),
+			Span(css.Class("autobudget-total", tw.TextDim), Attr("data-testid", "autobudget-total"), uistate.T("budgets.autoTotal", fmtMoney(money.New(totalMinor, base)))),
 			Button(css.Class("btn"), Type("button"), Attr("data-testid", "autobudget-cancel"), cancelOnClick, uistate.T("action.cancel")),
-			buttonWithDisabled(nSel == 0 || suggestionErr != nil || impactErr != nil || incomeErr != nil, []any{css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "autobudget-save"), applyOnClick},
-				uistate.T("budgets.autoSave", strconv.Itoa(nSel)))))
+			buttonWithDisabled(selectedCount == 0 || suggestionErr != nil || impactErr != nil || incomeErr != nil,
+				[]any{css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "autobudget-save"), applyOnClick}, uistate.T("budgets.autoSave", strconv.Itoa(selectedCount)))))
+}
+
+func saveAutoBudget(app *appstate.App, suggestions []budgeting.BudgetSuggestion, existing map[string]domain.Budget, base string, rates currency.Rates, anchor time.Time,
+	amountFor func(budgeting.BudgetSuggestion) int64, selected func() map[string]bool, suggestionErr, impactErr, incomeErr error, close func()) {
+	if suggestionErr != nil || impactErr != nil || incomeErr != nil {
+		return
+	}
+	saved := 0
+	for _, s := range suggestions {
+		if !selected()[s.CategoryID] {
+			continue
+		}
+		amt := amountFor(s)
+		if amt <= 0 {
+			continue
+		}
+		if b, ok := existing[s.CategoryID]; ok {
+			converted, err := currency.ConvertBetween(amt, base, b.Limit.Currency, rates)
+			if err != nil {
+				uistate.PostNotice(budgetErrorText(err), true)
+				continue
+			}
+			b.Limit = money.New(converted, b.Limit.Currency)
+			b.Period = domain.PeriodMonthly
+			if err := app.PutBudgetAt(b, anchor); err != nil {
+				uistate.PostNotice(budgetErrorText(err), true)
+				continue
+			}
+		} else {
+			nb := domain.Budget{ID: id.New(), Name: s.CategoryName, CategoryID: s.CategoryID,
+				Period: domain.PeriodMonthly, Limit: money.New(amt, base), Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID}
+			if err := app.PutBudgetAt(nb, anchor); err != nil {
+				uistate.PostNotice(budgetErrorText(err), true)
+				continue
+			}
+		}
+		saved++
+	}
+	if saved > 0 {
+		uistate.PostNotice(uistate.T("budgets.autoSavedToast", plural(saved, "budget")), false)
+	}
+	uistate.BumpDataRevision()
+	close()
+}
+
+type autoBudgetBulkProps struct {
+	Tuned    int
+	OnSetAll func(bool)
+	OnReset  func()
+}
+
+func autoBudgetBulkControl(props autoBudgetBulkProps) ui.Node {
+	selectAll := ui.UseEvent(Prevent(func() { props.OnSetAll(true) }))
+	selectNone := ui.UseEvent(Prevent(func() { props.OnSetAll(false) }))
+	reset := ui.UseEvent(Prevent(props.OnReset))
+	resetOnClick := OnClick(reset)
+	return Div(css.Class("autobudget-bulk"), Attr("data-testid", "autobudget-bulk"),
+		Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "autobudget-all"), OnClick(selectAll), uistate.T("budgets.autoSelectAll")),
+		Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "autobudget-none"), OnClick(selectNone), uistate.T("budgets.autoSelectNone")),
+		If(props.Tuned > 0, Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "autobudget-reset"),
+			resetOnClick, uistate.T("budgets.autoResetTuning", plural(props.Tuned, "slider")))))
 }
 
 // buttonWithDisabled builds a <button> that is disabled only when `disabled` is true —

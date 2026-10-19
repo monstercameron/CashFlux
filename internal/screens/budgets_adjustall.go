@@ -149,27 +149,7 @@ func AdjustAllBody(_ struct{}) ui.Node {
 		close()
 	}))
 
-	// --- what's wrong with the typed value, in the words that fix it -----------
-	inlineErr := ""
-	switch {
-	case raw == "":
-		// Not an error yet — the field is simply empty. The hint below carries it.
-	case parseErr != nil:
-		inlineErr = uistate.T("budgets.adjustAllNotANumber")
-	case pct == 0:
-		inlineErr = uistate.T("budgets.adjustAllZero")
-	case !budgeting.ValidAdjustPct(pct):
-		inlineErr = uistate.T("budgets.adjustAllOutOfRange",
-			formatAdjustPct(budgeting.AdjustMinPct), formatAdjustPct(budgeting.AdjustMaxPct))
-	case normalizationErr != nil:
-		inlineErr = uistate.T("budgets.incomplete")
-	case preview.Error != nil:
-		inlineErr = uistate.T("budgets.incomplete")
-	case normalizedDeltaErr != nil:
-		inlineErr = uistate.T("budgets.incomplete")
-	case preview.Count() == 0:
-		inlineErr = uistate.T("budgets.adjustAllNothingToChange")
-	}
+	inlineErr := adjustAllInlineError(raw, parseErr, pct, normalizationErr, preview, normalizedDeltaErr)
 
 	base := budgetBaseCurrency("")
 	if app != nil {
@@ -177,175 +157,168 @@ func AdjustAllBody(_ struct{}) ui.Node {
 			base = b
 		}
 	}
-	cur := preview.Currency
-	if cur == "" {
-		cur = base
-	}
+	previewNode := adjustAllPreviewNode(app, preview, pct, valid, base, normalizationErr, normalizedDeltaErr, normalizedDelta)
 
-	// --- the preview ----------------------------------------------------------
-	var previewNode ui.Node = Fragment()
-	if valid && preview.Count() > 0 {
-		rows := MapKeyed(preview.Lines,
-			func(l budgeting.AdjustLine) any { return l.Budget.ID },
-			func(l budgeting.AdjustLine) ui.Node {
-				return Div(css.Class("adjustall-row"), Attr("data-testid", "adjustall-row-"+l.Budget.ID),
-					Span(css.Class("adjustall-name"), budgetTitle(l.Budget.Name, budgetCategoryName(app, l.Budget.CategoryID))),
-					Span(css.Class("adjustall-before", tw.TextFaint), fmtMoney(money.New(l.Before, l.Budget.Limit.Currency))),
-					Span(css.Class("adjustall-arrow", tw.TextFaint), "→"),
-					Span(css.Class("adjustall-after"), fmtMoney(money.New(l.After, l.Budget.Limit.Currency))),
-				)
-			})
-		var totalNode ui.Node = Fragment()
-		if normalizationErr == nil && preview.Error == nil && normalizedDeltaErr == nil {
-			delta := normalizedDelta.Amount
-			totalNode = Div(css.Class("adjustall-total"), Attr("data-testid", "adjustall-total"),
-				Span(css.Class("adjustall-total-lbl"), uistate.T("budgets.adjustAllTotalLabel")),
-				Span(css.Class("adjustall-before", tw.TextFaint), fmtMoney(preview.NormalizedBefore)),
+	skipNode := adjustAllSkippedNode(app, preview, valid)
+	ackNode := adjustAllAckNode(needsAck, scope, pct, preview.Count(), ack.Get(), ackOnChange)
+
+	return adjustAllFormNode(adjustAllFormProps{
+		Scope: scope, PeriodLabel: vw.FromLabel(), ViewedClosed: viewedClosed, PctText: pctStr.Get(), InlineError: inlineErr,
+		CanApply: canApply, Preview: previewNode, Skipped: skipNode, Ack: ackNode,
+		ImpactHint: fundsImpactLine(budgeting.ImpactAdjustAll, fundsImpactOption{reach: impactReach}),
+		OnPct:      onPct, OnScope: func(value string) { scopeS.Set(value); ack.Set(false) }, OnCancel: onCancel, OnApply: apply,
+	})
+}
+
+func adjustAllPreviewNode(app *appstate.App, preview budgeting.AdjustPreview, pct float64, valid bool, base string, normalizationErr, normalizedDeltaErr error, normalizedDelta money.Money) ui.Node {
+	if !valid || preview.Count() == 0 {
+		return Fragment()
+	}
+	rows := MapKeyed(preview.Lines,
+		func(l budgeting.AdjustLine) any { return l.Budget.ID },
+		func(l budgeting.AdjustLine) ui.Node {
+			return Div(css.Class("adjustall-row"), Attr("data-testid", "adjustall-row-"+l.Budget.ID),
+				Span(css.Class("adjustall-name"), budgetTitle(l.Budget.Name, budgetCategoryName(app, l.Budget.CategoryID))),
+				Span(css.Class("adjustall-before", tw.TextFaint), fmtMoney(money.New(l.Before, l.Budget.Limit.Currency))),
 				Span(css.Class("adjustall-arrow", tw.TextFaint), "→"),
-				Span(css.Class("adjustall-after", tw.FontDisplay), fmtMoney(preview.NormalizedAfter)),
-				Span(ClassStr("adjustall-delta"+adjustDeltaTone(delta)),
-					uistate.T(adjustDeltaKey(delta), fmtMoney(money.New(absMinor(delta), base)))),
-			)
-		} else if preview.MixedCurrency {
-			totalNode = P(css.Class("budget-cat-fate", tw.TextFaint), Attr("data-testid", "adjustall-mixed"),
-				uistate.T("budgets.adjustAllMixedCurrency"))
-		} else {
-			totalNode = P(css.Class("budget-cat-fate", tw.TextFaint), Attr("data-testid", "adjustall-error"),
-				uistate.T("budgets.incomplete"))
-		}
-		var normalizedSummary ui.Node = Fragment()
-		if normalizationErr == nil && preview.Error == nil {
-			normalizedSummary = P(css.Class("adjustall-normalized"), Attr("data-testid", "adjustall-normalized"),
-				uistate.T("budq4.adjustNormalized", fmtMoney(preview.NormalizedBefore), fmtMoney(preview.NormalizedAfter)))
-		}
-		var normalizedLines ui.Node = Fragment()
-		if len(preview.NormalizedLines) > 0 {
-			normalizedLines = Div(css.Class("adjustall-normalized-lines"), Attr("data-testid", "adjustall-normalized-lines"),
-				MapKeyed(preview.NormalizedLines, func(line budgeting.AdjustNormalizedLine) any { return line.BudgetID }, func(line budgeting.AdjustNormalizedLine) ui.Node {
-					return P(css.Class("budget-owner-hint", tw.TextFaint), line.Name, ": ",
-						fmtMoney(line.Before), " → ", fmtMoney(line.After))
+				Span(css.Class("adjustall-after"), fmtMoney(money.New(l.After, l.Budget.Limit.Currency))))
+		})
+	var totalNode ui.Node = Fragment()
+	if normalizationErr == nil && preview.Error == nil && normalizedDeltaErr == nil {
+		delta := normalizedDelta.Amount
+		totalNode = Div(css.Class("adjustall-total"), Attr("data-testid", "adjustall-total"),
+			Span(css.Class("adjustall-total-lbl"), uistate.T("budgets.adjustAllTotalLabel")),
+			Span(css.Class("adjustall-before", tw.TextFaint), fmtMoney(preview.NormalizedBefore)),
+			Span(css.Class("adjustall-arrow", tw.TextFaint), "→"),
+			Span(css.Class("adjustall-after", tw.FontDisplay), fmtMoney(preview.NormalizedAfter)),
+			Span(ClassStr("adjustall-delta"+adjustDeltaTone(delta)), uistate.T(adjustDeltaKey(delta), fmtMoney(money.New(absMinor(delta), base)))))
+	} else if preview.MixedCurrency {
+		totalNode = P(css.Class("budget-cat-fate", tw.TextFaint), Attr("data-testid", "adjustall-mixed"), uistate.T("budgets.adjustAllMixedCurrency"))
+	} else {
+		totalNode = P(css.Class("budget-cat-fate", tw.TextFaint), Attr("data-testid", "adjustall-error"), uistate.T("budgets.incomplete"))
+	}
+	var normalizedSummary, normalizedLines ui.Node = Fragment(), Fragment()
+	if normalizationErr == nil && preview.Error == nil {
+		normalizedSummary = P(css.Class("adjustall-normalized"), Attr("data-testid", "adjustall-normalized"),
+			uistate.T("budq4.adjustNormalized", fmtMoney(preview.NormalizedBefore), fmtMoney(preview.NormalizedAfter)))
+	}
+	if len(preview.NormalizedLines) > 0 {
+		normalizedLines = Div(css.Class("adjustall-normalized-lines"), Attr("data-testid", "adjustall-normalized-lines"),
+			MapKeyed(preview.NormalizedLines, func(line budgeting.AdjustNormalizedLine) any { return line.BudgetID },
+				func(line budgeting.AdjustNormalizedLine) ui.Node {
+					return P(css.Class("budget-owner-hint", tw.TextFaint), line.Name, ": ", fmtMoney(line.Before), " → ", fmtMoney(line.After))
 				}))
-		}
-		previewNode = Div(css.Class("adjustall-preview"), Attr("data-testid", "adjustall-preview"),
-			P(css.Class("adjustall-count"), Attr("data-testid", "adjustall-count"),
-				uistate.T("budgets.adjustAllCount", plural(preview.Count(), "budget"), formatAdjustPct(pct))),
-			totalNode,
-			normalizedSummary,
-			normalizedLines,
-			Div(css.Class("adjustall-rows"), Attr("data-testid", "adjustall-rows"), rows),
-		)
 	}
+	return Div(css.Class("adjustall-preview"), Attr("data-testid", "adjustall-preview"),
+		P(css.Class("adjustall-count"), Attr("data-testid", "adjustall-count"), uistate.T("budgets.adjustAllCount", plural(preview.Count(), "budget"), formatAdjustPct(pct))),
+		totalNode, normalizedSummary, normalizedLines, Div(css.Class("adjustall-rows"), Attr("data-testid", "adjustall-rows"), rows))
+}
 
-	// C671: what the adjustment is leaving out, and why. Skipping used to be
-	// silent, so a form headed "every budget" could quietly show fewer rows than
-	// the household has — and the inversion guard added here would have been the
-	// most confusing silence of all: a budget vanishing from the list because a
-	// change made earlier in the same period would put its plan below zero.
-	var skipNode ui.Node = Fragment()
-	if valid {
-		var lines []ui.Node
-		for _, reason := range []budgeting.SkipReason{budgeting.SkipWouldInvert, budgeting.SkipNothingToScale, budgeting.SkipUnknownOverlay} {
-			skipped := preview.SkippedFor(reason)
-			if len(skipped) == 0 {
-				continue
-			}
-			names := make([]string, 0, len(skipped))
-			for _, s := range skipped {
-				names = append(names, budgetTitle(s.Budget.Name, budgetCategoryName(app, s.Budget.CategoryID)))
-			}
-			lines = append(lines, P(css.Class("budget-cat-fate", tw.TextFaint),
-				Attr("data-testid", "adjustall-skipped-"+string(reason)),
-				uistate.T(adjustSkipKey(reason), plural(len(skipped), "budget"), strings.Join(names, ", "))))
-		}
-		if len(lines) > 0 {
-			skipNode = Div(css.Class("adjustall-skipped"), Attr("data-testid", "adjustall-skipped"), lines)
-		}
+func adjustAllSkippedNode(app *appstate.App, preview budgeting.AdjustPreview, valid bool) ui.Node {
+	if !valid {
+		return Fragment()
 	}
-
-	// --- the acknowledgement for consequential changes ------------------------
-	var ackNode ui.Node = Fragment()
-	if needsAck {
-		// C671: when the change outlives this period, the sentence has to say so —
-		// that is the fact the whole ticket is about, and "lower 12 budgets by 40%"
-		// is true of both scopes while meaning very different things.
-		key := "budgets.adjustAllAckRaise"
-		switch {
-		case scope.IsPermanent() && pct < 0:
-			key = "budgets.adjustAllAckFutureLower"
-		case scope.IsPermanent():
-			key = "budgets.adjustAllAckFutureRaise"
-		case pct < 0:
-			key = "budgets.adjustAllAckLower"
+	var lines []ui.Node
+	for _, reason := range []budgeting.SkipReason{budgeting.SkipWouldInvert, budgeting.SkipNothingToScale, budgeting.SkipUnknownOverlay} {
+		skipped := preview.SkippedFor(reason)
+		if len(skipped) == 0 {
+			continue
 		}
-		// The verb ("lower") already carries the direction, so the figure beside it
-		// is a magnitude: "lower 10 budgets by 10%", never "by -10%".
-		ackNode = Label(css.Class("adjustall-ack"), Attr("data-testid", "adjustall-ack-label"),
-			Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "adjustall-ack"),
-				Attr("style", "flex-shrink:0"), ackOnChange}, checkedAttr(ack.Get())...)...),
-			Span(uistate.T(key, plural(preview.Count(), "budget"), formatAdjustPct(math.Abs(pct)))))
+		names := make([]string, 0, len(skipped))
+		for _, s := range skipped {
+			names = append(names, budgetTitle(s.Budget.Name, budgetCategoryName(app, s.Budget.CategoryID)))
+		}
+		lines = append(lines, P(css.Class("budget-cat-fate", tw.TextFaint), Attr("data-testid", "adjustall-skipped-"+string(reason)),
+			uistate.T(adjustSkipKey(reason), plural(len(skipped), "budget"), strings.Join(names, ", "))))
 	}
+	if len(lines) == 0 {
+		return Fragment()
+	}
+	return Div(css.Class("adjustall-skipped"), Attr("data-testid", "adjustall-skipped"), lines)
+}
 
-	return Form(css.Class("acct-edit-form"), Attr("data-testid", "adjustall-form"), OnSubmit(apply),
+func adjustAllAckNode(needsAck bool, scope budgeting.AdjustScope, pct float64, count int, ack bool, ackOnChange any) ui.Node {
+	if !needsAck {
+		return Fragment()
+	}
+	key := "budgets.adjustAllAckRaise"
+	switch {
+	case scope.IsPermanent() && pct < 0:
+		key = "budgets.adjustAllAckFutureLower"
+	case scope.IsPermanent():
+		key = "budgets.adjustAllAckFutureRaise"
+	case pct < 0:
+		key = "budgets.adjustAllAckLower"
+	}
+	return Label(css.Class("adjustall-ack"), Attr("data-testid", "adjustall-ack-label"),
+		Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "adjustall-ack"), Attr("style", "flex-shrink:0"), ackOnChange}, checkedAttr(ack)...)...),
+		Span(uistate.T(key, plural(count, "budget"), formatAdjustPct(math.Abs(pct)))))
+}
+
+type adjustAllFormProps struct {
+	Scope        budgeting.AdjustScope
+	PeriodLabel  string
+	ViewedClosed bool
+	PctText      string
+	InlineError  string
+	CanApply     bool
+	Preview      ui.Node
+	Skipped      ui.Node
+	Ack          ui.Node
+	ImpactHint   string
+	OnPct        any
+	OnScope      func(string)
+	OnCancel     any
+	OnApply      any
+}
+
+func adjustAllFormNode(props adjustAllFormProps) ui.Node {
+	return Form(css.Class("acct-edit-form"), Attr("data-testid", "adjustall-form"), OnSubmit(props.OnApply),
 		Div(css.Class("modal-scroll"),
-			// C671: the intro used to say "every budget's limit" whichever scope was
-			// chosen, which is false of a this-period change — that one never touches
-			// a limit. The sentence follows the scope.
-			P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "adjustall-intro"),
-				Style(map[string]string{"margin": "0"}), uistate.T(adjustIntroKey(scope))),
-			// C597: the same reach vocabulary the page's other funds-moving actions
-			// use, so "Adjust all" can be compared with them rather than read on its
-			// own terms.
-			labeledField(uistate.T("budgets.adjustAllFieldLabel"),
-				Fragment(
-					Div(css.Class("adjustall-field"),
-						Input(css.Class("field"), Type("number"), Attr("data-testid", "adjustall-pct"),
-							Attr("autofocus", ""), Attr("inputmode", "decimal"),
-							Attr("aria-label", uistate.T("budgets.adjustAllFieldLabel")),
-							Attr("min", formatAdjustPct(budgeting.AdjustMinPct)),
-							Attr("max", formatAdjustPct(budgeting.AdjustMaxPct)),
-							Step("0.5"), Placeholder("5"), OnInput(onPct), uiw.FieldValue(pctStr.Get())),
-						Span(css.Class("adjustall-suffix", tw.TextFaint), "%"),
-					),
-					Span(css.Class("budget-owner-hint", tw.TextFaint), Attr("data-testid", "adjustall-hint"),
-						uistate.T("budgets.adjustAllFieldHint",
-							formatAdjustPct(budgeting.AdjustMinPct), formatAdjustPct(budgeting.AdjustMaxPct))))),
-			// C671: how long it lasts, asked as its own question. The form used to
-			// have one answer and never state it, so an action offered as a fix for
-			// one underfunded period rewrote the plan for every period after it.
-			labeledField(uistate.T("budgets.adjustAllScopeLabel"),
-				uiw.Segmented(uiw.SegmentedProps{
-					Label:    uistate.T("budgets.adjustAllScopeLabel"),
-					Selected: string(scope),
-					Options: []uiw.SegOption{
-						{Value: string(budgeting.AdjustThisPeriod), Label: uistate.T("budgets.adjustAllScopeThis"), TestID: "adjustall-scope-this"},
-						{Value: string(budgeting.AdjustEveryPeriod), Label: adjustEveryPeriodLabel(), TestID: "adjustall-scope-every"},
-					},
-					OnSelect: func(v string) { scopeS.Set(v); ack.Set(false) },
-				})),
-			P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "adjustall-scope-hint"),
-				Style(map[string]string{"margin": "0"}), fundsImpactLine(budgeting.ImpactAdjustAll, fundsImpactOption{reach: impactReach})),
-			// C671: WHICH period "this period" is, said inside the form. The funding
-			// callout discloses it before opening, but the toolbar's own Adjust-all is
-			// available at any time and carries none of that — so a user browsing a
-			// closed month could reach this same write with nothing anywhere saying
-			// the month had ended. The warning belongs where both doors lead.
-			If(scope == budgeting.AdjustThisPeriod,
-				P(ClassStr(adjustPeriodClass(viewedClosed)), Attr("data-testid", "adjustall-period"),
-					Style(map[string]string{"margin": "0"}),
-					uistate.T(adjustPeriodKey(viewedClosed), vw.FromLabel()))),
-			If(inlineErr != "", P(ClassStr("form-err"), Attr("data-testid", "adjustall-err"), Attr("role", "alert"), inlineErr)),
-			previewNode,
-			skipNode,
-			ackNode,
-		),
+			P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "adjustall-intro"), Style(map[string]string{"margin": "0"}), uistate.T(adjustIntroKey(props.Scope))),
+			labeledField(uistate.T("budgets.adjustAllFieldLabel"), Fragment(
+				Div(css.Class("adjustall-field"),
+					Input(css.Class("field"), Type("number"), Attr("data-testid", "adjustall-pct"), Attr("autofocus", ""), Attr("inputmode", "decimal"),
+						Attr("aria-label", uistate.T("budgets.adjustAllFieldLabel")), Attr("min", formatAdjustPct(budgeting.AdjustMinPct)),
+						Attr("max", formatAdjustPct(budgeting.AdjustMaxPct)), Step("0.5"), Placeholder("5"), OnInput(props.OnPct), uiw.FieldValue(props.PctText)),
+					Span(css.Class("adjustall-suffix", tw.TextFaint), "%")),
+				Span(css.Class("budget-owner-hint", tw.TextFaint), Attr("data-testid", "adjustall-hint"),
+					uistate.T("budgets.adjustAllFieldHint", formatAdjustPct(budgeting.AdjustMinPct), formatAdjustPct(budgeting.AdjustMaxPct))))),
+			labeledField(uistate.T("budgets.adjustAllScopeLabel"), uiw.Segmented(uiw.SegmentedProps{
+				Label: uistate.T("budgets.adjustAllScopeLabel"), Selected: string(props.Scope),
+				Options: []uiw.SegOption{
+					{Value: string(budgeting.AdjustThisPeriod), Label: uistate.T("budgets.adjustAllScopeThis"), TestID: "adjustall-scope-this"},
+					{Value: string(budgeting.AdjustEveryPeriod), Label: adjustEveryPeriodLabel(), TestID: "adjustall-scope-every"},
+				}, OnSelect: props.OnScope,
+			})),
+			P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "adjustall-scope-hint"), Style(map[string]string{"margin": "0"}), props.ImpactHint),
+			If(props.Scope == budgeting.AdjustThisPeriod,
+				P(ClassStr(adjustPeriodClass(props.ViewedClosed)), Attr("data-testid", "adjustall-period"), Style(map[string]string{"margin": "0"}),
+					uistate.T(adjustPeriodKey(props.ViewedClosed), props.PeriodLabel))),
+			If(props.InlineError != "", P(ClassStr("form-err"), Attr("data-testid", "adjustall-err"), Attr("role", "alert"), props.InlineError)),
+			props.Preview, props.Skipped, props.Ack),
 		Div(css.Class("modal-foot"),
-			Button(css.Class("btn"), Type("button"), Attr("data-testid", "adjustall-cancel"), OnClick(onCancel), uistate.T("action.cancel")),
-			// The commit names its own reach, so the last thing read before the
-			// click is the thing that was hidden until after it (C671).
-			buttonWithDisabled(!canApply, []any{css.Class("btn btn-primary"), Type("submit"), Attr("data-testid", "adjustall-apply")},
-				uistate.T(adjustApplyKey(scope))),
-		),
-	)
+			Button(css.Class("btn"), Type("button"), Attr("data-testid", "adjustall-cancel"), OnClick(props.OnCancel), uistate.T("action.cancel")),
+			buttonWithDisabled(!props.CanApply, []any{css.Class("btn btn-primary"), Type("submit"), Attr("data-testid", "adjustall-apply")}, uistate.T(adjustApplyKey(props.Scope)))))
+}
+
+func adjustAllInlineError(raw string, parseErr error, pct float64, normalizationErr error, preview budgeting.AdjustPreview, deltaErr error) string {
+	switch {
+	case raw == "":
+		return ""
+	case parseErr != nil:
+		return uistate.T("budgets.adjustAllNotANumber")
+	case pct == 0:
+		return uistate.T("budgets.adjustAllZero")
+	case !budgeting.ValidAdjustPct(pct):
+		return uistate.T("budgets.adjustAllOutOfRange", formatAdjustPct(budgeting.AdjustMinPct), formatAdjustPct(budgeting.AdjustMaxPct))
+	case normalizationErr != nil || preview.Error != nil || deltaErr != nil:
+		return uistate.T("budgets.incomplete")
+	case preview.Count() == 0:
+		return uistate.T("budgets.adjustAllNothingToChange")
+	default:
+		return ""
+	}
 }
 
 // defaultAdjustScope resolves the scope the form opens on: whatever the action

@@ -230,66 +230,12 @@ func trackUntrackedForm(_ trackUntrackedFormProps) ui.Node {
 	}
 
 	applyFn = func() {
-		// Re-resolve at click time so the write uses the state on screen.
-		live := parseTrackRows(rowsAtom.Get())
-		n := 0
-		for _, c := range cands {
-			r := trackRow{Include: true, Amount: c.SuggestMinor, Raise: true}
-			if e, ok := live[c.CategoryID]; ok {
-				r.Include, r.Amount, r.BudgetID, r.Raise = e.Include, e.Amount, e.BudgetID, e.Raise
-			}
-			if !r.Include || r.Amount <= 0 {
-				continue
-			}
-			if r.BudgetID == "" {
-				nb := domain.Budget{
-					ID: id.New(), Name: c.Name, CategoryID: c.CategoryID,
-					Limit: money.New(r.Amount, base), Period: c.Period,
-				}
-				if err := app.PutBudget(nb); err == nil {
-					n++
-				}
-				continue
-			}
-			for _, b := range app.Budgets() {
-				if b.ID != r.BudgetID {
-					continue
-				}
-				// Extend the tracked LIST. TrackedCategoryIDs is either/or — a
-				// non-empty CategoryIDs replaces CategoryID rather than extending
-				// it — so seeding the list from the accessor keeps the budget
-				// watching everything it already watched.
-				nb := b
-				nb.CategoryIDs = append(append([]string(nil), b.TrackedCategoryIDs()...), c.CategoryID)
-				if r.Raise {
-					nb.Limit = money.New(b.Limit.Amount+r.Amount, b.Limit.Currency)
-					if nb.Limit.Currency == "" {
-						nb.Limit = money.New(b.Limit.Amount+r.Amount, base)
-					}
-				}
-				if err := app.PutBudget(nb); err == nil {
-					n++
-				}
-				break
-			}
-		}
-		if n > 0 {
-			uistate.PostUndoable(uistate.T("track.applied", plural(n, "category")))
-			uistate.RequestPersist()
-			uistate.BumpDataRevision()
-		}
-		rowsAtom.Set("")
-		openAtom.Set(false)
+		applyTrackUntracked(app, cands, base, rowsAtom.Get, rowsAtom.Set, func() { openAtom.Set(false) })
 	}
 
-	body := MapKeyed(rows,
-		func(r trackRow) any { return r.Cand.CategoryID },
-		func(r trackRow) ui.Node {
-			return ui.CreateElement(trackUntrackedRow, trackUntrackedRowProps{
-				Row: r, Base: base, Dests: dests, CatName: v.CatName,
-				OnChange: func(next trackRow) { rowsAtom.Set(putTrackRow(rowsAtom.Get(), r.Cand.CategoryID, next)) },
-			})
-		})
+	body := renderTrackUntrackedRows(rows, base, dests, v.CatName, func(catID string, next trackRow) {
+		rowsAtom.Set(putTrackRow(rowsAtom.Get(), catID, next))
+	})
 
 	// The footer is the point of the sheet: what this costs, stated before it is
 	// possible to apply. In zero-based the To Assign line is the honest bad news.
@@ -306,6 +252,21 @@ func trackUntrackedForm(_ trackUntrackedFormProps) ui.Node {
 			uistate.T("track.overspendRisk", strings.Join(riskyNames, ", ")))
 	}
 
+	return renderTrackUntrackedSheet(body, effect, base, toAssign, riskNote, closeOnClick, applyOnClick)
+}
+
+func renderTrackUntrackedRows(rows []trackRow, base string, dests []domain.Budget, catNames map[string]string, onChange func(string, trackRow)) []ui.Node {
+	return MapKeyed(rows,
+		func(r trackRow) any { return r.Cand.CategoryID },
+		func(r trackRow) ui.Node {
+			return ui.CreateElement(trackUntrackedRow, trackUntrackedRowProps{
+				Row: r, Base: base, Dests: dests, CatName: catNames,
+				OnChange: func(next trackRow) { onChange(r.Cand.CategoryID, next) },
+			})
+		})
+}
+
+func renderTrackUntrackedSheet(body []ui.Node, effect untracked.Effect, base string, toAssign, riskNote ui.Node, closeOnClick, applyOnClick any) ui.Node {
 	return Div(css.Class("track-sheet"),
 		P(css.Class("budget-sub"), uistate.T("track.intro", trackScanMonths)),
 		Div(css.Class("track-rows"), Attr("data-testid", "track-rows"), body),
@@ -313,20 +274,59 @@ func trackUntrackedForm(_ trackUntrackedFormProps) ui.Node {
 			Div(css.Class("track-foot-read"),
 				P(css.Class("track-foot-line"), Attr("data-testid", "track-summary"),
 					uistate.TN("track.summaryOne", "track.summaryMany", effect.Categories,
-						fmtMoney(money.New(effect.TrackedMinor, base)),
-						fmtMoney(money.New(effect.AssignedDeltaMinor, base)))),
-				toAssign,
-				riskNote,
-			),
+						fmtMoney(money.New(effect.TrackedMinor, base)), fmtMoney(money.New(effect.AssignedDeltaMinor, base)))),
+				toAssign, riskNote),
 			Div(css.Class("track-foot-actions"),
-				Button(css.Class("btn"), Type("button"), Attr("data-testid", "track-cancel"),
-					closeOnClick, uistate.T("action.cancel")),
+				Button(css.Class("btn"), Type("button"), Attr("data-testid", "track-cancel"), closeOnClick, uistate.T("action.cancel")),
 				Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "track-apply"),
-					disabledAttr(effect.Categories == 0), applyOnClick,
-					uistate.T("track.apply", effect.Categories)),
-			),
+					disabledAttr(effect.Categories == 0), applyOnClick, uistate.T("track.apply", effect.Categories))),
 		),
 	)
+}
+
+func applyTrackUntracked(app *appstate.App, cands []untracked.Candidate, base string, readRows func() string, clearRows func(string), close func()) {
+	live := parseTrackRows(readRows())
+	n := 0
+	for _, c := range cands {
+		r := trackRow{Include: true, Amount: c.SuggestMinor, Raise: true}
+		if e, ok := live[c.CategoryID]; ok {
+			r.Include, r.Amount, r.BudgetID, r.Raise = e.Include, e.Amount, e.BudgetID, e.Raise
+		}
+		if !r.Include || r.Amount <= 0 {
+			continue
+		}
+		if r.BudgetID == "" {
+			nb := domain.Budget{ID: id.New(), Name: c.Name, CategoryID: c.CategoryID, Limit: money.New(r.Amount, base), Period: c.Period}
+			if err := app.PutBudget(nb); err == nil {
+				n++
+			}
+			continue
+		}
+		for _, b := range app.Budgets() {
+			if b.ID != r.BudgetID {
+				continue
+			}
+			nb := b
+			nb.CategoryIDs = append(append([]string(nil), b.TrackedCategoryIDs()...), c.CategoryID)
+			if r.Raise {
+				nb.Limit = money.New(b.Limit.Amount+r.Amount, b.Limit.Currency)
+				if nb.Limit.Currency == "" {
+					nb.Limit = money.New(b.Limit.Amount+r.Amount, base)
+				}
+			}
+			if err := app.PutBudget(nb); err == nil {
+				n++
+			}
+			break
+		}
+	}
+	if n > 0 {
+		uistate.PostUndoable(uistate.T("track.applied", plural(n, "category")))
+		uistate.RequestPersist()
+		uistate.BumpDataRevision()
+	}
+	clearRows("")
+	close()
 }
 
 type trackUntrackedRowProps struct {
