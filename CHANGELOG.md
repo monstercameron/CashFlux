@@ -4,6 +4,17 @@ All notable changes to CashFlux are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/). Policy: **one feature per commit**,
 and every commit updates this file under `Unreleased`.
 
+## [Unreleased]
+
+### Added
+- **Keyring for encrypted local-first storage (v2, SV1).** New pure package `internal/keyring`: a
+  random workspace data key wrapped by each key-encryption key (passcode via PBKDF2-SHA-256 at
+  600k rounds, a printable recovery key, a passkey PRF output, a device key), HKDF subkeys for
+  attachments and the credential vault, AAD that binds scope, workspace, change ID and key version
+  so a blob delivered to the wrong place fails to decrypt, and HPKE pairing helpers for adding a
+  device. Native tests and fuzzing for the decoders; WebCrypto glue for the browser. Not wired into
+  the app yet.
+
 ## [1.18.0] - 2026-08-31
 
 ### Changed
