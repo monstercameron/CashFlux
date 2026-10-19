@@ -90,6 +90,9 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **The inline limit editor opens inside its own row (BR2ED.1).** The compact row's limit editor now renders inside the
+  clicked row, under its figures, instead of after the last row of the list; it carries a "Groceries limit" heading and a
+  "Groceries base limit" input name, and the input is focused and selected through a component ref — no DOM patching.
 - **A funded "this period" top-up moves money instead of inventing it (BQ8, BQ8.1).** Each source budget is debited
   under its own period key (a weekly source funding a monthly budget lowers its own current week), cross-currency sources
   are refused with a plain message, and the destination and all sources are written together in one SQLite transaction

@@ -63,10 +63,53 @@ func stubBudgetRowBrowser(t *testing.T) {
 	})
 }
 
+func renderContainsNode(root, target *render.QueryNode) bool {
+	if root == nil || target == nil {
+		return false
+	}
+	if root.NodeID() == target.NodeID() {
+		return true
+	}
+	for _, child := range root.Children() {
+		if renderContainsNode(child, target) {
+			return true
+		}
+	}
+	return false
+}
+
+func TestBR2EDCompactLimitEditorStaysInsideBudgetRow(t *testing.T) {
+	stubBudgetRowBrowser(t)
+	guardTestApp(t)
+	b := quickFillFixtureBudget()
+	b.Name = "Groceries"
+	f := render.New(t)
+	f.Render(ui.CreateElement(BudgetRow, budgetRowProps{
+		Status:  budgeting.Status{Budget: b, Limit: b.Limit, Remaining: b.Limit},
+		Compact: true, OnDelete: func(string) {},
+	}))
+	byTestID(f, "button", "budget-limit-btn-"+b.ID).Click()
+	f.Stabilize()
+
+	row := byTestID(f, "div", "budget-card-"+b.ID)
+	editor := byTestID(f, "form", "budget-limit-editor-"+b.ID)
+	if row == nil || editor == nil || !renderContainsNode(row, editor) {
+		t.Fatal("compact limit editor is not a descendant of the clicked budget row")
+	}
+	if heading := f.ByText("Groceries limit"); heading == nil || heading.Tag() != "strong" || !renderContainsNode(editor, heading) {
+		t.Fatal("compact limit editor is missing its rendered Groceries limit heading")
+	}
+	input := byTestID(f, "input", "budget-limit-input-"+b.ID)
+	if input == nil || input.Attr("aria-label") != "Groceries "+uistate.T("budgets.baseLimitNameSuffix") {
+		t.Fatal("compact limit editor input is missing its budget-specific accessible name")
+	}
+}
+
 func TestBud3CompactLimitEditAndRolloverMenu(t *testing.T) {
 	stubBudgetRowBrowser(t)
 	app := guardTestApp(t)
 	b := quickFillFixtureBudget()
+	b.Name = "Groceries"
 	b.Limit = money.New(45000, "USD")
 	if err := app.PutBudget(b); err != nil {
 		t.Fatal(err)
@@ -92,21 +135,29 @@ func TestBud3CompactLimitEditAndRolloverMenu(t *testing.T) {
 	if got := byTestID(f, "button", "edit-budget-cats-btn-"+b.ID); got == nil || got.Text() != uistate.T("budgets.actionEditTracking") {
 		t.Fatalf("tracking menu action = %v, want Edit tracking", got)
 	}
-	if got := byTestID(f, "button", "budget-formulas-btn-"+b.ID); got == nil || got.Text() != uistate.T("budgets.actionEditFormulas") {
-		t.Fatalf("formulas menu action = %v, want Edit formulas", got)
+	if got := byTestID(f, "button", "budget-formulas-btn-"+b.ID); got == nil || got.Text() != uistate.T("budgets.actionEditFormulasPlain") {
+		t.Fatalf("formulas menu action = %v, want Calculate the limit with a formula", got)
 	}
 	byTestID(f, "button", "budget-kebab-"+b.ID).Click()
 	f.Stabilize()
 	byTestID(f, "button", "budget-limit-btn-"+b.ID).Click()
 	f.Stabilize()
-	if editor := byTestID(f, "form", "budget-limit-editor-"+b.ID); editor == nil {
+	editor := byTestID(f, "form", "budget-limit-editor-"+b.ID)
+	if editor == nil {
 		t.Fatal("limit click did not open the inline editor")
+	}
+	row := byTestID(f, "div", "budget-card-"+b.ID)
+	if row == nil || !renderContainsNode(row, editor) {
+		t.Fatal("compact limit editor is not a descendant of the clicked budget row")
+	}
+	if heading := f.ByText("Groceries limit"); heading == nil || heading.Tag() != "strong" || !renderContainsNode(editor, heading) {
+		t.Fatal("compact limit editor is missing its rendered Groceries limit heading")
 	}
 	if got := byTestID(f, "strong", "budget-limit-effective-"+b.ID); got == nil || got.Text() != "$205.20" {
 		t.Fatalf("effective cap = %v, want $205.20", got)
 	}
-	if got := byTestID(f, "input", "budget-limit-input-"+b.ID); got == nil || got.Attr("aria-label") != uistate.T("budgets.baseLimitLabel") {
-		t.Fatal("base limit input is missing its explicit label")
+	if got := byTestID(f, "input", "budget-limit-input-"+b.ID); got == nil || got.Attr("aria-label") != "Groceries "+uistate.T("budgets.baseLimitNameSuffix") {
+		t.Fatal("base limit input is missing its budget-specific accessible name")
 	}
 	if text := byTestID(f, "form", "budget-limit-editor-"+b.ID).Text(); !strings.Contains(text, "$205.20") || !strings.Contains(text, "$450.00") {
 		t.Fatalf("editor does not show effective and base limits together: %q", text)

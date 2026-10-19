@@ -21,6 +21,7 @@ type budgetRowLimitDraftResult struct {
 	limitEditing      ui.State[bool]
 	limitRestoreFocus ui.State[bool]
 	limitDraft        ui.State[string]
+	limitInputRef     ui.DOMRef
 	limitDec          int
 	limitErrID        string
 	limitErrMsg       string
@@ -38,6 +39,7 @@ func useBudgetRowLimitDraft(s budgeting.Status) budgetRowLimitDraftResult {
 	limitEditing := ui.UseState(false)
 	limitRestoreFocus := ui.UseState(false)
 	limitDraft := ui.UseState("")
+	limitInputRef := ui.UseDOMRef()
 	limitDec := currency.Decimals(s.Budget.Limit.Currency)
 	// C665: the field advertises min="0.01" and the browser's own validation does
 	// nothing for it, because the value is read out of state on submit rather than
@@ -52,6 +54,20 @@ func useBudgetRowLimitDraft(s budgeting.Status) budgetRowLimitDraftResult {
 	if limitErrMsg != "" {
 		limitSaveTitle = uistate.T("budgets.limitSaveBlocked")
 	}
+	ui.UseEffect(func() func() {
+		if !limitEditing.Get() {
+			return nil
+		}
+		limitInputRef.Focus()
+		// The framework ref owns focus after the editor mounts. Selecting the
+		// focused input preserves the existing quick-replace keyboard workflow.
+		if doc := js.Global().Get("document"); doc.Truthy() {
+			if active := doc.Get("activeElement"); active.Truthy() {
+				active.Call("select")
+			}
+		}
+		return nil
+	}, limitEditing.Get())
 	startLimitEdit := ui.UseEvent(Prevent(func() {
 		// Seed from the STORED base limit — s.Budget here is the evaluation copy whose
 		// Limit has rollover carry / period boosts folded in (the effective cap). If the
@@ -74,7 +90,7 @@ func useBudgetRowLimitDraft(s budgeting.Status) budgetRowLimitDraftResult {
 		limitEditing.Set(false)
 	}))
 	return budgetRowLimitDraftResult{
-		limitEditing: limitEditing, limitRestoreFocus: limitRestoreFocus, limitDraft: limitDraft, limitDec: limitDec,
+		limitEditing: limitEditing, limitRestoreFocus: limitRestoreFocus, limitDraft: limitDraft, limitInputRef: limitInputRef, limitDec: limitDec,
 		limitErrID: limitErrID, limitErrMsg: limitErrMsg, limitSaveTitle: limitSaveTitle, startLimitEdit: startLimitEdit,
 		cancelLimitEdit: cancelLimitEdit,
 	}

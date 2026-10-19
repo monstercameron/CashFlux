@@ -88,7 +88,8 @@ func BudgetRow(props budgetRowProps) ui.Node {
 			Kebab: kebabNode, OnLimitEdit: rowLimitDraft.startLimitEdit, OnDrill: rowNavigation.drill,
 			LimitEditing: rowLimitDraft.limitEditing.Get(), LimitDraft: rowLimitDraft.limitDraft.Get(), OnLimitDraft: onLimitDraft,
 			OnLimitSave: saveLimitEdit, OnLimitCancel: rowLimitDraft.cancelLimitEdit, OnLimitKeyDown: limitKeyDown,
-			LimitErrorID: rowLimitDraft.limitErrID, LimitError: rowLimitDraft.limitErrMsg, FundedChip: fundedChip,
+			LimitInputRef: rowLimitDraft.limitInputRef,
+			LimitErrorID:  rowLimitDraft.limitErrID, LimitError: rowLimitDraft.limitErrMsg, FundedChip: fundedChip,
 			HasRecurring: hasRecurring,
 			HasNote:      rowTitle.hasNote, NotesLabel: rowTitle.notesLabel, NoteText: rowTitle.noteText, OnOpenNotes: rowDetailActions.openNotesFn,
 		})
@@ -149,6 +150,7 @@ type budgetRowCompactProps struct {
 	LimitEditing                                             bool
 	LimitDraft                                               string
 	OnLimitDraft, OnLimitSave, OnLimitCancel, OnLimitKeyDown any
+	LimitInputRef                                            ui.DOMRef
 	LimitErrorID, LimitError                                 string
 	FundedChip                                               string
 	HasRecurring                                             bool
@@ -247,11 +249,12 @@ func budgetRowCompact(props budgetRowCompactProps) ui.Node {
 						Attr("style", fmt.Sprintf("position:absolute;top:0;bottom:0;left:%d%%;width:2px;background:var(--text);opacity:0.65;pointer-events:none", props.PaceMarkerPct)))),
 			),
 		),
+		If(props.LimitEditing, budgetLimitEditor(
+			s.Budget.ID, s.Budget.Name, props.LimitInputRef, props.LimitDraft, onLimitDraft, saveLimitEdit, cancelLimitEdit,
+			limitKeyDown, limitErrID, limitErrMsg, fmtMoney(limit), baseBudgetLimit(s.Budget.ID, s.Budget.Limit),
+		)),
 	)
-	return Fragment(row, If(props.LimitEditing, budgetLimitEditor(
-		s.Budget.ID, props.LimitDraft, onLimitDraft, saveLimitEdit, cancelLimitEdit,
-		limitKeyDown, limitErrID, limitErrMsg, fmtMoney(limit), baseBudgetLimit(s.Budget.ID, s.Budget.Limit),
-	)))
+	return row
 }
 
 // budgetCompactNameCell renders the compact row's title and in-name markers.
@@ -339,8 +342,9 @@ func baseBudgetLimit(id string, fallback money.Money) string {
 	return fmtMoney(fallback)
 }
 
-func budgetLimitEditor(id, draft string, onDraft, save, cancel, keyDown any, errID, errMsg, effective, base string) ui.Node {
+func budgetLimitEditor(id, budgetName string, inputRef ui.DOMRef, draft string, onDraft, save, cancel, keyDown any, errID, errMsg, effective, base string) ui.Node {
 	return Form(css.Class("budget-limit-editor"), Attr("data-testid", "budget-limit-editor-"+id), OnSubmit(save),
+		Strong(css.Class("budget-limit-editor-title"), budgetName+" "+uistate.T("budgets.limitTitleSuffix")),
 		Div(css.Class("budget-limit-editor-cap"),
 			Span(uistate.T("budgets.effectiveCapLabel")),
 			Strong(Attr("data-testid", "budget-limit-effective-"+id), effective)),
@@ -348,7 +352,7 @@ func budgetLimitEditor(id, draft string, onDraft, save, cancel, keyDown any, err
 			Label(For("budget-limit-input-"+id), uistate.T("budgets.baseLimitLabel")),
 			Span(Strong(base), Input(append(append([]any{css.Class("field", "budget-limit-input"), Type("number"),
 				ID("budget-limit-input-" + id), Attr("data-testid", "budget-limit-input-"+id),
-				Attr("aria-label", uistate.T("budgets.baseLimitLabel")), Step("0.01"), Attr("min", "0.01"),
+				Attr("aria-label", budgetName+" "+uistate.T("budgets.baseLimitNameSuffix")), Ref(inputRef), Step("0.01"), Attr("min", "0.01"),
 				OnInput(onDraft), OnKeyDown(keyDown)}, errAttrs(errID, errMsg)...), uiw.FieldValue(draft))...))),
 		Button(append([]any{css.Class("btn btn-sm budget-limit-save"), Type("submit"), Attr("data-testid", "budget-limit-save-"+id),
 			Attr("aria-label", uistate.T("action.save")), uistate.T("action.save")}, disabledAttr(errMsg != "")...)...),
