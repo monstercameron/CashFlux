@@ -1647,7 +1647,7 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 		// still hold a legacy plaintext snapshot, and refusing it locks the owner
 		// out of their own data. Uploads stay encrypted-only (SEC6), so the first
 		// App Lock setup replaces that legacy copy with an encrypted one.
-		if datasetEncryptionActive() && !cryptobox.IsEnvelope(payload) {
+		if loadAppLock().Active() && !cryptobox.IsEnvelope(payload) {
 			message := "The server returned an unprotected copy. CashFlux did not load it."
 			setSyncStatus(syncStatus{State: "error", Pending: pendingSyncCount(), Message: message})
 			markHostedHydrationError(message)
@@ -2105,7 +2105,7 @@ func resolveConflictUseServer() {
 			return
 		}
 		payload := resp.Dataset
-		if datasetEncryptionActive() && !cryptobox.IsEnvelope(payload) {
+		if loadAppLock().Active() && !cryptobox.IsEnvelope(payload) {
 			message := "The server returned an unprotected copy. CashFlux did not load it."
 			setSyncStatus(syncStatus{State: "error", Pending: pendingSyncCount(), Message: message})
 			return
