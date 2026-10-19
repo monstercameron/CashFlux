@@ -90,6 +90,11 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Transactions page type scale and surfaces (UXT2).** The page now uses four type sizes (12 / 14 / 17 / 24 px) and two
+  weights, sentence-case labels instead of ALL-CAPS, one ledger surface instead of nested outlines (the toolbar sits on
+  the page; scheduled items aren't boxed), consistent radii (6 px controls, pills, 12 px only for the ledger), and selected
+  rows with an accent edge and an 8 % accent tint so every text colour stays ≥ 4.5:1, plus a visible focus ring on
+  selected rows. Suggestion text uses the accessible green token.
 - **No more format errors in suggestion copy, and a lint that catches them (BR3FMT).** Budget suggestions no longer show
   "%!(EXTRA int=0)"; the Smart "safe to spend" detail has its missing template. New guards render every suggestion
   variant and every `smart.*` string and fail on "%!", and a screenlint scan compares each `uistate.T` call's argument

@@ -150,6 +150,7 @@ func Register() {
 	registerRulesBR2A11Y()
 	registerR4Copy()
 	registerUXT6()
+	registerUXT2()
 	inject(Build())
 }
 
