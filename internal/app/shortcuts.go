@@ -44,6 +44,9 @@ func wireKeyboardShortcuts() {
 			return nil
 		}
 		key := e.Get("key").String()
+		if key == "Enter" && globalEnterShortcutTargetIgnored(e.Get("target")) {
+			return nil
+		}
 		// Esc dismisses the help/command overlays (no-op when closed); FlipPanel
 		// keeps handling Esc for open settings panels independently.
 		if key == "Escape" {
@@ -152,6 +155,38 @@ func wireKeyboardShortcuts() {
 		return nil
 	})
 	doc.Call("addEventListener", "keydown", onKeyDown)
+}
+
+// globalEnterShortcutTargetIgnored keeps Enter's transaction-edit shortcut out
+// of controls that already own Enter, including Import menu items and dialogs.
+func globalEnterShortcutTargetIgnored(target js.Value) bool {
+	if target.IsNull() || target.IsUndefined() {
+		return false
+	}
+	tag := target.Get("tagName")
+	tagName := ""
+	if tag.Type() == js.TypeString {
+		tagName = tag.String()
+	}
+	role := target.Call("getAttribute", "role")
+	roleName := ""
+	if role.Type() == js.TypeString {
+		roleName = role.String()
+	}
+	inMenuOrDialog := false
+	if target.Get("closest").Type() == js.TypeFunction {
+		container := target.Call("closest", "[role='menu'], [role='dialog']")
+		inMenuOrDialog = !container.IsNull() && !container.IsUndefined()
+	}
+	return globalEnterTargetIgnored(tagName, roleName, inMenuOrDialog)
+}
+
+func globalEnterTargetIgnored(tag, role string, inMenuOrDialog bool) bool {
+	switch strings.ToUpper(tag) {
+	case "BUTTON", "INPUT", "SELECT", "TEXTAREA", "A":
+		return true
+	}
+	return role == "menuitem" || role == "button" || inMenuOrDialog
 }
 
 // evBool safely reads a boolean property off an event, returning false when it's

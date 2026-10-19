@@ -72,6 +72,36 @@ func txnRowKeyTargetIgnored(tag string) bool {
 	}
 }
 
+func txnEnterTargetIgnored(target js.Value) bool {
+	if target.IsNull() || target.IsUndefined() {
+		return false
+	}
+	tag := target.Get("tagName")
+	tagName := ""
+	if tag.Type() == js.TypeString {
+		tagName = tag.String()
+	}
+	role := target.Call("getAttribute", "role")
+	roleName := ""
+	if role.Type() == js.TypeString {
+		roleName = role.String()
+	}
+	inMenuOrDialog := false
+	if target.Get("closest").Type() == js.TypeFunction {
+		container := target.Call("closest", "[role='menu'], [role='menuitem'], [role='dialog']")
+		inMenuOrDialog = !container.IsNull() && !container.IsUndefined()
+	}
+	return txnEnterActionIgnored(tagName, roleName, inMenuOrDialog)
+}
+
+func txnEnterActionIgnored(tag, role string, inMenuOrDialog bool) bool {
+	switch strings.ToUpper(tag) {
+	case "BUTTON", "INPUT", "SELECT", "TEXTAREA", "A":
+		return true
+	}
+	return role == "menuitem" || role == "button" || inMenuOrDialog
+}
+
 func handleTxnTableShortcut(key string, target, doc js.Value, openCategory func(string), openHelp func()) bool {
 	if key != "c" && key != "?" || target.IsNull() || target.IsUndefined() {
 		return false
@@ -138,6 +168,9 @@ func HandleTxnKey(key string) bool {
 	}
 	doc := js.Global().Get("document")
 	if doc.IsNull() || doc.IsUndefined() {
+		return false
+	}
+	if key == "Enter" && txnEnterTargetIgnored(doc.Get("activeElement")) {
 		return false
 	}
 	editable, dialogOpen := txnEditableTarget(doc), txnDialogOpen(doc)

@@ -90,6 +90,7 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- Keep Enter on menus and dialogs from opening the transaction editor.
 - Batch staged import writes and ledger updates with durable completion feedback.
 - Validate structured Smart+ replies and bound model requests before draft review.
 - Use one sealed staged import with stable row outcomes and strict account validation.
