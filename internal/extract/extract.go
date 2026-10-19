@@ -25,6 +25,9 @@ type Row struct {
 	Description string
 	Amount      string
 	Category    string
+	AccountID   string
+	Currency    string
+	Status      string
 }
 
 // ParseRows reads a model reply and returns the extracted rows. It accepts a bare
@@ -62,6 +65,9 @@ func ParseRows(reply string) ([]Row, error) {
 			Description: firstString(m, "description", "desc", "Description", "merchant", "payee", "name"),
 			Category:    firstString(m, "category", "Category"),
 			Amount:      amountString(m, "amount", "Amount", "value", "total"),
+			AccountID:   firstString(m, "accountId", "account_id", "account"),
+			Currency:    strings.ToUpper(firstString(m, "currency", "Currency")),
+			Status:      normalizedStatus(statusString(m)),
 		}
 		if r.Description == "" && r.Amount == "" {
 			continue
@@ -71,12 +77,48 @@ func ParseRows(reply string) ([]Row, error) {
 	return rows, nil
 }
 
-// Signature is a loose dedupe key for a row: its date plus a normalized amount.
-// Two rows (or a row and an existing transaction rendered as a row) with the same
-// signature are treated as the same entry. Description is intentionally excluded —
-// wording varies between a statement and a prior manual entry.
+func statusString(m map[string]any) string {
+	for _, key := range []string{"status", "cleared", "pending", "Status"} {
+		if value, ok := m[key]; ok {
+			switch v := value.(type) {
+			case string:
+				if strings.TrimSpace(v) != "" {
+					if key == "pending" && normalizedStatus(v) == "cleared" {
+						return "pending"
+					}
+					return v
+				}
+			case bool:
+				if key == "pending" {
+					if v {
+						return "pending"
+					}
+					return "cleared"
+				}
+				return strconv.FormatBool(v)
+			}
+		}
+	}
+	return ""
+}
+
+// Signature keys a reviewed row by date, normalized amount, merchant, account,
+// currency, and any status supplied by the source.
 func (r Row) Signature() string {
-	return strings.TrimSpace(r.Date) + "|" + normalizeAmount(r.Amount)
+	merchant := strings.ToLower(strings.Join(strings.Fields(strings.TrimSpace(r.Description)), " "))
+	return strings.TrimSpace(r.Date) + "|" + normalizeAmount(r.Amount) + "|" + merchant + "|" + strings.TrimSpace(r.AccountID) + "|" + strings.ToUpper(strings.TrimSpace(r.Currency)) + "|" + normalizedStatus(r.Status)
+}
+
+func normalizedStatus(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	switch s {
+	case "true", "yes", "y", "cleared", "posted", "complete", "completed":
+		return "cleared"
+	case "false", "no", "n", "pending", "uncleared":
+		return "pending"
+	default:
+		return s
+	}
 }
 
 // FilterNew returns the rows whose Signature is not present in seen. Build seen

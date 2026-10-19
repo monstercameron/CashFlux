@@ -65,6 +65,29 @@ func TestFindDuplicatesNone(t *testing.T) {
 	}
 }
 
+func TestFindDuplicatesIncludesMerchantCurrencyAccountAndStatus(t *testing.T) {
+	d := day(2026, time.June, 1)
+	base := txn("a", "Coffee", -450, d)
+	base.AccountID, base.Payee = "checking", "Cafe North"
+	differentMerchant := base
+	differentMerchant.ID, differentMerchant.Payee = "b", "Parking"
+	differentAccount := base
+	differentAccount.ID, differentAccount.AccountID = "c", "card"
+	differentCurrency := base
+	differentCurrency.ID, differentCurrency.Amount = "d", money.New(-450, "CAD")
+	cleared := base
+	cleared.ID, cleared.Cleared = "e", true
+	got := FindDuplicates([]domain.Transaction{base, differentMerchant, differentAccount, differentCurrency, cleared})
+	if len(got) != 0 {
+		t.Fatalf("distinct merchant/account/currency/status should not group: %+v", got)
+	}
+	base2 := base
+	base2.ID = "f"
+	if got := FindDuplicates([]domain.Transaction{base, base2}); len(got) != 1 {
+		t.Fatalf("matching rows should group: %+v", got)
+	}
+}
+
 func TestMerge(t *testing.T) {
 	d := day(2026, time.June, 1)
 	survivor := domain.Transaction{

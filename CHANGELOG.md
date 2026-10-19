@@ -31,6 +31,13 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Imports are all-or-nothing and honest about what happened (IMPB).** CSV and reviewed-document imports validate
+  every row first, then write the rows and the import-history record in one transaction (existing IDs are rejected,
+  never overwritten), and return exact imported, duplicate, possible-duplicate and failed counts with reasons; undo
+  removes exactly that run. An unreadable date fails its row instead of becoming today. Duplicate detection includes
+  the merchant, account, currency and pending/cleared status, so two real same-day purchases of the same amount both
+  import (a looser match is shown as a possible duplicate). The preview applies the same category rules as the import.
+  Column-mapping profiles are saved with the dataset per workspace instead of living in memory for one session.
 - **Local store never skips a change because a copy of it was rejected (SV3a.4).** A record that cannot be
   replayed is marked rejected at its own log position in the same transaction; boot skips only those positions
   and reports them, and a rejected remote copy can no longer hide the genuine local change.

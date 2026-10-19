@@ -40,6 +40,45 @@ func (s *SQLiteStore) PutTransactionsAtomic(txns []domain.Transaction) error {
 	return nil
 }
 
+// PutImportBatch stores imported transactions and, when doc has an ID, their
+// history record in one SQLite transaction. Existing IDs are rejected instead
+// of being overwritten.
+func (s *SQLiteStore) PutImportBatch(txns []domain.Transaction, doc domain.Document) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("store: begin import batch: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	for _, txn := range txns {
+		if txn.ID == "" {
+			return fmt.Errorf("store: import transaction id is required")
+		}
+		data, err := json.Marshal(txn)
+		if err != nil {
+			return fmt.Errorf("store: encode import transaction %s: %w", txn.ID, err)
+		}
+		if _, err := tx.Exec("INSERT INTO transactions(id, data) VALUES(?, ?)", txn.ID, string(data)); err != nil {
+			return fmt.Errorf("store: write import transaction %s: %w", txn.ID, err)
+		}
+	}
+	if doc.ID != "" {
+		docData, err := json.Marshal(doc)
+		if err != nil {
+			return fmt.Errorf("store: encode import history %s: %w", doc.ID, err)
+		}
+		if _, err := tx.Exec("INSERT INTO documents(id, data) VALUES(?, ?)", doc.ID, string(docData)); err != nil {
+			return fmt.Errorf("store: write import history %s: %w", doc.ID, err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("store: commit import batch: %w", err)
+	}
+	if len(txns) > 0 || doc.ID != "" {
+		mutationRev.Add(1)
+	}
+	return nil
+}
+
 // DeleteTransactionsAtomic deletes existing transaction IDs in one transaction
 // and returns only the IDs that existed and were deleted after commit.
 func (s *SQLiteStore) DeleteTransactionsAtomic(ids []string) ([]string, error) {

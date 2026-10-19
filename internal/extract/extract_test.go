@@ -56,6 +56,19 @@ func TestParseRowsSkipsEmpty(t *testing.T) {
 	}
 }
 
+func TestParseRowsKeepsSourceAccountCurrencyAndStatus(t *testing.T) {
+	rows, err := ParseRows(`[{"date":"2026-06-01","description":"Coffee","amount":-4.5,"account_id":"checking","currency":"usd","cleared":true},{"date":"2026-06-01","description":"Coffee","amount":-4.5,"pending":true}]`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 2 || rows[0].AccountID != "checking" || rows[0].Currency != "USD" || rows[0].Status != "cleared" || rows[1].Status != "pending" {
+		t.Fatalf("parsed rows = %+v", rows)
+	}
+	if rows[0].Signature() == rows[1].Signature() {
+		t.Fatal("source-provided pending/cleared status must affect duplicate identity")
+	}
+}
+
 func TestSignatureNormalizesAmount(t *testing.T) {
 	a := Row{Date: "2026-06-01", Amount: "-4.5"}
 	b := Row{Date: "2026-06-01", Amount: "-4.50"}
@@ -66,10 +79,14 @@ func TestSignatureNormalizesAmount(t *testing.T) {
 	if a.Signature() == c.Signature() {
 		t.Error("-4.50 and 4.50 (different sign) should not match")
 	}
-	// Description is excluded from the signature.
+	// Merchant text is part of the signature so distinct same-day purchases survive.
 	d := Row{Date: "2026-06-01", Amount: "-4.5", Description: "Coffee"}
-	if a.Signature() != d.Signature() {
-		t.Error("description should not affect the signature")
+	if a.Signature() == d.Signature() {
+		t.Error("description should affect the signature")
+	}
+	e := Row{Date: "2026-06-01", Amount: "-4.50", Description: "  COFFEE  "}
+	if d.Signature() != e.Signature() {
+		t.Error("merchant whitespace and case should normalize")
 	}
 }
 
@@ -79,7 +96,7 @@ func TestFilterNew(t *testing.T) {
 		{Date: "2026-06-02", Amount: "-10", Description: "Lunch"},
 	}
 	seen := map[string]bool{
-		(Row{Date: "2026-06-01", Amount: "-4.5"}).Signature(): true,
+		(Row{Date: "2026-06-01", Amount: "-4.5", Description: "Coffee"}).Signature(): true,
 	}
 	got := FilterNew(rows, seen)
 	if len(got) != 1 || got[0].Description != "Lunch" {

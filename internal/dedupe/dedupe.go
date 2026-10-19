@@ -55,8 +55,22 @@ func Key(t domain.Transaction) string {
 // Signature is the within-account half of Key.
 func Signature(t domain.Transaction) string {
 	day := t.Date.Format("2006-01-02")
-	norm := strings.ToLower(strings.TrimSpace(t.Desc))
-	return day + "|" + strconv.FormatInt(t.Amount.Amount, 10) + "|" + t.Amount.Currency + "|" + norm
+	merchant := t.Payee
+	if strings.TrimSpace(merchant) == "" {
+		merchant = t.Desc
+	}
+	norm := strings.ToLower(strings.Join(strings.Fields(strings.TrimSpace(merchant)), " "))
+	status := "pending"
+	if t.Cleared {
+		status = "cleared"
+	}
+	return day + "|" + strconv.FormatInt(t.Amount.Amount, 10) + "|" + strings.ToUpper(t.Amount.Currency) + "|" + norm + "|" + status
+}
+
+// AmbiguityKey groups rows with equal date, signed amount, currency, and account
+// while deliberately ignoring merchant and status, for review-only warnings.
+func AmbiguityKey(t domain.Transaction) string {
+	return t.AccountID + "|" + t.Date.Format("2006-01-02") + "|" + strconv.FormatInt(t.Amount.Amount, 10) + "|" + strings.ToUpper(t.Amount.Currency)
 }
 
 // FindDuplicates groups transactions that share the same ACCOUNT, calendar date,

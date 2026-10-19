@@ -347,19 +347,19 @@ func TestReviewedDocumentImportDedupeHistoryAndDerivedFigures(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ImportReviewedDocumentRows: %v", err)
 	}
-	if result.Imported != 2 || result.Skipped != 1 || result.DocumentID == "" {
-		t.Fatalf("import result = %+v, want imported2 skipped1 document id", result)
+	if result.Imported != 3 || result.Skipped != 0 || len(result.PossibleDuplicates) != 1 || result.DocumentID == "" {
+		t.Fatalf("import result = %+v, want three imported, one possible duplicate, document id", result)
 	}
-	if len(a.Transactions()) != 3 {
-		t.Fatalf("transactions after import = %d, want 3", len(a.Transactions()))
+	if len(a.Transactions()) != 4 {
+		t.Fatalf("transactions after import = %d, want 4", len(a.Transactions()))
 	}
 
 	docs := a.Documents()
 	if len(docs) != 1 || docs[0].Kind != domain.DocImage || docs[0].Status != domain.DocImported || docs[0].AccountID != "checking" {
 		t.Fatalf("document history = %+v", docs)
 	}
-	if len(docs[0].Extracted) != 2 || docs[0].Extracted[0].Description != "Groceries" {
-		t.Fatalf("document extracted rows = %+v, want only imported reviewed rows", docs[0].Extracted)
+	if len(docs[0].Extracted) != 3 || docs[0].Extracted[0].Description != "Coffee duplicate" {
+		t.Fatalf("document extracted rows = %+v, want every imported reviewed row", docs[0].Extracted)
 	}
 
 	start, end := dateutil.MonthRange(time.Date(2026, time.June, 10, 0, 0, 0, 0, time.UTC))
@@ -368,8 +368,8 @@ func TestReviewedDocumentImportDedupeHistoryAndDerivedFigures(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PeriodTotals: %v", err)
 	}
-	if !income.Equal(money.New(100000, "USD")) || !expense.Equal(money.New(9090, "USD")) {
-		t.Fatalf("period totals income/expense = %v/%v, want 1000.00/90.90 USD", income, expense)
+	if !income.Equal(money.New(100000, "USD")) || !expense.Equal(money.New(9540, "USD")) {
+		t.Fatalf("period totals income/expense = %v/%v, want 1000.00/95.40 USD", income, expense)
 	}
 	spent, err := budgeting.Spent(
 		domain.Budget{CategoryID: "food", Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID, Limit: money.New(20000, "USD")},
@@ -378,8 +378,8 @@ func TestReviewedDocumentImportDedupeHistoryAndDerivedFigures(t *testing.T) {
 	if err != nil {
 		t.Fatalf("budgeting.Spent: %v", err)
 	}
-	if !spent.Equal(money.New(8640, "USD")) {
-		t.Fatalf("food budget spent = %v, want 86.40 USD", spent)
+	if !spent.Equal(money.New(9090, "USD")) {
+		t.Fatalf("food budget spent = %v, want 90.90 USD", spent)
 	}
 }
 
