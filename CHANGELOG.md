@@ -7,6 +7,12 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Regular monthly spend calculation (BASE2, not wired in yet).** `internal/regularspend` works out "Fixed
+  commitments" (recurring bills and subscriptions, debt minimums, annual and quarterly bills as a monthly set-aside with
+  their due months) and "Typical essential month" (fixed plus the median of the last six complete months of the essential
+  categories you choose, with refunds netted, one-offs and transfers left out), each line explained ("scheduled",
+  "detected from 8 payments", "median of 6 months") and suggested essential categories offered, never assumed. Exact
+  integer and rational math; a missing exchange rate marks the total incomplete instead of guessing.
 - **Debt-payment logic (DEBT1, not wired in yet).** `internal/debtpay` recognises payments from a bank account to a card
   or loan (a matching credit on the debt account or a confirmed payee rule is strong evidence; a named lender with a
   matching recurring amount is medium; refunds and balance transfers are never suggested), splits a loan payment into
