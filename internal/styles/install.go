@@ -180,6 +180,11 @@ func Register() {
 	registerTV8C()
 	registerBC6N8()
 	registerBC6N8()
+	registerImportWizard()
+	registerTierSystem()
+	registerIMV7()
+	registerIMV7()
+	registerIMV7()
 	inject(Build())
 }
 
