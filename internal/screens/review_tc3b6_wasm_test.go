@@ -58,7 +58,7 @@ func TestReviewTC3B6LoanPaymentMemoUsesAppAndRevision(t *testing.T) {
 func TestReviewTC3B6DismissalPruningAndVisibility(t *testing.T) {
 	dismissed := map[string]bool{"live": true, "gone": true, "false": false}
 	suggestions := []txnclassify.PaymentSuggestion{{TransactionID: "live"}, {TransactionID: "new"}}
-	pruned, changed := pruneRecurringLoanPaymentDismissals(dismissed, suggestions)
+	pruned, changed := pruneRecurringLoanPaymentDismissals(dismissed, []domain.Transaction{{ID: "live"}, {ID: "new"}})
 	if !changed || len(pruned) != 1 || !pruned["live"] {
 		t.Fatalf("pruned dismissals = %#v, changed=%v", pruned, changed)
 	}

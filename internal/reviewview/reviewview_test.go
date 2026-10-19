@@ -45,7 +45,7 @@ func TestDismissalSnapshots(t *testing.T) {
 		{"stale and false", map[string]bool{"gone": true, "a": false, "b": true}, map[string]bool{"b": true}, true, 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got, changed := PruneDismissals(tc.in, suggestions)
+			got, changed := PruneDismissals(tc.in, []domain.Transaction{{ID: "a"}, {ID: "b"}})
 			if changed != tc.changed || !reflect.DeepEqual(got, tc.want) {
 				t.Fatalf("pruned = %v, %v", got, changed)
 			}

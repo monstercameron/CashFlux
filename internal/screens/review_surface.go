@@ -68,8 +68,8 @@ func (memo *recurringLoanPaymentSuggestionMemo) get(app *appstate.App, revision 
 	return memo.memo.Get(app, revision, load)
 }
 
-func pruneRecurringLoanPaymentDismissals(dismissed map[string]bool, suggestions []txnclassify.PaymentSuggestion) (map[string]bool, bool) {
-	return reviewview.PruneDismissals(dismissed, suggestions)
+func pruneRecurringLoanPaymentDismissals(dismissed map[string]bool, transactions []domain.Transaction) (map[string]bool, bool) {
+	return reviewview.PruneDismissals(dismissed, transactions)
 }
 
 func reviewEmptyCopy(scope reviewscope.Scope, queueTotal int, suggestionCount int) (string, string) {
@@ -332,7 +332,7 @@ func (c *reviewController) useLoanPayments() ui.Node {
 	seed := ui.UseMemo(loadRecurringLoanPaymentDismissals, app)
 	dismissed := ui.UseState(seed)
 	ui.UseEffect(func() func() {
-		pruned, changed := pruneRecurringLoanPaymentDismissals(dismissed.Get(), all)
+		pruned, changed := pruneRecurringLoanPaymentDismissals(dismissed.Get(), app.Transactions())
 		if changed {
 			dismissed.Set(pruned)
 			saveRecurringLoanPaymentDismissals(pruned)
@@ -349,7 +349,7 @@ func (c *reviewController) useLoanPayments() ui.Node {
 	}
 	dismiss := func(transactionID string) {
 		active := reviewview.Dismiss(dismissed.Get(), transactionID)
-		pruned, _ := pruneRecurringLoanPaymentDismissals(active, all)
+		pruned, _ := pruneRecurringLoanPaymentDismissals(active, app.Transactions())
 		dismissed.Set(pruned)
 		saveRecurringLoanPaymentDismissals(pruned)
 	}

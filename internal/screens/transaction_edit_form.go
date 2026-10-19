@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/catsuggest"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
@@ -447,12 +448,6 @@ func (s txnEditState) alwaysRule() {
 	router.Navigate(uistate.RoutePath("/rules"))
 }
 func (s txnEditState) dismissSimilar() { s.simState.Set(nil); s.done() }
-func (s txnEditState) applySuggestion() {
-	candidate := txnform.SuggestionTransaction(s.txn, s.amountS.Get(), s.directionS.Get())
-	if suggestion, ok := reviewSuggestion(s.app, candidate); ok {
-		s.catS.Set(suggestion.CategoryID)
-	}
-}
 
 type txnEditInputProps struct {
 	Value, Error string
@@ -515,6 +510,7 @@ func txnEditDirection(props txnEditDirectionProps) ui.Node {
 }
 
 type txnEditCategoryProps struct {
+	App              *appstate.App
 	Options          []uiw.SelectOption
 	Kind             domain.CategoryKind
 	Selected         string
@@ -525,50 +521,71 @@ type txnEditCategoryProps struct {
 }
 
 func txnEditCategory(props txnEditCategoryProps) ui.Node {
+	selectGeneration := ui.UseState(0)
+	onCategory := ui.UseEvent(func(e ui.Event) {
+		if value := e.GetValue(); value == txnEditNewCategoryOption {
+			// Selecting the command mutates the browser's live value even though
+			// the category state did not change. Replace just the native select
+			// so dismissing or reopening the picker retains the real category.
+			selectGeneration.Set(selectGeneration.Get() + 1)
+			props.OnOpen()
+		} else {
+			props.OnSelect(value)
+		}
+	})
+	selectArgs := []any{css.Class("field"), Value(props.Selected), Attr("aria-label", uistate.T("quickAdd.category")),
+		Attr("data-testid", "txn-edit-category"), OnChange(onCategory)}
+	for _, option := range props.Options {
+		selectArgs = append(selectArgs, Option(Value(option.Value), SelectedIf(option.Value == props.Selected), option.Label))
+	}
+	app := props.App
+	if app == nil {
+		app = appstate.Default
+	}
 	return Div(css.Class("labeled-field", "txn-edit-category-field"),
 		Div(css.Class("txn-edit-category-label"),
 			Span(css.Class("t-caption", tw.TextDim), uistate.T("quickAdd.category"))),
 		Div(css.Class("txn-cat-picker"),
 			Div(css.Class("txn-cat-row"),
-				uiw.SelectInput(uiw.SelectInputProps{
-					Options: props.Options, Selected: props.Selected, AriaLabel: uistate.T("quickAdd.category"), TestID: "txn-edit-category",
-					OnChange: func(v string) {
-						if v == txnEditNewCategoryOption {
-							props.OnOpen()
-
-							return
-						}
-						props.OnSelect(v)
-					},
-				}),
+				WithKey(Select(selectArgs...), selectGeneration.Get()),
 			),
 			props.Suggestion,
-			If(props.Open, ui.CreateElement(CategoryPicker, CategoryPickerProps{
+			If(props.Open && app != nil, ui.CreateElement(categoryPickerComponent, categoryPickerComponentProps{App: app, Props: CategoryPickerProps{
 				Kind: props.Kind, Selected: props.Selected,
 				OnPick:  func(categoryID string) { props.OnPick(categoryID) },
 				OnClose: func() { props.OnClose() },
-			})),
+			}})),
 		),
 	)
 }
 
+type txnEditSuggestion struct {
+	Suggestion catsuggest.Suggestion
+	Found      bool
+}
+
 func (s txnEditState) categoryNode() ui.Node {
+	revision := uistate.UseDataRevision().Get()
+	proposal := ui.UseMemo(func() txnEditSuggestion {
+		defer txnPerfStart("edit-category-suggestion")()
+		candidate := txnform.SuggestionTransaction(s.txn, s.amountS.Get(), s.directionS.Get())
+		suggested, ok := reviewSuggestion(s.app, candidate)
+		return txnEditSuggestion{Suggestion: suggested, Found: ok}
+	}, s.app, s.app.Rev(), revision, s.txn.ID, s.amountS.Get(), s.directionS.Get())
 	options, kind := txnform.Categories(s.categories, s.directionS.Get())
 	catOpts := []uiw.SelectOption{{Value: "", Label: uistate.T("transactions.noCategory")}}
 	for _, o := range options {
 		catOpts = append(catOpts, uiw.SelectOption{Value: o.Value, Label: o.Label})
 	}
 	catOpts = append(catOpts, uiw.SelectOption{Value: txnEditNewCategoryOption, Label: uistate.T("transactions.newCategoryOption")})
-	candidate := txnform.SuggestionTransaction(s.txn, s.amountS.Get(), s.directionS.Get())
-	suggested, ok := reviewSuggestion(s.app, candidate)
-	name, show := txnform.SuggestionName(s.categories, suggested.CategoryID, s.catS.Get(), ok)
+	name, show := txnform.SuggestionName(s.categories, proposal.Suggestion.CategoryID, s.catS.Get(), proposal.Found)
 	var suggestion ui.Node
 	if show {
 		suggestion = uiw.Pill(uiw.PillProps{
 			Label: uistate.T("r5e.suggestedCategory", name), AriaLabel: uistate.T("sol1.useCategory", name), Tone: uiw.PillAccent,
-			TestID: "txn-edit-category-suggestion", OnClick: s.applySuggestion})
+			TestID: "txn-edit-category-suggestion", OnClick: func() { s.catS.Set(proposal.Suggestion.CategoryID) }})
 	}
-	return ui.CreateElement(txnEditCategory, txnEditCategoryProps{Options: catOpts, Kind: kind, Selected: s.catS.Get(), Open: s.categoryPickerOpen.Get(), Suggestion: suggestion,
+	return ui.CreateElement(txnEditCategory, txnEditCategoryProps{App: s.app, Options: catOpts, Kind: kind, Selected: s.catS.Get(), Open: s.categoryPickerOpen.Get(), Suggestion: suggestion,
 		OnOpen: func() { s.categoryPickerOpen.Set(true); s.errMsg.Set("") }, OnClose: func() { s.categoryPickerOpen.Set(false) }, OnSelect: s.catS.Set,
 		OnPick: func(id string) { s.catS.Set(id); s.categoryPickerOpen.Set(false) }})
 }
@@ -836,7 +853,15 @@ const (
 // refusal (a currency the account cannot hold) also shows here rather than after
 // the button.
 func accountField(app *appstate.App, txn domain.Transaction, selected string, onSelect func(string)) ui.Node {
-	view := txnform.AccountPreview(txn, selected, app.Accounts(), app.Transactions())
+	return ui.CreateElement(txnEditAccountView, txnEditAccountProps{App: app, Txn: txn, Selected: selected, OnSelect: onSelect})
+}
+
+func txnEditAccountView(props txnEditAccountProps) ui.Node {
+	app, txn, selected, onSelect := props.App, props.Txn, props.Selected, props.OnSelect
+	view := ui.UseMemo(func() txnform.AccountView {
+		defer txnPerfStart("edit-account-preview")()
+		return txnform.AccountPreview(txn, selected, app.Accounts(), app.Transactions())
+	}, app, app.Rev(), txn, selected)
 	if !view.Show {
 		return Fragment()
 	}
@@ -876,7 +901,25 @@ func accountField(app *appstate.App, txn domain.Transaction, selected string, on
 // the pure preview to the existing elements.
 func classifyField(app *appstate.App, txn domain.Transaction, selected string, debtPay bool,
 	onSelect func(string), onDebtPay ui.Handler) ui.Node {
-	view := txnform.MovementPreview(txn, selected, debtPay, app.Accounts(), app.Transactions())
+	return ui.CreateElement(txnEditMovementView, txnEditMovementViewProps{App: app, Txn: txn, Selected: selected, DebtPay: debtPay, OnSelect: onSelect, OnDebtPay: onDebtPay})
+}
+
+type txnEditMovementViewProps struct {
+	App       *appstate.App
+	Txn       domain.Transaction
+	Selected  string
+	DebtPay   bool
+	OnSelect  func(string)
+	OnDebtPay ui.Handler
+}
+
+func txnEditMovementView(props txnEditMovementViewProps) ui.Node {
+	app, txn, selected, debtPay := props.App, props.Txn, props.Selected, props.DebtPay
+	onSelect, onDebtPay := props.OnSelect, props.OnDebtPay
+	view := ui.UseMemo(func() txnform.MovementView {
+		defer txnPerfStart("edit-movement-preview")()
+		return txnform.MovementPreview(txn, selected, debtPay, app.Accounts(), app.Transactions())
+	}, app, app.Rev(), txn, selected, debtPay)
 	if !view.Show {
 		return Fragment()
 	}

@@ -73,12 +73,15 @@ func VisibleLoanPayments(all []txnclassify.PaymentSuggestion, dismissed map[stri
 	return visible
 }
 
-// PruneDismissals keeps only true dismissals for currently offered transactions.
+// PruneDismissals retains decisions while their transactions exist and are not
+// transfers. A temporarily missing suggestion must not erase a user's decision.
 // The second result reports whether any stored entry was removed.
-func PruneDismissals(dismissed map[string]bool, suggestions []txnclassify.PaymentSuggestion) (map[string]bool, bool) {
-	active := make(map[string]struct{}, len(suggestions))
-	for _, suggestion := range suggestions {
-		active[suggestion.TransactionID] = struct{}{}
+func PruneDismissals(dismissed map[string]bool, transactions []domain.Transaction) (map[string]bool, bool) {
+	active := make(map[string]struct{}, len(transactions))
+	for _, txn := range transactions {
+		if !txn.IsTransfer() {
+			active[txn.ID] = struct{}{}
+		}
 	}
 	pruned := make(map[string]bool, len(dismissed))
 	changed := false
