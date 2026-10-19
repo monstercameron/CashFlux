@@ -136,10 +136,32 @@ func budgetSuggestHint(props budgetSuggestProps) ui.Node {
 // the values that template uses. The no-outlier variant needs only the window;
 // the other variants also need the excluded-month count.
 func budgetSuggestionEvidence(key string, window, outliers int) string {
-	if key == "sm12.reasonNoOutliers" {
+	switch key {
+	case "sm12.reasonNoOutliers":
 		return uistate.T(key, window)
+	case "sm12.reasonOneOutlier":
+		return uistate.T(key, window)
+	default:
+		return uistate.T(key, window, outliers)
 	}
-	return uistate.T(key, window, outliers)
+}
+
+func budgetRecommendationCopy(direction budgeting.SuggestionDirection, amount string, periods, outliers int) string {
+	verbKey := "sm12.keep"
+	switch direction {
+	case budgeting.SuggestionRaise:
+		verbKey = "sm12.raise"
+	case budgeting.SuggestionLower:
+		verbKey = "sm12.lower"
+	}
+	reasonKey := "sm12.reasonNoOutliers"
+	if outliers == 1 {
+		reasonKey = "sm12.reasonOneOutlier"
+	} else if outliers > 1 {
+		reasonKey = "sm12.reasonManyOutliers"
+	}
+	target := uistate.T("sm12.directionalHint", uistate.T(verbKey), amount)
+	return target + " " + budgetSuggestionEvidence(reasonKey, periods, outliers)
 }
 
 // budgetSuggestRowHint renders SM-12 with a contextual accessible action name.
@@ -218,12 +240,24 @@ func budgetRecommendationAt(app *appstate.App, b domain.Budget, anchor time.Time
 	entry, cached := suggestLimitCache[cacheKey]
 	if !cached {
 		suggestedTxns, suggestedCovers := suggestTransactionsForScope(covers, scope.Tags, app.Transactions())
-		status, err := budgeting.EvaluateRollup(b, suggestedTxns, start, end, rates, budgeting.DefaultNearThreshold, suggestedCovers)
+		_, err := budgeting.EvaluateRollup(b, suggestedTxns, start, end, rates, budgeting.DefaultNearThreshold, suggestedCovers)
 		var recommendation budgeting.LimitRecommendation
 		var displayAmount money.Money
 		if err == nil {
-			projected := budgeting.ProjectPace(status, start, end, time.Now()).Projected
-			projected, err = budgeting.PeriodEquivalent(projected, b.Period, domain.PeriodMonthly)
+			now := time.Now()
+			projectionBudget := b
+			projectionBudget.CategoryIDs = scope.CategoryIDs
+			view := budgeting.EvaluateViewBudget(projectionBudget, budgeting.ViewInput{
+				Period:       budgeting.ViewPeriod{Anchor: start, Now: now, WeekStart: userPrefs.WeekStartWeekday(), PayCycleAnchor: payCycleAnchor},
+				Transactions: app.Transactions(), Categories: app.Categories(), Recurring: app.Recurring(), Rates: rates, Base: base,
+			})
+			if view.Projection.Error != nil {
+				err = view.Projection.Error
+			}
+			projected := view.Projection.Projected
+			if err == nil {
+				projected, err = budgeting.PeriodEquivalent(projected, b.Period, domain.PeriodMonthly)
+			}
 			if err == nil {
 				recommendation, err = budgeting.RecommendBudgetLimit(b, suggestedCovers, suggestedTxns, anchor, suggestLimitMonths, projected, rates)
 			}

@@ -90,6 +90,9 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Row and Edit suggestions follow the new rules (BR3SUG).** Budget suggestions gate on the recurring-aware projection
+  (fixed bills no longer trigger raises), say "Raise to $X" / "Lower to $X" / "Keep at $X" as a target rather than a
+  change, and use the same pluralised evidence in the row and the Edit dialog.
 - **The translation argument lint is strict everywhere and accurate (FMTFIX).** It now understands copy formatted through
   an enclosing `fmt.Sprintf` and ignores prose percentages, so the 19 reported mismatches on Credit, Duplicates,
   Investments, Loans, Setup and the Smart strip were confirmed false positives; the lint now fails on any real mismatch in

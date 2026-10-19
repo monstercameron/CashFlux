@@ -27,23 +27,75 @@ func TestBR2SUGOverPaceRecommendationDoesNotCutBelowProjection(t *testing.T) {
 		t.Fatalf("PutBudget: %v", err)
 	}
 	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
-	for i := 1; i <= 3; i++ {
-		date := monthStart.AddDate(0, -i, 10)
-		br2sugPutExpense(t, app, "history-"+date.Format("2006-01"), date, -50000)
+	for i, amount := range []int64{120000, 130000, 90000} {
+		date := monthStart.AddDate(0, -(i + 1), 10)
+		br2sugPutExpense(t, app, "history-"+date.Format("2006-01"), date, -amount)
 	}
-	br2sugPutExpense(t, app, "current-pace", now, -300000)
+	br2sugPutExpense(t, app, "current-pace", now, -10000)
 	rec, shown, ok := budgetRecommendationAt(app, budget, monthStart)
 	if !ok {
 		t.Fatal("expected a history-backed recommendation")
 	}
 	if rec.Direction != budgeting.SuggestionRaise {
-		t.Fatalf("direction = %q, want raise", rec.Direction)
+		t.Fatalf("direction = %q, want raise after two comparable overspends", rec.Direction)
 	}
 	if rec.Suggested < rec.Projection {
 		t.Fatalf("suggested monthly limit %d is below monthly projection %d", rec.Suggested, rec.Projection)
 	}
+	if rec.Suggested != 120000 {
+		t.Fatalf("suggested monthly limit = %d, want historical median 120000", rec.Suggested)
+	}
 	if shown.Amount <= 0 {
 		t.Fatal("converted row limit is not positive")
+	}
+}
+
+func TestBR2SUGOnPaceBudgetDoesNotGetRaiseFromOneOverspend(t *testing.T) {
+	app := br2sugTestApp(t)
+	now := time.Now()
+	budget := domain.Budget{ID: "transport-on-pace", Name: "Transportation", CategoryID: "transport-cat", OwnerID: domain.GroupOwnerID,
+		Scope: domain.ScopeShared, Period: domain.PeriodMonthly, Limit: money.New(100000, "USD")}
+	if err := app.PutBudget(budget); err != nil {
+		t.Fatalf("PutBudget: %v", err)
+	}
+	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	for i, amount := range []int64{120000, 90000, 80000} {
+		date := monthStart.AddDate(0, -(i + 1), 10)
+		br2sugPutExpense(t, app, "on-pace-history-"+date.Format("2006-01"), date, -amount)
+	}
+	br2sugPutExpense(t, app, "on-pace-current", now, -10000)
+	rec, _, ok := budgetRecommendationAt(app, budget, monthStart)
+	if !ok {
+		t.Fatal("expected a history-backed recommendation")
+	}
+	if rec.Direction == budgeting.SuggestionRaise {
+		t.Fatalf("on-pace budget got a raise from only one comparable overspend: %+v", rec)
+	}
+}
+
+func TestBR2SUGProjectionIncludesScheduledRecurringSpend(t *testing.T) {
+	app := br2sugTestApp(t)
+	now := time.Now()
+	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	budget := domain.Budget{ID: "recurring-transport", Name: "Transportation", CategoryID: "transport-cat", OwnerID: domain.GroupOwnerID,
+		Scope: domain.ScopeShared, Period: domain.PeriodMonthly, Limit: money.New(100000, "USD")}
+	if err := app.PutBudget(budget); err != nil {
+		t.Fatalf("PutBudget: %v", err)
+	}
+	for i, amount := range []int64{120000, 130000, 90000} {
+		date := monthStart.AddDate(0, -(i + 1), 10)
+		br2sugPutExpense(t, app, "recurring-history-"+date.Format("2006-01"), date, -amount)
+	}
+	if err := app.PutRecurring(domain.Recurring{ID: "scheduled-gas", Label: "Scheduled gas", CategoryID: "transport-cat",
+		Amount: money.New(-25000, "USD"), Cadence: domain.CadenceMonthly, NextDue: monthStart.AddDate(0, 1, -1)}); err != nil {
+		t.Fatalf("PutRecurring: %v", err)
+	}
+	rec, _, ok := budgetRecommendationAt(app, budget, monthStart)
+	if !ok {
+		t.Fatal("expected a history-backed recommendation")
+	}
+	if rec.Projection != 25000 {
+		t.Fatalf("monthly projection gate = %d, want scheduled recurring spend 25000", rec.Projection)
 	}
 }
 
@@ -91,6 +143,50 @@ func TestBR2SUGDirectionalCopyAndAccessibleNames(t *testing.T) {
 			}
 			if got := button.Attr("aria-label"); got != tc.accessible {
 				t.Errorf("accessible action = %q, want %q", got, tc.accessible)
+			}
+		})
+	}
+}
+
+func TestBR2SUGEvidencePluralizesOutlierCount(t *testing.T) {
+	cases := []struct {
+		name     string
+		outliers int
+		want     string
+	}{
+		{name: "none", outliers: 0, want: "Based on a 3-month median."},
+		{name: "one", outliers: 1, want: "3-month median, 1 unusual month left out."},
+		{name: "many", outliers: 2, want: "3-month median, 2 unusual months left out."},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			key := "sm12.reasonNoOutliers"
+			if tc.outliers == 1 {
+				key = "sm12.reasonOneOutlier"
+			} else if tc.outliers > 1 {
+				key = "sm12.reasonManyOutliers"
+			}
+			if got := budgetSuggestionEvidence(key, 3, tc.outliers); got != tc.want {
+				t.Errorf("evidence = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestBR2SUGEditRecommendationUsesTargetWording(t *testing.T) {
+	cases := []struct {
+		direction budgeting.SuggestionDirection
+		amount    string
+		outliers  int
+		want      string
+	}{
+		{direction: budgeting.SuggestionRaise, amount: "$136.30", want: "Raise to $136.30 Based on a 3-month median."},
+		{direction: budgeting.SuggestionLower, amount: "$126.42", outliers: 2, want: "Lower to $126.42 3-month median, 2 unusual months left out."},
+	}
+	for _, tc := range cases {
+		t.Run(string(tc.direction), func(t *testing.T) {
+			if got := budgetRecommendationCopy(tc.direction, tc.amount, 3, tc.outliers); got != tc.want {
+				t.Errorf("recommendation copy = %q, want %q", got, tc.want)
 			}
 		})
 	}

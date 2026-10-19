@@ -6,6 +6,7 @@ package i18n
 var br2sugKeys = Catalog{
 	"sm12.raise":                 "Raise to",
 	"sm12.lower":                 "Lower to",
+	"sm12.keep":                  "Keep at",
 	"sm12.directionalHint":       "%s %s",
 	"sm12.reasonNoOutliers":      "Based on a %d-month median.",
 	"sm12.reasonOneOutlier":      "%d-month median, 1 unusual month left out.",

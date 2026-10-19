@@ -303,7 +303,7 @@ func budgetRecommendationLine(app *appstate.App, b domain.Budget, status budgeti
 		base = budgetBaseCurrency(base)
 	}
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	projected, err := budgeting.PeriodEquivalent(status.Spent, b.Period, domain.PeriodMonthly)
+	projected, err := budgeting.PeriodEquivalent(status.Projection.Projected, b.Period, domain.PeriodMonthly)
 	if err != nil {
 		return P(css.Class("t-caption", tw.TextWarn), Attr("data-testid", "budget-limit-recommendation-incomplete"), uistate.T("budgets.recommendationIncomplete"))
 	}
@@ -330,15 +330,8 @@ func budgetRecommendationLine(app *appstate.App, b domain.Budget, status budgeti
 	if err != nil {
 		return P(css.Class("t-caption", tw.TextWarn), Attr("data-testid", "budget-limit-recommendation-incomplete"), uistate.T("budgets.recommendationIncomplete"))
 	}
-	direction := "budgets.recommendationKeep"
-	switch recommendation.Direction {
-	case budgeting.SuggestionRaise:
-		direction = "budgets.recommendationRaise"
-	case budgeting.SuggestionLower:
-		direction = "budgets.recommendationLower"
-	}
 	return P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "budget-limit-recommendation"),
-		uistate.T("budgets.recommendationEvidence", uistate.T(direction), fmtMoney(suggestedPeriod), len(recommendation.MonthsUsed), len(recommendation.Outliers)))
+		budgetRecommendationCopy(recommendation.Direction, fmtMoney(suggestedPeriod), len(recommendation.MonthsUsed)+len(recommendation.Outliers), len(recommendation.Outliers)))
 }
 
 // sourceAfterGiving is what a source would have left once its share is taken —
@@ -633,5 +626,11 @@ func rolloverCapOptions() []uiw.SelectOption {
 
 // budgetEditTopupImpact supplies the shared consequence wording for the raise-limit form.
 func budgetEditTopupImpact(permanent, funded bool) string {
-	return fundsImpactLine(budgeting.TopUpImpact(permanent, funded))
+	reach := fundsReachThisPeriod
+	if permanent {
+		reach = fundsReachPermanent
+	}
+	return fundsImpactLine(budgeting.TopUpImpact(permanent, funded), fundsImpactOption{
+		reach: reach, movesFromSelectedBudgets: funded,
+	})
 }
