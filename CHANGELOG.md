@@ -7,6 +7,19 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Debt-payment logic (DEBT1, not wired in yet).** `internal/debtpay` recognises payments from a bank account to a card
+  or loan (a matching credit on the debt account or a confirmed payee rule is strong evidence; a named lender with a
+  matching recurring amount is medium; refunds and balance transfers are never suggested), splits a loan payment into
+  principal, interest, fees and escrow from the statement or — marked as an estimate — from the loan's rate using exact
+  integer arithmetic, never caps an overpayment, and totals cash paid, principal reduced, interest and fees per period.
+- **Conflict checkpoints model (CONF1, not wired in yet).** `internal/conflictcheckpoint` keeps any number of restorable
+  copies per workspace, each locked to its server, account and workspace, ordered without trusting device clocks and
+  expiring after 90 days, plus a comparison of two copies (counts and added/changed/deleted records) that says plainly when
+  one side cannot be read.
+- **Device key for encryption at rest (ENC2, not wired in yet).** A non-extractable WebCrypto AES-GCM key stored only as a
+  CryptoKey in IndexedDB wraps a per-workspace data key, so data can be encrypted at rest even without a passcode; turning
+  App Lock on rewraps the key with the passcode (and back), an optional recovery code is issued only after it is safely
+  stored, and a missing device key asks for recovery instead of ever erasing data.
 - **Price increases are flagged when they happen (UNU2.1).** On an established recurring charge (three or more stable
   cycles) the first charge at least 10% or $2 higher is flagged with medium confidence, rising to high when the next
   charge confirms it; a one-off bump that returns to normal is not flagged again. Held-out evaluation: precision 1.00,
