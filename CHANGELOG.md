@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Price increases are flagged when they happen (UNU2.1).** On an established recurring charge (three or more stable
+  cycles) the first charge at least 10% or $2 higher is flagged with medium confidence, rising to high when the next
+  charge confirms it; a one-off bump that returns to normal is not flagged again. Held-out evaluation: precision 1.00,
+  recall 1.00 (designed scenarios).
 - **A new Unusual detector, measured (UNU2).** `internal/unusual` compares each charge with that merchant's own recent
   history first (median and median absolute deviation, so one old outlier cannot hide new spikes), falls back to the
   category, and reports separate signals — spike, possible double charge, first large charge at a new merchant, price

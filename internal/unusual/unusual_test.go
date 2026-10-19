@@ -120,17 +120,74 @@ func TestExclusionsAndExpectationEvidence(t *testing.T) {
 	}
 }
 
-func TestRecurringIncreaseNeedsTwoConsecutiveCycles(t *testing.T) {
-	makeInput := func(lastPrevious int64) Input {
-		return Input{Now: testNow, Recurring: []domain.Recurring{{ID: "stream", Label: "Video", Amount: money.New(-1599, "USD"), Cadence: domain.CadenceMonthly}}, Transactions: []domain.Transaction{
-			txn("candidate", "Video", "bills", 1999, 1), txn("prev", "Video", "bills", lastPrevious, 31), txn("old1", "Video", "bills", 1599, 61), txn("old2", "Video", "bills", 1599, 92), txn("old3", "Video", "bills", 1599, 123),
-		}}
+func TestEstablishedSeriesFlagsFirstIncreaseAndConfirmsNextCycle(t *testing.T) {
+	makeInput := func(amounts ...int64) Input {
+		rows := make([]domain.Transaction, 0, len(amounts))
+		for i, amount := range amounts {
+			rows = append(rows, txn("cycle"+string(rune('a'+i)), "Video", "bills", amount, (len(amounts)-i)*31))
+		}
+		return Input{Now: testNow, Transactions: rows}
 	}
-	if got := Detect(makeInput(1599)); hasFinding(got, "candidate", PriceIncrease) {
-		t.Fatalf("single increase flagged: %+v", got)
+	first := Detect(makeInput(1599, 1599, 1599, 2099))
+	var raised Finding
+	for _, finding := range first {
+		if finding.TxnID == "cycled" && finding.Signal == PriceIncrease {
+			raised = finding
+		}
 	}
-	if got := Detect(makeInput(1999)); !hasFinding(got, "candidate", PriceIncrease) {
-		t.Fatalf("two increases missed: %+v", got)
+	if raised.TxnID == "" || raised.Confidence != ConfidenceMedium {
+		t.Fatalf("first raised cycle = %+v; want medium PriceIncrease", first)
+	}
+
+	confirmed := Detect(makeInput(1599, 1599, 1599, 2099, 2099))
+	var firstEvidence, confirming Finding
+	for _, finding := range confirmed {
+		if finding.Signal != PriceIncrease {
+			continue
+		}
+		if finding.TxnID == "cycled" {
+			firstEvidence = finding
+		}
+		if finding.TxnID == "cyclee" {
+			confirming = finding
+		}
+	}
+	if firstEvidence.Confidence != ConfidenceMedium || firstEvidence.Evidence.Confirmation != "confirmed by the next charge" {
+		t.Fatalf("first cycle evidence = %+v; want medium with next-charge confirmation", firstEvidence)
+	}
+	if confirming.Confidence != ConfidenceHigh {
+		t.Fatalf("confirming cycle = %+v; want high confidence", confirming)
+	}
+
+	// A one-off rise is reported once; the return to the prior amount is not a rise.
+	oneOff := Detect(makeInput(1599, 1599, 1599, 2099, 1599))
+	if hasFinding(oneOff, "cyclee", PriceIncrease) {
+		t.Fatalf("return to baseline generated another price finding: %+v", oneOff)
+	}
+}
+
+func TestPriceIncreaseThresholdAndEstablishedHistory(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		amounts []int64
+		want    bool
+	}{
+		{name: "9 percent is below threshold", amounts: []int64{10000, 10000, 10000, 10900}},
+		{name: "less than two dollars is below threshold", amounts: []int64{1000, 1000, 1000, 1199}},
+		{name: "three prior stable cycles establish series", amounts: []int64{1599, 1599, 1599, 2099}, want: true},
+		{name: "two prior charges do not establish series", amounts: []int64{1599, 1599, 2099}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rows := make([]domain.Transaction, 0, len(tc.amounts))
+			for i, amount := range tc.amounts {
+				rows = append(rows, txn("cycle"+string(rune('a'+i)), "Video", "bills", amount, (len(tc.amounts)-i)*31))
+			}
+			findings := Detect(Input{Now: testNow, Transactions: rows})
+			got := hasFinding(findings, "cycle"+string(rune('a'+len(tc.amounts)-1)), PriceIncrease)
+			if got != tc.want {
+				t.Fatalf("PriceIncrease=%t want %t; findings=%+v", got, tc.want, findings)
+			}
+		})
 	}
 }
 

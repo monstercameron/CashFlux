@@ -186,11 +186,11 @@ func TestUNU2EvaluationAndLatencyReport(t *testing.T) {
 				t.Errorf("UNU2 holdout overall P/R = %.3f/%.3f; want >= .70/.60", newReport.Overall.Precision, newReport.Overall.Recall)
 			}
 			for _, metric := range newReport.Signals[:len(newReport.Signals)-1] {
+				if metric.Signal == PriceIncrease && (metric.Recall <= 0 || metric.Precision < .70) {
+					t.Errorf("UNU2 holdout PriceIncrease P/R = %.3f/%.3f; want precision >= .70 and recall > 0", metric.Precision, metric.Recall)
+				}
 				if metric.Recall <= 0 && metric.Signal != PriceIncrease {
 					t.Errorf("UNU2 holdout %s recall = %.3f; want > 0", metric.Signal, metric.Recall)
-				}
-				if metric.Recall <= 0 && metric.Signal == PriceIncrease {
-					t.Log("UNU2 holdout PriceIncrease recall is zero: every current positive fixture has only one raised cycle, contrary to the required two-cycle rule")
 				}
 			}
 		}

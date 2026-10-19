@@ -61,6 +61,7 @@ type Evidence struct {
 	Window              string         `json:"window,omitempty"`
 	RelatedTxnIDs       []string       `json:"related_txn_ids,omitempty"`
 	ExpectationEvidence []string       `json:"expectation_evidence,omitempty"`
+	Confirmation        string         `json:"confirmation,omitempty"`
 }
 
 // Finding is a detector result for one transaction.
@@ -215,12 +216,8 @@ func Detect(in Input) []Finding {
 		if len(merchantHistory) == 0 {
 			continue
 		}
-		if recurringPriceIncrease(candidate, merchantHistory, in) {
-			related := latestIDs(merchantHistory, 4)
-			typical := medianLast(merchantHistory, 3)
-			findings = append(findings, Finding{TxnID: candidate.txn.ID, Signal: PriceIncrease, Confidence: ConfidenceHigh, Evidence: Evidence{
-				AmountMinor: candidate.minor, TypicalMinor: typical, DeltaMinor: candidate.minor - typical, Method: "two_consecutive_recurring_cycles",
-				CurrencyCode: baseCurrency(candidate.txn.Amount, in), BaselineSource: BaselineMerchant, HistoryCount: len(merchantHistory), Window: "prior recurring cycles", RelatedTxnIDs: related}})
+		if increase, ok := recurringPriceIncrease(candidate, merchantHistory, merchantGroups[candidate.key], in); ok {
+			findings = append(findings, increase)
 		}
 	}
 	findings = append(findings, doubleChargeFindings(charges, duplicateIDs, in, goalByID, seasonalYears)...)
@@ -325,18 +322,6 @@ func latestIDs(history []charge, limit int) []string {
 	sort.Strings(out)
 	return out
 }
-func medianLast(history []charge, n int) int64 {
-	sort.Slice(history, func(i, j int) bool { return history[i].date.After(history[j].date) })
-	if len(history) > n {
-		history = history[:n]
-	}
-	vals := make([]int64, len(history))
-	for i, h := range history {
-		vals[i] = h.minor
-	}
-	return median(vals)
-}
-
 func duplicateSuspects(charges []charge) map[string]bool {
 	marked := map[string]bool{}
 	// Canonical same-day import duplicates are always excluded from baseline math.
@@ -437,31 +422,149 @@ func recurrenceMatches(t domain.Transaction, r domain.Recurring) bool {
 	return true
 }
 
-func recurringPriceIncrease(candidate charge, history []charge, in Input) bool {
-	var matched bool
-	for _, r := range in.Recurring {
-		if recurrenceMatches(candidate.txn, r) {
-			matched = true
-			break
-		}
-	}
-	if !matched { // A stable cadence is inferred from the last three merchant charges.
-		if len(history) < 4 {
-			return false
-		}
-		recent := append([]charge(nil), history...)
-		sort.Slice(recent, func(i, j int) bool { return recent[i].date.After(recent[j].date) })
-		span := recent[0].date.Sub(recent[1].date)
-		matched = span >= 20*24*time.Hour && span <= 400*24*time.Hour
-	}
-	if !matched || len(history) < 4 {
-		return false
+func recurringPriceIncrease(candidate charge, history, series []charge, in Input) (Finding, bool) {
+	if len(history) < 3 {
+		return Finding{}, false
 	}
 	ordered := append([]charge(nil), history...)
-	sort.Slice(ordered, func(i, j int) bool { return ordered[i].date.After(ordered[j].date) })
-	baseline := median([]int64{ordered[1].minor, ordered[2].minor, ordered[3].minor})
-	threshold := maxInt64(mulRatio(baseline, 10, 100), 200)
-	return ordered[0].minor-baseline > threshold && candidate.minor-baseline > threshold
+	sort.Slice(ordered, func(i, j int) bool { return ordered[i].date.Before(ordered[j].date) })
+	series = append([]charge(nil), series...)
+	sort.Slice(series, func(i, j int) bool { return series[i].date.Before(series[j].date) })
+
+	// Any stable, cadence-matched three-charge block can establish the prior
+	// amount. Prefer the most recent such block that is below this candidate.
+	var baseline int64
+	var baselineStart int = -1
+	for i := len(ordered) - 3; i >= 0; i-- {
+		block := ordered[i : i+3]
+		values := []int64{block[0].minor, block[1].minor, block[2].minor}
+		typical := median(values)
+		if !stableAmounts(values, typical) || candidate.minor-typical < increaseThreshold(typical) {
+			continue
+		}
+		points := make([]time.Time, 0, len(ordered)-i+1)
+		for _, item := range ordered[i:] {
+			points = append(points, item.date)
+		}
+		points = append(points, candidate.date)
+		if !cadenceMatched(points) {
+			continue
+		}
+		baseline, baselineStart = typical, i
+		break
+	}
+	if baselineStart < 0 {
+		return Finding{}, false
+	}
+
+	confidence := ConfidenceMedium
+	var related []string
+	if baselineStart+3 < len(ordered) {
+		newAmount := ordered[baselineStart+3].minor
+		confirmed := amountNear(candidate.minor, newAmount, increaseThreshold(baseline))
+		for _, item := range ordered[baselineStart+3:] {
+			if item.minor-baseline < increaseThreshold(baseline) || !amountNear(item.minor, newAmount, increaseThreshold(baseline)) {
+				confirmed = false
+				break
+			}
+			related = append(related, item.txn.ID)
+		}
+		if confirmed && candidate.minor-baseline >= increaseThreshold(baseline) {
+			confidence = ConfidenceHigh
+		}
+	}
+	if confidence == ConfidenceMedium {
+		related = append(related, ordered[len(ordered)-1].txn.ID)
+	}
+	confirmation := ""
+	if confidence == ConfidenceMedium && confirmedByNextCharge(candidate, series, in) {
+		confirmation = "confirmed by the next charge"
+	}
+	return Finding{TxnID: candidate.txn.ID, Signal: PriceIncrease, Confidence: confidence, Evidence: Evidence{
+		AmountMinor: candidate.minor, TypicalMinor: baseline, DeltaMinor: candidate.minor - baseline, Method: "established_recurring_series",
+		CurrencyCode: baseCurrency(candidate.txn.Amount, in), BaselineSource: BaselineMerchant, HistoryCount: len(ordered),
+		Window: "prior cadence-matched charges", RelatedTxnIDs: related, Confirmation: confirmation}}, true
+}
+
+func increaseThreshold(expected int64) int64 {
+	return maxInt64(mulRatio(expected, 10, 100), 200)
+}
+
+func stableAmounts(values []int64, typical int64) bool {
+	tolerance := increaseThreshold(typical)
+	for _, value := range values {
+		if value < typical-tolerance || value > typical+tolerance {
+			return false
+		}
+	}
+	return true
+}
+
+func amountNear(a, b, tolerance int64) bool {
+	if a >= b {
+		return a-b <= tolerance
+	}
+	return b-a <= tolerance
+}
+
+func cadenceMatched(points []time.Time) bool {
+	if len(points) < 4 {
+		return false
+	}
+	gaps := make([]int64, len(points)-1)
+	for i := 1; i < len(points); i++ {
+		gap := int64(points[i].Sub(points[i-1]) / (24 * time.Hour))
+		if gap < 1 || gap > 400 {
+			return false
+		}
+		gaps[i-1] = gap
+	}
+	center := median(gaps)
+	tolerance := maxInt64(3, mulRatio(center, 15, 100))
+	for _, gap := range gaps {
+		if gap < center-tolerance || gap > center+tolerance {
+			return false
+		}
+	}
+	return true
+}
+
+func confirmedByNextCharge(candidate charge, series []charge, in Input) bool {
+	var previous time.Time
+	for _, prior := range series {
+		if prior.date.Before(candidate.date) && prior.date.After(previous) {
+			previous = prior.date
+		}
+	}
+	if previous.IsZero() {
+		return false
+	}
+	for _, next := range series {
+		if !next.date.After(candidate.date) || !sameComparisonCurrency(candidate.txn.Amount.Currency, next.txn.Amount.Currency, in) {
+			continue
+		}
+		if !cadenceGapMatched(previous, candidate.date, next.date) {
+			return false
+		}
+		if amountNear(next.minor, candidate.minor, increaseThreshold(candidate.minor)) {
+			return true
+		}
+		// The first later merchant charge determines whether this was a
+		// one-off; do not skip a return to the old amount for a later match.
+		return false
+	}
+	return false
+}
+
+func cadenceGapMatched(a, b, c time.Time) bool {
+	first := int64(b.Sub(a) / (24 * time.Hour))
+	second := int64(c.Sub(b) / (24 * time.Hour))
+	if first < 1 || first > 400 || second < 1 || second > 400 {
+		return false
+	}
+	center := (first + second) / 2
+	tolerance := maxInt64(3, mulRatio(center, 15, 100))
+	return first >= center-tolerance && first <= center+tolerance && second >= center-tolerance && second <= center+tolerance
 }
 
 func recurringAmountExpected(candidate charge, recurring domain.Recurring, in Input) bool {
