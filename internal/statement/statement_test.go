@@ -4,6 +4,7 @@ package statement
 
 import (
 	"encoding/binary"
+	"strings"
 	"testing"
 	"unicode/utf16"
 )
@@ -195,6 +196,51 @@ func TestMapColumns(t *testing.T) {
 	}
 }
 
+func TestMapColumnsRecognizesInternationalBankHeaders(t *testing.T) {
+	tests := []struct {
+		name   string
+		header []string
+		want   Columns
+	}{
+		{"Dutch", []string{"Datum", "Buchungstext", "Bedrag"}, Columns{Date: 0, Description: 1, Amount: 2, Debit: -1, Credit: -1, Balance: -1}},
+		{"Spanish", []string{"Fecha", "Concepto", "Importe"}, Columns{Date: 0, Description: 1, Amount: 2, Debit: -1, Credit: -1, Balance: -1}},
+		{"French", []string{"Date de valeur", "Libellé", "Montant"}, Columns{Date: 0, Description: 1, Amount: 2, Debit: -1, Credit: -1, Balance: -1}},
+		{"German unusual names", []string{"Valuta", "Buchungstext", "Betrag", "Saldo"}, Columns{Date: 0, Description: 1, Amount: 2, Debit: -1, Credit: -1, Balance: 3}},
+		{"French signed debit credit column", []string{"Date", "Libellé", "Débit/Crédit"}, Columns{Date: 0, Description: 1, Amount: 2, Debit: -1, Credit: -1, Balance: -1}},
+		{"separate debit and credit", []string{"Fecha", "Concepto", "Débit", "Crédit"}, Columns{Date: 0, Description: 1, Amount: -1, Debit: 2, Credit: 3, Balance: -1}},
+		{"posting date and transaction details", []string{"Posting Date", "Transaction Details", "Ref", "Value"}, Columns{Date: 0, Description: 1, Amount: 3, Debit: -1, Credit: -1, Balance: -1}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := MapColumns(tc.header); got != tc.want {
+				t.Errorf("MapColumns(%q) = %+v, want %+v", tc.header, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestParseRecognizesInternationalAndSeparateDebitCreditHeaders(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		csv  string
+		want int64
+	}{
+		{"Dutch", "Datum;Buchungstext;Betrag\n2026-06-15;Einkauf;-12,50\n", -1250},
+		{"Spanish", "Fecha;Concepto;Importe\n2026-06-16;Compra;-8,25\n", -825},
+		{"French debit credit", "Date;Libellé;Débit;Crédit\n2026-06-17;Achat;12,50;\n", -1250},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			st, err := Parse(tc.csv, 2)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(st.Rows) != 1 || st.Rows[0].Amount != tc.want {
+				t.Fatalf("rows = %+v, want one row amount %d", st.Rows, tc.want)
+			}
+		})
+	}
+}
+
 func TestParseSingleAmountColumn(t *testing.T) {
 	csv := "Date,Description,Amount,Balance\n" +
 		"2026-06-01,Coffee Shop,(4.50),100.00\n" +
@@ -256,5 +302,7 @@ func TestParseRowErrorsAreSkippedNotFatal(t *testing.T) {
 func TestParseRejectsUnmappableHeader(t *testing.T) {
 	if _, err := Parse("Foo,Bar\n1,2\n", 2); err == nil {
 		t.Error("a header with no date/amount columns should error")
+	} else if !strings.Contains(err.Error(), "map the columns") {
+		t.Errorf("unmappable header error = %q, want mapping guidance", err)
 	}
 }

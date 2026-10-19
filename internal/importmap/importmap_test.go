@@ -255,3 +255,33 @@ func TestDefaultProfile(t *testing.T) {
 		}
 	}
 }
+
+func TestDefaultProfileRecognizesInternationalHeaders(t *testing.T) {
+	tests := []struct {
+		name   string
+		header []string
+		date   int
+		desc   int
+		amount int
+		debit  int
+		credit int
+		bal    int
+	}{
+		{"Dutch", []string{"Datum", "Buchungstext", "Bedrag", "Saldo"}, 0, 1, 2, -1, -1, 3},
+		{"Spanish", []string{"Fecha", "Concepto", "Importe"}, 0, 1, 2, -1, -1, -1},
+		{"French", []string{"Date de valeur", "Libellé", "Montant"}, 0, 1, 2, -1, -1, -1},
+		{"separate debit and credit", []string{"Fecha", "Concepto", "Débit", "Crédit"}, 0, 1, -1, 2, 3, -1},
+		{"signed debit credit column", []string{"Date", "Libellé", "Débit/Crédit"}, 0, 1, 2, -1, -1, -1},
+		{"posting date and transaction details", []string{"Posting Date", "Transaction Details", "Ref", "Value"}, 0, 1, 3, -1, -1, -1},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := DefaultProfile("bank", tc.header, 2)
+			if got.DateCol != tc.date || got.DescCol != tc.desc || got.AmountCol != tc.amount || got.DebitCol != tc.debit || got.CreditCol != tc.credit || got.BalanceCol != tc.bal {
+				t.Errorf("DefaultProfile mapping = date %d desc %d amount %d debit %d credit %d balance %d, want %d/%d/%d/%d/%d/%d",
+					got.DateCol, got.DescCol, got.AmountCol, got.DebitCol, got.CreditCol, got.BalanceCol,
+					tc.date, tc.desc, tc.amount, tc.debit, tc.credit, tc.bal)
+			}
+		})
+	}
+}

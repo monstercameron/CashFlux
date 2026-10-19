@@ -110,23 +110,94 @@ func DetectDelimiter(line string) rune {
 func MapColumns(header []string) Columns {
 	c := Columns{Date: -1, Description: -1, Amount: -1, Debit: -1, Credit: -1, Balance: -1}
 	for i, raw := range header {
-		h := strings.ToLower(strings.TrimSpace(raw))
-		switch {
-		case c.Date < 0 && (containsAny(h, "date", "posted")):
-			c.Date = i
-		case c.Debit < 0 && containsAny(h, "debit", "withdrawal", "paid out", "money out"):
-			c.Debit = i
-		case c.Credit < 0 && containsAny(h, "credit", "deposit", "paid in", "money in"):
-			c.Credit = i
-		case c.Amount < 0 && containsAny(h, "amount", "value"):
-			c.Amount = i
-		case c.Balance < 0 && containsAny(h, "balance"):
-			c.Balance = i
-		case c.Description < 0 && containsAny(h, "description", "memo", "payee", "narrative", "details", "name", "reference"):
-			c.Description = i
+		h := normalizeHeader(raw)
+		role := headerRole(h)
+		switch role {
+		case "date":
+			if c.Date < 0 {
+				c.Date = i
+			}
+		case "debit":
+			if c.Debit < 0 {
+				c.Debit = i
+			}
+		case "credit":
+			if c.Credit < 0 {
+				c.Credit = i
+			}
+		case "amount":
+			if c.Amount < 0 {
+				c.Amount = i
+			}
+		case "balance":
+			if c.Balance < 0 {
+				c.Balance = i
+			}
+		case "description":
+			if c.Description < 0 {
+				c.Description = i
+			}
 		}
 	}
 	return c
+}
+
+// normalizeHeader folds common Latin accents and punctuation so bank-specific
+// labels can be matched without depending on a locale or external package.
+func normalizeHeader(raw string) string {
+	raw = strings.ToLower(strings.TrimSpace(raw))
+	raw = strings.NewReplacer(
+		"á", "a", "à", "a", "â", "a", "ä", "a", "ã", "a", "å", "a",
+		"é", "e", "è", "e", "ê", "e", "ë", "e",
+		"í", "i", "ì", "i", "î", "i", "ï", "i", "ı", "i",
+		"ó", "o", "ò", "o", "ô", "o", "ö", "o", "õ", "o", "ø", "o", "œ", "oe",
+		"ú", "u", "ù", "u", "û", "u", "ü", "u", "ý", "y", "ÿ", "y", "ç", "c", "ñ", "n", "ß", "ss",
+	).Replace(raw)
+	var b strings.Builder
+	space := true
+	for _, r := range raw {
+		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' {
+			b.WriteRune(r)
+			space = false
+			continue
+		}
+		if !space {
+			b.WriteByte(' ')
+			space = true
+		}
+	}
+	return strings.TrimSpace(b.String())
+}
+
+func headerRole(h string) string {
+	// A single bilingual or combined debit/credit column carries its own sign;
+	// it must never be interpreted as a debit-only column.
+	if hasHeaderTerm(h, "debit") && hasHeaderTerm(h, "credit") {
+		return "amount"
+	}
+	if hasHeaderTerm(h, "date") || hasHeaderTerm(h, "posted") || hasHeaderTerm(h, "posting") || hasHeaderTerm(h, "fecha") || hasHeaderTerm(h, "datum") || hasHeaderTerm(h, "valuta") {
+		return "date"
+	}
+	if hasHeaderTerm(h, "debit") || hasHeaderTerm(h, "withdrawal") || hasHeaderTerm(h, "paid out") || hasHeaderTerm(h, "money out") || hasHeaderTerm(h, "debito") || hasHeaderTerm(h, "ausgabe") {
+		return "debit"
+	}
+	if hasHeaderTerm(h, "credit") || hasHeaderTerm(h, "deposit") || hasHeaderTerm(h, "paid in") || hasHeaderTerm(h, "money in") || hasHeaderTerm(h, "credito") || hasHeaderTerm(h, "einnahme") {
+		return "credit"
+	}
+	if hasHeaderTerm(h, "amount") || hasHeaderTerm(h, "value") || hasHeaderTerm(h, "betrag") || hasHeaderTerm(h, "importe") || hasHeaderTerm(h, "montant") || hasHeaderTerm(h, "bedrag") || hasHeaderTerm(h, "summe") {
+		return "amount"
+	}
+	if hasHeaderTerm(h, "balance") || hasHeaderTerm(h, "saldo") || hasHeaderTerm(h, "solde") {
+		return "balance"
+	}
+	if hasHeaderTerm(h, "description") || hasHeaderTerm(h, "memo") || hasHeaderTerm(h, "payee") || hasHeaderTerm(h, "narrative") || hasHeaderTerm(h, "details") || hasHeaderTerm(h, "name") || hasHeaderTerm(h, "reference") || hasHeaderTerm(h, "buchungstext") || hasHeaderTerm(h, "omschrijving") || hasHeaderTerm(h, "libelle") || hasHeaderTerm(h, "concepto") || hasHeaderTerm(h, "motif") {
+		return "description"
+	}
+	return ""
+}
+
+func hasHeaderTerm(header, term string) bool {
+	return header == term || strings.Contains(header, " "+term+" ") || strings.HasPrefix(header, term+" ") || strings.HasSuffix(header, " "+term)
 }
 
 var dateLayouts = []string{
@@ -257,7 +328,7 @@ func ParseWithOptions(text string, decimals int, options ParseOptions) (Statemen
 	}
 	st.Columns = MapColumns(records[0])
 	if st.Columns.Date < 0 || (st.Columns.Amount < 0 && st.Columns.Credit < 0 && st.Columns.Debit < 0) {
-		return st, errors.New("statement: could not find a date and an amount/debit/credit column")
+		return st, errors.New("statement: could not find a date and amount column; map the columns to continue")
 	}
 	dateOrder, ambiguousDates := detectDateOrder(records[1:], st.Columns.Date)
 	if options.DateOrder != "" {
@@ -333,15 +404,6 @@ func (st Statement) normalize(rec []string, decimals int, format NumberFormat, u
 		}
 	}
 	return row, ""
-}
-
-func containsAny(h string, subs ...string) bool {
-	for _, s := range subs {
-		if strings.Contains(h, s) {
-			return true
-		}
-	}
-	return false
 }
 
 func stripRunes(s, set string) string {

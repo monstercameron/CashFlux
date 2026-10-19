@@ -90,6 +90,7 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- Recognize international statement and CSV headers, including separate debit and credit columns.
 - **The transaction Link dialog is split into small components backed by a tested txnlink package (CSLINK).** No visible change.
 - **The Transactions summary band never overprints (TV8C).** Spent/Income/Net and the bar sit on two rows with labels under a full-width
   bar at 1440 and 1024, and "+N more" opens a readable popover instead of squeezing every category into the bar.

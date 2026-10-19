@@ -224,40 +224,49 @@ func DefaultProfile(name string, header []string, decimals int) Profile {
 		CurrencyCol: -1,
 		Decimals:    decimals,
 	}
+	columns := statement.MapColumns(header)
+	p.DateCol = columns.Date
+	p.DescCol = columns.Description
+	p.AmountCol = columns.Amount
+	p.DebitCol = columns.Debit
+	p.CreditCol = columns.Credit
+	p.BalanceCol = columns.Balance
 	for i, h := range header {
-		lower := strings.ToLower(strings.TrimSpace(h))
-		switch lower {
-		case "date", "transaction date", "posted date", "post date":
-			if p.DateCol < 0 {
-				p.DateCol = i
-			}
-		case "description", "memo", "name", "payee", "transaction description":
-			if p.DescCol < 0 {
-				p.DescCol = i
-			}
-		case "amount":
-			if p.AmountCol < 0 {
-				p.AmountCol = i
-			}
-		case "debit":
-			if p.DebitCol < 0 {
-				p.DebitCol = i
-			}
-		case "credit":
-			if p.CreditCol < 0 {
-				p.CreditCol = i
-			}
-		case "balance", "running balance":
-			if p.BalanceCol < 0 {
-				p.BalanceCol = i
-			}
-		case "currency":
-			if p.CurrencyCol < 0 {
-				p.CurrencyCol = i
-			}
+		lower := normalizeHeader(h)
+		if p.CurrencyCol < 0 && isCurrencyHeader(lower) {
+			p.CurrencyCol = i
 		}
 	}
 	return p
+}
+
+func isCurrencyHeader(header string) bool {
+	return header == "currency" || header == "devise" || header == "moneda" || header == "waehrung"
+}
+
+func normalizeHeader(raw string) string {
+	raw = strings.ToLower(strings.TrimSpace(raw))
+	raw = strings.NewReplacer(
+		"á", "a", "à", "a", "â", "a", "ä", "a", "ã", "a", "å", "a",
+		"é", "e", "è", "e", "ê", "e", "ë", "e",
+		"í", "i", "ì", "i", "î", "i", "ï", "i", "ı", "i",
+		"ó", "o", "ò", "o", "ô", "o", "ö", "o", "õ", "o", "ø", "o", "œ", "oe",
+		"ú", "u", "ù", "u", "û", "u", "ü", "u", "ý", "y", "ÿ", "y", "ç", "c", "ñ", "n", "ß", "ss",
+	).Replace(raw)
+	var b strings.Builder
+	space := true
+	for _, r := range raw {
+		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' {
+			b.WriteRune(r)
+			space = false
+			continue
+		}
+		if !space {
+			b.WriteByte(' ')
+			space = true
+		}
+	}
+	return strings.TrimSpace(b.String())
 }
 
 var dateLayouts = []string{
