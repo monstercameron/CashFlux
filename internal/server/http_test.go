@@ -1385,13 +1385,14 @@ func TestOAuthCallbackIssuesSessionAndRefreshLogout(t *testing.T) {
 	}
 	assertHTTPErrorReason(t, refreshRR, ErrorReasonPermissionDenied)
 
+	refreshHandler := handleOAuthRefresh(cfg, store)
 	refreshReq = httptest.NewRequest(http.MethodPost, "/v1/auth/refresh", nil)
 	refreshReq.Header.Set("Origin", "http://127.0.0.1:8080")
 	refreshReq.Header.Set(sessionCSRFHeader, csrfCookie.Value)
 	refreshReq.AddCookie(refreshCookie)
 	refreshReq.AddCookie(csrfCookie)
 	refreshRR = httptest.NewRecorder()
-	h.ServeHTTP(refreshRR, refreshReq)
+	refreshHandler.ServeHTTP(refreshRR, refreshReq)
 	if refreshRR.Code != http.StatusOK {
 		t.Fatalf("refresh status = %d body %q", refreshRR.Code, refreshRR.Body.String())
 	}
@@ -1421,32 +1422,79 @@ func TestOAuthCallbackIssuesSessionAndRefreshLogout(t *testing.T) {
 	reuseReq.AddCookie(oldRefreshCookie)
 	reuseReq.AddCookie(csrfCookie)
 	reuseRR := httptest.NewRecorder()
-	h.ServeHTTP(reuseRR, reuseReq)
-	if reuseRR.Code != http.StatusUnauthorized {
+	refreshHandler.ServeHTTP(reuseRR, reuseReq)
+	if reuseRR.Code != http.StatusOK {
 		t.Fatalf("reused refresh status = %d body %q", reuseRR.Code, reuseRR.Body.String())
 	}
-	assertHTTPErrorReason(t, reuseRR, ErrorReasonUnauthenticated)
-
-	revokedReq := httptest.NewRequest(http.MethodPost, "/v1/auth/refresh", nil)
-	revokedReq.Header.Set("Origin", "http://127.0.0.1:8080")
-	revokedReq.Header.Set(sessionCSRFHeader, csrfCookie.Value)
-	revokedReq.AddCookie(refreshCookie)
-	revokedReq.AddCookie(csrfCookie)
-	revokedRR := httptest.NewRecorder()
-	h.ServeHTTP(revokedRR, revokedReq)
-	if revokedRR.Code != http.StatusUnauthorized {
-		t.Fatalf("family revoked refresh status = %d body %q", revokedRR.Code, revokedRR.Body.String())
+	var reused oauthSessionResponse
+	if err := json.Unmarshal(reuseRR.Body.Bytes(), &reused); err != nil {
+		t.Fatalf("decode reused refresh: %v", err)
 	}
-	assertHTTPErrorReason(t, revokedRR, ErrorReasonUnauthenticated)
+	reusedRefresh := refreshCookieFromResponse(t, reuseRR)
+	if reused.AccessToken != refreshed.AccessToken || reusedRefresh.Value != refreshCookie.Value {
+		t.Fatalf("grace retry changed successor pair: access_equal=%v refresh_equal=%v", reused.AccessToken == refreshed.AccessToken, reusedRefresh.Value == refreshCookie.Value)
+	}
+	for _, cookie := range reuseRR.Result().Cookies() {
+		if cookie.Name == sessionCSRFCookie {
+			csrfCookie = cookie
+		}
+	}
 
 	logoutReq := httptest.NewRequest(http.MethodPost, "/v1/auth/logout", nil)
 	logoutReq.Header.Set("Origin", "http://127.0.0.1:8080")
 	logoutReq.Header.Set(sessionCSRFHeader, csrfCookie.Value)
+	logoutReq.AddCookie(refreshCookie)
 	logoutReq.AddCookie(csrfCookie)
 	logoutRR := httptest.NewRecorder()
 	h.ServeHTTP(logoutRR, logoutReq)
 	if logoutRR.Code != http.StatusNoContent {
 		t.Fatalf("logout status = %d", logoutRR.Code)
+	}
+	postLogoutReuse := oauthRefreshRequest(t, refreshHandler, oldRefreshCookie.Value, csrfCookie)
+	if postLogoutReuse.Code != http.StatusUnauthorized {
+		t.Fatalf("logged-out refresh reuse status = %d body %q, want 401", postLogoutReuse.Code, postLogoutReuse.Body.String())
+	}
+	assertHTTPErrorReason(t, postLogoutReuse, ErrorReasonUnauthenticated)
+}
+
+func TestOAuthRefreshReuseAfterGraceRevokesFamily(t *testing.T) {
+	store := openTestStore(t)
+	now := time.Now().UTC()
+	cfg := Config{AuthMode: "oauth", AppOrigin: "http://127.0.0.1:8080", MasterKey: "0123456789abcdef0123456789abcdef"}
+	if err := store.UpsertUser(User{ID: "github:late-refresh", Provider: "github", Subject: "late-refresh", CreatedAt: now}); err != nil {
+		t.Fatalf("UpsertUser: %v", err)
+	}
+	_, originalRefresh, err := issueStoredSessionPair(cfg, store, "github:late-refresh", now, "", "test device")
+	if err != nil {
+		t.Fatalf("issueStoredSessionPair: %v", err)
+	}
+	csrfRecorder := httptest.NewRecorder()
+	csrf, err := setCSRFCookie(csrfRecorder, false, now.Add(sessionRefreshTTL))
+	if err != nil {
+		t.Fatalf("setCSRFCookie: %v", err)
+	}
+	csrfCookie := &http.Cookie{Name: sessionCSRFCookie, Value: csrf}
+	handler := handleOAuthRefresh(cfg, store)
+	first := oauthRefreshRequest(t, handler, originalRefresh, csrfCookie)
+	if first.Code != http.StatusOK {
+		t.Fatalf("first refresh status = %d body %q", first.Code, first.Body.String())
+	}
+	successor := refreshCookieFromResponse(t, first)
+	claims, ok := verifySessionClaims(cfg, originalRefresh, "refresh", time.Now().UTC())
+	if !ok {
+		t.Fatal("original refresh token did not verify")
+	}
+	if _, err := store.db.Exec(`UPDATE refresh_tokens SET used_at = ? WHERE jti = ?`, formatTime(time.Now().UTC().Add(-31*time.Second)), claims.JTI); err != nil {
+		t.Fatalf("age consumed token past grace window: %v", err)
+	}
+	lateReuse := oauthRefreshRequest(t, handler, originalRefresh, csrfCookie)
+	if lateReuse.Code != http.StatusUnauthorized {
+		t.Fatalf("late reuse status = %d body %q, want 401", lateReuse.Code, lateReuse.Body.String())
+	}
+	assertHTTPErrorReason(t, lateReuse, ErrorReasonUnauthenticated)
+	useSuccessor := oauthRefreshRequest(t, handler, successor.Value, csrfCookie)
+	if useSuccessor.Code != http.StatusUnauthorized {
+		t.Fatalf("successor after late reuse status = %d body %q, want 401", useSuccessor.Code, useSuccessor.Body.String())
 	}
 }
 

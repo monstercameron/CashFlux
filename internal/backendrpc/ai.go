@@ -171,6 +171,36 @@ type PutWorkspaceRequest struct {
 	Dataset         []byte    `json:"dataset,omitempty"`
 	ClientUpdatedAt string    `json:"clientUpdatedAt,omitempty"`
 	Force           bool      `json:"force,omitempty"`
+	// BaseVersion is the workspace version this edit was based on — the Version
+	// the server returned the last time this device pushed or pulled. The server
+	// accepts when it still holds that version and rejects when something has
+	// landed since.
+	//
+	// It exists because the previous rule compared the CLIENT's wall clock with
+	// the SERVER's stamp, so a browser whose clock trailed the server's lost
+	// every push forever. A missing field selects the legacy timestamp rule for
+	// older clients; an explicit zero represents a create based on no workspace.
+	BaseVersion int64 `json:"baseVersion"`
+	// BaseVersionSet distinguishes a modern explicit version zero (a create
+	// based on an empty server state) from an older peer that omitted the field.
+	BaseVersionSet bool `json:"-"`
+}
+
+// UnmarshalJSON keeps old peers compatible while preserving whether they sent
+// the optional version field. Unknown fields remain ignored by the JSON codec.
+func (r *PutWorkspaceRequest) UnmarshalJSON(data []byte) error {
+	type wire PutWorkspaceRequest
+	var decoded wire
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	*r = PutWorkspaceRequest(decoded)
+	_, r.BaseVersionSet = fields["baseVersion"]
+	return nil
 }
 
 type PutWorkspaceResponse struct {
@@ -179,6 +209,11 @@ type PutWorkspaceResponse struct {
 	Dataset   []byte    `json:"dataset,omitempty"`
 	Version   int64     `json:"version"`
 	UpdatedAt string    `json:"updatedAt"`
+	// Reason names the rule that rejected a push ("version-stale",
+	// "clock-older"). It lets the client log WHY it lost rather than only that it
+	// lost, which is the difference between diagnosing a stale base and guessing
+	// at a clock. Empty on acceptance and from older servers.
+	Reason string `json:"reason,omitempty"`
 }
 
 type DeleteWorkspaceRequest struct {
@@ -204,7 +239,6 @@ type JSONCodec struct{}
 func (JSONCodec) Marshal(v any) ([]byte, error) { return json.Marshal(v) }
 func (JSONCodec) Unmarshal(data []byte, v any) error {
 	dec := json.NewDecoder(bytes.NewReader(data))
-	dec.DisallowUnknownFields()
 	if err := dec.Decode(v); err != nil {
 		return err
 	}

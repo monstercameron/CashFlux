@@ -58,6 +58,19 @@ and every commit updates this file under `Unreleased`.
 - **Add transaction asks for what it needs.** Payee or description is required on the visible Payee
   field; Description is optional and defaults to the payee (R4F). The typed-sentence box applies its
   fill on Enter (R2K). Add and Edit share one field layout, labels and direction toggle (R9F).
+- **The server can no longer let two pushes both win (SV0.3).** A workspace write is one transaction
+  with `UPDATE … WHERE version = ?` plus its snapshot and history; only an exact base version is
+  accepted, a delete bumps the version, and older peers keep the legacy timestamp rule. Refresh-token
+  reuse within 30 seconds returns the same successor pair instead of revoking the whole session family,
+  on both the gRPC and the OAuth cookie paths (SVR9/SVR11). `/v1/me` answers on the embed bridges
+  (SVR6). Schema v18.
+- **Blind, append-only change log on the server (v2, SV4; not yet reachable).** Schema v19 adds
+  `change_log`, workspace heads, snapshots (last three kept), a compare-and-swap keyring blob and a
+  pairing relay with a TTL; `AppendChanges` is idempotent per change ID with gap-free sequence numbers,
+  every call is scoped to the authenticated user, blobs and pairing envelopes are size-limited, and the
+  per-user rate limiter evicts idle buckets (SV4.1). `/v1/version` reports a server ID and API version.
+  Backups use `VACUUM INTO` plus an atomic rename, with a Litestream example and container health
+  checks. The service is not registered on the gRPC bridge until the v2 cut-over.
 
 ### Changed
 - **The Transactions page, reworked through an adversarial review loop (5.5 → 7.8/10 so far).**

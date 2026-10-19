@@ -16,6 +16,7 @@ import (
 
 // VersionResponse is returned by /v1/version for client compatibility checks.
 type VersionResponse struct {
+	ServerID            string   `json:"serverId"`
 	APIVersion          string   `json:"apiVersion"`
 	MinClientAPIVersion string   `json:"minClientApiVersion"`
 	AuthMode            string   `json:"authMode"`
@@ -256,9 +257,23 @@ func NewMux(cfg Config, stores ...*Store) http.Handler {
 			writeErrorJSON(w, ErrorReasonPermissionDenied, "origin not allowed")
 			return
 		}
+		serverID := ""
+		if store != nil {
+			var err error
+			serverID, err = store.ServerID(r.Context())
+			if err != nil {
+				writeErrorJSON(w, ErrorReasonInternal, "server identity unavailable")
+				return
+			}
+		}
+		minClientVersion := strings.TrimSpace(cfg.MinClientAPIVersion)
+		if minClientVersion == "" {
+			minClientVersion = MinClientAPIVersion
+		}
 		writeJSON(w, VersionResponse{
+			ServerID:            serverID,
 			APIVersion:          APIVersion,
-			MinClientAPIVersion: MinClientAPIVersion,
+			MinClientAPIVersion: minClientVersion,
 			AuthMode:            cfg.AuthMode,
 			BillingEnabled:      cfg.Billing,
 			AuthProviders:       cfg.OAuthProviderNames(),

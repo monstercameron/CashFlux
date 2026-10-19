@@ -223,37 +223,71 @@ func handleOAuthRefresh(cfg Config, store *Store) http.HandlerFunc {
 			writeErrorJSON(w, ErrorReasonUnauthenticated, "refresh token is invalid")
 			return
 		}
-		session, ok, err := store.ConsumeRefreshSession(claims.JTI, sessionTokenHash(cookie.Value), now)
-		if err != nil {
-			writeErrorJSON(w, ErrorReasonInternal, "refresh token lookup failed")
-			return
-		}
-		if !ok {
-			if strings.TrimSpace(session.FamilyID) != "" {
-				_ = store.RevokeRefreshSessionFamily(session.FamilyID, now)
-				auditFromRequest(r, store, AuthUser{ID: session.UserID}, "auth.token.reuse", "session_family", session.FamilyID)
-			}
-			writeErrorJSON(w, ErrorReasonUnauthenticated, "refresh token is invalid")
-			return
-		}
-		// A suspended account cannot refresh into a fresh access token even with a
-		// still-valid refresh cookie (suspension normally also revokes sessions, but
-		// this closes the window between suspend and revoke).
-		if suspended, err := store.IsUserSuspended(session.UserID); err != nil {
-			writeErrorJSON(w, ErrorReasonInternal, "suspension check failed")
-			return
-		} else if suspended {
-			_ = store.RevokeRefreshSessionFamily(session.FamilyID, now)
-			auditFromRequest(r, store, AuthUser{ID: session.UserID}, "auth.token.refresh.suspended", "user", session.UserID)
-			writeErrorJSON(w, ErrorReasonPermissionDenied, "account is suspended")
-			return
-		}
-		access, refresh, err := issueStoredSessionPair(cfg, store, session.UserID, now, session.FamilyID, session.DeviceLabel)
+		successorJTI, err := randomURLToken(24)
 		if err != nil {
 			writeErrorJSON(w, ErrorReasonInternal, "session issue failed")
 			return
 		}
-		auditFromRequest(r, store, AuthUser{ID: session.UserID}, "auth.token.refresh", "user", session.UserID)
+		successor, err := makeRefreshSuccessor(cfg, claims.Sub, claims.Family, successorJTI, now, "")
+		if err != nil {
+			writeErrorJSON(w, ErrorReasonInternal, "session issue failed")
+			return
+		}
+		session, rotated, err := store.RotateRefreshSession(claims.JTI, sessionTokenHash(cookie.Value), now, successor)
+		if err != nil {
+			writeErrorJSON(w, ErrorReasonInternal, "refresh token lookup failed")
+			return
+		}
+		var access, refresh string
+		if !rotated {
+			if !session.UsedAt.IsZero() && session.SuccessorJTI != "" && now.Sub(session.UsedAt) >= 0 && now.Sub(session.UsedAt) <= 30*time.Second && session.RevokedAt.IsZero() {
+				pair, ok, err := (&authServer{cfg: cfg, store: store}).refreshSuccessorPair(session)
+				if err != nil {
+					writeErrorJSON(w, ErrorReasonInternal, "refresh token lookup failed")
+					return
+				}
+				if ok {
+					if suspended, err := store.IsUserSuspended(session.UserID); err != nil {
+						writeErrorJSON(w, ErrorReasonInternal, "suspension check failed")
+						return
+					} else if suspended {
+						_ = store.RevokeRefreshSessionFamily(session.FamilyID, now)
+						auditFromRequest(r, store, AuthUser{ID: session.UserID}, "auth.token.refresh.suspended", "user", session.UserID)
+						writeErrorJSON(w, ErrorReasonPermissionDenied, "account is suspended")
+						return
+					}
+					access, refresh = pair.AccessToken, pair.RefreshToken
+				}
+			}
+			if refresh == "" {
+				if strings.TrimSpace(session.FamilyID) != "" {
+					_ = store.RevokeRefreshSessionFamily(session.FamilyID, now)
+					auditFromRequest(r, store, AuthUser{ID: session.UserID}, "auth.token.reuse", "session_family", session.FamilyID)
+				}
+				writeErrorJSON(w, ErrorReasonUnauthenticated, "refresh token is invalid")
+				return
+			}
+		}
+		if rotated {
+			if suspended, err := store.IsUserSuspended(session.UserID); err != nil {
+				writeErrorJSON(w, ErrorReasonInternal, "suspension check failed")
+				return
+			} else if suspended {
+				_ = store.RevokeRefreshSessionFamily(session.FamilyID, now)
+				auditFromRequest(r, store, AuthUser{ID: session.UserID}, "auth.token.refresh.suspended", "user", session.UserID)
+				writeErrorJSON(w, ErrorReasonPermissionDenied, "account is suspended")
+				return
+			}
+			pair, err := tokenPairFromSuccessor(cfg, successor, now.UTC().Truncate(time.Second))
+			if err != nil {
+				writeErrorJSON(w, ErrorReasonInternal, "session issue failed")
+				return
+			}
+			access, refresh = pair.AccessToken, pair.RefreshToken
+		}
+		if rotated {
+			auditFromRequest(r, store, AuthUser{ID: session.UserID}, "auth.token.refresh", "user", session.UserID)
+		}
 		setRefreshCookie(w, refresh, requestIsSecure(r), now.Add(sessionRefreshTTL))
 		csrf, err := setCSRFCookie(w, requestIsSecure(r), now.Add(sessionRefreshTTL))
 		if err != nil {

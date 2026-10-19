@@ -27,10 +27,10 @@ func TestEveryAccountCanOwnTheDefaultWorkspace(t *testing.T) {
 	ctxA := ContextWithAuthUser(context.Background(), AuthUser{ID: "user-A"})
 	ctxB := ContextWithAuthUser(context.Background(), AuthUser{ID: "user-B"})
 
-	if _, err := svc.PutWorkspace(ctxA, Workspace{ID: "default", Name: "Default"}, now, false, now); err != nil {
+	if _, err := svc.PutWorkspace(ctxA, Workspace{ID: "default", Name: "Default"}, now, false, now, 0); err != nil {
 		t.Fatalf("first account: %v", err)
 	}
-	if _, err := svc.PutWorkspace(ctxB, Workspace{ID: "default", Name: "Default"}, now, false, now); err != nil {
+	if _, err := svc.PutWorkspace(ctxB, Workspace{ID: "default", Name: "Default"}, now, false, now, 0); err != nil {
 		t.Fatalf("second account was refused its own default workspace: %v", err)
 	}
 
@@ -58,7 +58,7 @@ func TestSameWorkspaceIDKeepsSeparateSnapshots(t *testing.T) {
 		{"user-B", `{"owner":"B"}`},
 	} {
 		ctx := ContextWithAuthUser(context.Background(), AuthUser{ID: tc.user})
-		if _, err := svc.PutWorkspace(ctx, Workspace{ID: "default", Name: "Default"}, now, false, now); err != nil {
+		if _, err := svc.PutWorkspace(ctx, Workspace{ID: "default", Name: "Default"}, now, false, now, 0); err != nil {
 			t.Fatalf("%s put workspace: %v", tc.user, err)
 		}
 		if err := store.PutSnapshot(Snapshot{
@@ -92,7 +92,7 @@ func TestDeletingOneAccountLeavesTheOthersDefaultWorkspace(t *testing.T) {
 
 	for _, userID := range []string{"user-A", "user-B"} {
 		ctx := ContextWithAuthUser(context.Background(), AuthUser{ID: userID})
-		if _, err := svc.PutWorkspace(ctx, Workspace{ID: "default", Name: "Default"}, now, false, now); err != nil {
+		if _, err := svc.PutWorkspace(ctx, Workspace{ID: "default", Name: "Default"}, now, false, now, 0); err != nil {
 			t.Fatalf("%s: %v", userID, err)
 		}
 		if err := store.PutSnapshot(Snapshot{
@@ -133,7 +133,7 @@ func TestSameWorkspaceIDKeepsSeparateBlobLinks(t *testing.T) {
 	}
 	for _, userID := range []string{"user-A", "user-B"} {
 		ctx := ContextWithAuthUser(context.Background(), AuthUser{ID: userID})
-		if _, err := svc.PutWorkspace(ctx, Workspace{ID: "default", Name: "Default"}, now, false, now); err != nil {
+		if _, err := svc.PutWorkspace(ctx, Workspace{ID: "default", Name: "Default"}, now, false, now, 0); err != nil {
 			t.Fatalf("%s: %v", userID, err)
 		}
 	}

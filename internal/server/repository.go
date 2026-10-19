@@ -17,6 +17,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/monstercameron/CashFlux/internal/syncstate"
 )
 
 var errPayloadTooLarge = errors.New("server store: payload too large")
@@ -273,14 +275,15 @@ func (s *Store) DeleteAccount(userID string) (bool, error) {
 }
 
 type RefreshSession struct {
-	JTI         string
-	FamilyID    string
-	UserID      string
-	TokenHash   string
-	DeviceLabel string
-	ExpiresAt   time.Time
-	UsedAt      time.Time
-	RevokedAt   time.Time
+	JTI          string
+	FamilyID     string
+	UserID       string
+	TokenHash    string
+	DeviceLabel  string
+	ExpiresAt    time.Time
+	UsedAt       time.Time
+	RevokedAt    time.Time
+	SuccessorJTI string
 }
 
 type RefreshSessionFamily struct {
@@ -312,6 +315,119 @@ VALUES(?, ?, ?, ?, ?, ?, '', '')`,
 		return fmt.Errorf("server store: put refresh session: %w", err)
 	}
 	return nil
+}
+
+// RotateRefreshSession atomically consumes an unused refresh token, creates
+// its successor, and records the successor JTI on the consumed row. A replay
+// returns the consumed row unchanged so the caller can apply its grace policy.
+func (s *Store) RotateRefreshSession(jti, tokenHash string, now time.Time, successor RefreshSession) (RefreshSession, bool, error) {
+	if strings.TrimSpace(jti) == "" || strings.TrimSpace(tokenHash) == "" {
+		return RefreshSession{}, false, fmt.Errorf("server store: refresh jti and hash are required")
+	}
+	if strings.TrimSpace(successor.JTI) == "" || strings.TrimSpace(successor.TokenHash) == "" || successor.ExpiresAt.IsZero() {
+		return RefreshSession{}, false, fmt.Errorf("server store: successor refresh session is incomplete")
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return RefreshSession{}, false, fmt.Errorf("server store: begin rotate refresh session: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	// Claim the rotation with a conditional UPDATE first. This serializes two
+	// simultaneous refreshes at the SQLite write lock: one consumes the token;
+	// the other sees zero rows and reads the committed successor link below.
+	claimed, err := tx.Exec(`UPDATE refresh_tokens SET used_at = ?, successor_jti = ?
+WHERE jti = ? AND token_hash = ? AND used_at = '' AND revoked_at = '' AND expires_at > ?`,
+		formatTime(now.UTC()), successor.JTI, jti, tokenHash, formatTime(now.UTC()))
+	if err != nil {
+		return RefreshSession{}, false, fmt.Errorf("server store: claim refresh rotation: %w", err)
+	}
+	claimedRows, err := claimed.RowsAffected()
+	if err != nil {
+		return RefreshSession{}, false, fmt.Errorf("server store: refresh rotation rows: %w", err)
+	}
+	var session RefreshSession
+	var expiresAt, usedAt, revokedAt string
+	readSession := func() error {
+		return tx.QueryRow(`SELECT jti, family_id, user_id, token_hash, device_label, expires_at, used_at, revoked_at, successor_jti FROM refresh_tokens WHERE jti = ?`, jti).
+			Scan(&session.JTI, &session.FamilyID, &session.UserID, &session.TokenHash, &session.DeviceLabel, &expiresAt, &usedAt, &revokedAt, &session.SuccessorJTI)
+	}
+	if claimedRows == 0 {
+		err := readSession()
+		if errors.Is(err, sql.ErrNoRows) {
+			return RefreshSession{}, false, tx.Commit()
+		}
+		if err != nil {
+			return RefreshSession{}, false, fmt.Errorf("server store: read refresh session for rotation: %w", err)
+		}
+		session.ExpiresAt, err = parseTime(expiresAt)
+		if err != nil {
+			return RefreshSession{}, false, fmt.Errorf("server store: parse refresh expiry: %w", err)
+		}
+		if usedAt != "" {
+			session.UsedAt, err = parseTime(usedAt)
+			if err != nil {
+				return RefreshSession{}, false, fmt.Errorf("server store: parse used refresh time: %w", err)
+			}
+		}
+		if revokedAt != "" {
+			session.RevokedAt, err = parseTime(revokedAt)
+			if err != nil {
+				return RefreshSession{}, false, fmt.Errorf("server store: parse revoked refresh time: %w", err)
+			}
+		}
+		return session, false, tx.Commit()
+	}
+	if err := readSession(); err != nil {
+		return RefreshSession{}, false, fmt.Errorf("server store: read claimed refresh session: %w", err)
+	}
+	session.ExpiresAt, err = parseTime(expiresAt)
+	if err != nil {
+		return RefreshSession{}, false, fmt.Errorf("server store: parse refresh expiry: %w", err)
+	}
+	successor.FamilyID, successor.UserID = session.FamilyID, session.UserID
+	if successor.DeviceLabel == "" {
+		successor.DeviceLabel = session.DeviceLabel
+	}
+	if _, err := tx.Exec(`INSERT INTO refresh_tokens(jti, family_id, user_id, token_hash, device_label, expires_at, used_at, revoked_at) VALUES(?, ?, ?, ?, ?, ?, '', '')`, successor.JTI, successor.FamilyID, successor.UserID, successor.TokenHash, successor.DeviceLabel, formatTime(successor.ExpiresAt.UTC())); err != nil {
+		return RefreshSession{}, false, fmt.Errorf("server store: insert successor refresh session: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return RefreshSession{}, false, fmt.Errorf("server store: commit rotate refresh session: %w", err)
+	}
+	session.UsedAt, session.SuccessorJTI = now.UTC(), successor.JTI
+	return session, true, nil
+}
+
+// GetRefreshSession returns one refresh session by JTI.
+func (s *Store) GetRefreshSession(jti string) (RefreshSession, bool, error) {
+	var session RefreshSession
+	var expiresAt, usedAt, revokedAt string
+	err := s.db.QueryRow(`SELECT jti, family_id, user_id, token_hash, device_label, expires_at, used_at, revoked_at, successor_jti FROM refresh_tokens WHERE jti = ?`, jti).
+		Scan(&session.JTI, &session.FamilyID, &session.UserID, &session.TokenHash, &session.DeviceLabel, &expiresAt, &usedAt, &revokedAt, &session.SuccessorJTI)
+	if errors.Is(err, sql.ErrNoRows) {
+		return RefreshSession{}, false, nil
+	}
+	if err != nil {
+		return RefreshSession{}, false, fmt.Errorf("server store: get refresh session: %w", err)
+	}
+	var parseErr error
+	session.ExpiresAt, parseErr = parseTime(expiresAt)
+	if parseErr != nil {
+		return RefreshSession{}, false, fmt.Errorf("server store: parse refresh expiry: %w", parseErr)
+	}
+	if usedAt != "" {
+		session.UsedAt, parseErr = parseTime(usedAt)
+		if parseErr != nil {
+			return RefreshSession{}, false, fmt.Errorf("server store: parse refresh used time: %w", parseErr)
+		}
+	}
+	if revokedAt != "" {
+		session.RevokedAt, parseErr = parseTime(revokedAt)
+		if parseErr != nil {
+			return RefreshSession{}, false, fmt.Errorf("server store: parse refresh revoked time: %w", parseErr)
+		}
+	}
+	return session, true, nil
 }
 
 func (s *Store) GetIdempotencyResult(userID, route, key string) (IdempotencyResult, bool, error) {
@@ -728,6 +844,198 @@ ON CONFLICT(user_id, id) DO UPDATE SET
 	return nil
 }
 
+// AtomicPutWorkspaceInput is one version-checked workspace write: the
+// registry row plus, when Dataset is non-empty, its snapshot.
+type AtomicPutWorkspaceInput struct {
+	// Workspace is the row to store. UserID, ID and Name are required;
+	// UpdatedAt is the SERVER's stamp for this write (now when zero). Version
+	// in this struct is not taken as given: the stored version is always the
+	// successor of the row being replaced. Deleted is honored as passed, as
+	// the old upsert did — an ordinary push carries false, and only a forced
+	// push can land on a row that is currently a tombstone at all.
+	Workspace Workspace
+	// Dataset, when non-empty, becomes the current snapshot at the new
+	// version, in the same transaction.
+	Dataset []byte
+	// MaxDatasetBytes rejects an oversized Dataset BEFORE any write (0 = no
+	// limit). HistoryLimit bounds retained prior snapshots.
+	MaxDatasetBytes int
+	HistoryLimit    int
+	// BaseVersion, HasBaseVersion, Force and ClientUpdatedAt feed
+	// syncstate.DecidePut. HasBaseVersion is false only for older clients that
+	// omitted the field; explicit zero means a versioned create.
+	BaseVersion     int64
+	HasBaseVersion  bool
+	Force           bool
+	ClientUpdatedAt time.Time
+}
+
+// AtomicPutWorkspaceResult reports the outcome of PutWorkspaceAtomic. On
+// rejection Workspace is the row the server currently holds, so the caller
+// can hand the client the state it must pull before retrying.
+type AtomicPutWorkspaceResult struct {
+	Accepted  bool
+	Reason    string
+	Workspace Workspace
+}
+
+// PutWorkspaceAtomic decides and writes a workspace push in ONE transaction.
+//
+// The old path read the row, decided in Go, upserted with no version
+// condition, and wrote the snapshot in a second transaction — two devices
+// pushing the same base version both succeeded and the later silently
+// replaced the earlier, and an oversized snapshot was only rejected after
+// the version had already advanced. Here the size is validated before any
+// write, the decision (syncstate.DecidePut) runs against the row read inside
+// the transaction, and the write itself is guarded:
+//
+//   - existing row: UPDATE … SET version = version + 1 WHERE user_id = ?
+//     AND id = ? AND version = ? (the version just read). Zero rows affected
+//     means a concurrent write landed after the read; the transaction is
+//     rolled back and the whole decide/write is retried against fresh state,
+//     so the loser gets an honest rejection instead of overwriting.
+//   - new row: INSERT … ON CONFLICT DO NOTHING with version 1. Zero rows
+//     affected means a concurrent create won; same retry, which now decides
+//     against the winner's row.
+//
+// The snapshot (current row + history) is written in the same transaction,
+// so a workspace version never exists without its dataset or vice versa.
+func (s *Store) PutWorkspaceAtomic(in AtomicPutWorkspaceInput) (AtomicPutWorkspaceResult, error) {
+	w := in.Workspace
+	if strings.TrimSpace(w.ID) == "" || strings.TrimSpace(w.UserID) == "" || strings.TrimSpace(w.Name) == "" {
+		return AtomicPutWorkspaceResult{}, fmt.Errorf("server store: workspace id, user id, and name are required")
+	}
+	// Size before anything is written — a rejected oversized push must leave
+	// the stored version exactly where it was.
+	if in.MaxDatasetBytes > 0 && len(in.Dataset) > in.MaxDatasetBytes {
+		return AtomicPutWorkspaceResult{}, fmt.Errorf("%w: snapshot dataset is %d bytes, exceeds limit %d", errPayloadTooLarge, len(in.Dataset), in.MaxDatasetBytes)
+	}
+	if w.UpdatedAt.IsZero() {
+		w.UpdatedAt = time.Now().UTC()
+	}
+	defer s.observeDB("PutWorkspaceAtomic", time.Now())
+
+	// A guard miss retries against fresh state. The bound only matters under
+	// pathological contention; each retry is a full re-decision, never a
+	// blind re-write.
+	const maxAttempts = 5
+	createCollision := false
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		result, raced, createdCollision, err := s.putWorkspaceAtomicOnce(in, w, createCollision)
+		if err != nil {
+			return AtomicPutWorkspaceResult{}, err
+		}
+		if !raced {
+			return result, nil
+		}
+		createCollision = createCollision || createdCollision
+	}
+	return AtomicPutWorkspaceResult{}, fmt.Errorf("server store: put workspace: concurrent writes did not settle")
+}
+
+// putWorkspaceAtomicOnce is one decide-and-write transaction. raced=true
+// means the version guard missed (a concurrent write landed mid-transaction)
+// and the caller should retry from a fresh read.
+func (s *Store) putWorkspaceAtomicOnce(in AtomicPutWorkspaceInput, w Workspace, createCollision bool) (AtomicPutWorkspaceResult, bool, bool, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return AtomicPutWorkspaceResult{}, false, false, fmt.Errorf("server store: begin put workspace: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	current, exists, err := getWorkspaceTx(tx, w.UserID, w.ID)
+	if err != nil {
+		return AtomicPutWorkspaceResult{}, false, false, err
+	}
+	if exists && createCollision && !in.Force {
+		return AtomicPutWorkspaceResult{Accepted: false, Reason: "version-stale", Workspace: current}, false, false, nil
+	}
+	verdict := syncstate.DecidePut(syncstate.PutInput{
+		Exists:            exists,
+		Deleted:           exists && current.Deleted,
+		Force:             in.Force,
+		ClientBaseVersion: in.BaseVersion,
+		HasBaseVersion:    in.HasBaseVersion,
+		CurrentVersion:    current.Version,
+		ClientUpdatedAt:   in.ClientUpdatedAt,
+		CurrentUpdatedAt:  current.UpdatedAt,
+	})
+	if !verdict.Accept {
+		// Nothing was written; rolling back (via defer) is the whole point —
+		// a rejection never advances the version.
+		return AtomicPutWorkspaceResult{Accepted: false, Reason: verdict.Reason, Workspace: current}, false, false, nil
+	}
+
+	stored := w
+	if exists {
+		stored.Version = current.Version + 1
+		res, err := tx.Exec(`
+UPDATE workspaces SET
+  name = ?, color = ?, sort = ?, deleted = ?,
+  version = version + 1, updated_at = ?, device_id = ?
+WHERE user_id = ? AND id = ? AND version = ?`,
+			stored.Name, stored.Color, stored.Sort, boolInt(stored.Deleted), formatTime(stored.UpdatedAt), stored.DeviceID,
+			stored.UserID, stored.ID, current.Version)
+		if err != nil {
+			return AtomicPutWorkspaceResult{}, false, false, fmt.Errorf("server store: put workspace: %w", err)
+		}
+		affected, err := res.RowsAffected()
+		if err != nil {
+			return AtomicPutWorkspaceResult{}, false, false, fmt.Errorf("server store: put workspace rows: %w", err)
+		}
+		if affected == 0 {
+			return AtomicPutWorkspaceResult{}, true, false, nil
+		}
+	} else {
+		stored.Version = 1
+		res, err := tx.Exec(`
+INSERT INTO workspaces(id, user_id, name, color, sort, deleted, version, updated_at, device_id)
+VALUES(?, ?, ?, ?, ?, ?, 1, ?, ?)
+ON CONFLICT(user_id, id) DO NOTHING`,
+			stored.ID, stored.UserID, stored.Name, stored.Color, stored.Sort, boolInt(stored.Deleted), formatTime(stored.UpdatedAt), stored.DeviceID)
+		if err != nil {
+			return AtomicPutWorkspaceResult{}, false, false, fmt.Errorf("server store: put workspace: %w", err)
+		}
+		affected, err := res.RowsAffected()
+		if err != nil {
+			return AtomicPutWorkspaceResult{}, false, false, fmt.Errorf("server store: put workspace rows: %w", err)
+		}
+		if affected == 0 {
+			return AtomicPutWorkspaceResult{}, true, true, nil
+		}
+	}
+
+	if len(in.Dataset) > 0 {
+		if err := putSnapshotTx(tx, Snapshot{
+			UserID:      stored.UserID,
+			WorkspaceID: stored.ID,
+			Dataset:     in.Dataset,
+			Version:     stored.Version,
+			UpdatedAt:   stored.UpdatedAt,
+		}, in.HistoryLimit); err != nil {
+			return AtomicPutWorkspaceResult{}, false, false, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return AtomicPutWorkspaceResult{}, false, false, fmt.Errorf("server store: commit put workspace: %w", err)
+	}
+	return AtomicPutWorkspaceResult{Accepted: true, Workspace: stored}, false, false, nil
+}
+
+func getWorkspaceTx(tx *sql.Tx, userID, workspaceID string) (Workspace, bool, error) {
+	row := tx.QueryRow(`
+SELECT id, user_id, name, color, sort, deleted, version, updated_at, device_id
+FROM workspaces WHERE user_id = ? AND id = ?`, userID, workspaceID)
+	w, err := scanWorkspace(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Workspace{}, false, nil
+	}
+	if err != nil {
+		return Workspace{}, false, err
+	}
+	return w, true, nil
+}
+
 // ListWorkspaces returns a user's workspaces ordered for display.
 func (s *Store) ListWorkspaces(userID string, includeDeleted bool) ([]Workspace, error) {
 	defer s.observeDB("ListWorkspaces", time.Now())
@@ -774,14 +1082,23 @@ FROM workspaces WHERE user_id = ? AND id = ?`, userID, workspaceID)
 }
 
 // SoftDeleteWorkspace marks a user's workspace as deleted.
+//
+// The delete is itself a versioned write: it bumps version and stamps the
+// tombstone with the SERVER's time (updatedAt is that server stamp — callers
+// no longer pass a client clock). Bumping matters: a push queued before the
+// delete is based on the pre-delete version, so after the delete it is
+// version-stale and, tombstone rule aside, cannot match. Only a live row
+// transitions (deleted = 0) — deleting an already-deleted workspace reports
+// false and bumps nothing, so a repeated delete cannot keep moving the
+// version other devices have already learned.
 func (s *Store) SoftDeleteWorkspace(userID, workspaceID string, updatedAt time.Time, deviceID string) (bool, error) {
 	if updatedAt.IsZero() {
 		updatedAt = time.Now().UTC()
 	}
 	defer s.observeDB("SoftDeleteWorkspace", time.Now())
 	res, err := s.db.Exec(`
-UPDATE workspaces SET deleted = 1, updated_at = ?, device_id = ?
-WHERE user_id = ? AND id = ?`, formatTime(updatedAt), deviceID, userID, workspaceID)
+UPDATE workspaces SET deleted = 1, version = version + 1, updated_at = ?, device_id = ?
+WHERE user_id = ? AND id = ? AND deleted = 0`, formatTime(updatedAt), deviceID, userID, workspaceID)
 	if err != nil {
 		return false, fmt.Errorf("server store: soft delete workspace: %w", err)
 	}
@@ -810,12 +1127,25 @@ func (s *Store) PutSnapshot(snapshot Snapshot, maxBytes, historyLimit int) error
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
+	if err := putSnapshotTx(tx, snapshot, historyLimit); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
 
+// putSnapshotTx is PutSnapshot's body inside a caller-owned transaction, so
+// PutWorkspaceAtomic can commit the workspace row and its snapshot (plus
+// history) together — a version is never durable without its dataset.
+// Size validation stays with the callers (each has its own limit source).
+func putSnapshotTx(tx *sql.Tx, snapshot Snapshot, historyLimit int) error {
+	if snapshot.UpdatedAt.IsZero() {
+		snapshot.UpdatedAt = time.Now().UTC()
+	}
 	var current Snapshot
 	var updated string
 	row := tx.QueryRow(`SELECT workspace_id, dataset_json, version, updated_at FROM snapshots WHERE user_id = ? AND workspace_id = ?`,
 		snapshot.UserID, snapshot.WorkspaceID)
-	err = row.Scan(&current.WorkspaceID, &current.Dataset, &current.Version, &updated)
+	err := row.Scan(&current.WorkspaceID, &current.Dataset, &current.Version, &updated)
 	if err == nil {
 		current.UpdatedAt, err = parseTime(updated)
 		if err != nil {
@@ -842,7 +1172,7 @@ ON CONFLICT(user_id, workspace_id) DO UPDATE SET
 	if err := trimSnapshotHistory(tx, snapshot.UserID, snapshot.WorkspaceID, historyLimit); err != nil {
 		return err
 	}
-	return tx.Commit()
+	return nil
 }
 
 // GetSnapshotForUser returns the current dataset snapshot for a workspace ONLY when

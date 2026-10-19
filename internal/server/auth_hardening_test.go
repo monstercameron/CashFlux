@@ -34,7 +34,7 @@ func TestDeletedAccountIsNotRecreatedBySync(t *testing.T) {
 	ctx := ContextWithAuthUser(context.Background(), AuthUser{ID: "u-erase"})
 
 	mustUser(t, store, "u-erase", "local")
-	if _, err := svc.PutWorkspace(ctx, Workspace{ID: "ws-money", Name: "Money"}, now, false, now); err != nil {
+	if _, err := svc.PutWorkspace(ctx, Workspace{ID: "ws-money", Name: "Money"}, now, false, now, 0); err != nil {
 		t.Fatalf("initial push: %v", err)
 	}
 	if err := store.PutSnapshot(Snapshot{UserID: "u-erase", WorkspaceID: "ws-money", Dataset: []byte(`{"secret":"salary"}`), Version: 1, UpdatedAt: now}, 0, 5); err != nil {
@@ -47,7 +47,7 @@ func TestDeletedAccountIsNotRecreatedBySync(t *testing.T) {
 
 	// The tab is still open and its queue flushes exactly as it always does.
 	later := now.Add(time.Minute)
-	_, err := svc.PutWorkspace(ctx, Workspace{ID: "ws-money", Name: "Money"}, later, false, later)
+	_, err := svc.PutWorkspace(ctx, Workspace{ID: "ws-money", Name: "Money"}, later, false, later, 0)
 	if err == nil {
 		t.Fatal("a push from a deleted account was accepted — the account has been resurrected")
 	}
@@ -75,7 +75,7 @@ func TestSuspendedAccountCannotEraseItsWaySuspensionFree(t *testing.T) {
 	if err := store.SetUserSuspended("u-susp", true, now); err != nil {
 		t.Fatalf("suspend: %v", err)
 	}
-	if _, err := svc.PutWorkspace(ctx, Workspace{ID: "ws1", Name: "W"}, now, false, now); status.Code(err) != codes.PermissionDenied {
+	if _, err := svc.PutWorkspace(ctx, Workspace{ID: "ws1", Name: "W"}, now, false, now, 0); status.Code(err) != codes.PermissionDenied {
 		t.Fatalf("suspended push error = %v, want PermissionDenied", err)
 	}
 
@@ -83,7 +83,7 @@ func TestSuspendedAccountCannotEraseItsWaySuspensionFree(t *testing.T) {
 	if _, err := store.DeleteAccount("u-susp"); err != nil {
 		t.Fatalf("self delete: %v", err)
 	}
-	if _, err := svc.PutWorkspace(ctx, Workspace{ID: "ws1", Name: "W"}, now, false, now); status.Code(err) != codes.Unauthenticated {
+	if _, err := svc.PutWorkspace(ctx, Workspace{ID: "ws1", Name: "W"}, now, false, now, 0); status.Code(err) != codes.Unauthenticated {
 		t.Fatalf("post-delete push error = %v, want Unauthenticated", err)
 	}
 	if _, found, _ := store.GetUserByID("u-susp"); found {
@@ -145,7 +145,7 @@ func TestDeletedUsernameCanRegisterAgain(t *testing.T) {
 	// And the rebuilt account must actually work.
 	svc := NewSyncService(store)
 	ctx := ContextWithAuthUser(context.Background(), AuthUser{ID: again.ID})
-	if _, err := svc.PutWorkspace(ctx, Workspace{ID: "ws-new", Name: "New"}, now, false, now); err != nil {
+	if _, err := svc.PutWorkspace(ctx, Workspace{ID: "ws-new", Name: "New"}, now, false, now, 0); err != nil {
 		t.Fatalf("re-registered account cannot sync: %v", err)
 	}
 }
@@ -158,7 +158,7 @@ func TestTokenModeIdentityStillMaterializes(t *testing.T) {
 	now := time.Now().UTC()
 	ctx := ContextWithAuthUser(context.Background(), AuthUser{ID: "token:abc123"})
 
-	if _, err := svc.PutWorkspace(ctx, Workspace{ID: "ws1", Name: "W"}, now, false, now); err != nil {
+	if _, err := svc.PutWorkspace(ctx, Workspace{ID: "ws1", Name: "W"}, now, false, now, 0); err != nil {
 		t.Fatalf("first push from a never-seen token identity: %v", err)
 	}
 	if _, found, _ := store.GetUserByID("token:abc123"); !found {

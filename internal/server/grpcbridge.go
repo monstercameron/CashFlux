@@ -146,10 +146,13 @@ func NewSyncBridgeHandler(cfg Config, stores ...*Store) http.Handler {
 	)
 	// The sync engine's contract is the /grpc tunnel plus the /v1/version discovery handshake: the
 	// frontend GETs /v1/version to confirm the backend is reachable and learn its auth mode before it
-	// will connect. Serve exactly those two — no billing/portal/OAuth/blob HTTP surface.
+	// will connect. /v1/me supplies the authenticated identity required to scope sync writes. Billing
+	// stays disabled on this bridge, with no portal/OAuth/blob HTTP surface.
 	mux := http.NewServeMux()
 	mux.Handle("/grpc", tunnel)
 	mux.HandleFunc("OPTIONS /v1/version", handleCORSPreflight(cfg))
+	mux.HandleFunc("OPTIONS /v1/me", handleCORSPreflight(cfg))
+	mux.HandleFunc("GET /v1/me", handleBridgeMe(cfg, store))
 	mux.HandleFunc("GET /v1/version", func(w http.ResponseWriter, r *http.Request) {
 		if !writeCORS(w, r, cfg) {
 			writeErrorJSON(w, ErrorReasonPermissionDenied, "origin not allowed")
@@ -246,10 +249,13 @@ func NewSyncAndAuthBridgeHandler(cfg Config, stores ...*Store) http.Handler {
 	)
 	// Same discovery contract as NewSyncBridgeHandler: the /grpc tunnel plus
 	// /v1/version so the frontend can confirm reachability and auth mode
-	// before connecting.
+	// before connecting, and /v1/me so it can bind queued writes to the
+	// authenticated account. Billing is disabled on this bridge.
 	mux := http.NewServeMux()
 	mux.Handle("/grpc", tunnel)
 	mux.HandleFunc("OPTIONS /v1/version", handleCORSPreflight(cfg))
+	mux.HandleFunc("OPTIONS /v1/me", handleCORSPreflight(cfg))
+	mux.HandleFunc("GET /v1/me", handleBridgeMe(cfg, store))
 	mux.HandleFunc("GET /v1/version", func(w http.ResponseWriter, r *http.Request) {
 		if !writeCORS(w, r, cfg) {
 			writeErrorJSON(w, ErrorReasonPermissionDenied, "origin not allowed")
@@ -267,6 +273,32 @@ func NewSyncAndAuthBridgeHandler(cfg Config, stores ...*Store) http.Handler {
 		})
 	})
 	return mux
+}
+
+// handleBridgeMe shares the full server's identity and CORS behavior without
+// exposing billing from an embedded sync bridge. When no store is available,
+// identity is still resolved from the bearer token and only the user ID is
+// returned.
+func handleBridgeMe(cfg Config, store *Store) http.HandlerFunc {
+	meCfg := cfg
+	meCfg.Billing = false
+	if store != nil {
+		return handleMe(meCfg, store)
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !writeCORS(w, r, meCfg) {
+			writeErrorJSON(w, ErrorReasonPermissionDenied, "origin not allowed")
+			return
+		}
+		user, ok := httpBearerUser(r, meCfg, nil)
+		if !ok {
+			writeErrorJSON(w, ErrorReasonUnauthenticated, "missing bearer token")
+			return
+		}
+		writeJSON(w, struct {
+			UserID string `json:"userId"`
+		}{UserID: user.ID})
+	}
 }
 
 // grpcBridgeOriginAllowed keeps an explicitly configured cross-origin client

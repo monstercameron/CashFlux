@@ -38,8 +38,46 @@ func ThreeWayMerge(base, local, remote Record) (merged Record, conflicts []Confl
 		lv, lOk := local[field]
 		rv, rOk := remote[field]
 
-		localChanged := lOk && (!bOk || lv.Value != bv.Value)
-		remoteChanged := rOk && (!bOk || rv.Value != bv.Value)
+		// A DELETION is a change. This read `lOk && ...`, so a field the local
+		// side had removed scored localChanged=false — the delete was invisible,
+		// the field fell through to the "only remote has it" arm, and it came back
+		// from the other side with no conflict recorded. Deletes propagated in
+		// neither direction; every device resurrected what any other had removed.
+		localDeleted := bOk && !lOk
+		remoteDeleted := bOk && !rOk
+		localChanged := localDeleted || (lOk && (!bOk || lv.Value != bv.Value))
+		remoteChanged := remoteDeleted || (rOk && (!bOk || rv.Value != bv.Value))
+
+		// Both sides removed it: agreement, and nothing to write.
+		if localDeleted && remoteDeleted {
+			continue
+		}
+		// One side deleted while the other edited. That is a real conflict and the
+		// caller has to hear about it — a delete beaten silently is the same data
+		// loss as an edit beaten silently. The surviving EDIT wins: resurrecting a
+		// record is recoverable by deleting it again, whereas honouring the delete
+		// discards an edit that no longer exists anywhere.
+		if localDeleted && remoteChanged {
+			merged[field] = rv
+			conflicts = append(conflicts, ConflictEntry{
+				Field: field, LocalValue: "", RemoteValue: rv.Value,
+				ChosenValue: rv.Value, ChosenSide: "remote",
+			})
+			continue
+		}
+		if remoteDeleted && localChanged {
+			merged[field] = lv
+			conflicts = append(conflicts, ConflictEntry{
+				Field: field, LocalValue: lv.Value, RemoteValue: "",
+				ChosenValue: lv.Value, ChosenSide: "local",
+			})
+			continue
+		}
+		// A delete on one side that the other never touched: honour it by writing
+		// nothing.
+		if localDeleted || remoteDeleted {
+			continue
+		}
 
 		switch {
 		case localChanged && remoteChanged:

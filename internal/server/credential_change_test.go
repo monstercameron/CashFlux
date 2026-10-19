@@ -309,7 +309,7 @@ func TestCredentialChangeRoundTrip(t *testing.T) {
 	sync := NewSyncService(store)
 	now := time.Now().UTC()
 	if _, err := sync.PutWorkspace(ContextWithAuthUser(context.Background(), AuthUser{ID: userID}),
-		Workspace{ID: "ws1", Name: "W"}, now, false, now); err != nil {
+		Workspace{ID: "ws1", Name: "W"}, now, false, now, 0); err != nil {
 		t.Fatalf("sync after credential changes: %v", err)
 	}
 	if strings.TrimSpace(final.AccessToken) == "" {

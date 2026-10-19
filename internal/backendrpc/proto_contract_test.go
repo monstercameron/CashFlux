@@ -119,7 +119,7 @@ func TestGeneratedProtoMethodNamesMatchBridgeConstants(t *testing.T) {
 	}
 }
 
-func TestJSONCodecRejectsUnknownAndTrailingFields(t *testing.T) {
+func TestJSONCodecIgnoresUnknownAndRejectsTrailingFields(t *testing.T) {
 	codec := JSONCodec{}
 	var req GetWorkspaceRequest
 	if err := codec.Unmarshal([]byte(`{"id":"w1"}`), &req); err != nil {
@@ -132,7 +132,6 @@ func TestJSONCodecRejectsUnknownAndTrailingFields(t *testing.T) {
 		name string
 		raw  string
 	}{
-		{name: "unknown field", raw: `{"id":"w1","extra":true}`},
 		{name: "trailing object", raw: `{"id":"w1"} {"id":"w2"}`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -141,5 +140,34 @@ func TestJSONCodecRejectsUnknownAndTrailingFields(t *testing.T) {
 				t.Fatalf("Unmarshal(%s) succeeded, want error", tc.raw)
 			}
 		})
+	}
+	var future GetWorkspaceRequest
+	if err := codec.Unmarshal([]byte(`{"id":"w2","futureField":true}`), &future); err != nil || future.ID != "w2" {
+		t.Fatalf("unknown-field decode = %+v/%v, want id w2 and no error", future, err)
+	}
+}
+
+func TestPutWorkspaceRequestTracksExplicitZeroBaseVersion(t *testing.T) {
+	codec := JSONCodec{}
+	var modern PutWorkspaceRequest
+	if err := codec.Unmarshal([]byte(`{"workspace":{"id":"w1","name":"Home"},"baseVersion":0,"future":true}`), &modern); err != nil {
+		t.Fatalf("decode modern request: %v", err)
+	}
+	if !modern.BaseVersionSet || modern.BaseVersion != 0 {
+		t.Fatalf("modern base version = %d/%v, want explicit zero", modern.BaseVersion, modern.BaseVersionSet)
+	}
+	var legacy PutWorkspaceRequest
+	if err := codec.Unmarshal([]byte(`{"workspace":{"id":"w1","name":"Home"}}`), &legacy); err != nil {
+		t.Fatalf("decode legacy request: %v", err)
+	}
+	if legacy.BaseVersionSet {
+		t.Fatal("legacy request without baseVersion marked as versioned")
+	}
+	encoded, err := codec.Marshal(PutWorkspaceRequest{Workspace: Workspace{ID: "w1", Name: "Home"}})
+	if err != nil {
+		t.Fatalf("marshal modern request: %v", err)
+	}
+	if !strings.Contains(string(encoded), `"baseVersion":0`) {
+		t.Fatalf("zero baseVersion was omitted: %s", encoded)
 	}
 }

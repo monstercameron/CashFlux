@@ -1,7 +1,20 @@
 // SPDX-License-Identifier: MIT
 
 // Package syncmerge provides pure, platform-independent helpers for merging
-// workspace sync records. All functions are safe to call from native Go tests
+// workspace sync records.
+//
+// # NOT WIRED UP
+//
+// Nothing imports this package. The live sync path replaces the whole dataset
+// under last-writer-wins — see internal/app/sync_client.go and the server's
+// PutWorkspace, where the accept/reject decision lives in
+// syncstate.DecidePut. Field-level merging is a design that exists here and is
+// not in use.
+//
+// That is stated plainly because the package reads like the reconciliation
+// engine — tests, a conflict policy, a design section — and reasoning about a
+// sync problem from this file leads somewhere the running system never goes.
+// The functions below are correct and tested; they are simply not reached. All functions are safe to call from native Go tests
 // and from wasm — no syscall/js imports.
 //
 // # Design

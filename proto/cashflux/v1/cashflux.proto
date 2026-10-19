@@ -53,6 +53,7 @@ message PutWorkspaceRequest {
   bytes dataset = 2;
   string client_updated_at = 3;
   bool force = 4;
+  int64 base_version = 5;
 }
 
 message PutWorkspaceResponse {
@@ -61,6 +62,7 @@ message PutWorkspaceResponse {
   bytes dataset = 3;
   int64 version = 4;
   string updated_at = 5;
+  string reason = 6;
 }
 
 message DeleteWorkspaceRequest {

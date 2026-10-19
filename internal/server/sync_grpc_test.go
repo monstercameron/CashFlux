@@ -59,6 +59,9 @@ func TestSyncServiceGRPCBridgeWorkspaceRoundTrip(t *testing.T) {
 	if !put.Accepted || put.Version != 1 || put.Workspace.ID != "w-grpc" || put.Workspace.Name != "Home" {
 		t.Fatalf("PutWorkspace response = %+v", put)
 	}
+	if put.Reason != "" {
+		t.Fatalf("accepted PutWorkspace reason = %q, want empty", put.Reason)
+	}
 	if string(put.Dataset) != `{"schemaVersion":1,"accounts":[]}` {
 		t.Fatalf("PutWorkspace dataset = %q", put.Dataset)
 	}
@@ -81,6 +84,9 @@ func TestSyncServiceGRPCBridgeWorkspaceRoundTrip(t *testing.T) {
 	}
 	if stale.Accepted || stale.Workspace.Name != "Home" || stale.Version != 1 {
 		t.Fatalf("stale PutWorkspace response = %+v", stale)
+	}
+	if stale.Reason != "version-stale" {
+		t.Fatalf("stale PutWorkspace reason = %q, want version-stale", stale.Reason)
 	}
 	if string(stale.Dataset) != `{"schemaVersion":1,"accounts":[]}` {
 		t.Fatalf("stale PutWorkspace dataset = %q", stale.Dataset)

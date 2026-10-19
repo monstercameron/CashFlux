@@ -14,7 +14,7 @@ import (
 	_ "github.com/ncruces/go-sqlite3/driver" // registers the pure-Go sqlite3 driver
 )
 
-const CurrentServerSchemaVersion = 17
+const CurrentServerSchemaVersion = 19
 const sqliteBusyTimeoutMillis = 5000
 
 // Store owns the backend SQLite database.
@@ -276,8 +276,69 @@ func (s *Store) migrate() error {
 		}
 		version = 17
 	}
+	if version < 18 {
+		if err := s.migrateTo18(); err != nil {
+			return err
+		}
+		version = 18
+	}
+	if version < 19 {
+		if err := s.migrateTo19(); err != nil {
+			return err
+		}
+		version = 19
+	}
 	if _, err := s.db.Exec(`INSERT INTO schema_meta(id, version) VALUES(1, ?) ON CONFLICT(id) DO UPDATE SET version = excluded.version`, version); err != nil {
 		return fmt.Errorf("server store: write schema version: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) migrateTo19() error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("server store: migrate v19 begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	for _, stmt := range []string{
+		`CREATE TABLE IF NOT EXISTS change_log (
+  user_id TEXT NOT NULL, workspace_id TEXT NOT NULL, seq INTEGER NOT NULL,
+  change_id TEXT NOT NULL, device_id TEXT NOT NULL, size INTEGER NOT NULL,
+  created_at TEXT NOT NULL, blob BLOB NOT NULL,
+  PRIMARY KEY(user_id, workspace_id, seq), UNIQUE(user_id, workspace_id, change_id)
+)`,
+		`CREATE TABLE IF NOT EXISTS ws_head (
+  user_id TEXT NOT NULL, workspace_id TEXT NOT NULL, next_seq INTEGER NOT NULL,
+  deleted_at TEXT NOT NULL DEFAULT '', PRIMARY KEY(user_id, workspace_id)
+)`,
+		`CREATE TABLE IF NOT EXISTS ws_snapshot (
+  user_id TEXT NOT NULL, workspace_id TEXT NOT NULL, covers_seq INTEGER NOT NULL,
+  created_at TEXT NOT NULL, blob BLOB NOT NULL,
+  PRIMARY KEY(user_id, workspace_id, covers_seq)
+)`,
+		`CREATE TABLE IF NOT EXISTS keyring (
+  user_id TEXT NOT NULL, workspace_id TEXT NOT NULL, version INTEGER NOT NULL,
+  blob BLOB NOT NULL, PRIMARY KEY(user_id, workspace_id)
+)`,
+		`CREATE TABLE IF NOT EXISTS pairing_relay (
+	  user_id TEXT NOT NULL, id TEXT NOT NULL, created_at TEXT NOT NULL,
+	  expires_at TEXT NOT NULL, blob BLOB NOT NULL, PRIMARY KEY(user_id,id)
+)`,
+		`CREATE INDEX IF NOT EXISTS pairing_relay_expiry ON pairing_relay(expires_at)`,
+		`CREATE TABLE IF NOT EXISTS server_meta (name TEXT PRIMARY KEY, value TEXT NOT NULL)`,
+	} {
+		if _, err := tx.Exec(stmt); err != nil {
+			return fmt.Errorf("server store: migrate v19 schema: %w", err)
+		}
+	}
+	if _, err := tx.Exec(`WITH random_id(value) AS (SELECT lower(hex(randomblob(16)))) INSERT OR IGNORE INTO server_meta(name,value) SELECT 'server_id',substr(value,1,8)||'-'||substr(value,9,4)||'-4'||substr(value,14,3)||'-'||substr('89ab',abs(random())%4+1,1)||substr(value,18,3)||'-'||substr(value,21,12) FROM random_id`); err != nil {
+		return fmt.Errorf("server store: migrate v19 server id: %w", err)
+	}
+	if _, err := tx.Exec(`INSERT INTO schema_meta(id, version) VALUES(1, 19) ON CONFLICT(id) DO UPDATE SET version = 19`); err != nil {
+		return fmt.Errorf("server store: migrate v19 version: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("server store: migrate v19 commit: %w", err)
 	}
 	return nil
 }
@@ -796,6 +857,56 @@ FROM workspace_blobs wb JOIN workspaces w ON w.id = wb.workspace_id`,
 	}
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("server store: migrate v17: foreign key check: %w", err)
+	}
+	return nil
+}
+
+// migrateTo18 links each consumed refresh token to the session that
+// replaced it (successor_jti), backing the refresh-reuse grace window
+// (SV0.3): a duplicate refresh moments after a rotation — two tabs racing,
+// or a retry whose response was lost — can be answered with the successor
+// pair instead of revoking the whole session family as if the token had
+// been stolen. Only the successor's JTI is stored, never a token: refresh
+// tokens are deterministic server-signed JWTs over (user, family, jti,
+// expiry), all of which the successor row already holds, so the identical
+// token can be re-minted and checked against the stored hash. The database
+// keeps its hashes-only property for live credentials.
+func (s *Store) migrateTo18() error {
+	rows, err := s.db.Query(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'refresh_tokens'`)
+	if err != nil {
+		return fmt.Errorf("server store: migrate v18: inspect refresh_tokens: %w", err)
+	}
+	hasTable := rows.Next()
+	rows.Close()
+	if !hasTable {
+		// Some v17 databases were created before refresh-token sessions existed.
+		// Install the complete current table so the schema remains usable after
+		// upgrade, rather than treating the missing table as a failed migration.
+		if _, err := s.db.Exec(`CREATE TABLE refresh_tokens (
+			jti TEXT PRIMARY KEY,
+			family_id TEXT NOT NULL,
+			user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			token_hash TEXT NOT NULL,
+			device_label TEXT NOT NULL DEFAULT '',
+			expires_at TEXT NOT NULL,
+			used_at TEXT NOT NULL DEFAULT '',
+			revoked_at TEXT NOT NULL DEFAULT '',
+			successor_jti TEXT NOT NULL DEFAULT ''
+		);
+		CREATE INDEX IF NOT EXISTS idx_refresh_tokens_family ON refresh_tokens(family_id);
+		CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);`); err != nil {
+			return fmt.Errorf("server store: migrate v18: create refresh_tokens: %w", err)
+		}
+		return nil
+	}
+	has, err := s.columnExists("refresh_tokens", "successor_jti")
+	if err != nil {
+		return fmt.Errorf("server store: migrate v18: %w", err)
+	}
+	if !has {
+		if _, err := s.db.Exec(`ALTER TABLE refresh_tokens ADD COLUMN successor_jti TEXT NOT NULL DEFAULT '';`); err != nil {
+			return fmt.Errorf("server store: migrate v18: %w", err)
+		}
 	}
 	return nil
 }

@@ -1,0 +1,37 @@
+syntax = "proto3";
+package cashflux.v2;
+
+service BlobSync {
+  rpc AppendChanges(AppendChangesRequest) returns (AppendChangesResponse);
+  rpc ListChanges(ListChangesRequest) returns (ListChangesResponse);
+  rpc PutSnapshot(PutSnapshotRequest) returns (PutSnapshotResponse);
+  rpc GetSnapshot(GetSnapshotRequest) returns (GetSnapshotResponse);
+  rpc GetKeyring(GetKeyringRequest) returns (GetKeyringResponse);
+  rpc PutKeyring(PutKeyringRequest) returns (PutKeyringResponse);
+  rpc DeleteWorkspace(DeleteWorkspaceRequest) returns (DeleteWorkspaceResponse);
+  rpc CreatePairing(CreatePairingRequest) returns (CreatePairingResponse);
+  rpc ClaimPairing(ClaimPairingRequest) returns (ClaimPairingResponse);
+  rpc Watch(WatchRequest) returns (stream WatchEvent);
+}
+
+message Change { string change_id = 1; string device_id = 2; bytes blob = 3; int64 seq = 4; }
+message AppendChangesRequest { string workspace = 1; repeated Change changes = 2; }
+message AppendChangesResponse { repeated int64 seqs = 1; }
+message ListChangesRequest { string workspace = 1; int64 since = 2; int32 limit = 3; }
+message ListChangesResponse { repeated Change changes = 1; int64 head = 2; }
+message PutSnapshotRequest { string workspace = 1; int64 covers_seq = 2; bytes blob = 3; }
+message PutSnapshotResponse { bool accepted = 1; }
+message GetSnapshotRequest { string workspace = 1; }
+message GetSnapshotResponse { bool found = 1; int64 covers_seq = 2; bytes blob = 3; }
+message GetKeyringRequest { string workspace = 1; }
+message GetKeyringResponse { bool found = 1; int64 version = 2; bytes blob = 3; }
+message PutKeyringRequest { string workspace = 1; int64 expected_version = 2; bytes blob = 3; }
+message PutKeyringResponse { int64 version = 1; bool updated = 2; }
+message DeleteWorkspaceRequest { string workspace = 1; }
+message DeleteWorkspaceResponse { bool deleted = 1; }
+message CreatePairingRequest { string id = 1; bytes blob = 2; int64 ttl_seconds = 3; }
+message CreatePairingResponse { string expires_at = 1; string id = 2; }
+message ClaimPairingRequest { string id = 1; }
+message ClaimPairingResponse { bool found = 1; bytes blob = 2; }
+message WatchRequest { string workspace = 1; int64 since = 2; }
+message WatchEvent { string workspace = 1; int64 head = 2; }

@@ -67,13 +67,7 @@ func RunBackup(ctx context.Context, opts BackupOptions) (string, BackupManifest,
 	if err != nil {
 		return "", BackupManifest{}, err
 	}
-	if err := store.CheckpointWAL(ctx); err != nil {
-		_ = store.Close()
-		return "", BackupManifest{}, err
-	}
-	if err := store.Close(); err != nil {
-		return "", BackupManifest{}, fmt.Errorf("server backup: close store: %w", err)
-	}
+	defer func() { _ = store.Close() }()
 
 	backupDir := filepath.Join(outDir, "cashflux-backup-"+opts.Now.Format("20060102T150405Z"))
 	if err := os.MkdirAll(backupDir, 0o700); err != nil {
@@ -85,7 +79,20 @@ func RunBackup(ctx context.Context, opts BackupOptions) (string, BackupManifest,
 		RPO:                 "last successful scheduled backup",
 		RTO:                 "restore the backup directory, start the server, and verify /readyz",
 	}
-	if err := copyBackupFile(ctx, dbPath, filepath.Join(backupDir, "cashflux-server.db"), "cashflux-server.db", &manifest); err != nil {
+	dbBackup := filepath.Join(backupDir, ".cashflux-server.db.tmp")
+	quotedBackup := strings.ReplaceAll(dbBackup, "'", "''")
+	if _, err := store.db.ExecContext(ctx, `VACUUM INTO '`+quotedBackup+`'`); err != nil {
+		_ = store.Close()
+		return "", BackupManifest{}, fmt.Errorf("server backup: vacuum into: %w", err)
+	}
+	if err := store.Close(); err != nil {
+		return "", BackupManifest{}, fmt.Errorf("server backup: close store: %w", err)
+	}
+	finalDB := filepath.Join(backupDir, "cashflux-server.db")
+	if err := os.Rename(dbBackup, finalDB); err != nil {
+		return "", BackupManifest{}, fmt.Errorf("server backup: install database: %w", err)
+	}
+	if err := recordBackupFile(ctx, finalDB, "cashflux-server.db", &manifest); err != nil {
 		return "", BackupManifest{}, err
 	}
 	blobRoot := filepath.Join(dataDir, "blobs")
@@ -113,6 +120,24 @@ func RunBackup(ctx context.Context, opts BackupOptions) (string, BackupManifest,
 		return "", BackupManifest{}, err
 	}
 	return backupDir, manifest, nil
+}
+
+func recordBackupFile(ctx context.Context, path, rel string, manifest *BackupManifest) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("server backup: canceled: %w", err)
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return fmt.Errorf("server backup: open %s: %w", rel, err)
+	}
+	defer f.Close()
+	h := sha256.New()
+	n, err := io.Copy(h, f)
+	if err != nil {
+		return fmt.Errorf("server backup: hash %s: %w", rel, err)
+	}
+	manifest.Files = append(manifest.Files, BackupFileInfo{Path: rel, Size: n, SHA256: hex.EncodeToString(h.Sum(nil))})
+	return nil
 }
 
 func copyBackupFile(ctx context.Context, src, dst, rel string, manifest *BackupManifest) error {

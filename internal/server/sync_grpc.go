@@ -96,6 +96,15 @@ func (s *SyncService) PutWorkspaceRPC(ctx context.Context, req backendrpc.PutWor
 	if err != nil {
 		return backendrpc.PutWorkspaceResponse{}, err
 	}
+	// Size before any write. This used to be discovered inside PutSnapshot,
+	// after the workspace row (and its version) had already been written by a
+	// separate call — an oversized push failed having already advanced the
+	// version every other device based its next edit on. The store re-checks
+	// inside PutWorkspaceAtomic; checking here too gives the RPC its
+	// ResourceExhausted shape without touching the database at all.
+	if len(req.Dataset) > defaultSnapshotMaxBytes {
+		return backendrpc.PutWorkspaceResponse{}, status.Error(codes.ResourceExhausted, "sync dataset is too large")
+	}
 	// Before anything is written: would this dataset gut the copy already
 	// stored? Last-write-wins orders concurrent edits; it does not decide whether
 	// a replacement is sane, and on 2026-08-19 that gap let a stale dataset from
@@ -112,24 +121,19 @@ func (s *SyncService) PutWorkspaceRPC(ctx context.Context, req backendrpc.PutWor
 			return backendrpc.PutWorkspaceResponse{}, err
 		}
 	}
-	result, err := s.PutWorkspace(ctx, serverWorkspace(req.Workspace), clientUpdatedAt, req.Force, time.Now().UTC())
+	// The snapshot commits in the SAME transaction as the workspace row and
+	// its version bump (Store.PutWorkspaceAtomic). There is no separate
+	// PutSnapshot step anymore: that split let an accepted version exist
+	// without its dataset when the second write failed.
+	result, err := s.PutWorkspaceWithDataset(ctx, serverWorkspace(req.Workspace), req.Dataset, clientUpdatedAt, req.Force, time.Now().UTC(), req.BaseVersion, req.BaseVersionSet)
 	if err != nil {
+		if errors.Is(err, errPayloadTooLarge) {
+			return backendrpc.PutWorkspaceResponse{}, status.Error(codes.ResourceExhausted, "sync dataset is too large")
+		}
 		return backendrpc.PutWorkspaceResponse{}, err
 	}
 	var dataset []byte
 	if result.Accepted && len(req.Dataset) > 0 {
-		if err := s.store.PutSnapshot(Snapshot{
-			UserID:      result.Workspace.UserID,
-			WorkspaceID: result.Workspace.ID,
-			Dataset:     req.Dataset,
-			Version:     result.Version,
-			UpdatedAt:   result.UpdatedAt,
-		}, defaultSnapshotMaxBytes, defaultSnapshotHistoryLimit); err != nil {
-			if errors.Is(err, errPayloadTooLarge) {
-				return backendrpc.PutWorkspaceResponse{}, status.Error(codes.ResourceExhausted, "sync dataset is too large")
-			}
-			return backendrpc.PutWorkspaceResponse{}, err
-		}
 		dataset = req.Dataset
 	} else if !result.Accepted {
 		user, _ := AuthUserFromContext(ctx)
@@ -150,25 +154,32 @@ func (s *SyncService) PutWorkspaceRPC(ctx context.Context, req backendrpc.PutWor
 		auditFromContext(ctx, s.store, "workspace.put", "workspace", result.Workspace.ID)
 		s.metrics.ObserveSyncPush("accepted")
 	}
+	reason := result.Reason
+	if result.Accepted {
+		reason = ""
+	}
 	return backendrpc.PutWorkspaceResponse{
 		Accepted:  result.Accepted,
 		Workspace: rpcWorkspace(result.Workspace),
 		Dataset:   dataset,
 		Version:   result.Version,
 		UpdatedAt: formatRPCTime(result.UpdatedAt),
+		Reason:    reason,
 	}, nil
 }
 
 func (s *SyncService) DeleteWorkspaceRPC(ctx context.Context, req backendrpc.DeleteWorkspaceRequest) (backendrpc.DeleteWorkspaceResponse, error) {
 	SetLogScope(ctx, LogScope{WorkspaceID: req.ID, DeviceID: req.DeviceID})
-	updatedAt, err := parseOptionalRPCTime(req.UpdatedAt)
-	if err != nil {
+	// The client's timestamp is still parsed (a malformed one is a malformed
+	// request) but no longer stored: the tombstone carries the SERVER's time.
+	// A client-stamped tombstone could be backdated so a later queued push
+	// compared newer and resurrected the workspace; server time plus the
+	// version bump in SoftDeleteWorkspace close that without any clock
+	// comparison deciding anything.
+	if _, err := parseOptionalRPCTime(req.UpdatedAt); err != nil {
 		return backendrpc.DeleteWorkspaceResponse{}, err
 	}
-	if updatedAt.IsZero() {
-		updatedAt = time.Now().UTC()
-	}
-	deleted, err := s.Delete(ctx, req.ID, updatedAt, req.DeviceID)
+	deleted, err := s.Delete(ctx, req.ID, time.Now().UTC(), req.DeviceID)
 	if err != nil {
 		return backendrpc.DeleteWorkspaceResponse{}, err
 	}

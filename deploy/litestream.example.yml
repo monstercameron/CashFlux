@@ -1,0 +1,10 @@
+# Copy to litestream.yml and provide LITESTREAM_ACCESS_KEY / SECRET_KEY.
+dbs:
+  - path: /data/cashflux-server.db
+    replicas:
+      - type: s3
+        bucket: replace-with-your-bucket
+        path: cashflux-server
+        region: us-east-1
+        access-key-id: ${LITESTREAM_ACCESS_KEY}
+        secret-access-key: ${LITESTREAM_SECRET_KEY}

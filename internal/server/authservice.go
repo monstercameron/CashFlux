@@ -991,11 +991,10 @@ func (s *authServer) issueSession(userID string, now time.Time, deviceLabel stri
 	return access, refresh, familyID, nil
 }
 
-// RefreshToken rotates a refresh token for a new access/refresh pair. It is
-// the gRPC twin of handleOAuthRefresh (oauth_http.go): single-use consume via
-// store.ConsumeRefreshSession, reuse of an already-rotated token revokes the
-// whole session family (compromise signal, TODOS.md C423), and a suspended
-// account is denied even with a still-valid refresh token.
+// RefreshToken rotates a refresh token for a new access/refresh pair. Reuse
+// within 30 seconds returns the same pair to tolerate concurrent tabs and
+// retried requests; later reuse revokes the session family. Suspended accounts
+// are denied even with a still-valid refresh token.
 func (s *authServer) RefreshToken(ctx context.Context, req backendrpc.RefreshTokenRequest) (backendrpc.TokenPairResponse, error) {
 	if s == nil || s.store == nil {
 		return backendrpc.TokenPairResponse{}, status.Error(codes.FailedPrecondition, "store is not configured")
@@ -1009,11 +1008,34 @@ func (s *authServer) RefreshToken(ctx context.Context, req backendrpc.RefreshTok
 	if !ok || strings.TrimSpace(claims.JTI) == "" || strings.TrimSpace(claims.Family) == "" {
 		return backendrpc.TokenPairResponse{}, status.Error(codes.Unauthenticated, "refresh token is invalid")
 	}
-	session, ok, err := s.store.ConsumeRefreshSession(claims.JTI, sessionTokenHash(refreshToken), now)
+	successorJTI, err := randomURLToken(24)
+	if err != nil {
+		return backendrpc.TokenPairResponse{}, status.Error(codes.Internal, "session issue failed")
+	}
+	successor, err := makeRefreshSuccessor(s.cfg, claims.Sub, claims.Family, successorJTI, now, "")
+	if err != nil {
+		return backendrpc.TokenPairResponse{}, status.Error(codes.Internal, "session issue failed")
+	}
+	session, rotated, err := s.store.RotateRefreshSession(claims.JTI, sessionTokenHash(refreshToken), now, successor)
 	if err != nil {
 		return backendrpc.TokenPairResponse{}, status.Error(codes.Internal, "refresh token lookup failed")
 	}
-	if !ok {
+	if !rotated {
+		if !session.UsedAt.IsZero() && session.SuccessorJTI != "" && now.Sub(session.UsedAt) >= 0 && now.Sub(session.UsedAt) <= 30*time.Second && session.RevokedAt.IsZero() {
+			pair, ok, err := s.refreshSuccessorPair(session)
+			if err != nil {
+				return backendrpc.TokenPairResponse{}, status.Error(codes.Internal, "refresh token lookup failed")
+			}
+			if ok {
+				if suspended, err := s.store.IsUserSuspended(session.UserID); err != nil {
+					return backendrpc.TokenPairResponse{}, status.Error(codes.Internal, "suspension check failed")
+				} else if suspended {
+					_ = s.store.RevokeRefreshSessionFamily(session.FamilyID, now)
+					return backendrpc.TokenPairResponse{}, status.Error(codes.PermissionDenied, "account is suspended")
+				}
+				return pair, nil
+			}
+		}
 		if strings.TrimSpace(session.FamilyID) != "" {
 			_ = s.store.RevokeRefreshSessionFamily(session.FamilyID, now)
 			s.auditActor(ctx, session.UserID, "auth.token.reuse", "session_family", session.FamilyID)
@@ -1027,17 +1049,43 @@ func (s *authServer) RefreshToken(ctx context.Context, req backendrpc.RefreshTok
 		s.auditActor(ctx, session.UserID, "auth.token.refresh.suspended", "user", session.UserID)
 		return backendrpc.TokenPairResponse{}, status.Error(codes.PermissionDenied, "account is suspended")
 	}
-	access, refresh, err := issueStoredSessionPair(s.cfg, s.store, session.UserID, now, session.FamilyID, session.DeviceLabel)
-	if err != nil {
-		return backendrpc.TokenPairResponse{}, status.Error(codes.Internal, "session issue failed")
-	}
 	s.auditActor(ctx, session.UserID, "auth.token.refresh", "user", session.UserID)
-	return backendrpc.TokenPairResponse{
-		AccessToken:      access,
-		RefreshToken:     refresh,
-		ExpiresInSeconds: int64(sessionAccessTTL.Seconds()),
-		DeviceID:         session.FamilyID,
-	}, nil
+	return tokenPairFromSuccessor(s.cfg, successor, now.UTC().Truncate(time.Second))
+}
+
+func makeRefreshSuccessor(cfg Config, userID, familyID, jti string, now time.Time, deviceLabel string) (RefreshSession, error) {
+	refresh, err := issueSessionTokenWithClaims(cfg, sessionClaims{Sub: userID, Type: "refresh", Exp: now.Add(sessionRefreshTTL).Unix(), JTI: jti, Family: familyID})
+	if err != nil {
+		return RefreshSession{}, err
+	}
+	return RefreshSession{JTI: jti, FamilyID: familyID, UserID: userID, TokenHash: sessionTokenHash(refresh), DeviceLabel: deviceLabel, ExpiresAt: now.Add(sessionRefreshTTL)}, nil
+}
+
+func tokenPairFromSuccessor(cfg Config, successor RefreshSession, issuedAt time.Time) (backendrpc.TokenPairResponse, error) {
+	access, err := issueSessionToken(cfg, successor.UserID, "access", sessionAccessTTL, issuedAt)
+	if err != nil {
+		return backendrpc.TokenPairResponse{}, err
+	}
+	refresh, err := issueSessionTokenWithClaims(cfg, sessionClaims{Sub: successor.UserID, Type: "refresh", Exp: successor.ExpiresAt.Unix(), JTI: successor.JTI, Family: successor.FamilyID})
+	if err != nil {
+		return backendrpc.TokenPairResponse{}, err
+	}
+	return backendrpc.TokenPairResponse{AccessToken: access, RefreshToken: refresh, ExpiresInSeconds: int64(sessionAccessTTL.Seconds()), DeviceID: successor.FamilyID}, nil
+}
+
+func (s *authServer) refreshSuccessorPair(consumed RefreshSession) (backendrpc.TokenPairResponse, bool, error) {
+	successor, ok, err := s.store.GetRefreshSession(consumed.SuccessorJTI)
+	if err != nil || !ok || !successor.UsedAt.IsZero() || !successor.RevokedAt.IsZero() {
+		return backendrpc.TokenPairResponse{}, false, err
+	}
+	returnPair, err := tokenPairFromSuccessor(s.cfg, successor, consumed.UsedAt.UTC().Truncate(time.Second))
+	if err != nil {
+		return backendrpc.TokenPairResponse{}, false, err
+	}
+	if sessionTokenHash(returnPair.RefreshToken) != successor.TokenHash {
+		return backendrpc.TokenPairResponse{}, false, fmt.Errorf("server session: successor token did not match stored hash")
+	}
+	return returnPair, true, nil
 }
 
 // Logout revokes the session family the given refresh token belongs to. It is

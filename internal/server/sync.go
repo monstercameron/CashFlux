@@ -51,6 +51,11 @@ type PutWorkspaceResult struct {
 	Workspace Workspace
 	Version   int64
 	UpdatedAt time.Time
+	// Reason is the decision's short tag ("version-stale", "clock-older", …).
+	// A rejection that says WHY lets the client tell a genuinely superseded push
+	// apart from one that merely lost a clock comparison, and lets the log show
+	// which rule ran.
+	Reason string
 }
 
 // NewSyncService builds the server-side workspace sync service.
@@ -127,8 +132,34 @@ func (s *SyncService) requireWriter(userID string) error {
 	return nil
 }
 
-// PutWorkspace applies last-write-wins workspace updates scoped to the authenticated user.
-func (s *SyncService) PutWorkspace(ctx context.Context, workspace Workspace, clientUpdatedAt time.Time, force bool, serverNow time.Time) (PutWorkspaceResult, error) {
+// PutWorkspace applies a version-checked workspace update scoped to the
+// authenticated user, without a dataset snapshot. The RPC path uses
+// PutWorkspaceWithDataset so the snapshot commits in the same transaction.
+func (s *SyncService) PutWorkspace(ctx context.Context, workspace Workspace, clientUpdatedAt time.Time, force bool, serverNow time.Time, baseVersion int64) (PutWorkspaceResult, error) {
+	return s.PutWorkspaceWithDataset(ctx, workspace, nil, clientUpdatedAt, force, serverNow, baseVersion, baseVersion > 0)
+}
+
+// PutWorkspaceWithDataset is PutWorkspace plus the dataset snapshot, decided
+// and written atomically (see Store.PutWorkspaceAtomic).
+//
+// Accept or reject by VERSION when the client supplied one, and only fall
+// back to the clocks when it did not. The old single line compared
+// clientUpdatedAt — a browser's time.Now() — against current.UpdatedAt, which
+// this server stamped itself, so a device whose clock ran behind lost every
+// push forever and filed a conflict backup each time. syncstate.DecidePut
+// carries the rule and its tests; it now runs inside the store transaction,
+// against the row that same transaction then writes under a version guard,
+// so two devices pushing the same base version cannot both be accepted.
+//
+// There used to be a global owner lookup here, refusing the write when any
+// OTHER account already held this workspace id. That guard is gone with
+// schema v17, which made ownership part of the key: another account holding
+// "default" is now an ordinary, expected state rather than a collision, and
+// refusing on it was the bug — every install mints "default", so the second
+// account on a server could never sync anything. Nothing is lost by removing
+// it: every statement addresses the workspace as (user.ID, workspace.ID), so
+// there is no way to express a write to somebody else's row.
+func (s *SyncService) PutWorkspaceWithDataset(ctx context.Context, workspace Workspace, dataset []byte, clientUpdatedAt time.Time, force bool, serverNow time.Time, baseVersion int64, baseVersionSet bool) (PutWorkspaceResult, error) {
 	user, err := syncUser(ctx)
 	if err != nil {
 		return PutWorkspaceResult{}, err
@@ -142,55 +173,41 @@ func (s *SyncService) PutWorkspace(ctx context.Context, workspace Workspace, cli
 	if err := validateWorkspaceFields(workspace); err != nil {
 		return PutWorkspaceResult{}, err
 	}
-	// There used to be a global owner lookup here, refusing the write when any
-	// OTHER account already held this workspace id. That guard is gone with
-	// schema v17, which made ownership part of the key: another account holding
-	// "default" is now an ordinary, expected state rather than a collision, and
-	// refusing on it was the bug — every install mints "default", so the second
-	// account on a server could never sync anything.
-	//
-	// Nothing is lost by removing it. Every statement below addresses the
-	// workspace as (user.ID, workspace.ID): the read is user-scoped, and
-	// PutWorkspace upserts ON CONFLICT(user_id, id). There is no longer a way to
-	// express a write to somebody else's row, so there is nothing left to check.
-	current, exists, err := s.store.GetWorkspace(user.ID, workspace.ID)
-	if err != nil {
-		return PutWorkspaceResult{}, fmt.Errorf("server sync: get current workspace: %w", err)
-	}
-	if exists && !force && clientUpdatedAt.Before(current.UpdatedAt) {
-		return PutWorkspaceResult{
-			Accepted:  false,
-			Workspace: current,
-			Version:   current.Version,
-			UpdatedAt: current.UpdatedAt,
-		}, nil
-	}
 	if serverNow.IsZero() {
 		serverNow = time.Now().UTC()
 	}
 	workspace.UserID = user.ID
 	workspace.UpdatedAt = serverNow.UTC()
-	if exists {
-		workspace.Version = current.Version + 1
-	} else {
-		workspace.Version = 1
-	}
+	// The users row must exist before the workspace insert references it.
+	// This stays outside the write transaction: materializing the caller is
+	// idempotent and independent of whether the push itself is accepted.
 	if err := s.ensureUser(user); err != nil {
 		return PutWorkspaceResult{}, err
 	}
-	if err := s.store.PutWorkspace(workspace); err != nil {
+	result, err := s.store.PutWorkspaceAtomic(AtomicPutWorkspaceInput{
+		Workspace:       workspace,
+		Dataset:         dataset,
+		MaxDatasetBytes: defaultSnapshotMaxBytes,
+		HistoryLimit:    defaultSnapshotHistoryLimit,
+		BaseVersion:     baseVersion,
+		HasBaseVersion:  baseVersionSet,
+		Force:           force,
+		ClientUpdatedAt: clientUpdatedAt,
+	})
+	if err != nil {
 		return PutWorkspaceResult{}, fmt.Errorf("server sync: put workspace: %w", err)
 	}
 	return PutWorkspaceResult{
-		Accepted:  true,
-		Workspace: workspace,
-		Version:   workspace.Version,
-		UpdatedAt: workspace.UpdatedAt,
+		Accepted:  result.Accepted,
+		Workspace: result.Workspace,
+		Version:   result.Workspace.Version,
+		UpdatedAt: result.Workspace.UpdatedAt,
+		Reason:    result.Reason,
 	}, nil
 }
 
 // Delete writes a user-scoped workspace tombstone.
-func (s *SyncService) Delete(ctx context.Context, workspaceID string, updatedAt time.Time, deviceID string) (bool, error) {
+func (s *SyncService) Delete(ctx context.Context, workspaceID string, _ time.Time, deviceID string) (bool, error) {
 	user, err := syncUser(ctx)
 	if err != nil {
 		return false, err
@@ -204,7 +221,7 @@ func (s *SyncService) Delete(ctx context.Context, workspaceID string, updatedAt 
 	if len(workspaceID) > maxWorkspaceIDLength || len(deviceID) > maxWorkspaceDeviceLength {
 		return false, status.Error(codes.InvalidArgument, "workspace id or device id is too long")
 	}
-	deleted, err := s.store.SoftDeleteWorkspace(user.ID, workspaceID, updatedAt, deviceID)
+	deleted, err := s.store.SoftDeleteWorkspace(user.ID, workspaceID, time.Now().UTC(), deviceID)
 	if err != nil {
 		return false, fmt.Errorf("server sync: delete workspace: %w", err)
 	}

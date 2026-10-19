@@ -97,4 +97,6 @@ ENV CASHFLUX_SERVER_PORTAL_DIR=/app/web/portal
 
 VOLUME ["/data"]
 
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD ["/usr/local/bin/cashflux-server", "healthcheck"]
+
 ENTRYPOINT ["/usr/local/bin/cashflux-server"]

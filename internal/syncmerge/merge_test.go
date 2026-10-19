@@ -267,3 +267,93 @@ func TestThreeWayMerge_RoundTrip(t *testing.T) {
 		t.Errorf("conflicts = %d, want 0 — clean 3-way should be conflict-free", len(conflicts))
 	}
 }
+
+// ── deletion ────────────────────────────────────────────────────────────────
+//
+// A deletion used to be invisible to the merge: localChanged was `lOk && …`, so
+// a field the local side had REMOVED scored false, fell through to the
+// "only remote has it" arm, and came back from the other side. Deletes
+// propagated in neither direction — every device resurrected whatever any other
+// had deleted, silently.
+
+func TestADeleteIsNotUndoneByADeviceThatStillHasTheRecord(t *testing.T) {
+	base := syncmerge.Record{"a": fv("1", t1), "b": fv("2", t1)}
+	local := syncmerge.Record{"a": fv("1", t1)}                    // deleted b
+	remote := syncmerge.Record{"a": fv("1", t1), "b": fv("2", t1)} // untouched
+	merged, conflicts := syncmerge.ThreeWayMerge(base, local, remote)
+	if _, back := merged["b"]; back {
+		t.Error("the deleted field was resurrected from the device that had not seen the delete")
+	}
+	if len(conflicts) != 0 {
+		t.Errorf("an uncontested delete reported a conflict: %+v", conflicts)
+	}
+}
+
+func TestADeleteFromTheRemoteSideAlsoPropagates(t *testing.T) {
+	// The mirror. Both directions were broken, so both directions are pinned.
+	base := syncmerge.Record{"a": fv("1", t1), "b": fv("2", t1)}
+	local := syncmerge.Record{"a": fv("1", t1), "b": fv("2", t1)}
+	remote := syncmerge.Record{"a": fv("1", t1)}
+	merged, _ := syncmerge.ThreeWayMerge(base, local, remote)
+	if _, back := merged["b"]; back {
+		t.Error("a remote delete was undone by the local copy")
+	}
+}
+
+func TestBothSidesDeletingAgreeSilently(t *testing.T) {
+	base := syncmerge.Record{"b": fv("2", t1)}
+	merged, conflicts := syncmerge.ThreeWayMerge(base, syncmerge.Record{}, syncmerge.Record{})
+	if len(merged) != 0 {
+		t.Errorf("merged = %+v, want empty", merged)
+	}
+	if len(conflicts) != 0 {
+		t.Errorf("agreeing deletes reported a conflict: %+v", conflicts)
+	}
+}
+
+func TestADeleteRacingAnEditIsAConflictAndTheEditSurvives(t *testing.T) {
+	// One side removed it, the other changed it. Honouring the delete would throw
+	// away an edit that exists nowhere else; resurrecting is recoverable by
+	// deleting again. Either way the caller must be TOLD — a delete beaten in
+	// silence is the same data loss as an edit beaten in silence.
+	base := syncmerge.Record{"b": fv("2", t1)}
+	local := syncmerge.Record{}                  // deleted
+	remote := syncmerge.Record{"b": fv("9", t2)} // edited
+	merged, conflicts := syncmerge.ThreeWayMerge(base, local, remote)
+	if merged["b"].Value != "9" {
+		t.Errorf("merged b = %q, want the surviving edit 9", merged["b"].Value)
+	}
+	if len(conflicts) != 1 || conflicts[0].Field != "b" {
+		t.Fatalf("a delete-versus-edit race was not reported: %+v", conflicts)
+	}
+	if conflicts[0].ChosenSide != "remote" {
+		t.Errorf("ChosenSide = %q, want remote (the side that still has a value)", conflicts[0].ChosenSide)
+	}
+}
+
+func TestTheMirrorOfDeleteVersusEdit(t *testing.T) {
+	base := syncmerge.Record{"b": fv("2", t1)}
+	local := syncmerge.Record{"b": fv("7", t2)}
+	remote := syncmerge.Record{}
+	merged, conflicts := syncmerge.ThreeWayMerge(base, local, remote)
+	if merged["b"].Value != "7" {
+		t.Errorf("merged b = %q, want 7", merged["b"].Value)
+	}
+	if len(conflicts) != 1 || conflicts[0].ChosenSide != "local" {
+		t.Fatalf("mirror case not reported correctly: %+v", conflicts)
+	}
+}
+
+func TestANewFieldOnOneSideIsStillNotADelete(t *testing.T) {
+	// Guard against over-correcting: absent from BASE and present on one side is
+	// an addition, not a deletion, and must still be taken.
+	base := syncmerge.Record{}
+	local := syncmerge.Record{"new": fv("x", t2)}
+	merged, conflicts := syncmerge.ThreeWayMerge(base, local, syncmerge.Record{})
+	if merged["new"].Value != "x" {
+		t.Errorf("a newly added field was dropped as if deleted: %+v", merged)
+	}
+	if len(conflicts) != 0 {
+		t.Errorf("an addition reported a conflict: %+v", conflicts)
+	}
+}

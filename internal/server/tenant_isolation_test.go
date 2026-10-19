@@ -56,7 +56,7 @@ func setupTenants(t *testing.T) *tenants {
 		{tn.ctxA, tn.userA, `{"schemaVersion":1,"secret":"A-private","transactions":[{"id":"a1"}]}`},
 		{tn.ctxB, tn.userB, `{"schemaVersion":1,"secret":"B-private","transactions":[{"id":"b1"}]}`},
 	} {
-		if _, err := tn.sync.PutWorkspace(tc.ctx, Workspace{ID: tn.sharedWS, Name: "Default"}, now, false, now); err != nil {
+		if _, err := tn.sync.PutWorkspace(tc.ctx, Workspace{ID: tn.sharedWS, Name: "Default"}, now, false, now, 0); err != nil {
 			t.Fatalf("seed workspace for %s: %v", tc.user, err)
 		}
 		if err := store.PutSnapshot(Snapshot{
@@ -196,7 +196,7 @@ func TestTenantIsolationWrites(t *testing.T) {
 	tn := setupTenants(t)
 
 	// B writing "default" writes its OWN, never A's.
-	if _, err := tn.sync.PutWorkspace(tn.ctxB, Workspace{ID: tn.sharedWS, Name: "B renamed it"}, tn.now.Add(time.Hour), true, tn.now.Add(time.Hour)); err != nil {
+	if _, err := tn.sync.PutWorkspace(tn.ctxB, Workspace{ID: tn.sharedWS, Name: "B renamed it"}, tn.now.Add(time.Hour), true, tn.now.Add(time.Hour), 0); err != nil {
 		t.Fatalf("B's own write refused: %v", err)
 	}
 	aws, ok, err := tn.store.GetWorkspace(tn.userA, tn.sharedWS)

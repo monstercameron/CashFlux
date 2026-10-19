@@ -68,22 +68,22 @@ func TestSyncServicePutWorkspaceLWW(t *testing.T) {
 	seedSyncUser(t, store, "u1", now)
 	ctx := ContextWithAuthUser(context.Background(), AuthUser{ID: "u1"})
 
-	result, err := service.PutWorkspace(ctx, Workspace{ID: "w1", Name: "Home", Color: "blue"}, now, false, now.Add(time.Minute))
+	result, err := service.PutWorkspace(ctx, Workspace{ID: "w1", Name: "Home", Color: "blue"}, now, false, now.Add(time.Minute), 0)
 	if err != nil || !result.Accepted || result.Version != 1 || !result.UpdatedAt.Equal(now.Add(time.Minute)) {
 		t.Fatalf("initial PutWorkspace = %+v/%v", result, err)
 	}
-	stale, err := service.PutWorkspace(ctx, Workspace{ID: "w1", Name: "Stale"}, now.Add(-time.Hour), false, now.Add(2*time.Minute))
+	stale, err := service.PutWorkspace(ctx, Workspace{ID: "w1", Name: "Stale"}, now.Add(-time.Hour), false, now.Add(2*time.Minute), 0)
 	if err != nil || stale.Accepted {
 		t.Fatalf("stale PutWorkspace = %+v/%v, want reject", stale, err)
 	}
 	if stale.Workspace.Name != "Home" || stale.Version != 1 || !stale.UpdatedAt.Equal(now.Add(time.Minute)) {
 		t.Fatalf("stale result current state = %+v", stale)
 	}
-	fresh, err := service.PutWorkspace(ctx, Workspace{ID: "w1", Name: "Fresh", Color: "green"}, now.Add(time.Minute), false, now.Add(3*time.Minute))
+	fresh, err := service.PutWorkspace(ctx, Workspace{ID: "w1", Name: "Fresh", Color: "green"}, now.Add(time.Minute), false, now.Add(3*time.Minute), 0)
 	if err != nil || !fresh.Accepted || fresh.Version != 2 {
 		t.Fatalf("fresh PutWorkspace = %+v/%v", fresh, err)
 	}
-	forced, err := service.PutWorkspace(ctx, Workspace{ID: "w1", Name: "Forced"}, now.Add(-time.Hour), true, now.Add(4*time.Minute))
+	forced, err := service.PutWorkspace(ctx, Workspace{ID: "w1", Name: "Forced"}, now.Add(-time.Hour), true, now.Add(4*time.Minute), 0)
 	if err != nil || !forced.Accepted || forced.Version != 3 {
 		t.Fatalf("forced PutWorkspace = %+v/%v", forced, err)
 	}
@@ -109,7 +109,7 @@ func TestSyncServicePutWorkspaceIsolatesTheSameIDAcrossAccounts(t *testing.T) {
 	}
 
 	ctx := ContextWithAuthUser(context.Background(), AuthUser{ID: "u1"})
-	result, err := service.PutWorkspace(ctx, Workspace{ID: "shared", Name: "Mine"}, now, true, now.Add(time.Minute))
+	result, err := service.PutWorkspace(ctx, Workspace{ID: "shared", Name: "Mine"}, now, true, now.Add(time.Minute), 0)
 	if err != nil || !result.Accepted {
 		t.Fatalf("second account could not claim its own workspace of the same id: %+v/%v", result, err)
 	}
@@ -151,7 +151,7 @@ func TestSyncServiceRejectsOversizedWorkspaceFields(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := service.PutWorkspace(ctx, tc.workspace, now, false, now)
+			_, err := service.PutWorkspace(ctx, tc.workspace, now, false, now, 0)
 			if status.Code(err) != codes.InvalidArgument {
 				t.Fatalf("PutWorkspace err = %v, want invalid argument", err)
 			}
@@ -271,7 +271,7 @@ func TestSyncServiceViewerCannotWrite(t *testing.T) {
 	ctx := ContextWithAuthUser(context.Background(), AuthUser{ID: "u-view"})
 
 	// As a member (the default), writing works.
-	if result, err := service.PutWorkspace(ctx, Workspace{ID: "w1", Name: "Home"}, now, false, now); err != nil || !result.Accepted {
+	if result, err := service.PutWorkspace(ctx, Workspace{ID: "w1", Name: "Home"}, now, false, now, 0); err != nil || !result.Accepted {
 		t.Fatalf("member PutWorkspace: accepted=%v err=%v", result.Accepted, err)
 	}
 
@@ -279,7 +279,7 @@ func TestSyncServiceViewerCannotWrite(t *testing.T) {
 		t.Fatalf("SetUserRole: %v", err)
 	}
 
-	_, err := service.PutWorkspace(ctx, Workspace{ID: "w1", Name: "Rewritten"}, now.Add(time.Hour), false, now.Add(time.Hour))
+	_, err := service.PutWorkspace(ctx, Workspace{ID: "w1", Name: "Rewritten"}, now.Add(time.Hour), false, now.Add(time.Hour), 0)
 	if status.Code(err) != codes.PermissionDenied {
 		t.Fatalf("viewer PutWorkspace: err = %v, want PermissionDenied", err)
 	}
@@ -310,7 +310,7 @@ func TestSyncServiceSuspendedCannotWrite(t *testing.T) {
 	if err := store.SetUserSuspended("u-susp", true, now); err != nil {
 		t.Fatalf("SetUserSuspended: %v", err)
 	}
-	_, err := service.PutWorkspace(ctx, Workspace{ID: "w1", Name: "Home"}, now, false, now)
+	_, err := service.PutWorkspace(ctx, Workspace{ID: "w1", Name: "Home"}, now, false, now, 0)
 	if status.Code(err) != codes.PermissionDenied {
 		t.Fatalf("suspended PutWorkspace: err = %v, want PermissionDenied", err)
 	}
@@ -319,7 +319,7 @@ func TestSyncServiceSuspendedCannotWrite(t *testing.T) {
 	if err := store.SetUserSuspended("u-susp", false, now); err != nil {
 		t.Fatalf("un-suspend: %v", err)
 	}
-	if result, err := service.PutWorkspace(ctx, Workspace{ID: "w1", Name: "Home"}, now, false, now); err != nil || !result.Accepted {
+	if result, err := service.PutWorkspace(ctx, Workspace{ID: "w1", Name: "Home"}, now, false, now, 0); err != nil || !result.Accepted {
 		t.Fatalf("after un-suspend: accepted=%v err=%v", result.Accepted, err)
 	}
 }

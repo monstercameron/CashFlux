@@ -20,8 +20,8 @@ const (
 	DefaultAddr         = ":8081"
 	DefaultDataDir      = "data"
 	DefaultAuthMode     = "token"
-	APIVersion          = "v1"
-	MinClientAPIVersion = "v1"
+	APIVersion          = "2"
+	MinClientAPIVersion = "1"
 )
 
 // Config contains the runtime settings for the optional CashFlux backend.
@@ -110,6 +110,13 @@ type Config struct {
 	HTTPRateLimitPerMinute            int
 	HTTPUserRateLimitPerMinute        int
 	AuthRateLimitPerMinute            int
+	BlobSyncChangeMaxBytes            int64
+	BlobSyncSnapshotMaxBytes          int64
+	BlobSyncPairingMaxBytes           int64
+	BlobSyncRetentionDays             int
+	BlobSyncRatePerSecond             int
+	BlobSyncRateBurst                 int
+	MinClientAPIVersion               string
 	// TrustedProxies is the set of networks whose requests may carry a trustworthy
 	// X-Forwarded-For / X-Real-IP header. IP-based rate limiting honors those
 	// forwarding headers ONLY when the direct peer (RemoteAddr) falls inside one of
@@ -207,6 +214,13 @@ func FromEnv() (Config, error) {
 	cfg.HTTPRateLimitPerMinute = int(envInt64("CASHFLUX_SERVER_HTTP_RATE_LIMIT_PER_MINUTE", 0))
 	cfg.HTTPUserRateLimitPerMinute = int(envInt64("CASHFLUX_SERVER_HTTP_USER_RATE_LIMIT_PER_MINUTE", 0))
 	cfg.AuthRateLimitPerMinute = int(envInt64("CASHFLUX_SERVER_AUTH_RATE_LIMIT_PER_MINUTE", 20))
+	cfg.BlobSyncChangeMaxBytes = envInt64("CASHFLUX_SERVER_V2_CHANGE_MAX_BYTES", 1<<20)
+	cfg.BlobSyncSnapshotMaxBytes = envInt64("CASHFLUX_SERVER_V2_SNAPSHOT_MAX_BYTES", 32<<20)
+	cfg.BlobSyncPairingMaxBytes = envInt64("CASHFLUX_SERVER_V2_PAIRING_MAX_BYTES", defaultBlobSyncPairingMaxBytes)
+	cfg.BlobSyncRetentionDays = int(envInt64("CASHFLUX_SERVER_V2_RETENTION_DAYS", 30))
+	cfg.BlobSyncRatePerSecond = int(envInt64("CASHFLUX_SERVER_V2_RATE_PER_SECOND", 20))
+	cfg.BlobSyncRateBurst = int(envInt64("CASHFLUX_SERVER_V2_RATE_BURST", 60))
+	cfg.MinClientAPIVersion = envOr("CASHFLUX_SERVER_MIN_CLIENT_API_VERSION", "1")
 	trustedProxies, err := parseTrustedProxies(os.Getenv("CASHFLUX_SERVER_TRUSTED_PROXIES"))
 	if err != nil {
 		return Config{}, err
@@ -284,6 +298,9 @@ func (c Config) Validate() error {
 	}
 	if c.LogHotPathSampleRate < 0 {
 		return fmt.Errorf("server: log hot path sample rate must be non-negative")
+	}
+	if c.BlobSyncChangeMaxBytes < 0 || c.BlobSyncSnapshotMaxBytes < 0 || c.BlobSyncPairingMaxBytes < 0 || c.BlobSyncRetentionDays < 0 || c.BlobSyncRatePerSecond < 0 || c.BlobSyncRateBurst < 0 {
+		return fmt.Errorf("server: blob sync limits must be non-negative")
 	}
 	if c.GRPCIdleTimeout > 0 && c.GRPCKeepaliveInterval <= 0 {
 		return fmt.Errorf("server: grpc keepalive interval is required when idle timeout is set")

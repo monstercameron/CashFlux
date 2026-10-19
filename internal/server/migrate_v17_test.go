@@ -200,7 +200,7 @@ func TestMigrateV17UnblocksASecondAccount(t *testing.T) {
 	svc := NewSyncService(store)
 	ctx := ContextWithAuthUser(context.Background(), AuthUser{ID: "u2"})
 	stamp := time.Date(2026, 8, 18, 12, 5, 0, 0, time.UTC)
-	if _, err := svc.PutWorkspace(ctx, Workspace{ID: "default", Name: "Default"}, stamp, false, stamp); err != nil {
+	if _, err := svc.PutWorkspace(ctx, Workspace{ID: "default", Name: "Default"}, stamp, false, stamp, 0); err != nil {
 		t.Fatalf("a second account is still blocked after migrating: %v", err)
 	}
 }

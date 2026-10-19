@@ -318,15 +318,14 @@ func TestAdminDeleteUserPurgesEverythingOwned(t *testing.T) {
 	if _, ok, err := a.store.ConsumePairingCode(code, now); err != nil || !ok {
 		t.Fatalf("ConsumePairingCode: ok=%v err=%v", ok, err)
 	}
-	if err := a.store.PutWorkspace(server.Workspace{
-		ID: "ws-1", UserID: OwnerAccountID, Name: "Default", Version: 1, UpdatedAt: now,
+	if _, err := a.store.PutWorkspaceAtomic(server.AtomicPutWorkspaceInput{
+		Workspace:       server.Workspace{ID: "ws-1", UserID: OwnerAccountID, Name: "Default", UpdatedAt: now},
+		Dataset:         []byte(`{"hello":"world"}`),
+		MaxDatasetBytes: 1 << 20,
+		HistoryLimit:    5,
+		HasBaseVersion:  true,
 	}); err != nil {
-		t.Fatalf("PutWorkspace: %v", err)
-	}
-	if err := a.store.PutSnapshot(server.Snapshot{
-		WorkspaceID: "ws-1", Dataset: []byte(`{"hello":"world"}`), Version: 1, UpdatedAt: now,
-	}, 1<<20, 5); err != nil {
-		t.Fatalf("PutSnapshot: %v", err)
+		t.Fatalf("PutWorkspaceAtomic: %v", err)
 	}
 
 	deleted, err := a.DeleteUser(OwnerAccountID)
@@ -418,16 +417,15 @@ func TestAdminListUsersReportsSyncFacts(t *testing.T) {
 	if _, _, err := a.MintActivationCode(); err != nil {
 		t.Fatalf("MintActivationCode: %v", err)
 	}
-	if err := a.store.PutWorkspace(server.Workspace{
-		ID: "ws-1", UserID: OwnerAccountID, Name: "Default", Version: 1, UpdatedAt: now,
-	}); err != nil {
-		t.Fatalf("PutWorkspace: %v", err)
-	}
 	dataset := []byte(`{"hello":"world"}`)
-	if err := a.store.PutSnapshot(server.Snapshot{
-		WorkspaceID: "ws-1", Dataset: dataset, Version: 1, UpdatedAt: now,
-	}, 1<<20, 5); err != nil {
-		t.Fatalf("PutSnapshot: %v", err)
+	if _, err := a.store.PutWorkspaceAtomic(server.AtomicPutWorkspaceInput{
+		Workspace:       server.Workspace{ID: "ws-1", UserID: OwnerAccountID, Name: "Default", UpdatedAt: now},
+		Dataset:         dataset,
+		MaxDatasetBytes: 1 << 20,
+		HistoryLimit:    5,
+		HasBaseVersion:  true,
+	}); err != nil {
+		t.Fatalf("PutWorkspaceAtomic: %v", err)
 	}
 
 	users, err := a.ListUsers(50, 0)
