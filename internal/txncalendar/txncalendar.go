@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/bills"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -143,6 +144,47 @@ func MonthCashflow(anchor time.Time, weekStart time.Weekday, txns []domain.Trans
 	return result, nil
 }
 
+// MonthCashflowWithAccounts projects recurring rules and liability statement
+// payments into the calendar. Liability payments already represented by a
+// matching monthly recurring rule are omitted by bills.OccurrencesWithin, so a
+// due item appears once even when both sources describe it.
+func MonthCashflowWithAccounts(anchor time.Time, weekStart time.Weekday, txns []domain.Transaction, recurring []domain.Recurring, accounts []domain.Account, rates currency.Rates) (CashflowMonth, error) {
+	result, err := MonthCashflow(anchor, weekStart, txns, recurring, rates)
+	if err != nil {
+		return CashflowMonth{}, err
+	}
+	start := dateutil.MonthStart(anchor)
+	end := dateutil.AddMonths(start, 1).AddDate(0, 0, -1)
+	liabilityBills := bills.OccurrencesWithin(accounts, recurring, start, end)
+	byDay := make(map[string][]Ghost)
+	for _, bill := range liabilityBills {
+		if _, recurringBill := bills.RecurringIDFromAccount(bill.AccountID); recurringBill {
+			continue
+		}
+		amount, err := money.Neg(bill.Amount.Amount)
+		if err != nil {
+			return CashflowMonth{}, fmt.Errorf("project liability payment %q: %w", bill.AccountID, err)
+		}
+		byDay[DayKey(bill.DueDate)] = append(byDay[DayKey(bill.DueDate)], Ghost{
+			RecurringID: "account:" + bill.AccountID,
+			Label:       bill.Name,
+			Amount:      amount,
+			Currency:    bill.Amount.Currency,
+			Date:        bill.DueDate,
+			Liability:   true,
+		})
+	}
+	for wi := range result.Weeks {
+		for di := range result.Weeks[wi].Days {
+			day := &result.Weeks[wi].Days[di]
+			if day.InMonth {
+				day.Ghosts = append(day.Ghosts, byDay[DayKey(day.Date)]...)
+			}
+		}
+	}
+	return result, nil
+}
+
 func addCashflow(total *Cashflow, day Cashflow) error {
 	var err error
 	if total.Spent, err = money.Add(total.Spent, day.Spent); err != nil {
@@ -252,6 +294,38 @@ func ScopeRecurring(recurring []domain.Recurring, criteria txnfilter.Criteria, a
 	return filtered
 }
 
+// ScopeLiabilityAccounts returns liability accounts represented by the active
+// account and member filters. Category filters are handled by the recurring
+// rules that carry a category; inferred account statements have no category.
+func ScopeLiabilityAccounts(accounts []domain.Account, criteria txnfilter.Criteria) []domain.Account {
+	accountIDs := splitScope(criteria.Accounts, criteria.Account)
+	memberIDs := splitScope(criteria.Members, criteria.Member)
+	filtered := make([]domain.Account, 0, len(accounts))
+	for _, account := range accounts {
+		if account.Archived || account.Class != domain.ClassLiability || !matchesScope(accountIDs, account.ID) {
+			continue
+		}
+		if len(memberIDs) > 0 {
+			matchesOwner := false
+			if len(account.OwnershipShares) > 0 {
+				for owner := range account.OwnershipShares {
+					if contains(memberIDs, owner) {
+						matchesOwner = true
+						break
+					}
+				}
+			} else {
+				matchesOwner = contains(memberIDs, account.OwnerID)
+			}
+			if !matchesOwner {
+				continue
+			}
+		}
+		filtered = append(filtered, account)
+	}
+	return filtered
+}
+
 func splitScope(multi, single string) []string {
 	value := single
 	if strings.TrimSpace(multi) != "" {
@@ -293,6 +367,7 @@ type Ghost struct {
 	Currency    string
 	Date        time.Time
 	NotPosted   bool
+	Liability   bool
 }
 
 // FoldSettled removes scheduled markers with a durable bill-match and marks
@@ -308,7 +383,7 @@ func FoldSettled(weeks []CashflowWeek, settled map[string]bool, asOf time.Time) 
 			folded[wi].Days[di] = day
 			folded[wi].Days[di].Ghosts = make([]Ghost, 0, len(day.Ghosts))
 			for _, ghost := range day.Ghosts {
-				if settled[domain.OccurrenceKey(ghost.RecurringID, ghost.Date)] {
+				if settled[domain.OccurrenceKey(ghost.RecurringID, ghost.Date)] || (ghost.Liability && settled[ghost.RecurringID]) {
 					continue
 				}
 				ghost.NotPosted = DayKey(ghost.Date) < today

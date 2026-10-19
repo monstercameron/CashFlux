@@ -90,6 +90,8 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **The calendar shows every scheduled payment in its day (TV7C).** A scheduled liability payment such as the Oct 22 card
+  payment projects into its day as "Due $220.00"; calendar labels use the meta size and tabular figures.
 - **Budgets pages read the same on every row (BV6H).** Zero-spend rows show the pace tick; rollover details open on click with
   aria-expanded; light-theme links meet 4.5:1; Age of money has a 32 px "Why?" target; the Unbudgeted strip has a heading, list
   semantics and correct "(others)" and count copy; recurring bills follow the member lens and name bills excluded for a missing

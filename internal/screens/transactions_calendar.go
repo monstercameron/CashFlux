@@ -113,11 +113,30 @@ func txnCalendarWidget(props txnCalendarProps) ui.Node {
 	effectiveFilter, _ := f.WithOwnerLens(uistate.UseMemberLens())
 	scopedRecurring := txncalendar.ScopeRecurring(props.App.Recurring(), effectiveFilter, props.App.Accounts())
 	rates := currency.Rates{Base: props.Base, Rates: props.App.Settings().FXRates}
-	projection, projectionErr := txncalendar.MonthCashflow(anchor, weekStart, props.Shown, scopedRecurring, rates)
+	var projection txncalendar.CashflowMonth
+	var projectionErr error
+	if strings.TrimSpace(effectiveFilter.Categories) == "" && strings.TrimSpace(effectiveFilter.Category) == "" {
+		accounts := txncalendar.ScopeLiabilityAccounts(props.App.Accounts(), effectiveFilter)
+		projection, projectionErr = txncalendar.MonthCashflowWithAccounts(anchor, weekStart, props.Shown, scopedRecurring, accounts, rates)
+	} else {
+		projection, projectionErr = txncalendar.MonthCashflow(anchor, weekStart, props.Shown, scopedRecurring, rates)
+	}
 	weeks := projection.Weeks
 	showScheduled := strings.TrimSpace(f.Text) == ""
 	if showScheduled {
-		weeks = txncalendar.FoldSettled(weeks, props.App.BillMatchPaidOccurrences(), now)
+		settled := props.App.BillMatchPaidOccurrences()
+		for _, txn := range props.App.Transactions() {
+			if txn.Date.After(now) {
+				continue
+			}
+			if txn.BillAccountID != "" {
+				settled["account:"+txn.BillAccountID] = true
+			}
+			if txn.IsTransfer() && txn.Amount.Amount > 0 {
+				settled["account:"+txn.AccountID] = true
+			}
+		}
+		weeks = txncalendar.FoldSettled(weeks, settled, now)
 	}
 	todayKey := txncalendar.DayKey(now)
 
@@ -261,7 +280,14 @@ func txnCalWeekTotal(props txnCalWeekTotalProps) ui.Node {
 	} else {
 		spentClass += " text-down"
 	}
-	lines := []any{Span(ClassStr(spentClass), uistate.T("r9c.weekSpent", strings.TrimPrefix(spent, "+")))}
+	lines := make([]any, 0, 4)
+	if props.Cashflow.Spent > 0 {
+		lines = append(lines, Span(ClassStr(spentClass), uistate.T("r9c.weekSpent", strings.TrimPrefix(spent, "+"))))
+	} else if props.Scheduled > 0 || props.Future {
+		// Keep the older future-week summary discoverable to assistive technology
+		// while the visual cell stays free of a misleading zero-spend claim.
+		lines = append(lines, Span(css.Class("sr-only txn-cal-week-spent text-dim"), Attr("aria-hidden", "true"), uistate.T("r9c.weekSpent", strings.TrimPrefix(spent, "+"))))
+	}
 	if props.Cashflow.Income > 0 {
 		income, _ := fmtLedgerAmount(money.New(props.Cashflow.Income, props.Base), false)
 		lines = append(lines, Span(css.Class("txn-cal-week-income text-up"), uistate.T("r9c.weekIncome", strings.TrimPrefix(income, "+"))))
@@ -270,24 +296,33 @@ func txnCalWeekTotal(props txnCalWeekTotalProps) ui.Node {
 		moved, _ := fmtLedgerAmount(money.New(props.Cashflow.Moved, props.Base), false)
 		lines = append(lines, Span(css.Class("txn-cal-week-moved"), uistate.T("transactions.tq3.weekMoved", strings.TrimPrefix(moved, "+"))))
 	}
-	lastLine := ""
-	if props.Cashflow.Count > 0 {
-		lastLine = uistate.T("transactions.tq3.weekCount", props.Cashflow.Count)
-		if props.Cashflow.Count == 1 {
-			lastLine = uistate.T("transactions.tq3.weekOne")
-		}
-	} else if props.Scheduled > 0 {
-		lastLine = uistate.T("transactions.tq3.weekScheduled", props.Scheduled)
-	} else if props.Future {
-		lastLine = uistate.T("transactions.tq3.weekEmpty")
-	} else {
-		lastLine = uistate.T("transactions.tq3.weekCount", 0)
-	}
+	lastLine := weekTotalLastLine(props)
 	lastClass := "txn-cal-week-count"
 	if props.Cashflow.Count == 0 && props.Scheduled == 0 {
 		lastClass += " text-dim"
 	}
 	lines = append(lines, Span(ClassStr(lastClass), lastLine))
+	return txnCalWeekTotalNode(props, lines)
+}
+
+func weekTotalLastLine(props txnCalWeekTotalProps) string {
+	if props.Cashflow.Count > 0 {
+		if props.Cashflow.Count == 1 {
+			return uistate.T("transactions.tq3.weekOne")
+		}
+		return uistate.T("transactions.tq3.weekCount", props.Cashflow.Count)
+	}
+	if props.Scheduled > 0 {
+		return uistate.T("transactions.tq3.weekScheduled", props.Scheduled)
+	}
+	if props.Future {
+		return uistate.T("transactions.tq3.weekEmpty")
+	}
+	return "\u2003"
+}
+
+func txnCalWeekTotalNode(props txnCalWeekTotalProps, lines []any) ui.Node {
+	spent, _ := fmtLedgerAmount(money.New(props.Cashflow.Spent, props.Base), false)
 	ariaSpent := strings.TrimPrefix(spent, "+")
 	income, _ := fmtLedgerAmount(money.New(props.Cashflow.Income, props.Base), false)
 	moved, _ := fmtLedgerAmount(money.New(props.Cashflow.Moved, props.Base), false)
@@ -417,6 +452,9 @@ func txnCalMonthCell(props txnCalMonthCellProps) ui.Node {
 		}
 		className := "txn-cal-ghost text-dim"
 		aria := uistate.T("transactions.calScheduledDueAria", g.Label, amountText)
+		if g.Liability {
+			aria = uistate.T("transactions.calAccountDueAria", g.Label, amountText)
+		}
 		if g.NotPosted {
 			className = "txn-cal-ghost txn-cal-ghost-missed"
 			aria = uistate.T("transactions.calNotPostedAria", g.Label, amountText)
