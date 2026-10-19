@@ -4,12 +4,14 @@ package budgetplan
 
 import (
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/smoothing"
 )
 
 // Projection is the future-month projection for one year of the annual grid.
@@ -63,6 +65,7 @@ func Project(recs []domain.Recurring, gs []domain.Goal, year, fromMonth int, bas
 	}
 	yearStart := time.Date(year, time.January, 1, 0, 0, 0, 0, time.UTC)
 	yearEnd := time.Date(year+1, time.January, 1, 0, 0, 0, 0, time.UTC) // exclusive
+	projectedRecurring := make(map[string]bool, len(recs))
 
 	for _, r := range recs {
 		if !r.Active() || !r.Amount.IsNegative() { // only active bills / money-out are projected spend
@@ -82,9 +85,11 @@ func Project(recs []domain.Recurring, gs []domain.Goal, year, fromMonth int, bas
 		}
 		amt := p.Recurring[r.CategoryID]
 		d := r.NextDue.UTC()
+		projected := false
 		for i := 0; i < projectionSteps && d.Before(yearEnd); i++ {
 			if !d.Before(yearStart) {
 				if mi := int(d.Month()) - 1; mi >= fromMonth {
+					projected = true
 					v, err := checkedAdd(amt[mi], minor, base)
 					if err != nil {
 						p.Error = fmt.Errorf("recurring category %q: %w", r.CategoryID, err)
@@ -100,10 +105,16 @@ func Project(recs []domain.Recurring, gs []domain.Goal, year, fromMonth int, bas
 			d = next
 		}
 		p.Recurring[r.CategoryID] = amt
+		if projected {
+			projectedRecurring[r.ID] = true
+		}
 	}
 
 	for _, g := range gs {
 		if g.Archived {
+			continue
+		}
+		if recurringID := smoothing.SmoothingRecurringID(g); recurringID != "" && projectedRecurring[recurringID] {
 			continue
 		}
 		var byCat, byBudget MonthAmounts
@@ -146,9 +157,9 @@ func Project(recs []domain.Recurring, gs []domain.Goal, year, fromMonth int, bas
 			}
 			p.GoalsByCategory[g.CategoryID] = cur
 		} else {
-			for _, bID := range g.BudgetIDs {
+			for bID, amount := range splitGoalMonths(byBudget, uniqueIDs(g.BudgetIDs)) {
 				cur := p.GoalsByBudget[bID]
-				if err := mergeMonths(&cur, byBudget, base); err != nil {
+				if err := mergeMonths(&cur, amount, base); err != nil {
 					p.Error = fmt.Errorf("goal budget %q totals: %w", bID, err)
 				}
 				p.GoalsByBudget[bID] = cur
@@ -156,6 +167,46 @@ func Project(recs []domain.Recurring, gs []domain.Goal, year, fromMonth int, bas
 		}
 	}
 	return p
+}
+
+func uniqueIDs(ids []string) []string {
+	seen := make(map[string]bool, len(ids))
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if id == "" || seen[id] {
+			continue
+		}
+		seen[id] = true
+		out = append(out, id)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// splitGoalMonths divides each monthly assignment evenly across linked budgets.
+// Integer remainders go to the earliest budget ID, so the shares are stable and
+// always add back to the exact goal assignment.
+func splitGoalMonths(amounts MonthAmounts, budgetIDs []string) map[string]MonthAmounts {
+	out := make(map[string]MonthAmounts, len(budgetIDs))
+	if len(budgetIDs) == 0 {
+		return out
+	}
+	count := int64(len(budgetIDs))
+	for _, id := range budgetIDs {
+		out[id] = MonthAmounts{}
+	}
+	for month, amount := range amounts {
+		share, remainder := amount/count, amount%count
+		for i, id := range budgetIDs {
+			months := out[id]
+			months[month] = share
+			if int64(i) < remainder {
+				months[month]++
+			}
+			out[id] = months
+		}
+	}
+	return out
 }
 
 func checkedAdd(a, b int64, cur string) (int64, error) {

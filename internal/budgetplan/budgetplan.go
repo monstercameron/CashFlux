@@ -18,10 +18,3 @@ package budgetplan
 // MonthAmounts is one calendar year of minor-unit amounts, index 0 = January …
 // 11 = December.
 type MonthAmounts [12]int64
-
-// addInto accumulates src into dst month by month (helper for folding).
-func addInto(dst *MonthAmounts, src MonthAmounts) {
-	for i := 0; i < 12; i++ {
-		dst[i] += src[i]
-	}
-}

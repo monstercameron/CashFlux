@@ -42,9 +42,6 @@ type Funded struct {
 	ShortfallMinor int64
 }
 
-// Underfunded reports whether this budget could not be fully covered.
-func (f Funded) Underfunded() bool { return f.ShortfallMinor > 0 }
-
 // ScenarioResult is the month's outcome: the adjusted income, the total plan,
 // the per-budget funding waterfall, and the aggregate shortfall.
 type ScenarioResult struct {
@@ -54,16 +51,6 @@ type ScenarioResult struct {
 	Funded              []Funded
 	Underfunded         []string // budgetIDs with a shortfall, in input order
 	Error               error
-}
-
-// IsUnderfunded reports whether the given budget went underfunded in this result.
-func (r ScenarioResult) IsUnderfunded(budgetID string) bool {
-	for _, id := range r.Underfunded {
-		if id == budgetID {
-			return true
-		}
-	}
-	return false
 }
 
 // Evaluate runs the funding waterfall for one month: the adjusted income

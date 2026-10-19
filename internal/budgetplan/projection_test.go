@@ -10,6 +10,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/smoothing"
 )
 
 func usd(minor int64) money.Money { return money.New(minor, "USD") }
@@ -73,6 +74,22 @@ func TestProjectRecurring(t *testing.T) {
 	}
 }
 
+func TestProjectMonthEndRecurringKeepsTwelveOccurrences(t *testing.T) {
+	r := domain.Recurring{
+		ID: "month-end", Amount: usd(-100), Cadence: domain.CadenceMonthly,
+		NextDue: time.Date(2026, time.January, 31, 0, 0, 0, 0, time.UTC), CategoryID: "bills",
+	}
+	p := Project([]domain.Recurring{r}, nil, 2026, 0, "USD", usdRates)
+	for month, got := range p.Recurring["bills"] {
+		if got != 100 {
+			t.Errorf("month %d amount = %d, want 100", month, got)
+		}
+	}
+	if got := sumMonths(p.Recurring["bills"]); got != 1200 {
+		t.Fatalf("annual amount = %d, want 1200 across all 12 months", got)
+	}
+}
+
 func TestProjectIgnoresIncomeAndBlankDue(t *testing.T) {
 	recs := []domain.Recurring{
 		{ID: "inc", Amount: usd(200000), Cadence: domain.CadenceMonthly, NextDue: time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC), CategoryID: "pay"}, // income, ignored
@@ -96,9 +113,46 @@ func TestProjectGoals(t *testing.T) {
 		t.Errorf("GoalsByCategory[savings] = %v", got)
 	}
 	for _, b := range []string{"b1", "b2"} {
-		if got := p.GoalsByBudget[b]; sumMonths(got) != 11*3000 || got[0] != 0 || got[11] != 3000 {
+		if got := p.GoalsByBudget[b]; sumMonths(got) != 11*1500 || got[0] != 0 || got[11] != 1500 {
 			t.Errorf("GoalsByBudget[%s] = %v", b, got)
 		}
+	}
+}
+
+func TestProjectManagedSmoothingGoalDoesNotDoubleCountProjectedBill(t *testing.T) {
+	rec := domain.Recurring{
+		ID: "annual-insurance", Amount: usd(-12000), Cadence: domain.CadenceYearly,
+		NextDue:    time.Date(2026, time.December, 31, 0, 0, 0, 0, time.UTC),
+		CategoryID: "insurance", SmoothIntoBudgets: true,
+	}
+	goal := domain.Goal{
+		ID: "managed-insurance", CategoryID: "insurance", MonthlyContribution: usd(1000),
+		Custom: map[string]any{smoothing.GoalCustomKey: rec.ID},
+	}
+	p := Project([]domain.Recurring{rec}, []domain.Goal{goal}, 2026, 0, "USD", usdRates)
+	if got := p.GoalsByCategory["insurance"]; got != (MonthAmounts{}) {
+		t.Fatalf("managed smoothing goal was projected with its bill: %v", got)
+	}
+	if got := p.Recurring["insurance"][11]; got != 12000 {
+		t.Fatalf("December recurring = %d, want 12000", got)
+	}
+}
+
+func TestProjectGoalBudgetSharesPreserveWholeAssignment(t *testing.T) {
+	goal := domain.Goal{ID: "shared", MonthlyContribution: usd(1001), BudgetIDs: []string{"b2", "b1", "b1"}}
+	p := Project(nil, []domain.Goal{goal}, 2026, 0, "USD", usdRates)
+	if got := p.GoalsByBudget["b1"][0]; got != 501 {
+		t.Errorf("first budget share = %d, want 501 remainder assigned by ID", got)
+	}
+	if got := p.GoalsByBudget["b2"][0]; got != 500 {
+		t.Errorf("second budget share = %d, want 500", got)
+	}
+	total, err := p.TotalUnique([]string{"b1", "b2"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total[0] != 1001 {
+		t.Fatalf("unique total = %d, want the full assignment 1001", total[0])
 	}
 }
 

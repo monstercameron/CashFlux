@@ -103,14 +103,14 @@ func TestEvaluateFundedBreakdown(t *testing.T) {
 		t.Fatalf("expected 2 funded rows, got %d", len(got.Funded))
 	}
 	// a fully funded, b gets the remaining 20000 and is short 10000.
-	if f := got.Funded[0]; f.FundedMinor != 30000 || f.Underfunded() {
+	if f := got.Funded[0]; f.FundedMinor != 30000 || f.ShortfallMinor != 0 {
 		t.Errorf("row a = %+v", f)
 	}
-	if f := got.Funded[1]; f.FundedMinor != 20000 || f.ShortfallMinor != 10000 || !f.Underfunded() {
+	if f := got.Funded[1]; f.FundedMinor != 20000 || f.ShortfallMinor != 10000 {
 		t.Errorf("row b = %+v", f)
 	}
-	if !got.IsUnderfunded("b") || got.IsUnderfunded("a") {
-		t.Errorf("IsUnderfunded wrong: %v", got.Underfunded)
+	if len(got.Underfunded) != 1 || got.Underfunded[0] != "b" {
+		t.Errorf("Underfunded IDs = %v, want [b]", got.Underfunded)
 	}
 }
 

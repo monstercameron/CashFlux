@@ -90,6 +90,10 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Planning projection counts each bill and goal once (BC5B3).** A smoothed bill no longer adds its sinking-fund goal on top of
+  the projected payment, and a goal linked to several budgets is apportioned across them instead of counted in full for each.
+- **Price-creep impact uses the budget view and its currency (BC5B5).** The preview converts FX (refusing on a missing rate), uses the
+  household week start and the evaluated card; over-budget flag tasks get catalog titles and stable dedupe.
 - **Document re-imports skip rows already in the ledger even when they carry a status (TC4N7).**
 - **Unusual-spend thresholds convert currency and each transaction yields one finding (TC4N8).**
 - **Budgets: Auto Budget opens, headline totals use one window, last month reads per period, row details explain themselves
