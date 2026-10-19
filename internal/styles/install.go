@@ -181,6 +181,7 @@ func Register() {
 	registerBC6N8()
 	registerIMV7()
 	registerBC6N7()
+	registerTV8F()
 	inject(Build())
 }
 

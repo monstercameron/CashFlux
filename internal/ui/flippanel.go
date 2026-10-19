@@ -437,7 +437,7 @@ func flipPanel(props FlipPanelProps) uic.Node {
 				// Back face — the settings panel.
 				Div(css.Class("flip-face flip-back"),
 					Div(css.Class("set-h"),
-						Span(Style(map[string]string{"width": "1.5rem"})), // balance the close button so the title centers
+						Span(css.Class("flip-title-balance"), Style(map[string]string{"width": "1.5rem"})),
 						H3(Attr("id", titleID), props.Title),
 						Button(css.Class("set-close"), Type("button"), Attr("title", uistate.T("action.close")), Attr("aria-label", uistate.T("action.close")),
 							OnClick(func() {

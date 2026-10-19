@@ -6,23 +6,14 @@ package app
 
 import (
 	"strconv"
-	"strings"
 	"syscall/js"
 	"time"
 
-	"github.com/monstercameron/CashFlux/internal/accountselect"
-	"github.com/monstercameron/CashFlux/internal/amountmath"
 	"github.com/monstercameron/CashFlux/internal/appstate"
-	"github.com/monstercameron/CashFlux/internal/currency"
-	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
-	"github.com/monstercameron/CashFlux/internal/money"
-	"github.com/monstercameron/CashFlux/internal/payees"
-	"github.com/monstercameron/CashFlux/internal/rules"
 	"github.com/monstercameron/CashFlux/internal/screens"
-	"github.com/monstercameron/CashFlux/internal/smarttext"
-	"github.com/monstercameron/CashFlux/internal/textutil"
+	"github.com/monstercameron/CashFlux/internal/txnform"
 	"github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -31,27 +22,8 @@ import (
 	uic "github.com/monstercameron/GoWebComponents/v5/ui"
 )
 
-// QuickAddHost mounts at the shell root and renders a quick "add a transaction"
-// modal when the quick-add atom is open, so a transaction can be logged
-// from anywhere without leaving the current screen. It renders nothing when
-// closed. The controlled Overlay stays mounted through close so GWC can return
-// focus to the opener. Form hooks remain unconditional across opens.
-func QuickAddHost() uic.Node {
-	return uic.CreateElement(quickAddHost, appstate.Default)
-}
-
-func quickAddCategoryIsValid(categories []domain.Category, categoryID, direction string) bool {
-	want := domain.KindExpense
-	if direction == "Income" {
-		want = domain.KindIncome
-	}
-	for _, category := range categories {
-		if category.ID == categoryID {
-			return category.Kind == want
-		}
-	}
-	return false
-}
+// QuickAddHost keeps the controlled modal mounted so closing it restores focus.
+func QuickAddHost() uic.Node { return uic.CreateElement(quickAddHost, appstate.Default) }
 
 func quickAddHost(app *appstate.App) uic.Node {
 	open := uistate.UseQuickAdd()
@@ -67,766 +39,381 @@ type quickAddFormProps struct {
 }
 
 func quickAddForm(props quickAddFormProps) uic.Node {
-	app := props.App
 	open := uistate.UseQuickAdd()
-	// C573: the direction a menu item promised ("Income…"), consumed as the panel
-	// opens. Read unconditionally here so the atom is captured on every render, not
-	// only the renders where the panel happens to be showing.
 	seedKind := uistate.UseQuickAddKind()
 	transferOpen := uistate.UseAcctTransferOpen()
-	notice := uistate.UseNotice()
-	dataRev := uistate.UseDataRevision()
-	_ = dataRev.Get()
-
-	acctID := uic.UseState("")
-	kind := uic.UseState("Expense")
-	amount := uic.UseState("")
-	payee := uic.UseState("")
-	desc := uic.UseState("")
-	catID := uic.UseState("")
-	date := uic.UseState("")
-	needsReview := uic.UseState(false)
-	saveAttempted := uic.UseState(false)
-	saveDraftID := uic.UseRef("")
-	focusField := uic.UseState("")
-	// QA M7: the metadata that used to require save-then-reopen (tags, member,
-	// note, cleared, report exclusion) is available at creation, folded behind a
-	// collapsed "More details" disclosure so the fast path stays five fields.
-	tagsS := uic.UseState("")
-	activeMember := uistate.UseActiveMember().Get()
-	ownersS := uic.UseState(quickAddOwnerDefaults(activeMember))
-	ownersTouched := uic.UseState(false)
-	noteS := uic.UseState("")
-	clearedS := uic.UseState(false)
-	excludeS := uic.UseState(false)
-	categoryPickerOpen := uic.UseState(false)
-	setKind := func(next string) {
-		selected := catID.Get()
-		if selected != "" && !quickAddCategoryIsValid(app.Categories(), selected, next) {
-			catID.Set("")
-		}
-		kind.Set(next)
+	_ = uistate.UseDataRevision().Get()
+	active := uistate.UseActiveMember().Get()
+	draft := uic.UseState(txnform.NewQuickDraft(active))
+	attempted := uic.UseState(false)
+	focus := uic.UseState("")
+	categoryOpen := uic.UseState(false)
+	draftID := uic.UseRef("")
+	source := txnform.QuickSource{Accounts: props.App.Accounts(), Transactions: props.App.Transactions(),
+		Categories: props.App.Categories(), Members: props.App.Members(), Rules: props.App.Rules(),
+		MemberLens: uistate.UseMemberLens(), ActiveMember: active, DefaultAccount: props.App.DefaultAccountID(),
+		Now: time.Now(), LearnTally: uistate.LoadLearnTally(), LearnThreshold: uistate.LoadLearnThreshold(), TemplateCount: len(uistate.TxnTemplates())}
+	view := txnform.QuickPreview(draft.Get(), source, attempted.Get())
+	reset := func() {
+		draft.Set(txnform.NewQuickDraft(active))
+		attempted.Set(false)
+		focus.Set("")
+		categoryOpen.Set(false)
+		draftID.Set("")
 	}
-
-	onReviewed := uic.UseEvent(func(e uic.Event) { needsReview.Set(e.IsChecked()) })
-	onTags := uic.UseEvent(func(v string) { tagsS.Set(v) })
-	onNote := uic.UseEvent(func(v string) { noteS.Set(v) })
-	onCleared := uic.UseEvent(func(e uic.Event) { clearedS.Set(e.IsChecked()) })
-	onExclude := uic.UseEvent(func(e uic.Event) { excludeS.Set(e.IsChecked()) })
-	onAcct := func(e uic.Event) { acctID.Set(e.GetValue()) }
-	onAmount := func(v string) {
-		amount.Set(v)
-		// C624: a typed minus means money OUT (C546), and the toggle must say so
-		// while the user can still see it. Resolving the sign silently at save time
-		// let "-1" be entered with Income selected and stored as an expense — the
-		// direction/amount mismatch this ticket is about. Reflecting it here is the
-		// "show the resulting sign before commit" option the ticket allows, and it
-		// is safe in an INPUT handler (setting state mid-save is what loses writes).
-		if strings.HasPrefix(strings.TrimSpace(v), "-") && kind.Get() != "Expense" {
-			setKind("Expense")
-		}
-	}
-	// TX16: on blur/Enter, evaluate an arithmetic entry ("45.99*3", "(12+8)*2")
-	// and replace it with the result; a plain number or parse failure is left as-is.
-	onAmountBlur := func(e uic.Event) {
-		v := e.GetValue()
-		if s, ok := screens.EvalAmountField(v); ok {
-			v = s
-			amount.Set(s)
-		}
-		// C624: once the user leaves the field, the minus has done its job — the kind
-		// toggle carries the direction now. Leaving it in the box asks the reader to
-		// resolve "Expense" over "-1", a double negative, and that ambiguity is the
-		// whole complaint: nothing on the form said which way it would be stored. The
-		// stored value is unchanged (ParseSigned reads the magnitude plus the toggle);
-		// only the display stops contradicting itself.
-		if t := strings.TrimSpace(v); strings.HasPrefix(t, "-") {
-			amount.Set(strings.TrimSpace(strings.TrimPrefix(t, "-")))
-		}
-	}
-	onPayee := func(v string) { payee.Set(v) }
-	onDesc := func(v string) { desc.Set(v) }
-	onCat := uic.UseEvent(func(e uic.Event) { catID.Set(e.GetValue()) })
-	toggleNewCategory := uic.UseEvent(Prevent(func() { categoryPickerOpen.Set(true) }))
-	onDate := func(v string) { date.Set(v) }
+	closePanel := func() { reset(); open.Set(false) }
 	uic.UseEffect(func() func() {
-		if id := focusField.Get(); id != "" {
-			focusQuickAddField(id)
+		if field := focus.Get(); field != "" {
+			focusQuickAddField(field)
 		}
 		return nil
-	}, focusField.Get())
-
-	accounts := app.Accounts()
-	// The single-member view supplies the member-specific default. A broader view
-	// has no member default and falls back to the workspace setting.
-	memberLens := uistate.UseMemberLens()
-	defaultMemberID := ""
-	if len(memberLens) == 1 {
-		defaultMemberID = memberLens[0]
-	}
-	today := dateutil.FormatDate(time.Now())
-	// account selection remains explicit once the user or a template chooses it;
-	// clearing state after Save & add another runs this same resolver again.
-	effAcct := resolveQuickAddAccountID(accountselect.ResolveInput{
-		Accounts: accounts, Transactions: app.Transactions(), ExplicitID: acctID.Get(),
-		ActiveMemberID: defaultMemberID, Members: app.Members(),
-		WorkspaceDefaultID: app.DefaultAccountID(),
-	})
-	effDate := date.Get()
-	if effDate == "" {
-		effDate = today
-	}
-
-	post := func(text string, isErr bool) { notice.Set(notice.Get().With(text, isErr)) }
-	reset := func() {
-		acctID.Set("")
-		kind.Set("Expense")
-		amount.Set("")
-		payee.Set("")
-		desc.Set("")
-		catID.Set("")
-		date.Set("")
-		categoryPickerOpen.Set(false)
-		needsReview.Set(false)
-		saveAttempted.Set(false)
-		saveDraftID.Set("")
-		focusField.Set("")
-		tagsS.Set("")
-		ownersS.Set(quickAddOwnerDefaults(activeMember))
-		ownersTouched.Set(false)
-		noteS.Set("")
-		clearedS.Set(false)
-		excludeS.Set(false)
-	}
-	closePanel := func() {
-		reset()
-		open.Set(false)
-	}
-	// C573: apply the direction the entry point promised. Done in an effect rather
-	// than during render — writing state while rendering re-enters the render — and
-	// keyed on both the open flag and the seed, so it runs when the panel opens with
-	// a seed waiting and again if a second menu choice arrives while it is open.
-	// TakeQuickAddKind clears the seed, so the next plain "+ Add transaction" does
-	// not silently inherit the last menu choice.
+	}, focus.Get())
 	uic.UseEffect(func() func() {
-		if !open.Get() {
-			return nil
-		}
-		if k := uistate.TakeQuickAddKind(); k != "" {
-			setKind(k)
+		if open.Get() {
+			if kind := uistate.TakeQuickAddKind(); kind != "" {
+				draft.Update(func(d txnform.QuickDraft) txnform.QuickDraft {
+					return txnform.QuickSetDirection(d, kind, source.Categories)
+				})
+			}
 		}
 		return nil
 	}, "quickadd-seed:"+strconv.FormatBool(open.Get())+":"+seedKind.Get())
+	save, saving := useQuickAddSave(quickAddSaveProps{App: props.App, Open: props.Open, Draft: draft.Get, Source: source,
+		AccountID: view.AccountID, Date: view.Date, DraftID: draftID, Invalid: func(field string) { attempted.Set(true); focus.Set(field) }})
+	fields := quickAddFieldsProps{Draft: draft.Get(), View: view, Source: source, Change: draft.Update, Focus: focus.Set,
+		Close: closePanel, Transfer: func() { transferOpen.Set(true) }, CategoryOpen: categoryOpen.Get(), SetCategoryOpen: categoryOpen.Set, App: props.App}
+	footer := uic.CreateElement(quickAddFooter, quickAddFooterProps{Saving: saving, Close: closePanel,
+		Save: func() { save(closePanel) }, Another: func() { save(reset) }})
+	return ui.Overlay(ui.OverlayProps{Open: props.Open, Kind: ui.OverlayModal, Title: uistate.T("quickAdd.title"),
+		TestID: "txn-add-dialog", Body: uic.CreateElement(quickAddBody, fields), Footer: footer, OnClose: closePanel})
+}
+
+type quickAddSaveProps struct {
+	App             *appstate.App
+	Open            bool
+	Draft           func() txnform.QuickDraft
+	Source          txnform.QuickSource
+	AccountID, Date string
+	DraftID         uic.Ref[string]
+	Invalid         func(string)
+}
+
+// useQuickAddSave owns browser persistence and lifecycle hooks, never draft decisions.
+func useQuickAddSave(p quickAddSaveProps) (func(func()), bool) {
 	saving := uic.UseState(false)
-	saveGeneration := uic.UseRef(uint64(0))
+	generation := uic.UseRef(uint64(0))
+	notice := uistate.UseNotice()
 	uic.UseEffect(func() func() {
-		saveGeneration.Set(saveGeneration.Get() + 1)
+		generation.Set(generation.Get() + 1)
 		saving.Set(false)
-		return func() { saveGeneration.Set(saveGeneration.Get() + 1) }
-	}, props.Open)
-	// saveCore validates + persists the transaction, returning true on success. It is
-	// shared by the panel's Save (which then closes) and "Save & add another" (C40),
-	// which keeps the panel open and resets the form for the next entry.
-	saveCore := func(after func()) {
+		return func() { generation.Set(generation.Get() + 1) }
+	}, p.Open)
+	return func(after func()) {
 		if saving.Get() {
 			return
 		}
-		if field, _ := quickAddInvalidFieldR4F(accounts, effAcct, amount.Get(), kind.Get(), payee.Get(), desc.Get()); field != "" {
-			saveAttempted.Set(true)
-			focusField.Set(field)
+		d := p.Draft()
+		if field, _ := txnform.QuickInvalidField(p.Source.Accounts, p.AccountID, d.Amount, d.Direction, d.Payee, d.Desc); field != "" {
+			p.Invalid(field)
 			return
 		}
-		acc, ok := accountByID(accounts, effAcct)
-		if !ok {
-			return
+		if p.DraftID.Get() == "" {
+			p.DraftID.Set(id.New())
 		}
-		// C546: the amount field is a magnitude and the kind toggle carries the
-		// sign — but this used to guard on `amt == 0`, so a typed "-50" parsed to
-		// −5000, survived the guard, and was then negated by the Expense branch
-		// into +50 INCOME. The opposite of what was typed, saved silently.
-		// amountmath.ParseSigned owns that reconciliation now: a typed minus is
-		// read as intent and wins, and it reports the direction back so the
-		// toggle follows instead of displaying a lie.
-		want := amountmath.Out
-		if kind.Get() == "Income" {
-			want = amountmath.In
-		}
-		amt, resolved, err := amountmath.ParseSigned(amount.Get(), currency.Decimals(acc.Currency), want)
+		d.Date = p.Date
+		t, err := txnform.BuildQuick(d, p.Source.Accounts, p.AccountID, p.Source.ActiveMember, p.DraftID.Get(), time.Now())
 		if err != nil {
 			return
 		}
-		// The resolved direction is already carried by amt's sign. The kind toggle
-		// is deliberately NOT set here: a state setter mid-handler re-renders the
-		// panel while this closure is still running and the write can be lost, and
-		// on this form the point is moot anyway — a successful save closes the
-		// panel and reset() returns the toggle to Expense.
-		_ = resolved
-		d, derr := dateutil.ParseDate(strings.TrimSpace(effDate))
-		if derr != nil {
-			d = time.Now()
-		}
-		if saveDraftID.Get() == "" {
-			saveDraftID.Set(id.New())
-		}
-		t := domain.Transaction{
-			ID: saveDraftID.Get(), AccountID: acc.ID, Date: d, Payee: strings.TrimSpace(payee.Get()),
-			Desc: quickAddDescriptionR4F(payee.Get(), desc.Get()), CategoryID: catID.Get(),
-			Amount: money.New(amt, acc.Currency), MemberIDs: quickAddOwnerSelection(ownersS.Get(), activeMember, acc, ownersTouched.Get()), Reviewed: quickAddReviewedValue(needsReview.Get()),
-			Source:             domain.TxnSourceManual,
-			Tags:               textutil.CommaFields(tagsS.Get()),
-			Note:               strings.TrimSpace(noteS.Get()),
-			Cleared:            clearedS.Get(),
-			ExcludeFromReports: excludeS.Get(),
-		}
-		// Apply auto-categorization rules on save (it won't overwrite a manual
-		// category). Quick-add is now the sole manual-add path after the inline
-		// transaction form was removed (C73/C79), so without this a rule-matching
-		// payee would no longer be auto-filed the way the inline form did (L15).
-		t = app.AutoCategorizeTransaction(t)
-		generation := saveGeneration.Get()
+		t = p.App.AutoCategorizeTransaction(t)
+		current := generation.Get()
 		saving.Set(true)
-		_ = screens.CommitUndoable(app, uistate.T("quickAdd.added"), []string{t.ID}, func() error {
-			if err := app.PutTransaction(t); err != nil {
+		_ = screens.CommitUndoable(p.App, uistate.T("quickAdd.added"), []string{t.ID}, func() error {
+			if err := p.App.PutTransaction(t); err != nil {
 				return err
 			}
 			if t.CategoryID != "" {
-				learn := strings.TrimSpace(t.Payee)
-				if learn == "" {
-					learn = strings.TrimSpace(t.Desc)
-				}
-				uistate.IncrementLearnTally(learn, t.CategoryID)
+				uistate.IncrementLearnTally(txnform.RulePhrase(t), t.CategoryID)
 			}
 			return nil
 		}, func(err error) {
-			if saveGeneration.Get() != generation {
+			if generation.Get() != current {
 				return
 			}
 			saving.Set(false)
 			if err != nil {
-				post(uistate.T("txint.transactionNotSaved"), true)
+				notice.Set(notice.Get().With(uistate.T("txint.transactionNotSaved"), true))
 				return
 			}
 			if after != nil {
 				after()
 			}
 		})
-	}
-	save := func() { saveCore(closePanel) }
-	saveAndAnother := func() { saveCore(reset) }
+	}, saving.Get()
+}
 
-	// TXT: transaction quick-templates ("favourites"). onPick pre-fills the add
-	// form's existing state atoms from a chosen template (account, kind, amount,
-	// payee, description, category) so a frequent manual entry lands in one click.
-	// The amount atom holds a plain positive string, so we format the template's
-	// magnitude with its currency's decimals and carry the sign via the kind toggle.
-	onPick := func(t domain.TxnTemplate) {
-		if t.AccountID != "" {
-			acctID.Set(t.AccountID)
-		}
-		if t.IsExpense() {
-			setKind("Expense")
-		} else {
-			setKind("Income")
-		}
-		if t.AmountMinor != 0 {
-			mag := t.AmountMinor
-			if mag < 0 {
-				mag = -mag
-			}
-			amount.Set(money.FormatMinor(mag, currency.Decimals(t.Currency)))
-		}
-		payee.Set(t.Payee)
-		if t.Note != "" {
-			desc.Set(t.Note)
-		}
-		if quickAddCategoryIsValid(app.Categories(), t.CategoryID, kind.Get()) {
-			catID.Set(t.CategoryID)
-		} else {
-			catID.Set("")
-		}
-	}
+type quickAddFieldsProps struct {
+	Draft           txnform.QuickDraft
+	View            txnform.QuickView
+	Source          txnform.QuickSource
+	App             *appstate.App
+	Change          func(func(txnform.QuickDraft) txnform.QuickDraft)
+	Focus           func(string)
+	Close, Transfer func()
+	CategoryOpen    bool
+	SetCategoryOpen func(bool)
+}
 
-	// Build the draft field set the "Save as template" action snapshots from the
-	// live form. AmountMinor is the parsed magnitude against the effective account's
-	// currency; the sign is carried by Direction (from the Expense/Income toggle).
-	var draftCurrency string
-	var draftAmountMinor int64
-	if acc, ok := accountByID(accounts, effAcct); ok {
-		draftCurrency = acc.Currency
-		if v, perr := money.ParseMinor(strings.TrimSpace(amount.Get()), currency.Decimals(acc.Currency)); perr == nil {
-			draftAmountMinor = v
-		}
-	}
-	draftDir := domain.DirectionExpense
-	if kind.Get() == "Income" {
-		draftDir = domain.DirectionIncome
-	}
-	saveTemplateBtn := screens.SaveAsTemplateButton(screens.TxnTemplateDraft{
-		Payee:       strings.TrimSpace(payee.Get()),
-		CategoryID:  catID.Get(),
-		AccountID:   effAcct,
-		AmountMinor: draftAmountMinor,
-		Currency:    draftCurrency,
-		Direction:   draftDir,
-		Note:        strings.TrimSpace(desc.Get()),
-	}, nil)
+func quickAddBody(p quickAddFieldsProps) uic.Node {
+	return Div(css.Class("txn-add-layout"), screens.TxnSharedForm(screens.TxnFormModel{
+		Mode: screens.TxnFormAdd, Amount: uic.CreateElement(quickAddAmount, p), Direction: uic.CreateElement(quickAddDirection, p),
+		Payee: uic.CreateElement(quickAddPayee, p), Category: uic.CreateElement(quickAddCategory, p), Date: uic.CreateElement(quickAddDate, p), Account: uic.CreateElement(quickAddAccount, p),
+		Sentence: uic.CreateElement(quickAddSentence, p), More: []uic.Node{uic.CreateElement(quickAddDescription, p),
+			screens.SmartFieldAssist(uistate.LoadSmartSettings(), "qa-desc", p.View.DescriptionSuggestion, func() {
+				p.Change(func(d txnform.QuickDraft) txnform.QuickDraft { d.Desc = p.View.CleanDescription; return d })
+			}), uic.CreateElement(quickAddReview, p), uic.CreateElement(quickAddDetails, p)},
+		AddQuickFill: uic.CreateElement(quickAddPayeeDatalist, p.View.Payees), AddTemplates: uic.CreateElement(quickAddTemplates, p), MoreID: "txn-add-more"}))
+}
 
-	acctOpts := make([]uic.Node, 0, len(accounts))
-	for _, option := range screens.TxnFormAccountOptions(accounts, effAcct) {
-		acctOpts = append(acctOpts, Option(Value(option.Value), SelectedIf(effAcct == option.Value), option.Label))
+func quickAddSentence(p quickAddFieldsProps) uic.Node {
+	return Div(css.Class("qa-sentence"), Label(Attr("for", "sm15-input"), uistate.T("txu3.sentenceLabel")),
+		uic.CreateElement(screens.TxnDraftHint, screens.TxnDraftHintProps{OnApply: func(fill screens.TxnDraftFill) {
+			next := txnform.QuickApplyFill(p.Draft, fill, p.Source.Categories)
+			p.Change(func(d txnform.QuickDraft) txnform.QuickDraft {
+				return txnform.QuickApplyFill(d, fill, p.Source.Categories)
+			})
+			p.Focus(txnform.QuickNextFocus(p.Source.Accounts, p.View.AccountID, next.Amount, next.Payee, next.Desc, fill))
+		}}))
+}
+
+func quickAddAmount(p quickAddFieldsProps) uic.Node {
+	amountAttrs := []any{css.Class("field"), Type("text"), Attr("inputmode", "decimal"), Attr("id", "txn-add-amount"), Attr("data-testid", "txn-add-amount"), Attr("autofocus", ""), Attr("aria-label", uistate.T("quickAdd.amount")), Attr("aria-required", "true"), Placeholder(uistate.T("quickAdd.amount")), ui.FieldValue(p.Draft.Amount)}
+	if p.View.AmountError {
+		amountAttrs = append(amountAttrs, Attr("aria-invalid", "true"), Attr("aria-describedby", "txn-add-amount-error"))
 	}
-	// C570: the same qualified, naturally-sorted category list Review, Edit and the
-	// split editor use — "Housing > Mortgage", not a bare "Mortgage". Quick-add is
-	// where most transactions get their category, so it was the worst place to make
-	// two same-named leaves indistinguishable.
-	categoryKind := domain.KindExpense
-	if kind.Get() == "Income" {
-		categoryKind = domain.KindIncome
+	onAmount := func(v string) {
+		p.Change(func(d txnform.QuickDraft) txnform.QuickDraft {
+			return txnform.QuickInputAmount(d, v, p.Source.Categories)
+		})
 	}
-	matchingCategories := make([]domain.Category, 0, len(app.Categories()))
-	for _, category := range app.Categories() {
-		if category.Kind == categoryKind {
-			matchingCategories = append(matchingCategories, category)
-		}
+	onAmountBlur := func(e uic.Event) {
+		p.Change(func(d txnform.QuickDraft) txnform.QuickDraft { return txnform.QuickBlurAmount(d, e.GetValue()) })
 	}
-	catOpts := []uic.Node{Option(Value(""), SelectedIf(catID.Get() == ""), uistate.T("quickAdd.noCategory"))}
-	for _, o := range screens.CategoryPickOptions(matchingCategories) {
-		catOpts = append(catOpts, Option(Value(o.Value), SelectedIf(catID.Get() == o.Value), o.Label))
+	amountNote := Fragment()
+	if p.View.AmountNote != "" {
+		amountNote = Div(css.Class("qa-amount-note"), Attr("data-testid", "txn-add-amount-note"), Attr("role", "status"), Attr("aria-live", "polite"), uistate.T("quickAdd.minusMeansOut", p.View.AmountNote))
 	}
 
-	// C47: "Mark as reviewed" checkbox: a confident entry skips the auto review-tag (L43).
-	// The original label key ("quickAdd.reviewed") was too terse — users couldn't tell
-	// what "reviewed" meant or what leaving it unchecked would do. Replaced with a clear
-	// primary label + a muted helper caption so the field is self-explanatory.
-	needsReviewArgs := []any{Type("checkbox"), Attr("data-testid", "txn-add-needs-review"), OnChange(onReviewed), Checked(needsReview.Get())}
-
-	// SMART field assists (Wave 3 / Free):
-	//  (a) Clean-merchant: suggests a normalised merchant name when the raw
-	//      description looks like a bank POS string (prefix, store numbers, etc.).
-	//  (b) Auto-category: when a user rule matches the description, shows the
-	//      rule's category so it can be applied in one click — giving visibility
-	//      into the auto-categorization that already runs on save.
-	qaSmartSettings := uistate.LoadSmartSettings()
-
-	// (a) Clean-merchant assist.
-	rawDesc := desc.Get()
-	cleanedDesc := smarttext.CleanMerchant(rawDesc)
-	var descSuggestion string
-	if cleanedDesc != strings.TrimSpace(rawDesc) && cleanedDesc != "" {
-		descSuggestion = cleanedDesc
-	}
-	descAssist := screens.SmartFieldAssist(qaSmartSettings, "qa-desc", descSuggestion, func() {
-		desc.Set(cleanedDesc)
-	})
-
-	// (b) Auto-category assist: resolve the matched category ID to a human name
-	//     so the chip reads "Use 'Groceries'" rather than an opaque ID.
-	suggestedCatID := rules.Category(app.Rules(), "", strings.TrimSpace(rawDesc))
-	var catSuggestion string
-	if suggestedCatID != "" && catID.Get() == "" && quickAddCategoryIsValid(app.Categories(), suggestedCatID, kind.Get()) {
-		for _, c := range app.Categories() {
-			if c.ID == suggestedCatID {
-				catSuggestion = c.Name
-				break
-			}
-		}
-	}
-	catAssist := screens.SmartFieldAssist(qaSmartSettings, "qa-cat", catSuggestion, func() {
-		if quickAddCategoryIsValid(app.Categories(), suggestedCatID, kind.Get()) {
-			catID.Set(suggestedCatID)
-		}
-	})
-
-	// (c) C34: self-learning category assist — when no rule matched and the user
-	//     hasn't picked a category yet, consult the persisted learntally. If the
-	//     top payee→category correction count has crossed the user-tunable threshold,
-	//     surface a chip. We key on payee first (more specific), falling back to the
-	//     description, to match what saveCore records.
-	learnThreshold := uistate.LoadLearnThreshold()
-	learnTally := uistate.LoadLearnTally()
-	learnPayeeKey := strings.TrimSpace(payee.Get())
-	if learnPayeeKey == "" {
-		learnPayeeKey = strings.TrimSpace(rawDesc)
-	}
-	var learnedCatAssist uic.Node = Fragment()
-	if suggestedCatID == "" && catID.Get() == "" {
-		if learnedCatID, ok := learnTally.ShouldSuggest(learnPayeeKey, learnThreshold); ok &&
-			quickAddCategoryIsValid(app.Categories(), learnedCatID, kind.Get()) {
-			var learnedCatName string
-			for _, c := range app.Categories() {
-				if c.ID == learnedCatID {
-					learnedCatName = c.Name
-					break
-				}
-			}
-			if learnedCatName != "" {
-				// Reuse SmartFieldAssist chip pattern: chip text will read
-				// `✦ Use "Groceries"` which is the correct affordance.
-				learnedCatAssist = screens.SmartFieldAssist(qaSmartSettings, "qa-learned-cat", learnedCatName, func() {
-					catID.Set(learnedCatID)
-				})
-			}
-		}
-	}
-
-	// TX17: entry-time budget impact. When a category and a non-zero amount are both
-	// present, show a live caption with the amount left in that budget. Computed on render
-	// (the engine surface is memoized); the helper returns
-	// an empty fragment until both inputs exist.
-	var impactMinor int64
-	if acc, ok := accountByID(accounts, effAcct); ok {
-		if v, perr := money.ParseMinor(strings.TrimSpace(amount.Get()), currency.Decimals(acc.Currency)); perr == nil {
-			impactMinor = v
-		}
-	}
-	budgetImpact := screens.QuickAddBudgetImpact(app, catID.Get(), impactMinor)
-
-	// C624: state the direction the typed amount resolves to, before commit.
-	//
-	// A typed minus means "money out" (C546/C547) and the kind toggle follows — but
-	// only when the toggle disagreed. With Expense already selected, which is the
-	// default, typing "-1" moved nothing and said nothing: the form sat reading
-	// "Expense" over "-1" with Save enabled, and the reader had no way to tell
-	// whether that would store a dollar out, a dollar in, or be rejected. The money
-	// was always stored correctly; the form simply never admitted what it was about
-	// to do. The ticket allows "normalize direction and show the resulting sign
-	// before commit" — this is the showing half, and it is a plain sentence rather
-	// than a badge because the question it answers is a sentence.
-	var amountNote uic.Node = Fragment()
-	if trimmed := strings.TrimSpace(amount.Get()); strings.HasPrefix(trimmed, "-") {
-		if acc, ok := accountByID(accounts, effAcct); ok {
-			dec := currency.Decimals(acc.Currency)
-			if v, perr := money.ParseMinor(trimmed, dec); perr == nil && v != 0 {
-				mag := v
-				if mag < 0 {
-					mag = -mag
-				}
-				amountNote = Div(css.Class("qa-amount-note"),
-					Attr("data-testid", "txn-add-amount-note"),
-					Attr("role", "status"), Attr("aria-live", "polite"),
-					uistate.T("quickAdd.minusMeansOut", money.FormatMinor(mag, dec)))
-			}
-		}
-	}
-
-	accountError := saveAttempted.Get() && !quickAddHasAccount(accounts, effAcct)
-	amountError := saveAttempted.Get() && !quickAddAmountValid(accounts, effAcct, amount.Get(), kind.Get())
-	payeeDescError := saveAttempted.Get() && strings.TrimSpace(payee.Get()) == "" && strings.TrimSpace(desc.Get()) == ""
-	accountAttrs := []any{css.Class("field"), Attr("id", "txn-add-account"), Attr("data-testid", "txn-add-account"), Attr("aria-label", uistate.T("quickAdd.account")), Attr("aria-required", "true")}
-	amountAttrs := []any{css.Class("field"), Type("text"), Attr("inputmode", "decimal"), Attr("id", "txn-add-amount"), Attr("data-testid", "txn-add-amount"), Attr("autofocus", ""), Attr("aria-label", uistate.T("quickAdd.amount")), Attr("aria-required", "true"), Placeholder(uistate.T("quickAdd.amount")), ui.FieldValue(amount.Get())}
-	descAttrs := []any{css.Class("field"), Type("text"), Attr("id", "txn-add-desc"), Attr("data-testid", "txn-add-desc"), Attr("aria-label", uistate.T("quickAdd.description")), Attr("aria-required", "false"), Placeholder(uistate.T("quickAdd.descPlaceholder")), ui.FieldValue(desc.Get())}
-	payeeAttrs := []any{css.Class("field"), Type("text"), Attr("id", "txn-add-payee"), Attr("data-testid", "txn-add-payee"), Attr("list", "qa-payees"), Attr("aria-label", uistate.T("quickAdd.payee")), Placeholder(uistate.T("quickAdd.payeePlaceholder")), ui.FieldValue(payee.Get())}
-	for _, f := range []struct {
-		show bool
-		id   string
-		args *[]any
-	}{{accountError, "txn-add-account-error", &accountAttrs}, {amountError, "txn-add-amount-error", &amountAttrs}, {payeeDescError, "txn-add-payee-error", &payeeAttrs}} {
-		if f.show {
-			*f.args = append(*f.args, Attr("aria-invalid", "true"), Attr("aria-describedby", f.id))
-		}
-	}
-	fieldMessage := func(show bool, key string) string {
-		if show {
-			return uistate.T(key)
-		}
-		return ""
-	}
-
-	// C39/C46: build a datalist of recent payees (distinct, newest-first, ≤50) so the
-	// Payee input offers autocomplete suggestions without constraining the user to them.
-	recentPayees := payees.RecentPayees(app.Transactions(), 50)
-	payeeDatalistArgs := make([]any, 0, len(recentPayees)+1)
-	payeeDatalistArgs = append(payeeDatalistArgs, Attr("id", "qa-payees"))
-	for _, p := range recentPayees {
-		payeeDatalistArgs = append(payeeDatalistArgs, Option(Value(p)))
-	}
-	payeeDatalist := Datalist(payeeDatalistArgs...)
-
-	// GM2-3: 5 of 6 QuickAdd inputs were placeholder/title-only (no visible label).
-	// Wrap each in ui.FormField so they render a visible caption above the control,
-	// matching the .labeled-field pattern used by all entity add modals.
-	// SM-15: type the whole thing in words and fill the fields below in one click.
-	// It sits ABOVE the fields it fills — the point of the feature is to avoid
-	// touching them, and a shortcut placed after the long way round is decoration.
-	// Its own component: it owns its input state and the Smart+ request hooks.
-	draftHint := uic.CreateElement(screens.TxnDraftHint, screens.TxnDraftHintProps{
-		OnApply: func(f screens.TxnDraftFill) {
-			// Each field is filled only when the parse actually found it, so a
-			// partial read never wipes something already typed.
-			if f.AmountMajor != "" {
-				amount.Set(f.AmountMajor)
-			}
-			if f.Payee != "" {
-				payee.Set(f.Payee)
-				if strings.TrimSpace(desc.Get()) == "" {
-					desc.Set(f.Payee)
-				}
-			}
-			if !f.Date.IsZero() {
-				date.Set(dateutil.FormatDate(f.Date))
-			}
-			if f.Income {
-				setKind("Income")
-			} else if f.AmountMajor != "" {
-				setKind("Expense")
-			}
-			if f.CategoryID != "" && quickAddCategoryIsValid(app.Categories(), f.CategoryID, kind.Get()) {
-				catID.Set(f.CategoryID)
-			}
-			focusField.Set(quickAddNextFocusR4F(accounts, effAcct, amount.Get(), payee.Get(), desc.Get(), f))
-		},
-	})
-	draftHint = Div(css.Class("qa-sentence"),
-		Label(Attr("for", "sm15-input"), uistate.T("txu3.sentenceLabel")),
-		draftHint,
-	)
-
-	categoryField := Div(css.Class("labeled-field", "txn-edit-category-field"),
-		Div(css.Class("txn-edit-category-label"), Span(css.Class("t-caption", tw.TextDim), uistate.T("quickAdd.category"))),
-		Div(css.Class("txn-cat-picker"),
-			Div(css.Class("txn-cat-row"), Select(css.Class("field"), Attr("data-testid", "txn-add-category"), Attr("aria-label", uistate.T("quickAdd.category")), OnChange(onCat), catOpts),
-				screens.TxnNewCategoryAction("txn-add-newcat-toggle", categoryPickerOpen.Get(), toggleNewCategory)),
-			catAssist, learnedCatAssist, budgetImpact,
-			If(categoryPickerOpen.Get(), uic.CreateElement(screens.CategoryPicker, screens.CategoryPickerProps{
-				Kind:     categoryKind,
-				Selected: catID.Get(),
-				OnPick:   func(categoryID string) { catID.Set(categoryID); categoryPickerOpen.Set(false) },
-				OnClose:  func() { categoryPickerOpen.Set(false) },
-			})),
-		),
-	)
-	amountField := Div(
+	return Div(
 		ui.Field(ui.FieldProps{ID: "txn-add-amount", Label: uistate.T("quickAdd.amount"),
-			Error: fieldMessage(amountError, "txu3.needAmount"), Required: true,
+			Error: uistate.T(p.View.AmountErrorKey), Required: true,
 			Control: func(a ui.FieldA11y) uic.Node {
 				return Input(append(amountAttrs, Attr("aria-describedby", a.DescribedBy), OnInput(onAmount), OnBlur(onAmountBlur))...)
 			}}), amountNote)
-	directionField := screens.TxnDirectionToggle(screens.TxnDirectionToggleProps{
-		Label: uistate.T("quickAdd.kind"), Value: kind.Get(),
+}
+
+func quickAddPayee(p quickAddFieldsProps) uic.Node {
+	payeeAttrs := []any{css.Class("field"), Type("text"), Attr("id", "txn-add-payee"), Attr("data-testid", "txn-add-payee"), Attr("list", "qa-payees"), Attr("aria-label", uistate.T("quickAdd.payee")), Placeholder(uistate.T("quickAdd.payeePlaceholder")), ui.FieldValue(p.Draft.Payee)}
+	if p.View.PayeeError {
+		payeeAttrs = append(payeeAttrs, Attr("aria-invalid", "true"), Attr("aria-describedby", "txn-add-payee-error"))
+	}
+	onPayee := func(v string) { p.Change(func(d txnform.QuickDraft) txnform.QuickDraft { d.Payee = v; return d }) }
+
+	return ui.Field(ui.FieldProps{ID: "txn-add-payee", Label: uistate.T("quickAdd.payee"),
+		Error: uistate.T(p.View.PayeeErrorKey),
+		Control: func(a ui.FieldA11y) uic.Node {
+			return Input(append(payeeAttrs, Attr("aria-describedby", a.DescribedBy), OnInput(onPayee))...)
+		}})
+}
+
+func quickAddDate(p quickAddFieldsProps) uic.Node {
+	onDate := func(v string) { p.Change(func(d txnform.QuickDraft) txnform.QuickDraft { d.Date = v; return d }) }
+
+	return ui.Field(ui.FieldProps{ID: "txn-add-date", Label: uistate.T("quickAdd.date"),
+		Control: func(a ui.FieldA11y) uic.Node {
+			return Input(css.Class("field"), ID(a.ID), Type("date"), Attr("data-testid", "txn-add-date"),
+				Attr("aria-label", a.Label), OnInput(onDate), ui.FieldValue(p.View.Date))
+		}})
+}
+
+func quickAddAccount(p quickAddFieldsProps) uic.Node {
+	accountAttrs := []any{css.Class("field"), Attr("id", "txn-add-account"), Attr("data-testid", "txn-add-account"), Attr("aria-label", uistate.T("quickAdd.account")), Attr("aria-required", "true")}
+	if p.View.AccountError {
+		accountAttrs = append(accountAttrs, Attr("aria-invalid", "true"), Attr("aria-describedby", "txn-add-account-error"))
+	}
+	acctOpts := make([]uic.Node, 0, len(p.View.Accounts))
+	for _, o := range p.View.Accounts {
+		acctOpts = append(acctOpts, Option(Value(o.Value), SelectedIf(p.View.AccountID == o.Value), o.Label))
+	}
+	onAcct := func(v uic.Event) {
+		p.Change(func(d txnform.QuickDraft) txnform.QuickDraft { d.AccountID = v.GetValue(); return d })
+	}
+
+	return ui.Field(ui.FieldProps{ID: "txn-add-account", Label: uistate.T("quickAdd.account"),
+		Error: uistate.T(p.View.AccountErrorKey), Required: true,
+		Control: func(a ui.FieldA11y) uic.Node {
+			return Select(append(append(accountAttrs, Attr("aria-describedby", a.DescribedBy), OnChange(onAcct)), acctOpts)...)
+		}})
+}
+
+func quickAddDirection(p quickAddFieldsProps) uic.Node {
+	return screens.TxnDirectionToggle(screens.TxnDirectionToggleProps{
+		Label: uistate.T("quickAdd.kind"), Value: p.Draft.Direction,
 		Options: []screens.TxnDirectionOption{
 			{Value: "Expense", Label: uistate.T("quickAdd.expense"), TestID: "txn-add-direction-expense"},
 			{Value: "Income", Label: uistate.T("quickAdd.income"), TestID: "txn-add-direction-income"},
 			{Value: "Transfer", Label: uistate.T("quickAdd.transfer"), TestID: "txn-add-direction-transfer"},
 		},
 		OnSelect: func(v string) {
-			if v == "Transfer" {
-				closePanel()
-				transferOpen.Set(true)
+			if _, transfer := txnform.QuickChooseDirection(p.Draft, v, p.Source.Categories); transfer {
+				p.Close()
+				p.Transfer()
 				return
 			}
-			setKind(v)
+			p.Change(func(d txnform.QuickDraft) txnform.QuickDraft {
+				next, _ := txnform.QuickChooseDirection(d, v, p.Source.Categories)
+				return next
+			})
 		},
 	})
-	payeeField := ui.Field(ui.FieldProps{ID: "txn-add-payee", Label: uistate.T("quickAdd.payee"),
-		Error: fieldMessage(payeeDescError, "r4f.addPayeeOrDescription"),
-		Control: func(a ui.FieldA11y) uic.Node {
-			return Input(append(payeeAttrs, Attr("aria-describedby", a.DescribedBy), OnInput(onPayee))...)
-		}})
-	dateField := ui.Field(ui.FieldProps{ID: "txn-add-date", Label: uistate.T("quickAdd.date"),
-		Control: func(a ui.FieldA11y) uic.Node {
-			return Input(css.Class("field"), ID(a.ID), Type("date"), Attr("data-testid", "txn-add-date"),
-				Attr("aria-label", a.Label), OnInput(onDate), ui.FieldValue(effDate))
-		}})
-	accountControl := ui.Field(ui.FieldProps{ID: "txn-add-account", Label: uistate.T("quickAdd.account"),
-		Error: fieldMessage(accountError, "txu3.needAccount"), Required: true,
-		Control: func(a ui.FieldA11y) uic.Node {
-			return Select(append(append(accountAttrs, Attr("aria-describedby", a.DescribedBy), OnChange(onAcct)), acctOpts)...)
-		}})
-	moreFields := []uic.Node{
-		ui.Field(ui.FieldProps{ID: "txn-add-desc", Label: uistate.T("quickAdd.description"), Hint: uistate.T("sol1.bankDescription"),
-			Control: func(a ui.FieldA11y) uic.Node {
-				return Input(append(descAttrs, Attr("aria-describedby", a.DescribedBy), OnInput(onDesc))...)
-			}}),
-		descAssist,
-		// C47: wrap the checkbox in a block container so the helper caption sits
-		// below the label text, not inline with it. The outer Div is not a label
-		// so screen-readers read the Input's associated Label normally.
-		Div(css.Class("txn-form-check-field"),
-			Label(css.Class("txn-form-check"),
-				Input(needsReviewArgs...),
-				uistate.T("txu3.needsReview")),
-			Span(css.Class("txn-form-help"),
-				uistate.T("txu3.needsReviewHelp"))),
-		// Native date inputs have browser-specific sub-fields; the rapid-entry and
-		// Save actions remain in normal tab order after the form controls.
-		// QA M7: the metadata that used to require save-then-find-then-edit — tags,
-		// member, note, cleared, report exclusion — folded behind a collapsed
-		// native disclosure so the everyday five-field path stays fast.
-		Div(css.Class("txn-form-detail-group"),
-			ui.FormField(uistate.T("quickAdd.tags"),
-				Input(css.Class("field"), Type("text"), Attr("data-testid", "txn-add-tags"), Attr("aria-label", uistate.T("quickAdd.tags")),
-					Placeholder(uistate.T("quickAdd.tagsPh")), OnInput(onTags), ui.FieldValue(tagsS.Get()))),
-			If(len(app.Members()) > 0, screens.TxnWhoField(screens.TxnWhoFieldProps{
-				ID: "txn-add-who", Owners: quickAddOwnerSelection(ownersS.Get(), activeMember, accountForQuickAdd(accounts, effAcct), ownersTouched.Get()), Colors: quickAddMemberColors(app.Members()), Options: func() []ui.PickerOption {
-					options := make([]ui.PickerOption, 0, len(app.Members()))
-					for _, member := range app.Members() {
-						options = append(options, ui.PickerOption{Value: member.ID, Label: member.Name})
-					}
-					return options
-				}(), OnToggle: func(owner string) {
-					ownersS.Set(quickAddToggleOwner(ownersS.Get(), owner))
-					ownersTouched.Set(true)
-				},
+}
+
+func quickAddCategory(p quickAddFieldsProps) uic.Node {
+	catOpts := []uic.Node{Option(Value(""), SelectedIf(p.Draft.CategoryID == ""), uistate.T("quickAdd.noCategory"))}
+	for _, o := range p.View.Categories {
+		catOpts = append(catOpts, Option(Value(o.Value), SelectedIf(p.Draft.CategoryID == o.Value), o.Label))
+	}
+	setCategory := func(category string) {
+		p.Change(func(d txnform.QuickDraft) txnform.QuickDraft { d.CategoryID = category; return d })
+	}
+	onCat := uic.UseEvent(func(e uic.Event) { setCategory(e.GetValue()) })
+	toggleNewCategory := uic.UseEvent(Prevent(func() { p.SetCategoryOpen(true) }))
+	catAssist := screens.SmartFieldAssist(uistate.LoadSmartSettings(), "qa-cat", p.View.CategorySuggestion, func() { setCategory(p.View.RuleCategoryID) })
+	learnedCatAssist := screens.SmartFieldAssist(uistate.LoadSmartSettings(), "qa-learned-cat", p.View.LearnedCategoryName, func() { setCategory(p.View.LearnedCategoryID) })
+	budgetImpact := screens.QuickAddBudgetImpact(p.App, p.Draft.CategoryID, p.View.ImpactMinor)
+
+	return Div(css.Class("labeled-field", "txn-edit-category-field"),
+		Div(css.Class("txn-edit-category-label"), Span(css.Class("t-caption", tw.TextDim), uistate.T("quickAdd.category"))),
+		Div(css.Class("txn-cat-picker"),
+			Div(css.Class("txn-cat-row"), Select(css.Class("field"), Attr("data-testid", "txn-add-category"), Attr("aria-label", uistate.T("quickAdd.category")), OnChange(onCat), catOpts),
+				screens.TxnNewCategoryAction("txn-add-newcat-toggle", p.CategoryOpen, toggleNewCategory)),
+			catAssist, learnedCatAssist, budgetImpact,
+			If(p.CategoryOpen, uic.CreateElement(screens.CategoryPicker, screens.CategoryPickerProps{
+				Kind:     p.View.CategoryKind,
+				Selected: p.Draft.CategoryID,
+				OnPick:   func(categoryID string) { setCategory(categoryID); p.SetCategoryOpen(false) },
+				OnClose:  func() { p.SetCategoryOpen(false) },
 			})),
-			ui.FormField(uistate.T("quickAdd.note"),
-				Input(css.Class("field"), Type("text"), Attr("data-testid", "txn-add-note"), Attr("aria-label", uistate.T("quickAdd.note")),
-					Placeholder(uistate.T("quickAdd.notePh")), OnInput(onNote), ui.FieldValue(noteS.Get()))),
-			Div(css.Class("txn-form-check-field"),
-				Label(css.Class("txn-form-check"), Input(Type("checkbox"), Attr("data-testid", "txn-add-cleared"),
-					Attr("aria-describedby", "txn-add-cleared-hint"), OnChange(onCleared), Checked(clearedS.Get())), uistate.T("quickAdd.cleared")),
-				Span(ID("txn-add-cleared-hint"), css.Class("txn-form-help"), uistate.T("sol1.clearedHint"))),
-			Div(css.Class("txn-form-check-field"),
-				Label(css.Class("txn-form-check"), Input(Type("checkbox"), Attr("data-testid", "txn-add-exclude"),
-					Attr("aria-describedby", "txn-add-exclude-hint"), OnChange(onExclude), Checked(excludeS.Get())), uistate.T("quickAdd.exclude")),
-				Span(ID("txn-add-exclude-hint"), css.Class("txn-form-help"), uistate.T("transactions.excludeHint"))),
-		),
-	}
-	templatesSlot := Div(css.Class("txt-zone"),
-		If(len(app.Transactions()) > 0 || len(uistate.TxnTemplates()) > 0, screens.TxnTemplatePicker(onPick)),
-		// DP-F5c: the save action sits beside the PICKER, so it is genuinely
-		// ambiguous whether it saves the template you just picked or the form you
-		// just filled. The zone's move to the bottom (TXT) fixed the ordering
-		// complaint; this fixes the remaining one, which is that the button's own
-		// label cannot say what it snapshots. One line does.
-		Div(css.Class("txt-save-row"), saveTemplateBtn),
-	)
-	body := Div(
-		screens.TxnSharedForm(screens.TxnFormModel{Mode: screens.TxnFormAdd, Amount: amountField, Direction: directionField,
-			Payee: payeeField, Category: categoryField, Date: dateField, Account: accountControl,
-			Sentence: draftHint, More: moreFields, AddQuickFill: payeeDatalist, AddTemplates: templatesSlot, MoreID: "txn-add-more"}),
-	)
-	footer := Div(css.Class("txn-form-footer"),
-		Div(css.Class("txn-form-footer-actions"),
-			Button(css.Class("btn"), Type("button"), Attr("data-testid", "txn-add-cancel"), OnClick(closePanel), uistate.T("action.cancel")),
-			Button(css.Class("btn"), Type("button"), Disabled(saving.Get()), Attr("data-testid", "txn-add-another"), OnClick(saveAndAnother), uistate.T("quickAdd.saveAndAnother")),
-			Button(css.Class("btn btn-primary"), Type("button"), Disabled(saving.Get()), Attr("aria-busy", strconv.FormatBool(saving.Get())), Attr("id", "txn-add-save"), Attr("data-testid", "flip-save"), OnClick(save), uistate.T("action.save")),
 		),
 	)
-	return ui.Overlay(ui.OverlayProps{
-		Open: props.Open, Kind: ui.OverlayModal, Title: uistate.T("quickAdd.title"),
-		TestID: "txn-add-dialog", Body: body, Footer: footer, OnClose: closePanel,
+}
+
+func quickAddDescription(p quickAddFieldsProps) uic.Node {
+	descAttrs := []any{css.Class("field"), Type("text"), Attr("id", "txn-add-desc"), Attr("data-testid", "txn-add-desc"), Attr("aria-label", uistate.T("quickAdd.description")), Attr("aria-required", "false"), Placeholder(uistate.T("quickAdd.descPlaceholder")), ui.FieldValue(p.Draft.Desc)}
+	onDesc := func(v string) { p.Change(func(d txnform.QuickDraft) txnform.QuickDraft { d.Desc = v; return d }) }
+
+	return ui.Field(ui.FieldProps{ID: "txn-add-desc", Label: uistate.T("quickAdd.description"), Hint: uistate.T("sol1.bankDescription"),
+		Control: func(a ui.FieldA11y) uic.Node {
+			return Input(append(descAttrs, Attr("aria-describedby", a.DescribedBy), OnInput(onDesc))...)
+		}})
+}
+
+func quickAddReview(p quickAddFieldsProps) uic.Node {
+	onReviewed := uic.UseEvent(func(e uic.Event) {
+		p.Change(func(d txnform.QuickDraft) txnform.QuickDraft { d.NeedsReview = e.IsChecked(); return d })
 	})
+	needsReviewArgs := []any{Type("checkbox"), Attr("data-testid", "txn-add-needs-review"), OnChange(onReviewed), Checked(p.Draft.NeedsReview)}
+	return Div(css.Class("txn-form-check-field"),
+		Label(css.Class("txn-form-check"),
+			Input(needsReviewArgs...),
+			uistate.T("txu3.needsReview")),
+		Span(css.Class("txn-form-help"),
+			uistate.T("txu3.needsReviewHelp")))
 }
 
-// accountByID finds an account by ID in a slice.
-func accountByID(accounts []domain.Account, id string) (domain.Account, bool) {
-	for _, a := range accounts {
-		if a.ID == id {
-			return a, true
-		}
+func quickAddDetails(p quickAddFieldsProps) uic.Node {
+	onTags := uic.UseEvent(func(v string) { p.Change(func(d txnform.QuickDraft) txnform.QuickDraft { d.Tags = v; return d }) })
+	onNote := uic.UseEvent(func(v string) { p.Change(func(d txnform.QuickDraft) txnform.QuickDraft { d.Note = v; return d }) })
+	onCleared := uic.UseEvent(func(v uic.Event) {
+		p.Change(func(d txnform.QuickDraft) txnform.QuickDraft { d.Cleared = v.IsChecked(); return d })
+	})
+	onExclude := uic.UseEvent(func(v uic.Event) {
+		p.Change(func(d txnform.QuickDraft) txnform.QuickDraft { d.Exclude = v.IsChecked(); return d })
+	})
+	memberOptions := make([]ui.PickerOption, 0, len(p.View.Members))
+	for _, m := range p.View.Members {
+		memberOptions = append(memberOptions, ui.PickerOption{Value: m.Value, Label: m.Label})
 	}
-	return domain.Account{}, false
+	return Div(css.Class("txn-form-detail-group"),
+		ui.FormField(uistate.T("quickAdd.tags"),
+			Input(css.Class("field"), Type("text"), Attr("data-testid", "txn-add-tags"), Attr("aria-label", uistate.T("quickAdd.tags")),
+				Placeholder(uistate.T("quickAdd.tagsPh")), OnInput(onTags), ui.FieldValue(p.Draft.Tags))),
+		If(p.View.ShowMembers, screens.TxnWhoField(screens.TxnWhoFieldProps{
+			ID: "txn-add-who", Owners: p.View.Owners, Colors: p.View.Colors, Options: memberOptions,
+			OnToggle: func(owner string) {
+				p.Change(func(d txnform.QuickDraft) txnform.QuickDraft {
+					return txnform.QuickToggleOwner(d, owner)
+				})
+			},
+		})),
+		ui.FormField(uistate.T("quickAdd.note"),
+			Input(css.Class("field"), Type("text"), Attr("data-testid", "txn-add-note"), Attr("aria-label", uistate.T("quickAdd.note")),
+				Placeholder(uistate.T("quickAdd.notePh")), OnInput(onNote), ui.FieldValue(p.Draft.Note))),
+		Div(css.Class("txn-form-check-field"),
+			Label(css.Class("txn-form-check"), Input(Type("checkbox"), Attr("data-testid", "txn-add-cleared"),
+				Attr("aria-describedby", "txn-add-cleared-hint"), OnChange(onCleared), Checked(p.Draft.Cleared)), uistate.T("quickAdd.cleared")),
+			Span(ID("txn-add-cleared-hint"), css.Class("txn-form-help"), uistate.T("sol1.clearedHint"))),
+		Div(css.Class("txn-form-check-field"),
+			Label(css.Class("txn-form-check"), Input(Type("checkbox"), Attr("data-testid", "txn-add-exclude"),
+				Attr("aria-describedby", "txn-add-exclude-hint"), OnChange(onExclude), Checked(p.Draft.Exclude)), uistate.T("quickAdd.exclude")),
+			Span(ID("txn-add-exclude-hint"), css.Class("txn-form-help"), uistate.T("transactions.excludeHint"))),
+	)
 }
 
-func quickAddHasAccount(accounts []domain.Account, accountID string) bool {
-	_, ok := accountByID(accounts, accountID)
-	return ok
+func quickAddPayeeDatalist(payees []string) uic.Node {
+	args := make([]any, 0, len(payees)+1)
+	args = append(args, Attr("id", "qa-payees"))
+	for _, payee := range payees {
+		args = append(args, Option(Value(payee)))
+	}
+	return Datalist(args...)
 }
 
-func resolveQuickAddAccountID(input accountselect.ResolveInput) string {
-	id, _ := accountselect.Resolve(input)
-	return id
+func quickAddTemplates(p quickAddFieldsProps) uic.Node {
+	onPick := func(t domain.TxnTemplate) {
+		p.Change(func(d txnform.QuickDraft) txnform.QuickDraft {
+			return txnform.QuickApplyTemplate(d, t, p.Source.Categories)
+		})
+	}
+	save := screens.SaveAsTemplateButton(screens.TxnTemplateDraft{
+		Payee: p.View.TemplatePayee, CategoryID: p.Draft.CategoryID, AccountID: p.View.AccountID,
+		AmountMinor: p.View.TemplateMinor, Currency: p.View.Currency, Direction: p.View.TemplateDirection, Note: p.View.TemplateNote}, nil)
+	return Div(css.Class("txt-zone"), If(p.View.ShowTemplates, screens.TxnTemplatePicker(onPick)), Div(css.Class("txt-save-row"), save))
 }
 
-func quickAddAmountValid(accounts []domain.Account, accountID, raw, kind string) bool {
-	account, ok := accountByID(accounts, accountID)
-	if !ok {
-		return false
-	}
-	want := amountmath.Out
-	if kind == "Income" {
-		want = amountmath.In
-	}
-	_, _, err := amountmath.ParseSigned(raw, currency.Decimals(account.Currency), want)
-	return err == nil
+type quickAddFooterProps struct {
+	Saving               bool
+	Close, Another, Save func()
 }
 
-func quickAddInvalidFieldR4F(accounts []domain.Account, accountID, rawAmount, kind, payee, description string) (string, string) {
-	if !quickAddHasAccount(accounts, accountID) {
-		return "txn-add-account", "txu3.needAccount"
-	}
-	if !quickAddAmountValid(accounts, accountID, rawAmount, kind) {
-		return "txn-add-amount", "txu3.needAmount"
-	}
-	if strings.TrimSpace(payee) == "" && strings.TrimSpace(description) == "" {
-		return "txn-add-payee", "r4f.addPayeeOrDescription"
-	}
-	return "", ""
+func quickAddFooter(p quickAddFooterProps) uic.Node {
+	return Div(css.Class("txn-form-footer"), Div(css.Class("txn-form-footer-actions"),
+		Button(css.Class("btn"), Type("button"), Attr("data-testid", "txn-add-cancel"), OnClick(p.Close), uistate.T("action.cancel")),
+		Button(css.Class("btn"), Type("button"), Disabled(p.Saving), Attr("data-testid", "txn-add-another"), OnClick(p.Another), uistate.T("quickAdd.saveAndAnother")),
+		Button(css.Class("btn btn-primary"), Type("button"), Disabled(p.Saving), Attr("aria-busy", strconv.FormatBool(p.Saving)), Attr("id", "txn-add-save"), Attr("data-testid", "flip-save"), OnClick(p.Save), uistate.T("action.save"))))
 }
 
-func quickAddDescriptionR4F(payee, description string) string {
-	description = strings.TrimSpace(description)
-	if description != "" {
-		return description
-	}
-	return strings.TrimSpace(payee)
-}
-
-func quickAddNextFocusR4F(accounts []domain.Account, accountID, amount, payee, description string, fill screens.TxnDraftFill) string {
-	if strings.TrimSpace(amount) == "" && fill.AmountMajor == "" {
-		return "txn-add-amount"
-	}
-	if !quickAddHasAccount(accounts, accountID) {
-		return "txn-add-account"
-	}
-	if strings.TrimSpace(payee) == "" && strings.TrimSpace(description) == "" && fill.Payee == "" {
-		return "txn-add-payee"
-	}
-	return "txn-add-save"
-}
-
-func quickAddMemberValue(activeMember, selected string, explicitlySelected bool) string {
-	if explicitlySelected {
-		return selected
-	}
-	return activeMember
-}
-
-func quickAddOwnerDefaults(activeMember string) []string {
-	if activeMember == "" {
-		return nil
-	}
-	return []string{activeMember}
-}
-
-func quickAddOwnerSelection(owners []string, activeMember string, account domain.Account, touched bool) []string {
-	if touched || len(owners) > 0 {
-		return append([]string(nil), owners...)
-	}
-	if activeMember != "" {
-		return []string{activeMember}
-	}
-	if account.Scope == domain.ScopeIndividual && account.OwnerID != "" {
-		return []string{account.OwnerID}
-	}
-	return nil
-}
-
-func accountForQuickAdd(accounts []domain.Account, accountID string) domain.Account {
-	account, _ := accountByID(accounts, accountID)
-	return account
-}
-
-func quickAddMemberColors(members []domain.Member) map[string]string {
-	colors := make(map[string]string, len(members))
-	for _, member := range members {
-		colors[member.ID] = member.Color
-	}
-	return colors
-}
-
-func quickAddToggleOwner(owners []string, owner string) []string {
-	for i, current := range owners {
-		if current == owner {
-			return append(append([]string(nil), owners[:i]...), owners[i+1:]...)
-		}
-	}
-	return append(append([]string(nil), owners...), owner)
-}
-
-func quickAddReviewedValue(needsReview bool) bool {
-	return !needsReview
-}
+// Compatibility aliases keep existing tests unchanged; all decisions live in txnform.
+var (
+	quickAddCategoryIsValid  = txnform.QuickCategoryValid
+	resolveQuickAddAccountID = txnform.QuickAccountID
+	quickAddInvalidFieldR4F  = txnform.QuickInvalidField
+	quickAddDescriptionR4F   = txnform.QuickDescription
+	quickAddNextFocusR4F     = txnform.QuickNextFocus
+	quickAddMemberValue      = txnform.QuickMemberValue
+	quickAddOwnerSelection   = txnform.QuickOwners
+	quickAddReviewedValue    = txnform.QuickReviewed
+)
 
 func focusQuickAddField(id string) {
 	doc := js.Global().Get("document")

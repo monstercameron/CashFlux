@@ -7,6 +7,9 @@ package styles
 // category picker + one-click suggestion, and the step actions. Theme tokens
 // only, so it tracks light/dark.
 func registerReviewInboxSurface() {
+	rule(".rvw, .rvw button, .rvw input, .rvw select, .rvw textarea",
+		fontFamily("Inter, sans-serif"),
+	)
 	rule(".rvw",
 		display("flex"),
 		flexDirection("column"),
@@ -21,8 +24,8 @@ func registerReviewInboxSurface() {
 		gap("0.4rem"),
 	)
 	rule(".rvw-progress-count",
-		fontSize("0.75rem"),
-		fontWeight("600"),
+		fontSize("var(--fs-meta)"),
+		fontWeight("500"),
 		color("var(--text-dim)"),
 	)
 	rule(".rvw-progress-track",
@@ -42,7 +45,7 @@ func registerReviewInboxSurface() {
 	// A quiet cross-link under the progress bar to /rules when ready-made rule
 	// suggestions exist — low-key, one small line, with an inline accent link.
 	rule(".rvw-rules-link",
-		fontSize("var(--type-12)"),
+		fontSize("var(--fs-meta)"),
 		color("var(--text-dim)"),
 	)
 	rule(".rvw-rules-link-btn",
@@ -50,8 +53,8 @@ func registerReviewInboxSurface() {
 		background("transparent"),
 		padding("0"),
 		color("var(--accent)"),
-		fontSize("var(--type-12)"),
-		fontWeight("600"),
+		fontSize("var(--fs-meta)"),
+		fontWeight("500"),
 		cursor("pointer"),
 		textDecoration("underline"),
 	)
@@ -73,10 +76,8 @@ func registerReviewInboxSurface() {
 		gap("0.5rem"),
 	)
 	rule(".rvw-reason",
-		fontSize("var(--type-11)"),
-		fontWeight("700"),
-		letterSpacing("0.04em"),
-		textTransform("uppercase"),
+		fontSize("var(--fs-meta)"),
+		fontWeight("500"),
 		padding("0.1rem 0.5rem"),
 		borderRadius("var(--radius-pill)"),
 		whiteSpace("nowrap"),
@@ -90,22 +91,22 @@ func registerReviewInboxSurface() {
 		background("color-mix(in srgb, var(--accent) 15%, transparent)"),
 	)
 	rule(".rvw-date",
-		fontSize("0.75rem"),
+		fontSize("var(--fs-meta)"),
 		color("var(--text-dim)"),
 		whiteSpace("nowrap"),
 	)
 	rule(".rvw-payee",
-		fontSize("var(--type-18)"),
-		fontWeight("700"),
+		fontSize("var(--fs-figure)"),
+		fontWeight("600"),
 		color("var(--text)"),
 		overflowWrap("anywhere"),
 	)
 	// The raw bank descriptor, shown small + muted under the cleaned name so the
 	// user still sees the literal string without it dominating the card.
 	rule(".rvw-rawpayee",
-		fontSize("var(--type-12)"),
+		fontSize("var(--fs-meta)"),
 		color("var(--text-dim)"),
-		fontFamily("var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace)"),
+		fontVariantNumeric("tabular-nums"),
 		overflowWrap("anywhere"),
 	)
 	rule(".rvw-meta",
@@ -115,14 +116,14 @@ func registerReviewInboxSurface() {
 		flexWrap("wrap"),
 	)
 	rule(".rvw-amount",
-		fontSize("1.1rem"),
-		fontWeight("700"),
+		fontSize("var(--fs-figure)"),
+		fontWeight("600"),
 		fontVariantNumeric("tabular-nums"),
 		color("var(--text)"),
 	)
 	rule(".rvw-amount.is-income", color("var(--accent)"))
 	rule(".rvw-acct",
-		fontSize("var(--type-13)"),
+		fontSize("var(--fs-meta)"),
 		color("var(--text-dim)"),
 	)
 
@@ -133,10 +134,8 @@ func registerReviewInboxSurface() {
 		gap("0.5rem"),
 	)
 	rule(".rvw-assign-label",
-		fontSize("var(--type-11)"),
-		fontWeight("600"),
-		letterSpacing("0.05em"),
-		textTransform("uppercase"),
+		fontSize("var(--fs-meta)"),
+		fontWeight("500"),
 		color("var(--text-dim)"),
 	)
 	rule(".rvw-suggest",
@@ -149,7 +148,7 @@ func registerReviewInboxSurface() {
 		border("1px solid color-mix(in srgb, var(--accent) 40%, transparent)"),
 		background("color-mix(in srgb, var(--accent) 10%, transparent)"),
 		color("var(--accent)"),
-		fontSize("var(--type-13)"),
+		fontSize("var(--fs-body)"),
 		fontWeight("600"),
 		cursor("pointer"),
 		transition("background .12s ease"),
@@ -163,7 +162,7 @@ func registerReviewInboxSurface() {
 	rule(".rvw-suggest-why",
 		color("var(--text-dim)"),
 		fontWeight("400"),
-		fontSize("var(--type-12)"),
+		fontSize("var(--fs-meta)"),
 		paddingLeft("0.4rem"),
 		borderLeft("1px solid color-mix(in srgb, var(--accent) 30%, transparent)"),
 		marginLeft("0.1rem"),
@@ -187,7 +186,7 @@ func registerReviewInboxSurface() {
 		border("1px solid color-mix(in srgb, var(--accent) 45%, transparent)"),
 		background("transparent"),
 		color("var(--accent)"),
-		fontSize("var(--type-13)"),
+		fontSize("var(--fs-body)"),
 		fontWeight("600"),
 		cursor("pointer"),
 		transition("background .12s ease"),
@@ -200,7 +199,7 @@ func registerReviewInboxSurface() {
 		pointerEvents("none"),
 	)
 	rule(".rvw-ai-err",
-		fontSize("var(--type-12)"),
+		fontSize("var(--fs-meta)"),
 		color("var(--danger)"),
 	)
 
@@ -209,7 +208,7 @@ func registerReviewInboxSurface() {
 		display("flex"),
 		alignItems("center"),
 		gap("0.45rem"),
-		fontSize("var(--type-13)"),
+		fontSize("var(--fs-body)"),
 		color("var(--text-dim)"),
 		cursor("pointer"),
 	)
@@ -251,12 +250,12 @@ func registerReviewInboxSurface() {
 		color("var(--accent)"),
 	)
 	rule(".rvw-done-title",
-		fontSize("var(--type-18)"),
-		fontWeight("700"),
+		fontSize("var(--fs-figure)"),
+		fontWeight("600"),
 		color("var(--text)"),
 	)
 	rule(".rvw-done-sub",
-		fontSize("var(--type-14)"),
+		fontSize("var(--fs-body)"),
 		color("var(--text-dim)"),
 		maxWidth("32ch"),
 	)

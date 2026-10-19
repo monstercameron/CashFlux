@@ -4,6 +4,17 @@ package styles
 
 // registerForm3 gives Add and Edit transactions one responsive, two-column field grid.
 func registerForm3() {
+	// Add and Edit share this form, including the quick-add sentence prompt. Keep
+	// labels on the same body step instead of letting the prompt copy grow larger.
+	rule(".txn-form-add, .txn-form-edit",
+		fontFamily("Inter, sans-serif"),
+	)
+	rule(".txn-form-add .qa-sentence > label",
+		fontSize("var(--fs-body)"),
+		fontWeight("500"),
+		fontStyle("normal"),
+		textTransform("none"),
+	)
 	rule(".txn-form-grid",
 		display("grid"),
 		gridTemplateColumns("repeat(2, minmax(0, 1fr))"),

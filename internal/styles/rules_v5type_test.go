@@ -89,3 +89,41 @@ func TestTV7DDialogTypographyUsesSharedTokens(t *testing.T) {
 		}
 	}
 }
+
+func TestTV8FDialogCollectorCoversReviewFlipAndQuickAdd(t *testing.T) {
+	resetSheet()
+	registerReviewInboxSurface()
+	registerReviewSurface()
+	registerTxnEditSurface()
+	registerForm3()
+	registerV5Type()
+	registerTV8F()
+
+	css := Build()
+	for _, expected := range []string{
+		".cf-overlay__title, .flip-back .set-h h3, .rvs .rvs-intro-title, .cf-dialog-title{font-family:Inter, sans-serif;font-size:var(--fs-figure);font-weight:600;text-align:left;}",
+		".flip-back .set-body:not(.set-body-flush){padding:24px;}",
+		".cf-overlay__footer .btn-del, .flip-back .set-foot .btn-del{margin-right:auto;}",
+		".filter-inline-title{font-family:Inter, sans-serif;font-size:var(--fs-figure);font-weight:600;text-align:left;}",
+		".filter-inline-panel.filter-sheet .filter-inline-body{padding:24px;}",
+		".txn-form-add .txt-picker:has(.txt-empty){display:none;}",
+		".rvs [class*='rvs-'], .rvs [class*='rvw-']{font-size:var(--fs-body);font-weight:400;font-style:normal;text-transform:none;}",
+		".rvs .rvs-tier-count, .rvs .rvs-foot-sub, .rvs .rvs-note, .rvs .rvs-kbd, .rvs .rvw-rawpayee{font-size:var(--fs-meta);font-weight:400;font-style:normal;font-variant-numeric:tabular-nums;}",
+		".cf-overlay__surface--modal:has(.txn-add-layout){width:min(760px, 90vw);max-height:min(720px, 90vh);}",
+		".txn-form-add .qa-sentence > label{font-size:var(--fs-body);font-weight:500;font-style:normal;text-transform:none;}",
+	} {
+		if !strings.Contains(css, expected) {
+			t.Errorf("TV8F dialog collector is missing %q", expected)
+		}
+	}
+
+	start := strings.LastIndex(css, ".cf-overlay__surface--modal, .cf-overlay__surface--sheet, .flip-back, .rvs{")
+	if start < 0 {
+		t.Fatal("TV8F dialog overrides were not appended after the dialog registrars")
+	}
+	for _, forbidden := range []string{"font-weight:700", "text-transform:uppercase", "ui-monospace", "font-size:14.5px", "font-size:13.6px"} {
+		if strings.Contains(css[start:], forbidden) {
+			t.Errorf("TV8F final dialog overrides contain off-scale value %q", forbidden)
+		}
+	}
+}
