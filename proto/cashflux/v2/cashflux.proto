@@ -1,6 +1,8 @@
 syntax = "proto3";
 package cashflux.v2;
 
+option go_package = "github.com/monstercameron/CashFlux/internal/backendrpc/pb/cashflux/v2;cashfluxv2pb";
+
 service BlobSync {
   rpc AppendChanges(AppendChangesRequest) returns (AppendChangesResponse);
   rpc ListChanges(ListChangesRequest) returns (ListChangesResponse);

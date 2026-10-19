@@ -463,6 +463,7 @@ type PutWorkspaceRequest struct {
 	Dataset         []byte                 `protobuf:"bytes,2,opt,name=dataset,proto3" json:"dataset,omitempty"`
 	ClientUpdatedAt string                 `protobuf:"bytes,3,opt,name=client_updated_at,json=clientUpdatedAt,proto3" json:"client_updated_at,omitempty"`
 	Force           bool                   `protobuf:"varint,4,opt,name=force,proto3" json:"force,omitempty"`
+	BaseVersion     int64                  `protobuf:"varint,5,opt,name=base_version,json=baseVersion,proto3" json:"base_version,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -525,6 +526,13 @@ func (x *PutWorkspaceRequest) GetForce() bool {
 	return false
 }
 
+func (x *PutWorkspaceRequest) GetBaseVersion() int64 {
+	if x != nil {
+		return x.BaseVersion
+	}
+	return 0
+}
+
 type PutWorkspaceResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Accepted      bool                   `protobuf:"varint,1,opt,name=accepted,proto3" json:"accepted,omitempty"`
@@ -532,6 +540,7 @@ type PutWorkspaceResponse struct {
 	Dataset       []byte                 `protobuf:"bytes,3,opt,name=dataset,proto3" json:"dataset,omitempty"`
 	Version       int64                  `protobuf:"varint,4,opt,name=version,proto3" json:"version,omitempty"`
 	UpdatedAt     string                 `protobuf:"bytes,5,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	Reason        string                 `protobuf:"bytes,6,opt,name=reason,proto3" json:"reason,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -597,6 +606,13 @@ func (x *PutWorkspaceResponse) GetVersion() int64 {
 func (x *PutWorkspaceResponse) GetUpdatedAt() string {
 	if x != nil {
 		return x.UpdatedAt
+	}
+	return ""
+}
+
+func (x *PutWorkspaceResponse) GetReason() string {
+	if x != nil {
+		return x.Reason
 	}
 	return ""
 }
@@ -3008,19 +3024,21 @@ const file_cashflux_v1_cashflux_proto_rawDesc = "" +
 	"\fnot_modified\x18\x02 \x01(\bR\vnotModified\x12\x12\n" +
 	"\x04etag\x18\x03 \x01(\tR\x04etag\x124\n" +
 	"\tworkspace\x18\x04 \x01(\v2\x16.cashflux.v1.WorkspaceR\tworkspace\x12\x18\n" +
-	"\adataset\x18\x05 \x01(\fR\adataset\"\xa7\x01\n" +
+	"\adataset\x18\x05 \x01(\fR\adataset\"\xca\x01\n" +
 	"\x13PutWorkspaceRequest\x124\n" +
 	"\tworkspace\x18\x01 \x01(\v2\x16.cashflux.v1.WorkspaceR\tworkspace\x12\x18\n" +
 	"\adataset\x18\x02 \x01(\fR\adataset\x12*\n" +
 	"\x11client_updated_at\x18\x03 \x01(\tR\x0fclientUpdatedAt\x12\x14\n" +
-	"\x05force\x18\x04 \x01(\bR\x05force\"\xbb\x01\n" +
+	"\x05force\x18\x04 \x01(\bR\x05force\x12!\n" +
+	"\fbase_version\x18\x05 \x01(\x03R\vbaseVersion\"\xd3\x01\n" +
 	"\x14PutWorkspaceResponse\x12\x1a\n" +
 	"\baccepted\x18\x01 \x01(\bR\baccepted\x124\n" +
 	"\tworkspace\x18\x02 \x01(\v2\x16.cashflux.v1.WorkspaceR\tworkspace\x12\x18\n" +
 	"\adataset\x18\x03 \x01(\fR\adataset\x12\x18\n" +
 	"\aversion\x18\x04 \x01(\x03R\aversion\x12\x1d\n" +
 	"\n" +
-	"updated_at\x18\x05 \x01(\tR\tupdatedAt\"d\n" +
+	"updated_at\x18\x05 \x01(\tR\tupdatedAt\x12\x16\n" +
+	"\x06reason\x18\x06 \x01(\tR\x06reason\"d\n" +
 	"\x16DeleteWorkspaceRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
