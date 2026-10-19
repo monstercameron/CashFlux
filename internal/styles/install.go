@@ -170,6 +170,7 @@ func Register() {
 	registerBV7G()
 	registerBV7C()
 	registerRulesBV7E()
+	registerBV7F()
 	inject(Build())
 }
 

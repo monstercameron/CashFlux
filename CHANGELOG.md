@@ -90,6 +90,8 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Inline budget limit saves and Undo respond quickly (BV7F).** The editor updates the card before the durable write finishes and
+  rolls back on failure; Undo restores only the affected budget; the future tile no longer recomputes on every period step.
 - **Transactions copy and the upcoming strip (TV7E.1, TC4N11).** "Search all dates" hides at zero, one filter reads "Clear
   filter", the no-match hint appears only with other filters, the transfer "None" option explains itself, member roles show on
   their own line, upcoming bills name their due date, and the overflow menu behaves.

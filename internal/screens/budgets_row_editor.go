@@ -10,7 +10,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/period"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/v5/ui"
@@ -121,28 +123,7 @@ func useBudgetRowLimitKeyboard(p budgetRowLimitKeyboardProps) (ui.Handler, ui.Ha
 			// The form submit owns validation and persistence.
 			amt, prob := budgeting.ParseLimitMajor(p.limitDraft.Get(), p.limitDec)
 			if prob.OK() {
-				p.limitRestoreFocus.Set(true)
-				// Invoke the same save path as the submit button.
-				if app := appstate.Default; app != nil {
-					for _, bb := range app.Budgets() {
-						if bb.ID == p.s.Budget.ID {
-							if bb.Limit.Amount != amt {
-								bb.Limit = money.New(amt, bb.Limit.Currency)
-								if err := app.PutBudgetAt(bb, budgetViewAnchor(viewedPeriod, budgetNow())); err == nil {
-									uistate.PostUndoable(uistate.T("budgets.limitChangedToast", fmtMoney(bb.Limit)))
-									uistate.BumpDataRevision()
-								} else {
-									uistate.PostNotice(budgetErrorText(err), true)
-									return
-								}
-							}
-							break
-						}
-					}
-				}
-				if p.limitEditing.Get() {
-					p.limitEditing.Set(false)
-				}
+				queueBudgetLimitSave(p.s, amt, viewedPeriod, p.limitEditing, p.limitRestoreFocus)
 			}
 		}
 	})
@@ -173,26 +154,7 @@ func useBudgetRowLimitSave(p budgetRowLimitSaveProps) ui.Handler {
 			// indistinguishable from a saved one.
 			return
 		}
-		if app := appstate.Default; app != nil {
-			for _, bb := range app.Budgets() {
-				if bb.ID != p.s.Budget.ID {
-					continue
-				}
-				if bb.Limit.Amount != amt {
-					bb.Limit = money.New(amt, bb.Limit.Currency)
-					if err := app.PutBudgetAt(bb, budgetViewAnchor(viewedPeriod, budgetNow())); err == nil {
-						uistate.PostUndoable(uistate.T("budgets.limitChangedToast", fmtMoney(bb.Limit)))
-						uistate.BumpDataRevision()
-					} else {
-						uistate.PostNotice(budgetErrorText(err), true)
-						return
-					}
-				}
-				break
-			}
-		}
-		p.limitEditing.Set(false)
-		p.limitRestoreFocus.Set(true)
+		queueBudgetLimitSave(p.s, amt, viewedPeriod, p.limitEditing, p.limitRestoreFocus)
 	}))
 	ui.UseEffect(func() func() {
 		if !p.limitRestoreFocus.Get() {
@@ -204,4 +166,77 @@ func useBudgetRowLimitSave(p budgetRowLimitSaveProps) ui.Handler {
 	}, p.limitRestoreFocus.Get())
 
 	return saveLimitEdit
+}
+
+// queueBudgetLimitSave closes the editor before scheduling the write. The
+// store update and its dependent budget calculations then run after the browser
+// has had a chance to paint the completed interaction. Success remains withheld
+// until RequestDurable confirms the strict persistence commit.
+type budgetLimitSaveKey struct {
+	app      *appstate.App
+	budgetID string
+}
+
+var budgetLimitSaveInFlight = map[budgetLimitSaveKey]bool{}
+
+func queueBudgetLimitSave(s budgeting.Status, amount int64, viewedPeriod period.Window, editing, restoreFocus ui.State[bool]) {
+	app := appstate.Default
+	if app == nil {
+		return
+	}
+	key := budgetLimitSaveKey{app: app, budgetID: s.Budget.ID}
+	if budgetLimitSaveInFlight[key] {
+		return
+	}
+	var budget domain.Budget
+	found := false
+	for _, candidate := range app.Budgets() {
+		if candidate.ID == s.Budget.ID {
+			budget, found = candidate, true
+			break
+		}
+	}
+	if !found || budget.Limit.Amount == amount {
+		editing.Set(false)
+		restoreFocus.Set(true)
+		return
+	}
+
+	budget.Limit = money.New(amount, budget.Limit.Currency)
+	if err := app.PutBudgetAt(budget, budgetViewAnchor(viewedPeriod, budgetNow())); err != nil {
+		uistate.PostNotice(budgetErrorText(err), true)
+		return
+	}
+	budgetLimitSaveInFlight[key] = true
+	editing.Set(false)
+	restoreFocus.Set(true)
+
+	var slowTimer js.Func
+	saveFinished := false
+	slowTimer = js.FuncOf(func(js.Value, []js.Value) any {
+		if !saveFinished {
+			uistate.PostNotice(uistate.T("budgets.limitSaving"), false)
+		}
+		slowTimer.Release()
+		return nil
+	})
+	js.Global().Call("setTimeout", slowTimer, 300)
+
+	var write js.Func
+	write = js.FuncOf(func(js.Value, []js.Value) any {
+		uistate.BumpDataRevision()
+		uistate.RequestPersist()
+		app.RequestDurable(func(result appstate.DurableResult) {
+			saveFinished = true
+			delete(budgetLimitSaveInFlight, key)
+			if result.Err != nil {
+				uistate.PostNotice(budgetErrorText(result.Err), true)
+			} else {
+				uistate.PostUndoable(uistate.T("budgets.limitChangedToast", fmtMoney(budget.Limit)))
+			}
+		})
+		write.Release()
+		return nil
+	})
+	js.Global().Call("setTimeout", write, 0)
 }

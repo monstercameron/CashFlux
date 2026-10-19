@@ -9,9 +9,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/budgetplan"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/period"
 	"github.com/monstercameron/CashFlux/internal/prefs"
@@ -28,6 +32,32 @@ import (
 // budgetFutureMaxRows caps the projected-occurrence list so a long future window
 // (e.g. a whole year) stays glanceable; the remainder is summarized as "+ N more".
 const budgetFutureMaxRows = 8
+
+type budgetFutureViewKey struct {
+	app         *appstate.App
+	revision    uint64
+	member      string
+	start       time.Time
+	end         time.Time
+	weekStart   time.Weekday
+	rollover    bool
+	incomeMode  string
+	paycheckMin int64
+	fixedIncome int64
+	avgMonths   int
+	payAnchor   string
+	viewAnchor  string
+	categoryIDs string
+}
+
+type budgetFutureTotals struct {
+	TotalLimit      int64
+	SavingsAssigned int64
+	BannerIncome    int64
+}
+
+var budgetFutureViews = map[budgetFutureViewKey]budgetFutureTotals{}
+var budgetFutureViewCalculations uint64
 
 // budgetFutureWidget answers coworker feedback #6 — "when navigating future
 // timelines, show future-related things, not empty values." When the global
@@ -81,7 +111,10 @@ func renderBudgetFutureWidget(props budgetSummaryProps, w period.Window, now tim
 	// Keep the future income figure on the same basis as the budget hero. Scheduled
 	// deposits remain visible as individual recurring rows, while this total is the
 	// plan's expected income, not a second estimate derived from the recurrence list.
-	view := computeBudgetView(app, activeMember, w, prefs, false)
+	view, err := cachedBudgetFutureView(app, activeMember, w, prefs)
+	if err != nil {
+		return Div(css.Class("budget-future-error"), Attr("role", "alert"), uistate.T("budgets.annualGridError"))
+	}
 	expectedWindowIncome, err := budgetplan.ScaleMonthlyIncome(money.New(view.BannerIncome, base), start, end)
 	if err != nil {
 		return Div(css.Class("budget-future-error"), Attr("role", "alert"), uistate.T("budgets.annualGridError"))
@@ -184,6 +217,101 @@ func renderBudgetFutureWidget(props budgetSummaryProps, w period.Window, now tim
 		ID: "budget-future", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
 		Body: Div(css.Class("brc budget-fold"), Attr("data-testid", "budgets-future"), fold, body),
 	})
+}
+
+// cachedBudgetFutureView avoids rerunning the household's full ledger budget
+// evaluation when the future projection is revisited with the same data and
+// period. The bounded cache key contains every view input; no timestamp is used
+// to choose or replace a result.
+func cachedBudgetFutureView(app *appstate.App, member string, w period.Window, p prefs.Prefs) (budgetFutureTotals, error) {
+	start, end := w.Range()
+	key := budgetFutureViewKey{
+		app: app, revision: app.Rev(), member: member, start: start, end: end,
+		weekStart: p.WeekStartWeekday(), rollover: p.BudgetRolloverLeftover,
+		incomeMode: p.BudgetIncomeMode, paycheckMin: p.BudgetPaycheckMinMinor,
+		fixedIncome: p.MonthlyIncomeMinor, avgMonths: p.BudgetIncomeAvgMonths,
+		payAnchor: p.PayCycleAnchor, viewAnchor: dateutil.FormatDate(budgetViewAnchor(w, time.Now())),
+		categoryIDs: strings.Join(p.BudgetIncomeCategoryIDs, "\x00"),
+	}
+	if view, ok := budgetFutureViews[key]; ok {
+		return view, nil
+	}
+	if len(budgetFutureViews) >= 8 {
+		budgetFutureViews = make(map[budgetFutureViewKey]budgetFutureTotals)
+	}
+	budgetFutureViewCalculations++
+	view, err := calculateBudgetFutureTotals(app, member, w, p)
+	if err != nil {
+		return budgetFutureTotals{}, err
+	}
+	budgetFutureViews[key] = view
+	return view, nil
+}
+
+// calculateBudgetFutureTotals computes only the plan figures the future tile
+// displays. It skips annotations that are useful on the current-month cards but
+// expensive over the full ledger, such as transfer-suspect scans and age of
+// money, while using the same tested budget evaluation and rollup services.
+func calculateBudgetFutureTotals(app *appstate.App, member string, w period.Window, p prefs.Prefs) (budgetFutureTotals, error) {
+	settings := app.Settings()
+	base := budgetBaseCurrency(settings.BaseCurrency)
+	rates := currency.Rates{Base: base, Rates: settings.FXRates}
+	start, end := w.Range()
+	now := time.Now()
+	transactions := app.Transactions()
+	categories := app.Categories()
+	input := budgeting.ViewInput{
+		Period:       budgeting.ResolveViewPeriod(start, end, now, p.WeekStartWeekday(), budgetPayCycleAnchor(p.PayCycleAnchor)),
+		Transactions: transactions,
+		Categories:   categories,
+		Recurring:    app.Recurring(),
+		Rates:        rates,
+		Base:         base,
+		PoolRollover: p.BudgetRolloverLeftover,
+	}
+	budgets := budgeting.ViewBudgets(app.Budgets(), member)
+	statuses := make([]budgeting.Status, 0, len(budgets))
+	for _, budget := range budgets {
+		budget = budget.WithBaseCurrency(base)
+		statuses = append(statuses, budgeting.Status{
+			Budget: budget, Limit: budget.Limit, Spent: money.Zero(base), Remaining: budget.Limit,
+		})
+	}
+	rollup, _, err := budgeting.SummarizeViewStatuses(statuses, base, rates)
+	if err != nil {
+		return budgetFutureTotals{}, err
+	}
+	basis := budgeting.ViewIncomeBasis{
+		Mode: p.BudgetIncomeMode, PaycheckMin: p.BudgetPaycheckMinMinor,
+		Fixed: p.MonthlyIncomeMinor, CategoryIDs: p.BudgetIncomeCategoryIDs,
+		AverageMonths: p.BudgetIncomeAvgMonths,
+	}
+	income, err := budgeting.ResolveViewIncome(basis, transactions, categories, input.Period, base, rates)
+	if err != nil {
+		return budgetFutureTotals{}, err
+	}
+	explicitIncome := basis.Mode == budgeting.IncomeModeAll || basis.Mode == budgeting.IncomeModePaychecks || basis.Mode == budgeting.IncomeModeFixed || basis.Mode == budgeting.IncomeModeCategories
+	if !explicitIncome && income == 0 {
+		monthStart, _ := budgeting.PeriodRange(domain.PeriodMonthly, input.Period.Anchor, input.Period.WeekStart)
+		if prior, _, priorErr := ledger.PeriodTotals(transactions, dateutil.AddMonths(monthStart, -1), monthStart, rates); priorErr == nil {
+			income = prior.Amount
+		}
+	}
+	var savingsAssigned int64
+	for _, account := range computeSavingsAccounts(app, member, input.Period.Anchor, base, rates) {
+		if account.ConversionError != nil {
+			return budgetFutureTotals{}, account.ConversionError
+		}
+		savingsAssigned, err = money.Add(savingsAssigned, account.AssignedBase)
+		if err != nil {
+			return budgetFutureTotals{}, err
+		}
+	}
+	savingsAssigned, err = money.Add(savingsAssigned, rollup.SavingsBudgetedMinor)
+	if err != nil {
+		return budgetFutureTotals{}, err
+	}
+	return budgetFutureTotals{TotalLimit: rollup.LimitMinor, SavingsAssigned: savingsAssigned, BannerIncome: income}, nil
 }
 
 // isFuturePeriod reports whether the viewed window starts after today. Budgets uses
