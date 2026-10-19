@@ -101,7 +101,7 @@ func csvPreflightCard(info *csvPreflightInfo, confirm, cancel ui.Handler) ui.Nod
 			Attr("role", "alert"), uistate.T("documents.preflightUnusable", c.Unusable)))
 	}
 	if len(info.Failures) > 0 {
-		failureCopy := uistate.T("documents.preflightFailed", plural(len(info.Failures), "row"), csvSkipDetail(info.Failures))
+		failureCopy := uistate.T("documents.preflightFailed", importCount(len(info.Failures), "row", "rows"), csvSkipDetail(info.Failures))
 		if len(info.Failures) == 1 {
 			failureCopy = uistate.T("documents.preflightFailedOne", csvSkipDetail(info.Failures))
 		}
@@ -111,7 +111,7 @@ func csvPreflightCard(info *csvPreflightInfo, confirm, cancel ui.Handler) ui.Nod
 
 	return Div(css.Class("notice", tw.Mt2), Attr("data-testid", "csv-preflight"),
 		P(Attr("data-testid", "csv-preflight-counts"),
-			uistate.T("documents.preflightCounts", plural(newRows, "new transaction"), info.Dupes)),
+			uistate.T("documents.preflightCounts", importCount(newRows, "new transaction", "new transactions"), info.Dupes)),
 		extra,
 		If(info.HasBal, P(Attr("data-testid", "csv-preflight-balance"),
 			uistate.T("documents.preflightBalance", info.AcctName,
@@ -303,7 +303,7 @@ func importRunRow(p importRunRowProps) ui.Node {
 	// transactions are still here, which is the only figure that reconciles the
 	// import history against the ledger.
 	tally := importaudit.For(d, p.Txns)
-	result := uistate.T("documents.historyImported", plural(imported, "transaction"))
+	result := uistate.T("documents.historyImported", importCount(imported, "transaction", "transactions"))
 	if tally.Split() {
 		if tally.Duplicates > 0 {
 			result += " " + uistate.T("documents.historyDuplicates", tally.Duplicates)

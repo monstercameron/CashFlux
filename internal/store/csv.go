@@ -312,9 +312,40 @@ func TransactionsFromCSVResilient(data []byte, defaultCurrency string) (txns []d
 	return TransactionsFromCSVResilientForAccounts(data, defaultCurrency, "", nil)
 }
 
+// CSVAccount supplies the identity and currency needed to parse rows for an account.
+type CSVAccount struct {
+	ID       string
+	Name     string
+	Currency string
+}
+
 // TransactionsFromCSVResilientForAccounts parses amounts using the currency of
 // the resolved account. It preserves row failures for the import preflight.
 func TransactionsFromCSVResilientForAccounts(data []byte, defaultCurrency, fallbackAccountID string, accountCurrencies map[string]string) (txns []domain.Transaction, skipped []CSVRowError, err error) {
+	accounts := make([]CSVAccount, 0, len(accountCurrencies))
+	for accountID, curr := range accountCurrencies {
+		accounts = append(accounts, CSVAccount{ID: accountID, Currency: curr})
+	}
+	return parseCSVForAccountList(data, defaultCurrency, fallbackAccountID, accounts, false)
+}
+
+// TransactionsFromCSVResilientForAccountList parses CSV amounts using each row's
+// explicit currency or its resolved account currency before converting to minor units.
+// Account names are resolved case-insensitively; blank account cells use fallbackAccountID.
+func TransactionsFromCSVResilientForAccountList(data []byte, defaultCurrency, fallbackAccountID string, accounts []CSVAccount) (txns []domain.Transaction, skipped []CSVRowError, err error) {
+	return parseCSVForAccountList(data, defaultCurrency, fallbackAccountID, accounts, true)
+}
+
+func parseCSVForAccountList(data []byte, defaultCurrency, fallbackAccountID string, accounts []CSVAccount, allowExplicitCurrencyMismatch bool) (txns []domain.Transaction, skipped []CSVRowError, err error) {
+	accountByName := make(map[string]CSVAccount, len(accounts)*2)
+	accountByID := make(map[string]CSVAccount, len(accounts))
+	for _, account := range accounts {
+		accountByID[account.ID] = account
+		accountByName[strings.ToLower(strings.TrimSpace(account.ID))] = account
+		if account.Name != "" {
+			accountByName[strings.ToLower(strings.TrimSpace(account.Name))] = account
+		}
+	}
 	r := csvReader(data)
 	records, csvErr := r.ReadAll()
 	if csvErr != nil {
@@ -376,6 +407,17 @@ func TransactionsFromCSVResilientForAccounts(data []byte, defaultCurrency, fallb
 		nativeExport := isCashFluxExportRow(row)
 
 		accountID := colID(row, "account")
+		if account := accountByName[strings.ToLower(strings.TrimSpace(accountID))]; account.ID != "" {
+			accountID = account.ID
+		} else if accountID != "" && fallbackAccountID != "" {
+			if _, known := accountByID[accountID]; !known {
+				accountID = fallbackAccountID
+			}
+		}
+		accountForCurrency := accountByID[accountID]
+		if accountID == "" {
+			accountForCurrency = accountByID[fallbackAccountID]
+		}
 		amtStr := col(row, "amount")
 		if amtStr == "" {
 			skipped = append(skipped, CSVRowError{Line: line, Reason: "amount is required"})
@@ -383,10 +425,7 @@ func TransactionsFromCSVResilientForAccounts(data []byte, defaultCurrency, fallb
 		}
 		curr := fieldCol(row, "currency", nativeExport)
 		if curr == "" {
-			curr = accountCurrencies[accountID]
-			if curr == "" && accountID == "" {
-				curr = accountCurrencies[fallbackAccountID]
-			}
+			curr = accountForCurrency.Currency
 			if curr == "" {
 				curr = defaultCurrency
 			}
@@ -395,12 +434,8 @@ func TransactionsFromCSVResilientForAccounts(data []byte, defaultCurrency, fallb
 			skipped = append(skipped, CSVRowError{Line: line, Reason: "currency is required (add a currency column or set a base currency)"})
 			continue
 		}
-		accountIDForCurrency := accountID
-		if accountIDForCurrency == "" {
-			accountIDForCurrency = fallbackAccountID
-		}
-		if accountCurrency := accountCurrencies[accountIDForCurrency]; accountCurrency != "" && !strings.EqualFold(curr, accountCurrency) {
-			skipped = append(skipped, CSVRowError{Line: line, Reason: fmt.Sprintf("currency %s does not match account currency %s", curr, accountCurrency)})
+		if !allowExplicitCurrencyMismatch && accountForCurrency.Currency != "" && !strings.EqualFold(curr, accountForCurrency.Currency) {
+			skipped = append(skipped, CSVRowError{Line: line, Reason: fmt.Sprintf("currency %s does not match account currency %s", curr, accountForCurrency.Currency)})
 			continue
 		}
 		amt, parseErr := money.ParseMinor(amtStr, currency.Decimals(curr))
@@ -479,6 +514,9 @@ func TransactionsFromCSVResilientForAccounts(data []byte, defaultCurrency, fallb
 			Tags:              tags,
 			MemberIDs:         owners,
 			Source:            csvSource(fieldCol(row, "source", nativeExport), srcCol),
+		}
+		if txn.AccountID == "" {
+			txn.AccountID = fallbackAccountID
 		}
 		if isV2ExportRow(row) {
 			if err := applyCSVV2Fields(&txn, row, idx, true); err != nil {

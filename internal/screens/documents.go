@@ -160,7 +160,7 @@ func csvSkipDetail(rows []store.CSVRowError) string {
 		if i >= maxShown {
 			break
 		}
-		reason := strings.TrimSpace(r.Reason)
+		reason := localizedCSVReason(strings.TrimSpace(r.Reason))
 		if reason == "" {
 			reason = uistate.T("documents.skipReasonGeneric")
 		}
@@ -171,6 +171,52 @@ func csvSkipDetail(rows []store.CSVRowError) string {
 		detail += " " + uistate.T("documents.skipMore", len(rows)-maxShown)
 	}
 	return detail
+}
+
+func localizedCSVReason(reason string) string {
+	lower := strings.ToLower(reason)
+	switch {
+	case reason == "amount is required":
+		return uistate.T("tc4n6.amountRequired")
+	case strings.Contains(lower, "possible duplicate"):
+		return uistate.T("tc4n6.possibleDuplicate")
+	case strings.Contains(lower, "too many decimal places"):
+		return uistate.T("tc4n6.amountPrecision")
+	case strings.Contains(lower, "invalid amount"):
+		return uistate.T("tc4n6.amountInvalid")
+	case strings.Contains(lower, "invalid cleared"):
+		return uistate.T("tc4n6.clearedInvalid")
+	case strings.Contains(lower, "member_ids"):
+		return uistate.T("tc4n6.memberIDsInvalid")
+	case strings.Contains(lower, "date"):
+		return uistate.T("tc4n6.dateInvalid")
+	case strings.Contains(lower, "currency"):
+		return uistate.T("tc4n6.currencyInvalid")
+	case strings.Contains(lower, "repeated"):
+		return uistate.T("tc4n6.repeatedID")
+	default:
+		return uistate.T("documents.skipReasonGeneric")
+	}
+}
+
+func importMapWarningSummary(warnings []importmap.RowWarning) string {
+	dateCount, amountCount := 0, 0
+	for _, warning := range warnings {
+		switch warning.Field {
+		case "amount":
+			amountCount++
+		default:
+			dateCount++
+		}
+	}
+	var parts []string
+	if dateCount > 0 {
+		parts = append(parts, uistate.T("tc4n6.ambiguousDates", dateCount))
+	}
+	if amountCount > 0 {
+		parts = append(parts, uistate.T("tc4n6.ambiguousAmounts", amountCount))
+	}
+	return strings.Join(parts, " ")
 }
 
 func statementRowsForDraft(rows []statement.Row, decimals int) []extract.Row {
@@ -186,6 +232,14 @@ func statementRowsForDraft(rows []statement.Row, decimals int) []extract.Row {
 
 func statementImportCounts(ambiguousDates, ambiguousNumbers, invalidRows int) string {
 	return " " + uistate.T("impc.rowCounts", ambiguousDates, ambiguousNumbers, invalidRows)
+}
+
+func importCount(n int, singular, pluralWord string) string {
+	word := singular
+	if n != 1 {
+		word = pluralWord
+	}
+	return uistate.T("tc4n6.count", n, word)
 }
 
 func statementParseOptions(dateOrder, numberFormat string) statement.ParseOptions {
@@ -213,7 +267,20 @@ func importNumberFormatChoice(choice string) importmap.NumberFormat {
 func mapImportErrors(rows []importmap.RowError) []store.CSVRowError {
 	out := make([]store.CSVRowError, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, store.CSVRowError{Line: row.Index + 1, Reason: row.Error()})
+		field := row.Field
+		switch field {
+		case "date":
+			field = uistate.T("tc4n6.fieldDate")
+		case "amount":
+			field = uistate.T("tc4n6.fieldAmount")
+		case "debit":
+			field = uistate.T("tc4n6.fieldDebit")
+		case "credit":
+			field = uistate.T("tc4n6.fieldCredit")
+		case "balance":
+			field = uistate.T("tc4n6.fieldBalance")
+		}
+		out = append(out, store.CSVRowError{Line: row.Index + 1, Reason: uistate.T("tc4n6.rowFieldFailure", row.Index+1, field)})
 	}
 	return out
 }
@@ -540,7 +607,7 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 			}
 			summary := csvImportSummary(accounts, importAcct.Get(), n)
 			if len(skipped) > 0 {
-				summary += " " + uistate.T("documents.importedCsvSkipped", plural(len(skipped), "row"))
+				summary += " " + uistate.T("documents.importedCsvSkipped", importCount(len(skipped), "row", "rows"))
 				if d := csvSkipDetail(skipped); d != "" {
 					summary += " " + d
 				}
@@ -558,7 +625,7 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 			// C364: name the reversal path (Ctrl+Z / Activity) at the moment a CSV
 			// import commits, so a bad file is reversible from the moment of risk.
 			if n > 0 {
-				postUndoStory(uistate.T("documents.importUndo", plural(n, "transaction")))
+				postUndoStory(uistate.T("documents.importUndo", importCount(n, "transaction", "transactions")))
 			}
 			csvText.Set("") // clear the paste box after a successful import
 			if importModalOpen.Get() {
@@ -589,25 +656,16 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 	// like the second leg of a transfer already in the ledger. Nothing writes
 	// until the user confirms.
 	buildCSVPreflight := func(data []byte) {
-		txns, err := app.ParseCSVForPreview(data, importAcct.Get())
-		if err != nil {
-			msg.Set(uistate.T("documents.csvError", strings.TrimPrefix(err.Error(), "store: ")))
-			return
-		}
-		if len(txns) == 0 {
-			msg.Set(uistate.T("documents.csvEmpty"))
-			return
-		}
-		accountCurrencies := make(map[string]string, len(app.Accounts()))
+		csvAccounts := make([]store.CSVAccount, 0, len(app.Accounts()))
 		for _, account := range app.Accounts() {
-			accountCurrencies[account.ID] = account.Currency
+			csvAccounts = append(csvAccounts, store.CSVAccount{ID: account.ID, Name: account.Name, Currency: account.Currency})
 		}
 		baseCurrency := app.Settings().BaseCurrency
 		if baseCurrency == "" {
 			baseCurrency = "USD"
 		}
-		_, skipped, parseErr := store.TransactionsFromCSVResilientForAccounts(data, baseCurrency,
-			importAcct.Get(), accountCurrencies)
+		txns, skipped, parseErr := store.TransactionsFromCSVResilientForAccountList(data, baseCurrency,
+			importAcct.Get(), csvAccounts)
 		if parseErr != nil {
 			msg.Set(uistate.T("documents.csvError", strings.TrimPrefix(parseErr.Error(), "store: ")))
 			return
@@ -643,8 +701,9 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 			if b, berr := ledger.Balance(acc, app.Transactions()); berr == nil {
 				info.HasBal = true
 				info.BeforeMinor = b.Amount
-				info.NetMinor, info.AfterMinor, err = importsafe.Impact(b.Amount, txns, acc.ID, acc.Currency)
-				if err != nil {
+				net, after, impactErr := importsafe.Impact(b.Amount, txns, acc.ID, acc.Currency)
+				info.NetMinor, info.AfterMinor = net, after
+				if impactErr != nil {
 					info.HasBal = false
 				} else {
 					info.Jump = importsafe.JumpWarning(b.Amount, info.NetMinor)
@@ -806,7 +865,7 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 		// Successful parse — hide wizard, populate draft.
 		wizardVisible.Set(false)
 		setDraft(rows)
-		msg.Set(uistate.T("documents.stmtParsed", plural(len(rows), "row")) + statementImportCounts(statementAmbiguousDates.Get(), statementAmbiguousNumbers.Get(), statementInvalidRows.Get()))
+		msg.Set(uistate.T("documents.stmtParsed", importCount(len(rows), "row", "rows")) + statementImportCounts(statementAmbiguousDates.Get(), statementAmbiguousNumbers.Get(), statementInvalidRows.Get()))
 		rev.Set(rev.Get() + 1)
 	}))
 	onDateOrderChoice := ui.UseEvent(func(e ui.Event) { dateOrderChoice.Set(e.GetValue()) })
@@ -833,7 +892,7 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 			return
 		}
 		setDraft(rows)
-		msg.Set(uistate.T("documents.stmtParsed", plural(len(rows), "row")) + statementImportCounts(st.AmbiguousDates, st.AmbiguousNumbers, len(st.Errors)))
+		msg.Set(uistate.T("documents.stmtParsed", importCount(len(rows), "row", "rows")) + statementImportCounts(st.AmbiguousDates, st.AmbiguousNumbers, len(st.Errors)))
 	}))
 
 	// applyWizard (C74) applies the user's manual column assignments via
@@ -856,6 +915,7 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 			SkipRows:     0,
 			Decimals:     dec,
 			NumberFormat: importNumberFormatChoice(numberFormatChoice.Get()),
+			DateOrder:    statement.DateOrder(dateOrderChoice.Get()),
 		}
 		rawRecs := wizardRawRows.Get()
 		// Flatten [][][]string to [][]string (each outer entry is one record set).
@@ -878,12 +938,12 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 		}
 		wizardVisible.Set(false)
 		setDraft(rows)
-		message := uistate.T("documents.stmtParsed", plural(len(rows), "row"))
+		message := uistate.T("documents.stmtParsed", importCount(len(rows), "row", "rows"))
 		if len(rowErrors) > 0 {
 			message += " " + csvSkipDetail(mapImportErrors(rowErrors))
 		}
 		if len(rowWarnings) > 0 {
-			message += " " + uistate.T("documents.ambiguousDates", len(rowWarnings))
+			message += " " + importMapWarningSummary(rowWarnings)
 		}
 		msg.Set(message)
 		rev.Set(rev.Get() + 1)
@@ -907,10 +967,11 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 			CurrencyCol:  -1,
 			Decimals:     currency.Decimals(reviewCurrencyFor(app, accounts, importAcct.Get())),
 			NumberFormat: importNumberFormatChoice(numberFormatChoice.Get()),
+			DateOrder:    statement.DateOrder(dateOrderChoice.Get()),
 		}
 		saved, err := app.SaveImportProfile(importmap.SavedProfile{Profile: p}, activeImportProfileWorkspaceID())
 		if err != nil {
-			msg.Set("Couldn't save: " + err.Error())
+			msg.Set(uistate.T("tc4n6.profileSaveFailed", err.Error()))
 			return
 		}
 		profileName.Set("")
@@ -945,7 +1006,7 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 			Recurrence: domain.CadenceMonthly,
 		}
 		if err := app.PutTask(t); err != nil {
-			cadenceMsg.Set("Couldn't create reminder: " + err.Error())
+			cadenceMsg.Set(uistate.T("tc4n6.reminderFailed", err.Error()))
 			return
 		}
 		// C18: confirm right next to the button (not in the far-away top message).
@@ -1122,7 +1183,7 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 				return
 			}
 			setDraft(rows)
-			msg.Set(uistate.T("documents.stmtParsed", plural(len(rows), "row")))
+			msg.Set(uistate.T("documents.stmtParsed", importCount(len(rows), "row", "rows")))
 		}
 		onError := func(e string) { aiLoading.Set(false); aiErr.Set(e) }
 		if useBackendAI {
@@ -1237,7 +1298,7 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 	doImportDraft := func() {
 		rows := draft.Get()
 		// #55: checkpoint before the reviewed-rows import commits.
-		checkpointRun(uistate.T("ckpt.beforeDocImport", plural(len(rows), "row")), func(cpID string) {
+		checkpointRun(uistate.T("ckpt.beforeDocImport", importCount(len(rows), "row", "rows")), func(cpID string) {
 			result, err := app.ImportReviewedDocumentRows(domain.DocImage, importAcct.Get(), rows)
 			if err != nil {
 				aiErr.Set(strings.TrimPrefix(err.Error(), "appstate: "))
@@ -1294,7 +1355,7 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 			msg.Set(summary)
 			// C364: undo story for a committed image/statement import.
 			if result.Imported > 0 {
-				postUndoStory(uistate.T("documents.importUndo", plural(result.Imported, "transaction")))
+				postUndoStory(uistate.T("documents.importUndo", importCount(result.Imported, "transaction", "transactions")))
 			}
 			rev.Set(rev.Get() + 1)
 		})
@@ -1331,7 +1392,7 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 			receiptMerchant.Set("")
 			receiptMode.Set(false)
 			aiErr.Set("")
-			msg.Set("Imported the receipt as one transaction split across " + plural(len(tx.Splits), "category") + ".")
+			msg.Set(uistate.T("tc4n6.receiptImported", importCount(len(tx.Splits), "category", "categories")))
 			// C364: undo story for a committed receipt import.
 			postUndoStory(uistate.T("documents.receiptImportUndo"))
 			rev.Set(rev.Get() + 1)
@@ -1452,7 +1513,7 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 		aiErr.Set("")
 		// A toast, not the panel msg line — the attach clears the draft, which
 		// swaps the review stage's layout out from under an inline message.
-		uistate.PostNotice(uistate.T("documents.receiptAttached", tx.Desc, plural(len(tx.Splits), "category")), false)
+		uistate.PostNotice(uistate.T("documents.receiptAttached", tx.Desc, importCount(len(tx.Splits), "category", "categories")), false)
 		uistate.BumpDataRevision()
 		rev.Set(rev.Get() + 1)
 	}
@@ -1697,6 +1758,7 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 							showProfiles.Get(),
 							func() { showProfiles.Set(!showProfiles.Get()) },
 							func(sp importmap.SavedProfile) {
+								dateOrderChoice.Set(string(sp.Profile.DateOrder))
 								// Apply a saved profile to the current raw rows.
 								rawRecs := wizardRawRows.Get()
 								flat := make([][]string, 0)
@@ -1704,14 +1766,14 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 									flat = append(flat, g...)
 								}
 								if len(flat) == 0 {
-									msg.Set("Paste a statement above, then click Parse before applying a profile.")
+									msg.Set(uistate.T("tc4n6.profilePasteFirst"))
 									return
 								}
 								dec := currency.Decimals(reviewCurrencyFor(app, accounts, importAcct.Get()))
 								sp.Profile.Decimals = dec
 								stRows, rowErrors, rowWarnings := importmap.ApplyWithDiagnostics(sp.Profile, flat)
 								if len(stRows) == 0 {
-									msg.Set("No rows matched with that profile — check column assignments.")
+									msg.Set(uistate.T("tc4n6.profileNoRows"))
 									return
 								}
 								rows2 := make([]extract.Row, 0, len(stRows))
@@ -1724,12 +1786,12 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 								}
 								wizardVisible.Set(false)
 								setDraft(rows2)
-								message := uistate.T("documents.stmtParsed", plural(len(rows2), "row"))
+								message := uistate.T("documents.stmtParsed", importCount(len(rows2), "row", "rows"))
 								if len(rowErrors) > 0 {
 									message += " " + csvSkipDetail(mapImportErrors(rowErrors))
 								}
 								if len(rowWarnings) > 0 {
-									message += " " + uistate.T("documents.ambiguousDates", len(rowWarnings))
+									message += " " + importMapWarningSummary(rowWarnings)
 								}
 								msg.Set(message)
 								rev.Set(rev.Get() + 1)
@@ -1973,7 +2035,7 @@ func paginatedDraftReview(props draftReviewProps) ui.Node {
 		)
 	}
 	return uiw.EntityListSection(uiw.EntityListSectionProps{
-		Title:      uistate.T("documents.reviewTitle", plural(len(props.Rows), "transaction")),
+		Title:      uistate.T("documents.reviewTitle", importCount(len(props.Rows), "transaction", "transactions")),
 		ClassParts: []any{"card-step-active"},
 		Body: Fragment(summary,
 			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter), clear, props.Toggle),

@@ -52,7 +52,7 @@ func SpendSummaryCard(props spendSummaryCardProps) ui.Node {
 		}
 		sumRows = append(sumRows, Div(css.Class("row"),
 			Span(css.Class("row-desc"), label),
-			Span(css.Class("muted"), plural(m.Count, "row")),
+			Span(css.Class("muted"), importCount(m.Count, "row", "rows")),
 			Span(css.Class("amount fig"), uistate.T("documents.summaryOutIn",
 				fmtMoney(money.New(m.Out, cur)),
 				fmtMoney(money.New(m.In, cur)),

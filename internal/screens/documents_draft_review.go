@@ -248,7 +248,7 @@ func DraftReviewList(props draftReviewListProps) ui.Node {
 
 		importLabel := uistate.T("documents.importThese")
 		if importable > 0 {
-			importLabel = uistate.T("documents.importN", plural(importable, "transaction"))
+			importLabel = uistate.T("documents.importN", importCount(importable, "transaction", "transactions"))
 		}
 		topBar = Div(css.Class("draft-actionbar"),
 			summary,
@@ -274,7 +274,7 @@ func DraftReviewList(props draftReviewListProps) ui.Node {
 	}
 
 	return uiw.EntityListSection(uiw.EntityListSectionProps{
-		Title: uistate.T("documents.reviewTitle", plural(len(rows), "transaction")),
+		Title: uistate.T("documents.reviewTitle", importCount(len(rows), "transaction", "transactions")),
 		// G14 §1: colored left-border step indicator — signals this card is an
 		// "action required" next step that materialised from the user's last action.
 		ClassParts: []any{"card-step-active"},
@@ -284,7 +284,7 @@ func DraftReviewList(props draftReviewListProps) ui.Node {
 			// a "Start over" escape hatch so they are never stuck with stale rows.
 			If(dupCount > 0,
 				Div(css.Class("notice notice-warn", tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter),
-					Span(uistate.T("documents.rowsAlreadyImported", plural(dupCount, "row"), plural(len(rows), "row"))),
+					Span(uistate.T("documents.rowsAlreadyImported", importCount(dupCount, "row", "rows"), importCount(len(rows), "row", "rows"))),
 				),
 			),
 			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter, tw.Mt1),

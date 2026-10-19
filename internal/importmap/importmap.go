@@ -26,18 +26,19 @@ const (
 
 // Profile describes how a particular bank's CSV export maps to statement rows.
 type Profile struct {
-	Name         string       // e.g. "Chase Checking"
-	DateCol      int          // 0-based column index, -1 if absent
-	DescCol      int          // 0-based column index
-	AmountCol    int          // 0-based column index, -1 if absent
-	DebitCol     int          // -1 if absent; used when no AmountCol
-	CreditCol    int          // -1 if absent
-	BalanceCol   int          // -1 if absent
-	CurrencyCol  int          // -1 if absent (informational)
-	SkipRows     int          // header rows to skip before data rows
-	Decimals     int          // minor-unit precision, default 2
-	DateLayout   string       // Go time layout; empty = auto-detect
-	NumberFormat NumberFormat // decimal separator choice; empty behaves as auto-detect
+	Name         string              // e.g. "Chase Checking"
+	DateCol      int                 // 0-based column index, -1 if absent
+	DescCol      int                 // 0-based column index
+	AmountCol    int                 // 0-based column index, -1 if absent
+	DebitCol     int                 // -1 if absent; used when no AmountCol
+	CreditCol    int                 // -1 if absent
+	BalanceCol   int                 // -1 if absent
+	CurrencyCol  int                 // -1 if absent (informational)
+	SkipRows     int                 // header rows to skip before data rows
+	Decimals     int                 // minor-unit precision, default 2
+	DateLayout   string              // Go time layout; empty = auto-detect
+	DateOrder    statement.DateOrder // Preferred order for ambiguous numeric dates.
+	NumberFormat NumberFormat        // decimal separator choice; empty behaves as auto-detect
 }
 
 // Apply maps raw CSV rows (already split, after SkipRows) to []statement.Row.
@@ -86,7 +87,11 @@ func ApplyWithDiagnostics(p Profile, rows [][]string) ([]statement.Row, []RowErr
 		if ok {
 			out = append(out, row)
 			if warning != "" {
-				warnings = append(warnings, RowWarning{Index: i, Field: "date", Warning: warning})
+				field := "date"
+				if strings.Contains(warning, "comma before three digits") {
+					field = "amount"
+				}
+				warnings = append(warnings, RowWarning{Index: i, Field: field, Warning: warning})
 			}
 		} else if err != nil {
 			rowErrors = append(rowErrors, RowError{Index: i, Field: field, Err: err})
@@ -115,12 +120,13 @@ func applyRow(p Profile, cols []string) (statement.Row, bool, string, error, str
 	if p.DateLayout != "" {
 		date, err = time.Parse(p.DateLayout, dateStr)
 	} else {
-		date, err = autoParseDate(dateStr)
+		date, err = autoParseDateOrder(dateStr, p.DateOrder)
 	}
 	if err != nil {
 		return statement.Row{}, false, "date", err, ""
 	}
-	dateWarning := ambiguousDateWarning(dateStr, p.DateLayout)
+	dateWarning := ambiguousDateWarning(dateStr, p.DateLayout, p.DateOrder)
+	amountWarning := ""
 
 	// Description
 	desc := get(p.DescCol)
@@ -136,6 +142,7 @@ func applyRow(p Profile, cols []string) (statement.Row, bool, string, error, str
 		if err != nil {
 			return statement.Row{}, false, "amount", err, ""
 		}
+		amountWarning = ambiguousThreeDecimalComma(amtStr, p.Decimals, p.NumberFormat)
 	} else {
 		// Debit/Credit columns
 		debitStr := get(p.DebitCol)
@@ -188,6 +195,13 @@ func applyRow(p Profile, cols []string) (statement.Row, bool, string, error, str
 		}
 	}
 
+	if amountWarning != "" {
+		if dateWarning != "" {
+			dateWarning += " " + amountWarning
+		} else {
+			dateWarning = amountWarning
+		}
+	}
 	return statement.Row{
 		Date:        date,
 		Description: desc,
@@ -251,6 +265,7 @@ var dateLayouts = []string{
 	"01/02/2006",
 	"1/2/2006",
 	"01/02/06",
+	"1/2/06",
 	"2006/01/02",
 	"Jan 2, 2006",
 	"January 2, 2006",
@@ -258,8 +273,14 @@ var dateLayouts = []string{
 	"20060102",
 }
 
-func autoParseDate(s string) (time.Time, error) {
-	for _, layout := range dateLayouts {
+func autoParseDate(s string) (time.Time, error) { return autoParseDateOrder(s, statement.MonthDay) }
+
+func autoParseDateOrder(s string, order statement.DateOrder) (time.Time, error) {
+	layouts := dateLayouts
+	if order == statement.DayMonth {
+		layouts = append([]string{"02/01/2006", "2/1/2006", "02/01/06", "2/1/06"}, dateLayouts...)
+	}
+	for _, layout := range layouts {
 		if t, err := time.Parse(layout, s); err == nil {
 			return t, nil
 		}
@@ -267,17 +288,21 @@ func autoParseDate(s string) (time.Time, error) {
 	return time.Time{}, strconv.ErrSyntax
 }
 
-func ambiguousDateWarning(value, layout string) string {
+func ambiguousDateWarning(value, layout string, order statement.DateOrder) string {
 	if layout != "" {
 		return ""
 	}
-	if len(value) != 10 || value[2] != '/' || value[5] != '/' || !digits(value[:2]) || !digits(value[3:5]) {
+	parts := strings.Split(value, "/")
+	if len(parts) != 3 || !digits(parts[0]) || !digits(parts[1]) || !digits(parts[2]) {
 		return ""
 	}
-	first, _ := strconv.Atoi(value[:2])
-	second, _ := strconv.Atoi(value[3:5])
+	first, _ := strconv.Atoi(parts[0])
+	second, _ := strconv.Atoi(parts[1])
 	if first > 12 || second > 12 || first == second {
 		return ""
+	}
+	if order == statement.DayMonth {
+		return "This date can mean either month/day or day/month; it was read as day/month."
 	}
 	return "This date can mean either month/day or day/month; it was read as month/day."
 }
@@ -357,7 +382,11 @@ func separators(s string, decimals int, format NumberFormat) (decimal, group run
 			}
 			return '.', ',', nil
 		case comma >= 0:
-			if decimals == 3 && comma == len(s)-4 && comma > 0 && digits(s[:comma]) && digits(s[comma+1:]) {
+			integerPart := strings.TrimLeft(s, "+-")
+			if decimals == 3 && comma == len(s)-4 && comma > 0 && digits(integerPart[:len(integerPart)-4]) && digits(s[comma+1:]) {
+				if integerPart[:len(integerPart)-4] == "0" {
+					return ',', '.', nil
+				}
 				return '.', ',', nil
 			}
 			if shouldBeDecimal(s, comma, decimals) {
@@ -374,6 +403,17 @@ func separators(s string, decimals int, format NumberFormat) (decimal, group run
 	default:
 		return 0, 0, fmt.Errorf("unsupported number format %q", format)
 	}
+}
+
+func ambiguousThreeDecimalComma(value string, decimals int, format NumberFormat) string {
+	if (format != "" && format != NumberFormatAuto) || decimals != 3 {
+		return ""
+	}
+	value = strings.TrimSpace(strings.TrimLeft(value, "+-"))
+	if len(value) < 5 || value[len(value)-4] != ',' || !digits(value[:len(value)-4]) || !digits(value[len(value)-3:]) || value[:len(value)-4] == "0" {
+		return ""
+	}
+	return "A comma before three digits can mean a decimal mark or a thousands separator; check this amount."
 }
 
 func shouldBeDecimal(s string, sep int, decimals int) bool {
