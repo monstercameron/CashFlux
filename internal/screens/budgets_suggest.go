@@ -26,9 +26,13 @@ import (
 	"github.com/monstercameron/CashFlux/internal/categorytree"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/smart"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
+	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+	"github.com/monstercameron/GoWebComponents/v5/css"
 	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
@@ -42,21 +46,16 @@ const suggestLimitCode = "SMART-B12"
 // the household lives now.
 const suggestLimitMonths = 3
 
-// suggestLimitDriftBP is how far the current limit must sit from the suggestion
-// before the hint appears, in basis points. A budget already within 10% of its own
-// trailing average does not need advice; showing it anyway is how a helpful line
-// becomes wallpaper that gets ignored when it finally matters.
-const suggestLimitDriftBP = 1000
-
 // budgetSuggestProps carries the budget the hint is about.
 type budgetSuggestProps struct {
 	Budget domain.Budget
 }
 
 type suggestLimitCacheEntry struct {
-	amount int64
-	err    error
-	valid  bool
+	recommendation budgeting.LimitRecommendation
+	displayAmount  money.Money
+	err            error
+	valid          bool
 }
 
 var suggestLimitCache = map[string]suggestLimitCacheEntry{}
@@ -66,8 +65,8 @@ var suggestSettingsCache struct {
 	loaded   bool
 }
 
-// budgetSuggestHint renders "your 3-month average here is $X — use it". Its own
-// component: it renders inside the budget list and owns a click hook.
+// budgetSuggestHint renders an evidence-backed, directional limit recommendation.
+// Its own component: it renders inside the budget list and owns a click hook.
 func budgetSuggestHint(props budgetSuggestProps) ui.Node {
 	dataRevision := uistate.UseDataRevision().Get()
 	app := appstate.Default
@@ -75,7 +74,7 @@ func budgetSuggestHint(props budgetSuggestProps) ui.Node {
 	viewedPeriod := uistate.UsePeriod().Get()
 	b := props.Budget
 
-	suggested, ok := budgetSuggestedLimitAt(app, b, viewedPeriod.From)
+	recommendation, displayAmount, ok := budgetRecommendationAt(app, b, viewedPeriod.From)
 
 	apply := func() {
 		a := appstate.Default
@@ -96,7 +95,7 @@ func budgetSuggestHint(props budgetSuggestProps) ui.Node {
 			return
 		}
 		auditview.CaptureNow()
-		cur.Limit = money.New(suggested, cur.Limit.Currency)
+		cur.Limit = displayAmount
 		if err := a.PutBudget(cur); err != nil {
 			uistate.PostNotice(budgetErrorText(err), true)
 			return
@@ -109,40 +108,78 @@ func budgetSuggestHint(props budgetSuggestProps) ui.Node {
 	if !ok {
 		return Fragment()
 	}
-	amount := fmtMoney(money.New(suggested, b.Limit.Currency))
-	return smartRowHintFor(settings, suggestLimitCode, smart.AffordanceFieldAssist, smartRowHintProps{
-		Key:         "sm12:" + b.ID,
-		TestID:      "sm12-" + b.ID,
-		Text:        uistate.T("sm12.hint", suggestLimitMonths, amount),
-		ActionLabel: uistate.T("sm12.action", amount),
-		OnAction:    apply,
-		Dismissible: true,
+	amount := fmtMoney(displayAmount)
+	verbKey := "sm12.raise"
+	verb := uistate.T(verbKey)
+	if recommendation.Direction == budgeting.SuggestionLower {
+		verbKey, verb = "sm12.lower", uistate.T("sm12.lower")
+	}
+	reasonKey := "sm12.reasonNoOutliers"
+	if len(recommendation.Outliers) == 1 {
+		reasonKey = "sm12.reasonOneOutlier"
+	} else if len(recommendation.Outliers) > 1 {
+		reasonKey = "sm12.reasonManyOutliers"
+	}
+	return budgetSuggestRowHint(settings, budgetSuggestRowHintProps{
+		Key:                   "sm12:" + b.ID,
+		TestID:                "sm12-" + b.ID,
+		Text:                  uistate.T("sm12.directionalHint", verb, amount),
+		Detail:                uistate.T(reasonKey, len(recommendation.MonthsUsed)+len(recommendation.Outliers), len(recommendation.Outliers)),
+		ActionLabel:           uistate.T(verbKey+"AccessibleAction", b.Name, amount),
+		AccessibleActionLabel: uistate.T(verbKey+"AccessibleAction", b.Name, amount),
+		OnAction:              apply,
+		Dismissible:           true,
 	})
 }
 
-// budgetSuggestedLimit returns the trailing-average limit for a budget, or
-// ok=false when there is nothing worth suggesting.
-//
-// It declines in three cases, each deliberate: a budget with no history to learn
-// from (the average would be a guess dressed as a measurement), a budget whose
-// limit already sits within suggestLimitDriftBP of the average (correct advice
-// nobody needs is how advice stops being read), and a saving-direction budget —
-// a savings TARGET is a decision about what you intend to put away, and "your
-// three-month average" is an argument for aiming lower, which is the opposite of
-// what a savings goal is for.
-func budgetSuggestedLimit(app *appstate.App, b domain.Budget) (int64, bool) {
-	return budgetSuggestedLimitAt(app, b, time.Now())
+// budgetSuggestRowHint renders SM-12 with a contextual accessible action name.
+func budgetSuggestRowHint(settings smart.Settings, props budgetSuggestRowHintProps) ui.Node {
+	if props.Text == "" || props.Key == "" || !settings.IsEnabled(suggestLimitCode) || settings.IsMuted(suggestLimitCode) ||
+		!settings.DensityOrDefault().Shows(smart.AffordanceFieldAssist) || settings.IsDismissed(props.Key) {
+		return Fragment()
+	}
+	return ui.CreateElement(budgetSuggestRowHintInner, props)
 }
 
-func budgetSuggestedLimitAt(app *appstate.App, b domain.Budget, anchor time.Time) (int64, bool) {
+type budgetSuggestRowHintProps struct {
+	Key                   string
+	TestID                string
+	Text                  string
+	Detail                string
+	ActionLabel           string
+	AccessibleActionLabel string
+	OnAction              func()
+	Dismissible           bool
+}
+
+func budgetSuggestRowHintInner(props budgetSuggestRowHintProps) ui.Node {
+	act := ui.UseEvent(func() {
+		if props.OnAction != nil {
+			props.OnAction()
+		}
+	})
+	dismiss := ui.UseEvent(func() { uistate.DismissSmartInsight(props.Key); uistate.BumpDataRevision() })
+	return Div(css.Class("smart-rowhint"), Attr("data-testid", "smart-rowhint-"+props.TestID),
+		uiw.Icon(icon.Sparkles, css.Class(tw.W35, tw.H35, tw.ShrinkO)),
+		Div(css.Class("smart-rowhint-body"),
+			Div(css.Class("smart-rowhint-text"), props.Text),
+			If(props.Detail != "", Div(css.Class("smart-rowhint-detail", tw.Text12, tw.TextDim), props.Detail)),
+		),
+		Button(css.Class("btn btn-sm smart-rowhint-act"), Type("button"), Attr("data-testid", "smart-rowhint-act-"+props.TestID),
+			Attr("aria-label", props.AccessibleActionLabel), OnClick(act), props.ActionLabel),
+		If(props.Dismissible, Button(css.Class("btn-icon-bare smart-rowhint-x"), Type("button"),
+			Attr("data-testid", "smart-rowhint-dismiss-"+props.TestID), Attr("aria-label", uistate.T("smartHint.dismissAria")),
+			Title(uistate.T("smartHint.dismiss")), OnClick(dismiss), uiw.Icon(icon.Close, css.Class(tw.W3, tw.H3)))),
+	)
+}
+
+// budgetRecommendationAt returns an evidence-backed direction and a displayed
+// limit in the budget's cadence and currency, or ok=false when no change is useful.
+// Saving-direction budgets are omitted because their target is an intentional
+// contribution rather than a spending cap.
+func budgetRecommendationAt(app *appstate.App, b domain.Budget, anchor time.Time) (budgeting.LimitRecommendation, money.Money, bool) {
 	if app == nil || b.Direction.IsSaving() {
-		return 0, false
-	}
-	// Only a monthly budget can be compared with a monthly average without
-	// converting the period, and a conversion here would silently propose a weekly
-	// limit built from a monthly figure.
-	if b.Period != domain.PeriodMonthly {
-		return 0, false
+		return budgeting.LimitRecommendation{}, money.Money{}, false
 	}
 	base := app.Settings().BaseCurrency
 	if base == "" {
@@ -155,35 +192,55 @@ func budgetSuggestedLimitAt(app *appstate.App, b domain.Budget, anchor time.Time
 	covers := categorytree.DescendantsOfAll(app.Categories(), b.TrackedCategoryIDs())
 	scope := budgeting.ScopeOf(b, covers)
 	if scope.IsEmpty() {
-		return 0, false
+		return budgeting.LimitRecommendation{}, money.Money{}, false
 	}
-	periodKey := anchor.Format("2006-01")
+	if anchor.IsZero() {
+		anchor = time.Now()
+	}
+	userPrefs := uistate.LoadPrefs()
+	var payCycleAnchor time.Time
+	if userPrefs.PayCycleAnchor != "" {
+		payCycleAnchor, _ = time.Parse("2006-01-02", userPrefs.PayCycleAnchor)
+	}
+	start, end := budgeting.PeriodRangeAnchored(b.Period, anchor, userPrefs.WeekStartWeekday(), payCycleAnchor)
+	periodKey := start.Format("2006-01-02")
 	cacheKey := fmt.Sprintf("%p|%d|%s|%s", app, app.Rev(), b.ID, periodKey)
 	entry, cached := suggestLimitCache[cacheKey]
 	if !cached {
 		suggestedTxns, suggestedCovers := suggestTransactionsForScope(covers, scope.Tags, app.Transactions())
-		amount, err := budgeting.SuggestLimitIn(suggestedCovers, suggestedTxns, anchor, suggestLimitMonths, rates)
-		entry = suggestLimitCacheEntry{amount: amount, err: err, valid: err == nil && amount > 0}
+		status, err := budgeting.EvaluateRollup(b, suggestedTxns, start, end, rates, budgeting.DefaultNearThreshold, suggestedCovers)
+		var recommendation budgeting.LimitRecommendation
+		var displayAmount money.Money
+		if err == nil {
+			projected := budgeting.ProjectPace(status, start, end, time.Now()).Projected
+			projected, err = budgeting.PeriodEquivalent(projected, b.Period, domain.PeriodMonthly)
+			if err == nil {
+				recommendation, err = budgeting.RecommendBudgetLimit(b, suggestedCovers, suggestedTxns, anchor, suggestLimitMonths, projected, rates)
+			}
+			if err == nil && recommendation.HasEvidence && recommendation.Direction != budgeting.SuggestionKeep {
+				periodAmount, convErr := budgeting.PeriodEquivalent(money.New(recommendation.Suggested, base), domain.PeriodMonthly, b.Period)
+				if convErr == nil {
+					displayCurrency := b.Limit.Currency
+					if displayCurrency == "" {
+						displayCurrency = base
+					}
+					displayAmount, err = rates.Convert(periodAmount, displayCurrency)
+				} else {
+					err = convErr
+				}
+			}
+		}
+		entry = suggestLimitCacheEntry{recommendation: recommendation, displayAmount: displayAmount, err: err,
+			valid: err == nil && recommendation.HasEvidence && recommendation.Direction != budgeting.SuggestionKeep && displayAmount.Amount > 0}
 		if len(suggestLimitCache) > 512 {
 			suggestLimitCache = map[string]suggestLimitCacheEntry{}
 		}
 		suggestLimitCache[cacheKey] = entry
 	}
-	suggested := entry.amount
 	if entry.err != nil || !entry.valid {
-		return 0, false
+		return budgeting.LimitRecommendation{}, money.Money{}, false
 	}
-	limit := b.Limit.Amount
-	if limit > 0 {
-		drift := suggested - limit
-		if drift < 0 {
-			drift = -drift
-		}
-		if drift*10000 < limit*suggestLimitDriftBP {
-			return 0, false
-		}
-	}
-	return suggested, true
+	return entry.recommendation, entry.displayAmount, true
 }
 
 func smartSettingsForRevision(revision int) smart.Settings {

@@ -90,6 +90,10 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Budget suggestions say which way and why (BR2SUG).** Row suggestions now come from the robust recommendation: "Raise
+  to $X" or "Lower to $X" with the evidence (3-month median, unusual months left out), never a cut below what the budget is
+  already projected to spend, and nothing when there is no history. The action is named with its context ("Raise the
+  Transportation limit to $X").
 - **Budgets: an honest recurring-bills panel (BR2REC).** "Recurring in your budgets" is now "Recurring bills (all
   categories)": paychecks are no longer listed as charges, and the bills are split into "Covered by a budget" and "Not
   budgeted ($X/mo)", each with its monthly total, with a "Budget this" action per uncovered category seeded with its
