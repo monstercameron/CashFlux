@@ -11,6 +11,7 @@ var budq5Keys = Catalog{
 	"budgets.recommendationKeep":       "keep",
 	"budgets.rolloverChain":            "Period-by-period rollover: %s",
 	"budgets.rolloverChainEntry":       "%s: base %s, carry-in %s, effective cap %s, spent %s, carry-out %s.",
+	"budgets.rolloverChainEarlier":     "and %d earlier",
 }
 
 func init() {

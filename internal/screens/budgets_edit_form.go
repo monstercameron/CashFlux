@@ -369,7 +369,7 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 						srcs = append(srcs, domain.CoverShare{BudgetID: sc.ID, Weight: w, WeightFormula: wtFormula})
 					}
 				}
-				rc := &domain.RecurringCover{Sources: srcs, LastAppliedPeriod: budgeting.PeriodKey(b.Period, viewAnchor, coverPayAnchor)}
+				rc := &domain.RecurringCover{Sources: srcs, LastAppliedPeriod: budgeting.PeriodKeyWithWeekStart(b.Period, viewAnchor, coverPayAnchor, pr.WeekStartWeekday())}
 				if amtFxS.Get() {
 					rc.AmountFormula = strings.TrimSpace(amtFormulaS.Get())
 				}
@@ -617,7 +617,7 @@ func BudgetEditForm(props BudgetEditFormProps) ui.Node {
 			return
 		}
 		permanent := topupPermanentS.Get()
-		periodStart := budgetPeriodKeyStart(b.Period, viewAnchor, coverPayAnchor)
+		periodStart := budgetPeriodKeyStartWithWeekStart(b.Period, viewAnchor, coverPayAnchor, pr.WeekStartWeekday())
 
 		// Optional funding: pull the amount from other budgets (equal split across the
 		// checked sources). Without any source, the top-up adds new limit from income.

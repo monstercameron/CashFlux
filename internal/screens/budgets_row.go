@@ -281,7 +281,8 @@ func BudgetRow(props budgetRowProps) ui.Node {
 				if b.ID != s.Budget.ID {
 					continue
 				}
-				start := budgetPeriodKeyStart(b.Period, props.Anchor, budgetPayCycleAnchor(uistate.LoadPrefs().PayCycleAnchor))
+				prefs := uistate.LoadPrefs()
+				start := budgetPeriodKeyStartWithWeekStart(b.Period, props.Anchor, budgetPayCycleAnchor(prefs.PayCycleAnchor), prefs.WeekStartWeekday())
 				if err := app.PutBudget(b.WithPeriodBoost(start, -remaining.Amount)); err != nil {
 					uistate.PostNotice(budgetErrorText(err), true)
 					return
@@ -1332,12 +1333,21 @@ func buildBudgetRolloverChainText(b domain.Budget, anchor time.Time) string {
 	if err != nil {
 		return ""
 	}
-	lines := make([]string, 0, len(chain))
+	return budgetRolloverChainLines(chain)
+}
+
+func budgetRolloverChainLines(chain []budgeting.RolloverPeriodState) string {
+	const visiblePeriods = 6
+	lines := make([]string, 0, visiblePeriods+1)
+	if earlier := len(chain) - visiblePeriods; earlier > 0 {
+		lines = append(lines, uistate.T("budgets.rolloverChainEarlier", earlier))
+		chain = chain[earlier:]
+	}
 	for _, state := range chain {
 		lines = append(lines, uistate.T("budgets.rolloverChainEntry", state.Start.Format("2006-01-02"), fmtMoney(state.Base),
 			fmtMoney(state.CarryIn), fmtMoney(state.EffectiveCap), fmtMoney(state.Spend), fmtMoney(state.CarryOut)))
 	}
-	return strings.Join(lines, " ")
+	return strings.Join(lines, "\n")
 }
 
 // budgetDrillScope resolves what a budget's "Transactions" drill-through should

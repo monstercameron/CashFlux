@@ -90,6 +90,9 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Weekly raise-limits respect the week start (BUDQ5.1).** Raise-limit, release-unused and recurring "last applied" writes
+  now use the same week-start-aware period key the page reads, so a "this week" raise on a Sunday-start household is no
+  longer saved where the page never looks. The rollover carry tooltip shows the latest six periods plus "and N earlier".
 - **Assistant transfer preview can't reuse stale rates (SEC7.1).** The preview/run cache is keyed by the arguments, both
   accounts, the full rate table, time and description, so a preview built with one set of rates is never reused after
   the rates change; generated operation IDs are derived from the same inputs. Regression test: preview with rates, then

@@ -19,19 +19,22 @@ import (
 	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
 
-// budgetPeriodKeyStart returns the UTC day represented by the shared persisted
-// budget period key. Boost writes store period starts, so routing them through
-// PeriodKey keeps writes aligned with the key used by budget reads.
+// budgetPeriodKeyStart returns the day represented by the shared persisted
+// budget period key, using the household's configured week start.
 func budgetPeriodKeyStart(period domain.Period, ref, anchor time.Time) time.Time {
+	return budgetPeriodKeyStartWithWeekStart(period, ref, anchor, uistate.LoadPrefs().WeekStartWeekday())
+}
+
+func budgetPeriodKeyStartWithWeekStart(period domain.Period, ref, anchor time.Time, weekStart time.Weekday) time.Time {
 	if ref.IsZero() {
 		ref = time.Now()
 	}
-	key := budgeting.PeriodKey(period, ref, anchor)
+	key := budgeting.PeriodKeyWithWeekStart(period, ref, anchor, weekStart)
 	start, err := time.Parse("2006-01-02", key)
 	if err == nil {
 		return start
 	}
-	start, _ = budgeting.PeriodRangeAnchored(period, ref, time.Monday, anchor)
+	start, _ = budgeting.PeriodRangeAnchored(period, ref, weekStart, anchor)
 	return start
 }
 
