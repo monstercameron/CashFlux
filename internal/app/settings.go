@@ -1876,8 +1876,10 @@ func wipeAfterSession(notify func(string, bool)) {
 		notify(uistate.T("settings.wipeErr", err.Error()), true)
 		return
 	}
-	// The durable wipe batch tombstones the owner with the dataset. Keep the
-	// existing claim until that transaction commits so a failed wipe retains it.
+	// Nothing is loaded any more, so nobody owns it. Leaving a stale claim
+	// behind would make the next dataset look foreign to the very account
+	// that is about to create it.
+	releaseDatasetOwner()
 	// The store wipe cleared the financial tables and the audit_log table, but two
 	// things live outside that sweep and would otherwise survive: (1) the in-memory
 	// activity feed (the Activity screen's preferred source, re-hydrated from the
