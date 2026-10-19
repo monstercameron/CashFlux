@@ -441,14 +441,17 @@ func RuleEditForm(props RuleEditFormProps) ui.Node {
 	cond1Field := ui.UseState(string(c1.Field))
 	cond1Op := ui.UseState(string(c1.Op))
 	cond1Value := ui.UseState(c1.Value)
+	cond1Currency := ui.UseState(c1.Currency)
 	cond2Enabled := ui.UseState(c2.Field != "")
 	cond2Field := ui.UseState(string(c2.Field))
 	cond2Op := ui.UseState(string(c2.Op))
 	cond2Value := ui.UseState(c2.Value)
+	cond2Currency := ui.UseState(c2.Currency)
 	cond3Enabled := ui.UseState(c3.Field != "")
 	cond3Field := ui.UseState(string(c3.Field))
 	cond3Op := ui.UseState(string(c3.Op))
 	cond3Value := ui.UseState(c3.Value)
+	cond3Currency := ui.UseState(c3.Currency)
 	onCond1Enable := ui.UseEvent(func(e ui.Event) { cond1Enabled.Set(e.IsChecked()) })
 	onCond1Value := ui.UseEvent(func(v string) { cond1Value.Set(v) })
 	onCond2Enable := ui.UseEvent(func(e ui.Event) { cond2Enabled.Set(e.IsChecked()) })
@@ -459,23 +462,25 @@ func RuleEditForm(props RuleEditFormProps) ui.Node {
 	collectConditions := func() []rules.RuleCondition {
 		var conds []rules.RuleCondition
 		slots := [3]struct {
-			enabled bool
-			field   string
-			op      string
-			value   string
+			enabled  bool
+			field    string
+			op       string
+			value    string
+			currency string
 		}{
-			{cond1Enabled.Get(), cond1Field.Get(), cond1Op.Get(), cond1Value.Get()},
-			{cond2Enabled.Get(), cond2Field.Get(), cond2Op.Get(), cond2Value.Get()},
-			{cond3Enabled.Get(), cond3Field.Get(), cond3Op.Get(), cond3Value.Get()},
+			{cond1Enabled.Get(), cond1Field.Get(), cond1Op.Get(), cond1Value.Get(), cond1Currency.Get()},
+			{cond2Enabled.Get(), cond2Field.Get(), cond2Op.Get(), cond2Value.Get(), cond2Currency.Get()},
+			{cond3Enabled.Get(), cond3Field.Get(), cond3Op.Get(), cond3Value.Get(), cond3Currency.Get()},
 		}
 		for _, s := range slots {
 			if !s.enabled || s.field == "" || s.op == "" {
 				continue
 			}
 			conds = append(conds, rules.RuleCondition{
-				Field: rules.ConditionField(s.field),
-				Op:    rules.ConditionOp(s.op),
-				Value: strings.TrimSpace(s.value),
+				Field:    rules.ConditionField(s.field),
+				Op:       rules.ConditionOp(s.op),
+				Value:    strings.TrimSpace(s.value),
+				Currency: s.currency,
 			})
 		}
 		return conds
@@ -548,21 +553,21 @@ func RuleEditForm(props RuleEditFormProps) ui.Node {
 				cond1Enabled.Get(), onCond1Enable,
 				cond1Field.Get(), func(v string) { cond1Field.Set(v); cond1Op.Set("") },
 				cond1Op.Get(), func(v string) { cond1Op.Set(v) },
-				cond1Value.Get(), onCond1Value,
+				cond1Value.Get(), onCond1Value, func(v string) { cond1Value.Set(v) },
 			),
 			condSlotRow(
 				uistate.T("rulecond.slot2"),
 				cond2Enabled.Get(), onCond2Enable,
 				cond2Field.Get(), func(v string) { cond2Field.Set(v); cond2Op.Set("") },
 				cond2Op.Get(), func(v string) { cond2Op.Set(v) },
-				cond2Value.Get(), onCond2Value,
+				cond2Value.Get(), onCond2Value, func(v string) { cond2Value.Set(v) },
 			),
 			condSlotRow(
 				uistate.T("rulecond.slot3"),
 				cond3Enabled.Get(), onCond3Enable,
 				cond3Field.Get(), func(v string) { cond3Field.Set(v); cond3Op.Set("") },
 				cond3Op.Get(), func(v string) { cond3Op.Set(v) },
-				cond3Value.Get(), onCond3Value,
+				cond3Value.Get(), onCond3Value, func(v string) { cond3Value.Set(v) },
 			),
 		),
 		If(errS.Get() != "", P(css.Class("notice-danger"), errS.Get())),

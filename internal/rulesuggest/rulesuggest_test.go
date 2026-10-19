@@ -3,6 +3,7 @@
 package rulesuggest
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -47,6 +48,19 @@ func TestSuggestSkipsExisting(t *testing.T) {
 	existing := []rules.Rule{{Match: "starbucks", SetCategoryID: "cafe"}}
 	if got := Suggest(txns, existing, 3); len(got) != 0 {
 		t.Errorf("expected no suggestions when a rule already matches, got %+v", got)
+	}
+}
+
+func TestSuggestSuppressesConflictingPrefixRule(t *testing.T) {
+	txns := []domain.Transaction{
+		tx("Uber", "ride", "transport"), tx("Uber", "trip", "transport"),
+		tx("UberEats", "delivery", "dining"), tx("UberEats", "meal", "dining"),
+	}
+	got := Suggest(txns, nil, 2)
+	for _, s := range got {
+		if strings.EqualFold(s.Rule.Match, "Uber") {
+			t.Fatalf("broad Uber prefix conflicts with UberEats but was suggested: %+v", got)
+		}
 	}
 }
 

@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/dashlayout"
-	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/widgetcfg"
 )
@@ -129,7 +128,10 @@ type Account struct {
 	BeneficiaryNote string      `json:"beneficiaryNote,omitempty"`
 	Currency        string      `json:"currency"`
 	OpeningBalance  money.Money `json:"openingBalance"`
-	BalanceAsOf     time.Time   `json:"balanceAsOf"`
+	// LiabilitySign fixes how debt is booked, even after the balance crosses zero.
+	// Missing legacy values are derived once from OpeningBalance on store ingress.
+	LiabilitySign LiabilitySign `json:"liabilitySign,omitempty"`
+	BalanceAsOf   time.Time     `json:"balanceAsOf"`
 	// VarName is an optional explicit variable name for this account in the formula/widget
 	// engine. When set, the account's figures are exposed as account_<slug(VarName)>_* (e.g.
 	// account_checking_balance) instead of the name-derived slug. Empty = derive from Name.
@@ -258,6 +260,38 @@ type Account struct {
 // user flagged as a liability), where AccountType.Class() alone would not. Prefer this
 // over t.Type.IsLiability() anywhere a formula asks "is this account money owed?".
 func (a Account) IsLiability() bool { return a.Class == ClassLiability }
+
+// LiabilitySign is the fixed sign used to represent an amount owed.
+type LiabilitySign string
+
+const (
+	// LiabilityPositiveOwed means charges add and payments subtract.
+	LiabilityPositiveOwed LiabilitySign = "positive_owed"
+	// LiabilityNegativeOwed means charges subtract and payments add.
+	LiabilityNegativeOwed LiabilitySign = "negative_owed"
+)
+
+// WithLiabilitySign fills an unset liability convention from its opening balance.
+// Zero-opening liabilities default to positive amounts owed. Explicit conventions
+// are preserved, including when the opening balance is later corrected.
+func (a Account) WithLiabilitySign() Account {
+	if a.IsLiability() && a.LiabilitySign == "" {
+		a.LiabilitySign = LiabilityPositiveOwed
+		if a.OpeningBalance.Amount < 0 {
+			a.LiabilitySign = LiabilityNegativeOwed
+		}
+	}
+	return a
+}
+
+// InflowSign returns the booking direction for money entering the account.
+// For liabilities this is the direction of a payment, independent of live balance.
+func (a Account) InflowSign() int64 {
+	if a.IsLiability() && a.WithLiabilitySign().LiabilitySign == LiabilityPositiveOwed {
+		return -1
+	}
+	return 1
+}
 
 // IsInstallment reports whether this account is a liability repaid on a fixed
 // schedule — a loan or a mortgage — as opposed to a revolving one (C204).
@@ -607,68 +641,6 @@ const (
 	CadenceYearly      RecurringCadence = "yearly"
 )
 
-// Next returns the date one cadence step after from. Month-based cadences use
-// dateutil.AddMonths; weekly adds 7 days. An unknown cadence is treated as
-// monthly.
-func (c RecurringCadence) Next(from time.Time) time.Time {
-	switch c {
-	case CadenceDaily:
-		return from.AddDate(0, 0, 1)
-	case CadenceWeekly:
-		return from.AddDate(0, 0, 7)
-	case CadenceBiweekly:
-		return from.AddDate(0, 0, 14)
-	case CadenceSemimonthly:
-		// Twice a month on a 1st/15th rhythm: before the 15th → the 15th of the same
-		// month; on/after the 15th → the 1st of the next month.
-		if from.Day() < 15 {
-			return time.Date(from.Year(), from.Month(), 15, from.Hour(), from.Minute(), from.Second(), from.Nanosecond(), from.Location())
-		}
-		next := dateutil.AddMonths(from, 1)
-		return time.Date(next.Year(), next.Month(), 1, next.Hour(), next.Minute(), next.Second(), next.Nanosecond(), next.Location())
-	case CadenceQuarterly:
-		return dateutil.AddMonths(from, 3)
-	case CadenceYearly:
-		return dateutil.AddMonths(from, 12)
-	default:
-		return dateutil.AddMonths(from, 1)
-	}
-}
-
-// Prev returns the date one cadence step BEFORE from — the exact inverse of
-// Next, so Next(Prev(d)) == d for any date a schedule can actually land on.
-//
-// A schedule is stored as its NEXT due date, which is all a forward agenda
-// needs. A calendar has to render months that have already happened, and "what
-// was due on the 12th of last month" is a question the stored schedule can only
-// answer by being wound backwards. Stepping back by a fixed number of days would
-// desynchronise a month-based cadence (months are not 30 days), so the reverse
-// walks the same calendar arithmetic Next does.
-func (c RecurringCadence) Prev(from time.Time) time.Time {
-	switch c {
-	case CadenceDaily:
-		return from.AddDate(0, 0, -1)
-	case CadenceWeekly:
-		return from.AddDate(0, 0, -7)
-	case CadenceBiweekly:
-		return from.AddDate(0, 0, -14)
-	case CadenceSemimonthly:
-		// Mirror of Next's 1st/15th rhythm: on or after the 15th → back to the 1st
-		// of the same month; before it → the 15th of the previous month.
-		if from.Day() >= 15 {
-			return time.Date(from.Year(), from.Month(), 1, from.Hour(), from.Minute(), from.Second(), from.Nanosecond(), from.Location())
-		}
-		prev := dateutil.AddMonths(from, -1)
-		return time.Date(prev.Year(), prev.Month(), 15, prev.Hour(), prev.Minute(), prev.Second(), prev.Nanosecond(), prev.Location())
-	case CadenceQuarterly:
-		return dateutil.AddMonths(from, -3)
-	case CadenceYearly:
-		return dateutil.AddMonths(from, -12)
-	default:
-		return dateutil.AddMonths(from, -1)
-	}
-}
-
 // Recurring is a scheduled cash flow that repeats on a cadence — a bill, a
 // paycheck, a subscription. Amount is signed (negative = money out) and carries
 // its currency, mirroring Transaction; Autopost (later) turns due ones into real
@@ -726,13 +698,6 @@ func (r Recurring) Smooths() bool {
 	default:
 		return false
 	}
-}
-
-// Advance returns a copy with NextDue moved one cadence forward — used after a
-// due occurrence is posted.
-func (r Recurring) Advance() Recurring {
-	r.NextDue = r.Cadence.Next(r.NextDue)
-	return r
 }
 
 // MonthlyEquivalent normalizes the amount to a per-month figure (minor units) so

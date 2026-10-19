@@ -97,6 +97,18 @@ func TestPlanHonorsCategoryPrecedenceAndSkipsTransfers(t *testing.T) {
 	}
 }
 
+func TestPlanKeepsReviewedAndSplitTransactions(t *testing.T) {
+	reviewed := txn("reviewed", "Coffee Shop", "old", d(2025, time.June, 1))
+	reviewed.Reviewed = true
+	split := txn("split", "Coffee Shop", "old", d(2025, time.June, 2))
+	split.Splits = []domain.CategorySplit{{CategoryID: "groceries", Amount: money.New(-500, "USD")}}
+	plain := txn("plain", "Coffee Shop", "old", d(2025, time.June, 3))
+	got := Plan(coffeeRule(), []domain.Transaction{reviewed, split, plain}, ScopeAll, time.Time{})
+	if len(got) != 1 || got[0].TxnID != "plain" {
+		t.Fatalf("plan overwrote protected rows: %+v", got)
+	}
+}
+
 func TestSinceScopeStartsOnTheChosenDay(t *testing.T) {
 	changes := Plan(coffeeRule(), ledger(), ScopeSince, d(2025, time.January, 1))
 	if len(changes) != 1 || changes[0].TxnID != "t2" {

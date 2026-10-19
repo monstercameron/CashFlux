@@ -15,9 +15,9 @@
 //
 // # What moving actually touches
 //
-// Only AccountID. The amount is what the money did and does not change with the
-// account it is filed under; the date, category and payee describe the purchase,
-// not the account.
+// AccountID changes, along with the booking signs of the amount and splits
+// when the destination uses a different convention. The economic direction,
+// magnitude, date, category and payee are preserved.
 //
 // Two things DO have to follow the move, and they are the reason this is a
 // package rather than a one-line setter:
@@ -25,11 +25,9 @@
 //   - A transfer leg's partner names this row's account as ITS counterparty. Move
 //     one leg and the other still points at the account the money is no longer on,
 //     so the pair stops describing a real movement. The partner comes along.
-//   - Currency is not cosmetic. Balances fold every row into the account's own
-//     currency, and a mismatch makes that account's balance unavailable (while
-//     other accounts still compute). A move that mixed currencies would make the
-//     destination balance unavailable, so it is refused outright rather than
-//     converted: converting would rewrite what the bank actually recorded.
+//   - Currency is not cosmetic. A mismatched row is excluded from the balance
+//     fold with an error. Refuse the move rather than hiding the row from the
+//     destination's balance or rewriting what the bank actually recorded.
 package txnmove
 
 import (
@@ -38,6 +36,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/reconcile"
+	"github.com/monstercameron/CashFlux/internal/txnclassify"
 )
 
 // Reason is why a move would be refused, as a value the UI can turn into its own
@@ -56,7 +55,7 @@ const (
 	// counterparty, which would put one account on both sides of a move.
 	ReasonSelfTransfer Reason = "self-transfer"
 	// ReasonCurrency means the row's currency is not the target account's, which
-	// would leave that account's balance uncomputable.
+	// would leave a row outside the destination account's currency.
 	ReasonCurrency Reason = "currency"
 )
 
@@ -122,7 +121,7 @@ func PlanMove(t domain.Transaction, toAccountID string, accounts []domain.Accoun
 	}
 
 	if t.IsTransfer() {
-		if partner, found := findPartner(t, txns); found {
+		if partner, found := findPartner(t, txns, accounts); found {
 			p.Partner, p.HasPartner = partner, true
 		}
 	}
@@ -151,6 +150,21 @@ func Apply(t domain.Transaction, toAccountID string, accounts []domain.Account,
 	}
 	moved = t
 	moved.AccountID = toAccountID
+	from, _ := domain.AccountByID(accounts, t.AccountID)
+	to, _ := domain.AccountByID(accounts, toAccountID)
+	if from.InflowSign() != to.InflowSign() {
+		moved.Amount, err = t.Amount.NegChecked()
+		if err != nil {
+			return t, domain.Transaction{}, false, fmt.Errorf("txnmove: reverse booking sign: %w", err)
+		}
+		moved.Splits = append([]domain.CategorySplit(nil), t.Splits...)
+		for i := range moved.Splits {
+			moved.Splits[i].Amount, err = moved.Splits[i].Amount.NegChecked()
+			if err != nil {
+				return t, domain.Transaction{}, false, fmt.Errorf("txnmove: reverse split sign: %w", err)
+			}
+		}
+	}
 	if p.HasPartner {
 		partner = p.Partner
 		// The partner's counterparty was this row's OLD account. It has to name the
@@ -166,7 +180,7 @@ func Apply(t domain.Transaction, toAccountID string, accounts []domain.Account,
 // group id (C680) and falls back to the resemblance match for legs written
 // before that existed — the same order appstate uses, for the same reason: an
 // edited or FX pair never satisfies the resemblance test.
-func findPartner(t domain.Transaction, txns []domain.Transaction) (domain.Transaction, bool) {
+func findPartner(t domain.Transaction, txns []domain.Transaction, accounts []domain.Account) (domain.Transaction, bool) {
 	if t.TransferGroupID != "" {
 		for _, c := range txns {
 			if c.ID != t.ID && c.TransferGroupID == t.TransferGroupID {
@@ -183,7 +197,11 @@ func findPartner(t domain.Transaction, txns []domain.Transaction) (domain.Transa
 			continue
 		}
 		if c.AccountID == t.TransferAccountID && c.TransferAccountID == t.AccountID &&
-			c.Amount.Amount == -t.Amount.Amount && sameDay(c.Date, t.Date) {
+			sameDay(c.Date, t.Date) {
+			match, found := txnclassify.FindReciprocal(t, t.TransferAccountID, []domain.Transaction{c}, accounts...)
+			if !found || !match.Exact {
+				continue
+			}
 			return c, true
 		}
 	}

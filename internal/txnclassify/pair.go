@@ -37,7 +37,7 @@ const PairWindow = 4 * 24 * time.Hour
 type Match struct {
 	// Txn is the counterpart row.
 	Txn domain.Transaction
-	// Exact reports whether the amounts are exactly opposite. A near match
+	// Exact reports whether the currencies and magnitudes match. A near match
 	// (same account pair and window, different magnitude) is still worth showing
 	// — a wire fee often makes the two sides differ by a few units — but the
 	// caller must be able to say which it found.
@@ -45,7 +45,8 @@ type Match struct {
 }
 
 // FindReciprocal looks for the far side of t in txns, assuming t is (or is about
-// to be) a transfer to counterpartyID.
+// to be) a transfer to counterpartyID. Supply accounts to interpret liability
+// booking signs; without them the legacy opposite-sign convention is used.
 //
 // A candidate has to be a DIFFERENT row, posted to the counterparty account,
 // dated within PairWindow, and moving money the other way. The best exact match
@@ -55,7 +56,7 @@ type Match struct {
 //
 // The second return reports whether anything was found at all, so a caller can
 // distinguish "no partner exists" from "a poor partner exists".
-func FindReciprocal(t domain.Transaction, counterpartyID string, txns []domain.Transaction) (Match, bool) {
+func FindReciprocal(t domain.Transaction, counterpartyID string, txns []domain.Transaction, accounts ...domain.Account) (Match, bool) {
 	if counterpartyID == "" || t.Amount.Amount == 0 {
 		return Match{}, false
 	}
@@ -72,12 +73,12 @@ func FindReciprocal(t domain.Transaction, counterpartyID string, txns []domain.T
 			if t.TransferGroupID == "" || c.TransferGroupID != t.TransferGroupID || c.TransferAccountID != t.AccountID {
 				continue
 			}
-			exact := c.Amount.Amount == -t.Amount.Amount && c.Amount.Currency == t.Amount.Currency
+			exact := equalMagnitude(t.Amount, c.Amount)
 			return Match{Txn: c, Exact: exact}, true
 		}
-		// Opposite direction. Two rows moving the same way are not two sides of
-		// one move, however close their dates.
-		if (c.Amount.Amount > 0) == (t.Amount.Amount > 0) {
+		// Opposite money directions, interpreted using the account conventions.
+		// Booked signs can agree when one account stores positive amounts owed.
+		if !oppositeDirections(t, c, accounts) {
 			continue
 		}
 		// Already paired with something else.
@@ -91,7 +92,7 @@ func FindReciprocal(t domain.Transaction, counterpartyID string, txns []domain.T
 		if gap > PairWindow {
 			continue
 		}
-		exact := c.Amount.Amount == -t.Amount.Amount && c.Amount.Currency == t.Amount.Currency
+		exact := equalMagnitude(t.Amount, c.Amount)
 		// An exact match always beats a near one; between two of the same kind,
 		// the closer date wins.
 		if !found || (exact && !best.Exact) || (exact == best.Exact && gap < bestGap) {
@@ -115,7 +116,7 @@ func FindReciprocal(t domain.Transaction, counterpartyID string, txns []domain.T
 // "Equally good" means the same tier: two exact matches, or (absent any exact
 // one) two near matches the same number of days away. An exact match beside a
 // near one is not ambiguous — the exact one is the partner.
-func AmbiguousLeg(t domain.Transaction, counterpartyID string, txns []domain.Transaction) bool {
+func AmbiguousLeg(t domain.Transaction, counterpartyID string, txns []domain.Transaction, accounts ...domain.Account) bool {
 	if counterpartyID == "" || t.Amount.Amount == 0 {
 		return false
 	}
@@ -137,7 +138,7 @@ func AmbiguousLeg(t domain.Transaction, counterpartyID string, txns []domain.Tra
 			exactCount++
 			continue
 		}
-		if (c.Amount.Amount > 0) == (t.Amount.Amount > 0) {
+		if !oppositeDirections(t, c, accounts) {
 			continue
 		}
 		if c.IsTransfer() && c.TransferAccountID != t.AccountID {
@@ -150,7 +151,7 @@ func AmbiguousLeg(t domain.Transaction, counterpartyID string, txns []domain.Tra
 		if gap > PairWindow {
 			continue
 		}
-		if c.Amount.Amount == -t.Amount.Amount && c.Amount.Currency == t.Amount.Currency {
+		if equalMagnitude(t.Amount, c.Amount) {
 			exactCount++
 			continue
 		}
@@ -193,6 +194,16 @@ type reciprocalIndexKey struct {
 // Without rates, rows can pair only when their currencies and minor-unit
 // magnitudes match. It is O(n log n), with no per-leg scan over the visible set.
 func SummarizeVisibleTransfers(txns []domain.Transaction, rateTables ...currency.Rates) VisibleTransferSummary {
+	return SummarizeVisibleTransfersWithAccounts(txns, nil, rateTables...)
+}
+
+// SummarizeVisibleTransfersWithAccounts also honors each account's fixed booking
+// convention, so a positive-owed liability payment can pair two negative rows.
+func SummarizeVisibleTransfersWithAccounts(txns []domain.Transaction, accounts []domain.Account, rateTables ...currency.Rates) VisibleTransferSummary {
+	inflowSigns := make(map[string]int64, len(accounts))
+	for _, account := range accounts {
+		inflowSigns[account.ID] = account.InflowSign()
+	}
 	result := VisibleTransferSummary{CountedRows: make([]bool, len(txns))}
 	var rates currency.Rates
 	convertAmounts := len(rateTables) > 0
@@ -227,7 +238,7 @@ func SummarizeVisibleTransfers(txns []domain.Transaction, rateTables ...currency
 			continue
 		}
 		key := reciprocalIndexKey{
-			accountID: txn.AccountID, positive: txn.Amount.Amount > 0,
+			accountID: txn.AccountID, positive: incoming(txn.Amount.Amount, inflowSigns[txn.AccountID]),
 			transferTarget: txn.TransferAccountID, currency: currencyKey, magnitude: magnitude,
 		}
 		legacy[key] = append(legacy[key], i)
@@ -237,7 +248,7 @@ func SummarizeVisibleTransfers(txns []domain.Transaction, rateTables ...currency
 			a, b := txns[indexes[0]], txns[indexes[1]]
 			if a.Amount.Amount != 0 && b.Amount.Amount != 0 && a.AccountID == b.TransferAccountID && b.AccountID == a.TransferAccountID {
 				chosen := indexes[0]
-				if a.Amount.Amount > 0 {
+				if incoming(a.Amount.Amount, inflowSigns[a.AccountID]) {
 					chosen = indexes[1]
 				}
 				result.CountedRows[chosen] = true
@@ -272,7 +283,7 @@ func SummarizeVisibleTransfers(txns []domain.Transaction, rateTables ...currency
 			if gap <= PairWindow {
 				paired[a], paired[b] = true, true
 				chosen := a
-				if txns[a].Amount.Amount > 0 {
+				if incoming(txns[a].Amount.Amount, inflowSigns[txns[a].AccountID]) {
 					chosen = b
 				}
 				result.CountedRows[chosen] = true
@@ -337,7 +348,31 @@ func PreviewApply(t domain.Transaction, counterpartyID string, countTowardDebt b
 		p.LeavesTotalsMinor = amt
 	}
 	if counterpartyID != "" {
-		p.Partner, p.HasPartner = FindReciprocal(t, counterpartyID, txns)
+		p.Partner, p.HasPartner = FindReciprocal(t, counterpartyID, txns, accounts...)
 	}
 	return p
+}
+
+// incoming interprets a booked sign as a money direction. An unknown account
+// retains the historical asset-style convention.
+func incoming(amount, inflowSign int64) bool {
+	return (amount > 0) != (inflowSign < 0)
+}
+
+func oppositeDirections(a, b domain.Transaction, accounts []domain.Account) bool {
+	if a.Amount.Amount == 0 || b.Amount.Amount == 0 {
+		return false
+	}
+	from, _ := domain.AccountByID(accounts, a.AccountID)
+	to, _ := domain.AccountByID(accounts, b.AccountID)
+	return incoming(a.Amount.Amount, from.InflowSign()) != incoming(b.Amount.Amount, to.InflowSign())
+}
+
+func equalMagnitude(a, b money.Money) bool {
+	x, err := money.Abs(a.Amount)
+	if err != nil {
+		return false
+	}
+	y, err := money.Abs(b.Amount)
+	return err == nil && a.Currency == b.Currency && x == y
 }

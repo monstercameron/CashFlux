@@ -90,6 +90,12 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Liability signs, recurring dates, transfer receipts and saved rules are migrated, not guessed (TCS1, TC4N2, TC4N5, TC4N10).**
+  Each liability account stores its sign convention (derived once from the opening balance by an idempotent migration), so a card
+  that reaches zero or takes a cash advance keeps the right sign and edits change only the magnitude. Recurring items keep their
+  month-end day. Transfer receipts round-trip through export and import. Saved rules with legacy signed amount conditions are
+  rewritten once on load to magnitude plus a flow condition, so each rule matches exactly what it matched before; the flow
+  condition can be set in the rule forms.
 - **Planning projection counts each bill and goal once (BC5B3).** A smoothed bill no longer adds its sinking-fund goal on top of
   the projected payment, and a goal linked to several budgets is apportioned across them instead of counted in full for each.
 - **Price-creep impact uses the budget view and its currency (BC5B5).** The preview converts FX (refusing on a missing rate), uses the

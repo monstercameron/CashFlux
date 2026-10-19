@@ -272,8 +272,8 @@ func TestEditCrossCurrencyLiabilityTransferUsesEditedMagnitude(t *testing.T) {
 			assetAmount = tx.Amount.Amount
 		}
 	}
-	if assetAmount != 13200 {
-		t.Fatalf("asset leg = %d USD cents, want +13200 converted from the edited EUR magnitude and its reversed flow", assetAmount)
+	if assetAmount != -13200 {
+		t.Fatalf("asset leg = %d USD cents, want -13200 converted from the edited EUR magnitude with the partner's sign retained", assetAmount)
 	}
 }
 

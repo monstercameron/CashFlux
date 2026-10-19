@@ -118,7 +118,24 @@ func (s *SQLiteStore) ListMembers() ([]domain.Member, error) {
 
 // --- Accounts ---
 
-func (s *SQLiteStore) PutAccount(a domain.Account) error { return putJSON(s.db, "accounts", a.ID, a) }
+func (s *SQLiteStore) PutAccount(a domain.Account) error {
+	// Old callers may omit the convention on an edit. Retain the stored value
+	// rather than deriving it again from a corrected opening balance.
+	if a.IsLiability() && a.LiabilitySign == "" {
+		prior, found, err := s.GetAccount(a.ID)
+		if err != nil {
+			return fmt.Errorf("store: read account convention: %w", err)
+		}
+		if found && prior.IsLiability() {
+			a.LiabilitySign = prior.WithLiabilitySign().LiabilitySign
+		}
+	}
+	a = a.WithLiabilitySign()
+	if err := validateLiabilitySign(a); err != nil {
+		return err
+	}
+	return putJSON(s.db, "accounts", a.ID, a)
+}
 func (s *SQLiteStore) GetAccount(id string) (domain.Account, bool, error) {
 	return getJSON[domain.Account](s.db, "accounts", id)
 }

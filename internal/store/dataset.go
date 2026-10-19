@@ -29,7 +29,7 @@ type PayoffBaseline struct {
 
 // SchemaVersion is the current on-disk dataset schema version. Bump it when the
 // shape changes and add a migration step in migrate.
-const SchemaVersion = 1
+const SchemaVersion = 2
 
 // Settings holds app-wide configuration persisted alongside the data.
 type Settings struct {
@@ -136,6 +136,7 @@ const AuditLogCap = 200
 // version.
 func Export(ds Dataset) ([]byte, error) {
 	ds.SchemaVersion = SchemaVersion
+	ds.TransferOperations = liveTransferReceipts(ds.TransferOperations, ds.Transactions)
 	b, err := json.MarshalIndent(ds, "", "  ")
 	if err != nil {
 		return nil, fmt.Errorf("store: export: %w", err)
@@ -166,7 +167,14 @@ func migrate(ds Dataset) (Dataset, error) {
 	if ds.SchemaVersion > SchemaVersion {
 		return Dataset{}, fmt.Errorf("store: dataset schema version %d is newer than supported version %d", ds.SchemaVersion, SchemaVersion)
 	}
-	// Future stepwise migrations go here (e.g. if ds.SchemaVersion < 2 { ... }).
+	if ds.SchemaVersion < 2 {
+		ds = migrateLegacyRuleSemantics(ds)
+	}
 	ds.SchemaVersion = SchemaVersion
+	ds.TransferOperations = liveTransferReceipts(ds.TransferOperations, ds.Transactions)
+	ds, err := backfillLiabilitySigns(ds)
+	if err != nil {
+		return Dataset{}, err
+	}
 	return backfillBudgetCurrencies(ds), nil
 }

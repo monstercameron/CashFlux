@@ -136,6 +136,11 @@ func matchOneCondition(c RuleCondition, payee, desc string, amountMinor int64, c
 			return false
 		}
 		return matchAmount(amountMagnitude(amountMinor), c.Op, c.Value)
+	case ConditionFieldLegacySignedAmount:
+		if c.Currency != "" && !strings.EqualFold(strings.TrimSpace(c.Currency), strings.TrimSpace(currency)) {
+			return false
+		}
+		return matchSignedAmount(amountMinor, c.Op, c.Value)
 	case ConditionFieldFlow:
 		return matchFlow(amountMinor, c.Op, c.Value)
 	case ConditionFieldAccount:
@@ -197,6 +202,29 @@ func matchAmount(magnitudeMinor int64, op ConditionOp, value string) bool {
 		return magnitudeMinor <= v
 	case ConditionOpGte:
 		return magnitudeMinor >= v
+	default:
+		return false
+	}
+}
+
+func matchSignedAmount(amountMinor int64, op ConditionOp, value string) bool {
+	v, err := strconv.ParseInt(strings.TrimSpace(value), 10, 64)
+	if err != nil {
+		return false
+	}
+	switch op {
+	case ConditionOpEq:
+		return amountMinor == v
+	case ConditionOpNeq:
+		return amountMinor != v
+	case ConditionOpLt:
+		return amountMinor < v
+	case ConditionOpGt:
+		return amountMinor > v
+	case ConditionOpLte:
+		return amountMinor <= v
+	case ConditionOpGte:
+		return amountMinor >= v
 	default:
 		return false
 	}

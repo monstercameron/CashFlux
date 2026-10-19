@@ -431,7 +431,7 @@ func TestLegacyMatchUsesWordStarts(t *testing.T) {
 		want bool
 	}{
 		{name: "does not match inside Current", text: "Current", want: false},
-		{name: "matches Rental", text: "Rental", want: true},
+		{name: "does not match Rental prefix", text: "Rental", want: false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got := FirstMatchFull([]Rule{{Match: "rent"}}, tc.text, "", 0, "", TxnDate{})

@@ -151,9 +151,6 @@ func conflictingKeys(keys map[string]*suggestionAggregate, dominant map[string]s
 				continue
 			}
 			for end := start + 1; end <= len(runes); end++ {
-				if end < len(runes) && merchantWordRune(runes[end]) {
-					continue
-				}
 				if end-start == len(runes) {
 					continue
 				}

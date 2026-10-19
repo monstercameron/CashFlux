@@ -7,6 +7,7 @@
 package rules
 
 import (
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -18,12 +19,13 @@ import (
 type ConditionField string
 
 const (
-	ConditionFieldPayee       ConditionField = "payee"
-	ConditionFieldDescription ConditionField = "description"
-	ConditionFieldAmount      ConditionField = "amount"
-	ConditionFieldFlow        ConditionField = "flow"
-	ConditionFieldAccount     ConditionField = "account"
-	ConditionFieldDate        ConditionField = "date"
+	ConditionFieldPayee              ConditionField = "payee"
+	ConditionFieldDescription        ConditionField = "description"
+	ConditionFieldAmount             ConditionField = "amount"
+	ConditionFieldFlow               ConditionField = "flow"
+	ConditionFieldLegacySignedAmount ConditionField = "legacySignedAmount"
+	ConditionFieldAccount            ConditionField = "account"
+	ConditionFieldDate               ConditionField = "date"
 )
 
 // ConditionOp is the comparison operator for a structured condition.
@@ -74,11 +76,13 @@ type RuleCondition struct {
 // against Match. This design is fully backward-compatible: existing rules with
 // no Conditions continue to work exactly as before.
 type Rule struct {
-	ID            string
-	Match         string // case-insensitive substring matched against payee + description
-	SetCategoryID string
-	SetTags       []string
-	RenameDesc    string `json:",omitempty"` // when set, overwrites the transaction description on match
+	ID    string
+	Match string // case-insensitive substring matched against payee + description
+	// LegacySubstring preserves the exact matching behavior of saved rules.
+	LegacySubstring bool `json:",omitempty"`
+	SetCategoryID   string
+	SetTags         []string
+	RenameDesc      string `json:",omitempty"` // when set, overwrites the transaction description on match
 	// SetBillAccountID, when set, links a matching transaction as a BILL PAYMENT toward
 	// that account (Transaction.BillAccountID) — so future/imported payments to a merchant
 	// auto-tie to the account the user first linked one to. Applied only when the
@@ -155,8 +159,14 @@ func matchesRule(text, pattern string) bool {
 	if len(patternRunes) == 0 || len(patternRunes) > len(textRunes) {
 		return false
 	}
+	wordStart := unicode.IsLetter(patternRunes[0]) && !unicode.In(patternRunes[0], unicode.Han, unicode.Hiragana, unicode.Katakana, unicode.Thai)
+	wordEnd := isRuleWordRune(patternRunes[len(patternRunes)-1])
 	for start := 0; start+len(patternRunes) <= len(textRunes); start++ {
-		if start > 0 && isRuleWordRune(textRunes[start-1]) {
+		if wordStart && start > 0 && isRuleWordRune(textRunes[start-1]) {
+			continue
+		}
+		end := start + len(patternRunes)
+		if wordEnd && end < len(textRunes) && isRuleWordRune(textRunes[end]) {
 			continue
 		}
 		match := true
@@ -173,7 +183,12 @@ func matchesRule(text, pattern string) bool {
 	return false
 }
 
-func isRuleWordRune(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) }
+func isRuleWordRune(r rune) bool {
+	if unicode.In(r, unicode.Han, unicode.Hiragana, unicode.Katakana, unicode.Thai) {
+		return false
+	}
+	return unicode.IsLetter(r) || unicode.IsDigit(r)
+}
 
 // FirstMatch returns the first rule whose Match is found in text, or nil.
 // Rules with structured Conditions are skipped by this function — use
@@ -184,7 +199,11 @@ func FirstMatch(rs []Rule, text string) *Rule {
 		if len(rs[i].Conditions) > 0 {
 			continue
 		}
-		if matchesRule(text, rs[i].Match) {
+		matched := matchesRule(text, rs[i].Match)
+		if rs[i].LegacySubstring {
+			matched = matches(text, rs[i].Match)
+		}
+		if matched {
 			return &rs[i]
 		}
 	}
@@ -213,7 +232,81 @@ func ruleMatchesFullCurrency(r Rule, payee, desc string, amountMinor int64, curr
 	if len(r.Conditions) > 0 {
 		return MatchConditionsWithCurrency(r.Conditions, payee, desc, amountMinor, currency, accountID, txnDate)
 	}
-	return matchesRule(payee+" "+desc+" "+cleanPayee, r.Match)
+	haystack := payee + " " + desc + " " + cleanPayee
+	if r.LegacySubstring {
+		return matches(haystack, r.Match)
+	}
+	return matchesRule(haystack, r.Match)
+}
+
+// MigrateLegacyRuleSemantics upgrades pre-magnitude amount conditions and
+// preserves the substring matcher used by previously saved phrase rules.
+func MigrateLegacyRuleSemantics(rs []Rule) ([]Rule, bool) {
+	out := append([]Rule(nil), rs...)
+	changed := false
+	for i := range out {
+		r := &out[i]
+		if !r.LegacySubstring && len(r.Conditions) == 0 && strings.TrimSpace(r.Match) != "" {
+			r.LegacySubstring = true
+			changed = true
+		}
+		conds := append([]RuleCondition(nil), r.Conditions...)
+		conditionChanged := false
+		for j := range conds {
+			c := &conds[j]
+			if c.Field != ConditionFieldAmount {
+				continue
+			}
+			n, err := strconv.ParseInt(strings.TrimSpace(c.Value), 10, 64)
+			if err != nil {
+				continue
+			}
+			hasFlow := false
+			for _, existing := range r.Conditions {
+				if existing.Field == ConditionFieldFlow {
+					hasFlow = true
+					break
+				}
+			}
+			if hasFlow {
+				continue
+			}
+			flow := ""
+			switch {
+			case n < 0 && c.Op == ConditionOpLt:
+				flow, c.Op, c.Value = "outflow", ConditionOpGt, strconv.FormatInt(amountMagnitude(n), 10)
+			case n < 0 && c.Op == ConditionOpLte:
+				flow, c.Op, c.Value = "outflow", ConditionOpGte, strconv.FormatInt(amountMagnitude(n), 10)
+			case n < 0 && c.Op == ConditionOpEq:
+				flow, c.Value = "outflow", strconv.FormatInt(amountMagnitude(n), 10)
+			case n > 0 && c.Op == ConditionOpEq:
+				flow = "inflow"
+			case n == 0 && (c.Op == ConditionOpEq || c.Op == ConditionOpNeq):
+				// Magnitude zero has the same equality result for either sign.
+			case n == 0 && c.Op == ConditionOpLt:
+				flow = "outflow"
+			case n == 0 && c.Op == ConditionOpGt:
+				flow = "inflow"
+			case n > 0 && c.Op == ConditionOpGt, n > 0 && c.Op == ConditionOpGte:
+				flow = "inflow"
+			}
+			if flow != "" {
+				conds = append(conds, RuleCondition{Field: ConditionFieldFlow, Op: ConditionOpEquals, Value: flow})
+				changed = true
+				conditionChanged = true
+			} else if c.Field == ConditionFieldAmount && (n != 0 || (c.Op != ConditionOpEq && c.Op != ConditionOpNeq)) {
+				// Signed ranges that cross zero (and signed !=) cannot be
+				// represented as an AND of magnitude and flow predicates.
+				c.Field = ConditionFieldLegacySignedAmount
+				changed = true
+				conditionChanged = true
+			}
+		}
+		if conditionChanged {
+			r.Conditions = conds
+		}
+	}
+	return out, changed
 }
 
 // FirstMatchFullWhere returns the first rule that both matches the transaction and

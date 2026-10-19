@@ -218,7 +218,7 @@ func Rules() ui.Node {
 			now := time.Now()
 			since = time.Date(now.Year(), time.January, 1, 0, 0, 0, 0, now.Location())
 		}
-		planned := ruleapply.Plan(target, app.Transactions(), scope, since)
+		planned := ruleapply.Plan(target, app.Transactions(), scope, since, app.Rules())
 		if len(planned) == 0 {
 			notice.Set(notice.Get().With(uistate.T("rules.appliedNone"), false))
 			return
@@ -911,7 +911,7 @@ func ruleCondEnglish(c rules.RuleCondition, acctName func(string) string, fmtAmt
 			return uistate.T("rls.cond.textEquals", word, v)
 		}
 		return uistate.T("rls.cond.textContains", word, v)
-	case rules.ConditionFieldAmount:
+	case rules.ConditionFieldAmount, rules.ConditionFieldLegacySignedAmount:
 		amt := v
 		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
 			amt = fmtAmt(n)
@@ -929,6 +929,13 @@ func ruleCondEnglish(c rules.RuleCondition, acctName func(string) string, fmtAmt
 			return uistate.T("rls.cond.amtEq", amt)
 		case rules.ConditionOpNeq:
 			return uistate.T("rls.cond.amtNeq", amt)
+		}
+	case rules.ConditionFieldFlow:
+		if strings.EqualFold(v, "inflow") {
+			return uistate.T("tc4n5.rule.inflow")
+		}
+		if strings.EqualFold(v, "outflow") {
+			return uistate.T("tc4n5.rule.outflow")
 		}
 	case rules.ConditionFieldAccount:
 		if c.Op == rules.ConditionOpIsNot {

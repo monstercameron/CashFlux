@@ -65,6 +65,8 @@ func condSlotFieldOpts() []uiw.SelectOption {
 		{Value: string(rules.ConditionFieldPayee), Label: uistate.T("rulecond.field.payee")},
 		{Value: string(rules.ConditionFieldDescription), Label: uistate.T("rulecond.field.description")},
 		{Value: string(rules.ConditionFieldAmount), Label: uistate.T("rulecond.field.amount")},
+		{Value: string(rules.ConditionFieldLegacySignedAmount), Label: uistate.T("tc4n5.rule.signedAmount")},
+		{Value: string(rules.ConditionFieldFlow), Label: uistate.T("tc4n5.rule.flow")},
 		{Value: string(rules.ConditionFieldAccount), Label: uistate.T("rulecond.field.account")},
 		{Value: string(rules.ConditionFieldDate), Label: uistate.T("rulecond.field.date")},
 	}
@@ -78,7 +80,7 @@ func condSlotOpOpts(field string) []uiw.SelectOption {
 			{Value: string(rules.ConditionOpContains), Label: uistate.T("rulecond.op.contains")},
 			{Value: string(rules.ConditionOpEquals), Label: uistate.T("rulecond.op.equals")},
 		}
-	case rules.ConditionFieldAmount:
+	case rules.ConditionFieldAmount, rules.ConditionFieldLegacySignedAmount:
 		return []uiw.SelectOption{
 			{Value: string(rules.ConditionOpGt), Label: uistate.T("rulecond.op.gt")},
 			{Value: string(rules.ConditionOpGte), Label: uistate.T("rulecond.op.gte")},
@@ -87,6 +89,8 @@ func condSlotOpOpts(field string) []uiw.SelectOption {
 			{Value: string(rules.ConditionOpEq), Label: uistate.T("rulecond.op.eq")},
 			{Value: string(rules.ConditionOpNeq), Label: uistate.T("rulecond.op.neq")},
 		}
+	case rules.ConditionFieldFlow:
+		return []uiw.SelectOption{{Value: string(rules.ConditionOpEquals), Label: uistate.T("rulecond.op.equals")}}
 	case rules.ConditionFieldAccount:
 		return []uiw.SelectOption{
 			{Value: string(rules.ConditionOpIs), Label: uistate.T("rulecond.op.is")},
@@ -107,8 +111,10 @@ func condSlotOpOpts(field string) []uiw.SelectOption {
 // condValueHint returns a short input placeholder for the chosen field.
 func condValueHint(field string) string {
 	switch rules.ConditionField(field) {
-	case rules.ConditionFieldAmount:
+	case rules.ConditionFieldAmount, rules.ConditionFieldLegacySignedAmount:
 		return uistate.T("rulecond.amountHint")
+	case rules.ConditionFieldFlow:
+		return uistate.T("tc4n5.rule.flowHint")
 	case rules.ConditionFieldDate:
 		return uistate.T("rulecond.dateHint")
 	case rules.ConditionFieldAccount:
@@ -400,21 +406,21 @@ func ruleAddForm(props RuleAddFormProps) ui.Node {
 				cond1Enabled.Get(), onCond1Enable,
 				cond1Field.Get(), func(v string) { cond1Field.Set(v); cond1Op.Set("") },
 				cond1Op.Get(), func(v string) { cond1Op.Set(v) },
-				cond1Value.Get(), onCond1Value,
+				cond1Value.Get(), onCond1Value, func(v string) { cond1Value.Set(v) },
 			),
 			condSlotRow(
 				uistate.T("rulecond.slot2"),
 				cond2Enabled.Get(), onCond2Enable,
 				cond2Field.Get(), func(v string) { cond2Field.Set(v); cond2Op.Set("") },
 				cond2Op.Get(), func(v string) { cond2Op.Set(v) },
-				cond2Value.Get(), onCond2Value,
+				cond2Value.Get(), onCond2Value, func(v string) { cond2Value.Set(v) },
 			),
 			condSlotRow(
 				uistate.T("rulecond.slot3"),
 				cond3Enabled.Get(), onCond3Enable,
 				cond3Field.Get(), func(v string) { cond3Field.Set(v); cond3Op.Set("") },
 				cond3Op.Get(), func(v string) { cond3Op.Set(v) },
-				cond3Value.Get(), onCond3Value,
+				cond3Value.Get(), onCond3Value, func(v string) { cond3Value.Set(v) },
 			),
 		),
 
@@ -479,6 +485,7 @@ func condSlotRow(
 	field string, onField func(string),
 	op string, onOp func(string),
 	value string, onValue ui.Handler,
+	onValueChange func(string),
 ) ui.Node {
 	opOpts := condSlotOpOpts(field)
 	hint := condValueHint(field)
@@ -504,10 +511,19 @@ func condSlotRow(
 					OnChange:  onOp,
 					AriaLabel: uistate.T("rulecond.opLabel"),
 				}),
-				Input(css.Class("field"), Type("text"),
-					Placeholder(hint),
-					Attr("aria-label", uistate.T("rulecond.valueLabel")),
-					OnInput(onValue), uiw.FieldValue(value)),
+				IfElse(rules.ConditionField(field) == rules.ConditionFieldFlow,
+					uiw.SelectInput(uiw.SelectInputProps{
+						Options: []uiw.SelectOption{
+							{Value: "", Label: uistate.T("rulecond.valueLabel")},
+							{Value: "inflow", Label: uistate.T("tc4n5.rule.inflow")},
+							{Value: "outflow", Label: uistate.T("tc4n5.rule.outflow")},
+						},
+						Selected: value, OnChange: onValueChange,
+						AriaLabel: uistate.T("rulecond.valueLabel"),
+					}),
+					Input(css.Class("field"), Type("text"), Placeholder(hint),
+						Attr("aria-label", uistate.T("rulecond.valueLabel")),
+						OnInput(onValue), uiw.FieldValue(value))),
 			),
 		),
 	)

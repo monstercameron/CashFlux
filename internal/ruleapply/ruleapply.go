@@ -110,7 +110,7 @@ func Plan(r rules.Rule, txns []domain.Transaction, scope Scope, since time.Time,
 		if !InScope(t, scope, since) {
 			continue
 		}
-		if t.IsTransfer() || t.CategoryID == r.SetCategoryID {
+		if t.IsTransfer() || t.Reviewed || len(t.Splits) > 0 || t.CategoryID == r.SetCategoryID {
 			continue
 		}
 		categoryRule := rules.FirstMatchFullWhereCurrency(precedence, t.Payee, t.Desc, t.Amount.Amount, t.Amount.Currency, t.AccountID, rules.NewTxnDate(t.Date), func(candidate rules.Rule) bool {
