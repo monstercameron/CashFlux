@@ -82,9 +82,9 @@ func registerTxnToolbar() {
 		display("inline-flex"),
 		alignItems("center"),
 		justifyContent("center"),
-		fontSize("0.62rem"),
+		fontSize("var(--fs-meta)"),
 		lineHeight("1"),
-		fontWeight("700"),
+		fontWeight("600"),
 		background("var(--bg-elev)"),
 		border("1px solid var(--border)"),
 		color("var(--text-dim)"),
@@ -123,7 +123,7 @@ func registerTxnToolbar() {
 		background("var(--bg-elev)"),
 		color("var(--text)"),
 		border("1px solid var(--border)"),
-		fontSize(".72rem"),
+		fontSize("var(--fs-meta)"),
 		whiteSpace("nowrap"),
 		pointerEvents("none"),
 		opacity("0"),
@@ -134,7 +134,7 @@ func registerTxnToolbar() {
 	// Second line: a dim "Opens a dialog" / "Opens a page" hint that echoes the corner
 	// badge in words, so the modal-vs-navigation distinction is unmistakable on hover.
 	rule(".tbar-tip-kind",
-		fontSize(".62rem"),
+		fontSize("var(--fs-meta)"),
 		color("var(--text-dim)"),
 	)
 	rule(".tbar-btn:hover .tbar-tip, .tbar-btn:focus-visible .tbar-tip",
@@ -165,8 +165,8 @@ func registerTxnToolbar() {
 		borderRadius("var(--radius-pill)"),
 		background("var(--accent)"),
 		color("#fff"),
-		fontSize(".6rem"),
-		fontWeight("700"),
+		fontSize("var(--fs-meta)"),
+		fontWeight("600"),
 		lineHeight("1"),
 		display("inline-flex"),
 		alignItems("center"),
@@ -194,7 +194,7 @@ func registerTxnToolbar() {
 	rule(".bulk-count",
 		flexShrink("0"),
 		whiteSpace("nowrap"),
-		fontSize("var(--type-14)"),
+		fontSize("var(--fs-body)"),
 		fontWeight("500"),
 		color("var(--text-dim)"),
 	)
@@ -246,7 +246,7 @@ func registerTxnToolbar() {
 		gap("0.5rem"),
 	)
 	rule(".filter-group-label",
-		fontSize("var(--type-11)"),
+		fontSize("var(--fs-meta)"),
 		fontWeight("600"),
 		letterSpacing("0.05em"),
 		textTransform("uppercase"),
@@ -254,7 +254,7 @@ func registerTxnToolbar() {
 	)
 	// "· N selected" badge next to a collapsed group's label so an active filter stays visible.
 	rule(".filter-group-selcount",
-		fontSize("var(--type-12)"),
+		fontSize("var(--fs-meta)"),
 		color("var(--accent)"),
 		fontWeight("600"),
 	)
@@ -276,7 +276,7 @@ func registerTxnToolbar() {
 		border("1px dashed var(--control-border)"),
 		background("transparent"),
 		color("var(--text-dim)"),
-		fontSize("var(--type-12)"),
+		fontSize("var(--fs-meta)"),
 		whiteSpace("nowrap"),
 	)
 	rule(".filter-group-disc:hover",
@@ -289,7 +289,7 @@ func registerTxnToolbar() {
 		border("1px solid var(--control-border)"),
 		background("var(--bg-card)"),
 		color("var(--text)"),
-		fontSize("var(--type-13)"),
+		fontSize("var(--fs-body)"),
 		cursor("pointer"),
 		whiteSpace("nowrap"),
 		transition("background .12s ease, border-color .12s ease, color .12s ease"),
@@ -321,7 +321,7 @@ func registerTxnToolbar() {
 		borderRadius("var(--radius-lg)"),
 		background("transparent"),
 		color("var(--text)"),
-		fontSize("var(--type-13)"),
+		fontSize("var(--fs-body)"),
 		fontWeight("600"),
 		cursor("pointer"),
 	)

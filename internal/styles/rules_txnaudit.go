@@ -29,7 +29,7 @@ func registerTxnAudit() {
 		paddingLeft(".7rem"),
 		borderTop("1px solid var(--border)"),
 		color("var(--text-faint)"),
-		fontSize("var(--type-11)"),
+		fontSize("var(--fs-meta)"),
 		fontWeight("600"),
 		letterSpacing(".05em"),
 		textTransform("uppercase"),
@@ -106,7 +106,7 @@ func registerTxnAudit() {
 		flexBasis("100%"),
 		marginTop(".15rem"),
 		color("var(--text-faint)"),
-		fontSize("var(--type-12)"),
+		fontSize("var(--fs-meta)"),
 	)
 
 	// --- C560: the ledger's own period + view bar ------------------------------
@@ -131,7 +131,7 @@ func registerTxnAudit() {
 		minWidth("9.5rem"),
 		textAlign("center"),
 		fontWeight("600"),
-		fontSize("var(--type-14)"),
+		fontSize("var(--fs-body)"),
 		fontVariantNumeric("tabular-nums"),
 		color("var(--text)"),
 		whiteSpace("nowrap"),
@@ -177,7 +177,7 @@ func registerTxnAudit() {
 		background("transparent"),
 		color("var(--text-dim)"),
 		font("inherit"),
-		fontSize("var(--type-13)"),
+		fontSize("var(--fs-body)"),
 		cursor("pointer"),
 		whiteSpace("nowrap"),
 	)

@@ -36,24 +36,24 @@ func TestR4CalendarScheduledItemsShowAmountsAndMissedState(t *testing.T) {
 	if len(buttons) != 2 {
 		t.Fatalf("calendar cells = %d, want 2", len(buttons))
 	}
-	for i, want := range []string{"Not posted yet", "Electric bill"} {
+	for i, want := range []string{"not posted", "is due on this day"} {
 		if got := buttons[i].Attr("aria-label"); !strings.Contains(got, want) {
 			t.Errorf("day %d accessible name = %q, want scheduled item %q", i, got, want)
 		}
 	}
-	if got := buttons[0].Text(); !strings.Contains(got, "Not posted yet · $220.00 · Gym membership") {
-		t.Errorf("missed scheduled item = %q, want label, missed state, and amount", got)
+	if got := buttons[0].Text(); !strings.Contains(got, "$220.00 not posted") || !strings.Contains(got, "Gym membership") || strings.Contains(got, "·") {
+		t.Errorf("missed scheduled item = %q, want amount and status on line one, name on line two, and no middle dot", got)
 	}
-	if got := buttons[1].Text(); !strings.Contains(got, "−$220.00 due · Electric bill") {
-		t.Errorf("upcoming scheduled item = %q, want label and due amount", got)
+	if got := buttons[1].Text(); !strings.Contains(got, "Due $220.00") || !strings.Contains(got, "Electric bill") || strings.Contains(got, "·") {
+		t.Errorf("upcoming scheduled item = %q, want consistent Due label and no middle dot", got)
 	}
 	var missed *render.QueryNode
-	for _, node := range f.AllByTag("span") {
+	for _, node := range f.AllByTag("div") {
 		if strings.Contains(node.Attr("class"), "txn-cal-ghost-missed") {
 			missed = node
 		}
 	}
-	if missed == nil || !strings.Contains(missed.Attr("aria-label"), "Not posted yet") || !strings.Contains(missed.Attr("aria-label"), "$220.00") {
+	if missed == nil || !strings.Contains(missed.Attr("aria-label"), "not posted") || !strings.Contains(missed.Attr("aria-label"), "$220.00") {
 		t.Errorf("missed item's accessible description = %v, want status and amount", missed)
 	}
 }

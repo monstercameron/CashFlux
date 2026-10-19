@@ -233,7 +233,7 @@ func txnCalendarWidget(props txnCalendarProps) ui.Node {
 				Span(css.Class("txn-cal-legend-dots"),
 					Span(css.Class("cal-dot txn-cal-legend-dot"))),
 				Span(uistate.T("transactions.calDotsLegend"))),
-			If(showScheduled, Div(css.Class("text-dim"), uistate.T("transactions.calScheduledFilterNote")))),
+			If(showScheduled, Div(css.Class("text-dim"), uistate.T("transactions.calDueFilterNote")))),
 	})
 }
 
@@ -254,14 +254,14 @@ type txnCalWeekTotalProps struct {
 }
 
 func txnCalWeekTotal(props txnCalWeekTotalProps) ui.Node {
-	spent, _ := fmtLedgerAmount(money.New(-props.Cashflow.Spent, props.Base), false)
+	spent, _ := fmtLedgerAmount(money.New(props.Cashflow.Spent, props.Base), false)
 	spentClass := "txn-cal-week-spent"
 	if props.Cashflow.Spent == 0 {
 		spentClass += " text-dim"
 	} else {
 		spentClass += " text-down"
 	}
-	lines := []any{Span(ClassStr(spentClass), uistate.T("r9c.weekSpent", spent))}
+	lines := []any{Span(ClassStr(spentClass), uistate.T("r9c.weekSpent", strings.TrimPrefix(spent, "+")))}
 	if props.Cashflow.Income > 0 {
 		income, _ := fmtLedgerAmount(money.New(props.Cashflow.Income, props.Base), false)
 		lines = append(lines, Span(css.Class("txn-cal-week-income text-up"), uistate.T("r9c.weekIncome", strings.TrimPrefix(income, "+"))))
@@ -276,10 +276,10 @@ func txnCalWeekTotal(props txnCalWeekTotalProps) ui.Node {
 		if props.Cashflow.Count == 1 {
 			lastLine = uistate.T("transactions.tq3.weekOne")
 		}
-	} else if props.Future {
-		lastLine = uistate.T("transactions.tq3.weekEmpty")
 	} else if props.Scheduled > 0 {
 		lastLine = uistate.T("transactions.tq3.weekScheduled", props.Scheduled)
+	} else if props.Future {
+		lastLine = uistate.T("transactions.tq3.weekEmpty")
 	} else {
 		lastLine = uistate.T("transactions.tq3.weekCount", 0)
 	}
@@ -288,10 +288,7 @@ func txnCalWeekTotal(props txnCalWeekTotalProps) ui.Node {
 		lastClass += " text-dim"
 	}
 	lines = append(lines, Span(ClassStr(lastClass), lastLine))
-	if props.Future && props.Cashflow.Count == 0 && props.Scheduled > 0 {
-		lines = append(lines, Span(css.Class("txn-cal-week-count"), uistate.T("r6f.weekScheduled", props.Scheduled)))
-	}
-	ariaSpent := strings.TrimPrefix(strings.TrimPrefix(spent, "−"), "+")
+	ariaSpent := strings.TrimPrefix(spent, "+")
 	income, _ := fmtLedgerAmount(money.New(props.Cashflow.Income, props.Base), false)
 	moved, _ := fmtLedgerAmount(money.New(props.Cashflow.Moved, props.Base), false)
 	countSummary := uistate.T("transactions.tq3.weekManySummary", props.Cashflow.Count)
@@ -407,31 +404,33 @@ func txnCalMonthCell(props txnCalMonthCellProps) ui.Node {
 	for _, g := range props.Ghosts {
 		amount := money.New(g.Amount, g.Currency)
 		amountValid := true
-		if g.NotPosted {
-			var err error
-			amount.Amount, err = money.Abs(amount.Amount)
-			amountValid = err == nil
-		}
+		var amountErr error
+		amount.Amount, amountErr = money.Abs(amount.Amount)
+		amountValid = amountErr == nil
 		amountText := uistate.T("transactions.calScheduledAmountUnavailable")
 		if amountValid {
 			converted, err := props.Rates.Convert(amount, props.Rates.Base)
 			if err == nil {
 				amountText, _ = fmtLedgerAmount(converted, false)
-				if g.NotPosted {
-					amountText = strings.TrimPrefix(amountText, "+")
-				}
+				amountText = strings.TrimPrefix(amountText, "+")
 			}
 		}
-		text := uistate.T("transactions.calScheduledDue", amountText, g.Label)
 		className := "txn-cal-ghost text-dim"
 		aria := uistate.T("transactions.calScheduledDueAria", g.Label, amountText)
 		if g.NotPosted {
-			text = uistate.T("transactions.calNotPosted", amountText, g.Label)
 			className = "txn-cal-ghost txn-cal-ghost-missed"
 			aria = uistate.T("transactions.calNotPostedAria", g.Label, amountText)
 		}
 		ghostAriaLabels = append(ghostAriaLabels, aria)
-		ghostNodes = append(ghostNodes, Span(css.Class(className), Attr("aria-label", aria), Attr("title", aria), text))
+		if g.NotPosted {
+			ghostNodes = append(ghostNodes, Div(css.Class(className), Attr("aria-label", aria), Attr("title", aria),
+				Span(css.Class("txn-cal-ghost-status"), uistate.T("transactions.calNotPostedStatus", amountText)),
+				Span(css.Class("txn-cal-ghost-label"), g.Label)))
+		} else {
+			ghostNodes = append(ghostNodes, Div(css.Class(className), Attr("aria-label", aria), Attr("title", aria),
+				Span(css.Class("txn-cal-ghost-status"), uistate.T("transactions.calDueStatus", amountText)),
+				Span(css.Class("txn-cal-ghost-label"), g.Label)))
+		}
 	}
 
 	label := props.AriaLabel

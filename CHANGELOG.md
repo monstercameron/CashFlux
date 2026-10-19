@@ -90,6 +90,11 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Transactions keeps one type scale and a flat primary button; the calendar says one thing one way (V5TYPE, V5CAL).**
+  Transactions text uses four sizes (12/14/17/24 px tokens) and weights up to 600, and a style test fails on anything
+  else. Primary buttons are a flat accent fill with black or white text chosen for contrast. Calendar week totals read
+  "Spent $629.25" in the spending colour on one line; transfers say "Transferred"; upcoming items say "Due"; missed bills
+  show the amount and name on two lines; no middle-dot strings.
 - **One name for each Budgets action, in every dialog title (BR3DLG.1).** The dialog title names the budget ("Raise
   Groceries limit", "Cover Groceries from another budget"); the full-card button now matches the row menu ("Cover from
   another budget"); covering several budgets at once is titled "Cover overages from other budgets"; and focus returns to

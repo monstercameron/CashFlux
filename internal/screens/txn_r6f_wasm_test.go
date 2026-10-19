@@ -130,10 +130,10 @@ func TestR9CCalendarWeekTotalsUseComparableMetrics(t *testing.T) {
 		wantSummary string
 		wantTone    string
 	}{
-		{name: "spending", props: txnCalWeekTotalProps{Cashflow: txncalendar.Cashflow{Spent: 262200, Count: 4}, Base: "USD", WeekOf: "Oct 4", SummaryID: "week"}, wantLines: []string{"Spent −$2,622.00", "4 transactions"}, wantSummary: "Week of Oct 4: spent $2,622.00, income $0.00, moved $0.00, 4 transactions."},
-		{name: "mixed", props: txnCalWeekTotalProps{Cashflow: txncalendar.Cashflow{Spent: 10000, Income: 25000, Moved: 5000, Count: 2}, Base: "USD", WeekOf: "Oct 4", SummaryID: "week"}, wantLines: []string{"Spent −$100.00", "Income $250.00", "2 transactions"}, wantSummary: "Week of Oct 4: spent $100.00, income $250.00, moved $50.00, 2 transactions.", wantTone: "text-up"},
-		{name: "future scheduled", props: txnCalWeekTotalProps{Base: "USD", Scheduled: 3, WeekOf: "Oct 25", Future: true, SummaryID: "week"}, wantLines: []string{"Spent $0.00", "Nothing yet", "3 scheduled"}, wantSummary: "Week of Oct 25: spent $0.00, income $0.00, moved $0.00, 0 transactions. 3 scheduled."},
-		{name: "empty future", props: txnCalWeekTotalProps{Base: "USD", WeekOf: "Oct 25", Future: true, SummaryID: "week"}, wantLines: []string{"Spent $0.00", "Nothing yet"}, wantSummary: "Week of Oct 25: spent $0.00, income $0.00, moved $0.00, 0 transactions."},
+		{name: "spending", props: txnCalWeekTotalProps{Cashflow: txncalendar.Cashflow{Spent: 262200, Count: 4}, Base: "USD", WeekOf: "Oct 4", SummaryID: "week"}, wantLines: []string{"Spent $2,622.00", "4 transactions"}, wantSummary: "Week of Oct 4: spent $2,622.00, income $0.00, transferred $0.00, 4 transactions."},
+		{name: "mixed", props: txnCalWeekTotalProps{Cashflow: txncalendar.Cashflow{Spent: 10000, Income: 25000, Moved: 5000, Count: 2}, Base: "USD", WeekOf: "Oct 4", SummaryID: "week"}, wantLines: []string{"Spent $100.00", "Income $250.00", "Transferred $50.00", "2 transactions"}, wantSummary: "Week of Oct 4: spent $100.00, income $250.00, transferred $50.00, 2 transactions.", wantTone: "text-up"},
+		{name: "future due", props: txnCalWeekTotalProps{Base: "USD", Scheduled: 3, WeekOf: "Oct 25", Future: true, SummaryID: "week"}, wantLines: []string{"Spent $0.00", "3 due"}, wantSummary: "Week of Oct 25: spent $0.00, income $0.00, transferred $0.00, 0 transactions. 3 due."},
+		{name: "empty future", props: txnCalWeekTotalProps{Base: "USD", WeekOf: "Oct 25", Future: true, SummaryID: "week"}, wantLines: []string{"Spent $0.00", "Nothing yet"}, wantSummary: "Week of Oct 25: spent $0.00, income $0.00, transferred $0.00, 0 transactions."},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

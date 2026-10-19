@@ -78,8 +78,8 @@ func TestR3MCalendarMoneyUsesLedgerDisplayAndAccessibleDescriptions(t *testing.T
 	if len(totals) != 2 {
 		t.Fatalf("calendar week totals = %d, want 2", len(totals))
 	}
-	if got := totals[0].Text(); !strings.Contains(got, "Spent −$6.75") {
-		t.Fatalf("expense week total text = %q, want Spent −$6.75", got)
+	if got := totals[0].Text(); !strings.Contains(got, "Spent $6.75") || strings.Contains(got, "Spent −") {
+		t.Fatalf("expense week total text = %q, want Spent $6.75 without a minus", got)
 	}
 	if got := totals[0].Attr("aria-label"); got != "" {
 		t.Fatalf("week total aria-label = %q, want content-derived name", got)
@@ -102,11 +102,11 @@ func TestTQ3TransferDayShowsMovementWithoutCashSpending(t *testing.T) {
 		MovedStr: calMovedStr(50000, "USD"), AriaLabel: calDayAria(12, txncalendar.Cashflow{Moved: 50000, Count: 1}, "USD"),
 	}))
 	button := f.AllByTag("button")[0]
-	if strings.Contains(button.Text(), "$0.00") || !strings.Contains(button.Text(), "Moved $500.00") {
-		t.Fatalf("transfer-only day = %q, want movement and no cash total", button.Text())
+	if strings.Contains(button.Text(), "$0.00") || !strings.Contains(button.Text(), "Transferred $500.00") {
+		t.Fatalf("transfer-only day = %q, want transfer and no cash total", button.Text())
 	}
-	if got := button.Attr("aria-label"); !strings.Contains(got, "spent $0.00") || !strings.Contains(got, "moved $500.00") {
-		t.Fatalf("transfer day accessible name = %q, want zero spending and movement", got)
+	if got := button.Attr("aria-label"); !strings.Contains(got, "spent $0.00") || !strings.Contains(got, "transferred $500.00") {
+		t.Fatalf("transfer day accessible name = %q, want zero spending and transfer", got)
 	}
 }
 

@@ -14,7 +14,7 @@ func registerTxnScope() {
 	// so the lead-in is quiet, uppercase and non-shrinking: a label, not a chip.
 	rule(".filter-chips-lead",
 		flexShrink("0"),
-		fontSize("var(--type-12)"),
+		fontSize("var(--fs-meta)"),
 		fontWeight("600"),
 		letterSpacing("0.03em"),
 		textTransform("uppercase"),
@@ -50,11 +50,11 @@ func registerTxnScope() {
 	rule(".txn-upcoming-disc",
 		marginLeft("auto"),
 		flexShrink("0"),
-		fontSize("var(--type-13)"),
+		fontSize("var(--fs-body)"),
 	)
 	rule(".txn-upcoming-link",
 		marginTop("0.35rem"),
-		fontSize("var(--type-13)"),
+		fontSize("var(--fs-body)"),
 		alignSelf("flex-start"),
 	)
 
@@ -78,7 +78,7 @@ func registerTxnScope() {
 		flexWrap("wrap"),
 		alignItems("baseline"),
 		gap("0.35rem"),
-		fontSize("var(--type-13)"),
+		fontSize("var(--fs-body)"),
 		color("var(--text)"),
 	)
 	rule(".txn-countline .txn-count-sep, .txn-countline .txn-count-net, .txn-countline .txn-count-lens",
@@ -137,7 +137,7 @@ func registerTxnScope() {
 	// not hidden in the arrow's tooltip. Quiet and small so it joins the two figures
 	// rather than competing with them.
 	rule(".rvs-joiner",
-		fontSize("var(--type-12)"),
+		fontSize("var(--fs-meta)"),
 		color("var(--text-dim)"),
 		whiteSpace("nowrap"),
 	)
@@ -151,7 +151,7 @@ func registerTxnScope() {
 		prop("text-transform", "none"),
 		fontWeight("600"),
 		letterSpacing("0"),
-		fontSize("var(--type-12)"),
+		fontSize("var(--fs-meta)"),
 	)
 
 	// --- The review card's pending-decision note (C600) ---------------------------
@@ -161,7 +161,7 @@ func registerTxnScope() {
 	// to the second rather than a fourth competing label.
 	rule(".rvs-pending",
 		margin("0.25rem 0 0"),
-		fontSize("var(--type-12)"),
+		fontSize("var(--fs-meta)"),
 		color("var(--text-dim)"),
 	)
 
@@ -177,10 +177,10 @@ func registerTxnScope() {
 		padding("0.4rem 1.25rem"),
 		borderBottom("1px solid var(--border)"),
 		background("var(--bg-elev)"),
-		fontSize("var(--type-13)"),
+		fontSize("var(--fs-body)"),
 	)
 	rule(".return-crumb-note",
-		fontSize("var(--type-12)"),
+		fontSize("var(--fs-meta)"),
 	)
 	rule(".return-crumb-x",
 		marginLeft("auto"),
@@ -227,7 +227,7 @@ func registerTxnScope() {
 		whiteSpace("nowrap"),
 	)
 	rule(".td-cat-inner .txn-auto-mark",
-		fontSize("12px"),
+		fontSize("var(--fs-meta)"),
 		lineHeight("1"),
 		color("var(--text-dim)"),
 		border("0"),
@@ -263,7 +263,7 @@ func registerTxnScope() {
 	// are unconfirmed), so it must not shout. It earns its place by being a word
 	// rather than a colour, and by explaining itself on hover and to a screen reader.
 	rule(".txn-auto-mark",
-		fontSize("12px"),
+		fontSize("var(--fs-meta)"),
 		lineHeight("1"),
 		color("var(--text-dim)"),
 		cursor("help"),

@@ -24,7 +24,7 @@ func registerR10W() {
 	)
 	rule(".txn-catsuggest + .txn-cat-choose",
 		marginLeft("-.2rem"),
-		fontSize(".7rem"),
+		fontSize("var(--fs-meta)"),
 	)
 	rule(".add-submenu-wrap",
 		position("relative"),

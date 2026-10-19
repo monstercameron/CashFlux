@@ -108,16 +108,35 @@ func TestIconStroke(t *testing.T) {
 func TestCSSVars(t *testing.T) {
 	vars := Default().CSSVars()
 	checks := map[string]string{
-		"--bg-base":        "#0e1116",
-		"--control-border": Default().TextDim,
-		"--accent":         "#7c83ff",
-		"--radius":         "12px",
-		"--ui-scale":       "1",
-		"--density":        "comfortable",
+		"--bg-base":            "#0e1116",
+		"--control-border":     Default().TextDim,
+		"--accent":             "#7c83ff",
+		"--radius":             "12px",
+		"--ui-scale":           "1",
+		"--density":            "comfortable",
+		"--fs-meta":            "12px",
+		"--fs-body":            "14px",
+		"--fs-figure":          "17px",
+		"--fs-title":           "24px",
+		"--primary-button-ink": "#000000",
 	}
 	for k, want := range checks {
 		if got := vars[k]; got != want {
 			t.Errorf("CSSVars()[%q] = %q, want %q", k, got, want)
+		}
+	}
+}
+
+func TestPrimaryButtonInkMaintainsContrast(t *testing.T) {
+	for _, preset := range Presets() {
+		ink := preset.CSSVars()["--primary-button-ink"]
+		ratio, err := contrast.Ratio(ink, preset.Accent)
+		if err != nil {
+			t.Errorf("%s primary button ink: %v", preset.Name, err)
+			continue
+		}
+		if !contrast.PassesAA(ratio, false) {
+			t.Errorf("%s primary button contrast = %.2f:1, want WCAG AA", preset.Name, ratio)
 		}
 	}
 }

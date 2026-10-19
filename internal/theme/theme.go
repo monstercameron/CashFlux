@@ -242,22 +242,33 @@ func (t Theme) Valid() bool { return len(t.Validate()) == 0 }
 // the UI to set on :root. Color vars are the hex strings; radius/scale carry
 // their units.
 func (t Theme) CSSVars() map[string]string {
+	primaryInk := "#ffffff"
+	if blackRatio, err := contrast.Ratio("#000000", t.Accent); err == nil {
+		if whiteRatio, whiteErr := contrast.Ratio("#ffffff", t.Accent); whiteErr == nil && blackRatio > whiteRatio {
+			primaryInk = "#000000"
+		}
+	}
 	vars := map[string]string{
-		"--bg-base":        t.BgBase,
-		"--bg-card":        t.BgCard,
-		"--border":         t.Border,
-		"--control-border": t.TextDim,
-		"--text":           t.Text,
-		"--text-dim":       t.TextDim,
-		"--accent":         t.Accent,
-		"--up":             t.Up,
-		"--down":           t.Down,
-		"--radius":         fmt.Sprintf("%dpx", t.Radius),
-		"--font-ui":        t.FontUI,
-		"--font-display":   t.FontDisplay,
-		"--ui-scale":       fmt.Sprintf("%g", t.Scale),
-		"--density":        string(t.Density),
-		"--icon-stroke":    fmt.Sprintf("%g", t.IconStroke),
+		"--bg-base":            t.BgBase,
+		"--bg-card":            t.BgCard,
+		"--border":             t.Border,
+		"--control-border":     t.TextDim,
+		"--text":               t.Text,
+		"--text-dim":           t.TextDim,
+		"--accent":             t.Accent,
+		"--up":                 t.Up,
+		"--down":               t.Down,
+		"--radius":             fmt.Sprintf("%dpx", t.Radius),
+		"--font-ui":            t.FontUI,
+		"--font-display":       t.FontDisplay,
+		"--ui-scale":           fmt.Sprintf("%g", t.Scale),
+		"--density":            string(t.Density),
+		"--icon-stroke":        fmt.Sprintf("%g", t.IconStroke),
+		"--fs-meta":            "12px",
+		"--fs-body":            "14px",
+		"--fs-figure":          "17px",
+		"--fs-title":           "24px",
+		"--primary-button-ink": primaryInk,
 	}
 	// Derived tokens the shell needs (elevated surface, faint text, dim accent,
 	// warn, --danger alias) — see derivedVars. Emitted here so the stylesheet can

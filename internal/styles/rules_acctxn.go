@@ -15,14 +15,14 @@ func registerAcctxn() {
 		alignItems("center"),
 		gap("0.15rem 0.85rem"),
 		padding("0.35rem 0.1rem 0.1rem"),
-		fontSize("var(--type-12)"),
+		fontSize("var(--fs-meta)"),
 		color("var(--text-dim)"),
 	)
 	rule(".txn-legend-label",
 		fontWeight("600"),
 		letterSpacing("0.03em"),
 		textTransform("uppercase"),
-		fontSize("var(--type-11)"),
+		fontSize("var(--fs-meta)"),
 	)
 	rule(".txn-legend-item",
 		display("inline-flex"),
@@ -31,7 +31,7 @@ func registerAcctxn() {
 		cursor("help"),
 	)
 	rule(".txn-legend-glyph",
-		fontWeight("700"),
+		fontWeight("600"),
 		color("var(--text)"),
 		fontVariantNumeric("tabular-nums"),
 		minWidth("1.1rem"),

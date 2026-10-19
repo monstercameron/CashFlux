@@ -20,7 +20,7 @@ func registerTxnCalendar() {
 	)
 	rule(".txn-cal-month",
 		prop("font-weight", "600"),
-		prop("font-size", "1rem"),
+		prop("font-size", "var(--fs-body)"),
 		prop("min-width", "10rem"),
 		prop("text-align", "center"),
 	)
@@ -36,7 +36,7 @@ func registerTxnCalendar() {
 		prop("margin-top", ".5rem"),
 	)
 	rule(".txn-cal-week-head .cal-head",
-		prop("font-size", "12px"),
+		prop("font-size", "var(--fs-meta)"),
 		prop("font-weight", "500"),
 		prop("color", "var(--muted)"),
 		prop("text-transform", "none"),
@@ -53,16 +53,17 @@ func registerTxnCalendar() {
 		prop("background", "var(--bg-card)"),
 	)
 	rule(".txn-cal-week-spent, .txn-cal-week-income, .txn-cal-week-count",
-		prop("font-size", "var(--type-13)"),
+		prop("font-size", "var(--fs-body)"),
 		prop("font-variant-numeric", "tabular-nums"),
 	)
 	rule(".txn-cal-week-count",
-		prop("font-size", "12px"),
+		prop("font-size", "var(--fs-meta)"),
 		prop("font-weight", "500"),
 		prop("color", "var(--muted)"),
 	)
 	rule(".txn-cal-week-spent",
 		prop("font-weight", "600"),
+		prop("white-space", "nowrap"),
 	)
 	rule(".txn-cal-week-income",
 		prop("font-weight", "500"),
@@ -120,7 +121,7 @@ func registerTxnCalendar() {
 		prop("background", "var(--accent)"),
 	)
 	rule(".txn-cal-net",
-		prop("font-size", "var(--type-13)"),
+		prop("font-size", "var(--fs-body)"),
 		prop("font-weight", "600"),
 		prop("font-variant-numeric", "tabular-nums"),
 	)
@@ -142,7 +143,7 @@ func registerTxnCalendar() {
 	// Ghost: a dimmed recurring label projected onto its due date; no interaction.
 	rule(".txn-cal-ghost",
 		prop("display", "block"),
-		prop("font-size", "12px"),
+		prop("font-size", "var(--fs-meta)"),
 		prop("font-weight", "500"),
 		prop("line-height", "1.25"),
 		prop("overflow", "hidden"),
@@ -150,6 +151,14 @@ func registerTxnCalendar() {
 		prop("white-space", "nowrap"),
 		prop("border-left", "2px dashed color-mix(in srgb, var(--accent) 55%, var(--border))"),
 		prop("padding-left", "4px"),
+	)
+	rule(".txn-cal-ghost-status, .txn-cal-ghost-label",
+		prop("display", "block"),
+	)
+	rule(".txn-cal-ghost-missed",
+		prop("white-space", "normal"),
+		prop("overflow", "visible"),
+		prop("text-overflow", "clip"),
 	)
 	rule(".txn-cal-ghost-missed",
 		prop("color", "var(--warn, #d97706)"),

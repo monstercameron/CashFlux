@@ -154,6 +154,7 @@ func Register() {
 	registerBR3Row()
 	registerUXT1()
 	registerBR3Head()
+	registerV5Type()
 	inject(Build())
 }
 

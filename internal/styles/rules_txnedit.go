@@ -1,9 +1,9 @@
-// SPDX-License-Identifier: MIT
+﻿// SPDX-License-Identifier: MIT
 
 package styles
 
 // registerTxnEditSurface emits the styles unique to the Edit-transaction flip modal
-// that aren't covered by the generated .txn-edit rules — currently the inline
+// that aren't covered by the generated .txn-edit rules â€” currently the inline
 // quick-add category picker: the select + "New category" button on one row, and the
 // reveal-on-demand name field + Add/Cancel below it. Theme tokens only.
 func registerTxnEditSurface() {
