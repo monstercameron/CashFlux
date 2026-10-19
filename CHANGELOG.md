@@ -90,6 +90,7 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- Move budget creation decisions into tested pure logic and stable form components.
 - Keep Enter within the active form and give Close-only modal footers precedence.
 - Clarify transaction, split, transfer, filter and Undo messages.
 - Validate receipt currency against its account and reject overflowing receipt totals.

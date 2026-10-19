@@ -7,16 +7,13 @@ package screens
 import (
 	"log/slog"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/budgetform"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
-	"github.com/monstercameron/CashFlux/internal/categorytree"
-	"github.com/monstercameron/CashFlux/internal/catname"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
-	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
@@ -29,34 +26,20 @@ import (
 	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
 
-// budgetNewCatSentinel is the category-picker value that means "create a new
-// category" (named after the budget) instead of selecting an existing one.
-const budgetNewCatSentinel = "__new_category__"
-
-func budgetCountKey(prefix string, count int) string {
-	if count == 1 {
-		return prefix + ".one"
-	}
-	return prefix + ".many"
+func budgetCountKey(prefix string, count int) string { return budgetform.CountKey(prefix, count) }
+func budgetAddNameForCategory(current, previous, next string) string {
+	return budgetform.NameForCategory(current, previous, next)
 }
 
-// parseTrackedTags splits a comma-separated tag input into a trimmed, "#"-stripped,
-// case-insensitively-deduped list — the cross-category tags a budget also tracks. The
-// dedupe means selecting the same tag twice never counts a charge twice.
-func parseTrackedTags(s string) []string {
-	var out []string
-	seen := map[string]bool{}
-	for _, raw := range strings.Split(s, ",") {
-		t := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(raw), "#"))
-		if t == "" {
-			continue
+func budgetAddCategoryOptions(categories []domain.Category, budgets []domain.Budget, period, owner string) []uiw.PickerOption {
+	options := budgetform.CategoryOptions(categories, budgets, period, owner)
+	out := make([]uiw.PickerOption, 0, len(options))
+	for _, o := range options {
+		option := uiw.PickerOption{Value: o.ID, Label: o.Name, Disabled: o.Disabled}
+		if o.Disabled {
+			option.Secondary = uistate.T("budgets.categoryAlreadyBudgeted")
 		}
-		key := strings.ToLower(t)
-		if seen[key] {
-			continue
-		}
-		seen[key] = true
-		out = append(out, t)
+		out = append(out, option)
 	}
 	return out
 }
@@ -84,63 +67,6 @@ type budgetAddFormComponentProps struct {
 	App   *appstate.App
 }
 
-// matchTopLevelCategory returns the existing TOP-LEVEL category whose name
-// equals name, or a zero Category when there is none.
-//
-// This is the C536 replacement for matchExpenseCategory, which was wrong three
-// ways. It matched only expense-kind categories, so a same-named income category
-// was not a collision and a twin got minted. It compared names across the WHOLE
-// tree, so a "Gas" nested under "Auto" satisfied a request for a top-level "Gas"
-// and the budget silently attached to a category the user never meant — the
-// opposite failure, and the worse one because nothing said it happened. And its
-// callers handed it a category snapshot captured at render.
-//
-// catname.FindSibling answers all three: it is parent-scoped (a budget creates a
-// top-level category, so "" is the right parent), deliberately kind-blind, and
-// takes whatever slice the caller passes — so callers must pass a fresh read.
-func matchTopLevelCategory(categories []domain.Category, name string) (domain.Category, bool) {
-	// A top-level match is the unambiguous case: the budget would create a
-	// top-level category, and one by that name already exists.
-	if c, ok := catname.FindSibling(categories, "", name); ok {
-		return c, true
-	}
-	// Otherwise look at the whole tree. A household holding "Auto > Auto loans"
-	// that is handed a second, top-level "Auto loans" experiences that as a
-	// duplicate whatever the tree says about levels — and parent-scoping alone
-	// let exactly that through. One match anywhere is unambiguous enough to
-	// reuse; the form names its full path so the user can see which it picked.
-	if all := catname.FindByName(categories, name); len(all) == 1 {
-		return all[0], true
-	}
-	// Two or more matches at different levels: do not guess. The budget gets a
-	// new top-level category and the form warns that similar names exist.
-	return domain.Category{}, false
-}
-
-// budgetAddCategoryOptions preserves already-used categories in the picker so the
-// user can see why they cannot be selected for this owner and period.
-func budgetAddCategoryOptions(categories []domain.Category, budgets []domain.Budget, period, owner string) []uiw.PickerOption {
-	options := make([]uiw.PickerOption, 0, len(categories))
-	for _, category := range categories {
-		blocked := budgeting.IsDuplicateBudget(budgets, category.ID, period, owner, "")
-		option := uiw.PickerOption{Value: category.ID, Label: category.Name, Disabled: blocked}
-		if blocked {
-			option.Secondary = uistate.T("budgets.categoryAlreadyBudgeted")
-		}
-		options = append(options, option)
-	}
-	return options
-}
-
-// budgetAddNameForCategory supplies a category-based default while preserving a
-// name the user has already customized.
-func budgetAddNameForCategory(currentName, previousCategoryName, nextCategoryName string) string {
-	if strings.TrimSpace(currentName) == "" || strings.TrimSpace(currentName) == previousCategoryName {
-		return nextCategoryName
-	}
-	return currentName
-}
-
 func budgetAddForm(props BudgetAddFormProps) ui.Node {
 	app := appstate.Default
 	if app == nil {
@@ -149,838 +75,502 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 	return ui.CreateElement(budgetAddFormReady, budgetAddFormComponentProps{Props: props, App: app})
 }
 
-func budgetAddFormReady(componentProps budgetAddFormComponentProps) ui.Node {
-	props := componentProps.Props
-	app := componentProps.App
-	dataRevision := uistate.UseDataRevision().Get()
+type budgetAddActions struct {
+	Name, Limit, NewCategory, Direction, Owner, Period, Method, Tags, VarName, Category, Copy func(string)
+	Create, Rollover, Advanced, OpenTemplate, CloseTemplate, Cancel, Submit, Apply, Suggest   func()
+	Also, Exclude                                                                             func(string)
+	Custom, Bucket                                                                            func(string, string)
+}
 
-	base := app.Settings().BaseCurrency
-	if base == "" {
-		base = budgetBaseCurrency(base)
-	}
+type budgetAddViewProps struct {
+	Draft           budgetform.Draft
+	Preview         budgetform.Preview
+	Actions         budgetAddActions
+	Base            string
+	GlobalMethod    string
+	Error           string
+	LimitError      string
+	Blocker         string
+	Fate            string
+	OwnerHint       string
+	SuggestScope    string
+	Categories      []domain.Category
+	Budgets         []domain.Budget
+	Members         []domain.Member
+	Defs            []customfields.Def
+	CategoryOptions []uiw.PickerOption
+	CopyOptions     []uiw.SelectOption
+	Template        budgetAddTemplateMemo
+	Suggestion      budgetform.Suggestion
+}
 
-	categories := app.Categories()
-	var expenseCats []domain.Category
-	for _, c := range categories {
-		if c.Kind == domain.KindExpense {
-			expenseCats = append(expenseCats, c)
-		}
-	}
-	// A saving budget can track any category — that is the whole point of it —
-	// so its picker is not restricted to spending categories. Sorted so both
-	// lists read the same way (C518).
-	pickableCats := catname.Sorted(expenseCats)
-
-	// Leave the category unset for an ordinary add. A seed from a "Budget this"
-	// action is the only path that begins with a category selected.
-	defaultCat := ""
-	if props.Seed.CategoryID != "" {
-		defaultCat = props.Seed.CategoryID
-	}
-	defaultPeriod := string(domain.PeriodMonthly)
-	if props.Seed.Period != "" {
-		defaultPeriod = props.Seed.Period
-	}
-
-	name := ui.UseState(props.Seed.Name)
-	ev := useEntityVarField(budgetVarKind, name, "")
-	limit := ui.UseState(props.Seed.LimitMajor)
-	limitCurrency := ui.UseState(base)
-	catID := ui.UseState(defaultCat)
-	newCatName := ui.UseState("")
-	// C535: creating a category is now something you ASK for, not the default
-	// outcome of adding a budget. It used to be the default AND it lived behind
-	// the Advanced disclosure, so the common path minted a category named after
-	// the budget with nothing on screen offering the alternative.
-	// C538: which way money has to move for this budget to be doing well. A
-	// spending cap by default — the historical meaning and the common case — with
-	// saving as an explicit choice rather than something guessed from the
-	// categories, so a mistyped category yields a wrong-LOOKING budget rather than
-	// a silently inverted one.
-	direction := ui.UseState(string(domain.DirectionSpend))
-	createCat := ui.UseState(false)
-	toggleCreateCat := ui.UseEvent(func() { createCat.Set(!createCat.Get()) })
-	owner := ui.UseState(domain.GroupOwnerID)
-	period := ui.UseState(defaultPeriod)
-	rollover := ui.UseState(false)
-	methodology := ui.UseState("") // empty = inherit global method
-	customVals := ui.UseState(map[string]string{})
-	// trackTags: comma-separated tags this budget also counts, across categories (a
-	// "#vacation" cap spanning travel + dining + shopping). Parsed + deduped on submit.
-	trackTags := ui.UseState("")
-	onTrackTags := ui.UseEvent(func(v string) { trackTags.Set(v) })
-	// alsoTrack: extra existing categories this budget should also count (multi-category).
-	// The primary category above is always tracked; these add to it.
-	alsoTrack := ui.UseState(map[string]bool{})
-	toggleAlso := func(id string) {
-		m := alsoTrack.Get()
-		nm := make(map[string]bool, len(m)+1)
-		for k, v := range m {
-			nm[k] = v
-		}
-		nm[id] = !nm[id]
-		alsoTrack.Set(nm)
-	}
-	errMsg := ui.UseState("")
-	// The essentials-first layout: everything beyond Name/Limit/Period lives behind
-	// this disclosure, so the common case reads as a two-field form. A seeded category
-	// opens it so the pre-fill is visible rather than silently applied.
-	advOpen := ui.UseState(props.Seed.CategoryID != "")
-	toggleAdv := ui.UseEvent(Prevent(func() { advOpen.Set(!advOpen.Get()) }))
-	// 50/30/20 review mode: the template button switches the modal body to a per-line
-	// review (checkboxes + amounts) instead of a count-only confirm, so the user sees
-	// and prunes exactly what will be created.
-	tmplOpen := ui.UseState(false)
-	openTmpl := ui.UseEvent(Prevent(func() { tmplOpen.Set(true) }))
-	closeTmpl := ui.UseEvent(Prevent(func() { tmplOpen.Set(false) }))
-	tmplExcluded := ui.UseState(map[string]bool{})
-	tmplBuckets := ui.UseState(map[string]budgeting.Bucket{})
-	setTmplBucket := func(id, raw string) {
-		value, err := strconv.Atoi(raw)
-		if err != nil || value < int(budgeting.BucketNeeds) || value > int(budgeting.BucketSavings) {
-			return
-		}
-		buckets := tmplBuckets.Get()
-		next := make(map[string]budgeting.Bucket, len(buckets)+1)
-		for key, bucket := range buckets {
-			next[key] = bucket
-		}
-		next[id] = budgeting.Bucket(value)
-		tmplBuckets.Set(next)
-	}
-	toggleTmpl := func(id string) {
-		m := tmplExcluded.Get()
-		nm := make(map[string]bool, len(m)+1)
-		for k, v := range m {
-			nm[k] = v
-		}
-		nm[id] = !nm[id]
-		tmplExcluded.Set(nm)
-	}
-
-	onLimit := ui.UseEvent(func(v string) { limit.Set(v) })
-	onNewCatName := ui.UseEvent(func(v string) { newCatName.Set(v) })
-	onRollover := ui.UseEvent(func() { rollover.Set(!rollover.Get()) })
-	cancel := ui.UseEvent(Prevent(func() {
-		if props.OnDone != nil {
-			props.OnDone()
-		}
-	}))
-
-	budgetDefs := app.CustomFieldDefsFor("budget")
-	onCustom := func(key, value string) {
-		m := customVals.Get()
-		nm := make(map[string]string, len(m)+1)
-		for k, v := range m {
-			nm[k] = v
-		}
-		nm[key] = value
-		customVals.Set(nm)
-	}
-
-	// Copy an existing budget: choosing one pre-fills the form from it (name gets a
-	// "copy" suffix; the category/period/method/rollover carry over) and opens the
-	// Advanced section so every carried-over value is visible, not silently applied.
-	copyFrom := func(bid string) {
-		for _, b := range app.Budgets() {
-			if b.ID != bid {
-				continue
-			}
-			copyDefaults := budgeting.CopyBudgetDefaults(b)
-			name.Set(uistate.T("budgets.copySuffix", b.Name))
-			limit.Set(money.FormatMinor(copyDefaults.Limit.Amount, currency.Decimals(copyDefaults.Limit.Currency)))
-			limitCurrency.Set(copyDefaults.Limit.Currency)
-			period.Set(string(copyDefaults.Period))
-			direction.Set(string(copyDefaults.Direction))
-			owner.Set(b.OwnerID)
-			methodology.Set(b.Methodology)
-			rollover.Set(b.Rollover)
-			if b.CategoryID != "" {
-				catID.Set(b.CategoryID)
-			}
-			also := map[string]bool{}
-			for i, cid := range b.TrackedCategoryIDs() {
-				if i > 0 {
-					also[cid] = true
-				}
-			}
-			alsoTrack.Set(also)
-			trackTags.Set(strings.Join(b.TrackedTags, ", "))
-			advOpen.Set(true)
-			return
-		}
-	}
-
-	add := ui.UseEvent(Prevent(func() {
-		// Name first: it's the budget's identity and (by default) its category's name.
-		if strings.TrimSpace(name.Get()) == "" {
-			errMsg.Set(uistate.T("budgets.nameRequired"))
-			return
-		}
-		// C666: the same parse the field and the Add button use, so the three agree
-		// on what "valid" means and the message names the actual problem.
-		amt, limitProb := budgeting.ParseLimitMajor(limit.Get(), currency.Decimals(limitCurrency.Get()))
-		if !limitProb.OK() {
-			errMsg.Set(budgetLimitError(limitProb, limitCurrency.Get()))
-			return
-		}
-		// Reject a variable name that collides with an existing budget's handle.
-		if warn := entityVarCollision(budgetVarKind, budgetVarEntities(app.Budgets()), "", ev.VarName.Get(), name.Get()); warn != "" {
-			errMsg.Set(warn)
-			return
-		}
-		// Resolve the category. "New category" first tries to REUSE an existing expense
-		// category with the same name (no silent duplicates); only a genuinely new name
-		// creates one. Either way the duplicate-budget guard below applies to the
-		// resolved category, so the one-budget-per-(category, period, owner) rule can't
-		// be bypassed through the create-new path.
-		// C536(a): resolve against a FRESH read of the store, not the snapshot this
-		// component captured when it last rendered. budgetAddForm never subscribes
-		// to the data revision, so `categories` above can be arbitrarily stale —
-		// and the very same handler already re-reads app.Categories() thirty lines
-		// below for the also-track list, so one function was reading the category
-		// set two different ways. A stale read here means the guard cannot see a
-		// category created since the last render and mints a duplicate of it.
-		liveCats := app.Categories()
-		liveExpense := 0
-		for _, c := range liveCats {
-			if c.Kind == domain.KindExpense {
-				liveExpense++
-			}
-		}
-		finalCatID := catID.Get()
-		createdCatName := ""
-		// C584: the category is only PREPARED here, never written. It is saved
-		// together with the budget below, as one operation that either lands
-		// completely or leaves nothing behind — writing it here is what left an
-		// orphan category when the budget write then failed.
-		var newCat *domain.Category
-		if createCat.Get() || liveExpense == 0 || finalCatID == budgetNewCatSentinel {
-			catName := strings.TrimSpace(newCatName.Get())
-			if catName == "" {
-				catName = strings.TrimSpace(name.Get())
-			}
-			// Ticking "create" for a name that already exists REUSES it. The
-			// checkbox states an intent; the store states the truth, and minting a
-			// twin to honour the intent is the bug being fixed.
-			if existing, ok := matchTopLevelCategory(liveCats, catName); ok {
-				finalCatID = existing.ID
-			} else {
-				nc := domain.Category{ID: id.New(), Name: catName, Kind: domain.KindExpense}
-				newCat = &nc
-				finalCatID = nc.ID
-				createdCatName = catName
-			}
-		}
-		if finalCatID == "" {
-			errMsg.Set(uistate.T("budgets.categoryRequired"))
-			return
-		}
-		// One budget per (category, period, owner) — reject duplicates (L40). Runs for
-		// every path now that the category is resolved.
-		if createdCatName == "" && budgeting.IsDuplicateBudget(app.Budgets(), finalCatID, period.Get(), owner.Get(), "") {
-			errMsg.Set(uistate.T("budgets.duplicateBudget"))
-			return
-		}
-		scope := domain.ScopeIndividual
-		if owner.Get() == domain.GroupOwnerID {
-			scope = domain.ScopeShared
-		}
-		// Resolve per-budget methodology override: empty = inherit global.
-		methodVal := methodology.Get()
-		if m := budgeting.Methodology(methodVal); methodVal != "" && !m.Valid() {
-			methodVal = ""
-		}
-		// Fold in any "also track" extras (existing expense categories), keeping the
-		// primary first and de-duped. Only set CategoryIDs when tracking more than one.
-		catIDs := []string{finalCatID}
-		seen := map[string]bool{finalCatID: true}
-		selAlso := alsoTrack.Get()
-		saving := domain.BudgetDirection(direction.Get()).IsSaving()
-		for _, c := range app.Categories() {
-			if (saving || c.Kind == domain.KindExpense) && selAlso[c.ID] && !seen[c.ID] {
-				seen[c.ID] = true
-				catIDs = append(catIDs, c.ID)
-			}
-		}
-		b := domain.Budget{
-			ID: id.New(), Name: strings.TrimSpace(name.Get()), Scope: scope, OwnerID: owner.Get(),
-			CategoryID: finalCatID, Period: domain.Period(period.Get()), Limit: money.New(amt, limitCurrency.Get()),
-			Rollover: rollover.Get(), Methodology: methodVal, Custom: customValuesToMap(budgetDefs, customVals.Get()),
-			VarName: strings.TrimSpace(ev.VarName.Get()),
-		}
-		if d := domain.BudgetDirection(direction.Get()); d.Valid() {
-			b.Direction = d
-		}
-		if len(catIDs) > 1 {
-			b.CategoryIDs = catIDs
-		}
-		if tags := parseTrackedTags(trackTags.Get()); len(tags) > 0 {
-			b.TrackedTags = tags
-		}
-		// C584: budget and category are ONE write. It rolls back a half-made pair
-		// and reads the result back from the store before returning, so the dialog
-		// can only close on a budget that actually exists.
-		if err := app.CreateBudgetWithCategory(newCat, b); err != nil {
-			errMsg.Set(err.Error())
-			return
-		}
-		uistate.BumpDataRevision() // surface the new budget (and category) immediately
-		// Flush to storage now rather than waiting for the autosave. A new budget is
-		// exactly the moment a user leaves the page or reloads to go look at it.
-		uistate.RequestPersist()
-		// Reset fields.
-		name.Set("")
-		ev.Reset()
-		limit.Set("")
-		limitCurrency.Set(base)
-		rollover.Set(false)
-		methodology.Set("")
-		catID.Set(defaultCat)
-		newCatName.Set("")
-		createCat.Set(false)
-		alsoTrack.Set(map[string]bool{})
-		trackTags.Set("")
-		customVals.Set(map[string]string{})
-		errMsg.Set("")
-		advOpen.Set(false)
-		if createdCatName != "" {
-			uistate.PostNotice(uistate.T("budgets.addedWithCatToast", createdCatName), false)
-		} else {
-			uistate.PostNotice(uistate.T("budgets.addedToast"), false)
-		}
-		if props.OnDone != nil {
-			props.OnDone()
-		}
-	}))
-
-	// 50/30/20 proposals for the review list (recomputed per render while open — pure
-	// and deterministic over the current data). Zero income disables the template.
-	txns := app.Transactions()
-	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
+func budgetAddFormReady(cp budgetAddFormComponentProps) ui.Node {
+	app := cp.App
+	revision := uistate.UseDataRevision().Get()
+	base := budgetBaseCurrency(app.Settings().BaseCurrency)
+	initial := budgetform.Initial(cp.Props.Seed.Name, cp.Props.Seed.LimitMajor, cp.Props.Seed.CategoryID, cp.Props.Seed.Period, base)
+	draft := ui.UseState(initial)
+	errorState := ui.UseState("")
+	d := draft.Get()
 	now := time.Now()
+	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
+	categories, budgets := app.Categories(), app.Budgets()
+	income := uistate.CurrentPrefs().MonthlyIncomeMinor
 	template := ui.UseMemo(func() budgetAddTemplateMemo {
-		curStart := dateutil.MonthStart(now)
-		prevStart := dateutil.AddMonths(curStart, -1)
-		income, err := budgeting.IncomeForBudgetsChecked(uistate.CurrentPrefs().MonthlyIncomeMinor, txns, prevStart, curStart, base, rates)
-		if err != nil {
-			return budgetAddTemplateMemo{Err: err}
-		}
-		if income <= 0 {
-			return budgetAddTemplateMemo{}
-		}
-		result, err := budgeting.Generate5030WithRatesAndOverrides(income, categories, budgetLedgerForApp(app), now, rates, tmplBuckets.Get())
-		if err != nil {
-			return budgetAddTemplateMemo{Err: err}
-		}
-		existing := map[string]bool{}
-		for _, b := range app.Budgets() {
-			for _, categoryID := range b.TrackedCategoryIDs() {
-				existing[categoryID] = true
-			}
-		}
-		var proposals []budgeting.BudgetProposal
-		for _, proposal := range result.Proposals {
-			if proposal.LimitMinor > 0 && !existing[proposal.Category.ID] {
-				proposals = append(proposals, proposal)
-			}
-		}
-		return budgetAddTemplateMemo{Proposals: proposals}
-	}, dataRevision, app.Rev(), base, now.Format("2006-01"), tmplBuckets.Get())
-	tmplProposals := template.Proposals
+		proposals, err := budgetform.Template(income, app.Transactions(), budgetLedgerForApp(app), categories, budgets, now, rates, d.Buckets)
+		return budgetAddTemplateMemo{Proposals: proposals, Err: err}
+	}, revision, app.Rev(), base, budgetform.MonthIdentity(now), d.Buckets, income, len(categories), len(budgets))
+	preview := budgetform.Inspect(d, categories, budgets, app.Members(), cp.Props.Seed.Name, cp.Props.Seed.LimitMajor)
+	suggestion := ui.UseMemo(func() budgetform.Suggestion {
+		return budgetform.Suggest(preview.SuggestCategory, categories, budgetLedgerForApp(app), now, d.Period, d.Currency, rates)
+	}, revision, app.Rev(), preview.SuggestCategory, d.Period, d.Currency, base, budgetform.MonthIdentity(now), len(categories))
 	if template.Err != nil {
 		slog.Error("calculate 50/30/20 budget template", "error", template.Err)
 	}
-
-	// Apply the reviewed template: create only the checked proposals.
-	applyTmpl := ui.UseEvent(Prevent(func() {
-		n, err := applyBudgetTemplate(app, tmplProposals, tmplExcluded.Get(), base, now)
-		if err != nil {
-			uistate.PostNotice(budgetErrorText(err), true)
-			return
-		}
-		if n == 0 {
-			uistate.PostNotice(uistate.T("budgets.tmplNothingToAdd"), false)
-			return
-		}
-		uistate.BumpDataRevision()
-		uistate.RequestPersist() // C584: a whole budget set is not worth losing to a fast reload
-		uistate.PostUndoable(uistate.T("budgets.tmplApplied", uistate.T(budgetCountKey("budgets.addedCount", n), n)))
-		if props.OnDone != nil {
-			props.OnDone()
-		}
-	}))
-	toggleCreateOnChange := OnChange(toggleCreateCat)
-	tagsOnInput := OnInput(onTrackTags)
-	closeTmplOnClick := OnClick(closeTmpl)
-	applyTmplOnSubmit := OnSubmit(applyTmpl)
-	addOnSubmit := OnSubmit(add)
-	openTmplOnClick := OnClick(openTmpl)
-	nameOnInput := OnInput(ev.OnName)
-	limitOnInput := OnInput(onLimit)
-	toggleAdvOnClick := OnClick(toggleAdv)
-	cancelOnClick := OnClick(cancel)
-	rolloverOnChange := OnChange(onRollover)
-
-	ownerOptions := ownerSelectOptions(app.Members(), owner.Get())
-
-	// Copy-an-existing-budget options (creation-time duplicate, G4). Leads with a
-	// placeholder so it reads as an action, not a value.
-	copyOptions := []uiw.SelectOption{{Value: "", Label: uistate.T("budgets.copyExisting")}}
-	for _, b := range app.Budgets() {
-		copyOptions = append(copyOptions, uiw.SelectOption{Value: b.ID, Label: b.Name})
+	if suggestion.Err != nil {
+		slog.Error("calculate budget limit suggestion", "error", suggestion.Err)
 	}
+	p := budgetAddViewProps{Draft: d, Preview: preview, Base: base, GlobalMethod: app.Settings().BudgetMethodology, Error: errorState.Get(), Categories: categories, Budgets: budgets, Members: app.Members(), Defs: app.CustomFieldDefsFor("budget"), Template: template, Suggestion: suggestion}
+	p.Actions = budgetAddHandlers(draft, errorState, cp, base, template.Proposals, suggestion, now)
+	p = budgetAddMessages(p)
+	if d.Template {
+		return ui.CreateElement(budgetAddTemplateReview, p)
+	}
+	return ui.CreateElement(budgetAddContent, p)
+}
 
-	// Resolve where the category WILL land (mirroring the add handler) so the form can
-	// say so up front: reuse an existing same-named category, or create a new one. The
-	// same resolution feeds the limit suggestion, so it fires on the default path too
-	// (typing "Groceries" suggests from the Groceries category's history).
-	// A household with nothing to attach a budget to must still get a category,
-	// so the opt-in is forced on and says why rather than presenting an empty
-	// picker the user cannot satisfy.
-	mustCreateCat := len(expenseCats) == 0
-	wantNewCat := createCat.Get() || mustCreateCat
+func budgetAddHandlers(state ui.State[budgetform.Draft], errors ui.State[string], cp budgetAddFormComponentProps, base string, proposals []budgeting.BudgetProposal, suggestion budgetform.Suggestion, now time.Time) budgetAddActions {
+	change := func(action budgetform.Action, value string) { state.Set(budgetform.Change(state.Get(), action, value)) }
+	return budgetAddActions{
+		Name:        func(v string) { state.Set(budgetform.ChangeName(state.Get(), v)) },
+		Limit:       func(v string) { change(budgetform.EditLimit, v) },
+		NewCategory: func(v string) { change(budgetform.EditNewCategory, v) },
+		Direction:   func(v string) { change(budgetform.EditDirection, v) },
+		Owner:       func(v string) { change(budgetform.EditOwner, v) },
+		Period:      func(v string) { change(budgetform.EditPeriod, v) },
+		Method:      func(v string) { change(budgetform.EditMethod, v) },
+		Tags:        func(v string) { change(budgetform.EditTags, v) },
+		VarName:     func(v string) { change(budgetform.EditVariable, v) },
+		Category: func(v string) {
+			state.Set(budgetform.ChooseCategory(state.Get(), budgetform.Inspect(state.Get(), cp.App.Categories(), nil, nil, "", "").Categories, v))
+		},
+		Copy: func(v string) {
+			d, name, ok := budgetform.Copy(state.Get(), cp.App.Budgets(), v)
+			if ok {
+				d.Name = uistate.T("budgets.copySuffix", name)
+				state.Set(d)
+			}
+		},
+		Create:        func() { change(budgetform.ToggleCreate, "") },
+		Rollover:      func() { change(budgetform.ToggleRollover, "") },
+		Advanced:      func() { change(budgetform.ToggleAdvanced, "") },
+		OpenTemplate:  func() { change(budgetform.OpenTemplate, "") },
+		CloseTemplate: func() { change(budgetform.CloseTemplate, "") },
+		Cancel: func() {
+			if cp.Props.OnDone != nil {
+				cp.Props.OnDone()
+			}
+		},
+		Submit:  func() { budgetAddSubmit(state, errors, cp, base) },
+		Apply:   func() { budgetAddApplyTemplate(cp, proposals, state.Get().Excluded, base, now) },
+		Suggest: func() { change(budgetform.EditLimit, budgetform.FormatLimit(suggestion.Amount)) },
+		Also:    func(id string) { d := state.Get(); d.Also = budgetform.Toggle(d.Also, id); state.Set(d) },
+		Exclude: func(id string) { d := state.Get(); d.Excluded = budgetform.Toggle(d.Excluded, id); state.Set(d) },
+		Custom: func(key, v string) {
+			d := state.Get()
+			d.Custom = budgetform.SetCustom(d.Custom, key, v)
+			state.Set(d)
+		},
+		Bucket: func(id, v string) {
+			d := state.Get()
+			d.Buckets = budgetform.SetBucket(d.Buckets, id, v)
+			state.Set(d)
+		},
+	}
+}
 
-	// The name the new category would take, and what actually happens to it. The
-	// hint is the honest outcome, not a restatement of the checkbox: ticking
-	// "create" for a name that already exists REUSES it rather than minting a
-	// twin, and the form has to say so before Add is pressed.
-	typedCatName := strings.TrimSpace(newCatName.Get())
-	if typedCatName == "" {
-		typedCatName = strings.TrimSpace(name.Get())
-	}
-	sugCatID := catID.Get()
-	if sugCatID == budgetNewCatSentinel {
-		sugCatID = ""
-	}
-	// C586: with "create a new category" ticked, the estimate must describe the
-	// category this budget will actually watch. It used to keep whatever the
-	// existing-category picker happened to hold — so a brand-new "Pet care"
-	// budget was told "you've averaged $1,100.00/mo here recently", which was
-	// Transportation's history under another category's name. A new category has
-	// no history, and the form says so instead of borrowing someone else's.
-	if wantNewCat {
-		sugCatID = ""
-	}
-	var catFateHint string
-	if wantNewCat && typedCatName != "" {
-		if existing, ok := matchTopLevelCategory(categories, typedCatName); ok {
-			sugCatID = existing.ID
-			// Name the FULL path, so reusing a nested category is visible rather
-			// than a surprise ("Uses your existing Auto > Auto loans category").
-			catFateHint = uistate.T("budgets.catWillReuse", catname.Path(categories, existing))
-		} else if dupes := catname.FindByName(categories, typedCatName); len(dupes) > 1 {
-			catFateHint = uistate.T("budgets.catAmbiguous", len(dupes), typedCatName)
+func budgetAddSubmit(state ui.State[budgetform.Draft], errors ui.State[string], cp budgetAddFormComponentProps, base string) {
+	app := cp.App
+	p := budgetform.Prepare(state.Get(), app.Categories(), app.Budgets(), app.CustomFieldDefsFor("budget"), id.New(), id.New())
+	if p.ProblemKey != "" {
+		if p.ProblemKey == "budgets.varNameTaken" {
+			errors.Set(uistate.T(p.ProblemKey, p.CollisionName))
 		} else {
-			catFateHint = uistate.T("budgets.catWillCreate", typedCatName)
+			errors.Set(uistate.T(p.ProblemKey))
 		}
+		return
 	}
-	var catFateNode ui.Node = Fragment()
-	if catFateHint != "" {
-		catFateNode = Span(css.Class("budget-cat-fate", tw.TextFaint), Attr("data-testid", "budget-cat-fate"), catFateHint)
+	if !p.LimitProblem.OK() {
+		errors.Set(budgetLimitError(p.LimitProblem, state.Get().Currency))
+		return
 	}
-	// The existing-category picker: shown whenever the user is NOT creating one.
-	// It is in the essentials now, not behind Advanced — the category a budget
-	// watches is not an advanced detail, and hiding it is what let the old
-	// create-by-default behaviour run unseen.
-	if direction.Get() == string(domain.DirectionSave) {
-		pickableCats = catname.Sorted(categories)
+	if err := app.CreateBudgetWithCategory(p.Category, p.Budget); err != nil {
+		slog.Error("create budget with category", "error", err)
+		errors.Set(budgetErrorText(err))
+		return
 	}
-	existingCatOptions := budgetAddCategoryOptions(pickableCats, app.Budgets(), period.Get(), owner.Get())
-	selectedCatName := ""
-	for _, c := range pickableCats {
-		if c.ID == catID.Get() {
-			selectedCatName = c.Name
-			break
-		}
+	uistate.BumpDataRevision()
+	uistate.RequestPersist()
+	state.Set(budgetform.Reset(state.Get(), base, cp.Props.Seed.CategoryID))
+	errors.Set("")
+	if p.CreatedName != "" {
+		uistate.PostNotice(uistate.T("budgets.addedWithCatToast", p.CreatedName), false)
+	} else {
+		uistate.PostNotice(uistate.T("budgets.addedToast"), false)
 	}
-	chooseCategory := func(id string) {
-		previousName := selectedCatName
-		catID.Set(id)
-		for _, c := range pickableCats {
-			if c.ID == id {
-				name.Set(budgetAddNameForCategory(name.Get(), previousName, c.Name))
-				return
-			}
-		}
+	if cp.Props.OnDone != nil {
+		cp.Props.OnDone()
 	}
-	// Control before consequence: the opt-in, then the field it governs. Putting
-	// the picker first meant that ticking the box revealed the new-category name
-	// field ABOVE the checkbox that had just revealed it, which reads backwards.
-	catRow := Div(css.Class("ba-full", "budget-cat-row"),
-		Label(css.Class("budget-cat-optin", tw.Flex, tw.ItemsCenter, tw.Gap2), Attr("data-testid", "budget-create-cat-label"),
-			Input(append([]any{Type("checkbox"), Attr("data-testid", "budget-create-cat"),
-				Attr("style", "flex-shrink:0"), toggleCreateOnChange},
-				append(checkedAttr(wantNewCat), checkboxDisabled(mustCreateCat)...)...)...),
-			Span(uistate.T("budgets.createCatOptIn"))),
-		If(mustCreateCat, Span(css.Class("budget-cat-fate", tw.TextFaint), Attr("data-testid", "budget-create-cat-forced"),
-			uistate.T("budgets.createCatForced"))),
-		If(!wantNewCat, uiw.Field(uiw.FieldProps{
-			ID: "budget-add-category", Label: uistate.T("budgets.categoryLabel"), Required: true,
-			TestID: "budget-add-category-field",
-			Control: func(a uiw.FieldA11y) ui.Node {
-				return uiw.Picker(uiw.PickerProps{
-					ID: a.ID, Label: a.Label, Placeholder: uistate.T("budgets.chooseCategory"),
-					SelectedLabel: selectedCatName, Searchable: true, TestID: "budget-existing-cat",
-					Options: existingCatOptions, OnCommit: chooseCategory,
-				})
-			},
-		})),
-		If(wantNewCat && !mustCreateCat, labeledField(uistate.T("budgets.newCategoryName"),
-			Input(css.Class("field"), Type("text"), Attr("data-testid", "budget-new-cat-name"),
-				Placeholder(uistate.T("budgets.newCategoryPlaceholder")), OnInput(onNewCatName), uiw.FieldValue(newCatName.Get())))),
-		catFateNode,
-	)
+}
 
-	// Suggest a limit from the resolved category's recent monthly spend (D6).
-	//
-	// C586: the average covers the category AND its sub-categories, which is the
-	// scope the resulting budget's card will report against. Suggesting from the
-	// parent alone gave a figure the new budget's own bar would immediately
-	// contradict. It also names the scope, so a rolled-up estimate is never
-	// mistaken for one category's spending.
-	sugCovers := map[string]bool{}
-	if sugCatID != "" {
-		sugCovers = categorytree.DescendantsOfAll(categories, []string{sugCatID})
-		sugCovers[sugCatID] = true
+func budgetAddApplyTemplate(cp budgetAddFormComponentProps, proposals []budgeting.BudgetProposal, excluded map[string]bool, base string, now time.Time) {
+	n, err := applyBudgetTemplate(cp.App, proposals, excluded, base, now)
+	if err != nil {
+		uistate.PostNotice(budgetErrorText(err), true)
+		return
 	}
-	suggestionMemo := ui.UseMemo(func() budgetAddSuggestionMemo {
-		monthly, err := budgeting.SuggestLimitIn(sugCovers, budgetLedgerForApp(app), now, 6, rates)
-		if err != nil {
-			return budgetAddSuggestionMemo{Err: err}
-		}
-		amount, err := budgeting.LimitForPeriod(money.New(monthly, base), domain.PeriodMonthly, domain.Period(period.Get()), limitCurrency.Get(), rates)
-		return budgetAddSuggestionMemo{Amount: amount, Err: err}
-	}, dataRevision, app.Rev(), sugCatID, period.Get(), limitCurrency.Get(), base, now.Format("2006-01"))
-	suggestion, suggestionErr := suggestionMemo.Amount, suggestionMemo.Err
-	if suggestionErr != nil {
-		slog.Error("calculate budget limit suggestion", "error", suggestionErr)
+	if n == 0 {
+		uistate.PostNotice(uistate.T("budgets.tmplNothingToAdd"), false)
+		return
 	}
-	suggestAmount := suggestion.Amount
-	if suggestionErr != nil {
-		suggestAmount = 0
+	uistate.BumpDataRevision()
+	uistate.RequestPersist()
+	uistate.PostUndoable(uistate.T("budgets.tmplApplied", uistate.T(budgetCountKey("budgets.addedCount", n), n)))
+	if cp.Props.OnDone != nil {
+		cp.Props.OnDone()
 	}
-	useSuggestion := ui.UseEvent(Prevent(func() { limit.Set(money.FormatMinor(suggestAmount, currency.Decimals(limitCurrency.Get()))) }))
-	suggestOnClick := OnClick(useSuggestion)
-	suggestScope := ""
-	if suggestAmount > 0 && len(sugCovers) > 1 {
-		for _, c := range categories {
-			if c.ID == sugCatID {
-				suggestScope = uistate.T("budgets.suggestScoped", uistate.T("budgets.scopeNoteCats", catname.Path(categories, c)))
-				break
-			}
-		}
-	}
-	// With a brand-new category chosen, say plainly that there is nothing to
-	// average — silence there reads as "we found nothing worth telling you".
-	var suggestNote ui.Node = Fragment()
-	if suggestionErr != nil {
-		suggestNote = Div(css.Class("ba-full"), P(css.Class("form-err"), Attr("role", "status"), uistate.T("budgets.incomplete")))
-	}
-	if wantNewCat && suggestAmount == 0 && typedCatName != "" {
-		suggestNote = Div(css.Class("ba-full"),
-			Span(css.Class("budget-cat-fate", tw.TextFaint), Attr("data-testid", "budget-suggest-none"),
-				uistate.T("budgets.suggestNoHistory")))
-	}
+}
 
-	// Owner-scope consequence: picking a member silently made the budget individual;
-	// say what the choice means right under the picker.
-	ownerHint := uistate.T("budgets.ownerSharedHint")
-	if owner.Get() != domain.GroupOwnerID {
-		ownerName := ""
-		for _, m := range app.Members() {
-			if m.ID == owner.Get() {
-				ownerName = m.Name
-				break
-			}
-		}
-		ownerHint = uistate.T("budgets.ownerIndividualHint", ownerName)
+func budgetAddMessages(p budgetAddViewProps) budgetAddViewProps {
+	v := p.Preview
+	if v.LimitFieldError {
+		p.LimitError = budgetLimitError(v.LimitProblem, p.Draft.Currency)
 	}
+	if v.BlockerKey != "" {
+		p.Blocker = uistate.T(v.BlockerKey)
+	} else if !v.LimitProblem.OK() {
+		p.Blocker = p.LimitError
+	}
+	switch v.FateKey {
+	case "budgets.catWillReuse":
+		p.Fate = uistate.T(v.FateKey, v.FatePath)
+	case "budgets.catAmbiguous":
+		p.Fate = uistate.T(v.FateKey, v.Ambiguous, v.TypedCategory)
+	case "budgets.catWillCreate":
+		p.Fate = uistate.T(v.FateKey, v.TypedCategory)
+	}
+	p.OwnerHint = uistate.T(v.OwnerKey)
+	if v.OwnerKey == "budgets.ownerIndividualHint" {
+		p.OwnerHint = uistate.T(v.OwnerKey, v.OwnerName)
+	}
+	if p.Suggestion.ScopePath != "" {
+		p.SuggestScope = uistate.T("budgets.suggestScoped", uistate.T("budgets.scopeNoteCats", p.Suggestion.ScopePath))
+	}
+	p.CategoryOptions = budgetAddCategoryOptions(v.Categories, p.Budgets, p.Draft.Period, p.Draft.Owner)
+	p.CopyOptions = []uiw.SelectOption{{Value: "", Label: uistate.T("budgets.copyExisting")}}
+	for _, b := range p.Budgets {
+		p.CopyOptions = append(p.CopyOptions, uiw.SelectOption{Value: b.ID, Label: b.Name})
+	}
+	return p
+}
 
-	advLabel := uistate.T("budgets.advancedShow")
-	if advOpen.Get() {
-		advLabel = uistate.T("budgets.advancedHide")
-	}
-
-	// C666: what the draft is still missing, recomputed every render.
-	//
-	// The modal opened with both required fields empty, no required markers, and a
-	// live "Add budget" — so the only way to learn what the form wanted was to
-	// press it. The button is dead until there is a minimum valid draft, the
-	// labels say which fields are required, and the line above the button names
-	// what is still outstanding. The create-a-new-category path is covered by the
-	// same rule: a blank category-name field falls back to the budget's name, so a
-	// nameless budget cannot mint a nameless category either.
-	nameMissing := strings.TrimSpace(name.Get()) == ""
-	_, limitProblem := budgeting.ParseLimitMajor(limit.Get(), currency.Decimals(limitCurrency.Get()))
-	// A field-level message for a value that is present but unusable. A blank
-	// field is not an error yet — the required marker and the blocker line say so
-	// without shouting at a form the user has only just opened.
-	limitFieldErr := ""
-	if !limitProblem.OK() && limitProblem != budgeting.LimitBlank {
-		limitFieldErr = budgetLimitError(limitProblem, limitCurrency.Get())
-	}
-	categoryMissing := !wantNewCat && strings.TrimSpace(catID.Get()) == ""
-	categoryAlreadyBudgeted := !wantNewCat && catID.Get() != "" && budgeting.IsDuplicateBudget(app.Budgets(), catID.Get(), period.Get(), owner.Get(), "")
-	addBlocked := nameMissing || categoryMissing || categoryAlreadyBudgeted || !limitProblem.OK()
-	blockerMsg := ""
-	switch {
-	case nameMissing && limitProblem == budgeting.LimitBlank:
-		blockerMsg = uistate.T("budgets.addNeedsBoth")
-	case nameMissing:
-		blockerMsg = uistate.T("budgets.addNeedsName")
-	case categoryMissing:
-		blockerMsg = uistate.T("budgets.categoryRequired")
-	case categoryAlreadyBudgeted:
-		blockerMsg = uistate.T("budgets.categoryAlreadyBudgeted")
-	case limitProblem == budgeting.LimitBlank:
-		blockerMsg = uistate.T("budgets.addNeedsLimit")
-	case !limitProblem.OK():
-		blockerMsg = limitFieldErr
-	}
-
-	// ---- 50/30/20 review mode -------------------------------------------------------
-	if tmplOpen.Get() {
-		excluded := tmplExcluded.Get()
-		var total int64
-		checked := 0
-		rows := MapKeyed(tmplProposals, func(p budgeting.BudgetProposal) any { return p.Category.ID }, func(p budgeting.BudgetProposal) ui.Node {
-			return ui.CreateElement(tmplReviewRow, tmplReviewRowProps{
-				ID: p.Category.ID, Label: p.Category.Name, AmountStr: fmtMoney(money.New(p.LimitMinor, base)),
-				Checked: !excluded[p.Category.ID], Bucket: p.Bucket, OnToggle: toggleTmpl, OnBucketChange: setTmplBucket,
-			})
-		})
-		for _, p := range tmplProposals {
-			if !excluded[p.Category.ID] {
-				checked++
-				total += p.LimitMinor
-			}
-		}
-		var emptyNote ui.Node = Fragment()
-		if len(tmplProposals) == 0 {
-			emptyNote = P(css.Class("empty"), uistate.T("budgets.tmplNothingToAdd"))
-		}
-		return Form(css.Class("budget-add-shell"), Attr("data-testid", "budget-tmpl-review"), applyTmplOnSubmit,
-			Div(css.Class("modal-scroll"),
-				P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0"}), uistate.T("bc6n7.reviewHint")),
-				If(template.Err != nil, P(css.Class("form-err"), Attr("role", "status"), uistate.T("budgets.incomplete"))),
-				Div(css.Class("budget-tmpl-rows"), rows),
-				emptyNote,
-				If(checked > 0, P(css.Class("budget-tmpl-total"), Attr("data-testid", "budget-tmpl-total"),
-					uistate.T("budgets.tmplReviewTotal", fmtMoney(money.New(total, base)), uistate.T(budgetCountKey("bc4b4.budgetCount", checked), checked)))),
-			),
-			Div(css.Class("modal-foot"),
-				Button(css.Class("btn"), Type("button"), Attr("data-testid", "budget-tmpl-back"), closeTmplOnClick, uistate.T("budgets.tmplBack")),
-				Button(css.Class("btn btn-primary", "ba-submit"), Type("submit"), Attr("data-testid", "budget-tmpl-apply"),
-					attrIf(checked == 0, "disabled", "disabled"),
-					uistate.T("budgets.tmplCreateN", uistate.T(budgetCountKey("bc4b4.budgetCount", checked), checked))),
-			),
-		)
-	}
-
-	// ---- the add form (essentials first, the rest behind Advanced) -------------------
-	return Form(css.Class("budget-add-shell"), Attr("data-testid", "budget-add-form"), addOnSubmit,
+func budgetAddContent(p budgetAddViewProps) ui.Node {
+	submit := OnSubmit(ui.UseEvent(Prevent(p.Actions.Submit)))
+	return Form(css.Class("budget-add-shell"), Attr("data-testid", "budget-add-form"), submit,
 		Div(css.Class("modal-scroll"),
-			// Start-from shortcuts: the 50/30/20 review, or copy an existing budget.
-			Div(css.Class("budget-add-tmpl"), Attr("data-testid", "budget-add-tmpl"),
-				Div(css.Class("row-main"),
-					Span(css.Class("budget-add-tmpl-title"), uistate.T("budgets.tmplBannerTitle")),
-					Span(css.Class("row-meta", tw.TextDim), uistate.T("budgets.tmplBannerHint")),
-				),
-				Div(css.Class("budget-add-tmpl-actions"),
-					Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "budgets-template-503020"),
-						Title(uistate.T("budgets.tmplTitle")), openTmplOnClick,
-						uiw.Icon(icon.Split, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("budgets.tmpl503020"))),
-					If(len(copyOptions) > 1, uiw.SelectInput(uiw.SelectInputProps{
-						Options:   copyOptions,
-						Selected:  "",
-						OnChange:  func(v string) { copyFrom(v) },
-						AriaLabel: uistate.T("budgets.copyExisting"),
-						TestID:    "budget-copy-existing",
-					})),
-				),
-				If(template.Err != nil, P(css.Class("form-err"), Attr("role", "status"), Attr("data-testid", "budget-template-income-incomplete"), uistate.T("budgets.incomplete"))),
-			),
+			ui.CreateElement(budgetAddShortcuts, p),
 			Div(css.Class("budget-add-or"), Span(uistate.T("budgets.tmplOr"))),
 			Div(css.Class("form-grid", "budget-add-grid"),
-				// The essentials: Name, then Limit + Period. Everything else is Advanced.
-				Div(css.Class("ba-full"),
-					uiw.Field(uiw.FieldProps{ID: "budget-add", Label: uistate.T("common.name"), Required: true, TestID: "budget-add-name-field",
-						Control: func(a uiw.FieldA11y) ui.Node {
-							attrs := []any{css.Class("field"), Attr("id", a.ID), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), nameOnInput}
-							if strings.TrimSpace(props.Seed.Name) == "" {
-								attrs = append(attrs, Attr("autofocus", "autofocus"))
-							}
-							attrs = append(attrs, errAttrs("budget-err", errMsg.Get())...)
-							return Input(append(attrs, uiw.FieldValue(name.Get()))...)
-						},
-					})),
-				// What this budget measures, before what it watches: the direction
-				// changes which categories are even offered below.
-				Div(css.Class("ba-full"),
-					labeledField(uistate.T("budgets.directionLabel"),
-						uiw.SelectInput(uiw.SelectInputProps{
-							Options: []uiw.SelectOption{
-								{Value: string(domain.DirectionSpend), Label: uistate.T("budgets.directionSpend")},
-								{Value: string(domain.DirectionSave), Label: uistate.T("budgets.directionSave")},
-							},
-							Selected:  direction.Get(),
-							OnChange:  func(v string) { direction.Set(v) },
-							AriaLabel: uistate.T("budgets.directionLabel"),
-							TestID:    "budget-direction",
-						}))),
-				If(direction.Get() == string(domain.DirectionSave),
-					P(css.Class("budget-cat-fate", tw.TextFaint), Attr("data-testid", "budget-direction-hint"),
-						uistate.T("budgets.directionSaveHint"))),
-				// Which category this budget watches, and whether one gets created.
-				// This used to live behind Advanced with "create a new category" as
-				// the silent default, which is how adding a budget minted twins.
-				catRow,
-				// C666/C665: required, floored at a cent, and validated as it is typed —
-				// a zero, a negative or a malformed limit says so under the field
-				// instead of waiting to be discovered by a failed commit.
-				uiw.Field(uiw.FieldProps{ID: "budget-add-limit", Label: uistate.T("budgets.limitLabel"), Required: true,
-					Error: limitFieldErr, TestID: "budget-add-limit-field",
-					Control: func(a uiw.FieldA11y) ui.Node {
-						attrs := []any{css.Class("field"), Attr("id", a.ID), Type("number"), Attr("data-testid", "budget-add-limit"),
-							Attr("aria-required", "true"), Attr("aria-describedby", a.DescribedBy),
-							Placeholder(uistate.T("budgets.limitPlaceholder", limitCurrency.Get())), Step("0.01"), Attr("min", "0.01"), limitOnInput}
-						if strings.TrimSpace(props.Seed.LimitMajor) == "" {
-							attrs = append(attrs, Attr("autofocus", "autofocus"))
-						}
-						if limitFieldErr != "" {
-							attrs = append(attrs, Attr("aria-invalid", "true"))
-						}
-						return Input(append(attrs, uiw.FieldValue(limit.Get()))...)
-					},
-				}),
-				labeledField(uistate.T("budgets.period"),
-					uiw.SelectInput(uiw.SelectInputProps{
-						Options:   periodOptions(period.Get()),
-						Selected:  period.Get(),
-						OnChange:  func(v string) { period.Set(v) },
-						AriaLabel: uistate.T("budgets.period"),
-					})),
-				If(suggestAmount > 0, Div(css.Class("ba-full", "suggest-row"),
-					Span(css.Class("muted"), uistate.T("budgets.suggest", fmtMoney(money.New(suggestAmount, limitCurrency.Get())))),
-					Button(css.Class("btn"), Type("button"), Attr("data-testid", "budget-use-suggest"), suggestOnClick, uistate.T("budgets.useSuggest")),
-				)),
-				// Where a rolled-up average came from, so it is never read as one
-				// category's spending (C586).
-				If(suggestScope != "", Div(css.Class("ba-full"),
-					Span(css.Class("budget-cat-fate", tw.TextFaint), Attr("data-testid", "budget-suggest-scope"), suggestScope))),
-				suggestNote,
-				// Advanced: identity + tracking + ownership details most adds never touch.
-				Div(css.Class("ba-full"),
-					Button(css.Class("btn cf-adv-toggle"), Type("button"), Attr("data-testid", "budget-add-advanced"),
-						Attr("aria-expanded", ariaBool(advOpen.Get())), toggleAdvOnClick, Text(advLabel))),
-				// C594: the advanced surface used to be one undifferentiated pile —
-				// a formula handle, a whole category tree, tags, owner, method, rollover
-				// and custom fields — opening with an implementation-oriented variable
-				// name before the user had finished establishing the budget. It is three
-				// named groups now, each saying in product language what it is for, so a
-				// power user can go straight to the one they came for and a first-timer
-				// can see at a glance that none of it is required.
-				If(advOpen.Get(), Fragment(
-					// --- What else this budget counts ---
-					Div(css.Class("ba-full", "ba-group"), Attr("data-testid", "budget-add-group-tracking"),
-						Span(css.Class("ba-group-head"), uistate.T("budgets.groupTracking")),
-						Span(css.Class("ba-group-hint", tw.TextFaint), uistate.T("budgets.groupTrackingHint"))),
-					// Optional multi-category: track more existing categories in this one budget.
-					If(len(expenseCats) > 0, Div(css.Class("ba-full"),
-						labeledField(uistate.T("budgets.catsAlsoTrack"),
-							ui.CreateElement(budgetCategoryPicker, budgetCategoryPickerProps{
-								Picked: alsoTrack.Get(), OnToggle: toggleAlso,
-								Saving: direction.Get() == string(domain.DirectionSave),
-							})))),
-					// Optional cross-category tag tracking: count any charge with these tags,
-					// whatever its category. Comma-separated; parsed + deduped on save.
-					Div(css.Class("ba-full"),
-						labeledField(uistate.T("budgets.tagsFieldLabel"),
-							Fragment(
-								Input(css.Class("field"), Type("text"), Attr("data-testid", "budget-add-tags"),
-									Placeholder(uistate.T("budgets.tagsPlaceholder")), tagsOnInput, uiw.FieldValue(trackTags.Get())),
-								Span(css.Class("budget-owner-hint", tw.TextFaint), uistate.T("budgets.tagsFieldHint"))))),
-					// --- How it behaves ---
-					Div(css.Class("ba-full", "ba-group"), Attr("data-testid", "budget-add-group-behaviour"),
-						Span(css.Class("ba-group-head"), uistate.T("budgets.groupBehaviour")),
-						Span(css.Class("ba-group-hint", tw.TextFaint), uistate.T("budgets.groupBehaviourHint"))),
-					// Owner (hidden until members exist) with its scope consequence spelled out.
-					If(len(app.Members()) > 0, Fragment(
-						labeledField(uistate.T("common.owner"),
-							uiw.SelectInput(uiw.SelectInputProps{
-								Options:   ownerOptions,
-								Selected:  owner.Get(),
-								OnChange:  func(v string) { owner.Set(v) },
-								AriaLabel: uistate.T("common.owner"),
-							})),
-						Div(css.Class("ba-full"),
-							Span(css.Class("budget-owner-hint", tw.TextFaint), Attr("data-testid", "budget-owner-hint"), ownerHint)))),
-					// C590: name the scope. This picker and the page's "Budgeting method"
-					// popover were both called "method", and neither said which budgets it moved.
-					labeledField(uistate.T("budgets.methodLabel"),
-						Fragment(
-							uiw.SelectInput(uiw.SelectInputProps{
-								Options:   budgetMethodOptions(methodology.Get()),
-								Selected:  methodology.Get(),
-								OnChange:  func(v string) { methodology.Set(v) },
-								AriaLabel: uistate.T("budgets.methodLabel"),
-							}),
-							Span(css.Class("budget-owner-hint", tw.TextFaint), Attr("data-testid", "budget-add-method-hint"),
-								budgetOwnMethodHint(app.Settings().BudgetMethodology, methodology.Get())))),
-					// Rollover gets its own full-width row so the label never wraps.
-					Label(css.Class("ba-full", "ba-check"),
-						Input(append([]any{Type("checkbox"), Attr("style", "flex-shrink:0"), rolloverOnChange}, checkedAttr(rollover.Get())...)...),
-						Span(Title(uistate.T("budgets.rolloverTitle")), uistate.T("budgets.rollover")),
-					),
-					MapKeyed(budgetDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
-						return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customVals.Get()[d.Key], OnChange: onCustom})
-					}),
-					// --- For your own calculations ---
-					// LAST, and explained: this is a formula handle, not a budget setting, and
-					// leading the advanced section with it asked a first-time user to name an
-					// engine variable before they had finished naming their budget.
-					Div(css.Class("ba-full", "ba-group"), Attr("data-testid", "budget-add-group-formula"),
-						Span(css.Class("ba-group-head"), uistate.T("budgets.groupFormula")),
-						Span(css.Class("ba-group-hint", tw.TextFaint), uistate.T("budgets.groupFormulaHint"))),
-					Div(css.Class("ba-full"),
-						labeledField(uistate.T("budgets.varNameLabel"),
-							entityVarField(budgetVarKind, budgetVarEntities(app.Budgets()), "", "budget-add-varname", "budget-add-varname-warn", ev.VarName.Get(), name.Get(), ev.OnVarName))),
-				)),
+				ui.CreateElement(budgetAddIdentity, p), ui.CreateElement(budgetAddCategory, p), ui.CreateElement(budgetAddLimit, p), ui.CreateElement(budgetAddSuggestion, p), ui.CreateElement(budgetAddAdvanced, p)),
+			errText("budget-err", p.Error)), ui.CreateElement(budgetAddFooter, p))
+}
+
+func budgetAddAdvanced(p budgetAddViewProps) ui.Node {
+	toggle := OnClick(ui.UseEvent(Prevent(p.Actions.Advanced)))
+	return Fragment(
+		Div(css.Class("ba-full"), Button(css.Class("btn cf-adv-toggle"), Type("button"), Attr("data-testid", "budget-add-advanced"), Attr("aria-expanded", ariaBool(p.Draft.Advanced)), toggle, Text(uistate.T(p.Preview.AdvancedKey)))),
+		If(p.Draft.Advanced, Fragment(ui.CreateElement(budgetAddTracking, p), ui.CreateElement(budgetAddBehaviour, p), ui.CreateElement(budgetAddFormula, p))))
+}
+
+func budgetAddSuggestionNote(p budgetAddViewProps) ui.Node {
+	if p.Preview.WantNew && p.Suggestion.Amount.Amount == 0 && p.Preview.TypedCategory != "" {
+		return Div(css.Class("ba-full"), Span(css.Class("budget-cat-fate", tw.TextFaint), Attr("data-testid", "budget-suggest-none"), uistate.T("budgets.suggestNoHistory")))
+	}
+	if p.Suggestion.Err != nil {
+		return Div(css.Class("ba-full"), P(css.Class("form-err"), Attr("role", "status"), uistate.T("budgets.incomplete")))
+	}
+	return Fragment()
+}
+
+func budgetAddShortcuts(p budgetAddViewProps) ui.Node {
+	openTmplOnClick := OnClick(ui.UseEvent(Prevent(p.Actions.OpenTemplate)))
+	return Fragment(
+		Div(css.Class("budget-add-tmpl"), Attr("data-testid", "budget-add-tmpl"),
+			Div(css.Class("row-main"),
+				Span(css.Class("budget-add-tmpl-title"), uistate.T("budgets.tmplBannerTitle")),
+				Span(css.Class("row-meta", tw.TextDim), uistate.T("budgets.tmplBannerHint")),
 			),
-			errText("budget-err", errMsg.Get()),
+			Div(css.Class("budget-add-tmpl-actions"),
+				Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "budgets-template-503020"),
+					Title(uistate.T("budgets.tmplTitle")), openTmplOnClick,
+					uiw.Icon(icon.Split, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("budgets.tmpl503020"))),
+				If(len(p.CopyOptions) > 1, uiw.SelectInput(uiw.SelectInputProps{
+					Options:   p.CopyOptions,
+					Selected:  "",
+					OnChange:  func(v string) { p.Actions.Copy(v) },
+					AriaLabel: uistate.T("budgets.copyExisting"),
+					TestID:    "budget-copy-existing",
+				})),
+			),
+			If(p.Template.Err != nil, P(css.Class("form-err"), Attr("role", "status"), Attr("data-testid", "budget-template-income-incomplete"), uistate.T("budgets.incomplete"))),
 		),
-		// Action bar pinned to the bottom of the modal: a quiet Cancel and the primary,
-		// full-width-feeling "Add budget".
+	)
+}
+
+func budgetAddIdentity(p budgetAddViewProps) ui.Node {
+	nameOnInput := OnInput(ui.UseEvent(p.Actions.Name))
+	return Fragment(
+		Div(css.Class("ba-full"),
+			uiw.Field(uiw.FieldProps{ID: "budget-add", Label: uistate.T("common.name"), Required: true, TestID: "budget-add-name-field",
+				Control: func(a uiw.FieldA11y) ui.Node {
+					attrs := []any{css.Class("field"), Attr("id", a.ID), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), nameOnInput}
+					if p.Preview.NameAutofocus {
+						attrs = append(attrs, Attr("autofocus", "autofocus"))
+					}
+					attrs = append(attrs, errAttrs("budget-err", p.Error)...)
+					return Input(append(attrs, uiw.FieldValue(p.Draft.Name))...)
+				},
+			})),
+		// What this budget measures, before what it watches: the direction
+		// changes which categories are even offered below.
+		Div(css.Class("ba-full"),
+			labeledField(uistate.T("budgets.directionLabel"),
+				uiw.SelectInput(uiw.SelectInputProps{
+					Options: []uiw.SelectOption{
+						{Value: string(domain.DirectionSpend), Label: uistate.T("budgets.directionSpend")},
+						{Value: string(domain.DirectionSave), Label: uistate.T("budgets.directionSave")},
+					},
+					Selected:  p.Draft.Direction,
+					OnChange:  p.Actions.Direction,
+					AriaLabel: uistate.T("budgets.directionLabel"),
+					TestID:    "budget-direction",
+				}))),
+		If(p.Preview.Saving,
+			P(css.Class("budget-cat-fate", tw.TextFaint), Attr("data-testid", "budget-direction-hint"),
+				uistate.T("budgets.directionSaveHint"))),
+	)
+}
+
+func budgetAddLimit(p budgetAddViewProps) ui.Node {
+	limitOnInput := OnInput(ui.UseEvent(p.Actions.Limit))
+	return Fragment(
+		uiw.Field(uiw.FieldProps{ID: "budget-add-limit", Label: uistate.T("budgets.limitLabel"), Required: true,
+			Error: p.LimitError, TestID: "budget-add-limit-field",
+			Control: func(a uiw.FieldA11y) ui.Node {
+				attrs := []any{css.Class("field"), Attr("id", a.ID), Type("number"), Attr("data-testid", "budget-add-limit"),
+					Attr("aria-required", "true"), Attr("aria-describedby", a.DescribedBy),
+					Placeholder(uistate.T("budgets.limitPlaceholder", p.Draft.Currency)), Step("0.01"), Attr("min", "0.01"), limitOnInput}
+				if p.Preview.LimitAutofocus {
+					attrs = append(attrs, Attr("autofocus", "autofocus"))
+				}
+				if p.LimitError != "" {
+					attrs = append(attrs, Attr("aria-invalid", "true"))
+				}
+				return Input(append(attrs, uiw.FieldValue(p.Draft.Limit))...)
+			},
+		}),
+		labeledField(uistate.T("budgets.period"),
+			uiw.SelectInput(uiw.SelectInputProps{
+				Options:   periodOptions(p.Draft.Period),
+				Selected:  p.Draft.Period,
+				OnChange:  p.Actions.Period,
+				AriaLabel: uistate.T("budgets.period"),
+			})),
+	)
+}
+
+func budgetAddSuggestion(p budgetAddViewProps) ui.Node {
+	suggestOnClick := OnClick(ui.UseEvent(Prevent(p.Actions.Suggest)))
+	return Fragment(
+		If(p.Suggestion.Amount.Amount > 0, Div(css.Class("ba-full", "suggest-row"),
+			Span(css.Class("muted"), uistate.T("budgets.suggest", fmtMoney(money.New(p.Suggestion.Amount.Amount, p.Draft.Currency)))),
+			Button(css.Class("btn"), Type("button"), Attr("data-testid", "budget-use-suggest"), suggestOnClick, uistate.T("budgets.useSuggest")),
+		)),
+		// Where a rolled-up average came from, so it is never read as one
+		// category's spending (C586).
+		If(p.SuggestScope != "", Div(css.Class("ba-full"),
+			Span(css.Class("budget-cat-fate", tw.TextFaint), Attr("data-testid", "budget-suggest-scope"), p.SuggestScope))),
+		ui.CreateElement(budgetAddSuggestionNote, p),
+	)
+}
+
+func budgetAddTracking(p budgetAddViewProps) ui.Node {
+	tagsOnInput := OnInput(ui.UseEvent(p.Actions.Tags))
+	return Fragment(
+		// --- What else this budget counts ---
+		Div(css.Class("ba-full", "ba-group"), Attr("data-testid", "budget-add-group-tracking"),
+			Span(css.Class("ba-group-head"), uistate.T("budgets.groupTracking")),
+			Span(css.Class("ba-group-hint", tw.TextFaint), uistate.T("budgets.groupTrackingHint"))),
+		// Optional multi-category: track more existing categories in this one budget.
+		If(p.Preview.ExpenseCount > 0, Div(css.Class("ba-full"),
+			labeledField(uistate.T("budgets.catsAlsoTrack"),
+				ui.CreateElement(budgetCategoryPicker, budgetCategoryPickerProps{
+					Picked: p.Draft.Also, OnToggle: p.Actions.Also,
+					Saving: p.Preview.Saving,
+				})))),
+		// Optional cross-category tag tracking: count any charge with these tags,
+		// whatever its category. Comma-separated; parsed + deduped on save.
+		Div(css.Class("ba-full"),
+			labeledField(uistate.T("budgets.tagsFieldLabel"),
+				Fragment(
+					Input(css.Class("field"), Type("text"), Attr("data-testid", "budget-add-tags"),
+						Placeholder(uistate.T("budgets.tagsPlaceholder")), tagsOnInput, uiw.FieldValue(p.Draft.Tags)),
+					Span(css.Class("budget-owner-hint", tw.TextFaint), uistate.T("budgets.tagsFieldHint"))))),
+	)
+}
+
+func budgetAddBehaviour(p budgetAddViewProps) ui.Node {
+	rolloverOnChange := OnChange(ui.UseEvent(p.Actions.Rollover))
+	return Fragment(
+		// --- How it behaves ---
+		Div(css.Class("ba-full", "ba-group"), Attr("data-testid", "budget-add-group-behaviour"),
+			Span(css.Class("ba-group-head"), uistate.T("budgets.groupBehaviour")),
+			Span(css.Class("ba-group-hint", tw.TextFaint), uistate.T("budgets.groupBehaviourHint"))),
+		// Owner (hidden until members exist) with its scope consequence spelled out.
+		If(len(p.Members) > 0, Fragment(
+			labeledField(uistate.T("common.owner"),
+				uiw.SelectInput(uiw.SelectInputProps{
+					Options:   ownerSelectOptions(p.Members, p.Draft.Owner),
+					Selected:  p.Draft.Owner,
+					OnChange:  p.Actions.Owner,
+					AriaLabel: uistate.T("common.owner"),
+				})),
+			Div(css.Class("ba-full"),
+				Span(css.Class("budget-owner-hint", tw.TextFaint), Attr("data-testid", "budget-owner-hint"), p.OwnerHint)))),
+		// C590: name the scope. This picker and the page's "Budgeting method"
+		// popover were both called "method", and neither said which budgets it moved.
+		labeledField(uistate.T("budgets.methodLabel"),
+			Fragment(
+				uiw.SelectInput(uiw.SelectInputProps{
+					Options:   budgetMethodOptions(p.Draft.Methodology),
+					Selected:  p.Draft.Methodology,
+					OnChange:  p.Actions.Method,
+					AriaLabel: uistate.T("budgets.methodLabel"),
+				}),
+				Span(css.Class("budget-owner-hint", tw.TextFaint), Attr("data-testid", "budget-add-method-hint"),
+					budgetOwnMethodHint(p.GlobalMethod, p.Draft.Methodology)))),
+		// Rollover gets its own full-width row so the label never wraps.
+		Label(css.Class("ba-full", "ba-check"),
+			Input(append([]any{Type("checkbox"), Attr("style", "flex-shrink:0"), rolloverOnChange}, checkedAttr(p.Draft.Rollover)...)...),
+			Span(Title(uistate.T("budgets.rolloverTitle")), uistate.T("budgets.rollover")),
+		),
+		MapKeyed(p.Defs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
+			return ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: p.Draft.Custom[d.Key], OnChange: p.Actions.Custom})
+		}),
+	)
+}
+
+func budgetAddFormula(p budgetAddViewProps) ui.Node {
+	varNameHandler := ui.UseEvent(p.Actions.VarName)
+	return Fragment(
+		// --- For your own calculations ---
+		// LAST, and explained: this is a formula handle, not a budget setting, and
+		// leading the advanced section with it asked a first-time user to name an
+		// engine variable before they had finished naming their budget.
+		Div(css.Class("ba-full", "ba-group"), Attr("data-testid", "budget-add-group-formula"),
+			Span(css.Class("ba-group-head"), uistate.T("budgets.groupFormula")),
+			Span(css.Class("ba-group-hint", tw.TextFaint), uistate.T("budgets.groupFormulaHint"))),
+		Div(css.Class("ba-full"),
+			labeledField(uistate.T("budgets.varNameLabel"),
+				entityVarField(budgetVarKind, budgetVarEntities(p.Budgets), "", "budget-add-varname", "budget-add-varname-warn", p.Draft.VarName, p.Draft.Name, varNameHandler))),
+	)
+}
+
+func budgetAddCategory(p budgetAddViewProps) ui.Node {
+	toggleCreateOnChange := OnChange(ui.UseEvent(p.Actions.Create))
+	newCategoryOnInput := OnInput(ui.UseEvent(p.Actions.NewCategory))
+	var catFateNode ui.Node = Fragment()
+	if p.Fate != "" {
+		catFateNode = Span(css.Class("budget-cat-fate", tw.TextFaint), Attr("data-testid", "budget-cat-fate"), p.Fate)
+	}
+	return Fragment(
+		Div(css.Class("ba-full", "budget-cat-row"),
+			Label(css.Class("budget-cat-optin", tw.Flex, tw.ItemsCenter, tw.Gap2), Attr("data-testid", "budget-create-cat-label"),
+				Input(append([]any{Type("checkbox"), Attr("data-testid", "budget-create-cat"),
+					Attr("style", "flex-shrink:0"), toggleCreateOnChange},
+					append(checkedAttr(p.Preview.WantNew), checkboxDisabled(p.Preview.MustCreate)...)...)...),
+				Span(uistate.T("budgets.createCatOptIn"))),
+			If(p.Preview.MustCreate, Span(css.Class("budget-cat-fate", tw.TextFaint), Attr("data-testid", "budget-create-cat-forced"),
+				uistate.T("budgets.createCatForced"))),
+			If(!p.Preview.WantNew, uiw.Field(uiw.FieldProps{
+				ID: "budget-add-category", Label: uistate.T("budgets.categoryLabel"), Required: true,
+				TestID: "budget-add-category-field",
+				Control: func(a uiw.FieldA11y) ui.Node {
+					return uiw.Picker(uiw.PickerProps{
+						ID: a.ID, Label: a.Label, Placeholder: uistate.T("budgets.chooseCategory"),
+						SelectedLabel: p.Preview.SelectedName, Searchable: true, TestID: "budget-existing-cat",
+						Options: p.CategoryOptions, OnCommit: p.Actions.Category,
+					})
+				},
+			})),
+			If(p.Preview.WantNew && !p.Preview.MustCreate, labeledField(uistate.T("budgets.newCategoryName"),
+				Input(css.Class("field"), Type("text"), Attr("data-testid", "budget-new-cat-name"),
+					Placeholder(uistate.T("budgets.newCategoryPlaceholder")), newCategoryOnInput, uiw.FieldValue(p.Draft.NewCategoryName)))),
+			catFateNode,
+		),
+	)
+}
+
+func budgetAddFooter(p budgetAddViewProps) ui.Node {
+	cancelOnClick := OnClick(ui.UseEvent(Prevent(p.Actions.Cancel)))
+	return Fragment(
 		Div(css.Class("modal-foot"),
 			// C666: a disabled button is only honest if it says what it is waiting
 			// for. This line sits with the action, so the answer is where the
 			// question gets asked.
-			If(blockerMsg != "", Span(css.Class("t-caption", tw.TextDim), Attr("data-testid", "budget-add-blockers"), blockerMsg)),
+			If(p.Blocker != "", Span(css.Class("t-caption", tw.TextDim), Attr("data-testid", "budget-add-blockers"), p.Blocker)),
 			Button(css.Class("btn"), Type("button"), cancelOnClick, uistate.T("action.cancel")),
 			Button(append([]any{css.Class("btn btn-primary", "ba-submit"), Type("submit"),
 				Attr("data-testid", "budget-add-submit"), uistate.T("budgets.add")},
-				disabledAttr(addBlocked)...)...),
+				disabledAttr(p.Preview.Blocked)...)...),
+		),
+	)
+}
+
+func budgetAddTemplateReview(p budgetAddViewProps) ui.Node {
+	back := OnClick(ui.UseEvent(Prevent(p.Actions.CloseTemplate)))
+	apply := OnSubmit(ui.UseEvent(Prevent(p.Actions.Apply)))
+	checked, total, err := budgetform.Review(p.Template.Proposals, p.Draft.Excluded)
+	if err != nil {
+		slog.Error("calculate template review total", "error", err)
+	}
+	rows := MapKeyed(p.Template.Proposals, func(proposal budgeting.BudgetProposal) any { return proposal.Category.ID }, func(proposal budgeting.BudgetProposal) ui.Node {
+		return ui.CreateElement(tmplReviewRow, tmplReviewRowProps{ID: proposal.Category.ID, Label: proposal.Category.Name, AmountStr: fmtMoney(money.New(proposal.LimitMinor, p.Base)), Checked: !p.Draft.Excluded[proposal.Category.ID], Bucket: proposal.Bucket, OnToggle: p.Actions.Exclude, OnBucketChange: p.Actions.Bucket})
+	})
+	var emptyNote ui.Node = Fragment()
+	if len(p.Template.Proposals) == 0 {
+		emptyNote = P(css.Class("empty"), uistate.T("budgets.tmplNothingToAdd"))
+	}
+	return Form(css.Class("budget-add-shell"), Attr("data-testid", "budget-tmpl-review"), apply,
+		Div(css.Class("modal-scroll"),
+			P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0"}), uistate.T("bc6n7.reviewHint")),
+			If(p.Template.Err != nil, P(css.Class("form-err"), Attr("role", "status"), uistate.T("budgets.incomplete"))),
+			Div(css.Class("budget-tmpl-rows"), rows),
+			emptyNote,
+			If(checked > 0, P(css.Class("budget-tmpl-total"), Attr("data-testid", "budget-tmpl-total"),
+				uistate.T("budgets.tmplReviewTotal", fmtMoney(money.New(total, p.Base)), uistate.T(budgetCountKey("bc4b4.budgetCount", checked), checked)))),
+		),
+		Div(css.Class("modal-foot"),
+			Button(css.Class("btn"), Type("button"), Attr("data-testid", "budget-tmpl-back"), back, uistate.T("budgets.tmplBack")),
+			Button(css.Class("btn btn-primary", "ba-submit"), Type("submit"), Attr("data-testid", "budget-tmpl-apply"),
+				attrIf(checked == 0, "disabled", "disabled"),
+				uistate.T("budgets.tmplCreateN", uistate.T(budgetCountKey("bc4b4.budgetCount", checked), checked))),
 		),
 	)
 }
 
 func applyBudgetTemplate(app *appstate.App, proposals []budgeting.BudgetProposal, excluded map[string]bool, base string, now time.Time) (int, error) {
-	var writes []domain.Budget
-	for _, proposal := range proposals {
-		if excluded[proposal.Category.ID] {
-			continue
-		}
-		budget := domain.Budget{
-			ID: id.New(), Name: proposal.Category.Name, CategoryID: proposal.Category.ID,
-			Scope: domain.ScopeShared, OwnerID: domain.GroupOwnerID,
-			Period: domain.PeriodMonthly, Limit: money.New(proposal.LimitMinor, base),
-		}
-		if proposal.Bucket == budgeting.BucketSavings {
-			budget.Direction = domain.DirectionSave
-		}
-		writes = append(writes, budget)
-	}
+	writes := budgetform.TemplateBudgets(proposals, excluded, base, id.New)
 	if len(writes) == 0 {
 		return 0, nil
 	}
@@ -993,11 +583,6 @@ func applyBudgetTemplate(app *appstate.App, proposals []budgeting.BudgetProposal
 type budgetAddTemplateMemo struct {
 	Proposals []budgeting.BudgetProposal
 	Err       error
-}
-
-type budgetAddSuggestionMemo struct {
-	Amount money.Money
-	Err    error
 }
 
 // attrIf returns the attribute option when cond holds, else a no-op fragment arg.
@@ -1013,7 +598,7 @@ type tmplReviewRowProps struct {
 	ID, Label, AmountStr string
 	Checked              bool
 	Bucket               budgeting.Bucket
-	OnToggle             func(string) // plain func — never an On* hook (no-On*-in-loop rule)
+	OnToggle             func(string) // plain func Ã¢â‚¬â€ never an On* hook (no-On*-in-loop rule)
 	OnBucketChange       func(string, string)
 }
 
@@ -1038,7 +623,7 @@ func tmplReviewRow(props tmplReviewRowProps) ui.Node {
 }
 
 // checkboxDisabled returns the disabled attribute when the control has no real
-// choice to offer — a household with no categories must create one, and a
+// choice to offer Ã¢â‚¬â€ a household with no categories must create one, and a
 // checkbox that looks clickable but is not is worse than one that says so.
 func checkboxDisabled(disabled bool) []any {
 	if disabled {
