@@ -35,6 +35,7 @@ type txnNoMatchProps struct {
 	FuturePeriod   bool
 	ScheduledCount int
 	ScheduledItems []bills.Bill
+	InTable        bool
 }
 
 // txnNoMatch is the empty state for a filtered ledger with no rows. Its own
@@ -49,9 +50,6 @@ func txnNoMatch(props txnNoMatchProps) ui.Node {
 	}
 	if props.FuturePeriod && props.ScheduledItems == nil {
 		props.ScheduledItems = txnFutureScheduledItems(filterAtom.Get(), time.Now())
-		if len(props.ScheduledItems) > 0 || props.ScheduledCount == 0 {
-			props.ScheduledCount = len(props.ScheduledItems)
-		}
 	}
 	clear := ui.UseEvent(func() {
 		// Cancel the in-flight debounce FIRST. Without this the pending callback
@@ -63,20 +61,12 @@ func txnNoMatch(props txnNoMatchProps) ui.Node {
 	})
 
 	if props.FuturePeriod {
-		messageKey := "transactions.noMatchFutureZero"
-		if props.ScheduledCount == 1 {
-			messageKey = "transactions.noMatchFutureOne"
-		} else if props.ScheduledCount > 1 {
-			messageKey = "transactions.noMatchFutureMany"
-		}
 		return Div(css.Class("empty", tw.Flex, tw.FlexCol, tw.ItemsCenter, tw.Gap2),
 			Attr("data-testid", "txn-nomatch"), Attr("role", "status"),
-			P(txnFutureMessage(messageKey, props.ScheduledCount)),
-			If(len(props.ScheduledItems) > 0, Div(css.Class("txn-scheduled-ghosts data-table"),
-				Attr("style", "width:100%;margin-top:.75rem;text-align:left"),
-				Attr("role", "rowgroup"), Attr("aria-label", uistate.T("transactions.noMatchFutureListLabel")),
-				Fragment(txnScheduledGhostRows(props.ScheduledItems, prefs.FormatDate)...),
-			)),
+			P(css.Class("txn-future-empty-line"), uistate.T("fut2.futureEmptyLine")),
+			If(!props.InTable && len(props.ScheduledItems) > 0, Div(Attr("role", "rowgroup"),
+				Attr("aria-label", uistate.T("transactions.noMatchFutureListLabel")),
+				Fragment(txnScheduledGhostRows(props.ScheduledItems, prefs.FormatDate)...))),
 			If(props.Search != "", Button(css.Class("btn btn-sm"), Type("button"),
 				Attr("data-testid", "txn-nomatch-clear"), OnClick(clear), uistate.T("action.clearSearch"))),
 			A(css.Class("btn-link"), Href(uistate.RoutePath("/recurring")),
@@ -95,13 +85,6 @@ func txnNoMatch(props txnNoMatchProps) ui.Node {
 			OnClick(clear), uistate.T("action.clearSearch")),
 		P(css.Class("t-caption", tw.TextDim), uistate.T("transactions.noMatchKeepsFilters")),
 	)
-}
-
-func txnFutureMessage(key string, count int) string {
-	if key == "transactions.noMatchFutureMany" {
-		return uistate.T(key, count)
-	}
-	return uistate.T(key)
 }
 
 func txnScheduledGhostRows(items []bills.Bill, formatDate func(time.Time) string) []any {
@@ -123,19 +106,93 @@ func txnScheduledGhostRows(items []bills.Bill, formatDate func(time.Time) string
 			category = categories[billCategoryID(app, item)]
 		}
 		amount, tone := fmtLedgerAmount(money.New(-item.Amount.Amount, item.Amount.Currency), false)
-		rows = append(rows, Div(css.Class("txn-row txn-scheduled-ghost"),
-			Attr("style", "display:grid;grid-template-columns:var(--txn-col-date,7rem) minmax(12rem,1fr) var(--txn-col-category,10rem) var(--txn-col-account,10rem) var(--txn-col-amount,7rem) var(--txn-col-status,7rem);align-items:center;gap:.5rem;padding:.45rem .6rem;border-bottom:1px solid var(--border)"),
-			Attr("role", "row"), Attr("data-testid", "txn-scheduled-ghost"),
-			Div(css.Class("td-date"), Attr("role", "gridcell"), formatDate(item.DueDate)),
-			Div(css.Class("td-desc"), Attr("role", "gridcell"), item.Name),
-			Div(css.Class("td-cat"), Attr("role", "gridcell"), category),
-			Div(css.Class("td-acct txn-scheduled-account"), Attr("role", "gridcell"), Attr("title", account), account),
-			Div(css.Class("td-amount", tw.ColorClass(tone)), Attr("role", "gridcell"), amount),
-			Div(css.Class("txn-scheduled-status"), Attr("role", "gridcell"),
-				Span(css.Class("txn-scheduled-pill"), uistate.T("transactions.scheduledStatus"))),
-		))
+		rows = append(rows, ui.CreateElement(txnScheduledGhostRow, txnScheduledGhostRowProps{
+			Date: formatDate(item.DueDate), Name: item.Name, Category: category,
+			Account: account, Amount: amount, AmountTone: tone,
+		}))
 	}
 	return rows
+}
+
+type txnScheduledGhostRowProps struct {
+	Date, Name, Category, Account, Amount, AmountTone string
+}
+
+// txnScheduledGhostRow keeps a scheduled item inert as a ledger row while giving
+// its overflow menu the one supported action: open the schedule that owns it.
+func txnScheduledGhostRow(props txnScheduledGhostRowProps) ui.Node {
+	return Div(css.Class("txn-row", "txn-scheduled-ghost"),
+		Attr("role", "row"), Attr("data-testid", "txn-scheduled-ghost"), Attr("aria-disabled", "true"),
+		Div(css.Class("td-date"), Attr("role", "gridcell"), props.Date),
+		Div(css.Class("td-desc"), Attr("role", "gridcell"),
+			Span(css.Class("txn-scheduled-name"), props.Name),
+			Span(css.Class("txn-scheduled-pill"), uistate.T("transactions.scheduledStatus"))),
+		Div(css.Class("td-cat"), Attr("role", "gridcell"), props.Category),
+		Div(css.Class("td-acct", "txn-scheduled-account"), Attr("role", "gridcell"), Attr("title", props.Account), props.Account),
+		Div(css.Class("td-amount", tw.ColorClass(props.AmountTone)), Attr("role", "gridcell"), props.Amount),
+		Div(css.Class("txn-scheduled-status"), Attr("role", "gridcell"), ui.CreateElement(txnScheduledGhostMenu, struct{}{})),
+	)
+}
+
+type txnScheduledTableRowProps struct {
+	Date, Name, Category, Account, Amount, AmountTone string
+	Vis                                               uistate.TxnCols
+	ShowUser, ShowBalance                             bool
+}
+
+func txnScheduledTableRow(props txnScheduledTableRowProps) ui.Node {
+	return Tr(css.Class("txn-row", "txn-scheduled-ghost"), Attr("data-testid", "txn-scheduled-ghost"), Attr("aria-disabled", "true"),
+		Td(ClassStr("td-select")),
+		Td(ClassStr("td-date"), props.Date),
+		Td(ClassStr("td-desc"), Span(css.Class("txn-scheduled-name"), props.Name), Span(css.Class("txn-scheduled-pill"), uistate.T("transactions.scheduledStatus"))),
+		If(props.Vis.Category, Td(ClassStr("td-cat"), props.Category)),
+		If(props.Vis.Account, Td(ClassStr("td-acct txn-scheduled-account"), Attr("title", props.Account), props.Account)),
+		If(props.ShowUser, Td(ClassStr("td-user"))),
+		If(props.Vis.Amount, Td(css.Class("td-amount", tw.ColorClass(props.AmountTone)), props.Amount)),
+		If(props.ShowBalance, Td(ClassStr("td-amount"))),
+		If(props.Vis.Source, Td(ClassStr("td-source"))),
+		Td(ClassStr("td-actions txn-scheduled-status"), ui.CreateElement(txnScheduledGhostMenu, struct{}{})),
+	)
+}
+
+func txnScheduledTableRows(items []bills.Bill, formatDate func(time.Time) string, vis uistate.TxnCols, showUser, showBalance bool) []any {
+	rows := make([]any, 0, len(items))
+	accounts, categories := map[string]string{}, map[string]string{}
+	if app := appstate.Default; app != nil {
+		for _, account := range app.Accounts() {
+			accounts[account.ID] = account.Name
+		}
+		for _, category := range app.Categories() {
+			categories[category.ID] = category.Name
+		}
+	}
+	app := appstate.Default
+	for _, item := range items {
+		category := ""
+		if app != nil {
+			category = categories[billCategoryID(app, item)]
+		}
+		amount, tone := fmtLedgerAmount(money.New(-item.Amount.Amount, item.Amount.Currency), false)
+		rows = append(rows, ui.CreateElement(txnScheduledTableRow, txnScheduledTableRowProps{
+			Date: formatDate(item.DueDate), Name: item.Name, Category: category,
+			Account: accounts[item.AccountID], Amount: amount, AmountTone: tone,
+			Vis: vis, ShowUser: showUser, ShowBalance: showBalance,
+		}))
+	}
+	return rows
+}
+
+func txnScheduledGhostMenu(struct{}) ui.Node {
+	open := ui.UseState(false)
+	toggle := ui.UseEvent(Prevent(func() { open.Set(!open.Get()) }))
+	return Div(css.Class("txn-scheduled-menu"),
+		Button(css.Class("btn btn-icon"), Type("button"),
+			Attr("aria-label", uistate.T("fut2.scheduledMenuLabel")),
+			Attr("aria-expanded", ariaBool(open.Get())), Attr("data-testid", "txn-scheduled-menu-toggle"),
+			OnClick(toggle), "⋯"),
+		If(open.Get(), A(css.Class("txn-scheduled-menu-item"), Href(uistate.RoutePath("/recurring")),
+			Attr("data-testid", "txn-scheduled-open"), uistate.T("fut2.scheduledMenuOpen"))),
+	)
 }
 
 func txnFutureScheduledItems(filter uistate.TxFilter, now time.Time) []bills.Bill {

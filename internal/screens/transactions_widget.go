@@ -1082,12 +1082,6 @@ func txnTableWidget(props txnTableProps) ui.Node {
 	switch {
 	case len(props.App.Transactions()) == 0:
 		tableBody = ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("transactions.empty"), CTALabel: uistate.T("transactions.addFirst"), AddTarget: "transaction", Icon: icon.Transactions, ImportLink: true})
-	case total == 0:
-		// C628: a no-match state that only says "nothing matched" leaves the way out
-		// as an unlabelled ✕ in a toolbar the user has to go looking for. The escape
-		// belongs where the disappointment is, and it removes ONLY the search — the
-		// period, member and category filters are not what the user just typed.
-		tableBody = ui.CreateElement(txnNoMatch, txnNoMatchProps{Search: strings.TrimSpace(f.Text)})
 	default:
 		// Header columns, built to match the row cells' conditional set exactly (same
 		// order): Select + Date + Description are always shown; the rest follow the
@@ -1160,7 +1154,20 @@ func txnTableWidget(props txnTableProps) ui.Node {
 		if !registerActive {
 			dtp.OnSort = sortBy
 		}
-		if virtualize {
+		if total == 0 {
+			futurePeriod, _ := txnFutureScheduleCount(f, time.Now())
+			if futurePeriod {
+				items := txnFutureScheduledItems(f, time.Now())
+				dtp.Body = Fragment(txnScheduledTableRows(items,
+					func(date time.Time) string { return ledgerDate(date, f.From, f.To) },
+					colVis, showUser, showBalance)...)
+				tableBody = Fragment(ui.CreateElement(txnNoMatch, txnNoMatchProps{
+					Search: strings.TrimSpace(f.Text), FuturePeriod: true, InTable: true,
+				}), uiw.DataTable(dtp))
+			} else {
+				tableBody = ui.CreateElement(txnNoMatch, txnNoMatchProps{Search: strings.TrimSpace(f.Text)})
+			}
+		} else if virtualize {
 			dtp.Virtual = &uiw.VirtualSpec{
 				Count:     total,
 				RowHeight: txnRowHeight,
@@ -1169,14 +1176,15 @@ func txnTableWidget(props txnTableProps) ui.Node {
 				RowAt:     renderRow,
 				KeyAt:     func(i int) any { return idCol.Str(i) },
 			}
+			tableBody = uiw.DataTable(dtp)
 		} else {
 			idxs := make([]int, 0, end-start)
 			for i := start; i < end; i++ {
 				idxs = append(idxs, i)
 			}
 			dtp.Body = MapKeyed(idxs, func(i int) any { return idCol.Str(i) }, renderRow)
+			tableBody = uiw.DataTable(dtp)
 		}
-		tableBody = uiw.DataTable(dtp)
 	}
 
 	// When the whole filtered set fits within the smallest page size, no rows-per-page

@@ -90,6 +90,12 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Future months read like the ledger; calendar columns line up (FUT2, FUT2.1).** In a future month the scheduled bills
+  are rows of the real transactions table — same columns, widths and date format as posted rows, hidden columns honoured —
+  each with a Scheduled pill and a menu that opens Bills & repeating payments, under one short line instead of the italic
+  sentence. The future count line is no longer all red (only the expected money-out amount is). The calendar uses one
+  grid for the header and every week, so later weeks no longer drift out of alignment, and weeks with nothing posted say
+  "Nothing yet" (plus a scheduled count when there is one).
 - **Unassigned rows back to 44 px (WHO3).** The "—" Unassigned placeholder in the Who column was sized with the 64 px
   `--space-8` spacing token, stretching every row with no owner to 74 px. Avatars, the overflow chip and the placeholder
   now share one `--txn-avatar-size` (22 px) token and the same type size; a style test guards against spacing tokens

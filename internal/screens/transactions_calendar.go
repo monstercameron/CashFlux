@@ -254,8 +254,6 @@ func txnCalWeekTotal(props txnCalWeekTotalProps) ui.Node {
 		if props.Stat.Count == 1 {
 			lastLine = uistate.T("r9c.weekOneTransaction")
 		}
-	} else if props.Future && props.Scheduled > 0 {
-		lastLine = uistate.T("r6f.weekScheduled", props.Scheduled)
 	} else if props.Future {
 		lastLine = uistate.T("r9c.weekNothingYet")
 	} else if props.Scheduled > 0 {
@@ -268,11 +266,18 @@ func txnCalWeekTotal(props txnCalWeekTotalProps) ui.Node {
 		lastClass += " text-dim"
 	}
 	lines = append(lines, Span(ClassStr(lastClass), lastLine))
+	if props.Future && props.Stat.Count == 0 && props.Scheduled > 0 {
+		lines = append(lines, Span(css.Class("txn-cal-week-count"), uistate.T("r6f.weekScheduled", props.Scheduled)))
+	}
 	ariaSpent := strings.TrimPrefix(spent, "−")
-	aria := uistate.T("r9c.weekAria", props.WeekOf, ariaSpent, lastLine)
+	ariaLastLine := lastLine
+	if props.Future && props.Stat.Count == 0 && props.Scheduled > 0 {
+		ariaLastLine += ", " + uistate.T("r6f.weekScheduled", props.Scheduled)
+	}
+	aria := uistate.T("r9c.weekAria", props.WeekOf, ariaSpent, ariaLastLine)
 	if props.Income > 0 {
 		income, _ := fmtLedgerAmount(money.New(props.Income, props.Base), false)
-		aria = uistate.T("r9c.weekAriaIncome", props.WeekOf, ariaSpent, strings.TrimPrefix(income, "+"), lastLine)
+		aria = uistate.T("r9c.weekAriaIncome", props.WeekOf, ariaSpent, strings.TrimPrefix(income, "+"), ariaLastLine)
 	}
 	return Div(css.Class("txn-cal-week-total"),
 		Attr("data-testid", "txn-cal-week-total"),

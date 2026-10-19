@@ -66,6 +66,18 @@ func TestR6FScheduledGhostShowsCategoryAccountAndStatusPill(t *testing.T) {
 	if !pillFound {
 		t.Fatal("status does not use the Scheduled pill")
 	}
+	if len(f.AllByTag("input")) != 0 || r2aByTestID(f, "button", "txn-rowedit") != nil {
+		t.Fatal("scheduled row unexpectedly exposes posted-row selection or editing")
+	}
+	menu := r2aByTestID(f, "button", "txn-scheduled-menu-toggle")
+	if menu == nil {
+		t.Fatal("scheduled row does not have its overflow menu")
+	}
+	menu.Click()
+	open := r2aByTestID(f, "a", "txn-scheduled-open")
+	if open == nil || open.Text() != "Open in Bills & repeating payments" || open.Attr("href") != "/recurring" {
+		t.Fatalf("scheduled row menu item = %v, want the bills and repeating payments route", open)
+	}
 }
 
 func r6fGridCell(t *testing.T, f *render.Fixture, text string) *render.QueryNode {
@@ -89,7 +101,7 @@ func TestR9CCalendarWeekTotalsUseComparableMetrics(t *testing.T) {
 	}{
 		{name: "spending", props: txnCalWeekTotalProps{Stat: txncalendar.DayStat{Net: -262200, Count: 4}, Base: "USD", Spent: 262200, WeekOf: "Oct 4"}, wantLines: []string{"Money out −$2,622.00", "4 transactions"}, wantAria: "Week of Oct 4: money out $2,622.00, 4 transactions."},
 		{name: "mixed", props: txnCalWeekTotalProps{Stat: txncalendar.DayStat{Net: 15000, Count: 2}, Base: "USD", Spent: 10000, Income: 25000, WeekOf: "Oct 4"}, wantLines: []string{"Money out −$100.00", "Money in $250.00", "2 transactions"}, wantAria: "Week of Oct 4: money out $100.00, money in $250.00, 2 transactions.", wantTone: "text-up"},
-		{name: "future scheduled", props: txnCalWeekTotalProps{Base: "USD", Scheduled: 3, WeekOf: "Oct 25", Future: true}, wantLines: []string{"Money out $0.00", "3 scheduled"}, wantAria: "Week of Oct 25: money out $0.00, 3 scheduled."},
+		{name: "future scheduled", props: txnCalWeekTotalProps{Base: "USD", Scheduled: 3, WeekOf: "Oct 25", Future: true}, wantLines: []string{"Money out $0.00", "Nothing yet", "3 scheduled"}, wantAria: "Week of Oct 25: money out $0.00, Nothing yet, 3 scheduled."},
 		{name: "empty future", props: txnCalWeekTotalProps{Base: "USD", WeekOf: "Oct 25", Future: true}, wantLines: []string{"Money out $0.00", "Nothing yet"}, wantAria: "Week of Oct 25: money out $0.00, Nothing yet."},
 	}
 	for _, tc := range cases {

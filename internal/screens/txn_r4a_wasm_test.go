@@ -108,7 +108,26 @@ func TestR4AFutureCountLineStaysVisibleWithoutPostedRows(t *testing.T) {
 	f := render.New(t)
 	f.Render(txnCountLine(txnCountLineProps{Shown: 0, Total: 0}))
 	line := r2aByTestID(f, "span", "txn-count-line")
-	if line == nil || !strings.Contains(line.Text(), "November 2026 · 0 posted · 0 scheduled · $0.00 still expected") {
+	if line == nil || !strings.Contains(line.Text(), "November 2026 · 0 posted · 0 scheduled · $0.00") {
 		t.Fatalf("future period count line = %v, want posted/scheduled summary", line)
+	}
+	main := r2aByTestID(f, "span", "txn-count-line")
+	if main == nil {
+		t.Fatal("future period count line is missing")
+	}
+	var summary, amount *render.QueryNode
+	for _, span := range f.AllByTag("span") {
+		if strings.Contains(span.Attr("class"), "txn-count-main") {
+			summary = span
+		}
+		if span.Text() == "$0.00" {
+			amount = span
+		}
+	}
+	if summary == nil || strings.Contains(summary.Attr("class"), "text-down") {
+		t.Fatalf("future count summary class = %v, want normal count-line color", summary)
+	}
+	if amount == nil {
+		t.Fatal("future expected-money amount is missing from the count line")
 	}
 }

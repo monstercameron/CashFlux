@@ -24,10 +24,13 @@ func registerTxnCalendar() {
 		prop("min-width", "10rem"),
 		prop("text-align", "center"),
 	)
-	rule(".txn-cal-week-head, .txn-cal-week-row",
+	rule(".txn-cal-weeks",
 		prop("display", "grid"),
-		prop("grid-template-columns", "repeat(7,minmax(0,1fr)) minmax(5rem,auto)"),
+		prop("grid-template-columns", "repeat(7,minmax(0,1fr)) 8rem"),
 		prop("gap", "4px"),
+	)
+	rule(".txn-cal-week-head, .txn-cal-week-row",
+		prop("display", "contents"),
 	)
 	rule(".txn-cal-week-head",
 		prop("margin-top", ".5rem"),

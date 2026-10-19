@@ -131,8 +131,9 @@ func txnCountLineComponent(props txnCountLineProps) ui.Node {
 			}
 		}
 		amount, tone := fmtLedgerAmount(money.New(-total.Amount, total.Currency), false)
-		parts = append(parts, Span(css.Class("txn-count-main", tw.ColorClass(tone)), uistate.T("r4a.futureSummary",
-			period, txnCountNumber(0), txnCountNumber(scheduledCount), amount)))
+		parts = append(parts, Span(css.Class("txn-count-main"),
+			uistate.T("fut2.futureSummary", period, txnCountNumber(0), txnCountNumber(scheduledCount)),
+			Span(css.Class(tw.ColorClass(tone)), amount)))
 	} else {
 		parts = append(parts, Span(css.Class("txn-count-main"), period, " · ", txnCountTransactionCount(props.Shown)))
 		showCashflow := spent.Amount != 0 || income.Amount != 0
