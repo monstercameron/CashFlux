@@ -8,7 +8,7 @@ import (
 	"syscall/js"
 	"time"
 
-	"github.com/monstercameron/CashFlux/internal/budgeting"
+	"github.com/monstercameron/CashFlux/internal/budgetview"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -26,16 +26,7 @@ func budgetPeriodKeyStart(period domain.Period, ref, anchor time.Time) time.Time
 }
 
 func budgetPeriodKeyStartWithWeekStart(period domain.Period, ref, anchor time.Time, weekStart time.Weekday) time.Time {
-	if ref.IsZero() {
-		ref = time.Now()
-	}
-	key := budgeting.PeriodKeyWithWeekStart(period, ref, anchor, weekStart)
-	start, err := time.Parse("2006-01-02", key)
-	if err == nil {
-		return start
-	}
-	start, _ = budgeting.PeriodRangeAnchored(period, ref, weekStart, anchor)
-	return start
+	return budgetview.PeriodKeyStart(period, ref, anchor, time.Now(), weekStart)
 }
 
 // budgets_goalglyph.go is the compact row's goal-funded marker.
@@ -109,88 +100,72 @@ type markerHover struct {
 // useMarkerHover wires the delay, the portal and the dismiss for one marker.
 // onActivate is the click action; nil means "click toggles the explainer".
 func useMarkerHover(wrapID, title, text string, onActivate func()) markerHover {
-	open := ui.UseState(false)
-	pending := ui.UseState(false)
-	closing := ui.UseState(false)
+	state := ui.UseState(budgetview.MarkerState{})
+	transition := func(event budgetview.MarkerEvent) { state.Set(state.Get().Next(event)) }
+	uiw.DismissPopover(state.Get().Open, wrapID, func() { transition(budgetview.MarkerDismiss) })
+	uiw.SmartTipPortal(state.Get().Open, wrapID, title, text)
+	useMarkerIntent(state.Get().Pending, func() { transition(budgetview.MarkerIntent) })
+	useMarkerGrace(state.Get().Closing, wrapID, func() { transition(budgetview.MarkerGrace) })
+	useMarkerFocus(wrapID, transition)
+	return markerHover{
+		Open: state.Get().Open, Pending: state.Get().Pending, Class: state.Get().Class(),
+		Enter: ui.UseEvent(func() { transition(budgetview.MarkerEnter) }),
+		Leave: ui.UseEvent(func() { transition(budgetview.MarkerLeave) }),
+		Activate: ui.UseEvent(Prevent(func() {
+			if onActivate != nil {
+				transition(budgetview.MarkerAction)
+				onActivate()
+				return
+			}
+			transition(budgetview.MarkerToggle)
+		})),
+	}
+}
 
-	uiw.DismissPopover(open.Get(), wrapID, func() { open.Set(false) })
-	uiw.SmartTipPortal(open.Get(), wrapID, title, text)
-
-	// The wait runs as an effect keyed on `pending`, so leaving tears the timer down
-	// through the cleanup rather than racing it: a pointer crossing the column on
-	// its way to the kebab cancels before anything opens.
+// useMarkerIntent cancels the pending browser timer on leave or unmount.
+func useMarkerIntent(pending bool, onElapsed func()) {
 	ui.UseEffect(func() func() {
-		if !pending.Get() {
+		if !pending {
 			return nil
 		}
 		cancelled := false
 		cb := js.FuncOf(func(js.Value, []js.Value) any {
-			if cancelled {
-				return nil
+			if !cancelled {
+				onElapsed()
 			}
-			pending.Set(false)
-			open.Set(true)
 			return nil
 		})
 		handle := js.Global().Call("setTimeout", cb, goalGlyphHoverMs)
-		return func() {
-			cancelled = true
-			js.Global().Call("clearTimeout", handle)
-			cb.Release()
-		}
-	}, pending.Get())
+		return func() { cancelled = true; js.Global().Call("clearTimeout", handle); cb.Release() }
+	}, pending)
+}
 
-	// The grace window. It POLLS :hover rather than listening on the popover,
-	// because the popover is portalled to <body> by SmartTipPortal and is created
-	// and destroyed outside this component — there is no stable node here to bind
-	// to, and a listener attached at open time would be attached to a node a later
-	// re-render replaced. Asking the document who is hovered right now cannot go
-	// stale that way.
+// useMarkerGrace polls the portalled tip, allowing the pointer to cross the gap.
+func useMarkerGrace(closing bool, wrapID string, onElapsed func()) {
 	ui.UseEffect(func() func() {
-		if !closing.Get() {
+		if !closing {
 			return nil
 		}
 		doc := js.Global().Get("document")
 		stopped := false
-		hovered := func(el js.Value) bool {
-			return el.Truthy() && el.Call("matches", ":hover").Bool()
-		}
+		hovered := func(el js.Value) bool { return el.Truthy() && el.Call("matches", ":hover").Bool() }
 		cb := js.FuncOf(func(js.Value, []js.Value) any {
 			if stopped {
 				return nil
 			}
-			if hovered(doc.Call("getElementById", wrapID)) ||
-				hovered(doc.Call("querySelector", "[data-testid=smart-tip-pop]")) {
-				return nil // the pointer is still on the marker or its popover
+			if hovered(doc.Call("getElementById", wrapID)) || hovered(doc.Call("querySelector", "[data-testid=smart-tip-pop]")) {
+				return nil
 			}
-			closing.Set(false)
-			open.Set(false)
+			onElapsed()
 			return nil
 		})
 		handle := js.Global().Call("setInterval", cb, goalGlyphGraceMs)
-		return func() {
-			stopped = true
-			js.Global().Call("clearInterval", handle)
-			cb.Release()
-		}
-	}, closing.Get())
+		return func() { stopped = true; js.Global().Call("clearInterval", handle); cb.Release() }
+	}, closing)
+}
 
-	// Keyboard preview. The framework's OnFocus/OnBlur props are registered but do
-	// not fire — MEASURED on a freshly mounted marker: focus lands on the button,
-	// `pending` stays false and nothing opens (2026-08-31). So the pair is bound
-	// natively instead.
-	//
-	// It binds on the DOCUMENT and resolves the wrapper at EVENT time, not on the
-	// wrapper at mount time. The first attempt did the latter and silently did
-	// nothing: on first render the effect runs before the wrapper carries its id,
-	// getElementById returns null, and because wrapID never changes the effect had
-	// no reason to run again — so the listener was never attached and focus behaved
-	// exactly as it had before the fix. Resolving late has no such window.
-	//
-	// focusin/focusout are used rather than focus/blur because they BUBBLE, and
-	// because scoping to the wrapper is what stops a focus move between the pill
-	// and the glyph from reading as a blur: relatedTarget is still inside, so the
-	// popover does not flicker shut within one marker.
+// useMarkerFocus resolves event membership late, after wrapper IDs are mounted.
+func useMarkerFocus(wrapID string, transition func(budgetview.MarkerEvent)) {
 	ui.UseEffect(func() func() {
 		doc := js.Global().Get("document")
 		// The testkit renderer deliberately has no browser document. The row and
@@ -211,9 +186,7 @@ func useMarkerHover(wrapID, title, text string, onActivate func()) markerHover {
 			if len(args) == 0 || !inside(args[0].Get("target")) {
 				return nil
 			}
-			if !open.Get() {
-				pending.Set(true)
-			}
+			transition(budgetview.MarkerFocus)
 			return nil
 		})
 		onOut := js.FuncOf(func(_ js.Value, args []js.Value) any {
@@ -223,8 +196,7 @@ func useMarkerHover(wrapID, title, text string, onActivate func()) markerHover {
 			if inside(args[0].Get("relatedTarget")) {
 				return nil
 			}
-			pending.Set(false)
-			open.Set(false)
+			transition(budgetview.MarkerBlur)
 			return nil
 		})
 		doc.Call("addEventListener", "focusin", onIn)
@@ -239,41 +211,6 @@ func useMarkerHover(wrapID, title, text string, onActivate func()) markerHover {
 		}
 	}, wrapID)
 
-	h := markerHover{Open: open.Get(), Pending: pending.Get()}
-	h.Enter = ui.UseEvent(func() {
-		closing.Set(false)
-		if !open.Get() {
-			pending.Set(true)
-		}
-	})
-	// Leaving ARMS a close rather than performing one, so the pointer has time to
-	// cross the gap onto the popover.
-	h.Leave = ui.UseEvent(func() {
-		pending.Set(false)
-		if open.Get() {
-			closing.Set(true)
-		}
-	})
-	// Click is the touch and keyboard path — neither has a hover — so a marker must
-	// never be reachable by pointer alone.
-	h.Activate = ui.UseEvent(Prevent(func() {
-		pending.Set(false)
-		closing.Set(false)
-		if onActivate != nil {
-			// The explainer would sit over whatever the action opens.
-			open.Set(false)
-			onActivate()
-			return
-		}
-		open.Set(!open.Get())
-	}))
-	if h.Pending {
-		h.Class = " is-waiting"
-	}
-	if h.Open {
-		h.Class += " is-open"
-	}
-	return h
 }
 
 // budgetGoalGlyph renders ONE marker in both of its shapes — the worded pill and

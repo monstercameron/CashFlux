@@ -5,20 +5,14 @@
 package screens
 
 import (
-	"fmt"
-	"sort"
-	"strings"
 	"time"
 
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
-	"github.com/monstercameron/CashFlux/internal/budgeting"
-	"github.com/monstercameron/CashFlux/internal/catname"
+	"github.com/monstercameron/CashFlux/internal/budgetview"
 	"github.com/monstercameron/CashFlux/internal/currency"
-	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
-	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/css"
@@ -35,27 +29,13 @@ import (
 // C607: the window is the page's selected period, not today's month. It used to
 // read time.Now() unconditionally, so opening Edit tracking from a closed Jul 2026
 // view in August counted August's transactions under a caption promising July's.
-func budgetTrackMeta(app *appstate.App, from, to time.Time) (catMeta map[string]string, tagCount map[string]int, tagTotal map[string]string) {
-	catMeta, tagCount, tagTotal = map[string]string{}, map[string]int{}, map[string]string{}
+func budgetTrackMeta(app *appstate.App, from, to time.Time) (map[string]string, map[string]int, map[string]string) {
 	if app == nil {
-		return
+		return map[string]string{}, map[string]int{}, map[string]string{}
 	}
-	base := budgetBaseCurrency(app.Settings().BaseCurrency)
-	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	mStart, mEnd := from, to
-	if mStart.IsZero() || mEnd.IsZero() {
-		mStart = dateutil.MonthStart(time.Now())
-		mEnd = dateutil.AddMonths(mStart, 1)
-	}
-	metadata := budgeting.ComputeTrackingMetadata(budgetLedgerForApp(app), mStart, mEnd, base, rates)
-	tagCount = metadata.TagCount
-	for id, count := range metadata.CategoryCount {
-		catMeta[id] = fmt.Sprintf("%d · %s", count, fmtMoney(money.New(metadata.CategoryTotal[id], base)))
-	}
-	for k, amt := range metadata.TagTotal {
-		tagTotal[k] = fmtMoney(money.New(amt, base))
-	}
-	return
+	base := budgetview.BaseCurrency(app.Settings().BaseCurrency)
+	metadata := budgetview.TrackingMeta(budgetLedgerForApp(app), from, to, time.Now(), base, currency.Rates{Base: base, Rates: app.Settings().FXRates})
+	return metadata.Categories, metadata.TagCount, metadata.TagTotal
 }
 
 // BudgetCategoriesBody is the "tracked categories" flip modal (mounted at the shell root
@@ -69,92 +49,30 @@ func BudgetCategoriesBody(_ struct{}) ui.Node {
 	openAtom := uistate.UseBudgetCategoriesEdit()
 	budgetID := openAtom.Get()
 	trackPeriod := uistate.UsePeriod().Get()
-	trackFrom, trackTo := trackPeriod.Range()
-	trackLabel := trackPeriod.Label()
-	trackMeta := ui.UseMemo(func() budgetTrackMetaResult {
-		catMeta, tagCount, tagTotal := budgetTrackMeta(app, trackFrom, trackTo)
-		return budgetTrackMetaResult{
-			Categories:   catMeta,
-			TagCount:     tagCount,
-			TagTotal:     tagTotal,
-			DistinctTags: distinctTxnTags(app),
-		}
-	}, dataRev, trackFrom.Unix(), trackTo.Unix())
-
-	var budget domain.Budget
-	found := false
+	from, to := trackPeriod.Range()
+	var appRev uint64
+	var budgets []domain.Budget
 	if app != nil {
-		for _, b := range app.Budgets() {
-			if b.ID == budgetID {
-				budget, found = b, true
-				break
-			}
-		}
+		appRev = app.Rev()
+		budgets = app.Budgets()
 	}
-
-	// Seed the checklist from the budget's current tracked set.
-	seed := make(map[string]bool)
-	for _, id := range budget.TrackedCategoryIDs() {
-		seed[id] = true
-	}
+	meta := ui.UseMemo(func() budgetTrackMetaResult {
+		categories, count, total := budgetTrackMeta(app, from, to)
+		return budgetTrackMetaResult{Categories: categories, TagCount: count, TagTotal: total, DistinctTags: distinctTxnTags(app)}
+	}, app, appRev, dataRev, from.Unix(), to.Unix())
+	budget, found := budgetview.FindBudget(budgets, budgetID)
+	seed, tagSeed := budgetview.SelectionSeed(budget)
 	picked := ui.UseState(seed)
-	toggle := func(id string) {
-		m := picked.Get()
-		nm := make(map[string]bool, len(m)+1)
-		for k, v := range m {
-			nm[k] = v
-		}
-		nm[id] = !nm[id]
-		picked.Set(nm)
-	}
-	// Cross-category tags this budget also tracks — a picked SET (lowercased tag keys),
-	// mirroring the category checklist. A budget may track categories, tags, or both.
-	tagSeed := make(map[string]bool)
-	for _, tg := range budget.TrackedTags {
-		if k := strings.ToLower(strings.TrimSpace(tg)); k != "" {
-			tagSeed[k] = true
-		}
-	}
-	pickedTags := ui.UseState(tagSeed)
-	toggleTag := func(tag string) {
-		k := strings.ToLower(strings.TrimSpace(tag))
-		if k == "" {
+	tags := ui.UseState(tagSeed)
+	cancel := func() { openAtom.Set("") }
+	save := func() {
+		if app == nil {
 			return
 		}
-		m := pickedTags.Get()
-		nm := make(map[string]bool, len(m)+1)
-		for kk, v := range m {
-			nm[kk] = v
+		b, ok := budgetview.TrackingDraft(budget, app.Categories(), picked.Get(), tags.Get())
+		if !ok {
+			return
 		}
-		nm[k] = !nm[k]
-		pickedTags.Set(nm)
-	}
-
-	onCancel := ui.UseEvent(Prevent(func() { openAtom.Set("") }))
-	onSave := ui.UseEvent(Prevent(func() {
-		sel := budgeting.SelectedBudgetCategories(app.Categories(), picked.Get(), budget.IsSaving())
-		var tags []string
-		for k, on := range pickedTags.Get() {
-			if on && k != "" {
-				tags = append(tags, k)
-			}
-		}
-		sort.Strings(tags)
-		if len(sel) == 0 && len(tags) == 0 {
-			return // Save is disabled in this state; guard anyway.
-		}
-		b := budget
-		// Store a single category in the historical shape; only reach for CategoryIDs when
-		// tracking more than one. A tag-only budget keeps no category at all.
-		switch {
-		case len(sel) == 0:
-			b.CategoryID, b.CategoryIDs = "", nil
-		case len(sel) == 1:
-			b.CategoryID, b.CategoryIDs = sel[0], nil
-		default:
-			b.CategoryID, b.CategoryIDs = sel[0], sel
-		}
-		b.TrackedTags = tags // nil when the field is empty
 		if err := app.PutBudget(b); err != nil {
 			uistate.PostNotice(budgetErrorText(err), true)
 			return
@@ -162,57 +80,68 @@ func BudgetCategoriesBody(_ struct{}) ui.Node {
 		uistate.PostNotice(uistate.T("budgets.catsSaved"), false)
 		uistate.BumpDataRevision()
 		openAtom.Set("")
-	}))
-	cancelOnClick := OnClick(onCancel)
-	saveOnClick := OnClick(onSave)
-
+	}
 	if !found {
-		return Div(css.Class(tw.FlexCol, tw.Gap3),
-			P(css.Class("muted"), uistate.T("common.notReady")),
-			Div(css.Class("autobudget-footer"),
-				Button(css.Class("btn"), Type("button"), cancelOnClick, uistate.T("action.close"))))
+		return ui.CreateElement(budgetTrackingUnavailable, budgetTrackingUnavailableProps{Close: cancel})
 	}
+	return ui.CreateElement(budgetTrackingContent, budgetTrackingContentProps{
+		Budget: budget, Label: trackPeriod.Label(), Meta: meta, Picked: picked.Get(), Tags: tags.Get(), Cancel: cancel, Save: save,
+		Toggle:    func(id string) { picked.Set(budgetview.ToggleSelection(picked.Get(), id, false)) },
+		ToggleTag: func(tag string) { tags.Set(budgetview.ToggleSelection(tags.Get(), tag, true)) },
+	})
+}
 
-	nSel := 0
-	for id, on := range picked.Get() {
-		if on && id != "" {
-			nSel++
-		}
-	}
-	nTags := 0
-	for k, on := range pickedTags.Get() {
-		if on && k != "" {
-			nTags++
-		}
-	}
-	// C607: count over the page's SELECTED period, and say which one — these
-	// figures sit beside budget cards that describe that period, and a caption
-	// reading "this month" over another month's numbers is the defect.
+type budgetTrackingUnavailableProps struct{ Close func() }
+
+func budgetTrackingUnavailable(props budgetTrackingUnavailableProps) ui.Node {
+	return Div(css.Class(tw.FlexCol, tw.Gap3),
+		P(css.Class("muted"), uistate.T("common.notReady")),
+		Div(css.Class("autobudget-footer"), Button(css.Class("btn"), Type("button"), OnClick(Prevent(props.Close)), uistate.T("action.close"))))
+}
+
+type budgetTrackingContentProps struct {
+	Budget            domain.Budget
+	Label             string
+	Meta              budgetTrackMetaResult
+	Picked, Tags      map[string]bool
+	Toggle, ToggleTag func(string)
+	Cancel, Save      func()
+}
+
+func budgetTrackingContent(props budgetTrackingContentProps) ui.Node {
 	return Div(css.Class(tw.FlexCol),
 		Div(css.Class("modal-scroll", tw.FlexCol, tw.Gap3),
-			Span(css.Class(tw.TextFaint, tw.Text12), Attr("data-testid", "budgetcats-metahint"), uistate.T("budgets.trackMetaHintPeriod", trackLabel)),
+			Span(css.Class(tw.TextFaint, tw.Text12), Attr("data-testid", "budgetcats-metahint"), uistate.T("budgets.trackMetaHintPeriod", props.Label)),
 			// Categories section.
 			Div(css.Class("budgettrack-section"),
 				Span(css.Class("budgettrack-head"), uistate.T("budgets.catsSection")),
 				ui.CreateElement(budgetCategoryPicker, budgetCategoryPickerProps{
-					Picked: picked.Get(), OnToggle: toggle, ExcludeBudgetID: budgetID, Meta: trackMeta.Categories, Saving: budget.IsSaving(),
+					Picked: props.Picked, OnToggle: props.Toggle, ExcludeBudgetID: props.Budget.ID, Meta: props.Meta.Categories, Saving: props.Budget.IsSaving(),
 				})),
 			// Tags section — a searchable checklist of the tags already in use (cross-
 			// category), plus "add a new tag" from the search box.
 			Div(css.Class("budgettrack-section"),
 				Span(css.Class("budgettrack-head"), uistate.T("budgets.tagsSection")),
 				ui.CreateElement(budgetTagPicker, budgetTagPickerProps{
-					Picked: pickedTags.Get(), OnToggle: toggleTag, AllTags: trackMeta.DistinctTags,
-					Count: trackMeta.TagCount, Total: trackMeta.TagTotal,
+					Picked: props.Tags, OnToggle: props.ToggleTag, AllTags: props.Meta.DistinctTags,
+					Count: props.Meta.TagCount, Total: props.Meta.TagTotal,
 				}))),
-		Div(css.Class("modal-foot", "autobudget-footer"),
-			Span(css.Class("autobudget-total", tw.TextDim), Attr("data-testid", "budgetcats-count"),
-				uistate.T("budgets.tracksCount",
-					uistate.T(budgetCountKey("bc4b4.categoryCount", nSel), nSel),
-					uistate.T(budgetCountKey("bc4b4.tagCount", nTags), nTags))),
-			Button(css.Class("btn"), Type("button"), Attr("data-testid", "budgetcats-cancel"), cancelOnClick, uistate.T("action.cancel")),
-			buttonWithDisabled(nSel == 0 && nTags == 0, []any{css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "budgetcats-save"), saveOnClick},
-				uistate.T("budgets.tracksSave"))))
+		ui.CreateElement(budgetTrackingFooter, budgetTrackingFooterProps{Categories: budgetview.SelectionCount(props.Picked), Tags: budgetview.SelectionCount(props.Tags), Cancel: props.Cancel, Save: props.Save}))
+}
+
+type budgetTrackingFooterProps struct {
+	Categories, Tags int
+	Cancel, Save     func()
+}
+
+func budgetTrackingFooter(props budgetTrackingFooterProps) ui.Node {
+	presentation := budgetview.PresentTrackingFooter(props.Categories, props.Tags, uistate.T)
+	return Div(css.Class("modal-foot", "autobudget-footer"),
+		Span(css.Class("autobudget-total", tw.TextDim), Attr("data-testid", "budgetcats-count"),
+			presentation.Count),
+		Button(css.Class("btn"), Type("button"), Attr("data-testid", "budgetcats-cancel"), OnClick(Prevent(props.Cancel)), uistate.T("action.cancel")),
+		buttonWithDisabled(presentation.Disabled, []any{css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "budgetcats-save"), OnClick(Prevent(props.Save))},
+			uistate.T("budgets.tracksSave")))
 }
 
 type budgetTrackMetaResult struct {
@@ -254,59 +183,19 @@ func budgetCategoryPicker(props budgetCategoryPickerProps) ui.Node {
 			return nil
 		}
 		return app.Categories()
-	}, appRev)
+	}, app, appRev)
 
-	// Which OTHER budgets track each category — for the soft overlap tag.
-	otherBudget := make(map[string]string)
+	var budgets []domain.Budget
 	if app != nil {
-		for _, b := range app.Budgets() {
-			if b.ID == props.ExcludeBudgetID {
-				continue
-			}
-			for _, cid := range b.TrackedCategoryIDs() {
-				if otherBudget[cid] == "" {
-					otherBudget[cid] = b.Name
-				}
-			}
-		}
+		budgets = app.Budgets()
 	}
+	shown, hiddenKinds := budgetview.CategoryOptions(cats, budgets, props.ExcludeBudgetID, query.Get(), props.Saving)
 
-	q := strings.ToLower(strings.TrimSpace(query.Get()))
-	hiddenKinds := 0
-	var shown []domain.Category
-	if app != nil {
-		// C519: a spending budget tracks spending categories. That filter is
-		// defensible, but it used to be SILENT — a household looking for an income
-		// category it had mistyped, or simply scanning for one it knew existed, was
-		// given no reason for its absence and reported the list as broken. The
-		// filter stays (a budget tracking an income category cannot accrue at all —
-		// matchesScope requires an expense, see C534/C538) but the picker now says
-		// so, and counts what it withheld.
-		// C550: rows are labelled by PATH, not by bare name. A "Gas" nested under
-		// "Auto" and a top-level "Gas" rendered as two identical rows, which reads
-		// as a duplicate — and reads as a MISSING category when the one you wanted
-		// is the other one. That is the third contributor to the "this picker
-		// hides my categories" report, alongside the kind filter (C519) and the
-		// ordering (C544). The search matches the path too, so typing "auto"
-		// finds "Auto › Gas".
-		for _, c := range cats {
-			if !props.Saving && c.Kind != domain.KindExpense {
-				hiddenKinds++
-				continue
-			}
-			if q != "" && !strings.Contains(strings.ToLower(catname.Label(cats, c)), q) {
-				continue
-			}
-			shown = append(shown, c)
-		}
-	}
-
-	keyOf := func(c domain.Category) any { return c.ID }
-	allCats := cats
-	rows := MapKeyed(shown, keyOf, func(c domain.Category) ui.Node {
+	keyOf := func(c budgetview.CategoryOption) any { return c.ID }
+	rows := MapKeyed(shown, keyOf, func(c budgetview.CategoryOption) ui.Node {
 		return ui.CreateElement(budgetCatRow, budgetCatRowProps{
-			CategoryID: c.ID, CategoryName: catname.Label(allCats, c), Checked: props.Picked[c.ID],
-			AlsoIn: otherBudget[c.ID], Meta: props.Meta[c.ID], OnToggle: props.OnToggle,
+			CategoryID: c.ID, CategoryName: c.Name, Checked: props.Picked[c.ID],
+			AlsoIn: c.AlsoIn, Meta: props.Meta[c.ID], OnToggle: props.OnToggle,
 		})
 	})
 
@@ -343,10 +232,7 @@ type budgetCatRowProps struct {
 // elsewhere. Its own component so its checkbox hook is never registered in a loop.
 func budgetCatRow(props budgetCatRowProps) ui.Node {
 	onToggle := ui.UseEvent(func() { props.OnToggle(props.CategoryID) })
-	rowCls := "budgetcat-row"
-	if props.Checked {
-		rowCls += " is-on"
-	}
+	rowCls := budgetview.CheckedRowClass(props.Checked)
 	return Label(ClassStr(rowCls),
 		Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "budgetcat-pick-"+props.CategoryID), OnChange(onToggle)}, checkedAttr(props.Checked)...)...),
 		Span(css.Class("budgetcat-name"), props.CategoryName),
@@ -361,18 +247,7 @@ func distinctTxnTags(app *appstate.App) []string {
 	if app == nil {
 		return nil
 	}
-	seen := map[string]bool{}
-	var out []string
-	for _, t := range app.Transactions() {
-		for _, tg := range t.Tags {
-			if k := strings.ToLower(strings.TrimSpace(tg)); k != "" && !seen[k] {
-				seen[k] = true
-				out = append(out, k)
-			}
-		}
-	}
-	sort.Strings(out)
-	return out
+	return budgetview.DistinctTags(app.Transactions())
 }
 
 // budgetTagPickerProps configures the searchable tracked-tags checklist.
@@ -391,42 +266,10 @@ type budgetTagPickerProps struct {
 func budgetTagPicker(props budgetTagPickerProps) ui.Node {
 	query := ui.UseState("")
 	onQuery := ui.UseEvent(func(v string) { query.Set(v) })
-	q := strings.ToLower(strings.TrimSpace(query.Get()))
-
-	// Candidate list: every tag in use, plus any currently-picked tag not in use (a custom
-	// tag the user just added). Deduped + sorted.
-	seen := map[string]bool{}
-	var all []string
-	for _, t := range props.AllTags {
-		if !seen[t] {
-			seen[t] = true
-			all = append(all, t)
-		}
-	}
-	for t, on := range props.Picked {
-		if on && !seen[t] {
-			seen[t] = true
-			all = append(all, t)
-		}
-	}
-	sort.Strings(all)
-
-	var shown []string
-	exact := false
-	for _, t := range all {
-		if q == "" || strings.Contains(t, q) {
-			shown = append(shown, t)
-		}
-		if t == q {
-			exact = true
-		}
-	}
+	shown, q, exact := budgetview.TagOptions(props.AllTags, props.Picked, query.Get())
 
 	rows := MapKeyed(shown, func(t string) any { return t }, func(t string) ui.Node {
-		meta := ""
-		if n := props.Count[t]; n > 0 {
-			meta = fmt.Sprintf("%d · %s", n, props.Total[t])
-		}
+		meta := budgetview.CountTotalLabel(props.Count[t], props.Total[t])
 		return ui.CreateElement(budgetTagRow, budgetTagRowProps{
 			Tag: t, Checked: props.Picked[t], Meta: meta, OnToggle: props.OnToggle,
 		})
@@ -460,10 +303,7 @@ type budgetTagRowProps struct {
 // component so its checkbox hook is never registered in a loop.
 func budgetTagRow(props budgetTagRowProps) ui.Node {
 	onToggle := ui.UseEvent(func() { props.OnToggle(props.Tag) })
-	rowCls := "budgetcat-row"
-	if props.Checked {
-		rowCls += " is-on"
-	}
+	rowCls := budgetview.CheckedRowClass(props.Checked)
 	return Label(ClassStr(rowCls),
 		Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "budgettag-pick-"+props.Tag), OnChange(onToggle)}, checkedAttr(props.Checked)...)...),
 		Span(css.Class("budgetcat-name"), "#"+props.Tag),

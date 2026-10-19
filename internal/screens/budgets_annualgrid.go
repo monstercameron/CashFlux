@@ -5,7 +5,6 @@
 package screens
 
 import (
-	"fmt"
 	"strconv"
 	"syscall/js"
 	"time"
@@ -13,11 +12,10 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/budgetplan"
-	"github.com/monstercameron/CashFlux/internal/categorytree"
+	"github.com/monstercameron/CashFlux/internal/budgetview"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
-	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -59,7 +57,7 @@ var annualGridMonthFullKeys = [12]string{
 }
 
 // scenarioStepMinor is one press of the income scenario stepper: ±$100 a month.
-const scenarioStepMinor int64 = 10000
+const scenarioStepMinor = budgetview.ScenarioStepMinor
 
 // BudgetAnnualGrid renders the BG9 categories×months plan-vs-actual matrix as a
 // collapsible, view-only "Plan the year" section (C371): a wide table with a
@@ -74,77 +72,72 @@ func BudgetAnnualGrid(props budgetAnnualGridProps) ui.Node {
 	year := ui.UseState(props.Now.Year())
 	scenarioOn := ui.UseState(false)
 	incomeDelta := ui.UseState(int64(0))
-	// C608: which months are on screen. The grid is twelve columns wide and its
-	// only affordance for the rest was "Scroll sideways for the full year →" — a
-	// sighted-only nudge toward a scrollbar at the bottom of a tall table. Halving
-	// the window is what lets a narrow viewport, and a keyboard, reach every month
-	// without horizontal scrolling at all.
 	monthWin := ui.UseState(annualWinAll)
 	revision := uistate.UseDataRevision().Get()
-
-	toggle := ui.UseEvent(Prevent(func() { open.Set(!open.Get()) }))
-	prevYear := ui.UseEvent(Prevent(func() { year.Set(year.Get() - 1) }))
-	nextYear := ui.UseEvent(Prevent(func() { year.Set(year.Get() + 1) }))
-	scenarioToggle := ui.UseEvent(Prevent(func() { scenarioOn.Set(!scenarioOn.Get()) }))
-	deltaLess := ui.UseEvent(Prevent(func() { incomeDelta.Set(incomeDelta.Get() - scenarioStepMinor) }))
-	deltaMore := ui.UseEvent(Prevent(func() { incomeDelta.Set(incomeDelta.Get() + scenarioStepMinor) }))
-	deltaReset := ui.UseEvent(Prevent(func() { incomeDelta.Set(0) }))
-	winAll := ui.UseEvent(Prevent(func() { monthWin.Set(annualWinAll) }))
-	winH1 := ui.UseEvent(Prevent(func() { monthWin.Set(annualWinH1) }))
-	winH2 := ui.UseEvent(Prevent(func() { monthWin.Set(annualWinH2) }))
-	toggleOnClick := OnClick(toggle)
-	prevOnClick := OnClick(prevYear)
-	nextOnClick := OnClick(nextYear)
-
-	// The current-month column index for THIS displayed year (−1 when the displayed
-	// year is not the current year), computed without building the grid so the
-	// scroll effect below can run at a stable hook position.
-	curMonth := -1
-	if props.Now.Year() == year.Get() {
-		curMonth = int(props.Now.Month()) - 1
-	}
-	// When opened (or the year changes), bring the current-month column into view so
-	// the grid "lands on" today rather than January (C371).
+	curMonth := budgetview.CurrentMonth(props.Now, year.Get())
 	ui.UseEffect(func() func() {
 		if open.Get() && curMonth >= 0 {
 			scrollAnnualGridToCurrent()
 		}
 		return nil
-	}, fmt.Sprintf("annualgrid-scroll-%v-%d-%d", open.Get(), year.Get(), curMonth))
-	type annualGridBuild struct {
-		grid   budgeting.AnnualGrid
-		covers map[string]map[string]bool
-		err    error
-	}
+	}, open.Get(), year.Get(), curMonth)
 	deps := []any{revision, props.App, props.Scope, props.WeekStart, props.Now.Format("2006-01-02"), year.Get(), open.Get()}
 	if props.App != nil {
 		deps = append(deps, props.App.Rev())
-	} else {
-		deps = append(deps, props.Budgets, props.Txns, props.Cats, props.Rates)
 	}
-	build := ui.UseMemo(func() annualGridBuild {
+	// GWC compares slices by base pointer. Length makes a reslice an invalidation.
+	deps = append(deps, props.Budgets, len(props.Budgets), props.Txns, len(props.Txns), props.Cats, len(props.Cats), props.Rates)
+	build := ui.UseMemo(func() budgetview.AnnualBuild {
 		if !open.Get() {
-			return annualGridBuild{}
+			return budgetview.AnnualBuild{}
 		}
-		covers := make(map[string]map[string]bool, len(props.Budgets))
-		for _, b := range props.Budgets {
-			covers[b.ID] = categorytree.DescendantsOfAll(props.Cats, b.TrackedCategoryIDs())
-		}
-		grid, err := budgeting.BuildAnnualGrid(props.Budgets, props.Txns, year.Get(), props.Rates, props.WeekStart, props.Now, covers)
-		return annualGridBuild{grid: grid, covers: covers, err: err}
+		return budgetview.BuildAnnual(props.Budgets, props.Txns, props.Cats, year.Get(), props.Rates, props.WeekStart, props.Now)
 	}, deps...)
-
-	// A proper collapsible-section toggle framed as "Plan the year" (C371): a
-	// rotating disclosure caret, a clear title, and a hint of what it opens.
-	caretCls := "budget-annualgrid-caret"
-	toggleAria := uistate.T("budgets.planYearShowAria")
-	if open.Get() {
-		caretCls += " is-open"
-		toggleAria = uistate.T("budgets.planYearHideAria")
+	header := ui.CreateElement(annualGridHeader, annualGridHeaderProps{Open: open.Get(), Year: year.Get(), Budgets: props.Budgets, Rates: props.Rates, Toggle: func() { open.Set(!open.Get()) }})
+	if !open.Get() {
+		return Div(css.Class("budget-annualgrid"), header)
 	}
-	header := Div(css.Class("budget-annualgrid-head"),
+	if build.Err != nil {
+		return Div(css.Class("budget-annualgrid"), header, Span(css.Class("budget-sub", tw.TextDown), Attr("role", "alert"), uistate.T("budgets.annualGridError")))
+	}
+	projection := budgetview.ProjectAnnual(build.Grid, build.Covers, props.Recurrings, props.Goals, props.Now, props.Rates)
+	if projection.Err != nil {
+		return Div(css.Class("budget-annualgrid"), header, Span(css.Class("budget-sub", tw.TextDown), Attr("role", "alert"), uistate.T("budgets.annualGridError")))
+	}
+	grid := build.Grid
+	var shortfalls map[string][12]int64
+	underCount := 0
+	if scenarioOn.Get() {
+		shortfalls, underCount = budgetview.AnnualScenario(grid, incomeDelta.Get())
+	}
+	return Div(css.Class("budget-annualgrid"), header,
+		Div(css.Class("budget-annualgrid-head"),
+			ui.CreateElement(annualGridYearControls, annualGridYearControlsProps{Year: grid.Year, Previous: func() { year.Set(budgetview.StepYear(year.Get(), -1)) }, Next: func() { year.Set(budgetview.StepYear(year.Get(), 1)) }}),
+			ui.CreateElement(annualGridScenarioControls, annualGridScenarioControlsProps{
+				On: scenarioOn.Get(), Delta: incomeDelta.Get(), UnderCount: underCount, Currency: grid.Currency,
+				Toggle: func() { scenarioOn.Set(!scenarioOn.Get()) }, Less: func() { incomeDelta.Set(budgetview.StepScenario(incomeDelta.Get(), -scenarioStepMinor)) },
+				More: func() { incomeDelta.Set(budgetview.StepScenario(incomeDelta.Get(), scenarioStepMinor)) }, Reset: func() { incomeDelta.Set(0) },
+			})),
+		annualGridLegend(projection.FromMonth <= 11, scenarioOn.Get()),
+		ui.CreateElement(annualGridWindowControls, annualGridWindowControlsProps{Window: monthWin.Get(), Select: monthWin.Set}),
+		Div(css.Class("budget-annualgrid-scroll"), annualGridTable(grid, props, projection.FromMonth, projection.PerBudget, projection.Totals, shortfalls, monthWin.Get())),
+	)
+}
+
+type annualGridHeaderProps struct {
+	Open    bool
+	Year    int
+	Budgets []domain.Budget
+	Rates   currency.Rates
+	Toggle  func()
+}
+
+func annualGridHeader(props annualGridHeaderProps) ui.Node {
+	caretCls, toggleKey := budgetview.AnnualDisclosure(props.Open)
+	toggleAria := uistate.T(toggleKey)
+	return Div(css.Class("budget-annualgrid-head"),
 		Button(css.Class("budget-annualgrid-toggle"), Type("button"), Attr("data-testid", "budget-annualgrid-toggle"),
-			Attr("aria-expanded", ariaBool(open.Get())), Attr("aria-label", toggleAria), toggleOnClick,
+			Attr("aria-expanded", ariaBool(props.Open)), Attr("aria-label", toggleAria), OnClick(Prevent(props.Toggle)),
 			Span(ClassStr(caretCls), Attr("aria-hidden", "true"),
 				uiw.Icon(icon.ChevronRight, css.Class(tw.ShrinkO, tw.W4, tw.H4))),
 			Span(css.Class("budget-annualgrid-toggle-label"), uistate.T("budgets.planYearTitle")),
@@ -154,90 +147,57 @@ func BudgetAnnualGrid(props budgetAnnualGridProps) ui.Node {
 			// (Cam, 2026-08-31). The figure is the budgets' own limits normalized to
 			// a year — no grid build, so it costs nothing while shut.
 			Span(css.Class("budget-annualgrid-toggle-hint"),
-				uistate.T("budgets.planYearStableHint", year.Get(),
+				uistate.T("budgets.planYearStableHint", props.Year,
 					annualPlanTotalLabel(props.Budgets, props.Rates))),
 		),
 	)
 
-	if !open.Get() {
-		return Div(css.Class("budget-annualgrid"), header)
-	}
+}
 
-	grid, covers := build.grid, build.covers
-	if build.err != nil {
-		return Div(css.Class("budget-annualgrid"), header,
-			Span(css.Class("budget-sub", tw.TextDown), Attr("role", "alert"), uistate.T("budgets.annualGridError")))
-	}
+type annualGridYearControlsProps struct {
+	Year           int
+	Previous, Next func()
+}
 
-	// fromMonth is the first month treated as "future" (projected, distinct wash):
-	// the month after the current one for the current year, the whole year (0) for a
-	// future year, and none (12) for a past year.
-	fromMonth := 12
-	if grid.CurrentMonth >= 0 {
-		fromMonth = grid.CurrentMonth + 1
-	} else if grid.Year > props.Now.Year() {
-		fromMonth = 0
-	}
-
-	budgetIDs := make([]string, 0, len(grid.Rows))
-	spendingBudgetIDs := make([]string, 0, len(grid.Rows))
-	for _, r := range grid.Rows {
-		budgetIDs = append(budgetIDs, r.BudgetID)
-		if !r.Saving && r.Error == nil {
-			spendingBudgetIDs = append(spendingBudgetIDs, r.BudgetID)
-		}
-	}
-	// C394 — project recurring bills + goal contributions into the future months,
-	// folded onto each budget row through its cover set.
-	projection := budgetplan.Project(props.Recurrings, props.Goals, grid.Year, fromMonth, grid.Currency, props.Rates)
-	perBudget, projectionErr := projection.PerBudget(budgetIDs, covers)
-	if projectionErr != nil {
-		return Div(css.Class("budget-annualgrid"), header,
-			Span(css.Class("budget-sub", tw.TextDown), Attr("role", "alert"), uistate.T("budgets.annualGridError")))
-	}
-	projectedTotals, projectionErr := projection.TotalUnique(spendingBudgetIDs, covers)
-	if projectionErr != nil {
-		return Div(css.Class("budget-annualgrid"), header,
-			Span(css.Class("budget-sub", tw.TextDown), Attr("role", "alert"), uistate.T("budgets.annualGridError")))
-	}
-
-	// C393 — scenario: which budget/month cells go underfunded at the chosen income
-	// delta. Ephemeral, view-only — nothing persists.
-	scOn := scenarioOn.Get()
-	delta := incomeDelta.Get()
-	var shortfalls map[string][12]int64
-	underCount := 0
-	if scOn {
-		shortfalls, underCount = annualGridScenario(grid, delta)
-	}
-
-	yearControls := Div(css.Class("budget-annualgrid-year"),
+func annualGridYearControls(props annualGridYearControlsProps) ui.Node {
+	return Div(css.Class("budget-annualgrid-year"),
 		Button(css.Class("btn"), Type("button"), Attr("data-testid", "budget-annualgrid-prev"),
-			Attr("aria-label", uistate.T("budgets.annualGridPrevYear")), prevOnClick,
+			Attr("aria-label", uistate.T("budgets.annualGridPrevYear")), OnClick(Prevent(props.Previous)),
 			uiw.Icon(icon.ChevronLeft, css.Class(tw.ShrinkO, tw.W4, tw.H4))),
-		Span(css.Class("budget-annualgrid-yearlabel"), strconv.Itoa(grid.Year)),
+		Span(css.Class("budget-annualgrid-yearlabel"), strconv.Itoa(props.Year)),
 		Button(css.Class("btn"), Type("button"), Attr("data-testid", "budget-annualgrid-next"),
-			Attr("aria-label", uistate.T("budgets.annualGridNextYear")), nextOnClick,
+			Attr("aria-label", uistate.T("budgets.annualGridNextYear")), OnClick(Prevent(props.Next)),
 			uiw.Icon(icon.ChevronRight, css.Class(tw.ShrinkO, tw.W4, tw.H4))),
 	)
 
-	scenarioBar := annualGridScenarioBar(scOn, delta, underCount, grid.Currency,
-		scenarioToggle, deltaLess, deltaMore, deltaReset)
+}
 
-	return Div(css.Class("budget-annualgrid"),
-		header,
-		Div(css.Class("budget-annualgrid-head"), yearControls, scenarioBar),
-		annualGridLegend(fromMonth <= 11, scOn),
-		// C608: a month-window control, replacing the "scroll sideways" cue. The cue
-		// was aria-hidden and pointed at a scrollbar; this is a real control that
-		// makes the far half of the year reachable by keyboard, by screen reader and
-		// on a narrow pane, with no horizontal scrolling involved.
-		annualGridWindowBar(monthWin.Get(), winAll, winH1, winH2),
-		// Horizontal scroll lives INSIDE the card so the page body never scrolls sideways
-		// (the .budget-annualgrid-scroll frame owns overflow-x + max-width).
-		Div(css.Class("budget-annualgrid-scroll"),
-			annualGridTable(grid, props, fromMonth, perBudget, projectedTotals, shortfalls, monthWin.Get())),
-	)
+type annualGridScenarioControlsProps struct {
+	On                        bool
+	Delta                     int64
+	UnderCount                int
+	Currency                  string
+	Toggle, Less, More, Reset func()
+}
+
+func annualGridScenarioControls(props annualGridScenarioControlsProps) ui.Node {
+	toggle := ui.UseEvent(Prevent(props.Toggle))
+	less := ui.UseEvent(Prevent(props.Less))
+	more := ui.UseEvent(Prevent(props.More))
+	reset := ui.UseEvent(Prevent(props.Reset))
+	return annualGridScenarioBar(props.On, props.Delta, props.UnderCount, props.Currency, toggle, less, more, reset)
+}
+
+type annualGridWindowControlsProps struct {
+	Window string
+	Select func(string)
+}
+
+func annualGridWindowControls(props annualGridWindowControlsProps) ui.Node {
+	all := ui.UseEvent(Prevent(func() { props.Select(annualWinAll) }))
+	h1 := ui.UseEvent(Prevent(func() { props.Select(annualWinH1) }))
+	h2 := ui.UseEvent(Prevent(func() { props.Select(annualWinH2) }))
+	return annualGridWindowBar(props.Window, all, h1, h2)
 }
 
 // scrollAnnualGridToCurrent brings the current-month header column into view
@@ -262,39 +222,6 @@ func scrollAnnualGridToCurrent() {
 	js.Global().Call("setTimeout", cb, 80)
 }
 
-// annualGridScenario runs the C393 funding waterfall for every month at the given
-// income delta and returns the per-budget, per-month shortfall (minor units; 0 =
-// funded) plus the total count of underfunded cells. The month's baseline income
-// is its own total plan, so a zero delta funds everything and a negative delta
-// reveals exactly which budgets fall off — funded top-to-bottom in row order.
-func annualGridScenario(grid budgeting.AnnualGrid, deltaMinor int64) (map[string][12]int64, int) {
-	out := map[string][12]int64{}
-	count := 0
-	for m := 0; m < 12; m++ {
-		plans := make([]budgetplan.BudgetPlan, 0, len(grid.Rows))
-		for _, r := range grid.Rows {
-			if r.Saving || r.Error != nil {
-				continue
-			}
-			plans = append(plans, budgetplan.BudgetPlan{BudgetID: r.BudgetID, Name: r.Name, PlanMinor: r.Cells[m].Plan.Amount})
-		}
-		res := budgetplan.Evaluate(budgetplan.ScenarioInput{
-			IncomeMinor:      grid.MonthPlanTotals[m].Amount,
-			IncomeDeltaMinor: deltaMinor,
-			Plans:            plans,
-		})
-		for _, f := range res.Funded {
-			if f.ShortfallMinor > 0 {
-				row := out[f.BudgetID]
-				row[m] = f.ShortfallMinor
-				out[f.BudgetID] = row
-				count++
-			}
-		}
-	}
-	return out, count
-}
-
 // annualGridScenarioBar renders the ephemeral income-scenario control (C393): a
 // toggle, and when on a ±$100 income stepper, a reset, and a live underfunded
 // count. All handlers are stable hooks passed in from the parent.
@@ -303,10 +230,7 @@ func annualGridScenarioBar(on bool, deltaMinor int64, underCount int, cur string
 	lessOnClick := OnClick(less)
 	moreOnClick := OnClick(more)
 	resetOnClick := OnClick(reset)
-	cls := "budget-annualgrid-scenario"
-	if on {
-		cls += " is-on"
-	}
+	presentation := budgetview.PresentAnnualScenario(on, deltaMinor, underCount, cur, uistate.T)
 	children := []ui.Node{
 		Button(css.Class("btn"), Type("button"), Attr("data-testid", "budget-annualgrid-scenario-toggle"),
 			Attr("aria-pressed", ariaBool(on)), Attr("aria-label", uistate.T("budgets.scenarioToggleAria")),
@@ -314,20 +238,13 @@ func annualGridScenarioBar(on bool, deltaMinor int64, underCount int, cur string
 			Span(uistate.T("budgets.scenarioToggle"))),
 	}
 	if on {
-		var status ui.Node
-		if underCount > 0 {
-			status = Span(css.Class("budget-annualgrid-scenario-status", "is-under"),
-				uistate.T("budgets.scenarioUnderfunded", underCount))
-		} else {
-			status = Span(css.Class("budget-annualgrid-scenario-status", "is-clear"),
-				uistate.T("budgets.scenarioAllFunded"))
-		}
+		status := Span(ClassStr(presentation.StatusClass), presentation.Status)
 		children = append(children,
 			Span(css.Class("budget-annualgrid-scenario-label"), uistate.T("budgets.scenarioLabel")),
 			Button(css.Class("btn"), Type("button"), Attr("data-testid", "budget-annualgrid-scenario-less"),
 				Attr("aria-label", uistate.T("budgets.scenarioLess")), lessOnClick, Span(Attr("aria-hidden", "true"), "−")),
 			Span(css.Class("budget-annualgrid-scenario-delta"), Attr("data-testid", "budget-annualgrid-scenario-delta"),
-				signedMoney(money.New(deltaMinor, cur), currency.Decimals(cur))),
+				presentation.Delta),
 			Button(css.Class("btn"), Type("button"), Attr("data-testid", "budget-annualgrid-scenario-more"),
 				Attr("aria-label", uistate.T("budgets.scenarioMore")), moreOnClick, Span(Attr("aria-hidden", "true"), "+")),
 			Button(css.Class("btn"), Type("button"), Attr("data-testid", "budget-annualgrid-scenario-reset"),
@@ -335,7 +252,7 @@ func annualGridScenarioBar(on bool, deltaMinor int64, underCount int, cur string
 			status,
 		)
 	}
-	return Div(ClassStr(cls), children)
+	return Div(ClassStr(presentation.Class), children)
 }
 
 // annualGridLegend renders the plan/actual/projected (and, in scenario mode,
@@ -365,16 +282,7 @@ func annualGridLegendItem(swatchMod, label string) ui.Node {
 // the current-month accent band, the future-month wash, and the leading-divider Total
 // column. Empty for a plain past month column. (i == 12 is the Total column.)
 func gridColClass(i, current, fromMonth int) string {
-	switch {
-	case i == 12:
-		return " is-total"
-	case i == current:
-		return " is-current"
-	case i >= fromMonth:
-		return " is-future"
-	default:
-		return ""
-	}
+	return budgetview.GridColClass(i, current, fromMonth)
 }
 
 // annualGridTable renders the matrix itself. A sticky header row and sticky first
@@ -410,10 +318,7 @@ func annualGridTable(grid budgeting.AnnualGrid, props budgetAnnualGridProps, fro
 		uistate.T("budgets.annualGridTotalCol")))
 
 	// Map each budget to its tracked categories so a cell click can filter Transactions.
-	catsByBudget := map[string][]string{}
-	for _, b := range props.Budgets {
-		catsByBudget[b.ID] = b.TrackedCategoryIDs()
-	}
+	catsByBudget := budgetview.BudgetCategories(props.Budgets)
 	var bodyRows []ui.Node
 	for _, row := range grid.Rows {
 		proj := perBudget[row.BudgetID]
@@ -435,13 +340,12 @@ func annualGridTable(grid budgeting.AnnualGrid, props budgetAnnualGridProps, fro
 		if i < firstM || i > lastM {
 			continue
 		}
-		cls := "budget-annualgrid-td is-foot" + gridColClass(i, grid.CurrentMonth, fromMonth)
-		if i >= fromMonth && projectedTotals[i] > 0 {
-			footCells = append(footCells, Td(ClassStr(cls),
-				Span(css.Class("budget-annualgrid-projected"), fmtMoney(money.New(projectedTotals[i], grid.Currency)))))
+		cell := budgetview.PresentAnnualFooter(grid, projectedTotals, i, fromMonth)
+		if cell.Projected {
+			footCells = append(footCells, Td(ClassStr(cell.Class), Span(css.Class("budget-annualgrid-projected"), cell.Amount)))
 			continue
 		}
-		footCells = append(footCells, Td(ClassStr(cls), fmtMoney(grid.MonthActualTotals[i])))
+		footCells = append(footCells, Td(ClassStr(cell.Class), cell.Amount))
 	}
 	footCells = append(footCells, Td(css.Class("budget-annualgrid-td", "is-foot", "is-total"), fmtMoney(grid.GrandActual)))
 
@@ -472,10 +376,10 @@ type annualGridRowProps struct {
 func annualGridRow(props annualGridRowProps) ui.Node {
 	row := props.Row
 	if row.Error != nil {
-		visibleMonths := props.LastMonth - props.FirstMonth + 1
+		columnSpan := budgetview.ErrorColumnSpan(props.FirstMonth, props.LastMonth)
 		return Tr(css.Class("budget-annualgrid-tr"),
 			Th(css.Class("budget-annualgrid-rowhead"), Attr("scope", "row"), row.Name),
-			Td(Attr("colspan", strconv.Itoa(visibleMonths+1)), Attr("role", "alert"),
+			Td(Attr("colspan", strconv.Itoa(columnSpan)), Attr("role", "alert"),
 				Span(css.Class("budget-sub", tw.TextDown), uistate.T("budgets.annualGridError"))))
 	}
 	cells := []ui.Node{
@@ -486,8 +390,7 @@ func annualGridRow(props annualGridRowProps) ui.Node {
 			continue
 		}
 		cell := row.Cells[m]
-		from := time.Date(props.Year, time.Month(m+1), 1, 0, 0, 0, 0, time.UTC).Format("2006-01-02")
-		to := time.Date(props.Year, time.Month(m+2), 1, 0, 0, 0, 0, time.UTC).Format("2006-01-02")
+		from, to := budgetview.MonthDates(props.Year, m)
 		cells = append(cells, ui.CreateElement(annualGridCell, annualGridCellProps{
 			BudgetID: row.BudgetID, CategoryIDs: props.CategoryIDs, Cell: cell,
 			Current: m == props.CurrentMonth, IsFuture: m >= props.FromMonth,
@@ -533,58 +436,15 @@ func annualGridCell(props annualGridCellProps) ui.Node {
 			props.OnCell(props.CategoryIDs, props.From, props.To)
 		}
 	}))
-	cls := "budget-annualgrid-td"
-	if props.Current {
-		cls += " is-current"
-	}
-	if props.IsFuture {
-		cls += " is-future"
-	}
-	if props.Cell.Over && !props.IsFuture {
-		cls += " is-over"
-	}
-	if props.Shortfall > 0 {
-		cls += " is-underfunded"
-	}
-
-	// Primary figure: projected for a future cell that has a projection, else actual.
-	var primary ui.Node
-	title := ""
-	if props.IsFuture && props.Projected > 0 {
-		primary = Span(css.Class("budget-annualgrid-projected"), fmtMoney(money.New(props.Projected, props.Base)))
-		title = uistate.T("budgets.gridProjectedTitle", fmtMoney(money.New(props.Projected, props.Base)))
-	} else {
-		primary = Span(css.Class("budget-annualgrid-actual"), fmtMoney(props.Cell.Actual))
-	}
-	if props.Shortfall > 0 {
-		title = uistate.T("budgets.scenarioUnderTitle", fmtMoney(money.New(props.Shortfall, props.Base)))
-	}
-
-	// C608: the button's accessible name spells out its coordinates and says which
-	// figure is which. As two bare amounts it announced "$1,100.00 $1,300.00",
-	// leaving a screen-reader user to match a paired value to a column they cannot
-	// see and a keyboard user with no idea which month they had reached.
-	aria := uistate.T("budgets.gridCellAria", props.BudgetName, props.MonthLabel,
-		fmtMoney(props.Cell.Actual), fmtMoney(props.Cell.Plan))
-	if props.IsFuture && props.Projected > 0 {
-		aria = uistate.T("budgets.gridCellAriaProjected", props.BudgetName, props.MonthLabel,
-			fmtMoney(money.New(props.Projected, props.Base)), fmtMoney(props.Cell.Plan))
-	}
-	if props.Shortfall > 0 {
-		aria += " " + uistate.T("budgets.gridCellAriaShort", fmtMoney(money.New(props.Shortfall, props.Base)))
-	}
-	// The tooltip repeats the accessible name when there is nothing more specific
-	// to say, so hovering and listening give the same answer.
-	if title == "" {
-		title = aria
-	}
+	presentation := budgetview.PresentAnnualCell(props.Cell, props.Current, props.IsFuture, props.Projected, props.Shortfall, props.Base, props.BudgetName, props.MonthLabel, uistate.T)
+	primary := Span(ClassStr(presentation.PrimaryClass), presentation.Primary)
 	btn := Button(css.Class("budget-annualgrid-cell"), Type("button"),
 		Attr("data-testid", "annualgrid-cell-"+props.BudgetID+"-"+props.From),
-		Attr("aria-label", aria), Attr("title", title),
+		Attr("aria-label", presentation.Aria), Attr("title", presentation.Title),
 		OnClick(click), primary,
 		Span(css.Class("budget-annualgrid-plan"), fmtMoney(props.Cell.Plan)),
 	)
-	return Td(ClassStr(cls), btn)
+	return Td(ClassStr(presentation.Class), btn)
 }
 
 // C608 — the year planner's month window.
@@ -602,32 +462,20 @@ const (
 
 // annualWindowRange turns a window into inclusive month indices.
 func annualWindowRange(win string) (first, last int) {
-	switch win {
-	case annualWinH1:
-		return 0, 5
-	case annualWinH2:
-		return 6, 11
-	}
-	return 0, 11
+	return budgetview.WindowRange(win)
 }
 
 // annualMonthLabel is a month's full name and year — what a cell's accessible
 // name references, and what a column header announces.
 func annualMonthLabel(m, year int) string {
-	if m < 0 || m > 11 {
-		return strconv.Itoa(year)
-	}
-	return uistate.T(annualGridMonthFullKeys[m]) + " " + strconv.Itoa(year)
+	return budgetview.MonthLabel(m, year, uistate.T)
 }
 
 // annualGridWindowBar renders the month-window control. Handlers arrive from the
 // parent so they sit at stable hook positions.
 func annualGridWindowBar(win string, all, h1, h2 ui.Handler) ui.Node {
 	opt := func(value, labelKey, testID string, on ui.Handler) ui.Node {
-		cls := "budget-annualgrid-win"
-		if win == value {
-			cls += " is-on"
-		}
+		cls := budgetview.AnnualWindowClass(win, value)
 		return Button(ClassStr(cls), Type("button"), Attr("data-testid", testID),
 			Attr("aria-pressed", ariaBool(win == value)), OnClick(on), uistate.T(labelKey))
 	}
@@ -645,23 +493,9 @@ func annualGridWindowBar(win string, all, h1, h2 ui.Handler) ui.Node {
 // biweekly, monthly, quarterly or yearly, so a bare sum of limits would compare a
 // weekly grocery cap with a yearly insurance one as though they were equal.
 func annualPlanTotal(budgets []domain.Budget, base string, rateTables ...currency.Rates) int64 {
-	rates := currency.Rates{Base: base}
-	if len(rateTables) > 0 {
-		rates = rateTables[0]
-	}
-	normalized, _ := budgeting.NormalizeBudgets(budgets, domain.PeriodYearly, rates)
-	return normalized.Total.Amount
+	return budgetview.AnnualPlanTotal(budgets, base, rateTables...)
 }
 
 func annualPlanTotalLabel(budgets []domain.Budget, rates currency.Rates) string {
-	normalized, _ := budgeting.NormalizeBudgets(budgets, domain.PeriodYearly, rates)
-	label := fmtMoney(normalized.Total)
-	if normalized.Excluded > 0 {
-		if normalized.Excluded == 1 {
-			label += " " + uistate.T("bud2.excludesOneBudget")
-		} else {
-			label += " " + uistate.T("bud2.excludesManyBudgets", normalized.Excluded)
-		}
-	}
-	return label
+	return budgetview.AnnualPlanLabel(budgets, rates, uistate.T)
 }
