@@ -20,11 +20,12 @@ import (
 const quarantinePrefix = "cashflux:quarantine:"
 
 var (
-	datasetQuarantined  bool
-	quarantinePending   bool
-	quarantineRaw       string
-	quarantineAvailable bool
-	hydrationSucceeded  bool
+	datasetQuarantined     bool
+	quarantinePending      bool
+	quarantineRaw          string
+	quarantineAvailable    bool
+	quarantineBannerHidden bool
+	hydrationSucceeded     bool
 )
 
 // autosaveBlocked reports whether hydration has left the in-memory dataset
@@ -131,7 +132,7 @@ func quarantineKey(unixSeconds int64) string {
 
 func showQuarantineBanner() {
 	doc := js.Global().Get("document")
-	if !doc.Truthy() || doc.Get("body").IsNull() {
+	if quarantineBannerHidden || !doc.Truthy() || !doc.Get("body").Truthy() {
 		return
 	}
 	if old := doc.Call("getElementById", "cashflux-quarantine-banner"); old.Truthy() {
@@ -141,7 +142,7 @@ func showQuarantineBanner() {
 	banner.Set("id", "cashflux-quarantine-banner")
 	banner.Call("setAttribute", "role", "alert")
 	banner.Call("setAttribute", "aria-live", "assertive")
-	banner.Set("style", "position:fixed;z-index:100000;top:0;left:0;right:0;padding:16px 20px;background:color-mix(in srgb,var(--warn) 16%,var(--bg-elev));color:var(--text);border-bottom:1px solid var(--warn);box-shadow:0 2px 12px rgba(0,0,0,.12);font:500 15px/1.5 system-ui,sans-serif")
+	banner.Set("style", "padding:16px 20px;background:color-mix(in srgb,var(--warn) 16%,var(--bg-elev));color:var(--text);border-bottom:1px solid var(--warn);box-shadow:0 2px 12px rgba(0,0,0,.12);font:500 15px/1.5 system-ui,sans-serif")
 	p := doc.Call("createElement", "p")
 	p.Set("textContent", uistate.T("datasetQuarantine.message"))
 	p.Set("style", "margin:0 0 10px")
@@ -150,10 +151,17 @@ func showQuarantineBanner() {
 	buttons.Set("style", "display:flex;gap:10px;flex-wrap:wrap")
 	download := quarantineButton(doc, uistate.T("datasetQuarantine.download"), downloadQuarantinedDataset)
 	startFresh := quarantineButton(doc, uistate.T("datasetQuarantine.startFresh"), startFreshAfterQuarantine)
+	hide := quarantineButton(doc, uistate.T("datasetQuarantine.hideForNow"), hideQuarantineBanner)
 	buttons.Call("appendChild", download)
 	buttons.Call("appendChild", startFresh)
+	buttons.Call("appendChild", hide)
 	banner.Call("appendChild", buttons)
-	doc.Get("body").Call("appendChild", banner)
+	body := doc.Get("body")
+	if first := body.Get("firstChild"); first.Truthy() {
+		body.Call("insertBefore", banner, first)
+	} else {
+		body.Call("appendChild", banner)
+	}
 }
 
 func quarantineButton(doc js.Value, label string, action func()) js.Value {
@@ -162,7 +170,27 @@ func quarantineButton(doc js.Value, label string, action func()) js.Value {
 	button.Set("textContent", label)
 	button.Set("style", "padding:7px 11px;border:1px solid var(--border);border-radius:6px;background:var(--bg-elev);color:var(--text);font:inherit;cursor:pointer")
 	button.Set("onclick", js.FuncOf(func(js.Value, []js.Value) any { action(); return nil }))
+	button.Set("onfocus", js.FuncOf(func(js.Value, []js.Value) any {
+		button.Get("style").Set("outline", "2px solid var(--warn)")
+		button.Get("style").Set("outlineOffset", "2px")
+		return nil
+	}))
+	button.Set("onblur", js.FuncOf(func(js.Value, []js.Value) any {
+		button.Get("style").Set("outline", "")
+		return nil
+	}))
 	return button
+}
+
+func hideQuarantineBanner() {
+	quarantineBannerHidden = true
+	doc := js.Global().Get("document")
+	if !doc.Truthy() {
+		return
+	}
+	if banner := doc.Call("getElementById", "cashflux-quarantine-banner"); banner.Truthy() {
+		banner.Call("remove")
+	}
 }
 
 func downloadQuarantinedDataset() {
