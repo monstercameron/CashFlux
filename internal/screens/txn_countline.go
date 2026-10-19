@@ -154,7 +154,9 @@ func txnCountLineComponent(props txnCountLineProps) ui.Node {
 	var visibleFacts ui.Node
 	visibleText := secondaryText
 	if props.FactsProvidedByTable {
-		visibleText = txntoolbar.UniqueFacts(secondaryText, props.MovedRows, props.UnpairedRows, props.Unconverted, props.Excluded, props.Lens != "")
+		// The table owns the complete visible facts band, including filter
+		// conversion failures and the perspective label. Keep the full accessible summary.
+		visibleText = nil
 	}
 	if len(visibleText) > 0 {
 		factNodes := make([]ui.Node, 0, len(visibleText))

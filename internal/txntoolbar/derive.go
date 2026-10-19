@@ -58,19 +58,21 @@ func CategoryFiltered(f txnfilter.Criteria) bool {
 }
 
 // Derive filters a current immutable ledger snapshot and folds the uncollapsed
-// rows. Filtering conversion failures are retained rather than recalculated.
+// rows in the requested order, without pagination. Filtering conversion failures
+// are retained rather than recalculated. On arithmetic failure, rows and issues
+// remain available for correction, but no partial monetary totals are returned.
 func Derive(rows []domain.Transaction, f txnfilter.Criteria, labels txnfilter.Labels, rates currency.Rates, base string, now time.Time) (Derived, error) {
-	f = SummaryScope(f)
+	f.Page, f.PageSize = 0, 0
 	visible, issues := txnfilter.ApplyWithLabelsChecked(rows, f, labels)
 	categoryRows := visible
-	if categoryScope := CategoryScope(f); categoryScope != f {
+	if categoryScope := CategoryScope(f); categoryScope != SummaryScope(f) {
 		categoryRows = txnfilter.ApplyWithLabels(rows, categoryScope, labels)
 	}
+	counts := PresetCounts(rows, f, labels, base, now)
 	view, err := txnview.SummarizeWithCategories(visible, categoryRows, rates, base)
 	if err != nil {
-		return Derived{}, fmt.Errorf("derive transaction toolbar: %w", err)
+		return Derived{Rows: visible, Issues: issues, Presets: counts, View: txnview.View{Count: len(visible), Categories: []txnview.CategoryTotal{}}}, fmt.Errorf("derive transaction toolbar: %w", err)
 	}
-	counts := PresetCounts(rows, f, labels, base, now)
 	return Derived{Rows: visible, Issues: issues, View: view, Presets: counts}, nil
 }
 

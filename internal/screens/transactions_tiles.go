@@ -655,19 +655,7 @@ func txnToolbarWidget(props txnToolbarProps) ui.Node {
 		if props.Derived.Matches(app.Rev(), txnDerivedScope(app, filter)) {
 			return props.Derived.Value
 		}
-		// The host has already folded uncollapsed rows. Reuse both its view and
-		// conversion issues only when they describe this exact current scope.
-		// Older hosts have a category-scope bug for multi-selects; those scopes
-		// take the authoritative pure fallback until the host hands off Derived.
-		cached := txnConversionIssuesCache
-		if view, ok := txnDerivedViewCache.Lookup(app.Rev(), txnDerivedScope(app, filter)); ok && filter.Categories == "" && !filter.ScopeAny && cached.valid && cached.app == app && cached.revision == app.Rev() && cached.scope == txnDerivedScope(app, filter) {
-			return txntoolbar.Derived{View: view, Issues: cached.issues, Presets: txntoolbar.PresetCounts(app.Transactions(), scope, labels, props.Base, time.Now())}
-		}
-		value, err := txntoolbar.Derive(app.Transactions(), scope, labels, props.Rates, props.Base, time.Now())
-		if err != nil {
-			return txntoolbar.Derived{}
-		}
-		return value
+		return deriveTxnScope(app, app.Transactions(), scope, labels, props.Rates, props.Base)
 	}, app, app.Rev(), scope, props.Base, month, activeImportProfileWorkspaceID(), props.Derived)
 	summary := ledger
 	summary.presets = derived.Presets

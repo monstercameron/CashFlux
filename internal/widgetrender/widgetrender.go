@@ -19,6 +19,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/freshness"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/txntoolbar"
 	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
 
@@ -39,6 +40,9 @@ type RenderCtx struct {
 	ScopedTxns     []domain.Transaction
 	Rates          currency.Rates
 	Base           string
+
+	// TxnDerived is the immutable uncollapsed ledger derivation shared by transaction tiles.
+	TxnDerived *txntoolbar.Snapshot
 
 	Start, End time.Time
 

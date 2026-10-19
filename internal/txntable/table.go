@@ -17,6 +17,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/reconcile"
 	"github.com/monstercameron/CashFlux/internal/txnclassify"
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
+	"github.com/monstercameron/CashFlux/internal/txntoolbar"
 )
 
 // VirtualizeThreshold is the All-view size above which rows are windowed.
@@ -306,6 +307,13 @@ func DeriveRows(rows []domain.Transaction, f txnfilter.Criteria, labels txnfilte
 		}
 	}
 	result, issues := txnfilter.ApplyWithLabelsChecked(rows, f, labels)
+	return OrderDescriptions(result, f, learned, resolve), issues
+}
+
+// OrderDescriptions orders an already filtered snapshot by its displayed description.
+// It never filters again or mutates the shared input. Other sort orders are retained.
+func OrderDescriptions(rows []domain.Transaction, f txnfilter.Criteria, learned func(string) bool, resolve func(string) string) []domain.Transaction {
+	result := append([]domain.Transaction(nil), rows...)
 	normalized := f.Normalize()
 	if normalized.Sort == "payee" {
 		keys := map[string]string{}
@@ -323,14 +331,12 @@ func DeriveRows(rows []domain.Transaction, f txnfilter.Criteria, labels txnfilte
 			return cmp < 0
 		})
 	}
-	return result, issues
+	return result
 }
 
 // CategoryCriteria removes category and direction choices for category summary context.
 func CategoryCriteria(f txnfilter.Criteria) txnfilter.Criteria {
-	f.Flow, f.Category, f.Uncategorized = "", "", false
-	f.Sort, f.Dir, f.Page, f.PageSize = "", "", 0, 0
-	return f
+	return txntoolbar.CategoryScope(f)
 }
 
 // OpenTaskCount counts unfinished tasks linked to a transaction.

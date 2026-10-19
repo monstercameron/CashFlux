@@ -6,6 +6,7 @@ package screens
 
 import (
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 	"syscall/js"
@@ -24,6 +25,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/txnlinks"
 	"github.com/monstercameron/CashFlux/internal/txnreview"
 	"github.com/monstercameron/CashFlux/internal/txntable"
+	"github.com/monstercameron/CashFlux/internal/txntoolbar"
 	"github.com/monstercameron/CashFlux/internal/txnview"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -43,14 +45,6 @@ const (
 )
 
 var txnDerivedViewCache txnview.Cache
-
-var txnConversionIssuesCache struct {
-	app      *appstate.App
-	revision uint64
-	scope    string
-	issues   []txnfilter.ConversionIssue
-	valid    bool
-}
 
 func txnDerivedScope(app *appstate.App, criteria txnfilter.Criteria) string {
 	return fmt.Sprintf("%p|%q|%s", app, activeImportProfileWorkspaceID(), txnview.Scope(criteria))
@@ -142,28 +136,34 @@ func useTxnSurfaceContext(app *appstate.App, f txnfilter.Criteria) widgetrender.
 	resolver := app.PayeeResolver()
 	derivedFilter := f
 	derivedFilter.Page, derivedFilter.PageSize = 0, 0
-	shown := ui.UseMemo(func() []domain.Transaction {
+	month := dateutil.MonthStart(time.Now())
+	derived := ui.UseMemo(func() *txntoolbar.Snapshot {
 		labels := txnfilter.Labels{
-			Account: accName, Category: catName, Payee: resolver.Resolve,
+			Account: accName, Category: catName, Payee: memoTxnLabel(resolver.Resolve),
 			BaseCurrency: base, ToBase: func(m money.Money) (money.Money, error) { return rates.Convert(m, base) },
 		}
-		finish := txnPerfStart("filter-sort")
-		rows, issues := txntable.DeriveRows(transactions, derivedFilter, labels, resolver.HasLearned, resolver.Resolve)
-		finish()
-		txnConversionIssuesCache.app, txnConversionIssuesCache.revision, txnConversionIssuesCache.scope = app, app.Rev(), txnDerivedScope(app, derivedFilter)
-		txnConversionIssuesCache.issues, txnConversionIssuesCache.valid = issues, true
-		categoryFilter := txntable.CategoryCriteria(derivedFilter)
-		categoryRows := txnfilter.ApplyWithLabels(transactions, categoryFilter, labels)
-		if _, err := txnDerivedViewCache.GetWithCategories(app.Rev(), txnDerivedScope(app, derivedFilter), rows, categoryRows, rates, base); err != nil {
-			// Invalid arithmetic leaves the summary empty rather than exposing a
-			// partial total. The table remains available for correcting the row.
-			txnDerivedViewCache = txnview.Cache{}
-		}
+		return &txntoolbar.Snapshot{Revision: app.Rev(), Scope: txnDerivedScope(app, derivedFilter),
+			Value: deriveTxnScope(app, transactions, derivedFilter, labels, rates, base)}
+	}, app, app.Rev(), derivedFilter, activeImportProfileWorkspaceID(), month)
+	shown := ui.UseMemo(func() []domain.Transaction {
+		rows := txntable.OrderDescriptions(derived.Value.Rows, derivedFilter, resolver.HasLearned, resolver.Resolve)
 		return txntable.VisibleTransfers(rows, derivedFilter, rates)
-	}, app, app.Rev(), derivedFilter, activeImportProfileWorkspaceID())
+	}, derived)
 
 	return widgetrender.RenderCtx{App: app, Accounts: accounts, Txns: transactions, ScopedAccounts: accounts, ScopedTxns: shown,
-		Rates: rates, Base: base, Start: time.Time{}, End: dateutil.CalendarDayUTC(time.Now())}
+		TxnDerived: derived, Rates: rates, Base: base, Start: time.Time{}, End: dateutil.CalendarDayUTC(time.Now())}
+}
+
+// deriveTxnScope is the single checked ledger derivation boundary. Independent
+// widget previews use it too; surface children reuse the host snapshot instead.
+func deriveTxnScope(app *appstate.App, rows []domain.Transaction, f txnfilter.Criteria, labels txnfilter.Labels, rates currency.Rates, base string) txntoolbar.Derived {
+	defer txnPerfStart("scope-derive")()
+	defer txnPerfStart("filter-sort")()
+	value, err := txntoolbar.Derive(rows, f, labels, rates, base, time.Now())
+	if err != nil {
+		slog.Error("Could not total the transaction scope", "error", err)
+	}
+	return value
 }
 
 type txnPlacementProps struct {
@@ -180,7 +180,7 @@ func txnPlacement(props txnPlacementProps) ui.Node {
 			return node
 		}
 		return Fragment()
-	}, c.App, props.Revision, props.Scope, c.Spec.ID)
+	}, c.App, props.Revision, props.Scope, c.Spec.ID, c.TxnDerived)
 }
 
 // init registers the transactions-surface widget bodies with the engine render
@@ -192,7 +192,7 @@ func init() {
 	R := widgetrender.Register
 
 	R("txn-toolbar", func(c widgetrender.RenderCtx) ui.Node {
-		return ui.CreateElement(txnToolbarWidget, txnToolbarProps{App: c.App, Base: c.Base, Rates: c.Rates, Shown: c.ScopedTxns})
+		return ui.CreateElement(txnToolbarWidget, txnToolbarProps{App: c.App, Base: c.Base, Rates: c.Rates, Shown: c.ScopedTxns, Derived: c.TxnDerived})
 	})
 	R("txn-bulkbar", func(c widgetrender.RenderCtx) ui.Node {
 		return ui.CreateElement(txnBulkBarWidget, txnBulkBarProps{App: c.App})
@@ -202,7 +202,7 @@ func init() {
 	})
 
 	widgetrender.RegisterFrame("txn-table", func(fr domain.Frame, c widgetrender.RenderCtx) ui.Node {
-		return ui.CreateElement(txnTableWidget, txnTableProps{Frame: fr, Shown: c.ScopedTxns, App: c.App, Base: c.Base})
+		return ui.CreateElement(txnTableWidget, txnTableProps{Frame: fr, Shown: c.ScopedTxns, App: c.App, Base: c.Base, Derived: c.TxnDerived})
 	})
 }
 
@@ -251,10 +251,11 @@ func txnReceiptPreviewOverlay(app *appstate.App, previewAtom state.Atom[domain.A
 // needs to present it: the filtered transactions (for attachments + empty states),
 // the app, and the base currency.
 type txnTableProps struct {
-	Frame domain.Frame
-	Shown []domain.Transaction
-	App   *appstate.App
-	Base  string
+	Frame   domain.Frame
+	Shown   []domain.Transaction
+	App     *appstate.App
+	Base    string
+	Derived *txntoolbar.Snapshot
 }
 
 type txnTableController struct {
@@ -267,6 +268,7 @@ type txnTableController struct {
 	columns                              uistate.TxnCols
 	register                             bool
 	registerID                           string
+	lensName                             string
 	searchPending                        bool
 	page                                 txntable.Page
 	frame                                txntable.FrameColumns
@@ -313,13 +315,17 @@ func txnTableWidget(props txnTableProps) ui.Node {
 			setTxFilterOn(c.filterAtom, func(f *uistate.TxFilter) { f.PageSize, f.Page = size, 1 })
 		},
 	})
-	return ui.CreateElement(txnTableRegion, txnTableRegionProps{App: props.App, Body: body, Filter: c.filter, Shown: props.Shown, Base: props.Base, Category: category})
+	return ui.CreateElement(txnTableRegion, txnTableRegionProps{App: props.App, Body: body, Filter: c.filter, Shown: props.Shown, Base: props.Base, Category: category, Derived: props.Derived, Lens: c.lensName})
 }
 
 func useTxnTableController(props txnTableProps) *txnTableController {
 	c := &txnTableController{props: props}
 	c.filterAtom = uistate.UseTxFilter()
-	c.filter, _ = c.filterAtom.Get().WithOwnerLens(uistate.UseMemberLens())
+	memberLens := uistate.UseMemberLens()
+	var lensOn bool
+	c.filter, lensOn = c.filterAtom.Get().WithOwnerLens(memberLens)
+	memberNames := txntoolbar.BuildIndexes(nil, nil, props.App.Members(), nil).Members
+	c.lensName = txntoolbar.LensName(memberLens, lensOn, memberNames, func(n int) string { return plural(n, "member") })
 	c.searchPending = uistate.UseTxnSearchPending().Get()
 	c.selection = uistate.UseTxnSelection()
 	c.anchor = uistate.UseTxnSelAnchor()
@@ -747,6 +753,8 @@ type txnTableRegionProps struct {
 	Shown    []domain.Transaction
 	Base     string
 	Category txnTableCategoryTarget
+	Derived  *txntoolbar.Snapshot
+	Lens     string
 }
 
 func txnTableRegion(props txnTableRegionProps) ui.Node {
@@ -758,24 +766,46 @@ func txnTableRegion(props txnTableRegionProps) ui.Node {
 	})
 	return uiw.Widget(uiw.WidgetProps{ID: "txn-table", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
 		Body: Div(Attr("role", "region"), Attr("aria-label", uistate.T("txw1.tableRegion")), OnKeyDown(keyDown),
-			txnTableScopedCountFacts(props.App, props.Filter, props.Shown, props.Base, props.App.Settings().FXRates), props.Body,
+			txnTableScopedCountFacts(props.App, props.Filter, props.Shown, props.Base, props.App.Settings().FXRates, txnTableFactsContext{Snapshot: props.Derived, Lens: props.Lens}), props.Body,
 			ui.CreateElement(txnPageCategoryPicker, txnPageCategoryPickerProps{App: props.App, ID: props.Category.ID, Close: props.Category.Close})),
 	})
 }
 
-func txnTableScopedCountFacts(app *appstate.App, criteria txnfilter.Criteria, rows []domain.Transaction, base string, fxRates map[string]float64) ui.Node {
-	// Pairing facts come from the pre-collapse rows of this exact app/workspace
-	// and filter. A revision-only lookup can return the last search's facts.
-	if app != nil {
-		if view, ok := txnDerivedViewCache.Lookup(app.Rev(), txnDerivedScope(app, criteria)); ok {
-			return txnTableCountFacts(rows, base, fxRates, view)
-		}
+type txnTableFactsContext struct {
+	Snapshot *txntoolbar.Snapshot
+	Lens     string
+}
+
+func txnTableScopedCountFacts(app *appstate.App, criteria txnfilter.Criteria, rows []domain.Transaction, base string, fxRates map[string]float64, contexts ...txnTableFactsContext) ui.Node {
+	if app == nil {
+		return Fragment()
 	}
-	return txnTableCountFacts(rows, base, fxRates)
+	var context txnTableFactsContext
+	if len(contexts) > 0 {
+		context = contexts[0]
+	}
+	snapshot := context.Snapshot
+	if !snapshot.Matches(app.Rev(), txnDerivedScope(app, criteria)) {
+		// Standalone previews must derive from the current complete ledger,
+		// never from collapsed or previous-render display rows.
+		index := txntable.BuildIndex(nil, app.Accounts(), app.Categories(), nil, nil, nil)
+		value := deriveTxnScope(app, app.Transactions(), criteria, txnLabelsForApp(app, index.AccountNames, index.CategoryNames), currency.Rates{Base: base, Rates: fxRates}, base)
+		snapshot = &txntoolbar.Snapshot{Revision: app.Rev(), Scope: txnDerivedScope(app, criteria), Value: value}
+	}
+	facts := txntable.CountFacts(rows, base, fxRates, []txnview.View{snapshot.Value.View}, txntable.Labels{T: uistate.T, Money: fmtMoney}, txnCountTransactionCount)
+	extra := txntoolbar.Presentation{Text: uistate.T, Money: fmtMoney}.SummaryFacts(txntoolbar.Facts{Issues: snapshot.Value.Issues, Lens: context.Lens})
+	for _, text := range extra[1:] {
+		facts = append(facts, txntable.Fact{Class: "txn-count-fact", Text: text})
+	}
+	return txnTableFactsBand(facts)
 }
 
 func txnTableCountFacts(rows []domain.Transaction, base string, fxRates map[string]float64, cached ...txnview.View) ui.Node {
 	facts := txntable.CountFacts(rows, base, fxRates, cached, txntable.Labels{T: uistate.T, Money: fmtMoney}, txnCountTransactionCount)
+	return txnTableFactsBand(facts)
+}
+
+func txnTableFactsBand(facts []txntable.Fact) ui.Node {
 	nodes := make([]ui.Node, 0, len(facts))
 	for _, fact := range facts {
 		args := []any{css.Class(fact.Class)}
