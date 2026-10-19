@@ -5,7 +5,6 @@ package main
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/monstercameron/CashFlux/internal/buildinfo"
@@ -16,7 +15,7 @@ func TestRunWritesMatchingBuildJSONAndLDFlags(t *testing.T) {
 	buildJSON := filepath.Join(dir, "build.json")
 	ldflags := filepath.Join(dir, "ldflags.txt")
 
-	if err := run(buildJSON, ldflags, "abc1234", 7); err != nil {
+	if err := run(buildJSON, ldflags, "", "v1.20.0-abc1234", 7); err != nil {
 		t.Fatalf("run() error = %v", err)
 	}
 
@@ -28,8 +27,8 @@ func TestRunWritesMatchingBuildJSONAndLDFlags(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseBuildJSON() error = %v", err)
 	}
-	if !strings.HasPrefix(info.BuildID, "abc1234-") {
-		t.Fatalf("build ID = %q, want abc1234-<nanosecond timestamp>", info.BuildID)
+	if info.BuildID != "v1.20.0-abc1234" {
+		t.Fatalf("build ID = %q, want exact release tag and commit", info.BuildID)
 	}
 	if info.Schema != 7 {
 		t.Fatalf("schema = %d, want 7", info.Schema)
@@ -49,10 +48,10 @@ func TestRunUsesDistinctIDsForRepeatedBuildsOfSameCommit(t *testing.T) {
 	dir := t.TempDir()
 	first := filepath.Join(dir, "first.json")
 	second := filepath.Join(dir, "second.json")
-	if err := run(first, "", "abc1234", 7); err != nil {
+	if err := run(first, "", "abc1234", "", 7); err != nil {
 		t.Fatalf("first run() error = %v", err)
 	}
-	if err := run(second, "", "abc1234", 7); err != nil {
+	if err := run(second, "", "abc1234", "", 7); err != nil {
 		t.Fatalf("second run() error = %v", err)
 	}
 

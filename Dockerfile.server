@@ -60,7 +60,8 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath \
         -ldflags="-s -w -X github.com/monstercameron/CashFlux/internal/version.Version=${VERSION} -X main.commit=${COMMIT} -X main.buildDate=${BUILD_DATE}" \
         -o /out/cashflux-server ./cmd/cashflux-server \
-    && GOOS=js GOARCH=wasm CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /src/web/bin/main.wasm . \
+    && go run ./tools/stampbuild -out /src/web/build.json -id "${VERSION}-${COMMIT}" -ldflags-out /src/web/bin/ldflags.txt \
+    && GOOS=js GOARCH=wasm CGO_ENABLED=0 go build -trimpath -ldflags="-s -w $(cat /src/web/bin/ldflags.txt)" -o /src/web/bin/main.wasm . \
     && GOOS=js GOARCH=wasm CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /src/web/bin/services.wasm ./cmd/cashflux-services \
     && GOOS=js GOARCH=wasm CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /src/web/admin/admin.wasm ./cmd/cashflux-admin \
     && GOOS=js GOARCH=wasm CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /src/web/portal/portal.wasm ./cmd/cashflux-portal \

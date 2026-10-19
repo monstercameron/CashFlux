@@ -126,6 +126,11 @@ func setAppAssetHeaders(w http.ResponseWriter, rel string) {
 	w.Header().Set("Cross-Origin-Resource-Policy", "same-origin")
 
 	switch {
+	case base == "build.json":
+		// This is the freshness oracle for open tabs and the service worker.
+		// It must always describe the currently served release.
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	case rel == "." || base == "index.html" || ext == ".html":
 		w.Header().Set("Cache-Control", "no-cache")
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")

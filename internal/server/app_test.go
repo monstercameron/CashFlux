@@ -20,6 +20,7 @@ func writeHostedAppFixture(t *testing.T) string {
 	}
 	for name, body := range map[string]string{
 		"index.html":         "<!doctype html><html><head><title>CashFlux hosted</title></head></html>",
+		"build.json":         `{"buildId":"v1.20.0-abc1234","schema":7}`,
 		"favicon.ico":        "ico fixture bytes",
 		"services-worker.js": "self.onmessage = function () {};",
 		"app.css":            "body { color: green; }",
@@ -171,6 +172,32 @@ func TestHostedAppServesRootDeepLinksAndAssets(t *testing.T) {
 	}
 	if got := rr.Header().Get("Cache-Control"); got != "public, max-age=3600" {
 		t.Fatalf("css cache-control = %q", got)
+	}
+}
+
+func TestHostedAppServesBuildJSONWithoutCaching(t *testing.T) {
+	h := NewMux(Config{AuthMode: "token", AppDir: writeHostedAppFixture(t)}, openTestStore(t))
+	req := httptest.NewRequest(http.MethodGet, "/build.json", nil)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body = %q", rr.Code, rr.Body.String())
+	}
+	if got := rr.Header().Get("Cache-Control"); got != "no-store" {
+		t.Errorf("cache-control = %q, want no-store", got)
+	}
+	if got := rr.Header().Get("Content-Type"); !strings.HasPrefix(got, "application/json") {
+		t.Errorf("content-type = %q, want application/json", got)
+	}
+	var info struct {
+		BuildID string `json:"buildId"`
+		Schema  int    `json:"schema"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &info); err != nil {
+		t.Fatalf("decode build.json: %v", err)
+	}
+	if info.BuildID != "v1.20.0-abc1234" || info.Schema != 7 {
+		t.Errorf("build.json = %+v, want release identity and schema", info)
 	}
 }
 

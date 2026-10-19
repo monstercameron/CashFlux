@@ -35,25 +35,34 @@ func main() {
 	out := flag.String("out", "web/build.json", "path of the build.json to write")
 	ldflagsOut := flag.String("ldflags-out", "", "optional path to also write the -ldflags fragment to")
 	sha := flag.String("sha", "", "git short SHA to stamp (default: git rev-parse --short HEAD)")
+	buildID := flag.String("id", "", "exact build ID to stamp (release builds use tag plus commit)")
 	schema := flag.Int("schema", store.SchemaVersion, "dataset schema version this build writes")
 	flag.Parse()
 
-	if err := run(*out, *ldflagsOut, *sha, *schema); err != nil {
+	if err := run(*out, *ldflagsOut, *sha, *buildID, *schema); err != nil {
 		slog.Error("stampbuild failed", "error", err)
 		os.Exit(1)
 	}
 }
 
-func run(out, ldflagsOut, sha string, schema int) error {
-	if strings.TrimSpace(sha) == "" {
-		sha = gitShortSHA()
-	}
-	var nonce [8]byte
-	if _, err := rand.Read(nonce[:]); err != nil {
-		return fmt.Errorf("stampbuild: generate unique build ID: %w", err)
+func run(out, ldflagsOut, sha, buildID string, schema int) error {
+	if strings.TrimSpace(buildID) == "" {
+		if strings.TrimSpace(sha) == "" {
+			sha = gitShortSHA()
+		}
+		var nonce [8]byte
+		if _, err := rand.Read(nonce[:]); err != nil {
+			return fmt.Errorf("stampbuild: generate unique build ID: %w", err)
+		}
+		buildID = buildinfo.FormatBuildID(sha+"-"+hex.EncodeToString(nonce[:]), time.Now().UnixNano())
+	} else {
+		buildID = buildinfo.Sanitize(strings.TrimSpace(buildID))
+		if buildID == "" || buildID == buildinfo.DevBuild {
+			return fmt.Errorf("stampbuild: invalid release build ID %q", buildID)
+		}
 	}
 	info := buildinfo.Info{
-		BuildID: buildinfo.FormatBuildID(sha+"-"+hex.EncodeToString(nonce[:]), time.Now().UnixNano()),
+		BuildID: buildID,
 		Schema:  schema,
 	}
 	raw, err := buildinfo.MarshalBuildJSON(info)
