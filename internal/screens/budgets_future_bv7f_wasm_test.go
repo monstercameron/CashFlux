@@ -38,9 +38,12 @@ func TestBV7FFutureProjectionMemoReusesTheSameScopedPeriod(t *testing.T) {
 	})
 
 	p := prefs.Default()
-	month := time.Date(time.Now().Year(), time.Now().Month()+1, 1, 0, 0, 0, 0, time.Local)
+	now := time.Now()
+	month := time.Date(now.Year(), now.Month()+1, 1, 0, 0, 0, 0, time.Local)
 	w := period.NewWindow(period.Month, month, p.WeekStartWeekday())
 	reference := computeBudgetView(app, "", w, p, false)
+	today := period.NewWindow(period.Month, now, p.WeekStartWeekday())
+	todayIncome := computeBudgetView(app, "", today, p, false).BannerIncome
 	missStart := time.Now()
 	first, err := cachedBudgetFutureView(app, "", w, p)
 	if err != nil {
@@ -51,9 +54,12 @@ func TestBV7FFutureProjectionMemoReusesTheSameScopedPeriod(t *testing.T) {
 	if missElapsed > 250*time.Millisecond {
 		t.Fatalf("future period first evaluation took %s", missElapsed)
 	}
-	if first.TotalLimit != reference.TotalLimit || first.SavingsAssigned != reference.SavingsAssigned || first.BannerIncome != reference.BannerIncome {
-		t.Fatalf("future totals differ from the shared budget view: got %+v; want limit=%d savings=%d income=%d",
-			first, reference.TotalLimit, reference.SavingsAssigned, reference.BannerIncome)
+	if first.TotalLimit != reference.TotalLimit || first.SavingsAssigned != reference.SavingsAssigned {
+		t.Fatalf("future budget totals differ from the shared budget view: got %+v; want limit=%d savings=%d",
+			first, reference.TotalLimit, reference.SavingsAssigned)
+	}
+	if first.BannerIncome != todayIncome {
+		t.Fatalf("future income = %d, want today-anchored income %d", first.BannerIncome, todayIncome)
 	}
 	if budgetFutureViewCalculations != 1 {
 		t.Fatalf("initial future-period calculations = %d, want 1", budgetFutureViewCalculations)
