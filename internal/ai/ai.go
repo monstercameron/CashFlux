@@ -360,6 +360,9 @@ func RetryDelayMS(attempt int) (ms int, retry bool) {
 func ErrorMessage(status int, body []byte) string {
 	detail := apiErrorMessage(body)
 	low := strings.ToLower(detail)
+	if mentionsNonChatModelError(low) {
+		return "This model can't be used for chat. Choose a chat-capable model in Settings."
+	}
 	switch {
 	case status == 401:
 		return "OpenAI didn't accept your API key. Check it in Settings."
@@ -383,6 +386,18 @@ func ErrorMessage(status int, body []byte) string {
 	}
 }
 
+func mentionsNonChatModelError(detail string) bool {
+	if !strings.Contains(detail, "model") {
+		return false
+	}
+	for _, hint := range []string{"not supported", "does not support", "not compatible", "can't be used", "cannot be used", "not available for", "does not exist"} {
+		if strings.Contains(detail, hint) {
+			return true
+		}
+	}
+	return false
+}
+
 // apiErrorMessage extracts OpenAI's error.message from a response body, or "" when
 // the body isn't a recognizable error object.
 func apiErrorMessage(body []byte) string {
@@ -400,33 +415,12 @@ type modelListResponse struct {
 	} `json:"data"`
 }
 
-// nonChatModelHints are id fragments that mark a model as NOT a chat/completions
-// model (embeddings, audio, image, moderation, etc.), so ChatModelIDs can drop them.
+// nonChatModelHints are id fragments used to label model types that may not work
+// with chat (embeddings, audio, image, moderation, etc.).
 var nonChatModelHints = []string{
 	"embedding", "whisper", "tts", "audio", "realtime", "transcribe",
 	"image", "dall-e", "moderation", "-search", "instruct", "codex",
 	"davinci", "babbage", "computer-use",
-}
-
-// isChatModelID reports whether an OpenAI model id names a chat/completions-capable
-// model: a gpt-* / chatgpt-* / o-series id that isn't one of the non-chat families.
-func isChatModelID(id string) bool {
-	id = strings.ToLower(strings.TrimSpace(id))
-	if id == "" {
-		return false
-	}
-	chatFamily := strings.HasPrefix(id, "gpt-") || strings.HasPrefix(id, "chatgpt") ||
-		strings.HasPrefix(id, "o1") || strings.HasPrefix(id, "o3") ||
-		strings.HasPrefix(id, "o4") || strings.HasPrefix(id, "o5")
-	if !chatFamily {
-		return false
-	}
-	for _, h := range nonChatModelHints {
-		if strings.Contains(id, h) {
-			return false
-		}
-	}
-	return true
 }
 
 // ParseModelIDs extracts every model id from an OpenAI /v1/models response body,
@@ -478,20 +472,75 @@ func mentionsEffortUnsupported(msg string) bool {
 	return strings.Contains(strings.ToLower(msg), "reasoning_effort")
 }
 
-// ChatModelIDs parses an OpenAI /v1/models response and returns the ids usable for
-// chat (the gpt-* and o-series families), excluding non-chat endpoints (embeddings,
-// audio, image, moderation, …). Sorted descending so newer families surface first.
+// ChatModelIDs is retained for compatibility and now returns every model id from
+// an OpenAI /v1/models response. Some listed models may not support chat; callers
+// should show them and explain a request-time rejection instead of hiding them.
 func ChatModelIDs(data []byte) ([]string, error) {
 	all, err := ParseModelIDs(data)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]string, 0, len(all))
-	for _, id := range all {
-		if isChatModelID(id) {
-			out = append(out, id)
+	return SortModelIDs(all, ""), nil
+}
+
+// ModelGroup classifies a model for display without implying support guarantees.
+type ModelGroup string
+
+const (
+	// ModelGroupChat includes ids commonly used for chat and text generation.
+	ModelGroupChat ModelGroup = "Chat"
+	// ModelGroupReasoning includes known reasoning model families.
+	ModelGroupReasoning ModelGroup = "Reasoning"
+	// ModelGroupOther includes model types that may not support chat.
+	ModelGroupOther ModelGroup = "Other — may not work for chat"
+)
+
+// GroupModelID returns a display group for an id. This heuristic never filters
+// models and is not used to decide whether a request may be sent.
+func GroupModelID(id string) ModelGroup {
+	model := strings.ToLower(strings.TrimSpace(id))
+	for _, hint := range nonChatModelHints {
+		if strings.Contains(model, hint) {
+			return ModelGroupOther
 		}
 	}
-	sort.Sort(sort.Reverse(sort.StringSlice(out)))
-	return out, nil
+	if strings.HasPrefix(model, "o1") || strings.HasPrefix(model, "o3") ||
+		strings.HasPrefix(model, "o4") || strings.HasPrefix(model, "o5") ||
+		strings.HasPrefix(model, "gpt-5") {
+		return ModelGroupReasoning
+	}
+	if strings.HasPrefix(model, "gpt-") || strings.HasPrefix(model, "chatgpt") {
+		return ModelGroupChat
+	}
+	return ModelGroupOther
+}
+
+// SortModelIDs orders all ids with selected first, then reasoning/chat models,
+// then other model types, alphabetically within each group. It never drops ids.
+func SortModelIDs(ids []string, selected string) []string {
+	out := append([]string(nil), ids...)
+	selected = strings.TrimSpace(selected)
+	sort.SliceStable(out, func(i, j int) bool {
+		a, b := out[i], out[j]
+		if (a == selected) != (b == selected) {
+			return a == selected
+		}
+		pa, pb := modelGroupPriority(GroupModelID(a)), modelGroupPriority(GroupModelID(b))
+		if pa != pb {
+			return pa < pb
+		}
+		return strings.ToLower(a) < strings.ToLower(b)
+	})
+	return out
+}
+
+func modelGroupPriority(group ModelGroup) int {
+	switch group {
+	case ModelGroupReasoning:
+		return 0
+	case ModelGroupChat:
+		return 1
+	default:
+		return 2
+	}
 }

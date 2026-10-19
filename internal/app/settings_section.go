@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/monstercameron/CashFlux/internal/ai"
 	"github.com/monstercameron/CashFlux/internal/aiprovider"
 	"github.com/monstercameron/CashFlux/internal/backup"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
@@ -99,21 +100,25 @@ type settingsRightProps struct {
 	// OnIdleCashBenchmarkAPR: AC15's idle-cash benchmark rate (percent, e.g. "4.5").
 	OnIdleCashBenchmarkAPR uic.Handler // UseEvent
 	// AI
-	AiOn           bool
-	OnAiToggle     func(bool)
-	AiKey          string
-	OnKey          func(string) // the field owns the hook (see uiw.fieldCore)
-	KeySet         bool         // a cloud AI key is stored server-side (§7.11)
-	OnRemoveKey    uic.Handler  // UseEvent — clears the server-side key
-	OnRememberKey  func(bool)
-	OnModel        uic.Handler // UseEvent
-	CurModel       string
-	Models         []string    // model ids fetched live from OpenAI (empty = fall back to built-in defaults)
-	OnReloadModels uic.Handler // UseEvent — refetch the model list
-	ModelsLoading  bool
-	ModelsErr      string
-	WsKey          string
-	OnWsKey        func(string)
+	AiOn             bool
+	OnAiToggle       func(bool)
+	AiKey            string
+	OnKey            func(string) // the field owns the hook (see uiw.fieldCore)
+	KeySet           bool         // a cloud AI key is stored server-side (§7.11)
+	OnRemoveKey      uic.Handler  // UseEvent — clears the server-side key
+	OnRememberKey    func(bool)
+	OnModel          uic.Handler // UseEvent
+	CurModel         string
+	Models           []string // model ids fetched live from OpenAI (empty = fall back to built-in defaults)
+	ModelsLoaded     bool
+	ModelQuery       string
+	OnModelQuery     func(string)
+	OnUseCustomModel uic.Handler
+	OnReloadModels   uic.Handler // UseEvent — refetch the model list
+	ModelsLoading    bool
+	ModelsErr        string
+	WsKey            string
+	OnWsKey          func(string)
 	// AG18 — OpenAI-compatible base-URL override (Ollama/LM Studio/proxy).
 	BaseURL   string
 	OnBaseURL func(string)
@@ -173,12 +178,37 @@ func modelIDList(models []string, cur string) []string {
 	if cur != "" {
 		for _, m := range ids {
 			if m == cur {
-				return ids
+				return ai.SortModelIDs(ids, cur)
 			}
 		}
 		ids = append([]string{cur}, ids...)
 	}
-	return ids
+	return ai.SortModelIDs(ids, cur)
+}
+
+func filterModelIDs(models []string, query string) []string {
+	query = strings.ToLower(strings.TrimSpace(query))
+	if query == "" {
+		return models
+	}
+	filtered := make([]string, 0, len(models))
+	for _, model := range models {
+		if strings.Contains(strings.ToLower(model), query) {
+			filtered = append(filtered, model)
+		}
+	}
+	return filtered
+}
+
+func modelGroupLabel(model string) string {
+	switch ai.GroupModelID(model) {
+	case ai.ModelGroupReasoning:
+		return uistate.T("settings.modelGroupReasoning")
+	case ai.ModelGroupChat:
+		return uistate.T("settings.modelGroupChat")
+	default:
+		return uistate.T("settings.modelGroupOther")
+	}
 }
 
 // settingsPreferencesPane renders the Preferences tab: the appearance link,
@@ -287,23 +317,31 @@ func settingsAIPane(p settingsRightProps) uic.Node {
 		If(strings.TrimSpace(p.AiKey) == "", P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiNoKey"))),
 		ui.ToggleRow(ui.ToggleRowProps{Label: uistate.T("settings.rememberKey"), On: p.Pr.RememberAIKey, OnChange: p.OnRememberKey}),
 		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.rememberKeyNote")),
-		// The model list is fetched live from OpenAI's /v1/models (when a key is set),
-		// so new models appear without a code change; it falls back to the built-in
-		// defaults offline / before it loads. Reload refetches on demand.
+		// Every model from /v1/models stays available. The search only filters what
+		// is shown, and a typed id can be selected even when the provider doesn't list it.
+		ui.TextInput(ui.TextFieldProps{Class: "set-input", Value: p.ModelQuery, OnInput: p.OnModelQuery,
+			AriaLabel: uistate.T("settings.aiModelSearch"), Placeholder: uistate.T("settings.aiModelSearch"),
+			Extra: []any{Attr("data-testid", "settings-ai-model-search"), Attr("spellcheck", "false")}}),
 		Div(css.Class("set-model-row", tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt045),
-			Select(css.Class("set-input"), Attr("aria-label", uistate.T("settings.aiModel")), Title(uistate.T("settings.aiModel")), OnChange(p.OnModel),
-				MapKeyed(modelIDList(p.Models, p.CurModel),
+			Select(css.Class("set-input"), Attr("aria-label", uistate.T("settings.aiModel")), Attr("data-testid", "settings-ai-model"), Title(uistate.T("settings.aiModel")), OnChange(p.OnModel),
+				MapKeyed(filterModelIDs(modelIDList(p.Models, p.CurModel), p.ModelQuery),
 					func(m string) any { return m },
 					func(m string) uic.Node {
-						return Option(Value(m), SelectedIf(p.CurModel == m || (p.CurModel == "" && m == "gpt-5.4-mini")), aiModelDisplayName(m))
+						label := modelGroupLabel(m) + " · " + aiModelDisplayName(m)
+						if p.ModelsLoaded && !containsModelID(p.Models, m) {
+							label += " (" + uistate.T("settings.aiModelNotLatest") + ")"
+						}
+						return Option(Value(m), SelectedIf(p.CurModel == m || (p.CurModel == "" && m == "gpt-5.4-mini")), label)
 					},
 				),
 			),
-			Button(css.Class("btn btn-tool btn-sm"), Type("button"), Attr("aria-label", uistate.T("settings.aiModelReload")), Title(uistate.T("settings.aiModelReload")), OnClick(p.OnReloadModels),
+			Button(css.Class("btn btn-tool btn-sm"), Type("button"), Attr("data-testid", "settings-ai-model-reload"), Attr("aria-label", uistate.T("settings.aiModelReload")), Title(uistate.T("settings.aiModelReload")), OnClick(p.OnReloadModels),
 				If(p.ModelsLoading, Span(uistate.T("settings.aiModelLoading"))),
 				If(!p.ModelsLoading, Span(uistate.T("settings.aiModelReload"))),
 			),
 		),
+		If(strings.TrimSpace(p.ModelQuery) != "", Button(css.Class("btn btn-tool btn-sm", tw.Mt1), Type("button"), Attr("data-testid", "settings-ai-model-use-custom"), OnClick(p.OnUseCustomModel), uistate.T("settings.aiModelUseCustom", strings.TrimSpace(p.ModelQuery)))),
+		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiModelKindsHint")),
 		// C250: surface the active model and BYOK billing transparency so users know
 		// which model is active and that they pay OpenAI directly per token used.
 		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiModelNote", aiModelDisplayName(p.CurModel))),
@@ -325,6 +363,15 @@ func settingsAIPane(p settingsRightProps) uic.Node {
 			Rules: []any{tw.Mt045}, Extra: []any{Type("password")}}),
 		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.webSearchHint")),
 	)
+}
+
+func containsModelID(models []string, id string) bool {
+	for _, model := range models {
+		if model == id {
+			return true
+		}
+	}
+	return false
 }
 
 // settingsCloudPane renders the Cloud tab. It is a thin wrapper around

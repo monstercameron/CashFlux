@@ -892,13 +892,14 @@ func globalSettingsForm() uic.Node {
 			_ = a.PutSettings(s)
 		}
 	}
-	// The model picker is populated live from OpenAI's /v1/models endpoint (no
-	// hardcoded list): fetch the chat-capable ids with the user's key, fall back to
-	// the built-in defaults offline or before it loads. Loaded once on open and via
-	// the Reload button (so a freshly-entered key can refresh it).
+	// The model picker is populated live from every id in OpenAI's /v1/models
+	// endpoint, falling back to defaults offline or before it loads. Reload keeps
+	// the persisted selected id available even when the refreshed list omits it.
 	modelList := uic.UseState([]string{})
+	modelsLoaded := uic.UseState(false)
 	modelsLoading := uic.UseState(false)
 	modelsErr := uic.UseState("")
+	modelQuery := uic.UseState("")
 	fetchModels := func() {
 		a := appstate.Default
 		if a == nil {
@@ -907,17 +908,34 @@ func globalSettingsForm() uic.Node {
 		k := strings.TrimSpace(a.Settings().OpenAIKey)
 		if k == "" {
 			modelList.Set(nil)
+			modelsLoaded.Set(false)
 			modelsErr.Set("")
 			return
 		}
 		modelsLoading.Set(true)
 		modelsErr.Set("")
-		ai.FetchModels(k, ai.DefaultBaseURL,
-			func(ids []string) { modelsLoading.Set(false); modelList.Set(ids) },
+		baseURL := strings.TrimSpace(a.Settings().OpenAIBaseURL)
+		if baseURL == "" {
+			baseURL = ai.DefaultBaseURL
+		}
+		ai.FetchModels(k, baseURL,
+			func(ids []string) { modelsLoading.Set(false); modelList.Set(ids); modelsLoaded.Set(true) },
 			func(msg string) { modelsLoading.Set(false); modelsErr.Set(msg) },
 		)
 	}
 	onReloadModels := uic.UseEvent(func() { fetchModels() })
+	onUseCustomModel := uic.UseEvent(func() {
+		model := strings.TrimSpace(modelQuery.Get())
+		if model == "" {
+			return
+		}
+		if a := appstate.Default; a != nil {
+			s := a.Settings()
+			s.OpenAIModel = model
+			_ = a.PutSettings(s)
+		}
+		bump()
+	})
 	// Load the list once when the panel opens (no-ops without a key).
 	uic.UseEffect(func() func() { fetchModels(); return nil }, "")
 	// Optional web-search API key for the chat's web_search tool (paid/higher-limit
@@ -1135,16 +1153,20 @@ func globalSettingsForm() uic.Node {
 				persistRememberPreference(v)
 			})
 		},
-		OnModel:        onModel,
-		CurModel:       curModel,
-		Models:         modelList.Get(),
-		OnReloadModels: onReloadModels,
-		ModelsLoading:  modelsLoading.Get(),
-		ModelsErr:      modelsErr.Get(),
-		WsKey:          wsKey.Get(),
-		OnWsKey:        onWsKey,
-		BaseURL:        baseURLState.Get(),
-		OnBaseURL:      onBaseURL,
+		OnModel:          onModel,
+		CurModel:         curModel,
+		Models:           modelList.Get(),
+		ModelsLoaded:     modelsLoaded.Get(),
+		ModelQuery:       modelQuery.Get(),
+		OnModelQuery:     func(v string) { modelQuery.Set(v) },
+		OnUseCustomModel: onUseCustomModel,
+		OnReloadModels:   onReloadModels,
+		ModelsLoading:    modelsLoading.Get(),
+		ModelsErr:        modelsErr.Get(),
+		WsKey:            wsKey.Get(),
+		OnWsKey:          onWsKey,
+		BaseURL:          baseURLState.Get(),
+		OnBaseURL:        onBaseURL,
 
 		OnExportJSON:   func() { exportJSON(notify) },
 		OnExportCSV:    func() { exportCSV(notify) },

@@ -159,6 +159,10 @@ and every commit updates this file under `Unreleased`.
   complete build in charge.
 
 ### Changed
+- **Choose any OpenAI model (MODELS1).** The model picker lists every model your key can use, grouped by likely type
+  instead of hidden, with search across all of them and a field for a custom model id; reloading keeps your choice and
+  marks it if the latest list no longer includes it. A model that cannot do chat now fails with a plain explanation
+  instead of a silent fallback.
 - **Transaction rows and the Edit modal (SOL1).** Rows are no longer one big click target: hovering a row highlights it
   softly and the description becomes an underlined button that opens the transaction (the pencil and `e` still work).
   Add and Edit open in the new Overlay with a short rise-and-fade entrance and a lightly blurred backdrop (no motion with
