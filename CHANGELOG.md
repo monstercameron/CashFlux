@@ -159,6 +159,13 @@ and every commit updates this file under `Unreleased`.
   complete build in charge.
 
 ### Changed
+- **Transaction rows and the Edit modal (SOL1).** Rows are no longer one big click target: hovering a row highlights it
+  softly and the description becomes an underlined button that opens the transaction (the pencil and `e` still work).
+  Add and Edit open in the new Overlay with a short rise-and-fade entrance and a lightly blurred backdrop (no motion with
+  reduced-motion or the app's motion setting off). The Edit modal now shows what you are editing (merchant, date,
+  amount) above the form, keeps the amount prominent, puts errors next to the field that has them, uses the plain
+  wording glossary, collapses optional details under "More details (optional)", and pins Delete / Cancel / Save in a
+  footer; Add and Edit share the same layout.
 - **A steadier toolbar and creating from the bulk picker (R10T, CAT2).** The "STATUS: Reconciled / Cleared"
   legend line is gone (each glyph keeps its tooltip and accessible name), so the first row sits higher; the
   Filters button keeps one width with or without its badge, so nothing shifts while searching; the bulk Category

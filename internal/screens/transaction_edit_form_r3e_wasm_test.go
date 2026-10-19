@@ -45,11 +45,11 @@ func TestR3EEditFormUsesSharedOrderAndKeepsBodyActions(t *testing.T) {
 	}
 	last := -1
 	for _, label := range ordered {
-		at := strings.Index(text, label)
-		if at <= last {
+		at := strings.Index(text[last+1:], label)
+		if at < 0 {
 			t.Fatalf("field %q is out of shared-form order in %q", label, text)
 		}
-		last = at
+		last += at + 1
 	}
 	if findByTestID(fixture, "p", "txn-edit-bank-text") != nil || strings.Contains(text, "Bank text:") {
 		t.Fatalf("bank text must be absent without an original-descriptor field: %q", text)
@@ -123,7 +123,7 @@ func TestR3ESuggestionIsOfferedOnlyForMatchingDirection(t *testing.T) {
 			if got != tc.want {
 				t.Fatalf("suggestion visible = %v, want %v; form text: %q", got, tc.want, fixture.Text())
 			}
-			if got && !strings.Contains(fixture.Text(), "Suggested: Groceries · Use") {
+			if got && !strings.Contains(fixture.Text(), uistate.T("r5e.suggestedCategory", "Groceries")) {
 				t.Fatalf("suggestion is not a clear one-control action: %q", fixture.Text())
 			}
 		})

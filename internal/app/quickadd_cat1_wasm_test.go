@@ -11,6 +11,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/v5/testkit/render"
 	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
@@ -34,9 +35,9 @@ func TestQuickAddCategoryPickerCreatesAndSelectsSubcategoryCAT1(t *testing.T) {
 
 	f := render.New(t)
 	defer f.Cleanup()
-	f.Render(ui.CreateElement(QuickAddHost))
+	f.Render(Body(ID("cat1-body"), ui.CreateElement(QuickAddHost)))
 	uistate.SetQuickAdd(true)
-	f.Render(ui.CreateElement(QuickAddHost))
+	f.Render(Body(ID("cat1-body"), ui.CreateElement(QuickAddHost)))
 	findAppTestID(f, "button", "txn-add-newcat-toggle").Click()
 	f.Stabilize()
 	if findAppTestID(f, "div", "catpick") == nil {

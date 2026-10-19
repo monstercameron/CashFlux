@@ -976,8 +976,8 @@ func txnTableWidget(props txnTableProps) ui.Node {
 			CategoryID:        txByID[rid].CategoryID,
 			SuggestedCategory: suggestedCategory,
 			Source:            srcCol.Str(i),
-			Member:            memberName[txByID[rid].MemberID],
-			MemberColor:       memberColor[txByID[rid].MemberID],
+			Member:            memberName[txByID[rid].PrimaryOwner()],  // TODO(WHO2): widget shows only the first owner.
+			MemberColor:       memberColor[txByID[rid].PrimaryOwner()], // TODO(WHO2): widget shows only the first owner.
 			Cleared:           cleared,
 			Reconciled: cleared && !reconThrough[txByID[rid].AccountID].IsZero() &&
 				!txByID[rid].Date.After(reconThrough[txByID[rid].AccountID]),
@@ -1480,9 +1480,9 @@ func sameTxnFrameRowValues(a, b txnFrameRowProps) bool {
 	return reflect.DeepEqual(a, b)
 }
 
-// txnFrameRow renders one clickable transaction row. It owns its click/select/
+// txnFrameRow renders one transaction row. It owns its edit/select/
 // view hooks (per the GWC rule: On* handlers live inside a per-row component,
-// never in a loop). Clicking the row drills into the edit modal; the leading
+// never in a loop). The description and pencil open Edit; the leading
 // checkbox toggles bulk selection (its cell stops click propagation so toggling
 // does not also open the modal); the paperclip opens the first receipt.
 // txnTagChipProps configure one clickable tag chip in the description column.
@@ -1510,18 +1510,14 @@ func txnTagChip(props txnTagChipProps) ui.Node {
 }
 
 func txnFrameRow(props *txnFrameRowProps) ui.Node {
-	open := ui.UseEvent(func() { props.OnOpen(props.ID) })
 	pickerOpen := ui.UseState(false)
 	openCategoryPicker := func(ui.Event) { pickerOpen.Set(true) }
 	applyManualCategory := func(categoryID string) {
 		pickerOpen.Set(false)
 		applyTxnManualCategory(props.ID, categoryID)
 	}
-	// C563: the whole row opened the edit modal, and nothing said so. There was no
-	// Edit label, no icon, and the <tr> is not focusable — so the single most common
-	// action on the ledger was reachable only by guessing, and not at all by keyboard.
-	// A labelled Edit button in the actions cell puts it in the tab order beside the
-	// ⋯ trigger; the row click stays as the shortcut for people who already know it.
+	// Description and pencil share one explicit edit action. The row itself is
+	// not interactive, so selecting text or clicking a date cannot open the editor.
 	editRow := ui.UseEvent(func(e ui.Event) {
 		e.StopPropagation()
 		props.OnOpen(props.ID)
@@ -1542,7 +1538,7 @@ func txnFrameRow(props *txnFrameRowProps) ui.Node {
 		}
 	})
 
-	rowClass := "row"
+	rowClass := "row txn-ledger-row"
 	if props.Selected {
 		rowClass += " selected"
 	}
@@ -1720,7 +1716,7 @@ func txnFrameRow(props *txnFrameRowProps) ui.Node {
 			If(props.AutoCategory, Span(css.Class("txn-auto-mark"), Attr("data-testid", "txn-auto-mark"),
 				Attr("title", props.AutoCategoryWhy), Attr("aria-label", props.AutoCategoryWhy), "⚙"))))
 	categoryCell := Td(categoryCellArgs...)
-	rowArgs := []any{ClassStr(rowClass), Attr("data-testid", "txn-row-"+props.ID), OnClick(open)}
+	rowArgs := []any{ClassStr(rowClass), Attr("data-testid", "txn-row-"+props.ID)}
 	// C626: this row's ABSOLUTE position in the match set, not its position in the
 	// DOM. In the virtualized "All" view those two differ by however far the user
 	// has scrolled, and without the absolute one assistive tech reads "row 3 of
@@ -1754,7 +1750,10 @@ func txnFrameRow(props *txnFrameRowProps) ui.Node {
 				// DOORDASH WINGSTOP 855-4" hides exactly the identifying tail a person
 				// is squinting at the ledger to find, with no way to see the rest short
 				// of opening the row.
-				Span(css.Class("row-desc-text"), Attr("title", props.Desc), Attr("aria-label", props.Desc), props.Desc),
+				Button(css.Class("row-desc-text txn-description-edit"), Type("button"),
+					Attr("data-testid", "txn-description-edit"), Title(props.Desc),
+					Attr("aria-label", txnRowActionName(uistate.T("transactions.rowEdit"), props.Desc, props.Date, props.Amount)),
+					OnClick(editRow), props.Desc),
 				stateBadge,
 				tagsNode,
 				// Follow-up indicator, to the right of the description: a chip with the open/total

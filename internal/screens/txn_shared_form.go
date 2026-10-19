@@ -61,12 +61,32 @@ type TxnDirectionToggleProps struct {
 
 // TxnDirectionToggle renders the same sized, accessible direction control in Add and Edit.
 func TxnDirectionToggle(props TxnDirectionToggleProps) ui.Node {
-	return uiw.FormField(props.Label, Div(css.Class("btn-group", "txn-dir-toggle"),
+	return ui.CreateElement(txnDirectionToggle, props)
+}
+
+func txnDirectionToggle(props TxnDirectionToggleProps) ui.Node {
+	hintID := ui.UseId()
+	hint := ""
+	for _, option := range props.Options {
+		if option.Disabled && option.Title != "" {
+			hint = option.Title
+			break
+		}
+	}
+	group := []any{css.Class("btn-group", "txn-dir-toggle"), Attr("role", "group"), Attr("aria-label", props.Label)}
+	if hint != "" {
+		group = append(group, Attr("aria-describedby", hintID))
+	}
+	group = append(group,
 		MapKeyed(props.Options, func(option TxnDirectionOption) any { return option.Value }, func(option TxnDirectionOption) ui.Node {
 			return ui.CreateElement(txnDirectionOption, txnDirectionOptionProps{
 				Option: option, Selected: props.Value == option.Value, OnSelect: props.OnSelect,
 			})
 		}),
+	)
+	return uiw.FormField(props.Label, Div(
+		Div(group...),
+		If(hint != "", Span(ID(hintID), css.Class("txn-form-help"), hint)),
 	))
 }
 
@@ -106,6 +126,7 @@ func TxnNewCategoryAction(testID string, expanded bool, onClick ui.Handler) ui.N
 // TxnSharedForm renders the common Add/Edit field hierarchy: everyday fields
 // first, followed by a single disclosure for supporting details.
 func TxnSharedForm(input any) ui.Node {
+	css.Inject("cf-transaction-form", txnFormCSS)
 	model, legacy := input.(TxnFormModel)
 	if !legacy {
 		old, ok := input.(TxnSharedFormProps)
@@ -120,22 +141,22 @@ func TxnSharedForm(input any) ui.Node {
 	if moreID == "" {
 		moreID = "txn-add-more"
 	}
-	detailsArgs := []any{css.Class("csv-help"), Attr("id", moreID), Attr("data-testid", moreID)}
+	detailsArgs := []any{css.Class("csv-help txn-form-details"), Attr("id", moreID), Attr("data-testid", moreID)}
 	if model.OpenMore {
 		detailsArgs = append(detailsArgs, Attr("open", "open"))
 	}
 	detailsArgs = append(detailsArgs,
-		Summary(uistate.T("r1e.moreDetails")),
-		Div(css.Class("form-grid"), model.More),
+		Summary(Span(uistate.T("r1e.moreDetails")), Span(css.Class("txn-form-optional"), uistate.T("sol1.optional"))),
+		Div(css.Class("txn-form-details-grid"), model.More),
 	)
-	return Div(css.Class("form-grid", "qa-grid"),
+	return Div(css.Class("form-grid", "qa-grid", "txn-form"),
 		If(model.AddQuickFill != nil, model.AddQuickFill),
 		Div(css.Class("txn-shared-row", "txn-shared-row-amount"), Attr("id", "txn-shared-row-amount"), model.Amount, model.Direction),
 		Div(css.Class("txn-shared-row", "txn-shared-row-payee"), Attr("id", "txn-shared-row-payee"), model.Payee),
 		Div(css.Class("txn-shared-row", "txn-shared-row-category-date"), Attr("id", "txn-shared-row-category-date"), model.Category, model.Date),
 		Div(css.Class("txn-shared-row", "txn-shared-row-account"), Attr("id", "txn-shared-row-account"), model.Account),
-		model.EditTools,
 		Details(detailsArgs...),
+		model.EditTools,
 		model.EditSummary,
 		If(model.AddTemplates != nil, model.AddTemplates),
 	)
@@ -152,3 +173,44 @@ func legacyTxnSharedForm(props TxnSharedFormProps) ui.Node {
 	}
 	return Div(css.Class("form-grid", "qa-grid"), props.Primary, props.BeforeMore, Details(details...), props.AfterMore)
 }
+
+// The shared form owns layout; callers supply controlled fields and action slots.
+const txnFormCSS = `
+.txn-form.qa-grid { display: flex; flex-direction: column; gap: var(--space-4); }
+.txn-form .txn-shared-row { gap: var(--space-4); align-items: start; }
+.txn-form .txn-shared-row-payee { grid-template-columns: minmax(0, 1fr); }
+.txn-form .txn-shared-row > *, .txn-form .cf-field { min-width: 0; }
+.txn-form .txn-shared-row-amount .field { font-size: var(--type-24); font-weight: 600; font-variant-numeric: tabular-nums; }
+.txn-form .field, .txn-form .txn-dir-option { min-height: calc(var(--space-5) + var(--space-4)); }
+.txn-form .txn-edit-category-label { margin: 0; min-height: auto; }
+.txn-form .txn-edit-category-field { display: flex; flex-direction: column; gap: var(--space-1); }
+.txn-form .txn-cat-row { display: flex; align-items: start; gap: var(--space-2); }
+.txn-form .txn-cat-row > :first-child { flex: 1; min-width: 0; }
+.txn-form .txn-cat-picker { display: flex; flex-direction: column; gap: var(--space-2); }
+.txn-form .cf-pill { align-self: start; white-space: normal; text-align: start; }
+.txn-form .txn-form-details { margin: 0; padding-block: var(--space-4); border-block: 1px solid var(--border); }
+.txn-form-details > summary { cursor: pointer; font-weight: 600; }
+.txn-form-optional { margin-inline-start: var(--space-2); font-weight: 400; color: var(--text-dim); }
+.txn-form-details-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); padding-block-start: var(--space-4); }
+.txn-form-details-grid > .txn-classify-field, .txn-form-details-grid > .txn-exclude-field,
+.txn-form-details-grid > .txn-form-detail-group { grid-column: 1 / -1; }
+.txn-form-detail-group { display: flex; flex-direction: column; gap: var(--space-4); }
+.txn-form-check-field { display: flex; flex-direction: column; gap: var(--space-1); }
+.txn-form-check { display: flex; align-items: center; gap: var(--space-2); }
+.txn-form-help, .txn-form .cf-field-hint { color: var(--text-dim); font-size: var(--type-12); line-height: 1.5; }
+.txn-form .txn-dir-toggle + .txn-form-help { display: block; margin-block-start: var(--space-1); }
+.txn-form .cf-field-label { font-size: var(--type-12); color: var(--text-dim); }
+.txn-form .cf-field-error { color: var(--danger); font-size: var(--type-12); }
+.txn-form-root { display: flex; flex-direction: column; gap: var(--space-4); }
+.txn-form-record { display: flex; align-items: start; justify-content: space-between; gap: var(--space-4); padding-block-end: var(--space-4); border-bottom: 1px solid var(--border); }
+.txn-form-record-name { font-weight: 600; overflow-wrap: anywhere; }
+.txn-form-record-meta { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
+.txn-form-record-amount { font-size: var(--type-24); font-weight: 600; white-space: nowrap; }
+.txn-form-footer { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); width: 100%; flex-wrap: wrap; }
+.txn-form-footer-actions { display: flex; gap: var(--space-2); margin-inline-start: auto; flex-wrap: wrap; justify-content: flex-end; }
+@media (max-width: 540px) {
+ .txn-form .txn-shared-row, .txn-form-details-grid { grid-template-columns: minmax(0, 1fr); }
+ .txn-form .txn-dir-toggle { width: 100%; }
+ .txn-form-record { flex-wrap: wrap; }
+}
+`

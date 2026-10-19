@@ -10,26 +10,17 @@ import (
 	"github.com/monstercameron/CashFlux/internal/screens"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+	"github.com/monstercameron/GoWebComponents/v5/css"
 	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
 	uic "github.com/monstercameron/GoWebComponents/v5/ui"
 )
 
-// savedTxnEditScroll holds the ledger pane's scroll offset while the edit modal
-// is open; -1 means nothing to restore.
-var savedTxnEditScroll = -1.0
-
-// TxnEditHost is mounted at the shell root (beside AddHost). It reads the
-// TxnEdit atom and renders the transaction edit form inside a FlipPanel modal.
-// When the atom is empty no overlay is shown.
-//
-// The FlipPanel supplies the standard pinned footer via FormID — Cancel plus a
-// Save that natively submits the form (the form does the work in OnSubmit and
-// closes via OnDone; a validation error keeps it open). Delete lives in the form
-// body, apart from the pinned pair. This replaced the form's own in-body button
-// row, which floated mid-panel instead of pinning to the bottom.
+// TxnEditHost mounts the transaction editor at the shell root. Overlay owns
+// modal focus, Escape, scroll locking and return to the description or pencil.
 func TxnEditHost() uic.Node {
 	edit := uistate.UseTxnEdit()
 	id := edit.Get()
+	savedScroll := uic.UseRef(-1.0)
 	// #59 (mobile pass, applies everywhere): opening a row's edit modal must not
 	// lose the list's scroll position. Capture the scroll pane's offset when the
 	// modal opens and re-assert it after close — the close-time focus restore
@@ -47,12 +38,12 @@ func TxnEditHost() uic.Node {
 			return nil
 		}
 		if id != "" {
-			savedTxnEditScroll = sc.Get("scrollTop").Float()
+			savedScroll.Set(sc.Get("scrollTop").Float())
 			return nil
 		}
-		if savedTxnEditScroll >= 0 {
-			top := savedTxnEditScroll
-			savedTxnEditScroll = -1
+		if savedScroll.Get() >= 0 {
+			top := savedScroll.Get()
+			savedScroll.Set(-1)
 			sc.Set("scrollTop", top)
 			// Focus restoration lands a beat later and scrolls again; one
 			// delayed re-assert wins without fighting user scrolling.
@@ -61,25 +52,47 @@ func TxnEditHost() uic.Node {
 				if s2 := js.Global().Get("document").Call("querySelector", "main.cf-scroll"); s2.Truthy() {
 					s2.Set("scrollTop", top)
 				}
-				cb.Release()
 				return nil
 			})
-			js.Global().Call("setTimeout", cb, 120)
+			timer := js.Global().Call("setTimeout", cb, 120)
+			return func() {
+				js.Global().Call("clearTimeout", timer)
+				cb.Release()
+			}
 		}
 		return nil
 	}, openKey)
-	if id == "" {
-		return Fragment()
-	}
 	close := func() { uistate.SetTxnEdit("") }
-	return uiw.FlipPanel(uiw.FlipPanelProps{
-		Title:      uistate.T("transactions.editTitle"),
-		Width:      uiw.FlipMediumW,
-		Height:     uiw.FlipMediumH,
-		FormID:     "txn-edit-form",
-		SaveTestID: "txn-edit-save",
-		LeftFooter: uic.CreateElement(screens.TxnEditDeleteFooter, screens.TransactionEditFormProps{TxnID: id, OnDone: close}),
-		OnClose:    close,
-		Back:       uic.CreateElement(screens.TransactionEditForm, screens.TransactionEditFormProps{TxnID: id, OnDone: close}),
+	return uic.CreateElement(txnEditOverlay, txnEditOverlayProps{
+		Open:    id != "",
+		Body:    uic.CreateElement(screens.TransactionEditForm, screens.TransactionEditFormProps{TxnID: id, OnDone: close}),
+		Delete:  uic.CreateElement(screens.TxnEditDeleteFooter, screens.TransactionEditFormProps{TxnID: id, OnDone: close}),
+		OnClose: close,
+	})
+}
+
+type txnEditOverlayProps struct {
+	Open         bool
+	Body, Delete uic.Node
+	OnClose      func()
+}
+
+func txnEditOverlay(props txnEditOverlayProps) uic.Node {
+	cancel := uic.UseEvent(func() {
+		if props.OnClose != nil {
+			props.OnClose()
+		}
+	})
+	return uiw.Overlay(uiw.OverlayProps{
+		Open: props.Open, Kind: uiw.OverlayModal, Title: uistate.T("transactions.editTitle"),
+		TestID: "txn-edit-dialog", OnClose: props.OnClose, Body: props.Body,
+		Footer: Div(css.Class("txn-form-footer"),
+			props.Delete,
+			Div(css.Class("txn-form-footer-actions"),
+				Button(css.Class("btn"), Type("button"), Attr("data-testid", "txn-edit-cancel"), OnClick(cancel), uistate.T("action.cancel")),
+				Button(css.Class("btn btn-primary"), Type("submit"), Attr("form", "txn-edit-form"),
+					Attr("data-testid", "txn-edit-save"), uistate.T("action.save")),
+			),
+		),
 	})
 }

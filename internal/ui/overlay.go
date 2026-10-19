@@ -58,6 +58,9 @@ func BottomBar(props OverlayProps) uic.Node {
 
 func overlayView(props OverlayProps) uic.Node {
 	id := uic.UseId()
+	// GWC's rule engine has no @supports wrapper; Inject owns this component's
+	// feature-query and motion rules without adding another overlay lifecycle.
+	css.Inject("cf-overlay-motion", overlayMotionCSS)
 	labelID := id + "-label"
 	kind := props.Kind
 	if kind == "" {
@@ -74,7 +77,7 @@ func overlayView(props OverlayProps) uic.Node {
 	positioning := "viewport"
 	surfaceClass := "cf-overlay__surface cf-overlay__surface--" + string(kind)
 	surfaceClass += " " + string(css.New(overlaySurfaceRules...))
-	backdropClass := "cf-overlay__backdrop " + string(css.New(overlayBackdropRules...))
+	backdropClass := "cf-overlay__backdrop cf-overlay__backdrop--" + string(kind) + " " + string(css.New(overlayBackdropRules...))
 	switch kind {
 	case OverlayPopover:
 		role, modal, trapFocus, backdrop, closeOutside = "region", false, false, false, true
@@ -223,6 +226,7 @@ var overlayContentRules = []css.Rule{
 	css.Raw("flex-direction", "column"),
 	css.Raw("min-height", "0"),
 	css.Raw("height", "100%"),
+	css.Raw("max-height", "inherit"),
 }
 
 var overlayTitleRules = []css.Rule{
@@ -263,3 +267,39 @@ var overlayVisuallyHiddenRules = []css.Rule{
 	css.Raw("white-space", "nowrap"),
 	css.Raw("border", "0"),
 }
+
+// Entrance only: AccessibleOverlay unmounts synchronously on controlled close.
+// Individual translate/scale leave the modal's centering transform untouched.
+const overlayMotionCSS = `
+.cf-overlay__surface--modal, .cf-overlay__surface--sheet {
+ animation: cf-overlay-enter var(--wonder-dur-slow, 280ms) var(--wonder-ease-out, cubic-bezier(0.16, 1, 0.3, 1)) both;
+}
+.cf-overlay__backdrop.cf-overlay__backdrop--modal, .cf-overlay__backdrop.cf-overlay__backdrop--sheet {
+ background: color-mix(in srgb, var(--bg) 64%, transparent);
+ animation: cf-overlay-dim var(--wonder-dur-slow, 280ms) ease-out both;
+}
+@supports ((backdrop-filter: blur(4px)) or (-webkit-backdrop-filter: blur(4px))) {
+ .cf-overlay__backdrop.cf-overlay__backdrop--modal, .cf-overlay__backdrop.cf-overlay__backdrop--sheet {
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+ }
+}
+@supports not ((backdrop-filter: blur(4px)) or (-webkit-backdrop-filter: blur(4px))) {
+ .cf-overlay__backdrop.cf-overlay__backdrop--modal, .cf-overlay__backdrop.cf-overlay__backdrop--sheet {
+  background: color-mix(in srgb, var(--bg) 76%, transparent);
+ }
+}
+@keyframes cf-overlay-enter {
+ from { opacity: 0; translate: 0 calc(var(--space-2) * var(--wonder-on, 1)); scale: calc(1 - 0.02 * var(--wonder-on, 1)); }
+ to { opacity: 1; translate: 0 0; scale: 1; }
+}
+@keyframes cf-overlay-dim { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+ .cf-overlay__surface--modal, .cf-overlay__surface--sheet,
+ .cf-overlay__backdrop.cf-overlay__backdrop--modal, .cf-overlay__backdrop.cf-overlay__backdrop--sheet { animation: none; }
+}
+[data-wonder="off"] .cf-overlay__surface--modal,
+[data-wonder="off"] .cf-overlay__surface--sheet,
+[data-wonder="off"] .cf-overlay__backdrop.cf-overlay__backdrop--modal,
+[data-wonder="off"] .cf-overlay__backdrop.cf-overlay__backdrop--sheet { animation: none; }
+`
