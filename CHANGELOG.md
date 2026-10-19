@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **One rule for which account a new transaction starts on (DF1).** `accountselect.Resolve` picks a valid explicit
+  choice, then the active member's default, then the workspace default, then the existing most-used heuristic, and
+  reports which tier chose it; missing or archived defaults are skipped, never rewritten. Not wired in yet.
 - **Local store for v2 (SV3a; not wired into the app yet).** New package `internal/localdb`: one IndexedDB
   database per scope with separate object stores for the keyring, metadata, change log, snapshots, drafts and
   quarantine. Appends are inserts in one strict-durability transaction, so two tabs never overwrite each other;

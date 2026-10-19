@@ -134,3 +134,77 @@ func DefaultID(accounts []domain.Account, txns []domain.Transaction, memberDefau
 	// --- Tier 5: none ---
 	return ""
 }
+
+// Tier identifies which source selected an account for a new transaction.
+type Tier string
+
+const (
+	// TierExplicit means a valid account explicitly selected for this transaction.
+	TierExplicit Tier = "explicit"
+	// TierMember means the active member's saved default selected the account.
+	TierMember Tier = "member"
+	// TierWorkspace means the workspace's saved default selected the account.
+	TierWorkspace Tier = "workspace"
+	// TierHeuristic means DefaultID selected the account from transaction history
+	// or eligible account types.
+	TierHeuristic Tier = "heuristic"
+	// TierFirstAccount means the first active account was used as the last fallback.
+	TierFirstAccount Tier = "first-account"
+	// TierNone means no non-archived account was available.
+	TierNone Tier = "none"
+)
+
+// Resolve selects an account for a new transaction using explicit, member,
+// workspace, heuristic, then first-account precedence. Saved defaults and
+// explicit choices are honored only when they identify an existing, non-archived
+// account. Invalid defaults are skipped without changing their stored values.
+// The heuristic is deterministic and uses only the supplied account and
+// transaction data; it does not consult wall-clock or device state.
+func Resolve(
+	accounts []domain.Account,
+	txns []domain.Transaction,
+	explicitID string,
+	activeMemberID string,
+	members []domain.Member,
+	workspaceDefaultID string,
+) (string, Tier) {
+	if validAccountID(accounts, explicitID) {
+		return explicitID, TierExplicit
+	}
+
+	if activeMemberID != "" {
+		for _, member := range members {
+			if member.ID == activeMemberID && validAccountID(accounts, member.Prefs.DefaultAccountID) {
+				return member.Prefs.DefaultAccountID, TierMember
+			}
+		}
+	}
+
+	if validAccountID(accounts, workspaceDefaultID) {
+		return workspaceDefaultID, TierWorkspace
+	}
+
+	if id := DefaultID(accounts, txns, ""); id != "" {
+		return id, TierHeuristic
+	}
+
+	for _, account := range accounts {
+		if account.ID != "" && !account.Archived {
+			return account.ID, TierFirstAccount
+		}
+	}
+
+	return "", TierNone
+}
+
+func validAccountID(accounts []domain.Account, id string) bool {
+	if id == "" {
+		return false
+	}
+	for _, account := range accounts {
+		if account.ID == id && account.ID != "" && !account.Archived {
+			return true
+		}
+	}
+	return false
+}
