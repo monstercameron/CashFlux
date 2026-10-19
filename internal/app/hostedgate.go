@@ -261,8 +261,15 @@ func hostedDataHydrationGate(props HostedAuthGateProps) uic.Node {
 	onRetry := uic.UseEvent(func() {
 		localError.Set("")
 		markHostedHydrationLoading()
+		if status.RetryWorkspaceList {
+			mergedRemoteWorkspaces = false
+			mergeRemoteWorkspaces(func() { pullActiveWorkspaceFromBackend(true) })
+			return
+		}
 		pullActiveWorkspaceFromBackend(true)
 	})
+	onStartBudget := uic.UseEvent(startHostedEmptyAccount)
+	onImportBackup := uic.UseEvent(restoreFromBackupEncrypted)
 
 	if status.Phase == hostedHydrationReady || !status.Required {
 		return props.Content
@@ -308,6 +315,18 @@ func hostedDataHydrationGate(props HostedAuthGateProps) uic.Node {
 				Attr("data-testid", "hosted-hydration-error"), Attr("role", "alert"),
 				P(css.Class(tw.Text13, tw.TextDanger), status.Message),
 				Button(css.Class("btn btn-primary"), Type("button"), OnClick(onRetry), uistate.T("hostedHydration.retry"))),
+		)
+	case hostedHydrationEmpty:
+		body = Fragment(body,
+			Div(css.Class("card", tw.Flex, tw.FlexCol, tw.Gap3),
+				Attr("data-testid", "hosted-hydration-empty-account"),
+				P(css.Class(tw.Text15, tw.FontSemibold), uistate.T("hostedFirstOpen.emptyTitle")),
+				P(css.Class(tw.Text13, tw.TextDim), uistate.T("hostedFirstOpen.emptyIntro")),
+				Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "hosted-start-budget"),
+					OnClick(onStartBudget), uistate.T("hostedFirstOpen.startBudget")),
+				Button(css.Class("btn btn-secondary"), Type("button"), Attr("data-testid", "hosted-import-backup"),
+					OnClick(onImportBackup), uistate.T("hostedFirstOpen.importBackup")),
+			),
 		)
 	default:
 		label := uistate.T("hostedHydration.loading")

@@ -20,16 +20,18 @@ const (
 	hostedHydrationWaiting   hostedHydrationPhase = "waiting"
 	hostedHydrationLoading   hostedHydrationPhase = "loading"
 	hostedHydrationLocked    hostedHydrationPhase = "locked"
+	hostedHydrationEmpty     hostedHydrationPhase = "emptyAccount"
 	hostedHydrationVerifying hostedHydrationPhase = "verifying"
 	hostedHydrationApplying  hostedHydrationPhase = "applying"
 	hostedHydrationError     hostedHydrationPhase = "error"
 )
 
 type hostedHydrationStatus struct {
-	Required          bool
-	Phase             hostedHydrationPhase
-	Message           string
-	EncryptedSnapshot []byte
+	Required           bool
+	Phase              hostedHydrationPhase
+	Message            string
+	EncryptedSnapshot  []byte
+	RetryWorkspaceList bool
 }
 
 var hostedHydration = struct {
@@ -115,6 +117,39 @@ func markHostedHydrationError(message string) {
 		Phase:    hostedHydrationError,
 		Message:  strings.TrimSpace(message),
 	})
+}
+
+func markHostedHydrationWorkspaceListError(message string) {
+	cur := currentHostedHydration()
+	if !cur.Required {
+		return
+	}
+	setHostedHydration(hostedHydrationStatus{
+		Required:           true,
+		Phase:              hostedHydrationError,
+		Message:            strings.TrimSpace(message),
+		RetryWorkspaceList: true,
+	})
+}
+
+func markHostedHydrationEmptyAccount() {
+	cur := currentHostedHydration()
+	if !cur.Required {
+		return
+	}
+	setHostedHydration(hostedHydrationStatus{Required: true, Phase: hostedHydrationEmpty})
+}
+
+func startHostedEmptyAccount() {
+	cur := currentHostedHydration()
+	if !cur.Required || cur.Phase != hostedHydrationEmpty {
+		return
+	}
+	// The active local workspace is intentionally empty on hosted first boot.
+	// Queue it through the ordinary encrypted push path; that first accepted
+	// write creates the account's first server workspace.
+	markHostedHydrationReady()
+	forceBackendSeedActiveWorkspace()
 }
 
 // unlockHostedHydrationWithAppLock validates the candidate against the encrypted

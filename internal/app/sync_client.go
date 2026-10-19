@@ -1395,6 +1395,14 @@ var mergedRemoteWorkspaces bool
 // dialling; this does.
 var mergingRemoteWorkspaces bool
 
+// listRemoteWorkspaces is the hosted bootstrap RPC seam. The production path
+// uses the services worker; wasm tests replace it with a deterministic fake.
+var hostedBootstrapWorkspaceListRPC = func(ctx context.Context, pr prefs.Prefs, out *backendrpc.ListWorkspacesResponse) error {
+	return invokeAuthed(ctx, pr, backendrpc.MethodSyncListWorkspaces, backendrpc.ListWorkspacesRequest{}, out)
+}
+
+var remoteWorkspaceListTimeout = 15 * time.Second
+
 // mergeRemoteWorkspaces reconciles the account's remote workspaces into this
 // device's registry, then runs done — which is how the caller sequences the pull
 // AFTER the reconciliation rather than racing it. done runs exactly once on
@@ -1417,11 +1425,15 @@ func mergeRemoteWorkspaces(done func()) {
 	mergingRemoteWorkspaces = true
 	go func() {
 		defer func() { mergingRemoteWorkspaces = false }()
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), remoteWorkspaceListTimeout)
 		defer cancel()
 		var resp backendrpc.ListWorkspacesResponse
-		if err := invokeAuthed(ctx, pr, backendrpc.MethodSyncListWorkspaces, backendrpc.ListWorkspacesRequest{}, &resp); err != nil {
+		if err := hostedBootstrapWorkspaceListRPC(ctx, pr, &resp); err != nil {
 			logSyncError("backend workspace list failed", err)
+			if hostedHydrationRequired() {
+				markHostedHydrationWorkspaceListError(customSyncErrorMessage(err, uistate.T("hostedFirstOpen.checkFailed")))
+				return
+			}
 			finish()
 			return
 		}
@@ -1431,6 +1443,10 @@ func mergeRemoteWorkspaces(done func()) {
 		// that followed moments later never got the one pass that decides which
 		// workspace to open. The failure is the case that most needs a retry.
 		mergedRemoteWorkspaces = true
+		if hostedHydrationRequired() && !hasLiveRemoteWorkspace(resp.Workspaces) {
+			markHostedHydrationEmptyAccount()
+			return
+		}
 		r := loadRegistry()
 		added := 0
 		for _, w := range resp.Workspaces {
@@ -1473,6 +1489,15 @@ func mergeRemoteWorkspaces(done func()) {
 		}
 		finish()
 	}()
+}
+
+func hasLiveRemoteWorkspace(workspaces []backendrpc.Workspace) bool {
+	for _, workspace := range workspaces {
+		if strings.TrimSpace(workspace.ID) != "" && !workspace.Deleted {
+			return true
+		}
+	}
+	return false
 }
 
 // adoptRemoteWorkspaceIfUntouched opens one of the account's own workspaces when

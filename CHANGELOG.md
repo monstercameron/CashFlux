@@ -90,6 +90,10 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **A new hosted account no longer hangs on "Checking the server for your existing data" (HOST1).** When the server has no
+  workspace for the account, sign-in shows a first-open step — "Start your budget" (creates the first workspace through
+  the normal encrypted sync path) or "Import a backup" — instead of waiting forever. A failed or timed-out (15 s)
+  workspace check shows an actionable error with Retry. Sample data is still never loaded on a hosted server.
 - **Budget money integrity, part 2 (SOLB2).** One signed `budgeting.Contribution` rule now decides what every budget
   counts (spent, rollover, smoothing, suggestions, tracking, true-up, composition), with checked arithmetic. Cards, badges
   and envelopes share one bounded rollover engine (history beyond 2,400 periods is an explicit error, never a page freeze;
