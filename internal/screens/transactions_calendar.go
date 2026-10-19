@@ -96,7 +96,7 @@ func txnCalendarWidget(props txnCalendarProps) ui.Node {
 	pr := uistate.UsePrefs().Get()
 	weekStart := pr.WeekStartWeekday()
 
-	now := time.Now()
+	now := dateutil.WallClockUTC(time.Now())
 	// C560: the visible month comes from the LEDGER'S date scope, not from a private
 	// calendar-month atom anchored on time.Now(). Those were separate states, so the
 	// grid could show August while the ledger label and rows were in July, and paging
@@ -423,11 +423,11 @@ func txnCalMonthCell(props txnCalMonthCellProps) ui.Node {
 		}
 		ghostAriaLabels = append(ghostAriaLabels, aria)
 		if g.NotPosted {
-			ghostNodes = append(ghostNodes, Div(css.Class(className), Attr("aria-label", aria), Attr("title", aria),
+			ghostNodes = append(ghostNodes, Span(css.Class(className), Attr("aria-label", aria), Attr("title", aria),
 				Span(css.Class("txn-cal-ghost-status"), uistate.T("transactions.calNotPostedStatus", amountText)),
 				Span(css.Class("txn-cal-ghost-label"), g.Label)))
 		} else {
-			ghostNodes = append(ghostNodes, Div(css.Class(className), Attr("aria-label", aria), Attr("title", aria),
+			ghostNodes = append(ghostNodes, Span(css.Class(className), Attr("aria-label", aria), Attr("title", aria),
 				Span(css.Class("txn-cal-ghost-status"), uistate.T("transactions.calDueStatus", amountText)),
 				Span(css.Class("txn-cal-ghost-label"), g.Label)))
 		}

@@ -90,6 +90,9 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Transfers pair only with a matching amount; the calendar follows (TC3B2).** Legacy transfer legs pair by account
+  pair, opposite sign, equal (FX-converted) amount and date window, so a real row is never hidden as a partner; excluded
+  transfers add nothing to Moved; ghost items are valid markup inside day buttons.
 - **Rules match whole phrases, respect currency and keep amount sizes (TC3B9).** Payee/description matching uses whole
   phrases; an amount condition with a currency only matches that currency and still compares amount sizes, so saved rules
   keep working; actions fill a missing member without replacing an owner; the planner honours category precedence and skips

@@ -75,7 +75,7 @@ func MonthCashflow(anchor time.Time, weekStart time.Weekday, txns []domain.Trans
 	monthEnd := dateutil.AddMonths(monthStart, 1)
 	grid := month(anchor, weekStart, nil, recurring, nil)
 	byDay := make(map[string]Cashflow, len(txns))
-	transferRows := txnclassify.SummarizeVisibleTransfers(txns).CountedRows
+	transferRows := txnclassify.SummarizeVisibleTransfers(txns, rates).CountedRows
 	result := CashflowMonth{Weeks: make([]CashflowWeek, len(grid))}
 	for i, txn := range txns {
 		if txn.Date.Before(monthStart) || !txn.Date.Before(monthEnd) {
@@ -87,6 +87,10 @@ func MonthCashflow(anchor time.Time, weekStart time.Weekday, txns []domain.Trans
 			return CashflowMonth{}, fmt.Errorf("count transactions on %s: %w", key, money.ErrOverflow)
 		}
 		day.Count++
+		if txn.ExcludeFromReports || (txn.IsTransfer() && !transferRows[i]) {
+			byDay[key] = day
+			continue
+		}
 		converted, err := rates.Convert(txn.Amount, rates.Base)
 		if err != nil {
 			result.RateIssues = append(result.RateIssues, RateIssue{TransactionID: txn.ID, Date: txn.Date, Currency: txn.Amount.Currency, Err: err})
@@ -104,9 +108,6 @@ func MonthCashflow(anchor time.Time, weekStart time.Weekday, txns []domain.Trans
 			if err == nil {
 				day.Moved, err = money.Add(day.Moved, amount)
 			}
-		case txn.ExcludeFromReports:
-			// Excluded rows still count as visible ledger activity, but do not
-			// contribute to analytical cash-flow totals.
 		case converted.Amount < 0:
 			amount, err = money.Neg(converted.Amount)
 			if err == nil {
@@ -168,8 +169,7 @@ func addCashflow(total *Cashflow, day Cashflow) error {
 // calendar dates (dateutil), so bucketing on the UTC date keeps a day cell in
 // step with the ledger row's rendered date.
 func DayKey(t time.Time) string {
-	y, m, d := t.Date()
-	return time.Date(y, m, d, 0, 0, 0, 0, time.UTC).Format("2006-01-02")
+	return dateutil.CalendarDayUTC(t).Format(dateutil.Layout)
 }
 
 // DayStat aggregates the transactions that fall on one calendar day: the signed
@@ -424,9 +424,7 @@ func jumpMonthCadence(cadence domain.RecurringCadence, due, from time.Time, mont
 }
 
 func calendarDayOrdinal(t time.Time) int64 {
-	year, month, day := t.Date()
-	utc := time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
-	return utc.Unix() / int64(24*time.Hour/time.Second)
+	return dateutil.CalendarDayUTC(t).Unix() / int64(24*time.Hour/time.Second)
 }
 
 // Cell is one day square in the month grid. InMonth is false for the leading and

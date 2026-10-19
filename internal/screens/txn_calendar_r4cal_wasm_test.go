@@ -48,13 +48,18 @@ func TestR4CalendarScheduledItemsShowAmountsAndMissedState(t *testing.T) {
 		t.Errorf("upcoming scheduled item = %q, want consistent Due label and no middle dot", got)
 	}
 	var missed *render.QueryNode
-	for _, node := range f.AllByTag("div") {
+	for _, node := range f.AllByTag("span") {
 		if strings.Contains(node.Attr("class"), "txn-cal-ghost-missed") {
 			missed = node
 		}
 	}
 	if missed == nil || !strings.Contains(missed.Attr("aria-label"), "not posted") || !strings.Contains(missed.Attr("aria-label"), "$220.00") {
 		t.Errorf("missed item's accessible description = %v, want status and amount", missed)
+	}
+	for _, node := range f.AllByTag("div") {
+		if strings.Contains(node.Attr("class"), "txn-cal-ghost") {
+			t.Errorf("calendar ghost uses div inside a day button: %q", node.Attr("class"))
+		}
 	}
 }
 

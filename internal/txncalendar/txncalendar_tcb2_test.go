@@ -79,3 +79,70 @@ func TestMonthCashflowExcludesReportRowsFromSpentAndIncome(t *testing.T) {
 	}
 	t.Fatal("October 12 cell missing")
 }
+
+func TestMonthCashflowDoesNotCountExcludedTransfersAsMoved(t *testing.T) {
+	date := time.Date(2026, time.October, 12, 0, 0, 0, 0, time.UTC)
+	txns := []domain.Transaction{
+		{ID: "out", Date: date, Amount: money.New(-50000, "USD"), AccountID: "checking", TransferAccountID: "savings", TransferGroupID: "excluded", ExcludeFromReports: true},
+		{ID: "in", Date: date, Amount: money.New(50000, "USD"), AccountID: "savings", TransferAccountID: "checking", TransferGroupID: "excluded", ExcludeFromReports: true},
+	}
+	got, err := MonthCashflow(date, time.Sunday, txns, nil, currency.Rates{Base: "USD"})
+	if err != nil {
+		t.Fatalf("MonthCashflow: %v", err)
+	}
+	day := cashflowDay(t, got, date)
+	if day.Count != 2 || day.Moved != 0 {
+		t.Fatalf("excluded transfer day = %+v, want two visible rows and no moved amount", day)
+	}
+}
+
+func TestMonthCashflowDoesNotReportRateIssueForUncountedTransferLeg(t *testing.T) {
+	date := time.Date(2026, time.October, 12, 0, 0, 0, 0, time.UTC)
+	txns := []domain.Transaction{
+		{ID: "unknown-in", Date: date, Amount: money.New(50000, "EUR"), AccountID: "savings", TransferAccountID: "checking", TransferGroupID: "paired"},
+		{ID: "out", Date: date, Amount: money.New(-50000, "USD"), AccountID: "checking", TransferAccountID: "savings", TransferGroupID: "paired"},
+	}
+	got, err := MonthCashflow(date, time.Sunday, txns, nil, currency.Rates{Base: "USD"})
+	if err != nil {
+		t.Fatalf("MonthCashflow: %v", err)
+	}
+	if len(got.RateIssues) != 0 {
+		t.Fatalf("rate issues = %+v, want none for the hidden partner leg", got.RateIssues)
+	}
+	day := cashflowDay(t, got, date)
+	if day.Moved != 50000 || day.Count != 2 {
+		t.Fatalf("paired transfer day = %+v, want one $500.00 movement and both visible rows counted", day)
+	}
+}
+
+func TestMonthCashflowPairsLegacyTransfersByConvertedAmount(t *testing.T) {
+	date := time.Date(2026, time.October, 12, 0, 0, 0, 0, time.UTC)
+	txns := []domain.Transaction{
+		{ID: "out", Date: date, Amount: money.New(-10000, "EUR"), AccountID: "checking", TransferAccountID: "savings"},
+		{ID: "in", Date: date.AddDate(0, 0, 1), Amount: money.New(12500, "USD"), AccountID: "savings", TransferAccountID: "checking"},
+	}
+	got, err := MonthCashflow(date, time.Sunday, txns, nil, currency.Rates{Base: "USD", Rates: map[string]float64{"EUR": 1.25}})
+	if err != nil {
+		t.Fatalf("MonthCashflow: %v", err)
+	}
+	if len(got.RateIssues) != 0 {
+		t.Fatalf("rate issues = %+v, want none", got.RateIssues)
+	}
+	if moved := cashflowDay(t, got, date).Moved; moved != 12500 {
+		t.Fatalf("moved = %d, want converted pair counted once as 12500 base minor units", moved)
+	}
+}
+
+func cashflowDay(t *testing.T, month CashflowMonth, date time.Time) Cashflow {
+	t.Helper()
+	key := DayKey(date)
+	for _, week := range month.Weeks {
+		for _, day := range week.Days {
+			if DayKey(day.Date) == key {
+				return day.Cashflow
+			}
+		}
+	}
+	t.Fatalf("calendar cell %s is missing", key)
+	return Cashflow{}
+}

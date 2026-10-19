@@ -6,7 +6,9 @@ import (
 	"sort"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/money"
 )
 
 // # Finding the other leg
@@ -181,13 +183,22 @@ type reciprocalIndexKey struct {
 	accountID      string
 	positive       bool
 	transferTarget string
+	currency       string
+	magnitude      int64
 }
 
 // SummarizeVisibleTransfers pairs grouped rows by identity and legacy rows by
-// indexed account, direction, and date. It is O(n log n), with no per-leg scan
-// over the complete visible slice.
-func SummarizeVisibleTransfers(txns []domain.Transaction) VisibleTransferSummary {
+// indexed account, direction, amount, and date. When rates are supplied,
+// amounts are compared after conversion into the rate table's base currency.
+// Without rates, rows can pair only when their currencies and minor-unit
+// magnitudes match. It is O(n log n), with no per-leg scan over the visible set.
+func SummarizeVisibleTransfers(txns []domain.Transaction, rateTables ...currency.Rates) VisibleTransferSummary {
 	result := VisibleTransferSummary{CountedRows: make([]bool, len(txns))}
+	var rates currency.Rates
+	convertAmounts := len(rateTables) > 0
+	if convertAmounts {
+		rates = rateTables[0]
+	}
 	groups := make(map[string][]int)
 	legacy := make(map[reciprocalIndexKey][]int)
 	for i, txn := range txns {
@@ -201,7 +212,24 @@ func SummarizeVisibleTransfers(txns []domain.Transaction) VisibleTransferSummary
 		if txn.Amount.Amount == 0 {
 			continue
 		}
-		key := reciprocalIndexKey{accountID: txn.AccountID, positive: txn.Amount.Amount > 0, transferTarget: txn.TransferAccountID}
+		amount := txn.Amount
+		currencyKey := amount.Currency
+		if convertAmounts {
+			var err error
+			amount, err = rates.Convert(amount, rates.Base)
+			if err != nil {
+				continue
+			}
+			currencyKey = ""
+		}
+		magnitude, err := money.Abs(amount.Amount)
+		if err != nil {
+			continue
+		}
+		key := reciprocalIndexKey{
+			accountID: txn.AccountID, positive: txn.Amount.Amount > 0,
+			transferTarget: txn.TransferAccountID, currency: currencyKey, magnitude: magnitude,
+		}
 		legacy[key] = append(legacy[key], i)
 	}
 	for _, indexes := range groups {
@@ -228,7 +256,10 @@ func SummarizeVisibleTransfers(txns []domain.Transaction) VisibleTransferSummary
 		if key.accountID >= key.transferTarget {
 			continue
 		}
-		second := legacy[reciprocalIndexKey{accountID: key.transferTarget, positive: !key.positive, transferTarget: key.accountID}]
+		second := legacy[reciprocalIndexKey{
+			accountID: key.transferTarget, positive: !key.positive,
+			transferTarget: key.accountID, currency: key.currency, magnitude: key.magnitude,
+		}]
 		sort.Slice(first, func(i, j int) bool { return txns[first[i]].Date.Before(txns[first[j]].Date) })
 		sort.Slice(second, func(i, j int) bool { return txns[second[i]].Date.Before(txns[second[j]].Date) })
 		i, j := 0, 0
