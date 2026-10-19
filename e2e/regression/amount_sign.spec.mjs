@@ -36,11 +36,20 @@ async function openQuickAdd(app) {
   await openVia(app, app.getByTestId("add-transaction-btn"), app.getByTestId("txn-add-amount"));
 }
 
+async function openMoreDetails(app) {
+  const more = app.getByTestId("txn-add-more");
+  if ((await more.getAttribute("open")) === null) {
+    await more.locator("summary").click();
+  }
+  await expect(app.getByTestId("txn-add-desc")).toBeVisible();
+}
+
 async function openFirstTxnEdit(app) {
   await nav(app, "/transactions");
+  const firstRow = app.locator('tr[data-testid^="txn-row-"]').first();
   await openVia(
     app,
-    app.locator('tr[data-testid^="txn-row-"] .row-desc-text').first(),
+    firstRow.getByRole("button", { name: /^Edit / }),
     app.getByTestId("txn-edit-amount"),
   );
 }
@@ -145,6 +154,7 @@ async function expectRowTone(app, desc, want) {
 test.describe("C546 · a typed minus is never inverted", { tag: "@prod" }, () => {
   test("quick-add stores a spend, not its opposite", async ({ app }) => {
     await openQuickAdd(app);
+    await openMoreDetails(app);
 
     // "Expense" is the default kind; type the amount WITH a minus, the way
     // someone writing money-out would.
@@ -157,11 +167,12 @@ test.describe("C546 · a typed minus is never inverted", { tag: "@prod" }, () =>
 
   test("a typed minus overrides an Income control rather than flipping", async ({ app }) => {
     await openQuickAdd(app);
+    await openMoreDetails(app);
 
     // The nastiest case: the control says Income and the text says minus. The
     // typed sign is the more deliberate signal, so it wins — and the control
     // moves to match, never displaying "Income" over a stored expense.
-    await app.getByRole("radio", { name: /^income$/i }).first().click();
+    await app.getByTestId("txn-add-direction-income").click();
     await app.getByTestId("txn-add-amount").fill("-42");
     await app.getByTestId("txn-add-desc").fill("CONTRAPROBE");
     await saveAndClose(app, app.getByTestId("txn-add-amount"));
@@ -171,9 +182,10 @@ test.describe("C546 · a typed minus is never inverted", { tag: "@prod" }, () =>
 
   test("without a minus the Income control still means income", async ({ app }) => {
     await openQuickAdd(app);
+    await openMoreDetails(app);
 
     // The control has to keep working — the fix must not make everything a spend.
-    await app.getByRole("radio", { name: /^income$/i }).first().click();
+    await app.getByTestId("txn-add-direction-income").click();
     await app.getByTestId("txn-add-amount").fill("42");
     await app.getByTestId("txn-add-desc").fill("PLAINPROBE");
     await saveAndClose(app, app.getByTestId("txn-add-amount"));
@@ -188,7 +200,7 @@ test.describe("C547 · the edit form reads a typed minus as direction", { tag: "
 
     const amount = app.getByTestId("txn-edit-amount");
     const magnitude = (await amount.inputValue()).replace(/[^\d.]/g, "") || "25";
-    await app.getByTestId("txn-edit-direction").selectOption("in"); // make it income first
+    await app.getByTestId("txn-edit-direction-income").click(); // make it income first
     await typeAmount(app, amount, `-${magnitude}`);
     await saveEdit(app);
 
@@ -212,7 +224,8 @@ test.describe("C547 · the edit form reads a typed minus as direction", { tag: "
     // splits (whose total must reconcile), and either would make this assert
     // something other than what it claims to.
     await openQuickAdd(app);
-    await app.getByRole("radio", { name: /^income$/i }).first().click();
+    await openMoreDetails(app);
+    await app.getByTestId("txn-add-direction-income").click();
     await app.getByTestId("txn-add-amount").fill("77");
     await app.getByTestId("txn-add-desc").fill("DIRPROBE");
     await saveAndClose(app, app.getByTestId("txn-add-amount"));
@@ -221,11 +234,15 @@ test.describe("C547 · the edit form reads a typed minus as direction", { tag: "
     const openProbe = () =>
       openVia(
         app,
-        app.locator('tr[data-testid^="txn-row-"]').filter({ hasText: "DIRPROBE" }).first().locator(".row-desc-text"),
+        app
+          .locator('tr[data-testid^="txn-row-"]')
+          .filter({ hasText: "DIRPROBE" })
+          .first()
+          .getByRole("button", { name: /^Edit / }),
         app.getByTestId("txn-edit-amount"),
       );
     await openProbe();
-    await expect(app.getByTestId("txn-edit-direction")).toHaveValue("in");
+    await expect(app.getByTestId("txn-edit-direction-income")).toHaveAttribute("aria-pressed", "true");
 
     // Now contradict it with a typed minus and save. The ledger row flipping to
     // the spending tone is the proof the write landed — assert on that rather
@@ -238,7 +255,7 @@ test.describe("C547 · the edit form reads a typed minus as direction", { tag: "
     // Reopening must show "out": a form that stored a spend while displaying
     // "Money in" is lying about the row the user just saved.
     await openProbe();
-    await expect(app.getByTestId("txn-edit-direction")).toHaveValue("out");
+    await expect(app.getByTestId("txn-edit-direction-expense")).toHaveAttribute("aria-pressed", "true");
   });
 
   test("a zero amount is still refused, visibly", async ({ app }) => {

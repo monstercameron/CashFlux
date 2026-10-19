@@ -41,20 +41,31 @@ test.describe("what a budget measures", { tag: "@prod" }, () => {
 
   test("a saving budget may track income categories; a spending budget may not", async ({ app }) => {
     await openAddBudget(app);
-    const picker = app.getByTestId("budget-existing-cat");
-    const spending = await picker.locator("option").count();
-    expect(spending).toBeGreaterThan(0);
+    const openCategoryPicker = async () => {
+      await app.getByRole("button", { name: "Category" }).click();
+      await expect(app.getByTestId("catpick")).toBeVisible();
+    };
+
+    // The add form uses the shared searchable picker rather than a native select.
+    // Assert the category-direction contract against the choices users see.
+    await openCategoryPicker();
+    await expect(app.getByTestId("catpick-opt-cat-groceries")).toBeVisible();
+    await expect(app.getByTestId("catpick-opt-cat-salary")).toHaveCount(0);
+    await app.keyboard.press("Escape");
 
     await app.getByTestId("budget-direction").selectOption("save");
-    await expect
-      .poll(async () => await picker.locator("option").count(), { timeout: 15000 })
-      .toBeGreaterThan(spending);
+    await openCategoryPicker();
+    await expect(app.getByTestId("catpick-opt-cat-salary")).toBeVisible();
+    await expect(app.getByTestId("catpick-opt-cat-groceries")).toBeVisible();
+    await app.keyboard.press("Escape");
 
     // ...and switching back re-restricts it. A spending budget tracking an income
     // category can never accrue — matchesScope wants an outflow — so offering one
     // would ship a budget broken by construction.
     await app.getByTestId("budget-direction").selectOption("");
-    await expect.poll(async () => await picker.locator("option").count(), { timeout: 15000 }).toBe(spending);
+    await openCategoryPicker();
+    await expect(app.getByTestId("catpick-opt-cat-groceries")).toBeVisible();
+    await expect(app.getByTestId("catpick-opt-cat-salary")).toHaveCount(0);
   });
 
   test("the picker stops apologising once income categories are allowed", async ({ app }) => {

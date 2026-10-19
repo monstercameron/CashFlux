@@ -24,6 +24,20 @@ async function openBudgetEdit(app) {
   return id;
 }
 
+async function openTrackedCategories(app) {
+  const back = app.getByTestId("budget-cats-back");
+  await expect
+    .poll(
+      async () => {
+        if (await back.isVisible().catch(() => false)) return true;
+        await app.getByTestId("budget-edit-open-cats").click({ timeout: 1000 }).catch(() => {});
+        return back.isVisible().catch(() => false);
+      },
+      { timeout: 15_000 },
+    )
+    .toBe(true);
+}
+
 function nameField(app) {
   return app.locator('[class*="flip"] input[type="text"]').first();
 }
@@ -36,7 +50,7 @@ test.describe("editing a budget and its tracked categories", { tag: "@prod" }, (
     await name.fill("CHANGED IN FLIGHT");
     await expect(name).toHaveValue("CHANGED IN FLIGHT");
 
-    await app.getByTestId("budget-edit-open-cats").click();
+    await openTrackedCategories(app);
 
     // ONE panel, not two. Layering a second FlipPanel gives each its own
     // document-level Escape handler, so a single press closes both and takes the
@@ -53,7 +67,7 @@ test.describe("editing a budget and its tracked categories", { tag: "@prod" }, (
 
   test("the back affordance says the changes are safe", async ({ app }) => {
     await openBudgetEdit(app);
-    await app.getByTestId("budget-edit-open-cats").click();
+    await openTrackedCategories(app);
     const back = app.getByTestId("budget-cats-back");
     await expect(back).toContainText(/back to budget/i);
     // Telling the user their work is still there is the difference between a
@@ -63,7 +77,7 @@ test.describe("editing a budget and its tracked categories", { tag: "@prod" }, (
 
   test("closing from the categories page does not reopen onto it", async ({ app }) => {
     await openBudgetEdit(app);
-    await app.getByTestId("budget-edit-open-cats").click();
+    await openTrackedCategories(app);
     await expect(app.getByTestId("budget-cats-back")).toBeVisible();
 
     // Close the whole editor while on the sub-page.
