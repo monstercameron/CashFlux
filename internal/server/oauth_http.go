@@ -29,10 +29,11 @@ const oauthIDTokenClockSkew = 5 * time.Minute
 var oauthHTTPClient = &http.Client{Timeout: 15 * time.Second}
 
 type oauthStateData struct {
-	State    string
-	Verifier string
-	Nonce    string
-	ReturnTo string
+	State           string
+	Verifier        string
+	Nonce           string
+	ReturnTo        string
+	ClientChallenge string
 }
 
 func handleOAuthStart(cfg Config) http.HandlerFunc {
@@ -64,17 +65,27 @@ func handleOAuthStart(cfg Config) http.HandlerFunc {
 			return
 		}
 		returnTo := validatedOAuthReturnTo(r, cfg)
+		clientChallenge := r.URL.Query().Get("code_challenge")
+		if returnTo != "" && !sameSessionOrigin(returnTo, r) {
+			if !validOAuthCodeReturnTo(returnTo, cfg) || !validPKCEChallenge(clientChallenge) || r.URL.Query().Get("code_challenge_method") != "S256" {
+				writeErrorJSON(w, ErrorReasonInvalidArgument, "cross-origin sign-in requires S256 PKCE")
+				return
+			}
+		}
 		challenge := pkceChallenge(verifier)
 		cookieValue := state + "." + verifier + "." + nonce
 		if returnTo != "" {
 			cookieValue += "." + base64.RawURLEncoding.EncodeToString([]byte(returnTo))
+			if clientChallenge != "" {
+				cookieValue += "." + clientChallenge
+			}
 		}
 		http.SetCookie(w, &http.Cookie{
 			Name:     oauthStateCookie,
 			Value:    cookieValue,
 			Path:     "/v1/auth/" + providerName + "/callback",
 			HttpOnly: true,
-			Secure:   requestIsSecure(r),
+			Secure:   sessionCookieSecure(cfg, r),
 			SameSite: http.SameSiteLaxMode,
 			Expires:  time.Now().Add(10 * time.Minute),
 		})
@@ -174,7 +185,22 @@ func handleOAuthCallback(cfg Config, store *Store) http.HandlerFunc {
 		}
 		now := time.Now().UTC()
 		auditFromRequest(r, store, AuthUser{ID: user.ID}, "auth.login", "user", user.ID)
-		if _, err := oauthDeviceBindingCookie(w, r, requestIsSecure(r), now.Add(sessionRefreshTTL)); err != nil {
+		w.Header().Set("Cache-Control", "no-store")
+		if stateData.ReturnTo != "" && !sameSessionOrigin(stateData.ReturnTo, r) {
+			if !validOAuthCodeReturnTo(stateData.ReturnTo, cfg) || !validPKCEChallenge(stateData.ClientChallenge) {
+				writeErrorJSON(w, ErrorReasonInvalidArgument, "oauth return destination or PKCE challenge is invalid")
+				return
+			}
+			code, err := store.issueOAuthSessionCode(user.ID, stateData.ReturnTo, stateData.ClientChallenge, now)
+			if err != nil {
+				writeErrorJSON(w, ErrorReasonInternal, "authorization code issue failed")
+				return
+			}
+			clearOAuthStateCookie(w, providerName, sessionCookieSecure(cfg, r))
+			writeOAuthCodeHTML(w, stateData.ReturnTo, code)
+			return
+		}
+		if _, err := oauthDeviceBindingCookie(w, r, sessionCookieSecure(cfg, r), now.Add(sessionRefreshTTL)); err != nil {
 			writeErrorJSON(w, ErrorReasonInternal, "device binding issue failed")
 			return
 		}
@@ -183,9 +209,9 @@ func handleOAuthCallback(cfg Config, store *Store) http.HandlerFunc {
 			writeErrorJSON(w, ErrorReasonInternal, "session issue failed")
 			return
 		}
-		clearOAuthStateCookie(w, providerName, requestIsSecure(r))
-		setRefreshCookie(w, refresh, requestIsSecure(r), now.Add(sessionRefreshTTL))
-		csrf, err := setCSRFCookie(w, requestIsSecure(r), now.Add(sessionRefreshTTL))
+		clearOAuthStateCookie(w, providerName, sessionCookieSecure(cfg, r))
+		setRefreshCookie(w, refresh, sessionCookieSecure(cfg, r), now.Add(sessionRefreshTTL))
+		csrf, err := setCSRFCookie(w, sessionCookieSecure(cfg, r), now.Add(sessionRefreshTTL))
 		if err != nil {
 			writeErrorJSON(w, ErrorReasonInternal, "csrf cookie issue failed")
 			return
@@ -202,6 +228,7 @@ func handleOAuthCallback(cfg Config, store *Store) http.HandlerFunc {
 
 func handleOAuthRefresh(cfg Config, store *Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
 		if !writeCORS(w, r, cfg) {
 			writeErrorJSON(w, ErrorReasonPermissionDenied, "origin not allowed")
 			return
@@ -239,7 +266,7 @@ func handleOAuthRefresh(cfg Config, store *Store) http.HandlerFunc {
 			writeErrorJSON(w, ErrorReasonInternal, "session issue failed")
 			return
 		}
-		deviceBinding, err := oauthDeviceBindingCookie(w, r, requestIsSecure(r), now.Add(sessionRefreshTTL))
+		deviceBinding, err := oauthDeviceBindingCookie(w, r, sessionCookieSecure(cfg, r), now.Add(sessionRefreshTTL))
 		if err != nil {
 			writeErrorJSON(w, ErrorReasonInternal, "device binding issue failed")
 			return
@@ -305,8 +332,8 @@ func handleOAuthRefresh(cfg Config, store *Store) http.HandlerFunc {
 		if rotated {
 			auditFromRequest(r, store, AuthUser{ID: session.UserID}, "auth.token.refresh", "user", session.UserID)
 		}
-		setRefreshCookie(w, refresh, requestIsSecure(r), now.Add(sessionRefreshTTL))
-		setCSRFCookieValue(w, csrfCookie.Value, requestIsSecure(r), now.Add(sessionRefreshTTL))
+		setRefreshCookie(w, refresh, sessionCookieSecure(cfg, r), now.Add(sessionRefreshTTL))
+		setCSRFCookieValue(w, csrfCookie.Value, sessionCookieSecure(cfg, r), now.Add(sessionRefreshTTL))
 		w.Header().Set(sessionCSRFHeader, csrfCookie.Value)
 		writeJSON(w, oauthSessionResponse{AccessToken: access, TokenType: "Bearer", ExpiresIn: int64(sessionAccessTTL.Seconds()), UserID: session.UserID})
 	}
@@ -413,8 +440,8 @@ func handleOAuthRevokeSession(cfg Config, store *Store) http.HandlerFunc {
 		}
 		auditFromRequest(r, store, user, "auth.session.revoke", "session_family", familyID)
 		if currentRefreshFamily(r, cfg, user.ID, now) == familyID {
-			setRefreshCookie(w, "", requestIsSecure(r), time.Unix(0, 0))
-			setExpiredCSRFCookie(w, requestIsSecure(r))
+			setRefreshCookie(w, "", sessionCookieSecure(cfg, r), time.Unix(0, 0))
+			setExpiredCSRFCookie(w, sessionCookieSecure(cfg, r))
 		}
 		w.WriteHeader(http.StatusNoContent)
 	}
@@ -433,14 +460,21 @@ func handleOAuthLogout(cfg Config, store *Store) http.HandlerFunc {
 		now := time.Now().UTC()
 		if cookie, err := r.Cookie(sessionRefreshCookie); err == nil {
 			if claims, ok := verifySessionClaims(cfg, cookie.Value, "refresh", now); ok {
-				if store != nil && strings.TrimSpace(claims.Family) != "" {
-					_ = store.RevokeRefreshSessionFamily(claims.Family, now)
+				if store == nil {
+					writeErrorJSON(w, ErrorReasonFailedPrecondition, "store is not configured")
+					return
+				}
+				if strings.TrimSpace(claims.Family) != "" {
+					if err := store.RevokeRefreshSessionFamily(claims.Family, now); err != nil {
+						writeErrorJSON(w, ErrorReasonInternal, "session revoke failed")
+						return
+					}
 				}
 				auditFromRequest(r, store, AuthUser{ID: claims.Sub}, "auth.logout", "user", claims.Sub)
 			}
 		}
-		setRefreshCookie(w, "", requestIsSecure(r), time.Unix(0, 0))
-		setExpiredCSRFCookie(w, requestIsSecure(r))
+		setRefreshCookie(w, "", sessionCookieSecure(cfg, r), time.Unix(0, 0))
+		setExpiredCSRFCookie(w, sessionCookieSecure(cfg, r))
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
@@ -470,8 +504,8 @@ func handleOAuthLogoutAll(cfg Config, store *Store) http.HandlerFunc {
 			return
 		}
 		auditFromRequest(r, store, user, "auth.logout_all", "user", user.ID)
-		setRefreshCookie(w, "", requestIsSecure(r), time.Unix(0, 0))
-		setExpiredCSRFCookie(w, requestIsSecure(r))
+		setRefreshCookie(w, "", sessionCookieSecure(cfg, r), time.Unix(0, 0))
+		setExpiredCSRFCookie(w, sessionCookieSecure(cfg, r))
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
@@ -607,6 +641,7 @@ func parseOAuthStateCookie(value string) (oauthStateData, bool) {
 		return oauthStateData{}, false
 	}
 	if hasReturnTo && encodedReturnTo != "" {
+		encodedReturnTo, out.ClientChallenge, _ = strings.Cut(encodedReturnTo, ".")
 		data, err := base64.RawURLEncoding.DecodeString(encodedReturnTo)
 		if err != nil {
 			return oauthStateData{}, false
@@ -631,8 +666,31 @@ func writeOAuthCallbackHTML(w http.ResponseWriter, returnTo string, resp oauthSe
 		"csrf":        csrf,
 	})
 	targetOrigin := target.Scheme + "://" + target.Host
+	writeOAuthPayloadHTML(w, payload, targetOrigin, returnTo)
+}
+
+func writeOAuthCodeHTML(w http.ResponseWriter, returnTo, code string) {
+	target, err := url.Parse(returnTo)
+	if err != nil {
+		writeErrorJSON(w, ErrorReasonInternal, "authorization code destination is invalid")
+		return
+	}
+	payload, _ := json.Marshal(map[string]string{"type": "cashflux.oauth", "code": code})
+	targetOrigin := target.Scheme + "://" + target.Host
+	// A full-page flow returns the code in the fragment, which is never sent to
+	// the app's HTTP server. The client retained the verifier before navigation.
+	fragment := url.Values{}
+	fragment.Set("oauthCode", code)
+	target.Fragment = fragment.Encode()
+	writeOAuthPayloadHTML(w, payload, targetOrigin, target.String())
+}
+
+func writeOAuthPayloadHTML(w http.ResponseWriter, payload []byte, targetOrigin, returnTo string) {
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Referrer-Policy", "no-referrer")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = fmt.Fprintf(w, `<!doctype html><meta charset="utf-8"><title>CashFlux signed in</title><script>
+	_, _ = fmt.Fprintf(w, `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>CashFlux signed in</title>
+<link rel="icon" href="/favicon.ico" sizes="48x48"><link rel="icon" type="image/svg+xml" href="/favicon.svg"><link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="mask-icon" href="/favicon.svg" color="#2e8b57"><meta name="theme-color" content="#2e8b57"></head><body><script>
 (function(){
   var payload = %s;
   if (window.opener && !window.opener.closed) {
@@ -642,7 +700,7 @@ func writeOAuthCallbackHTML(w http.ResponseWriter, returnTo string, resp oauthSe
     location.replace(%q);
   }
 }());
-</script><p>%s</p>`, payload, targetOrigin, returnTo, html.EscapeString("Signed in to CashFlux. You can close this window."))
+</script><p>%s</p></body></html>`, payload, targetOrigin, returnTo, html.EscapeString("Signed in to CashFlux. You can close this window."))
 }
 
 type oauthToken struct {
@@ -890,14 +948,20 @@ func issueStoredSessionPair(cfg Config, store *Store, userID string, now time.Ti
 }
 
 func setRefreshCookie(w http.ResponseWriter, token string, secure bool, expires time.Time) {
+	expireSessionCookie(w, sessionRefreshCookie, "/v1/auth", true, secure)
+	maxAge := 0
+	if token == "" {
+		maxAge = -1
+	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionRefreshCookie,
 		Value:    token,
-		Path:     "/v1/auth",
+		Path:     "/v1/auth/refresh",
 		HttpOnly: true,
 		Secure:   secure,
-		SameSite: http.SameSiteLaxMode,
+		SameSite: http.SameSiteStrictMode,
 		Expires:  expires,
+		MaxAge:   maxAge,
 	})
 }
 
@@ -911,10 +975,11 @@ func setCSRFCookie(w http.ResponseWriter, secure bool, expires time.Time) (strin
 }
 
 func setCSRFCookieValue(w http.ResponseWriter, token string, secure bool, expires time.Time) {
+	expireSessionCookie(w, sessionCSRFCookie, "/v1/auth", false, secure)
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCSRFCookie,
 		Value:    token,
-		Path:     "/v1/auth",
+		Path:     "/",
 		HttpOnly: false,
 		Secure:   secure,
 		SameSite: http.SameSiteStrictMode,
@@ -923,13 +988,20 @@ func setCSRFCookieValue(w http.ResponseWriter, token string, secure bool, expire
 }
 
 func setExpiredCSRFCookie(w http.ResponseWriter, secure bool) {
+	expireSessionCookie(w, sessionCSRFCookie, "/v1/auth", false, secure)
+	expireSessionCookie(w, sessionCSRFCookie, "/", false, secure)
+}
+
+func expireSessionCookie(w http.ResponseWriter, name, path string, httpOnly, secure bool) {
 	http.SetCookie(w, &http.Cookie{
-		Name:     sessionCSRFCookie,
+		Name:     name,
 		Value:    "",
-		Path:     "/v1/auth",
+		Path:     path,
+		HttpOnly: httpOnly,
 		Secure:   secure,
 		SameSite: http.SameSiteStrictMode,
 		Expires:  time.Unix(0, 0),
+		MaxAge:   -1,
 	})
 }
 

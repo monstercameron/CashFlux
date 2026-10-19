@@ -90,6 +90,14 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Server side of reload-safe sign-in (ENC3.6).** The refresh cookie is HttpOnly, Secure (insecure only in explicit
+  localhost dev mode), SameSite=Strict and scoped to `/v1/auth/refresh`; the double-submit CSRF cookie moves to `Path=/`
+  so the app can read it after a reload, and legacy `/v1/auth` cookies are expired. New rate-limited endpoints:
+  `POST /v1/auth/session/csrf`, `/session/cookie` (turns a password or pairing session into an HttpOnly refresh cookie
+  without returning the token to scripts) and `/session/code` (cross-origin OAuth now hands the app a one-time,
+  60-second, PKCE-bound code instead of tokens; schema v21 stores only hashed codes). Cookie logout and current-session
+  routes live under `/v1/auth/refresh/`. Deploy note: proxies must set X-Forwarded-Proto and be listed in
+  `CASHFLUX_SERVER_TRUSTED_PROXIES`.
 - **The inline limit editor opens inside its own row (BR2ED.1).** The compact row's limit editor now renders inside the
   clicked row, under its figures, instead of after the last row of the list; it carries a "Groceries limit" heading and a
   "Groceries base limit" input name, and the input is focused and selected through a component ref — no DOM patching.

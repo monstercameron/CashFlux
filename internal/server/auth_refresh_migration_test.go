@@ -12,8 +12,8 @@ func TestRefreshRotationBindingMigration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read schema version: %v", err)
 	}
-	if version != 20 {
-		t.Fatalf("schema version = %d, want 20", version)
+	if version != CurrentServerSchemaVersion {
+		t.Fatalf("schema version = %d, want %d", version, CurrentServerSchemaVersion)
 	}
 	hasBinding, err := store.columnExists("refresh_tokens", "rotation_binding")
 	if err != nil {

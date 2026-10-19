@@ -1369,7 +1369,7 @@ func TestOAuthCallbackIssuesSessionAndRefreshLogout(t *testing.T) {
 			deviceCookie = cookie
 		}
 	}
-	if refreshCookie == nil || !refreshCookie.HttpOnly || refreshCookie.SameSite != http.SameSiteLaxMode {
+	if refreshCookie == nil || !refreshCookie.HttpOnly || refreshCookie.SameSite != http.SameSiteStrictMode {
 		t.Fatalf("refresh cookie = %+v", refreshCookie)
 	}
 	if csrfCookie == nil || csrfCookie.HttpOnly || csrfCookie.SameSite != http.SameSiteStrictMode {
@@ -1527,13 +1527,13 @@ func TestOAuthStartAndCallbackSupportPopupReturnTo(t *testing.T) {
 
 	cfg := Config{
 		AuthMode:  "oauth",
-		AppOrigin: "http://127.0.0.1:8080",
+		AppOrigin: "https://cashflux.example",
 		MasterKey: "0123456789abcdef0123456789abcdef",
 		OAuthProviders: map[string]OAuthProviderConfig{
 			"github": {
 				ClientID:     "github-id",
 				ClientSecret: "github-secret",
-				RedirectURL:  "http://127.0.0.1:8081/v1/auth/github/callback",
+				RedirectURL:  "https://cashflux.example/v1/auth/github/callback",
 				AuthURL:      provider.URL + "/authorize",
 				TokenURL:     provider.URL + "/token",
 				UserURL:      provider.URL + "/user",
@@ -1541,7 +1541,7 @@ func TestOAuthStartAndCallbackSupportPopupReturnTo(t *testing.T) {
 		},
 	}
 	h := NewMux(cfg, store)
-	startReq := httptest.NewRequest(http.MethodGet, "/v1/auth/github?returnTo=http%3A%2F%2F127.0.0.1%3A8080%2Fsettings", nil)
+	startReq := httptest.NewRequest(http.MethodGet, "https://cashflux.example/v1/auth/github?returnTo=https%3A%2F%2Fcashflux.example%2Fsettings", nil)
 	startRR := httptest.NewRecorder()
 	h.ServeHTTP(startRR, startReq)
 	if startRR.Code != http.StatusFound {
@@ -1561,7 +1561,7 @@ func TestOAuthStartAndCallbackSupportPopupReturnTo(t *testing.T) {
 		t.Fatalf("state cookie = %q", stateCookie.Value)
 	}
 
-	callbackReq := httptest.NewRequest(http.MethodGet, "/v1/auth/github/callback?code=oauth-code&state="+url.QueryEscape(state), nil)
+	callbackReq := httptest.NewRequest(http.MethodGet, "https://cashflux.example/v1/auth/github/callback?code=oauth-code&state="+url.QueryEscape(state), nil)
 	callbackReq.AddCookie(stateCookie)
 	callbackRR := httptest.NewRecorder()
 	h.ServeHTTP(callbackRR, callbackReq)
@@ -1571,7 +1571,7 @@ func TestOAuthStartAndCallbackSupportPopupReturnTo(t *testing.T) {
 	body := callbackRR.Body.String()
 	if !strings.Contains(callbackRR.Header().Get("Content-Type"), "text/html") ||
 		!strings.Contains(body, "cashflux.oauth") ||
-		!strings.Contains(body, "http://127.0.0.1:8080") {
+		!strings.Contains(body, "https://cashflux.example") {
 		t.Fatalf("popup callback content-type/body = %q/%q", callbackRR.Header().Get("Content-Type"), body)
 	}
 }

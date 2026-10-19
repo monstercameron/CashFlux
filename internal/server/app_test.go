@@ -67,6 +67,10 @@ func TestStaticAndServerHTMLSurfacesHaveCashFluxIcons(t *testing.T) {
 		}
 		assertCashFluxIconLinks(t, name, string(data))
 	}
+	target := "https://cashflux.example/callback"
+	rr := httptest.NewRecorder()
+	writeOAuthCallbackHTML(rr, target, oauthSessionResponse{AccessToken: "token", TokenType: "Bearer", ExpiresIn: 60, UserID: "user"}, "csrf")
+	assertCashFluxIconLinks(t, "OAuth callback", rr.Body.String())
 }
 
 func TestManifestSeparatesAnyAndMaskableIcons(t *testing.T) {

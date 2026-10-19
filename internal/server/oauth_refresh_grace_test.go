@@ -70,7 +70,7 @@ func TestOAuthRefreshReuseGraceReturnsSamePairThenRevokes(t *testing.T) {
 			if firstResponse.AccessToken == "" || firstRefresh.Value == "" {
 				t.Fatalf("first refresh pair is incomplete: response=%+v cookie=%+v", firstResponse, firstRefresh)
 			}
-			if !firstRefresh.HttpOnly || firstRefresh.Path != "/v1/auth" || firstRefresh.SameSite != http.SameSiteLaxMode {
+			if !firstRefresh.HttpOnly || firstRefresh.Path != "/v1/auth/refresh" || firstRefresh.SameSite != http.SameSiteStrictMode {
 				t.Fatalf("refresh cookie attributes changed: %+v", firstRefresh)
 			}
 
@@ -145,7 +145,7 @@ func oauthRefreshRequest(t *testing.T, handler http.Handler, refresh string, csr
 func refreshCookieFromResponse(t *testing.T, rr *httptest.ResponseRecorder) *http.Cookie {
 	t.Helper()
 	for _, cookie := range rr.Result().Cookies() {
-		if cookie.Name == sessionRefreshCookie {
+		if cookie.Name == sessionRefreshCookie && cookie.Path == "/v1/auth/refresh" {
 			return cookie
 		}
 	}
