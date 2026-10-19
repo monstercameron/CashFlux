@@ -86,6 +86,9 @@ func budgetsSweepCard(_ struct{}) ui.Node {
 		hidden.Set(true)
 	})
 	onReview := ui.UseEvent(func() { nav.Navigate(uistate.RoutePath("/goals")) })
+	reviewOnClick := OnClick(onReview)
+	sweepOnClick := OnClick(onSweep)
+	dismissOnClick := OnClick(onDismiss)
 	if app == nil {
 		return Fragment()
 	}
@@ -131,17 +134,17 @@ func budgetsSweepCard(_ struct{}) ui.Node {
 		action = Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap2, tw.Mt3),
 			P(css.Class("t-caption", tw.TextDim), uistate.T("sweep.blocked", goalName)),
 			Button(css.Class("btn btn-sm"), Type("button"),
-				Attr("data-testid", "sweep-review-goals"), OnClick(onReview),
+				Attr("data-testid", "sweep-review-goals"), reviewOnClick,
 				uistate.T("integrity.reviewGoals")),
 		)
 	} else {
 		action = Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt3),
 			Button(css.Class("btn btn-primary btn-sm"), Type("button"),
 				Attr("data-testid", "sweep-approve"),
-				OnClick(onSweep),
+				sweepOnClick,
 				uistate.T("sweep.sweepAction", totalStr, goalName)),
 			Button(css.Class("btn btn-ghost btn-sm"), Type("button"),
-				Attr("data-testid", "sweep-dismiss"), OnClick(onDismiss),
+				Attr("data-testid", "sweep-dismiss"), dismissOnClick,
 				uistate.T("sweep.dismiss")),
 		)
 	}
@@ -202,6 +205,17 @@ func sweepConfigForm(props sweepConfigFormProps) ui.Node {
 	if app == nil {
 		return Fragment()
 	}
+	return ui.CreateElement(sweepConfigFormReady, sweepConfigFormReadyProps{Props: props, App: app})
+}
+
+type sweepConfigFormReadyProps struct {
+	Props sweepConfigFormProps
+	App   *appstate.App
+}
+
+func sweepConfigFormReady(ready sweepConfigFormReadyProps) ui.Node {
+	props := ready.Props
+	app := ready.App
 	_ = uistate.UseDataRevision().Get()
 	cfg := uistate.SweepConfigGet()
 
@@ -242,6 +256,9 @@ func sweepConfigForm(props sweepConfigFormProps) ui.Node {
 			props.OnDone()
 		}
 	})
+	toggleEnabledOnChange := OnChange(onToggleEnabled)
+	saveOnSubmit := OnSubmit(onSave)
+	cancelOnClick := OnClick(onCancel)
 
 	// Budget checkbox rows — each its own component (no On* in a loop). They sit in a
 	// bordered inset list so the participation choices read as one aligned group.
@@ -288,7 +305,7 @@ func sweepConfigForm(props sweepConfigFormProps) ui.Node {
 	// Standard config-modal shell (matches Add-budget): an .acct-edit-form with a
 	// scrolling .modal-scroll body and a pinned .modal-foot Save/Cancel bar. The host
 	// sets FlushBody so the foot stays put while the participation list scrolls.
-	return Form(css.Class("acct-edit-form"), OnSubmit(onSave),
+	return Form(css.Class("acct-edit-form"), saveOnSubmit,
 		Div(css.Class("modal-scroll"),
 			P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0"}),
 				uistate.T("sweep.configIntro")),
@@ -297,7 +314,7 @@ func sweepConfigForm(props sweepConfigFormProps) ui.Node {
 			Label(css.Class("field", tw.Flex, tw.ItemsCenter, tw.Gap2),
 				Attr("style", "flex-wrap:nowrap;cursor:pointer"),
 				Input(append([]any{css.Class("cf-check"), Type("checkbox"),
-					Attr("data-testid", "sweep-config-enable"), OnChange(onToggleEnabled)},
+					Attr("data-testid", "sweep-config-enable"), toggleEnabledOnChange},
 					checkedAttr(enabled.Get())...)...),
 				Span(css.Class("t-body"), uistate.T("sweep.configEnable")),
 			),
@@ -309,7 +326,7 @@ func sweepConfigForm(props sweepConfigFormProps) ui.Node {
 		),
 		Div(css.Class("modal-foot"),
 			Button(css.Class("btn"), Type("button"),
-				Attr("data-testid", "sweep-config-cancel"), OnClick(onCancel), uistate.T("sweep.cancel")),
+				Attr("data-testid", "sweep-config-cancel"), cancelOnClick, uistate.T("sweep.cancel")),
 			Button(css.Class("btn btn-primary"), Type("submit"),
 				Attr("data-testid", "sweep-config-save"), uistate.T("sweep.save")),
 		),

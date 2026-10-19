@@ -146,6 +146,8 @@ func trackUntrackedForm(_ trackUntrackedFormProps) ui.Node {
 			applyFn()
 		}
 	}))
+	closeOnClick := OnClick(closeSheet)
+	applyOnClick := OnClick(apply)
 
 	if app == nil {
 		return Fragment()
@@ -177,7 +179,7 @@ func trackUntrackedForm(_ trackUntrackedFormProps) ui.Node {
 		return Div(css.Class("track-sheet"),
 			P(css.Class("budget-sub"), Attr("data-testid", "track-empty"), uistate.T("track.empty")),
 			Div(css.Class("modal-foot"),
-				Button(css.Class("btn"), Type("button"), OnClick(closeSheet), uistate.T("action.close"))))
+				Button(css.Class("btn"), Type("button"), closeOnClick, uistate.T("action.close"))))
 	}
 
 	edits := parseTrackRows(rowsAtom.Get())
@@ -318,9 +320,9 @@ func trackUntrackedForm(_ trackUntrackedFormProps) ui.Node {
 			),
 			Div(css.Class("track-foot-actions"),
 				Button(css.Class("btn"), Type("button"), Attr("data-testid", "track-cancel"),
-					OnClick(closeSheet), uistate.T("action.cancel")),
+					closeOnClick, uistate.T("action.cancel")),
 				Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "track-apply"),
-					disabledAttr(effect.Categories == 0), OnClick(apply),
+					disabledAttr(effect.Categories == 0), applyOnClick,
 					uistate.T("track.apply", effect.Categories)),
 			),
 		),
@@ -344,6 +346,7 @@ func trackUntrackedRow(props trackUntrackedRowProps) ui.Node {
 
 	toggleInclude := ui.UseEvent(func() { next := r; next.Include = !r.Include; props.OnChange(next) })
 	toggleRaise := ui.UseEvent(func() { next := r; next.Raise = !r.Raise; props.OnChange(next) })
+	raiseOnChange := OnChange(toggleRaise)
 	setAmount := ui.UseEvent(func(s string) {
 		next := r
 		if amt, err := money.ParseMinor(s, currency.Decimals(props.Base)); err == nil && amt >= 0 {
@@ -365,7 +368,7 @@ func trackUntrackedRow(props trackUntrackedRowProps) ui.Node {
 	if r.BudgetID != "" {
 		raise = Label(css.Class("track-raise"),
 			Input(Type("checkbox"), Attr("data-testid", "track-raise-"+c.CategoryID),
-				checkedAttr(r.Raise), OnChange(toggleRaise)),
+				checkedAttr(r.Raise), raiseOnChange),
 			Span(uistate.T("track.raise")))
 	}
 

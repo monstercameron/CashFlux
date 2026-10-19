@@ -142,6 +142,7 @@ type budgetRowPaceNotesResult struct {
 
 // budgetRowPaceNotes builds the row pace notes section.
 func budgetRowPaceNotes(lastMonthMode bool, props budgetRowProps, s budgeting.Status, prefs prefs.Prefs, openEdit ui.Handler) budgetRowPaceNotesResult {
+	editOnClick := OnClick(openEdit)
 	// Pace projection (D2): a gentle heads-up when current spending would blow the
 	// budget by period end, shown only while the period is still in progress.
 	var paceLine ui.Node = Fragment()
@@ -200,7 +201,7 @@ func budgetRowPaceNotes(lastMonthMode bool, props budgetRowProps, s budgeting.St
 				message = uistate.T("bud2.rolloverStartAssumed")
 			}
 			rolloverLine = Fragment(rolloverLine, Span(css.Class("budget-sub", tw.TextFaint), Attr("data-testid", "budget-rollover-start-assumed-"+s.Budget.ID),
-				message, " ", Button(css.Class("btn btn-sm"), Type("button"), Attr("aria-label", uistate.T("bud2.setStart")), OnClick(openEdit), uistate.T("bud2.setStart"))))
+				message, " ", Button(css.Class("btn btn-sm"), Type("button"), Attr("aria-label", uistate.T("bud2.setStart")), editOnClick, uistate.T("bud2.setStart"))))
 			break
 		}
 	}
@@ -245,6 +246,7 @@ type budgetRowPeriodNotesResult struct {
 
 // budgetRowPeriodNotes builds the row period notes section.
 func budgetRowPeriodNotes(lastMonthMode bool, props budgetRowProps, s budgeting.Status, openCover ui.Handler) budgetRowPeriodNotesResult {
+	coverOnClick := OnClick(openCover)
 	// C143: even-pace guidance — how much of what's left can be spent over the days
 	// still in the period, so the user knows the sustainable daily-ish pace instead
 	// of seeing only a lump remaining. Quiet faint line; only set while in-progress.
@@ -271,7 +273,7 @@ func budgetRowPeriodNotes(lastMonthMode bool, props budgetRowProps, s budgeting.
 	isOver := s.State == budgeting.StateOver
 	var coverBtn ui.Node = Fragment()
 	if isOver {
-		coverBtn = Button(css.Class("btn"), Type("button"), Attr("data-testid", "budget-cover-btn-"+s.Budget.ID), Title(uistate.T("budgets.coverTitle")), OnClick(openCover), uistate.T("budgets.actionCoverFromOther"))
+		coverBtn = Button(css.Class("btn"), Type("button"), Attr("data-testid", "budget-cover-btn-"+s.Budget.ID), Title(uistate.T("budgets.coverTitle")), coverOnClick, uistate.T("budgets.actionCoverFromOther"))
 	}
 	return budgetRowPeriodNotesResult{
 		proratedLine: proratedLine, lastMonthTag: lastMonthTag, thisMonthRef: thisMonthRef, isOver: isOver, coverBtn: coverBtn,

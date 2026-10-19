@@ -38,10 +38,15 @@ import (
 // each through its per-widget error boundary.
 func Budgets() ui.Node {
 	app := appstate.Default
-	_ = uistate.UseDataRevision().Get()
 	if app == nil {
 		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("common.notReady"))})
 	}
+	return ui.CreateElement(budgetsReady, struct{}{})
+}
+
+func budgetsReady(_ struct{}) ui.Node {
+	app := appstate.Default
+	_ = uistate.UseDataRevision().Get()
 
 	// Re-render on any data mutation (a budget CRUD, a transaction added elsewhere, a
 	// method switch).
@@ -119,13 +124,21 @@ func Budgets() ui.Node {
 				},
 			),
 		),
-		budgetsSweepConfigModal(),
-		budgetsCoverAllModal(),
-		budgetsTrackUntrackedModal(),
+		ui.CreateElement(budgetsSweepConfigModalComponent, struct{}{}),
+		ui.CreateElement(budgetsCoverAllModalComponent, struct{}{}),
+		ui.CreateElement(budgetsTrackUntrackedModalComponent, struct{}{}),
 		ui.CreateElement(budgetsMonthCloseModal, struct{}{}),
-		flexAssignSheet(),
+		ui.CreateElement(flexAssignSheetComponent, struct{}{}),
 	)
 }
+
+func budgetsSweepConfigModalComponent(_ struct{}) ui.Node { return budgetsSweepConfigModal() }
+
+func budgetsCoverAllModalComponent(_ struct{}) ui.Node { return budgetsCoverAllModal() }
+
+func budgetsTrackUntrackedModalComponent(_ struct{}) ui.Node { return budgetsTrackUntrackedModal() }
+
+func flexAssignSheetComponent(_ struct{}) ui.Node { return flexAssignSheet() }
 
 // init registers the budgets-surface widget bodies with the engine render registry,
 // keyed by NativeID. The bodies read the live store (c.App) and the shared atoms,

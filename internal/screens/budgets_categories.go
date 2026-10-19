@@ -168,12 +168,14 @@ func BudgetCategoriesBody(_ struct{}) ui.Node {
 		uistate.BumpDataRevision()
 		openAtom.Set("")
 	}))
+	cancelOnClick := OnClick(onCancel)
+	saveOnClick := OnClick(onSave)
 
 	if !found {
 		return Div(css.Class(tw.FlexCol, tw.Gap3),
 			P(css.Class("muted"), uistate.T("common.notReady")),
 			Div(css.Class("autobudget-footer"),
-				Button(css.Class("btn"), Type("button"), OnClick(onCancel), uistate.T("action.close"))))
+				Button(css.Class("btn"), Type("button"), cancelOnClick, uistate.T("action.close"))))
 	}
 
 	nSel := 0
@@ -213,8 +215,8 @@ func BudgetCategoriesBody(_ struct{}) ui.Node {
 				uistate.T("budgets.tracksCount",
 					fmt.Sprintf("%d %s", nSel, pluralWord(nSel, "category")),
 					fmt.Sprintf("%d %s", nTags, pluralWord(nTags, "tag")))),
-			Button(css.Class("btn"), Type("button"), Attr("data-testid", "budgetcats-cancel"), OnClick(onCancel), uistate.T("action.cancel")),
-			buttonWithDisabled(nSel == 0 && nTags == 0, []any{css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "budgetcats-save"), OnClick(onSave)},
+			Button(css.Class("btn"), Type("button"), Attr("data-testid", "budgetcats-cancel"), cancelOnClick, uistate.T("action.cancel")),
+			buttonWithDisabled(nSel == 0 && nTags == 0, []any{css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "budgetcats-save"), saveOnClick},
 				uistate.T("budgets.tracksSave"))))
 }
 

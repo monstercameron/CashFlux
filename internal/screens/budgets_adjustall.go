@@ -56,6 +56,7 @@ func AdjustAllBody(_ struct{}) ui.Node {
 	scopeS := ui.UseState(defaultAdjustScope(seedScope))
 	ack := ui.UseState(false)
 	toggleAck := ui.UseEvent(func() { ack.Set(!ack.Get()) })
+	ackOnChange := OnChange(toggleAck)
 	// The scope is deliberately NOT reset here. AdjustAllHost renders nothing while
 	// closed, so this body remounts on every open and re-reads the seed — and if
 	// that ever stopped being true, a reset here would overwrite the scope the next
@@ -280,7 +281,7 @@ func AdjustAllBody(_ struct{}) ui.Node {
 		// is a magnitude: "lower 10 budgets by 10%", never "by -10%".
 		ackNode = Label(css.Class("adjustall-ack"), Attr("data-testid", "adjustall-ack-label"),
 			Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "adjustall-ack"),
-				Attr("style", "flex-shrink:0"), OnChange(toggleAck)}, checkedAttr(ack.Get())...)...),
+				Attr("style", "flex-shrink:0"), ackOnChange}, checkedAttr(ack.Get())...)...),
 			Span(uistate.T(key, plural(preview.Count(), "budget"), formatAdjustPct(math.Abs(pct)))))
 	}
 

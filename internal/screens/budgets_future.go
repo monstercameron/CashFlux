@@ -47,6 +47,7 @@ func budgetFutureWidget(props budgetSummaryProps) ui.Node {
 }
 
 func renderBudgetFutureWidget(props budgetSummaryProps, w period.Window, now time.Time, activeMember string, prefs prefs.Prefs, open bool, toggleOpen ui.Handler) ui.Node {
+	toggleOnClick := OnClick(toggleOpen)
 	app := props.App
 	start, end := w.Range()
 	if !isFuturePeriod(w, now) {
@@ -136,7 +137,7 @@ func renderBudgetFutureWidget(props budgetSummaryProps, w period.Window, now tim
 	}
 	fold := Button(css.Class("budget-fold-toggle"), Type("button"),
 		Attr("data-testid", "budgets-future-toggle"), Attr("aria-expanded", ariaBool(open)),
-		Attr("aria-label", buttonLabel), OnClick(toggleOpen),
+		Attr("aria-label", buttonLabel), toggleOnClick,
 		Span(css.Class("budget-fold-toggle-label"), uistate.T("budgets.future.title", w.Label())+" · "),
 		Span(css.Class("budget-fold-toggle-hint"), foldLabel),
 	)

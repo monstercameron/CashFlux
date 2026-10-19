@@ -72,6 +72,7 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 		basisDraft.Set(uistate.NewBudgetBasisDraft(pr))
 		basisOpen.Set(true)
 	}))
+	basisOnClick := OnClick(openBasis)
 	// B1 hero: the attention chip narrows the list via the shared attention filter
 	// (the same atom the issues rail's counts set). Hook registered before the early
 	// return; the counts it reads are assigned later in this render — the closure
@@ -97,7 +98,7 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 	// Same .btn-tool chrome as Cover-all beside it — the hero side cluster speaks
 	// one control language (Cam 2026-07-19).
 	basisBtn := Button(css.Class("btn btn-tool zbb-basis-open", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
-		Attr("data-testid", "budgets-basis-open"), Title(uistate.T("budgets.basisButtonTitle")), OnClick(openBasis),
+		Attr("data-testid", "budgets-basis-open"), Title(uistate.T("budgets.basisButtonTitle")), basisOnClick,
 		uiw.Icon(icon.TrendingUp, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
 		Span(uistate.T("budgets.basisButton")))
 
@@ -590,6 +591,13 @@ func budgetIncomeBasisControl(props incomeBasisProps) ui.Node {
 		dd.Cats = nil
 		draftAtom.Set(dd)
 	}))
+	modeOnChange := OnChange(onMode)
+	thresholdOnInput := OnInput(onThreshold)
+	fixedOnInput := OnInput(onFixed)
+	selectAllOnClick := OnClick(selectAllSources)
+	holdAllOnClick := OnClick(holdAllSources)
+	averageOnChange := OnChange(onToggleAverage)
+	rolloverOnChange := OnChange(onToggleRollover)
 	// toggleSource adds or removes one income category from the by-source draft.
 	toggleSource := func(catID string) {
 		dd := draftAtom.Get()
@@ -615,12 +623,12 @@ func budgetIncomeBasisControl(props incomeBasisProps) ui.Node {
 		extra = Label(css.Class("zbb-basis-extra"),
 			Span(css.Class("zbb-basis-sub"), uistate.T("budgets.zbbPaycheckMin")),
 			Input(css.Class("field"), Type("number"), Step("1"), Attr("min", "0"), Attr("data-testid", "budgets-zbb-paycheck-min"),
-				Placeholder(uistate.T("budgets.zbbPaycheckMinPh")), OnInput(onThreshold), uiw.FieldValue(minorToMajorStr(d.PaycheckMin, props.Base))))
+				Placeholder(uistate.T("budgets.zbbPaycheckMinPh")), thresholdOnInput, uiw.FieldValue(minorToMajorStr(d.PaycheckMin, props.Base))))
 	case budgeting.IncomeModeFixed:
 		extra = Label(css.Class("zbb-basis-extra"),
 			Span(css.Class("zbb-basis-sub"), uistate.T("budgets.zbbFixedAmount")),
 			Input(css.Class("field"), Type("number"), Step("1"), Attr("min", "0"), Attr("data-testid", "budgets-zbb-fixed-amount"),
-				Placeholder(uistate.T("budgets.zbbFixedAmountPh")), OnInput(onFixed), uiw.FieldValue(minorToMajorStr(d.Fixed, props.Base))))
+				Placeholder(uistate.T("budgets.zbbFixedAmountPh")), fixedOnInput, uiw.FieldValue(minorToMajorStr(d.Fixed, props.Base))))
 	}
 
 	// The income-source ledger appears only in by-source mode.
@@ -637,9 +645,9 @@ func budgetIncomeBasisControl(props incomeBasisProps) ui.Node {
 			}
 		}
 		actions := Div(css.Class("zbb-sources-actions"),
-			Button(css.Class("zbb-sources-act"), Type("button"), Attr("data-testid", "budgets-zbb-select-all"), OnClick(selectAllSources), uistate.T("budgets.incomeSelectAll")),
+			Button(css.Class("zbb-sources-act"), Type("button"), Attr("data-testid", "budgets-zbb-select-all"), selectAllOnClick, uistate.T("budgets.incomeSelectAll")),
 			Span(css.Class("zbb-sources-actsep"), Attr("aria-hidden", "true"), "·"),
-			Button(css.Class("zbb-sources-act"), Type("button"), Attr("data-testid", "budgets-zbb-hold-all"), OnClick(holdAllSources), uistate.T("budgets.incomeHoldAll")),
+			Button(css.Class("zbb-sources-act"), Type("button"), Attr("data-testid", "budgets-zbb-hold-all"), holdAllOnClick, uistate.T("budgets.incomeHoldAll")),
 		)
 		sources = budgetIncomeSourcesLedger(props, selected, toggleSource, actions, included)
 	}
@@ -648,7 +656,7 @@ func budgetIncomeBasisControl(props incomeBasisProps) ui.Node {
 		Div(css.Class("zbb-basis"), Attr("data-testid", "budgets-zbb-basis"),
 			Label(css.Class("zbb-basis-main"),
 				Span(css.Class("zbb-basis-label"), uistate.T("budgets.zbbBasisLabel")),
-				Select(css.Class("field"), Attr("data-testid", "budgets-zbb-income-mode"), Attr("aria-label", uistate.T("budgets.zbbBasisLabel")), OnChange(onMode),
+				Select(css.Class("field"), Attr("data-testid", "budgets-zbb-income-mode"), Attr("aria-label", uistate.T("budgets.zbbBasisLabel")), modeOnChange,
 					Option(Value(budgeting.IncomeModeAll), SelectedIf(mode == budgeting.IncomeModeAll), uistate.T("budgets.zbbBasisAll")),
 					Option(Value(budgeting.IncomeModePaychecks), SelectedIf(mode == budgeting.IncomeModePaychecks), uistate.T("budgets.zbbBasisPaychecks")),
 					Option(Value(budgeting.IncomeModeCategories), SelectedIf(mode == budgeting.IncomeModeCategories), uistate.T("budgets.zbbBasisCategories")),
@@ -659,13 +667,13 @@ func budgetIncomeBasisControl(props incomeBasisProps) ui.Node {
 		sources,
 		// Average the basis over the last 3 months — steadier for irregular income.
 		Label(css.Class("zbb-rollover"), Style(map[string]string{"cursor": "pointer"}),
-			Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "budgets-zbb-average"), OnChange(onToggleAverage)}, checkedAttr(d.AvgMonths >= 2)...)...),
+			Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "budgets-zbb-average"), averageOnChange}, checkedAttr(d.AvgMonths >= 2)...)...),
 			Div(css.Class("row-main"),
 				Span(uistate.T("budgets.zbbAverageToggle")),
 				Span(css.Class("row-meta", tw.TextDim), uistate.T("budgets.zbbAverageHint")))),
 		// Roll last month's unspent budget into this month's assignable pool.
 		Label(css.Class("zbb-rollover"), Style(map[string]string{"cursor": "pointer"}),
-			Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "budgets-zbb-rollover"), OnChange(onToggleRollover)}, checkedAttr(d.Rollover)...)...),
+			Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "budgets-zbb-rollover"), rolloverOnChange}, checkedAttr(d.Rollover)...)...),
 			Div(css.Class("row-main"),
 				Span(uistate.T("budgets.zbbRolloverToggle")),
 				Span(css.Class("row-meta", tw.TextDim), uistate.T("budgets.zbbRolloverHint")))),
@@ -749,11 +757,15 @@ func budgetIncomeSourceRow(props budgetIncomeSourceRowProps) ui.Node {
 // edits — and renders the income-basis control. Reachable from EVERY budgeting method,
 // not just zero-based. Self-contained (no props), matching the AutoBudgetBody convention.
 func BudgetBasisBody(_ struct{}) ui.Node {
-	_ = uistate.UseDataRevision().Get()
-	app := appstate.Default
-	if app == nil {
+	if appstate.Default == nil {
 		return Fragment()
 	}
+	return ui.CreateElement(budgetBasisBodyReady, struct{}{})
+}
+
+func budgetBasisBodyReady(_ struct{}) ui.Node {
+	_ = uistate.UseDataRevision().Get()
+	app := appstate.Default
 	pr := uistate.UsePrefs().Get()
 	d := uistate.UseBudgetBasisDraft().Get()
 	base := app.Settings().BaseCurrency
@@ -823,6 +835,10 @@ func budgetSavingsWidget(props budgetSummaryProps) ui.Node {
 		rates := currency.Rates{Base: vv.Base, Rates: app.Settings().FXRates}
 		spreadLeftoverAcrossSavings(app, vv.SavingsAccts, leftover, vv.Base, rates)
 	}))
+	spreadOnClick := OnClick(onSpread)
+	toggleOnClick := OnClick(toggleOpen)
+	accountsOnClick := OnClick(goToAccounts)
+	goalsOnClick := OnClick(goToGoals)
 
 	v := computeBudgetView(app, activeMemberID, vw, pr, false)
 	if v.Method != budgeting.MethodZeroBased || len(v.Statuses) == 0 {
@@ -854,7 +870,7 @@ func budgetSavingsWidget(props budgetSummaryProps) ui.Node {
 	if leftover > 0 && len(v.SavingsAccts) > 0 {
 		spreadBtn = Button(css.Class("btn btn-sm btn-accent zbb-savings-spread"), Type("button"),
 			Attr("data-testid", "budgets-savings-spread"), Attr("aria-label", uistate.T("budgets.savingsSpreadAria")),
-			Attr("title", uistate.T("budgets.savingsSpreadTitle")), OnClick(onSpread),
+			Attr("title", uistate.T("budgets.savingsSpreadTitle")), spreadOnClick,
 			uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
 			Span(uistate.T("budgets.savingsSpread", fmtMoney(money.New(leftover, v.Base)))))
 	}
@@ -876,7 +892,7 @@ func budgetSavingsWidget(props budgetSummaryProps) ui.Node {
 	}
 	fold := Div(css.Class("budget-fold-head"),
 		Button(css.Class("budget-fold-toggle"), Type("button"), Attr("data-testid", "budgets-savings-toggle"),
-			Attr("aria-expanded", ariaBool(open.Get())), Attr("aria-label", foldAria), OnClick(toggleOpen),
+			Attr("aria-expanded", ariaBool(open.Get())), Attr("aria-label", foldAria), toggleOnClick,
 			Span(ClassStr(caretCls), Attr("aria-hidden", "true"),
 				uiw.Icon(icon.ChevronRight, css.Class(tw.ShrinkO, tw.W4, tw.H4))),
 			Span(css.Class("budget-fold-toggle-label"), uistate.T("budgets.savingsSectionTitle")),
@@ -895,9 +911,9 @@ func budgetSavingsWidget(props budgetSummaryProps) ui.Node {
 			Div(css.Class("zbb-savings-foot"),
 				spreadBtn,
 				Div(css.Class("zbb-savings-foot-links"),
-					Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "budgets-savings-accounts-link"), OnClick(goToAccounts),
+					Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "budgets-savings-accounts-link"), accountsOnClick,
 						uiw.Icon(icon.Accounts, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("budgets.savingsManageAccounts"))),
-					Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "budgets-savings-goals-link"), OnClick(goToGoals),
+					Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "budgets-savings-goals-link"), goalsOnClick,
 						uiw.Icon(icon.Goals, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("budgets.savingsManageGoals"))))),
 		)
 	}
@@ -999,6 +1015,7 @@ func budgetSavingsAcctRow(props budgetSavingsAcctRowProps) ui.Node {
 // action — or a "Synced ✓" marker when the goal already carries this amount. Pure node
 // builder; the row owns the sync handler hook and passes it in.
 func budgetSavingsGoalNode(sa savingsAcct, onSync ui.Handler) ui.Node {
+	syncOnClick := OnClick(onSync)
 	// Every linked goal is already met — surface the win rather than a projection.
 	if sa.GoalComplete {
 		return Div(css.Class("zbb-savings-goal is-ontrack"),
@@ -1034,7 +1051,7 @@ func budgetSavingsGoalNode(sa savingsAcct, onSync ui.Handler) ui.Node {
 	case sa.SyncMinor > 0:
 		action = Button(css.Class("btn btn-xs zbb-savings-sync"), Type("button"),
 			Attr("data-testid", "budgets-savings-sync-"+sa.AccountID), Attr("title", uistate.T("budgets.savingsSyncTitle", sa.GoalName)),
-			OnClick(onSync), uistate.T("budgets.savingsSync"))
+			syncOnClick, uistate.T("budgets.savingsSync"))
 	}
 	cls := "zbb-savings-goal"
 	if tone != "" {
@@ -1161,6 +1178,9 @@ func budgetIssuesRail(props budgetIssuesRailProps) ui.Node {
 		uistate.SetTodoFilterLinkID("")
 		nav.Navigate(uistate.RoutePath("/todo"))
 	}))
+	allocateOnClick := OnClick(goAllocate)
+	toggleOnClick := OnClick(toggle)
+	todosOnClick := OnClick(goTodos)
 
 	// July-19 review #1: over/near BUDGETS are owned by the single top review queue
 	// (budget-attention) now, so this rail no longer double-reports them. It carries only
@@ -1208,7 +1228,7 @@ func budgetIssuesRail(props budgetIssuesRailProps) ui.Node {
 	if props.OverAssigned > 0 {
 		resolve = Button(css.Class("budget-rail-resolve"), Type("button"),
 			Attr("data-testid", "budgets-rail-resolve"), Title(uistate.T("budgets.resolveTitle")),
-			OnClick(goAllocate),
+			allocateOnClick,
 			uistate.T("budgets.resolveAmount", fmtMoney(money.New(props.OverAssigned, v.Base))))
 	}
 	hint := uistate.T("budgets.issuesShow")
@@ -1233,13 +1253,13 @@ func budgetIssuesRail(props budgetIssuesRailProps) ui.Node {
 	header := Div(css.Class(railClass),
 		Button(css.Class("budget-issues-toggle"), Type("button"),
 			Attr("data-testid", "budgets-issues-rail"), Attr("aria-expanded", ariaBool(open.Get())),
-			Title(hint), OnClick(toggle),
+			Title(hint), toggleOnClick,
 			If(!followUpsOnly, uiw.Icon(icon.AlertTriangle, css.Class("budget-issues-icon", tw.ShrinkO, tw.W4, tw.H4))),
 			Span(css.Class("budget-issues-title"), title),
 		),
 		resolve,
 		Button(css.Class("budget-issues-chevbtn"), Type("button"),
-			Attr("aria-hidden", "true"), Attr("tabindex", "-1"), OnClick(toggle),
+			Attr("aria-hidden", "true"), Attr("tabindex", "-1"), toggleOnClick,
 			uiw.Icon(chev, css.Class("budget-issues-chev", tw.ShrinkO, tw.W35, tw.H35)),
 		),
 	)
@@ -1256,7 +1276,7 @@ func budgetIssuesRail(props budgetIssuesRailProps) ui.Node {
 				Span(css.Class("budget-issue-body"), uistate.T("budgets.issueOverAssignedBody")),
 			),
 			Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "budgets-resolve-alloc"),
-				Title(uistate.T("budgets.issueReviewAllocTitle")), OnClick(goAllocate),
+				Title(uistate.T("budgets.issueReviewAllocTitle")), allocateOnClick,
 				uistate.T("budgets.issueGoAllocate")),
 		))
 	}
@@ -1271,7 +1291,7 @@ func budgetIssuesRail(props budgetIssuesRailProps) ui.Node {
 				Span(css.Class("budget-issue-body"), uistate.T("budgets.followUpsRowBody")),
 			),
 			Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "budgets-followups-view"),
-				Title(uistate.T("budgets.followUpsRowView")), OnClick(goTodos), uistate.T("budgets.issueGoTodo")),
+				Title(uistate.T("budgets.followUpsRowView")), todosOnClick, uistate.T("budgets.issueGoTodo")),
 		))
 	}
 	if fundShort {
@@ -1663,6 +1683,8 @@ func budgetListWidget(props budgetListProps) ui.Node {
 	// by the chip's "Show all".
 	att := uistate.UseBudgetAttention()
 	clearAtt := ui.UseEvent(Prevent(func() { att.Set("") }))
+	clearAttOnClick := OnClick(clearAtt)
+	searchOnInput := OnInput(onSearch)
 	// Density: full cards (default) or the compact one-line list for long budget lists;
 	// households past six budgets start compact unless they've chosen otherwise (UX-05).
 	compact := uistate.UseBudgetDensitySeeded(len(v.Statuses) > 6).Get() == uistate.BudgetDensityCompact
@@ -1741,7 +1763,7 @@ func budgetListWidget(props budgetListProps) ui.Node {
 				Attr("data-testid", "budgets-attention-chip"), Attr("role", "status"),
 				Span(chipTxt),
 				Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "budgets-attention-clear"),
-					Title(uistate.T("budgets.attentionClear")), OnClick(clearAtt), uistate.T("budgets.attentionClear")),
+					Title(uistate.T("budgets.attentionClear")), clearAttOnClick, uistate.T("budgets.attentionClear")),
 			)
 		}
 		// The search field appears only once the list is long enough to be worth scanning,
@@ -1754,7 +1776,7 @@ func budgetListWidget(props budgetListProps) ui.Node {
 				Input(css.Class("field budget-search-input"), Type("text"),
 					Attr("data-testid", "budgets-search"),
 					Attr("aria-label", uistate.T("budgets.searchLabel")),
-					Placeholder(uistate.T("budgets.searchPlaceholder")), OnInput(onSearch), uiw.FieldValue(search.Get())))
+					Placeholder(uistate.T("budgets.searchPlaceholder")), searchOnInput, uiw.FieldValue(search.Get())))
 		}
 		var matchNote ui.Node = Fragment()
 		if q != "" && len(visible) == 0 {

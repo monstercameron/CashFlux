@@ -88,6 +88,7 @@ func budgetFundedCallout(props budgetFundedProps) ui.Node {
 		uistate.SetBudgetAdjustSeed(strconv.FormatFloat(reducePct, 'f', -1, 64), string(budgeting.AdjustThisPeriod))
 		openAdjust.Set(true)
 	}))
+	reconcileOnClick := OnClick(reconcile)
 	if !f.Meaningful() || f.FullyFunded() {
 		return Fragment()
 	}
@@ -135,7 +136,7 @@ func budgetFundedCallout(props budgetFundedProps) ui.Node {
 			// the button and its tooltip name the month themselves.
 			Button(css.Class("btn btn-sm"), Type("button"),
 				Attr("data-testid", "budgets-funded-reconcile"),
-				Title(uistate.T(fundedReconcileTitleKey(props.Historical), periodLabel)), OnClick(reconcile),
+				Title(uistate.T(fundedReconcileTitleKey(props.Historical), periodLabel)), reconcileOnClick,
 				uistate.T(fundedReconcileLabelKey(props.Historical), periodLabel)),
 			// C671: the size and the reach, stated before the click rather than
 			// discovered inside the form it opens. The count is the budgets this

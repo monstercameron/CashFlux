@@ -90,6 +90,10 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Stable hook order across the Budgets page (HOOKB).** The add form, adjust-all, annual grid, auto-budget, tracking,
+  flex, funded, future, month-close, recurring, track-untracked, why-over and sweep components, the summary tiles and
+  the page host now register every event handler and state hook at a fixed position before early returns and branches
+  (readiness checks moved into hook-free wrappers), so toggling a section or loading data can no longer shift hook slots.
 - **Stable hook order across the Transactions side panels (HOOKT).** The review dialog, link and refund-pair dialogs,
   quick-add draft hint, category-suggestion chip and modal, split suggestion, smart-category body, follow-up popover,
   calendar day cells, count line, empty-search notice and history panel now register every event handler at a fixed

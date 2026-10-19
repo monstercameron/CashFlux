@@ -88,6 +88,9 @@ func BudgetAnnualGrid(props budgetAnnualGridProps) ui.Node {
 	winAll := ui.UseEvent(Prevent(func() { monthWin.Set(annualWinAll) }))
 	winH1 := ui.UseEvent(Prevent(func() { monthWin.Set(annualWinH1) }))
 	winH2 := ui.UseEvent(Prevent(func() { monthWin.Set(annualWinH2) }))
+	toggleOnClick := OnClick(toggle)
+	prevOnClick := OnClick(prevYear)
+	nextOnClick := OnClick(nextYear)
 
 	// The current-month column index for THIS displayed year (−1 when the displayed
 	// year is not the current year), computed without building the grid so the
@@ -115,7 +118,7 @@ func BudgetAnnualGrid(props budgetAnnualGridProps) ui.Node {
 	}
 	header := Div(css.Class("budget-annualgrid-head"),
 		Button(css.Class("budget-annualgrid-toggle"), Type("button"), Attr("data-testid", "budget-annualgrid-toggle"),
-			Attr("aria-expanded", ariaBool(open.Get())), Attr("aria-label", toggleAria), OnClick(toggle),
+			Attr("aria-expanded", ariaBool(open.Get())), Attr("aria-label", toggleAria), toggleOnClick,
 			Span(ClassStr(caretCls), Attr("aria-hidden", "true"),
 				uiw.Icon(icon.ChevronRight, css.Class(tw.ShrinkO, tw.W4, tw.H4))),
 			Span(css.Class("budget-annualgrid-toggle-label"), uistate.T("budgets.planYearTitle")),
@@ -176,11 +179,11 @@ func BudgetAnnualGrid(props budgetAnnualGridProps) ui.Node {
 
 	yearControls := Div(css.Class("budget-annualgrid-year"),
 		Button(css.Class("btn"), Type("button"), Attr("data-testid", "budget-annualgrid-prev"),
-			Attr("aria-label", uistate.T("budgets.annualGridPrevYear")), OnClick(prevYear),
+			Attr("aria-label", uistate.T("budgets.annualGridPrevYear")), prevOnClick,
 			uiw.Icon(icon.ChevronLeft, css.Class(tw.ShrinkO, tw.W4, tw.H4))),
 		Span(css.Class("budget-annualgrid-yearlabel"), strconv.Itoa(grid.Year)),
 		Button(css.Class("btn"), Type("button"), Attr("data-testid", "budget-annualgrid-next"),
-			Attr("aria-label", uistate.T("budgets.annualGridNextYear")), OnClick(nextYear),
+			Attr("aria-label", uistate.T("budgets.annualGridNextYear")), nextOnClick,
 			uiw.Icon(icon.ChevronRight, css.Class(tw.ShrinkO, tw.W4, tw.H4))),
 	)
 
@@ -259,6 +262,10 @@ func annualGridScenario(grid budgeting.AnnualGrid, deltaMinor int64) (map[string
 // toggle, and when on a ±$100 income stepper, a reset, and a live underfunded
 // count. All handlers are stable hooks passed in from the parent.
 func annualGridScenarioBar(on bool, deltaMinor int64, underCount int, cur string, toggle, less, more, reset ui.Handler) ui.Node {
+	toggleOnClick := OnClick(toggle)
+	lessOnClick := OnClick(less)
+	moreOnClick := OnClick(more)
+	resetOnClick := OnClick(reset)
 	cls := "budget-annualgrid-scenario"
 	if on {
 		cls += " is-on"
@@ -266,7 +273,7 @@ func annualGridScenarioBar(on bool, deltaMinor int64, underCount int, cur string
 	children := []ui.Node{
 		Button(css.Class("btn"), Type("button"), Attr("data-testid", "budget-annualgrid-scenario-toggle"),
 			Attr("aria-pressed", ariaBool(on)), Attr("aria-label", uistate.T("budgets.scenarioToggleAria")),
-			Attr("title", uistate.T("budgets.scenarioHint")), OnClick(toggle),
+			Attr("title", uistate.T("budgets.scenarioHint")), toggleOnClick,
 			Span(uistate.T("budgets.scenarioToggle"))),
 	}
 	if on {
@@ -281,13 +288,13 @@ func annualGridScenarioBar(on bool, deltaMinor int64, underCount int, cur string
 		children = append(children,
 			Span(css.Class("budget-annualgrid-scenario-label"), uistate.T("budgets.scenarioLabel")),
 			Button(css.Class("btn"), Type("button"), Attr("data-testid", "budget-annualgrid-scenario-less"),
-				Attr("aria-label", uistate.T("budgets.scenarioLess")), OnClick(less), Span(Attr("aria-hidden", "true"), "−")),
+				Attr("aria-label", uistate.T("budgets.scenarioLess")), lessOnClick, Span(Attr("aria-hidden", "true"), "−")),
 			Span(css.Class("budget-annualgrid-scenario-delta"), Attr("data-testid", "budget-annualgrid-scenario-delta"),
 				signedMoney(money.New(deltaMinor, cur), currency.Decimals(cur))),
 			Button(css.Class("btn"), Type("button"), Attr("data-testid", "budget-annualgrid-scenario-more"),
-				Attr("aria-label", uistate.T("budgets.scenarioMore")), OnClick(more), Span(Attr("aria-hidden", "true"), "+")),
+				Attr("aria-label", uistate.T("budgets.scenarioMore")), moreOnClick, Span(Attr("aria-hidden", "true"), "+")),
 			Button(css.Class("btn"), Type("button"), Attr("data-testid", "budget-annualgrid-scenario-reset"),
-				Attr("aria-label", uistate.T("budgets.scenarioReset")), OnClick(reset), Span(uistate.T("budgets.scenarioReset"))),
+				Attr("aria-label", uistate.T("budgets.scenarioReset")), resetOnClick, Span(uistate.T("budgets.scenarioReset"))),
 			status,
 		)
 	}

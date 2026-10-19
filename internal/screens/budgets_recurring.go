@@ -48,6 +48,8 @@ func budgetRecurringWidget(props budgetSummaryProps) ui.Node {
 	goToRecurring := ui.UseEvent(Prevent(func() { nav.Navigate(uistate.RoutePath("/recurring")) }))
 	open := ui.UseState(false)
 	toggleOpen := ui.UseEvent(Prevent(func() { open.Set(!open.Get()) }))
+	toggleOnClick := OnClick(toggleOpen)
+	manageOnClick := OnClick(goToRecurring)
 	recurNow := time.Now()
 	recurStart, recurEnd := uistate.UsePeriod().Get().Range()
 
@@ -155,7 +157,7 @@ func budgetRecurringWidget(props budgetSummaryProps) ui.Node {
 	}
 	fold := Div(css.Class("budget-fold-head"),
 		Button(css.Class("budget-fold-toggle"), Type("button"), Attr("data-testid", "budgets-recurring-toggle"),
-			Attr("aria-expanded", ariaBool(open.Get())), Attr("aria-label", foldAria), OnClick(toggleOpen),
+			Attr("aria-expanded", ariaBool(open.Get())), Attr("aria-label", foldAria), toggleOnClick,
 			Span(ClassStr(caretCls), Attr("aria-hidden", "true"),
 				uiw.Icon(icon.ChevronRight, css.Class(tw.ShrinkO, tw.W4, tw.H4))),
 			Span(css.Class("budget-fold-toggle-label"), uistate.T("budgets.recurring.allCategoriesTitle")),
@@ -184,7 +186,7 @@ func budgetRecurringWidget(props budgetSummaryProps) ui.Node {
 			),
 			Div(css.Class("brc-foot"),
 				Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "budgets-recurring-manage"),
-					OnClick(goToRecurring),
+					manageOnClick,
 					uiw.Icon(icon.Repeat, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
 					Span(uistate.T("budgets.recurring.manage"))),
 			),
@@ -214,6 +216,7 @@ func unbudgetedRecurringCategory(props unbudgetedRecurringCategoryProps) ui.Node
 		})
 		uistate.SetAddTarget("budget")
 	}))
+	openBudgetOnClick := OnClick(openBudget)
 	row := []ui.Node{
 		Span(css.Class("brc-label", tw.Fold(tw.FontDisplay)), props.CategoryName),
 		Span(css.Class("brc-amt fig", tw.Fold(tw.FontDisplay)), fmtMoney(props.Monthly)),
@@ -221,7 +224,7 @@ func unbudgetedRecurringCategory(props unbudgetedRecurringCategoryProps) ui.Node
 	if props.CategoryID != "" {
 		row = append(row, Button(css.Class("btn btn-sm"), Type("button"),
 			Attr("data-testid", "budget-this-recurring-"+props.CategoryID),
-			OnClick(openBudget), uistate.T("budgets.budgetThis")))
+			openBudgetOnClick, uistate.T("budgets.budgetThis")))
 	}
 	return Div(css.Class("brc-row", "brc-unbudgeted-row"), Attr("data-testid", "budgets-recurring-unbudgeted-row"), row)
 }

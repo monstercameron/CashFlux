@@ -203,6 +203,7 @@ func budgetWhyOverHint(props budgetWhyOverProps) ui.Node {
 			func(text string) { loading.Set(false); aiText.Set(text) },
 			func(e string) { loading.Set(false); errText.Set(e) })
 	}))
+	askOnClick := OnClick(ask)
 
 	if !ok || sentence == "" {
 		return Fragment()
@@ -222,7 +223,7 @@ func budgetWhyOverHint(props budgetWhyOverProps) ui.Node {
 		}
 		aiNode = Button(css.Class("btn btn-sm btn-ghost", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
 			Attr("data-testid", "sm4-ai-"+props.Budget.ID), Attr("aria-disabled", ariaBool(loading.Get())),
-			OnClick(ask), smartGlyph(true, tw.Fold(tw.W3, tw.H3)), Span(label))
+			askOnClick, smartGlyph(true, tw.Fold(tw.W3, tw.H3)), Span(label))
 	}
 
 	return Div(css.Class("budget-whyover"), Attr("data-testid", "budget-whyover-"+props.Budget.ID),

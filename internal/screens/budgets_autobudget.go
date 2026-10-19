@@ -214,13 +214,18 @@ func AutoBudgetBody(_ struct{}) ui.Node {
 		openAtom.Set(false)
 	}))
 	onCancel := ui.UseEvent(Prevent(func() { openAtom.Set(false) }))
+	cancelOnClick := OnClick(onCancel)
+	selectAllOnClick := OnClick(selectAll)
+	selectNoneOnClick := OnClick(selectNone)
+	resetOnClick := OnClick(resetTuning)
+	applyOnClick := OnClick(apply)
 
 	// ---- render ----
 	if len(suggestions) == 0 {
 		return Div(css.Class(tw.FlexCol, tw.Gap3),
 			P(css.Class("muted"), Attr("data-testid", "autobudget-empty"), uistate.T("budgets.autoEmpty")),
 			Div(css.Class("autobudget-footer"),
-				Button(css.Class("btn"), Type("button"), OnClick(onCancel), uistate.T("action.close"))))
+				Button(css.Class("btn"), Type("button"), cancelOnClick, uistate.T("action.close"))))
 	}
 
 	seg := uiw.Segmented(uiw.SegmentedProps{
@@ -278,11 +283,11 @@ func AutoBudgetBody(_ struct{}) ui.Node {
 	// slider back to what was learned.
 	bulkBar := Div(css.Class("autobudget-bulk"), Attr("data-testid", "autobudget-bulk"),
 		Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "autobudget-all"),
-			OnClick(selectAll), uistate.T("budgets.autoSelectAll")),
+			selectAllOnClick, uistate.T("budgets.autoSelectAll")),
 		Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "autobudget-none"),
-			OnClick(selectNone), uistate.T("budgets.autoSelectNone")),
+			selectNoneOnClick, uistate.T("budgets.autoSelectNone")),
 		If(tuned > 0, Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "autobudget-reset"),
-			OnClick(resetTuning), uistate.T("budgets.autoResetTuning", plural(tuned, "slider")))),
+			resetOnClick, uistate.T("budgets.autoResetTuning", plural(tuned, "slider")))),
 	)
 
 	// The plan-level consequence, kept in view above the list: what the household
@@ -329,8 +334,8 @@ func AutoBudgetBody(_ struct{}) ui.Node {
 		Div(css.Class("modal-foot", "autobudget-footer"),
 			Span(css.Class("autobudget-total", tw.TextDim), Attr("data-testid", "autobudget-total"),
 				uistate.T("budgets.autoTotal", fmtMoney(money.New(totalMinor, base)))),
-			Button(css.Class("btn"), Type("button"), Attr("data-testid", "autobudget-cancel"), OnClick(onCancel), uistate.T("action.cancel")),
-			buttonWithDisabled(nSel == 0 || suggestionErr != nil || impactErr != nil || incomeErr != nil, []any{css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "autobudget-save"), OnClick(apply)},
+			Button(css.Class("btn"), Type("button"), Attr("data-testid", "autobudget-cancel"), cancelOnClick, uistate.T("action.cancel")),
+			buttonWithDisabled(nSel == 0 || suggestionErr != nil || impactErr != nil || incomeErr != nil, []any{css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "autobudget-save"), applyOnClick},
 				uistate.T("budgets.autoSave", strconv.Itoa(nSel)))))
 }
 

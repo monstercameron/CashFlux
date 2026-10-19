@@ -379,6 +379,17 @@ func flexAssignForm(props flexAssignFormProps) ui.Node {
 	if app == nil {
 		return Fragment()
 	}
+	return ui.CreateElement(flexAssignFormReady, flexAssignFormReadyProps{Form: props, App: app})
+}
+
+type flexAssignFormReadyProps struct {
+	Form flexAssignFormProps
+	App  *appstate.App
+}
+
+func flexAssignFormReady(ready flexAssignFormReadyProps) ui.Node {
+	props := ready.Form
+	app := ready.App
 	_ = uistate.UseDataRevision().Get()
 
 	cats := make([]domain.Category, 0)

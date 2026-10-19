@@ -71,6 +71,11 @@ func BudgetAddForm(props BudgetAddFormProps) ui.Node {
 	return ui.CreateElement(budgetAddForm, props)
 }
 
+type budgetAddFormComponentProps struct {
+	Props BudgetAddFormProps
+	App   *appstate.App
+}
+
 // matchTopLevelCategory returns the existing TOP-LEVEL category whose name
 // equals name, or a zero Category when there is none.
 //
@@ -133,6 +138,12 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 	if app == nil {
 		return P(css.Class("empty"), uistate.T("common.notReady"))
 	}
+	return ui.CreateElement(budgetAddFormReady, budgetAddFormComponentProps{Props: props, App: app})
+}
+
+func budgetAddFormReady(componentProps budgetAddFormComponentProps) ui.Node {
+	props := componentProps.Props
+	app := componentProps.App
 
 	base := app.Settings().BaseCurrency
 	if base == "" {
@@ -468,6 +479,17 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 			props.OnDone()
 		}
 	}))
+	toggleCreateOnChange := OnChange(toggleCreateCat)
+	tagsOnInput := OnInput(onTrackTags)
+	closeTmplOnClick := OnClick(closeTmpl)
+	applyTmplOnSubmit := OnSubmit(applyTmpl)
+	addOnSubmit := OnSubmit(add)
+	openTmplOnClick := OnClick(openTmpl)
+	nameOnInput := OnInput(ev.OnName)
+	limitOnInput := OnInput(onLimit)
+	toggleAdvOnClick := OnClick(toggleAdv)
+	cancelOnClick := OnClick(cancel)
+	rolloverOnChange := OnChange(onRollover)
 
 	ownerOptions := ownerSelectOptions(app.Members(), owner.Get())
 
@@ -557,7 +579,7 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 	catRow := Div(css.Class("ba-full", "budget-cat-row"),
 		Label(css.Class("budget-cat-optin", tw.Flex, tw.ItemsCenter, tw.Gap2), Attr("data-testid", "budget-create-cat-label"),
 			Input(append([]any{Type("checkbox"), Attr("data-testid", "budget-create-cat"),
-				Attr("style", "flex-shrink:0"), OnChange(toggleCreateCat)},
+				Attr("style", "flex-shrink:0"), toggleCreateOnChange},
 				append(checkedAttr(wantNewCat), checkboxDisabled(mustCreateCat)...)...)...),
 			Span(uistate.T("budgets.createCatOptIn"))),
 		If(mustCreateCat, Span(css.Class("budget-cat-fate", tw.TextFaint), Attr("data-testid", "budget-create-cat-forced"),
@@ -592,6 +614,8 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 		sugCovers[sugCatID] = true
 	}
 	suggestion, _ := budgeting.SuggestLimitIn(sugCovers, txns, now, 6, rates)
+	useSuggestion := ui.UseEvent(Prevent(func() { limit.Set(money.FormatMinor(suggestion, currency.Decimals(base))) }))
+	suggestOnClick := OnClick(useSuggestion)
 	suggestScope := ""
 	if suggestion > 0 && len(sugCovers) > 1 {
 		for _, c := range categories {
@@ -687,7 +711,7 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 		if len(tmplProposals) == 0 {
 			emptyNote = P(css.Class("empty"), uistate.T("budgets.tmplNothingToAdd"))
 		}
-		return Form(css.Class("budget-add-shell"), Attr("data-testid", "budget-tmpl-review"), OnSubmit(applyTmpl),
+		return Form(css.Class("budget-add-shell"), Attr("data-testid", "budget-tmpl-review"), applyTmplOnSubmit,
 			Div(css.Class("modal-scroll"),
 				P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0"}), uistate.T("budgets.tmplReviewHint")),
 				Div(css.Class("budget-tmpl-rows"), rows),
@@ -696,7 +720,7 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 					uistate.T("budgets.tmplReviewTotal", fmtMoney(money.New(total, base)), plural(checked, "budget")))),
 			),
 			Div(css.Class("modal-foot"),
-				Button(css.Class("btn"), Type("button"), Attr("data-testid", "budget-tmpl-back"), OnClick(closeTmpl), uistate.T("budgets.tmplBack")),
+				Button(css.Class("btn"), Type("button"), Attr("data-testid", "budget-tmpl-back"), closeTmplOnClick, uistate.T("budgets.tmplBack")),
 				Button(css.Class("btn btn-primary", "ba-submit"), Type("submit"), Attr("data-testid", "budget-tmpl-apply"),
 					attrIf(checked == 0, "disabled", "disabled"),
 					uistate.T("budgets.tmplCreateN", plural(checked, "budget"))),
@@ -705,7 +729,7 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 	}
 
 	// ---- the add form (essentials first, the rest behind Advanced) -------------------
-	return Form(css.Class("budget-add-shell"), Attr("data-testid", "budget-add-form"), OnSubmit(add),
+	return Form(css.Class("budget-add-shell"), Attr("data-testid", "budget-add-form"), addOnSubmit,
 		Div(css.Class("modal-scroll"),
 			// Start-from shortcuts: the 50/30/20 review, or copy an existing budget.
 			Div(css.Class("budget-add-tmpl"), Attr("data-testid", "budget-add-tmpl"),
@@ -715,7 +739,7 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 				),
 				Div(css.Class("budget-add-tmpl-actions"),
 					Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "budgets-template-503020"),
-						Title(uistate.T("budgets.tmplTitle")), OnClick(openTmpl),
+						Title(uistate.T("budgets.tmplTitle")), openTmplOnClick,
 						uiw.Icon(icon.Split, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("budgets.tmpl503020"))),
 					If(len(copyOptions) > 1, uiw.SelectInput(uiw.SelectInputProps{
 						Options:   copyOptions,
@@ -733,7 +757,7 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 				Div(css.Class("ba-full"),
 					uiw.Field(uiw.FieldProps{ID: "budget-add", Label: uistate.T("common.name"), Required: true, TestID: "budget-add-name-field",
 						Control: func(a uiw.FieldA11y) ui.Node {
-							attrs := []any{css.Class("field"), Attr("id", a.ID), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), OnInput(ev.OnName)}
+							attrs := []any{css.Class("field"), Attr("id", a.ID), Type("text"), Attr("aria-required", "true"), Placeholder(uistate.T("common.name")), nameOnInput}
 							if strings.TrimSpace(props.Seed.Name) == "" {
 								attrs = append(attrs, Attr("autofocus", "autofocus"))
 							}
@@ -770,7 +794,7 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 					Control: func(a uiw.FieldA11y) ui.Node {
 						attrs := []any{css.Class("field"), Attr("id", a.ID), Type("number"), Attr("data-testid", "budget-add-limit"),
 							Attr("aria-required", "true"), Attr("aria-describedby", a.DescribedBy),
-							Placeholder(uistate.T("budgets.limitPlaceholder", base)), Step("0.01"), Attr("min", "0.01"), OnInput(onLimit)}
+							Placeholder(uistate.T("budgets.limitPlaceholder", base)), Step("0.01"), Attr("min", "0.01"), limitOnInput}
 						if strings.TrimSpace(props.Seed.LimitMajor) == "" {
 							attrs = append(attrs, Attr("autofocus", "autofocus"))
 						}
@@ -789,7 +813,7 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 					})),
 				If(suggestion > 0, Div(css.Class("ba-full", "suggest-row"),
 					Span(css.Class("muted"), uistate.T("budgets.suggest", fmtMoney(money.New(suggestion, base)))),
-					Button(css.Class("btn"), Type("button"), Attr("data-testid", "budget-use-suggest"), OnClick(func() { limit.Set(money.FormatMinor(suggestion, currency.Decimals(base))) }), uistate.T("budgets.useSuggest")),
+					Button(css.Class("btn"), Type("button"), Attr("data-testid", "budget-use-suggest"), suggestOnClick, uistate.T("budgets.useSuggest")),
 				)),
 				// Where a rolled-up average came from, so it is never read as one
 				// category's spending (C586).
@@ -799,7 +823,7 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 				// Advanced: identity + tracking + ownership details most adds never touch.
 				Div(css.Class("ba-full"),
 					Button(css.Class("btn cf-adv-toggle"), Type("button"), Attr("data-testid", "budget-add-advanced"),
-						Attr("aria-expanded", ariaBool(advOpen.Get())), OnClick(toggleAdv), Text(advLabel))),
+						Attr("aria-expanded", ariaBool(advOpen.Get())), toggleAdvOnClick, Text(advLabel))),
 				// C594: the advanced surface used to be one undifferentiated pile —
 				// a formula handle, a whole category tree, tags, owner, method, rollover
 				// and custom fields — opening with an implementation-oriented variable
@@ -825,7 +849,7 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 						labeledField(uistate.T("budgets.tagsFieldLabel"),
 							Fragment(
 								Input(css.Class("field"), Type("text"), Attr("data-testid", "budget-add-tags"),
-									Placeholder(uistate.T("budgets.tagsPlaceholder")), OnInput(onTrackTags), uiw.FieldValue(trackTags.Get())),
+									Placeholder(uistate.T("budgets.tagsPlaceholder")), tagsOnInput, uiw.FieldValue(trackTags.Get())),
 								Span(css.Class("budget-owner-hint", tw.TextFaint), uistate.T("budgets.tagsFieldHint"))))),
 					// --- How it behaves ---
 					Div(css.Class("ba-full", "ba-group"), Attr("data-testid", "budget-add-group-behaviour"),
@@ -856,7 +880,7 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 								budgetOwnMethodHint(app.Settings().BudgetMethodology, methodology.Get())))),
 					// Rollover gets its own full-width row so the label never wraps.
 					Label(css.Class("ba-full", "ba-check"),
-						Input(append([]any{Type("checkbox"), Attr("style", "flex-shrink:0"), OnChange(onRollover)}, checkedAttr(rollover.Get())...)...),
+						Input(append([]any{Type("checkbox"), Attr("style", "flex-shrink:0"), rolloverOnChange}, checkedAttr(rollover.Get())...)...),
 						Span(Title(uistate.T("budgets.rolloverTitle")), uistate.T("budgets.rollover")),
 					),
 					MapKeyed(budgetDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
@@ -883,7 +907,7 @@ func budgetAddForm(props BudgetAddFormProps) ui.Node {
 			// for. This line sits with the action, so the answer is where the
 			// question gets asked.
 			If(blockerMsg != "", Span(css.Class("t-caption", tw.TextDim), Attr("data-testid", "budget-add-blockers"), blockerMsg)),
-			Button(css.Class("btn"), Type("button"), OnClick(cancel), uistate.T("action.cancel")),
+			Button(css.Class("btn"), Type("button"), cancelOnClick, uistate.T("action.cancel")),
 			Button(append([]any{css.Class("btn btn-primary", "ba-submit"), Type("submit"),
 				Attr("data-testid", "budget-add-submit"), uistate.T("budgets.add")},
 				disabledAttr(addBlocked)...)...),

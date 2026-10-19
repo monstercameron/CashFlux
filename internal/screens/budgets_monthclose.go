@@ -203,6 +203,14 @@ func monthCloseBody(_ monthCloseBodyProps) ui.Node {
 			uistate.PostUndoable(uistate.T("monthclose.copyApplied", plural(n, "budget")))
 		}
 	}))
+	coverOnClick := OnClick(openCoverAll)
+	sweepOnClick := OnClick(openSweep)
+	allocateOnClick := OnClick(goAllocate)
+	basisOnClick := OnClick(openBasis)
+	rolloverOnClick := OnClick(enableRollover)
+	deferOnClick := OnClick(deferResolve)
+	applyCopyOnClick := OnClick(applyCopy)
+	doneOnClick := OnClick(closeDone)
 
 	// Inline-styled section chrome (a handful of elements — not worth a styles-
 	// registry entry that would entangle a shared file under concurrent lanes).
@@ -235,7 +243,7 @@ func monthCloseBody(_ monthCloseBodyProps) ui.Node {
 		overBody = append(overBody, Ul(css.Class("wf-lines"), rows),
 			Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt2),
 				Button(css.Class("btn btn-sm btn-primary"), Type("button"), Attr("data-testid", "monthclose-cover"),
-					Title(uistate.T("coverAll.title")), OnClick(openCoverAll), uistate.T("monthclose.coverAction")),
+					Title(uistate.T("coverAll.title")), coverOnClick, uistate.T("monthclose.coverAction")),
 				Span(css.Class("budget-sub"), uistate.T("monthclose.overLeaveNote"))))
 	}
 
@@ -273,7 +281,7 @@ func monthCloseBody(_ monthCloseBodyProps) ui.Node {
 			P(css.Class("budget-sub"), Attr("data-testid", "monthclose-rollover-note"), rolloverNote),
 			Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt2),
 				Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "monthclose-sweep"),
-					Title(uistate.T("sweep.openConfig")), OnClick(openSweep), uistate.T("sweep.openConfig"))))
+					Title(uistate.T("sweep.openConfig")), sweepOnClick, uistate.T("sweep.openConfig"))))
 	}
 
 	// 3 — Over-assignment with the honest choices inline.
@@ -293,19 +301,19 @@ func monthCloseBody(_ monthCloseBodyProps) ui.Node {
 			case monthclose.ResolveReduce:
 				choices = append(choices, Button(css.Class("btn btn-sm"), Type("button"),
 					Attr("data-testid", "monthclose-resolve-reduce"), Title(uistate.T("monthclose.reduceTitle")),
-					OnClick(goAllocate), uistate.T("monthclose.reduce")))
+					allocateOnClick, uistate.T("monthclose.reduce")))
 			case monthclose.ResolveIncome:
 				choices = append(choices, Button(css.Class("btn btn-sm"), Type("button"),
 					Attr("data-testid", "monthclose-resolve-income"), Title(uistate.T("monthclose.incomeTitle")),
-					OnClick(openBasis), uistate.T("monthclose.income")))
+					basisOnClick, uistate.T("monthclose.income")))
 			case monthclose.ResolveRollover:
 				choices = append(choices, Button(css.Class("btn btn-sm"), Type("button"),
 					Attr("data-testid", "monthclose-resolve-rollover"), Title(uistate.T("monthclose.rolloverTitle")),
-					OnClick(enableRollover), uistate.T("monthclose.rollover")))
+					rolloverOnClick, uistate.T("monthclose.rollover")))
 			case monthclose.ResolveDefer:
 				choices = append(choices, Button(css.Class("btn btn-ghost btn-sm"), Type("button"),
 					Attr("data-testid", "monthclose-resolve-defer"), Title(uistate.T("monthclose.deferTitle")),
-					OnClick(deferResolve), uistate.T("monthclose.defer")))
+					deferOnClick, uistate.T("monthclose.defer")))
 			}
 		}
 		resolveBody = append(resolveBody, Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.FlexWrap, tw.Mt2), choices))
@@ -351,7 +359,7 @@ func monthCloseBody(_ monthCloseBodyProps) ui.Node {
 		}
 		copyBody = append(copyBody, Div(css.Class("mc-copy-rows"), rows),
 			Button(css.Class("btn btn-sm btn-primary", tw.Mt2), Type("button"), Attr("data-testid", "monthclose-copy-apply"),
-				Title(uistate.T("monthclose.copyApplyTitle")), OnClick(applyCopy),
+				Title(uistate.T("monthclose.copyApplyTitle")), applyCopyOnClick,
 				uistate.T("monthclose.copyApply", len(copyPlan))))
 	}
 
@@ -364,7 +372,7 @@ func monthCloseBody(_ monthCloseBodyProps) ui.Node {
 		section("monthclose-copy", uistate.T("monthclose.copyTitle"), copyBody...),
 		Div(css.Class(tw.Flex, tw.JustifyEnd, tw.Mt3),
 			Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "monthclose-done"),
-				OnClick(closeDone), uistate.T("monthclose.done"))),
+				doneOnClick, uistate.T("monthclose.done"))),
 	)
 }
 
