@@ -115,9 +115,10 @@ func txnCalendarWidget(props txnCalendarProps) ui.Node {
 	rates := currency.Rates{Base: props.Base, Rates: props.App.Settings().FXRates}
 	var projection txncalendar.CashflowMonth
 	var projectionErr error
+	var liabilityAccounts []domain.Account
 	if strings.TrimSpace(effectiveFilter.Categories) == "" && strings.TrimSpace(effectiveFilter.Category) == "" {
-		accounts := txncalendar.ScopeLiabilityAccounts(props.App.Accounts(), effectiveFilter)
-		projection, projectionErr = txncalendar.MonthCashflowWithAccounts(anchor, weekStart, props.Shown, scopedRecurring, accounts, rates)
+		liabilityAccounts = txncalendar.ScopeLiabilityAccounts(props.App.Accounts(), effectiveFilter)
+		projection, projectionErr = txncalendar.MonthCashflowWithAccounts(anchor, weekStart, props.Shown, scopedRecurring, liabilityAccounts, rates)
 	} else {
 		projection, projectionErr = txncalendar.MonthCashflow(anchor, weekStart, props.Shown, scopedRecurring, rates)
 	}
@@ -125,16 +126,8 @@ func txnCalendarWidget(props txnCalendarProps) ui.Node {
 	showScheduled := strings.TrimSpace(f.Text) == ""
 	if showScheduled {
 		settled := props.App.BillMatchPaidOccurrences()
-		for _, txn := range props.App.Transactions() {
-			if txn.Date.After(now) {
-				continue
-			}
-			if txn.BillAccountID != "" {
-				settled["account:"+txn.BillAccountID] = true
-			}
-			if txn.IsTransfer() && txn.Amount.Amount > 0 {
-				settled["account:"+txn.AccountID] = true
-			}
+		for key := range txncalendar.SettledLiabilityOccurrences(projection.Weeks, props.App.Transactions(), liabilityAccounts, now) {
+			settled[key] = true
 		}
 		weeks = txncalendar.FoldSettled(weeks, settled, now)
 	}
@@ -286,7 +279,7 @@ func txnCalWeekTotal(props txnCalWeekTotalProps) ui.Node {
 	} else if props.Scheduled > 0 || props.Future {
 		// Keep the older future-week summary discoverable to assistive technology
 		// while the visual cell stays free of a misleading zero-spend claim.
-		lines = append(lines, Span(css.Class("sr-only txn-cal-week-spent text-dim"), Attr("aria-hidden", "true"), uistate.T("r9c.weekSpent", strings.TrimPrefix(spent, "+"))))
+		lines = append(lines, Span(css.Class("sr-only txn-cal-empty-week text-dim"), uistate.T("r9c.weekSpent", strings.TrimPrefix(spent, "+"))))
 	}
 	if props.Cashflow.Income > 0 {
 		income, _ := fmtLedgerAmount(money.New(props.Cashflow.Income, props.Base), false)
@@ -451,21 +444,16 @@ func txnCalMonthCell(props txnCalMonthCellProps) ui.Node {
 			}
 		}
 		className := "txn-cal-ghost text-dim"
-		aria := uistate.T("transactions.calScheduledDueAria", g.Label, amountText)
-		if g.Liability {
-			aria = uistate.T("transactions.calAccountDueAria", g.Label, amountText)
-		}
 		if g.NotPosted {
 			className = "txn-cal-ghost txn-cal-ghost-missed"
-			aria = uistate.T("transactions.calNotPostedAria", g.Label, amountText)
 		}
-		ghostAriaLabels = append(ghostAriaLabels, aria)
+		ghostAriaLabels = append(ghostAriaLabels, ghostSummaryAria(g, amountText))
 		if g.NotPosted {
-			ghostNodes = append(ghostNodes, Span(css.Class(className), Attr("aria-label", aria), Attr("title", aria),
+			ghostNodes = append(ghostNodes, Span(css.Class(className),
 				Span(css.Class("txn-cal-ghost-status"), uistate.T("transactions.calNotPostedStatus", amountText)),
 				Span(css.Class("txn-cal-ghost-label"), g.Label)))
 		} else {
-			ghostNodes = append(ghostNodes, Span(css.Class(className), Attr("aria-label", aria), Attr("title", aria),
+			ghostNodes = append(ghostNodes, Span(css.Class(className),
 				Span(css.Class("txn-cal-ghost-status"), uistate.T("transactions.calDueStatus", amountText)),
 				Span(css.Class("txn-cal-ghost-label"), g.Label)))
 		}
@@ -482,7 +470,7 @@ func txnCalMonthCell(props txnCalMonthCellProps) ui.Node {
 		label = uistate.T("transactions.calDayOtherMonth", strconv.Itoa(props.Day), props.MonthName)
 	}
 	if len(ghostAriaLabels) > 0 {
-		label += ". " + strings.Join(ghostAriaLabels, ". ")
+		label = uistate.T("transactions.calDayWithScheduled", label, strings.Join(ghostAriaLabels, "; "))
 	}
 	args := []any{
 		ClassStr(cls),
@@ -490,7 +478,6 @@ func txnCalMonthCell(props txnCalMonthCellProps) ui.Node {
 		Attr("data-date", props.DateKey),
 		Attr("data-testid", "txn-cal-day-"+props.DateKey),
 		Attr("aria-label", label),
-		Attr("title", label),
 	}
 	click := OnClick(pick)
 	if props.InMonth {
@@ -505,10 +492,21 @@ func txnCalMonthCell(props txnCalMonthCellProps) ui.Node {
 		Span(css.Class("cal-day"), strconv.Itoa(props.Day)),
 		If(props.NetStr != "", Span(ClassStr("txn-cal-net "+props.NetTone), props.NetStr)),
 		If(props.MovedStr != "", Span(css.Class("txn-cal-moved text-dim"), props.MovedStr)),
-		Div(css.Class("txn-cal-dots"), Fragment(dotNodes...)),
+		Span(css.Class("txn-cal-dots"), Fragment(dotNodes...)),
 		Fragment(ghostNodes...),
 	)
 	return Button(args...)
+}
+
+func ghostSummaryAria(ghost txncalendar.Ghost, amountText string) string {
+	switch {
+	case ghost.NotPosted:
+		return uistate.T("transactions.calNotPostedSummary", ghost.Label, amountText)
+	case ghost.Liability:
+		return uistate.T("transactions.calAccountDueSummary", ghost.Label, amountText)
+	default:
+		return uistate.T("transactions.calScheduledDueSummary", ghost.Label, amountText)
+	}
 }
 
 func calTransactionDotCount(count int) int {

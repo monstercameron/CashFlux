@@ -74,7 +74,7 @@ func TestTV7CFoldSettledHidesPaidLiabilityOccurrence(t *testing.T) {
 	weeks := []CashflowWeek{{Days: []CashflowCell{{Date: due, InMonth: true, Ghosts: []Ghost{{
 		RecurringID: "account:card", Label: "Rewards Credit Card", Amount: -22000, Currency: "USD", Date: due, Liability: true,
 	}}}}}}
-	got := FoldSettled(weeks, map[string]bool{"account:card": true}, time.Date(2026, time.October, 23, 0, 0, 0, 0, time.UTC))
+	got := FoldSettled(weeks, map[string]bool{domain.OccurrenceKey("account:card", due): true}, time.Date(2026, time.October, 23, 0, 0, 0, 0, time.UTC))
 	if len(got[0].Days[0].Ghosts) != 0 {
 		t.Fatalf("settled liability payment remained scheduled: %#v", got[0].Days[0].Ghosts)
 	}

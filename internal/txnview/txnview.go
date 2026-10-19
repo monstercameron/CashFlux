@@ -17,7 +17,8 @@ import (
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
 )
 
-// CategoryTotal is an expense total in the selected base currency.
+// CategoryTotal is a net amount in the selected base currency. Positive values
+// are spending; negative values are split credits or returns.
 type CategoryTotal struct {
 	ID    string
 	Minor int64
@@ -45,7 +46,7 @@ func Summarize(rows []domain.Transaction, rates currency.Rates, base string) (Vi
 // the same date, search, member, and account scope.
 func SummarizeWithCategories(rows, categoryRows []domain.Transaction, rates currency.Rates, base string) (View, error) {
 	view := View{Count: len(rows), UnconvertedByCurrency: make(map[string]int)}
-	transfers := txnclassify.SummarizeVisibleTransfers(rows)
+	transfers := txnclassify.SummarizeVisibleTransfers(rows, rates)
 	view.CountedTransfers = transfers.CountedRows
 	view.UnpairedRows = transfers.UnpairedRows
 	for i, row := range rows {
@@ -126,22 +127,30 @@ func categoryTotals(rows []domain.Transaction, rates currency.Rates, base string
 			}
 			continue
 		}
+		splitTotals := make(map[string]int64, len(row.Splits))
 		for _, split := range row.Splits {
-			if split.Amount.Amount >= 0 {
-				continue
-			}
 			converted, err := rates.Convert(split.Amount, base)
 			if err != nil {
 				continue
 			}
-			amount, err := money.Neg(converted.Amount)
+			splitTotals[split.CategoryID], err = money.Add(splitTotals[split.CategoryID], converted.Amount)
+			if err != nil {
+				return nil, fmt.Errorf("net category splits for %q (%q): %w", row.ID, split.CategoryID, err)
+			}
+		}
+		for categoryID, net := range splitTotals {
+			if net == 0 {
+				continue
+			}
+			amount, err := money.Neg(net)
 			if err != nil {
 				return nil, fmt.Errorf("category split for %q magnitude: %w", row.ID, err)
 			}
-			categories, err = addCategoryAmount(categories, split.CategoryID, amount)
+			nextCategories, err := addCategoryAmount(categories, categoryID, amount)
 			if err != nil {
 				return nil, fmt.Errorf("category split for %q: %w", row.ID, err)
 			}
+			categories = nextCategories
 		}
 	}
 	result := make([]CategoryTotal, 0, len(categories))

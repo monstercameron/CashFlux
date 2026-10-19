@@ -90,6 +90,8 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Calendar and summary agree (TC4N3, TC4N4).** Calendar cells, week totals and the summary strip pair transfers with FX the
+  same way and treat excluded rows alike; a parity test checks summary, count line and calendar for one period.
 - **Bills due today stay in the upcoming strip in every time zone (TC4N1).**
 - **Imports keep amounts, accounts and dates honest (TC4N6).** Import mapping, the resilient CSV parser and the documents
   preflight/review report what they could not read, keep account currency and refuse silent guesses.

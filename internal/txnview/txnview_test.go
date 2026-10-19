@@ -63,6 +63,20 @@ func TestSummarizeTransferPairAndUnpairedFactsOnce(t *testing.T) {
 	}
 }
 
+func TestSummarizePairsCrossCurrencyTransfersUsingRates(t *testing.T) {
+	rows := []domain.Transaction{
+		{ID: "out", AccountID: "checking", TransferAccountID: "savings", Amount: money.New(-12_500, "USD")},
+		{ID: "in", AccountID: "savings", TransferAccountID: "checking", Amount: money.New(10_000, "EUR")},
+	}
+	view, err := Summarize(rows, currency.Rates{Base: "USD", Rates: map[string]float64{"EUR": 1.25}}, "USD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view.Transferred != 12_500 || view.UnpairedRows != 0 || view.MovedRows != 1 {
+		t.Fatalf("cross-currency transfer summary = %+v", view)
+	}
+}
+
 func TestSummarizeReportsMissingFXWithoutAddingUnconvertedRows(t *testing.T) {
 	rows := []domain.Transaction{{ID: "eur", Amount: money.New(-1_200, "EUR")}, {ID: "usd", Amount: money.New(-500, "USD")}}
 	view, err := Summarize(rows, currency.Rates{Base: "USD"}, "USD")
@@ -92,6 +106,23 @@ func TestSummarizeUsesSplitCategoriesAndChecksOverflow(t *testing.T) {
 	}, currency.Rates{Base: "USD"}, "USD")
 	if err == nil {
 		t.Fatal("overflowing spent sum succeeded")
+	}
+}
+
+func TestSummarizeNetsMixedSignSplitLinesPerCategory(t *testing.T) {
+	rows := []domain.Transaction{{ID: "receipt", Amount: money.New(-10_000, "USD"), Splits: []domain.CategorySplit{
+		{CategoryID: "food", Amount: money.New(-15_000, "USD")},
+		{CategoryID: "returns", Amount: money.New(5_000, "USD")},
+	}}}
+	view, err := Summarize(rows, currency.Rates{Base: "USD"}, "USD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view.Spent != 10_000 || len(view.Categories) != 2 || view.Categories[0] != (CategoryTotal{ID: "food", Minor: 15_000}) || view.Categories[1] != (CategoryTotal{ID: "returns", Minor: -5_000}) {
+		t.Fatalf("mixed-sign split summary = %+v", view)
+	}
+	if got := view.Categories[0].Minor + view.Categories[1].Minor; got != view.Spent {
+		t.Fatalf("net category amount = %d, want spent %d", got, view.Spent)
 	}
 }
 

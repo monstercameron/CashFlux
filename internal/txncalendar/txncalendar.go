@@ -74,7 +74,7 @@ type CashflowMonth struct {
 func MonthCashflow(anchor time.Time, weekStart time.Weekday, txns []domain.Transaction, recurring []domain.Recurring, rates currency.Rates) (CashflowMonth, error) {
 	monthStart := dateutil.MonthStart(anchor)
 	monthEnd := dateutil.AddMonths(monthStart, 1)
-	grid := month(anchor, weekStart, nil, recurring, nil)
+	grid := monthGrid(anchor, weekStart, recurring)
 	byDay := make(map[string]Cashflow, len(txns))
 	transferRows := txnclassify.SummarizeVisibleTransfers(txns, rates).CountedRows
 	result := CashflowMonth{Weeks: make([]CashflowWeek, len(grid))}
@@ -222,39 +222,6 @@ type DayStat struct {
 	Count int
 }
 
-// BucketByDay groups transactions by calendar day, summing each day's net in the
-// stored currencies. Use BucketByDayInBase for a displayable household total.
-func BucketByDay(txns []domain.Transaction) map[string]DayStat {
-	out := make(map[string]DayStat)
-	for _, t := range txns {
-		k := DayKey(t.Date)
-		s := out[k]
-		s.Net += t.Amount.Amount
-		s.Count++
-		out[k] = s
-	}
-	return out
-}
-
-// BucketByDayInBase groups transactions by calendar day after converting every
-// amount to the selected base currency. It returns an error instead of presenting
-// a partial or mislabeled total when any required exchange rate is unavailable.
-func BucketByDayInBase(txns []domain.Transaction, rates currency.Rates) (map[string]DayStat, error) {
-	out := make(map[string]DayStat)
-	for _, txn := range txns {
-		converted, err := rates.Convert(txn.Amount, rates.Base)
-		if err != nil {
-			return nil, fmt.Errorf("convert transaction %q to %s: %w", txn.ID, rates.Base, err)
-		}
-		key := DayKey(txn.Date)
-		stat := out[key]
-		stat.Net += converted.Amount
-		stat.Count++
-		out[key] = stat
-	}
-	return out, nil
-}
-
 // ScopeRecurring applies the account, category, and member dimensions that can
 // be represented by recurring definitions. Text, tag, source, and amount filters
 // have no matching fields on Recurring and therefore do not alter the projection.
@@ -383,7 +350,7 @@ func FoldSettled(weeks []CashflowWeek, settled map[string]bool, asOf time.Time) 
 			folded[wi].Days[di] = day
 			folded[wi].Days[di].Ghosts = make([]Ghost, 0, len(day.Ghosts))
 			for _, ghost := range day.Ghosts {
-				if settled[domain.OccurrenceKey(ghost.RecurringID, ghost.Date)] || (ghost.Liability && settled[ghost.RecurringID]) {
+				if settled[domain.OccurrenceKey(ghost.RecurringID, ghost.Date)] {
 					continue
 				}
 				ghost.NotPosted = DayKey(ghost.Date) < today
@@ -392,6 +359,69 @@ func FoldSettled(weeks []CashflowWeek, settled map[string]bool, asOf time.Time) 
 		}
 	}
 	return folded
+}
+
+const liabilitySettlementWindowDays = 31
+
+// SettledLiabilityOccurrences finds calendar statement occurrences settled by
+// a linked bill payment or a signed transfer into that liability account. A
+// payment applies only to an occurrence due within the preceding 31 calendar
+// days; a payment after the due date never rewrites that occurrence's history.
+// The supplied weeks and accounts must already be scoped to the active view.
+func SettledLiabilityOccurrences(weeks []CashflowWeek, txns []domain.Transaction, accounts []domain.Account, asOf time.Time) map[string]bool {
+	accountByID := make(map[string]domain.Account, len(accounts))
+	for _, account := range accounts {
+		if account.IsLiability() {
+			accountByID[account.ID] = account
+		}
+	}
+
+	type occurrence struct {
+		accountID string
+		due       time.Time
+	}
+	var occurrences []occurrence
+	for _, week := range weeks {
+		for _, day := range week.Days {
+			for _, ghost := range day.Ghosts {
+				if !ghost.Liability || !strings.HasPrefix(ghost.RecurringID, "account:") {
+					continue
+				}
+				accountID := strings.TrimPrefix(ghost.RecurringID, "account:")
+				if _, ok := accountByID[accountID]; ok {
+					occurrences = append(occurrences, occurrence{accountID: accountID, due: dateutil.CalendarDayUTC(ghost.Date)})
+				}
+			}
+		}
+	}
+
+	asOfDay := dateutil.CalendarDayUTC(asOf)
+	settled := make(map[string]bool)
+	for _, txn := range txns {
+		paymentDay := dateutil.CalendarDayUTC(txn.Date)
+		if paymentDay.After(asOfDay) {
+			continue
+		}
+		for _, item := range occurrences {
+			if paymentDay.Before(item.due.AddDate(0, 0, -liabilitySettlementWindowDays)) || paymentDay.After(item.due) {
+				continue
+			}
+			account := accountByID[item.accountID]
+			linkedBillPayment := txn.BillAccountID == item.accountID
+			paymentIntoAccount := txn.AccountID == item.accountID && inflowAmount(txn.Amount.Amount, account.InflowSign())
+			if linkedBillPayment || paymentIntoAccount {
+				settled[domain.OccurrenceKey("account:"+item.accountID, item.due)] = true
+			}
+		}
+	}
+	return settled
+}
+
+func inflowAmount(amount, inflowSign int64) bool {
+	if inflowSign < 0 {
+		return amount < 0
+	}
+	return amount > 0
 }
 
 // Ghosts projects every recurring's occurrences into the half-open range
@@ -502,59 +532,15 @@ func calendarDayOrdinal(t time.Time) int64 {
 	return dateutil.CalendarDayUTC(t).Unix() / int64(24*time.Hour/time.Second)
 }
 
-// Cell is one day square in the month grid. InMonth is false for the leading and
-// trailing padding days that fill the first and last weeks (days belonging to the
-// adjacent months). Stat holds that day's net + count; Ghosts are the recurrings
-// due that day.
-type Cell struct {
+// calendarCell is one day square in a month grid. Padding days belong to an
+// adjacent month and carry no recurring markers.
+type calendarCell struct {
 	Date    time.Time
 	InMonth bool
-	Stat    DayStat
 	Ghosts  []Ghost
 }
 
-// WeekStat totals the daily net amounts and transaction counts in a calendar
-// week. Padding cells contribute zero because they have no in-month activity.
-func WeekStat(cells []Cell) DayStat {
-	var total DayStat
-	for _, cell := range cells {
-		total.Net += cell.Stat.Net
-		total.Count += cell.Stat.Count
-	}
-	return total
-}
-
-// Month builds the calendar grid for the month containing anchor: a slice of
-// weeks, each exactly seven Cells, padded so the first cell is the weekStart on or
-// before the first of the month and the last week is filled to the weekStart
-// boundary. Each in-month day is populated with its transaction stat (from txns)
-// and its ghost occurrences (from recurring). Padding days carry no stat or
-// ghosts. Both txns and recurring should already be scoped to the caller's active
-// filter — the grid is a pure projection of what it's given.
-func Month(anchor time.Time, weekStart time.Weekday, txns []domain.Transaction, recurring []domain.Recurring) [][]Cell {
-	return month(anchor, weekStart, txns, recurring, BucketByDay(txns))
-}
-
-// MonthInBase builds a month grid whose transaction totals are converted into
-// the base currency. Missing rates are returned to the caller so it can explain
-// why the calendar total is unavailable.
-func MonthInBase(anchor time.Time, weekStart time.Weekday, txns []domain.Transaction, recurring []domain.Recurring, rates currency.Rates) ([][]Cell, error) {
-	monthStart := dateutil.MonthStart(anchor)
-	monthEnd := dateutil.AddMonths(monthStart, 1)
-	visibleTxns := make([]domain.Transaction, 0, len(txns))
-	for _, txn := range txns {
-		if !txn.Date.Before(monthStart) && txn.Date.Before(monthEnd) {
-			visibleTxns = append(visibleTxns, txn)
-		}
-	}
-	stats, err := BucketByDayInBase(visibleTxns, rates)
-	if err != nil {
-		return nil, err
-	}
-	return month(anchor, weekStart, txns, recurring, stats), nil
-}
-
-func month(anchor time.Time, weekStart time.Weekday, txns []domain.Transaction, recurring []domain.Recurring, stats map[string]DayStat) [][]Cell {
+func monthGrid(anchor time.Time, weekStart time.Weekday, recurring []domain.Recurring) [][]calendarCell {
 	monthStart := dateutil.MonthStart(anchor)
 	monthEnd := dateutil.AddMonths(monthStart, 1) // exclusive
 
@@ -570,15 +556,14 @@ func month(anchor time.Time, weekStart time.Weekday, txns []domain.Transaction, 
 		ghostsByDay[k] = append(ghostsByDay[k], g)
 	}
 
-	var weeks [][]Cell
+	var weeks [][]calendarCell
 	for day := gridStart; day.Before(gridEnd); {
-		week := make([]Cell, 0, 7)
+		week := make([]calendarCell, 0, 7)
 		for i := 0; i < 7; i++ {
 			k := DayKey(day)
 			inMonth := !day.Before(monthStart) && day.Before(monthEnd)
-			cell := Cell{Date: day, InMonth: inMonth}
+			cell := calendarCell{Date: day, InMonth: inMonth}
 			if inMonth {
-				cell.Stat = stats[k]
 				cell.Ghosts = ghostsByDay[k]
 			}
 			week = append(week, cell)
