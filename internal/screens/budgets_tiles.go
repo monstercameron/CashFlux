@@ -52,8 +52,11 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 	// tile's props are the same *App pointer across host renders.
 	_ = uistate.UseDataRevision().Get()
 	app := props.App
-	activeMember := uistate.UseActiveMember()
-	activeMemberID := activeMember.Get()
+	memberLens := uistate.UseMemberLens()
+	activeMemberID := ""
+	if len(memberLens) == 1 {
+		activeMemberID = memberLens[0]
+	}
 	vw := uistate.UsePeriod().Get()
 	pr := uistate.UsePrefs().Get()
 	// "Last month's spend" overlay: when on, the summary graph shows last period's total
@@ -206,6 +209,10 @@ func budgetStatusAction(props budgetStatusActionProps) ui.Node {
 // shows a low-pressure nudge instead of a misleading number. Pure node builder.
 func budgetAgeOfMoneyNode(v budgetView, smartSettings smart.Settings) ui.Node {
 	am := v.AgeMoney
+	why := uistate.T("budgets.ageMoneyWhy")
+	if am.Capped {
+		why = uistate.T("budgets.ageMoneyOverYearWhyBR2TB")
+	}
 	label := Span(css.Class("budget-agemoney-label"), uistate.T("budgets.ageMoneyLabel"))
 	if !am.Ready {
 		return Div(css.Class("budget-agemoney", "is-empty"), Attr("data-testid", "budgets-agemoney"),
@@ -247,7 +254,7 @@ func budgetAgeOfMoneyNode(v budgetView, smartSettings smart.Settings) ui.Node {
 			label,
 			// Same explainer affordance as the LEFT hero stat (the app-wide "?" info-icon
 			// tooltip), not a one-off text link — one vocabulary for "explain this figure".
-			smartTooltipFor(smartSettings, "budget-agemoney", uistate.T("budgets.ageMoneyLabel"), uistate.T("budgets.ageMoneyWhy")),
+			smartTooltipFor(smartSettings, "budget-agemoney", uistate.T("budgets.ageMoneyLabel"), why),
 		),
 		Div(ClassStr(figCls), Attr("data-testid", "budgets-agemoney-days"),
 			Span(css.Class("budget-agemoney-num"), num),
@@ -821,7 +828,11 @@ func BudgetBasisBody(_ struct{}) ui.Node {
 func budgetSavingsWidget(props budgetSummaryProps) ui.Node {
 	_ = uistate.UseDataRevision().Get()
 	app := props.App
-	activeMemberID := uistate.UseActiveMember().Get()
+	memberLens := uistate.UseMemberLens()
+	activeMemberID := ""
+	if len(memberLens) == 1 {
+		activeMemberID = memberLens[0]
+	}
 	vw := uistate.UsePeriod().Get()
 	pr := uistate.UsePrefs().Get()
 
@@ -1245,11 +1256,16 @@ func budgetIssuesRail(props budgetIssuesRailProps) ui.Node {
 	// It is a second control on the same handler rather than part of the toggle, so
 	// it is hidden from assistive tech and taken out of the tab order — the labelled
 	// toggle beside it already announces and operates the disclosure.
-	header := Div(css.Class("budget-issues-rail"),
+	railClass := "budget-issues-rail"
+	followUpsOnly := props.FollowUps > 0 && props.OverAssigned == 0 && !fundShort
+	if followUpsOnly {
+		railClass += " is-followups-only"
+	}
+	header := Div(css.Class(railClass),
 		Button(css.Class("budget-issues-toggle"), Type("button"),
 			Attr("data-testid", "budgets-issues-rail"), Attr("aria-expanded", ariaBool(open.Get())),
 			Title(hint), OnClick(toggle),
-			uiw.Icon(icon.AlertTriangle, css.Class("budget-issues-icon", tw.ShrinkO, tw.W4, tw.H4)),
+			If(!followUpsOnly, uiw.Icon(icon.AlertTriangle, css.Class("budget-issues-icon", tw.ShrinkO, tw.W4, tw.H4))),
 			Span(css.Class("budget-issues-title"), title),
 		),
 		resolve,
@@ -1350,6 +1366,27 @@ func budgetToolbarWidget(props budgetToolbarProps) ui.Node {
 	})
 }
 
+// budgetMemberScopeNote names the active household member lens beside the list.
+// budgetCount matches the scoped budget rows; totalCount shows how many budgets
+// exist across the household. Amounts remain household totals in this view.
+func budgetMemberScopeNote(app *appstate.App, memberID string, budgetCount int) ui.Node {
+	if memberID == "" {
+		return Fragment()
+	}
+	var name string
+	for _, member := range app.Members() {
+		if member.ID == memberID {
+			name = member.Name
+			break
+		}
+	}
+	if name == "" {
+		return Fragment()
+	}
+	return P(css.Class("bud2-member-share"), Attr("data-testid", "budgets-member-scope"),
+		uistate.T("bud2.memberScopeBR2TB", name, budgetCount, len(app.Budgets()), name))
+}
+
 // budgetToolbarContent is the actions cluster: the "Budget settings" popover (the
 // in-context methodology picker, sort, density, last-month toggle, Auto-budget,
 // month-close, sweep config, bulk adjust) and the primary "Add budget" button. It
@@ -1359,8 +1396,11 @@ func budgetToolbarContent(props budgetToolbarProps) ui.Node {
 	app := props.App
 	sortAtom := uistate.UseBudgetSort()
 	onSort := ui.UseEvent(func(e ui.Event) { sortAtom.Set(e.GetValue()) })
-	activeMember := uistate.UseActiveMember()
-	activeMemberID := activeMember.Get()
+	memberLens := uistate.UseMemberLens()
+	activeMemberID := ""
+	if len(memberLens) == 1 {
+		activeMemberID = memberLens[0]
+	}
 
 	base := app.Settings().BaseCurrency
 	if base == "" {
@@ -1424,10 +1464,6 @@ func budgetToolbarContent(props budgetToolbarProps) ui.Node {
 	closeTools := ui.UseEvent(Prevent(func() { toolsOpen.Set(false) }))
 	uiw.DismissPopover(toolsOpen.Get(), "budgets-tools-wrap", func() { toolsOpen.Set(false) })
 	uiw.AnchorPopover(toolsOpen.Get(), "budgets-tools-wrap")
-	onMember := ui.UseEvent(func(e ui.Event) {
-		activeMember.Set(e.GetValue())
-		uistate.PersistActiveMember(e.GetValue())
-	})
 	// C112: switch the budgeting methodology right from /budgets.
 	//
 	// C590: this control is the HOUSEHOLD's method, and the page has a second,
@@ -1522,7 +1558,7 @@ func budgetToolbarContent(props budgetToolbarProps) ui.Node {
 			Span(css.Class("bud-set-lbl"), uistate.T("budgets.sortLabel")),
 			Select(css.Class("fctrl-select"), Attr("data-testid", "budgets-sort"),
 				Attr("aria-label", uistate.T("budgets.sortLabel")), Title(uistate.T("budgets.sortLabel")), OnChange(onSort),
-				Option(Value(uistate.BudgetSortHealth), SelectedIf(sortVal == uistate.BudgetSortHealth), uistate.T("budgets.sortHealth")),
+				Option(Value(uistate.BudgetSortHealth), SelectedIf(sortVal == uistate.BudgetSortHealth), uistate.T("budgets.sortRiskBR2TB")),
 				Option(Value(uistate.BudgetSortOverage), SelectedIf(sortVal == uistate.BudgetSortOverage), uistate.T("budgets.sortOverage")),
 				Option(Value(uistate.BudgetSortNearOverage), SelectedIf(sortVal == uistate.BudgetSortNearOverage), uistate.T("budgets.sortNear")),
 				Option(Value(uistate.BudgetSortUnderutilized), SelectedIf(sortVal == uistate.BudgetSortUnderutilized), uistate.T("budgets.sortUnderused")),
@@ -1567,7 +1603,7 @@ func budgetToolbarContent(props budgetToolbarProps) ui.Node {
 		Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
 			Attr("data-testid", "budgets-month-close"),
 			Title(uistate.T("monthclose.offerTitle")), OnClick(openMonthClose),
-			uiw.Icon(icon.Check, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("bud2.monthClose"))),
+			Span(uistate.T("bud2.monthClose"))),
 		// XC6: the leftover-sweep config modal.
 		Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
 			Attr("data-testid", "budgets-sweep-config"),
@@ -1577,45 +1613,16 @@ func budgetToolbarContent(props budgetToolbarProps) ui.Node {
 		If(hasBudgets, Button(css.Class("add-item"), Type("button"), Attr("role", "menuitem"),
 			Attr("data-testid", "budgets-adjust-all"),
 			Title(uistate.T("budgets.adjustAllTitle")), OnClick(adjustAll),
-			uiw.Icon(icon.Scale, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("bud2.adjustAll")))),
+			uiw.Icon(icon.Scale, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("bud2.adjustAllBR2TB")))),
 	)
-	sharedBudgets := 0
-	for _, b := range app.Budgets() {
-		if ownerVisibleTo(b.OwnerID, activeMemberID) && b.OwnerID == domain.GroupOwnerID {
-			sharedBudgets++
-		}
-	}
-	var memberName string
-	for _, m := range app.Members() {
-		if m.ID == activeMemberID {
-			memberName = m.Name
-			break
-		}
-	}
-	var memberLens ui.Node = Fragment()
-	if len(app.Members()) > 0 {
-		memberOpts := []any{Option(Value(""), SelectedIf(activeMemberID == ""), uistate.T("bud2.everyone"))}
-		for _, m := range app.Members() {
-			memberOpts = append(memberOpts, Option(Value(m.ID), SelectedIf(activeMemberID == m.ID), m.Name))
-		}
-		memberLens = Label(css.Class("bud2-member-lens"), Attr("style", "display:inline-flex;align-items:center;gap:.4rem;min-width:0"),
-			Span(css.Class("bud2-member-label"), Attr("data-testid", "budgets-member-label"), uistate.T("bud2.viewAs")),
-			Select(css.Class("fctrl-select"), Attr("data-testid", "budgets-member-lens"),
-				Attr("aria-label", uistate.T("bud2.viewAsMember")), OnChange(onMember), memberOpts),
-		)
-		if activeMemberID != "" && memberName != "" {
-			memberLens = Fragment(memberLens, P(css.Class("bud2-member-share"), Attr("data-testid", "budgets-member-share"),
-				uistate.T("bud2.sharedCount", memberName, sharedBudgets, visibleBudgets)))
-		}
-	}
 	toolbar := Div(css.Class("filter-toolbar budgets-tb"),
 		Div(css.Class("filter-toolbar-actions"),
-			memberLens,
 			Div(ClassStr("add-wrap"), Attr("id", "budgets-settings-wrap"),
 				Button(css.Class("btn btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
 					Attr("data-testid", "budgets-settings"), Attr("aria-haspopup", "menu"),
 					Attr("aria-expanded", ariaBool(settingsOpen.Get())),
-					Title(uistate.T("bud2.settingsTitle")), OnClick(toggleSettings),
+					Attr("aria-label", uistate.T("bud2.settingsAccessibleBR2TB")),
+					Title(uistate.T("bud2.settingsAccessibleBR2TB")), OnClick(toggleSettings),
 					uiw.Icon(icon.Settings, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
 					Span(uistate.T("bud2.settings")),
 					uiw.Icon(icon.ChevronDown, css.Class(tw.ShrinkO, tw.W35, tw.H35))),
@@ -1657,7 +1664,11 @@ func budgetListWidget(props budgetListProps) ui.Node {
 	app := props.App
 	nav := router.UseNavigate()
 	txFilter := uistate.UseTxFilter()
-	activeMemberID := uistate.UseActiveMember().Get()
+	memberLens := uistate.UseMemberLens()
+	activeMemberID := ""
+	if len(memberLens) == 1 {
+		activeMemberID = memberLens[0]
+	}
 	vw := uistate.UsePeriod().Get()
 	pr := uistate.UsePrefs().Get()
 	// "Last month's spend" overlays each budget with last period's actual spending for
@@ -1845,8 +1856,10 @@ func budgetListWidget(props budgetListProps) ui.Node {
 		// B1: the list card's head row — search grows on the left, the settings/add
 		// cluster pins right — replacing the standalone toolbar tile (whose orphan
 		// band was mostly empty space above the budgets).
+		memberScope := budgetMemberScopeNote(app, activeMemberID, len(v.Statuses))
 		head := Div(css.Class("budlist-head"),
 			searchBar,
+			memberScope,
 			ui.CreateElement(budgetToolbarContent, budgetToolbarProps{App: app}),
 		)
 		body = Fragment(head, budgetIncompleteNotice(v.Incomplete), attChip, matchNote, Div(ClassStr(listCls), Attr("data-testid", "budgets-list"), rows), unbudgeted)
@@ -1884,7 +1897,11 @@ func budgetAnnualGridWidget(props budgetListProps) ui.Node {
 	app := props.App
 	nav := router.UseNavigate()
 	txFilter := uistate.UseTxFilter()
-	activeMemberID := uistate.UseActiveMember().Get()
+	memberLens := uistate.UseMemberLens()
+	activeMemberID := ""
+	if len(memberLens) == 1 {
+		activeMemberID = memberLens[0]
+	}
 	vw := uistate.UsePeriod().Get()
 	pr := uistate.UsePrefs().Get()
 	showLastMonth := uistate.UseBudgetsLastMonth().Get()

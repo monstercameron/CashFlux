@@ -38,7 +38,11 @@ func budgetAttentionWidget(props budgetListProps) ui.Node {
 	app := props.App
 	nav := router.UseNavigate()
 	txFilter := uistate.UseTxFilter()
-	activeMemberID := uistate.UseActiveMember().Get()
+	memberLens := uistate.UseMemberLens()
+	activeMemberID := ""
+	if len(memberLens) == 1 {
+		activeMemberID = memberLens[0]
+	}
 	vw := uistate.UsePeriod().Get()
 	pr := uistate.UsePrefs().Get()
 	showLastMonth := uistate.UseBudgetsLastMonth().Get()

@@ -145,6 +145,7 @@ func Register() {
 	registerFUT2()
 	registerForm3()
 	registerBR2MOB()
+	registerRulesBR2TB()
 	inject(Build())
 }
 

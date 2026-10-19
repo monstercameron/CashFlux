@@ -90,6 +90,12 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Budgets toolbar: one member lens, readable Tools menu (BR2TB).** The Budgets list now follows the single member lens
+  from the top bar (the duplicate list selector is gone), and its header says how many budgets include that member with
+  counts that match the rows. The Tools menu is wide enough that no item wraps, "Adjust every budget" matches its dialog,
+  the sort option is plain ("most at risk first"), "Review the month" no longer shows a done-looking check, "Age of money"
+  explains itself, small toolbar targets are at least 24 px (44 px on touch), and follow-up-only notices are neutral, not
+  amber. Settings is named starting with its visible label.
 - **Budget row menus: Raise limit everywhere, menus close before dialogs (BR2ED).** Every row menu, including over-budget
   rows, starts with "Raise limit" then "Cover from another budget". Choosing a menu item that opens a dialog closes the
   menu first and hands focus back to the row's ⋯ button when the dialog closes, so the menu no longer floats over the
