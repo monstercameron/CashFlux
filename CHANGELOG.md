@@ -90,6 +90,12 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Money arithmetic can no longer silently overflow or round (MONEY1).** `internal/money` now has checked add, subtract,
+  negate, absolute value, multiply, multiply-then-divide with an explicit rounding mode, ceiling division and sums that
+  return an error instead of wrapping; exact decimal parsing that rejects excess precision and out-of-range values
+  (including the case that used to come back as the most negative number); correct formatting of the extreme values; and
+  an exact largest-remainder allocation that always preserves the total. Fuzz and property tests compare against
+  arbitrary-precision arithmetic. Callers move to the checked APIs in the following money lanes.
 - **Every CSV export is safe to open in a spreadsheet (SEC4, SEC6.1).** All text and id columns of the transaction export
   (ids, payee, description, category, account, member, currency, tags, notes) and every report, split and subscription
   export neutralise cells that would start a formula; amounts, dates and booleans stay plain, and re-importing a CashFlux

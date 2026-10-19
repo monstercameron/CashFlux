@@ -57,47 +57,84 @@ func (m Money) IsPositive() bool { return m.Amount > 0 }
 // IsNegative reports whether the amount is less than zero.
 func (m Money) IsNegative() bool { return m.Amount < 0 }
 
-// Neg returns the additive inverse of m.
+// Neg returns the additive inverse of m. It panics with ErrOverflow when the
+// result cannot be represented.
+//
+// Deprecated: use NegChecked to handle overflow as an error.
 func (m Money) Neg() Money {
-	return Money{Amount: -m.Amount, Currency: m.Currency}
-}
-
-// Abs returns the absolute value of m.
-func (m Money) Abs() Money {
-	if m.Amount < 0 {
-		return m.Neg()
+	result, err := m.NegChecked()
+	if err != nil {
+		panic(err)
 	}
-	return m
+	return result
 }
 
-// Add returns m + n. It fails if the two values are in different currencies or
-// if the sum would overflow the int64 minor-unit range.
+// NegChecked returns the additive inverse of m, or ErrOverflow for MinInt64.
+func (m Money) NegChecked() (Money, error) {
+	amount, err := Neg(m.Amount)
+	if err != nil {
+		return Money{}, err
+	}
+	return Money{Amount: amount, Currency: m.Currency}, nil
+}
+
+// Abs returns the absolute value of m. It panics with ErrOverflow for MinInt64.
+//
+// Deprecated: use AbsChecked to handle overflow as an error.
+func (m Money) Abs() Money {
+	result, err := m.AbsChecked()
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
+
+// AbsChecked returns the magnitude of m, or ErrOverflow for MinInt64.
+func (m Money) AbsChecked() (Money, error) {
+	amount, err := Abs(m.Amount)
+	if err != nil {
+		return Money{}, err
+	}
+	return Money{Amount: amount, Currency: m.Currency}, nil
+}
+
+// Add returns m+n, checking both currency and overflow.
 func (m Money) Add(n Money) (Money, error) {
 	if m.Currency != n.Currency {
 		return Money{}, currencyMismatch(m, n)
 	}
-	sum := m.Amount + n.Amount
-	// Signed addition overflows when the result's sign disagrees with the
-	// (equal) signs of both operands.
-	if (n.Amount > 0 && sum < m.Amount) || (n.Amount < 0 && sum > m.Amount) {
-		return Money{}, fmt.Errorf("%w: %d + %d", ErrOverflow, m.Amount, n.Amount)
+	amount, err := Add(m.Amount, n.Amount)
+	if err != nil {
+		return Money{}, err
 	}
-	return Money{Amount: sum, Currency: m.Currency}, nil
+	return Money{Amount: amount, Currency: m.Currency}, nil
 }
 
-// Sub returns m - n. It fails if the two values are in different currencies or
-// if the difference would overflow the int64 minor-unit range.
+// Sub returns m-n, checking both currency and overflow.
 func (m Money) Sub(n Money) (Money, error) {
 	if m.Currency != n.Currency {
 		return Money{}, currencyMismatch(m, n)
 	}
-	diff := m.Amount - n.Amount
-	// Signed subtraction overflows when the operands' signs differ and the
-	// result's sign disagrees with the minuend's.
-	if (n.Amount < 0 && diff < m.Amount) || (n.Amount > 0 && diff > m.Amount) {
-		return Money{}, fmt.Errorf("%w: %d - %d", ErrOverflow, m.Amount, n.Amount)
+	amount, err := Sub(m.Amount, n.Amount)
+	if err != nil {
+		return Money{}, err
 	}
-	return Money{Amount: diff, Currency: m.Currency}, nil
+	return Money{Amount: amount, Currency: m.Currency}, nil
+}
+
+// Mul multiplies m by an integer, checking overflow and preserving currency.
+func (m Money) Mul(factor int64) (Money, error) {
+	return m.MulDiv(factor, 1, RoundTowardZero)
+}
+
+// MulDiv scales m by num/den with explicit rounding, checking overflow and
+// preserving currency. Only the final rounded amount must fit in int64.
+func (m Money) MulDiv(num, den int64, mode RoundingMode) (Money, error) {
+	amount, err := MulDiv(m.Amount, num, den, mode)
+	if err != nil {
+		return Money{}, err
+	}
+	return Money{Amount: amount, Currency: m.Currency}, nil
 }
 
 // Cmp compares m and n, returning -1 if m < n, 0 if equal, and +1 if m > n.
@@ -133,7 +170,8 @@ func currencyMismatch(m, n Money) error {
 }
 
 // Sum adds any number of same-currency Money values. With no arguments it
-// returns the zero value. It fails on the first currency mismatch.
+// returns the zero value. It fails on the first currency mismatch or partial-sum
+// overflow.
 func Sum(values ...Money) (Money, error) {
 	if len(values) == 0 {
 		return Money{}, nil

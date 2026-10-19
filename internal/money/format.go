@@ -5,6 +5,7 @@ package money
 import (
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 )
@@ -12,30 +13,66 @@ import (
 // ErrInvalidAmount is returned when a string cannot be parsed as a money amount.
 var ErrInvalidAmount = errors.New("money: invalid amount")
 
-// FormatMinor renders an integer minor-unit amount as a plain decimal string
-// with the given number of decimal places — no currency symbol and no thousands
-// grouping (suited to CSV and round-tripping). Display formatting with symbols
-// and grouping lives in the UI layer.
+// MaxDecimals is the largest supported decimal precision. It bounds parsing
+// and formatting work and includes all currency exponents used by CashFlux.
+const MaxDecimals = 18
+
+// MaxAmountLength bounds input bytes, including any surrounding whitespace.
+const MaxAmountLength = 128
+
+// ErrInvalidPrecision is returned for a precision outside [0, MaxDecimals].
+var ErrInvalidPrecision = errors.New("money: invalid decimal precision")
+
+// FormatMinor renders exact minor units as a plain decimal string, without
+// rounding, symbols or grouping. It panics for unsupported precision.
+//
+// Deprecated: use FormatMinorChecked to handle invalid precision as an error.
 func FormatMinor(amount int64, decimals int) string {
-	if decimals <= 0 {
-		return strconv.FormatInt(amount, 10)
+	result, err := FormatMinorChecked(amount, decimals)
+	if err != nil {
+		panic(err)
 	}
-	neg := amount < 0
-	if neg {
-		amount = -amount
+	return result
+}
+
+// FormatMinorChecked renders exact minor units without rounding, symbols or
+// grouping. Precision must be in [0, MaxDecimals]. MinInt64 is supported.
+func FormatMinorChecked(amount int64, decimals int) (string, error) {
+	if decimals < 0 || decimals > MaxDecimals {
+		return "", ErrInvalidPrecision
 	}
-	div := pow10i(decimals)
-	whole := amount / div
-	frac := amount % div
-	s := fmt.Sprintf("%d.%0*d", whole, decimals, frac)
-	if neg {
-		return "-" + s
+	digits := strconv.FormatUint(magnitude(amount), 10)
+	if decimals > 0 {
+		if len(digits) <= decimals {
+			digits = strings.Repeat("0", decimals+1-len(digits)) + digits
+		}
+		point := len(digits) - decimals
+		digits = digits[:point] + "." + digits[point:]
 	}
-	return s
+	if amount < 0 {
+		digits = "-" + digits
+	}
+	return digits, nil
 }
 
 // Format renders the Money's amount with the given number of decimal places.
+// It panics for unsupported precision.
+//
+// Deprecated: use FormatChecked to handle invalid precision as an error.
 func (m Money) Format(decimals int) string { return FormatMinor(m.Amount, decimals) }
+
+// FormatChecked renders the Money's exact amount, checking decimal precision.
+func (m Money) FormatChecked(decimals int) (string, error) {
+	return FormatMinorChecked(m.Amount, decimals)
+}
+
+// magnitude returns an unsigned magnitude without negating MinInt64.
+func magnitude(amount int64) uint64 {
+	if amount < 0 {
+		return uint64(-(amount + 1)) + 1
+	}
+	return uint64(amount)
+}
 
 // Group inserts thousands separators (commas) into the integer portion of a
 // plain decimal string as produced by FormatMinor. A leading minus sign and the
@@ -78,28 +115,45 @@ func groupDigits(d string) string {
 	return b.String()
 }
 
-// FormatAccounting renders an integer minor-unit amount in accounting style: the
-// currency symbol immediately precedes the comma-grouped magnitude, `decimals`
-// fractional places are always shown, and negative values are wrapped in
-// parentheses with no minus sign — e.g. 123456 -> "$1,234.56" and
-// -24055 -> "($240.55)". The caller supplies the symbol (from internal/currency)
-// so this package stays free of the currency registry.
+// FormatAccounting renders an exact amount with the supplied symbol, comma
+// grouping and parentheses for negatives. It panics for unsupported precision.
+//
+// Deprecated: use FormatAccountingChecked to handle invalid precision as an error.
 func FormatAccounting(amount int64, decimals int, symbol string) string {
-	neg := amount < 0
-	if neg {
-		amount = -amount
+	result, err := FormatAccountingChecked(amount, decimals, symbol)
+	if err != nil {
+		panic(err)
 	}
-	body := symbol + Group(FormatMinor(amount, decimals))
-	if neg {
-		return "(" + body + ")"
-	}
-	return body
+	return result
 }
 
-// ParseMinor parses a plain decimal string into an integer minor-unit amount
-// using the given number of decimal places. More fractional digits than
-// `decimals` is an error (to avoid silent rounding). No thousands separators.
+// FormatAccountingChecked renders an exact amount with the supplied symbol,
+// comma grouping and parentheses for negatives, checking decimal precision.
+func FormatAccountingChecked(amount int64, decimals int, symbol string) (string, error) {
+	plain, err := FormatMinorChecked(amount, decimals)
+	if err != nil {
+		return "", err
+	}
+	body := symbol + Group(strings.TrimPrefix(plain, "-"))
+	if amount < 0 {
+		return "(" + body + ")", nil
+	}
+	return body, nil
+}
+
+// ParseMinor parses a plain decimal into exact minor units. It accepts optional
+// surrounding whitespace, one leading sign, and omitted digits on either side
+// of the point (but not both). Precision must be in [0, MaxDecimals]; input is
+// limited to MaxAmountLength bytes. Excess precision, malformed input and amounts
+// outside int64 are errors. No rounding or thousands separators are supported.
+// Range errors match both ErrInvalidAmount and ErrOverflow.
 func ParseMinor(s string, decimals int) (int64, error) {
+	if decimals < 0 || decimals > MaxDecimals {
+		return 0, fmt.Errorf("%w: %w", ErrInvalidAmount, ErrInvalidPrecision)
+	}
+	if len(s) > MaxAmountLength {
+		return 0, fmt.Errorf("%w: input is too long", ErrInvalidAmount)
+	}
 	s = strings.TrimSpace(s)
 	if s == "" {
 		return 0, ErrInvalidAmount
@@ -111,55 +165,52 @@ func ParseMinor(s string, decimals int) (int64, error) {
 	case '+':
 		s = s[1:]
 	}
-
 	intPart, fracPart := s, ""
 	if i := strings.IndexByte(s, '.'); i >= 0 {
 		intPart, fracPart = s[:i], s[i+1:]
 	}
-	if intPart == "" && fracPart == "" {
-		return 0, ErrInvalidAmount
+	if (intPart == "" && fracPart == "") || !allDigits(intPart) || !allDigits(fracPart) {
+		return 0, fmt.Errorf("%w: malformed decimal", ErrInvalidAmount)
 	}
 	if len(fracPart) > decimals {
-		return 0, fmt.Errorf("%w: too many decimal places in %q", ErrInvalidAmount, s)
+		return 0, fmt.Errorf("%w: too many decimal places", ErrInvalidAmount)
 	}
-	if intPart == "" {
-		intPart = "0"
+	limit := uint64(math.MaxInt64)
+	if neg {
+		limit++ // The negative range has one additional representable magnitude.
 	}
-	for len(fracPart) < decimals {
-		fracPart += "0"
+	var value uint64
+	appendDigit := func(digit uint64) bool {
+		if value > (limit-digit)/10 {
+			return false
+		}
+		value = value*10 + digit
+		return true
 	}
-	if !allDigits(intPart) || !allDigits(fracPart) {
-		return 0, fmt.Errorf("%w: %q", ErrInvalidAmount, s)
-	}
-
-	whole, err := strconv.ParseInt(intPart, 10, 64)
-	if err != nil {
-		return 0, fmt.Errorf("%w: %q", ErrInvalidAmount, s)
-	}
-	var frac int64
-	if fracPart != "" {
-		if frac, err = strconv.ParseInt(fracPart, 10, 64); err != nil {
-			return 0, fmt.Errorf("%w: %q", ErrInvalidAmount, s)
+	for _, part := range []string{intPart, fracPart} {
+		for i := 0; i < len(part); i++ {
+			if !appendDigit(uint64(part[i] - '0')) {
+				return 0, fmt.Errorf("%w: %w", ErrInvalidAmount, ErrOverflow)
+			}
 		}
 	}
-	val := whole*pow10i(decimals) + frac
+	for i := len(fracPart); i < decimals; i++ {
+		if !appendDigit(0) {
+			return 0, fmt.Errorf("%w: %w", ErrInvalidAmount, ErrOverflow)
+		}
+	}
 	if neg {
-		val = -val
+		if value == uint64(1)<<63 {
+			return math.MinInt64, nil
+		}
+		return -int64(value), nil
 	}
-	return val, nil
-}
-
-func pow10i(n int) int64 {
-	p := int64(1)
-	for i := 0; i < n; i++ {
-		p *= 10
-	}
-	return p
+	return int64(value), nil
 }
 
 func allDigits(s string) bool {
-	for _, r := range s {
-		if r < '0' || r > '9' {
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
 			return false
 		}
 	}
