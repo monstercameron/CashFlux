@@ -10,28 +10,16 @@ import (
 	"github.com/monstercameron/CashFlux/internal/staging"
 )
 
-// C689 stages a file to preview it and then imports the raw bytes, so the two
-// decide independently which rows are new. They agree today because both ask
-// dedupe.Key — but agreement by coincidence is exactly how the duplicates screen
-// and the importer came to disagree in the first place (C688), and nothing was
-// checking it.
-//
-// This is that check: for the same file and the same ledger, what staging says
-// will import and what the importer actually writes must match.
+// StageCSV is the public preflight path; the legacy importer delegates to the
+// same model. Compare every row outcome so preview agreement cannot be a
+// coincidence between a test-only parser and a different production parser.
 func stageSameCSV(t *testing.T, a *App, csv, fallback string) staging.Batch {
 	t.Helper()
-	parsed, err := a.ParseCSVForPreview([]byte(csv), fallback)
+	batch, err := a.StageCSV([]byte(csv), fallback)
 	if err != nil {
-		t.Fatalf("ParseCSVForPreview: %v", err)
+		t.Fatalf("StageCSV: %v", err)
 	}
-	inputs := make([]staging.Input, 0, len(parsed))
-	for _, x := range parsed {
-		inputs = append(inputs, staging.Input{
-			Date: x.Date, Description: x.Desc, AmountMinor: x.Amount.Amount,
-			HasAmount: true, AccountID: x.AccountID,
-		})
-	}
-	return staging.Stage(inputs, a.Transactions(), fallback, "USD")
+	return batch.Batch
 }
 
 func seedAgreementAccount(t *testing.T, a *App) {
@@ -57,6 +45,7 @@ func TestStagingAndTheImporterAgreeOnWhatIsNew(t *testing.T) {
 		file string
 	}{
 		{"an entirely new file", "", fresh},
+		{"an unknown account is a row error", "", "date,account,desc,amount\n2026-06-10,Chase Visa,Coffee,-10\n"},
 		{"a file already fully imported", fresh, fresh},
 		{"a file overlapping an earlier one", "date,account_id,desc,amount\n2026-06-10,Checking,Coffee,-10\n", fresh},
 		{"a file repeating a row within itself", "",
@@ -88,6 +77,9 @@ func TestStagingAndTheImporterAgreeOnWhatIsNew(t *testing.T) {
 			if got := len(batch.Approved()); got != written {
 				t.Errorf("staging approved %d rows, the importer wrote %d — the preview and the import disagree",
 					got, written)
+			}
+			if batch.Counts.Unusable != len(res.Failed) {
+				t.Errorf("staging rejected %d, importer rejected %d", batch.Counts.Unusable, len(res.Failed))
 			}
 			// The skipped halves must agree too, or the preview's summary is a
 			// different story from the one the history records.

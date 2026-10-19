@@ -66,24 +66,6 @@ func TestParseRowsKeepsSourceAccountCurrencyAndStatus(t *testing.T) {
 	}
 }
 
-func TestFilterNewDoesNotReimportStatusRows(t *testing.T) {
-	ledgerRow := Row{
-		Date:        "2026-06-01",
-		Description: "Coffee Shop",
-		Amount:      "-4.50",
-		AccountID:   "checking",
-		Currency:    "USD",
-	}
-	seen := map[string]bool{ledgerRow.Signature(): true}
-	for _, status := range []string{"posted", "cleared", "pending"} {
-		row := ledgerRow
-		row.Status = status
-		if got := FilterNew([]Row{row}, seen); len(got) != 0 {
-			t.Errorf("status %q re-imported existing row: %+v", status, got)
-		}
-	}
-}
-
 func TestSignatureNormalizesAmount(t *testing.T) {
 	a := Row{Date: "2026-06-01", Amount: "-4.5"}
 	b := Row{Date: "2026-06-01", Amount: "-4.50"}
@@ -102,20 +84,6 @@ func TestSignatureNormalizesAmount(t *testing.T) {
 	e := Row{Date: "2026-06-01", Amount: "-4.50", Description: "  COFFEE  "}
 	if d.Signature() != e.Signature() {
 		t.Error("merchant whitespace and case should normalize")
-	}
-}
-
-func TestFilterNew(t *testing.T) {
-	rows := []Row{
-		{Date: "2026-06-01", Amount: "-4.50", Description: "Coffee"},
-		{Date: "2026-06-02", Amount: "-10", Description: "Lunch"},
-	}
-	seen := map[string]bool{
-		(Row{Date: "2026-06-01", Amount: "-4.5", Description: "Coffee"}).Signature(): true,
-	}
-	got := FilterNew(rows, seen)
-	if len(got) != 1 || got[0].Description != "Lunch" {
-		t.Errorf("expected only Lunch to survive, got %+v", got)
 	}
 }
 

@@ -33,6 +33,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -78,6 +79,20 @@ func (v Verdict) String() string {
 // Row is one staged line: what it was, what it normalized to, and what will
 // happen to it.
 type Row struct {
+	// ID identifies this occurrence independently of its position in a review list.
+	ID string
+	// Line is the source record number (CSV header is record one).
+	Line int
+	// Transaction is the exact normalized candidate to write after approval.
+	Transaction domain.Transaction
+	// Currency is the resolved currency of AmountMinor.
+	Currency string
+	// Occurrence counts equal identities within the source, starting at one.
+	Occurrence int
+	// PossibleDuplicate warns about repetitions or equal amounts with another merchant.
+	// It never silently discards a same-file occurrence.
+	PossibleDuplicate bool
+
 	// Index is the row's position in the file, so a review table can point at the
 	// line a person is looking at rather than at a row number of its own.
 	Index int
@@ -85,6 +100,9 @@ type Row struct {
 	// a guess and categorization stays debuggable only while the original is
 	// visible.
 	RawDescription string
+	// RawDate, RawAmount, RawCurrency and RawAccount retain editable source
+	// values, including values that failed validation.
+	RawDate, RawAmount, RawCurrency, RawAccount string
 
 	// AccountID, Date, AmountMinor and Merchant are the normalized row.
 	AccountID   string
@@ -121,6 +139,17 @@ type Counts struct {
 
 // Input is one line as read from a statement, before staging.
 type Input struct {
+	// ID is a stable draft identity, preserved when supplied by the source.
+	ID string
+	// Line is the source record number, or zero to use Index + 1.
+	Line int
+	// RawDate, RawAmount, RawCurrency and RawAccount retain the source spelling.
+	RawDate, RawAmount, RawCurrency, RawAccount string
+	// Currency is the resolved account currency, including on invalid rows.
+	Currency string
+	// Error is a parse or validation failure retained in the batch.
+	Error string
+
 	// Transaction is the parsed row when available. It preserves payee, status,
 	// and the row's actual currency for the shared dedupe key.
 	Transaction *domain.Transaction
@@ -151,19 +180,37 @@ func Stage(inputs []Input, existing []domain.Transaction, fallbackAccountID, cur
 		matchIDs[key] = append(matchIDs[key], t.ID)
 	}
 
+	occurrences := map[string]int{}
+	ambiguous := map[string]bool{}
+	for _, tx := range existing {
+		ambiguous[dedupe.AmbiguityKey(tx)] = true
+	}
 	b := Batch{Rows: make([]Row, 0, len(inputs))}
 	for i, in := range inputs {
-		r := Row{Index: i, RawDescription: in.Description}
+		r := Row{ID: in.ID, Line: in.Line, Index: i, RawDescription: in.Description,
+			RawDate: in.RawDate, RawAmount: in.RawAmount, RawCurrency: in.RawCurrency, RawAccount: in.RawAccount}
+		if r.Line == 0 {
+			r.Line = i + 1
+		}
+		if r.ID == "" {
+			r.ID = "row-" + strconv.Itoa(r.Line)
+		}
 
 		r.AccountID = in.AccountID
-		if r.AccountID == "" {
+		if r.AccountID == "" && in.Error == "" {
 			r.AccountID = fallbackAccountID
+		}
+		r.Currency = in.Currency
+		if r.Currency == "" {
+			r.Currency = currency
 		}
 		r.Date = in.Date
 		r.AmountMinor = in.AmountMinor
 		r.Merchant = Normalize(in.Description)
 
 		switch {
+		case in.Error != "":
+			r.Verdict, r.Reason = Unusable, in.Error
 		case r.AccountID == "":
 			r.Verdict, r.Reason = Unusable, "no account"
 		case in.Date.IsZero():
@@ -178,12 +225,15 @@ func Stage(inputs []Input, existing []domain.Transaction, fallbackAccountID, cur
 
 		candidate := domain.Transaction{
 			AccountID: r.AccountID, Date: r.Date, Desc: in.Description,
-			Amount: money.New(r.AmountMinor, currency),
+			Amount: money.New(r.AmountMinor, r.Currency),
 		}
 		if in.Transaction != nil {
 			candidate = *in.Transaction
 			candidate.AccountID = r.AccountID
 		}
+		r.Transaction = candidate
+		r.Currency = candidate.Amount.Currency
+		r.Date, r.AmountMinor = candidate.Date, candidate.Amount.Amount
 		merchant := candidate.Payee
 		if strings.TrimSpace(merchant) == "" {
 			merchant = candidate.Desc
@@ -191,6 +241,10 @@ func Stage(inputs []Input, existing []domain.Transaction, fallbackAccountID, cur
 		r.Merchant = Normalize(merchant)
 		r.Hash = HashTransaction(candidate)
 		key := dedupe.Key(candidate)
+		occurrences[key]++
+		r.Occurrence = occurrences[key]
+		r.PossibleDuplicate = r.Occurrence > 1 || ambiguous[dedupe.AmbiguityKey(candidate)]
+		ambiguous[dedupe.AmbiguityKey(candidate)] = true
 		if dedupe.ConsumeExisting(remaining, key) {
 			r.Verdict = Duplicate
 			matched := len(matchIDs[key]) - remaining[key] - 1

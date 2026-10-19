@@ -10,8 +10,6 @@
 package appstate
 
 import (
-	"bytes"
-	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -31,8 +29,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/catname"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
-	"github.com/monstercameron/CashFlux/internal/dateutil"
-	"github.com/monstercameron/CashFlux/internal/dedupe"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/engineenv"
 	"github.com/monstercameron/CashFlux/internal/extract"
@@ -207,14 +203,6 @@ func (a *App) TransactionsCSV(txns []domain.Transaction) ([]byte, error) {
 	return store.TransactionsToCSV(txns)
 }
 
-// ImportTransactionsCSV parses CSV transaction rows and stores each via the
-// validated write path, returning how many were imported, which rows were
-// skipped (per-row parse failures), and any structural error (malformed CSV).
-// Missing currencies default to the household base currency, and
-// account/category/member cells given as names (a hand-written CSV) are
-// resolved to ids (C27). fallbackAccountID is applied to any row whose account
-// column is blank or unresolvable — pass "" to keep the previous behavior
-// (rows without an account are rejected by the validated write path).
 // CSVImportResult is what one CSV import actually did, with the outcomes kept
 // apart (C687).
 //
@@ -226,6 +214,8 @@ func (a *App) TransactionsCSV(txns []domain.Transaction) ([]byte, error) {
 // duplicate is the safeguard working, a parse failure is money missing from the
 // ledger that nothing else will notice.
 type CSVImportResult struct {
+	// Outcomes preserves a result for every staged source row.
+	Outcomes []ImportRowOutcome
 	// Imported is how many rows were written.
 	Imported int
 	// Duplicates is how many rows the ledger already had.
@@ -240,14 +230,6 @@ type CSVImportResult struct {
 	DocumentID string
 }
 
-// CSVImportPreview contains the deterministic rows and duplicate review signals
-// available before CSV import is committed.
-type CSVImportPreview struct {
-	Rows               []domain.Transaction
-	Duplicates         []store.CSVRowError
-	PossibleDuplicates []store.CSVRowError
-}
-
 // Presented is how many rows the file offered in total.
 func (r CSVImportResult) Presented() int { return r.Imported + r.Duplicates + len(r.Failed) }
 
@@ -258,181 +240,25 @@ func (r CSVImportResult) Presented() int { return r.Imported + r.Duplicates + le
 // checkable afterwards: without it, "this run added 688 rows" and "the ledger
 // holds 565" are two unconnected numbers and the difference has no explanation.
 // Empty means the caller is not recording a run.
-func (a *App) ImportTransactionsCSV(data []byte, fallbackAccountID, docID string) (CSVImportResult, error) {
-	if err := a.roleGuard(); err != nil {
-		return CSVImportResult{}, err
-	}
-	auditview.SetSessionActor(auditview.ActorImport)
-	defer func() { auditview.CaptureNow(); auditview.SetSessionActor("") }()
-	base := "USD"
-	if s := a.Settings(); s.BaseCurrency != "" {
-		base = s.BaseCurrency
-	}
-	txns, skipped, err := store.TransactionsFromCSVResilient(data, base)
+func (a *App) ImportTransactionsCSV(data []byte, fallbackAccountID, docID string, checkpointID ...string) (CSVImportResult, error) {
+	batch, err := a.StageCSV(data, fallbackAccountID)
 	if err != nil {
 		return CSVImportResult{}, err
 	}
-	resolveAcc, resolveCat, resolveMem := a.importResolvers()
-	accountCurrency := make(map[string]string, len(a.Accounts()))
-	for _, account := range a.Accounts() {
-		accountCurrency[account.ID] = account.Currency
+	result, err := a.Commit(batch, docID, firstCheckpoint(checkpointID))
+	// Compatibility callers render per-row failures rather than an additional
+	// storage error; the new Commit API returns both.
+	if err != nil && len(result.Failed) > 0 {
+		return result, nil
 	}
-	defaultCurrencyRows := csvRowsMissingCurrency(data, skipped)
-	defaultCurrencyErrors := make(map[int]error)
-	ruleByIndex := make(map[int]string, len(txns))
-	for i := range txns {
-		txns[i].AccountID = resolveAcc(txns[i].AccountID)
-		if txns[i].AccountID == "" {
-			txns[i].AccountID = fallbackAccountID
-		}
-		if i < len(defaultCurrencyRows) && defaultCurrencyRows[i].missing && accountCurrency[txns[i].AccountID] != "" {
-			accountCurr := accountCurrency[txns[i].AccountID]
-			minor, parseErr := money.ParseMinor(defaultCurrencyRows[i].amount, currency.Decimals(accountCurr))
-			if parseErr != nil {
-				defaultCurrencyErrors[i] = parseErr
-			} else {
-				txns[i].Amount = money.New(minor, accountCurr)
-			}
-		}
-		txns[i].TransferAccountID = resolveAcc(txns[i].TransferAccountID)
-		txns[i].CategoryID = resolveCat(txns[i].CategoryID)
-		owners := txns[i].Owners()
-		for j := range owners {
-			owners[j] = resolveMem(owners[j])
-		}
-		txns[i].SetOwners(owners)
-		if !txns[i].IsTransfer() {
-			ruleByIndex[i] = a.autoRuleFor(txns[i].Payee, txns[i].Desc, txns[i].Amount.Amount, txns[i].AccountID, rules.NewTxnDate(txns[i].Date))
-		}
-		txns[i] = a.AutoCategorizeTransaction(txns[i])
-	}
-	seen, baseSeen := map[string]int{}, map[string]bool{}
-	for _, old := range a.Transactions() {
-		seen[dedupe.Key(old)]++
-		baseSeen[dedupe.AmbiguityKey(old)] = true
-	}
-	result := CSVImportResult{Duplicates: 0, Failed: append([]store.CSVRowError(nil), skipped...), DocumentID: docID}
-	prepared := make([]domain.Transaction, 0, len(txns))
-	preparedLines := make([]int, 0, len(txns))
-	ids := make(map[string]bool, len(txns))
-	ruleHits := map[string]int{}
-	for i, txn := range txns {
-		line := csvSourceLine(i, skipped)
-		if parseErr := defaultCurrencyErrors[i]; parseErr != nil {
-			result.Failed = append(result.Failed, store.CSVRowError{Line: line, Reason: fmt.Sprintf("amount is invalid for account currency: %v", parseErr)})
-			continue
-		}
-		key := dedupe.Key(txn)
-		if dedupe.ConsumeExisting(seen, key) {
-			result.Duplicates++
-			continue
-		}
-		if baseSeen[dedupe.AmbiguityKey(txn)] {
-			result.PossibleDuplicates = append(result.PossibleDuplicates, store.CSVRowError{Line: line, Reason: "possible duplicate: same date, account, amount, and currency; review whether this is a separate purchase or a pending-to-posted pair"})
-		}
-		if ids[txn.ID] {
-			result.Failed = append(result.Failed, store.CSVRowError{Line: line, Reason: "transaction ID is repeated in this file"})
-			continue
-		}
-		ids[txn.ID] = true
-		txn.SourceDocID = docID
-		if issues := validate.ValidateTransaction(txn); !issues.OK() {
-			result.Failed = append(result.Failed, store.CSVRowError{Line: line, Reason: issues.Error()})
-			continue
-		}
-		if err := a.validateCustom("transaction", txn.Custom); err != nil {
-			result.Failed = append(result.Failed, store.CSVRowError{Line: line, Reason: err.Error()})
-			continue
-		}
-		prepared = append(prepared, txn)
-		preparedLines = append(preparedLines, line)
-		baseSeen[dedupe.AmbiguityKey(txn)] = true
-		if rid := ruleByIndex[i]; rid != "" {
-			ruleHits[rid]++
-		}
-	}
-	doc := domain.Document{}
-	if docID != "" {
-		status := domain.DocImported
-		if len(prepared) == 0 && len(result.Failed) > 0 {
-			status = domain.DocFailed
-		}
-		doc = domain.Document{ID: docID, Kind: domain.DocCSV, UploadedAt: a.now(), Status: status,
-			AccountID: fallbackAccountID, RowCount: len(prepared), SkippedCount: result.Duplicates + len(result.Failed),
-			DuplicateCount: result.Duplicates, FailedCount: len(result.Failed), RowsLinked: true}
-	}
-	err = a.store.PutImportBatch(prepared, doc)
-	if err != nil {
-		for _, line := range preparedLines {
-			result.Failed = append(result.Failed, store.CSVRowError{Line: line, Reason: "import batch was not saved: " + err.Error()})
-		}
-		if len(preparedLines) == 0 {
-			result.Failed = append(result.Failed, store.CSVRowError{Reason: "import history was not saved: " + err.Error()})
-		}
-		prepared = nil
-	} else {
-		result.Imported = len(prepared)
-		if len(prepared) > 0 {
-			a.fireTxnMutated()
-		}
-		for i := range prepared {
-			a.applySinkingFundDrawdown(prepared[i])
-			a.RunTriggered(workflow.TriggerTxnAdded, &prepared[i])
-			a.resolveTasksForTxn(prepared[i])
-		}
-		if err := a.CreditRuleHits(ruleHits); err != nil {
-			a.log.Error("credit rule hits after import", "err", err)
-		}
-	}
-	a.log.Info("imported transactions from CSV", "imported", result.Imported, "parsed", len(txns), "duplicatesSkipped", result.Duplicates, "failed", len(result.Failed))
-	return result, nil
+	return result, err
 }
 
-type csvDefaultCurrencyRow struct {
-	missing bool
-	amount  string
-}
-
-func csvRowsMissingCurrency(data []byte, skipped []store.CSVRowError) []csvDefaultCurrencyRow {
-	data = bytes.TrimPrefix(data, []byte{0xef, 0xbb, 0xbf})
-	reader := csv.NewReader(bytes.NewReader(data))
-	reader.FieldsPerRecord = -1
-	if header, _, ok := bytes.Cut(data, []byte("\n")); ok && bytes.Count(header, []byte(";")) > bytes.Count(header, []byte(",")) {
-		reader.Comma = ';'
+func firstCheckpoint(ids []string) string {
+	if len(ids) > 0 {
+		return ids[0]
 	}
-	records, err := reader.ReadAll()
-	if err != nil {
-		return nil
-	}
-	if len(records) == 0 {
-		return nil
-	}
-	currencyIndex, amountIndex := -1, -1
-	for i, name := range records[0] {
-		switch strings.ToLower(strings.TrimSpace(name)) {
-		case "currency":
-			currencyIndex = i
-		case "amount":
-			amountIndex = i
-		}
-	}
-	skippedLines := make(map[int]struct{}, len(skipped))
-	for _, row := range skipped {
-		skippedLines[row.Line] = struct{}{}
-	}
-	missing := make([]csvDefaultCurrencyRow, 0, len(records)-1)
-	for i, row := range records[1:] {
-		if _, bad := skippedLines[i+2]; bad {
-			continue
-		}
-		isMissing := currencyIndex < 0 || currencyIndex >= len(row) || strings.TrimSpace(row[currencyIndex]) == ""
-		amount := ""
-		if amountIndex >= 0 && amountIndex < len(row) {
-			amount = strings.TrimSpace(row[amountIndex])
-		}
-		missing = append(missing, csvDefaultCurrencyRow{missing: isMissing, amount: amount})
-	}
-	return missing
+	return ""
 }
 
 func (a *App) importResolvers() (func(string) string, func(string) string, func(string) string) {
@@ -459,110 +285,6 @@ func csvSourceLine(parsedIndex int, skipped []store.CSVRowError) int {
 		}
 	}
 	return line
-}
-
-// PreviewCSVImport parses data as CSV transactions (using the same logic as
-// ImportTransactionsCSV) and returns the total number of parseable rows and how
-// many of those would be skipped as duplicates of existing transactions — without
-// writing anything to the store. Use the returned counts to surface a pre-import
-// duplicate warning to the user before calling ImportTransactionsCSV.
-func (a *App) PreviewCSVImport(data []byte, fallbackAccountID string) (total, dupes int, err error) {
-	txns, err := a.ParseCSVForPreview(data, fallbackAccountID)
-	if err != nil {
-		return 0, 0, err
-	}
-	d := dedupe.CountIncomingDuplicates(txns, a.Transactions(), fallbackAccountID)
-	return len(txns), d, nil
-}
-
-// PreviewCSVImportDetails classifies exact duplicates and possible duplicates
-// without writing transactions or import history.
-func (a *App) PreviewCSVImportDetails(data []byte, fallbackAccountID string) (CSVImportPreview, error) {
-	rows, err := a.ParseCSVForPreview(data, fallbackAccountID)
-	if err != nil {
-		return CSVImportPreview{}, err
-	}
-	preview := CSVImportPreview{Rows: rows}
-	seen, candidates := map[string]bool{}, map[string]bool{}
-	for _, old := range a.Transactions() {
-		seen[dedupe.Key(old)] = true
-		candidates[dedupe.AmbiguityKey(old)] = true
-	}
-	for i, row := range rows {
-		line := i + 2
-		if seen[dedupe.Key(row)] {
-			preview.Duplicates = append(preview.Duplicates, store.CSVRowError{Line: line, Reason: "already in the ledger"})
-			continue
-		}
-		if candidates[dedupe.AmbiguityKey(row)] {
-			preview.PossibleDuplicates = append(preview.PossibleDuplicates, store.CSVRowError{Line: line, Reason: "possible duplicate: same date, account, amount, and currency; review whether this is a separate purchase or a pending-to-posted pair"})
-		}
-		seen[dedupe.Key(row)] = true
-		candidates[dedupe.AmbiguityKey(row)] = true
-	}
-	return preview, nil
-}
-
-// ParseCSVForPreview parses data as CSV transactions with the same resolution
-// (account/category/member names → ids, fallback account) the real import
-// applies, WITHOUT writing anything — so pre-commit previews (#57: balance
-// impact, duplicate detail, transfer-pair detection) see exactly the rows the
-// import would store.
-func (a *App) ParseCSVForPreview(data []byte, fallbackAccountID string) ([]domain.Transaction, error) {
-	base := "USD"
-	if s := a.Settings(); s.BaseCurrency != "" {
-		base = s.BaseCurrency
-	}
-	txns, skipped, parseErr := store.TransactionsFromCSVResilient(data, base)
-	if parseErr != nil {
-		return nil, parseErr
-	}
-	missingCurrency := csvRowsMissingCurrency(data, skipped)
-	accountCurrency := make(map[string]string, len(a.Accounts()))
-	for _, account := range a.Accounts() {
-		accountCurrency[account.ID] = account.Currency
-	}
-	// Apply the same account/category/member resolution so AccountIDs match.
-	accPairs := make([][2]string, 0, len(a.Accounts()))
-	for _, ac := range a.Accounts() {
-		accPairs = append(accPairs, [2]string{ac.ID, ac.Name})
-	}
-	catPairs := make([][2]string, 0, len(a.Categories()))
-	for _, c := range a.Categories() {
-		catPairs = append(catPairs, [2]string{c.ID, c.Name})
-	}
-	memPairs := make([][2]string, 0, len(a.Members()))
-	for _, m := range a.Members() {
-		memPairs = append(memPairs, [2]string{m.ID, m.Name})
-	}
-	resolveAcc, resolveCat, resolveMem := idResolver(accPairs), idResolver(catPairs), idResolver(memPairs)
-	parsed := make([]domain.Transaction, 0, len(txns))
-	for i := range txns {
-		txns[i].AccountID = resolveAcc(txns[i].AccountID)
-		if txns[i].AccountID == "" && fallbackAccountID != "" {
-			txns[i].AccountID = fallbackAccountID
-		}
-		if i < len(missingCurrency) && missingCurrency[i].missing {
-			if curr := accountCurrency[txns[i].AccountID]; curr != "" {
-				minor, err := money.ParseMinor(missingCurrency[i].amount, currency.Decimals(curr))
-				if err != nil {
-					// The importer records this row as failed instead of writing it.
-					continue
-				}
-				txns[i].Amount = money.New(minor, curr)
-			}
-		}
-		txns[i].TransferAccountID = resolveAcc(txns[i].TransferAccountID)
-		txns[i].CategoryID = resolveCat(txns[i].CategoryID)
-		owners := txns[i].Owners()
-		for j := range owners {
-			owners[j] = resolveMem(owners[j])
-		}
-		txns[i].SetOwners(owners)
-		txns[i] = a.AutoCategorizeTransaction(txns[i])
-		parsed = append(parsed, txns[i])
-	}
-	return parsed, nil
 }
 
 // idResolver builds a function that maps a CSV reference cell to an entity id:
@@ -1462,20 +1184,12 @@ func (a *App) AutoCategorizeTransaction(t domain.Transaction) domain.Transaction
 
 // DocumentImportResult reports the outcome of committing reviewed document rows.
 type DocumentImportResult struct {
+	Outcomes           []ImportRowOutcome
 	Imported           int
 	Skipped            int
 	Failed             []store.CSVRowError
 	PossibleDuplicates []store.CSVRowError
 	DocumentID         string
-}
-
-// DocumentImportPreview contains transformed review rows and duplicate signals
-// before the caller commits an import.
-type DocumentImportPreview struct {
-	Rows               []extract.Row
-	Duplicates         []store.CSVRowError
-	PossibleDuplicates []store.CSVRowError
-	Failed             []store.CSVRowError
 }
 
 // PutDocument saves an imported-document record (needs an ID).
@@ -1501,201 +1215,20 @@ func (a *App) DeleteDocument(id string) error {
 	return a.del("document", id, a.store.DeleteDocument)
 }
 
-// PreviewReviewedDocumentRows applies the same date, amount, category, and
-// auto-categorization transformation used by ImportReviewedDocumentRows.
-func (a *App) PreviewReviewedDocumentRows(accountID string, rows []extract.Row) ([]extract.Row, []store.CSVRowError, error) {
-	acc, ok := domain.AccountByID(a.Accounts(), accountID)
-	if !ok {
-		return nil, nil, fmt.Errorf("appstate: choose an account for document import")
-	}
-	out := make([]extract.Row, 0, len(rows))
-	var failed []store.CSVRowError
-	for i, row := range rows {
-		txn, err := a.transactionFromDocumentRow(acc, row)
-		if err != nil {
-			failed = append(failed, store.CSVRowError{Line: i + 1, Reason: err.Error()})
-			continue
-		}
-		row.Date = dateutil.FormatDate(txn.Date)
-		row.Amount = money.FormatMinor(txn.Amount.Amount, currency.Decimals(txn.Amount.Currency))
-		if name := a.categoryNameByID(txn.CategoryID); name != "" {
-			row.Category = name
-		}
-		out = append(out, row)
-	}
-	return out, failed, nil
-}
-
-// PreviewReviewedDocumentImport provides transformed rows and duplicate review
-// signals for the staged document import UI.
-func (a *App) PreviewReviewedDocumentImport(accountID string, rows []extract.Row) (DocumentImportPreview, error) {
-	transformed, failed, err := a.PreviewReviewedDocumentRows(accountID, rows)
+// ImportReviewedDocumentRows stages and atomically commits reviewed rows. The
+// optional checkpoint ID is saved with history in the same transaction.
+func (a *App) ImportReviewedDocumentRows(kind domain.DocumentKind, accountID string, rows []extract.Row, checkpointID ...string) (DocumentImportResult, error) {
+	batch, err := a.Stage(kind, rows, accountID)
 	if err != nil {
-		return DocumentImportPreview{}, err
-	}
-	preview := DocumentImportPreview{Rows: transformed, Failed: failed}
-	acc, ok := domain.AccountByID(a.Accounts(), accountID)
-	if !ok {
-		return DocumentImportPreview{}, fmt.Errorf("appstate: choose an account for document import")
-	}
-	seen, candidates := map[string]bool{}, map[string]bool{}
-	for _, txn := range a.Transactions() {
-		if txn.AccountID != acc.ID {
-			continue
-		}
-		merchant := txn.Payee
-		if merchant == "" {
-			merchant = txn.Desc
-		}
-		row := extract.Row{Date: dateutil.FormatDate(txn.Date), Description: merchant, Amount: money.FormatMinor(txn.Amount.Amount, currency.Decimals(txn.Amount.Currency)), AccountID: txn.AccountID, Currency: txn.Amount.Currency}
-		seen[row.Signature()] = true
-		candidates[documentAmbiguityKey(row)] = true
-	}
-	for i, row := range transformed {
-		row.AccountID, row.Currency = acc.ID, acc.Currency
-		line := i + 1
-		for _, issue := range failed {
-			if issue.Line <= line {
-				line++
-			}
-		}
-		if seen[row.Signature()] {
-			preview.Duplicates = append(preview.Duplicates, store.CSVRowError{Line: line, Reason: "already in the ledger"})
-			continue
-		}
-		if candidates[documentAmbiguityKey(row)] {
-			preview.PossibleDuplicates = append(preview.PossibleDuplicates, store.CSVRowError{Line: line, Reason: "possible duplicate: same date, account, amount, and currency; review whether this is a separate purchase or a pending-to-posted pair"})
-		}
-		seen[row.Signature()] = true
-		candidates[documentAmbiguityKey(row)] = true
-	}
-	return preview, nil
-}
-
-// ImportReviewedDocumentRows validates all reviewed rows before storing them,
-// then writes transactions and their history record in one SQLite transaction.
-func (a *App) ImportReviewedDocumentRows(kind domain.DocumentKind, accountID string, rows []extract.Row) (DocumentImportResult, error) {
-	if err := a.roleGuard(); err != nil {
 		return DocumentImportResult{}, err
 	}
-	auditview.SetSessionActor(auditview.ActorImport)
-	defer func() { auditview.CaptureNow(); auditview.SetSessionActor("") }()
-	var result DocumentImportResult
-	acc, ok := domain.AccountByID(a.Accounts(), accountID)
-	if !ok {
-		return result, fmt.Errorf("appstate: choose an account for document import")
+	result, err := a.Commit(batch, id.New(), firstCheckpoint(checkpointID))
+	out := DocumentImportResult{Imported: result.Imported, Skipped: result.Duplicates,
+		Failed: result.Failed, PossibleDuplicates: result.PossibleDuplicates, DocumentID: result.DocumentID, Outcomes: result.Outcomes}
+	if err != nil && len(out.Failed) > 0 {
+		return out, nil
 	}
-	seen, baseSeen := map[string]bool{}, map[string]bool{}
-	for _, txn := range a.Transactions() {
-		if txn.AccountID != acc.ID {
-			continue
-		}
-		row := extract.Row{Date: dateutil.FormatDate(txn.Date), Description: txn.Payee, Amount: money.FormatMinor(txn.Amount.Amount, currency.Decimals(txn.Amount.Currency)), AccountID: txn.AccountID, Currency: txn.Amount.Currency}
-		if row.Description == "" {
-			row.Description = txn.Desc
-		}
-		seen[row.Signature()] = true
-		baseSeen[documentAmbiguityKey(row)] = true
-	}
-	docID := id.New()
-	result.DocumentID = docID
-	prepared := make([]domain.Transaction, 0, len(rows))
-	preparedLines := make([]int, 0, len(rows))
-	importedRows := make([]extract.Row, 0, len(rows))
-	ids := make(map[string]bool, len(rows))
-	for i, row := range rows {
-		row.AccountID, row.Currency = acc.ID, acc.Currency
-		txn, err := a.transactionFromDocumentRow(acc, row)
-		if err != nil {
-			result.Failed = append(result.Failed, store.CSVRowError{Line: i + 1, Reason: err.Error()})
-			continue
-		}
-		row.Date = dateutil.FormatDate(txn.Date)
-		row.Amount = money.FormatMinor(txn.Amount.Amount, currency.Decimals(acc.Currency))
-		if name := a.categoryNameByID(txn.CategoryID); name != "" {
-			row.Category = name
-		}
-		if seen[row.Signature()] {
-			result.Skipped++
-			continue
-		}
-		if baseSeen[documentAmbiguityKey(row)] {
-			result.PossibleDuplicates = append(result.PossibleDuplicates, store.CSVRowError{Line: i + 1, Reason: "possible duplicate: same date, account, amount, and currency; review whether this is a separate purchase or a pending-to-posted pair"})
-		}
-		if ids[txn.ID] {
-			result.Failed = append(result.Failed, store.CSVRowError{Line: i + 1, Reason: "transaction ID is repeated in this file"})
-			continue
-		}
-		ids[txn.ID] = true
-		if issues := validate.ValidateTransaction(txn); !issues.OK() {
-			result.Failed = append(result.Failed, store.CSVRowError{Line: i + 1, Reason: issues.Error()})
-			continue
-		}
-		if err := a.validateCustom("transaction", txn.Custom); err != nil {
-			result.Failed = append(result.Failed, store.CSVRowError{Line: i + 1, Reason: err.Error()})
-			continue
-		}
-		txn.SourceDocID = docID
-		prepared = append(prepared, txn)
-		baseSeen[documentAmbiguityKey(row)] = true
-		preparedLines = append(preparedLines, i+1)
-		importedRows = append(importedRows, row)
-		seen[row.Signature()] = true
-	}
-	status := domain.DocImported
-	if len(prepared) == 0 && len(result.Failed) > 0 {
-		status = domain.DocFailed
-	}
-	doc := domain.Document{ID: docID, Kind: kind, UploadedAt: a.now(), AccountID: acc.ID, Status: status,
-		Extracted: documentRowsFromExtract(importedRows), RowCount: len(prepared), SkippedCount: result.Skipped + len(result.Failed),
-		DuplicateCount: result.Skipped, FailedCount: len(result.Failed), RowsLinked: true}
-	if err := a.store.PutImportBatch(prepared, doc); err != nil {
-		for _, line := range preparedLines {
-			result.Failed = append(result.Failed, store.CSVRowError{Line: line, Reason: "import batch was not saved: " + err.Error()})
-		}
-		if len(preparedLines) == 0 {
-			result.Failed = append(result.Failed, store.CSVRowError{Reason: "import history was not saved: " + err.Error()})
-		}
-		result.DocumentID = ""
-		return result, nil
-	}
-	result.Imported = len(prepared)
-	if result.Imported > 0 {
-		a.fireTxnMutated()
-	}
-	for i := range prepared {
-		a.applySinkingFundDrawdown(prepared[i])
-		a.RunTriggered(workflow.TriggerTxnAdded, &prepared[i])
-		a.resolveTasksForTxn(prepared[i])
-	}
-	return result, nil
-}
-
-func (a *App) transactionFromDocumentRow(acc domain.Account, r extract.Row) (domain.Transaction, error) {
-	amt, err := money.ParseMinor(strings.TrimSpace(r.Amount), currency.Decimals(acc.Currency))
-	if err != nil {
-		return domain.Transaction{}, fmt.Errorf("invalid amount: %w", err)
-	}
-	if amt == 0 {
-		return domain.Transaction{}, fmt.Errorf("amount must not be zero")
-	}
-	date, err := dateutil.ParseDate(strings.TrimSpace(r.Date))
-	if err != nil {
-		return domain.Transaction{}, fmt.Errorf("invalid date: %w", err)
-	}
-	desc := strings.TrimSpace(r.Description)
-	if desc == "" {
-		return domain.Transaction{}, fmt.Errorf("description is required")
-	}
-	txn := domain.Transaction{ID: id.New(), AccountID: acc.ID, Date: date, Desc: desc, CategoryID: a.categoryIDForDocumentRow(r.Category), Amount: money.New(amt, acc.Currency), Source: domain.TxnSourceScanned}
-	if extractStatusCleared(r.Status) {
-		txn.Cleared = true
-	}
-	return a.AutoCategorizeTransaction(txn), nil
-}
-
-func documentAmbiguityKey(r extract.Row) string {
-	return r.AccountID + "|" + strings.TrimSpace(r.Date) + "|" + normalizeImportAmount(r.Amount) + "|" + strings.ToUpper(strings.TrimSpace(r.Currency))
+	return out, err
 }
 
 func extractStatusCleared(status string) bool {
@@ -1704,10 +1237,6 @@ func extractStatusCleared(status string) bool {
 		return true
 	}
 	return false
-}
-
-func normalizeImportAmount(amount string) string {
-	return strings.ReplaceAll(strings.ReplaceAll(strings.TrimSpace(amount), ",", ""), "$", "")
 }
 
 func (a *App) categoryNameByID(categoryID string) string {
@@ -1725,7 +1254,7 @@ func (a *App) categoryIDForDocumentRow(category string) string {
 	}
 	for _, c := range a.Categories() {
 		cn := strings.ToLower(c.Name)
-		if aiCat == cn || len(cn) >= 3 && (strings.Contains(aiCat, cn) || strings.Contains(cn, aiCat)) {
+		if aiCat == strings.TrimSpace(cn) || aiCat == strings.ToLower(c.ID) {
 			return c.ID
 		}
 	}

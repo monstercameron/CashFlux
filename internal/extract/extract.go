@@ -11,16 +11,25 @@
 package extract
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
+
+	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/id"
+	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/staging"
 )
 
 // Row is one extracted transaction candidate, before it is mapped to a real
 // transaction. Fields are strings (as the user will review/edit them).
 type Row struct {
+	// ID is the stable draft identity, retained through review edits.
+	ID          string
 	Date        string
 	Description string
 	Amount      string
@@ -38,7 +47,7 @@ func ParseRows(reply string) ([]Row, error) {
 	s := stripFence(strings.TrimSpace(reply))
 
 	var list []map[string]any
-	if err := json.Unmarshal([]byte(s), &list); err != nil {
+	if err := decodeNumbers([]byte(s), &list); err != nil {
 		// Maybe it's an object wrapping the array under a common key.
 		var obj map[string]json.RawMessage
 		if err2 := json.Unmarshal([]byte(s), &obj); err2 != nil {
@@ -47,7 +56,7 @@ func ParseRows(reply string) ([]Row, error) {
 		found := false
 		for _, key := range []string{"transactions", "rows", "items", "data", "results"} {
 			if v, ok := obj[key]; ok {
-				if json.Unmarshal(v, &list) == nil {
+				if decodeNumbers(v, &list) == nil {
 					found = true
 					break
 				}
@@ -107,7 +116,7 @@ func statusString(m map[string]any) string {
 // from the status stored in the ledger for the same transaction.
 func (r Row) Signature() string {
 	merchant := strings.ToLower(strings.Join(strings.Fields(strings.TrimSpace(r.Description)), " "))
-	return strings.TrimSpace(r.Date) + "|" + normalizeAmount(r.Amount) + "|" + merchant + "|" + strings.TrimSpace(r.AccountID) + "|" + strings.ToUpper(strings.TrimSpace(r.Currency))
+	return strings.TrimSpace(r.Date) + "|" + normalizeAmountForCurrency(r.Amount, r.Currency) + "|" + merchant + "|" + strings.TrimSpace(r.AccountID) + "|" + strings.ToUpper(strings.TrimSpace(r.Currency))
 }
 
 func normalizedStatus(s string) string {
@@ -122,30 +131,26 @@ func normalizedStatus(s string) string {
 	}
 }
 
-// FilterNew returns the rows whose Signature is not present in seen. Build seen
-// from existing data using the same Signature so formats match.
-func FilterNew(rows []Row, seen map[string]bool) []Row {
-	out := make([]Row, 0, len(rows))
-	for _, r := range rows {
-		if !seen[r.Signature()] {
-			out = append(out, r)
-		}
-	}
-	return out
-}
-
-// normalizeAmount canonicalizes an amount string for comparison: drop currency
-// symbols, grouping commas, and a leading plus, then format to two decimals so
-// "-4.5", "-4.50", and "$4.50" compare equal where appropriate.
-func normalizeAmount(s string) string {
-	s = strings.TrimSpace(s)
-	s = strings.ReplaceAll(s, ",", "")
-	s = strings.TrimPrefix(s, "$")
-	s = strings.TrimPrefix(s, "+")
-	if f, err := strconv.ParseFloat(s, 64); err == nil {
-		return strconv.FormatFloat(f, 'f', 2, 64)
+// normalizeAmountForCurrency compares amounts without converting money to floats.
+func normalizeAmountForCurrency(s, code string) string {
+	s = strings.ReplaceAll(strings.TrimSpace(s), "\u2212", "-")
+	decimals := currency.Decimals(code)
+	if minor, err := staging.ParseAmount(s, decimals); err == nil {
+		return money.FormatMinor(minor, decimals)
 	}
 	return s
+}
+
+func decodeNumbers(data []byte, target any) error {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.UseNumber()
+	if err := decoder.Decode(target); err != nil {
+		return err
+	}
+	if err := decoder.Decode(new(any)); err != io.EOF {
+		return errors.New("extract: response must contain exactly one JSON value")
+	}
+	return nil
 }
 
 // stripFence removes a leading/trailing Markdown code fence (```json … ```), which
@@ -176,7 +181,7 @@ func firstString(m map[string]any, keys ...string) string {
 }
 
 // amountString returns the first amount key coerced to a clean numeric string
-// (JSON numbers arrive as float64; strings pass through trimmed).
+// (JSON numbers retain their exact decimal spelling; strings pass through trimmed).
 func amountString(m map[string]any, keys ...string) string {
 	for _, k := range keys {
 		v, ok := m[k]
@@ -184,8 +189,8 @@ func amountString(m map[string]any, keys ...string) string {
 			continue
 		}
 		switch x := v.(type) {
-		case float64:
-			return strconv.FormatFloat(x, 'f', -1, 64)
+		case json.Number:
+			return x.String()
 		case string:
 			if t := strings.TrimSpace(x); t != "" {
 				return t
@@ -193,4 +198,17 @@ func amountString(m map[string]any, keys ...string) string {
 		}
 	}
 	return ""
+}
+
+// EnsureRowIDs returns a copy with an identity assigned to every new draft row.
+// Call once when appending source rows and retain the IDs through edits, paging,
+// async suggestions, and restaging. Equal purchases still have different IDs.
+func EnsureRowIDs(rows []Row) []Row {
+	out := append([]Row(nil), rows...)
+	for i := range out {
+		if out[i].ID == "" {
+			out[i].ID = id.New()
+		}
+	}
+	return out
 }

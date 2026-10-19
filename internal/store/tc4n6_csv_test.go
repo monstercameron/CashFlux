@@ -6,12 +6,13 @@ import "testing"
 
 func TestAccountAwareCSVParserUsesResolvedAccountAndRowCurrency(t *testing.T) {
 	cases := []struct {
-		name     string
-		csv      string
-		fallback string
-		wantID   string
-		wantCur  string
-		wantAmt  int64
+		name      string
+		csv       string
+		fallback  string
+		wantID    string
+		wantCur   string
+		wantAmt   int64
+		wantError bool
 	}{
 		{
 			name: "fallback account currency before amount parse",
@@ -29,9 +30,10 @@ func TestAccountAwareCSVParserUsesResolvedAccountAndRowCurrency(t *testing.T) {
 			wantID: "usd-account", wantCur: "USD", wantAmt: -1234,
 		},
 		{
-			name:   "explicit currency may differ from account currency",
-			csv:    "date,payee,amount,currency,account\n2026-01-02,Hotel,-12.34,EUR,Travel Card\n",
-			wantID: "usd-account", wantCur: "EUR", wantAmt: -1234,
+			name:      "explicit currency mismatch is rejected",
+			wantError: true,
+			csv:       "date,payee,amount,currency,account\n2026-01-02,Hotel,-12.34,EUR,Travel Card\n",
+			wantID:    "usd-account", wantCur: "EUR", wantAmt: -1234,
 		},
 	}
 	accounts := []CSVAccount{{ID: "usd-account", Name: "Travel Card", Currency: "USD"}}
@@ -40,6 +42,12 @@ func TestAccountAwareCSVParserUsesResolvedAccountAndRowCurrency(t *testing.T) {
 			rows, skipped, err := TransactionsFromCSVResilientForAccountList([]byte(tc.csv), "JPY", tc.fallback, accounts)
 			if err != nil {
 				t.Fatal(err)
+			}
+			if tc.wantError {
+				if len(rows) != 0 || len(skipped) != 1 {
+					t.Fatalf("rows=%+v skipped=%+v; want a row failure", rows, skipped)
+				}
+				return
 			}
 			if len(skipped) != 0 || len(rows) != 1 {
 				t.Fatalf("rows=%+v skipped=%+v", rows, skipped)

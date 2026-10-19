@@ -22,9 +22,10 @@ func TestImportPreviewUsesImporterDuplicateCountAndAccountCurrency(t *testing.T)
 		"2026-06-10,jpy,Train fare,1500\n" +
 		"2026-06-10,jpy,Train fare,1500\n"
 
-	rows, err := a.ParseCSVForPreview([]byte(csv), "jpy")
+	batch, err := a.StageCSV([]byte(csv), "jpy")
+	rows := imaUsableTransactions(batch)
 	if err != nil {
-		t.Fatalf("ParseCSVForPreview: %v", err)
+		t.Fatalf("StageCSV: %v", err)
 	}
 	if len(rows) != 2 {
 		t.Fatalf("preview rows = %d, want 2", len(rows))
@@ -34,10 +35,7 @@ func TestImportPreviewUsesImporterDuplicateCountAndAccountCurrency(t *testing.T)
 			t.Errorf("preview amount = %+v, want 1500 JPY", row.Amount)
 		}
 	}
-	previewCount, previewDuplicates, err := a.PreviewCSVImport([]byte(csv), "jpy")
-	if err != nil {
-		t.Fatalf("PreviewCSVImport: %v", err)
-	}
+	previewCount, previewDuplicates := batch.Counts.New+batch.Counts.Duplicate, batch.Counts.Duplicate
 	want := dedupe.CountIncomingDuplicates(rows, a.Transactions(), "jpy")
 	if previewCount != len(rows) || previewDuplicates != want || want != 0 {
 		t.Fatalf("preview (rows=%d, duplicates=%d), importer count=%d; want 2, 0, 0", previewCount, previewDuplicates, want)

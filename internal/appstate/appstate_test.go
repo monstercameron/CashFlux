@@ -335,7 +335,7 @@ func TestReviewedDocumentImportDedupeHistoryAndDerivedFigures(t *testing.T) {
 
 	rows := []extract.Row{
 		{Date: "2026-06-01", Description: "Coffee duplicate", Amount: "-4.50", Category: "Food"},
-		{Date: "2026-06-02", Description: "Groceries", Amount: "-86.40", Category: "Food & Drink"},
+		{Date: "2026-06-02", Description: "Groceries", Amount: "-86.40", Category: "Food"},
 		{Date: "2026-06-03", Description: "Payroll", Amount: "1000.00"},
 	}
 	preview := spendsummary.Summarize(rows, 2)

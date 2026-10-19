@@ -201,7 +201,8 @@ func TestReviewedDocumentInvalidDateIsRejectedWithoutClockFallback(t *testing.T)
 	a := newApp(t, false)
 	seedImportAccount(t, a)
 	rows := []extract.Row{{Date: "2026-02-30", Description: "Rent", Amount: "-1200.00"}}
-	preview, failed, err := a.PreviewReviewedDocumentRows("chk", rows)
+	batch, err := a.Stage(domain.DocImage, rows, "chk")
+	preview, failed := batch.Approved(), imaUnusableRows(batch)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -227,16 +228,16 @@ func TestCSVImportKeepsDistinctSameDayPurchasesAndPreviewMatchesCommit(t *testin
 		t.Fatal(err)
 	}
 	csv := []byte("date,account_id,desc,amount\n2026-01-02,chk,Coffee Shop,-4.50\n2026-01-02,chk,Parking,-4.50\n")
-	preview, err := a.ParseCSVForPreview(csv, "")
+	batch, err := a.StageCSV(csv, "")
+	preview := imaUsableTransactions(batch)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(preview) != 2 || preview[0].CategoryID != "food" {
 		t.Fatalf("preview = %+v", preview)
 	}
-	details, err := a.PreviewCSVImportDetails(csv, "")
-	if err != nil || len(details.PossibleDuplicates) != 1 {
-		t.Fatalf("preview details/error = %+v / %v", details, err)
+	if len(batch.Rows) != 2 || !batch.Rows[1].PossibleDuplicate {
+		t.Fatalf("preview details = %+v", batch)
 	}
 	result, err := a.ImportTransactionsCSV(csv, "", "purchases")
 	if err != nil {
@@ -264,16 +265,13 @@ func TestReviewedDocumentPreviewAndCommitShareAutoCategory(t *testing.T) {
 		t.Fatal(err)
 	}
 	rows := []extract.Row{{Date: "2026-01-02", Description: "Coffee Shop", Amount: "-4.50"}}
-	preview, failed, err := a.PreviewReviewedDocumentRows("chk", rows)
+	batch, err := a.Stage(domain.DocImage, rows, "chk")
+	preview, failed := batch.Approved(), imaUnusableRows(batch)
 	if err != nil || len(failed) != 0 {
 		t.Fatalf("preview error/failures = %v / %+v", err, failed)
 	}
-	if len(preview) != 1 || preview[0].Category != "Food" {
+	if len(preview) != 1 || preview[0].Transaction.CategoryID != "food" {
 		t.Fatalf("review preview = %+v", preview)
-	}
-	details, err := a.PreviewReviewedDocumentImport("chk", rows)
-	if err != nil || len(details.Rows) != 1 || details.Rows[0].Category != "Food" {
-		t.Fatalf("document preview details/error = %+v / %v", details, err)
 	}
 	result, err := a.ImportReviewedDocumentRows(domain.DocImage, "chk", rows)
 	if err != nil || result.Imported != 1 {
