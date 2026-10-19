@@ -6,8 +6,10 @@ package screens
 
 import (
 	"github.com/monstercameron/CashFlux/internal/domain"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+
 	"github.com/monstercameron/GoWebComponents/v5/css"
 	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/v5/ui"
@@ -17,21 +19,14 @@ import (
 type csvImportCardProps struct {
 	Accounts     []domain.Account
 	ImportAcctID string
-	Msg          string
 
-	// DupWarn is non-empty when a pre-import preview detected duplicate rows.
-	// It holds the human-readable warning string. When set, OnConfirmCSV
-	// replaces the primary import action so the user can proceed knowingly.
-	DupWarn string
-
+	CSVText      string
 	OnChooseFile ui.Handler
 	OnAcctChange ui.Handler
 	OnCsvInput   ui.Handler
 	// OnImportCSV runs the preview first; if duplicates are found it sets
 	// DupWarn and waits for OnConfirmCSV.
 	OnImportCSV ui.Handler
-	// OnConfirmCSV commits the import after the user acknowledges the warning.
-	OnConfirmCSV ui.Handler
 	// Preflight is the staged import's pre-commit preview card (#57): counts,
 	// balance impact + jump warning, duplicate reasons, transfer pairs, and
 	// the Import now / Cancel actions. Nil when nothing is staged.
@@ -59,7 +54,7 @@ func CsvImportCard(props csvImportCardProps) ui.Node {
 				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("documents.import")),
 			),
 			Textarea(css.Class("field field-wide"), Attr("rows", "6"),
-				Placeholder("date,payee,amount,account\n2026-06-01,Salary,4200.00,Checking\n2026-06-02,Groceries,-86.40,Checking"),
+				Placeholder(uistate.T("imb.csvSample")), Value(props.CSVText), uiw.FieldValue(props.CSVText),
 				OnInput(props.OnCsvInput),
 			),
 		),
@@ -75,18 +70,5 @@ func CsvImportCard(props csvImportCardProps) ui.Node {
 		// #57: the staged pre-commit preview (replaces the old dup-only warning
 		// as the primary two-step; DupWarn is kept for any legacy setters).
 		props.Preflight,
-		// C88: pre-import duplicate warning — shown when the preview step detects that
-		// some incoming rows match existing transactions.
-		If(props.DupWarn != "",
-			Div(css.Class("notice notice-warn", tw.Mt2), Attr("role", "alert"),
-				Attr("data-testid", "csv-dup-warn"),
-				Span(props.DupWarn),
-				Button(css.Class("btn btn-sm"), Style(map[string]string{"margin-left": "0.5rem"}), Type("button"),
-					Attr("data-testid", "csv-dup-confirm"),
-					OnClick(props.OnConfirmCSV),
-					uistate.T("documents.dupWarnConfirm")),
-			),
-		),
-		If(props.Msg != "", P(css.Class("muted"), Attr("data-testid", "csv-import-msg"), props.Msg)),
 	)
 }

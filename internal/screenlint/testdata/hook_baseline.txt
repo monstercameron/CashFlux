@@ -55,9 +55,6 @@ screens/debt_accelerate.go:biweeklyPanel
 screens/debt_accelerate.go:consolidatePanel
 screens/debt_row.go:DebtRow
 screens/debt_widget.go:DebtPlanner
-screens/documents.go:DocumentsPanel
-screens/documents.go:DraftRow
-screens/documents.go:paginatedDraftReview
 screens/documents_preflight.go:csvPreflightCard
 screens/documents_preflight.go:importHistorySection
 screens/duplicates.go:dupeRow

@@ -5,22 +5,20 @@
 package screens
 
 import (
-	"sort"
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
-	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/extract"
-	"github.com/monstercameron/CashFlux/internal/importaudit"
+	"github.com/monstercameron/CashFlux/internal/importdraft"
 	"github.com/monstercameron/CashFlux/internal/importsafe"
-	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/receiptmatch"
 	"github.com/monstercameron/CashFlux/internal/staging"
 	"github.com/monstercameron/CashFlux/internal/store"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+
 	"github.com/monstercameron/GoWebComponents/v5/css"
 	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/v5/ui"
@@ -31,6 +29,8 @@ import (
 // flag, per-row duplicate reasons, and likely transfer pairs. Built by
 // buildCSVPreflight in documents.go; nothing writes until the user confirms.
 type csvPreflightInfo struct {
+	Staged       appstate.StagedImport
+	AccountID    string
 	Total, Dupes int
 	AcctName     string
 	Dec          int
@@ -56,10 +56,7 @@ func csvPreflightCard(info *csvPreflightInfo, confirm, cancel ui.Handler) ui.Nod
 		return Fragment()
 	}
 	newRows := info.Batch.Counts.New
-	signedNet := money.FormatMinor(info.NetMinor, info.Dec)
-	if info.NetMinor > 0 {
-		signedNet = "+" + signedNet
-	}
+	signedNet := importdraft.SignedMinor(info.NetMinor, info.Dec)
 
 	// Duplicate why-matched rows (capped at 6 — enough to recognize the file).
 	var whyRows []ui.Node
@@ -143,29 +140,16 @@ func reviewImpactCard(app *appstate.App, accounts []domain.Account, acctID strin
 	if len(rows) == 0 || receiptMode || app == nil {
 		return Fragment()
 	}
-	acc, ok := domain.AccountByID(accounts, acctID)
-	if !ok {
+	preview := importdraft.RawPreview(accounts, app.Transactions(), acctID, rows)
+	if !preview.HasBalance {
 		return Fragment()
 	}
-	dec := currency.Decimals(acc.Currency)
-	var net int64
-	for _, r := range rows {
-		if amt, err := money.ParseMinor(strings.TrimSpace(r.Amount), dec); err == nil {
-			net += amt
-		}
-	}
-	bal, err := ledger.Balance(acc, app.Transactions())
-	if err != nil {
-		return Fragment()
-	}
-	signed := money.FormatMinor(net, dec)
-	if net > 0 {
-		signed = "+" + signed
-	}
+	acc, dec, net := preview.Account, preview.Decimals, preview.Net
+	signed := importdraft.SignedMinor(net, dec)
 	return Div(css.Class("notice", tw.Mt2), Attr("data-testid", "review-balance-impact"),
 		P(uistate.T("documents.preflightBalance", acc.Name,
-			money.FormatMinor(bal.Amount, dec), money.FormatMinor(bal.Amount+net, dec), signed)),
-		If(importsafe.JumpWarning(bal.Amount, net), Div(css.Class("notice notice-warn", tw.Mt1),
+			money.FormatMinor(preview.Before, dec), money.FormatMinor(preview.After, dec), signed)),
+		If(preview.Jump, Div(css.Class("notice notice-warn", tw.Mt1),
 			Attr("role", "alert"), Attr("data-testid", "review-jump-warn"),
 			uistate.T("documents.preflightJumpWarn"))),
 	)
@@ -179,12 +163,8 @@ func learnReceiptChoices(merchant string, splits []domain.CategorySplit) {
 	if merchant == "" {
 		return
 	}
-	seen := map[string]bool{}
-	for _, s := range splits {
-		if s.CategoryID != "" && !seen[s.CategoryID] {
-			seen[s.CategoryID] = true
-			uistate.IncrementLearnTally(merchant, s.CategoryID)
-		}
+	for _, categoryID := range importdraft.LearnedCategories(splits) {
+		uistate.IncrementLearnTally(merchant, categoryID)
 	}
 }
 
@@ -214,13 +194,7 @@ type receiptMatchRowProps struct {
 func receiptMatchRow(p receiptMatchRowProps) ui.Node {
 	attach := ui.UseEvent(Prevent(func() { p.OnAttach(p.Cand.Txn.ID) }))
 	t := p.Cand.Txn
-	why := uistate.T("documents.receiptMatchSameDay")
-	if p.Cand.DaysApart > 0 {
-		why = uistate.T("documents.receiptMatchDaysApart", p.Cand.DaysApart)
-	}
-	if p.Cand.MerchantHit {
-		why += " · " + uistate.T("documents.receiptMatchMerchant")
-	}
+	why := importdraft.MatchReason(p.Cand, uistate.T)
 	return Div(css.Class("row"), Attr("data-testid", "receipt-match-row"),
 		Style(map[string]string{"display": "flex", "justify-content": "space-between", "align-items": "center", "gap": "1rem"}),
 		Div(
@@ -241,25 +215,13 @@ func receiptMatchRow(p receiptMatchRowProps) ui.Node {
 func importHistorySection(docs []domain.Document, accounts []domain.Account, txns []domain.Transaction, onRollback func(domain.Document), onViewActivity ui.Handler) ui.Node {
 	// Newest first by upload time (store order isn't chronological — the
 	// sample dataset seeds history rows with past dates).
-	sorted := append([]domain.Document(nil), docs...)
-	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].UploadedAt.After(sorted[j].UploadedAt) })
-	if len(sorted) > 5 {
-		sorted = sorted[:5]
-	}
+	sorted := ui.UseMemo(func() []domain.Document { return importdraft.RecentDocuments(docs) }, docs, len(docs))
 	if len(sorted) == 0 {
 		return Fragment()
 	}
-	nameOf := func(id string) string {
-		for _, a := range accounts {
-			if a.ID == id {
-				return a.Name
-			}
-		}
-		return ""
-	}
 	keyOf := func(d domain.Document) any { return d.ID }
 	render := func(d domain.Document) ui.Node {
-		return ui.CreateElement(importRunRow, importRunRowProps{Doc: d, AcctName: nameOf(d.AccountID), Txns: txns, OnRollback: onRollback})
+		return ui.CreateElement(importRunRow, importRunRowProps{Doc: d, AcctName: importdraft.AccountName(accounts, d.AccountID), Txns: txns, OnRollback: onRollback})
 	}
 	return Div(css.Class(tw.Mt3), Attr("data-testid", "import-history"),
 		P(css.Class("t-caption"), uistate.T("documents.historyHeading")),
@@ -287,46 +249,7 @@ type importRunRowProps struct {
 func importRunRow(p importRunRowProps) ui.Node {
 	rollback := ui.UseEvent(Prevent(func() { p.OnRollback(p.Doc) }))
 	d := p.Doc
-	kindLabel := uistate.T("documents.historyKindCSV")
-	if d.Kind == domain.DocImage {
-		kindLabel = uistate.T("documents.historyKindDoc")
-	}
-	imported := d.RowCount
-	if imported == 0 {
-		imported = len(d.Extracted)
-	}
-	// C687: the row used to say "N imported · M skipped", where M lumped together
-	// rows the ledger already had and rows that could not be read at all. The
-	// first is the safeguard working; the second is money missing from the ledger
-	// that nothing else will mention. And "imported" was a claim about the past
-	// with nothing to check it against — this row now also says how many of those
-	// transactions are still here, which is the only figure that reconciles the
-	// import history against the ledger.
-	tally := importaudit.For(d, p.Txns)
-	result := uistate.T("documents.historyImported", importCount(imported, "transaction", "transactions"))
-	if tally.Split() {
-		if tally.Duplicates > 0 {
-			result += " " + uistate.T("documents.historyDuplicates", tally.Duplicates)
-		}
-		if tally.Failed > 0 {
-			result += " " + uistate.T("documents.historyFailed", tally.Failed)
-		}
-	} else if d.SkippedCount > 0 {
-		result += " " + uistate.T("documents.historySkipped", d.SkippedCount)
-	}
-	switch {
-	case !tally.ActiveKnown && imported > 0:
-		// An import from before rows carried their run id. Saying "0 still here"
-		// would be a confident lie in the direction that alarms people.
-		result += " " + uistate.T("documents.historyUntraceable")
-	case tally.Removed > 0:
-		result += " " + uistate.T("documents.historyRemoved", tally.Active, tally.Removed)
-	}
-	when := d.UploadedAt.Format("Jan 2, 2006 3:04 PM")
-	label := kindLabel
-	if p.AcctName != "" {
-		label += " · " + p.AcctName
-	}
+	label, result, when := importdraft.HistoryText(d, p.AcctName, p.Txns, uistate.T)
 	return Div(css.Class("row"), Attr("data-testid", "import-history-row"),
 		Style(map[string]string{"display": "flex", "justify-content": "space-between", "align-items": "center", "gap": "1rem"}),
 		Div(

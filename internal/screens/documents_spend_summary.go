@@ -5,13 +5,13 @@
 package screens
 
 import (
-	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/extract"
+	"github.com/monstercameron/CashFlux/internal/importdraft"
 	"github.com/monstercameron/CashFlux/internal/money"
-	"github.com/monstercameron/CashFlux/internal/spendsummary"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+
 	"github.com/monstercameron/GoWebComponents/v5/css"
 	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/v5/ui"
@@ -31,19 +31,14 @@ type spendSummaryCardProps struct {
 // Returns nil when there are no rows.
 func SpendSummaryCard(props spendSummaryCardProps) ui.Node {
 	rows := props.Rows
-	if len(rows) == 0 {
+
+	cur := importdraft.ReviewCurrency(props.Accounts, props.ImportAcctID, props.BaseCurrency)
+
+	summary := ui.UseMemo(func() importdraft.SpendSummary { return importdraft.MonthlySpend(rows, cur) }, rows, len(rows), cur)
+	months := summary.Months
+	if len(rows) == 0 || summary.Err != nil {
 		return nil
 	}
-
-	cur := props.BaseCurrency
-	if cur == "" {
-		cur = "USD"
-	}
-	if acc, ok := domain.AccountByID(props.Accounts, props.ImportAcctID); ok && acc.Currency != "" {
-		cur = acc.Currency
-	}
-
-	months := spendsummary.Summarize(rows, currency.Decimals(cur))
 	sumRows := make([]ui.Node, 0, len(months))
 	for _, m := range months {
 		label := m.Month

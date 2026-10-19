@@ -14,16 +14,16 @@ package i18n
 var importAuditKeys = Catalog{
 	// Duplicates are the safeguard working. Re-importing an overlapping statement
 	// is a normal thing to do, so this must not read as a fault.
-	"documents.historyDuplicates": "· %d already in your ledger",
+	"documents.historyDuplicates": "%d already in your ledger",
 	// A parse failure IS a fault: that money is not in the ledger and nothing
 	// else will mention it.
-	"documents.historyFailed": "· %d could not be read",
+	"documents.historyFailed": "%d could not be read",
 	// Said only when rows have gone since. Both numbers, because "3 removed" on
 	// its own invites the question this line exists to answer.
-	"documents.historyRemoved": "· %d still here, %d removed since",
+	"documents.historyRemoved": "%d still here; %d removed since",
 	// For imports made before rows recorded which run created them. Saying "0
 	// still here" would be a confident lie in the direction that alarms people.
-	"documents.historyUntraceable": "· from before imports were tracked, so how many remain is not recorded",
+	"documents.historyUntraceable": "From before imports were tracked; how many remain is unknown.",
 }
 
 func init() {

@@ -10,8 +10,8 @@ package i18n
 // being redundant, which costs nothing. The other is money that will not arrive
 // in the ledger and that nothing else will ever mention.
 var stagingKeys = Catalog{
-	"documents.preflightRepeated": "%d row(s) appear more than once in this file — only the first of each will be imported.",
-	"documents.preflightUnusable": "%d row(s) could not be read and will not be imported. Their money will be missing from this account.",
+	"documents.preflightRepeated": "Repeated rows in this file: %d. Only the first occurrence is imported.",
+	"documents.preflightUnusable": "Rows that could not be read: %d. No transactions will be added for them.",
 }
 
 func init() {

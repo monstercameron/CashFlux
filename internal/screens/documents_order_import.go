@@ -7,11 +7,10 @@ package screens
 import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/importdraft"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/orderimport"
 	"github.com/monstercameron/CashFlux/internal/ordermatch"
-	"github.com/monstercameron/CashFlux/internal/receiptsplit"
-	"github.com/monstercameron/CashFlux/internal/rules"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/css"
@@ -60,16 +59,16 @@ func OrderImportCard(_ orderImportCardProps) ui.Node {
 		msg.Set(uistate.T("orderimport.parsed", len(orders)))
 	}
 
-	onFindPaste := ui.UseEvent(Prevent(func() {
+	onFindPaste := func() {
 		if strings.TrimSpace(pasteText.Get()) == "" {
 			matches.Set(nil)
 			msg.Set(uistate.T("orderimport.emptyPaste"))
 			return
 		}
 		runMatch(orderimport.ParseOrdersPaste(pasteText.Get(), base))
-	}))
-	onPasteInput := ui.UseEvent(func(v string) { pasteText.Set(v) })
-	onChooseFile := ui.UseEvent(func() {
+	}
+	onPasteInput := func(v string) { pasteText.Set(v) }
+	onChooseFile := func() {
 		pickFileLimited(".csv,text/csv", maxImportCSVBytes, func(_, limit int) {
 			msg.Set(uistate.T("impc.fileTooLarge", "CSV", fileLimitLabel(limit)))
 		}, func(_ string, _ string, data []byte) {
@@ -84,26 +83,11 @@ func OrderImportCard(_ orderImportCardProps) ui.Node {
 			}
 			runMatch(orders)
 		})
-	})
+	}
 
 	ms := matches.Get()
 	return Div(css.Class("doc-form-body"), Attr("data-testid", "order-import-card"),
-		Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter),
-			Button(css.Class("btn"), Type("button"), Attr("data-testid", "order-file-picker"),
-				OnClick(onChooseFile), uistate.T("orderimport.chooseFile")),
-			Span(css.Class("muted", tw.Text13), uistate.T("orderimport.fileOrPaste")),
-		),
-		Form(Attr("data-testid", "order-paste-form"), OnSubmit(onFindPaste),
-			Div(css.Class("form-grid"), Style(map[string]string{"margin-bottom": "0.5rem"}),
-				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("orderimport.findOrders")),
-			),
-			Textarea(css.Class("field field-wide"), Attr("rows", "5"),
-				Attr("id", "order-paste"),
-				Attr("data-testid", "order-paste"),
-				Placeholder(uistate.T("orderimport.pastePlaceholder")),
-				OnInput(onPasteInput),
-			),
-		),
+		ui.CreateElement(orderImportInput, orderImportInputProps{onChooseFile: onChooseFile, onFindPaste: onFindPaste, onPasteInput: onPasteInput}),
 		P(css.Class("muted", tw.Text12), uistate.T("orderimport.localNote")),
 		If(msg.Get() != "", P(css.Class("muted"), Attr("data-testid", "order-import-msg"), msg.Get())),
 		If(len(ms) > 0,
@@ -124,27 +108,13 @@ func OrderImportCard(_ orderImportCardProps) ui.Node {
 
 // findTxnByID returns the ledger transaction with the given id.
 func findTxnByID(app *appstate.App, id string) (domain.Transaction, bool) {
-	for _, t := range app.Transactions() {
-		if t.ID == id {
-			return t, true
-		}
-	}
-	return domain.Transaction{}, false
+	return importdraft.FindTransaction(app.Transactions(), id)
 }
 
 // orderChargesFromLedger builds the matcher's candidate charges from the ledger's
 // expenses (transfers and income excluded).
 func orderChargesFromLedger(app *appstate.App) []orderimport.Charge {
-	var out []orderimport.Charge
-	for _, t := range app.Transactions() {
-		if t.IsTransfer() || !t.Amount.IsNegative() {
-			continue
-		}
-		out = append(out, orderimport.Charge{
-			TxnID: t.ID, Date: t.Date, AmountMinor: t.Amount.Amount, Currency: t.Amount.Currency,
-		})
-	}
-	return out
+	return importdraft.OrderCharges(app.Transactions())
 }
 
 // applyOrderMatch runs the per-order Apply: a single-charge match opens the split
@@ -188,38 +158,9 @@ func applyOrderMatch(app *appstate.App, m orderimport.Match) {
 // editor pre-filled. Categories come from the auto-categorization rules on each
 // item name; tax/shipping/gift-card drift auto-balances onto the txn's own category.
 func proposeSplitFromOrder(app *appstate.App, txn domain.Transaction, o orderimport.Order) {
-	cur := txn.Amount.Currency
-	if cur == "" {
-		cur = o.Currency
-	}
-	cats := app.Categories()
-	appRules := app.Rules()
-
-	lineCat := make(map[string]string, len(o.Items))
-	items := make([]receiptsplit.LineItem, 0, len(o.Items))
-	for _, it := range o.Items {
-		if it.Name == "" {
-			continue
-		}
-		cid := resolveExpenseCategoryName(cats, it.Name)
-		if cid == "" {
-			if mrule := rules.FirstMatch(appRules, it.Name); mrule != nil {
-				cid = mrule.SetCategoryID
-			}
-		}
-		lineCat[it.Name] = cid
-		items = append(items, receiptsplit.LineItem{Name: it.Name, Amount: money.New(it.LineTotalMinor(), cur)})
-	}
-	if len(items) == 0 {
-		uistate.PostNotice(uistate.T("orderimport.noItems"), true)
-		return
-	}
-	match := func(name string) string { return lineCat[name] }
-	proposal, ok := receiptsplit.Propose(items, receiptsplit.Target{
-		Amount: txn.Amount, CategoryID: txn.CategoryID,
-	}, match)
-	if !ok {
-		uistate.PostNotice(uistate.T("receiptsplit.noProposal"), true)
+	proposal, key := importdraft.OrderSplit(txn, o, app.Categories(), app.Rules())
+	if key != "" {
+		uistate.PostNotice(uistate.T(key), true)
 		return
 	}
 	uistate.SetTxnSplitProposal(txn.ID, proposal.Splits, proposal.Note)
@@ -243,35 +184,13 @@ func orderImportRow(props orderImportRowProps) ui.Node {
 	if cur == "" {
 		cur = props.Base
 	}
-	var verdict string
-	switch m.Kind {
-	case orderimport.MatchSingle:
-		verdict = uistate.T("orderimport.matchedSingle")
-	case orderimport.MatchMulti:
-		verdict = uistate.T("orderimport.matchedMulti", len(m.TxnIDs))
-	default:
-		verdict = uistate.T("orderimport.unmatched")
-	}
-	drift := m.DriftMinor
-	if drift < 0 {
-		drift = -drift
-	}
-	chargeLabel := "orderimport.chargeLabel"
-	if len(review.Charges) > 1 {
-		chargeLabel = "orderimport.chargesLabel"
-	}
+	verdict, chargeLabel, canApply := importdraft.OrderText(review, uistate.T)
 	items := make([]ui.Node, 0, len(m.Order.Items))
 	for _, item := range m.Order.Items {
-		qty := item.Qty
-		if qty <= 0 {
-			qty = 1
-		}
 		items = append(items, Div(css.Class("muted", tw.Text12),
-			Span(uistate.T("orderimport.itemLine", qty, item.Name,
-				fmtMoney(money.New(item.LineTotalMinor(), cur)))),
+			Span(importdraft.OrderItemLabel(item, cur, uistate.T)),
 		))
 	}
-	canApply := m.Kind != orderimport.MatchNone && len(review.MissingTxnIDs) == 0
 	return Div(css.Class("doc-order-row", tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt1),
 		Attr("role", "listitem"), Attr("data-testid", "order-row-"+m.Order.ID),
 		Div(css.Class(tw.Flex1),
@@ -279,7 +198,7 @@ func orderImportRow(props orderImportRowProps) ui.Node {
 			Div(css.Class("muted", tw.Text12),
 				Span(verdict),
 				If(m.Kind != orderimport.MatchNone && m.DriftMinor != 0,
-					Span(". "+uistate.T("orderimport.amountDifference", fmtMoney(money.New(drift, cur))))),
+					Span(". "+uistate.T("orderimport.amountDifference", importdraft.MagnitudeText(m.DriftMinor, cur)))),
 			),
 			If(len(review.MissingTxnIDs) > 0,
 				P(css.Class("muted", tw.Text12), uistate.T("orderimport.chargeMissing"))),
@@ -287,13 +206,7 @@ func orderImportRow(props orderImportRowProps) ui.Node {
 				Div(css.Class(tw.Mt1),
 					Strong(uistate.T(chargeLabel)),
 					Div(Map(review.Charges, func(txn domain.Transaction) ui.Node {
-						payee := txn.Payee
-						if payee == "" {
-							payee = txn.Desc
-						}
-						if payee == "" {
-							payee = txn.ID
-						}
+						payee := importdraft.ChargePayee(txn)
 						return Div(css.Class("muted", tw.Text12),
 							Span(txn.Date.Format("Jan 2, 2006")), Span(" — "), Span(payee), Span(" — "), Span(fmtMoney(txn.Amount)))
 					})),
@@ -311,4 +224,29 @@ func orderImportRow(props orderImportRowProps) ui.Node {
 				OnClick(props.OnApply), uistate.T("orderimport.apply")),
 		),
 	)
+}
+
+type orderImportInputProps struct {
+	onChooseFile, onFindPaste func()
+	onPasteInput              func(string)
+}
+
+// orderImportInput owns the local order file and paste controls.
+func orderImportInput(props orderImportInputProps) ui.Node {
+	return Fragment(Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter),
+		Button(css.Class("btn"), Type("button"), Attr("data-testid", "order-file-picker"),
+			OnClick(props.onChooseFile), uistate.T("orderimport.chooseFile")),
+		Span(css.Class("muted", tw.Text13), uistate.T("orderimport.fileOrPaste")),
+	),
+		Form(Attr("data-testid", "order-paste-form"), OnSubmit(Prevent(props.onFindPaste)),
+			Div(css.Class("form-grid"), Style(map[string]string{"margin-bottom": "0.5rem"}),
+				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("orderimport.findOrders")),
+			),
+			Textarea(css.Class("field field-wide"), Attr("rows", "5"),
+				Attr("id", "order-paste"),
+				Attr("data-testid", "order-paste"),
+				Placeholder(uistate.T("orderimport.pastePlaceholder")),
+				OnInput(props.onPasteInput),
+			),
+		))
 }

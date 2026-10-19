@@ -62,7 +62,9 @@ var lane4Keys = Catalog{
 	// #57 — import dependability: preflight preview, why-matched duplicates,
 	// transfer-pair detection, richer summaries, per-run roll-back.
 	// %s = "N new transactions", %d = duplicate count.
-	"documents.preflightCounts": "Ready to import %s. %d duplicates will be skipped.",
+	"documents.preflightCounts":               "Ready to import %s. Possible duplicates: %d.",
+	"documents.preflightCountsNoDuplicates":   "Ready to import %s.",
+	"documents.preflightCountsWithDuplicates": "Ready to import %s. Skip duplicate rows (%d).",
 	// %s ×4 = account name, balance before, balance after, signed net.
 	"documents.preflightBalance":  "%s: %s → %s (%s).",
 	"documents.preflightJumpWarn": "This is a big jump for this account — double-check the file (and its sign convention) before importing.",
@@ -77,7 +79,7 @@ var lane4Keys = Catalog{
 	// %s ×3 = incoming desc, amount, matching existing desc.
 	"documents.preflightPairLine": "\"%s\" (%s) mirrors \"%s\"",
 	// %d = new-row count.
-	"documents.preflightImportNow": "Import %d rows",
+	"documents.preflightImportNow": "Import rows (%d)",
 	// %s ×2 = balance before, balance after.
 	"documents.balanceMoved":   "Balance moved %s → %s.",
 	"documents.historyHeading": "Recent imports",
@@ -87,11 +89,12 @@ var lane4Keys = Catalog{
 	// %s = "N transactions".
 	"documents.historyImported": "%s imported",
 	// %d = skipped count.
-	"documents.historySkipped":  "· %d skipped",
+	"documents.historySkipped":  "(%d skipped)",
 	"documents.rollbackBtn":     "Roll back",
+	"documents.rollbackAction":  "Roll back",
 	"documents.rollbackTitle":   "Restore your data to just before this import",
 	"documents.rollbackConfirm": "Roll back this import? Your data returns to the moment before it ran — the imported rows and anything you changed since will be lost.",
-	"documents.rolledBack":      "Rolled back — your data is back to just before that import.",
+	"documents.rolledBack":      "Import rolled back. Your data is back to just before it ran.",
 
 	// #63 — transaction trust details.
 	// %s ×2 = account name, its new balance.

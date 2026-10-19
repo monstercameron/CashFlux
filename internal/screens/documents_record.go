@@ -25,12 +25,12 @@ import (
 // facts — a duplicate is the safeguard working, a parse failure is money missing
 // from the ledger that nothing else will report.
 func recordDocumentAs(app *appstate.App, docID string, kind domain.DocumentKind, accountID string,
-	rows []extract.Row, rowCount, skipped, duplicates, failed int, cpID string) {
-	_ = app.PutDocument(domain.Document{
+	rows []extract.Row, rowCount, skipped, duplicates, failed int, cpID string) error {
+	return app.PutDocument(domain.Document{
 		ID: docID, Kind: kind, UploadedAt: time.Now(), AccountID: accountID,
 		Status: domain.DocImported, Extracted: toDocumentRows(rows), RowCount: rowCount,
 		SkippedCount: skipped, DuplicateCount: duplicates, FailedCount: failed,
-		RowsLinked:   true, // every row this run wrote carries docID (C687)
+		RowsLinked:   false, // receipt attachment history has no new SourceDocID linkage
 		CheckpointID: cpID,
 	})
 }

@@ -2,76 +2,39 @@
 
 package screens
 
-type importFlowStage string
-type importFlowSource string
-type importFlowScreen string
-type importFlowAction string
+import "github.com/monstercameron/CashFlux/internal/importdraft"
+
+type importFlowStage = importdraft.FlowStage
+type importFlowSource = importdraft.FlowSource
+type importFlowScreen = importdraft.FlowScreen
+type importFlowAction = importdraft.FlowAction
+type importFlowState = importdraft.FlowState
 
 const (
-	importFlowInput  importFlowStage = "input"
-	importFlowReview importFlowStage = "review"
-
-	importSourcePicker  importFlowSource = ""
-	importSourceCSV     importFlowSource = "csv"
-	importSourceStmt    importFlowSource = "stmt"
-	importSourcePDF     importFlowSource = "pdf"
-	importSourceReceipt importFlowSource = "receipt"
-	importSourceAmazon  importFlowSource = "amazon"
-
-	importScreenStart   importFlowScreen = "start"
-	importScreenReview  importFlowScreen = "review"
-	importScreenCSV     importFlowScreen = "csv"
-	importScreenStmt    importFlowScreen = "statement"
-	importScreenPDF     importFlowScreen = "pdf"
-	importScreenReceipt importFlowScreen = "receipt"
-	importScreenOrder   importFlowScreen = "order"
-
-	importActionBack    importFlowAction = "back"
-	importActionNext    importFlowAction = "next"
-	importActionAddMore importFlowAction = "add-more"
+	importActionAddMore = importdraft.ActionAddMore
+	importActionBack    = importdraft.ActionBack
+	importActionNext    = importdraft.ActionNext
+	importFlowInput     = importdraft.FlowInput
+	importFlowReview    = importdraft.FlowReview
+	importScreenCSV     = importdraft.ScreenCSV
+	importScreenOrder   = importdraft.ScreenOrder
+	importScreenPDF     = importdraft.ScreenPDF
+	importScreenReceipt = importdraft.ScreenReceipt
+	importScreenReview  = importdraft.ScreenReview
+	importScreenStart   = importdraft.ScreenStart
+	importScreenStmt    = importdraft.ScreenStmt
+	importSourceAmazon  = importdraft.SourceAmazon
+	importSourceCSV     = importdraft.SourceCSV
+	importSourcePDF     = importdraft.SourcePDF
+	importSourcePicker  = importdraft.SourcePicker
+	importSourceReceipt = importdraft.SourceReceipt
+	importSourceStmt    = importdraft.SourceStmt
 )
 
-type importFlowState struct {
-	Stage  importFlowStage
-	Source importFlowSource
-}
-
-// importFlowScreenFor selects the visible import screen from the flow state.
 func importFlowScreenFor(state importFlowState) importFlowScreen {
-	if state.Stage == importFlowReview {
-		return importScreenReview
-	}
-	switch state.Source {
-	case importSourceCSV:
-		return importScreenCSV
-	case importSourceStmt:
-		return importScreenStmt
-	case importSourcePDF:
-		return importScreenPDF
-	case importSourceReceipt:
-		return importScreenReceipt
-	case importSourceAmazon:
-		return importScreenOrder
-	default:
-		return importScreenStart
-	}
+	return importdraft.FlowScreenFor(state)
 }
 
-// transitionImportFlow applies the existing back/next controls without changing draft data.
 func transitionImportFlow(state importFlowState, action importFlowAction) importFlowState {
-	switch action {
-	case importActionBack:
-		if state.Stage == importFlowReview {
-			state.Stage = importFlowInput
-			state.Source = importSourcePicker
-		} else {
-			state.Source = importSourcePicker
-		}
-	case importActionNext:
-		state.Stage = importFlowReview
-	case importActionAddMore:
-		state.Stage = importFlowInput
-		state.Source = importSourcePicker
-	}
-	return state
+	return importdraft.TransitionFlow(state, action)
 }

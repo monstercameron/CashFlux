@@ -9,22 +9,20 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+
 	"github.com/monstercameron/GoWebComponents/v5/css"
 	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/router"
 	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
 
 // imageImportCardProps carries the state and handlers the ImageImportCard needs
 // from the parent Documents() component.
 type imageImportCardProps struct {
-	ImageURL  string
-	AILoading bool
-	AIErr     string
-	NeedsKey  bool
-	OnChoose  ui.Handler
-	OnReadAI  ui.Handler
-	Nav       router.Navigator
+	ImageURL   string
+	AILoading  bool
+	Disclosure string
+	OnChoose   ui.Handler
+	OnReadAI   ui.Handler
 }
 
 // ImageImportCard renders the receipt/statement image import inputs: choose image, the
@@ -48,10 +46,11 @@ func ImageImportCard(props imageImportCardProps) ui.Node {
 					Text(uistate.T("documents.reading")),
 					Text(uistate.T("documents.readAI")),
 				),
+				KeyGateMark(AIKeyConfigured()),
 			),
 		),
 		// Explain the outbound image transfer beside the action before the user can send it.
-		P(css.Class("muted", tw.Text12), uistate.T("impc.aiDisclosure")),
+		P(css.Class("muted", tw.Text12), imageDisclosure(props.Disclosure)),
 		P(css.Class("muted", tw.Text12), uistate.T("documents.imageCostNote")),
 		// Image preview: shown once a file is chosen so the user can verify the scan (C60).
 		If(props.ImageURL != "",
@@ -70,16 +69,6 @@ func ImageImportCard(props imageImportCardProps) ui.Node {
 				),
 			),
 		),
-		If(props.NeedsKey,
-			Div(css.Class("notice notice-warn", tw.Flex, tw.ItemsCenter, tw.Gap2),
-				Span(uistate.T("documents.needKey")),
-				Button(css.Class("btn btn-sm"), Type("button"),
-					OnClick(func() { uistate.OpenGlobalSettingsAt("ai") }),
-					uistate.T("documents.goToSettings"),
-				),
-			),
-		),
-		If(props.AIErr != "", P(css.Class("err"), Attr("role", "alert"), props.AIErr)),
 	)
 }
 
@@ -99,4 +88,11 @@ func readAIBtnClass(imageURL string) string {
 		return "btn btn-plus"
 	}
 	return "btn"
+}
+
+func imageDisclosure(disclosure string) string {
+	if disclosure != "" {
+		return disclosure
+	}
+	return uistate.T("impc.aiDisclosure")
 }
