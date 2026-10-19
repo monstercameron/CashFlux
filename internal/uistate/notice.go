@@ -20,6 +20,10 @@ type Notice struct {
 	// the toast shows an explicit "Undo" button instead of relying on a text-pattern
 	// heuristic. Set it via WithUndoable / PostUndoable from delete/change handlers.
 	Undoable bool
+	// Durable means the caller has already awaited this dataset write's commit.
+	Durable bool
+	// NonDataset explicitly opts informational feedback out of dataset persistence.
+	NonDataset bool
 }
 
 const noticeAtomID = "app:notice"
@@ -73,6 +77,32 @@ func PostUndoable(text string) {
 	}
 }
 
+// WithDurable returns feedback for a write whose strict commit already succeeded.
+// undoable is true only when the committed action has a supported inverse.
+func (n Notice) WithDurable(text string, undoable bool) Notice {
+	return Notice{Seq: n.Seq + 1, Text: text, Undoable: undoable, Durable: true}
+}
+
+// PostDurable posts feedback only after the caller has awaited strict durability.
+func PostDurable(text string, undoable bool) {
+	if noticeCaptured {
+		capturedNotice.Set(capturedNotice.Get().WithDurable(text, undoable))
+	}
+}
+
+// WithTransient returns informational feedback unrelated to a dataset write.
+// Write acknowledgements must use With or WithDurable instead.
+func (n Notice) WithTransient(text string) Notice {
+	return Notice{Seq: n.Seq + 1, Text: text, NonDataset: true}
+}
+
+// PostTransient posts informational feedback unrelated to a dataset write.
+func PostTransient(text string) {
+	if noticeCaptured {
+		capturedNotice.Set(capturedNotice.Get().WithTransient(text))
+	}
+}
+
 // Cleared returns n with its message removed but Seq preserved, so dismissing
 // or auto-expiring a toast doesn't look like a fresh post to the effect.
 func (n Notice) Cleared() Notice {
@@ -82,5 +112,6 @@ func (n Notice) Cleared() Notice {
 // MarkLeaving returns n marked as animating out: Text/Err/Seq are preserved so
 // the exit transition plays and the dismiss effect isn't treated as a fresh post.
 func (n Notice) MarkLeaving() Notice {
-	return Notice{Seq: n.Seq, Text: n.Text, Err: n.Err, Leaving: true}
+	n.Leaving = true
+	return n
 }

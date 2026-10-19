@@ -19,11 +19,15 @@ func postUndoStory(summary string) {
 	if appstate.Default == nil {
 		return
 	}
-	appstate.Default.RequestDurable(func(result appstate.DurableResult) {
+	app := appstate.Default
+	app.RequestDurable(func(result appstate.DurableResult) {
+		if appstate.Default != app {
+			return
+		}
 		if result.Err != nil {
 			uistate.PostNotice(uistate.T("txint.changesNotSaved"), true)
 			return
 		}
-		uistate.PostUndoable(uistate.T("toast.undoStory", summary))
+		uistate.PostDurable(summary, auditview.CanUndoFunc())
 	})
 }

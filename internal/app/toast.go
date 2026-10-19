@@ -12,6 +12,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/auditview"
+	"github.com/monstercameron/CashFlux/internal/screens"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/css"
@@ -20,19 +21,12 @@ import (
 	uic "github.com/monstercameron/GoWebComponents/v5/ui"
 )
 
-// How long a notice stays on screen before auto-dismissing. Errors linger longer
-// than ordinary notices so there's time to read what went wrong.
+// Notices stay visible for eight seconds of active reading time.
 const (
-	toastTimeoutMS    = 4500
-	toastErrTimeoutMS = 7500
+	toastTimeoutMS    = 8000
+	toastErrTimeoutMS = 8000
 	toastTickMS       = 100
 )
-
-// toastUndoProps are the props for the toastUndoButton sub-component.
-type toastUndoProps struct {
-	// Atom is the notice atom so the Undo action can clear the toast after undo.
-	Atom state.Atom[uistate.Notice]
-}
 
 type toastDismissProps struct {
 	Atom state.Atom[uistate.Notice]
@@ -47,21 +41,14 @@ func toastDismissButton(props toastDismissProps) uic.Node {
 // registered at a stable (non-loop) call-site — required by the GoWebComponents
 // framework (CLAUDE.md §"CRITICAL gotchas"). It renders the "Undo" button
 // inside a Toast whose notice represents an undoable change.
-func toastUndoButton(props toastUndoProps) uic.Node {
+func toastUndoButton() uic.Node {
 	pending := uic.UseState(false)
 	doUndo := uic.UseEvent(func() {
 		if pending.Get() {
 			return
 		}
 		pending.Set(true)
-		undoLastChangeThen(false, func(err error) {
-			pending.Set(false)
-			if err != nil {
-				uistate.PostNotice(uistate.T("bv6d1.undoSaveFailed"), true)
-				return
-			}
-			props.Atom.Set(props.Atom.Get().Cleared())
-		})
+		commitToastUndo(func(error) { pending.Set(false) })
 	})
 
 	label := uistate.T("toast.undoBtn")
@@ -79,23 +66,6 @@ func toastUndoButton(props toastUndoProps) uic.Node {
 		OnClick(doUndo),
 		label,
 	)
-}
-
-// toastNoticeIsUndoable reports whether the notice text looks like it
-// represents a delete or change that the user may want to undo. This is a
-// heuristic used when the Notice model has no explicit Undoable field.
-//
-// Follow-up: add a Notice.Undoable bool field to uistate.Notice so callers
-// (e.g. delete handlers) can set it directly, removing the need for this
-// text-matching heuristic entirely.
-func toastNoticeIsUndoable(text string) bool {
-	lower := strings.ToLower(text)
-	return strings.Contains(lower, "deleted") ||
-		strings.Contains(lower, "removed") ||
-		strings.Contains(lower, "changed") ||
-		strings.Contains(lower, "updated") ||
-		strings.Contains(lower, "moved") ||
-		strings.Contains(lower, "archived")
 }
 
 func toastV5RowCopy(text string) (string, string) {
@@ -128,18 +98,15 @@ func toastV5RowCountsTime(visibility string, hovered, focused bool) bool {
 // atom. Ordinary notices auto-dismiss after toastTimeoutMS; errors linger for
 // toastErrTimeoutMS (and can always be dismissed by hand).
 //
-// Inline Undo: when the undo stack is non-empty (auditview.CanUndoFunc()) and
-// the notice text matches a delete/change pattern, an inline "Undo" button
-// appears. Clicking it calls auditview.UndoFunc() and dismisses the toast.
-//
-// Cleaner follow-up: add Notice.Undoable bool to uistate.Notice and set it
-// from delete/change handlers, replacing the text-pattern heuristic below.
+// Inline Undo requires an explicit undoable notice and a committed undo point.
+// Informational notices explicitly opt out of dataset persistence; write notices
+// wait for durability unless their caller has already awaited the strict commit.
 func Toast() uic.Node {
 	atom := uistate.UseNotice()
 	n := atom.Get()
 	confirmed := uic.UseState(uistate.Notice{})
 	app := appstate.Default
-	needsCommit := n.Text != "" && !n.Err && app != nil && durableNoticeApp == app
+	needsCommit := toastNeedsDurable(n, app)
 	requested := n
 	// Gate presentation rather than English text: every positive notice goes
 	// through the same boundary, including budget writes, translations and prefs.
@@ -183,7 +150,7 @@ func Toast() uic.Node {
 	uic.UseEffect(func() func() {
 		if appstate.Default != nil {
 			appstate.Default.Notifier = func(msg string) {
-				atom.Set(atom.Get().With(msg, false))
+				atom.Set(atom.Get().WithTransient(msg))
 			}
 		}
 		return nil
@@ -200,16 +167,30 @@ func Toast() uic.Node {
 		if n.Err {
 			timeout = toastErrTimeoutMS
 		}
-		elapsed := 0.0
-		last := js.Global().Get("performance").Call("now").Float()
+		clock := toastReadingClock{last: js.Global().Get("performance").Call("now").Float()}
 		var id js.Value
 		var cb js.Func
+		// Hidden pages may stop interval callbacks entirely. Reset the baseline
+		// on visibility transitions so returning cannot charge hidden time.
+		document := js.Global().Get("document")
+		visibilityReset := js.FuncOf(func(js.Value, []js.Value) any {
+			clock.last = js.Global().Get("performance").Call("now").Float()
+			return nil
+		})
+		listening := document.Truthy() && document.Get("addEventListener").Type() == js.TypeFunction && document.Get("removeEventListener").Type() == js.TypeFunction
+		if listening {
+			document.Call("addEventListener", "visibilitychange", visibilityReset)
+		}
 		stopped := false
 		stop := func() {
 			if !stopped {
 				stopped = true
 				js.Global().Call("clearInterval", id)
 				cb.Release()
+				if listening {
+					document.Call("removeEventListener", "visibilitychange", visibilityReset)
+				}
+				visibilityReset.Release()
 			}
 		}
 		cb = js.FuncOf(func(js.Value, []js.Value) any {
@@ -220,23 +201,21 @@ func Toast() uic.Node {
 				return nil
 			}
 			now := js.Global().Get("performance").Call("now").Float()
-			delta := now - last
-			last = now
 			doc := js.Global().Get("document")
 			toast := js.Undefined()
 			if doc.Truthy() && doc.Get("querySelector").Type() == js.TypeFunction {
-				toast = doc.Call("querySelector", ".toast")
+				toast = doc.Call("querySelector", `[data-testid="app-notice"]`)
 			}
-			visible := doc.Truthy() && doc.Get("visibilityState").String() == "visible"
+			visibility := ""
+			if doc.Truthy() {
+				visibility = doc.Get("visibilityState").String()
+			}
 			hovered, focused := false, false
 			if toast.Truthy() && toast.Get("matches").Type() == js.TypeFunction && toast.Get("contains").Type() == js.TypeFunction {
 				hovered = toast.Call("matches", ":hover").Bool()
 				focused = toast.Call("contains", doc.Get("activeElement")).Bool()
 			}
-			if toastV5RowCountsTime(map[bool]string{true: "visible", false: "hidden"}[visible], hovered, focused) {
-				elapsed += delta
-			}
-			if elapsed >= float64(timeout) {
+			if clock.expired(now, float64(timeout), toastV5RowCountsTime(visibility, hovered, focused)) {
 				stop()
 				atom.Set(n.Cleared())
 			}
@@ -266,17 +245,87 @@ func Toast() uic.Node {
 		cls += " toast-err"
 	}
 
-	// Show the inline Undo button when the undo stack has something to undo and
-	// the notice text indicates a destructive or mutating operation.
-	// Prefer the explicit Notice.Undoable flag (set by delete/change handlers);
-	// fall back to the text heuristic for callers that haven't been updated yet.
-	showUndo := auditview.CanUndoFunc() && (n.Undoable || toastNoticeIsUndoable(n.Text))
+	showUndo := toastOffersUndo(n)
 	message, balanceLine := toastV5RowCopy(n.Text)
 
-	return withSaveFailureBanner(Div(ClassStr(cls), Attr("role", role), Attr("aria-live", live),
+	return withSaveFailureBanner(Div(ClassStr(cls), Attr("data-testid", "app-notice"), Attr("role", role), Attr("aria-live", live),
 		Span(css.Class("toast-msg"), message),
 		If(balanceLine != "", Span(css.Class("toast-balance"), balanceLine)),
-		If(showUndo, uic.CreateElement(toastUndoButton, toastUndoProps{Atom: atom})),
+		If(showUndo, uic.CreateElement(toastUndoButton)),
 		uic.CreateElement(toastDismissButton, toastDismissProps{Atom: atom}),
 	))
+}
+
+func toastNeedsDurable(n uistate.Notice, app *appstate.App) bool {
+	return n.Text != "" && !n.Err && !n.Durable && !n.NonDataset && app != nil && durableNoticeApp == app
+}
+
+func toastOffersUndo(n uistate.Notice) bool {
+	return !n.Err && !n.NonDataset && n.Undoable && auditview.CanUndoFunc()
+}
+
+// commitToastUndo uses the same commit completion boundary as forward actions.
+// Replay owns the history cursor and strict durable request; failed persistence
+// must retry that restoration rather than pop a second history entry.
+func commitToastUndo(done func(error)) {
+	commitUndoFeedback(false, done)
+}
+
+// commitUndoFeedback also supports the keyboard and Activity entry points.
+func commitUndoFeedback(redo bool, done func(error)) {
+	app := appstate.Default
+	label := uistate.T("tv8h.undone")
+	if redo {
+		label = uistate.T("tv8h.redone")
+	}
+	var replay func(func(error))
+	replay = func(complete func(error)) { undoLastChangeThen(redo, complete) }
+	var retry func()
+	retry = func() {
+		if appstate.Default != app {
+			return
+		}
+		screens.CommitUndoableReplay(app, label, replay, func(err error) {
+			if err != nil {
+				if app != nil && undoPersistencePending && toastDurabilityFailureIsRetryable(err) {
+					cursor := undoDurableCursor
+					// Autosave may finish before the banner is clicked. Retrying
+					// durability directly can never pop another history entry.
+					replay = func(complete func(error)) {
+						app.RequestDurable(func(result appstate.DurableResult) {
+							if appstate.Default != app {
+								return
+							}
+							if result.Err == nil && undoDurableCursor == cursor {
+								undoPersistencePending = false
+							}
+							complete(result.Err)
+						})
+					}
+					uistate.ReportPersistFailure("transaction-undo", retry)
+				}
+				uistate.PostNotice(uistate.T("tv8h.undoNotSaved"), true)
+			} else {
+				uistate.ClearPersistFailure("transaction-undo")
+			}
+			if done != nil {
+				done(err)
+			}
+		})
+	}
+	retry()
+}
+
+// toastReadingClock counts only the intervals during which feedback can be read.
+// Visibility events reset last because browsers can suspend background timers.
+type toastReadingClock struct {
+	last, elapsed float64
+}
+
+func (clock *toastReadingClock) expired(now, timeout float64, reading bool) bool {
+	if reading && now > clock.last {
+		clock.elapsed += now - clock.last
+	}
+	clock.last = now
+	return clock.elapsed >= timeout
 }

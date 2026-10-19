@@ -1874,7 +1874,7 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 
 	// Every bulk edit validates all rows and commits one batch. Selection remains
 	// available on failure; there is one durable Undo affordance for the action.
-	applyBatch := func(label string, writes []domain.Transaction, done func()) {
+	applyBatch := func(label func(int) string, writes []domain.Transaction, done func()) {
 		if len(writes) == 0 {
 			return
 		}
@@ -1882,7 +1882,7 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 		for i, t := range writes {
 			ids[i] = t.ID
 		}
-		_ = CommitUndoable(app, label, ids, func() error { return app.PutTransactionsAtomic(writes) }, func(err error) {
+		_ = CommitUndoableCounted(app, label, ids, func() error { return app.PutTransactionsAtomic(writes) }, func(err error) {
 			if err != nil {
 				uistate.PostNotice(uistate.T("txint.changesNotSaved"), true)
 				return
@@ -1905,7 +1905,7 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 		if !value {
 			key = "transactions.bulkOpUncleared"
 		}
-		applyBatch(uistate.T(key, len(writes)), writes, nil)
+		applyBatch(func(n int) string { return uistate.T(key, n) }, writes, nil)
 	}
 	bulkMarkReviewedAction := func() {
 		sel := txnExpandedSelection(app, selAtom.Get())
@@ -1919,7 +1919,7 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 				}
 			}
 		}
-		applyBatch(uistate.T("r1c.markedReviewed", len(writes)), writes, nil)
+		applyBatch(func(n int) string { return uistate.T("r1c.markedReviewed", n) }, writes, nil)
 	}
 	bulkMarkReviewed := ui.UseEvent(Prevent(bulkMarkReviewedAction))
 	bulkSetExclude := func(value bool) {
@@ -1935,7 +1935,7 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 		if !value {
 			key = "transactions.bulkOpIncluded"
 		}
-		applyBatch(uistate.T(key, len(writes)), writes, nil)
+		applyBatch(func(n int) string { return uistate.T(key, n) }, writes, nil)
 	}
 	applyBulkCategory := func(cid string) {
 		if checkpointSaving.Get() {
@@ -1958,9 +1958,11 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 					}
 				}
 			}
-			label := uistate.T("transactions.bulkOpClearedCat", len(writes))
-			if cid != "" {
-				label = uistate.T("transactions.bulkCatApplied", len(writes), bulkCatLabel(app, cid))
+			label := func(n int) string {
+				if cid != "" {
+					return uistate.T("transactions.bulkCatApplied", n, bulkCatLabel(app, cid))
+				}
+				return uistate.T("transactions.bulkOpClearedCat", n)
 			}
 			applyBatch(label, writes, func() {
 				if bulkCatAtom.Get() != "" {
@@ -1978,7 +1980,7 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 				writes = append(writes, t)
 			}
 		}
-		applyBatch(uistate.T("transactions.bulkOpAssigned", len(writes)), writes, nil)
+		applyBatch(func(n int) string { return uistate.T("transactions.bulkOpAssigned", n) }, writes, nil)
 	}
 	applyBulkTag := func(raw string) {
 		tag := strings.TrimSpace(raw)
@@ -1993,7 +1995,7 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 				writes = append(writes, t)
 			}
 		}
-		applyBatch(uistate.T("r1c.tagged", len(writes), tag), writes, func() { tagValue.Set(""); tagOpen.Set(false) })
+		applyBatch(func(n int) string { return uistate.T("r1c.tagged", n, tag) }, writes, func() { tagValue.Set(""); tagOpen.Set(false) })
 	}
 	addTag := ui.UseEvent(Prevent(func() { applyBulkTag(tagValue.Get()) }))
 	onTagInput := ui.UseEvent(func(e ui.Event) { tagValue.Set(e.GetValue()) })
@@ -2068,7 +2070,7 @@ func txnBulkBarWidget(props txnBulkBarProps) ui.Node {
 						ids = append(ids, id)
 					}
 					doomed := app.ExpandTransferPairs(ids)
-					_ = CommitUndoable(app, uistate.T("transactions.bulkOpDeleted", len(doomed)), doomed, func() error {
+					_ = CommitUndoableCounted(app, func(n int) string { return uistate.T("transactions.bulkOpDeleted", n) }, doomed, func() error {
 						_, err := app.DeleteTransactionsBulkExpanded(doomed)
 						return err
 					}, func(err error) {

@@ -6,9 +6,10 @@ package screens
 
 import (
 	"fmt"
-	"github.com/monstercameron/CashFlux/internal/auditview"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/auditview"
+	"github.com/monstercameron/CashFlux/internal/store"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/state"
 	"github.com/monstercameron/GoWebComponents/v5/ui"
@@ -159,18 +160,25 @@ func awaitTxnSave(app *appstate.App, ids []string, done func(error)) {
 // A completion callback owns error presentation when supplied; otherwise this
 // boundary emits exactly one error notice. Completion never crosses App scope.
 func CommitUndoable(app *appstate.App, label string, ids []string, write func() error, done func(error)) error {
-	scope := appstate.Default
-	active := scope == app
-	finish := func(err error) {
-		if appstate.Default != scope {
-			return
+	return commitTxnAction(app, func(int) string { return label }, ids, write, false, done)
+}
+
+// CommitUndoableCounted names a durable action using the number of transaction
+// records actually changed by its atomic write, excluding duplicates and no-ops.
+func CommitUndoableCounted(app *appstate.App, label func(int) string, ids []string, write func() error, done func(error)) error {
+	return commitTxnAction(app, label, ids, write, true, done)
+}
+
+func commitTxnAction(app *appstate.App, label func(int) string, ids []string, write func() error, requireRows bool, done func(error)) error {
+	active := appstate.Default == app
+	var changes []store.RecordChange
+	count := 0
+	finish := txnActionCompletion(app, func() string {
+		if len(changes) == 0 || (requireRows && count == 0) {
+			return ""
 		}
-		if done != nil {
-			done(err)
-		} else if active && err != nil {
-			uistate.PostNotice(uistate.T("txint.changesNotSaved"), true)
-		}
-	}
+		return label(count)
+	}, true, "txint.changesNotSaved", done)
 	if app == nil {
 		err := appstate.ErrDurabilityUnavailable
 		finish(err)
@@ -181,24 +189,27 @@ func CommitUndoable(app *appstate.App, label string, ids []string, write func() 
 	if active {
 		auditview.CaptureNow()
 	}
-	if err := write(); err != nil {
-		if done == nil && active {
-			uistate.PostNotice(err.Error(), true)
-		} else {
-			finish(err)
-		}
+	before, err := app.Store().ChangeCursor()
+	if err != nil {
+		finish(err)
 		return err
 	}
-	awaitTxnSave(app, ids, func(err error) {
-		if appstate.Default != scope {
-			return
-		}
-		if err == nil && active {
-			uistate.BumpDataRevision()
-			uistate.PostUndoable(uistate.T("toast.undoStory", label))
-		}
+	if err := write(); err != nil {
+		app.Log().Error("transaction action failed", "err", err)
 		finish(err)
-	})
+		return err
+	}
+	changes, err = txnActionChanges(app, before)
+	if err != nil {
+		finish(err)
+		return err
+	}
+	for _, change := range changes {
+		if change.Table == "transactions" {
+			count++
+		}
+	}
+	awaitTxnSave(app, ids, finish)
 	return nil
 }
 
@@ -208,4 +219,63 @@ func commitUndoable(label string, ids []string, write func() error, done ...func
 		complete = done[0]
 	}
 	return CommitUndoable(appstate.Default, label, ids, write, complete)
+}
+
+// txnActionChanges reads a fixed SQL-committed range before persistence can prune
+// it. Rolled-back writes never enter this journal; coalescing removes net no-ops.
+func txnActionChanges(app *appstate.App, before uint64) ([]store.RecordChange, error) {
+	target, err := app.Store().ChangeCursor()
+	if err != nil {
+		return nil, err
+	}
+	var changes []store.RecordChange
+	for before < target {
+		page, err := app.Store().CaptureChanges(before, target, 256)
+		if err != nil {
+			return nil, err
+		}
+		changes = append(changes, page.Changes...)
+		before = page.Through
+	}
+	return store.CoalesceChanges(changes), nil
+}
+
+// CommitUndoableReplay is the asynchronous undo form of the commit boundary.
+// replay must complete only after its restoration is durable (or has failed).
+// The history owner retains failed restorations for retry and suppresses capture
+// of replay as a new forward undo step. A replay never advertises another Undo.
+func CommitUndoableReplay(app *appstate.App, label string, replay func(func(error)), done func(error)) {
+	finish := txnActionCompletion(app, func() string { return label }, false, "tv8h.undoNotSaved", done)
+	if app == nil {
+		finish(appstate.ErrDurabilityUnavailable)
+		return
+	}
+	replay(finish)
+}
+
+// txnActionCompletion is shared by atomic forward writes and asynchronous
+// history replay. Only their durable completion may publish success, exactly
+// once, and only within the App scope where the action began.
+func txnActionCompletion(app *appstate.App, label func() string, undoable bool, failureKey string, done func(error)) func(error) {
+	scope := appstate.Default
+	completed := false
+	return func(err error) {
+		if completed || appstate.Default != scope {
+			return
+		}
+		completed = true
+		if app == scope {
+			if err == nil && app != nil {
+				uistate.BumpDataRevision()
+				if text := label(); text != "" {
+					uistate.PostDurable(text, undoable)
+				}
+			} else if done == nil {
+				uistate.PostNotice(uistate.T(failureKey), true)
+			}
+		}
+		if done != nil {
+			done(err)
+		}
+	}
 }

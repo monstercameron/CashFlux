@@ -90,6 +90,7 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- Count actual committed transaction changes and show truthful durable Undo feedback.
 - Move budget tracking and annual planning decisions into tested pure logic.
 - Keep source-analysis regression checks aligned with the CSCAL component extraction.
 - Extract calendar decisions into pure logic and stable keyed calendar components.
