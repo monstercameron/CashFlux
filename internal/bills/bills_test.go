@@ -189,3 +189,24 @@ func TestUpcomingAllSkipsInvalidRecurring(t *testing.T) {
 		t.Fatalf("invalid recurring produced bills: %+v", got)
 	}
 }
+
+func TestUpcomingAllRecurringBillDueTodayInNewYork(t *testing.T) {
+	newYork, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Fatalf("load New York location: %v", err)
+	}
+	now := time.Date(2026, time.October, 20, 10, 0, 0, 0, newYork)
+	due := d(2026, time.October, 20)
+	recurring := []domain.Recurring{{
+		ID: "rent", Label: "Rent", Amount: money.New(-150000, "USD"),
+		Cadence: domain.CadenceMonthly, NextDue: due,
+	}}
+
+	got := UpcomingAll(nil, recurring, now)
+	if len(got) != 1 {
+		t.Fatalf("upcoming bills = %d, want today's recurring bill", len(got))
+	}
+	if !got[0].DueDate.Equal(due) || got[0].DaysUntil != 0 {
+		t.Errorf("today's bill = due %s, days until %d; want %s and 0", got[0].DueDate, got[0].DaysUntil, due)
+	}
+}

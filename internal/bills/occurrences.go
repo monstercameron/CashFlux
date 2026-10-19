@@ -6,6 +6,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 )
 
@@ -37,7 +38,7 @@ func OccurrencesWithin(accounts []domain.Account, recurring []domain.Recurring, 
 // identity. Only OccurrencesWithin calls it — the raw list is an intermediate,
 // never an answer.
 func occurrencesRaw(accounts []domain.Account, recurring []domain.Recurring, now, until time.Time) []Bill {
-	end := dateOnly(until)
+	end := dateutil.CalendarDayUTC(until)
 	var out []Bill
 	for _, a := range accounts {
 		if a.Archived || a.Class != domain.ClassLiability {

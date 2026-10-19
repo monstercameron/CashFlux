@@ -103,3 +103,25 @@ func TestOccurrencesWithinFirstMatchesUpcomingAll(t *testing.T) {
 		}
 	}
 }
+
+func TestOccurrencesWithinRecurringBillDueTodayInNewYork(t *testing.T) {
+	newYork, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Fatalf("load New York location: %v", err)
+	}
+	now := time.Date(2026, time.October, 20, 10, 0, 0, 0, newYork)
+	until := time.Date(2026, time.October, 20, 23, 59, 0, 0, newYork)
+	due := time.Date(2026, time.October, 20, 0, 0, 0, 0, time.UTC)
+	recurring := []domain.Recurring{{
+		ID: "rent", Label: "Rent", Amount: money.New(-150000, "USD"),
+		Cadence: domain.CadenceMonthly, NextDue: due,
+	}}
+
+	got := OccurrencesWithin(nil, recurring, now, until)
+	if len(got) != 1 {
+		t.Fatalf("occurrences = %d, want today's recurring bill", len(got))
+	}
+	if !got[0].DueDate.Equal(due) || got[0].DaysUntil != 0 {
+		t.Errorf("today's occurrence = due %s, days until %d; want %s and 0", got[0].DueDate, got[0].DaysUntil, due)
+	}
+}

@@ -90,6 +90,8 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **A bill due today stays due in every time zone (TC3B1).** Due and reference dates compare on the calendar day, so a
+  bill due today no longer disappears for anyone west of UTC.
 - **Natural-language filters use the local calendar day when no clock is supplied (TC3B5).** "today", "yesterday" and "this
   month" no longer jump to the next day after 8 pm west of UTC.
 - **A budget's leftover is given away once; cover-all offers only real room (BC4S2B).** Rollover budgets are no longer swept,

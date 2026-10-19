@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/txnclassify"
@@ -275,23 +276,21 @@ func nextRecurringDue(r domain.Recurring, now time.Time) (time.Time, bool) {
 // of a short month (e.g. 31 in February) lands on the last day instead of
 // overflowing into the next month.
 func NextDue(dueDay int, from time.Time) time.Time {
-	loc := from.Location()
-	fromDate := dateOnly(from)
-
-	y, m := from.Year(), from.Month()
-	cand := time.Date(y, m, clampDay(y, m, dueDay), 0, 0, 0, 0, loc)
+	fromDate := dateutil.CalendarDayUTC(from)
+	y, m, _ := fromDate.Date()
+	cand := time.Date(y, m, clampDay(y, m, dueDay), 0, 0, 0, 0, time.UTC)
 	if cand.Before(fromDate) {
 		ny, nm := y, m+1
 		if nm > time.December {
 			ny, nm = y+1, time.January
 		}
-		cand = time.Date(ny, nm, clampDay(ny, nm, dueDay), 0, 0, 0, 0, loc)
+		cand = time.Date(ny, nm, clampDay(ny, nm, dueDay), 0, 0, 0, 0, time.UTC)
 	}
 	return cand
 }
 
 func dateOnly(t time.Time) time.Time {
-	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
+	return dateutil.CalendarDayUTC(t)
 }
 
 // clampDay limits day to the number of days in the given month.
@@ -314,7 +313,5 @@ func daysInMonth(year int, month time.Month) int {
 // daysBetween returns the whole-day difference between the calendar dates of from
 // and to (positive when to is later).
 func daysBetween(from, to time.Time) int {
-	a := time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, time.UTC)
-	b := time.Date(to.Year(), to.Month(), to.Day(), 0, 0, 0, 0, time.UTC)
-	return int(b.Sub(a).Hours() / 24)
+	return dateutil.DaysBetween(from, to)
 }
