@@ -7,6 +7,10 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **Component library: Picker and MultiPicker (LIB1C).** One keyboard-safe chooser: it opens from a labelled button,
+  focuses its search, moves through options with the arrow keys without applying anything, commits only on Enter or a
+  click, closes on Escape without applying (and without letting Escape reach whatever is behind it), returns focus, and
+  can offer "Create" last. MultiPicker is the matching multi-select for filters. Not wired in yet.
 - **A household default account is saved with the data (DF2).** `Settings.DefaultAccountID` round-trips through
   exports, backups and checkpoints; deleting an account clears any member or household default that pointed at it in the
   same write (archiving keeps it, since archived accounts are skipped). The account resolver takes one input struct.
