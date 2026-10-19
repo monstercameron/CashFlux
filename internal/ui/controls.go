@@ -108,8 +108,14 @@ func segmented(props SegmentedProps) uic.Node {
 	// wasm app, so the effect always runs and the indicator is never missing.
 	uic.UseEffect(func() func() {
 		doc := js.Global().Get("document")
+		if !doc.Truthy() || doc.Get("getElementById").Type() != js.TypeFunction {
+			return nil
+		}
 		grp := doc.Call("getElementById", groupID)
 		if !grp.Truthy() {
+			return nil
+		}
+		if grp.Get("querySelector").Type() != js.TypeFunction {
 			return nil
 		}
 		pill := grp.Call("querySelector", ".seg-pill")
@@ -118,6 +124,9 @@ func segmented(props SegmentedProps) uic.Node {
 		}
 		active := grp.Call("querySelector", ".seg-btn.active")
 		st := pill.Get("style")
+		if !st.Truthy() || st.Get("setProperty").Type() != js.TypeFunction {
+			return nil
+		}
 		if !active.Truthy() {
 			st.Call("setProperty", "opacity", "0")
 			return nil

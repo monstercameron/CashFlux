@@ -90,6 +90,9 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Segmented controls no longer panic when their DOM is missing (UISEG).** The sliding-pill effect checks that each DOM
+  function exists before calling it, so a control that unmounts between render and effect (or a test DOM) returns quietly
+  instead of logging an effect panic.
 - **Budgets dialogs split into small components (BUDQ6.3).** Adjust all (315 → 132 lines), Auto Budget (305 → 150), Month close
   (298 → 144) and Track untracked (211 → 126) compose named sections; Auto Budget's monthly budget lookup is a pure, tested
   budgeting helper. No visible change.
