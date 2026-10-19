@@ -3,6 +3,7 @@
 package txnclassify
 
 import (
+	"sort"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -63,6 +64,15 @@ func FindReciprocal(t domain.Transaction, counterpartyID string, txns []domain.T
 		if c.ID == t.ID || c.AccountID != counterpartyID {
 			continue
 		}
+		// A durable group is stronger evidence than resemblance. If either row
+		// declares a group, only the same non-empty group can be its counterpart.
+		if t.TransferGroupID != "" || c.TransferGroupID != "" {
+			if t.TransferGroupID == "" || c.TransferGroupID != t.TransferGroupID || c.TransferAccountID != t.AccountID {
+				continue
+			}
+			exact := c.Amount.Amount == -t.Amount.Amount && c.Amount.Currency == t.Amount.Currency
+			return Match{Txn: c, Exact: exact}, true
+		}
 		// Opposite direction. Two rows moving the same way are not two sides of
 		// one move, however close their dates.
 		if (c.Amount.Amount > 0) == (t.Amount.Amount > 0) {
@@ -118,6 +128,13 @@ func AmbiguousLeg(t domain.Transaction, counterpartyID string, txns []domain.Tra
 		if c.ID == t.ID || c.AccountID != counterpartyID {
 			continue
 		}
+		if t.TransferGroupID != "" || c.TransferGroupID != "" {
+			if t.TransferGroupID == "" || c.TransferGroupID != t.TransferGroupID || c.TransferAccountID != t.AccountID {
+				continue
+			}
+			exactCount++
+			continue
+		}
 		if (c.Amount.Amount > 0) == (t.Amount.Amount > 0) {
 			continue
 		}
@@ -146,6 +163,104 @@ func AmbiguousLeg(t domain.Transaction, counterpartyID string, txns []domain.Tra
 		return exactCount > 1
 	}
 	return nearCount > 1
+}
+
+// VisibleTransferSummary identifies one displayed row per visible transfer
+// movement and counts transfer legs whose counterpart is outside the view.
+// The row indexes let callers convert only the chosen leg into their base
+// currency, so FX pairs never add unlike minor units.
+type VisibleTransferSummary struct {
+	// CountedRows marks the one row whose converted magnitude represents each
+	// movement. An orphan leg represents itself.
+	CountedRows []bool
+	// UnpairedRows is the number of transfer legs without a visible counterpart.
+	UnpairedRows int
+}
+
+type reciprocalIndexKey struct {
+	accountID      string
+	positive       bool
+	transferTarget string
+}
+
+// SummarizeVisibleTransfers pairs grouped rows by identity and legacy rows by
+// indexed account, direction, and date. It is O(n log n), with no per-leg scan
+// over the complete visible slice.
+func SummarizeVisibleTransfers(txns []domain.Transaction) VisibleTransferSummary {
+	result := VisibleTransferSummary{CountedRows: make([]bool, len(txns))}
+	groups := make(map[string][]int)
+	legacy := make(map[reciprocalIndexKey][]int)
+	for i, txn := range txns {
+		if !txn.IsTransfer() {
+			continue
+		}
+		if txn.TransferGroupID != "" {
+			groups[txn.TransferGroupID] = append(groups[txn.TransferGroupID], i)
+			continue
+		}
+		if txn.Amount.Amount == 0 {
+			continue
+		}
+		key := reciprocalIndexKey{accountID: txn.AccountID, positive: txn.Amount.Amount > 0, transferTarget: txn.TransferAccountID}
+		legacy[key] = append(legacy[key], i)
+	}
+	for _, indexes := range groups {
+		if len(indexes) == 2 {
+			a, b := txns[indexes[0]], txns[indexes[1]]
+			if a.Amount.Amount != 0 && b.Amount.Amount != 0 && a.AccountID == b.TransferAccountID && b.AccountID == a.TransferAccountID && (a.Amount.Amount > 0) != (b.Amount.Amount > 0) {
+				chosen := indexes[0]
+				if a.Amount.Amount > 0 {
+					chosen = indexes[1]
+				}
+				result.CountedRows[chosen] = true
+				continue
+			}
+		}
+		for _, index := range indexes {
+			result.CountedRows[index] = true
+			result.UnpairedRows++
+		}
+	}
+	paired := make([]bool, len(txns))
+	// Match reciprocal account/direction buckets with a two-pointer date walk.
+	// Dense transfer days therefore do not turn the toolbar into a quadratic scan.
+	for key, first := range legacy {
+		if key.accountID >= key.transferTarget {
+			continue
+		}
+		second := legacy[reciprocalIndexKey{accountID: key.transferTarget, positive: !key.positive, transferTarget: key.accountID}]
+		sort.Slice(first, func(i, j int) bool { return txns[first[i]].Date.Before(txns[first[j]].Date) })
+		sort.Slice(second, func(i, j int) bool { return txns[second[i]].Date.Before(txns[second[j]].Date) })
+		i, j := 0, 0
+		for i < len(first) && j < len(second) {
+			a, b := first[i], second[j]
+			gap := txns[b].Date.Sub(txns[a].Date)
+			if gap < 0 {
+				gap = -gap
+			}
+			if gap <= PairWindow {
+				paired[a], paired[b] = true, true
+				chosen := a
+				if txns[a].Amount.Amount > 0 {
+					chosen = b
+				}
+				result.CountedRows[chosen] = true
+				i++
+				j++
+			} else if txns[a].Date.Before(txns[b].Date) {
+				i++
+			} else {
+				j++
+			}
+		}
+	}
+	for i, txn := range txns {
+		if txn.IsTransfer() && txn.TransferGroupID == "" && !paired[i] {
+			result.CountedRows[i] = true
+			result.UnpairedRows++
+		}
+	}
+	return result
 }
 
 // Preview is what classifying a row would do, computed before anything is

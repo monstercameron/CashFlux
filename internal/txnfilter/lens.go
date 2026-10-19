@@ -4,6 +4,12 @@ package txnfilter
 
 import "strings"
 
+// UnassignedMemberID is the reserved selection value for transactions that have
+// no member assigned. Transaction.MemberID itself remains empty for those rows;
+// the non-empty sentinel lets the ambient lens distinguish that selection from
+// Everyone (an empty owner list).
+const UnassignedMemberID = "__cashflux_unassigned_member__"
+
 // WithOwnerLens layers an ambient member perspective (the top bar's "View as"
 // control) onto the criteria and reports whether it actually applied.
 //

@@ -75,8 +75,13 @@ func ClearedBalance(account domain.Account, all []domain.Transaction) (money.Mon
 }
 
 // AdjustmentToTarget returns the cleared adjustment needed to make current
-// equal target. ok=false means no adjustment is needed.
+// equal target. ok=false means no adjustment is needed or the difference cannot
+// be represented as an int64 amount.
 func AdjustmentToTarget(current money.Money, targetMinor int64) (money.Money, bool) {
+	if current.Amount < 0 && targetMinor > math.MaxInt64+current.Amount ||
+		current.Amount > 0 && targetMinor < math.MinInt64+current.Amount {
+		return money.Money{}, false
+	}
 	delta := targetMinor - current.Amount
 	if delta == 0 {
 		return money.Money{}, false

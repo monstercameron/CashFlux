@@ -27,6 +27,16 @@ and every commit updates this file under `Unreleased`.
   `%d` placeholder rendered as `%!d(float64=3)`. `copytext.Text` now restores whole numbers as
   integers, and translated strings whose format is chosen at run time go through the new
   `copytext.OfKey` instead of `Of`, which `go vet` rightly flagged as non-constant format strings.
+- **Ledger logic behind the Transactions page (TX bug hunt, 2026-10-18).** Fixes in the pure packages,
+  each with tests: transfer-pair detection no longer pairs legs it should not (`txnclassify`,
+  `transferpair`); links and groups keep their members consistent (`txnlinks`); settlement and receipt
+  splits keep cents exact (`settle`, `receiptsplit`); running balances and formula variables agree
+  with the ledger (`ledger`, `engineenv`); the review queue resolves merchants without dropping
+  charges (`reviewqueue`); saved views and the filter criteria round-trip, the period is no longer
+  counted as a filter (`PageFilters()` vs `AllCriteria()`), presets are stored as keys so "This month"
+  follows the calendar, and empty values sort last (`txnfilter`, `savedtxnview`); calendar projection
+  covers whole weeks (`txncalendar`); payee clean-up strips processor prefixes (`payeeclean`); theme
+  tokens for the money tones (`theme`).
 
 ## [1.18.0] - 2026-08-31
 

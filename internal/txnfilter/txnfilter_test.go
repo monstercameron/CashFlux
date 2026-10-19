@@ -144,10 +144,10 @@ func TestScopeChangedAndPageReset(t *testing.T) {
 	}
 }
 
-func TestActiveFiltersAndCount(t *testing.T) {
-	// Sort, direction, pagination and a blank Cleared are not filters.
+func TestPageFiltersAndCount(t *testing.T) {
+	// Sort, direction, pagination, period bounds and a blank Cleared are not filters.
 	if c := (Criteria{Sort: "amount", Dir: Asc, Page: 4, PageSize: 25}); c.ActiveCount() != 0 {
-		t.Errorf("sort/dir/page only: ActiveCount = %d, want 0; got %+v", c.ActiveCount(), c.ActiveFilters())
+		t.Errorf("sort/dir/page only: ActiveCount = %d, want 0; got %+v", c.ActiveCount(), c.PageFilters())
 	}
 	// Whitespace-only values do not count as active.
 	if c := (Criteria{Text: "  ", From: " "}); c.ActiveCount() != 0 {
@@ -155,18 +155,112 @@ func TestActiveFiltersAndCount(t *testing.T) {
 	}
 	c := Criteria{Text: "coffee", Account: "acc1", Category: "food", Member: "m1",
 		From: "2026-06-01", To: "2026-06-30", Cleared: "yes", Sort: "amount", Page: 2}
-	got := c.ActiveFilters()
-	if len(got) != 7 {
-		t.Fatalf("ActiveFilters len = %d, want 7: %+v", len(got), got)
+	got := c.PageFilters()
+	if len(got) != 5 {
+		t.Fatalf("PageFilters len = %d, want 5 (period bounds excluded): %+v", len(got), got)
 	}
-	wantOrder := []FilterField{FieldText, FieldAccount, FieldCategory, FieldMember, FieldFrom, FieldTo, FieldCleared}
+	wantOrder := []FilterField{FieldText, FieldAccount, FieldCategory, FieldMember, FieldCleared}
 	for i, w := range wantOrder {
 		if got[i].Field != w {
 			t.Errorf("filter %d = %q, want %q", i, got[i].Field, w)
 		}
 	}
-	if got[0].Value != "coffee" || got[6].Value != "yes" {
-		t.Errorf("values: text=%q cleared=%q", got[0].Value, got[6].Value)
+	if got[0].Value != "coffee" || got[4].Value != "yes" {
+		t.Errorf("values: text=%q cleared=%q", got[0].Value, got[4].Value)
+	}
+}
+
+func TestPeriodBoundsDoNotCountAsActiveUserFilters(t *testing.T) {
+	c := Criteria{From: "2026-11-01", To: "2026-11-30"}
+	if got := c.ActiveCount(); got != 0 {
+		t.Fatalf("period-only ActiveCount() = %d, want 0", got)
+	}
+	c.Text = "coffee"
+	if got := c.ActiveCount(); got != 1 {
+		t.Fatalf("search plus period ActiveCount() = %d, want 1", got)
+	}
+	if got := c.PageFilters(); len(got) != 1 || got[0].Field != FieldText {
+		t.Fatalf("PageFilters() = %+v, want only the text filter", got)
+	}
+	wantAll := []ActiveFilter{
+		{Field: FieldFrom, Value: "2026-11-01"},
+		{Field: FieldTo, Value: "2026-11-30"},
+		{Field: FieldText, Value: "coffee"},
+	}
+	if got := c.AllCriteria(); len(got) != len(wantAll) || got[0] != wantAll[0] || got[1] != wantAll[1] || got[2] != wantAll[2] {
+		t.Fatalf("AllCriteria() = %+v, want From and To followed by the text filter", got)
+	}
+	if got := c.ActiveFilters(); len(got) != 3 || got[0].Field != FieldFrom || got[1].Field != FieldTo {
+		t.Fatalf("ActiveFilters() = %+v, want all criteria including dates", got)
+	}
+}
+
+func TestPageFiltersAndClearKeepPeriod(t *testing.T) {
+	c := Criteria{Text: "coffee", Category: "food", Flow: "out", From: "2026-11-01", To: "2026-11-30",
+		PeriodPreset: PeriodThisMonth, Sort: "amount", Dir: Asc, Page: 4, PageSize: 50}
+	if got := len(c.PageFilters()); got != 3 {
+		t.Fatalf("PageFilters() count = %d, want 3", got)
+	}
+	cleared := c.ClearPageFilters()
+	if cleared.From != c.From || cleared.To != c.To || cleared.PeriodPreset != PeriodThisMonth {
+		t.Fatalf("clear dropped the period: %+v", cleared)
+	}
+	if cleared.Text != "" || cleared.Category != "" || cleared.Flow != "" || cleared.Sort != c.Sort || cleared.Dir != c.Dir || cleared.Page != 1 {
+		t.Fatalf("clear did not preserve only period and sort preference: %+v", cleared)
+	}
+}
+
+func TestResolvePeriodPersistsPresetsAndMigratesLegacyRanges(t *testing.T) {
+	now := time.Date(2026, time.November, 1, 12, 0, 0, 0, time.FixedZone("local", -5*60*60))
+	tests := []struct {
+		name, preset, from, to, wantKey, wantFrom, wantTo string
+	}{
+		{"rolling this month", PeriodThisMonth, "2026-10-01", "2026-10-31", PeriodThisMonth, "2026-11-01", "2026-11-30"},
+		{"rolling last month", PeriodLastMonth, "", "", PeriodLastMonth, "2026-10-01", "2026-10-31"},
+		{"rolling three months", PeriodLastThreeMonths, "", "", PeriodLastThreeMonths, "2026-09-01", "2026-11-30"},
+		{"year", PeriodThisYear, "", "", PeriodThisYear, "2026-01-01", "2026-12-31"},
+		{"all dates", PeriodAllDates, "2026-01-01", "2026-12-31", PeriodAllDates, "", ""},
+		{"stable month", MonthPeriodPreset(2026, time.August), "", "", "month:2026-08", "2026-08-01", "2026-08-31"},
+		{"legacy this month migration", "", "2026-11-01", "2026-11-30", PeriodThisMonth, "2026-11-01", "2026-11-30"},
+		{"legacy named month migration", "", "2026-08-01", "2026-08-31", "month:2026-08", "2026-08-01", "2026-08-31"},
+		{"custom range remains absolute", "", "2026-10-03", "2026-10-09", PeriodCustom, "2026-10-03", "2026-10-09"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := (Criteria{PeriodPreset: tc.preset, From: tc.from, To: tc.to, Text: "coffee"}).ResolvePeriod(now)
+			if got.PeriodPreset != tc.wantKey || got.From != tc.wantFrom || got.To != tc.wantTo || got.Text != "coffee" {
+				t.Fatalf("ResolvePeriod() = key %q, %q..%q, text %q; want %q, %q..%q and retained text", got.PeriodPreset, got.From, got.To, got.Text, tc.wantKey, tc.wantFrom, tc.wantTo)
+			}
+		})
+	}
+}
+
+func TestResolvePeriodChangeRekeysChangedDateBounds(t *testing.T) {
+	now := time.Date(2026, time.November, 1, 12, 0, 0, 0, time.UTC)
+	previous := Criteria{From: "2026-11-01", To: "2026-11-30", PeriodPreset: PeriodThisMonth}
+	changed := Criteria{From: "2026-10-01", To: "2026-10-31", PeriodPreset: PeriodThisMonth}
+	got := changed.ResolvePeriodChange(previous, now)
+	if got.PeriodPreset != PeriodLastMonth || got.From != "2026-10-01" || got.To != "2026-10-31" {
+		t.Fatalf("changed period = %+v, want last-month at its current resolution", got)
+	}
+	custom := Criteria{From: "2026-10-03", To: "2026-10-09", PeriodPreset: PeriodCustom}
+	got = custom.ResolvePeriodChange(previous, now)
+	if got.PeriodPreset != PeriodCustom || got.From != custom.From || got.To != custom.To {
+		t.Fatalf("explicit custom period changed: %+v", got)
+	}
+}
+
+func TestEmptyCategoryAndAccountSortLastBothDirections(t *testing.T) {
+	txns := []domain.Transaction{
+		{ID: "empty", Date: d("2026-06-01")},
+		{ID: "named", CategoryID: "food", AccountID: "checking", Date: d("2026-06-02")},
+	}
+	for _, key := range []string{"category", "account"} {
+		for _, dir := range []string{Asc, Desc} {
+			if got := ids(Apply(txns, Criteria{Sort: key, Dir: dir})); got != "namedempty" {
+				t.Errorf("%s/%s order = %q, want named value before empty", key, dir, got)
+			}
+		}
 	}
 }
 
@@ -253,7 +347,7 @@ func TestApplyMultiCategory(t *testing.T) {
 		t.Errorf("Categories should win over Category = %q, want ba", got)
 	}
 	// Each selected category surfaces as its own removable chip.
-	af := (Criteria{Categories: "food,rent"}).ActiveFilters()
+	af := (Criteria{Categories: "food,rent"}).PageFilters()
 	if len(af) != 2 || af[0].Field != FieldCategory || af[1].Field != FieldCategory {
 		t.Errorf("ActiveFilters = %+v, want two category chips", af)
 	}
@@ -307,7 +401,7 @@ func TestApplyTagFilter(t *testing.T) {
 	}
 	// Active filter + removable.
 	c := Criteria{Tag: "food"}
-	af := c.ActiveFilters()
+	af := c.PageFilters()
 	if len(af) != 1 || af[0].Field != FieldTag || af[0].Value != "food" {
 		t.Errorf("ActiveFilters = %+v, want one FieldTag=food", af)
 	}
@@ -453,7 +547,7 @@ func TestApplyUncategorized(t *testing.T) {
 		t.Fatalf("Uncategorized filter = %d rows (want 1: only the non-transfer uncategorized 'u')", len(got))
 	}
 	// It surfaces as a removable active filter and Without clears it.
-	if af := (Criteria{Uncategorized: true}).ActiveFilters(); len(af) != 1 || af[0].Field != FieldUncategorized {
+	if af := (Criteria{Uncategorized: true}).PageFilters(); len(af) != 1 || af[0].Field != FieldUncategorized {
 		t.Errorf("ActiveFilters = %+v, want one FieldUncategorized", af)
 	}
 	if (Criteria{Uncategorized: true}).Without(FieldUncategorized).Uncategorized {

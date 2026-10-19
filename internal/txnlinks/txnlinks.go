@@ -108,6 +108,10 @@ func Reconcile(sum, enteredTotal money.Money) (remainder money.Money, balanced b
 // original and refund are the pair's two transactions (link.TxnIDs[0] and [1]).
 func RefundNet(link domain.TxnLink, original, refund domain.Transaction) money.Money {
 	cur := original.Amount.Currency
+	if !sameCurrency(original.Amount.Currency, refund.Amount.Currency) ||
+		(link.Amount.Amount != 0 && !sameCurrency(link.Amount.Currency, cur)) {
+		return money.Zero(cur)
+	}
 	n := abs(link.Amount.Amount)
 	if n == 0 {
 		n = abs(refund.Amount.Amount)
@@ -147,6 +151,12 @@ func NetAdjustments(txns []domain.Transaction, links []domain.TxnLink) map[strin
 		}
 		refund, ok := byID[l.TxnIDs[1]]
 		if !ok {
+			continue
+		}
+		// A malformed or legacy cross-currency pair has no safe implicit FX
+		// policy. Ignore it rather than adding minor units from different
+		// currencies to either transaction.
+		if !sameCurrency(original.Amount.Currency, refund.Amount.Currency) {
 			continue
 		}
 		net := RefundNet(l, original, refund)
@@ -193,17 +203,24 @@ func RefundCandidates(refund domain.Transaction, txns []domain.Transaction, link
 		return nil
 	}
 	linkedOriginals := map[string]bool{}
+	linkedRefunds := map[string]bool{}
 	for _, l := range links {
 		if l.Kind == domain.TxnLinkRefundPair && len(l.TxnIDs) > 0 {
 			linkedOriginals[l.TxnIDs[0]] = true
+			if len(l.TxnIDs) > 1 {
+				linkedRefunds[l.TxnIDs[1]] = true
+			}
 		}
+	}
+	if linkedRefunds[refund.ID] {
+		return nil
 	}
 	key := matchKey(refund)
 	window := refund.Date.AddDate(0, 0, -RefundWindowDays)
 	refAmt := abs(refund.Amount.Amount)
 	var out []domain.Transaction
 	for _, t := range txns {
-		if t.ID == refund.ID || !t.IsExpense() {
+		if t.ID == refund.ID || !t.IsExpense() || !sameCurrency(t.Amount.Currency, refund.Amount.Currency) {
 			continue
 		}
 		if linkedOriginals[t.ID] {
@@ -267,4 +284,8 @@ func addMinor(m money.Money, delta int64, cur string) money.Money {
 	}
 	m.Amount += delta
 	return m
+}
+
+func sameCurrency(a, b string) bool {
+	return strings.EqualFold(strings.TrimSpace(a), strings.TrimSpace(b))
 }

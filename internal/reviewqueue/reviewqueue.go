@@ -72,6 +72,12 @@ func ReasonFor(t domain.Transaction) Reason {
 	return ReasonFlagged
 }
 
+// CanAssignCategory reports whether assigning a flat category can resolve the
+// transaction's review reason. An unbalanced split needs its split lines fixed.
+func CanAssignCategory(t domain.Transaction) bool {
+	return ReasonFor(t) != ReasonSplitUnbalanced
+}
+
 // QueueOpen returns the transactions needing review that the user has not
 // snoozed or dismissed (C493), newest first. Pass a nil Resolutions to get the
 // unfiltered queue.

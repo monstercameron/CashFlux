@@ -150,6 +150,9 @@ func For(leg domain.Transaction, txns []domain.Transaction, accounts []domain.Ac
 				return m
 			}
 		}
+		// An explicit relationship remains authoritative even when its other row
+		// is missing. Do not silently replace it with a heuristic look-alike.
+		return m
 	}
 
 	var candidates []domain.Transaction
@@ -308,8 +311,12 @@ func Declared(leg domain.Transaction, txns []domain.Transaction) (domain.Transac
 		if c.AccountID != leg.TransferAccountID || c.TransferAccountID != leg.AccountID {
 			continue
 		}
-		if leg.TransferGroupID != "" && c.TransferGroupID != "" && c.TransferGroupID != leg.TransferGroupID {
-			continue
+		// A declared group is an explicit identity, not a hint. Only legacy
+		// pairs where both sides have no group may use this structural fallback.
+		if leg.TransferGroupID != "" || c.TransferGroupID != "" {
+			if leg.TransferGroupID == "" || c.TransferGroupID == "" || c.TransferGroupID != leg.TransferGroupID {
+				continue
+			}
 		}
 		if absDuration(c.Date.Sub(leg.Date)) > Window {
 			continue

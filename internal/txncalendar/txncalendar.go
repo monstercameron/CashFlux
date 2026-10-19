@@ -12,10 +12,14 @@
 package txncalendar
 
 import (
+	"fmt"
+	"strings"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/txnfilter"
 )
 
 // DayKey returns the canonical calendar-day key (YYYY-MM-DD, UTC) used to bucket
@@ -35,11 +39,8 @@ type DayStat struct {
 	Count int
 }
 
-// BucketByDay groups txns by calendar day, summing each day's net minor-unit
-// amount and counting its transactions. Amounts are summed in their stored minor
-// units without FX conversion — the calendar is a single-currency household
-// glance; a caller formats the total with the base currency. The returned map is
-// keyed by DayKey.
+// BucketByDay groups transactions by calendar day, summing each day's net in the
+// stored currencies. Use BucketByDayInBase for a displayable household total.
 func BucketByDay(txns []domain.Transaction) map[string]DayStat {
 	out := make(map[string]DayStat)
 	for _, t := range txns {
@@ -52,6 +53,95 @@ func BucketByDay(txns []domain.Transaction) map[string]DayStat {
 	return out
 }
 
+// BucketByDayInBase groups transactions by calendar day after converting every
+// amount to the selected base currency. It returns an error instead of presenting
+// a partial or mislabeled total when any required exchange rate is unavailable.
+func BucketByDayInBase(txns []domain.Transaction, rates currency.Rates) (map[string]DayStat, error) {
+	out := make(map[string]DayStat)
+	for _, txn := range txns {
+		converted, err := rates.Convert(txn.Amount, rates.Base)
+		if err != nil {
+			return nil, fmt.Errorf("convert transaction %q to %s: %w", txn.ID, rates.Base, err)
+		}
+		key := DayKey(txn.Date)
+		stat := out[key]
+		stat.Net += converted.Amount
+		stat.Count++
+		out[key] = stat
+	}
+	return out, nil
+}
+
+// ScopeRecurring applies the account, category, and member dimensions that can
+// be represented by recurring definitions. Text, tag, source, and amount filters
+// have no matching fields on Recurring and therefore do not alter the projection.
+func ScopeRecurring(recurring []domain.Recurring, criteria txnfilter.Criteria, accounts []domain.Account) []domain.Recurring {
+	accountIDs := splitScope(criteria.Accounts, criteria.Account)
+	categoryIDs := splitScope(criteria.Categories, criteria.Category)
+	memberIDs := splitScope(criteria.Members, criteria.Member)
+
+	accountOwners := make(map[string]bool, len(accounts))
+	for _, account := range accounts {
+		ownerMatches := len(memberIDs) == 0
+		if len(memberIDs) > 0 {
+			if len(account.OwnershipShares) > 0 {
+				for owner := range account.OwnershipShares {
+					if contains(memberIDs, owner) {
+						ownerMatches = true
+						break
+					}
+				}
+			} else {
+				ownerMatches = contains(memberIDs, account.OwnerID)
+			}
+		}
+		accountOwners[account.ID] = ownerMatches
+	}
+
+	filtered := make([]domain.Recurring, 0, len(recurring))
+	for _, item := range recurring {
+		if !matchesScope(accountIDs, item.AccountID) || !matchesScope(categoryIDs, item.CategoryID) {
+			continue
+		}
+		if len(memberIDs) > 0 && !accountOwners[item.AccountID] {
+			continue
+		}
+		filtered = append(filtered, item)
+	}
+	return filtered
+}
+
+func splitScope(multi, single string) []string {
+	value := single
+	if strings.TrimSpace(multi) != "" {
+		value = multi
+	}
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+	parts := strings.Split(value, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if id := strings.TrimSpace(part); id != "" {
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
+func matchesScope(ids []string, value string) bool {
+	return len(ids) == 0 || contains(ids, value)
+}
+
+func contains(ids []string, value string) bool {
+	for _, id := range ids {
+		if id == value {
+			return true
+		}
+	}
+	return false
+}
+
 // Ghost is a projected recurring occurrence on a due date — a dimmed, read-only
 // entry in a day cell that names the recurring and its signed amount. It carries
 // no interaction beyond a title/tooltip.
@@ -62,34 +152,19 @@ type Ghost struct {
 	Date        time.Time
 }
 
-// maxGhostSteps bounds occurrence expansion so a degenerate imported cadence
-// (one whose Next never advances) cannot loop forever. A visible month spans at
-// most 31 days, so even a daily recurring fits well within this.
-const maxGhostSteps = 400
-
 // Ghosts projects every recurring's occurrences into the half-open range
 // [from, to), stepping from each recurring's NextDue by its cadence. A recurring
-// whose NextDue is zero (never scheduled) or before the range is stepped forward
-// until it enters the window. Iteration is bounded (maxGhostSteps) against a
-// non-advancing cadence.
+// whose NextDue is zero (never scheduled) or before the range is jumped forward
+// arithmetically to the first due date in the window. Paused recurrings are not
+// active cash flows and are omitted.
 func Ghosts(recurring []domain.Recurring, from, to time.Time) []Ghost {
 	var out []Ghost
 	for _, r := range recurring {
-		due := r.NextDue
-		if due.IsZero() {
+		if !r.Active() || r.NextDue.IsZero() || !to.After(from) {
 			continue
 		}
-		// Advance into the window if the next due date precedes it.
-		steps := 0
-		for due.Before(from) && steps < maxGhostSteps {
-			next := r.Cadence.Next(due)
-			if !next.After(due) {
-				break // non-advancing cadence — stop
-			}
-			due = next
-			steps++
-		}
-		for due.Before(to) && steps < maxGhostSteps {
+		due := jumpToRange(r.Cadence, r.NextDue, from)
+		for due.Before(to) {
 			out = append(out, Ghost{
 				RecurringID: r.ID,
 				Label:       r.Label,
@@ -101,10 +176,89 @@ func Ghosts(recurring []domain.Recurring, from, to time.Time) []Ghost {
 				break
 			}
 			due = next
-			steps++
 		}
 	}
 	return out
+}
+
+func jumpToRange(cadence domain.RecurringCadence, due, from time.Time) time.Time {
+	if !due.Before(from) {
+		return due
+	}
+	switch cadence {
+	case domain.CadenceDaily, domain.CadenceWeekly, domain.CadenceBiweekly:
+		stepDays := int64(1)
+		if cadence == domain.CadenceWeekly {
+			stepDays = 7
+		} else if cadence == domain.CadenceBiweekly {
+			stepDays = 14
+		}
+		dayDelta := calendarDayOrdinal(from) - calendarDayOrdinal(due)
+		steps := dayDelta / stepDays
+		if dayDelta%stepDays != 0 {
+			steps++
+		}
+		return due.AddDate(0, 0, int(steps*stepDays))
+	case domain.CadenceSemimonthly:
+		if due.Day() != 1 && due.Day() != 15 {
+			due = cadence.Next(due)
+		}
+		dueIndex := (due.Year()*12 + int(due.Month()) - 1) * 2
+		if due.Day() == 15 {
+			dueIndex++
+		}
+		fromIndex := (from.Year()*12 + int(from.Month()) - 1) * 2
+		switch {
+		case from.Day() <= 1:
+		case from.Day() <= 15:
+			fromIndex++
+		default:
+			fromIndex += 2
+		}
+		if fromIndex > dueIndex {
+			monthIndex := fromIndex / 2
+			day := 1
+			if fromIndex%2 == 1 {
+				day = 15
+			}
+			due = time.Date(monthIndex/12, time.Month(monthIndex%12+1), day, due.Hour(), due.Minute(), due.Second(), due.Nanosecond(), due.Location())
+		}
+	case domain.CadenceQuarterly:
+		due = jumpMonthCadence(cadence, due, from, 3)
+	case domain.CadenceYearly:
+		due = jumpMonthCadence(cadence, due, from, 12)
+	default: // monthly, including unknown legacy cadence strings
+		due = jumpMonthCadence(cadence, due, from, 1)
+	}
+	for due.Before(from) {
+		next := cadence.Next(due)
+		if !next.After(due) {
+			return time.Time{}
+		}
+		due = next
+	}
+	return due
+}
+
+func jumpMonthCadence(cadence domain.RecurringCadence, due, from time.Time, monthsPerStep int) time.Time {
+	// Go's AddDate normalizes days beyond the target month's length. One real
+	// cadence step first preserves that behavior (and stabilizes dates such as
+	// Jan 31 -> Mar 3); the remaining jump is then equivalent to repeated steps.
+	if due.Day() > 28 {
+		due = cadence.Next(due)
+	}
+	months := (from.Year()-due.Year())*12 + int(from.Month()-due.Month())
+	steps := months / monthsPerStep
+	if steps > 0 {
+		due = due.AddDate(0, steps*monthsPerStep, 0)
+	}
+	return due
+}
+
+func calendarDayOrdinal(t time.Time) int64 {
+	year, month, day := t.Date()
+	utc := time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
+	return utc.Unix() / int64(24*time.Hour/time.Second)
 }
 
 // Cell is one day square in the month grid. InMonth is false for the leading and
@@ -118,6 +272,17 @@ type Cell struct {
 	Ghosts  []Ghost
 }
 
+// WeekStat totals the daily net amounts and transaction counts in a calendar
+// week. Padding cells contribute zero because they have no in-month activity.
+func WeekStat(cells []Cell) DayStat {
+	var total DayStat
+	for _, cell := range cells {
+		total.Net += cell.Stat.Net
+		total.Count += cell.Stat.Count
+	}
+	return total
+}
+
 // Month builds the calendar grid for the month containing anchor: a slice of
 // weeks, each exactly seven Cells, padded so the first cell is the weekStart on or
 // before the first of the month and the last week is filled to the weekStart
@@ -126,6 +291,29 @@ type Cell struct {
 // ghosts. Both txns and recurring should already be scoped to the caller's active
 // filter — the grid is a pure projection of what it's given.
 func Month(anchor time.Time, weekStart time.Weekday, txns []domain.Transaction, recurring []domain.Recurring) [][]Cell {
+	return month(anchor, weekStart, txns, recurring, BucketByDay(txns))
+}
+
+// MonthInBase builds a month grid whose transaction totals are converted into
+// the base currency. Missing rates are returned to the caller so it can explain
+// why the calendar total is unavailable.
+func MonthInBase(anchor time.Time, weekStart time.Weekday, txns []domain.Transaction, recurring []domain.Recurring, rates currency.Rates) ([][]Cell, error) {
+	monthStart := dateutil.MonthStart(anchor)
+	monthEnd := dateutil.AddMonths(monthStart, 1)
+	visibleTxns := make([]domain.Transaction, 0, len(txns))
+	for _, txn := range txns {
+		if !txn.Date.Before(monthStart) && txn.Date.Before(monthEnd) {
+			visibleTxns = append(visibleTxns, txn)
+		}
+	}
+	stats, err := BucketByDayInBase(visibleTxns, rates)
+	if err != nil {
+		return nil, err
+	}
+	return month(anchor, weekStart, txns, recurring, stats), nil
+}
+
+func month(anchor time.Time, weekStart time.Weekday, txns []domain.Transaction, recurring []domain.Recurring, stats map[string]DayStat) [][]Cell {
 	monthStart := dateutil.MonthStart(anchor)
 	monthEnd := dateutil.AddMonths(monthStart, 1) // exclusive
 
@@ -134,7 +322,6 @@ func Month(anchor time.Time, weekStart time.Weekday, txns []domain.Transaction, 
 	lastDay := monthEnd.AddDate(0, 0, -1)
 	gridEnd := dateutil.WeekStart(lastDay, weekStart).AddDate(0, 0, 7)
 
-	stats := BucketByDay(txns)
 	ghosts := Ghosts(recurring, monthStart, monthEnd)
 	ghostsByDay := make(map[string][]Ghost, len(ghosts))
 	for _, g := range ghosts {

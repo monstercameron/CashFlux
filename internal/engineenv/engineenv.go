@@ -333,18 +333,30 @@ func computeAtoms(d Data) map[string]float64 {
 	// transactions — the shared input for the net-worth, liquid, revolving,
 	// per-account, per-debt, pool, health, and credit variables below, each of
 	// which used to re-scan the full ledger per account.
-	bals, _ := ledger.Balances(d.Accounts, d.Transactions)
-	clearedBals, _ := ledger.ClearedBalances(d.Accounts, d.Transactions)
+	bals, balancesErr := ledger.Balances(d.Accounts, d.Transactions)
+	if balancesErr != nil {
+		slog.Warn("engineenv: one or more account balances are unavailable", "err", balancesErr)
+	}
+	clearedBals, clearedBalancesErr := ledger.ClearedBalances(d.Accounts, d.Transactions)
+	if clearedBalancesErr != nil {
+		slog.Warn("engineenv: one or more cleared account balances are unavailable", "err", clearedBalancesErr)
+	}
 
 	// Assets/liabilities: explaining variant excludes missing-FX accounts gracefully.
-	nw, _ := ledger.NetWorthFromBalances(d.Accounts, bals, d.Rates)
+	nw, netWorthErr := ledger.NetWorthFromBalances(d.Accounts, bals, d.Rates)
+	if netWorthErr != nil {
+		slog.Warn("engineenv: net-worth totals are unavailable", "err", netWorthErr)
+	}
 
 	// Income/expense over the active period (falls back to the calendar month).
 	start, end := d.PeriodStart, d.PeriodEnd
 	if start.IsZero() || end.IsZero() {
 		start, end = dateutil.MonthRange(d.Now)
 	}
-	income, expense, _ := ledger.PeriodTotals(d.Transactions, start, end, d.Rates)
+	income, expense, periodTotalsErr := ledger.PeriodTotals(d.Transactions, start, end, d.Rates)
+	if periodTotalsErr != nil {
+		slog.Warn("engineenv: period income and expense are unavailable", "err", periodTotalsErr)
+	}
 
 	// Period transaction counts (by sign), for "N deposits / N transactions" labels.
 	incCount, expCount := 0, 0
@@ -465,6 +477,22 @@ func computeAtoms(d Data) map[string]float64 {
 		"budgets":                  float64(len(d.Budgets)),
 		"goals":                    float64(len(d.Goals)),
 		"tasks":                    float64(len(d.Tasks)),
+	}
+	// Failed aggregates are unavailable, not real zeroes. Omitting these names
+	// keeps formula evaluation from treating corrupt or unconvertible data as a
+	// trustworthy total. Per-account variables still expose every clean fold.
+	if netWorthErr != nil {
+		delete(out, "assets")
+		delete(out, "liabilities")
+	}
+	if liquidErr != nil {
+		delete(out, "liquid_cash")
+		delete(out, "idle_cash")
+		delete(out, "idle_cash_forgone_annual")
+	}
+	if periodTotalsErr != nil {
+		delete(out, "income")
+		delete(out, "expense")
 	}
 	addCustomFieldVars(out, d, start, end)
 	addBudgetVars(out, d, major)

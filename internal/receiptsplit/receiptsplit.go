@@ -21,12 +21,13 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 )
 
-// LineItem is one extracted receipt line: a display name and its printed cost as a
-// positive magnitude (the sign is taken from the target transaction, so callers
-// pass the amount as it reads on the receipt).
+// LineItem is one extracted receipt line: a display name, optional pre-resolved
+// category, and printed cost as a positive magnitude (the sign is taken from the
+// target transaction, so callers pass the amount as it reads on the receipt).
 type LineItem struct {
-	Name   string
-	Amount money.Money
+	Name       string
+	CategoryID string
+	Amount     money.Money
 }
 
 // Target is the existing transaction the split is proposed for: its signed amount
@@ -62,7 +63,7 @@ type Proposal struct {
 // mismatch between any line and the transaction, or when no line matched a category
 // (a single all-remainder split is no better than leaving the transaction unsplit).
 func Propose(items []LineItem, target Target, match MatchFunc) (Proposal, bool) {
-	if len(items) == 0 || match == nil {
+	if len(items) == 0 {
 		return Proposal{}, false
 	}
 
@@ -94,7 +95,10 @@ func Propose(items []LineItem, target Target, match MatchFunc) (Proposal, bool) 
 	for _, it := range items {
 		mag := abs(it.Amount.Amount)
 		receiptMag += mag
-		cat := match(it.Name)
+		cat := it.CategoryID
+		if cat == "" && match != nil {
+			cat = match(it.Name)
+		}
 		if cat == "" || cat == target.CategoryID {
 			continue
 		}

@@ -5,6 +5,8 @@ package theme
 import (
 	"strings"
 	"testing"
+
+	"github.com/monstercameron/CashFlux/internal/contrast"
 )
 
 func TestDefaultIsValid(t *testing.T) {
@@ -106,15 +108,29 @@ func TestIconStroke(t *testing.T) {
 func TestCSSVars(t *testing.T) {
 	vars := Default().CSSVars()
 	checks := map[string]string{
-		"--bg-base":  "#0e1116",
-		"--accent":   "#7c83ff",
-		"--radius":   "12px",
-		"--ui-scale": "1",
-		"--density":  "comfortable",
+		"--bg-base":        "#0e1116",
+		"--control-border": Default().TextDim,
+		"--accent":         "#7c83ff",
+		"--radius":         "12px",
+		"--ui-scale":       "1",
+		"--density":        "comfortable",
 	}
 	for k, want := range checks {
 		if got := vars[k]; got != want {
 			t.Errorf("CSSVars()[%q] = %q, want %q", k, got, want)
+		}
+	}
+}
+
+func TestPresetControlBoundaryContrast(t *testing.T) {
+	for _, preset := range Presets() {
+		ratio, err := contrast.Ratio(preset.CSSVars()["--control-border"], preset.BgCard)
+		if err != nil {
+			t.Errorf("%s control boundary color: %v", preset.Name, err)
+			continue
+		}
+		if ratio < 3 {
+			t.Errorf("%s control boundary contrast = %.2f:1, want at least 3:1", preset.Name, ratio)
 		}
 	}
 }

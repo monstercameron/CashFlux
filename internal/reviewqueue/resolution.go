@@ -139,13 +139,14 @@ type Group struct {
 	Confidence int
 }
 
-// Total returns the summed minor units of the group's charges.
-func (g Group) Total() int64 {
-	var n int64
+// TotalsByCurrency returns each currency's summed minor units independently.
+// Callers rendering mixed-currency groups should label every entry.
+func (g Group) TotalsByCurrency() map[string]int64 {
+	totals := make(map[string]int64)
 	for _, t := range g.Items {
-		n += t.Amount.Amount
+		totals[t.Amount.Currency] += t.Amount.Amount
 	}
-	return n
+	return totals
 }
 
 // GroupByMerchant buckets a ranked queue by merchant and orders the groups by

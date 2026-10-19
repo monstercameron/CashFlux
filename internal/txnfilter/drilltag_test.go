@@ -20,13 +20,13 @@ func TestDrillToTagAddsAChipWithoutTouchingTheSearch(t *testing.T) {
 		t.Errorf("Text = %q — a tag drill-down must ADD a criterion, not replace the query", c.Text)
 	}
 	found := false
-	for _, af := range c.ActiveFilters() {
+	for _, af := range c.PageFilters() {
 		if af.Field == FieldTag && af.Value == "coffee" {
 			found = true
 		}
 	}
 	if !found {
-		t.Fatalf("no removable Tag chip after drilling to #coffee; chips = %+v (C651)", c.ActiveFilters())
+		t.Fatalf("no removable Tag chip after drilling to #coffee; chips = %+v (C651)", c.PageFilters())
 	}
 }
 
@@ -38,7 +38,7 @@ func TestDrillToTagChipRemovesOnlyItself(t *testing.T) {
 	if back.Text != "UXJ-S01" || back.Member != "m1" {
 		t.Errorf("removing the tag chip took other filters with it: text=%q member=%q", back.Text, back.Member)
 	}
-	for _, af := range back.ActiveFilters() {
+	for _, af := range back.PageFilters() {
 		if af.Field == FieldTag {
 			t.Errorf("Tag filter survived its own chip removal: %+v", af)
 		}

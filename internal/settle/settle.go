@@ -10,8 +10,10 @@
 package settle
 
 import (
+	"fmt"
 	"sort"
 
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/money"
 )
 
@@ -40,30 +42,51 @@ type Transfer struct {
 
 // Net returns each member's net balance in minor units: positive means the group
 // owes them (they fronted more than their share), negative means they owe the
-// group. The balances always sum to zero. currency labels the returned amounts.
+// group. The balances always sum to zero. currencyCode labels the returned amounts.
+// It returns nil if the input contains an amount that cannot be converted to that
+// currency; callers that need the reason should use NetWithRates.
 //
 // For each expense the payer is credited the full amount (the sum of its shares)
 // and every member is debited their own share; each settlement moves its amount
 // from the payer's debt toward zero and reduces the recipient's credit.
-func Net(expenses []Expense, settlements []Settlement, currency string) map[string]money.Money {
+func Net(expenses []Expense, settlements []Settlement, currencyCode string) map[string]money.Money {
+	net, err := NetWithRates(expenses, settlements, currency.Rates{Base: currencyCode}, currencyCode)
+	if err != nil {
+		return nil
+	}
+	return net
+}
+
+// NetWithRates converts every recorded share and settlement into targetCurrency
+// before adding minor units. It returns an error when a conversion cannot be
+// performed, so callers can withhold a misleading mixed-currency result.
+func NetWithRates(expenses []Expense, settlements []Settlement, rates currency.Rates, targetCurrency string) (map[string]money.Money, error) {
 	bal := map[string]int64{}
 	for _, e := range expenses {
 		var total int64
 		for member, share := range e.Shares {
-			bal[member] -= share.Amount
-			total += share.Amount
+			converted, err := rates.Convert(share, targetCurrency)
+			if err != nil {
+				return nil, fmt.Errorf("settle: convert share for %q: %w", member, err)
+			}
+			bal[member] -= converted.Amount
+			total += converted.Amount
 		}
 		bal[e.Payer] += total
 	}
 	for _, s := range settlements {
-		bal[s.From] += s.Amount.Amount
-		bal[s.To] -= s.Amount.Amount
+		converted, err := rates.Convert(s.Amount, targetCurrency)
+		if err != nil {
+			return nil, fmt.Errorf("settle: convert settlement %q to %q: %w", s.From, s.To, err)
+		}
+		bal[s.From] += converted.Amount
+		bal[s.To] -= converted.Amount
 	}
 	out := make(map[string]money.Money, len(bal))
 	for member, amt := range bal {
-		out[member] = money.New(amt, currency)
+		out[member] = money.New(amt, targetCurrency)
 	}
-	return out
+	return out, nil
 }
 
 // Minimize returns a minimal set of transfers that settles the given net balances:

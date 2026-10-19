@@ -4,6 +4,7 @@ package reviewqueue_test
 
 import (
 	"encoding/json"
+	"reflect"
 	"sort"
 	"strings"
 	"testing"
@@ -60,15 +61,17 @@ func TestGroupByMerchantPartitionsTheInput(t *testing.T) {
 	}
 
 	// Totals must add up too, or the footer lies about what a confirm will touch.
-	var groupSum, inputSum int64
+	groupSums, inputSums := map[string]int64{}, map[string]int64{}
 	for _, g := range groups {
-		groupSum += g.Total()
+		for code, total := range g.TotalsByCurrency() {
+			groupSums[code] += total
+		}
 	}
 	for _, r := range in {
-		inputSum += r.Txn.Amount.Amount
+		inputSums[r.Txn.Amount.Currency] += r.Txn.Amount.Amount
 	}
-	if groupSum != inputSum {
-		t.Errorf("group totals sum to %d, input sums to %d", groupSum, inputSum)
+	if !reflect.DeepEqual(groupSums, inputSums) {
+		t.Errorf("group totals sum to %#v, input sums to %#v", groupSums, inputSums)
 	}
 }
 

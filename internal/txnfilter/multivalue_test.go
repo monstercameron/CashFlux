@@ -84,7 +84,7 @@ func TestSelectedValuesAndRemoveValue(t *testing.T) {
 // TestActiveFiltersPerValueChips: each selected multi value is one removable chip.
 func TestActiveFiltersPerValueChips(t *testing.T) {
 	c := Criteria{Accounts: "acc1,acc2", Members: "m1"}
-	af := c.ActiveFilters()
+	af := c.PageFilters()
 	nAcct, nMem := 0, 0
 	for _, a := range af {
 		switch a.Field {

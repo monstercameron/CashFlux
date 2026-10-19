@@ -16,11 +16,15 @@ import (
 var (
 	// A leading processor code + star, e.g. "SQ *", "TST* ", "PP*", "PAYPAL *".
 	reProcessorPrefix = regexp.MustCompile(`(?i)^\s*(sq|tst|pp|sp|pos|dd|ci|pmt|paypal|venmo|cash app|sumup|toast|clover)\b\s*\*+\s*`)
+	// Text-led descriptors used by banks that omit the usual processor star.
+	// Keep this separate from the star-only list so a merchant such as "PayPal"
+	// is not mistaken for a processor prefix without an explicit descriptor.
+	reTextProcessorPrefix = regexp.MustCompile(`(?i)^\s*(ap[l]pay|apple\s+pay|checkcard|ach\s+web|ach|pos|debit(?:\s+card)?)\b(?:\s*[*#:-]\s*|\s+)`)
 	// Any remaining star separators → space ("AMZN*MKTP" → "AMZN MKTP").
 	reStar = regexp.MustCompile(`\*+`)
 	// A trailing store/reference/masked-card token: "#123", "x1234", "*4821", or a run
 	// of 3+ digits at the end ("… STORE 004821").
-	reTrailingRef = regexp.MustCompile(`(?i)\s+(#\s*\d{2,}|x{2,}\s*\d+|\d{3,}|store\s*#?\d+)\s*$`)
+	reTrailingRef = regexp.MustCompile(`(?i)\s+(#\s*\d{2,}|x+\s*\d+|\d{3,}|store\s*#?\d+)\s*$`)
 	// A trailing US "CITY ST" tail some processors append ("… PORTLAND OR"). Only a
 	// SINGLE-word city is stripped (no spaces in the city token) so it can't gobble the
 	// merchant name itself — multi-word cities are left for the SMART+ AI cleanup.
@@ -36,7 +40,17 @@ func Suggest(raw string) string {
 	if s == "" {
 		return ""
 	}
-	s = reProcessorPrefix.ReplaceAllString(s, "")
+	// Some bank descriptors stack prefixes (for example "ACH WEB PAYPAL *").
+	// Remove only anchored, recognized processor labels, and keep going until the
+	// descriptor begins with merchant text.
+	for {
+		stripped := reTextProcessorPrefix.ReplaceAllString(s, "")
+		stripped = reProcessorPrefix.ReplaceAllString(stripped, "")
+		if stripped == s {
+			break
+		}
+		s = stripped
+	}
 	s = reStar.ReplaceAllString(s, " ")
 	s = reMultiSpace.ReplaceAllString(strings.TrimSpace(s), " ")
 	// Strip trailing city/state before trailing refs (order matters: "… PORTLAND OR 12").

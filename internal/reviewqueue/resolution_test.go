@@ -186,13 +186,13 @@ func TestGroupConfidenceIsTheWorstMember(t *testing.T) {
 	}
 }
 
-func TestGroupTotal(t *testing.T) {
+func TestGroupTotalsByCurrency(t *testing.T) {
 	got := GroupByMerchant([]Ranked{
 		{Txn: rqTxn("a1", "AMZN MKTP US*1", -2500)},
 		{Txn: rqTxn("a2", "AMZN MKTP US*2", -1000)},
 	})
-	if len(got) != 1 || got[0].Total() != -3500 {
-		t.Errorf("Total = %d, want -3500", got[0].Total())
+	if len(got) != 1 || got[0].TotalsByCurrency()["USD"] != -3500 {
+		t.Errorf("USD total = %v, want -3500", got[0].TotalsByCurrency())
 	}
 }
 

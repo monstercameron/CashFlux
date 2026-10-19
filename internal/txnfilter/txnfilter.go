@@ -129,9 +129,13 @@ type Criteria struct {
 	Tags     string `json:"tags,omitempty"`
 	From     string `json:"from,omitempty"`
 	To       string `json:"to,omitempty"`
-	Sort     string `json:"sort,omitempty"`
-	Dir      string `json:"dir,omitempty"`
-	Cleared  string `json:"cleared,omitempty"`
+	// PeriodPreset records the user-facing period choice so rolling presets can
+	// resolve against the current date after a reload. Empty is accepted for
+	// legacy filters and migrated by ResolvePeriod; "custom" keeps From/To.
+	PeriodPreset string `json:"periodPreset,omitempty"`
+	Sort         string `json:"sort,omitempty"`
+	Dir          string `json:"dir,omitempty"`
+	Cleared      string `json:"cleared,omitempty"`
 	// Flow filters by money direction: "out" keeps expenses (a negative amount),
 	// "in" keeps income (a positive amount). Empty = both. Drives the natural-
 	// language search's "spent" / "received" clause (TX2).
@@ -167,6 +171,122 @@ type Criteria struct {
 	PageSize int `json:"pageSize,omitempty"`
 }
 
+// Period preset values persisted with Criteria.
+const (
+	PeriodThisMonth       = "this-month"
+	PeriodLastMonth       = "last-month"
+	PeriodLastThreeMonths = "last-three-months"
+	PeriodThisYear        = "this-year"
+	PeriodAllDates        = "all-dates"
+	PeriodCustom          = "custom"
+)
+
+// MonthPeriodPreset names an absolute calendar month as a stable period key.
+func MonthPeriodPreset(year int, month time.Month) string {
+	return fmt.Sprintf("month:%04d-%02d", year, month)
+}
+
+// ResolvePeriod resolves rolling presets to today's date bounds. Legacy filters
+// without a preset are migrated when their stored range exactly matches a
+// preset's current range; an exact calendar month gets a stable named-month key.
+func (c Criteria) ResolvePeriod(now time.Time) Criteria {
+	key := c.PeriodPreset
+	if key == "" {
+		key = InferPeriodPreset(c.From, c.To, now)
+	}
+	month, namedMonth := parseMonthPeriodPreset(key)
+	switch {
+	case key == PeriodThisMonth:
+		c.From, c.To = monthBounds(now.Year(), now.Month())
+	case key == PeriodLastMonth:
+		last := now.AddDate(0, -1, 0)
+		c.From, c.To = monthBounds(last.Year(), last.Month())
+	case key == PeriodLastThreeMonths:
+		from := now.AddDate(0, -2, 0)
+		c.From, _ = monthBounds(from.Year(), from.Month())
+		_, c.To = monthBounds(now.Year(), now.Month())
+	case key == PeriodThisYear:
+		c.From = time.Date(now.Year(), time.January, 1, 0, 0, 0, 0, now.Location()).Format("2006-01-02")
+		c.To = time.Date(now.Year(), time.December, 31, 0, 0, 0, 0, now.Location()).Format("2006-01-02")
+	case key == PeriodAllDates:
+		c.From, c.To = "", ""
+	case namedMonth:
+		c.From, c.To = monthBounds(month.Year(), month.Month())
+	case key == PeriodCustom:
+	default:
+		// Ignore a future or malformed key and migrate its bounds instead.
+		c.PeriodPreset = ""
+		return c.ResolvePeriod(now)
+	}
+	c.PeriodPreset = key
+	return c
+}
+
+// ResolvePeriodChange resolves a filter being saved against the prior persisted
+// value. If only the date bounds changed while the preset key stayed the same,
+// treat the new bounds as the user's period selection and infer its stable key.
+func (c Criteria) ResolvePeriodChange(previous Criteria, now time.Time) Criteria {
+	if (c.From != previous.From || c.To != previous.To) && (c.PeriodPreset == previous.PeriodPreset || c.PeriodPreset == "") {
+		c.PeriodPreset = InferPeriodPreset(c.From, c.To, now)
+	}
+	return c.ResolvePeriod(now)
+}
+
+// InferPeriodPreset returns the stable key for a date range, including rolling
+// presets when the range matches today's resolution. Other full calendar months
+// get a month:YYYY-MM key; explicit partial ranges remain custom.
+func InferPeriodPreset(from, to string, now time.Time) string {
+	if from == "" && to == "" {
+		return PeriodAllDates
+	}
+	thisFrom, thisTo := monthBounds(now.Year(), now.Month())
+	if from == thisFrom && to == thisTo {
+		return PeriodThisMonth
+	}
+	last := now.AddDate(0, -1, 0)
+	lastFrom, lastTo := monthBounds(last.Year(), last.Month())
+	if from == lastFrom && to == lastTo {
+		return PeriodLastMonth
+	}
+	threeAgo := now.AddDate(0, -2, 0)
+	threeFrom, _ := monthBounds(threeAgo.Year(), threeAgo.Month())
+	if _, threeTo := monthBounds(now.Year(), now.Month()); from == threeFrom && to == threeTo {
+		return PeriodLastThreeMonths
+	}
+	yearFrom := time.Date(now.Year(), time.January, 1, 0, 0, 0, 0, now.Location()).Format("2006-01-02")
+	yearTo := time.Date(now.Year(), time.December, 31, 0, 0, 0, 0, now.Location()).Format("2006-01-02")
+	if from == yearFrom && to == yearTo {
+		return PeriodThisYear
+	}
+	if month, ok := parseFullMonthRange(from, to); ok {
+		return MonthPeriodPreset(month.Year(), month.Month())
+	}
+	return PeriodCustom
+}
+
+func monthBounds(year int, month time.Month) (string, string) {
+	start := time.Date(year, month, 1, 0, 0, 0, 0, time.UTC)
+	end := start.AddDate(0, 1, -1)
+	return start.Format("2006-01-02"), end.Format("2006-01-02")
+}
+
+func parseFullMonthRange(from, to string) (time.Time, bool) {
+	start, err := time.Parse("2006-01-02", from)
+	if err != nil || start.Day() != 1 {
+		return time.Time{}, false
+	}
+	_, end := monthBounds(start.Year(), start.Month())
+	return start, to == end
+}
+
+func parseMonthPeriodPreset(key string) (time.Time, bool) {
+	if !strings.HasPrefix(key, "month:") {
+		return time.Time{}, false
+	}
+	month, err := time.Parse("2006-01", strings.TrimPrefix(key, "month:"))
+	return month, err == nil
+}
+
 // Normalize fills defaults: sort defaults to date, the direction defaults to the
 // key's natural direction (DefaultDir) when unset or invalid, the page is at
 // least 1, and an unset page size becomes DefaultPageSize (a negative size is
@@ -183,6 +303,15 @@ func (c Criteria) Normalize() Criteria {
 	}
 	if c.PageSize == 0 {
 		c.PageSize = DefaultPageSize
+	}
+	// UI handlers normalize immediately after changing From/To. If a non-custom
+	// preset key was carried over with those new bounds, re-key it before it can
+	// be persisted or used by a later filter action.
+	if c.PeriodPreset != "" && c.PeriodPreset != PeriodCustom {
+		resolved := c.ResolvePeriod(time.Now())
+		if resolved.From != c.From || resolved.To != c.To {
+			c.PeriodPreset = InferPeriodPreset(c.From, c.To, time.Now())
+		}
 	}
 	return c
 }
@@ -230,19 +359,18 @@ const (
 	FieldCustom        FilterField = "custom"
 )
 
-// ActiveFilter describes one engaged filter for the toolbar's count badge and
-// removable chips. Value is the raw stored value (an entity ID, a date, the
-// search text, or "yes"/"no" for Cleared); the view resolves IDs to display
-// names. Field is what Without clears when the chip's ✕ is clicked.
+// ActiveFilter describes one engaged criterion. PageFilters returns these for
+// the toolbar's count badge and removable chips; AllCriteria also includes date
+// bounds. Value is the raw stored value and Field is what Without clears.
 type ActiveFilter struct {
 	Field FilterField
 	Value string
 }
 
-// ActiveFilters returns the filters currently narrowing the result set, in
-// toolbar order. Whitespace-only text/date values count as inactive. Sort
-// direction and pagination are never included.
-func (c Criteria) ActiveFilters() []ActiveFilter {
+// PageFilters returns user-selected filters currently narrowing the page, in
+// toolbar order. Period bounds belong to the period control and are excluded.
+// Whitespace-only values count as inactive; sort and pagination are never included.
+func (c Criteria) PageFilters() []ActiveFilter {
 	var out []ActiveFilter
 	add := func(f FilterField, v string) {
 		if strings.TrimSpace(v) != "" {
@@ -258,8 +386,6 @@ func (c Criteria) ActiveFilters() []ActiveFilter {
 			out = append(out, ActiveFilter{Field: f, Value: v})
 		}
 	}
-	add(FieldFrom, c.From)
-	add(FieldTo, c.To)
 	add(FieldAmountMin, c.AmountMin)
 	add(FieldAmountMax, c.AmountMax)
 	if c.Cleared == "yes" || c.Cleared == "no" {
@@ -277,9 +403,37 @@ func (c Criteria) ActiveFilters() []ActiveFilter {
 	return out
 }
 
+// AllCriteria returns every active criterion, including the selected date bounds.
+// Date bounds are useful when explaining a parsed query, even though the page's
+// period control is intentionally excluded from its filter chips and badge.
+func (c Criteria) AllCriteria() []ActiveFilter {
+	out := make([]ActiveFilter, 0, len(c.PageFilters())+2)
+	if strings.TrimSpace(c.From) != "" {
+		out = append(out, ActiveFilter{Field: FieldFrom, Value: c.From})
+	}
+	if strings.TrimSpace(c.To) != "" {
+		out = append(out, ActiveFilter{Field: FieldTo, Value: c.To})
+	}
+	return append(out, c.PageFilters()...)
+}
+
+// ActiveFilters returns all active criteria, including date bounds. Use
+// PageFilters for page-level chips, badges, and clear-all behavior.
+func (c Criteria) ActiveFilters() []ActiveFilter { return c.AllCriteria() }
+
 // ActiveCount is the number of engaged filters — the number shown on the
 // "Filters" trigger badge.
-func (c Criteria) ActiveCount() int { return len(c.ActiveFilters()) }
+func (c Criteria) ActiveCount() int { return len(c.PageFilters()) }
+
+// ClearPageFilters clears user filters while preserving the selected period and
+// sort preference. Pagination returns to the first page.
+func (c Criteria) ClearPageFilters() Criteria {
+	return Criteria{
+		From: c.From, To: c.To, PeriodPreset: c.PeriodPreset,
+		Sort: c.Sort, Dir: c.Dir, PageSize: c.PageSize,
+		Page: 1,
+	}
+}
 
 // Without returns c with the given filter field cleared, as when a chip's ✕ is
 // clicked. Sort, direction and page size are preserved; the caller resets the
@@ -659,7 +813,7 @@ func ApplyWithLabels(txns []domain.Transaction, c Criteria, labels Labels) []dom
 		case !c.ScopeAny && c.Categories != "" && !matchesCategory(t, func(id string) bool { return csvHas(c.Categories, id) }):
 		case !c.ScopeAny && c.Categories == "" && c.Category != "" && !matchesCategory(t, func(id string) bool { return id == c.Category }):
 		case c.Uncategorized && (t.CategoryID != "" || t.IsTransfer()):
-		case c.Members != "" && !csvHas(c.Members, t.MemberID):
+		case c.Members != "" && !matchesMemberSelection(c.Members, t.MemberID):
 		case c.Members == "" && c.Member != "" && t.MemberID != c.Member:
 		case c.Sources != "" && !csvHas(c.Sources, string(t.Source)):
 		case c.Sources == "" && c.Source != "" && string(t.Source) != c.Source:
@@ -674,10 +828,10 @@ func ApplyWithLabels(txns []domain.Transaction, c Criteria, labels Labels) []dom
 		case ft != "" && !matchText(t, ft, labels.Payee):
 		case c.Cleared == "yes" && !t.Cleared:
 		case c.Cleared == "no" && t.Cleared:
-		// Flow keeps only expenses ("out", a negative amount) or only income ("in",
-		// a positive amount); a zero-amount row matches neither direction.
-		case c.Flow == "out" && t.Amount.Amount >= 0:
-		case c.Flow == "in" && t.Amount.Amount <= 0:
+		// Direction follows the domain's income/expense definitions, which exclude
+		// transfer legs even when a leg's signed amount looks like income or spend.
+		case c.Flow == "out" && !t.IsExpense():
+		case c.Flow == "in" && !t.IsIncome():
 		case c.CustomKey != "" && c.CustomVal != "" && customString(t.Custom[c.CustomKey]) != c.CustomVal:
 		default:
 			out = append(out, t)
@@ -686,6 +840,9 @@ func ApplyWithLabels(txns []domain.Transaction, c Criteria, labels Labels) []dom
 
 	asc := c.Dir == Asc
 	sort.SliceStable(out, func(i, j int) bool {
+		if emptySortValue(out[i], c.Sort) != emptySortValue(out[j], c.Sort) {
+			return !emptySortValue(out[i], c.Sort)
+		}
 		if k := compare(out[i], out[j], c.Sort, labels); k != 0 {
 			if asc {
 				return k < 0
@@ -696,6 +853,43 @@ func ApplyWithLabels(txns []domain.Transaction, c Criteria, labels Labels) []dom
 		return out[i].ID < out[j].ID
 	})
 	return out
+}
+
+func emptySortValue(t domain.Transaction, key string) bool {
+	switch key {
+	case "category":
+		if strings.TrimSpace(t.CategoryID) != "" {
+			return false
+		}
+		for _, split := range t.Splits {
+			if strings.TrimSpace(split.CategoryID) != "" {
+				return false
+			}
+		}
+		return true
+	case "account":
+		return strings.TrimSpace(t.AccountID) == ""
+	default:
+		return false
+	}
+}
+
+// matchesMemberSelection matches an OR-set of member IDs. The reserved
+// UnassignedMemberID selection represents rows whose actual MemberID is empty;
+// other values continue to match member IDs exactly.
+func matchesMemberSelection(selected, memberID string) bool {
+	for _, id := range splitCSV(selected) {
+		if id == UnassignedMemberID {
+			if memberID == "" {
+				return true
+			}
+			continue
+		}
+		if id == memberID {
+			return true
+		}
+	}
+	return false
 }
 
 // compare orders two transactions by the given key in ascending sense, returning
@@ -773,6 +967,9 @@ func AbsAmount(t domain.Transaction) int64 {
 // findable. resolve (optional) maps the raw payee to its cleaned alias so a search for
 // the clean merchant name matches every charge even though the raw payee is unchanged.
 func matchText(t domain.Transaction, q string, resolve func(string) string) bool {
+	if amount, ok := parseSearchAmount(q); ok && AbsAmount(t) == currency.MinorFromMajor(amount, t.Amount.Currency) {
+		return true
+	}
 	if strings.Contains(strings.ToLower(t.Payee), q) {
 		return true
 	}
@@ -784,12 +981,33 @@ func matchText(t domain.Transaction, q string, resolve func(string) string) bool
 			return true
 		}
 	}
+	tagQuery := strings.TrimPrefix(q, "#")
 	for _, tag := range t.Tags {
-		if strings.Contains(strings.ToLower(tag), q) {
+		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(tag)), tagQuery) {
 			return true
 		}
 	}
 	return false
+}
+
+// parseSearchAmount recognizes an unambiguous exact amount query in major units.
+// A leading currency symbol and grouping commas are accepted because they are
+// common in the amount column's displayed value.
+func parseSearchAmount(q string) (float64, bool) {
+	s := strings.TrimSpace(q)
+	s = strings.TrimPrefix(s, "$")
+	s = strings.ReplaceAll(s, ",", "")
+	if s == "" {
+		return 0, false
+	}
+	v, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return 0, false
+	}
+	if v < 0 {
+		v = -v
+	}
+	return v, true
 }
 
 // parseAmountBound parses an amount filter bound (major units, e.g. "12.50") to a

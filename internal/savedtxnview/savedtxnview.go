@@ -80,21 +80,41 @@ var (
 // UI injects an FX conversion, tests inject the identity.
 type AmountFunc func(domain.Transaction) int64
 
+// ConversionFunc converts a transaction to the summary currency. The boolean is
+// false when no valid conversion is available; such a transaction is counted as
+// unconverted and excluded from the total.
+type ConversionFunc func(domain.Transaction) (int64, bool)
+
 // Summary evaluates the view's criteria over txns and returns how many match and
 // their signed total (via amount). It reuses the live ledger's filter engine
 // (txnfilter.ApplyWithLabels) so a view matches EXACTLY the rows the ledger would
 // show for the same criteria. amount may be nil, in which case each transaction's
 // own stored minor amount is summed (naive, single-currency).
 func (v SavedTxnView) Summary(txns []domain.Transaction, amount AmountFunc) (count int, total int64) {
+	converted, total, _ := v.SummaryConverted(txns, func(t domain.Transaction) (int64, bool) {
+		if amount == nil {
+			return t.Amount.Amount, true
+		}
+		return amount(t), true
+	})
+	return converted, total
+}
+
+// SummaryConverted evaluates the view's criteria over txns and totals only
+// transactions successfully converted by convert. It returns the number of
+// matching transactions, the converted total, and the number excluded because
+// conversion failed.
+func (v SavedTxnView) SummaryConverted(txns []domain.Transaction, convert ConversionFunc) (count int, total int64, unconverted int) {
 	rows := txnfilter.Apply(txns, v.Criteria)
 	for _, t := range rows {
-		if amount != nil {
-			total += amount(t)
-		} else {
-			total += t.Amount.Amount
+		amount, ok := convert(t)
+		if !ok {
+			unconverted++
+			continue
 		}
+		total += amount
 	}
-	return len(rows), total
+	return len(rows), total, unconverted
 }
 
 // CrossedThreshold reports whether a live total trips the view's threshold: the
