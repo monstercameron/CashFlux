@@ -90,6 +90,10 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Budgets: an honest recurring-bills panel (BR2REC).** "Recurring in your budgets" is now "Recurring bills (all
+  categories)": paychecks are no longer listed as charges, and the bills are split into "Covered by a budget" and "Not
+  budgeted ($X/mo)", each with its monthly total, with a "Budget this" action per uncovered category seeded with its
+  monthly amount. The year-plan hint is labelled with the calendar year ("2026 plan").
 - **Transaction filters: inclusive end day, base-currency amounts, preset counts that match (TQ5).** The "To" date now
   includes rows stamped late on that day. Amount bounds, the Large preset and amount search parse with exact minor units
   in the base currency and compare FX-converted magnitudes (a ¥5,000 charge no longer passes "≥ $100"); rows that can't

@@ -125,7 +125,9 @@ func BudgetAnnualGrid(props budgetAnnualGridProps) ui.Node {
 			// (Cam, 2026-08-31). The figure is the budgets' own limits normalized to
 			// a year — no grid build, so it costs nothing while shut.
 			Span(css.Class("budget-annualgrid-toggle-hint"),
-				uistate.T("budgets.planYearFoldHint", year.Get(),
+				// TODO(SOLB1): replace this display-only annualized budget-limit total
+				// with SOLB1's calendar-year-stable calculation when its API lands.
+				uistate.T("budgets.planYearStableHint", year.Get(),
 					fmtMoney(money.New(annualPlanTotal(props.Budgets, props.Rates.Base), props.Rates.Base)))),
 		),
 	)

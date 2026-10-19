@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/budgeting"
+	"github.com/monstercameron/CashFlux/internal/categorytree"
 
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -22,6 +23,16 @@ import (
 	"github.com/monstercameron/GoWebComponents/v5/router"
 	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
+
+// recurringBudgetCoverage returns every category covered directly or through a
+// budget's parent category.
+func recurringBudgetCoverage(budgets []domain.Budget, categories []domain.Category) map[string]bool {
+	roots := make([]string, 0)
+	for _, budget := range budgets {
+		roots = append(roots, budget.TrackedCategoryIDs()...)
+	}
+	return categorytree.DescendantsOfAll(categories, roots)
+}
 
 // budgetRecurringWidget lists the household's active recurring commitments with
 // their cadence (frequency) and per-month normalized cost, surfaced right on the
@@ -44,10 +55,11 @@ func budgetRecurringWidget(props budgetSummaryProps) ui.Node {
 	}
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 
-	// Active recurrings only, biggest monthly commitment first.
+	// Only active outflows belong in a bill list. Grouping is performed after
+	// category coverage is resolved so income can never inflate either section.
 	recs := make([]domain.Recurring, 0)
 	for _, r := range app.Recurring() {
-		if r.Active() {
+		if r.Active() && r.MonthlyEquivalent() < 0 {
 			recs = append(recs, r)
 		}
 	}
@@ -70,20 +82,26 @@ func budgetRecurringWidget(props budgetSummaryProps) ui.Node {
 		catName[c.ID] = c.Name
 	}
 
-	// Committed outflow, normalized to a per-month figure in the base currency. Only
-	// spending recurrings (negative monthly equivalent) count toward "committed" — a
-	// recurring paycheck is detected and listed, but it isn't a budget commitment, so
-	// including it would understate what's actually spoken-for each month.
-	var totalMonthly int64
+	coveredCategories := recurringBudgetCoverage(app.Budgets(), app.Categories())
+	covered := make([]domain.Recurring, 0, len(recs))
+	unbudgetedByCategory := make(map[string]int64)
+	var coveredMonthly, unbudgetedMonthly int64
 	for _, r := range recs {
-		me := r.MonthlyEquivalent()
-		if me >= 0 {
-			continue // income / inflow — shown in the list, but not "committed"
+		amount, err := currency.ConvertBetween(-r.MonthlyEquivalent(), r.Amount.Currency, base, rates)
+		if err != nil {
+			continue
 		}
-		if conv, err := currency.ConvertBetween(-me, r.Amount.Currency, base, rates); err == nil {
-			totalMonthly += conv
+		if coveredCategories[r.CategoryID] {
+			covered = append(covered, r)
+			coveredMonthly += amount
+			continue
 		}
+		unbudgetedByCategory[r.CategoryID] += amount
+		unbudgetedMonthly += amount
 	}
+	sort.SliceStable(covered, func(i, j int) bool {
+		return absMonthly(covered[i]) > absMonthly(covered[j])
+	})
 
 	// C609: every date is stated against a reference. The list showed "Next Jul 3,
 	// 2026" beside "Next Sep 1, 2026" with nothing saying whether either had
@@ -91,18 +109,37 @@ func budgetRecurringWidget(props budgetSummaryProps) ui.Node {
 	// different facts under one word.
 	recurNow := time.Now()
 	recurStart, recurEnd := uistate.UsePeriod().Get().Range()
-	rows := make([]ui.Node, 0, len(recs))
-	for _, r := range recs {
-		rows = append(rows, budgetRecurringRow(r, catName, recurNow, recurStart, recurEnd))
+	coveredRows := make([]ui.Node, 0, len(covered))
+	for _, r := range covered {
+		coveredRows = append(coveredRows, budgetRecurringRow(r, catName, recurNow, recurStart, recurEnd))
+	}
+	unbudgetedCategories := make([]string, 0, len(unbudgetedByCategory))
+	for categoryID := range unbudgetedByCategory {
+		unbudgetedCategories = append(unbudgetedCategories, categoryID)
+	}
+	sort.Slice(unbudgetedCategories, func(i, j int) bool {
+		return unbudgetedByCategory[unbudgetedCategories[i]] > unbudgetedByCategory[unbudgetedCategories[j]]
+	})
+	unbudgetedRowsView := make([]ui.Node, 0, len(unbudgetedCategories))
+	for _, categoryID := range unbudgetedCategories {
+		cat := catName[categoryID]
+		if cat == "" {
+			cat = uistate.T("budgets.recurring.uncategorized")
+		}
+		limit := money.FormatMinor(unbudgetedByCategory[categoryID], currency.Decimals(base))
+		unbudgetedRowsView = append(unbudgetedRowsView, ui.CreateElement(unbudgetedRecurringCategory, unbudgetedRecurringCategoryProps{
+			CategoryID: categoryID, CategoryName: cat, Monthly: money.New(unbudgetedByCategory[categoryID], base),
+			LimitMajor: limit,
+		}))
 	}
 
 	head := Div(css.Class("brc-head"),
 		Div(
-			Span(css.Class("brc-total-label", tw.TextDim), uistate.T("budgets.recurring.totalLabel")),
+			Span(css.Class("brc-total-label", tw.TextDim), uistate.T("budgets.recurring.monthlyBillsLabel")),
 			Span(css.Class("brc-total-val fig", tw.Fold(tw.FontDisplay)),
-				uistate.T("budgets.recurring.totalVal", fmtMoney(money.New(totalMonthly, base)))),
+				uistate.T("budgets.recurring.totalVal", fmtMoney(money.New(coveredMonthly+unbudgetedMonthly, base)))),
 		),
-		Span(css.Class("brc-count", tw.TextDim), uistate.T("budgets.recurring.countLabel", len(recs))),
+		Span(css.Class("brc-count", tw.TextDim), uistate.T("budgets.recurring.billCount", len(recs))),
 	)
 
 	// Collapsible, like the two sections below it. This is the tallest tile on the
@@ -121,10 +158,10 @@ func budgetRecurringWidget(props budgetSummaryProps) ui.Node {
 			Attr("aria-expanded", ariaBool(open.Get())), Attr("aria-label", foldAria), OnClick(toggleOpen),
 			Span(ClassStr(caretCls), Attr("aria-hidden", "true"),
 				uiw.Icon(icon.ChevronRight, css.Class(tw.ShrinkO, tw.W4, tw.H4))),
-			Span(css.Class("budget-fold-toggle-label"), uistate.T("budgets.recurring.title")),
+			Span(css.Class("budget-fold-toggle-label"), uistate.T("budgets.recurring.allCategoriesTitle")),
 			Span(css.Class("budget-fold-toggle-hint"),
-				uistate.TN("budgets.recurring.foldHintOne", "budgets.recurring.foldHintMany",
-					len(recs), fmtMoney(money.New(totalMonthly, base)))),
+				uistate.TN("budgets.recurring.billFoldOne", "budgets.recurring.billFoldMany",
+					len(recs), fmtMoney(money.New(coveredMonthly+unbudgetedMonthly, base)))),
 		),
 	)
 
@@ -132,8 +169,19 @@ func budgetRecurringWidget(props budgetSummaryProps) ui.Node {
 	if open.Get() {
 		body = Fragment(
 			head,
-			P(css.Class("muted", tw.Text13), uistate.T("budgets.recurring.desc")),
-			Div(css.Class("brc-rows"), rows),
+			P(css.Class("muted", tw.Text13), uistate.T("budgets.recurring.coverageDesc")),
+			Div(css.Class("brc-section"),
+				Div(css.Class("brc-section-head"),
+					Span(css.Class("brc-section-title"), uistate.T("budgets.recurring.coveredTitle")),
+					Span(css.Class("brc-section-total"), Attr("data-testid", "budgets-recurring-covered-total"), fmtMoney(money.New(coveredMonthly, base)))),
+				Div(css.Class("brc-rows"), coveredRows),
+			),
+			Div(css.Class("brc-section"),
+				Div(css.Class("brc-section-head"),
+					Span(css.Class("brc-section-title"), uistate.T("budgets.recurring.unbudgetedTitle")),
+					Span(css.Class("brc-section-total"), Attr("data-testid", "budgets-recurring-unbudgeted-total"), uistate.T("budgets.recurring.unbudgetedMonthly", fmtMoney(money.New(unbudgetedMonthly, base))))),
+				Div(css.Class("brc-rows"), unbudgetedRowsView),
+			),
 			Div(css.Class("brc-foot"),
 				Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "budgets-recurring-manage"),
 					OnClick(goToRecurring),
@@ -146,6 +194,36 @@ func budgetRecurringWidget(props budgetSummaryProps) ui.Node {
 		ID: "budget-recurring", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
 		Body: Div(css.Class("brc budget-fold"), Attr("data-testid", "budgets-recurring"), fold, body),
 	})
+}
+
+type unbudgetedRecurringCategoryProps struct {
+	CategoryID, CategoryName string
+	Monthly                  money.Money
+	LimitMajor               string
+}
+
+// unbudgetedRecurringCategory renders one category total and owns its Budget-this
+// event hook, keeping hook registration out of the variable-length category list.
+func unbudgetedRecurringCategory(props unbudgetedRecurringCategoryProps) ui.Node {
+	openBudget := ui.UseEvent(Prevent(func() {
+		if props.CategoryID == "" {
+			return
+		}
+		uistate.SetBudgetAddSeed(uistate.BudgetAddSeed{
+			Name: props.CategoryName, CategoryID: props.CategoryID, LimitMajor: props.LimitMajor,
+		})
+		uistate.SetAddTarget("budget")
+	}))
+	row := []ui.Node{
+		Span(css.Class("brc-label", tw.Fold(tw.FontDisplay)), props.CategoryName),
+		Span(css.Class("brc-amt fig", tw.Fold(tw.FontDisplay)), fmtMoney(props.Monthly)),
+	}
+	if props.CategoryID != "" {
+		row = append(row, Button(css.Class("btn btn-sm"), Type("button"),
+			Attr("data-testid", "budget-this-recurring-"+props.CategoryID),
+			OnClick(openBudget), uistate.T("budgets.budgetThis")))
+	}
+	return Div(css.Class("brc-row", "brc-unbudgeted-row"), Attr("data-testid", "budgets-recurring-unbudgeted-row"), row)
 }
 
 // budgetRecurringRow renders one recurring commitment: its label, category, the
