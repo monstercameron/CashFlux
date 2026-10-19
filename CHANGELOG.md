@@ -90,6 +90,12 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **The month's money is the first thing you read on Transactions (UXT1).** The dotted count line is replaced by a
+  summary strip: Spent, Income and Net as three labelled figures at 17 px with tabular numbers, a thin bar under Spent
+  split by the top five categories (clicking a segment filters the ledger, clicking again clears it, with an equivalent
+  labelled list for keyboard and screen readers), and one quiet line for the transaction count and secondary facts —
+  no middle dots or arrows. Search and future-month modes keep their wording, and the strip reflows at 1024 px and on
+  phones.
 - **Row and Edit suggestions follow the new rules (BR3SUG).** Budget suggestions gate on the recurring-aware projection
   (fixed bills no longer trigger raises), say "Raise to $X" / "Lower to $X" / "Keep at $X" as a target rather than a
   change, and use the same pluralised evidence in the row and the Edit dialog.

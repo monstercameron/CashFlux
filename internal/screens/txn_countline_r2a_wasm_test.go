@@ -54,7 +54,7 @@ func TestTxnFutureTotalKeepsHouseholdCurrencyAndCountsFXFailures(t *testing.T) {
 	}
 }
 
-func TestR5NCountLineOmitsZeroCashflowTotals(t *testing.T) {
+func TestUXT1CountLineKeepsAllThreeFiguresAtZero(t *testing.T) {
 	previous := appstate.Default
 	previousFilter := uistate.CurrentTxFilter()
 	app, err := appstate.New(nil, false)
@@ -73,8 +73,10 @@ func TestR5NCountLineOmitsZeroCashflowTotals(t *testing.T) {
 	if !strings.Contains(got, "14 transactions") {
 		t.Fatalf("count line %q does not include the transaction count", got)
 	}
-	if strings.Contains(got, "Spent") || strings.Contains(got, "Income") || strings.Contains(got, "Net") {
-		t.Fatalf("zero cashflow line should show only its count, got %q", got)
+	for _, want := range []string{"Spent", "Income", "Net", "$0.00"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("zero cashflow strip missing %q: %q", want, got)
+		}
 	}
 }
 
@@ -89,7 +91,7 @@ func TestR3NCountLinePluralizesAndRemainsVisibleForAnEmptyPeriod(t *testing.T) {
 	}
 	f := render.New(t)
 	f.Render(txnCountLine(txnCountLineProps{Shown: 0, Total: 3292}))
-	if node := r2aByTestID(f, "span", "txn-count-line"); node == nil || !strings.Contains(node.Text(), "0 transactions") {
+	if node := r2aByTestID(f, "div", "txn-count-line"); node == nil || !strings.Contains(node.Text(), "0 transactions") {
 		t.Fatalf("empty-period count line missing or inaccurate: %v", node)
 	}
 }
