@@ -90,6 +90,10 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Budgets pages read the same on every row (BV6H).** Zero-spend rows show the pace tick; rollover details open on click with
+  aria-expanded; light-theme links meet 4.5:1; Age of money has a 32 px "Why?" target; the Unbudgeted strip has a heading, list
+  semantics and correct "(others)" and count copy; recurring bills follow the member lens and name bills excluded for a missing
+  exchange rate.
 - **The app shell keeps a stable top bar; the pressed Ledger/Calendar segment is readable (TV7H).** The period control slot is
   always mounted so the sample banner never remounts on route changes; the theme toggle names the current theme; the pressed
   segment exposes data-pressed matching aria-checked and uses contrast-aware ink.

@@ -61,7 +61,7 @@ func registerBud3() {
 		display("flex"),
 		flexDirection("column"),
 		gap("0.2rem"),
-		fontSize("var(--type-13)"),
+		fontSize("12.5px"),
 		color("var(--text)"),
 	)
 	rule(".budget-limit-editor-base > span",
@@ -125,7 +125,7 @@ func registerBud3() {
 		padding("0 0.4rem"),
 		background("var(--bg-elev)"),
 		color("var(--text)"),
-		fontSize("var(--type-13)"),
+		fontSize("12.5px"),
 		fontWeight("600"),
 	)
 	rule(".budget-pace-legend",

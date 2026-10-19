@@ -6,6 +6,7 @@ package screens
 
 import (
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/budgeting"
@@ -66,8 +67,9 @@ func budgetRecurringWidget(props budgetSummaryProps) ui.Node {
 	// Only active outflows belong in a bill list. Grouping is performed after
 	// category coverage is resolved so income can never inflate either section.
 	recs := make([]domain.Recurring, 0)
+	accounts := app.Accounts()
 	for _, r := range app.Recurring() {
-		if r.Active() && r.Amount.IsNegative() {
+		if r.Active() && r.Amount.IsNegative() && recurringInMemberLens(r, activeMember, accounts) {
 			recs = append(recs, r)
 		}
 	}
@@ -99,12 +101,14 @@ func budgetRecurringWidget(props budgetSummaryProps) ui.Node {
 
 	coveredCategories := recurringBudgetCoverage(app.Budgets(), app.Categories(), activeMember)
 	covered := make([]domain.Recurring, 0, len(recs))
+	excluded := make([]string, 0)
 	unbudgetedByCategory := make(map[string]int64)
 	var coveredMonthly, unbudgetedMonthly int64
 	validBillCount := 0
 	for _, r := range recs {
-		amount, err := recurringMonthlyBase(r, base, rates)
+		amount, excludedLabel, err := recurringBudgetAmount(r, base, rates)
 		if err != nil {
+			excluded = append(excluded, excludedLabel)
 			continue
 		}
 		validBillCount++
@@ -125,7 +129,7 @@ func budgetRecurringWidget(props budgetSummaryProps) ui.Node {
 			return Div(Attr("role", "alert"), uistate.T("budgets.annualGridError"))
 		}
 	}
-	if validBillCount == 0 {
+	if validBillCount == 0 && len(excluded) == 0 {
 		return Fragment()
 	}
 	totalMonthly, err := money.Add(coveredMonthly, unbudgetedMonthly)
@@ -135,6 +139,7 @@ func budgetRecurringWidget(props budgetSummaryProps) ui.Node {
 	sort.SliceStable(covered, func(i, j int) bool {
 		return absMonthly(covered[i]) > absMonthly(covered[j])
 	})
+	sort.Strings(excluded)
 
 	// C609: every date is stated against a reference. The list showed "Next Jul 3,
 	// 2026" beside "Next Sep 1, 2026" with nothing saying whether either had
@@ -170,7 +175,7 @@ func budgetRecurringWidget(props budgetSummaryProps) ui.Node {
 			Span(css.Class("brc-total-val fig", tw.Fold(tw.FontDisplay)),
 				uistate.T("budgets.recurring.totalVal", fmtMoney(money.New(totalMonthly, base)))),
 		),
-		Span(css.Class("brc-count", tw.TextDim), uistate.T("budgets.recurring.billCount", validBillCount)),
+		Span(css.Class("brc-count", tw.TextDim), uistate.TN("budgets.recurring.billOne", "budgets.recurring.billMany", validBillCount)),
 	)
 
 	// Collapsible, like the two sections below it. This is the tallest tile on the
@@ -203,16 +208,26 @@ func budgetRecurringWidget(props budgetSummaryProps) ui.Node {
 			P(css.Class("muted", tw.Text13), uistate.T("budgets.recurring.coverageDesc")),
 			Div(css.Class("brc-section"),
 				Div(css.Class("brc-section-head"),
-					Span(css.Class("brc-section-title"), uistate.T("budgets.recurring.coveredTitle")),
+					H2(css.Class("brc-section-title"), uistate.T("budgets.recurring.coveredTitle")),
 					Span(css.Class("brc-section-total"), Attr("data-testid", "budgets-recurring-covered-total"), fmtMoney(money.New(coveredMonthly, base)))),
-				Div(css.Class("brc-rows"), coveredRows),
+				Ul(css.Class("brc-rows"), coveredRows),
 			),
 			Div(css.Class("brc-section"),
 				Div(css.Class("brc-section-head"),
-					Span(css.Class("brc-section-title"), uistate.T("budgets.recurring.unbudgetedTitle")),
+					H2(css.Class("brc-section-title"), uistate.T("budgets.recurring.unbudgetedTitle")),
 					Span(css.Class("brc-section-total"), Attr("data-testid", "budgets-recurring-unbudgeted-total"), uistate.T("budgets.recurring.unbudgetedMonthly", fmtMoney(money.New(unbudgetedMonthly, base))))),
-				Div(css.Class("brc-rows"), unbudgetedRowsView),
+				Ul(css.Class("brc-rows"), unbudgetedRowsView),
 			),
+			If(len(excluded) > 0, Div(css.Class("brc-section brc-excluded"),
+				Div(css.Class("brc-section-head"),
+					H2(css.Class("brc-section-title"), uistate.T("budgets.recurring.excludedTitle")),
+					Span(css.Class("brc-section-total"), uistate.TN("budgets.recurring.excludedOne", "budgets.recurring.excludedMany", len(excluded))),
+				),
+				Ul(css.Class("brc-excluded-list"), Map(excluded, func(label string) ui.Node {
+					return Li(label)
+				})),
+				P(css.Class("muted"), uistate.T("budgets.recurring.excludedReason")),
+			)),
 			Div(css.Class("brc-foot"),
 				Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "budgets-recurring-manage"),
 					manageOnClick,
@@ -225,6 +240,35 @@ func budgetRecurringWidget(props budgetSummaryProps) ui.Node {
 		ID: "budget-recurring", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
 		Body: Div(css.Class("brc budget-fold"), Attr("data-testid", "budgets-recurring"), fold, body),
 	})
+}
+
+func recurringInMemberLens(recurring domain.Recurring, memberID string, accounts []domain.Account) bool {
+	if memberID == "" || recurring.AccountID == "" {
+		return true
+	}
+	for _, account := range accounts {
+		if account.ID != recurring.AccountID {
+			continue
+		}
+		return account.Scope != domain.ScopeIndividual || account.OwnerID == memberID || account.OwnerID == domain.GroupOwnerID
+	}
+	return false
+}
+
+func recurringFXExcludedLabel(recurring domain.Recurring) string {
+	label := strings.TrimSpace(recurring.Label)
+	if label == "" {
+		return uistate.T("budgets.recurring.unnamedBill")
+	}
+	return label
+}
+
+func recurringBudgetAmount(recurring domain.Recurring, base string, rates currency.Rates) (int64, string, error) {
+	amount, err := recurringMonthlyBase(recurring, base, rates)
+	if err != nil {
+		return 0, recurringFXExcludedLabel(recurring), err
+	}
+	return amount, "", nil
 }
 
 type unbudgetedRecurringCategoryProps struct {
@@ -255,7 +299,7 @@ func unbudgetedRecurringCategory(props unbudgetedRecurringCategoryProps) ui.Node
 			Attr("data-testid", "budget-this-recurring-"+props.CategoryID),
 			openBudgetOnClick, uistate.T("budgets.budgetThis")))
 	}
-	return Div(css.Class("brc-row", "brc-unbudgeted-row"), Attr("data-testid", "budgets-recurring-unbudgeted-row"), row)
+	return Li(css.Class("brc-row", "brc-unbudgeted-row"), Attr("data-testid", "budgets-recurring-unbudgeted-row"), row)
 }
 
 // budgetRecurringRow renders one recurring commitment: its label, category, the
@@ -269,14 +313,14 @@ func budgetRecurringRow(r domain.Recurring, catName map[string]string, now, peri
 	}
 	meta := []ui.Node{Span(cat)}
 	if r.Autopay {
-		meta = append(meta, Span(css.Class(tw.TextFaint), " · "+uistate.T("budgets.recurring.autopay")))
+		meta = append(meta, Span(css.Class(tw.TextFaint), ", "+uistate.T("budgets.recurring.autopay")))
 	}
 	// C609: the date carries its own meaning — overdue, due inside the period on
 	// screen, or the schedule's next date after it.
 	if state := budgeting.ClassifyRecurDate(r.NextDue, now, periodStart, periodEnd); state != budgeting.RecurUnscheduled {
 		when := uistate.LoadPrefs().FormatDate(r.NextDue)
 		meta = append(meta, Span(ClassStr(recurDateClass(state)), Attr("data-testid", "brc-date-"+string(state)),
-			" · "+uistate.T(recurDateKey(state), when)))
+			", "+uistate.T(recurDateKey(state), when)))
 	}
 
 	// Amount block: the charge as-is, plus a per-month equivalent when the cadence
@@ -288,7 +332,7 @@ func budgetRecurringRow(r domain.Recurring, catName map[string]string, now, peri
 			uistate.T("budgets.recurring.perMonth", fmtMoney(money.New(monthly, r.Amount.Currency)))))
 	}
 
-	return Div(css.Class("brc-row"), Attr("data-testid", "budgets-recurring-row"),
+	return Li(css.Class("brc-row"), Attr("data-testid", "budgets-recurring-row"),
 		Span(css.Class("brc-cadence"), recurCadence(r.Cadence)),
 		Div(css.Class("brc-body"),
 			Span(css.Class("brc-label", tw.Fold(tw.FontDisplay)), r.Label),

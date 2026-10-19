@@ -271,14 +271,6 @@ func budgetRowCompact(props budgetRowCompactProps) ui.Node {
 		// One action cell: the labelled Transactions drill (icon + accessible
 		// name) and the ⋯ overflow, so the compact row keeps a one-click path to
 		// the ledger without the name pretending to be one (C591).
-		Div(css.Class("budget-crow-actions"),
-			If(canDrill, Button(css.Class("btn btn-tool budget-crow-drill"), Type("button"),
-				Attr("data-testid", "budget-view-txns-"+s.Budget.ID),
-				Attr("aria-label", uistate.T("budgets.drillAria", title)),
-				Title(drillTitle), OnClick(drill),
-				uiw.Icon(icon.Receipt, css.Class(tw.ShrinkO, tw.W4, tw.H4)))),
-			kebabNode,
-		),
 		Div(css.Class("budget-crow-figures"),
 			Span(css.Class("budget-crow-amt fig"),
 				Span(css.Class("budget-crow-spent"), barSpent),
@@ -287,14 +279,24 @@ func budgetRowCompact(props budgetRowCompactProps) ui.Node {
 					Title(uistate.T("budgets.limitEditTitle")), Attr("aria-label", uistate.T("budgets.limitEditTitle")+" — "+title),
 					OnClick(startLimitEdit), fmtMoney(limit)),
 				If(budgetCadenceSuffix(s.Budget.Period) != "", Span(css.Class("budget-cadence"), budgetCadenceSuffix(s.Budget.Period))),
-				Span(css.Class("budget-crow-fig-separator"), " · "), crowLeft,
+				Span(css.Class("budget-crow-fig-separator"), " — "), crowLeft,
 			),
 		),
 		Div(css.Class("budget-crow-bar"), Attr("role", "progressbar"), Attr("aria-valuenow", strconv.Itoa(width)), Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"), Attr("aria-label", uistate.T("budgets.progressLabel")+" — "+title),
 			Div(ClassStr(fillClass), Attr("style", fmt.Sprintf("width:%d%%", width))),
-			If(!lastMonthMode && s.PeriodStatus != budgeting.PeriodEnded && props.PaceMarkerPct > 0 && s.Spent.Amount > 0,
+			If(!lastMonthMode && s.PeriodStatus != budgeting.PeriodEnded && props.PaceMarkerPct > 0,
 				Div(css.Class("bar-pace-tick"), Attr("data-testid", "budget-pace-tick-"+s.Budget.ID), Attr("aria-hidden", "true"),
 					Attr("style", fmt.Sprintf("position:absolute;top:-3px;height:12px;left:%d%%;width:2px;background:var(--text-1,var(--text));pointer-events:none", props.PaceMarkerPct)))),
+		),
+		// Keep the keyboard sequence aligned with the row's reading order: figures,
+		// then the actions visually placed at the end of the row.
+		Div(css.Class("budget-crow-actions"),
+			If(canDrill, Button(css.Class("btn btn-tool budget-crow-drill"), Type("button"),
+				Attr("data-testid", "budget-view-txns-"+s.Budget.ID),
+				Attr("aria-label", uistate.T("budgets.drillAria", title)),
+				Title(drillTitle), OnClick(drill),
+				uiw.Icon(icon.Receipt, css.Class(tw.ShrinkO, tw.W4, tw.H4)))),
+			kebabNode,
 		),
 		Div(css.Class("budget-crow-sub"), props.ProjectionLine),
 		Div(css.Class("budget-crow-rollover"), props.RolloverDetail),
@@ -535,12 +537,38 @@ func budgetRolloverBadge(props budgetRolloverBadgeProps) ui.Node {
 	// ONE marker, both shapes, one hover system. This used to run its own popover
 	// AND nest a glyph that ran a second — two systems for one piece of information,
 	// able to open together and anchored to different elements (Cam, 2026-08-31).
-	return Span(ClassStr("budget-rollover-badge"+toneCls),
-		ui.CreateElement(budgetGoalGlyph, budgetGoalGlyphProps{
-			BudgetID: props.BudgetID, Kind: "rollover", Icon: icon.Repeat,
-			Title: uistate.T("budgetsRollover.popTitle"), Text: strings.Join(parts, " "),
-			PillText: label, PillClass: "budget-rollover-pill",
-		}),
+	return ui.CreateElement(budgetRolloverDisclosure, budgetRolloverDisclosureProps{
+		BudgetID: props.BudgetID, Label: label, ToneClass: toneCls, Text: strings.Join(parts, " "),
+	})
+}
+
+type budgetRolloverDisclosureProps struct {
+	BudgetID, Label, ToneClass, Text string
+}
+
+func budgetRolloverDisclosure(props budgetRolloverDisclosureProps) ui.Node {
+	open := ui.UseState(false)
+	toggle := ui.UseEvent(Prevent(func() { open.Set(!open.Get()) }))
+	close := ui.UseEvent(Prevent(func() { open.Set(false) }))
+	id := "budget-rollover-" + props.BudgetID
+	buttonArgs := []any{
+		Attr("data-testid", "budget-glyph-rollover-"+props.BudgetID),
+		Attr("aria-expanded", ariaBool(open.Get())), Attr("aria-controls", id+"-tip"),
+		OnClick(toggle), OnBlur(close),
+	}
+	if open.Get() {
+		buttonArgs = append(buttonArgs, Attr("aria-describedby", id+"-tip"))
+	}
+	buttonArgs = append(buttonArgs,
+		Span(props.Label),
+		uiw.Icon(icon.Repeat, css.Class("budget-goalglyph-icon", tw.ShrinkO, tw.W4, tw.H4)),
+	)
+	return Span(ClassStr("budget-rollover-badge"+props.ToneClass), Attr("id", id),
+		Button(append([]any{ClassStr("budget-marker-pill budget-rollover-pill"), Type("button")}, buttonArgs...)...),
+		If(open.Get(), Div(css.Class("budget-rollover-popover"), Attr("id", id+"-tip"), Attr("role", "tooltip"),
+			Span(css.Class("budget-rollover-popover-title"), uistate.T("budgetsRollover.popTitle")),
+			P(css.Class("budget-rollover-popover-text"), props.Text),
+		)),
 	)
 }
 

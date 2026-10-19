@@ -10,8 +10,10 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
+	"github.com/monstercameron/CashFlux/internal/categorytree"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
+	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -121,6 +123,7 @@ func unbudgetedStrip(props unbudgetedStripProps) ui.Node {
 			CatID: c.CategoryID, CatName: c.Name,
 			SpentStr:   fmtMoney(c.Amount),
 			LimitMajor: money.FormatMinor(sug, currency.Decimals(props.Base)),
+			Others:     hasMemberBudgetForCategory(app.Budgets(), app.Categories(), c.CategoryID),
 		})
 	})
 	// C607: the hint NAMES the period it describes. "this month" was true only by
@@ -136,7 +139,7 @@ func unbudgetedStrip(props unbudgetedStripProps) ui.Node {
 	}
 	return Div(css.Class("budget-unbudgeted"), Attr("data-testid", "budgets-unbudgeted"),
 		Div(css.Class("budget-unbudgeted-head"),
-			Span(css.Class("budget-unbudgeted-title"), uistate.T("budgets.unbudgetedHead")),
+			H2(css.Class("budget-unbudgeted-title"), uistate.T("budgets.unbudgetedHead")),
 			Span(css.Class(tw.TextFaint, tw.Text12), Attr("data-testid", "budgets-unbudgeted-hint"),
 				uistate.T(hintKey, label)),
 			// The chips are capped at four and scoped to the viewed period, and
@@ -144,7 +147,7 @@ func unbudgetedStrip(props unbudgetedStripProps) ui.Node {
 			// untracked category over a year, each one handled on its own terms.
 			ui.CreateElement(trackAllButton, trackAllButtonProps{Total: totalCands}),
 		),
-		Div(css.Class("budget-unbudgeted-chips"), chips),
+		Ul(css.Class("budget-unbudgeted-chips"), chips),
 	)
 }
 
@@ -165,7 +168,7 @@ func trackAllButton(props trackAllButtonProps) ui.Node {
 	// there actually are, over a full year rather than just this period.
 	label := uistate.T("budgets.trackAll")
 	if props.Total > 0 {
-		label = uistate.T("budgets.trackAllCount", props.Total)
+		label = uistate.T("budgets.trackAllCategoryCount", props.Total)
 	}
 	return Button(css.Class("budget-unbudgeted-all"), Type("button"),
 		Attr("data-testid", "budgets-track-all"), Attr("aria-label", label), OnClick(onOpen), label)
@@ -174,6 +177,20 @@ func trackAllButton(props trackAllButtonProps) ui.Node {
 // unbudgetedChipProps drives one category chip in the unbudgeted strip.
 type unbudgetedChipProps struct {
 	CatID, CatName, SpentStr, LimitMajor string
+	Others                               bool
+}
+
+func hasMemberBudgetForCategory(budgets []domain.Budget, categories []domain.Category, categoryID string) bool {
+	for _, budget := range budgets {
+		if budget.Scope != domain.ScopeIndividual {
+			continue
+		}
+		covered := categorytree.DescendantsOfAll(categories, budget.TrackedCategoryIDs())
+		if covered[categoryID] {
+			return true
+		}
+	}
+	return false
 }
 
 // unbudgetedChip is one "<category> · $spent — Budget this" chip. Clicking it opens
@@ -186,12 +203,16 @@ func unbudgetedChip(props unbudgetedChipProps) ui.Node {
 		})
 		uistate.SetAddTarget("budget")
 	}))
-	return Button(css.Class("budget-unbudgeted-chip"), Type("button"),
+	categoryLabel := props.CatName
+	if props.Others {
+		categoryLabel = uistate.T("br3row.unbudgetedOthers", categoryLabel)
+	}
+	return Li(css.Class("budget-unbudgeted-item"), Button(css.Class("budget-unbudgeted-chip"), Type("button"),
 		Attr("data-testid", "budget-this-"+props.CatID),
 		Title(uistate.T("budgets.budgetThis")), OnClick(open),
-		Span(css.Class("budget-unbudgeted-cat"), uistate.T("br3row.unbudgetedOthers", props.CatName), " · ", props.SpentStr),
+		Span(css.Class("budget-unbudgeted-cat"), categoryLabel, " — ", props.SpentStr),
 		Span(css.Class("budget-unbudgeted-cta"),
 			uiw.Icon(icon.Plus, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
 			uistate.T("budgets.budgetThis")),
-	)
+	))
 }
