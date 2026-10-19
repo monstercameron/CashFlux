@@ -48,6 +48,18 @@ func FindTranslationArgCountOffenders(root string) ([]FormatArgOffender, error) 
 		if parseErr != nil {
 			return parseErr
 		}
+		formattedTranslations := make(map[*ast.CallExpr]int)
+		ast.Inspect(file, func(node ast.Node) bool {
+			call, ok := node.(*ast.CallExpr)
+			if !ok || !isFmtSprintf(call.Fun) || len(call.Args) < 1 {
+				return true
+			}
+			translation, ok := call.Args[0].(*ast.CallExpr)
+			if ok && isUistateT(translation.Fun) {
+				formattedTranslations[translation] = len(call.Args) - 1
+			}
+			return true
+		})
 		ast.Inspect(file, func(node ast.Node) bool {
 			call, ok := node.(*ast.CallExpr)
 			if !ok || !isUistateT(call.Fun) || len(call.Args) == 0 {
@@ -66,7 +78,10 @@ func FindTranslationArgCountOffenders(root string) ([]FormatArgOffender, error) 
 				return true
 			}
 			want := countFormatVerbs(template)
-			got := len(call.Args) - 1
+			got, formatted := formattedTranslations[call]
+			if !formatted {
+				got = len(call.Args) - 1
+			}
 			if got != want {
 				pos := fset.Position(call.Pos())
 				rel, relErr := filepath.Rel(root, path)
@@ -91,6 +106,15 @@ func isUistateT(expr ast.Expr) bool {
 	return ok && pkg.Name == "uistate"
 }
 
+func isFmtSprintf(expr ast.Expr) bool {
+	sel, ok := expr.(*ast.SelectorExpr)
+	if !ok || sel.Sel.Name != "Sprintf" {
+		return false
+	}
+	pkg, ok := sel.X.(*ast.Ident)
+	return ok && pkg.Name == "fmt"
+}
+
 func countFormatVerbs(format string) int {
 	count := 0
 	for i := 0; i < len(format); i++ {
@@ -109,25 +133,46 @@ func countFormatVerbs(format string) int {
 		if format[i] == '%' {
 			continue
 		}
-		// Skip flags, width, precision and positional indices until the first
-		// letter. Stop there even if it is unsupported, so a literal percent
-		// followed by prose cannot consume a later letter from that word.
-		for i < len(format) && !isASCIIAlpha(format[i]) {
+		if format[i] == ' ' || format[i] == '\t' || format[i] == '\n' || format[i] == '\r' {
+			// A percent followed by whitespace is prose (for example "30% of").
+			continue
+		}
+		// Parse a printf directive rather than scanning prose for the next
+		// letter. This keeps percentages such as "80%. Counts" literal.
+		start := i
+		for i < len(format) && strings.ContainsRune("#0+- ", rune(format[i])) {
 			i++
+		}
+		if i < len(format) && format[i] == '[' {
+			if end := strings.IndexByte(format[i:], ']'); end >= 0 {
+				i += end + 1
+			}
+		}
+		for i < len(format) && format[i] >= '0' && format[i] <= '9' {
+			i++
+		}
+		if i < len(format) && format[i] == '.' {
+			i++
+			if i < len(format) && format[i] == '[' {
+				if end := strings.IndexByte(format[i:], ']'); end >= 0 {
+					i += end + 1
+				}
+			}
+			for i < len(format) && format[i] >= '0' && format[i] <= '9' {
+				i++
+			}
 		}
 		if i < len(format) && isFormatVerb(format[i]) {
 			count++
+		} else {
+			i = start
 		}
 	}
 	return count
 }
 
 func isFormatVerb(char byte) bool {
-	return strings.ContainsRune("aAbBcCdDeEfFgGopqsSTUvxX%", rune(char))
-}
-
-func isASCIIAlpha(char byte) bool {
-	return char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z'
+	return strings.ContainsRune("bcdoxXUeEfgGstTqvwp%", rune(char))
 }
 
 func screensRoot() string {

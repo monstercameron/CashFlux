@@ -90,6 +90,10 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **The translation argument lint is strict everywhere and accurate (FMTFIX).** It now understands copy formatted through
+  an enclosing `fmt.Sprintf` and ignores prose percentages, so the 19 reported mismatches on Credit, Duplicates,
+  Investments, Loans, Setup and the Smart strip were confirmed false positives; the lint now fails on any real mismatch in
+  `internal/screens`, with per-page render checks.
 - **Transactions page type scale and surfaces (UXT2).** The page now uses four type sizes (12 / 14 / 17 / 24 px) and two
   weights, sentence-case labels instead of ALL-CAPS, one ledger surface instead of nested outlines (the toolbar sits on
   the page; scheduled items aren't boxed), consistent radii (6 px controls, pills, 12 px only for the ledger), and selected
