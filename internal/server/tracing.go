@@ -19,6 +19,9 @@ func ConfigureTracing(ctx context.Context, cfg Config) (func(context.Context) er
 	if endpoint == "" {
 		return func(context.Context) error { return nil }, nil
 	}
+	// WithEndpointURL treats a URL without a path as the root path. Append the
+	// OTLP traces path explicitly so base endpoints retain the standard route.
+	endpoint = strings.TrimRight(endpoint, "/") + "/v1/traces"
 	exporter, err := otlptracehttp.New(ctx, otlptracehttp.WithEndpointURL(endpoint))
 	if err != nil {
 		return nil, err
