@@ -7,6 +7,11 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- **An evaluation harness for the Unusual detector (UNU1).** `internal/unusualeval` runs any detector over 48 labelled
+  scenarios built on the sample household (spikes, price increases, double charges, first large charges at a new
+  merchant, and near-miss controls for each, split into tuning and held-out sets), with expectation evidence such as a
+  goal-funded purchase recorded per case. Today's detector scores precision 1.00 but recall about 0.25: it only finds
+  spikes. Every change to the detector is now measured against this.
 - **Component library: Picker and MultiPicker (LIB1C).** One keyboard-safe chooser: it opens from a labelled button,
   focuses its search, moves through options with the arrow keys without applying anything, commits only on Enter or a
   click, closes on Escape without applying (and without letting Escape reach whatever is behind it), returns focus, and

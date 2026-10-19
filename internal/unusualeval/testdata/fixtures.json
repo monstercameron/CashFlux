@@ -1,0 +1,3545 @@
+[
+  {
+    "id": "subscription-cadence",
+    "candidate": "syn-sub-current",
+    "expected": [
+      "None"
+    ],
+    "rationale": "The familiar monthly subscription posts at its established amount.",
+    "merchant": "StreamCo",
+    "period": "2026-Q4",
+    "rows": [
+      {
+        "id": "syn-sub-1",
+        "date": "2026-09-05",
+        "payee": "StreamCo",
+        "category": "subscriptions",
+        "amount": -1599,
+        "currency": "USD"
+      },
+      {
+        "id": "syn-sub-2",
+        "date": "2026-10-05",
+        "payee": "StreamCo",
+        "category": "subscriptions",
+        "amount": -1599,
+        "currency": "USD"
+      },
+      {
+        "id": "syn-sub-3",
+        "date": "2026-11-05",
+        "payee": "StreamCo",
+        "category": "subscriptions",
+        "amount": -1599,
+        "currency": "USD"
+      },
+      {
+        "id": "syn-sub-current",
+        "date": "2026-12-05",
+        "payee": "StreamCo",
+        "category": "subscriptions",
+        "amount": -1599,
+        "currency": "USD"
+      }
+    ],
+    "split": "tuning",
+    "evidence": []
+  },
+  {
+    "id": "subscription-increase",
+    "candidate": "syn-sub-increase",
+    "expected": [
+      "PriceIncrease"
+    ],
+    "rationale": "The same monthly subscription rises from $15.99 to $19.99.",
+    "merchant": "StreamCo Plus",
+    "period": "2026-Q4",
+    "rows": [
+      {
+        "id": "syn-plus-1",
+        "date": "2026-09-05",
+        "payee": "StreamCo Plus",
+        "category": "subscriptions",
+        "amount": -1599,
+        "currency": "USD"
+      },
+      {
+        "id": "syn-plus-2",
+        "date": "2026-10-05",
+        "payee": "StreamCo Plus",
+        "category": "subscriptions",
+        "amount": -1599,
+        "currency": "USD"
+      },
+      {
+        "id": "syn-plus-3",
+        "date": "2026-11-05",
+        "payee": "StreamCo Plus",
+        "category": "subscriptions",
+        "amount": -1599,
+        "currency": "USD"
+      },
+      {
+        "id": "syn-sub-increase",
+        "date": "2026-12-05",
+        "payee": "StreamCo Plus",
+        "category": "subscriptions",
+        "amount": -1999,
+        "currency": "USD"
+      }
+    ],
+    "split": "holdout",
+    "evidence": []
+  },
+  {
+    "id": "duplicate-at-merchant",
+    "candidate": "syn-dup-b",
+    "expected": [
+      "PossibleDoubleCharge"
+    ],
+    "rationale": "Two equal charges at one restaurant land on consecutive days.",
+    "merchant": "Corner Market",
+    "period": "2026-Q4",
+    "rows": [
+      {
+        "id": "syn-dup-history-1",
+        "date": "2026-10-10",
+        "payee": "Corner Market",
+        "category": "groceries",
+        "amount": -4200,
+        "currency": "USD"
+      },
+      {
+        "id": "syn-dup-history-2",
+        "date": "2026-11-10",
+        "payee": "Corner Market",
+        "category": "groceries",
+        "amount": -4300,
+        "currency": "USD"
+      },
+      {
+        "id": "syn-dup-a",
+        "date": "2026-12-08",
+        "payee": "Corner Market",
+        "category": "groceries",
+        "amount": -4260,
+        "currency": "USD"
+      },
+      {
+        "id": "syn-dup-b",
+        "date": "2026-12-09",
+        "payee": "Corner Market",
+        "category": "groceries",
+        "amount": -4260,
+        "currency": "USD"
+      }
+    ],
+    "split": "tuning",
+    "evidence": []
+  },
+  {
+    "id": "category-inflated-outlier",
+    "candidate": "syn-inflated-current",
+    "expected": [
+      "Spike"
+    ],
+    "rationale": "A stale $1,000 outlier hides today's $150 charge against five usual $20 purchases.",
+    "merchant": "Home Supply",
+    "period": "2026-Q4",
+    "rows": [
+      {
+        "id": "syn-inf-1",
+        "date": "2025-07-01",
+        "payee": "Home Supply",
+        "category": "household",
+        "amount": -2000,
+        "currency": "USD"
+      },
+      {
+        "id": "syn-inf-2",
+        "date": "2025-08-01",
+        "payee": "Home Supply",
+        "category": "household",
+        "amount": -2000,
+        "currency": "USD"
+      },
+      {
+        "id": "syn-inf-3",
+        "date": "2025-09-01",
+        "payee": "Home Supply",
+        "category": "household",
+        "amount": -2000,
+        "currency": "USD"
+      },
+      {
+        "id": "syn-inf-4",
+        "date": "2025-10-01",
+        "payee": "Home Supply",
+        "category": "household",
+        "amount": -2000,
+        "currency": "USD"
+      },
+      {
+        "id": "syn-inf-5",
+        "date": "2025-11-01",
+        "payee": "Home Supply",
+        "category": "household",
+        "amount": -2000,
+        "currency": "USD"
+      },
+      {
+        "id": "syn-inf-old-outlier",
+        "date": "2024-01-01",
+        "payee": "Home Supply",
+        "category": "household",
+        "amount": -100000,
+        "currency": "USD"
+      },
+      {
+        "id": "syn-inflated-current",
+        "date": "2026-12-10",
+        "payee": "Home Supply",
+        "category": "household",
+        "amount": -15000,
+        "currency": "USD"
+      }
+    ],
+    "split": "holdout",
+    "evidence": []
+  },
+  {
+    "id": "split-costco",
+    "candidate": "syn-costco-split",
+    "expected": [
+      "None"
+    ],
+    "rationale": "The Costco parent is split across groceries and shopping rather than one unusual categorized expense.",
+    "merchant": "Costco",
+    "period": "2026-Q4",
+    "rows": [
+      {
+        "id": "syn-costco-split",
+        "date": "2026-12-12",
+        "payee": "Costco",
+        "category": "",
+        "amount": -28000,
+        "currency": "USD",
+        "splits": [
+          {
+            "category": "fixture-groceries",
+            "amount": -18000
+          },
+          {
+            "category": "fixture-shopping",
+            "amount": -10000
+          }
+        ]
+      }
+    ],
+    "split": "tuning",
+    "evidence": []
+  },
+  {
+    "id": "amazon-refund",
+    "candidate": "syn-amazon-refund",
+    "expected": [
+      "None"
+    ],
+    "rationale": "A positive Amazon refund is not an expense spike.",
+    "merchant": "Amazon",
+    "period": "2026-Q4",
+    "rows": [
+      {
+        "id": "syn-amazon-refund",
+        "date": "2026-12-03",
+        "payee": "Amazon",
+        "category": "shopping",
+        "amount": 6500,
+        "currency": "USD"
+      }
+    ],
+    "split": "holdout",
+    "evidence": []
+  },
+  {
+    "id": "transfer",
+    "candidate": "syn-transfer",
+    "expected": [
+      "None"
+    ],
+    "rationale": "A transfer moves money between accounts and is not unusual spending.",
+    "merchant": "Internal transfer",
+    "period": "2026-Q4",
+    "rows": [
+      {
+        "id": "syn-transfer",
+        "date": "2026-12-10",
+        "payee": "Move to savings",
+        "category": "",
+        "amount": -30000,
+        "currency": "USD",
+        "transfer": true
+      }
+    ],
+    "split": "tuning",
+    "evidence": []
+  },
+  {
+    "id": "income",
+    "candidate": "syn-income",
+    "expected": [
+      "None"
+    ],
+    "rationale": "A current paycheck is positive income, not a spending anomaly.",
+    "merchant": "Meridian Data",
+    "period": "2026-Q4",
+    "rows": [
+      {
+        "id": "syn-income",
+        "date": "2026-12-10",
+        "payee": "Meridian Data",
+        "category": "income",
+        "amount": 420000,
+        "currency": "USD"
+      }
+    ],
+    "split": "holdout",
+    "evidence": []
+  },
+  {
+    "id": "two-currencies",
+    "candidate": "syn-fx-current",
+    "expected": [
+      "None"
+    ],
+    "rationale": "A €90 purchase converts to an ordinary $97.20 beside USD history at the captured sample rate.",
+    "merchant": "Euro Books",
+    "period": "2026-Q4",
+    "rows": [
+      {
+        "id": "syn-fx-1",
+        "date": "2026-07-01",
+        "payee": "Euro Books",
+        "category": "books",
+        "amount": -9000,
+        "currency": "EUR"
+      },
+      {
+        "id": "syn-fx-2",
+        "date": "2026-08-01",
+        "payee": "Euro Books",
+        "category": "books",
+        "amount": -9000,
+        "currency": "EUR"
+      },
+      {
+        "id": "syn-fx-3",
+        "date": "2026-09-01",
+        "payee": "Euro Books",
+        "category": "books",
+        "amount": -9000,
+        "currency": "EUR"
+      },
+      {
+        "id": "syn-fx-4",
+        "date": "2026-10-01",
+        "payee": "Euro Books",
+        "category": "books",
+        "amount": -9000,
+        "currency": "EUR"
+      },
+      {
+        "id": "syn-fx-usd-history",
+        "date": "2026-11-15",
+        "payee": "Euro Books",
+        "category": "books",
+        "amount": -9720,
+        "currency": "USD"
+      },
+      {
+        "id": "syn-fx-current",
+        "date": "2026-12-06",
+        "payee": "Euro Books",
+        "category": "books",
+        "amount": -9000,
+        "currency": "EUR"
+      }
+    ],
+    "split": "tuning",
+    "evidence": []
+  },
+  {
+    "id": "new-merchant-large",
+    "candidate": "syn-new-merchant",
+    "expected": [
+      "FirstTimeMerchantLarge"
+    ],
+    "rationale": "A first charge of $480 is material, though this dataset has no merchant-specific baseline.",
+    "merchant": "First Stop Outfitters",
+    "period": "2026-Q4",
+    "rows": [
+      {
+        "id": "syn-new-merchant",
+        "date": "2026-12-07",
+        "payee": "First Stop Outfitters",
+        "category": "shopping",
+        "amount": -48000,
+        "currency": "USD"
+      }
+    ],
+    "split": "holdout",
+    "evidence": []
+  },
+  {
+    "id": "annual-bill",
+    "candidate": "syn-annual-current",
+    "expected": [
+      "None"
+    ],
+    "rationale": "Two prior annual renewals at the same merchant and amount support the expected annual bill label.",
+    "merchant": "Web Domain Co",
+    "period": "2026-Q4",
+    "rows": [
+      {
+        "id": "syn-annual-2024",
+        "date": "2024-12-02",
+        "payee": "Web Domain Co",
+        "category": "subscriptions",
+        "amount": -12000,
+        "currency": "USD"
+      },
+      {
+        "id": "syn-annual-2025",
+        "date": "2025-12-02",
+        "payee": "Web Domain Co",
+        "category": "subscriptions",
+        "amount": -12000,
+        "currency": "USD"
+      },
+      {
+        "id": "syn-annual-current",
+        "date": "2026-12-02",
+        "payee": "Web Domain Co",
+        "category": "subscriptions",
+        "amount": -12000,
+        "currency": "USD"
+      }
+    ],
+    "split": "tuning",
+    "evidence": [
+      "recurring_history:2"
+    ]
+  },
+  {
+    "id": "seasonal-holiday",
+    "candidate": "syn-holiday-current",
+    "expected": [
+      "None"
+    ],
+    "rationale": "Two prior December cycles in the fixture support treating this holiday purchase as expected.",
+    "merchant": "Holiday Market",
+    "period": "2026-Q4",
+    "rows": [
+      {
+        "id": "syn-holiday-2024",
+        "date": "2024-12-10",
+        "payee": "Holiday Market",
+        "category": "gifts",
+        "amount": -25000,
+        "currency": "USD"
+      },
+      {
+        "id": "syn-holiday-2025",
+        "date": "2025-12-10",
+        "payee": "Holiday Market",
+        "category": "gifts",
+        "amount": -27000,
+        "currency": "USD"
+      },
+      {
+        "id": "syn-holiday-current",
+        "date": "2026-12-10",
+        "payee": "Holiday Market",
+        "category": "gifts",
+        "amount": -27000,
+        "currency": "USD"
+      }
+    ],
+    "split": "holdout",
+    "evidence": [
+      "seasonal_cycles:2"
+    ]
+  },
+  {
+    "id": "ordinary-category-spike",
+    "candidate": "syn-category-spike",
+    "expected": [
+      "Spike"
+    ],
+    "rationale": "A recent $200 dining charge is ten times five prior $20 meals.",
+    "merchant": "Steakhouse",
+    "period": "2026-Q4",
+    "rows": [
+      {
+        "id": "syn-dine-1",
+        "date": "2026-07-01",
+        "payee": "Cafe One",
+        "category": "dining",
+        "amount": -2000,
+        "currency": "USD"
+      },
+      {
+        "id": "syn-dine-2",
+        "date": "2026-02-10",
+        "payee": "Cafe Two",
+        "category": "dining",
+        "amount": -2000,
+        "currency": "USD"
+      },
+      {
+        "id": "syn-dine-3",
+        "date": "2026-08-01",
+        "payee": "Cafe One",
+        "category": "dining",
+        "amount": -2000,
+        "currency": "USD"
+      },
+      {
+        "id": "syn-dine-4",
+        "date": "2026-03-10",
+        "payee": "Cafe Two",
+        "category": "dining",
+        "amount": -2000,
+        "currency": "USD"
+      },
+      {
+        "id": "syn-dine-5",
+        "date": "2026-09-01",
+        "payee": "Cafe One",
+        "category": "dining",
+        "amount": -2000,
+        "currency": "USD"
+      },
+      {
+        "id": "syn-category-spike",
+        "date": "2026-12-09",
+        "payee": "Steakhouse",
+        "category": "dining",
+        "amount": -20000,
+        "currency": "USD"
+      }
+    ],
+    "split": "tuning",
+    "evidence": []
+  },
+  {
+    "id": "planned-large-purchase",
+    "candidate": "syn-planned-large",
+    "expected": [
+      "None"
+    ],
+    "rationale": "The $900 appliance purchase is explicitly marked expected in the fixture evidence.",
+    "merchant": "Appliance House",
+    "period": "2026-Q4",
+    "rows": [
+      {
+        "id": "syn-planned-large",
+        "date": "2026-12-11",
+        "payee": "Appliance House",
+        "category": "household",
+        "amount": -90000,
+        "currency": "USD"
+      }
+    ],
+    "split": "holdout",
+    "evidence": [
+      "explicit_expected:fixture-planned-large"
+    ]
+  },
+  {
+    "id": "small-control",
+    "candidate": "syn-control-normal",
+    "expected": [
+      "None"
+    ],
+    "rationale": "A routine $24 grocery trip sits near its normal category amounts.",
+    "merchant": "Green Basket",
+    "period": "2026-Q4",
+    "rows": [
+      {
+        "id": "syn-control-1",
+        "date": "2026-07-01",
+        "payee": "Green Basket",
+        "category": "groceries",
+        "amount": -2200,
+        "currency": "USD"
+      },
+      {
+        "id": "syn-control-2",
+        "date": "2026-08-01",
+        "payee": "Green Basket",
+        "category": "groceries",
+        "amount": -2300,
+        "currency": "USD"
+      },
+      {
+        "id": "syn-control-3",
+        "date": "2026-09-01",
+        "payee": "Green Basket",
+        "category": "groceries",
+        "amount": -2500,
+        "currency": "USD"
+      },
+      {
+        "id": "syn-control-normal",
+        "date": "2026-12-08",
+        "payee": "Green Basket",
+        "category": "groceries",
+        "amount": -2400,
+        "currency": "USD"
+      }
+    ],
+    "split": "tuning",
+    "evidence": []
+  },
+  {
+    "id": "babylist-june-unlinked",
+    "candidate": "tx-card-nursery",
+    "expected": [
+      "Spike"
+    ],
+    "rationale": "The sample's $1,850 Babylist registry purchase has no goal, envelope, recurring, or expected marker, so the data supports a Spike label.",
+    "merchant": "Babylist",
+    "period": "2026-Q4",
+    "rows": [],
+    "split": "holdout",
+    "evidence": []
+  },
+  {
+    "id": "sample-goal-funded-crib",
+    "candidate": "tx-goalfunded-crib",
+    "expected": [
+      "None"
+    ],
+    "rationale": "The sample's crib and nursery setup transaction is linked to the baby-fund goal, so it is expected.",
+    "merchant": "Babylist",
+    "period": "2026-Q4",
+    "rows": [],
+    "split": "tuning",
+    "evidence": [
+      "goal:goal-baby"
+    ]
+  },
+  {
+    "id": "spike-tuning-positive-1",
+    "candidate": "spike-tuning-positive-1-candidate",
+    "expected": [
+      "Spike"
+    ],
+    "evidence": [],
+    "rationale": "A $200 meal is ten times five prior $20 meals at this merchant.",
+    "merchant": "Spike-tuning-merchant-1",
+    "period": "2026-tuning-1",
+    "split": "tuning",
+    "rows": [
+      {
+        "id": "spike-tuning-positive-1-hist-1",
+        "date": "2026-02-10",
+        "payee": "Spike-tuning-merchant-1",
+        "category": "dining",
+        "amount": -2000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-tuning-positive-1-hist-2",
+        "date": "2026-03-10",
+        "payee": "Spike-tuning-merchant-1",
+        "category": "dining",
+        "amount": -2000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-tuning-positive-1-hist-3",
+        "date": "2026-04-10",
+        "payee": "Spike-tuning-merchant-1",
+        "category": "dining",
+        "amount": -2000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-tuning-positive-1-hist-4",
+        "date": "2026-05-10",
+        "payee": "Spike-tuning-merchant-1",
+        "category": "dining",
+        "amount": -2000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-tuning-positive-1-hist-5",
+        "date": "2026-06-10",
+        "payee": "Spike-tuning-merchant-1",
+        "category": "dining",
+        "amount": -2000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-tuning-positive-1-candidate",
+        "date": "2026-12-10",
+        "payee": "Spike-tuning-merchant-1",
+        "category": "dining",
+        "amount": -20000,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "spike-tuning-positive-2",
+    "candidate": "spike-tuning-positive-2-candidate",
+    "expected": [
+      "Spike"
+    ],
+    "evidence": [],
+    "rationale": "A $200 meal is ten times five prior $20 meals at this merchant.",
+    "merchant": "Spike-tuning-merchant-2",
+    "period": "2026-tuning-2",
+    "split": "tuning",
+    "rows": [
+      {
+        "id": "spike-tuning-positive-2-hist-1",
+        "date": "2026-02-10",
+        "payee": "Spike-tuning-merchant-2",
+        "category": "dining",
+        "amount": -2000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-tuning-positive-2-hist-2",
+        "date": "2026-03-10",
+        "payee": "Spike-tuning-merchant-2",
+        "category": "dining",
+        "amount": -2000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-tuning-positive-2-hist-3",
+        "date": "2026-04-10",
+        "payee": "Spike-tuning-merchant-2",
+        "category": "dining",
+        "amount": -2000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-tuning-positive-2-hist-4",
+        "date": "2026-05-10",
+        "payee": "Spike-tuning-merchant-2",
+        "category": "dining",
+        "amount": -2000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-tuning-positive-2-hist-5",
+        "date": "2026-06-10",
+        "payee": "Spike-tuning-merchant-2",
+        "category": "dining",
+        "amount": -2000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-tuning-positive-2-candidate",
+        "date": "2026-12-10",
+        "payee": "Spike-tuning-merchant-2",
+        "category": "dining",
+        "amount": -20000,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "spike-tuning-positive-3",
+    "candidate": "spike-tuning-positive-3-candidate",
+    "expected": [
+      "Spike"
+    ],
+    "evidence": [],
+    "rationale": "A $200 meal is ten times five prior $20 meals at this merchant.",
+    "merchant": "Spike-tuning-merchant-3",
+    "period": "2026-tuning-3",
+    "split": "tuning",
+    "rows": [
+      {
+        "id": "spike-tuning-positive-3-hist-1",
+        "date": "2026-02-10",
+        "payee": "Spike-tuning-merchant-3",
+        "category": "dining",
+        "amount": -2000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-tuning-positive-3-hist-2",
+        "date": "2026-03-10",
+        "payee": "Spike-tuning-merchant-3",
+        "category": "dining",
+        "amount": -2000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-tuning-positive-3-hist-3",
+        "date": "2026-04-10",
+        "payee": "Spike-tuning-merchant-3",
+        "category": "dining",
+        "amount": -2000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-tuning-positive-3-hist-4",
+        "date": "2026-05-10",
+        "payee": "Spike-tuning-merchant-3",
+        "category": "dining",
+        "amount": -2000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-tuning-positive-3-hist-5",
+        "date": "2026-06-10",
+        "payee": "Spike-tuning-merchant-3",
+        "category": "dining",
+        "amount": -2000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-tuning-positive-3-candidate",
+        "date": "2026-12-10",
+        "payee": "Spike-tuning-merchant-3",
+        "category": "dining",
+        "amount": -20000,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "spike-tuning-positive-4",
+    "candidate": "spike-tuning-positive-4-candidate",
+    "expected": [
+      "Spike"
+    ],
+    "evidence": [],
+    "rationale": "A $200 meal is ten times five prior $20 meals at this merchant.",
+    "merchant": "Spike-tuning-merchant-4",
+    "period": "2026-tuning-4",
+    "split": "tuning",
+    "rows": [
+      {
+        "id": "spike-tuning-positive-4-hist-1",
+        "date": "2026-02-10",
+        "payee": "Spike-tuning-merchant-4",
+        "category": "dining",
+        "amount": -2000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-tuning-positive-4-hist-2",
+        "date": "2026-03-10",
+        "payee": "Spike-tuning-merchant-4",
+        "category": "dining",
+        "amount": -2000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-tuning-positive-4-hist-3",
+        "date": "2026-04-10",
+        "payee": "Spike-tuning-merchant-4",
+        "category": "dining",
+        "amount": -2000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-tuning-positive-4-hist-4",
+        "date": "2026-05-10",
+        "payee": "Spike-tuning-merchant-4",
+        "category": "dining",
+        "amount": -2000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-tuning-positive-4-hist-5",
+        "date": "2026-06-10",
+        "payee": "Spike-tuning-merchant-4",
+        "category": "dining",
+        "amount": -2000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-tuning-positive-4-candidate",
+        "date": "2026-12-10",
+        "payee": "Spike-tuning-merchant-4",
+        "category": "dining",
+        "amount": -20000,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "spike-tuning-near-miss-1",
+    "candidate": "spike-tuning-near-miss-1-candidate",
+    "expected": [
+      "None"
+    ],
+    "evidence": [],
+    "hard_negative_for": [
+      "Spike"
+    ],
+    "rationale": "The charge is inside this category?s established high-variance range, despite a larger amount than some prior purchases.",
+    "merchant": "Spike-tuning-near-miss-merchant-1",
+    "period": "2026-tuning-near-1",
+    "split": "tuning",
+    "rows": [
+      {
+        "id": "spike-tuning-near-miss-1-hist-1",
+        "date": "2026-02-10",
+        "payee": "Spike-tuning-near-miss-merchant-1 history 1",
+        "category": "dining",
+        "amount": -5000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-tuning-near-miss-1-hist-2",
+        "date": "2026-03-10",
+        "payee": "Spike-tuning-near-miss-merchant-1 history 2",
+        "category": "dining",
+        "amount": -2500,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-tuning-near-miss-1-hist-3",
+        "date": "2026-04-10",
+        "payee": "Spike-tuning-near-miss-merchant-1 history 3",
+        "category": "dining",
+        "amount": -8500,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-tuning-near-miss-1-hist-4",
+        "date": "2026-05-10",
+        "payee": "Spike-tuning-near-miss-merchant-1 history 4",
+        "category": "dining",
+        "amount": -3000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-tuning-near-miss-1-hist-5",
+        "date": "2026-06-10",
+        "payee": "Spike-tuning-near-miss-merchant-1 history 5",
+        "category": "dining",
+        "amount": -6500,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-tuning-near-miss-1-candidate",
+        "date": "2026-12-10",
+        "payee": "Spike-tuning-near-miss-merchant-1",
+        "category": "dining",
+        "amount": -6000,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "spike-tuning-near-miss-2",
+    "candidate": "spike-tuning-near-miss-2-candidate",
+    "expected": [
+      "None"
+    ],
+    "evidence": [],
+    "hard_negative_for": [
+      "Spike"
+    ],
+    "rationale": "The charge is inside this category?s established high-variance range, despite a larger amount than some prior purchases.",
+    "merchant": "Spike-tuning-near-miss-merchant-2",
+    "period": "2026-tuning-near-2",
+    "split": "tuning",
+    "rows": [
+      {
+        "id": "spike-tuning-near-miss-2-hist-1",
+        "date": "2026-02-10",
+        "payee": "Spike-tuning-near-miss-merchant-2 history 1",
+        "category": "dining",
+        "amount": -5000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-tuning-near-miss-2-hist-2",
+        "date": "2026-03-10",
+        "payee": "Spike-tuning-near-miss-merchant-2 history 2",
+        "category": "dining",
+        "amount": -2500,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-tuning-near-miss-2-hist-3",
+        "date": "2026-04-10",
+        "payee": "Spike-tuning-near-miss-merchant-2 history 3",
+        "category": "dining",
+        "amount": -8500,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-tuning-near-miss-2-hist-4",
+        "date": "2026-05-10",
+        "payee": "Spike-tuning-near-miss-merchant-2 history 4",
+        "category": "dining",
+        "amount": -3000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-tuning-near-miss-2-hist-5",
+        "date": "2026-06-10",
+        "payee": "Spike-tuning-near-miss-merchant-2 history 5",
+        "category": "dining",
+        "amount": -6500,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-tuning-near-miss-2-candidate",
+        "date": "2026-12-10",
+        "payee": "Spike-tuning-near-miss-merchant-2",
+        "category": "dining",
+        "amount": -6000,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "spike-tuning-near-miss-3",
+    "candidate": "spike-tuning-near-miss-3-candidate",
+    "expected": [
+      "None"
+    ],
+    "evidence": [],
+    "hard_negative_for": [
+      "Spike"
+    ],
+    "rationale": "The charge is inside this category?s established high-variance range, despite a larger amount than some prior purchases.",
+    "merchant": "Spike-tuning-near-miss-merchant-3",
+    "period": "2026-tuning-near-3",
+    "split": "tuning",
+    "rows": [
+      {
+        "id": "spike-tuning-near-miss-3-hist-1",
+        "date": "2026-02-10",
+        "payee": "Spike-tuning-near-miss-merchant-3 history 1",
+        "category": "dining",
+        "amount": -5000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-tuning-near-miss-3-hist-2",
+        "date": "2026-03-10",
+        "payee": "Spike-tuning-near-miss-merchant-3 history 2",
+        "category": "dining",
+        "amount": -2500,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-tuning-near-miss-3-hist-3",
+        "date": "2026-04-10",
+        "payee": "Spike-tuning-near-miss-merchant-3 history 3",
+        "category": "dining",
+        "amount": -8500,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-tuning-near-miss-3-hist-4",
+        "date": "2026-05-10",
+        "payee": "Spike-tuning-near-miss-merchant-3 history 4",
+        "category": "dining",
+        "amount": -3000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-tuning-near-miss-3-hist-5",
+        "date": "2026-06-10",
+        "payee": "Spike-tuning-near-miss-merchant-3 history 5",
+        "category": "dining",
+        "amount": -6500,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-tuning-near-miss-3-candidate",
+        "date": "2026-12-10",
+        "payee": "Spike-tuning-near-miss-merchant-3",
+        "category": "dining",
+        "amount": -6000,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "spike-tuning-near-miss-4",
+    "candidate": "spike-tuning-near-miss-4-candidate",
+    "expected": [
+      "None"
+    ],
+    "evidence": [],
+    "hard_negative_for": [
+      "Spike"
+    ],
+    "rationale": "The charge is inside this category?s established high-variance range, despite a larger amount than some prior purchases.",
+    "merchant": "Spike-tuning-near-miss-merchant-4",
+    "period": "2026-tuning-near-4",
+    "split": "tuning",
+    "rows": [
+      {
+        "id": "spike-tuning-near-miss-4-hist-1",
+        "date": "2026-02-10",
+        "payee": "Spike-tuning-near-miss-merchant-4 history 1",
+        "category": "dining",
+        "amount": -5000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-tuning-near-miss-4-hist-2",
+        "date": "2026-03-10",
+        "payee": "Spike-tuning-near-miss-merchant-4 history 2",
+        "category": "dining",
+        "amount": -2500,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-tuning-near-miss-4-hist-3",
+        "date": "2026-04-10",
+        "payee": "Spike-tuning-near-miss-merchant-4 history 3",
+        "category": "dining",
+        "amount": -8500,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-tuning-near-miss-4-hist-4",
+        "date": "2026-05-10",
+        "payee": "Spike-tuning-near-miss-merchant-4 history 4",
+        "category": "dining",
+        "amount": -3000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-tuning-near-miss-4-hist-5",
+        "date": "2026-06-10",
+        "payee": "Spike-tuning-near-miss-merchant-4 history 5",
+        "category": "dining",
+        "amount": -6500,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-tuning-near-miss-4-candidate",
+        "date": "2026-12-10",
+        "payee": "Spike-tuning-near-miss-merchant-4",
+        "category": "dining",
+        "amount": -6000,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "priceincrease-tuning-positive-1",
+    "candidate": "priceincrease-tuning-positive-1-candidate",
+    "expected": [
+      "PriceIncrease"
+    ],
+    "evidence": [],
+    "rationale": "The monthly subscription rises materially from three established $15.99 cycles.",
+    "merchant": "PriceIncrease-tuning-merchant-1",
+    "period": "2026-tuning-1",
+    "split": "tuning",
+    "rows": [
+      {
+        "id": "priceincrease-tuning-positive-1-hist-1",
+        "date": "2026-09-05",
+        "payee": "PriceIncrease-tuning-merchant-1",
+        "category": "subscriptions",
+        "amount": -1599,
+        "currency": "USD"
+      },
+      {
+        "id": "priceincrease-tuning-positive-1-hist-2",
+        "date": "2026-10-05",
+        "payee": "PriceIncrease-tuning-merchant-1",
+        "category": "subscriptions",
+        "amount": -1599,
+        "currency": "USD"
+      },
+      {
+        "id": "priceincrease-tuning-positive-1-hist-3",
+        "date": "2026-11-05",
+        "payee": "PriceIncrease-tuning-merchant-1",
+        "category": "subscriptions",
+        "amount": -1599,
+        "currency": "USD"
+      },
+      {
+        "id": "priceincrease-tuning-positive-1-candidate",
+        "date": "2026-12-05",
+        "payee": "PriceIncrease-tuning-merchant-1",
+        "category": "subscriptions",
+        "amount": -2099,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "priceincrease-tuning-positive-2",
+    "candidate": "priceincrease-tuning-positive-2-candidate",
+    "expected": [
+      "PriceIncrease"
+    ],
+    "evidence": [],
+    "rationale": "The monthly subscription rises materially from three established $15.99 cycles.",
+    "merchant": "PriceIncrease-tuning-merchant-2",
+    "period": "2026-tuning-2",
+    "split": "tuning",
+    "rows": [
+      {
+        "id": "priceincrease-tuning-positive-2-hist-1",
+        "date": "2026-09-05",
+        "payee": "PriceIncrease-tuning-merchant-2",
+        "category": "subscriptions",
+        "amount": -1599,
+        "currency": "USD"
+      },
+      {
+        "id": "priceincrease-tuning-positive-2-hist-2",
+        "date": "2026-10-05",
+        "payee": "PriceIncrease-tuning-merchant-2",
+        "category": "subscriptions",
+        "amount": -1599,
+        "currency": "USD"
+      },
+      {
+        "id": "priceincrease-tuning-positive-2-hist-3",
+        "date": "2026-11-05",
+        "payee": "PriceIncrease-tuning-merchant-2",
+        "category": "subscriptions",
+        "amount": -1599,
+        "currency": "USD"
+      },
+      {
+        "id": "priceincrease-tuning-positive-2-candidate",
+        "date": "2026-12-05",
+        "payee": "PriceIncrease-tuning-merchant-2",
+        "category": "subscriptions",
+        "amount": -2099,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "priceincrease-tuning-positive-3",
+    "candidate": "priceincrease-tuning-positive-3-candidate",
+    "expected": [
+      "PriceIncrease"
+    ],
+    "evidence": [],
+    "rationale": "The monthly subscription rises materially from three established $15.99 cycles.",
+    "merchant": "PriceIncrease-tuning-merchant-3",
+    "period": "2026-tuning-3",
+    "split": "tuning",
+    "rows": [
+      {
+        "id": "priceincrease-tuning-positive-3-hist-1",
+        "date": "2026-09-05",
+        "payee": "PriceIncrease-tuning-merchant-3",
+        "category": "subscriptions",
+        "amount": -1599,
+        "currency": "USD"
+      },
+      {
+        "id": "priceincrease-tuning-positive-3-hist-2",
+        "date": "2026-10-05",
+        "payee": "PriceIncrease-tuning-merchant-3",
+        "category": "subscriptions",
+        "amount": -1599,
+        "currency": "USD"
+      },
+      {
+        "id": "priceincrease-tuning-positive-3-hist-3",
+        "date": "2026-11-05",
+        "payee": "PriceIncrease-tuning-merchant-3",
+        "category": "subscriptions",
+        "amount": -1599,
+        "currency": "USD"
+      },
+      {
+        "id": "priceincrease-tuning-positive-3-candidate",
+        "date": "2026-12-05",
+        "payee": "PriceIncrease-tuning-merchant-3",
+        "category": "subscriptions",
+        "amount": -2099,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "priceincrease-tuning-positive-4",
+    "candidate": "priceincrease-tuning-positive-4-candidate",
+    "expected": [
+      "PriceIncrease"
+    ],
+    "evidence": [],
+    "rationale": "The monthly subscription rises materially from three established $15.99 cycles.",
+    "merchant": "PriceIncrease-tuning-merchant-4",
+    "period": "2026-tuning-4",
+    "split": "tuning",
+    "rows": [
+      {
+        "id": "priceincrease-tuning-positive-4-hist-1",
+        "date": "2026-09-05",
+        "payee": "PriceIncrease-tuning-merchant-4",
+        "category": "subscriptions",
+        "amount": -1599,
+        "currency": "USD"
+      },
+      {
+        "id": "priceincrease-tuning-positive-4-hist-2",
+        "date": "2026-10-05",
+        "payee": "PriceIncrease-tuning-merchant-4",
+        "category": "subscriptions",
+        "amount": -1599,
+        "currency": "USD"
+      },
+      {
+        "id": "priceincrease-tuning-positive-4-hist-3",
+        "date": "2026-11-05",
+        "payee": "PriceIncrease-tuning-merchant-4",
+        "category": "subscriptions",
+        "amount": -1599,
+        "currency": "USD"
+      },
+      {
+        "id": "priceincrease-tuning-positive-4-candidate",
+        "date": "2026-12-05",
+        "payee": "PriceIncrease-tuning-merchant-4",
+        "category": "subscriptions",
+        "amount": -2099,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "priceincrease-tuning-near-miss-1",
+    "candidate": "priceincrease-tuning-near-miss-1-candidate",
+    "expected": [
+      "None"
+    ],
+    "evidence": [],
+    "hard_negative_for": [
+      "PriceIncrease"
+    ],
+    "rationale": "The subscription change is 9%, below the material price-increase threshold.",
+    "merchant": "PriceIncrease-tuning-near-miss-merchant-1",
+    "period": "2026-tuning-near-1",
+    "split": "tuning",
+    "rows": [
+      {
+        "id": "priceincrease-tuning-near-miss-1-hist-1",
+        "date": "2026-09-05",
+        "payee": "PriceIncrease-tuning-near-miss-merchant-1",
+        "category": "subscriptions",
+        "amount": -10000,
+        "currency": "USD"
+      },
+      {
+        "id": "priceincrease-tuning-near-miss-1-hist-2",
+        "date": "2026-10-05",
+        "payee": "PriceIncrease-tuning-near-miss-merchant-1",
+        "category": "subscriptions",
+        "amount": -10000,
+        "currency": "USD"
+      },
+      {
+        "id": "priceincrease-tuning-near-miss-1-hist-3",
+        "date": "2026-11-05",
+        "payee": "PriceIncrease-tuning-near-miss-merchant-1",
+        "category": "subscriptions",
+        "amount": -10000,
+        "currency": "USD"
+      },
+      {
+        "id": "priceincrease-tuning-near-miss-1-candidate",
+        "date": "2026-12-05",
+        "payee": "PriceIncrease-tuning-near-miss-merchant-1",
+        "category": "subscriptions",
+        "amount": -10900,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "priceincrease-tuning-near-miss-2",
+    "candidate": "priceincrease-tuning-near-miss-2-candidate",
+    "expected": [
+      "None"
+    ],
+    "evidence": [],
+    "hard_negative_for": [
+      "PriceIncrease"
+    ],
+    "rationale": "The subscription change is 9%, below the material price-increase threshold.",
+    "merchant": "PriceIncrease-tuning-near-miss-merchant-2",
+    "period": "2026-tuning-near-2",
+    "split": "tuning",
+    "rows": [
+      {
+        "id": "priceincrease-tuning-near-miss-2-hist-1",
+        "date": "2026-09-05",
+        "payee": "PriceIncrease-tuning-near-miss-merchant-2",
+        "category": "subscriptions",
+        "amount": -10000,
+        "currency": "USD"
+      },
+      {
+        "id": "priceincrease-tuning-near-miss-2-hist-2",
+        "date": "2026-10-05",
+        "payee": "PriceIncrease-tuning-near-miss-merchant-2",
+        "category": "subscriptions",
+        "amount": -10000,
+        "currency": "USD"
+      },
+      {
+        "id": "priceincrease-tuning-near-miss-2-hist-3",
+        "date": "2026-11-05",
+        "payee": "PriceIncrease-tuning-near-miss-merchant-2",
+        "category": "subscriptions",
+        "amount": -10000,
+        "currency": "USD"
+      },
+      {
+        "id": "priceincrease-tuning-near-miss-2-candidate",
+        "date": "2026-12-05",
+        "payee": "PriceIncrease-tuning-near-miss-merchant-2",
+        "category": "subscriptions",
+        "amount": -10900,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "priceincrease-tuning-near-miss-3",
+    "candidate": "priceincrease-tuning-near-miss-3-candidate",
+    "expected": [
+      "None"
+    ],
+    "evidence": [],
+    "hard_negative_for": [
+      "PriceIncrease"
+    ],
+    "rationale": "The subscription change is 9%, below the material price-increase threshold.",
+    "merchant": "PriceIncrease-tuning-near-miss-merchant-3",
+    "period": "2026-tuning-near-3",
+    "split": "tuning",
+    "rows": [
+      {
+        "id": "priceincrease-tuning-near-miss-3-hist-1",
+        "date": "2026-09-05",
+        "payee": "PriceIncrease-tuning-near-miss-merchant-3",
+        "category": "subscriptions",
+        "amount": -10000,
+        "currency": "USD"
+      },
+      {
+        "id": "priceincrease-tuning-near-miss-3-hist-2",
+        "date": "2026-10-05",
+        "payee": "PriceIncrease-tuning-near-miss-merchant-3",
+        "category": "subscriptions",
+        "amount": -10000,
+        "currency": "USD"
+      },
+      {
+        "id": "priceincrease-tuning-near-miss-3-hist-3",
+        "date": "2026-11-05",
+        "payee": "PriceIncrease-tuning-near-miss-merchant-3",
+        "category": "subscriptions",
+        "amount": -10000,
+        "currency": "USD"
+      },
+      {
+        "id": "priceincrease-tuning-near-miss-3-candidate",
+        "date": "2026-12-05",
+        "payee": "PriceIncrease-tuning-near-miss-merchant-3",
+        "category": "subscriptions",
+        "amount": -10900,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "priceincrease-tuning-near-miss-4",
+    "candidate": "priceincrease-tuning-near-miss-4-candidate",
+    "expected": [
+      "None"
+    ],
+    "evidence": [],
+    "hard_negative_for": [
+      "PriceIncrease"
+    ],
+    "rationale": "The subscription change is 9%, below the material price-increase threshold.",
+    "merchant": "PriceIncrease-tuning-near-miss-merchant-4",
+    "period": "2026-tuning-near-4",
+    "split": "tuning",
+    "rows": [
+      {
+        "id": "priceincrease-tuning-near-miss-4-hist-1",
+        "date": "2026-09-05",
+        "payee": "PriceIncrease-tuning-near-miss-merchant-4",
+        "category": "subscriptions",
+        "amount": -10000,
+        "currency": "USD"
+      },
+      {
+        "id": "priceincrease-tuning-near-miss-4-hist-2",
+        "date": "2026-10-05",
+        "payee": "PriceIncrease-tuning-near-miss-merchant-4",
+        "category": "subscriptions",
+        "amount": -10000,
+        "currency": "USD"
+      },
+      {
+        "id": "priceincrease-tuning-near-miss-4-hist-3",
+        "date": "2026-11-05",
+        "payee": "PriceIncrease-tuning-near-miss-merchant-4",
+        "category": "subscriptions",
+        "amount": -10000,
+        "currency": "USD"
+      },
+      {
+        "id": "priceincrease-tuning-near-miss-4-candidate",
+        "date": "2026-12-05",
+        "payee": "PriceIncrease-tuning-near-miss-merchant-4",
+        "category": "subscriptions",
+        "amount": -10900,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "possibledoublecharge-tuning-positive-1",
+    "candidate": "possibledoublecharge-tuning-positive-1-candidate",
+    "expected": [
+      "PossibleDoubleCharge"
+    ],
+    "evidence": [],
+    "rationale": "Two matching charges at the same merchant post on consecutive days.",
+    "merchant": "PossibleDoubleCharge-tuning-merchant-1",
+    "period": "2026-tuning-1",
+    "split": "tuning",
+    "rows": [
+      {
+        "id": "possibledoublecharge-tuning-positive-1-hist-1",
+        "date": "2026-10-10",
+        "payee": "PossibleDoubleCharge-tuning-merchant-1",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      },
+      {
+        "id": "possibledoublecharge-tuning-positive-1-hist-2",
+        "date": "2026-11-10",
+        "payee": "PossibleDoubleCharge-tuning-merchant-1",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      },
+      {
+        "id": "possibledoublecharge-tuning-positive-1-first",
+        "date": "2026-12-08",
+        "payee": "PossibleDoubleCharge-tuning-merchant-1",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      },
+      {
+        "id": "possibledoublecharge-tuning-positive-1-candidate",
+        "date": "2026-12-09",
+        "payee": "PossibleDoubleCharge-tuning-merchant-1",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "possibledoublecharge-tuning-positive-2",
+    "candidate": "possibledoublecharge-tuning-positive-2-candidate",
+    "expected": [
+      "PossibleDoubleCharge"
+    ],
+    "evidence": [],
+    "rationale": "Two matching charges at the same merchant post on consecutive days.",
+    "merchant": "PossibleDoubleCharge-tuning-merchant-2",
+    "period": "2026-tuning-2",
+    "split": "tuning",
+    "rows": [
+      {
+        "id": "possibledoublecharge-tuning-positive-2-hist-1",
+        "date": "2026-10-10",
+        "payee": "PossibleDoubleCharge-tuning-merchant-2",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      },
+      {
+        "id": "possibledoublecharge-tuning-positive-2-hist-2",
+        "date": "2026-11-10",
+        "payee": "PossibleDoubleCharge-tuning-merchant-2",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      },
+      {
+        "id": "possibledoublecharge-tuning-positive-2-first",
+        "date": "2026-12-08",
+        "payee": "PossibleDoubleCharge-tuning-merchant-2",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      },
+      {
+        "id": "possibledoublecharge-tuning-positive-2-candidate",
+        "date": "2026-12-09",
+        "payee": "PossibleDoubleCharge-tuning-merchant-2",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "possibledoublecharge-tuning-positive-3",
+    "candidate": "possibledoublecharge-tuning-positive-3-candidate",
+    "expected": [
+      "PossibleDoubleCharge"
+    ],
+    "evidence": [],
+    "rationale": "Two matching charges at the same merchant post on consecutive days.",
+    "merchant": "PossibleDoubleCharge-tuning-merchant-3",
+    "period": "2026-tuning-3",
+    "split": "tuning",
+    "rows": [
+      {
+        "id": "possibledoublecharge-tuning-positive-3-hist-1",
+        "date": "2026-10-10",
+        "payee": "PossibleDoubleCharge-tuning-merchant-3",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      },
+      {
+        "id": "possibledoublecharge-tuning-positive-3-hist-2",
+        "date": "2026-11-10",
+        "payee": "PossibleDoubleCharge-tuning-merchant-3",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      },
+      {
+        "id": "possibledoublecharge-tuning-positive-3-first",
+        "date": "2026-12-08",
+        "payee": "PossibleDoubleCharge-tuning-merchant-3",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      },
+      {
+        "id": "possibledoublecharge-tuning-positive-3-candidate",
+        "date": "2026-12-09",
+        "payee": "PossibleDoubleCharge-tuning-merchant-3",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "possibledoublecharge-tuning-positive-4",
+    "candidate": "possibledoublecharge-tuning-positive-4-candidate",
+    "expected": [
+      "PossibleDoubleCharge"
+    ],
+    "evidence": [],
+    "rationale": "Two matching charges at the same merchant post on consecutive days.",
+    "merchant": "PossibleDoubleCharge-tuning-merchant-4",
+    "period": "2026-tuning-4",
+    "split": "tuning",
+    "rows": [
+      {
+        "id": "possibledoublecharge-tuning-positive-4-hist-1",
+        "date": "2026-10-10",
+        "payee": "PossibleDoubleCharge-tuning-merchant-4",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      },
+      {
+        "id": "possibledoublecharge-tuning-positive-4-hist-2",
+        "date": "2026-11-10",
+        "payee": "PossibleDoubleCharge-tuning-merchant-4",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      },
+      {
+        "id": "possibledoublecharge-tuning-positive-4-first",
+        "date": "2026-12-08",
+        "payee": "PossibleDoubleCharge-tuning-merchant-4",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      },
+      {
+        "id": "possibledoublecharge-tuning-positive-4-candidate",
+        "date": "2026-12-09",
+        "payee": "PossibleDoubleCharge-tuning-merchant-4",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "possibledoublecharge-tuning-near-miss-1",
+    "candidate": "possibledoublecharge-tuning-near-miss-1-candidate",
+    "expected": [
+      "None"
+    ],
+    "evidence": [],
+    "hard_negative_for": [
+      "PossibleDoubleCharge"
+    ],
+    "rationale": "An equal charge posts the same day, but at a different merchant.",
+    "merchant": "PossibleDoubleCharge-tuning-near-miss-merchant-1",
+    "period": "2026-tuning-near-1",
+    "split": "tuning",
+    "rows": [
+      {
+        "id": "possibledoublecharge-tuning-near-miss-1-hist-1",
+        "date": "2026-10-10",
+        "payee": "PossibleDoubleCharge-tuning-near-miss-merchant-1",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      },
+      {
+        "id": "possibledoublecharge-tuning-near-miss-1-hist-2",
+        "date": "2026-11-10",
+        "payee": "PossibleDoubleCharge-tuning-near-miss-merchant-1",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      },
+      {
+        "id": "possibledoublecharge-tuning-near-miss-1-other",
+        "date": "2026-12-09",
+        "payee": "Unrelated Merchant 1",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      },
+      {
+        "id": "possibledoublecharge-tuning-near-miss-1-candidate",
+        "date": "2026-12-09",
+        "payee": "PossibleDoubleCharge-tuning-near-miss-merchant-1",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "possibledoublecharge-tuning-near-miss-2",
+    "candidate": "possibledoublecharge-tuning-near-miss-2-candidate",
+    "expected": [
+      "None"
+    ],
+    "evidence": [],
+    "hard_negative_for": [
+      "PossibleDoubleCharge"
+    ],
+    "rationale": "An equal charge posts the same day, but at a different merchant.",
+    "merchant": "PossibleDoubleCharge-tuning-near-miss-merchant-2",
+    "period": "2026-tuning-near-2",
+    "split": "tuning",
+    "rows": [
+      {
+        "id": "possibledoublecharge-tuning-near-miss-2-hist-1",
+        "date": "2026-10-10",
+        "payee": "PossibleDoubleCharge-tuning-near-miss-merchant-2",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      },
+      {
+        "id": "possibledoublecharge-tuning-near-miss-2-hist-2",
+        "date": "2026-11-10",
+        "payee": "PossibleDoubleCharge-tuning-near-miss-merchant-2",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      },
+      {
+        "id": "possibledoublecharge-tuning-near-miss-2-other",
+        "date": "2026-12-09",
+        "payee": "Unrelated Merchant 2",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      },
+      {
+        "id": "possibledoublecharge-tuning-near-miss-2-candidate",
+        "date": "2026-12-09",
+        "payee": "PossibleDoubleCharge-tuning-near-miss-merchant-2",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "possibledoublecharge-tuning-near-miss-3",
+    "candidate": "possibledoublecharge-tuning-near-miss-3-candidate",
+    "expected": [
+      "None"
+    ],
+    "evidence": [],
+    "hard_negative_for": [
+      "PossibleDoubleCharge"
+    ],
+    "rationale": "An equal charge posts the same day, but at a different merchant.",
+    "merchant": "PossibleDoubleCharge-tuning-near-miss-merchant-3",
+    "period": "2026-tuning-near-3",
+    "split": "tuning",
+    "rows": [
+      {
+        "id": "possibledoublecharge-tuning-near-miss-3-hist-1",
+        "date": "2026-10-10",
+        "payee": "PossibleDoubleCharge-tuning-near-miss-merchant-3",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      },
+      {
+        "id": "possibledoublecharge-tuning-near-miss-3-hist-2",
+        "date": "2026-11-10",
+        "payee": "PossibleDoubleCharge-tuning-near-miss-merchant-3",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      },
+      {
+        "id": "possibledoublecharge-tuning-near-miss-3-other",
+        "date": "2026-12-09",
+        "payee": "Unrelated Merchant 3",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      },
+      {
+        "id": "possibledoublecharge-tuning-near-miss-3-candidate",
+        "date": "2026-12-09",
+        "payee": "PossibleDoubleCharge-tuning-near-miss-merchant-3",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "possibledoublecharge-tuning-near-miss-4",
+    "candidate": "possibledoublecharge-tuning-near-miss-4-candidate",
+    "expected": [
+      "None"
+    ],
+    "evidence": [],
+    "hard_negative_for": [
+      "PossibleDoubleCharge"
+    ],
+    "rationale": "An equal charge posts the same day, but at a different merchant.",
+    "merchant": "PossibleDoubleCharge-tuning-near-miss-merchant-4",
+    "period": "2026-tuning-near-4",
+    "split": "tuning",
+    "rows": [
+      {
+        "id": "possibledoublecharge-tuning-near-miss-4-hist-1",
+        "date": "2026-10-10",
+        "payee": "PossibleDoubleCharge-tuning-near-miss-merchant-4",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      },
+      {
+        "id": "possibledoublecharge-tuning-near-miss-4-hist-2",
+        "date": "2026-11-10",
+        "payee": "PossibleDoubleCharge-tuning-near-miss-merchant-4",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      },
+      {
+        "id": "possibledoublecharge-tuning-near-miss-4-other",
+        "date": "2026-12-09",
+        "payee": "Unrelated Merchant 4",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      },
+      {
+        "id": "possibledoublecharge-tuning-near-miss-4-candidate",
+        "date": "2026-12-09",
+        "payee": "PossibleDoubleCharge-tuning-near-miss-merchant-4",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "firsttimemerchantlarge-tuning-positive-1",
+    "candidate": "firsttimemerchantlarge-tuning-positive-1-candidate",
+    "expected": [
+      "FirstTimeMerchantLarge"
+    ],
+    "evidence": [],
+    "rationale": "The first charge from this merchant is $480, above the $250 materiality floor.",
+    "merchant": "FirstTimeMerchantLarge-tuning-merchant-1",
+    "period": "2026-tuning-1",
+    "split": "tuning",
+    "rows": [
+      {
+        "id": "firsttimemerchantlarge-tuning-positive-1-candidate",
+        "date": "2026-12-07",
+        "payee": "FirstTimeMerchantLarge-tuning-merchant-1",
+        "category": "shopping",
+        "amount": -48000,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "firsttimemerchantlarge-tuning-positive-2",
+    "candidate": "firsttimemerchantlarge-tuning-positive-2-candidate",
+    "expected": [
+      "FirstTimeMerchantLarge"
+    ],
+    "evidence": [],
+    "rationale": "The first charge from this merchant is $480, above the $250 materiality floor.",
+    "merchant": "FirstTimeMerchantLarge-tuning-merchant-2",
+    "period": "2026-tuning-2",
+    "split": "tuning",
+    "rows": [
+      {
+        "id": "firsttimemerchantlarge-tuning-positive-2-candidate",
+        "date": "2026-12-07",
+        "payee": "FirstTimeMerchantLarge-tuning-merchant-2",
+        "category": "shopping",
+        "amount": -48000,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "firsttimemerchantlarge-tuning-positive-3",
+    "candidate": "firsttimemerchantlarge-tuning-positive-3-candidate",
+    "expected": [
+      "FirstTimeMerchantLarge"
+    ],
+    "evidence": [],
+    "rationale": "The first charge from this merchant is $480, above the $250 materiality floor.",
+    "merchant": "FirstTimeMerchantLarge-tuning-merchant-3",
+    "period": "2026-tuning-3",
+    "split": "tuning",
+    "rows": [
+      {
+        "id": "firsttimemerchantlarge-tuning-positive-3-candidate",
+        "date": "2026-12-07",
+        "payee": "FirstTimeMerchantLarge-tuning-merchant-3",
+        "category": "shopping",
+        "amount": -48000,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "firsttimemerchantlarge-tuning-positive-4",
+    "candidate": "firsttimemerchantlarge-tuning-positive-4-candidate",
+    "expected": [
+      "FirstTimeMerchantLarge"
+    ],
+    "evidence": [],
+    "rationale": "The first charge from this merchant is $480, above the $250 materiality floor.",
+    "merchant": "FirstTimeMerchantLarge-tuning-merchant-4",
+    "period": "2026-tuning-4",
+    "split": "tuning",
+    "rows": [
+      {
+        "id": "firsttimemerchantlarge-tuning-positive-4-candidate",
+        "date": "2026-12-07",
+        "payee": "FirstTimeMerchantLarge-tuning-merchant-4",
+        "category": "shopping",
+        "amount": -48000,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "firsttimemerchantlarge-tuning-near-miss-1",
+    "candidate": "firsttimemerchantlarge-tuning-near-miss-1-candidate",
+    "expected": [
+      "None"
+    ],
+    "evidence": [],
+    "hard_negative_for": [
+      "FirstTimeMerchantLarge"
+    ],
+    "rationale": "The first merchant charge is $240, below the $250 materiality floor.",
+    "merchant": "FirstTimeMerchantLarge-tuning-near-miss-merchant-1",
+    "period": "2026-tuning-near-1",
+    "split": "tuning",
+    "rows": [
+      {
+        "id": "firsttimemerchantlarge-tuning-near-miss-1-candidate",
+        "date": "2026-12-07",
+        "payee": "FirstTimeMerchantLarge-tuning-near-miss-merchant-1",
+        "category": "shopping",
+        "amount": -24000,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "firsttimemerchantlarge-tuning-near-miss-2",
+    "candidate": "firsttimemerchantlarge-tuning-near-miss-2-candidate",
+    "expected": [
+      "None"
+    ],
+    "evidence": [],
+    "hard_negative_for": [
+      "FirstTimeMerchantLarge"
+    ],
+    "rationale": "The first merchant charge is $240, below the $250 materiality floor.",
+    "merchant": "FirstTimeMerchantLarge-tuning-near-miss-merchant-2",
+    "period": "2026-tuning-near-2",
+    "split": "tuning",
+    "rows": [
+      {
+        "id": "firsttimemerchantlarge-tuning-near-miss-2-candidate",
+        "date": "2026-12-07",
+        "payee": "FirstTimeMerchantLarge-tuning-near-miss-merchant-2",
+        "category": "shopping",
+        "amount": -24000,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "firsttimemerchantlarge-tuning-near-miss-3",
+    "candidate": "firsttimemerchantlarge-tuning-near-miss-3-candidate",
+    "expected": [
+      "None"
+    ],
+    "evidence": [],
+    "hard_negative_for": [
+      "FirstTimeMerchantLarge"
+    ],
+    "rationale": "The first merchant charge is $240, below the $250 materiality floor.",
+    "merchant": "FirstTimeMerchantLarge-tuning-near-miss-merchant-3",
+    "period": "2026-tuning-near-3",
+    "split": "tuning",
+    "rows": [
+      {
+        "id": "firsttimemerchantlarge-tuning-near-miss-3-candidate",
+        "date": "2026-12-07",
+        "payee": "FirstTimeMerchantLarge-tuning-near-miss-merchant-3",
+        "category": "shopping",
+        "amount": -24000,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "firsttimemerchantlarge-tuning-near-miss-4",
+    "candidate": "firsttimemerchantlarge-tuning-near-miss-4-candidate",
+    "expected": [
+      "None"
+    ],
+    "evidence": [],
+    "hard_negative_for": [
+      "FirstTimeMerchantLarge"
+    ],
+    "rationale": "The first merchant charge is $240, below the $250 materiality floor.",
+    "merchant": "FirstTimeMerchantLarge-tuning-near-miss-merchant-4",
+    "period": "2026-tuning-near-4",
+    "split": "tuning",
+    "rows": [
+      {
+        "id": "firsttimemerchantlarge-tuning-near-miss-4-candidate",
+        "date": "2026-12-07",
+        "payee": "FirstTimeMerchantLarge-tuning-near-miss-merchant-4",
+        "category": "shopping",
+        "amount": -24000,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "spike-holdout-positive-1",
+    "candidate": "spike-holdout-positive-1-candidate",
+    "expected": [
+      "Spike"
+    ],
+    "evidence": [],
+    "rationale": "A $200 meal is ten times five prior $20 meals at this merchant.",
+    "merchant": "Spike-holdout-merchant-1",
+    "period": "2026-holdout-1",
+    "split": "holdout",
+    "rows": [
+      {
+        "id": "spike-holdout-positive-1-hist-1",
+        "date": "2026-02-10",
+        "payee": "Spike-holdout-merchant-1",
+        "category": "dining",
+        "amount": -2000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-holdout-positive-1-hist-2",
+        "date": "2026-03-10",
+        "payee": "Spike-holdout-merchant-1",
+        "category": "dining",
+        "amount": -2000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-holdout-positive-1-hist-3",
+        "date": "2026-04-10",
+        "payee": "Spike-holdout-merchant-1",
+        "category": "dining",
+        "amount": -2000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-holdout-positive-1-hist-4",
+        "date": "2026-05-10",
+        "payee": "Spike-holdout-merchant-1",
+        "category": "dining",
+        "amount": -2000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-holdout-positive-1-hist-5",
+        "date": "2026-06-10",
+        "payee": "Spike-holdout-merchant-1",
+        "category": "dining",
+        "amount": -2000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-holdout-positive-1-candidate",
+        "date": "2026-12-10",
+        "payee": "Spike-holdout-merchant-1",
+        "category": "dining",
+        "amount": -20000,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "spike-holdout-positive-2",
+    "candidate": "spike-holdout-positive-2-candidate",
+    "expected": [
+      "Spike"
+    ],
+    "evidence": [],
+    "rationale": "A $200 meal is ten times five prior $20 meals at this merchant.",
+    "merchant": "Spike-holdout-merchant-2",
+    "period": "2026-holdout-2",
+    "split": "holdout",
+    "rows": [
+      {
+        "id": "spike-holdout-positive-2-hist-1",
+        "date": "2026-02-10",
+        "payee": "Spike-holdout-merchant-2",
+        "category": "dining",
+        "amount": -2000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-holdout-positive-2-hist-2",
+        "date": "2026-03-10",
+        "payee": "Spike-holdout-merchant-2",
+        "category": "dining",
+        "amount": -2000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-holdout-positive-2-hist-3",
+        "date": "2026-04-10",
+        "payee": "Spike-holdout-merchant-2",
+        "category": "dining",
+        "amount": -2000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-holdout-positive-2-hist-4",
+        "date": "2026-05-10",
+        "payee": "Spike-holdout-merchant-2",
+        "category": "dining",
+        "amount": -2000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-holdout-positive-2-hist-5",
+        "date": "2026-06-10",
+        "payee": "Spike-holdout-merchant-2",
+        "category": "dining",
+        "amount": -2000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-holdout-positive-2-candidate",
+        "date": "2026-12-10",
+        "payee": "Spike-holdout-merchant-2",
+        "category": "dining",
+        "amount": -20000,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "spike-holdout-positive-3",
+    "candidate": "spike-holdout-positive-3-candidate",
+    "expected": [
+      "Spike"
+    ],
+    "evidence": [],
+    "rationale": "A $200 meal is ten times five prior $20 meals at this merchant.",
+    "merchant": "Spike-holdout-merchant-3",
+    "period": "2026-holdout-3",
+    "split": "holdout",
+    "rows": [
+      {
+        "id": "spike-holdout-positive-3-hist-1",
+        "date": "2026-02-10",
+        "payee": "Spike-holdout-merchant-3",
+        "category": "dining",
+        "amount": -2000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-holdout-positive-3-hist-2",
+        "date": "2026-03-10",
+        "payee": "Spike-holdout-merchant-3",
+        "category": "dining",
+        "amount": -2000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-holdout-positive-3-hist-3",
+        "date": "2026-04-10",
+        "payee": "Spike-holdout-merchant-3",
+        "category": "dining",
+        "amount": -2000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-holdout-positive-3-hist-4",
+        "date": "2026-05-10",
+        "payee": "Spike-holdout-merchant-3",
+        "category": "dining",
+        "amount": -2000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-holdout-positive-3-hist-5",
+        "date": "2026-06-10",
+        "payee": "Spike-holdout-merchant-3",
+        "category": "dining",
+        "amount": -2000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-holdout-positive-3-candidate",
+        "date": "2026-12-10",
+        "payee": "Spike-holdout-merchant-3",
+        "category": "dining",
+        "amount": -20000,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "spike-holdout-positive-4",
+    "candidate": "spike-holdout-positive-4-candidate",
+    "expected": [
+      "Spike"
+    ],
+    "evidence": [],
+    "rationale": "A $200 meal is ten times five prior $20 meals at this merchant.",
+    "merchant": "Spike-holdout-merchant-4",
+    "period": "2026-holdout-4",
+    "split": "holdout",
+    "rows": [
+      {
+        "id": "spike-holdout-positive-4-hist-1",
+        "date": "2026-02-10",
+        "payee": "Spike-holdout-merchant-4",
+        "category": "dining",
+        "amount": -2000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-holdout-positive-4-hist-2",
+        "date": "2026-03-10",
+        "payee": "Spike-holdout-merchant-4",
+        "category": "dining",
+        "amount": -2000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-holdout-positive-4-hist-3",
+        "date": "2026-04-10",
+        "payee": "Spike-holdout-merchant-4",
+        "category": "dining",
+        "amount": -2000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-holdout-positive-4-hist-4",
+        "date": "2026-05-10",
+        "payee": "Spike-holdout-merchant-4",
+        "category": "dining",
+        "amount": -2000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-holdout-positive-4-hist-5",
+        "date": "2026-06-10",
+        "payee": "Spike-holdout-merchant-4",
+        "category": "dining",
+        "amount": -2000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-holdout-positive-4-candidate",
+        "date": "2026-12-10",
+        "payee": "Spike-holdout-merchant-4",
+        "category": "dining",
+        "amount": -20000,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "spike-holdout-near-miss-1",
+    "candidate": "spike-holdout-near-miss-1-candidate",
+    "expected": [
+      "None"
+    ],
+    "evidence": [],
+    "hard_negative_for": [
+      "Spike"
+    ],
+    "rationale": "The charge is inside this category?s established high-variance range, despite a larger amount than some prior purchases.",
+    "merchant": "Spike-holdout-near-miss-merchant-1",
+    "period": "2026-holdout-near-1",
+    "split": "holdout",
+    "rows": [
+      {
+        "id": "spike-holdout-near-miss-1-hist-1",
+        "date": "2026-02-10",
+        "payee": "Spike-holdout-near-miss-merchant-1 history 1",
+        "category": "dining",
+        "amount": -5000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-holdout-near-miss-1-hist-2",
+        "date": "2026-03-10",
+        "payee": "Spike-holdout-near-miss-merchant-1 history 2",
+        "category": "dining",
+        "amount": -2500,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-holdout-near-miss-1-hist-3",
+        "date": "2026-04-10",
+        "payee": "Spike-holdout-near-miss-merchant-1 history 3",
+        "category": "dining",
+        "amount": -8500,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-holdout-near-miss-1-hist-4",
+        "date": "2026-05-10",
+        "payee": "Spike-holdout-near-miss-merchant-1 history 4",
+        "category": "dining",
+        "amount": -3000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-holdout-near-miss-1-hist-5",
+        "date": "2026-06-10",
+        "payee": "Spike-holdout-near-miss-merchant-1 history 5",
+        "category": "dining",
+        "amount": -6500,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-holdout-near-miss-1-candidate",
+        "date": "2026-12-10",
+        "payee": "Spike-holdout-near-miss-merchant-1",
+        "category": "dining",
+        "amount": -6000,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "spike-holdout-near-miss-2",
+    "candidate": "spike-holdout-near-miss-2-candidate",
+    "expected": [
+      "None"
+    ],
+    "evidence": [],
+    "hard_negative_for": [
+      "Spike"
+    ],
+    "rationale": "The charge is inside this category?s established high-variance range, despite a larger amount than some prior purchases.",
+    "merchant": "Spike-holdout-near-miss-merchant-2",
+    "period": "2026-holdout-near-2",
+    "split": "holdout",
+    "rows": [
+      {
+        "id": "spike-holdout-near-miss-2-hist-1",
+        "date": "2026-02-10",
+        "payee": "Spike-holdout-near-miss-merchant-2 history 1",
+        "category": "dining",
+        "amount": -5000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-holdout-near-miss-2-hist-2",
+        "date": "2026-03-10",
+        "payee": "Spike-holdout-near-miss-merchant-2 history 2",
+        "category": "dining",
+        "amount": -2500,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-holdout-near-miss-2-hist-3",
+        "date": "2026-04-10",
+        "payee": "Spike-holdout-near-miss-merchant-2 history 3",
+        "category": "dining",
+        "amount": -8500,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-holdout-near-miss-2-hist-4",
+        "date": "2026-05-10",
+        "payee": "Spike-holdout-near-miss-merchant-2 history 4",
+        "category": "dining",
+        "amount": -3000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-holdout-near-miss-2-hist-5",
+        "date": "2026-06-10",
+        "payee": "Spike-holdout-near-miss-merchant-2 history 5",
+        "category": "dining",
+        "amount": -6500,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-holdout-near-miss-2-candidate",
+        "date": "2026-12-10",
+        "payee": "Spike-holdout-near-miss-merchant-2",
+        "category": "dining",
+        "amount": -6000,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "spike-holdout-near-miss-3",
+    "candidate": "spike-holdout-near-miss-3-candidate",
+    "expected": [
+      "None"
+    ],
+    "evidence": [],
+    "hard_negative_for": [
+      "Spike"
+    ],
+    "rationale": "The charge is inside this category?s established high-variance range, despite a larger amount than some prior purchases.",
+    "merchant": "Spike-holdout-near-miss-merchant-3",
+    "period": "2026-holdout-near-3",
+    "split": "holdout",
+    "rows": [
+      {
+        "id": "spike-holdout-near-miss-3-hist-1",
+        "date": "2026-02-10",
+        "payee": "Spike-holdout-near-miss-merchant-3 history 1",
+        "category": "dining",
+        "amount": -5000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-holdout-near-miss-3-hist-2",
+        "date": "2026-03-10",
+        "payee": "Spike-holdout-near-miss-merchant-3 history 2",
+        "category": "dining",
+        "amount": -2500,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-holdout-near-miss-3-hist-3",
+        "date": "2026-04-10",
+        "payee": "Spike-holdout-near-miss-merchant-3 history 3",
+        "category": "dining",
+        "amount": -8500,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-holdout-near-miss-3-hist-4",
+        "date": "2026-05-10",
+        "payee": "Spike-holdout-near-miss-merchant-3 history 4",
+        "category": "dining",
+        "amount": -3000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-holdout-near-miss-3-hist-5",
+        "date": "2026-06-10",
+        "payee": "Spike-holdout-near-miss-merchant-3 history 5",
+        "category": "dining",
+        "amount": -6500,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-holdout-near-miss-3-candidate",
+        "date": "2026-12-10",
+        "payee": "Spike-holdout-near-miss-merchant-3",
+        "category": "dining",
+        "amount": -6000,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "spike-holdout-near-miss-4",
+    "candidate": "spike-holdout-near-miss-4-candidate",
+    "expected": [
+      "None"
+    ],
+    "evidence": [],
+    "hard_negative_for": [
+      "Spike"
+    ],
+    "rationale": "The charge is inside this category?s established high-variance range, despite a larger amount than some prior purchases.",
+    "merchant": "Spike-holdout-near-miss-merchant-4",
+    "period": "2026-holdout-near-4",
+    "split": "holdout",
+    "rows": [
+      {
+        "id": "spike-holdout-near-miss-4-hist-1",
+        "date": "2026-02-10",
+        "payee": "Spike-holdout-near-miss-merchant-4 history 1",
+        "category": "dining",
+        "amount": -5000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-holdout-near-miss-4-hist-2",
+        "date": "2026-03-10",
+        "payee": "Spike-holdout-near-miss-merchant-4 history 2",
+        "category": "dining",
+        "amount": -2500,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-holdout-near-miss-4-hist-3",
+        "date": "2026-04-10",
+        "payee": "Spike-holdout-near-miss-merchant-4 history 3",
+        "category": "dining",
+        "amount": -8500,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-holdout-near-miss-4-hist-4",
+        "date": "2026-05-10",
+        "payee": "Spike-holdout-near-miss-merchant-4 history 4",
+        "category": "dining",
+        "amount": -3000,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-holdout-near-miss-4-hist-5",
+        "date": "2026-06-10",
+        "payee": "Spike-holdout-near-miss-merchant-4 history 5",
+        "category": "dining",
+        "amount": -6500,
+        "currency": "USD"
+      },
+      {
+        "id": "spike-holdout-near-miss-4-candidate",
+        "date": "2026-12-10",
+        "payee": "Spike-holdout-near-miss-merchant-4",
+        "category": "dining",
+        "amount": -6000,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "priceincrease-holdout-positive-1",
+    "candidate": "priceincrease-holdout-positive-1-candidate",
+    "expected": [
+      "PriceIncrease"
+    ],
+    "evidence": [],
+    "rationale": "The monthly subscription rises materially from three established $15.99 cycles.",
+    "merchant": "PriceIncrease-holdout-merchant-1",
+    "period": "2026-holdout-1",
+    "split": "holdout",
+    "rows": [
+      {
+        "id": "priceincrease-holdout-positive-1-hist-1",
+        "date": "2026-09-05",
+        "payee": "PriceIncrease-holdout-merchant-1",
+        "category": "subscriptions",
+        "amount": -1599,
+        "currency": "USD"
+      },
+      {
+        "id": "priceincrease-holdout-positive-1-hist-2",
+        "date": "2026-10-05",
+        "payee": "PriceIncrease-holdout-merchant-1",
+        "category": "subscriptions",
+        "amount": -1599,
+        "currency": "USD"
+      },
+      {
+        "id": "priceincrease-holdout-positive-1-hist-3",
+        "date": "2026-11-05",
+        "payee": "PriceIncrease-holdout-merchant-1",
+        "category": "subscriptions",
+        "amount": -1599,
+        "currency": "USD"
+      },
+      {
+        "id": "priceincrease-holdout-positive-1-candidate",
+        "date": "2026-12-05",
+        "payee": "PriceIncrease-holdout-merchant-1",
+        "category": "subscriptions",
+        "amount": -2099,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "priceincrease-holdout-positive-2",
+    "candidate": "priceincrease-holdout-positive-2-candidate",
+    "expected": [
+      "PriceIncrease"
+    ],
+    "evidence": [],
+    "rationale": "The monthly subscription rises materially from three established $15.99 cycles.",
+    "merchant": "PriceIncrease-holdout-merchant-2",
+    "period": "2026-holdout-2",
+    "split": "holdout",
+    "rows": [
+      {
+        "id": "priceincrease-holdout-positive-2-hist-1",
+        "date": "2026-09-05",
+        "payee": "PriceIncrease-holdout-merchant-2",
+        "category": "subscriptions",
+        "amount": -1599,
+        "currency": "USD"
+      },
+      {
+        "id": "priceincrease-holdout-positive-2-hist-2",
+        "date": "2026-10-05",
+        "payee": "PriceIncrease-holdout-merchant-2",
+        "category": "subscriptions",
+        "amount": -1599,
+        "currency": "USD"
+      },
+      {
+        "id": "priceincrease-holdout-positive-2-hist-3",
+        "date": "2026-11-05",
+        "payee": "PriceIncrease-holdout-merchant-2",
+        "category": "subscriptions",
+        "amount": -1599,
+        "currency": "USD"
+      },
+      {
+        "id": "priceincrease-holdout-positive-2-candidate",
+        "date": "2026-12-05",
+        "payee": "PriceIncrease-holdout-merchant-2",
+        "category": "subscriptions",
+        "amount": -2099,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "priceincrease-holdout-positive-3",
+    "candidate": "priceincrease-holdout-positive-3-candidate",
+    "expected": [
+      "PriceIncrease"
+    ],
+    "evidence": [],
+    "rationale": "The monthly subscription rises materially from three established $15.99 cycles.",
+    "merchant": "PriceIncrease-holdout-merchant-3",
+    "period": "2026-holdout-3",
+    "split": "holdout",
+    "rows": [
+      {
+        "id": "priceincrease-holdout-positive-3-hist-1",
+        "date": "2026-09-05",
+        "payee": "PriceIncrease-holdout-merchant-3",
+        "category": "subscriptions",
+        "amount": -1599,
+        "currency": "USD"
+      },
+      {
+        "id": "priceincrease-holdout-positive-3-hist-2",
+        "date": "2026-10-05",
+        "payee": "PriceIncrease-holdout-merchant-3",
+        "category": "subscriptions",
+        "amount": -1599,
+        "currency": "USD"
+      },
+      {
+        "id": "priceincrease-holdout-positive-3-hist-3",
+        "date": "2026-11-05",
+        "payee": "PriceIncrease-holdout-merchant-3",
+        "category": "subscriptions",
+        "amount": -1599,
+        "currency": "USD"
+      },
+      {
+        "id": "priceincrease-holdout-positive-3-candidate",
+        "date": "2026-12-05",
+        "payee": "PriceIncrease-holdout-merchant-3",
+        "category": "subscriptions",
+        "amount": -2099,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "priceincrease-holdout-positive-4",
+    "candidate": "priceincrease-holdout-positive-4-candidate",
+    "expected": [
+      "PriceIncrease"
+    ],
+    "evidence": [],
+    "rationale": "The monthly subscription rises materially from three established $15.99 cycles.",
+    "merchant": "PriceIncrease-holdout-merchant-4",
+    "period": "2026-holdout-4",
+    "split": "holdout",
+    "rows": [
+      {
+        "id": "priceincrease-holdout-positive-4-hist-1",
+        "date": "2026-09-05",
+        "payee": "PriceIncrease-holdout-merchant-4",
+        "category": "subscriptions",
+        "amount": -1599,
+        "currency": "USD"
+      },
+      {
+        "id": "priceincrease-holdout-positive-4-hist-2",
+        "date": "2026-10-05",
+        "payee": "PriceIncrease-holdout-merchant-4",
+        "category": "subscriptions",
+        "amount": -1599,
+        "currency": "USD"
+      },
+      {
+        "id": "priceincrease-holdout-positive-4-hist-3",
+        "date": "2026-11-05",
+        "payee": "PriceIncrease-holdout-merchant-4",
+        "category": "subscriptions",
+        "amount": -1599,
+        "currency": "USD"
+      },
+      {
+        "id": "priceincrease-holdout-positive-4-candidate",
+        "date": "2026-12-05",
+        "payee": "PriceIncrease-holdout-merchant-4",
+        "category": "subscriptions",
+        "amount": -2099,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "priceincrease-holdout-near-miss-1",
+    "candidate": "priceincrease-holdout-near-miss-1-candidate",
+    "expected": [
+      "None"
+    ],
+    "evidence": [],
+    "hard_negative_for": [
+      "PriceIncrease"
+    ],
+    "rationale": "The subscription change is 9%, below the material price-increase threshold.",
+    "merchant": "PriceIncrease-holdout-near-miss-merchant-1",
+    "period": "2026-holdout-near-1",
+    "split": "holdout",
+    "rows": [
+      {
+        "id": "priceincrease-holdout-near-miss-1-hist-1",
+        "date": "2026-09-05",
+        "payee": "PriceIncrease-holdout-near-miss-merchant-1",
+        "category": "subscriptions",
+        "amount": -10000,
+        "currency": "USD"
+      },
+      {
+        "id": "priceincrease-holdout-near-miss-1-hist-2",
+        "date": "2026-10-05",
+        "payee": "PriceIncrease-holdout-near-miss-merchant-1",
+        "category": "subscriptions",
+        "amount": -10000,
+        "currency": "USD"
+      },
+      {
+        "id": "priceincrease-holdout-near-miss-1-hist-3",
+        "date": "2026-11-05",
+        "payee": "PriceIncrease-holdout-near-miss-merchant-1",
+        "category": "subscriptions",
+        "amount": -10000,
+        "currency": "USD"
+      },
+      {
+        "id": "priceincrease-holdout-near-miss-1-candidate",
+        "date": "2026-12-05",
+        "payee": "PriceIncrease-holdout-near-miss-merchant-1",
+        "category": "subscriptions",
+        "amount": -10900,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "priceincrease-holdout-near-miss-2",
+    "candidate": "priceincrease-holdout-near-miss-2-candidate",
+    "expected": [
+      "None"
+    ],
+    "evidence": [],
+    "hard_negative_for": [
+      "PriceIncrease"
+    ],
+    "rationale": "The subscription change is 9%, below the material price-increase threshold.",
+    "merchant": "PriceIncrease-holdout-near-miss-merchant-2",
+    "period": "2026-holdout-near-2",
+    "split": "holdout",
+    "rows": [
+      {
+        "id": "priceincrease-holdout-near-miss-2-hist-1",
+        "date": "2026-09-05",
+        "payee": "PriceIncrease-holdout-near-miss-merchant-2",
+        "category": "subscriptions",
+        "amount": -10000,
+        "currency": "USD"
+      },
+      {
+        "id": "priceincrease-holdout-near-miss-2-hist-2",
+        "date": "2026-10-05",
+        "payee": "PriceIncrease-holdout-near-miss-merchant-2",
+        "category": "subscriptions",
+        "amount": -10000,
+        "currency": "USD"
+      },
+      {
+        "id": "priceincrease-holdout-near-miss-2-hist-3",
+        "date": "2026-11-05",
+        "payee": "PriceIncrease-holdout-near-miss-merchant-2",
+        "category": "subscriptions",
+        "amount": -10000,
+        "currency": "USD"
+      },
+      {
+        "id": "priceincrease-holdout-near-miss-2-candidate",
+        "date": "2026-12-05",
+        "payee": "PriceIncrease-holdout-near-miss-merchant-2",
+        "category": "subscriptions",
+        "amount": -10900,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "priceincrease-holdout-near-miss-3",
+    "candidate": "priceincrease-holdout-near-miss-3-candidate",
+    "expected": [
+      "None"
+    ],
+    "evidence": [],
+    "hard_negative_for": [
+      "PriceIncrease"
+    ],
+    "rationale": "The subscription change is 9%, below the material price-increase threshold.",
+    "merchant": "PriceIncrease-holdout-near-miss-merchant-3",
+    "period": "2026-holdout-near-3",
+    "split": "holdout",
+    "rows": [
+      {
+        "id": "priceincrease-holdout-near-miss-3-hist-1",
+        "date": "2026-09-05",
+        "payee": "PriceIncrease-holdout-near-miss-merchant-3",
+        "category": "subscriptions",
+        "amount": -10000,
+        "currency": "USD"
+      },
+      {
+        "id": "priceincrease-holdout-near-miss-3-hist-2",
+        "date": "2026-10-05",
+        "payee": "PriceIncrease-holdout-near-miss-merchant-3",
+        "category": "subscriptions",
+        "amount": -10000,
+        "currency": "USD"
+      },
+      {
+        "id": "priceincrease-holdout-near-miss-3-hist-3",
+        "date": "2026-11-05",
+        "payee": "PriceIncrease-holdout-near-miss-merchant-3",
+        "category": "subscriptions",
+        "amount": -10000,
+        "currency": "USD"
+      },
+      {
+        "id": "priceincrease-holdout-near-miss-3-candidate",
+        "date": "2026-12-05",
+        "payee": "PriceIncrease-holdout-near-miss-merchant-3",
+        "category": "subscriptions",
+        "amount": -10900,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "priceincrease-holdout-near-miss-4",
+    "candidate": "priceincrease-holdout-near-miss-4-candidate",
+    "expected": [
+      "None"
+    ],
+    "evidence": [],
+    "hard_negative_for": [
+      "PriceIncrease"
+    ],
+    "rationale": "The subscription change is 9%, below the material price-increase threshold.",
+    "merchant": "PriceIncrease-holdout-near-miss-merchant-4",
+    "period": "2026-holdout-near-4",
+    "split": "holdout",
+    "rows": [
+      {
+        "id": "priceincrease-holdout-near-miss-4-hist-1",
+        "date": "2026-09-05",
+        "payee": "PriceIncrease-holdout-near-miss-merchant-4",
+        "category": "subscriptions",
+        "amount": -10000,
+        "currency": "USD"
+      },
+      {
+        "id": "priceincrease-holdout-near-miss-4-hist-2",
+        "date": "2026-10-05",
+        "payee": "PriceIncrease-holdout-near-miss-merchant-4",
+        "category": "subscriptions",
+        "amount": -10000,
+        "currency": "USD"
+      },
+      {
+        "id": "priceincrease-holdout-near-miss-4-hist-3",
+        "date": "2026-11-05",
+        "payee": "PriceIncrease-holdout-near-miss-merchant-4",
+        "category": "subscriptions",
+        "amount": -10000,
+        "currency": "USD"
+      },
+      {
+        "id": "priceincrease-holdout-near-miss-4-candidate",
+        "date": "2026-12-05",
+        "payee": "PriceIncrease-holdout-near-miss-merchant-4",
+        "category": "subscriptions",
+        "amount": -10900,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "possibledoublecharge-holdout-positive-1",
+    "candidate": "possibledoublecharge-holdout-positive-1-candidate",
+    "expected": [
+      "PossibleDoubleCharge"
+    ],
+    "evidence": [],
+    "rationale": "Two matching charges at the same merchant post on consecutive days.",
+    "merchant": "PossibleDoubleCharge-holdout-merchant-1",
+    "period": "2026-holdout-1",
+    "split": "holdout",
+    "rows": [
+      {
+        "id": "possibledoublecharge-holdout-positive-1-hist-1",
+        "date": "2026-10-10",
+        "payee": "PossibleDoubleCharge-holdout-merchant-1",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      },
+      {
+        "id": "possibledoublecharge-holdout-positive-1-hist-2",
+        "date": "2026-11-10",
+        "payee": "PossibleDoubleCharge-holdout-merchant-1",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      },
+      {
+        "id": "possibledoublecharge-holdout-positive-1-first",
+        "date": "2026-12-08",
+        "payee": "PossibleDoubleCharge-holdout-merchant-1",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      },
+      {
+        "id": "possibledoublecharge-holdout-positive-1-candidate",
+        "date": "2026-12-09",
+        "payee": "PossibleDoubleCharge-holdout-merchant-1",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "possibledoublecharge-holdout-positive-2",
+    "candidate": "possibledoublecharge-holdout-positive-2-candidate",
+    "expected": [
+      "PossibleDoubleCharge"
+    ],
+    "evidence": [],
+    "rationale": "Two matching charges at the same merchant post on consecutive days.",
+    "merchant": "PossibleDoubleCharge-holdout-merchant-2",
+    "period": "2026-holdout-2",
+    "split": "holdout",
+    "rows": [
+      {
+        "id": "possibledoublecharge-holdout-positive-2-hist-1",
+        "date": "2026-10-10",
+        "payee": "PossibleDoubleCharge-holdout-merchant-2",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      },
+      {
+        "id": "possibledoublecharge-holdout-positive-2-hist-2",
+        "date": "2026-11-10",
+        "payee": "PossibleDoubleCharge-holdout-merchant-2",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      },
+      {
+        "id": "possibledoublecharge-holdout-positive-2-first",
+        "date": "2026-12-08",
+        "payee": "PossibleDoubleCharge-holdout-merchant-2",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      },
+      {
+        "id": "possibledoublecharge-holdout-positive-2-candidate",
+        "date": "2026-12-09",
+        "payee": "PossibleDoubleCharge-holdout-merchant-2",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "possibledoublecharge-holdout-positive-3",
+    "candidate": "possibledoublecharge-holdout-positive-3-candidate",
+    "expected": [
+      "PossibleDoubleCharge"
+    ],
+    "evidence": [],
+    "rationale": "Two matching charges at the same merchant post on consecutive days.",
+    "merchant": "PossibleDoubleCharge-holdout-merchant-3",
+    "period": "2026-holdout-3",
+    "split": "holdout",
+    "rows": [
+      {
+        "id": "possibledoublecharge-holdout-positive-3-hist-1",
+        "date": "2026-10-10",
+        "payee": "PossibleDoubleCharge-holdout-merchant-3",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      },
+      {
+        "id": "possibledoublecharge-holdout-positive-3-hist-2",
+        "date": "2026-11-10",
+        "payee": "PossibleDoubleCharge-holdout-merchant-3",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      },
+      {
+        "id": "possibledoublecharge-holdout-positive-3-first",
+        "date": "2026-12-08",
+        "payee": "PossibleDoubleCharge-holdout-merchant-3",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      },
+      {
+        "id": "possibledoublecharge-holdout-positive-3-candidate",
+        "date": "2026-12-09",
+        "payee": "PossibleDoubleCharge-holdout-merchant-3",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "possibledoublecharge-holdout-positive-4",
+    "candidate": "possibledoublecharge-holdout-positive-4-candidate",
+    "expected": [
+      "PossibleDoubleCharge"
+    ],
+    "evidence": [],
+    "rationale": "Two matching charges at the same merchant post on consecutive days.",
+    "merchant": "PossibleDoubleCharge-holdout-merchant-4",
+    "period": "2026-holdout-4",
+    "split": "holdout",
+    "rows": [
+      {
+        "id": "possibledoublecharge-holdout-positive-4-hist-1",
+        "date": "2026-10-10",
+        "payee": "PossibleDoubleCharge-holdout-merchant-4",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      },
+      {
+        "id": "possibledoublecharge-holdout-positive-4-hist-2",
+        "date": "2026-11-10",
+        "payee": "PossibleDoubleCharge-holdout-merchant-4",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      },
+      {
+        "id": "possibledoublecharge-holdout-positive-4-first",
+        "date": "2026-12-08",
+        "payee": "PossibleDoubleCharge-holdout-merchant-4",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      },
+      {
+        "id": "possibledoublecharge-holdout-positive-4-candidate",
+        "date": "2026-12-09",
+        "payee": "PossibleDoubleCharge-holdout-merchant-4",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "possibledoublecharge-holdout-near-miss-1",
+    "candidate": "possibledoublecharge-holdout-near-miss-1-candidate",
+    "expected": [
+      "None"
+    ],
+    "evidence": [],
+    "hard_negative_for": [
+      "PossibleDoubleCharge"
+    ],
+    "rationale": "An equal charge posts the same day, but at a different merchant.",
+    "merchant": "PossibleDoubleCharge-holdout-near-miss-merchant-1",
+    "period": "2026-holdout-near-1",
+    "split": "holdout",
+    "rows": [
+      {
+        "id": "possibledoublecharge-holdout-near-miss-1-hist-1",
+        "date": "2026-10-10",
+        "payee": "PossibleDoubleCharge-holdout-near-miss-merchant-1",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      },
+      {
+        "id": "possibledoublecharge-holdout-near-miss-1-hist-2",
+        "date": "2026-11-10",
+        "payee": "PossibleDoubleCharge-holdout-near-miss-merchant-1",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      },
+      {
+        "id": "possibledoublecharge-holdout-near-miss-1-other",
+        "date": "2026-12-09",
+        "payee": "Unrelated Merchant 1",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      },
+      {
+        "id": "possibledoublecharge-holdout-near-miss-1-candidate",
+        "date": "2026-12-09",
+        "payee": "PossibleDoubleCharge-holdout-near-miss-merchant-1",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "possibledoublecharge-holdout-near-miss-2",
+    "candidate": "possibledoublecharge-holdout-near-miss-2-candidate",
+    "expected": [
+      "None"
+    ],
+    "evidence": [],
+    "hard_negative_for": [
+      "PossibleDoubleCharge"
+    ],
+    "rationale": "An equal charge posts the same day, but at a different merchant.",
+    "merchant": "PossibleDoubleCharge-holdout-near-miss-merchant-2",
+    "period": "2026-holdout-near-2",
+    "split": "holdout",
+    "rows": [
+      {
+        "id": "possibledoublecharge-holdout-near-miss-2-hist-1",
+        "date": "2026-10-10",
+        "payee": "PossibleDoubleCharge-holdout-near-miss-merchant-2",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      },
+      {
+        "id": "possibledoublecharge-holdout-near-miss-2-hist-2",
+        "date": "2026-11-10",
+        "payee": "PossibleDoubleCharge-holdout-near-miss-merchant-2",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      },
+      {
+        "id": "possibledoublecharge-holdout-near-miss-2-other",
+        "date": "2026-12-09",
+        "payee": "Unrelated Merchant 2",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      },
+      {
+        "id": "possibledoublecharge-holdout-near-miss-2-candidate",
+        "date": "2026-12-09",
+        "payee": "PossibleDoubleCharge-holdout-near-miss-merchant-2",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "possibledoublecharge-holdout-near-miss-3",
+    "candidate": "possibledoublecharge-holdout-near-miss-3-candidate",
+    "expected": [
+      "None"
+    ],
+    "evidence": [],
+    "hard_negative_for": [
+      "PossibleDoubleCharge"
+    ],
+    "rationale": "An equal charge posts the same day, but at a different merchant.",
+    "merchant": "PossibleDoubleCharge-holdout-near-miss-merchant-3",
+    "period": "2026-holdout-near-3",
+    "split": "holdout",
+    "rows": [
+      {
+        "id": "possibledoublecharge-holdout-near-miss-3-hist-1",
+        "date": "2026-10-10",
+        "payee": "PossibleDoubleCharge-holdout-near-miss-merchant-3",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      },
+      {
+        "id": "possibledoublecharge-holdout-near-miss-3-hist-2",
+        "date": "2026-11-10",
+        "payee": "PossibleDoubleCharge-holdout-near-miss-merchant-3",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      },
+      {
+        "id": "possibledoublecharge-holdout-near-miss-3-other",
+        "date": "2026-12-09",
+        "payee": "Unrelated Merchant 3",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      },
+      {
+        "id": "possibledoublecharge-holdout-near-miss-3-candidate",
+        "date": "2026-12-09",
+        "payee": "PossibleDoubleCharge-holdout-near-miss-merchant-3",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "possibledoublecharge-holdout-near-miss-4",
+    "candidate": "possibledoublecharge-holdout-near-miss-4-candidate",
+    "expected": [
+      "None"
+    ],
+    "evidence": [],
+    "hard_negative_for": [
+      "PossibleDoubleCharge"
+    ],
+    "rationale": "An equal charge posts the same day, but at a different merchant.",
+    "merchant": "PossibleDoubleCharge-holdout-near-miss-merchant-4",
+    "period": "2026-holdout-near-4",
+    "split": "holdout",
+    "rows": [
+      {
+        "id": "possibledoublecharge-holdout-near-miss-4-hist-1",
+        "date": "2026-10-10",
+        "payee": "PossibleDoubleCharge-holdout-near-miss-merchant-4",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      },
+      {
+        "id": "possibledoublecharge-holdout-near-miss-4-hist-2",
+        "date": "2026-11-10",
+        "payee": "PossibleDoubleCharge-holdout-near-miss-merchant-4",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      },
+      {
+        "id": "possibledoublecharge-holdout-near-miss-4-other",
+        "date": "2026-12-09",
+        "payee": "Unrelated Merchant 4",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      },
+      {
+        "id": "possibledoublecharge-holdout-near-miss-4-candidate",
+        "date": "2026-12-09",
+        "payee": "PossibleDoubleCharge-holdout-near-miss-merchant-4",
+        "category": "dining",
+        "amount": -4200,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "firsttimemerchantlarge-holdout-positive-1",
+    "candidate": "firsttimemerchantlarge-holdout-positive-1-candidate",
+    "expected": [
+      "FirstTimeMerchantLarge"
+    ],
+    "evidence": [],
+    "rationale": "The first charge from this merchant is $480, above the $250 materiality floor.",
+    "merchant": "FirstTimeMerchantLarge-holdout-merchant-1",
+    "period": "2026-holdout-1",
+    "split": "holdout",
+    "rows": [
+      {
+        "id": "firsttimemerchantlarge-holdout-positive-1-candidate",
+        "date": "2026-12-07",
+        "payee": "FirstTimeMerchantLarge-holdout-merchant-1",
+        "category": "shopping",
+        "amount": -48000,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "firsttimemerchantlarge-holdout-positive-2",
+    "candidate": "firsttimemerchantlarge-holdout-positive-2-candidate",
+    "expected": [
+      "FirstTimeMerchantLarge"
+    ],
+    "evidence": [],
+    "rationale": "The first charge from this merchant is $480, above the $250 materiality floor.",
+    "merchant": "FirstTimeMerchantLarge-holdout-merchant-2",
+    "period": "2026-holdout-2",
+    "split": "holdout",
+    "rows": [
+      {
+        "id": "firsttimemerchantlarge-holdout-positive-2-candidate",
+        "date": "2026-12-07",
+        "payee": "FirstTimeMerchantLarge-holdout-merchant-2",
+        "category": "shopping",
+        "amount": -48000,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "firsttimemerchantlarge-holdout-positive-3",
+    "candidate": "firsttimemerchantlarge-holdout-positive-3-candidate",
+    "expected": [
+      "FirstTimeMerchantLarge"
+    ],
+    "evidence": [],
+    "rationale": "The first charge from this merchant is $480, above the $250 materiality floor.",
+    "merchant": "FirstTimeMerchantLarge-holdout-merchant-3",
+    "period": "2026-holdout-3",
+    "split": "holdout",
+    "rows": [
+      {
+        "id": "firsttimemerchantlarge-holdout-positive-3-candidate",
+        "date": "2026-12-07",
+        "payee": "FirstTimeMerchantLarge-holdout-merchant-3",
+        "category": "shopping",
+        "amount": -48000,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "firsttimemerchantlarge-holdout-positive-4",
+    "candidate": "firsttimemerchantlarge-holdout-positive-4-candidate",
+    "expected": [
+      "FirstTimeMerchantLarge"
+    ],
+    "evidence": [],
+    "rationale": "The first charge from this merchant is $480, above the $250 materiality floor.",
+    "merchant": "FirstTimeMerchantLarge-holdout-merchant-4",
+    "period": "2026-holdout-4",
+    "split": "holdout",
+    "rows": [
+      {
+        "id": "firsttimemerchantlarge-holdout-positive-4-candidate",
+        "date": "2026-12-07",
+        "payee": "FirstTimeMerchantLarge-holdout-merchant-4",
+        "category": "shopping",
+        "amount": -48000,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "firsttimemerchantlarge-holdout-near-miss-1",
+    "candidate": "firsttimemerchantlarge-holdout-near-miss-1-candidate",
+    "expected": [
+      "None"
+    ],
+    "evidence": [],
+    "hard_negative_for": [
+      "FirstTimeMerchantLarge"
+    ],
+    "rationale": "The first merchant charge is $240, below the $250 materiality floor.",
+    "merchant": "FirstTimeMerchantLarge-holdout-near-miss-merchant-1",
+    "period": "2026-holdout-near-1",
+    "split": "holdout",
+    "rows": [
+      {
+        "id": "firsttimemerchantlarge-holdout-near-miss-1-candidate",
+        "date": "2026-12-07",
+        "payee": "FirstTimeMerchantLarge-holdout-near-miss-merchant-1",
+        "category": "shopping",
+        "amount": -24000,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "firsttimemerchantlarge-holdout-near-miss-2",
+    "candidate": "firsttimemerchantlarge-holdout-near-miss-2-candidate",
+    "expected": [
+      "None"
+    ],
+    "evidence": [],
+    "hard_negative_for": [
+      "FirstTimeMerchantLarge"
+    ],
+    "rationale": "The first merchant charge is $240, below the $250 materiality floor.",
+    "merchant": "FirstTimeMerchantLarge-holdout-near-miss-merchant-2",
+    "period": "2026-holdout-near-2",
+    "split": "holdout",
+    "rows": [
+      {
+        "id": "firsttimemerchantlarge-holdout-near-miss-2-candidate",
+        "date": "2026-12-07",
+        "payee": "FirstTimeMerchantLarge-holdout-near-miss-merchant-2",
+        "category": "shopping",
+        "amount": -24000,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "firsttimemerchantlarge-holdout-near-miss-3",
+    "candidate": "firsttimemerchantlarge-holdout-near-miss-3-candidate",
+    "expected": [
+      "None"
+    ],
+    "evidence": [],
+    "hard_negative_for": [
+      "FirstTimeMerchantLarge"
+    ],
+    "rationale": "The first merchant charge is $240, below the $250 materiality floor.",
+    "merchant": "FirstTimeMerchantLarge-holdout-near-miss-merchant-3",
+    "period": "2026-holdout-near-3",
+    "split": "holdout",
+    "rows": [
+      {
+        "id": "firsttimemerchantlarge-holdout-near-miss-3-candidate",
+        "date": "2026-12-07",
+        "payee": "FirstTimeMerchantLarge-holdout-near-miss-merchant-3",
+        "category": "shopping",
+        "amount": -24000,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "firsttimemerchantlarge-holdout-near-miss-4",
+    "candidate": "firsttimemerchantlarge-holdout-near-miss-4-candidate",
+    "expected": [
+      "None"
+    ],
+    "evidence": [],
+    "hard_negative_for": [
+      "FirstTimeMerchantLarge"
+    ],
+    "rationale": "The first merchant charge is $240, below the $250 materiality floor.",
+    "merchant": "FirstTimeMerchantLarge-holdout-near-miss-merchant-4",
+    "period": "2026-holdout-near-4",
+    "split": "holdout",
+    "rows": [
+      {
+        "id": "firsttimemerchantlarge-holdout-near-miss-4-candidate",
+        "date": "2026-12-07",
+        "payee": "FirstTimeMerchantLarge-holdout-near-miss-merchant-4",
+        "category": "shopping",
+        "amount": -24000,
+        "currency": "USD"
+      }
+    ]
+  }
+]
