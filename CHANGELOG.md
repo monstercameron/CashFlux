@@ -71,6 +71,10 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **CI is green-able again (CI1).** Go 1.26.9 and upgraded `golang.org/x/net` (0.60), gRPC (1.83.1) and OpenTelemetry
+  (1.45) clear the 15 reachable vulnerabilities govulncheck reported. The budget view cache now keys on the app
+  instance, so two datasets in one process can no longer return each other's budgets (it showed up as a yearly budget
+  with empty rows); its test uses a fixed clock. A stale calendar test follows the new week cells.
 - **Sign-in sessions and device data are harder to misuse (SEC2, SEC3, SEC5).** A refresh token replayed within the
   grace window only succeeds from the device that rotated it (token hash checked, device bound by cookie or a stable
   device id the app now sends, 10-second window, every replay and revocation logged; schema v20); a replay from anywhere

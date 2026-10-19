@@ -28,8 +28,12 @@ func TestR3MCalendarMoneyUsesLedgerDisplayAndAccessibleDescriptions(t *testing.T
 			NetTone:   calNetTone(txncalendar.DayStat{Net: 527075, Count: 1}),
 			AriaLabel: calDayAria(4, txncalendar.DayStat{Net: 527075, Count: 1}, "USD"),
 		}),
-		ui.CreateElement(txnCalWeekTotal, txnCalWeekTotalProps{Stat: txncalendar.DayStat{Net: -675, Count: 1}, Base: "USD"}),
-		ui.CreateElement(txnCalWeekTotal, txnCalWeekTotalProps{Stat: txncalendar.DayStat{Net: 527075, Count: 1}, Base: "USD"}),
+		ui.CreateElement(txnCalWeekTotal, txnCalWeekTotalProps{
+			Stat: txncalendar.DayStat{Net: -675, Count: 1}, Base: "USD", Spent: 675, WeekOf: "Oct 4",
+		}),
+		ui.CreateElement(txnCalWeekTotal, txnCalWeekTotalProps{
+			Stat: txncalendar.DayStat{Net: 527075, Count: 1}, Base: "USD", Income: 527075, WeekOf: "Oct 11",
+		}),
 	))
 
 	buttons := f.AllByTag("button")
@@ -54,8 +58,8 @@ func TestR3MCalendarMoneyUsesLedgerDisplayAndAccessibleDescriptions(t *testing.T
 			netSpans = append(netSpans, node)
 		}
 	}
-	if len(netSpans) != 4 {
-		t.Fatalf("rendered calendar net figures = %d, want 4", len(netSpans))
+	if len(netSpans) != 2 {
+		t.Fatalf("rendered calendar day figures = %d, want 2", len(netSpans))
 	}
 	if got := netSpans[0].Attr("class"); !strings.Contains(got, "txn-amount-expense") || strings.Contains(got, "text-down") {
 		t.Fatalf("expense day net class = %q, want neutral expense style", got)
@@ -73,22 +77,16 @@ func TestR3MCalendarMoneyUsesLedgerDisplayAndAccessibleDescriptions(t *testing.T
 	if len(totals) != 2 {
 		t.Fatalf("calendar week totals = %d, want 2", len(totals))
 	}
-	if got := totals[0].Text(); !strings.Contains(got, "$6.75") || strings.Contains(got, "(") {
-		t.Fatalf("expense week total text = %q, want neutral $6.75", got)
+	if got := totals[0].Text(); !strings.Contains(got, "Spent $6.75") {
+		t.Fatalf("expense week total text = %q, want spent $6.75", got)
 	}
-	if got := totals[0].Attr("aria-label"); !strings.Contains(got, "spent $6.75") {
-		t.Fatalf("expense week total aria-label = %q, want spent $6.75", got)
+	if got := totals[0].Attr("aria-label"); !strings.Contains(got, "spent $6.75") || !strings.Contains(got, "1 transaction") {
+		t.Fatalf("expense week total aria-label = %q, want spent $6.75 and one transaction", got)
 	}
-	if got := totals[1].Text(); !strings.Contains(got, "+$5,270.75") {
-		t.Fatalf("income week total text = %q, want +$5,270.75", got)
+	if got := totals[1].Text(); !strings.Contains(got, "+$5,270.75 in") {
+		t.Fatalf("income week total text = %q, want +$5,270.75 in", got)
 	}
-	if got := totals[1].Attr("aria-label"); !strings.Contains(got, "net +$5,270.75") {
-		t.Fatalf("income week total aria-label = %q, want net +$5,270.75", got)
-	}
-	if got := netSpans[2].Attr("class"); !strings.Contains(got, "txn-amount-expense") || strings.Contains(got, "text-down") {
-		t.Fatalf("expense week net class = %q, want neutral expense style", got)
-	}
-	if got := netSpans[3].Attr("class"); !strings.Contains(got, "text-up") {
-		t.Fatalf("income week net class = %q, want text-up", got)
+	if got := totals[1].Attr("aria-label"); !strings.Contains(got, "+$5,270.75 in") || !strings.Contains(got, "1 transaction") {
+		t.Fatalf("income week total aria-label = %q, want +$5,270.75 in and one transaction", got)
 	}
 }

@@ -572,7 +572,9 @@ func TestBudgetLeakRowsFollowEachBudgetsOwnWindow(t *testing.T) {
 	if err := app.PutCategory(domain.Category{ID: "c-tax", Name: "Transfer", Kind: domain.KindExpense}); err != nil {
 		t.Fatalf("PutCategory: %v", err)
 	}
-	now := time.Now()
+	// Keep the fixture fixed: the budget-year boundary and toolbar month must not
+	// drift as CI runs on later dates.
+	now := time.Date(2026, time.October, 18, 12, 0, 0, 0, time.UTC)
 	// A YEARLY budget: its window spans the whole calendar year, so a charge from
 	// eight months ago is inside it and already counted.
 	if err := app.PutBudget(domain.Budget{

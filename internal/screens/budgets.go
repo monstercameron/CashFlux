@@ -333,17 +333,17 @@ func computeSavingsAccounts(app *appstate.App, activeMemberID string, asOf time.
 // budgetViewCache memoizes computeBudgetView within/across renders. The budgets surface
 // renders several tiles (summary, list, savings, formula) that each call it with the same
 // inputs in one frame — without this, the full budget-over-all-transactions evaluation
-// ran once per tile. The key captures everything the result depends on: the data revision
-// (bumps on any dataset mutation), the member scope, the period window, the last-month
-// toggle, the base currency + FX rates, and the prefs — so a hit is always current. The
+// ran once per tile. The key captures the app instance, data revision, member scope, period
+// window, last-month toggle, base currency + FX rates, and prefs. App identity matters
+// because separate instances can have the same process-wide revision. The
 // map is cleared once it grows past a small cap (old data-revision keys are dead weight).
 var budgetViewCache = map[string]budgetView{}
 
 // computeBudgetView is the memoized entry point; computeBudgetViewRaw does the work.
 func computeBudgetView(app *appstate.App, activeMemberID string, vw period.Window, pr prefs.Prefs, showLastMonth bool) budgetView {
 	s := app.Settings()
-	key := fmt.Sprintf("%d|%s|%v|%t|%s|%v|%v",
-		uistate.CurrentDataRevision(), activeMemberID, vw, showLastMonth, s.BaseCurrency, s.FXRates, pr)
+	key := fmt.Sprintf("%p|%d|%s|%v|%t|%s|%v|%v",
+		app, uistate.CurrentDataRevision(), activeMemberID, vw, showLastMonth, s.BaseCurrency, s.FXRates, pr)
 	if v, ok := budgetViewCache[key]; ok {
 		return v
 	}
