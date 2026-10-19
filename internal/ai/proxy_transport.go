@@ -10,6 +10,7 @@ import (
 	"errors"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/backendrpc"
 	"github.com/monstercameron/CashFlux/internal/rpcprotocol"
@@ -46,6 +47,9 @@ func SendProxyChatToolsStreaming(endpoint, token, model string, messages []Messa
 }
 
 func SendProxyStructuredVisionChat(endpoint, token, model, systemPrompt, userText, imageURL string, temperature float64, schemaName string, schema []byte, onResult func(string, Usage), onError func(string)) func() {
+	if ReasoningModel(model) {
+		temperature = 0
+	}
 	toText := func(msg Message, u Usage) { onResult(msg.Content, u) }
 	return invokeProxyCompletionStream(endpoint, token, backendrpc.MethodAIVisionStream, backendrpc.VisionRequest{
 		Model:        strings.TrimSpace(model),
@@ -143,7 +147,7 @@ func invokeProxyCompletionStreamDelta(endpoint, token, method string, req any, o
 		return noopCancel
 	}
 	cancelled := false
-	ctx, cancelContext := context.WithCancel(context.Background())
+	ctx, cancelContext := context.WithTimeout(context.Background(), 45*time.Second)
 	cancel := func() {
 		if cancelled {
 			return
@@ -152,6 +156,7 @@ func invokeProxyCompletionStreamDelta(endpoint, token, method string, req any, o
 		cancelContext()
 	}
 	go func() {
+		defer cancelContext()
 		client := rpcworker.Default()
 		if client == nil {
 			var err error
@@ -166,7 +171,11 @@ func invokeProxyCompletionStreamDelta(endpoint, token, method string, req any, o
 		stream, err := client.OpenServerStream(ctx, endpoint, token, method, req)
 		if err != nil {
 			if !cancelled {
-				onError("Couldn't reach the backend server.")
+				if errors.Is(err, context.DeadlineExceeded) {
+					onError("The AI request took too long. Please try again.")
+				} else {
+					onError("Couldn't reach the backend server.")
+				}
 			}
 			return
 		}
@@ -198,7 +207,11 @@ func invokeProxyCompletionStreamDelta(endpoint, token, method string, req any, o
 				return
 			}
 			if err != nil {
-				reportProxyError(err, onError)
+				if errors.Is(err, context.DeadlineExceeded) {
+					onError("The AI request took too long. Please try again.")
+				} else {
+					reportProxyError(err, onError)
+				}
 				return
 			}
 			content.WriteString(chunk.Content)

@@ -38,10 +38,12 @@ type visionMessage struct {
 
 // visionRequest is a chat-completions request whose user message carries an image.
 type visionRequest struct {
-	Model          string          `json:"model"`
-	Messages       []visionMessage `json:"messages"`
-	Temperature    float64         `json:"temperature,omitempty"`
-	ResponseFormat *ResponseFormat `json:"response_format,omitempty"`
+	Model               string          `json:"model"`
+	Messages            []visionMessage `json:"messages"`
+	Temperature         float64         `json:"temperature,omitempty"`
+	MaxCompletionTokens int             `json:"max_completion_tokens,omitempty"`
+	ReasoningEffort     string          `json:"reasoning_effort,omitempty"`
+	ResponseFormat      *ResponseFormat `json:"response_format,omitempty"`
 }
 
 // visionMessages builds the system + multimodal-user message pair (text + one
@@ -69,15 +71,24 @@ func BuildVisionRequest(model, systemPrompt, userText, imageURL string, temperat
 // directly) instead of free-form text. schemaName is a short identifier; schema
 // is the raw JSON Schema.
 func BuildStructuredVisionRequest(model, systemPrompt, userText, imageURL string, temperature float64, schemaName string, schema []byte) ([]byte, error) {
-	return json.Marshal(visionRequest{
-		Model:       model,
-		Messages:    visionMessages(systemPrompt, userText, imageURL),
-		Temperature: temperature,
-		ResponseFormat: &ResponseFormat{
-			Type:       "json_schema",
-			JSONSchema: JSONSchema{Name: schemaName, Schema: json.RawMessage(schema), Strict: true},
-		},
-	})
+	return BuildStructuredVisionRequestWithOptions(model, systemPrompt, userText, imageURL, ChatOptions{Temperature: temperature}, schemaName, schema)
+}
+
+// BuildStructuredVisionRequestWithOptions builds a schema-constrained vision
+// request with model-compatible sampling options and a completion budget.
+func BuildStructuredVisionRequestWithOptions(model, systemPrompt, userText, imageURL string, opts ChatOptions, schemaName string, schema []byte) ([]byte, error) {
+	req := visionRequest{
+		Model:               model,
+		Messages:            visionMessages(systemPrompt, userText, imageURL),
+		MaxCompletionTokens: opts.MaxCompletionTokens,
+		ResponseFormat:      &ResponseFormat{Type: "json_schema", JSONSchema: JSONSchema{Name: schemaName, Schema: json.RawMessage(schema), Strict: true}},
+	}
+	if ReasoningModel(model) {
+		req.ReasoningEffort = opts.ReasoningEffort
+	} else {
+		req.Temperature = opts.Temperature
+	}
+	return json.Marshal(req)
 }
 
 // fileMessages builds the system + multimodal-user message pair carrying one attached
@@ -98,13 +109,23 @@ func fileMessages(systemPrompt, userText, filename, fileData string) []visionMes
 // vision-capable model (gpt-4o and later, e.g. gpt-5.5). fileData is a data: URL
 // ("data:application/pdf;base64,…").
 func BuildStructuredFileRequest(model, systemPrompt, userText, filename, fileData string, temperature float64, schemaName string, schema []byte) ([]byte, error) {
-	return json.Marshal(visionRequest{
-		Model:       model,
-		Messages:    fileMessages(systemPrompt, userText, filename, fileData),
-		Temperature: temperature,
-		ResponseFormat: &ResponseFormat{
-			Type:       "json_schema",
-			JSONSchema: JSONSchema{Name: schemaName, Schema: json.RawMessage(schema), Strict: true},
-		},
-	})
+	return BuildStructuredFileRequestWithOptions(model, systemPrompt, userText, filename, fileData, ChatOptions{Temperature: temperature}, schemaName, schema)
+}
+
+// BuildStructuredFileRequestWithOptions builds a strict-schema document request
+// with model-compatible sampling options and a completion budget.
+func BuildStructuredFileRequestWithOptions(model, systemPrompt, userText, filename, fileData string, opts ChatOptions, schemaName string, schema []byte) ([]byte, error) {
+	msgs := fileMessages(systemPrompt, userText, filename, fileData)
+	req := visionRequest{
+		Model:               model,
+		Messages:            msgs,
+		MaxCompletionTokens: opts.MaxCompletionTokens,
+		ResponseFormat:      &ResponseFormat{Type: "json_schema", JSONSchema: JSONSchema{Name: schemaName, Schema: json.RawMessage(schema), Strict: true}},
+	}
+	if ReasoningModel(model) {
+		req.ReasoningEffort = opts.ReasoningEffort
+	} else {
+		req.Temperature = opts.Temperature
+	}
+	return json.Marshal(req)
 }

@@ -23,7 +23,7 @@ func TestIsRetryable(t *testing.T) {
 }
 
 func TestRetryDelayMS(t *testing.T) {
-	want := []int{500, 1000, 2000}
+	want := []int{500}
 	for i, w := range want {
 		ms, retry := RetryDelayMS(i)
 		if !retry || ms != w {

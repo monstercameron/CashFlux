@@ -90,6 +90,17 @@ func SendChat(apiKey, baseURL, model string, messages []Message, temperature flo
 	return postCompletions(apiKey, baseURL, body, parseContent(onResult, onError), onError)
 }
 
+// SendStructuredChat sends a schema-constrained chat request with model-aware
+// options. The caller must strictly decode and validate the returned JSON.
+func SendStructuredChat(apiKey, baseURL, model string, messages []Message, opts ChatOptions, schemaName string, schema []byte, onResult func(string, Usage), onError func(string)) func() {
+	body, err := BuildStructuredRequestWithOptions(model, messages, opts, schemaName, schema)
+	if err != nil {
+		onError(err.Error())
+		return noopCancel
+	}
+	return postCompletions(apiKey, baseURL, body, parseContent(onResult, onError), onError)
+}
+
 // parseContent adapts a content+usage onResult to the raw-bytes onSuccess that
 // postCompletions expects, parsing the assistant's text via ParseResponse.
 func parseContent(onResult func(string, Usage), onError func(string)) func([]byte) {
@@ -170,7 +181,13 @@ func SendVisionChat(apiKey, baseURL, model, systemPrompt, userText, imageURL str
 // JSON string matching the schema — decode it with json.Unmarshal. Same async
 // contract; returns a cancel function.
 func SendStructuredVisionChat(apiKey, baseURL, model, systemPrompt, userText, imageURL string, temperature float64, schemaName string, schema []byte, onResult func(string, Usage), onError func(string)) func() {
-	body, err := BuildStructuredVisionRequest(model, systemPrompt, userText, imageURL, temperature, schemaName, schema)
+	return SendStructuredVisionChatWithOptions(apiKey, baseURL, model, systemPrompt, userText, imageURL, ChatOptions{Temperature: temperature, MaxCompletionTokens: DefaultStructuredMaxCompletionTokens}, schemaName, schema, onResult, onError)
+}
+
+// SendStructuredVisionChatWithOptions sends a strict-schema vision request using
+// only options supported by the selected model.
+func SendStructuredVisionChatWithOptions(apiKey, baseURL, model, systemPrompt, userText, imageURL string, opts ChatOptions, schemaName string, schema []byte, onResult func(string, Usage), onError func(string)) func() {
+	body, err := BuildStructuredVisionRequestWithOptions(model, systemPrompt, userText, imageURL, opts, schemaName, schema)
 	if err != nil {
 		onError(err.Error())
 		return noopCancel
@@ -182,7 +199,13 @@ func SendStructuredVisionChat(apiKey, baseURL, model, systemPrompt, userText, im
 // to the user message instead of an image — the model reads the PDF's text and page
 // images natively. Same async contract; returns a cancel function.
 func SendStructuredFileChat(apiKey, baseURL, model, systemPrompt, userText, filename, fileData string, temperature float64, schemaName string, schema []byte, onResult func(string, Usage), onError func(string)) func() {
-	body, err := BuildStructuredFileRequest(model, systemPrompt, userText, filename, fileData, temperature, schemaName, schema)
+	return SendStructuredFileChatWithOptions(apiKey, baseURL, model, systemPrompt, userText, filename, fileData, ChatOptions{Temperature: temperature, MaxCompletionTokens: DefaultStructuredMaxCompletionTokens}, schemaName, schema, onResult, onError)
+}
+
+// SendStructuredFileChatWithOptions sends a strict-schema file request using
+// only options supported by the selected model.
+func SendStructuredFileChatWithOptions(apiKey, baseURL, model, systemPrompt, userText, filename, fileData string, opts ChatOptions, schemaName string, schema []byte, onResult func(string, Usage), onError func(string)) func() {
+	body, err := BuildStructuredFileRequestWithOptions(model, systemPrompt, userText, filename, fileData, opts, schemaName, schema)
 	if err != nil {
 		onError(err.Error())
 		return noopCancel
@@ -346,29 +369,27 @@ func postCompletions(apiKey, baseURL string, body []byte, onSuccess func([]byte)
 		baseURL = DefaultBaseURL
 	}
 
-	controller := js.Global().Get("AbortController").New()
-	opts := map[string]any{
-		"method": "POST",
-		"headers": map[string]any{
-			"Authorization": "Bearer " + apiKey,
-			"Content-Type":  "application/json",
-		},
-		"body":   string(body),
-		"signal": controller.Get("signal"),
-	}
-
 	cancelled := false
 	var pendingTimer js.Value
 	timerSet := false
+	var timeoutTimer js.Value
+	timeoutSet := false
+	var controller js.Value
 	cancel := func() {
 		if cancelled {
 			return
 		}
 		cancelled = true
-		controller.Call("abort")
+		if !controller.IsUndefined() && !controller.IsNull() {
+			controller.Call("abort")
+		}
 		if timerSet {
 			js.Global().Call("clearTimeout", pendingTimer)
 			timerSet = false
+		}
+		if timeoutSet {
+			js.Global().Call("clearTimeout", timeoutTimer)
+			timeoutSet = false
 		}
 	}
 
@@ -376,6 +397,12 @@ func postCompletions(apiKey, baseURL string, body []byte, onSuccess func([]byte)
 	attempt = func(n int) {
 		if cancelled {
 			return
+		}
+		controller = js.Global().Get("AbortController").New()
+		opts := map[string]any{
+			"method":  "POST",
+			"headers": map[string]any{"Authorization": "Bearer " + apiKey, "Content-Type": "application/json"},
+			"body":    string(body), "signal": controller.Get("signal"),
 		}
 		var onText, onResp, onCatch js.Func
 		release := func() { onText.Release(); onResp.Release(); onCatch.Release() }
@@ -401,11 +428,30 @@ func postCompletions(apiKey, baseURL string, body []byte, onSuccess func([]byte)
 
 		// status is captured from the response in onResp and read in onText.
 		status := 0
+		timedOut := false
+		var timeoutFn js.Func
+		timeoutFn = js.FuncOf(func(js.Value, []js.Value) any {
+			timeoutFn.Release()
+			timeoutSet = false
+			if cancelled {
+				return nil
+			}
+			timedOut = true
+			controller.Call("abort")
+			return nil
+		})
+		timeoutTimer = js.Global().Call("setTimeout", timeoutFn, 45000)
+		timeoutSet = true
 		onResp = js.FuncOf(func(_ js.Value, args []js.Value) any {
 			status = args[0].Get("status").Int()
 			return args[0].Call("text") // a promise resolving to the response body
 		})
 		onText = js.FuncOf(func(_ js.Value, args []js.Value) any {
+			if timeoutSet {
+				js.Global().Call("clearTimeout", timeoutTimer)
+				timeoutSet = false
+				timeoutFn.Release()
+			}
 			data := []byte(args[0].String())
 			release()
 			if cancelled {
@@ -424,6 +470,15 @@ func postCompletions(apiKey, baseURL string, body []byte, onSuccess func([]byte)
 			// abort; a cancelled request stays silent, otherwise treat as retryable.
 			release()
 			if cancelled {
+				return nil
+			}
+			if timeoutSet {
+				js.Global().Call("clearTimeout", timeoutTimer)
+				timeoutSet = false
+				timeoutFn.Release()
+			}
+			if timedOut {
+				retryOrFail(0, "The AI request took too long. Please try again.")
 				return nil
 			}
 			retryOrFail(0, "Couldn't reach OpenAI. Check your internet connection and try again.")

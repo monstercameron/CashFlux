@@ -188,10 +188,12 @@ type ResponseFormat struct {
 
 // structuredRequest is a chat request that constrains the reply to a JSON schema.
 type structuredRequest struct {
-	Model          string         `json:"model"`
-	Messages       []Message      `json:"messages"`
-	Temperature    float64        `json:"temperature,omitempty"`
-	ResponseFormat ResponseFormat `json:"response_format"`
+	Model               string         `json:"model"`
+	Messages            []Message      `json:"messages"`
+	Temperature         float64        `json:"temperature,omitempty"`
+	MaxCompletionTokens int            `json:"max_completion_tokens,omitempty"`
+	ReasoningEffort     string         `json:"reasoning_effort,omitempty"`
+	ResponseFormat      ResponseFormat `json:"response_format"`
 }
 
 // BuildStructuredRequest marshals a chat request that asks the model to return
@@ -201,15 +203,27 @@ type structuredRequest struct {
 // JSON Schema. The reply's content is a JSON string — read it with ParseResponse,
 // then json.Unmarshal into your target type.
 func BuildStructuredRequest(model string, messages []Message, temperature float64, schemaName string, schema json.RawMessage) ([]byte, error) {
-	return json.Marshal(structuredRequest{
-		Model:       model,
-		Messages:    messages,
-		Temperature: temperature,
+	return BuildStructuredRequestWithOptions(model, messages, ChatOptions{Temperature: temperature}, schemaName, schema)
+}
+
+// BuildStructuredRequestWithOptions builds a strict-schema request using only
+// sampling options supported by the selected model, with a bounded completion.
+func BuildStructuredRequestWithOptions(model string, messages []Message, opts ChatOptions, schemaName string, schema json.RawMessage) ([]byte, error) {
+	req := structuredRequest{
+		Model:               model,
+		Messages:            messages,
+		MaxCompletionTokens: opts.MaxCompletionTokens,
 		ResponseFormat: ResponseFormat{
 			Type:       "json_schema",
 			JSONSchema: JSONSchema{Name: schemaName, Schema: schema, Strict: true},
 		},
-	})
+	}
+	if ReasoningModel(model) {
+		req.ReasoningEffort = strings.TrimSpace(opts.ReasoningEffort)
+	} else {
+		req.Temperature = opts.Temperature
+	}
+	return json.Marshal(req)
 }
 
 // ParseResponse decodes a chat response and returns the assistant's first
@@ -333,7 +347,7 @@ func FormatTokens(n int) string {
 
 // MaxRetries is how many times a transient OpenAI failure is retried before
 // giving up (so up to MaxRetries+1 total attempts).
-const MaxRetries = 3
+const MaxRetries = 1
 
 // IsRetryable reports whether a failure is worth retrying: rate limiting (429),
 // server errors (5xx), or a network-level failure (status 0). Client errors like

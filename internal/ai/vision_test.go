@@ -36,6 +36,27 @@ func TestBuildStructuredVisionRequest(t *testing.T) {
 	}
 }
 
+func TestStructuredVisionOptionsOmitTemperatureForReasoningModels(t *testing.T) {
+	raw, err := BuildStructuredVisionRequestWithOptions("gpt-5.4-mini", "sys", "extract", "data:image/png;base64,AAAA", ChatOptions{Temperature: 0.1, MaxCompletionTokens: 900, ReasoningEffort: "low"}, "transactions", []byte(`{"type":"object"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var request map[string]any
+	if err := json.Unmarshal(raw, &request); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := request["temperature"]; ok {
+		t.Fatal("reasoning model request included temperature")
+	}
+	if request["max_completion_tokens"] != float64(900) || request["reasoning_effort"] != "low" {
+		t.Fatalf("request options = %#v", request)
+	}
+	format, ok := request["response_format"].(map[string]any)
+	if !ok || format["type"] != "json_schema" {
+		t.Fatalf("response format = %#v", request["response_format"])
+	}
+}
+
 func TestBuildStructuredFileRequest(t *testing.T) {
 	const fileData = "data:application/pdf;base64,JVBERi0="
 	schema := []byte(`{"type":"object","properties":{"transactions":{"type":"array"}},"required":["transactions"],"additionalProperties":false}`)
