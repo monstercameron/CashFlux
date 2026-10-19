@@ -115,6 +115,7 @@ func renderPNG(size int, mode string) ([]byte, error) {
 				continue
 			}
 			covered := a / 255
+			// #nosec G115 -- covered averages of 8-bit channels stay in [0,255]; a/count is also in that range.
 			img.SetNRGBA(x, y, color.NRGBA{R: uint8(r / covered), G: uint8(g / covered), B: uint8(b / covered), A: uint8(a / count)})
 		}
 	}
@@ -181,7 +182,9 @@ func renderICO() ([]byte, error) {
 	var out bytes.Buffer
 	_ = binary.Write(&out, binary.LittleEndian, uint16(0))
 	_ = binary.Write(&out, binary.LittleEndian, uint16(1))
+	// #nosec G115 -- entries is the fixed three-element set of 16, 32 and 48 px icons.
 	_ = binary.Write(&out, binary.LittleEndian, uint16(len(entries)))
+	// #nosec G115 -- the fixed-size ICO directory is 6 + 16*3 bytes.
 	offset := uint32(6 + 16*len(entries))
 	for i, data := range entries {
 		size := []byte{16, 32, 48}[i]
@@ -191,8 +194,10 @@ func renderICO() ([]byte, error) {
 		_ = out.WriteByte(0)
 		_ = binary.Write(&out, binary.LittleEndian, uint16(1))
 		_ = binary.Write(&out, binary.LittleEndian, uint16(32))
+		// #nosec G115 -- each data slice is a PNG rendered at one of the fixed 16, 32 or 48 px sizes.
 		_ = binary.Write(&out, binary.LittleEndian, uint32(len(data)))
 		_ = binary.Write(&out, binary.LittleEndian, offset)
+		// #nosec G115 -- cumulative fixed-size icon PNG payloads fit in the ICO uint32 offset field.
 		offset += uint32(len(data))
 	}
 	for _, data := range entries {

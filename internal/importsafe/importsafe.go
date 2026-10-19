@@ -69,7 +69,8 @@ func magnitude(value int64) uint64 {
 	if value >= 0 {
 		return uint64(value)
 	}
-	return uint64(-(value + 1)) + 1
+	// #nosec G115 -- for value < 0, ^value is in [0, MaxInt64], even at MinInt64.
+	return uint64(^value) + 1
 }
 
 // WhyDup explains one incoming row that would be skipped as a duplicate: the

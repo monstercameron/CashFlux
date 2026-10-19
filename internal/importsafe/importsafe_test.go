@@ -88,7 +88,9 @@ func TestJumpWarning(t *testing.T) {
 		{"big but proportionate", 4_000_000, 1_200_000, false},
 		{"big and disproportionate", 90_000, 1_200_000, true},
 		{"negative net symmetrical", 90_000, -1_200_000, true},
+		{"minimum signed net uses full magnitude", 0, -1 << 63, true},
 		{"negative balance uses magnitude", -4_000_000, 1_200_000, false},
+		{"minimum signed balance uses full magnitude", -1 << 63, 1_200_000, false},
 		{"exactly 3x is allowed", 400_000, 1_200_000, false},
 	}
 	for _, tc := range cases {
