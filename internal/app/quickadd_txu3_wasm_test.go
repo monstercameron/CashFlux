@@ -5,11 +5,71 @@
 package app
 
 import (
+	"bytes"
+	"strings"
 	"testing"
 
+	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/screens"
+	"github.com/monstercameron/CashFlux/internal/uistate"
+	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v5/testkit/render"
+	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
+
+func TestQuickAddForm3UsesSharedGridAndFieldOrder(t *testing.T) {
+	appState, err := appstate.New(&bytes.Buffer{}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, account := range []domain.Account{
+		{ID: "form3-checking", Name: "Checking", Currency: "USD", Type: domain.TypeChecking, Class: domain.ClassAsset, OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared},
+		{ID: "form3-savings", Name: "Savings", Currency: "USD", Type: domain.TypeSavings, Class: domain.ClassAsset, OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared},
+	} {
+		if err := appState.PutAccount(account); err != nil {
+			t.Fatal(err)
+		}
+	}
+	previous := appstate.Default
+	appstate.Default = appState
+	t.Cleanup(func() { appstate.Default = previous; uistate.SetQuickAdd(false) })
+
+	f := render.New(t)
+	defer f.Cleanup()
+	f.Render(Body(ID("form3-add"), ui.CreateElement(QuickAddHost)))
+	uistate.SetQuickAdd(true)
+	f.Render(Body(ID("form3-add"), ui.CreateElement(QuickAddHost)))
+	text := f.Text()
+	ordered := []string{
+		uistate.T("txu3.sentenceLabel"), uistate.T("quickAdd.amount"), uistate.T("quickAdd.kind"),
+		uistate.T("quickAdd.payee"), uistate.T("quickAdd.date"), uistate.T("quickAdd.category"), uistate.T("quickAdd.account"),
+	}
+	last := -1
+	for _, label := range ordered {
+		at := strings.Index(text[last+1:], label)
+		if at < 0 {
+			t.Fatalf("field %q is out of Add form order in %q", label, text)
+		}
+		last += at + 1
+	}
+	var form *render.QueryNode
+	for _, node := range f.AllByTag("div") {
+		if strings.Contains(node.Attr("class"), "txn-form-grid") {
+			form = node
+			break
+		}
+	}
+	if form == nil || !strings.Contains(form.Attr("class"), "txn-form-add") {
+		t.Fatalf("Add form is missing shared grid classes: %#v", form)
+	}
+	if strings.Contains(text, "Use Type to choose money in or money out.") {
+		t.Fatalf("redundant Amount helper remains in Add form: %q", text)
+	}
+	if !strings.Contains(text, "No category") || strings.Contains(text, "— No category —") {
+		t.Fatalf("Add category option should read No category without decoration: %q", text)
+	}
+}
 
 func TestQuickAddRequiredFieldErrors(t *testing.T) {
 	accounts := []domain.Account{{ID: "checking", Currency: "USD"}}

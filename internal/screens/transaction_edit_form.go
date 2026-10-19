@@ -760,10 +760,10 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 	}
 	categoryPicker := Div(css.Class("labeled-field", "txn-edit-category-field"),
 		Div(css.Class("txn-edit-category-label"),
-			Span(css.Class("t-caption", tw.TextDim), uistate.T("transactions.categoryLabel"))),
+			Span(css.Class("t-caption", tw.TextDim), uistate.T("quickAdd.category"))),
 		Div(css.Class("txn-cat-picker"),
 			Div(css.Class("txn-cat-row"),
-				uiw.SelectInput(uiw.SelectInputProps{Options: catOpts, Selected: catS.Get(), AriaLabel: uistate.T("transactions.categoryLabel"), TestID: "txn-edit-category", OnChange: func(v string) { catS.Set(v) }}),
+				uiw.SelectInput(uiw.SelectInputProps{Options: catOpts, Selected: catS.Get(), AriaLabel: uistate.T("quickAdd.category"), TestID: "txn-edit-category", OnChange: func(v string) { catS.Set(v) }}),
 				TxnNewCategoryAction("txn-edit-newcat-toggle", categoryPickerOpen.Get(), toggleAddCat)),
 			suggestion,
 			If(categoryPickerOpen.Get(), ui.CreateElement(CategoryPicker, CategoryPickerProps{
@@ -781,8 +781,8 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 		dateError = errMsg.Get()
 	}
 	amountField := uiw.Field(uiw.FieldProps{
-		ID: "txn-edit-amount", Label: uistate.T("transactions.amountPlaceholder"),
-		Hint: uistate.T("sol1.amountHint"), Error: amountError, Required: true,
+		ID: "txn-edit-amount", Label: uistate.T("quickAdd.amount"),
+		Error: amountError, Required: true,
 		Control: func(a uiw.FieldA11y) ui.Node {
 			return Input(css.Class("field"), ID(a.ID), Type("text"), Attr("inputmode", "decimal"),
 				Attr("data-testid", "txn-edit-amount"), Attr("aria-label", a.Label),
@@ -795,19 +795,25 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 		Options: []TxnDirectionOption{
 			{Value: txnDirOut, Label: uistate.T("quickAdd.expense"), TestID: "txn-edit-direction-expense"},
 			{Value: txnDirIn, Label: uistate.T("quickAdd.income"), TestID: "txn-edit-direction-income"},
-			{Value: "Transfer", Label: uistate.T("quickAdd.transfer"), TestID: "txn-edit-direction-transfer", Disabled: true, Title: uistate.T("r9f.transferEditUnavailable")},
+			{Value: "Transfer", Label: uistate.T("quickAdd.transfer"), TestID: "txn-edit-direction-transfer", Title: uistate.T("r9f.transferEditUnavailable")},
 		},
-		OnSelect: func(value string) { directionS.Set(value) },
+		OnSelect: func(value string) {
+			if value == "Transfer" {
+				uistate.PostNotice(uistate.T("r9f.transferEditUnavailable"), false)
+				return
+			}
+			directionS.Set(value)
+		},
 	})
 	payeeField := uiw.Field(uiw.FieldProps{
-		ID: "txn-edit-payee", Label: uistate.T("transactions.payeeLabel"),
+		ID: "txn-edit-payee", Label: uistate.T("quickAdd.payee"),
 		Control: func(a uiw.FieldA11y) ui.Node {
 			return Input(css.Class("field"), ID(a.ID), Type("text"), Attr("data-testid", "txn-edit-payee"),
 				Attr("aria-label", a.Label), Placeholder(uistate.T("quickAdd.payeePlaceholder")), OnInput(onPayee), uiw.FieldValue(payeeS.Get()))
 		},
 	})
 	dateField := uiw.Field(uiw.FieldProps{
-		ID: "txn-edit-date", Label: uistate.T("transactions.dateLabel"), Error: dateError,
+		ID: "txn-edit-date", Label: uistate.T("quickAdd.date"), Error: dateError,
 		Control: func(a uiw.FieldA11y) ui.Node {
 			return Input(css.Class("field"), ID(a.ID), Type("date"), Attr("aria-label", a.Label),
 				Attr("aria-describedby", a.DescribedBy), Attr("aria-invalid", ariaBool(a.Invalid)), OnInput(onDate), uiw.FieldValue(dateS.Get()))
@@ -873,7 +879,7 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 			Span(css.Class("txn-form-record-amount"), uiw.MoneyFig(uiw.MoneyFigProps{Money: txn.Amount, Style: uiw.MoneyLedger, IsTransfer: txn.IsTransfer()}))),
 		TxnSharedForm(TxnFormModel{Mode: TxnFormEdit, Amount: amountField, Direction: directionField, Payee: payeeField,
 			Category: categoryPicker, Date: dateField, Account: accountControl, More: more, MoreID: "txn-edit-more-" + txn.ID,
-			EditTools: rowActions, EditSummary: Div(splits, attachments)}),
+			EditTools: rowActions, EditSummary: Div(css.Class("txn-edit-summary"), splits, attachments)}),
 		If(errMsg.Get() != "" && amountError == "" && dateError == "", Div(css.Class("form-err-sticky"), errText("txn-edit-err", errMsg.Get()))),
 	)
 }

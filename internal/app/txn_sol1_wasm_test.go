@@ -6,6 +6,7 @@ package app
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 	"time"
 
@@ -73,10 +74,15 @@ func TestSOL1AddAndEditExposeTheSamePrimaryFieldStructure(t *testing.T) {
 				content = screens.TransactionEditForm(screens.TransactionEditFormProps{App: app, TxnID: "sol1-txn"})
 			}
 			f.Render(Body(ID("sol1-structure-body"), content))
-			for _, id := range []string{"txn-shared-row-amount", "txn-shared-row-payee", "txn-shared-row-category-date", "txn-shared-row-account"} {
-				if f.ByID(id) == nil {
-					t.Fatalf("missing shared field row %s", id)
+			var grid *render.QueryNode
+			for _, node := range f.AllByTag("div") {
+				if strings.Contains(node.Attr("class"), "txn-form-grid") {
+					grid = node
+					break
 				}
+			}
+			if grid == nil {
+				t.Fatal("missing shared two-column transaction grid")
 			}
 			for _, label := range []string{uistate.T("quickAdd.amount"), uistate.T("quickAdd.payee"), uistate.T("quickAdd.date")} {
 				if f.ByRole("textbox", label) == nil && label != uistate.T("quickAdd.date") {

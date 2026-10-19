@@ -90,6 +90,11 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Add and Edit transaction share one grid (FORM3).** Both dialogs lay their fields out in the same two-column grid
+  (Amount | Type, Merchant | Date, Category | Account) with every input filling its cell and one column on small
+  screens; Add's "Describe it in a sentence" field spans the full width so its example is readable. Labels match between
+  Add and Edit, the redundant "Use Type to choose…" hint is gone, the empty category option reads "No category", and
+  Edit's Transfer choice is enabled and explains on click that an existing row can't be converted in place.
 - **Budgets page split into small components with a pure view pipeline (BUDQ6.1).** The budget view calculation moved
   into a pure, natively tested `internal/budgeting/view.go` pipeline (anchors, member scope, carry/boost/smoothing,
   commitments, pace, health order, attention set, checked currency roll-up, income basis); `computeBudgetViewRaw` went

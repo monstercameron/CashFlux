@@ -71,9 +71,9 @@ func TestSOL1EditRecordSummaryAndAssociatedValidation(t *testing.T) {
 		t.Fatalf("record summary does not identify merchant, date and amount: %q", record.Text())
 	}
 	for _, tc := range []struct{ id, label string }{
-		{"txn-edit-amount", uistate.T("transactions.amountPlaceholder")},
-		{"txn-edit-payee", uistate.T("transactions.payeeLabel")},
-		{"txn-edit-date", uistate.T("transactions.dateLabel")},
+		{"txn-edit-amount", uistate.T("quickAdd.amount")},
+		{"txn-edit-payee", uistate.T("quickAdd.payee")},
+		{"txn-edit-date", uistate.T("quickAdd.date")},
 		{"txn-edit-description", uistate.T("transactions.descPlaceholder")},
 	} {
 		control := f.ByID(tc.id)
@@ -85,8 +85,9 @@ func TestSOL1EditRecordSummaryAndAssociatedValidation(t *testing.T) {
 	if typeGroup == nil {
 		t.Fatal("transaction type choices are not a named group")
 	}
-	if hint := f.ByID(typeGroup.Attr("aria-describedby")); hint == nil || hint.Text() != uistate.T("r9f.transferEditUnavailable") {
-		t.Fatal("disabled transfer choice lacks a visible, associated explanation")
+	transfer := findByTestID(f, "button", "txn-edit-direction-transfer")
+	if transfer == nil || transfer.Attr("disabled") != "" || transfer.Attr("title") != uistate.T("r9f.transferEditUnavailable") {
+		t.Fatal("transfer choice should be enabled and explain the limit on hover or focus")
 	}
 	if f.ByID("txn-edit-more-sol1-record").Attr("open") != "" {
 		t.Fatal("optional details must start collapsed")

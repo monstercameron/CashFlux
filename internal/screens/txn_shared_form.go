@@ -28,6 +28,7 @@ const (
 type TxnFormModel struct {
 	Mode                                              TxnFormMode
 	Amount, Direction, Payee, Category, Date, Account ui.Node
+	Sentence                                          ui.Node
 	More                                              []ui.Node
 	AddQuickFill, AddTemplates                        ui.Node
 	EditTools, EditSummary                            ui.Node
@@ -172,7 +173,10 @@ func txnDirectionOption(props txnDirectionOptionProps) ui.Node {
 		Attr("aria-label", props.Option.Label), Attr("aria-pressed", ariaBool(props.Selected)),
 		OnClick(onClick), props.Option.Label}
 	if props.Option.Disabled {
-		args = append(args, Attr("disabled", "true"), Attr("aria-disabled", "true"), Attr("title", props.Option.Title))
+		args = append(args, Attr("disabled", "true"), Attr("aria-disabled", "true"))
+	}
+	if props.Option.Title != "" {
+		args = append(args, Attr("title", props.Option.Title))
 	}
 	return Button(args...)
 }
@@ -201,12 +205,19 @@ func TxnSharedForm(model TxnFormModel) ui.Node {
 		Summary(Span(uistate.T("r1e.moreDetails")), Span(css.Class("txn-form-optional"), uistate.T("sol1.optional"))),
 		Div(css.Class("txn-form-details-grid"), model.More),
 	)
-	return Div(css.Class("form-grid", "qa-grid", "txn-form"),
-		If(model.AddQuickFill != nil, model.AddQuickFill),
-		Div(css.Class("txn-shared-row", "txn-shared-row-amount"), Attr("id", "txn-shared-row-amount"), model.Amount, model.Direction),
-		Div(css.Class("txn-shared-row", "txn-shared-row-payee"), Attr("id", "txn-shared-row-payee"), model.Payee),
-		Div(css.Class("txn-shared-row", "txn-shared-row-category-date"), Attr("id", "txn-shared-row-category-date"), model.Category, model.Date),
-		Div(css.Class("txn-shared-row", "txn-shared-row-account"), Attr("id", "txn-shared-row-account"), model.Account),
+	modeClass := "txn-form-edit"
+	if model.Mode == TxnFormAdd {
+		modeClass = "txn-form-add"
+	}
+	return Div(css.Class("form-grid", "qa-grid", "txn-form", "txn-form-grid", modeClass),
+		model.AddQuickFill,
+		If(model.Sentence != nil, Div(css.Class("txn-form-sentence"), model.Sentence)),
+		model.Amount,
+		model.Direction,
+		model.Payee,
+		model.Date,
+		model.Category,
+		model.Account,
 		Details(detailsArgs...),
 		model.EditTools,
 		model.EditSummary,
@@ -216,11 +227,7 @@ func TxnSharedForm(model TxnFormModel) ui.Node {
 
 // The shared form owns layout; callers supply controlled fields and action slots.
 const txnFormCSS = `
-.txn-form.qa-grid { display: flex; flex-direction: column; gap: var(--space-4); }
-.txn-form .txn-shared-row { gap: var(--space-4); align-items: start; }
-.txn-form .txn-shared-row-payee { grid-template-columns: minmax(0, 1fr); }
-.txn-form .txn-shared-row > *, .txn-form .cf-field { min-width: 0; }
-.txn-form .txn-shared-row-amount .field { font-size: var(--type-24); font-weight: 600; font-variant-numeric: tabular-nums; }
+.txn-form .cf-field { min-width: 0; }
 .txn-form .field, .txn-form .txn-dir-option { min-height: calc(var(--space-5) + var(--space-4)); }
 .txn-form .txn-edit-category-label { margin: 0; min-height: auto; }
 .txn-form .txn-edit-category-field { display: flex; flex-direction: column; gap: var(--space-1); }
@@ -238,7 +245,6 @@ const txnFormCSS = `
 .txn-form-check-field { display: flex; flex-direction: column; gap: var(--space-1); }
 .txn-form-check { display: flex; align-items: center; gap: var(--space-2); }
 .txn-form-help, .txn-form .cf-field-hint { color: var(--text-dim); font-size: var(--type-12); line-height: 1.5; }
-.txn-form .txn-dir-toggle + .txn-form-help { display: block; margin-block-start: var(--space-1); }
 .txn-form .cf-field-label { font-size: var(--type-12); color: var(--text-dim); }
 .txn-form .cf-field-error { color: var(--danger); font-size: var(--type-12); }
 .txn-form-root { display: flex; flex-direction: column; gap: var(--space-4); }

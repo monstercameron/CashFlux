@@ -51,8 +51,8 @@ func TestTxnAddAndEditSharePrimaryRowsAndLabels(t *testing.T) {
 		uistate.SetQuickAdd(true)
 		addFixture.Render(Body(ID("shared-form-body"), uic.CreateElement(QuickAddHost)))
 		assertTxnPrimaryRowsAndLabels(t, addFixture, []string{
-			uistate.T("quickAdd.amount"), uistate.T("quickAdd.kind"), uistate.T("quickAdd.expense"), uistate.T("quickAdd.income"), uistate.T("quickAdd.transfer"),
-			uistate.T("quickAdd.payee"), uistate.T("quickAdd.category"), uistate.T("quickAdd.date"), uistate.T("quickAdd.account"),
+			uistate.T("txu3.sentenceLabel"), uistate.T("quickAdd.amount"), uistate.T("quickAdd.kind"), uistate.T("quickAdd.expense"), uistate.T("quickAdd.income"), uistate.T("quickAdd.transfer"),
+			uistate.T("quickAdd.payee"), uistate.T("quickAdd.date"), uistate.T("quickAdd.category"), uistate.T("quickAdd.account"),
 		})
 	}()
 	t.Cleanup(func() { uistate.SetQuickAdd(false) })
@@ -61,17 +61,22 @@ func TestTxnAddAndEditSharePrimaryRowsAndLabels(t *testing.T) {
 	defer editFixture.Cleanup()
 	editFixture.Render(uic.CreateElement(screens.TransactionEditForm, screens.TransactionEditFormProps{TxnID: txn.ID}))
 	assertTxnPrimaryRowsAndLabels(t, editFixture, []string{
-		uistate.T("transactions.amountPlaceholder"), uistate.T("quickAdd.kind"), uistate.T("quickAdd.expense"), uistate.T("quickAdd.income"), uistate.T("quickAdd.transfer"),
-		uistate.T("transactions.payeeLabel"), uistate.T("transactions.categoryLabel"), uistate.T("transactions.dateLabel"), uistate.T("quickAdd.account"),
+		uistate.T("quickAdd.amount"), uistate.T("quickAdd.kind"), uistate.T("quickAdd.expense"), uistate.T("quickAdd.income"), uistate.T("quickAdd.transfer"),
+		uistate.T("quickAdd.payee"), uistate.T("quickAdd.date"), uistate.T("quickAdd.category"), uistate.T("quickAdd.account"),
 	})
 }
 
 func assertTxnPrimaryRowsAndLabels(t *testing.T, fixture *render.Fixture, labels []string) {
 	t.Helper()
-	for _, rowID := range []string{"txn-shared-row-amount", "txn-shared-row-payee", "txn-shared-row-category-date", "txn-shared-row-account"} {
-		if row := fixture.ByID(rowID); row.Attr("id") != rowID {
-			t.Fatalf("shared transaction row %q is missing", rowID)
+	var grid *render.QueryNode
+	for _, node := range fixture.AllByTag("div") {
+		if strings.Contains(node.Attr("class"), "txn-form-grid") {
+			grid = node
+			break
 		}
+	}
+	if grid == nil {
+		t.Fatal("shared transaction field grid is missing")
 	}
 	text := fixture.Text()
 	previous := -1

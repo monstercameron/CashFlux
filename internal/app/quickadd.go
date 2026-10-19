@@ -567,7 +567,7 @@ func quickAddForm(props quickAddFormProps) uic.Node {
 	)
 	amountField := Div(
 		ui.Field(ui.FieldProps{ID: "txn-add-amount", Label: uistate.T("quickAdd.amount"),
-			Hint: uistate.T("sol1.amountHint"), Error: fieldMessage(amountError, "txu3.needAmount"), Required: true,
+			Error: fieldMessage(amountError, "txu3.needAmount"), Required: true,
 			Control: func(a ui.FieldA11y) uic.Node {
 				return Input(append(amountAttrs, Attr("aria-describedby", a.DescribedBy), OnInput(onAmount), OnBlur(onAmountBlur))...)
 			}}), amountNote)
@@ -666,7 +666,7 @@ func quickAddForm(props quickAddFormProps) uic.Node {
 	body := Div(
 		screens.TxnSharedForm(screens.TxnFormModel{Mode: screens.TxnFormAdd, Amount: amountField, Direction: directionField,
 			Payee: payeeField, Category: categoryField, Date: dateField, Account: accountControl,
-			More: moreFields, AddQuickFill: Div(draftHint, payeeDatalist), AddTemplates: templatesSlot, MoreID: "txn-add-more"}),
+			Sentence: draftHint, More: moreFields, AddQuickFill: payeeDatalist, AddTemplates: templatesSlot, MoreID: "txn-add-more"}),
 	)
 	footer := Div(css.Class("txn-form-footer"),
 		Div(css.Class("txn-form-footer-actions"),
