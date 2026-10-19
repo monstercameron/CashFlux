@@ -403,6 +403,9 @@ func txnFutureTotal(items []bills.Bill, rates currency.Rates, base string) (mone
 	total := money.New(0, base)
 	unconverted := 0
 	for _, item := range items {
+		if item.TransferAccountID != "" {
+			continue
+		}
 		converted, err := rates.Convert(item.Amount, base)
 		if err != nil {
 			unconverted++

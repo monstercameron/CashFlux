@@ -90,6 +90,10 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Review offers to fix past loan payments; scheduled loan payments are neutral (R4LOAN.1).** Review has a "Possible loan
+  payments" group: "Looks like a payment to Priya's Car Loan — record as a transfer?" with "Record as transfer" (converted
+  in place, with undo) and "Not a loan payment" (remembered). Scheduled payments to a loan or card show "Transfer →
+  <account>" in the Category cell with a neutral amount and are left out of the future month's amount due.
 - **Budgets dialogs name what they change (BR3DLG).** The raise form is headed with the budget's name, its amount field
   no longer repeats its label, quick-picks offer the current overspend and the projected overspend, and a rollover budget
   explains that next period's cap is the base plus carry; the toast reads "Groceries limit raised". The cover dialog

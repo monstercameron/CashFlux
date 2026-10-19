@@ -13,6 +13,8 @@
 package screens
 
 import (
+	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
 	"syscall/js"
@@ -30,6 +32,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/reviewscope"
 	"github.com/monstercameron/CashFlux/internal/rules"
 	"github.com/monstercameron/CashFlux/internal/smartai"
+	"github.com/monstercameron/CashFlux/internal/txnclassify"
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -45,6 +48,107 @@ const (
 	reviewModeSingle = uistate.ReviewModeSingle
 	reviewModeBulk   = uistate.ReviewModeBulk
 )
+
+const recurringLoanPaymentDismissalsKey = "review:recurring-loan-payment-dismissals"
+
+func loadRecurringLoanPaymentDismissals() map[string]bool {
+	var dismissed map[string]bool
+	if err := json.Unmarshal([]byte(uistate.KVGet(recurringLoanPaymentDismissalsKey)), &dismissed); err != nil || dismissed == nil {
+		return map[string]bool{}
+	}
+	return dismissed
+}
+
+func saveRecurringLoanPaymentDismissals(dismissed map[string]bool) {
+	data, err := json.Marshal(dismissed)
+	if err != nil {
+		return
+	}
+	uistate.KVSet(recurringLoanPaymentDismissalsKey, string(data))
+	uistate.RequestPersist()
+}
+
+func visibleRecurringLoanPaymentSuggestions(app *appstate.App, dismissed map[string]bool) []txnclassify.PaymentSuggestion {
+	if app == nil {
+		return nil
+	}
+	all := app.RecurringPaymentSuggestions()
+	visible := make([]txnclassify.PaymentSuggestion, 0, len(all))
+	for _, suggestion := range all {
+		if !dismissed[suggestion.TransactionID] {
+			visible = append(visible, suggestion)
+		}
+	}
+	return visible
+}
+
+func classifyRecurringLoanPayment(app *appstate.App, suggestion txnclassify.PaymentSuggestion) error {
+	if app == nil {
+		return fmt.Errorf("review: app is not ready")
+	}
+	current := false
+	for _, candidate := range app.RecurringPaymentSuggestions() {
+		if candidate.TransactionID == suggestion.TransactionID && candidate.AccountID == suggestion.AccountID {
+			current = true
+			break
+		}
+	}
+	if !current {
+		return fmt.Errorf("review: loan payment suggestion is no longer available")
+	}
+	txn, ok := app.TransactionByID(suggestion.TransactionID)
+	if !ok {
+		return fmt.Errorf("review: transaction %q was not found", suggestion.TransactionID)
+	}
+	classified, err := txnclassify.Apply(txn, suggestion.AccountID, true, app.Accounts())
+	if err != nil {
+		return fmt.Errorf("review: classify loan payment: %w", err)
+	}
+	if err := app.PutTransactionWithTransferPair(txn, classified); err != nil {
+		return fmt.Errorf("review: save loan payment transfer: %w", err)
+	}
+	return nil
+}
+
+type reviewLoanPaymentGroupProps struct {
+	Suggestions []txnclassify.PaymentSuggestion
+	OnRecord    func(txnclassify.PaymentSuggestion)
+	OnDismiss   func(string)
+}
+
+func reviewLoanPaymentGroup(props reviewLoanPaymentGroupProps) ui.Node {
+	if len(props.Suggestions) == 0 {
+		return Fragment()
+	}
+	return Div(css.Class("rvs-loan-payments"), Attr("data-testid", "review-loan-payment-group"),
+		H3(css.Class("rvs-loan-payments-title"), uistate.T("r4loan1.groupTitle")),
+		Div(css.Class("rvs-loan-payments-list"), MapKeyed(props.Suggestions,
+			func(s txnclassify.PaymentSuggestion) any { return s.TransactionID },
+			func(s txnclassify.PaymentSuggestion) ui.Node {
+				return ui.CreateElement(reviewLoanPaymentRow, reviewLoanPaymentRowProps{
+					Suggestion: s, OnRecord: props.OnRecord, OnDismiss: props.OnDismiss,
+				})
+			})),
+	)
+}
+
+type reviewLoanPaymentRowProps struct {
+	Suggestion txnclassify.PaymentSuggestion
+	OnRecord   func(txnclassify.PaymentSuggestion)
+	OnDismiss  func(string)
+}
+
+func reviewLoanPaymentRow(props reviewLoanPaymentRowProps) ui.Node {
+	record := ui.UseEvent(Prevent(func() { props.OnRecord(props.Suggestion) }))
+	dismiss := ui.UseEvent(Prevent(func() { props.OnDismiss(props.Suggestion.TransactionID) }))
+	return Div(css.Class("rvs-loan-payment-row"), Attr("data-testid", "review-loan-payment-row"),
+		P(css.Class("rvs-loan-payment-message"), uistate.T("r4loan1.suggestionMessage", props.Suggestion.AccountName)),
+		Div(css.Class("rvs-loan-payment-actions"),
+			Button(css.Class("btn btn-primary btn-sm"), Type("button"), Attr("data-testid", "review-loan-payment-record"), OnClick(record), uistate.T("r4loan1.record")),
+			Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "review-loan-payment-dismiss"), OnClick(dismiss), uistate.T("r4loan1.dismiss")),
+		),
+	)
+}
 
 // reviewTier buckets a merchant group by the confidence of its suggestion.
 type reviewTier int
@@ -401,6 +505,29 @@ func reviewSurfaceReady(_ struct{}) ui.Node {
 	},
 		rev, open.Get(), string(scope), ledgerEff)
 	scope = idx.Scope
+	dismissedLoanPayments := loadRecurringLoanPaymentDismissals()
+	loanPaymentSuggestions := visibleRecurringLoanPaymentSuggestions(app, dismissedLoanPayments)
+	recordLoanPayment := func(suggestion txnclassify.PaymentSuggestion) {
+		// The existing single-row transfer conversion path updates the imported
+		// transaction in place; it does not invent a second leg from an expense
+		// that may already be represented in the liability's own feed.
+		auditview.CaptureNow()
+		if err := classifyRecurringLoanPayment(app, suggestion); err != nil {
+			uistate.PostNotice(err.Error(), true)
+			return
+		}
+		uistate.BumpDataRevision()
+		uistate.RequestPersist()
+		uistate.PostUndoable(uistate.T("r4loan1.recordedUndo"))
+	}
+	dismissLoanPayment := func(transactionID string) {
+		dismissedLoanPayments[transactionID] = true
+		saveRecurringLoanPaymentDismissals(dismissedLoanPayments)
+		uistate.BumpDataRevision()
+	}
+	loanPaymentGroup := ui.CreateElement(reviewLoanPaymentGroup, reviewLoanPaymentGroupProps{
+		Suggestions: loanPaymentSuggestions, OnRecord: recordLoanPayment, OnDismiss: dismissLoanPayment,
+	})
 
 	// catFor resolves what a group will be categorized as: a hand edit wins over
 	// the suggestion, always.
@@ -865,17 +992,22 @@ func reviewSurfaceReady(_ struct{}) ui.Node {
 		OnSelect: setScope,
 	})
 
-	if idx.Total == 0 {
+	if idx.Total == 0 && len(loanPaymentSuggestions) == 0 {
 		// An empty SCOPE is not an empty queue. Saying "all caught up" while the
 		// entire-queue count sits at 251 is the app congratulating the user for a
 		// filter they may not remember setting.
 		title, sub := uistate.T("review.emptyTitle"), uistate.T("review.emptySub")
+		if len(loanPaymentSuggestions) > 0 {
+			title = uistate.T("r4loan1.suggestionOnlyTitle")
+			sub = uistate.T("r4loan1.suggestionOnlySub")
+		}
 		if scope == reviewscope.ScopeCurrentView && idx.QueueTotal > 0 {
 			title = uistate.T("review.emptyViewTitle")
 			sub = uistate.T("review.emptyViewSub", reviewLeftPhrase(idx.QueueTotal))
 		}
 		return Div(css.Class("rvs rvs-done"), Attr("data-testid", "review-inbox"),
 			scopeStrip,
+			loanPaymentGroup,
 			P(css.Class("rvw-done-title"), title),
 			P(css.Class("rvw-done-sub"), sub),
 			Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "review-done"),
@@ -932,6 +1064,7 @@ func reviewSurfaceReady(_ struct{}) ui.Node {
 			OnCommitScope: setCommit,
 		})
 	}
+	body = Div(css.Class("rvs-with-loan-payments"), loanPaymentGroup, body)
 
 	var pick ui.Node = Fragment()
 	if k := picker.Get(); k != "" {

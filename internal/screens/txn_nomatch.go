@@ -104,7 +104,7 @@ func txnScheduledGhostRows(items []bills.Bill, formatDate func(time.Time) string
 	}
 	for _, item := range items {
 		category, account := txnScheduledRowDetails(appstate.Default, item, accounts, categories)
-		amount, tone := fmtTxnSignedMoney(money.New(-item.Amount.Abs().Amount, item.Amount.Currency)), "text-down"
+		amount, tone := txnScheduledAmount(item)
 		rows = append(rows, ui.CreateElement(txnScheduledGhostRow, txnScheduledGhostRowProps{
 			Date: formatDate(item.DueDate), Name: item.Name, Category: category,
 			Account: account, Amount: amount, AmountTone: tone,
@@ -168,7 +168,7 @@ func txnScheduledTableRows(items []bills.Bill, formatDate func(time.Time) string
 	app := appstate.Default
 	for _, item := range items {
 		category, account := txnScheduledRowDetails(app, item, accounts, categories)
-		amount, tone := fmtTxnSignedMoney(money.New(-item.Amount.Abs().Amount, item.Amount.Currency)), "text-down"
+		amount, tone := txnScheduledAmount(item)
 		rows = append(rows, ui.CreateElement(txnScheduledTableRow, txnScheduledTableRowProps{
 			Date: formatDate(item.DueDate), Name: item.Name, Category: category,
 			Account: account, Amount: amount, AmountTone: tone,
@@ -193,6 +193,9 @@ func txnScheduledRowDetails(app *appstate.App, item bills.Bill, accounts, catego
 				break
 			}
 		}
+		if item.TransferAccountID != "" {
+			category = scheduledTransferCategory(item.TransferAccountName)
+		}
 		return category, account
 	}
 	for _, candidate := range app.Accounts() {
@@ -205,6 +208,16 @@ func txnScheduledRowDetails(app *appstate.App, item bills.Bill, accounts, catego
 		break
 	}
 	return category, ""
+}
+
+func scheduledTransferCategory(destination string) string {
+	return uistate.T("r4loan1.transferCategory", destination)
+}
+
+func txnScheduledAmount(item bills.Bill) (string, string) {
+	amount := money.New(-item.Amount.Abs().Amount, item.Amount.Currency)
+	text, tone := fmtLedgerAmount(amount, item.TransferAccountID != "")
+	return text, tone
 }
 
 func scheduledAccountLabel(account string) string {
@@ -247,9 +260,6 @@ func txnFutureScheduledItems(filter uistate.TxFilter, now time.Time) []bills.Bil
 	items := bills.UpcomingAll(app.Accounts(), app.Recurring(), now)
 	filtered := make([]bills.Bill, 0, len(items))
 	for _, item := range items {
-		if item.TransferAccountID != "" {
-			item.Name = "Transfer → " + item.TransferAccountName
-		}
 		due := item.DueDate.Format("2006-01-02")
 		if due < filter.From || (filter.To != "" && due > filter.To) {
 			continue
