@@ -10,13 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/extract"
-	"github.com/monstercameron/CashFlux/internal/importdraft"
 	"github.com/monstercameron/CashFlux/internal/statement"
-	"github.com/monstercameron/CashFlux/internal/uistate"
-
 	"github.com/monstercameron/GoWebComponents/v5/testkit/render"
 	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
@@ -82,7 +78,7 @@ func TestImageImportDisclosesOpenAITransferBeforeActionIMPC(t *testing.T) {
 	f := render.New(t)
 	defer f.Cleanup()
 	f.Render(ui.CreateElement(ImageImportCard, imageImportCardProps{}))
-	if !strings.Contains(f.Text(), "image is sent to OpenAI") {
+	if !strings.Contains(f.Text(), "selected image is sent to OpenAI") {
 		t.Fatalf("AI transfer disclosure missing from image card: %q", f.Text())
 	}
 }
@@ -132,15 +128,16 @@ func TestDraftReviewPaginatesAll1240RowsAndKeepsGlobalCategoryIndexIMPC(t *testi
 		date := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, i).Format("2006-01-02")
 		rows[i] = extract.Row{Date: date, Description: "row-" + strconv.Itoa(i), Amount: "-1.00"}
 	}
-	// This is an identical repeat in the source file, not a match against the
-	// existing ledger. IM-C-7 keeps every source occurrence; pagination still
-	// needs to count and render the repeat outside the visible page.
+	// An identical repeat inside the source file (not a match against the ledger):
+	// the counter must include rows outside the visible page, and IM-C-7 imports both occurrences.
 	rows[1239] = rows[10]
 	start, end, page, pageCount := draftReviewWindow(len(rows), 3)
 	if start != 200 || end != 300 || page != 3 || pageCount != 13 || end-start > draftReviewPageSize {
 		t.Fatalf("page 3 window = (%d,%d), page %d of %d", start, end, page, pageCount)
 	}
-	rows = importdraft.New(rows).Rows
+	if got := draftDuplicateCount(rows, nil); got != 1 {
+		t.Fatalf("duplicate count = %d, want 1 across all rows", got)
+	}
 
 	app := newR3EEditApp(t)
 	if err := app.PutCategory(domain.Category{ID: "cat-home", Name: "Home", Kind: domain.KindExpense}); err != nil {
@@ -154,7 +151,7 @@ func TestDraftReviewPaginatesAll1240RowsAndKeepsGlobalCategoryIndexIMPC(t *testi
 		rows: rows, page: page, start: start, end: end,
 		onUpdate: func(i int, row extract.Row) { updatedIndex, updated = i, row },
 	}))
-	if !strings.Contains(f.Text(), "Rows 201–300 of 1240") || !strings.Contains(f.Text(), uistate.T("impc.importAllRows", 1240)) || !strings.Contains(f.Text(), "Possible repeated purchases in this draft: 1") {
+	if !strings.Contains(f.Text(), "Rows 201–300 of 1240") || !strings.Contains(f.Text(), "Import all 1240 rows") || !strings.Contains(f.Text(), "Duplicate rows across this import: 1 of 1240") {
 		t.Fatalf("full-draft counts or page range missing: %q", f.Text())
 	}
 	if got := strings.Count(f.Text(), "row-"); got != draftReviewPageSize {
@@ -197,7 +194,7 @@ func TestDraftReviewPaginatesAll1240RowsAndKeepsGlobalCategoryIndexIMPC(t *testi
 		t.Fatalf("import 1240-row draft: %v", err)
 	}
 	if result.Imported != 1240 || result.Skipped != 0 {
-		t.Fatalf("1240-row import result = imported %d, skipped %d, want all 1240 distinct occurrences imported", result.Imported, result.Skipped)
+		t.Fatalf("1240-row import result = imported %d, skipped %d, want all 1240 source occurrences imported (IM-C-7)", result.Imported, result.Skipped)
 	}
 }
 
@@ -211,14 +208,9 @@ type draftReviewTestProps struct {
 
 func draftReviewFixture(props draftReviewTestProps) ui.Node {
 	noop := ui.UseEvent(func(ui.Event) {})
-	batch, err := appstate.Default.Stage(domain.DocCSV, props.rows, "acct-1")
-	if err != nil {
-		panic(err)
-	}
-	summary := importdraft.Summarize(batch.Batch)
-	return ui.CreateElement(paginatedDraftReview, draftReviewProps{
+	return paginatedDraftReview(draftReviewProps{
 		Rows: props.rows, VisibleRows: props.rows[props.start:props.end], Start: props.start,
-		Page: props.page, PageCount: 13, ReviewCur: "USD", ImportAcctID: "acct-1", Summary: &summary,
+		Page: props.page, PageCount: 13, ReviewCur: "USD", ImportAcctID: "checking",
 		ClearDraft: noop, OnPage: func(int) {}, OnAcctChange: noop,
 		OnReceiptTotal: noop, OnReceiptMerchant: noop, OnImportDraft: noop, OnImportReceipt: noop,
 		OnRemoveDraft: func(int) {}, OnUpdateDraft: props.onUpdate,
