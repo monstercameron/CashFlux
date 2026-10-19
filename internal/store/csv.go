@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/csvsafe"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -21,11 +22,14 @@ import (
 var csvHeader = []string{
 	"id", "date", "account_id", "payee", "desc", "category_id",
 	"amount", "currency", "transfer_account_id", "cleared", "tags", "member_id", "source",
-	// C680 appended LAST on purpose: the columns above are a published order that
-	// other tools read positionally, and inserting beside transfer_account_id would
-	// silently shift every field after it in somebody's importer.
+	// C680 appended after the published columns on purpose: other tools read them
+	// positionally, so inserting beside transfer_account_id would shift their fields.
+	// cashflux_export is internal round-trip metadata and stays after that column.
 	"transfer_group_id",
+	"cashflux_export",
 }
+
+const cashFluxCSVExportMarker = "cashflux-csv-v1"
 
 // TransactionsToCSV serializes transactions to CSV with a header row. Amounts
 // are written as plain decimals in the transaction's currency.
@@ -51,7 +55,11 @@ func TransactionsToCSV(txns []domain.Transaction) ([]byte, error) {
 			t.MemberID,
 			string(t.Source),
 			t.TransferGroupID,
+			cashFluxCSVExportMarker,
 		}
+		row[3] = csvsafe.Guard(row[3])
+		row[4] = csvsafe.Guard(row[4])
+		row[10] = csvsafe.Guard(row[10])
 		if err := w.Write(row); err != nil {
 			return nil, err
 		}
@@ -104,10 +112,25 @@ func TransactionsFromCSVResilient(data []byte, defaultCurrency string) (txns []d
 		}
 		return col(row, base)
 	}
+	isCashFluxExportRow := func(row []string) bool {
+		i, ok := idx["cashflux_export"]
+		return ok && i < len(row) && strings.TrimSpace(row[i]) == cashFluxCSVExportMarker
+	}
+	textCol := func(row []string, name string, nativeExport bool) string {
+		if i, ok := idx[name]; ok && i < len(row) {
+			value := row[i]
+			if nativeExport {
+				return csvsafe.Restore(value)
+			}
+			return strings.TrimSpace(value)
+		}
+		return ""
+	}
 
 	out := make([]domain.Transaction, 0, len(records)-1)
 	for n, row := range records[1:] {
 		line := n + 2
+		nativeExport := isCashFluxExportRow(row)
 
 		amtStr := col(row, "amount")
 		if amtStr == "" {
@@ -147,9 +170,12 @@ func TransactionsFromCSVResilient(data []byte, defaultCurrency string) (txns []d
 		}
 
 		var tags []string
-		if ts := col(row, "tags"); ts != "" {
+		if ts := textCol(row, "tags", nativeExport); ts != "" {
 			for _, tg := range strings.Split(ts, ";") {
-				if tg = strings.TrimSpace(tg); tg != "" {
+				if !nativeExport {
+					tg = strings.TrimSpace(tg)
+				}
+				if tg != "" {
 					tags = append(tags, tg)
 				}
 			}
@@ -164,16 +190,17 @@ func TransactionsFromCSVResilient(data []byte, defaultCurrency string) (txns []d
 		// column, but the ledger requires a description — so fall back to the
 		// payee, which is the human-facing label, when desc is absent. An explicit
 		// desc column still takes precedence.
-		desc := col(row, "desc")
+		payee := textCol(row, "payee", nativeExport)
+		desc := textCol(row, "desc", nativeExport)
 		if desc == "" {
-			desc = col(row, "payee")
+			desc = payee
 		}
 
 		out = append(out, domain.Transaction{
 			ID:                tid,
 			AccountID:         colID(row, "account"),
 			Date:              date,
-			Payee:             col(row, "payee"),
+			Payee:             payee,
 			Desc:              desc,
 			CategoryID:        colID(row, "category"),
 			Amount:            money.New(amt, curr),
@@ -242,10 +269,25 @@ func TransactionsFromCSV(data []byte, defaultCurrency string) ([]domain.Transact
 		}
 		return col(row, base)
 	}
+	isCashFluxExportRow := func(row []string) bool {
+		i, ok := idx["cashflux_export"]
+		return ok && i < len(row) && strings.TrimSpace(row[i]) == cashFluxCSVExportMarker
+	}
+	textCol := func(row []string, name string, nativeExport bool) string {
+		if i, ok := idx[name]; ok && i < len(row) {
+			value := row[i]
+			if nativeExport {
+				return csvsafe.Restore(value)
+			}
+			return strings.TrimSpace(value)
+		}
+		return ""
+	}
 
 	out := make([]domain.Transaction, 0, len(records)-1)
 	for n, row := range records[1:] {
 		line := n + 2
+		nativeExport := isCashFluxExportRow(row)
 
 		amtStr := col(row, "amount")
 		if amtStr == "" {
@@ -278,9 +320,12 @@ func TransactionsFromCSV(data []byte, defaultCurrency string) ([]domain.Transact
 		}
 
 		var tags []string
-		if ts := col(row, "tags"); ts != "" {
+		if ts := textCol(row, "tags", nativeExport); ts != "" {
 			for _, tg := range strings.Split(ts, ";") {
-				if tg = strings.TrimSpace(tg); tg != "" {
+				if !nativeExport {
+					tg = strings.TrimSpace(tg)
+				}
+				if tg != "" {
 					tags = append(tags, tg)
 				}
 			}
@@ -295,16 +340,17 @@ func TransactionsFromCSV(data []byte, defaultCurrency string) ([]domain.Transact
 		// column, but the ledger requires a description — so fall back to the
 		// payee, which is the human-facing label, when desc is absent. An explicit
 		// desc column still takes precedence.
-		desc := col(row, "desc")
+		payee := textCol(row, "payee", nativeExport)
+		desc := textCol(row, "desc", nativeExport)
 		if desc == "" {
-			desc = col(row, "payee")
+			desc = payee
 		}
 
 		out = append(out, domain.Transaction{
 			ID:                tid,
 			AccountID:         colID(row, "account"),
 			Date:              date,
-			Payee:             col(row, "payee"),
+			Payee:             payee,
 			Desc:              desc,
 			CategoryID:        colID(row, "category"),
 			Amount:            money.New(amt, curr),

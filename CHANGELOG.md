@@ -28,6 +28,10 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Exported transactions can no longer carry spreadsheet formulas (IMPD).** A payee, description or tag that
+  starts with `=`, `+`, `-`, `@`, a tab or a carriage return is written with a leading apostrophe, so opening
+  the export in Excel or Sheets shows text instead of running it; re-importing a CashFlux export restores the
+  original text exactly, and other CSV files import unchanged.
 - **Local store hardening (SV3a.3).** Each scope's database name now encodes every scope field
   unambiguously and the database records its own scope, refusing to open for a different one; a remote
   change is validated before it is stored, an invalid one is quarantined instead, and boot skips

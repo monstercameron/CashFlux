@@ -3,6 +3,7 @@
 package store
 
 import (
+	"encoding/csv"
 	"fmt"
 	"reflect"
 	"strings"
@@ -43,6 +44,86 @@ func TestTransactionsCSVRoundTrip(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, txns) {
 		t.Errorf("round trip mismatch:\n got: %+v\nwant: %+v", got, txns)
+	}
+}
+
+func TestTransactionsCSVFormulaNeutralizationRoundTrip(t *testing.T) {
+	dangerous := []string{
+		`=HYPERLINK("https://attacker.invalid","open")`,
+		"+1+1",
+		"-1+1",
+		"@SUM(A1:A2)",
+		"\t=1+1",
+		"\r=1+1",
+	}
+	fields := []struct {
+		name string
+		put  func(*domain.Transaction, string)
+		get  func(domain.Transaction) string
+		col  string
+	}{
+		{name: "payee", put: func(tx *domain.Transaction, value string) { tx.Payee = value }, get: func(tx domain.Transaction) string { return tx.Payee }, col: "payee"},
+		{name: "description", put: func(tx *domain.Transaction, value string) { tx.Desc = value }, get: func(tx domain.Transaction) string { return tx.Desc }, col: "desc"},
+		{name: "tag", put: func(tx *domain.Transaction, value string) { tx.Tags = []string{value} }, get: func(tx domain.Transaction) string { return tx.Tags[0] }, col: "tags"},
+	}
+	for _, field := range fields {
+		for _, value := range dangerous {
+			t.Run(field.name+"/"+value, func(t *testing.T) {
+				tx := domain.Transaction{ID: "formula", Amount: money.New(-450, "USD")}
+				field.put(&tx, value)
+				data, err := TransactionsToCSV([]domain.Transaction{tx})
+				if err != nil {
+					t.Fatalf("export: %v", err)
+				}
+				reader := csv.NewReader(strings.NewReader(string(data)))
+				records, err := reader.ReadAll()
+				if err != nil {
+					t.Fatalf("read exported CSV: %v", err)
+				}
+				columns := make(map[string]int, len(records[0]))
+				for i, header := range records[0] {
+					columns[header] = i
+				}
+				cell := records[1][columns[field.col]]
+				if cell != "'"+value {
+					t.Errorf("exported %s = %q, want guarded %q", field.col, cell, "'"+value)
+				}
+				if amount := records[1][columns["amount"]]; amount != "-4.50" {
+					t.Errorf("amount = %q, want numeric -4.50", amount)
+				}
+				got, err := TransactionsFromCSV(data, "")
+				if err != nil {
+					t.Fatalf("import exported CSV: %v", err)
+				}
+				if len(got) != 1 {
+					t.Fatalf("round trip returned %d transactions, want 1", len(got))
+				}
+				if roundTripped := field.get(got[0]); roundTripped != value {
+					t.Errorf("round trip text = %q, want %q", roundTripped, value)
+				}
+				resilient, skipped, err := TransactionsFromCSVResilient(data, "")
+				if err != nil || len(skipped) != 0 || len(resilient) != 1 {
+					t.Fatalf("resilient import = %v, skipped=%v, err=%v; want one transaction", resilient, skipped, err)
+				}
+				if roundTripped := field.get(resilient[0]); roundTripped != value {
+					t.Errorf("resilient round trip text = %q, want %q", roundTripped, value)
+				}
+			})
+		}
+	}
+}
+
+func TestTransactionsCSVImportKeepsUnmarkedGuardQuote(t *testing.T) {
+	input := "payee,desc,amount,currency\n'=1+1,\"'@SUM(A1:A2)\",-4.50,USD\n"
+	got, err := TransactionsFromCSV([]byte(input), "")
+	if err != nil {
+		t.Fatalf("import foreign CSV: %v", err)
+	}
+	if got[0].Payee != "'=1+1" || got[0].Desc != "'@SUM(A1:A2)" {
+		t.Errorf("foreign text changed: payee=%q desc=%q", got[0].Payee, got[0].Desc)
+	}
+	if got[0].Amount.Amount != -450 {
+		t.Errorf("negative amount changed: %d", got[0].Amount.Amount)
 	}
 }
 
