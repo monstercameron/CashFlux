@@ -204,7 +204,7 @@ func transactionsSurface(app *appstate.App) ui.Node {
 			// partial total. The table remains available for correcting the row.
 			txnDerivedViewCache = txnview.Cache{}
 		}
-		return txnV5RowTransfers(rows, txnV5RowAccountScoped(derivedFilter.Account, derivedFilter.Accounts))
+		return txnV5RowTransfers(rows, txnV5RowAccountScoped(derivedFilter.Account, derivedFilter.Accounts), rates)
 	}, app, app.Rev(), derivedFilter, activeImportProfileWorkspaceID())
 
 	// The engine render context: the live data every tile body reads from (§6). The
@@ -961,7 +961,8 @@ func txnTableWidget(props txnTableProps) ui.Node {
 			cat, _ = splitCellLabel(t)
 		}
 		if t, ok := txByID[rid]; ok && t.IsTransfer() {
-			cat = txnV5RowTransferLabel(accName[t.AccountID], accName[t.TransferAccountID])
+			account, _ := domain.AccountByID(props.App.Accounts(), t.AccountID)
+			cat = txnV5RowTransferLabel(accName[t.AccountID], accName[t.TransferAccountID], txnclassify.TransferOutgoing(t, account))
 		}
 		cleared := false
 		if b, ok := clearedCol.Values[i].(bool); ok {

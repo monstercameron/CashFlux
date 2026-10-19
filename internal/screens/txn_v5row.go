@@ -7,24 +7,24 @@ package screens
 import (
 	"strings"
 
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/txnclassify"
+	"github.com/monstercameron/CashFlux/internal/txnfilter"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 )
 
 // txnV5RowTransfers keeps one representative for each transfer movement when
 // both legs are in the current result set. An account-scoped view keeps its
 // matching leg so the register remains useful.
-func txnV5RowTransfers(rows []domain.Transaction, accountScoped bool) []domain.Transaction {
+func txnV5RowTransfers(rows []domain.Transaction, accountScoped bool, rateTables ...currency.Rates) []domain.Transaction {
 	if accountScoped || len(rows) < 2 {
 		return rows
 	}
-	summary := txnclassify.SummarizeVisibleTransfers(rows)
+	summary := txnclassify.SummarizeVisibleTransfers(rows, rateTables...)
 	kept := make([]domain.Transaction, 0, len(rows))
 	for i, row := range rows {
-		// The legacy matcher is intentionally not trusted for row hiding: a
-		// look-alike amount/date match can otherwise make a real ledger row vanish.
-		if !row.IsTransfer() || row.TransferGroupID == "" || summary.CountedRows[i] {
+		if !row.IsTransfer() || summary.CountedRows[i] {
 			kept = append(kept, row)
 		}
 	}
@@ -44,7 +44,8 @@ func txnV5RowExpandedSelection(selected map[string]bool, expandedIDs []string) m
 }
 
 func txnV5RowAccountScoped(criteriaAccount, criteriaAccounts string) bool {
-	return strings.TrimSpace(criteriaAccount) != "" || strings.TrimSpace(criteriaAccounts) != ""
+	_, single := (txnfilter.Criteria{Account: strings.TrimSpace(criteriaAccount), Accounts: criteriaAccounts}).SingleAccount()
+	return single
 }
 
 func txnEditBalanceAccountCount(before, after domain.Transaction) int {
@@ -55,9 +56,12 @@ func txnEditBalanceAccountCount(before, after domain.Transaction) int {
 }
 
 // txnV5RowTransferLabel returns the household-facing direction between accounts.
-func txnV5RowTransferLabel(from, to string) string {
+func txnV5RowTransferLabel(from, to string, outgoing ...bool) string {
 	if strings.TrimSpace(from) == "" || strings.TrimSpace(to) == "" {
 		return ""
+	}
+	if len(outgoing) > 0 && !outgoing[0] {
+		from, to = to, from
 	}
 	return from + " → " + to
 }

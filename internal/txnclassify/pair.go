@@ -178,6 +178,14 @@ type VisibleTransferSummary struct {
 	CountedRows []bool
 	// UnpairedRows is the number of transfer legs without a visible counterpart.
 	UnpairedRows int
+	// Pairs records the input indexes of proven counterparts. Legacy matches
+	// require a unique candidate in both directions; resemblance never breaks ties.
+	Pairs []TransferPair
+}
+
+// TransferPair identifies the two input rows representing one movement.
+type TransferPair struct {
+	Outgoing, Incoming int
 }
 
 type reciprocalIndexKey struct {
@@ -192,7 +200,8 @@ type reciprocalIndexKey struct {
 // indexed account, direction, amount, and date. When rates are supplied,
 // amounts are compared after conversion into the rate table's base currency.
 // Without rates, rows can pair only when their currencies and minor-unit
-// magnitudes match. It is O(n log n), with no per-leg scan over the visible set.
+// magnitudes match. Legacy candidates must be unique in both directions.
+// It is O(n log n), with no per-leg scan over the visible set.
 func SummarizeVisibleTransfers(txns []domain.Transaction, rateTables ...currency.Rates) VisibleTransferSummary {
 	return SummarizeVisibleTransfersWithAccounts(txns, nil, rateTables...)
 }
@@ -252,6 +261,11 @@ func SummarizeVisibleTransfersWithAccounts(txns []domain.Transaction, accounts [
 					chosen = indexes[1]
 				}
 				result.CountedRows[chosen] = true
+				other := indexes[0]
+				if chosen == other {
+					other = indexes[1]
+				}
+				result.Pairs = append(result.Pairs, TransferPair{Outgoing: chosen, Incoming: other})
 				continue
 			}
 		}
@@ -261,8 +275,8 @@ func SummarizeVisibleTransfersWithAccounts(txns []domain.Transaction, accounts [
 		}
 	}
 	paired := make([]bool, len(txns))
-	// Match reciprocal account/direction buckets with a two-pointer date walk.
-	// Dense transfer days therefore do not turn the toolbar into a quadratic scan.
+	// Binary searches count candidates in each date window without a quadratic
+	// scan on dense transfer days. Only mutual uniqueness proves a legacy pair.
 	for key, first := range legacy {
 		if key.accountID >= key.transferTarget {
 			continue
@@ -273,26 +287,33 @@ func SummarizeVisibleTransfersWithAccounts(txns []domain.Transaction, accounts [
 		}]
 		sort.Slice(first, func(i, j int) bool { return txns[first[i]].Date.Before(txns[first[j]].Date) })
 		sort.Slice(second, func(i, j int) bool { return txns[second[i]].Date.Before(txns[second[j]].Date) })
-		i, j := 0, 0
-		for i < len(first) && j < len(second) {
-			a, b := first[i], second[j]
-			gap := txns[b].Date.Sub(txns[a].Date)
-			if gap < 0 {
-				gap = -gap
+		uniqueCandidate := func(index int, candidates []int) (int, bool) {
+			start, end := txns[index].Date.Add(-PairWindow), txns[index].Date.Add(PairWindow)
+			lo := sort.Search(len(candidates), func(i int) bool { return !txns[candidates[i]].Date.Before(start) })
+			hi := sort.Search(len(candidates), func(i int) bool { return txns[candidates[i]].Date.After(end) })
+			if hi-lo != 1 {
+				return 0, false
 			}
-			if gap <= PairWindow {
+			return candidates[lo], true
+		}
+		for _, a := range first {
+			b, unique := uniqueCandidate(a, second)
+			if !unique {
+				continue
+			}
+			back, unique := uniqueCandidate(b, first)
+			if unique && back == a {
 				paired[a], paired[b] = true, true
 				chosen := a
 				if incoming(txns[a].Amount.Amount, inflowSigns[txns[a].AccountID]) {
 					chosen = b
 				}
 				result.CountedRows[chosen] = true
-				i++
-				j++
-			} else if txns[a].Date.Before(txns[b].Date) {
-				i++
-			} else {
-				j++
+				other := b
+				if chosen == b {
+					other = a
+				}
+				result.Pairs = append(result.Pairs, TransferPair{Outgoing: chosen, Incoming: other})
 			}
 		}
 	}
@@ -302,6 +323,9 @@ func SummarizeVisibleTransfersWithAccounts(txns []domain.Transaction, accounts [
 			result.UnpairedRows++
 		}
 	}
+	sort.Slice(result.Pairs, func(i, j int) bool {
+		return result.Pairs[i].Outgoing < result.Pairs[j].Outgoing
+	})
 	return result
 }
 
