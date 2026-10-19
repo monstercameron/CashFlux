@@ -90,6 +90,7 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Saving a transaction skips task-resolution work when no task needs it (TC3B10).**
 - **Loan-payment suggestions skip the paying account and recent transfers (TC3B3).** A recurring payment never pairs with
   its own source account, and a payment already recorded as a nearby transfer is not suggested again.
 - **Transfers pair only with a matching amount; the calendar follows (TC3B2).** Legacy transfer legs pair by account
