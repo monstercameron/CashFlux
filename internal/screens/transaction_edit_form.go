@@ -467,7 +467,7 @@ func transactionEditForm(props TransactionEditFormProps) ui.Node {
 		if acc, ok := domain.AccountByID(app.Accounts(), t.AccountID); ok {
 			if b, berr := ledger.Balance(acc, app.Transactions()); berr == nil {
 				saveMsg = uistate.T("transactions.savedImpact", acc.Name,
-					money.FormatMinor(b.Amount, currency.Decimals(acc.Currency)))
+					fmtMoney(money.New(b.Amount, acc.Currency)))
 			}
 		}
 		uistate.PostNotice(saveMsg, false)

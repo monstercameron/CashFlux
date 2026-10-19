@@ -54,9 +54,13 @@ func TestR6FScheduledGhostShowsCategoryAccountAndStatusPill(t *testing.T) {
 	if amount == nil || !strings.Contains(amount.Attr("class"), "text-down") {
 		t.Fatalf("scheduled amount cell = %v, want −$125.00 in negative tone", amount)
 	}
-	account := r6fGhostCell(t, f, "Loan from Priya's parents")
-	if account.Attr("title") != "Loan from Priya's parents" || !strings.Contains(account.Attr("class"), "txn-scheduled-account") {
-		t.Fatalf("account cell lacks single-line tooltip marker: %#v", account)
+	account := r6fGhostCell(t, f, "—")
+	if account.Attr("title") != "" || !strings.Contains(account.Attr("class"), "txn-scheduled-account") {
+		t.Fatalf("loan account cell = %#v, want no pay-from account", account)
+	}
+	category := r6fGhostCell(t, f, "Loan payment")
+	if !strings.Contains(category.Attr("class"), "td-cat") {
+		t.Fatalf("loan category cell = %#v, want Loan payment", category)
 	}
 	pillFound := false
 	for _, pill := range f.AllByTag("span") {
@@ -69,6 +73,9 @@ func TestR6FScheduledGhostShowsCategoryAccountAndStatusPill(t *testing.T) {
 	}
 	if len(f.AllByTag("input")) != 0 || r2aByTestID(f, "button", "txn-rowedit") != nil {
 		t.Fatal("scheduled row unexpectedly exposes posted-row selection or editing")
+	}
+	if disabled := r2aByTestID(f, "button", "txn-scheduled-edit-disabled"); disabled == nil || disabled.Attr("disabled") == "" {
+		t.Fatal("scheduled row should keep the posted-row pencil slot as a disabled control")
 	}
 	menu := r2aByTestID(f, "button", "txn-scheduled-menu-toggle")
 	if menu == nil {
@@ -92,6 +99,29 @@ func r6fGhostCell(t *testing.T, f *render.Fixture, text string) *render.QueryNod
 	return nil
 }
 
+func TestR6FScheduledRecurringRowShowsItsPayFromAccount(t *testing.T) {
+	app, err := appstate.New(&bytes.Buffer{}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := app.PutAccount(domain.Account{ID: "checking", Name: "Joint Checking", OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared, Class: domain.ClassAsset, Type: domain.TypeChecking, Currency: "USD"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.PutRecurring(domain.Recurring{ID: "internet", Label: "Internet service", AccountID: "checking", Amount: money.New(-8500, "USD"), Cadence: domain.CadenceMonthly}); err != nil {
+		t.Fatal(err)
+	}
+	previous := appstate.Default
+	appstate.Default = app
+	t.Cleanup(func() { appstate.Default = previous })
+
+	rows := txnScheduledGhostRows([]bills.Bill{{Name: "Internet service", AccountID: "recurring:internet", Amount: money.New(8500, "USD"), DueDate: time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)}}, func(time.Time) string { return "Nov 1" })
+	f := render.New(t)
+	f.Render(Div(rows...))
+	if cell := r6fGhostCell(t, f, "Joint Checking"); !strings.Contains(cell.Attr("class"), "txn-scheduled-account") {
+		t.Fatalf("scheduled account cell = %#v, want the recurring rule's pay-from account", cell)
+	}
+}
+
 func TestR9CCalendarWeekTotalsUseComparableMetrics(t *testing.T) {
 	cases := []struct {
 		name        string
@@ -100,10 +130,10 @@ func TestR9CCalendarWeekTotalsUseComparableMetrics(t *testing.T) {
 		wantSummary string
 		wantTone    string
 	}{
-		{name: "spending", props: txnCalWeekTotalProps{Cashflow: txncalendar.Cashflow{Spent: 262200, Count: 4}, Base: "USD", WeekOf: "Oct 4", SummaryID: "week"}, wantLines: []string{"Money out −$2,622.00", "4 transactions"}, wantSummary: "Week of Oct 4: spent $2,622.00, income $0.00, moved $0.00, 4 transactions."},
-		{name: "mixed", props: txnCalWeekTotalProps{Cashflow: txncalendar.Cashflow{Spent: 10000, Income: 25000, Moved: 5000, Count: 2}, Base: "USD", WeekOf: "Oct 4", SummaryID: "week"}, wantLines: []string{"Money out −$100.00", "Money in $250.00", "2 transactions"}, wantSummary: "Week of Oct 4: spent $100.00, income $250.00, moved $50.00, 2 transactions.", wantTone: "text-up"},
-		{name: "future scheduled", props: txnCalWeekTotalProps{Base: "USD", Scheduled: 3, WeekOf: "Oct 25", Future: true, SummaryID: "week"}, wantLines: []string{"Money out $0.00", "Nothing yet", "3 scheduled"}, wantSummary: "Week of Oct 25: spent $0.00, income $0.00, moved $0.00, 0 transactions. 3 scheduled."},
-		{name: "empty future", props: txnCalWeekTotalProps{Base: "USD", WeekOf: "Oct 25", Future: true, SummaryID: "week"}, wantLines: []string{"Money out $0.00", "Nothing yet"}, wantSummary: "Week of Oct 25: spent $0.00, income $0.00, moved $0.00, 0 transactions."},
+		{name: "spending", props: txnCalWeekTotalProps{Cashflow: txncalendar.Cashflow{Spent: 262200, Count: 4}, Base: "USD", WeekOf: "Oct 4", SummaryID: "week"}, wantLines: []string{"Spent −$2,622.00", "4 transactions"}, wantSummary: "Week of Oct 4: spent $2,622.00, income $0.00, moved $0.00, 4 transactions."},
+		{name: "mixed", props: txnCalWeekTotalProps{Cashflow: txncalendar.Cashflow{Spent: 10000, Income: 25000, Moved: 5000, Count: 2}, Base: "USD", WeekOf: "Oct 4", SummaryID: "week"}, wantLines: []string{"Spent −$100.00", "Income $250.00", "2 transactions"}, wantSummary: "Week of Oct 4: spent $100.00, income $250.00, moved $50.00, 2 transactions.", wantTone: "text-up"},
+		{name: "future scheduled", props: txnCalWeekTotalProps{Base: "USD", Scheduled: 3, WeekOf: "Oct 25", Future: true, SummaryID: "week"}, wantLines: []string{"Spent $0.00", "Nothing yet", "3 scheduled"}, wantSummary: "Week of Oct 25: spent $0.00, income $0.00, moved $0.00, 0 transactions. 3 scheduled."},
+		{name: "empty future", props: txnCalWeekTotalProps{Base: "USD", WeekOf: "Oct 25", Future: true, SummaryID: "week"}, wantLines: []string{"Spent $0.00", "Nothing yet"}, wantSummary: "Week of Oct 25: spent $0.00, income $0.00, moved $0.00, 0 transactions."},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

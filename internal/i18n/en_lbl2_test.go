@@ -33,7 +33,7 @@ func TestLBL2TransactionGlossary(t *testing.T) {
 		{"review.bulkApplied", "Accepted %d suggestions."},
 		{"review.pickHint", "Select transactions to accept suggestions."},
 		{"review.tierReady", "Ready to accept"},
-		{"sm10.hint", "%[1]s is running %[2]s above its usual."},
+		{"sm10.hint", "About %s more than your usual %s at %s"},
 		{"transactions.upcomingBadge", "Scheduled"},
 		{"quickAdd.exclude", "Exclude from budgets and reports"},
 		{"transactions.excludeLabel", "Exclude from budgets and reports"},

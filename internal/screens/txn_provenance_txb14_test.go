@@ -8,7 +8,17 @@ import (
 	"testing"
 
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/txnprov"
 )
+
+func TestAutoMarkWhyUsesPlainBillScheduleName(t *testing.T) {
+	if got := autoMarkWhy(txnprov.Provenance{}, "Recurring"); got != "Added from your bill schedule" {
+		t.Fatalf("automatic recurring source tooltip = %q, want plain bill schedule copy", got)
+	}
+	if got := autoMarkWhy(txnprov.Provenance{}, "Bank import"); got != "Added from Bank import. This category needs review." {
+		t.Fatalf("other source tooltip = %q, want source-specific review copy", got)
+	}
+}
 
 func TestProvenanceKeyDistinguishesInteriorRows(t *testing.T) {
 	views := [][]domain.Transaction{

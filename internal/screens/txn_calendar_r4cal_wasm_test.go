@@ -1,0 +1,75 @@
+// SPDX-License-Identifier: MIT
+
+//go:build js && wasm
+
+package screens
+
+import (
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/txncalendar"
+	"github.com/monstercameron/CashFlux/internal/uistate"
+	"github.com/monstercameron/GoWebComponents/v5/testkit/render"
+	"github.com/monstercameron/GoWebComponents/v5/ui"
+)
+
+func TestR4CalendarScheduledItemsShowAmountsAndMissedState(t *testing.T) {
+	f := render.New(t)
+	f.Render(ui.Fragment(
+		ui.CreateElement(txnCalMonthCell, txnCalMonthCellProps{
+			DateKey: "2026-10-03", Day: 3, InMonth: true, Count: 1,
+			Rates:  currency.Rates{Base: "USD"},
+			Ghosts: []txncalendar.Ghost{{Label: "Gym membership", Amount: -22000, Currency: "USD", NotPosted: true}},
+		}),
+		ui.CreateElement(txnCalMonthCell, txnCalMonthCellProps{
+			DateKey: "2026-10-22", Day: 22, InMonth: true,
+			Rates:  currency.Rates{Base: "USD"},
+			Ghosts: []txncalendar.Ghost{{Label: "Electric bill", Amount: -22000, Currency: "USD", Date: time.Date(2026, time.October, 22, 0, 0, 0, 0, time.UTC)}},
+		}),
+	))
+
+	buttons := f.AllByTag("button")
+	if len(buttons) != 2 {
+		t.Fatalf("calendar cells = %d, want 2", len(buttons))
+	}
+	if got := buttons[0].Text(); !strings.Contains(got, "Not posted yet · $220.00 · Gym membership") {
+		t.Errorf("missed scheduled item = %q, want label, missed state, and amount", got)
+	}
+	if got := buttons[1].Text(); !strings.Contains(got, "−$220.00 due · Electric bill") {
+		t.Errorf("upcoming scheduled item = %q, want label and due amount", got)
+	}
+	var missed *render.QueryNode
+	for _, node := range f.AllByTag("span") {
+		if strings.Contains(node.Attr("class"), "txn-cal-ghost-missed") {
+			missed = node
+		}
+	}
+	if missed == nil || !strings.Contains(missed.Attr("aria-label"), "Not posted yet") || !strings.Contains(missed.Attr("aria-label"), "$220.00") {
+		t.Errorf("missed item's accessible description = %v, want status and amount", missed)
+	}
+}
+
+func TestR4CalendarDotLegendDescribesRenderedDensity(t *testing.T) {
+	if got := uistate.T("transactions.calDotsLegend"); got != "More dots mean more transactions." {
+		t.Fatalf("density legend = %q, want a description of increasing dot count", got)
+	}
+	for count, wantDots := range map[int]int{0: 0, 1: 1, 4: 1, 5: 1, 6: 2} {
+		dots := calTransactionDotCount(count)
+		if dots != wantDots {
+			t.Errorf("count %d rendered %d dots, want %d", count, dots, wantDots)
+		}
+	}
+}
+
+func TestR4CalendarSearchHidesScheduledItems(t *testing.T) {
+	ghosts := []txncalendar.Ghost{{RecurringID: "bill", Label: "Electric bill"}}
+	if got := scheduledGhosts(ghosts, false); len(got) != 0 {
+		t.Fatalf("scheduled items during text search = %d, want none", len(got))
+	}
+	if got := scheduledGhosts(ghosts, true); len(got) != 1 || got[0].RecurringID != "bill" {
+		t.Fatalf("scheduled items without text search = %#v, want bill", got)
+	}
+}

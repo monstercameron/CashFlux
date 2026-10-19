@@ -281,7 +281,33 @@ type Ghost struct {
 	RecurringID string
 	Label       string
 	Amount      int64 // signed minor units (negative = money out)
+	Currency    string
 	Date        time.Time
+	NotPosted   bool
+}
+
+// FoldSettled removes scheduled markers with a durable bill-match and marks
+// unpaid occurrences before asOf as not posted yet. The caller supplies the
+// settlement state and date so the fold remains deterministic and testable.
+func FoldSettled(weeks []CashflowWeek, settled map[string]bool, asOf time.Time) []CashflowWeek {
+	today := DayKey(asOf)
+	folded := make([]CashflowWeek, len(weeks))
+	for wi, week := range weeks {
+		folded[wi] = week
+		folded[wi].Days = make([]CashflowCell, len(week.Days))
+		for di, day := range week.Days {
+			folded[wi].Days[di] = day
+			folded[wi].Days[di].Ghosts = make([]Ghost, 0, len(day.Ghosts))
+			for _, ghost := range day.Ghosts {
+				if settled[domain.OccurrenceKey(ghost.RecurringID, ghost.Date)] {
+					continue
+				}
+				ghost.NotPosted = DayKey(ghost.Date) < today
+				folded[wi].Days[di].Ghosts = append(folded[wi].Days[di].Ghosts, ghost)
+			}
+		}
+	}
+	return folded
 }
 
 // Ghosts projects every recurring's occurrences into the half-open range
@@ -301,6 +327,7 @@ func Ghosts(recurring []domain.Recurring, from, to time.Time) []Ghost {
 				RecurringID: r.ID,
 				Label:       r.Label,
 				Amount:      r.Amount.Amount,
+				Currency:    r.Amount.Currency,
 				Date:        due,
 			})
 			next := r.Cadence.Next(due)

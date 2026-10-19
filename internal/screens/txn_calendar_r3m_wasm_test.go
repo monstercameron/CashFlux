@@ -78,8 +78,8 @@ func TestR3MCalendarMoneyUsesLedgerDisplayAndAccessibleDescriptions(t *testing.T
 	if len(totals) != 2 {
 		t.Fatalf("calendar week totals = %d, want 2", len(totals))
 	}
-	if got := totals[0].Text(); !strings.Contains(got, "Money out −$6.75") {
-		t.Fatalf("expense week total text = %q, want money out $6.75", got)
+	if got := totals[0].Text(); !strings.Contains(got, "Spent −$6.75") {
+		t.Fatalf("expense week total text = %q, want Spent −$6.75", got)
 	}
 	if got := totals[0].Attr("aria-label"); got != "" {
 		t.Fatalf("week total aria-label = %q, want content-derived name", got)
@@ -87,8 +87,8 @@ func TestR3MCalendarMoneyUsesLedgerDisplayAndAccessibleDescriptions(t *testing.T
 	if got := totals[0].Attr("aria-describedby"); got != "week-one" {
 		t.Fatalf("expense week total aria-describedby = %q, want hidden summary id", got)
 	}
-	if got := totals[1].Text(); !strings.Contains(got, "Money in $5,270.75") {
-		t.Fatalf("income week total text = %q, want money in $5,270.75", got)
+	if got := totals[1].Text(); !strings.Contains(got, "Income $5,270.75") {
+		t.Fatalf("income week total text = %q, want Income $5,270.75", got)
 	}
 	if got := totals[1].Attr("aria-describedby"); got != "week-two" {
 		t.Fatalf("income week total aria-describedby = %q, want hidden summary id", got)

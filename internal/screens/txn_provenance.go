@@ -53,7 +53,10 @@ func autoMarkWhy(p txnprov.Provenance, sourceLabel string) string {
 		return uistate.T("transactions.autoWhyRuleUnnamed")
 	}
 	if s := strings.TrimSpace(sourceLabel); s != "" && s != "—" {
-		return uistate.T("transactions.autoWhySource", s)
+		if strings.EqualFold(s, "Recurring") {
+			return uistate.T("transactions.autoWhySource")
+		}
+		return uistate.T("transactions.autoWhySourceOther", s)
 	}
 	return uistate.T("transactions.autoWhyUnknown")
 }

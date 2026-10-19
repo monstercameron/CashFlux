@@ -6,8 +6,8 @@ package i18n
 // the guided triage flow reached from the transactions toolbar. Merged via init
 // so this file never touches en.go.
 var reviewInboxKeys = Catalog{
-	"review.title":  "Review categories",
-	"review.button": "Review inbox (%d)", // guided-triage entry; count = uncategorized + flagged (distinct from the filter chips below)
+	"reviewInbox.title": "Review",
+	"review.button":     "Review %d", // guided-triage entry; count = uncategorized + flagged (distinct from the filter chips below)
 
 	"review.progress":  "%d of %d",
 	"review.leftCount": "%d charges left",
@@ -74,7 +74,7 @@ var reviewInboxKeys = Catalog{
 	"review.decisions":          "merchants to decide",
 	"review.groupedInto":        "grouped into",
 	"review.tierReady":          "Ready to accept",
-	"review.tierLook":           "Check these",
+	"review.tierLook":           "Suggestions to check",
 	"review.tierNone":           "No category suggestion",
 	"review.tierCount":          "%s · %s",
 	"review.selectAll":          "Select all %d",

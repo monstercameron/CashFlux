@@ -3,8 +3,8 @@
 package i18n
 
 var r9cKeys = Catalog{
-	"r9c.weekSpent":          "Money out %s",
-	"r9c.weekIncome":         "Money in %s",
+	"r9c.weekSpent":          "Spent %s",
+	"r9c.weekIncome":         "Income %s",
 	"r9c.weekNothingYet":     "Nothing yet",
 	"r9c.weekTransactions":   "%d transactions",
 	"r9c.weekOneTransaction": "1 transaction",

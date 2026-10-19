@@ -148,6 +148,7 @@ func Register() {
 	registerBR2Card()
 	registerRulesBR2TB()
 	registerRulesBR2A11Y()
+	registerR4Copy()
 	inject(Build())
 }
 

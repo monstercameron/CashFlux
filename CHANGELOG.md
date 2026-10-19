@@ -90,6 +90,14 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Transactions copy says one thing one way; the calendar shows due and missed bills (R4COPY, R4CAL).** Saved-balance
+  toasts format money ("$28,322.20"), delete confirmations have singular and plural variants, the period metric is
+  "Spent"/"Income" everywhere (calendar included), the review queue is "Review", the first review group matches its legend,
+  bill-schedule rows say "Added from your bill schedule", the Add flow is "Add transaction" throughout, filter groups are
+  labelled consistently, and review and filter-sheet prose is capped at 68 characters a line. The calendar shows upcoming
+  bills as dim "−$220 due" items in their day, past scheduled bills that never posted as amber "Not posted yet", hides
+  scheduled items during a text search, draws one dot per five transactions as its legend says, and uses sentence-case
+  weekday and week-total labels.
 - **A new hosted account no longer hangs on "Checking the server for your existing data" (HOST1).** When the server has no
   workspace for the account, sign-in shows a first-open step — "Start your budget" (creates the first workspace through
   the normal encrypted sync path) or "Import a backup" — instead of waiting forever. A failed or timed-out (15 s)

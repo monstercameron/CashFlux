@@ -34,7 +34,7 @@ var english = Catalog{
 	"topbar.breadcrumb":    "Breadcrumb",
 
 	// "+ Add" menu (C23)
-	"addmenu.transaction": "New transaction",
+	"addmenu.transaction": "Add transaction",
 	"addmenu.transfer":    "Transfer between your accounts",
 	"addmenu.more":        "Add something else",
 	"addmenu.account":     "New account",
@@ -67,7 +67,7 @@ var english = Catalog{
 	// reader to resolve.
 	"quickAdd.minusMeansOut":     "Saving as money out: %s.",
 	"quickAdd.saveAndAnother":    "Save and add another",
-	"quickAdd.added":             "Transaction added.",
+	"quickAdd.added":             "Transaction added",
 	"resolution.fromEarlier":     "Move start earlier",
 	"resolution.fromLater":       "Move start later",
 	"resolution.toEarlier":       "Move end earlier",
@@ -2107,7 +2107,7 @@ var english = Catalog{
 	"transactions.dateLabel":           "Date",
 	"transactions.filterAccount":       "Account",
 	"transactions.filterCategory":      "Category",
-	"transactions.filterSource":        "Filter by source",
+	"transactions.filterSource":        "Source",
 	"transactions.allSources":          "— All sources —",
 	"transactions.chipSource":          "Source: %s",
 	"transactions.fromDate":            "From",

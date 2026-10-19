@@ -80,6 +80,7 @@ type txnCalMonthCellProps struct {
 	AriaLabel string
 	Count     int
 	Ghosts    []txncalendar.Ghost
+	Rates     currency.Rates
 	OnPick    func(dateKey string)
 }
 
@@ -114,6 +115,10 @@ func txnCalendarWidget(props txnCalendarProps) ui.Node {
 	rates := currency.Rates{Base: props.Base, Rates: props.App.Settings().FXRates}
 	projection, projectionErr := txncalendar.MonthCashflow(anchor, weekStart, props.Shown, scopedRecurring, rates)
 	weeks := projection.Weeks
+	showScheduled := strings.TrimSpace(f.Text) == ""
+	if showScheduled {
+		weeks = txncalendar.FoldSettled(weeks, props.App.BillMatchPaidOccurrences(), now)
+	}
 	todayKey := txncalendar.DayKey(now)
 
 	// Picking a day writes the ledger's own range, so the calendar and the scope bar
@@ -171,13 +176,16 @@ func txnCalendarWidget(props txnCalendarProps) ui.Node {
 				MovedStr:  calMovedStr(day.Cashflow.Moved, props.Base),
 				AriaLabel: calDayAria(day.Date.Day(), day.Cashflow, props.Base),
 				Count:     day.Cashflow.Count,
-				Ghosts:    day.Ghosts,
+				Ghosts:    scheduledGhosts(day.Ghosts, showScheduled),
+				Rates:     rates,
 				OnPick:    pickDay,
 			}))
 		}
 		scheduled := 0
 		for _, day := range week.Days {
-			scheduled += len(day.Ghosts)
+			if showScheduled {
+				scheduled += len(day.Ghosts)
+			}
 		}
 		weekOf := pr.FormatDate(week.Days[0].Date)
 		future := dateutil.WeekStart(week.Days[0].Date, weekStart).After(dateutil.WeekStart(now, weekStart))
@@ -225,8 +233,15 @@ func txnCalendarWidget(props txnCalendarProps) ui.Node {
 				Span(css.Class("txn-cal-legend-dots"), Attr("style", "display:inline-flex;align-items:center"),
 					Span(css.Class("cal-dot"), Attr("style", "position:static;width:7px;height:7px;border-radius:50%;background:var(--accent)"))),
 				Span(uistate.T("transactions.calDotsLegend"))),
-			Div(css.Class("text-dim"), uistate.T("transactions.calScheduledFilterNote"))),
+			If(showScheduled, Div(css.Class("text-dim"), uistate.T("transactions.calScheduledFilterNote")))),
 	})
+}
+
+func scheduledGhosts(ghosts []txncalendar.Ghost, visible bool) []txncalendar.Ghost {
+	if !visible {
+		return nil
+	}
+	return ghosts
 }
 
 type txnCalWeekTotalProps struct {
@@ -379,16 +394,7 @@ func txnCalMonthCell(props txnCalMonthCellProps) ui.Node {
 
 	// A dot per ~5 transactions conveys density without crowding; at least one dot
 	// when there is any activity.
-	dots := 0
-	if props.Count > 0 {
-		dots = (props.Count + 4) / 5
-		if dots < 1 {
-			dots = 1
-		}
-		if dots > 5 {
-			dots = 5
-		}
-	}
+	dots := calTransactionDotCount(props.Count)
 	dotNodes := make([]any, 0, dots)
 	for i := 0; i < dots; i++ {
 		dotNodes = append(dotNodes, Span(css.Class("cal-dot")))
@@ -398,7 +404,27 @@ func txnCalMonthCell(props txnCalMonthCellProps) ui.Node {
 	// a title/tooltip.
 	ghostNodes := make([]any, 0, len(props.Ghosts))
 	for _, g := range props.Ghosts {
-		ghostNodes = append(ghostNodes, Span(css.Class("txn-cal-ghost text-dim"), Attr("title", g.Label), g.Label))
+		amount := money.New(g.Amount, g.Currency)
+		if g.NotPosted {
+			amount.Amount, _ = money.Abs(amount.Amount)
+		}
+		converted, err := props.Rates.Convert(amount, props.Rates.Base)
+		amountText := uistate.T("transactions.calScheduledAmountUnavailable")
+		if err == nil {
+			amountText, _ = fmtLedgerAmount(converted, false)
+			if g.NotPosted {
+				amountText = strings.TrimPrefix(amountText, "+")
+			}
+		}
+		text := uistate.T("transactions.calScheduledDue", amountText, g.Label)
+		className := "txn-cal-ghost text-dim"
+		aria := uistate.T("transactions.calScheduledDueAria", g.Label, amountText)
+		if g.NotPosted {
+			text = uistate.T("transactions.calNotPosted", amountText, g.Label)
+			className = "txn-cal-ghost txn-cal-ghost-missed"
+			aria = uistate.T("transactions.calNotPostedAria", g.Label, amountText)
+		}
+		ghostNodes = append(ghostNodes, Span(css.Class(className), Attr("aria-label", aria), Attr("title", aria), text))
 	}
 
 	label := props.AriaLabel
@@ -440,4 +466,15 @@ func txnCalMonthCell(props txnCalMonthCellProps) ui.Node {
 		Fragment(ghostNodes...),
 	)
 	return Button(args...)
+}
+
+func calTransactionDotCount(count int) int {
+	if count <= 0 {
+		return 0
+	}
+	dots := 1 + (count-1)/5
+	if dots > 5 {
+		return 5
+	}
+	return dots
 }
