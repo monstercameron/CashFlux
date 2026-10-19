@@ -5,6 +5,8 @@
 package screens
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -121,7 +123,7 @@ func buildAssistantTransfer(raw json.RawMessage, from, to domain.Account, rates 
 	}
 	opID := a.OperationID
 	if opID == "" {
-		opID = id.New()
+		opID = generatedAssistantTransferOperationID(raw, from, to, rates, now, desc)
 	}
 	build.params.OperationID = opID
 	build.params.FromAccountID = from.ID
@@ -134,6 +136,15 @@ func buildAssistantTransfer(raw json.RawMessage, from, to domain.Account, rates 
 		return transferToolBuild{}, fmt.Errorf("the two accounts must be different")
 	}
 	return build, nil
+}
+
+func generatedAssistantTransferOperationID(raw json.RawMessage, from, to domain.Account, rates currency.Rates, now time.Time, desc string) string {
+	key, ok := assistantTransferBuildCacheKey(raw, from, to, rates, now, desc)
+	if !ok {
+		key = fmt.Sprintf("%s\x00%s\x00%s\x00%s\x00%d\x00%s", string(raw), from.ID, to.ID, rates.Base, now.UnixNano(), desc)
+	}
+	sum := sha256.Sum256([]byte(key))
+	return "transfer_" + hex.EncodeToString(sum[:24])
 }
 
 func assistantTransferPreview(build transferToolBuild) string {
@@ -156,6 +167,21 @@ func assistantTransferPreview(build transferToolBuild) string {
 		preview += fmt.Sprintf("\nWARNING: destination amount differs from today's rate by %.0f%%.", pct)
 	}
 	return preview
+}
+
+func assistantTransferBuildCacheKey(raw json.RawMessage, from, to domain.Account, rates currency.Rates, now time.Time, desc string) (string, bool) {
+	key, err := json.Marshal(struct {
+		Args  string
+		From  domain.Account
+		To    domain.Account
+		Rates currency.Rates
+		Now   time.Time
+		Desc  string
+	}{string(raw), from, to, rates, now, desc})
+	if err != nil {
+		return "", false
+	}
+	return string(key), true
 }
 
 // approvalReq is a pending mutating tool awaiting the user's yes/no in the chat.
@@ -1251,7 +1277,9 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates, tier a
 				if err != nil {
 					return "Transfer cannot be prepared: " + err.Error()
 				}
-				transferBuilds[string(raw)] = built
+				if key, ok := assistantTransferBuildCacheKey(raw, from, to, rates, now, built.params.Desc); ok {
+					transferBuilds[key] = built
+				}
 				return assistantTransferPreview(built)
 			},
 			run: func(raw json.RawMessage) string {
@@ -1267,15 +1295,20 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates, tier a
 				if !ok2 {
 					return "No account matching “" + a.To + "”."
 				}
-				built, ok := transferBuilds[string(raw)]
+				desc := uistate.T("assistant.transferToDesc", to.Name)
+				key, cacheable := assistantTransferBuildCacheKey(raw, from, to, rates, now, desc)
+				built, ok := transferBuilds[key]
+				ok = ok && cacheable
 				if !ok {
 					var err error
-					built, err = buildAssistantTransfer(raw, from, to, rates, now, uistate.T("assistant.transferToDesc", to.Name))
+					built, err = buildAssistantTransfer(raw, from, to, rates, now, desc)
 					if err != nil {
 						return "Couldn't prepare the transfer: " + err.Error()
 					}
 				}
-				delete(transferBuilds, string(raw))
+				if cacheable {
+					delete(transferBuilds, key)
+				}
 				if built.params.ReceivedMinor == 0 && !built.hasConversion {
 					return "Couldn't record the transfer: no exchange rate is available; enter the amount received."
 				}

@@ -70,6 +70,38 @@ func TestAssistantTransferWithoutRateIsExplicitlyRefused(t *testing.T) {
 	}
 }
 
+func TestAssistantTransferPreviewDoesNotReuseRatesFromEarlierBuild(t *testing.T) {
+	from, to := transferTestAccounts()
+	raw := json.RawMessage(`{"from_account":"Euro account","to_account":"Dollar account","amount":100}`)
+	now := time.Date(2026, 10, 19, 0, 0, 0, 0, time.UTC)
+
+	withRate, err := buildAssistantTransfer(raw, from, to,
+		currency.Rates{Base: "USD", Rates: map[string]float64{"EUR": 1.1}}, now, "Transfer")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if preview := assistantTransferPreview(withRate); !strings.Contains(preview, "$110.00") {
+		t.Fatalf("rate-backed preview does not show the converted amount: %q", preview)
+	}
+	withRateKey, _ := assistantTransferBuildCacheKey(raw, from, to, currency.Rates{Base: "USD", Rates: map[string]float64{"EUR": 1.1}}, now, "Transfer")
+	emptyRateKey, _ := assistantTransferBuildCacheKey(raw, from, to, currency.Rates{Base: "USD", Rates: map[string]float64{}}, now, "Transfer")
+	if withRateKey == emptyRateKey {
+		t.Fatal("transfer cache key does not include the exchange rates")
+	}
+
+	withoutRate, err := buildAssistantTransfer(raw, from, to, currency.Rates{Base: "USD", Rates: map[string]float64{}}, now, "Transfer")
+	if err != nil {
+		t.Fatal(err)
+	}
+	preview := strings.ToLower(assistantTransferPreview(withoutRate))
+	if withoutRate.params.ReceivedMinor != 0 || withoutRate.hasConversion {
+		t.Fatalf("empty rates reused a prior conversion: params=%+v conversion=%v", withoutRate.params, withoutRate.hasConversion)
+	}
+	if strings.Contains(preview, "$110.00") || !strings.Contains(preview, "no exchange rate") || !strings.Contains(preview, "will be refused") {
+		t.Errorf("empty-rate preview must refuse without showing an earlier amount, got %q", preview)
+	}
+}
+
 func TestAssistantTransferAmountParsingRejectsInvalidValues(t *testing.T) {
 	from, to := transferTestAccounts()
 	for _, amount := range []string{"-1", "NaN", "Infinity", "1e999", "92233720368547759"} {
@@ -90,11 +122,19 @@ func TestAssistantTransferOperationIDValidationAndGeneration(t *testing.T) {
 		}
 	}
 	raw := json.RawMessage(`{"from_account":"Euro account","to_account":"Dollar account","amount":1}`)
-	built, err := buildAssistantTransfer(raw, from, to, currency.Rates{Base: "EUR"}, time.Now(), "Transfer")
+	now := time.Date(2026, 10, 19, 0, 0, 0, 0, time.UTC)
+	built, err := buildAssistantTransfer(raw, from, to, currency.Rates{Base: "EUR"}, now, "Transfer")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if built.params.OperationID == "" || !validTransferOperationID(built.params.OperationID) {
 		t.Errorf("generated operation id is invalid: %q", built.params.OperationID)
+	}
+	rebuilt, err := buildAssistantTransfer(raw, from, to, currency.Rates{Base: "EUR"}, now, "Transfer")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if built.params.OperationID != rebuilt.params.OperationID {
+		t.Errorf("identical transfer inputs generated different operation IDs: %q != %q", built.params.OperationID, rebuilt.params.OperationID)
 	}
 }

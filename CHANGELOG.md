@@ -90,6 +90,10 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **Assistant transfer preview can't reuse stale rates (SEC7.1).** The preview/run cache is keyed by the arguments, both
+  accounts, the full rate table, time and description, so a preview built with one set of rates is never reused after
+  the rates change; generated operation IDs are derived from the same inputs. Regression test: preview with rates, then
+  with none → refused.
 - **Budget rows and Edit form: no silent failures, pay-cycle keys, explained carry (BUDQ5).** A rejected inline limit save
   now shows the error and keeps the editor open with your value. Release-unused, raise-limit and recurring
   "last applied" writes use the shared pay-cycle period key. The goal-funded note follows the viewed period and, like the
