@@ -5,6 +5,7 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"syscall/js"
@@ -33,6 +34,15 @@ type toastUndoProps struct {
 	Atom state.Atom[uistate.Notice]
 }
 
+type toastDismissProps struct {
+	Atom state.Atom[uistate.Notice]
+}
+
+func toastDismissButton(props toastDismissProps) uic.Node {
+	dismiss := uic.UseEvent(func() { props.Atom.Set(props.Atom.Get().Cleared()) })
+	return Button(css.Class("toast-x"), Attr("type", "button"), Attr("title", uistate.T("action.dismiss")), Attr("aria-label", uistate.T("action.dismiss")), OnClick(dismiss), "×")
+}
+
 // toastUndoButton is a dedicated component so that its UseEvent hook is
 // registered at a stable (non-loop) call-site — required by the GoWebComponents
 // framework (CLAUDE.md §"CRITICAL gotchas"). It renders the "Undo" button
@@ -56,10 +66,10 @@ func toastUndoButton(props toastUndoProps) uic.Node {
 
 	label := uistate.T("toast.undoBtn")
 	if label == "toast.undoBtn" {
-		label = "Undo"
+		label = uistate.T("tc4n9.undo")
 	}
 	if pending.Get() {
-		label = "Saving undo..."
+		label = uistate.T("tc4n9.savingUndo")
 	}
 	return Button(
 		Disabled(pending.Get()),
@@ -89,8 +99,11 @@ func toastNoticeIsUndoable(text string) bool {
 }
 
 func toastV5RowCopy(text string) (string, string) {
-	if strings.HasPrefix(text, "Saved — ") {
-		account, balance, ok := strings.Cut(strings.TrimPrefix(text, "Saved — "), " is now ")
+	for _, prefix := range []string{"Saved. ", "Saved — "} {
+		if !strings.HasPrefix(text, prefix) {
+			continue
+		}
+		account, balance, ok := strings.Cut(strings.TrimPrefix(text, prefix), " is now ")
 		if ok {
 			balance = strings.TrimSuffix(strings.TrimSpace(balance), ".")
 			return uistate.T("v5row.transactionSaved"), fmt.Sprintf(uistate.T("v5row.accountBalance"), account, balance)
@@ -100,6 +113,10 @@ func toastV5RowCopy(text string) (string, string) {
 		return uistate.T("v5row.transactionSaved"), ""
 	}
 	return text, ""
+}
+
+func toastDurabilityFailureIsRetryable(err error) bool {
+	return err != nil && !errors.Is(err, appstate.ErrStaleDataset)
 }
 
 func toastV5RowCountsTime(visibility string, hovered, focused bool) bool {
@@ -142,7 +159,9 @@ func Toast() uic.Node {
 						return
 					}
 					if err != nil {
-						uistate.ReportPersistFailure("notice", acknowledge)
+						if toastDurabilityFailureIsRetryable(err) {
+							uistate.ReportPersistFailure("notice", acknowledge)
+						}
 						return
 					}
 					uistate.ClearPersistFailure("notice")
@@ -258,7 +277,6 @@ func Toast() uic.Node {
 		Span(css.Class("toast-msg"), message),
 		If(balanceLine != "", Span(css.Class("toast-balance"), balanceLine)),
 		If(showUndo, uic.CreateElement(toastUndoButton, toastUndoProps{Atom: atom})),
-		Button(css.Class("toast-x"), Attr("type", "button"), Attr("title", uistate.T("action.dismiss")), Attr("aria-label", uistate.T("action.dismiss")),
-			OnClick(func() { atom.Set(n.Cleared()) }), "×"),
+		uic.CreateElement(toastDismissButton, toastDismissProps{Atom: atom}),
 	))
 }

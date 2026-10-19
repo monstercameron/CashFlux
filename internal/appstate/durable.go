@@ -10,6 +10,10 @@ import (
 // ErrDurabilityUnavailable means no durable storage boundary is installed.
 var ErrDurabilityUnavailable = errors.New("saving is not ready; please keep this page open and try again")
 
+// ErrStaleDataset means another page committed a newer dataset generation.
+// Retrying from this page cannot succeed; the caller must reload before editing.
+var ErrStaleDataset = errors.New("another page saved this workspace; reload to continue")
+
 // DurableResult describes completion of a requested store revision. A nil Err
 // means that revision, including all its records, committed to durable storage.
 type DurableResult struct {

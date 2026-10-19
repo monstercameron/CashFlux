@@ -334,10 +334,10 @@ func requestUndoNotice(redo bool) {
 		paletteNotify(uistate.T(emptyKey), false)
 		return
 	}
-	paletteNotify("Saving undo...", false)
+	paletteNotify(uistate.T("tc4n9.savingUndo"), false)
 	undoLastChangeThen(redo, func(err error) {
 		if err != nil {
-			paletteNotify("This undo is not saved. Keep this page open and try again.", true)
+			paletteNotify(uistate.T("tc4n9.undoNotSaved"), true)
 			return
 		}
 		paletteNotify(uistate.T(successKey), false)

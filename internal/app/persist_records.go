@@ -26,6 +26,19 @@ import (
 const datasetHeadKey = "cashflux:dataset:head"
 const datasetRecordPrefix = "cashflux:dataset:record:"
 
+const journalCheckpointRecordLimit = 128
+
+func shouldCheckpointJournal(initialized, forced bool, journalRecords int) bool {
+	return !initialized || forced || journalRecords >= journalCheckpointRecordLimit
+}
+
+func datasetSaveGenerationError(workspaceMatches, generationMatches bool) error {
+	if workspaceMatches && !generationMatches {
+		return appstate.ErrStaleDataset
+	}
+	return errors.New("the workspace changed before saving could finish")
+}
+
 // A head authenticates the exact checkpoint and workspace to which its immutable
 // chain belongs. Each transition is a separate ENC3 record. A head and generation
 // advance in the SAME strict transaction as those records; the CAS rejects stale
@@ -128,6 +141,39 @@ func recordWorkspacePrefix(workspace string) string {
 	return datasetRecordPrefix + checkpointHash(workspace) + ":"
 }
 
+func journalKeysFromHead(head datasetRecordHead, workspace string, read func(string) (string, bool, error)) ([]string, error) {
+	var keys []string
+	seen := map[string]bool{}
+	prefix := recordWorkspacePrefix(workspace)
+	for key := head.Tail; key != ""; {
+		if seen[key] || !strings.HasPrefix(key, prefix) {
+			return nil, errors.New("saved change chain is invalid")
+		}
+		seen[key] = true
+		raw, exists, err := read(key)
+		if err != nil {
+			return nil, err
+		}
+		if !exists {
+			return nil, fmt.Errorf("saved change batch is missing: %s", key)
+		}
+		var node datasetRecordNode
+		if err := json.Unmarshal([]byte(raw), &node); err != nil {
+			return nil, fmt.Errorf("read saved change batch: %w", err)
+		}
+		for _, recordKey := range node.Keys {
+			if !strings.HasPrefix(recordKey, prefix) || seen[recordKey] {
+				return nil, errors.New("saved journal record key is invalid or repeated")
+			}
+			seen[recordKey] = true
+			keys = append(keys, recordKey)
+		}
+		keys = append(keys, key)
+		key = node.Parent
+	}
+	return keys, nil
+}
+
 var hydratedRecordApp *appstate.App
 var hydratedRecordCursor, hydratedRecordRevision uint64
 
@@ -166,6 +212,7 @@ type durableWaiter struct {
 }
 
 func newRecordAutosave(app *appstate.App, commit func(map[string]string, map[string]string, func(error)), push func([]byte, time.Time)) (func(), func()) {
+	resetStaleDatasetState()
 	durableNoticeApp = app
 	workspace := recordWorkspace()
 	checkpoint := browserstore.GetString(datasetStoreKey)
@@ -173,6 +220,11 @@ func newRecordAutosave(app *appstate.App, commit func(map[string]string, map[str
 	_ = json.Unmarshal([]byte(browserstore.GetString(datasetHeadKey)), &head)
 	if head.Generation != readDatasetGen() || head.BaseHash != checkpointHash(checkpoint) || head.Workspace != recordWorkspace() {
 		head = datasetRecordHead{}
+	}
+	journalKeys, journalErr := journalKeysFromHead(head, workspace, browserstore.GetSecure)
+	if journalErr != nil {
+		app.Log().Error("load journal compaction state", "err", journalErr)
+		journalKeys = nil
 	}
 	baseline, baselineErr := localDatasetExport(app)
 	mirror, mirrorErr := undosnap.ToSnapshot(baseline)
@@ -195,7 +247,12 @@ func newRecordAutosave(app *appstate.App, commit func(map[string]string, map[str
 	completeWaiters := func(revision, cursor uint64, err error) {
 		if appstate.Default == app && recordWorkspace() == workspace {
 			if err != nil {
-				uistate.ReportPersistFailure("dataset", func() { save() })
+				if errors.Is(err, appstate.ErrStaleDataset) {
+					uistate.ClearPersistFailure("dataset")
+					preserveStaleDatasetEdits(app, workspace)
+				} else {
+					uistate.ReportPersistFailure("dataset", func() { save() })
+				}
 			} else {
 				uistate.ClearPersistFailure("dataset")
 			}
@@ -221,12 +278,16 @@ func newRecordAutosave(app *appstate.App, commit func(map[string]string, map[str
 		if inFlight {
 			return
 		}
+		if staleDatasetBlocked {
+			completeWaiters(app.Rev(), 0, appstate.ErrStaleDataset)
+			return
+		}
 		if appstate.Default != app || recordWorkspace() != workspace {
 			completeWaiters(app.Rev(), 0, errors.New("the workspace changed before saving could finish"))
 			return
 		}
 		if readDatasetGen() != datasetMyGen {
-			completeWaiters(app.Rev(), 0, errors.New("another tab saved this workspace; reload before saving more changes"))
+			completeWaiters(app.Rev(), 0, appstate.ErrStaleDataset)
 			return
 		}
 		if baselineErr != nil || mirrorErr != nil {
@@ -255,7 +316,7 @@ func newRecordAutosave(app *appstate.App, commit func(map[string]string, map[str
 			}
 		}
 		if recordWorkspace() != workspace || readDatasetGen() != datasetMyGen {
-			completeWaiters(app.Rev(), 0, errors.New("another tab saved this workspace; reload before saving more changes"))
+			completeWaiters(app.Rev(), 0, datasetSaveGenerationError(recordWorkspace() == workspace, readDatasetGen() == datasetMyGen))
 			return
 		}
 		inFlight = true
@@ -297,7 +358,7 @@ func newRecordAutosave(app *appstate.App, commit func(map[string]string, map[str
 			var fullDataset []byte
 			nextGeneration := id.New()
 			nextHead := head
-			full := !initialized || forceVersion != savedForce
+			full := shouldCheckpointJournal(initialized, forceVersion != savedForce, len(journalKeys))
 			if full {
 				data, err := localDatasetExport(app)
 				if err != nil {
@@ -306,6 +367,9 @@ func newRecordAutosave(app *appstate.App, commit func(map[string]string, map[str
 				}
 				fullDataset = data
 				values[datasetStoreKey], values[datasetHeadKey] = encodeRecordCheckpoint(data), ""
+				for _, key := range journalKeys {
+					values[key] = ""
+				}
 				nextHead = datasetRecordHead{}
 			} else {
 				prefix := recordWorkspacePrefix(workspace) + nextGeneration + ":"
@@ -354,7 +418,7 @@ func newRecordAutosave(app *appstate.App, commit func(map[string]string, map[str
 			}
 			values[datasetGenKey] = nextGeneration
 			if suspendAutosave || appstate.Default != app || recordWorkspace() != workspace || readDatasetGen() != datasetMyGen {
-				fail(errors.New("the workspace changed before saving could finish"))
+				fail(datasetSaveGenerationError(recordWorkspace() == workspace, readDatasetGen() == datasetMyGen))
 				return
 			}
 
@@ -383,8 +447,14 @@ func newRecordAutosave(app *appstate.App, commit func(map[string]string, map[str
 				if full {
 					checkpoint = values[datasetStoreKey]
 					baseHash = checkpointHash(checkpoint)
+					journalKeys = nil
 					mirror, mirrorErr = undosnap.ToSnapshot(fullDataset)
 				} else {
+					for key := range values {
+						if strings.HasPrefix(key, recordWorkspacePrefix(workspace)) {
+							journalKeys = append(journalKeys, key)
+						}
+					}
 					_, mirrorErr = applyCapturedRecords(mirror, captured)
 				}
 				head, savedCursor, savedRevision, savedForce = nextHead, targetCursor, targetRevision, targetForce

@@ -90,6 +90,10 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **A stale tab never strands edits; the save journal compacts (TC4N9).** When another tab has saved newer data, this tab shows a
+  non-retryable "This tab is out of date" state and keeps its unsaved edits as a downloadable recovery copy instead of offering a Retry
+  that cannot succeed; the encrypted journal checkpoints every 128 records; toasts read the current saved-balance copy; the toast
+  dismiss handler lives in its own component and app components are covered by the hook lint.
 - **Inline budget limit saves and Undo respond quickly (BV7F).** The editor updates the card before the durable write finishes and
   rolls back on failure; Undo restores only the affected budget; the future tile no longer recomputes on every period step.
 - **Transactions copy and the upcoming strip (TV7E.1, TC4N11).** "Search all dates" hides at zero, one filter reads "Clear

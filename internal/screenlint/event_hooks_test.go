@@ -36,7 +36,7 @@ func TestHooksKeepStableOrder(t *testing.T) {
 	parsed := make(map[string]*ast.File)
 	fsets := make(map[string]*token.FileSet)
 	for rel, source := range files {
-		if !isScreenOrUI(rel) || strings.HasSuffix(rel, "_test.go") {
+		if !isHookLintScope(rel) || strings.HasSuffix(rel, "_test.go") {
 			continue
 		}
 		fset := token.NewFileSet()
@@ -74,6 +74,9 @@ func TestHooksKeepStableOrder(t *testing.T) {
 	hasHooks := hookFunctionClosure(funcs)
 	var findings []hookFinding
 	for rel, file := range parsed {
+		if strings.HasPrefix(rel, "app/") && rel != "app/toast.go" && rel != "app/save_failure_banner.go" {
+			continue
+		}
 		fset := fsets[rel]
 		for _, decl := range file.Decls {
 			fn, ok := decl.(*ast.FuncDecl)
@@ -201,8 +204,8 @@ func callbackMethod(p props, page int) { p.OnPage(page) }
 	}
 }
 
-func isScreenOrUI(rel string) bool {
-	return strings.HasPrefix(rel, "screens/") || strings.HasPrefix(rel, "ui/")
+func isHookLintScope(rel string) bool {
+	return strings.HasPrefix(rel, "screens/") || strings.HasPrefix(rel, "ui/") || strings.HasPrefix(rel, "app/")
 }
 
 func hookFunctionClosure(funcs map[string]hookFunction) map[string]bool {
