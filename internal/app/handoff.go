@@ -79,7 +79,7 @@ func TryActivationHandoff() {
 		p.BackendDisabled = false
 		uistate.PersistPrefs(p.Normalize())
 		storeAuthTokenPair(out)
-		restartBackendSync()
+		reloadAfterIdentityChange("device activation sign-in")
 		uistate.PostNotice(uistate.T("authCards.activated"), false)
 	}()
 }

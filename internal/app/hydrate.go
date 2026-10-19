@@ -2,7 +2,11 @@
 
 package app
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/monstercameron/CashFlux/internal/store"
+)
 
 // hydrateAction is hydrateDataset's boot decision, factored out of the js/wasm
 // persist.go so it can be unit-tested natively.
@@ -30,4 +34,10 @@ func decideHydrate(datasetRaw string, seededBefore, allowSample bool) hydrateAct
 		return hydrateEmpty
 	}
 	return hydrateSeed
+}
+
+// unreadableDatasetReason classifies non-empty stored bytes that cannot safely
+// be loaded. Empty and valid datasets return an empty reason.
+func unreadableDatasetReason(raw []byte) string {
+	return store.UnreadableDatasetReason(raw)
 }

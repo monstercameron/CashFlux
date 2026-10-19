@@ -112,84 +112,65 @@ func backupEverything() {
 // replace, writes its contents back into localStorage, and reloads so boot
 // re-hydrates the restored install (L9). It's the inverse of backupEverything.
 func restoreFromBackup() {
-	pickFile(".json", func(data []byte) {
-		env, err := backup.UnmarshalEnvelope(data)
-		if err != nil {
-			paletteNotify(uistate.T("backup.restoreErr"), true)
-			return
-		}
-		// WF-BACKUP: say what the restore would REPLACE before doing it.
-		// Restoring is the most destructive thing this app can do, and "are you
-		// sure" is a question nobody can answer without being told what they are
-		// about to lose.
-		confirmModal(restoreConfirmMessage(env), true, func(ok bool) {
-			if !ok {
-				return
-			}
-			applyBackup(env)
-			reloadPage()
-		})
-	})
+	restoreFromBackupEncrypted()
 }
 
-// applyBackup writes a restored envelope back into localStorage: the workspace
-// registry, the appearance side-state, and each workspace's dataset (the active
-// one into the canonical key, the rest into their blobs, by registry order). The
-// autosave is suspended first so the dying page can't write the old in-memory
-// dataset back over what we restore.
+// applyBackup writes every restored key durably before reloading. The dataset
+// generation is adopted only after the active dataset has committed.
 func applyBackup(env backup.Envelope) {
-	suspendAutosave = true
-	if env.WorkspaceRegistry != "" {
-		lsSet(workspacesKey, env.WorkspaceRegistry)
-	}
-	restoreAppearance(env.Appearance)
-
-	r := loadRegistry()
-	if len(r.Workspaces) == 0 {
-		if len(env.Datasets) > 0 {
-			lsSet(datasetStoreKey, env.Datasets[0])
-			datasetMyGen = bumpDatasetGen()
-		}
+	if datasetQuarantined {
+		paletteNotify("This data is quarantined. Download or recover it before restoring a backup.", true)
 		return
 	}
-	for i, w := range r.Workspaces {
-		if i >= len(env.Datasets) {
-			break
-		}
-		if w.ID == r.ActiveID {
-			lsSet(datasetStoreKey, env.Datasets[i])
-			datasetMyGen = bumpDatasetGen()
-		} else {
-			saveBlob(w.ID, map[string]string{datasetStoreKey: env.Datasets[i]})
+	suspendAutosave = true
+	var writes []workspaceKeyValue
+	if env.WorkspaceRegistry != "" {
+		writes = append(writes, workspaceKeyValue{workspacesKey, env.WorkspaceRegistry})
+	}
+	for _, pair := range []struct{ key, value string }{
+		{themeKey, env.Appearance.Theme}, {fontsKey, env.Appearance.Fonts},
+		{bannerKey, env.Appearance.Banner}, {prefsKey, stripConnectionPrefsJSON(env.Appearance.Prefs)},
+	} {
+		writes = append(writes, workspaceKeyValue{pair.key, pair.value})
+	}
+	r := loadRegistry()
+	if env.WorkspaceRegistry != "" {
+		var restored workspace.Registry
+		if json.Unmarshal([]byte(env.WorkspaceRegistry), &restored) == nil {
+			r = restored
 		}
 	}
-}
-
-// restoreAppearance writes the device-local appearance keys, clearing any the
-// backup didn't carry so a restore is a faithful replacement, not a merge.
-func restoreAppearance(a backup.Appearance) {
-	setOrClear(themeKey, a.Theme)
-	setOrClear(fontsKey, a.Fonts)
-	setOrClear(bannerKey, a.Banner)
-	// Stripped on the way IN as well as out, so a backup written before the
-	// export-side strip existed — or one hand-edited to put them back — cannot
-	// point this device at somebody else's server under their credential.
-	setOrClear(prefsKey, stripConnectionPrefsJSON(a.Prefs))
+	activeDataset := ""
+	if len(r.Workspaces) == 0 {
+		if len(env.Datasets) > 0 {
+			activeDataset = env.Datasets[0]
+			writes = append(writes, workspaceKeyValue{datasetStoreKey, activeDataset})
+		}
+	} else {
+		for i, w := range r.Workspaces {
+			if i >= len(env.Datasets) {
+				break
+			}
+			if w.ID == r.ActiveID {
+				activeDataset = env.Datasets[i]
+				writes = append(writes, workspaceKeyValue{datasetStoreKey, activeDataset})
+			} else {
+				b, _ := json.Marshal(map[string]string{datasetStoreKey: env.Datasets[i]})
+				writes = append(writes, workspaceKeyValue{wsBlobKey(w.ID), string(b)})
+			}
+		}
+	}
+	reloadAfterDurableWrites(func(done func()) { writeKeyValuesThen(writes, done) }, func() {
+		if activeDataset != "" {
+			datasetMyGen = bumpDatasetGen()
+		}
+	}, reloadPage)
 }
 
 // strippedPrefsForBackup reads this device's prefs with the connection fields
 // removed, ready to travel in a backup file.
 func strippedPrefsForBackup() string {
 	return stripConnectionPrefsJSON(lsGet(prefsKey))
-}
-
-// setOrClear sets a localStorage key to val, or removes it when val is empty.
-func setOrClear(key, val string) {
-	if val != "" {
-		lsSet(key, val)
-		return
-	}
-	lsRemove(key)
 }
 
 // restoreConfirmMessage builds the confirmation, with a before-and-after when

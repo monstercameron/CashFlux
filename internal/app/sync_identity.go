@@ -7,10 +7,13 @@ package app
 import (
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/browserstore"
 	"github.com/monstercameron/CashFlux/internal/syncstate"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 )
@@ -41,10 +44,10 @@ type meResponse struct {
 
 // signedInUserID returns the account this browser is currently authenticated
 // as, or "" when unknown (signed out, or a session that predates this being
-// recorded). Empty is deliberately treated as "adoptable" rather than
-// "foreign" everywhere downstream — see syncstate.Binding.OwnedBy — because a
-// client that refused to sync state it had never labelled would strand every
-// existing install on the upgrade.
+// recorded). An empty OWNER on a piece of state is adoptable by a known
+// account — see syncstate.Binding.OwnedBy — but an empty SIGNED-IN identity
+// authorizes nothing: since SV0.1 queued work is parked, not pushed, while
+// the identity is unknown (syncstate.PushableEntry).
 func signedInUserID() string { return strings.TrimSpace(lsGet(syncUserIDKey)) }
 
 // setSignedInUserID records the account, and reports whether it CHANGED.
@@ -121,6 +124,11 @@ func refreshSignedInUserID(serverURL, token string) (string, bool) {
 func adoptIdentityForSync(serverURL, token string) {
 	userID, ok := refreshSignedInUserID(serverURL, token)
 	if !ok {
+		setSyncStatus(syncStatus{
+			State:   syncStateIdentityUnknown,
+			Pending: pendingSyncCount(),
+			Message: uistate.T("sync.identityUnknown"),
+		})
 		return
 	}
 	changed := setSignedInUserID(userID)
@@ -189,21 +197,27 @@ func uploadDecision() syncstate.UploadDecision {
 	}
 	userID := signedInUserID()
 	if strings.TrimSpace(userID) == "" {
-		// We do not know who this session is — /v1/me may be unreachable, the
-		// server may not offer it, or this may be a token-auth deployment that
-		// never had a user id to give. That is NOT a reason to stop syncing.
+		// We do not know who this session is, so nothing may be pushed
+		// (SV0.1, fail closed). This deliberately reverses the older
+		// fail-open rule, under which an unknown identity classified nothing
+		// as foreign: sign-out clears the recorded user ID, so in the window
+		// between signing out of account A and the next identity resolving,
+		// A's queued snapshots were pushable under account B's fresh token.
+		// The server rejecting a foreign workspace was the only guard, and it
+		// does not hold when both accounts own a workspace with the same ID
+		// (every install starts with "default").
 		//
-		// Blocking here was a real regression: it turned "we cannot identify
-		// you" into "never upload again", which breaks every working setup
-		// where the identity lookup does not answer. The server remains the
-		// authority on ownership, and it rejects what it should. Only its own
-		// verdict stops the queue.
+		// The work is parked, not dropped: once adoptIdentityForSync resolves
+		// the account (at boot, after the identity-change reload), the same
+		// entries are re-examined against a known owner. A workspace the
+		// server has already refused is still rebind-terminal rather than a
+		// mere wait.
 		for _, q := range queue {
 			if syncstate.IsWorkspaceNotFound(q.LastAttemptError) {
 				return syncstate.UploadRebind
 			}
 		}
-		return syncstate.UploadProceed
+		return syncstate.UploadSignIn
 	}
 	mine, foreign := splitQueueByOwner(queue, userID)
 	if len(mine) == 0 {
@@ -246,19 +260,65 @@ func blockedWorkspaceID() string {
 	return ""
 }
 
+// scopedEntry projects a queued mutation onto the pure scope type the
+// pushability decisions are made with (syncstate.ScopedEntry). The queue's
+// UserID field is the entry's owning account — captured when the edit was
+// queued, never re-read from the session at send time.
+func scopedEntry(q queuedSyncMutation) syncstate.ScopedEntry {
+	return syncstate.ScopedEntry{
+		WorkspaceID: q.WorkspaceID,
+		OwnerUserID: q.UserID,
+		BaseVersion: q.BaseVersion,
+		Hash:        q.Hash,
+	}
+}
+
+// splitPushableQueue divides queued work into what the signed-in account may
+// send and what stays parked, by the scope captured at enqueue time
+// (syncstate.PushableEntry). An unknown identity parks everything.
+func splitPushableQueue(queue []queuedSyncMutation) (pushable, parked []queuedSyncMutation) {
+	userID := signedInUserID()
+	for _, q := range queue {
+		if syncstate.PushableEntry(scopedEntry(q), userID) {
+			pushable = append(pushable, q)
+			continue
+		}
+		parked = append(parked, q)
+	}
+	return pushable, parked
+}
+
 // pushableQueue is the subset of queued work the signed-in account may send.
 // The flush loop iterates this rather than the raw queue, so another identity's
-// stranded snapshot is never pushed under the current token — which the server
-// would refuse anyway, but refusing it here keeps the queue's meaning honest.
+// stranded snapshot is never pushed under the current token.
 func pushableQueue(queue []queuedSyncMutation) []queuedSyncMutation {
-	userID := signedInUserID()
-	if strings.TrimSpace(userID) == "" {
-		// Unknown identity classifies nothing as foreign — see uploadDecision.
-		// Filtering on an identity we do not have would drop every entry.
-		return queue
+	pushable, _ := splitPushableQueue(queue)
+	return pushable
+}
+
+// refreshParkedQueueStatus reports parked work in the sync status instead of
+// letting it read as "synced" or as an ordinary backlog. Work owned by a
+// different account is waiting for that account to sign in again (or for a
+// rebind decision); work parked only because the identity has not resolved
+// yet says so. A no-op when nothing is parked, so the ordinary terminal
+// status of a flush is untouched.
+func refreshParkedQueueStatus() {
+	_, parked := splitPushableQueue(loadSyncQueue())
+	if len(parked) == 0 {
+		return
 	}
-	mine, _ := splitQueueByOwner(queue, userID)
-	return mine
+	scoped := make([]syncstate.ScopedEntry, 0, len(parked))
+	for _, q := range parked {
+		scoped = append(scoped, scopedEntry(q))
+	}
+	msg := "waiting for sign-in to be confirmed"
+	switch owners := syncstate.ParkedOwners(scoped); {
+	case len(owners) == 1 && owners[0] != signedInUserID():
+		msg = "waiting for " + owners[0]
+	case len(owners) > 1:
+		msg = "waiting for another account"
+	}
+	setSyncStatus(syncStatus{State: syncStateRebind, Pending: pendingSyncCount(), Message: msg})
 }
 
 // refreshRebindStatus puts the client into the blocked state when the queue
@@ -285,3 +345,47 @@ func refreshRebindStatus() {
 // account you are signed in as". It is deliberately not "error": an error
 // invites a retry, and retrying is the one thing that cannot work here.
 const syncStateRebind = "rebind"
+
+// syncStateIdentityUnknown means the client could not confirm the account
+// identity with the server. Queued writes stay paused until a later retry can
+// establish which account owns them.
+const syncStateIdentityUnknown = "identity-unknown"
+
+// reloadAfterIdentityChange ends every sign-in, sign-out and account switch
+// in a full page reload (SV0.1).
+//
+// Identity used to be re-resolved only at boot, in startBackendSync. Every
+// in-page sign-in path instead called restartBackendSync, which flushed the
+// queue and pulled without ever learning who the new session belonged to —
+// so queued work, the loaded dataset and the sync bookmarks kept the PREVIOUS
+// account's scope while the token was already the new account's. That is how
+// one account's data gets pushed into another's server copy, and no amount of
+// care inside the flush can fix a scope it was never told about. A reload is
+// the honest fix: boot re-runs startBackendSync → adoptIdentityForSync before
+// anything is pushed, with exactly the credentials now in storage and no
+// in-memory state left over from the old identity.
+//
+// The reload waits for durability first. The caller has just written the new
+// credentials (or cleared the old ones) through browserstore, whose writes
+// commit asynchronously; reloading before they land could boot the page on
+// the identity that was just replaced. browserstore.Barrier blocks until
+// every write issued before it has committed to IndexedDB — the same awaited
+// mechanism doRefreshAccessToken uses before releasing the cross-tab token
+// lock — so it runs in a goroutine (Barrier must never block a JS callback
+// stack) and the reload fires only from inside it. The sync watch and the
+// proactive-refresh countdown are stopped first so nothing can push, pull or
+// rotate a token under the outgoing identity while the barrier waits.
+func reloadAfterIdentityChange(reason string) {
+	log := slog.Default()
+	if app := appstate.Default; app != nil {
+		log = app.Log()
+	}
+	log.Info("reloading page after identity change", "reason", reason)
+	stopBackendWatch()
+	stopProactiveRefreshTimer()
+	dropSharedConn()
+	go func() {
+		browserstore.Barrier()
+		reloadPage()
+	}()
+}

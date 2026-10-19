@@ -42,6 +42,10 @@ func syncChipFace(state string) (labelKey, cls string, ok bool) {
 		return "sync.conflict", "sync-chip sync-warn", true
 	case "locked":
 		return "sync.locked", "sync-chip sync-warn", true
+	case syncStateLockedDifferentPasscode:
+		return "sync.lockedDifferentPasscode", "sync-chip sync-warn", true
+	case syncStateIdentityUnknown:
+		return "sync.identityUnknownLabel", "sync-chip sync-warn", true
 	case "error":
 		return "sync.error", "sync-chip sync-err", true
 	case syncStateRebind:

@@ -8,8 +8,13 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"syscall/js"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/applock"
+	"github.com/monstercameron/CashFlux/internal/browserstore"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 )
 
@@ -48,10 +53,18 @@ func newSalt() string {
 // callers such as hosted first-boot validate and hydrate the authoritative server
 // snapshot before there is any local dataset worth migrating.
 func installAppLock(passcode string, autoLockMinutes int, hint string) bool {
+	if current := loadAppLock(); current.Enabled && activePasscode != "" && activePasscode != passcode {
+		// A live passcode change must go through enableAppLock's vault migration.
+		return false
+	}
 	salt := newSalt()
 	if salt == "" {
 		return false
 	}
+	return installAppLockWithSalt(passcode, salt, autoLockMinutes, hint)
+}
+
+func installAppLockWithSalt(passcode, salt string, autoLockMinutes int, hint string) bool {
 	// Start from the current config (not a fresh zero) so changing the passcode
 	// carries over the lock-screen display prefs. On first set loadAppLock returns
 	// the zero config, so the defaults still apply.
@@ -72,6 +85,12 @@ func installAppLock(passcode string, autoLockMinutes int, hint string) bool {
 // enableAppLock sets a passcode (with a fresh salt) and persists it. Reports
 // whether it took (false for an empty passcode or RNG failure).
 func enableAppLock(passcode string, autoLockMinutes int, hint string) bool {
+	current := loadAppLock()
+	if current.Enabled && activePasscode != "" && activePasscode != passcode {
+		beginAppLockPasscodeChange(passcode, autoLockMinutes, hint)
+		// The setup form remains open until the re-key has durably completed.
+		return false
+	}
 	if !installAppLock(passcode, autoLockMinutes, hint) {
 		return false
 	}
@@ -89,18 +108,150 @@ func enableAppLock(passcode string, autoLockMinutes int, hint string) bool {
 	return true
 }
 
+var appLockPasscodeChangeInProgress bool
+
+func beginAppLockPasscodeChange(passcode string, autoLockMinutes int, hint string) {
+	if appLockPasscodeChangeInProgress {
+		return
+	}
+	salt := newSalt()
+	if salt == "" {
+		uistate.PostNotice(uistate.T("vault.rekeyFailed"), true)
+		return
+	}
+	oldPasscode := activePasscode
+	appLockPasscodeChangeInProgress = true
+	rekeyCredVault(oldPasscode, passcode, func(err error) {
+		if err != nil {
+			if shouldOfferUnreadableVaultDiscard(err) {
+				confirmDiscardUnreadableVault(passcode, salt, autoLockMinutes, hint)
+				return
+			}
+			appLockPasscodeChangeInProgress = false
+			uistate.PostNotice(uistate.T("vault.rekeyFailed"), true)
+			return
+		}
+		completeAppLockPasscodeChange(passcode, salt, autoLockMinutes, hint)
+	})
+}
+
+func completeAppLockPasscodeChange(passcode, salt string, autoLockMinutes int, hint string) {
+	appLockPasscodeChangeInProgress = false
+	if !installAppLockWithSalt(passcode, salt, autoLockMinutes, hint) {
+		uistate.PostNotice(uistate.T("vault.rekeyFailed"), true)
+		return
+	}
+	migrateDatasetAtRest()
+	if uistate.LoadPrefs().Normalize().BackendActive() {
+		pullActiveWorkspaceFromBackend(true)
+	}
+	if doc := js.Global().Get("document"); !doc.IsNull() && !doc.IsUndefined() {
+		if modal := doc.Call("getElementById", appLockSetupID); !modal.IsNull() && !modal.IsUndefined() {
+			modal.Get("style").Set("display", "none")
+		}
+	}
+	if appLockOnDone != nil {
+		appLockOnDone()
+	}
+}
+
+func confirmDiscardUnreadableVault(passcode, salt string, autoLockMinutes int, hint string) {
+	raw := browserstore.GetString(credVaultStoreKey)
+	if raw == "" {
+		appLockPasscodeChangeInProgress = false
+		uistate.PostNotice(uistate.T("vault.rekeyFailed"), true)
+		return
+	}
+	uistate.ConfirmModalLabeled(
+		uistate.T("vault.changeDiscardConfirm"),
+		uistate.T("vault.changeDiscardButton"), true,
+		func(ok bool) {
+			if !ok {
+				appLockPasscodeChangeInProgress = false
+				return
+			}
+			if browserstore.GetString(credVaultStoreKey) != raw {
+				appLockPasscodeChangeInProgress = false
+				uistate.PostNotice(uistate.T("vault.rekeyFailed"), true)
+				return
+			}
+			key := uniqueCredVaultQuarantineKey(time.Now().Unix(), func(candidate string) bool {
+				_, exists := browserstore.Get(candidate)
+				return exists
+			})
+			browserstore.SetDurable(key, raw, func(err error) {
+				if err != nil {
+					appLockPasscodeChangeInProgress = false
+					uistate.PostNotice(uistate.T("vault.quarantineFailed"), true)
+					return
+				}
+				browserstore.RemoveDurable(credVaultStoreKey, func(err error) {
+					if err != nil {
+						appLockPasscodeChangeInProgress = false
+						uistate.PostNotice(uistate.T("vault.quarantineFailed"), true)
+						return
+					}
+					completeAppLockPasscodeChange(passcode, salt, autoLockMinutes, hint)
+				})
+			})
+		},
+	)
+}
+
+func uniqueCredVaultQuarantineKey(unix int64, exists func(string) bool) string {
+	base := fmt.Sprintf("cashflux:quarantine:credvault:%d", unix)
+	key := base
+	for suffix := 1; exists != nil && exists(key); suffix++ {
+		key = fmt.Sprintf("%s-%d", base, suffix)
+	}
+	return key
+}
+
+func shouldOfferUnreadableVaultDiscard(err error) bool {
+	return errors.Is(err, errCredVaultUnreadable)
+}
+
 // disableAppLock removes the passcode lock and forgets the session passcode, so
 // the next autosave writes plaintext — completing the reverse (decrypt) migration.
-func disableAppLock() {
-	// Remove the PRF vault first (C282): once the lock is gone there is no
-	// passcode to wrap, so the vault is meaningless. Clear before wiping the
-	// config so an interrupted reload can't leave a dangling vault.
-	clearPasskey()
-	saveAppLock(applock.Config{})
-	activePasscode = ""
-	clearDatasetKeyCache()
-	clearArtifactKeyCache()
-	migrateDatasetAtRest() // rewrite the at-rest copy as plaintext now
+func disableAppLock(onDone ...func()) {
+	loadCredVaultWithPasscode(activePasscode, func(v credVault, err error) {
+		if err != nil {
+			uistate.PostNotice(uistate.T("vault.disableFailed"), true)
+			return
+		}
+		if len(v) > 0 {
+			uistate.ConfirmModalLabeled(
+				fmt.Sprintf(uistate.T("vault.disableConfirm"), len(v)),
+				uistate.T("vault.disableConfirmButton"), true,
+				func(ok bool) {
+					if ok {
+						removeVaultThenDisable(onDone...)
+					}
+				},
+			)
+			return
+		}
+		removeVaultThenDisable(onDone...)
+	})
+}
+
+func removeVaultThenDisable(onDone ...func()) {
+	// Commit an empty value before dropping the lock. This makes the vault
+	// unreachable only after its deletion has reached durable storage.
+	browserstore.SetThen(credVaultStoreKey, "", func() {
+		browserstore.Remove(credVaultStoreKey)
+		clearPasskey()
+		saveAppLock(applock.Config{})
+		activePasscode = ""
+		clearDatasetKeyCache()
+		clearArtifactKeyCache()
+		migrateDatasetAtRest()
+		for _, done := range onDone {
+			if done != nil {
+				done()
+			}
+		}
+	})
 }
 
 // setLockHideQuotes / setLockHideMeta flip the lock-screen content toggles on the

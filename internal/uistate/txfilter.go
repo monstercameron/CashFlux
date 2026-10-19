@@ -6,7 +6,9 @@ package uistate
 
 import (
 	"encoding/json"
+	"time"
 
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
 	"github.com/monstercameron/GoWebComponents/v5/state"
 )
@@ -35,7 +37,17 @@ func CurrentTxFilter() TxFilter { return loadTxFilter() }
 
 // PersistTxFilter saves the filter to localStorage.
 func PersistTxFilter(f TxFilter) {
-	data, err := json.Marshal(f.Normalize())
+	now := time.Now()
+	var previous TxFilter
+	if raw := kvGet(txFilterStoreID); raw != "" {
+		_ = json.Unmarshal([]byte(raw), &previous)
+	}
+	f = f.ResolvePeriodChange(previous, now).Normalize()
+	stored := f
+	if stored.PeriodPreset != txnfilter.PeriodCustom {
+		stored.From, stored.To = "", ""
+	}
+	data, err := json.Marshal(stored)
 	if err != nil {
 		return
 	}
@@ -47,11 +59,29 @@ func PersistTxFilter(f TxFilter) {
 func loadTxFilter() TxFilter {
 	raw := kvGet(txFilterStoreID)
 	if raw == "" {
-		return TxFilter{}.Normalize()
+		return defaultTxFilterAt(time.Now())
 	}
 	var f TxFilter
 	if err := json.Unmarshal([]byte(raw), &f); err != nil {
-		return TxFilter{}.Normalize()
+		return defaultTxFilterAt(time.Now())
 	}
-	return f.Normalize()
+	resolved := f.ResolvePeriod(time.Now()).Normalize()
+	if f.PeriodPreset != resolved.PeriodPreset || (resolved.PeriodPreset != txnfilter.PeriodCustom && (f.From != "" || f.To != "")) {
+		stored := resolved
+		if stored.PeriodPreset != txnfilter.PeriodCustom {
+			stored.From, stored.To = "", ""
+		}
+		if data, err := json.Marshal(stored); err == nil {
+			kvSet(txFilterStoreID, string(data))
+		}
+	}
+	return resolved
+}
+
+func defaultTxFilterAt(now time.Time) TxFilter {
+	start := dateutil.MonthStart(now)
+	end := dateutil.AddMonths(start, 1).AddDate(0, 0, -1)
+	f := (TxFilter{From: dateutil.FormatDate(start), To: dateutil.FormatDate(end), PeriodPreset: txnfilter.PeriodThisMonth}).Normalize()
+	f.PeriodPreset = txnfilter.PeriodThisMonth
+	return f
 }

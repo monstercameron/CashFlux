@@ -87,6 +87,10 @@ func backupEverythingEncrypted() {
 // have "a backup", not which format it happens to be in, and a picker that makes
 // them choose wrongly produces an error that looks like a corrupt file.
 func restoreFromBackupEncrypted() {
+	if datasetQuarantined {
+		paletteNotify("This data is quarantined. Download or recover it before restoring a backup.", true)
+		return
+	}
 	pickFile("", func(data []byte) {
 		if !cryptobox.IsEnvelope(data) {
 			// Plain backup — hand it to the existing path so there is one restore

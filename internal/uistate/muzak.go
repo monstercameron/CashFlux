@@ -7,6 +7,7 @@ package uistate
 import (
 	"strconv"
 
+	"github.com/monstercameron/CashFlux/internal/browserstore"
 	"github.com/monstercameron/GoWebComponents/v5/state"
 )
 
@@ -22,7 +23,7 @@ const (
 )
 
 // UseMuzakEnabled returns the shared on/off atom for the background music, seeded
-// from localStorage. Defaults to ON (music plays at low volume until toggled off).
+// from localStorage. Music is disabled unless the saved value is explicitly "1".
 // The atom is captured so SetMuzakEnabled can drive it from outside a render.
 func UseMuzakEnabled() state.Atom[bool] {
 	a := state.UseAtom(muzakAtomID, loadMuzakEnabled())
@@ -51,20 +52,23 @@ func SetMuzakEnabled(on bool) {
 
 // PersistMuzakEnabled remembers the music on/off choice across reloads.
 func PersistMuzakEnabled(on bool) {
-	v := "1"
-	if !on {
-		v = "0"
-	}
-	SettingKVSet(muzakStoreID, v)
+	value := MuzakSettingValue(on)
+	SettingKVSet(muzakStoreID, value)
+	// The JS player reads its synchronous IndexedDB cache through
+	// cashfluxStoreGet. Keep that cache aligned with the dataset-backed setting.
+	browserstore.Set(muzakStoreID, value)
 }
 
-// loadMuzakEnabled reads the saved choice, defaulting to ON when unset.
+// loadMuzakEnabled reads the saved choice, defaulting to OFF when unset or unknown.
 func loadMuzakEnabled() bool {
-	raw := SettingKVGet(muzakStoreID)
-	if raw == "" {
-		return true
+	value := SettingKVGet(muzakStoreID)
+	if !MuzakEnabledFromSetting(value) {
+		value = "0"
 	}
-	return raw != "0"
+	// Mirror the normalized choice so the JS player's pre-playback guard sees
+	// the same decision, including on a fresh device with a dataset setting.
+	browserstore.Set(muzakStoreID, value)
+	return MuzakEnabledFromSetting(value)
 }
 
 // UseMuzakVolume returns the shared background-music volume atom (0..1), seeded

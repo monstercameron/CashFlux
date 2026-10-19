@@ -144,7 +144,7 @@ func refreshLockMute(doc js.Value) {
 		return
 	}
 	btn.Get("style").Set("display", "")
-	if uistate.SettingKVGet(muzakEnabledKey) == "0" {
+	if !uistate.MuzakEnabledFromSetting(uistate.SettingKVGet(muzakEnabledKey)) {
 		btn.Set("textContent", uistate.T("applock.unmuteMusic")) // 🔇 — currently muted
 	} else {
 		btn.Set("textContent", uistate.T("applock.muteMusic")) // 🔊 — currently on
@@ -243,7 +243,7 @@ func buildAppLockGate(doc js.Value) {
 	muteCb := js.FuncOf(func(js.Value, []js.Value) any {
 		// Toggle off the PERSISTED source of truth (matches refreshLockMute), not muzak's
 		// transient in-memory `enabled`: currently muted → turn on, currently on → mute.
-		newEnabled := uistate.SettingKVGet(muzakEnabledKey) == "0"
+		newEnabled := !uistate.MuzakEnabledFromSetting(uistate.SettingKVGet(muzakEnabledKey))
 		// Persist the new on/off choice BEFORE telling the player, so the player's hard
 		// mute-check (musicMuted) reads the fresh value: on unmute it sees "1" and plays;
 		// on mute it sees "0" and refuses. Driving the shared atom (not just persisting)
@@ -354,8 +354,31 @@ func buildAppLockGate(doc js.Value) {
 			// re-write the in-memory dataset back into the storage we just cleared,
 			// silently undoing the wipe (L6 — a wipe must actually stay wiped).
 			suspendAutosave = true
-			wipeAllLocalData()
-			reloadPage()
+			pr := uistate.LoadPrefs().Normalize()
+			finish := js.FuncOf(func(js.Value, []js.Value) any {
+				clearAuthSession()
+				wipeAllLocalData(reloadPage)
+				return nil
+			})
+			var completed bool
+			complete := func() {
+				if completed {
+					return
+				}
+				completed = true
+				finish.Invoke()
+				finish.Release()
+			}
+			// Revoke the server session before local credentials are erased. The
+			// wipe proceeds after the request returns or after this short deadline.
+			signOutBackendSession(pr.ServerURL, effectiveServerToken(pr), pr.ServerCSRF, complete)
+			var timeout js.Func
+			timeout = js.FuncOf(func(js.Value, []js.Value) any {
+				complete()
+				timeout.Release()
+				return nil
+			})
+			js.Global().Call("setTimeout", timeout, 2000)
 		}
 		return nil
 	})
@@ -481,26 +504,33 @@ func lockQuoteText(dayOrdinal int) string {
 // wipeAllLocalData removes every cashflux:* entry from the browser store (and any
 // lingering localStorage copy) — the reset path for a forgotten passcode. The caller
 // reloads afterward (boot then re-seeds a fresh sample, as on first run).
-func wipeAllLocalData() {
+func wipeAllLocalData(then func()) {
+	queue := browserstore.GetString("cashflux:sync-queue")
 	for _, k := range browserstore.Keys() {
-		if strings.HasPrefix(k, "cashflux:") {
+		if strings.HasPrefix(k, "cashflux:") && k != "cashflux:sync-queue" {
 			browserstore.Remove(k)
 		}
 	}
 	// Belt-and-suspenders: clear any localStorage copies left from before migration.
 	ls := js.Global().Get("localStorage")
-	if ls.IsNull() || ls.IsUndefined() {
-		return
-	}
-	var keys []string
-	for i := 0; i < ls.Get("length").Int(); i++ {
-		if k := ls.Call("key", i); !k.IsNull() && !k.IsUndefined() && strings.HasPrefix(k.String(), "cashflux:") {
-			keys = append(keys, k.String())
+	if !ls.IsNull() && !ls.IsUndefined() {
+		var keys []string
+		for i := 0; i < ls.Get("length").Int(); i++ {
+			if k := ls.Call("key", i); !k.IsNull() && !k.IsUndefined() && strings.HasPrefix(k.String(), "cashflux:") {
+				keys = append(keys, k.String())
+			}
+		}
+		for _, k := range keys {
+			if k == "cashflux:sync-queue" {
+				continue
+			}
+			ls.Call("removeItem", k)
 		}
 	}
-	for _, k := range keys {
-		ls.Call("removeItem", k)
-	}
+	// IndexedDB serializes transactions against this object store. Committing
+	// the preserved queue rewrite fences all preceding delete transactions.
+	datasetMyGen = bumpDatasetGen()
+	browserstore.SetThen("cashflux:sync-queue", queue, then)
 }
 
 // setPasscodeFlow opens the in-app passcode setup form (no refresh callback —

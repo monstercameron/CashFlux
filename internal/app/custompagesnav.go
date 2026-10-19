@@ -256,7 +256,6 @@ type customPageRowProps struct {
 // click hooks stay stable across the list (the On*-hooks-in-loops rule). The menu
 // button is a sibling of the link (not nested), so clicking it doesn't navigate.
 func customPageRow(props customPageRowProps) uic.Node {
-	nav := router.UseNavigate()
 	open := uic.UseState(false)
 	menuID := uic.UseId()
 	// WAI-ARIA dismissal for the per-page ⋯ menu: Escape (refocus trigger) + outside
@@ -278,10 +277,10 @@ func customPageRow(props customPageRowProps) uic.Node {
 		cls = "nav nv " + navBase + " " + tw.Fold(tw.TextFaint)
 	}
 
-	link := A(ClassStr(cls), Title(p.Name), OnClick(func() { nav.Navigate(path) }))
+	link := A(ClassStr(cls), Title(p.Name), Attr("href", path))
 	if props.OnDragStart != nil {
 		onStart, onDrop := props.OnDragStart, props.OnDrop
-		link = A(ClassStr(cls), Title(p.Name), OnClick(func() { nav.Navigate(path) }),
+		link = A(ClassStr(cls), Title(p.Name), Attr("href", path),
 			Attr("draggable", "true"),
 			OnDragStart(func() {
 				if onStart != nil {
@@ -298,7 +297,7 @@ func customPageRow(props customPageRowProps) uic.Node {
 			Span(css.Class(tw.Truncate), p.Name),
 		)
 	} else {
-		link = A(ClassStr(cls), Title(p.Name), OnClick(func() { nav.Navigate(path) }),
+		link = A(ClassStr(cls), Title(p.Name), Attr("href", path),
 			ui.Icon(icon.Page, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
 			Span(css.Class(tw.Truncate), p.Name),
 		)

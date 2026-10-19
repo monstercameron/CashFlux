@@ -78,6 +78,7 @@ func TxnEditHost() uic.Node {
 		Height:     uiw.FlipMediumH,
 		FormID:     "txn-edit-form",
 		SaveTestID: "txn-edit-save",
+		LeftFooter: uic.CreateElement(screens.TxnEditDeleteFooter, screens.TransactionEditFormProps{TxnID: id, OnDone: close}),
 		OnClose:    close,
 		Back:       uic.CreateElement(screens.TransactionEditForm, screens.TransactionEditFormProps{TxnID: id, OnDone: close}),
 	})

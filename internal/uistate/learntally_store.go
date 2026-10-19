@@ -47,6 +47,7 @@ func SaveLearnTally(t learntally.Tally) {
 		return
 	}
 	SettingKVSet(learnTallyKey, string(b))
+	BumpDataRevision()
 }
 
 // IncrementLearnTally loads the tally, records one correction of payee→categoryID,
@@ -95,4 +96,5 @@ func SaveLearnThreshold(n int) {
 		n = 1
 	}
 	SettingKVSet(learnThresholdKey, strconv.Itoa(n))
+	BumpDataRevision()
 }

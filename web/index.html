@@ -343,10 +343,82 @@
           return;
         }
 
-        // Register the service worker for offline/installability (best-effort).
+        // Register the service worker for offline/installability (best-effort),
+        // versioned by build (SV7a). build.json — always fetched with
+        // cache:"no-store", never service-worker cached — names the build the
+        // server currently serves. Registering ./sw.js?build=<buildId> makes a
+        // new deploy a new script URL, which is what triggers a fresh install;
+        // the stamped worker then WAITS instead of taking over, and the wasm
+        // app (internal/app/swupdate.go) offers "An update is ready — Reload".
+        // No build.json (gwc dev) registers the plain worker, which keeps the
+        // immediate-activation live-reload behaviour. The globals set here are
+        // the contract swupdate.go reads: __cashfluxBuild (active build info),
+        // __cashfluxUpdateReady, __cashfluxApplyUpdate(), __cashfluxRegisterBuild(id),
+        // plus the cashflux:build-known / cashflux:update-ready events.
         if ("serviceWorker" in navigator) {
           window.addEventListener("load", function () {
-            navigator.serviceWorker.register("./sw.js").catch(function () {});
+            var registeredFor = null;
+            function wireRegistration(reg) {
+              window.__cashfluxSWRegistration = reg;
+              function announce(worker) {
+                // "installed" with an existing controller means this worker is
+                // WAITING behind the build this tab is running. No controller
+                // means a first install, which activates on its own.
+                if (!worker || !navigator.serviceWorker.controller) return;
+                window.__cashfluxUpdateReady = true;
+                window.dispatchEvent(new CustomEvent("cashflux:update-ready"));
+                try {
+                  new BroadcastChannel("cashflux-build").postMessage({
+                    type: "update-ready",
+                    buildId: (window.__cashfluxBuild || {}).buildId || "",
+                  });
+                } catch (e) {}
+              }
+              if (reg.waiting) announce(reg.waiting);
+              reg.addEventListener("updatefound", function () {
+                var w = reg.installing;
+                if (!w) return;
+                w.addEventListener("statechange", function () {
+                  if (w.state === "installed") announce(w);
+                });
+              });
+            }
+            function register(buildId) {
+              buildId = buildId && buildId !== "dev" ? buildId : "";
+              if (registeredFor === buildId) return Promise.resolve();
+              registeredFor = buildId;
+              var url = "./sw.js" + (buildId ? "?build=" + encodeURIComponent(buildId) : "");
+              return navigator.serviceWorker
+                .register(url, { updateViaCache: "none" })
+                .then(wireRegistration)
+                .catch(function () {});
+            }
+            // Let the wasm app pull a newer worker in without a reload when it
+            // learns (build.json poll, another tab) that the build moved on.
+            window.__cashfluxRegisterBuild = register;
+            window.__cashfluxApplyUpdate = function () {
+              var reg = window.__cashfluxSWRegistration;
+              if (reg && reg.waiting) {
+                reg.waiting.postMessage({ type: "SKIP_WAITING" });
+                return true;
+              }
+              return false;
+            };
+            fetch("./build.json", { cache: "no-store", credentials: "same-origin" })
+              .then(function (r) { return r.ok ? r.json() : null; })
+              .catch(function () { return null; })
+              .then(function (info) {
+                if (info && info.buildId) {
+                  window.__cashfluxBuild = info;
+                  window.dispatchEvent(new CustomEvent("cashflux:build-known", { detail: info }));
+                  register(info.buildId);
+                } else {
+                  register("");
+                }
+              });
+            // A hung build.json must never block registration (offline first
+            // load keeps today's behaviour).
+            setTimeout(function () { if (registeredFor === null) register(""); }, 3000);
           });
         }
 

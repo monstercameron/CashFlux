@@ -11,6 +11,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/memberrole"
 	"github.com/monstercameron/CashFlux/internal/scope"
+	"github.com/monstercameron/CashFlux/internal/txnfilter"
 	"github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -72,6 +73,7 @@ func MemberSwitcher() uic.Node {
 	// order (which matches the household's defined member sequence).
 	opts := []any{
 		Option(Value(""), SelectedIf(current == ""), uistate.T("member.everyone")),
+		Option(Value(txnfilter.UnassignedMemberID), SelectedIf(current == txnfilter.UnassignedMemberID), uistate.T("member.unassigned")),
 	}
 	for _, m := range members {
 		m := m

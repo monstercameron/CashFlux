@@ -61,6 +61,67 @@ func lsSetThen(key, val string, done func()) {
 func lsRemove(key string) { browserstore.Remove(key) }
 func reloadPage()         { js.Global().Get("location").Call("reload") }
 
+type workspaceKeyValue struct{ key, value string }
+
+func writeKeyValuesThen(values []workspaceKeyValue, done func()) {
+	if len(values) == 0 {
+		if done != nil {
+			done()
+		}
+		return
+	}
+	first := values[0]
+	lsSetThen(first.key, first.value, func() { writeKeyValuesThen(values[1:], done) })
+}
+
+func saveBlobThen(wsID string, b map[string]string, done func()) {
+	data, err := json.Marshal(b)
+	if err != nil {
+		if done != nil {
+			done()
+		}
+		return
+	}
+	lsSetThen(wsBlobKey(wsID), string(data), done)
+}
+
+func saveRegistryThen(r workspace.Registry, done func()) {
+	data, err := json.Marshal(r)
+	if err != nil {
+		if done != nil {
+			done()
+		}
+		return
+	}
+	lsSetThen(workspacesKey, string(data), done)
+}
+
+func applyBundleThen(b map[string]string, done func()) {
+	values := make([]workspaceKeyValue, 0, len(perWorkspaceKeys))
+	for _, key := range perWorkspaceKeys {
+		values = append(values, workspaceKeyValue{key: key, value: b[key]})
+	}
+	writeKeyValuesThen(values, done)
+}
+
+func reloadWorkspaceAfterWrites() {
+	bumpAndReloadWorkspace(bumpDatasetGen, func(generation string) {
+		datasetMyGen = generation
+	}, reloadPage)
+}
+
+func bumpAndReloadWorkspace(bump func() string, adopt func(string), reload func()) {
+	adopt(bump())
+	reload()
+}
+
+func reloadAfterDurableWrites(write func(func()), adopt func(), reload func()) {
+	write(func() {
+		adopt()
+		reload()
+	})
+}
+
 // loadRegistry reads the workspace registry from localStorage (empty when absent).
 func loadRegistry() workspace.Registry {
 	var r workspace.Registry
@@ -176,7 +237,7 @@ func importWorkspace(data []byte) bool {
 	}
 	r := loadRegistry()
 	suspendAutosave = true
-	saveBlob(r.ActiveID, bundleCurrent())
+	current := bundleCurrent()
 	newID := id.NewWithPrefix("ws")
 	color := env.Color
 	if color == "" {
@@ -189,10 +250,14 @@ func importWorkspace(data []byte) bool {
 	// or one hand-edited to add them back, still cannot inject an endpoint or a
 	// bearer token into this device's prefs.
 	imported := stripConnectionPrefs(env.Bundle)
-	saveBlob(newID, imported)
-	saveRegistry(r.Add(newID, name).SetActive(newID).SetColor(newID, color))
-	applyBundle(imported)
-	reloadPage()
+	next := r.Add(newID, name).SetActive(newID).SetColor(newID, color)
+	saveBlobThen(r.ActiveID, current, func() {
+		saveBlobThen(newID, imported, func() {
+			saveRegistryThen(next, func() {
+				applyBundleThen(imported, reloadWorkspaceAfterWrites)
+			})
+		})
+	})
 	return true
 }
 
@@ -265,10 +330,14 @@ func switchWorkspace(targetID string) {
 		return
 	}
 	suspendAutosave = true
-	saveBlob(r.ActiveID, bundleCurrent())
-	applyBundle(loadBlob(targetID))
-	saveRegistry(r.SetActive(targetID))
-	reloadPage()
+	current := bundleCurrent()
+	target := loadBlob(targetID)
+	next := r.SetActive(targetID)
+	saveBlobThen(r.ActiveID, current, func() {
+		applyBundleThen(target, func() {
+			saveRegistryThen(next, reloadWorkspaceAfterWrites)
+		})
+	})
 }
 
 // createWorkspace adds a fresh, EMPTY workspace and switches to it: it clears the
@@ -278,15 +347,22 @@ func switchWorkspace(targetID string) {
 // sample, which looks like a clone of the current sample-based workspace.)
 func createWorkspace(name string) {
 	r := loadRegistry()
-	suspendAutosave = true
-	saveBlob(r.ActiveID, bundleCurrent())
+	current := bundleCurrent()
 	newID := id.NewWithPrefix("ws")
-	saveRegistry(r.Add(newID, name).SetActive(newID).SetColor(newID, paletteColor(len(r.Workspaces))))
-	applyBundle(map[string]string{}) // clear UI keys → defaults
-	if data, err := store.Export(store.EmptyDataset()); err == nil {
-		lsSet(datasetStoreKey, string(data)) // explicit empty dataset, not the sample
+	next := r.Add(newID, name).SetActive(newID).SetColor(newID, paletteColor(len(r.Workspaces)))
+	data, err := store.Export(store.EmptyDataset())
+	if err != nil {
+		return
 	}
-	reloadPage()
+	suspendAutosave = true
+	dataset := string(data) // explicit empty dataset, not the sample
+	saveBlobThen(r.ActiveID, current, func() {
+		saveRegistryThen(next, func() {
+			applyBundleThen(map[string]string{}, func() {
+				lsSetThen(datasetStoreKey, dataset, reloadWorkspaceAfterWrites)
+			})
+		})
+	})
 }
 
 // duplicateWorkspace clones the active workspace's data into a new one and
@@ -295,12 +371,15 @@ func duplicateWorkspace(name string) {
 	r := loadRegistry()
 	suspendAutosave = true
 	cur := bundleCurrent()
-	saveBlob(r.ActiveID, cur)
 	newID := id.NewWithPrefix("ws")
-	saveBlob(newID, cur)
-	saveRegistry(r.Add(newID, name).SetActive(newID).SetColor(newID, paletteColor(len(r.Workspaces))))
-	applyBundle(cur) // already current, but explicit
-	reloadPage()
+	next := r.Add(newID, name).SetActive(newID).SetColor(newID, paletteColor(len(r.Workspaces)))
+	saveBlobThen(r.ActiveID, cur, func() {
+		saveBlobThen(newID, cur, func() {
+			saveRegistryThen(next, func() {
+				applyBundleThen(cur, reloadWorkspaceAfterWrites)
+			})
+		})
+	})
 }
 
 // renameWorkspace updates a workspace's name in place (no reload — no context
@@ -320,13 +399,18 @@ func deleteWorkspace(wsID string) workspace.Registry {
 		return r
 	}
 	wasActive := r.ActiveID == wsID
-	lsRemove(wsBlobKey(wsID))
 	r = r.Remove(wsID)
-	saveRegistry(r)
 	if wasActive {
 		suspendAutosave = true
-		applyBundle(loadBlob(r.ActiveID))
-		reloadPage()
+		target := loadBlob(r.ActiveID)
+		saveRegistryThen(r, func() {
+			lsSetThen(wsBlobKey(wsID), "", func() {
+				applyBundleThen(target, reloadWorkspaceAfterWrites)
+			})
+		})
+	} else {
+		lsSet(wsBlobKey(wsID), "")
+		saveRegistry(r)
 	}
 	return r
 }

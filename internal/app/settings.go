@@ -857,19 +857,14 @@ func globalSettingsForm() uic.Node {
 			s.OpenAIKey = v
 			_ = a.PutSettings(s)
 		}
-		// The key lives in Settings.OpenAIKey — the SQLite dataset, the single source of
-		// truth — and rides the dataset autosave like every other setting; there is no
-		// separate key store. Entering a key means you want to use it across reloads, so
-		// turn "Remember AI key" on by default (its opt-out keeps the key session-only by
-		// making the LOCAL dataset save redact it). RequestPersist re-saves immediately so
-		// the on-device copy reflects the new key/redaction without waiting for autosave.
-		if strings.TrimSpace(v) != "" {
-			if p := prefsAtom.Get(); !p.RememberAIKey {
-				p.RememberAIKey = true
-				savePrefs(p)
+		// Entering a key opts into remembering it on this device. It is stored
+		// separately from workspace data, encrypted whenever App Lock is active.
+		remember := prefsAtom.Get().RememberAIKey || strings.TrimSpace(v) != ""
+		queueAICredentialSave(v, remember, func(err error) {
+			if err == nil && remember && !prefsAtom.Get().RememberAIKey {
+				persistRememberPreference(true)
 			}
-		}
-		uistate.RequestPersist()
+		})
 		// A newly configured key can now drive the lock-screen quote-of-the-day —
 		// generate + cache it right away so the user doesn't have to wait for a reload.
 		refreshDailyLockQuote()
@@ -1125,13 +1120,20 @@ func globalSettingsForm() uic.Node {
 		AiKey:      aiKey.Get(),
 		OnKey:      onKey,
 		OnRememberKey: func(v bool) {
-			p := prefsAtom.Get()
-			p.RememberAIKey = v
-			savePrefs(p)
-			// The key already lives in the dataset (Settings.OpenAIKey). RememberAIKey only
-			// controls whether the LOCAL dataset save keeps it (on) or redacts it (off,
-			// session-only) — so re-persist now to apply the new redaction decision.
-			uistate.RequestPersist()
+			cancelQueuedAICredentialSave()
+			key := ""
+			if a := appstate.Default; a != nil {
+				key = a.Settings().OpenAIKey
+			}
+			saveAICredential(key, v, func(err error) {
+				if err != nil {
+					if appstate.Default != nil {
+						appstate.Default.Log().Error("update remembered OpenAI credential failed", "err", err)
+					}
+					return
+				}
+				persistRememberPreference(v)
+			})
 		},
 		OnModel:        onModel,
 		CurModel:       curModel,

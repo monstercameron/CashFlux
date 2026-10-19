@@ -139,7 +139,7 @@ func CloudConnectionPane() uic.Node {
 	advancedTokenOpen := uic.UseState(false)
 	billingInterval := uic.UseState("annual")
 	billingProvider := uic.UseState("stripe")
-	keySet := uic.UseState(lsGet("cashflux:cloud-ai-key-set") != "")
+	keySet := uic.UseState(lsGet(cloudAIKeySetKey) != "")
 	// manualAddressOpen gates the server-address field for the Local segment:
 	// false means "still trying (or succeeded at) auto-detecting a same-origin
 	// backend, nothing to type" — true means the user needs to (or chose to)
@@ -289,22 +289,48 @@ func CloudConnectionPane() uic.Node {
 		// token issued by one server is meaningless to another — and re-checks what
 		// the new host actually supports.
 		hostChanged := backendHost(next) != backendHost(p.ServerURL)
-		if hostChanged && p.ServerToken != "" {
-			p.ServerToken = ""
-			p.ServerCSRF = ""
-			serverToken.Set("")
-			lsSet("cashflux:cloud-ai-key-set", "")
-			keySet.Set(false)
-			setSyncStatus(syncStatus{State: "offline"})
-			notify(uistate.T("settings.serverSwitched"), false)
+		if !hostChanged {
+			p.ServerURL = next
+			persist(p)
+			return
 		}
+		// A new host is a new SCOPE (SV0.2), not just a new address for the old
+		// session. Clearing only prefs.ServerToken (the previous behaviour) left
+		// the old server's rotated access token in storage — and
+		// EffectiveServerToken prefers that token — so the old server's JWT, its
+		// signed-in user ID, its queued pushes and its sync bookmarks were all
+		// presented to the new server as if they belonged there.
+		// resetScopeForServerChange tears down the live connection and clears
+		// exactly those keys (see authtoken.go); the prefs-level credentials go
+		// here because they ride the prefs write.
+		hadPrefsSession := p.ServerToken != "" || p.ServerCSRF != ""
+		p.ServerToken = ""
+		p.ServerCSRF = ""
 		p.ServerURL = next
+		serverToken.Set("")
+		keySet.Set(false)
 		persist(p)
-		if hostChanged {
-			restartBackendSync()
-			if segment.Get() != "commercial" {
-				runDiscovery()
-			}
+		hadScope := resetScopeForServerChange() || hadPrefsSession
+		setSyncStatus(syncStatus{State: "offline"})
+		notify(uistate.T("settings.serverSwitched"), false)
+		if hadScope {
+			// The page itself is still running in the old server's scope —
+			// every atom and socket resolved its identity against it — so the
+			// switch finishes the one way scope changes are allowed to finish
+			// (SV principle 1): a full reload into the new scope. Discovery
+			// for the new host runs on the reloaded page's mount, so it is
+			// deliberately not started here.
+			//
+			// hadScope is the gate because this handler fires per keystroke:
+			// the first keystroke that moves the host clears the old scope
+			// and reloads; a device that never had a session (a first-time
+			// address being typed) has no scope to leave, and reloading on
+			// every keystroke would make the address field unusable.
+			reloadAfterIdentityChange("server-url-changed")
+			return
+		}
+		if segment.Get() != "commercial" {
+			runDiscovery()
 		}
 	})
 	onToken := uic.UseEvent(func(v string) {
@@ -314,20 +340,33 @@ func CloudConnectionPane() uic.Node {
 		persist(p)
 	})
 	saveOAuthSession := func(token, csrf, userID string) {
-		p := prefsAtom.Get()
-		p.ServerToken = token
-		p.ServerCSRF = csrf
-		p.ServerURL = serverURL.Get()
-		persist(p)
-		serverToken.Set(token)
+		// An OAuth completion delivers a 15-minute ACCESS token, its user ID
+		// and a CSRF token; the refresh token stays in the server's HttpOnly
+		// cookie and never reaches this page (internal/server
+		// handleOAuthCallback). Storing the access token as
+		// prefs.ServerToken — the previous behaviour — treated it as a
+		// static self-host token that nothing ever refreshes, so OAuth
+		// sessions stopped syncing 15 minutes after sign-in, and the user
+		// ID was thrown away, leaving queued work unowned. The session is
+		// now stored as the rotatable cookie session it is (authtoken.go),
+		// through the same storage password sessions use. The expiry is 0
+		// (= use the documented fallback) because startOAuthLogin does not
+		// forward the postMessage's expiresIn yet — see the SV0.2 report.
+		persistOAuthCookieSession(prefsAtom, serverURL.Get(), token, csrf, userID, 0)
+		// The raw-token field edits the STATIC self-host token; an OAuth
+		// access token is not that, and leaving it in the field would let a
+		// later edit persist a rotating credential as if it were static.
+		serverToken.Set("")
 		if strings.TrimSpace(userID) == "" {
 			notify(uistate.T("settings.oauthSignedIn"), false)
 		} else {
 			notify(uistate.T("settings.oauthSignedInAs", userID), false)
 		}
-		// This path persists prefs itself rather than going through
-		// persistAuthSession, so it still has to bring sync up on its own.
-		restartBackendSync()
+		// A sign-in is a scope change: the page must reload so sync starts
+		// by re-resolving WHO this session is (SV principle 1), rather than
+		// an in-page restart that keeps whatever identity the page booted
+		// with (usually none).
+		reloadAfterIdentityChange("oauth-sign-in")
 	}
 	onSignInGoogle := uic.UseEvent(func() {
 		startOAuthLogin(serverURL.Get(), "google", saveOAuthSession, func(msg string) { notify(msg, true) })
@@ -343,11 +382,21 @@ func CloudConnectionPane() uic.Node {
 		p := prefsAtom.Get()
 		// Present the token the session is ACTUALLY using (a rotated access token
 		// outranks prefs.ServerToken), or the server has nothing to revoke.
-		signOutBackendSession(serverURL.Get(), sessionToken(), p.ServerCSRF, func() {
+		// cookieSessionCSRF, not p.ServerCSRF directly: a cookie session's
+		// CSRF token rotates with every refresh (SV0.2), and the freshest
+		// value is tracked beside the tokens — prefs can be one rotation
+		// behind, which would make the server refuse the logout itself.
+		signOutBackendSession(serverURL.Get(), sessionToken(), cookieSessionCSRF(p), func() {
 			// Drop the rotated pair too, not just prefs — see clearAuthSession. The
 			// sync toggle deliberately stays ON: signing out is "this device needs a
 			// new code", not "turn cloud sync off".
 			clearAuthSession()
+			// The cookie-session keys (SV0.2) — clearAuthSession lives in
+			// sync_client.go and does not know about them yet; leaving the
+			// refresh-mode marker behind would classify the NEXT sign-in on
+			// this device as a cookie session it is not.
+			lsRemove(authRefreshModeKey)
+			lsRemove(authCSRFKey)
 			p.ServerToken = ""
 			p.ServerCSRF = ""
 			persist(p)
@@ -379,7 +428,7 @@ func CloudConnectionPane() uic.Node {
 			key = a.Settings().OpenAIKey
 		}
 		uploadOpenAIKeyToBackend(serverURL.Get(), sessionToken(), key, func() {
-			lsSet("cashflux:cloud-ai-key-set", "1")
+			lsSet(cloudAIKeySetKey, "1")
 			keySet.Set(true)
 			notify(uistate.T("settings.serverKeyStored"), false)
 		}, func(msg string) {
@@ -388,7 +437,7 @@ func CloudConnectionPane() uic.Node {
 	})
 	removeKey := uic.UseEvent(func() {
 		removeOpenAIKeyFromBackend(serverURL.Get(), sessionToken(), func() {
-			lsSet("cashflux:cloud-ai-key-set", "")
+			lsSet(cloudAIKeySetKey, "")
 			keySet.Set(false)
 			notify(uistate.T("settings.serverKeyRemoved"), false)
 		}, func(msg string) {
@@ -485,13 +534,20 @@ func CloudConnectionPane() uic.Node {
 		// Live status card.
 		Div(css.Class("sync-status-card", tw.Flex, tw.ItemsCenter, tw.Gap3, tw.Px3, tw.Py2, tw.Rounded4, tw.Border, tw.BorderLine),
 			Attr("role", "status"), Attr("data-testid", "sync-status-card"),
-			ui.Icon(icon.Cloud, css.Class(tw.W5, tw.H5, tw.ShrinkO, IfElseValue(status.State == "error", tw.TextDanger, tw.TextDim))),
+			ui.Icon(icon.Cloud, css.Class(tw.W5, tw.H5, tw.ShrinkO, IfElseValue(status.State == "error", tw.TextDanger,
+				IfElseValue(status.State == syncStateRebind || status.State == syncStateLockedDifferentPasscode || status.State == syncStateIdentityUnknown, tw.TextWarn, tw.TextDim)))),
 			Div(css.Class(tw.Flex, tw.FlexCol, tw.MinW0),
-				Span(css.Class(tw.Text15, tw.FontSemibold, statusLabelColor(status.State)), syncStatusLabel()),
+				Span(css.Class(tw.Text15, tw.FontSemibold,
+					IfElseValue(status.State == syncStateRebind || status.State == syncStateLockedDifferentPasscode || status.State == syncStateIdentityUnknown, tw.TextWarn,
+						IfElseValue(status.State == "error", tw.TextDanger, tw.TextDim))), syncStatusLabel()),
 				If(status.Pending > 0, Span(css.Class(tw.Text12, tw.TextFaint),
 					uistate.T("sync.pendingCount", status.Pending))),
 				If(status.Message != "", Span(css.Class(tw.Text12, IfElseValue(status.State == "error", tw.TextDanger, tw.TextFaint)), Attr("data-testid", "sync-status-detail"),
 					uistate.T("sync.statusDetail", status.Message))),
+				If(status.State == syncStateLockedDifferentPasscode,
+					Button(css.Class("btn btn-sm btn-danger", tw.Mt1), Type("button"), Attr("data-testid", "sync-replace-server-copy"),
+						OnClick(uic.UseEvent(func() { ReplaceServerCopyWithThisDevice() })),
+						uistate.T("sync.replaceServerCopyAction"))),
 			),
 		),
 

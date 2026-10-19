@@ -5,6 +5,7 @@
 package app
 
 import (
+	"sync/atomic"
 	"syscall/js"
 	"time"
 )
@@ -45,10 +46,18 @@ const tokenRefreshLockTimeout = 20 * time.Second
 // withTokenRefreshLock runs fn while holding the cross-tab token-refresh
 // lock, so a proactive or reactive refresh triggered independently in
 // several open tabs never races the server: only the tab that wins the lock
-// actually calls RefreshToken, and — because shouldRefreshNow re-checks the
-// stored token's freshness right before doing any work — a tab that only
-// *waited* for the lock and found the token was already refreshed by the
-// time it got in simply does nothing.
+// actually calls the refresh endpoint. fn is responsible for re-reading the
+// stored tokens once it starts — by then another tab may have already
+// refreshed while this one waited — and for doing nothing when they have
+// (see refreshAccessToken in sync_client.go and refreshCookieAccessToken
+// in authtoken.go, which share syncstate.DecideRefresh for that decision).
+//
+// fn runs INSIDE the navigator.locks.request callback, and only there. An
+// earlier version started fn in a goroutine before requesting the lock, so
+// the lock covered only the wait for a refresh that had already begun: two
+// tabs could both be mid-refresh with the same single-use refresh token by
+// the time either held the lock, and the loser's replay revoked the whole
+// session family on the server (SV0.2).
 //
 // Browsers without the Web Locks API (older WebViews) fall back to running
 // fn directly with no cross-tab coordination — best effort, not a hard
@@ -60,12 +69,6 @@ func withTokenRefreshLock(fn func()) {
 		fn()
 		return
 	}
-
-	fnDone := make(chan struct{})
-	go func() {
-		defer close(fnDone)
-		fn()
-	}()
 
 	// The lock callback MUST return a Promise and let Go resolve it when the
 	// work is done — it must never block a goroutine inside its own
@@ -82,9 +85,20 @@ func withTokenRefreshLock(fn func()) {
 	// exactly as long as that Promise stays pending, so the cross-tab mutual
 	// exclusion this guard exists for is fully preserved, while the Go
 	// scheduler stays free to service the dial.
+	//
+	// What changed for SV0.2 is only WHERE fn starts: inside the callback,
+	// after the browser has granted the lock — never before locks.request
+	// is even called.
 	released := make(chan struct{})
+	var fnStarted atomic.Bool
 	var callback, executor js.Func
 	callback = js.FuncOf(func(this js.Value, args []js.Value) any {
+		fnDone := make(chan struct{})
+		go func() {
+			defer close(fnDone)
+			fnStarted.Store(true)
+			fn()
+		}()
 		executor = js.FuncOf(func(_ js.Value, promiseArgs []js.Value) any {
 			resolve := promiseArgs[0]
 			go func() {
@@ -106,5 +120,12 @@ func withTokenRefreshLock(fn func()) {
 	locks.Call("request", tokenRefreshLockName, callback)
 	<-released
 	callback.Release()
-	executor.Release()
+	if fnStarted.Load() {
+		// executor is assigned in the callback before the Promise it backs
+		// can resolve, and released only closes after that resolution — so
+		// by the time fn has started, executor is safe to release. The
+		// guard covers a request that was somehow settled without the
+		// callback ever running, where executor is still the zero Func.
+		executor.Release()
+	}
 }

@@ -39,10 +39,11 @@ func appLockSection(onChange func()) uic.Node {
 			// Always shown when the lock is enabled so users can add/remove a passkey.
 			dataBtn(uistate.T("webauthn.manageBtn"), false, showPasskeyManager),
 			dataBtn(uistate.T("applock.cmdRemove"), true, func() {
-				disableAppLock()
-				if onChange != nil {
-					onChange()
-				}
+				disableAppLock(func() {
+					if onChange != nil {
+						onChange()
+					}
+				})
 			}),
 		)
 		return Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap1),

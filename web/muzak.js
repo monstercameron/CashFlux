@@ -23,22 +23,17 @@
 
   function clamp01(v) { return Math.max(0, Math.min(1, v)); }
 
-  var ENABLED_KEY = "cashflux:muzak"; // persisted on/off: "0" = muted, "1"/unset = on
+  var ENABLED_KEY = "cashflux:muzak"; // only the explicit value "1" enables playback
 
-  // musicMuted hard-checks the PERSISTED on/off state (the source of truth) right
-  // before playback. The in-memory `enabled` flag is seeded from the Go atom, which
-  // defaults to ON when the persisted store hasn't loaded yet — so at boot a muted
-  // user can end up with enabled=true and an armed gesture listener. Any real
-  // playback only happens on a user gesture (autoplay is blocked), by which point
-  // the IndexedDB-backed store cache is loaded, so this re-read sees the true value
-  // and refuses to play when muted. Unset/"1" => not muted (play allowed).
+  // musicMuted hard-checks the persisted choice before playback. Missing,
+  // unknown, and unreadable values stay muted; only an explicit "1" allows it.
   function musicMuted() {
     try {
       var raw = (typeof window.cashfluxStoreGet === "function")
         ? window.cashfluxStoreGet(ENABLED_KEY)
         : (window.localStorage ? localStorage.getItem(ENABLED_KEY) : null);
-      return raw === "0";
-    } catch (e) { return false; }
+      return raw !== "1";
+    } catch (e) { return true; }
   }
 
   // ---- Playlist: the internal track data structure -------------------------

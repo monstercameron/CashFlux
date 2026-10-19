@@ -17,9 +17,9 @@
 //     the passcode gate is satisfied. The autosave is held off while a decrypt is
 //     pending so it can never overwrite the ciphertext with an empty plaintext
 //     dataset.
-//   - Decryption failure is non-fatal: the ciphertext is kept, an error is logged,
-//     and the only data-destroying recovery remains the gate's explicit
-//     "Forgot passcode → wipe" path.
+//   - A wrong passcode never changes the pending ciphertext. Once the stored
+//     passcode check succeeds, unreadable encrypted bytes are quarantined so the
+//     app cannot seed or autosave over them.
 package app
 
 import (
@@ -130,28 +130,39 @@ func onAppUnlocked(passcode string) {
 }
 
 // hydrateFromPasscode parses the pending envelope, decrypts it with the session
-// passcode, and imports the recovered dataset. On success it clears the pending
-// state (releasing the autosave) and re-captures the undo baseline. On failure it
-// keeps the ciphertext intact and logs — it never wipes.
+// passcode, and imports the recovered dataset. A failed stored-passcode check
+// leaves the ciphertext pending; after the passcode is verified, unreadable or
+// unimportable data is quarantined before autosave is released.
 func hydrateFromPasscode(passcode string) {
 	app := appstate.Default
 	if app == nil {
 		return
 	}
+	if !loadAppLock().Verify(passcode) {
+		app.Log().Error("encrypted dataset: passcode verification failed; keeping ciphertext")
+		return
+	}
 	env, ok := cryptobox.Parse([]byte(pendingEnvelopeRaw))
 	if !ok {
-		app.Log().Error("encrypted dataset: envelope unreadable; keeping ciphertext")
+		app.Log().Error("encrypted dataset: envelope unreadable after verified passcode; quarantining ciphertext")
+		quarantinePendingEnvelope("The encrypted dataset envelope is unreadable after the passcode was verified.")
 		return
 	}
 	decryptDataset(env, passcode, func(plain []byte, err error) {
 		if err != nil {
-			app.Log().Error("encrypted dataset: decrypt failed; keeping ciphertext", "err", err)
+			app.Log().Error("encrypted dataset: decrypt failed after verified passcode; quarantining ciphertext", "err", err)
+			quarantinePendingEnvelope("The encrypted dataset could not be decrypted after the passcode was verified.")
 			return
 		}
 		if err := app.ImportJSON(plain); err != nil {
-			app.Log().Error("encrypted dataset: import after decrypt failed; keeping ciphertext", "err", err)
+			app.Log().Error("encrypted dataset: import after decrypt failed; quarantining ciphertext", "err", err)
+			quarantinePendingEnvelope("The decrypted dataset could not be imported.")
 			return
 		}
+		// Grant autosave authority only after import succeeds. Set both flags before
+		// clearing the pending envelope, which otherwise releases the autosave guard.
+		hydrationSucceeded = true
+		hadLocalDataset = true
 		pendingEnvelopeRaw = "" // releases the autosave and unblocks normal operation
 		// Re-seed the PREFS ATOM from the just-imported settings KV. The lock screen
 		// rendered before this import, so the first UsePrefs seeded the atom from an
@@ -174,4 +185,12 @@ func hydrateFromPasscode(passcode string) {
 		// quote-of-the-day cache so the next lock shows a fresh AI quote (C: lock quote).
 		refreshDailyLockQuote()
 	})
+}
+
+// quarantinePendingEnvelope preserves the exact encrypted bytes for recovery and
+// releases the pending-envelope autosave guard only after quarantine has taken over.
+func quarantinePendingEnvelope(reason string) {
+	raw := pendingEnvelopeRaw
+	pendingEnvelopeRaw = ""
+	quarantineDataset(raw, reason)
 }

@@ -91,6 +91,7 @@ func clearHostedUserSession(prefsAtom state.Atom[prefs.Prefs]) {
 	p = p.Normalize()
 	prefsAtom.Set(p)
 	uistate.PersistPrefs(p)
+	reloadAfterIdentityChange("hosted session ended")
 }
 
 // HostedAuthGate prevents every routed financial screen from mounting until a

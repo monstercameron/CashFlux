@@ -49,14 +49,11 @@ func persistAuthSession(prefsAtom state.Atom[prefs.Prefs], serverURL string, pai
 	prefsAtom.Set(p)
 	uistate.PersistPrefs(p)
 	storeAuthTokenPair(pair)
-	// Bring the sync engine up for the session that just started. storeAuthTokenPair
-	// only restarts the WATCH; the lifecycle listeners, the queue flush, and the
-	// initial pull (which seeds an empty server with this device's dataset) all live
-	// in restartBackendSync. Without this, activating a device left sync inert until
-	// the next page reload — the cloud tab's OAuth path called this itself, and the
-	// code-redemption paths silently did not.
+	// An identity change ends this page's scope. Boot resolves the new identity
+	// before it can flush or pull, so sign-in always reloads after the credential
+	// writes are durable.
 	if startSync {
-		restartBackendSync()
+		reloadAfterIdentityChange("sign-in")
 	}
 }
 

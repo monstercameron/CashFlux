@@ -86,7 +86,6 @@ type mobileTabItemProps struct {
 // sheet. Its own component so its click-handler hook stays at a stable position
 // regardless of how many items are in the bar (the On*-hooks-in-loops rule).
 func mobileTabItem(props mobileTabItemProps) uic.Node {
-	nav := router.UseNavigate()
 	path, onPick := props.Path, props.OnPick
 	cls := "mobile-tab-item"
 	if props.Sheet {
@@ -99,17 +98,14 @@ func mobileTabItem(props mobileTabItemProps) uic.Node {
 		ClassStr(cls),
 		Title(props.Label),
 		Attr("aria-label", props.Label),
-		OnClick(Prevent(func() {
-			if path != "" {
-				nav.Navigate(uistate.RoutePath(path))
-			}
-			if onPick != nil {
-				onPick()
-			}
-		})),
 	}
 	if path != "" {
 		args = append(args, Attr("href", uistate.RoutePath(path)))
+	}
+	if onPick != nil {
+		// Dismiss the More sheet without cancelling the browser's native link
+		// behavior for modified or middle-click activation.
+		args = append(args, OnClick(onPick))
 	}
 	if props.Active {
 		args = append(args, Attr("aria-current", "page"))
@@ -325,6 +321,7 @@ func Shell(props ShellProps) uic.Node {
 		uic.CreateElement(TxnEditHost),
 		uic.CreateElement(TxnSplitHost),
 		uic.CreateElement(TxnHistoryHost),
+		uic.CreateElement(screens.TxnKeyHelpHost),
 		uic.CreateElement(TxnColumnsHost),
 		uic.CreateElement(TxnSmartCatHost),
 		uic.CreateElement(TxnLinkHost),
@@ -996,8 +993,8 @@ func Sidebar(props sidebarProps) uic.Node {
 					// The row says how to move it. A drag is invisible to anyone not
 					// holding a mouse, so the keyboard route has to be announced
 					// rather than discovered.
-					AriaSuffix: uistate.T("rail.reorderHint"),
-					Pinned:     pinned, Slot: slot, PinFull: full, OnPin: onPin,
+					DescribeReorderHint: true,
+					Pinned:              pinned, Slot: slot, PinFull: full, OnPin: onPin,
 					// Dragging rearranges the SLOTS: the digits stay 1..9,0 down the
 					// list and the rows move between them. That is the right way
 					// round — the number is a position, and moving a row to second
@@ -1093,6 +1090,7 @@ func Sidebar(props sidebarProps) uic.Node {
 			OnInput: onRailSearch, OnKey: onRailSearchKey, OnClear: clearRailSearch,
 		})),
 		Nav(css.Class("rail-nav", tw.Flex1, tw.MinH0, tw.OverflowYAuto, tw.P3, tw.Flex, tw.FlexCol, tw.Gap05, tw.TextDim, tw.Text135), Attr("aria-label", uistate.T("nav.primaryLabel")),
+			P(css.Class("sr-only"), Attr("id", "cf-rail-reorder-hint"), uistate.T("rail.reorderDescription")),
 			// The single shared active-page indicator (motion spec §4). Positioned
 			// absolutely by positionRailIndicator(); CSS slides top/height between
 			// items over the standard token. Decorative — aria-current on the item
@@ -1142,9 +1140,9 @@ type navItemProps struct {
 	// results reuse this component and a pin there would sit under a list that is
 	// about to disappear.
 	OnPin func()
-	// AriaSuffix is appended to the row's accessible name — used to announce an
-	// affordance that has no visible label, like the keyboard reorder.
-	AriaSuffix string
+	// DescribeReorderHint attaches the shared keyboard-reorder description to this
+	// link without repeating the long hint in every link's accessible name.
+	DescribeReorderHint bool
 	// Pinned drives the toggle's state and keeps its star filled and visible even
 	// when the row is not hovered; Slot is the digit key this row answers to ("" if
 	// unpinned). PinFull disables the control on an unpinned row once ten are taken.
@@ -1200,7 +1198,6 @@ func boolAttr(b bool) string {
 // navItem is its own component so its click-handler hook stays stable regardless
 // of how the nav list changes (the On*-hooks-in-loops rule).
 func navItem(props navItemProps) uic.Node {
-	nav := router.UseNavigate()
 	base := tw.Fold(tw.Flex, tw.MinW10, tw.MinH10, tw.ItemsCenter, tw.Gap25, tw.Px3, tw.Py2, tw.Rounded4, tw.CursorPointer)
 	cls := "nav nv " + base
 	switch {
@@ -1217,15 +1214,7 @@ func navItem(props navItemProps) uic.Node {
 	args := []any{
 		ClassStr(cls),
 		Title(props.Label), // native tooltip
-		Attr("aria-label", strings.TrimSpace(props.Label+" "+props.AriaSuffix)), // C315: explicit accessible name (title alone is unreliable for SR)
-		// A real href makes nav items keyboard-focusable links that screen readers
-		// announce and that support middle-click / open-in-new-tab (L34/L19 a11y);
-		// the click handler prevents the full-page load and does SPA navigation.
-		OnClick(Prevent(func() {
-			if path != "" {
-				nav.Navigate(uistate.RoutePath(path))
-			}
-		})),
+		Attr("aria-label", strings.TrimSpace(props.Label)), // C315: explicit accessible name (title alone is unreliable for SR)
 	}
 	if path != "" {
 		// The RAW route alongside the href. The href carries whatever prefix
@@ -1233,6 +1222,9 @@ func navItem(props navItemProps) uic.Node {
 		// favorites list stores — the keyboard reorder reads this instead of
 		// parsing the prefix back off.
 		args = append(args, Attr("href", uistate.RoutePath(path)), Attr("data-path", path))
+	}
+	if props.DescribeReorderHint {
+		args = append(args, Attr("aria-describedby", "cf-rail-reorder-hint"))
 	}
 	if props.Active {
 		args = append(args, Attr("aria-current", "page"))
@@ -1574,11 +1566,9 @@ func themeWord(t prefs.Theme) string {
 // visible affordance. Routes to /help (topics, what's-new, setup checklist, and the
 // bug-report path), keeping support one obvious click away on every screen.
 func HelpButton() uic.Node {
-	nav := router.UseNavigate()
-	open := uic.UseEvent(func() { nav.Navigate(uistate.RoutePath("/help")) })
-	return Button(css.Class("icon-btn", tw.W7, tw.H7, tw.TextDim, tw.HoverTextFg),
-		Type("button"), Attr("title", uistate.T("nav.help")), Attr("aria-label", uistate.T("nav.help")),
-		Attr("data-testid", "help-button"), OnClick(open),
+	return A(css.Class("icon-btn", tw.W7, tw.H7, tw.TextDim, tw.HoverTextFg),
+		Attr("href", uistate.RoutePath("/help")), Attr("title", uistate.T("nav.help")), Attr("aria-label", uistate.T("nav.help")),
+		Attr("data-testid", "help-button"),
 		ui.Icon(icon.HelpCircle, css.Class(tw.W5, tw.H5)),
 	)
 }
@@ -1588,12 +1578,10 @@ func HelpButton() uic.Node {
 // tile styles), grouped with the other page-level top-bar actions instead of a
 // floating bar above the bento. Icon-only to stay out of the way.
 func DashCustomizeButton() uic.Node {
-	nav := router.UseNavigate()
-	open := uic.UseEvent(func() { nav.Navigate(uistate.RoutePath("/widget-manager")) })
-	return Button(css.Class("icon-btn", tw.W7, tw.H7, tw.TextDim, tw.HoverTextFg),
-		Type("button"),
+	return A(css.Class("icon-btn", tw.W7, tw.H7, tw.TextDim, tw.HoverTextFg),
+		Attr("href", uistate.RoutePath("/widget-manager")),
 		Attr("title", uistate.T("dashboard.customizeAria")), Attr("aria-label", uistate.T("dashboard.customizeAria")),
-		Attr("data-testid", "dash-customize"), OnClick(open),
+		Attr("data-testid", "dash-customize"),
 		ui.Icon(icon.Customize, css.Class(tw.W5, tw.H5)),
 	)
 }
@@ -1639,8 +1627,6 @@ func NotifyBell() uic.Node {
 		// install still advertises the seeded feed sensibly.
 		fresh = uistate.UnreadNotifyCount(needsYou)
 	}
-	nav := router.UseNavigate()
-	open := uic.UseEvent(func() { nav.Navigate(uistate.RoutePath("/notifications")) })
 	badge := Fragment()
 	if fresh > 0 {
 		label := fmt.Sprintf("%d", fresh)
@@ -1649,9 +1635,8 @@ func NotifyBell() uic.Node {
 		}
 		badge = Span(css.Class("notify-badge"), label)
 	}
-	return Button(css.Class("notify-btn", tw.Relative), Type("button"),
+	return A(css.Class("notify-btn", tw.Relative), Attr("href", uistate.RoutePath("/notifications")),
 		Attr("title", uistate.T("nav.notifications")), Attr("aria-label", uistate.T("nav.notifications")),
-		OnClick(open),
 		ui.Icon(icon.Bell, css.Class(tw.W18px, tw.H18px)),
 		badge,
 	)

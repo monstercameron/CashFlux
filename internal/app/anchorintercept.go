@@ -39,14 +39,10 @@ func wireAnchorInterceptor() {
 			return nil
 		}
 		e := args[0]
-		if e.Get("defaultPrevented").Truthy() {
-			return nil // a component handler already took this click
-		}
-		if e.Get("button").Int() != 0 {
-			return nil // middle/right click
-		}
-		if e.Get("metaKey").Truthy() || e.Get("ctrlKey").Truthy() || e.Get("shiftKey").Truthy() || e.Get("altKey").Truthy() {
-			return nil // open-in-new-tab / new-window / etc.
+		if !interceptPlainLeftClick(e.Get("button").Int(),
+			e.Get("defaultPrevented").Truthy(), e.Get("metaKey").Truthy(),
+			e.Get("ctrlKey").Truthy(), e.Get("shiftKey").Truthy(), e.Get("altKey").Truthy()) {
+			return nil
 		}
 		target := e.Get("target")
 		if !target.Truthy() {
@@ -81,4 +77,10 @@ func wireAnchorInterceptor() {
 	// Bubbling phase, after the framework's delegated handlers, so a component's own
 	// Prevent wins. Lives for the app's lifetime; intentionally never released.
 	doc.Call("addEventListener", "click", cb)
+}
+
+// interceptPlainLeftClick reports whether a click is eligible for client-side
+// routing before anchor and origin checks are applied.
+func interceptPlainLeftClick(button int, defaultPrevented, meta, control, shift, alt bool) bool {
+	return button == 0 && !defaultPrevented && !meta && !control && !shift && !alt
 }

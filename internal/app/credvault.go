@@ -16,8 +16,6 @@
 // │   • The app passcode gates everything; a weak passcode ⇒ weak encryption.   │
 // │     Consider enforcing passcode strength / WebAuthn-PRF-derived keys.       │
 // │   • No hardware-backed key / secure enclave.                                │
-// │   • Changing the passcode orphans the vault (it becomes undecryptable) —    │
-// │     needs a re-encrypt-on-passcode-change hook.                             │
 // │   • Retrieval is copy-to-clipboard behind a passcode re-auth and the        │
 // │     password is never put in the DOM / shown — but the clipboard still      │
 // │     holds it afterwards (readable by other apps / clipboard managers);      │
@@ -40,6 +38,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	"github.com/monstercameron/CashFlux/internal/browserstore"
 	"github.com/monstercameron/CashFlux/internal/cryptobox"
@@ -50,8 +49,12 @@ import (
 // never synced, and never included in a backup.
 const credVaultStoreKey = "cashflux:credvault"
 
+const errCredVaultUnreadableMessage = "credential vault: unreadable data"
+
 // errVaultLocked is returned when the vault is accessed without an active passcode.
 var errVaultLocked = errors.New("credential vault requires an app passcode + unlock")
+
+var errCredVaultUnreadable = errors.New(errCredVaultUnreadableMessage)
 
 // Credential is one account's institution login. Every field is optional. It is only
 // ever held in memory decrypted while the modal is open, and encrypted at rest.
@@ -82,6 +85,10 @@ func loadCredVault(onDone func(v credVault, err error)) {
 		onDone(nil, errVaultLocked)
 		return
 	}
+	loadCredVaultWithPasscode(activePasscode, onDone)
+}
+
+func loadCredVaultWithPasscode(passcode string, onDone func(v credVault, err error)) {
 	raw := browserstore.GetString(credVaultStoreKey)
 	if raw == "" {
 		onDone(credVault{}, nil)
@@ -89,23 +96,23 @@ func loadCredVault(onDone func(v credVault, err error)) {
 	}
 	envBytes, err := base64.StdEncoding.DecodeString(raw)
 	if err != nil {
-		onDone(nil, err)
+		onDone(nil, fmt.Errorf("%w: invalid base64: %v", errCredVaultUnreadable, err))
 		return
 	}
 	env, ok := cryptobox.Parse(envBytes)
 	if !ok {
-		onDone(nil, errors.New("credential vault: unreadable envelope"))
+		onDone(nil, fmt.Errorf("%w: invalid envelope", errCredVaultUnreadable))
 		return
 	}
-	decryptDataset(env, activePasscode, func(plain []byte, err error) {
+	decryptDataset(env, passcode, func(plain []byte, err error) {
 		if err != nil {
-			onDone(nil, err)
+			onDone(nil, fmt.Errorf("%w: decryption failed: %v", errCredVaultUnreadable, err))
 			return
 		}
 		v := credVault{}
 		if len(plain) > 0 {
 			if e := json.Unmarshal(plain, &v); e != nil {
-				onDone(nil, e)
+				onDone(nil, fmt.Errorf("%w: invalid contents: %v", errCredVaultUnreadable, e))
 				return
 			}
 		}
@@ -139,5 +146,61 @@ func saveCredVault(v credVault, onDone func(err error)) {
 			return
 		}
 		browserstore.SetThen(credVaultStoreKey, base64.StdEncoding.EncodeToString(env), func() { onDone(nil) })
+	})
+}
+
+// rekeyCredVault decrypts the vault under oldPasscode and writes a fresh
+// envelope under newPasscode. It never changes the stored bytes unless both
+// decryption and encryption succeed, and completes only after the write commits.
+func rekeyCredVault(oldPasscode, newPasscode string, onDone func(error)) {
+	raw := browserstore.GetString(credVaultStoreKey)
+	if raw == "" {
+		if onDone != nil {
+			onDone(nil)
+		}
+		return
+	}
+	envBytes, err := base64.StdEncoding.DecodeString(raw)
+	if err != nil {
+		if onDone != nil {
+			onDone(fmt.Errorf("%w: invalid base64: %v", errCredVaultUnreadable, err))
+		}
+		return
+	}
+	env, ok := cryptobox.Parse(envBytes)
+	if !ok {
+		if onDone != nil {
+			onDone(fmt.Errorf("%w: invalid envelope", errCredVaultUnreadable))
+		}
+		return
+	}
+	decryptDataset(env, oldPasscode, func(plain []byte, err error) {
+		if err != nil {
+			if onDone != nil {
+				onDone(fmt.Errorf("%w: decryption failed: %v", errCredVaultUnreadable, err))
+			}
+			return
+		}
+		// Reject malformed plaintext before producing a replacement ciphertext.
+		var vault credVault
+		if err := json.Unmarshal(plain, &vault); err != nil {
+			if onDone != nil {
+				onDone(fmt.Errorf("%w: invalid contents: %v", errCredVaultUnreadable, err))
+			}
+			return
+		}
+		encryptDataset(plain, newPasscode, func(rekeyed []byte, err error) {
+			if err != nil {
+				if onDone != nil {
+					onDone(err)
+				}
+				return
+			}
+			browserstore.SetThen(credVaultStoreKey, base64.StdEncoding.EncodeToString(rekeyed), func() {
+				if onDone != nil {
+					onDone(nil)
+				}
+			})
+		})
 	})
 }

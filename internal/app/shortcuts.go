@@ -410,8 +410,9 @@ func buildPaletteCommands() []paletteCmd {
 			paletteCmd{label: uistate.T("applock.cmdLock"), keywords: []string{"lock", "passcode", "password", "security"}, run: showAppLockGate},
 			paletteCmd{label: uistate.T("applock.cmdChange"), keywords: []string{"passcode", "password", "change", "security"}, run: setPasscodeFlow},
 			paletteCmd{label: uistate.T("applock.cmdRemove"), keywords: []string{"passcode", "password", "remove", "disable", "security"}, run: func() {
-				disableAppLock()
-				paletteNotify(uistate.T("applock.removed"), false)
+				disableAppLock(func() {
+					paletteNotify(uistate.T("applock.removed"), false)
+				})
 			}},
 		)
 	} else {

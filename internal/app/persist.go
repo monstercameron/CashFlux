@@ -40,6 +40,7 @@ var keptOnWipeKeys = map[string]bool{
 	"cashflux:languages":             true,
 	"cashflux:applock":               true,
 	"cashflux:openai-key":            true,
+	aiCredentialStoreKey:             true,
 	"cashflux:websearch-key":         true,
 	"cashflux:cloud-ai-key-set":      true,
 	"cashflux:cloud-mention-snoozed": true,
@@ -191,12 +192,20 @@ func hydrateDataset() {
 	if app == nil {
 		return
 	}
+	hydrationSucceeded = false
+	loadQuarantineRecord()
 	raw := browserstore.GetString(datasetStoreKey)
 	// Encrypted-at-rest dataset (C45): defer hydration until the passcode gate is
 	// satisfied. We stash the ciphertext and leave the store empty; the autosave is
 	// held off (see save's pendingEnvelopeRaw guard) so it can't overwrite it, and
 	// onAppUnlocked decrypts + imports once the right passcode is entered.
 	if cryptobox.IsEnvelope([]byte(raw)) {
+		if _, ok := cryptobox.Parse([]byte(raw)); !ok {
+			quarantineDataset(raw, unreadableDatasetReason([]byte(raw)))
+			uistate.SetSampleActive(false)
+			initializeHostedHydration(hostedDocument())
+			return
+		}
 		hadLocalDataset = true
 		pendingEnvelopeRaw = raw
 		initializeHostedHydration(false)
@@ -205,6 +214,12 @@ func hydrateDataset() {
 	seededBefore := browserstore.GetString(seededFlagKey) != ""
 	markSeeded := func() { browserstore.Set(seededFlagKey, "1") }
 	allowSample := !hostedDocument()
+	if raw != "" && strings.TrimSpace(raw) == "" {
+		quarantineDataset(raw, unreadableDatasetReason([]byte(raw)))
+		uistate.SetSampleActive(false)
+		initializeHostedHydration(hostedDocument())
+		return
+	}
 
 	switch decideHydrate(raw, seededBefore, allowSample) {
 	case hydrateImport:
@@ -212,16 +227,16 @@ func hydrateDataset() {
 		if err := app.ImportJSON([]byte(raw)); err != nil {
 			app.Log().Error("dataset hydrate failed", "err", err)
 			hadLocalDataset = false
-			if allowSample {
-				_ = app.LoadSample()
-				// Portable/dev fallback to sample: show the banner so the user knows.
-				uistate.SetSampleActive(true)
-			} else {
-				// A hosted server is authoritative. Never invent a household when
-				// the local cache is unreadable; the account gate will pull it.
-				uistate.SetSampleActive(false)
+			reason := unreadableDatasetReason([]byte(raw))
+			if reason == "" {
+				reason = err.Error()
 			}
+			quarantineDataset(raw, reason)
+			uistate.SetSampleActive(false)
+			initializeHostedHydration(hostedDocument())
+			return
 		}
+		hydrationSucceeded = true
 		// NOTE (C1): do NOT force the sample-active flag off here. Autosave persists
 		// the seeded sample as a real dataset, so a reload lands on hydrateImport
 		// even when the user never personalised — clearing the flag here made the
@@ -233,6 +248,8 @@ func hydrateDataset() {
 		hadLocalDataset = false
 		if err := app.LoadSample(); err != nil {
 			app.Log().Error("seed sample failed", "err", err)
+		} else {
+			hydrationSucceeded = true
 		}
 		// Mark that we are showing sample data so the banner appears (L6).
 		uistate.SetSampleActive(true)
@@ -240,6 +257,7 @@ func hydrateDataset() {
 	case hydrateEmpty:
 		// Set up before, intentionally empty — preserve the clean slate (L6).
 		hadLocalDataset = false
+		hydrationSucceeded = true
 		uistate.SetSampleActive(false)
 	}
 	// A hosted first boot (including a sample cached by an older build) must not
@@ -247,61 +265,28 @@ func hydrateDataset() {
 	initializeHostedHydration(hostedDocument() && (!hadLocalDataset || uistate.SampleActive()))
 }
 
-// hydrateAIKey folds the legacy standalone OpenAI-key entry into the single source of
-// truth (Settings.OpenAIKey in the SQLite dataset). The key used to be stored in a
-// separate browser-store entry; it now lives in the dataset like every other setting.
-// An encrypted dataset isn't loaded until the user unlocks, so defer the migration to
-// onAppUnlocked in that case — never adopt into (or clear against) an unloaded store.
-// Call after hydrateDataset so it lands on the loaded settings.
+// hydrateAIKey loads the device-global OpenAI credential after dataset hydration.
+// An encrypted dataset isn't available until unlock, so defer migration until then.
 func hydrateAIKey() {
 	if pendingEnvelopeRaw != "" {
-		return // encrypted dataset awaiting unlock — migrate in onAppUnlocked instead
+		return
 	}
 	migrateStandaloneAIKey()
 }
 
-// migrateStandaloneAIKey adopts the legacy standalone OpenAI key into the loaded
-// dataset (if the dataset doesn't already carry one) and then drops the standalone
-// copy, so the dataset is the single source of truth. No-op once migrated.
+// migrateStandaloneAIKey is retained for the post-unlock call site; it now loads
+// or migrates the device credential instead of moving it into dataset state.
 func migrateStandaloneAIKey() {
-	app := appstate.Default
-	if app == nil {
-		return
-	}
-	legacy := strings.TrimSpace(uistate.LoadAIKey())
-	if legacy == "" {
-		return
-	}
-	s := app.Settings()
-	if strings.TrimSpace(s.OpenAIKey) == "" {
-		s.OpenAIKey = legacy
-		if err := app.PutSettings(s); err != nil {
-			app.Log().Error("migrate ai key failed", "err", err)
-			return // couldn't adopt — keep the standalone so the key isn't lost
-		}
-		// Flush the adopted key into the (possibly encrypted) dataset now, before we
-		// drop the standalone, so closing the tab before the next autosave tick can't
-		// lose it. No-op at boot (the autosave hook isn't wired yet); effective on the
-		// post-unlock path, where the standalone is the only copy of the key.
-		uistate.RequestPersist()
-	}
-	uistate.ClearAIKey()
+	hydrateDeviceAIKey()
 }
 
-// startDatasetAutosave persists the dataset (OpenAI key redacted) to localStorage
+// startDatasetAutosave persists the dataset (OpenAI key redacted) to IndexedDB
 // so it survives a reload. It snapshots on a short ticker — which catches every
 // mutation regardless of code path, without instrumenting each write — and on
 // page hide, writing only when the serialized bytes change.
-// localDatasetExport serializes the dataset for ON-DEVICE persistence. It keeps the
-// OpenAI key with the data when the user has opted into remembering it (so the key
-// rides the reliable autosave and is restored on the next boot alongside everything
-// else, instead of depending on a single fire-and-forget key write). When "remember
-// key" is off, the key is redacted so it stays session-only. The BACKEND push always
-// uses ExportJSONRedacted — the key never leaves the device.
+// localDatasetExport serializes data without device credentials. The credential
+// has its own durable, workspace-independent browser-store record.
 func localDatasetExport(app *appstate.App) ([]byte, error) {
-	if uistate.LoadPrefs().RememberAIKey {
-		return app.ExportJSON()
-	}
 	return app.ExportJSONRedacted()
 }
 
@@ -332,6 +317,10 @@ func startDatasetAutosave() {
 		}
 		if pendingEnvelopeRaw != "" {
 			return // an encrypted dataset is awaiting unlock — never overwrite it
+		}
+		if autosaveBlocked() {
+			app.Log().Warn("dataset autosave refused because hydration did not succeed or unreadable data is quarantined")
+			return
 		}
 		if g := readDatasetGen(); g != datasetMyGen {
 			// Another tab saved after this one loaded. Overwriting would silently

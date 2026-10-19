@@ -21,6 +21,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/backendrpc"
 	"github.com/monstercameron/CashFlux/internal/backoff"
 	"github.com/monstercameron/CashFlux/internal/browserstore"
+	"github.com/monstercameron/CashFlux/internal/cryptobox"
 	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/CashFlux/internal/rpcprotocol"
 	"github.com/monstercameron/CashFlux/internal/rpcworker"
@@ -114,7 +115,37 @@ type queuedSyncMutation struct {
 	ClientUpdatedAt  string `json:"clientUpdatedAt"`
 	Hash             string `json:"hash"`
 	LastAttemptError string `json:"lastAttemptError,omitempty"`
+	// Force marks work the user explicitly told us to land whatever the server
+	// holds — "my copy wins". It rides the ordinary queue rather than a parallel
+	// push path so it inherits the same blob upload, retry, auth refresh and
+	// acknowledgement; the only thing it changes is that the server skips the
+	// concurrency check and its destructive-write guard.
+	//
+	// It survives being written to storage on purpose: a force queued while
+	// offline is still the user's decision when the connection returns.
+	Force bool `json:"force,omitempty"`
+	// BaseVersion is the server version this snapshot was based on, captured
+	// when the edit was queued (SV0.1) — together with UserID (the owning
+	// account) and WorkspaceID it is the entry's scope, and the flush pushes
+	// exactly these three. Reading the version from sync meta at send time
+	// let a pull or a workspace switch in between re-base a stale snapshot
+	// onto a version it was never based on. Zero on entries queued before
+	// this was recorded, which the server reads as "not sent" (legacy
+	// comparison) rather than as version zero.
+	BaseVersion int64 `json:"baseVersion,omitempty"`
 }
+
+// syncStateLockedDifferentPasscode is the sync status state for "the server
+// copy is encrypted and the passcode known on this device does not open it"
+// (SV0.1). It is deliberately distinct from "locked" (no passcode known yet,
+// where entering one is the way out): here a passcode WAS tried and failed,
+// so the choices are to set the matching passcode or to explicitly replace
+// the server copy — see ReplaceServerCopyWithThisDevice.
+const syncStateLockedDifferentPasscode = "locked-different-passcode"
+
+// lockedDifferentPasscodeMessage is the plain-English status text for
+// syncStateLockedDifferentPasscode.
+const lockedDifferentPasscodeMessage = "The server copy is locked with a different passcode"
 
 type syncStatus struct {
 	State        string `json:"state"`
@@ -401,6 +432,11 @@ func degradeToLocalOnly() {
 	pr.BackendDisabled = true
 	uistate.PersistPrefs(pr.Normalize())
 	setSyncStatus(syncStatus{State: "local"})
+	// A forced sign-out is an identity change like any other (SV0.1): the
+	// session that just ended must not leave its scope — queued owners, sync
+	// bookmarks, watch state — interpretable by whatever happens next in this
+	// page. Reload once the cleared credentials above have committed.
+	reloadAfterIdentityChange("session ended: refresh token rejected")
 }
 
 // restoreTokenLifecycleOnBoot rearms the proactive refresh countdown for a
@@ -455,34 +491,35 @@ func startBackendSync() {
 		startBackendWatch()
 		flushBackendSyncQueue()
 	})
-	// C696: learn which account this session belongs to before anything is
-	// pushed. Queued work written while signed out is adopted by the current
-	// account; work belonging to a DIFFERENT one is left alone and surfaces as
-	// a decision rather than as an endless retry. Off the critical path — a
-	// slow or unreachable /v1/me must not delay boot.
-	go func() {
-		pr := uistate.LoadPrefs().Normalize()
-		adoptIdentityForSync(pr.ServerURL, effectiveServerToken(pr))
-	}()
 	wireSyncLifecycleListeners()
-	// C696: re-resolve WHO this session is on every restart, not just at boot.
-	// persistAuthSession (register / login / redeem-pairing) funnels through
-	// here without reloading the page, so a boot-only identity would stay frozen
-	// across a sign-out and sign-in — and the next edit would be stamped with,
-	// and pushed as, the previous account. Found by adversarial review,
-	// 2026-08-17.
+	// C696 + SV0.1: learn which account this session belongs to BEFORE
+	// anything is pushed, and sequence the first flush after that answer.
+	// Queued work written while signed out is adopted by the current account;
+	// work belonging to a DIFFERENT one is left alone and surfaces as a
+	// decision rather than as an endless retry.
+	//
+	// This used to launch adoptIdentityForSync twice (two near-identical
+	// goroutines) and flush immediately, racing them: after an in-page
+	// account switch the flush could run while the recorded user ID still
+	// named the previous account, sending their queued snapshots under the
+	// new token. Sign-in/out now ends in a reload (reloadAfterIdentityChange)
+	// so this boot path is the one place identity is established; the single
+	// adoption below therefore runs first, in the same goroutine as the flush
+	// and pull it gates. A slow /v1/me delays only sync, never boot — and
+	// while it is outstanding the fail-closed queue (syncstate.PushableEntry)
+	// pushes nothing under a stale or unknown identity.
 	go func() {
 		pr := uistate.LoadPrefs().Normalize()
 		adoptIdentityForSync(pr.ServerURL, effectiveServerToken(pr))
+		flushBackendSyncQueue()
+		// Reconcile the account's workspaces BEFORE pulling. The pull addresses
+		// whichever workspace is open, so running it first on a freshly signed-in
+		// browser asks the server for a workspace the account has never heard of,
+		// gets "not found", and seeds this device's empty one to the server as a new
+		// workspace — permanently, and before anything had a chance to notice the
+		// account already had the real one.
+		mergeRemoteWorkspaces(func() { pullActiveWorkspaceFromBackend(true) })
 	}()
-	flushBackendSyncQueue()
-	// Reconcile the account's workspaces BEFORE pulling. The pull addresses
-	// whichever workspace is open, so running it first on a freshly signed-in
-	// browser asks the server for a workspace the account has never heard of,
-	// gets "not found", and seeds this device's empty one to the server as a new
-	// workspace — permanently, and before anything had a chance to notice the
-	// account already had the real one.
-	mergeRemoteWorkspaces(func() { pullActiveWorkspaceFromBackend(true) })
 	startBackendWatch()
 }
 
@@ -546,7 +583,17 @@ func wireSyncLifecycleListeners() {
 //
 // Both clear themselves: personalising the sample drops the flag, and unlocking
 // (or setting the matching passcode) re-pulls and clears "locked".
-func pushBlockedReason() string {
+func pushBlockedReason() string { return pushBlockedReasonAllowing(false) }
+
+// pushBlockedReasonAllowing is pushBlockedReason with one explicit exception:
+// when allowLockedDifferent is true, a server copy locked with a DIFFERENT
+// passcode does not block. That exception exists for exactly one caller —
+// the user-confirmed "replace the server copy" action (SV0.1) — where
+// overwriting a copy this device cannot read is the decision the user just
+// made by name. The no-passcode "locked" state still blocks even there:
+// with no passcode tried, "cannot read it" is not yet a fact, and the sample
+// and foreign-dataset guards block unconditionally everywhere.
+func pushBlockedReasonAllowing(allowLockedDifferent bool) string {
 	if uistate.SampleActive() {
 		return "local dataset is the seeded sample"
 	}
@@ -558,8 +605,13 @@ func pushBlockedReason() string {
 	if datasetIsForeign() {
 		return "this device is holding another account's data"
 	}
-	if loadSyncStatus().State == "locked" {
+	switch loadSyncStatus().State {
+	case "locked":
 		return "server snapshot is encrypted and this device cannot read it"
+	case syncStateLockedDifferentPasscode:
+		if !allowLockedDifferent {
+			return "server snapshot is locked with a different passcode"
+		}
 	}
 	return ""
 }
@@ -686,8 +738,14 @@ func pushActiveWorkspaceToBackend(dataset []byte, updatedAt time.Time) {
 	if meta.Hash == hash {
 		return
 	}
+	// SV0.1: capture the scope NOW — workspace, owning account and the server
+	// version this edit is based on. The flush pushes exactly these, never
+	// re-reads them at send time, so a later workspace or account switch (in
+	// this tab or another) cannot re-aim this snapshot.
+	scope := syncstate.CaptureScope(w.ID, signedInUserID(), meta.Version)
 	enqueueSyncMutation(queuedSyncMutation{
-		WorkspaceID:     w.ID,
+		UserID:          scope.OwnerUserID,
+		WorkspaceID:     scope.WorkspaceID,
 		Name:            w.Name,
 		Color:           w.Color,
 		Sort:            workspaceSort(r, w.ID),
@@ -695,8 +753,137 @@ func pushActiveWorkspaceToBackend(dataset []byte, updatedAt time.Time) {
 		Dataset:         string(dataset),
 		ClientUpdatedAt: updatedAt.UTC().Format(time.RFC3339Nano),
 		Hash:            hash,
+		BaseVersion:     scope.BaseVersion,
 	})
 	flushBackendSyncQueue()
+}
+
+// ForcePushActiveWorkspace asks the user to keep this device's copy. It queues
+// the dataset against the latest server version, so an intervening server write
+// still produces a conflict instead of being overwritten silently.
+//
+// This is available before a conflict occurs, and the conflict recovery action
+// uses the same version-checked path after the user confirms.
+//
+// The version check and destructive-write guard remain active. The explicit
+// confirmation makes the user aware that their saved changes will be sent, but
+// it does not authorize overwriting a server version they have not seen.
+//
+// What it does NOT bypass is pushBlockedReason, and that distinction is the
+// whole safety of the feature. It has no business overruling the guards that
+// say this device is not holding pushable data at all:
+//
+//   - the local dataset is the seeded sample, so sending it would write demo data
+//     over a real household;
+//   - the dataset belongs to a DIFFERENT ACCOUNT, which is the 2026-08-19
+//     incident exactly, and a button that skipped it would reopen the bug
+//     that release was written to close;
+//   - the server's snapshot is encrypted and unreadable here. The sole
+//     exception is ReplaceServerCopyWithThisDevice, where the snapshot was
+//     tried with this device's passcode, could not be decrypted, and the user
+//     confirmed the replacement by name — see pushBlockedReasonAllowing.
+//
+// A refusal is stated rather than silent: the user pressed a button that means
+// "keep my copy", and nothing happening looks identical to a broken button.
+func ForcePushActiveWorkspace() {
+	uistate.ConfirmModalLabeled(
+		"Keep this device's copy for the active workspace? CashFlux will check the current server version before sending.",
+		"Keep my copy", true, func(ok bool) {
+			if ok {
+				queueActiveWorkspaceAtServerVersion(false)
+			}
+		})
+}
+
+// ReplaceServerCopyWithThisDevice is the way out of the
+// syncStateLockedDifferentPasscode state (SV0.1): the server copy cannot be
+// decrypted with the passcode this device knows, so the user may choose to
+// replace it with this device's data. It is behind a named confirmation — the
+// confirm button itself says "Replace the server copy" — and it is the ONLY
+// Force path allowed besides ForcePushActiveWorkspace's explicit user
+// action: no retry, rejection handler or device-ID comparison may force.
+func ReplaceServerCopyWithThisDevice() {
+	if loadSyncStatus().State != syncStateLockedDifferentPasscode {
+		return
+	}
+	uistate.ConfirmModalLabeled(
+		"The server copy is locked with a different passcode, so this device cannot read it. Replace the server copy with this device's data? The unreadable server copy will be overwritten and cannot be recovered here.",
+		"Replace the server copy", true, func(ok bool) {
+			if !ok {
+				return
+			}
+			queueActiveWorkspaceAtServerVersion(true)
+		})
+}
+
+func queueActiveWorkspaceAtServerVersion(force bool) {
+	pr := uistate.LoadPrefs().Normalize()
+	if !pr.BackendActive() {
+		return
+	}
+	if reason := pushBlockedReasonAllowing(force); reason != "" {
+		if app := appstate.Default; app != nil {
+			app.Log().Warn("force push refused", "reason", reason)
+		}
+		setSyncStatus(syncStatus{State: "error", Message: uistate.T("sync.forceRefused", reason)})
+		return
+	}
+	r := loadRegistry()
+	w, ok := r.Active()
+	if !ok {
+		return
+	}
+	app := appstate.Default
+	if app == nil {
+		return
+	}
+	dataset, err := app.ExportJSONRedacted()
+	if err != nil {
+		setSyncStatus(syncStatus{State: "error", Message: customSyncErrorMessage(err, "could not read this device's data")})
+		return
+	}
+	// Clear the dedup hash as well as marking the item forced: the hash guard sits
+	// in pushActiveWorkspaceToBackend, and a force whose bytes match this device's
+	// last successful push would otherwise be dropped before it was ever queued.
+	workspaceID, ownerUserID := w.ID, signedInUserID()
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	go func() {
+		defer cancel()
+		var current backendrpc.GetWorkspaceResponse
+		if err := invokeAuthed(ctx, pr, backendrpc.MethodSyncGetWorkspace,
+			backendrpc.GetWorkspaceRequest{ID: workspaceID}, &current); err != nil {
+			logSyncError("could not check server version before keeping local copy", err)
+			setSyncStatus(syncStatus{State: "error", Message: customSyncErrorMessage(err, "could not check the server version"), AuthFailed: isAuthError(err)})
+			return
+		}
+		if !syncstate.PushableEntry(syncstate.ScopedEntry{WorkspaceID: workspaceID, OwnerUserID: ownerUserID}, signedInUserID()) {
+			return
+		}
+		latestRegistry := loadRegistry()
+		active, ok := latestRegistry.Active()
+		if !ok || active.ID != workspaceID {
+			return
+		}
+		meta := loadSyncMeta(workspaceID)
+		meta.Hash = ""
+		meta.Version = 0
+		if current.Found {
+			meta.Version = current.Workspace.Version
+		}
+		saveSyncMeta(workspaceID, meta)
+		if force {
+			app.Log().Warn("confirmed replacement of unreadable server copy", "workspace", workspaceID, "device", syncDeviceID())
+		}
+		scope := syncstate.CaptureScope(workspaceID, ownerUserID, meta.Version)
+		enqueueSyncMutation(queuedSyncMutation{
+			UserID: scope.OwnerUserID, WorkspaceID: scope.WorkspaceID,
+			Name: active.Name, Color: active.Color, Sort: workspaceSort(latestRegistry, workspaceID),
+			DeviceID: syncDeviceID(), Dataset: string(dataset),
+			ClientUpdatedAt: time.Now().UTC().Format(time.RFC3339Nano),
+			Hash:            datasetHash(dataset), Force: force, BaseVersion: scope.BaseVersion,
+		})
+		flushBackendSyncQueue()
+	}()
 }
 
 func requestBackendSyncNow() {
@@ -789,18 +976,25 @@ func flushBackendSyncQueue() {
 		// could sit at "1 change waiting to upload" indefinitely with nothing
 		// on either side about to change. The work is KEPT; what stops is the
 		// pointless retry, replaced by a decision the user can act on.
-		// Only an authoritative refusal stops the queue. An unknown identity does
-		// not — see uploadDecision; gating on it broke every deployment where the
-		// identity lookup does not answer.
-		if uploadDecision() == syncstate.UploadRebind {
+		// An authoritative refusal (rebind) and an unresolved identity both
+		// stop the queue — see uploadDecision. SV0.1 made the second one stop
+		// too: while we cannot say who is signed in, nothing is pushable, and
+		// the parked work is reported as waiting rather than sent on spec.
+		switch uploadDecision() {
+		case syncstate.UploadRebind:
 			refreshRebindStatus()
+			refreshParkedQueueStatus()
+			return
+		case syncstate.UploadSignIn:
+			refreshParkedQueueStatus()
 			return
 		}
-		// Push only what this account owns. Another identity's stranded snapshot
-		// stays queued until the user decides about it (C696).
+		// Push only what this account owns, by the scope captured at enqueue.
+		// Another identity's stranded snapshot stays queued (parked) until
+		// that account signs in again or the user rebinds it (C696, SV0.1).
 		queue = pushableQueue(queue)
 		if len(queue) == 0 {
-			refreshRebindStatus()
+			refreshParkedQueueStatus()
 			return
 		}
 		setSyncStatus(syncStatus{State: "syncing", Pending: len(queue)})
@@ -808,6 +1002,17 @@ func flushBackendSyncQueue() {
 		defer cancel()
 		for _, item := range queue {
 			maybeYield() // a queue of any length must not cost the user a click
+			// Re-check the captured scope against the identity at SEND time
+			// (SV0.1). The queue was filtered above, but an account switch in
+			// another tab during a long flush must park the remaining entries
+			// rather than send them under the new token.
+			if !syncstate.PushableEntry(scopedEntry(item), signedInUserID()) {
+				if app := appstate.Default; app != nil {
+					app.Log().Warn("backend sync push parked: queued scope no longer matches the signed-in account",
+						"workspace", item.WorkspaceID, "owner", item.UserID)
+				}
+				continue
+			}
 			// A first-ever push has to create the workspace row BEFORE any artifact
 			// blob is uploaded. UploadBlob deliberately refuses a blob for a workspace
 			// the caller doesn't own yet (storage attribution and cross-tenant read
@@ -859,6 +1064,14 @@ func flushBackendSyncQueue() {
 				logSyncError("backend artifact blob upload failed", err)
 				return
 			}
+			// BaseVersion is the version THIS EDIT was based on, captured when
+			// it was queued (SV0.1) — not whatever version sync meta holds at
+			// send time. The server accepts while it still holds that version,
+			// which is what removes the wall clock from the decision. Reading
+			// meta here instead let an intervening pull silently re-base this
+			// snapshot onto a version it never saw, turning a real conflict
+			// into an accepted overwrite.
+			base := item.BaseVersion
 			var resp backendrpc.PutWorkspaceResponse
 			err = invokeAuthed(ctx, pr, backendrpc.MethodSyncPutWorkspace, backendrpc.PutWorkspaceRequest{
 				Workspace: backendrpc.Workspace{
@@ -870,6 +1083,8 @@ func flushBackendSyncQueue() {
 				},
 				Dataset:         dataset,
 				ClientUpdatedAt: item.ClientUpdatedAt,
+				BaseVersion:     base,
+				Force:           item.Force,
 			}, &resp)
 			if err != nil {
 				item.LastAttemptError = err.Error()
@@ -887,38 +1102,17 @@ func flushBackendSyncQueue() {
 				logSyncError("backend sync push failed", err)
 				return
 			}
-			if !resp.Accepted && resp.Workspace.DeviceID == syncDeviceID() {
-				// We lost last-write-wins to a snapshot THIS device wrote. That is not
-				// a conflict — there is no other writer to protect — it is an artifact
-				// of when the timestamp was taken: ClientUpdatedAt is stamped when the
-				// edit is QUEUED, while the server stamps its own clock when the push
-				// LANDS. Any delay in between (a retry after a failed blob upload, an
-				// offline queue draining, a slow link) leaves the queued edit looking
-				// older than the snapshot it is meant to supersede, so the device's own
-				// newer data gets rejected and filed as a conflict against itself.
-				// Retry once, forcing past the comparison. Scoped strictly to our own
-				// device id: a snapshot written by any OTHER device still goes through
-				// the normal LWW path below, backup and all.
-				var forced backendrpc.PutWorkspaceResponse
-				forceErr := invokeAuthed(ctx, pr, backendrpc.MethodSyncPutWorkspace, backendrpc.PutWorkspaceRequest{
-					Workspace: backendrpc.Workspace{
-						ID:       item.WorkspaceID,
-						Name:     item.Name,
-						Color:    item.Color,
-						Sort:     item.Sort,
-						DeviceID: item.DeviceID,
-					},
-					Dataset:         dataset,
-					ClientUpdatedAt: item.ClientUpdatedAt,
-					Force:           true,
-				}, &forced)
-				if forceErr == nil && forced.Accepted {
-					resp = forced
-					if app := appstate.Default; app != nil {
-						app.Log().Info("backend sync re-pushed past our own newer snapshot", "workspace", item.WorkspaceID)
-					}
-				}
-			}
+			// A rejection is a conflict, full stop (SV0.1). This used to retry
+			// with Force:true when the winning server row was last written by
+			// this device ID — but a device ID is per BROWSER, shared by every
+			// tab and every account that signs in here, so "our device wrote
+			// it" never proved "our account's current edit may overwrite it".
+			// The retry bypassed every server check on exactly the evidence
+			// the 2026-08-19 incident showed cannot be trusted. The only Force
+			// path left is the explicit, user-confirmed unreadable-copy replacement
+			// (ReplaceServerCopyWithThisDevice);
+			// everything else goes through the conflict path below, where the
+			// local edit is backed up and the user decides.
 			if !resp.Accepted {
 				// LWW resolution: the server holds a newer snapshot, so this push lost.
 				// C309: do NOT silently drop the local edit. Before removing it from the
@@ -927,17 +1121,32 @@ func flushBackendSyncQueue() {
 				// a recoverable per-workspace backup so the user can restore it. Then tell
 				// them plainly (§7.11) and pull the newer server copy so the UI is current.
 				saveConflictBackup(item)
-				removeQueuedSyncMutation(item.WorkspaceID, item.Hash)
+				removeQueuedSyncMutationFor(item.UserID, item.WorkspaceID, item.Hash)
 				setSyncStatus(syncStatus{State: "conflict", Pending: pendingSyncCount(), Message: "newer server snapshot available"})
 				uistate.PostNotice(uistate.T("sync.conflictBackedUp"), false)
 				if app := appstate.Default; app != nil {
-					app.Log().Warn("backend sync push rejected; local edit backed up, newer server snapshot pulled", "workspace", item.WorkspaceID)
+					app.Log().Warn("backend sync push rejected; local edit backed up, newer server snapshot pulled",
+						"workspace", item.WorkspaceID, "reason", resp.Reason)
 				}
+				// PULL. This comment claimed the newer copy was fetched "so the UI
+				// is current" and no fetch was ever made: the screen went on showing
+				// the local edit that had just been rejected and filed away, so the
+				// user was told there was a conflict while looking at the losing
+				// data — and any further edit queued another push from a base the
+				// server had already moved past. It only ever corrected itself if
+				// the watch loop happened to fire (Cam, 2026-08-31).
+				pullActiveWorkspaceFromBackend(true)
 				continue
 			}
 			// Accepted: only now is it safe to drop the local mutation from the queue.
-			removeQueuedSyncMutation(item.WorkspaceID, item.Hash)
-			saveSyncMeta(item.WorkspaceID, syncMeta{UpdatedAt: resp.UpdatedAt, Version: resp.Version, Hash: item.Hash})
+			// Acknowledge against the entry's CAPTURED owner, not whoever is
+			// signed in at ack time, so the ack can never clear a different
+			// scope's entry (SV0.1); the bookmark is stamped for that owner too.
+			removeQueuedSyncMutationFor(item.UserID, item.WorkspaceID, item.Hash)
+			if backup, ok := loadConflictBackup(item.WorkspaceID); ok && backup.Hash == item.Hash {
+				clearConflictBackup(item.WorkspaceID)
+			}
+			saveSyncMeta(item.WorkspaceID, syncMeta{UpdatedAt: resp.UpdatedAt, Version: resp.Version, Hash: item.Hash, Owner: item.UserID})
 			// The server took this dataset as this account's, which settles who
 			// owns the copy on this device.
 			claimDatasetForCurrentUser()
@@ -1271,6 +1480,8 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 	if !ok {
 		return
 	}
+	requestedOwner := signedInUserID()
+	pullWorkspaceID := w.ID
 	pullMu.Lock()
 	if pullInFlight {
 		pullMu.Unlock()
@@ -1298,6 +1509,19 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 			markHostedHydrationError(customSyncErrorMessage(err, "CashFlux could not load your server data."))
 			return
 		}
+		pulledWorkspaceID := w.ID
+		if strings.TrimSpace(resp.Workspace.ID) != "" {
+			pulledWorkspaceID = resp.Workspace.ID
+		}
+		if allowed, reason := syncstate.CheckPullScope(pulledWorkspaceID, activeWorkspaceID(), requestedOwner, signedInUserID()); !allowed {
+			if app := appstate.Default; app != nil {
+				app.Log().Warn("backend sync pull discarded because its scope changed", "reason", reason,
+					"pulledWorkspace", pulledWorkspaceID, "activeWorkspace", activeWorkspaceID(),
+					"requestedOwner", requestedOwner, "signedInOwner", signedInUserID())
+			}
+			markHostedHydrationReady()
+			return
+		}
 		if !resp.Found || len(resp.Dataset) == 0 {
 			// The server holds no snapshot for this workspace at all — the shape of a
 			// freshly activated device against an empty account. Seed it with what
@@ -1307,13 +1531,29 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 			// stays empty, which reads as sync being broken. Safe by construction —
 			// there is nothing on the server to lose an LWW race against.
 			markHostedHydrationReady()
+			if pulledWorkspaceID != pullWorkspaceID || activeWorkspaceID() != pullWorkspaceID || requestedOwner != signedInUserID() {
+				return
+			}
 			forceBackendSeedActiveWorkspace()
 			return
 		}
 		// Same reason as the push path: hydrating decrypts, downloads blobs and
 		// imports into SQLite, all of it CPU on the renderer's thread.
 		yieldToBrowser()
-		dataset, err := hydrateBackendSyncDataset(ctx, pr.ServerURL, effectiveServerToken(pr), w.ID, resp.Dataset)
+		payload := resp.Dataset
+		if cryptobox.IsEnvelope(payload) && activePasscode != "" {
+			decrypted, decryptErr := decryptEnvelopeSync(payload, activePasscode)
+			if decryptErr != nil {
+				if app := appstate.Default; app != nil {
+					app.Log().Warn("backend snapshot could not be decrypted with this device's passcode", "workspace", w.ID, "err", decryptErr)
+				}
+				setSyncStatus(syncStatus{State: syncStateLockedDifferentPasscode, Pending: pendingSyncCount(), Message: lockedDifferentPasscodeMessage})
+				markHostedHydrationLocked(resp.Dataset, "")
+				return
+			}
+			payload = decrypted
+		}
+		dataset, err := hydrateBackendSyncDataset(ctx, pr.ServerURL, effectiveServerToken(pr), w.ID, payload)
 		if errors.Is(err, errSyncDatasetLocked) {
 			// The snapshot is encrypted and the app is locked. Don't apply or drop it —
 			// the server keeps it, and onAppUnlocked re-pulls once the passcode is known.
@@ -1325,6 +1565,15 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 			logSyncError("backend artifact blob download failed", err)
 			setSyncStatus(syncStatus{State: "error", Pending: pendingSyncCount(), Message: customSyncErrorMessage(err, "artifact blob download failed"), AuthFailed: isAuthError(err)})
 			markHostedHydrationError(customSyncErrorMessage(err, "CashFlux could not decrypt or download your server data."))
+			return
+		}
+		if allowed, reason := syncstate.CheckPullScope(pulledWorkspaceID, activeWorkspaceID(), requestedOwner, signedInUserID()); !allowed {
+			if app := appstate.Default; app != nil {
+				app.Log().Warn("hydrated backend snapshot discarded because its scope changed", "reason", reason,
+					"pulledWorkspace", pulledWorkspaceID, "activeWorkspace", activeWorkspaceID(),
+					"requestedOwner", requestedOwner, "signedInOwner", signedInUserID())
+			}
+			markHostedHydrationReady()
 			return
 		}
 		meta := loadSyncMeta(w.ID)
@@ -1365,6 +1614,15 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 			markHostedHydrationError("CashFlux could not import your server data.")
 			return
 		}
+		if allowed, reason := syncstate.CheckPullScope(pulledWorkspaceID, activeWorkspaceID(), requestedOwner, signedInUserID()); !allowed {
+			if app := appstate.Default; app != nil {
+				app.Log().Warn("backend snapshot import abandoned because its scope changed", "reason", reason,
+					"pulledWorkspace", pulledWorkspaceID, "activeWorkspace", activeWorkspaceID(),
+					"requestedOwner", requestedOwner, "signedInOwner", signedInUserID())
+			}
+			markHostedHydrationReady()
+			return
+		}
 		// What just replaced the local dataset is the account's real data, so the
 		// "you're viewing sample data" banner — and the "Start fresh" button sitting
 		// next to it — must not survive the hydrate. Nothing else in the sync path
@@ -1377,7 +1635,7 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 		// (other tabs must stop overwriting) and this tab's own write entitlement.
 		datasetMyGen = bumpDatasetGen()
 		hadLocalDataset = true
-		meta = syncMeta{UpdatedAt: resp.Workspace.UpdatedAt, Version: resp.Workspace.Version, Hash: datasetHash(dataset)}
+		meta = syncMeta{UpdatedAt: resp.Workspace.UpdatedAt, Version: resp.Workspace.Version, Hash: datasetHash(dataset), Owner: requestedOwner}
 		// A remote snapshot actually landed on this device — real traffic, same as an
 		// accepted push. (Seen only when reloadOnApply is false; an applying pull that
 		// reloads the page takes the flash with it, which is fine — the reload is a
@@ -1594,10 +1852,9 @@ func hasConflictBackup(workspaceID string) bool {
 	return ok
 }
 
-// resolveConflictKeepLocal re-pushes the stashed local dataset with Force=true
-// so the server accepts it unconditionally (bypassing the LWW staleness check),
-// then clears the conflict backup and marks sync as settled. Called by
-// SyncConflictHost's "Keep my changes" action. (C309 / #464)
+// resolveConflictKeepLocal asks for explicit confirmation, then requeues the
+// stashed snapshot against the latest server version. It never uses Force;
+// the server's version check remains the conflict guard.
 func resolveConflictKeepLocal() {
 	pr := uistate.LoadPrefs().Normalize()
 	if !pr.BackendActive() {
@@ -1614,41 +1871,37 @@ func resolveConflictKeepLocal() {
 		setSyncStatus(syncStatus{State: "synced", LastSyncedAt: time.Now().UTC().Format(time.RFC3339Nano)})
 		return
 	}
+	uistate.ConfirmModalLabeled(
+		"Keep this device's saved changes for the active workspace? CashFlux will check the current server version before sending.",
+		"Keep my copy", true, func(confirmed bool) {
+			if !confirmed {
+				return
+			}
+			queueConflictBackupAtCurrentVersion(pr, w.ID, item)
+		})
+}
+
+func queueConflictBackupAtCurrentVersion(pr prefs.Prefs, workspaceID string, item queuedSyncMutation) {
 	go func() {
-		syncPushMu.Lock()
-		defer syncPushMu.Unlock()
-		setSyncStatus(syncStatus{State: "syncing"})
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
-		dataset, err := prepareBackendSyncDataset(ctx, pr.ServerURL, effectiveServerToken(pr), item.WorkspaceID, []byte(item.Dataset))
-		if err != nil {
-			setSyncStatus(syncStatus{State: "error", Message: customSyncErrorMessage(err, "artifact upload failed"), AuthFailed: isAuthError(err)})
-			logSyncError("conflict resolve-keep artifact upload failed", err)
+		var current backendrpc.GetWorkspaceResponse
+		if err := invokeAuthed(ctx, pr, backendrpc.MethodSyncGetWorkspace,
+			backendrpc.GetWorkspaceRequest{ID: workspaceID}, &current); err != nil {
+			setSyncStatus(syncStatus{State: "error", Message: customSyncErrorMessage(err, "could not check the server version"), AuthFailed: isAuthError(err)})
+			logSyncError("conflict resolve-keep version check failed", err)
 			return
 		}
-		var resp backendrpc.PutWorkspaceResponse
-		err = invokeAuthed(ctx, pr, backendrpc.MethodSyncPutWorkspace, backendrpc.PutWorkspaceRequest{
-			Workspace: backendrpc.Workspace{
-				ID:       item.WorkspaceID,
-				Name:     item.Name,
-				Color:    item.Color,
-				Sort:     item.Sort,
-				DeviceID: item.DeviceID,
-			},
-			Dataset:         dataset,
-			ClientUpdatedAt: item.ClientUpdatedAt,
-			Force:           true, // bypass LWW staleness check — user chose "keep local"
-		}, &resp)
-		if err != nil {
-			setSyncStatus(syncStatus{State: "error", Message: customSyncErrorMessage(err, "force push failed"), AuthFailed: isAuthError(err)})
-			logSyncError("conflict resolve-keep force push failed", err)
+		if activeWorkspaceID() != workspaceID || !syncstate.PushableEntry(scopedEntry(item), signedInUserID()) {
+			setSyncStatus(syncStatus{State: "conflict", Message: uistate.T("sync.savedChangeInactive")})
 			return
 		}
-		// Force=true means the server always accepts; clear the backup and settle.
-		clearConflictBackup(item.WorkspaceID)
-		saveSyncMeta(item.WorkspaceID, syncMeta{UpdatedAt: resp.UpdatedAt, Version: resp.Version, Hash: item.Hash})
-		setSyncStatus(syncStatus{State: "synced", LastSyncedAt: time.Now().UTC().Format(time.RFC3339Nano)})
-		uistate.PostNotice(uistate.T("sync.conflictResolvedKeepLocal"), false)
+		item.BaseVersion = current.Workspace.Version
+		item.Force = false
+		item.ClientUpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+		item.LastAttemptError = ""
+		enqueueSyncMutation(item)
+		flushBackendSyncQueue()
 	}()
 }
 
@@ -1667,6 +1920,7 @@ func resolveConflictUseServer() {
 		return
 	}
 	wID := w.ID
+	requestedOwner := signedInUserID()
 	go func() {
 		setSyncStatus(syncStatus{State: "syncing"})
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -1678,17 +1932,46 @@ func resolveConflictUseServer() {
 			logSyncError("conflict resolve-server pull failed", err)
 			return
 		}
+		pulledWorkspaceID := wID
+		if strings.TrimSpace(resp.Workspace.ID) != "" {
+			pulledWorkspaceID = resp.Workspace.ID
+		}
+		if allowed, reason := syncstate.CheckPullScope(pulledWorkspaceID, activeWorkspaceID(), requestedOwner, signedInUserID()); !allowed {
+			if app := appstate.Default; app != nil {
+				app.Log().Warn("conflict server snapshot discarded because its scope changed", "reason", reason,
+					"pulledWorkspace", pulledWorkspaceID, "activeWorkspace", activeWorkspaceID(),
+					"requestedOwner", requestedOwner, "signedInOwner", signedInUserID())
+			}
+			return
+		}
 		if !resp.Found || len(resp.Dataset) == 0 {
 			// Server has no snapshot — treat as resolved (nothing to pull).
 			clearConflictBackup(wID)
 			setSyncStatus(syncStatus{State: "synced", LastSyncedAt: time.Now().UTC().Format(time.RFC3339Nano)})
 			return
 		}
-		dataset, err := hydrateBackendSyncDataset(ctx, pr.ServerURL, effectiveServerToken(pr), wID, resp.Dataset)
+		payload := resp.Dataset
+		if cryptobox.IsEnvelope(payload) && activePasscode != "" {
+			decrypted, decryptErr := decryptEnvelopeSync(payload, activePasscode)
+			if decryptErr != nil {
+				setSyncStatus(syncStatus{State: syncStateLockedDifferentPasscode, Message: lockedDifferentPasscodeMessage})
+				return
+			}
+			payload = decrypted
+		}
+		dataset, err := hydrateBackendSyncDataset(ctx, pr.ServerURL, effectiveServerToken(pr), wID, payload)
 		if errors.Is(err, errSyncDatasetLocked) {
 			// Can't apply the server copy while locked — keep the conflict and tell the
 			// user to unlock first; the choice re-runs once the passcode is known.
 			setSyncStatus(syncStatus{State: "locked", Message: "unlock to resolve with server copy"})
+			return
+		}
+		if allowed, reason := syncstate.CheckPullScope(pulledWorkspaceID, activeWorkspaceID(), requestedOwner, signedInUserID()); !allowed {
+			if app := appstate.Default; app != nil {
+				app.Log().Warn("hydrated conflict snapshot discarded because its scope changed", "reason", reason,
+					"pulledWorkspace", pulledWorkspaceID, "activeWorkspace", activeWorkspaceID(),
+					"requestedOwner", requestedOwner, "signedInOwner", signedInUserID())
+			}
 			return
 		}
 		if err != nil {
@@ -1706,6 +1989,14 @@ func resolveConflictUseServer() {
 			logSyncError("conflict resolve-server import failed", err)
 			return
 		}
+		if allowed, reason := syncstate.CheckPullScope(pulledWorkspaceID, activeWorkspaceID(), requestedOwner, signedInUserID()); !allowed {
+			if app := appstate.Default; app != nil {
+				app.Log().Warn("conflict snapshot import abandoned because its scope changed", "reason", reason,
+					"pulledWorkspace", pulledWorkspaceID, "activeWorkspace", activeWorkspaceID(),
+					"requestedOwner", requestedOwner, "signedInOwner", signedInUserID())
+			}
+			return
+		}
 		// Deliberate same-tab dataset replacement: advance the cross-tab generation
 		// (other tabs must stop overwriting) and this tab's own write entitlement.
 		datasetMyGen = bumpDatasetGen()
@@ -1714,6 +2005,7 @@ func resolveConflictUseServer() {
 			UpdatedAt: resp.Workspace.UpdatedAt,
 			Version:   resp.Workspace.Version,
 			Hash:      datasetHash(dataset),
+			Owner:     requestedOwner,
 		}
 		// Only discard the stash after the import has succeeded — the user's local
 		// edit is recoverable until this point.
@@ -1758,32 +2050,23 @@ func upsertQueuedSyncMutation(item queuedSyncMutation) {
 	saveSyncQueue(next)
 }
 
-// removeQueuedSyncMutation drops acknowledged work. Keyed on (account,
-// workspace) since C696, so acknowledging one identity's upload cannot silently
-// clear another identity's unpushed work for the same workspace id — a state a
-// device-account change genuinely produces.
-func removeQueuedSyncMutation(workspaceID, hash string) {
+// removeQueuedSyncMutationFor drops only the acknowledged queue entry in the
+// scope captured when it was queued. Acknowledging work for one account must
+// never clear another account's entry, even when workspace IDs and hashes match.
+func removeQueuedSyncMutationFor(userID, workspaceID, hash string) {
 	queue := loadSyncQueue()
-	pending := make([]syncstate.PendingMutation, 0, len(queue))
-	byKey := map[string]queuedSyncMutation{}
-	key := func(userID, wsID, h string) string { return userID + "\x00" + wsID + "\x00" + h }
-	for _, q := range queue {
-		pending = append(pending, syncstate.PendingMutation{UserID: q.UserID, WorkspaceID: q.WorkspaceID, Hash: q.Hash, UpdatedAt: q.ClientUpdatedAt})
-		byKey[key(q.UserID, q.WorkspaceID, q.Hash)] = q
-	}
-	pending = syncstate.RemovePending(pending, syncstate.Binding{UserID: signedInUserID(), WorkspaceID: workspaceID}, hash)
-	// An entry queued before identities were recorded carries no owner, so it
-	// would survive a removal keyed to the current account and then be retried
-	// for ever. Acknowledge that one too: it is this device's own work, and the
-	// push that just succeeded is exactly what it was waiting for.
-	pending = syncstate.RemovePending(pending, syncstate.Binding{WorkspaceID: workspaceID}, hash)
-	next := make([]queuedSyncMutation, 0, len(pending))
-	for _, p := range pending {
-		if q, ok := byKey[key(p.UserID, p.WorkspaceID, p.Hash)]; ok {
-			next = append(next, q)
+	saveSyncQueue(withoutQueuedSyncMutation(queue, userID, workspaceID, hash))
+}
+
+func withoutQueuedSyncMutation(queue []queuedSyncMutation, userID, workspaceID, hash string) []queuedSyncMutation {
+	next := make([]queuedSyncMutation, 0, len(queue))
+	for _, item := range queue {
+		if item.UserID == userID && item.WorkspaceID == workspaceID && item.Hash == hash {
+			continue
 		}
+		next = append(next, item)
 	}
-	saveSyncQueue(next)
+	return next
 }
 
 func setSyncStatus(status syncStatus) {
@@ -1849,6 +2132,10 @@ func syncStatusLabel() string {
 		// the first a flat lie, the second an implication that it is going to
 		// go. It is not going to go until somebody decides.
 		return "Needs your decision"
+	case syncStateLockedDifferentPasscode:
+		return uistate.T("sync.lockedDifferentPasscode")
+	case syncStateIdentityUnknown:
+		return uistate.T("sync.identityUnknownLabel")
 	case "conflict":
 		return "Newer server copy available"
 	case "local", "":

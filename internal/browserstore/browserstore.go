@@ -15,6 +15,9 @@
 package browserstore
 
 import (
+	"errors"
+	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"syscall/js"
@@ -31,10 +34,11 @@ const (
 )
 
 var (
-	mu    sync.Mutex
-	cache = map[string]string{}
-	db    js.Value
-	ready bool
+	mu      sync.Mutex
+	cache   = map[string]string{}
+	db      js.Value
+	ready   bool
+	durable bool
 )
 
 // Init opens IndexedDB, loads all entries into the in-memory cache, and migrates
@@ -52,6 +56,7 @@ func Init() {
 	StartCrossTab()
 	idb := js.Global().Get("indexedDB")
 	if !idb.Truthy() {
+		durable = false
 		mirrorLocalStorage()
 		return
 	}
@@ -68,6 +73,7 @@ func Init() {
 		return nil
 	}))
 	req.Set("onerror", js.FuncOf(func(js.Value, []js.Value) any {
+		durable = false
 		mirrorLocalStorage()
 		finish()
 		return nil
@@ -78,6 +84,7 @@ func Init() {
 		defer func() {
 			if r := recover(); r != nil {
 				db = js.Value{}
+				durable = false
 				mirrorLocalStorage()
 				finish()
 			}
@@ -86,10 +93,12 @@ func Init() {
 		// Guard: if the expected object store is absent, don't transact (would throw).
 		if !db.Get("objectStoreNames").Call("contains", idbStoreName).Bool() {
 			db = js.Value{}
+			durable = false
 			mirrorLocalStorage()
 			finish()
 			return nil
 		}
+		durable = true
 		tx := db.Call("transaction", idbStoreName, "readonly")
 		os := tx.Call("objectStore", idbStoreName)
 		keysReq := os.Call("getAllKeys")
@@ -110,6 +119,7 @@ func Init() {
 			return nil
 		}))
 		valsReq.Set("onerror", js.FuncOf(func(js.Value, []js.Value) any {
+			durable = false
 			mirrorLocalStorage()
 			finish()
 			return nil
@@ -118,6 +128,11 @@ func Init() {
 	}))
 	<-done
 }
+
+// Durable reports whether IndexedDB is available as the persistence backend.
+// It is false after Init falls back to the in-memory/localStorage mirror, where
+// writes cannot be acknowledged as durable.
+func Durable() bool { return durable }
 
 // mirrorLocalStorage copies localStorage cashflux:* entries into the cache without
 // touching localStorage — the no-IndexedDB fallback path.
@@ -210,33 +225,148 @@ func Set(key, val string) {
 	publish(key)
 }
 
-// SetThen writes key→val and invokes done() once the IndexedDB transaction commits
-// (or errors). Use it when the page is about to reload (e.g. a wipe): run the reload
-// inside done() so the write isn't lost to the async path. It does NOT block — which
-// matters because it's called from JS-invoked handlers where blocking would deadlock
-// the event loop (the IDB callback could never fire). Falls back to calling done()
-// immediately when IndexedDB is unavailable.
+// SetThen updates the in-memory cache and publishes key→val immediately, then
+// invokes done() after the IndexedDB transaction completes or fails. The cache
+// remains readable immediately even when IndexedDB is unavailable. Use
+// SetDurable when the caller needs to distinguish durable success from failure.
+// It does NOT block, which matters because calls from JS-invoked handlers would
+// deadlock the event loop if they waited for the IndexedDB callback.
 func SetThen(key, val string, done func()) {
 	mu.Lock()
 	cache[key] = val
 	mu.Unlock()
+	publish(key)
+
+	SetDurable(key, val, func(err error) {
+		if err != nil {
+			slog.Error("browserstore write failed", "key", key, "error", err)
+		}
+		if done != nil {
+			done()
+		}
+	})
+}
+
+// SetDurable writes key→val in a strict-durability IndexedDB transaction. The
+// in-memory cache is updated only after the transaction's complete event. If
+// IndexedDB is unavailable, or the transaction errors or aborts, the cache is
+// left unchanged and done receives an error. The callback is asynchronous when
+// IndexedDB is available and never blocks the browser event loop.
+func SetDurable(key, val string, done func(error)) {
+	writeDurable(key, done, func(os js.Value) { os.Call("put", val, key) }, func() { cache[key] = val })
+}
+
+// RemoveDurable removes key in a strict-durability IndexedDB transaction. The
+// in-memory cache is updated only after the transaction's complete event. If
+// IndexedDB is unavailable, or the transaction errors or aborts, the cache is
+// left unchanged and done receives an error.
+func RemoveDurable(key string, done func(error)) {
+	writeDurable(key, done, func(os js.Value) { os.Call("delete", key) }, func() { delete(cache, key) })
+}
+
+func writeDurable(key string, done func(error), issue func(js.Value), applyCache func()) {
+	finish := func(err error) {
+		if done != nil {
+			done(err)
+		}
+	}
 	if !db.Truthy() {
-		done()
+		finish(errors.New("IndexedDB is unavailable; write was not persisted"))
+		return
+	}
+	tx, err := openReadwriteTransaction()
+	if err != nil {
+		finish(err)
 		return
 	}
 	var once sync.Once
-	fin := func() { once.Do(done) }
+	settle := func(err error) {
+		once.Do(func() {
+			if err == nil {
+				mu.Lock()
+				applyCache()
+				mu.Unlock()
+				publish(key)
+			}
+			finish(err)
+		})
+	}
+	tx.Set("oncomplete", js.FuncOf(func(js.Value, []js.Value) any { settle(nil); return nil }))
+	tx.Set("onerror", js.FuncOf(func(js.Value, []js.Value) any { settle(transactionFailure(tx, "error")); return nil }))
+	tx.Set("onabort", js.FuncOf(func(js.Value, []js.Value) any { settle(transactionFailure(tx, "abort")); return nil }))
 	defer func() {
-		if r := recover(); r != nil {
-			fin()
+		if recovered := recover(); recovered != nil {
+			settle(jsPanicError("IndexedDB request failed", recovered))
 		}
 	}()
-	publish(key)
-	tx := db.Call("transaction", idbStoreName, "readwrite")
-	tx.Set("oncomplete", js.FuncOf(func(js.Value, []js.Value) any { fin(); return nil }))
-	tx.Set("onerror", js.FuncOf(func(js.Value, []js.Value) any { fin(); return nil }))
-	tx.Set("onabort", js.FuncOf(func(js.Value, []js.Value) any { fin(); return nil }))
-	tx.Call("objectStore", idbStoreName).Call("put", val, key)
+	issue(tx.Call("objectStore", idbStoreName))
+}
+
+func openReadwriteTransaction() (tx js.Value, err error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			err = jsPanicError("open IndexedDB transaction", recovered)
+		}
+	}()
+	options := js.Global().Get("Object").New()
+	options.Set("durability", "strict")
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			if isOptionError(recovered) {
+				tx = db.Call("transaction", idbStoreName, "readwrite")
+				err = nil
+			} else {
+				err = jsPanicError("open IndexedDB transaction", recovered)
+			}
+		}
+	}()
+	tx = db.Call("transaction", idbStoreName, "readwrite", options)
+	return tx, nil
+}
+
+func isOptionError(recovered any) bool {
+	name := jsExceptionName(recovered)
+	return name == "TypeError" || name == "NotSupportedError"
+}
+
+func transactionFailure(tx js.Value, event string) error {
+	if tx.Truthy() {
+		errValue := tx.Get("error")
+		if errValue.Truthy() {
+			name := errValue.Get("name")
+			if name.Type() == js.TypeString && name.String() != "" {
+				return fmt.Errorf("IndexedDB transaction %s: %s", event, name.String())
+			}
+		}
+	}
+	return fmt.Errorf("IndexedDB transaction %s", event)
+}
+
+func jsPanicError(context string, recovered any) error {
+	name := jsExceptionName(recovered)
+	if name == "" {
+		return fmt.Errorf("%s: %v", context, recovered)
+	}
+	return fmt.Errorf("%s: %s", context, name)
+}
+
+func jsExceptionName(recovered any) string {
+	var value js.Value
+	switch v := recovered.(type) {
+	case js.Error:
+		value = v.Value
+	case js.Value:
+		value = v
+	default:
+		return ""
+	}
+	if value.Truthy() {
+		name := value.Get("name")
+		if name.Type() == js.TypeString {
+			return name.String()
+		}
+	}
+	return ""
 }
 
 // Remove deletes a key from the cache and IndexedDB.

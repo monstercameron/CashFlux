@@ -44,6 +44,20 @@ and every commit updates this file under `Unreleased`.
   unreadable stored dataset is quarantined instead of being replaced by the sample (SV0.4). The OpenAI
   key is never exported, synced, checkpointed or restored with data, and an import keeps the key
   already in memory (SV0.8).
+- **Sync, identity and saving can no longer put data in the wrong place (Phase 0, SV0.1–SV0.8).**
+  Every sign-in, sign-out, account switch and server-URL change reloads the page so identity is
+  resolved again; a queued edit carries the workspace, owner and base version it was made in, a pull
+  applies only to the workspace that is still active, and the client no longer forces past the
+  server's version check. The cross-tab refresh lock now runs the refresh inside the lock, and Google
+  and GitHub sign-ins get a rotating session (SV0.2). Restores and workspace switches reload, writes are
+  awaited before any reload, and Forgot passcode revokes the server session and keeps the sync queue
+  (SV0.5). Changing or turning off the passcode re-encrypts the bank-login vault instead of orphaning it
+  (SV0.7). The OpenAI key is a device credential stored on its own, encrypted when App Lock is on
+  (SV0.8). Music is off by default (MZ1). The service-worker update banner and build id are in place
+  (SV7a; release stamping follows).
+- **Add transaction asks for what it needs.** Payee or description is required on the visible Payee
+  field; Description is optional and defaults to the payee (R4F). The typed-sentence box applies its
+  fill on Enter (R2K). Add and Edit share one field layout, labels and direction toggle (R9F).
 
 ## [1.18.0] - 2026-08-31
 
