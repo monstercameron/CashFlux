@@ -9,6 +9,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/orderimport"
+	"github.com/monstercameron/CashFlux/internal/ordermatch"
 	"github.com/monstercameron/CashFlux/internal/receiptsplit"
 	"github.com/monstercameron/CashFlux/internal/rules"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -16,6 +17,7 @@ import (
 	"github.com/monstercameron/GoWebComponents/v5/css"
 	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"strings"
 )
 
 // orderImportCardProps carries nothing yet — the card reads appstate.Default like
@@ -36,7 +38,7 @@ type orderImportCardProps struct{}
 func OrderImportCard(_ orderImportCardProps) ui.Node {
 	app := appstate.Default
 	pasteText := ui.UseState("")
-	matches := ui.UseState([]orderimport.Match(nil))
+	matches := ui.UseState([]ordermatch.ReviewMatch(nil))
 	msg := ui.UseState("")
 
 	base := "USD"
@@ -54,11 +56,16 @@ func OrderImportCard(_ orderImportCardProps) ui.Node {
 			return
 		}
 		ms := orderimport.MatchOrders(orders, orderChargesFromLedger(app))
-		matches.Set(ms)
+		matches.Set(ordermatch.ForReview(ms, app.Transactions()))
 		msg.Set(uistate.T("orderimport.parsed", len(orders)))
 	}
 
 	onFindPaste := ui.UseEvent(Prevent(func() {
+		if strings.TrimSpace(pasteText.Get()) == "" {
+			matches.Set(nil)
+			msg.Set(uistate.T("orderimport.emptyPaste"))
+			return
+		}
 		runMatch(orderimport.ParseOrdersPaste(pasteText.Get(), base))
 	}))
 	onPasteInput := ui.UseEvent(func(v string) { pasteText.Set(v) })
@@ -86,11 +93,12 @@ func OrderImportCard(_ orderImportCardProps) ui.Node {
 				OnClick(onChooseFile), uistate.T("orderimport.chooseFile")),
 			Span(css.Class("muted", tw.Text13), uistate.T("orderimport.fileOrPaste")),
 		),
-		Form(OnSubmit(onFindPaste),
+		Form(Attr("data-testid", "order-paste-form"), OnSubmit(onFindPaste),
 			Div(css.Class("form-grid"), Style(map[string]string{"margin-bottom": "0.5rem"}),
 				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("orderimport.findOrders")),
 			),
 			Textarea(css.Class("field field-wide"), Attr("rows", "5"),
+				Attr("id", "order-paste"),
 				Attr("data-testid", "order-paste"),
 				Placeholder(uistate.T("orderimport.pastePlaceholder")),
 				OnInput(onPasteInput),
@@ -101,11 +109,11 @@ func OrderImportCard(_ orderImportCardProps) ui.Node {
 		If(len(ms) > 0,
 			Div(css.Class(tw.Mt2), Attr("role", "list"),
 				MapKeyed(ms,
-					func(m orderimport.Match) any { return m.Order.ID },
-					func(m orderimport.Match) ui.Node {
+					func(m ordermatch.ReviewMatch) any { return m.Match.Order.ID },
+					func(m ordermatch.ReviewMatch) ui.Node {
 						return ui.CreateElement(orderImportRow, orderImportRowProps{
-							Match: m, Base: base,
-							OnApply: func() { applyOrderMatch(app, m) },
+							Review: m, Base: base,
+							OnApply: func() { applyOrderMatch(app, m.Match) },
 						})
 					},
 				),
@@ -220,16 +228,17 @@ func proposeSplitFromOrder(app *appstate.App, txn domain.Transaction, o orderimp
 // orderImportRowProps drives one matched-order row. OnApply is a plain callback so
 // the row (its own component) owns the click hook — never an On* option in a loop.
 type orderImportRowProps struct {
-	Match   orderimport.Match
+	Review  ordermatch.ReviewMatch
 	Base    string
 	OnApply func()
 }
 
 // orderImportRow renders one parsed order: its id, total, the match verdict
-// (single / multi-shipment / unmatched), any gift-card/promo drift stated plainly,
+// (single / multi-shipment / unmatched), any amount difference stated without guessing,
 // and an Apply button (enabled only when a match exists).
 func orderImportRow(props orderImportRowProps) ui.Node {
-	m := props.Match
+	review := props.Review
+	m := review.Match
 	cur := m.Order.Currency
 	if cur == "" {
 		cur = props.Base
@@ -247,6 +256,22 @@ func orderImportRow(props orderImportRowProps) ui.Node {
 	if drift < 0 {
 		drift = -drift
 	}
+	chargeLabel := "orderimport.chargeLabel"
+	if len(review.Charges) > 1 {
+		chargeLabel = "orderimport.chargesLabel"
+	}
+	items := make([]ui.Node, 0, len(m.Order.Items))
+	for _, item := range m.Order.Items {
+		qty := item.Qty
+		if qty <= 0 {
+			qty = 1
+		}
+		items = append(items, Div(css.Class("muted", tw.Text12),
+			Span(uistate.T("orderimport.itemLine", qty, item.Name,
+				fmtMoney(money.New(item.LineTotalMinor(), cur)))),
+		))
+	}
+	canApply := m.Kind != orderimport.MatchNone && len(review.MissingTxnIDs) == 0
 	return Div(css.Class("doc-order-row", tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt1),
 		Attr("role", "listitem"), Attr("data-testid", "order-row-"+m.Order.ID),
 		Div(css.Class(tw.Flex1),
@@ -254,10 +279,34 @@ func orderImportRow(props orderImportRowProps) ui.Node {
 			Div(css.Class("muted", tw.Text12),
 				Span(verdict),
 				If(m.Kind != orderimport.MatchNone && m.DriftMinor != 0,
-					Span(" · "+uistate.T("orderimport.drift", fmtMoney(money.New(drift, cur))))),
+					Span(". "+uistate.T("orderimport.amountDifference", fmtMoney(money.New(drift, cur))))),
+			),
+			If(len(review.MissingTxnIDs) > 0,
+				P(css.Class("muted", tw.Text12), uistate.T("orderimport.chargeMissing"))),
+			If(len(review.Charges) > 0,
+				Div(css.Class(tw.Mt1),
+					Strong(uistate.T(chargeLabel)),
+					Div(Map(review.Charges, func(txn domain.Transaction) ui.Node {
+						payee := txn.Payee
+						if payee == "" {
+							payee = txn.Desc
+						}
+						if payee == "" {
+							payee = txn.ID
+						}
+						return Div(css.Class("muted", tw.Text12),
+							Span(txn.Date.Format("Jan 2, 2006")), Span(" — "), Span(payee), Span(" — "), Span(fmtMoney(txn.Amount)))
+					})),
+				),
+			),
+			If(m.Kind != orderimport.MatchNone,
+				Div(css.Class(tw.Mt1),
+					Strong(uistate.T("orderimport.itemsLabel")),
+					IfElse(len(items) > 0, Div(items), P(css.Class("muted", tw.Text12), uistate.T("orderimport.noOrderItems"))),
+				),
 			),
 		),
-		If(m.Kind != orderimport.MatchNone,
+		If(canApply,
 			Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "order-apply-"+m.Order.ID),
 				OnClick(props.OnApply), uistate.T("orderimport.apply")),
 		),
