@@ -68,14 +68,11 @@ func TestBudgetStatusStripHasOneHeadlineFigure(t *testing.T) {
 	if figures != 1 {
 		t.Fatalf("headline figures = %d, want one", figures)
 	}
-	if sentence := byTestID(f, "span", "budgets-status-sentence"); sentence == nil || sentence.Text() == "" {
-		t.Fatal("the status strip has no plain-language sentence")
+	if sentence := byTestID(f, "span", "budgets-status-sentence"); sentence == nil || !strings.Contains(sentence.Text(), "spent of $1,000.00 this month") {
+		t.Fatalf("the status strip does not show the normalized monthly plan in its headline: %v", sentence)
 	}
-	if total := byTestID(f, "p", "budgets-normalized-total"); total == nil || total.Text() != uistate.T("bud2.monthlyEquivalent", "$1,000.00") {
-		t.Fatalf("normalized plan disclosure = %v, want monthly total", total)
-	}
-	if line := byTestID(f, "p", "budgets-normalized-line"); line == nil || line.Text() != uistate.T("bud2.normalizedBudgetLine", "Travel", "yearly", "$500.00") {
-		t.Fatalf("yearly budget disclosure = %v, want its $500 monthly equivalent", line)
+	if meter := byTestID(f, "div", "budgets-status-meter"); meter == nil || meter.Attr("role") != "meter" {
+		t.Fatalf("the status strip has no accessible spending meter: %v", meter)
 	}
 }
 

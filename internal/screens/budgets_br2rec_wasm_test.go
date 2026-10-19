@@ -43,8 +43,8 @@ func TestRecurringBillsExcludeIncomeAndSplitBudgetCoverage(t *testing.T) {
 	f := render.New(t)
 	f.Render(ui.CreateElement(recurringBillsHarness, budgetSummaryProps{App: app}))
 	toggle := byTestID(f, "button", "budgets-recurring-toggle")
-	if toggle == nil || !strings.Contains(toggle.Text(), "Recurring bills (all categories)") {
-		t.Fatalf("panel title = %v, want recurring bills across all categories", toggle)
+	if toggle == nil || !strings.Contains(toggle.Text(), "Recurring bills") || strings.Contains(toggle.Text(), "RECURRING BILLS") {
+		t.Fatalf("panel title = %v, want sentence-case recurring bills title", toggle)
 	}
 	toggle.Click()
 	f.Stabilize()

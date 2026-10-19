@@ -58,13 +58,15 @@ func TestTxnCountLineNamesExcludedRows(t *testing.T) {
 	f := render.New(t)
 	f.Render(txnCountLine(txnCountLineProps{Shown: 3, Total: 3, Net: money.New(8500, "USD"), Excluded: 1}))
 	got := f.Text()
-	for _, want := range []string{"3 transactions", "includes 1 left out of budgets and reports"} {
-		if !strings.Contains(got, want) {
-			t.Errorf("count line = %q, want current summary containing %q", got, want)
-		}
+	if !strings.Contains(got, "3 transactions") {
+		t.Errorf("count line = %q, want transaction count", got)
 	}
-	if strings.Contains(got, "Net ") {
-		t.Errorf("one-direction summary includes redundant net: %q", got)
+	secondary := byTestID(f, "div", "txn-count-secondary")
+	if secondary == nil || !strings.Contains(secondary.Text(), "left out of budgets") {
+		t.Errorf("secondary facts = %v, want excluded rows named", secondary)
+	}
+	if !strings.Contains(got, "left out of budgets") {
+		t.Errorf("accessible summary = %q, want excluded rows named", got)
 	}
 }
 

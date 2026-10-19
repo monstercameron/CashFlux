@@ -32,18 +32,26 @@ func TestBR2StripShowsUsableSubtotalAndDeduplicatedIssue(t *testing.T) {
 		t.Fatalf("summary plan = total %d excluded %d issues %d; want 7000, 1, 1", plan.normalizedBudgetTotal, plan.excluded, len(plan.issues))
 	}
 	strip := render.New(t)
+	view.TotalSpent = 2500
 	strip.Render(budgetSummaryStatus(budgetSummaryStatusProps{
-		v: view, vw: period.NewWindow(period.Month, time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC), time.Monday),
-		normalizedBudgetTotal: plan.normalizedBudgetTotal, normalizationOK: false,
-		excluded: plan.excluded, issues: plan.issues,
+		v:                     view,
+		vw:                    period.NewWindow(period.Month, time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC), time.Monday),
+		normalizedBudgetTotal: plan.normalizedBudgetTotal, normalizationOK: true,
+		excluded: plan.excluded, issues: plan.issues, attnCount: 2,
 	}))
 	figure := byTestID(strip, "span", "budgets-status-figure")
-	if figure == nil || figure.Text() != "$70.00" {
-		t.Fatalf("subtotal figure = %v, want $70.00", figure)
+	if figure == nil || figure.Text() != "$25.00" {
+		t.Fatalf("spent headline figure = %v, want $25.00", figure)
 	}
 	sentence := byTestID(strip, "span", "budgets-status-sentence")
-	if sentence == nil || !strings.Contains(sentence.Text(), "excludes 1 budget") {
-		t.Fatalf("status sentence = %v, want one-budget exclusion", sentence)
+	if sentence == nil || !strings.Contains(sentence.Text(), "spent of $70.00 this month") || !strings.Contains(sentence.Text(), "excludes 1 budget") {
+		t.Fatalf("status sentence = %v, want monthly plan and one-budget exclusion", sentence)
+	}
+	if meter := byTestID(strip, "div", "budgets-status-meter"); meter == nil || meter.Attr("role") != "meter" {
+		t.Fatalf("headline meter = %v, want accessible meter", meter)
+	}
+	if attention := byTestID(strip, "button", "budgets-hero-attn"); attention == nil || attention.Text() != "2 budgets need attention" {
+		t.Fatalf("attention line = %v, want the new attention headline", attention)
 	}
 	issues := byTestID(strip, "p", "budgets-status-issues")
 	if issues == nil || strings.Count(issues.Text(), "Trip needs a currency rate.") != 1 {
