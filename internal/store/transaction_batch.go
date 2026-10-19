@@ -123,11 +123,26 @@ func (s *SQLiteStore) PutTransferBatchAtomic(operationID string, txns []domain.T
 // history record in one SQLite transaction. Existing IDs are rejected instead
 // of being overwritten.
 func (s *SQLiteStore) PutImportBatch(txns []domain.Transaction, doc domain.Document) error {
+	return s.PutImportBatchWithChanges(txns, doc, nil)
+}
+
+// PutImportBatchWithChanges stores new imported rows, their history, and planned
+// automation effects in one transaction. Auxiliary transitions must match their
+// exact before-images; an intervening edit aborts the entire import.
+func (s *SQLiteStore) PutImportBatchWithChanges(txns []domain.Transaction, doc domain.Document, changes []RecordChange) error {
+	if len(txns) == 0 && doc.ID == "" && len(changes) == 0 {
+		return nil
+	}
 	tx, err := s.db.Begin()
 	if err != nil {
 		return fmt.Errorf("store: begin import batch: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+	stmt, err := tx.Prepare("INSERT INTO transactions(id, data) VALUES(?, ?)")
+	if err != nil {
+		return fmt.Errorf("store: prepare import batch: %w", err)
+	}
+	defer stmt.Close()
 	for _, txn := range txns {
 		if txn.ID == "" {
 			return fmt.Errorf("store: import transaction id is required")
@@ -136,9 +151,12 @@ func (s *SQLiteStore) PutImportBatch(txns []domain.Transaction, doc domain.Docum
 		if err != nil {
 			return fmt.Errorf("store: encode import transaction %s: %w", txn.ID, err)
 		}
-		if _, err := tx.Exec("INSERT INTO transactions(id, data) VALUES(?, ?)", txn.ID, string(data)); err != nil {
+		if _, err := stmt.Exec(txn.ID, string(data)); err != nil {
 			return fmt.Errorf("store: write import transaction %s: %w", txn.ID, err)
 		}
+	}
+	if err := writeImportChanges(tx, changes); err != nil {
+		return err
 	}
 	if doc.ID != "" {
 		docData, err := json.Marshal(doc)
@@ -152,9 +170,7 @@ func (s *SQLiteStore) PutImportBatch(txns []domain.Transaction, doc domain.Docum
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("store: commit import batch: %w", err)
 	}
-	if len(txns) > 0 || doc.ID != "" {
-		mutationRev.Add(1)
-	}
+	mutationRev.Add(1)
 	return nil
 }
 

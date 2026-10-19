@@ -67,6 +67,27 @@ func StartCrossTab() {
 			if !data.Truthy() {
 				return nil
 			}
+			if keys := data.Get("keys"); js.Global().Get("Array").Call("isArray", keys).Bool() {
+				var changed []string
+				for i := 0; i < keys.Length(); i++ {
+					if key := keys.Index(i); key.Type() == js.TypeString {
+						changed = append(changed, key.String())
+					}
+				}
+				go func() {
+					reloadPublishedBatch(changed)
+					for _, key := range changed {
+						mu.Lock()
+						err := cachedError(key)
+						mu.Unlock()
+						if err == nil {
+							v, present := Get(key)
+							notifyWatchers(key, v, present)
+						}
+					}
+				}()
+				return nil
+			}
 			key := data.Get("key")
 			if !key.Truthy() {
 				return nil

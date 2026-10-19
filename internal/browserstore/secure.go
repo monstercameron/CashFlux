@@ -11,6 +11,7 @@ import (
 	"sort"
 	"sync"
 	"syscall/js"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/atrest"
 	"github.com/monstercameron/CashFlux/internal/keyring"
@@ -184,9 +185,12 @@ func SetSecureBatch(values, expected map[string]string, done func(error)) {
 				delete(readErrors, key)
 			}
 			mu.Unlock()
+			keys := make([]string, 0, len(updates))
 			for key := range updates {
-				publish(key)
+				keys = append(keys, key)
 			}
+			sort.Strings(keys)
+			publishBatch(keys)
 		}
 		if done != nil {
 			done(err)
@@ -214,16 +218,14 @@ func writeSecureBatch(values, expected map[string]string) error {
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
+	priorRecords, err := readSecureBatch(keys)
+	if err != nil {
+		return err
+	}
 	updates := make([]recordReplacement, 0, len(keys))
-	for _, key := range keys {
-		value, err := storage().Encode(key, values[key])
-		if err != nil {
-			return err
-		}
-		old, have, err := (idbRecords{}).Read(key)
-		if err != nil {
-			return err
-		}
+	sliceStart := time.Now()
+	for i, key := range keys {
+		old, have := priorRecords[key]
 		if want, conditional := expected[key]; conditional {
 			plain := ""
 			if have {
@@ -236,12 +238,22 @@ func writeSecureBatch(values, expected map[string]string) error {
 				return recordChangedAt(key, "plaintext generation condition")
 			}
 		}
+		value, err := storage().Encode(key, values[key])
+		if err != nil {
+			return err
+		}
 		var prior *string
 		if have {
 			copy := old
 			prior = &copy
 		}
 		updates = append(updates, recordReplacement{key: key, value: value, expected: prior})
+		// Encryption and JSON encoding run outside the strict transaction. Give
+		// the browser a timer boundary before a large journal monopolizes a task.
+		if i+1 < len(keys) && time.Since(sliceStart) >= 12*time.Millisecond {
+			time.Sleep(time.Millisecond)
+			sliceStart = time.Now()
+		}
 	}
 	return recordTransaction(true, func(tx js.Value, retain func(js.Func), fail func(error)) {
 		os := tx.Call("objectStore", idbStoreName)

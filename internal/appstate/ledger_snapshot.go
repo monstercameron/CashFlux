@@ -102,6 +102,47 @@ func newLedgerSnapshot(rows []domain.Transaction) *ledgerSnapshot {
 	return s
 }
 
+// addImported installs one immutable bulk update directly from committed rows,
+// avoiding a second SQL capture/decode of the very batch the writer just made.
+// A cold/stale cache still follows the normal captured read path.
+func (c *ledgerSnapshotCache) addImported(s *store.SQLiteStore, beforeRev uint64, imported []domain.Transaction) error {
+	if len(imported) == 0 || c.store != s || c.value == nil || c.rev != beforeRev {
+		return nil
+	}
+	// Snapshot values never share draft-owned maps, tags or owner slices.
+	raw, err := json.Marshal(imported)
+	if err != nil {
+		return fmt.Errorf("encode imported ledger snapshot: %w", err)
+	}
+	var added []domain.Transaction
+	if err := json.Unmarshal(raw, &added); err != nil {
+		return fmt.Errorf("decode imported ledger snapshot: %w", err)
+	}
+	sort.Slice(added, func(i, j int) bool { return added[i].ID < added[j].ID })
+	rows := make([]domain.Transaction, 0, len(c.value.rows)+len(added))
+	i, j := 0, 0
+	for i < len(c.value.rows) && j < len(added) {
+		if c.value.rows[i].ID == added[j].ID {
+			return fmt.Errorf("imported ledger snapshot repeats transaction %q", added[j].ID)
+		}
+		if c.value.rows[i].ID < added[j].ID {
+			rows = append(rows, c.value.rows[i])
+			i++
+		} else {
+			rows = append(rows, added[j])
+			j++
+		}
+	}
+	rows = append(rows, c.value.rows[i:]...)
+	rows = append(rows, added[j:]...)
+	cursor, err := c.reader.Revision()
+	if err != nil {
+		return err
+	}
+	c.value, c.cursor, c.rev = newLedgerSnapshot(rows), cursor, s.Rev()
+	return nil
+}
+
 // apply copies the row slice once and shares unchanged ID/account indexes.
 // Ordinary edits decode only after-images and copy only affected accounts.
 // Structural changes retain ID order, matching ListTransactions exactly.
@@ -161,10 +202,16 @@ func (s *ledgerSnapshot) apply(changes []store.RecordChange) (*ledgerSnapshot, e
 	if len(next.rows) == 0 {
 		next.rows = nil
 	}
+	counts := make(map[string]int, len(affected))
+	for _, row := range next.rows {
+		if affected[row.AccountID] {
+			counts[row.AccountID]++
+		}
+	}
 	for account := range affected {
 		// A single allocation per affected account avoids repeated copying of large
 		// Transaction values as append grows the account slice.
-		next.byAccount[account] = make([]domain.Transaction, 0, len(s.byAccount[account])+len(updates))
+		next.byAccount[account] = make([]domain.Transaction, 0, counts[account])
 	}
 	for _, row := range next.rows {
 		if affected[row.AccountID] {
