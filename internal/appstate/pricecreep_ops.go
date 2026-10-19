@@ -4,7 +4,7 @@ package appstate
 
 import (
 	"fmt"
-	"time"
+	"sort"
 
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/categorytree"
@@ -24,34 +24,94 @@ const priceCreepRecurringKey = "xc5_recurringId"
 // two short lines, plus the limit bump that keeps the budget whole. newMinor is
 // the new per-cadence amount as a positive magnitude in the recurring's currency.
 func (a *App) PriceCreepBudgetImpact(recurringID string, newMinor int64) pricecreep.BudgetImpact {
+	impact, err := a.PriceCreepBudgetImpactChecked(recurringID, newMinor)
+	if err != nil {
+		a.log.Error("price creep budget impact", "recurring", recurringID, "err", err)
+		return pricecreep.BudgetImpact{}
+	}
+	return impact
+}
+
+// PriceCreepBudgetImpactChecked previews the price change using the same
+// effective budget view as the Budgets screen. Currency conversion failures are
+// returned so the caller can explain why a preview is unavailable.
+func (a *App) PriceCreepBudgetImpactChecked(recurringID string, newMinor int64) (pricecreep.BudgetImpact, error) {
 	r, ok := a.findRecurring(recurringID)
 	if !ok {
-		return pricecreep.BudgetImpact{}
+		return pricecreep.BudgetImpact{}, fmt.Errorf("recurring %q not found", recurringID)
 	}
 	base := a.baseCurrency()
 	rates := currency.Rates{Base: base, Rates: a.Settings().FXRates}
 
-	oldMonthly := abs64(r.MonthlyEquivalent())
-	newR := r
-	newR.Amount = money.New(-abs64(newMinor), r.Amount.Currency)
-	newMonthly := abs64(newR.MonthlyEquivalent())
-	deltaMonthly := convertMinor(newMonthly-oldMonthly, r.Amount.Currency, base, rates)
+	oldMonthly, err := recurringMonthlyEquivalentChecked(r)
+	if err != nil {
+		return pricecreep.BudgetImpact{}, fmt.Errorf("calculate current monthly price: %w", err)
+	}
+	newAmount, err := money.New(newMinor, r.Amount.Currency).AbsChecked()
+	if err != nil {
+		return pricecreep.BudgetImpact{}, fmt.Errorf("normalize new recurring price: %w", err)
+	}
+	newRecurring := r
+	newRecurring.Amount = newAmount
+	newMonthly, err := recurringMonthlyEquivalentChecked(newRecurring)
+	if err != nil {
+		return pricecreep.BudgetImpact{}, fmt.Errorf("calculate new monthly price: %w", err)
+	}
+	delta, err := newMonthly.Sub(oldMonthly)
+	if err != nil {
+		return pricecreep.BudgetImpact{}, fmt.Errorf("calculate monthly price change: %w", err)
+	}
+	delta, err = rates.Convert(delta, base)
+	if err != nil {
+		return pricecreep.BudgetImpact{}, fmt.Errorf("convert monthly price change: %w", err)
+	}
 
-	b, found := a.budgetForCategory(r.CategoryID)
+	b, found := a.budgetForRecurring(r)
 	if !found {
-		return pricecreep.Preview("", base, 0, 0, deltaMonthly, false)
+		return pricecreep.Preview("", base, 0, 0, delta.Amount, false), nil
 	}
 	now := a.clock()
-	bs, be := budgeting.PeriodRange(b.Period, now, a.weekStart())
-	cats := a.Categories()
-	st, err := budgeting.EvaluateRollup(b, a.Transactions(), bs, be, rates,
-		budgeting.DefaultNearThreshold, categorytree.DescendantsOfAll(cats, b.TrackedCategoryIDs()))
+	in, err := a.BudgetViewInput(now)
 	if err != nil {
-		return pricecreep.Preview("", base, 0, 0, deltaMonthly, false)
+		return pricecreep.BudgetImpact{}, fmt.Errorf("build budget view input: %w", err)
 	}
-	limit := convertMinor(b.Limit.Amount, b.Limit.Currency, base, rates)
-	spent := convertMinor(st.Spent.Amount, st.Spent.Currency, base, rates)
-	return pricecreep.Preview(b.Name, base, limit, spent, deltaMonthly, true)
+	v := budgeting.EvaluateViewBudget(b, in)
+	if !v.Valid {
+		if v.Error != nil {
+			return pricecreep.BudgetImpact{}, fmt.Errorf("evaluate budget %q: %w", b.ID, v.Error)
+		}
+		return pricecreep.BudgetImpact{}, fmt.Errorf("evaluate budget %q: unavailable", b.ID)
+	}
+	limit, err := rates.Convert(v.Status.Limit, base)
+	if err != nil {
+		return pricecreep.BudgetImpact{}, fmt.Errorf("convert effective budget limit: %w", err)
+	}
+	spent, err := rates.Convert(v.Status.Spent, base)
+	if err != nil {
+		return pricecreep.BudgetImpact{}, fmt.Errorf("convert budget spending: %w", err)
+	}
+	return pricecreep.Preview(b.Name, base, limit.Amount, spent.Amount, delta.Amount, true), nil
+}
+
+func recurringMonthlyEquivalentChecked(r domain.Recurring) (money.Money, error) {
+	a, err := r.Amount.AbsChecked()
+	if err != nil {
+		return money.Money{}, err
+	}
+	switch r.Cadence {
+	case domain.CadenceWeekly:
+		return a.MulDiv(52, 12, money.RoundTowardZero)
+	case domain.CadenceBiweekly:
+		return a.MulDiv(26, 12, money.RoundTowardZero)
+	case domain.CadenceSemimonthly:
+		return a.Mul(2)
+	case domain.CadenceQuarterly:
+		return a.MulDiv(1, 3, money.RoundTowardZero)
+	case domain.CadenceYearly:
+		return a.MulDiv(1, 12, money.RoundTowardZero)
+	default:
+		return a, nil
+	}
 }
 
 // AcceptNewPrice updates a recurring's expected amount to the accepted new price
@@ -74,13 +134,25 @@ func (a *App) RaiseBudgetForCreep(recurringID string, newMinor int64) error {
 	if !ok {
 		return fmt.Errorf("appstate: recurring %q not found", recurringID)
 	}
-	b, found := a.budgetForCategory(r.CategoryID)
+	b, found := a.budgetForRecurring(r)
 	if !found {
 		return nil
 	}
 	newR := r
-	newR.Amount = money.New(-abs64(newMinor), r.Amount.Currency)
-	delta, err := money.New(abs64(newR.MonthlyEquivalent()), r.Amount.Currency).Sub(money.New(abs64(r.MonthlyEquivalent()), r.Amount.Currency))
+	newAmount, err := money.New(newMinor, r.Amount.Currency).AbsChecked()
+	if err != nil {
+		return fmt.Errorf("normalize new recurring price: %w", err)
+	}
+	newR.Amount = newAmount
+	newMonthly, err := recurringMonthlyEquivalentChecked(newR)
+	if err != nil {
+		return fmt.Errorf("calculate new monthly price: %w", err)
+	}
+	oldMonthly, err := recurringMonthlyEquivalentChecked(r)
+	if err != nil {
+		return fmt.Errorf("calculate current monthly price: %w", err)
+	}
+	delta, err := newMonthly.Sub(oldMonthly)
 	if err != nil {
 		return fmt.Errorf("price increase delta: %w", err)
 	}
@@ -170,20 +242,56 @@ func (a *App) recurringCategory(idStr string) string {
 	return ""
 }
 
-// budgetForCategory returns the first budget whose tracked categories (including
-// descendants) cover the given category id.
-func (a *App) budgetForCategory(categoryID string) (domain.Budget, bool) {
-	if categoryID == "" {
+// budgetForRecurring selects the most specific spending budget in the recurring
+// account's scope. Exact category matches outrank ancestor rollups; ties are
+// resolved by stable budget ID rather than store order.
+func (a *App) budgetForRecurring(r domain.Recurring) (domain.Budget, bool) {
+	if r.CategoryID == "" || r.AccountID == "" {
+		return domain.Budget{}, false
+	}
+	var account domain.Account
+	foundAccount := false
+	for _, candidate := range a.Accounts() {
+		if candidate.ID == r.AccountID {
+			account, foundAccount = candidate, true
+			break
+		}
+	}
+	if !foundAccount {
 		return domain.Budget{}, false
 	}
 	cats := a.Categories()
+	type candidate struct {
+		budget domain.Budget
+		exact  bool
+	}
+	matches := make([]candidate, 0)
 	for _, b := range a.Budgets() {
+		if b.IsSaving() || b.Scope != account.Scope || b.OwnerID != account.OwnerID {
+			continue
+		}
 		covers := categorytree.DescendantsOfAll(cats, b.TrackedCategoryIDs())
-		if covers[categoryID] {
-			return b, true
+		if covers[r.CategoryID] {
+			exact := false
+			for _, tracked := range b.TrackedCategoryIDs() {
+				if tracked == r.CategoryID {
+					exact = true
+					break
+				}
+			}
+			matches = append(matches, candidate{budget: b, exact: exact})
 		}
 	}
-	return domain.Budget{}, false
+	sort.Slice(matches, func(i, j int) bool {
+		if matches[i].exact != matches[j].exact {
+			return matches[i].exact
+		}
+		return matches[i].budget.ID < matches[j].budget.ID
+	})
+	if len(matches) == 0 {
+		return domain.Budget{}, false
+	}
+	return matches[0].budget, true
 }
 
 func (a *App) baseCurrency() string {
@@ -193,17 +301,15 @@ func (a *App) baseCurrency() string {
 	return "USD"
 }
 
-func (a *App) weekStart() time.Weekday { return time.Monday }
-
-// convertMinor converts minor units between currencies via the rate table,
-// returning the input unchanged when currencies match or a rate is missing.
+// convertMinor is retained for legacy appstate callers. New code should use
+// Rates.Convert directly and handle the conversion error.
 func convertMinor(minor int64, from, to string, rates currency.Rates) int64 {
 	if from == "" || from == to {
 		return minor
 	}
-	v, err := currency.ConvertBetween(minor, from, to, rates)
+	converted, err := currency.ConvertBetween(minor, from, to, rates)
 	if err != nil {
 		return minor
 	}
-	return v
+	return converted
 }
