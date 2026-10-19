@@ -90,6 +90,8 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- **The Import modal starts its split into components (DOCSPLIT).** The start screen and CSV flow are their own components, and the flow
+  between screens is a pure, table-tested state machine; no visible change.
 - **Quick successive limit edits save in order (BC6N5).** A budget keeps only the latest pending inline amount and writes it after the
   previous save completes, so a slower earlier save can never overwrite a newer limit.
 - **Flex evaluation is split into small tested steps (CSFLEX).** Category indexing, pooled and per-category spending, FX and expected

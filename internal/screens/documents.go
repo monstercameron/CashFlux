@@ -285,6 +285,60 @@ func mapImportErrors(rows []importmap.RowError) []store.CSVRowError {
 	return out
 }
 
+// prepareCSVPreflight computes the exact preview inputs before a CSV import is acknowledged.
+func prepareCSVPreflight(app *appstate.App, accountID string, data []byte) (*csvPreflightInfo, bool, error) {
+	accounts := app.Accounts()
+	csvAccounts := make([]store.CSVAccount, 0, len(accounts))
+	for _, account := range accounts {
+		csvAccounts = append(csvAccounts, store.CSVAccount{ID: account.ID, Name: account.Name, Currency: account.Currency})
+	}
+	baseCurrency := app.Settings().BaseCurrency
+	if baseCurrency == "" {
+		baseCurrency = "USD"
+	}
+	txns, skipped, err := store.TransactionsFromCSVResilientForAccountList(data, baseCurrency, accountID, csvAccounts)
+	if err != nil {
+		return nil, false, err
+	}
+	if len(txns) == 0 && len(skipped) == 0 {
+		return nil, true, nil
+	}
+
+	info := &csvPreflightInfo{Total: len(txns) + len(skipped), Failures: skipped}
+	info.Whys = importsafe.Duplicates(txns, app.Transactions(), accountID)
+	info.Dupes = len(info.Whys)
+	base := app.Settings().BaseCurrency
+	if base == "" {
+		base = "USD"
+	}
+	inputs := make([]staging.Input, 0, len(txns))
+	for i := range txns {
+		txn := txns[i]
+		inputs = append(inputs, staging.Input{
+			Date: txn.Date, Description: txn.Desc, AmountMinor: txn.Amount.Amount,
+			HasAmount: true, AccountID: txn.AccountID, Transaction: &txn,
+		})
+	}
+	info.Batch = staging.Stage(inputs, app.Transactions(), accountID, base)
+	info.Pairs = importsafe.TransferPairs(txns, app.Transactions(), accountID, 3)
+	if account, ok := domain.AccountByID(accounts, accountID); ok {
+		info.Dec = currency.Decimals(account.Currency)
+		info.AcctName = account.Name
+		if balance, balanceErr := ledger.Balance(account, app.Transactions()); balanceErr == nil {
+			info.HasBal = true
+			info.BeforeMinor = balance.Amount
+			net, after, impactErr := importsafe.Impact(balance.Amount, txns, account.ID, account.Currency)
+			info.NetMinor, info.AfterMinor = net, after
+			if impactErr != nil {
+				info.HasBal = false
+			} else {
+				info.Jump = importsafe.JumpWarning(balance.Amount, info.NetMinor)
+			}
+		}
+	}
+	return info, false, nil
+}
+
 func validateCSVRowLimit(data []byte, limit int) error {
 	if limit <= 0 {
 		return nil
@@ -443,22 +497,7 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 	// setDraft is the single place draft rows are set, so the wizard stage stays in
 	// lockstep with the draft: non-empty rows show the review stage, an emptied draft
 	// (import done, cleared, or last row removed) returns to the input hub.
-	setDraft := func(rows []extract.Row) {
-		if len(draft.Get()) == 0 && len(rows) > 0 {
-			reviewPage.Set(1)
-		}
-		draft.Set(rows)
-		if len(rows) > 0 {
-			stage.Set("review")
-			// #62: stamp the persisted in-progress marker so an interrupted
-			// review shows up on the dashboard resume card (honestly phrased
-			// after a reload, resumable in-session via the draft atom).
-			uistate.SetImportWIP(len(rows))
-		} else {
-			stage.Set("input")
-			uistate.ClearImportWIP()
-		}
-	}
+	setDraft := func(rows []extract.Row) { setDocumentsDraft(draft, stage, reviewPage, rows) }
 	// #62: rows restored from the session atom (a mid-review navigation away and
 	// back) re-enter the review stage instead of stranding on the input hub.
 	ui.UseEffect(func() func() {
@@ -492,8 +531,16 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 	// the source picker to the grid, so "Add more data" lands on the type chooser.
 	// goArtifacts closes the modal and navigates to the Artifacts vault — the
 	// replacement for the old inline import-history list.
-	goReview := ui.UseEvent(Prevent(func() { stage.Set("review") }))
-	goInput := ui.UseEvent(Prevent(func() { stage.Set("input"); source.Set("") }))
+	goReview := ui.UseEvent(Prevent(func() {
+		next := transitionImportFlow(importFlowState{Stage: importFlowStage(stage.Get()), Source: importFlowSource(source.Get())}, importActionNext)
+		stage.Set(string(next.Stage))
+		source.Set(string(next.Source))
+	}))
+	goInput := ui.UseEvent(Prevent(func() {
+		next := transitionImportFlow(importFlowState{Stage: importFlowStage(stage.Get()), Source: importFlowSource(source.Get())}, importActionAddMore)
+		stage.Set(string(next.Stage))
+		source.Set(string(next.Source))
+	}))
 	goArtifacts := ui.UseEvent(Prevent(func() {
 		importModalOpen.Set(false)
 		nav.Navigate(uistate.RoutePath("/artifacts"))
@@ -564,76 +611,12 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 		})
 	}
 
-	// commitCSVImport is the shared write path used by both the paste and file-picker
-	// flows after any duplicate warning has been acknowledged. It calls
-	// ImportTransactionsCSV, resets the dup-warning state, and posts the summary.
-	commitCSVImport := func(data []byte) {
-		// #55: checkpoint the dataset before the import writes so a bad file can
-		// be rolled back in one click from Settings → Data (or from the import
-		// history's per-run roll-back, which is why the ID rides the record).
-		checkpointRun(uistate.T("ckpt.beforeCSVImport"), func(cpID string) {
-			// #57: capture the pre-import balance so the summary can state the move.
-			var beforeMinor int64
-			var balDec int
-			haveBal := false
-			if acc, ok := domain.AccountByID(app.Accounts(), importAcct.Get()); ok {
-				balDec = currency.Decimals(acc.Currency)
-				if b, berr := ledger.Balance(acc, app.Transactions()); berr == nil {
-					beforeMinor, haveBal = b.Amount, true
-				}
-			}
-			// C687: the run's id is minted BEFORE the import so every row it writes can
-			// be stamped with it. Recording the document afterwards, as this used to,
-			// left the rows with no way to say which import created them — which is
-			// exactly why "688 imported" and "565 in the ledger" could not be
-			// reconciled.
-			docID := id.New()
-			res, err := app.ImportTransactionsCSV(data, importAcct.Get(), docID)
-			n, skipped := res.Imported, res.Failed
-			csvDupWarn.Set("")
-			pendingCSV.Set(nil)
-			csvPreflightS.Set(nil)
-			if err != nil {
-				friendly := strings.TrimPrefix(err.Error(), "store: ")
-				msg.Set(uistate.T("documents.csvError", friendly))
-				return
-			}
-			if n > 0 || res.Duplicates > 0 || len(skipped) > 0 {
-				// Recorded even when nothing landed: an import where every row was a
-				// duplicate is a thing that happened, and a history that only shows
-				// successful runs cannot explain a ledger that did not change.
-				recordDocumentAs(app, docID, domain.DocCSV, importAcct.Get(), nil,
-					n, res.Duplicates+len(skipped), res.Duplicates, len(skipped), cpID)
-			}
-			summary := csvImportSummary(accounts, importAcct.Get(), n)
-			if len(skipped) > 0 {
-				summary += " " + uistate.T("documents.importedCsvSkipped", importCount(len(skipped), "row", "rows"))
-				if d := csvSkipDetail(skipped); d != "" {
-					summary += " " + d
-				}
-			}
-			// #57: full result — say where the balance landed.
-			if haveBal && n > 0 {
-				if acc, ok := domain.AccountByID(app.Accounts(), importAcct.Get()); ok {
-					if after, aerr := ledger.Balance(acc, app.Transactions()); aerr == nil {
-						summary += " " + uistate.T("documents.balanceMoved",
-							money.FormatMinor(beforeMinor, balDec), money.FormatMinor(after.Amount, balDec))
-					}
-				}
-			}
-			msg.Set(summary)
-			// C364: name the reversal path (Ctrl+Z / Activity) at the moment a CSV
-			// import commits, so a bad file is reversible from the moment of risk.
-			if n > 0 {
-				postUndoStory(uistate.T("documents.importUndo", importCount(n, "transaction", "transactions")))
-			}
-			csvText.Set("") // clear the paste box after a successful import
-			if importModalOpen.Get() {
-				importModalOpen.Set(false)
-			}
-			rev.Set(rev.Get() + 1)
-		})
+	csvContext := csvImportContext{
+		App: app, Accounts: accounts, ImportAccount: importAcct, CSVText: csvText,
+		DuplicateWarn: csvDupWarn, PendingCSV: pendingCSV, Preflight: csvPreflightS,
+		Message: msg, ModalOpen: importModalOpen, Revision: rev, CheckpointRun: checkpointRun,
 	}
+	commitCSVImport := csvContext.commitCSVImport
 
 	// confirmCSV is the preflight's "Import now" handler: commits the pending
 	// CSV bytes staged when the preview card was built (#57, ex-C88).
@@ -656,59 +639,14 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 	// like the second leg of a transfer already in the ledger. Nothing writes
 	// until the user confirms.
 	buildCSVPreflight := func(data []byte) {
-		csvAccounts := make([]store.CSVAccount, 0, len(app.Accounts()))
-		for _, account := range app.Accounts() {
-			csvAccounts = append(csvAccounts, store.CSVAccount{ID: account.ID, Name: account.Name, Currency: account.Currency})
-		}
-		baseCurrency := app.Settings().BaseCurrency
-		if baseCurrency == "" {
-			baseCurrency = "USD"
-		}
-		txns, skipped, parseErr := store.TransactionsFromCSVResilientForAccountList(data, baseCurrency,
-			importAcct.Get(), csvAccounts)
-		if parseErr != nil {
-			msg.Set(uistate.T("documents.csvError", strings.TrimPrefix(parseErr.Error(), "store: ")))
+		info, empty, err := prepareCSVPreflight(app, importAcct.Get(), data)
+		if err != nil {
+			msg.Set(uistate.T("documents.csvError", strings.TrimPrefix(err.Error(), "store: ")))
 			return
 		}
-		if len(txns) == 0 && len(skipped) == 0 {
+		if empty {
 			msg.Set(uistate.T("documents.csvEmpty"))
 			return
-		}
-		info := &csvPreflightInfo{Total: len(txns) + len(skipped), Failures: skipped}
-		info.Whys = importsafe.Duplicates(txns, app.Transactions(), importAcct.Get())
-		info.Dupes = len(info.Whys)
-		// C689: the same rows, staged once through the app's one duplicate rule,
-		// so the preview and the write path cannot reach different verdicts about
-		// the same file — which is exactly how a review screen and an importer came
-		// to disagree (C688) and how counts stopped reconciling (C687).
-		cur := "USD"
-		if s := app.Settings(); s.BaseCurrency != "" {
-			cur = s.BaseCurrency
-		}
-		inputs := make([]staging.Input, 0, len(txns))
-		for i := range txns {
-			t := txns[i]
-			inputs = append(inputs, staging.Input{
-				Date: t.Date, Description: t.Desc, AmountMinor: t.Amount.Amount,
-				HasAmount: true, AccountID: t.AccountID, Transaction: &t,
-			})
-		}
-		info.Batch = staging.Stage(inputs, app.Transactions(), importAcct.Get(), cur)
-		info.Pairs = importsafe.TransferPairs(txns, app.Transactions(), importAcct.Get(), 3)
-		if acc, ok := domain.AccountByID(app.Accounts(), importAcct.Get()); ok {
-			info.Dec = currency.Decimals(acc.Currency)
-			info.AcctName = acc.Name
-			if b, berr := ledger.Balance(acc, app.Transactions()); berr == nil {
-				info.HasBal = true
-				info.BeforeMinor = b.Amount
-				net, after, impactErr := importsafe.Impact(b.Amount, txns, acc.ID, acc.Currency)
-				info.NetMinor, info.AfterMinor = net, after
-				if impactErr != nil {
-					info.HasBal = false
-				} else {
-					info.Jump = importsafe.JumpWarning(b.Amount, info.NetMinor)
-				}
-			}
 		}
 		pendingCSV.Set(data)
 		csvDupWarn.Set("")
@@ -1599,7 +1537,8 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 		),
 	)
 
-	inReview := stage.Get() == "review"
+	flowScreen := importFlowScreenFor(importFlowState{Stage: importFlowStage(stage.Get()), Source: importFlowSource(source.Get())})
+	inReview := flowScreen == importScreenReview
 
 	return Div(
 		// Hidden form the transactions Import flip modal's footer Save submits (by id)
@@ -1620,37 +1559,10 @@ func DocumentsPanel(props documentsPanelProps) ui.Node {
 					OnClick(goReview), uistate.T("documents.reviewStage")))),
 
 			IfElse(source.Get() == "",
-				// ---- the document-type picker grid ----
-				Div(css.Class("doc-picker"), Attr("data-testid", "import-type-picker"),
-					// Smart branch — deterministic helpers based on predictions.
-					Div(css.Class("doc-branch"),
-						Div(css.Class("doc-branch-head"),
-							Span(css.Class("doc-branch-title", "smart"), uistate.T("documents.smartBranch")),
-							tierChip(false, uistate.T("documents.smartBranchTier")),
-							Span(css.Class("doc-branch-sub"), uistate.T("documents.smartBranchDesc"))),
-						Div(css.Class("doc-type-grid"),
-							docTypeTile("import-type-csv", onPickCSV, uiw.Icon(icon.Upload, css.Class(tw.W5, tw.H5)),
-								uistate.T("documents.typeCsvTitle"), uistate.T("documents.typeCsvDesc"), false),
-							docTypeTile("import-type-stmt", onPickStmt, uiw.Icon(icon.Landmark, css.Class(tw.W5, tw.H5)),
-								uistate.T("documents.typeStmtTitle"), uistate.T("documents.typeStmtDesc"), false),
-							docTypeTile("import-type-amazon", onPickAmazon, uiw.Icon(icon.Box, css.Class(tw.W5, tw.H5)),
-								uistate.T("orderimport.cardTitle"), uistate.T("orderimport.cardDesc"), false),
-						),
-					),
-					// Smart+ branch — generative AI.
-					Div(css.Class("doc-branch"),
-						Div(css.Class("doc-branch-head"),
-							Span(css.Class("doc-branch-title", "plus"), uistate.T("documents.smartPlusBranch")),
-							tierChip(true, uistate.T("documents.smartPlusBranchTier")),
-							Span(css.Class("doc-branch-sub"), uistate.T("documents.smartPlusBranchDesc"))),
-						Div(css.Class("doc-type-grid"),
-							docTypeTile("import-type-pdf", onPickPDF, uiw.Icon(icon.FileText, css.Class(tw.W5, tw.H5)),
-								uistate.T("documents.typePdfTitle"), uistate.T("documents.typePdfDesc"), true),
-							docTypeTile("import-type-receipt", onPickReceipt, uiw.Icon(icon.Receipt, css.Class(tw.W5, tw.H5)),
-								uistate.T("documents.typeReceiptTitle"), uistate.T("documents.typeReceiptDesc"), true),
-						),
-					),
-				),
+				importTypePicker(importTypePickerProps{
+					OnCSV: onPickCSV, OnStatement: onPickStmt, OnOrder: onPickAmazon,
+					OnPDF: onPickPDF, OnReceipt: onPickReceipt,
+				}),
 				// ---- the selected source's form (animates in over the grid) ----
 				Div(css.Class("doc-form"), Attr("data-testid", "import-source-form"),
 					Div(css.Class("doc-form-head"),
@@ -2234,41 +2146,6 @@ func DraftRow(props draftRowProps) ui.Node {
 			OnPick:  chooseDraftCategory,
 			OnClose: func() { categoryPickerOpen.Set(false) },
 		})),
-	)
-}
-
-// docTypeTile renders one clickable document-type tile in the Stage-1 picker: an icon,
-// a title, and a one-line description. smartPlus tints it with the brand/AI accent and
-// adds the ✦ glyph, marking it as a generative-AI (Smart+) source. The click handler is
-// passed in already-hooked, so the tile is a pure render helper (no hooks) that's safe to
-// render several times in the picker grid.
-func docTypeTile(testid string, onClick ui.Handler, ic ui.Node, title, desc string, smartPlus bool) ui.Node {
-	tileTier := "smart"
-	if smartPlus {
-		tileTier = "smartplus"
-	}
-	return Button(css.Class("doc-type-tile", tileTier), Type("button"), Attr("data-testid", testid), OnClick(onClick),
-		tierIcon(smartPlus, ic),
-		Div(css.Class("dt-body"),
-			Div(css.Class("dt-title"), title),
-			Div(css.Class("dt-desc"), desc)),
-	)
-}
-
-// importFormHeader is the shared header for each import-source form: the source's tier
-// icon + title + tier chip, and a one-line description. It ties the form back to the
-// tile that opened it and carries the Smart / Smart+ identity into the form.
-func importFormHeader(plus bool, ic ui.Node, title, desc string) ui.Node {
-	tierLabel := uistate.T("documents.smartBranch")
-	if plus {
-		tierLabel = uistate.T("documents.smartPlusBranch")
-	}
-	return Div(css.Class("doc-form-title"),
-		tierIcon(plus, ic),
-		Div(css.Class("doc-form-titletext"),
-			H3(css.Class("doc-form-h"), Span(title), tierChip(plus, tierLabel)),
-			P(css.Class("doc-form-desc"), desc),
-		),
 	)
 }
 
