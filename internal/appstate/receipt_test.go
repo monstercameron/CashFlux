@@ -50,6 +50,10 @@ func TestImportReceiptSplitsAndMapsCategories(t *testing.T) {
 	if tx.Amount.Amount != -1500 {
 		t.Errorf("transaction amount = %d, want -1500 (an expense)", tx.Amount.Amount)
 	}
+	wantDate := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+	if !tx.Date.Equal(wantDate) {
+		t.Errorf("transaction date = %s, want receipt date %s", tx.Date, wantDate)
+	}
 	if len(tx.Splits) != 2 || !tx.SplitsReconcile() {
 		t.Fatalf("want 2 reconciling splits, got %+v", tx.Splits)
 	}
@@ -58,6 +62,34 @@ func TestImportReceiptSplitsAndMapsCategories(t *testing.T) {
 	}
 	if tx.Splits[1].CategoryID != "house" {
 		t.Errorf("paper towels mapped to %q, want house (by name)", tx.Splits[1].CategoryID)
+	}
+}
+
+func TestImportReceiptUsesAccountCurrencyAndRejectsCurrencyMismatch(t *testing.T) {
+	a := receiptTestApp(t)
+	settings := a.Settings()
+	settings.BaseCurrency = "USD"
+	if err := a.PutSettings(settings); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.PutAccount(domain.Account{ID: "eur", Name: "Euro card", Currency: "EUR", Type: domain.TypeChecking, Class: domain.ClassAsset, OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared}); err != nil {
+		t.Fatal(err)
+	}
+	r := extract.Receipt{Currency: "EUR", Total: "10.50", Lines: []extract.ReceiptLine{{Description: "Item", Amount: "10.50"}}}
+	tx, err := a.ImportReceipt(r, "eur", time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatalf("ImportReceipt: %v", err)
+	}
+	if tx.Amount.Currency != "EUR" || tx.Amount.Amount != -1050 || tx.Splits[0].Amount.Currency != "EUR" {
+		t.Fatalf("receipt was not stored in the account currency: %+v", tx)
+	}
+	usdReceipt := r
+	usdReceipt.Currency = "USD"
+	if _, err := a.ImportReceipt(usdReceipt, "eur", time.Now()); err == nil {
+		t.Fatal("USD receipt must be rejected for an EUR account")
+	}
+	if _, err := a.ImportReceipt(r, "missing", time.Now()); err == nil {
+		t.Fatal("unknown account must be rejected")
 	}
 }
 
@@ -144,5 +176,28 @@ func TestAttachReceiptToExistingTransaction(t *testing.T) {
 	}
 	if _, err := a.AttachReceiptToTransaction("nope", r); err == nil {
 		t.Fatal("unknown transaction must error")
+	}
+}
+
+func TestAttachReceiptUsesAccountCurrencyAndRejectsMismatch(t *testing.T) {
+	a := receiptTestApp(t)
+	if err := a.PutAccount(domain.Account{ID: "eur", Name: "Euro card", Currency: "EUR", Type: domain.TypeChecking, Class: domain.ClassAsset, OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared}); err != nil {
+		t.Fatal(err)
+	}
+	orig := domain.Transaction{ID: "eur-txn", AccountID: "eur", Desc: "Card purchase", Date: time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC), Amount: money.New(-1000, "EUR")}
+	if err := a.PutTransaction(orig); err != nil {
+		t.Fatal(err)
+	}
+	r := extract.Receipt{Currency: "EUR", Total: "10.00", Lines: []extract.ReceiptLine{{Description: "Item", Amount: "10.00"}}}
+	tx, err := a.AttachReceiptToTransaction(orig.ID, r)
+	if err != nil {
+		t.Fatalf("AttachReceiptToTransaction: %v", err)
+	}
+	if tx.Splits[0].Amount.Currency != "EUR" || tx.Splits[0].Amount.Amount != -1000 {
+		t.Fatalf("receipt split did not use account currency and expense sign: %+v", tx.Splits)
+	}
+	r.Currency = "USD"
+	if _, err := a.AttachReceiptToTransaction(orig.ID, r); err == nil {
+		t.Fatal("USD receipt must not attach to an EUR account")
 	}
 }

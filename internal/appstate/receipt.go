@@ -55,6 +55,54 @@ func resolveCategoryName(cats []domain.Category, name string) string {
 	return ""
 }
 
+func receiptCurrency(r extract.Receipt) (string, error) {
+	currencyCode := strings.ToUpper(strings.TrimSpace(r.Currency))
+	for _, amount := range receiptAmounts(r) {
+		for symbol, code := range map[string]string{"€": "EUR", "£": "GBP", "¥": "JPY"} {
+			if !strings.Contains(amount, symbol) {
+				continue
+			}
+			if currencyCode != "" && currencyCode != code {
+				return "", fmt.Errorf("appstate: receipt currency %q conflicts with its %s amount", currencyCode, symbol)
+			}
+			currencyCode = code
+		}
+	}
+	return currencyCode, nil
+}
+
+func receiptAmounts(r extract.Receipt) []string {
+	amounts := make([]string, 0, len(r.Lines)+1)
+	amounts = append(amounts, r.Total)
+	for _, line := range r.Lines {
+		amounts = append(amounts, line.Amount)
+	}
+	return amounts
+}
+
+func accountReceiptCurrency(a *App, accountID string) (string, error) {
+	account, ok := findAccount(a, accountID)
+	if !ok {
+		return "", fmt.Errorf("appstate: account %q not found", accountID)
+	}
+	code := strings.ToUpper(strings.TrimSpace(account.Currency))
+	if code == "" {
+		return "", fmt.Errorf("appstate: account %q has no currency", accountID)
+	}
+	return code, nil
+}
+
+func validateReceiptCurrency(r extract.Receipt, accountCurrency string) error {
+	code, err := receiptCurrency(r)
+	if err != nil {
+		return err
+	}
+	if code != "" && code != accountCurrency {
+		return fmt.Errorf("appstate: receipt currency %s does not match account currency %s", code, accountCurrency)
+	}
+	return nil
+}
+
 // ImportReceipt turns a reconciled receipt into ONE expense transaction carrying a
 // category split per line — so it counts once against the account yet reports
 // per-category spend. Each line's free-text category is mapped to a real category
@@ -65,17 +113,24 @@ func (a *App) ImportReceipt(r extract.Receipt, accountID string, date time.Time)
 	if accountID == "" {
 		return domain.Transaction{}, fmt.Errorf("appstate: a receipt needs an account to import into")
 	}
-	base := a.Settings().BaseCurrency
-	if base == "" {
-		base = "USD"
+	accountCurrency, err := accountReceiptCurrency(a, accountID)
+	if err != nil {
+		return domain.Transaction{}, err
 	}
-	dec := currency.Decimals(base)
+	if err := validateReceiptCurrency(r, accountCurrency); err != nil {
+		return domain.Transaction{}, err
+	}
+	dec := currency.Decimals(accountCurrency)
 	if !r.Reconciles(dec) {
 		return domain.Transaction{}, fmt.Errorf("appstate: receipt line splits do not sum to the total")
 	}
 	totalMinor, err := r.TotalMinor(dec)
 	if err != nil {
 		return domain.Transaction{}, fmt.Errorf("appstate: receipt total: %w", err)
+	}
+	negativeTotal, err := money.Neg(totalMinor)
+	if err != nil {
+		return domain.Transaction{}, fmt.Errorf("appstate: receipt total sign: %w", err)
 	}
 
 	cats := a.Categories()
@@ -86,9 +141,13 @@ func (a *App) ImportReceipt(r extract.Receipt, accountID string, date time.Time)
 		if err != nil {
 			return domain.Transaction{}, fmt.Errorf("appstate: receipt line %q: %w", line.Description, err)
 		}
+		negativeLine, err := money.Neg(lineMinor)
+		if err != nil {
+			return domain.Transaction{}, fmt.Errorf("appstate: receipt line %q sign: %w", line.Description, err)
+		}
 		splits = append(splits, domain.CategorySplit{
 			CategoryID: a.mapReceiptCategory(cats, userRules, line, r.Merchant),
-			Amount:     money.New(-lineMinor, base), // an expense is negative
+			Amount:     money.New(negativeLine, accountCurrency), // an expense is negative
 		})
 	}
 
@@ -98,7 +157,7 @@ func (a *App) ImportReceipt(r extract.Receipt, accountID string, date time.Time)
 	}
 	tx := domain.Transaction{
 		ID: id.New(), AccountID: accountID, Date: date, Desc: desc, Payee: strings.TrimSpace(r.Merchant),
-		Amount: money.New(-totalMinor, base), Splits: splits, Source: domain.TxnSourceScanned,
+		Amount: money.New(negativeTotal, accountCurrency), Splits: splits, Source: domain.TxnSourceScanned,
 	}
 	// A single-category receipt also gets that category on the transaction itself.
 	if cat := singleCategory(splits); cat != "" {
@@ -132,11 +191,17 @@ func (a *App) AttachReceiptToTransaction(txnID string, r extract.Receipt) (domai
 	if !found {
 		return domain.Transaction{}, fmt.Errorf("appstate: transaction %q not found", txnID)
 	}
-	base := a.Settings().BaseCurrency
-	if base == "" {
-		base = "USD"
+	accountCurrency, err := accountReceiptCurrency(a, tx.AccountID)
+	if err != nil {
+		return domain.Transaction{}, err
 	}
-	dec := currency.Decimals(base)
+	if strings.ToUpper(strings.TrimSpace(tx.Amount.Currency)) != accountCurrency {
+		return domain.Transaction{}, fmt.Errorf("appstate: transaction currency %s does not match account currency %s", tx.Amount.Currency, accountCurrency)
+	}
+	if err := validateReceiptCurrency(r, accountCurrency); err != nil {
+		return domain.Transaction{}, err
+	}
+	dec := currency.Decimals(accountCurrency)
 	if !r.Reconciles(dec) {
 		return domain.Transaction{}, fmt.Errorf("appstate: receipt line splits do not sum to the total")
 	}
@@ -144,8 +209,12 @@ func (a *App) AttachReceiptToTransaction(txnID string, r extract.Receipt) (domai
 	if err != nil {
 		return domain.Transaction{}, fmt.Errorf("appstate: receipt total: %w", err)
 	}
-	if tx.Amount.Amount != -totalMinor || tx.Amount.Currency != base {
-		return domain.Transaction{}, fmt.Errorf("appstate: receipt total %d does not match the transaction amount %d", -totalMinor, tx.Amount.Amount)
+	negativeTotal, err := money.Neg(totalMinor)
+	if err != nil {
+		return domain.Transaction{}, fmt.Errorf("appstate: receipt total sign: %w", err)
+	}
+	if tx.Amount.Amount != negativeTotal || strings.ToUpper(strings.TrimSpace(tx.Amount.Currency)) != accountCurrency {
+		return domain.Transaction{}, fmt.Errorf("appstate: receipt total %d %s does not match the transaction amount %d %s", negativeTotal, accountCurrency, tx.Amount.Amount, tx.Amount.Currency)
 	}
 
 	cats := a.Categories()
@@ -156,9 +225,13 @@ func (a *App) AttachReceiptToTransaction(txnID string, r extract.Receipt) (domai
 		if lerr != nil {
 			return domain.Transaction{}, fmt.Errorf("appstate: receipt line %q: %w", line.Description, lerr)
 		}
+		negativeLine, lerr := money.Neg(lineMinor)
+		if lerr != nil {
+			return domain.Transaction{}, fmt.Errorf("appstate: receipt line %q sign: %w", line.Description, lerr)
+		}
 		splits = append(splits, domain.CategorySplit{
 			CategoryID: a.mapReceiptCategory(cats, userRules, line, r.Merchant),
-			Amount:     money.New(-lineMinor, base),
+			Amount:     money.New(negativeLine, accountCurrency),
 		})
 	}
 	tx.Splits = splits

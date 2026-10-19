@@ -2,7 +2,11 @@
 
 package extract
 
-import "testing"
+import (
+	"math"
+	"strconv"
+	"testing"
+)
 
 func rows(items ...[2]string) []Row {
 	out := make([]Row, 0, len(items))
@@ -93,5 +97,23 @@ func TestReceiptUnparsableAmountErrors(t *testing.T) {
 	}
 	if r.Reconciles(2) {
 		t.Error("an unparsable receipt must not report as reconciled")
+	}
+}
+
+func TestReceiptLineTotalsUseSignedCheckedArithmetic(t *testing.T) {
+	r := Receipt{Total: "8.00", Lines: []ReceiptLine{{Amount: "10.00"}, {Amount: "-2.00"}}}
+	got, err := r.LinesTotalMinor(2)
+	if err != nil || got != 800 {
+		t.Fatalf("signed line total = %d, %v; want 800, nil", got, err)
+	}
+
+	overflow := Receipt{Lines: []ReceiptLine{{Amount: strconv.FormatInt(math.MaxInt64, 10)}, {Amount: "1"}}}
+	if _, err := overflow.LinesTotalMinor(0); err == nil {
+		t.Fatal("line total overflow must be returned")
+	}
+
+	residualOverflow := Receipt{Total: strconv.FormatInt(math.MaxInt64, 10), Lines: []ReceiptLine{{Amount: "-1"}}}
+	if _, err := residualOverflow.Residual(0); err == nil {
+		t.Fatal("residual subtraction overflow must be returned")
 	}
 }

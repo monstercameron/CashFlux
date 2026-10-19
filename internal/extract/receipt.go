@@ -3,6 +3,7 @@
 package extract
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -24,6 +25,10 @@ type ReceiptLine struct {
 type Receipt struct {
 	Date     string
 	Merchant string
+	// Currency is the ISO-4217 currency printed on or identified for the receipt.
+	// Empty means the amount has no explicit currency and is interpreted in the
+	// destination account's currency.
+	Currency string
 	Total    string
 	Lines    []ReceiptLine
 }
@@ -75,7 +80,11 @@ func (r Receipt) Residual(decimals int) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return total - sum, nil
+	residual, err := money.Sub(total, sum)
+	if err != nil {
+		return 0, fmt.Errorf("extract: receipt residual: %w", err)
+	}
+	return residual, nil
 }
 
 // Reconciles reports whether the line splits sum exactly to the total.
@@ -91,7 +100,10 @@ func linesTotalMinor(lines []ReceiptLine, decimals int) (int64, error) {
 		if err != nil {
 			return 0, err
 		}
-		sum += amt
+		sum, err = money.Add(sum, amt)
+		if err != nil {
+			return 0, fmt.Errorf("extract: receipt line total: %w", err)
+		}
 	}
 	return sum, nil
 }
@@ -100,6 +112,9 @@ func linesTotalMinor(lines []ReceiptLine, decimals int) (int64, error) {
 // model often emits ("$1,234.50") before parsing to integer minor units.
 func parseAmountMinor(s string, decimals int) (int64, error) {
 	s = strings.ReplaceAll(strings.TrimSpace(s), "$", "")
+	s = strings.ReplaceAll(s, "€", "")
+	s = strings.ReplaceAll(s, "£", "")
+	s = strings.ReplaceAll(s, "¥", "")
 	s = strings.ReplaceAll(s, ",", "")
 	return money.ParseMinor(s, decimals)
 }
