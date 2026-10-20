@@ -63,6 +63,14 @@ sample-workspace confirmation, and `conditions.backgroundWork` when the caller s
 `PRIMARY_BENCH_BACKGROUND_WORK`. Record active builds or other heavy work there so
 the two captures' machine load is visible alongside the timing data.
 
+Newer builds expose a fixed-schema `window.__cashfluxBootTimings` record, captured
+as `boot.goPhases` when present (otherwise `null`). Its total starts at Go `Run`,
+so it excludes WASM fetch/decode/compile. Phase durations separate protected
+storage, hydration, sign-in bootstrap, recurring covers, mounting and boot wiring.
+`postMountNotificationScheduleMs` measures scheduling only; notification generation
+continues asynchronously. The record contains durations only, with no financial
+content or identity fields. Readiness still follows the existing boot contract.
+
 The `conditions.dataSize.transactions` value is the all-dates filtered ledger count
 shown by the transaction table. In the baseline capture, that was 2,808 transactions;
 the page rendered 25 row-like nodes because the table pages and virtualizes its rows.

@@ -148,6 +148,7 @@ async function main() {
       longTaskMs: window.__primaryBenchBoot.longTaskMs,
       longTaskCount: window.__primaryBenchBoot.longTaskCount,
       wallMs: null,
+      goPhases: window.__cashfluxBootTimings || null,
     }));
     boot.wallMs = Date.now() - bootWallStart;
 

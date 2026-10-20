@@ -81,6 +81,8 @@ func liveSettingsTab() string {
 // in the shell, mounts the app, and blocks the wasm runtime so the page stays
 // interactive.
 func Run() {
+	bootTiming := newStartupTimer()
+	bootTiming.BeginPhase("entryToStylesMs")
 	utils.DisableAllDebug()
 	_, rpcWorkerStartErr := rpcworker.StartDefault()
 
@@ -89,20 +91,24 @@ func Run() {
 	// present on first paint and registers ahead of the css utility engine's <style>
 	// (preserving cascade order).
 	styles.Register()
+	bootTiming.EndPhase("entryToStylesMs")
 
 	// Open the IndexedDB-backed storage primitive and migrate any legacy localStorage
 	// data into it FIRST — before anything reads persisted state. After this the app
 	// depends on no localStorage at all; every Get/Set/Remove routes through SQLite
 	// (the dataset) or this store (the dataset blob + bootstrap keys).
+	bootTiming.BeginPhase("protectedStorageMs")
 	configureLegacyProfileStorage()
 	browserstore.Init()
 	awaitProtectedStorageBoot()
 	browserstore.RegisterJSBridge() // let vendored JS (music player) persist via IndexedDB too
 	configureHostedPrefs()
+	bootTiming.EndPhase("protectedStorageMs")
 
 	// Start with an empty in-memory store, then load the user's saved dataset from
 	// localStorage (or seed the sample on first run). Logs (os.Stderr) surface in
 	// the browser console.
+	bootTiming.BeginPhase("appStateWorkspaceAndHydrationMs")
 	if err := appstate.Init(nil, false); err != nil {
 		panic(err)
 	}
@@ -123,12 +129,16 @@ func Run() {
 	initBlobStore()
 	hydrateOpenedProtectedStorage()
 	awaitLegacyDatasetUnlock()
+	bootTiming.EndPhase("appStateWorkspaceAndHydrationMs")
 	// Restore and refresh the selected account before any identity, sync or watch.
 	// Failure leaves household data intact and the connection behind sign-in.
+	bootTiming.BeginPhase("sessionBootstrapMs")
 	if err := bootstrapSelectedSession(context.Background()); err != nil {
 		logSyncError("restore sign-in failed", err)
 		setSyncStatus(syncStatus{State: syncStateIdentityUnknown, AuthFailed: true, Message: uistate.T("sync.identityUnknown")})
 	}
+	bootTiming.EndPhase("sessionBootstrapMs")
+	bootTiming.BeginPhase("preMountPreparationMs")
 	initUndo() // capture the baseline undo snapshot after hydration (C78)
 	if appstate.Default != nil {
 		appstate.Default.LoadAuditIntoFeed() // restore persisted audit history into the Activity feed (C78)
@@ -150,11 +160,15 @@ func Run() {
 	// when a remembered on-device key is available while locked), so the lock screen
 	// shows a fresh AI quote next time rather than the static fallback.
 	refreshDailyLockQuote()
+	bootTiming.EndPhase("preMountPreparationMs")
 	// Re-apply any standing recurring budget covers whose period has rolled over.
+	bootTiming.BeginPhase("recurringCoversMs")
 	applyRecurringCovers()
+	bootTiming.EndPhase("recurringCoversMs")
 
 	// Apply saved appearance preferences (theme/accent/density) before mounting,
 	// so the first paint matches the user's choice instead of flashing defaults.
+	bootTiming.BeginPhase("preMountAppearanceAndRoutesMs")
 	uistate.ApplyPrefs(uistate.LoadPrefs())
 	// Then apply the design-token theme (B20) on top: it sets the full token set
 	// (surfaces, border, text, accent, radius, fonts, scale) as CSS custom
@@ -262,7 +276,11 @@ func Run() {
 		return ui.CreateElement(HostedAuthGate, HostedAuthGateProps{Content: content})
 	})
 
+	bootTiming.EndPhase("preMountAppearanceAndRoutesMs")
+	bootTiming.BeginPhase("routerMountMs")
 	r.Mount("#app")
+	bootTiming.EndPhase("routerMountMs")
+	bootTiming.BeginPhase("postMountWiringMs")
 	startRecoveryMaintenance()
 
 	// Wire the dashboard bento drag-reorder coordinator + FLIP reflow animation
@@ -332,11 +350,19 @@ func Run() {
 	// after autosave is armed so the advanced NextDue + new transactions persist
 	// immediately (idempotent: NextDue advances past today, so a reopen won't
 	// double-post). Boot-safe — a nil/empty store just posts nothing.
+	bootTiming.EndPhase("postMountWiringMs")
+	bootTiming.BeginPhase("postMountRecurringMs")
 	postDueRecurringOnBoot()
+	bootTiming.EndPhase("postMountRecurringMs")
+	bootTiming.BeginPhase("postMountScheduledWorkflowsMs")
 	runDueScheduledWorkflowsOnBoot()
+	bootTiming.EndPhase("postMountScheduledWorkflowsMs")
+	bootTiming.BeginPhase("postMountBillDueTriggerMs")
 	fireBillDueTriggerOnBoot()
+	bootTiming.EndPhase("postMountBillDueTriggerMs")
 
 	// Expose the music checkpoint bridge (window.cashfluxMusicSave) for the JS player.
+	bootTiming.BeginPhase("postMountTailWiringMs")
 	registerMusicBridge()
 
 	// Expose the dataset app-KV bridge (window.cashfluxData*) so the widget-builder
@@ -346,7 +372,11 @@ func Run() {
 
 	// Surface "while you were away" reminders (stale balances, bills due soon)
 	// once on load, deduped via the persisted delivered log (B19). Boot-safe.
+	bootTiming.EndPhase("postMountTailWiringMs")
+	bootTiming.BeginPhase("postMountNotificationScheduleMs")
 	runNotifyCatchUp()
+	bootTiming.EndPhase("postMountNotificationScheduleMs")
+	bootTiming.BeginPhase("postMountTailWiringMs")
 
 	// Re-evaluate budget/alert conditions after every user transaction mutation
 	// (C122): register an observer so overspend notifications appear immediately
@@ -383,18 +413,22 @@ func Run() {
 
 	// Greet once after a version upgrade with a "what's new" pointer (C326).
 	whatsNewToastOnBoot()
+	bootTiming.EndPhase("postMountTailWiringMs")
 
 	// Readiness signal: boot (hydrate + seed + mount + all wiring) is complete and
 	// the dataset is live in memory. Tests and any external harness can wait on
 	// `document.documentElement[data-app-ready="true"]` (or `window.__cashfluxReady`)
 	// instead of sleeping on a guessed timeout — the single deterministic gate that
 	// the whole regression suite keys off. Harmless in production.
+	bootTiming.BeginPhase("readySignalMs")
 	if doc := js.Global().Get("document"); doc.Truthy() {
 		if de := doc.Get("documentElement"); de.Truthy() {
 			de.Call("setAttribute", "data-app-ready", "true")
 		}
 	}
 	js.Global().Set("__cashfluxReady", true)
+	bootTiming.EndPhase("readySignalMs")
+	bootTiming.Finish()
 
 	utils.WaitForever()
 }

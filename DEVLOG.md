@@ -1,3 +1,7 @@
+## 2026-10-20 - Measured startup phases
+
+Added timings for protected storage, hydration, session restoration, recurring covers, mounting and post-mount maintenance. Disjoint phases accumulate repeated intervals and use a consistent clock fallback; no data or identity fields are recorded. The total begins at Go Run, excluding WASM fetch/decode/compile, and async notification timing describes scheduling only. Three focused app WASM tests passed, the complete screen lane passed 805 tests, and the app build passed. The new measurements guide subsequent cold-start work rather than claiming an unmeasured improvement.
+
 ## 2026-10-20 - Checked household position arithmetic
 
 Added EvaluateChecked and an Error result while retaining Evaluate for existing callers. The native model checks aggregate debts/minimums, annualization, fund targets, available credit and wasm-sized integer conversions, and uses the checked payoff simulation. Failed evaluations retain no partial measured figures. Native regression tables cover int64 boundaries and finite large rates alongside the existing normal-case suite; the complete native gate passed.
