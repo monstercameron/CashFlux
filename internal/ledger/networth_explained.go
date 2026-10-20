@@ -34,7 +34,31 @@ type NetWorthResult struct {
 // in MissingCurrencies/ExcludedAccounts — never treated as base or zero. Other
 // errors (e.g. a corrupt balance) still propagate.
 func NetWorthExplained(accounts []domain.Account, all []domain.Transaction, rates currency.Rates) (NetWorthResult, error) {
+	// Net worth only asks for balances of eligible accounts. Compute those in
+	// one transaction pass rather than rescanning the ledger once per account.
+	// Duplicate IDs cannot be represented by Balances' ID-keyed result, so keep
+	// the legacy per-account path for that malformed-but-possible API input.
+	eligible := make([]domain.Account, 0, len(accounts))
+	seen := make(map[string]struct{}, len(accounts))
+	for _, a := range accounts {
+		if a.Archived || a.ExcludeFromNetWorth {
+			continue
+		}
+		if _, exists := seen[a.ID]; exists {
+			return netWorthAccumulate(accounts, rates, func(a domain.Account) (money.Money, error) {
+				return Balance(a, all)
+			})
+		}
+		seen[a.ID] = struct{}{}
+		eligible = append(eligible, a)
+	}
+	balances, _ := Balances(eligible, all)
 	return netWorthAccumulate(accounts, rates, func(a domain.Account) (money.Money, error) {
+		if bal, ok := balances[a.ID]; ok {
+			return bal, nil
+		}
+		// Preserve Balance's specific error (including its context and wrapping)
+		// for the account that failed, instead of returning a bulk-map sentinel.
 		return Balance(a, all)
 	})
 }

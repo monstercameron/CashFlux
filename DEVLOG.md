@@ -1,3 +1,7 @@
+## 2026-10-20 - Shared ledger balance correctness and cost
+
+The primary-page cleanup found that a bulk balance calculation kept an account after a currency mismatch or overflow, even though the single-account calculation rejected it. Bulk reads now omit the invalid account and preserve unaffected balances. NetWorthExplained builds eligible balances in one ledger pass and retains the original error and duplicate-ID paths. Native ledger tests cover the edge cases; the preserved 100-account/10,000-transaction benchmark measured about 10.08 ms before and 0.467 ms after on this machine. This is calculation evidence, not a browser latency claim.
+
 ## 2026-10-20 - v1.19.8 release preparation
 
 Grouped the accumulated work into focused commits, checked the native suite, all WASM component lanes, vet, app and
