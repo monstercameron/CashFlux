@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/monstercameron/CashFlux/internal/accountview"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -189,4 +190,19 @@ func accountMeta(a domain.Account, bal money.Money) string {
 		}
 	}
 	return meta
+}
+
+// accountSnapshot shares the ledger index between account page tiles. Store and
+// app identity are captured by revKey; filters never mutate this snapshot.
+var accountSnapshotCache = newViewCache[accountview.Snapshot](1)
+
+func accountSnapshot(app *appstate.App) accountview.Snapshot {
+	return memoByRev(accountSnapshotCache, revKey(app), func() accountview.Snapshot {
+		accounts := app.Accounts()
+		byAccount := make(map[string][]domain.Transaction, len(accounts))
+		for _, account := range accounts {
+			byAccount[account.ID] = app.TransactionsByAccount(account.ID)
+		}
+		return accountview.BuildIndexed(accounts, app.Transactions(), byAccount)
+	})
 }

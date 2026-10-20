@@ -1,3 +1,7 @@
+## 2026-10-20 - Indexed account page projections
+
+Moved account partitioning, risk ordering and group arithmetic into the native accountview package. The snapshot reuses the app transaction index and is invalidated by app/data revisions. Native parity and edge tests cover balance errors, ownership, liability signs, stable order and FX omissions; WASM regressions cover snapshot refresh and the visible exclusion note. The complete native suite and 790-screen WASM suite passed with these changes. Browser journeys and matched latency measurements remain in progress.
+
 ## 2026-10-20 - Reusable page presentation primitives
 
 Added ControlStrip with named control/action slots, accessible group labeling and existing class defaults. Added surfaceTiles to centralize keyed bento placement dispatch while preserving context and unavailable-tile handling. Children retain their own event hooks. Fixture tests verify classes/attributes, optional slots, context propagation, tile order and state following stable IDs after reordering. The shared UI lane passed 85 tests and the screen lane passed 790; browser journeys remain the integration step.

@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Accounts share an indexed ledger snapshot for balances, payment hints and row series. Group subtotals exclude invalid or unconvertible balances and disclose incomplete totals.
 - Architecture checks follow the canonical money calculations through extracted native view models, and calendar overflow regressions require an unavailable amount rather than preserving the old overflowing conversion.
 - Shared derived views use bounded LRU caches keyed by app identity, stored data, browser preferences, scope, and time inputs. Heavy Smart snapshots retain one context, and anomaly/action sections share the same deterministic engine pass.
 - Prepared v1.19.8 from the verified Transactions, Import, sync, budget, dashboard, navigation, and development-server changes below.
