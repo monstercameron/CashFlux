@@ -1,3 +1,7 @@
+## 2026-10-20 - Browser contracts for shared controls
+
+Updated obsolete test IDs, calendar classes and generic date-summary expectations to the current accessible controls. Async alerts and goal sort now wait for the actual condition; Dashboard focus checks durable selected/layout state rather than a toast displaced by reminders. Added Todo mode and notification keyboard-tab journeys. The focused final five-case run passed on the new artifact; the other affected routes passed focused checks, including the isolated budget Escape case. Added a passing actual-toolbar WASM Escape-after-sort regression without a speculative product handler. The all-routes smoke sweep passed earlier; this does not claim the entire browser suite was run.
+
 ## 2026-10-20 - Reusable report activity and row models
 
 Moved expensive ledger/subscription/position preparation into explicit native Activity and row models. Deposit grouping uses a structured-key pass; tag/category ratios and remainder totals are checked. Household position uses checked debt/card/interest accumulation and the shared vitals/payoff errors, with visible unavailable or incomplete states instead of false zeros. Reports controls use the shared strip. Native parity/boundary tests and the 805-screen WASM lane passed after fixing a leftover screen-local burn reference; the app build and saved-report browser journey passed. New matched route timings remain descriptive and are recorded in the performance guide.

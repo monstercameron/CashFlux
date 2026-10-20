@@ -11,6 +11,7 @@ test.describe("gap features", () => {
     // The sample seeds a $68 Blue Bottle Coffee charge against a ~$7 baseline; the
     // on-device unusual-charge detector should flag it in the Notification Center.
     await nav(app, "/notifications");
+    await expect(app.locator('[data-testid^="notif-open-default-unusual@"]').first()).toBeVisible();
     const text = await mainText(app);
     expect(text).toMatch(/unusual charge at blue bottle coffee/i);
     // The body states the charge vs the payee's typical amount.
@@ -24,17 +25,19 @@ test.describe("gap features", () => {
     await preset.scrollIntoViewIfNeeded();
     // Month end: the recap + budgets/trend view; the daily attention digest leaves.
     await preset.selectOption("monthend");
-    await expect(app.locator("body")).toContainText(/Dashboard focused: Month end/);
-    await expect(app.locator('[data-widget-id="attention"], #attention').first()).toHaveCount(0).catch(() => {});
+    await expect(preset).toHaveValue("monthend");
+    await expect(app.getByRole("heading", { name: "Monthly recap", exact: true })).toBeVisible();
+    await expect(app.getByRole("heading", { name: "Needs attention", exact: true })).toHaveCount(0);
     // Daily: safe-to-spend + forecast + bills return.
     await preset.selectOption("daily");
-    await expect(app.locator("body")).toContainText(/Dashboard focused: Daily check-in/);
+    await expect(preset).toHaveValue("daily");
+    await expect(app.getByRole("heading", { name: "Needs attention", exact: true })).toBeVisible();
     const forecast = app.getByTestId("dash-forecast");
     await forecast.scrollIntoViewIfNeeded();
     await expect(forecast).toBeVisible();
     // Back to everything.
     await preset.selectOption("default");
-    await expect(app.locator("body")).toContainText(/Dashboard focused: Everything/);
+    await expect(preset).toHaveValue("default");
   });
 
   test("ledger rows carry explicit cleared / needs-review state markers", async ({ app }) => {
@@ -127,7 +130,7 @@ test.describe("gap features", () => {
     await expect(open).toBeVisible();
     await open.click();
     await expect(app).toHaveURL(/\/transactions/, { timeout: 10_000 });
-    const search = app.locator('#main input[type="search"]').first();
+    const search = app.locator("#main").getByRole("searchbox");
     await expect(search).toHaveValue(/blue bottle coffee/i, { timeout: 10_000 });
   });
 

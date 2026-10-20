@@ -48,9 +48,15 @@ test.describe("todo: checklist templates", () => {
 test.describe("todo: toolbar", () => {
   test("has a search box, a linked-feature filter, Custom order, and a single-glyph Add", async ({ app }) => {
     await nav(app, "/todo");
-    await expect(app.getByTestId("todo-search")).toBeVisible();
-    await expect(app.getByTestId("todo-filter-link")).toBeVisible();
-    // Custom order is a real sort option.
+    const search = app.getByTestId("filter-toolbar-search");
+    await expect(search).toBeVisible();
+    await expect(search).toHaveAttribute("role", "searchbox");
+    const filters = app.locator(".filter-toolbar .filters-trigger");
+    await filters.click();
+    const panel = app.locator("#filter-inline-panel");
+    await expect(panel).toBeVisible();
+    await expect(panel.getByRole("combobox", { name: "Filter by linked feature" })).toBeVisible();
+    // Custom order is a real sort option inside Filters.
     await expect(app.locator('[data-testid="todo-sort"] option[value="manual"]')).toHaveCount(1);
     // The Add button carries exactly one glyph and no literal "+" in its text.
     const add = app.getByTestId("todo-add");
@@ -62,19 +68,21 @@ test.describe("todo: toolbar", () => {
     await nav(app, "/todo");
     const before = await app.locator('[data-testid="task-card"]').count();
     expect(before).toBeGreaterThan(3);
-    await app.getByTestId("todo-search").fill("nursery");
-    await app.waitForTimeout(300);
-    const after = await app.locator('[data-testid="task-card"]').count();
-    expect(after).toBeLessThan(before);
+    await app.getByTestId("filter-toolbar-search").fill("nursery");
+    const cards = app.locator('[data-testid="task-card"]');
+    await expect.poll(() => cards.count()).toBeLessThan(before);
+    const after = await cards.count();
     expect(after).toBeGreaterThan(0);
-    await app.getByTestId("todo-search-clear").click();
-    await app.waitForTimeout(300);
-    expect(await app.locator('[data-testid="task-card"]').count()).toBe(before);
+    await app.getByTestId("filter-clear-search").click();
+    await expect.poll(() => cards.count()).toBe(before);
   });
 
   test("the linked-feature filter shows only tasks tied to that feature", async ({ app }) => {
     await nav(app, "/todo");
-    await app.getByTestId("todo-filter-link").selectOption("goal");
+    await app.locator(".filter-toolbar .filters-trigger").click();
+    const panel = app.locator("#filter-inline-panel");
+    await expect(panel).toBeVisible();
+    await panel.getByRole("combobox", { name: "Filter by linked feature" }).selectOption("goal");
     await app.waitForTimeout(300);
     const cards = app.locator('[data-testid="task-card"]');
     const n = await cards.count();
@@ -83,6 +91,34 @@ test.describe("todo: toolbar", () => {
     for (let i = 0; i < n; i++) {
       await expect(cards.nth(i).locator(".todo-link.is-goal")).toHaveCount(1);
     }
+  });
+});
+
+test.describe("todo: shared display modes", () => {
+  test("list, board and calendar are projections of the same task set", async ({ app }) => {
+    await nav(app, "/todo");
+    const list = app.getByTestId("todo-view-list");
+    const board = app.getByTestId("todo-view-board");
+    const calendar = app.getByTestId("todo-view-calendar");
+    const taskCards = app.locator('[data-testid="task-card"]');
+
+    await expect(list).toHaveAttribute("aria-pressed", "true");
+    const listCount = await taskCards.count();
+    expect(listCount).toBeGreaterThan(0);
+
+    await board.click();
+    await expect(board).toHaveAttribute("aria-pressed", "true");
+    await expect(app.getByTestId("todo-board")).toBeVisible();
+    await expect(app.locator('[data-testid^="todo-board-card-"]').first()).toBeVisible();
+
+    await calendar.click();
+    await expect(calendar).toHaveAttribute("aria-pressed", "true");
+    await expect(app.locator(".uical")).toBeVisible();
+    await expect(app.getByTestId("todo-cal-title")).toBeVisible();
+
+    await list.click();
+    await expect(list).toHaveAttribute("aria-pressed", "true");
+    await expect.poll(() => taskCards.count()).toBe(listCount);
   });
 });
 

@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Browser journeys use current shared-control semantics and web-first state checks for menus, dates, sorting, views and notification tabs.
 - Reports reuse native activity facts across summary/full and display changes. Category averages follow the selected month count, and parent totals share their rolled-up sparkline basis.
 - Dashboard cash forecasts reject overflowing aggregate totals and disclose accounts omitted for unavailable exchange rates.
 - Goals share native checked reservation, headroom and funding facts. Quick funding rechecks current balances, counts existing earmarks once and preserves foreign allocation currencies when merging.
