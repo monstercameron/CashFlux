@@ -1,3 +1,7 @@
+## 2026-10-20 - Shared goal reservation and funding index
+
+Replaced repeated per-card ledger scans with one bounded revision index reused by summary, rows and Earmarks. Missing reservation FX blocks unsafe suggestions and is disclosed; fund headline totals use converted checked amounts. Own-foreign-allocation review found a gap/merge mismatch, now covered by checked per-currency aggregation and a matching headroom simulation. Native tests cover FX rounding, stable account choice, missing rates and overflow; the full 805-screen gate plus focused actual-host regression passed. Three WASM cases cover stale click safety, FX revision/removal and fund exclusions; the browser Earmarks journey passed on the second-pass snapshot.
+
 ## 2026-10-20 - Goal sorting across default sections
 
 Added native OrderedOpen over a copied visible set and wired explicit sorts into one open-goal list. Tests prove cross-section order without mutating the cached default view. The real Goals host WASM regression passes without parent atom subscriptions. Browser name sorting passes with a web-first order assertion; the previous 300ms snapshot captured an intermediate render although its later artifact was correctly ordered. Kept existing host keys and component state boundaries.

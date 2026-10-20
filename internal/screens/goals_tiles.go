@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
-	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/goalview"
@@ -86,7 +85,7 @@ func goalSummaryWidget(props goalSummaryProps) ui.Node {
 		// exist, say so — their card targets otherwise look like a $-mismatch
 		// against "Total target" (2026-07-18 assessment: users had to
 		// reverse-engineer which cards contribute).
-		fundScopeNote(app, v),
+		fundScopeNote(v),
 		If(len(v.ExcludedCurrencies) > 0,
 			P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "goal-summary-excluded-currencies"),
 				uistate.T("goals.summaryExcludedCurrencies", strings.Join(v.ExcludedCurrencies, ", ")))),
@@ -131,6 +130,7 @@ func goalToolbarWidget(props goalToolbarProps) ui.Node {
 	// A tab strip (Goals · Earmarks) + a "Sort by" picker (goals view only) on the left, the
 	// primary "Add goal" pushed to the right.
 	toolbar := uiw.ControlStrip(uiw.ControlStripProps{
+		Label: uistate.T("goals.toolbarLabel"),
 		Controls: []ui.Node{
 			Div(css.Class("goals-tabs"), Attr("role", "tablist"),
 				Button(ClassStr(goalsActive), Type("button"), Attr("role", "tab"), Attr("data-testid", "goals-tab-goals"),
@@ -527,13 +527,13 @@ func goalListWidget(props goalListProps) ui.Node {
 
 // fundScopeNote is the one-line scope statement under the goals headline: which
 // cards the totals count, and the sinking funds' own target when any exist.
-func fundScopeNote(app *appstate.App, v goalView) ui.Node {
+func fundScopeNote(v goalView) ui.Node {
 	if len(v.Fund) == 0 {
 		return Fragment()
 	}
-	rates := currency.Rates{Base: v.Base, Rates: app.Settings().FXRates}
-	_, fundTarget := goalsvc.Totals(v.Fund, rates, v.Base, false)
 	return P(css.Class("budget-sub"), Attr("data-testid", "goal-headline-scope"),
 		Style(map[string]string{"margin": "0.35rem 0 0"}),
-		uistate.T("goals.headlineScope", fmtMoney(fundTarget)))
+		uistate.T("goals.headlineScope", fmtMoney(v.FundTargetTotal)),
+		If(len(v.FundExcludedCurrencies) > 0, Span(Attr("data-testid", "goal-funds-excluded"),
+			uistate.T("goals.fundExcludedCurrencies", strings.Join(v.FundExcludedCurrencies, ", ")))))
 }

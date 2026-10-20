@@ -28,6 +28,20 @@ type goalPace = goalview.Pace
 // context rather than retaining those backing arrays across eight revisions.
 var goalViewCache = newViewCache[goalView](1)
 
+var goalFundingCache = newViewCache[goalview.FundingIndex](1)
+
+func goalFunding(app *appstate.App) goalview.FundingIndex {
+	return memoByRev(goalFundingCache, revKey(app), func() goalview.FundingIndex {
+		settings := app.Settings()
+		base := settings.BaseCurrency
+		if base == "" {
+			base = "USD"
+		}
+		return goalview.BuildFunding(app.Goals(), app.Accounts(), accountSnapshot(app).Balances,
+			currency.Rates{Base: base, Rates: settings.FXRates}, base)
+	})
+}
+
 // computeGoalView shares one immutable picture per store revision/member/day.
 func computeGoalView(app *appstate.App, activeMemberID string) goalView {
 	now := time.Now()
@@ -42,11 +56,13 @@ func computeGoalViewAt(app *appstate.App, activeMemberID string, now time.Time) 
 	if base == "" {
 		base = "USD"
 	}
+	funding := goalFunding(app)
 	return goalview.Build(goalview.Input{
 		Base: base, MemberID: activeMemberID,
 		Rates: currency.Rates{Base: base, Rates: settings.FXRates},
 		Goals: app.Goals(), Accounts: app.Accounts(), Members: app.Members(),
 		Categories: app.Categories(), Tasks: app.Tasks(), Transactions: app.Transactions(), Now: now,
+		Funding: &funding,
 	})
 }
 
@@ -83,11 +99,7 @@ func overbookedGoals(app *appstate.App) map[string]bool {
 	if app == nil {
 		return map[string]bool{}
 	}
-	return computeGoalView(app, "").Overbooked
-}
-
-func sortGoals(gs []domain.Goal, key string, tasks []domain.Task, now time.Time) {
-	goalview.Sort(gs, key, tasks, now)
+	return goalFunding(app).Overbooked
 }
 
 type goalRowProps struct {

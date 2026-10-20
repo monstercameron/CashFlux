@@ -13,6 +13,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
+	"github.com/monstercameron/CashFlux/internal/goalview"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -359,12 +360,7 @@ func goalAllocateForm(props GoalAllocateFormProps) ui.Node {
 // cash. Liquid accounts lead the earmark picker and remain the only sources for
 // real money movements (transfers, ledger-posted contributions, quick-fund).
 func earmarkEligibleType(t domain.AccountType) bool {
-	switch t {
-	case domain.TypeChecking, domain.TypeDebit, domain.TypeSavings, domain.TypeCash:
-		return true
-	default:
-		return false
-	}
+	return goalview.LiquidSource(t)
 }
 
 // earmarkSourceAccount reports whether an account may be offered as an earmark
@@ -373,7 +369,7 @@ func earmarkEligibleType(t domain.AccountType) bool {
 // earmark is a virtual reservation, so held assets (brokerage, retirement,
 // property, …) qualify alongside liquid cash.
 func earmarkSourceAccount(a domain.Account) bool {
-	return !a.Archived && a.Class != domain.ClassLiability && !a.Type.IsLiability()
+	return goalview.EarmarkSource(a)
 }
 
 // sumAllocMinor totals a set of allocations in minor units (all share the goal currency).

@@ -6,13 +6,12 @@ package screens
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
-	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/icon"
-	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -40,23 +39,11 @@ func goalEarmarksManager(props goalEarmarksProps) ui.Node {
 	if app == nil {
 		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("common.notReady"))})
 	}
-	base := app.Settings().BaseCurrency
-	if base == "" {
-		base = "USD"
-	}
-	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	toBase := func(m money.Money) int64 {
-		if m.Currency == base || m.Currency == "" {
-			return m.Amount
-		}
-		if conv, err := rates.Convert(m, base); err == nil {
-			return conv.Amount
-		}
-		return m.Amount
-	}
+	funding := goalFunding(app)
+	v := funding.Earmarks
 	accounts := app.Accounts()
-	txns := app.Transactions()
 	goalsList := app.Goals()
+	base := v.TotalBalance.Currency
 
 	// Delete one earmark (goal + account) by persisting the goal's remaining allocations.
 	onDelete := func(goalID, acctID string) {
@@ -78,63 +65,13 @@ func goalEarmarksManager(props goalEarmarksProps) ui.Node {
 		}
 	}
 
-	// Per-account earmarked totals (base), and which goals have any earmarks.
-	earmarkByAcct := map[string]int64{}
-	var grandTotal int64
-	var goalsWithEarmarks []domain.Goal
-	for _, g := range goalsList {
-		if g.AllocatedMinor() <= 0 {
-			continue
-		}
-		goalsWithEarmarks = append(goalsWithEarmarks, g)
-		for _, al := range g.Allocations {
-			b := toBase(al.Amount)
-			earmarkByAcct[al.AccountID] += b
-			grandTotal += b
-		}
-	}
-
-	// Money map: the household-level reconciliation — everything in earmarkable
-	// accounts (any non-liability asset, matching the Set-aside modal's list),
-	// how much of it is reserved (earmarked), and what's still free to assign.
-	// This is the "where does my money stand" answer the per-account cards below detail.
-	// QA CF-14: "Free to assign" must mean money that can actually be assigned
-	// without opting into a held asset — a $304k condo in the headline made
-	// $377k look freely assignable. The headline is now LIQUID balances minus
-	// the earmarks against them; held assets (property, investments, …) get
-	// their own quiet caption and remain opt-in in the Set-aside modal.
-	var totalBal, liquidBal, liquidEarmarks int64
-	for _, a := range accounts {
-		if !earmarkSourceAccount(a) {
-			continue
-		}
-		bal, _ := ledger.Balance(a, txns)
-		b := toBase(bal)
-		totalBal += b
-		if earmarkEligibleType(a.Type) {
-			liquidBal += b
-			liquidEarmarks += earmarkByAcct[a.ID]
-		}
-	}
-	heldAssets := totalBal - liquidBal
-	totalFree := liquidBal - liquidEarmarks
+	goalsWithEarmarks := v.Goals
+	grandTotal, totalBal, totalFree, heldAssets := v.TotalReserved.Amount, v.TotalBalance.Amount, v.Free.Amount, v.Held.Amount
 	freeMod := ""
-	if totalFree < 0 { // more earmarked than liquid money on hand — over-committed
+	if totalFree < 0 {
 		freeMod = " " + tw.Fold(tw.TextWarn)
 	}
-	// Earmarked share of the whole, for the split bar (clamped 0..100). With
-	// held assets in the denominator a real-but-small earmark can floor to 0%
-	// — keep a 1% sliver so money that IS reserved never renders as nothing.
-	earmarkedShare := 0
-	if totalBal > 0 {
-		earmarkedShare = int(grandTotal * 100 / totalBal)
-		if earmarkedShare > 100 {
-			earmarkedShare = 100
-		}
-		if earmarkedShare == 0 && grandTotal > 0 {
-			earmarkedShare = 1
-		}
-	}
+	earmarkedShare := v.Percent
 	moneyMap := uiw.Card(uiw.CardProps{
 		Attrs:  []any{Attr("data-testid", "earmarks-moneymap")},
 		Header: H2(css.Class("card-title"), uistate.T("goals.mapTitle")),
@@ -159,12 +96,7 @@ func goalEarmarksManager(props goalEarmarksProps) ui.Node {
 
 	// G3: the manager can START an earmark, not just trim one — a chip per financial,
 	// non-archived goal that has none yet, each opening its Set-aside modal directly.
-	var unearmarked []domain.Goal
-	for _, g := range goalsList {
-		if g.IsFinancial() && !g.Archived && g.AllocatedMinor() == 0 {
-			unearmarked = append(unearmarked, g)
-		}
-	}
+	unearmarked := v.Unearmarked
 	var startStrip ui.Node = Fragment()
 	if len(unearmarked) > 0 {
 		chips := MapKeyed(unearmarked, func(g domain.Goal) any { return g.ID }, func(g domain.Goal) ui.Node {
@@ -194,32 +126,13 @@ func goalEarmarksManager(props goalEarmarksProps) ui.Node {
 	// reservations (over-earmarked), the bar fills fully in the danger tone and the free
 	// figure is flagged.
 	var exposureRows []ui.Node
-	for _, a := range accounts {
-		em := earmarkByAcct[a.ID]
-		if em <= 0 {
-			continue
-		}
-		bal, _ := ledger.Balance(a, txns)
-		balBase := toBase(bal)
-		free := balBase - em
-		over := free < 0
-		if free < 0 {
-			free = 0
-		}
-		freeCls := "ea-exp-free"
+	for _, exposure := range v.Accounts {
+		a := exposure.Account
+		em, balBase, free := exposure.Reserved.Amount, exposure.Balance.Amount, exposure.Free.Amount
+		over, coverPct := exposure.Overbooked, exposure.Percent
+		freeCls, barCls := "ea-exp-free", "ea-bar-fill"
 		if over {
 			freeCls += " " + tw.Fold(tw.TextWarn)
-		}
-		// Earmarked share of the balance (0..100). Over-earmarked reads as a full danger bar.
-		coverPct := 100
-		if balBase > 0 && !over {
-			coverPct = int(em * 100 / balBase)
-		}
-		if coverPct > 100 {
-			coverPct = 100
-		}
-		barCls := "ea-bar-fill"
-		if over {
 			barCls += " is-over"
 		}
 		exposureRows = append(exposureRows, Div(css.Class("ea-acct"), Attr("data-testid", "ea-exp-"+a.ID),
@@ -243,7 +156,7 @@ func goalEarmarksManager(props goalEarmarksProps) ui.Node {
 		Body: Div(css.Class("ea-exp-list"), exposureRows),
 	})
 
-	overbooked := overbookedGoals(app)
+	overbooked := funding.Overbooked
 	groups := MapKeyed(goalsWithEarmarks, func(g domain.Goal) any { return g.ID }, func(g domain.Goal) ui.Node {
 		return ui.CreateElement(goalEarmarkGroup, goalEarmarkGroupProps{
 			Goal: g, Accounts: accounts, Overbooked: overbooked[g.ID], OnDelete: onDelete,
@@ -251,6 +164,9 @@ func goalEarmarksManager(props goalEarmarksProps) ui.Node {
 	})
 
 	return Div(css.Class("earmarks-mgr"),
+		If(v.Incomplete, P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "earmarks-excluded"),
+			uistate.T("goals.earmarksIncomplete"),
+			If(len(v.ExcludedCurrencies) > 0, Span(uistate.T("goals.earmarksExcludedCurrencies", strings.Join(v.ExcludedCurrencies, ", ")))))),
 		moneyMap,
 		exposureCard,
 		uiw.Card(uiw.CardProps{

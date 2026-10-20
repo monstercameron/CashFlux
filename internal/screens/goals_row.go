@@ -15,9 +15,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
+	"github.com/monstercameron/CashFlux/internal/goalview"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
-	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -174,7 +174,17 @@ func GoalRow(props goalRowProps) ui.Node {
 			merged := false
 			for i, al := range allocs {
 				if al.AccountID == acctID {
-					allocs[i].Amount = money.New(al.Amount.Amount+amt, cur)
+					settings := app.Settings()
+					base := settings.BaseCurrency
+					if base == "" {
+						base = "USD"
+					}
+					combined, err := goalview.AddReservationAmount(al.Amount, money.New(amt, cur), currency.Rates{Base: base, Rates: settings.FXRates})
+					if err != nil {
+						uistate.PostNotice(err.Error(), true)
+						return
+					}
+					allocs[i].Amount = combined
 					merged = true
 					break
 				}
@@ -1048,69 +1058,11 @@ func addHabitCheckIn(goalID string) {
 // never more than that account's free-to-earmark headroom. Returns ("", "", 0) when
 // there's nothing to fund or nothing free.
 func bestQuickEarmark(app *appstate.App, goalID string) (acctID, acctName string, amt int64) {
-	var g domain.Goal
-	found := false
-	for _, gg := range app.Goals() {
-		if gg.ID == goalID {
-			g, found = gg, true
-			break
-		}
-	}
-	if !found || !g.IsFinancial() || g.TargetAmount.Amount <= 0 {
+	if app == nil {
 		return "", "", 0
 	}
-	gap := g.TargetAmount.Amount - goalsvc.CoverageMinor(g)
-	if gap <= 0 {
-		return "", "", 0
-	}
-	base := app.Settings().BaseCurrency
-	if base == "" {
-		base = "USD"
-	}
-	cur := g.TargetAmount.Currency
-	if cur == "" {
-		cur = base
-	}
-	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	txns := app.Transactions()
-	free := func(a domain.Account) int64 {
-		bal, _ := ledger.Balance(a, txns)
-		inGoal := bal.Amount
-		if bal.Currency != cur {
-			if conv, err := rates.Convert(bal, cur); err == nil {
-				inGoal = conv.Amount
-			}
-		}
-		return goalsvc.AvailableToEarmarkMinor(app.Goals(), a.ID, inGoal, g.ID)
-	}
-	var best domain.Account
-	var bestFree int64
-	for _, a := range app.Accounts() {
-		if a.Archived || !earmarkEligibleType(a.Type) {
-			continue
-		}
-		f := free(a)
-		if f <= 0 {
-			continue
-		}
-		// The linked account wins whenever it can cover the gap outright; otherwise
-		// the account with the most headroom.
-		if a.ID == g.AccountID && f >= gap {
-			best, bestFree = a, f
-			break
-		}
-		if f > bestFree {
-			best, bestFree = a, f
-		}
-	}
-	if best.ID == "" {
-		return "", "", 0
-	}
-	amt = gap
-	if bestFree < amt {
-		amt = bestFree
-	}
-	return best.ID, best.Name, amt
+	suggestion := goalFunding(app).Suggestions[goalID]
+	return suggestion.AccountID, suggestion.AccountName, suggestion.Amount.Amount
 }
 
 // goalBarLegend renders the saved-vs-set-aside key beneath a goal's progress bar so

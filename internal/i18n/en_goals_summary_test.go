@@ -16,3 +16,15 @@ func TestGoalSummaryExclusionsFormatCurrenciesAndFallback(t *testing.T) {
 		}
 	}
 }
+
+func TestPrimarySummaryAdditionalCopyIsRegistered(t *testing.T) {
+	bundle := DefaultBundle()
+	for key := range goalsSummaryKeys {
+		if got := bundle.T(English, key); got == key || got == "" {
+			t.Errorf("missing goal summary copy %q", key)
+		}
+	}
+	if key := "accounts.liquidityIncomplete"; bundle.T(English, key) == key {
+		t.Error("missing account liquidity disclosure")
+	}
+}

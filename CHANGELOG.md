@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Goals share native checked reservation, headroom and funding facts. Quick funding rechecks current balances, counts existing earmarks once and preserves foreign allocation currencies when merging.
 - Explicit Goal sorts apply across all open goals instead of pinning the Needs-a-plan section ahead of the selected order. The default actionable view retains its sections.
 - Report category rollups and monthly aggregates expose overflow errors, and runway durations retain int64 month counts on WebAssembly.
 - The component inventory documents control/action slots, keyed tabs and choices, shared tile hosts, native view models and bounded cache ownership.

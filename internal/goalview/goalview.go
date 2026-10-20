@@ -42,6 +42,7 @@ type Input struct {
 	Categories     []domain.Category
 	Tasks          []domain.Task
 	Transactions   []domain.Transaction
+	Funding        *FundingIndex
 	Now            time.Time
 }
 
@@ -65,6 +66,8 @@ type View struct {
 	Health                                                       map[string]Pace
 	Overbooked                                                   map[string]bool
 	ExcludedCurrencies                                           []string
+	FundTargetTotal                                              money.Money
+	FundExcludedCurrencies                                       []string
 }
 
 // Build scopes, classifies, sorts and totals goals without mutating its inputs.
@@ -108,20 +111,11 @@ func Build(in Input) View {
 		}
 		saved, savedErr := in.Rates.Convert(g.CurrentAmount, in.Base)
 		target, targetErr := in.Rates.Convert(g.TargetAmount, in.Base)
-		allocated := money.Zero(g.TargetAmount.Currency)
-		var asideErr error
-		for _, allocation := range g.Allocations {
-			allocated, asideErr = allocated.Add(allocation.Amount)
-			if asideErr != nil {
+		setAside, asideErr := allocationTotal(g, in.Rates, in.Base)
+		if asideErr != nil {
+			for _, allocation := range g.Allocations {
 				excluded[allocation.Amount.Currency] = true
-				break
 			}
-		}
-		var setAside money.Money
-		if asideErr == nil {
-			// Sum in the stored target currency before converting, so rounding
-			// occurs once per goal rather than once per reservation.
-			setAside, asideErr = in.Rates.Convert(allocated, in.Base)
 		}
 		if savedErr != nil || targetErr != nil || asideErr != nil {
 			if savedErr != nil {
@@ -164,8 +158,40 @@ func Build(in Input) View {
 		v.LeftTotal = money.Zero(in.Base)
 	}
 	v.Health = Health(v.All, in.Transactions, in.Rates, in.Base, in.Now)
-	v.Overbooked = Overbooked(in.Goals, in.Accounts, in.Transactions, in.Rates)
+	v.FundTargetTotal, v.FundExcludedCurrencies = FundTargets(v.Fund, in.Rates, in.Base)
+	if in.Funding != nil {
+		v.Overbooked = in.Funding.Overbooked
+	} else {
+		v.Overbooked = Overbooked(in.Goals, in.Accounts, in.Transactions, in.Rates)
+	}
 	return v
+}
+
+// FundTargets sums financial, non-archived fund targets in base currency and
+// reports currencies whose targets could not be converted or safely added.
+func FundTargets(all []domain.Goal, rates currency.Rates, base string) (money.Money, []string) {
+	total := money.Zero(base)
+	excluded := map[string]bool{}
+	for _, g := range all {
+		if g.Archived || !g.IsFinancial() {
+			continue
+		}
+		converted, err := rates.Convert(g.TargetAmount, base)
+		if err == nil {
+			converted, err = total.Add(converted)
+		}
+		if err != nil {
+			excluded[g.TargetAmount.Currency] = true
+			continue
+		}
+		total = converted
+	}
+	var codes []string
+	for code := range excluded {
+		codes = append(codes, code)
+	}
+	sort.Strings(codes)
+	return total, codes
 }
 
 func ratioPercent(n, d int64) int {
@@ -236,49 +262,6 @@ func Health(all []domain.Goal, txns []domain.Transaction, rates currency.Rates, 
 // Reservations are compared in the account's native currency; an unknown FX
 // rate is never treated as parity. Archived goals retain their reservations.
 func Overbooked(all []domain.Goal, accounts []domain.Account, txns []domain.Transaction, rates currency.Rates) map[string]bool {
-	byID := make(map[string]domain.Account, len(accounts))
-	for _, a := range accounts {
-		byID[a.ID] = a
-	}
-	earmarked := map[string]int64{}
-	overflowed := map[string]bool{}
-	for _, g := range all {
-		for _, allocation := range g.Allocations {
-			a, ok := byID[allocation.AccountID]
-			if !ok {
-				continue
-			}
-			amount, err := rates.Convert(allocation.Amount, a.Currency)
-			if err != nil {
-				continue
-			}
-			if amount.Amount <= 0 {
-				continue
-			}
-			if total, err := money.Add(earmarked[a.ID], amount.Amount); err == nil {
-				earmarked[a.ID] = total
-			} else {
-				// Positive reservations beyond int64 exceed any representable balance.
-				overflowed[a.ID] = true
-			}
-		}
-	}
-	if len(earmarked) == 0 {
-		return map[string]bool{}
-	}
 	balances, _ := ledger.Balances(accounts, txns)
-	over := map[string]bool{}
-	for _, a := range accounts {
-		over[a.ID] = overflowed[a.ID] || earmarked[a.ID] > 0 && earmarked[a.ID] > balances[a.ID].Amount
-	}
-	out := map[string]bool{}
-	for _, g := range all {
-		for _, allocation := range g.Allocations {
-			if over[allocation.AccountID] {
-				out[g.ID] = true
-				break
-			}
-		}
-	}
-	return out
+	return BuildFunding(all, accounts, balances, rates, rates.Base).Overbooked
 }
