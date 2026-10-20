@@ -140,7 +140,7 @@ func testBackendConnection(endpoint, token string, onDone func(backendauth.Disco
 			onError(endpoint + " responded, but not like a CashFlux backend. Make sure it's the sync server's base URL — no /budget or other path." + originMismatchHint(endpoint))
 			return
 		}
-		if version.APIVersion != "v1" || version.MinClientAPIVersion != "v1" {
+		if !backendauth.CompatibleVersion(version.APIVersion, version.MinClientAPIVersion) {
 			onError("Backend API version is not compatible.")
 			return
 		}

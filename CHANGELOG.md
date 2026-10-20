@@ -104,6 +104,7 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- Accept a server advertising API version 2 when it still supports the client's version 1 sync RPCs; reject malformed or truly incompatible version ranges.
 - Style the reviewed budget template bucket selector.
 - Improve import tile hierarchy, Smart+ marks, contrast and draft spacing.
 - Reject overflowing budget calculations and clarify budget save feedback.

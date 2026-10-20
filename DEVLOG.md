@@ -1,3 +1,7 @@
+## 2026-10-20 - Sync discovery version range
+
+The live server at budget.earlcameron.com advertises API 2 and minimum client 1, while the Settings connection check compared both fields to literal `v1`. That rejected a compatible server before sign-in. The v1 SyncService is still registered on API 2, so discovery now parses the advertised range and accepts client version 1 when it falls inside it. Malformed and too-new minimums remain blocked. Unit cases cover the live response, legacy prefixed values and rejection cases; native backendauth, server and syncstate tests passed. The live endpoint was checked anonymously, without an access token or user data.
+
 ## 2026-10-20 - v1.19.8 release preparation
 
 Grouped the accumulated work into focused commits, checked the native suite, all WASM component lanes, vet, app and
