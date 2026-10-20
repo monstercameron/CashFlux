@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Transaction description sorting uses the same native display rule as ledger rows, including a safe raw-label fallback, and account/category indexes refresh only when their data context changes.
 - Budget income allocation delegates checked money arithmetic, state selection and chart percentages to the native budgeting package; the page retains formatting and event handling.
 - Goal summaries and ordering use tested native projections, consistent base-currency totals, explicit FX exclusions and cache keys that track deadline and pause transitions.
 - Accounts share an indexed ledger snapshot for balances, payment hints and row series. Group subtotals exclude invalid or unconvertible balances and disclose incomplete totals.

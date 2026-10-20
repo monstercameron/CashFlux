@@ -130,7 +130,9 @@ func useTxnSurfaceContext(app *appstate.App, f txnfilter.Criteria) widgetrender.
 	accounts, categories := app.Accounts(), app.Categories()
 	base := txntable.BaseCurrency(app.Settings().BaseCurrency)
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	index := txntable.BuildIndex(nil, accounts, categories, nil, nil, nil)
+	index := ui.UseMemo(func() txntable.Index {
+		return txntable.BuildIndex(nil, accounts, categories, nil, nil, nil)
+	}, revKey(app))
 	accName, catName := index.AccountNames, index.CategoryNames
 	transactions := app.Transactions()
 	resolver := app.PayeeResolver()
@@ -144,7 +146,7 @@ func useTxnSurfaceContext(app *appstate.App, f txnfilter.Criteria) widgetrender.
 		}
 		return &txntoolbar.Snapshot{Revision: app.Rev(), Scope: txnDerivedScope(app, derivedFilter),
 			Value: deriveTxnScope(app, transactions, derivedFilter, labels, rates, base)}
-	}, app, app.Rev(), derivedFilter, activeImportProfileWorkspaceID(), month)
+	}, revKey(app), derivedFilter, activeImportProfileWorkspaceID(), month)
 	shown := ui.UseMemo(func() []domain.Transaction {
 		rows := txntable.OrderDescriptions(derived.Value.Rows, derivedFilter, resolver.HasLearned, resolver.Resolve)
 		return txntable.VisibleTransfers(rows, derivedFilter, rates)

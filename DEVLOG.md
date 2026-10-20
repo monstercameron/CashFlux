@@ -1,3 +1,7 @@
+## 2026-10-20 - Transaction description and selector reuse
+
+Removed the duplicate screen description rule that could call a nil payee resolver. A native regression checks sort order, fallback labels and input immutability. The transaction surface memo now uses the complete revision context shared with other pages. The complete native and screen WASM suites passed; the existing transaction placement memo remains in place.
+
 ## 2026-10-20 - Native budget allocation picture
 
 Moved the allocation model and its existing tests out of the WASM screen package. Pool, assigned funds, remaining income, overshoot and the shared spending axis retain the same checked integer contract. The native suite now exercises these cases directly, and the 790-screen WASM gate passed. Budget tiles also use the shared keyed surface without changing their method attribute.
