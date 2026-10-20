@@ -60,6 +60,10 @@ func normalizedBackendEndpoint(endpoint string) string {
 	return endpoint
 }
 
+func validateBackendTransport(endpoint string) error {
+	return backendauth.ValidateServerEndpoint(endpoint)
+}
+
 func backendOrigin(endpoint string) string {
 	u, err := url.Parse(normalizedBackendEndpoint(endpoint))
 	if err != nil || u.Scheme == "" || u.Host == "" {
@@ -114,6 +118,10 @@ func backendStatusHint(code int, endpoint string) string {
 
 func testBackendConnection(endpoint string, onDone func(backendauth.Discovery), onError func(string)) {
 	endpoint = normalizedBackendEndpoint(endpoint)
+	if err := backendauth.ValidateServerEndpoint(endpoint); err != nil {
+		onError(err.Error())
+		return
+	}
 	go func() {
 		req, err := http.NewRequest(http.MethodGet, endpoint+"/v1/version", nil)
 		if err != nil {
@@ -207,6 +215,10 @@ func removeOpenAIKeyFromBackend(endpoint, token string, onDone func(), onError f
 
 func startOAuthLogin(endpoint, provider string, onDone func(token, csrf, userID string), onError func(string)) {
 	endpoint = normalizedBackendEndpoint(endpoint)
+	if err := validateBackendTransport(endpoint); err != nil {
+		onError(err.Error())
+		return
+	}
 	provider = strings.TrimSpace(provider)
 	origin := backendOrigin(endpoint)
 	if provider == "" || origin == "" {
@@ -252,6 +264,10 @@ func signOutBackendOAuth(endpoint, token, csrf string, onDone func(error)) {
 		return
 	}
 	endpoint = normalizedBackendEndpoint(endpoint)
+	if err := validateBackendTransport(endpoint); err != nil {
+		onDone(err)
+		return
+	}
 	headers := js.Global().Get("Headers").New()
 	if strings.TrimSpace(token) != "" {
 		headers.Call("set", "Authorization", "Bearer "+strings.TrimSpace(token))
@@ -338,6 +354,10 @@ func openBillingPortal(endpoint, token string, onError func(string)) {
 
 func createBillingSession(endpoint, token, path string, body map[string]string, onError func(string)) {
 	endpoint = normalizedBackendEndpoint(endpoint)
+	if err := validateBackendTransport(endpoint); err != nil {
+		onError(err.Error())
+		return
+	}
 	token = strings.TrimSpace(token)
 	if token == "" {
 		onError("Add a backend token before opening billing.")

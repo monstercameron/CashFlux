@@ -30,7 +30,7 @@ type billingStatus struct {
 func fetchBillingStatus(endpoint, token string, onDone func(billingStatus)) {
 	endpoint = normalizedBackendEndpoint(endpoint)
 	token = strings.TrimSpace(token)
-	if endpoint == "" || token == "" {
+	if endpoint == "" || token == "" || validateBackendTransport(endpoint) != nil {
 		return
 	}
 	go func() {

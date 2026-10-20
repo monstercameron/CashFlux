@@ -295,6 +295,9 @@ func exchangeOAuthCode(ctx context.Context, endpoint, code, verifier, returnTo s
 // sessionHTTP waits for the browser response (including cookie installation).
 // Cancellation settles the fetch before a caller can release the refresh lock.
 func sessionHTTP(ctx context.Context, endpoint, path, token, csrf string, cookies bool, input, output any) error {
+	if err := validateBackendTransport(endpoint); err != nil {
+		return fmt.Errorf("session request: %w", err)
+	}
 	headers := js.Global().Get("Headers").New()
 	headers.Call("set", "Content-Type", "application/json")
 	if token != "" {

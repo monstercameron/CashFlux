@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+
+	"github.com/monstercameron/CashFlux/internal/backendauth"
 )
 
 const refreshCredentialPrefix = "cashflux:cred:refresh:"
@@ -38,6 +40,9 @@ func newRefreshScope(serverID, accountID, endpoint, pageOrigin string) (refreshS
 }
 
 func refreshEndpoint(raw string) (*url.URL, error) {
+	if err := backendauth.ValidateServerEndpoint(raw); err != nil {
+		return nil, fmt.Errorf("session refresh: %w", err)
+	}
 	u, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil || u == nil || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Scheme != "https" && u.Scheme != "http") {
 		return nil, errors.New("session refresh: a valid server address is required")

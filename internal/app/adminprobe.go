@@ -44,7 +44,7 @@ func probeAdminAccess() {
 	// credential it has never issued, and the admin nav then hides itself from
 	// an operator who is in fact signed in.
 	token := strings.TrimSpace(effectiveServerToken(pr))
-	if endpoint == "" || token == "" {
+	if endpoint == "" || token == "" || validateBackendTransport(endpoint) != nil {
 		return
 	}
 	endpoint = normalizedBackendEndpoint(endpoint)
