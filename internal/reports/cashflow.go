@@ -9,6 +9,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/ledger"
+	"github.com/monstercameron/CashFlux/internal/money"
 )
 
 // PeriodFlow is income, expense, and the derived net/savings for one reporting
@@ -49,13 +50,36 @@ func IncomeExpenseSeries(txns []domain.Transaction, bounds []time.Time, rates cu
 	if n < 1 {
 		return nil, nil
 	}
-	out := make([]PeriodFlow, 0, n)
+	out := make([]PeriodFlow, n)
 	for i := 0; i < n; i++ {
-		f, err := IncomeVsExpense(txns, bounds[i], bounds[i+1], rates)
-		if err != nil {
-			return nil, err
+		out[i] = PeriodFlow{Start: bounds[i], End: bounds[i+1]}
+	}
+	err := visitBuckets(netted(txns), bounds, func(i int, t domain.Transaction) error {
+		if t.IsTransfer() || !t.CountsInReports() {
+			return nil
 		}
-		out = append(out, f)
+		conv, err := rates.Convert(t.Amount, rates.Base)
+		if err != nil {
+			return err
+		}
+		switch {
+		case t.IsIncome():
+			total, err := money.New(out[i].Income, rates.Base).Add(conv)
+			if err != nil {
+				return err
+			}
+			out[i].Income = total.Amount
+		case t.IsExpense():
+			total, err := money.New(out[i].Expense, rates.Base).Add(conv.Abs())
+			if err != nil {
+				return err
+			}
+			out[i].Expense = total.Amount
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	return out, nil
 }

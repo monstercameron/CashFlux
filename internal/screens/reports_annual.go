@@ -13,8 +13,6 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
-	"github.com/monstercameron/CashFlux/internal/budgeting"
-	"github.com/monstercameron/CashFlux/internal/credithealth"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
@@ -28,13 +26,12 @@ import (
 	"github.com/monstercameron/CashFlux/internal/period"
 	"github.com/monstercameron/CashFlux/internal/provenance"
 	"github.com/monstercameron/CashFlux/internal/reports"
-	"github.com/monstercameron/CashFlux/internal/safespend"
+	"github.com/monstercameron/CashFlux/internal/reportview"
 	"github.com/monstercameron/CashFlux/internal/scope"
 	"github.com/monstercameron/CashFlux/internal/subscriptions"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/CashFlux/internal/vitals"
 	"github.com/monstercameron/GoWebComponents/v5/css"
 	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/v5/router"
@@ -87,10 +84,6 @@ func Reports() ui.Node {
 	accounts := app.Accounts()
 
 	sc := scope.Merge(lensScope, scopeAtom.Get())
-	instOf := func(a domain.Account) string { return a.Institution }
-	scopeIDs := scope.ResolveScope(accounts, sc, instOf)
-	scopedTxns := scope.ApplyScopeToTxns(txns, scopeIDs)
-	budgetLedger := budgeting.NettedLedger(scope.ApplyScopeToTxns(budgetLedgerForApp(app), scopeIDs))
 
 	// When any scope narrows the report, every section that deliberately stays
 	// household-wide (a balance sheet, health factors, goals, budget limits)
@@ -129,6 +122,19 @@ func Reports() ui.Node {
 		ps, pe = cmpSpan.Start, cmpSpan.End
 	}
 	lastMonth = primarySpan.LastMonth()
+
+	// One explicit scope/window model feeds the charts and headline. Its
+	// separate household flows keep household position figures consistent with
+	// their cash, debt and essentials, even while the activity report is scoped.
+	bounds := make([]time.Time, 0, months+1)
+	for k := 0; k <= months; k++ {
+		bounds = append(bounds, dateutil.AddMonths(as, k))
+	}
+	review := ui.UseMemo(func() reportview.Series {
+		return reportview.BuildSeries(accounts, txns, sc, bounds, rates)
+	}, revKey(app), as.Unix(), ae.Unix(), fmt.Sprintf("%#v", sc))
+	scopedTxns := review.Transactions
+	scopedAccounts := review.Accounts
 
 	// Reading-posture toggles (persisted): rollup + YoY drive the category review.
 	cfg := uistate.ReportsConfigGet()
@@ -186,7 +192,7 @@ func Reports() ui.Node {
 	})
 
 	// ── Year computations (all pure-core calls over [as, ae)). ────────────────
-	flow, _ := reports.IncomeVsExpense(scopedTxns, as, ae, rates)
+	flow := review.Flow
 	rows, _ := reports.SpendingByCategory(scopedTxns, as, ae, true, ps, pe, rates)
 	cats := app.Categories()
 	if rollupCats.Get() {
@@ -205,13 +211,8 @@ func Reports() ui.Node {
 	fmtMinor := func(v int64) string { return fmtMoney(money.New(v, base)) }
 	decimals := currency.Decimals(base)
 
-	// Monthly bounds → the per-month flows, savings-rate + category trend series.
-	bounds := make([]time.Time, 0, months+1)
-	for k := 0; k <= months; k++ {
-		bounds = append(bounds, dateutil.AddMonths(as, k))
-	}
-	monthFlows, _ := reports.IncomeExpenseSeries(scopedTxns, bounds, rates)
-	srInts, _ := reports.SavingsRateSeries(scopedTxns, bounds, rates)
+	// Savings reuses the exact cash-flow buckets; it never scans the ledger again.
+	monthFlows, srInts := review.MonthFlows, review.SavingsRates
 	catTrends, _ := reports.CategoryTrends(scopedTxns, bounds, rates)
 	trendByCat := make(map[string][]int64, len(catTrends))
 	for _, tr := range catTrends {
@@ -237,16 +238,6 @@ func Reports() ui.Node {
 	// scoped income/spending beside an unscoped $152k net worth read as a broken
 	// filter). The scope resolves to account IDs, so filter the accounts and use
 	// the already-scoped transactions for the series and the level.
-	inScope := make(map[string]bool, len(scopeIDs))
-	for _, id := range scopeIDs {
-		inScope[id] = true
-	}
-	scopedAccounts := make([]domain.Account, 0, len(accounts))
-	for _, a := range accounts {
-		if inScope[a.ID] {
-			scopedAccounts = append(scopedAccounts, a)
-		}
-	}
 	nwBounds := append([]time.Time{}, bounds...)
 	nwSeries, _ := ledger.NetWorthSeries(scopedAccounts, scopedTxns, nwBounds, rates)
 	nwNet, _, _, _ := ledger.NetWorth(scopedAccounts, scopedTxns, rates)
@@ -258,47 +249,14 @@ func Reports() ui.Node {
 	// Health: the deterministic score + factors + prioritized steps.
 	health := healthscore.Evaluate(liveHealthInputs(app, time.Now()))
 
-	// Credit proxy score at each month end (bounds[1..N] are the month-end
-	// cutoffs; transactions strictly before each cutoff count, mirroring
-	// NetWorthSeries). Scoped like net worth (QA CF-01): a report narrowed to
-	// accounts with no cards simply omits the credit section.
-	var creditSeries []int
-	hasCards := false
-	for _, a := range scopedAccounts {
-		if a.Type == domain.TypeCreditCard && !a.Archived {
-			hasCards = true
-			break
-		}
-	}
-	if hasCards {
-		for k := 1; k < len(bounds); k++ {
-			cutoff := bounds[k]
-			upto := make([]domain.Transaction, 0, len(scopedTxns))
-			for _, t := range scopedTxns {
-				if t.Date.Before(cutoff) {
-					upto = append(upto, t)
-				}
-			}
-			balances := make(map[string]int64, 4)
-			for _, a := range scopedAccounts {
-				if a.Type != domain.TypeCreditCard || a.Archived {
-					continue
-				}
-				if bal, err := ledger.Balance(a, upto); err == nil {
-					balances[a.ID] = bal.Amount
-				}
-			}
-			cr := credithealth.Evaluate(credithealth.Inputs{Accounts: scopedAccounts, Balances: balances, Transactions: upto, Now: cutoff})
-			creditSeries = append(creditSeries, cr.ProxyScore)
-		}
-	}
+	creditSeries := review.Credit
 
 	// The year's fee + interest charges ("money that bought nothing", §07).
 	costs, _ := reports.CostOfMoney(scopedTxns, cats, as, ae, rates)
 
 	// Runway (liquid ÷ 6-month burn) for the strengths/problems split. Scoped
 	// like net worth — an account-scoped report must not count cash the scope
-	// excluded (the vitals section keeps its own household-wide liquidAll).
+	// excluded (the vitals section keeps its own household-wide position model).
 	liquid, _ := ledger.LiquidBalance(scopedAccounts, scopedTxns, rates)
 	burn := reports.AverageMonthlyExpense(lastN(monthFlows, 6))
 	runway := reports.EstimateRunway(liquid.Amount, burn)
@@ -382,48 +340,12 @@ func Reports() ui.Node {
 	// (a balance sheet has no scope). Trailing 6-month averages feed the
 	// capacity figures; the essential-month basis and debt list feed the rest.
 	// All judgment lives in the pure internal/vitals core.
-	vitFlows := lastN(monthFlows, 6)
 	essBasis := buildSmartInput(app, pr.WeekStartWeekday()).EssentialBasis()
-	toBaseVit := safespend.ToBaseFunc(rates)
-	liquidAll, _ := ledger.LiquidBalance(accounts, txns, rates)
-	var vitDebts []vitals.Debt
-	vitCards := vitals.Cards{}
-	for _, a := range accounts {
-		if a.Archived || a.Class != domain.ClassLiability {
-			continue
-		}
-		bal, err := ledger.Balance(a, txns)
-		if err != nil {
-			continue
-		}
-		mag := absMinor(toBaseVit(bal.Amount, bal.Currency))
-		if a.Type == domain.TypeCreditCard {
-			vitCards.HasCards = true
-			vitCards.BalanceMinor += mag
-			vitCards.LimitMinor += toBaseVit(a.CreditLimit.Amount, a.CreditLimit.Currency)
-		}
-		if mag == 0 && a.MinPayment.Amount == 0 {
-			continue
-		}
-		vitDebts = append(vitDebts, vitals.Debt{
-			Name:            a.Name,
-			BalanceMinor:    mag,
-			AprPercent:      a.RateAPROrZero(),
-			MinPaymentMinor: toBaseVit(a.MinPayment.Amount, a.MinPayment.Currency),
-			IsMortgage:      a.Type == domain.TypeMortgage,
-			InPayoff:        a.IncludedInPayoff(),
-		})
-	}
-	vt := vitals.Evaluate(vitals.Inputs{
-		IncomeMonthlyMinor:    reports.AverageMonthlyIncome(vitFlows),
-		ExpenseMonthlyMinor:   reports.AverageMonthlyExpense(vitFlows),
-		MonthsAveraged:        reports.ActiveMonths(vitFlows),
-		EssentialMonthlyMinor: essBasis.EssentialMonthlyMinor(),
-		LiquidMinor:           liquidAll.Amount,
-		Debts:                 vitDebts,
-		Cards:                 vitCards,
-	})
-	standSec := rptaVitalsSection(vt, reports.ActiveMonths(vitFlows), essBasis.FixedMonthlyMinor, essBasis.EssentialSpendMonthlyMinor, fmtMinor, hhChip("rpta.hhChipTitle"))
+	position := ui.UseMemo(func() reportview.Position {
+		return reportview.BuildPosition(accounts, txns, review.HouseholdFlows, rates, essBasis.EssentialMonthlyMinor())
+	}, revKey(app), as.Unix(), ae.Unix(), essBasis.EssentialMonthlyMinor())
+	vt := position.Vitals
+	standSec := rptaVitalsSection(vt, position.MonthsAveraged, essBasis.FixedMonthlyMinor, essBasis.EssentialSpendMonthlyMinor, fmtMinor, hhChip("rpta.hhChipTitle"))
 
 	// Uncategorized share of spend (data hygiene).
 	var uncatMinor int64
@@ -438,33 +360,9 @@ func Reports() ui.Node {
 		uncatPct = uncatMinor * 100 / flow.Expense
 	}
 
-	// Debt drag: interest-bearing liabilities with estimated annual interest.
-	type debtRow struct {
-		name         string
-		balance      money.Money
-		apr          float64
-		estYearMinor int64
-		minimum      money.Money
-	}
-	var debts []debtRow
-	var debtInterestTotal int64
-	for _, a := range accounts {
-		// The interest table costs money to be in: a debt at a recorded 0%, or one
-		// with no rate on file, owes nothing this table can state (WF4-b).
-		rate, known := a.RateAPR()
-		if a.Archived || a.Class != domain.ClassLiability || !known || rate <= 0 {
-			continue
-		}
-		bal, _ := ledger.Balance(a, txns)
-		ab := absMinor(bal.Amount)
-		if ab == 0 {
-			continue
-		}
-		est := int64(float64(ab) * rate / 100)
-		debts = append(debts, debtRow{name: a.Name, balance: bal, apr: rate, estYearMinor: est, minimum: a.MinPayment})
-		debtInterestTotal += est
-	}
-	sort.SliceStable(debts, func(i, j int) bool { return debts[i].apr > debts[j].apr })
+	// Native balances retain their own currency; the cost column, bars and total
+	// all use base-currency interest computed in the shared position model.
+	debts, debtInterestTotal := position.Debts, position.AnnualInterestMinor
 
 	// CountUp on the masthead figures.
 	heroSig := fmt.Sprintf("%d|%d|%d", flow.Net(), flow.Income, flow.Expense)
@@ -731,10 +629,10 @@ func Reports() ui.Node {
 	if noSpendDays > 0 {
 		wins = append(wins, rptaWin(uistate.T("rpta.winNoSpend", noSpendDays)))
 	}
-	if bestIdx := bestSavingsMonth(monthFlows); bestIdx >= 0 {
+	if bestIdx := reports.BestSavingsMonth(monthFlows); bestIdx >= 0 {
 		wins = append(wins, rptaWin(uistate.T("rpta.winBestMonth", bounds[bestIdx].Format("January"), fmtMinor(monthFlows[bestIdx].Net()))))
 	}
-	for i, r := range topCuts(rows, 3) {
+	for i, r := range reports.TopSpendingCuts(rows, 5000, 3) {
 		_ = i
 		wins = append(wins, rptaWin(uistate.T("rpta.winCut", nameOf(r.CategoryID), fmtMinor(r.Prior-r.Amount))))
 	}
@@ -1334,16 +1232,7 @@ func Reports() ui.Node {
 		}
 		state := goalsvc.Classify(g, tasks, nowT)
 		covPct := goalsvc.CoveragePercent(g)
-		savedPct := 0
-		if g.TargetAmount.Amount > 0 {
-			savedPct = int(g.CurrentAmount.Amount * 100 / g.TargetAmount.Amount)
-			if savedPct > 100 {
-				savedPct = 100
-			}
-			if savedPct < 0 {
-				savedPct = 0
-			}
-		}
+		savedPct := goalsvc.Percent(g)
 		tone, chipKey := "", "rpta.goalStateCurrent"
 		barColor := rptaToneUp
 		switch state {
@@ -1386,66 +1275,29 @@ func Reports() ui.Node {
 	}
 
 	// ── 07 · Budget adherence: month-by-month cells per budget. ──────────────
-	periodsPerYear := func(p domain.Period) int64 {
-		switch p {
-		case domain.PeriodWeekly:
-			return 52
-		case domain.PeriodBiweekly:
-			return 26
-		case domain.PeriodSemimonthly:
-			return 24
-		case domain.PeriodQuarterly:
-			return 4
-		case domain.PeriodYearly:
-			return 1
-		default:
-			return 12
-		}
-	}
-	budgets := app.Budgets()
+	adherence := ui.UseMemo(func() reportview.BudgetAdherence {
+		model, _ := reportview.BuildBudgetAdherence(app.Budgets(), budgetLedgerForApp(app), bounds, rates)
+		return model
+	}, revKey(app), as.Unix(), ae.Unix())
 	var budgetRows []ui.Node
-	budgetsClean := 0
-	budgetsCounted := 0
-	for _, bg := range budgets {
-		limConv, err := rates.Convert(bg.Limit, rates.Base)
-		if err != nil || limConv.Amount <= 0 {
-			continue
-		}
-		limit := limConv.Amount
+	for _, row := range adherence.Rows {
+		bg := row.Budget
 		name := bg.Name
 		if name == "" {
 			name = catName[bg.CategoryID]
 		}
-		budgetsCounted++
-		if bg.Period == domain.PeriodMonthly || bg.Period == "" {
+		if len(row.Months) > 0 {
 			var cells []ui.Node
-			over := 0
-			for k := 0; k+1 < len(bounds) && k < 12; k++ {
-				sp, err := budgeting.Spent(bg, budgetLedger, bounds[k], bounds[k+1], rates)
-				if err != nil {
-					continue
+			for _, month := range row.Months {
+				state := string(month.State)
+				if month.State == reportview.AdherenceWithin {
+					state = "under"
 				}
-				spent := sp.Amount
-				cls := "rpta-bud-cell "
-				switch {
-				case spent == 0:
-					cls += "rpta-bud-quiet"
-				case spent <= limit:
-					cls += "rpta-bud-under"
-				case spent <= limit+limit/10:
-					cls += "rpta-bud-near"
-				default:
-					cls += "rpta-bud-over"
-					over++
-				}
-				cells = append(cells, Span(ClassStr(cls), Title(bounds[k].Format("Jan")+": "+fmtMinor(spent)+" / "+fmtMinor(limit))))
-			}
-			if over == 0 {
-				budgetsClean++
+				cells = append(cells, Span(ClassStr("rpta-bud-cell rpta-bud-"+state), Title(month.Start.Format("Jan")+": "+fmtMinor(month.Spent)+" / "+fmtMinor(row.Limit))))
 			}
 			verdictCls, verdictTxt := "rpta-tone-up", uistate.T("rpta.budWithin")
-			if over > 0 {
-				verdictCls, verdictTxt = "rpta-tone-down", uistate.T("rpta.budMonthsOver", over)
+			if row.MonthsOver > 0 {
+				verdictCls, verdictTxt = "rpta-tone-down", uistate.T("rpta.budMonthsOver", row.MonthsOver)
 			}
 			budgetRows = append(budgetRows, Div(css.Class("rpta-bud-row"), Attr("data-testid", "rpta-bud-row"),
 				Span(css.Class("rpta-bud-name"), name),
@@ -1453,32 +1305,17 @@ func Reports() ui.Node {
 				Span(ClassStr("rpta-bud-verdict "+verdictCls), verdictTxt),
 			))
 		} else {
-			yearCap := limit * periodsPerYear(bg.Period)
-			sp, err := budgeting.Spent(bg, budgetLedger, as, ae, rates)
-			if err != nil {
-				continue
-			}
-			spent := sp.Amount
 			tone := rptaToneUp
 			verdictCls, verdictTxt := "rpta-tone-up", uistate.T("rpta.budWithin")
-			switch {
-			case spent > yearCap+yearCap/10:
-				tone, verdictCls, verdictTxt = rptaToneDown, "rpta-tone-down", uistate.T("rpta.budOverYear", fmtMinor(spent-yearCap))
-			case spent > yearCap:
-				tone, verdictCls, verdictTxt = rptaToneWarn, "rpta-tone-warn", uistate.T("rpta.budOverYear", fmtMinor(spent-yearCap))
-			default:
-				budgetsClean++
-			}
-			pct := int64(0)
-			if yearCap > 0 {
-				pct = spent * 100 / yearCap
-				if pct > 100 {
-					pct = 100
-				}
+			switch row.AnnualState {
+			case reportview.AdherenceOver:
+				tone, verdictCls, verdictTxt = rptaToneDown, "rpta-tone-down", uistate.T("rpta.budOverYear", fmtMinor(row.AnnualOver))
+			case reportview.AdherenceNear:
+				tone, verdictCls, verdictTxt = rptaToneWarn, "rpta-tone-warn", uistate.T("rpta.budOverYear", fmtMinor(row.AnnualOver))
 			}
 			budgetRows = append(budgetRows, Div(css.Class("rpta-bud-row"), Attr("data-testid", "rpta-bud-row"),
 				Span(css.Class("rpta-bud-name"), name+" "+uistate.T("rpta.budAnnualized", string(bg.Period))),
-				Div(css.Class("rpta-hist-track"), Div(css.Class("rpta-hist-fill"), Style(map[string]string{"width": fmt.Sprintf("%d%%", pct), "background": tone}))),
+				Div(css.Class("rpta-hist-track"), Div(css.Class("rpta-hist-fill"), Style(map[string]string{"width": fmt.Sprintf("%d%%", row.AnnualPercent), "background": tone}))),
 				Span(ClassStr("rpta-bud-verdict "+verdictCls), verdictTxt),
 			))
 		}
@@ -1493,7 +1330,7 @@ func Reports() ui.Node {
 		Div(css.Class("rpta-bud-cells"), budMonthCells),
 		Span(css.Class("rpta-bud-verdict")),
 	)
-	askBudgets := uistate.T("rpta.budgetsSummary", budgetsClean, budgetsCounted)
+	askBudgets := uistate.T("rpta.budgetsSummary", adherence.Clean, adherence.Counted)
 	budgetsSec := Fragment()
 	if len(budgetRows) > 0 {
 		budgetsSec = rptaSectionWithAction("rpta-07", "07", uistate.T("rpta.secBudgets"), "neutral", uistate.T("rpta.secBudgetsSub"), askBudgets, hhChip("rpta.hhChipBudgetsTitle"), Fragment(
@@ -1526,10 +1363,10 @@ func Reports() ui.Node {
 	}
 	var subsAnnual int64
 	for _, s := range liveSubs {
-		subsAnnual += annualizeSub(s)
+		subsAnnual += s.AnnualAmount()
 	}
 	var subNodes []ui.Node
-	sort.SliceStable(liveSubs, func(i, j int) bool { return annualizeSub(liveSubs[i]) > annualizeSub(liveSubs[j]) })
+	sort.SliceStable(liveSubs, func(i, j int) bool { return liveSubs[i].AnnualAmount() > liveSubs[j].AnnualAmount() })
 	for i, s := range liveSubs {
 		if i >= 8 {
 			break
@@ -1537,7 +1374,7 @@ func Reports() ui.Node {
 		subNodes = append(subNodes, Div(css.Class("rpta-watch-row"),
 			Span(css.Class("rpta-watch-name"), s.Name),
 			Span(css.Class("rpta-muted"), string(s.Cadence)),
-			Span(css.Class("rpta-watch-amt"), uistate.T("rpta.perYear", fmtMinor(annualizeSub(s)))),
+			Span(css.Class("rpta-watch-amt"), uistate.T("rpta.perYear", fmtMinor(s.AnnualAmount()))),
 		))
 	}
 	var riseNodes []ui.Node
@@ -1565,26 +1402,26 @@ func Reports() ui.Node {
 	// ── 07 · Problem spots. ───────────────────────────────────────────────────
 	var maxDebtInterest int64
 	for _, d := range debts {
-		if d.estYearMinor > maxDebtInterest {
-			maxDebtInterest = d.estYearMinor
+		if d.AnnualInterestMinor > maxDebtInterest {
+			maxDebtInterest = d.AnnualInterestMinor
 		}
 	}
 	var debtRowNodes []ui.Node
 	for _, d := range debts {
 		minStr := "—"
-		if d.minimum.Amount > 0 {
-			minStr = fmtMoney(d.minimum)
+		if d.Minimum.Amount > 0 {
+			minStr = fmtMoney(d.Minimum)
 		}
 		var dragBar ui.Node = Fragment()
 		if maxDebtInterest > 0 {
 			dragBar = Div(css.Class("rpta-bar-red"), Attr("aria-hidden", "true"),
-				Div(css.Class("rpta-bar-red-fill"), Style(map[string]string{"width": fmt.Sprintf("%d%%", d.estYearMinor*100/maxDebtInterest)})))
+				Div(css.Class("rpta-bar-red-fill"), Style(map[string]string{"width": fmt.Sprintf("%d%%", d.AnnualInterestMinor*100/maxDebtInterest)})))
 		}
 		debtRowNodes = append(debtRowNodes, Tr(
-			Td(css.Class("rpta-td-name"), d.name),
-			Td(css.Class("rpta-td-num"), fmtMoney(d.balance.Abs())),
-			Td(css.Class("rpta-td-num"), fmt.Sprintf("%.1f%%", d.apr)),
-			Td(css.Class("rpta-td-num", "rpta-tone-down"), fmtMinor(d.estYearMinor), dragBar),
+			Td(css.Class("rpta-td-name"), d.Name),
+			Td(css.Class("rpta-td-num"), fmtMoney(d.Balance.Abs())),
+			Td(css.Class("rpta-td-num"), fmt.Sprintf("%.1f%%", d.APR)),
+			Td(css.Class("rpta-td-num", "rpta-tone-down"), fmtMinor(d.AnnualInterestMinor), dragBar),
 			Td(css.Class("rpta-td-num"), minStr),
 		))
 	}
@@ -1712,8 +1549,8 @@ func Reports() ui.Node {
 	if len(debts) > 0 {
 		d := debts[0]
 		addPlan(
-			uistate.T("rpta.planDebt", d.name, fmt.Sprintf("%.1f%%", d.apr)),
-			uistate.T("rpta.planDebtDetail", fmtMinor(int64(d.apr*1000))),
+			uistate.T("rpta.planDebt", d.Name, fmt.Sprintf("%.1f%%", d.APR)),
+			uistate.T("rpta.planDebtDetail", fmtMinor(int64(d.APR*1000))),
 			"/debt", uistate.T("nav.debt"))
 	}
 	if costs.FeeTotal >= 2500 { // $25+/yr in fees is worth a line in the plan
@@ -1828,10 +1665,7 @@ func Reports() ui.Node {
 	for _, m := range nwSeries {
 		sumNWSeries = append(sumNWSeries, m.Amount)
 	}
-	var totalDebtMinor int64
-	for _, d := range vitDebts {
-		totalDebtMinor += d.BalanceMinor
-	}
+	totalDebtMinor := vt.TotalDebtMinor
 	trendItem := func(label, value, sub, tone string, series []int64) ui.Node {
 		valCls := "rpta-sum-trend-val " + tw.Fold(tw.FontDisplay)
 		if tone != "" {
@@ -1957,46 +1791,6 @@ func lastN(flows []reports.PeriodFlow, n int) []reports.PeriodFlow {
 		return flows
 	}
 	return flows[len(flows)-n:]
-}
-
-// annualizeSub converts a detected subscription's typical charge to a yearly cost.
-func annualizeSub(s subscriptions.Subscription) int64 {
-	switch s.Cadence {
-	case subscriptions.CadenceWeekly:
-		return s.Amount * 52
-	case subscriptions.CadenceYearly:
-		return s.Amount
-	default:
-		return s.Amount * 12
-	}
-}
-
-// bestSavingsMonth returns the index of the month with the highest positive net,
-// or -1 when no month saved anything.
-func bestSavingsMonth(flows []reports.PeriodFlow) int {
-	best, idx := int64(0), -1
-	for i, f := range flows {
-		if n := f.Net(); n > best {
-			best, idx = n, i
-		}
-	}
-	return idx
-}
-
-// topCuts returns up to n categories with the largest year-over-year spending
-// DECREASE (Prior − Amount), the wins the strengths section celebrates.
-func topCuts(rows []reports.CategorySpend, n int) []reports.CategorySpend {
-	var cuts []reports.CategorySpend
-	for _, r := range rows {
-		if r.HasDelta && r.Prior > r.Amount && r.Prior-r.Amount > 5000 {
-			cuts = append(cuts, r)
-		}
-	}
-	sort.SliceStable(cuts, func(i, j int) bool { return cuts[i].Prior-cuts[i].Amount > cuts[j].Prior-cuts[j].Amount })
-	if len(cuts) > n {
-		cuts = cuts[:n]
-	}
-	return cuts
 }
 
 // rptaToneFor maps a signed amount to a tone suffix.

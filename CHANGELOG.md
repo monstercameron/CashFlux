@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Report time series share one monthly ledger traversal. Native report models prepare scoped series, household financial position and budget adherence with consistent FX units and checked totals.
 - Assistant briefing, starter questions and purchase attribution use native projections and complete data/scope/time memo keys. Chat typing reuses ledger facts, and partially uncategorized split receipts count once.
 - Transaction description sorting uses the same native display rule as ledger rows, including a safe raw-label fallback, and account/category indexes refresh only when their data context changes.
 - Budget income allocation delegates checked money arithmetic, state selection and chart percentages to the native budgeting package; the page retains formatting and event handling.

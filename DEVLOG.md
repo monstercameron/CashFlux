@@ -1,3 +1,7 @@
+## 2026-10-20 - Report series and position models
+
+Replaced repeated per-month scans with reusable buckets while retaining repeated/nonascending-bound fallback semantics. Report position arithmetic and adherence moved from markup into native models. Household vitals use household flows even when activity is scoped; debt interest converts to base, and failed budget evaluations no longer count as clean. Native parity tests cover splits, refunds, transfers, exclusions, window order, missing FX and overflow. The native suite and 790-screen WASM suite passed. Browser latency results are recorded separately and do not imply every report interaction improved.
+
 ## 2026-10-20 - Native Assistant facts and scoped memoization
 
 Extracted briefing/trend/question facts and anomaly purchase attribution from screen markup, using checked money comparisons and explicit FX handling. Shared anomaly caching now takes the actual app and an unambiguous account scope; nil apps bypass caching and callers receive defensive copies. Dashboard callers pass their context explicitly. Native edge/parity tests and WASM app/FX/scope/calendar invalidation tests passed in the full native and 790-screen suites.
