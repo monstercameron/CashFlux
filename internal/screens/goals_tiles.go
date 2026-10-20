@@ -7,6 +7,7 @@ package screens
 import (
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -14,7 +15,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/icon"
-	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/smart"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -49,19 +49,9 @@ func goalSummaryWidget(props goalSummaryProps) ui.Node {
 	// "Funded so far" is the money working toward goals — saved contributions PLUS
 	// reserved set-asides — with the split shown below so it never contradicts the
 	// per-card saved/set-aside legend (#5).
-	funded := money.New(saved.Amount+setAside.Amount, v.Base)
+	funded := v.FundedTotal
 	target := v.TargetTotal
-	left := money.New(target.Amount-saved.Amount, v.Base)
-	if left.Amount < 0 {
-		left = money.New(0, v.Base)
-	}
 	fillW := v.OverallPct
-	if fillW > 100 {
-		fillW = 100
-	}
-	if fillW < 0 {
-		fillW = 0
-	}
 	// Progress semantics live on the childless FILL bar, not the wrapper — the
 	// wrapper contains focusable descendants (the smart tooltip), and a labeled
 	// role wrapping interactive children fails axe nested-interactive (#67).
@@ -96,6 +86,9 @@ func goalSummaryWidget(props goalSummaryProps) ui.Node {
 		// against "Total target" (2026-07-18 assessment: users had to
 		// reverse-engineer which cards contribute).
 		fundScopeNote(app, v),
+		If(len(v.ExcludedCurrencies) > 0,
+			P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "goal-summary-excluded-currencies"),
+				uistate.T("goals.summaryExcludedCurrencies", strings.Join(v.ExcludedCurrencies, ", ")))),
 		// C400: the saved-vs-set-aside distinction, stated once at page level.
 		//
 		// Each card carries a legend, but a reader meeting the surface for the
@@ -136,8 +129,8 @@ func goalToolbarWidget(props goalToolbarProps) ui.Node {
 	}
 	// A tab strip (Goals · Earmarks) + a "Sort by" picker (goals view only) on the left, the
 	// primary "Add goal" pushed to the right.
-	toolbar := Div(css.Class("filter-strip"),
-		Div(css.Class("filter-strip-controls"),
+	toolbar := uiw.ControlStrip(uiw.ControlStripProps{
+		Controls: []ui.Node{
 			Div(css.Class("goals-tabs"), Attr("role", "tablist"),
 				Button(ClassStr(goalsActive), Type("button"), Attr("role", "tab"), Attr("data-testid", "goals-tab-goals"),
 					Attr("aria-selected", ariaBool(view == uistate.GoalsViewGoals)), OnClick(showGoals), uistate.T("goals.viewGoals")),
@@ -158,8 +151,9 @@ func goalToolbarWidget(props goalToolbarProps) ui.Node {
 					Option(Value(uistate.GoalSortPriority), SelectedIf(sortVal == uistate.GoalSortPriority), uistate.T("goals.sortPriority")),
 				),
 			)),
-		),
-		Div(css.Class(tw.InlineFlex, tw.ItemsCenter, tw.Gap2),
+		},
+		ActionsClass: tw.Fold(tw.InlineFlex, tw.ItemsCenter, tw.Gap2),
+		Actions: []ui.Node{
 			// Goal-vs-goal comparison (flip modal): pick two goals, read the figures
 			// side by side.
 			Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "goals-compare-btn"),
@@ -171,8 +165,8 @@ func goalToolbarWidget(props goalToolbarProps) ui.Node {
 				Attr("data-testid", "goals-add"), Title(uistate.T("goals.add")), OnClick(addGoal),
 				uiw.Icon(icon.Plus, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
 				Span(uistate.T("goals.addGoal"))),
-		),
-	)
+		},
+	})
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "goal-toolbar", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
 		Body: toolbar,
@@ -307,7 +301,7 @@ func goalListWidget(props goalListProps) ui.Node {
 			}
 		})
 	}
-	overbooked := overbookedGoals(app)
+	overbooked := v.Overbooked
 	rowForU := func(g domain.Goal, fundSetAside int64, catName string, urgency goalsvc.PlanUrgency) ui.Node {
 		return ui.CreateElement(GoalRow, goalRowProps{
 			Goal: g, Accounts: v.Accounts, Members: v.Members, Tasks: v.Tasks,
@@ -334,7 +328,7 @@ func goalListWidget(props goalListProps) ui.Node {
 	// pulled up out of the active and sinking-fund lists — lead the page so the
 	// actionable items are in the first viewport instead of sitting below healthy
 	// funds. This ONLY reorders: each card is the same GoalRow with the same pace
-	// badge and reason; the verdicts come straight from v.Health (computeGoalHealth),
+	// badge and reason; the verdicts come straight from v.Health (goalview.Health),
 	// never recomputed. Pulled goals are filtered OUT of the healthy sections below so
 	// nothing renders twice.
 	type planEntry struct {

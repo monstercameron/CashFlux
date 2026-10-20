@@ -1,3 +1,7 @@
+## 2026-10-20 - Native goal summaries and ordering
+
+Extracted goal partitioning, sorting, health and headline arithmetic into goalview. Indexed task progress avoids repeated scans while sorting. Checked allocation sums report overflow, and overall progress uses converted values instead of adding unlike currencies. Tests cover ownership, stale cache contexts, sorting, rounding, missing rates and transition clocks. Native tests and the full screen WASM lane passed, including the rendered summary changing after a browser data revision.
+
 ## 2026-10-20 - Indexed account page projections
 
 Moved account partitioning, risk ordering and group arithmetic into the native accountview package. The snapshot reuses the app transaction index and is invalidated by app/data revisions. Native parity and edge tests cover balance errors, ownership, liability signs, stable order and FX omissions; WASM regressions cover snapshot refresh and the visible exclusion note. The complete native suite and 790-screen WASM suite passed with these changes. Browser journeys and matched latency measurements remain in progress.

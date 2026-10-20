@@ -6,15 +6,13 @@ package screens
 
 import (
 	"fmt"
-	"sort"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
-	"github.com/monstercameron/CashFlux/internal/cashflow"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
-	"github.com/monstercameron/CashFlux/internal/ledger"
+	"github.com/monstercameron/CashFlux/internal/goalview"
 	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -22,169 +20,41 @@ import (
 	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
 
-// goalView is the shared computed picture of the goals surface — the owner-scoped,
-// partitioned, sorted goal lists plus the headline totals. Both the summary and the
-// list tiles compute it, mirroring computeBudgetView on /budgets.
-type goalView struct {
-	Base        string
-	Accounts    []domain.Account
-	Members     []domain.Member
-	Categories  []domain.Category
-	Tasks       []domain.Task // for checklist-goal progress (linked to-do counts)
-	All         []domain.Goal // owner-visible goals (all sections)
-	Active      []domain.Goal // non-archived, non-fund, not missed; sorted most-actionable first
-	Missed      []domain.Goal // dated goals whose deadline passed unreached (Classify=missed); longest-missed first
-	Fund        []domain.Goal // sinking funds; alphabetical
-	Achieved    []domain.Goal // archived; alphabetical
-	SavedTotal  money.Money   // Σ saved contributions across active goals (base currency)
-	SetAsideMin money.Money   // Σ reserved set-asides (earmarks) across active goals (base currency)
-	TargetTotal money.Money   // Σ target across active goals (base currency)
-	OverallPct  int           // combined saved/target percent across active goals
-	// Health is the shared pace verdict per goal id (On track / Watch / At risk) plus
-	// the figures behind it, computed from required-contribution vs. available monthly
-	// cash — the SAME model the Smart assistant uses, so the card badge and Smart never
-	// contradict. Only deadlined, fundable goals appear; absent = HealthNone (no badge).
-	Health map[string]goalPace
-}
+// goalView is prepared by the native goalview package and shared by page tiles.
+type goalView = goalview.View
+type goalPace = goalview.Pace
 
-// goalViewCache memoizes computeGoalView by store revision + active member (the only
-// input beyond stored data), so the goals surface's tiles share one aggregation.
-var goalViewCache = newViewCache[goalView]()
+// Each model retains the full task/account snapshots, so keep only the current
+// context rather than retaining those backing arrays across eight revisions.
+var goalViewCache = newViewCache[goalView](1)
 
-// computeGoalView assembles the goalView for the active member view (memoized).
+// computeGoalView shares one immutable picture per store revision/member/day.
 func computeGoalView(app *appstate.App, activeMemberID string) goalView {
-	return memoByRev(goalViewCache, revKey(app)+"|"+activeMemberID, func() goalView {
-		return computeGoalViewRaw(app, activeMemberID)
+	now := time.Now()
+	return memoByRev(goalViewCache, revKey(app)+"|"+activeMemberID+"|"+goalview.TimeKey(app.Goals(), now), func() goalView {
+		return computeGoalViewAt(app, activeMemberID, now)
 	})
 }
 
-// computeGoalViewRaw assembles the goalView for the active member view: owner-scoped,
-// partitioned into active / sinking-fund / achieved, sorted, with the headline totals.
-// Pure aggregation over the internal/goals package (no hooks, no mutation).
-func computeGoalViewRaw(app *appstate.App, activeMemberID string) goalView {
-	base := app.Settings().BaseCurrency
+func computeGoalViewAt(app *appstate.App, activeMemberID string, now time.Time) goalView {
+	settings := app.Settings()
+	base := settings.BaseCurrency
 	if base == "" {
 		base = "USD"
 	}
-	v := goalView{Base: base, Accounts: app.Accounts(), Members: app.Members(), Categories: app.Categories(), Tasks: app.Tasks()}
-	for _, g := range app.Goals() {
-		if ownerVisibleTo(g.OwnerID, activeMemberID) {
-			v.All = append(v.All, g)
-		}
-	}
-	now := time.Now()
-	for _, g := range v.All {
-		switch {
-		case g.Archived:
-			v.Achieved = append(v.Achieved, g)
-		case g.IsSinkingFund:
-			v.Fund = append(v.Fund, g)
-		case goalsvc.Classify(g, v.Tasks, now) == goalsvc.StateMissed:
-			// A dated goal whose deadline passed unreached gets its own section — the
-			// dashboard widget counts these, so the page must be able to SHOW them.
-			v.Missed = append(v.Missed, g)
-		default:
-			v.Active = append(v.Active, g)
-		}
-	}
-	// Active: most actionable first (nearest date → highest %); missed: longest-missed
-	// first (the most overdue decision leads); funds/achieved: alpha.
-	sort.SliceStable(v.Active, func(i, j int) bool { return goalsvc.LessForList(v.Active[i], v.Active[j]) })
-	sort.SliceStable(v.Missed, func(i, j int) bool { return v.Missed[i].TargetDate.Before(v.Missed[j].TargetDate) })
-	sort.SliceStable(v.Fund, func(i, j int) bool { return v.Fund[i].Name < v.Fund[j].Name })
-	sort.SliceStable(v.Achieved, func(i, j int) bool { return v.Achieved[i].Name < v.Achieved[j].Name })
-
-	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	// Headline totals span active + missed (a missed goal is still money in flight —
-	// sectioning it must not shrink the summary figures).
-	inFlight := append(append([]domain.Goal(nil), v.Active...), v.Missed...)
-	v.SavedTotal, v.TargetTotal = goalsvc.Totals(inFlight, rates, base, false)
-	v.OverallPct, _ = goalsvc.OverallProgress(inFlight, false)
-	// Set-aside (earmark) money is reserved, not contributed, so it lives in its
-	// own figure. Allocations are stored in each goal's target currency; convert to
-	// base so the split matches the saved/target headline (GL summary honesty, #5).
-	var setAside int64
-	for _, g := range inFlight {
-		am := g.AllocatedMinor()
-		if am == 0 {
-			continue
-		}
-		m := money.New(am, g.TargetAmount.Currency)
-		if c, err := rates.Convert(m, base); err == nil {
-			setAside += c.Amount
-		} else {
-			setAside += am
-		}
-	}
-	v.SetAsideMin = money.New(setAside, base)
-	v.Health = computeGoalHealth(app, v.All, base, rates, now)
-	return v
-}
-
-// goalPace is the shared pace verdict PLUS the figures that justify it, so the goal
-// card can show WHY it's Watch/At risk (required monthly, the goal's fair share of the
-// household's free cash), not just a decorative badge. All money is base-currency
-// minor units. RequiredMinor is MonthlyNeeded; FairMinor is the goal's fair share of
-// SurplusMinor across the deadlined goals — the "available-money constraint".
-type goalPace struct {
-	Health        goalsvc.Health
-	RequiredMinor int64
-	FairMinor     int64
-	SurplusMinor  int64
-}
-
-// computeGoalHealth derives the shared pace verdict (On track / Watch / At risk) for
-// every deadlined, fundable goal, using the SAME inputs the Smart assistant uses: the
-// household's free monthly cash (one shared cashflow figure) split as a fair share
-// across the deadlined goals, against each goal's required monthly contribution. A
-// goal within its fair share is On track; one needing more than its share is a stretch
-// (Watch); one that can't be met even with all the free cash is At risk. Goals with no
-// deadline / already covered are absent (no pace claim — the card shows no badge). Each
-// entry also carries the figures behind the verdict so the card can explain it.
-func computeGoalHealth(app *appstate.App, all []domain.Goal, base string, rates currency.Rates, now time.Time) map[string]goalPace {
-	toBase := func(m money.Money) int64 {
-		if m.Currency == base || m.Currency == "" {
-			return m.Amount
-		}
-		if v, err := currency.ConvertBetween(m.Amount, m.Currency, base, rates); err == nil {
-			return v
-		}
-		return 0
-	}
-	surplus := cashflow.TrailingMonthlySurplus(app.Transactions(), rates, base, now, cashflow.DefaultTrailingMonths)
-	type need struct {
-		id  string
-		req int64
-	}
-	var needs []need
-	for _, g := range all {
-		if g.Archived {
-			continue
-		}
-		req, ok, err := goalsvc.MonthlyNeeded(g, now)
-		if err != nil || !ok {
-			continue
-		}
-		needs = append(needs, need{id: g.ID, req: toBase(req)})
-	}
-	fair := int64(0)
-	if surplus > 0 && len(needs) > 0 {
-		fair = surplus / int64(len(needs))
-	}
-	out := make(map[string]goalPace, len(needs))
-	for _, n := range needs {
-		if h := goalsvc.AssessHealth(n.req, surplus, len(needs)); h != goalsvc.HealthNone {
-			out[n.id] = goalPace{Health: h, RequiredMinor: n.req, FairMinor: fair, SurplusMinor: surplus}
-		}
-	}
-	return out
+	return goalview.Build(goalview.Input{
+		Base: base, MemberID: activeMemberID,
+		Rates: currency.Rates{Base: base, Rates: settings.FXRates},
+		Goals: app.Goals(), Accounts: app.Accounts(), Members: app.Members(),
+		Categories: app.Categories(), Tasks: app.Tasks(), Transactions: app.Transactions(), Now: now,
+	})
 }
 
 // healthNeedsPlan reports whether a goal's shared pace verdict lands it in the
 // "Needs a plan" lead section: Watch (a stretch — needs more than a fair share
 // of free cash) or At risk (unreachable even with all free cash). On-track and
 // no-verdict goals stay in their healthy sections. This ONLY drives sectioning
-// — it reads the verdict computeGoalHealth already produced and never recomputes
+// — it reads the verdict goalview.Health already produced and never recomputes
 // it, so the pace/health model is untouched.
 func healthNeedsPlan(h goalsvc.Health) bool {
 	return h == goalsvc.HealthWatch || h == goalsvc.HealthAtRisk
@@ -208,115 +78,16 @@ func needsPlanRank(missed bool, h goalsvc.Health) int {
 	}
 }
 
-// overbookedGoals returns the set of goal IDs whose virtual earmarks no longer fit the
-// live account balances backing them — i.e. an account they reserve from has been spent
-// down so the total earmarked against it now exceeds its current balance. Computed once
-// per render (all figures normalised to base currency) so a card never trusts a stale
-// reservation. Goals that don't earmark are absent from the map (false).
+// overbookedGoals shares the view's reservation check across the list and drawers.
 func overbookedGoals(app *appstate.App) map[string]bool {
-	out := map[string]bool{}
 	if app == nil {
-		return out
+		return map[string]bool{}
 	}
-	base := app.Settings().BaseCurrency
-	if base == "" {
-		base = "USD"
-	}
-	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	toBase := func(m money.Money) int64 {
-		if m.Currency == base || m.Currency == "" {
-			return m.Amount
-		}
-		if conv, err := rates.Convert(m, base); err == nil {
-			return conv.Amount
-		}
-		return m.Amount
-	}
-	goalsList := app.Goals()
-	// Total earmarked against each account (base minor units), across all goals.
-	earmark := map[string]int64{}
-	for _, g := range goalsList {
-		for _, al := range g.Allocations {
-			if al.AccountID != "" {
-				earmark[al.AccountID] += toBase(al.Amount)
-			}
-		}
-	}
-	// An account is over-earmarked when its current balance can't back the reservations.
-	txns := app.Transactions()
-	overAcct := map[string]bool{}
-	for _, a := range app.Accounts() {
-		if earmark[a.ID] <= 0 {
-			continue
-		}
-		bal, _ := ledger.Balance(a, txns)
-		if earmark[a.ID] > toBase(bal) {
-			overAcct[a.ID] = true
-		}
-	}
-	for _, g := range goalsList {
-		for _, al := range g.Allocations {
-			if overAcct[al.AccountID] {
-				out[g.ID] = true
-				break
-			}
-		}
-	}
-	return out
+	return computeGoalView(app, "").Overbooked
 }
 
-// sortGoals re-orders the active-goals list in place for the toolbar's Sort picker.
-// It is kind-agnostic — percent, step counts and deadlines are read the same way the
-// cards render them (EvaluateProgress / TaskCounts) so the on-screen order matches the
-// figures. Ties fall back to LessForList then name for a stable, sensible result.
 func sortGoals(gs []domain.Goal, key string, tasks []domain.Task, now time.Time) {
-	pct := func(g domain.Goal) int { return goalsvc.EvaluateProgress(g, tasks, now).Percent }
-	steps := func(g domain.Goal) int { _, total := goalsvc.TaskCounts(tasks, g.ID); return total }
-	switch key {
-	case uistate.GoalSortClosest:
-		sort.SliceStable(gs, func(i, j int) bool {
-			if pi, pj := pct(gs[i]), pct(gs[j]); pi != pj {
-				return pi > pj // nearly-there first
-			}
-			return goalsvc.LessForList(gs[i], gs[j])
-		})
-	case uistate.GoalSortFarthest:
-		sort.SliceStable(gs, func(i, j int) bool {
-			if pi, pj := pct(gs[i]), pct(gs[j]); pi != pj {
-				return pi < pj // just-getting-started first
-			}
-			return goalsvc.LessForList(gs[i], gs[j])
-		})
-	case uistate.GoalSortComplexity:
-		sort.SliceStable(gs, func(i, j int) bool {
-			if si, sj := steps(gs[i]), steps(gs[j]); si != sj {
-				return si > sj // most steps to work through first
-			}
-			return goalsvc.LessForList(gs[i], gs[j])
-		})
-	case uistate.GoalSortDeadline:
-		sort.SliceStable(gs, func(i, j int) bool {
-			ai, aj := gs[i].TargetDate.IsZero(), gs[j].TargetDate.IsZero()
-			if ai != aj {
-				return !ai // dated goals before undated
-			}
-			if !ai && !aj && !gs[i].TargetDate.Equal(gs[j].TargetDate) {
-				return gs[i].TargetDate.Before(gs[j].TargetDate)
-			}
-			return gs[i].Name < gs[j].Name
-		})
-	case uistate.GoalSortName:
-		sort.SliceStable(gs, func(i, j int) bool { return gs[i].Name < gs[j].Name })
-	case uistate.GoalSortPriority:
-		sort.SliceStable(gs, func(i, j int) bool {
-			if pi, pj := gs[i].PriorityRank(), gs[j].PriorityRank(); pi != pj {
-				return pi < pj // high (1) first; unprioritized last
-			}
-			return goalsvc.LessForList(gs[i], gs[j])
-		})
-	default: // GoalSortActionable
-		sort.SliceStable(gs, func(i, j int) bool { return goalsvc.LessForList(gs[i], gs[j]) })
-	}
+	goalview.Sort(gs, key, tasks, now)
 }
 
 type goalRowProps struct {

@@ -71,19 +71,7 @@ func Goals() ui.Node {
 	// transform) so its centering isn't broken.
 	return Fragment(
 		goalsRoundUpCard(),
-		Div(css.Class("bento bento-goals"),
-			MapKeyed(specs,
-				func(sp domain.WidgetSpec) any { return sp.ID },
-				func(sp domain.WidgetSpec) ui.Node {
-					c := rctx
-					c.Spec = sp
-					if node, ok := safeRenderSpec(sp, c); ok {
-						return node
-					}
-					return Fragment()
-				},
-			),
-		),
+		ui.CreateElement(surfaceTiles, surfaceTilesProps{Class: "bento-goals", Specs: specs, Context: rctx}),
 		goalsRoundUpConfigModal(),
 	)
 }
