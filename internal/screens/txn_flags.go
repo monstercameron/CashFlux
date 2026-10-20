@@ -335,11 +335,18 @@ func txnRowInfo(props txnRowInfoProps) ui.Node {
 // an observation — and two warning chips on one row halve the weight of both.
 func txnFlagChip(props txnFlagChipProps) ui.Node {
 	dupOpen := uistate.UseDuplicatesModalOpen()
+	spikeOpen := ui.UseState(false)
+	spikeAnchorID := ui.UseId()
 
 	openDupes := ui.UseEvent(func() { dupOpen.Set(true) })
-	openTxn := ui.UseEvent(func() { uistate.SetTxnEdit(props.TxnID) })
+	openTxn := ui.UseEvent(Prevent(func() {
+		spikeOpen.Set(false)
+		uistate.SetTxnEdit(props.TxnID)
+	}))
+	toggleSpike := ui.UseEvent(Prevent(func() { spikeOpen.Set(!spikeOpen.Get()) }))
 	openDupesClick := OnClick(openDupes)
 	openTxnClick := OnClick(openTxn)
+	toggleSpikeClick := OnClick(toggleSpike)
 
 	settings := uistate.LoadSmartSettings()
 	if !settings.DensityOrDefault().Shows(smart.AffordanceBadge) {
@@ -356,13 +363,37 @@ func txnFlagChip(props txnFlagChipProps) ui.Node {
 			Span(uistate.T("sm8.chip")))
 	}
 	if props.SpikeWhy != "" {
-		return Button(css.Class("txn-flag is-spike", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
-			Attr("data-testid", "txn-flag-spike"),
-			Attr("aria-label", props.SpikeWhy+": "+uistate.T("sm10.chip")),
-			Title(props.SpikeWhy),
-			openTxnClick,
-			uiw.Icon(icon.TrendingUp, css.Class(tw.ShrinkO, tw.W3, tw.H3)),
-			Span(uistate.T("sm10.chip")))
+		return Fragment(
+			Button(css.Class("txn-flag is-spike", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), ID(spikeAnchorID), Type("button"),
+				Attr("data-testid", "txn-flag-spike"),
+				Attr("aria-label", uistate.T("txnflag.showEvidence")),
+				Attr("aria-haspopup", "true"), Attr("aria-expanded", ariaBool(spikeOpen.Get())),
+				toggleSpikeClick,
+				uiw.Icon(icon.TrendingUp, css.Class(tw.ShrinkO, tw.W3, tw.H3)),
+				Span(uistate.T("sm10.chip"))),
+			uiw.Overlay(uiw.OverlayProps{
+				Open: spikeOpen.Get(), Kind: uiw.OverlayPopover,
+				Title: uistate.T("txnflag.evidenceTitle"), AnchorID: spikeAnchorID,
+				OnClose: func() { spikeOpen.Set(false) },
+				TestID:  "txn-spike-evidence",
+				Body:    txnSpikeEvidence(props.SpikeWhy),
+				Footer:  Button(css.Class("btn btn-tool"), Type("button"), openTxnClick, uistate.T("txnflag.openTransaction")),
+			}),
+		)
 	}
 	return Fragment()
+}
+
+func txnSpikeEvidence(why string) ui.Node {
+	parts := strings.Split(why, ";")
+	items := make([]any, 0, len(parts)-1)
+	for _, part := range parts[1:] {
+		if fact := strings.TrimSpace(part); fact != "" {
+			items = append(items, Li(fact))
+		}
+	}
+	return Div(css.Class("txn-spike-evidence"),
+		P(css.Class("txn-spike-evidence-lead"), strings.TrimSpace(parts[0])),
+		If(len(items) > 0, Ul(css.Class("txn-spike-evidence-facts"), items)),
+	)
 }

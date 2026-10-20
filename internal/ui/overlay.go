@@ -96,6 +96,8 @@ func overlayView(props OverlayProps) uic.Node {
 	if kind == OverlayPopover {
 		surfaceClass += " " + string(css.New(overlayPopoverRules...))
 	}
+	surfaceID := id + "-surface"
+	useOverlayPopoverAnchor(props.Open && kind == OverlayPopover, props.AnchorID, surfaceID)
 	if kind == OverlayBottomBar {
 		surfaceClass += " " + string(css.New(overlayBottomBarRules...))
 	}
@@ -131,6 +133,7 @@ func overlayView(props OverlayProps) uic.Node {
 	}
 	return uic.AccessibleOverlay(uic.AccessibleOverlayProps{
 		Open:                props.Open,
+		SurfaceID:           surfaceID,
 		Target:              uic.PortalTarget{Selector: "body"},
 		Kind:                overlayGWCKind(kind),
 		Role:                role,
@@ -271,6 +274,7 @@ var overlayVisuallyHiddenRules = []css.Rule{
 // Entrance only: AccessibleOverlay unmounts synchronously on controlled close.
 // Individual translate/scale leave the modal's centering transform untouched.
 const overlayMotionCSS = `
+.cf-overlay__surface--popover[data-overlay-anchor]:not([data-overlay-placed]) { visibility: hidden; }
 .cf-overlay__surface--modal, .cf-overlay__surface--sheet {
  animation: cf-overlay-enter var(--wonder-dur-slow, 280ms) var(--wonder-ease-out, cubic-bezier(0.16, 1, 0.3, 1)) both;
 }

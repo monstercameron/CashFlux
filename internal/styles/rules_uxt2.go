@@ -119,9 +119,9 @@ func registerUXT2() {
 		letterSpacing("normal"),
 	)
 
-	// Page controls share the same small, useful corner. Pills keep their full
-	// capsule shape; only the ledger surface uses the 12px radius.
-	rule(`.bento > .w[data-widget="txn-toolbar"] input, .bento > .w[data-widget="txn-toolbar"] select, .bento > .w[data-widget="txn-toolbar"] button, .bento > .w[data-widget="txn-table"] button`,
+	// Ledger controls use a compact corner. The toolbar above the money summary
+	// has its own control geometry in registerTxnControls.
+	rule(`.bento > .w[data-widget="txn-table"] button`,
 		borderRadius("6px"),
 	)
 }

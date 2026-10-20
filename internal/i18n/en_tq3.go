@@ -32,6 +32,10 @@ var tq3Keys = Catalog{
 	"transactions.tq3.weekEmpty":            "Nothing yet",
 	"transactions.tq3.weekMoved":            "Transferred %s",
 	"transactions.tq3.dayMoved":             "Transferred %s",
+	"transactions.calMoreDue":               "+%d more due",
+	"transactions.calScrollHint":            "Scroll to see all days",
+	"transactions.calOtherDue":              "Other due items (%d)",
+	"transactions.calDayNumber":             "Day %d",
 }
 
 func init() {

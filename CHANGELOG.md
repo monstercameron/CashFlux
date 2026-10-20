@@ -6,6 +6,11 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Changed
+- Refined the Transactions search and action controls with consistent 44 px targets, a grouped period stepper,
+  a quieter Ledger/Calendar switch, and a clearer Review count. The money summary and category bar are unchanged.
+- Improved Transactions date filtering, fixed calendar cell overflow, and made unusual-spend evidence readable on click.
+
 ### Added
 - **Regular monthly spend calculation (BASE2, not wired in yet).** `internal/regularspend` works out "Fixed
   commitments" (recurring bills and subscriptions, debt minimums, annual and quarterly bills as a monthly set-aside with

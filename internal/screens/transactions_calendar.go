@@ -111,7 +111,8 @@ type txnCalCalendarProps struct {
 // txnCalCalendar owns the static tile layout, caption and projection notices.
 func txnCalCalendar(props txnCalCalendarProps) ui.Node {
 	nav := Div(css.Class("txn-cal-nav", "row"),
-		Span(css.Class("txn-cal-month"), Attr("data-testid", "txn-cal-month"), props.Month.Caption))
+		Span(css.Class("txn-cal-month"), Attr("data-testid", "txn-cal-month"), props.Month.Caption),
+		Span(css.Class("txn-cal-scroll-hint"), uistate.T("transactions.calScrollHint")))
 	if props.Month.Err != nil {
 		return uiw.Widget(uiw.WidgetProps{
 			ID: "txn-calendar", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
@@ -130,7 +131,9 @@ func txnCalCalendar(props txnCalCalendarProps) ui.Node {
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "txn-calendar", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
 		Body: Div(css.Class("txn-cal"), nav, fxNotice,
-			Div(css.Class("txn-cal-weeks"), ui.CreateElement(txnCalWeekHeader, props.Headers), rows),
+			Div(css.Class("txn-cal-viewport"),
+				Div(css.Class("txn-cal-weeks"), ui.CreateElement(txnCalWeekHeader, props.Headers), rows)),
+			txnCalOverflow(props.Month.Weeks),
 			Div(css.Class("txn-cal-legend"),
 				Span(css.Class("txn-cal-legend-dots"), Span(css.Class("cal-dot txn-cal-legend-dot"))),
 				Span(uistate.T("transactions.calDotsLegend"))),
@@ -176,8 +179,52 @@ func txnCalWeekTotal(props txnCalWeekTotalProps) ui.Node {
 		lines = append(lines, Span(ClassStr(line.Class), line.Text))
 	}
 	return Div(css.Class("txn-cal-week-total"),
-		Attr("data-testid", "txn-cal-week-total"), Attr("aria-describedby", props.SummaryID),
+		Attr("data-testid", "txn-cal-week-total"), Attr("aria-describedby", props.SummaryID), Attr("title", summary.Aria),
 		Span(css.Class("sr-only"), Attr("id", props.SummaryID), summary.Aria), Fragment(lines...))
+}
+
+// txnCalOverflow keeps hidden scheduled items available to touch users without
+// making the month grid's day cells grow or changing the day-to-ledger action.
+func txnCalOverflow(weeks []txncalendarview.Week) ui.Node {
+	labels := calendarLabels(uistate.LoadPrefs())
+	rows := make([]any, 0)
+	count := 0
+	for _, week := range weeks {
+		for _, day := range week.Days {
+			if !day.InMonth || len(day.Ghosts) < 2 {
+				continue
+			}
+			preview := txnCalPreviewIndex(day.Ghosts)
+			items := make([]any, 0, len(day.Ghosts)-1)
+			for i, ghost := range day.Ghosts {
+				if i == preview {
+					continue
+				}
+				summary := labels.GhostSummary(ghost, day.Rates)
+				items = append(items, Div(css.Class("txn-cal-overflow-item"),
+					Span(summary.Status), Span(summary.Label)))
+				count++
+			}
+			rows = append(rows, Div(css.Class("txn-cal-overflow-day"),
+				Span(css.Class("txn-cal-overflow-date"), uistate.T("transactions.calDayNumber", day.Day)),
+				Div(css.Class("txn-cal-overflow-items"), Fragment(items...))))
+		}
+	}
+	if count == 0 {
+		return nil
+	}
+	return Details(css.Class("txn-cal-overflow"), Attr("data-testid", "txn-cal-overflow"),
+		Summary(uistate.T("transactions.calOtherDue", count)),
+		Div(css.Class("txn-cal-overflow-list"), Fragment(rows...)))
+}
+
+func txnCalPreviewIndex(ghosts []txncalendar.Ghost) int {
+	for i, ghost := range ghosts {
+		if ghost.NotPosted {
+			return i
+		}
+	}
+	return 0
 }
 
 func scheduledGhosts(ghosts []txncalendar.Ghost, visible bool) []txncalendar.Ghost {
@@ -224,9 +271,16 @@ func txnCalMonthCell(props txnCalMonthCellProps) ui.Node {
 	for range summary.Dots {
 		dots = append(dots, Span(css.Class("cal-dot")))
 	}
-	ghosts := make([]any, 0, len(summary.Ghosts))
-	for _, ghost := range summary.Ghosts {
-		ghosts = append(ghosts, ui.CreateElement(txnCalGhostMarker, ghost))
+	// Keep the calendar's rows a consistent height. Show the most urgent due item
+	// and summarize the rest; the full list remains in the button's accessible
+	// name without duplicating it in a browser tooltip.
+	ghosts := make([]any, 0, 2)
+	if len(summary.Ghosts) > 0 {
+		preview := txnCalPreviewIndex(props.Ghosts)
+		ghosts = append(ghosts, ui.CreateElement(txnCalGhostMarker, summary.Ghosts[preview]))
+		if extra := len(summary.Ghosts) - 1; extra > 0 {
+			ghosts = append(ghosts, Span(css.Class("txn-cal-more-due"), uistate.T("transactions.calMoreDue", extra)))
+		}
 	}
 	args := []any{ClassStr(summary.Class), Type("button"), Attr("data-date", props.DateKey),
 		Attr("data-testid", "txn-cal-day-"+props.DateKey), Attr("aria-label", summary.Aria)}

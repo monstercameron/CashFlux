@@ -137,6 +137,32 @@ func TestIsCurrentMonth(t *testing.T) {
 	}
 }
 
+func TestCanStepForwardStopsAtTheCurrentTimeframe(t *testing.T) {
+	tests := []struct {
+		name, from, to string
+		want           bool
+	}{
+		{"previous month", "2026-07-01", "2026-07-31", true},
+		{"this month", "2026-08-01", "2026-08-31", false},
+		{"future month", "2026-09-01", "2026-09-30", false},
+		{"previous day", "2026-07-14", "2026-07-14", true},
+		{"day this month", "2026-08-02", "2026-08-02", false},
+		{"custom range in past", "2026-05-10", "2026-06-20", true},
+		{"range reaching this month", "2026-06-01", "2026-08-31", false},
+		{"this year", "2026-01-01", "2026-12-31", false},
+		{"open range reaching present", "2026-06-01", "", false},
+		{"range ending in past", "", "2026-07-31", true},
+		{"all dates", "", "", false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := Of(tc.from, tc.to, now).CanStepForward(now); got != tc.want {
+				t.Errorf("CanStepForward() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 // Bounds carrying a time of day (a stored value that was never day-truncated)
 // must still classify as a whole month, or the label silently falls back to a
 // range for a scope the user set from the month stepper.

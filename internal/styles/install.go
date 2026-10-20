@@ -182,6 +182,7 @@ func Register() {
 	registerIMV7()
 	registerBC6N7()
 	registerTV8F()
+	registerTxnControls()
 	inject(Build())
 }
 

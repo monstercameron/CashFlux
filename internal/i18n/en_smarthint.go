@@ -72,9 +72,12 @@ var smartHintKeys = Catalog{
 
 	// SM-10 — a category spiked against its own baseline.
 	// %s = the category, %s = how much above its baseline.
-	"sm10.chip":   "Higher than usual",
-	"sm10.hint":   "About %s more than your usual %s at %s",
-	"sm10.action": "See the charges",
+	"sm10.chip":               "Higher than usual",
+	"sm10.hint":               "About %s more than your usual %s at %s",
+	"sm10.action":             "See the charges",
+	"txnflag.showEvidence":    "Higher than usual. Show evidence",
+	"txnflag.evidenceTitle":   "Why this was flagged",
+	"txnflag.openTransaction": "Open transaction",
 
 	// SM-11 — a low-balance / overdraft forecast on one account.
 	// %s = the date the balance is projected to go negative.

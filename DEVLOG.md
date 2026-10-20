@@ -1,3 +1,18 @@
+## 2026-10-20 - Transactions date, calendar, and evidence refinements
+
+The Transactions controls now share a consistent size and interaction style. Date filters have an explicit clear action,
+the calendar keeps day cells uniform and exposes overflow, and the higher-than-usual chip opens its underlying evidence.
+The latest WASM run caught competing tooltip expectations; the day button now keeps its complete accessible name without
+duplicating it as a native hover tooltip. Native and WASM suites pass, with browser smoke checked separately.
+
+## 2026-10-19 - Transactions toolbar visual refinement
+
+The Transactions toolbar had mismatched control sizes and surfaces: the date arrows floated apart from the period,
+the active view competed with Add for emphasis, and the Review count was hard to scan. I grouped period and view on
+the left and Add, Review, and More on the right, set a 44 px control rhythm, and gave Review a compact count badge.
+The styles are scoped to the toolbar above the money summary; no transaction behavior or totals changed. I checked
+the live dark-mode render and the Filters disclosure, ran the native suite, and built the WebAssembly app.
+
 ## 2026-10-19 - Transactions page critic loop, Phase 0 landed, first security follow-ups
 
 The Transactions page went through three rounds of an adversarial critic (5.5 → 6.8 → 7.8 out of 10) with Luna and

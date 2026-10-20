@@ -11,6 +11,11 @@ var r1dKeys = Catalog{
 	"txnperiod.customRangeChoice": "Custom range",
 	"txnperiod.from":              "From",
 	"txnperiod.to":                "To",
+	"txnperiod.editDates":         "Edit dates",
+	"txnperiod.clearDates":        "Clear date filter",
+	"txnperiod.chooseDates":       "Choose dates",
+	"txnperiod.applyDates":        "Apply dates",
+	"txnperiod.invalidRange":      "The end date must be on or after the start date.",
 }
 
 func init() {

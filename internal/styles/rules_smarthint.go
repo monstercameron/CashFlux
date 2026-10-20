@@ -101,6 +101,26 @@ func registerSmartRowHint() {
 		outline("2px solid var(--accent)"),
 		outlineOffset("1px"),
 	)
+	rule(".txn-spike-evidence",
+		display("grid"),
+		gap(".75rem"),
+		maxWidth("22rem"),
+		fontSize("var(--type-14)"),
+		lineHeight("1.5"),
+	)
+	rule(".txn-spike-evidence-lead",
+		margin("0"),
+		fontWeight("600"),
+	)
+	rule(".txn-spike-evidence-facts",
+		margin("0"),
+		paddingLeft("1.25rem"),
+		listStyle("disc"),
+		color("var(--text-dim)"),
+	)
+	rule(".txn-spike-evidence-facts li + li",
+		marginTop(".4rem"),
+	)
 
 	// --- SM-5 / SM-11 / SM-16: an entity's findings, stated inline on its row ---
 	// Indented to the row's text column and separated by a hairline, so a stack of

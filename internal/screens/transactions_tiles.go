@@ -750,7 +750,10 @@ func txnToolbarControls(props txnToolbarRenderProps) ui.Node {
 			uistate.PersistTxFilter(cleared)
 		},
 		ClearAllLabel: clearAllLabel(len(props.Own.PageFilters())), RemoveLabel: uistate.T("transactions.removeFilter"),
-		Actions: []ui.Node{ui.CreateElement(txnDateScope, struct{}{}), ui.CreateElement(txnViewToggle, struct{}{}), ui.CreateElement(txnToolbarAdd, props), ui.CreateElement(txnToolbarReview, props), ui.CreateElement(txnToolbarMore, props)},
+		Actions: []ui.Node{
+			Div(css.Class("txn-toolbar-context"), ui.CreateElement(txnDateScope, struct{}{}), ui.CreateElement(txnViewToggle, struct{}{})),
+			Div(css.Class("txn-toolbar-commands"), ui.CreateElement(txnToolbarAdd, props), ui.CreateElement(txnToolbarReview, props), ui.CreateElement(txnToolbarMore, props)),
+		},
 	})
 }
 
@@ -786,8 +789,8 @@ func txnToolbarReview(props txnToolbarRenderProps) ui.Node {
 	summary := props.Summary
 	return If(summary.review > 0, Button(css.Class("txn-review-callout txn-review-callout-attention"), Type("button"),
 		Attr("data-testid", "txn-review-btn"), Attr("aria-label", uistate.T("r1c.reviewCallout", summary.review)),
-		OnClick(openReview), Span(css.Class("txn-review-dot"), Attr("aria-hidden", "true")),
-		Span(uistate.T("r1c.reviewCallout", summary.review))))
+		OnClick(openReview), Span(uistate.T("uxt4.review")),
+		Span(css.Class("txn-review-count"), Attr("aria-hidden", "true"), strconv.Itoa(summary.review))))
 }
 
 func txnToolbarMore(props txnToolbarRenderProps) ui.Node {

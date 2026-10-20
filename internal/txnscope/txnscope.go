@@ -101,6 +101,17 @@ func (s Scope) Step(delta int) (from, to string) {
 	return MonthBounds(dateutil.AddMonths(s.Anchor, delta))
 }
 
+// CanStepForward reports whether the ledger can move to a later month without
+// advancing a range that already reaches the current month. Open-ended ranges
+// with a start date also reach the present, while All has no finite next month.
+func (s Scope) CanStepForward(now time.Time) bool {
+	if s.Kind == All || (s.Kind == Custom && s.To.IsZero()) {
+		return false
+	}
+	current := dateutil.MonthStart(now)
+	return s.Anchor.Before(current) && s.To.Before(current)
+}
+
 // IsCurrentMonth reports whether the scope is exactly the calendar month
 // containing now — what the "This month" control resets to, so the control can
 // show itself as already satisfied.
