@@ -1,3 +1,7 @@
+## 2026-10-20 - Memoized annual budget projection
+
+The annual grid keeps a stable native build pointer and registers its projection memo before early returns. Dependencies cover recurring/goal slices and lengths, data revisions, FX, date and open state; a closed or failed grid projects nothing. A WASM regression checks scenario/window reuse and invalidation after recurring edits, FX changes and reopening. The 805-screen gate passed.
+
 ## 2026-10-20 - Native budget savings and cash-age facts
 
 Extracted savings account ownership, linked-goal choice, FX and projection arithmetic into budgetview; ceil division avoids overflowing a valid remaining balance and preserves int64 month horizons on WASM. A native transaction-to-FIFO adapter feeds a revision/base cache shared across budget scopes. UI retains formatting and a distinct overflow caption. Native parity and boundary tests passed; the 805-screen WASM gate passed savings-width, cache refresh and unavailable-state regressions.
