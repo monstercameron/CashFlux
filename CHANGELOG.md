@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Explicit Goal sorts apply across all open goals instead of pinning the Needs-a-plan section ahead of the selected order. The default actionable view retains its sections.
 - Report category rollups and monthly aggregates expose overflow errors, and runway durations retain int64 month counts on WebAssembly.
 - The component inventory documents control/action slots, keyed tabs and choices, shared tile hosts, native view models and bounded cache ownership.
 - The transaction calendar reuses its native projection across selection-only renders, with full scope, date, formatting, clock, preference and data dependencies.

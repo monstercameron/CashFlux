@@ -1,3 +1,7 @@
+## 2026-10-20 - Goal sorting across default sections
+
+Added native OrderedOpen over a copied visible set and wired explicit sorts into one open-goal list. Tests prove cross-section order without mutating the cached default view. The real Goals host WASM regression passes without parent atom subscriptions. Browser name sorting passes with a web-first order assertion; the previous 300ms snapshot captured an intermediate render although its later artifact was correctly ordered. Kept existing host keys and component state boundaries.
+
 ## 2026-10-20 - Checked report rollups and wide runway
 
 Added checked ancestor totals and matching rolled-up monthly category series, with cycle/unknown-category parity tests. Runway day fractions use wide multiplication and Months remains int64 rather than narrowing on wasm32. The native boundary test enforces that field type at compile time. Focused reports tests and the native integration suite passed for the calculations; the final wasm integration verifies their screen callers.

@@ -14,6 +14,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
+	"github.com/monstercameron/CashFlux/internal/goalview"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/smart"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -190,11 +191,6 @@ func goalListWidget(props goalListProps) ui.Node {
 	goalSort := uistate.UseGoalSort().Get()
 
 	v := computeGoalView(app, activeMemberID)
-	// Apply the toolbar's Sort picker to the active list. Sort a copy — computeGoalView is
-	// memoized and its slices are shared with the summary tile, so we must not reorder the
-	// cached backing array in place.
-	activeSorted := append([]domain.Goal(nil), v.Active...)
-	sortGoals(activeSorted, goalSort, v.Tasks, time.Now())
 
 	viewAccountTxns := func(accountID string) {
 		f := uistate.TxFilter{Account: accountID}.Normalize()
@@ -336,7 +332,9 @@ func goalListWidget(props goalListProps) ui.Node {
 		missed bool
 	}
 	var planEntries []planEntry
+	missedByID := make(map[string]bool, len(v.Missed))
 	for _, g := range v.Missed {
+		missedByID[g.ID] = true
 		planEntries = append(planEntries, planEntry{g: g, missed: true})
 	}
 	for _, g := range v.Active {
@@ -349,25 +347,11 @@ func goalListWidget(props goalListProps) ui.Node {
 			planEntries = append(planEntries, planEntry{g: g})
 		}
 	}
-	// Ordering: severity (missed → at risk → watch) is the presentation of the
-	// DEFAULT "Most actionable" sort. When the user picks an explicit sort in
-	// the toolbar it applies here too — the Watch-first pass silently ignored
-	// e.g. "Sort by name" inside this section, which both broke the sort
-	// promise and goals.spec's A→Z regression check.
+	// Lifecycle sections belong to the default actionable view. An explicit
+	// sort spans every open goal, rather than pinning a differently named section
+	// ahead of the user's selected ordering.
 	if goalSort != uistate.GoalSortActionable {
-		planGoals := make([]domain.Goal, len(planEntries))
-		missedByID := make(map[string]bool, len(planEntries))
-		for i, e := range planEntries {
-			planGoals[i] = e.g
-			if e.missed {
-				missedByID[e.g.ID] = true
-			}
-		}
-		sortGoals(planGoals, goalSort, v.Tasks, now)
-		planEntries = planEntries[:0]
-		for _, g := range planGoals {
-			planEntries = append(planEntries, planEntry{g: g, missed: missedByID[g.ID]})
-		}
+		planEntries = nil
 	} else {
 		// Within the default "Most actionable" sort: missed → at risk → watch (the coarse
 		// verdict rank), then — crucially, since a whole cluster can share the Watch
@@ -394,11 +378,9 @@ func goalListWidget(props goalListProps) ui.Node {
 		})
 	}
 
-	// Healthy remainders for the sections below: the goals NOT pulled up (on-track /
-	// no-verdict). Missed goals were never in v.Active, so activeSorted only sheds its
-	// Watch / At-risk cards here.
+	// Healthy remainders for the default sections below.
 	var healthyActive []domain.Goal
-	for _, g := range activeSorted {
+	for _, g := range v.Active {
 		if !healthNeedsPlan(v.Health[g.ID].Health) {
 			healthyActive = append(healthyActive, g)
 		}
@@ -408,6 +390,10 @@ func goalListWidget(props goalListProps) ui.Node {
 		if !healthNeedsPlan(v.Health[g.ID].Health) {
 			healthyFund = append(healthyFund, g)
 		}
+	}
+	if goalSort != uistate.GoalSortActionable {
+		healthyActive = goalview.OrderedOpen(v, goalSort, now)
+		healthyFund = nil
 	}
 
 	rowForPlan := func(e planEntry) ui.Node {
@@ -482,6 +468,9 @@ func goalListWidget(props goalListProps) ui.Node {
 		// Each active goal card now renders its savings-pace rail INSIDE its own metadata
 		// block (see goals_row.go), so the list is just the cards — no trajectory wrapper.
 		rows := MapKeyed(healthyActive, func(g domain.Goal) any { return g.ID }, func(g domain.Goal) ui.Node {
+			if goalSort != uistate.GoalSortActionable {
+				return rowForPlan(planEntry{g: g, missed: missedByID[g.ID]})
+			}
 			return rowFor(g, 0, "")
 		})
 		listSection = uiw.EntityListSection(uiw.EntityListSectionProps{

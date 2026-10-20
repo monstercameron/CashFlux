@@ -230,6 +230,20 @@ func TestSortMatchesProgressAndPreservesInput(t *testing.T) {
 	}
 }
 
+func TestExplicitSortSpansFundingAndLifecycleSections(t *testing.T) {
+	now := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
+	missed, healthy, fund, archived := goal("Zed", "USD", 0, 100), goal("Baby", "USD", 0, 100), goal("Alpha fund", "USD", 0, 100), goal("Archived", "USD", 0, 100)
+	missed.TargetDate, fund.IsSinkingFund, archived.Archived = now.Add(-time.Hour), true, true
+	v := Build(Input{Goals: []domain.Goal{missed, healthy, fund, archived}, Rates: currency.Rates{Base: "USD"}, Now: now})
+	got := OrderedOpen(v, "name", now)
+	if len(got) != 3 || got[0].ID != fund.ID || got[1].ID != healthy.ID || got[2].ID != missed.ID {
+		t.Fatalf("explicit sort still pinned sections first: %+v", got)
+	}
+	if len(v.Missed) != 1 || len(v.Fund) != 1 || len(v.Active) != 1 || v.All[0].ID != missed.ID {
+		t.Fatal("explicit sort mutated the shared default sections")
+	}
+}
+
 func BenchmarkSortClosest(b *testing.B) {
 	now := time.Date(2026, 10, 20, 0, 0, 0, 0, time.UTC)
 	gs := make([]domain.Goal, 200)

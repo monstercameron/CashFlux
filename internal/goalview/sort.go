@@ -10,6 +10,19 @@ import (
 	"github.com/monstercameron/CashFlux/internal/goals"
 )
 
+// OrderedOpen returns a sorted copy of all visible, non-archived goals. Explicit
+// toolbar sorts span the default lifecycle and funding-health sections.
+func OrderedOpen(v View, key string, now time.Time) []domain.Goal {
+	var out []domain.Goal
+	for _, g := range v.All {
+		if !g.Archived {
+			out = append(out, g)
+		}
+	}
+	Sort(out, key, v.Tasks, now)
+	return out
+}
+
 // Sort orders a caller-owned goal slice by the toolbar sort key. Ties retain
 // the existing actionable order. It never mutates tasks or goal children.
 func Sort(gs []domain.Goal, key string, tasks []domain.Task, now time.Time) {
