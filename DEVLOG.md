@@ -1,3 +1,7 @@
+## 2026-10-20 - Durable sample reset before cloud setup
+
+The browser regression exposed a race when “Start fresh” was clicked while the initial sample autosave was still in flight. The wipe changed the in-memory dataset, but the saved generation advanced before its conditional durable replacement and the app stayed on an unsaved empty page. The action now requests a durable completion for the current App, then pauses autosave before wiping and reloads only after the empty dataset commits. A browser run confirmed the reset now reloads; subsequent attachment sync remains under investigation.
+
 ## 2026-10-20 - Verify downloaded attachment contents
 
 The blob server checks a content hash on upload, but the browser accepted downloaded bytes without checking that they still matched the BlobRef in the encrypted snapshot. The client now verifies SHA-256 over the complete downloaded payload before decrypting it or importing it locally. A mismatch keeps the local dataset unchanged and leaves sync retryable. Native tests cover valid, changed, and malformed hashes.
