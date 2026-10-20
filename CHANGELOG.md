@@ -23,6 +23,7 @@ and every commit updates this file under `Unreleased`.
 - Improved Transactions date filtering, fixed calendar cell overflow, and made unusual-spend evidence readable on click.
 
 ### Added
+- Shared configurable control strips and keyed tile surfaces preserve page-specific actions, attributes, tile context, and component state during reordering. Presentation components accept already-derived content and own no financial calculations.
 - **Regular monthly spend calculation (BASE2, not wired in yet).** `internal/regularspend` works out "Fixed
   commitments" (recurring bills and subscriptions, debt minimums, annual and quarterly bills as a monthly set-aside with
   their due months) and "Typical essential month" (fixed plus the median of the last six complete months of the essential

@@ -1,3 +1,7 @@
+## 2026-10-20 - Reusable page presentation primitives
+
+Added ControlStrip with named control/action slots, accessible group labeling and existing class defaults. Added surfaceTiles to centralize keyed bento placement dispatch while preserving context and unavailable-tile handling. Children retain their own event hooks. Fixture tests verify classes/attributes, optional slots, context propagation, tile order and state following stable IDs after reordering. The shared UI lane passed 85 tests and the screen lane passed 790; browser journeys remain the integration step.
+
 ## 2026-10-20 - Calculation seam regression guards
 
 The source ratchets now accept either the original direct call or an explicit screen-to-native-model-to-canonical-calculation chain. They still require net-worth windows and goal health to use their shared domain definitions. The calendar test now requires its existing unavailable-amount fallback for rejected FX overflow instead of characterizing the previous unchecked result. Full native tests and the focused screenlint/calendar gates passed after these updates.
