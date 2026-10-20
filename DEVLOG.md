@@ -1,3 +1,7 @@
+## 2026-10-20 - Checked payoff simulation
+
+Added BuildPlanChecked while preserving the existing BuildPlan signature and nonviable-plan boolean. Checked arithmetic runs inside the existing simulation instead of duplicating a preflight plan. Errors return no partial plan, and the compatibility wrapper keeps ok=false. Native cases cover finite large APR, opening balances, monthly payments and cumulative interest. The full native suite passed; this seam supports the checked household position model.
+
 ## 2026-10-20 - Exact age-of-money intermediates
 
 The ordinary FIFO path retains small integer arithmetic; weighted products and sums promote to big integers only when needed. Unsigned expense magnitude handles MinInt64 while still consuming the correct income lots. Overflow is scoped to the reported trailing window, so old large history does not poison a later valid window. Native boundary tests cover products, sums, exact half rounding, trailing windows and caps. The full native suite passed; UI integration has its own revision and unavailable-state checks.
