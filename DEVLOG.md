@@ -1,3 +1,7 @@
+## 2026-10-20 - Bounded shared derived-view caching
+
+Added a tested native LRU cache and stable app-instance identity. Store revisions are global, so revision alone cannot isolate two apps. Shared page selectors now include instance and browser data revisions, and account-set signatures encode IDs unambiguously. Heavy Smart input/findings caches keep one context; anomaly and next-action sections reuse one engine pass while applying current dismissals separately. Native cache/identity tests and the combined 790-screen WASM run passed, including app-switch, browser-revision, scope and clock cache regressions.
+
 ## 2026-10-20 - Checked currency conversion boundaries
 
 NaN/infinite rates and overflowing conversions could silently become the minimum signed amount. Conversion now returns explicit invalid-rate or wrapped money-overflow errors. A rare exact rational path preserves valid int64 boundary amounts and finite results whose float intermediate overflowed or underflowed. Normal conversions keep the existing rounding path and zero allocations; paired local benchmarks showed roughly six nanoseconds of validation overhead. Currency and six related native package tests and focused vet passed.

@@ -31,7 +31,7 @@ import (
 // liveEngineVarsCache memoizes liveEngineVars by store revision + current month (the
 // vars are computed over the current month, so the month is part of the identity).
 // Callers only read the returned map, so sharing one instance is safe.
-var liveEngineVarsCache = map[string]map[string]float64{}
+var liveEngineVarsCache = newViewCache[map[string]float64]()
 
 // liveEngineVars computes the full engine variable surface (atoms + molecules +
 // custom fields) over the current month, for live formula evaluation. This is the

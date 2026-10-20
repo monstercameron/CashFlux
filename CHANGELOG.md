@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Shared derived views use bounded LRU caches keyed by app identity, stored data, browser preferences, scope, and time inputs. Heavy Smart snapshots retain one context, and anomaly/action sections share the same deterministic engine pass.
 - Prepared v1.19.8 from the verified Transactions, Import, sync, budget, dashboard, navigation, and development-server changes below.
 - Dev-server reloads now replace the page instead of starting overlapping WebAssembly runtimes that could each autosave the same workspace.
 - Aligned the sticky top bar and sidebar border at expanded and collapsed widths, and kept the ledger below the top bar while scrolling.

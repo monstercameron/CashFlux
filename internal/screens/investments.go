@@ -141,7 +141,7 @@ type investView struct {
 
 // investViewCache memoizes computeInvestView by store revision — the investments
 // surface has ~6 tiles that each call it once per render.
-var investViewCache = map[string]investView{}
+var investViewCache = newViewCache[investView]()
 
 // computeInvestView returns the shared investments model, memoized on the store
 // revision so a multi-tile render aggregates the ledger once, not once per tile.

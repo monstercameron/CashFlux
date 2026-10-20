@@ -49,7 +49,7 @@ type goalView struct {
 
 // goalViewCache memoizes computeGoalView by store revision + active member (the only
 // input beyond stored data), so the goals surface's tiles share one aggregation.
-var goalViewCache = map[string]goalView{}
+var goalViewCache = newViewCache[goalView]()
 
 // computeGoalView assembles the goalView for the active member view (memoized).
 func computeGoalView(app *appstate.App, activeMemberID string) goalView {

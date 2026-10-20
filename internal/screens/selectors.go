@@ -6,6 +6,7 @@ package screens
 
 import (
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -25,7 +26,7 @@ import (
 // collapses them to one full-ledger pass. Keyed on the store revision PLUS the account
 // set, so a scoped view and the household total never share an entry, and a scope
 // change recomputes (which the previous rev-only memo key missed).
-var netWorthCache = map[string]ledger.NetWorthResult{}
+var netWorthCache = newViewCache[ledger.NetWorthResult]()
 
 // acctSig is a cheap, order-independent signature of an account set for the cache key.
 func acctSig(accounts []domain.Account) string {
@@ -34,7 +35,11 @@ func acctSig(accounts []domain.Account) string {
 		ids[i] = a.ID
 	}
 	sort.Strings(ids)
-	return strings.Join(ids, ",")
+	var signature strings.Builder
+	for _, id := range ids {
+		signature.WriteString(strconv.Quote(id))
+	}
+	return signature.String()
 }
 
 // This file holds the dashboard's render-time *derived selectors* — net worth,
@@ -58,7 +63,7 @@ func useNetWorth(app *appstate.App, accounts []domain.Account, txns []domain.Tra
 			nw, _ := ledger.NetWorthExplained(accounts, txns, rates)
 			return nw
 		})
-	}, app.Rev(), sig)
+	}, revKey(app), sig)
 }
 
 // usePeriodTotals returns memoized income/expense for the period over the given
@@ -70,7 +75,7 @@ func usePeriodTotals(app *appstate.App, txns []domain.Transaction, start, end ti
 	v := ui.UseMemo(func() totals {
 		i, e, _ := ledger.PeriodTotals(txns, start, end, rates)
 		return totals{i, e}
-	}, app.Rev(), start.Unix(), end.Unix(), memberSig)
+	}, revKey(app), start, end, memberSig)
 	return v.income, v.expense
 }
 
@@ -88,5 +93,5 @@ func useBudgetHealth(app *appstate.App, budgets []domain.Budget, txns []domain.T
 			statuses = append(statuses, budgeting.EvaluateViewBudget(b, input).Status)
 		}
 		return statuses
-	}, app, app.Rev(), start.Unix(), end.Unix(), memberID, pr.WeekStart, pr.PayCycleAnchor, pr.BudgetRolloverLeftover, budgetNow().Format("2006-01-02"))
+	}, revKey(app), start, end, memberID, pr.WeekStart, pr.PayCycleAnchor, pr.BudgetRolloverLeftover, budgetNow().Format("2006-01-02"))
 }

@@ -140,7 +140,7 @@ func majorMoney(v float64, base string) money.Money {
 // debtViewCache memoizes computeDebtView. Keyed on the store revision AND the debt
 // config (payoff strategy/extra/thresholds), which lives in uistate and can change
 // without a store mutation.
-var debtViewCache = map[string]debtView{}
+var debtViewCache = newViewCache[debtView]()
 
 // computeDebtView returns the shared debt model, memoized so the debt surface's tiles
 // don't each re-aggregate the ledger (and re-run the payoff engine) per render.

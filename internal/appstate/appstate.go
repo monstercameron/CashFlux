@@ -20,6 +20,7 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/allocate"
@@ -55,7 +56,8 @@ import (
 
 // App holds the live application state.
 type App struct {
-	store *store.SQLiteStore
+	store      *store.SQLiteStore
+	instanceID uint64
 	// transactionDeletes retains relationship before-images for the legacy row restore API.
 	// The durable undo journal captures these same records independently.
 	transactionDeletes map[string][]store.RecordChange
@@ -109,6 +111,13 @@ type App struct {
 // Default is the process-wide App, set by Init and read by screens.
 var Default *App
 
+var nextInstanceID atomic.Uint64
+
+// InstanceID is a process-local identity for derived-data cache keys. Revisions
+// alone are insufficient: multiple app stores share the global mutation counter.
+// The identity is stable for this App's lifetime and never exported with data.
+func (a *App) InstanceID() uint64 { return a.instanceID }
+
 // New creates an App backed by a fresh in-memory store. If w is nil, logs go to
 // os.Stderr (the browser console under wasm). When seed is true and the store is
 // empty, the sample dataset is loaded.
@@ -121,7 +130,7 @@ func New(w io.Writer, seed bool) (*App, error) {
 		return nil, err
 	}
 	logger, ring := logging.New(w, 500, slog.LevelInfo)
-	app := &App{store: st, log: logger, ring: ring, now: time.Now}
+	app := &App{store: st, instanceID: nextInstanceID.Add(1), log: logger, ring: ring, now: time.Now}
 	if seed {
 		if err := st.Load(store.SampleDataset()); err != nil {
 			return nil, err
