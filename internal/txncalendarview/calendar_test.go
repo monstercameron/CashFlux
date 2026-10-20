@@ -204,15 +204,6 @@ func TestGhostAndCellSummaries(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.ghost.Label = "Electric bill"
-			if tc.name == "fx overflow" {
-				// Characterize the pre-existing FX dependency rather than change
-				// its out-of-range conversion policy during component extraction.
-				converted, err := tc.rates.Convert(money.New(tc.ghost.Amount, tc.ghost.Currency), tc.rates.Base)
-				if err != nil {
-					t.Fatal(err)
-				}
-				tc.amount = l.unsigned(converted.Amount, converted.Currency)
-			}
 			got := l.GhostSummary(tc.ghost, tc.rates)
 			if !strings.Contains(got.Status, tc.amount) || !strings.Contains(got.Aria, tc.amount) || !strings.Contains(got.Aria, tc.phrase) || got.Label != tc.ghost.Label {
 				t.Errorf("ghost=%+v", got)

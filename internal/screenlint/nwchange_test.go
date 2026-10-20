@@ -114,7 +114,6 @@ func TestNwChangeSeamIsActuallyUsed(t *testing.T) {
 	files := readInternal(t)
 	want := []string{
 		"screens/dashboard.go",
-		"screens/dashboard_hero.go",
 		"screens/accounts_tiles.go",
 		"screens/networth.go",
 		"screens/widget_builder.go",
@@ -129,6 +128,14 @@ func TestNwChangeSeamIsActuallyUsed(t *testing.T) {
 		if !strings.Contains(src, "nwchange.") {
 			t.Errorf("%s no longer reads net-worth change through internal/nwchange (C341)", path)
 		}
+	}
+	// The hero delegates its expensive trend to a native model. Require that
+	// connection as well as the model's canonical window seam above, so moving
+	// arithmetic out of markup cannot make this guard pass vacuously.
+	hero := files["screens/dashboard_hero.go"]
+	if !strings.Contains(hero, "nwchange.") &&
+		!(strings.Contains(hero, "dashboardview.BuildNetWorthTrend(") && strings.Contains(files["dashboardview/trend.go"], "nwchange.")) {
+		t.Error("dashboard hero no longer reads the canonical net-worth window directly or through its tested trend model")
 	}
 }
 
@@ -289,8 +296,9 @@ func TestGoalPaceBadgeIsFundingDerived(t *testing.T) {
 		}
 	}
 	// AssessHealth must still be what produces that verdict.
-	if !strings.Contains(src, "goalsvc.AssessHealth(") {
-		t.Error("screens/goals.go no longer calls goals.AssessHealth (C352)")
+	if !strings.Contains(src, "goalsvc.AssessHealth(") &&
+		!(strings.Contains(src, "goalview.Build(") && strings.Contains(readInternal(t)["goalview/goalview.go"], "goals.AssessHealth(")) {
+		t.Error("goal screen no longer delegates to the funding-derived goals.AssessHealth model (C352)")
 	}
 }
 

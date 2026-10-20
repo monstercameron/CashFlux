@@ -1,3 +1,7 @@
+## 2026-10-20 - Calculation seam regression guards
+
+The source ratchets now accept either the original direct call or an explicit screen-to-native-model-to-canonical-calculation chain. They still require net-worth windows and goal health to use their shared domain definitions. The calendar test now requires its existing unavailable-amount fallback for rejected FX overflow instead of characterizing the previous unchecked result. Full native tests and the focused screenlint/calendar gates passed after these updates.
+
 ## 2026-10-20 - Bounded shared derived-view caching
 
 Added a tested native LRU cache and stable app-instance identity. Store revisions are global, so revision alone cannot isolate two apps. Shared page selectors now include instance and browser data revisions, and account-set signatures encode IDs unambiguously. Heavy Smart input/findings caches keep one context; anomaly and next-action sections reuse one engine pass while applying current dismissals separately. Native cache/identity tests and the combined 790-screen WASM run passed, including app-switch, browser-revision, scope and clock cache regressions.
