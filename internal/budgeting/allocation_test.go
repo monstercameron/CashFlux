@@ -1,18 +1,55 @@
 // SPDX-License-Identifier: MIT
 
-//go:build js && wasm
+package budgeting
 
-package screens
+import (
+	"math"
+	"testing"
+)
 
-import "testing"
+func TestAllocationRejectsOverflow(t *testing.T) {
+	for _, input := range []AllocationInput{
+		{Income: math.MaxInt64, Rollover: 1},
+		{Income: 100, Budgeted: math.MaxInt64, Savings: 1},
+		{Income: math.MaxInt64, Budgeted: math.MinInt64},
+	} {
+		if _, err := ResolveAllocation(input); err == nil {
+			t.Errorf("unrepresentable allocation accepted: %+v", input)
+		}
+	}
+}
+
+func TestAllocationSpendingUsesSharedAxis(t *testing.T) {
+	for _, tc := range []struct {
+		input    AllocationInput
+		spentPct int
+	}{
+		{AllocationInput{Income: 10000, Budgeted: 5000, Spent: 2500}, 25},
+		{AllocationInput{Income: 10000, Budgeted: 20000, Spent: 5000}, 25},
+		{AllocationInput{Income: 10000, Budgeted: 5000, Spent: 20000}, 100},
+	} {
+		got, err := ResolveAllocation(tc.input)
+		if err != nil || got.Spent != tc.input.Spent || got.SpentPct != tc.spentPct {
+			t.Errorf("spending geometry for %+v = %+v, error %v", tc.input, got, err)
+		}
+	}
+}
 
 // The allocation read is the arithmetic behind "how much of my income have I
 // budgeted?" — the question the /budgets hero never answered. These tests pin
 // the state machine and the bar geometry, including the states the adversarial
 // design pass found unhandled.
 
-func allocTestView(income, rolled, budgeted, savings int64) budgetView {
-	return budgetView{Base: "USD", BannerIncome: income, RolledOver: rolled, TotalLimit: budgeted, SavingsAssigned: savings}
+func allocTestView(income, rolled, budgeted, savings int64) AllocationInput {
+	return AllocationInput{Income: income, Rollover: rolled, Budgeted: budgeted, Savings: savings}
+}
+
+func testAllocation(v AllocationInput) Allocation {
+	read, err := ResolveAllocation(v)
+	if err != nil {
+		panic(err)
+	}
+	return read
 }
 
 func TestResolveAllocationStates(t *testing.T) {
@@ -34,7 +71,7 @@ func TestResolveAllocationStates(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			r := resolveAllocation(allocTestView(tc.income, tc.rolled, tc.budgeted, tc.saved))
+			r := testAllocation(allocTestView(tc.income, tc.rolled, tc.budgeted, tc.saved))
 			if r.State != tc.wantState {
 				t.Errorf("State = %q, want %q", r.State, tc.wantState)
 			}
@@ -52,7 +89,7 @@ func TestResolveAllocationStates(t *testing.T) {
 // off the page entirely for a household that has not set a basis: the component
 // returns early on Pool <= 0, so nothing below it may be relied upon.
 func TestResolveAllocationNoIncomeRendersNothing(t *testing.T) {
-	r := resolveAllocation(allocTestView(0, 0, 500000, 0))
+	r := testAllocation(allocTestView(0, 0, 500000, 0))
 	if r.Pool > 0 {
 		t.Fatalf("Pool = %d, want 0 so the block is skipped", r.Pool)
 	}
@@ -66,7 +103,7 @@ func TestResolveAllocationNoIncomeRendersNothing(t *testing.T) {
 // past income, so a bar that was 100% green sat under a caption saying "more
 // than you earn". The reader believes the colour.
 func TestAllocationBarSplitsAtTheIncomeTick(t *testing.T) {
-	r := resolveAllocation(allocTestView(590000, 0, 958250, 0))
+	r := testAllocation(allocTestView(590000, 0, 958250, 0))
 	if r.OverPct <= 0 {
 		t.Fatal("an over-income plan must render a striped overflow segment")
 	}
@@ -99,7 +136,7 @@ func TestAllocationBarHasNoTickWhenUnder(t *testing.T) {
 		{"exact", 590000, 590000},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			r := resolveAllocation(allocTestView(tc.income, 0, tc.budgeted, 0))
+			r := testAllocation(allocTestView(tc.income, 0, tc.budgeted, 0))
 			if r.MarkerPct >= 0 {
 				t.Errorf("MarkerPct = %d, want -1 — the track edge already marks income", r.MarkerPct)
 			}
@@ -122,7 +159,7 @@ func TestAllocationSegmentsAlwaysFillTheTrack(t *testing.T) {
 		{590000, 90000, 300000, 40000},
 	}
 	for _, c := range cases {
-		r := resolveAllocation(allocTestView(c[0], c[1], c[2], c[3]))
+		r := testAllocation(allocTestView(c[0], c[1], c[2], c[3]))
 		total := r.BudgetedPct + r.SavingsPct + r.OverPct + r.GapPct
 		if total != 100 {
 			t.Errorf("income=%d rolled=%d budgeted=%d saved=%d: segments total %d%%, want 100%%",
@@ -140,11 +177,11 @@ func TestAllocationSegmentsAlwaysFillTheTrack(t *testing.T) {
 // is day one, not a household that has fallen behind. It must be distinguishable
 // from "under" so the copy can greet rather than scold.
 func TestAllocationEmptyStateIsNotAFailureReport(t *testing.T) {
-	empty := resolveAllocation(allocTestView(700000, 0, 0, 0))
+	empty := testAllocation(allocTestView(700000, 0, 0, 0))
 	if empty.State != "empty" {
 		t.Fatalf("State = %q, want empty", empty.State)
 	}
-	started := resolveAllocation(allocTestView(700000, 0, 1, 0))
+	started := testAllocation(allocTestView(700000, 0, 1, 0))
 	if started.State != "under" {
 		t.Fatalf("one budget must leave the empty state, got %q", started.State)
 	}

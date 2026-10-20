@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Budget income allocation delegates checked money arithmetic, state selection and chart percentages to the native budgeting package; the page retains formatting and event handling.
 - Goal summaries and ordering use tested native projections, consistent base-currency totals, explicit FX exclusions and cache keys that track deadline and pause transitions.
 - Accounts share an indexed ledger snapshot for balances, payment hints and row series. Group subtotals exclude invalid or unconvertible balances and disclose incomplete totals.
 - Architecture checks follow the canonical money calculations through extracted native view models, and calendar overflow regressions require an unavailable amount rather than preserving the old overflowing conversion.

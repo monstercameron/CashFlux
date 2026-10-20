@@ -1,3 +1,7 @@
+## 2026-10-20 - Native budget allocation picture
+
+Moved the allocation model and its existing tests out of the WASM screen package. Pool, assigned funds, remaining income, overshoot and the shared spending axis retain the same checked integer contract. The native suite now exercises these cases directly, and the 790-screen WASM gate passed. Budget tiles also use the shared keyed surface without changing their method attribute.
+
 ## 2026-10-20 - Native goal summaries and ordering
 
 Extracted goal partitioning, sorting, health and headline arithmetic into goalview. Indexed task progress avoids repeated scans while sorting. Checked allocation sums report overflow, and overall progress uses converted values instead of adding unlike currencies. Tests cover ownership, stale cache contexts, sorting, rounding, missing rates and transition clocks. Native tests and the full screen WASM lane passed, including the rendered summary changing after a browser data revision.
