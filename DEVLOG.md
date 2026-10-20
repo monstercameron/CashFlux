@@ -1,3 +1,7 @@
+## 2026-10-20 - Memoized transaction calendar projection
+
+Registered the projection memo at a stable hook position. Cache regressions cover reuse, distinct account lenses, filter/month/date-format changes, FX omission warnings and browser revisions. The existing calendar math remains native; selection and overflow interaction behavior are unchanged. The full screen lane passed 805 tests, including the new calendar memo regression.
+
 ## 2026-10-20 - Native milestone preparation and roster refresh
 
 Moved reached-goal, prior-month kept-budget and no-spend milestone inputs into notificationview, preserving raw/netted ledger distinctions and existing seen identities. The page reuses the shared net-worth snapshot. Direct revision subscriptions refresh summary/list roster values even with stable app props. Native parity tests cover goal kinds, budget/FX/period edges and streaks; the 805-screen gate passed roster changes, tab transitions and day/data invalidation. The split snapshot regression file also passed its focused rerun.

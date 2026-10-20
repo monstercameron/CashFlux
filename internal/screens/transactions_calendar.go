@@ -11,6 +11,7 @@
 package screens
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -20,6 +21,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/CashFlux/internal/txncalendar"
 	"github.com/monstercameron/CashFlux/internal/txncalendarview"
+	"github.com/monstercameron/CashFlux/internal/txnfilter"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/css"
@@ -85,12 +87,7 @@ func txnCalendarWidget(props txnCalendarProps) ui.Node {
 	f := filterAtom.Get()
 	labels := calendarLabels(pr)
 	labels.ScopePrefs = uistate.LoadPrefs()
-	month := labels.Build(txncalendarview.Input{
-		Now: time.Now(), WeekStart: pr.WeekStartWeekday(), Filter: f, MemberLens: lens,
-		Shown: props.Shown, Transactions: props.App.Transactions(), Recurring: props.App.Recurring(),
-		Accounts: props.App.Accounts(), Settled: props.App.BillMatchPaidOccurrences(),
-		Rates: currency.Rates{Base: props.Base, Rates: props.App.Settings().FXRates},
-	})
+	month := useTxnCalendarMonth(props, f, lens, labels, time.Now())
 	pickDay := func(dateKey string) {
 		selection := labels.PickDay(dateKey, f.From, f.To)
 		setTxFilterOn(filterAtom, func(x *uistate.TxFilter) { *x = selection.Apply(*x) })
@@ -98,8 +95,24 @@ func txnCalendarWidget(props txnCalendarProps) ui.Node {
 		uistate.PostNotice(selection.Notice, false)
 	}
 	return ui.CreateElement(txnCalCalendar, txnCalCalendarProps{
-		Month: month, Headers: labels.Headers(pr.WeekStartWeekday()), OnPick: pickDay,
+		Month: *month, Headers: labels.Headers(pr.WeekStartWeekday()), OnPick: pickDay,
 	})
+}
+
+// useTxnCalendarMonth reuses the projection while selection, toolbar disclosure
+// or view mode changes. Data, scope, calendar day and localized date labels are
+// explicit inputs, so returning to the calendar never retains an obsolete month.
+func useTxnCalendarMonth(props txnCalendarProps, filter txnfilter.Criteria, lens []string, labels txncalendarview.Labels, now time.Time) *txncalendarview.Month {
+	return ui.UseMemo(func() *txncalendarview.Month {
+		month := labels.Build(txncalendarview.Input{
+			Now: now, WeekStart: labels.Prefs.WeekStartWeekday(), Filter: filter, MemberLens: lens,
+			Shown: props.Shown, Transactions: props.App.Transactions(), Recurring: props.App.Recurring(),
+			Accounts: props.App.Accounts(), Settled: props.App.BillMatchPaidOccurrences(),
+			Rates: currency.Rates{Base: props.Base, Rates: props.App.Settings().FXRates},
+		})
+		return &month
+	}, revKey(props.App), filter, fmt.Sprintf("%#v", lens), props.Shown, len(props.Shown), props.Base,
+		now.Format("2006-01-02"), labels.Prefs.WeekStartWeekday(), labels.Prefs.DateStyle, labels.ScopePrefs.DateStyle, uistate.ActiveLanguage())
 }
 
 type txnCalCalendarProps struct {
