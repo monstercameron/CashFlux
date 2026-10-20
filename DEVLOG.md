@@ -1,3 +1,7 @@
+## 2026-10-20 - Native notification feed preparation
+
+Extracted feed preparation and streak arithmetic into notificationview, kept collapsed groups lazy, and fixed variable hook positions across empty and populated states. History previously rendered blank for records with only Message; it now explicitly uses that legacy fallback. WASM tests exercise final-dismiss Undo, keyed expansion, shared/member lenses, archive search and wins transitions. Native and full screen suites passed. Removed the obsolete history/list/wins hook exceptions; browser journeys remain a separate gate.
+
 ## 2026-10-20 - Native dashboard frame inputs
 
 Moved financial frame calculations into dashboardview and kept the canonical net-worth change definition. The hero now applies the same resolved account scope as dashboard tiles, including unambiguous institution IDs. Its stable wrapper subscribes before the readiness branch; the conditional child owns its hooks. Native model tests and the full screen lane passed, including unavailable-to-empty-to-populated transitions and colliding institution-name cases. Removed the obsolete hero hook exception.

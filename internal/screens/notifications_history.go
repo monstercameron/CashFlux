@@ -87,6 +87,7 @@ func notificationHistoryView(props notifHistoryProps) ui.Node {
 
 	search := ui.UseState("")
 	sev := ui.UseState("")
+	pr := uistate.UsePrefs().Get()
 
 	onSearch := ui.UseEvent(func(v string) { search.Set(v) })
 	onSev := ui.UseEvent(func(e ui.Event) { sev.Set(e.GetValue()) })
@@ -133,21 +134,15 @@ func notificationHistoryView(props notifHistoryProps) ui.Node {
 		return Div(bar, empty)
 	}
 
-	pr := uistate.UsePrefs().Get()
 	now := time.Now().Unix()
-	rows := make([]ui.Node, 0, len(items))
-	for _, rec := range items {
+	rows := MapKeyed(items, func(rec notifyhistory.Record) any { return rec.ID }, func(rec notifyhistory.Record) ui.Node {
 		timeStr := relativeTime(rec.At, now)
 		if timeStr == "" {
 			timeStr = pr.FormatDate(time.Unix(rec.At, 0))
 		}
-		rows = append(rows, ui.CreateElement(notifHistoryRow, notifHistoryRowProps{Rec: rec, TimeStr: timeStr}))
-	}
-	listArgs := []any{css.Class("nhx-list"), Attr("role", "list")}
-	for _, r := range rows {
-		listArgs = append(listArgs, r)
-	}
-	return Div(bar, Div(listArgs...))
+		return ui.CreateElement(notifHistoryRow, notifHistoryRowProps{Rec: rec, TimeStr: timeStr})
+	})
+	return Div(bar, Div(css.Class("nhx-list"), Attr("role", "list"), rows))
 }
 
 // archiveMessage renders an archived alert through the catalog (C362).
@@ -159,6 +154,12 @@ func notificationHistoryView(props notifHistoryProps) ui.Node {
 // written before that fall back to the stored sentence, which is the right
 // answer for them.
 func archiveMessage(rec notifyhistory.Record) string {
+	// Legacy records and RecordNotification carry only Message. Resolve does
+	// not invoke its translator when the copy has no key, so the fallback must
+	// be handled before resolving the optional catalog-backed copy.
+	if rec.MessageText.Empty() {
+		return rec.Message
+	}
 	return rec.MessageText.Resolve(func(key string, args ...any) string {
 		if got := uistate.T(key, args...); got != "" && got != key {
 			return got

@@ -108,12 +108,9 @@ screens/networth_drill.go:nwsDrillRow
 screens/networth_page.go:NetWorth
 screens/notifications.go:notifyRow
 screens/notifications_history.go:notifHistoryRow
-screens/notifications_history.go:notificationHistoryView
-screens/notifications_tiles.go:notifListWidget
 screens/notifications_tiles.go:notifSummaryWidget
 screens/notifications_tiles.go:notifUndoBar
 screens/notifications_widget.go:NotificationCenter
-screens/notifications_wins.go:notifWinsWidget
 screens/payday_preflight.go:paydayPreflightCard
 screens/payeealias_section.go:payeeAliasSection
 screens/payeeclean_modal.go:PayeeCleanBody

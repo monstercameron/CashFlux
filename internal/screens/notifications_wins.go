@@ -18,6 +18,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/milestones"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/notificationview"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/css"
@@ -32,25 +33,6 @@ const winsSeenKey = "cashflux:wins-seen"
 // noSpendScanDays bounds how far back the no-spend streak is counted.
 const noSpendScanDays = 90
 
-// noSpendStreak counts consecutive COMPLETED days (ending yesterday) with no
-// expense. Today is excluded so a not-yet-spent morning doesn't inflate the streak.
-func noSpendStreak(txns []domain.Transaction, now time.Time) int {
-	spendDays := map[string]bool{}
-	for _, t := range txns {
-		if t.IsExpense() {
-			spendDays[t.Date.Format("2006-01-02")] = true
-		}
-	}
-	streak := 0
-	for i := 1; i <= noSpendScanDays; i++ {
-		if spendDays[now.AddDate(0, 0, -i).Format("2006-01-02")] {
-			break
-		}
-		streak++
-	}
-	return streak
-}
-
 // keptBudgetsLastMonth counts budgets that finished the last completed month at or
 // under their limit with real spend against them (a budget you never touched isn't
 // a win), and returns that month's period key. Errors on a single budget skip it.
@@ -58,11 +40,12 @@ func keptBudgetsLastMonth(app *appstate.App, rates currency.Rates, now time.Time
 	lastMonth := now.AddDate(0, 0, -now.Day()) // any day in the previous month
 	start, end := budgeting.PeriodRange(domain.PeriodMonthly, lastMonth, uistate.LoadPrefs().WeekStartWeekday())
 	kept := 0
+	ledger := budgetLedgerForApp(app)
 	for _, b := range app.Budgets() {
 		if b.Period != domain.PeriodMonthly {
 			continue // only monthly budgets have a clean "last month" to grade
 		}
-		spent, err := budgeting.Spent(b, budgetLedgerForApp(app), start, end, rates)
+		spent, err := budgeting.Spent(b, ledger, start, end, rates)
 		if err != nil {
 			continue
 		}
@@ -104,7 +87,7 @@ func winsInput(app *appstate.App) milestones.Input {
 	return milestones.Input{
 		ReachedGoals:  reached,
 		NetWorthMinor: nw,
-		NoSpendDays:   noSpendStreak(app.Transactions(), now),
+		NoSpendDays:   notificationview.NoSpendStreak(app.Transactions(), now, noSpendScanDays),
 		KeptBudgets:   kept,
 		KeptPeriodKey: periodKey,
 		Now:           now,
@@ -159,6 +142,9 @@ func loadWinsSeen() map[string]bool {
 // physics for financial milestones) and gated off under prefers-reduced-motion.
 // Renders nothing when there's nothing to celebrate.
 func notifWinsWidget(props notifProps) ui.Node {
+	// App is a stable pointer. Subscribe here so goal/ledger writes refresh the
+	// tile even when the parent's next render has equal component props.
+	_ = uistate.UseDataRevision().Get()
 	app := props.App
 	if app == nil {
 		app = appstate.Default
@@ -175,6 +161,16 @@ func notifWinsWidget(props notifProps) ui.Node {
 		return Fragment()
 	}
 
+	return ui.CreateElement(notifWinsContent, notifWinsContentProps{Found: found, Base: base})
+}
+
+type notifWinsContentProps struct {
+	Found []milestones.Milestone
+	Base  string
+}
+
+func notifWinsContent(props notifWinsContentProps) ui.Node {
+	found, base := props.Found, props.Base
 	seen := loadWinsSeen()
 	hasFresh := false
 	for _, m := range found {

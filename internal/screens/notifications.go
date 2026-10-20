@@ -29,16 +29,6 @@ import (
 // identical nags (e.g. eight "needs a balance update" cards) is one tidy card.
 const notifGroupMin = 3
 
-// notifyGroupKind returns the rule kind a feed item belongs to — the ID prefix
-// before the first '@' (feed IDs are notify.DedupeKey(ruleID, occurrence) =
-// "ruleID@occurrence"). Same-kind items are the ones worth grouping.
-func notifyGroupKind(id string) string {
-	if i := strings.IndexByte(id, '@'); i >= 0 {
-		return id[:i]
-	}
-	return ""
-}
-
 // notifyGroupSummary renders the plain-English one-line summary shown on a
 // collapsed group ("8 accounts need a balance update"), by rule kind.
 func notifyGroupSummary(kind string, n int) string {
@@ -58,15 +48,15 @@ func notifyGroupSummary(kind string, n int) string {
 	}
 }
 
-// notifGroupRowProps drive one collapsed group card. Children are the already-
-// built notifyRow nodes for the group's members (built in the list widget, which
-// owns the per-item callback closures); the group just shows/hides them.
+// notifGroupRowProps configure a collapsed group. The item renderer runs only
+// when expanded, avoiding hidden row construction during normal feed updates.
 type notifGroupRowProps struct {
 	Kind         string
 	Severity     string
 	Summary      string
 	Count        int
-	Children     []ui.Node
+	Items        []uistate.FeedItem
+	RenderItem   func(uistate.FeedItem) ui.Node
 	OnDismissAll func()
 }
 
@@ -116,12 +106,9 @@ func notifGroupRow(props notifGroupRowProps) ui.Node {
 	)
 
 	var body ui.Node = Fragment()
-	if open {
-		bodyArgs := []any{css.Class("notif-group-list"), Attr("role", "list")}
-		for _, c := range props.Children {
-			bodyArgs = append(bodyArgs, c)
-		}
-		body = Div(bodyArgs...)
+	if open && props.RenderItem != nil {
+		body = Div(css.Class("notif-group-list"), Attr("role", "list"),
+			MapKeyed(props.Items, func(item uistate.FeedItem) any { return item.ID }, props.RenderItem))
 	}
 
 	return Div(ClassStr(cardCls), Attr("role", "listitem"), Attr("data-testid", "notif-group-"+props.Kind),
@@ -146,20 +133,6 @@ func notifGroupRow(props notifGroupRowProps) ui.Node {
 // feed). The "live" value is kept (rather than renamed to "needs") so the
 // long-standing notif-view-live testid keeps addressing the default tab.
 func UseNotifyView() state.Atom[string] { return state.UseAtom("notify:view", "live") }
-
-// triageVisibleFeed is the shared pipeline both notification widgets run to turn
-// the raw feed into the rows for the current triage view: hide snoozed items,
-// collapse exact-duplicate digests, then keep only the bucket the view selects
-// ("watching" → the calm remainder; anything else → the Needs-you queue). The
-// History view never calls this — the shell swaps in the archive instead.
-func triageVisibleFeed(view string, feed []uistate.FeedItem, now int64) []uistate.FeedItem {
-	visible := uistate.DedupeFeed(uistate.VisibleFeed(feed, now))
-	needs, watching := uistate.PartitionTriage(visible)
-	if view == "watching" {
-		return watching
-	}
-	return needs
-}
 
 // notifSurfaceShellProps carries the app handle plus the already-built live
 // surface node so the shell can swap it for the archive view without rebuilding.
@@ -332,14 +305,11 @@ func notifyTxnSearchLabel(txnID string) string {
 	if app == nil {
 		return ""
 	}
-	for _, t := range app.Transactions() {
-		if t.ID != txnID {
-			continue
+	if txn, ok := app.TransactionByID(txnID); ok {
+		if label := strings.TrimSpace(txn.Payee); label != "" {
+			return label
 		}
-		if s := strings.TrimSpace(t.Payee); s != "" {
-			return s
-		}
-		return strings.TrimSpace(t.Desc)
+		return strings.TrimSpace(txn.Desc)
 	}
 	return ""
 }
