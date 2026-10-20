@@ -21,14 +21,12 @@ import (
 	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/healthscore"
 	"github.com/monstercameron/CashFlux/internal/icon"
-	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/period"
 	"github.com/monstercameron/CashFlux/internal/provenance"
 	"github.com/monstercameron/CashFlux/internal/reports"
 	"github.com/monstercameron/CashFlux/internal/reportview"
 	"github.com/monstercameron/CashFlux/internal/scope"
-	"github.com/monstercameron/CashFlux/internal/subscriptions"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -193,11 +191,23 @@ func Reports() ui.Node {
 
 	// ── Year computations (all pure-core calls over [as, ae)). ────────────────
 	flow := review.Flow
-	rows, _ := reports.SpendingByCategory(scopedTxns, as, ae, true, ps, pe, rates)
 	cats := app.Categories()
-	if rollupCats.Get() {
-		rows = reports.RollUpByParent(rows, cats)
-	}
+	nowActivity := time.Now()
+	confirmedSubs := loadConfirmedSubs()
+	activity := ui.UseMemo(func() reportview.Activity {
+		model, _ := reportview.BuildActivity(reportview.ActivityInput{
+			Series: review, Bounds: bounds, PriorStart: ps, PriorEnd: pe, Rates: rates,
+			Categories: cats, HouseholdAccounts: accounts, Recurring: app.Recurring(),
+			ConfirmedSubs: confirmedSubs, Now: nowActivity,
+		})
+		return model
+	}, revKey(app), as.Unix(), ae.Unix(), ps.Unix(), pe.Unix(), fmt.Sprintf("%#v", sc), nowActivity.Format(dateutil.Layout), fmt.Sprintf("%#v", confirmedSubs))
+	categoryReview := ui.UseMemo(func() reportview.CategoryReview {
+		model, err := reportview.BuildCategoryReview(activity.Spending, activity.CategoryTrends, cats, rollupCats.Get(), months, flow.Expense)
+		model.Error = err
+		return model
+	}, revKey(app), as.Unix(), ae.Unix(), ps.Unix(), pe.Unix(), fmt.Sprintf("%#v", sc), rollupCats.Get())
+	rows := categoryReview.Spending
 	catName := make(map[string]string, len(cats))
 	for _, c := range cats {
 		catName[c.ID] = c.Name
@@ -213,22 +223,12 @@ func Reports() ui.Node {
 
 	// Savings reuses the exact cash-flow buckets; it never scans the ledger again.
 	monthFlows, srInts := review.MonthFlows, review.SavingsRates
-	catTrends, _ := reports.CategoryTrends(scopedTxns, bounds, rates)
-	trendByCat := make(map[string][]int64, len(catTrends))
-	for _, tr := range catTrends {
-		trendByCat[tr.CategoryID] = tr.Spend
-	}
+	catTrends := activity.CategoryTrends
 	// FP-T2b: the per-payee series the reports package has always computed and no
 	// screen has ever drawn. A payee row states one total for the window, which
 	// cannot distinguish a steady $200 a month from one $2,400 January — the same
 	// argument that put a sparkline beside every category.
-	payeeTrends, _ := reports.PayeeTrends(scopedTxns, bounds, rates, 10)
-	trendByPayee := make(map[string][]int64, len(payeeTrends))
-	for _, tr := range payeeTrends {
-		// PayeeTrends and TopPayees key payees identically (lower-cased, trimmed),
-		// so the sparkline and the amount on a row always describe the same payee.
-		trendByPayee[strings.ToLower(strings.TrimSpace(tr.Payee))] = tr.Spend
-	}
+	trendByPayee := activity.PayeeTrends
 	monthLabels := make([]string, 0, months)
 	for k := 0; k < months; k++ {
 		monthLabels = append(monthLabels, bounds[k].Format("Jan"))
@@ -238,13 +238,7 @@ func Reports() ui.Node {
 	// scoped income/spending beside an unscoped $152k net worth read as a broken
 	// filter). The scope resolves to account IDs, so filter the accounts and use
 	// the already-scoped transactions for the series and the level.
-	nwBounds := append([]time.Time{}, bounds...)
-	nwSeries, _ := ledger.NetWorthSeries(scopedAccounts, scopedTxns, nwBounds, rates)
-	nwNet, _, _, _ := ledger.NetWorth(scopedAccounts, scopedTxns, rates)
-	var nwChange int64
-	if n := len(nwSeries); n >= 2 {
-		nwChange = nwSeries[n-1].Amount - nwSeries[0].Amount
-	}
+	nwSeries, nwNet, nwChange := activity.NetWorthSeries, activity.NetWorth, activity.NetWorthChange
 
 	// Health: the deterministic score + factors + prioritized steps.
 	health := healthscore.Evaluate(liveHealthInputs(app, time.Now()))
@@ -252,83 +246,30 @@ func Reports() ui.Node {
 	creditSeries := review.Credit
 
 	// The year's fee + interest charges ("money that bought nothing", §07).
-	costs, _ := reports.CostOfMoney(scopedTxns, cats, as, ae, rates)
+	costs := activity.Costs
 
 	// Runway (liquid ÷ 6-month burn) for the strengths/problems split. Scoped
 	// like net worth — an account-scoped report must not count cash the scope
 	// excluded (the vitals section keeps its own household-wide position model).
-	liquid, _ := ledger.LiquidBalance(scopedAccounts, scopedTxns, rates)
-	burn := reports.AverageMonthlyExpense(lastN(monthFlows, 6))
-	runway := reports.EstimateRunway(liquid.Amount, burn)
+	runway := activity.Runway
 
 	// Year lists.
-	payees, _ := reports.TopPayees(scopedTxns, as, ae, rates, 10)
-	largest, _ := reports.LargestExpenses(scopedTxns, as, ae, rates, 10)
-	bigIncome, _ := reports.LargestIncome(scopedTxns, as, ae, rates, 8)
-	incomeRows, _ := reports.IncomeByCategory(scopedTxns, as, ae, rates)
-	memberSpend, _ := reports.SpendingByMember(scopedTxns, as, ae, rates)
-	tagSpend, _ := reports.SpendingByTag(scopedTxns, as, ae, true, ps, pe, rates)
-	spendStats, _ := reports.SpendingStats(scopedTxns, as, ae, rates)
-	noSpendDays := reports.NoSpendDays(scopedTxns, as, ae, time.Now())
-	weekday, _ := reports.SpendingByWeekday(scopedTxns, as, ae, rates)
+	payees, largest, incomeRows := activity.Payees, activity.LargestExpenses, activity.Income
+	memberSpend, tagSpend := activity.Members, activity.Tags
+	spendStats, noSpendDays, weekday := activity.SpendStats, activity.NoSpendDays, activity.Weekday
 	// QA R3 CF-03: the review's subscription section counted every detected
 	// recurring pattern — utilities, pharmacy runs, liability payments — into
 	// "N recurring charges ≈ $X/yr". It now applies the same classification the
 	// Subscriptions surface uses (essentials, liability payments, and planned
 	// recurring flows excluded), so the headline total only carries charges the
 	// user could actually cancel.
-	subsRecurringNames := make(map[string]bool)
-	for _, r := range app.Recurring() {
-		if n := strings.ToLower(strings.TrimSpace(r.Label)); n != "" {
-			subsRecurringNames[n] = true
-		}
-	}
-	subsCatNameOf := func(id string) string { return catName[id] }
-	subsAccounts := app.Accounts()
-	subs, _ := subscriptions.Detect(scopedTxns, rates, 3)
-	// #52: needs-review detections never fold into the annual headline either —
-	// only Confirmed (user-verified) and Likely (strong evidence) count. The
-	// name-keyed levels also gate the price-rise callout below.
-	subsConfirmed := loadConfirmedSubs()
-	subsLevel := make(map[string]subscriptions.Confidence, len(subs))
-	liveSubs := subs[:0:0]
-	for _, s := range subs {
-		subsLevel[subscriptions.ConfirmKey(s.Name)] = subscriptions.Assess(s, subsConfirmed).Level
-		if s.Lapsed(time.Now()) {
-			continue
-		}
-		if !subscriptions.IsRealSubscriptionName(s.Name, scopedTxns, subsAccounts, subsCatNameOf, subsRecurringNames) {
-			continue
-		}
-		if subsLevel[subscriptions.ConfirmKey(s.Name)] == subscriptions.ConfidenceReview {
-			continue
-		}
-		liveSubs = append(liveSubs, s)
-	}
-	priceRises, _ := subscriptions.DetectPriceChanges(scopedTxns, rates, 3)
-	rises := priceRises[:0:0]
-	for _, pc := range priceRises {
-		if pc.Delta <= 0 || subsLevel[subscriptions.ConfirmKey(pc.Name)] == subscriptions.ConfidenceReview {
-			continue
-		}
-		if subscriptions.IsRealSubscriptionName(pc.Name, scopedTxns, subsAccounts, subsCatNameOf, subsRecurringNames) {
-			rises = append(rises, pc)
-		}
-	}
-	monthsRed := reports.MonthsNegative(monthFlows)
+	liveSubs, rises := activity.Subscriptions, activity.PriceRises
+	monthsRed := activity.MonthsNegative
 	// QA CF-23: the in-progress month (17 days of July) must not rank against
 	// eleven complete months as the year's "lightest" — find the partial month
 	// in the window (the one containing today) and exclude it from the extremes.
-	partialIdx := -1
-	nowSeasonal := time.Now()
-	for k := 0; k+1 < len(bounds); k++ {
-		if !nowSeasonal.Before(bounds[k]) && nowSeasonal.Before(bounds[k+1]) {
-			partialIdx = k
-			break
-		}
-	}
-	hiIdx, loIdx, seasonalOK := reports.SeasonalExtremesSkipping(monthFlows, partialIdx)
-	trims := reports.TrimTargets(catTrends, 2500, 3) // ≥$25/mo recent average
+	hiIdx, loIdx, seasonalOK := activity.HighMonth, activity.LowMonth, activity.HasSeasonality
+	trims := activity.Trims
 	// Top-10 to match the money-flow diagram, so the table's "everything else"
 	// and the diagram's are the same number.
 	per100 := reports.Per100(rows, flow.Income, 10)
@@ -345,20 +286,16 @@ func Reports() ui.Node {
 		return reportview.BuildPosition(accounts, txns, review.HouseholdFlows, rates, essBasis.EssentialMonthlyMinor())
 	}, revKey(app), as.Unix(), ae.Unix(), essBasis.EssentialMonthlyMinor())
 	vt := position.Vitals
-	standSec := rptaVitalsSection(vt, position.MonthsAveraged, essBasis.FixedMonthlyMinor, essBasis.EssentialSpendMonthlyMinor, fmtMinor, hhChip("rpta.hhChipTitle"))
+	var standSec ui.Node
+	if position.Error != nil {
+		standSec = rptaSectionWithAction("rpta-00", "00", uistate.T("rpta.secStand"), "neutral", uistate.T("rpta.secStandSub"), "", hhChip("rpta.hhChipTitle"),
+			P(css.Class("rpta-muted"), Attr("data-testid", "rpta-position-unavailable"), uistate.T("rpta.positionUnavailable")))
+	} else {
+		standSec = rptaVitalsSection(vt, position.MonthsAveraged, essBasis.FixedMonthlyMinor, essBasis.EssentialSpendMonthlyMinor, fmtMinor, hhChip("rpta.hhChipTitle"))
+	}
 
 	// Uncategorized share of spend (data hygiene).
-	var uncatMinor int64
-	for _, r := range rows {
-		if r.CategoryID == "" {
-			uncatMinor = absMinor(r.Amount)
-			break
-		}
-	}
-	uncatPct := int64(0)
-	if flow.Expense > 0 {
-		uncatPct = uncatMinor * 100 / flow.Expense
-	}
+	uncatMinor, uncatPct := categoryReview.UncategorizedMinor, categoryReview.UncategorizedPercent
 
 	// Native balances retain their own currency; the cost column, bars and total
 	// all use base-currency interest computed in the shared position model.
@@ -639,7 +576,7 @@ func Reports() ui.Node {
 	if gc.Completed > 0 {
 		wins = append(wins, rptaWin(uistate.T("rpta.winGoals", gc.Completed)))
 	}
-	if runway.Months >= 3 && burn > 0 {
+	if runway.Months >= 3 && !runway.Sustainable {
 		wins = append(wins, rptaWin(uistate.T("rpta.winRunway", runway.Months)))
 	}
 	askStrong := fmt.Sprintf("health score %s; ", rptaScoreText(health))
@@ -955,22 +892,15 @@ func Reports() ui.Node {
 
 	// ── 04 · Categories reviewed (the full-year table with sparklines). ──────
 	narrative := reports.SpendingNarrative(rows, true, fmtMinor, func(id string) string { return catName[id] })
-	var maxCat int64
-	for _, r := range rows {
-		if a := absMinor(r.Amount); a > maxCat {
-			maxCat = a
-		}
-	}
+	maxCat := categoryReview.MaxMinor
 	var catRows, zeroCatRows []ui.Node
-	for _, r := range rows {
-		if r.Amount == 0 && r.Prior == 0 {
-			continue
-		}
+	for _, row := range categoryReview.Rows {
+		r := row.Spend
 		node := ui.CreateElement(rptaCatRow, rptaCatRowProps{
 			CategoryID: r.CategoryID, Name: nameOf(r.CategoryID),
 			Dot:    flowColors.of(nameOf(r.CategoryID)),
-			Amount: r.Amount, Prior: r.Prior, HasDelta: r.HasDelta, DeltaPct: r.DeltaPct, PriorZero: r.PriorZero,
-			TotalSpend: flow.Expense, MaxCat: maxCat, Spark: trendByCat[r.CategoryID],
+			Amount: row.Amount, Average: row.AverageMinor, SharePercent: row.SharePercent, WidthPercent: row.WidthPercent,
+			Prior: r.Prior, HasDelta: r.HasDelta, DeltaPct: r.DeltaPct, PriorZero: r.PriorZero, Spark: row.Spark,
 			FmtMinor: fmtMinor, OnDrill: drillCategory,
 		})
 		if r.Amount == 0 {
@@ -985,58 +915,36 @@ func Reports() ui.Node {
 	// Top 12 bars + one aggregated "everything else" row — the long tail lives
 	// in the folded table, not as fifteen more sliver bars.
 	var catHist []ui.Node
-	var histRest int64
-	histRestN := 0
-	for _, r := range rows {
-		if r.Amount == 0 {
-			continue
-		}
-		amt := absMinor(r.Amount)
-		if len(catHist) >= 12 {
-			histRest += amt
-			histRestN++
-			continue
-		}
-		share := int64(0)
-		if flow.Expense > 0 {
-			share = amt * 100 / flow.Expense
-		}
+	for _, row := range categoryReview.Histogram {
+		r := row.Spend
 		id := r.CategoryID
 		catHist = append(catHist, ui.CreateElement(rptaHistRow, rptaHistRowProps{
 			Label: nameOf(r.CategoryID), Color: flowColors.of(nameOf(r.CategoryID)),
-			Amount: amt, Max: maxCat, Meta: fmt.Sprintf("%d%%", share),
+			Amount: row.Amount, WidthPercent: row.HistogramPercent, Meta: fmt.Sprintf("%d%%", row.SharePercent),
 			HasDelta: r.HasDelta, DeltaPct: r.DeltaPct, PriorZero: r.PriorZero,
 			FmtMinor: fmtMinor, OnSelect: func() { drillCategory(id) },
 		}))
 	}
-	if histRest > 0 {
-		share := int64(0)
-		if flow.Expense > 0 {
-			share = histRest * 100 / flow.Expense
-		}
+	if categoryReview.RestMinor > 0 {
 		catHist = append(catHist, ui.CreateElement(rptaHistRow, rptaHistRowProps{
-			Label: uistate.T("rpta.histRest", histRestN), Color: "#8a8f98",
-			Amount: histRest, Max: maxCat, Meta: fmt.Sprintf("%d%%", share),
+			Label: uistate.T("rpta.histRest", categoryReview.RestCount), Color: "#8a8f98",
+			Amount: categoryReview.RestMinor, WidthPercent: categoryReview.RestWidthPercent, Meta: fmt.Sprintf("%d%%", categoryReview.RestSharePercent),
 			FmtMinor: fmtMinor,
 		}))
 	}
 	// Tags render beside the categories on the SAME spending scale (maxCat), so
 	// a tag bar and a category bar are directly comparable.
 	var tagNodes []ui.Node
-	for i, ts := range tagSpend {
+	tagRows, _ := reportview.BuildTagRows(tagSpend, maxCat)
+	for i, ts := range tagRows {
 		if i >= 10 {
 			break
-		}
-		hasDelta := ts.Prior > 0
-		var deltaPct int64
-		if hasDelta {
-			deltaPct = (ts.Amount - ts.Prior) * 100 / ts.Prior
 		}
 		tagNodes = append(tagNodes, Div(Attr("data-testid", "rpta-tag-row"), ui.CreateElement(rptaHistRow, rptaHistRowProps{
 			Label: "#" + ts.Tag, Chip: true,
 			Color:  rptaCatPalette[i%len(rptaCatPalette)],
-			Amount: ts.Amount, Max: maxCat, Meta: uistate.T("rpta.tagCharges", ts.Count),
-			HasDelta: hasDelta, DeltaPct: deltaPct, PriorZero: ts.Prior == 0 && ts.Amount > 0,
+			Amount: ts.Amount, WidthPercent: ts.WidthPercent, Meta: uistate.T("rpta.tagCharges", ts.Count),
+			HasDelta: ts.HasDelta, DeltaPct: ts.DeltaPercent, PriorZero: ts.PriorZero,
 			FmtMinor: fmtMinor,
 		})))
 	}
@@ -1132,43 +1040,17 @@ func Reports() ui.Node {
 		largestNodes = append(largestNodes, quietRow(desc, pr.FormatDate(e.Date), e.Amount))
 	}
 	// Deposits: fold repeats of the same description + amount into one row.
-	type depGroup struct {
-		desc   string
-		amount int64
-		count  int
-		last   time.Time
-	}
-	var depGroups []depGroup
-	for _, e := range bigIncome {
-		desc := e.Desc
-		if desc == "" {
-			desc = nameOf(e.CategoryID)
-		}
-		folded := false
-		for gi := range depGroups {
-			if depGroups[gi].desc == desc && depGroups[gi].amount == e.Amount {
-				depGroups[gi].count++
-				if e.Date.After(depGroups[gi].last) {
-					depGroups[gi].last = e.Date
-				}
-				folded = true
-				break
-			}
-		}
-		if !folded {
-			depGroups = append(depGroups, depGroup{desc: desc, amount: e.Amount, count: 1, last: e.Date})
-		}
-	}
+	depGroups := reportview.GroupDeposits(activity.LargestIncome, nameOf)
 	var depositNodes []ui.Node
 	for i, g := range depGroups {
 		if i >= 4 {
 			break
 		}
-		meta := pr.FormatDate(g.last)
-		if g.count > 1 {
-			meta = uistate.T("rpta.depTimes", g.count)
+		meta := pr.FormatDate(g.Last)
+		if g.Count > 1 {
+			meta = uistate.T("rpta.depTimes", g.Count)
 		}
-		depositNodes = append(depositNodes, quietRow(g.desc, meta, g.amount))
+		depositNodes = append(depositNodes, quietRow(g.Description, meta, g.Amount))
 	}
 	var srcNodes []ui.Node
 	for _, r := range incomeRows {
@@ -1361,12 +1243,8 @@ func Reports() ui.Node {
 			break
 		}
 	}
-	var subsAnnual int64
-	for _, s := range liveSubs {
-		subsAnnual += s.AnnualAmount()
-	}
+	subsAnnual := activity.SubscriptionAnnualMinor
 	var subNodes []ui.Node
-	sort.SliceStable(liveSubs, func(i, j int) bool { return liveSubs[i].AnnualAmount() > liveSubs[j].AnnualAmount() })
 	for i, s := range liveSubs {
 		if i >= 8 {
 			break
@@ -1426,6 +1304,9 @@ func Reports() ui.Node {
 		))
 	}
 	var problemBits []ui.Node
+	if position.Error != nil {
+		problemBits = append(problemBits, P(css.Class("rpta-prob-line", "rpta-muted"), Attr("data-testid", "rpta-debt-unavailable"), uistate.T("rpta.positionUnavailable")))
+	}
 	if len(weakFacts) > 0 {
 		problemBits = append(problemBits, rptaSub(uistate.T("rpta.probFactors"),
 			Fragment(hhChip("rpta.hhChipTitle"), rptaSrcLink("nav.health", "/health"))), Div(css.Class("rpta-facts"), weakFacts))
@@ -1665,7 +1546,10 @@ func Reports() ui.Node {
 	for _, m := range nwSeries {
 		sumNWSeries = append(sumNWSeries, m.Amount)
 	}
-	totalDebtMinor := vt.TotalDebtMinor
+	totalDebtValue := fmtMinor(vt.TotalDebtMinor)
+	if position.Error != nil {
+		totalDebtValue = uistate.T("calculation.unavailable")
+	}
 	trendItem := func(label, value, sub, tone string, series []int64) ui.Node {
 		valCls := "rpta-sum-trend-val " + tw.Fold(tw.FontDisplay)
 		if tone != "" {
@@ -1694,7 +1578,7 @@ func Reports() ui.Node {
 		trendItem(uistate.T("dashboard.income"), fmtMinor(flow.Income), "", "", sumIncSeries),
 		trendItem(uistate.T("dashboard.spending"), fmtMinor(flow.Expense), "", "", sumExpSeries),
 		trendItem(uistate.T("rpta.kept"), fmtMinor(flow.Net()), uistate.T("rpta.keptRate", flow.SavingsRate()), rptaToneFor(flow.Net()), sumNetSeries),
-		trendItem(uistate.T("rpta.sumDebt"), fmtMinor(totalDebtMinor), "", "", nil),
+		trendItem(uistate.T("rpta.sumDebt"), totalDebtValue, "", "", nil),
 		trendItem(uistate.T("dashboard.netWorth"), fmtMoney(nwNet), nwSub, nwTone, sumNWSeries),
 	)
 	sumCol := func(title, tone string, items []ui.Node, emptyKey string) ui.Node {
@@ -1749,6 +1633,9 @@ func Reports() ui.Node {
 		// them against a finished month.
 		provisionalNotice(app, as, ae),
 		leakNotice,
+		If(activity.Error != nil || categoryReview.Error != nil || review.FlowError != nil,
+			P(css.Class("rpta-muted"), Attr("data-testid", "rpta-activity-incomplete"), uistate.T("rpta.activityIncomplete"))),
+		If(position.Error != nil, P(css.Class("rpta-muted"), Attr("data-testid", "rpta-position-incomplete"), uistate.T("rpta.positionUnavailable"))),
 		modeToggle,
 		If(summaryMode.Get(), summaryView),
 		If(!summaryMode.Get(), Fragment(
@@ -1783,14 +1670,6 @@ func If2(cond bool, a, b string) string {
 		return a
 	}
 	return b
-}
-
-// lastN returns the trailing n elements of flows (fewer when shorter).
-func lastN(flows []reports.PeriodFlow, n int) []reports.PeriodFlow {
-	if len(flows) <= n {
-		return flows
-	}
-	return flows[len(flows)-n:]
 }
 
 // rptaToneFor maps a signed amount to a tone suffix.
@@ -2007,17 +1886,17 @@ func rptaAskBtn(p rptaAskProps) ui.Node {
 // categories, §05 tags): a colored magnitude bar with the label, amount, and a
 // judgment-toned delta.
 type rptaHistRowProps struct {
-	Label     string
-	Chip      bool // render the label as a tag chip
-	Color     string
-	Amount    int64
-	Max       int64
-	Meta      string // right-edge secondary figure (share %, charge count)
-	HasDelta  bool
-	DeltaPct  int64
-	PriorZero bool
-	FmtMinor  func(int64) string
-	OnSelect  func() // nil = static row (no drill)
+	Label        string
+	Chip         bool // render the label as a tag chip
+	Color        string
+	Amount       int64
+	WidthPercent int64
+	Meta         string // right-edge secondary figure (share %, charge count)
+	HasDelta     bool
+	DeltaPct     int64
+	PriorZero    bool
+	FmtMinor     func(int64) string
+	OnSelect     func() // nil = static row (no drill)
 }
 
 // rptaHistRow is one histogram bar. Its own component so a drill hook never
@@ -2028,13 +1907,6 @@ func rptaHistRow(p rptaHistRowProps) ui.Node {
 			p.OnSelect()
 		}
 	}))
-	pct := int64(0)
-	if p.Max > 0 {
-		pct = p.Amount * 100 / p.Max
-	}
-	if pct < 1 {
-		pct = 1
-	}
 	delta := ""
 	deltaCls := "rpta-hist-delta rpta-muted"
 	switch {
@@ -2056,7 +1928,7 @@ func rptaHistRow(p rptaHistRowProps) ui.Node {
 	inner := []any{
 		Span(ClassStr(labelCls), p.Label),
 		Div(css.Class("rpta-hist-track"),
-			Div(css.Class("rpta-hist-fill"), Style(map[string]string{"width": fmt.Sprintf("%d%%", pct), "background": p.Color}))),
+			Div(css.Class("rpta-hist-fill"), Style(map[string]string{"width": fmt.Sprintf("%d%%", p.WidthPercent), "background": p.Color}))),
 		Span(css.Class("rpta-hist-amt", tw.FontDisplay), p.FmtMinor(p.Amount)),
 		Span(ClassStr(deltaCls), delta),
 		Span(css.Class("rpta-hist-meta", "rpta-muted"), p.Meta),
@@ -2196,7 +2068,7 @@ func rptaToolbar(app *appstate.App, sc scope.ReportScope, scopeOpenV bool, onTog
 		),
 	)
 	return Div(css.Class("rpta-toolbar"),
-		Div(css.Class("rpta-toolbar-row"),
+		uiw.ControlStrip(uiw.ControlStripProps{Label: uistate.T("reports.controls"), Class: "rpta-toolbar-row", Controls: []ui.Node{
 			Button(ClassStr(scopeCls+" "+tw.Fold(tw.Gap2)), Type("button"), Attr("aria-pressed", boolStr(scopeOpenV)),
 				Attr("data-testid", "reports-scope-toggle"), Title(uistate.T("reports.scopeHint")),
 				OnClick(onToggleScope),
@@ -2225,7 +2097,7 @@ func rptaToolbar(app *appstate.App, sc scope.ReportScope, scopeOpenV bool, onTog
 				Rows: rows, IncomeRows: incomeRows, Payees: payees, NameOf: nameOf,
 				Base: base, PeriodLabel: from.Format("Jan 2006"),
 			}),
-		),
+		}}),
 		If(scopeOpenV, ui.CreateElement(ScopeSelector)),
 		// Life-event annotations: the events intersecting this report window.
 		ui.CreateElement(reportEventChips, struct{}{}),
@@ -2264,16 +2136,16 @@ func rptaMonthDrill(props rptaMonthDrillProps) ui.Node {
 
 // rptaCatRowProps drives one row of the full-year category review table.
 type rptaCatRowProps struct {
-	CategoryID, Name   string
-	Dot                string // the category's money-flow color (grey when it isn't a diagram node)
-	Amount, Prior      int64
-	HasDelta           bool
-	DeltaPct           int64
-	PriorZero          bool
-	TotalSpend, MaxCat int64
-	Spark              []int64
-	FmtMinor           func(int64) string
-	OnDrill            func(string)
+	CategoryID, Name                    string
+	Dot                                 string // the category's money-flow color (grey when it isn't a diagram node)
+	Amount, Prior                       int64
+	HasDelta                            bool
+	DeltaPct                            int64
+	PriorZero                           bool
+	Average, SharePercent, WidthPercent int64
+	Spark                               []int64
+	FmtMinor                            func(int64) string
+	OnDrill                             func(string)
 }
 
 // rptaCatRow is one category line: name (drillable), year total, monthly average,
@@ -2286,13 +2158,6 @@ func rptaCatRow(props rptaCatRowProps) ui.Node {
 		}
 	}))
 	amt := props.Amount
-	if amt < 0 {
-		amt = -amt
-	}
-	share := int64(0)
-	if props.TotalSpend > 0 {
-		share = amt * 100 / props.TotalSpend
-	}
 	delta := "—"
 	deltaCls := "rpta-cat-delta rpta-muted"
 	if props.PriorZero {
@@ -2308,23 +2173,19 @@ func rptaCatRow(props rptaCatRowProps) ui.Node {
 			delta = "0%"
 		}
 	}
-	widthPct := int64(0)
-	if props.MaxCat > 0 {
-		widthPct = amt * 100 / props.MaxCat
-	}
 	return Div(css.Class("rpta-cat-row"), Attr("data-testid", "reports-cat-row"), Attr("data-category-id", props.CategoryID),
 		Button(css.Class("rpta-cat-name"), Type("button"), Attr("data-testid", "reports-cat-drill"),
 			Title(uistate.T("reports.drillTitleCat")), OnClick(drill),
 			Span(css.Class("rpta-cat-title"),
 				If(props.Dot != "", Span(css.Class("rpta-flow-dot", "rpta-cat-dot"), Attr("aria-hidden", "true"), Style(map[string]string{"background": props.Dot}))),
 				Span(props.Name)),
-			Div(css.Class("share-bar"), Div(css.Class("share-bar-fill"), Style(map[string]string{"width": fmt.Sprintf("%d%%", widthPct)}))),
+			Div(css.Class("share-bar"), Div(css.Class("share-bar-fill"), Style(map[string]string{"width": fmt.Sprintf("%d%%", props.WidthPercent)}))),
 		),
 		Span(css.Class("rpta-cat-amt", tw.FontDisplay), props.FmtMinor(amt)),
-		Span(css.Class("rpta-cat-avg", "rpta-muted"), props.FmtMinor(amt/12)),
+		Span(css.Class("rpta-cat-avg", "rpta-muted"), props.FmtMinor(props.Average)),
 		Span(css.Class("rpta-cat-spark"), sparklineSVG(props.Spark, uistate.T("rpta.catSparkAlt"))),
 		Span(ClassStr(deltaCls), delta),
-		Span(css.Class("rpta-cat-share", "rpta-muted"), fmt.Sprintf("%d%%", share)),
+		Span(css.Class("rpta-cat-share", "rpta-muted"), fmt.Sprintf("%d%%", props.SharePercent)),
 	)
 }
 

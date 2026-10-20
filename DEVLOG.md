@@ -1,3 +1,7 @@
+## 2026-10-20 - Reusable report activity and row models
+
+Moved expensive ledger/subscription/position preparation into explicit native Activity and row models. Deposit grouping uses a structured-key pass; tag/category ratios and remainder totals are checked. Household position uses checked debt/card/interest accumulation and the shared vitals/payoff errors, with visible unavailable or incomplete states instead of false zeros. Reports controls use the shared strip. Native parity/boundary tests and the 805-screen WASM lane passed after fixing a leftover screen-local burn reference; the app build and saved-report browser journey passed. New matched route timings remain descriptive and are recorded in the performance guide.
+
 ## 2026-10-20 - Checked dashboard cash forecasts
 
 Each account projection is converted once per horizon and checked before accumulation. A failed financial calculation returns no partial headline; the tile shows an unavailable state, while rate omissions retain an explanatory note. Added shared calculation copy for forecast/report consumers. Native boundary tests, the 805-screen gate and the rebuilt application passed. Latest browser measurements are being captured separately against the previous release baseline.
