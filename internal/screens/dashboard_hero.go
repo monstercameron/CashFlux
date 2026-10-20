@@ -6,19 +6,19 @@ package screens
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/ai"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/dashboardview"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
-	"github.com/monstercameron/CashFlux/internal/nwchange"
+	"github.com/monstercameron/CashFlux/internal/scope"
 	"github.com/monstercameron/CashFlux/internal/smartai"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -48,11 +48,11 @@ import (
 // logic — pure formatting delegated to the shared format helpers (fmtMoney,
 // figTone) and pure-logic functions (ledger.SavingsRate).
 func dashboardHero() ui.Node {
+	_ = uistate.UseDataRevision().Get() // re-render after import / load-sample / wipe
 	app := appstate.Default
 	if app == nil {
 		return Fragment()
 	}
-	_ = uistate.UseDataRevision().Get() // re-render after import / load-sample / wipe
 
 	accounts := app.Accounts()
 	txns := app.Transactions()
@@ -62,9 +62,28 @@ func dashboardHero() ui.Node {
 	if len(accounts) == 0 && len(txns) == 0 {
 		return ui.CreateElement(heroWelcome, struct{}{})
 	}
+	return ui.CreateElement(heroFinancialSummary, heroFinancialSummaryProps{App: app, Accounts: accounts, Transactions: txns})
+}
 
+type heroFinancialSummaryProps struct {
+	App          *appstate.App
+	Accounts     []domain.Account
+	Transactions []domain.Transaction
+}
+
+// heroFinancialSummary owns every populated-state hook so loading or wiping a
+// dataset cannot change dashboardHero's hook sequence.
+func heroFinancialSummary(p heroFinancialSummaryProps) ui.Node {
+	app, accounts, txns := p.App, p.Accounts, p.Transactions
 	// Non-empty → compute headline figures from the memoized §1.6 selectors,
 	// then delegate to heroSummary so its hooks are at stable positions.
+	// The hero and bento tiles share the active account lens. A household-only
+	// hero above scoped tiles made the same headline disagree on one screen.
+	sc := uistate.UseActiveScope().Get()
+	ids := scope.ResolveScope(accounts, sc, func(a domain.Account) string { return a.Institution })
+	accounts = scope.ApplyScopeToAccounts(accounts, ids)
+	txns = scope.ApplyScopeToTxns(txns, ids)
+	scopeSig := fmt.Sprintf("%#v", sc)
 	base := app.Settings().BaseCurrency
 	if base == "" {
 		base = "USD"
@@ -76,7 +95,7 @@ func dashboardHero() ui.Node {
 	activeMember := uistate.UseActiveMember().Get()
 	pr := uistate.UsePrefs().Get()
 	start, end := w.Range()
-	income, expense := usePeriodTotals(app, txns, start, end, rates, "")
+	income, expense := usePeriodTotals(app, txns, start, end, rates, scopeSig)
 	// The hero sparkline is a trailing 6-month net-worth series over every transaction
 	// — heavy, and secondary to the net-worth figure itself. Defer it off the initial
 	// mount so the headline number + KPIs paint immediately; the sparkline + delta chip
@@ -109,16 +128,23 @@ func dashboardHero() ui.Node {
 	// since the start of the current month becomes the delta chip — both turn the
 	// flat figure into a living, contextual headline. Both degrade gracefully: if
 	// the series can't be computed the spark/chip simply don't render.
-	var spark []float64
+	now := time.Now()
+	trend := ui.UseMemo(func() dashboardview.NetWorthTrend {
+		if !sparkReady {
+			return dashboardview.NetWorthTrend{}
+		}
+		return dashboardview.BuildNetWorthTrend(accounts, txns, rates, now)
+	}, revKey(app), scopeSig, sparkReady, now.Format(dateutil.Layout))
+	spark := trend.Spark
 	var delta, deltaTone string
-	if sparkReady {
-		spark, delta, deltaTone = heroNetWorthTrend(accounts, txns, rates)
+	if trend.Change.Known {
+		delta, deltaTone = nwChangeSub(trend.Change)
 	}
 	// Paged to another period, the "▲ $X this month" chip would sit beside the
 	// selected month's income/spending as if it belonged to that month — net
 	// worth is position-as-of-today, so the chip says that instead (parity-scan
 	// dashboard period contract).
-	if now := time.Now(); now.Before(start) || !now.Before(end) {
+	if now.Before(start) || !now.Before(end) {
 		delta, deltaTone = uistate.T("dashboard.netWorthAsOfToday"), "text-dim"
 	}
 
@@ -163,85 +189,23 @@ type heroBudgetSnapshot struct {
 // /budgets. It never adds category spending together: overlapping category
 // budgets could otherwise make a household total count the same charge twice.
 func summarizeHeroBudgets(v budgetView) heroBudgetSnapshot {
-	out := heroBudgetSnapshot{HasBudgets: true}
-	type ranked struct {
-		limit heroBudgetLimit
-		pct   int
+	pace := make(map[string]bool, len(v.PaceMark))
+	for id, mark := range v.PaceMark {
+		pace[id] = mark.Hot
 	}
-	rows := make([]ranked, 0, len(v.Statuses))
-	for _, st := range v.Statuses {
-		if st.Budget.Period != domain.PeriodMonthly || st.Budget.IsSaving() || st.Error != nil || st.Limit.Amount <= 0 {
-			continue
-		}
-		out.Total++
-		if out.Period == "" {
-			out.Period = st.Start.Format("Jan 2006")
-		}
-		mark, live := v.PaceMark[st.Budget.ID]
-		if live {
-			out.Measured++
-			if !mark.Hot {
-				out.OnPace++
-			}
-		}
-		name := st.Budget.Name
-		if name == "" {
-			name = v.CatName[st.Budget.CategoryID]
-		}
+	model := dashboardview.SummarizeBudgets(v.Statuses, v.CatName, pace)
+	out := heroBudgetSnapshot{HasBudgets: true, OnPace: model.OnPace, Measured: model.Measured, Total: model.Total}
+	if !model.Period.IsZero() {
+		out.Period = model.Period.Format("Jan 2006")
+	}
+	for _, limit := range model.Limits {
+		name := limit.Name
 		if name == "" {
 			name = uistate.T("nav.budgets")
 		}
-		rows = append(rows, ranked{limit: heroBudgetLimit{
-			Name: name, Spent: fmtMoney(st.Spent), Limit: fmtMoney(st.Limit),
-			Percent: st.Percent, Hot: live && mark.Hot,
-		}, pct: st.Percent})
-	}
-	sort.SliceStable(rows, func(i, j int) bool {
-		if rows[i].limit.Hot != rows[j].limit.Hot {
-			return rows[i].limit.Hot
-		}
-		if rows[i].pct != rows[j].pct {
-			return rows[i].pct > rows[j].pct
-		}
-		return rows[i].limit.Name < rows[j].limit.Name
-	})
-	for i := 0; i < len(rows) && i < 3; i++ {
-		out.Limits = append(out.Limits, rows[i].limit)
+		out.Limits = append(out.Limits, heroBudgetLimit{Name: name, Spent: fmtMoney(limit.Spent), Limit: fmtMoney(limit.Limit), Percent: limit.Percent, Hot: limit.Hot})
 	}
 	return out
-}
-
-// heroNetWorthTrend builds the hero's trailing 6-month net-worth series (for the
-// sparkline) and the month-over-start delta (for the chip). Returns an empty
-// series and delta on any computation error so the hero renders cleanly without
-// them.
-func heroNetWorthTrend(accounts []domain.Account, txns []domain.Transaction, rates currency.Rates) (spark []float64, delta, deltaTone string) {
-	const months = 6
-	now := time.Now()
-	cur := dateutil.MonthStart(now)
-	cutoffs := make([]time.Time, 0, months+1)
-	for i := months - 1; i >= 0; i-- {
-		cutoffs = append(cutoffs, dateutil.AddMonths(cur, -i))
-	}
-	cutoffs = append(cutoffs, now) // current point
-	series, err := ledger.NetWorthSeries(accounts, txns, cutoffs, rates)
-	if err != nil || len(series) < 2 {
-		return nil, "", ""
-	}
-	spark = make([]float64, len(series))
-	for i, m := range series {
-		spark[i] = float64(m.Amount)
-	}
-	// The chip's delta is the app's one month-to-date net-worth change (C341),
-	// not a subtraction of the last two sparkline points: those cutoffs exist to
-	// draw a shape, and reading a headline figure off them is how this chip came
-	// to disagree with the assets KPI sitting two inches away on the same hero.
-	mtd, err := nwchange.MonthToDateChange(accounts, txns, rates, now)
-	if err != nil || !mtd.Known {
-		return spark, "", ""
-	}
-	delta, tone := nwChangeSub(mtd)
-	return spark, delta, tone
 }
 
 // ---------------------------------------------------------------------------

@@ -1,3 +1,7 @@
+## 2026-10-20 - Native dashboard frame inputs
+
+Moved financial frame calculations into dashboardview and kept the canonical net-worth change definition. The hero now applies the same resolved account scope as dashboard tiles, including unambiguous institution IDs. Its stable wrapper subscribes before the readiness branch; the conditional child owns its hooks. Native model tests and the full screen lane passed, including unavailable-to-empty-to-populated transitions and colliding institution-name cases. Removed the obsolete hero hook exception.
+
 ## 2026-10-20 - Report series and position models
 
 Replaced repeated per-month scans with reusable buckets while retaining repeated/nonascending-bound fallback semantics. Report position arithmetic and adherence moved from markup into native models. Household vitals use household flows even when activity is scoped; debt interest converts to base, and failed budget evaluations no longer count as clean. Native parity tests cover splits, refunds, transfers, exclusions, window order, missing FX and overflow. The native suite and 790-screen WASM suite passed. Browser latency results are recorded separately and do not imply every report interaction improved.

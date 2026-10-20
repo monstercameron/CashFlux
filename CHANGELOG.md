@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Dashboard budget snapshots, net-worth trend preparation and cash-forecast eligibility use native models. The hero keeps a stable hook boundary through unavailable, empty and populated data states.
 - Report time series share one monthly ledger traversal. Native report models prepare scoped series, household financial position and budget adherence with consistent FX units and checked totals.
 - Assistant briefing, starter questions and purchase attribution use native projections and complete data/scope/time memo keys. Chat typing reuses ledger facts, and partially uncategorized split receipts count once.
 - Transaction description sorting uses the same native display rule as ledger rows, including a safe raw-label fallback, and account/category indexes refresh only when their data context changes.

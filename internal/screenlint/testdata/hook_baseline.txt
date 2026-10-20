@@ -39,7 +39,6 @@ screens/custompage.go:editWidgetForm
 screens/dashboard.go:Dashboard
 screens/dashboard.go:dashCatchUpCard
 screens/dashboard.go:freshnessWidget
-screens/dashboard_hero.go:dashboardHero
 screens/dashboard_hero.go:heroQuote
 screens/dashboard_onboard.go:dashOnboardCard
 screens/dashboard_onboard.go:onboardRow

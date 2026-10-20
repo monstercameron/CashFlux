@@ -7,8 +7,8 @@ package screens
 import (
 	"time"
 
-	"github.com/monstercameron/CashFlux/internal/domain"
-	"github.com/monstercameron/CashFlux/internal/liquidity"
+	"github.com/monstercameron/CashFlux/internal/dashboardview"
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -27,50 +27,32 @@ import (
 // base-converted; rate-less accounts are skipped (consistent with net worth's
 // exclusion disclosure). Each horizon tones by its delta against today.
 func forecastWidget(c widgetrender.RenderCtx) ui.Node {
+	return ui.CreateElement(forecastCard, c)
+}
+
+// forecastCard owns its memo hook independently of the variable-length widget
+// registry loop, so rearranging or hiding tiles cannot shift the hook order.
+func forecastCard(c widgetrender.RenderCtx) ui.Node {
 	app := c.App
 	now := time.Now()
-	horizons := [3]int{30, 60, 90}
-	var totals [3]int64
-	var today int64
-	counted := 0
-	for _, a := range c.ScopedAccounts {
-		if a.Archived || a.Class == domain.ClassLiability || liquidity.Of(a, now) != liquidity.Available {
-			continue
-		}
-		// Convert this account's projected figures; skip the account wholly on a
-		// missing rate so a partial sum never masquerades as the full picture.
-		proj0 := app.ProjectAccount(a.ID, now, horizons[0])
-		st, err := c.Rates.Convert(money.New(proj0.Start, a.Currency), c.Base)
-		if err != nil {
-			continue
-		}
-		today += st.Amount
-		counted++
-		for i, h := range horizons {
-			proj := proj0
-			if i > 0 {
-				proj = app.ProjectAccount(a.ID, now, h)
-			}
-			if cv, cerr := c.Rates.Convert(money.New(proj.End, a.Currency), c.Base); cerr == nil {
-				totals[i] += cv.Amount
-			}
-		}
-	}
+	model := ui.UseMemo(func() dashboardview.CashForecast {
+		return dashboardview.BuildCashForecast(c.ScopedAccounts, c.Rates, now, app.ProjectAccount)
+	}, revKey(app), acctSig(c.ScopedAccounts), now.Format(dateutil.Layout))
 
 	var body ui.Node
-	if counted == 0 {
+	if model.Counted == 0 {
 		body = P(css.Class("empty t-body", tw.TextDim), uistate.T("dashboard.forecastEmpty"))
 	} else {
 		stat := func(i int, labelKey string) ui.Node {
 			tone := "text-up"
-			if totals[i] < today {
+			if model.Totals[i] < model.Today {
 				tone = "text-down"
 			}
 			return Div(Style(map[string]string{"display": "grid", "gap": "0.1rem"}),
 				Span(css.Class("t-caption", tw.TextDim), uistate.T(labelKey)),
 				Span(ClassStr("fig "+tw.Fold(tw.FontDisplay, tw.LeadingTight)+" "+tw.ColorClass(tone)),
 					Attr("data-testid", "forecast-"+[3]string{"30", "60", "90"}[i]),
-					fmtMoney(money.New(totals[i], c.Base))),
+					fmtMoney(money.New(model.Totals[i], c.Base))),
 			)
 		}
 		body = Div(
@@ -80,7 +62,7 @@ func forecastWidget(c widgetrender.RenderCtx) ui.Node {
 				stat(2, "dashboard.forecast90"),
 			),
 			P(css.Class("t-caption", tw.TextDim, tw.Pt15),
-				uistate.T("dashboard.forecastSub", fmtMoney(money.New(today, c.Base)))),
+				uistate.T("dashboard.forecastSub", fmtMoney(money.New(model.Today, c.Base)))),
 		)
 	}
 	return uiw.Widget(uiw.WidgetProps{
