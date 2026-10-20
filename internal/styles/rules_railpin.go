@@ -168,10 +168,10 @@ func registerWsIdentity() {
 
 // registerRailDrag styles the pinned list's drag-to-reorder.
 func registerRailDrag() {
-	// A grab cursor is the only standing hint that these rows move; the rest of
-	// the affordance appears while dragging, where it is actually useful.
-	rule(".rail-pinned .nav-row > a", cursor("grab"))
-	rule(".rail-pinned .nav-row > a:active", cursor("grabbing"))
+	// These are navigation links until a native drag actually starts. :active
+	// also matches a simple click-and-hold, so it must not imply a drag.
+	rule(".rail-pinned .nav-row > a", cursor("pointer"))
+	rule("html[data-rail-dragging=\"true\"] .rail-pinned .nav-row > a", cursor("grabbing"))
 	// The row being dragged fades so the gap it will leave is readable.
 	rule(".rail-pinned .nav-row > a[draggable=\"true\"]:active", opacity("0.55"))
 }

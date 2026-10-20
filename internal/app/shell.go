@@ -1011,9 +1011,17 @@ func Sidebar(props sidebarProps) uic.Node {
 					// list and the rows move between them. That is the right way
 					// round — the number is a position, and moving a row to second
 					// place is the whole reason for moving it.
-					Draggable:   true,
-					OnDragStart: func() { favDrag.Set(src) },
+					Draggable: true,
+					OnDragStart: func() {
+						setPinnedRailDragging(true)
+						favDrag.Set(src)
+					},
+					OnDragEnd: func() {
+						setPinnedRailDragging(false)
+						favDrag.Set("")
+					},
 					OnDrop: func() {
+						setPinnedRailDragging(false)
 						moving := favDrag.Get()
 						favDrag.Set("")
 						// A drop that lands on nothing, or on the row that started it,
@@ -1147,6 +1155,7 @@ type navItemProps struct {
 	// OnDrop fires when another item is dropped onto this one.
 	Draggable   bool
 	OnDragStart func()
+	OnDragEnd   func()
 	OnDrop      func()
 	// Pinning. OnPin nil means this row has no pin control at all — the search
 	// results reuse this component and a pin there would sit under a list that is
@@ -1207,6 +1216,17 @@ func boolAttr(b bool) string {
 	return "false"
 }
 
+// setPinnedRailDragging changes the cursor only for a native drag gesture.
+// It does not re-render the drag source, which could cancel the browser's drag.
+func setPinnedRailDragging(dragging bool) {
+	root := js.Global().Get("document").Get("documentElement")
+	if dragging {
+		root.Call("setAttribute", "data-rail-dragging", "true")
+	} else {
+		root.Call("removeAttribute", "data-rail-dragging")
+	}
+}
+
 // navItem is its own component so its click-handler hook stays stable regardless
 // of how the nav list changes (the On*-hooks-in-loops rule).
 func navItem(props navItemProps) uic.Node {
@@ -1242,12 +1262,17 @@ func navItem(props navItemProps) uic.Node {
 		args = append(args, Attr("aria-current", "page"))
 	}
 	if props.Draggable {
-		onStart, onDrop := props.OnDragStart, props.OnDrop
+		onStart, onEnd, onDrop := props.OnDragStart, props.OnDragEnd, props.OnDrop
 		args = append(args,
 			Attr("draggable", "true"),
 			OnDragStart(func() {
 				if onStart != nil {
 					onStart()
+				}
+			}),
+			OnDragEnd(func() {
+				if onEnd != nil {
+					onEnd()
 				}
 			}),
 			OnDragOver(Prevent(func() {})), // allow drop

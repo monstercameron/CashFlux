@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Pinned navigation items use a normal pointer on hover and switch to a grab cursor only during an actual drag.
 - Dashboard now leads with daily budget adherence and monthly spending limits, with clearer labels and hierarchy.
 - Added a browser sanity journey for recurring bills and their budget coverage totals.
 - Budget income basis now keeps Save open until the preference reaches durable storage, and reports a save failure instead of silently closing. A browser regression covers reload and App Lock persistence.

@@ -1,3 +1,8 @@
+## 2026-10-20 - Rail drag feedback
+
+The first pinned navigation entries no longer imply a drag merely on hover. The cursor changes for the native drag
+gesture and resets on drop or drag end; a browser regression covers the interaction. Click navigation remains direct.
+
 ## 2026-10-20 - Dashboard budget readability
 
 The dashboard now gives daily budget adherence and monthly limits priority in the opening view. The change is

@@ -37,6 +37,39 @@ async function altDigit(page, digit) {
 }
 
 test.describe("sidebar · pinned destinations", () => {
+  test("pinned links use a pointer until a drag starts", async ({ page }) => {
+    await openApp(page);
+    const links = page.locator(`${PINNED} .nav-row a`);
+    expect(await links.count()).toBeGreaterThan(0);
+    expect(await links.count()).toBeLessThanOrEqual(10);
+    expect(await links.evaluateAll((els) => els.map((el) => getComputedStyle(el).cursor)))
+      .toEqual(Array(await links.count()).fill("pointer"));
+    const first = links.first();
+    await first.hover();
+    await expect.poll(() => first.evaluate((el) => getComputedStyle(el).cursor)).toBe("pointer");
+
+    await page.mouse.down();
+    expect(await first.evaluate((el) => el.matches(":active"))).toBe(true);
+    expect(await first.evaluate((el) => getComputedStyle(el).cursor)).toBe("pointer");
+    await page.mouse.up();
+
+    await first.dispatchEvent("dragstart");
+    await expect(page.locator("html")).toHaveAttribute("data-rail-dragging", "true");
+    expect(await links.evaluateAll((els) => els.map((el) => getComputedStyle(el).cursor)))
+      .toEqual(Array(await links.count()).fill("grabbing"));
+    await first.dispatchEvent("dragend");
+    await expect(page.locator("html")).not.toHaveAttribute("data-rail-dragging", "true");
+    await expect.poll(() => first.evaluate((el) => getComputedStyle(el).cursor)).toBe("pointer");
+
+    const before = await pinnedLabels(page);
+    if (before.length > 1) {
+      await links.nth(1).dragTo(links.first());
+      await expect.poll(async () => (await pinnedLabels(page))[0]).toBe(before[1]);
+      await expect(page.locator("html")).not.toHaveAttribute("data-rail-dragging", "true");
+      await expect.poll(() => links.first().evaluate((el) => getComputedStyle(el).cursor)).toBe("pointer");
+    }
+  });
+
   test("the tenth slot is the 0 key, not a tenth number", async ({ page }) => {
     // The one place this could be written as i+1 and look right for nine of the
     // ten cases. No single key sends "10".
