@@ -6,11 +6,13 @@ package screens
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/freshness"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/tasksuggest"
@@ -64,18 +66,44 @@ func suggestTitle(s tasksuggest.Suggestion) string {
 // silently. Add posts the task (with its self-resolve condition where one
 // exists); Dismiss snoozes the proposal for a month.
 func todoSuggestStrip(app *appstate.App) ui.Node {
+	return todoSuggestStripAt(app, time.Now())
+}
+
+// todoSuggestStripAt keeps the clock explicit for freshness-boundary tests.
+func todoSuggestStripAt(app *appstate.App, now time.Time) ui.Node {
 	_ = uistate.UseDataRevision().Get()
 	// Collapse state declared before any early return so the hook slot is stable.
 	sectionOpen := uistate.UseTodoSuggestOpen()
 	toggle := ui.UseEvent(Prevent(func() { sectionOpen.Set(!sectionOpen.Get()) }))
+	toggleClick := OnClick(toggle)
+	key := ""
+	var freshnessKey strings.Builder
+	if app != nil {
+		key = revKey(app)
+		// Freshness deadlines and snoozes can expire within the same calendar
+		// day without a write. Include their current state in the memo key so
+		// those transitions refresh suggestions on the next render.
+		windows := app.FreshnessWindows()
+		for _, account := range app.Accounts() {
+			if freshness.IsStale(account, windows, now) {
+				freshnessKey.WriteByte('1')
+			} else {
+				freshnessKey.WriteByte('0')
+			}
+		}
+	}
+	suggestions := ui.UseMemo(func() []tasksuggest.Suggestion {
+		if app == nil {
+			return nil
+		}
+		s := app.Settings()
+		rates := currency.Rates{Base: s.BaseCurrency, Rates: s.FXRates}
+		return tasksuggest.Scan(app.Accounts(), budgetLedgerForApp(app), app.Budgets(),
+			app.FreshnessWindows(), rates, now, uistate.LoadPrefs().WeekStartWeekday())
+	}, key, now.Format("2006-01-02"), freshnessKey.String())
 	if app == nil {
 		return Fragment()
 	}
-	s := app.Settings()
-	rates := currency.Rates{Base: s.BaseCurrency, Rates: s.FXRates}
-	now := time.Now()
-	suggestions := tasksuggest.Scan(app.Accounts(), budgetLedgerForApp(app), app.Budgets(),
-		app.FreshnessWindows(), rates, now, uistate.LoadPrefs().WeekStartWeekday())
 
 	// Drop dismissed-within-snooze and already-open proposals (an open task
 	// linked to the same entity from a prior Add).
@@ -100,10 +128,6 @@ func todoSuggestStrip(app *appstate.App) ui.Node {
 		return Fragment()
 	}
 
-	rows := make([]ui.Node, 0, len(kept))
-	for _, sg := range kept {
-		rows = append(rows, ui.CreateElement(todoSuggestRow, todoSuggestRowProps{S: sg, App: app}))
-	}
 	// A clearly-labeled, collapsible section that sits BELOW the committed list. The header
 	// counts what's waiting ("Suggested for you (N)"); the proposals render only when the
 	// user expands it, so nudges never crowd their own tasks.
@@ -111,14 +135,17 @@ func todoSuggestStrip(app *appstate.App) ui.Node {
 		Attr("data-testid", "todo-suggest-toggle"),
 		Attr("aria-expanded", ariaBool(sectionOpen.Get())),
 		Attr("aria-controls", "todo-suggest-body"),
-		OnClick(toggle),
+		toggleClick,
 		uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
 		Span(uistate.T("todo.suggestForYou", len(kept))),
 		uiw.Icon(icon.ChevronRight, css.Class("todo-suggest-caret", tw.W4, tw.H4)),
 	)
 	var body ui.Node = Fragment()
 	if sectionOpen.Get() {
-		body = Div(css.Class("todo-suggest-body"), Attr("id", "todo-suggest-body"), rows)
+		body = Div(css.Class("todo-suggest-body"), Attr("id", "todo-suggest-body"),
+			MapKeyed(kept, func(sg tasksuggest.Suggestion) any { return sg.Key }, func(sg tasksuggest.Suggestion) ui.Node {
+				return ui.CreateElement(todoSuggestRow, todoSuggestRowProps{S: sg, App: app})
+			}))
 	}
 	return Div(css.Class("todo-suggest"), Attr("data-testid", "todo-suggest-strip"), header, body)
 }

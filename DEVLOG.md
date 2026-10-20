@@ -1,3 +1,7 @@
+## 2026-10-20 - Native task projections and suggestion freshness
+
+Moved task selection and calendar preparation out of browser markup. Native tests compare 216 filter combinations and cover date-zone boundaries and immutable inputs; the preserved benchmark compares scan cost without asserting machine timings. The suggestion handler is registered before empty returns, and memo keys include exact same-day freshness state. Full native and 790-screen WASM gates passed, including list/board/calendar and keyed expansion transitions. Removed the obsolete suggestion hook exception.
+
 ## 2026-10-20 - Native notification feed preparation
 
 Extracted feed preparation and streak arithmetic into notificationview, kept collapsed groups lazy, and fixed variable hook positions across empty and populated states. History previously rendered blank for records with only Message; it now explicitly uses that legacy fallback. WASM tests exercise final-dismiss Undo, keyed expansion, shared/member lenses, archive search and wins transitions. Native and full screen suites passed. Removed the obsolete history/list/wins hook exceptions; browser journeys remain a separate gate.

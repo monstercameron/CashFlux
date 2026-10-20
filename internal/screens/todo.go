@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
@@ -33,6 +32,7 @@ type taskRowProps struct {
 	Budgets      []domain.Budget
 	Goals        []domain.Goal
 	Transactions []domain.Transaction
+	Members      []domain.Member
 	// Sub-task summary + collapse (parents only; ChildTotal 0 = leaf). Counts are over
 	// ALL children regardless of the current view filter.
 	ChildTotal       int
@@ -183,13 +183,11 @@ func TaskRow(props taskRowProps) ui.Node {
 	}
 	// Assignee chip — a task claimed by one member says whose it is.
 	if t.MemberID != "" {
-		if app := appstate.Default; app != nil {
-			for _, m := range app.Members() {
-				if m.ID == t.MemberID {
-					metaParts = append(metaParts, Span(css.Class("todo-meta-item"), Attr("data-testid", "assignee-badge-"+t.ID),
-						uiw.Icon(icon.Users, css.Class(tw.ShrinkO, tw.W35, tw.H35)), Span(m.Name)))
-					break
-				}
+		for _, m := range props.Members {
+			if m.ID == t.MemberID {
+				metaParts = append(metaParts, Span(css.Class("todo-meta-item"), Attr("data-testid", "assignee-badge-"+t.ID),
+					uiw.Icon(icon.Users, css.Class(tw.ShrinkO, tw.W35, tw.H35)), Span(m.Name)))
+				break
 			}
 		}
 	}

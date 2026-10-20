@@ -174,7 +174,6 @@ screens/taskaddform.go:taskAddForm
 screens/todo.go:TaskRow
 screens/todo_board.go:BoardCard
 screens/todo_bulk.go:todoBulkBar
-screens/todo_suggest.go:todoSuggestStrip
 screens/todo_tiles.go:todoListWidget
 screens/todo_tiles.go:todoToolbarWidget
 screens/todo_widget.go:Todo

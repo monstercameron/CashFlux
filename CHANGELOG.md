@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- To-do filtering, counts and calendar preparation use a native task projection. Suggestion caches track exact freshness transitions, and keyed rows preserve local state through sorting and view changes.
 - Notification summaries, filtering and grouping use native projections and keyed components. Empty transitions preserve actions and Undo; history renders legacy message text and wins retain their seen state.
 - Dashboard budget snapshots, net-worth trend preparation and cash-forecast eligibility use native models. The hero keeps a stable hook boundary through unavailable, empty and populated data states.
 - Report time series share one monthly ledger traversal. Native report models prepare scoped series, household financial position and budget adherence with consistent FX units and checked totals.
