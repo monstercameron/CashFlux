@@ -27,6 +27,10 @@ type importPanelJob struct {
 
 var activeImportPanel *importPanelJob
 
+// Keep the text proxy boundary replaceable for offline controller tests. The
+// direct and structured-vision paths use the provider's fetch/worker transports.
+var importProxyStatementChat = ai.SendProxyChat
+
 // CancelImportPanel invalidates pending callbacks before the shell closes the
 // import panel, including a checkpoint that has not yet started its write.
 func CancelImportPanel() {
@@ -67,7 +71,7 @@ func (c *documentsController) startAI(send func(func(string, ai.Usage), func(str
 	if c.busy() || c.aiLoading.Get() || c.job.closed {
 		return
 	}
-	if !AIKeyConfigured() {
+	if !c.canSend(c.aiSource()) {
 		c.needsKey.Set(true)
 		return
 	}
@@ -83,6 +87,9 @@ func (c *documentsController) startAI(send func(func(string, ai.Usage), func(str
 		if !c.model.Accept(request) {
 			return
 		}
+		// Grant consent only after verifying the disclosure still belongs to
+		// this request. A superseded dialog must not authorize a later source.
+		c.job.consented = true
 		request = c.model.Begin()
 		onError := func(message string) {
 			if !c.model.Accept(request) {
@@ -118,23 +125,30 @@ func (c *documentsController) startAI(send func(func(string, ai.Usage), func(str
 			return
 		}
 		if !ok {
-			c.cancelAI()
+			if c.model.Accept(request) {
+				c.cancelAI()
+			}
 			return
 		}
-		c.job.consented = true
 		start()
 	})
 }
 
 func (c *documentsController) disclosure() string {
-	source := c.source.Get()
-	if c.stage.Get() == "review" {
-		source = "categories"
+	if c.aiSource() == "categories" {
+		return uistate.T("imb.disclosureCategories", c.aiModel)
 	}
-	if importdraft.Transport(source, c.settings.OpenAIKey, c.useBackendAI) == "proxy" {
+	if importdraft.Transport(c.aiSource(), c.settings.OpenAIKey, c.useBackendAI) == "proxy" {
 		return uistate.T("imb.disclosureProxy", c.pr.ServerURL, c.aiModel)
 	}
 	return uistate.T("imb.disclosureDirect", c.aiModel)
+}
+
+func (c *documentsController) aiSource() string {
+	if c.stage.Get() == "review" {
+		return "categories"
+	}
+	return c.source.Get()
 }
 
 func (c *documentsController) requestExtraction(source string) {
@@ -156,8 +170,8 @@ func (c *documentsController) requestExtraction(source string) {
 		c.aiErr.Set(uistate.T("imb.textLimit", importai.MaxSourceBytes))
 		return
 	}
-	// The current proxy exposes structured vision only. Other sources require
-	// the user's key until its schema/options contract is available.
+	// PDFs still require a personal key. The text proxy uses the same explicit
+	// JSON contract and strict decoder as direct structured extraction.
 	if importdraft.Transport(source, c.settings.OpenAIKey, c.useBackendAI) == "unavailable" {
 		c.needsKey.Set(true)
 		c.aiErr.Set(uistate.T("imb.directKeyRequired"))
@@ -178,12 +192,16 @@ func (c *documentsController) requestExtraction(source string) {
 			}
 			return ai.SendStructuredVisionChatWithOptions(c.settings.OpenAIKey, ai.DefaultBaseURL, c.aiModel, system, "Extract the receipt lines.", data, opts, "transactions", schema, result, fail)
 		case "pdf":
+			opts = importai.PDFRequestOptions(c.aiModel)
 			return ai.SendStructuredFileChatWithOptions(c.settings.OpenAIKey, ai.DefaultBaseURL, c.aiModel, system, "Extract the statement transactions.", firstNonEmpty(c.pdfName.Get(), "statement.pdf"), data, opts, "transactions", schema, result, fail)
 		default:
 			messages, err := importai.ExtractionMessages(data)
 			if err != nil {
 				fail(err.Error())
 				return func() {}
+			}
+			if c.useBackendAI {
+				return importProxyStatementChat(c.pr.ServerURL, uistate.EffectiveServerToken(c.pr.ServerToken), c.aiModel, messages, opts.Temperature, result, fail)
 			}
 			return ai.SendStructuredChat(c.settings.OpenAIKey, ai.DefaultBaseURL, c.aiModel, messages, opts, "transactions", schema, result, fail)
 		}
@@ -200,6 +218,11 @@ func (c *documentsController) acceptExtraction(content string) {
 		c.aiErr.Set(uistate.T("documents.noneFound"))
 		return
 	}
+	// The source may contain a bank account number, but the model does not know
+	// CashFlux account IDs. Review's account picker supplies the destination.
+	for i := range rows {
+		rows[i].AccountID = ""
+	}
 	validated := importdraft.ValidateExtraction(rows, c.accounts, reviewCurrencyFor(c.app, c.accounts, c.importAcct.Get()), time.Now())
 	for i := range validated {
 		rows[i] = validated[i].Row
@@ -211,7 +234,7 @@ func (c *documentsController) acceptExtraction(content string) {
 	}
 	for i, v := range validated {
 		if !v.Valid {
-			c.model.Errors[c.model.Rows[before+i].ID] = uistate.T("imb.invalidRow")
+			c.model.Errors[c.model.Rows[before+i].ID] = importdraft.ExtractionErrors(v.Issues, uistate.T)
 		}
 	}
 	c.msg.Set(uistate.T("documents.stmtParsed", importCount(len(rows), "row", "rows")))
@@ -236,7 +259,8 @@ func (c *documentsController) useCategorizeAI() {
 			return
 		}
 		names := c.categoryNames()
-		messages, schema, err := importai.CategoryMessages(inputs, names)
+		history := importdraft.CategoryHistoryHints(c.model.Rows, c.app.Transactions(), c.app.Categories(), c.recDec)
+		messages, schema, err := importai.CategoryMessages(inputs, names, history)
 		if err != nil {
 			c.aiErr.Set(uistate.T("imb.suggestionLimit", importai.MaxSuggestionItems))
 			return

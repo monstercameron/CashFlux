@@ -223,13 +223,12 @@ func importHistorySection(docs []domain.Document, accounts []domain.Account, txn
 	render := func(d domain.Document) ui.Node {
 		return ui.CreateElement(importRunRow, importRunRowProps{Doc: d, AcctName: importdraft.AccountName(accounts, d.AccountID), Txns: txns, OnRollback: onRollback})
 	}
-	return Div(css.Class(tw.Mt3), Attr("data-testid", "import-history"),
-		P(css.Class("t-caption"), uistate.T("documents.historyHeading")),
-		P(css.Class("muted", tw.Text12), uistate.T("documents.historyHintHonest")),
+	return Details(css.Class(importMuted), Attr("data-testid", "import-history"),
+		Summary(css.Class(importFocus), Style(map[string]string{"cursor": "pointer"}), uistate.T("importux.pastImports", len(docs))),
 		Div(css.Class("rows"), MapKeyed(sorted, keyOf, render)),
 		A(css.Class("btn-link", tw.Text12), Href(uistate.RoutePath("/activity")),
 			Attr("data-testid", "import-history-activity"), OnClick(onViewActivity),
-			uistate.T("documents.historyActivityLink")),
+			uistate.T("importux.activity")),
 	)
 }
 
@@ -249,13 +248,16 @@ type importRunRowProps struct {
 func importRunRow(p importRunRowProps) ui.Node {
 	rollback := ui.UseEvent(Prevent(func() { p.OnRollback(p.Doc) }))
 	d := p.Doc
-	label, result, when := importdraft.HistoryText(d, p.AcctName, p.Txns, uistate.T)
+	label, result, _ := importdraft.HistoryText(d, "", p.Txns, uistate.T)
+	if p.AcctName != "" {
+		label = p.AcctName + " (" + label + ")"
+	}
+	when := d.UploadedAt.Format("Jan 2, 2006")
 	return Div(css.Class("row"), Attr("data-testid", "import-history-row"),
 		Style(map[string]string{"display": "flex", "justify-content": "space-between", "align-items": "center", "gap": "1rem"}),
-		Div(
-			Div(label),
-			Div(css.Class(tw.TextFaint, tw.Text12), when+" · "+result),
-		),
+		Div(Style(map[string]string{"display": "flex", "gap": "8px", "align-items": "baseline", "flex-wrap": "wrap", "min-width": "0", "overflow-wrap": "anywhere"}),
+			Span(when), Span(label), Span(uistate.T("importux.added", importdraft.AddedCount(d))),
+			Details(Summary(css.Class(importFocus), uistate.T("importux.review")), P(result))),
 		If(uistate.HasCheckpoint(d.CheckpointID),
 			Button(css.Class("btn", tw.ShrinkO), Type("button"), Attr("data-testid", "import-rollback"),
 				Title(uistate.T("documents.rollbackTitle")), OnClick(rollback), uistate.T("documents.rollbackBtn"))),

@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Redesigned the Import flow with a source/read/review progression, an explicit destination account picker, and a visible reading state. Smart uses 90% description similarity to categorized history; Smart+ sends bounded category counts as hints to AI. Statement text can use the configured server route, while PDF extraction keeps its personal-key requirement. Import requests no longer impose a 2,048-token app limit.
 - Refined the Transactions search and action controls with consistent 44 px targets, a grouped period stepper,
   a quieter Ledger/Calendar switch, and a clearer Review count. The money summary and category bar are unchanged.
 - Improved Transactions date filtering, fixed calendar cell overflow, and made unusual-spend evidence readable on click.

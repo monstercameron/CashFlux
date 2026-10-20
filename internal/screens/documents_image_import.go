@@ -6,6 +6,7 @@ package screens
 
 import (
 	"github.com/monstercameron/CashFlux/internal/icon"
+	"github.com/monstercameron/CashFlux/internal/importdraft"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -20,9 +21,15 @@ import (
 type imageImportCardProps struct {
 	ImageURL   string
 	AILoading  bool
+	Disabled   bool
+	FileLabel  string
+	FileSize   int
 	Disclosure string
 	OnChoose   ui.Handler
 	OnReadAI   ui.Handler
+	OnDrop     ui.Handler
+	OnDragOver ui.Handler
+	OnRemove   func()
 }
 
 // ImageImportCard renders the receipt/statement image import inputs: choose image, the
@@ -30,17 +37,21 @@ type imageImportCardProps struct {
 // title + description live in the shared importFormHeader, so this returns just the body.
 func ImageImportCard(props imageImportCardProps) ui.Node {
 	return Div(css.Class("doc-form-body"),
-		// G14 §4: "Choose image" is primary until an image is selected; once imageURL is
-		// set the user is ready to run AI — swap weights so the affordance tracks the step.
-		// The AI action reads as Smart+ (violet + ✦) via btn-plus.
-		Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter),
-			Button(
-				css.Class(chooseImageBtnClass(props.ImageURL)),
-				Type("button"), OnClick(props.OnChoose), uistate.T("documents.chooseImage"),
+		Div(css.Class(importDropZone), Attr("data-testid", "import-image-dropzone"), OnDragOver(props.OnDragOver), OnDrop(props.OnDrop),
+			Div(css.Class(importStack),
+				Span(Style(map[string]string{"overflow-wrap": "anywhere"}), IfElse(props.FileLabel != "", Text(props.FileLabel), Text(uistate.T("importux.imageHint")))),
+				If(props.ImageURL != "", Span(css.Class(importMuted), IfElse(props.FileSize > 0, Text(importdraft.FileSizeLabel(props.FileSize)), Text(uistate.T("importux.selectedImage"))))),
 			),
 			Button(
-				css.Class(readAIBtnClass(props.ImageURL), tw.InlineFlex, tw.ItemsCenter, tw.Gap15),
-				Type("button"), OnClick(props.OnReadAI), Disabled(props.AILoading),
+				css.Class("btn"), Attr("data-testid", "import-choose-image"), Disabled(props.Disabled || props.AILoading),
+				Type("button"), OnClick(props.OnChoose), uistate.T("importux.chooseFile"),
+			),
+			If(props.ImageURL != "", Button(css.Class("btn btn-ghost"), Type("button"), Attr("data-testid", "import-remove-image"), OnClick(props.OnRemove), Disabled(props.Disabled || props.AILoading), uistate.T("importux.removeFile"))),
+		),
+		Div(css.Class(importActionRow),
+			Button(
+				css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Attr("data-testid", "import-read-image"),
+				Type("button"), OnClick(props.OnReadAI), Disabled(props.ImageURL == "" || props.AILoading || props.Disabled),
 				uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
 				IfElse(props.AILoading,
 					Text(uistate.T("documents.reading")),
@@ -50,8 +61,7 @@ func ImageImportCard(props imageImportCardProps) ui.Node {
 			),
 		),
 		// Explain the outbound image transfer beside the action before the user can send it.
-		P(css.Class("muted", tw.Text12), imageDisclosure(props.Disclosure)),
-		P(css.Class("muted", tw.Text12), uistate.T("documents.imageCostNote")),
+		importDisclosure(imageDisclosure(props.Disclosure)+" "+uistate.T("documents.imageCostNote")),
 		// Image preview: shown once a file is chosen so the user can verify the scan (C60).
 		If(props.ImageURL != "",
 			Div(css.Class(tw.Flex, tw.Gap3, tw.ItemsStart),
@@ -70,24 +80,6 @@ func ImageImportCard(props imageImportCardProps) ui.Node {
 			),
 		),
 	)
-}
-
-// chooseImageBtnClass returns the button class for "Choose image": primary
-// when no image is chosen yet (first step), secondary after one is loaded.
-func chooseImageBtnClass(imageURL string) string {
-	if imageURL == "" {
-		return "btn btn-primary"
-	}
-	return "btn"
-}
-
-// readAIBtnClass returns the button class for "Read with AI": a neutral button until an
-// image is loaded, then the Smart+ (violet) action once it's the user's next logical step.
-func readAIBtnClass(imageURL string) string {
-	if imageURL != "" {
-		return "btn btn-plus"
-	}
-	return "btn"
 }
 
 func imageDisclosure(disclosure string) string {

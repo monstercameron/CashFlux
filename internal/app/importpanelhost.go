@@ -28,10 +28,11 @@ func ImportPanelHost() uic.Node {
 		Title:  uistate.T("transactions.importBtn"),
 		Width:  "900px",
 		Height: "660px",
-		// The footer advances only the visible preview or reviewed draft.
-		FormID:    screens.ImportModalFormID,
-		SaveLabel: uistate.T("action.done"),
+		// The import frame owns its step-aware footer: Cancel, plus one
+		// result-named action only on the review step.
+		NoFooter:  true,
+		FlushBody: true,
 		OnClose:   func() { screens.CancelImportPanel(); open.Set(false) },
-		Back:      uic.CreateElement(screens.ImportPanelBody, struct{}{}),
+		Back:      uic.CreateElement(screens.ImportPanelFrame, struct{}{}),
 	})
 }

@@ -175,6 +175,8 @@ type draftReviewProps struct {
 	OnImportReceipt   ui.Handler
 	OnRemoveDraft     func(int)
 	OnUpdateDraft     func(int, extract.Row)
+	AccountAbove      bool
+	PinnedFooter      bool
 }
 
 // paginatedDraftReview renders only the selected page while calculating row
@@ -201,13 +203,17 @@ func paginatedDraftReview(props draftReviewProps) ui.Node {
 	})
 	controls := func() ui.Node { return draftPageControls(props, onPrev, onNext) }
 	return uiw.EntityListSection(uiw.EntityListSectionProps{
-		Title: uistate.T("documents.reviewTitle", importCount(len(props.Rows), "transaction", "transactions")), ClassParts: []any{"card-step-active"},
+		Title: uistate.T("documents.reviewTitle", importCount(len(props.Rows), "transaction", "transactions")),
 		Body: Fragment(
 			If(summary.Duplicates > 0, Div(css.Class("notice notice-warn"), Attr("data-testid", "draft-all-duplicate-count"), uistate.T("impc.duplicateCount", summary.Duplicates, len(props.Rows)))),
 			If(summary.Repeated > 0, Div(css.Class("notice notice-warn"), Attr("data-testid", "draft-possible-duplicate-count"), uistate.T("imb.repeated", summary.Repeated))),
 			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter), Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "draft-clear-all"), OnClick(props.ClearDraft), Disabled(props.SavingCheckpoint), uistate.T("impc.clearAllRows")), props.Toggle),
 			P(css.Class("muted"), uistate.T("documents.reviewDesc")), controls(),
-			Div(css.Class("rows draft-ledger"), Attr("data-testid", "draft-review-page"), items), controls(),
+			Div(Style(map[string]string{"overflow-x": "auto"}),
+				Div(Attr("role", "table"), Attr("aria-label", uistate.T("documents.reviewTitle", importCount(len(props.Rows), "transaction", "transactions"))), Attr("data-testid", "draft-review-page"),
+					Div(css.Class(importStatementColumns, importMuted), Attr("role", "row"), Style(map[string]string{"padding": "8px 0", "border-bottom": "1px solid var(--border)", "max-width": "none"}),
+						Span(Attr("role", "columnheader"), uistate.T("importux.date")), Span(Attr("role", "columnheader"), uistate.T("importux.description")),
+						Span(Attr("role", "columnheader"), uistate.T("importux.category")), Span(Attr("role", "columnheader"), Style(map[string]string{"text-align": "right"}), uistate.T("importux.amount")), Span(Attr("role", "columnheader"), Attr("aria-label", uistate.T("documents.editRow")))), items)), controls(),
 			If(props.ReceiptMode, ui.CreateElement(importReceiptReview, props)),
 			If(!props.ReceiptMode, ui.CreateElement(importStatementReview, props)),
 		),
@@ -237,9 +243,9 @@ func importReceiptReview(props draftReviewProps) ui.Node {
 				Placeholder(uistate.T("documents.storeNamePh")), OnInput(props.OnReceiptMerchant), uiw.FieldValue(props.ReceiptMerchant)),
 			Input(css.Class("field"), Type("text"), Attr("aria-label", uistate.T("documents.receiptTotal")),
 				Placeholder(uistate.T("documents.receiptTotal")), OnInput(props.OnReceiptTotal), uiw.FieldValue(props.ReceiptTotal)),
-			Select(css.Class("field"), Attr("aria-label", uistate.T("documents.importAccount")), OnChange(props.OnAcctChange), draftAccountOptions(props.Accounts, props.ImportAcctID)),
+			If(!props.AccountAbove, Select(css.Class("field"), Attr("aria-label", uistate.T("documents.importAccount")), OnChange(props.OnAcctChange), draftAccountOptions(props.Accounts, props.ImportAcctID))),
 			receiptStatus,
-			buttonWithDisabled(receipt.Disabled, []any{css.Class("btn btn-primary"), Type("submit")}, IfElse(props.SavingCheckpoint, Text(uistate.T("enc34.saving")), Text(uistate.T("documents.importReceipt")))),
+			If(!props.PinnedFooter, buttonWithDisabled(receipt.Disabled, []any{css.Class("btn btn-primary"), Type("submit")}, IfElse(props.SavingCheckpoint, Text(uistate.T("enc34.saving")), Text(uistate.T("documents.importReceipt"))))),
 		),
 	)
 }
@@ -250,15 +256,15 @@ func importStatementReview(props draftReviewProps) ui.Node {
 		summary = *props.Summary
 	}
 	return Fragment(
-		Div(css.Class("draft-summary"),
+		If(!props.AccountAbove, Div(css.Class("draft-summary"),
 			draftSumItem(uistate.T("documents.sumIn"), fmtMoney(money.New(summary.Income, props.ReviewCur)), "in"),
 			draftSumItem(uistate.T("documents.sumOut"), fmtMoney(money.New(summary.Expense, props.ReviewCur)), "out"),
-			draftSumNet(summary.Net, props.ReviewCur)),
+			draftSumNet(summary.Net, props.ReviewCur))),
 		Form(css.Class("draft-actionrow"), OnSubmit(props.OnImportDraft),
-			Select(css.Class("field"), Attr("aria-label", uistate.T("documents.importAccount")), OnChange(props.OnAcctChange), draftAccountOptions(props.Accounts, props.ImportAcctID)),
-			buttonWithDisabled(importdraft.StatementDisabled(summary, len(props.Errors), props.SavingCheckpoint),
+			If(!props.AccountAbove, Select(css.Class("field"), Attr("aria-label", uistate.T("documents.importAccount")), OnChange(props.OnAcctChange), draftAccountOptions(props.Accounts, props.ImportAcctID))),
+			If(!props.PinnedFooter, buttonWithDisabled(importdraft.StatementDisabled(summary, len(props.Errors), props.SavingCheckpoint),
 				[]any{css.Class("btn btn-primary"), Type("submit"), Attr("data-testid", "draft-import-all")},
-				IfElse(props.SavingCheckpoint, Text(uistate.T("enc34.saving")), Text(uistate.T("impc.importAllRows", summary.Importable)))),
+				IfElse(props.SavingCheckpoint, Text(uistate.T("enc34.saving")), Text(uistate.T("impc.importAllRows", summary.Importable))))),
 		),
 	)
 }
@@ -374,12 +380,12 @@ func draftRowEditor(v draftRowView) ui.Node {
 	onAmount := ui.UseEvent(func(s string) { v.Amount.Set(s) })
 	onCategory := ui.UseEvent(func(e ui.Event) { v.Category.Set(e.GetValue()) })
 	return Div(css.Class("row-edit"), Attr("data-testid", "draft-review-row"),
-		Form(css.Class("draft-edit-grid"), OnSubmit(v.Save),
-			Input(css.Class("field"), Attr("id", v.FieldID), Type("date"), OnInput(onDate), uiw.FieldValue(v.Date.Get())),
-			Input(css.Class("field"), Type("text"), Placeholder(uistate.T("documents.descPlaceholder")), OnInput(onDesc), uiw.FieldValue(v.Desc.Get())),
-			Input(css.Class("field fig"), Type("text"), Placeholder(uistate.T("documents.amountPlaceholder")), OnInput(onAmount), uiw.FieldValue(v.Amount.Get())),
-			Select(css.Class("field"), Attr("aria-label", uistate.T("documents.categoryPlaceholder")), OnChange(onCategory), draftCategoryOptions(v.Props.Categories, v.Category.Get())),
-			Div(css.Class("draft-edit-actions"),
+		Form(css.Class(importStatementColumns), Attr("data-testid", "draft-row-edit-form"), OnSubmit(v.Save),
+			Input(css.Class("field"), Attr("id", v.FieldID), Type("date"), Attr("aria-label", uistate.T("importux.date")), Disabled(v.Props.Disabled), OnInput(onDate), uiw.FieldValue(v.Date.Get())),
+			Input(css.Class("field"), Type("text"), Attr("aria-label", uistate.T("importux.description")), Disabled(v.Props.Disabled), Placeholder(uistate.T("documents.descPlaceholder")), OnInput(onDesc), uiw.FieldValue(v.Desc.Get())),
+			Select(css.Class("field"), Attr("aria-label", uistate.T("documents.categoryPlaceholder")), Disabled(v.Props.Disabled), OnChange(onCategory), draftCategoryOptions(v.Props.Categories, v.Category.Get())),
+			Input(css.Class("field fig"), Type("text"), Attr("aria-label", uistate.T("importux.amount")), Disabled(v.Props.Disabled), Placeholder(uistate.T("documents.amountPlaceholder")), OnInput(onAmount), uiw.FieldValue(v.Amount.Get())),
+			Div(css.Class("draft-edit-actions"), Style(map[string]string{"grid-column": "1 / -1", "justify-content": "flex-end"}),
 				Button(css.Class("btn"), Type("button"), OnClick(v.Cancel), uistate.T("action.cancel")),
 				Button(css.Class("btn btn-primary"), Type("submit"), OnClick(v.Save), Disabled(v.Props.Disabled), uistate.T("action.save")),
 			),
@@ -391,21 +397,21 @@ func draftRowDisplay(v draftRowView) ui.Node {
 	props := v.Props
 	row := props.Row
 	text, class, kind := draftAmountPresentation(row.Amount, props.Currency, props.ColorBySign)
-	return Div(css.Class("row"), Attr("data-testid", "draft-review-row"),
-		Div(css.Class("row-main"), Span(css.Class("row-desc"), textutil.FirstNonEmpty(row.Description, uistate.T("documents.noDescription"))),
-			Div(css.Class("draft-subline"), Span(css.Class("row-meta"), row.Date),
-				If(props.Error != "", Span(css.Class("err"), Attr("data-testid", "draft-row-error"), props.Error)),
-				If(props.PossibleDuplicate, Span(css.Class("badge badge-warn"), uistate.T("imb.possibleDuplicate"))),
-				If(props.IsDuplicate, Span(css.Class("badge badge-warn"), uistate.T("documents.alreadyImported"))),
-				IfElse(row.Category != "", Span(css.Class("draft-cat-chip"), row.Category),
-					Button(css.Class("draft-cat-add"), Type("button"), Attr("aria-label", uistate.T("documents.addCategory")), OnClick(v.OpenPicker), Disabled(props.Disabled), Span("+ "), uistate.T("documents.category"))),
-			),
-		),
-		Span(css.Class(class), text),
-		Div(css.Class("draft-row-actions"),
-			Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("documents.editRow")), Title(uistate.T("documents.editRow")), OnClick(v.Start), Disabled(props.Disabled), uiw.Icon(icon.Pencil, css.Class(tw.W4, tw.H4))),
-			Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("documents.removeRow")), Title(uistate.T("documents.removeRow")), OnClick(v.Remove), Disabled(props.Disabled), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))),
-		),
+	return Div(css.Class(importStack), Attr("data-testid", "draft-review-row"), Style(map[string]string{"gap": "8px", "padding": "16px 0", "border-bottom": "1px solid var(--border)"}),
+		Div(css.Class(importStatementColumns), Attr("role", "row"),
+			Span(Attr("role", "cell"), css.Class(importMuted), row.Date),
+			Div(Attr("role", "cell"), Style(map[string]string{"min-width": "0", "overflow-wrap": "anywhere"}),
+				Span(textutil.FirstNonEmpty(row.Description, uistate.T("documents.noDescription"))),
+				If(props.Error != "", P(css.Class("err"), Attr("role", "alert"), Attr("data-testid", "draft-row-error"), Style(map[string]string{"margin": "8px 0 0"}), props.Error)),
+				If(props.PossibleDuplicate, P(css.Class(importMuted), uistate.T("imb.possibleDuplicate"))),
+				If(props.IsDuplicate, P(css.Class(importMuted), uistate.T("documents.alreadyImported")))),
+			Div(Attr("role", "cell"),
+				Button(css.Class("btn-link", importFocus), Type("button"), Attr("aria-label", uistate.T("documents.categoryPlaceholder")), OnClick(v.OpenPicker), Disabled(props.Disabled),
+					IfElse(row.Category != "", Text(row.Category), Text("+ "+uistate.T("documents.category"))))),
+			Span(Attr("role", "cell"), css.Class(class), Style(map[string]string{"text-align": "right", "font-variant-numeric": "tabular-nums", "white-space": "nowrap"}), text),
+			Div(css.Class("draft-row-actions"), Attr("role", "cell"),
+				Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("documents.editRow")), Title(uistate.T("documents.editRow")), OnClick(v.Start), Disabled(props.Disabled), uiw.Icon(icon.Pencil, css.Class(tw.W4, tw.H4))),
+				Button(css.Class("btn-del"), Type("button"), Attr("aria-label", uistate.T("documents.removeRow")), Title(uistate.T("documents.removeRow")), OnClick(v.Remove), Disabled(props.Disabled), uiw.Icon(icon.Close, css.Class(tw.W4, tw.H4))))),
 		If(v.Picker, ui.CreateElement(CategoryPicker, CategoryPickerProps{Kind: kind, OnPick: v.ChooseCategory, OnClose: v.ClosePicker})),
 	)
 }

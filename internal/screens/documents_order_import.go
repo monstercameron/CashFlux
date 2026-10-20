@@ -87,7 +87,7 @@ func OrderImportCard(_ orderImportCardProps) ui.Node {
 
 	ms := matches.Get()
 	return Div(css.Class("doc-form-body"), Attr("data-testid", "order-import-card"),
-		ui.CreateElement(orderImportInput, orderImportInputProps{onChooseFile: onChooseFile, onFindPaste: onFindPaste, onPasteInput: onPasteInput}),
+		ui.CreateElement(orderImportInput, orderImportInputProps{onChooseFile: onChooseFile, onFindPaste: onFindPaste, onPasteInput: onPasteInput, pasteText: pasteText.Get()}),
 		P(css.Class("muted", tw.Text12), uistate.T("orderimport.localNote")),
 		If(msg.Get() != "", P(css.Class("muted"), Attr("data-testid", "order-import-msg"), msg.Get())),
 		If(len(ms) > 0,
@@ -229,24 +229,23 @@ func orderImportRow(props orderImportRowProps) ui.Node {
 type orderImportInputProps struct {
 	onChooseFile, onFindPaste func()
 	onPasteInput              func(string)
+	pasteText                 string
 }
 
 // orderImportInput owns the local order file and paste controls.
 func orderImportInput(props orderImportInputProps) ui.Node {
-	return Fragment(Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter),
+	return Fragment(Div(css.Class(importDropZone),
 		Button(css.Class("btn"), Type("button"), Attr("data-testid", "order-file-picker"),
 			OnClick(props.onChooseFile), uistate.T("orderimport.chooseFile")),
 		Span(css.Class("muted", tw.Text13), uistate.T("orderimport.fileOrPaste")),
 	),
-		Form(Attr("data-testid", "order-paste-form"), OnSubmit(Prevent(props.onFindPaste)),
-			Div(css.Class("form-grid"), Style(map[string]string{"margin-bottom": "0.5rem"}),
-				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("orderimport.findOrders")),
-			),
+		Form(css.Class(importStack), Attr("data-testid", "order-paste-form"), OnSubmit(Prevent(props.onFindPaste)),
 			Textarea(css.Class("field field-wide"), Attr("rows", "5"),
 				Attr("id", "order-paste"),
 				Attr("data-testid", "order-paste"),
 				Placeholder(uistate.T("orderimport.pastePlaceholder")),
-				OnInput(props.onPasteInput),
+				OnInput(props.onPasteInput), Attr("aria-label", uistate.T("orderimport.cardTitle")),
 			),
+			Div(css.Class(importActionRow), Button(css.Class("btn btn-primary"), Type("submit"), Disabled(strings.TrimSpace(props.pasteText) == ""), uistate.T("orderimport.findOrders"))),
 		))
 }

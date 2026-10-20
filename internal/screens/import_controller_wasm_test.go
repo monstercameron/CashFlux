@@ -12,6 +12,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/ai"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/extract"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 
 	"github.com/monstercameron/GoWebComponents/v5/state"
@@ -20,7 +21,8 @@ import (
 )
 
 type importControllerFixtureProps struct {
-	capture func(*documentsController, state.Atom[*uistate.DialogRequest])
+	capture       func(*documentsController, state.Atom[*uistate.DialogRequest])
+	captureNotice func(state.Atom[uistate.Notice])
 }
 
 func importControllerFixture(p importControllerFixtureProps) ui.Node {
@@ -33,6 +35,11 @@ func importControllerFixture(p importControllerFixtureProps) ui.Node {
 
 func mountImportController(t *testing.T) (*render.Fixture, func() *documentsController, func() *uistate.DialogRequest) {
 	t.Helper()
+	return mountImportControllerSurface(t, false)
+}
+
+func mountImportControllerSurface(t *testing.T, modal bool) (*render.Fixture, func() *documentsController, func() *uistate.DialogRequest) {
+	t.Helper()
 	app := newR3EEditApp(t)
 	settings := app.Settings()
 	settings.OpenAIKey = "fake-test-key"
@@ -43,7 +50,11 @@ func mountImportController(t *testing.T) (*render.Fixture, func() *documentsCont
 	t.Cleanup(f.Cleanup)
 	var current *documentsController
 	var dialog state.Atom[*uistate.DialogRequest]
-	f.Render(ui.CreateElement(importControllerFixture, importControllerFixtureProps{capture: func(c *documentsController, d state.Atom[*uistate.DialogRequest]) { current = c; dialog = d }}))
+	node := ui.CreateElement(importControllerFixture, importControllerFixtureProps{capture: func(c *documentsController, d state.Atom[*uistate.DialogRequest]) { current = c; dialog = d }})
+	if modal {
+		node = uiw.FlipPanel(uiw.FlipPanelProps{Title: uistate.T("transactions.importBtn"), Width: "900px", Height: "660px", FormID: ImportModalFormID, Back: node})
+	}
+	f.Render(node)
 	f.Stabilize()
 	current.model.Reset()
 	current.syncDraft()
@@ -240,7 +251,7 @@ func TestImportEditorFollowsIdentityAfterRowRemovalIMB(t *testing.T) {
 	current().removeDraft(0)
 	f.Stabilize()
 	for _, form := range f.AllByTag("form") {
-		if form.Attr("class") == "draft-edit-grid" {
+		if form.Attr("data-testid") == "draft-row-edit-form" {
 			form.Submit()
 			break
 		}
@@ -338,7 +349,11 @@ func TestImportDisclosureMatchesAvailableTransportIMB(t *testing.T) {
 	if !strings.Contains(c.disclosure(), c.pr.ServerURL) {
 		t.Fatal("proxy destination missing")
 	}
-	for _, source := range []string{"stmt", "pdf"} {
+	c.source.Set("stmt")
+	if !strings.Contains(c.disclosure(), c.pr.ServerURL) {
+		t.Fatal("statement proxy destination missing")
+	}
+	for _, source := range []string{"pdf"} {
 		c.source.Set(source)
 		if strings.Contains(c.disclosure(), c.pr.ServerURL) {
 			t.Fatal("direct request disclosed as proxy")

@@ -1,3 +1,10 @@
+## 2026-10-20 - Import review and category suggestions
+
+The import panel now makes source, reading, and review distinct. Extracted transactions stay in review until the user
+selects an account and commits them. Smart reuses category history only above the requested text-similarity threshold;
+Smart+ shares aggregate category counts with the model instead of past raw descriptions. The request and response
+boundaries are tested, including server text extraction, PDF requirements, stale replies, and review placement.
+
 ## 2026-10-20 - Transactions date, calendar, and evidence refinements
 
 The Transactions controls now share a consistent size and interaction style. Date filters have an explicit clear action,

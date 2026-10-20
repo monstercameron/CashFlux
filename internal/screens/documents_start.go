@@ -38,45 +38,27 @@ type importTypePickerProps struct {
 
 // importTypePicker renders the Smart and Smart+ source choices.
 func importTypePicker(props importTypePickerProps) ui.Node {
-	return Div(css.Class("doc-picker"), Attr("data-testid", "import-type-picker"),
-		Div(css.Class("doc-branch"),
-			Div(css.Class("doc-branch-head"),
-				Span(css.Class("doc-branch-title", "smart"), uistate.T("documents.smartBranch")),
-				tierChip(false, uistate.T("documents.smartBranchTier")),
-				Span(css.Class("doc-branch-sub"), uistate.T("documents.smartBranchDesc"))),
-			Div(css.Class("doc-type-grid"),
-				docTypeTile("import-type-csv", props.OnCSV, uiw.Icon(icon.Upload, css.Class(tw.W5, tw.H5)),
-					uistate.T("documents.typeCsvTitle"), uistate.T("documents.typeCsvDesc"), false),
-				docTypeTile("import-type-stmt", props.OnStatement, uiw.Icon(icon.Landmark, css.Class(tw.W5, tw.H5)),
-					uistate.T("documents.typeStmtTitle"), uistate.T("documents.typeStmtDesc"), false),
-				docTypeTile("import-type-amazon", props.OnOrder, uiw.Icon(icon.Box, css.Class(tw.W5, tw.H5)),
-					uistate.T("orderimport.cardTitle"), uistate.T("orderimport.cardDesc"), false),
-			),
-		),
-		Div(css.Class("doc-branch"),
-			Div(css.Class("doc-branch-head"),
-				Span(css.Class("doc-branch-title", "plus"), uistate.T("documents.smartPlusBranch")),
-				tierChip(true, uistate.T("documents.smartPlusBranchTier")),
-				Span(css.Class("doc-branch-sub"), uistate.T("documents.smartPlusBranchDesc"))),
-			Div(css.Class("doc-type-grid"),
-				docTypeTile("import-type-pdf", props.OnPDF, uiw.Icon(icon.FileText, css.Class(tw.W5, tw.H5)),
-					uistate.T("documents.typePdfTitle"), uistate.T("documents.typePdfDesc"), true),
-				docTypeTile("import-type-receipt", props.OnReceipt, uiw.Icon(icon.Receipt, css.Class(tw.W5, tw.H5)),
-					uistate.T("documents.typeReceiptTitle"), uistate.T("documents.typeReceiptDesc"), true),
-			),
-		),
+	return Div(css.Class(importSourceGrid), Attr("data-testid", "import-type-picker"),
+		docTypeTile("import-type-pdf", props.OnPDF, uiw.Icon(icon.FileText, css.Class(tw.W5, tw.H5)), uistate.T("importux.sourcePDF"), uistate.T("importux.sourcePDFDesc"), true),
+		docTypeTile("import-type-csv", props.OnCSV, uiw.Icon(icon.Upload, css.Class(tw.W5, tw.H5)), uistate.T("documents.typeCsvTitle"), uistate.T("importux.sourceCSVDesc"), false),
+		docTypeTile("import-type-amazon", props.OnOrder, uiw.Icon(icon.Box, css.Class(tw.W5, tw.H5)), uistate.T("orderimport.cardTitle"), uistate.T("importux.sourceOrderDesc"), false),
+		docTypeTile("import-type-receipt", props.OnReceipt, uiw.Icon(icon.Receipt, css.Class(tw.W5, tw.H5)), uistate.T("documents.typeReceiptTitle"), uistate.T("importux.sourceReceiptDesc"), true),
+		docTypeTile("import-type-stmt", props.OnStatement, uiw.Icon(icon.Landmark, css.Class(tw.W5, tw.H5)), uistate.T("importux.sourceStatement"), uistate.T("importux.sourceStatementDesc"), false),
 	)
 }
 
 // docTypeTile renders a source tile without registering per-item hooks in the picker.
 func docTypeTile(testid string, onClick ui.Handler, ic ui.Node, title, desc string, smartPlus bool) ui.Node {
-	tier := "smart"
+	tier := "documents.smartBranch"
 	if smartPlus {
-		tier = "smartplus"
+		tier = "documents.smartPlusBranch"
 	}
-	return Button(css.Class("doc-type-tile", tier), Type("button"), Attr("data-testid", testid), OnClick(onClick),
-		tierIcon(smartPlus, ic),
-		Div(css.Class("dt-body"), Div(css.Class("dt-title"), title), Div(css.Class("dt-desc"), desc)),
+	return Button(css.Class(importSourceTile), Type("button"), Attr("data-testid", testid), OnClick(onClick),
+		ic,
+		Div(css.Class(importStack), Style(map[string]string{"gap": "8px"}),
+			Div(Style(map[string]string{"display": "flex", "align-items": "baseline", "gap": "8px", "flex-wrap": "wrap"}),
+				Span(Style(map[string]string{"font-weight": "600"}), title), Span(css.Class(importTier), uistate.T(tier))),
+			Span(css.Class(importMuted), desc)),
 	)
 }
 
@@ -86,10 +68,8 @@ func importFormHeader(plus bool, ic ui.Node, title, desc string) ui.Node {
 	if plus {
 		tierLabel = uistate.T("documents.smartPlusBranch")
 	}
-	return Div(css.Class("doc-form-title"), tierIcon(plus, ic),
-		Div(css.Class("doc-form-titletext"),
-			H3(css.Class("doc-form-h"), Span(title), tierChip(plus, tierLabel)),
-			P(css.Class("doc-form-desc"), desc),
-		),
-	)
+	return Div(css.Class(importStack), Style(map[string]string{"gap": "8px"}),
+		Div(Style(map[string]string{"display": "flex", "align-items": "center", "gap": "8px"}), ic,
+			H3(Style(map[string]string{"margin": "0", "font-size": "18px", "font-weight": "600"}), title), Span(css.Class(importTier), tierLabel)),
+		P(css.Class(importMuted), desc))
 }

@@ -9,6 +9,7 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+	"strings"
 
 	"github.com/monstercameron/GoWebComponents/v5/css"
 	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
@@ -38,30 +39,25 @@ type csvImportCardProps struct {
 // duplicate warning / status line. The form's title + description live in the shared
 // importFormHeader, so this returns just the input body.
 func CsvImportCard(props csvImportCardProps) ui.Node {
-	return Div(css.Class("doc-form-body"),
+	return Div(css.Class(importStack),
 		// File picker: the primary path for real .csv files (C60).
-		Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter),
+		Div(css.Class(importDropZone),
 			Button(css.Class("btn"), Type("button"), Attr("data-testid", "csv-file-picker"),
 				OnClick(props.OnChooseFile), uistate.T("documents.chooseCsvFile")),
 			Span(css.Class("muted", tw.Text13), uistate.T("documents.csvFileOrPaste")),
 		),
-		Form(OnSubmit(props.OnImportCSV),
-			// Account selector + Import button sit above the textarea so they stay visible
-			// on short viewports (L44).
-			Div(css.Class("form-grid"),
-				Style(map[string]string{"margin-bottom": "0.5rem"}),
-				csvAcctSelect(props.Accounts, props.ImportAcctID, props.OnAcctChange),
-				Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("documents.import")),
-			),
+		Form(css.Class(importStack), OnSubmit(props.OnImportCSV),
 			Textarea(css.Class("field field-wide"), Attr("rows", "6"),
 				Placeholder(uistate.T("imb.csvSample")), Value(props.CSVText), uiw.FieldValue(props.CSVText),
-				OnInput(props.OnCsvInput),
+				OnInput(props.OnCsvInput), Attr("aria-label", uistate.T("documents.typeCsvTitle")),
 			),
+			Div(css.Class(importActionRow), csvAcctSelect(props.Accounts, props.ImportAcctID, props.OnAcctChange),
+				Button(css.Class("btn btn-primary"), Type("submit"), Disabled(strings.TrimSpace(props.CSVText) == ""), uistate.T("importux.previewCSV"))),
 		),
 		// Terse column hint, then details tucked into a collapsible so they don't crowd
 		// the input.
 		P(css.Class("muted", tw.Text12), Attr("data-testid", "local-first-note"),
-			uistate.T("documents.csvColumnsHint")),
+			uistate.T("importux.readLocal")),
 		Details(css.Class("csv-help"), Attr("data-testid", "csv-bank-help"),
 			Summary(uistate.T("documents.bankCsvHelpTitle")),
 			P(css.Class("muted", tw.Mt1), uistate.T("documents.bankCsvHelpBody")),

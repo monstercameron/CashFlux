@@ -123,7 +123,7 @@ func BuildRequestWithOptions(model string, messages []Message, opts ChatOptions)
 // reject a custom temperature.
 func ReasoningModel(model string) bool {
 	m := strings.ToLower(strings.TrimSpace(model))
-	return strings.HasPrefix(m, "gpt-5") ||
+	return strings.HasPrefix(m, "gpt-5") || strings.HasPrefix(m, "gpt-6") ||
 		strings.HasPrefix(m, "o1") || strings.HasPrefix(m, "o3") ||
 		strings.HasPrefix(m, "o4") || strings.HasPrefix(m, "o5")
 }
@@ -267,6 +267,7 @@ type ModelPricing struct {
 // best-effort table for surfacing rough cost (prices change; treat as an
 // estimate). Dated/variant model names fall back to the longest matching prefix.
 var modelPricing = map[string]ModelPricing{
+	"gpt-6-luna":  {Input: 0.10, Output: 0.50},
 	"gpt-5.5":      {Input: 2.00, Output: 8.00},
 	"gpt-5.4-mini": {Input: 0.25, Output: 2.00},
 	"o4-mini":      {Input: 1.10, Output: 4.40},

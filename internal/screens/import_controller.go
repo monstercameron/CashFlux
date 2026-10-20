@@ -5,6 +5,7 @@
 package screens
 
 import (
+	"strconv"
 	"strings"
 	"time"
 
@@ -49,6 +50,8 @@ type documentsController struct {
 	defaultMemberID               string
 	defaultAcc                    string
 	imageURL                      ui.State[string]
+	imageName                     ui.State[string]
+	imageSize                     ui.State[int]
 	imageDraftAtom                state.Atom[string]
 	aiLoading                     ui.State[bool]
 	aiErr                         ui.State[string]
@@ -70,6 +73,9 @@ type documentsController struct {
 	onPickStmt                    ui.Handler
 	onPickPDF                     ui.Handler
 	onPickReceipt                 ui.Handler
+	onDropPDF                     ui.Handler
+	onDropImage                   ui.Handler
+	onFileDragOver                ui.Handler
 	onPickAmazon                  ui.Handler
 	backToTypes                   ui.Handler
 	goReview                      ui.Handler
@@ -161,6 +167,7 @@ type documentsController struct {
 	batch                         appstate.StagedImport
 	summary                       importdraft.Summary
 	categorizeAI                  ui.Handler
+	pinnedFooter                  bool
 }
 
 func useDocumentsController() *documentsController {
@@ -225,6 +232,8 @@ func (c *documentsController) useNav() {
 		})
 	}, c.app, c.app.Rev(), c.defaultMemberID)
 	c.imageURL = ui.UseState("")
+	c.imageName = ui.UseState("")
+	c.imageSize = ui.UseState(0)
 	c.imageDraftAtom = uistate.UseImageDraft()
 	ui.UseEffect(func() func() {
 		if c.imageURL.Get() == "" {
@@ -242,8 +251,14 @@ func (c *documentsController) useNav() {
 	c.source = ui.UseState("")
 	c.onPickCSV = ui.UseEvent(Prevent(func() { c.chooseSource("csv") }))
 	c.onPickStmt = ui.UseEvent(Prevent(func() { c.chooseSource("stmt") }))
-	c.onPickPDF = ui.UseEvent(Prevent(func() { c.chooseSource("pdf") }))
+	c.onPickPDF = ui.UseEvent(Prevent(func() {
+		c.importAcct.Set("")
+		c.chooseSource("pdf")
+	}))
 	c.onPickReceipt = ui.UseEvent(Prevent(func() { c.chooseSource("receipt") }))
+	c.onFileDragOver = ui.UseEvent(func(e ui.Event) { e.PreventDefault() })
+	c.onDropPDF = ui.UseEvent(func(e ui.Event) { c.dropImportFile("pdf", e) })
+	c.onDropImage = ui.UseEvent(func(e ui.Event) { c.dropImportFile("receipt", e) })
 	c.onPickAmazon = ui.UseEvent(Prevent(func() { c.chooseSource("amazon") }))
 	c.backToTypes = ui.UseEvent(Prevent(func() { c.chooseSource("") }))
 	c.goReview = ui.UseEvent(Prevent(func() {
@@ -604,29 +619,7 @@ func (c *documentsController) useCreateCadenceReminder() {
 }
 
 func (c *documentsController) useChooseImage() {
-	c.chooseImage = ui.UseEvent(func() {
-		if c.busy() || c.aiLoading.Get() {
-			return
-		}
-		c.cancelAI()
-		request := c.model.Begin()
-		pickImageDataURL(
-			func(u string) {
-				if !c.model.Accept(request) {
-					return
-				}
-				c.imageURL.Set(u)
-				c.imageDraftAtom.Set(u) // C98: persist across navigation
-				c.aiErr.Set("")
-				c.needsKey.Set(false)
-			},
-			func(e string) {
-				if c.model.Accept(request) {
-					c.aiErr.Set(e)
-				}
-			},
-		)
-	})
+	c.chooseImage = ui.UseEvent(func() { c.chooseImportFile("receipt") })
 	c.settings = c.app.Settings()
 	c.pr = uistate.UsePrefs().Get().Normalize()
 	c.useBackendAI = uistate.BackendConnectionActive(c.pr)
@@ -641,31 +634,7 @@ func (c *documentsController) useReadAI() {
 }
 
 func (c *documentsController) useChoosePDF() {
-	c.choosePDF = ui.UseEvent(func() {
-		if c.busy() || c.aiLoading.Get() {
-			return
-		}
-		c.cancelAI()
-		request := c.model.Begin()
-		pickFileLimited(".pdf,application/pdf", 10*1024*1024, func(_, limit int) { c.aiErr.Set(uistate.T("impc.fileTooLarge", "PDF", fileLimitLabel(limit))) }, func(name, mime string, data []byte) {
-			if !c.model.Accept(request) {
-				return
-			}
-			if len(data) == 0 {
-				c.aiErr.Set(uistate.T("statementimport.readErr"))
-				return
-			}
-			if len(data) > 45*1024*1024 { // OpenAI caps files at 50MB; stay under it
-				c.aiErr.Set(uistate.T("statementimport.tooLarge"))
-				return
-			}
-			c.pdfData.Set(importdraft.PDFDataURL(mime, data))
-			c.pdfBytes.Set(data)
-			c.pdfName.Set(name)
-			c.aiErr.Set("")
-			c.needsKey.Set(false)
-		})
-	})
+	c.choosePDF = ui.UseEvent(func() { c.chooseImportFile("pdf") })
 }
 
 func (c *documentsController) useOnTogglePdfSave() {
@@ -686,7 +655,7 @@ func (c *documentsController) useCategorizeDraft() {
 			return
 		}
 		c.cancelAI()
-		c.model.Suggest(c.app.Rules(), c.app.Categories(), c.recDec)
+		c.model.Suggest(c.app.Rules(), c.app.Categories(), c.app.Transactions(), c.recDec)
 		c.syncDraft()
 		c.msg.Set(uistate.T("imb.suggested"))
 	})
@@ -822,19 +791,31 @@ func (c *documentsController) useSeenSigs() {
 }
 
 func (c *documentsController) usePdfCard() {
-	c.pdfFileLabel = firstNonEmpty(c.pdfName.Get(), uistate.T("statementimport.noFile"))
+	remove := ui.UseEvent(func() { c.removeSourceFile("pdf") })
+	processing := c.aiLoading.Get()
+	buttonStyle := map[string]string{}
+	if processing {
+		buttonStyle["opacity"] = "1"
+		buttonStyle["cursor"] = "progress"
+	}
+	c.pdfFileLabel = firstNonEmpty(c.pdfName.Get(), uistate.T("importux.pdfHint"))
 	c.pdfCard = Fragment(
 		importFormHeader(true, uiw.Icon(icon.FileText, css.Class(tw.W5, tw.H5)),
 			uistate.T("documents.typePdfTitle"), uistate.T("documents.pdfFormDesc")),
 		Div(css.Class("doc-form-body"),
-			Div(css.Class("statement-drop"),
-				Button(css.Class("btn"), Type("button"), Attr("data-testid", "statementimport-choose"), OnClick(c.choosePDF),
-					uiw.Icon(icon.FileText, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("statementimport.choose"))),
-				Span(css.Class("statement-file", tw.TextDim), Attr("data-testid", "statementimport-filename"), c.pdfFileLabel)),
-			If(c.aiLoading.Get(), P(css.Class("muted"), Attr("data-testid", "statementimport-loading"), uistate.T("statementimport.reading"))),
-			buttonWithDisabled(c.pdfData.Get() == "" || c.aiLoading.Get(),
-				[]any{css.Class("btn btn-plus", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "statementimport-run"), OnClick(c.runPDFAI)},
-				uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("statementimport.run")), KeyGateMark(c.canSend("pdf"))),
+			Div(css.Class(importDropZone), Attr("data-testid", "statementimport-dropzone"), OnDragOver(c.onFileDragOver), OnDrop(c.onDropPDF),
+				Div(css.Class(importStack),
+					Span(css.Class("statement-file"), Style(map[string]string{"overflow-wrap": "anywhere"}), Attr("data-testid", "statementimport-filename"), c.pdfFileLabel),
+					Span(css.Class(importMuted), IfElse(c.pdfData.Get() == "", Text(uistate.T("importux.pdfLimit")), Text(importdraft.FileSizeLabel(len(c.pdfBytes.Get())))))),
+				Button(css.Class("btn"), Type("button"), Attr("data-testid", "statementimport-choose"), Disabled(c.busy() || c.aiLoading.Get()), OnClick(c.choosePDF),
+					uiw.Icon(icon.FileText, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("importux.chooseFile"))),
+				If(c.pdfData.Get() != "", Button(css.Class("btn btn-ghost"), Type("button"), Attr("data-testid", "statementimport-remove"), Disabled(c.busy() || c.aiLoading.Get()), OnClick(remove), uistate.T("importux.removeFile")))),
+			Div(css.Class(importActionRow), buttonWithDisabled(c.pdfData.Get() == "" || processing || c.busy(),
+				[]any{css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Style(buttonStyle), Type("button"), Attr("aria-busy", strconv.FormatBool(processing)), Attr("data-testid", "statementimport-run"), OnClick(c.runPDFAI)},
+				IfElse(processing,
+					Span(css.Class("dt-spin dt-spin-sm"), Style(map[string]string{"border-color": "rgba(255,255,255,0.4)", "border-top-color": "#fff"}), Attr("aria-hidden", "true"), Attr("data-testid", "statementimport-spinner")),
+					uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4))),
+				IfElse(processing, Text(uistate.T("statementimport.reading")), Text(uistate.T("importux.readStatement"))), KeyGateMark(c.canSend("pdf")))),
 			If(c.pdfData.Get() != "", Label(css.Class("statement-savedoc", tw.Flex, tw.ItemsCenter, tw.Gap2), Style(map[string]string{"cursor": "pointer"}),
 				Input(append([]any{css.Class("cf-check"), Type("checkbox"), Attr("data-testid", "statementimport-savedoc"), OnChange(c.onTogglePdfSave)}, checkedAttr(c.pdfSaveCopy.Get())...)...),
 				Div(css.Class("row-main"),

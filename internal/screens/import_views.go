@@ -12,14 +12,26 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
+	"strings"
 
 	"github.com/monstercameron/GoWebComponents/v5/css"
 	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
 
+func (c *documentsController) progressStep() string {
+	step := "source"
+	if c.inReview {
+		step = "review"
+	} else if c.source.Get() != "" {
+		step = "read"
+	}
+	return step
+}
+
 func (c *documentsController) renderPanel() ui.Node {
-	return Div(
+	return Div(css.Class(importStack, importPanelStyle), Attr("data-testid", "import-panel"),
+		If(!c.pinnedFooter, importProgress(c.progressStep())),
 		Form(Attr("id", ImportModalFormID), OnSubmit(c.saveModalImport)),
 		ui.CreateElement(importStatus, c),
 		If(!c.inReview, ui.CreateElement(importInputStage, c)),
@@ -31,19 +43,22 @@ func importInputStage(c *documentsController) ui.Node {
 	return Fragment(
 		If(len(c.rows) > 0, Div(css.Class(tw.Mb2, tw.Flex, tw.JustifyEnd), Button(css.Class("btn btn-primary"), Type("button"), Attr("data-testid", "import-review-btn"), OnClick(c.goReview), uistate.T("documents.reviewStage")))),
 		IfElse(c.source.Get() == "", ui.CreateElement(importTypePicker, importTypePickerProps{OnCSV: c.onPickCSV, OnStatement: c.onPickStmt, OnOrder: c.onPickAmazon, OnPDF: c.onPickPDF, OnReceipt: c.onPickReceipt}), ui.CreateElement(importSourceForm, c)),
-		c.renderHistory(),
+		If(c.source.Get() == "", ui.CreateElement(importPickerHistory, c)),
 	)
 }
 
 func importSourceForm(c *documentsController) ui.Node {
-	return Div(css.Class("doc-form"), Attr("data-testid", "import-source-form"),
-		Div(css.Class("doc-form-head"), Button(css.Class("btn"), Type("button"), Attr("data-testid", "import-back-types"), OnClick(c.backToTypes), uistate.T("documents.backToTypes"))),
-		If(c.source.Get() == "csv", ui.CreateElement(importCSVSource, c)),
-		If(c.source.Get() == "stmt", ui.CreateElement(importStatementSource, c)),
-		If(c.source.Get() == "amazon", ui.CreateElement(importOrderSource, c)),
-		If(c.source.Get() == "pdf", ui.CreateElement(importPDFSource, c)),
-		If(c.source.Get() == "receipt", ui.CreateElement(importReceiptSource, c)),
-		If(c.source.Get() == "stmt", ui.CreateElement(importStatementOptions, c)),
+	return Div(css.Class(importStack), Attr("data-testid", "import-source-form"),
+		Button(css.Class("btn-link", importBackLink), Type("button"), Attr("data-testid", "import-back-types"), OnClick(c.backToTypes), Disabled(c.busy()), uistate.T("importux.allTypes")),
+		Div(css.Class(importSourceCard, importStack), Attr("data-testid", "import-source-card"),
+			If(len(c.rows) > 0, P(css.Class(importMuted), Attr("data-testid", "import-draft-note"), uistate.T("imb.ready"))),
+			If(c.source.Get() == "csv", ui.CreateElement(importCSVSource, c)),
+			If(c.source.Get() == "stmt", ui.CreateElement(importStatementSource, c)),
+			If(c.source.Get() == "amazon", ui.CreateElement(importOrderSource, c)),
+			If(c.source.Get() == "pdf", ui.CreateElement(importPDFSource, c)),
+			If(c.source.Get() == "receipt", ui.CreateElement(importReceiptSource, c)),
+			If(c.source.Get() == "stmt", ui.CreateElement(importStatementOptions, c)),
+		),
 	)
 }
 
@@ -70,23 +85,24 @@ func importStatementSource(c *documentsController) ui.Node {
 	return Fragment(
 		importFormHeader(false, uiw.Icon(icon.Landmark, css.Class(tw.W5, tw.H5)),
 			uistate.T("documents.typeStmtTitle"), uistate.T("documents.stmtFormDesc")),
-		Div(css.Class("doc-form-body"),
-			Form(OnSubmit(c.parseStatement),
-				Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2), Style(map[string]string{"margin-bottom": "0.5rem"}),
-					Button(css.Class("btn btn-primary"), Type("submit"), uistate.T("documents.stmtParse")),
-					Button(css.Class("btn btn-plus", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "extract-ai-btn"),
-						OnClick(c.extractWithAI), Disabled(c.aiLoading.Get() || c.busy()),
-						uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("documents.extractAI")),
+		Div(css.Class("doc-form-body", importStack),
+			Form(css.Class(importStack), OnSubmit(c.parseStatement),
+				Textarea(css.Class("field field-wide"), Attr("rows", "6"), Attr("aria-label", uistate.T("documents.typeStmtTitle")),
+					Placeholder(uistate.T("documents.stmtSample")), Disabled(c.busy() || c.aiLoading.Get()),
+					OnInput(c.onStmt), Value(c.stmtText.Get()), uiw.FieldValue(c.stmtText.Get()),
+				),
+				Div(css.Class(importActionRow),
+					Button(css.Class("btn btn-primary"), Type("submit"), Disabled(strings.TrimSpace(c.stmtText.Get()) == "" || c.busy() || c.aiLoading.Get()), uistate.T("importux.readStatement")),
+					Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "extract-ai-btn"),
+						OnClick(c.extractWithAI), Disabled(strings.TrimSpace(c.stmtText.Get()) == "" || c.aiLoading.Get() || c.busy()),
+						uiw.Icon(icon.Sparkles, css.Class(tw.ShrinkO, tw.W4, tw.H4)), IfElse(c.aiLoading.Get(), Text(uistate.T("documents.reading")), Text(uistate.T("importux.readWithSmartPlus"))),
 						// R24: the control says it needs a key BEFORE it is pressed. The
 						// plain "Parse" button beside it is the no-key sibling and works
 						// regardless, which is what makes this a label rather than a wall.
 						KeyGateMark(c.canSend("stmt"))),
 				),
-				Textarea(css.Class("field field-wide"), Attr("rows", "4"),
-					Placeholder(uistate.T("documents.stmtSample")),
-					OnInput(c.onStmt), Value(c.stmtText.Get()), uiw.FieldValue(c.stmtText.Get()),
-				),
 			),
+			P(css.Class(importMuted), uistate.T("importux.readLocal")),
 			c.renderDisclosure(),
 			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter),
 				P(css.Class("muted", tw.Text12), uistate.T("documents.cadenceDesc")),
@@ -115,17 +131,24 @@ func importReceiptSource(c *documentsController) ui.Node {
 		ImageImportCard(imageImportCardProps{
 			ImageURL:  c.imageURL.Get(),
 			AILoading: c.aiLoading.Get(),
+			Disabled:  c.busy(),
+			FileLabel: c.imageName.Get(), FileSize: c.imageSize.Get(),
 
-			OnChoose:   c.chooseImage,
+			OnChoose: c.chooseImage,
+			OnDrop:   c.onDropImage, OnDragOver: c.onFileDragOver,
 			OnReadAI:   c.readAI,
+			OnRemove:   func() { c.removeSourceFile("receipt") },
 			Disclosure: c.disclosure(),
 		}),
 	)
 }
 
 func importPDFSource(c *documentsController) ui.Node {
-	return Fragment(c.pdfCard, c.renderDisclosure())
+	return Div(css.Class(importStack), c.pdfCard, c.renderDisclosure())
 }
+
+// History owns its memo hooks separately from source navigation.
+func importPickerHistory(c *documentsController) ui.Node { return c.renderHistory() }
 
 func importStatementOptions(c *documentsController) ui.Node {
 	return Fragment(
@@ -185,26 +208,26 @@ func (c *documentsController) applySavedProfile(sp importmap.SavedProfile) {
 
 func importReviewStage(c *documentsController) ui.Node {
 	return Fragment(
-		Div(css.Class(tw.Flex, tw.ItemsCenter, tw.JustifyBetween, tw.Mb2),
-			Button(css.Class("btn"), Type("button"), Attr("data-testid", "import-back-btn"),
-				OnClick(c.goInput), uistate.T("documents.backToInput")),
+		ui.CreateElement(importAccountPlacement, importPlacementProps{Accounts: c.accounts, AccountID: c.importAcct.Get(), OnChange: c.onAcct, Disabled: c.busy() || c.aiLoading.Get(), Rows: c.rows, Summary: c.summary, Currency: c.reviewCur}),
+		Div(css.Class(tw.Flex, tw.FlexWrap, tw.ItemsCenter, tw.JustifyBetween, tw.Mb2),
+			Button(css.Class("btn-link", importBackLink), Type("button"), Attr("data-testid", "import-back-btn"), Disabled(c.busy()),
+				OnClick(c.goInput), uistate.T("importux.addSource")),
 			A(css.Class("btn", "btn-ghost"), Href(uistate.RoutePath("/artifacts")),
 				Attr("data-testid", "import-artifacts-link"), OnClick(c.goArtifacts),
 				uistate.T("documents.pastImportsLink"))),
 		// C74 — Suggest categories button: shown when draft is non-empty.
 		// Pass 1 (deterministic rules) runs free; Pass 2 (AI) only fires with a key.
-		If(len(c.rows) > 0,
+		If(len(c.rows) > 0, Details(Attr("data-testid", "import-category-tools"),
+			Summary(css.Class(importFocus, importMuted), Style(map[string]string{"cursor": "pointer"}), uistate.T("importux.categoryTools")),
 			Div(css.Class(tw.Mt2, tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter),
 				Button(css.Class("btn"), Type("button"), Attr("data-testid", "suggest-categories-btn"),
 					OnClick(c.categorizeDraft), Disabled(c.aiLoading.Get() || c.busy()), uistate.T("imb.suggestLocal")),
 				Button(css.Class("btn btn-plus"), Type("button"), Attr("data-testid", "suggest-categories-ai"), OnClick(c.categorizeAI), Disabled(c.aiLoading.Get() || c.busy()), uistate.T("imb.suggestAI"), KeyGateMark(c.canSend("categories"))),
 				c.renderDisclosure(),
 			),
-		),
+		)),
 		If(c.source.Get() == "stmt" && c.statementRaw.Get() != "", ui.CreateElement(importFormatOptions, c)),
-		// Review results sit below the import inputs that produce them (G14 §1): a
-		// parsed statement / scanned receipt's draft rows no longer pop in *above* the
-		// card the user just acted in.
+		// The statement header leads the automatically entered review.
 		ui.CreateElement(paginatedDraftReview, draftReviewProps{
 			Rows:              c.rows,
 			VisibleRows:       c.visibleRows,
@@ -232,6 +255,8 @@ func importReviewStage(c *documentsController) ui.Node {
 			Summary:           &c.summary, Errors: c.model.Errors,
 			OnRemoveDraft: c.removeDraft,
 			OnUpdateDraft: c.updateDraft,
+			AccountAbove:  true,
+			PinnedFooter:  c.pinnedFooter,
 		}),
 		// #58: when the receipt's total matches an existing charge, lead with
 		// the attach-to-existing offer — "Import" below stays the create-new path.

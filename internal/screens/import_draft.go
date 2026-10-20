@@ -139,7 +139,11 @@ func (c *documentsController) finishImport(result appstate.CSVImportResult, csv 
 	c.aiErr.Set("")
 	c.msg.Set(uistate.T("impc.importSummary", result.Imported, result.Duplicates, len(result.Failed), len(result.PossibleDuplicates)))
 	if result.Imported > 0 {
-		uistate.PostDurable(uistate.T("documents.importUndo", importCount(result.Imported, "transaction", "transactions")), true)
+		key := "importux.imported"
+		if result.Imported == 1 {
+			key = "importux.importedOne"
+		}
+		uistate.PostDurable(uistate.T(key, result.Imported), true)
 	}
 	c.savePDFCopy()
 	c.rev.Set(c.rev.Get() + 1)

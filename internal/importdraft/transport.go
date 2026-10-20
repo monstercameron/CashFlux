@@ -4,10 +4,11 @@ package importdraft
 
 import "strings"
 
-// Transport chooses an available schema-capable route. The current backend
-// supports structured vision; other sources need the personal-key transport.
+// Transport chooses an available extraction route. The backend supports text
+// chat and structured vision; PDF files and category suggestions need a personal
+// key. Text replies are strictly decoded before becoming draft rows.
 func Transport(source, personalKey string, backend bool) string {
-	if source == "receipt" && backend {
+	if (source == "receipt" || source == "stmt") && backend {
 		return "proxy"
 	}
 	if strings.TrimSpace(personalKey) != "" {

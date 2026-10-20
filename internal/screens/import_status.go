@@ -28,8 +28,11 @@ func importStatus(c *documentsController) ui.Node {
 	})
 	settings := ui.UseEvent(func() { uistate.OpenGlobalSettingsAt("ai") })
 	text := importdraft.StatusText(c.msg.Get(), c.aiErr.Get(), c.aiLoading.Get(), c.busy(), c.job.pending != nil, uistate.T)
+	if text == uistate.T("imb.ready") {
+		text = ""
+	}
 	return Div(Attr("data-testid", "import-status"), Attr("role", "status"), Attr("aria-live", "polite"),
-		P(css.Class("muted"), text),
+		If(text != "", P(css.Class("muted"), text)),
 		If(c.needsKey.Get(), Div(css.Class("notice notice-warn"), Span(uistate.T("documents.needKey")), Button(css.Class("btn btn-sm"), Type("button"), OnClick(settings), uistate.T("documents.goToSettings")))),
 		If(c.aiLoading.Get(), Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "import-cancel-ai"), OnClick(cancel), uistate.T("imb.cancelAI"))),
 		If(c.job.pending != nil, Button(css.Class("btn btn-sm"), Type("button"), Attr("data-testid", "import-retry-save"), OnClick(retry), uistate.T("imb.retrySave"))),
@@ -37,7 +40,14 @@ func importStatus(c *documentsController) ui.Node {
 }
 
 func (c *documentsController) renderDisclosure() ui.Node {
-	return P(css.Class("muted"), Attr("data-testid", "import-ai-disclosure"), c.disclosure())
+	short := "importux.disclosureShort"
+	if c.aiSource() == "stmt" {
+		short = "importux.disclosureText"
+	}
+	if c.aiSource() == "categories" {
+		short = "importux.disclosureCategories"
+	}
+	return importDisclosureFor(short, c.disclosure())
 }
 
 func (c *documentsController) renderHistory() ui.Node {

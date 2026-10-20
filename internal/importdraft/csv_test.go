@@ -86,7 +86,10 @@ func TestTransportCapabilities(t *testing.T) {
 		backend     bool
 		want        string
 	}{
-		{"receipt", "", true, "proxy"}, {"receipt", "key", false, "direct"}, {"stmt", "key", true, "direct"}, {"pdf", "", true, "unavailable"}, {"categories", "", true, "unavailable"},
+		{"receipt", "", true, "proxy"}, {"receipt", "key", false, "direct"},
+		{"stmt", "", true, "proxy"}, {"stmt", "key", true, "proxy"}, {"stmt", "key", false, "direct"},
+		{"stmt", "", false, "unavailable"}, {"stmt", "  ", false, "unavailable"},
+		{"pdf", "", true, "unavailable"}, {"pdf", "key", true, "direct"}, {"categories", "", true, "unavailable"},
 	} {
 		if got := Transport(tt.source, tt.key, tt.backend); got != tt.want {
 			t.Fatal(tt, got)

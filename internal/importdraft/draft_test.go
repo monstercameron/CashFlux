@@ -177,12 +177,12 @@ func TestReceiptKeepsDiscountAndFirstValidDate(t *testing.T) {
 
 func TestLocalSuggestionsKeepIdentityAndUserCategories(t *testing.T) {
 	rows := []extract.Row{{ID: "a", Description: "STARBUCKS", Amount: "-3.00"}, {ID: "b", Description: "STARBUCKS", Amount: "-3.00", Category: "User"}, {ID: "c", Amount: "bad"}, {ID: "d", Description: "Unknown", Amount: "-1.00"}}
-	updated := SuggestLocal(rows, nil, []domain.Category{{ID: "dining", Name: "Dining", Kind: domain.KindExpense}}, 2)
+	updated := SuggestLocal(rows, nil, []domain.Category{{ID: "dining", Name: "Dining", Kind: domain.KindExpense}}, nil, 2)
 	if updated[0].Category != "Dining" || updated[0].ID != "a" || updated[1].Category != "User" || updated[2].Category != "" || updated[3].Category != "" || rows[0].Category != "" {
 		t.Fatal(updated)
 	}
 	m := New(rows)
-	m.Suggest(nil, []domain.Category{{ID: "dining", Name: "Dining", Kind: domain.KindExpense}}, 2)
+	m.Suggest(nil, []domain.Category{{ID: "dining", Name: "Dining", Kind: domain.KindExpense}}, nil, 2)
 	if m.Rows[0].Category != "Dining" {
 		t.Fatal(m.Rows)
 	}

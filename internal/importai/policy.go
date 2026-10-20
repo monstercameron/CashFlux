@@ -19,7 +19,7 @@ type ModelCapabilities struct {
 func CapabilitiesFor(model string) ModelCapabilities {
 	m := strings.ToLower(strings.TrimSpace(model))
 	switch {
-	case strings.HasPrefix(m, "gpt-5"), strings.HasPrefix(m, "o1"), strings.HasPrefix(m, "o3"), strings.HasPrefix(m, "o4"), strings.HasPrefix(m, "o5"):
+	case strings.HasPrefix(m, "gpt-5"), strings.HasPrefix(m, "gpt-6"), strings.HasPrefix(m, "o1"), strings.HasPrefix(m, "o3"), strings.HasPrefix(m, "o4"), strings.HasPrefix(m, "o5"):
 		return ModelCapabilities{ReasoningEffort: true, StructuredOutputs: true}
 	case strings.HasPrefix(m, "gpt-4o"), strings.HasPrefix(m, "gpt-4.1"), strings.HasPrefix(m, "gpt-4.5"):
 		return ModelCapabilities{Temperature: true, StructuredOutputs: true}
@@ -28,15 +28,27 @@ func CapabilitiesFor(model string) ModelCapabilities {
 	}
 }
 
-// RequestOptions returns bounded, supported options for a selected model.
+// RequestOptions returns model-compatible import options. The API model's own
+// output limit applies; CashFlux does not impose a smaller completion cap.
 func RequestOptions(model string) ai.ChatOptions {
 	c := CapabilitiesFor(model)
-	opts := ai.ChatOptions{MaxCompletionTokens: 2048}
+	opts := ai.ChatOptions{}
 	if c.Temperature {
 		opts.Temperature = 0.1
 	}
 	if c.ReasoningEffort {
 		opts.ReasoningEffort = "low"
+	}
+	return opts
+}
+
+// PDFRequestOptions lets the model output a full statement without an app cap.
+// Mini uses none to preserve answer tokens; Luna keeps low effort for page coverage.
+func PDFRequestOptions(model string) ai.ChatOptions {
+	opts := RequestOptions(model)
+	m := strings.ToLower(strings.TrimSpace(model))
+	if strings.HasPrefix(m, "gpt-5.4-mini") {
+		opts.ReasoningEffort = "none"
 	}
 	return opts
 }
