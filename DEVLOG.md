@@ -1,3 +1,7 @@
+## 2026-10-20 - Shared keyed segmented controls
+
+The shared component preserves page-owned state and styles. Tabs support wrapped arrow navigation, Home/End, disabled skipping, stable focus IDs and roving tab stops; ordinary choices retain aria-pressed semantics. Native navigation tables and WASM tests cover counts, empty/reordered choices, handler identity and focus. The complete shared UI lane passed 90 tests after correcting a fixture text-joining assumption in the zero-count assertion. Page adoptions are committed with their own integration slices.
+
 ## 2026-10-20 - Repeatable primary-page browser measurements
 
 The harness measures an already-built loopback app in a fresh sample context and blocks non-loopback traffic. One warmup plus seven sweeps were captured twice for baseline/current. Repeat medians suggest gains on several routes, while Dashboard, Transactions and Reports remain inconclusive; empty notifications and lower Assistant DOM count limit comparison. Source provenance now identifies the dirty-built WASM by SHA256 instead of treating its then-current HEAD as the complete build. Node syntax/help checks passed; all four captures completed without route failures. This is descriptive evidence, not a timing gate.
