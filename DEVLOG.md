@@ -1,3 +1,7 @@
+## 2026-10-20 - Exact age-of-money intermediates
+
+The ordinary FIFO path retains small integer arithmetic; weighted products and sums promote to big integers only when needed. Unsigned expense magnitude handles MinInt64 while still consuming the correct income lots. Overflow is scoped to the reported trailing window, so old large history does not poison a later valid window. Native boundary tests cover products, sums, exact half rounding, trailing windows and caps. The full native suite passed; UI integration has its own revision and unavailable-state checks.
+
 ## 2026-10-20 - Shared keyed segmented controls
 
 The shared component preserves page-owned state and styles. Tabs support wrapped arrow navigation, Home/End, disabled skipping, stable focus IDs and roving tab stops; ordinary choices retain aria-pressed semantics. Native navigation tables and WASM tests cover counts, empty/reordered choices, handler identity and focus. The complete shared UI lane passed 90 tests after correcting a fixture text-joining assumption in the zero-count assertion. Page adoptions are committed with their own integration slices.
