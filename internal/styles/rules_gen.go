@@ -774,7 +774,7 @@ func registerGenerated() {
 	rule(".topbar",
 		position("sticky"),
 		top("0"),
-		zIndex("5"),
+		zIndex("var(--z-overlay)"),
 		display("flex"),
 		alignItems("center"),
 		gap("1.25rem"),
@@ -5458,7 +5458,7 @@ func registerGenerated() {
 	rule(".bento.bento-ledger",
 		gridTemplateRows("auto"),
 		gridAutoRows("auto"),
-		customProp("--dt-sticky-top", "3.5rem"),
+		customProp("--dt-sticky-top", "var(--topbar-h, 3.5rem)"),
 	)
 	rule(".bento.bento-ledger > .w",
 		height("auto"),
@@ -10677,6 +10677,9 @@ func registerGenerated() {
 		paddingLeft("0"),
 		paddingRight("0"),
 		justifyContent("center"),
+	)
+	rule("aside.rail .railhead",
+		height("var(--topbar-h, 3.5rem)"),
 	)
 	rule("aside.rail.collapsed .hh",
 		justifyContent("center"),

@@ -1,3 +1,9 @@
+## 2026-10-20 - Header stacking and border alignment
+
+The top bar and ledger header shared a stacking level, so a hovered ledger tile could paint over the page header.
+The top bar now sits above content. A ResizeObserver publishes its layout height for the ledger sticky offset and
+sidebar brand row; both borders met in live checks at 1440 and 1024 pixels, including a wrapped top bar.
+
 ## 2026-10-20 - Rail drag feedback
 
 The first pinned navigation entries no longer imply a drag merely on hover. The cursor changes for the native drag

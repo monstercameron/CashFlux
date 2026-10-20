@@ -1455,6 +1455,7 @@ type topBarProps struct {
 // TopBar is the sticky page header inside the scrolling main pane: a (currently
 // static) menu toggle, the page title, and an Add action.
 func TopBar(props topBarProps) uic.Node {
+	useTopbarHeight()
 	collapsed := uistate.UseRailCollapsed()
 	curPath := props.ActivePath
 	onDashboard := curPath == "/"
