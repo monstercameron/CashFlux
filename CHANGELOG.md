@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Dashboard now leads with daily budget adherence and monthly spending limits, with clearer labels and hierarchy.
 - Added a browser sanity journey for recurring bills and their budget coverage totals.
 - Budget income basis now keeps Save open until the preference reaches durable storage, and reports a save failure instead of silently closing. A browser regression covers reload and App Lock persistence.
 - Protected legacy server workspace migration: the client asks for App Lock before replacing plaintext copies, keeps the authenticated server connection during import, and refuses an encryption downgrade. Recovery and retry messages now identify the required action.

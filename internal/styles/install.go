@@ -183,6 +183,7 @@ func Register() {
 	registerBC6N7()
 	registerTV8F()
 	registerTxnControls()
+	registerDashboardReadability()
 	inject(Build())
 }
 

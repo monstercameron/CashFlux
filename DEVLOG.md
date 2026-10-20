@@ -1,3 +1,9 @@
+## 2026-10-20 - Dashboard budget readability
+
+The dashboard now gives daily budget adherence and monthly limits priority in the opening view. The change is
+presentation-focused: it uses existing budget data and keeps the calculations visible in plain language. Styles were
+checked in the live build and registered after the existing dashboard rules.
+
 ## 2026-10-20 - Recurring bills sanity coverage
 
 Added a browser journey that checks the recurring-bills summary, covered and uncovered groups, and the route from an

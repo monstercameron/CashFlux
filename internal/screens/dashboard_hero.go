@@ -6,6 +6,7 @@ package screens
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -24,6 +25,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/css"
 	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v5/router"
 	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
 
@@ -71,6 +73,8 @@ func dashboardHero() ui.Node {
 	nw := useNetWorth(app, accounts, txns, rates)
 
 	w := uistate.UsePeriod().Get()
+	activeMember := uistate.UseActiveMember().Get()
+	pr := uistate.UsePrefs().Get()
 	start, end := w.Range()
 	income, expense := usePeriodTotals(app, txns, start, end, rates, "")
 	// The hero sparkline is a trailing 6-month net-worth series over every transaction
@@ -78,6 +82,18 @@ func dashboardHero() ui.Node {
 	// mount so the headline number + KPIs paint immediately; the sparkline + delta chip
 	// fill in after first paint (they already degrade gracefully when absent).
 	sparkReady := useAfterSettle("hero")
+	budgetReady := useAfterSettle("hero-budget")
+	hasMonthlyBudgets := false
+	for _, b := range app.Budgets() {
+		if b.Period == domain.PeriodMonthly && !b.IsSaving() {
+			hasMonthlyBudgets = true
+			break
+		}
+	}
+	budgetSummary := heroBudgetSnapshot{HasBudgets: hasMonthlyBudgets, Loading: hasMonthlyBudgets}
+	if budgetReady && budgetSummary.HasBudgets {
+		budgetSummary = summarizeHeroBudgets(computeBudgetView(app, activeMember, w, pr, false))
+	}
 
 	netMoney := money.New(income.Amount-expense.Amount, income.Currency)
 	savingsPct := ledger.SavingsRate(income.Amount, expense.Amount)
@@ -125,7 +141,74 @@ func dashboardHero() ui.Node {
 		DeltaTone:    deltaTone,
 		HasAccounts:  len(accounts) > 0,
 		Focused:      focused,
+		Budget:       budgetSummary,
 	})
+}
+
+type heroBudgetLimit struct {
+	Name, Spent, Limit string
+	Percent            int
+	Hot                bool
+}
+
+type heroBudgetSnapshot struct {
+	HasBudgets, Loading bool
+	Period              string
+	OnPace, Measured    int
+	Total               int
+	Limits              []heroBudgetLimit
+}
+
+// summarizeHeroBudgets reads the same effective statuses and daily pace marks as
+// /budgets. It never adds category spending together: overlapping category
+// budgets could otherwise make a household total count the same charge twice.
+func summarizeHeroBudgets(v budgetView) heroBudgetSnapshot {
+	out := heroBudgetSnapshot{HasBudgets: true}
+	type ranked struct {
+		limit heroBudgetLimit
+		pct   int
+	}
+	rows := make([]ranked, 0, len(v.Statuses))
+	for _, st := range v.Statuses {
+		if st.Budget.Period != domain.PeriodMonthly || st.Budget.IsSaving() || st.Error != nil || st.Limit.Amount <= 0 {
+			continue
+		}
+		out.Total++
+		if out.Period == "" {
+			out.Period = st.Start.Format("Jan 2006")
+		}
+		mark, live := v.PaceMark[st.Budget.ID]
+		if live {
+			out.Measured++
+			if !mark.Hot {
+				out.OnPace++
+			}
+		}
+		name := st.Budget.Name
+		if name == "" {
+			name = v.CatName[st.Budget.CategoryID]
+		}
+		if name == "" {
+			name = uistate.T("nav.budgets")
+		}
+		rows = append(rows, ranked{limit: heroBudgetLimit{
+			Name: name, Spent: fmtMoney(st.Spent), Limit: fmtMoney(st.Limit),
+			Percent: st.Percent, Hot: live && mark.Hot,
+		}, pct: st.Percent})
+	}
+	sort.SliceStable(rows, func(i, j int) bool {
+		if rows[i].limit.Hot != rows[j].limit.Hot {
+			return rows[i].limit.Hot
+		}
+		if rows[i].pct != rows[j].pct {
+			return rows[i].pct > rows[j].pct
+		}
+		return rows[i].limit.Name < rows[j].limit.Name
+	})
+	for i := 0; i < len(rows) && i < 3; i++ {
+		out.Limits = append(out.Limits, rows[i].limit)
+	}
+	return out
 }
 
 // heroNetWorthTrend builds the hero's trailing 6-month net-worth series (for the
@@ -191,6 +274,7 @@ type heroSummaryProps struct {
 	// Focused compacts the hero (~30% shorter via .home-hero--focused) while a
 	// curated Focus preset is the active view (#76).
 	Focused bool
+	Budget  heroBudgetSnapshot
 }
 
 // heroSummary renders the non-empty hero: a time-of-day greeting, the
@@ -211,6 +295,8 @@ func heroSummary(props heroSummaryProps) ui.Node {
 	// (On*-hooks-in-loops rule: these hooks must be at fixed positions per render).
 	openQuickAdd := ui.UseEvent(func() { uistate.SetQuickAdd(true) })
 	openAddAccount := ui.UseEvent(func() { uistate.SetAddTarget("account") })
+	nav := router.UseNavigate()
+	openBudgets := ui.UseEvent(func() { nav.Navigate(uistate.RoutePath("/budgets")) })
 
 	savingsStr := fmt.Sprintf("%d%%", props.SavingsPct)
 	savingsTone := "text-up"
@@ -236,7 +322,10 @@ func heroSummary(props heroSummaryProps) ui.Node {
 		)
 	}
 
-	heroCls := "home-hero"
+	heroCls := "home-hero home-hero--summary"
+	if props.Budget.HasBudgets {
+		heroCls += " home-hero--budgeted"
+	}
 	if props.Focused {
 		heroCls += " home-hero--focused"
 	}
@@ -274,7 +363,10 @@ func heroSummary(props heroSummaryProps) ui.Node {
 		// period — named, because these four are the app's most-copied figures and
 		// the ones most often compared against a differently-windowed number
 		// elsewhere (C342/C343).
-		Div(css.Class("home-hero-stats-block"),
+		If(props.Budget.HasBudgets,
+			heroBudgetPanel(props.Budget, openBudgets),
+		),
+		If(!props.Budget.HasBudgets, Div(css.Class("home-hero-stats-block"),
 			P(css.Class("home-hero-stats-window t-caption", tw.TextFaint),
 				Attr("data-testid", "hero-stats-window"),
 				uistate.T("home.statsWindow", props.PeriodLabel)),
@@ -284,7 +376,7 @@ func heroSummary(props heroSummaryProps) ui.Node {
 				heroStat(uistate.T("home.net"), props.Net, props.NetTone),
 				heroStat(uistate.T("home.savingsRate"), savingsStr, savingsTone),
 			),
-		),
+		)),
 
 		// Quick actions — the two most common entry points, surfaced without hunting.
 		// Standard glyph buttons (leading icon + label, like the page toolbars).
@@ -326,6 +418,61 @@ func heroSummary(props heroSummaryProps) ui.Node {
 
 		// Quote of the day (opt-in AI Smart+ feature) — a calm footer ribbon.
 		ui.CreateElement(heroQuote, struct{}{}),
+	)
+}
+
+func heroBudgetPanel(p heroBudgetSnapshot, onOpen ui.Handler) ui.Node {
+	rows := make([]ui.Node, 0, len(p.Limits))
+	for _, limit := range p.Limits {
+		pct := limit.Percent
+		if pct < 0 {
+			pct = 0
+		}
+		if pct > 100 {
+			pct = 100
+		}
+		fillClass := "home-hero-limit-fill"
+		if limit.Hot || limit.Percent > 100 {
+			fillClass += " is-hot"
+		}
+		rows = append(rows, Div(css.Class("home-hero-limit-row"),
+			Div(css.Class("home-hero-limit-line"),
+				Span(css.Class("home-hero-limit-name"), limit.Name),
+				Span(css.Class("home-hero-limit-amount"), limit.Spent+" / "+limit.Limit),
+			),
+			Div(css.Class("home-hero-limit-track"), Attr("aria-hidden", "true"),
+				Div(ClassStr(fillClass), Attr("style", fmt.Sprintf("width:%d%%", pct))),
+			),
+		))
+	}
+	pace := "—"
+	detail := uistate.T("dashboard.budgetPaceOutside")
+	if p.Loading {
+		detail = uistate.T("dashboard.budgetPaceLoading")
+	} else if p.Measured > 0 {
+		pace = fmt.Sprintf("%d / %d", p.OnPace, p.Measured)
+		detail = uistate.T("dashboard.budgetPaceDetail")
+	} else if p.Total == 0 {
+		detail = uistate.T("dashboard.budgetNoMonthly")
+	}
+	period := uistate.T("dashboard.budgetMonthly")
+	if p.Period != "" {
+		period += " · " + p.Period
+	}
+	return Div(css.Class("home-hero-stats-block home-hero-budget"), Attr("data-testid", "dashboard-budget-summary"),
+		Div(css.Class("home-hero-budget-pace"),
+			Span(css.Class("home-hero-budget-label"), uistate.T("dashboard.budgetPaceTitle")),
+			Strong(css.Class("home-hero-budget-count"), pace),
+			Span(css.Class("home-hero-budget-detail"), detail),
+		),
+		Div(css.Class("home-hero-budget-limits"),
+			Div(css.Class("home-hero-budget-limits-head"),
+				Span(css.Class("home-hero-budget-label"), period),
+				Button(css.Class("home-hero-budget-link"), Type("button"),
+					OnClick(onOpen), uistate.T("dashboard.budgetViewAll")),
+			),
+			Div(css.Class("home-hero-budget-rows"), rows),
+		),
 	)
 }
 
