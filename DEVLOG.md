@@ -1,3 +1,8 @@
+## 2026-10-20 - Recurring bills sanity coverage
+
+Added a browser journey that checks the recurring-bills summary, covered and uncovered groups, and the route from an
+uncovered bill to budgeting it. This captures the feature's visible contract without changing bill calculations.
+
 ## 2026-10-20 - Durable budget income basis
 
 The income-basis dialog previously closed before the dataset writer finished, so a quick reload could discard the
