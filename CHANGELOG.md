@@ -104,6 +104,7 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- Currency conversion rejects non-finite rates and results outside the money range. An exact fallback preserves valid boundary amounts and half-away-from-zero rounding without adding allocations to ordinary conversions.
 - Bulk balance reads now omit corrupted accounts instead of returning a partial balance. Net-worth aggregation shares one ledger pass while preserving account-specific errors, archived/excluded-account rules, and duplicate-ID behavior.
 - Style the reviewed budget template bucket selector.
 - Improve import tile hierarchy, Smart+ marks, contrast and draft spacing.

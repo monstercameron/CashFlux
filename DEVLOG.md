@@ -1,3 +1,7 @@
+## 2026-10-20 - Checked currency conversion boundaries
+
+NaN/infinite rates and overflowing conversions could silently become the minimum signed amount. Conversion now returns explicit invalid-rate or wrapped money-overflow errors. A rare exact rational path preserves valid int64 boundary amounts and finite results whose float intermediate overflowed or underflowed. Normal conversions keep the existing rounding path and zero allocations; paired local benchmarks showed roughly six nanoseconds of validation overhead. Currency and six related native package tests and focused vet passed.
+
 ## 2026-10-20 - Shared ledger balance correctness and cost
 
 The primary-page cleanup found that a bulk balance calculation kept an account after a currency mismatch or overflow, even though the single-account calculation rejected it. Bulk reads now omit the invalid account and preserve unaffected balances. NetWorthExplained builds eligible balances in one ledger pass and retains the original error and duplicate-ID paths. Native ledger tests cover the edge cases; the preserved 100-account/10,000-transaction benchmark measured about 10.08 ms before and 0.467 ms after on this machine. This is calculation evidence, not a browser latency claim.
