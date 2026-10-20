@@ -1,3 +1,7 @@
+## 2026-10-20 - Native milestone preparation and roster refresh
+
+Moved reached-goal, prior-month kept-budget and no-spend milestone inputs into notificationview, preserving raw/netted ledger distinctions and existing seen identities. The page reuses the shared net-worth snapshot. Direct revision subscriptions refresh summary/list roster values even with stable app props. Native parity tests cover goal kinds, budget/FX/period edges and streaks; the 805-screen gate passed roster changes, tab transitions and day/data invalidation. The split snapshot regression file also passed its focused rerun.
+
 ## 2026-10-20 - Shared task lookup snapshot
 
 Removed repeated task counting and per-row entity/member linear searches. The native snapshot preserves first matching entity names, last matching task IDs, missing-link behavior and original records without retaining unrelated entity arrays. Native parity tests and the 805-screen gate passed; five focused task/notification snapshot tests passed again after splitting their test files. Switch tests verify pressed states, view actions and pagination reset. A local microbenchmark isolates lookup work rather than claiming a browser-wide speedup.

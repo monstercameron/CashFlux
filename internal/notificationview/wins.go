@@ -1,0 +1,69 @@
+// SPDX-License-Identifier: MIT
+
+package notificationview
+
+import (
+	"time"
+
+	"github.com/monstercameron/CashFlux/internal/budgeting"
+	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/goals"
+	"github.com/monstercameron/CashFlux/internal/ledger"
+	"github.com/monstercameron/CashFlux/internal/milestones"
+)
+
+// WinsInput supplies the household data used to detect financial milestones.
+// Transactions are the raw ledger for net worth and no-spend days; BudgetLedger
+// is the separately netted ledger so linked refunds retain budget semantics.
+type WinsInput struct {
+	Accounts     []domain.Account
+	Transactions []domain.Transaction
+	Tasks        []domain.Task
+	Goals        []domain.Goal
+	Budgets      []domain.Budget
+	BudgetLedger budgeting.NettedLedger
+	Rates        currency.Rates
+	Now          time.Time
+	WeekStart    time.Weekday
+	NoSpendLimit int
+	// NetWorth optionally reuses a complete, already-computed net-worth result.
+	// Nil computes it here. A net-worth error contributes zero, as the screen did.
+	NetWorth *ledger.NetWorthResult
+}
+
+// PrepareWins computes the primitives consumed by milestones.Detect. It keeps
+// goal order, counts only monthly budgets with positive spend at or below their
+// limit in the previous completed month, and skips individual budget errors.
+// No input data is modified; localization and seen-state stay with the caller.
+func PrepareWins(in WinsInput) milestones.Input {
+	var reached []string
+	for _, goal := range in.Goals {
+		if goals.Reached(goal, in.Tasks, in.Now) {
+			reached = append(reached, goal.Name)
+		}
+	}
+	var netWorth int64
+	if in.NetWorth != nil {
+		netWorth = in.NetWorth.Net.Amount
+	} else if value, err := ledger.NetWorthExplained(in.Accounts, in.Transactions, in.Rates); err == nil {
+		netWorth = value.Net.Amount
+	}
+	lastMonth := in.Now.AddDate(0, 0, -in.Now.Day())
+	start, end := budgeting.PeriodRange(domain.PeriodMonthly, lastMonth, in.WeekStart)
+	kept := 0
+	for _, budget := range in.Budgets {
+		if budget.Period != domain.PeriodMonthly {
+			continue
+		}
+		spent, err := budgeting.Spent(budget, in.BudgetLedger, start, end, in.Rates)
+		if err == nil && spent.Amount > 0 && spent.Amount <= budget.Limit.Amount {
+			kept++
+		}
+	}
+	return milestones.Input{
+		ReachedGoals: reached, NetWorthMinor: netWorth,
+		NoSpendDays: NoSpendStreak(in.Transactions, in.Now, in.NoSpendLimit),
+		KeptBudgets: kept, KeptPeriodKey: lastMonth.Format("2006-01"), Now: in.Now,
+	}
+}

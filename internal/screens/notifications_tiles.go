@@ -28,6 +28,7 @@ type notifProps struct{ App *appstate.App }
 // visit without changing individual read states. Renders
 // nothing when the feed is empty (the list tile owns the empty state).
 func notifSummaryWidget(props notifProps) ui.Node {
+	_ = uistate.UseDataRevision().Get()
 	feedAtom := uistate.UseNotifyFeed()
 	feed := feedAtom.Get()
 	now := time.Now().Unix()
@@ -271,6 +272,7 @@ func notifSevChip(props notifSevChipProps) ui.Node {
 // severity-sorted (critical first, recency within a tier), each rendered as a notifyRow
 // card with a ⋯ menu. Owns the per-item mutation callbacks + the empty state.
 func notifListWidget(props notifProps) ui.Node {
+	_ = uistate.UseDataRevision().Get()
 	feedAtom := uistate.UseNotifyFeed()
 	filter := uistate.UseNotifyFilter()
 	memberFilter := uistate.UseNotifyMemberFilter()

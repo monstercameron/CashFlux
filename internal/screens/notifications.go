@@ -158,23 +158,22 @@ func notifSurfaceShell(props notifSurfaceShellProps) ui.Node {
 		return nil
 	}, "notif-archive-sync")
 
-	setNeeds := ui.UseEvent(Prevent(func() { view.Set("live") }))
-	setWatching := ui.UseEvent(Prevent(func() { view.Set("watching") }))
-	setHistory := ui.UseEvent(Prevent(func() { view.Set("history") }))
-
 	// Three triage tabs: Needs you (default) / Watching / History. The default
 	// tab keeps the notif-view-live testid so existing coverage still resolves it.
-	toggle := Div(css.Class("nhx-toggle"), Attr("role", "tablist"), Attr("aria-label", uistate.T("notifications.triageViewLabel")),
-		Button(css.Class("nhx-toggle-btn"), Type("button"), Attr("role", "tab"),
-			Attr("data-testid", "notif-view-live"), Attr("aria-selected", ariaBool(cur != "history" && cur != "watching")),
-			OnClick(setNeeds), Text(uistate.T("notifications.triageNeedsYou"))),
-		Button(css.Class("nhx-toggle-btn"), Type("button"), Attr("role", "tab"),
-			Attr("data-testid", "notif-view-watching"), Attr("aria-selected", ariaBool(cur == "watching")),
-			OnClick(setWatching), Text(uistate.T("notifications.triageWatching"))),
-		Button(css.Class("nhx-toggle-btn"), Type("button"), Attr("role", "tab"),
-			Attr("data-testid", "notif-view-history"), Attr("aria-selected", ariaBool(cur == "history")),
-			OnClick(setHistory), Text(uistate.T("notifHistory.history"))),
-	)
+	selected := cur
+	if selected != "watching" && selected != "history" {
+		selected = "live"
+	}
+	toggle := uiw.SegmentedControl(uiw.SegmentedControlProps{
+		Class: "nhx-toggle", ButtonClass: "nhx-toggle-btn", Tabs: true,
+		Label: uistate.T("notifications.triageViewLabel"), Selected: selected,
+		Options: []uiw.SegmentOption{
+			{Key: "live", Label: uistate.T("notifications.triageNeedsYou"), TestID: "notif-view-live"},
+			{Key: "watching", Label: uistate.T("notifications.triageWatching"), TestID: "notif-view-watching"},
+			{Key: "history", Label: uistate.T("notifHistory.history"), TestID: "notif-view-history"},
+		},
+		OnSelect: func(value string) { view.Set(value) },
+	})
 
 	var content ui.Node = props.Live
 	if cur == "history" {

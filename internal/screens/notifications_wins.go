@@ -10,10 +10,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
-	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/currency"
-	"github.com/monstercameron/CashFlux/internal/domain"
-	"github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/milestones"
@@ -33,65 +30,38 @@ const winsSeenKey = "cashflux:wins-seen"
 // noSpendScanDays bounds how far back the no-spend streak is counted.
 const noSpendScanDays = 90
 
-// keptBudgetsLastMonth counts budgets that finished the last completed month at or
-// under their limit with real spend against them (a budget you never touched isn't
-// a win), and returns that month's period key. Errors on a single budget skip it.
-func keptBudgetsLastMonth(app *appstate.App, rates currency.Rates, now time.Time) (int, string) {
-	lastMonth := now.AddDate(0, 0, -now.Day()) // any day in the previous month
-	start, end := budgeting.PeriodRange(domain.PeriodMonthly, lastMonth, uistate.LoadPrefs().WeekStartWeekday())
-	kept := 0
-	ledger := budgetLedgerForApp(app)
-	for _, b := range app.Budgets() {
-		if b.Period != domain.PeriodMonthly {
-			continue // only monthly budgets have a clean "last month" to grade
-		}
-		spent, err := budgeting.Spent(b, ledger, start, end, rates)
-		if err != nil {
-			continue
-		}
-		limit := b.Limit
-		if limit.Currency == "" {
-			limit = money.New(limit.Amount, rates.Base)
-		}
-		if spent.Amount > 0 && spent.Amount <= limit.Amount {
-			kept++
-		}
-	}
-	return kept, lastMonth.Format("2006-01")
+type notificationWinsSnapshot struct {
+	Base  string
+	Found []milestones.Milestone
 }
 
-// winsInput gathers the milestone primitives from the live dataset.
-func winsInput(app *appstate.App) milestones.Input {
-	now := time.Now()
-	base := app.Settings().BaseCurrency
-	if base == "" {
-		base = "USD"
-	}
-	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
+var notificationWinsCache = newViewCache[notificationWinsSnapshot](1)
 
-	var reached []string
-	tasks := app.Tasks()
-	for _, g := range app.Goals() {
-		if goals.Reached(g, tasks, now) {
-			reached = append(reached, g.Name)
+// winsSnapshot owns browser/store wiring; the full calculation is native Go.
+func winsSnapshot(app *appstate.App, now time.Time, weekStart time.Weekday) notificationWinsSnapshot {
+	key := revKey(app) + "|" + now.Format("2006-01-02 -0700") + "|" + strconv.Itoa(int(weekStart))
+	return memoByRev(notificationWinsCache, key, func() notificationWinsSnapshot {
+		if app == nil {
+			return notificationWinsSnapshot{}
 		}
-	}
-
-	var nw int64
-	if res, err := ledger.NetWorthExplained(app.Accounts(), app.Transactions(), rates); err == nil {
-		nw = res.Net.Amount
-	}
-
-	kept, periodKey := keptBudgetsLastMonth(app, rates, now)
-
-	return milestones.Input{
-		ReachedGoals:  reached,
-		NetWorthMinor: nw,
-		NoSpendDays:   notificationview.NoSpendStreak(app.Transactions(), now, noSpendScanDays),
-		KeptBudgets:   kept,
-		KeptPeriodKey: periodKey,
-		Now:           now,
-	}
+		settings := app.Settings()
+		base := settings.BaseCurrency
+		if base == "" {
+			base = "USD"
+		}
+		rates := currency.Rates{Base: base, Rates: settings.FXRates}
+		accounts, txns := app.Accounts(), app.Transactions()
+		netWorth := memoByRev(netWorthCache, revKey(app)+"|"+acctSig(accounts), func() ledger.NetWorthResult {
+			value, _ := ledger.NetWorthExplained(accounts, txns, rates)
+			return value
+		})
+		input := notificationview.PrepareWins(notificationview.WinsInput{
+			Accounts: accounts, Transactions: txns, Tasks: app.Tasks(), Goals: app.Goals(), Budgets: app.Budgets(),
+			BudgetLedger: budgetLedgerForApp(app), Rates: rates, Now: now, WeekStart: weekStart,
+			NoSpendLimit: noSpendScanDays, NetWorth: &netWorth,
+		})
+		return notificationWinsSnapshot{Base: base, Found: milestones.Detect(input)}
+	})
 }
 
 // milestoneCopy renders the localized title + message for a milestone. Net-worth
@@ -145,23 +115,17 @@ func notifWinsWidget(props notifProps) ui.Node {
 	// App is a stable pointer. Subscribe here so goal/ledger writes refresh the
 	// tile even when the parent's next render has equal component props.
 	_ = uistate.UseDataRevision().Get()
+	weekStart := uistate.UsePrefs().Get().WeekStartWeekday()
 	app := props.App
 	if app == nil {
 		app = appstate.Default
 	}
-	if app == nil {
-		return Fragment()
-	}
-	base := app.Settings().BaseCurrency
-	if base == "" {
-		base = "USD"
-	}
-	found := milestones.Detect(winsInput(app))
-	if len(found) == 0 {
+	model := winsSnapshot(app, time.Now(), weekStart)
+	if len(model.Found) == 0 {
 		return Fragment()
 	}
 
-	return ui.CreateElement(notifWinsContent, notifWinsContentProps{Found: found, Base: base})
+	return ui.CreateElement(notifWinsContent, notifWinsContentProps{Found: model.Found, Base: model.Base})
 }
 
 type notifWinsContentProps struct {

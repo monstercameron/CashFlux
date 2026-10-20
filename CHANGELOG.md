@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Notifications cache native milestone preparation by app, revision and day, refresh member names/options after roster edits, and share accessible triage tabs.
 - To-do tiles share one bounded revision/day snapshot for counts, child relationships, open links and referenced display names. View and quick-filter switches use the shared segmented control.
 - Startup phase timings retain a common elapsed-time origin if the performance clock temporarily becomes unavailable.
 - Assistant spending-habit preparation uses native checked daily aggregates and overflow-safe averages, leaving wording and formatting in the screen.
