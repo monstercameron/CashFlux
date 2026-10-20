@@ -44,7 +44,7 @@ func todoSummaryWidget(props todoSummaryProps) ui.Node {
 	_ = uistate.UseDataRevision().Get()
 	tasks := props.App.Tasks()
 	today := dateutil.FormatDate(time.Now())
-	c := ui.UseMemo(func() taskview.Counts { return taskview.Count(tasks, today) }, revKey(props.App), today)
+	c := taskSnapshot(props.App, today).Counts
 	if len(tasks) == 0 {
 		return Fragment()
 	}
@@ -201,32 +201,19 @@ func todoToolbarWidget(props todoToolbarProps) ui.Node {
 			{Title: uistate.T("todo.tmplQtrGoals")},
 		}, due)
 	}
-	// View switch (list / board / calendar) + the board's group-by. Fixed set of
-	// controls, so their handlers sit at stable hook positions (no loop).
-	setViewList := ui.UseEvent(Prevent(func() { view.Set(uistate.TodoViewList) }))
-	setViewBoard := ui.UseEvent(Prevent(func() { view.Set(uistate.TodoViewBoard) }))
-	setViewCal := ui.UseEvent(Prevent(func() { view.Set(uistate.TodoViewCalendar) }))
+	// The shared keyed control owns each choice's handler; the page owns state.
 	onBoardGroup := ui.UseEvent(func(e ui.Event) { boardGroup.Set(e.GetValue()) })
-	// Quick-view lens (All / Today / Overdue): three fixed buttons, so their handlers sit
-	// at stable hook positions (not a loop). Switching resets to page 1.
-	setQuickAll := ui.UseEvent(Prevent(func() { quickView.Set(string(tasksort.QuickAll)); page.Set(1) }))
-	setQuickToday := ui.UseEvent(Prevent(func() { quickView.Set(string(tasksort.QuickToday)); page.Set(1) }))
-	setQuickOverdue := ui.UseEvent(Prevent(func() { quickView.Set(string(tasksort.QuickOverdue)); page.Set(1) }))
 	curView := view.Get()
-	tvwCls := func(on bool) string {
-		if on {
-			return "tvw-btn is-active"
-		}
-		return "tvw-btn"
-	}
-	viewSwitch := Div(css.Class("todo-viewswitch"), Attr("role", "group"), Attr("aria-label", uistate.T("todo.viewLabel")),
-		Button(ClassStr(tvwCls(curView == uistate.TodoViewList)), Type("button"), Attr("data-testid", "todo-view-list"),
-			Attr("aria-pressed", ariaBool(curView == uistate.TodoViewList)), OnClick(setViewList), uistate.T("todo.viewList")),
-		Button(ClassStr(tvwCls(curView == uistate.TodoViewBoard)), Type("button"), Attr("data-testid", "todo-view-board"),
-			Attr("aria-pressed", ariaBool(curView == uistate.TodoViewBoard)), OnClick(setViewBoard), uistate.T("todo.viewBoard")),
-		Button(ClassStr(tvwCls(curView == uistate.TodoViewCalendar)), Type("button"), Attr("data-testid", "todo-view-calendar"),
-			Attr("aria-pressed", ariaBool(curView == uistate.TodoViewCalendar)), OnClick(setViewCal), uistate.T("todo.viewCalendar")),
-	)
+	viewSwitch := uiw.SegmentedControl(uiw.SegmentedControlProps{
+		Class: "todo-viewswitch", ButtonClass: "tvw-btn", ActiveClass: "is-active",
+		Label: uistate.T("todo.viewLabel"), Selected: curView,
+		Options: []uiw.SegmentOption{
+			{Key: uistate.TodoViewList, Label: uistate.T("todo.viewList"), TestID: "todo-view-list"},
+			{Key: uistate.TodoViewBoard, Label: uistate.T("todo.viewBoard"), TestID: "todo-view-board"},
+			{Key: uistate.TodoViewCalendar, Label: uistate.T("todo.viewCalendar"), TestID: "todo-view-calendar"},
+		},
+		OnSelect: func(value string) { view.Set(value) },
+	})
 	// The board group-by pill appears only in board view (irrelevant elsewhere).
 	var boardGroupCtrl ui.Node = Fragment()
 	if curView == uistate.TodoViewBoard {
@@ -245,22 +232,18 @@ func todoToolbarWidget(props todoToolbarProps) ui.Node {
 	// tasks are due today / past due. Shares the .todo-viewswitch chrome with the
 	// display-view switch so the two read as one system.
 	today := dateutil.FormatDate(time.Now())
-	qc := ui.UseMemo(func() taskview.Counts { return taskview.Count(props.App.Tasks(), today) }, revKey(props.App), today)
+	qc := taskSnapshot(props.App, today).Counts
 	cq := tasksort.ParseQuickView(quickView.Get())
-	quickBadge := func(n int) ui.Node {
-		if n <= 0 {
-			return Fragment()
-		}
-		return Span(css.Class("tvw-count"), fmt.Sprintf("%d", n))
-	}
-	quickSwitch := Div(css.Class("todo-viewswitch"), Attr("role", "group"), Attr("aria-label", uistate.T("todo.lensLabel")),
-		Button(ClassStr(tvwCls(cq == tasksort.QuickAll)), Type("button"), Attr("data-testid", "todo-quick-all"),
-			Attr("aria-pressed", ariaBool(cq == tasksort.QuickAll)), OnClick(setQuickAll), uistate.T("todo.lensAll")),
-		Button(ClassStr(tvwCls(cq == tasksort.QuickToday)), Type("button"), Attr("data-testid", "todo-quick-today"),
-			Attr("aria-pressed", ariaBool(cq == tasksort.QuickToday)), OnClick(setQuickToday), uistate.T("todo.lensToday"), quickBadge(qc.Today)),
-		Button(ClassStr(tvwCls(cq == tasksort.QuickOverdue)+" is-overdue"), Type("button"), Attr("data-testid", "todo-quick-overdue"),
-			Attr("aria-pressed", ariaBool(cq == tasksort.QuickOverdue)), OnClick(setQuickOverdue), uistate.T("todo.lensOverdue"), quickBadge(qc.Overdue)),
-	)
+	quickSwitch := uiw.SegmentedControl(uiw.SegmentedControlProps{
+		Class: "todo-viewswitch", ButtonClass: "tvw-btn", ActiveClass: "is-active", CountClass: "tvw-count",
+		Label: uistate.T("todo.lensLabel"), Selected: string(cq),
+		Options: []uiw.SegmentOption{
+			{Key: string(tasksort.QuickAll), Label: uistate.T("todo.lensAll"), TestID: "todo-quick-all"},
+			{Key: string(tasksort.QuickToday), Label: uistate.T("todo.lensToday"), TestID: "todo-quick-today", Count: qc.Today, ShowCount: qc.Today > 0},
+			{Key: string(tasksort.QuickOverdue), Label: uistate.T("todo.lensOverdue"), TestID: "todo-quick-overdue", Class: "is-overdue", Count: qc.Overdue, ShowCount: qc.Overdue > 0},
+		},
+		OnSelect: func(value string) { quickView.Set(value); page.Set(1) },
+	})
 
 	hideLabel := uistate.T("todo.hideDone")
 	if hideDone.Get() {
@@ -547,21 +530,10 @@ func todoListWidget(props todoListProps) ui.Node {
 	}))
 
 	tasks := app.Tasks()
-	accounts := app.Accounts()
-	budgets := app.Budgets()
-	goals := app.Goals()
-	txns := app.Transactions()
 	members := app.Members()
-	byID := ui.UseMemo(func() map[string]domain.Task {
-		out := make(map[string]domain.Task, len(tasks))
-		for _, task := range tasks {
-			out[task.ID] = task
-		}
-		return out
-	}, revKey(app))
 	today := dateutil.FormatDate(time.Now())
-	counts := ui.UseMemo(func() taskview.Counts { return taskview.Count(tasks, today) }, revKey(app), today)
-	childStats := ui.UseMemo(func() map[string]tasktree.ChildStat { return tasktree.ChildStats(tasks) }, revKey(app))
+	snapshot := taskSnapshot(app, today)
+	byID, counts, childStats := snapshot.ByID, snapshot.Counts, snapshot.Children
 
 	toggleTask := func(taskID string) {
 		t, ok := byID[taskID]
@@ -899,10 +871,12 @@ func todoListWidget(props todoListProps) ui.Node {
 			func(n tasktree.Node) any { return n.Task.ID },
 			func(n tasktree.Node) ui.Node {
 				st := childStats[n.Task.ID]
+				linkName, linkFound := snapshot.EntityName(n.Task.RelatedType, n.Task.RelatedID)
+				memberName, memberFound := snapshot.MemberNames[n.Task.MemberID]
 				return ui.CreateElement(TaskRow, taskRowProps{
 					Task: n.Task, Depth: n.Depth,
 					OnToggle: toggleTask, OnDelete: deleteTask, OnAddSub: addSub,
-					Accounts: accounts, Budgets: budgets, Goals: goals, Transactions: txns, Members: members,
+					LinkName: linkName, LinkFound: linkFound, MemberName: memberName, MemberFound: memberFound,
 					ChildTotal: st.Total, ChildDone: st.Done,
 					Collapsed: collapsedSet[n.Task.ID], OnToggleCollapse: toggleCollapse,
 					Draggable:   manualMode,

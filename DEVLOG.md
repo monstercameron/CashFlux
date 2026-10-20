@@ -1,3 +1,7 @@
+## 2026-10-20 - Shared task lookup snapshot
+
+Removed repeated task counting and per-row entity/member linear searches. The native snapshot preserves first matching entity names, last matching task IDs, missing-link behavior and original records without retaining unrelated entity arrays. Native parity tests and the 805-screen gate passed; five focused task/notification snapshot tests passed again after splitting their test files. Switch tests verify pressed states, view actions and pagination reset. A local microbenchmark isolates lookup work rather than claiming a browser-wide speedup.
+
 ## 2026-10-20 - Consistent startup fallback clock origin
 
 A nonfinite performance reading previously fell back from a relative timestamp to an epoch timestamp, which could inflate a diagnostic duration. Both clocks now measure elapsed time from construction. A regression switches from a valid performance clock to fallback and back, requiring five milliseconds for the phase and nine for the total. All four focused startup WASM tests pass; boot behavior is unchanged.

@@ -16,6 +16,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/tasksuggest"
+	"github.com/monstercameron/CashFlux/internal/taskview"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -108,18 +109,13 @@ func todoSuggestStripAt(app *appstate.App, now time.Time) ui.Node {
 	// Drop dismissed-within-snooze and already-open proposals (an open task
 	// linked to the same entity from a prior Add).
 	dismissed := loadSuggestDismissals()
-	open := map[string]bool{}
-	for _, t := range app.Tasks() {
-		if t.Status == domain.StatusOpen && t.RelatedID != "" {
-			open[string(t.RelatedType)+":"+t.RelatedID] = true
-		}
-	}
+	open := taskSnapshot(app, now.Format("2006-01-02")).OpenLinks
 	kept := suggestions[:0:0]
 	for _, sg := range suggestions {
 		if at, ok := dismissed[sg.Key]; ok && now.Sub(time.Unix(at, 0)) < suggestSnoozeDays*24*time.Hour {
 			continue
 		}
-		if sg.RelatedID != "" && open[string(sg.RelatedType)+":"+sg.RelatedID] {
+		if sg.RelatedID != "" && open[taskview.Link{Type: sg.RelatedType, ID: sg.RelatedID}] {
 			continue
 		}
 		kept = append(kept, sg)
