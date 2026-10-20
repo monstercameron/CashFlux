@@ -17,7 +17,8 @@ import (
 )
 
 // Snapshot indexes transactions and calculates each account's exact ledger
-// balance once. Error results match ledger.Balance, including its zero result.
+// balance once. Invalid balances are absent; ordinary map lookup still returns
+// the same zero value as ledger.Balance on error.
 // Transactions retain their original order, which matters for overflow checks.
 type Snapshot struct {
 	Transactions map[string][]domain.Transaction
@@ -74,8 +75,12 @@ func BuildIndexed(accounts []domain.Account, txns []domain.Transaction, byAccoun
 		}
 	}
 	for _, a := range accounts {
-		s.Balances[a.ID], _ = ledger.Balance(a, s.Transactions[a.ID])
-		s.Cleared[a.ID], _ = ledger.ClearedBalance(a, s.Transactions[a.ID])
+		if balance, err := ledger.Balance(a, s.Transactions[a.ID]); err == nil {
+			s.Balances[a.ID] = balance
+		}
+		if cleared, err := ledger.ClearedBalance(a, s.Transactions[a.ID]); err == nil {
+			s.Cleared[a.ID] = cleared
+		}
 	}
 	return s
 }

@@ -563,7 +563,7 @@ func acctSummaryWidget(props acctSummaryProps) ui.Node {
 	accounts := app.Accounts()
 	txns := app.Transactions()
 
-	nw, _ := ledger.NetWorthExplained(accounts, txns, props.Rates)
+	nw, _ := ledger.NetWorthFromBalances(accounts, accountSnapshot(app).Balances, props.Rates)
 	net, assets, liabilities := nw.Net, nw.Assets, nw.Liabilities
 
 	// Month-to-date net-worth delta (G3 §3): the honest change since the 1st,
@@ -671,18 +671,8 @@ func acctIdleCashLine(app *appstate.App, base string, onAllocate ui.Handler) ui.
 // household learns nothing from it. Rate-less accounts are skipped (consistent
 // with the net-worth exclusion disclosure above).
 func acctLiquidityLine(app *appstate.App, base string, rates currency.Rates) ui.Node {
-	txns := app.Transactions()
-	totals := liquidity.Totals(app.Accounts(), time.Now(), func(a domain.Account) (int64, bool) {
-		bal, err := ledger.Balance(a, txns)
-		if err != nil {
-			return 0, false
-		}
-		c, cerr := rates.Convert(bal, base)
-		if cerr != nil {
-			return 0, false
-		}
-		return c.Amount, true
-	})
+	v := accountview.Liquidity(app.Accounts(), accountSnapshot(app).Balances, rates, base, time.Now())
+	totals := v.Totals
 	type item struct {
 		cls    liquidity.Class
 		key    string
@@ -700,7 +690,7 @@ func acctLiquidityLine(app *appstate.App, base string, rates currency.Rates) ui.
 			nonzero++
 		}
 	}
-	if nonzero < 2 {
+	if nonzero < 2 && !v.Incomplete {
 		return Fragment()
 	}
 	kids := []any{css.Class("t-caption", tw.TextDim), Attr("data-testid", "acct-liquidity-line"),
@@ -712,6 +702,9 @@ func acctLiquidityLine(app *appstate.App, base string, rates currency.Rates) ui.
 		}
 		kids = append(kids, Span(Attr("data-testid", it.testid),
 			uistate.T(it.key, fmtMoney(money.New(totals[it.cls], base)))))
+	}
+	if v.Incomplete {
+		kids = append(kids, Span(Attr("data-testid", "acct-liquidity-incomplete"), uistate.T("accounts.liquidityIncomplete")))
 	}
 	return P(kids...)
 }

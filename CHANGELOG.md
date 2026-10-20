@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Account summary and liquidity buckets reuse the shared balance snapshot and native checked arithmetic, with explicit incomplete totals for omitted or invalid balances.
 - Startup exposes a bounded duration-only phase record, and the browser benchmark captures it alongside app readiness. Boot ordering and readiness semantics are unchanged.
 - Household position evaluation exposes calculation failures instead of wrapped debt, payment, surplus, coverage or utilization figures. Ratios use wide checked intermediates.
 - Payoff plans reject overflowing payment budgets, balance and interest additions, and cumulative totals through an explicit checked API.

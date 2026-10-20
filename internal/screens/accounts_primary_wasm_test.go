@@ -56,3 +56,26 @@ func TestPrimaryAccountGroupShowsIncompleteSubtotal(t *testing.T) {
 		t.Fatalf("incomplete subtotal lacks explanation: %v", note)
 	}
 }
+
+func TestPrimaryAccountSettingsMenuExposesExistingManagementActions(t *testing.T) {
+	app := primaryAccountsGoalsApp(t)
+	if err := app.PutAccount(domain.Account{ID: "bank", Name: "Checking", OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared, Class: domain.ClassAsset, Type: domain.TypeChecking, Currency: "USD", OpeningBalance: money.Zero("USD")}); err != nil {
+		t.Fatal(err)
+	}
+	f := render.New(t)
+	defer f.Cleanup()
+	f.Render(ui.CreateElement(acctToolbarWidget, acctToolbarProps{App: app}))
+	f.Stabilize()
+	trigger := byTestID(f, "button", "acct-manage-btn")
+	if trigger == nil {
+		t.Fatal("missing account settings trigger")
+	}
+	trigger.Click()
+	f.Stabilize()
+	if trigger = byTestID(f, "button", "acct-manage-btn"); trigger.Attr("aria-expanded") != "true" {
+		t.Fatal("account settings did not stay open")
+	}
+	if byTestID(f, "button", "acct-groups-btn") == nil || byTestID(f, "button", "acct-institutions-btn") == nil {
+		t.Fatalf("account management actions are missing: %s", f.Text())
+	}
+}

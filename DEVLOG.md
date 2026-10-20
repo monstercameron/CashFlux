@@ -1,3 +1,7 @@
+## 2026-10-20 - Shared account totals and liquidity facts
+
+Removed repeated ledger scans from account summary/liquidity rendering. Native tests cover liability signs, ownership, lock expiry, invalid balances, missing conversion and overflow. The account menu fixture checks the existing management actions through the real toolbar. The complete native suite and 805-screen WASM gate passed with the integration, and source formatting/diff checks are clean.
+
 ## 2026-10-20 - Measured startup phases
 
 Added timings for protected storage, hydration, session restoration, recurring covers, mounting and post-mount maintenance. Disjoint phases accumulate repeated intervals and use a consistent clock fallback; no data or identity fields are recorded. The total begins at Go Run, excluding WASM fetch/decode/compile, and async notification timing describes scheduling only. Three focused app WASM tests passed, the complete screen lane passed 805 tests, and the app build passed. The new measurements guide subsequent cold-start work rather than claiming an unmeasured improvement.
