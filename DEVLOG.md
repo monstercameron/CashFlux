@@ -1,3 +1,9 @@
+## 2026-10-20 - Durable budget income basis
+
+The income-basis dialog previously closed before the dataset writer finished, so a quick reload could discard the
+choice. Save now waits for the durable result, retains the dialog on error, and blocks a second submit while saving.
+The browser regression covers ordinary reload and a passcode-locked reboot.
+
 ## 2026-10-20 - Legacy workspace encryption migration
 
 Sync now tracks whether a server workspace has already held an encrypted snapshot and refuses a later plaintext

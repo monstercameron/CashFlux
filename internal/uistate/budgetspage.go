@@ -188,9 +188,9 @@ func NewBudgetBasisDraft(p prefs.Prefs) BudgetBasisDraft {
 	}
 }
 
-// CommitBudgetBasisDraft writes the staged edits into the household prefs and persists
-// them (invoked from the modal's Save button).
-func CommitBudgetBasisDraft(d BudgetBasisDraft) {
+// CommitBudgetBasisDraft writes the staged edits into the household prefs. The
+// caller must await the dataset's durable writer before reporting success.
+func CommitBudgetBasisDraft(d BudgetBasisDraft) error {
 	p := CurrentPrefs()
 	p.BudgetIncomeMode = d.Mode
 	p.BudgetPaycheckMinMinor = d.PaycheckMin
@@ -198,11 +198,14 @@ func CommitBudgetBasisDraft(d BudgetBasisDraft) {
 	p.BudgetIncomeCategoryIDs = append([]string(nil), d.Cats...)
 	p.BudgetIncomeAvgMonths = d.AvgMonths
 	p.BudgetRolloverLeftover = d.Rollover
-	SetPrefs(p)
+	if err := SetPrefs(p); err != nil {
+		return err
+	}
 	// Flush the dataset now so the choice survives a refresh right after Save — SetPrefs
 	// writes to the store, but the autosave only reaches IndexedDB on its ticker/pagehide,
 	// and a fire-and-forget write can be lost if the reload beats it (C2).
 	RequestPersist()
+	return nil
 }
 
 // Budget sort keys the budget list can be ordered by (the toolbar's Sort control sets
