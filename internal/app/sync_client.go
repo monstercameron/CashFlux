@@ -52,8 +52,23 @@ import (
 // backup (manual ExportJSON keeps the key) restores as written.
 func importRemoteDataset(app *appstate.App, dataset []byte) error {
 	keep := strings.TrimSpace(app.Settings().OpenAIKey)
+	connection := uistate.LoadPrefs().Normalize()
 	if err := app.ImportJSON(dataset); err != nil {
 		return err
+	}
+	// A server dataset can contain older/default connection preferences. Keep
+	// this page bound to its authenticated server while importing display prefs;
+	// otherwise legacy hydration can disconnect before the encrypted replacement.
+	remote := prefs.Default()
+	if raw := uistate.SettingKVGet("cashflux:prefs"); raw != "" {
+		if err := json.Unmarshal([]byte(raw), &remote); err != nil {
+			return fmt.Errorf("read imported preferences: %w", err)
+		}
+	}
+	remote.ServerURL, remote.ServerToken, remote.ServerCSRF = connection.ServerURL, connection.ServerToken, connection.ServerCSRF
+	remote.ServerMode, remote.ConnectionSegment, remote.BackendDisabled = connection.ServerMode, connection.ConnectionSegment, connection.BackendDisabled
+	if err := uistate.PersistPrefs(remote.Normalize()); err != nil {
+		return fmt.Errorf("keep this device's server connection after import: %w", err)
 	}
 	if keep == "" {
 		return nil
@@ -81,9 +96,12 @@ const syncStatusKey = "cashflux:sync-status"
 const syncConflictPrefix = "cashflux:sync-conflict:"
 
 type syncMeta struct {
-	UpdatedAt string `json:"updatedAt,omitempty"`
-	Hash      string `json:"hash,omitempty"`
-	Version   int64  `json:"version,omitempty"`
+	// LegacyPlaintext records that this scoped server copy still needs migration.
+	LegacyPlaintext bool   `json:"legacyPlaintext,omitempty"`
+	Server          string `json:"server,omitempty"`
+	UpdatedAt       string `json:"updatedAt,omitempty"`
+	Hash            string `json:"hash,omitempty"`
+	Version         int64  `json:"version,omitempty"`
 	// Owner is the account this bookmark describes a conversation with.
 	//
 	// The key is the WORKSPACE, and workspace ids collide across accounts —
@@ -618,10 +636,14 @@ func requireDatasetEncryption() bool {
 	if decision.Allowed {
 		return true
 	}
+	message := decision.Message
+	if legacyWorkspaceNeedsProtection() {
+		message = uistate.T("migration.syncNeeded")
+	}
 	setSyncStatus(syncStatus{
 		State:   string(decision.Status),
 		Pending: pendingSyncCount(),
-		Message: decision.Message,
+		Message: message,
 	})
 	return false
 }
@@ -1118,7 +1140,7 @@ func flushBackendSyncQueue() {
 			// into an accepted overwrite.
 			base := item.BaseVersion
 			var resp backendrpc.PutWorkspaceResponse
-			err = invokeAuthed(ctx, pr, backendrpc.MethodSyncPutWorkspace, backendrpc.PutWorkspaceRequest{
+			err = pushWorkspaceRPC(ctx, pr, backendrpc.PutWorkspaceRequest{
 				Workspace: backendrpc.Workspace{
 					ID:       item.WorkspaceID,
 					Name:     item.Name,
@@ -1184,6 +1206,9 @@ func flushBackendSyncQueue() {
 				continue
 			}
 			// Accepted: only now is it safe to drop the local mutation from the queue.
+			if cryptobox.IsEnvelope(dataset) {
+				lsSet(encryptedWorkspaceKeyFor(datasetServerIDForURL(pr.ServerURL), item.UserID, item.WorkspaceID), "true")
+			}
 			// Acknowledge against the entry's CAPTURED owner, not whoever is
 			// signed in at ack time, so the ack can never clear a different
 			// scope's entry (SV0.1); the bookmark is stamped for that owner too.
@@ -1647,11 +1672,14 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 		// still hold a legacy plaintext snapshot, and refusing it locks the owner
 		// out of their own data. Uploads stay encrypted-only (SEC6), so the first
 		// App Lock setup replaces that legacy copy with an encrypted one.
-		if loadAppLock().Active() && !cryptobox.IsEnvelope(payload) {
+		if (loadAppLock().Active() || serverWorkspaceWasEncrypted(w.ID)) && !cryptobox.IsEnvelope(payload) {
 			message := "The server returned an unprotected copy. CashFlux did not load it."
 			setSyncStatus(syncStatus{State: "error", Pending: pendingSyncCount(), Message: message})
 			markHostedHydrationError(message)
 			return
+		}
+		if cryptobox.IsEnvelope(payload) {
+			rememberServerWorkspaceEncrypted(w.ID)
 		}
 		if cryptobox.IsEnvelope(payload) && activePasscode != "" {
 			decrypted, decryptErr := decryptEnvelopeSync(payload, activePasscode)
@@ -1719,7 +1747,19 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 			localIsUsers = false
 		}
 		if !syncstate.ShouldApplyRemote(localUpdatedAt, hasLocalMeta, localIsUsers, remoteUpdatedAt, true) {
-			markHostedHydrationReady()
+			if !cryptobox.IsEnvelope(resp.Dataset) && !datasetEncryptionActive() {
+				// Remember the migration requirement without rebasing unsynced
+				// local work onto a version it has never imported.
+				meta.LegacyPlaintext, meta.Server = true, currentDatasetServerID()
+				saveSyncMeta(w.ID, meta)
+				if hostedHydrationRequired() || hostedDocument() {
+					markHostedLegacyProtection()
+				} else {
+					requireDatasetEncryption()
+				}
+			} else {
+				markHostedHydrationReady()
+			}
 			return
 		}
 		app := appstate.Default
@@ -1748,12 +1788,18 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 		// over freshly arrived real records.
 		uistate.SetSampleActive(false)
 		meta = syncMeta{UpdatedAt: resp.Workspace.UpdatedAt, Version: resp.Workspace.Version, Hash: datasetHash(dataset), Owner: requestedOwner}
-		if hostedHydrationRequired() {
+		meta.LegacyPlaintext = !cryptobox.IsEnvelope(resp.Dataset)
+		meta.Server = currentDatasetServerID()
+		if hostedHydrationRequired() || (hostedDocument() && meta.LegacyPlaintext && !datasetEncryptionActive()) {
 			// The financial shell is still unmounted. Persist the authoritative
 			// snapshot first, then release the hosted gate without a reload so the
 			// user's just-entered App Lock passcode remains in memory.
 			markHostedHydrationApplying()
-			saveSyncedDatasetThen(w.ID, dataset, meta, markHostedHydrationReady)
+			done := markHostedHydrationReady
+			if meta.LegacyPlaintext && !datasetEncryptionActive() {
+				done = markHostedLegacyProtection
+			}
+			saveSyncedDatasetThen(w.ID, dataset, meta, done)
 			return
 		}
 		if reloadOnApply {
@@ -1773,6 +1819,17 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 // boundary injectable lets wasm tests verify hosted first-open behavior without
 // opening a real services-worker connection.
 var hostedPullWorkspaceRPC func(context.Context, prefs.Prefs, backendrpc.GetWorkspaceRequest, *backendrpc.GetWorkspaceResponse) error
+
+// hostedPushWorkspaceRPC keeps the real queue/encryption/CAS path in migration
+// tests, replacing only the network boundary.
+var hostedPushWorkspaceRPC func(context.Context, prefs.Prefs, backendrpc.PutWorkspaceRequest, *backendrpc.PutWorkspaceResponse) error
+
+func pushWorkspaceRPC(ctx context.Context, pr prefs.Prefs, req backendrpc.PutWorkspaceRequest, resp *backendrpc.PutWorkspaceResponse) error {
+	if hostedPushWorkspaceRPC != nil {
+		return hostedPushWorkspaceRPC(ctx, pr, req, resp)
+	}
+	return invokeAuthed(ctx, pr, backendrpc.MethodSyncPutWorkspace, req, resp)
+}
 
 func workspaceSort(r workspace.Registry, id string) int {
 	for i, w := range r.Workspaces {
@@ -2105,7 +2162,7 @@ func resolveConflictUseServer() {
 			return
 		}
 		payload := resp.Dataset
-		if loadAppLock().Active() && !cryptobox.IsEnvelope(payload) {
+		if (loadAppLock().Active() || serverWorkspaceWasEncrypted(wID)) && !cryptobox.IsEnvelope(payload) {
 			message := "The server returned an unprotected copy. CashFlux did not load it."
 			setSyncStatus(syncStatus{State: "error", Pending: pendingSyncCount(), Message: message})
 			return

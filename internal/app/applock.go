@@ -82,6 +82,7 @@ func enableAppLock(passcode string, autoLockMinutes int, hint string) bool {
 }
 
 func finishAppLockEnable() {
+	legacyMigration := legacyWorkspaceNeedsProtection()
 	// Remembering the passcode above lets the dataset autosave encrypt at rest
 	// immediately (C45), without waiting for a reload + unlock.
 	migrateDatasetAtRest() // encrypt the existing at-rest copy now
@@ -90,7 +91,7 @@ func finishAppLockEnable() {
 	// gate, which never renders on a device that has no lock. Setting the matching
 	// passcode is the actual recovery, so re-pull here — that is the moment this
 	// device becomes able to decrypt the account's data.
-	if backendConnectionActive(uistate.LoadPrefs().Normalize()) {
+	if !legacyMigration && backendConnectionActive(uistate.LoadPrefs().Normalize()) {
 		pullActiveWorkspaceFromBackend(true)
 	}
 }

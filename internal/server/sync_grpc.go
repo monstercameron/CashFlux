@@ -80,6 +80,9 @@ func (s *SyncService) GetWorkspaceRPC(ctx context.Context, req backendrpc.GetWor
 		user, _ := AuthUserFromContext(ctx)
 		snapshot, ok, err := s.store.GetSnapshotForUser(user.ID, workspace.ID)
 		if err != nil {
+			if errors.Is(err, errWorkspaceEncryptionDowngrade) {
+				return backendrpc.GetWorkspaceResponse{}, status.Error(codes.FailedPrecondition, err.Error())
+			}
 			return backendrpc.GetWorkspaceResponse{}, err
 		}
 		if ok {
@@ -129,6 +132,9 @@ func (s *SyncService) PutWorkspaceRPC(ctx context.Context, req backendrpc.PutWor
 	if err != nil {
 		if errors.Is(err, errPayloadTooLarge) {
 			return backendrpc.PutWorkspaceResponse{}, status.Error(codes.ResourceExhausted, "sync dataset is too large")
+		}
+		if errors.Is(err, errWorkspaceEncryptionDowngrade) {
+			return backendrpc.PutWorkspaceResponse{}, status.Error(codes.FailedPrecondition, err.Error())
 		}
 		return backendrpc.PutWorkspaceResponse{}, err
 	}

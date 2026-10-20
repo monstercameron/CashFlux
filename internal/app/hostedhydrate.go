@@ -20,6 +20,7 @@ const (
 	hostedHydrationWaiting   hostedHydrationPhase = "waiting"
 	hostedHydrationLoading   hostedHydrationPhase = "loading"
 	hostedHydrationLocked    hostedHydrationPhase = "locked"
+	hostedHydrationProtect   hostedHydrationPhase = "protectLegacy"
 	hostedHydrationEmpty     hostedHydrationPhase = "emptyAccount"
 	hostedHydrationVerifying hostedHydrationPhase = "verifying"
 	hostedHydrationApplying  hostedHydrationPhase = "applying"

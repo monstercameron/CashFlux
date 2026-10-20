@@ -1,3 +1,11 @@
+## 2026-10-20 - Legacy workspace encryption migration
+
+Sync now tracks whether a server workspace has already held an encrypted snapshot and refuses a later plaintext
+downgrade. Hosted hydration gives legacy plaintext users an explicit App Lock protection path before syncing their
+copy back; imported preferences retain the current authenticated server connection. Migration and server tests cover
+the real queue path, failure handling, and downgrade rejection. This path is data-sensitive, so the release checks
+include native, WASM, and browser smoke runs.
+
 ## 2026-10-20 - Import review and category suggestions
 
 The import panel now makes source, reading, and review distinct. Extracted transactions stay in review until the user

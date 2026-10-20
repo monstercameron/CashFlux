@@ -250,11 +250,17 @@ func hostedDataHydrationGate(props HostedAuthGateProps) uic.Node {
 		switch {
 		case pass == "":
 			localError.Set(uistate.T("applock.needPasscode"))
+		case currentHostedHydration().Phase == hostedHydrationProtect && legacyPasscodeError(pass) != "":
+			localError.Set(uistate.T(legacyPasscodeError(pass)))
 		case pass != strings.TrimSpace(confirm.Get()):
 			localError.Set(uistate.T("applock.mismatch"))
 		default:
 			localError.Set("")
-			unlockHostedHydrationWithAppLock(pass)
+			if currentHostedHydration().Phase == hostedHydrationProtect {
+				enableHostedLegacyProtection(pass)
+			} else {
+				unlockHostedHydrationWithAppLock(pass)
+			}
 		}
 	})
 	onRetry := uic.UseEvent(func() {
@@ -278,15 +284,22 @@ func hostedDataHydrationGate(props HostedAuthGateProps) uic.Node {
 	)
 
 	switch status.Phase {
-	case hostedHydrationLocked:
+	case hostedHydrationLocked, hostedHydrationProtect:
 		detail := status.Message
+		title, button := "hostedHydration.lockedTitle", "hostedHydration.enableLock"
+		if status.Phase == hostedHydrationProtect {
+			title, button = "migration.title", "migration.enableLock"
+			if detail == "" {
+				detail = uistate.T("migration.intro")
+			}
+		}
 		if detail == "" {
 			detail = uistate.T("hostedHydration.lockedHint")
 		}
 		body = Fragment(body,
 			Div(css.Class("card", tw.Flex, tw.FlexCol, tw.Gap3),
 				Attr("data-testid", "hosted-hydration-lock"),
-				Span(css.Class(tw.Text15, tw.FontSemibold), uistate.T("hostedHydration.lockedTitle")),
+				Span(css.Class(tw.Text15, tw.FontSemibold), uistate.T(title)),
 				P(css.Class(tw.Text13, tw.TextDim), detail),
 				Input(css.Class("set-input"), Type("password"), Attr("inputmode", "numeric"),
 					Attr("aria-label", uistate.T("applock.passcode")),
@@ -299,7 +312,7 @@ func hostedDataHydrationGate(props HostedAuthGateProps) uic.Node {
 				If(localError.Get() != "", P(css.Class(tw.Text13, tw.TextDanger), Attr("role", "alert"), localError.Get())),
 				Button(css.Class("btn btn-primary"), Type("button"),
 					Attr("data-testid", "hosted-hydration-enable-lock"),
-					OnClick(onSubmit), uistate.T("hostedHydration.enableLock")),
+					OnClick(onSubmit), uistate.T(button)),
 			),
 		)
 	case hostedHydrationError:

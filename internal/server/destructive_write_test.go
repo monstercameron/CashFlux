@@ -167,8 +167,8 @@ func TestEncryptedPayloadsAreNotBlocked(t *testing.T) {
 	}
 }
 
-// Replacing an encrypted stored copy is equally unjudgeable, and equally must
-// not be blocked.
+// The destructive-write guard cannot inspect encrypted data, but the separate
+// encryption policy must still refuse a plaintext downgrade.
 func TestWritingOverAnEncryptedStoredCopyIsNotBlocked(t *testing.T) {
 	svc, _, ctx := newSyncGRPC(t)
 	base := time.Now().UTC()
@@ -177,8 +177,8 @@ func TestWritingOverAnEncryptedStoredCopyIsNotBlocked(t *testing.T) {
 	if err := put(t, svc, ctx, sealed, base, false); err != nil {
 		t.Fatalf("first push: %v", err)
 	}
-	if err := put(t, svc, ctx, syncDataset(1, 1, 1), base.Add(time.Minute), false); err != nil {
-		t.Fatalf("refused a write over an unreadable stored copy: %v", err)
+	if err := put(t, svc, ctx, syncDataset(1, 1, 1), base.Add(time.Minute), false); err == nil {
+		t.Fatal("accepted a plaintext downgrade over an encrypted stored copy")
 	}
 }
 

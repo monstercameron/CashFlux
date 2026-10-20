@@ -129,12 +129,19 @@ func staleDatasetBanner() ui.Node {
 
 func retrySaveBanner() ui.Node {
 	retry := ui.UseEvent(func() { uistate.RetryPersistFailures() })
+	protect := ui.UseEvent(func() { showAppLockSetup(nil) })
+	message, button, testID := "bv6d.unsaved", "bv6d.retry", "retry-unsaved-changes"
+	action := retry
+	if legacyWorkspaceNeedsProtection() && !datasetEncryptionActive() {
+		message, button, testID = "migration.syncNeeded", "migration.enableLock", "protect-server-copy"
+		action = protect
+	}
 	return Div(css.Class("toast toast-err"), Attr("data-testid", "unsaved-changes"),
 		Attr("role", "alert"), Attr("aria-live", "assertive"),
 		Attr("style", "position:fixed;top:1rem;bottom:auto;z-index:10000;max-width:calc(100vw - 2rem)"),
-		Span(uistate.T("bv6d.unsaved")),
-		Button(Type("button"), css.Class("btn"), Attr("data-testid", "retry-unsaved-changes"),
-			OnClick(retry), uistate.T("bv6d.retry")))
+		Span(uistate.T(message)),
+		Button(Type("button"), css.Class("btn"), Attr("data-testid", testID),
+			OnClick(action), uistate.T(button)))
 }
 
 func downloadStaleRecovery() { go downloadStaleRecoveryAsync() }

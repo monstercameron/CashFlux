@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Protected legacy server workspace migration: the client asks for App Lock before replacing plaintext copies, keeps the authenticated server connection during import, and refuses an encryption downgrade. Recovery and retry messages now identify the required action.
 - Redesigned the Import flow with a source/read/review progression, an explicit destination account picker, and a visible reading state. Smart uses 90% description similarity to categorized history; Smart+ sends bounded category counts as hints to AI. Statement text can use the configured server route, while PDF extraction keeps its personal-key requirement. Import requests no longer impose a 2,048-token app limit.
 - Refined the Transactions search and action controls with consistent 44 px targets, a grouped period stepper,
   a quieter Ledger/Calendar switch, and a clearer Review count. The money summary and category bar are unchanged.

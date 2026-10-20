@@ -1147,6 +1147,13 @@ func (s *Store) PutSnapshot(snapshot Snapshot, maxBytes, historyLimit int) error
 // Size validation stays with the callers (each has its own limit source).
 func putSnapshotTx(tx *sql.Tx, snapshot Snapshot, historyLimit int) error {
 	encrypted := cryptobox.IsEnvelope(snapshot.Dataset)
+	wasEncrypted, err := workspaceEncryptedTx(tx, snapshot.UserID, snapshot.WorkspaceID)
+	if err != nil {
+		return err
+	}
+	if wasEncrypted && !encrypted {
+		return errWorkspaceEncryptionDowngrade
+	}
 	if snapshot.UpdatedAt.IsZero() {
 		snapshot.UpdatedAt = time.Now().UTC()
 	}
@@ -1154,7 +1161,7 @@ func putSnapshotTx(tx *sql.Tx, snapshot Snapshot, historyLimit int) error {
 	var updated string
 	row := tx.QueryRow(`SELECT workspace_id, dataset_json, version, updated_at FROM snapshots WHERE user_id = ? AND workspace_id = ?`,
 		snapshot.UserID, snapshot.WorkspaceID)
-	err := row.Scan(&current.WorkspaceID, &current.Dataset, &current.Version, &updated)
+	err = row.Scan(&current.WorkspaceID, &current.Dataset, &current.Version, &updated)
 	if err == nil {
 		current.UpdatedAt, err = parseTime(updated)
 		if err != nil {
@@ -1179,6 +1186,9 @@ ON CONFLICT(user_id, workspace_id) DO UPDATE SET
 		return fmt.Errorf("server store: put snapshot: %w", err)
 	}
 	if encrypted {
+		if err := markWorkspaceEncryptedTx(tx, snapshot.UserID, snapshot.WorkspaceID); err != nil {
+			return err
+		}
 		// Once an encrypted version is durably accepted, remove every older
 		// snapshot for this workspace. Otherwise history would keep plaintext
 		// copies after the current row had migrated to ciphertext. This runs in
@@ -1246,6 +1256,9 @@ WHERE sn.workspace_id = ? AND sn.user_id = ?`, workspaceID, userID)
 		return Snapshot{}, false, nil
 	}
 	if err != nil {
+		return Snapshot{}, false, err
+	}
+	if err := s.checkSnapshotEncryption(snapshot); err != nil {
 		return Snapshot{}, false, err
 	}
 	return snapshot, true, nil
