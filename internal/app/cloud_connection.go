@@ -20,6 +20,7 @@ import (
 
 type cloudConnection struct {
 	Segment, URL, Token       string
+	Error                     string
 	Discovery                 backendauth.Discovery
 	Phase                     discoveryPhase
 	OnSegment, OnURL, OnToken func(string)
@@ -35,12 +36,14 @@ func useCloudServer(atom state.Atom[prefs.Prefs], step cloudStep) cloudConnectio
 	token := uic.UseState(p.ServerToken)
 	discovery := uic.UseState(backendauth.Discovery{})
 	phase := uic.UseState(discoveryIdle)
+	connectionError := uic.UseState("")
 	generation := uic.UseRef(0)
 	probe := func(address string, save bool) {
 		g := generation.Get() + 1
 		generation.Set(g)
 		phase.Set(discoveryChecking)
-		testBackendConnection(address, "", func(d backendauth.Discovery) {
+		connectionError.Set("")
+		testBackendConnection(address, func(d backendauth.Discovery) {
 			if generation.Get() != g {
 				return
 			}
@@ -69,6 +72,7 @@ func useCloudServer(atom state.Atom[prefs.Prefs], step cloudStep) cloudConnectio
 					if err != nil {
 						logSyncError("save cloud connection failed", err)
 						if generation.Get() == g {
+							connectionError.Set(uistate.T("cloud1.saveFailed"))
 							phase.Set(discoveryError)
 						}
 						return
@@ -88,6 +92,7 @@ func useCloudServer(atom state.Atom[prefs.Prefs], step cloudStep) cloudConnectio
 					resetScopeForServerChangeThen(*outgoing, func(_ bool, err error) {
 						if err != nil {
 							logSyncError("remove outgoing server session failed", err)
+							connectionError.Set(uistate.T("cloud1.saveFailed"))
 							phase.Set(discoveryError)
 							return
 						}
@@ -102,8 +107,9 @@ func useCloudServer(atom state.Atom[prefs.Prefs], step cloudStep) cloudConnectio
 			} else {
 				commit()
 			}
-		}, func(string) {
+		}, func(message string) {
 			if generation.Get() == g {
+				connectionError.Set(message)
 				phase.Set(discoveryError)
 			}
 		})
@@ -121,6 +127,7 @@ func useCloudServer(atom state.Atom[prefs.Prefs], step cloudStep) cloudConnectio
 			url.Set(address)
 		}
 		if address == "" {
+			connectionError.Set("Enter a server address before checking the connection.")
 			phase.Set(discoveryError)
 			return
 		}
@@ -145,6 +152,7 @@ func useCloudServer(atom state.Atom[prefs.Prefs], step cloudStep) cloudConnectio
 			cloudCommitPreferences(atom, next, func(err error) {
 				if err != nil {
 					logSyncError("save cloud access code failed", err)
+					connectionError.Set(uistate.T("cloud1.saveFailed"))
 					phase.Set(discoveryError)
 					return
 				}
@@ -156,6 +164,7 @@ func useCloudServer(atom state.Atom[prefs.Prefs], step cloudStep) cloudConnectio
 			resetScopeForServerChangeThen(*outgoing, func(_ bool, err error) {
 				if err != nil {
 					logSyncError("remove outgoing session failed", err)
+					connectionError.Set(uistate.T("cloud1.saveFailed"))
 					phase.Set(discoveryError)
 					return
 				}
@@ -168,10 +177,20 @@ func useCloudServer(atom state.Atom[prefs.Prefs], step cloudStep) cloudConnectio
 			phase.Set(discoveryError)
 		}
 	}
-	return cloudConnection{Segment: segment.Get(), URL: url.Get(), Token: token.Get(), Discovery: discovery.Get(), Phase: phase.Get(),
-		OnSegment: func(v string) { segment.Set(v); phase.Set(discoveryIdle); generation.Set(generation.Get() + 1) },
-		OnURL:     func(v string) { url.Set(v); phase.Set(discoveryIdle); generation.Set(generation.Get() + 1) },
-		OnToken:   func(v string) { token.Set(v) }, Test: test, SaveToken: saveToken}
+	return cloudConnection{Segment: segment.Get(), URL: url.Get(), Token: token.Get(), Error: connectionError.Get(), Discovery: discovery.Get(), Phase: phase.Get(),
+		OnSegment: func(v string) {
+			segment.Set(v)
+			phase.Set(discoveryIdle)
+			connectionError.Set("")
+			generation.Set(generation.Get() + 1)
+		},
+		OnURL: func(v string) {
+			url.Set(v)
+			phase.Set(discoveryIdle)
+			connectionError.Set("")
+			generation.Set(generation.Get() + 1)
+		},
+		OnToken: func(v string) { token.Set(v) }, Test: test, SaveToken: saveToken}
 }
 
 type cloudWhereProps struct {
@@ -190,7 +209,7 @@ func cloudWhereView(p cloudWhereProps) uic.Node {
 		If(c.Segment == "local", P(css.Class(tw.Text14, tw.TextDim), uistate.T("cloud1.sameServerHint"))),
 		If(c.Segment != "local", uic.CreateElement(cloudDisclosure, cloudDisclosureProps{Title: uistate.T("cloud1.connectionAddress"), TestID: "cloud-address-advanced", Body: uic.CreateElement(cloudAddressField, c)})),
 		uic.CreateElement(cloudAction, cloudActionProps{Label: uistate.T("cloud1.test"), TestID: "sync-test", OnClick: c.Test, Disabled: p.Busy || c.Phase == discoveryChecking}),
-		uic.CreateElement(cloudConnectionFeedback, c.Phase),
+		uic.CreateElement(cloudConnectionFeedback, cloudFeedbackProps{Phase: c.Phase, Error: c.Error}),
 		uic.CreateElement(cloudAction, cloudActionProps{Label: uistate.T("cloud1.continue"), TestID: "cloud-where-continue", Kind: cloudActionPrimary, OnClick: p.OnContinue, Disabled: p.Busy || c.Phase != discoveryOK}),
 		A(css.Class("btn-link"), Attr("href", "https://github.com/monstercameron/CashFlux/blob/main/docs/SELF_HOSTING.md"), Attr("target", "_blank"), Attr("rel", "noreferrer"), uistate.T("settings.deploySelfHost")),
 	)
@@ -203,9 +222,14 @@ func cloudAddressField(c cloudConnection) uic.Node {
 	}})
 }
 
-func cloudConnectionFeedback(p discoveryPhase) uic.Node {
+type cloudFeedbackProps struct {
+	Phase discoveryPhase
+	Error string
+}
+
+func cloudConnectionFeedback(c cloudFeedbackProps) uic.Node {
 	key, id := "cloud1.testHint", "cloud-connection-idle"
-	switch p {
+	switch c.Phase {
 	case discoveryChecking:
 		key, id = "cloud1.testing", "sync-discovery-checking"
 	case discoveryOK:
@@ -213,7 +237,11 @@ func cloudConnectionFeedback(p discoveryPhase) uic.Node {
 	case discoveryError:
 		key, id = "cloud1.testFailed", "sync-discovery-error"
 	}
-	return P(css.Class(tw.Text14, tw.TextDim), Attr("role", "status"), Attr("aria-live", "polite"), Attr("data-testid", id), uistate.T(key))
+	message := uistate.T(key)
+	if c.Phase == discoveryError && c.Error != "" {
+		message = c.Error
+	}
+	return P(css.Class(tw.Text14, tw.TextDim), Attr("role", "status"), Attr("aria-live", "polite"), Attr("data-testid", id), message)
 }
 
 type cloudFirstProps struct {

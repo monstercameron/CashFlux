@@ -131,7 +131,7 @@ func cloudSignInView(p cloudSignInProps) uic.Node {
 	return Section(css.Class(tw.Flex, tw.FlexCol, tw.Gap3), Attr("data-testid", "cloud-setup-signin"),
 		H3(css.Class(tw.Text15, tw.FontSemibold), uistate.T("cloud1.step.signin")),
 		P(css.Class(tw.Text14, tw.TextDim), uistate.T("cloud1.signInHint")),
-		uic.CreateElement(cloudConnectionFeedback, c.Phase),
+		uic.CreateElement(cloudConnectionFeedback, cloudFeedbackProps{Phase: c.Phase, Error: c.Error}),
 		If(activation, uic.CreateElement(PendingDeviceCard, PendingDeviceCardProps{Primary: true})),
 		If(password && !activation, uic.CreateElement(PasswordAuthCard, PasswordAuthCardProps{AllowRegistration: true, InitiallyExpanded: true})),
 		If(oauth, Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2),

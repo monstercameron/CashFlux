@@ -39,6 +39,7 @@ test.describe("sync error visibility", () => {
     await app.locator('[data-testid="sync-server-url"]').fill(UNREACHABLE);
     await app.getByTestId("sync-test").click();
     await expect(app.getByTestId("sync-discovery-error")).toBeVisible({ timeout: 20_000 });
+    await expect(app.getByTestId("sync-discovery-error")).toContainText(/Couldn't reach a backend|connection to .* failed/i);
     await expect(app.getByTestId("cloud-where-continue")).toBeDisabled();
     await expect(app.getByTestId("cloud-start-encrypted-sync")).toHaveCount(0);
   });

@@ -1,3 +1,7 @@
+## 2026-10-20 - Actionable Cloud connection errors
+
+The guided setup reduced every discovery failure to one generic line, hiding whether the server was unreachable, returned the wrong API range or could not be saved locally. The connection component now retains the specific failure for the current address only; editing the address clears it, and stale asynchronous responses remain generation-guarded. The public discovery request no longer accepts a bearer token, has a ten-second deadline and bounds response decoding. Cross-origin guidance now describes the server's CORS and gRPC origin configuration rather than incorrectly claiming that all deployments must share one origin. The full native Go suite passed after this change; the browser build is checked separately.
+
 ## 2026-10-20 - Sync discovery version range
 
 The live server at budget.earlcameron.com advertises API 2 and minimum client 1, while the Settings connection check compared both fields to literal `v1`. That rejected a compatible server before sign-in. The v1 SyncService is still registered on API 2, so discovery now parses the advertised range and accepts client version 1 when it falls inside it. Malformed and too-new minimums remain blocked. Unit cases cover the live response, legacy prefixed values and rejection cases; native backendauth, server and syncstate tests passed. The live endpoint was checked anonymously, without an access token or user data.
