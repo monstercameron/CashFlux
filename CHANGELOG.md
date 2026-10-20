@@ -104,6 +104,7 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- Verify downloaded attachment bytes against the content hash in the encrypted dataset before decrypting or importing them.
 - Require HTTPS or secure WebSockets for remote sync and credential requests; allow unencrypted loopback only for local development. Reject server URLs containing user credentials, queries, or fragments.
 - Show the actual Cloud setup connection error, check discovery without sending a token, and time out unresponsive hosts. Clarify that separate app and server origins can work when the server allows the app origin.
 - Accept a server advertising API version 2 when it still supports the client's version 1 sync RPCs; reject malformed or truly incompatible version ranges.

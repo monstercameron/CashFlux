@@ -1,3 +1,7 @@
+## 2026-10-20 - Verify downloaded attachment contents
+
+The blob server checks a content hash on upload, but the browser accepted downloaded bytes without checking that they still matched the BlobRef in the encrypted snapshot. The client now verifies SHA-256 over the complete downloaded payload before decrypting it or importing it locally. A mismatch keeps the local dataset unchanged and leaves sync retryable. Native tests cover valid, changed, and malformed hashes.
+
 ## 2026-10-20 - Encrypted remote sync transport
 
 The browser worker converted any configured remote `http://` server to `ws://` and attached the bearer token to the resulting gRPC connection. The guided setup could therefore approve a remote unencrypted endpoint. A pure endpoint policy now accepts HTTPS/WSS everywhere and HTTP/WS only for literal loopback addresses. The discovery check, websocket tunnel, refresh-scope binding, session and account HTTP routes, device management, billing and admin requests apply the same policy; old saved insecure URLs fail closed instead of sending credentials. Userinfo, queries and fragments are rejected as server addresses. Local development on 127.0.0.1/localhost remains supported; remote and LAN self-hosting requires TLS. Focused endpoint, bridge and session tests cover both accepted and rejected paths.

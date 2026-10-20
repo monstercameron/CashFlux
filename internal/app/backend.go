@@ -581,6 +581,9 @@ func downloadBackendArtifactBlob(ctx context.Context, endpoint, token, workspace
 	if err != nil {
 		return nil, err
 	}
+	if err := verifyDownloadedBlob(hash, raw); err != nil {
+		return nil, err
+	}
 	// Transparent decryption: if the server stored an encrypted envelope (EC2),
 	// decrypt it now. Legacy plaintext blobs (IsEnvelope → false) pass through
 	// unchanged, so old blobs uploaded before encryption was enabled still work.
