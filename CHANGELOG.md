@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Assistant spending-habit preparation uses native checked daily aggregates and overflow-safe averages, leaving wording and formatting in the screen.
 - Annual budget recurring/goal projections are reused when only a scenario or visible month window changes.
 - Budget savings timelines and age-of-money inputs use native tested models. Timelines retain wide month counts, and invalid cash-age totals show an explicit unavailable reason.
 - Account summary and liquidity buckets reuse the shared balance snapshot and native checked arithmetic, with explicit incomplete totals for omitted or invalid balances.

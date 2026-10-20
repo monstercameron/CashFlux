@@ -145,11 +145,16 @@ func rate(days []Day) int64 {
 	if len(days) == 0 {
 		return 0
 	}
-	var sum int64
+	var average, remainder int64
+	count := int64(len(days))
 	for _, d := range days {
-		sum += abs64(d.Minor)
+		value := abs64(d.Minor)
+		average += value / count
+		remainder += value % count
+		average += remainder / count
+		remainder %= count
 	}
-	return sum / int64(len(days))
+	return average
 }
 
 // lift is the inside rate as a percentage above the outside rate. An outside

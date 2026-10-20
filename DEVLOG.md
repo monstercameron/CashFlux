@@ -1,3 +1,7 @@
+## 2026-10-20 - Native Assistant spending habits
+
+Moved the 120-day income/spending series and habit facts into assistantview. Missing FX remains excluded by contract; invalid expense magnitudes or overflowing daily sums return unavailable facts. The spendpattern mean uses quotient/remainder accumulation so valid cross-day totals do not wrap. Native parity/edge tests and the full screen WASM gate passed; the page reuses its existing revision/day memo.
+
 ## 2026-10-20 - Memoized annual budget projection
 
 The annual grid keeps a stable native build pointer and registers its projection memo before early returns. Dependencies cover recurring/goal slices and lengths, data revisions, FX, date and open state; a closed or failed grid projects nothing. A WASM regression checks scenario/window reuse and invalidation after recurring edits, FX changes and reopening. The 805-screen gate passed.
