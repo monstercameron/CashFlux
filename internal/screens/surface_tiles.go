@@ -16,7 +16,7 @@ import (
 type surfaceTilesProps struct {
 	// Class is the page-specific class appended to the common bento class.
 	Class string
-	// Specs are rendered in order and keyed by their stable placement ID.
+	// Specs are rendered in order and keyed by stable, unique, nonempty placement IDs.
 	Specs []domain.WidgetSpec
 	// Context contains the surface data shared by all tile renderers. The current
 	// placement's Spec is copied into Context for each render.

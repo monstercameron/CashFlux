@@ -1,3 +1,7 @@
+## 2026-10-20 - Shared component usage guide
+
+Updated the existing inventory with current first-nine-page adoption, configuration examples and stable-ID/read-only-model requirements. Kept the distinction between rich FilterToolbar, lightweight ControlStrip, styled radio Segmented and configurable pressed/tab SegmentedControl. The guide also records why Transactions preserves its specialized placement memo and why composed Dashboard/Report grids remain page-owned. These are documentation/comment changes; diff checks pass and the referenced APIs have passed their integration lanes.
+
 ## 2026-10-20 - Memoized transaction calendar projection
 
 Registered the projection memo at a stable hook position. Cache regressions cover reuse, distinct account lenses, filter/month/date-format changes, FX omission warnings and browser revisions. The existing calendar math remains native; selection and overflow interaction behavior are unchanged. The full screen lane passed 805 tests, including the new calendar memo regression.

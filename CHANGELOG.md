@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- The component inventory documents control/action slots, keyed tabs and choices, shared tile hosts, native view models and bounded cache ownership.
 - The transaction calendar reuses its native projection across selection-only renders, with full scope, date, formatting, clock, preference and data dependencies.
 - Notifications cache native milestone preparation by app, revision and day, refresh member names/options after roster edits, and share accessible triage tabs.
 - To-do tiles share one bounded revision/day snapshot for counts, child relationships, open links and referenced display names. View and quick-filter switches use the shared segmented control.

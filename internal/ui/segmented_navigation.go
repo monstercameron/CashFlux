@@ -2,7 +2,8 @@
 
 package ui
 
-// SegmentOption describes one keyed choice in a segmented control.
+// SegmentOption describes one choice. Keys must be stable, unique and nonempty
+// within a segmented control.
 type SegmentOption struct {
 	Key, Label, Class, TestID, AriaLabel, Title string
 	Count                                       int

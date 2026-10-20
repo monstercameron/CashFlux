@@ -108,9 +108,24 @@ ui.DataTable(ui.DataTableProps{Columns: cols, Body: rowNodes, Sort: sortKey, Dir
 
 ### FilterToolbar (`filtertoolbar.go`)
 **Purpose:** Search box + Filters popover trigger + active-filter chips + trailing action buttons.
-Screen-agnostic — used by Transactions; adopt for Reports, Categories, Rules per Phase 2.
+Screen-agnostic — used by Transactions, Accounts and To-do.
 ```go
 ui.FilterToolbar(ui.FilterToolbarProps{Search: q, OnSearch: fn, FilterFields: fieldNodes, Chips: chips, OnRemoveChip: removeFn})
+```
+
+### ControlStrip (`controlstrip.go`)
+**Purpose:** Control/action slots for pages that do not need `FilterToolbar` search,
+filter-panel and chip behavior. Goals and Assistant use it. The outer class is
+`filter-strip`; `Class` adds page classes. `ControlsClass` and `ActionsClass` replace
+the slots' default `filter-strip-controls` class. `Attrs` preserves page attributes.
+Supply a translated `Label` for a named group. The component owns no hooks or
+financial calculations; callers pass prepared nodes.
+```go
+ui.ControlStrip(ui.ControlStripProps{
+    Label: controlsLabel,
+    Controls: []uic.Node{periodPicker, viewPicker},
+    Actions: []uic.Node{addButton},
+})
 ```
 
 ### FlipPanel (`flippanel.go`)
@@ -153,6 +168,49 @@ ui.Icon(icon.Accounts, css.Class(tw.W4, tw.H4))
 ```go
 ui.Segmented(ui.SegmentedProps{Options: []ui.SegOption{{Value: "month", Label: "Month"}, …}, Selected: cur, OnSelect: fn})
 ```
+
+### SegmentedControl (`segmented.go`)
+**Purpose:** Keyed pressed choices or tabs with caller-owned classes, optional
+counts, disabled options and stable test IDs. To-do uses pressed choices for
+views/date lenses; Notifications uses tabs for triage. `Segmented` above retains
+its animated radio-group presentation.
+
+Use stable, unique, nonempty keys. The group and button children own their hooks;
+mount groups through `uic.CreateElement` in variable-length lists. Tabs support
+wrapped Left/Right navigation, Home/End, disabled skipping and roving tab stops.
+`Selected` and `OnSelect` keep selection caller-owned.
+```go
+ui.SegmentedControl(ui.SegmentedControlProps{
+    Label: viewLabel, Selected: currentView, OnSelect: selectView,
+    Class: "page-views", ButtonClass: "page-view", ActiveClass: "is-active",
+    Options: []ui.SegmentOption{
+        {Key: "list", Label: listLabel},
+        {Key: "calendar", Label: calendarLabel},
+    },
+})
+```
+
+### surfaceTiles (`screens/surface_tiles.go` — screen package)
+**Purpose:** Keyed widget placement host for Accounts, Budgets, Goals, To-do and
+Notifications. It adds `bento`, accepts page classes/root attributes, copies the
+render context per placement and delegates failure handling to `safeRenderSpec`.
+Placement IDs must be stable, unique and nonempty. Event hooks stay in children.
+
+Transactions retains specialized `txnPlacement` dispatch/memoization. Dashboard
+and Reports retain composed grids/sections. Use the shared host when its placement
+contract fits the page; preserve specialized performance boundaries.
+
+### Native view models and bounded caches
+Financial rules and aggregate preparation belong in native packages (`accountview`,
+`assistantview`, `budgetview`, `dashboardview`, `goalview`, `notificationview`,
+`reportview`, `taskview`). Screens format facts and own events. Cached maps/slices
+are read-only; copy before sorting or editing.
+
+`viewcache.Cache` bounds retained models. Screen `revKey` includes app identity,
+stored revision and browser data revision; callers append scope, period, time and
+other inputs. Large snapshots use capacity one. Tests cover context/data/FX/date
+invalidation. See [Primary page performance](PRIMARY_PAGE_PERFORMANCE.md) for local
+measurements and their limits.
 
 ### Toggle (`controls.go`)
 **Purpose:** Pill on/off switch (`.switch`, ARIA `role="switch"`). Keyboard-accessible (Space/Enter).
