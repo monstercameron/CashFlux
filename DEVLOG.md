@@ -1,3 +1,7 @@
+## 2026-10-20 - Consistent startup fallback clock origin
+
+A nonfinite performance reading previously fell back from a relative timestamp to an epoch timestamp, which could inflate a diagnostic duration. Both clocks now measure elapsed time from construction. A regression switches from a valid performance clock to fallback and back, requiring five milliseconds for the phase and nine for the total. All four focused startup WASM tests pass; boot behavior is unchanged.
+
 ## 2026-10-20 - Native Assistant spending habits
 
 Moved the 120-day income/spending series and habit facts into assistantview. Missing FX remains excluded by contract; invalid expense magnitudes or overflowing daily sums return unavailable facts. The spendpattern mean uses quotient/remainder accumulation so valid cross-day totals do not wrap. Native parity/edge tests and the full screen WASM gate passed; the page reuses its existing revision/day memo.

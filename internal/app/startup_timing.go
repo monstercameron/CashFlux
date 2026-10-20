@@ -55,17 +55,29 @@ func newStartupTimer() *startupTimer {
 // newStartupTimerWith keeps clock and target injection local to this helper so
 // the wasm unit tests can exercise publication without running app boot.
 func newStartupTimerWith(perf, target js.Value, wallNow func() time.Time) *startupTimer {
-	clock := func() float64 {
+	readPerformance := func() (float64, bool) {
 		if perf.Truthy() {
 			now := perf.Get("now")
 			if now.Type() == js.TypeFunction {
 				elapsed := perf.Call("now").Float()
 				if !math.IsNaN(elapsed) && !math.IsInf(elapsed, 0) {
-					return elapsed
+					return elapsed, true
 				}
 			}
 		}
-		return float64(wallNow().UnixNano()) / float64(time.Millisecond)
+		return 0, false
+	}
+	// Both clocks report elapsed time from this origin. A temporarily unusable
+	// performance API must not switch a relative timestamp to an epoch value.
+	wallOrigin := wallNow()
+	performanceOrigin, usePerformance := readPerformance()
+	clock := func() float64 {
+		if usePerformance {
+			if elapsed, ok := readPerformance(); ok {
+				return elapsed - performanceOrigin
+			}
+		}
+		return float64(wallNow().Sub(wallOrigin)) / float64(time.Millisecond)
 	}
 	started := clock()
 	return &startupTimer{

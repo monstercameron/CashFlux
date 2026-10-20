@@ -70,6 +70,31 @@ func TestStartupTimerFallsBackWithoutPerformanceAPI(t *testing.T) {
 	}
 }
 
+func TestStartupTimerKeepsClockOriginDuringPerformanceFailure(t *testing.T) {
+	wall := time.Date(2026, 10, 20, 0, 0, 0, 0, time.UTC)
+	performanceMS := 100.0
+	nowFn := js.FuncOf(func(js.Value, []js.Value) any { return performanceMS })
+	defer nowFn.Release()
+	perf := js.Global().Get("Object").New()
+	perf.Set("now", nowFn)
+	target := js.Global().Get("Object").New()
+	timer := newStartupTimerWith(perf, target, func() time.Time { return wall })
+	timer.BeginPhase("routerMountMs")
+	wall = wall.Add(5 * time.Millisecond)
+	performanceMS = math.NaN()
+	timer.EndPhase("routerMountMs")
+	wall = wall.Add(4 * time.Millisecond)
+	performanceMS = 109
+	timer.Finish()
+	record := target.Get("__cashfluxBootTimings")
+	if got := record.Get("totalMs").Float(); got != 9 {
+		t.Fatalf("recovered totalMs = %v, want 9", got)
+	}
+	if got := record.Get("phases").Get("routerMountMs").Float(); got != 5 {
+		t.Fatalf("fallback phase = %v, want 5", got)
+	}
+}
+
 func TestStartupTimerFallsBackFromNonFinitePerformanceValues(t *testing.T) {
 	nowFn := js.FuncOf(func(js.Value, []js.Value) any { return math.NaN() })
 	defer nowFn.Release()

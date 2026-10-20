@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Startup phase timings retain a common elapsed-time origin if the performance clock temporarily becomes unavailable.
 - Assistant spending-habit preparation uses native checked daily aggregates and overflow-safe averages, leaving wording and formatting in the screen.
 - Annual budget recurring/goal projections are reused when only a scenario or visible month window changes.
 - Budget savings timelines and age-of-money inputs use native tested models. Timelines retain wide month counts, and invalid cash-age totals show an explicit unavailable reason.
