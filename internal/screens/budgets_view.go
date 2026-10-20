@@ -314,7 +314,7 @@ func (builder *budgetViewBuilder) addSavings(app *appstate.App, memberID string)
 			}
 		}
 	}
-	v.AgeMoney = computeAgeOfMoney(in.Transactions, in.Base, in.Rates)
+	v.AgeMoney = budgetAgeOfMoney(app, in.Transactions, in.Base, in.Rates)
 }
 
 func sinkingFundSetAsideBase(goal domain.Goal, now time.Time, base string, rates currency.Rates) (int64, error) {

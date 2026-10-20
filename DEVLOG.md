@@ -1,3 +1,7 @@
+## 2026-10-20 - Native budget savings and cash-age facts
+
+Extracted savings account ownership, linked-goal choice, FX and projection arithmetic into budgetview; ceil division avoids overflowing a valid remaining balance and preserves int64 month horizons on WASM. A native transaction-to-FIFO adapter feeds a revision/base cache shared across budget scopes. UI retains formatting and a distinct overflow caption. Native parity and boundary tests passed; the 805-screen WASM gate passed savings-width, cache refresh and unavailable-state regressions.
+
 ## 2026-10-20 - Shared account totals and liquidity facts
 
 Removed repeated ledger scans from account summary/liquidity rendering. Native tests cover liability signs, ownership, lock expiry, invalid balances, missing conversion and overflow. The account menu fixture checks the existing management actions through the real toolbar. The complete native suite and 805-screen WASM gate passed with the integration, and source formatting/diff checks are clean.

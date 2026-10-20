@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Budget savings timelines and age-of-money inputs use native tested models. Timelines retain wide month counts, and invalid cash-age totals show an explicit unavailable reason.
 - Account summary and liquidity buckets reuse the shared balance snapshot and native checked arithmetic, with explicit incomplete totals for omitted or invalid balances.
 - Startup exposes a bounded duration-only phase record, and the browser benchmark captures it alongside app readiness. Boot ordering and readiness semantics are unchanged.
 - Household position evaluation exposes calculation failures instead of wrapped debt, payment, surplus, coverage or utilization figures. Ratios use wide checked intermediates.

@@ -419,6 +419,10 @@ func budgetSummaryChips(p budgetSummaryChipsProps) (ui.Node, ui.Node, ui.Node) {
 			uistate.T("budgets.ageMoneyLabel")+" · "+figure,
 			Span(css.Class("bud3-age-explain"), uistate.T("budgets.ageMoneyOneLine")),
 			smartTooltipFor(p.smartSettings, "budget-agemoney", uistate.T("budgets.ageMoneyLabel"), why))
+	} else if am.Overflow {
+		ageChip = Span(css.Class("budget-hero-age"), Attr("data-testid", "budgets-agemoney-unavailable"),
+			uistate.T("budgets.ageMoneyUnavailable"),
+			Span(css.Class("bud3-age-explain"), uistate.T("budgets.ageMoneyTotalsTooLarge")))
 	}
 
 	return attnChip, toAssignChip, ageChip
