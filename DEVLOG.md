@@ -1,3 +1,10 @@
+## 2026-10-20 - v1.19.8 release preparation
+
+Grouped the accumulated work into focused commits, checked the native suite, all WASM component lanes, vet, app and
+console builds, and dark/light browser smoke. The full local production browser gate was stopped under the requested
+five-minute testing cap after resource timeouts and a Windows WASM-file lock; the focused smoke completed cleanly.
+The release tag points to the version bump so the image workflow's tag/version check agrees.
+
 ## 2026-10-20 - Safe dev reloads
 
 The development script disables in-place WebAssembly hot swapping. A swap left the previous Go runtime alive, so two

@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Prepared v1.19.8 from the verified Transactions, Import, sync, budget, dashboard, navigation, and development-server changes below.
 - Dev-server reloads now replace the page instead of starting overlapping WebAssembly runtimes that could each autosave the same workspace.
 - Aligned the sticky top bar and sidebar border at expanded and collapsed widths, and kept the ledger below the top bar while scrolling.
 - Pinned navigation items use a normal pointer on hover and switch to a grab cursor only during an actual drag.
