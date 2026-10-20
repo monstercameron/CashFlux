@@ -3,7 +3,9 @@
 package dashboardview
 
 import (
+	"errors"
 	"fmt"
+	"math"
 	"reflect"
 	"testing"
 	"time"
@@ -11,6 +13,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/acctproject"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/money"
 )
 
 func TestCashForecastUsesEligibleScopeAndConvertsEveryHorizon(t *testing.T) {
@@ -43,5 +46,30 @@ func TestCashForecastUsesEligibleScopeAndConvertsEveryHorizon(t *testing.T) {
 	scoped := BuildCashForecast(accounts[:1], currency.Rates{Base: "USD"}, now, project)
 	if scoped.Today != 10000 || scoped.Counted != 1 || scoped.Totals != [3]int64{7000, 4000, 1000} {
 		t.Fatalf("scope leaked: %+v", scoped)
+	}
+}
+
+func TestCashForecastRejectsOverflowingTotalsAndConvertedAmounts(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		start, end int64
+		code       string
+		rate       float64
+	}{
+		{"today", math.MaxInt64, 0, "USD", 1},
+		{"horizon", 0, math.MaxInt64, "USD", 1},
+		{"negative horizon", 0, math.MinInt64, "USD", 1},
+		{"converted start", math.MaxInt64, 0, "EUR", 2},
+		{"converted end", 0, math.MaxInt64, "EUR", 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			accounts := []domain.Account{{ID: "a", Currency: tc.code, Type: domain.TypeChecking}, {ID: "b", Currency: tc.code, Type: domain.TypeSavings}}
+			got := BuildCashForecast(accounts, currency.Rates{Base: "USD", Rates: map[string]float64{tc.code: tc.rate}}, time.Now(), func(string, time.Time, int) acctproject.Projection {
+				return acctproject.Projection{Start: tc.start, End: tc.end}
+			})
+			if !errors.Is(got.Error, money.ErrOverflow) || got.Today != 0 || got.Totals != [3]int64{} || got.Counted != 0 {
+				t.Fatalf("overflow exposed apparently valid forecast: %+v", got)
+			}
+		})
 	}
 }

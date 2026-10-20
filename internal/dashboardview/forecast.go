@@ -3,6 +3,8 @@
 package dashboardview
 
 import (
+	"errors"
+	"fmt"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/acctproject"
@@ -19,6 +21,10 @@ type CashForecast struct {
 	Today   int64
 	Totals  [3]int64
 	Counted int
+	// Excluded counts cash accounts missing a usable FX rate.
+	Excluded int
+	// Error makes every total unavailable after unrepresentable arithmetic.
+	Error error
 }
 
 // BuildCashForecast sums the account service's projections under one explicit
@@ -33,20 +39,44 @@ func BuildCashForecast(accounts []domain.Account, rates currency.Rates, now time
 		first := project(a.ID, now, 30)
 		start, err := rates.Convert(money.New(first.Start, a.Currency), rates.Base)
 		if err != nil {
+			if errors.Is(err, money.ErrOverflow) {
+				return CashForecast{Error: fmt.Errorf("forecast account %q today: %w", a.ID, err)}
+			}
+			out.Excluded++
 			continue
 		}
-		out.Today += start.Amount
-		out.Counted++
+		var ends [3]int64
+		complete := true
 		for i, horizon := range [3]int{30, 60, 90} {
 			p := first
 			if i > 0 {
 				p = project(a.ID, now, horizon)
 			}
 			converted, err := rates.Convert(money.New(p.End, a.Currency), rates.Base)
-			if err == nil {
-				out.Totals[i] += converted.Amount
+			if err != nil {
+				if errors.Is(err, money.ErrOverflow) {
+					return CashForecast{Error: fmt.Errorf("forecast account %q horizon %d: %w", a.ID, horizon, err)}
+				}
+				complete = false
+				break
+			}
+			ends[i] = converted.Amount
+		}
+		if !complete {
+			out.Excluded++
+			continue
+		}
+		out.Today, err = money.Add(out.Today, start.Amount)
+		if err != nil {
+			return CashForecast{Error: fmt.Errorf("forecast current total: %w", err)}
+		}
+		for i, end := range ends {
+			out.Totals[i], err = money.Add(out.Totals[i], end)
+			if err != nil {
+				return CashForecast{Error: fmt.Errorf("forecast horizon %d total: %w", i, err)}
 			}
 		}
+		out.Counted++
 	}
 	return out
 }

@@ -1,3 +1,7 @@
+## 2026-10-20 - Checked dashboard cash forecasts
+
+Each account projection is converted once per horizon and checked before accumulation. A failed financial calculation returns no partial headline; the tile shows an unavailable state, while rate omissions retain an explanatory note. Added shared calculation copy for forecast/report consumers. Native boundary tests, the 805-screen gate and the rebuilt application passed. Latest browser measurements are being captured separately against the previous release baseline.
+
 ## 2026-10-20 - Shared goal reservation and funding index
 
 Replaced repeated per-card ledger scans with one bounded revision index reused by summary, rows and Earmarks. Missing reservation FX blocks unsafe suggestions and is disclosed; fund headline totals use converted checked amounts. Own-foreign-allocation review found a gap/merge mismatch, now covered by checked per-currency aggregation and a matching headroom simulation. Native tests cover FX rounding, stable account choice, missing rates and overflow; the full 805-screen gate plus focused actual-host regression passed. Three WASM cases cover stale click safety, FX revision/removal and fund exclusions; the browser Earmarks journey passed on the second-pass snapshot.

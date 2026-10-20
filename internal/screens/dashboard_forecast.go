@@ -40,7 +40,9 @@ func forecastCard(c widgetrender.RenderCtx) ui.Node {
 	}, revKey(app), acctSig(c.ScopedAccounts), now.Format(dateutil.Layout))
 
 	var body ui.Node
-	if model.Counted == 0 {
+	if model.Error != nil {
+		body = P(css.Class("empty t-body", tw.TextDim), Attr("data-testid", "forecast-unavailable"), uistate.T("dashboard.forecastUnavailable"))
+	} else if model.Counted == 0 {
 		body = P(css.Class("empty t-body", tw.TextDim), uistate.T("dashboard.forecastEmpty"))
 	} else {
 		stat := func(i int, labelKey string) ui.Node {
@@ -68,6 +70,7 @@ func forecastCard(c widgetrender.RenderCtx) ui.Node {
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "forecast", Title: uistate.T("dashboard.forecast"), Draggable: !c.Preview, Resizable: !c.Preview,
 		Preview: c.Preview, GridColumn: "1 / span 2",
-		Body: Div(Attr("data-testid", "dash-forecast"), body),
+		Body: Div(Attr("data-testid", "dash-forecast"), body,
+			If(model.Excluded > 0, P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "forecast-excluded"), uistate.T("dashboard.forecastExcluded")))),
 	})
 }
