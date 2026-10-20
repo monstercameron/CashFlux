@@ -1,3 +1,7 @@
+## 2026-10-20 - Native Assistant facts and scoped memoization
+
+Extracted briefing/trend/question facts and anomaly purchase attribution from screen markup, using checked money comparisons and explicit FX handling. Shared anomaly caching now takes the actual app and an unambiguous account scope; nil apps bypass caching and callers receive defensive copies. Dashboard callers pass their context explicitly. Native edge/parity tests and WASM app/FX/scope/calendar invalidation tests passed in the full native and 790-screen suites.
+
 ## 2026-10-20 - Transaction description and selector reuse
 
 Removed the duplicate screen description rule that could call a nil payee resolver. A native regression checks sort order, fallback labels and input immutability. The transaction surface memo now uses the complete revision context shared with other pages. The complete native and screen WASM suites passed; the existing transaction placement memo remains in place.

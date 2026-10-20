@@ -666,7 +666,7 @@ func Dashboard() ui.Node {
 	ids := scope.ResolveScope(accounts, sc, instOf)
 	kpiTxns := scope.ApplyScopeToTxns(txns, ids)
 	scopedAccounts := scope.ApplyScopeToAccounts(accounts, ids)
-	scopeSig := fmt.Sprintf("%v|%v|%v|%v", sc.Owners, sc.Institutions, sc.Types, sc.AccountIDs)
+	scopeSig := fmt.Sprintf("%#v", sc)
 
 	// Memoized via state.UseComputed keyed on app.Rev() — recomputes only when the
 	// dataset/FX actually changes, not on every re-render (§1.6).
@@ -799,7 +799,7 @@ func Dashboard() ui.Node {
 	// repeated renders within the TTL reuse the cached surface (the figures depend on
 	// the wall clock only through bills_due/goal_needs, which don't move minute to
 	// minute).
-	varsKey := fmt.Sprintf("%d|%v|%s", app.Rev(), w, scopeSig)
+	varsKey := fmt.Sprintf("%s|%v|%s", revKey(app), w, scopeSig)
 	// The engine-variable surface (atoms + molecules + custom fields over every
 	// transaction) is the dashboard's single heaviest body compute, and it's consumed
 	// ONLY by the grid tiles via rctx.Vars — the hero reads the direct figures (net,
@@ -1499,8 +1499,8 @@ func savingsRateWidget(ratePct float64, cfg widgetcfg.Config, periodLabel string
 // month (via the shared anomaly detection) as a one-line plain-English highlight,
 // or a calm "nothing notable" message when there's nothing to flag. It links the
 // dashboard to the fuller Spending highlights card on the Insights screen.
-func topHighlightWidget(txns []domain.Transaction, categories []domain.Category, rates currency.Rates) ui.Node {
-	anomalies := detectSpendingAnomaliesMemo(appstate.Default.Rev(), "dash-highlight", txns, categories, rates)
+func topHighlightWidget(app *appstate.App, scopeKey string, txns []domain.Transaction, categories []domain.Category, rates currency.Rates) ui.Node {
+	anomalies := detectSpendingAnomaliesMemo(app, "dash-highlight|"+scopeKey, txns, categories, rates)
 	var body ui.Node
 	if len(anomalies) == 0 {
 		// A calm month left this card as one dim line in an otherwise-empty tile
@@ -2268,7 +2268,7 @@ func attentionWidget(app *appstate.App, txns []domain.Transaction, rates currenc
 	}
 
 	var anomalyPtr *insights.Anomaly
-	if anomalies := detectSpendingAnomaliesMemo(app.Rev(), "dash-attention", txns, cats, rates); len(anomalies) > 0 {
+	if anomalies := detectSpendingAnomaliesMemo(app, "dash-attention", txns, cats, rates); len(anomalies) > 0 {
 		anomalyPtr = &anomalies[0]
 	}
 

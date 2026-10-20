@@ -194,7 +194,7 @@ func init() {
 		return freshnessWidget(c.Accounts, c.App.FreshnessWindows(), c.Dismissals, c.RemindToUpdate, c.DismissFreshness)
 	})
 	R("highlight", func(c widgetrender.RenderCtx) ui.Node {
-		return topHighlightWidget(c.ScopedTxns, c.App.Categories(), c.Rates)
+		return topHighlightWidget(c.App, acctSig(c.ScopedAccounts), c.ScopedTxns, c.App.Categories(), c.Rates)
 	})
 	R("monthly-recap", monthlyRecapWidget)
 	// 30/60/90-day available-cash forecast from per-account recurring projections.

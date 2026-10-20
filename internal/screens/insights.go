@@ -20,7 +20,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/anomalyattrib"
 	"github.com/monstercameron/CashFlux/internal/anomalyprobe"
 	"github.com/monstercameron/CashFlux/internal/appstate"
-	"github.com/monstercameron/CashFlux/internal/budgeting"
+	"github.com/monstercameron/CashFlux/internal/assistantview"
 	"github.com/monstercameron/CashFlux/internal/chatpolish"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
@@ -56,6 +56,7 @@ func Insights() ui.Node {
 		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("common.notReady"))})
 	}
 
+	dataRevision := uistate.UseDataRevision().Get()
 	settings := app.Settings()
 	key := settings.OpenAIKey
 	// AG18: resolve the effective endpoint — a user-supplied OpenAI-compatible base
@@ -124,111 +125,39 @@ func Insights() ui.Node {
 	// reflect the user's chosen scope. Household NW stays unscoped — it is an
 	// account-level aggregate and the scoped tile lives on the dashboard.
 	insightsSc := insightsScopeAtom.Get()
-	insightsInstOf := func(a domain.Account) string { return a.Institution }
-	insightsIDs := scope.ResolveScope(accounts, insightsSc, insightsInstOf)
-	scopedTxns := scope.ApplyScopeToTxns(txns, insightsIDs)
-	net, _, _, _ := ledger.NetWorth(accounts, txns, rates)
-	mStart, mEnd := dateutil.MonthRange(time.Now())
-	income, expense, _ := ledger.PeriodTotals(scopedTxns, mStart, mEnd, rates)
+	scopeKey := fmt.Sprintf("%#v", insightsSc)
+	scopedTxns := ui.UseMemo(func() []domain.Transaction {
+		ids := scope.ResolveScope(accounts, insightsSc, func(a domain.Account) string { return a.Institution })
+		return scope.ApplyScopeToTxns(txns, ids)
+	}, app, app.Rev(), dataRevision, scopeKey)
+	now := time.Now()
+	mStart, mEnd := dateutil.MonthRange(now)
+	net := useNetWorth(app, accounts, txns, rates).Net
+	income, expense := usePeriodTotals(app, scopedTxns, mStart, mEnd, rates, scopeKey)
 	active := 0
 	for _, a := range accounts {
 		if !a.Archived {
 			active++
 		}
 	}
-	// The only financial data sent to the model: aggregates, no PII (see ai.FinancialContext).
 	aiCtx := ai.FinancialContext{NetWorth: fmtMoney(net), Income: fmtMoney(income), Spending: fmtMoney(expense), Accounts: active}
 
-	// Starter questions for the Ask box (L8): tailored to the user's live data so
-	// a blank box never stalls them — top spend category, a near-limit budget, and
-	// a near-target goal (C59: fuller context means more useful starter questions).
-	// Starter questions are derived from three full-dataset scans (top spend
-	// category, nearest-limit budget, soonest goal). They're pure over the data +
-	// scope + month, so memoize them: the chat page re-renders on every keystroke,
-	// send, and effect, and recomputing these each time (a topCatSpend scan of every
-	// transaction + budget evaluation + a goals pass) was pure waste.
+	// Typing and chat effects reuse the same scoped snapshot and question facts.
+	// Day is a dependency because budget cadence and upcoming goals can change
+	// without a store mutation while this conversation remains mounted.
 	starters := ui.UseMemo(func() []string {
-		topCatSpend := map[string]int64{}
-		for _, t := range scopedTxns {
-			if t.IsExpense() && dateutil.InRange(t.Date, mStart, mEnd) {
-				if conv, err := rates.Convert(t.Amount.Abs(), base); err == nil {
-					topCatSpend[t.CategoryID] += conv.Amount
-				}
-			}
+		facts := assistantview.Questions(scopedTxns, app.Categories(), budgetStatusesAt(app, now), app.Goals(), rates, mStart, mEnd, now)
+		ctx := insights.QuestionContext{
+			TopCategory: facts.TopCategory, NearLimitBudget: facts.NearLimitBudget,
+			UpcomingGoal: facts.UpcomingGoal, OverBudgetCount: facts.OverBudgetCount,
+			UncategorizedCount: facts.UncategorizedCount,
 		}
-		topCat := ""
-		var topAmt int64
-		for _, c := range app.Categories() { // category order → deterministic on ties
-			if topCatSpend[c.ID] > topAmt {
-				topAmt, topCat = topCatSpend[c.ID], c.Name
-			}
+		if facts.LargestExpenseMinor > 0 {
+			ctx.LargestExpensePayee = txnDisplayPayee(facts.LargestExpense)
+			ctx.LargestExpenseAmount = insightsMoneyFmt(facts.LargestExpenseMinor, base)
 		}
-
-		budgetStatuses := budgetStatusesAt(app, time.Now())
-
-		// Near-limit budget: the budget closest to (or over) its limit in its own period.
-		nearLimitBudget := ""
-		for _, s := range budgetStatuses {
-			if s.State == budgeting.StateNear || s.State == budgeting.StateOver {
-				nearLimitBudget = s.Budget.Name
-				break // first near/over budget in the view order
-			}
-		}
-
-		// Upcoming goal: the active goal with the nearest non-zero target date.
-		upcomingGoal := ""
-		now := time.Now()
-		var soonest time.Time
-		for _, g := range app.Goals() {
-			if g.Archived || g.TargetDate.IsZero() || !g.TargetDate.After(now) {
-				continue
-			}
-			if soonest.IsZero() || g.TargetDate.Before(soonest) {
-				soonest = g.TargetDate
-				upcomingGoal = g.Name
-			}
-		}
-
-		// EC-16: the situational half — what is true about the data RIGHT NOW, so
-		// the first chip names something real rather than asking a reasonable
-		// question in general.
-		overBudgets, uncategorized := 0, 0
-		for _, st := range budgetStatuses {
-			if st.State == budgeting.StateOver {
-				overBudgets++
-			}
-		}
-		var largestPayee, largestAmount string
-		var largestMinor int64
-		for _, t := range scopedTxns {
-			if !dateutil.InRange(t.Date, mStart, mEnd) {
-				continue
-			}
-			if t.CategoryID == "" && t.IsExpense() && !t.IsTransfer() {
-				uncategorized++
-			}
-			if !t.IsExpense() || t.IsTransfer() {
-				continue
-			}
-			amount := t.Amount.Abs()
-			if conv, err := rates.Convert(amount, base); err == nil {
-				amount = conv
-			}
-			if amount.Amount > largestMinor {
-				largestMinor, largestPayee = amount.Amount, txnDisplayPayee(t)
-				largestAmount = insightsMoneyFmt(amount.Amount, base)
-			}
-		}
-		return insights.SuggestedQuestions(insights.QuestionContext{
-			TopCategory:          topCat,
-			NearLimitBudget:      nearLimitBudget,
-			UpcomingGoal:         upcomingGoal,
-			OverBudgetCount:      overBudgets,
-			UncategorizedCount:   uncategorized,
-			LargestExpensePayee:  largestPayee,
-			LargestExpenseAmount: largestAmount,
-		})
-	}, app.Rev(), fmt.Sprintf("%v", insightsSc), mStart.Unix(), pr.WeekStart, pr.PayCycleAnchor, pr.BudgetRolloverLeftover)
+		return insights.SuggestedQuestions(ctx)
+	}, app, app.Rev(), dataRevision, scopeKey, now.Format("2006-01-02"), pr.WeekStart, pr.PayCycleAnchor, pr.BudgetRolloverLeftover)
 
 	// The no-key hint is a clear call to action that hops to Settings (where the AI
 	// key lives), not a dead-end sentence (C59; same fix as C54). Built fresh per
@@ -1273,9 +1202,12 @@ func Insights() ui.Node {
 			return nil // deferred to just after first paint (see railReady)
 		}
 		return detectSpendingAnomalies(scopedTxns, app.Categories(), rates)
-	}, app.Rev(), fmt.Sprintf("%v", insightsSc), mStart.Unix(), railReady.Get())
+	}, app, app.Rev(), dataRevision, scopeKey, now.Format("2006-01-02"), railReady.Get())
+	attributions := ui.UseMemo(func() map[string]string {
+		return anomalyAttributionTexts(spendingAnoms, catsByName, scopedTxns, rates, base, now)
+	}, spendingAnoms, revKey(app), scopeKey, now.Format("2006-01-02"), railReady.Get(), uistate.ActiveLanguage())
 	highlights := spendingHighlights(spendingAnoms, base, func(a insights.Anomaly) string {
-		return anomalyAttributionText(a, catsByName[a.Category], scopedTxns, rates, base, time.Now())
+		return attributions[a.Category]
 	}, viewCategoryTransactions)
 
 	// C252: bridge the four anomaly-type SMART detectors (duplicate, spike, missing
@@ -3544,7 +3476,7 @@ func smartAnomalyHighlights(app *appstate.App, weekStart time.Weekday, ready boo
 			return nil
 		}
 		return runAnomalyDetectors(app, weekStart)
-	}, app.Rev(), int(weekStart), ready)
+	}, revKey(app), int(weekStart), ready, time.Now().Format("2006-01-02"))
 	if len(flagged) == 0 {
 		return Fragment()
 	}
@@ -3780,48 +3712,7 @@ func spendingHighlights(anomalies []insights.Anomaly, base string, attrib func(i
 // judged against the same three baseline months the anomaly was measured over. A
 // payee never seen before is not "larger" — it has no usual to be larger than.
 func anomalyPurchases(catID string, txns []domain.Transaction, rates currency.Rates, now time.Time) []anomalyattrib.Purchase {
-	curStart, _ := dateutil.MonthRange(now)
-	baseStart := dateutil.AddMonths(curStart, -3)
-	curEnd := dateutil.AddMonths(curStart, 1)
-
-	var cur []anomalyattrib.Purchase
-	priorSum := map[string]int64{}
-	priorN := map[string]int{}
-	for _, t := range txns {
-		if t.CategoryID != catID || !t.IsExpense() || !t.CountsInReports() {
-			continue
-		}
-		conv, err := rates.Convert(t.Amount, rates.Base)
-		if err != nil {
-			continue
-		}
-		minor := conv.Abs().Amount
-		switch {
-		case dateutil.InRange(t.Date, curStart, curEnd):
-			payee := strings.TrimSpace(t.Payee)
-			if payee == "" {
-				payee = strings.TrimSpace(t.Desc)
-			}
-			if payee == "" {
-				payee = uistate.T("insights.attribUnnamedPayee")
-			}
-			cur = append(cur, anomalyattrib.Purchase{ID: t.ID, Payee: payee, Minor: minor})
-		case dateutil.InRange(t.Date, baseStart, curStart):
-			key := strings.ToLower(strings.TrimSpace(t.Payee))
-			priorSum[key] += minor
-			priorN[key]++
-		}
-	}
-	for i, p := range cur {
-		key := strings.ToLower(p.Payee)
-		if n := priorN[key]; n > 0 {
-			usual := priorSum[key] / int64(n)
-			// Half again as much as usual, so ordinary variation in a repeat
-			// purchase is not reported as remarkable.
-			cur[i].Larger = usual > 0 && p.Minor*2 > usual*3
-		}
-	}
-	return cur
+	return anomalyattrib.CategoryPurchases(catID, txns, rates, now, uistate.T("insights.attribUnnamedPayee"))
 }
 
 // anomalyAttributionText answers the question a spending flag leaves hanging:
@@ -3868,34 +3759,30 @@ func anomalyAttributionText(a insights.Anomaly, catID string, txns []domain.Tran
 	return line
 }
 
-// spendAnomaliesCache backs detectSpendingAnomaliesMemo (single dashboard surface;
-// wasm is single-threaded, so no lock).
-var spendAnomaliesCache = map[string][]insights.Anomaly{}
+// anomalyAttributionTexts is memoized with the detected anomalies so expanding a
+// flag or typing in the composer does not repeat a ledger scan for each category.
+func anomalyAttributionTexts(anomalies []insights.Anomaly, categoryIDs map[string]string, txns []domain.Transaction, rates currency.Rates, base string, now time.Time) map[string]string {
+	texts := make(map[string]string, len(anomalies))
+	for _, anomaly := range anomalies {
+		texts[anomaly.Category] = anomalyAttributionText(anomaly, categoryIDs[anomaly.Category], txns, rates, base, now)
+	}
+	return texts
+}
 
-// detectSpendingAnomaliesMemo wraps detectSpendingAnomalies with a revision-keyed
-// cache. The detection builds four monthly per-category spend series over every
-// transaction — heavy — and the dashboard calls it more than once per render (the
-// top-highlight widget and the attention widget), re-running on every dashboard
-// re-render. scopeKey distinguishes callers that pass different transaction sets so
-// they never share an entry. Returns a fresh copy, so a caller that takes
-// &result[0] can't mutate the cached slice. The month is part of the key (the
-// series are month-relative); any data edit bumps rev and invalidates.
-func detectSpendingAnomaliesMemo(rev uint64, scopeKey string, txns []domain.Transaction, categories []domain.Category, rates currency.Rates) []insights.Anomaly {
-	key := strconv.FormatUint(rev, 10) + "|" + scopeKey + "|" + time.Now().Format("2006-01")
-	v, ok := spendAnomaliesCache[key]
-	if !ok {
-		if len(spendAnomaliesCache) > 6 {
-			spendAnomaliesCache = map[string][]insights.Anomaly{}
-		}
-		v = detectSpendingAnomalies(txns, categories, rates)
-		spendAnomaliesCache[key] = v
+// spendAnomaliesCache is shared by the dashboard's highlight and attention tiles.
+var spendAnomaliesCache = newViewCache[[]insights.Anomaly]()
+
+// detectSpendingAnomaliesMemo isolates app instances and transaction scopes at
+// equal revisions. A caller without an app gets an uncached derivation.
+func detectSpendingAnomaliesMemo(app *appstate.App, scopeKey string, txns []domain.Transaction, categories []domain.Category, rates currency.Rates) []insights.Anomaly {
+	if app == nil {
+		return detectSpendingAnomalies(txns, categories, rates)
 	}
-	if len(v) == 0 {
-		return nil
-	}
-	out := make([]insights.Anomaly, len(v))
-	copy(out, v)
-	return out
+	key := revKey(app) + "|" + scopeKey + "|" + time.Now().Format("2006-01-02") + "|" + string(uistate.ActiveLanguage())
+	value := memoByRev(spendAnomaliesCache, key, func() []insights.Anomaly {
+		return detectSpendingAnomalies(txns, categories, rates)
+	})
+	return append([]insights.Anomaly(nil), value...)
 }
 
 // detectSpendingAnomalies builds the last four monthly per-category spend series
