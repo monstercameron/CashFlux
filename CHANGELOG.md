@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Household position evaluation exposes calculation failures instead of wrapped debt, payment, surplus, coverage or utilization figures. Ratios use wide checked intermediates.
 - Payoff plans reject overflowing payment budgets, balance and interest additions, and cumulative totals through an explicit checked API.
 - Age-of-money keeps full-range int64 flows and exact weighted averages without overflowing dollar-days or the rounding increment. An unrepresentable exposed window total is explicitly unavailable.
 - Added a configurable segmented control for pressed choices and tabs, with optional counts, existing class slots, stable keyed handlers, disabled choices and keyboard navigation.

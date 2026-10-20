@@ -1,3 +1,7 @@
+## 2026-10-20 - Checked household position arithmetic
+
+Added EvaluateChecked and an Error result while retaining Evaluate for existing callers. The native model checks aggregate debts/minimums, annualization, fund targets, available credit and wasm-sized integer conversions, and uses the checked payoff simulation. Failed evaluations retain no partial measured figures. Native regression tables cover int64 boundaries and finite large rates alongside the existing normal-case suite; the complete native gate passed.
+
 ## 2026-10-20 - Checked payoff simulation
 
 Added BuildPlanChecked while preserving the existing BuildPlan signature and nonviable-plan boolean. Checked arithmetic runs inside the existing simulation instead of duplicating a preflight plan. Errors return no partial plan, and the compatibility wrapper keeps ok=false. Native cases cover finite large APR, opening balances, monthly payments and cumulative interest. The full native suite passed; this seam supports the checked household position model.
