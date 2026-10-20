@@ -1,3 +1,7 @@
+## 2026-10-20 - Checked report rollups and wide runway
+
+Added checked ancestor totals and matching rolled-up monthly category series, with cycle/unknown-category parity tests. Runway day fractions use wide multiplication and Months remains int64 rather than narrowing on wasm32. The native boundary test enforces that field type at compile time. Focused reports tests and the native integration suite passed for the calculations; the final wasm integration verifies their screen callers.
+
 ## 2026-10-20 - Shared component usage guide
 
 Updated the existing inventory with current first-nine-page adoption, configuration examples and stable-ID/read-only-model requirements. Kept the distinction between rich FilterToolbar, lightweight ControlStrip, styled radio Segmented and configurable pressed/tab SegmentedControl. The guide also records why Transactions preserves its specialized placement memo and why composed Dashboard/Report grids remain page-owned. These are documentation/comment changes; diff checks pass and the referenced APIs have passed their integration lanes.

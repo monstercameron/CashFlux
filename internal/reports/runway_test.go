@@ -9,7 +9,7 @@ func TestEstimateRunway(t *testing.T) {
 		name       string
 		balance    int64
 		burn       int64
-		wantMonths int
+		wantMonths int64
 		wantDays   int
 		wantSust   bool
 	}{
