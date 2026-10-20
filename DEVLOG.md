@@ -1,3 +1,8 @@
+## 2026-10-20 - Safe dev reloads
+
+The development script disables in-place WebAssembly hot swapping. A swap left the previous Go runtime alive, so two
+autosave loops could write the same local dataset after an edit. Full-page reload gives each build one runtime.
+
 ## 2026-10-20 - Header stacking and border alignment
 
 The top bar and ledger header shared a stacking level, so a hovered ledger tile could paint over the page header.

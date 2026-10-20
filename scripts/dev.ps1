@@ -2,6 +2,8 @@
 #
 # gwc dev currently accepts one app target, so this script lets it own main.wasm
 # and live reload while a small background watcher rebuilds services.wasm.
+# Use full-page live reload: a hot WASM swap starts a second Go runtime without
+# stopping the first, leaving both CashFlux autosave loops writing the same data.
 
 $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent $PSScriptRoot
@@ -70,7 +72,8 @@ try {
         -app ".\main.go" `
         -root ".\web" `
         -html ".\web\index.html" `
-        -wasm "web\bin\main.wasm"
+        -wasm "web\bin\main.wasm" `
+        -hot=false
 }
 finally {
     Stop-Job -Job $watchJob -ErrorAction SilentlyContinue

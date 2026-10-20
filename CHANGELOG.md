@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Dev-server reloads now replace the page instead of starting overlapping WebAssembly runtimes that could each autosave the same workspace.
 - Aligned the sticky top bar and sidebar border at expanded and collapsed widths, and kept the ledger below the top bar while scrolling.
 - Pinned navigation items use a normal pointer on hover and switch to a grab cursor only during an actual drag.
 - Dashboard now leads with daily budget adherence and monthly spending limits, with clearer labels and hierarchy.
