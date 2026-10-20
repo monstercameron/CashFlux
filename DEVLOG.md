@@ -1,3 +1,7 @@
+## 2026-10-20 - Repeatable primary-page browser measurements
+
+The harness measures an already-built loopback app in a fresh sample context and blocks non-loopback traffic. One warmup plus seven sweeps were captured twice for baseline/current. Repeat medians suggest gains on several routes, while Dashboard, Transactions and Reports remain inconclusive; empty notifications and lower Assistant DOM count limit comparison. Source provenance now identifies the dirty-built WASM by SHA256 instead of treating its then-current HEAD as the complete build. Node syntax/help checks passed; all four captures completed without route failures. This is descriptive evidence, not a timing gate.
+
 ## 2026-10-20 - Native task projections and suggestion freshness
 
 Moved task selection and calendar preparation out of browser markup. Native tests compare 216 filter combinations and cover date-zone boundaries and immutable inputs; the preserved benchmark compares scan cost without asserting machine timings. The suggestion handler is registered before empty returns, and memo keys include exact same-day freshness state. Full native and 790-screen WASM gates passed, including list/board/calendar and keyed expansion transitions. Removed the obsolete suggestion hook exception.
