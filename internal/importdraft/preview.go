@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/extract"
 	"github.com/monstercameron/CashFlux/internal/importsafe"
@@ -111,4 +112,14 @@ func ReceiptCandidates(rows []extract.Row, merchant, total string, decimals int,
 		return nil
 	}
 	return receiptmatch.Match(minor, receipt.Merchant, ReceiptDate(rows, fallback), txns, receiptmatch.DefaultWindowDays)
+}
+
+// ReceiptMatchDate returns the effective date used by candidate matching. A
+// parsed receipt date wins; when it is absent, matching uses today's calendar
+// date at UTC midnight, consistent with stored transaction dates.
+func ReceiptMatchDate(rows []extract.Row, now time.Time) time.Time {
+	if parsed := ReceiptDate(rows, time.Time{}); !parsed.IsZero() {
+		return parsed
+	}
+	return dateutil.CalendarDayUTC(now)
 }

@@ -729,12 +729,13 @@ func (c *documentsController) useRemoveDraft() {
 	c.reviewCur = reviewCurrencyFor(c.app, c.accounts, c.importAcct.Get())
 	c.recBaseCur = c.reviewCur
 	c.recDec = currency.Decimals(c.reviewCur)
+	receiptMatchDate := importdraft.ReceiptMatchDate(c.rows, time.Now())
 	c.receiptCands = ui.UseMemo(func() []receiptmatch.Candidate {
 		if !c.receiptMode.Get() {
 			return nil
 		}
-		return importdraft.ReceiptCandidates(c.rows, c.receiptMerchant.Get(), c.receiptTotal.Get(), c.recDec, c.app.Transactions(), time.Now())
-	}, c.app, c.app.Rev(), c.model.Revision, len(c.rows), c.receiptMode.Get(), c.receiptTotal.Get(), c.receiptMerchant.Get(), c.reviewCur)
+		return importdraft.ReceiptCandidates(c.rows, c.receiptMerchant.Get(), c.receiptTotal.Get(), c.recDec, c.app.Transactions(), receiptMatchDate)
+	}, c.app, c.app.Rev(), c.model.Revision, len(c.rows), c.receiptMode.Get(), c.receiptTotal.Get(), c.receiptMerchant.Get(), c.reviewCur, receiptMatchDate)
 	c.batch = ui.UseMemo(func() appstate.StagedImport {
 		batch, err := c.app.Stage(c.documentKind(), c.rows, c.importAcct.Get())
 		if err != nil {

@@ -1,3 +1,7 @@
+## 2026-10-21 - Complete receipt matching memo dependencies
+
+Parsed statement dates remain authoritative. The native helper normalizes an absent-date fallback to the local calendar day at UTC midnight, matching stored date-only transaction identity. The controller samples this date once and includes it in memo invalidation instead of retaining stale candidates across a day change. Focused native importdraft tests and vet pass for candidate cutoff and parsed-date precedence; the full native suite passed before this additive fix.
+
 ## 2026-10-21 - Workflow composer delegates native drafts
 
 The route now calls the checked injected-clock draft service, preserving existing feedback and commands. Both actual-host composer cases pass, proving weekly NextRun and dedupe persistence plus same-account rejection. Stable composer selectors distinguish its controls from identically labelled quick-start forms. Native workflow/appstate draft validation was committed separately.

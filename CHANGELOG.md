@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Receipt candidate matching includes its effective calendar date in memo dependencies.
 - Workflow authoring delegates schedule and transfer preparation to native validation.
 - Budget income-source facts retain unknown amounts separately from known fixed income.
 - Auto-budget rows, impact preview and save share one checked native tuning result.
