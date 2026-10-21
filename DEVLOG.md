@@ -1,3 +1,7 @@
+## 2026-10-20 - Encrypt locally stored attachment bytes
+
+The separate `cashflux/artifacts` IndexedDB store previously wrote PDF bytes and MIME as plaintext even when the dataset had App Lock. An encrypted wrapper now seals both with the protected workspace key and authenticated artifact ID before every new write. Its read path upgrades a legacy entry in place and returns the bytes only after the encrypted replacement's IndexedDB transaction completes; failed upgrades leave the old record and surface an error. A background pass visits active-household legacy files after unlock, while inactive or orphaned legacy records remain a documented migration limit. Native wrapper tests and a WebAssembly key-binding test passed; the app WebAssembly build passed. The full browser attachment and protected reload journeys are being rerun.
+
 ## 2026-10-20 - Guard the sync publisher itself
 
 The Cloud setup and current queue caller require App Lock, and the blob uploader already refuses an unprotected payload. Snapshot preparation still had a final plaintext return when protection was inactive, leaving future callers a path to publish readable JSON. It now checks protection before import and again before returning its encrypted envelope, including a passcode change during preparation. A wasm test asserts the refusal without network access; the two-device encrypted attachment browser journey passed after the change.

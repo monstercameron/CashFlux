@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- New locally stored attachment bytes and MIME are encrypted with the protected workspace key; active legacy plaintext files are upgraded after unlock or on first read, and the upgrade waits for an IndexedDB commit.
 - Snapshot preparation now refuses to return a dataset unless App Lock encryption stays active through the final envelope, closing a plaintext fallback for future sync callers.
 - File-bearing JSON and full-install exports now run outside browser click callbacks so IndexedDB can deliver attachment reads and the backup can finish or report an error.
 - Unlocking a saved encrypted dataset now replays its IndexedDB journal after the WebCrypto callback returns, so a server-change reload can finish and show the signed-out setup for the new server.

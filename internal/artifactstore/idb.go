@@ -96,27 +96,22 @@ func (s *IDBStore) Put(id string, mime string, data []byte) error {
 
 	ch := make(chan error, 1)
 
-	var onSuccess, onError js.Func
-	onSuccess = js.FuncOf(func(_ js.Value, _ []js.Value) any {
-		defer onSuccess.Release()
-		defer onError.Release()
+	var onComplete, onAbort js.Func
+	onComplete = js.FuncOf(func(_ js.Value, _ []js.Value) any {
 		ch <- nil
 		return nil
 	})
-	onError = js.FuncOf(func(_ js.Value, args []js.Value) any {
-		defer onSuccess.Release()
-		defer onError.Release()
-		event := args[0]
-		msg := event.Get("target").Get("error").Get("message").String()
-		ch <- fmt.Errorf("artifactstore: idb put %s: %s", id, msg)
+	onAbort = js.FuncOf(func(_ js.Value, _ []js.Value) any {
+		ch <- fmt.Errorf("artifactstore: idb put %s aborted: %s", id, tx.Get("error"))
 		return nil
 	})
-
-	req := os.Call("put", jsObj, id)
-	req.Set("onsuccess", onSuccess)
-	req.Set("onerror", onError)
-
-	return <-ch
+	tx.Set("oncomplete", onComplete)
+	tx.Set("onabort", onAbort)
+	os.Call("put", jsObj, id)
+	err := <-ch
+	onComplete.Release()
+	onAbort.Release()
+	return err
 }
 
 // Get retrieves the blob for id. Returns ok=false when not found.
@@ -173,27 +168,22 @@ func (s *IDBStore) Delete(id string) error {
 
 	ch := make(chan error, 1)
 
-	var onSuccess, onError js.Func
-	onSuccess = js.FuncOf(func(_ js.Value, _ []js.Value) any {
-		defer onSuccess.Release()
-		defer onError.Release()
+	var onComplete, onAbort js.Func
+	onComplete = js.FuncOf(func(_ js.Value, _ []js.Value) any {
 		ch <- nil
 		return nil
 	})
-	onError = js.FuncOf(func(_ js.Value, args []js.Value) any {
-		defer onSuccess.Release()
-		defer onError.Release()
-		event := args[0]
-		msg := event.Get("target").Get("error").Get("message").String()
-		ch <- fmt.Errorf("artifactstore: idb delete %s: %s", id, msg)
+	onAbort = js.FuncOf(func(_ js.Value, _ []js.Value) any {
+		ch <- fmt.Errorf("artifactstore: idb delete %s aborted: %s", id, tx.Get("error"))
 		return nil
 	})
-
-	req := os.Call("delete", id)
-	req.Set("onsuccess", onSuccess)
-	req.Set("onerror", onError)
-
-	return <-ch
+	tx.Set("oncomplete", onComplete)
+	tx.Set("onabort", onAbort)
+	os.Call("delete", id)
+	err := <-ch
+	onComplete.Release()
+	onAbort.Release()
+	return err
 }
 
 // Usage queries navigator.storage.estimate() for bytes used. Returns 0, nil
