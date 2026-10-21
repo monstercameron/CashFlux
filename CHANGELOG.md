@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Block dev reload sockets in benchmark contexts and retain bounded startup failure diagnostics.
 - Reuse bounded, owned SMART results between the page strip and peek, preserving settings, page, time, language and data dependencies.
 - Verify frozen benchmark artifacts, require complete route content, and add representative nine-page interaction measurements and optional CPU profiles.
 - Move Allocate allocatable amounts into native preparation and retain failed income-prefill availability.

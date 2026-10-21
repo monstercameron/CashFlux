@@ -132,6 +132,20 @@ async function main() {
       timezoneId: "America/New_York",
     });
     const page = await context.newPage();
+    // A frozen artifact must not be replaced by the dev server's reload client
+    // when unrelated source work changes. This context has no cloud traffic.
+    await page.routeWebSocket(url => url.hostname === "127.0.0.1" || url.hostname === "localhost" || url.hostname === "[::1]", socket => socket.close());
+    const startupDiagnostics = { errors: [], failedRequests: [], badResponses: [] };
+    fatalReport.startupDiagnostics = startupDiagnostics;
+    page.on("pageerror", error => {
+      if (startupDiagnostics.errors.length < 12) startupDiagnostics.errors.push(String(error).slice(0, 400));
+    });
+    page.on("requestfailed", request => {
+      if (startupDiagnostics.failedRequests.length < 12) startupDiagnostics.failedRequests.push({ url: request.url().slice(0, 250), error: request.failure()?.errorText });
+    });
+    page.on("response", response => {
+      if (response.status() >= 400 && startupDiagnostics.badResponses.length < 12) startupDiagnostics.badResponses.push({ url: response.url().slice(0, 250), status: response.status() });
+    });
     // Keep all app traffic on loopback, including optional AI integrations. The
     // benchmark only reads the built-in sample pages; no paid/external request is
     // needed for route render measurements.
@@ -214,7 +228,19 @@ async function main() {
 
     const bootWallStart = Date.now();
     await page.goto(`${opts.baseUrl}/`, { waitUntil: "commit", timeout: 60_000 });
-    await page.waitForFunction(() => document.documentElement.getAttribute("data-app-ready") === "true", null, { timeout: 60_000 });
+    try {
+      await page.waitForFunction(() => document.documentElement.getAttribute("data-app-ready") === "true", null, { timeout: 60_000 });
+    } catch (error) {
+      startupDiagnostics.document = await page.evaluate(() => ({
+        url: location.href,
+        ready: document.documentElement.getAttribute("data-app-ready"),
+        runtimeAvailable: typeof Go === "function",
+        bootError: document.querySelector("#boot-error")?.textContent?.slice(0, 500),
+        scripts: [...document.scripts].filter(script => script.src).map(script => script.src),
+        wasmResources: performance.getEntriesByType("resource").filter(entry => entry.name.includes("wasm")).map(entry => ({ url: entry.name, durationMs: entry.duration })),
+      })).catch(diagnosticError => ({ error: String(diagnosticError).slice(0, 250) }));
+      throw error;
+    }
     if (wasmArtifact && (wasmDelivery.rawInterceptionCount !== 1 || wasmDelivery.gzipFallbackInterceptionCount !== 1 || wasmDelivery.unexpectedFallbackAttempts.length > 0)) {
       throw new Error(`WASM override delivery was not exclusive: ${JSON.stringify(wasmDelivery)}`);
     }
@@ -517,6 +543,7 @@ main().catch((error) => {
       failures: [{ phase: "startup", message: String(error).slice(0, 500) }],
       conditions: fatalReport.wasmDelivery ? { wasmDelivery: fatalReport.wasmDelivery } : undefined,
       cpuProfiling: fatalReport.cpuProfiling,
+      startupDiagnostics: fatalReport.startupDiagnostics,
       pages: [],
       note: "Benchmark did not complete startup; see failures for the recorded error.",
     };

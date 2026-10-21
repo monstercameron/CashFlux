@@ -56,6 +56,9 @@ this path are not normal server-negotiated startup measurements.
 Without these paired flags, it measures the server's artifact and records no
 verified artifact identity. It does not infer source provenance from Git HEAD. Record dirty source
 changes alongside it when the build predates their commits.
+Both benchmark scripts block loopback WebSocket connections inside their own
+contexts, so the live dev server cannot reload a frozen artifact mid-capture.
+The user's browser and the dev server retain their normal live reload behavior.
 The warm-up sweep is discarded; each measured sweep visits all nine pages in order,
 ending at Reports before the next sweep returns to Dashboard. Raw per-sweep samples
 are preserved beside route medians in the JSON. `--help` prints the options. Without
@@ -70,6 +73,8 @@ normalized main text, its SHA256 and raw samples; inconsistent visible content
 within a build fails the capture. Inspect content differences between builds
 before comparing timings. Route failures and missing samples also return a
 nonzero exit status.
+Startup failures retain bounded page errors, failed requests, HTTP error responses
+and loader-state diagnostics. A failed startup produces no route latency result.
 
 For representative interaction checks, use
 `e2e/perf/primary-interactions-benchmark.mjs` with the same artifact, hash, URL,

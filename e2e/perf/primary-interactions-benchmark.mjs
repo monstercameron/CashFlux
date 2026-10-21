@@ -55,6 +55,8 @@ async function main() {
       const measured = sweep >= opts.warmups;
       const context = await browser.newContext({ viewport: report.viewport, deviceScaleFactor: 1, reducedMotion: "reduce", serviceWorkers: "block", locale: "en-US", timezoneId: "America/New_York" });
       const page = await context.newPage();
+      // Isolate the frozen app from dev-server reload notifications.
+      await page.routeWebSocket(url => url.hostname === "127.0.0.1" || url.hostname === "localhost" || url.hostname === "[::1]", socket => socket.close());
       const origin = new URL(opts.baseUrl).origin;
       await page.route("**/*", route => {
         const u = new URL(route.request().url());
