@@ -50,11 +50,14 @@ type remoteComparison struct {
 // merging into it would do.
 func compareWithRemote(workspaceID string, policy datasetmerge.Policy) (remoteComparison, error) {
 	out := remoteComparison{WorkspaceID: workspaceID}
+	if activeWorkspaceID() != workspaceID {
+		return out, fmt.Errorf("open the workspace being recovered before comparing it")
+	}
 	app := appstate.Default
 	if app == nil {
 		return out, fmt.Errorf("no local dataset is loaded")
 	}
-	local, err := app.ExportJSONRedacted()
+	local, err := app.ExportJSONRedactedWithBlobs()
 	if err != nil {
 		return out, err
 	}
@@ -72,10 +75,14 @@ func compareWithRemote(workspaceID string, policy datasetmerge.Policy) (remoteCo
 		return out, nil
 	}
 	out.RemoteFound = true
-	out.RemoteBytes = len(resp.Dataset)
 	// The remote is the TARGET of a merge here: the user is deciding what to add
 	// to the copy the account already has.
-	_, report, err := datasetmerge.Merge(resp.Dataset, local, policy)
+	remote, err := hydrateBackendSyncDataset(ctx, pr.ServerURL, effectiveServerToken(pr), workspaceID, resp.Dataset)
+	if err != nil {
+		return out, fmt.Errorf("read server files for comparison: %w", err)
+	}
+	out.RemoteBytes = len(remote)
+	_, report, err := datasetmerge.Merge(remote, local, policy)
 	if err != nil {
 		return out, err
 	}
@@ -91,15 +98,18 @@ func compareWithRemote(workspaceID string, policy datasetmerge.Policy) (remoteCo
 // reasoning, and the same mechanism, as resolving an LWW conflict with "keep my
 // changes". The caller exports a backup first.
 func replaceRemoteWithLocal(workspaceID string) error {
+	if activeWorkspaceID() != workspaceID {
+		return fmt.Errorf("open the workspace being recovered before replacing it")
+	}
 	app := appstate.Default
 	if app == nil {
 		return fmt.Errorf("no local dataset is loaded")
 	}
-	local, err := app.ExportJSONRedacted()
+	local, err := app.ExportJSONRedactedWithBlobs()
 	if err != nil {
 		return err
 	}
-	return pushDatasetToWorkspace(workspaceID, local)
+	return pushDatasetToWorkspace(workspaceID, local, 0, true)
 }
 
 // mergeWithRemote pulls the target's snapshot, merges this device's records into
@@ -111,11 +121,14 @@ func replaceRemoteWithLocal(workspaceID string) error {
 // out of date about its own merge.
 func mergeWithRemote(workspaceID string, policy datasetmerge.Policy) (datasetmerge.Report, error) {
 	var report datasetmerge.Report
+	if activeWorkspaceID() != workspaceID {
+		return report, fmt.Errorf("open the workspace being recovered before merging it")
+	}
 	app := appstate.Default
 	if app == nil {
 		return report, fmt.Errorf("no local dataset is loaded")
 	}
-	local, err := app.ExportJSONRedacted()
+	local, err := app.ExportJSONRedactedWithBlobs()
 	if err != nil {
 		return report, err
 	}
@@ -129,23 +142,27 @@ func mergeWithRemote(workspaceID string, policy datasetmerge.Policy) (datasetmer
 	}
 	if !resp.Found || len(resp.Dataset) == 0 {
 		// Nothing on the other side: a merge into nothing is just this copy.
-		return report, pushDatasetToWorkspace(workspaceID, local)
+		return report, pushDatasetToWorkspace(workspaceID, local, resp.Workspace.Version, false)
 	}
-	merged, report, err := datasetmerge.Merge(resp.Dataset, local, policy)
+	remote, err := hydrateBackendSyncDataset(ctx, pr.ServerURL, effectiveServerToken(pr), workspaceID, resp.Dataset)
+	if err != nil {
+		return report, fmt.Errorf("read server files for merge: %w", err)
+	}
+	merged, report, err := datasetmerge.Merge(remote, local, policy)
 	if err != nil {
 		return report, err
 	}
-	if err := app.ImportJSON(merged); err != nil {
+	if err := app.ImportJSONWithBlobs(merged); err != nil {
 		return report, fmt.Errorf("merged copy could not be applied locally: %w", err)
 	}
 	// Re-render the surfaces reading the dataset; the autosave path writes it
 	// through to storage on the same revision bump.
 	uistate.BumpDataRevision()
-	return report, pushDatasetToWorkspace(workspaceID, merged)
+	return report, pushDatasetToWorkspace(workspaceID, merged, resp.Workspace.Version, false)
 }
 
 // pushDatasetToWorkspace sends a dataset as the workspace's authoritative copy.
-func pushDatasetToWorkspace(workspaceID string, dataset []byte) error {
+func pushDatasetToWorkspace(workspaceID string, dataset []byte, baseVersion int64, force bool) error {
 	workspaceID = strings.TrimSpace(workspaceID)
 	if workspaceID == "" {
 		return fmt.Errorf("no workspace to write to")
@@ -170,11 +187,14 @@ func pushDatasetToWorkspace(workspaceID string, dataset []byte) error {
 		},
 		Dataset:         prepared,
 		ClientUpdatedAt: time.Now().UTC().Format(time.RFC3339Nano),
-		// The user has explicitly chosen this copy, which is the same
-		// justification the "keep my changes" conflict resolution uses.
-		Force: true,
+		// Replacement is an explicit destructive choice. A merge is based on the
+		// version fetched above and must not erase another device's later edit.
+		Force: force, BaseVersion: baseVersion, BaseVersionSet: true,
 	}, &resp); err != nil {
 		return err
+	}
+	if !resp.Accepted {
+		return fmt.Errorf("server copy changed before this action finished (%s); compare again", resp.Reason)
 	}
 	saveSyncMeta(workspaceID, syncMeta{
 		UpdatedAt: resp.UpdatedAt, Version: resp.Version, Hash: datasetHash(dataset),

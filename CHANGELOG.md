@@ -19,6 +19,7 @@ and every commit updates this file under `Unreleased`.
 - The device-erasure audit now identifies retained workspace, queue, file, credential, and key records that the current “Erase everything” action does not remove, with acceptance criteria for a truthful full erase.
 
 ### Fixed
+- Workspace recovery now decrypts and downloads the server copy before comparing or merging, carries local file bytes into replacement uploads, and checks that the server accepted a version-bound merge. Its safety export includes active and inactive workspace files and must succeed before rebinding.
 - Every outgoing sync snapshot now strips legacy device AI keys at the final upload boundary, including explicit server-copy replacement and merge paths that bypass queued snapshot completion.
 - Legacy queued snapshots and inactive-workspace backup datasets now strip the device OpenAI key while gathering file bytes, including when no external file read is needed.
 - SQLite workspace exports now omit the device's OpenAI key, matching JSON exports; older SQLite files may still contain a key and should be handled as sensitive.

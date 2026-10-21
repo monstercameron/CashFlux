@@ -59,6 +59,15 @@ test("full backup restores files from two workspaces in another browser", async 
 
     await nav(source, "/settings");
     await source.locator(".settings-page .set-tab-strip button", { hasText: "Data" }).first().click();
+    for (const [index, filename] of [[0, "backup-first.png"], [1, "backup-second.png"]]) {
+      const [workspaceDownload] = await Promise.all([
+        source.waitForEvent("download"),
+        source.getByRole("button", { name: "Export", exact: true }).nth(index).click(),
+      ]);
+      const workspace = JSON.parse((await fs.readFile(await workspaceDownload.path())).toString("utf8"));
+      const artifact = JSON.parse(workspace.bundle["cashflux:dataset"]).artifacts.find((row) => row.name === filename);
+      expect(Buffer.from(artifact.bytes, "base64")).toEqual(image);
+    }
     const [backupDownload] = await Promise.all([
       source.waitForEvent("download"),
       source.getByRole("button", { name: "Back up everything" }).click(),

@@ -101,8 +101,13 @@ func RebindCard(p rebindProps) uic.Node {
 	})
 	onPick := uic.UseEvent(func(v string) { selected.Set(v) })
 	exportFirst := uic.UseEvent(func() {
-		exportWorkspace(activeWorkspaceID())
-		message.Set(uistate.T("sync.rebindBackupSaved"))
+		go func() {
+			if err := exportWorkspaceFile(localWS); err != nil {
+				message.Set(uistate.T("sync.mergeFailed", err.Error()))
+				return
+			}
+			message.Set(uistate.T("sync.rebindBackupSaved"))
+		}()
 	})
 	// C695: once a target is chosen and BOTH copies hold records, the user still
 	// has to say what happens to the server's copy. The choice is only raised
@@ -127,7 +132,10 @@ func RebindCard(p rebindProps) uic.Node {
 		message.Set("")
 		go func() {
 			defer busy.Set(false)
-			exportWorkspace(activeWorkspaceID())
+			if err := exportWorkspaceFile(c.WorkspaceID); err != nil {
+				message.Set(uistate.T("sync.mergeFailed", err.Error()))
+				return
+			}
 			if err := replaceRemoteWithLocal(c.WorkspaceID); err != nil {
 				message.Set(uistate.T("sync.mergeFailed", err.Error()))
 				return
@@ -145,7 +153,10 @@ func RebindCard(p rebindProps) uic.Node {
 		message.Set("")
 		go func() {
 			defer busy.Set(false)
-			exportWorkspace(activeWorkspaceID())
+			if err := exportWorkspaceFile(c.WorkspaceID); err != nil {
+				message.Set(uistate.T("sync.mergeFailed", err.Error()))
+				return
+			}
 			report, err := mergeWithRemote(c.WorkspaceID, policyOf())
 			if err != nil {
 				message.Set(uistate.T("sync.mergeFailed", err.Error()))
@@ -172,7 +183,10 @@ func RebindCard(p rebindProps) uic.Node {
 			defer busy.Set(false)
 			// Same rule as every other path here: export before repointing. This
 			// is the moment a person is least sure which copy is which.
-			exportWorkspace(localWS)
+			if err := exportWorkspaceFile(localWS); err != nil {
+				message.Set(uistate.T("sync.rebindFailed", err.Error()))
+				return
+			}
 			fresh := id.NewWithPrefix("ws")
 			if err := rebindLocalWorkspace(localWS, fresh, userID); err != nil {
 				message.Set(uistate.T("sync.rebindFailed", err.Error()))
@@ -200,7 +214,10 @@ func RebindCard(p rebindProps) uic.Node {
 			// The local copy is exported BEFORE anything is repointed. A rebind
 			// is the moment a person is least sure which copy is which, and an
 			// export costs one file.
-			exportWorkspace(localWS)
+			if err := exportWorkspaceFile(localWS); err != nil {
+				message.Set(uistate.T("sync.rebindFailed", err.Error()))
+				return
+			}
 			if err := rebindLocalWorkspace(localWS, target, userID); err != nil {
 				message.Set(uistate.T("sync.rebindFailed", err.Error()))
 				return
@@ -220,6 +237,10 @@ func RebindCard(p rebindProps) uic.Node {
 			comparing.Set(true)
 			cmp, cmpErr := compareWithRemote(target, policyOf())
 			comparing.Set(false)
+			if cmpErr != nil {
+				message.Set(uistate.T("sync.mergeFailed", cmpErr.Error()))
+				return
+			}
 			if cmpErr == nil && cmp.RemoteFound {
 				compare.Set(&cmp)
 				return
