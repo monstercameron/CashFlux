@@ -1833,6 +1833,9 @@ func (a *App) PutWorkflow(w workflow.Workflow) error {
 	if strings.TrimSpace(w.Name) == "" {
 		return fmt.Errorf("appstate: workflow needs a name")
 	}
+	if errs := workflow.Validate(w); len(errs) > 0 {
+		return fmt.Errorf("appstate: invalid workflow: %s", errs[0])
+	}
 	if err := a.store.PutWorkflow(w); err != nil {
 		return err
 	}
@@ -1968,6 +1971,9 @@ func (a *App) RunWorkflowOn(w workflow.Workflow, t domain.Transaction, dryRun bo
 }
 
 func (a *App) runWorkflow(w workflow.Workflow, ctx workflow.Context, dryRun bool) (workflow.Run, error) {
+	if errs := workflow.Validate(w); len(errs) > 0 {
+		return workflow.Run{}, fmt.Errorf("appstate: invalid workflow: %s", errs[0])
+	}
 	effects, matched, err := workflow.Plan(w, ctx)
 	if err != nil {
 		return workflow.Run{}, err

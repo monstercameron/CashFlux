@@ -1,3 +1,7 @@
+## 2026-10-21 - Checked workflow draft preparation
+
+Native draft preparation copies actions, fills only missing schedule/dedupe values and reuses canonical validation. Persistence and direct execution also validate the workflow. Full native workflow/appstate tests and vet pass; route wiring and composer host verification remain a separate slice.
+
 ## 2026-10-21 - Guard category deletion with complete references
 
 The native guard checks split transactions, multi-category budgets, goals, rules, recurring templates, learned tally and widget bindings through checked reads. Existing child reparent behavior remains. Full native appstate tests and vet pass, including reference-specific and child reparent tests. The Categories view migration is a separate slice.

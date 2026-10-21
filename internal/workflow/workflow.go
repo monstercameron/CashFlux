@@ -365,6 +365,9 @@ func ValidateTransferAction(a Action, triggerKind TriggerKind) error {
 	if a.TransferToAccountID == "" {
 		return fmt.Errorf("workflow: transfer action requires a destination account (TransferToAccountID)")
 	}
+	if a.TransferFromAccountID == a.TransferToAccountID {
+		return fmt.Errorf("workflow: transfer source and destination must be different accounts")
+	}
 	if a.TransferAmount <= 0 {
 		return fmt.Errorf("workflow: transfer amount must be positive, got %d", a.TransferAmount)
 	}
@@ -372,6 +375,24 @@ func ValidateTransferAction(a Action, triggerKind TriggerKind) error {
 		return fmt.Errorf("workflow: ActionTransfer is not permitted on TriggerTxnAdded (would loop — transfer legs are transactions)")
 	}
 	return nil
+}
+
+// PrepareDraft applies creation-time schedule defaults to a new workflow and
+// validates it. The supplied clock makes schedule setup deterministic in native
+// tests. Existing nonzero NextRun values and explicit dedupe keys are preserved.
+func PrepareDraft(w Workflow, now time.Time) (Workflow, []string) {
+	w.Actions = append([]Action(nil), w.Actions...)
+	if w.Trigger.Kind == TriggerScheduled {
+		if w.Trigger.NextRun.IsZero() {
+			w.Trigger.NextRun = w.Trigger.Cadence.Next(now)
+		}
+		for i := range w.Actions {
+			if w.Actions[i].Kind == ActionTransfer && w.Actions[i].DedupeKey == "" {
+				w.Actions[i].DedupeKey = "wf:" + w.ID + ":{period}"
+			}
+		}
+	}
+	return w, Validate(w)
 }
 
 func fallback(s, def string) string {
