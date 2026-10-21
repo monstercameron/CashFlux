@@ -1,3 +1,7 @@
+## 2026-10-20 - Check report per-hundred arithmetic
+
+The annual money-flow table multiplied minor units by 1,000 before division, and pooled categories used unchecked addition. Added wide-intermediate share calculations, checked magnitudes and totals, safe legacy fallback, and a native savings-share helper for the screen. Native reports tests cover representable large inputs, minimum signed values, pooled overflow, net overflow and ordinary savings.
+
 ## 2026-10-20 - Record second-pass page measurements
 
 Verified seven measured sweeps after one warm-up on each fixed artifact against the saved JSON. Content and DOM counts matched with zero route failures. Eight route medians favored the current artifact, but unrelated browser work changed machine load, so the report qualifies the results and records Notifications as slightly slower. Startup phases identify hydration as the largest measured segment; the default Needs you notification count is distinguished from the complete feed.
