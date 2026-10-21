@@ -16,6 +16,7 @@ and every commit updates this file under `Unreleased`.
 - The device-erasure audit now identifies retained workspace, queue, file, credential, and key records that the current “Erase everything” action does not remove, with acceptance criteria for a truthful full erase.
 
 ### Fixed
+- The existing session-erasure Wasm regression now checks the standalone eraser handoff when server revocation or local credential removal fails, matching the verified browser flow.
 - Device erasure now leaves the app before deleting browser storage, coordinates open tabs, removes recognized CashFlux databases and caches plus legacy local records, and acknowledges completion only after a fresh storage inventory. Offline erasure and blocked-deletion retry are covered in disposable browsers.
 - AI Settings now owns the server/direct route switch and the corresponding key controls. Server mode accepts a separate key only when explicitly saved to the server; direct mode shows the device key and endpoint. Cloud settings no longer duplicates server AI setup, and the route switch leaves encrypted sync connected.
 - Hosted Cloud settings now rely on the account gate and show only protection or first sync tasks. An authentication rejection triggers a fresh account check, and an old check cannot validate a replacement session. Portable server choices sit under Advanced while the selected destination remains visible.
