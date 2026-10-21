@@ -1,3 +1,7 @@
+## 2026-10-20 - Prune generated trees from live service watch
+
+Extracted shared source discovery for the foreground script and background job. The single-pass directory stack skips .tools, web, node_modules, .git and reparse-point directories before descent, preserves other actual source roots, and includes go.mod/go.sum timestamps. A pre-build stamp avoids recompiling unchanged services immediately after startup while retaining detection of edits during the initial build. Windows PowerShell 5.1 parsing and deterministic fixtures passed, including source roots, ignored trees, a junction, module stamps and empty roots. An optional single paired repository probe removed2562 ignored tool files from each poll; elapsed302.5ms versus135.8ms is a local wall-time observation, not CPU or sustained benchmark evidence. The max-timestamp polling contract is retained.
+
 ## 2026-10-20 - Constrain WASM validator fixture cleanup
 
 The isolated artifact-validator test now resolves its temporary directory and confirms strict containment under the system temporary root plus the expected GUID basename before removal. Windows PowerShell 5.1 validation passed. This keeps cleanup limited to the fixture it created.
