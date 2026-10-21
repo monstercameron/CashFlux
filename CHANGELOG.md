@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Assistant document search now reaches all retained artifact rows and reports bounded, source-linked evidence.
 - Expanded assistant data discovery to 76 typed collections, including financial decision settings, learning evidence, memory and retained transfer receipts.
 - Assistant record detail chunks now fit a complete encoded response byte budget while preserving lossless continuation.
 - Added checked saved-plan and forecast calculations with explicit overflow and resource-limit errors.

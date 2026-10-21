@@ -1,3 +1,7 @@
+## 2026-10-21 - Complete document search evidence
+
+Removed the silent 200-row corpus cutoff, preserved stable row identity and source counts, centered excerpts around matched text, and disclosed excerpt truncation and record-detail recovery. Search reads fresh bound storage and reports read errors explicitly. Native docqa tests and vet passed; both document-search WASM integration tests passed.
+
 ## 2026-10-21 - Complete assistant financial decision inputs
 
 Added fallible bound-store readers for eleven remaining financial configuration and historical evidence collections. Retained expired resolutions and transfer receipts are read without pruning or trigger installation. Native persistence/getter tests passed; all sixteen assistant data WASM test groups passed in integration pass10.

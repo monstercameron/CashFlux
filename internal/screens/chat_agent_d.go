@@ -191,7 +191,7 @@ func agToolsDocQA(app *appstate.App, base string, rates currency.Rates) []chatTo
 	return []chatTool{
 		{
 			spec: ai.FunctionTool("search_documents",
-				"Search the user's attached documents and artifacts (statements, policies, receipts) for the answer to a question like 'what was on the March statement?' or 'when does my insurance renew?'. Returns the most relevant source(s) with their text and a citation link to open each. Ground your answer ONLY in the returned text and cite the source with its Open link; if nothing relevant is returned, tell the user you don't see a document covering it rather than guessing.",
+				"Search all retained extracted document rows and artifact table rows (statements, policies, receipts) for a question. Returns up to three matching sources with the matching row number and a bounded excerpt, plus the total matching source count. Ground your answer ONLY in returned excerpts and cite the source with its Open link. For exact or additional rows, use data_manifest then query_data/read_record. If a read fails, the result reports unavailable; do not claim that no document matched.",
 				json.RawMessage(`{"type":"object","properties":{"question":{"type":"string"}},"required":["question"]}`)),
 			run: func(raw json.RawMessage) string {
 				var a struct {
@@ -200,7 +200,15 @@ func agToolsDocQA(app *appstate.App, base string, rates currency.Rates) []chatTo
 				if err := json.Unmarshal(raw, &a); err != nil || strings.TrimSpace(a.Question) == "" {
 					return "What would you like me to look up in your documents?"
 				}
-				corpus := docqa.BuildCorpus(app.Documents(), app.Artifacts())
+				docs, err := app.Store().ListDocuments()
+				if err != nil {
+					return "Document search is unavailable because retained documents could not be read."
+				}
+				arts, err := app.Store().ListArtifacts()
+				if err != nil {
+					return "Document search is unavailable because retained attachments could not be read."
+				}
+				corpus := docqa.BuildCorpus(docs, arts)
 				if len(corpus) == 0 {
 					return "You don't have any documents or attachments yet, so there's nothing to search. Add a statement or receipt first."
 				}
@@ -209,13 +217,19 @@ func agToolsDocQA(app *appstate.App, base string, rates currency.Rates) []chatTo
 					return "I don't see a document that covers that. I searched your attachments and none matched — I won't guess."
 				}
 				var b strings.Builder
-				b.WriteString("Relevant sources (ground your answer in these and cite the Open link):\n")
+				fmt.Fprintf(&b, "Relevant sources (%d matching sources; showing %d. Ground your answer in these excerpts and cite each Open link):\n", res.TotalHits, len(res.Hits))
 				for _, h := range res.Hits {
-					text := strings.TrimSpace(h.Source.Text)
-					if r := []rune(text); len(r) > 1200 {
-						text = string(r[:1200]) + "…"
+					row := ""
+					if h.Row > 0 {
+						row = fmt.Sprintf(" — row %d", h.Row)
 					}
-					fmt.Fprintf(&b, "\n### %s%s\n%s\n", h.Source.Title, openLink(h.Source.Route, h.Source.ID), text)
+					if h.ExcerptTruncated {
+						row += " (excerpt shortened)"
+					}
+					fmt.Fprintf(&b, "\n### %s%s%s\n%s\n", h.Source.Title, row, openLink(h.Source.Route, h.Source.ID), h.Excerpt)
+				}
+				if res.Truncated {
+					b.WriteString("\nMore matching sources were omitted from this short result. Use data_manifest, query_data, or read_record to inspect additional persisted rows.")
 				}
 				return strings.TrimRight(b.String(), "\n")
 			},
