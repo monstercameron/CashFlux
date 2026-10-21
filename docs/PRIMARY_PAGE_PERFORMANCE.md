@@ -223,3 +223,31 @@ DNS blocked: Dashboard Focus presets, an unusual-charge notification deep link,
 Goals alphabetical sorting, Reports Summary/Full and saved-view actions, and the
 all-routes smoke sweep. The log is `work/primary-pass3-focused.log` in the task
 workspace. This was a functional verification run, not another latency capture.
+
+## Native transaction-filter preparation benchmark
+
+The prepared matcher was compared with the frozen prior matcher retained in the
+parity tests. This isolates predicate preparation/matching and widened preset
+counts; it does not measure WASM, sorting, DOM updates or typing-to-paint latency.
+The synthetic rows and criteria are defined in
+`internal/txnfilter/compiled_bench_test.go`. The command used Go 1.26.9 on Windows
+ARM64 with one benchmark CPU, 25 iterations and three samples per case:
+
+```powershell
+go test -work ./internal/txnfilter -run '^$' -bench '^BenchmarkCompiledCriteriaPreparation$' -benchtime=25x -count=3 -cpu=1 -benchmem
+```
+
+For 10,000 rows, median elapsed time and allocations per iteration were:
+
+| Case | Prior parsing | Prepared | Allocations, prior → prepared |
+| --- | ---: | ---: | ---: |
+| Plain search | 3.377 ms | 0.839 ms | 30,016 → 10,018 |
+| Numeric search | 3.005 ms | 2.250 ms | 20,014 → 20,014 |
+| Multiple facets | 7.760 ms | 1.741 ms | 85,016 → 10,036 |
+| Widened preset counts | 25.170 ms | 6.044 ms | 230,066 → 30,096 |
+
+The same run includes 1,000-row cases. Raw results are in the task workspace at
+`work/primary-txnfilter-preparation-bench.log`. Other development work was active
+on the machine, so elapsed values are local observations rather than browser
+performance guarantees. The allocation reduction is direct evidence that the
+repeated parsing work was removed; numeric parsing primarily reduces CPU work.

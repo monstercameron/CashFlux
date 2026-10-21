@@ -1,3 +1,7 @@
+## 2026-10-20 - Measure native transaction-filter preparation
+
+Ran three 25-iteration samples at one benchmark CPU for 1k/10k synthetic rows. At 10k rows median widened preset counting fell from 25.170 ms to 6.044 ms and allocations from 230066 to 30096; plain and multi-facet cases also reduced allocations, while numeric search reduced elapsed work with unchanged allocations. Saved raw results and exact command, documented synthetic/native scope and concurrent-development timing caveats. These numbers do not claim browser or end-to-end typing latency improvements.
+
 ## 2026-10-20 - Defer Accounts history and projection work until disclosure
 
 Compact account rows no longer compute cash flow, three history windows or a projection. An opened detail panel builds only its selected series from an immutable chronological index, while projection inputs reuse captured recurring rows and exact snapshot balances. Bounded caches include app/data identity, currency/rates, exact occurrence time and local history boundaries; invalid ledger balances show unavailable status without a plausible curve or zero-start projection. Native parity tests pass for history windows, intraday recurring cutoffs and invalid data; all three actual Accounts-host/cache regressions pass, related native gates pass and a main WASM preflight builds.
