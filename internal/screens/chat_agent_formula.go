@@ -262,7 +262,7 @@ func assistantFormulaPreflight(app *appstate.App) error {
 		{"transactions", func() error { _, e := s.ListTransactions(); return e }},
 		{"transaction links", func() error { _, e := s.ListTxnLinks(); return e }},
 		{"members", func() error { _, e := s.ListMembers(); return e }},
-		{"categories", func() error { _, e := s.ListCategories(); return e }},
+		{"categories", func() error { _, e := app.CategoriesChecked(); return e }},
 		{"budgets", func() error { _, e := s.ListBudgets(); return e }},
 		{"goals", func() error { _, e := s.ListGoals(); return e }},
 		{"tasks", func() error { _, e := s.ListTasks(); return e }},

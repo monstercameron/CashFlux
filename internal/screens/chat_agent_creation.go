@@ -187,7 +187,7 @@ func prepareAssistantTransaction(app *appstate.App, raw json.RawMessage) *assist
 	p.draft = domain.Transaction{ID: id.New(), AccountID: p.account.ID, Date: when, Payee: payee, Desc: desc, Amount: booked, Source: domain.TxnSourceAssistant}
 	categoryLabel := "uncategorized (category_id empty)"
 	if strings.TrimSpace(a.CategoryID) != "" || strings.TrimSpace(a.Category) != "" {
-		all, err := app.Store().ListCategories()
+		all, err := app.CategoriesChecked()
 		if err != nil {
 			p.err = err
 			return p
@@ -238,7 +238,7 @@ func prepareAssistantCategory(app *appstate.App, raw json.RawMessage) *assistant
 		p.err = issues
 		return p
 	}
-	all, err := app.Store().ListCategories()
+	all, err := app.CategoriesChecked()
 	if err != nil {
 		p.err = err
 		return p
@@ -318,7 +318,7 @@ func prepareAssistantCategorization(app *appstate.App, raw json.RawMessage) *ass
 		return p
 	}
 	p.categorize = a
-	all, err := app.Store().ListCategories()
+	all, err := app.CategoriesChecked()
 	if err != nil {
 		p.err = err
 		return p

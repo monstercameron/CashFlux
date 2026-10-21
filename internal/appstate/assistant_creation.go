@@ -194,7 +194,7 @@ func (a *App) CreateCategoryExpected(draft domain.Category) (domain.Category, bo
 	if issues := validate.ValidateCategory(draft); !issues.OK() {
 		return domain.Category{}, false, issues
 	}
-	all, err := a.store.ListCategories()
+	all, err := a.CategoriesChecked()
 	if err != nil {
 		return domain.Category{}, false, err
 	}

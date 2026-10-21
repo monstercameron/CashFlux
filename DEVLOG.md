@@ -1,3 +1,7 @@
+## 2026-10-21 - Fallible canonical category ordering
+
+Added CategoriesChecked beside the existing cached Categories reader; both share canonical catname ordering. Strict Assistant creation, finance and formula readers now use the fallible seam. The full native suite identified the ordering ratchet violation; targeted ordering, natural-sort/closed-store and screen-copy gates passed after this correction. No lint baseline or gate was weakened.
+
 ## 2026-10-21 - Exact Assistant evidence selectors
 
 Aligned citation scopes with the current data, report, planning, account and formula schemas. Structured IDs/filters remain compact exact JSON, decimal numeric lexemes retain full precision, and opaque continuation tokens get a readable marker. Tool-result evidence is retained verbatim. Native toolcite tests and vet passed.

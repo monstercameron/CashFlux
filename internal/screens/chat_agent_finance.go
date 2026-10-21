@@ -53,7 +53,7 @@ func assistantFinanceForCall(app *appstate.App, fallbackBase string, currentScop
 	if err != nil {
 		return assistantdata.Finance{}, &assistantFinanceReadError{Collection: "transactions", Err: err}
 	}
-	categories, err := s.ListCategories()
+	categories, err := app.CategoriesChecked()
 	if err != nil {
 		return assistantdata.Finance{}, &assistantFinanceReadError{Collection: "categories", Err: err}
 	}

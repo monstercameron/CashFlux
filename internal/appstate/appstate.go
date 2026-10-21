@@ -470,10 +470,24 @@ func (a *App) Accounts() []domain.Account {
 // not once per render.
 func (a *App) Categories() []domain.Category {
 	return a.reads.categories.get(a.store.Rev(), func() []domain.Category {
-		v, err := a.store.ListCategories()
+		v, err := a.CategoriesChecked()
 		a.logErr("categories", err)
-		return catname.Sorted(v)
+		return v
 	})
+}
+
+// CategoriesChecked reads current categories in the canonical natural order.
+// Unlike Categories, it preserves storage failures for callers that must
+// distinguish unavailable data from a genuinely empty category collection.
+func (a *App) CategoriesChecked() ([]domain.Category, error) {
+	if a == nil || a.store == nil {
+		return nil, fmt.Errorf("read categories: local dataset is unavailable")
+	}
+	rows, err := a.store.ListCategories()
+	if err != nil {
+		return nil, fmt.Errorf("read categories: %w", err)
+	}
+	return catname.Sorted(rows), nil
 }
 
 // Transactions returns the ledger snapshot for the current store revision.
