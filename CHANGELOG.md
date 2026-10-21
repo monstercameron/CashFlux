@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Assistant citations identify data collections, record selectors and calculation scope without rounding decimal arguments.
 - Formula facts preserve unavailable FX and overflow for account flows, recurring amounts and essential spending.
 - Assistant task/account creation rejects invalid drafts before approval and preserves exact money and selected defaults.
 - Assistant transaction/category creation and bulk categorization use complete fixed previews and atomic expected-state writes.

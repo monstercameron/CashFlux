@@ -1,3 +1,7 @@
+## 2026-10-21 - Exact Assistant evidence selectors
+
+Aligned citation scopes with the current data, report, planning, account and formula schemas. Structured IDs/filters remain compact exact JSON, decimal numeric lexemes retain full precision, and opaque continuation tokens get a readable marker. Tool-result evidence is retained verbatim. Native toolcite tests and vet passed.
+
 ## 2026-10-21 - Checked account and recurring formula facts
 
 Added a checked account-flow reducer sharing the existing legacy fold and reused checked recurring cadence/FX arithmetic. Invalid facts omit only dependent variables; unavailable dynamic names are reserved against custom-molecule shadowing. Account free/overearmarked differences stay in exact minor units before formatting, and essential-month totals use an additive checked emergencyfund Basis API. Native accountflow, engineenv and emergencyfund tests passed exit0 with -work; vet and diff checks passed. Prior ordinary test bodies passed but Windows refused temporary-executable cleanup, so the retained-work run supplied the clean process gate.
