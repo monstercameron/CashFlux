@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/testkit/render"
-	uic "github.com/monstercameron/GoWebComponents/v5/ui"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/testkit/render"
+	uic "github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // CSS is a public contract here: the modal and sheet animate, respect both

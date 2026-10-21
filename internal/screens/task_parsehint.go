@@ -31,9 +31,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/smartai"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // The free and paid halves of SM-14.
@@ -67,11 +67,11 @@ func taskParseHint(props taskParseHintProps) ui.Node {
 	raw := strings.TrimSpace(props.Raw)
 	local := duedate.Parse(raw, time.Now())
 
-	backendAI := app != nil && aiProviderConfigured(app, uistate.BackendConnectionActive(pr))
+	backendAI := app != nil && aiProviderConfigured(app, uistate.BackendAIActive(pr))
 	aiEnabled := backendAI && settings.IsEnabled(taskParseAICode) && !settings.IsMuted(taskParseAICode)
 	aiConn := smartAIConn{}
 	if app != nil {
-		aiConn = resolveAIConn(app, uistate.BackendConnectionActive(pr), pr.ServerURL, pr.ServerToken)
+		aiConn = resolveAIConn(app, uistate.BackendAIActive(pr), pr.ServerURL, pr.ServerToken)
 	}
 
 	applyLocal := func() {

@@ -164,7 +164,7 @@ func BuildBridge(in Input) (Bridge, error) {
 	legs := map[LegKind]int64{}
 	contribs := map[LegKind][]Contributor{}
 	for _, a := range in.Accounts {
-		if a.Archived {
+		if !a.CountsInNetWorth() {
 			continue
 		}
 		// Account-currency sums: balances at each cutoff and the window's activity

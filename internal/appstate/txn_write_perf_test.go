@@ -204,6 +204,7 @@ func TestTCS2RestoreRefusesInterveningRelationshipEdit(t *testing.T) {
 
 func TestTCS2ReceiptAndReferenceAreAtomic(t *testing.T) {
 	a, out, _ := seedTransferPair(t)
+	a.SetBlobStore(newMemBlobStore())
 	art := domain.Artifact{ID: "receipt", Name: "Receipt", Kind: "image", MIME: "image/png", Bytes: []byte{1, 2, 3}, Size: 3}
 	if err := a.AttachTransactionArtifact("missing", art); err == nil {
 		t.Fatal("attached to a missing transaction")
@@ -218,8 +219,22 @@ func TestTCS2ReceiptAndReferenceAreAtomic(t *testing.T) {
 	if len(row.Attachments) != 1 || row.Attachments[0].ArtifactID != art.ID {
 		t.Fatal("receipt reference missing")
 	}
-	if err := a.AttachTransactionArtifact(out.ID, art); err == nil {
+	stored, ok, err := a.Store().GetArtifact(art.ID)
+	if err != nil || !ok || len(stored.Bytes) != 0 {
+		t.Fatalf("receipt bytes remained in the dataset: %+v, %v", stored, err)
+	}
+	blob, err := a.GetBlobForArtifact(art.ID)
+	if err != nil || !reflect.DeepEqual(blob, art.Bytes) {
+		t.Fatalf("stored receipt bytes = %v, %v", blob, err)
+	}
+	duplicate := art
+	duplicate.Bytes = []byte{9, 8, 7}
+	if err := a.AttachTransactionArtifact(out.ID, duplicate); err == nil {
 		t.Fatal("overwrote an existing receipt id")
+	}
+	blob, err = a.GetBlobForArtifact(art.ID)
+	if err != nil || !reflect.DeepEqual(blob, art.Bytes) {
+		t.Fatalf("rejected receipt overwrote existing local bytes: %v, %v", blob, err)
 	}
 	row, _ = a.TransactionByID(out.ID)
 	if len(row.Attachments) != 1 {

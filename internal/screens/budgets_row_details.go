@@ -25,9 +25,9 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // budgetRowCoverage builds the row coverage section.
@@ -323,22 +323,27 @@ func budgetRowGoalFunding(lastMonthMode bool, s budgeting.Status, props budgetRo
 		payAnchor := budgetPayCycleAnchor(uistate.LoadPrefs().PayCycleAnchor)
 		pStart, pEnd := budgeting.PeriodRangeAnchored(s.Budget.Period, anchor,
 			uistate.LoadPrefs().WeekStartWeekday(), payAnchor)
-		split := memoGoalFunded(app, dataRevision, s.Budget.ID, pStart, pEnd, func() goalfunded.Split {
+		goalFunding := memoGoalFunded(app, dataRevision, s.Budget.ID, pStart, pEnd, func() (goalfunded.Split, error) {
 			transactions := budgetLedgerForApp(app)
 			summary, err := budgetGoalFundedSummary(s.Budget, transactions, app.Categories(), pStart, pEnd,
 				currency.Rates{Base: base, Rates: app.Settings().FXRates})
 			if err != nil {
 				slog.Error("calculate goal-funded budget contributions", "budget_id", s.Budget.ID, "error", err)
-				return goalfunded.Split{}
+				return goalfunded.Split{}, err
 			}
-			return summary
+			return summary, nil
 		})
-		if split.HasFunded() {
+		if goalFunding.err != nil {
+			fundedLine = P(css.Class("budget-sub", tw.TextFaint), Attr("role", "status"),
+				Attr("data-testid", "budget-goalfunded-unavailable-"+s.Budget.ID), uistate.T("budgets.fundingUnavailable"))
+		} else if goalFunding.split.HasFunded() {
+			split := goalFunding.split
 			rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
 			ordinaryOver, err := budgetGoalFundedOverBy(split, s.Limit, rates)
 			if err != nil {
 				slog.Error("convert goal-funded budget limit", "budget_id", s.Budget.ID, "error", err)
-				return Fragment(), ""
+				return P(css.Class("budget-sub", tw.TextFaint), Attr("role", "status"),
+					Attr("data-testid", "budget-goalfunded-unavailable-"+s.Budget.ID), uistate.T("budgets.fundingUnavailable")), ""
 			}
 			allocations := memoBudgetGoalFunding(app, dataRevision, pStart, pEnd, func() []goalfunded.BudgetFunding {
 				return budgetGoalFundingForPeriod(app, pStart, pEnd, rates)
@@ -354,7 +359,8 @@ func budgetRowGoalFunding(lastMonthMode bool, s budgeting.Status, props budgetRo
 				fundedAmount, err = money.Add(fundedAmount, allocation.AmountMinor)
 				if err != nil {
 					slog.Error("sum allocated goal funding", "budget_id", s.Budget.ID, "error", err)
-					return Fragment(), ""
+					return P(css.Class("budget-sub", tw.TextFaint), Attr("role", "status"),
+						Attr("data-testid", "budget-goalfunded-unavailable-"+s.Budget.ID), uistate.T("budgets.fundingUnavailable")), ""
 				}
 				mismatch = mismatch || allocation.PurposeMismatch
 				allocatedNames = append(allocatedNames, allocation.GoalName)
@@ -533,7 +539,10 @@ func budgetGoalFundedOverBy(split goalfunded.Split, limit money.Money, rates cur
 	if err != nil {
 		return money.Money{}, err
 	}
-	over, _ := split.OverBy(limitBase.Amount)
+	over, _, err := split.OverByChecked(limitBase.Amount)
+	if err != nil {
+		return money.Money{}, err
+	}
 	return money.New(over, rates.Base), nil
 }
 
@@ -543,7 +552,7 @@ func budgetGoalFundedSummary(b domain.Budget, transactions []domain.Transaction,
 	if err != nil {
 		return goalfunded.Split{}, err
 	}
-	return goalfunded.Summarize(contributors, nil, start, end, rates), nil
+	return goalfunded.SummarizeChecked(contributors, nil, start, end, rates)
 }
 
 // budgetRowNotesProps carries the explicit inputs for budgetRowNotes.

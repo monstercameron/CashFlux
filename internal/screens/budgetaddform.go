@@ -7,6 +7,7 @@ package screens
 import (
 	"log/slog"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -21,9 +22,9 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 func budgetCountKey(prefix string, count int) string { return budgetform.CountKey(prefix, count) }
@@ -192,6 +193,10 @@ func budgetAddHandlers(state ui.State[budgetform.Draft], errors ui.State[string]
 func budgetAddSubmit(state ui.State[budgetform.Draft], errors ui.State[string], cp budgetAddFormComponentProps, base string) {
 	app := cp.App
 	p := budgetform.Prepare(state.Get(), app.Categories(), app.Budgets(), app.CustomFieldDefsFor("budget"), id.New(), id.New())
+	if len(p.CustomIssues) > 0 {
+		errors.Set(strings.Join(p.CustomIssues, " "))
+		return
+	}
 	if p.ProblemKey != "" {
 		if p.ProblemKey == "budgets.varNameTaken" {
 			errors.Set(uistate.T(p.ProblemKey, p.CollisionName))

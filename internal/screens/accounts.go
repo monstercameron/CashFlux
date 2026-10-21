@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/monstercameron/CashFlux/internal/accountview"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -19,9 +20,9 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // accounts.go holds the shared helpers for the accounts surface. The page itself is
@@ -120,10 +121,14 @@ func currencyOptions(app *appstate.App, selected string) []uiw.SelectOption {
 
 // netWorthDeltaLine renders the month-to-date net-worth change as a small trend
 // subtitle under the hero figure: a colored ↑/↓ glyph + the signed amount + "this
-// month" (G3 §3). A zero or unknown delta reads as a calm "no change" caption.
+// month" (G3 §3). Unknown arithmetic gets an unavailable caption, distinct from
+// a known zero delta.
 func netWorthDeltaLine(delta money.Money, have bool) ui.Node {
-	if !have || delta.Amount == 0 {
-		return Span(css.Class("stat-sub", tw.TextDim), uistate.T("accounts.noChangeMonth"))
+	if !have {
+		return Span(css.Class("stat-sub", tw.TextDim), Attr("data-testid", "acct-networth-delta-unavailable"), uistate.T("accounts.deltaUnavailable"))
+	}
+	if delta.Amount == 0 {
+		return Span(css.Class("stat-sub", tw.TextDim), Attr("data-testid", "acct-networth-delta-zero"), uistate.T("accounts.noChangeMonth"))
 	}
 	up := delta.Amount > 0
 	tone, glyph := tw.TextUp, icon.TrendingUp
@@ -132,7 +137,11 @@ func netWorthDeltaLine(delta money.Money, have bool) ui.Node {
 	}
 	abs := delta
 	if !up {
-		abs = money.New(-delta.Amount, delta.Currency)
+		var err error
+		abs, err = delta.AbsChecked()
+		if err != nil {
+			return Span(css.Class("stat-sub", tw.TextDim), Attr("data-testid", "acct-networth-delta-unavailable"), uistate.T("accounts.deltaUnavailable"))
+		}
 	}
 	sign := "+"
 	if !up {
@@ -189,4 +198,19 @@ func accountMeta(a domain.Account, bal money.Money) string {
 		}
 	}
 	return meta
+}
+
+// accountSnapshot shares the ledger index between account page tiles. Store and
+// app identity are captured by revKey; filters never mutate this snapshot.
+var accountSnapshotCache = newViewCache[accountview.Snapshot](1)
+
+func accountSnapshot(app *appstate.App) accountview.Snapshot {
+	return memoByRev(accountSnapshotCache, revKey(app), func() accountview.Snapshot {
+		accounts := app.Accounts()
+		byAccount := make(map[string][]domain.Transaction, len(accounts))
+		for _, account := range accounts {
+			byAccount[account.ID] = app.TransactionsByAccount(account.ID)
+		}
+		return accountview.BuildIndexed(accounts, app.Transactions(), byAccount)
+	})
 }

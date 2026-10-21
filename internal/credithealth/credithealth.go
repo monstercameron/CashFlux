@@ -259,6 +259,10 @@ type Inputs struct {
 	// Transactions are all household transactions, used for the on-time payment proxy.
 	Transactions []domain.Transaction
 
+	// TransactionsErr marks an unavailable source for checked evaluation. It
+	// never substitutes an unread ledger for a known empty payment history.
+	TransactionsErr error
+
 	// Now is the reference time for "past 3 months" and age calculations.
 	Now time.Time
 }

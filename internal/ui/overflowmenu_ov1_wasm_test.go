@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/testkit/render"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/testkit/render"
 )
 
 func TestOV1OverflowMenuHidesExtraContentUntilOpen(t *testing.T) {

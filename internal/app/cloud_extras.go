@@ -5,34 +5,32 @@
 package app
 
 import (
-	"github.com/monstercameron/CashFlux/internal/appstate"
+	"strings"
+
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	uic "github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	uic "github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
-func cloudAISettings() uic.Node {
+func serverAIKeySettings() uic.Node {
 	atom := uistate.UsePrefs()
 	notice := uistate.UseNotice()
-	keySet := uic.UseState(lsGet(cloudAIKeySetKey) != "")
+	keyDraft := uic.UseState("")
+	result := uic.UseState("")
 	busy := uic.UseState(false)
-	onError := func(msg string) { busy.Set(false); notice.Set(notice.Get().With(msg, true)) }
+	onError := func(msg string) { busy.Set(false); result.Set(""); notice.Set(notice.Get().With(msg, true)) }
 	upload := func() {
-		if busy.Get() {
+		if busy.Get() || strings.TrimSpace(keyDraft.Get()) == "" {
 			return
 		}
 		busy.Set(true)
-		key := ""
-		if a := appstate.Default; a != nil {
-			key = a.Settings().OpenAIKey
-		}
 		p := atom.Get()
-		uploadOpenAIKeyToBackend(p.ServerURL, effectiveServerToken(p), key, func() {
-			lsSet(cloudAIKeySetKey, "1")
-			keySet.Set(true)
+		uploadOpenAIKeyToBackend(p.ServerURL, effectiveServerToken(p), keyDraft.Get(), func() {
+			keyDraft.Set("")
+			result.Set(uistate.T("settings.serverKeyStored"))
 			busy.Set(false)
 		}, onError)
 	}
@@ -43,17 +41,19 @@ func cloudAISettings() uic.Node {
 		busy.Set(true)
 		p := atom.Get()
 		removeOpenAIKeyFromBackend(p.ServerURL, effectiveServerToken(p), func() {
-			lsSet(cloudAIKeySetKey, "")
-			keySet.Set(false)
+			keyDraft.Set("")
+			result.Set(uistate.T("settings.serverKeyRemoved"))
 			busy.Set(false)
 		}, onError)
 	}
 	return Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap2),
-		H3(css.Class(tw.Text15, tw.FontSemibold), uistate.T("cloud1.aiTitle")),
 		P(css.Class(tw.Text14, tw.TextDim), uistate.T("cloud1.aiHint")),
-		If(keySet.Get(), Fragment(P(uistate.T("settings.serverKeySet")),
-			uic.CreateElement(cloudAction, cloudActionProps{Label: uistate.T("settings.removeKey"), TestID: "cloud-ai-remove", OnClick: remove, Disabled: busy.Get()}))),
-		If(!keySet.Get(), uic.CreateElement(cloudAction, cloudActionProps{Label: uistate.T("settings.uploadKey"), TestID: "cloud-ai-upload", OnClick: upload, Disabled: busy.Get()})),
+		uiw.TextInput(uiw.TextFieldProps{Class: "set-input", Value: keyDraft.Get(), OnInput: func(v string) { keyDraft.Set(v); result.Set("") },
+			AriaLabel: uistate.T("settings.aiServerKeyPlaceholder"), Placeholder: uistate.T("settings.aiServerKeyPlaceholder"),
+			Extra: []any{Type("password"), Attr("autocomplete", "off"), Attr("data-testid", "settings-ai-server-key")}}),
+		uic.CreateElement(cloudAction, cloudActionProps{Label: uistate.T("settings.uploadKey"), TestID: "settings-ai-server-save", OnClick: upload, Disabled: busy.Get() || strings.TrimSpace(keyDraft.Get()) == "", Kind: cloudActionPrimary}),
+		uic.CreateElement(cloudAction, cloudActionProps{Label: uistate.T("settings.removeKey"), TestID: "settings-ai-server-remove", OnClick: remove, Disabled: busy.Get()}),
+		If(result.Get() != "", P(css.Class(tw.Text14, tw.TextDim), Attr("role", "status"), result.Get())),
 	)
 }
 

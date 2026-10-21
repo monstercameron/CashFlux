@@ -10,6 +10,7 @@ $projectRoot = Split-Path -Parent $PSScriptRoot
 $binDir = Join-Path $projectRoot "web\bin"
 $servicesOut = Join-Path $binDir "services.wasm"
 $servicesTmp = Join-Path $binDir "services.wasm.dev-tmp"
+. (Join-Path $PSScriptRoot "devwatch.ps1")
 
 New-Item -ItemType Directory -Force -Path $binDir | Out-Null
 
@@ -36,17 +37,16 @@ function Build-ServicesWasm {
 }
 
 Set-Location -LiteralPath $projectRoot
+$initialSourceStamp = Get-CashFluxDevSourceSnapshot -Root $projectRoot
 Build-ServicesWasm
 
-$watchJob = Start-Job -ArgumentList $projectRoot -ScriptBlock {
-    param($root)
+$watchJob = Start-Job -ArgumentList $projectRoot, $initialSourceStamp.LastWriteTimeUtc.Ticks -ScriptBlock {
+    param($root, $initialStampTicks)
     Set-Location -LiteralPath $root
-    $lastStamp = [DateTime]::MinValue
+    . (Join-Path $root "scripts\devwatch.ps1")
+    $lastStamp = [DateTime]::new([long]$initialStampTicks, [DateTimeKind]::Utc)
     while ($true) {
-        $stamp = Get-ChildItem -Path $root -Recurse -Filter "*.go" |
-            Where-Object { $_.FullName -notmatch "[\\/](web|node_modules|\.git)[\\/]" } |
-            Sort-Object LastWriteTimeUtc -Descending |
-            Select-Object -First 1 -ExpandProperty LastWriteTimeUtc
+        $stamp = (Get-CashFluxDevSourceSnapshot -Root $root).LastWriteTimeUtc
         if ($stamp -gt $lastStamp) {
             $lastStamp = $stamp
             $env:GOOS = "js"

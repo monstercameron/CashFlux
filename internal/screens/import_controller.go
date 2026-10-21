@@ -26,11 +26,11 @@ import (
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/router"
-	"github.com/monstercameron/GoWebComponents/v5/state"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/router"
+	"github.com/monstercameron/GoWebComponents/v7/state"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 type documentsController struct {
@@ -622,7 +622,7 @@ func (c *documentsController) useChooseImage() {
 	c.chooseImage = ui.UseEvent(func() { c.chooseImportFile("receipt") })
 	c.settings = c.app.Settings()
 	c.pr = uistate.UsePrefs().Get().Normalize()
-	c.useBackendAI = uistate.BackendConnectionActive(c.pr)
+	c.useBackendAI = uistate.BackendAIActive(c.pr)
 	c.aiModel = c.settings.OpenAIModel
 	if c.aiModel == "" {
 		c.aiModel = "gpt-5.4-mini"
@@ -729,12 +729,13 @@ func (c *documentsController) useRemoveDraft() {
 	c.reviewCur = reviewCurrencyFor(c.app, c.accounts, c.importAcct.Get())
 	c.recBaseCur = c.reviewCur
 	c.recDec = currency.Decimals(c.reviewCur)
+	receiptMatchDate := importdraft.ReceiptMatchDate(c.rows, time.Now())
 	c.receiptCands = ui.UseMemo(func() []receiptmatch.Candidate {
 		if !c.receiptMode.Get() {
 			return nil
 		}
-		return importdraft.ReceiptCandidates(c.rows, c.receiptMerchant.Get(), c.receiptTotal.Get(), c.recDec, c.app.Transactions(), time.Now())
-	}, c.app, c.app.Rev(), c.model.Revision, len(c.rows), c.receiptMode.Get(), c.receiptTotal.Get(), c.receiptMerchant.Get(), c.reviewCur)
+		return importdraft.ReceiptCandidates(c.rows, c.receiptMerchant.Get(), c.receiptTotal.Get(), c.recDec, c.app.Transactions(), receiptMatchDate)
+	}, c.app, c.app.Rev(), c.model.Revision, len(c.rows), c.receiptMode.Get(), c.receiptTotal.Get(), c.receiptMerchant.Get(), c.reviewCur, receiptMatchDate)
 	c.batch = ui.UseMemo(func() appstate.StagedImport {
 		batch, err := c.app.Stage(c.documentKind(), c.rows, c.importAcct.Get())
 		if err != nil {

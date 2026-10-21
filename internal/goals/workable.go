@@ -40,11 +40,14 @@ func WorkableDate(remainingMinor, monthlyMinor int64, from time.Time) (time.Time
 	if monthlyMinor <= 0 {
 		return time.Time{}, false
 	}
-	months := int((remainingMinor + monthlyMinor - 1) / monthlyMinor) // ceil
+	months := remainingMinor / monthlyMinor
+	if remainingMinor%monthlyMinor != 0 {
+		months++
+	}
 	if months > maxWorkableMonths {
 		return time.Time{}, false
 	}
-	return dateutil.AddMonths(dateutil.MonthStart(from), months), true
+	return dateutil.AddMonths(dateutil.MonthStart(from), int(months)), true
 }
 
 // WorkableTargetDate is WorkableDate for a whole goal, using its fair share of

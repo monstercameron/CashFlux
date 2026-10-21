@@ -17,8 +17,8 @@ import (
 	"github.com/monstercameron/CashFlux/internal/statement"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 
-	"github.com/monstercameron/GoWebComponents/v5/testkit/render"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/testkit/render"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 func TestImportWizardUsesCSVQuotedFieldsAndMultilineRecordsIMPC(t *testing.T) {
@@ -45,8 +45,11 @@ func TestImportRowLimitAndArtifactFileCapsIMPC(t *testing.T) {
 	if got := artifactFileLimit("statement.csv", "text/csv"); got != 25*1024*1024 {
 		t.Fatalf("CSV cap = %d", got)
 	}
-	if got := artifactFileLimit("statement.pdf", "application/pdf"); got != 45*1024*1024 {
+	if got := artifactFileLimit("statement.pdf", "application/pdf"); got != 23*1024*1024 {
 		t.Fatalf("PDF cap = %d", got)
+	}
+	if got := artifactFileLimit("statement.json", "application/json"); got != 45*1024*1024 {
+		t.Fatalf("JSON cap = %d", got)
 	}
 }
 

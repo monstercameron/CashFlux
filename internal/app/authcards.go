@@ -18,10 +18,10 @@ import (
 	"github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/state"
-	uic "github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/state"
+	uic "github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // passwordAuthMode is which of the two password-fallback sub-forms
@@ -117,6 +117,15 @@ func persistAuthSessionWithCommitThen(current prefs.Prefs, serverURL string, pai
 					p = p.Normalize()
 				}
 				commit(p, func(err error) {
+					if err == nil {
+						// A rejected credential from the outgoing session must not
+						// keep the newly saved account at the sign-in step.
+						if st := loadSyncStatus(); st.AuthFailed {
+							st.AuthFailed = false
+							st.Message = ""
+							setSyncStatus(st)
+						}
+					}
 					done(err)
 					if err == nil && startSync {
 						reloadAfterIdentityChange("sign-in")

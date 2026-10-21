@@ -2,7 +2,7 @@
 
 package tw
 
-import "github.com/monstercameron/GoWebComponents/v5/css"
+import "github.com/monstercameron/GoWebComponents/v7/css"
 
 // ColorClass maps a color-token name (the old "text-up"/"bg-warn"/… utility class
 // strings that are computed dynamically into tones) to a styled class. It returns
@@ -104,8 +104,8 @@ var (
 	LineThrough = raw("text-decoration-line", "line-through") // line-through
 
 	// effects / misc
-	Opacity30         = css.Opacity(0.3)
-	Opacity70         = css.Opacity(0.7)
+	Opacity30         = css.OpacityNum(css.Num(0.3))
+	Opacity70         = css.OpacityNum(css.Num(0.7))
 	PointerEventsNone = raw("pointer-events", "none")
 
 	// side borders (re-include border-style:solid — no CDN preflight)

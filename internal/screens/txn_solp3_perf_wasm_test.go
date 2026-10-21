@@ -12,8 +12,8 @@ import (
 	"github.com/monstercameron/CashFlux/internal/auditview"
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/testkit/render"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/testkit/render"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // TestSOLP3RowUpdateBreakdown3300 separates the action and its subscribed

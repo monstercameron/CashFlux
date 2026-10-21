@@ -13,10 +13,10 @@ import (
 	"github.com/monstercameron/CashFlux/internal/goalfunded"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	"github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/testkit/render"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	"github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/testkit/render"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 func TestBR2CardFiguresPrecedeBarAndPaceLegend(t *testing.T) {
@@ -104,9 +104,9 @@ func TestBR2CardExpensiveHelpersRunOncePerBudgetRevisionAndPeriod(t *testing.T) 
 	end := start.AddDate(0, 1, 0)
 	var goalCalls, followUpCalls int
 	for range 3 {
-		memoGoalFunded(app, 44001, "br2-counter", start, end, func() goalfunded.Split {
+		memoGoalFunded(app, 44001, "br2-counter", start, end, func() (goalfunded.Split, error) {
 			goalCalls++
-			return goalfunded.Split{FundedMinor: 1}
+			return goalfunded.Split{FundedMinor: 1}, nil
 		})
 		memoBudgetFollowUps(app, app.Rev(), "br2-counter", func() []followUpItem {
 			followUpCalls++
@@ -120,9 +120,9 @@ func TestBR2CardExpensiveHelpersRunOncePerBudgetRevisionAndPeriod(t *testing.T) 
 		t.Fatalf("PutCategory: %v", err)
 	}
 	newRevision := int(app.Rev())
-	memoGoalFunded(app, newRevision, "br2-counter", start, end, func() goalfunded.Split {
+	memoGoalFunded(app, newRevision, "br2-counter", start, end, func() (goalfunded.Split, error) {
 		goalCalls++
-		return goalfunded.Split{}
+		return goalfunded.Split{}, nil
 	})
 	memoBudgetFollowUps(app, app.Rev(), "br2-counter", func() []followUpItem {
 		followUpCalls++

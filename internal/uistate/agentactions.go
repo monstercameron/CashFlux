@@ -18,7 +18,7 @@ package uistate
 import (
 	"time"
 
-	"github.com/monstercameron/GoWebComponents/v5/state"
+	"github.com/monstercameron/GoWebComponents/v7/state"
 )
 
 const agentActionsRevAtomID = "agent:actionsRevision"
@@ -29,6 +29,8 @@ type AssistantAction struct {
 	Tool string
 	// At is when it ran, for the "2 minutes ago" line in the history.
 	At time.Time
+	// UndoID is the identity of this action's exact captured undo point.
+	UndoID string
 }
 
 // assistantActions is the session's ordered action list. Single-goroutine (the UI
@@ -41,11 +43,12 @@ const maxAssistantActions = 200
 
 // NoteAssistantAction records that a tool just changed something. Called from the
 // approved-write path, so a declined or read-only call never appears here.
-func NoteAssistantAction(tool string) {
-	if tool == "" {
+func NoteAssistantAction(tool string, undoIDs ...string) {
+	if tool == "" || len(undoIDs) == 0 || undoIDs[0] == "" {
 		return
 	}
-	assistantActions = append(assistantActions, AssistantAction{Tool: tool, At: time.Now()})
+	undoID := undoIDs[0]
+	assistantActions = append(assistantActions, AssistantAction{Tool: tool, At: time.Now(), UndoID: undoID})
 	if len(assistantActions) > maxAssistantActions {
 		assistantActions = append([]AssistantAction(nil), assistantActions[len(assistantActions)-maxAssistantActions:]...)
 	}
@@ -78,6 +81,21 @@ func DropLastAssistantAction() {
 	assistantActions = assistantActions[:len(assistantActions)-1]
 	bumpAgentActions()
 }
+
+// DropLastAssistantActionFor removes the newest history entry only when it is
+// the action whose exact undo point completed successfully.
+func DropLastAssistantActionFor(undoID string) bool {
+	if undoID == "" || len(assistantActions) == 0 || assistantActions[len(assistantActions)-1].UndoID != undoID {
+		return false
+	}
+	assistantActions = assistantActions[:len(assistantActions)-1]
+	bumpAgentActions()
+	return true
+}
+
+// NotifyAssistantUndoStateChanged rerenders the action history when an undo
+// point becomes durable and its matching Undo control becomes available.
+func NotifyAssistantUndoStateChanged() { bumpAgentActions() }
 
 // ─── C390: per-conversation model and token budget ──────────────────────────
 

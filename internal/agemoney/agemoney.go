@@ -16,7 +16,10 @@
 // breakdown fields so the number is never a black box.
 package agemoney
 
-import "time"
+import (
+	"math"
+	"time"
+)
 
 // DefaultWindow is the number of most-recent outflow transactions averaged into
 // the reported age when Opts.Window is unset. It mirrors YNAB's rolling window of
@@ -58,8 +61,13 @@ type Result struct {
 	// Ready reports whether there is enough matched history to trust Days. It is
 	// false when there are no outflows, when no outflow could be matched to prior
 	// income, or when an outflow in the window spent more than the tracked income
-	// could cover (a sign the ledger's income history is incomplete).
+	// could cover (a sign the ledger's income history is incomplete). It is also
+	// false when Overflow is true.
 	Ready bool
+	// Overflow reports that matched spending in the window cannot fit the exposed
+	// int64 total. Ready is false and Days/TotalAgedMinor are zero in this case.
+	// Large weighted intermediates alone do not make a result unavailable.
+	Overflow bool
 	// TotalAgedMinor is the sum of matched spend (minor units) across the window —
 	// the denominator of the weighted average.
 	TotalAgedMinor int64
@@ -86,8 +94,8 @@ type lot struct {
 // the dollar-days that match accrued, and whether any of it went unmatched.
 type spend struct {
 	date      time.Time
-	matched   int64
-	weighted  int64 // Σ(portionMinor × ageDays)
+	matched   uint64
+	weighted  weightedAmount // Σ(portionMinor × ageDays), promoted only on overflow
 	unmatched bool
 }
 
@@ -114,13 +122,14 @@ func Compute(flows []Flow, opts Opts) Result {
 		case f.AmountMinor > 0:
 			lots = append(lots, lot{date: f.Date, remaining: f.AmountMinor})
 		case f.AmountMinor < 0:
-			need := -f.AmountMinor
+			// This magnitude also represents MinInt64 without narrowing valid flows.
+			need := uint64(-(f.AmountMinor + 1)) + 1 // #nosec G115 -- f.AmountMinor is negative; adding one before negation also handles MinInt64.
 			sp := spend{date: f.Date}
 			for need > 0 && head < len(lots) {
 				l := &lots[head]
 				take := l.remaining
-				if take > need {
-					take = need
+				if uint64(take) > need { // #nosec G115 -- remaining income lots are positive int64.
+					take = int64(need) // #nosec G115 -- this branch proves need < take <= MaxInt64.
 				}
 				age := int64(f.Date.Sub(l.date) / day)
 				if age < 0 {
@@ -129,10 +138,10 @@ func Compute(flows []Flow, opts Opts) Result {
 				if age > int64(maxAge) {
 					age = int64(maxAge)
 				}
-				sp.matched += take
-				sp.weighted += take * age
+				sp.matched += uint64(take)
+				sp.weighted.addProduct(take, age)
 				l.remaining -= take
-				need -= take
+				need -= uint64(take)
 				if l.remaining == 0 {
 					head++
 				}
@@ -154,29 +163,33 @@ func Compute(flows []Flow, opts Opts) Result {
 	}
 	win := spends[start:]
 
-	var totMatched, totWeighted int64
+	res := Result{
+		WindowCount: len(win),
+		WindowStart: win[0].date,
+		WindowEnd:   win[len(win)-1].date,
+	}
+	var totMatched int64
+	var totWeighted weightedAmount
 	ready := true
 	for _, s := range win {
 		if s.unmatched {
 			ready = false
 		}
-		totMatched += s.matched
-		totWeighted += s.weighted
+		if s.matched > uint64(math.MaxInt64-totMatched) {
+			res.Overflow = true
+			return res // A partial or wrapped denominator cannot explain this figure.
+		}
+		totMatched += int64(s.matched) // #nosec G115 -- the preceding bound check proves the sum fits int64.
+		totWeighted.add(s.weighted)
 	}
 
-	res := Result{
-		WindowCount:    len(win),
-		WindowStart:    win[0].date,
-		WindowEnd:      win[len(win)-1].date,
-		TotalAgedMinor: totMatched,
-	}
+	res.TotalAgedMinor = totMatched
 	if !ready || totMatched == 0 {
 		res.Ready = false
 		return res
 	}
 	res.Ready = true
-	// Round to the nearest whole day: (weighted + matched/2) / matched.
-	res.Days = int((totWeighted + totMatched/2) / totMatched)
+	res.Days = int(totWeighted.rounded(totMatched))
 	if res.Days >= maxAge {
 		res.Days = maxAge
 		res.Capped = true

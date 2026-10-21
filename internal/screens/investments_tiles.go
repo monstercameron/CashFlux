@@ -24,9 +24,9 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 type investPanelProps struct{ App *appstate.App }
@@ -36,7 +36,7 @@ type investPanelProps struct{ App *appstate.App }
 // tracked securities there are not two competing "investment value" figures to
 // reconcile, so the reconciliation copy is suppressed.
 func investHasReconcile(v investView) bool {
-	return v.Reconcile.SecuritiesMinor != 0
+	return v.ReconcileKnown && v.Reconcile.SecuritiesMinor != 0
 }
 
 // investReconcileLine builds the one-line reconciliation equation shared by the
@@ -114,7 +114,7 @@ func investSummaryWidget(props investPanelProps) ui.Node {
 		Div(css.Class("inv-hero-main"),
 			Div(css.Class("inv-hero-label", tw.TextDim), uistate.T("investments.portfolioValue")),
 			Div(css.Class("inv-hero-value", tw.FontDisplay), Attr("data-testid", "invest-total"),
-				fmtSignedMoney(v.TotalValueMinor, v.Sym, v.Dec)),
+				IfElse(v.TotalKnown, Text(fmtSignedMoney(v.TotalValueMinor, v.Sym, v.Dec)), Text(uistate.T("investments.totalUnavailable")))),
 			If(investHasReconcile(v),
 				Fragment(
 					P(css.Class("inv-hero-sub", tw.TextDim), Attr("data-testid", "invest-reconcile"),
@@ -122,7 +122,11 @@ func investSummaryWidget(props investPanelProps) ui.Node {
 					P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0.05rem 0 0"}),
 						uistate.T("investments.reconcileNetWorthNote")),
 				)),
-			If(!investHasReconcile(v),
+			If(v.TotalKnown && len(v.Securities) > 0 && !v.ReconcileKnown,
+				P(css.Class("inv-hero-sub", tw.TextDim), Attr("data-testid", "invest-reconcile-unavailable"), uistate.T("investments.reconcileUnavailable"))),
+			If(!v.TotalKnown,
+				P(css.Class("inv-hero-sub", tw.TextDim), Attr("data-testid", "invest-total-unavailable"), uistate.T("investments.totalUnavailableDetail"))),
+			If(v.TotalKnown && !investHasReconcile(v),
 				P(css.Class("inv-hero-sub", tw.TextDim),
 					uistate.T("investments.splitLine",
 						fmtSignedMoney(v.SecSummary.TotalValueMinor, v.Sym, v.Dec),
@@ -194,7 +198,8 @@ func investGrowthWidget(props investPanelProps) ui.Node {
 	}
 	now := time.Now()
 	cutoffs, labels := growthCutoffs(now, months)
-	series, _ := ledger.NetWorthSeries(investAccts, app.Transactions(), cutoffs, rates)
+	series, seriesErr := ledger.AccountNetValueSeries(investAccts, app.Transactions(), cutoffs, rates)
+	growth := portfolio.GrowthChangeFor(series)
 
 	pts := make([]chartspec.Point, len(series))
 	valueLabels := make([]string, len(series))
@@ -203,26 +208,6 @@ func investGrowthWidget(props investPanelProps) ui.Node {
 		valueLabels[i] = fmtSignedMoney(m.Amount, v.Sym, v.Dec)
 	}
 
-	var startV, endV int64
-	if len(series) > 0 {
-		startV = series[0].Amount
-		endV = series[len(series)-1].Amount
-	}
-	delta := endV - startV
-	deltaPct := 0.0
-	if startV != 0 {
-		d := delta
-		s := startV
-		if s < 0 {
-			s = -s
-		}
-		deltaPct = float64(d) / float64(s) * 100
-	}
-	tone := gainToneClass(delta)
-	arrow := "▲"
-	if delta < 0 {
-		arrow = "▼"
-	}
 	yFmt := ".2~s"
 	if v.Sym == "$" {
 		yFmt = "$.2~s"
@@ -245,24 +230,23 @@ func investGrowthWidget(props investPanelProps) ui.Node {
 		},
 	})
 
-	head := Div(css.Class("inv-growth-head"),
-		Div(css.Class("inv-growth-vals"),
-			Span(css.Class("inv-growth-now", tw.FontDisplay), fmtSignedMoney(endV, v.Sym, v.Dec)),
-			Span(ClassStr("inv-growth-delta "+tw.ColorClass(tone)),
-				fmt.Sprintf("%s %s (%+.1f%%)", arrow, fmtSignedMoney(delta, v.Sym, v.Dec), deltaPct)),
-		),
-		segToggle,
-	)
+	head := ui.CreateElement(investGrowthHeadline, investGrowthHeadlineProps{
+		Change: growth, SeriesErr: seriesErr != nil, Symbol: v.Sym, Decimals: v.Dec,
+		WindowControl: segToggle,
+	})
 
 	_ = uistate.UsePrefs().Get() // re-render when the accent/theme preference changes
 	accent := chartLineColor(uistate.CurrentAccent())
-	chart := uiw.Chart(uiw.ChartProps{
-		Spec: chartspec.Spec{Kind: chartspec.Area, Series: []chartspec.Series{
-			{Name: uistate.T("investments.portfolioValue"), Color: accent, Points: pts},
-		}, Y: chartspec.Axis{Format: yFmt}},
-		Height: "240px", CurrencySymbol: v.Sym,
-		Label: uistate.T("investments.growthChartLabel"),
-	})
+	var chart ui.Node = Fragment()
+	if seriesErr == nil && len(series) > 0 {
+		chart = uiw.Chart(uiw.ChartProps{
+			Spec: chartspec.Spec{Kind: chartspec.Area, Series: []chartspec.Series{
+				{Name: uistate.T("investments.portfolioValue"), Color: accent, Points: pts},
+			}, Y: chartspec.Axis{Format: yFmt}},
+			Height: "240px", CurrencySymbol: v.Sym,
+			Label: uistate.T("investments.growthChartLabel"),
+		})
+	}
 	_ = valueLabels
 
 	// C380: the growth line has no reference on its own. A user-imported
@@ -272,6 +256,9 @@ func investGrowthWidget(props investPanelProps) ui.Node {
 	benchDates := make([]time.Time, 0, len(cutoffs))
 	benchVals := make([]float64, 0, len(series))
 	for i := range series {
+		if seriesErr != nil {
+			break
+		}
 		if i < len(cutoffs) {
 			benchDates = append(benchDates, cutoffs[i])
 			benchVals = append(benchVals, currency.MajorFromMinor(series[i].Amount, base))
@@ -282,6 +269,7 @@ func investGrowthWidget(props investPanelProps) ui.Node {
 		Div(css.Class("inv-growth"), head,
 			P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "invest-growth-caption"),
 				Style(map[string]string{"margin": "0 0 0.5rem"}), uistate.T("investments.growthCaption")),
+			If(seriesErr != nil, P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "invest-growth-unavailable"), uistate.T("investments.growthUnavailable"))),
 			chart,
 			// FP-T1c: the chart is a balance line. Say what it actually RETURNED,
 			// over exactly the window it plots.
@@ -293,6 +281,55 @@ func investGrowthWidget(props investPanelProps) ui.Node {
 		ID: "invest-growth", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
 		Body: body,
 	})
+}
+
+// investGrowthHeadline renders the already-prepared portfolio growth facts. It
+// owns no hooks and performs no financial arithmetic.
+type investGrowthHeadlineProps struct {
+	Change        portfolio.GrowthChange
+	SeriesErr     bool
+	Symbol        string
+	Decimals      int
+	WindowControl ui.Node
+}
+
+func investGrowthHeadline(props investGrowthHeadlineProps) ui.Node {
+	current := ui.Node(P(css.Class("inv-growth-now", tw.FontDisplay), Attr("data-testid", "invest-growth-current-unavailable"), uistate.T("investments.growthUnavailable")))
+	if !props.SeriesErr && props.Change.CurrentKnown {
+		if value, err := formatGrowthMoney(props.Change.End.Amount, props.Symbol, props.Decimals); err == nil {
+			current = Span(css.Class("inv-growth-now", tw.FontDisplay), Attr("data-testid", "invest-growth-now"), value)
+		}
+	}
+	var change ui.Node = P(css.Class("inv-growth-delta", tw.TextDim), Attr("data-testid", "invest-growth-change-unavailable"), uistate.T("investments.growthChangeUnavailable"))
+	if !props.SeriesErr && props.Change.DeltaKnown {
+		delta, err := formatGrowthMoney(props.Change.Delta.Amount, props.Symbol, props.Decimals)
+		if err == nil {
+			arrow := "▲"
+			if props.Change.Delta.Amount < 0 {
+				arrow = "▼"
+			}
+			text := arrow + " " + delta
+			if props.Change.PercentKnown {
+				text = fmt.Sprintf("%s (%+.1f%%)", text, props.Change.Percent)
+			} else {
+				text += " · " + uistate.T("investments.growthPercentUnavailable")
+			}
+			tone := gainToneClass(props.Change.Delta.Amount)
+			change = Span(ClassStr("inv-growth-delta "+tw.ColorClass(tone)), Attr("data-testid", "invest-growth-delta"), text)
+		}
+	}
+	return Div(css.Class("inv-growth-head"),
+		Div(css.Class("inv-growth-vals"), current, change), props.WindowControl)
+}
+
+// formatGrowthMoney keeps the chart's signed currency style while safely
+// formatting every int64 value, including MinInt64.
+func formatGrowthMoney(minor int64, symbol string, decimals int) (string, error) {
+	formatted, err := money.FormatAccountingChecked(minor, decimals, symbol)
+	if err != nil || minor >= 0 {
+		return formatted, err
+	}
+	return "−" + strings.TrimSuffix(strings.TrimPrefix(formatted, "("), ")"), nil
 }
 
 // --- invest-toolbar --------------------------------------------------------------

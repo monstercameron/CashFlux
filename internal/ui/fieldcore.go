@@ -9,8 +9,8 @@ import (
 	"syscall/js"
 	"unicode/utf16"
 
-	"github.com/monstercameron/GoWebComponents/v5/html"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/html"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
 )
 
 // FieldValue is what a text field's value option must be, instead of Value().

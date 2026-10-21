@@ -19,34 +19,6 @@ import (
 // cannot reconstruct.
 const retirementPlanKey = "cashflux:retirement-plan"
 
-// RetirementPlan is what the projection needs beyond the account balances the
-// app already holds.
-type RetirementPlan struct {
-	// YearsToRetirement is the accumulation horizon. Zero means unset, and the
-	// surface must say so rather than projecting zero years.
-	YearsToRetirement int `json:"years,omitempty"`
-	// AnnualContributionMinor is what goes in each year.
-	AnnualContributionMinor int64 `json:"contribution,omitempty"`
-	// AnnualSpendMinor is the retirement spending the drawdown and the FIRE
-	// number are both computed from — one number, so the two cannot disagree
-	// about what the life costs.
-	AnnualSpendMinor int64 `json:"spend,omitempty"`
-	// ReturnPct is the assumed nominal annual return, as a percent.
-	ReturnPct float64 `json:"returnPct,omitempty"`
-	// InflationPct is the household's inflation assumption, as a percent. It is
-	// NOT stored here (FP-T2d): Load reads it from the one household setting and
-	// Save writes it back there, so the retirement card and the forecast can never
-	// hold different beliefs about the same future.
-	InflationPct float64 `json:"-"`
-}
-
-// DefaultReturnPct is the assumed nominal annual return when none is set.
-//
-// Seven percent: the commonly-cited long-run US equity average. It is a
-// convention, not a forecast, which is why the surface states it back rather
-// than applying it invisibly.
-const DefaultReturnPct = 7.0
-
 // LoadRetirementPlan reads the household's assumptions, filling an unset return
 // rate with the stated default and taking inflation from the household setting.
 //
@@ -55,17 +27,10 @@ const DefaultReturnPct = 7.0
 // app inventing a plan and then projecting from it, which is a confident number
 // about a life nobody described.
 func LoadRetirementPlan() RetirementPlan {
-	var p RetirementPlan
-	if raw := SettingKVGet(retirementPlanKey); raw != "" {
-		if err := json.Unmarshal([]byte(raw), &p); err != nil {
-			p = RetirementPlan{}
-		}
+	p, err := ParseRetirementPlan(SettingKVGet(retirementPlanKey))
+	if err != nil {
+		p, _ = ParseRetirementPlan("")
 	}
-	if p.ReturnPct == 0 {
-		p.ReturnPct = DefaultReturnPct
-	}
-	// Inflation comes from the household setting, never from this record — one
-	// belief about the future, shared by every surface that discounts to today.
 	p.InflationPct = LoadInflationPct()
 	return p
 }

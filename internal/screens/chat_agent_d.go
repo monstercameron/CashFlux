@@ -20,10 +20,10 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/monstercameron/CashFlux/internal/ai"
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/assistantdata"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/docqa"
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -92,6 +92,33 @@ func agToolsCapture(app *appstate.App, base string, rates currency.Rates) []chat
 	}
 }
 
+const (
+	taxProseCategoryLimit = 8
+	taxProseLabelRunes    = 120
+	taxCSVChunkCharacters = 24000
+	taxToolOutputMaxBytes = 32 * 1024
+)
+
+type taxCSVRecord struct {
+	ID  string `json:"id"`
+	CSV string `json:"csv"`
+}
+
+type taxGatherCounts struct {
+	DeductibleCategories int `json:"deductibleCategories"`
+	DonationMatches      int `json:"donationMatches"`
+	InterestMatches      int `json:"interestMatches"`
+	ReceiptGaps          int `json:"receiptGaps"`
+}
+
+type taxCSVChunkOutput struct {
+	Year            int                  `json:"year"`
+	Counts          taxGatherCounts      `json:"counts"`
+	Summary         string               `json:"summary"`
+	CSV             assistantdata.Detail `json:"csv"`
+	CSVInstructions string               `json:"csvInstructions"`
+}
+
 // captureLooksDuplicate reports whether an existing non-transfer transaction has
 // the same absolute amount and a payee/description that contains the draft label —
 // a cheap "you may have already logged this" badge for the review list.
@@ -119,51 +146,110 @@ func agToolsTax(app *appstate.App, base string, rates currency.Rates) []chatTool
 	return []chatTool{
 		{
 			spec: ai.FunctionTool("gather_tax_records",
-				"Gather the user's records for a tax year: totals for deductible-flagged categories, charitable donations, and interest paid, plus a list of gaps (deductible/donation entries with no receipt attached). Returns a plain summary and a CSV block the user can save. It GATHERS the user's own records — it is not tax advice and makes no completeness or deductibility claim; the user (or their preparer) decides what actually applies.",
-				json.RawMessage(`{"type":"object","properties":{"year":{"type":"integer","description":"tax year, e.g. 2025; defaults to the previous calendar year"}}}`)),
+				"Gather the household's retained records for a UTC calendar tax year: checked totals for deductible-flagged category lines, donation/interest keyword matches, and receipt gaps. Uses current stored base currency/FX and explicit refund links; excludes transfers and report-excluded rows. Buckets may overlap and are not additive. Small results include complete exact-decimal CSV. Large CSV is returned in bounded chunks with a snapshot and nextOffset. Continue with the same year and csv_snapshot, setting csv_offset to nextOffset and optionally csv_limit (maximum 24000 characters). Concatenate each csv.jsonText slice, then JSON-decode the concatenated text to recover the exact CSV. A changed snapshot requires restarting at offset 0; never combine chunks from different snapshots. Unavailable inputs or ambiguous partially refunded split allocation are explicit errors. This is record gathering, not tax advice or a completeness/deductibility claim.",
+				json.RawMessage(`{"type":"object","properties":{"year":{"type":"integer","description":"tax year, e.g. 2025; defaults to the previous calendar year"},"csv_offset":{"type":"integer","minimum":0,"description":"CSV JSON-character offset from the prior response's nextOffset; requires csv_snapshot when greater than zero"},"csv_limit":{"type":"integer","minimum":0,"maximum":24000,"description":"maximum CSV JSON characters in this response; default 24000 for chunked output"},"csv_snapshot":{"type":"string","description":"snapshot from the prior CSV chunk; reuse unchanged for every continuation"}},"additionalProperties":false}`)),
 			run: func(raw json.RawMessage) string {
 				var a struct {
-					Year int `json:"year"`
+					Year        *int   `json:"year"`
+					CSVOffset   int    `json:"csv_offset,omitempty"`
+					CSVLimit    int    `json:"csv_limit,omitempty"`
+					CSVSnapshot string `json:"csv_snapshot,omitempty"`
 				}
-				_ = json.Unmarshal(raw, &a)
-				year := a.Year
-				if year == 0 {
-					year = time.Now().Year() - 1
+				if err := assistantDataArgs(raw, &a); err != nil {
+					return "Couldn't gather tax records: " + err.Error()
 				}
-				start := time.Date(year, 1, 1, 0, 0, 0, 0, time.UTC)
-				end := time.Date(year+1, 1, 1, 0, 0, 0, 0, time.UTC)
-				cats := app.Categories()
+				if app == nil || app.Store() == nil {
+					return "Couldn't gather tax records: local dataset is unavailable."
+				}
+				sourceRevision := app.Rev()
+				year := app.ClockNow().UTC().Year() - 1
+				if a.Year != nil {
+					year = *a.Year
+				} else {
+					// A pointer distinguishes explicit zero from omission; reject
+					// explicit null as well rather than silently choosing a year.
+					var supplied map[string]json.RawMessage
+					_ = json.Unmarshal(raw, &supplied) // already strictly decoded
+					if _, hasYear := supplied["year"]; hasYear {
+						return "Couldn't gather tax records: year must be an integer from 1 through 9999."
+					}
+				}
+				if a.CSVOffset < 0 || a.CSVLimit < 0 || a.CSVLimit > taxCSVChunkCharacters {
+					return "Couldn't gather tax records: csv_offset must be nonnegative and csv_limit must be 0 through 24000."
+				}
+				if a.CSVOffset > 0 && a.CSVSnapshot == "" {
+					return "Couldn't gather tax records: csv_snapshot is required when continuing beyond offset 0."
+				}
+				if len(a.CSVSnapshot) > 128 {
+					return "Couldn't gather tax records: csv_snapshot is invalid."
+				}
+				if (a.CSVOffset > 0 || a.CSVSnapshot != "") && a.Year == nil {
+					return "Couldn't gather tax records: include the same year when continuing a CSV snapshot."
+				}
+				start, end, err := taxgather.YearBounds(year)
+				if err != nil {
+					return "Couldn't gather tax records: " + err.Error()
+				}
+				settings, err := app.Store().GetSettings()
+				if err != nil {
+					return "Couldn't gather tax records: financial settings are unavailable."
+				}
+				currentBase := strings.ToUpper(strings.TrimSpace(settings.BaseCurrency))
+				if currentBase == "" {
+					currentBase = "USD"
+				}
+				currentRates := currency.Rates{Base: currentBase, Rates: settings.FXRates}
+				cats, err := app.CategoriesChecked()
+				if err != nil {
+					return "Couldn't gather tax records: categories are unavailable."
+				}
+				txns, err := app.Store().ListTransactions()
+				if err != nil {
+					return "Couldn't gather tax records: transactions are unavailable."
+				}
+				links, err := app.Store().ListTxnLinks()
+				if err != nil {
+					return "Couldn't gather tax records: refund links are unavailable."
+				}
 				catName := make(map[string]string, len(cats))
 				for _, c := range cats {
 					catName[c.ID] = c.Name
 				}
-				s, err := taxgather.Gather(app.Transactions(), cats, year, start, end, rates)
+				s, err := taxgather.GatherWithLinks(txns, cats, links, year, start, end, currentRates)
 				if err != nil {
 					return "Couldn't gather tax records: " + err.Error()
 				}
-				fmtM := func(minor int64) string { return fmtMoney(money.New(minor, base)) }
+				fmtM := func(minor int64) string { return fmtMoney(money.New(minor, currentBase)) }
 				var b strings.Builder
 				fmt.Fprintf(&b, "Tax-year %d gathering (your records, not tax advice — you or your preparer decide what applies):\n", year)
-				fmt.Fprintf(&b, "- Deductible-category spending: %s across %s\n", fmtM(s.Deductible.Total), pluralWord(len(s.Deductible.Rows), "category"))
-				for _, r := range s.Deductible.Rows {
+				fmt.Fprintf(&b, "Household scope; UTC calendar year; amounts in %s using current stored FX. Negative category split lines follow the checked report rules; positive split credits are omitted. Deductible, charitable and interest buckets can overlap and must not be added together.\n", currentBase)
+				if !currency.Valid(currentBase) {
+					b.WriteString("This currency is not in the registry; CSV amounts use the app's canonical two-decimal fallback assumption.\n")
+				}
+				fmt.Fprintf(&b, "- Deductible-category spending: %s across %d %s\n", fmtM(s.Deductible.Total), len(s.Deductible.Rows), pluralWord(len(s.Deductible.Rows), "category"))
+				for i, r := range s.Deductible.Rows {
+					if i >= taxProseCategoryLimit {
+						fmt.Fprintf(&b, "    • …and %d more categories; exact full category detail is in the CSV export.\n", len(s.Deductible.Rows)-taxProseCategoryLimit)
+						break
+					}
 					n := catName[r.CategoryID]
 					if n == "" {
 						n = "Uncategorized"
 					}
-					fmt.Fprintf(&b, "    • %s: %s\n", n, fmtM(r.Amount))
+					fmt.Fprintf(&b, "    • %s: %s\n", taxProseLabel(n), fmtM(r.Amount))
 				}
 				fmt.Fprintf(&b, "- Charitable donations: %s (%d)\n", fmtM(s.Charitable.Total), s.Charitable.Count)
 				fmt.Fprintf(&b, "- Interest paid: %s (%d)\n", fmtM(s.InterestPaid.Total), s.InterestPaid.Count)
 				if len(s.Gaps) == 0 {
-					b.WriteString("- Gaps: none — every deductible/donation entry has a receipt attached.\n")
+					b.WriteString("- Receipt gaps: none among the matched retained deductible/donation records. This does not establish filing completeness.\n")
 				} else {
 					fmt.Fprintf(&b, "- Gaps (%d entries missing a receipt):\n", len(s.Gaps))
 					for i, g := range s.Gaps {
 						if i >= 10 {
-							fmt.Fprintf(&b, "    • …and %d more\n", len(s.Gaps)-10)
+							fmt.Fprintf(&b, "    • …and %d more; exact gap details are in the CSV export.\n", len(s.Gaps)-10)
 							break
 						}
-						fmt.Fprintf(&b, "    • %s — %s on %s (%s)\n", g.Label, fmtM(g.Amount), g.Date.Format("Jan 2"), g.Reason)
+						fmt.Fprintf(&b, "    • %s — %s on %s (%s)\n", taxProseLabel(g.Label), fmtM(g.Amount), g.Date.Format("Jan 2"), g.Reason)
 					}
 					b.WriteString("Offer to file each gap as a to-do (add_task) so it resolves when the receipt is attached.\n")
 				}
@@ -173,12 +259,57 @@ func agToolsTax(app *appstate.App, base string, rates currency.Rates) []chatTool
 					}
 					return "Uncategorized"
 				}
-				amt := func(v int64) string { return strconv.FormatFloat(currency.MajorFromMinor(v, base), 'f', 2, 64) }
-				csv := taxgather.GatherCSV(s, name, amt)
-				b.WriteString("\nCSV export:\n```\n")
-				b.Write(csv)
-				b.WriteString("```")
-				return b.String()
+				csv, err := taxgather.GatherCSVExact(s, name, currentBase)
+				if err != nil {
+					return "Couldn't gather tax records: " + err.Error()
+				}
+				if app.Rev() != sourceRevision {
+					return "Couldn't gather tax records: local data changed during collection; retry the tax-year request."
+				}
+				summary := b.String()
+				chunkRequested := a.CSVOffset > 0 || a.CSVSnapshot != "" || a.CSVLimit > 0
+				if !chunkRequested {
+					legacy := summary + "\nCSV export:\n```\n" + string(csv) + "```"
+					if len(legacy) < taxToolOutputMaxBytes {
+						return legacy
+					}
+				}
+				chunkLimit := a.CSVLimit
+				if chunkLimit == 0 {
+					chunkLimit = taxCSVChunkCharacters
+				}
+				collectionID := fmt.Sprintf("tax-year-%d", year)
+				csvCollection := assistantdata.NewCollection("tax_csv", "id", func() ([]taxCSVRecord, error) {
+					return []taxCSVRecord{{ID: collectionID, CSV: string(csv)}}, nil
+				})
+				// Assistant usage and unrelated household writes can advance the app
+				// revision without changing this CSV. Keep the snapshot identity tied to
+				// the app/store instance and tax query; ReadRecord fingerprints the full
+				// CSV itself so relevant changes still invalidate continuations.
+				csvCollection.Revision = fmt.Sprintf("tax-csv:v1;app:%p;store:%p;year:%d;base:%s", app, app.Store(), year, currentBase)
+				counts := taxGatherCounts{DeductibleCategories: len(s.Deductible.Rows), DonationMatches: s.Charitable.Count,
+					InterestMatches: s.InterestPaid.Count, ReceiptGaps: len(s.Gaps)}
+				for {
+					detail, detailErr := assistantdata.ReadRecord(csvCollection, assistantdata.DetailRequest{
+						Collection: "tax_csv", ID: collectionID, Field: "csv", Offset: a.CSVOffset,
+						Limit: chunkLimit, Snapshot: a.CSVSnapshot,
+					})
+					if detailErr != nil {
+						return assistantDataJSON(nil, detailErr)
+					}
+					output := taxCSVChunkOutput{
+						Year: year, Counts: counts, Summary: summary, CSV: detail,
+						CSVInstructions: "csv.jsonText is a slice of the JSON serialization of the CSV string. Append slices in offset order through nextOffset, then JSON-decode the concatenated text once to recover the exact CSV. Keep csv.snapshot unchanged; if it changes, restart at offset 0.",
+					}
+					encoded := assistantDataJSON(output, nil)
+					if len(encoded) < taxToolOutputMaxBytes {
+						return encoded
+					}
+					if chunkLimit <= 1 {
+						return "Couldn't gather tax records: bounded CSV chunk metadata exceeds the response limit."
+					}
+					chunkLimit /= 2
+				}
 			},
 		},
 	}
@@ -191,7 +322,7 @@ func agToolsDocQA(app *appstate.App, base string, rates currency.Rates) []chatTo
 	return []chatTool{
 		{
 			spec: ai.FunctionTool("search_documents",
-				"Search the user's attached documents and artifacts (statements, policies, receipts) for the answer to a question like 'what was on the March statement?' or 'when does my insurance renew?'. Returns the most relevant source(s) with their text and a citation link to open each. Ground your answer ONLY in the returned text and cite the source with its Open link; if nothing relevant is returned, tell the user you don't see a document covering it rather than guessing.",
+				"Search all retained extracted document rows and artifact table rows (statements, policies, receipts) for a question. Returns up to three matching sources with the matching row number and a bounded excerpt, plus the total matching source count. Ground your answer ONLY in returned excerpts and cite the source with its Open link. For exact or additional rows, use data_manifest then query_data/read_record. If a read fails, the result reports unavailable; do not claim that no document matched.",
 				json.RawMessage(`{"type":"object","properties":{"question":{"type":"string"}},"required":["question"]}`)),
 			run: func(raw json.RawMessage) string {
 				var a struct {
@@ -200,7 +331,15 @@ func agToolsDocQA(app *appstate.App, base string, rates currency.Rates) []chatTo
 				if err := json.Unmarshal(raw, &a); err != nil || strings.TrimSpace(a.Question) == "" {
 					return "What would you like me to look up in your documents?"
 				}
-				corpus := docqa.BuildCorpus(app.Documents(), app.Artifacts())
+				docs, err := app.Store().ListDocuments()
+				if err != nil {
+					return "Document search is unavailable because retained documents could not be read."
+				}
+				arts, err := app.Store().ListArtifacts()
+				if err != nil {
+					return "Document search is unavailable because retained attachments could not be read."
+				}
+				corpus := docqa.BuildCorpus(docs, arts)
 				if len(corpus) == 0 {
 					return "You don't have any documents or attachments yet, so there's nothing to search. Add a statement or receipt first."
 				}
@@ -209,13 +348,19 @@ func agToolsDocQA(app *appstate.App, base string, rates currency.Rates) []chatTo
 					return "I don't see a document that covers that. I searched your attachments and none matched — I won't guess."
 				}
 				var b strings.Builder
-				b.WriteString("Relevant sources (ground your answer in these and cite the Open link):\n")
+				fmt.Fprintf(&b, "Relevant sources (%d matching sources; showing %d. Ground your answer in these excerpts and cite each Open link):\n", res.TotalHits, len(res.Hits))
 				for _, h := range res.Hits {
-					text := strings.TrimSpace(h.Source.Text)
-					if r := []rune(text); len(r) > 1200 {
-						text = string(r[:1200]) + "…"
+					row := ""
+					if h.Row > 0 {
+						row = fmt.Sprintf(" — row %d", h.Row)
 					}
-					fmt.Fprintf(&b, "\n### %s%s\n%s\n", h.Source.Title, openLink(h.Source.Route, h.Source.ID), text)
+					if h.ExcerptTruncated {
+						row += " (excerpt shortened)"
+					}
+					fmt.Fprintf(&b, "\n### %s%s%s\n%s\n", h.Source.Title, row, openLink(h.Source.Route, h.Source.ID), h.Excerpt)
+				}
+				if res.Truncated {
+					b.WriteString("\nMore matching sources were omitted from this short result. Use data_manifest, query_data, or read_record to inspect additional persisted rows.")
 				}
 				return strings.TrimRight(b.String(), "\n")
 			},
@@ -239,4 +384,12 @@ func pluralWord(n int, word string) string {
 		return word[:len(word)-1] + "ies"
 	}
 	return word + "s"
+}
+
+func taxProseLabel(label string) string {
+	runes := []rune(label)
+	if len(runes) <= taxProseLabelRunes {
+		return label
+	}
+	return string(runes[:taxProseLabelRunes-1]) + "…"
 }

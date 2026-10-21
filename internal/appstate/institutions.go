@@ -67,12 +67,10 @@ func (a *App) DeleteInstitution(instID string) error {
 // --- AC13: projected balance on the row ---
 
 // ProjectAccount projects one account's balance over the next `horizonDays` days
-// from today's balance plus every recurring cash flow scoped to that account
-// (paychecks, bills, transfers). It returns the running low point and the dated
-// drivers behind it, so the row can show "$2,340 today → ~$1,150 low on the 28th"
-// and expand to explain "rent −$1,400 on the 1st". A missing account yields a flat
+// from today's exact ledger balance and its recurring cash flows. Ledger, currency,
+// and arithmetic errors are returned; a missing account remains a valid empty
 // projection at zero.
-func (a *App) ProjectAccount(accountID string, asOf time.Time, horizonDays int) acctproject.Projection {
+func (a *App) ProjectAccount(accountID string, asOf time.Time, horizonDays int) (acctproject.Projection, error) {
 	var acc domain.Account
 	var found bool
 	for _, x := range a.Accounts() {
@@ -85,7 +83,9 @@ func (a *App) ProjectAccount(accountID string, asOf time.Time, horizonDays int) 
 		return acctproject.Project(0, asOf, nil, horizonDays)
 	}
 	bal, err := ledger.Balance(acc, a.Transactions())
-	a.logErr("project account balance", err)
+	if err != nil {
+		return acctproject.Projection{}, fmt.Errorf("appstate: project account %s balance: %w", accountID, err)
+	}
 
 	var drivers []acctproject.Driver
 	end := asOf.AddDate(0, 0, horizonDays)
@@ -98,6 +98,9 @@ func (a *App) ProjectAccount(accountID string, asOf time.Time, horizonDays int) 
 		// misconfigured cadence can never spin.
 		for i := 0; i < 400 && !due.After(end); i++ {
 			if !due.Before(asOf) {
+				if r.Amount.Currency != bal.Currency {
+					return acctproject.Projection{}, fmt.Errorf("%w: recurring %q is %s, account is %s", acctproject.ErrCurrencyMismatch, r.Label, r.Amount.Currency, bal.Currency)
+				}
 				drivers = append(drivers, acctproject.Driver{
 					Label:  r.Label,
 					Date:   due,

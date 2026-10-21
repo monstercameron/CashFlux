@@ -4,6 +4,7 @@ package ledger
 
 import (
 	"errors"
+	"fmt"
 	"sort"
 	"strings"
 
@@ -34,17 +35,51 @@ type NetWorthResult struct {
 // in MissingCurrencies/ExcludedAccounts — never treated as base or zero. Other
 // errors (e.g. a corrupt balance) still propagate.
 func NetWorthExplained(accounts []domain.Account, all []domain.Transaction, rates currency.Rates) (NetWorthResult, error) {
+	// Net worth only asks for balances of eligible accounts. Compute those in
+	// one transaction pass rather than rescanning the ledger once per account.
+	// Duplicate IDs cannot be represented by Balances' ID-keyed result, so keep
+	// the legacy per-account path for that malformed-but-possible API input.
+	eligible := make([]domain.Account, 0, len(accounts))
+	seen := make(map[string]struct{}, len(accounts))
+	for _, a := range accounts {
+		if !a.CountsInNetWorth() {
+			continue
+		}
+		if _, exists := seen[a.ID]; exists {
+			return netWorthAccumulate(accounts, rates, func(a domain.Account) (money.Money, error) {
+				return Balance(a, all)
+			})
+		}
+		seen[a.ID] = struct{}{}
+		eligible = append(eligible, a)
+	}
+	balances, _ := Balances(eligible, all)
 	return netWorthAccumulate(accounts, rates, func(a domain.Account) (money.Money, error) {
+		if bal, ok := balances[a.ID]; ok {
+			return bal, nil
+		}
+		// Preserve Balance's specific error (including its context and wrapping)
+		// for the account that failed, instead of returning a bulk-map sentinel.
 		return Balance(a, all)
 	})
 }
 
-// netWorthAccumulate is the shared net-worth core: balanceOf supplies each
-// non-archived account's balance (a live scan for NetWorthExplained, a map
-// lookup for NetWorthFromBalances), and the accumulation — missing-rate
-// exclusion, liability magnitude via Abs, net = assets − liabilities — lives
-// in exactly one place.
+// netWorthAccumulate is the explained entry to the shared accumulation core.
+// balanceOf supplies eligible balances; missing-rate exclusions, checked
+// liability magnitudes and net = assets − liabilities are computed once below.
 func netWorthAccumulate(accounts []domain.Account, rates currency.Rates, balanceOf func(domain.Account) (money.Money, error)) (NetWorthResult, error) {
+	return accumulateAccountTotals(accounts, rates, balanceOf, accountTotalsPolicy{explainMissingRates: true})
+}
+
+// Strict household totals, explained totals and explicit class values share
+// conversion, liability magnitude and checked addition; only selection and the
+// handling of a missing exchange rate differ.
+type accountTotalsPolicy struct {
+	includeChosenAccounts bool
+	explainMissingRates   bool
+}
+
+func accumulateAccountTotals(accounts []domain.Account, rates currency.Rates, balanceOf func(domain.Account) (money.Money, error), policy accountTotalsPolicy) (NetWorthResult, error) {
 	res := NetWorthResult{Assets: money.Zero(rates.Base), Liabilities: money.Zero(rates.Base)}
 	missing := map[string]bool{}
 	for _, a := range accounts {
@@ -53,7 +88,7 @@ func netWorthAccumulate(accounts []domain.Account, rates currency.Rates, balance
 		}
 		// AC11: accounts the household flagged out of net worth are omitted from
 		// the totals and disclosed by name, never silently dropped.
-		if a.ExcludeFromNetWorth {
+		if !a.CountsInNetWorth() && !policy.includeChosenAccounts {
 			res.ExcludedByChoice = append(res.ExcludedByChoice, a.Name)
 			continue
 		}
@@ -63,7 +98,7 @@ func netWorthAccumulate(accounts []domain.Account, rates currency.Rates, balance
 		}
 		conv, err := rates.Convert(bal, rates.Base)
 		if err != nil {
-			if errors.Is(err, currency.ErrUnknownRate) {
+			if policy.explainMissingRates && errors.Is(err, currency.ErrUnknownRate) {
 				missing[strings.ToUpper(strings.TrimSpace(a.Currency))] = true
 				res.ExcludedAccounts = append(res.ExcludedAccounts, a.Name)
 				continue
@@ -76,7 +111,11 @@ func netWorthAccumulate(accounts []domain.Account, rates currency.Rates, balance
 			// negative, but an account added through the "amount you owe" form stores
 			// it positive. Abs() makes net worth correct for both, rather than
 			// silently adding a positive-stored debt to net worth.
-			if res.Liabilities, err = res.Liabilities.Add(conv.Abs()); err != nil {
+			magnitude, absErr := conv.AbsChecked()
+			if absErr != nil {
+				return NetWorthResult{}, fmt.Errorf("ledger: account %s liability magnitude: %w", a.ID, absErr)
+			}
+			if res.Liabilities, err = res.Liabilities.Add(magnitude); err != nil {
 				return NetWorthResult{}, err
 			}
 		} else {

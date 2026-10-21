@@ -25,9 +25,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/splitsuggest"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // The free and paid halves of SM-3. As with SM-2, the gate on the local half must
@@ -71,7 +71,7 @@ func splitSuggestHint(props splitSuggestProps) ui.Node {
 		})
 	}
 
-	backendAI := uistate.BackendConnectionActive(pr)
+	backendAI := uistate.BackendAIActive(pr)
 	aiEnabled := app != nil && aiProviderConfigured(app, backendAI) &&
 		settings.IsEnabled(splitSuggestAICode) && !settings.IsMuted(splitSuggestAICode)
 	aiConn := smartAIConn{}

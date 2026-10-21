@@ -12,9 +12,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/balancesheet"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // TWO SIDES — signature graphic #2.
@@ -165,6 +165,9 @@ func nwsGapPath(upper, lower []int64, s nwsGapScale) string {
 // regions named where they sit, and the net worth called out at the right end —
 // plus the composition strips for both sides.
 func nwsSides(v nwsView) ui.Node {
+	if v.SeriesErr != nil {
+		return P(css.Class("empty"), Attr("data-testid", "nws-sides-unavailable"), uistate.T("networth.unavailable"))
+	}
 	pts := v.Points
 	if len(pts) < 2 {
 		return P(css.Class("empty"), Attr("data-testid", "nws-sides-empty"), uistate.T("nws.sidesEmpty"))

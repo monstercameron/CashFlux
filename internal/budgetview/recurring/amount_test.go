@@ -17,6 +17,31 @@ func bill(id string, amount int64, code string, cadence domain.RecurringCadence)
 	return domain.Recurring{ID: id, Label: id, Amount: money.New(amount, code), Cadence: cadence}
 }
 
+func TestAnnualEquivalentPreservesSchedulePrecision(t *testing.T) {
+	for _, tc := range []struct {
+		cadence      domain.RecurringCadence
+		amount, want int64
+	}{
+		{domain.CadenceYearly, -12001, -12001}, {domain.CadenceYearly, -1, -1},
+		{domain.CadenceMonthly, -1000, -12000}, {domain.CadenceWeekly, -1200, -62400},
+		{domain.CadenceBiweekly, -1200, -31200}, {domain.CadenceSemimonthly, -1200, -28800},
+		{domain.CadenceQuarterly, -1201, -4804}, {domain.CadenceYearly, math.MinInt64, math.MinInt64},
+	} {
+		got, err := AnnualEquivalent(bill("bill", tc.amount, "USD", tc.cadence))
+		if err != nil || got != tc.want {
+			t.Fatalf("%s/%d: got %d,%v want %d", tc.cadence, tc.amount, got, err, tc.want)
+		}
+	}
+	if _, err := AnnualEquivalent(bill("bill", math.MaxInt64, "USD", domain.CadenceMonthly)); !errors.Is(err, money.ErrOverflow) {
+		t.Fatalf("annual overflow: %v", err)
+	}
+	for _, cadence := range []domain.RecurringCadence{domain.CadenceDaily, "unknown", ""} {
+		if _, err := AnnualEquivalent(bill("bill", -100, "USD", cadence)); err == nil {
+			t.Fatalf("invented annual convention for %q", cadence)
+		}
+	}
+}
+
 func TestMonthlyEquivalent(t *testing.T) {
 	for _, tc := range []struct {
 		cadence      domain.RecurringCadence

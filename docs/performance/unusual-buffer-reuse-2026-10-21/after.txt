@@ -1,0 +1,13 @@
+Command: go test -work -run '^$' -bench '^BenchmarkJob3300Step32$' -benchmem -benchtime=1x -count=5 ./internal/unusual (private GOCACHE)
+WORK=C:\Users\mreca\AppData\Local\Temp\go-build1505594755
+goos: windows
+goarch: amd64
+pkg: github.com/monstercameron/CashFlux/internal/unusual
+cpu: Virtual CPU @ 4.45GHz
+BenchmarkJob3300Step32-18    	       1	 336375100 ns/op	61586952 B/op	 1028231 allocs/op
+BenchmarkJob3300Step32-18    	       1	 247725700 ns/op	61587048 B/op	 1028232 allocs/op
+BenchmarkJob3300Step32-18    	       1	 280840100 ns/op	61586392 B/op	 1028227 allocs/op
+BenchmarkJob3300Step32-18    	       1	 530465000 ns/op	61586600 B/op	 1028228 allocs/op
+BenchmarkJob3300Step32-18    	       1	1185553200 ns/op	61587432 B/op	 1028238 allocs/op
+PASS
+ok  	github.com/monstercameron/CashFlux/internal/unusual	3.851s

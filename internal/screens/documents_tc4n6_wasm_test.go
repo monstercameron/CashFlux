@@ -10,8 +10,8 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/staging"
 	"github.com/monstercameron/CashFlux/internal/store"
-	"github.com/monstercameron/GoWebComponents/v5/testkit/render"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/testkit/render"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 func TestCSVPreflightShowsFailuresWhenNoRowsAreParseableTC4N6(t *testing.T) {

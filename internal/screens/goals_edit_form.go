@@ -19,9 +19,9 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // GoalEditFormProps drives the goal editor rendered inside the shell-root flip modal
@@ -135,11 +135,15 @@ func GoalEditForm(props GoalEditFormProps) ui.Node {
 	onToggleBudget := func(idv string) { budgetSetS.Set(toggleInSet(budgetSetS.Get(), idv)) }
 	// Contribute quick-fill: set the amount to exactly what's left to reach the target.
 	fillRemaining := ui.UseEvent(Prevent(func() {
-		rem := g.TargetAmount.Amount - g.CurrentAmount.Amount
-		if rem < 0 {
-			rem = 0
+		if app == nil {
+			return
 		}
-		contribS.Set(money.FormatMinor(rem, dec))
+		remaining, err := app.GoalContributionRemaining(props.GoalID)
+		if err != nil {
+			errS.Set(err.Error())
+			return
+		}
+		contribS.Set(money.FormatMinor(remaining.Amount, currency.Decimals(remaining.Currency)))
 	}))
 
 	saveEdit := ui.UseEvent(Prevent(func() {
@@ -260,7 +264,19 @@ func GoalEditForm(props GoalEditFormProps) ui.Node {
 			done()
 			return
 		}
+		// A mounted form may outlive an external edit or deletion. Resolve the
+		// eligible debit links before submitting. Parse in the rendered currency;
+		// native validation rejects a conflicting external currency edit rather than
+		// silently reinterpreting the number the user already typed.
+		latest, found := findGoal(app, props.GoalID)
+		if !found {
+			errS.Set(uistate.T("common.notReady"))
+			return
+		}
 		c := g.CurrentAmount.Currency
+		if c == "" {
+			c = g.TargetAmount.Currency
+		}
 		if c == "" {
 			c = base
 		}
@@ -269,21 +285,17 @@ func GoalEditForm(props GoalEditFormProps) ui.Node {
 			errS.Set(uistate.T("goals.targetRequired"))
 			return
 		}
-		beforePct := goalsvc.Percent(g)
-		after := g
-		after.CurrentAmount = money.New(g.CurrentAmount.Amount+amt, c)
-		afterPct := goalsvc.Percent(after)
 		// Debit the account the user picked (multi-linked goals choose; defaults to the
 		// first ELIGIBLE link) — without altering the goal's stored link. Resolved through
 		// the same liquid-only filter the picker uses, so an ineligible stored primary
 		// (e.g. a grandfathered 401(k) link) can never become a ledger-debit source.
 		fromAcct := ""
-		for _, a := range goalEligibleDebitAccounts(app.Accounts(), g) {
+		for _, a := range goalEligibleDebitAccounts(app.Accounts(), latest) {
 			if fromAcct == "" || a.ID == ledgerAcctS.Get() {
 				fromAcct = a.ID
 			}
 		}
-		res, cerr := app.ContributeToGoalFrom(g, money.New(amt, c), postLedgerS.Get(), fromAcct)
+		res, cerr := app.ContributeToGoalFrom(latest, money.New(amt, c), postLedgerS.Get(), fromAcct)
 		if cerr != nil {
 			errS.Set(cerr.Error())
 			return
@@ -294,8 +306,8 @@ func GoalEditForm(props GoalEditFormProps) ui.Node {
 			notice += " " + uistate.T("goals.contributedLedger")
 		}
 		uistate.PostUndoable(notice) // money-state change → one-click reversible
-		if m := goalsvc.MilestoneCrossed(beforePct, afterPct); m > 0 {
-			uistate.PostNotice(uistate.T(fmt.Sprintf("goals.milestone%d", m)), false)
+		if res.Milestone > 0 {
+			uistate.PostNotice(uistate.T(fmt.Sprintf("goals.milestone%d", res.Milestone)), false)
 		}
 		if res.BecameComplete {
 			uistate.PostNotice(uistate.T("goals.completionPrompt"), false)
@@ -356,10 +368,13 @@ func GoalEditForm(props GoalEditFormProps) ui.Node {
 			)
 		}
 		// Progress context: a compact bar (saved of target) and the amount left to go.
-		cpct := goalsvc.Percent(g)
-		rem := g.TargetAmount.Amount - g.CurrentAmount.Amount
-		if rem < 0 {
-			rem = 0
+		evaluation := goalsvc.EvaluateGoal(g, goalsvc.TaskSummary{}, goalRates(app), time.Now())
+		cpct := evaluation.Coverage.SavedPercent
+		rem := int64(0)
+		if evaluation.Coverage.SavedKnown {
+			if left, err := g.TargetAmount.Sub(evaluation.Coverage.Saved); err == nil {
+				rem = max(left.Amount, 0)
+			}
 		}
 		var finishChip ui.Node = Fragment()
 		if rem > 0 {
@@ -370,13 +385,15 @@ func GoalEditForm(props GoalEditFormProps) ui.Node {
 		// the reservation no longer fits the live balance, warn instead of claiming coverage —
 		// so Contribute never contradicts the card's overbooked warning.
 		var earmarkNote ui.Node = Fragment()
-		if g.AllocatedMinor() > 0 && rem > 0 {
+		if evaluation.Err != nil {
+			earmarkNote = goalCoverageUnavailable(g.ID+"-contribution", evaluation)
+		} else if evaluation.Coverage.SetAside.Amount > 0 && rem > 0 {
 			if overbookedGoals(app)[g.ID] {
 				earmarkNote = P(css.Class("t-caption", tw.TextWarn), Style(map[string]string{"margin": "0"}),
-					uistate.T("goals.earmarkOverbooked", fmtMoney(goalsvc.AllocatedTotal(g))))
+					uistate.T("goals.earmarkOverbooked", fmtMoney(evaluation.Coverage.SetAside)))
 			} else {
 				earmarkNote = P(css.Class("t-caption"), Style(map[string]string{"margin": "0", "color": "var(--up)"}),
-					uistate.T("goals.contribEarmark", fmtMoney(goalsvc.AllocatedTotal(g)), goalsvc.CoveragePercent(g)))
+					uistate.T("goals.contribEarmark", fmtMoney(evaluation.Coverage.SetAside), evaluation.Coverage.CoveragePercent))
 			}
 		}
 		return Form(css.Class("acct-edit-form", "goal-contribute"), OnSubmit(submitContribute),

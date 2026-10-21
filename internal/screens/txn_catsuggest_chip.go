@@ -20,9 +20,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/smartcatview"
 	"github.com/monstercameron/CashFlux/internal/txnreview"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // The two catalog codes this feature spans, and the reason there are two.

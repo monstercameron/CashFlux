@@ -4,6 +4,8 @@ package notify
 
 import (
 	"encoding/json"
+	"fmt"
+	"strings"
 	"time"
 )
 
@@ -159,28 +161,35 @@ func MarshalRuleConfig(cfg RuleConfig) string {
 // the struct migration) are detected and promoted: the bool map becomes the
 // Enabled field and Thresholds starts empty.
 func UnmarshalRuleConfig(raw string) RuleConfig {
-	if raw == "" {
+	cfg, err := ParseRuleConfig(raw)
+	if err != nil {
 		return DefaultRuleConfig()
 	}
-	// Attempt to unmarshal as the current struct shape.
+	return cfg
+}
+
+// ParseRuleConfig shares current and legacy enabled-map interpretation with the
+// UI while making malformed or wrong-shaped storage observable to data readers.
+func ParseRuleConfig(raw string) (RuleConfig, error) {
+	if raw == "" {
+		return DefaultRuleConfig(), nil
+	}
+	if !strings.HasPrefix(strings.TrimSpace(raw), "{") {
+		return RuleConfig{}, fmt.Errorf("notification rule configuration must be a JSON object")
+	}
 	var cfg RuleConfig
 	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
-		return DefaultRuleConfig()
+		return RuleConfig{}, fmt.Errorf("notification rule configuration unavailable: %w", err)
 	}
-	// If Enabled is nil the payload was either empty or a legacy bare bool-map.
-	// Try the legacy path: unmarshal as map[string]bool.
 	if cfg.Enabled == nil {
 		var legacy map[string]bool
 		if err := json.Unmarshal([]byte(raw), &legacy); err == nil && len(legacy) > 0 {
-			return RuleConfig{
-				Enabled:    legacy,
-				Thresholds: map[string]int64{},
-			}
+			return RuleConfig{Enabled: legacy, Thresholds: map[string]int64{}}, nil
 		}
-		return DefaultRuleConfig()
+		return DefaultRuleConfig(), nil
 	}
 	if cfg.Thresholds == nil {
 		cfg.Thresholds = map[string]int64{}
 	}
-	return cfg
+	return cfg, nil
 }

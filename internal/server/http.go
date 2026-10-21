@@ -421,6 +421,13 @@ func httpOperatorAuthorized(user AuthUser, cfg Config) bool {
 func securityHeadersMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		header := w.Header()
+		// Every API response can carry account data or credentials, including
+		// error responses and endpoints that use cookies instead of bearer auth.
+		// Keep the public discovery response under the same policy so new API
+		// routes cannot accidentally become cacheable by omission.
+		if strings.HasPrefix(r.URL.Path, "/v1/") || r.URL.Path == "/grpc" {
+			header.Set("Cache-Control", "private, no-store")
+		}
 		header.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 		header.Set("X-Content-Type-Options", "nosniff")
 		header.Set("Referrer-Policy", "no-referrer")

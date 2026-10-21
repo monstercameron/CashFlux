@@ -20,9 +20,9 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // CatSuggestFormID links the form to the modal's pinned Save button.
@@ -70,7 +70,7 @@ func CatSuggestBody(_ struct{}) ui.Node {
 		seeded.Set(txnID)
 	}
 	others := smartcatview.MerchantOthers(txn, txns)
-	backend := pr.Normalize().BackendActive()
+	backend := uistate.BackendAIActive(pr)
 	aiEnabled := app != nil && aiProviderConfigured(app, backend) && uistate.LoadSmartSettings().IsEnabled(catSuggestAICode)
 	var conn smartAIConn
 	if app != nil {

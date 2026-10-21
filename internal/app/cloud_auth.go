@@ -25,10 +25,10 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/state"
-	uic "github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/state"
+	uic "github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 type cloudAuthActions struct{ Google, GitHub, SignOut func() }
@@ -132,8 +132,9 @@ func cloudSignInView(p cloudSignInProps) uic.Node {
 		H3(css.Class(tw.Text15, tw.FontSemibold), uistate.T("cloud1.step.signin")),
 		P(css.Class(tw.Text14, tw.TextDim), uistate.T("cloud1.signInHint")),
 		uic.CreateElement(cloudConnectionFeedback, cloudFeedbackProps{Phase: c.Phase, Error: c.Error}),
-		If(activation, uic.CreateElement(PendingDeviceCard, PendingDeviceCardProps{Primary: true})),
-		If(password && !activation, uic.CreateElement(PasswordAuthCard, PasswordAuthCardProps{AllowRegistration: true, InitiallyExpanded: true})),
+		If(c.Phase != discoveryOK, uic.CreateElement(cloudAction, cloudActionProps{Label: uistate.T("cloud1.test"), TestID: "cloud-signin-test-connection", OnClick: c.Test, Disabled: c.Phase == discoveryChecking})),
+		If(password, uic.CreateElement(PasswordAuthCard, PasswordAuthCardProps{AllowRegistration: d.RegistrationOpen, InitiallyExpanded: true})),
+		If(activation, uic.CreateElement(PendingDeviceCard, PendingDeviceCardProps{Primary: false})),
 		If(oauth, Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2),
 			uic.CreateElement(cloudAction, cloudActionProps{Label: uistate.T("settings.signInGoogle"), TestID: "sync-oauth-google", OnClick: p.Auth.Google, Disabled: !p.Protected || !cloudProviderEnabled(c, "google")}),
 			uic.CreateElement(cloudAction, cloudActionProps{Label: uistate.T("settings.signInGitHub"), TestID: "sync-oauth-github", OnClick: p.Auth.GitHub, Disabled: !p.Protected || !cloudProviderEnabled(c, "github")}),
@@ -143,7 +144,6 @@ func cloudSignInView(p cloudSignInProps) uic.Node {
 			uic.CreateElement(cloudAction, cloudActionProps{Label: uistate.T("cloud1.protectAction"), TestID: "cloud-oauth-protect", OnClick: p.OnProtect}),
 		)),
 		uic.CreateElement(cloudDisclosure, cloudDisclosureProps{Title: uistate.T("cloud1.moreSignIn"), TestID: "sync-advanced-token-toggle", Body: Fragment(
-			If(activation, uic.CreateElement(PasswordAuthCard, PasswordAuthCardProps{AllowRegistration: false})),
 			uic.CreateElement(DeviceLinkCard, DeviceLinkCardProps{}),
 			uiw.Field(uiw.FieldProps{Label: uistate.T("cloud1.accessCode"), Hint: uistate.T("cloud1.accessCodeHint"), Control: func(a uiw.FieldA11y) uic.Node {
 				return Input(css.Class("set-input"), Type("password"), ID(a.ID), Attr("aria-describedby", a.DescribedBy), Attr("data-testid", "sync-server-token"),

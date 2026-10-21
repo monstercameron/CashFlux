@@ -25,9 +25,9 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // buildDiscoverTxns converts the store's transactions into the discovery input:
@@ -390,7 +390,7 @@ func rhyReviewSection(_ rhyReviewProps) ui.Node {
 	// ── Group B — Smart+ (opt-in) ──
 	settings := app.Settings()
 	pr := uistate.LoadPrefs().Normalize()
-	hasKey := settings.OpenAIKey != "" || uistate.BackendConnectionActive(pr)
+	hasKey := settings.OpenAIKey != "" || uistate.BackendAIActive(pr)
 	payload := rhyLeftoverPayload(leftovers, base)
 	estTokens := len(payload) / 4
 
@@ -412,7 +412,7 @@ func rhyReviewSection(_ rhyReviewProps) ui.Node {
 		}
 		done := func(c string, _ ai.Usage) { aiLoading.Set(false); aiText.Set(c) }
 		fail := func(e string) { aiLoading.Set(false); aiErr.Set(e) }
-		if uistate.BackendConnectionActive(pr) {
+		if uistate.BackendAIActive(pr) {
 			ai.SendProxyChat(pr.ServerURL, uistate.EffectiveServerToken(pr.ServerToken), model, messages, 0.4, done, fail)
 		} else {
 			ai.SendChat(settings.OpenAIKey, ai.DefaultBaseURL, model, messages, 0.4, done, fail)

@@ -239,7 +239,9 @@ func TestAgUpdateTransactionEditsExactlyOneRow(t *testing.T) {
 func TestAgUpdateTransactionFlipsDirectionWithoutTouchingMagnitude(t *testing.T) {
 	app := agrApp(t)
 	tool := agrTool(t, app, "update_transaction", aicontext.TierFull)
-	out := tool.run(json.RawMessage(`{"id":"ff666666","direction":"income"}`))
+	args := json.RawMessage(`{"id":"ff666666","direction":"income"}`)
+	_ = tool.preview(args)
+	out := tool.run(args)
 	if !strings.Contains(out, "Updated") {
 		t.Fatalf("direction flip failed: %s", out)
 	}
@@ -256,9 +258,11 @@ func TestAgUpdateTransactionRefusesAnAmbiguousID(t *testing.T) {
 	// Every seeded id starts with a distinct pair, so a single character is
 	// unambiguous; "" is not an id at all and must be refused, not applied to
 	// whatever comes first.
+	_ = tool.preview(json.RawMessage(`{"id":"","category":"Rent"}`))
 	if out := tool.run(json.RawMessage(`{"id":"","category":"Rent"}`)); !strings.Contains(out, "give the transaction id") {
 		t.Errorf("an empty id should be refused, got: %s", out)
 	}
+	_ = tool.preview(json.RawMessage(`{"id":"zz999999","category":"Rent"}`))
 	if out := tool.run(json.RawMessage(`{"id":"zz999999","category":"Rent"}`)); !strings.Contains(out, "no transaction with id") {
 		t.Errorf("an unknown id should be refused, got: %s", out)
 	}
@@ -266,8 +270,10 @@ func TestAgUpdateTransactionRefusesAnAmbiguousID(t *testing.T) {
 
 func TestAgUpdateTransactionRejectsAnUnknownCategory(t *testing.T) {
 	app := agrApp(t)
-	out := agrTool(t, app, "update_transaction", aicontext.TierFull).
-		run(json.RawMessage(`{"id":"ff666666","category":"Yacht upkeep"}`))
+	tool := agrTool(t, app, "update_transaction", aicontext.TierFull)
+	args := json.RawMessage(`{"id":"ff666666","category":"Yacht upkeep"}`)
+	_ = tool.preview(args)
+	out := tool.run(args)
 	if !strings.Contains(out, "create_category") {
 		t.Errorf("should point at create_category rather than inventing one: %s", out)
 	}

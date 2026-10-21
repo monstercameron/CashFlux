@@ -13,9 +13,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	uic "github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	uic "github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // pendingPhase tracks pendingDeviceWatcher's state machine.
@@ -62,7 +62,7 @@ func PendingDeviceCard(props PendingDeviceCardProps) uic.Node {
 	if !expanded.Get() {
 		return Div(Attr("data-testid", "pending-device-collapsed"),
 			Button(css.Class("btn-link", tw.Text12, tw.TextDim), Type("button"), Attr("data-testid", "pending-device-expand"),
-				OnClick(onToggleExpand), uistate.T("authCards.waitForApproval")),
+				OnClick(onToggleExpand), uistate.T("authCards.pendingRequest")),
 		)
 	}
 	return uic.CreateElement(pendingDeviceWatcher)

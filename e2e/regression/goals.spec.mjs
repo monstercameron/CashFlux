@@ -47,12 +47,18 @@ test.describe("goals: decluttered toolbar", () => {
 
   test("sorting by name orders the active goal cards A→Z", async ({ app }) => {
     await nav(app, "/goals");
-    await app.getByTestId("goals-sort").selectOption("name");
-    await app.waitForTimeout(300);
-    const titles = await app.locator(".goal-list .goal-card .goal-card-title").allInnerTexts();
-    expect(titles.length).toBeGreaterThan(1);
-    const sorted = [...titles].sort((a, b) => a.localeCompare(b));
-    expect(titles).toEqual(sorted);
+    const sort = app.getByTestId("goals-sort");
+    await sort.selectOption("name");
+    await expect(sort).toHaveValue("name");
+    const titles = app.locator(".goal-list .goal-card .goal-card-title");
+    const expected = [
+      "Baby fund (due Dec 2026)",
+      "Emergency fund (3 months)",
+      "Pay off Marcus's car loan",
+      "Pay off Priya's student loan",
+      "Trade up to a bigger family home",
+    ];
+    await expect.poll(() => titles.allInnerTexts(), { timeout: 10_000 }).toEqual(expected);
   });
 });
 

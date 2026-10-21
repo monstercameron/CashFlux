@@ -9,18 +9,18 @@ import (
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/accountflow"
+	"github.com/monstercameron/CashFlux/internal/accountview"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
-	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // --- grouping model (AC1) --------------------------------------------------------
@@ -28,73 +28,11 @@ import (
 // acctGroupSection is one rendered section on the /accounts list: a group header
 // (empty ID = the default "Ungrouped" section) plus the member accounts, already
 // filtered to the visible set, with the group's net subtotal in the base currency.
-type acctGroupSection struct {
-	Group    domain.AccountGroup // zero value (empty ID) = the Ungrouped catch-all
-	Accounts []domain.Account
-	Subtotal money.Money
-}
+type acctGroupSection = accountview.GroupSection
 
-// groupSections partitions the visible accounts into the user's groups (in group
-// order) followed by an "Ungrouped" catch-all for the rest. Each account appears in
-// at most one group; a group's net subtotal signs liabilities negative (assets add,
-// debts subtract) so it matches the group_<slug>_total engine variable. Empty groups
-// are dropped from the display so the page doesn't sprout blank headers. Pure — no
-// hooks — so the list tile can call it after building `shown`.
-func groupSections(shown []domain.Account, groups []domain.AccountGroup, txns []domain.Transaction, rates currency.Rates, base string) []acctGroupSection {
-	byID := make(map[string]domain.Account, len(shown))
-	for _, a := range shown {
-		byID[a.ID] = a
-	}
-	claimed := map[string]bool{}
-	signed := func(a domain.Account) int64 {
-		bal, _ := ledger.Balance(a, txns)
-		v := bal.Amount
-		if c, err := rates.Convert(bal, base); err == nil {
-			v = c.Amount
-		}
-		if a.Class == domain.ClassLiability {
-			if v < 0 {
-				v = -v
-			}
-			return -v
-		}
-		return v
-	}
-
-	var out []acctGroupSection
-	for _, g := range groups {
-		var members []domain.Account
-		var subtotal int64
-		for _, aid := range g.AccountIDs {
-			a, ok := byID[aid]
-			if !ok || claimed[aid] {
-				continue
-			}
-			claimed[aid] = true
-			members = append(members, a)
-			subtotal += signed(a)
-		}
-		if len(members) == 0 {
-			continue
-		}
-		out = append(out, acctGroupSection{Group: g, Accounts: members, Subtotal: money.New(subtotal, base)})
-	}
-
-	// Ungrouped catch-all: every visible account not claimed by a group, in the
-	// order the caller already sorted them.
-	var rest []domain.Account
-	var restTotal int64
-	for _, a := range shown {
-		if claimed[a.ID] {
-			continue
-		}
-		rest = append(rest, a)
-		restTotal += signed(a)
-	}
-	if len(rest) > 0 {
-		out = append(out, acctGroupSection{Accounts: rest, Subtotal: money.New(restTotal, base)})
-	}
-	return out
+// groupSections uses the shared account snapshot so grouping adds no ledger scans.
+func groupSections(shown []domain.Account, groups []domain.AccountGroup, balances map[string]money.Money, rates currency.Rates, base string) []acctGroupSection {
+	return accountview.Groups(shown, groups, balances, rates, base)
 }
 
 // --- collapsible group sections (C412) -------------------------------------------
@@ -173,6 +111,14 @@ func acctGroupHeader(props acctGroupHeaderProps) ui.Node {
 	if !isReal {
 		toggleTestID = "acct-group-toggle-" + ungroupedCollapseID
 	}
+	subtotalNote := ""
+	if props.Section.Incomplete {
+		subtotalNote = "Some account balances are excluded from this subtotal."
+		if len(props.Section.ExcludedCurrencies) > 0 {
+			subtotalNote = "Missing exchange rates: " + strings.Join(props.Section.ExcludedCurrencies, ", ") + ". These balances are excluded."
+		}
+	}
+
 	return Div(css.Class("acct-group-header", tw.Flex, tw.ItemsCenter, tw.Gap2),
 		Attr("role", "heading"), Attr("aria-level", "3"),
 		Attr("aria-label", uistate.T("accounts.groupRowAria", name)),
@@ -195,7 +141,9 @@ func acctGroupHeader(props acctGroupHeaderProps) ui.Node {
 		),
 		Span(css.Class("acct-group-subtotal", tw.TextDim, tw.MlAuto),
 			Attr("aria-label", uistate.T("accounts.groupSubtotalAria", fmtMoney(props.Section.Subtotal))),
-			uistate.T("accounts.groupSubtotal", fmtMoney(props.Section.Subtotal))),
+			uistate.T("accounts.groupSubtotal", fmtMoney(props.Section.Subtotal)),
+			If(props.Section.Incomplete, Span(css.Class("t-caption", tw.TextDim),
+				Attr("data-testid", "acct-group-incomplete-"+g.ID), Title(subtotalNote), " · "+subtotalNote))),
 		editBtn,
 	)
 }

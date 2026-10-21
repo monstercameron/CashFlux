@@ -3,10 +3,28 @@
 package prefs
 
 import (
+	"encoding/json"
 	"reflect"
 	"testing"
 	"time"
 )
+
+func TestAIProxyPreferenceRoundTrip(t *testing.T) {
+	pr := Default()
+	pr.BackendDisabled = false
+	pr.AIProxyDisabled = true
+	b, err := json.Marshal(pr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got Prefs
+	if err := json.Unmarshal(b, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.BackendDisabled || !got.AIProxyDisabled {
+		t.Fatalf("AI route changed cloud connection on round trip: %+v", got)
+	}
+}
 
 func TestFormatDate(t *testing.T) {
 	d := time.Date(2026, 6, 5, 0, 0, 0, 0, time.UTC)

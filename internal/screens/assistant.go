@@ -23,24 +23,22 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/assistantview"
 	"github.com/monstercameron/CashFlux/internal/currency"
-	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
-	"github.com/monstercameron/CashFlux/internal/engineenv"
 	"github.com/monstercameron/CashFlux/internal/flagverdict"
 	"github.com/monstercameron/CashFlux/internal/insights"
 	"github.com/monstercameron/CashFlux/internal/insightsperiod"
 	"github.com/monstercameron/CashFlux/internal/money"
-	"github.com/monstercameron/CashFlux/internal/reports"
 	"github.com/monstercameron/CashFlux/internal/scope"
 	"github.com/monstercameron/CashFlux/internal/smart"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/router"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/router"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // Assistant returns the top-level node for the /assistant hub. It is the
@@ -268,21 +266,23 @@ func assistantInsightsDataPanel() ui.Node {
 	rates := currency.Rates{Base: base, Rates: settings.FXRates}
 
 	accounts := app.Accounts()
+	sc := scopeAtom.Get()
+	cats := app.Categories()
+	now := time.Now()
+	uncategorized := uistate.T("insights.uncategorized")
+	data := useAssistantBriefing(app, sc, insightsperiod.Period(periodAtom.Get()), now, uncategorized)
+	catsByName := categoryNameToIDMap(cats)
+	attributions := ui.UseMemo(func() map[string]string {
+		return anomalyAttributionTexts(data.Anomalies, catsByName, data.Transactions, rates, base, now)
+	}, data, uistate.ActiveLanguage())
+	habits := ui.UseMemo(func() []string {
+		return spendHabitLines(data.Transactions, rates, base, now)
+	}, data, uistate.ActiveLanguage())
 	if len(accounts) == 0 {
 		return ui.CreateElement(EmptyStateCTA, emptyCTAProps{
-			Message:   uistate.T("assistant.emptyData"),
-			CTALabel:  uistate.T("accounts.addFirst"),
-			AddTarget: "account",
+			Message: uistate.T("assistant.emptyData"), CTALabel: uistate.T("accounts.addFirst"), AddTarget: "account",
 		})
 	}
-
-	sc := scopeAtom.Get()
-	instOf := func(a domain.Account) string { return a.Institution }
-	scopeIDs := scope.ResolveScope(accounts, sc, instOf)
-	scopedTxns := scope.ApplyScopeToTxns(app.Transactions(), scopeIDs)
-	cats := app.Categories()
-	catsByName := categoryNameToIDMap(cats)
-	now := time.Now()
 	accent := chartLineColor(uistate.CurrentAccent())
 
 	// ── Drill callbacks ────────────────────────────────────────────────────────
@@ -304,14 +304,11 @@ func assistantInsightsDataPanel() ui.Node {
 
 	// ── Briefing figures — the SAME derivations as the assistant_* variables ──
 
-	window := insightsperiod.Resolve(insightsperiod.Period(periodAtom.Get()), now)
-	mtd, prev, _ := engineenv.AssistantSpendStoryRange(scopedTxns, rates, window.Start, window.End, window.PriorStart, window.PriorEnd)
-	// The comparison figure IS the pace for every window: each period is measured
-	// against the equivalent span before it, so "ahead of pace" means the same
-	// thing whichever period is chosen.
+	window := data.Window
+	mtd, prev := data.Spent, data.Prior
+	// Every selected range is compared with the matching prior span.
 	pace := prev
-	anomalies := engineenv.AssistantHighlights(scopedTxns, cats, rates, now, uistate.T("insights.uncategorized"))
-	merchants, _ := reports.TopPayeesTrailing(scopedTxns, engineenv.AssistantMerchantWindowDays, now, rates, 7)
+	anomalies, merchants := data.Anomalies, data.Merchants
 	flaggedIns := runAnomalyDetectors(app, pr.WeekStartWeekday())
 
 	// ── Hero tile: the month's spending story ─────────────────────────────────
@@ -339,10 +336,9 @@ func assistantInsightsDataPanel() ui.Node {
 	// month-scoped — the trailing-90-day `merchants` ranking feeds the Top
 	// merchants tile below, not this chip (2026-07-18 assessment, High: the
 	// "This month" summary presented a 90-day aggregate as current-month spend).
-	monthStart := dateutil.MonthStart(now)
-	if monthMerchants, _ := reports.TopPayees(scopedTxns, monthStart, dateutil.AddMonths(monthStart, 1), rates, 1); len(monthMerchants) > 0 {
-		chips = append(chips, rptChip(uistate.T("assistant.chipTopMerchant", monthMerchants[0].Name),
-			fmtMoney(money.New(monthMerchants[0].Amount, base)), ""))
+	if len(data.MonthMerchants) > 0 {
+		chips = append(chips, rptChip(uistate.T("assistant.chipTopMerchant", data.MonthMerchants[0].Name),
+			fmtMoney(money.New(data.MonthMerchants[0].Amount, base)), ""))
 	}
 	flaggedTone := ""
 	if len(flaggedIns) > 0 {
@@ -382,17 +378,17 @@ func assistantInsightsDataPanel() ui.Node {
 		metricsCls += " is-on"
 		metricsLabel = uistate.T("assistant.metricsHide")
 	}
-	toolbar := astTile("ast-toolbar", "1 / span 4", Div(css.Class("filter-strip"),
-		Div(css.Class("filter-strip-controls"),
+	toolbar := astTile("ast-toolbar", "1 / span 4", uiw.ControlStrip(uiw.ControlStripProps{
+		Controls: []ui.Node{
 			Button(ClassStr(metricsCls), Type("button"), Attr("aria-pressed", ariaBool(showFormulas.Get())),
 				Attr("data-testid", "ast-toggle-formulas"), Title(uistate.T("assistant.metricsTitle")),
 				OnClick(toggleFormulas), Text(metricsLabel)),
-		),
-		Div(css.Class("filter-strip-controls"),
+		},
+		Actions: []ui.Node{
 			A(css.Class("btn", "btn-ghost"), Href(uistate.RoutePath("/reports")), Attr("data-testid", "ast-reports-link"), uistate.T("assistant.viewReports")),
 			A(css.Class("btn", "btn-ghost"), Href(uistate.RoutePath("/transactions")), Attr("data-testid", "ast-transactions-link"), uistate.T("assistant.viewTransactions")),
-		),
-	))
+		},
+	}))
 
 	// ── Attention pair: flagged activity + category shifts ────────────────────
 
@@ -469,7 +465,7 @@ func assistantInsightsDataPanel() ui.Node {
 		return ui.CreateElement(insightsHighlightRow, insightsHighlightRowProps{
 			Anomaly:     a,
 			Base:        base,
-			Attribution: anomalyAttributionText(a, catsByName[a.Category], scopedTxns, rates, base, now),
+			Attribution: attributions[a.Category],
 			Verdict:     cur.Verdict,
 			OnJudge: func(v flagverdict.Verdict) {
 				if v == "" {
@@ -503,7 +499,7 @@ func assistantInsightsDataPanel() ui.Node {
 	// ── Trend tile: the last six complete months, theme-accent, with takeaway ──
 
 	trendTile := astTile("ast-trend", "1 / span 4", astSection("sec-ast-trend", uistate.T("insights.spendTrendTitle"), nil,
-		assistantSpendTrend(scopedTxns, base, rates, accent)))
+		assistantSpendTrendData(data.Trend, data.TrendError, base, accent)))
 
 	// ── Merchants + pinned pair ────────────────────────────────────────────────
 
@@ -515,24 +511,12 @@ func assistantInsightsDataPanel() ui.Node {
 		for i, s := range merchants {
 			ms[i] = merchantSpend{Name: s.Name, Total: s.Amount, Count: s.Count}
 		}
-		rows := MapKeyed(ms,
-			func(m merchantSpend) any { return m.Name },
-			func(m merchantSpend) ui.Node {
-				rank := 0
-				for i, other := range ms {
-					if other.Name == m.Name {
-						rank = i + 1
-						break
-					}
-				}
-				return ui.CreateElement(insightsMerchantRow, insightsMerchantRowProps{
-					Merchant: m,
-					Base:     base,
-					Rank:     rank,
-					OnDrill:  viewMerchantTransactions,
-				})
-			},
-		)
+		rows := make([]ui.Node, 0, len(ms))
+		for i, merchant := range ms {
+			rows = append(rows, WithKey(ui.CreateElement(insightsMerchantRow, insightsMerchantRowProps{
+				Merchant: merchant, Base: base, Rank: i + 1, OnDrill: viewMerchantTransactions,
+			}), merchant.Name))
+		}
 		merchantsBody = Fragment(
 			P(css.Class("muted"), uistate.T("insights.topMerchantsHint")),
 			Div(css.Class("insight-list"), rows),
@@ -563,7 +547,6 @@ func assistantInsightsDataPanel() ui.Node {
 	pinnedTile := astTile("ast-pinned", "span 2", astSection("sec-ast-pinned", uistate.T("insights.pinnedTitle"), nil, pinnedBody))
 
 	// ── Habits: what repeats, as opposed to what happened once (WF-SM2) ───────
-	habits := spendHabitLines(scopedTxns, rates, base, now)
 	var habitsBody ui.Node
 	if len(habits) == 0 {
 		habitsBody = P(css.Class("empty"), Attr("data-testid", "ast-habits-empty"), uistate.T("habits.empty"))
@@ -623,57 +606,59 @@ func assistantInsightsDataPanel() ui.Node {
 	)
 }
 
+// useAssistantBriefing retains one scoped financial snapshot while presentation
+// state changes. Quoted scope values distinguish institution names containing
+// spaces from multiple selected institutions.
+func useAssistantBriefing(app *appstate.App, sc scope.ReportScope, selected insightsperiod.Period, now time.Time, uncategorized string) *assistantview.Briefing {
+	return ui.UseMemo(func() *assistantview.Briefing {
+		settings := app.Settings()
+		base := settings.BaseCurrency
+		if base == "" {
+			base = "USD"
+		}
+		value := assistantview.DeriveBriefing(assistantview.BriefingInput{
+			Accounts: app.Accounts(), Transactions: app.Transactions(), Categories: app.Categories(),
+			Scope: sc, Period: selected, Rates: currency.Rates{Base: base, Rates: settings.FXRates},
+			Now: now, Uncategorized: uncategorized,
+		})
+		return &value
+	}, revKey(app), fmt.Sprintf("%#v", sc), selected, now.Format("2006-01-02"), uncategorized)
+}
+
 // assistantSpendTrend renders the briefing's spending trend: total expense
 // outflow for each of the last six complete months as a theme-accent area
 // chart, with a serif takeaway comparing the latest complete month to the
 // six-month average. Returns a quiet empty note with fewer than 2 points.
 func assistantSpendTrend(txns []domain.Transaction, base string, rates currency.Rates, accent string) ui.Node {
-	const buckets = 6
-	curMonth := dateutil.MonthStart(time.Now())
-	bounds := make([]time.Time, buckets+1)
-	for k := 0; k <= buckets; k++ {
-		bounds[k] = dateutil.AddMonths(curMonth, k-buckets)
-	}
-	flows, err := reports.IncomeExpenseSeries(txns, bounds, rates)
-	if err != nil || len(flows) < 2 {
+	data, err := assistantview.SpendTrend(txns, rates, time.Now())
+	return assistantSpendTrendData(data, err, base, accent)
+}
+
+// assistantSpendTrendData renders already derived chart facts. UI-only toggles
+// and flag verdicts reuse the cached series instead of rescanning the ledger.
+func assistantSpendTrendData(data assistantview.Trend, err error, base, accent string) ui.Node {
+	if err != nil || len(data.Flows) < 2 {
 		return P(css.Class("empty"), uistate.T("assistant.trendEmpty"))
 	}
-	vals := make([]float64, len(flows))
-	labels := make([]string, 0, len(flows))
-	valLabels := make([]string, 0, len(flows))
-	var total int64
-	for i, f := range flows {
-		vals[i] = float64(f.Expense)
-		total += f.Expense
-		labels = append(labels, bounds[i].Format("Jan"))
-		valLabels = append(valLabels, fmtMoney(money.New(f.Expense, base)))
+	valueLabels := make([]string, len(data.Flows))
+	for i, flow := range data.Flows {
+		valueLabels[i] = fmtMoney(money.New(flow.Expense, base))
 	}
-
-	// Takeaway: the latest complete month vs the six-month average.
 	takeaway := ""
-	avg := total / int64(len(flows))
-	last := flows[len(flows)-1].Expense
-	lastName := bounds[len(flows)-1].Format("January")
-	diff := last - avg
 	switch {
-	case diff > 0:
-		takeaway = uistate.T("assistant.trendAbove", lastName, fmtMoney(money.New(diff, base)))
-	case diff < 0:
-		takeaway = uistate.T("assistant.trendBelow", lastName, fmtMoney(money.New(-diff, base)))
+	case data.Delta > 0:
+		takeaway = uistate.T("assistant.trendAbove", data.LastMonth, fmtMoney(money.New(data.Delta, base)))
+	case data.Delta < 0:
+		takeaway = uistate.T("assistant.trendBelow", data.LastMonth, fmtMoney(money.New(-data.Delta, base)))
 	default:
-		takeaway = uistate.T("assistant.trendEven", lastName)
+		takeaway = uistate.T("assistant.trendEven", data.LastMonth)
 	}
-
 	return Fragment(
 		P(ClassStr("rpt-takeaway "+tw.Fold(tw.FontDisplay)), Attr("data-testid", "ast-trend-takeaway"), takeaway),
 		P(css.Class("muted"), uistate.T("insights.spendTrendHint")),
 		uiw.AreaChart(uiw.AreaChartProps{
-			Values:      vals,
-			Stroke:      accent,
-			GradientID:  "cf-assistant-spend",
-			Label:       uistate.T("insights.spendTrendTitle"),
-			Labels:      labels,
-			ValueLabels: valLabels,
+			Values: data.Values, Stroke: accent, GradientID: "cf-assistant-spend",
+			Label: uistate.T("insights.spendTrendTitle"), Labels: data.Labels, ValueLabels: valueLabels,
 		}),
 	)
 }

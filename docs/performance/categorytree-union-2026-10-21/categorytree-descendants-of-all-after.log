@@ -1,0 +1,13 @@
+Command: go test -work -run '^$' -bench '^BenchmarkDescendantsOfAllManyRoots$' -benchmem -count=5 ./internal/categorytree
+WORK=C:\Users\mreca\AppData\Local\Temp\go-build1708598246
+goos: windows
+goarch: amd64
+pkg: github.com/monstercameron/CashFlux/internal/categorytree
+cpu: Virtual CPU @ 4.45GHz
+BenchmarkDescendantsOfAllManyRoots-18    	    1371	    854354 ns/op	  464111 B/op	    2086 allocs/op
+BenchmarkDescendantsOfAllManyRoots-18    	    1778	    708466 ns/op	  464111 B/op	    2086 allocs/op
+BenchmarkDescendantsOfAllManyRoots-18    	    1609	    679697 ns/op	  464106 B/op	    2086 allocs/op
+BenchmarkDescendantsOfAllManyRoots-18    	    2001	    776313 ns/op	  464108 B/op	    2086 allocs/op
+BenchmarkDescendantsOfAllManyRoots-18    	     681	   1839374 ns/op	  464112 B/op	    2086 allocs/op
+PASS
+ok  	github.com/monstercameron/CashFlux/internal/categorytree	7.553s

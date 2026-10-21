@@ -3,6 +3,7 @@
 package categorytree
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -64,5 +65,69 @@ func TestDescendantsEdgeCases(t *testing.T) {
 	got := Descendants(cyc, "a")
 	if !got["a"] || !got["b"] {
 		t.Errorf("cycle Descendants(a) = %v, want to include a and b without looping", got)
+	}
+}
+
+func TestDescendantsOfAllMatchesPerRootUnionAndDoesNotMutate(t *testing.T) {
+	cats := []domain.Category{
+		cat("a", "A", "b"), // cycle with b
+		cat("b", "B", "a"),
+		cat("self", "Self", "self"), // self-parent is not an adjacency edge
+		cat("orphan", "Orphan", "outside"),
+		cat("child", "Child", "orphan"),
+		cat("plain", "Plain", ""),
+	}
+	before := append([]domain.Category(nil), cats...)
+	roots := []string{"a", "b", "a", "", "self", "outside", "unknown"}
+	want := map[string]bool{
+		"a": true, "b": true, "self": true, "outside": true,
+		"orphan": true, "child": true, "unknown": true,
+	}
+	got := DescendantsOfAll(cats, roots)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("DescendantsOfAll edge union = %v, want %v", got, want)
+	}
+	if !reflect.DeepEqual(cats, before) {
+		t.Fatalf("DescendantsOfAll mutated categories: got %v, want %v", cats, before)
+	}
+
+	// Keep the public union contract pinned to the established per-root traversal.
+	parity := make(map[string]bool)
+	for _, root := range roots {
+		for id := range Descendants(cats, root) {
+			parity[id] = true
+		}
+	}
+	if !reflect.DeepEqual(got, parity) {
+		t.Fatalf("DescendantsOfAll differs from union of Descendants calls: got %v, want %v", got, parity)
+	}
+}
+
+func descendantsOfAllBenchmarkFixture() ([]domain.Category, []string) {
+	const categoryCount = 2047
+	cats := make([]domain.Category, categoryCount)
+	roots := make([]string, 0, categoryCount/4)
+	for i := range cats {
+		id := fmt.Sprintf("cat-%04d", i)
+		parent := ""
+		if i > 0 {
+			parent = fmt.Sprintf("cat-%04d", (i-1)/2)
+		}
+		cats[i] = domain.Category{ID: id, ParentID: parent, Name: id}
+		// The selected roots overlap heavily in the balanced tree: selected
+		// ancestors already cover many of the descendants of later roots.
+		if i%4 == 0 {
+			roots = append(roots, id)
+		}
+	}
+	return cats, roots
+}
+
+func BenchmarkDescendantsOfAllManyRoots(b *testing.B) {
+	cats, roots := descendantsOfAllBenchmarkFixture()
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = DescendantsOfAll(cats, roots)
 	}
 }

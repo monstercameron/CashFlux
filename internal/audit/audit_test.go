@@ -11,7 +11,7 @@ import (
 
 func priced(key string, page smart.Page, sev smart.Severity, minor int64) smart.Insight {
 	return smart.Insight{Feature: "SMART-X", Page: page, Key: key, Title: key, Severity: sev}.
-		WithAmount(money.New(minor, "USD"))
+		WithOneTimeAmount(money.New(minor, "USD"))
 }
 
 func TestAuditRanksByImpactThenSeverity(t *testing.T) {
@@ -32,11 +32,11 @@ func TestAuditRanksByImpactThenSeverity(t *testing.T) {
 			t.Fatalf("order[%d] = %q, want %q (full %v)", i, gotOrder[i], want[i], gotOrder)
 		}
 	}
-	if r.TotalImpactMinor != 500+34000+1000+1000 {
-		t.Fatalf("total = %d", r.TotalImpactMinor)
+	if r.OneTimeMinor != 500+34000+1000+1000 {
+		t.Fatalf("total = %d", r.OneTimeMinor)
 	}
-	if got := r.TotalImpact(); got.Amount != r.TotalImpactMinor || got.Currency != "USD" {
-		t.Fatalf("TotalImpact = %+v", got)
+	if r.Base != "USD" {
+		t.Fatalf("base = %q", r.Base)
 	}
 }
 
@@ -94,7 +94,7 @@ func TestAuditFamilyLabel(t *testing.T) {
 
 func TestAuditEmpty(t *testing.T) {
 	r := Audit(nil, "USD")
-	if len(r.Findings) != 0 || r.TotalImpactMinor != 0 || r.OneTapCount() != 0 {
+	if len(r.Findings) != 0 || r.OneTimeMinor != 0 || r.OneTapCount() != 0 {
 		t.Fatalf("empty audit = %+v", r)
 	}
 }

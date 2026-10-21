@@ -13,9 +13,9 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/CashFlux/internal/widgetrender"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // Goals is the widgetized goals surface — a thin SURFACE HOST like /budgets and
@@ -71,19 +71,7 @@ func Goals() ui.Node {
 	// transform) so its centering isn't broken.
 	return Fragment(
 		goalsRoundUpCard(),
-		Div(css.Class("bento bento-goals"),
-			MapKeyed(specs,
-				func(sp domain.WidgetSpec) any { return sp.ID },
-				func(sp domain.WidgetSpec) ui.Node {
-					c := rctx
-					c.Spec = sp
-					if node, ok := safeRenderSpec(sp, c); ok {
-						return node
-					}
-					return Fragment()
-				},
-			),
-		),
+		ui.CreateElement(surfaceTiles, surfaceTilesProps{Class: "bento-goals", Specs: specs, Context: rctx}),
 		goalsRoundUpConfigModal(),
 	)
 }

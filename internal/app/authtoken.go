@@ -16,7 +16,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/CashFlux/internal/syncstate"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/state"
+	"github.com/monstercameron/GoWebComponents/v7/state"
 )
 
 // Session refresh has two explicit modes: same-origin HTTPS uses the server's
@@ -33,9 +33,9 @@ const authRefreshModeCookie = "cookie"
 // authCSRFKey holds a transient double-submit token. It is never saved in prefs.
 const authCSRFKey = "cashflux:auth:csrf"
 
-// cloudAIKeySetKey records that an OpenAI key has been uploaded to the
-// currently configured server. It is scoped to that server, so the scope
-// reset below clears it alongside the credentials.
+// cloudAIKeySetKey is a legacy local hint about a server key, not an
+// authoritative server status. Clear it when changing servers; AI Settings
+// no longer reads it because a local hint can become stale.
 const cloudAIKeySetKey = "cashflux:cloud-ai-key-set"
 
 // oauthFallbackExpiresInSeconds is the access-token lifetime assumed for an

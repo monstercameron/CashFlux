@@ -13,7 +13,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/browserstore"
 	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/state"
+	"github.com/monstercameron/GoWebComponents/v7/state"
 )
 
 const cloudSetupKey = "cashflux:cloud:setup"

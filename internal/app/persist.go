@@ -281,7 +281,14 @@ func hydrateDataset() {
 		initializeHostedHydration(false)
 		return
 	}
+	// A verified whole-device erase removes the browserstore seed gate too.
+	// Keep only this nonpersonal marker outside CashFlux's storage families so
+	// reopening the app does not silently recreate demo transactions.
+	erasedMarker := js.Global().Get("localStorage")
 	seededBefore := browserstore.GetString(seededFlagKey) != ""
+	if erasedMarker.Truthy() {
+		seededBefore = seededBefore || erasedMarker.Call("getItem", "cf-device-erased-v1").Truthy()
+	}
 	markSeeded := func() { browserstore.Set(seededFlagKey, "1") }
 	allowSample := !hostedDocument()
 

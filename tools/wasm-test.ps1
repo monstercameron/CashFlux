@@ -100,6 +100,35 @@ function Compile-TestBinary([string] $Package, [string] $Binary) {
   if ($LASTEXITCODE -ne 0) {
     throw "Could not compile wasm tests for $Package (exit $LASTEXITCODE)."
   }
+  Assert-WasmBinary $Package $Binary
+}
+
+function Assert-WasmBinary([string] $Package, [string] $Binary) {
+  if (-not (Test-Path -LiteralPath $Binary -PathType Leaf)) {
+    throw "Could not compile wasm tests for ${Package}: output '$Binary' was not created."
+  }
+  $length = (Get-Item -LiteralPath $Binary).Length
+  if ($length -lt 8) {
+    throw "Could not compile wasm tests for ${Package}: output '$Binary' is too short ($length bytes)."
+  }
+  $stream = $null
+  try {
+    $stream = [System.IO.File]::OpenRead($Binary)
+    $header = New-Object byte[] 8
+    $read = $stream.Read($header, 0, $header.Length)
+  } catch {
+    throw "Could not validate wasm tests for ${Package}: output '$Binary' could not be read."
+  } finally {
+    if ($null -ne $stream) { $stream.Dispose() }
+  }
+  $expected = [byte[]](0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00)
+  $valid = $read -eq 8
+  for ($index = 0; $valid -and $index -lt $expected.Length; $index++) {
+    if ($header[$index] -ne $expected[$index]) { $valid = $false }
+  }
+  if (-not $valid) {
+    throw "Could not compile wasm tests for ${Package}: output '$Binary' has an invalid WebAssembly header."
+  }
 }
 
 function Get-TopLevelTests([string] $Package, [string] $Binary, [string] $TestPattern) {

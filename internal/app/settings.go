@@ -6,11 +6,14 @@ package app
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall/js"
 	"time"
 
@@ -30,15 +33,16 @@ import (
 	"github.com/monstercameron/CashFlux/internal/notify"
 	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/CashFlux/internal/screens"
+	"github.com/monstercameron/CashFlux/internal/settingsinput"
 	"github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/CashFlux/internal/version"
 	"github.com/monstercameron/CashFlux/internal/widgetcfg"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/router"
-	uic "github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/router"
+	uic "github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // backendHost extracts the lowercased host[:port] from a server URL, ignoring
@@ -797,18 +801,15 @@ func globalSettingsForm() uic.Node {
 	// "/settings" (no tab segment) redirects to "/settings/household" once,
 	// on mount.
 	tab := liveSettingsTab()
-	// rawTab is captured (not the mutable tab, reassigned to "household" just
-	// below) because UseEffect's callback runs deferred, after commit — by
-	// then a closure over `tab` itself would see the reassigned fallback
-	// value, never the original "" that means "needs a redirect" (Go closures
-	// capture variables by reference, not a snapshot at registration time).
-	rawTab := tab
-	uic.UseEffect(func() func() {
-		if rawTab == "" {
-			uistate.NavigateTo("/settings/household")
+	// The callback rechecks the browser path when it runs. A passive effect
+	// from this render must not redirect after the user has already left.
+	uic.UseEffect(defaultSettingsTabRedirect(tab, func() string {
+		loc := js.Global().Get("location")
+		if !loc.Truthy() {
+			return ""
 		}
-		return nil
-	}, "settings-default-tab-redirect")
+		return uistate.LogicalPath(loc.Get("pathname").String())
+	}, uistate.NavigateTo), "settings-default-tab-redirect")
 	if tab == "" {
 		tab = "household"
 	}
@@ -899,38 +900,50 @@ func globalSettingsForm() uic.Node {
 			_ = a.PutSettings(s)
 		}
 	}
-	// The model picker is populated live from every id in OpenAI's /v1/models
-	// endpoint, falling back to defaults offline or before it loads. Reload keeps
-	// the persisted selected id available even when the refreshed list omits it.
+	// Load models from the selected AI route only while the AI settings tab is
+	// open. Server mode must never fetch directly with this browser's provider key.
+	aiPrefs := prefsAtom.Get().Normalize()
 	modelList := uic.UseState([]string{})
 	modelsLoaded := uic.UseState(false)
 	modelsLoading := uic.UseState(false)
 	modelsErr := uic.UseState("")
 	modelQuery := uic.UseState("")
-	fetchModels := func() {
+	activeModelLookup := uic.UseRef((func())(nil))
+	fetchModels := func() func() {
+		if tab != "ai" {
+			return nil
+		}
 		a := appstate.Default
 		if a == nil {
-			return
+			return nil
+		}
+		modelList.Set(nil)
+		modelsLoaded.Set(false)
+		modelsLoading.Set(true)
+		modelsErr.Set("")
+		done := func(ids []string) { modelsLoading.Set(false); modelList.Set(ids); modelsLoaded.Set(true) }
+		fail := func(msg string) { modelsLoading.Set(false); modelsErr.Set(msg) }
+		if uistate.BackendAIActive(aiPrefs) {
+			return ai.FetchProxyModels(aiPrefs.ServerURL, uistate.EffectiveServerToken(aiPrefs.ServerToken), done, fail)
 		}
 		k := strings.TrimSpace(a.Settings().OpenAIKey)
 		if k == "" {
-			modelList.Set(nil)
-			modelsLoaded.Set(false)
-			modelsErr.Set("")
-			return
+			modelsLoading.Set(false)
+			return nil
 		}
-		modelsLoading.Set(true)
-		modelsErr.Set("")
 		baseURL := strings.TrimSpace(a.Settings().OpenAIBaseURL)
 		if baseURL == "" {
 			baseURL = ai.DefaultBaseURL
 		}
-		ai.FetchModels(k, baseURL,
-			func(ids []string) { modelsLoading.Set(false); modelList.Set(ids); modelsLoaded.Set(true) },
-			func(msg string) { modelsLoading.Set(false); modelsErr.Set(msg) },
-		)
+		return ai.FetchModels(k, baseURL, done, fail)
 	}
-	onReloadModels := uic.UseEvent(func() { fetchModels() })
+	startModels := func() {
+		if cancel := activeModelLookup.Get(); cancel != nil {
+			cancel()
+		}
+		activeModelLookup.Set(fetchModels())
+	}
+	onReloadModels := uic.UseEvent(func() { startModels() })
 	onUseCustomModel := uic.UseEvent(func() {
 		model := strings.TrimSpace(modelQuery.Get())
 		if model == "" {
@@ -943,8 +956,16 @@ func globalSettingsForm() uic.Node {
 		}
 		bump()
 	})
-	// Load the list once when the panel opens (no-ops without a key).
-	uic.UseEffect(func() func() { fetchModels(); return nil }, "")
+	// Route changes and unmounts cancel even a manual reload in progress.
+	uic.UseEffect(func() func() {
+		startModels()
+		return func() {
+			if cancel := activeModelLookup.Get(); cancel != nil {
+				cancel()
+				activeModelLookup.Set(nil)
+			}
+		}
+	}, tab, aiPrefs.ServerURL, aiPrefs.ServerToken, aiPrefs.BackendDisabled, aiPrefs.AIProxyDisabled)
 	// Optional web-search API key for the chat's web_search tool (paid/higher-limit
 	// access); kept on-device in its own localStorage entry.
 	wsKey := uic.UseState(uistate.LoadWebSearchKey())
@@ -982,6 +1003,7 @@ func globalSettingsForm() uic.Node {
 		if a == nil {
 			return
 		}
+		rate = settingsinput.NormalizeFXRate(rate)
 		s := a.Settings()
 		if s.FXRates == nil {
 			s.FXRates = map[string]float64{}
@@ -1131,10 +1153,7 @@ func globalSettingsForm() uic.Node {
 		// AC15: the idle-cash benchmark rate. A blank/invalid/negative entry clears it
 		// (0 disables the idle_cash_forgone_annual figure — nothing to compare to).
 		OnIdleCashBenchmarkAPR: uic.UseEvent(func(v string) {
-			apr, err := strconv.ParseFloat(strings.TrimSpace(v), 64)
-			if err != nil || apr < 0 {
-				apr = 0
-			}
+			apr := settingsinput.ParseIdleCashBenchmarkAPR(v)
 			p := prefsAtom.Get()
 			p.IdleCashBenchmarkAPR = apr
 			savePrefs(p)
@@ -1144,6 +1163,11 @@ func globalSettingsForm() uic.Node {
 		OnAiToggle: func(v bool) { aiOn.Set(v) },
 		AiKey:      aiKey.Get(),
 		OnKey:      onKey,
+		OnServerAIRoute: func(on bool) {
+			p := prefsAtom.Get()
+			p.AIProxyDisabled = !on
+			savePrefs(p)
+		},
 		OnRememberKey: func(v bool) {
 			cancelQueuedAICredentialSave()
 			key := ""
@@ -1367,7 +1391,7 @@ type fxRateRowProps struct {
 // empty/zero value clears the rate.
 func fxRateRow(props fxRateRowProps) uic.Node {
 	on := uic.UseEvent(func(e uic.Event) {
-		r, _ := strconv.ParseFloat(strings.TrimSpace(e.GetValue()), 64)
+		r := settingsinput.ParseFXRate(e.GetValue())
 		props.OnSet(props.Code, r)
 	})
 	val := ""
@@ -1837,23 +1861,56 @@ func wipeData(onChange func(), notify func(string, bool)) {
 }
 
 func eraseDataThen(notify func(string, bool)) {
+	// Leave the Wasm page before deleting origin-wide storage. This pauses its
+	// autosave/sync and releases its open IndexedDB handles; the dedicated page
+	// coordinates other tabs and verifies the browser inventory after deletion.
+	wasSuspended, wasSyncPaused := suspendAutosave, syncApplyPaused
+	suspendAutosave = true
+	syncApplyPaused = true
+	ticket, err := markDeviceErasePending()
+	if err != nil {
+		suspendAutosave, syncApplyPaused = wasSuspended, wasSyncPaused
+		notify(uistate.T("settings.wipeErr", err.Error()), true)
+		return
+	}
+	var navigation sync.Once
+	openEraser := func() {
+		navigation.Do(func() {
+			url := js.Global().Get("URL").New("./erase-device.html", js.Global().Get("document").Get("baseURI"))
+			url.Set("hash", "start="+ticket)
+			js.Global().Get("location").Call("replace", url.Get("href").String())
+		})
+	}
+	// Revocation is best effort. A broken credential store or unreachable server
+	// must never stop the user from erasing this browser. The timeout also keeps
+	// the action usable if an old server never responds.
+	time.AfterFunc(8*time.Second, openEraser)
 	endPageSessionForWipeThen(uistate.LoadPrefs().Normalize(), func(revokeErr, err error) {
 		if err != nil {
-			notify(uistate.T("settings.wipeErr", err.Error()), true)
-			return
+			slog.Warn("local sign-out before device erase was incomplete", "error", err)
 		}
 		reportWipeRevokeFailure(revokeErr, notify)
-		p := uistate.LoadPrefs().Normalize()
-		p.ServerToken, p.ServerCSRF = "", ""
-		p.BackendDisabled = true
-		commitCapturedAuthPreferences(p, func(err error) {
-			if err != nil {
-				notify(uistate.T("settings.wipeErr", err.Error()), true)
-				return
-			}
-			wipeAfterSession(notify)
-		})
+		openEraser()
 	})
+}
+
+func markDeviceErasePending() (ticket string, err error) {
+	defer func() {
+		if problem := recover(); problem != nil {
+			err = fmt.Errorf("could not coordinate open tabs: %v", problem)
+		}
+	}()
+	random := make([]byte, 16)
+	if _, err := rand.Read(random); err != nil {
+		return "", fmt.Errorf("create erasure ticket: %w", err)
+	}
+	ticket = hex.EncodeToString(random)
+	storage := js.Global().Get("localStorage")
+	if !storage.Truthy() {
+		return "", errors.New("browser local storage is unavailable")
+	}
+	storage.Call("setItem", "cashflux:erase-in-progress", ticket)
+	return ticket, nil
 }
 
 func reportWipeRevokeFailure(err error, notify func(string, bool)) {
@@ -1864,38 +1921,9 @@ func reportWipeRevokeFailure(err error, notify func(string, bool)) {
 	notify(uistate.T("enc39.revokeFailed"), false)
 }
 
-func wipeAfterSession(notify func(string, bool)) {
-	app := appstate.Default
-	if app == nil {
-		return
-	}
-	if err := app.Wipe(); err != nil {
-		notify(uistate.T("settings.wipeErr", err.Error()), true)
-		return
-	}
-	// The durable wipe batch tombstones the owner with the dataset. Keep the
-	// existing claim until that transaction commits so a failed wipe retains it.
-	// The store wipe cleared the financial tables and the audit_log table, but two
-	// things live outside that sweep and would otherwise survive: (1) the in-memory
-	// activity feed (the Activity screen's preferred source, re-hydrated from the
-	// table at boot), and (2) the data-derived SMART content — cached AI "messages",
-	// dismissals, last-run stamps, and the digest log — which sit in the PRESERVED
-	// settings KV. Clear both now, before the dataset export below, so a stale feed
-	// or stale smart message can't reappear after the reload.
-	auditview.Feed.Clear()
-	uistate.ClearSmartGenerated()
-	// A wipe means the user is starting fresh — hide the sample banner (L6).
-	uistate.SetSampleActive(false)
-	// Make the wipe authoritative: clear non-settings keys and persist the emptied
-	// store, then reload (after the IndexedDB write commits) so all in-memory state
-	// re-hydrates from the clean slate (nothing survives the wipe).
-	suspendAutosave = true
-	wipeFinancialLocalState(reloadPage, wipeEraseEverything)
-}
-
 // endPageSessionForWipeThen ends the current session locally before an erase.
-// Server revocation is best effort, but every local credential and route delete
-// must be durable before the caller is allowed to wipe the household data.
+// Server revocation is best effort; the separate eraser removes local credentials
+// even when the sign-out path cannot read or delete one of them.
 func endPageSessionForWipeThen(pr prefs.Prefs, done func(revokeErr, localErr error)) {
 	scope := outgoingRefreshScope()
 	if scope == nil {

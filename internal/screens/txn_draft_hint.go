@@ -26,9 +26,9 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // TxnDraftFill contains optional fields to merge into a quick-add draft.
@@ -46,12 +46,12 @@ func TxnDraftHint(props TxnDraftHintProps) ui.Node {
 	loading := ui.UseState(false)
 	errText := ui.UseState("")
 	settings := uistate.LoadSmartSettings()
-	provider := app != nil && aiProviderConfigured(app, uistate.BackendConnectionActive(pr))
+	provider := app != nil && aiProviderConfigured(app, uistate.BackendAIActive(pr))
 	local := parseTxnSentence(sentence.Get())
 	view := smartcatview.PresentDraft(sentence.Get(), local, aiFill.Get(), provider, loading.Get(), settings)
 	var conn smartAIConn
 	if app != nil {
-		conn = resolveAIConn(app, uistate.BackendConnectionActive(pr), pr.ServerURL, pr.ServerToken)
+		conn = resolveAIConn(app, uistate.BackendAIActive(pr), pr.ServerURL, pr.ServerToken)
 	}
 	apply := func() {
 		offer := smartcatview.PresentDraft(sentence.Get(), local, aiFill.Get(), provider, loading.Get(), settings).Offer

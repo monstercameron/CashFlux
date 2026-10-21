@@ -43,7 +43,7 @@ func (s *Stack) PushCoalescing(cs ChangeSet) {
 	if s.cursor == len(s.entries) && s.cursor > 0 {
 		top := s.entries[s.cursor-1]
 		if a, b, ok := singleSameRow(top, cs); ok {
-			merged := ChangeSet{Label: cs.Label, Changes: []Change{coalesce(a, b)}}
+			merged := ChangeSet{Label: cs.Label, UndoID: cs.UndoID, Changes: []Change{coalesce(a, b)}}
 			s.bytes += merged.Bytes() - top.Bytes()
 			s.entries[s.cursor-1] = merged
 			s.enforceCap()
@@ -55,6 +55,15 @@ func (s *Stack) PushCoalescing(cs ChangeSet) {
 
 // CanUndo reports whether there is an action to undo.
 func (s *Stack) CanUndo() bool { return s.cursor > 0 }
+
+// UndoID returns the identity of the current top undo point, if one exists.
+// It is empty for ordinary changesets that have no session receipt.
+func (s *Stack) UndoID() string {
+	if !s.CanUndo() {
+		return ""
+	}
+	return s.entries[s.cursor-1].UndoID
+}
 
 // CanRedo reports whether there is an undone action to redo.
 func (s *Stack) CanRedo() bool { return s.cursor < len(s.entries) }

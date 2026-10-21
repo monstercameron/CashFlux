@@ -5,6 +5,7 @@ package goals
 import (
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
 )
@@ -28,9 +29,15 @@ func AllocatedTotal(g domain.Goal) money.Money {
 
 // CoverageMinor is committed savings (CurrentAmount) plus virtual earmarks, in minor
 // units of the goal's target currency. It answers "how much of the target is already
-// accounted for, whether moved or merely reserved?".
+// accounted for, whether moved or merely reserved?". This rate-less convenience
+// returns zero on invalid/foreign amounts. Use EvaluateCoverage for known/error
+// semantics and a rate table.
 func CoverageMinor(g domain.Goal) int64 {
-	return g.CurrentAmount.Amount + g.AllocatedMinor()
+	c, err := EvaluateCoverage(g, currency.Rates{})
+	if err != nil {
+		return 0
+	}
+	return c.Covered.Amount
 }
 
 // CoveredRemaining is the gap between the target and what's already accounted
@@ -38,35 +45,21 @@ func CoverageMinor(g domain.Goal) int64 {
 // currency. This is the remaining figure every pace computation amortizes:
 // earmarks are first-class progress, so money merely reserved (not yet moved)
 // still shrinks what's left to find. Like Remaining, a saved/target currency
-// mismatch is an error (allocations are stored in the target currency).
+// mismatch needs a rate table: this legacy helper returns an error for foreign
+// amounts. New consumers should use EvaluateCoverage with their current rates.
 func CoveredRemaining(g domain.Goal) (money.Money, error) {
-	rem, err := g.TargetAmount.Sub(g.CurrentAmount)
-	if err != nil {
-		return money.Money{}, err
-	}
-	rem.Amount -= g.AllocatedMinor()
-	if rem.Amount < 0 {
-		rem.Amount = 0
-	}
-	return rem, nil
+	c, err := EvaluateCoverage(g, currency.Rates{})
+	return c.Remaining, err
 }
 
 // CoveragePercent is CoverageMinor over the target, clamped to 0..100. A goal with no
 // positive target (non-financial, or unset) reports 0.
 func CoveragePercent(g domain.Goal) int {
-	t := g.TargetAmount.Amount
-	if t <= 0 {
+	c, err := EvaluateCoverage(g, currency.Rates{})
+	if err != nil {
 		return 0
 	}
-	p := int(CoverageMinor(g) * 100 / t)
-	switch {
-	case p < 0:
-		return 0
-	case p > 100:
-		return 100
-	default:
-		return p
-	}
+	return c.CoveragePercent
 }
 
 // AccountEarmarkedMinor sums how much is virtually earmarked against accountID across
@@ -120,10 +113,11 @@ const (
 // EarmarkOf classifies a goal's earmark coverage. A goal with no positive target (non-
 // financial, or unset) is always EarmarkNone — earmarking is a financial-goal concept.
 func EarmarkOf(g domain.Goal) EarmarkStatus {
-	if g.TargetAmount.Amount <= 0 || g.AllocatedMinor() <= 0 {
+	c, err := EvaluateCoverage(g, currency.Rates{})
+	if err != nil || g.TargetAmount.Amount <= 0 || c.SetAside.Amount <= 0 {
 		return EarmarkNone
 	}
-	if CoverageMinor(g) >= g.TargetAmount.Amount {
+	if c.Complete {
 		return EarmarkFull
 	}
 	return EarmarkPartial

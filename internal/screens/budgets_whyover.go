@@ -27,9 +27,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/CashFlux/internal/whyover"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // The free and paid halves of SM-4. The sentence is deterministic and free; the
@@ -178,7 +178,7 @@ func budgetWhyOverHint(props budgetWhyOverProps) ui.Node {
 		sentence = whyOverSentence(facts)
 	}
 
-	backendAI := uistate.BackendConnectionActive(pr)
+	backendAI := uistate.BackendAIActive(pr)
 	aiEnabled := app != nil && aiProviderConfigured(app, backendAI) &&
 		settings.IsEnabled(whyOverAICode) && !settings.IsMuted(whyOverAICode)
 	aiConn := smartAIConn{}

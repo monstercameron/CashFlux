@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/monstercameron/CashFlux/internal/artifacts"
+	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/store"
 )
 
@@ -40,6 +42,72 @@ func TestDatasetJSONExportsAlwaysOmitOpenAIKey(t *testing.T) {
 			}
 			if got.Settings.OpenAIKey != "" {
 				t.Fatalf("export contains key %q", got.Settings.OpenAIKey)
+			}
+		})
+	}
+}
+
+func TestSQLiteExportOmitsDeviceOpenAIKey(t *testing.T) {
+	a, err := New(nil, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ds := store.EmptyDataset()
+	ds.Settings.OpenAIKey = "sk-device-secret"
+	if err := a.Store().Load(ds); err != nil {
+		t.Fatal(err)
+	}
+	data, err := a.ExportSQLite()
+	if err != nil {
+		t.Fatal(err)
+	}
+	exported, err := store.ImportSQLiteFile(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if exported.Settings.OpenAIKey != "" {
+		t.Fatal("SQLite export contains a device credential")
+	}
+}
+
+func TestCompleteArtifactSnapshotOmitsLegacyDeviceKey(t *testing.T) {
+	for _, withBlob := range []bool{false, true} {
+		name := "no external file"
+		if withBlob {
+			name = "external file"
+		}
+		t.Run(name, func(t *testing.T) {
+			a, err := New(nil, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ds := store.EmptyDataset()
+			ds.Settings.OpenAIKey = "sk-legacy-device-secret"
+			if withBlob {
+				blobs := newMemBlobStore()
+				if err := blobs.Put("legacy-pdf", "application/pdf", []byte("PDF bytes")); err != nil {
+					t.Fatal(err)
+				}
+				a.SetBlobStore(blobs)
+				ds.Artifacts = []domain.Artifact{{ID: "legacy-pdf", Kind: artifacts.KindPDF, MIME: "application/pdf", Size: len("PDF bytes")}}
+			}
+			committed, err := store.Export(ds)
+			if err != nil {
+				t.Fatal(err)
+			}
+			complete, err := a.CompleteArtifactSnapshot(committed)
+			if err != nil {
+				t.Fatal(err)
+			}
+			exported, err := store.Import(complete)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if exported.Settings.OpenAIKey != "" {
+				t.Fatal("completed snapshot contains a device credential")
+			}
+			if withBlob && string(exported.Artifacts[0].Bytes) != "PDF bytes" {
+				t.Fatal("completed snapshot lost file bytes")
 			}
 		})
 	}

@@ -6,27 +6,25 @@ package screens
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/ai"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/dashboardview"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
-	"github.com/monstercameron/CashFlux/internal/ledger"
-	"github.com/monstercameron/CashFlux/internal/money"
-	"github.com/monstercameron/CashFlux/internal/nwchange"
+	"github.com/monstercameron/CashFlux/internal/scope"
 	"github.com/monstercameron/CashFlux/internal/smartai"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/router"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/router"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // dashboardHero renders the EC4 home band that sits above the bento grid on
@@ -48,11 +46,11 @@ import (
 // logic — pure formatting delegated to the shared format helpers (fmtMoney,
 // figTone) and pure-logic functions (ledger.SavingsRate).
 func dashboardHero() ui.Node {
+	_ = uistate.UseDataRevision().Get() // re-render after import / load-sample / wipe
 	app := appstate.Default
 	if app == nil {
 		return Fragment()
 	}
-	_ = uistate.UseDataRevision().Get() // re-render after import / load-sample / wipe
 
 	accounts := app.Accounts()
 	txns := app.Transactions()
@@ -62,9 +60,28 @@ func dashboardHero() ui.Node {
 	if len(accounts) == 0 && len(txns) == 0 {
 		return ui.CreateElement(heroWelcome, struct{}{})
 	}
+	return ui.CreateElement(heroFinancialSummary, heroFinancialSummaryProps{App: app, Accounts: accounts, Transactions: txns})
+}
 
+type heroFinancialSummaryProps struct {
+	App          *appstate.App
+	Accounts     []domain.Account
+	Transactions []domain.Transaction
+}
+
+// heroFinancialSummary owns every populated-state hook so loading or wiping a
+// dataset cannot change dashboardHero's hook sequence.
+func heroFinancialSummary(p heroFinancialSummaryProps) ui.Node {
+	app, accounts, txns := p.App, p.Accounts, p.Transactions
 	// Non-empty → compute headline figures from the memoized §1.6 selectors,
 	// then delegate to heroSummary so its hooks are at stable positions.
+	// The hero and bento tiles share the active account lens. A household-only
+	// hero above scoped tiles made the same headline disagree on one screen.
+	sc := uistate.UseActiveScope().Get()
+	ids := scope.ResolveScope(accounts, sc, func(a domain.Account) string { return a.Institution })
+	accounts = scope.ApplyScopeToAccounts(accounts, ids)
+	txns = scope.ApplyScopeToTxns(txns, ids)
+	scopeSig := fmt.Sprintf("%#v", sc)
 	base := app.Settings().BaseCurrency
 	if base == "" {
 		base = "USD"
@@ -76,7 +93,7 @@ func dashboardHero() ui.Node {
 	activeMember := uistate.UseActiveMember().Get()
 	pr := uistate.UsePrefs().Get()
 	start, end := w.Range()
-	income, expense := usePeriodTotals(app, txns, start, end, rates, "")
+	totals := usePeriodTotals(app, txns, start, end, rates, scopeSig)
 	// The hero sparkline is a trailing 6-month net-worth series over every transaction
 	// — heavy, and secondary to the net-worth figure itself. Defer it off the initial
 	// mount so the headline number + KPIs paint immediately; the sparkline + delta chip
@@ -95,30 +112,36 @@ func dashboardHero() ui.Node {
 		budgetSummary = summarizeHeroBudgets(computeBudgetView(app, activeMember, w, pr, false))
 	}
 
-	netMoney := money.New(income.Amount-expense.Amount, income.Currency)
-	savingsPct := ledger.SavingsRate(income.Amount, expense.Amount)
-
-	// Net display: "+" prefix for surplus, accounting parens for deficit, plain
-	// zero for breakeven — mirrors the dashboard cash-flow sub-line style (L4).
-	netDisplay := fmtMoney(netMoney)
-	if netMoney.Amount > 0 {
-		netDisplay = "+" + fmtMoney(netMoney)
+	incomeDisplay, spendingDisplay, netDisplay, netTone := "—", "—", "—", "text-dim"
+	if totals.Known {
+		incomeDisplay, spendingDisplay = fmtMoney(totals.Income), fmtMoney(totals.Expense)
+		netDisplay, netTone = fmtMoney(totals.Net), figTone(totals.Net)
+		if totals.Net.Amount > 0 {
+			netDisplay = "+" + netDisplay
+		}
 	}
 
 	// A trailing 6-month net-worth series powers the hero sparkline, and the change
 	// since the start of the current month becomes the delta chip — both turn the
 	// flat figure into a living, contextual headline. Both degrade gracefully: if
 	// the series can't be computed the spark/chip simply don't render.
-	var spark []float64
+	now := time.Now()
+	trend := ui.UseMemo(func() dashboardview.NetWorthTrend {
+		if !sparkReady || !nw.Complete() {
+			return dashboardview.NetWorthTrend{}
+		}
+		return dashboardview.BuildNetWorthTrend(accounts, txns, rates, now)
+	}, revKey(app), scopeSig, sparkReady, now.Format(dateutil.Layout))
+	spark := trend.Spark
 	var delta, deltaTone string
-	if sparkReady {
-		spark, delta, deltaTone = heroNetWorthTrend(accounts, txns, rates)
+	if trend.Change.Known {
+		delta, deltaTone = nwChangeSub(trend.Change)
 	}
 	// Paged to another period, the "▲ $X this month" chip would sit beside the
 	// selected month's income/spending as if it belonged to that month — net
 	// worth is position-as-of-today, so the chip says that instead (parity-scan
 	// dashboard period contract).
-	if now := time.Now(); now.Before(start) || !now.Before(end) {
+	if now.Before(start) || !now.Before(end) {
 		delta, deltaTone = uistate.T("dashboard.netWorthAsOfToday"), "text-dim"
 	}
 
@@ -126,22 +149,28 @@ func dashboardHero() ui.Node {
 	// ~30% of its height there (no sparkline, tighter type/spacing via CSS).
 	preset := uistate.LoadDashPreset()
 	focused := preset != "" && preset != "default"
+	netWorthTone := "text-dim"
+	if nw.Complete() {
+		netWorthTone = figTone(nw.Net)
+	}
 
 	return ui.CreateElement(heroSummary, heroSummaryProps{
-		NetWorth:     fmtMoney(nw.Net),
-		NetWorthTone: figTone(nw.Net),
-		Income:       fmtMoney(income),
-		Spending:     fmtMoney(expense),
+		NetWorth:     netWorthFigure(nw),
+		NetWorthTone: netWorthTone,
+		NetWorthNote: netWorthDisclosure(nw),
+		Income:       incomeDisplay,
+		Spending:     spendingDisplay,
 		Net:          netDisplay,
-		NetTone:      figTone(netMoney),
-		SavingsPct:   savingsPct,
-		PeriodLabel:  w.Label(),
-		Spark:        spark,
-		Delta:        delta,
-		DeltaTone:    deltaTone,
-		HasAccounts:  len(accounts) > 0,
-		Focused:      focused,
-		Budget:       budgetSummary,
+		NetTone:      netTone,
+		SavingsPct:   totals.SavingsPercent,
+		TotalsKnown:  totals.Known, SavingsKnown: totals.SavingsKnown(),
+		PeriodLabel: w.Label(),
+		Spark:       spark,
+		Delta:       delta,
+		DeltaTone:   deltaTone,
+		HasAccounts: len(accounts) > 0,
+		Focused:     focused,
+		Budget:      budgetSummary,
 	})
 }
 
@@ -163,85 +192,23 @@ type heroBudgetSnapshot struct {
 // /budgets. It never adds category spending together: overlapping category
 // budgets could otherwise make a household total count the same charge twice.
 func summarizeHeroBudgets(v budgetView) heroBudgetSnapshot {
-	out := heroBudgetSnapshot{HasBudgets: true}
-	type ranked struct {
-		limit heroBudgetLimit
-		pct   int
+	pace := make(map[string]bool, len(v.PaceMark))
+	for id, mark := range v.PaceMark {
+		pace[id] = mark.Hot
 	}
-	rows := make([]ranked, 0, len(v.Statuses))
-	for _, st := range v.Statuses {
-		if st.Budget.Period != domain.PeriodMonthly || st.Budget.IsSaving() || st.Error != nil || st.Limit.Amount <= 0 {
-			continue
-		}
-		out.Total++
-		if out.Period == "" {
-			out.Period = st.Start.Format("Jan 2006")
-		}
-		mark, live := v.PaceMark[st.Budget.ID]
-		if live {
-			out.Measured++
-			if !mark.Hot {
-				out.OnPace++
-			}
-		}
-		name := st.Budget.Name
-		if name == "" {
-			name = v.CatName[st.Budget.CategoryID]
-		}
+	model := dashboardview.SummarizeBudgets(v.Statuses, v.CatName, pace)
+	out := heroBudgetSnapshot{HasBudgets: true, OnPace: model.OnPace, Measured: model.Measured, Total: model.Total}
+	if !model.Period.IsZero() {
+		out.Period = model.Period.Format("Jan 2006")
+	}
+	for _, limit := range model.Limits {
+		name := limit.Name
 		if name == "" {
 			name = uistate.T("nav.budgets")
 		}
-		rows = append(rows, ranked{limit: heroBudgetLimit{
-			Name: name, Spent: fmtMoney(st.Spent), Limit: fmtMoney(st.Limit),
-			Percent: st.Percent, Hot: live && mark.Hot,
-		}, pct: st.Percent})
-	}
-	sort.SliceStable(rows, func(i, j int) bool {
-		if rows[i].limit.Hot != rows[j].limit.Hot {
-			return rows[i].limit.Hot
-		}
-		if rows[i].pct != rows[j].pct {
-			return rows[i].pct > rows[j].pct
-		}
-		return rows[i].limit.Name < rows[j].limit.Name
-	})
-	for i := 0; i < len(rows) && i < 3; i++ {
-		out.Limits = append(out.Limits, rows[i].limit)
+		out.Limits = append(out.Limits, heroBudgetLimit{Name: name, Spent: fmtMoney(limit.Spent), Limit: fmtMoney(limit.Limit), Percent: limit.Percent, Hot: limit.Hot})
 	}
 	return out
-}
-
-// heroNetWorthTrend builds the hero's trailing 6-month net-worth series (for the
-// sparkline) and the month-over-start delta (for the chip). Returns an empty
-// series and delta on any computation error so the hero renders cleanly without
-// them.
-func heroNetWorthTrend(accounts []domain.Account, txns []domain.Transaction, rates currency.Rates) (spark []float64, delta, deltaTone string) {
-	const months = 6
-	now := time.Now()
-	cur := dateutil.MonthStart(now)
-	cutoffs := make([]time.Time, 0, months+1)
-	for i := months - 1; i >= 0; i-- {
-		cutoffs = append(cutoffs, dateutil.AddMonths(cur, -i))
-	}
-	cutoffs = append(cutoffs, now) // current point
-	series, err := ledger.NetWorthSeries(accounts, txns, cutoffs, rates)
-	if err != nil || len(series) < 2 {
-		return nil, "", ""
-	}
-	spark = make([]float64, len(series))
-	for i, m := range series {
-		spark[i] = float64(m.Amount)
-	}
-	// The chip's delta is the app's one month-to-date net-worth change (C341),
-	// not a subtraction of the last two sparkline points: those cutoffs exist to
-	// draw a shape, and reading a headline figure off them is how this chip came
-	// to disagree with the assets KPI sitting two inches away on the same hero.
-	mtd, err := nwchange.MonthToDateChange(accounts, txns, rates, now)
-	if err != nil || !mtd.Known {
-		return spark, "", ""
-	}
-	delta, tone := nwChangeSub(mtd)
-	return spark, delta, tone
 }
 
 // ---------------------------------------------------------------------------
@@ -251,13 +218,15 @@ func heroNetWorthTrend(accounts []domain.Account, txns []domain.Transaction, rat
 // heroSummaryProps carries the pre-formatted display values for the non-empty
 // hero so the parent can call memoized selectors before rendering the component.
 type heroSummaryProps struct {
-	NetWorth     string
-	NetWorthTone string // color token, e.g. "text-up" or "text-down"
-	Income       string
-	Spending     string
-	Net          string // formatted cash-flow net (income − spending)
-	NetTone      string // color token for the net figure
-	SavingsPct   int
+	NetWorth                  string
+	NetWorthTone              string // color token, e.g. "text-up" or "text-down"
+	NetWorthNote              string // availability and intentional exclusion disclosure
+	Income                    string
+	Spending                  string
+	Net                       string // formatted cash-flow net (income − spending)
+	NetTone                   string // color token for the net figure
+	SavingsPct                int64
+	TotalsKnown, SavingsKnown bool
 	// PeriodLabel names the window the four stats below cover ("Jul 2026"). The
 	// row used to be captioned "this month" in a code comment and nowhere in the
 	// UI, so a hero paged to March showed March's savings rate beside a health
@@ -307,6 +276,14 @@ func heroSummary(props heroSummaryProps) ui.Node {
 		savingsTone = "text-warn"
 	}
 
+	if !props.SavingsKnown {
+		savingsStr, savingsTone = "—", "text-dim"
+	}
+	incomeTone, spendingTone := "text-up", "text-down"
+	if !props.TotalsKnown {
+		incomeTone, spendingTone = "text-dim", "text-dim"
+	}
+
 	// Optional delta chip ("▲ $X this month") and net-worth sparkline.
 	var delta ui.Node = Fragment()
 	if props.Delta != "" {
@@ -352,9 +329,11 @@ func heroSummary(props heroSummaryProps) ui.Node {
 					tw.Fold(tw.FontDisplay)+" "+
 					tw.ColorClass(props.NetWorthTone)),
 					Attr("data-countup", ""),
+					Attr("data-testid", "hero-networth-value"),
 					props.NetWorth,
 				),
 				delta,
+				If(props.NetWorthNote != "", P(css.Class("t-caption", tw.TextDim), Attr("role", "status"), Attr("data-testid", "hero-networth-note"), props.NetWorthNote)),
 			),
 			spark,
 		),
@@ -371,12 +350,15 @@ func heroSummary(props heroSummaryProps) ui.Node {
 				Attr("data-testid", "hero-stats-window"),
 				uistate.T("home.statsWindow", props.PeriodLabel)),
 			Div(css.Class("home-hero-stats"),
-				heroStat(uistate.T("home.income"), props.Income, "text-up"),
-				heroStat(uistate.T("home.spending"), props.Spending, "text-down"),
+				heroStat(uistate.T("home.income"), props.Income, incomeTone),
+				heroStat(uistate.T("home.spending"), props.Spending, spendingTone),
 				heroStat(uistate.T("home.net"), props.Net, props.NetTone),
 				heroStat(uistate.T("home.savingsRate"), savingsStr, savingsTone),
 			),
 		)),
+
+		If(!props.TotalsKnown, P(css.Class("t-caption", tw.TextDim), Attr("role", "status"), Attr("data-testid", "hero-totals-unavailable"), uistate.T("period.totalsUnavailable"))),
+		If(props.TotalsKnown && !props.SavingsKnown, P(css.Class("t-caption", tw.TextDim), Attr("role", "status"), uistate.T("period.savingsUnavailable"))),
 
 		// Quick actions — the two most common entry points, surfaced without hunting.
 		// Standard glyph buttons (leading icon + label, like the page toolbars).
@@ -619,7 +601,7 @@ func heroQuote(_ struct{}) ui.Node {
 			model = m
 		}
 	}
-	useBackend := uistate.BackendConnectionActive(prefs)
+	useBackend := uistate.BackendAIActive(prefs)
 	hasProvider := aiKey != "" || useBackend
 
 	// Handlers (declared unconditionally for stable hook order).

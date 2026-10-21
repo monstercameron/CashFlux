@@ -9,8 +9,8 @@ import (
 	"testing"
 
 	"github.com/monstercameron/CashFlux/internal/domain"
-	"github.com/monstercameron/GoWebComponents/v5/testkit/render"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/testkit/render"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 func TestTxnBulkCategoryPickerOffersKeyboardCreateLast(t *testing.T) {

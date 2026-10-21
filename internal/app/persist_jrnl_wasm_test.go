@@ -24,6 +24,10 @@ import (
 const jrnlFixtureWorkspace = "jrnl-workspace"
 
 func jrnlFixture(t *testing.T) solp22Fixture {
+	return jrnlFixtureForWorkspace(t, jrnlFixtureWorkspace)
+}
+
+func jrnlFixtureForWorkspace(t *testing.T, workspaceID string) solp22Fixture {
 	t.Helper()
 	solp22Storage(t)
 	oldHydrated := hydratedDatasetState
@@ -39,7 +43,7 @@ func jrnlFixture(t *testing.T) solp22Fixture {
 	}
 	cleared := map[string]string{}
 	for key := range initial {
-		if strings.HasPrefix(key, recordWorkspacePrefix(jrnlFixtureWorkspace)) {
+		if strings.HasPrefix(key, recordWorkspacePrefix(workspaceID)) {
 			if value := browserstore.GetString(key); value != "" {
 				previous[key] = value
 				cleared[key] = ""
@@ -54,7 +58,7 @@ func jrnlFixture(t *testing.T) solp22Fixture {
 		solp22Batch(t, previous, nil)
 		var detachedRecords []string
 		for _, key := range browserstore.Keys() {
-			if !initial[key] && strings.HasPrefix(key, recordWorkspacePrefix(jrnlFixtureWorkspace)) {
+			if !initial[key] && strings.HasPrefix(key, recordWorkspacePrefix(workspaceID)) {
 				detachedRecords = append(detachedRecords, key)
 			}
 			if !initial[key] && (strings.HasPrefix(key, journalRecoveryPrefix) || strings.HasPrefix(key, quarantinePrefix)) {
@@ -68,7 +72,7 @@ func jrnlFixture(t *testing.T) solp22Fixture {
 		staleDatasetBlocked, staleRecoveryReady, staleDatasetRecoveryKey = oldBlocked, oldReady, oldRecovery
 		uistate.ClearPersistFailure("dataset")
 	})
-	return solp22JournalDataset(t, jrnlDataset(), jrnlFixtureWorkspace)
+	return solp22JournalDataset(t, jrnlDataset(), workspaceID)
 }
 
 // Recovery tests need a household and real journal rows, without unrelated demo

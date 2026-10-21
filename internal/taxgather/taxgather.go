@@ -9,13 +9,18 @@
 // It is deliberately humble: it GATHERS and organizes the user's own records for
 // their own filing. It gives no tax advice, claims no completeness, and applies no
 // jurisdiction rules — the user (or their preparer) decides what is actually
-// deductible. It reuses the tested reports.DeductibleTotals / reports.YearTax so
-// the figures match the app's own reports.
+// deductible. It reuses reports.SpendingByCategoryChecked so category selection,
+// report exclusions and checked split arithmetic match the shared report fold.
 //
 // Pure Go, no syscall/js: unit-tested on native Go.
 package taxgather
 
 import (
+	"fmt"
+	"github.com/monstercameron/CashFlux/internal/budgeting"
+	"github.com/monstercameron/CashFlux/internal/csvsafe"
+	"github.com/monstercameron/CashFlux/internal/money"
+	"sort"
 	"strings"
 	"time"
 
@@ -62,52 +67,97 @@ var interestKeywords = []string{"interest"}
 // by category-name / tag keyword), and a gap list of deductible-or-donation entries
 // missing a receipt. year labels the summary; the bounds define the actual period.
 func Gather(txns []domain.Transaction, cats []domain.Category, year int, start, end time.Time, rates currency.Rates) (Summary, error) {
-	ded, err := reports.DeductibleTotals(txns, cats, start, end, rates)
-	if err != nil {
-		return Summary{}, err
+	return gatherLedger(budgeting.NewNettedLedger(txns), cats, year, start, end, rates)
+}
+
+// gatherLedger reuses the checked report fold once per transaction so category
+// totals, keyword buckets and receipt gaps share exactly the same selected
+// expense lines. Buckets can overlap; counts are distinct matching transactions.
+func gatherLedger(all budgeting.NettedLedger, cats []domain.Category, year int, start, end time.Time, rates currency.Rates) (Summary, error) {
+	if year < 1 || year > 9999 || !start.Before(end) {
+		return Summary{}, fmt.Errorf("invalid tax year or gathering window")
 	}
-	catName := make(map[string]string, len(cats))
-	deductibleCat := make(map[string]bool, len(cats))
+	if strings.TrimSpace(rates.Base) == "" {
+		return Summary{}, fmt.Errorf("tax gathering base currency is unavailable")
+	}
+	catName := map[string]string{}
+	deductible := map[string]bool{}
 	for _, c := range cats {
 		catName[c.ID] = c.Name
-		if c.Deductible {
-			deductibleCat[c.ID] = true
-		}
+		deductible[c.ID] = c.Deductible
 	}
-
-	s := Summary{Year: year, Deductible: ded}
-	for _, t := range txns {
-		if !t.IsExpense() || !dateutil.InRange(t.Date, start, end) {
+	s := Summary{Year: year}
+	totals := map[string]int64{}
+	for _, t := range all {
+		if !t.IsExpense() || !t.CountsInReports() || !dateutil.InRange(t.Date, start, end) {
 			continue
 		}
-		conv, err := rates.Convert(t.Amount, rates.Base)
+		rows, err := reports.SpendingByCategoryChecked(budgeting.NettedLedger{t}, start, end, rates)
 		if err != nil {
-			return Summary{}, err
+			return Summary{}, fmt.Errorf("transaction %q tax records unavailable: %w", t.ID, err)
 		}
-		amt := conv.Abs().Amount
-		hay := strings.ToLower(catName[t.CategoryID] + " " + strings.Join(t.Tags, " "))
-
-		isDonation := containsAny(hay, donationKeywords)
-		if isDonation {
+		donationTagged := containsAny(strings.ToLower(strings.Join(t.Tags, " ")), donationKeywords)
+		interestTagged := containsAny(strings.ToLower(strings.Join(t.Tags, " ")), interestKeywords)
+		var donation, interest, gap int64
+		for _, row := range rows {
+			isDonation := donationTagged || containsAny(strings.ToLower(catName[row.CategoryID]), donationKeywords)
+			isInterest := interestTagged || containsAny(strings.ToLower(catName[row.CategoryID]), interestKeywords)
+			if deductible[row.CategoryID] {
+				totals[row.CategoryID], err = money.Add(totals[row.CategoryID], row.Amount)
+				if err != nil {
+					return Summary{}, fmt.Errorf("deductible category %q: %w", row.CategoryID, err)
+				}
+				s.Deductible.Total, err = money.Add(s.Deductible.Total, row.Amount)
+				if err != nil {
+					return Summary{}, fmt.Errorf("deductible spending: %w", err)
+				}
+			}
+			if isDonation {
+				donation, err = money.Add(donation, row.Amount)
+				if err != nil {
+					return Summary{}, fmt.Errorf("donation transaction %q: %w", t.ID, err)
+				}
+			}
+			if isInterest {
+				interest, err = money.Add(interest, row.Amount)
+				if err != nil {
+					return Summary{}, fmt.Errorf("interest transaction %q: %w", t.ID, err)
+				}
+			}
+			if deductible[row.CategoryID] || isDonation {
+				gap, err = money.Add(gap, row.Amount)
+				if err != nil {
+					return Summary{}, fmt.Errorf("receipt gap %q: %w", t.ID, err)
+				}
+			}
+		}
+		if donation > 0 {
 			s.Charitable.Count++
-			s.Charitable.Total += amt
+			s.Charitable.Total, err = money.Add(s.Charitable.Total, donation)
+			if err != nil {
+				return Summary{}, fmt.Errorf("charitable total: %w", err)
+			}
 		}
-		if containsAny(hay, interestKeywords) {
+		if interest > 0 {
 			s.InterestPaid.Count++
-			s.InterestPaid.Total += amt
+			s.InterestPaid.Total, err = money.Add(s.InterestPaid.Total, interest)
+			if err != nil {
+				return Summary{}, fmt.Errorf("interest total: %w", err)
+			}
 		}
-		// Gap: a deductible-flagged or donation entry with no receipt attached is
-		// the thing most likely to hold up a filing.
-		if (deductibleCat[t.CategoryID] || isDonation) && len(t.Attachments) == 0 {
-			s.Gaps = append(s.Gaps, Gap{
-				TxnID:  t.ID,
-				Label:  txnLabel(t),
-				Amount: amt,
-				Date:   t.Date,
-				Reason: "no receipt attached",
-			})
+		if gap > 0 && len(t.Attachments) == 0 {
+			s.Gaps = append(s.Gaps, Gap{TxnID: t.ID, Label: txnLabel(t), Amount: gap, Date: t.Date, Reason: "no receipt attached"})
 		}
 	}
+	for id, amount := range totals {
+		s.Deductible.Rows = append(s.Deductible.Rows, reports.DeductibleRow{CategoryID: id, Amount: amount})
+	}
+	sort.Slice(s.Deductible.Rows, func(i, j int) bool {
+		if s.Deductible.Rows[i].Amount != s.Deductible.Rows[j].Amount {
+			return s.Deductible.Rows[i].Amount > s.Deductible.Rows[j].Amount
+		}
+		return s.Deductible.Rows[i].CategoryID < s.Deductible.Rows[j].CategoryID
+	})
 	return s, nil
 }
 
@@ -125,7 +175,7 @@ func GatherCSV(s Summary, name func(id string) string, amount func(int64) string
 	if len(s.Gaps) > 0 {
 		b.WriteString("\nGaps to resolve,Date,Amount\n")
 		for _, g := range s.Gaps {
-			b.WriteString(csvField(g.Label+" ("+g.Reason+")") + "," + g.Date.Format("2006-01-02") + "," + amount(g.Amount) + "\n")
+			b.WriteString(csvField(csvsafe.Guard(g.Label+" ("+g.Reason+")")) + "," + g.Date.Format("2006-01-02") + "," + amount(g.Amount) + "\n")
 		}
 	}
 	return []byte(b.String())

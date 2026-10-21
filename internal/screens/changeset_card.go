@@ -24,10 +24,10 @@ import (
 	"github.com/monstercameron/CashFlux/internal/changeset"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/router"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/router"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // PendingChangesetHost renders the current agent proposal (if any) as a review
@@ -73,7 +73,7 @@ func changesetReviewCard(props changesetReviewProps) ui.Node {
 
 	// After apply: show the receipt view.
 	if r := receipt.Get(); r != nil {
-		return changesetReceiptView(cs, *r, dismissed)
+		return changesetReceiptView(cs, *r, receipt, dismissed)
 	}
 
 	onToggle := func(i int, on bool) {
@@ -90,12 +90,18 @@ func changesetReviewCard(props changesetReviewProps) ui.Node {
 		uistate.RequestPersist()
 		uistate.AddAgentActions(props.ConversationID, rec.Kinds())
 		receipt.Set(&rec)
-		if rec.OK() {
+		if rec.CaptureError != "" {
+			uistate.PostNotice(uistate.T("changeset.captureFailed"), true)
+		} else if rec.OK() && rec.AppliedCount() > 0 {
 			// C364: the completion toast tells the reversal story at the moment of
 			// risk — Ctrl+Z reverses the last step, and the persistent receipt below
 			// carries "Undo all" + "View in Activity" (the audit timeline) for the
 			// full picture.
 			uistate.PostNotice(uistate.T("changeset.appliedUndo", rec.AppliedCount()), false)
+		} else if rec.OK() {
+			uistate.PostNotice(uistate.T("changeset.noChanges"), false)
+		} else if rec.Failed != nil && rec.Failed.UndoID != "" {
+			uistate.PostNotice(uistate.T("changeset.failedPartial", rec.Failed.Line, rec.Failed.Err), true)
 		} else {
 			uistate.PostNotice(uistate.T("changeset.failed", rec.Failed.Line, rec.Failed.Err), true)
 		}
@@ -178,39 +184,79 @@ func changesetOpLabel(enabled bool, line string) ui.Node {
 
 // changesetReceiptView renders the post-apply receipt: what applied, the first
 // failure (if any), and one-tap "Undo all" over the session undo stack.
-func changesetReceiptView(cs *changeset.Changeset, r changeset.Receipt, dismissed ui.State[bool]) ui.Node {
+func changesetReceiptView(cs *changeset.Changeset, r changeset.Receipt, receiptState ui.State[*changeset.Receipt], dismissed ui.State[bool]) ui.Node {
 	nav := router.UseNavigate()
 	// C364: "View in Activity" jumps to the audit timeline where every applied step
 	// is recorded and individually reversible — the durable companion to Ctrl+Z.
 	viewActivity := ui.UseEvent(Prevent(func() { nav.Navigate(uistate.RoutePath("/activity")) }))
 	onUndoAll := ui.UseEvent(func() {
-		// The apply captured one undo point per applied op (auditview.CaptureNow
-		// inside ApplyChangeset), so undo that many times to reverse them all.
-		for i := 0; i < r.AppliedCount(); i++ {
-			if !auditview.UndoFunc() {
-				break
-			}
+		if r.UndoInProgress {
+			return
 		}
-		uistate.BumpDataRevision()
-		uistate.PostNotice(uistate.T("changeset.undone"), false)
-		dismissed.Set(true)
-		uistate.ClearPendingChangeset()
+		updated := r
+		updated.UndoInProgress = true
+		updated.UndoError = ""
+		publishReceipt := func() {
+			snapshot := updated
+			receiptState.Set(&snapshot)
+		}
+		publishReceipt()
+		undoChangesetReceipt(&updated, auditview.TopUndoID, auditview.UndoExpected, func() {
+			publishReceipt()
+			uistate.BumpDataRevision()
+		}, func(err error) {
+			updated.UndoInProgress = false
+			if err != nil {
+				updated.UndoError = err.Error()
+				publishReceipt()
+				uistate.PostNotice(uistate.T("bv6d1.undoTheSaveFailed"), true)
+				return
+			}
+			publishReceipt()
+			uistate.BumpDataRevision()
+			uistate.PostNotice(uistate.T("changeset.undone"), false)
+			dismissed.Set(true)
+			uistate.ClearPendingChangeset()
+		})
 	})
 	onClose := ui.UseEvent(func() {
+		if r.UndoInProgress {
+			return
+		}
 		dismissed.Set(true)
 		uistate.ClearPendingChangeset()
 	})
 
 	title := uistate.T("changeset.receiptTitle", r.AppliedCount(), cs.Len())
 
-	lines := make([]ui.Node, 0, len(r.Applied)+1)
+	lines := make([]ui.Node, 0, len(r.Applied)+len(r.Unchanged)+2)
 	for _, ap := range r.Applied {
 		lines = append(lines, Div(css.Class("t-caption", tw.Flex, tw.ItemsCenter, tw.Gap2),
 			Span("✓"), Span(ap.Result)))
 	}
-	if r.Failed != nil {
+	for _, unchanged := range r.Unchanged {
+		lines = append(lines, Div(css.Class("t-caption", tw.Flex, tw.ItemsCenter, tw.Gap2),
+			Span("·"), Span(unchanged.Result)))
+	}
+	if r.Failed != nil && r.Failed.Index >= 0 {
+		failedKey := "changeset.failed"
+		if r.Failed.UndoID != "" {
+			failedKey = "changeset.failedPartial"
+		}
 		lines = append(lines, P(css.Class("t-caption", tw.TextDim), Attr("role", "alert"),
-			uistate.T("changeset.failed", r.Failed.Line, r.Failed.Err)))
+			uistate.T(failedKey, r.Failed.Line, r.Failed.Err)))
+	}
+	if r.CaptureError != "" {
+		lines = append(lines, P(css.Class("t-caption", tw.TextDim), Attr("role", "alert"),
+			uistate.T("changeset.undoVerificationFailed", r.CaptureError)))
+	}
+	if len(r.UndoneIDs) > 0 || r.UndoInProgress {
+		lines = append(lines, P(css.Class("t-caption", tw.TextDim), Attr("role", "status"),
+			uistate.T("changeset.undoProgress", len(r.UndoneIDs), len(r.UndoOrderIDs()), len(r.UndoRemainingIDs()))))
+	}
+	if r.UndoError != "" {
+		lines = append(lines, P(css.Class("t-caption", tw.TextDim), Attr("role", "alert"),
+			uistate.T("changeset.undoStopped", r.UndoError)))
 	}
 
 	return Div(
@@ -224,24 +270,66 @@ func changesetReceiptView(cs *changeset.Changeset, r changeset.Receipt, dismisse
 			),
 			Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap1), lines),
 			Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt2),
-				If(r.AppliedCount() > 0,
-					Button(css.Class("btn btn-ghost btn-sm"), Type("button"),
-						Attr("data-testid", "changeset-undo-all"),
-						Attr("aria-label", uistate.T("changeset.undoAllAria")),
-						OnClick(onUndoAll), uistate.T("changeset.undoAll")),
+				If(len(r.UndoRemainingIDs()) > 0,
+					buttonWithDisabled(r.UndoInProgress,
+						[]any{css.Class("btn btn-ghost btn-sm"), Type("button"),
+							Attr("data-testid", "changeset-undo-all"),
+							Attr("aria-label", uistate.T("changeset.undoAllAria")), OnClick(onUndoAll)},
+						uistate.T("changeset.undoAll")),
 				),
-				If(r.AppliedCount() > 0,
+				If(len(r.UndoOrderIDs()) > 0,
 					Button(css.Class("btn btn-ghost btn-sm"), Type("button"),
 						Attr("data-testid", "changeset-view-activity"),
 						Attr("aria-label", uistate.T("changeset.viewActivity")),
 						OnClick(viewActivity), uistate.T("changeset.viewActivity")),
 				),
-				Button(css.Class("btn btn-ghost btn-sm"), Type("button"),
-					Attr("data-testid", "changeset-receipt-close"),
-					OnClick(onClose), uistate.T("action.close")),
+				buttonWithDisabled(r.UndoInProgress,
+					[]any{css.Class("btn btn-ghost btn-sm"), Type("button"),
+						Attr("data-testid", "changeset-receipt-close"), OnClick(onClose)},
+					uistate.T("action.close")),
 			),
 		),
 	)
+}
+
+// undoChangesetReceipt reverses only this receipt's exact undo IDs, newest
+// first. Each next step starts only after the previous durable replay succeeds.
+// A stale top ID or replay error stops the sequence and preserves completed IDs
+// on the receipt so the UI can report partial progress accurately.
+func undoChangesetReceipt(r *changeset.Receipt, topUndoID func() string, undoExpected func(string, func(error)) bool, progress func(), done func(error)) {
+	var next func()
+	next = func() {
+		remaining := r.UndoRemainingIDs()
+		if len(remaining) == 0 {
+			done(nil)
+			return
+		}
+		expected := remaining[0]
+		if topUndoID() != expected {
+			done(fmt.Errorf("undo receipt %q is no longer at the top of history", expected))
+			return
+		}
+		callbackCalled := false
+		complete := func(err error) {
+			if callbackCalled {
+				return
+			}
+			callbackCalled = true
+			if err != nil {
+				done(err)
+				return
+			}
+			r.MarkUndone(expected)
+			progress()
+			next()
+		}
+		started := undoExpected(expected, complete)
+		if !started && !callbackCalled {
+			callbackCalled = true
+			done(fmt.Errorf("undo receipt %q could not be started", expected))
+		}
+	}
+	next()
 }
 
 // AgentSessionReceipt renders the AG20 cumulative "this chat: …" receipt for a
@@ -287,9 +375,17 @@ func AgentActionHistory(props agentActionHistoryProps) ui.Node {
 	nav := router.UseNavigate()
 	openActivity := ui.UseEvent(Prevent(func() { nav.Navigate(uistate.RoutePath("/activity")) }))
 	undo := ui.UseEvent(Prevent(func() {
-		if auditview.UndoFunc() {
-			uistate.DropLastAssistantAction()
+		action, ok := uistate.LastAssistantAction()
+		if !ok || action.UndoID == "" || auditview.TopUndoID() != action.UndoID {
+			return
 		}
+		auditview.UndoExpected(action.UndoID, func(err error) {
+			if err != nil {
+				uistate.PostNotice(uistate.T("bv6d1.undoTheSaveFailed"), true)
+				return
+			}
+			uistate.DropLastAssistantActionFor(action.UndoID)
+		})
 	}))
 
 	actions := uistate.AssistantActions()
@@ -305,7 +401,8 @@ func AgentActionHistory(props agentActionHistoryProps) ui.Node {
 		))
 	}
 	list := append([]any{css.Class("asst-act-list"), Attr("data-testid", "agent-action-list")}, rows...)
-	canUndo := auditview.CanUndoFunc()
+	last, hasLast := uistate.LastAssistantAction()
+	canUndo := hasLast && last.UndoID != "" && auditview.TopUndoID() == last.UndoID
 	return Details(css.Class("asst-act"), Attr("data-testid", "agent-action-history"),
 		Summary(css.Class("asst-act-summary"), uistate.T("changeset.historySummary", len(actions))),
 		Ul(list...),

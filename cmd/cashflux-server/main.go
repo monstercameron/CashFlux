@@ -165,8 +165,13 @@ func main() {
 			logger.Error("server blob gc failed", "error", err)
 			os.Exit(1)
 		}
-		cfg.Metrics.ObserveBlobGC(deleted)
-		logger.Info("server blob gc complete", "deleted", deleted)
+		orphans, err := store.SweepOrphanBlobFiles(filepath.Join(cfg.DataDir, "blobs"), time.Now().UTC().Add(-server.OrphanBlobGracePeriod))
+		if err != nil {
+			logger.Error("server orphan blob gc failed", "error", err, "metadata_deleted", deleted)
+			os.Exit(1)
+		}
+		cfg.Metrics.ObserveBlobGC(deleted + orphans)
+		logger.Info("server blob gc complete", "metadata_deleted", deleted, "orphan_files_deleted", orphans)
 		return
 	}
 	if token := cfg.TokenForDisplay(); token != "" {

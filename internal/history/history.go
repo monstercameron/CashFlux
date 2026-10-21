@@ -45,7 +45,10 @@ type Change struct {
 // ChangeSet is the diff of one mutation — a labelled, deterministic list of row
 // changes. Applying it moves a snapshot forward; applying its inverse undoes it.
 type ChangeSet struct {
-	Label   string   `json:"label,omitempty"`
+	Label string `json:"label,omitempty"`
+	// UndoID identifies the captured undo point in the live session. It is not
+	// persisted with the dataset or included in audit serialization.
+	UndoID  string   `json:"-"`
 	Changes []Change `json:"changes"`
 }
 
@@ -89,7 +92,7 @@ func Diff(before, after Snapshot) ChangeSet {
 // Invert returns the change set that undoes cs: adds become deletes, deletes become
 // adds, and updates swap before/after.
 func (cs ChangeSet) Invert() ChangeSet {
-	out := ChangeSet{Label: cs.Label, Changes: make([]Change, len(cs.Changes))}
+	out := ChangeSet{Label: cs.Label, UndoID: cs.UndoID, Changes: make([]Change, len(cs.Changes))}
 	for i, c := range cs.Changes {
 		inv := Change{Collection: c.Collection, ID: c.ID, Before: c.After, After: c.Before}
 		switch c.Op {

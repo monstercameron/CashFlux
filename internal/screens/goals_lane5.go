@@ -6,131 +6,54 @@ package screens
 
 import (
 	"fmt"
-	"sort"
-	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
-	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/icon"
-	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // goals_lane5.go holds the #65 goals refinements: the goal-conflict warning
 // strip (several goals' earmarks claiming the same account balance), the
 // "fund from next paycheck" preview, and the payday funding-order control.
 
-// goalConflict is one over-claimed account: which goals share it and by how much
-// the combined earmarks exceed the balance (base minor units).
-type goalConflict struct {
-	AccountID   string
-	AccountName string
-	GoalNames   []string
-	ClaimMinor  int64
-	BalMinor    int64
-}
-
-// computeGoalConflicts finds accounts where MULTIPLE goals' earmarks together
-// exceed the account's balance — the shared-claim case the per-card overbooked
-// flag can't explain on its own. Single-goal overbooking stays a card concern.
-func computeGoalConflicts(app *appstate.App) []goalConflict {
+// computeGoalConflicts reuses the household native reservation snapshot. Unknown
+// claimed positions remain visible, and duplicate rows never imply two goals.
+func computeGoalConflicts(app *appstate.App) []goals.AccountReservation {
 	if app == nil {
 		return nil
 	}
-	base := app.Settings().BaseCurrency
-	if base == "" {
-		base = "USD"
-	}
-	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	toBase := func(m money.Money) int64 {
-		if m.Currency == base || m.Currency == "" {
-			return m.Amount
-		}
-		if conv, err := rates.Convert(m, base); err == nil {
-			return conv.Amount
-		}
-		return m.Amount
-	}
-	claim := map[string]int64{}
-	names := map[string][]string{}
-	for _, g := range app.Goals() {
-		if g.Archived {
-			continue
-		}
-		for _, al := range g.Allocations {
-			if al.AccountID == "" || al.Amount.Amount <= 0 {
-				continue
-			}
-			claim[al.AccountID] += toBase(al.Amount)
-			names[al.AccountID] = append(names[al.AccountID], g.Name)
-		}
-	}
-	txns := app.Transactions()
-	var out []goalConflict
-	for _, a := range app.Accounts() {
-		if len(names[a.ID]) < 2 || claim[a.ID] <= 0 {
-			continue
-		}
-		bal, _ := ledger.Balance(a, txns)
-		if claim[a.ID] > toBase(bal) {
-			out = append(out, goalConflict{
-				AccountID: a.ID, AccountName: a.Name,
-				GoalNames: names[a.ID], ClaimMinor: claim[a.ID], BalMinor: toBase(bal),
-			})
-		}
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].AccountName < out[j].AccountName })
-	return out
+	return goalReservations(app).Warnings(2)
 }
 
-// goalConflictStrip is the warning banner over the goals list when goals' plans
-// claim the same balance (#65). One row per over-claimed account, naming the
-// goals, the combined claim, the balance, and the gap — with a jump into the
-// earmarks manager where the claims are edited.
 func goalConflictStrip(_ struct{}) ui.Node {
 	_ = uistate.UseDataRevision().Get()
-	app := appstate.Default
-	viewAtom := uistate.UseGoalsView()
-	goEarmarks := ui.UseEvent(Prevent(func() { viewAtom.Set(uistate.GoalsViewEarmarks) }))
-	conflicts := computeGoalConflicts(app)
+	conflicts := computeGoalConflicts(appstate.Default)
 	if len(conflicts) == 0 {
 		return Fragment()
 	}
-	base := app.Settings().BaseCurrency
-	if base == "" {
-		base = "USD"
-	}
-	var rows []ui.Node
-	for _, c := range conflicts {
-		over := c.ClaimMinor - c.BalMinor
-		rows = append(rows, Div(css.Class("budget-issue-row"), Attr("data-testid", "goal-conflict-"+c.AccountID),
-			Div(css.Class("budget-issue-main"),
-				Span(css.Class("budget-issue-title"),
-					uistate.T("goals.conflictTitle", strings.Join(c.GoalNames, ", "), c.AccountName)),
-				Span(css.Class("budget-issue-body"),
-					uistate.T("goals.conflictBody",
-						fmtMoney(money.New(c.ClaimMinor, base)),
-						fmtMoney(money.New(c.BalMinor, base)),
-						fmtMoney(money.New(over, base)))),
-			),
-		))
-	}
+	return ui.CreateElement(goalConflictDetails, conflicts)
+}
+
+func goalConflictDetails(conflicts []goals.AccountReservation) ui.Node {
+	viewAtom := uistate.UseGoalsView()
+	goEarmarks := ui.UseEvent(Prevent(func() { viewAtom.Set(uistate.GoalsViewEarmarks) }))
+	rows := MapKeyed(conflicts, func(p goals.AccountReservation) any { return p.Account.ID }, func(p goals.AccountReservation) ui.Node {
+		return Div(css.Class("budget-issue-row"), Attr("data-testid", "goal-conflict-"+p.Account.ID),
+			ui.CreateElement(reservationNotice, reservationNoticeProps{Position: p, ShowGoalNames: true}))
+	})
 	return Div(css.Class("budget-issues-wrap"), Attr("data-testid", "goals-conflict-strip"),
-		Div(css.Class("budget-issues-detail"),
-			append([]ui.Node{}, rows...),
+		Div(css.Class("budget-issues-detail"), rows,
 			Button(css.Class("btn btn-sm", tw.Mt2), Type("button"), Attr("data-testid", "goals-conflict-review"),
-				Title(uistate.T("goals.conflictReviewTitle")), OnClick(goEarmarks), uistate.T("goals.conflictReview")),
-		),
-	)
+				Title(uistate.T("goals.conflictReviewTitle")), OnClick(goEarmarks), uistate.T("goals.conflictReview"))))
 }
 
 // goalsPaycheckPreviewCard shows what the payday waterfall WOULD do with the

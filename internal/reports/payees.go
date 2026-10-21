@@ -3,6 +3,7 @@
 package reports
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/money"
 )
 
 // PayeeTotal is one payee's total spend over the reporting period, in base-
@@ -36,6 +38,7 @@ type PayeeSummary struct {
 // entry). Transactions with no resolvable name are skipped. Transfers and
 // income are excluded; amounts are converted to the Rates base currency.
 // limit <= 0 returns every payee; otherwise at most the top limit.
+// Unrepresentable converted magnitudes or group totals return an error and no rows.
 func TopPayeesTrailing(txns []domain.Transaction, days int, asOf time.Time, rates currency.Rates, limit int) ([]PayeeSummary, error) {
 	cutoff := asOf.AddDate(0, 0, -days)
 	type agg struct {
@@ -64,7 +67,14 @@ func TopPayeesTrailing(txns []domain.Transaction, days int, asOf time.Time, rate
 			g = &agg{name: name}
 			groups[name] = g
 		}
-		g.amt += conv.Abs().Amount
+		magnitude, err := conv.AbsChecked()
+		if err != nil {
+			return nil, fmt.Errorf("payee %q transaction %q magnitude: %w", name, t.ID, err)
+		}
+		g.amt, err = money.Add(g.amt, magnitude.Amount)
+		if err != nil {
+			return nil, fmt.Errorf("payee %q total: %w", name, err)
+		}
 		g.count++
 	}
 
@@ -90,7 +100,8 @@ func TopPayeesTrailing(txns []domain.Transaction, days int, asOf time.Time, rate
 // Transfers and income are excluded and amounts are converted to the base
 // currency. n <= 0 returns every payee; otherwise at most the top n. Expenses
 // with a blank description are grouped under one "(no description)"-empty key
-// and surfaced like any other.
+// and surfaced like any other. Unrepresentable converted magnitudes or group
+// totals return an error and no partial ranking.
 func TopPayees(txns []domain.Transaction, start, end time.Time, rates currency.Rates, n int) ([]PayeeTotal, error) {
 	type agg struct {
 		name string
@@ -112,7 +123,14 @@ func TopPayees(txns []domain.Transaction, start, end time.Time, rates currency.R
 			g = &agg{name: name}
 			groups[key] = g
 		}
-		g.amt += conv.Abs().Amount
+		magnitude, err := conv.AbsChecked()
+		if err != nil {
+			return nil, fmt.Errorf("payee %q transaction %q magnitude: %w", name, t.ID, err)
+		}
+		g.amt, err = money.Add(g.amt, magnitude.Amount)
+		if err != nil {
+			return nil, fmt.Errorf("payee %q total: %w", name, err)
+		}
 	}
 
 	out := make([]PayeeTotal, 0, len(groups))

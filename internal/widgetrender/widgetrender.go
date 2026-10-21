@@ -16,11 +16,13 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/dashboardview"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/freshness"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/periodview"
 	"github.com/monstercameron/CashFlux/internal/txntoolbar"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // RenderCtx carries everything a registered widget body needs for one render of a
@@ -44,8 +46,14 @@ type RenderCtx struct {
 	// TxnDerived is the immutable uncollapsed ledger derivation shared by transaction tiles.
 	TxnDerived *txntoolbar.Snapshot
 
+	// Frames shares one immutable data snapshot and bounded pipeline results across
+	// dashboard placements. Other hosts leave it nil and hydrate directly.
+	Frames *dashboardview.PreparedFrames
+
 	Start, End time.Time
 
+	// PeriodTotals carries availability; Income and Expense below require Known.
+	PeriodTotals                              periodview.Totals
 	Net, Assets, Liabilities, Income, Expense money.Money
 
 	PeriodLabel    string

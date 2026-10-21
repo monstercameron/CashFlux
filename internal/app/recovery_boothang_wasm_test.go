@@ -16,8 +16,8 @@ import (
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/store"
 	"github.com/monstercameron/CashFlux/internal/workspace"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/testkit/render"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/testkit/render"
 )
 
 func TestBOOTLargeRecoveryHistoryDoesNotBlockHydration(t *testing.T) {
@@ -116,7 +116,11 @@ func TestBOOTLargeRecoveryHistoryDoesNotBlockHydration(t *testing.T) {
 }
 
 func TestBOOTStaleWriterDeduplicatesTheSameHouseholdEdit(t *testing.T) {
-	fixture := jrnlFixture(t)
+	// Recovery copies survive fixture cleanup, so isolate this test by scope.
+	workspaceID := "boot-stale-" + id.New()
+	fixture := jrnlFixtureForWorkspace(t, workspaceID)
+	owner := browserstore.GetString(datasetOwnerKey)
+	recoveryScopePrefix := fmt.Sprintf("cashflux:stale-recovery:%s:%s:", checkpointHash(workspaceID), checkpointHash(owner))
 	initial := map[string]bool{}
 	for _, key := range browserstore.Keys() {
 		initial[key] = true
@@ -124,7 +128,7 @@ func TestBOOTStaleWriterDeduplicatesTheSameHouseholdEdit(t *testing.T) {
 	t.Cleanup(func() {
 		var remove []string
 		for _, key := range browserstore.Keys() {
-			if !initial[key] && strings.HasPrefix(key, "cashflux:stale-recovery:") {
+			if !initial[key] && strings.HasPrefix(key, recoveryScopePrefix) {
 				remove = append(remove, key)
 			}
 		}
@@ -149,12 +153,15 @@ func TestBOOTStaleWriterDeduplicatesTheSameHouseholdEdit(t *testing.T) {
 	}
 	count := 0
 	for _, key := range browserstore.Keys() {
-		if !initial[key] && strings.HasPrefix(key, "cashflux:stale-recovery:") {
+		if strings.HasPrefix(key, recoveryScopePrefix) {
 			count++
 		}
 	}
 	if count != 1 {
-		t.Fatalf("same stale edit created %d copies, want one", count)
+		t.Fatalf("same stale edit left %d retained copies in its isolated scope, want one", count)
+	}
+	if !strings.HasPrefix(retained, recoveryScopePrefix) {
+		t.Fatalf("retained stale edit key %q is outside its isolated scope", retained)
 	}
 	raw, have, err := browserstore.GetSecure(retained)
 	if err != nil || !have || !strings.Contains(raw, fixture.row.Desc) {

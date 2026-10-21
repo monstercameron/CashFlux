@@ -18,9 +18,9 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // budgetTargetKindOptions builds the funding-target picker options (BG1). The first
@@ -66,7 +66,7 @@ type budgetTargetDraft struct {
 // select/input On* handlers register safely (the no-On*-in-loop rule only bans
 // variable-length loops).
 func budgetTargetSection(app *appstate.App, d budgetTargetDraft,
-	onKind func(string), onGoal func(string), onAmount any, onDate any) ui.Node {
+	onKind func(string), onGoal func(string), onAmount ui.Handler, onDate ui.Handler) ui.Node {
 	kind := domain.TargetKind(d.Kind)
 	needsAmount := kind == domain.TargetRefillUpTo || kind == domain.TargetSetAside || kind == domain.TargetByDate
 	isByDate := kind == domain.TargetByDate
@@ -121,29 +121,30 @@ func budgetDraftTarget(b domain.Budget, d budgetTargetDraft) domain.Budget {
 func budgetTargetNeed(app *appstate.App, b domain.Budget, status budgeting.Status, now time.Time) (budgeting.TargetNeed, error) {
 	var linked money.Money
 	hasLinked := false
-	if b.TargetKind == domain.TargetByDate && b.LinkedGoalID != "" && app != nil {
-		for _, g := range app.Goals() {
-			if g.ID != b.LinkedGoalID {
-				continue
-			}
-			if m, ok, err := goals.MonthlyNeeded(g, now); err != nil {
-				return budgeting.TargetNeed{}, err
-			} else if ok {
-				linked, hasLinked = m, true
-			}
-			break
-		}
-	}
 	if app == nil {
 		return budgeting.Needed(b, status, now, linked, hasLinked), nil
 	}
 	settings := app.Settings()
-	base := settings.BaseCurrency
-	if base == "" {
-		base = budgetBaseCurrency(base)
+	base := budgetBaseCurrency(settings.BaseCurrency)
+	rates := currency.Rates{Base: base, Rates: settings.FXRates}
+	if b.TargetKind == domain.TargetByDate && b.LinkedGoalID != "" {
+		for _, g := range app.Goals() {
+			if g.ID != b.LinkedGoalID {
+				continue
+			}
+			evaluation := goals.EvaluateGoal(g, goals.TaskSummary{}, rates, now)
+			if evaluation.Err != nil {
+				return budgeting.TargetNeed{}, evaluation.Err
+			}
+			if evaluation.HasMonthlyNeeded {
+				linked, hasLinked = evaluation.MonthlyNeeded, true
+			} else if g.IsFinancial() && evaluation.Complete {
+				linked, hasLinked = money.Zero(g.TargetAmount.Currency), true
+			}
+			break
+		}
 	}
-	return budgeting.NeededWithRates(b, status, now, linked, hasLinked,
-		currency.Rates{Base: base, Rates: settings.FXRates})
+	return budgeting.NeededWithRates(b, status, now, linked, hasLinked, rates)
 }
 
 // budgetTargetLine renders the one-line target summary beneath a budget's bar (BG1)

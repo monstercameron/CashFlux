@@ -5,6 +5,7 @@ package goals
 import (
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 )
 
@@ -31,7 +32,8 @@ const (
 // marked, habit target hit).
 func Reached(g domain.Goal, tasks []domain.Task, now time.Time) bool {
 	if g.IsFinancial() {
-		return g.TargetAmount.Amount > 0 && CoverageMinor(g) >= g.TargetAmount.Amount
+		c, err := EvaluateCoverage(g, currency.Rates{})
+		return err == nil && c.Complete
 	}
 	return EvaluateProgress(g, tasks, now).Complete
 }
@@ -41,7 +43,15 @@ func Reached(g domain.Goal, tasks []domain.Task, now time.Time) bool {
 // otherwise current. The Archived flag is intentionally NOT consulted so callers
 // can decide whether to fold archived goals into the completed count.
 func Classify(g domain.Goal, tasks []domain.Task, now time.Time) GoalState {
-	if Reached(g, tasks, now) {
+	if g.IsFinancial() {
+		c, err := EvaluateCoverage(g, currency.Rates{})
+		if err != nil {
+			return StateCurrent
+		}
+		if c.Complete {
+			return StateCompleted
+		}
+	} else if Reached(g, tasks, now) {
 		return StateCompleted
 	}
 	if !g.TargetDate.IsZero() && !g.TargetDate.After(now) && !g.IsPaused(now) {

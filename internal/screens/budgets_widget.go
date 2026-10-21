@@ -14,9 +14,9 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/CashFlux/internal/widgetrender"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // Budgets is the widgetized budgets surface. Like /accounts and /transactions, the
@@ -111,19 +111,10 @@ func budgetsReady(_ struct{}) ui.Node {
 		// so anything wanting to observe a method change had to infer it from a
 		// toast — and a toast from the PREVIOUS change satisfies that check just as
 		// well, which is what made switching methods race (Cam, 2026-08-31).
-		Div(css.Class("bento bento-budgets"), Attr("data-method", string(method)),
-			MapKeyed(specs,
-				func(sp domain.WidgetSpec) any { return sp.ID },
-				func(sp domain.WidgetSpec) ui.Node {
-					c := rctx
-					c.Spec = sp
-					if node, ok := safeRenderSpec(sp, c); ok {
-						return node
-					}
-					return Fragment()
-				},
-			),
-		),
+		surfaceTiles(surfaceTilesProps{
+			Class: "bento-budgets", Specs: specs, Context: rctx,
+			Attrs: []any{Attr("data-method", string(method))},
+		}),
 		ui.CreateElement(budgetsSweepConfigModalComponent, struct{}{}),
 		ui.CreateElement(budgetsCoverAllModalComponent, struct{}{}),
 		ui.CreateElement(budgetsTrackUntrackedModalComponent, struct{}{}),

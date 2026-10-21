@@ -17,10 +17,10 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/state"
-	uic "github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/state"
+	uic "github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 const hostedAppMetaSelector = `meta[name="cashflux-hosted-app"][content="true"]`
@@ -79,6 +79,10 @@ func initialHostedGatePhase() hostedGatePhase {
 	return hostedGateChecking
 }
 
+func hostedSessionValidated(refresh, validated string, authFailed bool) bool {
+	return refresh != "" && refresh == validated && !authFailed
+}
+
 func hostedSessionKey() string {
 	if !backendSessionReady() {
 		return ""
@@ -127,12 +131,17 @@ func HostedAuthGate(props HostedAuthGateProps) uic.Node {
 
 func hostedAuthGateActive(props HostedAuthGateProps) uic.Node {
 	prefsAtom := uistate.UsePrefs()
+	authRev := uistate.UseAuthRevision()
+	uistate.CaptureAuthRevision(authRev)
+	_ = authRev.Get()
+	_ = state.UseAtom(syncRevAtomID, 0).Get()
 	phase := uic.UseState(string(initialHostedGatePhase()))
 	errMsg := uic.UseState("")
 	retry := uic.UseState(0)
 
 	pr := prefsAtom.Get().Normalize()
 	refresh := hostedSessionKey()
+	authFailed := loadSyncStatus().AuthFailed
 	sessionKey := pr.ServerURL + "\x00" + pr.ServerToken + "\x00" + refresh + "\x00" + itoa(retry.Get())
 
 	uic.UseEffect(func() func() {
@@ -142,7 +151,7 @@ func hostedAuthGateActive(props HostedAuthGateProps) uic.Node {
 			errMsg.Set("")
 			return nil
 		}
-		if refresh == hostedValidatedRefreshToken {
+		if hostedSessionValidated(refresh, hostedValidatedRefreshToken, authFailed) {
 			phase.Set(string(hostedGateAllowed))
 			return nil
 		}
@@ -152,8 +161,21 @@ func hostedAuthGateActive(props HostedAuthGateProps) uic.Node {
 		go func() {
 			var out backendrpc.ListDevicesResponse
 			err := invokeAuthed(ctx, pr, backendrpc.MethodAuthListDevices, backendrpc.ListDevicesRequest{}, &out)
+			// An earlier request cannot validate or revoke a different account's
+			// newly installed session after a sign-in or cross-tab rotation.
+			if ctx.Err() != nil || hostedSessionKey() != refresh {
+				return
+			}
 			if err == nil {
-				hostedValidatedRefreshToken = hostedSessionKey()
+				hostedValidatedRefreshToken = refresh
+				if st := loadSyncStatus(); st.AuthFailed {
+					st.AuthFailed = false
+					if st.State == "error" {
+						st.State = "offline"
+						st.Message = ""
+					}
+					setSyncStatus(st)
+				}
 				errMsg.Set("")
 				phase.Set(string(hostedGateAllowed))
 				return
@@ -169,11 +191,14 @@ func hostedAuthGateActive(props HostedAuthGateProps) uic.Node {
 			phase.Set(string(hostedGateError))
 		}()
 		return cancel
-	}, sessionKey)
+	}, sessionKey, authFailed)
 	onRetry := uic.UseEvent(func() { retry.Set(retry.Get() + 1) })
 
 	p := hostedGatePhase(phase.Get())
-	if p == hostedGateAllowed && refresh != "" {
+	if authFailed && p == hostedGateAllowed {
+		p = hostedGateChecking
+	}
+	if p == hostedGateAllowed && refresh != "" && !authFailed {
 		// Keep one subscribed boundary mounted even after Ready. Parent renders
 		// must not decide hydration from a non-reactive Required read.
 		return uic.CreateElement(hostedDataHydrationGate, props)

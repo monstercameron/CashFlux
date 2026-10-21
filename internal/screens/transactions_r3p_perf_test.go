@@ -17,9 +17,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/reviewqueue"
 	"github.com/monstercameron/CashFlux/internal/txnclassify"
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
-	"github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/testkit/render"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/testkit/render"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // r3pFixture builds a sample-household-sized ledger (3,292 rows, matching the

@@ -44,13 +44,15 @@ async function protectedStoredValue(page, key) {
   }, key);
 }
 
-test("protected boot migrates a legacy file in an inactive workspace", async ({ app }) => {
+test("protected boot migrates inactive and orphaned legacy files", async ({ app }) => {
   test.setTimeout(120_000);
   await expect(app.getByTestId("sample-start-fresh")).toBeVisible();
   await Promise.all([app.waitForEvent("load"), app.getByTestId("sample-start-fresh").click()]);
   await app.waitForFunction(() => document.documentElement.getAttribute("data-app-ready") === "true");
   const originalWorkspaceID = await app.evaluate(() => JSON.parse(window.cashfluxStoreGet("cashflux:workspaces")).activeId);
   const pixels = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=", "base64");
+  const orphanID = `orphan-${crypto.randomUUID()}`;
+  const orphanBytes = Buffer.from("old local file with no dataset reference");
   const filename = `legacy-inactive-${crypto.randomUUID().slice(0, 8)}.png`;
   await nav(app, "/artifacts");
   const [chooser] = await Promise.all([
@@ -87,7 +89,7 @@ test("protected boot migrates a legacy file in an inactive workspace", async ({ 
     window.cashfluxStoreSet(key, JSON.stringify(bundle));
   }, { key: bundleKey, artifactID: id });
   await expect.poll(() => protectedStoredValue(app, bundleKey), { timeout: 20_000 }).not.toBe(previousBundleRecord);
-  await app.evaluate(async ({ key, bytes }) => {
+  await app.evaluate(async ({ key, bytes, orphanKey, orphanData }) => {
     const db = await new Promise((resolve, reject) => {
       const request = indexedDB.open("cashflux", 1);
       request.onsuccess = () => resolve(request.result);
@@ -97,17 +99,22 @@ test("protected boot migrates a legacy file in an inactive workspace", async ({ 
       await new Promise((resolve, reject) => {
         const tx = db.transaction("artifacts", "readwrite");
         tx.objectStore("artifacts").put({ mime: "image/png", data: new Uint8Array(bytes) }, key);
+        tx.objectStore("artifacts").put({ mime: "text/plain", data: new Uint8Array(orphanData) }, orphanKey);
         tx.oncomplete = resolve;
         tx.onabort = () => reject(tx.error);
       });
     } finally {
       db.close();
     }
-  }, { key: id, bytes: [...pixels] });
+  }, { key: id, bytes: [...pixels], orphanKey: orphanID, orphanData: [...orphanBytes] });
   expect((await artifactRecord(app, id)).mime).toBe("image/png");
+  expect((await artifactRecord(app, orphanID)).mime).toBe("text/plain");
   await app.reload();
   await app.waitForFunction(() => document.documentElement.getAttribute("data-app-ready") === "true");
   await expect.poll(async () => (await artifactRecord(app, id)).mime, { timeout: 30_000 }).toBe("application/x-cashflux-encrypted-artifact");
+  await expect.poll(async () => (await artifactRecord(app, orphanID)).mime, { timeout: 30_000 }).toBe("application/x-cashflux-encrypted-artifact");
   const saved = await artifactRecord(app, id);
   expect(Buffer.from(saved.data)).not.toEqual(pixels);
+  const orphanSaved = await artifactRecord(app, orphanID);
+  expect(Buffer.from(orphanSaved.data)).not.toEqual(orphanBytes);
 });

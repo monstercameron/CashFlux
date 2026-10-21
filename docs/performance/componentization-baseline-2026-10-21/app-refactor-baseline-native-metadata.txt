@@ -1,0 +1,16 @@
+HEAD: d79e1b90061948e4af2c1cc94c359a97e4682da6
+Dirty status:
+?? docs/ASSISTANT_VALIDATION.md
+Go: go version go1.26.9 windows/arm64
+GOOS: windows
+GOARCH: amd64
+GOVERSION: go1.26.9
+GOFLAGS:
+OS: Microsoft Windows 10.0.28000
+CPU: Arm64
+GOHOSTOS: windows
+GOHOSTARCH: arm64
+Physical processor reported by Windows: Snapdragon(R) X2 Elite Extreme - X2E94100 - Qualcomm Oryon(TM) CPU
+Go benchmark CPU label: Virtual CPU @ 4.45GHz (from benchmark headers)
+Benchmark target: windows/amd64, host: windows/arm64
+Run order: screens transaction benchmark, goalview benchmarks, then taskview benchmarks; no parallel benchmark jobs.

@@ -13,7 +13,6 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/acctsort"
 	"github.com/monstercameron/CashFlux/internal/amountmath"
-	"github.com/monstercameron/CashFlux/internal/artifacts"
 	"github.com/monstercameron/CashFlux/internal/catname"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
@@ -307,13 +306,13 @@ func FieldErrors(message, positive, number, date string) (string, string) {
 	return amountErr, dateErr
 }
 
-// Thumbnail is an attachment and the available artifact data URL.
+// Thumbnail is an attachment and its artifact metadata, if the file exists.
 type Thumbnail struct {
-	Ref     domain.AttachmentRef
-	DataURL string
+	Ref      domain.AttachmentRef
+	Artifact domain.Artifact
 }
 
-// Thumbnails resolves attachment bytes without dropping missing artifacts.
+// Thumbnails resolves artifact records without dropping missing references.
 func Thumbnails(refs []domain.AttachmentRef, arts []domain.Artifact) []Thumbnail {
 	byID := make(map[string]domain.Artifact, len(arts))
 	for _, a := range arts {
@@ -322,11 +321,7 @@ func Thumbnails(refs []domain.AttachmentRef, arts []domain.Artifact) []Thumbnail
 	out := make([]Thumbnail, 0, len(refs))
 	for _, ref := range refs {
 		a := byID[ref.ArtifactID]
-		url := ""
-		if len(a.Bytes) > 0 {
-			url = artifacts.DataURL(a.MIME, a.Bytes)
-		}
-		out = append(out, Thumbnail{ref, url})
+		out = append(out, Thumbnail{Ref: ref, Artifact: a})
 	}
 	return out
 }

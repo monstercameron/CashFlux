@@ -314,13 +314,16 @@ func (builder *budgetViewBuilder) addSavings(app *appstate.App, memberID string)
 			}
 		}
 	}
-	v.AgeMoney = computeAgeOfMoney(in.Transactions, in.Base, in.Rates)
+	v.AgeMoney = budgetAgeOfMoney(app, in.Transactions, in.Base, in.Rates)
 }
 
 func sinkingFundSetAsideBase(goal domain.Goal, now time.Time, base string, rates currency.Rates) (int64, error) {
-	amount := goalsvc.FundSetAsideMinor(goal, now)
-	if amount == 0 {
+	evaluation := goalsvc.EvaluateGoal(goal, goalsvc.TaskSummary{}, rates, now)
+	if evaluation.Err != nil {
+		return 0, evaluation.Err
+	}
+	if !evaluation.HasMonthlyNeeded {
 		return 0, nil
 	}
-	return currency.ConvertBetween(amount, goal.TargetAmount.Currency, base, rates)
+	return currency.ConvertBetween(evaluation.MonthlyNeeded.Amount, evaluation.MonthlyNeeded.Currency, base, rates)
 }

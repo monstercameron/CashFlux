@@ -24,7 +24,7 @@
 // CDN also drops Tailwind's preflight (which set border-style globally).
 package tw
 
-import "github.com/monstercameron/GoWebComponents/v5/css"
+import "github.com/monstercameron/GoWebComponents/v7/css"
 
 // --- the app's custom palette (exact hex from the former tailwind.config) ------
 const (
@@ -289,12 +289,12 @@ var (
 // --- effects ------------------------------------------------------------------
 var (
 	ShadowLg  = raw("box-shadow", "0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)")
-	Opacity0  = css.Opacity(0)
-	Opacity60 = css.Opacity(0.6)
+	Opacity0  = css.OpacityNum(css.Num(0))
+	Opacity60 = css.OpacityNum(css.Num(0.6))
 
-	HoverOpacity100             = css.Hover(css.Opacity(1))
-	GroupHoverOpacity100        = css.DefineVariant(".group:hover &")(css.Opacity(1))
-	GroupFocusWithinOpacity100  = css.DefineVariant(".group:focus-within &")(css.Opacity(1))
+	HoverOpacity100             = css.Hover(css.OpacityNum(css.Num(1)))
+	GroupHoverOpacity100        = css.DefineVariant(".group:hover &")(css.OpacityNum(css.Num(1)))
+	GroupFocusWithinOpacity100  = css.DefineVariant(".group:focus-within &")(css.OpacityNum(css.Num(1)))
 	MotionSafeTransitionOpacity = css.Media(css.RawMedia("(prefers-reduced-motion: no-preference)"), raw("transition-property", "opacity"), raw("transition-duration", "150ms"))
 )
 

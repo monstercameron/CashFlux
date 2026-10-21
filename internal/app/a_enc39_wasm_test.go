@@ -22,10 +22,10 @@ import (
 	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/CashFlux/internal/rpcworker"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/state"
-	"github.com/monstercameron/GoWebComponents/v5/testkit/render"
-	uic "github.com/monstercameron/GoWebComponents/v5/ui"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/state"
+	"github.com/monstercameron/GoWebComponents/v7/testkit/render"
+	uic "github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 type enc39Transport struct{ account string }
@@ -166,17 +166,19 @@ func TestENC39ActivationHandoffSurvivesReloadWithoutPrefsToken(t *testing.T) {
 	}
 }
 
-func TestENC39EraseRevokeIsBestEffortAndLocalCredentialDeleteIsRequired(t *testing.T) {
+func TestENC39EraseRevokeAndLocalCredentialDeleteAreBestEffort(t *testing.T) {
 	enc39Page(t)
+	_, restoreLocalStorage := legacyStorageShim(t)
+	t.Cleanup(restoreLocalStorage)
 	oldTransport, oldDocument, oldLocation := http.DefaultTransport, js.Global().Get("document"), js.Global().Get("location")
 	http.DefaultTransport = enc39Transport{account: "enc39-wipe-account"}
 	document := js.Global().Get("document")
 	document.Set("querySelector", js.Global().Get("Function").New("return {}"))
-	reloads := make(chan struct{}, 2)
-	reload := js.FuncOf(func(js.Value, []js.Value) any { reloads <- struct{}{}; return nil })
-	js.Global().Set("location", map[string]any{"origin": "https://app.test", "reload": reload})
+	navigations := make(chan string, 2)
+	replace := js.FuncOf(func(_ js.Value, args []js.Value) any { navigations <- args[0].String(); return nil })
+	js.Global().Set("location", map[string]any{"origin": "https://app.test", "replace": replace})
 	t.Cleanup(func() {
-		reload.Release()
+		replace.Release()
 		http.DefaultTransport = oldTransport
 		js.Global().Set("document", oldDocument)
 		js.Global().Set("location", oldLocation)
@@ -217,9 +219,12 @@ func TestENC39EraseRevokeIsBestEffortAndLocalCredentialDeleteIsRequired(t *testi
 	startRPC := js.Global().Get("__enc35RPC").Get("calls").Length()
 	eraseDataThen(notify)
 	select {
-	case <-reloads:
+	case target := <-navigations:
+		if !strings.Contains(target, "/erase-device.html#start=") {
+			t.Fatalf("erase navigated to %q", target)
+		}
 	case <-time.After(15 * time.Second):
-		t.Fatal("erase did not continue after the best-effort server revoke failed")
+		t.Fatal("erase did not reach the separate eraser after server revoke failed")
 	}
 	if len(notices) != 1 || notices[0] != uistate.T("enc39.revokeFailed") {
 		t.Fatalf("server-revoke notice = %q", notices)
@@ -238,8 +243,8 @@ func TestENC39EraseRevokeIsBestEffortAndLocalCredentialDeleteIsRequired(t *testi
 	if _, _, have, err := (scopedRefreshSession{scope}).load(); err != nil || have {
 		t.Fatalf("server failure retained local credential: %v", err)
 	}
-	if len(app.Accounts()) != 0 {
-		t.Fatal("erase did not wipe household data after local credential deletion")
+	if len(app.Accounts()) != 1 {
+		t.Fatal("household data changed before the separate eraser ran")
 	}
 
 	if err := app.PutAccount(domain.Account{ID: "enc39-keep", Name: "Household data", Type: domain.TypeChecking, Class: domain.ClassAsset, Currency: "USD", OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared}); err != nil {
@@ -256,19 +261,14 @@ func TestENC39EraseRevokeIsBestEffortAndLocalCredentialDeleteIsRequired(t *testi
 	if cfg := js.Global().Get("__enc35RPC"); cfg.Truthy() {
 		cfg.Set("error", "")
 	}
-	failureNotice := make(chan string, 1)
-	eraseDataThen(func(message string, isErr bool) {
-		if isErr {
-			failureNotice <- message
-		}
-	})
+	eraseDataThen(func(string, bool) {})
 	select {
-	case message := <-failureNotice:
-		if !strings.Contains(message, "Couldn't erase your data") {
-			t.Fatalf("local-delete failure notice = %q", message)
+	case target := <-navigations:
+		if !strings.Contains(target, "/erase-device.html#start=") {
+			t.Fatalf("erase navigated to %q", target)
 		}
 	case <-time.After(15 * time.Second):
-		t.Fatal("local credential deletion failure was not reported")
+		t.Fatal("local credential failure prevented separate eraser navigation")
 	}
 	if _, _, have, err := (scopedRefreshSession{scope}).load(); err != nil || !have {
 		t.Fatalf("failed local delete lost credential: %v", err)
@@ -277,8 +277,8 @@ func TestENC39EraseRevokeIsBestEffortAndLocalCredentialDeleteIsRequired(t *testi
 		t.Fatal("failed local credential delete did not preserve household data")
 	}
 	select {
-	case <-reloads:
-		t.Fatal("failed local credential deletion reloaded after a partial erase")
+	case target := <-navigations:
+		t.Fatalf("local credential failure caused unexpected extra navigation to %q", target)
 	default:
 	}
 }

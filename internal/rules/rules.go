@@ -145,7 +145,13 @@ func matches(text, pattern string) bool {
 	if pattern == "" {
 		return false
 	}
-	return strings.Contains(strings.ToLower(text), strings.ToLower(pattern))
+	return matchesLowered(strings.ToLower(text), strings.ToLower(pattern))
+}
+
+// matchesLowered is the shared substring predicate for callers that can safely
+// prepare the case-folded text and pattern once. Empty patterns never match.
+func matchesLowered(textLower, patternLower string) bool {
+	return patternLower != "" && strings.Contains(textLower, patternLower)
 }
 
 // matchesRule reports whether pattern occurs in text beginning at a word

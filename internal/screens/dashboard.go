@@ -5,9 +5,9 @@
 package screens
 
 import (
-	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math"
 	"sort"
 	"strings"
 	"syscall/js"
@@ -20,15 +20,14 @@ import (
 	"github.com/monstercameron/CashFlux/internal/categorytree"
 	"github.com/monstercameron/CashFlux/internal/chartspec"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/dashboardview"
 	"github.com/monstercameron/CashFlux/internal/dashlayout"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/engineenv"
 	"github.com/monstercameron/CashFlux/internal/freshness"
-	"github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/insights"
-	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/nwchange"
 	"github.com/monstercameron/CashFlux/internal/scope"
@@ -43,10 +42,10 @@ import (
 	"github.com/monstercameron/CashFlux/internal/widgetengine"
 	"github.com/monstercameron/CashFlux/internal/widgetregistry"
 	"github.com/monstercameron/CashFlux/internal/widgetrender"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/router"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/router"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // engineVarsTTL bounds how long a memoized engine variable surface is reused when
@@ -173,8 +172,17 @@ func periodChartAnchor(start, end time.Time) time.Time {
 // (member/institution scope), so collection/chart widgets and embedded data-view
 // blocks show the same figures as the scoped KPI tiles.
 func frameDataCtx(ctx widgetrender.RenderCtx) widgetengine.DataCtx {
+	return frameDataCtxAt(ctx, time.Now())
+}
+
+func frameDataCtxAt(ctx widgetrender.RenderCtx, now time.Time) widgetengine.DataCtx {
+	scopedLedger := budgetLedgerForTransactions(ctx.App, ctx.ScopedTxns)
+	anchor := ctx.End.Add(-time.Second)
+	if !now.Before(ctx.Start) && now.Before(ctx.End) {
+		anchor = now
+	}
 	return widgetengine.DataCtx{
-		Ledger: budgetLedgerForTransactions(ctx.App, ctx.ScopedTxns),
+		Ledger: scopedLedger,
 		Vars:   ctx.Vars, Base: ctx.Base,
 		Accounts:     ctx.ScopedAccounts,
 		Transactions: ctx.ScopedTxns,
@@ -182,12 +190,12 @@ func frameDataCtx(ctx widgetrender.RenderCtx) widgetengine.DataCtx {
 		Categories:   ctx.App.Categories(),
 		Recurring:    ctx.App.Recurring(),
 		Rates:        ctx.Rates,
-		Start:        ctx.Start, End: ctx.End, Now: time.Now(),
+		Start:        ctx.Start, End: ctx.End, Now: now,
 		// Trailing chart windows follow the VIEWED period, not the wall clock,
 		// so paging the dashboard to another month moves the series with it
 		// (parity-scan dashboard period contract). Bills/current-state sources
 		// keep reading Now.
-		ChartAnchor: periodChartAnchor(ctx.Start, ctx.End),
+		ChartAnchor: anchor,
 		// The per-month variable surface behind "formula" series charts —
 		// scoped like the KPI tiles, re-windowed per month, and memoized per
 		// (revision, scope, window) so a chart's trailing months compute once,
@@ -196,11 +204,11 @@ func frameDataCtx(ctx widgetrender.RenderCtx) widgetengine.DataCtx {
 			key := revKey(ctx.App) + "|" + acctSig(ctx.ScopedAccounts)
 			return memoMonthVars(key, s, e, func() map[string]float64 {
 				return engineenv.Vars(engineenv.Data{
-					Ledger:   budgetLedgerForTransactions(ctx.App, ctx.ScopedTxns),
+					Ledger:   scopedLedger,
 					Accounts: ctx.ScopedAccounts, Transactions: ctx.ScopedTxns,
 					Members: ctx.App.Members(), Budgets: ctx.App.Budgets(), Goals: ctx.App.Goals(), Tasks: ctx.App.Tasks(),
 					Recurring: ctx.App.Recurring(), Categories: ctx.App.Categories(), Rates: ctx.Rates,
-					Now: time.Now(), PeriodStart: s, PeriodEnd: e,
+					Now: now, PeriodStart: s, PeriodEnd: e,
 					CustomDefs: ctx.App.CustomFieldDefs(), Molecules: ctx.App.Molecules(),
 				})
 			})
@@ -212,9 +220,16 @@ func frameDataCtx(ctx widgetrender.RenderCtx) widgetengine.DataCtx {
 // through the engine, then dispatches to the widget's registered FrameRenderer. The
 // effective pipeline merges the spec's declared Source with the tile's user settings
 // (limit, at-risk, cleared, window) so the data path is engine-driven end to end.
+func hydrateDashboardFrame(pipe *domain.Pipeline, ctx widgetrender.RenderCtx) (domain.Frame, error) {
+	if ctx.Frames != nil {
+		return ctx.Frames.Hydrate(pipe)
+	}
+	return widgetengine.HydrateFrame(pipe, frameDataCtx(ctx))
+}
+
 func hydrateAndRenderFrame(spec domain.WidgetSpec, ctx widgetrender.RenderCtx) (ui.Node, bool) {
 	pipe := effectivePipeline(spec, ctx)
-	frame, err := widgetengine.HydrateFrame(&pipe, frameDataCtx(ctx))
+	frame, err := hydrateDashboardFrame(&pipe, ctx)
 	if err != nil {
 		slog.Warn("dashboard: hydrate frame failed", "id", spec.ID, "err", err)
 		return nil, false
@@ -368,16 +383,7 @@ const userSpecPrefix = "us:"
 // (Kind / Scalar / Pipeline / NativeID) stay from the default so built-ins keep
 // evolving with the code; only the configurable surface is restored from storage.
 func hydrateStoredSpec(def, stored domain.WidgetSpec) domain.WidgetSpec {
-	if stored.Content.Mode == domain.LayoutCustom && len(stored.Content.Blocks) > 0 {
-		def.Content = stored.Content
-	}
-	if !stored.Style.Empty() {
-		def.Style = stored.Style
-	}
-	if stored.Title != "" {
-		def.Title = stored.Title
-	}
-	return def
+	return dashboardview.OverlayStoredSpec(def, stored)
 }
 
 // renderCustomContent is the intra-tile content-layout engine (§7.5): it composes a
@@ -486,7 +492,7 @@ func renderBlockDataView(spec domain.WidgetSpec, ctx widgetrender.RenderCtx, sty
 	if spec.Pipeline == nil {
 		return Div(Style(style))
 	}
-	fr, err := widgetengine.HydrateFrame(spec.Pipeline, frameDataCtx(ctx))
+	fr, err := hydrateDashboardFrame(spec.Pipeline, ctx)
 	if err != nil || fr.Rows == 0 || len(fr.Fields) == 0 {
 		return Div(css.Class("t-caption", tw.TextDim), Style(style), uistate.T("common.noDataYet"))
 	}
@@ -527,6 +533,7 @@ func effectivePipeline(spec domain.WidgetSpec, ctx widgetrender.RenderCtx) domai
 	var p domain.Pipeline
 	if spec.Pipeline != nil {
 		p = *spec.Pipeline
+		p.Transform = append([]domain.Transform(nil), p.Transform...)
 	}
 	sch, ok := widgetcfg.SchemaFor(spec.ID)
 	if !ok {
@@ -627,11 +634,21 @@ func bentoFlipDriver() ui.Node {
 // Dashboard shows headline metrics in the candidate-C bento grid, driven by the
 // live store and the shared time-resolution window.
 func Dashboard() ui.Node {
+	revision := uistate.UseDataRevision().Get()
 	app := appstate.Default
 	if app == nil {
 		return Div(css.Class("bento"), Div(css.Class("w"), Div(css.Class("wbody"), P(css.Class("empty"), uistate.T("common.notReady")))))
 	}
-	_ = uistate.UseDataRevision().Get() // re-render after import / load-sample / wipe
+	return ui.CreateElement(dashboardController, dashboardControllerProps{App: app, Revision: revision})
+}
+
+type dashboardControllerProps struct {
+	App      *appstate.App
+	Revision int
+}
+
+func dashboardController(props dashboardControllerProps) ui.Node {
+	app := props.App
 
 	// The drag-preview FLIP trigger + drag-atom reads live in a separate tiny
 	// component (bentoFlipDriver), NOT here. Dashboard() recomputes every widget's
@@ -666,7 +683,7 @@ func Dashboard() ui.Node {
 	ids := scope.ResolveScope(accounts, sc, instOf)
 	kpiTxns := scope.ApplyScopeToTxns(txns, ids)
 	scopedAccounts := scope.ApplyScopeToAccounts(accounts, ids)
-	scopeSig := fmt.Sprintf("%v|%v|%v|%v", sc.Owners, sc.Institutions, sc.Types, sc.AccountIDs)
+	scopeSig := fmt.Sprintf("%#v", sc)
 
 	// Memoized via state.UseComputed keyed on app.Rev() — recomputes only when the
 	// dataset/FX actually changes, not on every re-render (§1.6).
@@ -677,7 +694,8 @@ func Dashboard() ui.Node {
 	start, end := w.Range()
 	// Memoized (§1.6): keyed on app.Rev() + the period + the full scope sig,
 	// so it recomputes only when one of those changes.
-	income, expense := usePeriodTotals(app, kpiTxns, start, end, rates, scopeSig)
+	totals := usePeriodTotals(app, kpiTxns, start, end, rates, scopeSig)
+	income, expense := totals.Income, totals.Expense
 
 	// W-15: trigger count-up animation on the KPI hero figures whenever the
 	// underlying values change. The sig is keyed on the four headline amounts so
@@ -696,28 +714,26 @@ func Dashboard() ui.Node {
 	// Cash flow = income − spending for the period (G1 §7): the surplus/deficit Elena
 	// wants in one line. Shown as a signed sub-line on the Income tile so "what
 	// changed?" is answerable above the fold without mental arithmetic.
-	cashFlow := money.New(income.Amount-expense.Amount, income.Currency)
-	cashFlowSub := "cash flow −" + fmtMoney(money.New(-cashFlow.Amount, income.Currency))
-	if cashFlow.Amount >= 0 {
-		cashFlowSub = "cash flow +" + fmtMoney(cashFlow)
+	cashFlowSub := uistate.T("calculation.unavailable")
+	if totals.Known {
+		if totals.Net.Amount >= 0 {
+			cashFlowSub = "cash flow +" + fmtMoney(totals.Net)
+		} else if magnitude, err := totals.Net.AbsChecked(); err == nil {
+			cashFlowSub = "cash flow −" + fmtMoney(magnitude)
+		}
 	}
+
 	periodLabel := w.FromLabel()
 	if w.ToLabel() != w.FromLabel() {
 		periodLabel += " – " + w.ToLabel()
 	}
 
-	incCount, expCount := 0, 0
-	for _, t := range kpiTxns {
-		if !dateutil.InRange(t.Date, start, end) {
-			continue
-		}
-		switch {
-		case t.IsIncome():
-			incCount++
-		case t.IsExpense():
-			expCount++
-		}
-	}
+	// Count captions/context follow the same report eligibility as money totals.
+	// Keep the hook unconditional and key the scoped snapshot by app identity,
+	// data/preference revision, the full scope signature and exact period bounds.
+	counts := ui.UseMemo(func() dashboardview.TransactionCounts {
+		return dashboardview.CountPeriodTransactions(kpiTxns, start, end)
+	}, revKey(app), scopeSig, start, end)
 
 	// scopedAccounts is already non-archived (ResolveScope excludes archived IDs).
 	active := len(scopedAccounts)
@@ -748,22 +764,24 @@ func Dashboard() ui.Node {
 	// When the dashboard is paged to ANOTHER period, the "this month" delta is
 	// replaced with an explicit as-of-today label — net worth is position, not
 	// period activity, and the tile must say so (parity-scan period contract).
-	nowT := time.Now()
+	nowT := dashboardPreparationNow()
 	viewingCurrent := !nowT.Before(start) && nowT.Before(end)
 	nwSub, nwTone := uistate.T("dashboard.assetsSub", fmtMoney(assets)), "text-dim"
 	if !viewingCurrent {
 		nwSub = uistate.T("dashboard.netWorthAsOfToday")
-	} else if mtd, err := nwchange.MonthToDateChange(scopedAccounts, txns, rates, nowT); err == nil && mtd.Known {
-		// One seam, one window, one wording for every "this month" net-worth
-		// figure in the app (C341) — the hero, /accounts, /networth and /reports
-		// used to compute this four different ways.
-		nwSub, nwTone = nwChangeSub(mtd)
+	} else if nw.Complete() {
+		if mtd, err := nwchange.MonthToDateChange(scopedAccounts, txns, rates, nowT); err == nil && mtd.Known {
+			// One seam, one window, one wording for every "this month" net-worth
+			// figure in the app (C341) — the hero, /accounts, /networth and /reports
+			// used to compute this four different ways.
+			nwSub, nwTone = nwChangeSub(mtd)
+		}
 	}
 	// A missing FX rate excludes accounts from the total (L4) — say so on the tile,
 	// rather than letting net worth silently collapse.
-	if len(nw.MissingCurrencies) > 0 {
-		nwTone = "text-down"
-		nwSub = "excludes " + plural(len(nw.ExcludedAccounts), "account") + " — no " + strings.Join(nw.MissingCurrencies, ", ") + " rate"
+	if !nw.Complete() {
+		nwTone = "text-dim"
+		nwSub = netWorthDisclosure(nw)
 	} else {
 		// C82: when the total folds in non-base-currency accounts, disclose that a
 		// conversion happened so the figure isn't read as a raw same-currency sum.
@@ -774,18 +792,19 @@ func Dashboard() ui.Node {
 				break
 			}
 		}
+		if len(nw.ExcludedByChoice) > 0 {
+			nwSub += " · " + netWorthDisclosure(nw)
+		}
 	}
 
 	// MIA-extend (#445-8): when a scope is active, show "vs household total: $X"
 	// as a muted second sub-label on the net-worth tile so the user can compare
 	// their scoped view to the full household at a glance.
-	// Use ledger.NetWorthExplained directly (not via the hook) to avoid
-	// registering an extra state.UseComputed slot.
+	// The hook-free shared snapshot avoids another ledger fold or hook slot.
 	hhNWSub := ""
 	if !sc.IsAll() {
-		if hhResult, err := ledger.NetWorthExplained(accounts, txns, rates); err == nil {
-			hhNWSub = uistate.T("dashboard.householdTotal", fmtMoney(hhResult.Net))
-		}
+		hhResult := netWorthSnapshot(app, accounts, txns, rates)
+		hhNWSub = uistate.T("dashboard.householdTotal", netWorthContext(hhResult))
 	}
 
 	attnCol, attnRow := spanOf(layoutItems, "attention")
@@ -799,7 +818,7 @@ func Dashboard() ui.Node {
 	// repeated renders within the TTL reuse the cached surface (the figures depend on
 	// the wall clock only through bills_due/goal_needs, which don't move minute to
 	// minute).
-	varsKey := fmt.Sprintf("%d|%v|%s", app.Rev(), w, scopeSig)
+	varsKey := fmt.Sprintf("%s|%v|%s", revKey(app), w, scopeSig)
 	// The engine-variable surface (atoms + molecules + custom fields over every
 	// transaction) is the dashboard's single heaviest body compute, and it's consumed
 	// ONLY by the grid tiles via rctx.Vars — the hero reads the direct figures (net,
@@ -834,13 +853,17 @@ func Dashboard() ui.Node {
 		Rates: rates, Base: base,
 		Start: start, End: end,
 		Net: net, Assets: assets, Liabilities: liabilities, Income: income, Expense: expense,
-		PeriodLabel: periodLabel, CashFlowSub: cashFlowSub,
-		IncCount: incCount, ExpCount: expCount, ActiveAccounts: active,
+		PeriodTotals: totals, PeriodLabel: periodLabel, CashFlowSub: cashFlowSub,
+		IncCount: counts.Income, ExpCount: counts.Expense, ActiveAccounts: active,
 		NWSub: nwSub, NWTone: nwTone, HHNWSub: hhNWSub,
 		AttnCol: attnCol, AttnRow: attnRow,
 		Vars:           vars,
 		Dismissals:     freshnessDismissals.Get(),
 		RemindToUpdate: remindToUpdate, DismissFreshness: dismissFreshness,
+	}
+
+	if dashReady {
+		rctx.Frames = prepareDashboardFrames(rctx, scopeSig, nowT)
 	}
 
 	hidden := uistate.UseHiddenWidgets().Get()
@@ -865,91 +888,17 @@ func Dashboard() ui.Node {
 	// user-customizable parts (custom content layout, tile style, title) overlay the
 	// registry default so stored config DRIVES rendering — the default is only the
 	// fallback for not-yet-customized tiles (same defaults-merge pattern as molecules).
-	stored := map[string]domain.WidgetSpec{}
-	if app != nil {
-		for _, p := range app.Placements("dashboard") {
-			stored[p.ID] = p.Spec
-		}
-	}
-	placements := make([]domain.Placement, 0, len(layoutItems))
-	for _, it := range layoutItems {
-		// Defer the whole grid off the initial mount: building each placement (hydrate
-		// + schema-validate ~20 widgets) is the bulk of the dashboard's mount cost, and
-		// it's infrastructure, not the primary net-worth glance. On the first paint we
-		// build nothing here; the effect flips dashReady and the grid + persistence run
-		// a beat later. The stored placements stay intact (we also gate the persist
-		// below, so the mount never writes an incomplete set).
-		if !dashReady {
-			continue
-		}
-		// Each built-in tile is a validated domain.Placement: its spec comes from the
-		// widget registry (the single source of truth) and carries this instance's
-		// saved settings/style (widgetcfg, incl. the reserved style keys); its body is
-		// dispatched through the render registry by NativeID. A "wb:" id is a
-		// user-published Widget Builder card, rendered from its saved graph.
-		if spec, ok := widgetregistry.DefaultSpec(it.ID); ok {
-			spec.Settings = widgetCfgs.For(it.ID)
-			if sp, ok := stored[it.ID]; ok {
-				spec = hydrateStoredSpec(spec, sp)
+	preparedLayout := prepareDashboardLayout(app, dashReady, layoutItems, widgetCfgs, hidden)
+	for _, entry := range preparedLayout.Entries {
+		if entry.Placement != nil {
+			rctx.Spec = entry.Placement.Spec
+			if node, ok := safeRenderSpec(entry.Placement.Spec, rctx); ok {
+				tiles = append(tiles, node)
 			}
-			pl := domain.Placement{
-				SchemaVersion: domain.WidgetSpecVersion,
-				ID:            it.ID,
-				Surface:       "dashboard",
-				Spec:          spec,
-				Layout:        it,
-				Hidden:        hidden.IsHidden(it.ID),
-			}
-			if pl.Validate() != nil {
-				continue
-			}
-			placements = append(placements, pl)
-			if pl.Hidden {
-				continue
-			}
-			if dashReady {
-				rctx.Spec = pl.Spec
-				if node, ok := safeRenderSpec(pl.Spec, rctx); ok {
-					tiles = append(tiles, node)
-				}
-			}
-		} else if strings.HasPrefix(it.ID, userSpecPrefix) {
-			// A Studio-designed widget: its full WidgetSpec is the persisted placement
-			// (formula / pipeline / content layout / style). Render it through the same
-			// engine path as a built-in — pure hydration, no Go body.
-			sp, have := stored[it.ID]
-			if !have {
-				continue
-			}
-			pl := domain.Placement{
-				SchemaVersion: domain.WidgetSpecVersion,
-				ID:            it.ID,
-				Surface:       "dashboard",
-				Spec:          sp,
-				Layout:        it,
-				Hidden:        hidden.IsHidden(it.ID),
-			}
-			if pl.Validate() != nil {
-				continue
-			}
-			placements = append(placements, pl)
-			if pl.Hidden {
-				continue
-			}
-			if dashReady {
-				rctx.Spec = pl.Spec
-				if node, ok := safeRenderSpec(pl.Spec, rctx); ok {
-					tiles = append(tiles, node)
-				}
-			}
-		} else if strings.HasPrefix(it.ID, vbCardPrefix) {
-			if hidden.IsHidden(it.ID) {
-				continue
-			}
-			if dashReady {
-				if w := vbPublishedWidget(strings.TrimPrefix(it.ID, vbCardPrefix), it.ColSpan, it.RowSpan); w != nil {
-					tiles = append(tiles, w)
-				}
+		} else {
+			item := entry.Published
+			if node := vbPublishedWidget(strings.TrimPrefix(item.ID, vbCardPrefix), item.ColSpan, item.RowSpan); node != nil {
+				tiles = append(tiles, node)
 			}
 		}
 	}
@@ -965,42 +914,34 @@ func Dashboard() ui.Node {
 	// above the bento (not a packed grid cell) with ChromeHover, so it reads as clean
 	// content but is a configurable, persisted widget like any tile.
 	heroNode := ui.CreateElement(dashboardHero)
-	if hspec, ok := widgetregistry.DefaultSpec("hero"); ok {
-		hpl := domain.Placement{
-			SchemaVersion: domain.WidgetSpecVersion,
-			ID:            "hero",
-			Surface:       "dashboard",
-			Spec:          hspec,
-			Layout:        dashlayout.Item{ID: "hero", ColSpan: 4, RowSpan: 2},
-		}
-		if hpl.Validate() == nil {
-			placements = append(placements, hpl)
-			rctx.Spec = hpl.Spec
-			if n, ok := safeRender("hero", rctx); ok {
-				heroNode = n
-			}
+	if preparedLayout.Hero != nil {
+		rctx.Spec = preparedLayout.Hero.Spec
+		if node, ok := safeRender("hero", rctx); ok {
+			heroNode = node
 		}
 	}
 
 	// Persist the dashboard's placements to SQLite as first-class rows so the layout
 	// (and each tile's saved settings/style) travels with export and is the engine's
 	// canonical representation (§8). Keyed on a signature of the placements, the
-	// effect runs only when they actually change — never on a plain re-render — so it
-	// can't loop with the data-revision re-render. The live edit surface remains the
+	// effect runs when they change or a different app is installed. Ready/success
+	// are dependencies so a deferred or formerly failed preparation can sync.
+	// Unchanged rows are skipped in appstate, so remounting does not advance the
+	// store revision. The live edit surface remains the
 	// layout/config atoms; this mirrors them into placement rows.
-	plSig, _ := json.Marshal(placements)
-	placementsToPersist := placements
+	plSig := preparedLayout.Signature
+	placementsToPersist := preparedLayout.Placements
 	ui.UseEffect(func() func() {
 		// Only persist once the full grid has been built (dashReady). On the initial
 		// mount the placement set is intentionally just the hero, so skipping the write
 		// keeps the stored layout intact.
-		if app != nil && dashReady {
-			if err := app.PutPlacements(placementsToPersist); err != nil {
+		if app != nil && dashReady && preparedLayout.Err == nil {
+			if _, err := app.PutPlacementsIfChanged("dashboard", placementsToPersist); err != nil {
 				slog.Warn("dashboard: persist placements failed", "err", err)
 			}
 		}
 		return nil
-	}, string(plSig))
+	}, plSig, app.InstanceID(), dashReady, preparedLayout.Err == nil)
 
 	return Fragment(
 		// Optional decorative banner band (B20) — shown only when the user picks a
@@ -1442,11 +1383,19 @@ func breakdownFrame(fr domain.Frame, c widgetrender.RenderCtx) ui.Node {
 
 // savingsRateWidget is the 2×1 Savings rate widget: the share of the period's
 // income that wasn't spent, as a big figure and a bar.
-func savingsRateWidget(ratePct float64, cfg widgetcfg.Config, periodLabel string) ui.Node {
+func savingsRateWidget(ratePct float64, known bool, cfg widgetcfg.Config, periodLabel string) ui.Node {
+	if !known {
+		return uiw.Widget(uiw.WidgetProps{ID: "savings", Title: uistate.T("dashboard.savingsRate"), Draggable: true, Resizable: true, GridColumn: "1 / span 2", GridRow: "7",
+			Body: Div(Attr("data-testid", "savings-unavailable"), P(css.Class("fig t-figure-lg", tw.TextDim), "—"), P(css.Class("t-caption", tw.TextDim), uistate.T("period.savingsUnavailable")))})
+	}
+
 	// ratePct is the tile's configurable formula evaluated over the engine surface
 	// (default (income−expense)/income·100). Truncate toward zero to match the hero's
 	// whole-percent reading (ledger.SavingsRate convention).
-	pct := int(ratePct)
+	pct := math.Trunc(ratePct)
+	if pct == 0 {
+		pct = 0
+	} // Normalize negative zero to the existing whole-percent display.
 
 	// Widget settings (gear → flip): target savings rate and whether to show the bar.
 	target, showBar := 20, true
@@ -1465,7 +1414,7 @@ func savingsRateWidget(ratePct float64, cfg widgetcfg.Config, periodLabel string
 	switch {
 	case pct < 0:
 		tone, bar = "text-down", "bg-down"
-	case pct < target:
+	case pct < float64(target):
 		tone, bar = "text-warn", "bg-warn"
 	}
 
@@ -1478,14 +1427,14 @@ func savingsRateWidget(ratePct float64, cfg widgetcfg.Config, periodLabel string
 		window = periodLabel
 	}
 	left := Div(
-		Div(ClassStr("fig t-figure-lg "+tw.Fold(tw.FontDisplay, tw.LeadingNone)+" "+tw.ColorClass(tone)), fmt.Sprintf("%d%%", pct)),
+		Div(ClassStr("fig t-figure-lg "+tw.Fold(tw.FontDisplay, tw.LeadingNone)+" "+tw.ColorClass(tone)), fmt.Sprintf("%.0f%%", pct)),
 		Div(css.Class("t-caption", tw.TextDim, tw.Mt1), uistate.T("dashboard.savingsSub", target)),
 		Div(css.Class("t-caption", tw.TextFaint), Attr("data-testid", "savings-window"), window),
 	)
 	var right ui.Node = Fragment()
 	if showBar {
 		right = Div(css.Class(tw.Flex1),
-			uiw.ProgressBar(uiw.ProgressBarProps{Percent: pct, Tone: bar}),
+			uiw.ProgressBar(uiw.ProgressBarProps{Percent: int(math.Max(0, math.Min(100, pct))), Tone: bar}),
 		)
 	}
 	body := Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap5), left, right)
@@ -1499,8 +1448,8 @@ func savingsRateWidget(ratePct float64, cfg widgetcfg.Config, periodLabel string
 // month (via the shared anomaly detection) as a one-line plain-English highlight,
 // or a calm "nothing notable" message when there's nothing to flag. It links the
 // dashboard to the fuller Spending highlights card on the Insights screen.
-func topHighlightWidget(txns []domain.Transaction, categories []domain.Category, rates currency.Rates) ui.Node {
-	anomalies := detectSpendingAnomaliesMemo(appstate.Default.Rev(), "dash-highlight", txns, categories, rates)
+func topHighlightWidget(app *appstate.App, scopeKey string, txns []domain.Transaction, categories []domain.Category, rates currency.Rates) ui.Node {
+	anomalies := detectSpendingAnomaliesMemo(app, "dash-highlight|"+scopeKey, txns, categories, rates)
 	var body ui.Node
 	if len(anomalies) == 0 {
 		// A calm month left this card as one dim line in an otherwise-empty tile
@@ -1644,42 +1593,23 @@ func trendFrame(fr domain.Frame, c widgetrender.RenderCtx) ui.Node {
 	for i := 0; i < fr.Rows; i++ {
 		series[i] = money.New(valCol.Int64(i), net.Currency)
 	}
-	deltaLabel, deltaTone := "No change", "text-dim"
-	rangeLabel := ""
-	if len(series) > 0 {
-		first := series[0]
-		last := series[len(series)-1]
-		delta := money.New(last.Amount-first.Amount, last.Currency)
+	facts := dashboardview.PrepareTrendFacts(series, net)
+	deltaLabel, deltaTone := uistate.T("dashboard.trendUnavailable"), "text-dim"
+	if facts.DeltaAvailable {
 		switch {
-		case delta.IsPositive():
-			deltaLabel = "Up " + fmtMoney(delta)
+		case facts.Delta.Amount > 0:
+			deltaLabel = "Up " + fmtMoney(facts.DeltaMagnitude)
 			deltaTone = "text-up"
-		case delta.IsNegative():
-			deltaLabel = "Down " + fmtMoney(delta.Abs())
+		case facts.Delta.Amount < 0:
+			deltaLabel = "Down " + fmtMoney(facts.DeltaMagnitude)
 			deltaTone = "text-down"
+		default:
+			deltaLabel = "No change"
 		}
-		low, high := first, first
-		for _, m := range series[1:] {
-			if m.Amount < low.Amount {
-				low = m
-			}
-			if m.Amount > high.Amount {
-				high = m
-			}
-		}
-		// net is always the LIVE net worth (a position, not period activity — see
-		// the "netWorthAsOfToday" comment above), but the series anchors on the
-		// VIEWED period (periodChartAnchor in frameDataCtx) and ends short of today
-		// once the dashboard is paged to a past period. Without this, a paged-away
-		// dashboard could show a headline figure above the chart's own high — the
-		// range text silently understating where "now" actually sits.
-		if net.Amount < low.Amount {
-			low = net
-		}
-		if net.Amount > high.Amount {
-			high = net
-		}
-		rangeLabel = fmt.Sprintf("%s - %s", fmtMoney(low), fmtMoney(high))
+	}
+	rangeLabel := uistate.T("dashboard.trendUnavailable")
+	if facts.RangeAvailable {
+		rangeLabel = fmt.Sprintf("%s - %s", fmtMoney(facts.Low), fmtMoney(facts.High))
 	}
 	// Plot in major units (dollars), not raw minor units (cents): feeding cents
 	// made the Y axis read "2,000,000 / 1,500,000 …" and clip in the narrow
@@ -1746,11 +1676,11 @@ func trendFrame(fr domain.Frame, c widgetrender.RenderCtx) ui.Node {
 		Div(css.Class("trend-expanded"),
 			Div(css.Class("trend-stat"),
 				Span(css.Class("t-caption", tw.TextFaint), uistate.T("dashboard.trendChange")),
-				Span(ClassStr("fig t-body "+deltaTone), deltaLabel),
+				Span(ClassStr("fig t-body "+deltaTone), Attr("data-testid", "dashboard-trend-delta"), deltaLabel),
 			),
 			Div(css.Class("trend-stat"),
 				Span(css.Class("t-caption", tw.TextFaint), uistate.T("dashboard.trendRange")),
-				Span(css.Class("fig t-body", tw.TextDim), rangeLabel),
+				Span(css.Class("fig t-body", tw.TextDim), Attr("data-testid", "dashboard-trend-range"), rangeLabel),
 			),
 		),
 		uiw.Chart(uiw.ChartProps{
@@ -2026,6 +1956,7 @@ func todoMoreLink(props todoMoreProps) ui.Node {
 // feature the goal nearest completion, and the target-date caption is optional.
 func goalsWidget(app *appstate.App, cfg widgetcfg.Config) ui.Node {
 	pr := uistate.UsePrefs().Get()
+	_ = uistate.UseDataRevision().Get()
 	byProgress, showDate := false, true
 	if sch, ok := widgetcfg.SchemaFor("goals"); ok {
 		if f, ok := sch.FieldByKey("byProgress"); ok {
@@ -2035,48 +1966,49 @@ func goalsWidget(app *appstate.App, cfg widgetcfg.Config) ui.Node {
 			showDate = f.Bool(cfg)
 		}
 	}
-	list := app.Goals()
-	if len(list) == 0 {
+	featured, hasGoal := dashboardGoalFacts(app, time.Now()).Featured(byProgress)
+	if !hasGoal {
 		return uiw.Widget(uiw.WidgetProps{
 			ID: "goals", Title: uistate.T("nav.goals"), Draggable: true, Resizable: true, GridColumn: "1", GridRow: "5",
 			Body: ui.CreateElement(emptyAddCTA, emptyAddProps{Message: uistate.T("dashboard.noGoalsYet"), Label: uistate.T("dashboard.addGoal"), Path: "/goals"}),
 		})
 	}
-	g := list[0]
-	if byProgress {
-		// Feature the goal nearest completion (highest percent; first wins ties).
-		best := goals.Percent(g)
-		for _, cand := range list[1:] {
-			if p := goals.Percent(cand); p > best {
-				best, g = p, cand
-			}
-		}
-	}
+	g, evaluation := featured.Goal, featured.Evaluation
 	// Coverage % (saved + set aside) is the SAME figure /goals headlines, so the two
 	// surfaces tell one story instead of the widget showing only cash-in-hand. The
 	// breakdown sub-line keeps the saved-vs-earmarked split honest.
-	cov := goals.CoveragePercent(g)
-	earmark := g.AllocatedMinor()
-	cur := g.TargetAmount.Currency
-	if cur == "" {
-		cur = g.CurrentAmount.Currency
+	cov := evaluation.Progress.Percent
+	if g.IsFinancial() && evaluation.Err == nil {
+		cov = evaluation.Coverage.CoveragePercent
 	}
 	caption := fmt.Sprintf("%d%%", cov)
+	if evaluation.Err != nil {
+		caption = uistate.T("calculation.unavailable")
+	}
 	if showDate && !g.TargetDate.IsZero() {
 		caption += " · by " + pr.FormatDate(g.TargetDate)
 	}
 	var metaLine string
-	if earmark > 0 {
-		metaLine = uistate.T("dashboard.goalSavedSetAside", fmtMoney(g.CurrentAmount), fmtMoney(money.New(earmark, cur)), fmtMoney(g.TargetAmount))
-	} else {
-		metaLine = uistate.T("dashboard.goalSavedOf", fmtMoney(g.CurrentAmount), fmtMoney(g.TargetAmount))
+	switch {
+	case evaluation.Err != nil:
+		metaLine = uistate.T("dashboard.goalUnavailable")
+	case !g.IsFinancial():
+		metaLine = uistate.T("dashboard.goalNonFinancialProgress", evaluation.Progress.Done, evaluation.Progress.Total)
+	case evaluation.Coverage.SetAside.Amount > 0:
+		metaLine = uistate.T("dashboard.goalSavedSetAside", fmtMoney(evaluation.Coverage.Saved), fmtMoney(evaluation.Coverage.SetAside), fmtMoney(g.TargetAmount))
+	default:
+		metaLine = uistate.T("dashboard.goalSavedOf", fmtMoney(evaluation.Coverage.Saved), fmtMoney(g.TargetAmount))
+	}
+	var progressBar ui.Node = Fragment()
+	if evaluation.Err == nil {
+		progressBar = uiw.ProgressBar(uiw.ProgressBarProps{Percent: cov, Tone: "bg-up", Class: "mt-2"})
 	}
 	body := Div(
 		Div(css.Class("t-body", tw.Flex, tw.JustifyBetween),
 			Span(css.Class(tw.TextDim), uistate.T("goals.progressLabel")),
 			Span(css.Class("fig t-body", tw.FontDisplay), caption),
 		),
-		uiw.ProgressBar(uiw.ProgressBarProps{Percent: cov, Tone: "bg-up", Class: "mt-2"}),
+		progressBar,
 		Div(css.Class("t-caption", tw.TextDim, tw.Mt15), metaLine),
 	)
 	return uiw.Widget(uiw.WidgetProps{
@@ -2268,7 +2200,7 @@ func attentionWidget(app *appstate.App, txns []domain.Transaction, rates currenc
 	}
 
 	var anomalyPtr *insights.Anomaly
-	if anomalies := detectSpendingAnomaliesMemo(app.Rev(), "dash-attention", txns, cats, rates); len(anomalies) > 0 {
+	if anomalies := detectSpendingAnomaliesMemo(app, "dash-attention", txns, cats, rates); len(anomalies) > 0 {
 		anomalyPtr = &anomalies[0]
 	}
 

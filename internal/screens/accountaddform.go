@@ -19,9 +19,9 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // AccountAddFormProps configures the AccountAddForm component.
@@ -244,7 +244,12 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 			inst = titleCaseWords(acc.Lender)
 		}
 		acc.Institution = inst
-		acc.Custom = customValuesToMap(accDefs, customVals.Get())
+		custom, customIssues := customValuesToMap(accDefs, customVals.Get())
+		if len(customIssues) > 0 {
+			errMsg.Set(strings.Join(customIssues, " "))
+			return
+		}
+		acc.Custom = custom
 		if splitOwn.Get() {
 			shares := cloneSharesMap(ownerShares.Get())
 			sum := 0

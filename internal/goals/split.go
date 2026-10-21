@@ -2,7 +2,11 @@
 
 package goals
 
-import "sort"
+import (
+	"math/big"
+	"math/bits"
+	"sort"
+)
 
 // SplitMode selects how SplitEarmark distributes a target total across accounts.
 type SplitMode string
@@ -34,21 +38,27 @@ func SplitEarmark(total int64, avail []int64, mode SplitMode) []int64 {
 		return out
 	}
 	cap := make([]int64, n)
-	var capacity int64
+	var capacity uint64
+	capacityOverflow := false
 	for i, a := range avail {
 		if a > 0 {
 			cap[i] = a
-			capacity += a
+			var carry uint64
+			capacity, carry = bits.Add64(capacity, uint64(a), 0)
+			capacityOverflow = capacityOverflow || carry != 0
 		}
 	}
-	if capacity <= 0 {
+	if capacity == 0 && !capacityOverflow {
 		return out
 	}
-	if total > capacity {
-		total = capacity
+	if !capacityOverflow && uint64(total) > capacity {
+		total = int64(capacity)
 	}
 	if mode == SplitProportional {
-		return splitProportional(total, cap, out)
+		if capacityOverflow {
+			return splitProportionalLarge(total, cap, out)
+		}
+		return splitProportional(total, cap, out, capacity)
 	}
 	return splitEven(total, cap, out)
 }
@@ -98,28 +108,18 @@ func splitEven(total int64, cap []int64, out []int64) []int64 {
 
 // splitProportional apportions total by each account's share of capacity, using the
 // largest-remainder method so the parts sum exactly to total (no rounding drift).
-func splitProportional(total int64, cap []int64, out []int64) []int64 {
-	var capacity int64
-	for _, c := range cap {
-		capacity += c
-	}
-	if capacity <= 0 {
-		return out
-	}
-	rem := make([]int64, len(cap))
+func splitProportional(total int64, cap []int64, out []int64, capacity uint64) []int64 {
+	rem := make([]uint64, len(cap))
 	var distributed int64
 	for i, c := range cap {
 		if c <= 0 {
 			continue
 		}
-		num := total * c
-		share := num / capacity
-		if share > c {
-			share = c
-		}
-		out[i] = share
-		distributed += share
-		rem[i] = num % capacity
+		hi, lo := bits.Mul64(uint64(total), uint64(c)) // #nosec G115 -- total and c are positive int64 values, so both fit uint64.
+		share, remainder := bits.Div64(hi, lo, capacity)
+		out[i] = int64(share)       // #nosec G115 -- the proportional share cannot exceed positive int64 total.
+		distributed += int64(share) // #nosec G115 -- shares sum to at most positive int64 total.
+		rem[i] = remainder
 	}
 	// Hand out the leftover to the largest remainders first (stable), skipping capped ones.
 	leftover := total - distributed
@@ -130,20 +130,52 @@ func splitProportional(total int64, cap []int64, out []int64) []int64 {
 		}
 	}
 	sort.SliceStable(order, func(a, b int) bool { return rem[order[a]] > rem[order[b]] })
-	for leftover > 0 {
-		progressed := false
-		for _, i := range order {
-			if leftover == 0 {
-				break
-			}
-			if out[i] < cap[i] {
-				out[i]++
-				leftover--
-				progressed = true
-			}
-		}
-		if !progressed {
+	// Exact quotient/remainder arithmetic guarantees leftover < len(order).
+	// One bounded pass replaces the old potentially unbounded per-cent loop.
+	for _, i := range order {
+		if leftover == 0 {
 			break
+		}
+		if out[i] < cap[i] {
+			out[i]++
+			leftover--
+		}
+	}
+	return out
+}
+
+// An account count large enough to overflow a uint64 capacity sum is rare.
+// Keep ordinary allocation on the fixed-width path, with exact wide arithmetic
+// here rather than saturating the denominator and changing the proportions.
+func splitProportionalLarge(total int64, cap, out []int64) []int64 {
+	capacity := new(big.Int)
+	var amount big.Int
+	for _, c := range cap {
+		capacity.Add(capacity, amount.SetInt64(c))
+	}
+	rem := make([]big.Int, len(cap))
+	order := make([]int, 0, len(cap))
+	var distributed int64
+	var numerator, quotient big.Int
+	for i, c := range cap {
+		if c <= 0 {
+			continue
+		}
+		numerator.Mul(amount.SetInt64(total), big.NewInt(c))
+		quotient.QuoRem(&numerator, capacity, &rem[i])
+		out[i] = quotient.Int64()
+		distributed += out[i]
+		order = append(order, i)
+	}
+	sort.SliceStable(order, func(i, j int) bool { return rem[order[i]].Cmp(&rem[order[j]]) > 0 })
+	leftover := total - distributed
+	for _, i := range order {
+		if leftover == 0 {
+			break
+		}
+		if out[i] < cap[i] {
+			out[i]++
+			leftover--
 		}
 	}
 	return out

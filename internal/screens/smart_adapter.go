@@ -5,7 +5,6 @@
 package screens
 
 import (
-	"fmt"
 	"strconv"
 	"time"
 
@@ -24,26 +23,36 @@ import (
 // revision (covers all data + base-currency/FX), the week start, and a 1-minute bucket
 // for the wall-clock Now — the same 60s staleness the dashboard engine memo accepts for
 // time-relative figures. wasm is single-threaded, so no lock is needed.
-var smartInputCache = map[string]smartengine.Input{}
+var smartInputCache = newViewCache[smartengine.Input](1)
+
+// Free findings are consumed by both the anomaly and next-action sections. Share
+// their engine pass; each caller still applies the current dismissals immediately.
+var freeFindingsCache = newViewCache[[]smart.Insight](1)
+
+func smartContextKey(app *appstate.App, weekStart time.Weekday, now time.Time) string {
+	return revKey(app) + "|" + strconv.Itoa(int(weekStart)) + "|" + strconv.FormatInt(now.Unix()/60, 10)
+}
 
 // buildSmartInput gathers the live dataset into the pure smartengine.Input the
 // rule engines compute over. It reads only through the appstate accessors (no
 // hooks), so it is safe to call anywhere in a render. weekStart is passed in by
 // the caller (which reads it from the prefs hook at a stable render position).
 func buildSmartInput(app *appstate.App, weekStart time.Weekday) smartengine.Input {
-	key := fmt.Sprintf("%p|", app) + strconv.FormatUint(app.Rev(), 10) + "|" + strconv.Itoa(int(weekStart)) + "|" + strconv.FormatInt(time.Now().Unix()/60, 10)
-	if v, ok := smartInputCache[key]; ok {
-		return v
-	}
-	if len(smartInputCache) > 4 {
-		smartInputCache = map[string]smartengine.Input{}
-	}
-	v := buildSmartInputRaw(app, weekStart)
-	smartInputCache[key] = v
-	return v
+	return buildSmartInputAt(app, weekStart, time.Now())
 }
 
+func buildSmartInputAt(app *appstate.App, weekStart time.Weekday, now time.Time) smartengine.Input {
+	return memoByRev(smartInputCache, smartContextKey(app, weekStart, now), func() smartengine.Input {
+		return buildSmartInputRawAt(app, weekStart, now)
+	})
+}
+
+// buildSmartInputRaw is the uncached seam used by engine parity tests.
 func buildSmartInputRaw(app *appstate.App, weekStart time.Weekday) smartengine.Input {
+	return buildSmartInputRawAt(app, weekStart, time.Now())
+}
+
+func buildSmartInputRawAt(app *appstate.App, weekStart time.Weekday, now time.Time) smartengine.Input {
 	s := app.Settings()
 	base := s.BaseCurrency
 	if base == "" {
@@ -51,7 +60,7 @@ func buildSmartInputRaw(app *appstate.App, weekStart time.Weekday) smartengine.I
 	}
 	return smartengine.Input{
 		Ledger:        budgetLedgerForApp(app),
-		Now:           time.Now(),
+		Now:           now,
 		Base:          base,
 		Rates:         currency.Rates{Base: base, Rates: s.FXRates},
 		WeekStart:     weekStart,
@@ -70,6 +79,13 @@ func buildSmartInputRaw(app *appstate.App, weekStart time.Weekday) smartengine.I
 	}
 }
 
+func freeSmartFindings(app *appstate.App, weekStart time.Weekday, now time.Time) []smart.Insight {
+	key := smartContextKey(app, weekStart, now) + "|" + string(uistate.ActiveLanguage())
+	return memoByRev(freeFindingsCache, key, func() []smart.Insight {
+		return smartengine.Run(buildSmartInputAt(app, weekStart, now), smart.EnableFreeOnly(smart.Settings{}))
+	})
+}
+
 // runSmart computes the active insights (enabled features, not dismissed) over
 // the live data for the given settings, sorted for display.
 func runSmart(app *appstate.App, weekStart time.Weekday, s smart.Settings) []smart.Insight {
@@ -82,9 +98,7 @@ func runSmart(app *appstate.App, weekStart time.Weekday, s smart.Settings) []sma
 // Insights screen (smartAnomalyHighlights) and the Anomaly Hub dashboard widget
 // (anomalyHubWidget) — only the row renderer differs between the two call sites.
 func runAnomalyDetectors(app *appstate.App, weekStart time.Weekday) []smart.Insight {
-	in := buildSmartInput(app, weekStart)
-	freeSettings := smart.EnableFreeOnly(smart.Settings{})
-	all := smartengine.Run(in, freeSettings)
+	all := freeSmartFindings(app, weekStart, time.Now())
 	anomalyCodes := map[string]bool{
 		"SMART-A1": true,
 		"SMART-T2": true,
@@ -113,7 +127,7 @@ func runAnomalyDetectors(app *appstate.App, weekStart time.Weekday) []smart.Insi
 // those are not anomalies at all — a subscription that crept up in price is not
 // an anomaly, it is a decision.
 func runActionableFindings(app *appstate.App, weekStart time.Weekday) []smart.Insight {
-	all := smartengine.Run(buildSmartInput(app, weekStart), smart.EnableFreeOnly(smart.Settings{}))
+	all := freeSmartFindings(app, weekStart, time.Now())
 	dismissed := uistate.LoadSmartSettings()
 	out := make([]smart.Insight, 0, len(all))
 	for _, ins := range all {

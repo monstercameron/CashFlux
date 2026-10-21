@@ -86,8 +86,9 @@ type WorkflowInput struct {
 // unknown variable or a syntax error is caught here rather than at run time — and
 // then running the workflow engine's own structural Validate. known reports
 // whether a variable name is part of the live engine surface (pass
-// app.WorkflowVariableNames as a set); a nil known skips the reference check but
-// still parses the expression. Returns the workflow and any plain-English
+// app.WorkflowVariableNamesFor as a set); a nil known skips the general reference
+// check but still parses the expression and rejects transaction-only variables
+// on other triggers. Returns the workflow and any plain-English
 // problems (empty when valid and safe to save).
 func CompileWorkflow(in WorkflowInput, known func(name string) bool) (workflow.Workflow, []string) {
 	wf := workflow.Workflow{
@@ -100,7 +101,13 @@ func CompileWorkflow(in WorkflowInput, known func(name string) bool) (workflow.W
 	}
 	var errs []string
 	if cond := wf.Condition; cond != "" {
-		if err := formula.Validate(cond, known); err != nil {
+		knownForTrigger := func(name string) bool {
+			if workflow.IsTransactionVariable(name) && wf.Trigger.Kind != workflow.TriggerTxnAdded {
+				return false
+			}
+			return known == nil || known(name)
+		}
+		if err := formula.Validate(cond, knownForTrigger); err != nil {
 			errs = append(errs, "The condition isn't valid: "+err.Error())
 		}
 	}

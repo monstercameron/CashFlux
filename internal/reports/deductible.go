@@ -5,6 +5,7 @@ package reports
 import (
 	"bytes"
 	"encoding/csv"
+	"fmt"
 	"sort"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/money"
 )
 
 // DeductibleRow is one deductible category's expense total for the reporting
@@ -63,14 +65,25 @@ func DeductibleTotals(
 		if err != nil {
 			return DeductibleSummary{}, err
 		}
-		totals[t.CategoryID] += conv.Abs().Amount
+		amount, err := conv.AbsChecked()
+		if err != nil {
+			return DeductibleSummary{}, fmt.Errorf("deductible category %q expense magnitude: %w", t.CategoryID, err)
+		}
+		totals[t.CategoryID], err = money.Add(totals[t.CategoryID], amount.Amount)
+		if err != nil {
+			return DeductibleSummary{}, fmt.Errorf("deductible category %q total: %w", t.CategoryID, err)
+		}
 	}
 
 	rows := make([]DeductibleRow, 0, len(totals))
 	var grand int64
 	for id, amt := range totals {
 		rows = append(rows, DeductibleRow{CategoryID: id, Amount: amt})
-		grand += amt
+		next, err := money.Add(grand, amt)
+		if err != nil {
+			return DeductibleSummary{}, fmt.Errorf("deductible grand total: %w", err)
+		}
+		grand = next
 	}
 	sort.Slice(rows, func(i, j int) bool {
 		if rows[i].Amount != rows[j].Amount {

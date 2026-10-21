@@ -17,9 +17,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	uic "github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	uic "github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // settingsLeftProps carries all data and callbacks needed to render the left
@@ -149,12 +149,11 @@ type settingsRightProps struct {
 	OnAiToggle       func(bool)
 	AiKey            string
 	OnKey            func(string) // the field owns the hook (see uiw.fieldCore)
-	KeySet           bool         // a cloud AI key is stored server-side (§7.11)
-	OnRemoveKey      uic.Handler  // UseEvent — clears the server-side key
 	OnRememberKey    func(bool)
+	OnServerAIRoute  func(bool)
 	OnModel          uic.Handler // UseEvent
 	CurModel         string
-	Models           []string // model ids fetched live from OpenAI (empty = fall back to built-in defaults)
+	Models           []string // model ids from the selected AI route (empty = built-in defaults)
 	ModelsLoaded     bool
 	ModelQuery       string
 	OnModelQuery     func(string)
@@ -345,25 +344,39 @@ func idleCashBenchmarkDisplay(apr float64) string {
 // settingsAIPane renders the AI tab: the BYOK key, model choice, and the web
 // search key. Pure rendering helper — no hooks.
 func settingsAIPane(p settingsRightProps) uic.Node {
+	serverAI := uistate.BackendAIActive(p.Pr)
+	serverAvailable := uistate.BackendConnectionActive(p.Pr)
+	routeText := func(serverKey, directKey string, args ...any) string {
+		if serverAI {
+			return uistate.T(serverKey, args...)
+		}
+		return uistate.T(directKey, args...)
+	}
 	return Div(
-		H4(css.Class("set-label"), uistate.T("settings.aiTitle")),
-		// AI is enabled by the presence of an API key (the no-key hint below is the
-		// affordance). The former local-only "Enable AI" toggle gated nothing and reset
-		// to off on every open, so it was removed to avoid a misleading dead control (§6.12).
-		ui.TextInput(ui.TextFieldProps{Class: "set-input", Value: p.AiKey, OnInput: p.OnKey,
-			AriaLabel: uistate.T("settings.aiKeyPlaceholder"), Placeholder: uistate.T("settings.aiKeyPlaceholder"),
-			Rules: []any{tw.Mt045}, Extra: []any{Type("password")}}),
-		// C292: always disclose where the key goes (BYOK, device-local, direct to OpenAI),
-		// not only the conditional no-key hint below — the trust statement shouldn't hide
-		// the moment a key is entered.
-		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiKeyTrust")),
-		// C100: explain what the key is for, that it's BYOK/pay-per-use, and where to get one.
-		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiKeyExplainer")),
-		If(strings.TrimSpace(p.AiKey) == "", P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiNoKey"))),
-		ui.ToggleRow(ui.ToggleRowProps{Label: uistate.T("settings.rememberKey"), On: p.Pr.RememberAIKey, OnChange: p.OnRememberKey}),
-		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.rememberKeyNote")),
-		// Every model from /v1/models stays available. The search only filters what
-		// is shown, and a typed id can be selected even when the provider doesn't list it.
+		If(serverAvailable, Fragment(
+			ui.ToggleRow(ui.ToggleRowProps{Label: uistate.T("settings.aiUseServer"), On: serverAI, OnChange: p.OnServerAIRoute}),
+			P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiRouteHint")),
+		)),
+		H4(css.Class("set-label"), routeText("settings.aiServerTitle", "settings.aiTitle")),
+		IfElse(serverAI,
+			Fragment(
+				P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiServerExplainer")),
+				P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiServerDestination", backendHost(p.Pr.ServerURL))),
+				uic.CreateElement(serverAIKeySettings),
+			),
+			Fragment(
+				ui.TextInput(ui.TextFieldProps{Class: "set-input", Value: p.AiKey, OnInput: p.OnKey,
+					AriaLabel: uistate.T("settings.aiKeyPlaceholder"), Placeholder: uistate.T("settings.aiKeyPlaceholder"),
+					Rules: []any{tw.Mt045}, Extra: []any{Type("password"), Attr("data-testid", "settings-ai-device-key")}}),
+				P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiKeyTrust")),
+				P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiKeyExplainer")),
+				If(strings.TrimSpace(p.AiKey) == "", P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiNoKey"))),
+				ui.ToggleRow(ui.ToggleRowProps{Label: uistate.T("settings.rememberKey"), On: p.Pr.RememberAIKey, OnChange: p.OnRememberKey}),
+				P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.rememberKeyNote")),
+			),
+		),
+		// The list comes from the selected route. Search only filters what is
+		// shown, and a typed id can still be selected as a custom model.
 		ui.TextInput(ui.TextFieldProps{Class: "set-input", Value: p.ModelQuery, OnInput: p.OnModelQuery,
 			AriaLabel: uistate.T("settings.aiModelSearch"), Placeholder: uistate.T("settings.aiModelSearch"),
 			Extra: []any{Attr("data-testid", "settings-ai-model-search"), Attr("spellcheck", "false")}}),
@@ -387,19 +400,20 @@ func settingsAIPane(p settingsRightProps) uic.Node {
 		),
 		If(strings.TrimSpace(p.ModelQuery) != "", Button(css.Class("btn btn-tool btn-sm", tw.Mt1), Type("button"), Attr("data-testid", "settings-ai-model-use-custom"), OnClick(p.OnUseCustomModel), uistate.T("settings.aiModelUseCustom", strings.TrimSpace(p.ModelQuery)))),
 		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiModelKindsHint")),
-		// C250: surface the active model and BYOK billing transparency so users know
-		// which model is active and that they pay OpenAI directly per token used.
-		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiModelNote", aiModelDisplayName(p.CurModel))),
-		If(strings.TrimSpace(p.ModelsErr) != "", P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiModelLoadFailed"))),
-		If(len(p.Models) > 0, P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiModelLive", len(p.Models)))),
+		// Describe the active model and which route will handle its requests.
+		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), routeText("settings.aiServerModelNote", "settings.aiModelNote", aiModelDisplayName(p.CurModel))),
+		If(strings.TrimSpace(p.ModelsErr) != "", P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), routeText("settings.aiServerModelLoadFailed", "settings.aiModelLoadFailed"))),
+		If(len(p.Models) > 0, P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), routeText("settings.aiServerModelLive", "settings.aiModelLive", len(p.Models)))),
 		// AG18: point the app at any OpenAI-compatible endpoint (a local model or a
 		// proxy) — the honest "no key leaves the house" path. Blank = OpenAI direct.
-		H4(css.Class("set-label"), uistate.T("settings.aiBaseUrlTitle")),
-		ui.TextInput(ui.TextFieldProps{Class: "set-input", Rules: []any{tw.Mt045}, Value: p.BaseURL, OnInput: p.OnBaseURL,
-			AriaLabel: uistate.T("settings.aiBaseUrlTitle"), Placeholder: uistate.T("settings.aiBaseUrlPlaceholder"),
-			Extra: []any{Attr("spellcheck", "false"), Attr("data-testid", "settings-ai-base-url")}}),
-		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiBaseUrlHint")),
-		If(aiprovider.IsLocalEndpoint(p.BaseURL), P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiBaseUrlLocal"))),
+		If(!serverAI, Fragment(
+			H4(css.Class("set-label"), uistate.T("settings.aiBaseUrlTitle")),
+			ui.TextInput(ui.TextFieldProps{Class: "set-input", Rules: []any{tw.Mt045}, Value: p.BaseURL, OnInput: p.OnBaseURL,
+				AriaLabel: uistate.T("settings.aiBaseUrlTitle"), Placeholder: uistate.T("settings.aiBaseUrlPlaceholder"),
+				Extra: []any{Attr("spellcheck", "false"), Attr("data-testid", "settings-ai-base-url")}}),
+			P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiBaseUrlHint")),
+			If(aiprovider.IsLocalEndpoint(p.BaseURL), P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiBaseUrlLocal"))),
+		)),
 		// AG19: the assistant's transparent, editable memory.
 		uic.CreateElement(agentMemoryForm),
 		H4(css.Class("set-label"), uistate.T("settings.webSearchTitle")),

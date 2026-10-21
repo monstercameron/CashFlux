@@ -11,9 +11,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/smartai"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // smart_explain.go is the shared "explain this one thing" affordance behind SM-5
@@ -77,7 +77,7 @@ func smartExplainBlock(props smartExplainProps) ui.Node {
 	errText := ui.UseState("")
 
 	settings := uistate.LoadSmartSettings()
-	backendAI := uistate.BackendConnectionActive(pr)
+	backendAI := uistate.BackendAIActive(pr)
 	enabled := app != nil && aiProviderConfigured(app, backendAI) &&
 		settings.IsEnabled(props.Code) && !settings.IsMuted(props.Code)
 	aiConn := smartAIConn{}

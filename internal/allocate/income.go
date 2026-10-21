@@ -17,7 +17,12 @@
 //     returns 0, not a negative amount, because there is nothing to allocate.
 package allocate
 
-import "time"
+import (
+	"fmt"
+	"time"
+
+	"github.com/monstercameron/CashFlux/internal/money"
+)
 
 // Transaction is the minimum interface PeriodIncome needs from a transaction
 // record. It avoids importing the domain package (keeping this package free of
@@ -44,12 +49,12 @@ func NoConvert(amount int64, _, _ string) (int64, error) { return amount, nil }
 
 // PeriodIncome sums income for transactions in [start, end), converting each to
 // baseCurrency via convert. It returns the total income in minor base-currency
-// units (always ≥ 0) or an error if conversion fails for any transaction.
+// units (always ≥ 0) or an error if conversion fails or a partial sum overflows.
 //
 // Only transactions where IsIncome is true and Date ∈ [start, end) are counted.
 func PeriodIncome(txns []Transaction, start, end time.Time, baseCurrency string, convert RateConverter) (int64, error) {
 	var total int64
-	for _, t := range txns {
+	for i, t := range txns {
 		if !t.IsIncome {
 			continue
 		}
@@ -58,9 +63,12 @@ func PeriodIncome(txns []Transaction, start, end time.Time, baseCurrency string,
 		}
 		converted, err := convert(t.Amount, t.Currency, baseCurrency)
 		if err != nil {
-			return 0, err
+			return 0, fmt.Errorf("period income: transaction %d conversion: %w", i, err)
 		}
-		total += converted
+		total, err = money.Add(total, converted)
+		if err != nil {
+			return 0, fmt.Errorf("period income: transaction %d total: %w", i, err)
+		}
 	}
 	if total < 0 {
 		return 0, nil

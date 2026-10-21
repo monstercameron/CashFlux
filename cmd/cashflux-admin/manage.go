@@ -18,9 +18,10 @@ import (
 	"strings"
 	"syscall/js"
 
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/CashFlux/internal/ai"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // manageCSS styles the user-management UI. It is injected from Go (once, guarded by
@@ -85,33 +86,48 @@ func ensureManageCSS() {
 // ---------------------------------------------------------------------------
 
 type adminUserDetail struct {
-	ID                 string `json:"id"`
-	Provider           string `json:"provider"`
-	Email              string `json:"email"`
-	CreatedAt          string `json:"createdAt"`
-	Username           string `json:"username"`
-	Role               string `json:"role"`
-	SubscriptionPlan   string `json:"subscriptionPlan"`
-	SubscriptionStatus string `json:"subscriptionStatus"`
-	CurrentPeriodEnd   string `json:"currentPeriodEnd"`
-	TrialEnd           string `json:"trialEnd"`
-	WorkspaceCount     int    `json:"workspaceCount"`
-	BlobBytes          int64  `json:"blobBytes"`
-	UsageTodayRequests int64  `json:"usageTodayRequests"`
-	UsageTodayTokens   int64  `json:"usageTodayTokens"`
-	Suspended          bool   `json:"suspended"`
+	ID                             string `json:"id"`
+	Provider                       string `json:"provider"`
+	Email                          string `json:"email"`
+	CreatedAt                      string `json:"createdAt"`
+	Username                       string `json:"username"`
+	Role                           string `json:"role"`
+	SubscriptionPlan               string `json:"subscriptionPlan"`
+	SubscriptionStatus             string `json:"subscriptionStatus"`
+	CurrentPeriodEnd               string `json:"currentPeriodEnd"`
+	TrialEnd                       string `json:"trialEnd"`
+	WorkspaceCount                 int    `json:"workspaceCount"`
+	BlobBytes                      int64  `json:"blobBytes"`
+	UsageTodayRequests             int64  `json:"usageTodayRequests"`
+	UsageTodayTokens               int64  `json:"usageTodayTokens"`
+	UsageTodayEstimatedCostNanoUSD int64  `json:"usageTodayEstimatedCostNanoUsd"`
+	UsageTodayCostIncomplete       bool   `json:"usageTodayCostIncomplete"`
+	Suspended                      bool   `json:"suspended"`
 }
 
 type adminUsageRow struct {
-	Day      string `json:"day"`
-	Requests int64  `json:"requests"`
-	Tokens   int64  `json:"tokens"`
+	Day                  string `json:"day"`
+	Requests             int64  `json:"requests"`
+	Tokens               int64  `json:"tokens"`
+	EstimatedCostNanoUSD int64  `json:"estimatedCostNanoUsd"`
+	CostIncomplete       bool   `json:"costIncomplete"`
 }
 
 type adminUsageResp struct {
 	UserID string          `json:"userId"`
 	Days   int             `json:"days"`
 	Usage  []adminUsageRow `json:"usage"`
+}
+
+func adminEstimatedCost(nanoUSD int64, incomplete bool) string {
+	if incomplete && nanoUSD == 0 {
+		return "Unavailable for earlier or unpriced calls"
+	}
+	estimate := "≈" + ai.FormatCostUSD(float64(nanoUSD)/1e9)
+	if incomplete {
+		return estimate + " (partial; some calls unpriced)"
+	}
+	return estimate
 }
 
 type adminCreateUserResp struct {
@@ -977,6 +993,7 @@ func manageView(p manageProps) ui.Node {
 			detailRow("Workspaces", fmt.Sprintf("%d", d.WorkspaceCount)),
 			detailRow("Storage", formatBytes(d.BlobBytes)),
 			detailRow("Today's usage", fmt.Sprintf("%d requests · %d tokens", d.UsageTodayRequests, d.UsageTodayTokens)),
+			detailRow("Estimated AI cost today", adminEstimatedCost(d.UsageTodayEstimatedCostNanoUSD, d.UsageTodayCostIncomplete)),
 		)
 	}
 
@@ -994,7 +1011,7 @@ func manageView(p manageProps) ui.Node {
 			return Div(css.Class("usage-bar-row"),
 				Span(css.Class("usage-day"), Text(u.Day)),
 				Div(css.Class("usage-track"), Div(css.Class("usage-fill"), Style(map[string]string{"width": w}))),
-				Span(css.Class("usage-num"), Text(fmt.Sprintf("%d req · %d tok", u.Requests, u.Tokens))),
+				Span(css.Class("usage-num"), Text(fmt.Sprintf("%d req · %d tok · %s", u.Requests, u.Tokens, adminEstimatedCost(u.EstimatedCostNanoUSD, u.CostIncomplete)))),
 			)
 		}),
 	)

@@ -7,8 +7,8 @@ package ui
 import (
 	"testing"
 
-	"github.com/monstercameron/GoWebComponents/v5/testkit/render"
-	uic "github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/testkit/render"
+	uic "github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 func TestTV7HSegmentPressedStateMatchesARIA(t *testing.T) {

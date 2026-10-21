@@ -72,10 +72,12 @@ type Blob struct {
 
 // Usage is a per-user daily server usage counter.
 type Usage struct {
-	UserID   string
-	Day      string
-	Requests int64
-	Tokens   int64
+	UserID               string
+	Day                  string
+	Requests             int64
+	Tokens               int64
+	EstimatedCostNanoUSD int64 `json:"estimatedCostNanoUsd"`
+	CostIncomplete       bool  `json:"costIncomplete"`
 }
 
 // Subscription is the server-side subscription state for one Cloud user, held
@@ -1329,6 +1331,20 @@ func (s *Store) PutBlob(root string, data []byte, mime, name string, maxBytes in
 
 // PutBlobContext stores bytes under a sha256 content-addressed path and observes cancellation before disk and metadata writes.
 func (s *Store) PutBlobContext(ctx context.Context, root string, data []byte, mime, name string, maxBytes int64) (Blob, error) {
+	return s.putBlobContext(ctx, root, data, mime, name, maxBytes, "", "")
+}
+
+// PutLinkedBlobContext stores a blob and its workspace link under one database
+// write lock. Blob GC uses the same lock before removing a file, so an upload
+// cannot be collected between its metadata write and its workspace link.
+func (s *Store) PutLinkedBlobContext(ctx context.Context, root string, data []byte, mime, name string, maxBytes int64, userID, workspaceID string) (Blob, error) {
+	if strings.TrimSpace(userID) == "" || strings.TrimSpace(workspaceID) == "" {
+		return Blob{}, fmt.Errorf("server store: user and workspace IDs are required")
+	}
+	return s.putBlobContext(ctx, root, data, mime, name, maxBytes, userID, workspaceID)
+}
+
+func (s *Store) putBlobContext(ctx context.Context, root string, data []byte, mime, name string, maxBytes int64, userID, workspaceID string) (Blob, error) {
 	if maxBytes > 0 && int64(len(data)) > maxBytes {
 		return Blob{}, fmt.Errorf("server store: blob is %d bytes, exceeds limit %d", len(data), maxBytes)
 	}
@@ -1360,26 +1376,74 @@ func (s *Store) PutBlobContext(ctx context.Context, root string, data []byte, mi
 	if err := confinedRoot.MkdirAll(filepath.Dir(relativePath), 0o700); err != nil {
 		return Blob{}, fmt.Errorf("server store: blob mkdir: %w", err)
 	}
+	conn, err := s.db.Conn(ctx)
+	if err != nil {
+		return Blob{}, fmt.Errorf("server store: blob connection: %w", err)
+	}
+	defer conn.Close()
+	if _, err := conn.ExecContext(ctx, `BEGIN IMMEDIATE`); err != nil {
+		return Blob{}, fmt.Errorf("server store: begin blob write: %w", err)
+	}
+	committed, created, commitAttempted := false, false, false
+	defer func() {
+		if !committed {
+			if created && !commitAttempted {
+				_ = confinedRoot.Remove(relativePath)
+			}
+			_, _ = conn.ExecContext(context.Background(), `ROLLBACK`)
+		}
+	}()
+	if userID != "" {
+		var deleted int
+		if err := conn.QueryRowContext(ctx, `SELECT deleted FROM workspaces WHERE user_id = ? AND id = ?`, userID, workspaceID).Scan(&deleted); err != nil {
+			return Blob{}, fmt.Errorf("server store: blob workspace: %w", err)
+		}
+		if deleted != 0 {
+			return Blob{}, fmt.Errorf("server store: blob workspace is deleted")
+		}
+	}
 	if err := ctx.Err(); err != nil {
 		return Blob{}, fmt.Errorf("server store: blob write canceled: %w", err)
 	}
 	if _, err := confinedRoot.Stat(relativePath); errors.Is(err, os.ErrNotExist) {
+		created = true // Remove a partial new file if WriteFile itself fails.
 		if err := confinedRoot.WriteFile(relativePath, data, 0o600); err != nil {
 			return Blob{}, fmt.Errorf("server store: blob write: %w", err)
 		}
 	} else if err != nil {
 		return Blob{}, fmt.Errorf("server store: blob stat: %w", err)
+	} else {
+		existing, err := confinedRoot.ReadFile(relativePath)
+		if err != nil {
+			return Blob{}, fmt.Errorf("server store: blob read before linking: %w", err)
+		}
+		if sum := sha256.Sum256(existing); hex.EncodeToString(sum[:]) != hash {
+			return Blob{}, fmt.Errorf("server store: existing blob hash mismatch")
+		}
 	}
 	if err := ctx.Err(); err != nil {
 		return Blob{}, fmt.Errorf("server store: blob write canceled: %w", err)
 	}
-	if _, err := s.db.ExecContext(ctx, `
+	if _, err := conn.ExecContext(ctx, `
 INSERT INTO blobs(hash, size, mime, created_at)
 VALUES(?, ?, ?, ?)
 ON CONFLICT(hash) DO UPDATE SET size = excluded.size, mime = excluded.mime`,
 		blob.Hash, blob.Size, blob.Mime, formatTime(blob.CreatedAt)); err != nil {
 		return Blob{}, fmt.Errorf("server store: put blob metadata: %w", err)
 	}
+	if userID != "" {
+		if _, err := conn.ExecContext(ctx, `INSERT OR IGNORE INTO workspace_blobs(user_id, workspace_id, hash) VALUES(?, ?, ?)`, userID, workspaceID, blob.Hash); err != nil {
+			return Blob{}, fmt.Errorf("server store: link workspace blob: %w", err)
+		}
+	}
+	// Complete the transaction after the file and link have been written, even
+	// if the client disconnects at this point. Cancellation was checked before
+	// both writes; interrupting COMMIT could leave its outcome ambiguous.
+	commitAttempted = true
+	if _, err := conn.ExecContext(context.Background(), `COMMIT`); err != nil {
+		return Blob{}, fmt.Errorf("server store: commit blob write: %w", err)
+	}
+	committed = true
 	return blob, nil
 }
 
@@ -1546,36 +1610,90 @@ ORDER BY b.hash`, userID, workspaceID)
 func (s *Store) SweepUnreferencedBlobs(root string) (int, error) {
 	defer s.observeDB("SweepUnreferencedBlobs", time.Now())
 	rows, err := s.db.Query(`
-SELECT b.hash, b.size, b.mime, b.created_at
+SELECT b.hash
 FROM blobs b
 LEFT JOIN workspace_blobs wb ON wb.hash = b.hash
 WHERE wb.hash IS NULL`)
 	if err != nil {
 		return 0, fmt.Errorf("server store: unreferenced blobs: %w", err)
 	}
-	defer rows.Close()
-	var blobs []Blob
+	var hashes []string
 	for rows.Next() {
-		blob, err := scanBlob(rows)
-		if err != nil {
-			return 0, err
+		var hash string
+		if err := rows.Scan(&hash); err != nil {
+			rows.Close()
+			return 0, fmt.Errorf("server store: scan unreferenced blob: %w", err)
 		}
-		blobs = append(blobs, blob)
+		hashes = append(hashes, hash)
 	}
 	if err := rows.Err(); err != nil {
+		rows.Close()
 		return 0, fmt.Errorf("server store: unreferenced blob rows: %w", err)
 	}
-	for _, blob := range blobs {
-		path, err := blobPath(root, blob.Hash)
+	if err := rows.Close(); err != nil {
+		return 0, fmt.Errorf("server store: close unreferenced blob rows: %w", err)
+	}
+	if len(hashes) == 0 {
+		return 0, nil
+	}
+	confinedRoot, err := os.OpenRoot(root)
+	if err != nil {
+		return 0, fmt.Errorf("server store: blob gc root: %w", err)
+	}
+	defer confinedRoot.Close()
+	deleted := 0
+	for _, hash := range hashes {
+		removed, err := s.sweepUnreferencedBlob(confinedRoot, hash)
 		if err != nil {
-			return 0, err
+			return deleted, err
 		}
-		_ = os.Remove(path)
-		if _, err := s.db.Exec(`DELETE FROM blobs WHERE hash = ?`, blob.Hash); err != nil {
-			return 0, fmt.Errorf("server store: delete blob metadata: %w", err)
+		if removed {
+			deleted++
 		}
 	}
-	return len(blobs), nil
+	return deleted, nil
+}
+
+func (s *Store) sweepUnreferencedBlob(root *os.Root, hash string) (bool, error) {
+	relativePath, err := blobRelativePath(hash)
+	if err != nil {
+		return false, err
+	}
+	ctx := context.Background()
+	conn, err := s.db.Conn(ctx)
+	if err != nil {
+		return false, fmt.Errorf("server store: blob gc connection: %w", err)
+	}
+	defer conn.Close()
+	if _, err := conn.ExecContext(ctx, `BEGIN IMMEDIATE`); err != nil {
+		return false, fmt.Errorf("server store: begin blob gc: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_, _ = conn.ExecContext(context.Background(), `ROLLBACK`)
+		}
+	}()
+	var unreferenced int
+	if err := conn.QueryRowContext(ctx, `
+SELECT COUNT(*) FROM blobs b
+WHERE b.hash = ? AND NOT EXISTS (SELECT 1 FROM workspace_blobs wb WHERE wb.hash = b.hash)`, hash).Scan(&unreferenced); err != nil {
+		return false, fmt.Errorf("server store: recheck blob references: %w", err)
+	}
+	if unreferenced == 0 {
+		return false, nil
+	}
+	if err := root.Remove(relativePath); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return false, fmt.Errorf("server store: remove unreferenced blob %s: %w", hash, err)
+	}
+	if _, err := conn.ExecContext(ctx, `DELETE FROM blobs WHERE hash = ?`, hash); err != nil {
+		return false, fmt.Errorf("server store: delete blob metadata: %w", err)
+	}
+	if _, err := conn.ExecContext(ctx, `COMMIT`); err != nil {
+		return false, fmt.Errorf("server store: commit blob gc: %w", err)
+	}
+	committed = true
+	return true, nil
 }
 
 // UserSyncSummary reports what an account actually HOLDS on this server: how many
@@ -1834,6 +1952,39 @@ ON CONFLICT(user_id, day) DO UPDATE SET
 	return usage, nil
 }
 
+// AddAIUsage records billed tokens and their estimated cost in one database
+// write after an AI completion. The request count was reserved before calling
+// the upstream provider. Unknown prices mark the day's estimate incomplete
+// rather than claiming a zero-dollar call.
+func (s *Store) AddAIUsage(userID string, day time.Time, tokens, costNanoUSD int64, unpriced bool) (Usage, error) {
+	if strings.TrimSpace(userID) == "" || tokens < 0 || costNanoUSD < 0 {
+		return Usage{}, fmt.Errorf("server store: invalid AI usage increment")
+	}
+	var incomplete int64
+	if unpriced {
+		incomplete = 1
+	}
+	defer s.observeDB("AddAIUsage", time.Now())
+	if _, err := s.db.Exec(`
+INSERT INTO usage(user_id, day, tokens, estimated_cost_nano_usd, cost_incomplete)
+VALUES(?, ?, ?, ?, ?)
+ON CONFLICT(user_id, day) DO UPDATE SET
+  tokens = tokens + excluded.tokens,
+  estimated_cost_nano_usd = estimated_cost_nano_usd + excluded.estimated_cost_nano_usd,
+  cost_incomplete = MAX(cost_incomplete, excluded.cost_incomplete)`,
+		userID, usageDay(day), tokens, costNanoUSD, incomplete); err != nil {
+		return Usage{}, fmt.Errorf("server store: add AI usage: %w", err)
+	}
+	usage, ok, err := s.GetUsage(userID, day)
+	if err != nil {
+		return Usage{}, err
+	}
+	if !ok {
+		return Usage{}, fmt.Errorf("server store: AI usage row missing after increment")
+	}
+	return usage, nil
+}
+
 // ReserveAIRequest atomically checks the caller against their daily AI limits and, if
 // under both, reserves one request by incrementing the day's request counter. It
 // returns allowed=false WITHOUT incrementing when a limit is already reached, plus
@@ -1898,8 +2049,8 @@ func (s *Store) GetUsage(userID string, day time.Time) (Usage, bool, error) {
 	defer s.observeDB("GetUsage", time.Now())
 	key := usageDay(day)
 	var usage Usage
-	err := s.db.QueryRow(`SELECT user_id, day, requests, tokens FROM usage WHERE user_id = ? AND day = ?`, userID, key).
-		Scan(&usage.UserID, &usage.Day, &usage.Requests, &usage.Tokens)
+	err := s.db.QueryRow(`SELECT user_id, day, requests, tokens, estimated_cost_nano_usd, cost_incomplete FROM usage WHERE user_id = ? AND day = ?`, userID, key).
+		Scan(&usage.UserID, &usage.Day, &usage.Requests, &usage.Tokens, &usage.EstimatedCostNanoUSD, &usage.CostIncomplete)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Usage{}, false, nil
 	}
@@ -1917,7 +2068,7 @@ func (s *Store) ListUserUsage(userID string, sinceDay time.Time) ([]Usage, error
 	}
 	defer s.observeDB("ListUserUsage", time.Now())
 	rows, err := s.db.Query(
-		`SELECT user_id, day, requests, tokens FROM usage WHERE user_id = ? AND day >= ? ORDER BY day DESC`,
+		`SELECT user_id, day, requests, tokens, estimated_cost_nano_usd, cost_incomplete FROM usage WHERE user_id = ? AND day >= ? ORDER BY day DESC`,
 		strings.TrimSpace(userID), usageDay(sinceDay))
 	if err != nil {
 		return nil, fmt.Errorf("server store: list user usage: %w", err)
@@ -1926,7 +2077,7 @@ func (s *Store) ListUserUsage(userID string, sinceDay time.Time) ([]Usage, error
 	var out []Usage
 	for rows.Next() {
 		var u Usage
-		if err := rows.Scan(&u.UserID, &u.Day, &u.Requests, &u.Tokens); err != nil {
+		if err := rows.Scan(&u.UserID, &u.Day, &u.Requests, &u.Tokens, &u.EstimatedCostNanoUSD, &u.CostIncomplete); err != nil {
 			return nil, fmt.Errorf("server store: scan usage: %w", err)
 		}
 		out = append(out, u)

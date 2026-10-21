@@ -132,7 +132,11 @@ func PeriodTotals(all []domain.Transaction, start, end time.Time, rates currency
 				return money.Money{}, money.Money{}, err
 			}
 		case t.IsExpense():
-			if expense, err = expense.Add(conv.Abs()); err != nil {
+			magnitude, err := conv.AbsChecked()
+			if err != nil {
+				return money.Money{}, money.Money{}, err
+			}
+			if expense, err = expense.Add(magnitude); err != nil {
 				return money.Money{}, money.Money{}, err
 			}
 		}
@@ -150,133 +154,29 @@ func PeriodTotals(all []domain.Transaction, start, end time.Time, rates currency
 // insights.CategorySeries for anomaly detection. bounds must be ascending; fewer
 // than two bounds yields an empty result.
 func CategorySpendSeries(all []domain.Transaction, bounds []time.Time, rates currency.Rates) (map[string][]int64, error) {
-	n := len(bounds) - 1
-	out := map[string][]int64{}
-	if n < 1 {
-		return out, nil
-	}
-	for _, t := range all {
-		if !t.IsExpense() || !t.CountsInReports() {
-			continue
-		}
-		idx := -1
-		for i := 0; i < n; i++ {
-			if dateutil.InRange(t.Date, bounds[i], bounds[i+1]) {
-				idx = i
-				break
-			}
-		}
-		if idx < 0 {
-			continue
-		}
-		conv, err := rates.Convert(t.Amount, rates.Base)
-		if err != nil {
-			return nil, err
-		}
-		if t.HasSplits() {
-			for _, split := range t.Splits {
-				// Split lines carry their own direction. Positive lines are
-				// refunds/credits and do not contribute to spend, even when the
-				// parent transaction is an expense.
-				if split.Amount.Amount >= 0 {
-					continue
-				}
-				splitValue, splitErr := rates.Convert(split.Amount, rates.Base)
-				if splitErr != nil {
-					return nil, splitErr
-				}
-				value, splitErr := splitValue.AbsChecked()
-				if splitErr != nil {
-					return nil, fmt.Errorf("ledger: split spend: %w", splitErr)
-				}
-				series := out[split.CategoryID]
-				if series == nil {
-					series = make([]int64, n)
-					out[split.CategoryID] = series
-				}
-				next, addErr := money.Add(series[idx], value.Amount)
-				if addErr != nil {
-					return nil, fmt.Errorf("ledger: category %q spend: %w", split.CategoryID, addErr)
-				}
-				series[idx] = next
-			}
-			continue
-		}
-		series, ok := out[t.CategoryID]
-		if !ok {
-			series = make([]int64, n)
-			out[t.CategoryID] = series
-		}
-		value, err := conv.AbsChecked()
-		if err != nil {
-			return nil, fmt.Errorf("ledger: category %q spend: %w", t.CategoryID, err)
-		}
-		next, err := money.Add(series[idx], value.Amount)
-		if err != nil {
-			return nil, fmt.Errorf("ledger: category %q spend: %w", t.CategoryID, err)
-		}
-		series[idx] = next
-	}
-	return out, nil
+	return categorySpendSeries(all, bounds, rates, nil, false)
 }
 
 // NetWorth returns net worth (assets − liabilities) along with the asset and
-// liability totals, all in the base currency. Archived accounts are excluded.
+// liability totals, all in the base currency. Archived accounts and accounts
+// excluded from net worth by choice are omitted.
 // Liability amounts are reported as positive amounts owed — taken as the magnitude
 // of the balance so a debt stored either negative (the sample convention) or
 // positive (the "amount you owe" add form) both subtract from net worth.
 func NetWorth(accounts []domain.Account, all []domain.Transaction, rates currency.Rates) (net, assets, liabilities money.Money, err error) {
-	assets = money.Zero(rates.Base)
-	liabilities = money.Zero(rates.Base)
-	for _, a := range accounts {
-		if a.Archived {
-			continue
-		}
-		bal, err := Balance(a, all)
-		if err != nil {
-			return money.Money{}, money.Money{}, money.Money{}, err
-		}
-		conv, err := rates.Convert(bal, rates.Base)
-		if err != nil {
-			return money.Money{}, money.Money{}, money.Money{}, err
-		}
-		if a.Class == domain.ClassLiability {
-			if liabilities, err = liabilities.Add(conv.Abs()); err != nil {
-				return money.Money{}, money.Money{}, money.Money{}, err
-			}
-		} else {
-			if assets, err = assets.Add(conv); err != nil {
-				return money.Money{}, money.Money{}, money.Money{}, err
-			}
-		}
-	}
-	net, err = assets.Sub(liabilities)
+	res, err := strictAccountTotals(accounts, all, rates, accountTotalsPolicy{})
 	if err != nil {
 		return money.Money{}, money.Money{}, money.Money{}, err
 	}
-	return net, assets, liabilities, nil
+	return res.Net, res.Assets, res.Liabilities, nil
 }
 
 // NetWorthSeries returns net worth as of each cutoff time, all in the base
 // currency. Transactions strictly before a cutoff are counted, so passing the
 // first day of successive months yields an end-of-month net-worth trend.
-// Archived accounts are excluded, as in NetWorth.
+// Archived accounts and accounts excluded by choice are omitted, as in NetWorth.
 func NetWorthSeries(accounts []domain.Account, all []domain.Transaction, cutoffs []time.Time, rates currency.Rates) ([]money.Money, error) {
-	out := make([]money.Money, len(cutoffs))
-	for i, c := range cutoffs {
-		upto := make([]domain.Transaction, 0, len(all))
-		for _, t := range all {
-			if t.Date.Before(c) {
-				upto = append(upto, t)
-			}
-		}
-		net, _, _, err := NetWorth(accounts, upto, rates)
-		if err != nil {
-			return nil, fmt.Errorf("ledger: net worth as of %s: %w", c.Format(dateutil.Layout), err)
-		}
-		out[i] = net
-	}
-	return out, nil
+	return accountValueSeries(accounts, all, cutoffs, rates, accountTotalsPolicy{}, "net worth")
 }
 
 // NetByOwner returns each owner's net worth (sum of their account balances in
@@ -284,8 +184,9 @@ func NetWorthSeries(accounts []domain.Account, all []domain.Transaction, cutoffs
 // shared accounts. Archived accounts are excluded.
 //
 // When an account has a non-empty OwnershipShares map, its base-currency
-// balance is split across the share members via SplitByShares (largest-remainder
-// Hamilton apportionment) rather than attributed wholly to OwnerID.
+// balance is split across the share members via SplitBySharesChecked
+// (largest-remainder Hamilton apportionment) rather than attributed wholly to
+// OwnerID. Invalid ownership shares and arithmetic failures return an error.
 func NetByOwner(accounts []domain.Account, all []domain.Transaction, rates currency.Rates) (map[string]money.Money, error) {
 	out := make(map[string]money.Money)
 	for _, a := range accounts {
@@ -303,7 +204,10 @@ func NetByOwner(accounts []domain.Account, all []domain.Transaction, rates curre
 
 		if len(a.OwnershipShares) > 0 {
 			// Fractional ownership: split the base-currency amount across share holders.
-			parts := SplitByShares(conv.Amount, a.OwnershipShares)
+			parts, err := SplitBySharesChecked(conv.Amount, a.OwnershipShares)
+			if err != nil {
+				return nil, fmt.Errorf("ledger: account %s ownership: %w", a.ID, err)
+			}
 			for memberID, part := range parts {
 				cur, ok := out[memberID]
 				if !ok {

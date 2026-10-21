@@ -17,9 +17,9 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // debtRowProps carries one liability's render data + the plain callbacks the list tile
@@ -27,7 +27,9 @@ import (
 // MapKeyed over a variable-length debt slice without calling hooks in a loop.
 type debtRowProps struct {
 	Account     domain.Account
-	Owed        money.Money        // absolute amount owed, in the account's currency
+	Owed        money.Money // absolute amount owed, in the account's currency
+	OwedKnown   bool        // false when the ledger balance could not be prepared
+	OwedErr     error
 	Rank        int                // 1-based position in the payoff order; 0 = not in the plan
 	Utilization float64            // credit utilization %, or -1 when N/A (not a line of credit)
 	Available   money.Money        // remaining credit (credit lines only)
@@ -193,7 +195,7 @@ func DebtRow(props debtRowProps) ui.Node {
 			customNode,
 		),
 		Div(css.Class("debt-side"),
-			Span(css.Class("debt-owed", tw.FontDisplay), Attr("aria-label", uistate.T("debt.owedAria", a.Name)), fmtMoney(props.Owed)),
+			Span(css.Class("debt-owed", tw.FontDisplay), Attr("aria-label", uistate.T("debt.owedAria", a.Name)), Attr("title", debtSourceError(props.OwedErr)), IfElse(props.OwedKnown, Text(fmtMoney(props.Owed)), Text("—"))),
 			Div(css.Class("debt-actions"),
 				Button(css.Class("btn btn-sm", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
 					Attr("data-testid", "debt-view-"+a.ID), Attr("aria-label", uistate.T("debt.viewAria", a.Name)),

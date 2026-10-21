@@ -60,13 +60,9 @@ func handlePutBlob(cfg Config, store *Store) http.HandlerFunc {
 		}
 		ctx, cancel := blobIOContext(r.Context(), cfg)
 		defer cancel()
-		blob, err := store.PutBlobContext(ctx, blobRoot(cfg), data, mime, "", cfg.BlobMaxBytes)
+		blob, err := store.PutLinkedBlobContext(ctx, blobRoot(cfg), data, mime, "", cfg.BlobMaxBytes, user.ID, workspaceID)
 		if err != nil {
 			writeErrorJSON(w, ErrorReasonInternal, "blob write failed")
-			return
-		}
-		if err := store.LinkWorkspaceBlob(user.ID, workspaceID, blob.Hash); err != nil {
-			writeErrorJSON(w, ErrorReasonInternal, "blob link failed")
 			return
 		}
 		if cfg.Metrics != nil {
@@ -265,7 +261,7 @@ func blobIOContext(parent context.Context, cfg Config) (context.Context, context
 func writeBlobHeaders(w http.ResponseWriter, blob Blob) {
 	w.Header().Set("Content-Type", blob.Mime)
 	w.Header().Set("Content-Length", strconv.FormatInt(blob.Size, 10))
-	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	w.Header().Set("Cache-Control", "private, no-store")
 	w.Header().Set("Content-Disposition", "attachment")
 	w.Header().Set("ETag", `"`+blob.Hash+`"`)
 }

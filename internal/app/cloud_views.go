@@ -8,9 +8,9 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	uic "github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	uic "github.com/monstercameron/GoWebComponents/v7/ui"
 	"syscall/js"
 )
 
@@ -73,6 +73,24 @@ func cloudStatusView(p cloudStatusProps) uic.Node {
 type cloudSetupProps struct {
 	Step                          cloudStep
 	Where, SignIn, Protect, First uic.Node
+}
+
+// Hosted pages already selected their own server and passed the account gate.
+// Settings only asks for the remaining device protection and first sync tasks.
+type cloudHostedSetupProps struct {
+	Step           cloudStep
+	Protect, First uic.Node
+}
+
+func cloudHostedSetupView(p cloudHostedSetupProps) uic.Node {
+	switch p.Step {
+	case cloudProtect:
+		return p.Protect
+	case cloudFirst:
+		return p.First
+	default:
+		return Fragment()
+	}
 }
 
 func cloudSetupView(p cloudSetupProps) uic.Node {

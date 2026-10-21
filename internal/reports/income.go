@@ -52,51 +52,5 @@ func LargestIncome(txns []domain.Transaction, start, end time.Time, rates curren
 // income; the caller resolves names. The result reuses CategorySpend with only
 // the Amount field populated (no prior-period comparison).
 func IncomeByCategory(txns []domain.Transaction, start, end time.Time, rates currency.Rates) ([]CategorySpend, error) {
-	totals := map[string]int64{}
-	for _, t := range txns {
-		if !t.IsIncome() || !t.CountsInReports() || !dateutil.InRange(t.Date, start, end) {
-			continue
-		}
-		// C533: attribute a SPLIT deposit per line, so a paycheck split into
-		// salary + bonus shows under both sources rather than landing wholly on
-		// the transaction's own category. Any amount the lines do not cover stays
-		// on the transaction's category, so the rows still sum to the deposit and
-		// this total keeps agreeing with budgeting.ZeroBasedIncome.
-		if t.HasSplits() {
-			var allocated int64
-			for _, s := range t.Splits {
-				conv, err := rates.Convert(s.Amount, rates.Base)
-				if err != nil {
-					return nil, err
-				}
-				totals[s.CategoryID] += conv.Abs().Amount
-				allocated += conv.Abs().Amount
-			}
-			whole, err := rates.Convert(t.Amount, rates.Base)
-			if err != nil {
-				return nil, err
-			}
-			if rest := whole.Abs().Amount - allocated; rest > 0 {
-				totals[t.CategoryID] += rest
-			}
-			continue
-		}
-		conv, err := rates.Convert(t.Amount, rates.Base)
-		if err != nil {
-			return nil, err
-		}
-		totals[t.CategoryID] += conv.Abs().Amount
-	}
-
-	out := make([]CategorySpend, 0, len(totals))
-	for id, amt := range totals {
-		out = append(out, CategorySpend{CategoryID: id, Amount: amt})
-	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].Amount != out[j].Amount {
-			return out[i].Amount > out[j].Amount
-		}
-		return out[i].CategoryID < out[j].CategoryID
-	})
-	return out, nil
+	return IncomeByCategoryChecked(txns, start, end, rates)
 }

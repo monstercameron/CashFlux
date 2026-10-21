@@ -23,9 +23,9 @@
 // silently swapped onto new code mid-session, and never left believing it
 // is current either: it keeps being told an update is waiting.
 //
-// Only same-origin GETs are cached; cross-origin calls (e.g. OpenAI) pass
-// straight through. build.json is never cached or intercepted: every
-// freshness decision depends on reading the server's current copy.
+// Only exact app assets and dedicated public-static paths are cached. API
+// requests and cross-origin calls pass straight through. build.json is never
+// cached or intercepted: every freshness decision reads the server's copy.
 
 const CACHE_PREFIX = "cashflux-fav1-";
 const LEGACY_CACHE_PREFIX = "cashflux-";
@@ -40,6 +40,7 @@ const COMPLETE_ENTRY = "./__cashflux_complete__.json";
 const CORE_REQUIRED = [
   "./", "./index.html", "./wasm_exec.js", "./manifest.webmanifest",
   "./favicon.ico", "./favicon.svg", "./favicon-32.png", "./fonts.css",
+  "./erase-device.html", "./device-erase.js",
 ];
 // The wasm binary is boot-critical too. Prefer the loader's negotiated URL:
 // the browser transparently decodes its Content-Encoding, so that response
@@ -302,6 +303,13 @@ self.addEventListener("activate", (event) => {
       keys.filter((k) => (k.startsWith(CACHE_PREFIX) || k.startsWith(LEGACY_CACHE_PREFIX)) && k !== keep)
         .map((k) => caches.delete(k))
     );
+    // A previous worker cached every successful same-origin GET, including
+    // account-specific API responses. Scrub those entries even when the build
+    // ID (and therefore the current cache name) did not change.
+    const current = await caches.open(keep);
+    await Promise.all((await current.keys())
+      .filter((request) => !isAllowedCacheEntry(request))
+      .map((request) => current.delete(request)));
     await self.clients.claim();
     // Tell open pages which build now controls them; pages that asked for
     // the update reload on controllerchange, the rest learn they are stale.
@@ -346,6 +354,12 @@ async function appShell() {
 // /p/<slug> works on a static host with no history fallback (e.g. gwc dev returns 404
 // for the route). It can never reject: every branch resolves to a Response.
 async function handleNavigate(req) {
+  // Device erasure runs outside Wasm and must remain reachable offline. A
+  // stamped worker normally serves index.html for every navigation; doing so
+  // here would re-enter the app while its erase marker is set.
+  if (new URL(req.url).origin === self.location.origin && coreKeyFor(req.url) === "./erase-device.html") {
+    return handleAsset(req, true);
+  }
   const buildId = await resolveBuildId();
   if (buildId !== DEV_BUILD) {
     // A stamped worker always serves its verified shell. Returning the
@@ -371,14 +385,37 @@ async function handleNavigate(req) {
 function coreKeyFor(url) {
   const path = new URL(url).pathname;
   for (const key of CORE_ALL) {
-    if (key !== "./" && path.endsWith(key.slice(1))) return key;
+    if (key !== "./" && path === new URL(key, self.registration.scope).pathname) return key;
   }
   return "";
 }
 
+// Only these dedicated public-static directories may enter the runtime cache.
+// API routes and arbitrary same-origin GET responses must use the network and
+// must never be written to or restored from CacheStorage.
+function isRuntimeStaticAsset(request) {
+  const url = new URL(request.url);
+  const scope = new URL(self.registration.scope);
+  if (url.origin !== scope.origin || !url.pathname.startsWith(scope.pathname)) return false;
+  if (request.headers && request.headers.has("Authorization")) return false;
+  const path = url.pathname.slice(scope.pathname.length);
+  return /^fonts\/[^/]+\.woff2$/.test(path)
+    || /^audio\/[^/]+\.mp3$/.test(path)
+    || /^admin\/img\/[^/]+\.(?:png|jpe?g|webp|svg)$/.test(path);
+}
+
+function isAllowedCacheEntry(request) {
+  const url = new URL(request.url);
+  const scope = new URL(self.registration.scope);
+  if (url.origin !== scope.origin) return false;
+  if (url.href === new URL(COMPLETE_ENTRY, scope).href) return true;
+  if (url.pathname === scope.pathname && !url.search) return true;
+  return !!coreKeyFor(url.href) || isRuntimeStaticAsset(request);
+}
+
 // handleAsset is network-first with a same-build cache fallback; never returns
-// undefined. Non-core same-origin responses (font files, images) runtime-cache
-// into this build's cache; core assets are served from the network online and
+// undefined. Non-core public-static responses (fonts, audio, admin images)
+// runtime-cache into this build's cache; core assets are served from the network online and
 // from the precache offline, but never re-written at runtime.
 async function handleAsset(req, sameOrigin) {
   const key = sameOrigin ? coreKeyFor(req.url) : "";
@@ -394,8 +431,8 @@ async function handleAsset(req, sameOrigin) {
   try {
     const resp = await fetch(req, sameOrigin ? { cache: "no-store" } : undefined);
     if (resp) {
-      if (resp.ok && sameOrigin && !coreKeyFor(req.url)) {
-        try { (await ownCache()).put(req, resp.clone()); } catch (e) {}
+      if (resp.ok && sameOrigin && isRuntimeStaticAsset(req) && !coreKeyFor(req.url)) {
+        try { await (await ownCache()).put(req, resp.clone()); } catch (e) {}
       }
       return resp;
     }
@@ -415,14 +452,23 @@ function isBuildJSON(url) {
   return new URL(url).pathname.endsWith("/build.json");
 }
 
+function isBackendPath(url) {
+  const path = new URL(url).pathname;
+  return path === "/v1" || path.startsWith("/v1/")
+    || path === "/grpc" || path.startsWith("/grpc/")
+    || path === "/readyz" || path === "/healthz" || path === "/metrics";
+}
+
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
+  if (isBackendPath(req.url)) return;
   if (isBuildJSON(req.url)) return;
   if (req.mode === "navigate") {
     event.respondWith(handleNavigate(req));
     return;
   }
   const sameOrigin = new URL(req.url).origin === self.location.origin;
+  if (!sameOrigin || (!coreKeyFor(req.url) && !isRuntimeStaticAsset(req))) return;
   event.respondWith(handleAsset(req, sameOrigin));
 });

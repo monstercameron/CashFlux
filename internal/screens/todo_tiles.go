@@ -20,47 +20,29 @@ import (
 	"github.com/monstercameron/CashFlux/internal/taskchecklist"
 	"github.com/monstercameron/CashFlux/internal/tasksort"
 	"github.com/monstercameron/CashFlux/internal/tasktree"
+	"github.com/monstercameron/CashFlux/internal/taskview"
 	"github.com/monstercameron/CashFlux/internal/todoview"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/router"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/router"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 type todoSummaryProps struct{ App *appstate.App }
 type todoToolbarProps struct{ App *appstate.App }
 type todoListProps struct{ App *appstate.App }
 
-// todoCounts is the at-a-glance portfolio picture over ALL tasks (independent of the
-// current view filters): how many are open, overdue, done, and the completion percent.
-type todoCounts struct {
-	Open, Overdue, Done, Total, DonePct int
+type todoTreePage struct {
+	Nodes      []tasktree.Node
+	TotalRoots int
 }
 
-// computeTodoCounts reduces the task list to the summary counts. Overdue = an open task
-// whose due date is before today.
-func computeTodoCounts(tasks []domain.Task, now time.Time) todoCounts {
-	c := todoCounts{}
-	today := dateutil.FormatDate(now)
-	for _, t := range tasks {
-		if t.Status == domain.StatusDone {
-			c.Done++
-			continue
-		}
-		c.Open++
-		if !t.Due.IsZero() && dateutil.FormatDate(t.Due) < today {
-			c.Overdue++
-		}
-	}
-	c.Total = c.Open + c.Done
-	if c.Total > 0 {
-		c.DonePct = c.Done * 100 / c.Total
-	}
-	return c
-}
+// todoPageBuildObserver counts native page builds in focused host tests.
+// It is nil in production and does not retain any page data.
+var todoPageBuildObserver func()
 
 // --- todo-summary ----------------------------------------------------------------
 
@@ -70,10 +52,11 @@ func computeTodoCounts(tasks []domain.Task, now time.Time) todoCounts {
 func todoSummaryWidget(props todoSummaryProps) ui.Node {
 	_ = uistate.UseDataRevision().Get()
 	tasks := props.App.Tasks()
+	today := dateutil.FormatDate(time.Now())
+	c := taskSnapshot(props.App, today).Counts
 	if len(tasks) == 0 {
 		return Fragment()
 	}
-	c := computeTodoCounts(tasks, time.Now())
 
 	overdueTone := "budget-loader-value"
 	if c.Overdue > 0 {
@@ -227,32 +210,19 @@ func todoToolbarWidget(props todoToolbarProps) ui.Node {
 			{Title: uistate.T("todo.tmplQtrGoals")},
 		}, due)
 	}
-	// View switch (list / board / calendar) + the board's group-by. Fixed set of
-	// controls, so their handlers sit at stable hook positions (no loop).
-	setViewList := ui.UseEvent(Prevent(func() { view.Set(uistate.TodoViewList) }))
-	setViewBoard := ui.UseEvent(Prevent(func() { view.Set(uistate.TodoViewBoard) }))
-	setViewCal := ui.UseEvent(Prevent(func() { view.Set(uistate.TodoViewCalendar) }))
+	// The shared keyed control owns each choice's handler; the page owns state.
 	onBoardGroup := ui.UseEvent(func(e ui.Event) { boardGroup.Set(e.GetValue()) })
-	// Quick-view lens (All / Today / Overdue): three fixed buttons, so their handlers sit
-	// at stable hook positions (not a loop). Switching resets to page 1.
-	setQuickAll := ui.UseEvent(Prevent(func() { quickView.Set(string(tasksort.QuickAll)); page.Set(1) }))
-	setQuickToday := ui.UseEvent(Prevent(func() { quickView.Set(string(tasksort.QuickToday)); page.Set(1) }))
-	setQuickOverdue := ui.UseEvent(Prevent(func() { quickView.Set(string(tasksort.QuickOverdue)); page.Set(1) }))
 	curView := view.Get()
-	tvwCls := func(on bool) string {
-		if on {
-			return "tvw-btn is-active"
-		}
-		return "tvw-btn"
-	}
-	viewSwitch := Div(css.Class("todo-viewswitch"), Attr("role", "group"), Attr("aria-label", uistate.T("todo.viewLabel")),
-		Button(ClassStr(tvwCls(curView == uistate.TodoViewList)), Type("button"), Attr("data-testid", "todo-view-list"),
-			Attr("aria-pressed", ariaBool(curView == uistate.TodoViewList)), OnClick(setViewList), uistate.T("todo.viewList")),
-		Button(ClassStr(tvwCls(curView == uistate.TodoViewBoard)), Type("button"), Attr("data-testid", "todo-view-board"),
-			Attr("aria-pressed", ariaBool(curView == uistate.TodoViewBoard)), OnClick(setViewBoard), uistate.T("todo.viewBoard")),
-		Button(ClassStr(tvwCls(curView == uistate.TodoViewCalendar)), Type("button"), Attr("data-testid", "todo-view-calendar"),
-			Attr("aria-pressed", ariaBool(curView == uistate.TodoViewCalendar)), OnClick(setViewCal), uistate.T("todo.viewCalendar")),
-	)
+	viewSwitch := uiw.SegmentedControl(uiw.SegmentedControlProps{
+		Class: "todo-viewswitch", ButtonClass: "tvw-btn", ActiveClass: "is-active",
+		Label: uistate.T("todo.viewLabel"), Selected: curView,
+		Options: []uiw.SegmentOption{
+			{Key: uistate.TodoViewList, Label: uistate.T("todo.viewList"), TestID: "todo-view-list"},
+			{Key: uistate.TodoViewBoard, Label: uistate.T("todo.viewBoard"), TestID: "todo-view-board"},
+			{Key: uistate.TodoViewCalendar, Label: uistate.T("todo.viewCalendar"), TestID: "todo-view-calendar"},
+		},
+		OnSelect: func(value string) { view.Set(value) },
+	})
 	// The board group-by pill appears only in board view (irrelevant elsewhere).
 	var boardGroupCtrl ui.Node = Fragment()
 	if curView == uistate.TodoViewBoard {
@@ -270,22 +240,19 @@ func todoToolbarWidget(props todoToolbarProps) ui.Node {
 	// Quick-view segmented control (All / Today / Overdue), badged with how many open
 	// tasks are due today / past due. Shares the .todo-viewswitch chrome with the
 	// display-view switch so the two read as one system.
-	qc := tasksort.CountQuickViews(props.App.Tasks(), dateutil.FormatDate(time.Now()))
+	today := dateutil.FormatDate(time.Now())
+	qc := taskSnapshot(props.App, today).Counts
 	cq := tasksort.ParseQuickView(quickView.Get())
-	quickBadge := func(n int) ui.Node {
-		if n <= 0 {
-			return Fragment()
-		}
-		return Span(css.Class("tvw-count"), fmt.Sprintf("%d", n))
-	}
-	quickSwitch := Div(css.Class("todo-viewswitch"), Attr("role", "group"), Attr("aria-label", uistate.T("todo.lensLabel")),
-		Button(ClassStr(tvwCls(cq == tasksort.QuickAll)), Type("button"), Attr("data-testid", "todo-quick-all"),
-			Attr("aria-pressed", ariaBool(cq == tasksort.QuickAll)), OnClick(setQuickAll), uistate.T("todo.lensAll")),
-		Button(ClassStr(tvwCls(cq == tasksort.QuickToday)), Type("button"), Attr("data-testid", "todo-quick-today"),
-			Attr("aria-pressed", ariaBool(cq == tasksort.QuickToday)), OnClick(setQuickToday), uistate.T("todo.lensToday"), quickBadge(qc.Today)),
-		Button(ClassStr(tvwCls(cq == tasksort.QuickOverdue)+" is-overdue"), Type("button"), Attr("data-testid", "todo-quick-overdue"),
-			Attr("aria-pressed", ariaBool(cq == tasksort.QuickOverdue)), OnClick(setQuickOverdue), uistate.T("todo.lensOverdue"), quickBadge(qc.Overdue)),
-	)
+	quickSwitch := uiw.SegmentedControl(uiw.SegmentedControlProps{
+		Class: "todo-viewswitch", ButtonClass: "tvw-btn", ActiveClass: "is-active", CountClass: "tvw-count",
+		Label: uistate.T("todo.lensLabel"), Selected: string(cq),
+		Options: []uiw.SegmentOption{
+			{Key: string(tasksort.QuickAll), Label: uistate.T("todo.lensAll"), TestID: "todo-quick-all"},
+			{Key: string(tasksort.QuickToday), Label: uistate.T("todo.lensToday"), TestID: "todo-quick-today", Count: qc.Today, ShowCount: qc.Today > 0},
+			{Key: string(tasksort.QuickOverdue), Label: uistate.T("todo.lensOverdue"), TestID: "todo-quick-overdue", Class: "is-overdue", Count: qc.Overdue, ShowCount: qc.Overdue > 0},
+		},
+		OnSelect: func(value string) { quickView.Set(value); page.Set(1) },
+	})
 
 	hideLabel := uistate.T("todo.hideDone")
 	if hideDone.Get() {
@@ -572,14 +539,10 @@ func todoListWidget(props todoListProps) ui.Node {
 	}))
 
 	tasks := app.Tasks()
-	accounts := app.Accounts()
-	budgets := app.Budgets()
-	goals := app.Goals()
-	txns := app.Transactions()
-	byID := make(map[string]domain.Task, len(tasks))
-	for _, t := range tasks {
-		byID[t.ID] = t
-	}
+	members := app.Members()
+	today := dateutil.FormatDate(time.Now())
+	snapshot := taskSnapshot(app, today)
+	byID, counts, childStats := snapshot.ByID, snapshot.Counts, snapshot.Children
 
 	toggleTask := func(taskID string) {
 		t, ok := byID[taskID]
@@ -603,11 +566,8 @@ func todoListWidget(props todoListProps) ui.Node {
 	}
 	deleteTask := func(taskID string) {
 		name := uistate.T("todo.thisTask")
-		for _, t := range tasks {
-			if t.ID == taskID && t.Title != "" {
-				name = t.Title
-				break
-			}
+		if task, ok := byID[taskID]; ok && task.Title != "" {
+			name = task.Title
 		}
 		uistate.ConfirmModal(uistate.T("todo.deleteConfirm", name), true, func(ok bool) {
 			if !ok {
@@ -631,62 +591,32 @@ func todoListWidget(props todoListProps) ui.Node {
 		uistate.SetAddTarget("task")
 	}
 
-	// Order + filter, then nest into the parent/child tree (C72). hide-done filters
-	// first so a done parent's open child surfaces as a root; the priority filter runs
-	// after so the two cooperate.
-	filtered := tasksort.Visible(tasks, hideDone.Get())
-	if p := domain.TaskPriority(filterPrio.Get()); p.Valid() {
-		kept := filtered[:0:0]
-		for _, t := range filtered {
-			if t.Priority == p {
-				kept = append(kept, t)
-			}
-		}
-		filtered = kept
+	// All display modes share the same tested, single-pass flat filter. Nesting
+	// and root pagination happen afterward so filtered parents never hide children.
+	filter := taskview.Filter{
+		HideDone: hideDone.Get(), Priority: domain.TaskPriority(filterPrio.Get()),
+		Search: searchAtom.Get(), Link: linkAtom.Get(), LinkID: linkIDAtom.Get(),
+		Quick: tasksort.ParseQuickView(quickViewAtom.Get()), TodayISO: today,
 	}
-	// Free-text search over title + notes (case-insensitive). Like the other filters it runs
-	// on the flat list before tree nesting, so a matching child surfaces as a root.
-	if q := strings.ToLower(strings.TrimSpace(searchAtom.Get())); q != "" {
-		kept := filtered[:0:0]
-		for _, t := range filtered {
-			if strings.Contains(strings.ToLower(t.Title), q) || strings.Contains(strings.ToLower(t.Notes), q) {
-				kept = append(kept, t)
-			}
+	revisionKey := revKey(app)
+	filtered := ui.UseMemo(func() []domain.Task { return taskview.Select(tasks, filter) },
+		revisionKey, filter.HideDone, string(filter.Priority), filter.Search, filter.Link, filter.LinkID, string(filter.Quick), today)
+	// Keep the hook registered in every view, while only List builds a task tree.
+	// Selection, drag and error state change presentation without changing this
+	// native result. Collapse maps are replaced by ToggleTodoCollapsed, never edited.
+	collapsedSet := collapsed.Get()
+	todoPageSize := pageSizeAtom.Get()
+	listMode := viewAtom.Get() != uistate.TodoViewBoard && viewAtom.Get() != uistate.TodoViewCalendar
+	treePage := ui.UseMemo(func() todoTreePage {
+		if !listMode {
+			return todoTreePage{}
 		}
-		filtered = kept
-	}
-	// Linked-feature filter: tasks tied to goals/budgets/accounts, only unlinked ones, or all.
-	if lf := linkAtom.Get(); lf != uistate.TodoLinkAll {
-		kept := filtered[:0:0]
-		for _, t := range filtered {
-			linked := t.RelatedID != "" && t.RelatedType != "" && t.RelatedType != domain.RelatedNone
-			var match bool
-			if lf == uistate.TodoLinkNone {
-				match = !linked
-			} else {
-				match = linked && string(t.RelatedType) == lf
-			}
-			if match {
-				kept = append(kept, t)
-			}
+		if todoPageBuildObserver != nil {
+			todoPageBuildObserver()
 		}
-		filtered = kept
-	}
-	// Specific-entity narrowing: a deep-link from e.g. a budget card's to-do panel filters
-	// to just that budget's follow-ups (on top of the link-type filter above).
-	if id := linkIDAtom.Get(); id != "" {
-		kept := filtered[:0:0]
-		for _, t := range filtered {
-			if t.RelatedID == id {
-				kept = append(kept, t)
-			}
-		}
-		filtered = kept
-	}
-	// Quick-view lens (All / Today / Overdue): a coarse date narrowing to open tasks due
-	// today or past due, applied like the other filters before tree nesting (so a matching
-	// child surfaces as a root) and to every view projection below.
-	filtered = tasksort.FilterQuickView(filtered, tasksort.ParseQuickView(quickViewAtom.Get()), dateutil.FormatDate(time.Now()))
+		nodes, roots := tasktree.Page(filtered, tasksort.ParseMode(sortMode.Get()), pageAtom.Get(), todoPageSize, collapsedSet)
+		return todoTreePage{Nodes: nodes, TotalRoots: roots}
+	}, listMode, filtered, len(filtered), revisionKey, filter, tasksort.ParseMode(sortMode.Get()), pageAtom.Get(), todoPageSize, collapsedSet)
 
 	// Board / calendar views are alternate projections of the SAME filtered set (search +
 	// priority + link + hide-done all still apply). They don't paginate or nest, so they
@@ -755,13 +685,8 @@ func todoListWidget(props todoListProps) ui.Node {
 		return wrapTodoList(Fragment(errNode, cal))
 	}
 
-	// Direct-children tally (over ALL tasks, ignoring view filters) for the collapsible
-	// parent summary, plus the collapsed set that prunes hidden sub-trees.
-	childStats := tasktree.ChildStats(tasks)
-	collapsedSet := collapsed.Get()
-	// Paginate by ROOT task (sub-trees stay together), ordered by the chosen sort mode.
-	todoPageSize := pageSizeAtom.Get()
-	nodes, totalRoots := tasktree.Page(filtered, tasksort.ParseMode(sortMode.Get()), pageAtom.Get(), todoPageSize, collapsedSet)
+	// Native pagination keeps every descendant on its root's page, in native order.
+	nodes, totalRoots := treePage.Nodes, treePage.TotalRoots
 	curPage := pagination.Clamp(pageAtom.Get(), totalRoots, todoPageSize)
 
 	// Drag-to-reorder is live only in "Custom order"; a drop asks appstate to move the
@@ -968,10 +893,12 @@ func todoListWidget(props todoListProps) ui.Node {
 			func(n tasktree.Node) any { return n.Task.ID },
 			func(n tasktree.Node) ui.Node {
 				st := childStats[n.Task.ID]
+				linkName, linkFound := snapshot.EntityName(n.Task.RelatedType, n.Task.RelatedID)
+				memberName, memberFound := snapshot.MemberNames[n.Task.MemberID]
 				return ui.CreateElement(TaskRow, taskRowProps{
 					Task: n.Task, Depth: n.Depth,
 					OnToggle: toggleTask, OnDelete: deleteTask, OnAddSub: addSub,
-					Accounts: accounts, Budgets: budgets, Goals: goals, Transactions: txns,
+					LinkName: linkName, LinkFound: linkFound, MemberName: memberName, MemberFound: memberFound,
 					ChildTotal: st.Total, ChildDone: st.Done,
 					Collapsed: collapsedSet[n.Task.ID], OnToggleCollapse: toggleCollapse,
 					Draggable:   manualMode,
@@ -990,8 +917,8 @@ func todoListWidget(props todoListProps) ui.Node {
 	// work so it doesn't feel lost (mirrors the Transactions filter-summary pattern).
 	var hiddenDoneNote ui.Node = Fragment()
 	if hideDone.Get() {
-		if c := computeTodoCounts(tasks, time.Now()); c.Done > 0 {
-			hiddenDoneNote = P(css.Class("empty", tw.TextDim), uistate.T("todo.hiddenDone", c.Done))
+		if counts.Done > 0 {
+			hiddenDoneNote = P(css.Class("empty", tw.TextDim), uistate.T("todo.hiddenDone", counts.Done))
 		}
 	}
 
@@ -1018,7 +945,7 @@ func todoListWidget(props todoListProps) ui.Node {
 		Active:      selectMode.Get(),
 		Count:       len(selected.Get()),
 		HasRows:     len(nodes) > 0,
-		Members:     app.Members(),
+		Members:     members,
 		UndoCount:   len(undoTasks.Get()),
 		UndoLabel:   undoLabel.Get(),
 		OnEnter:     enterSelectMode,

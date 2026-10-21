@@ -9,6 +9,8 @@ package app
 import (
 	"encoding/json"
 	"strings"
+
+	"github.com/monstercameron/CashFlux/internal/store"
 )
 
 // connectionPrefKeys are the fields of cashflux:prefs that describe THIS
@@ -94,4 +96,16 @@ func stripDatasetConnectionPrefs(settings map[string]string) bool {
 		settings[prefsStoreKey] = clean
 	}
 	return true
+}
+
+// stripDatasetDeviceSecrets is the final outgoing-snapshot boundary. Queue
+// replay and explicit server-copy replacement both pass through it, including
+// older datasets that may still carry a device-scoped OpenAI key.
+func stripDatasetDeviceSecrets(ds *store.Dataset) bool {
+	changed := stripDatasetConnectionPrefs(ds.SettingsKV)
+	if ds.Settings.OpenAIKey != "" {
+		ds.Settings.OpenAIKey = ""
+		changed = true
+	}
+	return changed
 }

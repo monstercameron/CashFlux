@@ -34,8 +34,28 @@ func RunwayMonths(p domain.Plan) (months float64, depletes bool) {
 
 	curve := Project(p) // end-of-month balances, len == HorizonMonths
 
+	return runwayFromCurve(p.StartBalance, curve)
+}
+
+// RunwayMonthsChecked uses the checked curve and the same within-month linear
+// interpolation as RunwayMonths. A projection error is never treated as either
+// immediate depletion or a balance that stays positive.
+func RunwayMonthsChecked(p domain.Plan) (months float64, depletes bool, err error) {
+	curve, err := ProjectChecked(p)
+	if err != nil {
+		return 0, false, err
+	}
+	months, depletes = runwayFromCurve(p.StartBalance, curve)
+	return months, depletes, nil
+}
+
+func runwayFromCurve(start int64, curve []int64) (float64, bool) {
+	if len(curve) == 0 {
+		return 0, false
+	}
+
 	// Treat the starting balance as the balance at month 0 (before any flows).
-	prev := p.StartBalance
+	prev := start
 
 	// Special case: already at or below zero with nothing going up.
 	if prev <= 0 {

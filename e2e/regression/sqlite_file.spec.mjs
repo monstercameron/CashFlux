@@ -58,23 +58,14 @@ async function importFile(app, buttonName, file) {
 }
 
 /**
- * How many transactions the household holds, read from the persisted dataset.
- *
- * Deliberately not counted off the ledger screen. What this spec is testing is
- * data moving in and out of a file, and routing a heavyweight screen in and out
- * on every check would make the test's slowest, flakiest part the one thing it
- * is not about.
+ * Count visible transaction rows. The protected dataset checkpoint is encrypted
+ * in browser storage, so its raw JSON is no longer a valid transaction oracle.
  */
 async function transactionCount(app) {
-  return app.evaluate(() => {
-    const raw = window.cashfluxStoreGet?.("cashflux:dataset");
-    if (!raw) return -1;
-    try {
-      return (JSON.parse(raw).transactions || []).length;
-    } catch {
-      return -1;
-    }
-  });
+  if (await app.locator('#main[data-route="/transactions"]').count() === 0) {
+    await nav(app, "/transactions");
+  }
+  return app.locator('tr[data-testid^="txn-row-"]').count();
 }
 
 test.describe("SQLite database file export and import", () => {
@@ -85,6 +76,7 @@ test.describe("SQLite database file export and import", () => {
   }) => {
     test.setTimeout(180_000);
 
+    await expect.poll(() => transactionCount(app), { timeout: 30_000 }).toBeGreaterThan(0);
     const before = await transactionCount(app);
     expect(before).toBeGreaterThan(0); // the sample household seeds rows
 
@@ -108,14 +100,15 @@ test.describe("SQLite database file export and import", () => {
     expect(bytes.includes(Buffer.from("transactions"))).toBe(true);
 
     // ── Wipe, so the import has something to prove ────────────────────────
-    // The wipe reloads the page once the clean slate is durable, so wait for the
-    // app to come back up before touching it again — anything else races a
-    // destroyed execution context rather than testing the import.
+    // Whole-device erasure runs on its own page after the app releases its
+    // databases. Reopen explicitly after its verified completion.
     await openDataTab(app);
     await app.getByRole("button", { name: "Wipe data" }).click();
     const erase = app.getByRole("button", { name: "Erase everything" });
     await expect(erase).toBeVisible();
-    await Promise.all([app.waitForLoadState("load"), erase.click()]);
+    await erase.click();
+    await expect(app.getByRole("heading", { name: "This device has been erased" })).toBeVisible({ timeout: 30_000 });
+    await app.getByRole("link", { name: "Open CashFlux" }).click();
     await waitForAppReady(app);
     await expect
       .poll(async () => transactionCount(app), { timeout: 30_000 })
@@ -131,6 +124,7 @@ test.describe("SQLite database file export and import", () => {
     const replace = app.getByRole("button", { name: "Replace all data" });
     await expect(replace).toBeVisible();
     await replace.click();
+    await expect(app.getByText("Imported your database.", { exact: true })).toBeVisible({ timeout: 30_000 });
 
     await expect
       .poll(async () => transactionCount(app), { timeout: 30_000 })
@@ -142,6 +136,7 @@ test.describe("SQLite database file export and import", () => {
   }) => {
     test.setTimeout(120_000);
 
+    await expect.poll(() => transactionCount(app), { timeout: 30_000 }).toBeGreaterThan(0);
     const before = await transactionCount(app);
     expect(before).toBeGreaterThan(0);
 

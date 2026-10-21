@@ -9,8 +9,8 @@
 package ui
 
 import (
-	sh "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	uic "github.com/monstercameron/GoWebComponents/v5/ui"
+	sh "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	uic "github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // SelectOption and OptionsFrom are defined in select_pure.go (no build tag) so

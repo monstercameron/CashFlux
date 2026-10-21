@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall/js"
 	"time"
 
@@ -20,13 +21,15 @@ import (
 	"github.com/monstercameron/CashFlux/internal/anomalyattrib"
 	"github.com/monstercameron/CashFlux/internal/anomalyprobe"
 	"github.com/monstercameron/CashFlux/internal/appstate"
-	"github.com/monstercameron/CashFlux/internal/budgeting"
+	"github.com/monstercameron/CashFlux/internal/assistantloop"
+	"github.com/monstercameron/CashFlux/internal/assistantview"
 	"github.com/monstercameron/CashFlux/internal/chatpolish"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/flagverdict"
+	"github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/insights"
@@ -40,11 +43,50 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/router"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/router"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
+
+type assistantChatTransportFunc func(
+	useBackend bool, serverURL, serverToken, key, baseURL, model string,
+	messages []ai.Message, temperature float64, effort string, tools []ai.Tool,
+	onDelta func(string), onResult func(ai.Message, ai.Usage), onError func(string),
+) func()
+
+type assistantTitleTransportFunc func(
+	useBackend bool, serverURL, serverToken, key, baseURL, model string,
+	messages []ai.Message, onResult func(string, ai.Usage), onError func(string),
+) func()
+
+const (
+	assistantRelayMaxMessages = 64
+	assistantRelayMaxBytes    = 256 * 1024
+)
+
+// assistantChatTransport is replaceable by same-package host tests so lifecycle
+// behavior can be exercised without credentials or external provider requests.
+var assistantChatTransport assistantChatTransportFunc = func(
+	useBackend bool, serverURL, serverToken, key, baseURL, model string,
+	messages []ai.Message, temperature float64, effort string, tools []ai.Tool,
+	onDelta func(string), onResult func(ai.Message, ai.Usage), onError func(string),
+) func() {
+	if useBackend {
+		return ai.SendProxyChatToolsStreaming(serverURL, serverToken, model, messages, temperature, effort, tools, onDelta, onResult, onError)
+	}
+	return ai.SendResponsesChatToolsStreaming(key, baseURL, model, messages, temperature, effort, tools, onDelta, onResult, onError)
+}
+
+var assistantTitleTransport assistantTitleTransportFunc = func(
+	useBackend bool, serverURL, serverToken, key, baseURL, model string,
+	messages []ai.Message, onResult func(string, ai.Usage), onError func(string),
+) func() {
+	if useBackend {
+		return ai.SendProxyChat(serverURL, serverToken, model, messages, 0, onResult, onError)
+	}
+	return ai.SendChat(key, baseURL, model, messages, 0, onResult, onError)
+}
 
 // Insights is AI analysis (OpenAI, client-side, bring-your-own-key): an
 // "Explain my month" narrative generated from the user's live figures.
@@ -56,6 +98,7 @@ func Insights() ui.Node {
 		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("common.notReady"))})
 	}
 
+	dataRevision := uistate.UseDataRevision().Get()
 	settings := app.Settings()
 	key := settings.OpenAIKey
 	// AG18: resolve the effective endpoint — a user-supplied OpenAI-compatible base
@@ -69,11 +112,11 @@ func Insights() ui.Node {
 	// MIA-extend (#445-9): read the active scope at a stable hook slot so all
 	// spend calcs below can be pre-filtered consistently.
 	insightsScopeAtom := uistate.UseActiveScope()
-	useBackendAI := uistate.BackendConnectionActive(pr)
+	useBackendAI := uistate.BackendAIActive(pr)
 	// Model + thinking level are adjustable inline from the assistant header (a quick
 	// switch, no trip to Settings). Seed from the saved settings; picks persist back so
-	// they stick and stay in sync with Settings. modelList is populated live from
-	// OpenAI's /v1/models when a key is set (falls back to the built-in defaults).
+	// they stick and stay in sync with Settings. The list comes from the selected
+	// AI route and falls back to built-in defaults while loading or offline.
 	initModel := settings.OpenAIModel
 	if initModel == "" {
 		initModel = "gpt-5.4-mini"
@@ -82,11 +125,16 @@ func Insights() ui.Node {
 	effortSel := ui.UseState(settings.OpenAIReasoningEffort)
 	modelList := ui.UseState([]string{})
 	ui.UseEffect(func() func() {
+		modelList.Set(nil)
+		if useBackendAI {
+			return ai.FetchProxyModels(pr.ServerURL, uistate.EffectiveServerToken(pr.ServerToken),
+				func(ids []string) { modelList.Set(ids) }, func(string) {})
+		}
 		if k := strings.TrimSpace(settings.OpenAIKey); k != "" {
-			ai.FetchModels(k, aiBaseURL, func(ids []string) { modelList.Set(ids) }, func(string) {})
+			return ai.FetchModels(k, aiBaseURL, func(ids []string) { modelList.Set(ids) }, func(string) {})
 		}
 		return nil
-	}, "")
+	}, useBackendAI, pr.ServerURL, pr.ServerToken, settings.OpenAIKey, aiBaseURL)
 	pickEffort := func(v string) {
 		effortSel.Set(v)
 		s := app.Settings()
@@ -124,111 +172,43 @@ func Insights() ui.Node {
 	// reflect the user's chosen scope. Household NW stays unscoped — it is an
 	// account-level aggregate and the scoped tile lives on the dashboard.
 	insightsSc := insightsScopeAtom.Get()
-	insightsInstOf := func(a domain.Account) string { return a.Institution }
-	insightsIDs := scope.ResolveScope(accounts, insightsSc, insightsInstOf)
-	scopedTxns := scope.ApplyScopeToTxns(txns, insightsIDs)
-	net, _, _, _ := ledger.NetWorth(accounts, txns, rates)
-	mStart, mEnd := dateutil.MonthRange(time.Now())
-	income, expense, _ := ledger.PeriodTotals(scopedTxns, mStart, mEnd, rates)
+	scopeKey := fmt.Sprintf("%#v", insightsSc)
+	scopedTxns := ui.UseMemo(func() []domain.Transaction {
+		ids := scope.ResolveScope(accounts, insightsSc, func(a domain.Account) string { return a.Institution })
+		return scope.ApplyScopeToTxns(txns, ids)
+	}, app, app.Rev(), dataRevision, scopeKey)
+	now := time.Now()
+	mStart, mEnd := dateutil.MonthRange(now)
+	netWorth := useNetWorth(app, accounts, txns, rates)
+	totals := usePeriodTotals(app, scopedTxns, mStart, mEnd, rates, scopeKey)
 	active := 0
 	for _, a := range accounts {
 		if !a.Archived {
 			active++
 		}
 	}
-	// The only financial data sent to the model: aggregates, no PII (see ai.FinancialContext).
-	aiCtx := ai.FinancialContext{NetWorth: fmtMoney(net), Income: fmtMoney(income), Spending: fmtMoney(expense), Accounts: active}
+	incomeText, expenseText := uistate.T("calculation.unavailable"), uistate.T("calculation.unavailable")
+	if totals.Known {
+		incomeText, expenseText = fmtMoney(totals.Income), fmtMoney(totals.Expense)
+	}
+	aiCtx := ai.FinancialContext{NetWorth: netWorthContext(netWorth), Income: incomeText, Spending: expenseText, Accounts: active}
 
-	// Starter questions for the Ask box (L8): tailored to the user's live data so
-	// a blank box never stalls them — top spend category, a near-limit budget, and
-	// a near-target goal (C59: fuller context means more useful starter questions).
-	// Starter questions are derived from three full-dataset scans (top spend
-	// category, nearest-limit budget, soonest goal). They're pure over the data +
-	// scope + month, so memoize them: the chat page re-renders on every keystroke,
-	// send, and effect, and recomputing these each time (a topCatSpend scan of every
-	// transaction + budget evaluation + a goals pass) was pure waste.
+	// Typing and chat effects reuse the same scoped snapshot and question facts.
+	// Day is a dependency because budget cadence and upcoming goals can change
+	// without a store mutation while this conversation remains mounted.
 	starters := ui.UseMemo(func() []string {
-		topCatSpend := map[string]int64{}
-		for _, t := range scopedTxns {
-			if t.IsExpense() && dateutil.InRange(t.Date, mStart, mEnd) {
-				if conv, err := rates.Convert(t.Amount.Abs(), base); err == nil {
-					topCatSpend[t.CategoryID] += conv.Amount
-				}
-			}
+		facts := assistantview.Questions(scopedTxns, app.Categories(), budgetStatusesAt(app, now), app.Goals(), rates, mStart, mEnd, now, goals.BuildTaskIndex(app.Tasks()))
+		ctx := insights.QuestionContext{
+			TopCategory: facts.TopCategory, NearLimitBudget: facts.NearLimitBudget,
+			UpcomingGoal: facts.UpcomingGoal, OverBudgetCount: facts.OverBudgetCount,
+			UncategorizedCount: facts.UncategorizedCount,
 		}
-		topCat := ""
-		var topAmt int64
-		for _, c := range app.Categories() { // category order → deterministic on ties
-			if topCatSpend[c.ID] > topAmt {
-				topAmt, topCat = topCatSpend[c.ID], c.Name
-			}
+		if facts.LargestExpenseMinor > 0 {
+			ctx.LargestExpensePayee = txnDisplayPayee(facts.LargestExpense)
+			ctx.LargestExpenseAmount = insightsMoneyFmt(facts.LargestExpenseMinor, base)
 		}
-
-		budgetStatuses := budgetStatusesAt(app, time.Now())
-
-		// Near-limit budget: the budget closest to (or over) its limit in its own period.
-		nearLimitBudget := ""
-		for _, s := range budgetStatuses {
-			if s.State == budgeting.StateNear || s.State == budgeting.StateOver {
-				nearLimitBudget = s.Budget.Name
-				break // first near/over budget in the view order
-			}
-		}
-
-		// Upcoming goal: the active goal with the nearest non-zero target date.
-		upcomingGoal := ""
-		now := time.Now()
-		var soonest time.Time
-		for _, g := range app.Goals() {
-			if g.Archived || g.TargetDate.IsZero() || !g.TargetDate.After(now) {
-				continue
-			}
-			if soonest.IsZero() || g.TargetDate.Before(soonest) {
-				soonest = g.TargetDate
-				upcomingGoal = g.Name
-			}
-		}
-
-		// EC-16: the situational half — what is true about the data RIGHT NOW, so
-		// the first chip names something real rather than asking a reasonable
-		// question in general.
-		overBudgets, uncategorized := 0, 0
-		for _, st := range budgetStatuses {
-			if st.State == budgeting.StateOver {
-				overBudgets++
-			}
-		}
-		var largestPayee, largestAmount string
-		var largestMinor int64
-		for _, t := range scopedTxns {
-			if !dateutil.InRange(t.Date, mStart, mEnd) {
-				continue
-			}
-			if t.CategoryID == "" && t.IsExpense() && !t.IsTransfer() {
-				uncategorized++
-			}
-			if !t.IsExpense() || t.IsTransfer() {
-				continue
-			}
-			amount := t.Amount.Abs()
-			if conv, err := rates.Convert(amount, base); err == nil {
-				amount = conv
-			}
-			if amount.Amount > largestMinor {
-				largestMinor, largestPayee = amount.Amount, txnDisplayPayee(t)
-				largestAmount = insightsMoneyFmt(amount.Amount, base)
-			}
-		}
-		return insights.SuggestedQuestions(insights.QuestionContext{
-			TopCategory:          topCat,
-			NearLimitBudget:      nearLimitBudget,
-			UpcomingGoal:         upcomingGoal,
-			OverBudgetCount:      overBudgets,
-			UncategorizedCount:   uncategorized,
-			LargestExpensePayee:  largestPayee,
-			LargestExpenseAmount: largestAmount,
-		})
-	}, app.Rev(), fmt.Sprintf("%v", insightsSc), mStart.Unix(), pr.WeekStart, pr.PayCycleAnchor, pr.BudgetRolloverLeftover)
+		return insights.SuggestedQuestions(ctx)
+	}, app, app.Rev(), dataRevision, scopeKey, now.Format("2006-01-02"), pr.WeekStart, pr.PayCycleAnchor, pr.BudgetRolloverLeftover)
 
 	// The no-key hint is a clear call to action that hops to Settings (where the AI
 	// key lives), not a dead-end sentence (C59; same fix as C54). Built fresh per
@@ -249,6 +229,7 @@ func Insights() ui.Node {
 	// The Insights screen is a chat with the CashFlux assistant (C82 wiring): a
 	// conversation thread the user types into, answered from their own figures.
 	turns := ui.UseState([]chatTurn{})
+	persistTransition := ui.UseRef(false)
 	// The composer is deliberately NOT bound to a state that changes per keystroke.
 	//
 	// `value` is a special property the reconciler always writes, and it diffs the
@@ -320,17 +301,13 @@ func Insights() ui.Node {
 	errMsg := ui.UseState("")
 	rev := ui.UseState(0)
 	bump := func() { rev.Set(rev.Get() + 1) }
-	var noCancel func()
-	cancelFn := ui.UseState(noCancel)
-	cancelAI := ui.UseEvent(func() {
-		if c := cancelFn.Get(); c != nil {
-			c()
-		}
-		loading.Set(false)
-	})
+	sessionState := ui.UseState((*assistantloop.Session)(nil))
 	// The conversation this thread belongs to ("" = a new, unsaved chat). convCreated
 	// preserves the original timestamp across saves; inited guards the one-time load.
 	convID := ui.UseState("")
+	// A not-yet-created conversation still has a selectable per-chat cap. Keep it
+	// locally until the first request gives that conversation its durable identity.
+	blankBudget := ui.UseState(0)
 	convCreated := ui.UseState(time.Time{})
 	inited := ui.UseState(false)
 	// Editable system prompt (persona/instructions) — the live data context is always
@@ -344,6 +321,24 @@ func Insights() ui.Node {
 	// The answer currently being written, fragment by fragment (G2-C7). Empty
 	// between turns.
 	streaming := ui.UseState("")
+	cancelCurrentSession := func() {
+		if current := sessionState.Get(); current != nil {
+			current.Cancel()
+		}
+		sessionState.Set(nil)
+		pendingApproval.Set(nil)
+		loading.Set(false)
+		streaming.Set("")
+	}
+	cancelAI := ui.UseEvent(func() { cancelCurrentSession() })
+	ui.UseEffect(func() func() {
+		return func() {
+			if current := sessionState.Get(); current != nil {
+				current.Cancel()
+			}
+			pendingApproval.Set(nil)
+		}
+	}, "assistant-session-owner")
 
 	// C390: picking a model sticks to THIS conversation as well as to the household
 	// default, so returning to a long analytical thread does not quietly continue it
@@ -359,7 +354,13 @@ func Insights() ui.Node {
 	// pickBudget caps what this conversation may spend in total. It is a per-chat
 	// decision, not a global one: "don't let this exploration run away" is a
 	// different thing from "cap my month".
-	pickBudget := func(tokens int) { uistate.SetAgentBudget(convID.Get(), tokens) }
+	pickBudget := func(tokens int) {
+		if convID.Get() == "" {
+			blankBudget.Set(tokens)
+			return
+		}
+		uistate.SetAgentBudget(convID.Get(), tokens)
+	}
 
 	// railReady defers the periphery rail's heavy detectors (spend-anomaly + the four
 	// SMART anomaly detectors, each a full-transaction scan) to just after first paint.
@@ -368,16 +369,9 @@ func Insights() ui.Node {
 	// frame later. The hooks below stay unconditional (rule of hooks); only the work
 	// inside them is gated.
 	railReady := ui.UseState(false)
-	ui.UseEffect(func() func() {
-		if !railReady.Get() {
-			// Fill the rail once the page has settled — after first paint AND the 160ms
-			// route cross-fade (var(--wonder-dur)), so the deferred re-render doesn't
-			// abort the entrance transition. A Go timer keeps the primary chat
-			// interactive immediately; the secondary rail loads a beat later.
-			time.AfterFunc(300*time.Millisecond, func() { railReady.Set(true) })
-		}
-		return nil
-	}, "rail-defer-once")
+	// Fill the rail after first paint and the 160ms route cross-fade. The managed
+	// browser timer runs on the UI goroutine and is cancelled if this page unmounts.
+	ui.UseTimeout(func() { railReady.Set(true) }, 300*time.Millisecond, "rail-defer-once")
 
 	// pinText saves an answer to the pinned-insights list. (Saving an answer as a
 	// To-do is no longer a UI button — it becomes an agent tool the model invokes
@@ -403,7 +397,7 @@ func Insights() ui.Node {
 	// persona/instructions prompt, then a live data-context system message (aggregates
 	// + the user's category names + a directive to call tools for any specific figure),
 	// then the conversation so far.
-	buildMessages := func(hist []chatTurn) []ai.Message {
+	buildMessages := func(hist []chatTurn) ([]ai.Message, int, int) {
 		persona := strings.TrimSpace(uistate.LoadSystemPrompt())
 		if persona == "" {
 			persona = defaultChatSystemPrompt
@@ -431,6 +425,8 @@ func Insights() ui.Node {
 		if mem := uistate.LoadAgentMemory().Prompt(); mem != "" {
 			msgs = append(msgs, ai.Message{Role: ai.RoleSystem, Content: mem})
 		}
+		prefixCount := len(msgs)
+		currentStart := len(msgs)
 		for _, t := range hist {
 			role := ai.RoleUser
 			if t.Role == "assistant" {
@@ -438,22 +434,20 @@ func Insights() ui.Node {
 			}
 			msgs = append(msgs, ai.Message{Role: role, Content: t.Text})
 		}
-		return msgs
+		if len(hist) > 0 {
+			currentStart = len(msgs) - 1
+		}
+		return msgs, prefixCount, currentStart
 	}
 
 	// sendTools dispatches one model turn. Both paths advertise the same tools: the
 	// direct key goes straight to OpenAI, the shared server key goes through the
 	// backend proxy, and neither is the weaker assistant (C551).
-	sendTools := func(messages []ai.Message, tools []ai.Tool, onDelta func(string), onResult func(ai.Message, ai.Usage), onErr func(string)) func() {
-		if useBackendAI {
-			return ai.SendProxyChatToolsStreaming(pr.ServerURL, uistate.EffectiveServerToken(pr.ServerToken), model, messages, chatTemp, chatEffort, tools, onDelta, onResult, onErr)
-		}
-		// Route the tool loop through the Responses API: it's the only endpoint that
-		// accepts reasoning.effort together with function tools for the reasoning models
-		// (gpt-5.x / o-series), so the thinking level actually works instead of being
-		// rejected by /chat/completions. Streaming rides the same endpoint, so both
-		// paths show the answer being written (G2-C7).
-		return ai.SendResponsesChatToolsStreaming(key, aiBaseURL, model, messages, chatTemp, chatEffort, tools, onDelta, onResult, onErr)
+	sendTools := func(requestModel string, messages []ai.Message, tools []ai.Tool, onDelta func(string), onResult func(ai.Message, ai.Usage), onErr func(string)) func() {
+		// The real direct path uses Responses because it accepts reasoning effort
+		// together with function tools; both paths keep streaming enabled.
+		return assistantChatTransport(useBackendAI, pr.ServerURL, uistate.EffectiveServerToken(pr.ServerToken), key, aiBaseURL, requestModel,
+			messages, chatTemp, chatEffort, tools, onDelta, onResult, onErr)
 	}
 
 	// run drives the bounded tool-calling loop: ask the model; if it requests tools,
@@ -461,43 +455,107 @@ func Insights() ui.Node {
 	// step cap is hit). It runs in a goroutine, blocking on a channel per turn (Go
 	// wasm schedules cooperatively, so the fetch callback resumes it). Turns are set
 	// deterministically to the sent history + reply (the stale-base fix), and a shared
-	// done channel lets Cancel unblock the loop.
+	// assistantloop session lets cancellation unblock the loop and rejects late callbacks.
 	run := func(hist []chatTurn) {
+		cancelCurrentSession()
+		requestModel := modelSel.Get()
+		if requestModel == "" {
+			requestModel = model
+		}
+		conversationID := convID.Get()
+		if conversationID == "" {
+			conversationID = id.New()
+			convID.Set(conversationID)
+			convCreated.Set(time.Now())
+		}
+		// A render caused by turns.Set in onSubmit may persist the first user
+		// message, and allocate convID, before this handler reaches run. Transfer
+		// blank-chat preferences after ID resolution so both scheduling orders
+		// bind them to the same conversation before budget enforcement.
+		if requestModel != "" && uistate.AgentModel(conversationID) == "" {
+			uistate.SetAgentModel(conversationID, requestModel)
+		}
+		if budget := blankBudget.Get(); budget > 0 {
+			uistate.SetAgentBudget(conversationID, budget)
+			blankBudget.Set(0)
+		}
 		errMsg.Set("")
 		// C390: a spent budget stops the conversation BEFORE the call, not after.
 		// A cap that only notices it was exceeded once the tokens are gone is a
 		// receipt, not a budget. The message says how to carry on, because the cap
 		// is the user's own and they are allowed to change their mind.
-		if uistate.AgentBudgetExhausted(convID.Get()) {
-			errMsg.Set(uistate.T("insights.budgetSpent", ai.FormatTokens(uistate.AgentBudget(convID.Get()))))
+		if uistate.AgentBudgetExhausted(conversationID) {
+			errMsg.Set(uistate.T("insights.budgetSpent", ai.FormatTokens(uistate.AgentBudget(conversationID))))
 			return
 		}
+		boundStore := app.Store()
+		recordProviderUsage := func(usage ai.Usage) {
+			if usage.PromptTokens <= 0 && usage.CompletionTokens <= 0 && usage.TotalTokens <= 0 {
+				return
+			}
+			// Account real usage against the captured conversation even if its
+			// callback arrives after cancellation. Never write into a replacement
+			// app dataset or a closed store.
+			if app.Store() != boundStore {
+				return
+			}
+			if _, err := boundStore.GetSettings(); err != nil {
+				return
+			}
+			cost, costOK := ai.EstimateCostUSD(requestModel, usage)
+			uistate.AddAgentCost(conversationID, usage.TotalTokens, cost, costOK)
+			app.RecordAISpend("assistant", requestModel, usage)
+		}
+		buildToolSet := func(forTier aicontext.ConversationTier) ([]ai.Tool, map[string]chatTool, error) {
+			// Re-read conversion settings whenever a tool snapshot is built. A
+			// preceding approved tool may have changed base currency or FX rates;
+			// the render-time settings captured above must not leak into later
+			// provider steps or tool calls.
+			freshSettings, err := boundStore.GetSettings()
+			if err != nil {
+				return nil, nil, err
+			}
+			toolBase := freshSettings.BaseCurrency
+			if toolBase == "" {
+				toolBase = "USD"
+			}
+			toolRates := currency.Rates{Base: toolBase, Rates: freshSettings.FXRates}
+			allTools := buildChatTools(app, toolBase, toolRates, forTier, insightsScopeAtom.Get)
+			specs := make([]ai.Tool, 0, len(allTools))
+			byName := make(map[string]chatTool, len(allTools))
+			for _, tool := range allTools {
+				if !aicontext.ToolAllowed(tool.spec.Function.Name, forTier) {
+					continue
+				}
+				specs = append(specs, tool.spec)
+				byName[tool.spec.Function.Name] = tool
+			}
+			return specs, byName, nil
+		}
+		session := assistantloop.NewSession(conversationID)
+		sessionState.Set(session)
+		isCurrentSession := func() bool {
+			if !session.Active() || sessionState.Get() != session {
+				return false
+			}
+			if appstate.Default != app || app.Store() != boundStore {
+				session.Cancel()
+				return false
+			}
+			return true
+		}
+		finishSession := func() {
+			session.SetCancel(nil)
+			session.Cancel()
+			if sessionState.Get() == session {
+				loading.Set(false)
+				streaming.Set("")
+				pendingApproval.Set(nil)
+				sessionState.Set(nil)
+			}
+		}
 		loading.Set(true)
-		allTools := buildChatTools(app, base, rates, tier)
-		// AG17: under aggregates-only, withhold the transaction/payee-detail read tools
-		// so the privacy promise holds for tool results too, not just the injected context.
-		tools := allTools[:0:0]
-		for _, t := range allTools {
-			if aicontext.ToolAllowed(t.spec.Function.Name, tier) {
-				tools = append(tools, t)
-			}
-		}
-		specs := make([]ai.Tool, len(tools))
-		byName := make(map[string]chatTool, len(tools))
-		for i, t := range tools {
-			specs[i] = t.spec
-			byName[t.spec.Function.Name] = t
-		}
-		msgs := buildMessages(hist)
-		done := make(chan struct{})
-		doneClosed := false
-		closeDone := func() {
-			if !doneClosed {
-				doneClosed = true
-				close(done)
-			}
-		}
-		cancelFn.Set(closeDone)
+		msgs, prefixCount, currentStart := buildMessages(hist)
 		var total ai.Usage
 
 		// C387: every tool this answer runs is recorded as it runs, so the reply can
@@ -505,37 +563,108 @@ func Insights() ui.Node {
 		// that is the evidence; a citation that only names a source proves nothing.
 		var sources []domain.ChatSource
 
+		// There is no reactive app-identity atom: a dataset can be replaced while
+		// this component stays mounted. One short-lived owner watcher closes the
+		// provider session on that boundary and exits as soon as the session ends.
 		go func() {
+			ticker := time.NewTicker(250 * time.Millisecond)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-session.Done():
+					return
+				case <-ticker.C:
+					if appstate.Default != app || app.Store() != boundStore {
+						session.Cancel()
+						return
+					}
+				}
+			}
+		}()
+		go func() {
+			defer finishSession()
 			// Last line of defence. Everything below runs in a goroutine, and an
 			// unrecovered panic in a Go/wasm goroutine ends the whole program — the
 			// entire app, not the chat. A failure here becomes a message in the
 			// thread instead.
 			defer func() {
 				if r := recover(); r != nil {
-					loading.Set(false)
-					streaming.Set("")
-					errMsg.Set(uistate.T("insights.loopFailed"))
+					if isCurrentSession() {
+						loading.Set(false)
+						streaming.Set("")
+						errMsg.Set(uistate.T("insights.loopFailed"))
+					}
 				}
 			}()
 			for step := 0; step < 6; step++ {
+				if !isCurrentSession() {
+					return
+				}
+				if uistate.AgentBudgetExhausted(conversationID) {
+					loading.Set(false)
+					streaming.Set("")
+					errMsg.Set(uistate.T("insights.budgetSpent", ai.FormatTokens(uistate.AgentBudget(conversationID))))
+					return
+				}
+				if privacyTier.Get() != tier {
+					return
+				}
+				specs, byName, err := buildToolSet(tier)
+				if err != nil {
+					if isCurrentSession() {
+						errMsg.Set(uistate.T("insights.loopFailed"))
+					}
+					return
+				}
+				requestMessages, err := assistantloop.BoundRequestHistory(
+					msgs, prefixCount, currentStart, assistantRelayMaxMessages, assistantRelayMaxBytes, 64<<10,
+				)
+				if err != nil {
+					loading.Set(false)
+					streaming.Set("")
+					errMsg.Set("This turn and its required context exceed the assistant request limit. Start a new chat or shorten the current turn.")
+					return
+				}
 				ch := make(chan agentStep, 1)
 				// Each fragment lands in the live-answer atom, which the thread
 				// renders as a growing bubble. It is cleared when the turn resolves,
 				// at which point the real turn takes over — one answer on screen at
 				// any moment, never a draft sitting beside its finished self.
 				streaming.Set("")
-				fc := sendTools(msgs, specs,
-					func(delta string) { streaming.Set(streaming.Get() + delta) },
-					func(m ai.Message, u ai.Usage) { ch <- agentStep{msg: m, usage: u} },
-					func(e string) { ch <- agentStep{err: e} })
-				cancelFn.Set(func() { fc(); closeDone() })
+				var usageOnce sync.Once
+				fc := sendTools(requestModel, requestMessages, specs,
+					func(delta string) {
+						if isCurrentSession() {
+							streaming.Set(streaming.Get() + delta)
+						}
+					},
+					func(m ai.Message, u ai.Usage) {
+						usageOnce.Do(func() { recordProviderUsage(u) })
+						if isCurrentSession() {
+							select {
+							case ch <- agentStep{msg: m, usage: u}:
+							default:
+							}
+						}
+					},
+					func(e string) {
+						if isCurrentSession() {
+							select {
+							case ch <- agentStep{err: e}:
+							default:
+							}
+						}
+					})
+				session.SetCancel(fc)
 
 				var r agentStep
 				select {
 				case r = <-ch:
-				case <-done:
-					loading.Set(false)
-					streaming.Set("")
+				case <-session.Done():
+					return
+				}
+				session.SetCancel(nil)
+				if !isCurrentSession() {
 					return
 				}
 				if r.err != "" {
@@ -568,14 +697,8 @@ func Insights() ui.Node {
 					}
 					reply := chatTurn{ID: id.New(), Role: "assistant", Text: text, Usage: total, Sources: sources}
 					turns.Set(append(append([]chatTurn{}, hist...), reply))
-					// AG20: feed this turn's token spend into the per-conversation
-					// receipt (cost estimated from the resolved model).
-					cost, costOK := ai.EstimateCostUSD(model, total)
-					uistate.AddAgentCost(convID.Get(), total.TotalTokens, cost, costOK)
-					// EC-15: and into the household's running AI spend meter, so
-					// "what is this costing me?" has an answer here rather than on
-					// next month's provider bill.
-					app.RecordAISpend("assistant", model, total)
+					// AG20: usage was posted on each response callback, including
+					// partial tool loops and interrupted turns.
 					return
 				}
 				// This turn asked for tools, so whatever text it streamed was a
@@ -586,46 +709,78 @@ func Insights() ui.Node {
 				streaming.Set("")
 				msgs = append(msgs, r.msg)
 				for _, tc := range r.msg.ToolCalls {
+					if !isCurrentSession() {
+						return
+					}
+					currentTier := privacyTier.Get()
+					if currentTier != tier {
+						return
+					}
 					args := json.RawMessage(tc.Function.Arguments)
 					out := "tool unavailable"
-					if tool, ok := byName[tc.Function.Name]; ok {
-						// Mutating tools pause for the user's approval in the thread.
-						if !tool.mutates {
-							out = runReadTool(tc.Function.Name, func() string { return tool.run(args) })
-						} else {
-							preview := tc.Function.Name
-							if tool.preview != nil {
-								preview = tool.preview(args)
+					if aicontext.ToolAllowed(tc.Function.Name, currentTier) {
+						if tool, ok := byName[tc.Function.Name]; ok {
+							// Mutating tools pause for the user's approval in the thread.
+							if !tool.mutates {
+								out = runReadTool(tc.Function.Name, func() string { return tool.run(args) })
+							} else {
+								preview := tc.Function.Name
+								if tool.preview != nil {
+									preview = tool.preview(args)
+								}
+								decision := assistantloop.NewApproval()
+								pa := &approvalReq{
+									tool:     tc.Function.Name,
+									preview:  preview,
+									perm:     toolperm.For(tc.Function.Name, args),
+									resp:     make(chan bool, 1),
+									decision: decision,
+								}
+								pendingApproval.Set(pa)
+								approved, responded := decision.Wait(session.Done())
+								if !isCurrentSession() {
+									return
+								}
+								if pendingApproval.Get() == pa {
+									pendingApproval.Set(nil)
+								}
+								if !responded {
+									return
+								}
+								if !approved {
+									msgs = append(msgs, ai.ToolResultMessage(tc.ID, tc.Function.Name, "The user declined this change."))
+									continue
+								}
+								// Recheck immediately before the write. The visible privacy
+								// toggle cancels the session, and this guard also covers a
+								// tier change delivered through another state update.
+								if privacyTier.Get() != tier {
+									return
+								}
+								// C389/AG20: an approved write runs under the assistant
+								// actor and takes its own undo point, so Activity shows
+								// who made the change and offers to take it back. Without
+								// this, a change the assistant made was indistinguishable
+								// in the log from one the household made by hand.
+								write := runAssistantWriteResult(tc.Function.Name, func() string { return tool.run(args) })
+								out = write.Text
+								if write.Changed {
+									uistate.AddAgentActions(conversationID, []string{tc.Function.Name})
+								}
+								if write.Changed || write.VerificationError != "" {
+									// A failed receipt capture makes the write outcome uncertain. Refresh
+									// handlers before another call so a possibly applied write is visible.
+									_, byName, err = buildToolSet(currentTier)
+									if err != nil {
+										errMsg.Set(uistate.T("insights.loopFailed"))
+										return
+									}
+								}
 							}
-							resp := make(chan bool, 1)
-							pendingApproval.Set(&approvalReq{
-								tool:    tc.Function.Name,
-								preview: preview,
-								perm:    toolperm.For(tc.Function.Name, args),
-								resp:    resp,
-							})
-							var approved bool
-							select {
-							case approved = <-resp:
-							case <-done:
-								pendingApproval.Set(nil)
-								loading.Set(false)
-								streaming.Set("")
-								return
-							}
-							pendingApproval.Set(nil)
-							if !approved {
-								msgs = append(msgs, ai.ToolResultMessage(tc.ID, tc.Function.Name, "The user declined this change."))
-								continue
-							}
-							// C389/AG20: an approved write runs under the assistant
-							// actor and takes its own undo point, so Activity shows
-							// who made the change and offers to take it back. Without
-							// this, a change the assistant made was indistinguishable
-							// in the log from one the household made by hand.
-							out = runAssistantWrite(tc.Function.Name, func() string { return tool.run(args) })
-							uistate.AddAgentActions(convID.Get(), []string{tc.Function.Name})
 						}
+					}
+					if !isCurrentSession() {
+						return
 					}
 					cite := toolcite.For(tc.Function.Name, args)
 					sources = append(sources, domain.ChatSource{
@@ -634,9 +789,11 @@ func Insights() ui.Node {
 					msgs = append(msgs, ai.ToolResultMessage(tc.ID, tc.Function.Name, out))
 				}
 			}
-			loading.Set(false)
-			streaming.Set("")
-			errMsg.Set(uistate.T("insights.tooManySteps"))
+			if isCurrentSession() {
+				loading.Set(false)
+				streaming.Set("")
+				errMsg.Set(uistate.T("insights.tooManySteps"))
+			}
 		}()
 	}
 
@@ -654,11 +811,17 @@ func Insights() ui.Node {
 
 		// Affordability fast-path: answer from real numbers, no AI key needed.
 		if q, ok := insights.ParseAffordQuery(text); ok {
-			monthlyNet := income.Amount - expense.Amount // this month's net (minor units)
-			ar := insights.AffordAnswer(*q, net.Amount, monthlyNet, 0)
+			answer := chatTurn{ID: id.New(), Role: "assistant", Text: uistate.T("insights.affordTotalsUnavailable")}
+			if totals.Known && !netWorth.Complete() {
+				answer.Text = uistate.T("insights.affordNetWorthUnavailable")
+			}
+			if totals.Known && netWorth.Complete() {
+				ar := insights.AffordAnswer(*q, netWorth.Net.Amount, totals.Net.Amount, 0)
+				answer.Role, answer.Text = "afford", affordCardText(ar, q, base)
+			}
 			hist := append(append([]chatTurn{}, turns.Get()...),
 				chatTurn{ID: id.New(), Role: "user", Text: text},
-				chatTurn{ID: id.New(), Role: "afford", Text: affordCardText(ar, q, base)},
+				answer,
 			)
 			turns.Set(hist)
 			setComposer("")
@@ -675,7 +838,7 @@ func Insights() ui.Node {
 		if intent, matched := localqa.Match(text); matched {
 			src := newInsightsQASource(app, base, rates)
 			if answer, answered := localqa.Answer(intent, src, text, func(minor int64) string {
-				return insightsMoneyFmt(minor, base)
+				return insightsMoneyFmt(minor, src.base)
 			}); answered {
 				hist := append(append([]chatTurn{}, turns.Get()...),
 					chatTurn{ID: id.New(), Role: "user", Text: text},
@@ -833,8 +996,7 @@ func Insights() ui.Node {
 
 	// persist upserts the current thread as a conversation, creating one (and a fresh
 	// id + created stamp) on the first message. Title comes from the first user line.
-	persist := func(ts []chatTurn) {
-		cid := convID.Get()
+	persistConversation := func(cid string, created time.Time, ts []chatTurn) {
 		if cid == "" {
 			if len(ts) == 0 {
 				return
@@ -842,7 +1004,6 @@ func Insights() ui.Node {
 			cid = id.New()
 			convID.Set(cid)
 		}
-		created := convCreated.Get()
 		if created.IsZero() {
 			created = time.Now()
 			convCreated.Set(created)
@@ -871,6 +1032,9 @@ func Insights() ui.Node {
 			TokenBudget: uistate.AgentBudget(cid),
 		})
 		bump()
+	}
+	persist := func(ts []chatTurn) {
+		persistConversation(convID.Get(), convCreated.Get(), ts)
 	}
 
 	// rateTurn records or clears a verdict on one answer, then persists it with the
@@ -903,38 +1067,49 @@ func Insights() ui.Node {
 					Sources:  m.Sources,
 					Feedback: chatpolish.Feedback(m.Feedback)}
 			}
-			turns.Set(ts)
-			convID.Set(cid)
-			// C390: resume this conversation on the model it was using, when it
-			// chose one. A thread reopened on a different model gives different
-			// answers to the same question, which reads as the assistant changing
-			// its mind rather than as the setting changing underneath it.
-			// The saved values are restored into session state first, so the
-			// pickers and the send-time budget check read the same thing whether
-			// the conversation was opened this session or last week.
-			if c.Model != "" {
-				uistate.SetAgentModel(cid, c.Model)
-			}
-			if c.TokenBudget > 0 {
-				uistate.SetAgentBudget(cid, c.TokenBudget)
-			}
-			if m := uistate.AgentModel(cid); m != "" {
-				modelSel.Set(m)
-			}
-			convCreated.Set(c.CreatedAt)
-			setComposer("")
-			errMsg.Set("")
+			persistTransition.Set(true)
+			func() {
+				defer persistTransition.Set(false)
+				cancelCurrentSession()
+				turns.Set(ts)
+				convID.Set(cid)
+				// C390: resume this conversation on the model it was using, when it
+				// chose one. A thread reopened on a different model gives different
+				// answers to the same question, which reads as the assistant changing
+				// its mind rather than as the setting changing underneath it.
+				if c.Model != "" {
+					uistate.SetAgentModel(cid, c.Model)
+				}
+				if c.TokenBudget > 0 {
+					uistate.SetAgentBudget(cid, c.TokenBudget)
+				}
+				if m := uistate.AgentModel(cid); m != "" {
+					modelSel.Set(m)
+				}
+				convCreated.Set(c.CreatedAt)
+				setComposer("")
+				errMsg.Set("")
+			}()
+			// Persist explicitly after the transition gate opens so a synchronous
+			// interim render cannot consume the final persist effect.
+			persistConversation(cid, c.CreatedAt, ts)
 			return
 		}
 	}
 
 	// newChat clears the thread for a fresh (unsaved) conversation.
 	newChat := func() {
-		turns.Set(nil)
-		convID.Set("")
-		convCreated.Set(time.Time{})
-		setComposer("")
-		errMsg.Set("")
+		persistTransition.Set(true)
+		func() {
+			defer persistTransition.Set(false)
+			cancelCurrentSession()
+			turns.Set(nil)
+			convID.Set("")
+			blankBudget.Set(0)
+			convCreated.Set(time.Time{})
+			setComposer("")
+			errMsg.Set("")
+		}()
 	}
 
 	// renameConv gives a chat a name of the user's choosing. An empty name is not
@@ -987,10 +1162,16 @@ func Insights() ui.Node {
 	// Persist whenever the thread's shape changes (message added/removed/redone).
 	cur := turns.Get()
 	persistSig := convID.Get() + "|" + strconv.Itoa(len(cur))
+	if cid := convID.Get(); cid != "" {
+		persistSig += "|" + uistate.AgentModel(cid) + "|" + strconv.Itoa(uistate.AgentBudget(cid))
+	}
 	if n := len(cur); n > 0 {
 		persistSig += "|" + cur[n-1].ID
 	}
 	ui.UseEffect(func() func() {
+		if persistTransition.Get() {
+			return nil
+		}
 		if len(turns.Get()) > 0 || convID.Get() != "" {
 			persist(turns.Get())
 		}
@@ -1033,12 +1214,11 @@ func Insights() ui.Node {
 	if loading.Get() {
 		scrollSig += "|L"
 	}
-	ui.UseEffect(func() func() {
+	ui.UseTimeout(func() {
 		if len(turns.Get()) > 0 {
 			scrollChatToEnd()
 		}
-		return nil
-	}, scrollSig)
+	}, 80*time.Millisecond, scrollSig)
 
 	// Composer keyboard: Enter sends (Shift+Enter ignored), Up/Down cycle prior messages
 	// (shell-style). A raw document keydown listener (so it gets NATIVE events — the
@@ -1170,17 +1350,25 @@ func Insights() ui.Node {
 
 	// Once a chat has a few exchanges (>=4 messages), generate a short AI title for it
 	// (once) and update the switcher tab. Skips conversations already AI-named.
-	namingSig := convID.Get() + "|" + strconv.Itoa(len(turns.Get()))
+	titleStore := app.Store()
+	namingSig := convID.Get() + "|" + strconv.Itoa(len(turns.Get())) + fmt.Sprintf("|%p|%p|%s", app, titleStore, tier)
 	ui.UseEffect(func() func() {
 		ts := turns.Get()
 		cid := convID.Get()
-		if cid == "" || len(ts) < 4 || (key == "" && !useBackendAI) || namingDone.Get() == cid {
+		if cid == "" || len(ts) < 4 || tier != aicontext.TierFull || (key == "" && !useBackendAI) || namingDone.Get() == cid ||
+			uistate.AgentBudgetExhausted(cid) || (app.AISpendCap() > 0 && app.AISpendThisMonth().CostUSD >= app.AISpendCap()) {
 			return nil
 		}
+		originalTitle := conversationTitle(ts)
+		originalNamed := false
 		for _, c := range app.Conversations() {
-			if c.ID == cid && c.Named {
-				namingDone.Set(cid)
-				return nil
+			if c.ID == cid {
+				originalTitle, originalNamed = c.Title, c.Named
+				if c.Named {
+					namingDone.Set(cid)
+					return nil
+				}
+				break
 			}
 		}
 		namingDone.Set(cid) // attempt only once per chat
@@ -1192,13 +1380,43 @@ func Insights() ui.Node {
 			{Role: ai.RoleSystem, Content: "Give a very short, 2-4 word title for this personal-finance chat. Reply with ONLY the title — no quotes, no punctuation, no preamble."},
 			{Role: ai.RoleUser, Content: b.String()},
 		}
-		onName := func(content string, _ ai.Usage) {
+		messages, err := assistantloop.BoundRequestHistory(messages, 1, 1, assistantRelayMaxMessages, assistantRelayMaxBytes, 64<<10)
+		if err != nil {
+			return nil
+		}
+		active := true
+		var usageOnce sync.Once
+		boundStore := titleStore
+		recordUsage := func(usage ai.Usage) {
+			usageOnce.Do(func() {
+				if usage.TotalTokens <= 0 && usage.PromptTokens <= 0 && usage.CompletionTokens <= 0 {
+					return
+				}
+				if app.Store() != boundStore {
+					return
+				}
+				if _, err := boundStore.GetSettings(); err != nil {
+					return
+				}
+				cost, costOK := ai.EstimateCostUSD(model, usage)
+				uistate.AddAgentCost(cid, usage.TotalTokens, cost, costOK)
+				app.RecordAISpend("assistant-title", model, usage)
+			})
+		}
+		onName := func(content string, usage ai.Usage) {
+			recordUsage(usage)
+			if !active || appstate.Default != app || app.Store() != boundStore || convID.Get() != cid || privacyTier.Get() != tier {
+				return
+			}
 			name := cleanChatTitle(content)
 			if name == "" {
 				return
 			}
 			for _, c := range app.Conversations() {
 				if c.ID == cid {
+					if c.Named || c.Title != originalTitle || originalNamed {
+						return
+					}
 					c.Title, c.Named = name, true
 					_ = app.PutConversation(c)
 					bump()
@@ -1207,16 +1425,16 @@ func Insights() ui.Node {
 			}
 		}
 		noErr := func(string) {}
-		if useBackendAI {
-			ai.SendProxyChat(pr.ServerURL, uistate.EffectiveServerToken(pr.ServerToken), model, messages, 0, onName, noErr)
-		} else {
-			ai.SendChat(key, aiBaseURL, model, messages, 0, onName, noErr)
+		cancel := assistantTitleTransport(useBackendAI, pr.ServerURL, uistate.EffectiveServerToken(pr.ServerToken), key, aiBaseURL, model, messages, onName, noErr)
+		return func() {
+			active = false
+			if cancel != nil {
+				cancel()
+			}
 		}
-		return nil
 	}, namingSig)
 
 	onSubmit := ui.UseEvent(Prevent(func() { submitChat() }))
-	newChatEvt := ui.UseEvent(Prevent(func() { newChat() }))
 	// System-prompt editor handlers.
 	onPromptInput := ui.UseEvent(func(v string) { promptDraft.Set(v) })
 	openPrompt := ui.UseEvent(Prevent(func() {
@@ -1238,12 +1456,12 @@ func Insights() ui.Node {
 		promptOpen.Set(false)
 	}
 	closePrompt := func() { promptOpen.Set(false) }
-	// Toggle the backend AI proxy on/off so the user can force the direct OpenAI
-	// provider (or back to the proxy) without leaving the chat.
+	// Switch only the AI route. Sync stays connected while the assistant uses
+	// either the server or this browser's direct OpenAI key.
 	prefsAtom := uistate.UsePrefs()
-	toggleBackend := ui.UseEvent(Prevent(func() {
+	toggleAIProxy := ui.UseEvent(Prevent(func() {
 		p := prefsAtom.Get()
-		p.BackendDisabled = !p.BackendDisabled
+		p.AIProxyDisabled = !p.AIProxyDisabled
 		prefsAtom.Set(p)
 		uistate.PersistPrefs(p)
 	}))
@@ -1273,9 +1491,12 @@ func Insights() ui.Node {
 			return nil // deferred to just after first paint (see railReady)
 		}
 		return detectSpendingAnomalies(scopedTxns, app.Categories(), rates)
-	}, app.Rev(), fmt.Sprintf("%v", insightsSc), mStart.Unix(), railReady.Get())
+	}, app, app.Rev(), dataRevision, scopeKey, now.Format("2006-01-02"), railReady.Get())
+	attributions := ui.UseMemo(func() map[string]string {
+		return anomalyAttributionTexts(spendingAnoms, catsByName, scopedTxns, rates, base, now)
+	}, spendingAnoms, revKey(app), scopeKey, now.Format("2006-01-02"), railReady.Get(), uistate.ActiveLanguage())
 	highlights := spendingHighlights(spendingAnoms, base, func(a insights.Anomaly) string {
-		return anomalyAttributionText(a, catsByName[a.Category], scopedTxns, rates, base, time.Now())
+		return attributions[a.Category]
 	}, viewCategoryTransactions)
 
 	// C252: bridge the four anomaly-type SMART detectors (duplicate, spike, missing
@@ -1341,50 +1562,11 @@ func Insights() ui.Node {
 	convo := turns.Get()
 	empty := len(convo) == 0
 
-	// Retry is offered on the latest message (user or assistant) when idle, so a
-	// failed turn with no reply can still be re-sent. resendLast re-answers the last
-	// user prompt either way.
-	lastID := ""
-	if n := len(convo); n > 0 {
-		lastID = convo[n-1].ID
-	}
-	retryFor := func(tid string) func() {
-		if tid == lastID && !loading.Get() {
-			return resendLast
-		}
-		return nil
-	}
-
-	// The conversation is a plain flex column; the SINGLE scroller is the canvas
-	// (.chat-scroll) that wraps it, so the composer below stays put while history
-	// scrolls. Auto-scroll keeps the newest message in view.
-	thread := Div(Attr("id", "cf-chat-thread"), css.Class("chat-thread", tw.Flex, tw.FlexCol, tw.Gap4),
-		MapKeyed(convo,
-			func(t chatTurn) any { return t.ID },
-			func(t chatTurn) ui.Node {
-				if t.Role == "user" {
-					return ui.CreateElement(UserBubble, userBubbleProps{ID: t.ID, Text: t.Text, OnDelete: deleteTurn, OnRetry: retryFor(t.ID), OnEdit: editAndResend})
-				}
-				if t.Role == "afford" {
-					return ui.CreateElement(AffordResultBubble, affordResultBubbleProps{ID: t.ID, HTML: t.Text, OnDelete: deleteTurn})
-				}
-				return ui.CreateElement(AssistantBubble, asstBubbleProps{ID: t.ID, Text: t.Text, Usage: t.Usage, Model: model,
-					Sources: t.Sources, Feedback: t.Feedback, OnPin: pinText, OnDelete: deleteTurn, OnRetry: retryFor(t.ID), OnFeedback: rateTurn})
-			},
-		),
-		// While a turn is in flight the thread shows either the answer being
-		// written or, before the first fragment lands, the thinking line. They are
-		// mutually exclusive: showing both would put a spinner above text that has
-		// visibly started arriving.
-		If(loading.Get() && strings.TrimSpace(streaming.Get()) == "", Div(css.Class(tw.Flex, tw.JustifyStart),
-			Div(css.Class("chat-row-agent"),
-				Div(css.Class("chat-avatar"), Attr("aria-hidden", "true"), "✦"),
-				Div(css.Class("insights-thinking chat-thinking", tw.Text13, tw.TextFaint), uistate.T("insights.thinking")),
-			),
-		)),
-		If(loading.Get() && strings.TrimSpace(streaming.Get()) != "",
-			ui.CreateElement(StreamingBubble, streamingBubbleProps{Text: streaming.Get()})),
-	)
+	thread := ui.CreateElement(assistantChatThread, assistantChatThreadProps{
+		Turns: convo, Model: model, Loading: loading.Get(), Streaming: streaming.Get(),
+		OnDelete: deleteTurn, OnRetry: resendLast, OnEdit: editAndResend,
+		OnPin: pinText, OnFeedback: rateTurn,
+	})
 
 	// Composer: always show the Ask input (so the starter chips have a visible box to
 	// fill and a new user sees what they'd ask, L8). With AI configured it pairs with
@@ -1441,6 +1623,12 @@ func Insights() ui.Node {
 	budgetCap := uistate.AgentBudget(convID.Get())
 	budgetUsed := uistate.AgentTokensUsed(convID.Get())
 	budgetLeft, budgetCapped := uistate.AgentBudgetRemaining(convID.Get())
+	if convID.Get() == "" {
+		budgetCap = blankBudget.Get()
+		budgetUsed = 0
+		budgetCapped = budgetCap > 0
+		budgetLeft = budgetCap
+	}
 
 	// C250: which model is answering, and what this chat has cost so far, sit
 	// directly under the box where the next question is typed. Both belong at the
@@ -1558,15 +1746,16 @@ func Insights() ui.Node {
 	// the aside becomes a slide-in drawer — so the thread + composer own the first
 	// screen on every viewport.
 	ctrlOpen := ui.UseState(false)
-	toggleCtrls := ui.UseEvent(Prevent(func() { ctrlOpen.Set(!ctrlOpen.Get()) }))
 	asideOpen := ui.UseState(false)
-	toggleAside := ui.UseEvent(Prevent(func() { asideOpen.Set(!asideOpen.Get()) }))
 	closeAside := ui.UseEvent(Prevent(func() { asideOpen.Set(false) }))
 	togglePrivacy := func() {
 		next := aicontext.TierAggregatesOnly
 		if tier == aicontext.TierAggregatesOnly {
 			next = aicontext.TierFull
 		}
+		// A response produced under the previous tier must not retain a path
+		// to its old tools or approval after the privacy boundary changes.
+		cancelCurrentSession()
 		privacyTier.Set(next)
 		uistate.PersistDefaultPrivacyTier(next) // remember as the default for new chats (AG17)
 	}
@@ -1666,7 +1855,7 @@ func Insights() ui.Node {
 	// The session's credential, not the static one: on a hosted instance
 	// prefs.ServerToken is empty while a rotating session is live, and reading it
 	// here hid the backend/OpenAI toggle from every hosted user.
-	backendConfigured := strings.TrimSpace(pr.ServerURL) != "" && uistate.Session(pr.ServerToken).Present()
+	backendConfigured := uistate.BackendConnectionActive(pr)
 	backendToggle := Fragment()
 	if backendConfigured {
 		label := uistate.T("insights.usingOpenAI")
@@ -1677,15 +1866,16 @@ func Insights() ui.Node {
 		}
 		backendToggle = Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mb2, tw.Text12, tw.TextFaint),
 			Span(label),
-			Button(css.Class(tw.Underline, tw.HoverOpacity100), Type("button"), OnClick(toggleBackend), action),
+			Button(css.Class(tw.Underline, tw.HoverOpacity100), Type("button"), OnClick(toggleAIProxy), action),
 		)
 	}
 
 	approvalPreview := ""
 	approvalPerm := toolperm.Permission{}
-	if pa := pendingApproval.Get(); pa != nil {
-		approvalPreview = pa.preview
-		approvalPerm = pa.perm
+	approval := pendingApproval.Get()
+	if approval != nil {
+		approvalPreview = approval.preview
+		approvalPerm = approval.perm
 	}
 
 	noData := len(accounts) == 0 && len(txns) == 0
@@ -1777,8 +1967,8 @@ func Insights() ui.Node {
 				If(approvalPreview != "", ui.CreateElement(ApprovalCard, approvalCardProps{
 					Preview:   approvalPreview,
 					Perm:      approvalPerm,
-					OnApprove: func() { respondApproval(pendingApproval.Get(), true) },
-					OnDecline: func() { respondApproval(pendingApproval.Get(), false) },
+					OnApprove: func() { respondApproval(approval, true) },
+					OnDecline: func() { respondApproval(approval, false) },
 				})),
 				// AG20: the running per-conversation receipt (actions taken + spend).
 				If(!empty, AgentSessionReceipt(convID.Get())),
@@ -1812,32 +2002,13 @@ func Insights() ui.Node {
 	// Advanced as quiet ghost actions on the right) over the content-height canvas,
 	// and a quiet "margin notes" aside — chrome-less typographic groups, not tiles —
 	// for the agent's periphery and saved chats.
-	askHead := Div(css.Class("ask-head"),
-		Div(css.Class("ask-head-row"),
-			Div(css.Class("ask-head-id"),
-				Span(ClassStr(statusCls), Attr("aria-hidden", "true")),
-				H2(css.Class("ask-title"), uistate.T("assistant.agentTitle")),
-			),
-			// UX-09 header actions: New chat is the everyday verb; Chat settings
-			// opens the collapsed controls drawer; Notes & chats slides the aside
-			// in on narrow widths (hidden on desktop, where the aside is visible).
-			Div(css.Class("ask-head-actions"),
-				Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "assistant-new-chat"), OnClick(newChatEvt),
-					uiw.Icon(icon.Plus, css.Class(tw.ShrinkO, tw.W35, tw.H35)), Span(uistate.T("insights.newChat"))),
-				Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "assistant-settings-toggle"),
-					Attr("aria-expanded", ariaBool(ctrlOpen.Get())), Attr("aria-controls", "ask-settings-drawer"),
-					OnClick(toggleCtrls),
-					uiw.Icon(icon.Settings, css.Class(tw.ShrinkO, tw.W35, tw.H35)), Span(uistate.T("assistant.chatSettings"))),
-				Button(css.Class("btn btn-tool ask-aside-toggle"), Type("button"), Attr("data-testid", "assistant-aside-toggle"),
-					Attr("aria-expanded", ariaBool(asideOpen.Get())),
-					OnClick(toggleAside),
-					uiw.Icon(icon.MessageCircle, css.Class(tw.ShrinkO, tw.W35, tw.H35)), Span(uistate.T("assistant.notesDrawer"))),
-			),
-		),
-		// The status/caption sits on its own subtitle line below the agent name, rather
-		// than sharing the title's baseline at a clashing scale.
-		Span(css.Class("ask-status"), uistate.T(statusKey)),
-	)
+	askHead := ui.CreateElement(assistantAskHeader, assistantAskHeaderProps{
+		StatusClass: statusCls, StatusKey: statusKey,
+		ControlsOpen: ctrlOpen.Get(), AsideOpen: asideOpen.Get(),
+		OnNewChat:        newChat,
+		OnToggleControls: func() { ctrlOpen.Set(!ctrlOpen.Get()) },
+		OnToggleAside:    func() { asideOpen.Set(!asideOpen.Get()) },
+	})
 	askMain := Div(css.Class("ask-main"),
 		askHead,
 		// The controls drawer: the full settings cell, revealed by the header's
@@ -1862,6 +2033,7 @@ func Insights() ui.Node {
 		// so the user knows these figures are filtered. "Change scope in Reports →"
 		// links directly to the ScopeSelector on /reports.
 		scopeNotice,
+		If(!totals.Known, P(css.Class("t-caption", tw.TextDim), Attr("role", "status"), Attr("data-testid", "assistant-totals-unavailable"), uistate.T("period.totalsUnavailable"))),
 		Div(css.Class("ask-deck"), Attr("data-testid", "assistant-layout"), Attr("id", "ask"),
 			askMain,
 			// The agent's periphery as quiet margin notes: anomaly findings,
@@ -2458,7 +2630,9 @@ type streamingBubbleProps struct{ Text string }
 // completes. It is aria-live=polite so a screen reader hears the finished answer
 // once, rather than being interrupted by every fragment.
 func StreamingBubble(p streamingBubbleProps) ui.Node {
-	ui.UseEffect(func() func() { scrollChatToEnd(); return nil }, p.Text)
+	// Plain streaming text needs only the next browser turn after its DOM commit.
+	// A managed timer cancels pending work when this bubble is replaced or removed.
+	ui.UseTimeout(scrollChatToEnd, 0, p.Text)
 	return Div(css.Class(tw.Flex, tw.FlexCol, tw.ItemsStart),
 		Div(css.Class("chat-row-agent"),
 			Div(css.Class("chat-avatar"), Attr("aria-hidden", "true"), "✦"),
@@ -3013,21 +3187,14 @@ func thinkPickerComp(p thinkPickerProps) ui.Node {
 
 // scrollChatToEnd scrolls the bounded canvas (#cf-chat-scroll — the single
 // scroller wrapping the thread) to its bottom (only the container, never the
-// page), so the latest message stays in view. The scroll is deferred via
-// setTimeout so it runs AFTER the bubbles' Markdown innerHTML has been filled
-// (each bubble renders in its own effect, growing scrollHeight) — otherwise an
-// on-load resume would scroll a still-empty container and land at the top.
+// page), so the latest message stays in view. Callers own the deferred browser
+// timer through their component lifecycle. Completed Markdown waits for the
+// bubble effects; streaming plain text waits only for its DOM commit.
 func scrollChatToEnd() {
-	var cb js.Func
-	cb = js.FuncOf(func(js.Value, []js.Value) any {
-		cb.Release()
-		el := js.Global().Get("document").Call("getElementById", "cf-chat-scroll")
-		if el.Truthy() {
-			el.Set("scrollTop", el.Get("scrollHeight"))
-		}
-		return nil
-	})
-	js.Global().Call("setTimeout", cb, 80)
+	el := js.Global().Get("document").Call("getElementById", "cf-chat-scroll")
+	if el.Truthy() {
+		el.Set("scrollTop", el.Get("scrollHeight"))
+	}
 }
 
 // isAppRoutePath reports whether a raw URL pathname (possibly host-prefixed by the
@@ -3135,8 +3302,18 @@ func PinnedInsightRow(props pinnedInsightRowProps) ui.Node {
 
 // respondApproval sends the user's yes/no to a pending mutating tool (no-op if none).
 func respondApproval(pa *approvalReq, ok bool) {
-	if pa != nil {
-		pa.resp <- ok
+	if pa == nil {
+		return
+	}
+	if pa.decision != nil {
+		pa.decision.TryRespond(ok)
+		return
+	}
+	if pa.resp != nil {
+		select {
+		case pa.resp <- ok:
+		default:
+		}
 	}
 }
 
@@ -3544,7 +3721,7 @@ func smartAnomalyHighlights(app *appstate.App, weekStart time.Weekday, ready boo
 			return nil
 		}
 		return runAnomalyDetectors(app, weekStart)
-	}, app.Rev(), int(weekStart), ready)
+	}, revKey(app), int(weekStart), ready, time.Now().Format("2006-01-02"))
 	if len(flagged) == 0 {
 		return Fragment()
 	}
@@ -3780,48 +3957,7 @@ func spendingHighlights(anomalies []insights.Anomaly, base string, attrib func(i
 // judged against the same three baseline months the anomaly was measured over. A
 // payee never seen before is not "larger" — it has no usual to be larger than.
 func anomalyPurchases(catID string, txns []domain.Transaction, rates currency.Rates, now time.Time) []anomalyattrib.Purchase {
-	curStart, _ := dateutil.MonthRange(now)
-	baseStart := dateutil.AddMonths(curStart, -3)
-	curEnd := dateutil.AddMonths(curStart, 1)
-
-	var cur []anomalyattrib.Purchase
-	priorSum := map[string]int64{}
-	priorN := map[string]int{}
-	for _, t := range txns {
-		if t.CategoryID != catID || !t.IsExpense() || !t.CountsInReports() {
-			continue
-		}
-		conv, err := rates.Convert(t.Amount, rates.Base)
-		if err != nil {
-			continue
-		}
-		minor := conv.Abs().Amount
-		switch {
-		case dateutil.InRange(t.Date, curStart, curEnd):
-			payee := strings.TrimSpace(t.Payee)
-			if payee == "" {
-				payee = strings.TrimSpace(t.Desc)
-			}
-			if payee == "" {
-				payee = uistate.T("insights.attribUnnamedPayee")
-			}
-			cur = append(cur, anomalyattrib.Purchase{ID: t.ID, Payee: payee, Minor: minor})
-		case dateutil.InRange(t.Date, baseStart, curStart):
-			key := strings.ToLower(strings.TrimSpace(t.Payee))
-			priorSum[key] += minor
-			priorN[key]++
-		}
-	}
-	for i, p := range cur {
-		key := strings.ToLower(p.Payee)
-		if n := priorN[key]; n > 0 {
-			usual := priorSum[key] / int64(n)
-			// Half again as much as usual, so ordinary variation in a repeat
-			// purchase is not reported as remarkable.
-			cur[i].Larger = usual > 0 && p.Minor*2 > usual*3
-		}
-	}
-	return cur
+	return anomalyattrib.CategoryPurchases(catID, txns, rates, now, uistate.T("insights.attribUnnamedPayee"))
 }
 
 // anomalyAttributionText answers the question a spending flag leaves hanging:
@@ -3868,34 +4004,30 @@ func anomalyAttributionText(a insights.Anomaly, catID string, txns []domain.Tran
 	return line
 }
 
-// spendAnomaliesCache backs detectSpendingAnomaliesMemo (single dashboard surface;
-// wasm is single-threaded, so no lock).
-var spendAnomaliesCache = map[string][]insights.Anomaly{}
+// anomalyAttributionTexts is memoized with the detected anomalies so expanding a
+// flag or typing in the composer does not repeat a ledger scan for each category.
+func anomalyAttributionTexts(anomalies []insights.Anomaly, categoryIDs map[string]string, txns []domain.Transaction, rates currency.Rates, base string, now time.Time) map[string]string {
+	texts := make(map[string]string, len(anomalies))
+	for _, anomaly := range anomalies {
+		texts[anomaly.Category] = anomalyAttributionText(anomaly, categoryIDs[anomaly.Category], txns, rates, base, now)
+	}
+	return texts
+}
 
-// detectSpendingAnomaliesMemo wraps detectSpendingAnomalies with a revision-keyed
-// cache. The detection builds four monthly per-category spend series over every
-// transaction — heavy — and the dashboard calls it more than once per render (the
-// top-highlight widget and the attention widget), re-running on every dashboard
-// re-render. scopeKey distinguishes callers that pass different transaction sets so
-// they never share an entry. Returns a fresh copy, so a caller that takes
-// &result[0] can't mutate the cached slice. The month is part of the key (the
-// series are month-relative); any data edit bumps rev and invalidates.
-func detectSpendingAnomaliesMemo(rev uint64, scopeKey string, txns []domain.Transaction, categories []domain.Category, rates currency.Rates) []insights.Anomaly {
-	key := strconv.FormatUint(rev, 10) + "|" + scopeKey + "|" + time.Now().Format("2006-01")
-	v, ok := spendAnomaliesCache[key]
-	if !ok {
-		if len(spendAnomaliesCache) > 6 {
-			spendAnomaliesCache = map[string][]insights.Anomaly{}
-		}
-		v = detectSpendingAnomalies(txns, categories, rates)
-		spendAnomaliesCache[key] = v
+// spendAnomaliesCache is shared by the dashboard's highlight and attention tiles.
+var spendAnomaliesCache = newViewCache[[]insights.Anomaly]()
+
+// detectSpendingAnomaliesMemo isolates app instances and transaction scopes at
+// equal revisions. A caller without an app gets an uncached derivation.
+func detectSpendingAnomaliesMemo(app *appstate.App, scopeKey string, txns []domain.Transaction, categories []domain.Category, rates currency.Rates) []insights.Anomaly {
+	if app == nil {
+		return detectSpendingAnomalies(txns, categories, rates)
 	}
-	if len(v) == 0 {
-		return nil
-	}
-	out := make([]insights.Anomaly, len(v))
-	copy(out, v)
-	return out
+	key := revKey(app) + "|" + scopeKey + "|" + time.Now().Format("2006-01-02") + "|" + string(uistate.ActiveLanguage())
+	value := memoByRev(spendAnomaliesCache, key, func() []insights.Anomaly {
+		return detectSpendingAnomalies(txns, categories, rates)
+	})
+	return append([]insights.Anomaly(nil), value...)
 }
 
 // detectSpendingAnomalies builds the last four monthly per-category spend series

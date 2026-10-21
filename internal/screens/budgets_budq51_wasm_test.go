@@ -12,7 +12,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
-	"github.com/monstercameron/GoWebComponents/v5/testkit/render"
+	"github.com/monstercameron/GoWebComponents/v7/testkit/render"
 )
 
 func TestBUDQ51SundayWeeklyRaiseLimitUsesPageReadKey(t *testing.T) {

@@ -9,7 +9,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/browserstore"
 	"github.com/monstercameron/CashFlux/internal/prefs"
-	"github.com/monstercameron/GoWebComponents/v5/state"
+	"github.com/monstercameron/GoWebComponents/v7/state"
 )
 
 // One answer to "is this device signed in?".
@@ -71,6 +71,12 @@ func Session(staticToken string) SessionState {
 func BackendConnectionActive(pr prefs.Prefs) bool {
 	pr = pr.Normalize()
 	return !pr.BackendDisabled && strings.TrimSpace(pr.ServerURL) != "" && Session(pr.ServerToken).Present()
+}
+
+// BackendAIActive reports whether AI should use the authenticated server.
+// Switching AI providers never changes the separate cloud sync connection.
+func BackendAIActive(pr prefs.Prefs) bool {
+	return !pr.AIProxyDisabled && BackendConnectionActive(pr)
 }
 
 // CurrentPrefsAtom returns the preferences atom captured by a rendered

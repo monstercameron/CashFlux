@@ -13,40 +13,47 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/chartspec"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/debtview"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/payoff"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // DebtStrategyPanelProps configures a DebtStrategyPanel.
 type DebtStrategyPanelProps struct {
-	// HideExtraInput drops the panel's own extra-payment field. On /debt the tuner
-	// tile owns that control (both write the same canonical DebtConfig value), so a
-	// second input here would be redundant; /planning has no tuner and keeps it.
+	// HideExtraInput drops the panel's own extra-payment field when another tile
+	// owns the canonical DebtConfig control.
 	HideExtraInput bool
+	App            *appstate.App
+	Base           string
+	Prepared       *debtview.Result
 }
 
-// DebtStrategyPanel renders the snowball-vs-avalanche debt-payoff block as a
-// registered component so it can be shared between /planning and /debt without
-// duplicating hook state or violating the GWC per-row hook rule. All hooks are
-// declared unconditionally at the top; the component owns its own revision
-// counter and extra-payment input state so mutations stay isolated to this panel.
+// DebtStrategyPanel renders prepared snowball-vs-avalanche facts. All hooks are
+// declared unconditionally at the top; the component owns its revision counter
+// and optional extra-payment input state.
 func DebtStrategyPanel(props DebtStrategyPanelProps) ui.Node {
-	// Base currency (no hooks) — the extra-payment handler below needs its decimals.
-	base := "USD"
-	if a := appstate.Default; a != nil {
-		if b := a.Settings().BaseCurrency; b != "" {
-			base = b
+	app := props.App
+	if app == nil {
+		app = appstate.Default
+	}
+	base := props.Base
+	if base == "" {
+		base = "USD"
+		if app != nil && app.Settings().BaseCurrency != "" {
+			base = app.Settings().BaseCurrency
 		}
 	}
 	dec := currency.Decimals(base)
-	app := appstate.Default
 	var currentOwed int64
+	canTrack := false
+	var suggestedExtra int64
+	canSuggestExtra := false
 
 	// All hooks must be declared unconditionally — even when app is nil.
 	rev := ui.UseState(0)
@@ -57,10 +64,19 @@ func DebtStrategyPanel(props DebtStrategyPanelProps) ui.Node {
 		}
 	})
 	onStartTracking := ui.UseEvent(func() {
-		if app != nil {
+		if app != nil && canTrack {
 			_ = app.StartPayoffTracking(currentOwed, base)
 			rev.Set(rev.Get() + 1)
 		}
+	})
+	onSuggestExtra := ui.UseEvent(func() {
+		if !canSuggestExtra {
+			return
+		}
+		c := uistate.DebtConfigGet()
+		c.DefaultExtraMinor = suggestedExtra
+		uistate.SetDebtConfig(c)
+		uistate.BumpDataRevision()
 	})
 
 	// Subscribe to the shared data revision so the comparison redraws when the /debt
@@ -92,19 +108,30 @@ func DebtStrategyPanel(props DebtStrategyPanelProps) ui.Node {
 	// will trigger a re-render of this panel.
 	_ = rev.Get()
 
-	txns := app.Transactions()
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	// C195: FX-convert each included debt to the base currency. A EUR balance
-	// must not be summed into a USD plan as raw cents. AggregateDebts handles
-	// IncludedInPayoff + Abs + conversion, and reports currencies missing a rate
-	// (those debts are excluded rather than miscounted).
-	debts, missingDebtRates := payoff.AggregateDebts(app.Accounts(), txns, base, rates)
+	prepared := debtview.Result{}
+	if props.Prepared != nil {
+		prepared = *props.Prepared
+	} else {
+		cfg := uistate.DebtConfigGet()
+		prepared = debtview.Prepare(app.Accounts(), app.Transactions(), rates, base, debtview.Config{
+			ExtraMinor: cfg.DefaultExtraMinor, Strategy: strategyFromConfig(cfg), CompareStrategies: true,
+		}, time.Now())
+	}
+	debts := prepared.Debts
 
 	// Payoff progress vs a stored baseline (L5 gap 5): "paid off $X of $Y".
-	for _, d := range debts {
-		currentOwed += d.Balance
+	if prepared.PlanKnown {
+		currentOwed = prepared.PlanOwed.Amount
+		canTrack = true
 	}
-	prog, since, tracking := app.PayoffProgress(currentOwed)
+	suggestedExtra, canSuggestExtra = prepared.SuggestedExtraMinor, prepared.SuggestedExtraKnown && prepared.SuggestedExtraMinor > 0
+	var prog payoff.Progress
+	var since time.Time
+	tracking := false
+	if canTrack {
+		prog, since, tracking = app.PayoffProgress(currentOwed)
+	}
 	var progressNode ui.Node = Fragment()
 	if tracking {
 		w := prog.Percent
@@ -116,20 +143,19 @@ func DebtStrategyPanel(props DebtStrategyPanelProps) ui.Node {
 			Div(css.Class("bar"), Div(css.Class("bar-fill"), Attr("style", fmt.Sprintf("width:%d%%", w)))),
 			Button(css.Class("btn"), Type("button"), Style(map[string]string{"margin-top": "0.4rem"}), OnClick(onResetTracking), uistate.T("debt.resetProgress")),
 		)
-	} else if len(debts) > 0 {
+	} else if prepared.PlanKnown && len(debts) > 0 {
 		progressNode = Div(Style(map[string]string{"margin-top": "0.6rem"}),
 			Button(css.Class("btn"), Type("button"), Title(uistate.T("planning.snapshotTitle")),
 				OnClick(onStartTracking), uistate.T("debt.startTracking")),
 		)
 	}
 
-	// C195: if any liability is in a currency with no FX rate, it can't be summed
-	// into the base-currency plan, so AggregateDebts excluded it. Say so plainly
-	// rather than silently undercounting the debt total.
+	// A missing included-debt rate makes the whole comparison unavailable. Show
+	// the affected currencies from the checked preparation result.
 	var rateWarn ui.Node = Fragment()
-	if len(missingDebtRates) > 0 {
+	if len(prepared.PlanMissingRates) > 0 {
 		rateWarn = P(css.Class("budget-sub"), Style(map[string]string{"margin-top": "0.6rem"}),
-			uistate.T("planning.debtMissingRate", strings.Join(missingDebtRates, ", ")))
+			uistate.T("planning.debtMissingRate", strings.Join(prepared.PlanMissingRates, ", ")))
 	}
 
 	// Per-debt inclusion and APR/minimum editing now live on the payoff-ladder cards
@@ -138,114 +164,95 @@ func DebtStrategyPanel(props DebtStrategyPanelProps) ui.Node {
 
 	var body ui.Node
 	switch {
+	case !prepared.PlanKnown:
+		message := "debt plan unavailable"
+		if prepared.PlanErr != nil {
+			message = prepared.PlanErr.Error()
+		}
+		body = P(css.Class("err"), Attr("role", "alert"), message)
 	case len(debts) == 0:
 		body = P(css.Class("empty"), uistate.T("planning.debtStrategyEmpty"))
-	default:
-		extra := uistate.DebtConfigGet().DefaultExtraMinor
-		if extra < 0 {
-			extra = 0
+	case !prepared.Comparison.Known:
+		message := uistate.T("planning.strategyNotViable")
+		if prepared.Comparison.Err != nil {
+			message = prepared.Comparison.Err.Error()
 		}
-		snow, okS := payoff.BuildPlan(debts, extra, payoff.Snowball)
-		aval, okA := payoff.BuildPlan(debts, extra, payoff.Avalanche)
-		if !okS || !okA {
-			body = P(css.Class("err"), Attr("role", "alert"), uistate.T("planning.strategyNotViable"))
-		} else {
-			rec := Fragment()
-			if saved := snow.TotalInterest - aval.TotalInterest; saved > 0 {
-				rec = P(css.Class("muted"), uistate.T("planning.strategyRecommend", fmtMoney(money.New(saved, base))))
+		body = P(css.Class("err"), Attr("role", "alert"), message)
+	default:
+		comparison := prepared.Comparison
+		snow, aval := comparison.SnowballPlan, comparison.AvalanchePlan
+		rec := Fragment()
+		if comparison.HasInterestSaving && comparison.InterestSavedBy == payoff.Avalanche {
+			rec = P(css.Class("muted"), uistate.T("planning.strategyRecommend", fmtMoney(comparison.InterestSaved)))
+		}
+		if comparison.HasTimeSaving {
+			fasterLabel := uistate.T("planning.avalanche")
+			if comparison.MonthsSavedBy == payoff.Snowball {
+				fasterLabel = uistate.T("planning.snowball")
 			}
-			// C197: surface the *time* difference, not just the interest. The two
-			// strategies pay the same amount each month, but the faster one clears
-			// the whole balance in fewer months — a concrete "X months sooner".
-			if dm := snow.Months - aval.Months; dm != 0 {
-				fasterLabel := uistate.T("planning.avalanche")
-				months := dm
-				if dm < 0 {
-					fasterLabel = uistate.T("planning.snowball")
-					months = -dm
-				}
-				dur := strconv.Itoa(months) + " month"
-				if months != 1 {
-					dur += "s"
-				}
-				rec = Fragment(rec, P(css.Class("muted"), uistate.T("planning.strategyTimeSaved", fasterLabel, dur)))
+			dur := strconv.Itoa(comparison.MonthsSaved) + " month"
+			if comparison.MonthsSaved != 1 {
+				dur += "s"
 			}
-			// When the two strategies are truly identical (typically at $0 extra,
-			// or a single debt) the side-by-side is meaningless — explain why (L5).
-			explain := Fragment()
-			if snow.Months == aval.Months && snow.TotalInterest == aval.TotalInterest {
-				explain = P(css.Class("budget-sub"), uistate.T("debt.strategiesMatch"))
+			rec = Fragment(rec, P(css.Class("muted"), uistate.T("planning.strategyTimeSaved", fasterLabel, dur)))
+		}
+		explain := Fragment()
+		if comparison.Match {
+			explain = P(css.Class("budget-sub"), uistate.T("debt.strategiesMatch"))
+		}
+		now := time.Now()
+		snowDate := payoff.DebtFreeMonth(now, snow.Months).Format("Jan 2006")
+		avalDate := payoff.DebtFreeMonth(now, aval.Months).Format("Jan 2006")
+		orderParts := make([]string, len(aval.Order))
+		for i, n := range aval.Order {
+			if i < len(aval.ClearedMonths) {
+				orderParts[i] = n + " (" + payoff.DebtFreeMonth(now, aval.ClearedMonths[i]).Format("Jan 2006") + ")"
+			} else {
+				orderParts[i] = n
 			}
-			// A calendar debt-free date reads better than a bare month count
-			// (L5), plus a "cleared by <month>" beside each debt in the order.
-			now := time.Now()
-			snowDate := payoff.DebtFreeMonth(now, snow.Months).Format("Jan 2006")
-			avalDate := payoff.DebtFreeMonth(now, aval.Months).Format("Jan 2006")
-			orderParts := make([]string, len(aval.Order))
-			for i, n := range aval.Order {
-				if i < len(aval.ClearedMonths) {
-					orderParts[i] = n + " (" + payoff.DebtFreeMonth(now, aval.ClearedMonths[i]).Format("Jan 2006") + ")"
-				} else {
-					orderParts[i] = n
+		}
+		burnChart := Fragment()
+		if len(aval.Schedule) > 0 {
+			startTotal := prepared.PlanOwed.Amount
+			mkBurnPts := func(schedule []int64) []chartspec.Point {
+				pts := make([]chartspec.Point, 0, len(schedule)+1)
+				pts = append(pts, chartspec.Point{X: 0, Y: currency.MajorFromMinor(startTotal, base), Label: payoff.DebtFreeMonth(now, 1).Format("Jan 2006")})
+				for i, b := range schedule {
+					pts = append(pts, chartspec.Point{X: float64(i + 1), Y: currency.MajorFromMinor(b, base), Label: payoff.DebtFreeMonth(now, i+2).Format("Jan 2006")})
 				}
+				return pts
 			}
-			// Burn-down chart (L5 gap 4): the remaining total balance falling to
-			// zero from the full starting balance. C199: overlay BOTH strategies
-			// as lines so snowball and avalanche can be compared, not just
-			// avalanche shown alone. Each series is anchored at the full starting
-			// balance (month 0) then follows its own schedule down to zero.
-			burnChart := Fragment()
-			if len(aval.Schedule) > 0 {
-				var startTotal int64
-				for _, d := range debts {
-					startTotal += d.Balance
-				}
-				mkBurnPts := func(schedule []int64) []chartspec.Point {
-					pts := make([]chartspec.Point, 0, len(schedule)+1)
-					// C203: label each month with its calendar date so the x-axis reads
-					// as real months, not bare indices (0,1,2…).
-					pts = append(pts, chartspec.Point{X: 0, Y: currency.MajorFromMinor(startTotal, base), Label: payoff.DebtFreeMonth(now, 1).Format("Jan 2006")})
-					for i, b := range schedule {
-						pts = append(pts, chartspec.Point{X: float64(i + 1), Y: currency.MajorFromMinor(b, base), Label: payoff.DebtFreeMonth(now, i+2).Format("Jan 2006")})
-					}
-					return pts
-				}
-				yFmt := ".3~s"
-				if currency.Symbol(base) == "$" {
-					yFmt = "$.3~s"
-				}
-				burnChart = Div(Style(map[string]string{"margin-top": "0.6rem"}),
-					P(css.Class("budget-sub"), uistate.T("debt.burnDownHeading")),
-					uiw.Chart(uiw.ChartProps{
-						Spec: chartspec.Spec{Kind: chartspec.Line, Series: []chartspec.Series{
-							{Name: uistate.T("planning.avalanche"), Points: mkBurnPts(aval.Schedule)},
-							{Name: uistate.T("planning.snowball"), Points: mkBurnPts(snow.Schedule)},
-						}, Y: chartspec.Axis{Format: yFmt}},
-						Height: "150px",
-						Label:  uistate.T("debt.burnDownChartLabel", aval.Months),
-					}),
-				)
+			yFmt := ".3~s"
+			if currency.Symbol(base) == "$" {
+				yFmt = "$.3~s"
 			}
-			// Which method wins: fewer months, then less interest. At $0 extra they tie
-			// (neither wins), so no card is badged and the "add an extra amount" hint shows.
-			snowWins := snow.Months < aval.Months || (snow.Months == aval.Months && snow.TotalInterest < aval.TotalInterest)
-			avalWins := aval.Months < snow.Months || (aval.Months == snow.Months && aval.TotalInterest < snow.TotalInterest)
-			body = Div(
-				// The snowball-vs-avalanche decision, side by side: months (the headline),
-				// total interest, and debt-free date, with the better method badged.
-				Div(css.Class("strat-compare"),
-					strategyCard(uistate.T("planning.snowball"), snow.Months, money.New(snow.TotalInterest, base), snowDate, snowWins),
-					strategyCard(uistate.T("planning.avalanche"), aval.Months, money.New(aval.TotalInterest, base), avalDate, avalWins),
-				),
-				rec,
-				explain,
-				If(len(orderParts) > 0, Div(css.Class("strat-order"),
-					Span(css.Class("strat-order-label", tw.TextDim), uistate.T("debt.payoffOrderLabel")),
-					P(css.Class("strat-order-seq"), strings.Join(orderParts, "  →  ")),
-				)),
-				burnChart,
+			burnChart = Div(Style(map[string]string{"margin-top": "0.6rem"}),
+				P(css.Class("budget-sub"), uistate.T("debt.burnDownHeading")),
+				uiw.Chart(uiw.ChartProps{
+					Spec: chartspec.Spec{Kind: chartspec.Line, Series: []chartspec.Series{
+						{Name: uistate.T("planning.avalanche"), Points: mkBurnPts(aval.Schedule)},
+						{Name: uistate.T("planning.snowball"), Points: mkBurnPts(snow.Schedule)},
+					}, Y: chartspec.Axis{Format: yFmt}},
+					Height: "150px",
+					Label:  uistate.T("debt.burnDownChartLabel", aval.Months),
+				}),
 			)
 		}
+		snowWins := comparison.HasRecommendation && comparison.RecommendedStrategy == payoff.Snowball
+		avalWins := comparison.HasRecommendation && comparison.RecommendedStrategy == payoff.Avalanche
+		body = Div(
+			Div(css.Class("strat-compare"),
+				strategyCard(uistate.T("planning.snowball"), snow.Months, money.New(snow.TotalInterest, base), snowDate, snowWins),
+				strategyCard(uistate.T("planning.avalanche"), aval.Months, money.New(aval.TotalInterest, base), avalDate, avalWins),
+			),
+			rec,
+			explain,
+			If(len(orderParts) > 0, Div(css.Class("strat-order"),
+				Span(css.Class("strat-order-label", tw.TextDim), uistate.T("debt.payoffOrderLabel")),
+				P(css.Class("strat-order-seq"), strings.Join(orderParts, "  →  ")),
+			)),
+			burnChart,
+		)
 	}
 
 	return uiw.EntityListSection(uiw.EntityListSectionProps{
@@ -268,15 +275,11 @@ func DebtStrategyPanel(props DebtStrategyPanelProps) ui.Node {
 				Div(css.Class("strat-extra"),
 					labeledField(uistate.T("planning.debtStrategyExtra", base),
 						Input(css.Class("field"), Type("number"), Attr("min", "0"), Attr("data-testid", "strat-extra"), Value(money.FormatMinor(uistate.DebtConfigGet().DefaultExtraMinor, dec)), Step("0.01"), OnChange(onExtra))),
-					If(uistate.DebtConfigGet().DefaultExtraMinor == 0 && len(debts) > 1 && payoff.SuggestedExtra(debts) > 0,
+					If(uistate.DebtConfigGet().DefaultExtraMinor == 0 && len(debts) > 1 && canSuggestExtra,
 						Button(css.Class("btn strat-try"), Type("button"), Title(uistate.T("planning.fillSensibleTitle")),
-							OnClick(func() {
-								c := uistate.DebtConfigGet()
-								c.DefaultExtraMinor = payoff.SuggestedExtra(debts)
-								uistate.SetDebtConfig(c)
-								uistate.BumpDataRevision()
-							}),
-							uistate.T("debt.tryExtra", fmtMoney(money.New(payoff.SuggestedExtra(debts), base)))))),
+							OnClick(onSuggestExtra),
+							uistate.T("debt.tryExtra", fmtMoney(money.New(suggestedExtra, base))))),
+				),
 			),
 			body,
 			rateWarn,
@@ -313,5 +316,4 @@ func strategyCard(name string, months int, interest money.Money, freeDate string
 	)
 }
 
-// DebtPlanner now lives in debt_widget.go as a widgetized surface host; the shared
-// DebtStrategyPanel above is reused by both /planning and the /debt strategy tile.
+// DebtPlanner now lives in debt_widget.go as a widgetized surface host.

@@ -15,17 +15,17 @@ import (
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
-	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/period"
 	"github.com/monstercameron/CashFlux/internal/reports"
+	"github.com/monstercameron/CashFlux/internal/reportview"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/router"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/router"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // reportsBarSpec builds a horizontal Bar chart spec from label+amount pairs.
@@ -112,12 +112,20 @@ func rptChip(label, value, valueCls string, extra ...ui.Node) ui.Node {
 	return Div(args...)
 }
 
+// reportUnavailableSection shows an explicit error state when checked financial
+// preparation cannot produce complete report facts.
+func reportUnavailableSection(testID, sectionID, title string) ui.Node {
+	return Div(Attr("data-testid", testID),
+		rptSection(sectionID, title, nil, P(css.Class("muted"), Attr("data-testid", "report-aggregate-unavailable"),
+			uistate.T("reports.financialUnavailable"))))
+}
+
 // customFieldSpendSection renders the "Spending by <field>" section body: a
 // field selector, a ranked list of value→amount rows, and a CSV download
 // button. It is extracted to keep the main Reports function readable and to
-// isolate the per-field OnChange hook (called at a single stable render
-// position, not in a loop).
-func customFieldSpendSection(
+// keep the controller-owned selection handler and child-owned export hook
+// independent of variable analysis rows.
+func customFieldSpendSection(context reportSectionContext,
 	txns []domain.Transaction,
 	defs []customfields.Def,
 	selectedKey string,
@@ -137,19 +145,17 @@ func customFieldSpendSection(
 		}
 	}
 
-	cfRows, _ := reports.ByCustomField(txns, activeDef.Key, start, end, rates)
-
-	// When nothing in the period actually carries a value for this field, the
-	// grouper degenerates to a single "(no value) — 100%" bar that reads like a
-	// real insight. Show an honest empty state instead (the field selector stays
-	// so the user can try another field).
-	allUnvalued := len(cfRows) > 0
-	for _, r := range cfRows {
-		if r.Value != "" {
-			allUnvalued = false
-			break
-		}
+	cfRows, err := reports.ByCustomField(txns, activeDef.Key, start, end, rates)
+	if err != nil {
+		return reportUnavailableSection("customfield-spend-section", "sec-customfield",
+			uistate.T("reports.byCustomField", activeDef.Label))
 	}
+	review, err := reportview.BuildCustomFieldReview(cfRows)
+	if err != nil {
+		return reportUnavailableSection("customfield-spend-section", "sec-customfield",
+			uistate.T("reports.byCustomField", activeDef.Label))
+	}
+	cfRows = review.Rows
 
 	// Field selector options — built outside of a loop hook (no On* here).
 	var fieldOpts []ui.Node
@@ -157,54 +163,17 @@ func customFieldSpendSection(
 		fieldOpts = append(fieldOpts, Option(Value(d.Key), SelectedIf(d.Key == activeDef.Key), d.Label))
 	}
 
-	// When "(no value)" DOMINATES (a field only a handful of transactions carry), a
-	// single giant "(no value)" bar drowns the real classifications and reads like a
-	// false insight (e.g. "(no value) $44,738" beside "Personal $180"). Detect that,
-	// drop the no-value row from the chart, and surface an honest note — the valued
-	// rows then scale to each other instead of to the unclassified mass.
-	var totalAmt, noValAmt int64
-	for _, r := range cfRows {
-		totalAmt += r.Amount
-		if r.Value == "" {
-			noValAmt += r.Amount
-		}
-	}
-	dominantUnvalued := totalAmt > 0 && !allUnvalued && noValAmt*100/totalAmt >= 70
-
-	displayRows := cfRows
-	if dominantUnvalued {
-		valued := make([]reports.CustomFieldSpend, 0, len(cfRows))
-		for _, r := range cfRows {
-			if r.Value != "" {
-				valued = append(valued, r)
-			}
-		}
-		displayRows = valued
-	}
-
 	// Value rows are plain display (no On* in the loop).
 	noValueLabel := uistate.T("reports.customFieldNoValue")
 	var rowNodes []ui.Node
-	var maxAmt int64
-	for _, r := range displayRows {
-		if r.Amount > maxAmt {
-			maxAmt = r.Amount
-		}
-	}
-	for _, r := range displayRows {
+	for _, fact := range review.DisplayRows {
+		r := fact.Spend
 		label := r.Value
 		if label == "" {
 			label = noValueLabel
 		}
-		pct := 0
-		if maxAmt > 0 {
-			pct = int(r.Amount * 100 / maxAmt)
-		}
-		if pct > 100 {
-			pct = 100
-		}
 		bar := Div(css.Class("share-bar", "share-bar-thin"),
-			Div(css.Class("share-bar-fill"), Style(map[string]string{"width": fmt.Sprintf("%d%%", pct)})))
+			Div(css.Class("share-bar-fill"), Style(map[string]string{"width": fmt.Sprintf("%d%%", fact.WidthPercent)})))
 		rowNodes = append(rowNodes, Div(css.Class("row"),
 			Div(css.Class("row-main"), Span(css.Class("row-desc"), label), bar),
 			Span(css.Class("budget-amount"), fmtMinor(r.Amount)),
@@ -213,14 +182,14 @@ func customFieldSpendSection(
 
 	// Honest note when most spending is unclassified for this field.
 	var domNote ui.Node = Fragment()
-	if dominantUnvalued {
+	if review.DominantUnvalued {
 		domNote = P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "cf-dominant-unvalued"),
-			uistate.T("reports.customFieldMostUnvalued", int(noValAmt*100/totalAmt), activeDef.Label))
+			uistate.T("reports.customFieldMostUnvalued", review.NoValuePercent, activeDef.Label))
 	}
 
 	var body ui.Node
 	switch {
-	case allUnvalued:
+	case review.AllUnvalued:
 		body = P(css.Class("empty"), Attr("data-testid", "cf-unvalued"), uistate.T("reports.customFieldUnvalued", activeDef.Label))
 	case len(rowNodes) == 0:
 		body = P(css.Class("empty"), uistate.T("reports.empty"))
@@ -238,19 +207,12 @@ func customFieldSpendSection(
 				Select(css.Class("field"), Attr("id", "cf-field-select"), Attr("aria-label", selectorLabel), Attr("data-testid", "cf-field-select"), onKeyChange, fieldOpts),
 			),
 			body,
-			If(!allUnvalued && len(rowNodes) > 0, Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
-				Button(css.Class("btn", tw.Gap2), Type("button"),
-					Attr("data-testid", "cf-download-csv"),
-					Title(uistate.T("reports.customFieldDownloadTitle")),
-					Attr("aria-label", uistate.T("reports.customFieldDownloadTitle")),
-					OnClick(func() {
-						csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
-						filename := reports.ExportFilename("spending-by-"+activeDef.Key, win.Res, win.From)
-						downloadBytes(filename, "text/csv", reports.CustomFieldCSV(cfRows, activeDef.Label, csvAmount))
-					}),
-					uiw.Icon(icon.FileText, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-					Span(uistate.T("reports.downloadCsv")),
-				),
+			If(!review.AllUnvalued && len(rowNodes) > 0, Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
+				ui.CreateElement(reportDownloadButton, reportDownloadProps{Context: context, TestID: "cf-download-csv", TitleKey: "reports.customFieldDownloadTitle", Download: func() {
+					csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
+					filename := reports.ExportFilename("spending-by-"+activeDef.Key, win.Res, win.From)
+					downloadBytes(filename, "text/csv", reports.CustomFieldCSV(cfRows, activeDef.Label, csvAmount))
+				}}),
 			)),
 		)))
 }
@@ -268,7 +230,7 @@ func rollupLabelKey(on bool) string {
 // investment / retirement / crypto account, what was put in (cost basis) vs its
 // current value, the gain, and the return % — all from the account's own history, no
 // live prices. Returns nil when there are no investment accounts. Includes a CSV export.
-func investmentPerformanceSection(
+func investmentPerformanceSection(context reportSectionContext,
 	accounts []domain.Account,
 	txns []domain.Transaction,
 	rates currency.Rates,
@@ -277,15 +239,19 @@ func investmentPerformanceSection(
 	win period.Window,
 ) ui.Node {
 	perf, err := reports.InvestmentPerformance(accounts, txns, rates)
-	if err != nil || len(perf) == 0 {
+	if err != nil {
+		return reportUnavailableSection("investperf-section", "sec-investperf", uistate.T("reports.invPerfTitle"))
+	}
+	review, err := reportview.BuildInvestmentReview(perf)
+	if err != nil {
+		return reportUnavailableSection("investperf-section", "sec-investperf", uistate.T("reports.invPerfTitle"))
+	}
+	if len(review.Rows) == 0 {
 		return nil
 	}
-	var totalInvested, totalCurrent, totalGain int64
-	rowNodes := make([]ui.Node, 0, len(perf))
-	for _, p := range perf {
-		totalInvested += p.Invested
-		totalCurrent += p.Current
-		totalGain += p.Gain
+	rowNodes := make([]ui.Node, 0, len(review.Rows))
+	for _, fact := range review.Rows {
+		p := fact.Performance
 		tone := "text-up"
 		if p.Gain < 0 {
 			tone = "text-down"
@@ -301,7 +267,7 @@ func investmentPerformanceSection(
 		// nonsense. Say "Took out" with the magnitude when more came out than in.
 		basisLine := uistate.T("reports.invPerfBasis", fmtMinor(p.Invested), fmtMinor(p.Current))
 		if p.Invested < 0 {
-			basisLine = uistate.T("reports.invPerfBasisOut", fmtMinor(-p.Invested), fmtMinor(p.Current))
+			basisLine = uistate.T("reports.invPerfBasisOut", fmtMinor(fact.InvestedMagnitude), fmtMinor(p.Current))
 		}
 		rowNodes = append(rowNodes, Div(css.Class("row"), Attr("data-testid", "invperf-row"),
 			Div(css.Class("row-main"),
@@ -312,31 +278,24 @@ func investmentPerformanceSection(
 		))
 	}
 	totalTone := "text-up"
-	if totalGain < 0 {
+	if review.TotalGain < 0 {
 		totalTone = "text-down"
 	}
-	totalRet := 0.0
-	if totalInvested > 0 {
-		totalRet = float64(totalGain) / float64(totalInvested) * 100
+	totalRet := money.FormatMinor(review.TotalReturnTenthsPct, 1)
+	if review.TotalReturnTenthsPct >= 0 {
+		totalRet = "+" + totalRet
 	}
 	return Div(Attr("data-testid", "investperf-section"),
 		rptSection("sec-investperf", uistate.T("reports.invPerfTitle"), nil, Fragment(
 			P(css.Class("muted"), uistate.T("reports.invPerfHint")),
 			Div(css.Class("rows"), rowNodes),
 			P(ClassStr("muted "+tw.ColorClass(totalTone)), Attr("data-testid", "invperf-total"),
-				uistate.T("reports.invPerfTotal", fmtMinor(totalCurrent), fmtMinor(totalGain), fmt.Sprintf("%+.1f%%", totalRet))),
+				uistate.T("reports.invPerfTotal", fmtMinor(review.TotalCurrent), fmtMinor(review.TotalGain), totalRet+"%")),
 			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
-				Button(css.Class("btn", tw.Gap2), Type("button"),
-					Attr("data-testid", "invperf-download-csv"),
-					Title(uistate.T("reports.invPerfDownloadTitle")),
-					Attr("aria-label", uistate.T("reports.invPerfDownloadTitle")),
-					OnClick(func() {
-						csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
-						downloadBytes(reports.ExportFilename("investment-performance", win.Res, win.From), "text/csv", reports.InvestmentPerformanceCSV(perf, csvAmount))
-					}),
-					uiw.Icon(icon.FileText, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-					Span(uistate.T("reports.downloadCsv")),
-				),
+				ui.CreateElement(reportDownloadButton, reportDownloadProps{Context: context, TestID: "invperf-download-csv", TitleKey: "reports.invPerfDownloadTitle", Download: func() {
+					csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
+					downloadBytes(reports.ExportFilename("investment-performance", win.Res, win.From), "text/csv", reports.InvestmentPerformanceCSV(perf, csvAmount))
+				}}),
 			),
 		)))
 }
@@ -384,7 +343,7 @@ func deductibleRow(props deductibleRowProps) ui.Node {
 // the period, a headline total, and a CSV export. Returns nil when no
 // categories are marked deductible, so the tile stays invisible until the user
 // sets up at least one deductible category.
-func deductibleSection(
+func deductibleSection(context reportSectionContext,
 	txns []domain.Transaction,
 	cats []domain.Category,
 	start, end time.Time,
@@ -406,7 +365,14 @@ func deductibleSection(
 		return nil
 	}
 
-	summary, _ := reports.DeductibleTotals(txns, cats, start, end, rates)
+	summary, err := reports.DeductibleTotals(txns, cats, start, end, rates)
+	if err != nil {
+		return reportUnavailableSection("deductible-section", "sec-deductible", uistate.T("reports.deductibleTitle"))
+	}
+	review, err := reportview.BuildDeductibleReview(summary)
+	if err != nil {
+		return reportUnavailableSection("deductible-section", "sec-deductible", uistate.T("reports.deductibleTitle"))
+	}
 	nameOf := func(id string) string {
 		if n := catName[id]; n != "" {
 			return n
@@ -414,23 +380,11 @@ func deductibleSection(
 		return uistate.T("reports.uncategorized")
 	}
 
-	var rowNodes []ui.Node
-	var maxAmt int64
-	for _, r := range summary.Rows {
-		if r.Amount > maxAmt {
-			maxAmt = r.Amount
-		}
-	}
-	for _, r := range summary.Rows {
-		pct := 0
-		if maxAmt > 0 {
-			pct = int(r.Amount * 100 / maxAmt)
-		}
-		if pct > 100 {
-			pct = 100
-		}
+	rowNodes := make([]ui.Node, 0, len(review.Rows))
+	for _, fact := range review.Rows {
+		r := fact.Row
 		bar := Div(css.Class("share-bar", "share-bar-thin"),
-			Div(css.Class("share-bar-fill"), Style(map[string]string{"width": fmt.Sprintf("%d%%", pct)})))
+			Div(css.Class("share-bar-fill"), Style(map[string]string{"width": fmt.Sprintf("%d%%", fact.WidthPercent)})))
 		// Each deductible line drills to its SUPPORTING TRANSACTIONS — the
 		// ledger filtered to the category subtree within the report window
 		// (parity scan: a tax workflow needs the receipts behind the totals).
@@ -457,17 +411,10 @@ func deductibleSection(
 			If(summary.Total > 0, P(css.Class("muted"), uistate.T("reports.deductibleTotal", fmtMinor(summary.Total)))),
 			body,
 			If(len(rowNodes) > 0, Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
-				Button(css.Class("btn", tw.Gap2), Type("button"),
-					Attr("data-testid", "deductible-download-csv"),
-					Title(uistate.T("reports.deductibleDownloadTitle")),
-					Attr("aria-label", uistate.T("reports.deductibleDownloadTitle")),
-					OnClick(func() {
-						csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
-						downloadBytes(reports.ExportFilename("deductible-totals", win.Res, win.From), "text/csv", reports.DeductibleCSV(summary, nameOf, csvAmount))
-					}),
-					uiw.Icon(icon.FileText, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-					Span(uistate.T("reports.downloadCsv")),
-				),
+				ui.CreateElement(reportDownloadButton, reportDownloadProps{Context: context, TestID: "deductible-download-csv", TitleKey: "reports.deductibleDownloadTitle", Download: func() {
+					csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
+					downloadBytes(reports.ExportFilename("deductible-totals", win.Res, win.From), "text/csv", reports.DeductibleCSV(summary, nameOf, csvAmount))
+				}}),
 			)),
 		)))
 }

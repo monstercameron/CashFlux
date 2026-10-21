@@ -148,16 +148,32 @@ test.describe("C560 — one period across the label, the rows and the calendar",
 
   test("This month and All dates return to their named states", async ({ app }) => {
     await nav(app, "/transactions");
-    await app.getByTestId("txn-scope-prev").click();
-    await expect(app.getByTestId("txn-scope-label")).toHaveText(PREV_MONTH);
-    await app.getByTestId("txn-scope-thismonth").click();
-    await expect(app.getByTestId("txn-scope-label")).toHaveText(THIS_MONTH);
-    // Already on this month, so the control that would do nothing is not offered.
-    await expect(app.getByTestId("txn-scope-thismonth")).toHaveCount(0);
-    await app.getByTestId("txn-scope-alldates").click();
-    await expect(app.getByTestId("txn-scope-label")).toHaveText(/all dates/i);
-    // Unbounded, so there is nothing to clear.
-    await expect(app.getByTestId("txn-scope-alldates")).toHaveCount(0);
+    const scope = app.getByTestId("txn-scopebar");
+    const period = scope.getByRole("combobox", { name: "Period", exact: true });
+    const status = app.locator(".txn-countline-wrap [role=status]");
+    // The current picker owns the ledger period; the older standalone label and
+    // preset buttons no longer exist. Move through the same named states using
+    // its options, including All dates.
+    await period.selectOption("last-month");
+    await expect(period).toHaveValue("last-month");
+    await expect(period.locator("option:checked")).toHaveText("Last month");
+    await expect(scope).toHaveAttribute("aria-label", PREV_MONTH);
+    await expect(status).toContainText(PREV_MONTH);
+    await expect.poll(async () => (await rowDates(app)).length > 0 && (await rowDates(app)).every((d) => /Jun\b/.test(d))).toBe(true);
+    await period.selectOption("this-month");
+    await expect(period).toHaveValue("this-month");
+    await expect(period.locator("option:checked")).toHaveText("This month");
+    await expect(scope).toHaveAttribute("aria-label", THIS_MONTH);
+    await expect(status).toContainText(THIS_MONTH);
+    const thisMonthRows = await rowDates(app);
+    expect(thisMonthRows.length).toBeGreaterThan(0);
+    await expect.poll(async () => (await rowDates(app)).every((d) => /Jul\b/.test(d))).toBe(true);
+    await period.selectOption("all-dates");
+    await expect(period).toHaveValue("all-dates");
+    await expect(period.locator("option:checked")).toHaveText(/All dates/i);
+    await expect(scope).toHaveAttribute("aria-label", /All dates/i);
+    await expect(status).toContainText(/All dates/i);
+    await expect.poll(async () => (await rowDates(app)).length >= thisMonthRows.length).toBe(true);
   });
 
   test("Ledger and Calendar are a pressed pair with a one-click way back", async ({ app }) => {
@@ -169,7 +185,7 @@ test.describe("C560 — one period across the label, the rows and the calendar",
     await calendar.click();
     await expect(calendar).toHaveAttribute("aria-pressed", "true");
     await expect(ledger).toHaveAttribute("aria-pressed", "false");
-    await expect(app.locator(".txn-cal-grid")).toBeVisible();
+    await expect(app.locator(".txn-cal-weeks")).toBeVisible();
     // The way back is the visible pair, not a rediscovered overflow entry.
     await ledger.click();
     await expect(ledger).toHaveAttribute("aria-pressed", "true");
@@ -192,7 +208,10 @@ test.describe("C560 — one period across the label, the rows and the calendar",
 
   test("picking a calendar day scopes the ledger to that day and says so", async ({ app }) => {
     await nav(app, "/transactions");
-    await app.getByTestId("txn-scope-thismonth").click();
+    const scope = app.getByTestId("txn-scopebar");
+    const period = scope.getByRole("combobox", { name: "Period", exact: true });
+    await period.selectOption("this-month");
+    await expect(scope).toHaveAttribute("aria-label", THIS_MONTH);
     await app.getByTestId("txn-view-calendar").click();
     await expect(app.getByTestId("txn-cal-month")).toHaveText(THIS_MONTH);
     // Any in-month day with activity; the first enabled cell will do.
@@ -202,8 +221,18 @@ test.describe("C560 — one period across the label, the rows and the calendar",
     // Back on the ledger, scoped to exactly that day — and the label states the DAY,
     // not the month it sits in, because the rows are one day's worth.
     await expect(app.getByTestId("txn-view-ledger")).toHaveAttribute("aria-pressed", "true");
-    await expect(app.getByTestId("filter-summary")).toContainText(key);
-    await expect(app.getByTestId("txn-scope-label")).not.toHaveText(THIS_MONTH);
+    const pickedDate = new Date(`${key}T12:00:00Z`);
+    const rowDate = pickedDate.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+    const selectedDate = `${rowDate}, ${pickedDate.getUTCFullYear()}`;
+    // Date scope is stated by the period control; the generic filter summary
+    // describes the other filters and need not exist for a date-only selection.
+    await expect(scope).toHaveAttribute("aria-label", `Period shown: ${selectedDate}`);
+    await expect(period.getByRole("option", { selected: true })).toHaveText(selectedDate);
+    await expect.poll(async () => {
+      const dates = await rowDates(app);
+      return dates.length > 0 && dates.every((date) => date === rowDate);
+    }).toBe(true);
+    await expect(scope).not.toHaveAttribute("aria-label", THIS_MONTH);
   });
 
   test("the upcoming band steps aside outside a period containing today", async ({ app }) => {

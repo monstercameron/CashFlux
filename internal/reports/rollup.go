@@ -3,9 +3,11 @@
 package reports
 
 import (
+	"fmt"
 	"sort"
 
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/money"
 )
 
 // RollUpByParent re-aggregates per-category spend rows into their TOP-LEVEL
@@ -16,6 +18,13 @@ import (
 // from the rolled-up Amount/Prior. Output is sorted largest spend first, ties
 // broken by id for determinism.
 func RollUpByParent(rows []CategorySpend, cats []domain.Category) []CategorySpend {
+	rolled, _ := RollUpByParentChecked(rows, cats)
+	return rolled
+}
+
+// RollUpByParentChecked is RollUpByParent with an explicit error if an ancestor
+// total cannot be represented. No partial parent totals are returned.
+func RollUpByParentChecked(rows []CategorySpend, cats []domain.Category) ([]CategorySpend, error) {
 	top := topLevelMap(cats)
 	agg := map[string]*CategorySpend{}
 	order := make([]string, 0, len(rows))
@@ -36,8 +45,15 @@ func RollUpByParent(rows []CategorySpend, cats []domain.Category) []CategorySpen
 			agg[root] = a
 			order = append(order, root)
 		}
-		a.Amount += r.Amount
-		a.Prior += r.Prior
+		var err error
+		a.Amount, err = money.Add(a.Amount, r.Amount)
+		if err != nil {
+			return nil, fmt.Errorf("category %q current rollup: %w", root, err)
+		}
+		a.Prior, err = money.Add(a.Prior, r.Prior)
+		if err != nil {
+			return nil, fmt.Errorf("category %q prior rollup: %w", root, err)
+		}
 	}
 	out := make([]CategorySpend, 0, len(order))
 	for _, id := range order {
@@ -58,7 +74,7 @@ func RollUpByParent(rows []CategorySpend, cats []domain.Category) []CategorySpen
 		}
 		return out[i].CategoryID < out[j].CategoryID
 	})
-	return out
+	return out, nil
 }
 
 // topLevelMap maps each category id to the id of its top-level ancestor (the

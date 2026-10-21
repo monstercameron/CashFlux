@@ -14,8 +14,8 @@ import (
 	"github.com/monstercameron/CashFlux/internal/widgetregistry"
 	"github.com/monstercameron/CashFlux/internal/widgetrender"
 	"github.com/monstercameron/CashFlux/internal/widgetspec"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // kpiScope builds the engine evaluation context for a KPI tile: the numeric variable
@@ -96,7 +96,7 @@ func renderKPISpec(spec domain.WidgetSpec, c widgetrender.RenderCtx) ui.Node {
 	// savings is a declarative KPI (scalar binding "savings_rate") but rendered as a
 	// gauge rather than a plain figure tile — a presentation variant of Kind==KPI.
 	if spec.ID == "savings" {
-		return savingsRateWidget(view.Value, spec.Settings, c.PeriodLabel)
+		return savingsRateWidget(view.Value, err == nil, spec.Settings, c.PeriodLabel)
 	}
 	pres := kpiPresentation[spec.ID]
 	tone := pres.Tone
@@ -194,7 +194,7 @@ func init() {
 		return freshnessWidget(c.Accounts, c.App.FreshnessWindows(), c.Dismissals, c.RemindToUpdate, c.DismissFreshness)
 	})
 	R("highlight", func(c widgetrender.RenderCtx) ui.Node {
-		return topHighlightWidget(c.ScopedTxns, c.App.Categories(), c.Rates)
+		return topHighlightWidget(c.App, acctSig(c.ScopedAccounts), c.ScopedTxns, c.App.Categories(), c.Rates)
 	})
 	R("monthly-recap", monthlyRecapWidget)
 	// 30/60/90-day available-cash forecast from per-account recurring projections.

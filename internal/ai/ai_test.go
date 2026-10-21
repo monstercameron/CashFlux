@@ -39,13 +39,16 @@ func TestRetryDelayMS(t *testing.T) {
 }
 
 func TestEstimateCostUSD(t *testing.T) {
-	// gpt-5.4-mini: $0.25/1M in, $2.00/1M out. 1,000,000 in + 1,000,000 out = 0.25 + 2.00 = 2.25.
-	if got, ok := EstimateCostUSD("gpt-5.4-mini", Usage{PromptTokens: 1_000_000, CompletionTokens: 1_000_000}); !ok || got != 2.25 {
-		t.Errorf("gpt-5.4-mini cost = %v (ok=%v), want 2.25", got, ok)
+	// gpt-5.4-mini: $0.75/1M in, $4.50/1M out at the checked standard rate.
+	if got, ok := EstimateCostUSD("gpt-5.4-mini", Usage{PromptTokens: 1_000_000, CompletionTokens: 1_000_000}); !ok || got != 5.25 {
+		t.Errorf("gpt-5.4-mini cost = %v (ok=%v), want 5.25", got, ok)
 	}
 	// Dated variant resolves to the longest prefix (gpt-5.4-mini, not gpt-5.5).
-	if got, ok := EstimateCostUSD("gpt-5.4-mini-2026-01-01", Usage{PromptTokens: 1_000_000}); !ok || got != 0.25 {
-		t.Errorf("dated variant cost = %v (ok=%v), want 0.25 via gpt-5.4-mini prefix", got, ok)
+	if got, ok := EstimateCostUSD("gpt-5.4-mini-2026-01-01", Usage{PromptTokens: 1_000_000}); !ok || got != 0.75 {
+		t.Errorf("dated variant cost = %v (ok=%v), want 0.75 via gpt-5.4-mini prefix", got, ok)
+	}
+	if got, ok := EstimateCostUSD("gpt-5.5", Usage{PromptTokens: 1_000_000, CompletionTokens: 1_000_000}); !ok || got != 35 {
+		t.Errorf("gpt-5.5 cost = %v (ok=%v), want 35", got, ok)
 	}
 	// Unknown model → not ok.
 	if _, ok := EstimateCostUSD("some-future-model", Usage{PromptTokens: 100}); ok {

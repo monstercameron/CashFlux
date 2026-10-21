@@ -410,7 +410,7 @@ func prepareBackendSyncDataset(ctx context.Context, endpoint, token, workspaceID
 	// The encrypted snapshot can be opened by another device with the same App
 	// Lock passcode. Keep this browser's endpoint and bearer out of that shared
 	// payload even though the server itself cannot decrypt it.
-	changed := stripDatasetConnectionPrefs(ds.SettingsKV)
+	changed := stripDatasetDeviceSecrets(&ds)
 	for i := range ds.Artifacts {
 		if len(ds.Artifacts[i].Bytes) == 0 {
 			continue

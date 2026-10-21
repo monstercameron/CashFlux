@@ -6,24 +6,23 @@ package screens
 
 import (
 	"fmt"
-	"math"
 	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
+	"github.com/monstercameron/CashFlux/internal/budgetview"
 	"github.com/monstercameron/CashFlux/internal/catname"
 	"github.com/monstercameron/CashFlux/internal/currency"
-	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // budgetFlexWidget is the flex-budgeting view (BG2), shown only when the
@@ -125,78 +124,40 @@ type flexEvaluationMemo struct {
 // flexTargetForWindow scales the configured monthly target by the calendar days
 // covered in each month, using checked integer arithmetic throughout.
 func flexTargetForWindow(monthly int64, start, end time.Time, base string) (money.Money, error) {
-	total := money.Zero(base)
-	start = dateutil.CalendarDayUTC(start)
-	end = dateutil.CalendarDayUTC(end)
-	for cursor := start; cursor.Before(end); {
-		monthStart := dateutil.MonthStart(cursor)
-		nextMonth := dateutil.AddMonths(monthStart, 1)
-		segmentEnd := end
-		if segmentEnd.After(nextMonth) {
-			segmentEnd = nextMonth
-		}
-		days := int64(dateutil.DaysBetween(cursor, segmentEnd))
-		monthDays := int64(dateutil.DaysBetween(monthStart, nextMonth))
-		segment, err := money.New(monthly, base).MulDiv(days, monthDays, money.RoundHalfAwayFromZero)
-		if err != nil {
-			return money.Money{}, fmt.Errorf("scale flex target for %s: %w", monthStart.Format("2006-01"), err)
-		}
-		total, err = total.Add(segment)
-		if err != nil {
-			return money.Money{}, fmt.Errorf("sum flex target window: %w", err)
-		}
-		cursor = segmentEnd
-	}
-	return total, nil
+	return budgeting.FlexTargetForWindow(monthly, start, end, base)
 }
 
 // flexMeter is the pure, view-derived read that drives the signature meter: how
 // full the flex pool is, where the calendar's pace sits, and the one-word verdict.
 // Computed once in the component so the render helpers stay hook-free.
 type flexMeter struct {
-	unset     bool
-	fillPct   float64 // spent as a % of target, clamped to [0,100]
-	pacePct   float64 // fraction of the period elapsed, as a %
-	showPace  bool    // hide the tick at the very edges where it reads as noise
-	toneClass string  // meter fill tone: is-empty | is-ok | is-warn | is-over
-	paceClass string  // pace-pill tone: is-ok | is-warn | is-over
-	paceLabel string  // localized verdict: On track / Getting tight / Spending fast / Over budget
-	daysLeft  string  // localized "N days left" (empty on the period's last hours)
+	unset      bool
+	fillPct    float64 // spent as a % of target, clamped to [0,100]
+	pacePct    float64 // fraction of the period elapsed, as a %
+	showPace   bool    // hide the tick at the very edges where it reads as noise
+	toneClass  string  // meter fill tone: is-empty | is-ok | is-warn | is-over
+	paceClass  string  // pace-pill tone: is-ok | is-warn | is-over
+	paceLabel  string  // localized verdict: On track / Getting tight / Spending fast / Over budget
+	daysLeft   string  // localized "N days left" (empty on the period's last hours)
+	reading    money.Money
+	readingErr error
 }
 
 // newFlexMeter derives the meter read from the evaluated view and the period clock.
 func newFlexMeter(view budgeting.FlexView, target int64, now, start, end time.Time) flexMeter {
-	if target <= 0 {
-		return flexMeter{unset: true, toneClass: "is-empty"}
+	facts := budgetview.PrepareFlexMeter(view, target, now, start, end)
+	m := flexMeter{
+		unset: facts.Unset, fillPct: facts.FillPct, pacePct: facts.PacePct, showPace: facts.ShowPace,
+		daysLeft: flexDaysLabel(facts.DaysLeft), reading: facts.Reading, readingErr: facts.ReadingErr,
 	}
-	m := flexMeter{}
-	spent := float64(view.Spent.Amount)
-	tgt := float64(target)
-	m.fillPct = clampPct(spent / tgt * 100)
-
-	// Pace: how far through the period we are. If spending outruns the calendar, the
-	// fill crosses this tick — the whole point of the marker.
-	var pace float64
-	if total := end.Sub(start); total > 0 {
-		pace = now.Sub(start).Seconds() / total.Seconds()
-	}
-	if pace < 0 {
-		pace = 0
-	} else if pace > 1 {
-		pace = 1
-	}
-	m.pacePct = pace * 100
-	m.showPace = pace > 0.03 && pace < 0.97
-	m.daysLeft = flexDaysLeft(now, end)
-
-	spentFrac := spent / tgt
-	switch {
-	case view.Over:
+	switch facts.State {
+	case budgetview.FlexPaceUnset:
+		m.toneClass = "is-empty"
+	case budgetview.FlexPaceOver:
 		m.toneClass, m.paceClass, m.paceLabel = "is-over", "is-over", uistate.T("flex.paceOver")
-	case view.Remaining.Amount < target/5:
+	case budgetview.FlexPaceTight:
 		m.toneClass, m.paceClass, m.paceLabel = "is-warn", "is-warn", uistate.T("flex.paceTight")
-	case spentFrac > pace+0.1:
-		// Ahead of the calendar though not yet tight — the pace tick earns its keep.
+	case budgetview.FlexPaceFast:
 		m.toneClass, m.paceClass, m.paceLabel = "is-warn", "is-warn", uistate.T("flex.paceFast")
 	default:
 		m.toneClass, m.paceClass, m.paceLabel = "is-ok", "is-ok", uistate.T("flex.paceOnTrack")
@@ -257,19 +218,22 @@ func flexEditor(draft string, onDraft, onSave ui.Handler) ui.Node {
 func flexReading(view budgeting.FlexView, m flexMeter, onEdit ui.Handler) ui.Node {
 	// Lead with the actionable number — what's still spendable — not what's gone.
 	// Over budget flips the figure to the overspend, read in the danger tone.
-	numTxt := fmtMoney(view.Remaining)
+	numTxt := fmtMoney(m.reading)
 	word := uistate.T("flex.leftWord")
 	figClass := "bflex-figure"
 	if view.Over {
-		numTxt = fmtMoney(view.Remaining.Abs())
 		word = uistate.T("flex.overWord")
 		figClass = "bflex-figure is-over"
+	}
+	if m.readingErr != nil {
+		numTxt, word = uistate.T("calculation.unavailable"), ""
 	}
 
 	return Div(css.Class("bflex-reading"),
 		Div(css.Class(figClass),
 			Span(css.Class("bflex-num"), numTxt),
 			Span(css.Class("bflex-word"), word)),
+		If(m.readingErr != nil, P(css.Class("budget-sub is-error"), Attr("role", "status"), Attr("data-testid", "flex-reading-unavailable"), uistate.T("flex.calculationFailed"))),
 		flexMeterBar(m),
 		Div(css.Class("bflex-context"),
 			Span(css.Class("bflex-spent"), Attr("data-testid", "flex-spent"),
@@ -381,28 +345,14 @@ func flexNonMonthlyRow(props flexNonMonthlyRowProps) ui.Node {
 			Span(css.Class("bflex-row-sub"), uistate.T("flex.spentThisPeriod", fmtMoney(r.Spent)))))
 }
 
-// clampPct clamps a percentage to [0,100].
-func clampPct(v float64) float64 {
-	if v < 0 {
-		return 0
-	}
-	if v > 100 {
-		return 100
-	}
-	return v
-}
-
 // pctStr renders a percentage as a CSS width/offset value.
 func pctStr(v float64) string { return fmt.Sprintf("%.2f%%", v) }
 
-// flexDaysLeft returns the localized "N days left" for the period, counting the
-// current day; it returns "" once the period has effectively ended.
-func flexDaysLeft(now, end time.Time) string {
-	hrs := end.Sub(now).Hours()
-	if hrs <= 0 {
+// flexDaysLabel formats the native elapsed-day count; zero hides the caption.
+func flexDaysLabel(days int) string {
+	if days == 0 {
 		return ""
 	}
-	days := int(math.Ceil(hrs / 24))
 	if days <= 1 {
 		return uistate.T("flex.dayLeft")
 	}

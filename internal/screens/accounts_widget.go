@@ -7,6 +7,7 @@ package screens
 import (
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/accountview"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/docexpiry"
@@ -14,9 +15,9 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/CashFlux/internal/widgetrender"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // Accounts is the widgetized accounts surface. Like /transactions, the page is a
@@ -69,7 +70,7 @@ func Accounts() ui.Node {
 	accounts := app.Accounts()
 	txns := app.Transactions()
 	activeMemberID := acctActiveMemberID()
-	_, archived := partitionAssetAccounts(accounts, txns, rates, base, activeMemberID)
+	_, archived := accountview.Assets(accounts, accountSnapshot(app).Balances, rates, base, activeMemberID)
 
 	// The engine render context: the live data every tile body reads from (§6).
 	rctx := widgetrender.RenderCtx{
@@ -102,19 +103,7 @@ func Accounts() ui.Node {
 	// preview-approve moment, present only when a sweep rule is due.
 	return Div(
 		ui.CreateElement(accountsSweepCards),
-		Div(css.Class("bento bento-accounts"),
-			MapKeyed(specs,
-				func(sp domain.WidgetSpec) any { return sp.ID },
-				func(sp domain.WidgetSpec) ui.Node {
-					c := rctx
-					c.Spec = sp
-					if node, ok := safeRenderSpec(sp, c); ok {
-						return node
-					}
-					return Fragment()
-				},
-			),
-		),
+		ui.CreateElement(surfaceTiles, surfaceTilesProps{Class: "bento-accounts", Specs: specs, Context: rctx}),
 	)
 }
 

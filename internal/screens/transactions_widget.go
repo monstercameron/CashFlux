@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
-	"github.com/monstercameron/CashFlux/internal/artifacts"
 	"github.com/monstercameron/CashFlux/internal/catname"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
@@ -31,11 +30,11 @@ import (
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/CashFlux/internal/widgetrender"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/router"
-	"github.com/monstercameron/GoWebComponents/v5/state"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/router"
+	"github.com/monstercameron/GoWebComponents/v7/state"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 const (
@@ -130,7 +129,9 @@ func useTxnSurfaceContext(app *appstate.App, f txnfilter.Criteria) widgetrender.
 	accounts, categories := app.Accounts(), app.Categories()
 	base := txntable.BaseCurrency(app.Settings().BaseCurrency)
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	index := txntable.BuildIndex(nil, accounts, categories, nil, nil, nil)
+	index := ui.UseMemo(func() txntable.Index {
+		return txntable.BuildIndex(nil, accounts, categories, nil, nil, nil)
+	}, revKey(app))
 	accName, catName := index.AccountNames, index.CategoryNames
 	transactions := app.Transactions()
 	resolver := app.PayeeResolver()
@@ -144,7 +145,7 @@ func useTxnSurfaceContext(app *appstate.App, f txnfilter.Criteria) widgetrender.
 		}
 		return &txntoolbar.Snapshot{Revision: app.Rev(), Scope: txnDerivedScope(app, derivedFilter),
 			Value: deriveTxnScope(app, transactions, derivedFilter, labels, rates, base)}
-	}, app, app.Rev(), derivedFilter, activeImportProfileWorkspaceID(), month)
+	}, revKey(app), derivedFilter, activeImportProfileWorkspaceID(), month)
 	shown := ui.UseMemo(func() []domain.Transaction {
 		rows := txntable.OrderDescriptions(derived.Value.Rows, derivedFilter, resolver.HasLearned, resolver.Resolve)
 		return txntable.VisibleTransfers(rows, derivedFilter, rates)
@@ -226,13 +227,19 @@ func txnReceiptPreviewOverlay(app *appstate.App, previewAtom state.Atom[domain.A
 	closePreview := ui.UseEvent(Prevent(func() { previewAtom.Set(domain.AttachmentRef{}) }))
 	closeOption := OnClick(closePreview)
 	ref := previewAtom.Get()
+	artifact := domain.Artifact{}
+	if ref.ArtifactID != "" {
+		if art := txntable.PreviewArtifact(ref.ArtifactID, app.Artifacts()); art != nil {
+			artifact = *art
+		}
+	}
+	url := useArtifactImageURL(app, artifact)
 	if ref.ArtifactID == "" {
 		return Fragment()
 	}
-	art := txntable.PreviewArtifact(ref.ArtifactID, app.Artifacts())
 	var body ui.Node
-	if art != nil && len(art.Bytes) > 0 {
-		body = Img(Attr("src", artifacts.DataURL(art.MIME, art.Bytes)), Attr("alt", uistate.T("transactions.previewAlt", ref.Name)), css.Class(tw.MaxWFull))
+	if url != "" {
+		body = Img(Attr("src", url), Attr("alt", uistate.T("transactions.previewAlt", ref.Name)), css.Class(tw.MaxWFull))
 	} else {
 		body = P(css.Class("empty"), uistate.T("transactions.previewMissing"))
 	}

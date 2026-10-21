@@ -317,7 +317,7 @@ Blob garbage collection removes unreferenced content-addressed blob files and me
 docker compose -f docker-compose.selfhost.yml run --rm cashflux-server gc-blobs
 ```
 
-The repository includes `deploy/cashflux-blob-gc.example.service` and `deploy/cashflux-blob-gc.example.timer` for weekly blob GC. Monitor `cashflux_blob_gc_sweeps_total` and `cashflux_blob_gc_deleted_total`. Audit listing is capped at 500 rows per request and snapshot history is capped per write, so list/history growth stays bounded.
+The repository includes `deploy/cashflux-blob-gc.example.service` and `deploy/cashflux-blob-gc.example.timer` for weekly blob GC. The job also reclaims content-addressed files older than 24 hours that have no database row, including files left by older failed sweeps. It logs metadata and rowless-file deletion counts separately. Monitor `cashflux_blob_gc_sweeps_total` and `cashflux_blob_gc_deleted_total`. Audit listing is capped at 500 rows per request and snapshot history is capped per write, so list/history growth stays bounded.
 
 ## Logging
 

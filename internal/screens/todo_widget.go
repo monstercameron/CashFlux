@@ -15,9 +15,9 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/CashFlux/internal/widgetrender"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // Todo is the widgetized to-do surface — a thin SURFACE HOST like /budgets, /goals and
@@ -66,19 +66,7 @@ func Todo() ui.Node {
 		todoNativeSpec("todo-list"),
 	}
 
-	return Div(css.Class("bento bento-todo"),
-		MapKeyed(specs,
-			func(sp domain.WidgetSpec) any { return sp.ID },
-			func(sp domain.WidgetSpec) ui.Node {
-				c := rctx
-				c.Spec = sp
-				if node, ok := safeRenderSpec(sp, c); ok {
-					return node
-				}
-				return Fragment()
-			},
-		),
-	)
+	return surfaceTiles(surfaceTilesProps{Class: "bento-todo", Specs: specs, Context: rctx})
 }
 
 // init registers the to-do-surface widget bodies with the engine render registry.

@@ -24,9 +24,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/textutil"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // dataEditSaved is the shared post-save path for the modal editors: refresh
@@ -112,7 +112,12 @@ func MemberEditForm(props MemberEditFormProps) ui.Node {
 		if r, err := memberrole.ParseRole(strings.TrimSpace(roleS.Get())); err == nil {
 			m.Role = r
 		}
-		m.Custom = customValuesToMap(memberDefs, customS.Get())
+		custom, customIssues := customValuesToMap(memberDefs, customS.Get())
+		if len(customIssues) > 0 {
+			errS.Set(strings.Join(customIssues, " "))
+			return
+		}
+		m.Custom = custom
 		if err := app.PutMember(m); err != nil {
 			errS.Set(err.Error())
 			return

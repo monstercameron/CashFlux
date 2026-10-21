@@ -18,8 +18,8 @@ import (
 	"math"
 	"os"
 	"reflect"
-	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/allocate"
@@ -55,7 +55,8 @@ import (
 
 // App holds the live application state.
 type App struct {
-	store *store.SQLiteStore
+	store      *store.SQLiteStore
+	instanceID uint64
 	// transactionDeletes retains relationship before-images for the legacy row restore API.
 	// The durable undo journal captures these same records independently.
 	transactionDeletes map[string][]store.RecordChange
@@ -77,7 +78,8 @@ type App struct {
 	// pays the SQL query + JSON unmarshal only once. Each accessor still returns a fresh
 	// top-level copy, so callers keep their "you own this slice" contract (safe to sort
 	// or filter in place). Single-threaded wasm, so no locking.
-	reads appReadCaches
+	reads    appReadCaches
+	settings settingsSnapshotCache
 	// triggersSuspended pauses automatic workflow firing from PutTransaction while
 	// a bulk operation (import) or a workflow's own effects are running, so a single
 	// user-facing "add a transaction" fires triggers but a 500-row import doesn't
@@ -109,6 +111,13 @@ type App struct {
 // Default is the process-wide App, set by Init and read by screens.
 var Default *App
 
+var nextInstanceID atomic.Uint64
+
+// InstanceID is a process-local identity for derived-data cache keys. Revisions
+// alone are insufficient: multiple app stores share the global mutation counter.
+// The identity is stable for this App's lifetime and never exported with data.
+func (a *App) InstanceID() uint64 { return a.instanceID }
+
 // New creates an App backed by a fresh in-memory store. If w is nil, logs go to
 // os.Stderr (the browser console under wasm). When seed is true and the store is
 // empty, the sample dataset is loaded.
@@ -121,7 +130,7 @@ func New(w io.Writer, seed bool) (*App, error) {
 		return nil, err
 	}
 	logger, ring := logging.New(w, 500, slog.LevelInfo)
-	app := &App{store: st, log: logger, ring: ring, now: time.Now}
+	app := &App{store: st, instanceID: nextInstanceID.Add(1), log: logger, ring: ring, now: time.Now}
 	if seed {
 		if err := st.Load(store.SampleDataset()); err != nil {
 			return nil, err
@@ -177,18 +186,44 @@ func (a *App) ExportJSONRedacted() ([]byte, error) {
 
 // ImportJSON replaces all data with the given dataset JSON.
 func (a *App) ImportJSON(data []byte) error {
-	ds, err := store.Import(data)
+	parsed, err := ParseDataset(data)
 	if err != nil {
 		return err
+	}
+	return a.ImportParsedDataset(parsed)
+}
+
+// ParsedDataset holds a migrated import without exposing mutable dataset fields.
+// Its zero value is invalid; ParseDataset is the only constructor.
+type ParsedDataset struct {
+	dataset *store.PreparedDataset
+}
+
+// ParseDataset validates and migrates JSON once. Recovery may retain the result
+// only while its source checkpoint remains unchanged; replayed bytes need a new parse.
+func ParseDataset(data []byte) (*ParsedDataset, error) {
+	ds, err := store.PrepareDataset(data)
+	if err != nil {
+		return nil, err
+	}
+	return &ParsedDataset{dataset: ds}, nil
+}
+
+// ImportParsedDataset replaces all data using a validated parse. Like ImportJSON,
+// it preserves this device's credential, loads through the store's clean ingress,
+// and synchronizes transaction links. It does not retain the parsed handle.
+func (a *App) ImportParsedDataset(parsed *ParsedDataset) error {
+	if parsed == nil || parsed.dataset == nil {
+		return errors.New("appstate: dataset has not been parsed")
 	}
 	// OpenAI credentials belong to this device, so every dataset import (sync
 	// pulls, restores and user imports) must replace the incoming value even when
 	// this device has no credential. Otherwise an imported key would be adopted.
-	ds.Settings.OpenAIKey = a.Settings().OpenAIKey
-	if err := a.store.Load(ds); err != nil {
+	if err := a.store.LoadPrepared(parsed.dataset, a.Settings().OpenAIKey); err != nil {
 		return err
 	}
-	a.log.Info("imported dataset", "accounts", len(ds.Accounts), "transactions", len(ds.Transactions))
+	accounts, transactions := parsed.dataset.Counts()
+	a.log.Info("imported dataset", "accounts", accounts, "transactions", transactions)
 	a.SyncTxnLinkNetting()
 	return nil
 }
@@ -386,6 +421,22 @@ func (c *revCache[T]) get(rev uint64, load func() []T) []T {
 	return out
 }
 
+func (c *revCache[T]) getChecked(rev uint64, load func() ([]T, error)) ([]T, error) {
+	if !c.loaded || c.rev != rev {
+		value, err := load()
+		if err != nil {
+			return nil, err
+		}
+		c.val, c.rev, c.loaded = value, rev, true
+	}
+	if len(c.val) == 0 {
+		return nil, nil
+	}
+	out := make([]T, len(c.val))
+	copy(out, c.val)
+	return out, nil
+}
+
 // appReadCaches holds one revCache per frequently-read table. It lives inline on
 // App (see the reads field) so every accessor shares the same revision key.
 type appReadCaches struct {
@@ -411,11 +462,11 @@ func (a *App) Members() []domain.Member {
 	})
 }
 func (a *App) Accounts() []domain.Account {
-	return a.reads.accounts.get(a.store.Rev(), func() []domain.Account {
-		v, err := a.store.ListAccounts()
+	rows, err := a.AccountsChecked()
+	if err != nil {
 		a.logErr("accounts", err)
-		return v
-	})
+	}
+	return rows
 }
 
 // Categories returns every category, ordered naturally by name.
@@ -436,10 +487,24 @@ func (a *App) Accounts() []domain.Account {
 // not once per render.
 func (a *App) Categories() []domain.Category {
 	return a.reads.categories.get(a.store.Rev(), func() []domain.Category {
-		v, err := a.store.ListCategories()
+		v, err := a.CategoriesChecked()
 		a.logErr("categories", err)
-		return catname.Sorted(v)
+		return v
 	})
+}
+
+// CategoriesChecked reads current categories in the canonical natural order.
+// Unlike Categories, it preserves storage failures for callers that must
+// distinguish unavailable data from a genuinely empty category collection.
+func (a *App) CategoriesChecked() ([]domain.Category, error) {
+	if a == nil || a.store == nil {
+		return nil, fmt.Errorf("read categories: local dataset is unavailable")
+	}
+	rows, err := a.store.ListCategories()
+	if err != nil {
+		return nil, fmt.Errorf("read categories: %w", err)
+	}
+	return catname.Sorted(rows), nil
 }
 
 // Transactions returns the ledger snapshot for the current store revision.
@@ -471,11 +536,11 @@ func (a *App) Budgets() []domain.Budget {
 	})
 }
 func (a *App) Goals() []domain.Goal {
-	return a.reads.goals.get(a.store.Rev(), func() []domain.Goal {
-		v, err := a.store.ListGoals()
+	rows, err := a.GoalsChecked()
+	if err != nil {
 		a.logErr("goals", err)
-		return v
-	})
+	}
+	return rows
 }
 func (a *App) Tasks() []domain.Task {
 	return a.reads.tasks.get(a.store.Rev(), func() []domain.Task {
@@ -623,7 +688,7 @@ func (a *App) FreshnessWindows() freshness.Windows {
 
 // Settings returns the stored settings.
 func (a *App) Settings() store.Settings {
-	s, err := a.store.GetSettings()
+	s, err := a.SettingsChecked()
 	a.logErr("settings", err)
 	return s
 }
@@ -1017,6 +1082,13 @@ func (a *App) PutCategory(c domain.Category) error {
 func (a *App) DeleteCategory(id string) error {
 	if err := a.roleGuard(); err != nil {
 		return err
+	}
+	refs, err := a.CategoryDeleteReferences(id)
+	if err != nil {
+		return fmt.Errorf("appstate: check category references before deleting %q: %w", id, err)
+	}
+	if refs.Total() != 0 {
+		return fmt.Errorf("appstate: category %q still has %d live reference(s); reassign them before deleting", id, refs.Total())
 	}
 	for _, child := range categorytree.ReparentOnDelete(a.Categories(), id) {
 		if err := a.store.PutCategory(child); err != nil {
@@ -1762,6 +1834,12 @@ func (a *App) PutWorkflow(w workflow.Workflow) error {
 	if strings.TrimSpace(w.Name) == "" {
 		return fmt.Errorf("appstate: workflow needs a name")
 	}
+	if errs := workflow.Validate(w); len(errs) > 0 {
+		return fmt.Errorf("appstate: invalid workflow: %s", errs[0])
+	}
+	if err := a.checkPayYourselfFirstDuplicate(w); err != nil {
+		return err
+	}
 	if err := a.store.PutWorkflow(w); err != nil {
 		return err
 	}
@@ -1799,35 +1877,11 @@ func (a *App) engineVars() map[string]float64 {
 	})
 }
 
-// WorkflowVariableNames lists the variable names a workflow condition can
-// reference — the exact surface the trigger runners evaluate against — sorted,
-// so the composer can offer them for insertion instead of asking users to
-// memorize names. (The per-transaction txn_* fields join this set on
-// transaction-triggered runs.)
+// WorkflowVariableNames lists the sorted discovery union across all triggers.
+// Use WorkflowVariableNamesFor when validating a specific trigger's condition;
+// transaction-only names in this union are unavailable to other triggers.
 func (a *App) WorkflowVariableNames() []string {
-	vars := a.engineVars()
-	names := map[string]bool{}
-	for n := range vars {
-		names[n] = true
-	}
-	// The per-transaction merchant-baseline variables only exist on txn-added runs
-	// but must still be offerable in the composer — a variable you cannot discover
-	// is a variable nobody uses.
-	names["txn_payee_typical"] = true
-	names["txn_vs_typical"] = true
-	// Every transaction custom field is referenceable on txn-added runs —
-	// number and yes/no fields as cf_txn_<key> values, text/choice fields via
-	// contains(cf_txn_<key>, "…") — so offer them even though the base surface
-	// only carries numeric period sums.
-	for _, def := range a.CustomFieldDefsFor("transaction") {
-		names["cf_txn_"+def.Key] = true
-	}
-	out := make([]string, 0, len(names))
-	for n := range names {
-		out = append(out, n)
-	}
-	sort.Strings(out)
-	return out
+	return a.WorkflowVariableNamesFor(workflow.TriggerTxnAdded)
 }
 
 // txnContext builds the workflow context for a transaction-triggered run: the
@@ -1836,7 +1890,7 @@ func (a *App) WorkflowVariableNames() []string {
 // txn_category/txn_account/txn_tags, and transaction-mutating actions know which
 // transaction to change.
 func (a *App) txnContext(t domain.Transaction) workflow.Context {
-	ctx := workflow.Context{Vars: a.engineVars(), Strs: map[string]string{}, TxnID: t.ID}
+	ctx := workflow.Context{Vars: a.engineVars(), Strs: map[string]string{"txn_account": "", "txn_category": ""}, TxnID: t.ID}
 	div := 1.0
 	for i := 0; i < currency.Decimals(t.Amount.Currency); i++ {
 		div *= 10
@@ -1921,6 +1975,9 @@ func (a *App) RunWorkflowOn(w workflow.Workflow, t domain.Transaction, dryRun bo
 }
 
 func (a *App) runWorkflow(w workflow.Workflow, ctx workflow.Context, dryRun bool) (workflow.Run, error) {
+	if errs := workflow.Validate(w); len(errs) > 0 {
+		return workflow.Run{}, fmt.Errorf("appstate: invalid workflow: %s", errs[0])
+	}
 	effects, matched, err := workflow.Plan(w, ctx)
 	if err != nil {
 		return workflow.Run{}, err
@@ -2793,6 +2850,13 @@ func (a *App) PutTransaction(t domain.Transaction) error {
 	if err := a.store.PutTransaction(t); err != nil {
 		return err
 	}
+	a.afterTransactionSaved(t, existed, overBefore)
+	return nil
+}
+
+// afterTransactionSaved runs addition effects and observers only after all records
+// belonging to the operation have committed. Edits retain their existing behavior.
+func (a *App) afterTransactionSaved(t domain.Transaction, existed bool, overBefore map[string]bool) {
 	a.log.Info("transaction saved", "id", t.ID)
 	if !existed && !a.triggersSuspended {
 		// C192: spending against a sinking fund's linked category draws the fund
@@ -2819,7 +2883,6 @@ func (a *App) PutTransaction(t domain.Transaction) error {
 		// never a timer). Ambiguous occurrences are left for a manual match.
 		a.autoMatchBills(a.clock())
 	}
-	return nil
 }
 
 func normalizeTransactionDate(date time.Time) time.Time {
@@ -2969,6 +3032,11 @@ func (a *App) AttachTransactionArtifact(transactionID string, artifact domain.Ar
 	if !ok {
 		return fmt.Errorf("the transaction no longer exists")
 	}
+	if _, exists, err := a.store.GetArtifact(artifact.ID); err != nil {
+		return fmt.Errorf("check receipt id: %w", err)
+	} else if exists {
+		return fmt.Errorf("a receipt with that id already exists")
+	}
 	before, err := json.Marshal(txn)
 	if err != nil {
 		return fmt.Errorf("encode receipt transaction: %w", err)
@@ -2977,6 +3045,12 @@ func (a *App) AttachTransactionArtifact(transactionID string, artifact domain.Ar
 	after, err := json.Marshal(txn)
 	if err != nil {
 		return fmt.Errorf("encode receipt reference: %w", err)
+	}
+	// Commit the encrypted local file before the transaction can reference it.
+	// The caller runs this off a browser callback because IndexedDB is async.
+	artifact, err = a.StoreBlobForArtifact(artifact)
+	if err != nil {
+		return fmt.Errorf("store receipt bytes: %w", err)
 	}
 	encodedArtifact, err := json.Marshal(artifact)
 	if err != nil {
@@ -3371,6 +3445,13 @@ func (a *App) deleteTransactionsAtomic(ids []string) ([]string, error) {
 	if err := a.store.ReplayChangesExpected(changes); err != nil {
 		return nil, fmt.Errorf("delete transactions: %w", err)
 	}
+	a.afterTransactionsDeleted(changes, deleted)
+	return deleted, nil
+}
+
+// afterTransactionsDeleted retains relationship restoration metadata and notifies
+// observers after the transaction rows and their related changes commit together.
+func (a *App) afterTransactionsDeleted(changes []store.RecordChange, deleted []string) {
 	var relations []store.RecordChange
 	for _, c := range changes {
 		if c.Table != "transactions" {
@@ -3387,7 +3468,6 @@ func (a *App) deleteTransactionsAtomic(ids []string) ([]string, error) {
 	}
 	a.SyncTxnLinkNetting()
 	a.fireTxnMutated()
-	return deleted, nil
 }
 
 // DeleteTransactionWithTransferPair deletes both legs and their relationships.
@@ -3523,22 +3603,29 @@ func (a *App) PutGoal(g domain.Goal) error {
 	if err := a.validateCustom("goal", g.Custom); err != nil {
 		return err
 	}
-	wasComplete := false
+	wasComplete, beforeKnown := false, true
+	rates := a.goalEvaluationRates()
 	for _, existing := range a.Goals() {
 		if existing.ID == g.ID {
-			wasComplete = existing.CurrentAmount.Amount >= existing.TargetAmount.Amount && existing.TargetAmount.Amount > 0
+			wasComplete, beforeKnown = goalCompletionForWrite(existing, rates)
 			break
 		}
 	}
 	if err := a.store.PutGoal(g); err != nil {
 		return err
 	}
+	a.afterGoalSaved(g, wasComplete, beforeKnown, rates)
+	return nil
+}
+
+// afterGoalSaved fires the known completion transition after its enclosing write
+// has committed, including operations that also change the ledger.
+func (a *App) afterGoalSaved(g domain.Goal, wasComplete, beforeKnown bool, rates currency.Rates) {
 	a.log.Info("goal saved", "id", g.ID)
-	isComplete := g.CurrentAmount.Amount >= g.TargetAmount.Amount && g.TargetAmount.Amount > 0
-	if !wasComplete && isComplete && !a.triggersSuspended {
+	isComplete, afterKnown := goalCompletionForWrite(g, rates)
+	if beforeKnown && afterKnown && !wasComplete && isComplete && !a.triggersSuspended {
 		a.RunTriggered(workflow.TriggerGoalReached, nil)
 	}
-	return nil
 }
 func (a *App) DeleteGoal(id string) error {
 	if err := a.roleGuard(); err != nil {
