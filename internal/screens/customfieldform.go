@@ -74,24 +74,7 @@ func customValuesToMap(defs []customfields.Def, vals map[string]string) (map[str
 // float → trimmed decimal, anything else → its default string form). Used to seed an
 // inline-edit form from an entity's saved custom values.
 func customMapToStrings(custom map[string]any) map[string]string {
-	out := make(map[string]string, len(custom))
-	for k, v := range custom {
-		switch t := v.(type) {
-		case bool:
-			if t {
-				out[k] = "true"
-			} else {
-				out[k] = "false"
-			}
-		case float64:
-			out[k] = strconv.FormatFloat(t, 'f', -1, 64)
-		case string:
-			out[k] = t
-		default:
-			out[k] = fmt.Sprintf("%v", t)
-		}
-	}
-	return out
+	return customfields.FormValuesToStrings(custom)
 }
 
 // customSummary builds a compact "Label: value" string for an entity's non-empty

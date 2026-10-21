@@ -1,3 +1,7 @@
+## 2026-10-21 - Move custom-field edit value conversion into native logic
+
+Moved the existing boolean, decimal, string and fallback conversion rules into customfields.FormValuesToStrings; the four form callers keep their thin wrapper. Native conversion, empty-map, round-trip and strict-parser regressions passed with Go 1.27.3; the v7 Screens host binary also compiled the adapter.
+
 ## 2026-10-21 - Isolate recovery deduplication test scope
 
 RetainRecovery correctly reused an identical copy already present under the shared journal fixture, so the old test counted zero newly-added copies and failed. The fixture now accepts an explicit workspace while existing callers retain their default. The stale-edit test uses a fresh workspace and exact owner-scoped prefix, checks one retained copy after two calls, requires both calls to return the same scoped key and reads the authenticated payload. It removes no unrelated recovery entries. The combined focused app WASM run passes all six cases including this regression.
