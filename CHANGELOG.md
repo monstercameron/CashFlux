@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Assistant task/account creation rejects invalid drafts before approval and preserves exact money and selected defaults.
 - Assistant transaction/category creation and bulk categorization use complete fixed previews and atomic expected-state writes.
 - Assistant balance updates and transfers commit the exact previewed financial state with checked arithmetic.
 - Assistant tool rounds refresh data and currency settings, enforce per-round budgets, and retain reported usage from interrupted requests.

@@ -25,7 +25,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/dedupe"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/formula"
-	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/scope"
 	"github.com/monstercameron/CashFlux/internal/toolperm"
@@ -545,64 +544,6 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates, tier a
 
 		// --- Write tools (mutates: require the user's approval before running) ---
 		{
-			spec: ai.FunctionTool("add_task",
-				"Add a to-do task for the user.",
-				json.RawMessage(`{"type":"object","properties":{"title":{"type":"string"},"notes":{"type":"string"},"priority":{"type":"string","enum":["low","medium","high"]},"due":{"type":"string","description":"YYYY-MM-DD"}},"required":["title"]}`)),
-			mutates: true,
-			// QA CF-19: the approval card must show EVERY field that will be
-			// written — due date and priority used to be silently applied after a
-			// preview that named only the title.
-			preview: func(raw json.RawMessage) string {
-				var a struct {
-					Title    string `json:"title"`
-					Notes    string `json:"notes"`
-					Priority string `json:"priority"`
-					Due      string `json:"due"`
-				}
-				_ = json.Unmarshal(raw, &a)
-				out := "Add a to-do: “" + strings.TrimSpace(a.Title) + "”"
-				if p := strings.TrimSpace(a.Priority); p != "" {
-					out += " · " + p + " priority"
-				}
-				if d := strings.TrimSpace(a.Due); d != "" {
-					out += " · due " + d
-				}
-				if n := strings.TrimSpace(a.Notes); n != "" {
-					if len(n) > 80 {
-						n = n[:80] + "…"
-					}
-					out += "\nNotes: " + n
-				}
-				return out
-			},
-			run: func(raw json.RawMessage) string {
-				var a struct {
-					Title    string `json:"title"`
-					Notes    string `json:"notes"`
-					Priority string `json:"priority"`
-					Due      string `json:"due"`
-				}
-				if err := json.Unmarshal(raw, &a); err != nil || strings.TrimSpace(a.Title) == "" {
-					return "A task needs a title."
-				}
-				title := strings.TrimSpace(a.Title)
-				// Dedupe: don't create a near-duplicate open task.
-				for _, ex := range app.Tasks() {
-					if ex.Status != domain.StatusDone && similarText(ex.Title, title) {
-						return fmt.Sprintf("A similar to-do already exists: “%s”.%s", ex.Title, openLink("/todo", ex.ID))
-					}
-				}
-				t := domain.Task{ID: id.New(), Title: title, Notes: a.Notes, Status: domain.StatusOpen, Priority: parseTaskPriority(a.Priority), Source: domain.SourceAI}
-				if d, err := dateutil.ParseDate(a.Due); err == nil && a.Due != "" {
-					t.Due = d
-				}
-				if err := app.PutTask(t); err != nil {
-					return "Couldn't add the task: " + err.Error()
-				}
-				return "Added to-do: " + t.Title + "." + openLink("/todo", t.ID)
-			},
-		},
-		{
 			spec: ai.FunctionTool("list_uncategorized_transactions",
 				"List the user's transactions that have no category yet, so you can propose categories for them. Returns up to `limit` (default 30) with payee, description, and amount.",
 				json.RawMessage(`{"type":"object","properties":{"limit":{"type":"integer"}}}`)),
@@ -629,75 +570,6 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates, tier a
 					return "Every transaction already has a category."
 				}
 				return fmt.Sprintf("%d uncategorized transaction(s):\n%s", n, b.String())
-			},
-		},
-		{
-			spec: ai.FunctionTool("add_account",
-				"Create an account: an ASSET (checking, savings, cash, investment) or a LIABILITY (loan, credit_card, mortgage, line_of_credit). Use a liability for money owed — e.g. a 401(k) loan. For a liability, `balance` is the amount owed (enter it positive). Optional liability fields: apr, credit_limit, min_payment.",
-				json.RawMessage(`{"type":"object","properties":{"name":{"type":"string"},"class":{"type":"string","enum":["asset","liability"]},"type":{"type":"string","description":"checking|savings|cash|investment|loan|credit_card|mortgage|line_of_credit"},"balance":{"type":"number","description":"opening balance in major units; for a liability the amount owed"},"apr":{"type":"number"},"credit_limit":{"type":"number"},"min_payment":{"type":"number"}},"required":["name","class"]}`)),
-			mutates: true,
-			preview: func(raw json.RawMessage) string {
-				var a struct {
-					Name    string  `json:"name"`
-					Class   string  `json:"class"`
-					Balance float64 `json:"balance"`
-				}
-				_ = json.Unmarshal(raw, &a)
-				return fmt.Sprintf("Create a %s account “%s”%s", a.Class, strings.TrimSpace(a.Name), ifStr(a.Balance != 0, " ("+fmtMoney(money.New(currency.MinorFromMajor(a.Balance, base), base))+")", ""))
-			},
-			run: func(raw json.RawMessage) string {
-				var a struct {
-					Name        string  `json:"name"`
-					Class       string  `json:"class"`
-					Type        string  `json:"type"`
-					Balance     float64 `json:"balance"`
-					APR         float64 `json:"apr"`
-					CreditLimit float64 `json:"credit_limit"`
-					MinPayment  float64 `json:"min_payment"`
-				}
-				if err := json.Unmarshal(raw, &a); err != nil || strings.TrimSpace(a.Name) == "" {
-					return "An account needs a name."
-				}
-				liability := strings.ToLower(strings.TrimSpace(a.Class)) == "liability"
-				acType := domain.TypeChecking
-				if liability {
-					acType = domain.TypeLoan
-				}
-				if a.Type != "" {
-					if cand := domain.AccountType(strings.ToLower(strings.TrimSpace(a.Type))); cand.Valid() {
-						acType = cand
-					}
-				}
-				// Dedupe: don't create an account that already exists by name.
-				for _, ex := range accounts {
-					if !ex.Archived && similarText(ex.Name, a.Name) {
-						return fmt.Sprintf("An account named “%s” already exists.%s", ex.Name, openLink("/accounts", ex.ID))
-					}
-				}
-				cls := acType.Class() // keep class consistent with the resolved type
-				minor := currency.MinorFromMajor(a.Balance, base)
-				if cls == domain.ClassLiability && minor > 0 {
-					minor = -minor // an owed amount is stored negative
-				}
-				acc := domain.Account{
-					ID: id.New(), Name: strings.TrimSpace(a.Name), OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared,
-					Class: cls, Type: acType, Currency: base, OpeningBalance: money.New(minor, base), BalanceAsOf: now,
-				}
-				if cls == domain.ClassLiability {
-					if a.APR > 0 {
-						acc = acc.WithRateAPR(a.APR)
-					}
-					if a.CreditLimit > 0 {
-						acc.CreditLimit = money.New(currency.MinorFromMajor(a.CreditLimit, base), base)
-					}
-					if a.MinPayment > 0 {
-						acc.MinPayment = money.New(currency.MinorFromMajor(a.MinPayment, base), base)
-					}
-				}
-				if err := app.PutAccount(acc); err != nil {
-					return "Couldn't create the account: " + err.Error()
-				}
-				return fmt.Sprintf("Created %s account “%s” with balance %s.%s", cls, acc.Name, fmtMoney(acc.OpeningBalance), openLink("/accounts", acc.ID))
 			},
 		},
 		{
@@ -751,6 +623,7 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates, tier a
 	tools = append(tools, agToolsFormula(app, base, rates)...)
 	tools = append(tools, agToolsAccountWrites(app)...)
 	tools = append(tools, agToolsCreation(app, base, rates)...)
+	tools = append(tools, agToolsBasicCreation(app)...)
 	tools = append(tools, agToolsTrust(app, base, rates)...)
 	tools = append(tools, agToolsAuditor(app, base, rates)...)
 	tools = append(tools, agToolsAuthoring(app, base, rates)...)

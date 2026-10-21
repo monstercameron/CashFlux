@@ -1,3 +1,7 @@
+## 2026-10-21 - Strict Assistant task and account creation
+
+Added strict typed arguments, complete previews, canonical task/account validation, expected collection/base-currency guards and explicit duplicate no-ops. Account creation preserves shared ownership, supported currency/type/class, liability sign, APR, limits and opening-balance history; task creation discloses full notes, dates and priority. Monetary parsing uses canonical plain-decimal ParseMinor. Focused native tests passed; all eight strict Basic creation WASM groups passed in integrated pass8, and the actual duplicate-approval session test passed with the replacement handler.
+
 ## 2026-10-21 - Exact Assistant transaction creation and categorization
 
 Replaced float amounts and ambiguous substring selection with exact decimal parsing, stable IDs or exact unique names, validated effective fields and canonical duplicate checks. Public signed cash flow maps through each account liability convention. Categorization previews every affected ID, excludes transfers, preserves other fields and rejects a changed match set or stale row atomically. Six focused native groups/vet and all seven real-App WASM creation groups passed in integrated pass7.
