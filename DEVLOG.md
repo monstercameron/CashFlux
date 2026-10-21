@@ -1,3 +1,7 @@
+## 2026-10-21 - Localized Assistant capture failure copy
+
+The complete native suite caught one new user-facing literal in the write-result struct. Routed that error through the existing translation catalog while preserving its error detail and English behavior. The unchanged hardcoded-copy ratchet passes; broader native assertions were otherwise green in the first full run.
+
 ## 2026-10-21 - Fallible canonical category ordering
 
 Added CategoriesChecked beside the existing cached Categories reader; both share canonical catname ordering. Strict Assistant creation, finance and formula readers now use the fallible seam. The full native suite identified the ordering ratchet violation; targeted ordering, natural-sort/closed-store and screen-copy gates passed after this correction. No lint baseline or gate was weakened.

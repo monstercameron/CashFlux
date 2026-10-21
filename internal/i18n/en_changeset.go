@@ -6,6 +6,7 @@ package i18n
 // AG20 session receipt. Kept in its own file (not en.go) so it doesn't touch the
 // concurrent-WIP catalog.
 var changesetKeys = Catalog{
+	"assistant.writeBaselineUnavailable": "The approved change could not start because its undo history was unavailable: %s",
 	// --- AG1 review card ---
 	"changeset.title":       "Proposed changes",
 	"changeset.subtitle":    "Review each step, then apply the ones you want.",

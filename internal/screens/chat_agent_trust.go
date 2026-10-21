@@ -103,7 +103,7 @@ func runAssistantWriteResult(tool string, run func() string) (result assistantWr
 	auditview.SetSessionActor("")
 	if err := auditview.CaptureAssistantBaselineChecked(); err != nil {
 		auditview.SetSessionActor(previousActor)
-		return assistantWriteResult{Text: "The approved change could not start because its undo history was unavailable: " + err.Error(), VerificationError: err.Error()}
+		return assistantWriteResult{Text: uistate.T("assistant.writeBaselineUnavailable", err.Error()), VerificationError: err.Error()}
 	}
 	auditview.SetSessionActor(auditview.ActorAssistant)
 	// A tool runs with arguments the MODEL wrote — unvalidated JSON shaped by
