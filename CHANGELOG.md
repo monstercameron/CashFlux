@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Allocate uses native eligibility, balance, goal, validation and distribution facts.
 - Split previews and saves use native typed amount and weight validation.
 - Activity prepares a bounded ordered feed, filter facts and undo display assessments once.
 - Categories render native checked income, expense and lifetime usage facts.

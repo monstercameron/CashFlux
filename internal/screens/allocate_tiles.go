@@ -127,6 +127,8 @@ func allocHeroTile(props allocHeroProps) ui.Node {
 					Placeholder(uistate.T("allocate.amountFieldPlaceholder")), OnInput(props.OnAmount), uiw.FieldValue(props.AmountStr)),
 			),
 			nudge,
+			If(v.InputUnavailable, P(css.Class("t-caption text-down"), Attr("role", "alert"), uistate.T("allocate.dataUnavailable"))),
+			If(v.InputInvalid && !v.InputUnavailable, P(css.Class("t-caption text-down"), Attr("role", "alert"), uistate.T("allocate.invalidAmount"))),
 			kept,
 		),
 		figs,

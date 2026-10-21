@@ -1635,6 +1635,8 @@ var english = Catalog{
 	"allocate.profileNameLabel":       "New profile name",
 	"allocate.moreActions":            "More actions",
 	"allocate.amountFieldPlaceholder": "0.00",
+	"allocate.dataUnavailable":        "Allocation data is unavailable. Reload the page and try again.",
+	"allocate.invalidAmount":          "Enter valid nonnegative amounts to preview this allocation.",
 	"allocate.adjustStrategy":         "Adjust strategy",
 	"allocate.viewAccount":            "View account",
 	"allocate.viewGoal":               "View goal",

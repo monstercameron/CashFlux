@@ -120,6 +120,8 @@ type allocView struct {
 	// floor rather than this screen's box (WF-SM4), so the surface can say where
 	// the number came from. A figure that appears on its own reads as a bug.
 	ReserveFromStanding bool
+	InputInvalid        bool
+	InputUnavailable    bool
 	MaxPerMinor         int64
 	Remainder           int64 // unallocated leftover (buffer + caps/rounding)
 	MonthIncome         money.Money
@@ -247,16 +249,21 @@ func Allocate() ui.Node {
 
 	// --- build the view model (candidates → ranked → split) ---
 	_ = standingRev.Get() // re-read the standing book after an instruction changes
+	standingFloor, _ := uistate.LoadStanding().KeepLiquidMinor()
 	v := computeAllocView(app, computeAllocInput{
 		Base: base, Dec: dec, Rates: rates, ActiveMember: activeMemberID,
 		Mode: mode.Get(), Excluded: excluded.Get(), MonthIncome: monthIncome, Weights: weights,
 		AmountStr: amountStr.Get(), ReserveStr: reserveAtom.Get(), MaxPerStr: maxPerAtom.Get(),
+		Now: time.Now(), StandingFloor: standingFloor,
 	})
 
 	// Persist the plan whenever a plan input changes, so alloc_* variables stay live. Silent
 	// (no data-revision bump) — the FormulaBuilder tile reads the config on its own render.
 	planKey := fmt.Sprintf("%d|%d|%d|%s|%s", v.TotalMinor, v.ReserveMinor, v.MaxPerMinor, profile.Get(), mode.Get())
 	ui.UseEffect(func() func() {
+		if v.InputInvalid || v.InputUnavailable {
+			return nil
+		}
 		uistate.SetAllocConfig(uistate.AllocConfig{
 			AmountMinor: v.TotalMinor, ReserveMinor: v.ReserveMinor, MaxPerMinor: v.MaxPerMinor,
 			Profile: profile.Get(), Mode: mode.Get(),
@@ -265,7 +272,7 @@ func Allocate() ui.Node {
 	}, planKey)
 
 	amountFor := func(cid string) string {
-		if v.TotalMinor <= 0 {
+		if v.TotalMinor <= 0 || v.InputInvalid || v.InputUnavailable {
 			return ""
 		}
 		return fmtMoney(money.New(v.PlanByID[cid], base))
@@ -330,7 +337,7 @@ func Allocate() ui.Node {
 		}
 	}
 	planActions := func() []allocate.Action {
-		if v.TotalMinor <= 0 {
+		if v.TotalMinor <= 0 || v.InputInvalid || v.InputUnavailable {
 			return nil
 		}
 		plans := make([]allocate.Plan, 0, len(v.Ranked))
@@ -340,7 +347,7 @@ func Allocate() ui.Node {
 		return allocate.PlanActions(plans, func(cid string) bool { return liabilityIDs[cid] })
 	}
 	openConfirm := ui.UseEvent(Prevent(func() {
-		if v.TotalMinor <= 0 {
+		if v.TotalMinor <= 0 || v.InputInvalid || v.InputUnavailable {
 			applyErr.Set(uistate.T("allocate.applyNoPlans"))
 			return
 		}
@@ -460,7 +467,7 @@ func Allocate() ui.Node {
 			App: app, Base: base, OnChanged: func() { standingRev.Set(standingRev.Get() + 1) },
 		}),
 		ui.CreateElement(allocApplyTile, allocApplyProps{
-			HasAmount: v.TotalMinor > 0, Confirming: applyConfirming.Get(),
+			HasAmount: v.TotalMinor > 0 && !v.InputInvalid && !v.InputUnavailable, Confirming: applyConfirming.Get(),
 			Msg: applyMsg.Get(), Err: applyErr.Get(), DidApply: applyDidApply.Get(),
 			ConfirmLabels: confirmLabels,
 			OnOpenConfirm: openConfirm, OnConfirm: doApply, OnCancel: cancelConfirm, OnUndo: doUndo,

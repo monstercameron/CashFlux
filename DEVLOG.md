@@ -1,3 +1,7 @@
+## 2026-10-21 - Native allocation preparation
+
+Shared one checked balance fold, retained ranking/distribution policy and independent goal availability, and stopped invalid/source-failed input from producing or saving a plan. Native allocateview/appstate tests pass; both actual-host WASM cases pass. Checked source readers were committed separately.
+
 ## 2026-10-21 - Native split form preparation
 
 Preserved blank weight defaults, explicit zero exclusions and existing split distribution policies. Malformed or overflowing input suppresses preview and cannot save. Native table tests and the focused Split route WASM regression pass.
