@@ -79,21 +79,22 @@ func CloudConnectionPane() uic.Node {
 	_ = state.UseAtom(syncClockAtomID, 0).Get()
 	uistate.CaptureAuthRevision(uistate.UseAuthRevision())
 	pr := prefsAtom.Get().Normalize()
+	hosted := hostedDocument()
 	status := loadSyncStatus()
 	signedIn := uistate.Session(pr.ServerToken).Present() && !status.AuthFailed
 	protected := datasetEncryptionActive()
 	workspaceID := activeWorkspaceID()
 	bump := func() { rev.Update(func(n int) int { return n + 1 }) }
 	setup := useCloudSetup(prefsAtom, status, signedIn, protected, bump)
-	connection := useCloudServer(prefsAtom, setup.Step)
+	connection := useCloudServer(prefsAtom, setup.Step, !hosted)
 	auth := useCloudAuth(prefsAtom, connection.URL, bump)
 	devices := useCloudDevices(pr, signedIn)
-	facts := cloudFacts{Disabled: pr.BackendDisabled, SignedIn: signedIn, Protected: protected,
+	facts := cloudFacts{Disabled: pr.BackendDisabled, SignedIn: signedIn, Protected: protected, Hosted: hosted,
 		Setup: setup.Saved, State: status.State, Pending: status.Pending}
 	step := cloudNextStep(facts)
 	action := cloudActionProps{Label: uistate.T("cloud1.syncNow"), TestID: "sync-now", Kind: cloudActionPrimary, OnClick: setup.SyncNow, Disabled: !cloudCanSync(facts) || setup.Busy}
 	switch {
-	case step == cloudOff:
+	case step == cloudOff && !hosted:
 		action = cloudActionProps{Label: uistate.T("cloud1.start"), TestID: "cloud-setup-start", Kind: cloudActionPrimary, OnClick: setup.Start, Disabled: setup.Busy}
 	case status.State == "conflict":
 		action = cloudActionProps{Label: uistate.T("cloud1.review"), TestID: "cloud-review-conflicts", OnClick: openSyncConflict}
@@ -120,17 +121,18 @@ func CloudConnectionPane() uic.Node {
 		H2(css.Class(tw.Text18, tw.FontSemibold), uistate.T("cloud1.title")),
 		uic.CreateElement(cloudStatusView, cloudStatusProps{Facts: facts, Step: step, LastSync: syncLastSyncedLabel(status.LastSyncedAt, time.Now()), Device: customSyncDeviceLabel(), Peers: peers, Action: statusAction}),
 		If(setup.Error != "", P(css.Class(tw.Text14, tw.TextDanger), Attr("role", "alert"), setup.Error)),
-		If(status.AuthFailed && uistate.Session(pr.ServerToken).Present(), uic.CreateElement(cloudAction, cloudActionProps{Label: uistate.T("settings.clearInvalidToken"), TestID: "settings-clear-invalid-token", OnClick: auth.SignOut})),
+		If(!hosted && status.AuthFailed && uistate.Session(pr.ServerToken).Present(), uic.CreateElement(cloudAction, cloudActionProps{Label: uistate.T("settings.clearInvalidToken"), TestID: "settings-clear-invalid-token", OnClick: auth.SignOut})),
 		uic.CreateElement(RebindCard, rebindProps{ServerURL: pr.ServerURL, Status: status, OnSignOut: auth.SignOut, OnDisconnect: setup.Pause, OnRetry: setup.SyncNow}),
 		If(status.State == syncStateLockedDifferentPasscode, uic.CreateElement(cloudAction, cloudActionProps{Label: uistate.T("sync.replaceServerCopyAction"), TestID: "sync-replace-server-copy", Kind: cloudActionDanger, OnClick: ReplaceServerCopyWithThisDevice, Disabled: !protected})),
-		If(step != cloudOff && step != cloudDone, uic.CreateElement(cloudSetupView, cloudSetupProps{Step: step, Where: where, SignIn: signin, Protect: protection, First: first})),
+		If(!hosted && step != cloudOff && step != cloudDone, uic.CreateElement(cloudSetupView, cloudSetupProps{Step: step, Where: where, SignIn: signin, Protect: protection, First: first})),
+		If(hosted, uic.CreateElement(cloudHostedSetupView, cloudHostedSetupProps{Step: step, Protect: protection, First: first})),
 		If(step == cloudDone, cloudHouseholdSummary()),
-		If(step == cloudDone || step == cloudOff, protection),
+		If(step == cloudDone || (!hosted && step == cloudOff), protection),
 		If(status.State == "conflict" || hasConflictBackup(workspaceID), uic.CreateElement(cloudConflictEntry, cloudConflictEntryProps{OnReview: openSyncConflict})),
 		If(signedIn, uic.CreateElement(cloudDevicesView, devices)),
 		If(signedIn, uic.CreateElement(cloudAccountView, cloudAccountProps{Account: signedInUserID(), Server: backendHost(pr.ServerURL), OnSignOut: auth.SignOut})),
 		uic.CreateElement(cloudDisclosure, cloudDisclosureProps{Title: uistate.T("cloud1.advanced"), TestID: "cloud-advanced", Body: Fragment(
-			uic.CreateElement(cloudAction, cloudActionProps{Label: uistate.T("cloud1.changeConnection"), TestID: "cloud-change-connection", OnClick: setup.Start, Disabled: setup.Busy}),
+			If(!hosted, uic.CreateElement(cloudAction, cloudActionProps{Label: uistate.T("cloud1.changeConnection"), TestID: "cloud-change-connection", OnClick: setup.Start, Disabled: setup.Busy})),
 			If(status.Message != "", P(css.Class(tw.Text12, tw.TextDim), Attr("data-testid", "sync-status-detail"), status.Message)),
 			If(signedIn, uic.CreateElement(cloudAISettings)),
 			If(segmentFor(pr) == "commercial", uic.CreateElement(cloudBillingView, cloudBillingProps{SignedIn: signedIn})),

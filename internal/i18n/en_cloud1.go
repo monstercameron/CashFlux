@@ -43,6 +43,8 @@ func init() {
 		"cloud1.step.first":              "First sync",
 		"cloud1.whereHint":               "Choose where to keep an encrypted copy for your other devices.",
 		"cloud1.destination":             "Where to sync",
+		"cloud1.selectedDestination":     "Selected: %s",
+		"cloud1.otherDestinations":       "Other server options",
 		"cloud1.sameServer":              "This server",
 		"cloud1.ownServer":               "Your own server",
 		"cloud1.sameServerHint":          "Check whether the site you opened also offers CashFlux sync.",

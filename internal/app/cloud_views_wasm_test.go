@@ -89,6 +89,30 @@ func TestCloudSetupShowsOnlyTheCurrentTask(t *testing.T) {
 	}
 }
 
+func TestHostedCloudSetupShowsOnlyProtectionOrFirstSync(t *testing.T) {
+	for _, tc := range []struct {
+		step cloudStep
+		want string
+	}{
+		{cloudProtect, "protect"},
+		{cloudFirst, "first"},
+		{cloudDone, ""},
+		{cloudSignIn, ""},
+	} {
+		t.Run(string(tc.step), func(t *testing.T) {
+			f := cloudTestFixture(t, uic.CreateElement(cloudHostedSetupView, cloudHostedSetupProps{
+				Step: tc.step, Protect: Input(Attr("data-testid", "protect")), First: Input(Attr("data-testid", "first")),
+			}))
+			if got := f.AllByTag("input"); len(got) != map[bool]int{true: 0, false: 1}[tc.want == ""] {
+				t.Fatalf("hosted task %q rendered %d controls", tc.step, len(got))
+			}
+			if tc.want != "" && cloudTestID(f, "input", tc.want) == nil {
+				t.Fatalf("hosted task %q rendered the wrong control", tc.step)
+			}
+		})
+	}
+}
+
 func TestCloudFirstSyncCannotStartWithoutEncryption(t *testing.T) {
 	for mask := 0; mask < 8; mask++ {
 		t.Run(string(rune('0'+mask)), func(t *testing.T) {
