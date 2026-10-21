@@ -148,7 +148,11 @@ func TestTxnFocusCallbackReleasesAfterItsTimerRuns(t *testing.T) {
 	if got := activeTxnFocusCallbacks.Load(); got != 1 {
 		t.Fatalf("active deferred-focus callbacks before timer = %d, want 1", got)
 	}
-	time.Sleep(20 * time.Millisecond)
+	// A busy WASM scheduler can resume the sleep before dispatching the JS
+	// timeout. Keep the query callback alive until the one-shot actually exits.
+	for deadline := time.Now().Add(3 * time.Second); activeTxnFocusCallbacks.Load() != 0 && time.Now().Before(deadline); {
+		time.Sleep(5 * time.Millisecond)
+	}
 	if got := activeTxnFocusCallbacks.Load(); got != 0 {
 		t.Fatalf("active deferred-focus callbacks after timer = %d, want 0", got)
 	}
@@ -184,7 +188,9 @@ func TestUXT4RowShortcutsOpenCategoryPickerAndGuide(t *testing.T) {
 	if !handleTxnTableShortcut("c", target, doc, func(id string) { categoryID = id }, nil) {
 		t.Fatal("c on the row was not handled")
 	}
-	time.Sleep(20 * time.Millisecond)
+	for deadline := time.Now().Add(3 * time.Second); !focused && time.Now().Before(deadline); {
+		time.Sleep(5 * time.Millisecond)
+	}
 	if categoryID != "uxt4-1" || !focused {
 		t.Fatalf("category picker open = %q, search focused = %t; want uxt4-1 and focus", categoryID, focused)
 	}

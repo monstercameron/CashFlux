@@ -1,3 +1,7 @@
+## 2026-10-20 - Wait for transaction focus timers in WASM tests
+
+The integrated screen run exposed a scheduling race in two tests that assumed a 20 ms sleep always dispatched the JavaScript focus callback. Both now poll the observable outcome with a bounded three-second deadline, keeping the callback alive until it has run. The two focused transaction tests passed after the change; a separate net-worth fixture failed validation and is being corrected. Production focus behavior is unchanged.
+
 ## 2026-10-20 - Carry net-worth availability through primary pages
 
 Added native networthview.Snapshot and shared revision/scope/rate-aware preparation so fatal errors cannot appear as 0.00, partial figures disclose omitted currencies, and incomplete totals cannot support affordability advice or net-worth milestone wins. Accounts reuses exact balances rather than folding the ledger again; Assistant shared context contains aggregate counts/currencies without account names. Checked liability magnitudes now return overflow instead of panicking at MinInt64. Native ledger/model/notification suites and full native integration passed. Five actual-host WASM regressions passed across two focused runs, covering live rate/scope/fatal/zero transitions, memo separation, actual share controls, composer safety, independent wins and Dashboard KPI/household disclosure. Chosen-exclusion trend parity is separately being corrected.
