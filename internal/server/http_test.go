@@ -2127,6 +2127,9 @@ func TestBlobEndpointsPutGetHead(t *testing.T) {
 	if rr.Header().Get("Content-Disposition") != "attachment" {
 		t.Fatalf("content-disposition = %q", rr.Header().Get("Content-Disposition"))
 	}
+	if rr.Header().Get("Cache-Control") != "private, no-store" {
+		t.Fatalf("head cache-control = %q", rr.Header().Get("Cache-Control"))
+	}
 	if rr.Body.Len() != 0 {
 		t.Fatalf("head body length = %d, want 0", rr.Body.Len())
 	}
@@ -2138,7 +2141,7 @@ func TestBlobEndpointsPutGetHead(t *testing.T) {
 	if rr.Code != http.StatusOK || rr.Body.String() != string(data) {
 		t.Fatalf("get blob status/body = %d/%q", rr.Code, rr.Body.String())
 	}
-	if rr.Header().Get("Cache-Control") != "public, max-age=31536000, immutable" {
+	if rr.Header().Get("Cache-Control") != "private, no-store" {
 		t.Fatalf("cache-control = %q", rr.Header().Get("Cache-Control"))
 	}
 

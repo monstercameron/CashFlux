@@ -261,7 +261,7 @@ func blobIOContext(parent context.Context, cfg Config) (context.Context, context
 func writeBlobHeaders(w http.ResponseWriter, blob Blob) {
 	w.Header().Set("Content-Type", blob.Mime)
 	w.Header().Set("Content-Length", strconv.FormatInt(blob.Size, 10))
-	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	w.Header().Set("Cache-Control", "private, no-store")
 	w.Header().Set("Content-Disposition", "attachment")
 	w.Header().Set("ETag", `"`+blob.Hash+`"`)
 }
