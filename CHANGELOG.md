@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Tax net income avoids unused receipt gathering through the canonical selected-category fold.
 - Recorded the 47-route inventory, completed model slices and raw detector allocation evidence.
 - Unusual detection reuses candidate history capacity while preserving price-job ownership.
 - Rule coverage prepares ordered counts and conflicts once using the canonical matcher.

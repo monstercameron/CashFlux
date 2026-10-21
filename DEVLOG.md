@@ -1,3 +1,7 @@
+## 2026-10-21 - Prepare only selected tax category totals
+
+Native ledger/taxgather tests and vet pass, including adversarial unused-category overflow and FX/error parity. Same-fixture captures show about 74% fewer allocations and 24-29% fewer allocated bytes. A 100k-row separate-run timing regression is retained along with a matched diagnostic; no reliable wall-time or browser speedup is claimed. Raw captures and full caveats are tracked in docs/performance/tax-selected-fold-2026-10-21.
+
 ## 2026-10-21 - Record app refactor checkpoint and measurements
 
 Documented finished versus remaining boundaries without claiming all-app completion. Retained detector before/after raw captures as text files because generic log files are ignored. Inventory JSON parses with exactly 47 entries. Focused UI tests passed for the committed first batch; second batch integration is ongoing.

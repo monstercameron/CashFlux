@@ -10,6 +10,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/reports"
 )
@@ -37,7 +38,7 @@ type NetIncome struct {
 	IncomeMinor, DeductibleMinor, NetMinor int64
 }
 
-// NetIncomeWithLinks reuses the checked reporting and tax-gathering folds over
+// NetIncomeWithLinks reuses the checked reporting and category-spending folds over
 // one explicitly netted refund ledger. A failed source fold returns an error
 // and an empty result; callers must not feed that empty result to an estimator.
 // Complete folds are intentional: even a nondeductible expense with unavailable
@@ -59,14 +60,25 @@ func NetIncomeWithLinks(in NetIncomeInput) (NetIncome, error) {
 	if err != nil {
 		return NetIncome{}, fmt.Errorf("tax net-income report flow: %w", err)
 	}
-	collection, err := gatherLedger(all, in.Categories, in.Year, in.From, in.To, in.Rates)
+	selected := make(map[string]bool, len(in.Categories))
+	for _, category := range in.Categories {
+		selected[category.ID] = category.Deductible
+	}
+	spending, err := ledger.CategorySpendSeriesSelected(all, []time.Time{in.From, in.To}, in.Rates, selected)
 	if err != nil {
 		return NetIncome{}, fmt.Errorf("tax net-income deductions: %w", err)
 	}
-	net, err := money.Sub(flows[0].Income, collection.Deductible.Total)
+	var deductible int64
+	for _, amounts := range spending {
+		deductible, err = money.Add(deductible, amounts[0])
+		if err != nil {
+			return NetIncome{}, fmt.Errorf("tax net-income deductions: %w", err)
+		}
+	}
+	net, err := money.Sub(flows[0].Income, deductible)
 	if err != nil {
 		return NetIncome{}, fmt.Errorf("tax net income: %w", err)
 	}
 	return NetIncome{Year: in.Year, From: in.From, To: in.To, Currency: base,
-		IncomeMinor: flows[0].Income, DeductibleMinor: collection.Deductible.Total, NetMinor: net}, nil
+		IncomeMinor: flows[0].Income, DeductibleMinor: deductible, NetMinor: net}, nil
 }
