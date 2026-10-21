@@ -120,7 +120,7 @@ func TestQueryLongRecordIsFullyReachableInUnicodeChunks(t *testing.T) {
 		ID   string `json:"id"`
 		Text string `json:"text"`
 	}
-	text := strings.Repeat("café🪙\n", 8000)
+	text := strings.Repeat("café🪙\"\\\n\t<&>", 8000)
 	c := NewCollection("notes", "id", func() ([]item, error) { return []item{{"long", text}}, nil })
 	p, e := ReadPage(c, Query{Collection: "notes"})
 	if e != nil {
@@ -129,17 +129,33 @@ func TestQueryLongRecordIsFullyReachableInUnicodeChunks(t *testing.T) {
 	if len(p.Records) != 1 || !p.Records[0].DetailRequired || len(p.Records[0].Data) != 0 {
 		t.Fatal("large record silently truncated", p)
 	}
-	q := DetailRequest{Collection: "notes", ID: "long", Field: "text", Limit: 137}
+	q := DetailRequest{Collection: "notes", ID: "long", Field: "text", Limit: maxOutput}
 	var b strings.Builder
+	expectedOffset := 0
+	fieldJSON, _ := json.Marshal(text)
+	expectedCharacters := len([]rune(string(fieldJSON)))
+	var snapshot string
 	for {
 		d, e := ReadRecord(c, q)
 		if e != nil {
 			t.Fatal(e)
 		}
+		encoded, err := json.Marshal(d)
+		if err != nil || len(encoded) > maxDetailBytes {
+			t.Fatalf("detail envelope bytes=%d err=%v budget=%d", len(encoded), err, maxDetailBytes)
+		}
+		if d.Offset != expectedOffset || len([]rune(d.JSONText)) > q.Limit || d.TotalCharacters != expectedCharacters {
+			t.Fatalf("invalid chunk offsets/limit/total: offset=%d expected=%d chars=%d limit=%d total=%d expectedTotal=%d", d.Offset, expectedOffset, len([]rune(d.JSONText)), q.Limit, d.TotalCharacters, expectedCharacters)
+		}
+		if snapshot != "" && d.Snapshot != snapshot {
+			t.Fatal("snapshot changed between detail chunks")
+		}
+		snapshot = d.Snapshot
 		b.WriteString(d.JSONText)
 		if d.NextOffset == nil {
 			break
 		}
+		expectedOffset = *d.NextOffset
 		q.Offset = *d.NextOffset
 		q.Snapshot = d.Snapshot
 	}
@@ -152,6 +168,63 @@ func TestQueryLongRecordIsFullyReachableInUnicodeChunks(t *testing.T) {
 	}
 	if _, e := ReadRecord(c, DetailRequest{Collection: "notes", ID: "missing"}); e == nil {
 		t.Fatal("missing record accepted")
+	}
+}
+
+func TestReadRecordBoundsEncodedEnvelopeAndRedactedMetadata(t *testing.T) {
+	type item struct {
+		ID     string            `json:"id"`
+		Custom map[string]string `json:"custom"`
+		Text   string            `json:"text"`
+	}
+	makeCollection := func(count int) Collection {
+		custom := make(map[string]string, count)
+		for i := range count {
+			custom[fmt.Sprintf("api_key_%04d", i)] = "redacted"
+		}
+		row := item{ID: "metadata", Custom: custom, Text: strings.Repeat("🪙\"\\\n\t", 3000)}
+		return NewCollection("notes", "id", func() ([]item, error) { return []item{row}, nil })
+	}
+
+	c := makeCollection(500)
+	q := DetailRequest{Collection: "notes", ID: "metadata", Field: "text", Limit: maxOutput}
+	var joined strings.Builder
+	fieldJSON, _ := json.Marshal(strings.Repeat("🪙\"\\\n\t", 3000))
+	expectedCharacters := len([]rune(string(fieldJSON)))
+	var snapshot string
+	for {
+		d, err := ReadRecord(c, q)
+		if err != nil {
+			t.Fatal(err)
+		}
+		encoded, err := json.Marshal(d)
+		if err != nil || len(encoded) > maxDetailBytes {
+			t.Fatalf("redacted detail envelope bytes=%d err=%v budget=%d", len(encoded), err, maxDetailBytes)
+		}
+		if len(d.RedactedPaths) != 500 || d.Offset != len([]rune(joined.String())) || d.TotalCharacters != expectedCharacters {
+			t.Fatalf("redacted metadata/offset/total lost: paths=%d offset=%d joined=%d total=%d expected=%d", len(d.RedactedPaths), d.Offset, len([]rune(joined.String())), d.TotalCharacters, expectedCharacters)
+		}
+		if snapshot != "" && d.Snapshot != snapshot {
+			t.Fatal("snapshot changed between redacted detail chunks")
+		}
+		snapshot = d.Snapshot
+		joined.WriteString(d.JSONText)
+		if d.NextOffset == nil {
+			break
+		}
+		q.Offset, q.Snapshot = *d.NextOffset, d.Snapshot
+	}
+	var got string
+	if err := json.Unmarshal([]byte(joined.String()), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got != strings.Repeat("🪙\"\\\n\t", 3000) {
+		t.Fatal("redacted metadata chunking changed JSON content")
+	}
+
+	tooMany := makeCollection(1400)
+	if _, err := ReadRecord(tooMany, DetailRequest{Collection: "notes", ID: "metadata", Field: "text", Limit: 1}); err == nil || !strings.Contains(err.Error(), "metadata") {
+		t.Fatalf("oversized fixed metadata did not fail clearly: %v", err)
 	}
 }
 

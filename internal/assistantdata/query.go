@@ -21,6 +21,7 @@ import (
 
 const maxPage = 50
 const maxOutput = 24000
+const maxDetailBytes = 24000
 
 // Field describes an exact persisted JSON field, including fields omitted on a row.
 type Field struct {
@@ -517,10 +518,73 @@ func ReadRecord(c Collection, q DetailRequest) (Detail, error) {
 		if q.Offset > len(chars) {
 			return Detail{}, fmt.Errorf("offset exceeds record length")
 		}
-		end := min(q.Offset+q.Limit, len(chars))
-		out := Detail{Collection: c.Name, ID: r.id, Field: q.Field, Snapshot: snap, JSONText: string(chars[q.Offset:end]), TotalCharacters: len(chars), Offset: q.Offset, RedactedPaths: r.redacted, Notes: collectionNotes(c) + " jsonText is a JSON character slice; concatenate chunks then decode."}
+		endLimit := min(q.Offset+q.Limit, len(chars))
+		out := Detail{Collection: c.Name, ID: r.id, Field: q.Field, Snapshot: snap, TotalCharacters: len(chars), Offset: q.Offset, RedactedPaths: r.redacted, Notes: collectionNotes(c) + " jsonText is a JSON character slice; concatenate chunks then decode."}
+		metadataBytes, err := json.Marshal(out)
+		if err != nil {
+			return Detail{}, fmt.Errorf("encode record detail metadata: %w", err)
+		}
+		if len(metadataBytes) > maxDetailBytes {
+			return Detail{}, fmt.Errorf("record detail metadata is %d bytes, over the %d-byte response limit", len(metadataBytes), maxDetailBytes)
+		}
+		// Limit is a character ceiling. Find the largest prefix whose complete JSON
+		// envelope fits the tool-message byte budget; JSON escaping and UTF-8 make
+		// a fixed character count unsafe as a transport bound.
+		end := q.Offset
+		if endLimit == len(chars) {
+			out.JSONText = string(chars[q.Offset:endLimit])
+			encoded, err := json.Marshal(out)
+			if err != nil {
+				return Detail{}, fmt.Errorf("encode record detail: %w", err)
+			}
+			if len(encoded) <= maxDetailBytes {
+				end = endLimit
+			}
+		}
+		if end != endLimit || endLimit < len(chars) {
+			// If a continuation is necessary, its cursor is part of the fixed
+			// response envelope and must fit even before any content is selected.
+			out.JSONText = ""
+			next := q.Offset
+			out.NextOffset = &next
+			metadataBytes, err = json.Marshal(out)
+			if err != nil {
+				return Detail{}, fmt.Errorf("encode record detail metadata: %w", err)
+			}
+			if len(metadataBytes) > maxDetailBytes {
+				return Detail{}, fmt.Errorf("record detail metadata is %d bytes, over the %d-byte response limit", len(metadataBytes), maxDetailBytes)
+			}
+		}
+		low, high := q.Offset, endLimit
+		if endLimit == len(chars) && end == endLimit {
+			high = q.Offset - 1
+		} else if endLimit == len(chars) {
+			high = endLimit - 1
+		}
+		for low <= high {
+			mid := low + (high-low+1)/2
+			out.JSONText = string(chars[q.Offset:mid])
+			next := mid
+			out.NextOffset = &next
+			encoded, err := json.Marshal(out)
+			if err != nil {
+				return Detail{}, fmt.Errorf("encode record detail: %w", err)
+			}
+			if len(encoded) <= maxDetailBytes {
+				end = mid
+				low = mid + 1
+			} else {
+				high = mid - 1
+			}
+		}
+		if end == q.Offset && q.Offset < len(chars) {
+			return Detail{}, fmt.Errorf("record detail metadata leaves no room for a JSON character within the %d-byte response limit", maxDetailBytes)
+		}
+		out.JSONText = string(chars[q.Offset:end])
 		if end < len(chars) {
 			out.NextOffset = &end
+		} else {
+			out.NextOffset = nil
 		}
 		return out, nil
 	}

@@ -1,3 +1,7 @@
+## 2026-10-21 - Byte-bounded assistant record details
+
+ReadRecord sizes the complete JSON envelope, including UTF-8, escaping, redaction metadata and the next cursor, within 24000 bytes. Binary search chooses the largest fitting character prefix; oversized metadata fails explicitly. Native assistantdata tests and vet passed, covering Unicode, escaped controls, stable snapshots and offsets, and exact reconstruction.
+
 ## 2026-10-21 - Checked planning projections
 
 Checked APIs share the established forecast and planning algorithms, including monthly ordering, anniversary growth, rounding, and runway interpolation. Tests cover 120 frozen-model parity combinations, invalid assumptions, integer and conversion overflow, and documented work bounds. Native forecast and planning suites and vet passed.
