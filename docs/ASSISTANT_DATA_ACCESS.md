@@ -9,9 +9,11 @@ read-only tools. The prompt summary is a starting point, not the data boundary.
 | `query_data` | Filter by IDs, exact scalar fields, stored text or date bounds; follow `nextOffset` with the returned snapshot. |
 | `read_record` | Read an exact record or field, including long text through numbered character chunks. |
 
-The catalog covers 43 typed collections, including archived records,
+The catalog covers 49 typed collections, including archived records,
 orphan balance history, transaction links, custom fields, documents, workflows,
-saved views financial settings and explicit financial preferences. Call the manifest for the current catalog;
+saved views, financial settings, explicit financial preferences, notification feed
+and archive history, allocation/planning/bill policies, and investment pools.
+Call the manifest for the current catalog;
 field names match persisted JSON, including legacy uppercase identity fields.
 Money fields retain exact integer minor units and their currencies. These tools
 do not perform financial aggregation; use the financial, planning, report and
@@ -21,6 +23,10 @@ Pages report both total and filtered counts. A changed snapshot rejects a later
 page instead of silently combining revisions. Oversized records point to
 `read_record`; consecutive `jsonText` chunks must be joined before decoding.
 Every call reads current storage. Store failures are explicit, not empty data.
+Declared Unix-second timestamp fields support UTC calendar filtering; ordinary
+numeric money fields are never inferred to be dates. The manifest lists each
+timestamp field's missing-zero policy. Configuration rows distinguish effective
+canonical defaults from persisted overrides; malformed storage is unavailable.
 
 Provider credentials, arbitrary settings KV, vault/auth state and binary blobs
 are excluded. Financial settings use an explicit DTO. Known device credentials

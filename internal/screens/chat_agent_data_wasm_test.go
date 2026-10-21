@@ -73,6 +73,11 @@ func TestAssistantDataCatalogReadsEveryRetainedCollectionAndWhitelistsSettings(t
 	if err := app.Store().SetSettingKV("cashflux:saved-txn-views", `{"txview":"{\"id\":\"txview\",\"name\":\"Saved ledger\"}"}`); err != nil {
 		t.Fatal(err)
 	}
+	for key, raw := range map[string]string{"cashflux:notify:feed": `[{"id":"live","title":"Retained alert"}]`, "cashflux:notifhistory": `{"items":[{"id":"old","message":"Archived alert"}]}`, "cashflux:invest:pools": `[{"id":"pool","name":"Retained pool","accountIds":["account"]}]`} {
+		if err := app.Store().SetKV(key, raw); err != nil {
+			t.Fatal(err)
+		}
+	}
 	manifest := assistantDataTool(t, app, "data_manifest")
 	out := manifest.run(json.RawMessage(`{}`))
 	var m struct {
@@ -85,7 +90,7 @@ func TestAssistantDataCatalogReadsEveryRetainedCollectionAndWhitelistsSettings(t
 	if err := json.Unmarshal([]byte(out), &m); err != nil {
 		t.Fatal(out, err)
 	}
-	if len(m.Collections) != 43 {
+	if len(m.Collections) != 49 {
 		t.Fatalf("catalog count %d: %s", len(m.Collections), out)
 	}
 	query := assistantDataTool(t, app, "query_data")

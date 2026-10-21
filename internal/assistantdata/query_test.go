@@ -247,3 +247,65 @@ func TestQueryNumericEqualityPreservesExactRationalValueWithoutExpandingExponent
 		})
 	}
 }
+
+func TestQueryDeclaredUnixDateFieldsUseUTCBoundsAndRejectInvalidNumericDates(t *testing.T) {
+	type row struct {
+		ID          string `json:"id"`
+		At          any    `json:"at"`
+		AmountMinor int64  `json:"amountMinor"`
+	}
+	start := time.Date(2026, 10, 20, 0, 0, 0, 0, time.UTC).Unix()
+	rows := []row{{"nil", nil, 100}, {"zero", int64(0), 100}, {"before", start - 1, 100}, {"start", start, 100}, {"end", start + 86399, 100}, {"after", start + 86400, 100}}
+	c := NewCollection("timestamps", "id", func() ([]row, error) { return rows, nil })
+	c.UnixSecondsDateFields = map[string]UnixSecondsDateField{"at": {ZeroIsMissing: true}}
+	previousZone := time.Local
+	time.Local = time.FixedZone("different-calendar-day", -7*60*60)
+	defer func() { time.Local = previousZone }()
+	q := Query{Collection: c.Name, DateField: "at", From: "2026-10-20", Through: "2026-10-20"}
+	p, err := ReadPage(c, q)
+	if err != nil || p.FilteredTotal != 2 || p.Records[0].ID != "end" || p.Records[1].ID != "start" {
+		t.Fatalf("UTC inclusive boundaries: %+v %v", p, err)
+	}
+	m, err := Describe(c)
+	if err != nil || m.UnixSecondsTimezone != "UTC" || !m.UnixSecondsDateFields["at"].ZeroIsMissing || !strings.Contains(p.Notes, "calendar bounds in UTC") {
+		t.Fatalf("date semantics undisclosed: %+v %v", m, err)
+	}
+	for _, tc := range []struct {
+		name        string
+		value       any
+		day         string
+		wantCount   int
+		wantError   bool
+		zeroMissing bool
+	}{
+		{"minimum", int64(-62135596800), "0001-01-01", 1, false, false},
+		{"maximum", int64(253402300799), "9999-12-31", 1, false, false},
+		{"before_minimum", int64(-62135596801), "0001-01-01", 0, true, false},
+		{"after_maximum", int64(253402300800), "9999-12-31", 0, true, false},
+		{"max_int64", int64(math.MaxInt64), "2026-10-20", 0, true, false},
+		{"outside_int64", json.Number("9223372036854775808"), "2026-10-20", 0, true, false},
+		{"fractional", json.Number("1.5"), "1970-01-01", 0, true, false},
+		{"wrong_type", "2026-10-20", "2026-10-20", 0, true, false},
+		{"nil", nil, "1970-01-01", 0, false, false},
+		{"zero_missing", int64(0), "1970-01-01", 0, false, true},
+		{"epoch_zero", int64(0), "1970-01-01", 1, false, false},
+		{"negative_epoch", int64(-1), "1969-12-31", 1, false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rows = []row{{"only", tc.value, 100}}
+			c.UnixSecondsDateFields["at"] = UnixSecondsDateField{ZeroIsMissing: tc.zeroMissing}
+			p, err := ReadPage(c, Query{Collection: c.Name, DateField: "at", From: tc.day, Through: tc.day})
+			if (err != nil) != tc.wantError || err == nil && p.FilteredTotal != tc.wantCount {
+				t.Fatalf("date availability: %+v %v", p, err)
+			}
+		})
+	}
+	for _, empty := range []bool{false, true} {
+		if empty {
+			rows = nil
+		}
+		if _, err := ReadPage(c, Query{Collection: c.Name, DateField: "amountMinor", From: "1970-01-01", Through: "1970-01-01"}); err == nil || !strings.Contains(err.Error(), "not declared") {
+			t.Fatal("money was treated as a timestamp or a healthy zero", err)
+		}
+	}
+}

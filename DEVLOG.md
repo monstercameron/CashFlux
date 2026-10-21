@@ -1,3 +1,7 @@
+## 2026-10-20 - Assistant retained notifications and financial policies
+
+Added fresh bound-store readers for retained notification feed/archive, allocation/planning/bill policies and investment pools. Canonical native config parsers are shared with existing UI getters; defaults and malformed data are distinguished. Declared Unix-second timestamps use checked UTC calendar filtering without interpreting numeric money as dates. Native Query7 and FinancialConfig2 tests passed; all eight Data WASM groups plus three cache adapter groups passed exit0 in the combined real-App gate.
+
 ## 2026-10-20 - Verified Assistant tax reference values
 
 Checked every existing field for both supported tax years against IRS and SSA primary publications. Fixed four deduction values, preserved the year-specific reference contract, and added verification dates/source URLs plus catch-up and retirement-age qualifications. Native taxref tests (nine groups), vet and diff checks passed; docs/TAX_REFERENCE_SOURCES.md records the source mapping.

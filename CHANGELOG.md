@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Assistant data discovery now covers 49 typed collections, including retained notifications and shared financial configurations.
 - Corrected 2025 and 2026 standard deductions in Assistant tax references and attached official verification sources.
 - Assistant reports preserve exact requested periods, share checked calculations, and return supporting records with explicit scope.
 - Cancel, new chat, and conversation switching stop pending Assistant requests and approvals; first-message model and budget choices persist.

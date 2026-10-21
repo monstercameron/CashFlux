@@ -35,9 +35,17 @@ type Collection struct {
 	Fields  []Field
 	// Notes adds collection-specific units and provenance to every result.
 	Notes string
+	// UnixSecondsDateFields declares timestamp semantics; ordinary numeric money
+	// fields are never inferred to be dates. Calendar comparisons use UTC.
+	UnixSecondsDateFields map[string]UnixSecondsDateField
 	// Revision identifies the caller's workspace and current data revision.
 	Revision string
 	load     func() ([]record, error)
+}
+
+// UnixSecondsDateField declares one numeric timestamp's missing-value policy.
+type UnixSecondsDateField struct {
+	ZeroIsMissing bool `json:"zeroIsMissing"`
 }
 
 type record struct {
@@ -182,12 +190,14 @@ func scrubValues(v any, path string, secrets []string, redacted *[]string) {
 
 // Manifest describes the read contract and its current content fingerprint.
 type Manifest struct {
-	Collection string  `json:"collection"`
-	IDField    string  `json:"idField"`
-	Fields     []Field `json:"fields"`
-	Total      int     `json:"total"`
-	Snapshot   string  `json:"snapshot"`
-	Notes      string  `json:"notes"`
+	Collection            string                          `json:"collection"`
+	IDField               string                          `json:"idField"`
+	Fields                []Field                         `json:"fields"`
+	Total                 int                             `json:"total"`
+	Snapshot              string                          `json:"snapshot"`
+	Notes                 string                          `json:"notes"`
+	UnixSecondsDateFields map[string]UnixSecondsDateField `json:"unixSecondsDateFields,omitempty"`
+	UnixSecondsTimezone   string                          `json:"unixSecondsTimezone,omitempty"`
 }
 
 // DataNotes is the common scope, precision and stored-content contract.
@@ -199,14 +209,27 @@ func Describe(c Collection) (Manifest, error) {
 	if err != nil {
 		return Manifest{}, err
 	}
-	return Manifest{c.Name, c.IDField, c.Fields, len(r), fingerprint(c, r), collectionNotes(c)}, nil
+	m := Manifest{Collection: c.Name, IDField: c.IDField, Fields: c.Fields, Total: len(r), Snapshot: fingerprint(c, r), Notes: collectionNotes(c), UnixSecondsDateFields: c.UnixSecondsDateFields}
+	if len(c.UnixSecondsDateFields) > 0 {
+		m.UnixSecondsTimezone = "UTC"
+	}
+	return m, nil
 }
 
 func collectionNotes(c Collection) string {
-	if c.Notes == "" {
-		return DataNotes
+	notes := DataNotes
+	if c.Notes != "" {
+		notes += " " + c.Notes
 	}
-	return DataNotes + " " + c.Notes
+	if len(c.UnixSecondsDateFields) > 0 {
+		names := make([]string, 0, len(c.UnixSecondsDateFields))
+		for name := range c.UnixSecondsDateFields {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		notes += " Declared Unix-seconds date fields (" + strings.Join(names, ", ") + ") accept calendar bounds in UTC, independent of the UI timezone. Their zeroIsMissing policies are listed in data_manifest."
+	}
+	return notes
 }
 
 // Query is an explicit conjunction of scalar matches and an optional calendar range.
@@ -301,6 +324,13 @@ func ReadPage(c Collection, q Query) (Page, error) {
 	if q.DateField != "" && !knownPath(c, q.DateField) {
 		return Page{}, fmt.Errorf("unknown dateField %q", q.DateField)
 	}
+	if _, declared := c.UnixSecondsDateFields[q.DateField]; q.DateField != "" && !declared {
+		for _, field := range c.Fields {
+			if field.Path == q.DateField && numericFieldType(field.Type) {
+				return Page{}, fmt.Errorf("dateField %q is numeric and is not declared as Unix seconds; choose an ISO date field", q.DateField)
+			}
+		}
+	}
 	rows, err := c.load()
 	if err != nil {
 		return Page{}, err
@@ -334,12 +364,14 @@ func ReadPage(c Collection, q Query) (Page, error) {
 		}
 		if q.DateField != "" {
 			v, ok := lookup(r.data, q.DateField)
-			d, valid := v.(string)
-			if !ok || !valid || len(d) < 10 {
+			if !ok || v == nil {
 				continue
 			}
-			d = d[:10]
-			if _, err := time.Parse("2006-01-02", d); err != nil {
+			d, present, err := calendarDate(c, q.DateField, v)
+			if err != nil {
+				return Page{}, err
+			}
+			if !present {
 				continue
 			}
 			if q.From != "" && d < q.From || q.Through != "" && d > q.Through {
@@ -374,6 +406,49 @@ func ReadPage(c Collection, q Query) (Page, error) {
 		p.Truncated = true
 	}
 	return p, nil
+}
+
+func numericFieldType(kind string) bool {
+	return strings.HasPrefix(kind, "int") || strings.HasPrefix(kind, "uint") || strings.HasPrefix(kind, "float") || kind == "number"
+}
+
+func calendarDate(c Collection, path string, value any) (string, bool, error) {
+	if spec, declared := c.UnixSecondsDateFields[path]; declared {
+		number, ok := value.(json.Number)
+		if !ok {
+			return "", false, fmt.Errorf("dateField %q must contain integer Unix seconds", path)
+		}
+		seconds, err := number.Int64()
+		if err != nil {
+			return "", false, fmt.Errorf("dateField %q contains invalid or out-of-range integer Unix seconds", path)
+		}
+		if spec.ZeroIsMissing && seconds == 0 {
+			return "", false, nil
+		}
+		// YYYY-MM-DD query bounds represent calendar years 0001 through 9999.
+		if seconds < -62135596800 || seconds > 253402300799 {
+			return "", false, fmt.Errorf("dateField %q is outside the supported calendar range 0001..9999", path)
+		}
+		return time.Unix(seconds, 0).UTC().Format("2006-01-02"), true, nil
+	}
+	if _, numeric := value.(json.Number); numeric {
+		return "", false, fmt.Errorf("dateField %q is numeric and is not declared as Unix seconds", path)
+	}
+	s, ok := value.(string)
+	if !ok {
+		return "", false, fmt.Errorf("dateField %q must contain ISO date text", path)
+	}
+	if s == "" {
+		return "", false, nil
+	}
+	if len(s) < 10 {
+		return "", false, fmt.Errorf("dateField %q contains invalid ISO date text", path)
+	}
+	s = s[:10]
+	if _, err := time.Parse("2006-01-02", s); err != nil {
+		return "", false, fmt.Errorf("dateField %q contains invalid ISO date text", path)
+	}
+	return s, true, nil
 }
 
 // DetailRequest selects one exact record and optionally a dot-separated field path.
