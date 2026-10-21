@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Assistant audits now read current bound data and separate recurring, one-time and unclassified estimates.
 - Assistant tax gathering now uses fresh bound records, canonical refund and split rules, checked totals, and exact currency CSV amounts.
 - Dormant-account fee estimates now convert amounts before thresholding and annualization.
 - Report statistics and payee reductions now return checked errors, and assistant report formulas preserve unavailable results.
