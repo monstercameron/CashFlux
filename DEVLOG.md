@@ -1,3 +1,7 @@
+## 2026-10-21 - Checked Setup input preparation
+
+Income and account input preparation now uses exact minor-unit parsing with explicit currency precision. Blank-input defaults and positive liability balances are preserved; malformed and overflowing input cannot write or advance. Native tests and vet pass; the focused WASM handler case passes.
+
 ## 2026-10-21 - Checked subscription financial preparation
 
 Extracted monthly/annual amounts, totals and share availability into a pure native model. Views render prepared facts and expose share percentages on hover. Native tests and vet pass; both focused WASM cases pass. The checked model adds correctness overhead in the small synthetic fixture; no performance improvement claimed.

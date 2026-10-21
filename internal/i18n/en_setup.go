@@ -28,6 +28,7 @@ var setupKeys = Catalog{
 	"setup.incomePlaceholder": "e.g. 4,000",
 	"setup.confirmIncome":     "Continue",
 	"setup.skipIncome":        "Skip for now",
+	"setup.amountInvalid":     "Enter a valid amount of zero or more, using this currency's decimal places.",
 
 	// Step 3 — first account
 	"setup.step3Label":          "Account",

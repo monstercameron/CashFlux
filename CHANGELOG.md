@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Setup validates money through native typed preparation before saving or advancing.
 - Subscription rows and totals use native checked cadence, currency and share facts.
 - Budget summaries now use checked native preparation and shared category selection.
 - Credit utilization history preserves selected snapshots and renders unavailable points rather than wrapped or zero values.
