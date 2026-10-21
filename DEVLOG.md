@@ -1,3 +1,7 @@
+## 2026-10-20 - Keep all named and surface-scoped undo records
+
+Snapshot extraction previously required id for every collection, rejecting named molecule records and collapsing placements with the same id on different surfaces. Collection-aware keys now match SQLite molecule names and surface/id placement keys; other collections still require nonempty ids. Duplicate snapshot keys return an error rather than silently losing a row. Native round-trip tests cover populated molecules, multiple surfaces, missing fields and duplicate keys. Existing user-undo placement exclusions remain in place; snapshot/recovery fingerprints retain every placement.
+
 ## 2026-10-20 - Commit contribution progress and ledger changes atomically
 
 Replaced independent goal/ledger writes with checked expected-before-image replay batches. Monthly log preflight runs before any write, and extracted transaction/goal/delete effects run after commit so observers see consistent data. Ledger errors no longer save memo progress and leave the form open for a duplicate retry. Undo removes progress, log, debit and relationships in one batch; missing debit remains tolerated. Native rollback/capture, conflict, event order, task/bill/workflow regressions and vet passed. Six actual app-host WASM cases passed, covering corrected retry once, global Undo/Redo including workflow effects and conflict retention. Browser durability remains a separate contract; no durable acknowledgement is claimed here.

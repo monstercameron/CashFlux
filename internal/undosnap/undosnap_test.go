@@ -94,6 +94,62 @@ func TestToSnapshot_MissingIDError(t *testing.T) {
 	}
 }
 
+func TestToSnapshot_StoreKeyedCollections(t *testing.T) {
+	input := []byte(`{
+		"placements": [
+			{"id":"hero","surface":"dashboard","layout":{"x":0}},
+			{"id":"hero","surface":"page:accounts","layout":{"x":1}}
+		],
+		"molecules": [
+			{"name":"monthlySpend","formula":"sum(expenses)"},
+			{"name":"netWorth","formula":"assets-liabilities"}
+		]
+	}`)
+
+	snap, err := undosnap.ToSnapshot(input)
+	if err != nil {
+		t.Fatalf("ToSnapshot: %v", err)
+	}
+	if len(snap["placements"]) != 2 {
+		t.Fatalf("placements: want 2 rows, got %d", len(snap["placements"]))
+	}
+	for _, key := range []string{"dashboard/hero", "page:accounts/hero"} {
+		if _, ok := snap["placements"][key]; !ok {
+			t.Errorf("placements[%q] missing", key)
+		}
+	}
+	if len(snap["molecules"]) != 2 {
+		t.Fatalf("molecules: want 2 rows, got %d", len(snap["molecules"]))
+	}
+	for _, key := range []string{"netWorth", "monthlySpend"} {
+		if _, ok := snap["molecules"][key]; !ok {
+			t.Errorf("molecules[%q] missing", key)
+		}
+	}
+
+	out, err := undosnap.ToJSON(snap)
+	if err != nil {
+		t.Fatalf("ToJSON: %v", err)
+	}
+	if got := normalize(t, out); !reflect.DeepEqual(normalize(t, input), got) {
+		t.Errorf("round-trip mismatch\ninput: %s\noutput: %s", input, out)
+	}
+}
+
+func TestToSnapshot_StoreKeyedCollectionsRequireKeys(t *testing.T) {
+	for _, input := range []string{
+		`{"molecules":[{"formula":"x"}]}`,
+		`{"placements":[{"id":"p"}]}`,
+		`{"placements":[{"surface":"dashboard"}]}`,
+		`{"molecules":[{"name":"same"},{"name":"same"}]}`,
+		`{"placements":[{"id":"p","surface":"dashboard"},{"id":"p","surface":"dashboard"}]}`,
+	} {
+		if _, err := undosnap.ToSnapshot([]byte(input)); err == nil {
+			t.Errorf("ToSnapshot(%s): expected invalid/missing/duplicate collection key error", input)
+		}
+	}
+}
+
 func TestRoundTrip(t *testing.T) {
 	cases := []struct {
 		name  string
