@@ -2532,6 +2532,7 @@ var english = Catalog{
 	"dashboard.trendSoFar":        "(so far)",
 	"dashboard.trendNow":          "Now",
 	"dashboard.trendUnavailable":  "Trend movement or range is unavailable",
+	"dashboard.wcUnavailable":     "What changed isn't available right now.",
 	"dashboard.netWorthTrend":     "Net worth trend",
 	"dashboard.spotlight":         "Spotlight",
 	"dashboard.income":            "Income",

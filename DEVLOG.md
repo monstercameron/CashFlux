@@ -1,3 +1,7 @@
+## 2026-10-21 - Prepare checked indexed What changed facts
+
+Removed incomplete cross-render report memoization and reused checked immutable snapshots. Native paired algorithm evidence reduced visits250000 to5000 for50accounts and5000transactions; no browser speed claim. Native suite and all4 mounted host regressions passed in1101-test Screens suite; test wrapper tick forces real v7 rerenders.
+
 ## 2026-10-21 - Prepare checked budget pool facts
 
 Native pool preparation preserves method-specific rollover and assignment semantics. The adapter carries actual normalization status and suppresses overflowed allocation basis. All370 native packages and1101 Screens WASM tests passed before final main integration.
