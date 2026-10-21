@@ -41,9 +41,6 @@ func TestParsedDatasetImportMatchesJSONIngress(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if parsed.dataset.SchemaVersion != store.SchemaVersion || len(parsed.dataset.TransferOperations) != 0 {
-				t.Fatal("parse did not migrate and normalize dataset")
-			}
 			if err := jsonApp.ImportJSON(raw); err != nil {
 				t.Fatal(err)
 			}
@@ -71,7 +68,7 @@ func TestParsedDatasetImportMatchesJSONIngress(t *testing.T) {
 func TestParsedDatasetRejectsInvalidIngress(t *testing.T) {
 	app := newApp(t, false)
 	t.Cleanup(func() { app.Store().Close() })
-	for _, parsed := range []*ParsedDataset{nil, {}} {
+	for _, parsed := range []*ParsedDataset{nil, {}, {dataset: &store.PreparedDataset{}}} {
 		if err := app.ImportParsedDataset(parsed); err == nil {
 			t.Fatal("invalid parsed handle accepted")
 		}

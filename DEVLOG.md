@@ -1,3 +1,7 @@
+## 2026-10-20 - Avoid repeated normalization of prepared imports
+
+Added store.PreparedDataset, constructed only by full Import, and LoadPrepared sharing the existing persistence body while ordinary Load keeps its existing migration/backfill behavior. Appstate retains the opaque prepared value and supplies the device credential separately. Current and legacy fixtures prove full snapshot parity and nonempty exact journal-capture parity; token reuse preserves original data across device keys, and invalid handles leave existing rows, revision and cursor unchanged. Focused native store and appstate tests passed. This removes repeated CPU passes on parsed imports without claiming a measured browser latency improvement.
+
 ## 2026-10-20 - Prepare Goal card details only after disclosure
 
 Moved the compact return ahead of expanded-only metadata, quick funding, task previews, notes, menus and detail preparation while keeping hook registration stable. Shared detail preparation delegates to the existing tested native calculations. Actual Goals host counters prove zero detail preparations across nine compact cards, only the opened goal prepares, collapsed revisions remain cold, and expanded output refreshes correctly after settings and contribution changes. Also replaced a byte-length separator slice with UTF-8-safe TrimPrefix for nonfinancial due labels. Screenlint and four focused WASM cases passed.

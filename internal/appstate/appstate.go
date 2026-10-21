@@ -196,17 +196,17 @@ func (a *App) ImportJSON(data []byte) error {
 // ParsedDataset holds a migrated import without exposing mutable dataset fields.
 // Its zero value is invalid; ParseDataset is the only constructor.
 type ParsedDataset struct {
-	dataset *store.Dataset
+	dataset *store.PreparedDataset
 }
 
 // ParseDataset validates and migrates JSON once. Recovery may retain the result
 // only while its source checkpoint remains unchanged; replayed bytes need a new parse.
 func ParseDataset(data []byte) (*ParsedDataset, error) {
-	ds, err := store.Import(data)
+	ds, err := store.PrepareDataset(data)
 	if err != nil {
 		return nil, err
 	}
-	return &ParsedDataset{dataset: &ds}, nil
+	return &ParsedDataset{dataset: ds}, nil
 }
 
 // ImportParsedDataset replaces all data using a validated parse. Like ImportJSON,
@@ -216,15 +216,14 @@ func (a *App) ImportParsedDataset(parsed *ParsedDataset) error {
 	if parsed == nil || parsed.dataset == nil {
 		return errors.New("appstate: dataset has not been parsed")
 	}
-	ds := *parsed.dataset
 	// OpenAI credentials belong to this device, so every dataset import (sync
 	// pulls, restores and user imports) must replace the incoming value even when
 	// this device has no credential. Otherwise an imported key would be adopted.
-	ds.Settings.OpenAIKey = a.Settings().OpenAIKey
-	if err := a.store.Load(ds); err != nil {
+	if err := a.store.LoadPrepared(parsed.dataset, a.Settings().OpenAIKey); err != nil {
 		return err
 	}
-	a.log.Info("imported dataset", "accounts", len(ds.Accounts), "transactions", len(ds.Transactions))
+	accounts, transactions := parsed.dataset.Counts()
+	a.log.Info("imported dataset", "accounts", accounts, "transactions", transactions)
 	a.SyncTxnLinkNetting()
 	return nil
 }

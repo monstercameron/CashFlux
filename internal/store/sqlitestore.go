@@ -133,6 +133,24 @@ func (s *SQLiteStore) Load(ds Dataset) error {
 	}
 	ds = backfillLegacyTransferGroups(ds)
 	ds = backfillBudgetCurrencies(ds)
+	return s.loadPreparedRows(ds)
+}
+
+// LoadPrepared persists a dataset returned by PrepareDataset without repeating
+// its already completed validation and normalization passes. The device-local
+// credential is supplied separately so import data cannot adopt another key.
+func (s *SQLiteStore) LoadPrepared(prepared *PreparedDataset, deviceOpenAIKey string) error {
+	if prepared == nil || !prepared.valid {
+		return fmt.Errorf("store: dataset has not been prepared")
+	}
+	ds := prepared.dataset
+	ds.Settings.OpenAIKey = deviceOpenAIKey
+	return s.loadPreparedRows(ds)
+}
+
+// loadPreparedRows persists an already-normalized dataset. Only Load and
+// LoadPrepared call this helper after applying their respective ingress rules.
+func (s *SQLiteStore) loadPreparedRows(ds Dataset) error {
 	if err := s.ensureDebtPaymentSchema(); err != nil {
 		return err
 	}
