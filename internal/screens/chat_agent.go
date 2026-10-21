@@ -929,40 +929,6 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates, tier a
 			},
 		},
 		{
-			spec: ai.FunctionTool("add_goal_contribution",
-				"Add money toward a savings goal, found by (part of) its name.",
-				json.RawMessage(`{"type":"object","properties":{"goal":{"type":"string"},"amount":{"type":"number","description":"major units"}},"required":["goal","amount"]}`)),
-			mutates: true,
-			preview: func(raw json.RawMessage) string {
-				var a struct {
-					Goal   string  `json:"goal"`
-					Amount float64 `json:"amount"`
-				}
-				_ = json.Unmarshal(raw, &a)
-				return fmt.Sprintf("Add %s toward the “%s” goal", fmtMoney(money.New(currency.MinorFromMajor(a.Amount, base), base)), a.Goal)
-			},
-			run: func(raw json.RawMessage) string {
-				var a struct {
-					Goal   string  `json:"goal"`
-					Amount float64 `json:"amount"`
-				}
-				if err := json.Unmarshal(raw, &a); err != nil || a.Amount == 0 {
-					return "Provide a goal and a non-zero amount."
-				}
-				q := strings.ToLower(strings.TrimSpace(a.Goal))
-				for _, g := range app.Goals() {
-					if strings.Contains(strings.ToLower(g.Name), q) {
-						g.CurrentAmount = money.New(g.CurrentAmount.Amount+currency.MinorFromMajor(a.Amount, g.CurrentAmount.Currency), g.CurrentAmount.Currency)
-						if err := app.PutGoal(g); err != nil {
-							return "Couldn't update the goal: " + err.Error()
-						}
-						return fmt.Sprintf("Added %s to “%s” — now %s of %s.%s", fmtMoney(money.New(currency.MinorFromMajor(a.Amount, base), base)), g.Name, fmtMoney(g.CurrentAmount), fmtMoney(g.TargetAmount), openLink("/goals", g.ID))
-					}
-				}
-				return "No goal matching “" + a.Goal + "”."
-			},
-		},
-		{
 			spec: ai.FunctionTool("add_account",
 				"Create an account: an ASSET (checking, savings, cash, investment) or a LIABILITY (loan, credit_card, mortgage, line_of_credit). Use a liability for money owed — e.g. a 401(k) loan. For a liability, `balance` is the amount owed (enter it positive). Optional liability fields: apr, credit_limit, min_payment.",
 				json.RawMessage(`{"type":"object","properties":{"name":{"type":"string"},"class":{"type":"string","enum":["asset","liability"]},"type":{"type":"string","description":"checking|savings|cash|investment|loan|credit_card|mortgage|line_of_credit"},"balance":{"type":"number","description":"opening balance in major units; for a liability the amount owed"},"apr":{"type":"number"},"credit_limit":{"type":"number"},"min_payment":{"type":"number"}},"required":["name","class"]}`)),
@@ -1341,6 +1307,7 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates, tier a
 	tools = append(tools, agToolsPlanning(app, base, rates)...)
 	tools = append(tools, agToolsFlags(app, base, rates)...)
 	tools = append(tools, agToolsFinance(app, base, rates, currentScope...)...)
+	tools = append(tools, agToolsGoalWrites(app, base, rates)...)
 	tools = append(tools, agToolsTrust(app, base, rates)...)
 	tools = append(tools, agToolsAuditor(app, base, rates)...)
 	tools = append(tools, agToolsAuthoring(app, base, rates)...)

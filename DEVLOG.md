@@ -1,3 +1,7 @@
+## 2026-10-20 - Assistant canonical goal contribution approvals
+
+Replaced the inline first-substring saved-amount update with stable-ID or unique-name resolution, exact decimal parsing in the selected actual currency, full goal/FX approval binding and canonical App.ContributeToGoal. Blank/ambiguous targets, nonpositive/malformed/overprecision amounts, stale/deleted goals, missing rates, unsupported legacy currency mismatch and task/archived state are refused before writing. The same approval cannot double-contribute. All seven real-App WASM groups passed in integration pass4, covering history/undo parity, values above float integer precision, foreign goal currency, atomic failure and role guard.
+
 ## 2026-10-20 - Assistant planning continuation and schedule availability
 
 Separated recurring source and schedule availability, so unassigned/deleted accounts no longer erase independently known forward dates. Retained per-definition source/schedule issues and explicit occurrences completeness. Planning continuation requires the returned dataset revision and refuses mixed pages after a store edit; oversized output requests a smaller page instead of silent truncation. Native Planning tests/vet and all nine actual-handler Planning WASM groups passed in integration pass4, including stale page, missing source, month-end cursor and bounded output regressions.

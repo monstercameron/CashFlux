@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Assistant goal contributions now resolve an exact goal, parse exact currency amounts and use the canonical checked contribution service after revalidating approval.
 - Assistant planning pages now pin continuation revisions and preserve known recurring dates even when their account source is unavailable.
 - Formula evaluation now keys its cache with the complete non-store configuration snapshot and exact calculation clock instead of retaining stale allocation/planning inputs.
 - Assistant data reads now include safe financial preferences and compare numeric filters exactly across decimal notation without losing large integer precision.
