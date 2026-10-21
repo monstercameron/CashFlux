@@ -5,6 +5,7 @@
 package screens
 
 import (
+	"errors"
 	"strings"
 	"time"
 
@@ -41,6 +42,52 @@ type goalCompareStats struct {
 	reachable             bool
 	deadline              time.Time
 	priority              int
+}
+
+type goalCompareOrderProps struct {
+	GoalA, GoalB             domain.Goal
+	MonthlyA, MonthlyB       money.Money
+	RemainingA, RemainingB   money.Money
+	HasMonthlyA, HasMonthlyB bool
+}
+
+func goalCompareOrderPanel(props goalCompareOrderProps) ui.Node {
+	pool := goalcompare.PrepareMonthlyPool(props.MonthlyA, props.MonthlyB, props.HasMonthlyA && props.HasMonthlyB)
+	switch {
+	case !props.HasMonthlyA || !props.HasMonthlyB:
+		return P(css.Class("muted"), Attr("data-testid", "goal-compare-order-none"),
+			uistate.T("goalcompare.orderNeedsPlans"))
+	case errors.Is(pool.Err, goalcompare.ErrMonthlyCurrencyMismatch):
+		return P(css.Class("muted"), Attr("data-testid", "goal-compare-order-none"),
+			uistate.T("goalcompare.orderNeedsOneCurrency"))
+	case !pool.Available:
+		return P(css.Class("muted"), Attr("data-testid", "goal-compare-order-unavailable"),
+			uistate.T("goalcompare.orderPoolUnavailable"))
+	}
+
+	swap := goalcompare.Compare(pool.Amount.Amount,
+		goalcompare.Fund{RemainingMinor: props.RemainingA.Amount, MonthlyCapMinor: props.MonthlyA.Amount},
+		goalcompare.Fund{RemainingMinor: props.RemainingB.Amount, MonthlyCapMinor: props.MonthlyB.Amount})
+	if !swap.Matters() {
+		return P(css.Class("muted"), Attr("data-testid", "goal-compare-order-moot"),
+			uistate.T("goalcompare.orderMoot"))
+	}
+	return Div(css.Class("goal-order-panel"), Attr("data-testid", "goal-compare-order"),
+		H4(css.Class("t-caption"), uistate.T("goalcompare.orderTitle")),
+		P(css.Class("muted"), uistate.T("goalcompare.orderLede", fmtMoney(pool.Amount))),
+		Table(css.Class("goal-compare-table"),
+			Style(map[string]string{"width": "100%", "border-collapse": "collapse"}),
+			Thead(Tr(Th(""), Th(props.GoalA.Name), Th(props.GoalB.Name))),
+			Tbody(
+				Tr(Td(css.Class("t-caption"), uistate.T("goalcompare.orderAFirst", props.GoalA.Name)),
+					Td(Attr("data-testid", "goal-order-a-first-a"), landingLabel(swap.AFirst.First)),
+					Td(Attr("data-testid", "goal-order-a-first-b"), landingLabel(swap.AFirst.Second))),
+				Tr(Td(css.Class("t-caption"), uistate.T("goalcompare.orderBFirst", props.GoalB.Name)),
+					Td(Attr("data-testid", "goal-order-b-first-a"), landingLabel(swap.BFirst.Second)),
+					Td(Attr("data-testid", "goal-order-b-first-b"), landingLabel(swap.BFirst.First))),
+			),
+		),
+	)
 }
 
 func computeGoalCompareStats(g domain.Goal, now time.Time, rates currency.Rates) goalCompareStats {
@@ -104,12 +151,16 @@ func GoalCompareForm(props GoalCompareProps) ui.Node {
 	now := time.Now()
 	ga, okA := byID(aS.Get())
 	gb, okB := byID(bS.Get())
+	var sa, sb goalCompareStats
+	if okA && okB {
+		rates := goalRates(app)
+		sa, sb = computeGoalCompareStats(ga, now, rates), computeGoalCompareStats(gb, now, rates)
+	}
 
 	var table ui.Node = P(css.Class("muted"), Attr("data-testid", "goal-compare-empty"),
 		uistate.T("goalcompare.empty"))
 	var verdict ui.Node = Fragment()
 	if okA && okB {
-		sa, sb := computeGoalCompareStats(ga, now, goalRates(app)), computeGoalCompareStats(gb, now, goalRates(app))
 		// One honest verdict sentence above the table, derived only from the figures the
 		// table shows (projected landings + monthly plans). The monthly gap is compared
 		// only when both goals share a currency (a cross-currency gap is meaningless).
@@ -168,45 +219,11 @@ func GoalCompareForm(props GoalCompareProps) ui.Node {
 	// "same money, different order", which is the one the user can actually act on.
 	var orderPanel ui.Node = Fragment()
 	if okA && okB {
-		sa, sb := computeGoalCompareStats(ga, now, goalRates(app)), computeGoalCompareStats(gb, now, goalRates(app))
-		switch {
-		case !sa.hasMonthly || !sb.hasMonthly:
-			orderPanel = P(css.Class("muted"), Attr("data-testid", "goal-compare-order-none"),
-				uistate.T("goalcompare.orderNeedsPlans"))
-		case sa.monthly.Currency != sb.monthly.Currency:
-			// Pooling two currencies would produce a number that is not money.
-			orderPanel = P(css.Class("muted"), Attr("data-testid", "goal-compare-order-none"),
-				uistate.T("goalcompare.orderNeedsOneCurrency"))
-		default:
-			pool := sa.monthly.Amount + sb.monthly.Amount
-			swap := goalcompare.Compare(pool,
-				goalcompare.Fund{RemainingMinor: sa.toGo.Amount, MonthlyCapMinor: sa.monthly.Amount},
-				goalcompare.Fund{RemainingMinor: sb.toGo.Amount, MonthlyCapMinor: sb.monthly.Amount})
-			if !swap.Matters() {
-				// Both plans fit inside the pot, so order changes nothing. Saying so
-				// is the useful answer; a table of identical numbers is not.
-				orderPanel = P(css.Class("muted"), Attr("data-testid", "goal-compare-order-moot"),
-					uistate.T("goalcompare.orderMoot"))
-			} else {
-				orderPanel = Div(css.Class("goal-order-panel"), Attr("data-testid", "goal-compare-order"),
-					H4(css.Class("t-caption"), uistate.T("goalcompare.orderTitle")),
-					P(css.Class("muted"), uistate.T("goalcompare.orderLede",
-						fmtMoney(money.New(pool, sa.monthly.Currency)))),
-					Table(css.Class("goal-compare-table"),
-						Style(map[string]string{"width": "100%", "border-collapse": "collapse"}),
-						Thead(Tr(Th(""), Th(ga.Name), Th(gb.Name))),
-						Tbody(
-							Tr(Td(css.Class("t-caption"), uistate.T("goalcompare.orderAFirst", ga.Name)),
-								Td(Attr("data-testid", "goal-order-a-first-a"), landingLabel(swap.AFirst.First)),
-								Td(Attr("data-testid", "goal-order-a-first-b"), landingLabel(swap.AFirst.Second))),
-							Tr(Td(css.Class("t-caption"), uistate.T("goalcompare.orderBFirst", gb.Name)),
-								Td(Attr("data-testid", "goal-order-b-first-a"), landingLabel(swap.BFirst.Second)),
-								Td(Attr("data-testid", "goal-order-b-first-b"), landingLabel(swap.BFirst.First))),
-						),
-					),
-				)
-			}
-		}
+		orderPanel = goalCompareOrderPanel(goalCompareOrderProps{
+			GoalA: ga, GoalB: gb, MonthlyA: sa.monthly, MonthlyB: sb.monthly,
+			RemainingA: sa.toGo, RemainingB: sb.toGo,
+			HasMonthlyA: sa.hasMonthly, HasMonthlyB: sb.hasMonthly,
+		})
 	}
 
 	// The eligibility note. It states the rule unconditionally — a reader seeing a

@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Move Goals Compare pooled monthly money into native checked preparation and reuse goal stats across its sections.
 - Move Dashboard trend movement, safe magnitudes and live-inclusive range into tested native preparation.
 - Use checked net-worth differences and safe display magnitudes on Accounts; distinguish unavailable movement from known zero.
 - Block dev reload sockets in benchmark contexts and retain bounded startup failure diagnostics.

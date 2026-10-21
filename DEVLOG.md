@@ -1,3 +1,7 @@
+## 2026-10-21 - Prepare checked monthly funding pools for Goals Compare
+
+goalcompare.PrepareMonthlyPool preserves missing-plan, currency and sum-overflow availability before scheduling. Goal Compare now computes its two goal stats once and reuses them for its table, verdict and order panel. Native goalcompare tests passed; focused WASM tests cover overflowing pool unavailable and known fitting plans retaining the correct no-order-change result. An initial test wrongly expected priority to change dates when the pool already funds both monthly caps; the corrected test asserts the native meaningful result. This preserves valid semantics and removes the prior unchecked addition from the view.
+
 ## 2026-10-21 - Prepare Dashboard trend movement and range outside rendering
 
 dashboardview.PrepareTrendFacts owns checked endpoint subtraction, safe absolute magnitude and chart range facts in one validation/range pass. Overflowed movement remains unavailable while valid plotted range remains usable. Native dashboardview tests cover both overflow directions, MinInt64 magnitude, currency mismatch, empty and ordinary series, and live-point range inclusion. Focused WASM trend-host regression passed; the integrated corrected primary-boundary batch passed eleven tests. The view retains chart formatting and consumes the prepared facts. What changed cache/service work is a separate pending slice.
