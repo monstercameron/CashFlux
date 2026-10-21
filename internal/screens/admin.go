@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/monstercameron/CashFlux/internal/backendauth"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -68,6 +69,10 @@ func fetchAdminOverview(endpoint, token string, onDone func(adminOverview), onFo
 	if endpoint == "" || strings.TrimSpace(token) == "" {
 		return
 	}
+	if err := backendauth.ValidateServerEndpoint(endpoint); err != nil {
+		onError(err.Error())
+		return
+	}
 	go func() {
 		req, err := http.NewRequest(http.MethodGet, endpoint+"/v1/admin/overview", nil)
 		if err != nil {
@@ -106,6 +111,10 @@ func fetchAdminOverview(endpoint, token string, onDone func(adminOverview), onFo
 func fetchAdminUsers(endpoint, token string, onDone func([]adminUserRow), onError func(string)) {
 	endpoint = normalizedAdminEndpoint(endpoint)
 	if endpoint == "" || strings.TrimSpace(token) == "" {
+		return
+	}
+	if err := backendauth.ValidateServerEndpoint(endpoint); err != nil {
+		onError(err.Error())
 		return
 	}
 	go func() {

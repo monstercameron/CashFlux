@@ -131,7 +131,7 @@ func cloudSignInView(p cloudSignInProps) uic.Node {
 	return Section(css.Class(tw.Flex, tw.FlexCol, tw.Gap3), Attr("data-testid", "cloud-setup-signin"),
 		H3(css.Class(tw.Text15, tw.FontSemibold), uistate.T("cloud1.step.signin")),
 		P(css.Class(tw.Text14, tw.TextDim), uistate.T("cloud1.signInHint")),
-		uic.CreateElement(cloudConnectionFeedback, c.Phase),
+		uic.CreateElement(cloudConnectionFeedback, cloudFeedbackProps{Phase: c.Phase, Error: c.Error}),
 		If(activation, uic.CreateElement(PendingDeviceCard, PendingDeviceCardProps{Primary: true})),
 		If(password && !activation, uic.CreateElement(PasswordAuthCard, PasswordAuthCardProps{AllowRegistration: true, InitiallyExpanded: true})),
 		If(oauth, Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2),
@@ -295,6 +295,9 @@ func exchangeOAuthCode(ctx context.Context, endpoint, code, verifier, returnTo s
 // sessionHTTP waits for the browser response (including cookie installation).
 // Cancellation settles the fetch before a caller can release the refresh lock.
 func sessionHTTP(ctx context.Context, endpoint, path, token, csrf string, cookies bool, input, output any) error {
+	if err := validateBackendTransport(endpoint); err != nil {
+		return fmt.Errorf("session request: %w", err)
+	}
 	headers := js.Global().Get("Headers").New()
 	headers.Call("set", "Content-Type", "application/json")
 	if token != "" {

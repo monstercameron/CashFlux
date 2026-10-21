@@ -235,3 +235,26 @@ func TestStripConnectionPrefsJSON(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) { tc.want(t, stripConnectionPrefsJSON(tc.raw)) })
 	}
 }
+
+func TestStripDatasetConnectionPrefsBeforeUpload(t *testing.T) {
+	settings := map[string]string{
+		prefsStoreKey:       `{"theme":"dark","serverUrl":"https://private.example","serverToken":"bearer-secret","serverCsrf":"csrf-secret"}`,
+		"cashflux:language": "en",
+	}
+	if !stripDatasetConnectionPrefs(settings) {
+		t.Fatal("upload dataset was not marked changed")
+	}
+	if strings.Contains(settings[prefsStoreKey], "private.example") || strings.Contains(settings[prefsStoreKey], "bearer-secret") || strings.Contains(settings[prefsStoreKey], "csrf-secret") || !strings.Contains(settings[prefsStoreKey], "dark") || settings["cashflux:language"] != "en" {
+		t.Fatalf("upload settings were not safely retained: %v", settings)
+	}
+	if stripDatasetConnectionPrefs(settings) {
+		t.Fatal("credential-free settings changed again")
+	}
+	settings[prefsStoreKey] = `{"serverToken":"bearer-secret",broken`
+	if !stripDatasetConnectionPrefs(settings) {
+		t.Fatal("malformed preferences were not removed")
+	}
+	if _, present := settings[prefsStoreKey]; present {
+		t.Fatal("malformed preferences still present in upload dataset")
+	}
+}

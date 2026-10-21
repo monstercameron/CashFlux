@@ -1,3 +1,113 @@
+## 2026-10-21 - Prepare v1.19.9 for encrypted sync rollout
+
+Bumped the single product version source to 1.19.9 after the local three-browser encrypted file roundtrip and all PR checks passed. The release keeps server connection credentials on each device and restores the exact attachment bytes and later edits across browsers. Production rollout and an authenticated live roundtrip still need verification after merge.
+
+## 2026-10-21 - Start the server load watch before its writes
+
+The second CI run's test/build job failed in `TestServerLoadSmokeSyncBlobAndWatch`: under concurrent CI load, the stream accepted the request before the server registered the subscription. Writes could then publish before the watcher existed, leaving the test waiting for a missing event until its shared ten-second context expired. The test now waits for the active-stream metric to confirm registration and uses a thirty-second load context. Five targeted local runs passed. This changes test sequencing, not sync delivery behavior.
+
+## 2026-10-21 - Settle the remaining Smart Import CI race
+
+The latest draft PR passed test/build and one E2E shard; the other failed in `TestImportUXReviewAutoShownAndFooter`. Its mocked fetch resolved, but the response text callback had not reached the three-row review when the test asserted and tore down the app. A late render then dereferenced the cleared fixture. Both this test and the earlier Smart Import review test now share a bounded wait for the actual review state. The two focused WebAssembly tests passed locally, including a repeated run; the next CI result remains to be checked.
+
+## 2026-10-21 - Verify encrypted cross-browser file sync and return edits
+
+After clearing the stale Go build cache and using an isolated fresh cache, a local three-browser regression exposed two independent sync failures. The remote import restored this browser's connection in SQLite, but the durable checkpoint then wrote the raw server snapshot, which intentionally lacks device credentials. A reload could no longer match the saved session route to the configured server and paused sync as identity unknown. The checkpoint now exports the imported local dataset after restoring this browser's preferences; the sync bookmark hashes that local form. Server upload strips the connection fields before encryption so another passcode holder receives the household data without this device's bearer or CSRF token.
+
+The pull also raced an in-flight autosave and a scheduled upload. Autosave and queue sends now pause while the imported snapshot, owner, and bookmark commit as one protected batch, then the record writer rebases to the committed generation. A later same-page edit can arrive while the prior upload is in flight; its queued snapshot now carries a page-specific ancestor so it advances only after that exact prior snapshot is accepted. Other tabs, accounts, and workspaces retain the normal conflict behavior. The regression checks that browser B downloads the original file byte for byte, uploads a transaction, settles with no pending queue or conflict backup, and browser C restores it. This passed against a fresh local server. The privacy and lineage native tests and the protected WebAssembly replacement-path test passed. Production server credentials and deployment remain unverified.
+
+## 2026-10-20 - Wait for Smart Import review before fixture teardown
+
+The CI deploy-gate shard intermittently tore down the Smart Import fixture after a fixed 10 ms yield while the mocked fetch and response text callbacks still had work queued. The late callback then used a cleared app fixture and panicked. The test now waits up to five seconds for the actual three-row review state. Its targeted WebAssembly run passed from the isolated fresh Go build cache. The encrypted sync roundtrip remains under investigation.
+
+## 2026-10-20 - Migrate inactive workspace files at protected boot
+
+The local encrypted blob wrapper upgraded a legacy plaintext file when it was read, but the post-unlock migration visited only active-workspace artifacts. Boot now also completes each saved inactive workspace snapshot, which reads and durably rewrites any referenced plaintext blob through the encrypted wrapper. Missing or damaged files are logged and kept for recovery. A browser regression simulates a legacy IndexedDB file under an inactive workspace, waits for its protected bundle write, reloads, and verifies the raw file record becomes encrypted without opening the workspace. Orphan records without a known owning workspace remain outside this migration.
+
+## 2026-10-20 - Update Go for x509 security fix
+
+The PR's CI `govulncheck` found GO-2026-6809 in Go 1.26.9's `crypto/x509`. Go 1.26.10 fixes it, and every GitHub workflow uses the version from `go.mod`, so the module version now selects the patched toolchain for test, build, E2E, and release jobs. The full native suite, WebAssembly build, and local `govulncheck` passed; the scanner reports zero vulnerabilities affecting called code.
+
+## 2026-10-20 - Remove artifact framing conversion flagged by CI
+
+The CI security scanner rejected the encrypted artifact wrapper's `int` to `uint16` MIME length conversion despite an earlier range check. The sealed plaintext now uses a zero separator after a validated MIME string, avoiding the conversion while still encrypting both fields and failing on a missing separator. Native artifact tests, the WebAssembly app build, and a focused gosec scan of `internal/artifactstore` passed.
+
+## 2026-10-20 - Fail malformed local artifact reads
+
+The IndexedDB artifact getter assumed every stored record had a `Uint8Array` payload. A malformed legacy or tampered record could panic inside the JavaScript success callback, leaving the Go caller blocked and preventing sync or backup from reporting the file failure. The getter now validates the byte type and copy length and converts callback panics into errors. The WebAssembly app build passed.
+
+## 2026-10-20 - Record the local blob deletion constraint
+
+The dataset's artifact delete removes its SQLite row but leaves a separate IndexedDB blob. A direct blob delete was prototyped and rejected before commit: an older durable sync queue item can still reference that file, so deleting the blob immediately would make the queue permanently fail its new completeness check. The privacy review now states the residual storage risk and the need for garbage collection that accounts for every workspace and pending snapshot before erasure.
+
+## 2026-10-20 - Include inactive workspace files in full backup
+
+The full-install backup previously rehydrated the active dataset's attached files but copied each inactive workspace's saved portable JSON as-is. Those inactive snapshots can contain blob metadata with bytes held separately in IndexedDB. The backup builder now completes each inactive snapshot from the local blob store and aborts if a required file cannot be read, preserving an honest failure instead of a silently incomplete archive. The WebAssembly app build passed. A dedicated multi-workspace browser restore case remains to be added.
+
+## 2026-10-20 - Encrypt locally stored attachment bytes
+
+The separate `cashflux/artifacts` IndexedDB store previously wrote PDF bytes and MIME as plaintext even when the dataset had App Lock. An encrypted wrapper now seals both with the protected workspace key and authenticated artifact ID before every new write. Its read path upgrades a legacy entry in place and returns the bytes only after the encrypted replacement's IndexedDB transaction completes; failed upgrades leave the old record and surface an error. A background pass visits active-household legacy files after unlock, while inactive or orphaned legacy records remain a documented migration limit. Native wrapper tests and a WebAssembly key-binding test passed; the app WebAssembly build passed. The full browser attachment and protected reload journeys are being rerun.
+
+## 2026-10-20 - Guard the sync publisher itself
+
+The Cloud setup and current queue caller require App Lock, and the blob uploader already refuses an unprotected payload. Snapshot preparation still had a final plaintext return when protection was inactive, leaving future callers a path to publish readable JSON. It now checks protection before import and again before returning its encrypted envelope, including a passcode change during preparation. A wasm test asserts the refusal without network access; the two-device encrypted attachment browser journey passed after the change.
+
+## 2026-10-20 - Record the file-sync privacy boundary
+
+The review in `docs/SYNC_PRIVACY_REVIEW.md` traces local save, first connection, encrypted blob upload, authenticated restore, and server switching against code and synthetic tests. It explicitly distinguishes encrypted remote file contents from readable server metadata and the plaintext local artifact IndexedDB store. It also records incomplete server exports and inactive-workspace backup bundles as recovery limits. No production credential or customer file was used.
+
+## 2026-10-20 - Let file-bearing exports read IndexedDB
+
+JSON export and both full-install backup actions called their synchronous blob-rehydrating helpers directly from UI callbacks. A PDF stored in IndexedDB makes those helpers wait for a browser event that cannot arrive until the callback returns. These actions now start a Go goroutine before reading the file bytes, matching the existing SQLite export pattern. The WebAssembly app build passed. Inactive workspace file completeness remains a separate backup limitation.
+
+## 2026-10-20 - Resume protected boot after server change
+
+The server-switch browser regression hung at the App Lock gate. The initial authenticated dataset read completed, but after WebCrypto decrypted the inner dataset envelope, its JavaScript promise callback synchronously began journal replay and waited for a second IndexedDB transaction. Browser events could not deliver that transaction's completion until the callback returned. The decrypted import and replay now run in a Go goroutine. The browser case passed: the old server's refresh and access credentials were absent after reload, the new server's signed-out setup appeared, and the new server had no copied account. A normal encrypted-workspace reload regression checks the same gate without switching servers.
+
+## 2026-10-20 - Abort incomplete full-install backups
+
+The full backup builder treated an active-dataset export error as an empty dataset string. If an attached file could not be read, the app could still download a backup that omitted the whole active household. The builder now propagates the export error, so the existing error notice appears and no incomplete archive is downloaded. A WebAssembly build passed. Inactive workspace bundles still need a separate file-completeness review.
+
+## 2026-10-20 - Keep blob-backed files in sync and backups
+
+The queued sync snapshot came from SQLite, where imported PDF bytes are stored separately in IndexedDB. The upload path therefore could publish metadata without the file, while backup export silently continued after a blob read failure. The queue flush now completes its already committed snapshot with the matching local bytes before encrypting and uploading; it stops with an actionable status when those bytes are missing, unreadable, or shorter than recorded. JSON and SQLite export use the same fail-closed check. A native test covers the PDF-backed snapshot, missing/truncated blobs, and both backup formats. The full native suite and screen-lint check passed.
+
+## 2026-10-20 - Let Cloud discovery finish after setup changes
+
+The sign-in step starts an asynchronous `/v1/version` check. Its effect cleanup incremented the response-generation guard during a setup render, so the response was discarded and the pane stayed at “Checking the connection.” Restoring the cleanup reproduced the stall in the attachment browser journey; removing that invalidation let the same full two-device roundtrip complete. A Settings remount could also reset discovery after it had briefly succeeded. The pane now remembers only public capabilities for the same endpoint during this page session, shows them while rechecking, and clears them if rechecking fails. A newer probe or draft-address edit still invalidates an older response, and a separate static-dependency effect invalidates pending probes when the Cloud pane actually unmounts. The first-snapshot regression asserts that the sign-in discovery result stays available.
+
+## 2026-10-20 - Keep the local writer after the server accepts ownership
+
+The first accepted snapshot called `claimDatasetForCurrentUser`, which changed the protected owner record while the active record autosave writer still compared it with the owner captured at boot. Its next edit failed the owner compare-and-swap and made this same tab read-only as if another tab had saved. The claim now waits for a durable protected-store commit, then authorizes only the writer for that App and workspace to adopt that exact owner value. An external owner change still fails the comparison. A fresh browser run uploaded an image after first sync, observed a changed encrypted server snapshot with no filename in the envelope, and found no stale-tab banner. Second-device restoration remains under investigation.
+
+## 2026-10-20 - First encrypted snapshot on a new workspace
+
+The first sync creates an empty workspace row before uploading any attachment blobs, because the blob endpoint requires an owned workspace. That creation advances the server row to version 1, but the already queued snapshot still carried base version 0 and was rejected as stale against the client's own row. After the server confirms that exact creation, the subsequent snapshot push uses its returned version and timestamp. A concurrent writer still advances the server version and causes an ordinary conflict. A fresh local-server browser run confirmed that one encrypted snapshot reached the account export and did not expose the account name; this does not yet establish a full attachment roundtrip.
+
+## 2026-10-20 - Cloud regression harness reliability
+
+The sync browser checks were racing the wizard's asynchronous render and discovery response, and a transaction helper could click Save more than once. The shared helpers now wait for the actual visible step or sync pulse, click once, and unlock protected storage before waiting for app readiness. On Windows, `go run` can leave the compiled server listening after its wrapper exits, so cleanup identifies the listener on the test's reserved port and stops it. The focused first-snapshot browser journey passed with these helpers; the protected reload journey still exposes an IndexedDB read timeout under investigation.
+
+## 2026-10-20 - Durable sample reset before cloud setup
+
+The browser regression exposed a race when “Start fresh” was clicked while the initial sample autosave was still in flight. The wipe changed the in-memory dataset, but the saved generation advanced before its conditional durable replacement and the app stayed on an unsaved empty page. The action now requests a durable completion for the current App, then pauses autosave before wiping and reloads only after the empty dataset commits. A browser run confirmed the reset now reloads; subsequent attachment sync remains under investigation.
+
+## 2026-10-20 - Verify downloaded attachment contents
+
+The blob server checks a content hash on upload, but the browser accepted downloaded bytes without checking that they still matched the BlobRef in the encrypted snapshot. The client now verifies SHA-256 over the complete downloaded payload before decrypting it or importing it locally. A mismatch keeps the local dataset unchanged and leaves sync retryable. Native tests cover valid, changed, and malformed hashes.
+
+## 2026-10-20 - Encrypted remote sync transport
+
+The browser worker converted any configured remote `http://` server to `ws://` and attached the bearer token to the resulting gRPC connection. The guided setup could therefore approve a remote unencrypted endpoint. A pure endpoint policy now accepts HTTPS/WSS everywhere and HTTP/WS only for literal loopback addresses. The discovery check, websocket tunnel, refresh-scope binding, session and account HTTP routes, device management, billing and admin requests apply the same policy; old saved insecure URLs fail closed instead of sending credentials. Userinfo, queries and fragments are rejected as server addresses. Local development on 127.0.0.1/localhost remains supported; remote and LAN self-hosting requires TLS. Focused endpoint, bridge and session tests cover both accepted and rejected paths.
+
+## 2026-10-20 - Actionable Cloud connection errors
+
+The guided setup reduced every discovery failure to one generic line, hiding whether the server was unreachable, returned the wrong API range or could not be saved locally. The connection component now retains the specific failure for the current address only; editing the address clears it, and stale asynchronous responses remain generation-guarded. The public discovery request no longer accepts a bearer token, has a ten-second deadline and bounds response decoding. Cross-origin guidance now describes the server's CORS and gRPC origin configuration rather than incorrectly claiming that all deployments must share one origin. The full native Go suite passed after this change; the browser build is checked separately.
+
+## 2026-10-20 - Sync discovery version range
+
+The live server at budget.earlcameron.com advertises API 2 and minimum client 1, while the Settings connection check compared both fields to literal `v1`. That rejected a compatible server before sign-in. The v1 SyncService is still registered on API 2, so discovery now parses the advertised range and accepts client version 1 when it falls inside it. Malformed and too-new minimums remain blocked. Unit cases cover the live response, legacy prefixed values and rejection cases; native backendauth, server and syncstate tests passed. The live endpoint was checked anonymously, without an access token or user data.
+
 ## 2026-10-20 - v1.19.8 release preparation
 
 Grouped the accumulated work into focused commits, checked the native suite, all WASM component lanes, vet, app and

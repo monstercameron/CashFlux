@@ -3,6 +3,7 @@
 package appstate
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/monstercameron/CashFlux/internal/artifacts"
@@ -81,10 +82,7 @@ func (a *App) GetBlobForArtifact(id string) ([]byte, error) {
 // not "image". This is safe to call only from non-render paths (export/import)
 // because the wasm IDB implementation blocks on a channel — calling it from a
 // render function would deadlock the single-threaded wasm runtime.
-func (a *App) rehydrateArtifactBytes(arts []domain.Artifact) {
-	if a.blobs == nil {
-		return
-	}
+func (a *App) rehydrateArtifactBytes(arts []domain.Artifact) error {
 	for i := range arts {
 		if len(arts[i].Bytes) > 0 {
 			continue // already present (legacy record or CSV artifact)
@@ -92,15 +90,26 @@ func (a *App) rehydrateArtifactBytes(arts []domain.Artifact) {
 		if !artifacts.IsBinaryKind(arts[i].Kind) {
 			continue // only binary artifacts (image/pdf) need rehydration
 		}
-		_, data, ok, err := a.blobs.Get(arts[i].ID)
-		if err != nil {
-			a.log.Warn("blob store get for export failed", "id", arts[i].ID, "err", err)
+		if a.blobs == nil {
+			if arts[i].Size > 0 || arts[i].BlobRef != nil {
+				return fmt.Errorf("appstate: artifact %s has no local blob store", arts[i].ID)
+			}
 			continue
 		}
-		if ok {
+		_, data, ok, err := a.blobs.Get(arts[i].ID)
+		if err != nil {
+			return fmt.Errorf("appstate: read artifact %s for export: %w", arts[i].ID, err)
+		}
+		if ok && len(data) > 0 {
+			if arts[i].Size > 0 && len(data) != arts[i].Size {
+				return fmt.Errorf("appstate: artifact %s has %d local bytes, expected %d", arts[i].ID, len(data), arts[i].Size)
+			}
 			arts[i].Bytes = data
+		} else if arts[i].Size > 0 || arts[i].BlobRef != nil {
+			return fmt.Errorf("appstate: artifact %s is missing local bytes", arts[i].ID)
 		}
 	}
+	return nil
 }
 
 // stashArtifactBytes is rehydrateArtifactBytes' inverse, run on the way IN:
@@ -140,7 +149,9 @@ func (a *App) ExportJSONWithBlobs() ([]byte, error) {
 		return nil, err
 	}
 	ds.Settings.OpenAIKey = ""
-	a.rehydrateArtifactBytes(ds.Artifacts)
+	if err := a.rehydrateArtifactBytes(ds.Artifacts); err != nil {
+		return nil, err
+	}
 	return store.Export(ds)
 }
 
@@ -151,7 +162,41 @@ func (a *App) ExportJSONRedactedWithBlobs() ([]byte, error) {
 		return nil, err
 	}
 	ds.Settings.OpenAIKey = ""
-	a.rehydrateArtifactBytes(ds.Artifacts)
+	if err := a.rehydrateArtifactBytes(ds.Artifacts); err != nil {
+		return nil, err
+	}
+	return store.Export(ds)
+}
+
+// CompleteArtifactSnapshot adds local blob-backed bytes to an already committed
+// portable snapshot. It reads artifact metadata from that snapshot, not live
+// SQLite rows, so a later financial edit cannot enter an earlier sync push.
+// Missing or unreadable bytes fail the push instead of publishing a fileless
+// server copy. The common no-external-blob path returns the original bytes.
+func (a *App) CompleteArtifactSnapshot(data []byte) ([]byte, error) {
+	var probe struct {
+		Artifacts []domain.Artifact `json:"artifacts"`
+	}
+	if err := json.Unmarshal(data, &probe); err != nil {
+		return nil, fmt.Errorf("appstate: inspect committed artifacts: %w", err)
+	}
+	needBlobs := false
+	for _, art := range probe.Artifacts {
+		if artifacts.IsBinaryKind(art.Kind) && len(art.Bytes) == 0 && (art.Size > 0 || art.BlobRef != nil) {
+			needBlobs = true
+			break
+		}
+	}
+	if !needBlobs {
+		return data, nil
+	}
+	ds, err := store.Import(data)
+	if err != nil {
+		return nil, fmt.Errorf("appstate: import committed artifact snapshot: %w", err)
+	}
+	if err := a.rehydrateArtifactBytes(ds.Artifacts); err != nil {
+		return nil, err
+	}
 	return store.Export(ds)
 }
 
@@ -224,7 +269,9 @@ func (a *App) ExportSQLite() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	a.rehydrateArtifactBytes(ds.Artifacts)
+	if err := a.rehydrateArtifactBytes(ds.Artifacts); err != nil {
+		return nil, err
+	}
 
 	scratch, err := store.NewMemory()
 	if err != nil {

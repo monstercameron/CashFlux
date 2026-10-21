@@ -63,20 +63,22 @@ func backupEverythingEncrypted() {
 				paletteNotify(uistate.T("backup.passphraseMismatch"), true)
 				return
 			}
-			plain, err := marshalFullBackup()
-			if err != nil {
-				paletteNotify(uistate.T("backup.everythingErr"), true)
-				return
-			}
-			encryptDataset(plain, pass, func(env []byte, encErr error) {
-				if encErr != nil {
-					paletteNotify(uistate.T("backup.encryptErr"), true)
+			go func() {
+				plain, err := marshalFullBackup()
+				if err != nil {
+					paletteNotify(uistate.T("backup.everythingErr"), true)
 					return
 				}
-				downloadBytes("cashflux-backup.cfbak", "application/octet-stream", env)
-				recordBackupNow()
-				paletteNotify(uistate.T("backup.encryptedDone"), false)
-			})
+				encryptDataset(plain, pass, func(env []byte, encErr error) {
+					if encErr != nil {
+						paletteNotify(uistate.T("backup.encryptErr"), true)
+						return
+					}
+					downloadBytes("cashflux-backup.cfbak", "application/octet-stream", env)
+					recordBackupNow()
+					paletteNotify(uistate.T("backup.encryptedDone"), false)
+				})
+			}()
 		})
 	})
 }

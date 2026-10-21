@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -59,6 +60,10 @@ func normalizedBackendEndpoint(endpoint string) string {
 	return endpoint
 }
 
+func validateBackendTransport(endpoint string) error {
+	return backendauth.ValidateServerEndpoint(endpoint)
+}
+
 func backendOrigin(endpoint string) string {
 	u, err := url.Parse(normalizedBackendEndpoint(endpoint))
 	if err != nil || u.Scheme == "" || u.Host == "" {
@@ -80,19 +85,17 @@ func appOrigin() string {
 	return o.String()
 }
 
-// originMismatchHint returns a trailing sentence naming a same-origin problem when the backend URL's
-// origin differs from the page's — the usual cause of a masked failure, since a cross-origin sync
-// request is blocked by the browser (and the offline service worker then reports it as a 504). It
-// returns "" when the origins match or can't be determined. Note that localhost and 127.0.0.1 are
-// distinct origins, as are different ports — a common trap.
+// originMismatchHint explains the cross-origin requirement when the backend URL
+// differs from the page's origin. A separately hosted backend must explicitly
+// allow the app's origin in CORS and in the gRPC bridge's origin check.
 func originMismatchHint(endpoint string) string {
 	page := appOrigin()
 	backend := backendOrigin(endpoint)
 	if page == "" || backend == "" || strings.EqualFold(page, backend) {
 		return ""
 	}
-	return fmt.Sprintf(" This app is loaded from %s, but the backend is %s — they must be the SAME origin (scheme, host, and port; localhost and 127.0.0.1 don't match). Open the app from %s, or point sync at %s.",
-		page, backend, backend, page)
+	return fmt.Sprintf(" This app is loaded from %s, but the backend is %s. Configure the backend to allow this app's origin, or open the app from %s. Localhost and 127.0.0.1 count as different origins.",
+		page, backend, backend)
 }
 
 // backendStatusHint turns a non-2xx discovery status into an actionable message. A 502/503/504 from
@@ -102,30 +105,32 @@ func originMismatchHint(endpoint string) string {
 func backendStatusHint(code int, endpoint string) string {
 	switch code {
 	case http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
-		return fmt.Sprintf("Couldn't reach a backend at %s — the request never completed (HTTP %d). Make sure the URL is the server's base address with no extra path (e.g. http://127.0.0.1:8095, not …/budget).%s",
+		return fmt.Sprintf("The connection to %s failed (HTTP %d). Check the server and its base address (for example, http://127.0.0.1:8095, with no /budget path).%s",
 			endpoint, code, originMismatchHint(endpoint))
 	case http.StatusNotFound:
 		return fmt.Sprintf("No backend found at %s (HTTP 404). Use the server's base URL only — with no path like /budget.%s", endpoint, originMismatchHint(endpoint))
 	case http.StatusUnauthorized, http.StatusForbidden:
-		return fmt.Sprintf("The backend rejected the request (HTTP %d). Check the bearer token.", code)
+		return fmt.Sprintf("The backend rejected the public connection check (HTTP %d). Check the address and server access policy.", code)
 	default:
 		return fmt.Sprintf("Backend returned HTTP %d.%s", code, originMismatchHint(endpoint))
 	}
 }
 
-func testBackendConnection(endpoint, token string, onDone func(backendauth.Discovery), onError func(string)) {
+func testBackendConnection(endpoint string, onDone func(backendauth.Discovery), onError func(string)) {
 	endpoint = normalizedBackendEndpoint(endpoint)
-	token = strings.TrimSpace(token)
+	if err := backendauth.ValidateServerEndpoint(endpoint); err != nil {
+		onError(err.Error())
+		return
+	}
 	go func() {
 		req, err := http.NewRequest(http.MethodGet, endpoint+"/v1/version", nil)
 		if err != nil {
 			onError("Backend URL is invalid.")
 			return
 		}
-		if token != "" {
-			req.Header.Set("Authorization", "Bearer "+token)
-		}
-		resp, err := http.DefaultClient.Do(req)
+		// Discovery is public. Never attach an account token to a user-entered
+		// address, and do not let an unresponsive host hold setup indefinitely.
+		resp, err := (&http.Client{Timeout: 10 * time.Second}).Do(req)
 		if err != nil {
 			onError("Couldn't reach a backend at " + endpoint + ". Check the server is running and the URL is its base address (e.g. http://127.0.0.1:8095) with no extra path." + originMismatchHint(endpoint))
 			return
@@ -136,11 +141,11 @@ func testBackendConnection(endpoint, token string, onDone func(backendauth.Disco
 			return
 		}
 		var version backendVersionResponse
-		if err := json.NewDecoder(resp.Body).Decode(&version); err != nil {
+		if err := json.NewDecoder(io.LimitReader(resp.Body, 64<<10)).Decode(&version); err != nil {
 			onError(endpoint + " responded, but not like a CashFlux backend. Make sure it's the sync server's base URL — no /budget or other path." + originMismatchHint(endpoint))
 			return
 		}
-		if version.APIVersion != "v1" || version.MinClientAPIVersion != "v1" {
+		if !backendauth.CompatibleVersion(version.APIVersion, version.MinClientAPIVersion) {
 			onError("Backend API version is not compatible.")
 			return
 		}
@@ -210,6 +215,10 @@ func removeOpenAIKeyFromBackend(endpoint, token string, onDone func(), onError f
 
 func startOAuthLogin(endpoint, provider string, onDone func(token, csrf, userID string), onError func(string)) {
 	endpoint = normalizedBackendEndpoint(endpoint)
+	if err := validateBackendTransport(endpoint); err != nil {
+		onError(err.Error())
+		return
+	}
 	provider = strings.TrimSpace(provider)
 	origin := backendOrigin(endpoint)
 	if provider == "" || origin == "" {
@@ -255,6 +264,10 @@ func signOutBackendOAuth(endpoint, token, csrf string, onDone func(error)) {
 		return
 	}
 	endpoint = normalizedBackendEndpoint(endpoint)
+	if err := validateBackendTransport(endpoint); err != nil {
+		onDone(err)
+		return
+	}
 	headers := js.Global().Get("Headers").New()
 	if strings.TrimSpace(token) != "" {
 		headers.Call("set", "Authorization", "Bearer "+strings.TrimSpace(token))
@@ -341,6 +354,10 @@ func openBillingPortal(endpoint, token string, onError func(string)) {
 
 func createBillingSession(endpoint, token, path string, body map[string]string, onError func(string)) {
 	endpoint = normalizedBackendEndpoint(endpoint)
+	if err := validateBackendTransport(endpoint); err != nil {
+		onError(err.Error())
+		return
+	}
 	token = strings.TrimSpace(token)
 	if token == "" {
 		onError("Add a backend token before opening billing.")
@@ -380,13 +397,20 @@ func createBillingSession(endpoint, token, path string, body map[string]string, 
 
 func prepareBackendSyncDataset(ctx context.Context, endpoint, token, workspaceID string, data []byte) ([]byte, error) {
 	defer timePhase("prepare.total")()
+	if !datasetEncryptionActive() {
+		return nil, fmt.Errorf("sync snapshot: %s", syncstate.DataProtectionMessage)
+	}
+	passcode := activePasscode
 	done := timePhase("prepare.import")
 	ds, err := store.Import(data)
 	done()
 	if err != nil {
 		return nil, err
 	}
-	changed := false
+	// The encrypted snapshot can be opened by another device with the same App
+	// Lock passcode. Keep this browser's endpoint and bearer out of that shared
+	// payload even though the server itself cannot decrypt it.
+	changed := stripDatasetConnectionPrefs(ds.SettingsKV)
 	for i := range ds.Artifacts {
 		if len(ds.Artifacts[i].Bytes) == 0 {
 			continue
@@ -412,9 +436,9 @@ func prepareBackendSyncDataset(ctx context.Context, endpoint, token, workspaceID
 	// stores is the cryptobox envelope, not plaintext JSON. The envelope embeds its
 	// own salt, so any device with the same passcode decrypts it on pull — no salt
 	// channel. Artifact blob bytes were already encrypted at upload time above.
-	if datasetEncryptionActive() {
+	if datasetEncryptionActive() && activePasscode == passcode {
 		doneEnc := timePhase("prepare.encrypt")
-		env, err := encryptDatasetSync(out, activePasscode)
+		env, err := encryptDatasetSync(out, passcode)
 		doneEnc()
 		if err != nil {
 			return nil, err
@@ -424,9 +448,12 @@ func prepareBackendSyncDataset(ctx context.Context, endpoint, token, workspaceID
 		if len(env) == 0 || !cryptobox.IsEnvelope(env) {
 			return nil, errSyncEncryptEmpty
 		}
+		if !datasetEncryptionActive() || activePasscode != passcode {
+			return nil, fmt.Errorf("sync snapshot: %s", syncstate.DataProtectionMessage)
+		}
 		return env, nil
 	}
-	return out, nil
+	return nil, fmt.Errorf("sync snapshot: %s", syncstate.DataProtectionMessage)
 }
 
 func hydrateBackendSyncDataset(ctx context.Context, endpoint, token, workspaceID string, data []byte) ([]byte, error) {
@@ -562,6 +589,9 @@ func downloadBackendArtifactBlob(ctx context.Context, endpoint, token, workspace
 	pr := prefs.Prefs{ServerURL: endpoint, ServerToken: token}
 	raw, err := downloadBlobStream(ctx, pr, workspaceID, hash, true)
 	if err != nil {
+		return nil, err
+	}
+	if err := verifyDownloadedBlob(hash, raw); err != nil {
 		return nil, err
 	}
 	// Transparent decryption: if the server stored an encrypted envelope (EC2),

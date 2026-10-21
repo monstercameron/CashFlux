@@ -123,6 +123,7 @@ func Run() {
 	initBlobStore()
 	hydrateOpenedProtectedStorage()
 	awaitLegacyDatasetUnlock()
+	migrateReferencedArtifactBlobs()
 	// Restore and refresh the selected account before any identity, sync or watch.
 	// Failure leaves household data intact and the connection behind sign-in.
 	if err := bootstrapSelectedSession(context.Background()); err != nil {

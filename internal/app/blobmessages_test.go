@@ -2,7 +2,34 @@
 
 package app
 
-import "testing"
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"strings"
+	"testing"
+)
+
+func TestVerifyDownloadedBlob(t *testing.T) {
+	data := []byte("encrypted attachment envelope")
+	sum := sha256.Sum256(data)
+	hash := hex.EncodeToString(sum[:])
+	for _, tt := range []struct {
+		name, hash string
+		data       []byte
+		wantError  bool
+	}{
+		{"matching", hash, data, false},
+		{"uppercase hash", strings.ToUpper(hash), data, false},
+		{"changed bytes", hash, []byte("tampered"), true},
+		{"invalid hash", "not-a-hash", data, true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := verifyDownloadedBlob(tt.hash, tt.data); (err != nil) != tt.wantError {
+				t.Fatalf("verifyDownloadedBlob error = %v, want error %t", err, tt.wantError)
+			}
+		})
+	}
+}
 
 // TestBuildUploadBlobHeaderIncludesWorkspaceID guards against the exact
 // regression a post-commit security scan caught: uploadBackendArtifactBlob

@@ -10,6 +10,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/artifacts"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/store"
 )
 
 // memBlobStore is an in-memory implementation of artifactstore.Store for tests.
@@ -62,6 +63,56 @@ func (m *memBlobStore) Usage() (int64, error) {
 		n += int64(len(v.b))
 	}
 	return n, nil
+}
+
+func TestCommittedSnapshotIncludesBlobBackedBytesAndFailsWhenMissing(t *testing.T) {
+	a := newApp(t, false)
+	blobs := newMemBlobStore()
+	a.SetBlobStore(blobs)
+	want := []byte("private PDF fixture bytes")
+	art, err := a.StoreBlobForArtifact(domain.Artifact{
+		ID: "pdf-backed", Name: "statement.pdf", Kind: artifacts.KindPDF,
+		MIME: "application/pdf", Bytes: want, Size: len(want),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := a.PutArtifact(art); err != nil {
+		t.Fatal(err)
+	}
+	committed, err := a.ExportJSONRedacted()
+	if err != nil {
+		t.Fatal(err)
+	}
+	complete, err := a.CompleteArtifactSnapshot(committed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ds, err := store.Import(complete)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ds.Artifacts) != 1 || !bytes.Equal(ds.Artifacts[0].Bytes, want) {
+		t.Fatalf("committed snapshot lost blob-backed PDF bytes: %+v", ds.Artifacts)
+	}
+	if err := blobs.Put(art.ID, art.MIME, want[:len(want)-1]); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.CompleteArtifactSnapshot(committed); err == nil {
+		t.Fatal("truncated local PDF bytes were accepted for sync")
+	}
+	if err := blobs.Delete(art.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.CompleteArtifactSnapshot(committed); err == nil {
+		t.Fatal("missing local PDF bytes were accepted for sync")
+	}
+	if _, err := a.ExportJSONWithBlobs(); err == nil {
+		t.Fatal("manual JSON backup silently omitted missing PDF bytes")
+	}
+	if _, err := a.ExportSQLite(); err == nil {
+		t.Fatal("SQLite backup silently omitted missing PDF bytes")
+	}
 }
 
 // TestArtifactBlobRoundTripWithBlobs proves the export→import path is fully

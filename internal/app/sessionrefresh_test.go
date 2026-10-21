@@ -20,6 +20,7 @@ func TestENC33RefreshModeSelection(t *testing.T) {
 		{"cross origin", "https://server.test", "https://example.test", authRefreshModeEncrypted, false},
 		{"different port", "https://example.test:8443", "https://example.test", authRefreshModeEncrypted, false},
 		{"HTTP cannot install Secure cookie", "http://localhost:8080", "http://localhost:8080", authRefreshModeEncrypted, false},
+		{"remote HTTP cannot carry credentials", "http://server.test", "http://page.test", "", true},
 		{"no page origin", "https://server.test", "", authRefreshModeEncrypted, false},
 		{"bad scheme", "file:///server", "https://example.test", "", true},
 		{"userinfo", "https://secret@server.test", "https://example.test", "", true},
