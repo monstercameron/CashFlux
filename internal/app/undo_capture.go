@@ -159,45 +159,57 @@ func captureIncrementalUndoReceipt(app *appstate.App) (string, error) {
 // approved Assistant tool starts. This keeps any earlier pending manual writes
 // separate and preserves the actor attached when each pending point was made.
 func captureAssistantBaseline() bool {
+	return captureAssistantBaselineChecked() == nil
+}
+
+func captureAssistantBaselineChecked() error {
 	if applyingUndo {
-		return false
+		return fmt.Errorf("undo replay is in progress")
 	}
 	app := appstate.Default
 	if app == nil {
-		return false
+		return fmt.Errorf("app state is unavailable")
 	}
 	if lastUndoCaptureApp != app || lastUndoSnap == nil {
 		initUndo()
-		return lastUndoCaptureApp == app && lastUndoSnap != nil
+		if lastUndoCaptureApp != app || lastUndoSnap == nil {
+			return fmt.Errorf("could not initialize undo baseline")
+		}
+		return nil
 	}
 	if _, err := captureIncrementalUndoReceipt(app); err != nil {
 		app.Log().Error("capture assistant baseline failed", "err", err)
-		return false
+		return err
 	}
-	return true
+	return nil
 }
 
 // captureAssistantReceipt forces one capture after the synchronous Assistant
 // tool run. Store changes since the baseline are therefore exactly this tool's
 // mutation, and only a nonempty filtered diff receives a receipt.
 func captureAssistantReceipt() (string, bool) {
+	id, changed, _ := captureAssistantReceiptChecked()
+	return id, changed
+}
+
+func captureAssistantReceiptChecked() (string, bool, error) {
 	if applyingUndo {
-		return "", false
+		return "", false, fmt.Errorf("undo replay is in progress")
 	}
 	app := appstate.Default
 	if app == nil {
-		return "", false
+		return "", false, fmt.Errorf("app state is unavailable")
 	}
 	if lastUndoCaptureApp != app || lastUndoSnap == nil {
 		initUndo()
-		return "", false
+		return "", false, fmt.Errorf("could not initialize undo baseline")
 	}
 	undoID, err := captureIncrementalUndoReceipt(app)
 	if err != nil {
 		app.Log().Error("capture assistant change failed", "err", err)
-		return "", false
+		return "", false, err
 	}
-	return undoID, undoID != ""
+	return undoID, undoID != "", nil
 }
 
 func publishDurableUndo(through uint64) {

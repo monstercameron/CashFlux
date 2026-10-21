@@ -58,15 +58,22 @@ func ChangesetApplyKinds(kind string) bool {
 // applied is recorded in Receipt.Applied (in run order) for the receipt card and
 // its one-tap "Undo all".
 //
-// Mutations made here are tagged "via assistant" in the audit trail (AG20): the
-// session actor is set for the duration, and each applied op is captured as its
-// own undo/audit point immediately (auditview.CaptureNow) so the tag is live at
-// capture time and "Undo all" has one undo point per applied op.
+// Mutations made here are tagged "via assistant" in the audit trail (AG20). A
+// household baseline is flushed before any dispatcher runs, then each attempted
+// op is captured separately so its exact undo ID can be tied to the receipt.
 func (a *App) ApplyChangeset(cs changeset.Changeset) changeset.Receipt {
-	auditview.SetSessionActor(auditview.ActorAssistant)
-	defer auditview.SetSessionActor("")
-
 	var rec changeset.Receipt
+	previousActor := auditview.SessionActor()
+	auditview.SetSessionActor("")
+	if err := auditview.CaptureAssistantBaselineChecked(); err != nil {
+		auditview.SetSessionActor(previousActor)
+		rec.CaptureError = err.Error()
+		rec.Failed = &changeset.FailedOp{Index: -1, Err: "could not establish undo baseline: " + err.Error()}
+		return rec
+	}
+	auditview.SetSessionActor(auditview.ActorAssistant)
+	defer auditview.SetSessionActor(previousActor)
+
 	for i, op := range cs.Ops {
 		if !op.Enabled {
 			continue
@@ -76,15 +83,35 @@ func (a *App) ApplyChangeset(cs changeset.Changeset) changeset.Receipt {
 			rec.Failed = &changeset.FailedOp{Index: i, Kind: op.Kind, Line: op.Line, Err: "unknown operation: " + op.Kind}
 			return rec
 		}
-		result, err := fn(a, op.Args)
-		if err != nil {
-			rec.Failed = &changeset.FailedOp{Index: i, Kind: op.Kind, Line: op.Line, Err: err.Error()}
+		result, opErr := fn(a, op.Args)
+		undoID, changed, captureErr := auditview.CaptureAssistantReceiptChecked()
+		if captureErr == nil && changed && undoID == "" {
+			captureErr = fmt.Errorf("capture reported a change without an undo receipt")
+		}
+		if captureErr == nil && !changed && undoID != "" {
+			captureErr = fmt.Errorf("capture returned an undo receipt for an unchanged operation")
+		}
+		if captureErr != nil {
+			rec.CaptureError = captureErr.Error()
+			errText := "undo verification failed: " + captureErr.Error()
+			if opErr != nil {
+				errText = opErr.Error() + "; " + errText
+			}
+			rec.Failed = &changeset.FailedOp{Index: i, Kind: op.Kind, Line: op.Line, Err: errText}
 			return rec
 		}
-		rec.Applied = append(rec.Applied, changeset.AppliedOp{Index: i, Kind: op.Kind, Line: op.Line, Result: result})
-		// Capture this op as its own audit + undo point while the assistant actor
-		// tag is set. No-op in tests (the slot defaults to a no-op).
-		auditview.CaptureNow()
+		if opErr != nil {
+			rec.Failed = &changeset.FailedOp{Index: i, Kind: op.Kind, Line: op.Line, Err: opErr.Error()}
+			if changed {
+				rec.Failed.UndoID = undoID
+			}
+			return rec
+		}
+		if changed {
+			rec.Applied = append(rec.Applied, changeset.AppliedOp{Index: i, Kind: op.Kind, Line: op.Line, Result: result, UndoID: undoID})
+		} else {
+			rec.Unchanged = append(rec.Unchanged, changeset.UnchangedOp{Index: i, Kind: op.Kind, Line: op.Line, Result: result})
+		}
 	}
 	return rec
 }

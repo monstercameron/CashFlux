@@ -80,9 +80,10 @@ func agToolsTrust(app *appstate.App, base string, rates currency.Rates) []chatTo
 // assistantWriteResult reports the tool output and the exact captured change, if
 // the approved call produced a nonempty filtered undo point.
 type assistantWriteResult struct {
-	Text    string
-	Changed bool
-	UndoID  string
+	Text              string
+	Changed           bool
+	UndoID            string
+	VerificationError string
 }
 
 // runAssistantWriteResult runs one approved mutating tool under the assistant's
@@ -100,9 +101,9 @@ type assistantWriteResult struct {
 func runAssistantWriteResult(tool string, run func() string) (result assistantWriteResult) {
 	previousActor := auditview.SessionActor()
 	auditview.SetSessionActor("")
-	if !auditview.CaptureAssistantBaseline() {
+	if err := auditview.CaptureAssistantBaselineChecked(); err != nil {
 		auditview.SetSessionActor(previousActor)
-		return assistantWriteResult{Text: "The approved change could not start because its undo history was unavailable."}
+		return assistantWriteResult{Text: "The approved change could not start because its undo history was unavailable: " + err.Error(), VerificationError: err.Error()}
 	}
 	auditview.SetSessionActor(auditview.ActorAssistant)
 	// A tool runs with arguments the MODEL wrote — unvalidated JSON shaped by
@@ -118,8 +119,23 @@ func runAssistantWriteResult(tool string, run func() string) (result assistantWr
 		}
 		// Capture real partial writes even after a panic. Empty/filtered diffs
 		// have no receipt and cannot create a phantom Assistant action.
-		result.UndoID, result.Changed = auditview.CaptureAssistantReceipt()
-		result.Changed = result.Changed && result.UndoID != ""
+		var captureErr error
+		result.UndoID, result.Changed, captureErr = auditview.CaptureAssistantReceiptChecked()
+		if captureErr == nil && result.Changed && result.UndoID == "" {
+			captureErr = fmt.Errorf("capture reported a change without an undo receipt")
+		}
+		if captureErr == nil && !result.Changed && result.UndoID != "" {
+			captureErr = fmt.Errorf("capture returned an undo receipt for an unchanged operation")
+		}
+		if captureErr != nil {
+			result.UndoID = ""
+			result.Changed = false
+			result.VerificationError = captureErr.Error()
+			if result.Text != "" {
+				result.Text += "\n"
+			}
+			result.Text += "A change may have been made, but undo verification is unavailable. Check Activity before retrying."
+		}
 		if result.Changed {
 			uistate.NoteAssistantAction(tool, result.UndoID)
 		}

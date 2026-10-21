@@ -5,6 +5,7 @@
 package screens
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -13,15 +14,15 @@ import (
 )
 
 func TestRunAssistantWriteResultRecordsOnlyCapturedChanges(t *testing.T) {
-	oldBaseline, oldCapture := auditview.CaptureAssistantBaseline, auditview.CaptureAssistantReceipt
+	oldBaseline, oldCapture := auditview.CaptureAssistantBaselineChecked, auditview.CaptureAssistantReceiptChecked
 	oldActor := auditview.SessionActor()
 	t.Cleanup(func() {
-		auditview.CaptureAssistantBaseline, auditview.CaptureAssistantReceipt = oldBaseline, oldCapture
+		auditview.CaptureAssistantBaselineChecked, auditview.CaptureAssistantReceiptChecked = oldBaseline, oldCapture
 		auditview.SetSessionActor(oldActor)
 	})
 	baselines := 0
-	auditview.CaptureAssistantBaseline = func() bool { baselines++; return true }
-	auditview.CaptureAssistantReceipt = func() (string, bool) { return "", false }
+	auditview.CaptureAssistantBaselineChecked = func() error { baselines++; return nil }
+	auditview.CaptureAssistantReceiptChecked = func() (string, bool, error) { return "", false, nil }
 	actionCount := len(uistate.AssistantActions())
 
 	noop := runAssistantWriteResult("noop_tool", func() string { return "Nothing changed." })
@@ -32,7 +33,7 @@ func TestRunAssistantWriteResultRecordsOnlyCapturedChanges(t *testing.T) {
 		t.Fatal("no-op created an Assistant action history item")
 	}
 
-	auditview.CaptureAssistantReceipt = func() (string, bool) { return "receipt-42", true }
+	auditview.CaptureAssistantReceiptChecked = func() (string, bool, error) { return "receipt-42", true, nil }
 	changed := runAssistantWriteResult("change_tool", func() string { return "Saved." })
 	if changed.Text != "Saved." || !changed.Changed || changed.UndoID != "receipt-42" {
 		t.Fatalf("changed result = %+v", changed)
@@ -48,25 +49,25 @@ func TestRunAssistantWriteResultRecordsOnlyCapturedChanges(t *testing.T) {
 }
 
 func TestRunAssistantWriteDoesNotRunWithoutAnIsolatedBaseline(t *testing.T) {
-	oldBaseline, oldCapture := auditview.CaptureAssistantBaseline, auditview.CaptureAssistantReceipt
+	oldBaseline, oldCapture := auditview.CaptureAssistantBaselineChecked, auditview.CaptureAssistantReceiptChecked
 	oldActor := auditview.SessionActor()
 	t.Cleanup(func() {
-		auditview.CaptureAssistantBaseline, auditview.CaptureAssistantReceipt = oldBaseline, oldCapture
+		auditview.CaptureAssistantBaselineChecked, auditview.CaptureAssistantReceiptChecked = oldBaseline, oldCapture
 		auditview.SetSessionActor(oldActor)
 	})
 	auditview.SetSessionActor("prior-actor")
-	auditview.CaptureAssistantBaseline = func() bool { return false }
+	auditview.CaptureAssistantBaselineChecked = func() error { return errors.New("baseline unavailable") }
 	captured := false
-	auditview.CaptureAssistantReceipt = func() (string, bool) {
+	auditview.CaptureAssistantReceiptChecked = func() (string, bool, error) {
 		captured = true
-		return "should-not-exist", true
+		return "should-not-exist", true, nil
 	}
 	ran := false
 	result := runAssistantWriteResult("blocked_tool", func() string {
 		ran = true
 		return "changed"
 	})
-	if ran || captured || result.Changed || result.UndoID != "" {
+	if ran || captured || result.Changed || result.UndoID != "" || result.VerificationError == "" {
 		t.Fatalf("unisolated write ran or captured: ran=%v captured=%v result=%+v", ran, captured, result)
 	}
 	if auditview.SessionActor() != "prior-actor" {
@@ -75,18 +76,18 @@ func TestRunAssistantWriteDoesNotRunWithoutAnIsolatedBaseline(t *testing.T) {
 }
 
 func TestRunAssistantWriteResultCapturesPartialPanicAndRestoresActor(t *testing.T) {
-	oldBaseline, oldCapture := auditview.CaptureAssistantBaseline, auditview.CaptureAssistantReceipt
+	oldBaseline, oldCapture := auditview.CaptureAssistantBaselineChecked, auditview.CaptureAssistantReceiptChecked
 	oldActor := auditview.SessionActor()
 	auditview.SetSessionActor("prior-actor")
 	t.Cleanup(func() {
-		auditview.CaptureAssistantBaseline, auditview.CaptureAssistantReceipt = oldBaseline, oldCapture
+		auditview.CaptureAssistantBaselineChecked, auditview.CaptureAssistantReceiptChecked = oldBaseline, oldCapture
 		auditview.SetSessionActor(oldActor)
 	})
-	auditview.CaptureAssistantBaseline = func() bool { return true }
+	auditview.CaptureAssistantBaselineChecked = func() error { return nil }
 	captured := false
-	auditview.CaptureAssistantReceipt = func() (string, bool) {
+	auditview.CaptureAssistantReceiptChecked = func() (string, bool, error) {
 		captured = auditview.SessionActor() == auditview.ActorAssistant
-		return "partial-receipt", true
+		return "partial-receipt", true, nil
 	}
 	result := runAssistantWriteResult("panic_tool", func() string { panic("after mutation") })
 	if !strings.Contains(result.Text, "panic_tool tool failed: after mutation") || !result.Changed || result.UndoID != "partial-receipt" {
@@ -96,4 +97,38 @@ func TestRunAssistantWriteResultCapturesPartialPanicAndRestoresActor(t *testing.
 		t.Fatalf("captureActor=%v restoredActor=%q", captured, auditview.SessionActor())
 	}
 	uistate.DropLastAssistantActionFor(result.UndoID)
+}
+
+func TestRunAssistantWriteReportsUnverifiableCaptureWithoutChangedCount(t *testing.T) {
+	oldBaseline, oldCapture := auditview.CaptureAssistantBaselineChecked, auditview.CaptureAssistantReceiptChecked
+	oldActor := auditview.SessionActor()
+	auditview.SetSessionActor("prior-actor")
+	t.Cleanup(func() {
+		auditview.CaptureAssistantBaselineChecked, auditview.CaptureAssistantReceiptChecked = oldBaseline, oldCapture
+		auditview.SetSessionActor(oldActor)
+	})
+	auditview.CaptureAssistantBaselineChecked = func() error { return nil }
+	captureActor := ""
+	auditview.CaptureAssistantReceiptChecked = func() (string, bool, error) {
+		captureActor = auditview.SessionActor()
+		return "", false, errors.New("store snapshot failed")
+	}
+	before := len(uistate.AssistantActions())
+	runs := 0
+	result := runAssistantWriteResult("uncertain_tool", func() string {
+		runs++
+		return "Saved the preference."
+	})
+	if runs != 1 || result.Changed || result.UndoID != "" || result.VerificationError == "" {
+		t.Fatalf("run=%d result=%+v", runs, result)
+	}
+	if !strings.Contains(result.Text, "Saved the preference.") || !strings.Contains(result.Text, "A change may have been made") {
+		t.Fatalf("uncertain result text = %q", result.Text)
+	}
+	if captureActor != auditview.ActorAssistant || auditview.SessionActor() != "prior-actor" {
+		t.Fatalf("capture actor=%q restored actor=%q", captureActor, auditview.SessionActor())
+	}
+	if len(uistate.AssistantActions()) != before {
+		t.Fatal("unverified write created an Assistant action count")
+	}
 }

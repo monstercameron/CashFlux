@@ -18,11 +18,17 @@ var changesetKeys = Catalog{
 	"changeset.receiptTitle": "Applied %d of %d",
 	"changeset.receiptOne":   "Applied 1 change",
 	// %s = the failing step, %s = the error.
-	"changeset.failed":      "Stopped at “%s”: %s. Earlier steps were applied.",
-	"changeset.undoAll":     "Undo all",
-	"changeset.undoAllAria": "Undo every change the assistant just applied",
-	"changeset.undone":      "Undid the assistant's changes.",
-	"changeset.applied":     "Applied %d change(s).",
+	"changeset.failed":                 "Stopped at “%s”: %s. Earlier steps were applied.",
+	"changeset.failedPartial":          "Stopped at “%s”: %s. This step changed some data before failing.",
+	"changeset.captureFailed":          "The change may have been saved, but its undo record could not be verified. Check Activity before retrying.",
+	"changeset.noChanges":              "No changes were needed.",
+	"changeset.undoProgress":           "Reversed %d of %d captured changes; %d remain.",
+	"changeset.undoVerificationFailed": "Undo verification failed: %s",
+	"changeset.undoStopped":            "Undo stopped: %s",
+	"changeset.undoAll":                "Undo all",
+	"changeset.undoAllAria":            "Undo every change the assistant just applied",
+	"changeset.undone":                 "Undid the assistant's changes.",
+	"changeset.applied":                "Applied %d change(s).",
 	// --- AG20 cumulative session receipt ---
 	"changeset.sessionAria": "What the assistant did in this chat",
 	// --- C389 per-action history ---

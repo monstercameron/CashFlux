@@ -1,3 +1,7 @@
+## 2026-10-21 - Verified Assistant batch undo and capture failures
+
+Changeset apply isolates the household baseline, preserves actor identity, captures each operation including failed partial writes, and records exact undo IDs. Undo All awaits each durable replay in reverse order, stops on mismatches/errors and retains visible partial progress. Direct tool writes use checked capture too, refusing unavailable baselines and disclosing uncertainty after a post-write capture failure. Native changeset/appstate tests passed, two focused Undo sequence WASM groups passed in pass7, and four direct-write receipt groups passed in pass8.
+
 ## 2026-10-21 - Assistant financial policy and retained history coverage
 
 Added sixteen fixed-key typed sources for sweep and round-up policies, occurrence payments, standing instructions, templates, tax/retirement/inflation assumptions, notification rules/routes, portfolio targets, benchmark/health history, saved reports/snapshots and debt policy. Shared checked native parsers preserve existing tolerant UI getters. Retained lists are not silently capped or pruned; unit/default provenance and malformed-source errors are explicit. Four native policy parser groups and all twelve actual-App Data WASM groups passed exit0; tests include more than 20,000 benchmark points and full record continuation.

@@ -36,9 +36,9 @@ func TestAddAndEnabledCount(t *testing.T) {
 
 func TestReceiptHelpers(t *testing.T) {
 	ok := Receipt{Applied: []AppliedOp{
-		{Index: 0, Kind: "add_transaction", Result: "Recorded $4.50"},
-		{Index: 1, Kind: "add_transaction", Result: "Recorded $38.00"},
-		{Index: 2, Kind: "create_category", Result: "Created Groceries"},
+		{Index: 0, Kind: "add_transaction", Result: "Recorded $4.50", UndoID: "a"},
+		{Index: 1, Kind: "add_transaction", Result: "Recorded $38.00", UndoID: "b"},
+		{Index: 2, Kind: "create_category", Result: "Created Groceries", UndoID: "c"},
 	}}
 	if !ok.OK() {
 		t.Fatal("OK = false, want true when Failed is nil")
@@ -66,6 +66,24 @@ func TestReceiptHelpers(t *testing.T) {
 	}
 	if failed.AppliedCount() != 1 {
 		t.Fatalf("AppliedCount = %d, want 1 (partial before failure)", failed.AppliedCount())
+	}
+}
+
+func TestUndoOrderIncludesPartialFailureAndTracksPartialProgress(t *testing.T) {
+	r := Receipt{
+		Applied: []AppliedOp{{UndoID: "first"}, {UndoID: "second"}},
+		Failed:  &FailedOp{UndoID: "partial"},
+	}
+	want := []string{"partial", "second", "first"}
+	if got := r.UndoOrderIDs(); len(got) != len(want) || got[0] != want[0] || got[1] != want[1] || got[2] != want[2] {
+		t.Fatalf("UndoOrderIDs = %v, want %v", got, want)
+	}
+	r.MarkUndone("partial")
+	r.MarkUndone("second")
+	r.MarkUndone("second")
+	wantRemaining := []string{"first"}
+	if got := r.UndoRemainingIDs(); len(got) != len(wantRemaining) || got[0] != wantRemaining[0] {
+		t.Fatalf("UndoRemainingIDs = %v, want %v", got, wantRemaining)
 	}
 }
 

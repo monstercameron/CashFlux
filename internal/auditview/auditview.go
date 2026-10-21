@@ -18,7 +18,11 @@
 // screen is safe to render before the app wires them up.
 package auditview
 
-import "github.com/monstercameron/CashFlux/internal/auditlog"
+import (
+	"errors"
+
+	"github.com/monstercameron/CashFlux/internal/auditlog"
+)
 
 // Feed is the session-scoped in-memory audit log. internal/app appends entries
 // to it via RecordAuditPoint; internal/screens reads it via Feed.Recent.
@@ -43,9 +47,21 @@ var CaptureNow = func() {}
 // an approved Assistant tool starts. The actor is still the household then.
 var CaptureAssistantBaseline = func() bool { return false }
 
+// CaptureAssistantBaselineChecked flushes any already-written household change
+// before an Assistant batch starts. The checked form lets callers stop before
+// mutation when the baseline could not be established.
+var CaptureAssistantBaselineChecked = func() error { return errors.New("Assistant undo capture is unavailable") }
+
 // CaptureAssistantReceipt captures the just-finished Assistant tool mutation and
 // returns its undo ID only when the filtered diff created a real undo point.
 var CaptureAssistantReceipt = func() (undoID string, changed bool) { return "", false }
+
+// CaptureAssistantReceiptChecked is the error-reporting form of
+// CaptureAssistantReceipt. A false changed result with nil error is a verified
+// no-op; a non-nil error means the result could not be verified.
+var CaptureAssistantReceiptChecked = func() (undoID string, changed bool, err error) {
+	return "", false, errors.New("Assistant undo capture is unavailable")
+}
 
 // TopUndoID returns the ID attached to the published top undo point.
 var TopUndoID = func() string { return "" }

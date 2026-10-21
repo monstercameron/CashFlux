@@ -42,7 +42,9 @@ func init() {
 	auditview.CanUndoFunc = func() bool { return undoStack.CanUndo() }
 	auditview.CaptureNow = func() { captureUndoPoint() }
 	auditview.CaptureAssistantBaseline = captureAssistantBaseline
+	auditview.CaptureAssistantBaselineChecked = captureAssistantBaselineChecked
 	auditview.CaptureAssistantReceipt = captureAssistantReceipt
+	auditview.CaptureAssistantReceiptChecked = captureAssistantReceiptChecked
 	auditview.TopUndoID = func() string { return undoStack.UndoID() }
 	auditview.UndoExpected = undoExpected
 }
