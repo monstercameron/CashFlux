@@ -12,6 +12,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/accountflow"
 	"github.com/monstercameron/CashFlux/internal/accountview"
+	"github.com/monstercameron/CashFlux/internal/acctproject"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -117,5 +118,56 @@ func TestIndexedAccountProjectionMatchesAppWithExactOccurrenceTimes(t *testing.T
 	}
 	if !reflect.DeepEqual(before, recurring) {
 		t.Fatal("projection changed the supplied recurring index")
+	}
+}
+
+func TestAccountProjectionSummariesKeepIndependent30And90DayHorizons(t *testing.T) {
+	now := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
+	balance := money.New(10000, "USD")
+	account := domain.Account{ID: "checking", Currency: "USD", OpeningBalance: balance}
+	app, err := appstate.New(io.Discard, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer app.Store().Close()
+	if err := app.Store().PutAccount(account); err != nil {
+		t.Fatal(err)
+	}
+	// The exact-boundary event is included in 30 days; one hour later has the
+	// same calendar date but must remain outside the 30-day window.
+	recurring := []domain.Recurring{
+		{ID: "exact", Label: "Exact boundary", AccountID: account.ID, Amount: money.New(-1000, "USD"), NextDue: now.AddDate(0, 0, 30), Cadence: domain.CadenceYearly},
+		{ID: "after", Label: "After boundary", AccountID: account.ID, Amount: money.New(-2000, "USD"), NextDue: now.AddDate(0, 0, 30).Add(time.Hour), Cadence: domain.CadenceYearly},
+		// Unknown cadences follow the domain's documented monthly fallback.
+		{ID: "late", Label: "Late reserve", AccountID: account.ID, Amount: money.New(-6000, "USD"), NextDue: now.AddDate(0, 0, 60), Cadence: "unsupported"},
+	}
+	for _, row := range recurring {
+		if err := app.Store().PutRecurring(row); err != nil {
+			t.Fatal(err)
+		}
+	}
+	inputs := accountview.PrepareProjectionInputs(recurring)
+	nearTerm, forward := inputs.ProjectPair(account.ID, balance, now, 30, 90)
+	want30, want90 := app.ProjectAccount(account.ID, now, 30), app.ProjectAccount(account.ID, now, 90)
+	if !reflect.DeepEqual(nearTerm, want30) || !reflect.DeepEqual(forward, want90) {
+		t.Fatalf("paired projections differ from independent app windows:\n30: got %+v want %+v\n90: got %+v want %+v", nearTerm, want30, forward, want90)
+	}
+	reversed90, reversed30 := inputs.ProjectPair(account.ID, balance, now, 90, 30)
+	if !reflect.DeepEqual(reversed90, forward) || !reflect.DeepEqual(reversed30, nearTerm) {
+		t.Fatal("reversed horizon arguments changed output ordering or projection values")
+	}
+	zero, thirty := inputs.ProjectPair(account.ID, balance, now, 0, 30)
+	if !reflect.DeepEqual(zero, acctproject.Project(balance.Amount, now, nil, 0)) || !reflect.DeepEqual(thirty, nearTerm) {
+		t.Fatal("zero first horizon changed either result or output ordering")
+	}
+	if len(nearTerm.Drivers) != 1 || nearTerm.Drivers[0].Label != "Exact boundary" || nearTerm.End != 9000 {
+		t.Fatalf("30-day window did not preserve exact timestamp boundary: %+v", nearTerm)
+	}
+	if len(forward.Drivers) != 3 || forward.End != 1000 {
+		t.Fatalf("90-day model omitted late recurring occurrences: %+v", forward)
+	}
+	points := forward.Series(now, 90)
+	if len(points) != 91 || points[30].Balance != 7000 || points[60].Balance != 1000 || points[90].Balance != 1000 {
+		t.Fatalf("90-day series did not apply the window's occurrences: day30=%+v day60=%+v day90=%+v", points[30], points[60], points[90])
 	}
 }

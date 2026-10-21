@@ -90,6 +90,27 @@ func PrepareProjectionInputs(recurring []domain.Recurring) ProjectionInputs {
 // is retained when selecting occurrences, matching App.ProjectAccount even for
 // imported intraday dates and non-advancing cadences.
 func (p ProjectionInputs) Project(accountID string, balance money.Money, asOf time.Time, horizonDays int) acctproject.Projection {
+	drivers := p.occurrences(accountID, asOf, horizonDays)
+	return acctproject.Project(balance.Amount, asOf, drivers, horizonDays)
+}
+
+// ProjectPair expands an account's recurring occurrences once through the longer
+// requested horizon, then filters each window against its exact timestamp boundary
+// before acctproject canonicalizes dates to calendar days. This keeps intraday
+// occurrences at the end of a shorter window from leaking in from a longer one.
+// The two returned projections follow the order of the requested horizons.
+func (p ProjectionInputs) ProjectPair(accountID string, balance money.Money, asOf time.Time, firstHorizonDays, secondHorizonDays int) (acctproject.Projection, acctproject.Projection) {
+	maxHorizon := max(firstHorizonDays, secondHorizonDays)
+	drivers := p.occurrences(accountID, asOf, maxHorizon)
+	first := projectWindow(balance.Amount, asOf, drivers, firstHorizonDays)
+	second := projectWindow(balance.Amount, asOf, drivers, secondHorizonDays)
+	return first, second
+}
+
+func (p ProjectionInputs) occurrences(accountID string, asOf time.Time, horizonDays int) []acctproject.Driver {
+	if horizonDays <= 0 {
+		return nil
+	}
 	var drivers []acctproject.Driver
 	end := asOf.AddDate(0, 0, horizonDays)
 	for _, row := range p.byAccount[accountID] {
@@ -105,5 +126,19 @@ func (p ProjectionInputs) Project(accountID string, balance money.Money, asOf ti
 			due = next
 		}
 	}
-	return acctproject.Project(balance.Amount, asOf, drivers, horizonDays)
+	return drivers
+}
+
+func projectWindow(start int64, asOf time.Time, drivers []acctproject.Driver, horizonDays int) acctproject.Projection {
+	if horizonDays <= 0 {
+		return acctproject.Project(start, asOf, nil, horizonDays)
+	}
+	end := asOf.AddDate(0, 0, horizonDays)
+	withinWindow := make([]acctproject.Driver, 0, len(drivers))
+	for _, driver := range drivers {
+		if !driver.Date.Before(asOf) && !driver.Date.After(end) {
+			withinWindow = append(withinWindow, driver)
+		}
+	}
+	return acctproject.Project(start, asOf, withinWindow, horizonDays)
 }

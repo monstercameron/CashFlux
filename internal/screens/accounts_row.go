@@ -92,6 +92,9 @@ type accountRowProps struct {
 	// "→ ~$X low on <date>" line that expands to list the drivers. Zero value renders
 	// nothing.
 	Projection acctproject.Projection
+	// ForwardProjection carries recurring drivers through the forward chart's 90-day
+	// horizon. Projection above remains the independent 30-day AC13 summary.
+	ForwardProjection acctproject.Projection
 	// Sparkline is the account's 90-day end-of-day balance series (AC2), oldest first,
 	// in the account's currency (minor units). Rendered as an inline SVG polyline; a
 	// flat run is itself the "nothing has posted since your last update" signal. Fewer
@@ -380,6 +383,7 @@ func AccountRow(props accountRowProps) ui.Node {
 	if detailsOpen.Get() && props.DetailContext != nil {
 		facts := props.DetailContext.facts(a)
 		props.Flow, props.ShowFlow, props.Projection = facts.Flow, true, facts.Projection
+		props.ForwardProjection = facts.ForwardProjection
 		props.ValuationHistory = facts.Valuations
 		series, hasRange := props.DetailContext.series(a, chartRange.Get())
 		props.HasRange = hasRange
@@ -604,7 +608,7 @@ func AccountRow(props accountRowProps) ui.Node {
 			chart,
 			// C381: and where it goes next. The history chart above answers where the
 			// account has been; this answers whether it survives until payday.
-			accountForwardLine(a, props.Balance, props.Projection, time.Now()),
+			accountForwardLine(a, props.Balance, props.ForwardProjection, time.Now()),
 			// XC7: warn when goals have earmarked more against this account than it
 			// holds (goal money has been spent). Own component; healthy → Fragment().
 			ui.CreateElement(accountEarmarkWarning, accountEarmarkWarnProps{Account: a, Balance: props.Balance}),

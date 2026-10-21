@@ -31,10 +31,13 @@ type accountDetailContext struct {
 }
 
 type accountDetailFacts struct {
-	Flow       accountflow.Flow
-	Projection acctproject.Projection
-	Valuations []domain.BalanceSnapshot
+	Flow              accountflow.Flow
+	Projection        acctproject.Projection // 30-day summary shown by the AC13 projected-low line
+	ForwardProjection acctproject.Projection // 90-day model used by the forward chart
+	Valuations        []domain.BalanceSnapshot
 }
+
+const accountProjectionHorizonDays = 30
 
 var (
 	accountHistoryCache          = newViewCache[*accountview.History](32)
@@ -64,7 +67,8 @@ func (c *accountDetailContext) facts(account domain.Account) *accountDetailFacts
 			inputs := memoByRev(accountProjectionInputsCache, c.revision, func() accountview.ProjectionInputs {
 				return accountview.PrepareProjectionInputs(c.recurring)
 			})
-			facts.Projection = inputs.Project(account.ID, c.snapshot.Balances[account.ID], c.asOf, 30)
+			balance := c.snapshot.Balances[account.ID]
+			facts.Projection, facts.ForwardProjection = inputs.ProjectPair(account.ID, balance, c.asOf, accountProjectionHorizonDays, forwardHorizonDays)
 		}
 		if isValuationType(account.Type) {
 			facts.Valuations = c.app.BalanceHistory(account.ID)

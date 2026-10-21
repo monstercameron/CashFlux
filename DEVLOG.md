@@ -1,3 +1,7 @@
+## 2026-10-20 - Use independent account projection horizons
+
+Added native ProjectionInputs.ProjectPair to expand recurring occurrences once through the longer horizon and filter each exact timestamp boundary before calendar-day normalization. This fixes the forward chart previously receiving only 30 days of drivers. The 30-day summary remains separate; a flow one hour beyond its endpoint cannot leak in from the longer window. Native accountview tests and vet passed, including independent App.ProjectAccount parity, exact boundaries, later flows, reversed/zero horizons and unknown cadence fallback. The actual lazy Accounts host test passed, showing a debit after day 30 affects the 90-day warning but not the near-term driver list. Single-window projection avoids redundant filtering.
+
 ## 2026-10-20 - Load the report scope once per mounted reader
 
 UseActiveScope memoizes its mounted seed by app identity before reading the existing fixed atom and capturing its setter. The original scope loader, legacy active-member migration, persistence and outside-render setter remain unchanged. Three new WASM tests passed, covering real-loader counts, live and persisted updates, late/remounted readers, migration/deletion and invalid/default cases, pre-capture no-op and fresh-runtime workspace changes. Four existing Dashboard/Accounts host regressions also passed under Go 1.26.9, including institution ambiguity, scope availability/disclosure and compact/detail lifecycle.

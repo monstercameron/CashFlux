@@ -62,6 +62,10 @@ func TestAccountsHostDefersDetailsAndReusesSelectedHistory(t *testing.T) {
 		Amount: money.New(-3000, "USD"), NextDue: now.AddDate(0, 0, 1), Cadence: domain.CadenceMonthly}); err != nil {
 		t.Fatal(err)
 	}
+	if err := app.Store().PutRecurring(domain.Recurring{ID: "late-reserve", Label: "Later reserve", AccountID: checking.ID,
+		Amount: money.New(-50000, "USD"), NextDue: now.AddDate(0, 0, 60), Cadence: domain.CadenceMonthly}); err != nil {
+		t.Fatal(err)
+	}
 	f := render.New(t, render.WithQueuedScheduler())
 	defer f.Cleanup()
 	f.Render(ui.CreateElement(Accounts))
@@ -94,6 +98,9 @@ func TestAccountsHostDefersDetailsAndReusesSelectedHistory(t *testing.T) {
 	if chart == nil || len(chart.Children()) != 1 || chart.Children()[0].Attr("points") != want || byTestID(f, "div", "acct-proj-checking") == nil {
 		t.Fatal("expanded row's history/projection differs from the previous display")
 	}
+	if byTestID(f, "span", "acct-fwd-negative-checking") == nil {
+		t.Fatalf("90-day forward line missed the recurring debit due after day 30: %s", f.Text())
+	}
 	byTestID(f, "button", "acct-range-all-checking").Click()
 	f.Stabilize()
 	if accountHistoryCache.Len() != 1 || accountSeriesCache.Len() != 2 || accountDetailFactsCache.Len() != 1 {
@@ -108,8 +115,8 @@ func TestAccountsHostDefersDetailsAndReusesSelectedHistory(t *testing.T) {
 	}
 	byTestID(f, "button", "acct-proj-toggle-checking").Click()
 	f.Stabilize()
-	if drivers := byTestID(f, "div", "acct-proj-drivers-checking"); drivers == nil || !strings.Contains(drivers.Text(), "Rent") {
-		t.Fatal("projection explanation action lost its recurring driver")
+	if drivers := byTestID(f, "div", "acct-proj-drivers-checking"); drivers == nil || !strings.Contains(drivers.Text(), "Rent") || strings.Contains(drivers.Text(), "Later reserve") {
+		t.Fatal("30-day projection explanation lost its near-term driver or included a later flow")
 	}
 	if err := app.Store().PutTransaction(domain.Transaction{ID: "new", AccountID: checking.ID, Date: now, Amount: money.New(-1000, "USD")}); err != nil {
 		t.Fatal(err)
