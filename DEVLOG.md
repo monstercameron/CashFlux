@@ -1,3 +1,7 @@
+## 2026-10-21 - Store uploaded images outside the durable dataset
+
+The Artifacts screen called PutArtifact directly with full image bytes. That bypassed the encrypted IndexedDB blob store and could make a large image exhaust the durable dataset before cloud sync uploaded its ciphertext. The upload now leaves the FileReader callback, commits the encrypted blob, saves metadata without inline bytes, refreshes usage, and requests persistence. The local three-browser regression checks the encrypted IndexedDB record, exact downloaded bytes, a second-browser edit, and a third-browser restore. Its first run reached the third browser but stalled on the loading shell with three WebAssembly pages open; closing each previous page before the next profile made the rerun pass. Account document attachments still use the inline path and need a separate fix.
+
 ## 2026-10-21 - Prepare v1.19.9 for encrypted sync rollout
 
 Bumped the single product version source to 1.19.9 after the local three-browser encrypted file roundtrip and all PR checks passed. The release keeps server connection credentials on each device and restores the exact attachment bytes and later edits across browsers. Production rollout and an authenticated live roundtrip still need verification after merge.

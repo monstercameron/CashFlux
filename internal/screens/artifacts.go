@@ -67,11 +67,21 @@ func Artifacts() ui.Node {
 				Bytes: data, CreatedAt: time.Now(),
 			}
 			art.Size = artifacts.Size(art)
-			if err := app.PutArtifact(art); err != nil {
-				notify(err.Error())
-				return
-			}
-			refresh()
+			// IndexedDB completes asynchronously; leave the FileReader callback before
+			// waiting for its encrypted write, then save the metadata and persist.
+			go func() {
+				stored, err := app.StoreBlobForArtifact(art)
+				if err == nil {
+					err = app.PutArtifact(stored)
+				}
+				if err != nil {
+					notify(err.Error())
+					return
+				}
+				app.RefreshBlobUsage()
+				refresh()
+				uistate.RequestPersist()
+			}()
 		})
 	}
 	importCSV := func() {

@@ -94,15 +94,38 @@ test("encrypted file and later edits sync across both devices", async ({ app, br
     app.getByRole("button", { name: /upload image/i }).click({ timeout: 20_000 }),
   ]);
   await chooser.setFiles({ name: filename, mimeType: "image/png", buffer: pixels });
-  await expect(app.getByTestId("artifact-name").filter({ hasText: filename })).toBeVisible();
+  const uploadedName = app.getByTestId("artifact-name").filter({ hasText: filename });
+  await expect(uploadedName).toBeVisible();
+  const uploadedRow = app.locator(".row").filter({ has: uploadedName });
+  const menuID = await uploadedRow.locator('[data-testid^="artifact-menu-btn-"]').getAttribute("data-testid");
+  const artifactID = menuID.slice("artifact-menu-btn-".length);
+  await expect.poll(() => app.evaluate(async (id) => {
+    const db = await new Promise((resolve, reject) => {
+      const request = indexedDB.open("cashflux", 1);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    try {
+      const record = await new Promise((resolve, reject) => {
+        const request = db.transaction("artifacts", "readonly").objectStore("artifacts").get(id);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      return record?.mime || "";
+    } finally {
+      db.close();
+    }
+  }, artifactID), { timeout: 30_000 }).toBe("application/x-cashflux-encrypted-artifact");
   await expect.poll(async () => {
     const found = await accountSnapshots(request, server.origin, await accessToken(app));
     return found.some((snapshot) => !beforeUpload.some((old) => old.workspaceID === snapshot.workspaceID && old.envelope === snapshot.envelope));
   }, { timeout: 90_000 }).toBe(true);
   const serverCopies = await accountSnapshots(request, server.origin, await accessToken(app));
   expect(serverCopies.every((snapshot) => !snapshot.envelope.includes(filename)), "server snapshot must not expose the filename").toBe(true);
+  const appOrigin = new URL(app.url()).origin;
+  await app.close(); // release the first WebAssembly runtime before booting another profile
 
-  const secondContext = await browser.newContext({ baseURL: new URL(app.url()).origin, reducedMotion: "reduce" });
+  const secondContext = await browser.newContext({ baseURL: appOrigin, reducedMotion: "reduce" });
   const second = await secondContext.newPage();
   try {
     await boot(second);
@@ -171,7 +194,8 @@ test("encrypted file and later edits sync across both devices", async ({ app, br
     }
     const returned = await accountSnapshots(request, server.origin, await accessToken(second));
     expect(returned.every((snapshot) => !snapshot.envelope.includes(edit)), "second-device edit must remain encrypted on the server").toBe(true);
-    const thirdContext = await browser.newContext({ baseURL: new URL(app.url()).origin, reducedMotion: "reduce" });
+    await second.close(); // each profile is independent; only one runtime needs to stay loaded
+    const thirdContext = await browser.newContext({ baseURL: appOrigin, reducedMotion: "reduce" });
     try {
       const third = await thirdContext.newPage();
       await boot(third);

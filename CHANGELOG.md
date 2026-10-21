@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Image uploads now commit bytes to the encrypted local blob store before saving artifact metadata, keeping large files out of the autosaved dataset; the three-browser sync regression checks that local record and the returned file bytes.
 - Prepared v1.19.9 with the verified encrypted cross-browser file sync and privacy fixes.
 - The server load smoke test now waits for its watch subscription before sending writes and allows for CI load, so it cannot miss events before the watch starts.
 - Smart Import WebAssembly review tests now wait for the mocked response to finish before fixture teardown, preventing an intermittent CI render panic.
