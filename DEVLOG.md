@@ -1,3 +1,7 @@
+## 2026-10-21 - Assistant financial policy and retained history coverage
+
+Added sixteen fixed-key typed sources for sweep and round-up policies, occurrence payments, standing instructions, templates, tax/retirement/inflation assumptions, notification rules/routes, portfolio targets, benchmark/health history, saved reports/snapshots and debt policy. Shared checked native parsers preserve existing tolerant UI getters. Retained lists are not silently capped or pruned; unit/default provenance and malformed-source errors are explicit. Four native policy parser groups and all twelve actual-App Data WASM groups passed exit0; tests include more than 20,000 benchmark points and full record continuation.
+
 ## 2026-10-20 - Canonical Assistant savings goal coaching
 
 Replaced naked minor-unit coaching with the existing checked goal evaluator and contribution plan projection. Savings pace distinguishes explicit planned contributions from required pace, saved funds from reservations, and nonfinancial goals from funding goals. Missing FX and arithmetic failures remain unavailable; paused and recently reviewed goals retain the quiet policy. Fresh fallible Store reads feed each call. Native goalcoach tests/vet and all three actual-tool WASM groups passed in integrated pass7.

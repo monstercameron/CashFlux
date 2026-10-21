@@ -123,6 +123,11 @@ func assistantDataCollections(app *appstate.App) ([]assistantdata.Collection, er
 		return nil, err
 	}
 	privateValues = append(privateValues, settings.OpenAIKey)
+	searchKey, _, err := s.GetSettingKV("cashflux:websearch-key")
+	if err != nil {
+		return nil, fmt.Errorf("credential redaction source unavailable: %w", err)
+	}
+	privateValues = append(privateValues, searchKey)
 	collections := []assistantdata.Collection{
 		assistantdata.NewCollection("members", "id", s.ListMembers),
 		assistantdata.NewCollection("accounts", "id", s.ListAccounts),
@@ -188,6 +193,7 @@ func assistantDataCollections(app *appstate.App) ([]assistantdata.Collection, er
 		}),
 	}
 	collections = append(collections, assistantFinancialKVCollections(app)...)
+	collections = append(collections, assistantAdditionalFinancialCollections(app)...)
 	for i := range collections {
 		collections[i] = assistantdata.RedactValues(collections[i], privateValues...)
 		collections[i].Revision = fmt.Sprintf("%d:%d", app.InstanceID(), app.Rev())

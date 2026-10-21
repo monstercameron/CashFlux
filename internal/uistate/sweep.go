@@ -7,7 +7,6 @@ package uistate
 import (
 	"encoding/json"
 
-	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/GoWebComponents/v5/state"
 )
 
@@ -24,38 +23,11 @@ const (
 	sweepPromptStateKey = "cashflux:budgets:sweepprompt"
 )
 
-// SweepConfig is the persisted leftover-sweep policy (XC6): whether the month-
-// close sweep ritual is on, which budgets contribute their unspent remainder, and
-// the goal the swept total earmarks toward. Stored as config so the ritual is
-// data, not code.
-type SweepConfig struct {
-	// Enabled turns the month-close sweep card + ritual on.
-	Enabled bool `json:"enabled"`
-	// BudgetIDs are the budgets whose leftovers participate.
-	BudgetIDs []string `json:"budgetIds"`
-	// TargetGoalID is the goal the swept total is earmarked toward.
-	TargetGoalID string `json:"targetGoalId"`
-}
-
-// Domain returns the config as the pure-logic budgeting.SweepConfig used by
-// ComputeSweep, so the UI and the tested logic share one shape.
-func (c SweepConfig) Domain() budgeting.SweepConfig {
-	return budgeting.SweepConfig{
-		Enabled:      c.Enabled,
-		BudgetIDs:    c.BudgetIDs,
-		TargetGoalID: c.TargetGoalID,
-	}
-}
-
 // SweepConfigGet returns the effective sweep config: the persisted override, or a
 // disabled default when nothing is stored yet.
 func SweepConfigGet() SweepConfig {
-	raw := kvGet(sweepConfigKey)
-	if raw == "" {
-		return SweepConfig{}
-	}
-	var cfg SweepConfig
-	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
+	cfg, err := ParseSweepConfig(kvGet(sweepConfigKey))
+	if err != nil {
 		return SweepConfig{}
 	}
 	return cfg
