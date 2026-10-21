@@ -2,6 +2,8 @@
 
 package portfolio
 
+import "github.com/monstercameron/CashFlux/internal/money"
+
 // AccountValue pairs one investment account's own ledger balance with the market
 // value of the tracked securities held inside it, both in base-currency minor
 // units. It is the input to Reconcile — the UI layer builds one per active
@@ -67,4 +69,37 @@ func Reconcile(accts []AccountValue) Reconciliation {
 	r.UntrackedMinor = r.AccountsTotalMinor - r.SecuritiesMinor
 	r.BalanceBehind = r.UntrackedMinor < 0
 	return r
+}
+
+// ReconcileChecked computes the same reconciliation as Reconcile while
+// returning an error when any per-account or aggregate money operation
+// overflows. The input slice is not modified.
+func ReconcileChecked(accts []AccountValue) (Reconciliation, error) {
+	r := Reconciliation{Accounts: make([]AccountReconcile, 0, len(accts))}
+	for _, a := range accts {
+		untracked, err := money.Sub(a.BalanceMinor, a.SecuritiesMinor)
+		if err != nil {
+			return Reconciliation{}, err
+		}
+		r.SecuritiesMinor, err = money.Add(r.SecuritiesMinor, a.SecuritiesMinor)
+		if err != nil {
+			return Reconciliation{}, err
+		}
+		r.AccountsTotalMinor, err = money.Add(r.AccountsTotalMinor, a.BalanceMinor)
+		if err != nil {
+			return Reconciliation{}, err
+		}
+		r.Accounts = append(r.Accounts, AccountReconcile{
+			AccountID: a.AccountID, Name: a.Name, BalanceMinor: a.BalanceMinor,
+			SecuritiesMinor: a.SecuritiesMinor, UntrackedMinor: untracked,
+			BalanceBehind: untracked < 0,
+		})
+	}
+	var err error
+	r.UntrackedMinor, err = money.Sub(r.AccountsTotalMinor, r.SecuritiesMinor)
+	if err != nil {
+		return Reconciliation{}, err
+	}
+	r.BalanceBehind = r.UntrackedMinor < 0
+	return r, nil
 }

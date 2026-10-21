@@ -1,3 +1,7 @@
+## 2026-10-21 - Native investment account preparation
+
+Extracted full investment preparation with independent availability, retaining valid security facts when account reconciliation fails. Removed raw FX and zero fallbacks. Native model/portfolio tests pass; focused WASM scenarios cover missing FX and invalid ledger balances. An initial allocation regression was corrected before wiring. Final synthetic comparison uses 39,232 bytes versus 40,976 for the reference but has more allocations; timings vary and are not an app speed claim.
+
 ## 2026-10-21 - Native custom-field form parsing
 
 Extracted supported text/number/date/bool/select parsing, required/choice validation and finite-number checks, preserving optional blank semantics and the existing schema. Account, budget, goal and member forms stop writes on issues. Native customfields/budgetform tests and vet pass; the focused actual member form WASM case verifies malformed boolean rejection and valid false persistence.

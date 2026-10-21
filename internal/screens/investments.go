@@ -6,7 +6,6 @@ package screens
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
@@ -14,7 +13,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
-	"github.com/monstercameron/CashFlux/internal/ledger"
+	"github.com/monstercameron/CashFlux/internal/investview"
 	"github.com/monstercameron/CashFlux/internal/portfolio"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -136,7 +135,10 @@ type investView struct {
 	HasAny bool // any investment account exists at all
 	// Reconcile explains the tracked-securities value against the investment-account
 	// balances that feed net worth: securities + cash&untracked = accounts total.
-	Reconcile portfolio.Reconciliation
+	Reconcile        portfolio.Reconciliation
+	TraditionalKnown bool
+	TotalKnown       bool
+	ReconcileKnown   bool
 }
 
 // investViewCache memoizes computeInvestView by store revision — the investments
@@ -156,80 +158,26 @@ func computeInvestViewRaw(app *appstate.App) investView {
 		base = "USD"
 	}
 	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	v := investView{Base: base, Sym: currency.Symbol(base), Dec: currency.Decimals(base), BalByID: map[string]int64{}}
-	txns := app.Transactions()
-
-	var accts []domain.Account
-	for _, a := range app.Accounts() {
-		if !a.Archived && isInvestmentAccount(a.Type) {
-			accts = append(accts, a)
-		}
-	}
-	v.HasAny = len(accts) > 0
-
-	byAccount := map[string][]domain.Holding{}
-	for _, h := range app.Holdings() {
-		byAccount[h.AccountID] = append(byAccount[h.AccountID], h)
-	}
-
-	acctSet := map[string]bool{}
-	acctBalByID := map[string]int64{}
-	for _, a := range accts {
-		acctSet[a.ID] = true
-		// Every investment account's own ledger balance (FX-converted to base) — the
-		// figure that feeds net worth. Traditional accounts are valued by it directly;
-		// securities-tracked accounts use it only for the reconciliation below.
-		bal, _ := ledger.Balance(a, txns)
-		cv := bal.Amount
-		if c, err := rates.Convert(bal, base); err == nil {
-			cv = c.Amount
-		}
-		acctBalByID[a.ID] = cv
-		if len(byAccount[a.ID]) == 0 {
-			// Traditional: valued by the account's own balance.
-			v.BalByID[a.ID] = cv
-			v.TradValueMinor += cv
-			v.Traditional = append(v.Traditional, a)
-		}
-	}
-	// Securities: every holding on an active investment account.
-	for _, h := range app.Holdings() {
-		if acctSet[h.AccountID] {
-			v.Securities = append(v.Securities, h)
-		}
-	}
-
-	ph := portfolio.FromDomainSlice(v.Securities)
-	v.SecSummary = portfolio.PortfolioSummary(ph)
-	v.AllocClass = portfolio.AllocationByAssetClass(ph)
-	v.AllocType = portfolio.AllocationBySecurityType(ph)
-	v.AllocSector = portfolio.AllocationBySector(ph)
-	v.AllocRegion = portfolio.AllocationByRegion(ph)
-	v.Fees = portfolio.Fees(ph)
-	v.TotalValueMinor = v.SecSummary.TotalValueMinor + v.TradValueMinor
-
-	// Reconciliation: for each investment account, the market value of its tracked
-	// securities versus its own ledger balance. The gap (cash & untracked balance)
-	// is what separates the securities value from the account total net worth uses.
-	recAccts := make([]portfolio.AccountValue, 0, len(accts))
-	for _, a := range accts {
-		var secVal int64
-		for _, h := range byAccount[a.ID] {
-			secVal += portfolio.HoldingValueMinor(portfolio.FromDomain(h))
-		}
-		recAccts = append(recAccts, portfolio.AccountValue{
-			AccountID: a.ID, Name: a.Name, BalanceMinor: acctBalByID[a.ID], SecuritiesMinor: secVal,
-		})
-	}
-	v.Reconcile = portfolio.Reconcile(recAccts)
-
-	sort.SliceStable(v.Securities, func(i, j int) bool {
-		return portfolio.HoldingValueMinor(portfolio.FromDomain(v.Securities[i])) >
-			portfolio.HoldingValueMinor(portfolio.FromDomain(v.Securities[j]))
+	prepared := investview.Prepare(investview.Input{
+		Accounts: app.Accounts(), Transactions: app.Transactions(),
+		Holdings: app.Holdings(), Rates: rates,
 	})
-	sort.SliceStable(v.Traditional, func(i, j int) bool {
-		return v.BalByID[v.Traditional[i].ID] > v.BalByID[v.Traditional[j].ID]
-	})
+	v := investView{
+		Base: base, Sym: currency.Symbol(base), Dec: currency.Decimals(base),
+		Securities: prepared.Securities, Traditional: prepared.Traditional,
+		BalByID:    make(map[string]int64, len(prepared.BalanceByID)),
+		SecSummary: prepared.Summary, AllocClass: prepared.AllocationByClass,
+		AllocType: prepared.AllocationByType, AllocSector: prepared.AllocationBySector,
+		AllocRegion: prepared.AllocationByRegion, Fees: prepared.Fees,
+		TradValueMinor:  prepared.TraditionalValue.Amount,
+		TotalValueMinor: prepared.TotalValue.Amount,
+		HasAny:          prepared.HasAccounts(), Reconcile: prepared.Reconciliation,
+		TraditionalKnown: prepared.TraditionalKnown, TotalKnown: prepared.TotalKnown,
+		ReconcileKnown: prepared.ReconciliationKnown,
+	}
+	for id, balance := range prepared.BalanceByID {
+		v.BalByID[id] = balance.Amount
+	}
 	return v
 }
 

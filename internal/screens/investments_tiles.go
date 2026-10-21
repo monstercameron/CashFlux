@@ -36,7 +36,7 @@ type investPanelProps struct{ App *appstate.App }
 // tracked securities there are not two competing "investment value" figures to
 // reconcile, so the reconciliation copy is suppressed.
 func investHasReconcile(v investView) bool {
-	return v.Reconcile.SecuritiesMinor != 0
+	return v.ReconcileKnown && v.Reconcile.SecuritiesMinor != 0
 }
 
 // investReconcileLine builds the one-line reconciliation equation shared by the
@@ -114,7 +114,7 @@ func investSummaryWidget(props investPanelProps) ui.Node {
 		Div(css.Class("inv-hero-main"),
 			Div(css.Class("inv-hero-label", tw.TextDim), uistate.T("investments.portfolioValue")),
 			Div(css.Class("inv-hero-value", tw.FontDisplay), Attr("data-testid", "invest-total"),
-				fmtSignedMoney(v.TotalValueMinor, v.Sym, v.Dec)),
+				IfElse(v.TotalKnown, Text(fmtSignedMoney(v.TotalValueMinor, v.Sym, v.Dec)), Text(uistate.T("investments.totalUnavailable")))),
 			If(investHasReconcile(v),
 				Fragment(
 					P(css.Class("inv-hero-sub", tw.TextDim), Attr("data-testid", "invest-reconcile"),
@@ -122,7 +122,11 @@ func investSummaryWidget(props investPanelProps) ui.Node {
 					P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0.05rem 0 0"}),
 						uistate.T("investments.reconcileNetWorthNote")),
 				)),
-			If(!investHasReconcile(v),
+			If(v.TotalKnown && len(v.Securities) > 0 && !v.ReconcileKnown,
+				P(css.Class("inv-hero-sub", tw.TextDim), Attr("data-testid", "invest-reconcile-unavailable"), uistate.T("investments.reconcileUnavailable"))),
+			If(!v.TotalKnown,
+				P(css.Class("inv-hero-sub", tw.TextDim), Attr("data-testid", "invest-total-unavailable"), uistate.T("investments.totalUnavailableDetail"))),
+			If(v.TotalKnown && !investHasReconcile(v),
 				P(css.Class("inv-hero-sub", tw.TextDim),
 					uistate.T("investments.splitLine",
 						fmtSignedMoney(v.SecSummary.TotalValueMinor, v.Sym, v.Dec),
