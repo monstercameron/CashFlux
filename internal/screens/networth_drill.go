@@ -100,17 +100,21 @@ func nwsFact(label, value string) ui.Node {
 // stands, where it came from, and what actually moved it over the window —
 // followed by links aimed at THIS account rather than at the account list.
 func nwsAccountPanel(r nwsAcctRow, v nwsView) ui.Node {
-	facts := []ui.Node{
-		nwsFact(uistate.T("nws.factKind"), selectorTypeLabel(r.Acct.Type)),
-		nwsFact(uistate.T("nws.factOpening"), fmtMoney(money.New(r.StartMinor, v.Base))),
-		nwsFact(uistate.T("nws.factClosing"), fmtMoney(money.New(r.EndMinor, v.Base))),
+	facts := []ui.Node{nwsFact(uistate.T("nws.factKind"), selectorTypeLabel(r.Acct.Type))}
+	if r.WindowKnown {
+		facts = append(facts,
+			nwsFact(uistate.T("nws.factOpening"), fmtMoney(money.New(r.StartMinor, v.Base))),
+			nwsFact(uistate.T("nws.factClosing"), fmtMoney(money.New(r.EndMinor, v.Base))))
+	} else {
+		facts = append(facts, nwsFact(uistate.T("nws.factOpening"), "—"), nwsFact(uistate.T("nws.factClosing"), "—"),
+			nwsFact(uistate.T("nws.factWindowStatus"), uistate.T("nws.windowUnavailable")))
 	}
 	// The split that actually answers "why did this move": money that passed
 	// through the account, versus balance the household simply asserted.
-	if r.FlowMinor != 0 {
+	if r.WindowKnown && r.FlowMinor != 0 {
 		facts = append(facts, nwsFact(uistate.T("nws.factFlow"), nwsSigned(r.FlowMinor, v.Base)))
 	}
-	if r.AdjMinor != 0 {
+	if r.WindowKnown && r.AdjMinor != 0 {
 		facts = append(facts, nwsFact(uistate.T("nws.factAdjusted"), nwsSigned(r.AdjMinor, v.Base)))
 	}
 	if r.Acct.Currency != "" && r.Acct.Currency != v.Base {

@@ -303,6 +303,13 @@ func nwsSignedCell(minor int64, base string) ui.Node {
 	return Td(ClassStr(cls), sign+fmtMoney(money.New(absMinor(minor), base)))
 }
 
+func nwsWindowMoveCell(row nwsAcctRow, base string) ui.Node {
+	if !row.WindowKnown {
+		return Td(css.Class("nws-num", tw.TextDim), "—")
+	}
+	return nwsSignedCell(row.MoveMinor, base)
+}
+
 // nwsStandSection (00) states the balance sheet as three figures and nothing else.
 func nwsStandSection(v nwsView) ui.Node {
 	p := v.Latest()
@@ -370,7 +377,7 @@ func nwsChangedSection(v nwsView) ui.Node {
 				Cells: []ui.Node{
 					Text(row.Acct.Name),
 					Td(selectorTypeLabel(row.Acct.Type)),
-					nwsSignedCell(row.MoveMinor, v.Base),
+					nwsWindowMoveCell(row, v.Base),
 				},
 				Panel: nwsAccountPanel(row, v),
 			}))
@@ -461,7 +468,7 @@ func nwsSideSection(v nwsView, asset bool) ui.Node {
 				Td(selectorTypeLabel(row.Acct.Type)),
 				Td(nwsShareBar(share, asset)),
 				nwsMoneyCell(row.SideMinor, v.Base),
-				nwsSignedCell(row.MoveMinor, v.Base),
+				nwsWindowMoveCell(row, v.Base),
 			},
 			Panel: nwsAccountPanel(row, v),
 		}))

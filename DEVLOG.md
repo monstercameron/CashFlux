@@ -1,3 +1,7 @@
+## 2026-10-21 - Native Net Worth account windows
+
+Prepared indexed account windows outside the view, preserving manual balance provenance, ordering, liability signs and independent failures. Native networthview tests and the focused WASM unavailable-state case pass. The initial benchmark reference omitted legacy work and cannot support a speed comparison. Full Net Worth preparation remains a separate slice.
+
 ## 2026-10-21 - Native investment growth facts
 
 Extracted current value, signed delta and percentage availability independently. Failed ledger series no longer appear as zero. Native portfolio tests and focused WASM headline coverage pass. Native benchmark is a baseline only; broader investment model migration remains pending.

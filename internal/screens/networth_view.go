@@ -15,7 +15,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/ledger"
-	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/networthview"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 )
 
@@ -37,6 +37,9 @@ type nwsAcctRow struct {
 	SideMinor int64
 	// MoveMinor is the account's signed net-worth contribution over the window.
 	MoveMinor int64
+	// WindowKnown reports whether the selected-window amounts converted and
+	// reduced without error. Current balance availability is tracked separately.
+	WindowKnown bool
 	// StartMinor / EndMinor are the account's own balance at each end of the
 	// window, so a drilldown can show what it opened and closed at rather than
 	// only how far it travelled.
@@ -120,7 +123,7 @@ func (v nwsView) Latest() balancesheet.Point {
 func (v nwsView) Movers() []nwsAcctRow {
 	out := make([]nwsAcctRow, 0, len(v.Accounts))
 	for _, r := range v.Accounts {
-		if r.MoveMinor != 0 {
+		if !r.WindowKnown || r.MoveMinor != 0 {
 			out = append(out, r)
 		}
 	}
@@ -189,25 +192,23 @@ func computeNwsView(app *appstate.App, months int, now time.Time) nwsView {
 	v.Labels = nwsLabels(cutoffs, span)
 
 	// Per-account standing and movement over the same window.
-	for _, a := range accounts {
+	accountWindows := networthview.AccountWindows(accounts, txns, rates, v.Since, v.Until, isAdj)
+	for i, a := range accounts {
 		if a.Archived {
 			continue
 		}
-		bal, err := ledger.Balance(a, txns)
-		if err != nil {
-			continue
-		}
-		conv, err := rates.Convert(bal, base)
-		if err != nil {
+		if i >= len(accountWindows) || !accountWindows[i].BaseBalanceKnown() {
 			continue // already disclosed by NetWorthExplained
 		}
-		row := nwsAcctRow{Acct: a, BalanceMinor: conv.Amount, Bucket: balancesheet.BucketOf(a), AsOf: a.BalanceAsOf}
-		row.SideMinor = absMinor(conv.Amount)
-		row.MoveMinor, row.StartMinor, row.EndMinor, row.FlowMinor, row.AdjMinor =
-			nwsAccountWindow(a, txns, rates, base, v.Since, v.Until, isAdj)
-		if kind, _ := ledger.BalanceProvenance(a.ID, txns, isAdj); kind == ledger.ProvenanceAdjusted || kind == ledger.ProvenanceOpening {
-			row.Manual = true
+		window := accountWindows[i]
+		row := nwsAcctRow{Acct: a, BalanceMinor: window.BaseBalance.Amount, Bucket: balancesheet.BucketOf(a), AsOf: a.BalanceAsOf, WindowKnown: window.WindowKnown()}
+		row.SideMinor = absMinor(window.BaseBalance.Amount)
+		if row.WindowKnown {
+			row.MoveMinor = window.Move.Amount
+			row.StartMinor, row.EndMinor = window.Start.Amount, window.End.Amount
+			row.FlowMinor, row.AdjMinor = window.Flow.Amount, window.Adjustment.Amount
 		}
+		row.Manual = window.Manual
 		v.Accounts = append(v.Accounts, row)
 	}
 	sort.SliceStable(v.Accounts, func(i, j int) bool {
@@ -247,48 +248,6 @@ func nwsMonthsBetween(a, b time.Time) int {
 // moved through it and balance that was asserted by hand. All in the canonical
 // convention — an asset contributes its balance delta, a liability contributes
 // minus the change in what is owed — so these agree with the bridge to the cent.
-func nwsAccountWindow(a domain.Account, txns []domain.Transaction, rates currency.Rates, base string,
-	since, until time.Time, isAdj func(domain.Transaction) bool) (move, start, end, flow, adj int64) {
-
-	balSince, balUntil := a.OpeningBalance.Amount, a.OpeningBalance.Amount
-	var flowAcct, adjAcct int64
-	for _, t := range txns {
-		if t.AccountID != a.ID {
-			continue
-		}
-		if t.Date.Before(since) {
-			balSince += t.Amount.Amount
-		}
-		if t.Date.Before(until) {
-			balUntil += t.Amount.Amount
-		}
-		if !dateutil.InRange(t.Date, since, until) {
-			continue
-		}
-		if isAdj(t) {
-			adjAcct += t.Amount.Amount
-		} else {
-			flowAcct += t.Amount.Amount
-		}
-	}
-	factor := int64(1)
-	delta := balUntil - balSince
-	if a.Class == domain.ClassLiability {
-		delta = -(absMinor(balUntil) - absMinor(balSince))
-		if !(balSince < 0 || (balSince == 0 && balUntil < 0)) {
-			factor = -1
-		}
-	}
-	conv := func(minor int64) int64 {
-		c, err := rates.Convert(money.New(minor, a.Currency), base)
-		if err != nil {
-			return 0
-		}
-		return c.Amount
-	}
-	return conv(delta), conv(balSince), conv(balUntil), conv(factor * flowAcct), conv(factor * adjAcct)
-}
-
 // nwsTypicalMonthlyExpense averages spending over the last three COMPLETE
 // months, which is what makes "months of expenses on hand" a real figure rather
 // than a reading of whatever this half-finished month happens to look like.
