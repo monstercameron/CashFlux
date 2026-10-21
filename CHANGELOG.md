@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Undo initialization and record-writer startup share one checked credential-free snapshot instead of serializing and reparsing the full dataset separately.
 - Contribution validation and quick-fill now use the direct goal lookup instead of decoding every saved goal.
 - Warm notification renders no longer reread SQLite and decode feed JSON merely to supply an ignored atom default.
 - Notification budget wins share one previous-month netted ledger projection instead of rescanning all history for every monthly budget.

@@ -11,7 +11,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/history"
 	"github.com/monstercameron/CashFlux/internal/store"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/CashFlux/internal/undosnap"
 )
 
 // undoStack is the bounded per-session undo/redo stack.  4 MB gives roughly
@@ -313,14 +312,10 @@ func undoRecordChanges(cs history.ChangeSet) ([]store.RecordChange, error) {
 	return records, nil
 }
 
-// currentSnapshot converts the shared credential-free export into an undo
-// snapshot. Device credentials are outside dataset state and never enter undo.
+// currentSnapshot returns the shared typed-dataset undo snapshot. Device
+// credentials are outside dataset state and never enter undo.
 func currentSnapshot() (history.Snapshot, error) {
-	data, err := localDatasetExport(appstate.Default)
-	if err != nil {
-		return nil, err
-	}
-	return undosnap.ToSnapshot(data)
+	return sharedDatasetSnapshot(appstate.Default)
 }
 
 func requestUndoNotice(redo bool) {

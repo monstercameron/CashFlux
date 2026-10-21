@@ -5,9 +5,12 @@ package undosnap_test
 import (
 	"encoding/json"
 	"reflect"
+	"strings"
 	"testing"
 
+	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/history"
+	"github.com/monstercameron/CashFlux/internal/store"
 	"github.com/monstercameron/CashFlux/internal/undosnap"
 )
 
@@ -148,6 +151,141 @@ func TestToSnapshot_StoreKeyedCollectionsRequireKeys(t *testing.T) {
 			t.Errorf("ToSnapshot(%s): expected invalid/missing/duplicate collection key error", input)
 		}
 	}
+}
+
+func TestToSnapshotDatasetMatchesExportSnapshotForEveryDatasetField(t *testing.T) {
+	ds := store.Dataset{Settings: store.Settings{
+		BaseCurrency: "USD",
+		OpenAIKey:    "device-only-secret",
+		FXRates:      map[string]float64{"EUR": 0.91},
+	}}
+	populateEveryDatasetSlice(t, &ds)
+	ds.Transactions = []domain.Transaction{{ID: "txn-parity"}}
+	ds.Placements[0].Spec.Graph = json.RawMessage(` { "nodes": [ ] } `)
+	ds.TransferOperations = []store.TransferOperationReceipt{
+		{ID: "live", Transactions: []domain.Transaction{{ID: "txn-parity"}}},
+		{ID: "orphan", Transactions: []domain.Transaction{{ID: "missing"}}},
+		{ID: "bad-leg", Transactions: []domain.Transaction{{ID: ""}}},
+		{ID: "empty"},
+		{Transactions: []domain.Transaction{{ID: "txn-parity"}}},
+	}
+	ds.KV = map[string]string{"layout": `{"widgets":[]}`}
+	ds.SettingsKV = map[string]string{}
+
+	wantDataset := ds
+	wantDataset.Settings.OpenAIKey = ""
+	wantJSON, err := store.Export(wantDataset)
+	if err != nil {
+		t.Fatalf("store.Export: %v", err)
+	}
+	want, err := undosnap.ToSnapshot(wantJSON)
+	if err != nil {
+		t.Fatalf("ToSnapshot(export): %v", err)
+	}
+	got, err := undosnap.ToSnapshotDataset(ds)
+	if err != nil {
+		t.Fatalf("ToSnapshotDataset: %v", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		for collection := range want {
+			if !reflect.DeepEqual(got[collection], want[collection]) {
+				t.Errorf("collection %q differs\n got: %#v\nwant: %#v", collection, got[collection], want[collection])
+			}
+		}
+		for collection := range got {
+			if _, exists := want[collection]; !exists {
+				t.Errorf("unexpected collection %q: %#v", collection, got[collection])
+			}
+		}
+	}
+	if got := string(got["_meta:settings"]["settings"]); containsCredential(got) {
+		t.Fatalf("redacted settings snapshot retained credential: %s", got)
+	}
+	if ds.Settings.OpenAIKey != "device-only-secret" {
+		t.Fatal("ToSnapshotDataset mutated the source dataset credential")
+	}
+}
+
+func TestToSnapshotDatasetNilAndEmptyCollectionsMatchExport(t *testing.T) {
+	for _, emptySlices := range []bool{false, true} {
+		name := "nil"
+		if emptySlices {
+			name = "empty-non-nil"
+		}
+		t.Run(name, func(t *testing.T) {
+			ds := store.Dataset{}
+			if emptySlices {
+				value := reflect.ValueOf(&ds).Elem()
+				for i := 0; i < value.NumField(); i++ {
+					field := value.Field(i)
+					if field.Kind() == reflect.Slice {
+						field.Set(reflect.MakeSlice(field.Type(), 0, 0))
+					}
+				}
+			}
+			wantDataset := ds
+			wantDataset.Settings.OpenAIKey = ""
+			data, err := store.Export(wantDataset)
+			if err != nil {
+				t.Fatalf("store.Export: %v", err)
+			}
+			want, err := undosnap.ToSnapshot(data)
+			if err != nil {
+				t.Fatalf("ToSnapshot(export): %v", err)
+			}
+			got, err := undosnap.ToSnapshotDataset(ds)
+			if err != nil {
+				t.Fatalf("ToSnapshotDataset: %v", err)
+			}
+			if !reflect.DeepEqual(got, want) {
+				t.Fatalf("snapshot mismatch\n got: %#v\nwant: %#v", got, want)
+			}
+		})
+	}
+}
+
+func populateEveryDatasetSlice(t *testing.T, dataset *store.Dataset) {
+	t.Helper()
+	value := reflect.ValueOf(dataset).Elem()
+	typeOf := value.Type()
+	for i := 0; i < value.NumField(); i++ {
+		field := value.Field(i)
+		if field.Kind() != reflect.Slice || typeOf.Field(i).Name == "TransferOperations" {
+			continue
+		}
+		row := reflect.New(field.Type().Elem()).Elem()
+		setStringTag(t, row, "id", "fixture-"+typeOf.Field(i).Name)
+		setStringTag(t, row, "name", "fixture-"+typeOf.Field(i).Name)
+		setStringTag(t, row, "surface", "dashboard")
+		field.Set(reflect.MakeSlice(field.Type(), 1, 1))
+		field.Index(0).Set(row)
+	}
+}
+
+func setStringTag(t *testing.T, value reflect.Value, wantedTag, text string) {
+	t.Helper()
+	if value.Kind() != reflect.Struct {
+		return
+	}
+	for i := 0; i < value.NumField(); i++ {
+		field := value.Field(i)
+		structField := value.Type().Field(i)
+		jsonName := strings.Split(structField.Tag.Get("json"), ",")[0]
+		if jsonName == "" || jsonName == "-" {
+			jsonName = structField.Name
+		}
+		if strings.EqualFold(jsonName, wantedTag) && field.Kind() == reflect.String && field.CanSet() {
+			field.SetString(text)
+		}
+	}
+}
+
+func containsCredential(raw string) bool {
+	var settings map[string]json.RawMessage
+	if json.Unmarshal([]byte(raw), &settings) != nil {
+		return true
+	}
+	return string(settings["openAiKey"]) != ""
 }
 
 func TestRoundTrip(t *testing.T) {

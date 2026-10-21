@@ -1,3 +1,7 @@
+## 2026-10-20 - Share typed dataset snapshots between undo and persistence
+
+Added a native typed snapshot converter with exact RawMessage parity against export-plus-parse, including every Dataset field, nil/empty semantics, receipt pruning, raw graph values, store-aligned keys and key redaction. A bounded app/revision/cursor cache serves deep independent copies to undo and the mutable writer mirror, reuses a matching export memo, and rejects or retries changing revisions without publishing stale snapshots. Six cache WASM tests and six selected persistence/undo/recovery cases passed, including the two-app compaction race. Native parity tests passed. The synthetic 3000-row conversion benchmark measured 31.01 ms/9.22 MB versus 21.29 ms/6.91 MB, with more typed-path allocations; it excludes database snapshot cost and is not a browser latency claim.
+
 ## 2026-10-20 - Read only the goal needed for a contribution
 
 Replaced storedContributionGoal ListGoals scanning with SQLiteStore.GetGoal by ID, preserving current-store freshness, missing-goal rejection and wrapped load errors. This removes whole-goal-table decoding from contribution, remaining-amount and Undo actions without changing their financial behavior. The focused native contribution, rollback, retry, Undo and remaining-amount regressions passed with exit zero.
