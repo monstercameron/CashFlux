@@ -54,13 +54,14 @@ func allocStatChip(label, value, valueCls string) ui.Node {
 // --- alloc-hero ------------------------------------------------------------------
 
 type allocHeroProps struct {
-	View            allocView
-	AmountStr       string
-	OnAmount        any
-	ShowIncomeNudge bool
-	MonthIncome     money.Money
-	OnPrefillIncome any
-	OnDismissIncome any
+	View              allocView
+	AmountStr         string
+	OnAmount          any
+	ShowIncomeNudge   bool
+	IncomeUnavailable bool
+	MonthIncome       money.Money
+	OnPrefillIncome   any
+	OnDismissIncome   any
 }
 
 // allocAmountIsZero reports whether the hero amount string carries no value — an
@@ -93,6 +94,9 @@ func allocHeroTile(props allocHeroProps) ui.Node {
 			),
 		)
 	}
+	if props.IncomeUnavailable {
+		nudge = P(css.Class("muted alloc-income-unavailable"), Attr("data-testid", "income-unavailable"), uistate.T("allocate.incomeUnavailable"))
+	}
 
 	var kept ui.Node = Fragment()
 	if v.TotalMinor > 0 && v.Remainder > 0 {
@@ -100,7 +104,7 @@ func allocHeroTile(props allocHeroProps) ui.Node {
 	}
 
 	figs := Div(css.Class("debt-chips"),
-		allocStatChip(uistate.T("allocate.figAllocatable"), fmtMoney(money.New(v.Allocatable(), base)), " "+tw.ColorClass("text-up")),
+		allocStatChip(uistate.T("allocate.figAllocatable"), fmtMoney(money.New(v.AllocatableMinor, base)), " "+tw.ColorClass("text-up")),
 		// QA M4: the chip must state the money ACTUALLY held back from the plan —
 		// v.Remainder (reserve buffer + caps/rounding leftovers), the same figure
 		// the "Kept back" sentence and the destination totals reconcile against.

@@ -48,6 +48,40 @@ func TestPrepareInvalidAmountsAreErrorsAndPreventSplit(t *testing.T) {
 	}
 }
 
+func TestPrepareAllocatableMinorUsesParsedAmountAndReserve(t *testing.T) {
+	tests := []struct {
+		name    string
+		amount  string
+		reserve string
+		want    int64
+	}{
+		{name: "amount after reserve", amount: "100.00", reserve: "25.00", want: 7500},
+		{name: "reserve floors amount at zero", amount: "25.00", reserve: "100.00", want: 0},
+		{name: "maximum amount with zero reserve", amount: "92233720368547758.07", want: math.MaxInt64},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := Prepare(Input{Amount: tt.amount, Reserve: tt.reserve, Decimals: 2})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.AllocatableMinor != tt.want {
+				t.Fatalf("AllocatableMinor = %d, want %d", got.AllocatableMinor, tt.want)
+			}
+		})
+	}
+}
+
+func TestPrepareAllocatableMinorUnavailableForInvalidInputs(t *testing.T) {
+	got, err := Prepare(Input{Amount: "92233720368547758.08", Reserve: "1.00", Decimals: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.TotalErr == nil || got.AllocatableMinor != 0 {
+		t.Fatalf("overflowing amount should remain unavailable: %+v", got)
+	}
+}
+
 func TestPrepareMixedCurrencyGoalFactsUnavailable(t *testing.T) {
 	g := domain.Goal{ID: "g", OwnerID: "m", TargetAmount: money.New(100, "EUR"), CurrentAmount: money.New(50, "USD")}
 	got, err := Prepare(Input{Goals: []domain.Goal{g}, ActiveMember: "m", Mode: "weighted"})

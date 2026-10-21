@@ -3440,6 +3440,7 @@ var english = Catalog{
 	"nav.mobileTabLabel":          "Mobile navigation",
 	"action.quickAdd":             "Quick add transaction",
 	"allocate.incomeNudgeLabel":   "Allocate this month's income",
+	"allocate.incomeUnavailable":  "This month's income is unavailable, so it can't be used to prefill an amount.",
 	"allocate.incomeNudgeDesc":    "You earned %v this month. Put it to work — allocate it to your budgets and goals.",
 	"allocate.incomeNudgeApply":   "Allocate %v",
 	"allocate.incomeNudgeDismiss": "Not now",

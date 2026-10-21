@@ -61,6 +61,7 @@ type Result struct {
 	TotalErr            error
 	ReserveMinor        int64
 	ReserveErr          error
+	AllocatableMinor    int64
 	ReserveFromStanding bool
 	MaxPerMinor         int64
 	MaxPerErr           error
@@ -171,6 +172,14 @@ func Prepare(in Input) (Result, error) {
 		res.ReserveMinor, res.ReserveErr, res.ReserveFromStanding = in.StandingFloor, nil, true
 	}
 	res.MaxPerMinor, res.MaxPerErr = parse(in.MaxPer, in.Decimals)
+	if res.TotalErr == nil && res.ReserveErr == nil {
+		// Amount and reserve are parsed as nonnegative int64 values. Their
+		// difference therefore fits in int64; floor the result at zero for display.
+		res.AllocatableMinor = res.TotalMinor - res.ReserveMinor
+		if res.AllocatableMinor < 0 {
+			res.AllocatableMinor = 0
+		}
+	}
 	if res.TotalErr != nil || res.ReserveErr != nil || res.MaxPerErr != nil {
 		return res, nil
 	}

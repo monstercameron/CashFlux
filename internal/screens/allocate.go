@@ -108,14 +108,15 @@ func allocResolveWeights(app *appstate.App, sel string) allocate.Weights {
 // allocView is the derived render model every allocate tile shares: the ranked destinations,
 // the split plan for the entered amount, and the headline figures. Built once per render.
 type allocView struct {
-	Base         string
-	Dec          int
-	Ranked       []allocate.Ranked
-	Candidates   []allocate.Candidate
-	HiddenZero   bool // some candidates were dropped for having no ranking signal
-	PlanByID     map[string]int64
-	TotalMinor   int64 // amount to allocate (after parsing the input)
-	ReserveMinor int64
+	Base             string
+	Dec              int
+	Ranked           []allocate.Ranked
+	Candidates       []allocate.Candidate
+	HiddenZero       bool // some candidates were dropped for having no ranking signal
+	PlanByID         map[string]int64
+	TotalMinor       int64 // amount to allocate (after parsing the input)
+	ReserveMinor     int64
+	AllocatableMinor int64
 	// ReserveFromStanding says the buffer came from the household's standing cash
 	// floor rather than this screen's box (WF-SM4), so the surface can say where
 	// the number came from. A figure that appears on its own reads as a bug.
@@ -125,6 +126,7 @@ type allocView struct {
 	MaxPerMinor         int64
 	Remainder           int64 // unallocated leftover (buffer + caps/rounding)
 	MonthIncome         money.Money
+	MonthIncomeKnown    bool
 	// Marginal describes each destination for the money-per-year comparison
 	// (WF10): what another dollar there actually earns or avoids.
 	Marginal []marginal.Destination
@@ -183,8 +185,15 @@ func Allocate() ui.Node {
 	incomeNudgeDismissed := ui.UseState(false)
 	dismissIncomeNudge := ui.UseEvent(Prevent(func() { incomeNudgeDismissed.Set(true) }))
 	mStart, mEnd := dateutil.MonthRange(time.Now())
-	monthIncome, _, _ := ledger.PeriodTotals(app.Transactions(), mStart, mEnd, rates)
+	monthIncome := money.Zero(base)
+	transactions, monthIncomeErr := app.TransactionsChecked()
+	if monthIncomeErr == nil {
+		monthIncome, _, monthIncomeErr = ledger.PeriodTotals(transactions, mStart, mEnd, rates)
+	}
 	prefillIncome := ui.UseEvent(Prevent(func() {
+		if monthIncomeErr != nil {
+			return
+		}
 		amountStr.Set(money.FormatMinor(monthIncome.Amount, dec))
 		incomeNudgeDismissed.Set(true)
 	}))
@@ -431,12 +440,13 @@ func Allocate() ui.Node {
 		}
 	}
 
-	showIncomeNudge := monthIncome.Amount > 0 && !incomeNudgeDismissed.Get() && v.TotalMinor == 0
+	v.MonthIncomeKnown = monthIncomeErr == nil
+	showIncomeNudge := v.MonthIncomeKnown && monthIncome.Amount > 0 && !incomeNudgeDismissed.Get() && v.TotalMinor == 0
 
 	tiles := []ui.Node{
 		ui.CreateElement(allocHeroTile, allocHeroProps{
 			View: v, AmountStr: amountStr.Get(), OnAmount: onAmount,
-			ShowIncomeNudge: showIncomeNudge, MonthIncome: monthIncome,
+			ShowIncomeNudge: showIncomeNudge, IncomeUnavailable: !v.MonthIncomeKnown, MonthIncome: monthIncome,
 			OnPrefillIncome: prefillIncome, OnDismissIncome: dismissIncomeNudge,
 		}),
 		ui.CreateElement(allocStrategyTile, allocStrategyProps{

@@ -83,7 +83,7 @@ func computeAllocView(app *appstate.App, in computeAllocInput) allocView {
 	for i := range v.Ranked {
 		v.Ranked[i].Candidate = candidateByID[v.Ranked[i].Candidate.ID]
 	}
-	v.PlanByID, v.TotalMinor, v.ReserveMinor, v.MaxPerMinor = prepared.PlanByID, prepared.TotalMinor, prepared.ReserveMinor, prepared.MaxPerMinor
+	v.PlanByID, v.TotalMinor, v.ReserveMinor, v.AllocatableMinor, v.MaxPerMinor = prepared.PlanByID, prepared.TotalMinor, prepared.ReserveMinor, prepared.AllocatableMinor, prepared.MaxPerMinor
 	v.ReserveFromStanding, v.Remainder, v.Marginal = prepared.ReserveFromStanding, prepared.Remainder, prepared.Marginal
 	v.InputInvalid = prepared.TotalErr != nil || prepared.ReserveErr != nil || prepared.MaxPerErr != nil
 	for i := range v.Marginal {
@@ -95,14 +95,6 @@ func computeAllocView(app *appstate.App, in computeAllocInput) allocView {
 		}
 	}
 	return v
-}
-
-// Allocatable is the amount that actually gets split (total minus the reserve, floored at 0).
-func (v allocView) Allocatable() int64 {
-	if a := v.TotalMinor - v.ReserveMinor; a > 0 {
-		return a
-	}
-	return 0
 }
 
 // allocMarginalDestinations describes each destination for the money-per-year

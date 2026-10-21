@@ -1,3 +1,7 @@
+## 2026-10-21 - Prepare Allocate display amounts and retain income availability
+
+Native allocateview and i18n suites passed. Allocate host tests cover missing FX, income total overflow, manual entry after unavailable income, valid split and malformed amount rejection, and closed sources. The initial new fixture omitted a required description and used the wrong paragraph selector; corrected fixtures pass. Fixtures explicitly unmount before releasing their app. The shared SMART cache has separate pending validation and is not part of this slice.
+
 ## 2026-10-21 - Keep the period pill synchronized with page calculations
 
 An isolated browser smoke exposed a Dashboard mismatch: the body moved to June while the pill stayed July. TopBar now threads the live period through its stable slot, and handlers read the current atom. The focused WASM test passed for stepping, rapid clicks and external updates. The production build and all nine sample browser actions passed.
