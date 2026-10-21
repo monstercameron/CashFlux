@@ -11,6 +11,8 @@ import (
 	"github.com/monstercameron/CashFlux/internal/browserstore"
 )
 
+var localEncryptedArtifactStore artifactstore.EncryptedStore
+
 // initBlobStore opens the IndexedDB artifact store and wires it into the app.
 // If IndexedDB is unavailable or the open fails, the app continues without it
 // (artifact bytes fall back to being stored inline in the SQLite/localStorage
@@ -25,7 +27,8 @@ func initBlobStore() {
 		app.Log().Warn("IndexedDB artifact store unavailable; falling back to inline bytes", "err", err)
 		return
 	}
-	app.SetBlobStore(artifactstore.EncryptedStore{Raw: idb, Cipher: browserstore.LocalArtifactCipher{}})
+	localEncryptedArtifactStore = artifactstore.EncryptedStore{Raw: idb, Cipher: browserstore.LocalArtifactCipher{}}
+	app.SetBlobStore(localEncryptedArtifactStore)
 	app.Log().Info("encrypted IndexedDB artifact store ready")
 	// Prime the usage cache so the first render of the Artifacts screen shows a
 	// non-zero figure. This runs in the boot goroutine (not the render path) so
@@ -44,6 +47,14 @@ func migrateReferencedArtifactBlobs() {
 	}
 	activeSaved := hadLocalDataset
 	go func() {
+		if localEncryptedArtifactStore.Raw != nil {
+			migrated, err := localEncryptedArtifactStore.MigrateAllLegacy()
+			if err != nil {
+				app.Log().Warn("origin-wide local artifact migration paused", "migrated", migrated, "err", err)
+			} else if migrated > 0 {
+				app.Log().Info("encrypted legacy local artifact records", "count", migrated)
+			}
+		}
 		if activeSaved {
 			for _, art := range app.Artifacts() {
 				if !artifacts.IsBinaryKind(art.Kind) || len(art.Bytes) > 0 || (art.Size == 0 && art.BlobRef == nil) {
