@@ -1,3 +1,7 @@
+## 2026-10-21 - Record assistant capability and validation evidence
+
+Recorded 77 financial data collections and the 59-tool catalog, native checked calculation paths, approval/Undo and session safeguards, exact test evidence and remaining limits. Full native suite passed 353 package suites; the earlier full screen pass had 1015 tests. Expanded coverage exposed and fixed a New-chat persistence race; the final 23-test assistant gate passed. Validation used disposable stores and mocked providers with no paid calls or real-data writes. No release, tag, main push or deployment.
+
 ## 2026-10-21 - Isolate assistant header and conversation thread components
 
 Extracted the Ask header and conversation thread from the large controller. Child components own action hooks and render prepared props; controller state, data and mutations remain outside them. Preserved markup, test IDs, ARIA and latest-turn retry semantics. Three new WASM component cases pass in the final 23-test assistant gate, including edit drafts following turn identity after reordering. No latency improvement is claimed from code movement.
