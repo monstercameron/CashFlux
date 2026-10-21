@@ -16,6 +16,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/dashboardview"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/freshness"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -43,6 +44,10 @@ type RenderCtx struct {
 
 	// TxnDerived is the immutable uncollapsed ledger derivation shared by transaction tiles.
 	TxnDerived *txntoolbar.Snapshot
+
+	// Frames shares one immutable data snapshot and bounded pipeline results across
+	// dashboard placements. Other hosts leave it nil and hydrate directly.
+	Frames *dashboardview.PreparedFrames
 
 	Start, End time.Time
 

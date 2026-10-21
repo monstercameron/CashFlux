@@ -5,7 +5,6 @@
 package screens
 
 import (
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"sort"
@@ -20,6 +19,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/categorytree"
 	"github.com/monstercameron/CashFlux/internal/chartspec"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/dashboardview"
 	"github.com/monstercameron/CashFlux/internal/dashlayout"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -172,8 +172,17 @@ func periodChartAnchor(start, end time.Time) time.Time {
 // (member/institution scope), so collection/chart widgets and embedded data-view
 // blocks show the same figures as the scoped KPI tiles.
 func frameDataCtx(ctx widgetrender.RenderCtx) widgetengine.DataCtx {
+	return frameDataCtxAt(ctx, time.Now())
+}
+
+func frameDataCtxAt(ctx widgetrender.RenderCtx, now time.Time) widgetengine.DataCtx {
+	scopedLedger := budgetLedgerForTransactions(ctx.App, ctx.ScopedTxns)
+	anchor := ctx.End.Add(-time.Second)
+	if !now.Before(ctx.Start) && now.Before(ctx.End) {
+		anchor = now
+	}
 	return widgetengine.DataCtx{
-		Ledger: budgetLedgerForTransactions(ctx.App, ctx.ScopedTxns),
+		Ledger: scopedLedger,
 		Vars:   ctx.Vars, Base: ctx.Base,
 		Accounts:     ctx.ScopedAccounts,
 		Transactions: ctx.ScopedTxns,
@@ -181,12 +190,12 @@ func frameDataCtx(ctx widgetrender.RenderCtx) widgetengine.DataCtx {
 		Categories:   ctx.App.Categories(),
 		Recurring:    ctx.App.Recurring(),
 		Rates:        ctx.Rates,
-		Start:        ctx.Start, End: ctx.End, Now: time.Now(),
+		Start:        ctx.Start, End: ctx.End, Now: now,
 		// Trailing chart windows follow the VIEWED period, not the wall clock,
 		// so paging the dashboard to another month moves the series with it
 		// (parity-scan dashboard period contract). Bills/current-state sources
 		// keep reading Now.
-		ChartAnchor: periodChartAnchor(ctx.Start, ctx.End),
+		ChartAnchor: anchor,
 		// The per-month variable surface behind "formula" series charts —
 		// scoped like the KPI tiles, re-windowed per month, and memoized per
 		// (revision, scope, window) so a chart's trailing months compute once,
@@ -195,11 +204,11 @@ func frameDataCtx(ctx widgetrender.RenderCtx) widgetengine.DataCtx {
 			key := revKey(ctx.App) + "|" + acctSig(ctx.ScopedAccounts)
 			return memoMonthVars(key, s, e, func() map[string]float64 {
 				return engineenv.Vars(engineenv.Data{
-					Ledger:   budgetLedgerForTransactions(ctx.App, ctx.ScopedTxns),
+					Ledger:   scopedLedger,
 					Accounts: ctx.ScopedAccounts, Transactions: ctx.ScopedTxns,
 					Members: ctx.App.Members(), Budgets: ctx.App.Budgets(), Goals: ctx.App.Goals(), Tasks: ctx.App.Tasks(),
 					Recurring: ctx.App.Recurring(), Categories: ctx.App.Categories(), Rates: ctx.Rates,
-					Now: time.Now(), PeriodStart: s, PeriodEnd: e,
+					Now: now, PeriodStart: s, PeriodEnd: e,
 					CustomDefs: ctx.App.CustomFieldDefs(), Molecules: ctx.App.Molecules(),
 				})
 			})
@@ -211,9 +220,16 @@ func frameDataCtx(ctx widgetrender.RenderCtx) widgetengine.DataCtx {
 // through the engine, then dispatches to the widget's registered FrameRenderer. The
 // effective pipeline merges the spec's declared Source with the tile's user settings
 // (limit, at-risk, cleared, window) so the data path is engine-driven end to end.
+func hydrateDashboardFrame(pipe *domain.Pipeline, ctx widgetrender.RenderCtx) (domain.Frame, error) {
+	if ctx.Frames != nil {
+		return ctx.Frames.Hydrate(pipe)
+	}
+	return widgetengine.HydrateFrame(pipe, frameDataCtx(ctx))
+}
+
 func hydrateAndRenderFrame(spec domain.WidgetSpec, ctx widgetrender.RenderCtx) (ui.Node, bool) {
 	pipe := effectivePipeline(spec, ctx)
-	frame, err := widgetengine.HydrateFrame(&pipe, frameDataCtx(ctx))
+	frame, err := hydrateDashboardFrame(&pipe, ctx)
 	if err != nil {
 		slog.Warn("dashboard: hydrate frame failed", "id", spec.ID, "err", err)
 		return nil, false
@@ -367,16 +383,7 @@ const userSpecPrefix = "us:"
 // (Kind / Scalar / Pipeline / NativeID) stay from the default so built-ins keep
 // evolving with the code; only the configurable surface is restored from storage.
 func hydrateStoredSpec(def, stored domain.WidgetSpec) domain.WidgetSpec {
-	if stored.Content.Mode == domain.LayoutCustom && len(stored.Content.Blocks) > 0 {
-		def.Content = stored.Content
-	}
-	if !stored.Style.Empty() {
-		def.Style = stored.Style
-	}
-	if stored.Title != "" {
-		def.Title = stored.Title
-	}
-	return def
+	return dashboardview.OverlayStoredSpec(def, stored)
 }
 
 // renderCustomContent is the intra-tile content-layout engine (§7.5): it composes a
@@ -485,7 +492,7 @@ func renderBlockDataView(spec domain.WidgetSpec, ctx widgetrender.RenderCtx, sty
 	if spec.Pipeline == nil {
 		return Div(Style(style))
 	}
-	fr, err := widgetengine.HydrateFrame(spec.Pipeline, frameDataCtx(ctx))
+	fr, err := hydrateDashboardFrame(spec.Pipeline, ctx)
 	if err != nil || fr.Rows == 0 || len(fr.Fields) == 0 {
 		return Div(css.Class("t-caption", tw.TextDim), Style(style), uistate.T("common.noDataYet"))
 	}
@@ -526,6 +533,7 @@ func effectivePipeline(spec domain.WidgetSpec, ctx widgetrender.RenderCtx) domai
 	var p domain.Pipeline
 	if spec.Pipeline != nil {
 		p = *spec.Pipeline
+		p.Transform = append([]domain.Transform(nil), p.Transform...)
 	}
 	sch, ok := widgetcfg.SchemaFor(spec.ID)
 	if !ok {
@@ -626,11 +634,21 @@ func bentoFlipDriver() ui.Node {
 // Dashboard shows headline metrics in the candidate-C bento grid, driven by the
 // live store and the shared time-resolution window.
 func Dashboard() ui.Node {
+	revision := uistate.UseDataRevision().Get()
 	app := appstate.Default
 	if app == nil {
 		return Div(css.Class("bento"), Div(css.Class("w"), Div(css.Class("wbody"), P(css.Class("empty"), uistate.T("common.notReady")))))
 	}
-	_ = uistate.UseDataRevision().Get() // re-render after import / load-sample / wipe
+	return ui.CreateElement(dashboardController, dashboardControllerProps{App: app, Revision: revision})
+}
+
+type dashboardControllerProps struct {
+	App      *appstate.App
+	Revision int
+}
+
+func dashboardController(props dashboardControllerProps) ui.Node {
+	app := props.App
 
 	// The drag-preview FLIP trigger + drag-atom reads live in a separate tiny
 	// component (bentoFlipDriver), NOT here. Dashboard() recomputes every widget's
@@ -747,7 +765,7 @@ func Dashboard() ui.Node {
 	// When the dashboard is paged to ANOTHER period, the "this month" delta is
 	// replaced with an explicit as-of-today label — net worth is position, not
 	// period activity, and the tile must say so (parity-scan period contract).
-	nowT := time.Now()
+	nowT := dashboardPreparationNow()
 	viewingCurrent := !nowT.Before(start) && nowT.Before(end)
 	nwSub, nwTone := uistate.T("dashboard.assetsSub", fmtMoney(assets)), "text-dim"
 	if !viewingCurrent {
@@ -842,6 +860,10 @@ func Dashboard() ui.Node {
 		RemindToUpdate: remindToUpdate, DismissFreshness: dismissFreshness,
 	}
 
+	if dashReady {
+		rctx.Frames = prepareDashboardFrames(rctx, scopeSig, nowT)
+	}
+
 	hidden := uistate.UseHiddenWidgets().Get()
 	tiles := make([]any, 0, len(layoutItems)+1)
 	// no-touch-chrome: lets the CSS agent hide drag/resize affordances (.grip, .rz
@@ -864,91 +886,17 @@ func Dashboard() ui.Node {
 	// user-customizable parts (custom content layout, tile style, title) overlay the
 	// registry default so stored config DRIVES rendering — the default is only the
 	// fallback for not-yet-customized tiles (same defaults-merge pattern as molecules).
-	stored := map[string]domain.WidgetSpec{}
-	if app != nil {
-		for _, p := range app.Placements("dashboard") {
-			stored[p.ID] = p.Spec
-		}
-	}
-	placements := make([]domain.Placement, 0, len(layoutItems))
-	for _, it := range layoutItems {
-		// Defer the whole grid off the initial mount: building each placement (hydrate
-		// + schema-validate ~20 widgets) is the bulk of the dashboard's mount cost, and
-		// it's infrastructure, not the primary net-worth glance. On the first paint we
-		// build nothing here; the effect flips dashReady and the grid + persistence run
-		// a beat later. The stored placements stay intact (we also gate the persist
-		// below, so the mount never writes an incomplete set).
-		if !dashReady {
-			continue
-		}
-		// Each built-in tile is a validated domain.Placement: its spec comes from the
-		// widget registry (the single source of truth) and carries this instance's
-		// saved settings/style (widgetcfg, incl. the reserved style keys); its body is
-		// dispatched through the render registry by NativeID. A "wb:" id is a
-		// user-published Widget Builder card, rendered from its saved graph.
-		if spec, ok := widgetregistry.DefaultSpec(it.ID); ok {
-			spec.Settings = widgetCfgs.For(it.ID)
-			if sp, ok := stored[it.ID]; ok {
-				spec = hydrateStoredSpec(spec, sp)
+	preparedLayout := prepareDashboardLayout(app, dashReady, layoutItems, widgetCfgs, hidden)
+	for _, entry := range preparedLayout.Entries {
+		if entry.Placement != nil {
+			rctx.Spec = entry.Placement.Spec
+			if node, ok := safeRenderSpec(entry.Placement.Spec, rctx); ok {
+				tiles = append(tiles, node)
 			}
-			pl := domain.Placement{
-				SchemaVersion: domain.WidgetSpecVersion,
-				ID:            it.ID,
-				Surface:       "dashboard",
-				Spec:          spec,
-				Layout:        it,
-				Hidden:        hidden.IsHidden(it.ID),
-			}
-			if pl.Validate() != nil {
-				continue
-			}
-			placements = append(placements, pl)
-			if pl.Hidden {
-				continue
-			}
-			if dashReady {
-				rctx.Spec = pl.Spec
-				if node, ok := safeRenderSpec(pl.Spec, rctx); ok {
-					tiles = append(tiles, node)
-				}
-			}
-		} else if strings.HasPrefix(it.ID, userSpecPrefix) {
-			// A Studio-designed widget: its full WidgetSpec is the persisted placement
-			// (formula / pipeline / content layout / style). Render it through the same
-			// engine path as a built-in — pure hydration, no Go body.
-			sp, have := stored[it.ID]
-			if !have {
-				continue
-			}
-			pl := domain.Placement{
-				SchemaVersion: domain.WidgetSpecVersion,
-				ID:            it.ID,
-				Surface:       "dashboard",
-				Spec:          sp,
-				Layout:        it,
-				Hidden:        hidden.IsHidden(it.ID),
-			}
-			if pl.Validate() != nil {
-				continue
-			}
-			placements = append(placements, pl)
-			if pl.Hidden {
-				continue
-			}
-			if dashReady {
-				rctx.Spec = pl.Spec
-				if node, ok := safeRenderSpec(pl.Spec, rctx); ok {
-					tiles = append(tiles, node)
-				}
-			}
-		} else if strings.HasPrefix(it.ID, vbCardPrefix) {
-			if hidden.IsHidden(it.ID) {
-				continue
-			}
-			if dashReady {
-				if w := vbPublishedWidget(strings.TrimPrefix(it.ID, vbCardPrefix), it.ColSpan, it.RowSpan); w != nil {
-					tiles = append(tiles, w)
-				}
+		} else {
+			item := entry.Published
+			if node := vbPublishedWidget(strings.TrimPrefix(item.ID, vbCardPrefix), item.ColSpan, item.RowSpan); node != nil {
+				tiles = append(tiles, node)
 			}
 		}
 	}
@@ -964,20 +912,10 @@ func Dashboard() ui.Node {
 	// above the bento (not a packed grid cell) with ChromeHover, so it reads as clean
 	// content but is a configurable, persisted widget like any tile.
 	heroNode := ui.CreateElement(dashboardHero)
-	if hspec, ok := widgetregistry.DefaultSpec("hero"); ok {
-		hpl := domain.Placement{
-			SchemaVersion: domain.WidgetSpecVersion,
-			ID:            "hero",
-			Surface:       "dashboard",
-			Spec:          hspec,
-			Layout:        dashlayout.Item{ID: "hero", ColSpan: 4, RowSpan: 2},
-		}
-		if hpl.Validate() == nil {
-			placements = append(placements, hpl)
-			rctx.Spec = hpl.Spec
-			if n, ok := safeRender("hero", rctx); ok {
-				heroNode = n
-			}
+	if preparedLayout.Hero != nil {
+		rctx.Spec = preparedLayout.Hero.Spec
+		if node, ok := safeRender("hero", rctx); ok {
+			heroNode = node
 		}
 	}
 
@@ -987,19 +925,19 @@ func Dashboard() ui.Node {
 	// effect runs only when they actually change — never on a plain re-render — so it
 	// can't loop with the data-revision re-render. The live edit surface remains the
 	// layout/config atoms; this mirrors them into placement rows.
-	plSig, _ := json.Marshal(placements)
-	placementsToPersist := placements
+	plSig := preparedLayout.Signature
+	placementsToPersist := preparedLayout.Placements
 	ui.UseEffect(func() func() {
 		// Only persist once the full grid has been built (dashReady). On the initial
 		// mount the placement set is intentionally just the hero, so skipping the write
 		// keeps the stored layout intact.
-		if app != nil && dashReady {
+		if app != nil && dashReady && preparedLayout.Err == nil {
 			if err := app.PutPlacements(placementsToPersist); err != nil {
 				slog.Warn("dashboard: persist placements failed", "err", err)
 			}
 		}
 		return nil
-	}, string(plSig))
+	}, plSig)
 
 	return Fragment(
 		// Optional decorative banner band (B20) — shown only when the user picks a

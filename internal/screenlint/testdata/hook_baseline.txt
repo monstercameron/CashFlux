@@ -36,7 +36,6 @@ screens/customize.go:Customize
 screens/custompage.go:addWidgetBar
 screens/custompage.go:CustomPage
 screens/custompage.go:editWidgetForm
-screens/dashboard.go:Dashboard
 screens/dashboard.go:dashCatchUpCard
 screens/dashboard.go:freshnessWidget
 screens/dashboard_hero.go:heroQuote
