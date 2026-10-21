@@ -1,3 +1,7 @@
+## 2026-10-20 - Reuse the validated hydration checkpoint
+
+The dominant measured startup phase validated an unchanged checkpoint with store.Import and then parsed it again during app import. Added an opaque appstate parsed-dataset handle and shared import ingress, preserving migrations, device credentials, store loading and transaction-link synchronization. Recovery retains that handle only for unchanged checkpoint bytes and discards it whenever journal replay produces a result. Native ingress equivalence, invalid input and credential tests pass; all 17 JRNL WASM tests pass, including unchanged live/backup and replay-discard regressions. The optimization removes a duplicate parse; no new boot-speed claim is made without another measurement.
+
 ## 2026-10-20 - Check report per-hundred arithmetic
 
 The annual money-flow table multiplied minor units by 1,000 before division, and pooled categories used unchecked addition. Added wide-intermediate share calculations, checked magnitudes and totals, safe legacy fallback, and a native savings-share helper for the screen. Native reports tests cover representable large inputs, minimum signed values, pooled overflow, net overflow and ordinary savings.

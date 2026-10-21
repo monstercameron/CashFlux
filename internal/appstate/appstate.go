@@ -186,10 +186,37 @@ func (a *App) ExportJSONRedacted() ([]byte, error) {
 
 // ImportJSON replaces all data with the given dataset JSON.
 func (a *App) ImportJSON(data []byte) error {
-	ds, err := store.Import(data)
+	parsed, err := ParseDataset(data)
 	if err != nil {
 		return err
 	}
+	return a.ImportParsedDataset(parsed)
+}
+
+// ParsedDataset holds a migrated import without exposing mutable dataset fields.
+// Its zero value is invalid; ParseDataset is the only constructor.
+type ParsedDataset struct {
+	dataset *store.Dataset
+}
+
+// ParseDataset validates and migrates JSON once. Recovery may retain the result
+// only while its source checkpoint remains unchanged; replayed bytes need a new parse.
+func ParseDataset(data []byte) (*ParsedDataset, error) {
+	ds, err := store.Import(data)
+	if err != nil {
+		return nil, err
+	}
+	return &ParsedDataset{dataset: &ds}, nil
+}
+
+// ImportParsedDataset replaces all data using a validated parse. Like ImportJSON,
+// it preserves this device's credential, loads through the store's clean ingress,
+// and synchronizes transaction links. It does not retain the parsed handle.
+func (a *App) ImportParsedDataset(parsed *ParsedDataset) error {
+	if parsed == nil || parsed.dataset == nil {
+		return errors.New("appstate: dataset has not been parsed")
+	}
+	ds := *parsed.dataset
 	// OpenAI credentials belong to this device, so every dataset import (sync
 	// pulls, restores and user imports) must replace the incoming value even when
 	// this device has no credential. Otherwise an imported key would be adopted.
