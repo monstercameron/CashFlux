@@ -1,3 +1,7 @@
+## 2026-10-20 - Record pass-seven page verification and timing
+
+Full native integration and 845 WASM screen tests passed. Three sample-only browser cases verified notification keyboard tabs, To-do view parity and all 47 routes. One warm-up and seven measured nine-page sweeps completed without failure; local and served artifact hashes matched throughout. Dataset counts matched earlier captures, while Assistant DOM content grew. Observed settled medians were slower than the previous capture under different uncontrolled machine load, so no causal page-latency improvement is claimed. PRIMARY_PAGE_PERFORMANCE records all medians, nested startup schema 2 details and exact evidence paths. Broader latency verification remains ongoing.
+
 ## 2026-10-20 - Restore the live reload server after concurrent websocket writes
 
 The local dev server exited on a Gorilla WebSocket concurrent-writer panic during overlapping build/status delivery. In the ignored pinned framework tool worktree, all three data-frame paths now share a dedicated writer mutex; no app module or external framework checkout was changed. The concurrent large-frame broadcast regression passed thirteen focused native runs; race testing was unavailable without cgo. Restarted scripts/dev.ps1 hidden on port8080 with the pruned watcher. Status reports a successful full-reload build and Transactions, Notifications and Budgets routes return200. The full native app suite and845 WASM screen tests passed before browser capture. No release or main push was performed.

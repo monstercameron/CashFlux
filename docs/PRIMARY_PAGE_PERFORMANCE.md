@@ -330,3 +330,51 @@ navigation. Go 1.26.9 targeted Windows AMD64 on an ARM64 host; other development
 work was active. Raw results and the contention note are in the task workspace
 at `work/primary-account-value-series-bench.log`; the benchmark is
 `BenchmarkAccountValuePreparation` (`-count=3 -cpu=1 -benchmem`).
+
+## Pass-seven integration and timing capture
+
+The full native suite and 845 WASM screen tests passed after account eligibility,
+source-order series preparation, snapshot keys, and lazy layout/widget seeds.
+Three sample-only browser cases passed on the existing 8080 live server:
+notification keyboard tabs, To-do List/Board/Calendar parity, and substantive
+smoke checks for all 47 routes. Chromium used one worker, no retries, a fixed
+sample clock and blocked external DNS; the temporary runner config was removed.
+
+One warm-up and seven measured sweeps across all nine pages completed without
+failures. The local and served artifact hashes before and after were identical:
+`3271503a3043bb419487db0e910c08f1b61b1e667338127b14026a28b8316a6b`.
+This is the Go source through `6e76fc3d`; subsequent documentation commits do not
+change that artifact. Entity counts match both pass-two captures: 2,808
+transactions, 15 accounts, 10 budgets, 5 goals and 20 tasks. The default
+notification-view metric remains zero with the caveat above. Descendant element
+counts match on eight routes; Assistant now has 354 elements rather than 298.
+
+| Page | Pass-two current settled median | Pass-seven settled median |
+| --- | ---: | ---: |
+| Dashboard | 607 ms | 811 ms |
+| Transactions | 635 ms | 882 ms |
+| Accounts | 653 ms | 664 ms |
+| Budgets | 301 ms | 464 ms |
+| Goals | 139 ms | 189 ms |
+| To-do | 154 ms | 220 ms |
+| Notifications | 81 ms | 133 ms |
+| Assistant | 92 ms | 181 ms |
+| Reports | 287 ms | 375 ms |
+
+These observed values are slower. The captures were not taken under the same
+load, and Assistant content also changed, so they establish neither a causal
+code regression nor a latency improvement. During pass seven there were no
+root/agent Go jobs, but the live dev poller and uncontrolled desktop/backend work
+remained active. No additional runs were made to seek better numbers. The goal
+of demonstrating lower latency on every page remains unverified; native work and
+allocation reductions above have narrower, independently measured evidence.
+
+App-ready was 8,779 ms. The nested startup record has schema version 2 and
+7,314 ms inside Go, including 4,659 ms for app state/workspace/hydration.
+Detail durations include app state initialization 2,565 ms, dataset hydration
+1,983 ms and undo baseline 528 ms. Details are subdivisions of enclosing phases,
+not extra time to add to their totals.
+
+Task workspace evidence: `work/primary-native-pass7.log`,
+`work/primary-screens-pass7.log`, `work/primary-pass7-focused.log`,
+`work/primary-current-pass7.json` and `work/primary-current-pass7-run.log`.
