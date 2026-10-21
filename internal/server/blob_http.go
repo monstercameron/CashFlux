@@ -60,13 +60,9 @@ func handlePutBlob(cfg Config, store *Store) http.HandlerFunc {
 		}
 		ctx, cancel := blobIOContext(r.Context(), cfg)
 		defer cancel()
-		blob, err := store.PutBlobContext(ctx, blobRoot(cfg), data, mime, "", cfg.BlobMaxBytes)
+		blob, err := store.PutLinkedBlobContext(ctx, blobRoot(cfg), data, mime, "", cfg.BlobMaxBytes, user.ID, workspaceID)
 		if err != nil {
 			writeErrorJSON(w, ErrorReasonInternal, "blob write failed")
-			return
-		}
-		if err := store.LinkWorkspaceBlob(user.ID, workspaceID, blob.Hash); err != nil {
-			writeErrorJSON(w, ErrorReasonInternal, "blob link failed")
 			return
 		}
 		if cfg.Metrics != nil {

@@ -573,6 +573,84 @@ func TestBlobStoreContentAddressingLinksAndGC(t *testing.T) {
 	}
 }
 
+func TestBlobGCFailedRemovalKeepsMetadataForRetry(t *testing.T) {
+	s := openTestStore(t)
+	root := filepath.Join(t.TempDir(), "blobs")
+	blob, err := s.PutBlob(root, []byte("unlinked encrypted bytes"), "application/octet-stream", "", 1024)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path, err := blobPath(root, blob.Hash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(path, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(path, "blocker"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if deleted, err := s.SweepUnreferencedBlobs(root); err == nil || deleted != 0 {
+		t.Fatalf("failed deletion reported success: deleted=%d err=%v", deleted, err)
+	}
+	if _, ok, err := s.GetBlob(blob.Hash); err != nil || !ok {
+		t.Fatalf("failed deletion lost metadata: present=%v err=%v", ok, err)
+	}
+	if err := os.Remove(filepath.Join(path, "blocker")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if deleted, err := s.SweepUnreferencedBlobs(root); err != nil || deleted != 1 {
+		t.Fatalf("retry deletion: deleted=%d err=%v", deleted, err)
+	}
+}
+
+func TestLinkedBlobUploadSurvivesConcurrentGC(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "server.db")
+	s, err := OpenStore(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	gc, err := OpenStore(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = gc.Close() })
+	root := filepath.Join(t.TempDir(), "blobs")
+	now := time.Now().UTC()
+	if err := s.UpsertUser(User{ID: "u1", Provider: "github", Subject: "alice", CreatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.PutWorkspace(Workspace{ID: "w1", UserID: "u1", Name: "Home", UpdatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 20; i++ {
+		data := []byte{byte(i), 0x8c, 0x14, 0x5e}
+		result := make(chan error, 1)
+		go func() {
+			_, err := s.PutLinkedBlobContext(context.Background(), root, data, "application/octet-stream", "", 1024, "u1", "w1")
+			result <- err
+		}()
+		if _, err := gc.SweepUnreferencedBlobs(root); err != nil {
+			t.Fatal(err)
+		}
+		if err := <-result; err != nil {
+			t.Fatal(err)
+		}
+		hash := sha256.Sum256(data)
+		stored, err := s.ReadBlob(root, hex.EncodeToString(hash[:]))
+		if err != nil || !bytes.Equal(stored, data) {
+			t.Fatalf("linked blob disappeared after concurrent GC: iteration=%d err=%v", i, err)
+		}
+	}
+}
+
 func TestBlobStoreCountsDistinctUserBlobBytes(t *testing.T) {
 	s := openTestStore(t)
 	root := filepath.Join(t.TempDir(), "blobs")

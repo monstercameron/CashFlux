@@ -19,6 +19,7 @@ and every commit updates this file under `Unreleased`.
 - The device-erasure audit now identifies retained workspace, queue, file, credential, and key records that the current “Erase everything” action does not remove, with acceptance criteria for a truthful full erase.
 
 ### Fixed
+- Server blob uploads now commit their workspace link with blob metadata under the same database write lock used by garbage collection. The collector rechecks references and keeps metadata for retry when file removal fails.
 - The protected-storage guard now recognizes only the eraser's random coordination ticket as an allowed direct localStorage write, restoring the native CI gate.
 - Opening the standalone eraser URL directly can no longer start deletion. Automatic erasure requires the unguessable ticket written by the confirmed Settings action.
 - Device erasure now unregisters only the CashFlux service worker for its app path, leaving other workers on a shared origin alone.
