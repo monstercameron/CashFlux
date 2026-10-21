@@ -10,6 +10,7 @@ and every commit updates this file under `Unreleased`.
 - The device-erasure audit now identifies retained workspace, queue, file, credential, and key records that the current “Erase everything” action does not remove, with acceptance criteria for a truthful full erase.
 
 ### Fixed
+- The Cloud sign-in step now offers a connection check when server discovery is idle or failed, so a browser with an invalid stored session can retry without clearing its local recovery data.
 - The service worker now bypasses account/API GETs even during top-level navigation, matches precached paths exactly, and removes previously cached private responses when a new worker activates.
 - Protected boot now encrypts orphaned legacy attachment records in IndexedDB as well as files referenced by saved workspaces, without overwriting a file another tab changed during migration.
 - Signing into a different account in the same browser now hides the previous account's local dataset and offers sign-out, while preserving the protected copy for its owner. The account-switch regression checks that the new account receives no inherited server snapshot.

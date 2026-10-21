@@ -135,6 +135,36 @@ func TestCloudOAuthCannotAuthorizeUnprotectedSync(t *testing.T) {
 	}
 }
 
+func TestCloudSignInCanRetryConnectionDiscovery(t *testing.T) {
+	for _, phase := range []discoveryPhase{discoveryIdle, discoveryChecking, discoveryError, discoveryOK} {
+		t.Run(string(phase), func(t *testing.T) {
+			calls := 0
+			f := cloudTestFixture(t, uic.CreateElement(cloudSignInView, cloudSignInProps{Connection: cloudConnection{
+				Segment: "local", Phase: phase, Test: func() { calls++ },
+			}}))
+			button := cloudTestID(f, "button", "cloud-signin-test-connection")
+			if phase == discoveryOK {
+				if button != nil {
+					t.Fatal("successful discovery still offers a redundant connection check")
+				}
+				return
+			}
+			if button == nil {
+				t.Fatal("sign-in step cannot retry an unfinished connection check")
+			}
+			button.Click()
+			f.Stabilize()
+			want := 1
+			if phase == discoveryChecking {
+				want = 0
+			}
+			if calls != want {
+				t.Fatalf("connection check calls = %d, want %d", calls, want)
+			}
+		})
+	}
+}
+
 func TestCloudConnectionRequiresSuccessfulCheck(t *testing.T) {
 	for _, phase := range []discoveryPhase{discoveryIdle, discoveryChecking, discoveryError, discoveryOK} {
 		t.Run(string(phase), func(t *testing.T) {
