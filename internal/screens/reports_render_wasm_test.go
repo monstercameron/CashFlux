@@ -47,8 +47,15 @@ func TestReportsPostureRendersPreserveRevisionModelsAndFullSections(t *testing.T
 	if models["series"] != 1 || models["activity"] != 1 {
 		t.Fatalf("initial models=%v", models)
 	}
+	if models["tax-net-income"] != 0 {
+		t.Fatalf("Summary eagerly prepared tax records: %v", models)
+	}
+	// Tax preparation belongs to the lazy Full child. Its first mount adds
+	// exactly that model; the already prepared controller models stay reusable.
+	fullModels := copyReportRenderCounts(initialModels)
+	fullModels["tax-net-income"] = 1
 	primaryClick(t, f, "rpta-mode-full")
-	if app.Rev() != revision || !reflect.DeepEqual(models, initialModels) {
+	if app.Rev() != revision || !reflect.DeepEqual(models, fullModels) {
 		t.Fatalf("Full mode wrote data or rebuilt models: revision=%d->%d builds=%v->%v", revision, app.Rev(), initialModels, models)
 	}
 	fullSections := copyReportRenderCounts(sections)
@@ -60,21 +67,31 @@ func TestReportsPostureRendersPreserveRevisionModelsAndFullSections(t *testing.T
 	for _, id := range []string{"reports-export-toggle", "reports-export-toggle", "reports-scope-toggle", "reports-scope-toggle"} {
 		clock = clock.Add(time.Minute)
 		primaryClick(t, f, id)
-		if app.Rev() != revision || !reflect.DeepEqual(models, initialModels) || !reflect.DeepEqual(sections, fullSections) {
-			t.Fatalf("%s wrote/rebuilt unchanged report: revision=%d->%d models=%v->%v sections=%v->%v", id, revision, app.Rev(), initialModels, models, fullSections, sections)
+		if app.Rev() != revision || !reflect.DeepEqual(models, fullModels) || !reflect.DeepEqual(sections, fullSections) {
+			t.Fatalf("%s wrote/rebuilt unchanged report: revision=%d->%d models=%v->%v sections=%v->%v", id, revision, app.Rev(), fullModels, models, fullSections, sections)
 		}
 	}
 	primaryClick(t, f, "rpta-mode-summary")
-	if app.Rev() != revision || !reflect.DeepEqual(models, initialModels) || !reflect.DeepEqual(sections, fullSections) {
+	if app.Rev() != revision || !reflect.DeepEqual(models, fullModels) || !reflect.DeepEqual(sections, fullSections) {
 		t.Fatalf("Summary transition wrote/rebuilt report: models=%v sections=%v", models, sections)
 	}
+	// Summary unmounts the Full child. Remounting reuses the bounded successful
+	// tax preparation for the same app revision and exact period.
+	remountedModels := copyReportRenderCounts(fullModels)
 	primaryClick(t, f, "rpta-mode-full")
-	if app.Rev() != revision || !reflect.DeepEqual(models, initialModels) {
-		t.Fatal("Full remount rescanned unchanged financial data")
+	if app.Rev() != revision || !reflect.DeepEqual(models, remountedModels) {
+		t.Fatalf("Full remount rebuilt more than its mounted tax memo: expected=%v got=%v", remountedModels, models)
 	}
 	for name, n := range fullSections {
 		if sections[name] != n+1 {
 			t.Fatalf("Full section %s did not remount exactly once: %d->%d", name, n, sections[name])
+		}
+	}
+	remountedSections := copyReportRenderCounts(sections)
+	for _, id := range []string{"reports-export-toggle", "reports-export-toggle", "reports-scope-toggle", "reports-scope-toggle"} {
+		primaryClick(t, f, id)
+		if app.Rev() != revision || !reflect.DeepEqual(models, remountedModels) || !reflect.DeepEqual(sections, remountedSections) {
+			t.Fatalf("%s failed warm reuse after remount: models=%v sections=%v", id, models, sections)
 		}
 	}
 	if got := uistate.ReportsConfigGet(); got.View != "overview" || got.Rollup || got.YoY {

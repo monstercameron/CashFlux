@@ -125,8 +125,61 @@ func TestReportsTaxCheckedMemoAndLifecycleStayFresh(t *testing.T) {
 	appstate.Default = app
 	uistate.BumpDataRevision()
 	f.Stabilize()
-	if builds != 3 || byTestID(f, "input", "tax-rate") == nil {
+	if builds != 2 || byTestID(f, "input", "tax-rate") == nil {
 		t.Fatalf("empty-to-loaded hooks/model stale: builds=%d", builds)
+	}
+	if basis := byTestID(f, "p", "tax-est-basis"); basis == nil || !strings.Contains(basis.Text(), fmtMoney(money.New(280000, "USD"))) {
+		t.Fatalf("same-app remount did not restore the prepared facts: %s", f.Text())
+	}
+}
+
+func TestReportsTaxCheckedPreparationCacheTracksAppRevisionAndExactWindow(t *testing.T) {
+	app, window := checkedTaxFixture(t)
+	taxNetIncomeCache.Clear()
+	builds := 0
+	previous := reportModelBuildObserver
+	reportModelBuildObserver = func(name string) {
+		if name == "tax-net-income" {
+			builds++
+		}
+	}
+	t.Cleanup(func() { reportModelBuildObserver = previous })
+	prepare := func(a *appstate.App, w taxSectionProps) {
+		t.Helper()
+		if got := taxNetIncomeForWindow(a, w); got.Err != nil {
+			t.Fatal(got.Err)
+		}
+	}
+	prepare(app, window)
+	prepare(app, window)
+	if builds != 1 {
+		t.Fatalf("successful preparation was not reused: %d", builds)
+	}
+	prepare(app, taxSectionProps{From: window.From.Add(time.Nanosecond), To: window.To, Year: window.Year})
+	if builds != 2 {
+		t.Fatalf("exact period bounds were not part of cache key: %d", builds)
+	}
+	if err := app.PutCategory(domain.Category{ID: "tax-cache-rev", Name: "Cache revision", Kind: domain.KindExpense}); err != nil {
+		t.Fatal(err)
+	}
+	prepare(app, window)
+	if builds != 3 {
+		t.Fatalf("app revision did not invalidate preparation: %d", builds)
+	}
+	settings := app.Settings()
+	settings.FXRates = map[string]float64{"EUR": 1.2}
+	if err := app.PutSettings(settings); err != nil {
+		t.Fatal(err)
+	}
+	prepare(app, window)
+	if builds != 4 {
+		t.Fatalf("FX revision did not invalidate preparation: %d", builds)
+	}
+	second := agrApp(t)
+	t.Cleanup(func() { _ = second.Store().Close() })
+	prepare(second, window)
+	if builds != 5 {
+		t.Fatalf("different app identity reused preparation: %d", builds)
 	}
 }
 

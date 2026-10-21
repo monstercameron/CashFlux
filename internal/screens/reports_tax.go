@@ -65,7 +65,10 @@ type taxDepthContentProps struct {
 // unconditional through empty, loaded and failed-source transitions.
 func taxDepthContent(p taxDepthContentProps) ui.Node {
 	app, props := p.App, p.Window
-	prepared := ui.UseMemo(func() taxIncomePreparation { return taxNetIncomeForWindow(app, props) }, p.Revision, props.From, props.To, props.Year)
+	// Recheck the store on every render before consulting the bounded cache. A
+	// component-local memo would hide a store close after its first successful
+	// paint; the shared helper retains the expensive ledger fold across remounts.
+	prepared := taxNetIncomeForWindow(app, props)
 	cfg := uistate.LoadTaxPlan()
 	rateS := ui.UseState("")
 	priorTaxS := ui.UseState("")
@@ -346,6 +349,8 @@ type taxIncomePreparation struct {
 	Err   error
 }
 
+var taxNetIncomeCache = newViewCache[taxIncomePreparation](8)
+
 // taxNetIncomeForWindow acquires the same household record population as the
 // existing tax section, using fallible reads and explicit workspace refund links.
 func taxNetIncomeForWindow(app *appstate.App, window taxSectionProps) taxIncomePreparation {
@@ -356,6 +361,11 @@ func taxNetIncomeForWindow(app *appstate.App, window taxSectionProps) taxIncomeP
 	settings, err := app.Store().GetSettings()
 	if err != nil {
 		return unavailable(fmt.Errorf("read tax settings: %w", err))
+	}
+	key := fmt.Sprintf("%d:%d:%s:%s:%d", app.InstanceID(), app.Rev(),
+		window.From.Format(time.RFC3339Nano), window.To.Format(time.RFC3339Nano), window.Year)
+	if prepared, ok := taxNetIncomeCache.Get(key); ok {
+		return prepared
 	}
 	base := settings.BaseCurrency
 	if base == "" {
@@ -378,7 +388,9 @@ func taxNetIncomeForWindow(app *appstate.App, window taxSectionProps) taxIncomeP
 	if err != nil {
 		return unavailable(err)
 	}
-	return taxIncomePreparation{Value: value}
+	prepared := taxIncomePreparation{Value: value}
+	taxNetIncomeCache.Set(key, prepared)
+	return prepared
 }
 
 // taxFieldValue prefers what the user is typing over what was stored, so a field

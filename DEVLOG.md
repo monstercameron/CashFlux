@@ -1,3 +1,7 @@
+## 2026-10-21 - Reuse successful tax preparation across Reports remounts
+
+Added an eight-entry successful preparation cache keyed by app identity, store revision, exact period bounds and tax year. Every render still checks the settings source before a cache hit, so a closed store remains unavailable. Host tests verify lazy first Full preparation, unchanged remount reuse, exact-window/data/FX/app invalidation and recovery from unavailable sources. The fifteen-case focused WASM batch passed; a broad rerun remains pending.
+
 ## 2026-10-21 - Cancel deferred Assistant UI work with its component lifecycle
 
 The full screen suite exposed an off-render Go timer and then an uncancelled scroll callback after Assistant teardown. Replaced the rail Go timer and raw deferred scrolling with framework-managed browser timers; streaming text scrolls after its DOM commit and completed Markdown retains the settling delay. A regression checks mounted canvas scrolling and cancellation after mount/update removal. Fifteen focused WASM tests passed, including Assistant availability and lifecycle, Reports cache and Household host paths; production WASM build passed. Assistant fixtures now explicitly unmount before restoring browser stubs. The full screen suite is rerunning.
