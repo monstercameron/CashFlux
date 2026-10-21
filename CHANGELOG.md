@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Native goal history rollover now checks monthly money and count arithmetic and leaves the original goal unchanged on failure.
 - Document the two-artifact live development entry point, full-page reload requirement, and locally repaired matching-version runner.
 - Component guidance now records lazy Accounts facts, current-state goal allocation drafts, and separate Dashboard layout/frame cache contracts.
 - Dashboard render context counts now use a memoized native report-eligible transaction counter.

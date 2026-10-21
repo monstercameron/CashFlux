@@ -1,3 +1,7 @@
+## 2026-10-20 - Check contribution history rollup arithmetic
+
+Added RecordContributionChecked with copy-on-write detailed logs and monthly history, checked money addition and portable count bounds, retaining chronological caps and the documented currency-mismatch policy. The legacy wrapper preserves source compatibility without returning wrapped amounts. Boundary, multiple-aged-entry rollback, aged currency mismatch, cap and nonmutation cases passed via go test -work on the domain package. Appstate preflight and atomic goal/ledger orchestration follow separately.
+
 ## 2026-10-20 - Restore the live development workflow on 8080
 
 Stopped the CashFlux test servers on 8142/8143 and restarted scripts/dev.ps1 on loopback 8080. Rebuilt the ignored gwc runner from a persistent v5.0.1 tool worktree matching the module, fixed boolean forwarding/full reload classification and extensionless SPA routing in that local tool installation. Verified an actual main.go timestamp change caused a successful full reload and /transactions returned HTTP 200. Documented these local ignored repairs explicitly so future tool replacement does not silently lose them; no application framework dependency or release changed.

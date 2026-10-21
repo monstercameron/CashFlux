@@ -4,7 +4,6 @@ package domain
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
@@ -1500,46 +1499,15 @@ const ContributionHistoryCap = 240
 // past MaxGoalContributions are ROLLED UP into ContributionHistory rather than
 // discarded: the detailed log is for undo, the monthly totals are for history,
 // and conflating the two is what made a five-year goal look four months old.
-// Pure; the caller persists the result.
+// Pure; the caller persists the result. An unrepresentable history rollup leaves
+// the original goal unchanged. Mutation services should use RecordContributionChecked
+// to report that failure before changing any related financial state.
 func (g Goal) RecordContribution(c GoalContribution) Goal {
-	g.Contributions = append(append([]GoalContribution(nil), g.Contributions...), c)
-	if len(g.Contributions) > MaxGoalContributions {
-		drop := g.Contributions[:len(g.Contributions)-MaxGoalContributions]
-		g.Contributions = g.Contributions[len(g.Contributions)-MaxGoalContributions:]
-		for _, d := range drop {
-			g = g.rollUpContribution(d)
-		}
-	}
-	return g
-}
-
-// rollUpContribution folds one aged-out contribution into the monthly totals,
-// keeping them sorted oldest-first. A contribution in a currency the month's
-// total does not use is skipped rather than added: summing two currencies would
-// produce a figure that is not money, and a silently wrong history is worse than
-// a short one.
-func (g Goal) rollUpContribution(c GoalContribution) Goal {
-	key := c.At.Format("2006-01")
-	hist := append([]GoalMonthTotal(nil), g.ContributionHistory...)
-	for i, h := range hist {
-		if h.Month != key {
-			continue
-		}
-		if h.Amount.Currency != c.Amount.Currency {
-			return g
-		}
-		hist[i].Amount = money.New(h.Amount.Amount+c.Amount.Amount, h.Amount.Currency)
-		hist[i].Count++
-		g.ContributionHistory = hist
+	updated, err := g.RecordContributionChecked(c)
+	if err != nil {
 		return g
 	}
-	hist = append(hist, GoalMonthTotal{Month: key, Amount: c.Amount, Count: 1})
-	sort.Slice(hist, func(i, j int) bool { return hist[i].Month < hist[j].Month })
-	if len(hist) > ContributionHistoryCap {
-		hist = hist[len(hist)-ContributionHistoryCap:]
-	}
-	g.ContributionHistory = hist
-	return g
+	return updated
 }
 
 // PopLastContribution removes and returns the most recent contribution (for undo),
