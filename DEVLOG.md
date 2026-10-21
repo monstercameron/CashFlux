@@ -1,3 +1,7 @@
+## 2026-10-21 - Preview-bound account reconciliation and transfers
+
+Added immutable expected-state native APIs for reconciliation and transfers, using shared checkpoint/transfer math and atomic replay. Repeated checkpoints replace against the underlying ledger correctly; returning to that ledger removes old checkpoints without a zero row. Balances and both currency legs are previewed; stale ledger/account/rate context refuses execution. Transfers retain explicit idempotency keys and assistant source. Native provisional/appstate suites and expected retry regression passed; all five actual account-write WASM groups passed in integrated pass8.
+
 ## 2026-10-21 - Fresh Assistant tool rounds and honest usage receipts
 
 Rebuild read closures for each provider turn and after an actual approved write, while retaining the previewed write instance until execution. Each response reports its usage once to the captured conversation and bound live store, including interrupted tool loops; budgets are checked before the next provider call. Privacy changes cancel active sessions, and app/store replacement blocks retained approvals and stale callbacks. All ten mocked actual Insights lifecycle groups passed in integrated pass8, including fresh same-response category reads, partial provider errors, exact cap enforcement and dataset replacement.

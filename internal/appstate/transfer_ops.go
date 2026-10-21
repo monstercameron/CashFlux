@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/ledger"
@@ -419,6 +420,10 @@ func (a *App) transferAccounts(fromID, toID string) (fromAcc, toAcc domain.Accou
 // reduce debt (payments). Cross-currency legs require saved rates or an explicit
 // receivedMinor magnitude; same-currency legs always share a magnitude.
 func (a *App) transferLegs(fromAcc, toAcc domain.Account, amountMinor, receivedMinor int64) (fromMoney, toMoney money.Money, err error) {
+	return transferLegsWithRates(fromAcc, toAcc, amountMinor, receivedMinor, a.transactionPairRates())
+}
+
+func transferLegsWithRates(fromAcc, toAcc domain.Account, amountMinor, receivedMinor int64, rates currency.Rates) (fromMoney, toMoney money.Money, err error) {
 	fromMoney = money.New(-fromAcc.InflowSign()*amountMinor, fromAcc.Currency)
 	toMoney = money.New(amountMinor, toAcc.Currency)
 	if fromAcc.Currency != toAcc.Currency {
@@ -426,7 +431,7 @@ func (a *App) transferLegs(fromAcc, toAcc domain.Account, amountMinor, receivedM
 			toMoney = money.New(receivedMinor, toAcc.Currency)
 		} else {
 			srcAbs := money.New(amountMinor, fromAcc.Currency)
-			conv, cerr := a.transactionPairRates().Convert(srcAbs, toAcc.Currency)
+			conv, cerr := rates.Convert(srcAbs, toAcc.Currency)
 			if cerr != nil {
 				return money.Money{}, money.Money{}, fmt.Errorf("%w: %s to %s", ErrTransferRateUnavailable, fromAcc.Currency, toAcc.Currency)
 			}

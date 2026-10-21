@@ -26,7 +26,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/formula"
 	"github.com/monstercameron/CashFlux/internal/id"
-	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/scope"
 	"github.com/monstercameron/CashFlux/internal/toolperm"
@@ -395,7 +394,6 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates, tier a
 		}
 	}
 
-	transferBuilds := make(map[string]transferToolBuild)
 	tools := []chatTool{
 		{
 			spec: ai.FunctionTool("list_categories", "List the user's spending/income category names. Call this first when unsure which category a question refers to.", json.RawMessage(`{"type":"object","properties":{}}`)),
@@ -886,113 +884,6 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates, tier a
 			},
 		},
 		{
-			spec: ai.FunctionTool("add_transfer",
-				"Move money between two of the user's accounts (records a matched transfer). Use this for the cash side of events like a loan payout or moving funds. Resolve accounts by name. For different currencies, provide received_amount when the saved exchange rate is unavailable or the user gives the exact amount that arrived.",
-				json.RawMessage(`{"type":"object","properties":{"from_account":{"type":"string"},"to_account":{"type":"string"},"amount":{"type":"number","description":"positive major units in the source account currency"},"received_amount":{"type":"number","description":"optional positive major units received in the destination account currency"},"operation_id":{"type":"string","description":"optional stable idempotency key for retrying this exact transfer"},"date":{"type":"string","description":"YYYY-MM-DD, defaults to today"}},"required":["from_account","to_account","amount"]}`)),
-			mutates: true,
-			preview: func(raw json.RawMessage) string {
-				var a transferToolArgs
-				if err := json.Unmarshal(raw, &a); err != nil {
-					return "Couldn't read the transfer details."
-				}
-				from, ok := resolveAccount(a.From)
-				if !ok {
-					return "No account matching “" + a.From + "”."
-				}
-				to, ok := resolveAccount(a.To)
-				if !ok {
-					return "No account matching “" + a.To + "”."
-				}
-				built, err := buildAssistantTransfer(raw, from, to, rates, now, uistate.T("assistant.transferToDesc", to.Name))
-				if err != nil {
-					return "Transfer cannot be prepared: " + err.Error()
-				}
-				if key, ok := assistantTransferBuildCacheKey(raw, from, to, rates, now, built.params.Desc); ok {
-					transferBuilds[key] = built
-				}
-				return assistantTransferPreview(built)
-			},
-			run: func(raw json.RawMessage) string {
-				var a transferToolArgs
-				if err := json.Unmarshal(raw, &a); err != nil {
-					return "A transfer needs both accounts and a positive amount."
-				}
-				from, ok1 := resolveAccount(a.From)
-				to, ok2 := resolveAccount(a.To)
-				if !ok1 {
-					return "No account matching “" + a.From + "”."
-				}
-				if !ok2 {
-					return "No account matching “" + a.To + "”."
-				}
-				desc := uistate.T("assistant.transferToDesc", to.Name)
-				key, cacheable := assistantTransferBuildCacheKey(raw, from, to, rates, now, desc)
-				built, ok := transferBuilds[key]
-				ok = ok && cacheable
-				if !ok {
-					var err error
-					built, err = buildAssistantTransfer(raw, from, to, rates, now, desc)
-					if err != nil {
-						return "Couldn't prepare the transfer: " + err.Error()
-					}
-				}
-				if cacheable {
-					delete(transferBuilds, key)
-				}
-				if built.params.ReceivedMinor == 0 && !built.hasConversion {
-					return "Couldn't record the transfer: no exchange rate is available; enter the amount received."
-				}
-				outID, _, err := app.CreateTransferPair(built.params)
-				if err != nil {
-					return "Couldn't record the transfer: " + err.Error()
-				}
-				fromMoney := money.New(built.params.AmountMinor, from.Currency)
-				return fmt.Sprintf("Transferred %s from %s to %s.%s", fmtMoney(fromMoney), from.Name, to.Name, openLink("/transactions", outID))
-			},
-		},
-		{
-			spec: ai.FunctionTool("update_account_balance",
-				"Set an account's current balance (reconcile to a statement), by an adjusting entry. For a liability, `balance` is the amount still owed (enter it positive).",
-				json.RawMessage(`{"type":"object","properties":{"account":{"type":"string"},"balance":{"type":"number","description":"the new current balance in major units"}},"required":["account","balance"]}`)),
-			mutates: true,
-			preview: func(raw json.RawMessage) string {
-				var a struct {
-					Account string  `json:"account"`
-					Balance float64 `json:"balance"`
-				}
-				_ = json.Unmarshal(raw, &a)
-				return fmt.Sprintf("Set %s balance to %s", a.Account, fmtMoney(money.New(currency.MinorFromMajor(a.Balance, base), base)))
-			},
-			run: func(raw json.RawMessage) string {
-				var a struct {
-					Account string  `json:"account"`
-					Balance float64 `json:"balance"`
-				}
-				if err := json.Unmarshal(raw, &a); err != nil {
-					return "Provide an account and a balance."
-				}
-				acc, ok := resolveAccount(a.Account)
-				if !ok {
-					return "No account matching “" + a.Account + "”."
-				}
-				target := currency.MinorFromMajor(a.Balance, acc.Currency)
-				if acc.Class == domain.ClassLiability && target > 0 {
-					target = -target
-				}
-				cur, err := ledger.Balance(acc, txns)
-				if err != nil {
-					return "Couldn't read the current balance."
-				}
-				delta := target - cur.Amount
-				acc.OpeningBalance = money.New(acc.OpeningBalance.Amount+delta, acc.Currency)
-				acc.BalanceAsOf = now
-				if err := app.PutAccount(acc); err != nil {
-					return "Couldn't update the balance: " + err.Error()
-				}
-				return fmt.Sprintf("Set %s balance to %s (adjusted by %s).", acc.Name, fmtMoney(money.New(target, acc.Currency)), fmtMoney(money.New(delta, acc.Currency)))
-			},
-		},
-		{
 			spec: ai.FunctionTool("find_duplicate_transactions",
 				"Find groups of likely-duplicate transactions — same calendar date, signed amount, and description — the app's CANONICAL duplicate definition (identical to the 'possible duplicate' flags and the Duplicates page). Call this to locate the duplicates behind a flag before merging or deleting them. Optionally filter by a description/payee phrase.",
 				json.RawMessage(`{"type":"object","properties":{"match":{"type":"string","description":"optional description/payee phrase to filter"}}}`)),
@@ -1041,6 +932,7 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates, tier a
 	tools = append(tools, agToolsGoalWrites(app, base, rates)...)
 	tools = append(tools, agToolsTransactionWrites(app)...)
 	tools = append(tools, agToolsFormula(app, base, rates)...)
+	tools = append(tools, agToolsAccountWrites(app)...)
 	tools = append(tools, agToolsTrust(app, base, rates)...)
 	tools = append(tools, agToolsAuditor(app, base, rates)...)
 	tools = append(tools, agToolsAuthoring(app, base, rates)...)
