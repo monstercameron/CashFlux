@@ -2274,6 +2274,7 @@ var english = Catalog{
 	"accounts.filterSummary":          "%s · %s",
 	"accounts.noMatch":                "No accounts match these filters.",
 	"accounts.deltaThisMonth":         "%s this month",
+	"accounts.deltaUnavailable":       "Net-worth change is unavailable",
 	"accounts.noChangeMonth":          "No change this month",
 	"accounts.noAssets":               "No asset accounts yet.",
 	"accounts.addFirst":               "Add your first account",

@@ -575,7 +575,8 @@ func acctSummaryWidget(props acctSummaryProps) ui.Node {
 	if nw.Complete() {
 		mtd, _ = nwchange.MonthToDateChange(accounts, txns, props.Rates, time.Now())
 	}
-	nwDelta, haveDelta := mtd.Delta(), mtd.Known
+	deltaMinor, deltaErr := mtd.DeltaMinorChecked()
+	nwDelta, haveDelta := money.New(deltaMinor, props.Base), deltaErr == nil
 	netText, assetsText, liabilitiesText, tone := "—", "—", "—", "text-dim"
 	if nw.Known {
 		netText, assetsText, liabilitiesText, tone = fmtMoney(net), fmtMoney(assets), fmtMoney(liabilities), accentFor(net)

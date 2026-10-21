@@ -29,6 +29,14 @@ func TestCheckedDeltaAndPercentRejectOverflow(t *testing.T) {
 	if _, err := c.DeltaMinorChecked(); !errors.Is(err, money.ErrOverflow) {
 		t.Fatalf("DeltaMinorChecked error = %v; want overflow", err)
 	}
+	reverse := Change{StartMinor: math.MaxInt64, EndMinor: math.MinInt64, Known: true}
+	if _, err := reverse.DeltaMinorChecked(); !errors.Is(err, money.ErrOverflow) {
+		t.Fatalf("reverse DeltaMinorChecked error = %v; want overflow", err)
+	}
+	minimum := Change{StartMinor: 0, EndMinor: math.MinInt64, Known: true}
+	if got, err := minimum.DeltaMinorChecked(); err != nil || got != math.MinInt64 {
+		t.Fatalf("representable MinInt64 delta = %d, %v; want MinInt64, nil", got, err)
+	}
 	if _, ok, err := c.PercentChangeChecked(); !errors.Is(err, money.ErrOverflow) || ok {
 		t.Fatalf("PercentChangeChecked = ok %v, err %v; want overflow and unavailable", ok, err)
 	}

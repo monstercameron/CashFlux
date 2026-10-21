@@ -121,10 +121,14 @@ func currencyOptions(app *appstate.App, selected string) []uiw.SelectOption {
 
 // netWorthDeltaLine renders the month-to-date net-worth change as a small trend
 // subtitle under the hero figure: a colored ↑/↓ glyph + the signed amount + "this
-// month" (G3 §3). A zero or unknown delta reads as a calm "no change" caption.
+// month" (G3 §3). Unknown arithmetic gets an unavailable caption, distinct from
+// a known zero delta.
 func netWorthDeltaLine(delta money.Money, have bool) ui.Node {
-	if !have || delta.Amount == 0 {
-		return Span(css.Class("stat-sub", tw.TextDim), uistate.T("accounts.noChangeMonth"))
+	if !have {
+		return Span(css.Class("stat-sub", tw.TextDim), Attr("data-testid", "acct-networth-delta-unavailable"), uistate.T("accounts.deltaUnavailable"))
+	}
+	if delta.Amount == 0 {
+		return Span(css.Class("stat-sub", tw.TextDim), Attr("data-testid", "acct-networth-delta-zero"), uistate.T("accounts.noChangeMonth"))
 	}
 	up := delta.Amount > 0
 	tone, glyph := tw.TextUp, icon.TrendingUp
@@ -133,7 +137,11 @@ func netWorthDeltaLine(delta money.Money, have bool) ui.Node {
 	}
 	abs := delta
 	if !up {
-		abs = money.New(-delta.Amount, delta.Currency)
+		var err error
+		abs, err = delta.AbsChecked()
+		if err != nil {
+			return Span(css.Class("stat-sub", tw.TextDim), Attr("data-testid", "acct-networth-delta-unavailable"), uistate.T("accounts.deltaUnavailable"))
+		}
 	}
 	sign := "+"
 	if !up {

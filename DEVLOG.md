@@ -1,3 +1,7 @@
+## 2026-10-21 - Keep Accounts net-worth movement checked and explicitly available
+
+Native nwchange and money suites passed, including both endpoint overflow directions and a representable MinInt64 signed delta. Two focused WASM host tests passed: presenter cases cover unknown, known zero, ordinary negative movement and unavailable MinInt64 magnitude; the actual Accounts summary receives valid MinInt64/MaxInt64 endpoints whose difference overflows and renders unavailable instead of no change. The initial integration compile caught a missing props qualifier; corrected wiring passes. Fixtures explicitly unmount before app/global cleanup. This fixes a concrete remaining boundary error and does not claim all Accounts logic or all nine pages complete.
+
 ## 2026-10-21 - Isolate frozen browser captures from development reloads
 
 The first new SMART capture timed out before requesting main WASM and retained a startup failure report with no latency results. Added bounded page-error, failed-request, HTTP status and bootstrap state diagnostics for future failures. Benchmark contexts now block loopback WebSocket connections so development reloads cannot replace frozen artifacts; the normal user browser is unaffected. Both scripts pass node --check. The revised navigation script completed matching before/after seven-sample captures with no failures and identical visible route text. Shared-machine load remains uncontrolled; report all raw samples and do not infer cold-start gains.

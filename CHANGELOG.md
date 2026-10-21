@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Use checked net-worth differences and safe display magnitudes on Accounts; distinguish unavailable movement from known zero.
 - Block dev reload sockets in benchmark contexts and retain bounded startup failure diagnostics.
 - Reuse bounded, owned SMART results between the page strip and peek, preserving settings, page, time, language and data dependencies.
 - Verify frozen benchmark artifacts, require complete route content, and add representative nine-page interaction measurements and optional CPU profiles.
