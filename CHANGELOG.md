@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Assistant subscription-call preparation preserves currency and exact annual costs with honest evidence limits.
 - Assistant edits validate and preview exact before/after transaction rows, including supported paired transfers.
 - Assistant baseline-history errors use the shared translation catalog.
 - Assistant readers preserve category storage failures while using the shared natural-ordering seam.

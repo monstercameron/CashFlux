@@ -29,8 +29,6 @@ import (
 // not also be advice they have to undo. The one thing either can file is a to-do,
 // and that goes through the ordinary add_task tool with its own approval card.
 func agToolsCoach(app *appstate.App, base string, rates currency.Rates) []chatTool {
-	_ = rates
-	money := func(minor int64) string { return insightsMoneyFmt(minor, base) }
 
 	return []chatTool{
 		{
@@ -83,36 +81,31 @@ func agToolsCoach(app *appstate.App, base string, rates currency.Rates) []chatTo
 		},
 		{
 			spec: ai.FunctionTool("prepare_subscription_call",
-				"Assemble what the user actually has to bargain with before they call a provider about a "+
-					"recurring cost: how long they have paid, how much the price rose and from what, and "+
-					"what it costs a year, plus a short script. Use when the user wants to cut or "+
-					"renegotiate a subscription. It states plainly what the data does NOT support; never "+
-					"add a competitor price of your own, because one the provider can disprove ends the call.",
-				json.RawMessage(`{"type":"object","properties":{"name":{"type":"string","description":"part of the subscription or merchant name"},"competitor_note":{"type":"string","description":"optional: a comparison you looked up with web_search, quoted exactly"}},"required":["name"]}`)),
+				"Prepare a subscription negotiation from fresh household data in the selected active schedule's currency. Supply name or recurring_id to identify one outgoing cost. Current annual cost comes directly from its known billing cadence; historical charges alone never establish a current monthly cost. Future, transfer, income and report-excluded rows are omitted. Mixed-currency or nonmonthly history cannot establish a nominal monthly price rise. Competitor notes are supplied evidence, never invented.",
+				json.RawMessage(`{"type":"object","properties":{"name":{"type":"string","description":"provider name, required unless recurring_id is supplied"},"recurring_id":{"type":"string","description":"optional exact active outgoing schedule ID"},"competitor_note":{"type":"string","description":"optional externally sourced comparison, quoted exactly"}},"additionalProperties":false}`)),
 			run: func(raw json.RawMessage) string {
 				var a struct {
 					Name           string `json:"name"`
+					RecurringID    string `json:"recurring_id"`
 					CompetitorNote string `json:"competitor_note"`
 				}
 				if err := json.Unmarshal(raw, &a); err != nil {
-					return "Couldn't read the details."
+					return "Subscription preparation unavailable: invalid arguments: " + err.Error()
 				}
-				want := strings.ToLower(strings.TrimSpace(a.Name))
-				if want == "" {
-					return "Which subscription?"
+				now := assistantSubscriptionNow()
+				prepared, err := assistantSubscriptionForCall(app, negotiationprep.Selection{Name: a.Name, RecurringID: a.RecurringID, CompetitorNote: a.CompetitorNote}, now)
+				if err != nil {
+					return "Subscription preparation unavailable: " + err.Error() + ". No current cost or price-rise claim was inferred."
 				}
-				sub, ok := subscriptionFor(app, want, a.CompetitorNote)
-				if !ok {
-					return "Nothing matching that name in their recurring costs or transactions."
+				prep, err := negotiationprep.BuildChecked(prepared.Subscription, now, func(minor int64) string { return goalReviewMoney(money.New(minor, prepared.Currency)) })
+				if err != nil {
+					return "Subscription preparation unavailable: " + err.Error() + ". No current cost or price-rise claim was inferred."
 				}
-				prep := negotiationprep.Build(sub, time.Now(), money)
+				out := prepared.Basis(now) + "\n\n" + prep.TaskNotes()
 				if !prep.Worthwhile() {
-					return "There is not much to bargain with on " + prep.Name +
-						": no meaningful tenure, no recorded price rise, and no comparison. Say so plainly " +
-						"rather than sending them into a call they cannot win.\n\n" + prep.TaskNotes()
+					return out + "\n\nNo strong negotiation point was established from tenure, price history or the supplied comparison."
 				}
-				return prep.TaskNotes() +
-					"\n\nOffer to file this as a to-do with add_task so the script is there when they call."
+				return out + "\n\nOffer to file this as a to-do with add_task so the script is there when they call."
 			},
 		},
 	}
@@ -201,47 +194,30 @@ func goalReviewLine(r goalcoach.Review) string {
 	return line
 }
 
-// subscriptionFor finds a recurring cost by name and gathers its charge history
-// from the ledger, so a price rise is measured against what was actually PAID
-// rather than against whatever the schedule currently claims.
-func subscriptionFor(app *appstate.App, want, competitorNote string) (negotiationprep.Subscription, bool) {
-	sub := negotiationprep.Subscription{CompetitorNote: competitorNote}
-	found := false
-	for _, r := range app.Recurring() {
-		if !strings.Contains(strings.ToLower(r.Label), want) {
-			continue
-		}
-		sub.Name = r.Label
-		monthly := r.MonthlyEquivalent()
-		if monthly < 0 {
-			monthly = -monthly
-		}
-		sub.MonthlyMinor = monthly
-		found = true
-		break
+var assistantSubscriptionNow = time.Now
+
+// assistantSubscriptionForCall reads fresh, fallible household evidence on every
+// invocation. A failed store read cannot become an empty or zero-cost verdict.
+func assistantSubscriptionForCall(app *appstate.App, selection negotiationprep.Selection, now time.Time) (negotiationprep.Prepared, error) {
+	if app == nil || app.Store() == nil {
+		return negotiationprep.Prepared{}, fmt.Errorf("the local workspace is unavailable")
 	}
-	for _, t := range app.Transactions() {
-		if t.IsTransfer() || !t.IsExpense() {
-			continue
-		}
-		if !strings.Contains(strings.ToLower(t.Payee+" "+t.Desc), want) {
-			continue
-		}
-		if sub.Name == "" {
-			sub.Name = strings.TrimSpace(t.Payee)
-		}
-		sub.Charges = append(sub.Charges, negotiationprep.Charge{At: t.Date, AmountMinor: t.Amount.Abs().Amount})
-		found = true
+	store := app.Store()
+	settings, err := store.GetSettings()
+	if err != nil {
+		return negotiationprep.Prepared{}, fmt.Errorf("read subscription settings: %w", err)
 	}
-	// With charges but no schedule, the most recent charge IS the current cost.
-	if sub.MonthlyMinor == 0 && len(sub.Charges) > 0 {
-		latest := sub.Charges[0]
-		for _, c := range sub.Charges {
-			if c.At.After(latest.At) {
-				latest = c
-			}
-		}
-		sub.MonthlyMinor = latest.AmountMinor
+	recurring, err := store.ListRecurring()
+	if err != nil {
+		return negotiationprep.Prepared{}, fmt.Errorf("read subscription schedules: %w", err)
 	}
-	return sub, found
+	transactions, err := store.ListTransactions()
+	if err != nil {
+		return negotiationprep.Prepared{}, fmt.Errorf("read subscription history: %w", err)
+	}
+	base := settings.BaseCurrency
+	if base == "" {
+		base = "USD"
+	}
+	return negotiationprep.Prepare(negotiationprep.Input{Recurring: recurring, Transactions: transactions, Rates: currency.Rates{Base: base, Rates: settings.FXRates}, Now: now}, selection)
 }

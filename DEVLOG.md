@@ -1,3 +1,7 @@
+## 2026-10-21 - Checked Assistant subscription evidence
+
+Added checked annual cadence normalization and a native preparation path sharing existing negotiation output/script logic. Active negative schedules and past eligible charges are read afresh; unscheduled cost cadence stays unknown, and nonmonthly or mixed-FX evidence does not support a nominal price-rise claim. Missing FX, ambiguous matches and overflow are explicit. Native recurring/negotiationprep tests and vet passed; all three actual-tool WASM groups passed in integrated pass9 retry.
+
 ## 2026-10-21 - Immutable Assistant transaction edits
 
 Added immutable native update previews with atomic expected rows/references, shared canonical paired-transfer edit planning, exact decimal parsing and full split validation. Preview binds resolved IDs, accounts, categories, members, FX and transfer fees; stale or unsupported malformed groups refuse rather than retarget. Existing transfer edit path reuses the same planner. Seven new native groups plus canonical pair tests/vet passed. Seven new actual-tool and four existing update WASM groups passed in integrated pass9 retry; the category read was subsequently routed through the tested fallible ordering seam.
