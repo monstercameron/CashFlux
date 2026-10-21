@@ -16,6 +16,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/assistantdata"
 	"github.com/monstercameron/CashFlux/internal/auditlog"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/CashFlux/internal/savedtxnview"
 	"github.com/monstercameron/CashFlux/internal/scope"
 	"github.com/monstercameron/CashFlux/internal/store"
@@ -35,6 +36,57 @@ type assistantFinancialSettings struct {
 	PayoffBaseline     *store.PayoffBaseline `json:"payoffBaseline,omitempty"`
 	AISpend            []aispend.Bucket      `json:"aiSpend,omitempty"`
 	AISpendCapUSD      float64               `json:"aiSpendCapUsd,omitempty"`
+}
+
+// assistantFinancialPreferences lists only the settings that affect financial
+// calculations and scheduled savings. Connection/auth and appearance fields
+// never enter this DTO, including when the stored prefs gain new fields.
+type assistantFinancialPreferences struct {
+	ID                      string          `json:"id"`
+	WeekStart               prefs.WeekStart `json:"weekStart"`
+	DateStyle               prefs.DateStyle `json:"dateStyle"`
+	PayCycleAnchor          string          `json:"payCycleAnchor"`
+	MonthlyIncomeMinor      int64           `json:"monthlyIncomeMinor"`
+	BudgetIncomeMode        string          `json:"budgetIncomeMode"`
+	BudgetPaycheckMinMinor  int64           `json:"budgetPaycheckMinMinor"`
+	BudgetIncomeAvgMonths   int             `json:"budgetIncomeAvgMonths"`
+	BudgetIncomeCategoryIDs []string        `json:"budgetIncomeCategoryIds"`
+	BudgetRolloverLeftover  bool            `json:"budgetRolloverLeftover"`
+	IdleCashBenchmarkAPR    float64         `json:"idleCashBenchmarkApr"`
+	SweepEnabled            bool            `json:"sweepEnabled"`
+	SweepFromAccountID      string          `json:"sweepFromAccountId"`
+	SweepToAccountID        string          `json:"sweepToAccountId"`
+	SweepBufferMinor        int64           `json:"sweepBufferMinor"`
+	SweepLastPeriod         string          `json:"sweepLastPeriod"`
+	RoundUpEnabled          bool            `json:"roundUpEnabled"`
+	RoundUpFromAccountID    string          `json:"roundUpFromAccountId"`
+	RoundUpToAccountID      string          `json:"roundUpToAccountId"`
+	RoundUpGranularityMinor int64           `json:"roundUpGranularityMinor"`
+	RoundUpLastPeriod       string          `json:"roundUpLastPeriod"`
+}
+
+func assistantDataPreferences(s *store.SQLiteStore) (prefs.Prefs, []string, error) {
+	raw, ok, err := s.GetSettingKV("cashflux:prefs")
+	if err != nil {
+		return prefs.Prefs{}, nil, fmt.Errorf("financial preferences unavailable: %w", err)
+	}
+	if !ok || raw == "" {
+		return prefs.Default(), nil, nil
+	}
+	var p prefs.Prefs
+	if err := json.Unmarshal([]byte(raw), &p); err != nil {
+		return prefs.Prefs{}, nil, fmt.Errorf("financial preferences unavailable: %w", err)
+	}
+	return p.Normalize(), []string{p.ServerToken, p.ServerCSRF}, nil
+}
+
+func assistantFinancialPreferenceRow(p prefs.Prefs) assistantFinancialPreferences {
+	return assistantFinancialPreferences{ID: "household", WeekStart: p.WeekStart, DateStyle: p.DateStyle, PayCycleAnchor: p.PayCycleAnchor,
+		MonthlyIncomeMinor: p.MonthlyIncomeMinor, BudgetIncomeMode: p.BudgetIncomeMode, BudgetPaycheckMinMinor: p.BudgetPaycheckMinMinor,
+		BudgetIncomeAvgMonths: p.BudgetIncomeAvgMonths, BudgetIncomeCategoryIDs: p.BudgetIncomeCategoryIDs, BudgetRolloverLeftover: p.BudgetRolloverLeftover,
+		IdleCashBenchmarkAPR: p.IdleCashBenchmarkAPR, SweepEnabled: p.SweepEnabled, SweepFromAccountID: p.SweepFromAccountID, SweepToAccountID: p.SweepToAccountID,
+		SweepBufferMinor: p.SweepBufferMinor, SweepLastPeriod: p.SweepLastPeriod, RoundUpEnabled: p.RoundUpEnabled, RoundUpFromAccountID: p.RoundUpFromAccountID,
+		RoundUpToAccountID: p.RoundUpToAccountID, RoundUpGranularityMinor: p.RoundUpGranularityMinor, RoundUpLastPeriod: p.RoundUpLastPeriod}
 }
 
 // assistantArtifact deliberately excludes binary payloads. Structured rows and
@@ -66,6 +118,11 @@ func assistantDataCollections(app *appstate.App) ([]assistantdata.Collection, er
 	if err != nil {
 		return nil, fmt.Errorf("financial settings unavailable: %w", err)
 	}
+	financialPrefs, privateValues, err := assistantDataPreferences(s)
+	if err != nil {
+		return nil, err
+	}
+	privateValues = append(privateValues, settings.OpenAIKey)
 	collections := []assistantdata.Collection{
 		assistantdata.NewCollection("members", "id", s.ListMembers),
 		assistantdata.NewCollection("accounts", "id", s.ListAccounts),
@@ -123,16 +180,24 @@ func assistantDataCollections(app *appstate.App) ([]assistantdata.Collection, er
 			return assistantSavedRows[savedtxnview.SavedTxnView](s, "cashflux:saved-txn-views")
 		}),
 		assistantdata.NewCollection("financial_settings", "id", func() ([]assistantFinancialSettings, error) {
-			v, err := s.GetSettings()
-			if err != nil {
-				return nil, err
-			}
+			v := settings
 			return []assistantFinancialSettings{{"household", v.DefaultAccountID, v.BaseCurrency, v.FXRates, v.FXUpdatedAt, v.FreshnessOverrides, v.BudgetMethodology, v.FlexBudget, v.PayoffBaseline, v.AISpend, v.AISpendCapUSD}}, nil
+		}),
+		assistantdata.NewCollection("financial_preferences", "id", func() ([]assistantFinancialPreferences, error) {
+			return []assistantFinancialPreferences{assistantFinancialPreferenceRow(financialPrefs)}, nil
 		}),
 	}
 	for i := range collections {
-		collections[i] = assistantdata.RedactValues(collections[i], settings.OpenAIKey)
+		collections[i] = assistantdata.RedactValues(collections[i], privateValues...)
 		collections[i].Revision = fmt.Sprintf("%d:%d", app.InstanceID(), app.Rev())
+		switch collections[i].Name {
+		case "financial_preferences":
+			collections[i].Notes = "Effective preferences use the app's canonical defaults and Normalize. monthlyIncomeMinor and budgetPaycheckMinMinor use financial_settings.baseCurrency. sweepBufferMinor and roundUpGranularityMinor use their source account's native currency. idleCashBenchmarkApr is an annual percentage, not a decimal fraction. Zero monthlyIncomeMinor means no configured income override."
+		case "financial_settings":
+			collections[i].Notes = "flexBudget and payoffBaseline.totalOwed use baseCurrency minor units. aiSpendCapUsd is in major USD dollars."
+		case "molecules":
+			collections[i].Notes = "These are persisted molecule definitions/overrides. Built-in formulas and live atoms are discoverable with list_formula_metrics."
+		}
 	}
 	return collections, nil
 }

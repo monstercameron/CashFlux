@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Assistant data reads now include safe financial preferences and compare numeric filters exactly across decimal notation without losing large integer precision.
 - Assistant financial summaries, category spending, account balances, budgets and affordability now use fresh checked canonical models with explicit scope, period and unavailable states.
 - Assistant flag dismissal now validates arguments and applies only the exact set of activities shown in the approval preview.
 - Assistant rule/workflow creation now validates exact arguments, previews all persisted effects, and refuses stale or ambiguous approval targets.

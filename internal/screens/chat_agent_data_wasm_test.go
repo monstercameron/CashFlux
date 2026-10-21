@@ -16,6 +16,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/assistantdata"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/CashFlux/internal/store"
 )
 
@@ -84,7 +85,7 @@ func TestAssistantDataCatalogReadsEveryRetainedCollectionAndWhitelistsSettings(t
 	if err := json.Unmarshal([]byte(out), &m); err != nil {
 		t.Fatal(out, err)
 	}
-	if len(m.Collections) != 42 {
+	if len(m.Collections) != 43 {
 		t.Fatalf("catalog count %d: %s", len(m.Collections), out)
 	}
 	query := assistantDataTool(t, app, "query_data")
@@ -134,6 +135,105 @@ func TestAssistantDataCatalogReadsEveryRetainedCollectionAndWhitelistsSettings(t
 	stored, err := app.Store().GetSettings()
 	if err != nil || stored.OpenAIKey != "DO_NOT_LEAK_API" {
 		t.Fatal("read mutated settings", stored, err)
+	}
+}
+
+func TestAssistantDataFinancialPreferencesAreFreshWhitelistedAndExplicitlyUnavailable(t *testing.T) {
+	app := primaryAccountsGoalsApp(t)
+	p := prefs.Default()
+	p.WeekStart = prefs.WeekMonday
+	p.DateStyle = prefs.DateISO
+	p.PayCycleAnchor = "2026-10-16"
+	p.MonthlyIncomeMinor = math.MaxInt64
+	p.BudgetIncomeMode = "fixed"
+	p.BudgetPaycheckMinMinor = 20000
+	p.BudgetIncomeAvgMonths = 3
+	p.BudgetIncomeCategoryIDs = []string{"salary"}
+	p.BudgetRolloverLeftover = true
+	p.IdleCashBenchmarkAPR = 4.5
+	p.SweepEnabled = true
+	p.SweepFromAccountID = "checking"
+	p.SweepToAccountID = "savings"
+	p.SweepBufferMinor = 400
+	p.SweepLastPeriod = "2026-09"
+	p.RoundUpEnabled = true
+	p.RoundUpFromAccountID = "checking"
+	p.RoundUpToAccountID = "savings"
+	p.RoundUpGranularityMinor = 100
+	p.RoundUpLastPeriod = "2026-09"
+	p.ServerToken = "opaque-auth-value-123"
+	p.ServerCSRF = "opaque-csrf-value-456"
+	p.ServerURL = "https://excluded-backend.invalid"
+	save := func() {
+		t.Helper()
+		b, err := json.Marshal(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := app.Store().SetSettingKV("cashflux:prefs", string(b)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	save()
+	if err := app.Store().PutSavedInsight(domain.SavedInsight{ID: "notes", Text: "Copied connection notes " + p.ServerToken + " " + p.ServerCSRF}); err != nil {
+		t.Fatal(err)
+	}
+	query := assistantDataTool(t, app, "query_data")
+	request := json.RawMessage(`{"collection":"financial_preferences"}`)
+	decode := func() assistantdata.Page {
+		t.Helper()
+		out := query.run(request)
+		var page assistantdata.Page
+		if err := json.Unmarshal([]byte(out), &page); err != nil || len(page.Records) != 1 {
+			t.Fatal(out, err)
+		}
+		for _, forbidden := range []string{p.ServerToken, p.ServerCSRF, p.ServerURL, "serverToken", "serverCsrf", "serverUrl", "rememberAiKey", "theme"} {
+			if strings.Contains(out, forbidden) {
+				t.Fatal("preference credential/unrelated field leaked", out)
+			}
+		}
+		return page
+	}
+	first := decode()
+	var actual assistantFinancialPreferences
+	if err := json.Unmarshal(first.Records[0].Data, &actual); err != nil {
+		t.Fatal(err)
+	}
+	if actual.MonthlyIncomeMinor != math.MaxInt64 || actual.WeekStart != prefs.WeekMonday || actual.PayCycleAnchor != "2026-10-16" || actual.BudgetIncomeMode != "fixed" || !actual.BudgetRolloverLeftover || actual.BudgetIncomeAvgMonths != 3 || actual.BudgetPaycheckMinMinor != 20000 || actual.IdleCashBenchmarkAPR != 4.5 || actual.SweepBufferMinor != 400 || actual.RoundUpGranularityMinor != 100 || actual.SweepLastPeriod != "2026-09" || actual.RoundUpLastPeriod != "2026-09" {
+		t.Fatalf("financial settings lost: %+v", actual)
+	}
+	if !strings.Contains(first.Notes, "source account's native currency") {
+		t.Fatal("units absent", first.Notes)
+	}
+	// Read the same local action after a persisted preference edit without using
+	// any global preference atom, cache invalidation or component rerender.
+	p.MonthlyIncomeMinor = 12345
+	p.WeekStart = prefs.WeekSaturday
+	save()
+	second := decode()
+	if second.Snapshot == first.Snapshot || !strings.Contains(string(second.Records[0].Data), `"monthlyIncomeMinor":12345`) {
+		t.Fatal("stale preference read", second)
+	}
+	if out := query.run(json.RawMessage(`{"collection":"saved_insights"}`)); strings.Contains(out, p.ServerToken) || strings.Contains(out, p.ServerCSRF) || !strings.Contains(out, "REDACTED CREDENTIAL") {
+		t.Fatal("unlabeled copied credentials leaked", out)
+	}
+	read := assistantDataTool(t, app, "read_record")
+	args, _ := json.Marshal(assistantdata.DetailRequest{Collection: "financial_preferences", ID: "household", Snapshot: first.Snapshot})
+	if out := read.run(args); !strings.Contains(out, "snapshot changed") {
+		t.Fatal("stale preference detail accepted", out)
+	}
+	if err := app.Store().DeleteSettingKV("cashflux:prefs"); err != nil {
+		t.Fatal(err)
+	}
+	defaults := decode()
+	if !strings.Contains(string(defaults.Records[0].Data), `"weekStart":"sunday"`) {
+		t.Fatal("canonical absent defaults missing", defaults)
+	}
+	if err := app.Store().SetSettingKV("cashflux:prefs", "{broken"); err != nil {
+		t.Fatal(err)
+	}
+	if out := query.run(request); !strings.Contains(out, "financial preferences unavailable") || strings.Contains(out, `"total":0`) {
+		t.Fatal("corrupt prefs became healthy zero", out)
 	}
 }
 

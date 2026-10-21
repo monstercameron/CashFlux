@@ -219,3 +219,31 @@ func TestQueryRedactsKnownCredentialEvenWithoutARecognizablePrefix(t *testing.T)
 		t.Fatal("revision missing from fingerprint")
 	}
 }
+
+func TestQueryNumericEqualityPreservesExactRationalValueWithoutExpandingExponents(t *testing.T) {
+	type row struct {
+		ID    string      `json:"id"`
+		Value json.Number `json:"value"`
+	}
+	for _, tc := range []struct {
+		stored, want string
+		match        bool
+	}{
+		{"100", "100.0", true}, {"100", "1e2", true}, {"1.01", "1.0100", true}, {"0", "-0e99999999999999999999999", true},
+		{"9223372036854775807", "9223372036854775807.0", true}, {"9223372036854775807", "9223372036854775808", false},
+		{"-9223372036854775808", "-9.223372036854775808e18", true}, {"100", `"100"`, false},
+		{"1e1000000000000000000000000", "10e999999999999999999999999", true},
+		{"1e1000000000000000000000000", "1e1000000000000000000000001", false},
+	} {
+		t.Run(tc.stored+"="+tc.want, func(t *testing.T) {
+			c := NewCollection("values", "id", func() ([]row, error) { return []row{{"x", json.Number(tc.stored)}}, nil })
+			p, err := ReadPage(c, Query{Collection: c.Name, Equals: map[string]json.RawMessage{"value": json.RawMessage(tc.want)}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if (p.FilteredTotal == 1) != tc.match {
+				t.Fatalf("exact comparison: %+v want %v", p, tc.match)
+			}
+		})
+	}
+}
