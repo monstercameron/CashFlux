@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Assistant goal check-ins use canonical goal coverage and funding plans in each goal currency.
 - Assistant formula tools expose the complete paginated metric catalog and evaluate against one explicit bound-store observation.
 - Smart bill calculations use checked recurring income normalization, currency conversion and scheduler arithmetic bounds.
 - Assistant data discovery now covers 49 typed collections, including retained notifications and shared financial configurations.

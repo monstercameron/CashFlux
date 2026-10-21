@@ -1,3 +1,7 @@
+## 2026-10-20 - Canonical Assistant savings goal coaching
+
+Replaced naked minor-unit coaching with the existing checked goal evaluator and contribution plan projection. Savings pace distinguishes explicit planned contributions from required pace, saved funds from reservations, and nonfinancial goals from funding goals. Missing FX and arithmetic failures remain unavailable; paused and recently reviewed goals retain the quiet policy. Fresh fallible Store reads feed each call. Native goalcoach tests/vet and all three actual-tool WASM groups passed in integrated pass7.
+
 ## 2026-10-20 - Complete Assistant formula discovery
 
 Replaced the 140-row listing cap with stable paginated metadata for canonical atoms, molecules, entities and custom metrics. Fixed observations retain time, base currency, household scope and month; a bounded shared cache survives per-round handler rebuilds and rejects stale/expired/evicted continuations. Missing/nonfinite variables and corrupt source configurations fail explicitly. All financial configuration and pool inputs read the bound store; calculations still use the existing live engine and formula evaluator. All eight actual-App WASM formula groups and enabled-registry parity passed in integrated pass7.
