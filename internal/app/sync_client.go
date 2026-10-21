@@ -1114,7 +1114,7 @@ func flushBackendSyncQueue() {
 				// write between create and push, in which case the push must conflict.
 				if ensured.Accepted {
 					if ensured.Version < 1 {
-						setSyncStatus(syncStatus{State: "error", Pending: pendingSyncCount(), Message: "Server did not return a workspace version after creation."})
+						setSyncStatus(syncStatus{State: "error", Pending: pendingSyncCount(), Message: uistate.T("cloud1.missingVersion")})
 						return
 					}
 					item.BaseVersion = ensured.Version
@@ -1126,7 +1126,20 @@ func flushBackendSyncQueue() {
 			// The connection is up; let the browser deliver its events and paint
 			// before this goroutine spends the thread on import/encrypt/export.
 			yieldToBrowser()
-			dataset, err := prepareBackendSyncDataset(ctx, pr.ServerURL, effectiveServerToken(pr), item.WorkspaceID, []byte(item.Dataset))
+			app := appstate.Default
+			if app == nil {
+				setSyncStatus(syncStatus{State: "error", Pending: pendingSyncCount(), Message: uistate.T("cloud1.localDataUnavailable")})
+				return
+			}
+			complete, err := app.CompleteArtifactSnapshot([]byte(item.Dataset))
+			if err != nil {
+				item.LastAttemptError = err.Error()
+				upsertQueuedSyncMutation(item)
+				setSyncStatus(syncStatus{State: "error", Pending: pendingSyncCount(), Message: uistate.T("cloud1.localFileUnavailable")})
+				logSyncError("backend artifact bytes unavailable", err)
+				return
+			}
+			dataset, err := prepareBackendSyncDataset(ctx, pr.ServerURL, effectiveServerToken(pr), item.WorkspaceID, complete)
 			if err != nil {
 				item.LastAttemptError = err.Error()
 				upsertQueuedSyncMutation(item)
@@ -1223,7 +1236,7 @@ func flushBackendSyncQueue() {
 			// The server took this dataset as this account's, which settles who
 			// owns the copy on this device.
 			if err := claimDatasetForCurrentUser(); err != nil {
-				setSyncStatus(syncStatus{State: "error", Pending: pendingSyncCount(), Message: "Server accepted the data, but this device could not save its account ownership. Keep this page open and retry."})
+				setSyncStatus(syncStatus{State: "error", Pending: pendingSyncCount(), Message: uistate.T("cloud1.ownerSaveFailed")})
 				logSyncError("save accepted dataset owner failed", err)
 				return
 			}

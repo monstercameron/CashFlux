@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Cloud sync now includes bytes from locally stored PDF and image attachments in each committed snapshot; unreadable, missing, or truncated files pause upload, and manual JSON/SQLite backups report the same failure instead of exporting an incomplete copy.
 - The Cloud sign-in step now lets its connection check finish across setup renders and preserves the last successful public discovery result for that server during a pane remount, preventing a persistent "Checking the connection" state.
 - A successful first sync now durably records the dataset's account owner before the local autosave writer adopts that same-page ownership, preventing a false "another tab" read-only state before attachment uploads.
 - First encrypted sync now rebases its queued snapshot on the version returned when it creates an empty server workspace, allowing the snapshot push to succeed.
