@@ -1,3 +1,7 @@
+## 2026-10-20 - Initialize persisted notification feed once per mounted hook
+
+UseNotifyFeed now memoizes its persisted seed per mounted hook and app identity, then keeps the existing fixed shared atom and out-of-render catch-up capture. No global cache or framework change was added. Three real-hook counter/lifecycle cases prove zero warm initializer reads, live updates across late subscribers/remounts, and supported workspace reloads with runtime reset. Five Notifications host cases passed, covering read/catch-up/history/remount/dismiss/Undo plus existing group/member/shared-tab transitions.
+
 ## 2026-10-20 - Project the completed month once for budget wins
 
 The native preparation preserves row order, netted semantics and canonical Spent calls while changing date-filter work from B*N to N+B*K. Parity tests cover date bounds/time zones, owners/splits/tags, saving transfers, duplicate budgets/categories, report exclusions, FX rounding, invalid-amount isolation and cross-month refunds. Native tests and vet passed. Three same-binary synthetic 60k-row/180-budget benchmark samples measured medians 155.9 ms versus 12.56 ms with identical 180 wins and 10.8M versus 150k candidate date checks. The projection adds 515552 bytes and ten allocations per operation; concurrent functional work and Windows amd64 target on the arm64 tool host mean these are local native phase observations, not browser speed claims.
