@@ -12,13 +12,11 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
-	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/networthview"
 	"github.com/monstercameron/CashFlux/internal/periodview"
-	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
 
@@ -45,15 +43,15 @@ func acctSig(accounts []domain.Account) string {
 }
 
 // This file holds the dashboard's render-time *derived selectors* — net worth,
-// period totals, budget health — wrapped in ui.UseMemo so each recomputes
+// period totals — wrapped in ui.UseMemo so each recomputes
 // only when the underlying data actually changes, not on every re-render (§1.6).
 // (state.UseComputed until GWC v4 soft-deprecated it in favor of UseMemo, which
 // returns the value directly instead of wrapping it in an atom.)
 //
 // Correctness hinges on the memo key: app.Rev() is an O(1) monotonic counter the
 // store advances on every entity write/delete AND on settings (base currency / FX)
-// writes, so it changes exactly when — and only when — a derived value could
-// change. UI-only inputs that also affect a result (the active period, the
+// writes. Persisted UI settings can also advance that revision. UI-only inputs
+// that affect a result (the active period, the
 // active-member filter) are added as extra deps so switching them recomputes too.
 
 func netWorthCacheKey(app *appstate.App, accounts []domain.Account, rates currency.Rates) string {
@@ -92,21 +90,4 @@ func usePeriodTotals(app *appstate.App, txns []domain.Transaction, start, end ti
 	return ui.UseMemo(func() periodview.Totals {
 		return periodview.BuildTotals(txns, start, end, rates)
 	}, revKey(app), start, end, memberSig, fmt.Sprintf("%#v", rates))
-}
-
-// useBudgetHealth returns the memoized per-budget status (health) for the period.
-func useBudgetHealth(app *appstate.App, budgets []domain.Budget, txns []domain.Transaction, start, end time.Time, rates currency.Rates, nearThreshold float64) []budgeting.Status {
-	pr := uistate.UsePrefs().Get()
-	memberID := uistate.ActiveMemberFromScope()
-	return ui.UseMemo(func() []budgeting.Status {
-		ledger := budgetLedgerForApp(app)
-		input := budgeting.ViewInput{Ledger: &ledger, Categories: app.Categories(), Recurring: app.Recurring(), Rates: rates, Base: rates.Base,
-			Period: budgeting.ResolveViewPeriod(start, end, budgetNow(), pr.WeekStartWeekday(), budgetPayCycleAnchor(pr.PayCycleAnchor)), PoolRollover: pr.BudgetRolloverLeftover}
-		visible := budgeting.ViewBudgets(budgets, memberID)
-		statuses := make([]budgeting.Status, 0, len(visible))
-		for _, b := range visible {
-			statuses = append(statuses, budgeting.EvaluateViewBudget(b, input).Status)
-		}
-		return statuses
-	}, revKey(app), start, end, memberID, pr.WeekStart, pr.PayCycleAnchor, pr.BudgetRolloverLeftover, budgetNow().Format("2006-01-02"))
 }

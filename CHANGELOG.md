@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Screen selectors remove an unused budget-health hook that duplicated native budget-view preparation.
 - Durable hydration reuses the transaction-link synchronization already performed by dataset import.
 - Budget task automation preserves open tasks when missing exchange rates or overflow prevents spending calculation.
 - Performance notes distinguish the transaction benchmark AMD64 target from its ARM64 host.

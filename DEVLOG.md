@@ -1,3 +1,7 @@
+## 2026-10-20 - Remove the obsolete budget selector
+
+Confirmed useBudgetHealth had no callers anywhere in internal Go source. Removed the dead private helper and imports; it retained obsolete parameters and a second budgeting path beside the canonical native view model. Corrected selector comments to acknowledge that persisted UI settings also advance the store revision. The WASM screen package compiled successfully after removal. No new tests or runtime behavior changes were needed for this dead-code cleanup.
+
 ## 2026-10-20 - Avoid the duplicate transaction-link read during hydration
 
 Removed one duplicate SyncTxnLinkNetting call after durable dataset import. Both the prepared checkpoint and replay/fallback import paths already synchronize the report overlay through ImportParsedDataset, so hydration no longer reads and decodes the same transaction links again. The focused WASM regression passed under Go 1.26.9 in 6.1 seconds, explicitly proving which recovery branch was taken and checking the linked refund leaves March expense at80 dollars and April income/expense atzero. Its cleanup restores the prior global netting overlay. A broader hydration lane was stopped after two minutes and is not claimed as a pass. This change removes redundant work without a new latency claim.
