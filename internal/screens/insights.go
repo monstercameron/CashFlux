@@ -69,7 +69,7 @@ func Insights() ui.Node {
 	// MIA-extend (#445-9): read the active scope at a stable hook slot so all
 	// spend calcs below can be pre-filtered consistently.
 	insightsScopeAtom := uistate.UseActiveScope()
-	useBackendAI := uistate.BackendConnectionActive(pr)
+	useBackendAI := uistate.BackendAIActive(pr)
 	// Model + thinking level are adjustable inline from the assistant header (a quick
 	// switch, no trip to Settings). Seed from the saved settings; picks persist back so
 	// they stick and stay in sync with Settings. modelList is populated live from
@@ -1238,12 +1238,12 @@ func Insights() ui.Node {
 		promptOpen.Set(false)
 	}
 	closePrompt := func() { promptOpen.Set(false) }
-	// Toggle the backend AI proxy on/off so the user can force the direct OpenAI
-	// provider (or back to the proxy) without leaving the chat.
+	// Switch only the AI route. Sync stays connected while the assistant uses
+	// either the server or this browser's direct OpenAI key.
 	prefsAtom := uistate.UsePrefs()
-	toggleBackend := ui.UseEvent(Prevent(func() {
+	toggleAIProxy := ui.UseEvent(Prevent(func() {
 		p := prefsAtom.Get()
-		p.BackendDisabled = !p.BackendDisabled
+		p.AIProxyDisabled = !p.AIProxyDisabled
 		prefsAtom.Set(p)
 		uistate.PersistPrefs(p)
 	}))
@@ -1666,7 +1666,7 @@ func Insights() ui.Node {
 	// The session's credential, not the static one: on a hosted instance
 	// prefs.ServerToken is empty while a rotating session is live, and reading it
 	// here hid the backend/OpenAI toggle from every hosted user.
-	backendConfigured := strings.TrimSpace(pr.ServerURL) != "" && uistate.Session(pr.ServerToken).Present()
+	backendConfigured := uistate.BackendConnectionActive(pr)
 	backendToggle := Fragment()
 	if backendConfigured {
 		label := uistate.T("insights.usingOpenAI")
@@ -1677,7 +1677,7 @@ func Insights() ui.Node {
 		}
 		backendToggle = Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mb2, tw.Text12, tw.TextFaint),
 			Span(label),
-			Button(css.Class(tw.Underline, tw.HoverOpacity100), Type("button"), OnClick(toggleBackend), action),
+			Button(css.Class(tw.Underline, tw.HoverOpacity100), Type("button"), OnClick(toggleAIProxy), action),
 		)
 	}
 

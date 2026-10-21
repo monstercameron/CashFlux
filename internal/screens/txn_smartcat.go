@@ -32,7 +32,7 @@ func TxnSmartCatBody(_ struct{}) ui.Node {
 	open := uistate.UseTxnSmartCatOpen()
 	pr := uistate.UsePrefs().Get()
 	review := ui.UseState(smartcatview.Reset(smartCatSuggest))
-	backend := uistate.BackendConnectionActive(pr)
+	backend := uistate.BackendAIActive(pr)
 	provider := app != nil && aiProviderConfigured(app, backend)
 	conn := resolveAIConn(app, backend, pr.ServerURL, pr.ServerToken)
 	cats := app.Categories()

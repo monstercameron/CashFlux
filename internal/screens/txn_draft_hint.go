@@ -46,12 +46,12 @@ func TxnDraftHint(props TxnDraftHintProps) ui.Node {
 	loading := ui.UseState(false)
 	errText := ui.UseState("")
 	settings := uistate.LoadSmartSettings()
-	provider := app != nil && aiProviderConfigured(app, uistate.BackendConnectionActive(pr))
+	provider := app != nil && aiProviderConfigured(app, uistate.BackendAIActive(pr))
 	local := parseTxnSentence(sentence.Get())
 	view := smartcatview.PresentDraft(sentence.Get(), local, aiFill.Get(), provider, loading.Get(), settings)
 	var conn smartAIConn
 	if app != nil {
-		conn = resolveAIConn(app, uistate.BackendConnectionActive(pr), pr.ServerURL, pr.ServerToken)
+		conn = resolveAIConn(app, uistate.BackendAIActive(pr), pr.ServerURL, pr.ServerToken)
 	}
 	apply := func() {
 		offer := smartcatview.PresentDraft(sentence.Get(), local, aiFill.Get(), provider, loading.Get(), settings).Offer

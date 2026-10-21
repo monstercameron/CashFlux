@@ -380,7 +380,7 @@ func (c *reviewController) apply() {
 }
 
 func (c *reviewController) useScan() func() {
-	backend := uistate.BackendConnectionActive(c.pr)
+	backend := uistate.BackendAIActive(c.pr)
 	c.hasProvider = aiProviderConfigured(c.app, backend)
 	connection := resolveAIConn(c.app, backend, c.pr.ServerURL, c.pr.ServerToken)
 	catalog := smartCatalog(c.app.Categories())

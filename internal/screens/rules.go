@@ -54,7 +54,7 @@ func Rules() ui.Node {
 	// SMART-T14: Smart+ rule suggestions — an opt-in AI scan of the transactions
 	// no rule covers yet. Hooks declared unconditionally at stable positions.
 	pr := uistate.UsePrefs().Get()
-	backendAI := uistate.BackendConnectionActive(pr)
+	backendAI := uistate.BackendAIActive(pr)
 	hasProvider := aiProviderConfigured(app, backendAI)
 	aiConn := resolveAIConn(app, backendAI, pr.ServerURL, pr.ServerToken)
 	smartOn := uistate.LoadSmartSettings().IsEnabled("SMART-T14")
