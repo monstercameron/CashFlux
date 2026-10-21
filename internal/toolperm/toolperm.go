@@ -129,6 +129,20 @@ var rules = map[string]rule{
 		},
 		reversible: true,
 	},
+	"create_rule": {
+		reads: fixed(read("matching transactions, to preview the rule")),
+		writes: func(a map[string]any) []Access {
+			return []Access{{Verb: VerbAdd, Entity: "categorization rule", Count: 1, Scope: scopePhrase(a, "match", "matching %q")}}
+		},
+		reversible: true,
+	},
+	"create_workflow": {
+		reads: fixed(read("the workflow definition being validated")),
+		writes: func(a map[string]any) []Access {
+			return []Access{{Verb: VerbAdd, Entity: "workflow", Count: 1, Scope: scopePhrase(a, "name", "named %q")}}
+		},
+		reversible: true,
+	},
 	"categorize_transactions": {
 		reads: fixed(read("every transaction, to find the matches")),
 		writes: func(a map[string]any) []Access {
@@ -169,7 +183,7 @@ var rules = map[string]rule{
 	"merge_duplicate_transactions": {
 		reads: fixed(read("the transactions being merged")),
 		writes: func(a map[string]any) []Access {
-			return []Access{{Verb: VerbDelete, Entity: "duplicate transaction", Count: countOf(a, "ids") - 1}}
+			return []Access{{Verb: VerbDelete, Entity: "duplicate transaction", Scope: duplicateMatchScope(a)}}
 		},
 		// A merge removes rows; Activity records it, but the removed rows are gone.
 		reversible: false,
@@ -194,9 +208,11 @@ var rules = map[string]rule{
 		reversible: false,
 	},
 	"dismiss_flagged_activity": {
-		reads:      fixed(read("your flagged activity")),
-		writes:     func(a map[string]any) []Access { return []Access{{Verb: VerbChange, Entity: "flag", Count: 1}} },
-		reversible: true,
+		reads: fixed(read("your flagged activity")),
+		writes: func(a map[string]any) []Access {
+			return []Access{{Verb: VerbChange, Entity: "flag", Scope: scopePhrase(a, "match", "matching %q")}}
+		},
+		reversible: false,
 	},
 	"remember_fact": {
 		reads: fixed(read("the facts the assistant already remembers")),
@@ -310,9 +326,18 @@ func joinPhrase(items []string) string {
 }
 
 // countOf returns the length of an array argument, or 0 when it is absent.
-func countOf(args map[string]any, key string) int {
-	list, _ := args[key].([]any)
-	return len(list)
+func duplicateMatchScope(args map[string]any) string {
+	var parts []string
+	if match := scopePhrase(args, "match", "description/payee matching %q"); match != "" {
+		parts = append(parts, match)
+	}
+	if amount, ok := args["amount"].(float64); ok && amount != 0 {
+		parts = append(parts, fmt.Sprintf("amount %g", amount))
+	}
+	if date := scopePhrase(args, "date", "on %q"); date != "" {
+		parts = append(parts, date)
+	}
+	return strings.Join(parts, ", ")
 }
 
 // plural renders "1 transaction" / "3 transactions", pluralising the last word of a

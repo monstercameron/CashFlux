@@ -70,6 +70,18 @@ var DetailToolNames = map[string]bool{
 	// transaction-level detail however aggregate the question that reached them.
 	"trace_report_row":  true,
 	"find_transactions": true,
+	// These tools can return stored financial records or document text. They are
+	// withheld with the detail tier even when their result is paginated or searched.
+	"data_manifest":          true,
+	"query_data":             true,
+	"read_record":            true,
+	"gather_tax_records":     true,
+	"search_documents":       true,
+	"list_recurring":         true,
+	"project_account":        true,
+	"get_account_details":    true,
+	"list_goal_reservations": true,
+	"goal_funding_plan":      true,
 }
 
 // ToolAllowed reports whether a tool may be offered to the model at the given

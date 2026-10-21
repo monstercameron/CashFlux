@@ -102,6 +102,29 @@ func TestToolAllowed(t *testing.T) {
 	}
 }
 
+func TestAggregatesOnlyWithholdsToolsThatExposeStoredFinancialDetail(t *testing.T) {
+	for _, name := range []string{
+		"list_transactions", "list_uncategorized_transactions", "find_duplicate_transactions",
+		"trace_report_row", "find_transactions", "data_manifest", "query_data", "read_record",
+		"gather_tax_records", "search_documents", "list_recurring", "project_account",
+		"get_account_details", "list_goal_reservations", "goal_funding_plan",
+	} {
+		if !DetailToolNames[name] || ToolAllowed(name, TierAggregatesOnly) {
+			t.Errorf("aggregates-only must withhold %q", name)
+		}
+		if !ToolAllowed(name, TierFull) {
+			t.Errorf("full tier should allow %q", name)
+		}
+	}
+	// Aggregate reports and goal metadata remain available: this tier is about
+	// withholding underlying records, not every tool that uses financial data.
+	for _, name := range []string{"financial_summary", "spending_by_category", "list_goals"} {
+		if ToolAllowed(name, TierAggregatesOnly) == false {
+			t.Errorf("aggregates-only should allow aggregate/goal metadata tool %q", name)
+		}
+	}
+}
+
 func TestConversationTierLabel(t *testing.T) {
 	if TierFull.Label() == "" || TierAggregatesOnly.Label() == "" {
 		t.Fatal("tiers must have non-empty labels")

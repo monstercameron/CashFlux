@@ -1,3 +1,7 @@
+## 2026-10-20 - Assistant permission and detail catalog
+
+Filled actual create_rule/create_workflow permission gaps, removed obsolete merge ids-based counts, and stopped claiming one reversible flag dismissal for potentially many local dismissal keys. Extended the aggregate-only tool gate to actual document/tax/recurring and planned paginated/planning detail read handlers; full-detail conversations retain access. Focused native toolperm and aicontext tests passed. Registered-tool integration coverage follows once the new helper groups are wired.
+
 ## 2026-10-20 - Shared checked goal reservations
 
 Added the canonical goals.BuildAccountReservations snapshot with checked source-currency aggregation before FX, unique goal identities, missing-balance/error metadata and stable warning order. Funding reuses that index; warning consumers avoid building suggestions. Accounts and Goals render the shared reservationNotice with independent action owners and unconditional child hooks, removing two stale hook exceptions. Native goals/goalview tests, vet and screen lint passed; both actual-host WASM regressions passed after the complete projection API migration, covering FX, stale data, unknown recovery, overflow and actions. Legacy payday and sweep consumers are a separate pending migration.

@@ -45,11 +45,12 @@ func TestForCountsWhatItCanAndSaysNothingWhenItCannot(t *testing.T) {
 	}
 }
 
-func TestMergeCountsTheRowsItRemovesNotTheOnesItReads(t *testing.T) {
-	p := For("merge_duplicate_transactions", json.RawMessage(`{"ids":["a","b","c"]}`))
-	got := p.Writes[0].Line()
-	if !strings.Contains(got, "2 duplicate transactions") {
-		t.Fatalf("merging 3 rows should remove 2: %q", got)
+func TestMergeDescribesItsActualMatchArgumentsWithoutInventingCount(t *testing.T) {
+	p := For("merge_duplicate_transactions", json.RawMessage(`{"match":"coffee","amount":12.5,"date":"2026-08-01"}`))
+	w := p.Writes[0]
+	got := w.Line()
+	if w.Count != 0 || !strings.Contains(got, "coffee") || !strings.Contains(got, "12.5") || !strings.Contains(got, "2026-08-01") {
+		t.Fatalf("merge permission should describe the actual selector without claiming a count: %+v; line %q", w, got)
 	}
 	if p.Reversible {
 		t.Fatal("a merge that removes rows is reported as reversible")
@@ -59,7 +60,7 @@ func TestMergeCountsTheRowsItRemovesNotTheOnesItReads(t *testing.T) {
 func TestMissingArgumentsDoNotProduceAbsurdCounts(t *testing.T) {
 	p := For("merge_duplicate_transactions", json.RawMessage(`{}`))
 	if got := p.Writes[0].Count; got != 0 {
-		t.Fatalf("count = %d, want 0 rather than a negative number", got)
+		t.Fatalf("count = %d, want unknown count", got)
 	}
 	if got := p.Writes[0].Line(); strings.Contains(got, "-") {
 		t.Fatalf("line shows a negative count: %q", got)
@@ -98,6 +99,7 @@ func TestEveryMutatingToolIsDescribed(t *testing.T) {
 		"categorize_transactions", "add_goal_contribution", "add_account",
 		"add_transfer", "update_account_balance", "merge_duplicate_transactions",
 		"delete_transaction", "dismiss_flagged_activity", "remember_fact",
+		"create_rule", "create_workflow",
 	} {
 		p := For(tool, json.RawMessage(`{}`))
 		if !p.Known {
@@ -112,6 +114,31 @@ func TestEveryMutatingToolIsDescribed(t *testing.T) {
 				t.Errorf("%s declares a write with no entity", tool)
 			}
 		}
+	}
+}
+
+func TestDismissFlagsDoesNotClaimSingleFlagOrReversibility(t *testing.T) {
+	p := For("dismiss_flagged_activity", json.RawMessage(`{}`))
+	if p.Reversible {
+		t.Fatal("dismissed local flags are not reversible through Activity")
+	}
+	if len(p.Writes) != 1 || p.Writes[0].Count != 0 || strings.Contains(p.Writes[0].Line(), "1 flag") {
+		t.Fatalf("clearing all flags must have an unknown count: %+v", p.Writes)
+	}
+	filtered := For("dismiss_flagged_activity", json.RawMessage(`{"match":"balance"}`))
+	if !strings.Contains(filtered.Writes[0].Line(), `matching "balance"`) {
+		t.Fatalf("filtered dismissal scope missing: %q", filtered.Writes[0].Line())
+	}
+}
+
+func TestAuthoringPermissionsDescribeCreatedItems(t *testing.T) {
+	rule := For("create_rule", json.RawMessage(`{"match":"coffee","category":"Dining"}`))
+	if !rule.Known || rule.ReadOnly() || !strings.Contains(rule.Writes[0].Line(), `matching "coffee"`) {
+		t.Fatalf("rule permission = %+v", rule)
+	}
+	workflow := For("create_workflow", json.RawMessage(`{"name":"Bill reminder"}`))
+	if !workflow.Known || workflow.ReadOnly() || !strings.Contains(workflow.Writes[0].Line(), `named "Bill reminder"`) {
+		t.Fatalf("workflow permission = %+v", workflow)
 	}
 }
 
