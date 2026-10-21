@@ -1,3 +1,7 @@
+## 2026-10-21 - Settle the remaining Smart Import CI race
+
+The latest draft PR passed test/build and one E2E shard; the other failed in `TestImportUXReviewAutoShownAndFooter`. Its mocked fetch resolved, but the response text callback had not reached the three-row review when the test asserted and tore down the app. A late render then dereferenced the cleared fixture. Both this test and the earlier Smart Import review test now share a bounded wait for the actual review state. The two focused WebAssembly tests passed locally, including a repeated run; the next CI result remains to be checked.
+
 ## 2026-10-21 - Verify encrypted cross-browser file sync and return edits
 
 After clearing the stale Go build cache and using an isolated fresh cache, a local three-browser regression exposed two independent sync failures. The remote import restored this browser's connection in SQLite, but the durable checkpoint then wrote the raw server snapshot, which intentionally lacks device credentials. A reload could no longer match the saved session route to the configured server and paused sync as identity unknown. The checkpoint now exports the imported local dataset after restoring this browser's preferences; the sync bookmark hashes that local form. Server upload strips the connection fields before encryption so another passcode holder receives the household data without this device's bearer or CSRF token.

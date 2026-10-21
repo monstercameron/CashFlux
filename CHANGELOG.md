@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Smart Import WebAssembly review tests now wait for the mocked response to finish before fixture teardown, preventing an intermittent CI render panic.
 - Encrypted cloud snapshots now omit this browser's server address and credentials; a restored browser keeps its own connection in its protected local checkpoint.
 - Remote replacement now pauses autosave and queued uploads until its dataset, owner, and sync bookmark commit together. Later edits queued by the same page follow an accepted upload version without creating a false conflict.
 - The browser regression now verifies an encrypted file download, a second-browser edit, a clean queue, and restoration of that edit in a third browser.

@@ -145,7 +145,7 @@ func TestImportUXReviewAutoShownAndFooter(t *testing.T) {
 		t.Fatal("read action must be disabled and show an accessible spinner while processing")
 	}
 	deliverImportExtraction(t, calls, 0)
-	f.Stabilize()
+	waitForImportReview(t, f, current, 3)
 	if findByTestID(f, "div", "import-source-form") != nil || findByTestID(f, "div", "draft-review-page") == nil || !current().inReview {
 		t.Fatal("successful read did not replace source with review")
 	}

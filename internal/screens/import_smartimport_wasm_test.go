@@ -144,6 +144,22 @@ func deliverImportContent(t *testing.T, calls js.Value, index int, content strin
 	time.Sleep(10 * time.Millisecond)
 }
 
+func waitForImportReview(t *testing.T, f *render.Fixture, current func() *documentsController, rows int) {
+	t.Helper()
+	// Fetch and response.text settle on separate JavaScript turns. Wait for
+	// the completed review before fixture teardown can clear the app it uses.
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		f.Stabilize()
+		c := current()
+		if c != nil && c.stage.Get() == "review" && c.inReview && len(c.model.Rows) == rows {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("import did not reach %d-row review: %s", rows, f.Text())
+}
+
 func TestSmartImportReviewAndAccountPlacement(t *testing.T) {
 	for _, source := range []string{"local-statement", "stmt", "pdf", "image-statement", "receipt"} {
 		t.Run(source, func(t *testing.T) {
@@ -202,18 +218,7 @@ func TestSmartImportReviewAndAccountPlacement(t *testing.T) {
 					content = strings.ReplaceAll(content, `"amount":"-`, `"amount":"`)
 				}
 				deliverImportContent(t, calls, 0, content)
-				// Fetch and response.text settle on separate JavaScript turns. Wait for
-				// the actual review state before this fixture is torn down; a single
-				// 10 ms yield can leave the response callback running into the next test.
-				deadline := time.Now().Add(5 * time.Second)
-				for time.Now().Before(deadline) {
-					f.Stabilize()
-					c := current()
-					if c.stage.Get() == "review" && c.inReview && len(c.model.Rows) == 3 {
-						break
-					}
-					time.Sleep(10 * time.Millisecond)
-				}
+				waitForImportReview(t, f, current, 3)
 			}
 			f.Stabilize()
 			c := current()
