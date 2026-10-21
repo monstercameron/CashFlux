@@ -35170,3 +35170,7 @@ Review found that the standalone eraser matched any worker script named `sw.js` 
 ## 2026-10-21 — Require confirmed intent before automatic erasure
 
 The standalone eraser originally started whenever a browser opened its `#start` URL, including through a direct external link. The Settings confirmation now creates a random 128-bit ticket in localStorage and passes that ticket in the navigation fragment. The standalone page automatically erases only when the ticket in its fragment matches the locally stored one. A disposable Chromium test verifies that both a direct link without a ticket and a guessed ticket with an unmatched pending marker leave local data intact. The five existing browser cases passed in the same run; after correcting a same-document navigation in the new test, its focused rerun passed too. The focused Wasm session test passed. No production browser storage was accessed.
+
+## 2026-10-21 — Gate releases on device-erasure privacy behavior
+
+The required CI workflow previously ran only the service-worker unit suite, and its `@prod` browser subset omitted the new erasure cases. It now runs the device-erasure unit suite alongside the worker checks and includes two Chromium cases in the deploy gate: real image files created in two workspaces are removed, and an unconfirmed direct link cannot delete local data. These cases use disposable contexts and do not access production storage.

@@ -128,9 +128,9 @@ jobs:
         if: matrix.shard == 1
         run: pwsh tools/wasm-test.ps1
 
-      - name: Service worker cache privacy test
+      - name: Browser storage privacy tests
         if: matrix.shard == 1
-        run: node --test e2e/unit/sw-cache.test.mjs
+        run: node --test e2e/unit/sw-cache.test.mjs e2e/unit/device-erase.test.mjs
 
       - name: Run deploy gate (shard ${{ matrix.shard }} of 2)
         working-directory: e2e

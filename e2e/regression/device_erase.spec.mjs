@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 
 const tinyPNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=", "base64");
 
-test("device erase removes real files from two locally created workspaces", async ({ browser }) => {
+test("device erase removes real files from two locally created workspaces @prod", async ({ browser }) => {
   test.setTimeout(150_000);
   const context = await browser.newContext({ serviceWorkers: "block", reducedMotion: "reduce" });
   const page = await context.newPage();
@@ -204,7 +204,7 @@ test("a waiting tab does not mistake marker removal for completed erasure", asyn
   }
 });
 
-test("a direct eraser URL cannot delete data without Settings confirmation", async ({ browser }) => {
+test("a direct eraser URL cannot delete data without Settings confirmation @prod", async ({ browser }) => {
   const context = await browser.newContext({ serviceWorkers: "block" });
   const page = await context.newPage();
   try {
