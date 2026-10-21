@@ -1,3 +1,7 @@
+## 2026-10-21 - Currency-aware assistant credit calculations
+
+Added a checked rates-aware credit-health API that preserves native card targets and converts aggregate amounts once. Missing balances, FX and overflow make dependent utilization or targets unavailable while age, on-time and weight facts remain independent. Fourteen new groups and full credithealth/engineenv tests plus vet passed. The legacy credit page remains on its existing adapter.
+
 ## 2026-10-21 - Independent checked financial health factors
 
 Checked payment and utilization FX, magnitudes, sums, percentages and net-worth trends; every applicable budget must evaluate before adherence is published. The native health model accepts explicit per-factor unavailability. Independent factors remain known and failed factors cannot be refilled by custom molecules. Full engineenv/healthscore tests, vet and seven new regression groups passed.

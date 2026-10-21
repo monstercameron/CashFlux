@@ -296,6 +296,9 @@ func Vars(d Data) map[string]float64 {
 	for _, name := range HealthVarNames {
 		atoms[name] = true
 	}
+	for _, name := range CreditVarNames {
+		atoms[name] = true
+	}
 	for _, name := range RecurringVarNames {
 		atoms[name] = true
 	}
