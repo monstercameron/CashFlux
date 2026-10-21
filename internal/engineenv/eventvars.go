@@ -5,7 +5,9 @@ package engineenv
 import (
 	"strconv"
 
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/money"
 )
 
 // EventDef is a spending event passed in from the wasm layer (which holds the
@@ -69,7 +71,7 @@ func EventVarSlug(s string) string { return budgetVarSlug(s) }
 // is how many transactions are mapped. Amounts are FX-converted to base major
 // units; transfers among member transactions are ignored. Splits do not change
 // the whole-transaction total, so this reads each mapped transaction's own amount.
-func addEventVars(out map[string]float64, d Data, major func(int64) float64, toBase func(int64, string) int64) {
+func addEventVars(out map[string]float64, d Data, major func(int64) float64, rates currency.Rates) {
 	if len(d.Events) == 0 {
 		return
 	}
@@ -79,21 +81,35 @@ func addEventVars(out map[string]float64, d Data, major func(int64) float64, toB
 	}
 	for _, base := range EventVarBases(d.Events) {
 		var totalBase int64
+		known := true
 		count := 0
 		for _, tid := range base.Event.TxnIDs {
 			t, ok := byID[tid]
 			if !ok || t.IsTransfer() {
 				continue
 			}
-			totalBase += toBase(t.Amount.Amount, t.Amount.Currency)
 			count++
+			converted, err := checkedToBase(t.Amount.Amount, t.Amount.Currency, rates)
+			if err == nil {
+				totalBase, err = money.Add(totalBase, converted)
+			}
+			if err != nil {
+				known = false
+			}
+		}
+		out[base.Prefix+"count"] = float64(count)
+		if !known {
+			continue
 		}
 		out[base.Prefix+"total"] = major(totalBase)
 		spend := int64(0)
 		if totalBase < 0 {
-			spend = -totalBase
+			var err error
+			spend, err = money.Neg(totalBase)
+			if err != nil {
+				continue
+			}
 		}
 		out[base.Prefix+"spend"] = major(spend)
-		out[base.Prefix+"count"] = float64(count)
 	}
 }

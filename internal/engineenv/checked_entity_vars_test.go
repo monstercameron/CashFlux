@@ -187,3 +187,105 @@ func TestGoalCommitmentFXFailureOmitsDependentAtoms(t *testing.T) {
 		}
 	}
 }
+
+func TestPoolGroupAndEventVariablesOmitUnavailableOrOverflowingValues(t *testing.T) {
+	now := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
+	t.Run("pool unknown FX", func(t *testing.T) {
+		vars := Vars(Data{
+			Accounts: []domain.Account{{ID: "eur", Name: "Euro", Currency: "EUR", OpeningBalance: money.New(10000, "EUR"), BalanceAsOf: now}},
+			Pools:    []PoolDef{{Name: "Foreign", AccountIDs: []string{"eur"}}},
+			Rates:    currency.Rates{Base: "USD"}, Now: now,
+			Molecules: []domain.Molecule{{Name: "pool_foreign_value", Formula: "999"}},
+		})
+		if _, ok := vars["pool_foreign_value"]; ok {
+			t.Fatal("unavailable pool value should be omitted and reserved")
+		}
+	})
+	t.Run("pool sum overflow", func(t *testing.T) {
+		vars := Vars(Data{
+			Accounts: []domain.Account{
+				{ID: "one", Currency: "USD", OpeningBalance: money.New(math.MaxInt64, "USD"), BalanceAsOf: now},
+				{ID: "two", Currency: "USD", OpeningBalance: money.New(1, "USD"), BalanceAsOf: now},
+			},
+			Pools: []PoolDef{{Name: "Overflow", AccountIDs: []string{"one", "two"}}},
+			Rates: currency.Rates{Base: "USD"}, Now: now,
+			Molecules: []domain.Molecule{{Name: "pool_overflow_value", Formula: "999"}},
+		})
+		if _, ok := vars["pool_overflow_value"]; ok {
+			t.Fatal("overflowing pool should be omitted and reserved")
+		}
+	})
+	t.Run("liability group MinInt magnitude", func(t *testing.T) {
+		vars := Vars(Data{
+			Accounts: []domain.Account{{ID: "debt", Name: "Debt", Class: domain.ClassLiability, Currency: "USD", OpeningBalance: money.New(math.MinInt64, "USD"), BalanceAsOf: now}},
+			Groups:   []AccountGroupDef{{Name: "Debt Group", AccountIDs: []string{"debt"}}},
+			Rates:    currency.Rates{Base: "USD"}, Now: now,
+			Molecules: []domain.Molecule{{Name: "group_debt_group_total", Formula: "999"}},
+		})
+		if _, ok := vars["group_debt_group_total"]; ok {
+			t.Fatal("group with unrepresentable liability magnitude should be omitted and reserved")
+		}
+	})
+	t.Run("event FX preserves count", func(t *testing.T) {
+		vars := Vars(Data{
+			Transactions: []domain.Transaction{{ID: "foreign", Amount: money.New(-10000, "EUR"), Date: now}},
+			Events:       []EventDef{{Name: "Foreign", TxnIDs: []string{"foreign"}}},
+			Rates:        currency.Rates{Base: "USD"}, Now: now,
+			Molecules: []domain.Molecule{{Name: "event_foreign_total", Formula: "999"}},
+		})
+		if got, ok := vars["event_foreign_count"]; !ok || got != 1 {
+			t.Errorf("count = %v, present %v; want known 1", got, ok)
+		}
+		if _, ok := vars["event_foreign_total"]; ok {
+			t.Fatal("FX-dependent event total should be omitted and reserved")
+		}
+	})
+	t.Run("event aggregate overflow", func(t *testing.T) {
+		vars := Vars(Data{
+			Transactions: []domain.Transaction{
+				{ID: "one", Amount: money.New(math.MaxInt64, "USD"), Date: now},
+				{ID: "two", Amount: money.New(1, "USD"), Date: now},
+			},
+			Events: []EventDef{{Name: "Overflow", TxnIDs: []string{"one", "two"}}},
+			Rates:  currency.Rates{Base: "USD"}, Now: now,
+		})
+		if got := vars["event_overflow_count"]; got != 2 {
+			t.Fatalf("known count = %v, want 2", got)
+		}
+		for _, name := range []string{"event_overflow_total", "event_overflow_spend"} {
+			if _, ok := vars[name]; ok {
+				t.Errorf("overflow-dependent %s should be omitted", name)
+			}
+		}
+	})
+	t.Run("event minimum total keeps total but omits spend", func(t *testing.T) {
+		vars := map[string]float64{}
+		addEventVars(vars, Data{
+			Transactions: []domain.Transaction{{ID: "min", Amount: money.New(math.MinInt64, "USD"), Date: now}},
+			Events:       []EventDef{{Name: "Minimum", TxnIDs: []string{"min"}}},
+		}, func(v int64) float64 { return float64(v) / 100 }, currency.Rates{Base: "USD"})
+		if _, ok := vars["event_minimum_total"]; !ok {
+			t.Fatal("known total should remain available")
+		}
+		if _, ok := vars["event_minimum_spend"]; ok {
+			t.Fatal("unrepresentable spend magnitude should be omitted")
+		}
+	})
+}
+
+func TestInvalidPlanVariablesAreOmittedAndReserved(t *testing.T) {
+	vars := Vars(Data{
+		Plans: []domain.Plan{{Name: "Huge", HorizonMonths: 1201}},
+		Rates: currency.Rates{Base: "USD"}, Now: time.Now(),
+		Molecules: []domain.Molecule{
+			{Name: "plan_huge_end", Formula: "999"},
+			{Name: "plan_huge_monthly", Formula: "999"},
+			{Name: "plan_huge_runway", Formula: "999"},
+		},
+	})
+	for _, name := range []string{"plan_huge_end", "plan_huge_monthly", "plan_huge_runway"} {
+		if _, ok := vars[name]; ok {
+			t.Errorf("invalid plan field %s should be omitted and reserved", name)
+		}
+	}
+}

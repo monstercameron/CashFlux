@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Assistant formulas now use checked pool, group, event, debt and saved-plan calculations.
 - Updated assistant instructions to discover complete data, respect calculation scope and use exact approved selectors.
 - Corrected the malformed sort property in the assistant ledger-search tool schema.
 - Assistant list and duplicate tools now expose complete paginated selections with strict filters and fresh storage reads.

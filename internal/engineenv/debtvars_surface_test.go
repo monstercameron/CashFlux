@@ -3,6 +3,7 @@
 package engineenv
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -76,5 +77,54 @@ func TestDebtVarBasesSkipsArchivedAndAssets(t *testing.T) {
 	bases := DebtVarBases(accounts)
 	if len(bases) != 2 || bases[0].Prefix != "debt_card_a_" || bases[1].Prefix != "debt_card_a_2_" {
 		t.Errorf("debt var bases wrong: %+v", bases)
+	}
+}
+
+func TestDebtVarsOmitUnknownFXFactsAndReserveNames(t *testing.T) {
+	account := domain.Account{
+		ID: "foreign", Name: "Foreign", Class: domain.ClassLiability, Type: domain.TypeCreditCard,
+		Currency: "EUR", OpeningBalance: money.New(-12345, "EUR"),
+		CreditLimit: money.New(50000, "EUR"), MinPayment: money.New(2500, "USD"),
+		InterestRateAPR: domain.APR(12), StatementDay: 7, DueDayOfMonth: 19,
+	}
+	vars := Vars(Data{
+		Accounts: []domain.Account{account}, Rates: currency.Rates{Base: "USD"},
+		Molecules: []domain.Molecule{
+			{Name: "debt_foreign_balance", Formula: "999"},
+			{Name: "debt_foreign_available", Formula: "999"},
+		},
+	})
+	for _, name := range []string{"debt_foreign_balance", "debt_foreign_available", "debt_foreign_utilization", "debt_foreign_carry", "credit_limit_total", "revolving_balance"} {
+		if _, ok := vars[name]; ok {
+			t.Errorf("unknown FX fact %q should be unavailable", name)
+		}
+	}
+	for name, want := range map[string]float64{
+		"debt_foreign_apr": 12, "debt_foreign_min_payment": 25,
+		"debt_foreign_statement_day": 7, "debt_foreign_due_day": 19,
+		"min_payments_total": 25,
+	} {
+		if got, ok := vars[name]; !ok || got != want {
+			t.Errorf("%s = %v, present %v; want %v", name, got, ok, want)
+		}
+	}
+}
+
+func TestDebtAggregateOverflowOmitsOnlyAffectedTotal(t *testing.T) {
+	accounts := []domain.Account{
+		{ID: "a", Name: "A", Class: domain.ClassLiability, Type: domain.TypeLoan, Currency: "USD",
+			OpeningBalance: money.New(-1, "USD"), MinPayment: money.New(math.MaxInt64, "USD")},
+		{ID: "b", Name: "B", Class: domain.ClassLiability, Type: domain.TypeLoan, Currency: "USD",
+			OpeningBalance: money.New(-1, "USD"), MinPayment: money.New(1, "USD")},
+	}
+	vars := Vars(Data{Accounts: accounts, Rates: currency.Rates{Base: "USD"}, Molecules: []domain.Molecule{{Name: "min_payments_total", Formula: "999"}}})
+	if _, ok := vars["min_payments_total"]; ok {
+		t.Fatal("overflowed minimum payment aggregate should be omitted and reserved")
+	}
+	if got, ok := vars["debt_a_min_payment"]; !ok || got != float64(math.MaxInt64)/100 {
+		t.Fatalf("individual valid payment lost: got %v present %v", got, ok)
+	}
+	if got, ok := vars["debt_b_min_payment"]; !ok || got != 0.01 {
+		t.Fatalf("independent individual payment lost: got %v present %v", got, ok)
 	}
 }

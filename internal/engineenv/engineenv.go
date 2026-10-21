@@ -21,6 +21,7 @@ package engineenv
 import (
 	"errors"
 	"log/slog"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -286,6 +287,9 @@ func Vars(d Data) map[string]float64 {
 	for _, name := range BillsSmartVarNames {
 		atoms[name] = true
 	}
+	for _, name := range ReportsVarNames {
+		atoms[name] = true
+	}
 	for _, name := range RecurringVarNames {
 		atoms[name] = true
 	}
@@ -298,8 +302,33 @@ func Vars(d Data) map[string]float64 {
 			atoms[base.Prefix+field] = true
 		}
 	}
+	for _, base := range DebtVarBases(d.Accounts) {
+		for _, field := range DebtVarFields {
+			atoms[base.Prefix+field] = true
+		}
+	}
 	for _, base := range GoalVarBases(d.Goals) {
 		for _, field := range GoalVarFields {
+			atoms[base.Prefix+field] = true
+		}
+	}
+	for _, base := range PlanVarBases(d.Plans) {
+		for _, field := range PlanVarFields {
+			atoms[base.Prefix+field] = true
+		}
+	}
+	for _, base := range PoolVarBases(d.Pools) {
+		for _, field := range PoolVarFields {
+			atoms[base.Prefix+field] = true
+		}
+	}
+	for _, base := range GroupVarBases(d.Groups) {
+		for _, field := range GroupVarFields {
+			atoms[base.Prefix+field] = true
+		}
+	}
+	for _, base := range EventVarBases(d.Events) {
+		for _, field := range EventVarFields {
 			atoms[base.Prefix+field] = true
 		}
 	}
@@ -505,6 +534,7 @@ func computeAtoms(d Data) map[string]float64 {
 
 	active, assetAccts, liabAccts, debtCount := 0, 0, 0, 0
 	var revolvingBal, creditLimitTotal, minPaymentsTotal int64
+	var revolvingErr, creditLimitErr, minPaymentsErr error
 	for _, a := range d.Accounts {
 		if a.Archived {
 			continue
@@ -513,15 +543,31 @@ func computeAtoms(d Data) map[string]float64 {
 		if a.Class == domain.ClassLiability {
 			liabAccts++
 			debtCount++
-			minPaymentsTotal += toBase(a.MinPayment.Amount, a.MinPayment.Currency)
+			if converted, err := checkedRates.ToBase(a.MinPayment); err != nil {
+				minPaymentsErr = err
+			} else if minPaymentsErr == nil {
+				minPaymentsTotal, minPaymentsErr = money.Add(minPaymentsTotal, converted.Amount)
+			}
 			if a.Type == domain.TypeCreditCard {
-				creditLimitTotal += toBase(a.CreditLimit.Amount, a.CreditLimit.Currency)
+				if converted, err := checkedRates.ToBase(a.CreditLimit); err != nil {
+					creditLimitErr = err
+				} else if creditLimitErr == nil {
+					creditLimitTotal, creditLimitErr = money.Add(creditLimitTotal, converted.Amount)
+				}
 				if bal, ok := bals[a.ID]; ok {
-					mag := bal.Amount
-					if mag < 0 {
-						mag = -mag
+					mag, err := (money.Money{Amount: bal.Amount, Currency: bal.Currency}).AbsChecked()
+					if err == nil {
+						var converted money.Money
+						converted, err = checkedRates.ToBase(mag)
+						if err == nil && revolvingErr == nil {
+							revolvingBal, err = money.Add(revolvingBal, converted.Amount)
+						}
 					}
-					revolvingBal += toBase(mag, bal.Currency)
+					if err != nil {
+						revolvingErr = err
+					}
+				} else {
+					revolvingErr = errors.New("credit card balance unavailable")
 				}
 			}
 		} else {
@@ -588,16 +634,25 @@ func computeAtoms(d Data) map[string]float64 {
 		delete(out, "income")
 		delete(out, "expense")
 	}
+	if revolvingErr != nil {
+		delete(out, "revolving_balance")
+	}
+	if creditLimitErr != nil {
+		delete(out, "credit_limit_total")
+	}
+	if minPaymentsErr != nil {
+		delete(out, "min_payments_total")
+	}
 	addCustomFieldVars(out, d, start, end)
 	addBudgetVars(out, d, major)
 	addDailyAllowanceVars(out, d, major, start, end)
 	addAccountVars(out, d, major, checkedRates, bals, clearedBals)
 	addAccountFlowVars(out, d, major, checkedRates, start, end)
 	addGoalVars(out, d, major, checkedRates)
-	addDebtVars(out, d, major, toBase, bals)
-	addPoolVars(out, d, major, toBase, bals)
-	addGroupVars(out, d, major, toBase, bals)
-	addEventVars(out, d, major, toBase)
+	addDebtVars(out, d, major, checkedRates, bals)
+	addPoolVars(out, d, major, checkedRates, bals)
+	addGroupVars(out, d, major, checkedRates, bals)
+	addEventVars(out, d, major, checkedRates)
 	addAllocVars(out, d, major)
 	addPlanningVars(out, d, major)
 	addRecurringVars(out, d, major, checkedRates)
@@ -1017,14 +1072,17 @@ func addPlanningVars(out map[string]float64, d Data, major func(int64) float64) 
 	out["runway_days"] = float64(d.Planning.RunwayDays)
 	out["forecast_horizon"] = float64(d.Planning.ForecastMonths)
 	for _, base := range PlanVarBases(d.Plans) {
-		p := base.Plan
-		out[base.Prefix+"end"] = major(planning.EndBalance(p))
-		out[base.Prefix+"monthly"] = major(planning.MonthlyNet(p))
-		months, depletes := planning.RunwayMonths(p)
-		if !depletes {
-			months = 0
+		result, err := planning.EvaluateChecked(base.Plan)
+		if err != nil {
+			continue
 		}
-		out[base.Prefix+"runway"] = months
+		out[base.Prefix+"end"] = major(result.EndBalance)
+		out[base.Prefix+"monthly"] = major(result.MonthlyNet)
+		if result.Depletes {
+			out[base.Prefix+"runway"] = result.RunwayMonths
+		} else {
+			out[base.Prefix+"runway"] = 0
+		}
 	}
 }
 
@@ -1235,7 +1293,7 @@ func GoalVarSlug(s string) string { return budgetVarSlug(s) }
 // addPoolVars exposes each account pool as a pool_<slug>_value variable: the combined
 // current balance of its member accounts (FX-converted to base), so a custom group like
 // "Retirement" (401k + Roth IRA) can be referenced by name in any formula or widget.
-func addPoolVars(out map[string]float64, d Data, major func(int64) float64, toBase func(int64, string) int64, bals map[string]money.Money) {
+func addPoolVars(out map[string]float64, d Data, major func(int64) float64, rates currency.Rates, bals map[string]money.Money) {
 	if len(d.Pools) == 0 {
 		return
 	}
@@ -1245,16 +1303,29 @@ func addPoolVars(out map[string]float64, d Data, major func(int64) float64, toBa
 	}
 	for _, base := range PoolVarBases(d.Pools) {
 		var total int64
+		known := true
 		for _, aid := range base.Pool.AccountIDs {
 			a, ok := byID[aid]
 			if !ok || a.Archived {
 				continue
 			}
-			if bal, ok := bals[a.ID]; ok {
-				total += toBase(bal.Amount, bal.Currency)
+			bal, ok := bals[a.ID]
+			if !ok {
+				known = false
+				break
+			}
+			converted, err := checkedToBase(bal.Amount, bal.Currency, rates)
+			if err == nil {
+				total, err = money.Add(total, converted)
+			}
+			if err != nil {
+				known = false
+				break
 			}
 		}
-		out[base.Prefix+"value"] = major(total)
+		if known {
+			out[base.Prefix+"value"] = major(total)
+		}
 	}
 }
 
@@ -1306,7 +1377,7 @@ func PoolVarSlug(s string) string { return budgetVarSlug(s) }
 // liabilities subtract (by magnitude) — so a grouping like "Shared" or "Property"
 // contributes a single signed figure a formula or widget can reference by name.
 // Archived members and unknown IDs are skipped.
-func addGroupVars(out map[string]float64, d Data, major func(int64) float64, toBase func(int64, string) int64, bals map[string]money.Money) {
+func addGroupVars(out map[string]float64, d Data, major func(int64) float64, rates currency.Rates, bals map[string]money.Money) {
 	if len(d.Groups) == 0 {
 		return
 	}
@@ -1316,6 +1387,7 @@ func addGroupVars(out map[string]float64, d Data, major func(int64) float64, toB
 	}
 	for _, base := range GroupVarBases(d.Groups) {
 		var total int64
+		known := true
 		for _, aid := range base.Group.AccountIDs {
 			a, ok := byID[aid]
 			if !ok || a.Archived {
@@ -1323,19 +1395,33 @@ func addGroupVars(out map[string]float64, d Data, major func(int64) float64, toB
 			}
 			bal, ok := bals[a.ID]
 			if !ok {
-				continue
+				known = false
+				break
 			}
-			v := toBase(bal.Amount, bal.Currency)
+			v, err := checkedToBase(bal.Amount, bal.Currency, rates)
+			if err != nil {
+				known = false
+				break
+			}
 			if a.Class == domain.ClassLiability {
-				if v < 0 {
-					v = -v
+				v, err = money.Abs(v)
+				if err == nil {
+					v, err = money.Neg(v)
 				}
-				total -= v
-			} else {
-				total += v
+				if err != nil {
+					known = false
+					break
+				}
+			}
+			total, err = money.Add(total, v)
+			if err != nil {
+				known = false
+				break
 			}
 		}
-		out[base.Prefix+"total"] = major(total)
+		if known {
+			out[base.Prefix+"total"] = major(total)
+		}
 	}
 }
 
@@ -1616,41 +1702,82 @@ func AccountVarSlug(s string) string { return budgetVarSlug(s) }
 // Money amounts are FX-converted to the base currency so debts in different currencies
 // compare on one scale. Name collisions are disambiguated with a numeric suffix in stable
 // account order (same scheme as accounts/goals).
-func addDebtVars(out map[string]float64, d Data, major func(int64) float64, toBase func(int64, string) int64, bals map[string]money.Money) {
+func addDebtVars(out map[string]float64, d Data, major func(int64) float64, rates currency.Rates, bals map[string]money.Money) {
+	carryTotal := 0.0
+	carryTotalErr := false
 	for _, base := range DebtVarBases(d.Accounts) {
 		a := base.Account
-		var balance float64
+		balanceMinor, balanceErr := int64(0), error(nil)
 		if bal, ok := bals[a.ID]; ok {
-			mag := bal.Amount
-			if mag < 0 {
-				mag = -mag
+			mag, err := bal.AbsChecked()
+			if err == nil {
+				var converted money.Money
+				converted, err = rates.ToBase(mag)
+				balanceMinor = converted.Amount
 			}
-			balance = major(toBase(mag, bal.Currency))
+			balanceErr = err
+		} else {
+			balanceErr = errors.New("debt balance unavailable")
 		}
-		limit := major(toBase(a.CreditLimit.Amount, a.CreditLimit.Currency))
-		available := 0.0
-		utilization := 0.0
-		if limit > 0 {
-			available = limit - balance
-			if available < 0 {
-				available = 0
+		balance := major(balanceMinor)
+		if balanceErr == nil {
+			out[base.Prefix+"balance"] = balance
+		}
+		apr := a.RateAPROrZero()
+		out[base.Prefix+"apr"] = apr
+		if payment, err := rates.ToBase(a.MinPayment); err == nil {
+			out[base.Prefix+"min_payment"] = major(payment.Amount)
+		}
+		limitMinor := int64(0)
+		var limitErr error
+		if a.Type == domain.TypeCreditCard {
+			var converted money.Money
+			converted, limitErr = rates.ToBase(a.CreditLimit)
+			limitMinor = converted.Amount
+		}
+		if limitErr == nil {
+			limit := major(limitMinor)
+			out[base.Prefix+"limit"] = limit
+			if balanceErr == nil {
+				availableMinor, err := money.Sub(limitMinor, balanceMinor)
+				if err == nil {
+					if availableMinor < 0 {
+						availableMinor = 0
+					}
+					out[base.Prefix+"available"] = major(availableMinor)
+					if limitMinor > 0 {
+						utilization := float64(balanceMinor) / float64(limitMinor) * 100
+						if !math.IsInf(utilization, 0) && !math.IsNaN(utilization) {
+							out[base.Prefix+"utilization"] = utilization
+						}
+					} else {
+						out[base.Prefix+"utilization"] = 0
+					}
+				}
 			}
-			utilization = balance / limit * 100
 		}
-		// Carrying cost (AC4): the monthly interest to hold this debt at its APR —
-		// balance × (APR/100) ÷ 12. A concrete dollar figure that competes with the
-		// discretionary spend it's quietly financing. Zero when APR or balance is zero.
-		carry := balance * (a.RateAPROrZero() / 100) / 12
-		out[base.Prefix+"balance"] = balance
-		out[base.Prefix+"apr"] = a.RateAPROrZero()
-		out[base.Prefix+"min_payment"] = major(toBase(a.MinPayment.Amount, a.MinPayment.Currency))
-		out[base.Prefix+"limit"] = limit
-		out[base.Prefix+"available"] = available
-		out[base.Prefix+"utilization"] = utilization
-		out[base.Prefix+"carry"] = carry
+		// Carrying cost is meaningful only when both balance and APR are valid.
+		carryKnown := false
+		if balanceErr == nil && !math.IsNaN(apr) && !math.IsInf(apr, 0) {
+			carry := balance * (apr / 100) / 12
+			if !math.IsNaN(carry) && !math.IsInf(carry, 0) {
+				out[base.Prefix+"carry"] = carry
+				if next := carryTotal + carry; !math.IsNaN(next) && !math.IsInf(next, 0) {
+					carryTotal = next
+					carryKnown = true
+				}
+			}
+		}
+		if !carryKnown {
+			carryTotalErr = true
+		}
 		out[base.Prefix+"statement_day"] = float64(a.StatementDay)
 		out[base.Prefix+"due_day"] = float64(a.DueDayOfMonth)
-		out["interest_drag_monthly"] += carry
+	}
+	if !carryTotalErr {
+		out["interest_drag_monthly"] = carryTotal
+	} else {
+		delete(out, "interest_drag_monthly")
 	}
 }
 

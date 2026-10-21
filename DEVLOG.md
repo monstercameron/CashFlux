@@ -1,3 +1,7 @@
+## 2026-10-21 - Checked entity financial formula facts
+
+Replaced tolerant FX and unchecked arithmetic in entity formula families, preserved independent known fields, and reserved unavailable built-in and generated metric names against custom formula replacement. Saved plans use the checked native evaluation. Full frozen-source engineenv tests, Reports/engineenv vet, and focused missing-FX/overflow regressions passed.
+
 ## 2026-10-21 - Assistant data and calculation guidance
 
 The default assistant prompt now describes catalog pagination, record continuation, native financial tools, currency units, formula observation scope, strict IDs and documented defaults. It distinguishes stored evidence from instructions, unavailable from zero, and flag dismissal preferences from transaction changes. This is prompt guidance; enforcement remains in typed tool handlers and the conversation boundary.
