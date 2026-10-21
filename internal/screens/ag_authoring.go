@@ -7,8 +7,10 @@
 package screens
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/ai"
@@ -21,30 +23,88 @@ import (
 	"github.com/monstercameron/CashFlux/internal/workflow"
 )
 
+// assistantObjectArgs requires one object and rejects unknown or mistyped fields.
+func assistantObjectArgs(raw json.RawMessage, out any) error {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || trimmed[0] != '{' {
+		return fmt.Errorf("arguments must be one JSON object")
+	}
+	if err := assistantDataArgs(raw, out); err != nil {
+		return err
+	}
+	var value any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return err
+	}
+	return assistantArgumentShape(value, reflect.TypeOf(out).Elem())
+}
+
+// JSON's null and case-insensitive struct field matching are more permissive
+// than these tool schemas. Check their shape after typed decoding as well.
+func assistantArgumentShape(value any, target reflect.Type) error {
+	if value == nil {
+		return fmt.Errorf("null is not allowed in these tool arguments")
+	}
+	switch v := value.(type) {
+	case map[string]any:
+		if target.Kind() != reflect.Struct {
+			return nil // RawMessage fields perform their own value validation.
+		}
+		fields := map[string]reflect.Type{}
+		for i := range target.NumField() {
+			field := target.Field(i)
+			name := strings.Split(field.Tag.Get("json"), ",")[0]
+			fields[name] = field.Type
+		}
+		for name, child := range v {
+			fieldType, ok := fields[name]
+			if !ok {
+				return fmt.Errorf("unknown argument %q", name)
+			}
+			if err := assistantArgumentShape(child, fieldType); err != nil {
+				return fmt.Errorf("%s: %w", name, err)
+			}
+		}
+	case []any:
+		if target.Kind() == reflect.Slice {
+			for _, child := range v {
+				if err := assistantArgumentShape(child, target.Elem()); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+
 // agToolsAuthoring exposes natural-language rule authoring (AG3) and workflow
 // authoring (AG4) as mutating assistant tools. The model turns the user's plain
 // English into structured arguments; these tools resolve names to IDs, compile the
 // typed domain object through the pure nlauthor helpers (a workflow condition is
 // validated through the SAME formula language the engine runs, before saving), and
-// preview the compiled result — with the "would affect N existing transactions"
-// count for a rule — for the user's one-tap approval.
+// preview the compiled result and current match count for approval. Saving a rule
+// leaves existing transactions unchanged.
 func agToolsAuthoring(app *appstate.App, base string, rates currency.Rates) []chatTool {
-	cats := app.Categories()
 	resolveCategory := func(name string) (domain.Category, bool) {
 		q := strings.ToLower(strings.TrimSpace(name))
-		for _, c := range cats {
+		var exact, partial []domain.Category
+		for _, c := range app.Categories() {
 			if strings.ToLower(c.Name) == q {
-				return c, true
+				exact = append(exact, c)
+			} else if q != "" && strings.Contains(strings.ToLower(c.Name), q) {
+				partial = append(partial, c)
 			}
 		}
-		for _, c := range cats {
-			if q != "" && strings.Contains(strings.ToLower(c.Name), q) {
-				return c, true
-			}
+		if len(exact) == 1 {
+			return exact[0], true
+		}
+		if len(exact) == 0 && len(partial) == 1 {
+			return partial[0], true
 		}
 		return domain.Category{}, false
 	}
 	catNames := func() string {
+		cats := app.Categories()
 		ns := make([]string, 0, len(cats))
 		for _, c := range cats {
 			ns = append(ns, c.Name)
@@ -69,22 +129,22 @@ func agToolsAuthoring(app *appstate.App, base string, rates currency.Rates) []ch
 		Tags       []string `json:"tags"`
 		RenameDesc string   `json:"rename_desc"`
 	}
-	parseRule := func(raw json.RawMessage) (ruleArgs, rules.Rule, []string, bool) {
+	parseRule := func(raw json.RawMessage, ruleID string, order int) (ruleArgs, rules.Rule, []string, bool) {
 		var a ruleArgs
-		if err := json.Unmarshal(raw, &a); err != nil {
-			return a, rules.Rule{}, []string{"Couldn't read the rule details."}, false
+		if err := assistantObjectArgs(raw, &a); err != nil {
+			return a, rules.Rule{}, []string{err.Error()}, false
 		}
 		catID := ""
 		if a.Category != "" {
 			if c, ok := resolveCategory(a.Category); ok {
 				catID = c.ID
 			} else {
-				return a, rules.Rule{}, []string{"No category matching “" + a.Category + "”. Create it first. Existing: " + catNames() + "."}, false
+				return a, rules.Rule{}, []string{"No unique category matching “" + a.Category + "”. Use an unambiguous existing name: " + catNames() + "."}, false
 			}
 		}
 		r, errs := nlauthor.CompileRule(nlauthor.RuleInput{
-			ID: id.New(), Match: a.Match, SetCategoryID: catID,
-			SetTags: a.Tags, RenameDesc: a.RenameDesc, Order: app.NextRuleOrder(),
+			ID: ruleID, Match: a.Match, SetCategoryID: catID,
+			SetTags: a.Tags, RenameDesc: a.RenameDesc, Order: order,
 		})
 		return a, r, errs, len(errs) == 0
 	}
@@ -107,32 +167,43 @@ func agToolsAuthoring(app *appstate.App, base string, rates currency.Rates) []ch
 		var errs []string
 		for _, a := range in {
 			act := workflow.Action{Kind: workflow.ActionKind(strings.TrimSpace(a.Kind))}
+			unused := false
 			switch act.Kind {
 			case workflow.ActionCreateTask:
 				act.Title, act.Notes = strings.TrimSpace(a.Title), strings.TrimSpace(a.Message)
+				unused = a.Category != "" || a.Tag != ""
 			case workflow.ActionNotify:
 				act.Message = strings.TrimSpace(a.Message)
+				if act.Message == "" {
+					errs = append(errs, "A notification action needs a message.")
+				}
+				unused = a.Title != "" || a.Category != "" || a.Tag != ""
 			case workflow.ActionSetCategory:
 				if c, ok := resolveCategory(a.Category); ok {
 					act.CategoryID = c.ID
 				} else {
-					errs = append(errs, "No category matching “"+a.Category+"” for the set-category action.")
+					errs = append(errs, "No unique category matching “"+a.Category+"” for the set-category action.")
 				}
+				unused = a.Title != "" || a.Message != "" || a.Tag != ""
 			case workflow.ActionAddTag:
 				act.Tag = strings.TrimSpace(a.Tag)
-			case workflow.ActionFlagReview, workflow.ActionApplyRules, workflow.ActionPostRecurring, workflow.ActionFlagBudgetOver:
-				// no extra fields
+				unused = a.Title != "" || a.Message != "" || a.Category != ""
+			case workflow.ActionFlagReview:
+				unused = a.Title != "" || a.Message != "" || a.Category != "" || a.Tag != ""
 			default:
 				errs = append(errs, "Unsupported action kind “"+a.Kind+"”.")
+			}
+			if unused {
+				errs = append(errs, "Action “"+a.Kind+"” includes fields that it does not use.")
 			}
 			out = append(out, act)
 		}
 		return out, errs
 	}
-	parseWorkflow := func(raw json.RawMessage) (wfArgs, workflow.Workflow, []string, bool) {
+	parseWorkflow := func(raw json.RawMessage, workflowID string) (wfArgs, workflow.Workflow, []string, bool) {
 		var a wfArgs
-		if err := json.Unmarshal(raw, &a); err != nil {
-			return a, workflow.Workflow{}, []string{"Couldn't read the workflow details."}, false
+		if err := assistantObjectArgs(raw, &a); err != nil {
+			return a, workflow.Workflow{}, []string{err.Error()}, false
 		}
 		acts, actErrs := buildActions(a.Actions)
 		trig := workflow.Trigger{Kind: workflow.TriggerKind(strings.TrimSpace(a.Trigger))}
@@ -144,7 +215,7 @@ func agToolsAuthoring(app *appstate.App, base string, rates currency.Rates) []ch
 		}
 		known = func(name string) bool { return set[name] }
 		wf, errs := nlauthor.CompileWorkflow(nlauthor.WorkflowInput{
-			ID: id.New(), Name: a.Name, Trigger: trig, Condition: a.Condition, Actions: acts, Enabled: true,
+			ID: workflowID, Name: a.Name, Trigger: trig, Condition: a.Condition, Actions: acts, Enabled: true,
 		}, known)
 		errs = append(actErrs, errs...)
 		return a, wf, errs, len(errs) == 0
@@ -153,7 +224,12 @@ func agToolsAuthoring(app *appstate.App, base string, rates currency.Rates) []ch
 	describeRule := func(r rules.Rule, catName string) string {
 		var parts []string
 		if r.SetCategoryID != "" {
-			parts = append(parts, "categorize as "+catName)
+			for _, category := range app.Categories() {
+				if category.ID == r.SetCategoryID {
+					catName = category.Name
+				}
+			}
+			parts = append(parts, fmt.Sprintf("categorize as %q (category ID %s)", catName, r.SetCategoryID))
 		}
 		if len(r.SetTags) > 0 {
 			parts = append(parts, "tag "+strings.Join(r.SetTags, ", "))
@@ -167,54 +243,117 @@ func agToolsAuthoring(app *appstate.App, base string, rates currency.Rates) []ch
 		}
 		return fmt.Sprintf("When a transaction matches “%s”: %s", match, strings.Join(parts, "; "))
 	}
+	type rulePlan struct {
+		args ruleArgs
+		rule rules.Rule
+		errs []string
+		ok   bool
+	}
+	type workflowPlan struct {
+		wf   workflow.Workflow
+		errs []string
+		ok   bool
+	}
+	rulePlans := map[string]rulePlan{}
+	prepareRule := func(raw json.RawMessage) rulePlan {
+		previous := rulePlans[string(raw)]
+		ruleID, order := previous.rule.ID, previous.rule.Order
+		if ruleID == "" {
+			ruleID, order = id.New(), app.NextRuleOrder()
+		}
+		a, r, errs, ok := parseRule(raw, ruleID, order)
+		value := rulePlan{a, r, errs, ok}
+		rulePlans[string(raw)] = value
+		return value
+	}
+	workflowPlans := map[string]workflowPlan{}
+	prepareWorkflow := func(raw json.RawMessage) workflowPlan {
+		workflowID := workflowPlans[string(raw)].wf.ID
+		if workflowID == "" {
+			workflowID = id.New()
+		}
+		_, wf, errs, ok := parseWorkflow(raw, workflowID)
+		value := workflowPlan{wf, errs, ok}
+		workflowPlans[string(raw)] = value
+		return value
+	}
 
 	return []chatTool{
 		{
 			spec: ai.FunctionTool("create_rule",
-				"Author a categorization RULE from a natural-language description. Give the match phrase (found in payee/description), the category to assign, optional tags, and an optional description rewrite. Previews the compiled rule and how many EXISTING transactions it would affect before applying (on approval it also files those existing matches).",
-				json.RawMessage(`{"type":"object","properties":{"match":{"type":"string","description":"case-insensitive phrase in the payee/description, e.g. Trader Joe's"},"category":{"type":"string"},"tags":{"type":"array","items":{"type":"string"}},"rename_desc":{"type":"string","description":"optional: rewrite the matched transaction's description"}},"required":["match"]}`)),
+				"Save a categorization rule for future rule application. Give a payee/description match phrase, a category name, optional tags, and an optional description rewrite. Approval saves only the rule; existing transactions are not recategorized.",
+				json.RawMessage(`{"type":"object","properties":{"match":{"type":"string","description":"case-insensitive phrase in the payee/description, e.g. Trader Joe's"},"category":{"type":"string"},"tags":{"type":"array","items":{"type":"string"}},"rename_desc":{"type":"string","description":"optional: rewrite the matched transaction's description"}},"required":["match"],"additionalProperties":false}`)),
 			mutates: true,
 			preview: func(raw json.RawMessage) string {
-				a, r, errs, ok := parseRule(raw)
-				if !ok {
-					return "Can't create that rule: " + strings.Join(errs, " ")
+				value := prepareRule(raw)
+				if !value.ok {
+					return "Can't create that rule: " + strings.Join(value.errs, " ")
 				}
-				n := nlauthor.RuleMatchCount(r, txnCtxs())
-				return fmt.Sprintf("%s.\nWould affect %s existing transaction(s).", describeRule(r, strings.TrimSpace(a.Category)), plural(n, "matching"))
+				n := nlauthor.RuleMatchCount(value.rule, txnCtxs())
+				return fmt.Sprintf("Save rule ID %s: %s.\nMatches %d existing transaction(s); existing transactions stay unchanged.", value.rule.ID, describeRule(value.rule, strings.TrimSpace(value.args.Category)), n)
 			},
 			run: func(raw json.RawMessage) string {
-				a, r, errs, ok := parseRule(raw)
-				if !ok {
-					return "Can't create that rule: " + strings.Join(errs, " ")
+				value, exists := rulePlans[string(raw)]
+				if !exists {
+					value = prepareRule(raw)
 				}
-				n := nlauthor.RuleMatchCount(r, txnCtxs())
-				if err := app.PutRule(r); err != nil {
+				if !value.ok {
+					return "Can't create that rule: " + strings.Join(value.errs, " ")
+				}
+				for _, existing := range app.Rules() {
+					if existing.ID == value.rule.ID {
+						if reflect.DeepEqual(existing, value.rule) {
+							return "That rule is already saved; nothing changed." + openLink("/rules", existing.ID)
+						}
+						return "That rule changed after the preview; review it again. Nothing changed."
+					}
+				}
+				_, live, _, valid := parseRule(raw, value.rule.ID, value.rule.Order)
+				if !valid || !reflect.DeepEqual(live, value.rule) {
+					return "The rule's inputs changed after the preview; review it again. Nothing changed."
+				}
+				if err := app.PutRule(value.rule); err != nil {
 					return "Couldn't save the rule: " + err.Error()
 				}
-				return fmt.Sprintf("Created the rule: %s. It matches %d existing transaction(s). %s", describeRule(r, strings.TrimSpace(a.Category)), n, openLink("/rules", r.ID))
+				return fmt.Sprintf("Created the rule: %s. Existing transactions stay unchanged.%s", describeRule(value.rule, strings.TrimSpace(value.args.Category)), openLink("/rules", value.rule.ID))
 			},
 		},
 		{
 			spec: ai.FunctionTool("create_workflow",
 				"Author an automation WORKFLOW from a natural-language description. Choose a trigger (txn-added, scheduled, budget-exceeded, goal-reached, bill-due, manual), an optional condition in the formula language (e.g. txn_abs > 500 — validated before saving), and one or more actions (createTask, notify, setCategory, addTag, flagReview). Transaction-changing actions (setCategory/addTag/flagReview) require the txn-added trigger. Previews the compiled workflow before applying.",
-				json.RawMessage(`{"type":"object","properties":{"name":{"type":"string"},"trigger":{"type":"string","enum":["txn-added","scheduled","budget-exceeded","goal-reached","bill-due","manual"]},"condition":{"type":"string","description":"optional formula over engine variables + txn_* fields, e.g. txn_abs > 500"},"actions":{"type":"array","items":{"type":"object","properties":{"kind":{"type":"string","enum":["createTask","notify","setCategory","addTag","flagReview"]},"title":{"type":"string"},"message":{"type":"string"},"category":{"type":"string"},"tag":{"type":"string"}},"required":["kind"]}}},"required":["name","trigger","actions"]}`)),
+				json.RawMessage(`{"type":"object","properties":{"name":{"type":"string"},"trigger":{"type":"string","enum":["txn-added","scheduled","budget-exceeded","goal-reached","bill-due","manual"]},"condition":{"type":"string","description":"optional formula over engine variables + txn_* fields, e.g. txn_abs > 500"},"actions":{"type":"array","items":{"type":"object","properties":{"kind":{"type":"string","enum":["createTask","notify","setCategory","addTag","flagReview"]},"title":{"type":"string"},"message":{"type":"string"},"category":{"type":"string"},"tag":{"type":"string"}},"required":["kind"],"additionalProperties":false}}},"required":["name","trigger","actions"],"additionalProperties":false}`)),
 			mutates: true,
 			preview: func(raw json.RawMessage) string {
-				_, wf, errs, ok := parseWorkflow(raw)
-				if !ok {
-					return "Can't create that workflow: " + strings.Join(errs, " ")
+				value := prepareWorkflow(raw)
+				if !value.ok {
+					return "Can't create that workflow: " + strings.Join(value.errs, " ")
 				}
-				return describeWorkflow(wf)
+				return describeWorkflow(value.wf, app.Categories())
 			},
 			run: func(raw json.RawMessage) string {
-				_, wf, errs, ok := parseWorkflow(raw)
-				if !ok {
-					return "Can't create that workflow: " + strings.Join(errs, " ")
+				value, exists := workflowPlans[string(raw)]
+				if !exists {
+					value = prepareWorkflow(raw)
 				}
-				if err := app.PutWorkflow(wf); err != nil {
+				if !value.ok {
+					return "Can't create that workflow: " + strings.Join(value.errs, " ")
+				}
+				for _, existing := range app.Workflows() {
+					if existing.ID == value.wf.ID {
+						if reflect.DeepEqual(existing, value.wf) {
+							return "That workflow is already saved; nothing changed." + openLink("/workflows", existing.ID)
+						}
+						return "That workflow changed after the preview; review it again. Nothing changed."
+					}
+				}
+				_, live, _, valid := parseWorkflow(raw, value.wf.ID)
+				if !valid || !reflect.DeepEqual(live, value.wf) {
+					return "The workflow's inputs changed after the preview; review it again. Nothing changed."
+				}
+				if err := app.PutWorkflow(value.wf); err != nil {
 					return "Couldn't save the workflow: " + err.Error()
 				}
-				return "Created the workflow: " + describeWorkflow(wf) + openLink("/workflows", wf.ID)
+				return "Created the workflow: " + describeWorkflow(value.wf, app.Categories()) + openLink("/workflows", value.wf.ID)
 			},
 		},
 	}
@@ -222,15 +361,32 @@ func agToolsAuthoring(app *appstate.App, base string, rates currency.Rates) []ch
 
 // describeWorkflow renders a compiled workflow in the editor's own vocabulary, so
 // the preview teaches the DSL by example (AG4).
-func describeWorkflow(wf workflow.Workflow) string {
-	kinds := make([]string, 0, len(wf.Actions))
-	for _, a := range wf.Actions {
-		kinds = append(kinds, string(a.Kind))
-	}
-	s := fmt.Sprintf("“%s” — WHEN %s", wf.Name, string(wf.Trigger.Kind))
+func describeWorkflow(wf workflow.Workflow, categories []domain.Category) string {
+	s := fmt.Sprintf("Save enabled workflow %q (ID %s) — WHEN %s", wf.Name, wf.ID, wf.Trigger.Kind)
 	if wf.Condition != "" {
 		s += " AND (" + wf.Condition + ")"
 	}
-	s += " THEN " + strings.Join(kinds, ", ")
+	for i, action := range wf.Actions {
+		detail := ""
+		switch action.Kind {
+		case workflow.ActionCreateTask:
+			detail = fmt.Sprintf("create to-do %q; notes %q", action.Title, action.Notes)
+		case workflow.ActionNotify:
+			detail = fmt.Sprintf("notify with message %q", action.Message)
+		case workflow.ActionSetCategory:
+			name := action.CategoryID
+			for _, category := range categories {
+				if category.ID == action.CategoryID {
+					name = category.Name
+				}
+			}
+			detail = fmt.Sprintf("set the triggering transaction's category to %q (category ID %s)", name, action.CategoryID)
+		case workflow.ActionAddTag:
+			detail = fmt.Sprintf("add tag %q to the triggering transaction", action.Tag)
+		case workflow.ActionFlagReview:
+			detail = fmt.Sprintf("add review tag %q to the triggering transaction", workflow.ReviewTag)
+		}
+		s += fmt.Sprintf("\n%d. %s", i+1, detail)
+	}
 	return s
 }
