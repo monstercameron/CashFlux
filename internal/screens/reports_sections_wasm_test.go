@@ -33,7 +33,9 @@ func (reportTestCSSSink) Emit(string, string) {}
 
 // Hold Reports off the first mount while establishing the shared scope/window,
 // so assertions measure report work rather than fixture preference setup.
-func renderLazyReport(t *testing.T) (*render.Fixture, *appstate.App) {
+type reportRenderControls struct{ Window state.Atom[period.Window] }
+
+func renderLazyReport(t *testing.T, controls ...*reportRenderControls) (*render.Fixture, *appstate.App) {
 	t.Helper()
 	oldCSS := css.SetSink(reportTestCSSSink{})
 	t.Cleanup(func() { css.SetSink(oldCSS) })
@@ -62,12 +64,19 @@ func renderLazyReport(t *testing.T) (*render.Fixture, *appstate.App) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = app.Store().Close() })
-	f := render.New(t)
+	var options []render.Option
+	if len(controls) > 0 {
+		options = append(options, render.WithQueuedScheduler())
+	}
+	f := render.New(t, options...)
 	var lens, local state.Atom[scope.ReportScope]
 	var window state.Atom[period.Window]
 	var mount func(bool)
 	f.Render(ui.CreateElement(func() ui.Node {
 		lens, local, window = uistate.UseActiveScope(), uistate.UseReportScope(), uistate.UsePeriod()
+		if len(controls) > 0 {
+			controls[0].Window = window
+		}
 		ready := ui.UseState(false)
 		mount = ready.Set
 		if ready.Get() {
@@ -273,7 +282,7 @@ func TestReportsCategoryRowsRefreshExplicitDisplayContext(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	props := reportCategoriesProps{Context: reportSectionContext{Base: "USD", Language: "en", Accent: "#abc"}, Review: review, Names: map[string]string{"groceries": "Groceries"}}
+	props := reportCategoriesProps{Context: reportSectionContext{Base: "USD", Language: "en", Accent: "#abc"}, Review: review, Names: map[string]string{"groceries": "Groceries"}, Actions: &reportSectionActions{}}
 	f.Render(ui.CreateElement(reportCategoriesSection, props))
 	if !strings.Contains(f.Text(), currency.Symbol("USD")+"123.45") {
 		t.Fatalf("missing initial amount: %s", f.Text())

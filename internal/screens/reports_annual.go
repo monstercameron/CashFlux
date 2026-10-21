@@ -50,6 +50,18 @@ const (
 	rptaHashWindowMS = 3000
 )
 
+// reportNow keeps the report clock explicit for calendar-boundary host tests.
+var reportNow = time.Now
+
+// reportModelBuildObserver observes actual memoized model builds in focused tests.
+var reportModelBuildObserver func(string)
+
+func reportModelBuilt(model string) {
+	if reportModelBuildObserver != nil {
+		reportModelBuildObserver(model)
+	}
+}
+
 func Reports() ui.Node {
 	revision := uistate.UseDataRevision().Get()
 	app := appstate.Default
@@ -71,16 +83,6 @@ func reportController(p reportControllerProps) ui.Node {
 	// show (the parity scan's "report scope leaks globally" defect).
 	scopeAtom := uistate.UseReportScope()
 	lensScope := uistate.UseActiveScope().Get()
-
-	// Drill wiring (category / payee-less: plain ledger) — hooks at stable positions.
-	nav := router.UseNavigate()
-	txFilterAtom := uistate.UseTxFilter()
-	drillCategory := func(categoryID string) {
-		f := uistate.TxFilter{Category: categoryID}.Normalize()
-		txFilterAtom.Set(f)
-		uistate.PersistTxFilter(f)
-		nav.Navigate(uistate.RoutePath("/transactions"))
-	}
 
 	pr := uistate.UsePrefs().Get()
 	base := app.Settings().BaseCurrency
@@ -115,7 +117,6 @@ func reportController(p reportControllerProps) ui.Node {
 	// this one, or nothing. Windows are always WHOLE months — every figure below
 	// is bucketed by month, so a partial last bucket would silently understate it.
 	w := uistate.UsePeriod().Get()
-	uistate.PersistPeriodWindow(w)
 	_, wEnd := w.Range()
 	lastMonth := dateutil.MonthStart(wEnd.AddDate(0, 0, -1))
 	rangeCfg := uistate.LoadReportRange()
@@ -139,6 +140,7 @@ func reportController(p reportControllerProps) ui.Node {
 		bounds = append(bounds, dateutil.AddMonths(as, k))
 	}
 	review := ui.UseMemo(func() reportview.Series {
+		reportModelBuilt("series")
 		return reportview.BuildSeries(accounts, txns, sc, bounds, rates)
 	}, revKey(app), as.Unix(), ae.Unix(), fmt.Sprintf("%#v", sc))
 	scopedTxns := review.Transactions
@@ -183,11 +185,21 @@ func reportController(p reportControllerProps) ui.Node {
 		firstCFKey = cfDefs[0].Key
 	}
 	selectedCFKey := ui.UseState(firstCFKey)
-	onCFKeyChange := OnChange(func(v string) { selectedCFKey.Set(v) })
+	onCFKeyChange := ui.UseEvent(func(v string) { selectedCFKey.Set(v) })
+	// UseEvent keeps these wrappers alive and updates their callback cells each
+	// render. A stable holder lets section prop equality reuse them even when a
+	// renderer's handler payload is itself a non-comparable function value.
+	sectionActions := ui.UseMemo(func() *reportSectionActions {
+		return &reportSectionActions{ToggleRollup: onToggleRollup, ChangeCFKey: onCFKeyChange}
+	}, app)
 
 	persistKey := fmt.Sprintf("annual|%t|%t", yoyMode.Get(), rollupCats.Get())
 	ui.UseEffect(func() func() {
-		uistate.SetReportsConfig(uistate.ReportsConfig{View: "annual", YoY: yoyMode.Get(), Rollup: rollupCats.Get()})
+		current := uistate.ReportsConfigGet()
+		if current.YoY != yoyMode.Get() || current.Rollup != rollupCats.Get() {
+			current.YoY, current.Rollup = yoyMode.Get(), rollupCats.Get()
+			uistate.SetReportsConfig(current)
+		}
 		return nil
 	}, persistKey)
 
@@ -202,9 +214,10 @@ func reportController(p reportControllerProps) ui.Node {
 	// ── Year computations (all pure-core calls over [as, ae)). ────────────────
 	flow := review.Flow
 	cats := app.Categories()
-	nowActivity := time.Now()
+	nowActivity := reportNow()
 	confirmedSubs := loadConfirmedSubs()
 	activity := ui.UseMemo(func() reportview.Activity {
+		reportModelBuilt("activity")
 		model, _ := reportview.BuildActivity(reportview.ActivityInput{
 			Series: review, Bounds: bounds, PriorStart: ps, PriorEnd: pe, Rates: rates,
 			Categories: cats, HouseholdAccounts: accounts, Recurring: app.Recurring(),
@@ -213,11 +226,13 @@ func reportController(p reportControllerProps) ui.Node {
 		return model
 	}, revKey(app), as.Unix(), ae.Unix(), ps.Unix(), pe.Unix(), fmt.Sprintf("%#v", sc), nowActivity.Format(dateutil.Layout), fmt.Sprintf("%#v", confirmedSubs))
 	categoryReview := ui.UseMemo(func() reportview.CategoryReview {
+		reportModelBuilt("categories")
 		model, err := reportview.BuildCategoryReview(activity.Spending, activity.CategoryTrends, cats, rollupCats.Get(), months, flow.Expense)
 		model.Error = err
 		return model
 	}, revKey(app), as.Unix(), ae.Unix(), ps.Unix(), pe.Unix(), fmt.Sprintf("%#v", sc), rollupCats.Get())
 	adherence := ui.UseMemo(func() reportview.BudgetAdherence {
+		reportModelBuilt("adherence")
 		model, _ := reportview.BuildBudgetAdherence(app.Budgets(), budgetLedgerForApp(app), bounds, rates)
 		return model
 	}, revKey(app), as.Unix(), ae.Unix())
@@ -245,7 +260,7 @@ func reportController(p reportControllerProps) ui.Node {
 	nwSeries, nwNet, nwChange := activity.NetWorthSeries, activity.NetWorth, activity.NetWorthChange
 
 	// Health: the deterministic score + factors + prioritized steps.
-	health := healthscore.Evaluate(liveHealthInputs(app, time.Now()))
+	health := healthscore.Evaluate(liveHealthInputs(app, nowActivity))
 
 	// The year's fee + interest charges ("money that bought nothing", §07).
 	costs := activity.Costs
@@ -271,6 +286,7 @@ func reportController(p reportControllerProps) ui.Node {
 
 	// Goals over the year (household-wide; classify is cheap).
 	goalFacts := ui.UseMemo(func() dashboardview.GoalFacts {
+		reportModelBuilt("goals")
 		return dashboardview.DeriveGoals(app.Goals(), app.Tasks(), rates, nowActivity)
 	}, revKey(app), nowActivity.Format(dateutil.Layout))
 	gc := goalFacts.Counts
@@ -281,6 +297,7 @@ func reportController(p reportControllerProps) ui.Node {
 	// All judgment lives in the pure internal/vitals core.
 	essBasis := buildSmartInput(app, pr.WeekStartWeekday()).EssentialBasis()
 	position := ui.UseMemo(func() reportview.Position {
+		reportModelBuilt("position")
 		return reportview.BuildPosition(accounts, txns, review.HouseholdFlows, rates, essBasis.EssentialMonthlyMinor())
 	}, revKey(app), as.Unix(), ae.Unix(), essBasis.EssentialMonthlyMinor())
 	vt := position.Vitals
@@ -498,7 +515,7 @@ func reportController(p reportControllerProps) ui.Node {
 	// still in progress, the masthead says so — a 17-day July beside eleven
 	// complete months must never read as a spending collapse.
 	var partialChip ui.Node = Fragment()
-	if nowM := time.Now(); !ae.After(dateutil.AddMonths(dateutil.MonthStart(nowM), 1)) && ae.After(nowM) {
+	if nowM := nowActivity; !ae.After(dateutil.AddMonths(dateutil.MonthStart(nowM), 1)) && ae.After(nowM) {
 		daysIn := nowM.Day()
 		daysTotal := dateutil.AddMonths(dateutil.MonthStart(nowM), 1).AddDate(0, 0, -1).Day()
 		partialChip = Span(css.Class("rpta-partial-chip"), Attr("data-testid", "rpta-partial-chip"),
@@ -544,7 +561,7 @@ func reportController(p reportControllerProps) ui.Node {
 	)
 
 	sectionContext := reportSectionContext{Revision: revKey(app), ScopeKey: fmt.Sprintf("%#v", sc), Base: base,
-		Language: string(uistate.ActiveLanguage()), Accent: chartLineColor(uistate.CurrentAccent()), From: as, To: ae, Now: nowActivity, Prefs: pr}
+		Language: string(uistate.ActiveLanguage()), Accent: chartLineColor(uistate.CurrentAccent()), From: as, To: ae, Prefs: pr}
 
 	// ── Toolbar (tabless): scope, metrics, export. ───────────────────────────
 	toolbar := ui.CreateElement(reportToolbar, reportToolbarProps{
@@ -605,9 +622,9 @@ func reportController(p reportControllerProps) ui.Node {
 
 	flowSec := ui.CreateElement(reportMoneyFlowSection, reportMoneyFlowProps{Context: sectionContext, Flow: flow, Income: incomeRows, Spending: rows, Names: catName})
 
-	motion := ui.CreateElement(reportMotionSection, reportMotionProps{Context: sectionContext, Series: review, Activity: activity, Bounds: bounds})
+	motion := ui.CreateElement(reportMotionSection, reportMotionProps{Context: sectionContext, Series: review, Activity: activity, Bounds: bounds, InProgress: reportview.InProgressMonth(bounds, nowActivity)})
 
-	categories := ui.CreateElement(reportCategoriesSection, reportCategoriesProps{Context: sectionContext, Review: categoryReview, Flow: flow, Income: incomeRows, Tags: tagSpend, Names: catName, Rollup: rollupCats.Get(), OnToggleRollup: onToggleRollup, OnDrill: drillCategory})
+	categories := ui.CreateElement(reportCategoriesSection, reportCategoriesProps{Context: sectionContext, Review: categoryReview, Flow: flow, Income: incomeRows, Tags: tagSpend, Names: catName, Rollup: rollupCats.Get(), Actions: sectionActions})
 
 	whereGoes := ui.CreateElement(reportWhereSection, reportWhereProps{Context: sectionContext, Activity: activity, Names: catName, Members: app.Members()})
 
@@ -975,7 +992,7 @@ func reportController(p reportControllerProps) ui.Node {
 	plan := rptaSection("rpta-10", "10", uistate.T("rpta.secPlan"), "plan", uistate.T("rpta.secPlanSub"), askPlan,
 		Div(css.Class("rpta-plan"), Attr("data-testid", "rpta-plan"), planItems))
 
-	appendix := ui.CreateElement(reportAppendixSection, reportAppendixProps{Context: sectionContext, Accounts: scopedAccounts, Transactions: scopedTxns, Categories: cats, Definitions: cfDefs, SelectedCFKey: selectedCFKey.Get(), OnCFKeyChange: onCFKeyChange, Rates: rates})
+	appendix := ui.CreateElement(reportAppendixSection, reportAppendixProps{Context: sectionContext, Accounts: scopedAccounts, Transactions: scopedTxns, Categories: cats, Definitions: cfDefs, SelectedCFKey: selectedCFKey.Get(), Actions: sectionActions, Rates: rates})
 	metricsModal := ui.CreateElement(reportMetricsModal, reportMetricsProps{Context: sectionContext, OnClose: func() { showFormulas.Set(false) }})
 
 	// ── Summary (executive) view ──────────────────────────────────────────────

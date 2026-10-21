@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Reports mode and popover changes no longer write period settings or rebuild unchanged financial sections.
 - Goals and Earmarks tabs use the shared segmented control with keyboard navigation and roving focus.
 - The account detail forecast includes 90 days of recurring events while its near-term summary retains 30 days.
 - Shared report-scope hooks avoid repeated storage reads and legacy migration on warm renders.

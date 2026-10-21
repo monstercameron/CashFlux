@@ -1,3 +1,7 @@
+## 2026-10-20 - Keep Reports read-only during ordinary renders
+
+Removed obsolete render-time period persistence; explicit period actions still own saves. The posture effect skips unchanged writes and preserves the valid stored view. Stable section context/action holders remove changing clock and callback identities, while a native exact open-start/closed-end month index refreshes only Motion at the relevant cutoff. Two new actual-host counter tests and five existing Reports regressions passed: UI-only mode/export/popover renders preserve store revision and six prepared model factories/five Full sections; real period, scope, data, day and nanosecond cutoff changes refresh the appropriate content. Native reportview and stable-hook checks passed. No latency percentage is claimed until a controlled browser comparison.
+
 ## 2026-10-20 - Reuse shared keyboard tabs on Goals
 
 Replaced the hand-built Goals tab buttons with the established configurable SegmentedControl Tabs. Existing labels, classes, test IDs, view atom callbacks, sort visibility and uncounted presentation remain intact. The shared component adds ArrowLeft/Right wrapping, Home/End, stable tab IDs, selected ARIA state and roving tab stops. Native segment/stable-hook checks passed. Four focused actual-host WASM tests passed, including keyboard/content/data transitions and existing FX/task-preview regressions. Component inventory now records Goals adoption.

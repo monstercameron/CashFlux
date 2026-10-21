@@ -27,6 +27,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/css"
 	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v5/router"
 	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
 
@@ -34,8 +35,13 @@ import (
 // code pointers alone cannot identify a new base currency, scope or translation.
 type reportSectionContext struct {
 	Revision, ScopeKey, Base, Language, Accent string
-	From, To, Now                              time.Time
+	From, To                                   time.Time
 	Prefs                                      prefs.Prefs
+}
+
+type reportSectionActions struct {
+	ToggleRollup ui.Handler
+	ChangeCFKey  ui.Handler
 }
 
 func (c reportSectionContext) formatMinor(value int64) string {
@@ -190,10 +196,12 @@ func reportMoneyFlowSection(p reportMoneyFlowProps) ui.Node {
 }
 
 type reportMotionProps struct {
-	Context  reportSectionContext
-	Series   reportview.Series
-	Activity reportview.Activity
-	Bounds   []time.Time
+	// InProgress is the prepared month-label index; unrelated sections need no clock.
+	InProgress int
+	Context    reportSectionContext
+	Series     reportview.Series
+	Activity   reportview.Activity
+	Bounds     []time.Time
 }
 
 func reportMotionSection(p reportMotionProps) ui.Node {
@@ -248,7 +256,7 @@ func reportMotionSection(p reportMotionProps) ui.Node {
 			Label:      bounds[i].Format("January 2006"),
 			From:       bounds[i].Format(dateutil.Layout),
 			To:         bounds[i+1].AddDate(0, 0, -1).Format(dateutil.Layout),
-			InProgress: !bounds[i+1].Before(p.Context.Now) && bounds[i].Before(p.Context.Now),
+			InProgress: i == p.InProgress,
 		})
 		monthRows = append(monthRows, Tr(ClassStr(rowCls),
 			Td(css.Class("rpta-td-name"), nameCell),
@@ -409,15 +417,14 @@ func reportMotionSection(p reportMotionProps) ui.Node {
 }
 
 type reportCategoriesProps struct {
-	Context        reportSectionContext
-	Review         reportview.CategoryReview
-	Flow           reports.PeriodFlow
-	Income         []reports.CategorySpend
-	Tags           []reports.TagSpend
-	Names          map[string]string
-	Rollup         bool
-	OnToggleRollup ui.Handler
-	OnDrill        func(string)
+	Context reportSectionContext
+	Review  reportview.CategoryReview
+	Flow    reports.PeriodFlow
+	Income  []reports.CategorySpend
+	Tags    []reports.TagSpend
+	Names   map[string]string
+	Rollup  bool
+	Actions *reportSectionActions
 }
 
 func reportCategoriesSection(p reportCategoriesProps) ui.Node {
@@ -425,7 +432,14 @@ func reportCategoriesSection(p reportCategoriesProps) ui.Node {
 	categoryReview, rows, tagSpend := p.Review, p.Review.Spending, p.Tags
 	as, ae := p.Context.From, p.Context.To
 	catName, nameOf, fmtMinor := p.Names, p.Context.categoryName(p.Names), p.Context.formatMinor
-	drillCategory := p.OnDrill
+	nav := router.UseNavigate()
+	txFilterAtom := uistate.UseTxFilter()
+	drillCategory := func(categoryID string) {
+		f := uistate.TxFilter{Category: categoryID}.Normalize()
+		txFilterAtom.Set(f)
+		uistate.PersistTxFilter(f)
+		nav.Navigate(uistate.RoutePath("/transactions"))
+	}
 	_, flowColors := reportFlowPresentation(reportMoneyFlowProps{Context: p.Context, Flow: p.Flow, Income: p.Income, Spending: rows, Names: p.Names})
 	// ── 04 · Categories reviewed (the full-year table with sparklines). ──────
 	narrative := reports.SpendingNarrative(rows, true, fmtMinor, func(id string) string { return catName[id] })
@@ -495,7 +509,7 @@ func reportCategoriesSection(p reportCategoriesProps) ui.Node {
 	catActions := Div(css.Class(tw.Flex, tw.Gap2),
 		Button(ClassStr(rollupCls+" "+tw.Fold(tw.Gap2)), Type("button"), Attr("data-testid", "reports-rollup-toggle"),
 			Attr("aria-pressed", boolStr(p.Rollup)), Title(uistate.T("reports.rollupTitle")),
-			OnClick(p.OnToggleRollup),
+			OnClick(p.Actions.ToggleRollup),
 			uiw.Icon(icon.List, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
 			Span(uistate.T(rollupLabelKey(p.Rollup)))),
 	)
@@ -661,12 +675,13 @@ type reportAppendixProps struct {
 	Categories    []domain.Category
 	Definitions   []customfields.Def
 	SelectedCFKey string
-	OnCFKeyChange any
+	Actions       *reportSectionActions
 	Rates         currency.Rates
 }
 
 func reportAppendixSection(p reportAppendixProps) ui.Node {
 	reportSectionBuilt("appendix")
+	onCFKeyChange := OnChange(p.Actions.ChangeCFKey)
 	base, as, ae := p.Context.Base, p.Context.From, p.Context.To
 	scopedAccounts, scopedTxns, cats, cfDefs, rates := p.Accounts, p.Transactions, p.Categories, p.Definitions, p.Rates
 	fmtMinor := p.Context.formatMinor
@@ -681,7 +696,7 @@ func reportAppendixSection(p reportAppendixProps) ui.Node {
 		appendixBits = append(appendixBits, invperf)
 	}
 	if len(cfDefs) > 0 {
-		appendixBits = append(appendixBits, customFieldSpendSection(p.Context, scopedTxns, cfDefs, p.SelectedCFKey, p.OnCFKeyChange, as, ae, rates, base, fmtMinor, winForExports))
+		appendixBits = append(appendixBits, customFieldSpendSection(p.Context, scopedTxns, cfDefs, p.SelectedCFKey, onCFKeyChange, as, ae, rates, base, fmtMinor, winForExports))
 	}
 	var appendix ui.Node = Fragment()
 	if len(appendixBits) > 0 {
