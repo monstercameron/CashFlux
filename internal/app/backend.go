@@ -397,6 +397,10 @@ func createBillingSession(endpoint, token, path string, body map[string]string, 
 
 func prepareBackendSyncDataset(ctx context.Context, endpoint, token, workspaceID string, data []byte) ([]byte, error) {
 	defer timePhase("prepare.total")()
+	if !datasetEncryptionActive() {
+		return nil, fmt.Errorf("sync snapshot: %s", syncstate.DataProtectionMessage)
+	}
+	passcode := activePasscode
 	done := timePhase("prepare.import")
 	ds, err := store.Import(data)
 	done()
@@ -429,9 +433,9 @@ func prepareBackendSyncDataset(ctx context.Context, endpoint, token, workspaceID
 	// stores is the cryptobox envelope, not plaintext JSON. The envelope embeds its
 	// own salt, so any device with the same passcode decrypts it on pull — no salt
 	// channel. Artifact blob bytes were already encrypted at upload time above.
-	if datasetEncryptionActive() {
+	if datasetEncryptionActive() && activePasscode == passcode {
 		doneEnc := timePhase("prepare.encrypt")
-		env, err := encryptDatasetSync(out, activePasscode)
+		env, err := encryptDatasetSync(out, passcode)
 		doneEnc()
 		if err != nil {
 			return nil, err
@@ -441,9 +445,12 @@ func prepareBackendSyncDataset(ctx context.Context, endpoint, token, workspaceID
 		if len(env) == 0 || !cryptobox.IsEnvelope(env) {
 			return nil, errSyncEncryptEmpty
 		}
+		if !datasetEncryptionActive() || activePasscode != passcode {
+			return nil, fmt.Errorf("sync snapshot: %s", syncstate.DataProtectionMessage)
+		}
 		return env, nil
 	}
-	return out, nil
+	return nil, fmt.Errorf("sync snapshot: %s", syncstate.DataProtectionMessage)
 }
 
 func hydrateBackendSyncDataset(ctx context.Context, endpoint, token, workspaceID string, data []byte) ([]byte, error) {

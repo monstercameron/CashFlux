@@ -1,3 +1,7 @@
+## 2026-10-20 - Guard the sync publisher itself
+
+The Cloud setup and current queue caller require App Lock, and the blob uploader already refuses an unprotected payload. Snapshot preparation still had a final plaintext return when protection was inactive, leaving future callers a path to publish readable JSON. It now checks protection before import and again before returning its encrypted envelope, including a passcode change during preparation. A wasm test asserts the refusal without network access; the two-device encrypted attachment browser journey passed after the change.
+
 ## 2026-10-20 - Record the file-sync privacy boundary
 
 The review in `docs/SYNC_PRIVACY_REVIEW.md` traces local save, first connection, encrypted blob upload, authenticated restore, and server switching against code and synthetic tests. It explicitly distinguishes encrypted remote file contents from readable server metadata and the plaintext local artifact IndexedDB store. It also records incomplete server exports and inactive-workspace backup bundles as recovery limits. No production credential or customer file was used.

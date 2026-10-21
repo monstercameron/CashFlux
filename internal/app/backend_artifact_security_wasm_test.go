@@ -45,4 +45,7 @@ func TestArtifactUploadRequiresDataProtection(t *testing.T) {
 	if status.State != string(syncstate.StatusNeedsDataProtection) || status.Message != syncstate.DataProtectionMessage {
 		t.Fatalf("sync status = %+v, want typed data protection status", status)
 	}
+	if _, err := prepareBackendSyncDataset(context.Background(), "http://invalid", "token", "workspace", []byte(`{"artifacts":[]}`)); err == nil || !strings.Contains(err.Error(), syncstate.DataProtectionMessage) {
+		t.Fatalf("snapshot prepare error = %v, want protection refusal", err)
+	}
 }
