@@ -14,7 +14,7 @@ import (
 // elapsed durations; it never captures route, account, workspace, or dataset data.
 // Run starts this clock after WASM has initialized, so the record does not include
 // fetching, decoding, or compiling the WASM binary.
-const startupTimingSchemaVersion = 1
+const startupTimingSchemaVersion = 2
 
 var startupTimingPhaseNames = [...]string{
 	"entryToStylesMs",
@@ -34,11 +34,19 @@ var startupTimingPhaseNames = [...]string{
 	"readySignalMs",
 }
 
+// Details subdivide selected phases. They must not be added to phases when
+// computing total time because their enclosing phase already includes them.
+var startupTimingDetailNames = [...]string{
+	"appStateInitMs", "workspacePreparationMs", "blobStoreInitMs",
+	"datasetHydrationMs", "legacyUnlockWaitMs", "undoBaselineMs", "auditFeedRestoreMs",
+}
+
 type startupTimer struct {
 	target   js.Value
 	started  float64
 	active   map[string]float64
 	phases   map[string]float64
+	details  map[string]float64
 	clock    func() float64
 	finished bool
 }
@@ -85,8 +93,28 @@ func newStartupTimerWith(perf, target js.Value, wallNow func() time.Time) *start
 		started: started,
 		active:  make(map[string]float64, len(startupTimingPhaseNames)),
 		phases:  make(map[string]float64, len(startupTimingPhaseNames)),
+		details: make(map[string]float64, len(startupTimingDetailNames)),
 		clock:   clock,
 	}
+}
+
+// MeasureDetail observes an operation without changing whether it runs. Only
+// fixed duration names are published; arbitrary metadata cannot enter the record.
+func (t *startupTimer) MeasureDetail(name string, operation func()) {
+	if operation == nil {
+		return
+	}
+	known := false
+	for _, detail := range startupTimingDetailNames {
+		known = known || name == detail
+	}
+	if t == nil || t.finished || !known {
+		operation()
+		return
+	}
+	start := t.clock()
+	operation()
+	t.details[name] += math.Max(0, t.clock()-start)
 }
 
 func (t *startupTimer) BeginPhase(name string) {
@@ -135,6 +163,13 @@ func (t *startupTimer) Finish() {
 		}
 	}
 	record.Set("phases", phases)
+	details := js.Global().Get("Object").New()
+	for _, name := range startupTimingDetailNames {
+		if duration, ok := t.details[name]; ok {
+			details.Set(name, duration)
+		}
+	}
+	record.Set("details", details)
 	t.target.Set("__cashfluxBootTimings", record)
 }
 

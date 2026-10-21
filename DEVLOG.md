@@ -1,3 +1,7 @@
+## 2026-10-20 - Separate startup phase details without recording data
+
+The broad hydration and pre-mount intervals could not identify which path dominated fresh-sample versus saved-data startup. Schema version 2 retains existing disjoint phases and adds nested timing details for app-state initialization, workspace preparation, artifact storage, hydration, legacy unlock waiting, undo baseline and audit restoration. All original calls execute inline exactly once with unchanged errors and ordering. Six isolated WASM timer tests pass, including fixed-name bounds, detail accumulation, non-additive totals and execution with disabled timers; a main WASM preflight build passes. A read-only review found no data capture or boot-order changes.
+
 ## 2026-10-20 - Document shared goal and lazy Reports component contracts
 
 Updated the component guide with one-pass task summaries, immutable row facts, raw-domain mutation boundaries, invalidation requirements and stable lazy Report section hooks. Documented checked per-hundred math APIs and the final 817-screen/native/browser verification with exact artifact provenance, without treating functional checks as latency measurements. Browser cases passed on isolated sample data with external DNS blocked.

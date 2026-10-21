@@ -117,3 +117,46 @@ func TestStartupTimerFallsBackFromNonFinitePerformanceValues(t *testing.T) {
 		t.Fatalf("routerMountMs = %v, want finite 4", got)
 	}
 }
+
+func TestStartupTimerDetailsSubdivideWithoutChangingPhaseTotals(t *testing.T) {
+	wall := time.Unix(0, 0)
+	target := js.Global().Get("Object").New()
+	timer := newStartupTimerWith(js.Undefined(), target, func() time.Time { return wall })
+	timer.BeginPhase("appStateWorkspaceAndHydrationMs")
+	timer.MeasureDetail("appStateInitMs", func() { wall = wall.Add(3 * time.Millisecond) })
+	timer.MeasureDetail("appStateInitMs", func() { wall = wall.Add(2 * time.Millisecond) })
+	timer.MeasureDetail("notAllowed", func() { wall = wall.Add(time.Millisecond) })
+	timer.EndPhase("appStateWorkspaceAndHydrationMs")
+	timer.Finish()
+	record := target.Get("__cashfluxBootTimings")
+	if got := record.Get("totalMs").Float(); got != 6 {
+		t.Fatalf("totalMs = %v, want 6", got)
+	}
+	if got := record.Get("phases").Get("appStateWorkspaceAndHydrationMs").Float(); got != 6 {
+		t.Fatalf("enclosing phase = %v, want 6", got)
+	}
+	if got := record.Get("details").Get("appStateInitMs").Float(); got != 5 {
+		t.Fatalf("detail = %v, want 5 accumulated milliseconds", got)
+	}
+	if !record.Get("details").Get("notAllowed").IsUndefined() {
+		t.Fatal("unknown detail entered fixed-schema record")
+	}
+	if !record.Get("phases").Get("appStateInitMs").IsUndefined() {
+		t.Fatal("nested detail entered disjoint phase totals")
+	}
+}
+
+func TestStartupTimerDetailsAlwaysRunTheirOperation(t *testing.T) {
+	wall := time.Unix(0, 0)
+	timer := newStartupTimerWith(js.Undefined(), js.Undefined(), func() time.Time { return wall })
+	timer.Finish()
+	calls := 0
+	for _, current := range []*startupTimer{nil, timer} {
+		current.MeasureDetail("appStateInitMs", func() { calls++ })
+		current.MeasureDetail("notAllowed", func() { calls++ })
+		current.MeasureDetail("appStateInitMs", nil)
+	}
+	if calls != 4 {
+		t.Fatalf("operations called %d times, want 4", calls)
+	}
+}

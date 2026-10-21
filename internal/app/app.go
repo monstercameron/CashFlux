@@ -109,8 +109,10 @@ func Run() {
 	// localStorage (or seed the sample on first run). Logs (os.Stderr) surface in
 	// the browser console.
 	bootTiming.BeginPhase("appStateWorkspaceAndHydrationMs")
-	if err := appstate.Init(nil, false); err != nil {
-		panic(err)
+	var stateInitErr error
+	bootTiming.MeasureDetail("appStateInitMs", func() { stateInitErr = appstate.Init(nil, false) })
+	if stateInitErr != nil {
+		panic(stateInitErr)
 	}
 	if rpcWorkerStartErr != nil && appstate.Default != nil {
 		appstate.Default.Log().Warn("services worker could not start", "error", rpcWorkerStartErr)
@@ -118,17 +120,19 @@ func Run() {
 	// Initialize the workspace registry (migrates an existing single dataset into a
 	// "Default" workspace). The active workspace's data already lives in the
 	// canonical localStorage keys, so hydrateDataset below loads it as usual.
-	ensureWorkspaceRegistry()
-	// Honor the startup-workspace preference before hydrating: if a workspace is
-	// pinned, swap its context into the canonical keys so the first paint is the
-	// workspace the user chose to open with (no reload needed pre-mount).
-	applyStartupWorkspace()
+	bootTiming.MeasureDetail("workspacePreparationMs", func() {
+		ensureWorkspaceRegistry()
+		// Honor the startup-workspace preference before hydrating: if a workspace is
+		// pinned, swap its context into the canonical keys so the first paint is the
+		// workspace the user chose to open with (no reload needed pre-mount).
+		applyStartupWorkspace()
+	})
 	// Open the IndexedDB artifact store so binary bytes are kept out of the main
 	// localStorage JSON blob. This must run before hydrateDataset so the blob store
 	// is ready when artifact bytes are migrated on load.
-	initBlobStore()
-	hydrateOpenedProtectedStorage()
-	awaitLegacyDatasetUnlock()
+	bootTiming.MeasureDetail("blobStoreInitMs", initBlobStore)
+	bootTiming.MeasureDetail("datasetHydrationMs", hydrateOpenedProtectedStorage)
+	bootTiming.MeasureDetail("legacyUnlockWaitMs", awaitLegacyDatasetUnlock)
 	bootTiming.EndPhase("appStateWorkspaceAndHydrationMs")
 	// Restore and refresh the selected account before any identity, sync or watch.
 	// Failure leaves household data intact and the connection behind sign-in.
@@ -139,9 +143,9 @@ func Run() {
 	}
 	bootTiming.EndPhase("sessionBootstrapMs")
 	bootTiming.BeginPhase("preMountPreparationMs")
-	initUndo() // capture the baseline undo snapshot after hydration (C78)
+	bootTiming.MeasureDetail("undoBaselineMs", initUndo) // baseline snapshot after hydration (C78)
 	if appstate.Default != nil {
-		appstate.Default.LoadAuditIntoFeed() // restore persisted audit history into the Activity feed (C78)
+		bootTiming.MeasureDetail("auditFeedRestoreMs", appstate.Default.LoadAuditIntoFeed)
 	}
 	// Seed this device's music resume point from the dataset (e.g. a just-imported
 	// workspace) BEFORE mounting, so the player reads the restored point on init.

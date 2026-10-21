@@ -64,7 +64,12 @@ sample-workspace confirmation, and `conditions.backgroundWork` when the caller s
 the two captures' machine load is visible alongside the timing data.
 
 Newer builds expose a fixed-schema `window.__cashfluxBootTimings` record, captured
-as `boot.goPhases` when present (otherwise `null`). Its total starts at Go `Run`,
+as `boot.goPhases` when present (otherwise `null`). Schema version 2 adds fixed
+duration-only `details` for app-state initialization, workspace preparation,
+artifact storage, hydration, legacy unlock waiting, undo baseline and audit-feed
+restoration. Details subdivide their enclosing phase and must not be added to the
+phase totals. No workspace, account or dataset values are recorded.
+Its total starts at Go `Run`,
 so it excludes WASM fetch/decode/compile. Phase durations separate protected
 storage, hydration, sign-in bootstrap, recurring covers, mounting and boot wiring.
 `postMountNotificationScheduleMs` measures scheduling only; notification generation
