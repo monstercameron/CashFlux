@@ -1845,6 +1845,13 @@ func (a *App) WorkflowVariableNames() []string {
 	for n := range vars {
 		names[n] = true
 	}
+	// A budget's spending can be unavailable (for example, a missing FX rate).
+	// Keep its established handles discoverable without supplying fake values.
+	for _, base := range engineenv.BudgetVarBases(a.Budgets()) {
+		for _, field := range engineenv.BudgetVarFields {
+			names[base.Prefix+field] = true
+		}
+	}
 	// The per-transaction merchant-baseline variables only exist on txn-added runs
 	// but must still be offerable in the composer — a variable you cannot discover
 	// is a variable nobody uses.

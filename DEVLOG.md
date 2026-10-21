@@ -1,3 +1,7 @@
+## 2026-10-20 - Keep budget tasks open when spending is unavailable
+
+Added a native typed budget observation that preserves independently known limits while omitting unavailable spending-derived variables. Existing formula conditions now fail closed instead of treating unknown overspending as zero. Budget variable discovery and duplicate-name identities remain stable, and persisted molecules cannot replace reserved unavailable atoms. Full engineenv/taskresolve/tasksuggest native suites, focused appstate task-resolution/routing regressions and vet passed under Go 1.26.9. Tests cover missing/invalid FX, sum/magnitude overflow, known zero, successful numeric parity, discovery, molecule collisions and production posting of the existing generated condition. Restoring rates while still overspent keeps the task open; actual linked-refund recovery completes it once. No formula or transaction commit-flow semantics changed.
+
 ## 2026-10-20 - Correct the transaction benchmark target metadata
 
 Rechecked the original transaction-filter benchmark header, which records goos windows and goarch amd64. Corrected the documentation that had described the ARM64 host as the benchmark target. Raw observations, fixtures and measured results are unchanged; no new benchmark run was needed.

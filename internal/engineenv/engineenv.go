@@ -268,6 +268,13 @@ func Vars(d Data) map[string]float64 {
 	for k := range out {
 		atoms[k] = true
 	}
+	// An unavailable budget atom remains reserved. A molecule that normally
+	// shadows it must not replace a failed spending calculation with a safe zero.
+	for _, base := range BudgetVarBases(d.Budgets) {
+		for _, field := range BudgetVarFields {
+			atoms[base.Prefix+field] = true
+		}
+	}
 	pending := make([]domain.Molecule, 0, len(mols))
 	for _, m := range mols {
 		if atoms[m.Name] {
@@ -1159,29 +1166,19 @@ func addAccountFlowVars(out map[string]float64, d Data, major func(int64) float6
 // Spent is measured over the budget's OWN period window (monthly/weekly/…), anchored to
 // the caller's week start, so it matches what the Budgets screen shows. Name collisions
 // are disambiguated with a numeric suffix (…_2, …_3) in stable budget order.
+// Failed spending leaves its derived variables absent, so formulas and task
+// conditions cannot mistake unknown spending for a real zero. The limit remains known.
 func addBudgetVars(out map[string]float64, d Data, major func(int64) float64) {
 	for _, base := range BudgetVarBases(d.Budgets) {
-		b := base.Budget
-		start, end := budgeting.PeriodRange(b.Period, d.Now, d.WeekStart)
-		spent := 0.0
-		if s, err := budgeting.Spent(b, d.budgetLedger(), start, end, d.Rates); err == nil {
-			spent = major(s.Amount)
+		observation := observeBudget(base.Budget, d, major)
+		out[base.Prefix+"limit"] = observation.Limit
+		if !observation.SpendingKnown {
+			continue
 		}
-		limit := major(b.Limit.Amount)
-		remaining := limit - spent
-		over := 0.0
-		if spent > limit {
-			over = spent - limit
-		}
-		percent := 0.0
-		if limit != 0 {
-			percent = spent / limit * 100
-		}
-		out[base.Prefix+"limit"] = limit
-		out[base.Prefix+"spent"] = spent
-		out[base.Prefix+"remaining"] = remaining
-		out[base.Prefix+"over"] = over
-		out[base.Prefix+"percent"] = percent
+		out[base.Prefix+"spent"] = observation.Spent
+		out[base.Prefix+"remaining"] = observation.Remaining
+		out[base.Prefix+"over"] = observation.Over
+		out[base.Prefix+"percent"] = observation.Percent
 	}
 }
 

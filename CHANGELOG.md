@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Budget task automation preserves open tasks when missing exchange rates or overflow prevents spending calculation.
 - Performance notes distinguish the transaction benchmark AMD64 target from its ARM64 host.
 - Transaction-filter readers avoid repeated SQLite reads and ignored JSON decoding on warm renders.
 - Primary-page verification records the current frozen build, passing checks and slower observed timings with load limitations.
