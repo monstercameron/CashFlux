@@ -1,3 +1,7 @@
+## 2026-10-21 - Plan the full application component boundary pass
+
+Extended the requested scope from the nine primary pages to all 47 registered routes. Read-only inventories identify existing native models, reusable UI, remaining screen calculations, large controllers, hook identity risks and existing benchmark seams. Recorded the bottom-up implementation order and evidence required for completion. This commit changes documentation only; no behavior or performance gain is claimed.
+
 ## 2026-10-21 - Page complete tax record exports
 
 Small results retain the complete inline CSV. Large results return JSON-character chunks with explicit year and snapshot continuation, truthful category and receipt counts, bounded prose, and a 32KiB envelope. CSV identity tracks actual output and the bound dataset, not usage accounting. Added a 900-category reconstruction, stale-data, and malformed-argument regression. Full screen WASM suite passed 1015 tests.
