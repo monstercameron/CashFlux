@@ -6,6 +6,7 @@ package app
 
 import (
 	"encoding/json"
+	"errors"
 	"strings"
 	"time"
 
@@ -55,16 +56,16 @@ func gatherBackupDatasets(r workspace.Registry, activeDS string) []string {
 // activeDataset serializes the live active-workspace dataset (OpenAI key redacted,
 // artifact image bytes rehydrated from IndexedDB so the backup is fully
 // self-contained), or "" when unavailable.
-func activeDataset() string {
+func activeDataset() (string, error) {
 	app := appstate.Default
 	if app == nil {
-		return ""
+		return "", errors.New("active dataset is unavailable")
 	}
 	data, err := app.ExportJSONRedactedWithBlobs()
 	if err != nil {
-		return ""
+		return "", err
 	}
-	return string(data)
+	return string(data), nil
 }
 
 // marshalFullBackup gathers the whole install — every workspace's dataset, the
@@ -77,8 +78,12 @@ func activeDataset() string {
 // install missing — the worst possible time and the worst possible way.
 func marshalFullBackup() ([]byte, error) {
 	r := loadRegistry()
+	active, err := activeDataset()
+	if err != nil {
+		return nil, err
+	}
 	env := backup.Envelope{
-		Datasets:          gatherBackupDatasets(r, activeDataset()),
+		Datasets:          gatherBackupDatasets(r, active),
 		WorkspaceRegistry: lsGet(workspacesKey),
 		Appearance: backup.Appearance{
 			Theme:  lsGet(themeKey),

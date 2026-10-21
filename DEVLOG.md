@@ -1,3 +1,7 @@
+## 2026-10-20 - Abort incomplete full-install backups
+
+The full backup builder treated an active-dataset export error as an empty dataset string. If an attached file could not be read, the app could still download a backup that omitted the whole active household. The builder now propagates the export error, so the existing error notice appears and no incomplete archive is downloaded. A WebAssembly build passed. Inactive workspace bundles still need a separate file-completeness review.
+
 ## 2026-10-20 - Keep blob-backed files in sync and backups
 
 The queued sync snapshot came from SQLite, where imported PDF bytes are stored separately in IndexedDB. The upload path therefore could publish metadata without the file, while backup export silently continued after a blob read failure. The queue flush now completes its already committed snapshot with the matching local bytes before encrypting and uploading; it stops with an actionable status when those bytes are missing, unreadable, or shorter than recorded. JSON and SQLite export use the same fail-closed check. A native test covers the PDF-backed snapshot, missing/truncated blobs, and both backup formats. The full native suite and screen-lint check passed.
