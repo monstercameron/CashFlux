@@ -1,3 +1,7 @@
+## 2026-10-20 - Revalidate contribution writes and canonical completion
+
+Contribution orchestration resolves the latest goal by ID, preserves external metadata and account edits, rejects deleted or currency-conflicting forms, and preflights amounts/custom fields before ledger writes. Native result fields now own saved milestones and known coverage transitions; the form no longer computes percentages. Seven new native cases and three actual app-host WASM cases passed. Full native integration and all 827 screen WASM tests passed. Legacy memo-only fallback on ledger failure and independent goal/ledger writes remain follow-up work.
+
 ## 2026-10-20 - Share prepared Dashboard frames and layouts
 
 Dashboard placements previously rebuilt the same scoped source context and reran source pipelines on unrelated parent renders. Typed native frame contexts now share immutable input and bounded copied pipeline results with complete app/data, scope, FX, period, preferences and clock identities. A separate two-configuration layout cache freezes actual reference fields, preserves published cards and validates/serializes only changed configurations. A stable wrapper supports nil/loaded transitions and removes one obsolete hook exception. Native parity, mutation, invalidation and retention tests pass; native screenlint and vet pass, two actual Dashboard host tests pass and a main WASM preflight builds. The unrelated excluded-transaction count mismatch remains a separate follow-up.

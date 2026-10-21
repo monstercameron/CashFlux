@@ -3559,10 +3559,11 @@ func (a *App) PutGoal(g domain.Goal) error {
 	if err := a.validateCustom("goal", g.Custom); err != nil {
 		return err
 	}
-	wasComplete := false
+	wasComplete, beforeKnown := false, true
+	rates := a.goalEvaluationRates()
 	for _, existing := range a.Goals() {
 		if existing.ID == g.ID {
-			wasComplete = existing.CurrentAmount.Amount >= existing.TargetAmount.Amount && existing.TargetAmount.Amount > 0
+			wasComplete, beforeKnown = goalCompletionForWrite(existing, rates)
 			break
 		}
 	}
@@ -3570,8 +3571,8 @@ func (a *App) PutGoal(g domain.Goal) error {
 		return err
 	}
 	a.log.Info("goal saved", "id", g.ID)
-	isComplete := g.CurrentAmount.Amount >= g.TargetAmount.Amount && g.TargetAmount.Amount > 0
-	if !wasComplete && isComplete && !a.triggersSuspended {
+	isComplete, afterKnown := goalCompletionForWrite(g, rates)
+	if beforeKnown && afterKnown && !wasComplete && isComplete && !a.triggersSuspended {
 		a.RunTriggered(workflow.TriggerGoalReached, nil)
 	}
 	return nil
