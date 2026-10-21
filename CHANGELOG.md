@@ -6,6 +6,9 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Added
+- Authenticated server AI calls now record daily estimated USD cost alongside token usage. The operator console shows per-account estimates and marks historical or unpriced activity as incomplete; server logs contain model and usage totals without prompts or responses.
+
 ### Documentation
 - The device-erasure audit now identifies retained workspace, queue, file, credential, and key records that the current “Erase everything” action does not remove, with acceptance criteria for a truthful full erase.
 
@@ -18,6 +21,7 @@ and every commit updates this file under `Unreleased`.
 - Receipt images, goal photos, custom-page images, and artifact thumbnails now load from encrypted local blob storage after sync restores them. New receipt and goal-photo uploads save their bytes there before the dataset refers to them.
 
 ### Changed
+- Updated the built-in standard-rate estimates for GPT-5.4 mini and GPT-5.5 using OpenAI's published API prices checked on 2026-10-21.
 - Prepared v1.19.10 with encrypted local storage for restored account documents and a PDF cap that fits the default encrypted server upload limit.
 - PDF selection now caps files at 23 MiB so their base64 encrypted blob envelopes fit within the server's default 32 MiB upload limit.
 - Account PDF and image attachments now save to encrypted local blob storage, and a server pull stores restored files there before committing the local dataset. The three-browser regression checks PDF bytes and encrypted IndexedDB records on both devices.

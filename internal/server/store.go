@@ -14,7 +14,7 @@ import (
 	_ "github.com/ncruces/go-sqlite3/driver" // registers the pure-Go sqlite3 driver
 )
 
-const CurrentServerSchemaVersion = 21
+const CurrentServerSchemaVersion = 22
 const sqliteBusyTimeoutMillis = 5000
 
 // Store owns the backend SQLite database.
@@ -299,6 +299,12 @@ func (s *Store) migrate() error {
 			return err
 		}
 		version = 21
+	}
+	if version < 22 {
+		if err := s.migrateTo22(); err != nil {
+			return err
+		}
+		version = 22
 	}
 	if _, err := s.db.Exec(`INSERT INTO schema_meta(id, version) VALUES(1, ?) ON CONFLICT(id) DO UPDATE SET version = excluded.version`, version); err != nil {
 		return fmt.Errorf("server store: write schema version: %w", err)

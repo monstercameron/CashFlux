@@ -263,13 +263,14 @@ type ModelPricing struct {
 	Output float64
 }
 
-// modelPricing maps known models to approximate per-1M-token USD pricing. It's a
-// best-effort table for surfacing rough cost (prices change; treat as an
-// estimate). Dated/variant model names fall back to the longest matching prefix.
+// modelPricing maps known models to standard per-1M-token USD pricing. It is a
+// best-effort estimate: cached input, long-context, and processing-tier rates
+// can differ. Checked against https://developers.openai.com/api/docs/pricing
+// on 2026-10-21. Dated model names use the longest matching prefix.
 var modelPricing = map[string]ModelPricing{
-	"gpt-6-luna":  {Input: 0.10, Output: 0.50},
-	"gpt-5.5":      {Input: 2.00, Output: 8.00},
-	"gpt-5.4-mini": {Input: 0.25, Output: 2.00},
+	"gpt-6-luna":   {Input: 0.10, Output: 0.50},
+	"gpt-5.5":      {Input: 5.00, Output: 30.00},
+	"gpt-5.4-mini": {Input: 0.75, Output: 4.50},
 	"o4-mini":      {Input: 1.10, Output: 4.40},
 }
 
