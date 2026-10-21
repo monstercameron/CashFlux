@@ -1,3 +1,7 @@
+## 2026-10-21 - Prepared category period and usage facts
+
+Prepared independent counts, income/expense availability, totals and bar shares outside the view, using canonical netted ledger rules. Lifetime usage preserves whole-transaction and primary-budget semantics while delete routing uses the complete canonical reference guard. Added checked income aggregation in reports. Native categoryview/reports/appstate tests pass and the focused missing-FX/usage WASM case passes.
+
 ## 2026-10-21 - Complete native Net Worth preparation
 
 Moved remaining model composition into native networthview with independent errors, explicit periods, stable account partitions and mover ordering. Native tests pass and focused WASM adapter checks pass. Corrected the earlier benchmark reference to include the full legacy account-window work; its synthetic results describe only account-window preparation, not browser latency.
