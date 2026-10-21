@@ -1,3 +1,7 @@
+## 2026-10-20 - Prepare sample payoff balances in one pass
+
+Fresh-sample startup does not use the saved-checkpoint reuse path. A separate audit found the sample payoff baseline scanned every transaction once per included liability. Reused ledger.Balances for one shared traversal while preserving account filters, per-account balance-error skipping, sample USD assumptions and ordinary truncation. Checked magnitudes, totals and wide scaling omit an unrepresentable baseline safely. Focused native store tests pass for parity against the old implementation at three sample dates, invalid accounts and arithmetic boundaries. No startup percentage claim is made for this source change.
+
 ## 2026-10-20 - Mount full Reports sections only when requested
 
 Reports now keeps controller hooks and local state stable while five typed child sections own money flow, motion, categories/tags, payees/lists and appendix content. Explicit revision, scope, currency, language, theme, window and preference identities refresh prepared output reliably. Section deep links open Full before scrolling; appendix export callbacks are isolated in components. Goal tallies and rows use canonical FX facts, and checked per-hundred helpers expose unavailable arithmetic. Removed three obsolete hook exceptions without adding any. Five focused render regressions and the complete 817-test screen suite pass; the full native suite, including hook-order checks, passes.

@@ -1421,31 +1421,54 @@ func SampleDatasetAt(now time.Time) Dataset {
 	// 2022" — far below the ~$100k actually owed — so progress always read 0%.
 	// Here we sum the current owed across the included (non-mortgage) liabilities
 	// and set the baseline a bit higher, so the card shows real, sensible progress.
-	var currentOwed int64
-	for _, a := range ds.Accounts {
-		if a.Archived || a.Class != domain.ClassLiability || !a.IncludedInPayoff() {
-			continue
-		}
-		bal, err := ledger.Balance(a, ds.Transactions)
-		if err != nil {
-			continue
-		}
-		owed := bal.Amount
-		if owed < 0 {
-			owed = -owed
-		}
-		// All included sample debts are USD (the EUR travel card sits at €0), so a
-		// raw minor-unit sum is correct here without FX conversion.
-		currentOwed += owed
-	}
-	if currentOwed > 0 {
-		// Treat the current balance as ~82% of what was owed when tracking began,
-		// i.e. roughly 18% paid down since the start date — a believable story.
-		baseline := currentOwed * 100 / 82
-		ds.Settings.PayoffBaseline = &PayoffBaseline{TotalOwed: baseline, Currency: "USD", StartedAt: date(2025, time.September, 1)}
-	}
+	// Use the bulk balance helper so this derivation scans the generated ledger
+	// once, rather than once for every included liability account.
+	ds.Settings.PayoffBaseline = samplePayoffBaseline(ds.Accounts, ds.Transactions, date(2025, time.September, 1))
 
 	return ds
+}
+
+// samplePayoffBaseline derives the sample's starting debt from current balances.
+// Included sample debts are USD, so their minor units can be summed directly.
+// Balance failures are skipped per account, matching the original seed behavior;
+// arithmetic overflow makes the derived baseline unavailable rather than wrapping.
+func samplePayoffBaseline(accounts []domain.Account, transactions []domain.Transaction, startedAt time.Time) *PayoffBaseline {
+	included := make([]domain.Account, 0, len(accounts))
+	for _, account := range accounts {
+		if account.Archived || account.Class != domain.ClassLiability || !account.IncludedInPayoff() {
+			continue
+		}
+		included = append(included, account)
+	}
+	if len(included) == 0 {
+		return nil
+	}
+
+	balances, _ := ledger.Balances(included, transactions)
+	var currentOwed int64
+	for _, account := range included {
+		balance, ok := balances[account.ID]
+		if !ok { // Match the former per-account ledger.Balance error skip.
+			continue
+		}
+		owed, err := money.Abs(balance.Amount)
+		if err != nil {
+			return nil
+		}
+		currentOwed, err = money.Add(currentOwed, owed)
+		if err != nil {
+			return nil
+		}
+	}
+	if currentOwed <= 0 {
+		return nil
+	}
+	// Keep the original truncation toward zero while using a wide intermediate.
+	baseline, err := money.MulDiv(currentOwed, 100, 82, money.RoundTowardZero)
+	if err != nil {
+		return nil
+	}
+	return &PayoffBaseline{TotalOwed: baseline, Currency: "USD", StartedAt: startedAt}
 }
 
 // boolN returns n when cond is true, else 0 — a small helper for conditionally

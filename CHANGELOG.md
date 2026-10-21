@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Reduced sample payoff-baseline preparation to one checked ledger traversal.
 - Split Reports into typed child sections so Summary skips hidden charts and full-detail builders.
 - Aligned budget savings, annual goal projections, dashboard goal summaries and Assistant questions with canonical goal evaluation.
 - Made goal-win notifications use canonical FX-aware completion and one linked-task index.
