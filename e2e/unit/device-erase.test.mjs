@@ -36,7 +36,7 @@ function fixture({ blocked = false } = {}) {
     async keys() { return Array.from(savedCaches); },
     async delete(name) { return savedCaches.delete(name); },
   };
-  const env = { indexedDB, caches, localStorage, navigator: { serviceWorker: { async getRegistrations() { return []; } } } };
+  const env = { indexedDB, caches, localStorage, document: { baseURI: "https://app.test/cashflux/erase-device.html" }, navigator: { serviceWorker: { async getRegistrations() { return []; } } } };
   return { env, names, savedCaches, values };
 }
 
@@ -60,4 +60,17 @@ test("verification fails closed when the browser cannot enumerate databases", as
   const { env } = fixture();
   delete env.indexedDB.databases;
   await assert.rejects(erase.erase(env), /could not be verified/);
+});
+
+test("erase unregisters only this app's service worker", async () => {
+  const { env } = fixture();
+  let ownRemoved = false;
+  let unrelatedRemoved = false;
+  env.navigator.serviceWorker.getRegistrations = async () => [
+    { active: { scriptURL: "https://app.test/other/sw.js" }, async unregister() { unrelatedRemoved = true; return true; } },
+    { active: { scriptURL: "https://app.test/cashflux/sw.js?build=abc" }, async unregister() { ownRemoved = true; return true; } },
+  ];
+  await erase.erase(env);
+  assert.equal(ownRemoved, true);
+  assert.equal(unrelatedRemoved, false);
 });

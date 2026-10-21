@@ -35162,3 +35162,7 @@ The existing ENC39 Wasm test still asserted that a session-delete failure must p
 ## 2026-10-21 — Reconcile the sync privacy review with the erasure branch
 
 The file-sync review still described the old in-memory wipe as current after the standalone eraser was implemented on the draft branch. It now records the disposable-browser evidence for whole-device deletion while keeping deployment and browser-engine validation open. The independent gap remains per-artifact blob garbage collection across snapshots and workspaces.
+
+## 2026-10-21 — Keep device erasure within its service-worker scope
+
+Review found that the standalone eraser matched any worker script named `sw.js` on the origin. On a shared origin, that could remove another application's registration. It now resolves CashFlux's own worker URL from the eraser document and compares both origin and path, allowing its build query parameter while leaving other registrations alone. A Node test verifies both cases, and the offline Chromium erasure test still passes with a controlled CashFlux worker.

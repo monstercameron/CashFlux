@@ -74,9 +74,12 @@
   async function unregisterWorkers(env) {
     if (!env.navigator?.serviceWorker) return;
     const registrations = await env.navigator.serviceWorker.getRegistrations();
+    const ownScript = new URL("./sw.js", env.document.baseURI);
     for (const registration of registrations) {
       const script = registration.active?.scriptURL || registration.waiting?.scriptURL || registration.installing?.scriptURL;
-      if (!script || !/\/(?:sw|services-worker)\.js(?:\?|$)/.test(script)) continue;
+      if (!script) continue;
+      const registeredScript = new URL(script);
+      if (registeredScript.origin !== ownScript.origin || registeredScript.pathname !== ownScript.pathname) continue;
       if (!(await registration.unregister())) throw new Error("CashFlux's offline worker could not be removed. Retry erasure.");
     }
   }
