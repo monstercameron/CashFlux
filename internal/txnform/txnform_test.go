@@ -324,8 +324,11 @@ func TestDecisions(t *testing.T) {
 func TestThumbnails(t *testing.T) {
 	refs := []domain.AttachmentRef{{ArtifactID: "ok"}, {ArtifactID: "missing"}, {ArtifactID: "empty"}}
 	got := Thumbnails(refs, []domain.Artifact{{ID: "ok", MIME: "image/png", Bytes: []byte("a")}, {ID: "empty"}})
-	if len(got) != 3 || got[0].DataURL != "data:image/png;base64,YQ==" || got[1].DataURL != "" || got[2].DataURL != "" {
+	if len(got) != 3 {
 		t.Fatal(got)
+	}
+	if got[0].Artifact.ID != "ok" || string(got[0].Artifact.Bytes) != "a" || got[1].Artifact.ID != "" || got[2].Artifact.ID != "empty" {
+		t.Fatal("thumbnail artifact metadata was not retained")
 	}
 	if len(Thumbnails(nil, nil)) != 0 {
 		t.Fatal("empty")

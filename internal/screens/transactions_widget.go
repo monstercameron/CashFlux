@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
-	"github.com/monstercameron/CashFlux/internal/artifacts"
 	"github.com/monstercameron/CashFlux/internal/catname"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
@@ -226,13 +225,19 @@ func txnReceiptPreviewOverlay(app *appstate.App, previewAtom state.Atom[domain.A
 	closePreview := ui.UseEvent(Prevent(func() { previewAtom.Set(domain.AttachmentRef{}) }))
 	closeOption := OnClick(closePreview)
 	ref := previewAtom.Get()
+	artifact := domain.Artifact{}
+	if ref.ArtifactID != "" {
+		if art := txntable.PreviewArtifact(ref.ArtifactID, app.Artifacts()); art != nil {
+			artifact = *art
+		}
+	}
+	url := useArtifactImageURL(app, artifact)
 	if ref.ArtifactID == "" {
 		return Fragment()
 	}
-	art := txntable.PreviewArtifact(ref.ArtifactID, app.Artifacts())
 	var body ui.Node
-	if art != nil && len(art.Bytes) > 0 {
-		body = Img(Attr("src", artifacts.DataURL(art.MIME, art.Bytes)), Attr("alt", uistate.T("transactions.previewAlt", ref.Name)), css.Class(tw.MaxWFull))
+	if url != "" {
+		body = Img(Attr("src", url), Attr("alt", uistate.T("transactions.previewAlt", ref.Name)), css.Class(tw.MaxWFull))
 	} else {
 		body = P(css.Class("empty"), uistate.T("transactions.previewMissing"))
 	}
