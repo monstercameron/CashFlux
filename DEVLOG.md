@@ -1,3 +1,7 @@
+## 2026-10-21 - Checked planning projections
+
+Checked APIs share the established forecast and planning algorithms, including monthly ordering, anniversary growth, rounding, and runway interpolation. Tests cover 120 frozen-model parity combinations, invalid assumptions, integer and conversion overflow, and documented work bounds. Native forecast and planning suites and vet passed.
+
 ## 2026-10-21 - Checked goal and reservation formula facts
 
 Added checked bill and goal commitment helpers, canonical goal coverage and task progress inputs, checked idle cash arithmetic, and reserved unavailable atom names. Native safespend and engineenv suites and vet passed; independent known facts remain available when related financial calculations fail.

@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Added checked saved-plan and forecast calculations with explicit overflow and resource-limit errors.
 - Assistant formula facts now preserve unavailable goal, bill, and earmarked calculations instead of substituting zero.
 - Assistant subscription-call preparation preserves currency and exact annual costs with honest evidence limits.
 - Assistant edits validate and preview exact before/after transaction rows, including supported paired transfers.
