@@ -62,7 +62,7 @@ func PendingDeviceCard(props PendingDeviceCardProps) uic.Node {
 	if !expanded.Get() {
 		return Div(Attr("data-testid", "pending-device-collapsed"),
 			Button(css.Class("btn-link", tw.Text12, tw.TextDim), Type("button"), Attr("data-testid", "pending-device-expand"),
-				OnClick(onToggleExpand), uistate.T("authCards.waitForApproval")),
+				OnClick(onToggleExpand), uistate.T("authCards.pendingRequest")),
 		)
 	}
 	return uic.CreateElement(pendingDeviceWatcher)

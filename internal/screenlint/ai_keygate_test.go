@@ -101,11 +101,11 @@ func TestEveryGrandfatheredSurfaceChecksBothHalves(t *testing.T) {
 				continue
 			}
 			// The condition must mention the backend on the same line, or the
-			// surrounding code must resolve it (BackendActive / useBackend).
+			// surrounding code must resolve it (BackendAIActive / useBackend).
 			if strings.Contains(line, "Backend") || strings.Contains(line, "backend") {
 				continue
 			}
-			if strings.Contains(text, "BackendActive()") || strings.Contains(text, "BackendConnectionActive(") {
+			if strings.Contains(text, "BackendActive()") || strings.Contains(text, "BackendAIActive(") {
 				continue
 			}
 			t.Errorf("%s: %q refuses on the direct key alone and the file never consults the backend",

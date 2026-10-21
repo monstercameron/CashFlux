@@ -899,38 +899,50 @@ func globalSettingsForm() uic.Node {
 			_ = a.PutSettings(s)
 		}
 	}
-	// The model picker is populated live from every id in OpenAI's /v1/models
-	// endpoint, falling back to defaults offline or before it loads. Reload keeps
-	// the persisted selected id available even when the refreshed list omits it.
+	// Load models from the selected AI route only while the AI settings tab is
+	// open. Server mode must never fetch directly with this browser's provider key.
+	aiPrefs := prefsAtom.Get().Normalize()
 	modelList := uic.UseState([]string{})
 	modelsLoaded := uic.UseState(false)
 	modelsLoading := uic.UseState(false)
 	modelsErr := uic.UseState("")
 	modelQuery := uic.UseState("")
-	fetchModels := func() {
+	activeModelLookup := uic.UseRef((func())(nil))
+	fetchModels := func() func() {
+		if tab != "ai" {
+			return nil
+		}
 		a := appstate.Default
 		if a == nil {
-			return
+			return nil
+		}
+		modelList.Set(nil)
+		modelsLoaded.Set(false)
+		modelsLoading.Set(true)
+		modelsErr.Set("")
+		done := func(ids []string) { modelsLoading.Set(false); modelList.Set(ids); modelsLoaded.Set(true) }
+		fail := func(msg string) { modelsLoading.Set(false); modelsErr.Set(msg) }
+		if uistate.BackendAIActive(aiPrefs) {
+			return ai.FetchProxyModels(aiPrefs.ServerURL, uistate.EffectiveServerToken(aiPrefs.ServerToken), done, fail)
 		}
 		k := strings.TrimSpace(a.Settings().OpenAIKey)
 		if k == "" {
-			modelList.Set(nil)
-			modelsLoaded.Set(false)
-			modelsErr.Set("")
-			return
+			modelsLoading.Set(false)
+			return nil
 		}
-		modelsLoading.Set(true)
-		modelsErr.Set("")
 		baseURL := strings.TrimSpace(a.Settings().OpenAIBaseURL)
 		if baseURL == "" {
 			baseURL = ai.DefaultBaseURL
 		}
-		ai.FetchModels(k, baseURL,
-			func(ids []string) { modelsLoading.Set(false); modelList.Set(ids); modelsLoaded.Set(true) },
-			func(msg string) { modelsLoading.Set(false); modelsErr.Set(msg) },
-		)
+		return ai.FetchModels(k, baseURL, done, fail)
 	}
-	onReloadModels := uic.UseEvent(func() { fetchModels() })
+	startModels := func() {
+		if cancel := activeModelLookup.Get(); cancel != nil {
+			cancel()
+		}
+		activeModelLookup.Set(fetchModels())
+	}
+	onReloadModels := uic.UseEvent(func() { startModels() })
 	onUseCustomModel := uic.UseEvent(func() {
 		model := strings.TrimSpace(modelQuery.Get())
 		if model == "" {
@@ -943,8 +955,16 @@ func globalSettingsForm() uic.Node {
 		}
 		bump()
 	})
-	// Load the list once when the panel opens (no-ops without a key).
-	uic.UseEffect(func() func() { fetchModels(); return nil }, "")
+	// Route changes and unmounts cancel even a manual reload in progress.
+	uic.UseEffect(func() func() {
+		startModels()
+		return func() {
+			if cancel := activeModelLookup.Get(); cancel != nil {
+				cancel()
+				activeModelLookup.Set(nil)
+			}
+		}
+	}, tab, aiPrefs.ServerURL, aiPrefs.ServerToken, aiPrefs.BackendDisabled, aiPrefs.AIProxyDisabled)
 	// Optional web-search API key for the chat's web_search tool (paid/higher-limit
 	// access); kept on-device in its own localStorage entry.
 	wsKey := uic.UseState(uistate.LoadWebSearchKey())
@@ -1144,6 +1164,11 @@ func globalSettingsForm() uic.Node {
 		OnAiToggle: func(v bool) { aiOn.Set(v) },
 		AiKey:      aiKey.Get(),
 		OnKey:      onKey,
+		OnServerAIRoute: func(on bool) {
+			p := prefsAtom.Get()
+			p.AIProxyDisabled = !on
+			savePrefs(p)
+		},
 		OnRememberKey: func(v bool) {
 			cancelQueuedAICredentialSave()
 			key := ""

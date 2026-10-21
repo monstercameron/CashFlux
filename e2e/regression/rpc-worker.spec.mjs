@@ -14,8 +14,8 @@ async function connectToBackend(app, { expectReload = false } = {}) {
   const start = app.getByTestId("cloud-setup-start");
   if (await start.isVisible()) await start.click();
   await expect(app.getByTestId("cloud-setup-where")).toBeVisible();
+  await app.getByTestId("cloud-server-options").click();
   await app.getByRole("radio", { name: "Your own server", exact: true }).click();
-  await app.getByTestId("cloud-address-advanced").click();
   await app.getByTestId("sync-server-url").fill(BACKEND);
   await app.getByTestId("sync-test").click();
   await expect(app.getByTestId("sync-discovery-ok")).toBeVisible({ timeout: 20_000 });

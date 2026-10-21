@@ -40,40 +40,49 @@ func attachAccountDoc(accountID, label, expiryISO string, onErr func(string)) {
 		return
 	}
 	pickFile("application/pdf,image/*", func(name, mime string, data []byte) {
-		kind := "document"
+		kind := artifacts.KindPDF
 		if strings.HasPrefix(mime, "image/") {
-			kind = "image"
+			kind = artifacts.KindImage
 		}
 		art := domain.Artifact{ID: id.New(), Name: name, Kind: kind, MIME: mime, Bytes: data, Size: len(data), CreatedAt: time.Now()}
-		if err := app.PutArtifact(art); err != nil {
-			if onErr != nil {
-				onErr(err.Error())
+		// IndexedDB callbacks must settle after the FileReader callback returns.
+		// Save the encrypted file before referring to it from the account.
+		go func() {
+			stored, err := app.StoreBlobForArtifact(art)
+			if err == nil {
+				err = app.PutArtifact(stored)
 			}
-			return
-		}
-		ref := domain.AccountDocRef{ArtifactID: art.ID, Label: strings.TrimSpace(label), AttachedAt: time.Now()}
-		if exp := strings.TrimSpace(expiryISO); exp != "" {
-			if d, err := dateutil.ParseDate(exp); err == nil {
-				ref.ExpiresAt = d
-			}
-		}
-		for _, ac := range app.Accounts() {
-			if ac.ID != accountID {
-				continue
-			}
-			ac.DocRefs = append(append([]domain.AccountDocRef(nil), ac.DocRefs...), ref)
-			if err := app.PutAccount(ac); err != nil {
+			if err != nil {
 				if onErr != nil {
 					onErr(err.Error())
 				}
 				return
 			}
-			break
-		}
-		reconcileDocExpiry(app)
-		uistate.BumpDataRevision()
-		uistate.RequestPersist()
-		uistate.PostNotice(uistate.T("accounts.documentAttached"), false)
+			ref := domain.AccountDocRef{ArtifactID: art.ID, Label: strings.TrimSpace(label), AttachedAt: time.Now()}
+			if exp := strings.TrimSpace(expiryISO); exp != "" {
+				if d, err := dateutil.ParseDate(exp); err == nil {
+					ref.ExpiresAt = d
+				}
+			}
+			for _, ac := range app.Accounts() {
+				if ac.ID != accountID {
+					continue
+				}
+				ac.DocRefs = append(append([]domain.AccountDocRef(nil), ac.DocRefs...), ref)
+				if err := app.PutAccount(ac); err != nil {
+					if onErr != nil {
+						onErr(err.Error())
+					}
+					return
+				}
+				break
+			}
+			reconcileDocExpiry(app)
+			app.RefreshBlobUsage()
+			uistate.BumpDataRevision()
+			uistate.RequestPersist()
+			uistate.PostNotice(uistate.T("accounts.documentAttached"), false)
+		}()
 	})
 }
 
@@ -184,6 +193,7 @@ func accountDocsDrawer(props accountDocsDrawerProps) ui.Node {
 		}
 		rows = append(rows, ui.CreateElement(accountDocRow, accountDocRowProps{
 			AccountID: a.ID, ArtifactID: d.ArtifactID, Label: label, Meta: meta, DataURL: dataURL,
+			MIME: art.MIME, NeedsBlob: len(art.Bytes) == 0 && (art.Size > 0 || art.BlobRef != nil),
 		}))
 	}
 
@@ -213,6 +223,13 @@ type accountDocRowProps struct {
 	Label      string
 	Meta       string
 	DataURL    string // "" when the referenced artifact's bytes are missing
+	MIME       string
+	NeedsBlob  bool
+}
+
+type loadedAccountDoc struct {
+	ID  string
+	URL string
 }
 
 // accountDocRow is one document line in the drawer: its label/date meta, an Open
@@ -220,6 +237,20 @@ type accountDocRowProps struct {
 // hook stays stable across the variable-length document list (never an On* handler
 // inside a loop).
 func accountDocRow(props accountDocRowProps) ui.Node {
+	loaded := ui.UseState(loadedAccountDoc{})
+	ui.UseEffect(func() func() {
+		if !props.NeedsBlob || appstate.Default == nil {
+			return nil
+		}
+		cancelled := false
+		go func() {
+			data, err := appstate.Default.GetBlobForArtifact(props.ArtifactID)
+			if !cancelled && err == nil && len(data) > 0 {
+				loaded.Set(loadedAccountDoc{ID: props.ArtifactID, URL: artifacts.DataURL(props.MIME, data)})
+			}
+		}()
+		return func() { cancelled = true }
+	}, props.ArtifactID, props.NeedsBlob)
 	remove := ui.UseEvent(Prevent(func() {
 		uistate.ConfirmModal(uistate.T("accounts.documentRemoveConfirm"), true, func(ok bool) {
 			if ok {
@@ -228,9 +259,13 @@ func accountDocRow(props accountDocRowProps) ui.Node {
 		})
 	}))
 	var openLink ui.Node = Fragment()
-	if props.DataURL != "" {
+	href := props.DataURL
+	if href == "" && loaded.Get().ID == props.ArtifactID {
+		href = loaded.Get().URL
+	}
+	if href != "" {
 		openLink = A(css.Class("btn-link"), Attr("data-testid", "acct-doc-open-"+props.ArtifactID),
-			Href(props.DataURL), Attr("target", "_blank"), Attr("rel", "noopener noreferrer"),
+			Href(href), Attr("target", "_blank"), Attr("rel", "noopener noreferrer"),
 			uistate.T("accounts.documentOpen"))
 	}
 	return Div(css.Class("row"), Attr("data-testid", "acct-doc-row-"+props.ArtifactID),

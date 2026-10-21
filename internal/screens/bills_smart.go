@@ -254,7 +254,7 @@ func BillsSmartForm(props BillsSmartFormProps) ui.Node {
 	explain := ui.UseEvent(func() {
 		settings := app.Settings()
 		pr := uistate.LoadPrefs().Normalize()
-		useBackend := uistate.BackendConnectionActive(pr)
+		useBackend := uistate.BackendAIActive(pr)
 		if settings.OpenAIKey == "" && !useBackend {
 			aiErr.Set(uistate.T("allocate.needKey"))
 			return

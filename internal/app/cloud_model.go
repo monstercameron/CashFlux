@@ -16,6 +16,7 @@ const (
 
 type cloudFacts struct {
 	Disabled, SignedIn, Protected bool
+	Hosted                        bool
 	Setup                         string
 	State                         string
 	Pending                       int
@@ -24,6 +25,21 @@ type cloudFacts struct {
 // cloudNextStep derives progress from capabilities rather than trusting a saved
 // step to authorize a write. Signing out or removing protection reopens setup.
 func cloudNextStep(f cloudFacts) cloudStep {
+	// A hosted site already selected its own server and admitted the account
+	// through HostedAuthGate. Never send that account through another connection
+	// chooser or sign-in wizard in Settings.
+	if f.Hosted {
+		if !f.SignedIn {
+			return cloudSignIn
+		}
+		if !f.Protected {
+			return cloudProtect
+		}
+		if f.Disabled || f.Setup != "" || f.State == "" || f.State == "local" {
+			return cloudFirst
+		}
+		return cloudDone
+	}
 	if f.Setup == string(cloudWhere) {
 		return cloudWhere
 	}

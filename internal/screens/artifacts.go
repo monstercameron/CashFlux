@@ -67,11 +67,21 @@ func Artifacts() ui.Node {
 				Bytes: data, CreatedAt: time.Now(),
 			}
 			art.Size = artifacts.Size(art)
-			if err := app.PutArtifact(art); err != nil {
-				notify(err.Error())
-				return
-			}
-			refresh()
+			// IndexedDB completes asynchronously; leave the FileReader callback before
+			// waiting for its encrypted write, then save the metadata and persist.
+			go func() {
+				stored, err := app.StoreBlobForArtifact(art)
+				if err == nil {
+					err = app.PutArtifact(stored)
+				}
+				if err != nil {
+					notify(err.Error())
+					return
+				}
+				app.RefreshBlobUsage()
+				refresh()
+				uistate.RequestPersist()
+			}()
 		})
 	}
 	importCSV := func() {
@@ -300,6 +310,7 @@ type artifactRowProps struct {
 func artifactRow(props artifactRowProps) ui.Node {
 	a := props.Artifact
 	app := appstate.Default
+	imageURL := useArtifactImageURL(app, a)
 
 	// Rename opens the shell-root flip modal (ArtifactEditHost).
 	startRename := ui.UseEvent(Prevent(func() { uistate.SetArtifactEdit(a.ID) }))
@@ -361,13 +372,13 @@ func artifactRow(props artifactRowProps) ui.Node {
 	}))
 
 	var preview ui.Node = Fragment()
-	if a.Kind == artifacts.KindImage && len(a.Bytes) > 0 {
+	if a.Kind == artifacts.KindImage && imageURL != "" {
 		// Wrap in a fixed-size container so a broken image (e.g. stub/corrupt bytes)
 		// shows a neutral placeholder rather than the browser's broken-image icon.
 		// The onerror string hides the <img> and reveals the sibling fallback div;
 		// no framework hook is used here so it is safe inside a component render (G20).
 		preview = Div(css.Class("artifact-thumb-wrap", tw.Mr2),
-			Img(Attr("src", artifacts.DataURL(a.MIME, a.Bytes)), Attr("alt", a.Name),
+			Img(Attr("src", imageURL), Attr("alt", a.Name),
 				css.Class(tw.W10, tw.H10, tw.ObjectCover, tw.Rounded),
 				Attr("onerror", "this.style.display='none';this.nextElementSibling.style.display='flex'")),
 			Div(css.Class("artifact-thumb-fallback"),
@@ -534,6 +545,12 @@ func artifactFileLimit(name, mime string) int {
 	}
 	if strings.HasSuffix(strings.ToLower(name), ".csv") || mime == "text/csv" {
 		return 25 * 1024 * 1024
+	}
+	// The hosted blob service defaults to 32 MiB per encrypted payload. Its
+	// JSON envelope base64-encodes the ciphertext, expanding it by about 4/3.
+	// Leave room for that expansion so an accepted PDF can sync by default.
+	if strings.HasSuffix(strings.ToLower(name), ".pdf") || mime == "application/pdf" {
+		return 23 * 1024 * 1024
 	}
 	return 45 * 1024 * 1024
 }

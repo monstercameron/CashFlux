@@ -26,15 +26,27 @@ func goalImageBanner(app *appstate.App, g domain.Goal) ui.Node {
 	if g.GoalImageArtifactID == "" {
 		return Fragment()
 	}
-	var dataURL string
+	return ui.CreateElement(goalImageBannerView, goalImageBannerProps{App: app, Goal: g})
+}
+
+type goalImageBannerProps struct {
+	App  *appstate.App
+	Goal domain.Goal
+}
+
+func goalImageBannerView(props goalImageBannerProps) ui.Node {
+	var art domain.Artifact
+	g := props.Goal
+	app := props.App
 	if app != nil {
 		for _, a := range app.Artifacts() {
-			if a.ID == g.GoalImageArtifactID && len(a.Bytes) > 0 {
-				dataURL = artifacts.DataURL(a.MIME, a.Bytes)
+			if a.ID == g.GoalImageArtifactID {
+				art = a
 				break
 			}
 		}
 	}
+	dataURL := useArtifactImageURL(app, art)
 	alt := uistate.T("goals.photoAlt", g.Name)
 	if dataURL == "" {
 		// Referenced but unavailable: a quiet placeholder, never a broken <img>.
@@ -58,28 +70,36 @@ func attachGoalImage(goalID string, onErr func(string)) {
 		return
 	}
 	pickFile("image/*", func(name, mime string, data []byte) {
-		art := domain.Artifact{ID: id.New(), Name: name, Kind: "image", MIME: mime, Bytes: data, Size: len(data), CreatedAt: time.Now()}
-		if err := app.PutArtifact(art); err != nil {
-			if onErr != nil {
-				onErr(err.Error())
+		art := domain.Artifact{ID: id.New(), Name: name, Kind: artifacts.KindImage, MIME: mime, Bytes: data, Size: len(data), CreatedAt: time.Now()}
+		go func() {
+			stored, err := app.StoreBlobForArtifact(art)
+			if err == nil {
+				err = app.PutArtifact(stored)
 			}
-			return
-		}
-		for _, g := range app.Goals() {
-			if g.ID != goalID {
-				continue
-			}
-			g.GoalImageArtifactID = art.ID
-			if err := app.PutGoal(g); err != nil {
+			if err != nil {
 				if onErr != nil {
 					onErr(err.Error())
 				}
 				return
 			}
-			break
-		}
-		uistate.BumpDataRevision()
-		uistate.PostNotice(uistate.T("goals.photoAdded"), false)
+			for _, g := range app.Goals() {
+				if g.ID != goalID {
+					continue
+				}
+				g.GoalImageArtifactID = art.ID
+				if err := app.PutGoal(g); err != nil {
+					if onErr != nil {
+						onErr(err.Error())
+					}
+					return
+				}
+				break
+			}
+			app.RefreshBlobUsage()
+			uistate.BumpDataRevision()
+			uistate.RequestPersist()
+			uistate.PostNotice(uistate.T("goals.photoAdded"), false)
+		}()
 	})
 }
 

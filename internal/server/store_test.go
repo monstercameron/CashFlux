@@ -36,6 +36,42 @@ func TestOpenStoreMigratesSchema(t *testing.T) {
 	}
 }
 
+func TestAICostMigrationMarksEarlierTokensWithoutInventingCost(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "cashflux.db")
+	s, err := OpenStore(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	day := time.Date(2026, time.October, 20, 0, 0, 0, 0, time.UTC)
+	if err := s.UpsertUser(User{ID: "old-cost", Provider: "token", Subject: "old-cost", CreatedAt: day}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.AddUsage("old-cost", day, 1, 40); err != nil {
+		t.Fatal(err)
+	}
+	for _, statement := range []string{
+		`ALTER TABLE usage DROP COLUMN cost_incomplete`,
+		`ALTER TABLE usage DROP COLUMN estimated_cost_nano_usd`,
+		`UPDATE schema_meta SET version = 21 WHERE id = 1`,
+	} {
+		if _, err := s.db.Exec(statement); err != nil {
+			t.Fatalf("prepare v21 store: %v", err)
+		}
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	s, err = OpenStore(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	usage, ok, err := s.GetUsage("old-cost", day)
+	if err != nil || !ok || usage.Tokens != 40 || usage.EstimatedCostNanoUSD != 0 || !usage.CostIncomplete {
+		t.Fatalf("migrated usage = %+v/%v/%v", usage, ok, err)
+	}
+}
+
 // TestStoreMigrateIsIdempotent proves that re-running migrate() against an
 // already-fully-migrated database (v8/v9/v10's new columns/tables/indexes
 // included) is a clean no-op: no error, no duplicate-column/duplicate-index

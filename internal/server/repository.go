@@ -72,10 +72,12 @@ type Blob struct {
 
 // Usage is a per-user daily server usage counter.
 type Usage struct {
-	UserID   string
-	Day      string
-	Requests int64
-	Tokens   int64
+	UserID               string
+	Day                  string
+	Requests             int64
+	Tokens               int64
+	EstimatedCostNanoUSD int64 `json:"estimatedCostNanoUsd"`
+	CostIncomplete       bool  `json:"costIncomplete"`
 }
 
 // Subscription is the server-side subscription state for one Cloud user, held
@@ -1834,6 +1836,39 @@ ON CONFLICT(user_id, day) DO UPDATE SET
 	return usage, nil
 }
 
+// AddAIUsage records billed tokens and their estimated cost in one database
+// write after an AI completion. The request count was reserved before calling
+// the upstream provider. Unknown prices mark the day's estimate incomplete
+// rather than claiming a zero-dollar call.
+func (s *Store) AddAIUsage(userID string, day time.Time, tokens, costNanoUSD int64, unpriced bool) (Usage, error) {
+	if strings.TrimSpace(userID) == "" || tokens < 0 || costNanoUSD < 0 {
+		return Usage{}, fmt.Errorf("server store: invalid AI usage increment")
+	}
+	var incomplete int64
+	if unpriced {
+		incomplete = 1
+	}
+	defer s.observeDB("AddAIUsage", time.Now())
+	if _, err := s.db.Exec(`
+INSERT INTO usage(user_id, day, tokens, estimated_cost_nano_usd, cost_incomplete)
+VALUES(?, ?, ?, ?, ?)
+ON CONFLICT(user_id, day) DO UPDATE SET
+  tokens = tokens + excluded.tokens,
+  estimated_cost_nano_usd = estimated_cost_nano_usd + excluded.estimated_cost_nano_usd,
+  cost_incomplete = MAX(cost_incomplete, excluded.cost_incomplete)`,
+		userID, usageDay(day), tokens, costNanoUSD, incomplete); err != nil {
+		return Usage{}, fmt.Errorf("server store: add AI usage: %w", err)
+	}
+	usage, ok, err := s.GetUsage(userID, day)
+	if err != nil {
+		return Usage{}, err
+	}
+	if !ok {
+		return Usage{}, fmt.Errorf("server store: AI usage row missing after increment")
+	}
+	return usage, nil
+}
+
 // ReserveAIRequest atomically checks the caller against their daily AI limits and, if
 // under both, reserves one request by incrementing the day's request counter. It
 // returns allowed=false WITHOUT incrementing when a limit is already reached, plus
@@ -1898,8 +1933,8 @@ func (s *Store) GetUsage(userID string, day time.Time) (Usage, bool, error) {
 	defer s.observeDB("GetUsage", time.Now())
 	key := usageDay(day)
 	var usage Usage
-	err := s.db.QueryRow(`SELECT user_id, day, requests, tokens FROM usage WHERE user_id = ? AND day = ?`, userID, key).
-		Scan(&usage.UserID, &usage.Day, &usage.Requests, &usage.Tokens)
+	err := s.db.QueryRow(`SELECT user_id, day, requests, tokens, estimated_cost_nano_usd, cost_incomplete FROM usage WHERE user_id = ? AND day = ?`, userID, key).
+		Scan(&usage.UserID, &usage.Day, &usage.Requests, &usage.Tokens, &usage.EstimatedCostNanoUSD, &usage.CostIncomplete)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Usage{}, false, nil
 	}
@@ -1917,7 +1952,7 @@ func (s *Store) ListUserUsage(userID string, sinceDay time.Time) ([]Usage, error
 	}
 	defer s.observeDB("ListUserUsage", time.Now())
 	rows, err := s.db.Query(
-		`SELECT user_id, day, requests, tokens FROM usage WHERE user_id = ? AND day >= ? ORDER BY day DESC`,
+		`SELECT user_id, day, requests, tokens, estimated_cost_nano_usd, cost_incomplete FROM usage WHERE user_id = ? AND day >= ? ORDER BY day DESC`,
 		strings.TrimSpace(userID), usageDay(sinceDay))
 	if err != nil {
 		return nil, fmt.Errorf("server store: list user usage: %w", err)
@@ -1926,7 +1961,7 @@ func (s *Store) ListUserUsage(userID string, sinceDay time.Time) ([]Usage, error
 	var out []Usage
 	for rows.Next() {
 		var u Usage
-		if err := rows.Scan(&u.UserID, &u.Day, &u.Requests, &u.Tokens); err != nil {
+		if err := rows.Scan(&u.UserID, &u.Day, &u.Requests, &u.Tokens, &u.EstimatedCostNanoUSD, &u.CostIncomplete); err != nil {
 			return nil, fmt.Errorf("server store: scan usage: %w", err)
 		}
 		out = append(out, u)
