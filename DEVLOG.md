@@ -1,3 +1,7 @@
+## 2026-10-21 - Upgrade final GoWebComponents performance patch
+
+Final module lookup foundv7.0.1 after initialv7.0.0 migration. Updated normalmodule requirement and checksums without replacements; tidy and verify pass. Go1.27.3native370package suite, Screens1101test suite and main/services/admin/portalWASM plusLinuxAMD64server builds pass before integrating currentmain. SchemaFluxlatestv2.0.1 is absent from this app dependencygraph; strict decoders are preserved.
+
 ## 2026-10-21 - Reconcile componentization source inventory
 
 Updated47staticroute inventory and separate dynamiccustompages, removing stale resolved arithmetic residuals. Source presence is not full completion; injected Settings, Events arithmetic, Reports latency and unproven interaction/cold-start improvements remain explicit. Documentation JSON parses; final merged-source gates follow.

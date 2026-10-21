@@ -50,7 +50,7 @@ bar. The full product spec is in [`SPEC.md`](./SPEC.md) — read it before imple
 
 - **Language:** Go (target `GOOS=js GOARCH=wasm`). Requires Go 1.27+, with toolchain Go 1.27.3.
 - **Framework:** consumed as a **normal versioned Go module** via `go get`
-  (`github.com/monstercameron/GoWebComponents/v7`, pinned `v7.0.0`) — **no local `replace`
+  (`github.com/monstercameron/GoWebComponents/v7`, pinned `v7.0.1`) — **no local `replace`
   / file-path dependency**. Update with `go get <module>@<commit-or-tag>` then `go mod tidy`.
 - **UI:** `html/shorthand` (dot-imported) element + control-flow funcs (`If`, `IfElse`, `Map`,
   `MapKeyed`). State via `ui` hooks and `state` atoms; pages via `router` (history).

@@ -6,7 +6,7 @@ toolchain go1.27.3
 
 require (
 	github.com/monstercameron/GoGRPCBridge v0.0.19
-	github.com/monstercameron/GoWebComponents/v7 v7.0.0
+	github.com/monstercameron/GoWebComponents/v7 v7.0.1
 	github.com/ncruces/go-sqlite3 v0.35.0
 	go.opentelemetry.io/otel v1.45.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.45.0

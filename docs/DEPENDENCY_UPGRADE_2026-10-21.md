@@ -2,13 +2,17 @@
 
 | Library | CashFlux before | Latest checked | Action |
 | --- | --- | --- | --- |
-| GoWebComponents | `/v5 v5.0.1` | `/v7 v7.0.0` | Migrate every application and test import, including both console entry points. |
+| GoWebComponents | `/v5 v5.0.1` | `/v7 v7.0.1` | Migrate every application and test import, including both console entry points. |
 | SchemaFlux | No module requirement or source imports | `/v2 v2.0.1` tag | No installed dependency to update. Keep the existing AI transport and strict import decoders. |
 
-Sources: [GoWebComponents v7 release](https://github.com/monstercameron/GoWebComponents/releases/tag/v7.0.0),
+Sources: [GoWebComponents v7.0.1 tag](https://github.com/monstercameron/GoWebComponents/tree/v7.0.1),
 [v7 migration guide](https://github.com/monstercameron/GoWebComponents/blob/v7.0.0/docs/MIGRATION_V7.md),
 [SchemaFlux v2.0.1 tag](https://github.com/monstercameron/SchemaFlux/releases/tag/v2.0.1).
 The versions were also resolved with `go list -m -json MODULE@latest`.
+The final check found v7.0.1, published after the initial v7.0.0 migration. It
+reduces allocations for host elements carrying only a reconciliation key and
+does not change the public API. The verification below identifies the original
+v7.0.0 runs separately from the final patch checks.
 
 ## Application migration
 
@@ -45,7 +49,8 @@ $runner = Join-Path $PWD '.tools/gwc.exe'
 go -C .tools/gwc-framework-v7/tools build -o $runner ./gwc
 ```
 
-Keep `.tools/gwc-framework-v7` in place. These files are ignored development tooling; the app
+Keep `.tools/gwc-framework-v7` in place. The local runner was built from v7.0.0;
+the v7.0.1 patch changes the app runtime rather than CLI behavior. These files are ignored development tooling; the app
 continues to resolve the released framework from the Go module cache. The previous v5 runner
 and its existing source directory were preserved.
 
@@ -54,7 +59,7 @@ command unconditionally disables JSON v2, conflicting with `go-sqlite3 v0.35.0` 
 The existing CashFlux direct Go build scripts retain Go's default JSON engine and work with
 that SQLite version; production verification uses `go build -tags production` directly.
 
-## Verification
+## Initial v7.0.0 verification
 
 - Native `go test -work -vet=all -p 4 ./...`: **370 packages passed** on Go 1.27.3.
 - Screen WebAssembly suite: **1,090 tests passed**; its only failure was the new Markdown test
@@ -83,3 +88,13 @@ route/transition checks could not reproduce them; retain that failed report as a
 not a passing interaction benchmark or performance claim. Browser diagnostics were run in
 disposable sample contexts with external traffic blocked. No production release, tag, or
 deployment is part of this change.
+
+## v7.0.1 checkpoint before integrating current main
+
+- `go mod tidy` and `go mod verify` pass; the released module is pinned without a replacement.
+- All 370 native packages pass with vet enabled.
+- The complete Screens WebAssembly suite passes all 1,101 tests, including the new
+  What changed, retirement, debt, recurring and budget availability regressions.
+- Main, services, admin and portal production WebAssembly bundles compile, as does
+  the Linux/amd64 server. A final source integration and version checkpoint follows
+  before any release publication.

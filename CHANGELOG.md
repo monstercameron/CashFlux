@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Pin GoWebComponents v7.0.1 after the final latest-version check.
 - Componentization inventory reflects current native seams and records remaining source and performance gaps.
 - Performance tools use bounded asset settling and explicit applied-search completion with retained provenance.
 - Pay-yourself-first duplicate checks run at the native write boundary for all callers.
