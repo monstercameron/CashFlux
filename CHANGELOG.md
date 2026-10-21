@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Protected boot now encrypts legacy external files referenced by inactive workspace snapshots as well as the active workspace.
 - CI and release builds now use Go 1.26.10, which fixes the reported `crypto/x509` standard-library vulnerability.
 - Local artifact encryption now frames the MIME with a validated separator, clearing the CI security scanner's integer-conversion finding.
 - Local artifact reads now report malformed IndexedDB byte records instead of leaving a file read waiting indefinitely.
