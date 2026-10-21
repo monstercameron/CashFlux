@@ -32,6 +32,7 @@ and every commit updates this file under `Unreleased`.
 - Improved Transactions date filtering, fixed calendar cell overflow, and made unusual-spend evidence readable on click.
 
 ### Added
+- The sync privacy review now records local blobs retained after artifact deletion and the queued-snapshot constraint on safe cleanup.
 - A file-sync and privacy review records the tested two-device flow, server-visible metadata, local attachment exposure, and backup recovery limits.
 - **Regular monthly spend calculation (BASE2, not wired in yet).** `internal/regularspend` works out "Fixed
   commitments" (recurring bills and subscriptions, debt minimums, annual and quarterly bills as a monthly set-aside with

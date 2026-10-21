@@ -1,3 +1,7 @@
+## 2026-10-20 - Record the local blob deletion constraint
+
+The dataset's artifact delete removes its SQLite row but leaves a separate IndexedDB blob. A direct blob delete was prototyped and rejected before commit: an older durable sync queue item can still reference that file, so deleting the blob immediately would make the queue permanently fail its new completeness check. The privacy review now states the residual storage risk and the need for garbage collection that accounts for every workspace and pending snapshot before erasure.
+
 ## 2026-10-20 - Include inactive workspace files in full backup
 
 The full-install backup previously rehydrated the active dataset's attached files but copied each inactive workspace's saved portable JSON as-is. Those inactive snapshots can contain blob metadata with bytes held separately in IndexedDB. The backup builder now completes each inactive snapshot from the local blob store and aborts if a required file cannot be read, preserving an honest failure instead of a silently incomplete archive. The WebAssembly app build passed. A dedicated multi-workspace browser restore case remains to be added.
