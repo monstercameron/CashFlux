@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Revision caches retain successful snapshots and retry failed reads without requiring a data mutation.
 - Prepared view adapters can distinguish failed account, budget, goal, transaction and link reads from empty data.
 - Tax net income avoids unused receipt gathering through the canonical selected-category fold.
 - Recorded the 47-route inventory, completed model slices and raw detector allocation evidence.

@@ -406,12 +406,11 @@ type revCache[T any] struct {
 	rev    uint64
 	val    []T
 	loaded bool
-	err    error
 }
 
 func (c *revCache[T]) get(rev uint64, load func() []T) []T {
 	if !c.loaded || c.rev != rev {
-		c.val, c.rev, c.loaded, c.err = load(), rev, true, nil
+		c.val, c.rev, c.loaded = load(), rev, true
 	}
 	if len(c.val) == 0 {
 		return nil
@@ -423,11 +422,11 @@ func (c *revCache[T]) get(rev uint64, load func() []T) []T {
 
 func (c *revCache[T]) getChecked(rev uint64, load func() ([]T, error)) ([]T, error) {
 	if !c.loaded || c.rev != rev {
-		c.val, c.err = load()
-		c.rev, c.loaded = rev, true
-	}
-	if c.err != nil {
-		return nil, c.err
+		value, err := load()
+		if err != nil {
+			return nil, err
+		}
+		c.val, c.rev, c.loaded = value, rev, true
 	}
 	if len(c.val) == 0 {
 		return nil, nil

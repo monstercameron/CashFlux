@@ -2,7 +2,47 @@
 
 package appstate
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
+
+func TestRevCacheCheckedRetriesFailedLoadAndReturnsOwnedSlice(t *testing.T) {
+	var cache revCache[int]
+	attempts := 0
+	load := func() ([]int, error) {
+		attempts++
+		if attempts == 1 {
+			return nil, errors.New("temporary read failure")
+		}
+		return []int{7, 11}, nil
+	}
+
+	if got, err := cache.getChecked(42, load); err == nil || got != nil {
+		t.Fatalf("first checked read = %v, %v; want a failed read", got, err)
+	}
+	if cache.loaded {
+		t.Fatal("failed read marked cache loaded")
+	}
+	first, err := cache.getChecked(42, load)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if attempts != 2 || len(first) != 2 || first[0] != 7 || first[1] != 11 {
+		t.Fatalf("retry result = %v after %d attempts", first, attempts)
+	}
+	first[0] = 99
+	second, err := cache.getChecked(42, func() ([]int, error) {
+		t.Fatal("warm read unexpectedly called loader")
+		return nil, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(second) != 2 || second[0] != 7 || second[1] != 11 {
+		t.Fatalf("caller mutation changed cached value: %v", second)
+	}
+}
 
 func TestCategorySourcesCheckedPreserveStorageFailures(t *testing.T) {
 	a := newApp(t, false)

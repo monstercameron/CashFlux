@@ -1,3 +1,7 @@
+## 2026-10-21 - Retry failed cached source reads
+
+A checked loader error now leaves the prior cache state untouched. The same-revision failure-to-success regression also verifies returned-slice ownership. Full native appstate tests and vet pass. Other appstate category/workflow changes remain separate.
+
 ## 2026-10-21 - Checked revision-cached source reads
 
 Added fallible source accessors with revision-cached account/goal/budget reads and a cheap store readiness check before warm reuse. Warm success then closed-store regression coverage passes with native tests and vet. Existing best-effort account/goal convenience methods retain logged-error behavior. Category deletion and workflow validation hunks remain separate pending their own gates.
