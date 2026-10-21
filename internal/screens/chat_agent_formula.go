@@ -355,6 +355,91 @@ func assistantFormulaPreflight(app *appstate.App) error {
 	return nil
 }
 
+// assistantFormulaBusinessIdentity fingerprints the persisted business inputs
+// the formula catalog and evaluator read. The global store revision is too broad:
+// unrelated writes such as AI spend accounting must not invalidate a page token.
+func assistantFormulaBusinessIdentity(app *appstate.App, base string, fx map[string]float64, inputs liveEngineVarInputs) (string, error) {
+	s := app.Store()
+	accounts, err := s.ListAccounts()
+	if err != nil {
+		return "", fmt.Errorf("read formula accounts: %w", err)
+	}
+	transactions, err := s.ListTransactions()
+	if err != nil {
+		return "", fmt.Errorf("read formula transactions: %w", err)
+	}
+	links, err := s.ListTxnLinks()
+	if err != nil {
+		return "", fmt.Errorf("read formula transaction links: %w", err)
+	}
+	members, err := s.ListMembers()
+	if err != nil {
+		return "", fmt.Errorf("read formula members: %w", err)
+	}
+	categories, err := app.CategoriesChecked()
+	if err != nil {
+		return "", fmt.Errorf("read formula categories: %w", err)
+	}
+	budgets, err := s.ListBudgets()
+	if err != nil {
+		return "", fmt.Errorf("read formula budgets: %w", err)
+	}
+	goals, err := s.ListGoals()
+	if err != nil {
+		return "", fmt.Errorf("read formula goals: %w", err)
+	}
+	tasks, err := s.ListTasks()
+	if err != nil {
+		return "", fmt.Errorf("read formula tasks: %w", err)
+	}
+	recurring, err := s.ListRecurring()
+	if err != nil {
+		return "", fmt.Errorf("read formula recurring: %w", err)
+	}
+	plans, err := s.ListPlans()
+	if err != nil {
+		return "", fmt.Errorf("read formula plans: %w", err)
+	}
+	groups, err := s.ListAccountGroups()
+	if err != nil {
+		return "", fmt.Errorf("read formula account groups: %w", err)
+	}
+	events, err := s.ListEvents()
+	if err != nil {
+		return "", fmt.Errorf("read formula events: %w", err)
+	}
+	molecules, err := s.ListMolecules()
+	if err != nil {
+		return "", fmt.Errorf("read formula molecules: %w", err)
+	}
+	customDefs, err := s.ListCustomFieldDefs()
+	if err != nil {
+		return "", fmt.Errorf("read formula custom fields: %w", err)
+	}
+	return assistantFormulaDigest(struct {
+		AppID        uint64
+		Store        string
+		BaseCurrency string
+		FXRates      map[string]float64
+		Inputs       liveEngineVarInputs
+		Accounts     any
+		Transactions any
+		Links        any
+		Members      any
+		Categories   any
+		Budgets      any
+		Goals        any
+		Tasks        any
+		Recurring    any
+		Plans        any
+		Groups       any
+		Events       any
+		Molecules    any
+		CustomDefs   any
+	}{app.InstanceID(), fmt.Sprintf("%p", s), base, fx, inputs, accounts, transactions, links, members, categories,
+		budgets, goals, tasks, recurring, plans, groups, events, molecules, customDefs})
+}
+
 func assistantFormulaSnapshotFor(app *appstate.App, tokenText string) (*assistantFormulaSnapshot, assistantFormulaToken, error) {
 	var token assistantFormulaToken
 	now := assistantFormulaNow()
@@ -382,12 +467,6 @@ func assistantFormulaSnapshotFor(app *appstate.App, tokenText string) (*assistan
 	if err != nil {
 		return nil, token, fmt.Errorf("read formula settings: %w", err)
 	}
-	if _, err := app.Store().ListMolecules(); err != nil {
-		return nil, token, fmt.Errorf("read formula molecules: %w", err)
-	}
-	if _, err := app.Store().ListCustomFieldDefs(); err != nil {
-		return nil, token, fmt.Errorf("read formula custom fields: %w", err)
-	}
 	inputs, err := assistantFormulaInputs(app, asOf)
 	if err != nil {
 		return nil, token, err
@@ -395,26 +474,23 @@ func assistantFormulaSnapshotFor(app *appstate.App, tokenText string) (*assistan
 	identityInputs := inputs
 	identityInputs.Now = asOf.Truncate(time.Minute)
 	revision := revKey(app)
-	identity, err := assistantFormulaDigest(struct {
-		Revision string
-		Inputs   liveEngineVarInputs
-	}{revision, identityInputs})
+	base := settings.BaseCurrency
+	if base == "" {
+		base = "USD"
+	}
+	identity, err := assistantFormulaBusinessIdentity(app, base, settings.FXRates, identityInputs)
 	if err != nil {
 		return nil, token, err
 	}
 	if tokenText != "" && token.Identity != identity {
 		return nil, token, fmt.Errorf("formula inputs changed; restart at offset 0 without snapshot")
 	}
-	key := revision + "|assistant-formulas|" + identity
+	key := fmt.Sprintf("%d|%p|assistant-formulas|%s", app.InstanceID(), app.Store(), identity)
 	snapshot := assistantFormulaCache.GetOrCompute(key, func() *assistantFormulaSnapshot {
 		result := &assistantFormulaSnapshot{Identity: identity, Nonce: id.New()}
 		if err := assistantFormulaPreflight(app); err != nil {
 			result.Err = err
 			return result
-		}
-		base := settings.BaseCurrency
-		if base == "" {
-			base = "USD"
 		}
 		start, before := dateutil.MonthRange(asOf)
 		result.Context = assistantFormulaContext{ObservedAt: asOf, BaseCurrency: base, Scope: "whole household",

@@ -1,3 +1,7 @@
+## 2026-10-21 - Keep formula pages stable across assistant usage writes
+
+Bound formula snapshots to the dataset, persisted engine inputs, catalog definitions, reference time, base currency and FX. Provider usage and unrelated app writes no longer invalidate continuation tokens; actual financial changes still require restarting. Full screen WASM suite passed 1015 tests and the full native suite passed.
+
 ## 2026-10-21 - Bound assistant history and session cleanup
 
 Added native protocol-preserving message and byte limits, a session-owned identity watcher, fresh handlers after uncertain receipts, and usage accounting once against the original still-live dataset. Verified writes alone count as actions. All twelve actual Insights WASM groups passed after correcting a local-QA-intercepted fixture prompt and draining deferred test callbacks; native history tests passed.

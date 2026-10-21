@@ -7,11 +7,13 @@ package screens
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/ai"
 	"github.com/monstercameron/CashFlux/internal/aicontext"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
@@ -265,6 +267,67 @@ func TestAssistantFormulaSnapshotsRejectChangedExpiredAndEvictedContinuations(t 
 	fresh = assistantFormulaTestReadPage(t, app, assistantFormulaPageArgs{Limit: 1})
 	assistantFormulaNow = func() time.Time { return now.Add(6 * time.Minute) }
 	checkRestart(assistantFormulaPageArgs{Offset: 1, Snapshot: fresh.Snapshot}, "expired")
+}
+
+func TestAssistantFormulaContinuationIgnoresUsageAndOtherAppWrites(t *testing.T) {
+	assistantFormulaTestClock(t)
+	app := primaryTodoNotificationsApp(t)
+	other, err := appstate.New(io.Discard, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = other.Store().Close() })
+	first := assistantFormulaTestReadPage(t, app, assistantFormulaPageArgs{Limit: 1})
+	app.RecordAISpend("assistant", "gpt-4o", ai.Usage{PromptTokens: 10, CompletionTokens: 10, TotalTokens: 20})
+	if err := other.PutTask(assistantOpenTask("unrelated-app-task", "Unrelated app write")); err != nil {
+		t.Fatal(err)
+	}
+	continuation := assistantFormulaTestReadPage(t, app, assistantFormulaPageArgs{Offset: 1, Limit: 1, Snapshot: first.Snapshot})
+	if continuation.Snapshot != first.Snapshot {
+		t.Fatal("unchanged formula inputs did not retain their snapshot after usage/unrelated writes")
+	}
+	raw, _ := json.Marshal(map[string]string{"expression": "1 + 1", "snapshot": first.Snapshot})
+	var evaluated struct {
+		Error    string  `json:"error"`
+		Value    float64 `json:"value"`
+		Snapshot string  `json:"snapshot"`
+	}
+	if out := assistantFormulaTestTool(t, app, "evaluate_formula").run(raw); json.Unmarshal([]byte(out), &evaluated) != nil || evaluated.Error != "" || evaluated.Value != 2 || evaluated.Snapshot != first.Snapshot {
+		t.Fatalf("evaluation rejected the unchanged observed inputs: %s", out)
+	}
+}
+
+func TestAssistantFormulaContinuationRejectsTransactionAndFXChanges(t *testing.T) {
+	assistantFormulaTestClock(t)
+	for _, change := range []string{"transaction", "fx"} {
+		t.Run(change, func(t *testing.T) {
+			app := primaryTodoNotificationsApp(t)
+			first := assistantFormulaTestReadPage(t, app, assistantFormulaPageArgs{Limit: 1})
+			switch change {
+			case "transaction":
+				if err := app.PutAccount(domain.Account{ID: "formula-cash", Name: "Cash", Currency: "USD", Class: domain.ClassAsset,
+					Type: domain.TypeChecking, OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared}); err != nil {
+					t.Fatal(err)
+				}
+				if err := app.PutTransaction(domain.Transaction{ID: "formula-txn", AccountID: "formula-cash", Desc: "Test expense", Date: assistantFormulaNow(), Amount: money.New(-100, "USD")}); err != nil {
+					t.Fatal(err)
+				}
+			case "fx":
+				settings := app.Settings()
+				settings.BaseCurrency = "USD"
+				settings.FXRates = map[string]float64{"EUR": 1.1}
+				if err := app.PutSettings(settings); err != nil {
+					t.Fatal(err)
+				}
+			}
+			raw, _ := json.Marshal(assistantFormulaPageArgs{Offset: 1, Limit: 1, Snapshot: first.Snapshot})
+			out := assistantFormulaTestTool(t, app, "list_formula_metrics").run(raw)
+			var result assistantFormulaTestPage
+			if err := json.Unmarshal([]byte(out), &result); err != nil || !result.Restart || !strings.Contains(result.Error, "inputs changed") {
+				t.Fatalf("continuation accepted changed %s inputs: %s", change, out)
+			}
+		})
+	}
 }
 
 func TestAssistantFormulaCacheIsolatesAppsAndKeepsBoundedSnapshots(t *testing.T) {
