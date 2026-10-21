@@ -1,3 +1,7 @@
+## 2026-10-21 — Say which backup includes every workspace
+
+Settings → Data called the current-workspace JSON export a backup of everything, even though the adjacent “Back up everything” action is the only one that gathers every workspace and its external files. The JSON and SQLite button labels now say “current workspace,” and the help text points to the all-workspace backup for a complete install recovery copy. This changes wording only; it does not change export bytes or restore behavior. The server account export remains a separate metadata-and-snapshot export without file payloads.
+
 ## 2026-10-21 — Keep account API responses out of HTTP caches
 
 The service worker bypasses private API requests and blob GET/HEAD now carry `private, no-store`, but other server API responses had no explicit cache policy. That includes account export, account details, and error responses. The server's outer security-header middleware now applies `private, no-store` to every `/v1/` and `/grpc` response, including public discovery, so new endpoints inherit the privacy rule. Static assets and public legal documents retain their existing cache behavior. A middleware test covers representative paths and an integrated account-export test checks the actual response. This change is undeployed.

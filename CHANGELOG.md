@@ -19,6 +19,7 @@ and every commit updates this file under `Unreleased`.
 - The device-erasure audit now identifies retained workspace, queue, file, credential, and key records that the current “Erase everything” action does not remove, with acceptance criteria for a truthful full erase.
 
 ### Fixed
+- Settings → Data now distinguishes current-workspace JSON and SQLite exports from the all-workspace backup, which includes files from every workspace.
 - Server `/v1/` and `/grpc` responses now send `Cache-Control: private, no-store`, including account export and authentication errors, so private API data is not retained by HTTP caches.
 - Scheduled blob GC now finds aged content-addressed files with no database row and removes them only after a locked recheck; recent uploads, tracked files, and unrelated paths are preserved.
 - Authenticated HTTP blob downloads now send `Cache-Control: private, no-store` on GET and HEAD so browser and shared HTTP caches do not retain encrypted financial attachments.
