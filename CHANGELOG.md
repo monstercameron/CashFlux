@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Isolate hosted pull tests from scoped encryption and durable workspace state, and verify plaintext downgrade refusal before import.
 - Upgrade GoWebComponents from v5.0.1 to v7.0.0, migrate typed handlers and Markdown registration, and select Go 1.27.3 consistently.
 - Unmount each transaction performance fixture before restoring shared state.
 - Move custom-field, deductible and investment summary calculations into native prepared models with truthful unavailable states.
