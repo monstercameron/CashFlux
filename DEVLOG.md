@@ -1,3 +1,7 @@
+## 2026-10-21 - Reject unfinished provider tool calls
+
+The parser checks terminal response status before returning tool calls while retaining usage accounting and legacy providers without a status field. Native AI tests passed, including incomplete and failed replies containing an otherwise valid function call.
+
 ## 2026-10-21 - Stable content-bound assistant read pages
 
 Removed global mutation revisions from raw read token identity. Snapshots retain bound App/store identity and hash exact selected content, so real row/settings changes still reject stale pages. Four actual-tool regressions passed for positive provider usage, unrelated writes, off-page edits and distinct stores with identical rows.

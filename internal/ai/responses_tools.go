@@ -215,6 +215,15 @@ func ParseResponsesChat(data []byte) (Message, Usage, error) {
 		CompletionTokens: r.Usage.OutputTokens,
 		TotalTokens:      r.Usage.InputTokens + r.Usage.OutputTokens,
 	}
+	// A Responses reply may contain partial output (including function calls) when
+	// it terminates as incomplete or failed. Never dispatch those calls. Empty status
+	// is accepted for older fixtures/providers that predate terminal status reporting.
+	if status := strings.TrimSpace(r.Status); status != "" && status != "completed" {
+		if status == "incomplete" {
+			return Message{}, usage, errors.New(EmptyReplyMessage(r.finishReason()))
+		}
+		return Message{}, usage, fmt.Errorf("ai: Responses reply did not complete (status %q)", status)
+	}
 	msg := Message{Role: RoleAssistant}
 	for _, raw := range r.Output {
 		var head struct {

@@ -162,6 +162,24 @@ func TestParseResponsesChat(t *testing.T) {
 	}
 }
 
+func TestParseResponsesChatRejectsToolCallsFromNonCompletedReplies(t *testing.T) {
+	for _, status := range []string{"incomplete", "failed"} {
+		t.Run(status, func(t *testing.T) {
+			body := []byte(`{"status":"` + status + `","incomplete_details":{"reason":"max_output_tokens"},"output":[{"type":"function_call","call_id":"call_partial","name":"delete_transaction","arguments":"{}"}],"usage":{"input_tokens":7,"output_tokens":3}}`)
+			msg, usage, err := ParseResponsesChat(body)
+			if err == nil {
+				t.Fatal("expected a non-completed reply error")
+			}
+			if len(msg.ToolCalls) != 0 || msg.Content != "" {
+				t.Fatalf("partial message escaped parser: %+v", msg)
+			}
+			if usage.TotalTokens != 10 {
+				t.Fatalf("usage = %+v, want total 10 even on terminal error", usage)
+			}
+		})
+	}
+}
+
 // TestResponsesReasoningEchoRoundTrip verifies the reasoning item captured from a
 // reply is echoed back verbatim (before the function_call) in the next request's
 // input — the Responses API requires this for reasoning models with tools.
