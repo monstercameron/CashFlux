@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"math"
 	"math/big"
 	"net/http"
@@ -220,7 +221,7 @@ func (s *AIService) buildChatUpstream(req AIChatRequest) (aiUpstream, error) {
 		if err != nil {
 			return aiUpstream{}, status.Errorf(codes.InvalidArgument, "build chat request: %v", err)
 		}
-		return aiUpstream{path: "/responses", body: body, parse: parseResponsesUpstream}, nil
+		return aiUpstream{model: req.Model, path: "/responses", body: body, parse: parseResponsesUpstream}, nil
 	}
 	body, err := ai.BuildRequestWithOptions(req.Model, req.Messages, ai.ChatOptions{
 		Temperature:         req.Temperature,
@@ -230,7 +231,7 @@ func (s *AIService) buildChatUpstream(req AIChatRequest) (aiUpstream, error) {
 	if err != nil {
 		return aiUpstream{}, status.Errorf(codes.InvalidArgument, "build chat request: %v", err)
 	}
-	return aiUpstream{path: "/chat/completions", body: body, parse: parseChatUpstream}, nil
+	return aiUpstream{model: req.Model, path: "/chat/completions", body: body, parse: parseChatUpstream}, nil
 }
 
 // aiUpstream is one prepared upstream call: which OpenAI endpoint it targets, the
@@ -238,6 +239,7 @@ func (s *AIService) buildChatUpstream(req AIChatRequest) (aiUpstream, error) {
 // two endpoints answer in different shapes, so the reader travels with the request
 // rather than being guessed at the other end.
 type aiUpstream struct {
+	model string
 	path  string
 	body  []byte
 	parse func([]byte) (AICompletion, error)
@@ -305,7 +307,7 @@ func (s *AIService) Vision(ctx context.Context, req AIVisionRequest) (AICompleti
 	if err != nil {
 		return AICompletion{}, status.Errorf(codes.InvalidArgument, "build vision request: %v", err)
 	}
-	return s.complete(ctx, aiUpstream{path: "/chat/completions", body: body, parse: parseChatUpstream})
+	return s.complete(ctx, aiUpstream{model: req.Model, path: "/chat/completions", body: body, parse: parseChatUpstream})
 }
 
 func (s *AIService) ListModels(context.Context) []string {
@@ -438,7 +440,7 @@ func (s *AIService) completeStreaming(ctx context.Context, up aiUpstream, onDelt
 	if up.stream && resp.StatusCode < 400 {
 		s.recordAIUpstreamSuccess()
 		completion, streamErr := readAIStream(resp.Body, onDelta)
-		next, err := s.store.AddUsage(user.ID, day, 0, int64(completion.Usage.TotalTokens))
+		next, err := s.recordAIUsage(user.ID, day, up.model, completion.Usage)
 		if err != nil {
 			return AICompletion{}, fmt.Errorf("server ai: add usage: %w", err)
 		}
@@ -476,7 +478,7 @@ func (s *AIService) completeStreaming(ctx context.Context, up aiUpstream, onDelt
 	// usage line that quietly omits failed calls understates the real spend.
 	completion, parseErr := up.parse(data)
 	usage := completion.Usage
-	next, err := s.store.AddUsage(user.ID, day, 0, int64(usage.TotalTokens))
+	next, err := s.recordAIUsage(user.ID, day, up.model, usage)
 	if err != nil {
 		return AICompletion{}, fmt.Errorf("server ai: add usage: %w", err)
 	}
@@ -486,6 +488,25 @@ func (s *AIService) completeStreaming(ctx context.Context, up aiUpstream, onDelt
 		return AICompletion{}, status.Error(codes.Internal, parseErr.Error())
 	}
 	return completion, nil
+}
+
+// recordAIUsage writes only accounting totals; neither requests nor responses
+// enter the cost store or server log. Prices are approximate standard rates.
+func (s *AIService) recordAIUsage(userID string, day time.Time, model string, usage ai.Usage) (Usage, error) {
+	costUSD, priced := ai.EstimateCostUSD(model, usage)
+	var costNanoUSD int64
+	if priced {
+		costNanoUSD = int64(math.Round(costUSD * 1e9))
+	}
+	tokens := max(usage.TotalTokens, usage.PromptTokens+usage.CompletionTokens)
+	next, err := s.store.AddAIUsage(userID, day, int64(tokens), costNanoUSD, !priced && tokens > 0)
+	if err != nil {
+		return Usage{}, err
+	}
+	slog.Info("AI usage recorded", "model", model, "input_tokens", usage.PromptTokens,
+		"output_tokens", usage.CompletionTokens, "estimated_cost_nano_usd", costNanoUSD,
+		"price_known", priced)
+	return next, nil
 }
 
 func (s *AIService) aiBlocked(userID string) bool {

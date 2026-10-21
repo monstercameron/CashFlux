@@ -17,6 +17,47 @@ import (
 	"github.com/monstercameron/CashFlux/internal/rpcworker"
 )
 
+// FetchProxyModels lists the models allowed by the authenticated server. The
+// browser never contacts the provider or reads a provider key on this route.
+func FetchProxyModels(endpoint, token string, onResult func([]string), onError func(string)) func() {
+	endpoint = strings.TrimRight(strings.TrimSpace(endpoint), "/")
+	token = strings.TrimSpace(token)
+	if endpoint == "" || token == "" {
+		onError("Sign in to this server to see its AI models.")
+		return noopCancel
+	}
+	ctx, cancelContext := context.WithTimeout(context.Background(), 10*time.Second)
+	cancelled := false
+	go func() {
+		defer cancelContext()
+		client := rpcworker.Default()
+		if client == nil {
+			var err error
+			client, err = rpcworker.StartDefault()
+			if err != nil {
+				if !cancelled {
+					onError("Couldn't start the server connection.")
+				}
+				return
+			}
+		}
+		var response backendrpc.ListModelsResponse
+		err := client.Invoke(ctx, endpoint, token, backendrpc.MethodAIListModels, backendrpc.ListModelsRequest{}, &response)
+		if cancelled {
+			return
+		}
+		if err != nil {
+			onError("Couldn't load this server's AI models.")
+			return
+		}
+		onResult(response.Models)
+	}()
+	return func() {
+		cancelled = true
+		cancelContext()
+	}
+}
+
 // SendProxyChat asks the backend proxy for a plain answer — no tools. Callers that
 // want the model to be able to call tools use SendProxyChatTools.
 func SendProxyChat(endpoint, token, model string, messages []Message, temperature float64, onResult func(string, Usage), onError func(string)) func() {

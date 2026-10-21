@@ -123,6 +123,9 @@ func TestAdminUserDetail(t *testing.T) {
 	adminToken := "admin-secret"
 	mux, store := newAdminTestMux(t, resolvedAdminID(adminToken))
 	seedAdminFixture(t, store)
+	if _, err := store.AddAIUsage("ua", time.Now().UTC(), 5, 15_000, false); err != nil {
+		t.Fatal(err)
+	}
 
 	w := adminReq(t, mux, http.MethodGet, "/v1/admin/users/ua", adminToken, "")
 	if w.Code != http.StatusOK {
@@ -138,8 +141,11 @@ func TestAdminUserDetail(t *testing.T) {
 	if resp.SubscriptionPlan != "monthly" || resp.SubscriptionStatus != "active" {
 		t.Errorf("subscription = %q/%q, want monthly/active", resp.SubscriptionPlan, resp.SubscriptionStatus)
 	}
-	if resp.UsageTodayRequests != 5 || resp.UsageTodayTokens != 100 {
-		t.Errorf("usage = %d/%d, want 5/100", resp.UsageTodayRequests, resp.UsageTodayTokens)
+	if resp.UsageTodayRequests != 5 || resp.UsageTodayTokens != 105 {
+		t.Errorf("usage = %d/%d, want 5/105", resp.UsageTodayRequests, resp.UsageTodayTokens)
+	}
+	if resp.UsageTodayEstimatedCostNanoUSD != 15_000 || resp.UsageTodayCostIncomplete {
+		t.Errorf("cost = %+v, want 15,000 nano-USD and complete", resp)
 	}
 	// No secrets must leak through the detail view.
 	for _, forbidden := range []string{"ciphertext", "nonce", "token", "dataset"} {

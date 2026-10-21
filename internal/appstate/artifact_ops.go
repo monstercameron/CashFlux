@@ -13,7 +13,7 @@ import (
 )
 
 // SetBlobStore wires in an IndexedDB-backed binary blob store so that artifact
-// image bytes are kept out of the main localStorage JSON blob. Called once by
+// file bytes are kept out of the main localStorage JSON blob. Called once by
 // the wasm entry point after successfully opening IndexedDB. A nil argument
 // clears the blob store (falls back to embedding bytes in the dataset).
 func (a *App) SetBlobStore(s artifactstore.Store) { a.blobs = s }
@@ -76,10 +76,9 @@ func (a *App) GetBlobForArtifact(id string) ([]byte, error) {
 	return data, nil
 }
 
-// rehydrateArtifactBytes fills in Bytes for each artifact that has none stored
-// in the dataset by fetching them from the blob store. It is a no-op when blobs
-// is nil, when the artifact already carries bytes, or when the artifact kind is
-// not "image". This is safe to call only from non-render paths (export/import)
+// rehydrateArtifactBytes fills in Bytes for each binary artifact that has none
+// stored in the dataset by fetching them from the blob store. This is safe to
+// call only from non-render paths (export/import)
 // because the wasm IDB implementation blocks on a channel — calling it from a
 // render function would deadlock the single-threaded wasm runtime.
 func (a *App) rehydrateArtifactBytes(arts []domain.Artifact) error {

@@ -315,3 +315,39 @@ func TestPDFArtifactBlobStored(t *testing.T) {
 		t.Errorf("blob bytes = %v, want %v", back, pdf)
 	}
 }
+
+func TestLegacyAccountDocumentSurvivesBlobBackedRestore(t *testing.T) {
+	source := newApp(t, false)
+	source.SetBlobStore(newMemBlobStore())
+	want := []byte("%PDF-1.7\nprivate account statement\n")
+	art, err := source.StoreBlobForArtifact(domain.Artifact{
+		ID: "legacy-account-doc", Name: "statement.pdf", Kind: artifacts.KindDocument,
+		MIME: "application/pdf", Bytes: want, Size: len(want),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(art.Bytes) != 0 {
+		t.Fatal("legacy account document remained inline")
+	}
+	if err := source.PutArtifact(art); err != nil {
+		t.Fatal(err)
+	}
+	exported, err := source.ExportJSONWithBlobs()
+	if err != nil {
+		t.Fatal(err)
+	}
+	destination := newApp(t, false)
+	destination.SetBlobStore(newMemBlobStore())
+	if err := destination.ImportJSONWithBlobs(exported); err != nil {
+		t.Fatal(err)
+	}
+	restored := destination.Artifacts()
+	if len(restored) != 1 || len(restored[0].Bytes) != 0 || restored[0].Kind != artifacts.KindDocument {
+		t.Fatalf("legacy document restore lost blob-backed metadata: %+v", restored)
+	}
+	got, err := destination.GetBlobForArtifact(art.ID)
+	if err != nil || !bytes.Equal(got, want) {
+		t.Fatalf("legacy document restore bytes = %q, %v", got, err)
+	}
+}

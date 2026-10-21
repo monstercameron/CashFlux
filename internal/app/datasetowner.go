@@ -106,6 +106,32 @@ func datasetIsForeign() bool {
 	return syncstate.DatasetOwnerForeign(datasetOwner(), currentDatasetOwner())
 }
 
+// foreignDatasetForDisplay uses only in-memory session scope and protected
+// browser state. Render paths must not call datasetIsForeign, which may fetch
+// the server identity when its cache is cold.
+func foreignDatasetForDisplay() bool {
+	accountID := signedInUserID()
+	if accountID == "" {
+		return false
+	}
+	raw := lsGet(datasetOwnerKey)
+	if raw == "" {
+		return false
+	}
+	scope := outgoingRefreshScope()
+	if scope == nil {
+		// Access-code servers can authenticate without a refresh scope. Their
+		// account identity still prevents displaying a different user's data.
+		owner, _ := syncstate.ParseDatasetOwner(raw, "")
+		return owner.UserID == "" || owner.UserID != accountID
+	}
+	owner, _ := syncstate.ParseDatasetOwner(raw, scope.ServerID)
+	if owner.UserID == "" {
+		return true
+	}
+	return syncstate.DatasetOwnerForeign(owner, syncstate.DatasetOwner{ServerID: scope.ServerID, UserID: accountID})
+}
+
 // foreignDatasetStashKey is where an inherited dataset is parked when the
 // arriving account's copy replaces it.
 //
