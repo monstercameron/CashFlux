@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Assistant edits validate and preview exact before/after transaction rows, including supported paired transfers.
 - Assistant baseline-history errors use the shared translation catalog.
 - Assistant readers preserve category storage failures while using the shared natural-ordering seam.
 - Assistant citations identify data collections, record selectors and calculation scope without rounding decimal arguments.

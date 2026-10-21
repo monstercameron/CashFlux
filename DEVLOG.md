@@ -1,3 +1,7 @@
+## 2026-10-21 - Immutable Assistant transaction edits
+
+Added immutable native update previews with atomic expected rows/references, shared canonical paired-transfer edit planning, exact decimal parsing and full split validation. Preview binds resolved IDs, accounts, categories, members, FX and transfer fees; stale or unsupported malformed groups refuse rather than retarget. Existing transfer edit path reuses the same planner. Seven new native groups plus canonical pair tests/vet passed. Seven new actual-tool and four existing update WASM groups passed in integrated pass9 retry; the category read was subsequently routed through the tested fallible ordering seam.
+
 ## 2026-10-21 - Localized Assistant capture failure copy
 
 The complete native suite caught one new user-facing literal in the write-result struct. Routed that error through the existing translation catalog while preserving its error detail and English behavior. The unchanged hardcoded-copy ratchet passes; broader native assertions were otherwise green in the first full run.

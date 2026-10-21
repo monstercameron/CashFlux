@@ -120,37 +120,19 @@ func (a *App) PutTransactionWithTransferPairReceived(prior, next domain.Transact
 		}
 		return a.PutTransaction(next)
 	}
-	amountChanged := prior.Amount.Amount != next.Amount.Amount
-	dateChanged := !prior.Date.Equal(next.Date)
-	if !amountChanged && !dateChanged {
+	writes, err := a.planPairedTransactionEdit(prior, next, receivedMinor)
+	if err != nil {
+		return err
+	}
+	if len(writes) == 1 {
 		return a.PutTransaction(next)
-	}
-
-	// Locate the counterpart against the PRE-edit values, while the pair still matches.
-	pair, found := a.transferPartner(prior)
-	if !found {
-		// Nothing to keep in step (an already-orphaned leg, or a cross-currency pair
-		// that isReciprocalTransferLeg cannot match). Write the one row and let the
-		// caller's own validation speak.
-		return a.PutTransaction(next)
-	}
-
-	if amountChanged {
-		mirrored, err := a.mirroredLegAmount(next, pair, receivedMinor)
-		if err != nil {
-			return err
-		}
-		pair.Amount = mirrored
-	}
-	if dateChanged {
-		pair.Date = next.Date
 	}
 
 	// Suppress per-leg firings so the surface re-renders once, with both legs written.
 	if err := a.roleGuard(); err != nil {
 		return err
 	}
-	for _, txn := range []domain.Transaction{next, pair} {
+	for _, txn := range writes {
 		if issues := validate.ValidateTransaction(txn, a.Accounts()...); !issues.OK() {
 			return issues
 		}
@@ -158,10 +140,10 @@ func (a *App) PutTransactionWithTransferPairReceived(prior, next domain.Transact
 			return err
 		}
 	}
-	if err := a.store.PutTransactionsAtomic([]domain.Transaction{next, pair}); err != nil {
+	if err := a.store.PutTransactionsAtomic(writes); err != nil {
 		return fmt.Errorf("save transfer pair: %w", err)
 	}
-	a.log.Info("transfer pair saved", "ids", []string{next.ID, pair.ID})
+	a.log.Info("transfer pair saved", "ids", expectedIDs(writes))
 	a.fireTxnMutated()
 	return nil
 }
@@ -173,7 +155,7 @@ func (a *App) transferPartner(prior domain.Transaction) (domain.Transaction, boo
 		if txn.ID == prior.ID {
 			continue
 		}
-		if prior.TransferGroupID != "" && txn.TransferGroupID == prior.TransferGroupID {
+		if prior.TransferGroupID != "" && txn.TransferGroupID == prior.TransferGroupID && txn.IsTransfer() && txn.AccountID == prior.TransferAccountID && txn.TransferAccountID == prior.AccountID {
 			return txn, true
 		}
 		// Normalize the amounts to the same currency before the account-aware
