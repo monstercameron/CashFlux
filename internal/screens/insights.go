@@ -824,7 +824,7 @@ func Insights() ui.Node {
 		if intent, matched := localqa.Match(text); matched {
 			src := newInsightsQASource(app, base, rates)
 			if answer, answered := localqa.Answer(intent, src, text, func(minor int64) string {
-				return insightsMoneyFmt(minor, base)
+				return insightsMoneyFmt(minor, src.base)
 			}); answered {
 				hist := append(append([]chatTurn{}, turns.Get()...),
 					chatTurn{ID: id.New(), Role: "user", Text: text},

@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- On-device answers distinguish unavailable calculations from genuine zero and use current bound financial inputs.
 - Retain raw native model benchmark samples and environment metadata before further app refactoring.
 - Document the all-route componentization contract and measured performance criteria.
 - Large assistant tax exports provide lossless bounded CSV continuation rather than oversized responses.

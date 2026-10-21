@@ -4,172 +4,395 @@
 
 package screens
 
-// insightsQASource implements localqa.Source using the live financial data that
-// is already computed at the top of Insights(). It keeps the adapter close to
-// the call-site so there are no circular imports; all the heavy lifting
-// (LiquidBalance, NetWorth, category aggregation, goals, health score) reuses
-// the same tested helpers already used on the screen.
+// insightsQASource is the local assistant's checked bridge to current app data.
+// It reads the bound store directly so a closed store or missing FX cannot become
+// an empty result through App's logging-only convenience accessors.
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/assistantdata"
 	"github.com/monstercameron/CashFlux/internal/bills"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/engineenv"
 	"github.com/monstercameron/CashFlux/internal/healthscore"
 	"github.com/monstercameron/CashFlux/internal/insights/localqa"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/safespend"
+	"github.com/monstercameron/CashFlux/internal/scope"
 )
 
-// insightsQASource satisfies localqa.Source using live appstate data.
 type insightsQASource struct {
-	app   *appstate.App
-	now   time.Time
-	base  string
-	rates currency.Rates
+	app     *appstate.App
+	now     time.Time
+	base    string
+	rates   currency.Rates
+	lastErr error
 }
 
-// newInsightsQASource constructs the adapter. base and rates must match those
-// already computed by the Insights() component so money figures are consistent.
 func newInsightsQASource(app *appstate.App, base string, rates currency.Rates) *insightsQASource {
-	return &insightsQASource{app: app, now: time.Now(), base: base, rates: rates}
+	now := time.Now()
+	if app != nil {
+		now = app.ClockNow()
+	}
+	return &insightsQASource{app: app, now: now, base: base, rates: rates}
 }
 
-// LiquidBalanceMinor returns total liquid (checking + savings) balance in minor units.
-func (s *insightsQASource) LiquidBalanceMinor() int64 {
-	liq, err := ledger.LiquidBalance(s.app.Accounts(), s.app.Transactions(), s.rates)
+func (s *insightsQASource) LastError() error { return s.lastErr }
+
+func (s *insightsQASource) begin() error {
+	s.lastErr = nil
+	if s.app == nil || s.app.Store() == nil {
+		return fmt.Errorf("local dataset is unavailable")
+	}
+	settings, err := s.app.Store().GetSettings()
 	if err != nil {
+		return fmt.Errorf("read local settings: %w", err)
+	}
+	s.base = settings.BaseCurrency
+	if s.base == "" {
+		s.base = "USD"
+	}
+	s.rates = currency.Rates{Base: s.base, Rates: settings.FXRates}
+	if s.now.IsZero() {
+		s.now = time.Now()
+	}
+	return nil
+}
+
+func (s *insightsQASource) fail(err error) {
+	if err != nil {
+		s.lastErr = err
+	}
+}
+
+func (s *insightsQASource) accounts() ([]domain.Account, error) {
+	rows, err := s.app.Store().ListAccounts()
+	if err != nil {
+		return nil, fmt.Errorf("read accounts: %w", err)
+	}
+	return rows, nil
+}
+func (s *insightsQASource) transactions() ([]domain.Transaction, error) {
+	rows, err := s.app.Store().ListTransactions()
+	if err != nil {
+		return nil, fmt.Errorf("read transactions: %w", err)
+	}
+	return rows, nil
+}
+func (s *insightsQASource) recurring() ([]domain.Recurring, error) {
+	rows, err := s.app.Store().ListRecurring()
+	if err != nil {
+		return nil, fmt.Errorf("read recurring schedules: %w", err)
+	}
+	return rows, nil
+}
+func (s *insightsQASource) goals() ([]domain.Goal, error) {
+	rows, err := s.app.Store().ListGoals()
+	if err != nil {
+		return nil, fmt.Errorf("read goals: %w", err)
+	}
+	return rows, nil
+}
+func (s *insightsQASource) LiquidBalanceMinor() int64 {
+	if err := s.begin(); err != nil {
+		s.fail(err)
+		return 0
+	}
+	accounts, err := s.accounts()
+	if err != nil {
+		s.fail(err)
+		return 0
+	}
+	txns, err := s.transactions()
+	if err != nil {
+		s.fail(err)
+		return 0
+	}
+	liq, err := ledger.LiquidBalance(accounts, txns, s.rates)
+	if err != nil {
+		s.fail(err)
 		return 0
 	}
 	return liq.Amount
 }
 
-// NetWorthMinor returns (assetsMinor, liabilitiesMinor) both in minor units.
 func (s *insightsQASource) NetWorthMinor() (int64, int64) {
-	_, assets, liabilities, err := ledger.NetWorth(s.app.Accounts(), s.app.Transactions(), s.rates)
+	if err := s.begin(); err != nil {
+		s.fail(err)
+		return 0, 0
+	}
+	accounts, err := s.accounts()
 	if err != nil {
+		s.fail(err)
+		return 0, 0
+	}
+	txns, err := s.transactions()
+	if err != nil {
+		s.fail(err)
+		return 0, 0
+	}
+	_, assets, liabilities, err := ledger.NetWorth(accounts, txns, s.rates)
+	if err != nil {
+		s.fail(err)
 		return 0, 0
 	}
 	return assets.Amount, liabilities.Amount
 }
 
-// SafeToSpendMinor computes liquid cash minus upcoming bills and goal
-// contributions, using the same approach as the Planning screen.
 func (s *insightsQASource) SafeToSpendMinor() int64 {
-	liq, err := ledger.LiquidBalance(s.app.Accounts(), s.app.Transactions(), s.rates)
-	if err != nil {
+	if err := s.begin(); err != nil {
+		s.fail(err)
 		return 0
 	}
-	toBase := safespend.ToBaseFunc(s.rates)
-	_, mEnd := dateutil.MonthRange(s.now)
-	billsDue := safespend.BillsDueBefore(s.app.Accounts(), s.app.Recurring(), s.now, mEnd, toBase)
-	goalNeeds := safespend.GoalContributionsProrated(s.app.Goals(), s.now, toBase)
+	accounts, err := s.accounts()
+	if err != nil {
+		s.fail(err)
+		return 0
+	}
+	txns, err := s.transactions()
+	if err != nil {
+		s.fail(err)
+		return 0
+	}
+	recurring, err := s.recurring()
+	if err != nil {
+		s.fail(err)
+		return 0
+	}
+	goals, err := s.goals()
+	if err != nil {
+		s.fail(err)
+		return 0
+	}
+	liq, err := ledger.LiquidBalance(accounts, txns, s.rates)
+	if err != nil {
+		s.fail(err)
+		return 0
+	}
+	_, monthEnd := dateutil.MonthRange(s.now)
+	billsDue, err := safespend.BillsDueBeforeChecked(accounts, recurring, s.now, monthEnd, s.rates)
+	if err != nil {
+		s.fail(err)
+		return 0
+	}
+	goalNeeds, err := safespend.GoalContributionsProratedChecked(goals, s.now, s.rates)
+	if err != nil {
+		s.fail(err)
+		return 0
+	}
+	partial, err := money.Sub(liq.Amount, max64(billsDue, 0))
+	if err != nil {
+		s.fail(err)
+		return 0
+	}
+	if _, err = money.Sub(partial, max64(goalNeeds, 0)); err != nil {
+		s.fail(err)
+		return 0
+	}
 	return safespend.Compute(liq.Amount, billsDue, goalNeeds, 0, s.base).SafeToSpend
 }
 
-// SpendingOnCategoryMinor returns month-to-date spend in the named category
-// (case-insensitive partial name match, current month only).
 func (s *insightsQASource) SpendingOnCategoryMinor(category string) int64 {
-	mStart, mEnd := dateutil.MonthRange(s.now)
-	catLower := strings.ToLower(strings.TrimSpace(category))
-	// First category whose lowercased name contains the query substring.
-	matchedID := ""
-	for _, c := range s.app.Categories() {
-		if strings.Contains(strings.ToLower(c.Name), catLower) {
-			matchedID = c.ID
-			break
-		}
-	}
-	if matchedID == "" {
+	if err := s.begin(); err != nil {
+		s.fail(err)
 		return 0
 	}
-	var total int64
-	for _, t := range s.app.Transactions() {
-		if t.CategoryID != matchedID || !t.IsExpense() {
-			continue
-		}
-		if !dateutil.InRange(t.Date, mStart, mEnd) {
-			continue
-		}
-		conv, err := s.rates.Convert(t.Amount.Abs(), s.base)
-		if err != nil {
-			conv = t.Amount.Abs()
-		}
-		total += conv.Amount
+	accounts, err := s.accounts()
+	if err != nil {
+		s.fail(err)
+		return 0
 	}
-	return total
+	txns, err := s.transactions()
+	if err != nil {
+		s.fail(err)
+		return 0
+	}
+	categories, err := s.app.CategoriesChecked()
+	if err != nil {
+		s.fail(err)
+		return 0
+	}
+	links, err := s.app.Store().ListTxnLinks()
+	if err != nil {
+		s.fail(fmt.Errorf("read transaction links: %w", err))
+		return 0
+	}
+	finance := assistantdata.BuildFinance(assistantdata.FinanceInput{
+		Accounts: accounts, Transactions: txns, Categories: categories, TxnLinks: links,
+		Now: s.now, Scope: scope.ReportScope{}, Base: s.base, Rates: s.rates,
+	})
+	window, err := finance.ResolveWindow("this_month", "", "")
+	if err != nil {
+		s.fail(err)
+		return 0
+	}
+	result, err := finance.Category(window, category)
+	if err != nil {
+		s.fail(err)
+		return 0
+	}
+	return result.Amount.Amount
 }
 
-// UpcomingBillsMinor returns the count and combined total of bills due within
-// 30 days using the same bills.UpcomingAll derivation as the dashboard widget.
 func (s *insightsQASource) UpcomingBillsMinor() (int, int64) {
-	toBase := safespend.ToBaseFunc(s.rates)
-	const horizonDays = 30
+	if err := s.begin(); err != nil {
+		s.fail(err)
+		return 0, 0
+	}
+	accounts, err := s.accounts()
+	if err != nil {
+		s.fail(err)
+		return 0, 0
+	}
+	recurring, err := s.recurring()
+	if err != nil {
+		s.fail(err)
+		return 0, 0
+	}
 	var count int
 	var total int64
-	for _, b := range bills.UpcomingAll(s.app.Accounts(), s.app.Recurring(), s.now) {
-		if b.DaysUntil > horizonDays {
+	for _, bill := range bills.UpcomingAll(accounts, recurring, s.now) {
+		if bill.DaysUntil > 30 {
 			continue
 		}
+		magnitude, err := bill.Amount.AbsChecked()
+		if err != nil {
+			s.fail(err)
+			return 0, 0
+		}
+		converted, err := s.rates.Convert(magnitude, s.base)
+		if err != nil {
+			s.fail(err)
+			return 0, 0
+		}
+		total, err = money.Add(total, converted.Amount)
+		if err != nil {
+			s.fail(err)
+			return 0, 0
+		}
 		count++
-		total += toBase(b.Amount.Amount, b.Amount.Currency)
 	}
 	return count, total
 }
 
-// TopGoal returns the highest-priority active goal (earliest target date) with
-// its name, current saved amount, and target — all in minor units.
-func (s *insightsQASource) TopGoal() (name string, currentMinor, targetMinor int64, ok bool) {
-	var bestName string
-	var bestCurrent, bestTarget int64
-	var bestDate time.Time
+func (s *insightsQASource) TopGoal() (string, int64, int64, bool) {
+	if err := s.begin(); err != nil {
+		s.fail(err)
+		return "", 0, 0, false
+	}
+	goals, err := s.goals()
+	if err != nil {
+		s.fail(err)
+		return "", 0, 0, false
+	}
+	accounts, err := s.accounts()
+	if err != nil {
+		s.fail(err)
+		return "", 0, 0, false
+	}
+	txns, err := s.transactions()
+	if err != nil {
+		s.fail(err)
+		return "", 0, 0, false
+	}
+	var best domain.Goal
 	found := false
-	for _, g := range s.app.Goals() {
-		if g.Archived {
+	for _, goal := range goals {
+		if goal.Archived {
 			continue
 		}
-		current := g.CurrentAmount.Amount
-		// If the goal is linked to an account, use the live ledger balance as the
-		// current saved amount so the answer reflects the actual account value.
-		if g.AccountID != "" {
-			for _, a := range s.app.Accounts() {
-				if a.ID != g.AccountID {
-					continue
-				}
-				if bal, err := ledger.Balance(a, s.app.Transactions()); err == nil {
-					if conv, cerr := s.rates.Convert(bal, s.base); cerr == nil {
-						current = conv.Amount
-					}
-				}
-				break
-			}
-		}
-		date := g.TargetDate
-		if !found || (!date.IsZero() && (bestDate.IsZero() || date.Before(bestDate))) {
-			bestName = g.Name
-			bestCurrent = current
-			bestTarget = g.TargetAmount.Amount
-			bestDate = date
-			found = true
+		if !found || (!goal.TargetDate.IsZero() && (best.TargetDate.IsZero() || goal.TargetDate.Before(best.TargetDate))) ||
+			(goal.TargetDate.Equal(best.TargetDate) && goal.ID < best.ID) {
+			best, found = goal, true
 		}
 	}
 	if !found {
 		return "", 0, 0, false
 	}
-	return bestName, bestCurrent, bestTarget, true
+	current := best.CurrentAmount
+	if best.AccountID != "" {
+		matched := false
+		for _, account := range accounts {
+			if account.ID == best.AccountID {
+				matched = true
+				balance, err := ledger.Balance(account, txns)
+				if err != nil {
+					s.fail(err)
+					return "", 0, 0, false
+				}
+				current, err = s.rates.Convert(balance, s.base)
+				if err != nil {
+					s.fail(err)
+					return "", 0, 0, false
+				}
+				break
+			}
+		}
+		if !matched {
+			s.fail(fmt.Errorf("linked goal account is unavailable"))
+			return "", 0, 0, false
+		}
+	} else {
+		current, err = s.rates.Convert(current, s.base)
+		if err != nil {
+			s.fail(err)
+			return "", 0, 0, false
+		}
+	}
+	target, err := s.rates.Convert(best.TargetAmount, s.base)
+	if err != nil {
+		s.fail(err)
+		return "", 0, 0, false
+	}
+	return best.Name, current.Amount, target.Amount, true
 }
 
-// HealthScore delegates to healthscore.Evaluate, re-using liveHealthInputs
-// from health.go (same package — no extra import needed).
-func (s *insightsQASource) HealthScore() (score int, band string, ok bool) {
-	in := liveHealthInputs(s.app, s.now)
+func (s *insightsQASource) HealthScore() (int, string, bool) {
+	if err := s.begin(); err != nil {
+		s.fail(err)
+		return 0, "", false
+	}
+	accounts, err := s.accounts()
+	if err != nil {
+		s.fail(err)
+		return 0, "", false
+	}
+	txns, err := s.transactions()
+	if err != nil {
+		s.fail(err)
+		return 0, "", false
+	}
+	links, err := s.app.Store().ListTxnLinks()
+	if err != nil {
+		s.fail(fmt.Errorf("read transaction links: %w", err))
+		return 0, "", false
+	}
+	budgets, err := s.app.Store().ListBudgets()
+	if err != nil {
+		s.fail(fmt.Errorf("read budgets: %w", err))
+		return 0, "", false
+	}
+	categories, err := s.app.CategoriesChecked()
+	if err != nil {
+		s.fail(err)
+		return 0, "", false
+	}
+	financialPrefs, _, err := assistantDataPreferences(s.app.Store())
+	if err != nil {
+		s.fail(err)
+		return 0, "", false
+	}
+	in := engineenv.HealthInputs(engineenv.Data{Ledger: budgeting.NewNettedLedger(txns, links), Accounts: accounts, Transactions: txns,
+		Budgets: budgets, Categories: categories, WeekStart: financialPrefs.WeekStartWeekday(), Rates: s.rates, Now: s.now})
 	result := healthscore.Evaluate(in)
 	if result.Band == healthscore.BandNoData {
 		return 0, "", false
@@ -177,96 +400,236 @@ func (s *insightsQASource) HealthScore() (score int, band string, ok bool) {
 	return result.Score, string(result.Band), true
 }
 
-// insightsMoneyFmt wraps fmtMoney for a plain minor-unit + currency pair, used
-// as the fmtMoney closure supplied to localqa.Answer inside sendText.
-func insightsMoneyFmt(minor int64, base string) string {
-	return fmtMoney(money.Money{Amount: minor, Currency: base})
-}
-
-// BudgetStatus reports how the household's budgets are doing this month: how many
-// exist, how many are over, and which one is furthest over (G2-C8). The overspend
-// is what the answer leads with, because "over by $4" and "over by $400" are
-// different situations that a count alone flattens.
-func (s *insightsQASource) BudgetStatus() (total, over int, worstName string, worstOverMinor int64, ok bool) {
-	budgets := s.app.Budgets()
+func (s *insightsQASource) BudgetStatus() (int, int, string, int64, bool) {
+	if err := s.begin(); err != nil {
+		s.fail(err)
+		return 0, 0, "", 0, false
+	}
+	budgets, err := s.app.Store().ListBudgets()
+	if err != nil {
+		s.fail(fmt.Errorf("read budgets: %w", err))
+		return 0, 0, "", 0, false
+	}
 	if len(budgets) == 0 {
 		return 0, 0, "", 0, false
 	}
-	statuses := budgetStatusesAt(s.app, s.now)
-	catName := map[string]string{}
-	for _, c := range s.app.Categories() {
+	accounts, err := s.accounts()
+	if err != nil {
+		s.fail(err)
+		return len(budgets), 0, "", 0, false
+	}
+	txns, err := s.transactions()
+	if err != nil {
+		s.fail(err)
+		return len(budgets), 0, "", 0, false
+	}
+	recurring, err := s.recurring()
+	if err != nil {
+		s.fail(err)
+		return len(budgets), 0, "", 0, false
+	}
+	categories, err := s.app.CategoriesChecked()
+	if err != nil {
+		s.fail(err)
+		return len(budgets), 0, "", 0, false
+	}
+	links, err := s.app.Store().ListTxnLinks()
+	if err != nil {
+		s.fail(fmt.Errorf("read transaction links: %w", err))
+		return len(budgets), 0, "", 0, false
+	}
+	financialPrefs, _, err := assistantDataPreferences(s.app.Store())
+	if err != nil {
+		s.fail(err)
+		return len(budgets), 0, "", 0, false
+	}
+	anchor := time.Time{}
+	if financialPrefs.PayCycleAnchor != "" {
+		anchor, err = dateutil.ParseDate(financialPrefs.PayCycleAnchor)
+		if err != nil {
+			s.fail(fmt.Errorf("read pay-cycle anchor: %w", err))
+			return len(budgets), 0, "", 0, false
+		}
+	}
+	finance := assistantdata.BuildFinance(assistantdata.FinanceInput{
+		Accounts: accounts, Transactions: txns, Categories: categories, Budgets: budgets,
+		Recurring: recurring, TxnLinks: links, Now: s.now, Scope: scope.ReportScope{}, Base: s.base, Rates: s.rates,
+		WeekStart: financialPrefs.WeekStartWeekday(), PayCycleAnchor: anchor, PoolRollover: financialPrefs.BudgetRolloverLeftover,
+	})
+	window, err := finance.ResolveWindow("this_month", "", "")
+	if err != nil {
+		s.fail(err)
+		return len(budgets), 0, "", 0, false
+	}
+	facts := finance.Budgets(window)
+	catName := make(map[string]string, len(categories))
+	for _, c := range categories {
 		catName[c.ID] = c.Name
 	}
-	for _, st := range statuses {
-		if st.Error != nil {
-			return len(statuses), 0, "", 0, false
+	over := 0
+	var worst int64
+	var worstName string
+	for _, fact := range facts {
+		st := fact.Status
+		if fact.Error != nil || st.Error != nil {
+			if fact.Error != nil {
+				s.fail(fact.Error)
+			} else {
+				s.fail(st.Error)
+			}
+			return len(facts), 0, "", 0, false
 		}
 		if st.State != budgeting.StateOver {
 			continue
 		}
 		over++
-		// Remaining is negative once a budget is over, so the overspend is its
-		// magnitude.
-		amountOver := -st.Remaining.Amount
-		if st.Budget.IsSaving() {
-			amountOver = st.Remaining.Amount
+		amount := st.Remaining
+		if !st.Budget.IsSaving() {
+			amount, err = amount.NegChecked()
+			if err != nil {
+				s.fail(err)
+				return len(facts), 0, "", 0, false
+			}
 		}
-		amount, err := s.rates.ToBase(money.New(amountOver, st.Remaining.Currency))
+		converted, err := s.rates.Convert(amount, s.base)
 		if err != nil {
-			return len(statuses), 0, "", 0, false
+			s.fail(err)
+			return len(facts), 0, "", 0, false
 		}
-		amountOver = amount.Amount
-		if amountOver > worstOverMinor {
-			worstOverMinor = amountOver
-			worstName = budgetDisplayName(st, catName)
+		if converted.Amount > worst {
+			worst, worstName = converted.Amount, budgetDisplayName(st, catName)
 		}
 	}
-	return len(statuses), over, worstName, worstOverMinor, true
+	return len(facts), over, worstName, worst, true
 }
 
-// budgetNearThreshold matches the fraction the budgets screen uses for its "close
-// to the limit" state, so a keyless answer and the screen never disagree about
-// which budgets are over.
-const budgetNearThreshold = 0.9
-
-// budgetDisplayName names a budget the way its screen does: by its own name when
-// it has one, otherwise by the category it governs.
-func budgetDisplayName(st budgeting.Status, catName map[string]string) string {
-	if n := strings.TrimSpace(st.Budget.Name); n != "" {
-		return n
-	}
-	if n := strings.TrimSpace(catName[st.Budget.CategoryID]); n != "" {
-		return n
-	}
-	return "a budget"
-}
-
-// RecentTransactions returns the newest transactions, newest first, converted to
-// the base currency so the figures in an answer are comparable with each other.
 func (s *insightsQASource) RecentTransactions() []localqa.RecentTxn {
-	txns := s.app.Transactions()
-	sorted := make([]domain.Transaction, 0, len(txns))
-	for _, t := range txns {
-		if t.IsTransfer() {
-			// A transfer moved money between the household's own accounts; listing
-			// it as something they bought would be wrong.
+	if err := s.begin(); err != nil {
+		s.fail(err)
+		return nil
+	}
+	txns, err := s.transactions()
+	if err != nil {
+		s.fail(err)
+		return nil
+	}
+	sort.SliceStable(txns, func(i, j int) bool {
+		if txns[i].Date.Equal(txns[j].Date) {
+			return txns[i].ID < txns[j].ID
+		}
+		return txns[i].Date.After(txns[j].Date)
+	})
+	out := make([]localqa.RecentTxn, 0, len(txns))
+	for _, txn := range txns {
+		if txn.IsTransfer() {
 			continue
 		}
-		sorted = append(sorted, t)
-	}
-	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].Date.After(sorted[j].Date) })
-	out := make([]localqa.RecentTxn, 0, len(sorted))
-	for _, t := range sorted {
-		out = append(out, localqa.RecentTxn{
-			Payee:       txnDisplayPayee(t),
-			AmountMinor: s.toBaseMinor(t.Amount.Abs()),
-		})
+		magnitude, err := txn.Amount.AbsChecked()
+		if err != nil {
+			s.fail(err)
+			return nil
+		}
+		converted, err := s.rates.Convert(magnitude, s.base)
+		if err != nil {
+			s.fail(err)
+			return nil
+		}
+		out = append(out, localqa.RecentTxn{Payee: txnDisplayPayee(txn), AmountMinor: converted.Amount})
 	}
 	return out
 }
 
-// txnDisplayPayee names a transaction the way the ledger does: its payee, falling
-// back to its description.
+func (s *insightsQASource) Subscriptions() (int, int64) {
+	if err := s.begin(); err != nil {
+		s.fail(err)
+		return 0, 0
+	}
+	rows, err := s.recurring()
+	if err != nil {
+		s.fail(err)
+		return 0, 0
+	}
+	count := 0
+	var total int64
+	for _, row := range rows {
+		if row.Paused || row.Amount.Amount >= 0 {
+			continue
+		}
+		magnitude, err := row.Amount.AbsChecked()
+		if err != nil {
+			s.fail(err)
+			return 0, 0
+		}
+		num, den := int64(1), int64(1)
+		switch row.Cadence {
+		case domain.CadenceWeekly:
+			num, den = 52, 12
+		case domain.CadenceBiweekly:
+			num, den = 26, 12
+		case domain.CadenceSemimonthly:
+			num = 2
+		case domain.CadenceQuarterly:
+			den = 3
+		case domain.CadenceYearly:
+			den = 12
+		}
+		monthly, err := magnitude.MulDiv(num, den, money.RoundTowardZero)
+		if err != nil {
+			s.fail(err)
+			return 0, 0
+		}
+		converted, err := s.rates.Convert(monthly, s.base)
+		if err != nil {
+			s.fail(err)
+			return 0, 0
+		}
+		total, err = money.Add(total, converted.Amount)
+		if err != nil {
+			s.fail(err)
+			return 0, 0
+		}
+		count++
+	}
+	return count, total
+}
+
+func (s *insightsQASource) LargestExpense() (string, int64, bool) {
+	if err := s.begin(); err != nil {
+		s.fail(err)
+		return "", 0, false
+	}
+	txns, err := s.transactions()
+	if err != nil {
+		s.fail(err)
+		return "", 0, false
+	}
+	start, end := dateutil.MonthRange(s.now)
+	var payee string
+	var largest int64
+	found := false
+	for _, txn := range txns {
+		if !txn.IsExpense() || txn.IsTransfer() || !txn.CountsInReports() || !dateutil.InRange(txn.Date, start, end) {
+			continue
+		}
+		magnitude, err := txn.Amount.AbsChecked()
+		if err != nil {
+			s.fail(err)
+			return "", 0, false
+		}
+		converted, err := s.rates.Convert(magnitude, s.base)
+		if err != nil {
+			s.fail(err)
+			return "", 0, false
+		}
+		if !found || converted.Amount > largest {
+			largest, payee, found = converted.Amount, txnDisplayPayee(txn), true
+		}
+	}
+	return payee, largest, found
+}
+
+func insightsMoneyFmt(minor int64, base string) string { return fmtMoney(money.New(minor, base)) }
+
 func txnDisplayPayee(t domain.Transaction) string {
 	if p := strings.TrimSpace(t.Payee); p != "" {
 		return p
@@ -277,49 +640,19 @@ func txnDisplayPayee(t domain.Transaction) string {
 	return "an unnamed transaction"
 }
 
-// Subscriptions counts the active recurring charges and their combined monthly
-// cost. It counts the household's own recurring SCHEDULE rather than guessing at
-// subscriptions from transaction patterns: a keyless answer should be a fact about
-// what was set up, not an inference presented as one.
-func (s *insightsQASource) Subscriptions() (count int, monthlyMinor int64) {
-	for _, r := range s.app.Recurring() {
-		if r.Paused || r.Amount.Amount >= 0 {
-			// A paused schedule is not currently costing anything, and an income
-			// schedule was never a subscription.
-			continue
-		}
-		count++
-		monthly := r.MonthlyEquivalent()
-		if monthly < 0 {
-			monthly = -monthly
-		}
-		monthlyMinor += monthly
+func budgetDisplayName(st budgeting.Status, catName map[string]string) string {
+	if name := strings.TrimSpace(st.Budget.Name); name != "" {
+		return name
 	}
-	return count, monthlyMinor
+	if name := strings.TrimSpace(catName[st.Budget.CategoryID]); name != "" {
+		return name
+	}
+	return "a budget"
 }
 
-// LargestExpense returns the biggest single expense of the current month.
-func (s *insightsQASource) LargestExpense() (payee string, amountMinor int64, ok bool) {
-	mStart, mEnd := dateutil.MonthRange(s.now)
-	for _, t := range s.app.Transactions() {
-		if !t.IsExpense() || t.IsTransfer() || !dateutil.InRange(t.Date, mStart, mEnd) {
-			continue
-		}
-		amount := s.toBaseMinor(t.Amount.Abs())
-		if amount > amountMinor {
-			amountMinor, payee, ok = amount, txnDisplayPayee(t), true
-		}
+func max64(v, floor int64) int64 {
+	if v < floor {
+		return floor
 	}
-	return payee, amountMinor, ok
-}
-
-// toBaseMinor converts an amount into the base currency, falling back to the raw
-// figure when the rate table cannot (an unmixed single-currency household is the
-// common case, where the two are the same).
-func (s *insightsQASource) toBaseMinor(m money.Money) int64 {
-	conv, err := s.rates.Convert(m, s.base)
-	if err != nil {
-		return m.Amount
-	}
-	return conv.Amount
+	return v
 }

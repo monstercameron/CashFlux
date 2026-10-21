@@ -1,3 +1,7 @@
+## 2026-10-21 - Make local assistant answers checked and current
+
+Added optional error-aware native localqa sources and checked net-worth/goal arithmetic. The App adapter reads fresh fallible settings and datasets, uses canonical refund-aware category and budget models, checked FX and reductions, and the app clock. Unsupported category date ranges fall through to provider tools. Native Insights tests and vet pass; all five real-App cases pass in the final 23-test assistant WASM gate, alongside the 353-suite native gate.
+
 ## 2026-10-21 - Capture native componentization baselines
 
 Captured five samples each for transaction filter/sort and memo hits, goal funding/indexed sorting, and task snapshot/filter paths. Stored raw logs, medians and exact source/environment metadata. All three native benchmark commands passed. These are existing synthetic algorithm comparisons, not new app before/after gains; the ARM64 host runs the amd64 benchmark target, which must stay consistent for later comparisons.

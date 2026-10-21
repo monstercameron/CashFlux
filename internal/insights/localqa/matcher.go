@@ -234,6 +234,9 @@ var rules = []intentRule{
 // matches.
 func Match(text string) (Intent, bool) {
 	lower := strings.ToLower(text)
+	if asksCategorySpend(lower) && unsupportedCategoryPeriod(lower) {
+		return IntentNone, false
+	}
 	for _, rule := range rules {
 		for _, phrase := range rule.phrases {
 			if strings.Contains(lower, phrase) {
@@ -242,6 +245,23 @@ func Match(text string) (Intent, bool) {
 		}
 	}
 	return IntentNone, false
+}
+
+func asksCategorySpend(lower string) bool {
+	return strings.Contains(lower, "spend on") || strings.Contains(lower, "spent on") || strings.Contains(lower, "spending on")
+}
+
+func unsupportedCategoryPeriod(lower string) bool {
+	for _, phrase := range []string{
+		"today", "yesterday", "this week", "last week", "past week", "last month", "previous month",
+		"this quarter", "last quarter", "previous quarter", "this year", "last year", "previous year",
+		"last 7 days", "last 30 days", "past 30 days", "last 12 months",
+	} {
+		if strings.Contains(lower, phrase) {
+			return true
+		}
+	}
+	return false
 }
 
 // ExtractCategory attempts to pull the category phrase from a
@@ -260,5 +280,13 @@ func ExtractCategory(text string) string {
 		return ""
 	}
 	after := strings.TrimSpace(text[idx+4:]) // preserve original casing
+	after = strings.TrimRight(after, " ?!.,")
+	lowerAfter := strings.ToLower(after)
+	for _, suffix := range []string{" this month", " this period"} {
+		if strings.HasSuffix(lowerAfter, suffix) {
+			after = strings.TrimSpace(after[:len(after)-len(suffix)])
+			break
+		}
+	}
 	return after
 }
