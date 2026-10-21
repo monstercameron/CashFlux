@@ -1164,6 +1164,11 @@ func globalSettingsForm() uic.Node {
 		OnAiToggle: func(v bool) { aiOn.Set(v) },
 		AiKey:      aiKey.Get(),
 		OnKey:      onKey,
+		OnServerAIRoute: func(on bool) {
+			p := prefsAtom.Get()
+			p.AIProxyDisabled = !on
+			savePrefs(p)
+		},
 		OnRememberKey: func(v bool) {
 			cancelQueuedAICredentialSave()
 			key := ""

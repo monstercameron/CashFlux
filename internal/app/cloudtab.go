@@ -134,7 +134,6 @@ func CloudConnectionPane() uic.Node {
 		uic.CreateElement(cloudDisclosure, cloudDisclosureProps{Title: uistate.T("cloud1.advanced"), TestID: "cloud-advanced", Body: Fragment(
 			If(!hosted, uic.CreateElement(cloudAction, cloudActionProps{Label: uistate.T("cloud1.changeConnection"), TestID: "cloud-change-connection", OnClick: setup.Start, Disabled: setup.Busy})),
 			If(status.Message != "", P(css.Class(tw.Text12, tw.TextDim), Attr("data-testid", "sync-status-detail"), status.Message)),
-			If(signedIn, uic.CreateElement(cloudAISettings)),
 			If(segmentFor(pr) == "commercial", uic.CreateElement(cloudBillingView, cloudBillingProps{SignedIn: signedIn})),
 		)}),
 		If(signedIn || !pr.BackendDisabled, uic.CreateElement(cloudDangerView, cloudDangerProps{Household: cloudHouseholdName(), Server: backendHost(pr.ServerURL), OnPause: setup.PauseThen, OnDelete: func(done func(error)) { cloudDeleteCopy(pr, workspaceID, setup.PauseThen, done) }})),
