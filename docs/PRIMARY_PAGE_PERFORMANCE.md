@@ -304,3 +304,29 @@ is direct evidence of removed row decoding; elapsed times are local observations
 Raw output is in the task workspace at `work/primary-snapshot-key-bench.log`.
 The reproducible benchmark is `BenchmarkSnapshot3000Transactions` in
 `internal/undosnap/dataset_snapshot_bench_test.go` (`-count=3 -cpu=1 -benchmem`).
+
+## Native account history preparation
+
+Net-worth and explicit portfolio series prepare account-to-row positions once,
+then visit each account's source-order rows for every cutoff. They no longer
+copy the complete transaction structs for every cutoff or scan every unrelated
+account's rows. They preserve account iteration order, source addition order,
+strict cutoff comparisons, checked intermediate overflow, error order, duplicate
+account records and per-account FX rounding. Adversarial cases and 400 seeded
+scenarios compare both selection policies with the frozen prior implementation.
+
+Three samples per case with one benchmark CPU gave these local medians:
+
+| Fixture | Prior series | Indexed series | Allocated bytes per operation, prior → indexed |
+| --- | ---: | ---: | ---: |
+| 24 accounts, 24,000 rows, 8 cutoffs | 80.46 ms | 3.715 ms | 87,556,416 → 531,136 |
+| 80 accounts, 60,000 rows, 12 cutoffs | 709.6 ms | 11.624 ms | 328,338,528 → 1,041,376 |
+
+Small allocation counts increase (17 → 264 and 61 → 811) because index slices
+grow per account, while total allocated bytes fall substantially. Candidate row
+visits calculated from the fixtures fall from 4,072,800 to 192,000 and from
+47,709,000 to 681,000. This isolates native series computation, not browser
+navigation. Go 1.26.9 targeted Windows AMD64 on an ARM64 host; other development
+work was active. Raw results and the contention note are in the task workspace
+at `work/primary-account-value-series-bench.log`; the benchmark is
+`BenchmarkAccountValuePreparation` (`-count=3 -cpu=1 -benchmem`).
