@@ -1,832 +1,1036 @@
 {
-  "source": "internal/screens/screens.go:All",
+  "source": "internal/screens/screens.go:All (authoritative registry)",
   "route_count": 47,
   "fields": {
-    "entry": "screen package source file and line for routed view function",
-    "native_models": "native package evidence imported/called by the entry implementation; empty means no native model identified from the routed entry",
-    "child_evidence": "known child components/surface APIs visible in inspected screen source",
-    "exceptions": "routing or architecture caveats, including explicit aliases/injection"
+    "entry": "null in every route; function-level locations are omitted because active refactors move source. route_source names the authoritative registry.",
+    "route_source": "authoritative registry source for route registration",
+    "native_model_evidence": "native package/preparation seams observed in the routed implementation; presence is not a completion claim",
+    "typed_child_evidence": "typed child components and surface APIs observed in current source",
+    "known_exceptions_or_residuals": "verified route caveats/residuals from source review; empty means none recorded in this audit, not proof of completeness",
+    "boundary_class": "observed source boundary classification, not a completion rating",
+    "test_evidence_pointer": "test source references only; execution/pass status is not inferred",
+    "verified_component_refs": "first-nine route component call sites verified against current source",
+    "representative_validation_refs": "representative test source files in the worktree, not a claim they passed"
   },
   "routes": [
     {
       "path": "/",
       "view": "Dashboard",
       "rail": "primary",
-      "entry": "internal/screens/dashboard.go:636",
-      "native_models": [
-        "dashboardview",
-        "widgetengine",
-        "widgetrender",
-        "dashlayout"
+      "entry": null,
+      "boundary_class": "prepared-model",
+      "native_model_evidence": [
+        "dashboardview, dashboard frame/layout preparation, widgetrender"
       ],
-      "child_evidence": [
+      "typed_child_evidence": [
         "dashboardController",
         "ui.Widget",
         "DashboardLayoutControls"
       ],
-      "exceptions": []
+      "known_exceptions_or_residuals": "",
+      "test_evidence_pointer": "internal/dashboardview/*_test.go; dashboard screen WASM tests",
+      "route_source": "internal/screens/screens.go:All",
+      "verified_component_refs": [
+        "ui.Widget",
+        "dashboardController",
+        "DashboardLayoutControls"
+      ],
+      "representative_validation_refs": [
+        "internal/screens/dashboard_preparation_wasm_test.go",
+        "internal/screens/dashboard_hero_wasm_test.go",
+        "internal/screens/dashboard_counts_wasm_test.go",
+        "internal/dashboardview/*_test.go"
+      ]
     },
     {
       "path": "/transactions",
       "view": "Transactions",
       "rail": "primary",
-      "entry": "internal/screens/transactions_widget.go:77",
-      "native_models": [
-        "txnview",
-        "txntable",
-        "txnfilter",
-        "txnreview",
-        "txntoolbar"
+      "entry": null,
+      "boundary_class": "prepared-model",
+      "native_model_evidence": [
+        "txnview, txntable, txnfilter, txnreview, txntoolbar"
       ],
-      "child_evidence": [
+      "typed_child_evidence": [
         "transactionsSurface",
         "txnPlacement",
         "txnReceiptPreviewOverlay"
       ],
-      "exceptions": [
-        "Specialized transaction placement/memoization; keep its cache boundary distinct from surfaceTiles"
+      "known_exceptions_or_residuals": "",
+      "test_evidence_pointer": "internal/screens/txn_route_links_wasm_test.go; internal/screens/transactions_derive_test.go",
+      "route_source": "internal/screens/screens.go:All",
+      "verified_component_refs": [
+        "ui.FilterToolbar",
+        "transactionsSurface",
+        "txnPlacement",
+        "txnReceiptPreviewOverlay"
+      ],
+      "representative_validation_refs": [
+        "internal/screens/transactions_derive_test.go",
+        "internal/screens/txn_route_links_wasm_test.go",
+        "internal/screens/transactions_widget_r10w_wasm_test.go",
+        "internal/screens/transactions_tiles_gate4_wasm_test.go"
       ]
     },
     {
       "path": "/accounts",
       "view": "Accounts",
       "rail": "primary",
-      "entry": "internal/screens/accounts_widget.go:39",
-      "native_models": [
-        "accountview",
-        "docexpiry",
-        "widgetrender"
+      "entry": null,
+      "boundary_class": "prepared-model",
+      "native_model_evidence": [
+        "accountview, goalview reservations"
       ],
-      "child_evidence": [
+      "typed_child_evidence": [
         "surfaceTiles",
         "AccountRow",
         "accountDetailContext"
       ],
-      "exceptions": [
-        "Account detail/history/projections are disclosure-lazy"
+      "known_exceptions_or_residuals": "Disclosure-lazy account history/projections are intentional; retain snapshot cache identity and invalid-balance unavailable behavior.",
+      "test_evidence_pointer": "internal/screens/accounts_details_lazy_wasm_test.go; internal/screens/reservations_primary_wasm_test.go",
+      "route_source": "internal/screens/screens.go:All",
+      "verified_component_refs": [
+        "surfaceTiles",
+        "ui.FilterToolbar",
+        "AccountRow",
+        "accountDetailContext"
+      ],
+      "representative_validation_refs": [
+        "internal/screens/accounts_details_lazy_wasm_test.go",
+        "internal/screens/reservations_primary_wasm_test.go",
+        "internal/screens/accounts_primary_wasm_test.go"
       ]
     },
     {
       "path": "/budgets",
       "view": "Budgets",
       "rail": "primary",
-      "entry": "internal/screens/budgets_widget.go:39",
-      "native_models": [
-        "budgetview",
-        "budgeting",
-        "widgetrender"
+      "entry": null,
+      "boundary_class": "prepared-model",
+      "native_model_evidence": [
+        "budgetview, budgeting"
       ],
-      "child_evidence": [
+      "typed_child_evidence": [
         "surfaceTiles",
         "BudgetRow",
         "BudgetAnnualGrid"
       ],
-      "exceptions": []
+      "known_exceptions_or_residuals": "",
+      "test_evidence_pointer": "internal/screens/budgets_bc4b1_wasm_test.go; internal/screens/budgets_flex_native_wasm_test.go",
+      "route_source": "internal/screens/screens.go:All",
+      "verified_component_refs": [
+        "surfaceTiles",
+        "BudgetRow",
+        "BudgetAnnualGrid"
+      ],
+      "representative_validation_refs": [
+        "internal/screens/budgets_bc4b1_wasm_test.go",
+        "internal/screens/budgets_summary_native_wasm_test.go",
+        "internal/screens/budgets_flex_native_wasm_test.go"
+      ]
     },
     {
       "path": "/goals",
       "view": "Goals",
       "rail": "primary",
-      "entry": "internal/screens/goals_widget.go:30",
-      "native_models": [
-        "goalview",
-        "goals",
-        "widgetrender"
+      "entry": null,
+      "boundary_class": "prepared-model",
+      "native_model_evidence": [
+        "goalview, goals, taskview"
       ],
-      "child_evidence": [
+      "typed_child_evidence": [
         "surfaceTiles",
         "goalListWidget",
         "GoalRow",
         "GoalFigures",
         "GoalTaskPreview"
       ],
-      "exceptions": []
+      "known_exceptions_or_residuals": "",
+      "test_evidence_pointer": "internal/goalview/*_test.go; internal/screens/goals_*_wasm_test.go",
+      "route_source": "internal/screens/screens.go:All",
+      "verified_component_refs": [
+        "surfaceTiles",
+        "ui.ControlStrip",
+        "ui.SegmentedControl",
+        "GoalRow",
+        "GoalFigures",
+        "GoalTaskPreview"
+      ],
+      "representative_validation_refs": [
+        "internal/screens/goals_primary_wasm_test.go",
+        "internal/screens/goals_sort_wasm_test.go",
+        "internal/screens/goals_segmented_tabs_wasm_test.go",
+        "internal/goalview/*_test.go"
+      ]
     },
     {
       "path": "/todo",
       "view": "Todo",
       "rail": "primary",
-      "entry": "internal/screens/todo_widget.go:31",
-      "native_models": [
-        "taskview",
-        "todoview",
-        "widgetrender"
+      "entry": null,
+      "boundary_class": "prepared-model",
+      "native_model_evidence": [
+        "taskview, todoview"
       ],
-      "child_evidence": [
+      "typed_child_evidence": [
         "surfaceTiles",
         "todoListWidget",
         "TaskRow"
       ],
-      "exceptions": []
+      "known_exceptions_or_residuals": "",
+      "test_evidence_pointer": "internal/screens/todo_primary_wasm_test.go; internal/screens/todo_paging_memo_wasm_test.go",
+      "route_source": "internal/screens/screens.go:All",
+      "verified_component_refs": [
+        "surfaceTiles",
+        "ui.FilterToolbar",
+        "ui.SegmentedControl",
+        "todoListWidget",
+        "TaskRow"
+      ],
+      "representative_validation_refs": [
+        "internal/screens/todo_primary_wasm_test.go",
+        "internal/screens/todo_paging_memo_wasm_test.go"
+      ]
     },
     {
       "path": "/notifications",
       "view": "NotificationCenter",
       "rail": "primary",
-      "entry": "internal/screens/notifications_widget.go:28",
-      "native_models": [
-        "notificationview",
-        "widgetrender"
+      "entry": null,
+      "boundary_class": "prepared-model",
+      "native_model_evidence": [
+        "notificationview"
       ],
-      "child_evidence": [
+      "typed_child_evidence": [
         "surfaceTiles",
         "notifSurfaceShell",
         "notifListWidget",
         "notifyRow"
       ],
-      "exceptions": []
+      "known_exceptions_or_residuals": "",
+      "test_evidence_pointer": "internal/notificationview/*_test.go",
+      "route_source": "internal/screens/screens.go:All",
+      "verified_component_refs": [
+        "surfaceTiles",
+        "ui.SegmentedControl",
+        "notifSurfaceShell",
+        "notifListWidget",
+        "notifyRow"
+      ],
+      "representative_validation_refs": [
+        "internal/screens/notifications_primary_wasm_test.go",
+        "internal/screens/notifications_initial_wasm_test.go",
+        "internal/notificationview/*_test.go"
+      ]
     },
     {
       "path": "/assistant",
       "view": "Assistant",
       "rail": "primary",
-      "entry": "internal/screens/assistant.go:46",
-      "native_models": [
-        "assistantview",
-        "insights",
-        "insightsperiod",
-        "scope"
+      "entry": null,
+      "boundary_class": "prepared-model",
+      "native_model_evidence": [
+        "assistantview, periodview, insights"
       ],
-      "child_evidence": [
+      "typed_child_evidence": [
         "AssistantHub",
         "assistantInsightsDataPanel",
-        "AssistantBubble",
-        "assistantChatThread (new component boundary)"
+        "assistantChatThread"
       ],
-      "exceptions": []
+      "known_exceptions_or_residuals": "Conversation state/actions stay in controller; financial answers must use checked prepared facts.",
+      "test_evidence_pointer": "internal/screens/assistant_chat_components_wasm_test.go; internal/screens/ag_reports_correctness_wasm_test.go",
+      "route_source": "internal/screens/screens.go:All",
+      "verified_component_refs": [
+        "ui.ControlStrip",
+        "AssistantHub",
+        "assistantAskHeader",
+        "assistantChatThread",
+        "assistantInsightsDataPanel"
+      ],
+      "representative_validation_refs": [
+        "internal/screens/assistant_chat_components_wasm_test.go",
+        "internal/screens/assistant_refactor_wasm_test.go",
+        "internal/screens/ag_reports_correctness_wasm_test.go"
+      ]
     },
     {
       "path": "/reports",
       "view": "Reports",
       "rail": "primary",
-      "entry": "internal/screens/reports_annual.go:65",
-      "native_models": [
-        "reportview",
-        "reports",
-        "period",
-        "healthscore",
-        "goals"
+      "entry": null,
+      "boundary_class": "prepared-model",
+      "native_model_evidence": [
+        "reportview, reports, periodview, healthscore, goals"
       ],
-      "child_evidence": [
+      "typed_child_evidence": [
         "reportController",
         "typed report section components"
       ],
-      "exceptions": [
-        "Summary mode keeps expensive full-detail sections unmounted"
+      "known_exceptions_or_residuals": "Summary keeps expensive typed sections unmounted; retain typed context identity and checked per-$100 helpers.",
+      "test_evidence_pointer": "internal/screens/reports_tax_checked_wasm_test.go; internal/screens/reports_render_wasm_test.go",
+      "route_source": "internal/screens/screens.go:All",
+      "verified_component_refs": [
+        "ui.ControlStrip",
+        "reportController",
+        "typed report section components"
+      ],
+      "representative_validation_refs": [
+        "internal/screens/reports_render_wasm_test.go",
+        "internal/screens/reports_sections_wasm_test.go",
+        "internal/screens/reports_tax_checked_wasm_test.go"
       ]
     },
     {
       "path": "/plan",
       "view": "PlanScreen",
       "rail": "tools",
-      "entry": "internal/screens/plan.go:135",
-      "native_models": [
-        "finplan",
-        "planning"
+      "entry": null,
+      "boundary_class": "prepared-model",
+      "native_model_evidence": [
+        "finplan, planningmodel"
       ],
-      "child_evidence": [
-        "PlanScreen section rows and question controls"
+      "typed_child_evidence": [
+        "PlanScreen sections",
+        "question controls"
       ],
-      "exceptions": []
+      "known_exceptions_or_residuals": "",
+      "test_evidence_pointer": "See the corresponding internal native model package tests; no dedicated screen test pointer recorded in this audit.",
+      "route_source": "internal/screens/screens.go:All"
     },
     {
       "path": "/debt",
       "view": "DebtPlanner",
       "rail": "tools",
-      "entry": "internal/screens/debt_widget.go:35",
-      "native_models": [
-        "payoff",
-        "engineenv",
-        "widgetrender"
+      "entry": null,
+      "boundary_class": "prepared-model",
+      "native_model_evidence": [
+        "debtview, payoff"
       ],
-      "child_evidence": [
+      "typed_child_evidence": [
         "surfaceTiles",
         "debtSummaryWidget",
         "DebtStrategyPanel",
         "DebtRow"
       ],
-      "exceptions": []
+      "known_exceptions_or_residuals": "",
+      "test_evidence_pointer": "See the corresponding internal native model package tests; no dedicated screen test pointer recorded in this audit.",
+      "route_source": "internal/screens/screens.go:All"
     },
     {
       "path": "/investments",
       "view": "InvestmentsScreen",
       "rail": "tools",
-      "entry": "internal/screens/investments.go:272",
-      "native_models": [
-        "portfolio",
-        "ledger",
-        "widgetrender"
+      "entry": null,
+      "boundary_class": "prepared-model",
+      "native_model_evidence": [
+        "investview, portfolio"
       ],
-      "child_evidence": [
+      "typed_child_evidence": [
         "investSummaryWidget",
         "investGrowthWidget",
         "holdingLotsPanel",
         "holdingIncomePanel"
       ],
-      "exceptions": [
-        "Growth/detail tile mounting is deferred until after initial settle"
-      ]
+      "known_exceptions_or_residuals": "Portfolio headline, securities, allocations, fees and reconciliation are prepared through investview.Prepare in computeInvestViewRaw (internal/screens/investments.go:155). Screen code maps the model and formats tiles; post-settle mounting is a documented presentation/performance policy. No residual aggregation found.",
+      "test_evidence_pointer": "internal/investview/model_test.go",
+      "route_source": "internal/screens/screens.go:All"
     },
     {
       "path": "/allocate",
       "view": "Allocate",
       "rail": "tools",
-      "entry": "internal/screens/allocate.go:143",
-      "native_models": [
-        "allocate",
-        "marginal",
-        "ledger"
+      "entry": null,
+      "boundary_class": "prepared-model",
+      "native_model_evidence": [
+        "allocateview.Prepare (candidates, rank, amount parsing, reserve/cap/split)",
+        "allocate package; marginal comparison",
+        "ledger.PeriodTotals (screen currently drops error for income-prefill hint)"
       ],
-      "child_evidence": [
+      "typed_child_evidence": [
         "allocHeroTile",
         "allocStrategyTile",
         "allocPlanTile",
         "allocDestRow"
       ],
-      "exceptions": []
+      "known_exceptions_or_residuals": "Concrete screen-boundary gaps: internal/screens/allocate.go:186 discards ledger.PeriodTotals error while producing the income-prefill hint (`monthIncome`); failure can look like zero and expose a misleading prefill. internal/screens/allocate_view.go:101 computes `TotalMinor - ReserveMinor` for Allocatable in the screen package although allocation model preparation is native; carry this derived money fact from allocateview.Prepare. Candidate/ranking/splitting otherwise use allocateview.Prepare.",
+      "test_evidence_pointer": "internal/screens/allocate_prepared_host_wasm_test.go; internal/allocateview/prepare_test.go",
+      "route_source": "internal/screens/screens.go:All"
     },
     {
       "path": "/planning",
       "view": "Planning",
       "rail": "tools",
-      "entry": "internal/screens/planning.go:64",
-      "native_models": [
-        "planning",
-        "forecast",
-        "cashflow",
-        "runway",
-        "safespend"
+      "entry": null,
+      "boundary_class": "prepared-model",
+      "native_model_evidence": [
+        "planningmodel, planning, forecast, cashflow, runway"
       ],
-      "child_evidence": [
+      "typed_child_evidence": [
         "RecurringRow",
         "PlanRow",
         "detectedRecurringRow"
       ],
-      "exceptions": []
+      "known_exceptions_or_residuals": "Forecast, runway, safe-spend, trim/compare computations are native through planningmodel.Prepare; `preparePlanning` (internal/screens/planning_prepared.go:19) is the typed screen adapter, parsing form strings with money.ParseMinor and validating nonnegative month input before invoking the model. Planning.go formats prepared values and builds chart points. Treat input parsing as adapter responsibility; no forecast math in the view identified.",
+      "test_evidence_pointer": "See the corresponding internal native model package tests; no dedicated screen test pointer recorded in this audit.",
+      "route_source": "internal/screens/screens.go:All"
     },
     {
       "path": "/recurring",
       "view": "Recurring",
       "rail": "tools",
-      "entry": "internal/screens/recurring.go:703",
-      "native_models": [
-        "cashflow",
-        "recurdiscover",
-        "subscriptions",
-        "runway"
+      "entry": null,
+      "boundary_class": "prepared-model",
+      "native_model_evidence": [
+        "subscriptionview, recurringview, cashflow, subscriptions"
       ],
-      "child_evidence": [
+      "typed_child_evidence": [
         "RhythmSurface",
         "recurring review rows"
       ],
-      "exceptions": []
+      "known_exceptions_or_residuals": "",
+      "test_evidence_pointer": "See the corresponding internal native model package tests; no dedicated screen test pointer recorded in this audit.",
+      "route_source": "internal/screens/screens.go:All"
     },
     {
       "path": "/events",
       "view": "Events",
       "rail": "tools",
-      "entry": "internal/screens/events.go:58",
-      "native_models": [
-        "events"
+      "entry": null,
+      "boundary_class": "composed-native-services",
+      "native_model_evidence": [
+        "events.AutoAssociate and events.Totals",
+        "appstate.PutEvent validation and persistence"
       ],
-      "child_evidence": [
-        "Events page event list/form sections"
+      "typed_child_evidence": [
+        "event list/form sections"
       ],
-      "exceptions": [
-        "Add form state and date parsing are still in the routed view"
-      ]
+      "known_exceptions_or_residuals": "Date-string parsing is form adapter work (parseEventDate at internal/screens/events.go:35); event name/start/end semantic validation and persistence are in appstate.PutEvent (internal/appstate/event_ops.go:31). Totals are delegated to native events.Totals, so no financial aggregation remains in screen code. Separate native correctness follow-up: events.Totals uses unchecked int64 accumulation at internal/events/events.go:75.",
+      "test_evidence_pointer": "See the corresponding internal native model package tests; no dedicated screen test pointer recorded in this audit.",
+      "route_source": "internal/screens/screens.go:All"
     },
     {
       "path": "/networth",
       "view": "NetWorth",
       "rail": "tools",
-      "entry": "internal/screens/networth_page.go:366",
-      "native_models": [
-        "balancesheet",
-        "attribution",
-        "nwchange"
+      "entry": null,
+      "boundary_class": "prepared-model",
+      "native_model_evidence": [
+        "networthview, balancesheet, attribution, nwchange"
       ],
-      "child_evidence": [
+      "typed_child_evidence": [
         "NetWorthPanel",
         "nwsAccountPanel",
         "nwsLegPanel"
       ],
-      "exceptions": []
+      "known_exceptions_or_residuals": "",
+      "test_evidence_pointer": "internal/networthview/prepare_test.go",
+      "route_source": "internal/screens/screens.go:All"
     },
     {
       "path": "/health",
       "view": "HealthScreen",
       "rail": "tools",
-      "entry": "internal/screens/health.go:513",
-      "native_models": [
-        "healthscore",
-        "resilience",
-        "vitals"
+      "entry": null,
+      "boundary_class": "prepared-model",
+      "native_model_evidence": [
+        "healthview, healthscore, resilience, vitals"
       ],
-      "child_evidence": [
+      "typed_child_evidence": [
         "healthRing",
         "healthFactorTile",
         "healthStepRow"
       ],
-      "exceptions": []
+      "known_exceptions_or_residuals": "",
+      "test_evidence_pointer": "See the corresponding internal native model package tests; no dedicated screen test pointer recorded in this audit.",
+      "route_source": "internal/screens/screens.go:All"
     },
     {
       "path": "/studio",
       "view": "Studio",
       "rail": "tools",
-      "entry": "internal/screens/studio.go:82",
-      "native_models": [
-        "pages",
-        "domain"
+      "entry": null,
+      "boundary_class": "composed-native-services",
+      "native_model_evidence": [
+        "pages, formula, customfields, workflow"
       ],
-      "child_evidence": [
+      "typed_child_evidence": [
         "StudioHub",
-        "studioBuilderPanel",
-        "studioFormulasPanel",
-        "studioFieldsPanel",
-        "studioWorkflowsPanel"
+        "builder/formulas/fields/workflows panels"
       ],
-      "exceptions": [
-        "Hub delegates to standalone tool components; those routes remain deep-linkable"
-      ]
+      "known_exceptions_or_residuals": "Hub composes standalone tool components; deep-link routes intentionally retained.",
+      "test_evidence_pointer": "See the corresponding internal native model package tests; no dedicated screen test pointer recorded in this audit.",
+      "route_source": "internal/screens/screens.go:All"
     },
     {
       "path": "/household",
       "view": "Household",
       "rail": "tools",
-      "entry": "internal/screens/household.go:252",
-      "native_models": [
-        "allocate",
-        "ledger",
-        "reports"
+      "entry": null,
+      "boundary_class": "prepared-model",
+      "native_model_evidence": [
+        "householdview, allocate, ledger"
       ],
-      "child_evidence": [
+      "typed_child_evidence": [
         "HouseholdHub",
         "householdMembersPanel",
-        "householdSplitPanel",
-        "householdByPersonPanel"
+        "householdSplitPanel"
       ],
-      "exceptions": []
+      "known_exceptions_or_residuals": "",
+      "test_evidence_pointer": "internal/householdview/household_test.go",
+      "route_source": "internal/screens/screens.go:All"
     },
     {
       "path": "/categories",
       "view": "Categories",
       "rail": "tools",
-      "entry": "internal/screens/categories.go:71",
-      "native_models": [
-        "categorytree",
-        "catmerge",
-        "reports"
+      "entry": null,
+      "boundary_class": "composed-native-services",
+      "native_model_evidence": [
+        "categoryview.PreparePeriod",
+        "categorytree; catmerge"
       ],
-      "child_evidence": [
+      "typed_child_evidence": [
         "categoryMapGrid",
         "CategoryRow",
         "CategoryAddForm",
         "CategoryPicker"
       ],
-      "exceptions": [
-        "Period/category financial facts and usage aggregation remain prepared in the screen controller"
-      ]
+      "known_exceptions_or_residuals": "Native period aggregation is prepared by categoryview.PreparePeriod at internal/screens/categories.go:324; the page consumes availability flags and formats prepared facts. Category counts and tree shape are presentation/index work. No period-math residual found.",
+      "test_evidence_pointer": "See the corresponding internal native model package tests; no dedicated screen test pointer recorded in this audit.",
+      "route_source": "internal/screens/screens.go:All"
     },
     {
       "path": "/rules",
       "view": "Rules",
       "rail": "tools",
-      "entry": "internal/screens/rules.go:34",
-      "native_models": [
-        "rules",
-        "ruleapply",
-        "rulesuggest"
+      "entry": null,
+      "boundary_class": "composed-native-services",
+      "native_model_evidence": [
+        "rules.SummarizeCoverage",
+        "rules.Rule.MatchesTxn / FirstMatchFull",
+        "ruleapply; rulesuggest"
       ],
-      "child_evidence": [
+      "typed_child_evidence": [
         "RuleRow",
         "SuggestionRow",
         "RuleAddForm",
         "rulesSmartSection"
       ],
-      "exceptions": [
-        "Coverage/count/conflict facts are currently assembled in Rules() from native rule APIs"
-      ]
+      "known_exceptions_or_residuals": "Coverage/count/conflict aggregation is native via rules.SummarizeCoverage at internal/screens/rules.go:314. ruleTxnCtxs at internal/screens/ruleaddform.go:460 is a typed adapter; previewFor at internal/screens/rules.go:383 lazily samples matching transactions with native Rule.MatchesTxn for presentation. No coverage-summary residual found.",
+      "test_evidence_pointer": "See the corresponding internal native model package tests; no dedicated screen test pointer recorded in this audit.",
+      "route_source": "internal/screens/screens.go:All"
     },
     {
       "path": "/artifacts",
       "view": "Artifacts",
       "rail": "tools",
-      "entry": "internal/screens/artifacts.go:34",
-      "native_models": [
-        "artifacts",
-        "artifactstore",
-        "pagination"
+      "entry": null,
+      "boundary_class": "prepared-model",
+      "native_model_evidence": [
+        "artifactview, artifactstore, pagination"
       ],
-      "child_evidence": [
+      "typed_child_evidence": [
         "artifactRow",
         "artifactStorageBar"
       ],
-      "exceptions": []
+      "known_exceptions_or_residuals": "",
+      "test_evidence_pointer": "internal/screens/artifacts_view_wasm_test.go; internal/artifactview/vault_test.go",
+      "route_source": "internal/screens/screens.go:All"
     },
     {
       "path": "/activity",
       "view": "Activity",
       "rail": "tools",
-      "entry": "internal/screens/activity.go:272",
-      "native_models": [
-        "auditview",
-        "auditlog",
-        "auditundo",
-        "auditimpact"
+      "entry": null,
+      "boundary_class": "prepared-model",
+      "native_model_evidence": [
+        "activityview, auditview, auditlog, auditundo"
       ],
-      "child_evidence": [
-        "activityRow"
+      "typed_child_evidence": [
+        "activityRow",
+        "activity prepared host"
       ],
-      "exceptions": []
+      "known_exceptions_or_residuals": "",
+      "test_evidence_pointer": "internal/screens/activity_prepared_host_wasm_test.go; internal/activityview/activity_test.go",
+      "route_source": "internal/screens/screens.go:All"
     },
     {
       "path": "/settings",
       "view": "SettingsScreen",
       "rail": "system",
-      "entry": "internal/screens/settings_route.go:23",
-      "native_models": [
-        "internal/app settings services (injected)"
+      "entry": null,
+      "boundary_class": "injected",
+      "native_model_evidence": [
+        "internal/app settings injected"
       ],
-      "child_evidence": [
+      "typed_child_evidence": [
         "SettingsView injection"
       ],
-      "exceptions": [
-        "Route body is injected by internal/app to break the screens/app import cycle"
-      ]
+      "known_exceptions_or_residuals": "Intentional import-cycle seam: app injects SettingsView. Confirm app-side calculations and validation stay in native services; route registry cannot verify this injected body.",
+      "test_evidence_pointer": "See the corresponding internal native model package tests; no dedicated screen test pointer recorded in this audit.",
+      "route_source": "internal/screens/screens.go:All"
     },
     {
       "path": "/help",
       "view": "HelpScreen",
       "rail": "system",
-      "entry": "internal/screens/help.go:160",
-      "native_models": [
-        "setup"
+      "entry": null,
+      "boundary_class": "composed-content",
+      "native_model_evidence": [
+        "setup and static help content"
       ],
-      "child_evidence": [
+      "typed_child_evidence": [
         "setupChecklistBody",
         "whatsNewBody",
         "supportBody"
       ],
-      "exceptions": []
+      "known_exceptions_or_residuals": "Help/setup checklist and support content composition; setup-specific validation is handled by setup native model/service.",
+      "test_evidence_pointer": "See the corresponding internal native model package tests; no dedicated screen test pointer recorded in this audit.",
+      "route_source": "internal/screens/screens.go:All"
     },
     {
       "path": "/about",
       "view": "About",
       "rail": "system",
-      "entry": "internal/screens/help.go:118",
-      "native_models": [
+      "entry": null,
+      "boundary_class": "static-info",
+      "native_model_evidence": [
         "version"
       ],
-      "child_evidence": [
-        "AboutScreen content"
+      "typed_child_evidence": [
+        "AboutScreen informational content"
       ],
-      "exceptions": [
-        "Small informational route"
-      ]
+      "known_exceptions_or_residuals": "",
+      "test_evidence_pointer": "See the corresponding internal native model package tests; no dedicated screen test pointer recorded in this audit.",
+      "route_source": "internal/screens/screens.go:All"
     },
     {
       "path": "/admin",
       "view": "AdminConsole",
       "rail": "system",
-      "entry": "internal/screens/admin.go:204",
-      "native_models": [],
-      "child_evidence": [
+      "entry": null,
+      "boundary_class": "transport-integration",
+      "native_model_evidence": [
+        "remote admin API integration"
+      ],
+      "typed_child_evidence": [
         "adminUserRow",
         "adminOverview panels"
       ],
-      "exceptions": [
-        "AdminOnly route; remote admin data is a screen-specific integration"
-      ]
+      "known_exceptions_or_residuals": "Screen-specific remote integration, outside local household model; keep transport errors and admin authorization explicit.",
+      "test_evidence_pointer": "See the corresponding internal native model package tests; no dedicated screen test pointer recorded in this audit.",
+      "route_source": "internal/screens/screens.go:All"
     },
     {
       "path": "/customize",
       "view": "Customize",
       "rail": "off-rail",
-      "entry": "internal/screens/customize.go:21",
-      "native_models": [
+      "entry": null,
+      "boundary_class": "composed-native-services",
+      "native_model_evidence": [
         "formula"
       ],
-      "child_evidence": [
+      "typed_child_evidence": [
         "formula builder route surface"
       ],
-      "exceptions": [
-        "Off-rail deep link; formula editing also lives under Studio"
-      ]
+      "known_exceptions_or_residuals": "",
+      "test_evidence_pointer": "See the corresponding internal native model package tests; no dedicated screen test pointer recorded in this audit.",
+      "route_source": "internal/screens/screens.go:All"
     },
     {
       "path": "/fields",
       "view": "CustomFields",
       "rail": "off-rail",
-      "entry": "internal/screens/fields.go:41",
-      "native_models": [
+      "entry": null,
+      "boundary_class": "composed-native-services",
+      "native_model_evidence": [
         "customfields"
       ],
-      "child_evidence": [
+      "typed_child_evidence": [
         "CustomFieldsManager",
         "CustomFieldRow"
       ],
-      "exceptions": [
-        "Off-rail deep link; Studio includes a fields tab"
-      ]
+      "known_exceptions_or_residuals": "",
+      "test_evidence_pointer": "See the corresponding internal native model package tests; no dedicated screen test pointer recorded in this audit.",
+      "route_source": "internal/screens/screens.go:All"
     },
     {
       "path": "/workflows",
       "view": "Workflows",
       "rail": "off-rail",
-      "entry": "internal/screens/workflows.go:37",
-      "native_models": [
+      "entry": null,
+      "boundary_class": "composed-native-services",
+      "native_model_evidence": [
         "workflow"
       ],
-      "child_evidence": [
+      "typed_child_evidence": [
         "workflowRow",
         "stagedActionRow",
         "workflowHistory"
       ],
-      "exceptions": [
-        "Off-rail deep link; Studio includes a workflow tab"
-      ]
+      "known_exceptions_or_residuals": "",
+      "test_evidence_pointer": "See the corresponding internal native model package tests; no dedicated screen test pointer recorded in this audit.",
+      "route_source": "internal/screens/screens.go:All"
     },
     {
       "path": "/appearance",
       "view": "Appearance",
       "rail": "off-rail",
-      "entry": "internal/screens/appearance.go:48",
-      "native_models": [
-        "prefs",
-        "theme"
+      "entry": null,
+      "boundary_class": "composed-native-services",
+      "native_model_evidence": [
+        "prefs, theme"
       ],
-      "child_evidence": [
+      "typed_child_evidence": [
         "Appearance settings sections"
       ],
-      "exceptions": [
-        "Off-rail deep link; current settings tab owns the main nav location"
-      ]
+      "known_exceptions_or_residuals": "",
+      "test_evidence_pointer": "See the corresponding internal native model package tests; no dedicated screen test pointer recorded in this audit.",
+      "route_source": "internal/screens/screens.go:All"
     },
     {
       "path": "/setup",
       "view": "SetupWizard",
       "rail": "off-rail",
-      "entry": "internal/screens/setup.go:43",
-      "native_models": [
-        "setup",
-        "prefs"
+      "entry": null,
+      "boundary_class": "prepared-model",
+      "native_model_evidence": [
+        "setup, prefs"
       ],
-      "child_evidence": [
+      "typed_child_evidence": [
         "setupStepDots",
         "weekOption",
         "acctTypeOption"
       ],
-      "exceptions": [
-        "Off-rail guided flow launched from Help and empty states"
-      ]
+      "known_exceptions_or_residuals": "",
+      "test_evidence_pointer": "internal/screens/setup_money_wasm_test.go",
+      "route_source": "internal/screens/screens.go:All"
     },
     {
       "path": "/credit",
       "view": "CreditScreen",
       "rail": "off-rail",
-      "entry": "internal/screens/credit.go:771",
-      "native_models": [
-        "credithealth",
-        "ledger"
+      "entry": null,
+      "boundary_class": "prepared-model",
+      "native_model_evidence": [
+        "creditview, credithealth"
       ],
-      "child_evidence": [
+      "typed_child_evidence": [
         "CreditHealthPanel",
         "creditCardRow",
         "creditFactorTile"
       ],
-      "exceptions": [
-        "Off-rail deep link / legacy route"
-      ]
+      "known_exceptions_or_residuals": "",
+      "test_evidence_pointer": "internal/creditview/model_test.go",
+      "route_source": "internal/screens/screens.go:All"
     },
     {
       "path": "/loans",
       "view": "LoansScreen",
       "rail": "off-rail",
-      "entry": "internal/screens/loans.go:539",
-      "native_models": [
-        "payoff",
-        "actionpreview",
-        "trust"
+      "entry": null,
+      "boundary_class": "prepared-model",
+      "native_model_evidence": [
+        "loanview, payoff"
       ],
-      "child_evidence": [
+      "typed_child_evidence": [
         "LoansPanel",
         "loanCard"
       ],
-      "exceptions": [
-        "Off-rail deep link, complementary to Debt hub"
-      ]
+      "known_exceptions_or_residuals": "",
+      "test_evidence_pointer": "See the corresponding internal native model package tests; no dedicated screen test pointer recorded in this audit.",
+      "route_source": "internal/screens/screens.go:All"
     },
     {
       "path": "/bills",
       "view": "Bills",
       "rail": "off-rail",
-      "entry": "internal/screens/bills_screen.go:30",
-      "native_models": [
-        "bills",
-        "budgeting",
-        "categorytree"
+      "entry": null,
+      "boundary_class": "prepared-model",
+      "native_model_evidence": [
+        "billsview, bills, budgetview, categorytree"
       ],
-      "child_evidence": [
-        "Bills screen bill-fit rows"
+      "typed_child_evidence": [
+        "Bills prepared fit rows"
       ],
-      "exceptions": [
-        "Off-rail deep link under the daily-money rail section"
-      ]
+      "known_exceptions_or_residuals": "",
+      "test_evidence_pointer": "internal/screens/bills_fit_prepared_wasm_test.go",
+      "route_source": "internal/screens/screens.go:All"
     },
     {
       "path": "/subscriptions",
       "view": "Subscriptions",
       "rail": "off-rail",
-      "entry": "internal/screens/subscriptions_screen.go:863",
-      "native_models": [
-        "subscriptions",
-        "smartengine",
-        "ledger"
+      "entry": null,
+      "boundary_class": "prepared-model",
+      "native_model_evidence": [
+        "subscriptionview, subscriptions, smartengine"
       ],
-      "child_evidence": [
+      "typed_child_evidence": [
         "SubscriptionsPanel",
         "SubscriptionRow",
         "IgnoredSubscriptionRow"
       ],
-      "exceptions": [
-        "Off-rail deep link; review and detection share the subscription model"
-      ]
+      "known_exceptions_or_residuals": "",
+      "test_evidence_pointer": "internal/screens/subscriptions_financial_wasm_test.go",
+      "route_source": "internal/screens/screens.go:All"
     },
     {
       "path": "/insights",
       "view": "AssistantInsightsRoute",
       "rail": "off-rail",
-      "entry": "internal/screens/assistant.go:127",
-      "native_models": [
-        "assistantview",
-        "insights"
+      "entry": null,
+      "boundary_class": "alias",
+      "native_model_evidence": [
+        "assistantview, insights"
       ],
-      "child_evidence": [
+      "typed_child_evidence": [
         "assistantChatThread",
         "assistantAskHeader",
-        "assistantRouteTo",
         "assistantInsightsDataPanel"
       ],
-      "exceptions": [
-        "Alias/sub-route into Assistant hub; not a separate screen model"
-      ]
+      "known_exceptions_or_residuals": "Assistant sub-route/alias, not an independent model boundary.",
+      "test_evidence_pointer": "See the corresponding internal native model package tests; no dedicated screen test pointer recorded in this audit.",
+      "route_source": "internal/screens/screens.go:All"
     },
     {
       "path": "/smart",
       "view": "AssistantAutomationsRoute",
       "rail": "off-rail",
-      "entry": "internal/screens/assistant.go:133",
-      "native_models": [
+      "entry": null,
+      "boundary_class": "alias",
+      "native_model_evidence": [
         "assistantview"
       ],
-      "child_evidence": [
+      "typed_child_evidence": [
         "assistantRouteTo",
         "automation hub panel"
       ],
-      "exceptions": [
-        "Alias/sub-route into Assistant hub; not a separate screen model"
-      ]
+      "known_exceptions_or_residuals": "Assistant automation sub-route/alias, not an independent model boundary.",
+      "test_evidence_pointer": "See the corresponding internal native model package tests; no dedicated screen test pointer recorded in this audit.",
+      "route_source": "internal/screens/screens.go:All"
     },
     {
       "path": "/members",
       "view": "Members",
       "rail": "off-rail",
-      "entry": "internal/screens/members.go:33",
-      "native_models": [
-        "memberrole",
-        "domain"
+      "entry": null,
+      "boundary_class": "prepared-model",
+      "native_model_evidence": [
+        "memberview, householdview"
       ],
-      "child_evidence": [
+      "typed_child_evidence": [
         "membersBody",
         "MemberRow"
       ],
-      "exceptions": [
-        "Off-rail consolidated under Household"
-      ]
+      "known_exceptions_or_residuals": "",
+      "test_evidence_pointer": "See the corresponding internal native model package tests; no dedicated screen test pointer recorded in this audit.",
+      "route_source": "internal/screens/screens.go:All"
     },
     {
       "path": "/split",
       "view": "Split",
       "rail": "off-rail",
-      "entry": "internal/screens/split_screen.go:32",
-      "native_models": [
-        "split"
+      "entry": null,
+      "boundary_class": "prepared-model",
+      "native_model_evidence": [
+        "splitview, split"
       ],
-      "child_evidence": [
+      "typed_child_evidence": [
         "SplitMemberRow",
         "transaction split form components"
       ],
-      "exceptions": [
-        "Off-rail focused workflow route"
-      ]
+      "known_exceptions_or_residuals": "",
+      "test_evidence_pointer": "internal/screens/split_route_prep_wasm_test.go",
+      "route_source": "internal/screens/screens.go:All"
     },
     {
       "path": "/widget-builder",
       "view": "VisualBuilder",
       "rail": "off-rail",
-      "entry": "internal/screens/widget_builder.go:260",
-      "native_models": [
-        "cardgraph",
-        "chartspec",
-        "dashlayout"
+      "entry": null,
+      "boundary_class": "prepared-model",
+      "native_model_evidence": [
+        "widgetbuilderview, cardgraph, chartspec, dashlayout"
       ],
-      "child_evidence": [
+      "typed_child_evidence": [
         "vbCanvas",
         "vbNodeBox",
         "vbInspector",
         "vbRenderTile"
       ],
-      "exceptions": [
-        "Off-rail deep link to Studio's builder tab"
-      ]
+      "known_exceptions_or_residuals": "",
+      "test_evidence_pointer": "internal/screens/widget_builder_prepared_host_wasm_test.go",
+      "route_source": "internal/screens/screens.go:All"
     },
     {
       "path": "/widget-manager",
       "view": "WidgetManager",
       "rail": "off-rail",
-      "entry": "internal/screens/widgets.go:190",
-      "native_models": [
-        "dashlayout",
-        "widgetstyle",
-        "widgetvis"
+      "entry": null,
+      "boundary_class": "composed-native-services",
+      "native_model_evidence": [
+        "dashlayout, widgetstyle, widgetvis"
       ],
-      "child_evidence": [
+      "typed_child_evidence": [
         "wmanMapTile",
         "widgetManagerRow",
         "tileStyleEditor"
       ],
-      "exceptions": [
-        "Off-rail deep link to Studio's manager tab"
-      ]
+      "known_exceptions_or_residuals": "",
+      "test_evidence_pointer": "See the corresponding internal native model package tests; no dedicated screen test pointer recorded in this audit.",
+      "route_source": "internal/screens/screens.go:All"
     },
     {
       "path": "/documents",
       "view": "Documents",
       "rail": "off-rail",
-      "entry": "internal/screens/documents.go:711",
-      "native_models": [
-        "importdraft",
-        "importmap",
-        "statement",
-        "extract",
-        "accountselect"
+      "entry": null,
+      "boundary_class": "composed-native-services",
+      "native_model_evidence": [
+        "importdraft, importmap, statement, extract"
       ],
-      "child_evidence": [
+      "typed_child_evidence": [
         "DocumentsPanel",
         "DraftRow",
         "ProfileRow",
         "wizardMappingForm"
       ],
-      "exceptions": [
-        "Off-rail import workflow; expensive parsing/AI stages have separate controllers"
-      ]
+      "known_exceptions_or_residuals": "Import-review arithmetic/duplicate/reconciliation is prepared in importdraft and extract packages; paginatedDraftReview (internal/screens/documents.go:180+) renders provided summary and calls importdraft.ReconcileReceipt at line 233. Controller orchestration is UI-owned. No specific calculation residual found in this review.",
+      "test_evidence_pointer": "See the corresponding internal native model package tests; no dedicated screen test pointer recorded in this audit.",
+      "route_source": "internal/screens/screens.go:All"
     },
     {
       "path": "/duplicates",
       "view": "DuplicatesScreen",
       "rail": "off-rail",
-      "entry": "internal/screens/duplicates.go:542",
-      "native_models": [
-        "dedupe",
-        "auditview"
+      "entry": null,
+      "boundary_class": "prepared-model",
+      "native_model_evidence": [
+        "dedupe, auditview"
       ],
-      "child_evidence": [
+      "typed_child_evidence": [
         "DuplicatesPanel",
         "dupeGroup",
         "dupeRow"
       ],
-      "exceptions": [
-        "Off-rail review route"
-      ]
+      "known_exceptions_or_residuals": "",
+      "test_evidence_pointer": "See the corresponding internal native model package tests; no dedicated screen test pointer recorded in this audit.",
+      "route_source": "internal/screens/screens.go:All"
     },
     {
       "path": "/plans",
       "view": "Plans",
       "rail": "off-rail",
-      "entry": "internal/screens/plans.go:22",
-      "native_models": [],
-      "child_evidence": [
+      "entry": null,
+      "boundary_class": "static-info",
+      "native_model_evidence": [
+        "static product/pricing copy"
+      ],
+      "typed_child_evidence": [
         "planCard"
       ],
-      "exceptions": [
-        "Small product/upgrade information surface"
-      ]
+      "known_exceptions_or_residuals": "",
+      "test_evidence_pointer": "See the corresponding internal native model package tests; no dedicated screen test pointer recorded in this audit.",
+      "route_source": "internal/screens/screens.go:All"
     },
     {
       "path": "/sync",
       "view": "SyncScreen",
       "rail": "off-rail",
-      "entry": "internal/screens/sync_route.go:24",
-      "native_models": [
-        "internal/app sync services (injected)"
+      "entry": null,
+      "boundary_class": "transport-redirect",
+      "native_model_evidence": [
+        "internal/app sync injected"
       ],
-      "child_evidence": [
+      "typed_child_evidence": [
         "SyncView injection"
       ],
-      "exceptions": [
-        "Compatibility deep link; current sync entry is Settings → Cloud"
-      ]
+      "known_exceptions_or_residuals": "Compatibility route is documented as redirect to Settings → Cloud, but current SyncScreen returns injected SyncView; verify that boot injection performs redirect. Old coverage calling it a separate surface is stale.",
+      "test_evidence_pointer": "See the corresponding internal native model package tests; no dedicated screen test pointer recorded in this audit.",
+      "route_source": "internal/screens/screens.go:All"
     }
-  ]
+  ],
+  "audit_head": "e14066dc",
+  "audited_date": "2026-10-21",
+  "classification_note": "Source-reviewed boundary classification. Prepared-model indicates native preparation is present, not that all view facts are complete. Residuals name only verified behavior and distinguish view math, typed form adapters, display policy, and command orchestration. Test pointers are references only; this audit ran no tests/build/browser tools.",
+  "shared_component_evidence": [
+    {
+      "source": [
+        "internal/screens/accounts_widget.go",
+        "internal/screens/budgets_widget.go",
+        "internal/screens/goals_widget.go",
+        "internal/screens/todo_widget.go",
+        "internal/screens/notifications_widget.go"
+      ],
+      "routes": [
+        "/accounts",
+        "/budgets",
+        "/goals",
+        "/todo",
+        "/notifications"
+      ],
+      "component": "surfaceTiles"
+    },
+    {
+      "source": [
+        "internal/screens/transactions_tiles.go",
+        "internal/screens/accounts_tiles.go",
+        "internal/screens/todo_tiles.go"
+      ],
+      "routes": [
+        "/transactions",
+        "/accounts",
+        "/todo"
+      ],
+      "component": "FilterToolbar"
+    },
+    {
+      "source": [
+        "internal/screens/goals_tiles.go",
+        "internal/screens/assistant.go",
+        "internal/screens/reports_annual.go"
+      ],
+      "routes": [
+        "/goals",
+        "/assistant",
+        "/reports"
+      ],
+      "component": "ControlStrip"
+    },
+    {
+      "source": [
+        "internal/screens/goals_tiles.go",
+        "internal/screens/todo_tiles.go",
+        "internal/screens/notifications.go"
+      ],
+      "routes": [
+        "/goals",
+        "/todo",
+        "/notifications"
+      ],
+      "component": "SegmentedControl"
+    },
+    {
+      "source": [
+        "internal/screens/dashboard.go"
+      ],
+      "routes": [
+        "/"
+      ],
+      "component": "ui.Widget"
+    },
+    {
+      "source": [
+        "internal/screens/transactions_widget.go"
+      ],
+      "routes": [
+        "/transactions"
+      ],
+      "component": "Specialized placement"
+    }
+  ],
+  "validation_status": "Test evidence pointers identify files in the worktree; this documentation reconciliation did not execute tests. The current full-screen suite is awaiting validation.",
+  "source_reconciliation": "Source audit dated 2026-10-21 at HEAD e14066dc with concurrent in-progress edits visible. No line-number assertions retained.",
+  "field_semantics": "Field names above match the serialized route objects. Each route has source navigation but no line-number entry because code is under active refactor."
 }

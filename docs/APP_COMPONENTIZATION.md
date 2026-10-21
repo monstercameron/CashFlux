@@ -35,20 +35,13 @@ The primary pages already use `accountview`, `budgetview`, `goalview`,
 `reportview`, dashboard preparation and shared surface hosts. Preserve those
 boundaries and cache behavior while finishing remaining gaps.
 
-## Execution order
+## Current work sequence
 
-| Work | First targets | Required evidence |
+| Slice | Current evidence/status | Next evidence needed |
 | --- | --- | --- |
-| Calculation correctness | Assistant local answers; tax-plan inputs; historical credit utilization; household totals; subscription monthly totals | Native overflow, FX, empty/unavailable, date and independent-factor tests; a focused screen adapter test |
-| Remaining prepared models | Budget summary union, auto-budget scaling, allocation candidate/model assembly | Model parity, immutable inputs, error paths, native benchmark where the model is expensive |
-| Large component controllers | Assistant conversation controls and content; Reports sections; Widget Builder panels; Dashboard composition | Stable hook order, keyed identity, route/state preservation, focused WASM interaction tests |
-| Authoring and secondary pages | Rules, Categories, Workflows, Documents, Planning, Household, remaining tools/settings | Per-route component/data/command ownership review; reuse existing controls when semantics match |
-| Performance | Cold model build, warm cache hit, invalidation, route navigation and representative interactions | Same-fixture before/after raw measurements, actual artifact hashes, allocations and route-specific conclusions |
-
-Work in small vertical slices: prove the native service/model, wire it into a
-screen, verify the interaction, then commit and push that slice. Do not combine
-unrelated route rewrites into one commit.
-
+| First nine primary routes | Source and representative validation references are reconciled below; this is not a claim that every view fact has moved into a native model. | Continue the route boundary review and resolve verified residuals below. |
+| Remaining routes | The 47-route registry and observed boundary classes are recorded in [Route coverage inventory](APP_ROUTE_COVERAGE.json). | Review each route's ownership and exception against the same checklist; aliases and transport routes are not separate financial models. |
+| Performance | Native algorithm baselines and measured native changes are recorded below and in the linked performance notes. | Browser route/interaction before-and-after measurements are still required to claim page latency improvement. |
 ## Completion checks
 
 - Review every registered route against the boundaries above; record remaining
@@ -71,63 +64,65 @@ environment/target caveat, is retained in
 These existing algorithm comparisons establish a reference; they are not a new
 application before/after result.
 
-## Initial remaining calculation gaps
+## First nine primary routes: source and validation references
 
-The read-only inventory found unchecked or error-hiding paths in local Q&A,
-tax-plan income reduction, historical credit utilization, household rollups and
-subscription share totals. Budget summary selection and allocation preparation
-still contain model composition in screen code. These are starting targets;
-the route audit remains necessary for the rest of the application.
+The table records current source seams and representative test files present in the
+worktree. References identify coverage locations; this documentation reconciliation
+did not run tests. The current full-screen suite passed 1,075 top-level tests after the lifecycle fixes. Call sites
+show `surfaceTiles` on Accounts, Budgets, Goals, To-do and Notifications; `FilterToolbar`
+on Transactions, Accounts and To-do; `ControlStrip` on Goals, Assistant and Reports;
+`SegmentedControl` on Goals, To-do and Notifications. Transactions keeps specialized
+`txnPlacement`; Dashboard uses `ui.Widget`; Reports has its own typed section composition.
 
-No production behavior or performance result is claimed by this plan.
+| Route | Native preparation evidence | Shared/page components in source | Representative validation references | Verified boundary notes |
+| --- | --- | --- | --- | --- |
+| `/` Dashboard | `dashboardview` layout/frame preparation; `widgetrender` | `dashboardController`, `ui.Widget`, `DashboardLayoutControls` | `internal/screens/dashboard_preparation_wasm_test.go`, `dashboard_hero_wasm_test.go`, `dashboard_counts_wasm_test.go`; `internal/dashboardview/*_test.go` | Layout and financial-frame preparation are separate caches; configurable/detail tiles are deferred until settle. No browser latency improvement is established. |
+| `/transactions` | `txnview`, `txntable`, `txnfilter`, `txnreview`, `txntoolbar` | `transactionsSurface`, specialized `txnPlacement`, `ui.FilterToolbar`, receipt preview overlay | `internal/screens/transactions_derive_test.go`, `txn_route_links_wasm_test.go`, `transactions_widget_r10w_wasm_test.go`, `transactions_tiles_gate4_wasm_test.go` | Keep specialized placement/memoization separate from `surfaceTiles`. |
+| `/accounts` | `accountview`; shared goal reservation facts from `goalview` | `surfaceTiles`, `AccountRow`, `accountDetailContext`, `ui.FilterToolbar` | `internal/screens/accounts_details_lazy_wasm_test.go`, `reservations_primary_wasm_test.go`, `accounts_primary_wasm_test.go` | History/projections are disclosure-lazy and cache-keyed; invalid balances remain unavailable. |
+| `/budgets` | `budgetview`, `budgeting` | `surfaceTiles`, `BudgetRow`, `BudgetAnnualGrid` | `internal/screens/budgets_bc4b1_wasm_test.go`, `budgets_summary_native_wasm_test.go`, `budgets_flex_native_wasm_test.go` | Native summary selection and flex preparation preserve availability; no additional route-specific residual recorded in the source audit. |
+| `/goals` | `goalview`, `goals`, `taskview` | `surfaceTiles`, `goalListWidget`, `GoalRow`, `GoalFigures`, `GoalTaskPreview`, `ui.ControlStrip`, `ui.SegmentedControl` | `internal/screens/goals_primary_wasm_test.go`, `goals_sort_wasm_test.go`, `goals_segmented_tabs_wasm_test.go`; `internal/goalview/*_test.go` | One prepared row model feeds summaries and children; no additional route-specific residual recorded in the source audit. |
+| `/todo` | `taskview`, `todoview` | `surfaceTiles`, `todoListWidget`, `TaskRow`, `ui.FilterToolbar`, `ui.SegmentedControl` | `internal/screens/todo_primary_wasm_test.go`, `todo_paging_memo_wasm_test.go` | View selection is page state while task preparation is native; no additional route-specific residual recorded in the source audit. |
+| `/notifications` | `notificationview` | `surfaceTiles`, `notifSurfaceShell`, `notifListWidget`, `notifyRow`, `ui.SegmentedControl` | `internal/screens/notifications_primary_wasm_test.go`, `notifications_initial_wasm_test.go`; `internal/notificationview/*_test.go` | Prepared notification facts feed page triage; no additional route-specific residual recorded in the source audit. |
+| `/assistant` | `assistantview`, `periodview`, insights services | `AssistantHub`, `assistantInsightsDataPanel`, typed `assistantAskHeader`/`assistantChatThread`, `ui.ControlStrip` | `internal/screens/assistant_chat_components_wasm_test.go`, `assistant_refactor_wasm_test.go`, `ag_reports_correctness_wasm_test.go` | Conversation state/actions remain controller-owned; financial answers use checked prepared facts. Component extraction is not a measured latency improvement. |
+| `/reports` | `reportview`, `reports`, `periodview`, health/goal services | `reportController`, typed report section components, `ui.ControlStrip` | `internal/screens/reports_render_wasm_test.go`, `reports_sections_wasm_test.go`, `reports_tax_checked_wasm_test.go` | Summary leaves expensive sections unmounted; retain typed context identity and checked arithmetic. |
 
-## Completed slices
+This is a source-and-reference inventory, not a completion certificate. Route coverage
+references do not imply that a test passed during this documentation pass.
 
-- Budget summaries use native checked union selection and independent summary
-  availability; auto-budget tuning is the next separate slice.
-- Household arithmetic prerequisites use checked owner shares, period income
-  and member spending. The Household/Members adapter migration is in progress.
-- Tax-plan net income uses a checked native helper and explicit household scope.
-  The legacy estimator policy is unchanged; selected-fold optimization is in progress.
-- Credit history is a native checked model with independent gaps and currency
-  availability. Whole-page credit aggregate/advice migration is in progress.
-- Subscriptions use native cadence, magnitude, annual/monthly totals and share
-  facts. Checked failures do not become successful zero amounts.
-- Setup money parsing and validation are native, exact and tested before UI writes.
-- Investment growth headlines use independent checked value/change/percentage
-  facts. Full investment preparation is still in progress.
-- Net Worth account windows use indexed native balance/flow facts. Full Net Worth
-  model preparation is still in progress.
-- Rules coverage uses the canonical native matcher once per prepared summary,
-  with stable row identity and lazy previews.
-- Assistant Ask header and conversation thread are typed child components in
-  `assistant_chat_components.go`. The controller owns state and actions; the
-  children own their event hooks and render prepared props. Tests cover header
-  callbacks/ARIA, edit-state identity through turn reordering, retry eligibility,
-  deletion and thinking/streaming states. This extraction is not a measured
-  latency improvement.
+## Verified residuals
 
-Focused WASM adapter checks pass for the committed slices above. Native package
-tests and vet pass for their models. Two broad-run timing failures were isolated
-to concurrent-machine contention; unchanged timing gates passed in quiet repeats.
-This is a batch checkpoint, not completion of the 47-route audit.
+- **Allocate:** `internal/screens/allocate.go` ignores the error from
+  `ledger.PeriodTotals` while preparing the income-prefill hint, so a failed
+  conversion/aggregation can be presented as a zero-like hint. Preserve availability
+  and suppress or label the hint on failure. `internal/screens/allocate_view.go`
+  still derives the displayed allocatable amount as `TotalMinor - ReserveMinor` in
+  `allocView.Allocatable`; move that fact into native preparation. These are separate
+  from native candidate ranking and split preparation.
+- **Events:** the page delegates totals to `events.Totals`, but
+  `internal/events/events.go` accumulates `int64` totals without overflow checking.
+  This is a native service correctness gap. Parsing typed date input and dispatching
+  writes remain adapter/command responsibilities.
+- **Sync route:** the registry comment describes `/sync` as a compatibility redirect,
+  while `SyncScreen` returns the injected `SyncView`. Confirm boot injection behavior
+  before documenting it as a redirect.
 
-## Remaining work and evidence
+Categories period usage is prepared by `categoryview.PreparePeriod`; Rules coverage,
+counts and conflict facts come from `rules.SummarizeCoverage`. Earlier claims that
+these calculations remain assembled in their screen renderers are stale. Planning's
+string parsing is a typed input adapter to `planningmodel.Prepare`, not forecast
+arithmetic in markup.
 
-Native-first lanes are working on Household/Members, Artifacts, auto-budget
-tuning, full Credit/Net Worth/Investments, Planning, Plan, Allocate, Debt/Loans,
-Recurring, Categories, Custom Fields, Settings/Builder, Activity/Workflows and
-Split input preparation. Bills/Health and Documents follow those bounded slices.
-Small static or transport-only routes will be reviewed against the same boundary
-checklist; they do not need financial models invented for them.
+## Performance evidence limits
 
-The initial per-route evidence is retained in
-[Route coverage inventory](APP_ROUTE_COVERAGE.json). Source line numbers in this
-capture are navigation hints from the initial audit and can move during refactors.
-An existing native import or child component is evidence, not proof that the whole
-route is complete.
+The native baseline is retained in
+[Native baseline](performance/componentization-baseline-2026-10-21/app-refactor-baseline-native-summary.md).
+It compares existing algorithms and is not an application before/after result.
+Measured native changes include shared category-tree union traversal,
+[Unusual history buffer reuse](performance/unusual-buffer-reuse-2026-10-21/README.md),
+and [checked Settings snapshots](performance/settings-snapshot-2026-10-21/README.md).
+No browser route/interaction before-and-after evidence is recorded here; therefore no
+page-latency improvement across the nine routes is claimed.
 
-Measured native changes include shared category-tree union traversal and
-[Unusual history buffer reuse](performance/unusual-buffer-reuse-2026-10-21/README.md).
-Moving calculations out of views is not itself a speed claim. Browser route and
-interaction measurements remain a separate integration gate.
+The route inventory was reconciled against the source audit at `e14066dc`, with
+concurrent in-progress edits visible. Source references are file-level because active
+refactors can move functions.

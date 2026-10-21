@@ -1,3 +1,7 @@
+## 2026-10-21 - Reconcile route component and native-model evidence
+
+Reconciled 47 registered routes and validated all first-nine file references against current source. Removed stale Categories, Rules and Planning calculation-gap claims. Retained verified Allocate income-hint and subtraction gaps, native Events overflow and Sync route injection ambiguity. The completed screen run passed 1075 top-level tests with no runtime panic, released-callback or off-render warnings; appstate native tests and the production WASM build also passed. Paired browser captures are in progress; no all-page latency improvement is claimed.
+
 ## 2026-10-21 - Unmount prepared-host fixtures before restoring browser globals
 
 Fixture.Cleanup does not unmount the framework tree. Added explicit empty-root render and stabilization before cleanup, allowing popover event/timer cleanup to run while the browser stubs are still installed. Both budget flex host tests and all five Household prepared-host tests passed; the focused fifteen-case batch also passed without runtime warnings. The full screen suite is rerunning.
