@@ -112,6 +112,7 @@ func buildAgendaSpan(app *appstate.App, now, from, until time.Time, base string)
 	// ONE obligation — listing both double-counts the money owed. OccurrencesWithin
 	// collapses them onto the recurring row and records the liability as its anchor.
 	occurrences := bills.OccurrencesWithin(app.Accounts(), rewound, start, until)
+	fitModel := prepareBillFitModel(app, occurrences, now)
 	for _, b := range occurrences {
 		amt, err := rates.Convert(b.Amount, base)
 		if err != nil {
@@ -119,7 +120,7 @@ func buildAgendaSpan(app *appstate.App, now, from, until time.Time, base string)
 		}
 		it := agendaItem{
 			Date: b.DueDate, Name: b.Name, AccountID: b.AccountID,
-			Amount: money.New(-amt.Amount, base), Fit: billFitFor(b),
+			Amount: money.New(-amt.Amount, base), Fit: billFitFor(fitModel, b),
 			AnchorAccountID: b.AnchorAccountID,
 		}
 		if rid, ok := recurringIDFromBillAccount(b.AccountID); ok {
@@ -584,17 +585,24 @@ func rhyAgendaRow(props rhyAgendaRowProps) ui.Node {
 
 	var fitNode ui.Node = Fragment()
 	if it.Fit != nil {
-		cls := "pill bill-fit bill-fit-ok"
-		label := uistate.T("bills.budgetFits", it.Fit.BudgetName, it.Fit.Amount)
-		if !it.Fit.Fits {
-			cls = "pill bill-fit bill-fit-over"
-			label = uistate.T("bills.budgetOver", it.Fit.Amount, it.Fit.BudgetName)
+		if !it.Fit.Available {
+			fitNode = Span(css.Class("pill bill-fit bill-fit-unavailable"),
+				Attr("data-testid", "bill-fit-"+it.AccountID),
+				Attr("aria-label", uistate.T("common.notReady")),
+				Title(uistate.T("common.notReady")), uistate.T("common.notReady"))
+		} else {
+			cls := "pill bill-fit bill-fit-ok"
+			label := uistate.T("bills.budgetFits", it.Fit.BudgetName, it.Fit.Amount)
+			if !it.Fit.Fits {
+				cls = "pill bill-fit bill-fit-over"
+				label = uistate.T("bills.budgetOver", it.Fit.Amount, it.Fit.BudgetName)
+			}
+			fitNode = Button(ClassStr(cls), Type("button"),
+				Attr("data-testid", "bill-fit-"+it.AccountID),
+				Attr("aria-label", uistate.T("bills.budgetFitAria", it.Fit.BudgetName)),
+				Title(uistate.T("bills.budgetFitAria", it.Fit.BudgetName)),
+				OnClick(openFit), label)
 		}
-		fitNode = Button(ClassStr(cls), Type("button"),
-			Attr("data-testid", "bill-fit-"+it.AccountID),
-			Attr("aria-label", uistate.T("bills.budgetFitAria", it.Fit.BudgetName)),
-			Title(uistate.T("bills.budgetFitAria", it.Fit.BudgetName)),
-			OnClick(openFit), label)
 	}
 
 	var kebab ui.Node = Fragment()

@@ -1,3 +1,7 @@
+## 2026-10-21 - Shared native bill budget-fit preparation
+
+Removed repeated UpcomingAll and descendant preparation from each displayed bill. Checked native spent, pending, FX and fit arithmetic retain first-budget and half-open-window policies, distinguishing no budget from unavailable facts. Native model tests and vet pass; the focused Bills WASM case passes for missing and refreshed FX. Shared bill-category identity remains available to transaction matching through the native helper.
+
 ## 2026-10-21 - Native recurring flow preparation
 
 Preserved paused/scheduled distinctions, window bounds, ordering and management actions. Independent known rows survive missing FX while incomplete totals are unavailable. Native recurringview tests and vet pass; the focused Recurring WASM case passes with refreshed FX. Screen controller and row components consume prepared facts.
