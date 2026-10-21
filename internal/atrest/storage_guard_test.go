@@ -101,8 +101,8 @@ func TestNoRawSensitiveStorageWrites(t *testing.T) {
 					// localStorage marker before deleting browserstore itself.
 					if filepath.Base(path) == "settings.go" && fn.Name.Name == "markDeviceErasePending" && len(call.Args) == 3 {
 						key, keyOK := call.Args[1].(*ast.BasicLit)
-						value, valueOK := call.Args[2].(*ast.BasicLit)
-						if keyOK && valueOK && key.Value == `"cashflux:erase-in-progress"` && value.Value == `"pending"` {
+						value, valueOK := call.Args[2].(*ast.Ident)
+						if keyOK && valueOK && key.Value == `"cashflux:erase-in-progress"` && value.Name == "ticket" {
 							return true
 						}
 					}

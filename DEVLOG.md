@@ -35174,3 +35174,7 @@ The standalone eraser originally started whenever a browser opened its `#start` 
 ## 2026-10-21 — Gate releases on device-erasure privacy behavior
 
 The required CI workflow previously ran only the service-worker unit suite, and its `@prod` browser subset omitted the new erasure cases. It now runs the device-erasure unit suite alongside the worker checks and includes two Chromium cases in the deploy gate: real image files created in two workspaces are removed, and an unconfirmed direct link cannot delete local data. These cases use disposable contexts and do not access production storage.
+
+## 2026-10-21 — Keep the at-rest write guard aligned with the erasure ticket
+
+The native CI job on an earlier draft commit failed because the storage guard still allowed only the fixed `pending` value for the eraser's localStorage coordination marker. The confirmed erasure flow now writes a random ticket. The guard exception remains limited to `markDeviceErasePending`, that exact marker key, and its `ticket` identifier; other direct browser-storage writes still fail. The local at-rest package tests pass after the update.
