@@ -924,8 +924,10 @@ func dashboardController(props dashboardControllerProps) ui.Node {
 	// Persist the dashboard's placements to SQLite as first-class rows so the layout
 	// (and each tile's saved settings/style) travels with export and is the engine's
 	// canonical representation (§8). Keyed on a signature of the placements, the
-	// effect runs only when they actually change — never on a plain re-render — so it
-	// can't loop with the data-revision re-render. The live edit surface remains the
+	// effect runs when they change or a different app is installed. Ready/success
+	// are dependencies so a deferred or formerly failed preparation can sync.
+	// Unchanged rows are skipped in appstate, so remounting does not advance the
+	// store revision. The live edit surface remains the
 	// layout/config atoms; this mirrors them into placement rows.
 	plSig := preparedLayout.Signature
 	placementsToPersist := preparedLayout.Placements
@@ -934,12 +936,12 @@ func dashboardController(props dashboardControllerProps) ui.Node {
 		// mount the placement set is intentionally just the hero, so skipping the write
 		// keeps the stored layout intact.
 		if app != nil && dashReady && preparedLayout.Err == nil {
-			if err := app.PutPlacements(placementsToPersist); err != nil {
+			if _, err := app.PutPlacementsIfChanged("dashboard", placementsToPersist); err != nil {
 				slog.Warn("dashboard: persist placements failed", "err", err)
 			}
 		}
 		return nil
-	}, plSig)
+	}, plSig, app.InstanceID(), dashReady, preparedLayout.Err == nil)
 
 	return Fragment(
 		// Optional decorative banner band (B20) — shown only when the user picks a

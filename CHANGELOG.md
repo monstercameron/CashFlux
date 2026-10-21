@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Returning to Dashboard skips unchanged placement writes, preserving the store revision and prepared financial snapshots.
 - Componentization docs now record current first-nine shared components, native seams and validation references, with explicit residuals and performance limits.
 - Budget flex and Household host tests explicitly unmount before releasing their fixture and browser stubs.
 - Reports retains bounded successful tax preparation across Summary and Full remounts with exact source invalidation.

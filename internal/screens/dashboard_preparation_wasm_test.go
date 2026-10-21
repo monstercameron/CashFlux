@@ -170,6 +170,26 @@ func TestDashboardPreparedFramesRefreshThroughActualHost(t *testing.T) {
 	if dashboardLayouts.Builds() != layoutBuilds {
 		t.Fatal("unchanged host renders rebuilt/serialized layout")
 	}
+	// A return visit remounts the controller. Its effect must not rewrite the
+	// same placements and invalidate the prepared financial snapshot.
+	mount(false)
+	f.Stabilize()
+	beforeRemount := app.Rev()
+	prepared = nil
+	rendered = make(chan struct{}, 1)
+	mount(true)
+	select {
+	case <-rendered:
+	case <-time.After(3 * time.Second):
+		t.Fatal("remounted Dashboard never rendered its deferred grid")
+	}
+	f.Stabilize()
+	if app.Rev() != beforeRemount {
+		t.Fatalf("unchanged remount advanced app revision: %d → %d", beforeRemount, app.Rev())
+	}
+	if prepared != warmed || prepared.Hydrations() != hydrations {
+		t.Fatal("unchanged remount discarded prepared financial frames")
+	}
 	configs.Set(configs.Get().WithField("recent", "count", "3"))
 	f.Stabilize()
 	if recent.Rows != 3 {
@@ -218,6 +238,22 @@ func TestDashboardPreparedFramesRefreshThroughActualHost(t *testing.T) {
 	if prepared == beforeClock {
 		t.Fatal("clock bucket retained prior current-state snapshot")
 	}
+	// The same mounted Dashboard can receive another App with the same layout.
+	// Its effect must sync that app independently even when the signature matches.
+	other, err := appstate.New(io.Discard, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer other.Store().Close()
+	appstate.Default = other
+	uistate.BumpDataRevision()
+	f.Stabilize()
+	if got := other.Placements("dashboard"); len(got) != 3 {
+		t.Fatalf("replacement app stored %d Dashboard placements, want 3", len(got))
+	}
+	appstate.Default = app
+	uistate.BumpDataRevision()
+	f.Stabilize()
 	appstate.Default = nil
 	uistate.BumpDataRevision()
 	f.Stabilize()

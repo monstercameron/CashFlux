@@ -1,3 +1,7 @@
+## 2026-10-21 - Preserve financial caches across unchanged Dashboard remounts
+
+Added an opt-in checked App.PutPlacementsIfChanged path that compares canonical stored placements and writes only changed or new rows; other store write semantics remain unchanged. Dashboard sync includes app identity and preparation readiness, so replacement workspaces and changed layout/configuration still persist. Native tests passed for repeated no-op sync, second app, layout/visibility/config/style/custom changes, invalid JSON retry and closed stores. Seven Dashboard WASM tests passed, including actual remount revision/frame retention and app replacement, and the production WASM build passed. Browser latency effects are being measured against the saved pre-fix artifact.
+
 ## 2026-10-21 - Reconcile route component and native-model evidence
 
 Reconciled 47 registered routes and validated all first-nine file references against current source. Removed stale Categories, Rules and Planning calculation-gap claims. Retained verified Allocate income-hint and subtraction gaps, native Events overflow and Sync route injection ambiguity. The completed screen run passed 1075 top-level tests with no runtime panic, released-callback or off-render warnings; appstate native tests and the production WASM build also passed. Paired browser captures are in progress; no all-page latency improvement is claimed.
