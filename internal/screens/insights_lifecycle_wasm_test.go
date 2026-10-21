@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/ai"
+	"github.com/monstercameron/CashFlux/internal/aicontext"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/auditview"
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -29,6 +30,8 @@ type insightsLifecycleCallbacks struct {
 	err         func(string)
 	cancelCount int
 	model       string
+	messages    []ai.Message
+	tools       []ai.Tool
 }
 
 func setupInsightsLifecycle(t *testing.T, conversations ...domain.Conversation) (*appstate.App, *render.Fixture, js.Value, *[]insightsLifecycleCallbacks) {
@@ -57,10 +60,14 @@ func setupInsightsLifecycle(t *testing.T, conversations ...domain.Conversation) 
 		t.Fatal(err)
 	}
 	oldBaseline, oldReceipt := auditview.CaptureAssistantBaseline, auditview.CaptureAssistantReceipt
+	oldBaselineChecked, oldReceiptChecked := auditview.CaptureAssistantBaselineChecked, auditview.CaptureAssistantReceiptChecked
 	auditview.CaptureAssistantBaseline = func() bool { return true }
 	auditview.CaptureAssistantReceipt = func() (string, bool) { return "mock-undo", true }
+	auditview.CaptureAssistantBaselineChecked = func() error { return nil }
+	auditview.CaptureAssistantReceiptChecked = func() (string, bool, error) { return "mock-undo", true, nil }
 	t.Cleanup(func() {
 		auditview.CaptureAssistantBaseline, auditview.CaptureAssistantReceipt = oldBaseline, oldReceipt
+		auditview.CaptureAssistantBaselineChecked, auditview.CaptureAssistantReceiptChecked = oldBaselineChecked, oldReceiptChecked
 	})
 	oldPrefs := uistate.CurrentPrefs()
 	if err := uistate.SetPrefs(prefs.Prefs{ServerURL: "http://mock.invalid", ServerToken: "test-token"}); err != nil {
@@ -72,10 +79,13 @@ func setupInsightsLifecycle(t *testing.T, conversations ...domain.Conversation) 
 	t.Cleanup(func() { assistantChatTransport = transport })
 	callbacks := []insightsLifecycleCallbacks{}
 	assistantChatTransport = func(
-		_ bool, _, _, _, _, model string, _ []ai.Message, _ float64, _ string, _ []ai.Tool,
+		_ bool, _, _, _, _, model string, messages []ai.Message, _ float64, _ string, tools []ai.Tool,
 		delta func(string), result func(ai.Message, ai.Usage), onErr func(string),
 	) func() {
-		callbacks = append(callbacks, insightsLifecycleCallbacks{delta: delta, result: result, err: onErr, model: model})
+		callbacks = append(callbacks, insightsLifecycleCallbacks{
+			delta: delta, result: result, err: onErr, model: model,
+			messages: append([]ai.Message(nil), messages...), tools: append([]ai.Tool(nil), tools...),
+		})
 		idx := len(callbacks) - 1
 		return func() { callbacks[idx].cancelCount++ }
 	}
@@ -131,6 +141,32 @@ func submitInsightsLifecycleTurn(t *testing.T, f *render.Fixture, composer js.Va
 	return len(*callbacks) - 1
 }
 
+func waitForInsightsCallbackCount(t *testing.T, f *render.Fixture, callbacks *[]insightsLifecycleCallbacks, count int) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for len(*callbacks) < count && time.Now().Before(deadline) {
+		f.Stabilize()
+		time.Sleep(time.Millisecond)
+	}
+	if len(*callbacks) < count {
+		t.Fatalf("provider callback count = %d, want at least %d", len(*callbacks), count)
+	}
+}
+
+func waitForInsightsConversation(t *testing.T, f *render.Fixture, app *appstate.App) domain.Conversation {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if conversations := app.Conversations(); len(conversations) > 0 {
+			return conversations[0]
+		}
+		f.Stabilize()
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatal("conversation was not persisted before the provider response")
+	return domain.Conversation{}
+}
+
 func TestInsightsSessionRejectsLateCallbacksAfterNewChatAndUnmount(t *testing.T) {
 	app, f, composer, callbacks := setupInsightsLifecycle(t)
 	first := submitInsightsLifecycleTurn(t, f, composer, "first request", callbacks)
@@ -150,9 +186,16 @@ func TestInsightsSessionRejectsLateCallbacksAfterNewChatAndUnmount(t *testing.T)
 	}
 	(*callbacks)[first].delta("late text")
 	(*callbacks)[first].result(ai.Message{Role: ai.RoleAssistant, Content: "late answer"}, ai.Usage{PromptTokens: 10, CompletionTokens: 5, TotalTokens: 15})
+	(*callbacks)[first].result(ai.Message{Role: ai.RoleAssistant, Content: "duplicate late answer"}, ai.Usage{PromptTokens: 10, CompletionTokens: 5, TotalTokens: 15})
 	f.Stabilize()
-	if summary := uistate.AgentReceiptSummary(conversationID); summary != "" {
-		t.Fatalf("late callback recorded a conversation receipt: %q", summary)
+	if summary := uistate.AgentReceiptSummary(conversationID); summary == "" {
+		t.Fatal("late provider usage was not recorded against its original conversation")
+	}
+	if got := uistate.AgentTokensUsed(conversationID); got != 15 {
+		t.Fatalf("late callback usage was recorded %d tokens, want one result's 15", got)
+	}
+	if got := app.AISpendThisMonth().Tokens; got != 15 {
+		t.Fatalf("late callback household usage = %d tokens, want 15", got)
 	}
 	for _, message := range app.Conversations()[0].Messages {
 		if message.Role == "assistant" && strings.Contains(message.Text, "late answer") {
@@ -161,6 +204,23 @@ func TestInsightsSessionRejectsLateCallbacksAfterNewChatAndUnmount(t *testing.T)
 	}
 
 	second := submitInsightsLifecycleTurn(t, f, composer, "unmount request", callbacks)
+	deadline = time.Now().Add(2 * time.Second)
+	secondConversationID := ""
+	for time.Now().Before(deadline) {
+		for _, conversation := range app.Conversations() {
+			if conversation.ID != conversationID {
+				secondConversationID = conversation.ID
+			}
+		}
+		if secondConversationID != "" {
+			break
+		}
+		f.Stabilize()
+		time.Sleep(time.Millisecond)
+	}
+	if secondConversationID == "" {
+		t.Fatal("new chat did not get its own conversation id before unmount")
+	}
 	f.Render(ui.CreateElement(func() ui.Node { return Div() }))
 	f.Stabilize()
 	if (*callbacks)[second].cancelCount == 0 {
@@ -168,8 +228,14 @@ func TestInsightsSessionRejectsLateCallbacksAfterNewChatAndUnmount(t *testing.T)
 	}
 	(*callbacks)[second].delta("after unmount")
 	(*callbacks)[second].result(ai.Message{Role: ai.RoleAssistant, Content: "after unmount"}, ai.Usage{PromptTokens: 1, CompletionTokens: 1, TotalTokens: 2})
-	if summary := uistate.AgentReceiptSummary(conversationID); summary != "" {
-		t.Fatalf("unmounted callback recorded a conversation receipt: %q", summary)
+	if got := uistate.AgentTokensUsed(conversationID); got != 15 {
+		t.Fatalf("unmounted callback changed prior conversation usage to %d tokens, want 15", got)
+	}
+	if got := uistate.AgentTokensUsed(secondConversationID); got != 2 {
+		t.Fatalf("unmounted callback usage = %d tokens on its original conversation, want 2", got)
+	}
+	if got := app.AISpendThisMonth().Tokens; got != 17 {
+		t.Fatalf("household usage after both late callbacks = %d tokens, want 17", got)
 	}
 }
 
@@ -197,8 +263,14 @@ func TestInsightsSessionCancelsWhenSwitchingConversation(t *testing.T) {
 	}
 	(*callbacks)[request].result(ai.Message{Role: ai.RoleAssistant, Content: "stale switched answer"}, ai.Usage{PromptTokens: 3, CompletionTokens: 3, TotalTokens: 6})
 	f.Stabilize()
-	if summary := uistate.AgentReceiptSummary(active.ID); summary != "" {
-		t.Fatalf("late result changed the switched-away conversation receipt: %q", summary)
+	if summary := uistate.AgentReceiptSummary(active.ID); summary == "" {
+		t.Fatal("late provider usage was not recorded against the original conversation")
+	}
+	if got := uistate.AgentTokensUsed(active.ID); got != 6 {
+		t.Fatalf("late switched callback usage = %d tokens on original conversation, want 6", got)
+	}
+	if got := uistate.AgentTokensUsed(older.ID); got != 0 {
+		t.Fatalf("late switched callback leaked %d tokens into selected conversation", got)
 	}
 	for _, conversation := range app.Conversations() {
 		if conversation.ID != active.ID {
@@ -209,6 +281,130 @@ func TestInsightsSessionCancelsWhenSwitchingConversation(t *testing.T) {
 				t.Fatal("late result persisted into the switched-away conversation")
 			}
 		}
+	}
+}
+
+func TestInsightsPrivacyChangeCancelsFullTierToolResponse(t *testing.T) {
+	// Seed the active conversation from the user's saved default before Insights
+	// mounts. Reading/changing the privacy atom here would call a UI hook outside
+	// its render context and would bypass the actual control under test.
+	stubBudgetRowBrowser(t)
+	previousDefault := uistate.DefaultPrivacyTier()
+	uistate.PersistDefaultPrivacyTier(aicontext.TierFull)
+	t.Cleanup(func() { uistate.PersistDefaultPrivacyTier(previousDefault) })
+	app, f, composer, callbacks := setupInsightsLifecycle(t)
+	f.Stabilize()
+	request := submitInsightsLifecycleTurn(t, f, composer, "privacy switch during request", callbacks)
+	waitForInsightsCallbackCount(t, f, callbacks, request+1)
+	conversationID := waitForInsightsConversation(t, f, app).ID
+	privacyBadge := byTestID(f, "button", "assistant-privacy-badge")
+	if privacyBadge == nil || !strings.Contains(privacyBadge.Text(), "Full detail") {
+		t.Fatalf("privacy badge before toggle = %v, want full detail", privacyBadge)
+	}
+	byTestID(f, "button", "assistant-privacy-badge").Click()
+	f.Stabilize()
+	privacyBadge = byTestID(f, "button", "assistant-privacy-badge")
+	if privacyBadge == nil || !strings.Contains(privacyBadge.Text(), "Aggregates only") {
+		t.Fatalf("privacy badge after toggle = %v, want aggregates only", privacyBadge)
+	}
+	if (*callbacks)[request].cancelCount == 0 {
+		t.Fatal("lowering the privacy tier did not cancel the full-tier request")
+	}
+	(*callbacks)[request].result(ai.Message{Role: ai.RoleAssistant, ToolCalls: []ai.ToolCall{{
+		ID: "late-private-write", Type: "function", Function: ai.FunctionCall{Name: "add_account", Arguments: `{"name":"Late Privacy Account","class":"asset"}`},
+	}}}, ai.Usage{PromptTokens: 5, CompletionTokens: 2, TotalTokens: 7})
+	f.Stabilize()
+	for _, account := range app.Accounts() {
+		if account.Name == "Late Privacy Account" {
+			t.Fatal("late full-tier tool response mutated data after privacy reduction")
+		}
+	}
+	if byTestID(f, "div", "assistant-approval") != nil {
+		t.Fatal("late full-tier tool response opened an approval after privacy reduction")
+	}
+	if got := uistate.AgentTokensUsed(conversationID); got != 7 {
+		t.Fatalf("late provider usage = %d tokens on original conversation, want 7", got)
+	}
+	if got := uistate.AgentReceiptActionCount(conversationID); got != 0 {
+		t.Fatalf("late full-tier tool response recorded %d actions, want none", got)
+	}
+}
+
+func TestInsightsUsageIsKeptWhenLaterProviderStepErrors(t *testing.T) {
+	app, f, composer, callbacks := setupInsightsLifecycle(t)
+	first := submitInsightsLifecycleTurn(t, f, composer, "use a read tool", callbacks)
+	conversationID := waitForInsightsConversation(t, f, app).ID
+	(*callbacks)[first].result(ai.Message{Role: ai.RoleAssistant, ToolCalls: []ai.ToolCall{{
+		ID: "categories", Type: "function", Function: ai.FunctionCall{Name: "list_categories", Arguments: `{}`},
+	}}}, ai.Usage{PromptTokens: 4, CompletionTokens: 2, TotalTokens: 6})
+	waitForInsightsCallbackCount(t, f, callbacks, 2)
+	(*callbacks)[1].err("provider failed on the follow-up")
+	f.Stabilize()
+	if got := uistate.AgentTokensUsed(conversationID); got != 6 {
+		t.Fatalf("usage retained after the follow-up error = %d tokens, want 6", got)
+	}
+	if got := app.AISpendThisMonth().Tokens; got != 6 {
+		t.Fatalf("household usage retained after the follow-up error = %d tokens, want 6", got)
+	}
+}
+
+func TestInsightsBudgetStopsBeforeAnotherToolLoopRequest(t *testing.T) {
+	app, f, composer, callbacks := setupInsightsLifecycle(t)
+	byTestID(f, "button", "assistant-settings-toggle").Click()
+	byTestID(f, "select", "assistant-budget").Change("25000")
+	f.Stabilize()
+	first := submitInsightsLifecycleTurn(t, f, composer, "use a read tool", callbacks)
+	conversationID := waitForInsightsConversation(t, f, app).ID
+	(*callbacks)[first].result(ai.Message{Role: ai.RoleAssistant, ToolCalls: []ai.ToolCall{{
+		ID: "categories-at-cap", Type: "function", Function: ai.FunctionCall{Name: "list_categories", Arguments: `{}`},
+	}}}, ai.Usage{PromptTokens: 20000, CompletionTokens: 5000, TotalTokens: 25000})
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		f.Stabilize()
+		if strings.Contains(strings.ToLower(f.Text()), "token cap") {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if len(*callbacks) != 1 {
+		t.Fatalf("provider calls after reaching the per-chat cap = %d, want 1", len(*callbacks))
+	}
+	if got := uistate.AgentTokensUsed(conversationID); got != 25000 {
+		t.Fatalf("usage at per-chat cap = %d tokens, want 25000", got)
+	}
+	if got := app.AISpendThisMonth().Tokens; got != 25000 {
+		t.Fatalf("household usage at per-chat cap = %d tokens, want 25000", got)
+	}
+}
+
+func TestInsightsRefreshesToolHandlersAfterApprovedWriteInSameResponse(t *testing.T) {
+	app, f, composer, callbacks := setupInsightsLifecycle(t)
+	first := submitInsightsLifecycleTurn(t, f, composer, "create and list a category", callbacks)
+	conversationID := waitForInsightsConversation(t, f, app).ID
+	(*callbacks)[first].result(ai.Message{Role: ai.RoleAssistant, ToolCalls: []ai.ToolCall{
+		{ID: "create-category", Type: "function", Function: ai.FunctionCall{Name: "create_category", Arguments: `{"name":"Fresh Handler Category","kind":"expense"}`}},
+		{ID: "list-categories", Type: "function", Function: ai.FunctionCall{Name: "list_categories", Arguments: `{}`}},
+	}}, ai.Usage{PromptTokens: 3, CompletionTokens: 2, TotalTokens: 5})
+	waitForInsightsApproval(t, f)
+	byTestID(f, "button", "assistant-approve").Click()
+	waitForInsightsCallbackCount(t, f, callbacks, 2)
+	foundFreshCategory := false
+	for _, message := range (*callbacks)[1].messages {
+		if message.Role == ai.RoleTool && message.Name == "list_categories" && strings.Contains(message.Content, "Fresh Handler Category") {
+			foundFreshCategory = true
+		}
+	}
+	if !foundFreshCategory {
+		t.Fatalf("second tool result did not see the approved category write: %#v", (*callbacks)[1].messages)
+	}
+	(*callbacks)[1].result(ai.Message{Role: ai.RoleAssistant, Content: "category created"}, ai.Usage{PromptTokens: 2, CompletionTokens: 2, TotalTokens: 4})
+	deadline := time.Now().Add(2 * time.Second)
+	for uistate.AgentReceiptActionCount(conversationID) == 0 && time.Now().Before(deadline) {
+		f.Stabilize()
+		time.Sleep(time.Millisecond)
+	}
+	if got := uistate.AgentReceiptActionCount(conversationID); got != 1 {
+		t.Fatalf("approved category action count = %d, want 1", got)
 	}
 }
 
@@ -244,6 +440,55 @@ func TestInsightsCanceledApprovalCannotMutate(t *testing.T) {
 		if account.Name == "Canceled Lifecycle Account" {
 			t.Fatal("approval delivered after cancellation ran a mutating tool")
 		}
+	}
+}
+
+func TestInsightsApprovalCannotMutateAfterAppReplacement(t *testing.T) {
+	app, f, composer, callbacks := setupInsightsLifecycle(t)
+	request := submitInsightsLifecycleTurn(t, f, composer, "propose an account", callbacks)
+	(*callbacks)[request].result(ai.Message{Role: ai.RoleAssistant, ToolCalls: []ai.ToolCall{{
+		ID: "call-replaced-account", Type: "function", Function: ai.FunctionCall{Name: "add_account", Arguments: `{"name":"Replaced Dataset Account","class":"asset"}`},
+	}}}, ai.Usage{PromptTokens: 5, CompletionTokens: 2, TotalTokens: 7})
+	waitForInsightsApproval(t, f)
+	staleApprove := byTestID(f, "button", "assistant-approve")
+	conversationID := waitForInsightsConversation(t, f, app).ID
+
+	replacement, err := appstate.New(io.Discard, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	appstate.Default = replacement
+	t.Cleanup(func() {
+		appstate.Default = app
+		_ = replacement.Store().Close()
+	})
+
+	// This retained event belongs to the old page render. It must not execute
+	// against the captured old app or create state in the replacement app.
+	staleApprove.Click()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		f.Stabilize()
+		if byTestID(f, "div", "assistant-approval") == nil {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if byTestID(f, "div", "assistant-approval") != nil {
+		t.Fatal("approval remained visible after the captured app was replaced")
+	}
+	for _, dataset := range []*appstate.App{app, replacement} {
+		for _, account := range dataset.Accounts() {
+			if account.Name == "Replaced Dataset Account" {
+				t.Fatalf("stale approval mutated dataset %p", dataset)
+			}
+		}
+	}
+	if got := uistate.AgentTokensUsed(conversationID); got != 7 {
+		t.Fatalf("provider usage recorded against original conversation = %d tokens, want 7", got)
+	}
+	if got := replacement.AISpendThisMonth().Tokens; got != 0 {
+		t.Fatalf("replacement dataset received %d provider usage tokens, want 0", got)
 	}
 }
 

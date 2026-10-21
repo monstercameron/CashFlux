@@ -1,3 +1,7 @@
+## 2026-10-21 - Fresh Assistant tool rounds and honest usage receipts
+
+Rebuild read closures for each provider turn and after an actual approved write, while retaining the previewed write instance until execution. Each response reports its usage once to the captured conversation and bound live store, including interrupted tool loops; budgets are checked before the next provider call. Privacy changes cancel active sessions, and app/store replacement blocks retained approvals and stale callbacks. All ten mocked actual Insights lifecycle groups passed in integrated pass8, including fresh same-response category reads, partial provider errors, exact cap enforcement and dataset replacement.
+
 ## 2026-10-21 - Verified Assistant batch undo and capture failures
 
 Changeset apply isolates the household baseline, preserves actor identity, captures each operation including failed partial writes, and records exact undo IDs. Undo All awaits each durable replay in reverse order, stops on mismatches/errors and retains visible partial progress. Direct tool writes use checked capture too, refusing unavailable baselines and disclosing uncertainty after a post-write capture failure. Native changeset/appstate tests passed, two focused Undo sequence WASM groups passed in pass7, and four direct-write receipt groups passed in pass8.

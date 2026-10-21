@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall/js"
 	"time"
 
@@ -463,32 +464,66 @@ func Insights() ui.Node {
 			errMsg.Set(uistate.T("insights.budgetSpent", ai.FormatTokens(uistate.AgentBudget(conversationID))))
 			return
 		}
+		boundStore := app.Store()
+		recordProviderUsage := func(usage ai.Usage) {
+			if usage.PromptTokens <= 0 && usage.CompletionTokens <= 0 && usage.TotalTokens <= 0 {
+				return
+			}
+			// Account real usage against the captured conversation even if its
+			// callback arrives after cancellation. Never write into a replacement
+			// app dataset or a closed store.
+			if appstate.Default != app || app.Store() != boundStore {
+				return
+			}
+			if _, err := boundStore.GetSettings(); err != nil {
+				return
+			}
+			cost, costOK := ai.EstimateCostUSD(requestModel, usage)
+			uistate.AddAgentCost(conversationID, usage.TotalTokens, cost, costOK)
+			app.RecordAISpend("assistant", requestModel, usage)
+		}
+		buildToolSet := func(forTier aicontext.ConversationTier) ([]ai.Tool, map[string]chatTool, error) {
+			// Re-read conversion settings whenever a tool snapshot is built. A
+			// preceding approved tool may have changed base currency or FX rates;
+			// the render-time settings captured above must not leak into later
+			// provider steps or tool calls.
+			freshSettings, err := boundStore.GetSettings()
+			if err != nil {
+				return nil, nil, err
+			}
+			toolBase := freshSettings.BaseCurrency
+			if toolBase == "" {
+				toolBase = "USD"
+			}
+			toolRates := currency.Rates{Base: toolBase, Rates: freshSettings.FXRates}
+			allTools := buildChatTools(app, toolBase, toolRates, forTier, insightsScopeAtom.Get)
+			specs := make([]ai.Tool, 0, len(allTools))
+			byName := make(map[string]chatTool, len(allTools))
+			for _, tool := range allTools {
+				if !aicontext.ToolAllowed(tool.spec.Function.Name, forTier) {
+					continue
+				}
+				specs = append(specs, tool.spec)
+				byName[tool.spec.Function.Name] = tool
+			}
+			return specs, byName, nil
+		}
 		session := assistantloop.NewSession(conversationID)
 		sessionState.Set(session)
-		isCurrentSession := func() bool { return session.Active() && sessionState.Get() == session }
+		isCurrentSession := func() bool {
+			return session.Active() && sessionState.Get() == session && appstate.Default == app && app.Store() == boundStore
+		}
 		finishSession := func() {
 			session.SetCancel(nil)
 			session.Cancel()
 			if sessionState.Get() == session {
+				loading.Set(false)
+				streaming.Set("")
+				pendingApproval.Set(nil)
 				sessionState.Set(nil)
 			}
 		}
 		loading.Set(true)
-		allTools := buildChatTools(app, base, rates, tier, insightsScopeAtom.Get)
-		// AG17: under aggregates-only, withhold the transaction/payee-detail read tools
-		// so the privacy promise holds for tool results too, not just the injected context.
-		tools := allTools[:0:0]
-		for _, t := range allTools {
-			if aicontext.ToolAllowed(t.spec.Function.Name, tier) {
-				tools = append(tools, t)
-			}
-		}
-		specs := make([]ai.Tool, len(tools))
-		byName := make(map[string]chatTool, len(tools))
-		for i, t := range tools {
-			specs[i] = t.spec
-			byName[t.spec.Function.Name] = t
-		}
 		msgs := buildMessages(hist)
 		var total ai.Usage
 
@@ -516,12 +551,29 @@ func Insights() ui.Node {
 				if !isCurrentSession() {
 					return
 				}
+				if uistate.AgentBudgetExhausted(conversationID) {
+					loading.Set(false)
+					streaming.Set("")
+					errMsg.Set(uistate.T("insights.budgetSpent", ai.FormatTokens(uistate.AgentBudget(conversationID))))
+					return
+				}
+				if privacyTier.Get() != tier {
+					return
+				}
+				specs, byName, err := buildToolSet(tier)
+				if err != nil {
+					if isCurrentSession() {
+						errMsg.Set(uistate.T("insights.loopFailed"))
+					}
+					return
+				}
 				ch := make(chan agentStep, 1)
 				// Each fragment lands in the live-answer atom, which the thread
 				// renders as a growing bubble. It is cleared when the turn resolves,
 				// at which point the real turn takes over — one answer on screen at
 				// any moment, never a draft sitting beside its finished self.
 				streaming.Set("")
+				var usageOnce sync.Once
 				fc := sendTools(requestModel, msgs, specs,
 					func(delta string) {
 						if isCurrentSession() {
@@ -529,6 +581,7 @@ func Insights() ui.Node {
 						}
 					},
 					func(m ai.Message, u ai.Usage) {
+						usageOnce.Do(func() { recordProviderUsage(u) })
 						if isCurrentSession() {
 							select {
 							case ch <- agentStep{msg: m, usage: u}:
@@ -586,14 +639,8 @@ func Insights() ui.Node {
 					}
 					reply := chatTurn{ID: id.New(), Role: "assistant", Text: text, Usage: total, Sources: sources}
 					turns.Set(append(append([]chatTurn{}, hist...), reply))
-					// AG20: feed this turn's token spend into the per-conversation
-					// receipt (cost estimated from the resolved model).
-					cost, costOK := ai.EstimateCostUSD(requestModel, total)
-					uistate.AddAgentCost(conversationID, total.TotalTokens, cost, costOK)
-					// EC-15: and into the household's running AI spend meter, so
-					// "what is this costing me?" has an answer here rather than on
-					// next month's provider bill.
-					app.RecordAISpend("assistant", requestModel, total)
+					// AG20: usage was posted on each response callback, including
+					// partial tool loops and interrupted turns.
 					return
 				}
 				// This turn asked for tools, so whatever text it streamed was a
@@ -607,49 +654,68 @@ func Insights() ui.Node {
 					if !isCurrentSession() {
 						return
 					}
+					currentTier := privacyTier.Get()
+					if currentTier != tier {
+						return
+					}
 					args := json.RawMessage(tc.Function.Arguments)
 					out := "tool unavailable"
-					if tool, ok := byName[tc.Function.Name]; ok {
-						// Mutating tools pause for the user's approval in the thread.
-						if !tool.mutates {
-							out = runReadTool(tc.Function.Name, func() string { return tool.run(args) })
-						} else {
-							preview := tc.Function.Name
-							if tool.preview != nil {
-								preview = tool.preview(args)
-							}
-							decision := assistantloop.NewApproval()
-							pa := &approvalReq{
-								tool:     tc.Function.Name,
-								preview:  preview,
-								perm:     toolperm.For(tc.Function.Name, args),
-								resp:     make(chan bool, 1),
-								decision: decision,
-							}
-							pendingApproval.Set(pa)
-							approved, responded := decision.Wait(session.Done())
-							if !isCurrentSession() {
-								return
-							}
-							if pendingApproval.Get() == pa {
-								pendingApproval.Set(nil)
-							}
-							if !responded {
-								return
-							}
-							if !approved {
-								msgs = append(msgs, ai.ToolResultMessage(tc.ID, tc.Function.Name, "The user declined this change."))
-								continue
-							}
-							// C389/AG20: an approved write runs under the assistant
-							// actor and takes its own undo point, so Activity shows
-							// who made the change and offers to take it back. Without
-							// this, a change the assistant made was indistinguishable
-							// in the log from one the household made by hand.
-							write := runAssistantWriteResult(tc.Function.Name, func() string { return tool.run(args) })
-							out = write.Text
-							if write.Changed {
-								uistate.AddAgentActions(conversationID, []string{tc.Function.Name})
+					if aicontext.ToolAllowed(tc.Function.Name, currentTier) {
+						if tool, ok := byName[tc.Function.Name]; ok {
+							// Mutating tools pause for the user's approval in the thread.
+							if !tool.mutates {
+								out = runReadTool(tc.Function.Name, func() string { return tool.run(args) })
+							} else {
+								preview := tc.Function.Name
+								if tool.preview != nil {
+									preview = tool.preview(args)
+								}
+								decision := assistantloop.NewApproval()
+								pa := &approvalReq{
+									tool:     tc.Function.Name,
+									preview:  preview,
+									perm:     toolperm.For(tc.Function.Name, args),
+									resp:     make(chan bool, 1),
+									decision: decision,
+								}
+								pendingApproval.Set(pa)
+								approved, responded := decision.Wait(session.Done())
+								if !isCurrentSession() {
+									return
+								}
+								if pendingApproval.Get() == pa {
+									pendingApproval.Set(nil)
+								}
+								if !responded {
+									return
+								}
+								if !approved {
+									msgs = append(msgs, ai.ToolResultMessage(tc.ID, tc.Function.Name, "The user declined this change."))
+									continue
+								}
+								// Recheck immediately before the write. The visible privacy
+								// toggle cancels the session, and this guard also covers a
+								// tier change delivered through another state update.
+								if privacyTier.Get() != tier {
+									return
+								}
+								// C389/AG20: an approved write runs under the assistant
+								// actor and takes its own undo point, so Activity shows
+								// who made the change and offers to take it back. Without
+								// this, a change the assistant made was indistinguishable
+								// in the log from one the household made by hand.
+								write := runAssistantWriteResult(tc.Function.Name, func() string { return tool.run(args) })
+								out = write.Text
+								if write.Changed {
+									uistate.AddAgentActions(conversationID, []string{tc.Function.Name})
+									// buildChatTools snapshots table slices. Refresh after an
+									// applied write so later calls in this response see it.
+									_, byName, err = buildToolSet(currentTier)
+									if err != nil {
+										errMsg.Set(uistate.T("insights.loopFailed"))
+										return
+									}
+								}
 							}
 						}
 					}
@@ -1619,6 +1685,9 @@ func Insights() ui.Node {
 		if tier == aicontext.TierAggregatesOnly {
 			next = aicontext.TierFull
 		}
+		// A response produced under the previous tier must not retain a path
+		// to its old tools or approval after the privacy boundary changes.
+		cancelCurrentSession()
 		privacyTier.Set(next)
 		uistate.PersistDefaultPrivacyTier(next) // remember as the default for new chats (AG17)
 	}

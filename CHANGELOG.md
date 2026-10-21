@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Assistant tool rounds refresh data and currency settings, enforce per-round budgets, and retain reported usage from interrupted requests.
 - Assistant batch receipts distinguish real changes, no-ops and unverified mutations; Undo All reverses only exact captured changes.
 - Assistant data discovery covers 65 typed collections including financial assumptions, saved reports and retained benchmark history.
 - Assistant goal check-ins use canonical goal coverage and funding plans in each goal currency.
