@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Verify frozen benchmark artifacts, require complete route content, and add representative nine-page interaction measurements and optional CPU profiles.
 - Move Allocate allocatable amounts into native preparation and retain failed income-prefill availability.
 - The top-bar period pill receives the live shared window and reads current state when stepping, matching page calculations after changes.
 - Returning to Dashboard skips unchanged placement writes, preserving the store revision and prepared financial snapshots.

@@ -7,11 +7,16 @@
 //
 //   node e2e/perf/primary-pages-benchmark.mjs --base-url http://127.0.0.1:8099 \
 //     --label before --runs 5 --out e2e/perf/results/primary-before.json
+// For a paired source-artifact comparison on the same server, pass both
+// --wasm-file and its verified --build-id. That path uses the app's gzip fallback
+// so Playwright does not transfer an identity WASM body larger than its 100 MiB cap.
 import { chromium } from "@playwright/test";
+import { createHash } from "node:crypto";
 import { cpus } from "node:os";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { gzipSync } from "node:zlib";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, "..", "..");
@@ -30,12 +35,12 @@ const FIXED_NOW = "2026-07-01T12:00:00.000Z";
 let fatalReport = null;
 
 function options(argv) {
-  const out = { baseUrl: process.env.E2E_BASE_URL || "", label: "run", buildId: "", runs: 5, warmups: 1, outFile: "" };
-  const keys = { "--base-url": "baseUrl", "--label": "label", "--build-id": "buildId", "--runs": "runs", "--warmups": "warmups", "--out": "outFile" };
+  const out = { baseUrl: process.env.E2E_BASE_URL || "", label: "run", buildId: "", wasmFile: "", runs: 5, warmups: 1, outFile: "", profileDir: "", profileRoute: "/", profileRouteSet: false };
+  const keys = { "--base-url": "baseUrl", "--label": "label", "--build-id": "buildId", "--wasm-file": "wasmFile", "--runs": "runs", "--warmups": "warmups", "--out": "outFile", "--profile-dir": "profileDir", "--profile-route": "profileRoute" };
   for (let i = 0; i < argv.length; i++) {
     const [flag, inline] = argv[i].split(/=(.*)/s, 2);
     if (flag === "--help" || flag === "-h") {
-      console.log("Usage: node e2e/perf/primary-pages-benchmark.mjs --base-url URL --label NAME [--build-id SHA256] [--runs 5] [--warmups 1] [--out FILE]");
+      console.log("Usage: node e2e/perf/primary-pages-benchmark.mjs --base-url URL --label NAME [--wasm-file PATH --build-id SHA256] [--runs 5] [--warmups 1] [--out FILE] [--profile-dir DIR [--profile-route /]]");
       process.exit(0);
     }
     const key = keys[flag];
@@ -43,6 +48,7 @@ function options(argv) {
     const value = inline ?? argv[++i];
     if (!value) throw new Error(`missing value for ${flag}`);
     out[key] = value;
+    if (key === "profileRoute") out.profileRouteSet = true;
   }
   out.runs = Number(out.runs);
   out.warmups = Number(out.warmups);
@@ -53,8 +59,12 @@ function options(argv) {
   }
   if (!Number.isInteger(out.runs) || out.runs < 1) throw new Error("--runs must be a positive integer");
   if (!Number.isInteger(out.warmups) || out.warmups < 0) throw new Error("--warmups must be a non-negative integer");
+  if (Boolean(out.wasmFile) !== Boolean(out.buildId)) throw new Error("--wasm-file and --build-id must be supplied together");
+  if (!out.profileDir && out.profileRouteSet) throw new Error("--profile-route requires --profile-dir");
+  if (out.profileDir && !ROUTES.some(([, route]) => route === out.profileRoute)) throw new Error(`--profile-route must be one of: ${ROUTES.map(([, route]) => route).join(", ")}`);
+  if (out.profileDir) out.profileDir = path.resolve(process.cwd(), out.profileDir);
   out.baseUrl = out.baseUrl.replace(/\/$/, "");
-  fatalReport = { label: out.label, baseUrl: out.baseUrl, outFile: out.outFile };
+  fatalReport = { label: out.label, baseUrl: out.baseUrl, outFile: out.outFile, cpuProfiling: { enabled: Boolean(out.profileDir), profiler: "Chromium CDP Profiler", route: out.profileRoute, outputDirectory: out.profileDir || null, expectedProfiles: out.profileDir ? out.runs : 0, warmupsProfiled: 0, timingsExcludedFromPerformanceMedians: true, profiles: [] } };
   return out;
 }
 
@@ -65,9 +75,50 @@ const median = (xs) => {
   const mid = Math.floor(values.length / 2);
   return round(values.length % 2 ? values[mid] : (values[mid - 1] + values[mid]) / 2);
 };
+const safeFilePart = (value) => String(value).replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80) || "run";
 
 async function main() {
   const opts = options(process.argv.slice(2));
+  const cpuProfiling = fatalReport.cpuProfiling;
+  const profileRunId = new Date().toISOString().replace(/[^0-9TZ]/g, "-");
+  if (opts.profileDir) mkdirSync(opts.profileDir, { recursive: true });
+  let wasmArtifact = null;
+  const wasmDelivery = {
+    mode: opts.wasmFile ? "injected-gzip-fallback" : "server-negotiated",
+    artifactPath: null,
+    artifactSha256: opts.wasmFile ? null : "not recorded",
+    artifactByteLength: null,
+    artifactGzipByteLength: null,
+    rawInterceptionCount: 0,
+    gzipFallbackInterceptionCount: 0,
+    unexpectedFallbackAttempts: [],
+    responseContentType: opts.wasmFile ? "application/gzip" : "server-negotiated",
+    responseContentEncoding: opts.wasmFile ? "none; decompressed by page loader" : "server-negotiated",
+  };
+  fatalReport.wasmDelivery = wasmDelivery;
+  if (opts.wasmFile) {
+    const artifactPath = path.resolve(process.cwd(), opts.wasmFile);
+    const bytes = readFileSync(artifactPath);
+    if (bytes.length < 8 || !bytes.subarray(0, 4).equals(Buffer.from([0x00, 0x61, 0x73, 0x6d]))) {
+      throw new Error("--wasm-file is not a WebAssembly artifact with a valid magic header");
+    }
+    if (!bytes.subarray(4, 8).equals(Buffer.from([0x01, 0x00, 0x00, 0x00]))) {
+      throw new Error("--wasm-file has an unsupported WebAssembly version header");
+    }
+    const sha256 = createHash("sha256").update(bytes).digest("hex");
+    if (!/^[0-9a-f]{64}$/i.test(opts.buildId) || sha256 !== opts.buildId.toLowerCase()) {
+      throw new Error(`--wasm-file SHA-256 ${sha256} does not match --build-id ${opts.buildId}`);
+    }
+    const gzipBytes = gzipSync(bytes, { level: 9, mtime: 0 });
+    wasmArtifact = { bytes, gzipBytes };
+    opts.buildId = sha256;
+    Object.assign(wasmDelivery, {
+      artifactPath,
+      artifactSha256: sha256,
+      artifactByteLength: bytes.length,
+      artifactGzipByteLength: gzipBytes.length,
+    });
+  }
   const browser = await chromium.launch({ args: ["--disable-gpu", "--enable-precise-memory-info"] });
   try {
     // A new browser context is the disposable sample workspace: its IndexedDB,
@@ -84,10 +135,34 @@ async function main() {
     // Keep all app traffic on loopback, including optional AI integrations. The
     // benchmark only reads the built-in sample pages; no paid/external request is
     // needed for route render measurements.
+    const baseOrigin = new URL(opts.baseUrl).origin;
     await page.route("**/*", (route) => {
-      const host = new URL(route.request().url()).hostname;
-      if (["localhost", "127.0.0.1", "[::1]"].includes(host)) return route.continue();
-      return route.abort();
+      const requestUrl = new URL(route.request().url());
+      if (!["localhost", "127.0.0.1", "[::1]"].includes(requestUrl.hostname)) return route.abort();
+      if (wasmArtifact && requestUrl.origin === baseOrigin && route.request().method() === "GET") {
+        // Identity delivery exceeds the browser automation protocol's 100 MiB
+        // response cap for these artifacts. Trigger the app's existing gzip
+        // compatibility path and fulfill that request with the exact artifact.
+        // The body is gzip bytes with no Content-Encoding: the page itself uses
+        // DecompressionStream before instantiateStreaming.
+        if (requestUrl.pathname === "/bin/main.wasm") {
+          wasmDelivery.rawInterceptionCount++;
+          return route.fulfill({ status: 404, headers: { "Cache-Control": "no-store" }, body: "" });
+        }
+        if (requestUrl.pathname === "/bin/main.wasm.gz") {
+          wasmDelivery.gzipFallbackInterceptionCount++;
+          return route.fulfill({
+            status: 200,
+            headers: { "Content-Type": "application/gzip", "Cache-Control": "no-store" },
+            body: wasmArtifact.gzipBytes,
+          });
+        }
+        if (requestUrl.pathname === "/bin/main.wasm.br") {
+          wasmDelivery.unexpectedFallbackAttempts.push({ path: requestUrl.pathname, search: requestUrl.search });
+          return route.abort();
+        }
+      }
+      return route.continue();
     });
     await page.clock.setFixedTime(new Date(FIXED_NOW));
     await page.addInitScript(() => {
@@ -140,6 +215,9 @@ async function main() {
     const bootWallStart = Date.now();
     await page.goto(`${opts.baseUrl}/`, { waitUntil: "commit", timeout: 60_000 });
     await page.waitForFunction(() => document.documentElement.getAttribute("data-app-ready") === "true", null, { timeout: 60_000 });
+    if (wasmArtifact && (wasmDelivery.rawInterceptionCount !== 1 || wasmDelivery.gzipFallbackInterceptionCount !== 1 || wasmDelivery.unexpectedFallbackAttempts.length > 0)) {
+      throw new Error(`WASM override delivery was not exclusive: ${JSON.stringify(wasmDelivery)}`);
+    }
     // Refuse to quietly benchmark a blank/new household. The app seeds its built-in
     // demo dataset in this fresh context; this marker confirms that path was taken.
     await page.locator('[data-testid="sample-data-banner"]').waitFor({ state: "visible", timeout: 15_000 });
@@ -154,9 +232,17 @@ async function main() {
 
     const samples = Object.fromEntries(ROUTES.map(([name]) => [name, []]));
     const failures = [];
-    const sweep = async (record) => {
+    const sweep = async (record, measuredRunIndex = null) => {
       for (const [name, route] of ROUTES) {
+        let cpuSession = null;
+        let cpuProfilerStarted = false;
         try {
+          if (record && opts.profileDir && route === opts.profileRoute) {
+            cpuSession = await context.newCDPSession(page);
+            await cpuSession.send("Profiler.enable");
+            await cpuSession.send("Profiler.start");
+            cpuProfilerStarted = true;
+          }
           const m = await page.evaluate(async (target) => {
             const selector = `#main[data-route="${target}"]`;
             const started = performance.now();
@@ -209,6 +295,17 @@ async function main() {
               };
               check();
             });
+            // The legacy Assistant artifact predates a deferred-render marker.
+            // This fixed sample has flagged activity: its populated rail is a
+            // semantic completion contract available in both compared builds.
+            // Measuring only two frames after mount mixed initial and complete
+            // Assistant content depending on whether its 300 ms timer had fired.
+            if (target === "/assistant") {
+              while (!document.querySelector(`${selector} [data-testid="assistant-note-flagged"]`)) {
+                if (performance.now() >= deadline) throw new Error("sample Assistant rail did not finish preparing flagged activity");
+                await new Promise(requestAnimationFrame);
+              }
+            }
             if (document.fonts?.ready) await document.fonts.ready;
             const imgs = [...document.querySelectorAll(`${selector} img`)];
             await Promise.all(imgs.map((img) => img.complete ? null : new Promise((resolve) => {
@@ -249,6 +346,11 @@ async function main() {
               firstMutationMs,
               mainElementCount: main?.querySelectorAll("*").length ?? 0,
               mainTextChars: textChars,
+              mainText: (main?.innerText ?? "").replace(/\s+/g, " ").trim(),
+              // Stable content identity lets paired builds prove that they rendered
+              // the same sample route, rather than comparing timing over different data.
+              contentSha256: await crypto.subtle.digest("SHA-256", new TextEncoder().encode((main?.innerText ?? "").replace(/\s+/g, " ").trim())).then((digest) =>
+                [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("")),
               renderedRowLikeCount: visibleRows,
               entityCount: entitySelector
                 ? target === "/transactions"
@@ -260,9 +362,34 @@ async function main() {
               heapUsedMB: performance.memory?.usedJSHeapSize ? performance.memory.usedJSHeapSize / 1048576 : null,
             };
           }, route);
+          if (cpuProfilerStarted) {
+            const { profile } = await cpuSession.send("Profiler.stop");
+            cpuProfilerStarted = false;
+            if (!profile || !Array.isArray(profile.nodes)) throw new Error("CDP Profiler.stop returned no CPU profile nodes");
+            const fileName = `${safeFilePart(opts.label)}-${safeFilePart(name)}-${profileRunId}-run-${measuredRunIndex}.cpuprofile`;
+            const filePath = path.join(opts.profileDir, fileName);
+            writeFileSync(filePath, JSON.stringify(profile), { flag: "wx" });
+            const profileRecord = {
+              route,
+              measuredRunIndex,
+              file: filePath,
+              nodeCount: profile.nodes.length,
+              sampleCount: profile.samples?.length ?? 0,
+              durationUs: profile.startTime != null && profile.endTime != null ? profile.endTime - profile.startTime : null,
+            };
+            cpuProfiling.profiles.push(profileRecord);
+            Object.assign(m, { cpuProfiled: true, performanceComparable: false, timingMode: "diagnostic-only", cpuProfileFile: filePath, cpuProfileNodeCount: profileRecord.nodeCount, cpuProfileSampleCount: profileRecord.sampleCount });
+          }
+          m.performanceComparable ??= true;
           if (record) samples[name].push(m);
         } catch (error) {
           failures.push({ route, pass: record ? "measured" : "warmup", message: String(error).slice(0, 300) });
+          if (cpuProfilerStarted) {
+            try { await cpuSession.send("Profiler.stop"); cpuProfilerStarted = false; }
+            catch (profileError) { failures.push({ route, pass: "measured", message: `could not stop CDP CPU profiler: ${String(profileError).slice(0, 200)}` }); }
+          }
+        } finally {
+          if (cpuSession) await cpuSession.detach().catch(() => {});
         }
       }
     };
@@ -272,11 +399,18 @@ async function main() {
     await page.evaluate(() => { history.pushState({}, "", "/reports"); dispatchEvent(new PopStateEvent("popstate")); });
     await page.waitForSelector('#main[data-route="/reports"]', { state: "visible", timeout: 30_000 });
     for (let i = 0; i < opts.warmups; i++) await sweep(false);
-    for (let i = 0; i < opts.runs; i++) await sweep(true);
+    for (let i = 0; i < opts.runs; i++) await sweep(true, i + 1);
+    if (opts.profileDir && cpuProfiling.profiles.length !== opts.runs) {
+      failures.push({ route: opts.profileRoute, pass: "measured", message: `expected ${opts.runs} CPU profiles, wrote ${cpuProfiling.profiles.length}` });
+    }
 
     const pages = ROUTES.map(([name, route]) => {
       const rows = samples[name];
-      const numeric = (key) => median(rows.map((row) => row[key]));
+      const contentHashes = [...new Set(rows.map((row) => row.contentSha256).filter(Boolean))];
+      if (rows.length !== opts.runs) failures.push({ route, pass: "measured", message: `expected ${opts.runs} measured route samples, recorded ${rows.length}` });
+      if (contentHashes.length > 1) failures.push({ route, pass: "measured", message: `sample route content changed across measured sweeps: ${contentHashes.join(", ")}` });
+      const comparableRows = rows.filter((row) => !row.cpuProfiled);
+      const numeric = (key) => median(comparableRows.map((row) => row[key]));
       return {
         name,
         route,
@@ -286,12 +420,15 @@ async function main() {
         longTaskTotalMsMedian: numeric("longTaskTotalMs"),
         longTaskCountMedian: numeric("longTaskCount"),
         longTaskMaxMsMedian: numeric("longTaskMaxMs"),
-        layoutShiftMedian: rows.length ? median(rows.map((row) => row.layoutShift)) : null,
+        performanceComparableSamples: comparableRows.length,
+        diagnosticOnlySamples: rows.length - comparableRows.length,
+        layoutShiftMedian: comparableRows.length ? median(comparableRows.map((row) => row.layoutShift)) : null,
         mainElementCountMedian: numeric("mainElementCount"),
         renderedRowLikeCountMedian: numeric("renderedRowLikeCount"),
         entityCount: rows.at(-1)?.entityCount ?? null,
         entityCountText: rows.at(-1)?.entityCountText ?? null,
         entityCountSelector: rows.at(-1)?.entityCountSelector ?? null,
+        contentSha256: contentHashes.length === 1 ? contentHashes[0] : null,
         raw: rows,
       };
     });
@@ -313,6 +450,8 @@ async function main() {
       capturedAt: new Date().toISOString(),
       baseUrl: opts.baseUrl,
       conditions: {
+        wasmDelivery,
+        cpuProfiling,
         node: process.version,
         playwright: JSON.parse(readFileSync(path.join(REPO, "e2e", "node_modules", "playwright-core", "package.json"), "utf8")).version,
         browser: browser.version(),
@@ -342,10 +481,16 @@ async function main() {
       boot: { ...boot, wallMs: round(boot.wallMs) },
       environment: meta,
       pages,
+      cpuProfiling,
       failures,
-      note: "Descriptive benchmark only. Compare medians with matching environment and dataset; no latency threshold is a pass/fail gate.",
+      note: opts.profileDir
+        ? `Diagnostic CPU profiling is enabled for ${opts.profileRoute}. Each measured profile sample is saved as a standalone .cpuprofile; warmups are unprofiled. Profiler-overhead samples remain in raw data and are excluded from performance medians. ${wasmArtifact ? "WASM uses the per-context injected gzip compatibility fallback; startup is not comparable to normal negotiated startup." : ""} Compare unprofiled medians with matching environment and dataset.`
+        : wasmArtifact
+        ? "Descriptive route benchmark using a per-context injected WASM artifact through the app's gzip compatibility fallback. Startup timing includes the forced raw-404 and gzip fallback and is not comparable to normal negotiated startup. Compare route medians with matching environment and dataset; inspect raw entity counts and text sizes before interpreting differences."
+        : "Descriptive benchmark only. Compare medians with matching environment and dataset; no latency threshold is a pass/fail gate.",
     };
     const json = JSON.stringify(result, null, 2) + "\n";
+    if (failures.length) process.exitCode = 1;
     if (opts.outFile) {
       const target = path.resolve(process.cwd(), opts.outFile);
       mkdirSync(path.dirname(target), { recursive: true });
@@ -370,6 +515,8 @@ main().catch((error) => {
       capturedAt: new Date().toISOString(),
       baseUrl: fatalReport.baseUrl,
       failures: [{ phase: "startup", message: String(error).slice(0, 500) }],
+      conditions: fatalReport.wasmDelivery ? { wasmDelivery: fatalReport.wasmDelivery } : undefined,
+      cpuProfiling: fatalReport.cpuProfiling,
       pages: [],
       note: "Benchmark did not complete startup; see failures for the recorded error.",
     };

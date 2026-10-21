@@ -1,3 +1,7 @@
+## 2026-10-21 - Strengthen primary-page performance measurement contracts
+
+The navigation benchmark verifies WASM hashes and injects the frozen artifact into isolated sample contexts through the existing gzip fallback. Assistant waits for populated sample content, raw normalized text and hashes retain parity evidence, and missing/failing samples fail the command. The interaction script covers all nine routes without submitting Assistant prompts. The period-fixed artifact passed all nine interaction actions; the navigation script completed seven measured sweeps and a separate diagnostic CPU profile. Both scripts pass node --check. Profiling timings are excluded from performance medians. Historical captures retain their recorded limitations; future comparisons use the stronger contracts documented in PRIMARY_PAGE_PERFORMANCE.md.
+
 ## 2026-10-21 - Prepare Allocate display amounts and retain income availability
 
 Native allocateview and i18n suites passed. Allocate host tests cover missing FX, income total overflow, manual entry after unavailable income, valid split and malformed amount rejection, and closed sources. The initial new fixture omitted a required description and used the wrong paragraph selector; corrected fixtures pass. Fixtures explicitly unmount before releasing their app. The shared SMART cache has separate pending validation and is not part of this slice.

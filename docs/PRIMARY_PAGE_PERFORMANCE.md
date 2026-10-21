@@ -23,6 +23,7 @@ From the repository root, in PowerShell:
 node e2e/perf/primary-pages-benchmark.mjs `
   --base-url http://127.0.0.1:8099 `
   --label before `
+  --wasm-file C:\path\to\before-main.wasm `
   --build-id ACTUAL_WASM_SHA256 `
   --warmups 1 `
   --runs 7 `
@@ -36,6 +37,7 @@ under a different file:
 node e2e/perf/primary-pages-benchmark.mjs `
   --base-url http://127.0.0.1:8099 `
   --label after `
+  --wasm-file C:\path\to\after-main.wasm `
   --build-id ACTUAL_WASM_SHA256 `
   --warmups 1 `
   --runs 7 `
@@ -44,9 +46,15 @@ node e2e/perf/primary-pages-benchmark.mjs `
 
 Use the same machine, browser, server mode, build flags, viewport, sample-data
 version, and run counts for both captures. Close other CPU-heavy work where practical.
-Use `Get-FileHash web/bin/main.wasm -Algorithm SHA256` on the artifact being served
-and pass its hash as `--build-id`. The benchmark records this caller-supplied ID;
-it does not infer source provenance from the current Git HEAD. Record dirty source
+Use `Get-FileHash PATH -Algorithm SHA256` on each frozen artifact and pass that path
+as `--wasm-file` together with its hash as `--build-id`. The benchmark verifies the
+WASM header and SHA256 before launching the browser. The isolated page receives
+the artifact through the app's gzip fallback; the served file is not replaced.
+This avoids Playwright's 100 MiB identity response limit. The report records the
+delivery path and rejects unexpected fallback attempts. Startup measurements from
+this path are not normal server-negotiated startup measurements.
+Without these paired flags, it measures the server's artifact and records no
+verified artifact identity. It does not infer source provenance from Git HEAD. Record dirty source
 changes alongside it when the build predates their commits.
 The warm-up sweep is discarded; each measured sweep visits all nine pages in order,
 ending at Reports before the next sweep returns to Dashboard. Raw per-sweep samples
@@ -54,6 +62,30 @@ are preserved beside route medians in the JSON. `--help` prints the options. Wit
 `--out`, JSON goes to stdout; the run summary goes to stderr-style console output.
 
 ## Captured signals
+
+Assistant navigation waits for the populated sample Insights rail on both
+artifacts. An earlier fixed delay could sample the deferred rail before it was
+mounted, making incomplete Assistant content appear faster. Captures retain
+normalized main text, its SHA256 and raw samples; inconsistent visible content
+within a build fails the capture. Inspect content differences between builds
+before comparing timings. Route failures and missing samples also return a
+nonzero exit status.
+
+For representative interaction checks, use
+`e2e/perf/primary-interactions-benchmark.mjs` with the same artifact, hash, URL,
+warmup, run and output flags. Each sweep has its own isolated sample context.
+Required actions cover period stepping, transaction search and date filters,
+account detail expansion, budget period and income-basis dialog, goal tabs/sort/
+expansion, To-do views/search, populated notification triage, local Assistant
+controls/typing and Reports views/export dialog/scope. No Assistant prompt is
+submitted. Missing or failed actions return a nonzero exit status. It retains
+per-action timings and diagnostics; a one-sweep pass is functional evidence,
+not a latency comparison.
+
+Optional `--profile-dir DIR --profile-route /` records a Chromium CPU profile
+for each measured visit to that route. Warmups are unprofiled. Profiling captures
+are diagnostic and excluded from reported performance medians; compare timings
+with separate unprofiled runs.
 
 The file includes the app-ready boot time; per-route median mount and settled times;
 long-task count, total blocking time (time above 50 ms), and longest task; layout
