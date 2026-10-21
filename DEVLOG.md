@@ -1,3 +1,7 @@
+## 2026-10-21 - Native household preparation and components
+
+Prepared worth, spending and exact income distribution retain independent source/total availability and known individual rows on aggregate overflow. One model is shared across tabs and route reuse, keyed by app instance/store revision/period; redundant local revision notifications were removed. Native tests and vet pass; five focused WASM host cases pass, including cache refresh, closed store, period boundaries and keyed PIN/menu identity. Removed only two stale hook exceptions.
+
 ## 2026-10-21 - Checked workflow draft preparation
 
 Native draft preparation copies actions, fills only missing schedule/dedupe values and reuses canonical validation. Persistence and direct execution also validate the workflow. Full native workflow/appstate tests and vet pass; route wiring and composer host verification remain a separate slice.

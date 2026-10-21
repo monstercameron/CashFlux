@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Household and Members share checked native facts with stable interactive rows.
 - Workflow drafts use injected-clock native scheduling and reject same-account transfers before persistence or execution.
 - Category deletion fails closed when any canonical non-child reference still needs reassignment.
 - Revision caches retain successful snapshots and retry failed reads without requiring a data mutation.

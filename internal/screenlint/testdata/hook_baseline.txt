@@ -79,7 +79,6 @@ screens/health.go:HealthScreen
 screens/health.go:healthStepRow
 screens/health.go:healthWidgetNode
 screens/help.go:HelpScreen
-screens/household.go:householdByPersonPanel
 screens/household.go:HouseholdHub
 screens/insights.go:asstVoiceButton
 screens/insights.go:ConversationPill
@@ -96,7 +95,6 @@ screens/investments_pools.go:investPoolsWidget
 screens/investments_tiles.go:investGrowthWidget
 screens/loans.go:loanCard
 screens/memberaddform.go:memberAddForm
-screens/members.go:Members
 screens/members.go:membersBody
 screens/members_lane5.go:membersLeavePreview
 screens/monthly_review.go:MonthlyReviewCard
