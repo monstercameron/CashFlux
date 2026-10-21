@@ -1,3 +1,7 @@
+## 2026-10-20 - Mount full Reports sections only when requested
+
+Reports now keeps controller hooks and local state stable while five typed child sections own money flow, motion, categories/tags, payees/lists and appendix content. Explicit revision, scope, currency, language, theme, window and preference identities refresh prepared output reliably. Section deep links open Full before scrolling; appendix export callbacks are isolated in components. Goal tallies and rows use canonical FX facts, and checked per-hundred helpers expose unavailable arithmetic. Removed three obsolete hook exceptions without adding any. Five focused render regressions and the complete 817-test screen suite pass; the full native suite, including hook-order checks, passes.
+
 ## 2026-10-20 - Share checked goal facts across budget and dashboard consumers
 
 Consumers now distinguish known completion from unavailable goal coverage and preserve original stored amounts. Budget savings cannot offer Sync or funded status for unknown coverage; linked targets and sinking funds derive converted remaining needs. A rate-aware annual-projection entry point preserves explicit plans while exposing unavailable inferred assignments. Dashboard featured goals and lifecycle counts share one indexed native model; Assistant starter questions skip confirmed completed goals. Native budgetplan, budgetview, dashboardview and assistantview tests pass, and all three new actual-screen currency regressions pass within the complete 817-test WASM screen suite.

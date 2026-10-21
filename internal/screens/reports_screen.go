@@ -15,7 +15,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
-	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/period"
 	"github.com/monstercameron/CashFlux/internal/reports"
@@ -115,9 +114,9 @@ func rptChip(label, value, valueCls string, extra ...ui.Node) ui.Node {
 // customFieldSpendSection renders the "Spending by <field>" section body: a
 // field selector, a ranked list of value→amount rows, and a CSV download
 // button. It is extracted to keep the main Reports function readable and to
-// isolate the per-field OnChange hook (called at a single stable render
-// position, not in a loop).
-func customFieldSpendSection(
+// keep the controller-owned selection handler and child-owned export hook
+// independent of variable analysis rows.
+func customFieldSpendSection(context reportSectionContext,
 	txns []domain.Transaction,
 	defs []customfields.Def,
 	selectedKey string,
@@ -239,18 +238,11 @@ func customFieldSpendSection(
 			),
 			body,
 			If(!allUnvalued && len(rowNodes) > 0, Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
-				Button(css.Class("btn", tw.Gap2), Type("button"),
-					Attr("data-testid", "cf-download-csv"),
-					Title(uistate.T("reports.customFieldDownloadTitle")),
-					Attr("aria-label", uistate.T("reports.customFieldDownloadTitle")),
-					OnClick(func() {
-						csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
-						filename := reports.ExportFilename("spending-by-"+activeDef.Key, win.Res, win.From)
-						downloadBytes(filename, "text/csv", reports.CustomFieldCSV(cfRows, activeDef.Label, csvAmount))
-					}),
-					uiw.Icon(icon.FileText, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-					Span(uistate.T("reports.downloadCsv")),
-				),
+				ui.CreateElement(reportDownloadButton, reportDownloadProps{Context: context, TestID: "cf-download-csv", TitleKey: "reports.customFieldDownloadTitle", Download: func() {
+					csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
+					filename := reports.ExportFilename("spending-by-"+activeDef.Key, win.Res, win.From)
+					downloadBytes(filename, "text/csv", reports.CustomFieldCSV(cfRows, activeDef.Label, csvAmount))
+				}}),
 			)),
 		)))
 }
@@ -268,7 +260,7 @@ func rollupLabelKey(on bool) string {
 // investment / retirement / crypto account, what was put in (cost basis) vs its
 // current value, the gain, and the return % — all from the account's own history, no
 // live prices. Returns nil when there are no investment accounts. Includes a CSV export.
-func investmentPerformanceSection(
+func investmentPerformanceSection(context reportSectionContext,
 	accounts []domain.Account,
 	txns []domain.Transaction,
 	rates currency.Rates,
@@ -326,17 +318,10 @@ func investmentPerformanceSection(
 			P(ClassStr("muted "+tw.ColorClass(totalTone)), Attr("data-testid", "invperf-total"),
 				uistate.T("reports.invPerfTotal", fmtMinor(totalCurrent), fmtMinor(totalGain), fmt.Sprintf("%+.1f%%", totalRet))),
 			Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
-				Button(css.Class("btn", tw.Gap2), Type("button"),
-					Attr("data-testid", "invperf-download-csv"),
-					Title(uistate.T("reports.invPerfDownloadTitle")),
-					Attr("aria-label", uistate.T("reports.invPerfDownloadTitle")),
-					OnClick(func() {
-						csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
-						downloadBytes(reports.ExportFilename("investment-performance", win.Res, win.From), "text/csv", reports.InvestmentPerformanceCSV(perf, csvAmount))
-					}),
-					uiw.Icon(icon.FileText, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-					Span(uistate.T("reports.downloadCsv")),
-				),
+				ui.CreateElement(reportDownloadButton, reportDownloadProps{Context: context, TestID: "invperf-download-csv", TitleKey: "reports.invPerfDownloadTitle", Download: func() {
+					csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
+					downloadBytes(reports.ExportFilename("investment-performance", win.Res, win.From), "text/csv", reports.InvestmentPerformanceCSV(perf, csvAmount))
+				}}),
 			),
 		)))
 }
@@ -384,7 +369,7 @@ func deductibleRow(props deductibleRowProps) ui.Node {
 // the period, a headline total, and a CSV export. Returns nil when no
 // categories are marked deductible, so the tile stays invisible until the user
 // sets up at least one deductible category.
-func deductibleSection(
+func deductibleSection(context reportSectionContext,
 	txns []domain.Transaction,
 	cats []domain.Category,
 	start, end time.Time,
@@ -457,17 +442,10 @@ func deductibleSection(
 			If(summary.Total > 0, P(css.Class("muted"), uistate.T("reports.deductibleTotal", fmtMinor(summary.Total)))),
 			body,
 			If(len(rowNodes) > 0, Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.Py1),
-				Button(css.Class("btn", tw.Gap2), Type("button"),
-					Attr("data-testid", "deductible-download-csv"),
-					Title(uistate.T("reports.deductibleDownloadTitle")),
-					Attr("aria-label", uistate.T("reports.deductibleDownloadTitle")),
-					OnClick(func() {
-						csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
-						downloadBytes(reports.ExportFilename("deductible-totals", win.Res, win.From), "text/csv", reports.DeductibleCSV(summary, nameOf, csvAmount))
-					}),
-					uiw.Icon(icon.FileText, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-					Span(uistate.T("reports.downloadCsv")),
-				),
+				ui.CreateElement(reportDownloadButton, reportDownloadProps{Context: context, TestID: "deductible-download-csv", TitleKey: "reports.deductibleDownloadTitle", Download: func() {
+					csvAmount := func(v int64) string { return money.FormatMinor(v, currency.Decimals(base)) }
+					downloadBytes(reports.ExportFilename("deductible-totals", win.Res, win.From), "text/csv", reports.DeductibleCSV(summary, nameOf, csvAmount))
+				}}),
 			)),
 		)))
 }
