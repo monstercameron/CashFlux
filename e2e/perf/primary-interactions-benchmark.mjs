@@ -73,6 +73,12 @@ async function main() {
         try { localStorage.setItem("cashflux:tx-filter", JSON.stringify({ periodPreset: "all-dates" })); } catch (_) {}
         window.__interactionBench = { longTasks: [], mutations: 0 };
         try { new PerformanceObserver(list => window.__interactionBench.longTasks.push(...list.getEntries().map(x => x.duration))).observe({ type: "longtask", buffered: true }); } catch (_) {}
+        // Match the route benchmark: these measurements exclude transition
+        // animations while retaining the actual route update callback.
+        if ("startViewTransition" in Document.prototype) Document.prototype.startViewTransition = function (callback) {
+          const done = Promise.resolve().then(() => typeof callback === "function" ? callback() : undefined);
+          return { finished: done, ready: done, updateCallbackDone: done, skipTransition() {} };
+        };
       });
       const one = { index: sweep, measured, actions: [], setup: {} };
       try {
@@ -83,30 +89,37 @@ async function main() {
         if (artifact && (delivery.rawCount < sweep + 1 || delivery.gzipCount < sweep + 1 || delivery.rawCount !== delivery.gzipCount || delivery.brAttempts.length)) throw new Error(`WASM override delivery mismatch: ${JSON.stringify(delivery)}`);
         const run = async (name, route, fn) => {
           const rec = { name, route, status: "ok" };
+          console.error(`sweep ${sweep}: ${name} started`);
           try {
             await navigate(page, opts.baseUrl, route);
             rec.contentSha256 = await page.locator("#main").evaluate(el => crypto.subtle.digest("SHA-256", new TextEncoder().encode((el.innerText || "").replace(/\s+/g, " ").trim())).then(d => [...new Uint8Array(d)].map(b => b.toString(16).padStart(2, "0")).join("")));
             rec.metrics = await measure(page, fn);
           } catch (e) { rec.status = "error"; rec.error = String(e).slice(0, 500); rec.diagnostic = await diagnose(page); }
           one.actions.push(rec);
+          console.error(`sweep ${sweep}: ${name} ${rec.status}`);
         };
         await run("period-step", "/", async p => {
           const label = p.locator('[data-testid="period-pill"] .period-label'); await label.waitFor(); const before = (await label.innerText()).trim();
           await p.locator(".period-control .period-step").first().click(); await p.waitForFunction(v => document.querySelector('[data-testid="period-pill"] .period-label')?.innerText.trim() !== v, before); return { changed: true, direction: "previous", visiblePeriodLabelChanged: true };
         });
         await run("search-and-date-filter", "/transactions", async p => {
-          const search = p.getByTestId("filter-toolbar-search"); await search.waitFor(); await armSearchCompletion(p); await search.fill("coffee");
-          // Search is intentionally debounced by the app (150 ms on Transactions).
-          // The observer is armed before fill, so even a fast busy true→false pair cannot be missed.
-          await waitForSearchCompletion(p);
+          const total = p.getByTestId("txn-count-transaction-total");
+          const originalCount = Number((await total.innerText()).replace(/[^0-9]/g, ""));
+          if (!(originalCount > 0)) throw new Error("sample ledger must be populated before search");
+          const search = p.getByTestId("filter-toolbar-search"); await search.waitFor(); await armSearchDiagnostics(p, "search-apply"); await search.fill("coffee");
+          // Applied query and filtered rows are the completion contract. A busy
+          // input can be replaced during render, so its transient edge is diagnostic.
+          const searchCount = await waitForAppliedSearch(p, { query: "coffee", originalCount });
+          await armSearchDiagnostics(p, "search-clear"); await search.fill("");
+          const clearedCount = await waitForAppliedSearch(p, { query: "", originalCount });
           const scope = p.getByTestId("txn-scopebar"), beforeScope = await scope.getAttribute("aria-label");
-          const select = p.getByTestId("txn-period-select"); await select.selectOption("this-month");
+          const select = p.getByTestId("txn-period-select"); await p.evaluate(() => { window.__primaryInteractionPhase = "date-filter"; }); await select.selectOption("this-month");
           await p.waitForFunction(v => document.querySelector('[data-testid="txn-scopebar"]')?.getAttribute("aria-label") !== v, beforeScope, { timeout: 15000 });
-          const rows = await p.locator(".txn-table tbody tr").count(); await armSearchCompletion(p); await search.fill("");
-          await waitForSearchCompletion(p);
-          const beforeRestore = await scope.getAttribute("aria-label"); await select.selectOption("all-dates");
+          const rows = await p.locator(".txn-table tbody tr").count();
+          const beforeRestore = await scope.getAttribute("aria-label"); await p.evaluate(() => { window.__primaryInteractionPhase = "date-restore"; }); await select.selectOption("all-dates");
           await p.waitForFunction(v => document.querySelector('[data-testid="txn-scopebar"]')?.getAttribute("aria-label") !== v, beforeRestore, { timeout: 15000 });
-          return { rows, intentionalSearchDebounceMsPerTransition: 150, searchTransitions: 2, expectedDebounceWaitMs: 300, dateScopeChanged: true };
+          await waitForAppliedSearch(p, { query: "", originalCount });
+          return { rows, originalCount, searchCount, clearedCount, appliedQueryAndRowsVerified: true, intentionalSearchDebounceMsPerTransition: 150, searchTransitions: 2, expectedDebounceWaitMs: 300, dateScopeChanged: true };
         });
         await run("account-expand", "/accounts", async p => {
           const b = p.locator('[data-testid^="acct-details-toggle-"]').first(); await b.waitFor(); const id = (await b.getAttribute("data-testid")).replace("acct-details-toggle-", "");
@@ -129,9 +142,20 @@ async function main() {
           const board = p.getByTestId("todo-view-board");
           if (await board.getAttribute("aria-pressed") === "true") { await p.getByTestId("todo-view-list").click(); await p.waitForFunction(() => document.querySelector('[data-testid="todo-view-list"]')?.getAttribute("aria-pressed") === "true"); }
           await board.click(); await p.waitForFunction(() => document.querySelector('[data-testid="todo-view-board"]')?.getAttribute("aria-pressed") === "true");
-          const search = p.getByTestId("filter-toolbar-search"); await search.waitFor(); await armSearchCompletion(p); await search.fill("baby"); await waitForSearchCompletion(p);
-          const chars = await p.locator("#main").innerText().then(x => x.length); await armSearchCompletion(p); await search.fill(""); await waitForSearchCompletion(p);
-          await p.getByTestId("todo-view-list").click(); await p.waitForFunction(() => document.querySelector('[data-testid="todo-view-list"]')?.getAttribute("aria-pressed") === "true"); return { textChars: chars, pendingStateObserved: true, viewChanged: true };
+          const cardsBefore = await p.locator('[data-testid="task-card"]').count();
+          if (!(cardsBefore > 0)) throw new Error("sample To-do board must be populated before search");
+          const search = p.getByTestId("filter-toolbar-search"); await search.waitFor(); await armSearchDiagnostics(p, "todo-search-apply"); await search.fill("baby");
+          await p.waitForFunction(before => {
+            const input = document.querySelector('[data-testid="filter-toolbar-search"]');
+            return input?.value === "baby" && input.getAttribute("aria-busy") !== "true" && document.querySelectorAll('[data-testid="task-card"]').length < before;
+          }, cardsBefore, { timeout: 15000 });
+          const cardsFiltered = await p.locator('[data-testid="task-card"]').count();
+          const chars = await p.locator("#main").innerText().then(x => x.length); await armSearchDiagnostics(p, "todo-search-clear"); await search.fill("");
+          await p.waitForFunction(before => {
+            const input = document.querySelector('[data-testid="filter-toolbar-search"]');
+            return input?.value === "" && input.getAttribute("aria-busy") !== "true" && document.querySelectorAll('[data-testid="task-card"]').length === before;
+          }, cardsBefore, { timeout: 15000 });
+          await p.getByTestId("todo-view-list").click(); await p.waitForFunction(() => document.querySelector('[data-testid="todo-view-list"]')?.getAttribute("aria-pressed") === "true"); return { textChars: chars, cardsBefore, cardsFiltered, appliedSearchAndRestoreVerified: true, viewChanged: true };
         });
         try {
         await navigate(page, opts.baseUrl, "/notifications");
@@ -223,11 +247,12 @@ async function main() {
 
 async function navigate(page, baseUrl, route) {
   await page.evaluate(r => { if (location.pathname !== r) { history.pushState({}, "", r); dispatchEvent(new PopStateEvent("popstate")); } }, route);
-  await page.locator(`#main[data-route="${route}"]`).waitFor({ state: "visible", timeout: 15000 });
+  await page.locator(`#main[data-route="${route}"]`).waitFor({ state: "visible", timeout: 30000 });
   await page.waitForFunction(r => {
     const root = document.querySelector(`#main[data-route="${r}"]`), deferred = root?.querySelector("[data-settled]");
     return !deferred || deferred.getAttribute("data-settled") === "true";
   }, route, { timeout: 30000 });
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
 }
 async function waitForSelectedControl(page, selector) {
   await page.waitForFunction(sel => {
@@ -242,6 +267,15 @@ async function diagnose(page) {
       const main = document.querySelector("#main");
       return {
         route: location.pathname,
+        mainRoute: main?.getAttribute("data-route"),
+        mainRect: main ? { width: main.getBoundingClientRect().width, height: main.getBoundingClientRect().height } : null,
+        phase: window.__primaryInteractionPhase ?? null,
+        searchState: {
+          value: document.querySelector('[data-testid="filter-toolbar-search"]')?.value,
+          busy: document.querySelector('[data-testid="filter-toolbar-search"]')?.getAttribute("aria-busy"),
+          scope: document.querySelector('[data-testid="txn-scopebar"]')?.getAttribute("aria-label"),
+          trace: window.__searchCompletionTrace ?? [],
+        },
         mainText: (main?.innerText || "").slice(0, 1200),
         controls: [...(main?.querySelectorAll("button,input,select,summary,[role=tab],[role=radio],[role=menuitem]") || [])].slice(0, 40).map(el => ({
           tag: el.tagName.toLowerCase(), text: (el.innerText || el.getAttribute("aria-label") || "").trim().slice(0, 80),
@@ -275,16 +309,21 @@ async function measure(page, action) {
   return { ...result, settledMs: round(end.end - state.start), longTaskCount: newLongs.length, longTaskTotalMs: round(newLongs.reduce((a, b) => a + Math.max(0, b - 50), 0)), longestTaskMs: round(Math.max(0, ...newLongs)), mutationCount: end.mutations, elementCount: end.elements, rowCount: end.rows, textChars: end.textChars };
 }
 
-async function armSearchCompletion(page) {
-  await page.evaluate(() => {
+async function armSearchDiagnostics(page, phase) {
+  await page.evaluate(phase => {
     const selector = '[data-testid="filter-toolbar-search"]';
     if (!document.querySelector(selector)) throw new Error("search input is missing before typing");
     window.__searchCompletionObserved = false;
+    window.__primaryInteractionPhase = phase;
+    window.__searchCompletionTrace = [];
     let sawBusy = false;
     const observer = new MutationObserver(records => {
+      for (const record of records) {
+        if (window.__searchCompletionTrace.length < 16 && record.target.matches?.(selector)) window.__searchCompletionTrace.push({ old: record.oldValue, current: record.target.getAttribute("aria-busy"), connected: record.target.isConnected });
+      }
       // Preserve a transient true state even if the render flips it back before
       // MutationObserver callbacks run; oldValue records the intermediate edge.
-      if (records.some(record => record.oldValue === "true")) sawBusy = true;
+      if (records.some(record => record.target.matches?.(selector) && (record.oldValue === "true" || record.target.getAttribute("aria-busy") === "true"))) sawBusy = true;
       const input = document.querySelector(selector);
       if (input?.getAttribute("aria-busy") === "true") sawBusy = true;
       else if (sawBusy) {
@@ -295,11 +334,19 @@ async function armSearchCompletion(page) {
     observer.observe(document.documentElement, { attributes: true, attributeOldValue: true, subtree: true, attributeFilter: ["aria-busy"] });
     window.__searchCompletionObserver = observer;
     if (document.querySelector(selector)?.getAttribute("aria-busy") === "true") sawBusy = true;
-  });
+  }, phase);
 }
 
-async function waitForSearchCompletion(page) {
-  await page.waitForFunction(() => window.__searchCompletionObserved === true, null, { timeout: 15000 });
+async function waitForAppliedSearch(page, state) {
+  const result = await page.waitForFunction(({ query, originalCount }) => {
+    const texts = [...document.querySelectorAll('[data-testid="filter-summary"] .chip-text')].map(el => el.textContent.toLowerCase());
+    const count = Number((document.querySelector('[data-testid="txn-count-transaction-total"]')?.textContent ?? "").replace(/[^0-9]/g, ""));
+    const busy = document.querySelector('[data-testid="filter-toolbar-search"]')?.getAttribute("aria-busy") === "true";
+    if (busy) return false;
+    if (query) return texts.some(text => text.includes(query)) && count < originalCount ? { count } : false;
+    return !texts.some(text => text.includes("coffee")) && count === originalCount ? { count } : false;
+  }, state, { timeout: 15000 });
+  return (await result.jsonValue()).count;
 }
 
 main().catch(e => { console.error(e); process.exitCode = 1; });

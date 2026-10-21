@@ -1,3 +1,7 @@
+## 2026-10-21 - Bound performance capture waits and retain diagnostics
+
+Asset font/visible-image waits share a5seconddeadline; timed-out captures cannot enter medians. Interaction diagnostics use applied-query/count contracts rather than a transient busy edge. Both scripts pass node--check; earlier failed interaction capture remains failed, and no new latency improvement is claimed. Retained paired route evidence shows8lower medians and a Reports regression, not overall completion.
+
 ## 2026-10-21 - Enforce pay-yourself-first duplicate identity at writes
 
 Shared pure classification and route/cadence identity helpers preserve active/off UI messages through a typed duplicate error. Native tests cover disabled duplicates, self updates, no-mutation rejection, ordinary transfers and read failure. Native suite and full Screens suite pass. Separate list/write operations do not claim atomic concurrent duplicate prevention.

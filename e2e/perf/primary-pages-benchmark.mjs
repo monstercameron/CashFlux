@@ -32,6 +32,7 @@ const ROUTES = [
   ["Reports", "/reports"],
 ];
 const FIXED_NOW = "2026-07-01T12:00:00.000Z";
+const ASSET_SETTLE_TIMEOUT_MS = 5_000;
 let fatalReport = null;
 
 function options(argv) {
@@ -269,7 +270,7 @@ async function main() {
             await cpuSession.send("Profiler.start");
             cpuProfilerStarted = true;
           }
-          const m = await page.evaluate(async (target) => {
+          const m = await page.evaluate(async ({ target, assetSettleTimeoutMs }) => {
             const selector = `#main[data-route="${target}"]`;
             const started = performance.now();
             let mutationCount = 0;
@@ -332,12 +333,75 @@ async function main() {
                 await new Promise(requestAnimationFrame);
               }
             }
-            if (document.fonts?.ready) await document.fonts.ready;
-            const imgs = [...document.querySelectorAll(`${selector} img`)];
-            await Promise.all(imgs.map((img) => img.complete ? null : new Promise((resolve) => {
-              img.addEventListener("load", resolve, { once: true });
-              img.addEventListener("error", resolve, { once: true });
-            })));
+            const assetSettleStarted = performance.now();
+            const assetSettleDeadline = assetSettleStarted + assetSettleTimeoutMs;
+            const waitForFonts = () => {
+              if (!document.fonts?.ready) return Promise.resolve({ outcome: "unavailable" });
+              return new Promise((resolve) => {
+                let finished = false;
+                const finish = (result) => {
+                  if (finished) return;
+                  finished = true;
+                  clearTimeout(timer);
+                  resolve(result);
+                };
+                const remaining = Math.max(0, assetSettleDeadline - performance.now());
+                const timer = setTimeout(() => finish({ outcome: "timeout" }), remaining);
+                Promise.resolve(document.fonts.ready).then(
+                  () => finish({ outcome: "ready" }),
+                  (error) => finish({ outcome: "error", message: String(error).slice(0, 200) }),
+                );
+              });
+            };
+            const imageState = (img) => img.naturalWidth > 0 ? "complete" : img.currentSrc ? "error" : "no-source";
+            const waitForImage = (img) => new Promise((resolve) => {
+              if (img.complete) return resolve({ outcome: imageState(img) });
+              let finished = false;
+              const finish = (outcome) => {
+                if (finished) return;
+                finished = true;
+                clearTimeout(timer);
+                img.removeEventListener("load", onLoad);
+                img.removeEventListener("error", onError);
+                resolve({ outcome });
+              };
+              const onLoad = () => finish("loaded");
+              const onError = () => finish("error");
+              const remaining = Math.max(0, assetSettleDeadline - performance.now());
+              const timer = setTimeout(() => finish("timeout"), remaining);
+              img.addEventListener("load", onLoad, { once: true });
+              img.addEventListener("error", onError, { once: true });
+              if (img.complete) finish(imageState(img));
+            });
+            const allImages = [...document.querySelectorAll(`${selector} img`)];
+            const visibleImages = allImages.filter((img) => {
+              const rect = img.getBoundingClientRect();
+              const style = getComputedStyle(img);
+              return style.display !== "none" && style.visibility !== "hidden" && Number(style.opacity || 1) > 0 &&
+                rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.right > 0 && rect.top < innerHeight && rect.left < innerWidth;
+            });
+            const [fontSettle, imageSettles] = await Promise.all([
+              waitForFonts(),
+              Promise.all(visibleImages.map(waitForImage)),
+            ]);
+            const imageOutcomes = imageSettles.map(({ outcome }) => outcome);
+            const imageTimeoutCount = imageOutcomes.filter((outcome) => outcome === "timeout").length;
+            const imageErrorCount = imageOutcomes.filter((outcome) => outcome === "error").length;
+            const settleDiagnostics = {
+              complete: fontSettle.outcome !== "timeout" && fontSettle.outcome !== "error" && imageTimeoutCount === 0,
+              deadlineMs: assetSettleTimeoutMs,
+              elapsedMs: performance.now() - assetSettleStarted,
+              fonts: fontSettle,
+              images: {
+                documentCount: allImages.length,
+                visibleCount: visibleImages.length,
+                skippedNonVisibleCount: allImages.length - visibleImages.length,
+                loadedCount: imageOutcomes.filter((outcome) => outcome === "loaded" || outcome === "complete").length,
+                errorCount: imageErrorCount,
+                noSourceCount: imageOutcomes.filter((outcome) => outcome === "no-source").length,
+                timeoutCount: imageTimeoutCount,
+              },
+            };
             await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
             const ended = performance.now();
             try {
@@ -363,6 +427,8 @@ async function main() {
               route: target,
               mountMs: mountedAt - started,
               settledMs: ended - started,
+              captureComplete: settleDiagnostics.complete,
+              settleDiagnostics,
               longTaskCount: longTasks.length,
               longTaskTotalMs: longTasks.reduce((sum, entry) => sum + Math.max(0, entry.duration - 50), 0),
               longTaskMaxMs: longTasks.length ? Math.max(...longTasks.map((entry) => entry.duration)) : 0,
@@ -387,7 +453,16 @@ async function main() {
               entityCountSelector: entitySelector,
               heapUsedMB: performance.memory?.usedJSHeapSize ? performance.memory.usedJSHeapSize / 1048576 : null,
             };
-          }, route);
+          }, { target: route, assetSettleTimeoutMs: ASSET_SETTLE_TIMEOUT_MS });
+          if (!m.captureComplete) {
+            const reasons = [];
+            if (m.settleDiagnostics.fonts.outcome === "timeout") reasons.push("font readiness timed out");
+            if (m.settleDiagnostics.fonts.outcome === "error") reasons.push("font readiness failed");
+            if (m.settleDiagnostics.images.timeoutCount) reasons.push(`${m.settleDiagnostics.images.timeoutCount} visible image(s) timed out`);
+            const error = new Error(`incomplete route capture: ${reasons.join(", ") || "asset settle did not complete"}`);
+            error.settleDiagnostics = m.settleDiagnostics;
+            throw error;
+          }
           if (cpuProfilerStarted) {
             const { profile } = await cpuSession.send("Profiler.stop");
             cpuProfilerStarted = false;
@@ -409,7 +484,9 @@ async function main() {
           m.performanceComparable ??= true;
           if (record) samples[name].push(m);
         } catch (error) {
-          failures.push({ route, pass: record ? "measured" : "warmup", message: String(error).slice(0, 300) });
+          const failure = { route, pass: record ? "measured" : "warmup", message: String(error).slice(0, 300) };
+          if (error?.settleDiagnostics) failure.settleDiagnostics = error.settleDiagnostics;
+          failures.push(failure);
           if (cpuProfilerStarted) {
             try { await cpuSession.send("Profiler.stop"); cpuProfilerStarted = false; }
             catch (profileError) { failures.push({ route, pass: "measured", message: `could not stop CDP CPU profiler: ${String(profileError).slice(0, 200)}` }); }
@@ -501,6 +578,7 @@ async function main() {
         },
         runs: opts.runs,
         warmups: opts.warmups,
+        assetSettleTimeoutMs: ASSET_SETTLE_TIMEOUT_MS,
         backgroundWork: process.env.PRIMARY_BENCH_BACKGROUND_WORK || "not recorded",
         buildId: opts.buildId || "not recorded; label alone does not identify a dirty build",
       },
