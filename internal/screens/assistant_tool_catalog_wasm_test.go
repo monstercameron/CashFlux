@@ -22,6 +22,12 @@ func TestAssistantEnabledToolCatalogIsCompleteAndUnambiguous(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = app.Store().Close() })
 	tools := buildChatTools(app, "USD", currency.Rates{Base: "USD"}, aicontext.TierFull)
+	// The relay accepts at most 64 tools and 32 KiB per argument schema.
+	// Registering a capability that cannot reach that transport is a regression.
+	if len(tools) > 64 {
+		t.Fatalf("enabled catalog has %d tools, exceeding the relay limit of 64", len(tools))
+	}
+	t.Logf("enabled assistant tool catalog: %d tools", len(tools))
 	seen := map[string]bool{}
 	for _, tool := range tools {
 		name := tool.spec.Function.Name
@@ -29,6 +35,9 @@ func TestAssistantEnabledToolCatalogIsCompleteAndUnambiguous(t *testing.T) {
 			t.Fatalf("incomplete or duplicate enabled tool %q", name)
 		}
 		seen[name] = true
+		if len(tool.spec.Function.Parameters) > 32<<10 {
+			t.Fatalf("%s argument schema exceeds the relay limit of 32 KiB", name)
+		}
 		var schema struct {
 			Type       string                     `json:"type"`
 			Properties map[string]json.RawMessage `json:"properties"`

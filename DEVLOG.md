@@ -1,3 +1,7 @@
+## 2026-10-21 - Assistant catalog transport compatibility gate
+
+Extended the actual registry test to guard the 64-tool and 32-KiB-per-schema relay contract. The current full-detail catalog contains 58 unique tools with valid object schemas, truthful mutation permissions and previews; the focused WASM gate passed.
+
 ## 2026-10-21 - Bound complete assistant record pages
 
 ReadPage sizes complete responses within 24000 bytes, preserves honest continuation, and returns detail-required placeholders for near-limit records. Unfit metadata errors identify the exact collection and record. Native assistantdata tests and full vet passed, including fifty-row Unicode/redaction traversal, stable snapshots and exact detail recovery.
