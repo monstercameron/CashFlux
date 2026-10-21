@@ -545,6 +545,12 @@ func artifactFileLimit(name, mime string) int {
 	if strings.HasSuffix(strings.ToLower(name), ".csv") || mime == "text/csv" {
 		return 25 * 1024 * 1024
 	}
+	// The hosted blob service defaults to 32 MiB per encrypted payload. Its
+	// JSON envelope base64-encodes the ciphertext, expanding it by about 4/3.
+	// Leave room for that expansion so an accepted PDF can sync by default.
+	if strings.HasSuffix(strings.ToLower(name), ".pdf") || mime == "application/pdf" {
+		return 23 * 1024 * 1024
+	}
 	return 45 * 1024 * 1024
 }
 
