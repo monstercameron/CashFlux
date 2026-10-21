@@ -1222,7 +1222,11 @@ func flushBackendSyncQueue() {
 			saveSyncMeta(item.WorkspaceID, syncMeta{UpdatedAt: resp.UpdatedAt, Version: resp.Version, Hash: item.Hash, Owner: item.UserID})
 			// The server took this dataset as this account's, which settles who
 			// owns the copy on this device.
-			claimDatasetForCurrentUser()
+			if err := claimDatasetForCurrentUser(); err != nil {
+				setSyncStatus(syncStatus{State: "error", Pending: pendingSyncCount(), Message: "Server accepted the data, but this device could not save its account ownership. Keep this page open and retry."})
+				logSyncError("save accepted dataset owner failed", err)
+				return
+			}
 			// The server took it — the one moment worth announcing in the top bar.
 			// Deliberately NOT the setSyncStatus below, which also fires for a flush
 			// that found an empty queue and uploaded nothing.

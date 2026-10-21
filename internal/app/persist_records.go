@@ -311,6 +311,9 @@ func newRecordAutosave(app *appstate.App, commit func(map[string]string, map[str
 		// Only an explicit full replacement adopted by this hydrated App may
 		// rebase its writer. Another App's generation is never our entitlement.
 		observed := browserstore.GetString(datasetStoreKey)
+		if lastAcceptedOwnerClaim.app == app && lastAcceptedOwnerClaim.workspace == workspace && browserstore.GetString(datasetOwnerKey) == lastAcceptedOwnerClaim.value {
+			writerOwner = lastAcceptedOwnerClaim.value
+		}
 		if datasetMyGen != writerGeneration && hydratedRecordApp == app && datasetMyGen == readDatasetGen() {
 			writerGeneration = datasetMyGen
 			checkpoint, baseHash, head, headRaw, initialized = observed, checkpointHash(observed), datasetRecordHead{}, "", false

@@ -1,3 +1,7 @@
+## 2026-10-20 - Keep the local writer after the server accepts ownership
+
+The first accepted snapshot called `claimDatasetForCurrentUser`, which changed the protected owner record while the active record autosave writer still compared it with the owner captured at boot. Its next edit failed the owner compare-and-swap and made this same tab read-only as if another tab had saved. The claim now waits for a durable protected-store commit, then authorizes only the writer for that App and workspace to adopt that exact owner value. An external owner change still fails the comparison. A fresh browser run uploaded an image after first sync, observed a changed encrypted server snapshot with no filename in the envelope, and found no stale-tab banner. Second-device restoration remains under investigation.
+
 ## 2026-10-20 - First encrypted snapshot on a new workspace
 
 The first sync creates an empty workspace row before uploading any attachment blobs, because the blob endpoint requires an owned workspace. That creation advances the server row to version 1, but the already queued snapshot still carried base version 0 and was rejected as stale against the client's own row. After the server confirms that exact creation, the subsequent snapshot push uses its returned version and timestamp. A concurrent writer still advances the server version and causes an ordinary conflict. A fresh local-server browser run confirmed that one encrypted snapshot reached the account export and did not expose the account name; this does not yet establish a full attachment roundtrip.
