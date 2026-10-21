@@ -60,15 +60,7 @@ func Percent(goal domain.Goal) int {
 		}
 		return 0
 	}
-	p := int(current * 100 / target)
-	switch {
-	case p < 0:
-		return 0
-	case p > 100:
-		return 100
-	default:
-		return p
-	}
+	return boundedPercent(current, target)
 }
 
 // RawPercent is like Percent but without the [0, 100] clamp, so an overfunded
@@ -116,7 +108,10 @@ func Project(goal domain.Goal, monthly money.Money, from time.Time) (date time.T
 	// the Nth and final payment happens in month N-1. Projecting the first
 	// payment a month out made "pay exactly the suggested monthly" read as one
 	// month late whenever the deadline fell mid-month.
-	payments := int((rem.Amount + monthly.Amount - 1) / monthly.Amount) // ceil division
+	payments := int(rem.Amount / monthly.Amount)
+	if rem.Amount%monthly.Amount != 0 {
+		payments++
+	}
 	return dateutil.AddMonths(from, payments-1), true, nil
 }
 
@@ -155,7 +150,10 @@ func MonthlyNeeded(goal domain.Goal, from time.Time) (money.Money, bool, error) 
 	if months < 1 {
 		months = 1
 	}
-	per := (rem.Amount + int64(months) - 1) / int64(months) // ceil division
+	per := rem.Amount / int64(months)
+	if rem.Amount%int64(months) != 0 {
+		per++
+	}
 	return money.New(per, rem.Currency), true, nil
 }
 

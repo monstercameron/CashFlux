@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Added canonical currency-aware goal coverage, lifecycle, planner evaluation and bounded shared task indexing.
 - Avoided reparsing unchanged authenticated checkpoints during hydration while retaining replay and import safeguards.
 - Added checked native per-hundred spending and savings calculations with explicit overflow results.
 - Recorded matched nine-page latency captures, build hashes, startup phase timings, and background-load limitations.
