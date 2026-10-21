@@ -1,3 +1,7 @@
+## 2026-10-21 - Bound financial calendar preferences
+
+Replaced the global preference getter with the fallible bound-store reader for week start, pay-cycle anchor and budget rollover. Actual list_budgets tests passed for different active workspaces, fresh preference edits and corrupted stored preferences; failures remain explicit.
+
 ## 2026-10-21 - Native financial-plan assistant access
 
 The new read-only tool uses bound household records, preferences and the native framework assessment. Unknown answers, APRs, FX and health inputs remain not assessable; USD starter thresholds are converted explicitly. Five native assessment regressions and all three actual-tool host groups passed. Record-level financial-plan access follows the full-detail privacy tier.

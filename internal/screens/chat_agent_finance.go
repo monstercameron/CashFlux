@@ -18,7 +18,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/reports"
 	"github.com/monstercameron/CashFlux/internal/scope"
-	"github.com/monstercameron/CashFlux/internal/uistate"
 )
 
 var assistantFinanceNow = time.Now
@@ -69,7 +68,10 @@ func assistantFinanceForCall(app *appstate.App, fallbackBase string, currentScop
 	if err != nil {
 		return assistantdata.Finance{}, &assistantFinanceReadError{Collection: "transaction links", Err: err}
 	}
-	pr := uistate.LoadPrefs()
+	pr, _, err := assistantDataPreferences(s)
+	if err != nil {
+		return assistantdata.Finance{}, &assistantFinanceReadError{Collection: "financial preferences", Err: err}
+	}
 	base := settings.BaseCurrency
 	if base == "" {
 		base = fallbackBase

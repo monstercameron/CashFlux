@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Assistant financial calculations now read calendar and rollover preferences from their own workspace.
 - Added financial-plan questionnaire discovery and a native assessment tool, bringing full-detail access to 77 collections and 59 tools.
 - Incomplete or failed Responses replies no longer expose partial function calls for dispatch.
 - Assistant data and list continuations now survive model usage bookkeeping and unrelated writes.
