@@ -15,7 +15,8 @@ import (
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
-	"github.com/monstercameron/CashFlux/internal/ledger"
+	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/networthview"
 	"github.com/monstercameron/CashFlux/internal/periodview"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/ui"
@@ -27,7 +28,7 @@ import (
 // collapses them to one full-ledger pass. Keyed on the store revision PLUS the account
 // set, so a scoped view and the household total never share an entry, and a scope
 // change recomputes (which the previous rev-only memo key missed).
-var netWorthCache = newViewCache[ledger.NetWorthResult]()
+var netWorthCache = newViewCache[networthview.Snapshot]()
 
 // acctSig is a cheap, order-independent signature of an account set for the cache key.
 func acctSig(accounts []domain.Account) string {
@@ -55,16 +56,32 @@ func acctSig(accounts []domain.Account) string {
 // change. UI-only inputs that also affect a result (the active period, the
 // active-member filter) are added as extra deps so switching them recomputes too.
 
-// useNetWorth returns a memoized net-worth breakdown. Net worth spans all accounts
-// and all time, so the data/FX revision (app.Rev()) is a complete key.
-func useNetWorth(app *appstate.App, accounts []domain.Account, txns []domain.Transaction, rates currency.Rates) ledger.NetWorthResult {
-	sig := acctSig(accounts)
-	return ui.UseMemo(func() ledger.NetWorthResult {
-		return memoByRev(netWorthCache, revKey(app)+"|"+sig, func() ledger.NetWorthResult {
-			nw, _ := ledger.NetWorthExplained(accounts, txns, rates)
-			return nw
-		})
-	}, revKey(app), sig)
+func netWorthCacheKey(app *appstate.App, accounts []domain.Account, rates currency.Rates) string {
+	return revKey(app) + "|" + acctSig(accounts) + "|rates=" + fmt.Sprintf("%#v", rates)
+}
+
+// netWorthSnapshot is the hook-free shared path for household comparisons and
+// notifications. Inputs must represent this app revision's immutable ledger.
+func netWorthSnapshot(app *appstate.App, accounts []domain.Account, txns []domain.Transaction, rates currency.Rates) networthview.Snapshot {
+	return memoByRev(netWorthCache, netWorthCacheKey(app, accounts, rates), func() networthview.Snapshot {
+		return networthview.Build(accounts, txns, rates)
+	})
+}
+
+// netWorthBalanceSnapshot lets Accounts reuse the exact balances it already
+// prepared, while sharing the same complete key and result with other surfaces.
+func netWorthBalanceSnapshot(app *appstate.App, accounts []domain.Account, balances map[string]money.Money, rates currency.Rates) networthview.Snapshot {
+	return memoByRev(netWorthCache, netWorthCacheKey(app, accounts, rates), func() networthview.Snapshot {
+		return networthview.FromBalances(accounts, balances, rates)
+	})
+}
+
+// useNetWorth preserves fatal errors and intentional missing-rate subtotals.
+func useNetWorth(app *appstate.App, accounts []domain.Account, txns []domain.Transaction, rates currency.Rates) networthview.Snapshot {
+	key := netWorthCacheKey(app, accounts, rates)
+	return ui.UseMemo(func() networthview.Snapshot {
+		return netWorthSnapshot(app, accounts, txns, rates)
+	}, key)
 }
 
 // usePeriodTotals returns memoized income/expense for the period over the given

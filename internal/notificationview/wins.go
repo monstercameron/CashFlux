@@ -9,8 +9,8 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/goals"
-	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/milestones"
+	"github.com/monstercameron/CashFlux/internal/networthview"
 )
 
 // WinsInput supplies the household data used to detect financial milestones.
@@ -27,9 +27,9 @@ type WinsInput struct {
 	Now          time.Time
 	WeekStart    time.Weekday
 	NoSpendLimit int
-	// NetWorth optionally reuses a complete, already-computed net-worth result.
-	// Nil computes it here. A net-worth error contributes zero, as the screen did.
-	NetWorth *ledger.NetWorthResult
+	// NetWorth optionally reuses an already-computed availability-aware snapshot.
+	// Nil computes it here. Partial or unavailable totals cannot establish a win.
+	NetWorth *networthview.Snapshot
 }
 
 // PrepareWins computes the primitives consumed by milestones.Detect. It keeps
@@ -48,10 +48,13 @@ func PrepareWins(in WinsInput) milestones.Input {
 		}
 	}
 	var netWorth int64
-	if in.NetWorth != nil {
-		netWorth = in.NetWorth.Net.Amount
-	} else if value, err := ledger.NetWorthExplained(in.Accounts, in.Transactions, in.Rates); err == nil {
-		netWorth = value.Net.Amount
+	view := in.NetWorth
+	if view == nil {
+		computed := networthview.Build(in.Accounts, in.Transactions, in.Rates)
+		view = &computed
+	}
+	if view.Complete() {
+		netWorth = view.Net.Amount
 	}
 	lastMonth := in.Now.AddDate(0, 0, -in.Now.Day())
 	start, end := budgeting.PeriodRange(domain.PeriodMonthly, lastMonth, in.WeekStart)

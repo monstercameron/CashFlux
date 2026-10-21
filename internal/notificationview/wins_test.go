@@ -12,6 +12,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/networthview"
 )
 
 func TestPrepareWinsGoalKindsAndSeparateRawNettedLedgers(t *testing.T) {
@@ -42,7 +43,7 @@ func TestPrepareWinsGoalKindsAndSeparateRawNettedLedgers(t *testing.T) {
 	if in.Transactions[0].Amount.Amount != -200 || in.BudgetLedger[0].Amount.Amount != -50 || in.Goals[0].Name != "Funded" {
 		t.Fatal("wins preparation changed its inputs")
 	}
-	precomputed := ledger.NetWorthResult{Net: money.New(123, "USD")}
+	precomputed := networthview.Snapshot{NetWorthResult: ledger.NetWorthResult{Net: money.New(123, "USD")}, Known: true}
 	in.NetWorth = &precomputed
 	if got := PrepareWins(in); got.NetWorthMinor != 123 {
 		t.Fatal("provided net-worth snapshot was not reused")

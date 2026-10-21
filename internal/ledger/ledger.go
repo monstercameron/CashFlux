@@ -245,7 +245,11 @@ func NetWorth(accounts []domain.Account, all []domain.Transaction, rates currenc
 			return money.Money{}, money.Money{}, money.Money{}, err
 		}
 		if a.Class == domain.ClassLiability {
-			if liabilities, err = liabilities.Add(conv.Abs()); err != nil {
+			magnitude, absErr := conv.AbsChecked()
+			if absErr != nil {
+				return money.Money{}, money.Money{}, money.Money{}, fmt.Errorf("ledger: account %s liability magnitude: %w", a.ID, absErr)
+			}
+			if liabilities, err = liabilities.Add(magnitude); err != nil {
 				return money.Money{}, money.Money{}, money.Money{}, err
 			}
 		} else {

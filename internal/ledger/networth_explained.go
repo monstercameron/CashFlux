@@ -4,6 +4,7 @@ package ledger
 
 import (
 	"errors"
+	"fmt"
 	"sort"
 	"strings"
 
@@ -100,7 +101,11 @@ func netWorthAccumulate(accounts []domain.Account, rates currency.Rates, balance
 			// negative, but an account added through the "amount you owe" form stores
 			// it positive. Abs() makes net worth correct for both, rather than
 			// silently adding a positive-stored debt to net worth.
-			if res.Liabilities, err = res.Liabilities.Add(conv.Abs()); err != nil {
+			magnitude, absErr := conv.AbsChecked()
+			if absErr != nil {
+				return NetWorthResult{}, fmt.Errorf("ledger: account %s liability magnitude: %w", a.ID, absErr)
+			}
+			if res.Liabilities, err = res.Liabilities.Add(magnitude); err != nil {
 				return NetWorthResult{}, err
 			}
 		} else {

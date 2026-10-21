@@ -22,7 +22,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/idlecash"
-	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/liquidity"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/nwchange"
@@ -561,7 +560,7 @@ func acctSummaryWidget(props acctSummaryProps) ui.Node {
 	accounts := app.Accounts()
 	txns := app.Transactions()
 
-	nw, _ := ledger.NetWorthFromBalances(accounts, accountSnapshot(app).Balances, props.Rates)
+	nw := netWorthBalanceSnapshot(app, accounts, accountSnapshot(app).Balances, props.Rates)
 	net, assets, liabilities := nw.Net, nw.Assets, nw.Liabilities
 
 	// Month-to-date net-worth delta (G3 §3): the honest change since the 1st,
@@ -572,8 +571,15 @@ func acctSummaryWidget(props acctSummaryProps) ui.Node {
 	// month start (Jul 1 00:00-04:00 = Jul 1 04:00Z) used to exclude
 	// first-of-month transactions and this tile said "No change this month"
 	// while the hero showed the real delta.
-	mtd, _ := nwchange.MonthToDateChange(accounts, txns, props.Rates, time.Now())
+	mtd := nwchange.Change{}
+	if nw.Complete() {
+		mtd, _ = nwchange.MonthToDateChange(accounts, txns, props.Rates, time.Now())
+	}
 	nwDelta, haveDelta := mtd.Delta(), mtd.Known
+	netText, assetsText, liabilitiesText, tone := "—", "—", "—", "text-dim"
+	if nw.Known {
+		netText, assetsText, liabilitiesText, tone = fmtMoney(net), fmtMoney(assets), fmtMoney(liabilities), accentFor(net)
+	}
 
 	smartSettings := uistate.LoadSmartSettings()
 
@@ -584,17 +590,16 @@ func acctSummaryWidget(props acctSummaryProps) ui.Node {
 					uistate.T("dashboard.netWorth"),
 					smartTooltipFor(smartSettings, "accounts-net", uistate.T("dashboard.netWorth"), uistate.T("smart.tipAccountsNet")),
 				),
-				Div(ClassStr("stat-value "+accentFor(net)), fmtMoney(net)),
+				Div(ClassStr("stat-value "+tone), Attr("data-testid", "acct-networth-value"), netText),
 				netWorthDeltaLine(nwDelta, haveDelta),
 			),
-			stat(uistate.T("accounts.assets"), fmtMoney(assets), "pos"),
+			stat(uistate.T("accounts.assets"), assetsText, "pos"),
 			Div(css.Class("stat"),
 				A(css.Class("stat-label"), Href(uistate.RoutePath("/debt")), uistate.T("dashboard.liabilities")),
-				Div(ClassStr("stat-value neg"), fmtMoney(liabilities)),
+				Div(ClassStr("stat-value neg"), liabilitiesText),
 			),
 		),
-		If(len(nw.MissingCurrencies) > 0, P(css.Class("err"), Attr("role", "alert"),
-			uistate.T("accounts.nwExcludes", plural(len(nw.ExcludedAccounts), "account"), strings.Join(nw.MissingCurrencies, ", ")))),
+		If(!nw.Complete(), P(css.Class("err"), Attr("role", "status"), Attr("data-testid", "acct-networth-note"), netWorthAvailabilityNote(nw))),
 		// AC11: disclose accounts left out of net worth by the household's choice.
 		If(len(nw.ExcludedByChoice) > 0, P(css.Class("t-caption", tw.TextDim), Attr("role", "status"), Attr("data-testid", "acct-nw-excludes-by-choice"),
 			uistate.T(excludesByChoiceKey(len(nw.ExcludedByChoice)), len(nw.ExcludedByChoice)))),

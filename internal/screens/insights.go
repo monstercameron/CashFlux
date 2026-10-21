@@ -133,7 +133,7 @@ func Insights() ui.Node {
 	}, app, app.Rev(), dataRevision, scopeKey)
 	now := time.Now()
 	mStart, mEnd := dateutil.MonthRange(now)
-	net := useNetWorth(app, accounts, txns, rates).Net
+	netWorth := useNetWorth(app, accounts, txns, rates)
 	totals := usePeriodTotals(app, scopedTxns, mStart, mEnd, rates, scopeKey)
 	active := 0
 	for _, a := range accounts {
@@ -145,7 +145,7 @@ func Insights() ui.Node {
 	if totals.Known {
 		incomeText, expenseText = fmtMoney(totals.Income), fmtMoney(totals.Expense)
 	}
-	aiCtx := ai.FinancialContext{NetWorth: fmtMoney(net), Income: incomeText, Spending: expenseText, Accounts: active}
+	aiCtx := ai.FinancialContext{NetWorth: netWorthContext(netWorth), Income: incomeText, Spending: expenseText, Accounts: active}
 
 	// Typing and chat effects reuse the same scoped snapshot and question facts.
 	// Day is a dependency because budget cadence and upcoming goals can change
@@ -589,8 +589,11 @@ func Insights() ui.Node {
 		// Affordability fast-path: answer from real numbers, no AI key needed.
 		if q, ok := insights.ParseAffordQuery(text); ok {
 			answer := chatTurn{ID: id.New(), Role: "assistant", Text: uistate.T("insights.affordTotalsUnavailable")}
-			if totals.Known {
-				ar := insights.AffordAnswer(*q, net.Amount, totals.Net.Amount, 0)
+			if totals.Known && !netWorth.Complete() {
+				answer.Text = uistate.T("insights.affordNetWorthUnavailable")
+			}
+			if totals.Known && netWorth.Complete() {
+				ar := insights.AffordAnswer(*q, netWorth.Net.Amount, totals.Net.Amount, 0)
 				answer.Role, answer.Text = "afford", affordCardText(ar, q, base)
 			}
 			hist := append(append([]chatTurn{}, turns.Get()...),

@@ -127,7 +127,7 @@ func heroFinancialSummary(p heroFinancialSummaryProps) ui.Node {
 	// the series can't be computed the spark/chip simply don't render.
 	now := time.Now()
 	trend := ui.UseMemo(func() dashboardview.NetWorthTrend {
-		if !sparkReady {
+		if !sparkReady || !nw.Complete() {
 			return dashboardview.NetWorthTrend{}
 		}
 		return dashboardview.BuildNetWorthTrend(accounts, txns, rates, now)
@@ -149,10 +149,15 @@ func heroFinancialSummary(p heroFinancialSummaryProps) ui.Node {
 	// ~30% of its height there (no sparkline, tighter type/spacing via CSS).
 	preset := uistate.LoadDashPreset()
 	focused := preset != "" && preset != "default"
+	netWorthTone := "text-dim"
+	if nw.Complete() {
+		netWorthTone = figTone(nw.Net)
+	}
 
 	return ui.CreateElement(heroSummary, heroSummaryProps{
-		NetWorth:     fmtMoney(nw.Net),
-		NetWorthTone: figTone(nw.Net),
+		NetWorth:     netWorthFigure(nw),
+		NetWorthTone: netWorthTone,
+		NetWorthNote: netWorthDisclosure(nw),
 		Income:       incomeDisplay,
 		Spending:     spendingDisplay,
 		Net:          netDisplay,
@@ -215,6 +220,7 @@ func summarizeHeroBudgets(v budgetView) heroBudgetSnapshot {
 type heroSummaryProps struct {
 	NetWorth                  string
 	NetWorthTone              string // color token, e.g. "text-up" or "text-down"
+	NetWorthNote              string // availability and intentional exclusion disclosure
 	Income                    string
 	Spending                  string
 	Net                       string // formatted cash-flow net (income − spending)
@@ -323,9 +329,11 @@ func heroSummary(props heroSummaryProps) ui.Node {
 					tw.Fold(tw.FontDisplay)+" "+
 					tw.ColorClass(props.NetWorthTone)),
 					Attr("data-countup", ""),
+					Attr("data-testid", "hero-networth-value"),
 					props.NetWorth,
 				),
 				delta,
+				If(props.NetWorthNote != "", P(css.Class("t-caption", tw.TextDim), Attr("role", "status"), Attr("data-testid", "hero-networth-note"), props.NetWorthNote)),
 			),
 			spark,
 		),

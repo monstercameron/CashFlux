@@ -28,7 +28,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/freshness"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/insights"
-	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/nwchange"
 	"github.com/monstercameron/CashFlux/internal/scope"
@@ -770,17 +769,19 @@ func dashboardController(props dashboardControllerProps) ui.Node {
 	nwSub, nwTone := uistate.T("dashboard.assetsSub", fmtMoney(assets)), "text-dim"
 	if !viewingCurrent {
 		nwSub = uistate.T("dashboard.netWorthAsOfToday")
-	} else if mtd, err := nwchange.MonthToDateChange(scopedAccounts, txns, rates, nowT); err == nil && mtd.Known {
-		// One seam, one window, one wording for every "this month" net-worth
-		// figure in the app (C341) — the hero, /accounts, /networth and /reports
-		// used to compute this four different ways.
-		nwSub, nwTone = nwChangeSub(mtd)
+	} else if nw.Complete() {
+		if mtd, err := nwchange.MonthToDateChange(scopedAccounts, txns, rates, nowT); err == nil && mtd.Known {
+			// One seam, one window, one wording for every "this month" net-worth
+			// figure in the app (C341) — the hero, /accounts, /networth and /reports
+			// used to compute this four different ways.
+			nwSub, nwTone = nwChangeSub(mtd)
+		}
 	}
 	// A missing FX rate excludes accounts from the total (L4) — say so on the tile,
 	// rather than letting net worth silently collapse.
-	if len(nw.MissingCurrencies) > 0 {
-		nwTone = "text-down"
-		nwSub = "excludes " + plural(len(nw.ExcludedAccounts), "account") + " — no " + strings.Join(nw.MissingCurrencies, ", ") + " rate"
+	if !nw.Complete() {
+		nwTone = "text-dim"
+		nwSub = netWorthDisclosure(nw)
 	} else {
 		// C82: when the total folds in non-base-currency accounts, disclose that a
 		// conversion happened so the figure isn't read as a raw same-currency sum.
@@ -791,18 +792,19 @@ func dashboardController(props dashboardControllerProps) ui.Node {
 				break
 			}
 		}
+		if len(nw.ExcludedByChoice) > 0 {
+			nwSub += " · " + netWorthDisclosure(nw)
+		}
 	}
 
 	// MIA-extend (#445-8): when a scope is active, show "vs household total: $X"
 	// as a muted second sub-label on the net-worth tile so the user can compare
 	// their scoped view to the full household at a glance.
-	// Use ledger.NetWorthExplained directly (not via the hook) to avoid
-	// registering an extra state.UseComputed slot.
+	// The hook-free shared snapshot avoids another ledger fold or hook slot.
 	hhNWSub := ""
 	if !sc.IsAll() {
-		if hhResult, err := ledger.NetWorthExplained(accounts, txns, rates); err == nil {
-			hhNWSub = uistate.T("dashboard.householdTotal", fmtMoney(hhResult.Net))
-		}
+		hhResult := netWorthSnapshot(app, accounts, txns, rates)
+		hhNWSub = uistate.T("dashboard.householdTotal", netWorthContext(hhResult))
 	}
 
 	attnCol, attnRow := spanOf(layoutItems, "attention")

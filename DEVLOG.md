@@ -1,3 +1,7 @@
+## 2026-10-20 - Carry net-worth availability through primary pages
+
+Added native networthview.Snapshot and shared revision/scope/rate-aware preparation so fatal errors cannot appear as 0.00, partial figures disclose omitted currencies, and incomplete totals cannot support affordability advice or net-worth milestone wins. Accounts reuses exact balances rather than folding the ledger again; Assistant shared context contains aggregate counts/currencies without account names. Checked liability magnitudes now return overflow instead of panicking at MinInt64. Native ledger/model/notification suites and full native integration passed. Five actual-host WASM regressions passed across two focused runs, covering live rate/scope/fatal/zero transitions, memo separation, actual share controls, composer safety, independent wins and Dashboard KPI/household disclosure. Chosen-exclusion trend parity is separately being corrected.
+
 ## 2026-10-20 - Reuse the native To-do page during selection changes
 
 Added one typed component-local memo at a stable hook position before mode returns, keyed by the filtered task set, data revision, complete filter, sort, page/size and immutable collapse set. Native paging remains the source of row order, with no callbacks stored in the cache. Three actual-host WASM cases and native paging/filter/hook lint passed: counters verify warm reuse for row/bulk selection and errors, refresh for each input change, no List work in Board/Calendar, native order parity and working callbacks after mode transitions.

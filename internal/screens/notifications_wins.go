@@ -12,7 +12,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/icon"
-	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/milestones"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/notificationview"
@@ -51,10 +50,7 @@ func winsSnapshot(app *appstate.App, now time.Time, weekStart time.Weekday) noti
 		}
 		rates := currency.Rates{Base: base, Rates: settings.FXRates}
 		accounts, txns := app.Accounts(), app.Transactions()
-		netWorth := memoByRev(netWorthCache, revKey(app)+"|"+acctSig(accounts), func() ledger.NetWorthResult {
-			value, _ := ledger.NetWorthExplained(accounts, txns, rates)
-			return value
-		})
+		netWorth := netWorthSnapshot(app, accounts, txns, rates)
 		input := notificationview.PrepareWins(notificationview.WinsInput{
 			Accounts: accounts, Transactions: txns, Tasks: app.Tasks(), Goals: app.Goals(), Budgets: app.Budgets(),
 			BudgetLedger: budgetLedgerForApp(app), Rates: rates, Now: now, WeekStart: weekStart,
