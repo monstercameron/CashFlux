@@ -7,8 +7,10 @@ package uistate
 import (
 	"encoding/json"
 
+	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/widgetcfg"
 	"github.com/monstercameron/GoWebComponents/v5/state"
+	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
 
 // WidgetConfigs maps a widget id to its saved settings (per widgetcfg.Schema).
@@ -24,7 +26,14 @@ const (
 // UseWidgetConfigs returns the shared widget-settings atom, seeded from
 // localStorage. The flip panel writes it; widgets read their slice via For.
 func UseWidgetConfigs() state.Atom[WidgetConfigs] {
-	return state.UseAtom(widgetCfgAtomID, loadWidgetConfigs())
+	return useWidgetConfigsWithLoader(loadWidgetConfigs)
+}
+
+// Each mounted reader loads one seed; later renders use the live fixed atom.
+// A supported workspace reload creates a fresh runtime and initializer.
+func useWidgetConfigsWithLoader(load func() WidgetConfigs) state.Atom[WidgetConfigs] {
+	initial := ui.UseMemo(load, appstate.Default)
+	return state.UseAtom(widgetCfgAtomID, initial)
 }
 
 // PersistWidgetConfigs saves all widget settings to localStorage.

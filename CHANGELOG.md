@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Shared layout and widget-settings hooks avoid repeated storage reads and JSON decoding on warm renders.
 - The development service watcher skips generated tool trees before traversal and avoids an unchanged duplicate startup build.
 - WASM validator tests verify their generated temporary path before recursive cleanup.
 - Typed undo snapshots avoid decoding each freshly encoded row just to recover its collection key.

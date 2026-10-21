@@ -1,3 +1,7 @@
+## 2026-10-20 - Load layout and widget settings once per mounted reader
+
+UseLayoutItems and UseWidgetConfigs now memoize each mounted hook seed by app identity before reading the existing fixed atom. Loaders, legacy placement migration, Focus subsets, reconciliation and persistence remain unchanged. Native dashlayout/widgetcfg tests passed. Four focused WASM hook tests with eleven storage-format cases covered warm parent and live-atom rerenders, late readers, remounts, fallback settings and fresh-runtime workspace A-to-B-to-A. Three existing actual Dashboard host regressions also passed. Same-runtime replacement of the App pointer is not added as a workspace switching contract.
+
 ## 2026-10-20 - Prune generated trees from live service watch
 
 Extracted shared source discovery for the foreground script and background job. The single-pass directory stack skips .tools, web, node_modules, .git and reparse-point directories before descent, preserves other actual source roots, and includes go.mod/go.sum timestamps. A pre-build stamp avoids recompiling unchanged services immediately after startup while retaining detection of edits during the initial build. Windows PowerShell 5.1 parsing and deterministic fixtures passed, including source roots, ignored trees, a junction, module stamps and empty roots. An optional single paired repository probe removed2562 ignored tool files from each poll; elapsed302.5ms versus135.8ms is a local wall-time observation, not CPU or sustained benchmark evidence. The max-timestamp polling contract is retained.
