@@ -1,3 +1,7 @@
+## 2026-10-21 - Reuse unusual detector history buffers
+
+Native reference parity and price-policy tests pass, and the unchanged 50ms slice gate passes. Same-fixture five-sample benchmark reduces median allocated volume from 456.7MB to 61.6MB; timing is noisy and not a browser claim. Raw captures and environment caveats are retained under docs/performance/unusual-buffer-reuse-2026-10-21.
+
 ## 2026-10-21 - Prepared rule coverage
 
 Moved coverage business logic into a native summary while retaining keyed rule rows and lazy previews. Native tests, vet, host compilation and focused WASM wiring pass. Synthetic prepared-model benchmark reduced repeated matcher preparation; it is not browser latency evidence.

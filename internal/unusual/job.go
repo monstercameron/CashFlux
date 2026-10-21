@@ -174,7 +174,11 @@ func (j *Job) Step(work int) bool {
 				continue
 			}
 			j.candidate = c
-			j.merchantHistory, j.categoryHistory = nil, nil
+			// Reuse the history buffers across candidates. priceJob may hold the
+			// merchant slice, but Job.Step drains priceJob completely before it
+			// reaches this candidate-selection branch again.
+			j.merchantHistory = j.merchantHistory[:0]
+			j.categoryHistory = j.categoryHistory[:0]
 			j.historyKind = 1
 			j.setHistory(j.merchants[c.key])
 		case 6:
@@ -271,7 +275,10 @@ func (j *Job) stepHistory() {
 	if len(j.merchantHistory) >= 3 {
 		j.price = newPriceJob(candidate, j.merchantHistory, j.merchants[j.candidate.key], j.in)
 	}
-	j.history, j.merchantHistory, j.categoryHistory, j.historyKind = nil, nil, nil, 0
+	// Keep the history buffers for the next candidate. If a priceJob was
+	// created above, it retains merchantHistory until it is fully drained; the
+	// next candidate-selection branch resets the lengths only after that.
+	j.history, j.historyKind = nil, 0
 }
 
 func (j *Job) stepDouble() {
