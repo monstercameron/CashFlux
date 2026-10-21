@@ -12,11 +12,12 @@ var healthAnalysisKeys = Catalog{
 	"healthx.runwayLead": "With no income at all, your %s cash buffer would cover everything for %s.",
 
 	// Stress-test tile.
-	"healthx.stressTitle":   "What if something goes wrong?",
-	"healthx.stressHint":    "Try a shock and read the concrete outcome. Nothing here changes your data.",
-	"healthx.dropLabel":     "Pay cut",
-	"healthx.surpriseLabel": "Surprise bill",
-	"healthx.rateLabel":     "Card rate hike",
+	"healthx.stressTitle":       "What if something goes wrong?",
+	"healthx.stressHint":        "Try a shock and read the concrete outcome. Nothing here changes your data.",
+	"healthx.stressUnavailable": "This estimate is unavailable because part of the account or transaction data could not be read.",
+	"healthx.dropLabel":         "Pay cut",
+	"healthx.surpriseLabel":     "Surprise bill",
+	"healthx.rateLabel":         "Card rate hike",
 	// %d = drop percent, %s = duration.
 	"healthx.dropNegative": "A %d%% pay cut and you'd burn through the buffer in about %s.",
 	// %d = drop percent, %s = remaining monthly surplus.

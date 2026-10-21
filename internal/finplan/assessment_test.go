@@ -79,6 +79,33 @@ func TestFinancialPlanUnknownAPRAndMissingDataCannotCompleteDebtSteps(t *testing
 	}
 }
 
+func TestFinancialPlanDebtAvailabilityUsesActiveRecordedLiabilities(t *testing.T) {
+	d := assessmentData("USD")
+	d.Accounts = append(d.Accounts,
+		domain.Account{ID: "archived-card", Class: domain.ClassLiability, Type: domain.TypeCreditCard, Currency: "USD", Archived: true},
+		domain.Account{ID: "home", Class: domain.ClassLiability, Type: domain.TypeMortgage, Currency: "USD"},
+	)
+	got, err := AssessData(d, Choices{Framework: "foo"})
+	if err != nil || got.Plan.Steps[2].Status != Done || got.Plan.Steps[8].Status != Done {
+		t.Fatal("archived debt or an unrated mortgage changed non-mortgage debt steps", got, err)
+	}
+
+	// An archived-only account is not evidence that the current liability inventory
+	// is known. This keeps stale records from making both debt steps read complete.
+	d.Accounts = []domain.Account{{ID: "archived-cash", Class: domain.ClassAsset, Type: domain.TypeChecking, Currency: "USD", Archived: true}}
+	got, err = AssessData(d, Choices{Framework: "foo"})
+	if err != nil || got.Plan.Steps[2].Status != NotAssessable || got.Plan.Steps[8].Status != NotAssessable {
+		t.Fatal("archived-only account inventory became known debt-free", got, err)
+	}
+
+	// A recorded APR at the canonical cutoff remains high-interest debt.
+	d.Accounts = append(d.Accounts, domain.Account{ID: "card", Class: domain.ClassLiability, Type: domain.TypeCreditCard, Currency: "USD", InterestRateAPR: domain.APR(HighInterestAPR())})
+	got, err = AssessData(d, Choices{Framework: "foo"})
+	if err != nil || got.Plan.Steps[2].Status != Todo || got.Plan.Steps[8].Status != Todo {
+		t.Fatal("threshold APR or active non-mortgage debt was ignored", got, err)
+	}
+}
+
 func TestFinancialPlanFailedHealthFactorsStayIndependentlyUnavailable(t *testing.T) {
 	d := assessmentData("USD")
 	d.Transactions[0].Amount.Currency = "EUR"

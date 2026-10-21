@@ -11,10 +11,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
-	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/healthscore"
+	"github.com/monstercameron/CashFlux/internal/healthview"
 	"github.com/monstercameron/CashFlux/internal/icon"
-	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/moneyleaks"
 	"github.com/monstercameron/CashFlux/internal/reports"
@@ -28,70 +27,21 @@ import (
 	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
 
-// resLookbackMonths is the trailing window used to average monthly income and
-// spending for the stress tests — the same three-month basis the health score
-// uses, so the two never disagree about "typical" cash flow.
-const resLookbackMonths = 3
-
-// liveResilienceInput builds the monthly cash-flow snapshot the stress tests run
-// against, from the same sources the health score reads: trailing income/spend,
-// liquid cash from the engine surface, and the revolving balance + balance-weighted
-// APR from the credit cards.
-func liveResilienceInput(app *appstate.App, now time.Time) resilience.Input {
-	base := app.Settings().BaseCurrency
+// liveResilienceInputs gathers the health route's current account/transaction
+// snapshot and delegates availability-aware derivation to the native model.
+func liveResilienceInputs(app *appstate.App, now time.Time) healthview.ResilienceFacts {
+	settings := app.Settings()
+	base := settings.BaseCurrency
 	if base == "" {
 		base = "USD"
 	}
-	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	txns := app.Transactions()
-
-	curMonth := dateutil.MonthStart(now)
-	start := dateutil.AddMonths(curMonth, -resLookbackMonths)
-	var monthlyIncome, monthlySpend int64
-	if flow, err := reports.IncomeVsExpense(txns, start, curMonth, rates); err == nil {
-		monthlyIncome = flow.Income / resLookbackMonths
-		monthlySpend = flow.Expense / resLookbackMonths // all outflow, debt payments included
+	facts, err := healthview.ResilienceInputs(app.Accounts(), app.Transactions(), currency.Rates{Base: base, Rates: settings.FXRates}, now)
+	if err == nil {
+		return facts
 	}
-
-	liquid := majorMoney(liveEngineVars(app)["liquid_cash"], base).Amount
-
-	// Revolving balance + balance-weighted APR across the cards.
-	var revBal int64
-	var wAprNum, wAprDen float64
-	for _, a := range app.Accounts() {
-		if a.Archived || a.Type != domain.TypeCreditCard {
-			continue
-		}
-		bal, err := ledger.Balance(a, txns)
-		if err != nil {
-			continue
-		}
-		owed := bal.Amount
-		if owed < 0 {
-			owed = -owed
-		}
-		conv, cerr := currency.ConvertBetween(owed, a.Currency, base, rates)
-		if cerr != nil {
-			continue
-		}
-		revBal += conv
-		wAprNum += float64(conv) * a.RateAPROrZero()
-		wAprDen += float64(conv)
-	}
-	avgAPR := 0.0
-	if wAprDen > 0 {
-		avgAPR = wAprNum / wAprDen
-	}
-
-	return resilience.Input{
-		LiquidCash:    liquid,
-		MonthlyIncome: monthlyIncome,
-		MonthlySpend:  monthlySpend,
-		// Debt minimums are already inside MonthlySpend (real outflow), so they aren't
-		// added again; the field stays zero to avoid double-counting.
-		RevolvingBalance: revBal,
-		AvgCardAPR:       avgAPR,
-	}
+	return healthview.ResilienceFacts{Unavailable: map[string]error{
+		"cash_flow": err, "liquidity": err, "card_balances": err, "card_apr": err,
+	}}
 }
 
 // --- Hero: "why this score" contribution breakdown ------------------------------
@@ -162,8 +112,8 @@ func healthContribBar(r healthscore.Result) ui.Node {
 // --- Stress-test tile -----------------------------------------------------------
 
 type healthStressProps struct {
-	In   resilience.Input
-	Base string
+	Facts healthview.ResilienceFacts
+	Base  string
 }
 
 // healthChipProps is one selectable value chip in the stress controls; its own
@@ -199,7 +149,8 @@ func healthStressTile(props healthStressProps) ui.Node {
 	ratePts := ui.UseState(5)
 	surpriseSel := ui.UseState(1) // index into the surprise presets
 
-	in := props.In
+	facts := props.Facts
+	in := facts.Input
 	base := props.Base
 	dec := currency.Decimals(base)
 	unit := int64(1)
@@ -209,9 +160,12 @@ func healthStressTile(props healthStressProps) ui.Node {
 	fmtB := func(minor int64) string { return fmtMoney(money.New(minor, base)) }
 
 	// Runway headline.
-	runway := resilience.RunwayMonths(in)
-	runwayLine := P(css.Class("hlt-stress-lead"), Attr("data-testid", "stress-runway"),
-		uistate.T("healthx.runwayLead", fmtB(in.LiquidCash), fmtMonthsHuman(int(runway+0.0001))))
+	var runwayLine ui.Node = P(css.Class("hlt-stress-lead"), Attr("data-testid", "stress-runway"), uistate.T("healthx.stressUnavailable"))
+	if facts.CashFlowKnown && facts.LiquidityKnown {
+		runway := resilience.RunwayMonths(in)
+		runwayLine = P(css.Class("hlt-stress-lead"), Attr("data-testid", "stress-runway"),
+			uistate.T("healthx.runwayLead", fmtB(in.LiquidCash), fmtMonthsHuman(int(runway+0.0001))))
+	}
 
 	// Income cut.
 	dropPcts := []int{10, 20, 30, 50}
@@ -226,7 +180,9 @@ func healthStressTile(props healthStressProps) ui.Node {
 	}
 	drop := resilience.IncomeDrop(in, incomeDrop.Get())
 	var dropOut string
-	if drop.GoesNegative {
+	if !facts.CashFlowKnown || !facts.LiquidityKnown {
+		dropOut = uistate.T("healthx.stressUnavailable")
+	} else if drop.GoesNegative {
 		dropOut = uistate.T("healthx.dropNegative", drop.DropPct, fmtMonthsHuman(drop.MonthsToNegative))
 	} else {
 		dropOut = uistate.T("healthx.dropOk", drop.DropPct, fmtB(drop.NewSurplus))
@@ -255,7 +211,9 @@ func healthStressTile(props healthStressProps) ui.Node {
 	}
 	sur := resilience.SurpriseExpense(in, surprisePresets[sIdx])
 	var surOut string
-	if sur.PushedToDebt > 0 {
+	if !facts.LiquidityKnown || sur.PushedToDebt > 0 && !facts.CardAPRKnown {
+		surOut = uistate.T("healthx.stressUnavailable")
+	} else if sur.PushedToDebt > 0 {
 		surOut = uistate.T("healthx.surpriseDebt", fmtB(sur.Amount), fmtB(sur.PushedToDebt), fmtB(sur.ExtraMonthlyInterest))
 	} else {
 		surOut = uistate.T("healthx.surpriseOk", fmtB(sur.Amount), fmtB(sur.BufferAfter))
@@ -274,7 +232,9 @@ func healthStressTile(props healthStressProps) ui.Node {
 	}
 	hike := resilience.RateHike(in, float64(ratePts.Get()))
 	var rateOut string
-	if in.RevolvingBalance > 0 {
+	if !facts.CardBalancesKnown {
+		rateOut = uistate.T("healthx.stressUnavailable")
+	} else if in.RevolvingBalance > 0 {
 		rateOut = uistate.T("healthx.rateOut", ratePts.Get(), fmtB(hike.ExtraMonthlyInterest), fmtB(hike.ExtraAnnualInterest))
 	} else {
 		rateOut = uistate.T("healthx.rateNoCards")

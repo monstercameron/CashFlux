@@ -1,3 +1,7 @@
+## 2026-10-21 - Native plan and resilience inputs
+
+Plan now delegates to existing finplan.AssessData instead of float engine values or account-count assumptions. Health resilience preparation retains source/FX errors independently for liquidity and card exposure. Native finplan/healthview tests pass; both actual-route WASM groups pass for known and failed FX inputs.
+
 ## 2026-10-21 - Native debt and loan planning facts
 
 Preserved debt strategy and mortgage inclusion policy, kept source failures unavailable, and replaced floating extra-payment parsing with exact minor-unit preparation. Native debtview/loanview tests and vet pass; both focused actual-host WASM groups pass, including overflow and invalid precision. Engine major-unit figures remain a presentation boundary.
