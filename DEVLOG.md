@@ -1,3 +1,7 @@
+## 2026-10-20 - Reuse the native To-do page during selection changes
+
+Added one typed component-local memo at a stable hook position before mode returns, keyed by the filtered task set, data revision, complete filter, sort, page/size and immutable collapse set. Native paging remains the source of row order, with no callbacks stored in the cache. Three actual-host WASM cases and native paging/filter/hook lint passed: counters verify warm reuse for row/bulk selection and errors, refresh for each input change, no List work in Board/Calendar, native order parity and working callbacks after mode transitions.
+
 ## 2026-10-20 - Share typed dataset snapshots between undo and persistence
 
 Added a native typed snapshot converter with exact RawMessage parity against export-plus-parse, including every Dataset field, nil/empty semantics, receipt pruning, raw graph values, store-aligned keys and key redaction. A bounded app/revision/cursor cache serves deep independent copies to undo and the mutable writer mirror, reuses a matching export memo, and rejects or retries changing revisions without publishing stale snapshots. Six cache WASM tests and six selected persistence/undo/recovery cases passed, including the two-app compaction race. Native parity tests passed. The synthetic 3000-row conversion benchmark measured 31.01 ms/9.22 MB versus 21.29 ms/6.91 MB, with more typed-path allocations; it excludes database snapshot cost and is not a browser latency claim.

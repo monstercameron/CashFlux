@@ -35,6 +35,15 @@ type todoSummaryProps struct{ App *appstate.App }
 type todoToolbarProps struct{ App *appstate.App }
 type todoListProps struct{ App *appstate.App }
 
+type todoTreePage struct {
+	Nodes      []tasktree.Node
+	TotalRoots int
+}
+
+// todoPageBuildObserver counts native page builds in focused host tests.
+// It is nil in production and does not retain any page data.
+var todoPageBuildObserver func()
+
 // --- todo-summary ----------------------------------------------------------------
 
 // todoSummaryWidget is the headline tile: a completion "loader" bar (done-of-total) with
@@ -589,8 +598,25 @@ func todoListWidget(props todoListProps) ui.Node {
 		Search: searchAtom.Get(), Link: linkAtom.Get(), LinkID: linkIDAtom.Get(),
 		Quick: tasksort.ParseQuickView(quickViewAtom.Get()), TodayISO: today,
 	}
+	revisionKey := revKey(app)
 	filtered := ui.UseMemo(func() []domain.Task { return taskview.Select(tasks, filter) },
-		revKey(app), filter.HideDone, string(filter.Priority), filter.Search, filter.Link, filter.LinkID, string(filter.Quick), today)
+		revisionKey, filter.HideDone, string(filter.Priority), filter.Search, filter.Link, filter.LinkID, string(filter.Quick), today)
+	// Keep the hook registered in every view, while only List builds a task tree.
+	// Selection, drag and error state change presentation without changing this
+	// native result. Collapse maps are replaced by ToggleTodoCollapsed, never edited.
+	collapsedSet := collapsed.Get()
+	todoPageSize := pageSizeAtom.Get()
+	listMode := viewAtom.Get() != uistate.TodoViewBoard && viewAtom.Get() != uistate.TodoViewCalendar
+	treePage := ui.UseMemo(func() todoTreePage {
+		if !listMode {
+			return todoTreePage{}
+		}
+		if todoPageBuildObserver != nil {
+			todoPageBuildObserver()
+		}
+		nodes, roots := tasktree.Page(filtered, tasksort.ParseMode(sortMode.Get()), pageAtom.Get(), todoPageSize, collapsedSet)
+		return todoTreePage{Nodes: nodes, TotalRoots: roots}
+	}, listMode, filtered, len(filtered), revisionKey, filter, tasksort.ParseMode(sortMode.Get()), pageAtom.Get(), todoPageSize, collapsedSet)
 
 	// Board / calendar views are alternate projections of the SAME filtered set (search +
 	// priority + link + hide-done all still apply). They don't paginate or nest, so they
@@ -659,12 +685,8 @@ func todoListWidget(props todoListProps) ui.Node {
 		return wrapTodoList(Fragment(errNode, cal))
 	}
 
-	// Direct-children tally (over ALL tasks, ignoring view filters) for the collapsible
-	// parent summary, plus the collapsed set that prunes hidden sub-trees.
-	collapsedSet := collapsed.Get()
-	// Paginate by ROOT task (sub-trees stay together), ordered by the chosen sort mode.
-	todoPageSize := pageSizeAtom.Get()
-	nodes, totalRoots := tasktree.Page(filtered, tasksort.ParseMode(sortMode.Get()), pageAtom.Get(), todoPageSize, collapsedSet)
+	// Native pagination keeps every descendant on its root's page, in native order.
+	nodes, totalRoots := treePage.Nodes, treePage.TotalRoots
 	curPage := pagination.Clamp(pageAtom.Get(), totalRoots, todoPageSize)
 
 	// Drag-to-reorder is live only in "Custom order"; a drop asks appstate to move the
