@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Recorded the 47-route inventory, completed model slices and raw detector allocation evidence.
 - Unusual detection reuses candidate history capacity while preserving price-job ownership.
 - Rule coverage prepares ordered counts and conflicts once using the canonical matcher.
 - Net Worth account windows use native checked balances, flows and availability.

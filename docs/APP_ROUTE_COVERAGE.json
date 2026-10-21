@@ -1,0 +1,832 @@
+{
+  "source": "internal/screens/screens.go:All",
+  "route_count": 47,
+  "fields": {
+    "entry": "screen package source file and line for routed view function",
+    "native_models": "native package evidence imported/called by the entry implementation; empty means no native model identified from the routed entry",
+    "child_evidence": "known child components/surface APIs visible in inspected screen source",
+    "exceptions": "routing or architecture caveats, including explicit aliases/injection"
+  },
+  "routes": [
+    {
+      "path": "/",
+      "view": "Dashboard",
+      "rail": "primary",
+      "entry": "internal/screens/dashboard.go:636",
+      "native_models": [
+        "dashboardview",
+        "widgetengine",
+        "widgetrender",
+        "dashlayout"
+      ],
+      "child_evidence": [
+        "dashboardController",
+        "ui.Widget",
+        "DashboardLayoutControls"
+      ],
+      "exceptions": []
+    },
+    {
+      "path": "/transactions",
+      "view": "Transactions",
+      "rail": "primary",
+      "entry": "internal/screens/transactions_widget.go:77",
+      "native_models": [
+        "txnview",
+        "txntable",
+        "txnfilter",
+        "txnreview",
+        "txntoolbar"
+      ],
+      "child_evidence": [
+        "transactionsSurface",
+        "txnPlacement",
+        "txnReceiptPreviewOverlay"
+      ],
+      "exceptions": [
+        "Specialized transaction placement/memoization; keep its cache boundary distinct from surfaceTiles"
+      ]
+    },
+    {
+      "path": "/accounts",
+      "view": "Accounts",
+      "rail": "primary",
+      "entry": "internal/screens/accounts_widget.go:39",
+      "native_models": [
+        "accountview",
+        "docexpiry",
+        "widgetrender"
+      ],
+      "child_evidence": [
+        "surfaceTiles",
+        "AccountRow",
+        "accountDetailContext"
+      ],
+      "exceptions": [
+        "Account detail/history/projections are disclosure-lazy"
+      ]
+    },
+    {
+      "path": "/budgets",
+      "view": "Budgets",
+      "rail": "primary",
+      "entry": "internal/screens/budgets_widget.go:39",
+      "native_models": [
+        "budgetview",
+        "budgeting",
+        "widgetrender"
+      ],
+      "child_evidence": [
+        "surfaceTiles",
+        "BudgetRow",
+        "BudgetAnnualGrid"
+      ],
+      "exceptions": []
+    },
+    {
+      "path": "/goals",
+      "view": "Goals",
+      "rail": "primary",
+      "entry": "internal/screens/goals_widget.go:30",
+      "native_models": [
+        "goalview",
+        "goals",
+        "widgetrender"
+      ],
+      "child_evidence": [
+        "surfaceTiles",
+        "goalListWidget",
+        "GoalRow",
+        "GoalFigures",
+        "GoalTaskPreview"
+      ],
+      "exceptions": []
+    },
+    {
+      "path": "/todo",
+      "view": "Todo",
+      "rail": "primary",
+      "entry": "internal/screens/todo_widget.go:31",
+      "native_models": [
+        "taskview",
+        "todoview",
+        "widgetrender"
+      ],
+      "child_evidence": [
+        "surfaceTiles",
+        "todoListWidget",
+        "TaskRow"
+      ],
+      "exceptions": []
+    },
+    {
+      "path": "/notifications",
+      "view": "NotificationCenter",
+      "rail": "primary",
+      "entry": "internal/screens/notifications_widget.go:28",
+      "native_models": [
+        "notificationview",
+        "widgetrender"
+      ],
+      "child_evidence": [
+        "surfaceTiles",
+        "notifSurfaceShell",
+        "notifListWidget",
+        "notifyRow"
+      ],
+      "exceptions": []
+    },
+    {
+      "path": "/assistant",
+      "view": "Assistant",
+      "rail": "primary",
+      "entry": "internal/screens/assistant.go:46",
+      "native_models": [
+        "assistantview",
+        "insights",
+        "insightsperiod",
+        "scope"
+      ],
+      "child_evidence": [
+        "AssistantHub",
+        "assistantInsightsDataPanel",
+        "AssistantBubble",
+        "assistantChatThread (new component boundary)"
+      ],
+      "exceptions": []
+    },
+    {
+      "path": "/reports",
+      "view": "Reports",
+      "rail": "primary",
+      "entry": "internal/screens/reports_annual.go:65",
+      "native_models": [
+        "reportview",
+        "reports",
+        "period",
+        "healthscore",
+        "goals"
+      ],
+      "child_evidence": [
+        "reportController",
+        "typed report section components"
+      ],
+      "exceptions": [
+        "Summary mode keeps expensive full-detail sections unmounted"
+      ]
+    },
+    {
+      "path": "/plan",
+      "view": "PlanScreen",
+      "rail": "tools",
+      "entry": "internal/screens/plan.go:135",
+      "native_models": [
+        "finplan",
+        "planning"
+      ],
+      "child_evidence": [
+        "PlanScreen section rows and question controls"
+      ],
+      "exceptions": []
+    },
+    {
+      "path": "/debt",
+      "view": "DebtPlanner",
+      "rail": "tools",
+      "entry": "internal/screens/debt_widget.go:35",
+      "native_models": [
+        "payoff",
+        "engineenv",
+        "widgetrender"
+      ],
+      "child_evidence": [
+        "surfaceTiles",
+        "debtSummaryWidget",
+        "DebtStrategyPanel",
+        "DebtRow"
+      ],
+      "exceptions": []
+    },
+    {
+      "path": "/investments",
+      "view": "InvestmentsScreen",
+      "rail": "tools",
+      "entry": "internal/screens/investments.go:272",
+      "native_models": [
+        "portfolio",
+        "ledger",
+        "widgetrender"
+      ],
+      "child_evidence": [
+        "investSummaryWidget",
+        "investGrowthWidget",
+        "holdingLotsPanel",
+        "holdingIncomePanel"
+      ],
+      "exceptions": [
+        "Growth/detail tile mounting is deferred until after initial settle"
+      ]
+    },
+    {
+      "path": "/allocate",
+      "view": "Allocate",
+      "rail": "tools",
+      "entry": "internal/screens/allocate.go:143",
+      "native_models": [
+        "allocate",
+        "marginal",
+        "ledger"
+      ],
+      "child_evidence": [
+        "allocHeroTile",
+        "allocStrategyTile",
+        "allocPlanTile",
+        "allocDestRow"
+      ],
+      "exceptions": []
+    },
+    {
+      "path": "/planning",
+      "view": "Planning",
+      "rail": "tools",
+      "entry": "internal/screens/planning.go:64",
+      "native_models": [
+        "planning",
+        "forecast",
+        "cashflow",
+        "runway",
+        "safespend"
+      ],
+      "child_evidence": [
+        "RecurringRow",
+        "PlanRow",
+        "detectedRecurringRow"
+      ],
+      "exceptions": []
+    },
+    {
+      "path": "/recurring",
+      "view": "Recurring",
+      "rail": "tools",
+      "entry": "internal/screens/recurring.go:703",
+      "native_models": [
+        "cashflow",
+        "recurdiscover",
+        "subscriptions",
+        "runway"
+      ],
+      "child_evidence": [
+        "RhythmSurface",
+        "recurring review rows"
+      ],
+      "exceptions": []
+    },
+    {
+      "path": "/events",
+      "view": "Events",
+      "rail": "tools",
+      "entry": "internal/screens/events.go:58",
+      "native_models": [
+        "events"
+      ],
+      "child_evidence": [
+        "Events page event list/form sections"
+      ],
+      "exceptions": [
+        "Add form state and date parsing are still in the routed view"
+      ]
+    },
+    {
+      "path": "/networth",
+      "view": "NetWorth",
+      "rail": "tools",
+      "entry": "internal/screens/networth_page.go:366",
+      "native_models": [
+        "balancesheet",
+        "attribution",
+        "nwchange"
+      ],
+      "child_evidence": [
+        "NetWorthPanel",
+        "nwsAccountPanel",
+        "nwsLegPanel"
+      ],
+      "exceptions": []
+    },
+    {
+      "path": "/health",
+      "view": "HealthScreen",
+      "rail": "tools",
+      "entry": "internal/screens/health.go:513",
+      "native_models": [
+        "healthscore",
+        "resilience",
+        "vitals"
+      ],
+      "child_evidence": [
+        "healthRing",
+        "healthFactorTile",
+        "healthStepRow"
+      ],
+      "exceptions": []
+    },
+    {
+      "path": "/studio",
+      "view": "Studio",
+      "rail": "tools",
+      "entry": "internal/screens/studio.go:82",
+      "native_models": [
+        "pages",
+        "domain"
+      ],
+      "child_evidence": [
+        "StudioHub",
+        "studioBuilderPanel",
+        "studioFormulasPanel",
+        "studioFieldsPanel",
+        "studioWorkflowsPanel"
+      ],
+      "exceptions": [
+        "Hub delegates to standalone tool components; those routes remain deep-linkable"
+      ]
+    },
+    {
+      "path": "/household",
+      "view": "Household",
+      "rail": "tools",
+      "entry": "internal/screens/household.go:252",
+      "native_models": [
+        "allocate",
+        "ledger",
+        "reports"
+      ],
+      "child_evidence": [
+        "HouseholdHub",
+        "householdMembersPanel",
+        "householdSplitPanel",
+        "householdByPersonPanel"
+      ],
+      "exceptions": []
+    },
+    {
+      "path": "/categories",
+      "view": "Categories",
+      "rail": "tools",
+      "entry": "internal/screens/categories.go:71",
+      "native_models": [
+        "categorytree",
+        "catmerge",
+        "reports"
+      ],
+      "child_evidence": [
+        "categoryMapGrid",
+        "CategoryRow",
+        "CategoryAddForm",
+        "CategoryPicker"
+      ],
+      "exceptions": [
+        "Period/category financial facts and usage aggregation remain prepared in the screen controller"
+      ]
+    },
+    {
+      "path": "/rules",
+      "view": "Rules",
+      "rail": "tools",
+      "entry": "internal/screens/rules.go:34",
+      "native_models": [
+        "rules",
+        "ruleapply",
+        "rulesuggest"
+      ],
+      "child_evidence": [
+        "RuleRow",
+        "SuggestionRow",
+        "RuleAddForm",
+        "rulesSmartSection"
+      ],
+      "exceptions": [
+        "Coverage/count/conflict facts are currently assembled in Rules() from native rule APIs"
+      ]
+    },
+    {
+      "path": "/artifacts",
+      "view": "Artifacts",
+      "rail": "tools",
+      "entry": "internal/screens/artifacts.go:34",
+      "native_models": [
+        "artifacts",
+        "artifactstore",
+        "pagination"
+      ],
+      "child_evidence": [
+        "artifactRow",
+        "artifactStorageBar"
+      ],
+      "exceptions": []
+    },
+    {
+      "path": "/activity",
+      "view": "Activity",
+      "rail": "tools",
+      "entry": "internal/screens/activity.go:272",
+      "native_models": [
+        "auditview",
+        "auditlog",
+        "auditundo",
+        "auditimpact"
+      ],
+      "child_evidence": [
+        "activityRow"
+      ],
+      "exceptions": []
+    },
+    {
+      "path": "/settings",
+      "view": "SettingsScreen",
+      "rail": "system",
+      "entry": "internal/screens/settings_route.go:23",
+      "native_models": [
+        "internal/app settings services (injected)"
+      ],
+      "child_evidence": [
+        "SettingsView injection"
+      ],
+      "exceptions": [
+        "Route body is injected by internal/app to break the screens/app import cycle"
+      ]
+    },
+    {
+      "path": "/help",
+      "view": "HelpScreen",
+      "rail": "system",
+      "entry": "internal/screens/help.go:160",
+      "native_models": [
+        "setup"
+      ],
+      "child_evidence": [
+        "setupChecklistBody",
+        "whatsNewBody",
+        "supportBody"
+      ],
+      "exceptions": []
+    },
+    {
+      "path": "/about",
+      "view": "About",
+      "rail": "system",
+      "entry": "internal/screens/help.go:118",
+      "native_models": [
+        "version"
+      ],
+      "child_evidence": [
+        "AboutScreen content"
+      ],
+      "exceptions": [
+        "Small informational route"
+      ]
+    },
+    {
+      "path": "/admin",
+      "view": "AdminConsole",
+      "rail": "system",
+      "entry": "internal/screens/admin.go:204",
+      "native_models": [],
+      "child_evidence": [
+        "adminUserRow",
+        "adminOverview panels"
+      ],
+      "exceptions": [
+        "AdminOnly route; remote admin data is a screen-specific integration"
+      ]
+    },
+    {
+      "path": "/customize",
+      "view": "Customize",
+      "rail": "off-rail",
+      "entry": "internal/screens/customize.go:21",
+      "native_models": [
+        "formula"
+      ],
+      "child_evidence": [
+        "formula builder route surface"
+      ],
+      "exceptions": [
+        "Off-rail deep link; formula editing also lives under Studio"
+      ]
+    },
+    {
+      "path": "/fields",
+      "view": "CustomFields",
+      "rail": "off-rail",
+      "entry": "internal/screens/fields.go:41",
+      "native_models": [
+        "customfields"
+      ],
+      "child_evidence": [
+        "CustomFieldsManager",
+        "CustomFieldRow"
+      ],
+      "exceptions": [
+        "Off-rail deep link; Studio includes a fields tab"
+      ]
+    },
+    {
+      "path": "/workflows",
+      "view": "Workflows",
+      "rail": "off-rail",
+      "entry": "internal/screens/workflows.go:37",
+      "native_models": [
+        "workflow"
+      ],
+      "child_evidence": [
+        "workflowRow",
+        "stagedActionRow",
+        "workflowHistory"
+      ],
+      "exceptions": [
+        "Off-rail deep link; Studio includes a workflow tab"
+      ]
+    },
+    {
+      "path": "/appearance",
+      "view": "Appearance",
+      "rail": "off-rail",
+      "entry": "internal/screens/appearance.go:48",
+      "native_models": [
+        "prefs",
+        "theme"
+      ],
+      "child_evidence": [
+        "Appearance settings sections"
+      ],
+      "exceptions": [
+        "Off-rail deep link; current settings tab owns the main nav location"
+      ]
+    },
+    {
+      "path": "/setup",
+      "view": "SetupWizard",
+      "rail": "off-rail",
+      "entry": "internal/screens/setup.go:43",
+      "native_models": [
+        "setup",
+        "prefs"
+      ],
+      "child_evidence": [
+        "setupStepDots",
+        "weekOption",
+        "acctTypeOption"
+      ],
+      "exceptions": [
+        "Off-rail guided flow launched from Help and empty states"
+      ]
+    },
+    {
+      "path": "/credit",
+      "view": "CreditScreen",
+      "rail": "off-rail",
+      "entry": "internal/screens/credit.go:771",
+      "native_models": [
+        "credithealth",
+        "ledger"
+      ],
+      "child_evidence": [
+        "CreditHealthPanel",
+        "creditCardRow",
+        "creditFactorTile"
+      ],
+      "exceptions": [
+        "Off-rail deep link / legacy route"
+      ]
+    },
+    {
+      "path": "/loans",
+      "view": "LoansScreen",
+      "rail": "off-rail",
+      "entry": "internal/screens/loans.go:539",
+      "native_models": [
+        "payoff",
+        "actionpreview",
+        "trust"
+      ],
+      "child_evidence": [
+        "LoansPanel",
+        "loanCard"
+      ],
+      "exceptions": [
+        "Off-rail deep link, complementary to Debt hub"
+      ]
+    },
+    {
+      "path": "/bills",
+      "view": "Bills",
+      "rail": "off-rail",
+      "entry": "internal/screens/bills_screen.go:30",
+      "native_models": [
+        "bills",
+        "budgeting",
+        "categorytree"
+      ],
+      "child_evidence": [
+        "Bills screen bill-fit rows"
+      ],
+      "exceptions": [
+        "Off-rail deep link under the daily-money rail section"
+      ]
+    },
+    {
+      "path": "/subscriptions",
+      "view": "Subscriptions",
+      "rail": "off-rail",
+      "entry": "internal/screens/subscriptions_screen.go:863",
+      "native_models": [
+        "subscriptions",
+        "smartengine",
+        "ledger"
+      ],
+      "child_evidence": [
+        "SubscriptionsPanel",
+        "SubscriptionRow",
+        "IgnoredSubscriptionRow"
+      ],
+      "exceptions": [
+        "Off-rail deep link; review and detection share the subscription model"
+      ]
+    },
+    {
+      "path": "/insights",
+      "view": "AssistantInsightsRoute",
+      "rail": "off-rail",
+      "entry": "internal/screens/assistant.go:127",
+      "native_models": [
+        "assistantview",
+        "insights"
+      ],
+      "child_evidence": [
+        "assistantChatThread",
+        "assistantAskHeader",
+        "assistantRouteTo",
+        "assistantInsightsDataPanel"
+      ],
+      "exceptions": [
+        "Alias/sub-route into Assistant hub; not a separate screen model"
+      ]
+    },
+    {
+      "path": "/smart",
+      "view": "AssistantAutomationsRoute",
+      "rail": "off-rail",
+      "entry": "internal/screens/assistant.go:133",
+      "native_models": [
+        "assistantview"
+      ],
+      "child_evidence": [
+        "assistantRouteTo",
+        "automation hub panel"
+      ],
+      "exceptions": [
+        "Alias/sub-route into Assistant hub; not a separate screen model"
+      ]
+    },
+    {
+      "path": "/members",
+      "view": "Members",
+      "rail": "off-rail",
+      "entry": "internal/screens/members.go:33",
+      "native_models": [
+        "memberrole",
+        "domain"
+      ],
+      "child_evidence": [
+        "membersBody",
+        "MemberRow"
+      ],
+      "exceptions": [
+        "Off-rail consolidated under Household"
+      ]
+    },
+    {
+      "path": "/split",
+      "view": "Split",
+      "rail": "off-rail",
+      "entry": "internal/screens/split_screen.go:32",
+      "native_models": [
+        "split"
+      ],
+      "child_evidence": [
+        "SplitMemberRow",
+        "transaction split form components"
+      ],
+      "exceptions": [
+        "Off-rail focused workflow route"
+      ]
+    },
+    {
+      "path": "/widget-builder",
+      "view": "VisualBuilder",
+      "rail": "off-rail",
+      "entry": "internal/screens/widget_builder.go:260",
+      "native_models": [
+        "cardgraph",
+        "chartspec",
+        "dashlayout"
+      ],
+      "child_evidence": [
+        "vbCanvas",
+        "vbNodeBox",
+        "vbInspector",
+        "vbRenderTile"
+      ],
+      "exceptions": [
+        "Off-rail deep link to Studio's builder tab"
+      ]
+    },
+    {
+      "path": "/widget-manager",
+      "view": "WidgetManager",
+      "rail": "off-rail",
+      "entry": "internal/screens/widgets.go:190",
+      "native_models": [
+        "dashlayout",
+        "widgetstyle",
+        "widgetvis"
+      ],
+      "child_evidence": [
+        "wmanMapTile",
+        "widgetManagerRow",
+        "tileStyleEditor"
+      ],
+      "exceptions": [
+        "Off-rail deep link to Studio's manager tab"
+      ]
+    },
+    {
+      "path": "/documents",
+      "view": "Documents",
+      "rail": "off-rail",
+      "entry": "internal/screens/documents.go:711",
+      "native_models": [
+        "importdraft",
+        "importmap",
+        "statement",
+        "extract",
+        "accountselect"
+      ],
+      "child_evidence": [
+        "DocumentsPanel",
+        "DraftRow",
+        "ProfileRow",
+        "wizardMappingForm"
+      ],
+      "exceptions": [
+        "Off-rail import workflow; expensive parsing/AI stages have separate controllers"
+      ]
+    },
+    {
+      "path": "/duplicates",
+      "view": "DuplicatesScreen",
+      "rail": "off-rail",
+      "entry": "internal/screens/duplicates.go:542",
+      "native_models": [
+        "dedupe",
+        "auditview"
+      ],
+      "child_evidence": [
+        "DuplicatesPanel",
+        "dupeGroup",
+        "dupeRow"
+      ],
+      "exceptions": [
+        "Off-rail review route"
+      ]
+    },
+    {
+      "path": "/plans",
+      "view": "Plans",
+      "rail": "off-rail",
+      "entry": "internal/screens/plans.go:22",
+      "native_models": [],
+      "child_evidence": [
+        "planCard"
+      ],
+      "exceptions": [
+        "Small product/upgrade information surface"
+      ]
+    },
+    {
+      "path": "/sync",
+      "view": "SyncScreen",
+      "rail": "off-rail",
+      "entry": "internal/screens/sync_route.go:24",
+      "native_models": [
+        "internal/app sync services (injected)"
+      ],
+      "child_evidence": [
+        "SyncView injection"
+      ],
+      "exceptions": [
+        "Compatibility deep link; current sync entry is Settings → Cloud"
+      ]
+    }
+  ]
+}

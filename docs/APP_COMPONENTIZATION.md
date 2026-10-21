@@ -83,9 +83,51 @@ No production behavior or performance result is claimed by this plan.
 
 ## Completed slices
 
+- Budget summaries use native checked union selection and independent summary
+  availability; auto-budget tuning is the next separate slice.
+- Household arithmetic prerequisites use checked owner shares, period income
+  and member spending. The Household/Members adapter migration is in progress.
+- Tax-plan net income uses a checked native helper and explicit household scope.
+  The legacy estimator policy is unchanged; selected-fold optimization is in progress.
+- Credit history is a native checked model with independent gaps and currency
+  availability. Whole-page credit aggregate/advice migration is in progress.
+- Subscriptions use native cadence, magnitude, annual/monthly totals and share
+  facts. Checked failures do not become successful zero amounts.
+- Setup money parsing and validation are native, exact and tested before UI writes.
+- Investment growth headlines use independent checked value/change/percentage
+  facts. Full investment preparation is still in progress.
+- Net Worth account windows use indexed native balance/flow facts. Full Net Worth
+  model preparation is still in progress.
+- Rules coverage uses the canonical native matcher once per prepared summary,
+  with stable row identity and lazy previews.
 - Assistant Ask header and conversation thread are typed child components in
   `assistant_chat_components.go`. The controller owns state and actions; the
   children own their event hooks and render prepared props. Tests cover header
   callbacks/ARIA, edit-state identity through turn reordering, retry eligibility,
   deletion and thinking/streaming states. This extraction is not a measured
   latency improvement.
+
+Focused WASM adapter checks pass for the committed slices above. Native package
+tests and vet pass for their models. Two broad-run timing failures were isolated
+to concurrent-machine contention; unchanged timing gates passed in quiet repeats.
+This is a batch checkpoint, not completion of the 47-route audit.
+
+## Remaining work and evidence
+
+Native-first lanes are working on Household/Members, Artifacts, auto-budget
+tuning, full Credit/Net Worth/Investments, Planning, Plan, Allocate, Debt/Loans,
+Recurring, Categories, Custom Fields, Settings/Builder, Activity/Workflows and
+Split input preparation. Bills/Health and Documents follow those bounded slices.
+Small static or transport-only routes will be reviewed against the same boundary
+checklist; they do not need financial models invented for them.
+
+The initial per-route evidence is retained in
+[Route coverage inventory](APP_ROUTE_COVERAGE.json). Source line numbers in this
+capture are navigation hints from the initial audit and can move during refactors.
+An existing native import or child component is evidence, not proof that the whole
+route is complete.
+
+Measured native changes include shared category-tree union traversal and
+[Unusual history buffer reuse](performance/unusual-buffer-reuse-2026-10-21/README.md).
+Moving calculations out of views is not itself a speed claim. Browser route and
+interaction measurements remain a separate integration gate.

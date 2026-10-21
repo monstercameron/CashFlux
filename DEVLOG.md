@@ -1,3 +1,7 @@
+## 2026-10-21 - Record app refactor checkpoint and measurements
+
+Documented finished versus remaining boundaries without claiming all-app completion. Retained detector before/after raw captures as text files because generic log files are ignored. Inventory JSON parses with exactly 47 entries. Focused UI tests passed for the committed first batch; second batch integration is ongoing.
+
 ## 2026-10-21 - Reuse unusual detector history buffers
 
 Native reference parity and price-policy tests pass, and the unchanged 50ms slice gate passes. Same-fixture five-sample benchmark reduces median allocated volume from 456.7MB to 61.6MB; timing is noisy and not a browser claim. Raw captures and environment caveats are retained under docs/performance/unusual-buffer-reuse-2026-10-21.
