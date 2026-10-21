@@ -482,7 +482,6 @@ func hydrateDurableDataset(app *appstate.App, s durableDatasetSnapshot) error {
 			return fmt.Errorf("load recovered dataset: %w", err)
 		}
 		app.Log().Info("dataset hydration stage", "stage", "import", "status", "complete")
-		app.SyncTxnLinkNetting()
 		hydratedRecordApp = app
 		hydratedRecordCursor, _ = app.Store().ChangeCursor()
 		hydratedRecordRevision = app.Rev()
