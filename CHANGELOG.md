@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- A disposable two-browser recovery regression now exercises both merge and explicit replacement of an encrypted server copy with a locally saved file, then downloads that file byte-for-byte in a fresh profile.
 - The deploy gate now runs device-erasure storage unit tests and browser cases for two-workspace file removal and direct-link safety.
 - A two-browser full-backup regression now verifies that files from two workspaces survive a complete backup, restore, workspace switch, and byte-for-byte download on the receiving browser.
 - The hosted corrupt-checkpoint and revoked-session browser regression now runs in the required deploy gate against CI's disposable local server.
@@ -19,6 +20,7 @@ and every commit updates this file under `Unreleased`.
 - The device-erasure audit now identifies retained workspace, queue, file, credential, and key records that the current “Erase everything” action does not remove, with acceptance criteria for a truthful full erase.
 
 ### Fixed
+- Workspace merge and replacement now serialize with the normal sync writer. Merge publishes its local revision only after the direct server decision, preventing autosave from racing the version-bound recovery write.
 - A direct workspace recovery upload now bookmarks the hash of the local lightweight dataset and the signed-in owner, so the next ordinary sync does not mistake the file-complete upload for a new edit or leave an ownerless bookmark.
 - Workspace recovery now decrypts and downloads the server copy before comparing or merging, carries local file bytes into replacement uploads, and checks that the server accepted a version-bound merge. Its safety export includes active and inactive workspace files and must succeed before rebinding.
 - Every outgoing sync snapshot now strips legacy device AI keys at the final upload boundary, including explicit server-copy replacement and merge paths that bypass queued snapshot completion.

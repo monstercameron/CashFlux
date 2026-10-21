@@ -98,6 +98,8 @@ func compareWithRemote(workspaceID string, policy datasetmerge.Policy) (remoteCo
 // reasoning, and the same mechanism, as resolving an LWW conflict with "keep my
 // changes". The caller exports a backup first.
 func replaceRemoteWithLocal(workspaceID string) error {
+	syncPushMu.Lock()
+	defer syncPushMu.Unlock()
 	if activeWorkspaceID() != workspaceID {
 		return fmt.Errorf("open the workspace being recovered before replacing it")
 	}
@@ -121,6 +123,8 @@ func replaceRemoteWithLocal(workspaceID string) error {
 // out of date about its own merge.
 func mergeWithRemote(workspaceID string, policy datasetmerge.Policy) (datasetmerge.Report, error) {
 	var report datasetmerge.Report
+	syncPushMu.Lock()
+	defer syncPushMu.Unlock()
 	if activeWorkspaceID() != workspaceID {
 		return report, fmt.Errorf("open the workspace being recovered before merging it")
 	}
@@ -155,10 +159,13 @@ func mergeWithRemote(workspaceID string, policy datasetmerge.Policy) (datasetmer
 	if err := app.ImportJSONWithBlobs(merged); err != nil {
 		return report, fmt.Errorf("merged copy could not be applied locally: %w", err)
 	}
-	// Re-render the surfaces reading the dataset; the autosave path writes it
-	// through to storage on the same revision bump.
+	// The normal autosave writer must not queue this merged state against the
+	// old server version while the direct merge write is in flight. Publish its
+	// revision after the server decision; on rejection the local merged copy is
+	// still surfaced and retained for recovery.
+	err = pushDatasetToWorkspace(workspaceID, merged, resp.Workspace.Version, false)
 	uistate.BumpDataRevision()
-	return report, pushDatasetToWorkspace(workspaceID, merged, resp.Workspace.Version, false)
+	return report, err
 }
 
 // pushDatasetToWorkspace sends a dataset as the workspace's authoritative copy.
