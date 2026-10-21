@@ -1,3 +1,7 @@
+## 2026-10-21 - Reuse category traversal work across selected roots
+
+Preserved empty roots, unknown/dangling IDs, cycles, self-parent policy and caller-owned inputs. Native categorytree suite and parity cases passed. On the same 2047-category/512-overlapping-root synthetic fixture, five-sample medians fell from 484.23ms to0.776ms and 1053689 to2086 allocations per operation. Raw before/after logs and environment caveats are retained; this is a native kernel result, not a measured browser latency gain.
+
 ## 2026-10-21 - Record assistant capability and validation evidence
 
 Recorded 77 financial data collections and the 59-tool catalog, native checked calculation paths, approval/Undo and session safeguards, exact test evidence and remaining limits. Full native suite passed 353 package suites; the earlier full screen pass had 1015 tests. Expanded coverage exposed and fixed a New-chat persistence race; the final 23-test assistant gate passed. Validation used disposable stores and mocked providers with no paid calls or real-data writes. No release, tag, main push or deployment.

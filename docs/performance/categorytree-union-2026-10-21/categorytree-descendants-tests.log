@@ -1,0 +1,3 @@
+Command: go test -work ./internal/categorytree
+WORK=C:\Users\mreca\AppData\Local\Temp\go-build4216231130
+ok  	github.com/monstercameron/CashFlux/internal/categorytree	0.970s
