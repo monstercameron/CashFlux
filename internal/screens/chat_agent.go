@@ -678,7 +678,7 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates, tier a
 				}
 				var b strings.Builder
 				for _, t := range ts {
-					line := fmt.Sprintf("[%s] %s (%s priority)", string(t.Status), t.Title, string(t.Priority))
+					line := fmt.Sprintf("[%s] %s (ID %s, %s priority)", string(t.Status), t.Title, t.ID, string(t.Priority))
 					if !t.Due.IsZero() {
 						line += ", due " + t.Due.Format("Jan 2")
 					}
@@ -920,38 +920,6 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates, tier a
 					return "Couldn't add the task: " + err.Error()
 				}
 				return "Added to-do: " + t.Title + "." + openLink("/todo", t.ID)
-			},
-		},
-		{
-			spec: ai.FunctionTool("complete_task",
-				"Mark a to-do task done, found by (part of) its title.",
-				json.RawMessage(`{"type":"object","properties":{"title":{"type":"string"}},"required":["title"]}`)),
-			mutates: true,
-			preview: func(raw json.RawMessage) string {
-				var a struct {
-					Title string `json:"title"`
-				}
-				_ = json.Unmarshal(raw, &a)
-				return "Mark done: the to-do matching “" + strings.TrimSpace(a.Title) + "”"
-			},
-			run: func(raw json.RawMessage) string {
-				var a struct {
-					Title string `json:"title"`
-				}
-				if err := json.Unmarshal(raw, &a); err != nil || strings.TrimSpace(a.Title) == "" {
-					return "Which task? Provide its title."
-				}
-				q := strings.ToLower(strings.TrimSpace(a.Title))
-				for _, t := range app.Tasks() {
-					if strings.Contains(strings.ToLower(t.Title), q) {
-						t.Status = domain.StatusDone
-						if err := app.PutTask(t); err != nil {
-							return "Couldn't update the task: " + err.Error()
-						}
-						return "Marked done: " + t.Title
-					}
-				}
-				return "No to-do matching “" + a.Title + "”."
 			},
 		},
 		{
@@ -1589,6 +1557,7 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates, tier a
 	// sidecar files (registered here so those files never touched this one):
 	// trust (remember facts), the auditor, natural-language rule/workflow authoring,
 	// web-grounded benchmarks, rapid capture, tax gather, and document Q&A.
+	tools = append(tools, agToolsTasks(app, base, rates)...)
 	tools = append(tools, agToolsTrust(app, base, rates)...)
 	tools = append(tools, agToolsAuditor(app, base, rates)...)
 	tools = append(tools, agToolsAuthoring(app, base, rates)...)

@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Assistant task completion now resolves stable IDs, previews the exact occurrence, preserves recurring successors, and rejects stale or ambiguous approvals.
 - Assistant approval metadata now describes rule/workflow changes and matching scopes accurately; aggregate-only conversations withhold document, recurring and paginated record detail tools.
 - Accounts and Goals now share checked native-currency reservation facts and configurable warning content, including archived claims and explicit unavailable states.
 - Account projections now return arithmetic and currency errors, preserve independent horizon availability, and include same-day cash flows in the forward curve.

@@ -1,3 +1,7 @@
+## 2026-10-20 - Canonical Assistant task completion
+
+Replaced the legacy title-substring PutTask path with a preview-bound canonical App.CompleteTask helper. Exact IDs are exposed by list_tasks; exact titles precede unique partial matches, completed retries remain unchanged, and execution refuses edited or removed preview records. Six focused actual-handler WASM test groups passed in the combined Data/CompleteTask run, including recurrence, identity, ambiguity, stale approvals, no-op retry and write-error recovery; the separate Data catalog ID fixture failure was outside this slice.
+
 ## 2026-10-20 - Assistant permission and detail catalog
 
 Filled actual create_rule/create_workflow permission gaps, removed obsolete merge ids-based counts, and stopped claiming one reversible flag dismissal for potentially many local dismissal keys. Extended the aggregate-only tool gate to actual document/tax/recurring and planned paginated/planning detail read handlers; full-detail conversations retain access. Focused native toolperm and aicontext tests passed. Registered-tool integration coverage follows once the new helper groups are wired.
