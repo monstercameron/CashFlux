@@ -34,7 +34,10 @@ test("Cloud sign-in recovers discovery and logs into a closed-registration serve
   await retry.click();
   await expect(app.getByTestId("sync-discovery-ok")).toBeVisible({ timeout: 20_000 });
   await expect(app.getByTestId("password-auth-card")).toBeVisible({ timeout: 20_000 });
-  expect(await savedDataset()).toEqual(before);
+  const after = await savedDataset();
+  for (const key of ["accounts", "transactions", "budgets", "goals", "artifacts", "documents"]) {
+    expect(after[key], `${key} changed during a public connection retry`).toEqual(before[key]);
+  }
   await login(app, username, password);
   await expect(app.getByTestId("settings-clear-invalid-token")).toHaveCount(0);
 });

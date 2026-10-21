@@ -34,8 +34,8 @@ test.describe("sync error visibility", () => {
     await app.locator(".settings-page .set-tab-strip button", { hasText: "Cloud" }).first().click();
     await app.getByTestId("cloud-setup-start").click();
     await expect(app.getByTestId("cloud-setup-where")).toBeVisible();
+    await app.getByTestId("cloud-server-options").click();
     await app.getByRole("radio", { name: "Your own server", exact: true }).click();
-    await app.getByTestId("cloud-address-advanced").click();
     await app.locator('[data-testid="sync-server-url"]').fill(UNREACHABLE);
     await app.getByTestId("sync-test").click();
     await expect(app.getByTestId("sync-discovery-error")).toBeVisible({ timeout: 20_000 });

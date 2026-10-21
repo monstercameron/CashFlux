@@ -29,6 +29,32 @@ async function login(page, username, password) {
   await page.getByTestId("password-auth-submit").click();
 }
 
+async function hasEncryptedDatasetRecord(page) {
+  return page.evaluate(async () => {
+    for (const { name } of await indexedDB.databases()) {
+      if (!name?.startsWith("cashflux-kv")) continue;
+      const raw = await new Promise((resolve) => {
+        const open = indexedDB.open(name);
+        open.onerror = () => resolve(null);
+        open.onsuccess = () => {
+          const db = open.result;
+          if (!db.objectStoreNames.contains("kv")) { db.close(); resolve(null); return; }
+          const get = db.transaction("kv", "readonly").objectStore("kv").get("cashflux:dataset");
+          get.onsuccess = () => { db.close(); resolve(get.result ?? null); };
+          get.onerror = () => { db.close(); resolve(null); };
+        };
+      });
+      if (typeof raw === "string") {
+        try {
+          const envelope = JSON.parse(raw);
+          if (envelope.format === "cashflux-atrest" && envelope.ciphertext) return true;
+        } catch (_) {}
+      }
+    }
+    return false;
+  });
+}
+
 test.describe("hosted first-boot hydration", () => {
   test("production-style boot never seeds and requires App Lock before decrypting existing data", async ({
     browser,
@@ -61,9 +87,18 @@ test.describe("hosted first-boot hydration", () => {
       expect(await first.evaluate(() => window.cashfluxStoreGet?.("cashflux:dataset") || "")).toBe("");
 
       await login(first, username, password);
+      await expect(first.getByTestId("hosted-hydration-empty-account")).toBeVisible({ timeout: 30_000 });
+      await first.getByTestId("hosted-start-budget").click();
       await expect(first.getByTestId("hosted-hydration-gate")).toHaveCount(0, { timeout: 30_000 });
       await expect(first.locator(".cf-shell")).toBeVisible();
       await expect(first.getByTestId("sample-data-banner")).toHaveCount(0);
+
+      await route(first, "/settings/cloud");
+      await expect(first.getByTestId("cloud-protection")).toBeVisible();
+      await expect(first.getByTestId("cloud-setup-where")).toHaveCount(0);
+      await expect(first.getByTestId("cloud-setup-signin")).toHaveCount(0);
+      await expect(first.getByTestId("cloud-change-connection")).toHaveCount(0);
+      await route(first, "/accounts");
 
       await first.getByTestId("accounts-add").click();
       const form = first.getByTestId("account-add-form");
@@ -112,10 +147,13 @@ test.describe("hosted first-boot hydration", () => {
       await expect(second.locator("#main")).toContainText(accountName);
       await expect(second.getByTestId("sample-data-banner")).toHaveCount(0);
 
+      await route(second, "/settings/cloud");
+      await expect(second.getByTestId("cloud-setup-where")).toHaveCount(0);
+      await expect(second.getByTestId("cloud-setup-signin")).toHaveCount(0);
+
       const savedLock = await second.evaluate(() => window.cashfluxStoreGet?.("cashflux:applock") || "");
       expect(JSON.parse(savedLock).enabled).toBe(true);
-      const savedDataset = await second.evaluate(() => window.cashfluxStoreGet?.("cashflux:dataset") || "");
-      expect(savedDataset.startsWith("\u0000cf1\u0000")).toBe(true);
+      await expect.poll(() => hasEncryptedDatasetRecord(second), { timeout: 30_000 }).toBe(true);
     } finally {
       await firstContext.close();
       await secondContext.close();

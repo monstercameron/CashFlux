@@ -19,6 +19,10 @@ func TestCloudProgressRequiresIdentityAndEncryption(t *testing.T) {
 		{"synced", cloudFacts{SignedIn: true, Protected: true, State: "synced"}, cloudDone},
 		{"removed protection", cloudFacts{SignedIn: true, State: "synced"}, cloudProtect},
 		{"expired identity", cloudFacts{Protected: true, State: "synced"}, cloudSignIn},
+		{"hosted account needs protection", cloudFacts{Hosted: true, Disabled: true, SignedIn: true}, cloudProtect},
+		{"hosted protected account starts sync", cloudFacts{Hosted: true, Disabled: true, SignedIn: true, Protected: true}, cloudFirst},
+		{"hosted account is synced", cloudFacts{Hosted: true, SignedIn: true, Protected: true, State: "synced"}, cloudDone},
+		{"hosted account never chooses a server", cloudFacts{Hosted: true, Disabled: true, SignedIn: true, Setup: "where"}, cloudProtect},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := cloudNextStep(tc.facts); got != tc.want {
