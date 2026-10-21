@@ -1,3 +1,7 @@
+## 2026-10-20 - Record second-pass page measurements
+
+Verified seven measured sweeps after one warm-up on each fixed artifact against the saved JSON. Content and DOM counts matched with zero route failures. Eight route medians favored the current artifact, but unrelated browser work changed machine load, so the report qualifies the results and records Notifications as slightly slower. Startup phases identify hydration as the largest measured segment; the default Needs you notification count is distinguished from the complete feed.
+
 ## 2026-10-20 - Browser contracts for shared controls
 
 Updated obsolete test IDs, calendar classes and generic date-summary expectations to the current accessible controls. Async alerts and goal sort now wait for the actual condition; Dashboard focus checks durable selected/layout state rather than a toast displaced by reminders. Added Todo mode and notification keyboard-tab journeys. The focused final five-case run passed on the new artifact; the other affected routes passed focused checks, including the isolated budget Escape case. Added a passing actual-toolbar WASM Escape-after-sort regression without a speculative product handler. The all-routes smoke sweep passed earlier; this does not claim the entire browser suite was run.

@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Recorded matched nine-page latency captures, build hashes, startup phase timings, and background-load limitations.
 - Browser journeys use current shared-control semantics and web-first state checks for menus, dates, sorting, views and notification tabs.
 - Reports reuse native activity facts across summary/full and display changes. Category averages follow the selected month count, and parent totals share their rolled-up sparkline basis.
 - Dashboard cash forecasts reject overflowing aggregate totals and disclose accounts omitted for unavailable exchange rates.

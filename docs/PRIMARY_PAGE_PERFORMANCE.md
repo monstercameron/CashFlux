@@ -107,8 +107,9 @@ captures predate the optional `--build-id` metadata field. Both used Go 1.26.9,
 Node 26.2.0, Playwright 1.61.0, Chromium 149.0.7827.55, Windows ARM64, a 1440×900
 viewport, and the same isolated sample. Each capture had one warm-up sweep and seven
 measured sweeps. The paired repeat ran without Go builds or tests detected. Counts
-matched at 2,808 transactions, 15 accounts, 10 budgets, 5 goals, 20 tasks, and zero
-notifications.
+matched at 2,808 transactions, 15 accounts, 10 budgets, 5 goals, 20 tasks, and no
+individual items visible in Notifications’ default “Needs you” view (not the total
+feed across triage tabs).
 
 | Route | Settled before | Settled after | Change |
 | --- | ---: | ---: | ---: |
@@ -138,3 +139,65 @@ filtering, expanding a populated notification feed, or CRUD latency improvements
 Cold app readiness was approximately 7.6 seconds in the repeat current capture;
 it remains a separate performance concern. Subsequent source changes need a fresh
 build and capture before the table above can describe them.
+
+## Capture comparison: final pass-two artifact
+
+After the second-pass fixes, the baseline artifact from `48e8f7ea` and the final
+second-pass working-tree artifact were measured on the same fixed servers (`:8142`
+and `:8143`). The current WASM includes the timer-origin correction and the
+`RunwayMonths` integer-width fix. The baseline SHA256 is
+`e134f4cf64ae3fc1dd0aa77ca0967c01a4ec9df52cd1bf655bc8d11b86344186`; the current
+SHA256 is `37d895c4a8093a13a2397ee0bfde0ed047da89b956c75ad4bb666791bf21e02b`.
+The hashes identify the measured artifacts; the current source state was a working
+tree build and is not identified by a Git commit alone.
+
+Both captures used Go 1.26.9, Node 26.2.0, Playwright 1.61.0, Chromium
+149.0.7827.55, Windows ARM64, a 1440×900 viewport, the fixed July 1, 2026 clock,
+one warm-up sweep, and seven measured sweeps. Each confirmed a fresh isolated sample
+context. Counts and median DOM sizes matched on every route; the sample had 2,808
+transactions, 15 accounts, 10 budgets, 5 goals, 20 tasks, and zero individual items
+in the default Notifications view. Neither capture had a route failure.
+
+| Route | Settled before | Settled after | Change |
+| --- | ---: | ---: | ---: |
+| Dashboard | 682 ms | 607 ms | −11.0% |
+| Transactions | 813 ms | 635 ms | −21.9% |
+| Accounts | 746 ms | 653 ms | −12.5% |
+| Budgets | 446 ms | 301 ms | −32.5% |
+| Goals | 155 ms | 139 ms | −10.3% |
+| Todo | 159 ms | 154 ms | −3.1% |
+| Notifications | 78 ms | 81 ms | +3.8% |
+| Assistant | 132 ms | 92 ms | −30.3% |
+| Reports | 306 ms | 287 ms | −6.2% |
+
+The app-ready time was 10,018 ms in the baseline and 8,213 ms in the current
+capture. The current artifact reported `boot.goPhases.totalMs` of 6,466 ms, including
+4,060 ms for workspace state and hydration, 848 ms pre-mount preparation, 684 ms
+entry-to-styles, 362 ms protected storage, 240 ms post-mount wiring, and 35 ms router
+mount. The baseline artifact predates this phase instrumentation, so its `goPhases`
+field is null and phase-by-phase comparison is unavailable.
+
+These measurements overlap an unrelated single-worker Playwright run
+(`sv0_artifact_sync.spec.mjs`) in another task. Processor samples before the pair
+ranged from 46% to 91%; during the baseline capture they were 24–26%, and during the
+current capture they were 10–22%. Two source-edit-only tasks were also active. The
+JSON records this background work. The lower medians on eight routes are useful
+directional evidence, but changing machine load means they do not establish clean,
+causal percentage improvements; Notifications was 3.8% slower. No extra pair was run.
+
+The Notifications entity selector measures rows in the active default “Needs you”
+view, not every item across all triage tabs. A separate sample-only inspection at the
+same clock confirmed that this view had no notification rows or group cards and
+showed “You're all caught up — nothing needs you right now.” It also displayed a
+separate “Recent wins” section. Thus the recorded zero describes an empty default
+attention queue, not necessarily an empty notification archive or the Watching tab.
+
+The exact captures and console logs are in the task `work/` directory:
+`primary-baseline-pass2-final.json`, `primary-current-pass2-final.json`, and the
+matching `.log` files. Commands, run from the repository root in PowerShell (with
+`PRIMARY_BENCH_BACKGROUND_WORK` set to the contention note recorded in each JSON):
+
+```powershell
+node e2e/perf/primary-pages-benchmark.mjs --base-url http://127.0.0.1:8142 --label before-48e8f7e-pass2-final --build-id e134f4cf64ae3fc1dd0aa77ca0967c01a4ec9df52cd1bf655bc8d11b86344186 --warmups 1 --runs 7 --out C:\Users\mreca\Documents\Codex\2026-10-19\fin\work\primary-baseline-pass2-final.json
+node e2e/perf/primary-pages-benchmark.mjs --base-url http://127.0.0.1:8143 --label after-37d895c-pass2-final --build-id 37d895c4a8093a13a2397ee0bfde0ed047da89b956c75ad4bb666791bf21e02b --warmups 1 --runs 7 --out C:\Users\mreca\Documents\Codex\2026-10-19\fin\work\primary-current-pass2-final.json
+```
