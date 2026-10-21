@@ -73,6 +73,12 @@ func BackendConnectionActive(pr prefs.Prefs) bool {
 	return !pr.BackendDisabled && strings.TrimSpace(pr.ServerURL) != "" && Session(pr.ServerToken).Present()
 }
 
+// BackendAIActive reports whether AI should use the authenticated server.
+// Switching AI providers never changes the separate cloud sync connection.
+func BackendAIActive(pr prefs.Prefs) bool {
+	return !pr.AIProxyDisabled && BackendConnectionActive(pr)
+}
+
 // CurrentPrefsAtom returns the preferences atom captured by a rendered
 // component so app lifecycle callbacks can commit settings without a hook call.
 func CurrentPrefsAtom() (state.Atom[prefs.Prefs], bool) {

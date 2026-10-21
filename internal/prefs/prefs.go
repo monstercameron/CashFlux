@@ -130,6 +130,10 @@ type Prefs struct {
 	// existing prefs keep working; the user flips it from the Settings modal to stop
 	// the app dialing the backend (e.g. when the websocket is unreachable).
 	BackendDisabled bool `json:"backendDisabled,omitempty"`
+	// AIProxyDisabled routes AI directly to the user's local provider key while
+	// leaving the authenticated cloud connection and sync untouched. This is a
+	// device preference; a remote dataset must not change this browser's choice.
+	AIProxyDisabled bool `json:"aiProxyDisabled,omitempty"`
 	// PayCycleAnchor is an ISO-8601 date ("2006-01-02") that identifies a known
 	// payday — the anchor date for the biweekly 14-day grid. When set, biweekly
 	// budget periods snap to the user's actual pay cycle instead of the fixed
@@ -220,9 +224,9 @@ type Prefs struct {
 }
 
 // BackendActive reports whether the app should talk to the backend: a server URL
-// and token are configured AND the user hasn't switched the backend off. Every
-// sync and AI-proxy path gates on this, so toggling BackendDisabled cleanly stops
-// all backend connection attempts.
+// and token are configured AND the user hasn't switched the backend off. Sync
+// also resolves rotating sessions held in browser memory; AIProxyDisabled is a
+// separate preference that never changes this connection's availability.
 func (p Prefs) BackendActive() bool {
 	return !p.BackendDisabled &&
 		strings.TrimSpace(p.ServerURL) != "" &&
