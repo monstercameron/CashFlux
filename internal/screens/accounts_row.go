@@ -91,10 +91,12 @@ type accountRowProps struct {
 	// flows (AC13). When it shows a dip below today's balance, the row renders a
 	// "→ ~$X low on <date>" line that expands to list the drivers. Zero value renders
 	// nothing.
-	Projection acctproject.Projection
+	Projection    acctproject.Projection
+	ProjectionErr error
 	// ForwardProjection carries recurring drivers through the forward chart's 90-day
 	// horizon. Projection above remains the independent 30-day AC13 summary.
-	ForwardProjection acctproject.Projection
+	ForwardProjection    acctproject.Projection
+	ForwardProjectionErr error
 	// Sparkline is the account's 90-day end-of-day balance series (AC2), oldest first,
 	// in the account's currency (minor units). Rendered as an inline SVG polyline; a
 	// flat run is itself the "nothing has posted since your last update" signal. Fewer
@@ -383,7 +385,9 @@ func AccountRow(props accountRowProps) ui.Node {
 	if detailsOpen.Get() && props.DetailContext != nil {
 		facts := props.DetailContext.facts(a)
 		props.Flow, props.ShowFlow, props.Projection = facts.Flow, true, facts.Projection
+		props.ProjectionErr = facts.ProjectionErr
 		props.ForwardProjection = facts.ForwardProjection
+		props.ForwardProjectionErr = facts.ForwardProjectionErr
 		props.ValuationHistory = facts.Valuations
 		series, hasRange := props.DetailContext.series(a, chartRange.Get())
 		props.HasRange = hasRange
@@ -530,7 +534,9 @@ func AccountRow(props accountRowProps) ui.Node {
 	// disclosure that lists the recurring drivers ("Rent −$1,400 on Mar 1"). Skipped
 	// for liabilities and valuation-type assets, whose balances aren't cash curves.
 	var projNode ui.Node = Fragment()
-	if a.Class != domain.ClassLiability && !isValuationType(a.Type) && props.Projection.HasLowDip() {
+	if a.Class != domain.ClassLiability && !isValuationType(a.Type) && props.ProjectionErr != nil {
+		projNode = P(css.Class("row-meta"), Attr("role", "status"), Attr("data-testid", "acct-proj-unavailable-"+a.ID), uistate.T("calculation.unavailable"))
+	} else if a.Class != domain.ClassLiability && !isValuationType(a.Type) && props.Projection.HasLowDip() {
 		dec := currency.Decimals(a.Currency)
 		low := money.New(props.Projection.Low, a.Currency)
 		toggleLabel := uistate.T("accounts.projectedShow")
@@ -608,7 +614,7 @@ func AccountRow(props accountRowProps) ui.Node {
 			chart,
 			// C381: and where it goes next. The history chart above answers where the
 			// account has been; this answers whether it survives until payday.
-			accountForwardLine(a, props.Balance, props.ForwardProjection, time.Now()),
+			accountForwardLine(a, props.Balance, props.ForwardProjection, props.ForwardProjectionErr, time.Now()),
 			// XC7: warn when goals have earmarked more against this account than it
 			// holds (goal money has been spent). Own component; healthy → Fragment().
 			ui.CreateElement(accountEarmarkWarning, accountEarmarkWarnProps{Account: a, Balance: props.Balance}),

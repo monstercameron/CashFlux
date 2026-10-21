@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Account projections now return arithmetic and currency errors, preserve independent horizon availability, and include same-day cash flows in the forward curve.
 - Reports mode and popover changes no longer write period settings or rebuild unchanged financial sections.
 - Goals and Earmarks tabs use the shared segmented control with keyboard navigation and roving focus.
 - The account detail forecast includes 90 days of recurring events while its near-term summary retains 30 days.

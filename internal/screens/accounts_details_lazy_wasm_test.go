@@ -223,10 +223,44 @@ func TestAccountsHostRejectsHistoryAndProjectionForInvalidLedgerBalance(t *testi
 	f.Stabilize()
 	byTestID(f, "button", "acct-details-toggle-invalid").Click()
 	f.Stabilize()
-	if byTestID(f, "p", "acct-history-unavailable-invalid") == nil || byTestID(f, "svg", "acct-spark-invalid") != nil || byTestID(f, "div", "acct-proj-invalid") != nil || byTestID(f, "div", "acct-fwd-invalid") != nil {
-		t.Fatalf("invalid exact balance became a valid chart or zero-start projection: %s", f.Text())
+	if byTestID(f, "p", "acct-history-unavailable-invalid") == nil || byTestID(f, "svg", "acct-spark-invalid") != nil || byTestID(f, "p", "acct-proj-unavailable-invalid") == nil || byTestID(f, "p", "acct-fwd-unavailable-invalid") == nil {
+		t.Fatalf("invalid exact balance became a valid chart or plausible-zero projection: %s", f.Text())
 	}
 	if accountHistoryCache.Len() != 0 || accountSeriesCache.Len() != 0 || accountProjectionInputsCache.Len() != 0 {
 		t.Fatal("invalid ledger still prepared misleading financial curves")
+	}
+}
+
+func TestAccountsHostShowsUnavailableForProjectionOverflowAcrossConsumers(t *testing.T) {
+	app := primaryAccountsGoalsApp(t)
+	filters := state.NewGlobalAtom("accounts:filter", uistate.AccountsFilter{})
+	previous := filters.Get()
+	filters.Set(uistate.AccountsFilter{})
+	clearAccountDetailCaches()
+	t.Cleanup(func() { filters.Set(previous); clearAccountDetailCaches() })
+	account := domain.Account{ID: "overflow", Name: "Overflow", OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared,
+		Class: domain.ClassAsset, Type: domain.TypeChecking, Currency: "USD", OpeningBalance: money.New(int64(^uint64(0)>>1), "USD")}
+	if err := app.PutAccount(account); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.Store().PutRecurring(domain.Recurring{ID: "one-more", Label: "One more dollar", AccountID: account.ID,
+		Amount: money.New(1, "USD"), NextDue: time.Now().AddDate(0, 0, 1), Cadence: domain.CadenceYearly}); err != nil {
+		t.Fatal(err)
+	}
+	accounts := render.New(t, render.WithQueuedScheduler())
+	defer accounts.Cleanup()
+	accounts.Render(ui.CreateElement(Accounts))
+	accounts.Stabilize()
+	byTestID(accounts, "button", "acct-details-toggle-overflow").Click()
+	accounts.Stabilize()
+	if byTestID(accounts, "p", "acct-proj-unavailable-overflow") == nil || byTestID(accounts, "p", "acct-fwd-unavailable-overflow") == nil {
+		t.Fatalf("projection overflow appeared as a healthy or plausible amount: %s", accounts.Text())
+	}
+
+	accounts.Render(ui.CreateElement(AccountEditForm, AccountEditFormProps{AccountID: account.ID, Mode: uistate.AcctEditModeSetBal}))
+	accounts.Stabilize()
+	projected := byTestID(accounts, "span", "acct-bal-projected")
+	if projected == nil || projected.Text() != uistate.T("calculation.unavailable") {
+		t.Fatalf("editor hid projection arithmetic failure: %s", accounts.Text())
 	}
 }

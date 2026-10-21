@@ -3,6 +3,7 @@
 package accountview_test
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -62,6 +63,24 @@ func TestPreparedAccountHistoryMatchesEveryLegacyWindow(t *testing.T) {
 	}
 }
 
+func TestProjectionPairKeepsCurrencyErrorsIndependentByHorizon(t *testing.T) {
+	now := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
+	inputs := accountview.PrepareProjectionInputs([]domain.Recurring{{
+		ID: "near", Label: "Near recurring", AccountID: "checking", Amount: money.New(-100, "USD"),
+		NextDue: now.AddDate(0, 0, 10), Cadence: domain.CadenceYearly,
+	}, {
+		ID: "foreign", Label: "Foreign recurring", AccountID: "checking", Amount: money.New(-100, "EUR"),
+		NextDue: now.AddDate(0, 0, 40), Cadence: domain.CadenceYearly,
+	}})
+	near, forward := inputs.ProjectPair("checking", money.New(10000, "USD"), now, 30, 90)
+	if near.Err != nil || !near.Projection.Known() {
+		t.Fatalf("unaffected 30-day window lost its valid projection: %+v", near)
+	}
+	if !errors.Is(forward.Err, acctproject.ErrCurrencyMismatch) {
+		t.Fatalf("90-day currency mismatch was not surfaced independently: %+v", forward)
+	}
+}
+
 func TestIndexedAccountProjectionMatchesAppWithExactOccurrenceTimes(t *testing.T) {
 	app, err := appstate.New(io.Discard, false)
 	if err != nil {
@@ -108,9 +127,15 @@ func TestIndexedAccountProjectionMatchesAppWithExactOccurrenceTimes(t *testing.T
 	for _, asOf := range []time.Time{now, now.Add(2 * time.Hour), now.AddDate(0, 0, 1)} {
 		for _, horizon := range []int{-1, 0, 30, 90} {
 			for _, account := range accounts {
-				got := prepared.Project(account.ID, snapshot.Balances[account.ID], asOf, horizon)
-				want := app.ProjectAccount(account.ID, asOf, horizon)
-				if !reflect.DeepEqual(got, want) {
+				if _, ok := snapshot.Balances[account.ID]; !ok {
+					if _, err := app.ProjectAccount(account.ID, asOf, horizon); err == nil {
+						t.Fatalf("%s at %s horizon=%d: invalid ledger balance was accepted", account.ID, asOf, horizon)
+					}
+					continue
+				}
+				got, gotErr := prepared.Project(account.ID, snapshot.Balances[account.ID], asOf, horizon)
+				want, wantErr := app.ProjectAccount(account.ID, asOf, horizon)
+				if (gotErr == nil) != (wantErr == nil) || !reflect.DeepEqual(got, want) {
 					t.Fatalf("%s at %s horizon=%d: got %+v; want %+v", account.ID, asOf, horizon, got, want)
 				}
 			}
@@ -147,17 +172,20 @@ func TestAccountProjectionSummariesKeepIndependent30And90DayHorizons(t *testing.
 		}
 	}
 	inputs := accountview.PrepareProjectionInputs(recurring)
-	nearTerm, forward := inputs.ProjectPair(account.ID, balance, now, 30, 90)
-	want30, want90 := app.ProjectAccount(account.ID, now, 30), app.ProjectAccount(account.ID, now, 90)
-	if !reflect.DeepEqual(nearTerm, want30) || !reflect.DeepEqual(forward, want90) {
+	nearTermWindow, forwardWindow := inputs.ProjectPair(account.ID, balance, now, 30, 90)
+	nearTerm, forward := nearTermWindow.Projection, forwardWindow.Projection
+	want30, err30 := app.ProjectAccount(account.ID, now, 30)
+	want90, err90 := app.ProjectAccount(account.ID, now, 90)
+	if err30 != nil || err90 != nil || nearTermWindow.Err != nil || forwardWindow.Err != nil || !reflect.DeepEqual(nearTerm, want30) || !reflect.DeepEqual(forward, want90) {
 		t.Fatalf("paired projections differ from independent app windows:\n30: got %+v want %+v\n90: got %+v want %+v", nearTerm, want30, forward, want90)
 	}
 	reversed90, reversed30 := inputs.ProjectPair(account.ID, balance, now, 90, 30)
-	if !reflect.DeepEqual(reversed90, forward) || !reflect.DeepEqual(reversed30, nearTerm) {
+	if !reflect.DeepEqual(reversed90.Projection, forward) || !reflect.DeepEqual(reversed30.Projection, nearTerm) {
 		t.Fatal("reversed horizon arguments changed output ordering or projection values")
 	}
 	zero, thirty := inputs.ProjectPair(account.ID, balance, now, 0, 30)
-	if !reflect.DeepEqual(zero, acctproject.Project(balance.Amount, now, nil, 0)) || !reflect.DeepEqual(thirty, nearTerm) {
+	zeroExpected, _ := acctproject.Project(balance.Amount, now, nil, 0)
+	if !reflect.DeepEqual(zero.Projection, zeroExpected) || !reflect.DeepEqual(thirty.Projection, nearTerm) {
 		t.Fatal("zero first horizon changed either result or output ordering")
 	}
 	if len(nearTerm.Drivers) != 1 || nearTerm.Drivers[0].Label != "Exact boundary" || nearTerm.End != 9000 {
@@ -166,7 +194,10 @@ func TestAccountProjectionSummariesKeepIndependent30And90DayHorizons(t *testing.
 	if len(forward.Drivers) != 3 || forward.End != 1000 {
 		t.Fatalf("90-day model omitted late recurring occurrences: %+v", forward)
 	}
-	points := forward.Series(now, 90)
+	points, err := forward.Series(now, 90)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(points) != 91 || points[30].Balance != 7000 || points[60].Balance != 1000 || points[90].Balance != 1000 {
 		t.Fatalf("90-day series did not apply the window's occurrences: day30=%+v day60=%+v day90=%+v", points[30], points[60], points[90])
 	}

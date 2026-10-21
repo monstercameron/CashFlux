@@ -602,8 +602,12 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 		}
 		projStr := uistate.T("accounts.balNone")
 		if a.Class != domain.ClassLiability && !isValuationType(a.Type) {
-			proj := app.ProjectAccount(a.ID, time.Now(), 30)
-			projStr = fmtMoney(money.New(proj.End, a.Currency))
+			proj, err := app.ProjectAccount(a.ID, time.Now(), 30)
+			if err != nil {
+				projStr = uistate.T("calculation.unavailable")
+			} else if proj.Known() {
+				projStr = fmtMoney(money.New(proj.End, a.Currency))
+			}
 		}
 		stat := func(key, val, testid string) ui.Node {
 			return Div(Style(map[string]string{"display": "grid", "gap": "0.1rem"}),

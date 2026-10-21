@@ -30,13 +30,16 @@ type CashForecast struct {
 // BuildCashForecast sums the account service's projections under one explicit
 // scope and clock. project is the same account-projection function used by the
 // accounts page, keeping future balances consistent across both presentations.
-func BuildCashForecast(accounts []domain.Account, rates currency.Rates, now time.Time, project func(string, time.Time, int) acctproject.Projection) CashForecast {
+func BuildCashForecast(accounts []domain.Account, rates currency.Rates, now time.Time, project func(string, time.Time, int) (acctproject.Projection, error)) CashForecast {
 	var out CashForecast
 	for _, a := range accounts {
 		if a.Archived || a.Class == domain.ClassLiability || liquidity.Of(a, now) != liquidity.Available {
 			continue
 		}
-		first := project(a.ID, now, 30)
+		first, err := project(a.ID, now, 30)
+		if err != nil {
+			return CashForecast{Error: fmt.Errorf("forecast account %q horizon 30: %w", a.ID, err)}
+		}
 		start, err := rates.Convert(money.New(first.Start, a.Currency), rates.Base)
 		if err != nil {
 			if errors.Is(err, money.ErrOverflow) {
@@ -50,7 +53,10 @@ func BuildCashForecast(accounts []domain.Account, rates currency.Rates, now time
 		for i, horizon := range [3]int{30, 60, 90} {
 			p := first
 			if i > 0 {
-				p = project(a.ID, now, horizon)
+				p, err = project(a.ID, now, horizon)
+				if err != nil {
+					return CashForecast{Error: fmt.Errorf("forecast account %q horizon %d: %w", a.ID, horizon, err)}
+				}
 			}
 			converted, err := rates.Convert(money.New(p.End, a.Currency), rates.Base)
 			if err != nil {

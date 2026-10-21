@@ -12,9 +12,17 @@
 package acctproject
 
 import (
+	"errors"
+	"fmt"
 	"sort"
 	"time"
+
+	"github.com/monstercameron/CashFlux/internal/money"
 )
+
+// ErrCurrencyMismatch reports a recurring amount denominated differently from
+// the account balance being projected.
+var ErrCurrencyMismatch = errors.New("acctproject: recurring amount currency does not match account")
 
 // Driver is one dated cash flow scoped to the account: a recurring paycheck, a
 // bill, a scheduled transfer. Amount is signed minor units (positive = money in,
@@ -47,11 +55,11 @@ func (p Projection) HasLowDip() bool { return p.Low < p.Start }
 // past the horizon are dropped. The returned Drivers slice is sorted by date (ties
 // by label) and contains only the in-window drivers actually applied. A non-positive
 // horizon yields a flat projection at `start`.
-func Project(start int64, asOf time.Time, drivers []Driver, horizonDays int) Projection {
+func Project(start int64, asOf time.Time, drivers []Driver, horizonDays int) (Projection, error) {
 	asOf = day(asOf)
 	p := Projection{Start: start, Low: start, LowDate: asOf, End: start}
 	if horizonDays <= 0 {
-		return p
+		return p, nil
 	}
 	end := asOf.AddDate(0, 0, horizonDays)
 
@@ -75,14 +83,18 @@ func Project(start int64, asOf time.Time, drivers []Driver, horizonDays int) Pro
 
 	bal := start
 	for _, d := range inWindow {
-		bal += d.Amount
+		var err error
+		bal, err = money.Add(bal, d.Amount)
+		if err != nil {
+			return Projection{}, fmt.Errorf("acctproject: apply %q on %s: %w", d.Label, d.Date.Format("2006-01-02"), err)
+		}
 		if bal < p.Low {
 			p.Low, p.LowDate = bal, d.Date
 		}
 	}
 	p.Drivers = inWindow
 	p.End = bal
-	return p
+	return p, nil
 }
 
 // day canonicalizes a time to its UTC calendar day so comparisons across the mixed
@@ -113,9 +125,9 @@ type Point struct {
 // The first point is today's balance with nothing applied, so the drawn line
 // starts where the account actually is and cannot contradict the figure printed
 // beside it. A non-positive horizon yields nothing.
-func (p Projection) Series(asOf time.Time, horizonDays int) []Point {
+func (p Projection) Series(asOf time.Time, horizonDays int) ([]Point, error) {
 	if horizonDays <= 0 {
-		return nil
+		return nil, nil
 	}
 	start := day(asOf)
 	byDay := map[string][]Driver{}
@@ -126,20 +138,48 @@ func (p Projection) Series(asOf time.Time, horizonDays int) []Point {
 	out := make([]Point, 0, horizonDays+1)
 	out = append(out, Point{Date: start, Balance: p.Start})
 	bal := p.Start
+	todayDrivers := byDay[start.Format("2006-01-02")]
+	if len(todayDrivers) > 0 {
+		in, outAmt, next, err := applyDay(bal, todayDrivers)
+		if err != nil {
+			return nil, err
+		}
+		bal = next
+		out = append(out, Point{Date: start, Balance: bal, In: in, Out: outAmt})
+	}
 	for i := 1; i <= horizonDays; i++ {
 		dt := start.AddDate(0, 0, i)
-		var in, outAmt int64
-		for _, d := range byDay[dt.Format("2006-01-02")] {
-			bal += d.Amount
-			if d.Amount > 0 {
-				in += d.Amount
-			} else {
-				outAmt += -d.Amount
-			}
+		in, outAmt, next, err := applyDay(bal, byDay[dt.Format("2006-01-02")])
+		if err != nil {
+			return nil, err
 		}
+		bal = next
 		out = append(out, Point{Date: dt, Balance: bal, In: in, Out: outAmt})
 	}
-	return out
+	return out, nil
+}
+
+func applyDay(balance int64, drivers []Driver) (in, out, nextBalance int64, err error) {
+	nextBalance = balance
+	for _, driver := range drivers {
+		nextBalance, err = money.Add(nextBalance, driver.Amount)
+		if err != nil {
+			return 0, 0, 0, fmt.Errorf("acctproject: apply %q on %s: %w", driver.Label, driver.Date.Format("2006-01-02"), err)
+		}
+		if driver.Amount > 0 {
+			in, err = money.Add(in, driver.Amount)
+		} else {
+			var magnitude int64
+			magnitude, err = money.Abs(driver.Amount)
+			if err == nil {
+				out, err = money.Add(out, magnitude)
+			}
+		}
+		if err != nil {
+			return 0, 0, 0, fmt.Errorf("acctproject: summarize daily flows on %s: %w", driver.Date.Format("2006-01-02"), err)
+		}
+	}
+	return in, out, nextBalance, nil
 }
 
 // FirstNegative reports the first day the projected balance closes below zero,
@@ -150,19 +190,23 @@ func (p Projection) Series(asOf time.Time, horizonDays int) []Point {
 // made. A start balance already below zero counts as today — otherwise an
 // overdrawn account projects as "never goes negative", which is the most
 // misleading answer available.
-func (p Projection) FirstNegative(asOf time.Time) (time.Time, bool) {
+func (p Projection) FirstNegative(asOf time.Time) (time.Time, bool, error) {
 	start := day(asOf)
 	if p.Start < 0 {
-		return start, true
+		return start, true, nil
 	}
 	bal := p.Start
 	for _, d := range p.Drivers {
-		bal += d.Amount
+		var err error
+		bal, err = money.Add(bal, d.Amount)
+		if err != nil {
+			return time.Time{}, false, fmt.Errorf("acctproject: apply %q on %s: %w", d.Label, d.Date.Format("2006-01-02"), err)
+		}
 		if bal < 0 {
-			return day(d.Date), true
+			return day(d.Date), true, nil
 		}
 	}
-	return time.Time{}, false
+	return time.Time{}, false, nil
 }
 
 // Known reports whether the projection rests on anything. A horizon with no

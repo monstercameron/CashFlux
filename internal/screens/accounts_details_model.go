@@ -31,10 +31,12 @@ type accountDetailContext struct {
 }
 
 type accountDetailFacts struct {
-	Flow              accountflow.Flow
-	Projection        acctproject.Projection // 30-day summary shown by the AC13 projected-low line
-	ForwardProjection acctproject.Projection // 90-day model used by the forward chart
-	Valuations        []domain.BalanceSnapshot
+	Flow                 accountflow.Flow
+	Projection           acctproject.Projection // 30-day summary shown by the AC13 projected-low line
+	ProjectionErr        error
+	ForwardProjection    acctproject.Projection // 90-day model used by the forward chart
+	ForwardProjectionErr error
+	Valuations           []domain.BalanceSnapshot
 }
 
 const accountProjectionHorizonDays = 30
@@ -63,12 +65,19 @@ func (c *accountDetailContext) facts(account domain.Account) *accountDetailFacts
 		// These account kinds never display a cash projection. Their exact balances
 		// and valuation histories retain their existing independent semantics.
 		_, validBalance := c.snapshot.Balances[account.ID]
-		if validBalance && account.Class != domain.ClassLiability && !isValuationType(account.Type) {
-			inputs := memoByRev(accountProjectionInputsCache, c.revision, func() accountview.ProjectionInputs {
-				return accountview.PrepareProjectionInputs(c.recurring)
-			})
-			balance := c.snapshot.Balances[account.ID]
-			facts.Projection, facts.ForwardProjection = inputs.ProjectPair(account.ID, balance, c.asOf, accountProjectionHorizonDays, forwardHorizonDays)
+		if account.Class != domain.ClassLiability && !isValuationType(account.Type) {
+			if !validBalance {
+				facts.ProjectionErr = fmt.Errorf("account balance unavailable")
+				facts.ForwardProjectionErr = facts.ProjectionErr
+			} else {
+				inputs := memoByRev(accountProjectionInputsCache, c.revision, func() accountview.ProjectionInputs {
+					return accountview.PrepareProjectionInputs(c.recurring)
+				})
+				balance := c.snapshot.Balances[account.ID]
+				first, second := inputs.ProjectPair(account.ID, balance, c.asOf, accountProjectionHorizonDays, forwardHorizonDays)
+				facts.Projection, facts.ProjectionErr = first.Projection, first.Err
+				facts.ForwardProjection, facts.ForwardProjectionErr = second.Projection, second.Err
+			}
 		}
 		if isValuationType(account.Type) {
 			facts.Valuations = c.app.BalanceHistory(account.ID)

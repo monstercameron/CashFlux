@@ -3,6 +3,7 @@
 package accountview
 
 import (
+	"fmt"
 	"sort"
 	"time"
 
@@ -74,6 +75,19 @@ func (h *History) Series(asOf time.Time, days int) []int64 {
 // conventions; the prepared exact ledger balance is supplied separately.
 type ProjectionInputs struct{ byAccount map[string][]domain.Recurring }
 
+// ProjectionWindow holds one independently checked recurring projection.
+// Err is nil for both valid projections and valid no-flow windows; Projection.Known
+// distinguishes those cases from a forecast with drivers.
+type ProjectionWindow struct {
+	Projection acctproject.Projection
+	Err        error
+}
+
+type projectionOccurrence struct {
+	acctproject.Driver
+	Currency string
+}
+
 // PrepareProjectionInputs copies recurring rows into an immutable account index.
 // PrepareProjectionInputs copies nonzero recurring rows into an account index.
 func PrepareProjectionInputs(recurring []domain.Recurring) ProjectionInputs {
@@ -89,9 +103,10 @@ func PrepareProjectionInputs(recurring []domain.Recurring) ProjectionInputs {
 // Project expands only this account's recurring occurrences. The exact asOf time
 // is retained when selecting occurrences, matching App.ProjectAccount even for
 // imported intraday dates and non-advancing cadences.
-func (p ProjectionInputs) Project(accountID string, balance money.Money, asOf time.Time, horizonDays int) acctproject.Projection {
+func (p ProjectionInputs) Project(accountID string, balance money.Money, asOf time.Time, horizonDays int) (acctproject.Projection, error) {
 	drivers := p.occurrences(accountID, asOf, horizonDays)
-	return acctproject.Project(balance.Amount, asOf, drivers, horizonDays)
+	projection, err := projectWindow(balance, asOf, drivers, horizonDays)
+	return projection, err
 }
 
 // ProjectPair expands an account's recurring occurrences once through the longer
@@ -99,25 +114,30 @@ func (p ProjectionInputs) Project(accountID string, balance money.Money, asOf ti
 // before acctproject canonicalizes dates to calendar days. This keeps intraday
 // occurrences at the end of a shorter window from leaking in from a longer one.
 // The two returned projections follow the order of the requested horizons.
-func (p ProjectionInputs) ProjectPair(accountID string, balance money.Money, asOf time.Time, firstHorizonDays, secondHorizonDays int) (acctproject.Projection, acctproject.Projection) {
+func (p ProjectionInputs) ProjectPair(accountID string, balance money.Money, asOf time.Time, firstHorizonDays, secondHorizonDays int) (ProjectionWindow, ProjectionWindow) {
 	maxHorizon := max(firstHorizonDays, secondHorizonDays)
 	drivers := p.occurrences(accountID, asOf, maxHorizon)
-	first := projectWindow(balance.Amount, asOf, drivers, firstHorizonDays)
-	second := projectWindow(balance.Amount, asOf, drivers, secondHorizonDays)
+	firstProjection, firstErr := projectWindow(balance, asOf, drivers, firstHorizonDays)
+	secondProjection, secondErr := projectWindow(balance, asOf, drivers, secondHorizonDays)
+	first := ProjectionWindow{Projection: firstProjection, Err: firstErr}
+	second := ProjectionWindow{Projection: secondProjection, Err: secondErr}
 	return first, second
 }
 
-func (p ProjectionInputs) occurrences(accountID string, asOf time.Time, horizonDays int) []acctproject.Driver {
+func (p ProjectionInputs) occurrences(accountID string, asOf time.Time, horizonDays int) []projectionOccurrence {
 	if horizonDays <= 0 {
 		return nil
 	}
-	var drivers []acctproject.Driver
+	var drivers []projectionOccurrence
 	end := asOf.AddDate(0, 0, horizonDays)
 	for _, row := range p.byAccount[accountID] {
 		due := row.NextDue
 		for i := 0; i < 400 && !due.After(end); i++ {
 			if !due.Before(asOf) {
-				drivers = append(drivers, acctproject.Driver{Label: row.Label, Date: due, Amount: row.Amount.Amount})
+				drivers = append(drivers, projectionOccurrence{
+					Driver:   acctproject.Driver{Label: row.Label, Date: due, Amount: row.Amount.Amount},
+					Currency: row.Amount.Currency,
+				})
 			}
 			next := row.Cadence.Next(due)
 			if !next.After(due) {
@@ -129,16 +149,19 @@ func (p ProjectionInputs) occurrences(accountID string, asOf time.Time, horizonD
 	return drivers
 }
 
-func projectWindow(start int64, asOf time.Time, drivers []acctproject.Driver, horizonDays int) acctproject.Projection {
+func projectWindow(start money.Money, asOf time.Time, drivers []projectionOccurrence, horizonDays int) (acctproject.Projection, error) {
 	if horizonDays <= 0 {
-		return acctproject.Project(start, asOf, nil, horizonDays)
+		return acctproject.Project(start.Amount, asOf, nil, horizonDays)
 	}
 	end := asOf.AddDate(0, 0, horizonDays)
 	withinWindow := make([]acctproject.Driver, 0, len(drivers))
 	for _, driver := range drivers {
-		if !driver.Date.Before(asOf) && !driver.Date.After(end) {
-			withinWindow = append(withinWindow, driver)
+		if !driver.Driver.Date.Before(asOf) && !driver.Driver.Date.After(end) {
+			if driver.Currency != start.Currency {
+				return acctproject.Projection{}, fmt.Errorf("%w: recurring %q is %s, account is %s", acctproject.ErrCurrencyMismatch, driver.Driver.Label, driver.Currency, start.Currency)
+			}
+			withinWindow = append(withinWindow, driver.Driver)
 		}
 	}
-	return acctproject.Project(start, asOf, withinWindow, horizonDays)
+	return acctproject.Project(start.Amount, asOf, withinWindow, horizonDays)
 }

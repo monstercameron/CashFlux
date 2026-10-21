@@ -1,3 +1,7 @@
+## 2026-10-20 - Checked account projections
+
+Migrated the canonical account projection API and all native/WASM consumers to explicit errors. Balance prefixes, daily flow summaries and debit magnitudes use checked money arithmetic; unavailable projections render translated status instead of wrapped amounts. The untouched starting point remains visible before same-day closing flows. Native acctproject, accountview, appstate and dashboardview tests and vet passed, the production WASM build passed, and both focused Accounts host tests passed. Daily flow summary availability can differ from a valid low/end balance when only the ancillary subtotal overflows.
+
 ## 2026-10-20 - Keep Reports read-only during ordinary renders
 
 Removed obsolete render-time period persistence; explicit period actions still own saves. The posture effect skips unchanged writes and preserves the valid stored view. Stable section context/action holders remove changing clock and callback identities, while a native exact open-start/closed-end month index refreshes only Motion at the relevant cutoff. Two new actual-host counter tests and five existing Reports regressions passed: UI-only mode/export/popover renders preserve store revision and six prepared model factories/five Full sections; real period, scope, data, day and nanosecond cutoff changes refresh the appropriate content. Native reportview and stable-hook checks passed. No latency percentage is claimed until a controlled browser comparison.

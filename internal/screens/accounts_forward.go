@@ -35,17 +35,23 @@ const forwardHorizonDays = 90
 // It renders nothing when there is nothing to project from. A flat line drawn
 // over an account with no recurring flows is not a forecast of stability — it is
 // the absence of information wearing a forecast's clothes.
-func accountForwardLine(a domain.Account, balance money.Money, p acctproject.Projection, now time.Time) ui.Node {
+func accountForwardLine(a domain.Account, balance money.Money, p acctproject.Projection, projectionErr error, now time.Time) ui.Node {
 	// Liabilities and valuation-type assets are not cash curves: a mortgage does
 	// not "run out", and projecting one implies a question the number cannot
 	// answer.
 	if a.Class == domain.ClassLiability || isValuationType(a.Type) {
 		return Fragment()
 	}
+	if projectionErr != nil {
+		return P(css.Class("row-meta"), Attr("role", "status"), Attr("data-testid", "acct-fwd-unavailable-"+a.ID), uistate.T("calculation.unavailable"))
+	}
 	if !p.Known() {
 		return Fragment()
 	}
-	pts := p.Series(now, forwardHorizonDays)
+	pts, err := p.Series(now, forwardHorizonDays)
+	if err != nil {
+		return P(css.Class("row-meta"), Attr("role", "status"), Attr("data-testid", "acct-fwd-unavailable-"+a.ID), uistate.T("calculation.unavailable"))
+	}
 	if len(pts) < 2 {
 		return Fragment()
 	}
@@ -56,7 +62,10 @@ func accountForwardLine(a domain.Account, balance money.Money, p acctproject.Pro
 
 	low := money.New(p.Low, a.Currency)
 	end := money.New(p.End, a.Currency)
-	negAt, goesNegative := p.FirstNegative(now)
+	negAt, goesNegative, err := p.FirstNegative(now)
+	if err != nil {
+		return P(css.Class("row-meta"), Attr("role", "status"), Attr("data-testid", "acct-fwd-unavailable-"+a.ID), uistate.T("calculation.unavailable"))
+	}
 
 	// The reading comes first and the chart supports it. A shape alone leaves the
 	// reader to find the trough themselves, which is the one thing they came for.
