@@ -1,3 +1,7 @@
+## 2026-10-20 - Resume protected boot after server change
+
+The server-switch browser regression hung at the App Lock gate. The initial authenticated dataset read completed, but after WebCrypto decrypted the inner dataset envelope, its JavaScript promise callback synchronously began journal replay and waited for a second IndexedDB transaction. Browser events could not deliver that transaction's completion until the callback returned. The decrypted import and replay now run in a Go goroutine. The browser case passed: the old server's refresh and access credentials were absent after reload, the new server's signed-out setup appeared, and the new server had no copied account. A normal encrypted-workspace reload regression checks the same gate without switching servers.
+
 ## 2026-10-20 - Abort incomplete full-install backups
 
 The full backup builder treated an active-dataset export error as an empty dataset string. If an attached file could not be read, the app could still download a backup that omitted the whole active household. The builder now propagates the export error, so the existing error notice appears and no incomplete archive is downloaded. A WebAssembly build passed. Inactive workspace bundles still need a separate file-completeness review.

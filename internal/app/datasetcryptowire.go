@@ -200,50 +200,55 @@ func hydrateFromPasscodeThen(passcode string, done func(error)) {
 		return
 	}
 	decryptDataset(env, passcode, func(plain []byte, err error) {
-		if err != nil {
-			app.Log().Error("encrypted dataset: decrypt failed after verified passcode; quarantining ciphertext", "err", err)
-			quarantinePendingEnvelope("The encrypted dataset could not be decrypted after the passcode was verified.")
-			done(err)
-			return
-		}
-		if err := app.ImportJSON(plain); err != nil {
-			app.Log().Error("encrypted dataset: import after decrypt failed; quarantining ciphertext", "err", err)
-			quarantinePendingEnvelope("The decrypted dataset could not be imported.")
-			done(err)
-			return
-		}
-		// Grant autosave authority only after import succeeds. Set both flags before
-		// clearing the pending envelope, which otherwise releases the autosave guard.
-		activePasscode = passcode
-		hydrationSucceeded = true
-		if err := replayDurableDatasetRecords(app, pendingEnvelopeRaw); err != nil {
-			quarantinePendingEnvelope("Saved changes could not be recovered: " + err.Error())
-			done(err)
-			return
-		}
-		hadLocalDataset = true
-		pendingEnvelopeRaw = "" // releases the autosave and unblocks normal operation
-		// Re-seed the PREFS ATOM from the just-imported settings KV. The lock screen
-		// rendered before this import, so the first UsePrefs seeded the atom from an
-		// EMPTY store — prefs.Default(). Without this, every passcode boot shows
-		// default preferences (the budgets income basis reset to "all income", Cam
-		// 2026-07-17) even though the saved values sit right here in the store — and
-		// the next PersistPrefs (any theme toggle) would write those defaults back
-		// over the real ones. SetPrefs also re-applies theme/accent to the document.
-		uistate.SetPrefs(uistate.LoadPrefs())
-		uistate.ApplyTheme(uistate.LoadTheme())
-		// The dataset is loaded now, so it's safe to fold any legacy standalone OpenAI
-		// key + language selection into it (encrypted users couldn't migrate at boot
-		// while still locked).
-		migrateStandaloneAIKey()
-		uistate.MigrateLegacyLanguage()
-		seedMusicFromDataset()
-		initUndo()
-		uistate.BumpDataRevision()
-		// The OpenAI key is now decrypted and available — refresh the lock-screen
-		// quote-of-the-day cache so the next lock shows a fresh AI quote (C: lock quote).
-		refreshDailyLockQuote()
-		done(nil)
+		// WebCrypto resolves this callback on the JavaScript event stack. Journal
+		// replay opens IndexedDB transactions and waits for browser events; it
+		// must run after this callback returns so those events can be delivered.
+		go func() {
+			if err != nil {
+				app.Log().Error("encrypted dataset: decrypt failed after verified passcode; quarantining ciphertext", "err", err)
+				quarantinePendingEnvelope("The encrypted dataset could not be decrypted after the passcode was verified.")
+				done(err)
+				return
+			}
+			if err := app.ImportJSON(plain); err != nil {
+				app.Log().Error("encrypted dataset: import after decrypt failed; quarantining ciphertext", "err", err)
+				quarantinePendingEnvelope("The decrypted dataset could not be imported.")
+				done(err)
+				return
+			}
+			// Grant autosave authority only after import succeeds. Set both flags before
+			// clearing the pending envelope, which otherwise releases the autosave guard.
+			activePasscode = passcode
+			hydrationSucceeded = true
+			if err := replayDurableDatasetRecords(app, pendingEnvelopeRaw); err != nil {
+				quarantinePendingEnvelope("Saved changes could not be recovered: " + err.Error())
+				done(err)
+				return
+			}
+			hadLocalDataset = true
+			pendingEnvelopeRaw = "" // releases the autosave and unblocks normal operation
+			// Re-seed the PREFS ATOM from the just-imported settings KV. The lock screen
+			// rendered before this import, so the first UsePrefs seeded the atom from an
+			// EMPTY store — prefs.Default(). Without this, every passcode boot shows
+			// default preferences (the budgets income basis reset to "all income", Cam
+			// 2026-07-17) even though the saved values sit right here in the store — and
+			// the next PersistPrefs (any theme toggle) would write those defaults back
+			// over the real ones. SetPrefs also re-applies theme/accent to the document.
+			uistate.SetPrefs(uistate.LoadPrefs())
+			uistate.ApplyTheme(uistate.LoadTheme())
+			// The dataset is loaded now, so it's safe to fold any legacy standalone OpenAI
+			// key + language selection into it (encrypted users couldn't migrate at boot
+			// while still locked).
+			migrateStandaloneAIKey()
+			uistate.MigrateLegacyLanguage()
+			seedMusicFromDataset()
+			initUndo()
+			uistate.BumpDataRevision()
+			// The OpenAI key is now decrypted and available — refresh the lock-screen
+			// quote-of-the-day cache so the next lock shows a fresh AI quote (C: lock quote).
+			refreshDailyLockQuote()
+			done(nil)
+		}()
 	})
 }
 
