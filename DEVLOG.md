@@ -1,3 +1,7 @@
+## 2026-10-20 - Complete Assistant formula discovery
+
+Replaced the 140-row listing cap with stable paginated metadata for canonical atoms, molecules, entities and custom metrics. Fixed observations retain time, base currency, household scope and month; a bounded shared cache survives per-round handler rebuilds and rejects stale/expired/evicted continuations. Missing/nonfinite variables and corrupt source configurations fail explicitly. All financial configuration and pool inputs read the bound store; calculations still use the existing live engine and formula evaluator. All eight actual-App WASM formula groups and enabled-registry parity passed in integrated pass7.
+
 ## 2026-10-20 - Checked smart bill formula inputs
 
 Reused the canonical checked recurring cadence model for income-per-payday and the existing optimizer behind a conservative checked arithmetic envelope. Missing FX, invalid magnitudes and overflow omit dependent bill variables instead of producing zero; known liquid cash remains independently available. Native billsched and engineenv tests/vet passed, and three real-host cache adapter groups passed with the new formula builder adapters.

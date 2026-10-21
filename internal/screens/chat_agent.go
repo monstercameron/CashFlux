@@ -24,7 +24,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/dedupe"
 	"github.com/monstercameron/CashFlux/internal/domain"
-	"github.com/monstercameron/CashFlux/internal/engineenv"
 	"github.com/monstercameron/CashFlux/internal/formula"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/ledger"
@@ -559,119 +558,6 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates, tier a
 				return strings.TrimRight(b.String(), "\n")
 			},
 		},
-		{
-			spec: ai.FunctionTool("list_formula_metrics",
-				"List the engine's formula variables: ATOMS (indivisible reductions over the user's data — e.g. assets, liabilities, liquid_cash, income, expense) and MOLECULES (compound figures defined as a formula over atoms — e.g. net_worth = assets - liabilities), plus per-entity metrics (budgets, goals, accounts, pools, plans). Each row shows the name, current value, and — for molecules — the formula. Use any name with evaluate_formula. Optionally filter by a substring, or set molecules_only.",
-				json.RawMessage(`{"type":"object","properties":{"filter":{"type":"string","description":"optional substring matched on name/label/doc"},"molecules_only":{"type":"boolean"}}}`)),
-			run: func(raw json.RawMessage) string {
-				var a struct {
-					Filter        string `json:"filter"`
-					MoleculesOnly bool   `json:"molecules_only"`
-				}
-				_ = json.Unmarshal(raw, &a)
-				metrics := allFormulaMetrics(app)
-				vars := liveEngineVars(app)
-				q := strings.ToLower(strings.TrimSpace(a.Filter))
-				groupOrder := []string{}
-				byGroup := map[string][]string{}
-				total := 0
-				for _, m := range metrics {
-					if a.MoleculesOnly && !m.Molecule {
-						continue
-					}
-					if q != "" && !strings.Contains(strings.ToLower(m.Name+" "+m.Label+" "+m.Doc), q) {
-						continue
-					}
-					val := "—"
-					if v, ok := vars[m.Name]; ok {
-						val = formatFormulaValue(v)
-					}
-					line := fmt.Sprintf("%s = %s", m.Name, val)
-					if m.Molecule && m.Formula != "" {
-						line += "  [" + m.Formula + "]"
-					}
-					if m.Label != "" {
-						line += "  — " + m.Label
-					}
-					g := string(m.Group)
-					if _, ok := byGroup[g]; !ok {
-						groupOrder = append(groupOrder, g)
-					}
-					byGroup[g] = append(byGroup[g], line)
-					total++
-				}
-				if total == 0 {
-					return "No matching formula metrics."
-				}
-				const cap = 140
-				var b strings.Builder
-				b.WriteString("Formula metrics — atoms + molecules (use any name in evaluate_formula):\n")
-				shown := 0
-				for _, g := range groupOrder {
-					if shown >= cap {
-						break
-					}
-					fmt.Fprintf(&b, "\n[%s]\n", g)
-					for _, line := range byGroup[g] {
-						if shown >= cap {
-							break
-						}
-						b.WriteString(line + "\n")
-						shown++
-					}
-				}
-				if shown < total {
-					fmt.Fprintf(&b, "\n… %d more — narrow with the filter argument.", total-shown)
-				}
-				return strings.TrimRight(b.String(), "\n")
-			},
-		},
-		{
-			spec: ai.FunctionTool("evaluate_formula",
-				evalFormulaToolDesc(),
-				json.RawMessage(`{"type":"object","properties":{"expression":{"type":"string"}},"required":["expression"]}`)),
-			run: func(raw json.RawMessage) string {
-				var a struct {
-					Expression string `json:"expression"`
-				}
-				if err := json.Unmarshal(raw, &a); err != nil || strings.TrimSpace(a.Expression) == "" {
-					return "Provide an expression to evaluate."
-				}
-				expr := strings.TrimSpace(a.Expression)
-				vars := liveEngineVars(app)
-				val, err := formula.Eval(expr, formula.Env{Vars: vars})
-				if err != nil {
-					return "Couldn't evaluate “" + expr + "”: " + err.Error()
-				}
-				out := fmt.Sprintf("%s = %s", expr, formatFormulaValue(val))
-				// A bare variable name: show how it's derived (atom source or molecule formula).
-				if _, ok := vars[expr]; ok {
-					if d, ok := engineenv.Explain(expr, vars, app.Molecules()); ok {
-						switch d.Kind {
-						case "molecule":
-							out += fmt.Sprintf("\nMolecule: %s = %s", d.Name, d.Formula)
-							if len(d.Inputs) > 0 {
-								names := make([]string, 0, len(d.Inputs))
-								for k := range d.Inputs {
-									names = append(names, k)
-								}
-								sort.Strings(names)
-								parts := make([]string, 0, len(names))
-								for _, k := range names {
-									parts = append(parts, fmt.Sprintf("%s=%s", k, formatFormulaValue(d.Inputs[k])))
-								}
-								out += " (with " + strings.Join(parts, ", ") + ")"
-							}
-						case "atom":
-							if d.Source != "" {
-								out += "\nAtom: " + d.Source
-							}
-						}
-					}
-				}
-				return out
-			},
-		},
 
 		// --- Write tools (mutates: require the user's approval before running) ---
 		{
@@ -1154,6 +1040,7 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates, tier a
 	tools = append(tools, agToolsFinance(app, base, rates, currentScope...)...)
 	tools = append(tools, agToolsGoalWrites(app, base, rates)...)
 	tools = append(tools, agToolsTransactionWrites(app)...)
+	tools = append(tools, agToolsFormula(app, base, rates)...)
 	tools = append(tools, agToolsTrust(app, base, rates)...)
 	tools = append(tools, agToolsAuditor(app, base, rates)...)
 	tools = append(tools, agToolsAuthoring(app, base, rates)...)

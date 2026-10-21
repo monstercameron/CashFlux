@@ -19,6 +19,16 @@ Money fields retain exact integer minor units and their currencies. These tools
 do not perform financial aggregation; use the financial, planning, report and
 formula tools for calculations.
 
+`list_formula_metrics` discovers the complete metric catalog in stable pages,
+including custom molecules and entity variables. Metadata includes formulas,
+availability and known units; values are optional. `evaluate_formula` uses the
+same canonical engine observation, with whole-household scope, the current
+calendar-month period, base currency and a fixed reference time made explicit.
+Continuation tokens preserve that observation across tool-handler rebuilds.
+Expired, evicted or changed observations require restarting. Missing or nonfinite
+referenced variables fail explicitly. Configuration inputs come from the bound
+App store, including when another dataset is active in the UI.
+
 Pages report both total and filtered counts. A changed snapshot rejects a later
 page instead of silently combining revisions. Oversized records point to
 `read_record`; consecutive `jsonText` chunks must be joined before decoding.
