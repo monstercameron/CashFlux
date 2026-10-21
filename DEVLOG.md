@@ -1,3 +1,7 @@
+## 2026-10-20 - Commit contribution progress and ledger changes atomically
+
+Replaced independent goal/ledger writes with checked expected-before-image replay batches. Monthly log preflight runs before any write, and extracted transaction/goal/delete effects run after commit so observers see consistent data. Ledger errors no longer save memo progress and leave the form open for a duplicate retry. Undo removes progress, log, debit and relationships in one batch; missing debit remains tolerated. Native rollback/capture, conflict, event order, task/bill/workflow regressions and vet passed. Six actual app-host WASM cases passed, covering corrected retry once, global Undo/Redo including workflow effects and conflict retention. Browser durability remains a separate contract; no durable acknowledgement is claimed here.
+
 ## 2026-10-20 - Avoid repeated normalization of prepared imports
 
 Added store.PreparedDataset, constructed only by full Import, and LoadPrepared sharing the existing persistence body while ordinary Load keeps its existing migration/backfill behavior. Appstate retains the opaque prepared value and supplies the device credential separately. Current and legacy fixtures prove full snapshot parity and nonempty exact journal-capture parity; token reuse preserves original data across device keys, and invalid handles leave existing rows, revision and cursor unchanged. Focused native store and appstate tests passed. This removes repeated CPU passes on parsed imports without claiming a measured browser latency improvement.

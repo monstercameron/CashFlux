@@ -52,7 +52,8 @@ type ContributeResult struct {
 // memo-only: only CurrentAmount is bumped (the historical behaviour).
 //
 // amt must be positive and share the saved amount's currency. Arithmetic and the
-// intended goal write are checked before any optional ledger mutation.
+// intended goal write are checked before any mutation. A requested ledger debit
+// and the goal commit together; an error leaves both unchanged.
 func (a *App) ContributeToGoal(g domain.Goal, amt money.Money, postLedger bool) (ContributeResult, error) {
 	latest, err := a.storedContributionGoal(g.ID)
 	if err != nil {
@@ -101,6 +102,12 @@ func (a *App) ContributeToGoalFrom(g domain.Goal, amt money.Money, postLedger bo
 	if err := a.validateCustom("goal", g.Custom); err != nil {
 		return ContributeResult{}, err
 	}
+	contributedAt := time.Now()
+	g, err = g.RecordContributionChecked(domain.GoalContribution{Amount: amt, At: contributedAt})
+	if err != nil {
+		return ContributeResult{}, fmt.Errorf("appstate: contribute: record history: %w", err)
+	}
+	g.LastReviewedAt = contributedAt
 	rates := a.goalEvaluationRates()
 	beforeCoverage, beforeErr := goals.EvaluateCoverage(before, rates)
 	afterCoverage, afterErr := goals.EvaluateCoverage(g, rates)
@@ -115,11 +122,9 @@ func (a *App) ContributeToGoalFrom(g domain.Goal, amt money.Money, postLedger bo
 	}
 	result.BecameComplete = result.CompletionKnown && !beforeCoverage.Complete && afterCoverage.Complete
 
-	// Post the ledger entry (if requested) BEFORE saving the goal, so the
-	// contribution log can record the transaction id and "undo contribution" can
-	// later remove both the progress and the ledger entry in one action.
-	var txnID string
-	var postErr error
+	// Prepare the optional debit and attach its ID to the copy-owned, checked
+	// contribution log before committing either record.
+	var debit *domain.Transaction
 	if postLedger && fromAcctID != "" {
 		// A debit (expense-signed, negative amount) against the chosen account. No
 		// CategoryID so it doesn't distort budget rollups — the user can categorise
@@ -127,32 +132,22 @@ func (a *App) ContributeToGoalFrom(g domain.Goal, amt money.Money, postLedger bo
 		txn := domain.Transaction{
 			ID:        id.New(),
 			AccountID: fromAcctID,
-			Date:      time.Now(),
+			Date:      contributedAt,
 			Payee:     fmt.Sprintf("Goal contribution — %s", g.Name),
 			Desc:      fmt.Sprintf("Contribution to savings goal %q", g.Name),
 			Amount:    money.New(-amt.Amount, amt.Currency), // debit
 			Source:    domain.TxnSourceManual,               // a deliberate user contribution
 		}
-		if err := a.PutTransaction(txn); err != nil {
-			postErr = fmt.Errorf("appstate: contribute: post ledger: %w", err)
-		} else {
-			txnID = txn.ID
-			a.log.Info("goal contribution ledger entry posted", "goal", g.ID, "txn", txnID)
-		}
+		debit = &txn
+		g.Contributions[len(g.Contributions)-1].TxnID = txn.ID
 	}
 
-	g = g.RecordContribution(domain.GoalContribution{Amount: amt, TxnID: txnID, At: time.Now()})
-	g.LastReviewedAt = time.Now() // a contribution counts as touching the goal (review freshness)
-	if err := a.PutGoal(g); err != nil {
-		return ContributeResult{}, fmt.Errorf("appstate: contribute: save goal: %w", err)
+	if err := a.commitGoalContribution(before, g, debit); err != nil {
+		return ContributeResult{}, fmt.Errorf("appstate: contribute: %w", err)
 	}
-	if postErr != nil {
-		// The goal (with its bumped amount) is saved; surface the ledger error but
-		// don't roll back — the contribution still counts, just without a txn.
-		return result, postErr
+	if debit != nil {
+		result.TransactionID = debit.ID
 	}
-
-	result.TransactionID = txnID
 	return result, nil
 }
 
@@ -237,16 +232,8 @@ func (a *App) UndoLastContribution(g domain.Goal) (money.Money, bool, error) {
 		newAmount = money.Zero(newAmount.Currency)
 	}
 	updated.CurrentAmount = newAmount
-	if err := a.PutGoal(updated); err != nil {
-		return money.Money{}, false, fmt.Errorf("appstate: undo contribution: save goal: %w", err)
-	}
-	// Remove the ledger entry this contribution posted, if it still exists. A
-	// failure here is non-fatal: the goal progress is already reversed, and the
-	// user can delete a stray transaction manually.
-	if last.TxnID != "" {
-		if err := a.DeleteTransaction(last.TxnID); err != nil {
-			a.log.Warn("undo contribution: delete ledger txn failed", "goal", g.ID, "txn", last.TxnID, "err", err)
-		}
+	if err := a.commitContributionUndo(g, updated, last.TxnID); err != nil {
+		return money.Money{}, false, fmt.Errorf("appstate: undo contribution: %w", err)
 	}
 	return last.Amount, true, nil
 }

@@ -2828,6 +2828,13 @@ func (a *App) PutTransaction(t domain.Transaction) error {
 	if err := a.store.PutTransaction(t); err != nil {
 		return err
 	}
+	a.afterTransactionSaved(t, existed, overBefore)
+	return nil
+}
+
+// afterTransactionSaved runs addition effects and observers only after all records
+// belonging to the operation have committed. Edits retain their existing behavior.
+func (a *App) afterTransactionSaved(t domain.Transaction, existed bool, overBefore map[string]bool) {
 	a.log.Info("transaction saved", "id", t.ID)
 	if !existed && !a.triggersSuspended {
 		// C192: spending against a sinking fund's linked category draws the fund
@@ -2854,7 +2861,6 @@ func (a *App) PutTransaction(t domain.Transaction) error {
 		// never a timer). Ambiguous occurrences are left for a manual match.
 		a.autoMatchBills(a.clock())
 	}
-	return nil
 }
 
 func normalizeTransactionDate(date time.Time) time.Time {
@@ -3406,6 +3412,13 @@ func (a *App) deleteTransactionsAtomic(ids []string) ([]string, error) {
 	if err := a.store.ReplayChangesExpected(changes); err != nil {
 		return nil, fmt.Errorf("delete transactions: %w", err)
 	}
+	a.afterTransactionsDeleted(changes, deleted)
+	return deleted, nil
+}
+
+// afterTransactionsDeleted retains relationship restoration metadata and notifies
+// observers after the transaction rows and their related changes commit together.
+func (a *App) afterTransactionsDeleted(changes []store.RecordChange, deleted []string) {
 	var relations []store.RecordChange
 	for _, c := range changes {
 		if c.Table != "transactions" {
@@ -3422,7 +3435,6 @@ func (a *App) deleteTransactionsAtomic(ids []string) ([]string, error) {
 	}
 	a.SyncTxnLinkNetting()
 	a.fireTxnMutated()
-	return deleted, nil
 }
 
 // DeleteTransactionWithTransferPair deletes both legs and their relationships.
@@ -3569,12 +3581,18 @@ func (a *App) PutGoal(g domain.Goal) error {
 	if err := a.store.PutGoal(g); err != nil {
 		return err
 	}
+	a.afterGoalSaved(g, wasComplete, beforeKnown, rates)
+	return nil
+}
+
+// afterGoalSaved fires the known completion transition after its enclosing write
+// has committed, including operations that also change the ledger.
+func (a *App) afterGoalSaved(g domain.Goal, wasComplete, beforeKnown bool, rates currency.Rates) {
 	a.log.Info("goal saved", "id", g.ID)
 	isComplete, afterKnown := goalCompletionForWrite(g, rates)
 	if beforeKnown && afterKnown && !wasComplete && isComplete && !a.triggersSuspended {
 		a.RunTriggered(workflow.TriggerGoalReached, nil)
 	}
-	return nil
 }
 func (a *App) DeleteGoal(id string) error {
 	if err := a.roleGuard(); err != nil {

@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Goal contributions and their optional debit now commit together; failed saves and Undo retain all records for a safe retry.
 - Validated imported datasets now retain an opaque prepared handle so reloads do not repeat completed normalization passes.
 - Compact Goal cards now avoid hidden interest, trajectory, history, task and action-node preparation.
 - Native goal history rollover now checks monthly money and count arithmetic and leaves the original goal unchanged on failure.

@@ -63,7 +63,7 @@ func TestContributeRejectsUnsafeAmountsBeforeGoalOrLedgerMutation(t *testing.T) 
 	}
 }
 
-func TestContributePreflightsLegacySavedCurrencyAndPreservesLedgerFailureContract(t *testing.T) {
+func TestContributePreflightsLegacySavedCurrencyAndRollsBackLedgerFailure(t *testing.T) {
 	app := newApp(t, false)
 	defer app.Store().Close()
 	goal := contributionSafetyGoal(100)
@@ -90,12 +90,12 @@ func TestContributePreflightsLegacySavedCurrencyAndPreservesLedgerFailureContrac
 		t.Fatal(err)
 	}
 	result, err := app.ContributeToGoalFrom(goal, money.New(500, "USD"), true, "missing-account")
-	if err == nil || result.TransactionID != "" || result.Milestone != 50 {
-		t.Fatalf("ledger failure result contract changed: %+v %v", result, err)
+	if err == nil || result != (ContributeResult{}) {
+		t.Fatalf("ledger failure returned success facts: %+v %v", result, err)
 	}
 	stored := findGoal(t, app, goal.ID)
-	if stored.CurrentAmount.Amount != 500 || len(stored.Contributions) != 1 || stored.Contributions[0].TxnID != "" || len(app.Transactions()) != 0 {
-		t.Fatal("ledger failure no longer preserves a memo-only saved contribution")
+	if !reflect.DeepEqual(stored, goal) || len(app.Transactions()) != 0 {
+		t.Fatal("ledger failure partially saved a contribution")
 	}
 }
 
