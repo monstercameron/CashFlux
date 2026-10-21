@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Planning retirement uses native checked balances and dependency-complete bounded simulation reuse.
 - What changed preserves source errors, exact cutoff and app identity while sharing transaction indexes.
 - Budget summary pool calculations preserve unknown plans and arithmetic overflow.
 - Goal-funded budget details show unavailable results for missing conversion rates or arithmetic overflow.

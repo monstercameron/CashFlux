@@ -1,3 +1,7 @@
+## 2026-10-21 - Prepare checked retirement facts
+
+Retirement balance aggregation uses a single ledger fold and all-or-nothing conversion. Native projection and drawdown assumptions are preserved; cache includes app/store/UI revisions, exact inputs and FX. All370 native packages and1101 Screens tests passed including missingFX, closed-store and FX-only mounted controls. Unavailable copy uses the translation catalog.
+
 ## 2026-10-21 - Prepare checked indexed What changed facts
 
 Removed incomplete cross-render report memoization and reused checked immutable snapshots. Native paired algorithm evidence reduced visits250000 to5000 for50accounts and5000transactions; no browser speed claim. Native suite and all4 mounted host regressions passed in1101-test Screens suite; test wrapper tick forces real v7 rerenders.
