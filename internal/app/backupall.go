@@ -104,14 +104,16 @@ func marshalFullBackup() ([]byte, error) {
 // single-workspace export, this is a lossless snapshot of the entire app, for
 // moving to a new device or keeping a safety copy.
 func backupEverything() {
-	data, err := marshalFullBackup()
-	if err != nil {
-		paletteNotify(uistate.T("backup.everythingErr"), true)
-		return
-	}
-	downloadBytes("cashflux-backup.json", "application/json", data)
-	recordBackupNow() // C299: stamp so "Last backed up" reflects full backups too
-	paletteNotify(uistate.T("backup.everythingDone"), false)
+	go func() {
+		data, err := marshalFullBackup()
+		if err != nil {
+			paletteNotify(uistate.T("backup.everythingErr"), true)
+			return
+		}
+		downloadBytes("cashflux-backup.json", "application/json", data)
+		recordBackupNow() // C299: stamp so "Last backed up" reflects full backups too
+		paletteNotify(uistate.T("backup.everythingDone"), false)
+	}()
 }
 
 // restoreFromBackup picks a full-backup JSON file, confirms the (destructive)

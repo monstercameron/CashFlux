@@ -1,3 +1,7 @@
+## 2026-10-20 - Let file-bearing exports read IndexedDB
+
+JSON export and both full-install backup actions called their synchronous blob-rehydrating helpers directly from UI callbacks. A PDF stored in IndexedDB makes those helpers wait for a browser event that cannot arrive until the callback returns. These actions now start a Go goroutine before reading the file bytes, matching the existing SQLite export pattern. The WebAssembly app build passed. Inactive workspace file completeness remains a separate backup limitation.
+
 ## 2026-10-20 - Resume protected boot after server change
 
 The server-switch browser regression hung at the App Lock gate. The initial authenticated dataset read completed, but after WebCrypto decrypted the inner dataset envelope, its JavaScript promise callback synchronously began journal replay and waited for a second IndexedDB transaction. Browser events could not deliver that transaction's completion until the callback returned. The decrypted import and replay now run in a Go goroutine. The browser case passed: the old server's refresh and access credentials were absent after reload, the new server's signed-out setup appeared, and the new server had no copied account. A normal encrypted-workspace reload regression checks the same gate without switching servers.

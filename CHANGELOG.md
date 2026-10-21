@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- File-bearing JSON and full-install exports now run outside browser click callbacks so IndexedDB can deliver attachment reads and the backup can finish or report an error.
 - Unlocking a saved encrypted dataset now replays its IndexedDB journal after the WebCrypto callback returns, so a server-change reload can finish and show the signed-out setup for the new server.
 - Full-install backup now stops when the active dataset or one of its locally stored files cannot be read, instead of downloading an archive with that dataset missing.
 - Cloud sync now includes bytes from locally stored PDF and image attachments in each committed snapshot; unreadable, missing, or truncated files pause upload, and manual JSON/SQLite backups report the same failure instead of exporting an incomplete copy.
