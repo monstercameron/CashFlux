@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Prepared v1.19.10 with encrypted local storage for restored account documents and a PDF cap that fits the default encrypted server upload limit.
 - PDF selection now caps files at 23 MiB so their base64 encrypted blob envelopes fit within the server's default 32 MiB upload limit.
 - Account PDF and image attachments now save to encrypted local blob storage, and a server pull stores restored files there before committing the local dataset. The three-browser regression checks PDF bytes and encrypted IndexedDB records on both devices.
 - Image uploads now commit bytes to the encrypted local blob store before saving artifact metadata, keeping large files out of the autosaved dataset; the three-browser sync regression checks that local record and the returned file bytes.

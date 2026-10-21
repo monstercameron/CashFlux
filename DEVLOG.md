@@ -1,3 +1,7 @@
+## 2026-10-21 - Prepare v1.19.10 for the attachment sync fixes
+
+Bumped the single product version source after the local three-browser password and file roundtrip, native artifact tests, focused WebAssembly cap test, and app build passed. PR #14 carries the storage and PDF limit fixes. The earlier v1.19.9 production shell and public health endpoints were checked, but a credentialed production login and attachment roundtrip remain unverified. The new PR's CI checks are still in progress; merge and deployment are pending.
+
 ## 2026-10-21 - Align the PDF picker with the encrypted upload limit
 
 The file picker accepted 45 MiB PDFs while the server's default blob limit is 32 MiB. Artifact encryption wraps ciphertext in a JSON envelope with base64, so a 30 MiB raw cap would still exceed the server limit. PDF selection now caps raw files at 23 MiB, leaving over 1 MiB for envelope expansion. The focused WebAssembly file-cap test covers PDF and the unchanged JSON cap. Servers configured below the default limit can still reject a file during sync; the app retains the local file and queued change for recovery.
