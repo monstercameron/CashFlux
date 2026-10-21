@@ -132,7 +132,11 @@ func PeriodTotals(all []domain.Transaction, start, end time.Time, rates currency
 				return money.Money{}, money.Money{}, err
 			}
 		case t.IsExpense():
-			if expense, err = expense.Add(conv.Abs()); err != nil {
+			magnitude, err := conv.AbsChecked()
+			if err != nil {
+				return money.Money{}, money.Money{}, err
+			}
+			if expense, err = expense.Add(magnitude); err != nil {
 				return money.Money{}, money.Money{}, err
 			}
 		}

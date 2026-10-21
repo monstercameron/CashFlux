@@ -20,6 +20,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/freshness"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/periodview"
 	"github.com/monstercameron/CashFlux/internal/txntoolbar"
 	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
@@ -51,6 +52,8 @@ type RenderCtx struct {
 
 	Start, End time.Time
 
+	// PeriodTotals carries availability; Income and Expense below require Known.
+	PeriodTotals                              periodview.Totals
 	Net, Assets, Liabilities, Income, Expense money.Money
 
 	PeriodLabel    string

@@ -1,3 +1,7 @@
+## 2026-10-20 - Distinguish unavailable period totals from genuine zero
+
+Added native periodview.Totals with known money versus independent percentage availability, preserved all-or-nothing FX semantics and changed MinInt64 expense absolute values from panic to checked error. Shared selectors now carry availability through Dashboard render context, hero, KPI/gauge and Assistant context; unsupported affordability renders an explanation rather than a zero-income result. Wide int64 gauge text no longer narrows to wasm int, while width remains clamped and truncation preserves 0% rather than -0%. Native periodview/ledger/i18n/screenlint and all native integration passed. Five focused actual-host/selector/gauge WASM cases and the final signed gauge parity case passed; full screens and sample browser integration are running separately.
+
 ## 2026-10-20 - Keep all named and surface-scoped undo records
 
 Snapshot extraction previously required id for every collection, rejecting named molecule records and collapsing placements with the same id on different surfaces. Collection-aware keys now match SQLite molecule names and surface/id placement keys; other collections still require nonempty ids. Duplicate snapshot keys return an error rather than silently losing a row. Native round-trip tests cover populated molecules, multiple surfaces, missing fields and duplicate keys. Existing user-undo placement exclusions remain in place; snapshot/recovery fingerprints retain every placement.

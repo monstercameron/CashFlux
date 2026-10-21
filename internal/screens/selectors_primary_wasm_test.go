@@ -31,8 +31,8 @@ func primarySelectorFixture(p primarySelectorProps) ui.Node {
 	rates := currency.Rates{Base: "USD"}
 	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	nw := useNetWorth(p.App, accounts, p.Txns, rates)
-	income, _ := usePeriodTotals(p.App, p.Txns, start, start.AddDate(0, 1, 0), rates, "all")
-	return P(fmt.Sprintf("%d/%d", nw.Net.Amount, income.Amount))
+	totals := usePeriodTotals(p.App, p.Txns, start, start.AddDate(0, 1, 0), rates, "all")
+	return P(fmt.Sprintf("%d/%d", nw.Net.Amount, totals.Income.Amount))
 }
 
 func TestPrimarySelectorsIsolateAppInstancesAtSameRevision(t *testing.T) {

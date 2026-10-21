@@ -16,8 +16,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
-	"github.com/monstercameron/CashFlux/internal/ledger"
-	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/scope"
 	"github.com/monstercameron/CashFlux/internal/smartai"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -95,7 +93,7 @@ func heroFinancialSummary(p heroFinancialSummaryProps) ui.Node {
 	activeMember := uistate.UseActiveMember().Get()
 	pr := uistate.UsePrefs().Get()
 	start, end := w.Range()
-	income, expense := usePeriodTotals(app, txns, start, end, rates, scopeSig)
+	totals := usePeriodTotals(app, txns, start, end, rates, scopeSig)
 	// The hero sparkline is a trailing 6-month net-worth series over every transaction
 	// — heavy, and secondary to the net-worth figure itself. Defer it off the initial
 	// mount so the headline number + KPIs paint immediately; the sparkline + delta chip
@@ -114,14 +112,13 @@ func heroFinancialSummary(p heroFinancialSummaryProps) ui.Node {
 		budgetSummary = summarizeHeroBudgets(computeBudgetView(app, activeMember, w, pr, false))
 	}
 
-	netMoney := money.New(income.Amount-expense.Amount, income.Currency)
-	savingsPct := ledger.SavingsRate(income.Amount, expense.Amount)
-
-	// Net display: "+" prefix for surplus, accounting parens for deficit, plain
-	// zero for breakeven — mirrors the dashboard cash-flow sub-line style (L4).
-	netDisplay := fmtMoney(netMoney)
-	if netMoney.Amount > 0 {
-		netDisplay = "+" + fmtMoney(netMoney)
+	incomeDisplay, spendingDisplay, netDisplay, netTone := "—", "—", "—", "text-dim"
+	if totals.Known {
+		incomeDisplay, spendingDisplay = fmtMoney(totals.Income), fmtMoney(totals.Expense)
+		netDisplay, netTone = fmtMoney(totals.Net), figTone(totals.Net)
+		if totals.Net.Amount > 0 {
+			netDisplay = "+" + netDisplay
+		}
 	}
 
 	// A trailing 6-month net-worth series powers the hero sparkline, and the change
@@ -156,18 +153,19 @@ func heroFinancialSummary(p heroFinancialSummaryProps) ui.Node {
 	return ui.CreateElement(heroSummary, heroSummaryProps{
 		NetWorth:     fmtMoney(nw.Net),
 		NetWorthTone: figTone(nw.Net),
-		Income:       fmtMoney(income),
-		Spending:     fmtMoney(expense),
+		Income:       incomeDisplay,
+		Spending:     spendingDisplay,
 		Net:          netDisplay,
-		NetTone:      figTone(netMoney),
-		SavingsPct:   savingsPct,
-		PeriodLabel:  w.Label(),
-		Spark:        spark,
-		Delta:        delta,
-		DeltaTone:    deltaTone,
-		HasAccounts:  len(accounts) > 0,
-		Focused:      focused,
-		Budget:       budgetSummary,
+		NetTone:      netTone,
+		SavingsPct:   totals.SavingsPercent,
+		TotalsKnown:  totals.Known, SavingsKnown: totals.SavingsKnown(),
+		PeriodLabel: w.Label(),
+		Spark:       spark,
+		Delta:       delta,
+		DeltaTone:   deltaTone,
+		HasAccounts: len(accounts) > 0,
+		Focused:     focused,
+		Budget:      budgetSummary,
 	})
 }
 
@@ -215,13 +213,14 @@ func summarizeHeroBudgets(v budgetView) heroBudgetSnapshot {
 // heroSummaryProps carries the pre-formatted display values for the non-empty
 // hero so the parent can call memoized selectors before rendering the component.
 type heroSummaryProps struct {
-	NetWorth     string
-	NetWorthTone string // color token, e.g. "text-up" or "text-down"
-	Income       string
-	Spending     string
-	Net          string // formatted cash-flow net (income − spending)
-	NetTone      string // color token for the net figure
-	SavingsPct   int
+	NetWorth                  string
+	NetWorthTone              string // color token, e.g. "text-up" or "text-down"
+	Income                    string
+	Spending                  string
+	Net                       string // formatted cash-flow net (income − spending)
+	NetTone                   string // color token for the net figure
+	SavingsPct                int64
+	TotalsKnown, SavingsKnown bool
 	// PeriodLabel names the window the four stats below cover ("Jul 2026"). The
 	// row used to be captioned "this month" in a code comment and nowhere in the
 	// UI, so a hero paged to March showed March's savings rate beside a health
@@ -269,6 +268,14 @@ func heroSummary(props heroSummaryProps) ui.Node {
 		savingsTone = "text-down"
 	case props.SavingsPct < 10:
 		savingsTone = "text-warn"
+	}
+
+	if !props.SavingsKnown {
+		savingsStr, savingsTone = "—", "text-dim"
+	}
+	incomeTone, spendingTone := "text-up", "text-down"
+	if !props.TotalsKnown {
+		incomeTone, spendingTone = "text-dim", "text-dim"
 	}
 
 	// Optional delta chip ("▲ $X this month") and net-worth sparkline.
@@ -335,12 +342,15 @@ func heroSummary(props heroSummaryProps) ui.Node {
 				Attr("data-testid", "hero-stats-window"),
 				uistate.T("home.statsWindow", props.PeriodLabel)),
 			Div(css.Class("home-hero-stats"),
-				heroStat(uistate.T("home.income"), props.Income, "text-up"),
-				heroStat(uistate.T("home.spending"), props.Spending, "text-down"),
+				heroStat(uistate.T("home.income"), props.Income, incomeTone),
+				heroStat(uistate.T("home.spending"), props.Spending, spendingTone),
 				heroStat(uistate.T("home.net"), props.Net, props.NetTone),
 				heroStat(uistate.T("home.savingsRate"), savingsStr, savingsTone),
 			),
 		)),
+
+		If(!props.TotalsKnown, P(css.Class("t-caption", tw.TextDim), Attr("role", "status"), Attr("data-testid", "hero-totals-unavailable"), uistate.T("period.totalsUnavailable"))),
+		If(props.TotalsKnown && !props.SavingsKnown, P(css.Class("t-caption", tw.TextDim), Attr("role", "status"), uistate.T("period.savingsUnavailable"))),
 
 		// Quick actions — the two most common entry points, surfaced without hunting.
 		// Standard glyph buttons (leading icon + label, like the page toolbars).

@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Dashboard and Assistant use checked period totals, explicit unavailable states and safe savings percentages; affordability waits for known figures.
 - Undo snapshots now preserve named molecules and placements sharing an ID across different surfaces, and reject duplicate keys.
 - Goal contributions and their optional debit now commit together; failed saves and Undo retain all records for a safe retry.
 - Validated imported datasets now retain an opaque prepared handle so reloads do not repeat completed normalization passes.

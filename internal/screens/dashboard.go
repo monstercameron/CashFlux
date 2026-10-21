@@ -7,6 +7,7 @@ package screens
 import (
 	"fmt"
 	"log/slog"
+	"math"
 	"sort"
 	"strings"
 	"syscall/js"
@@ -694,7 +695,8 @@ func dashboardController(props dashboardControllerProps) ui.Node {
 	start, end := w.Range()
 	// Memoized (§1.6): keyed on app.Rev() + the period + the full scope sig,
 	// so it recomputes only when one of those changes.
-	income, expense := usePeriodTotals(app, kpiTxns, start, end, rates, scopeSig)
+	totals := usePeriodTotals(app, kpiTxns, start, end, rates, scopeSig)
+	income, expense := totals.Income, totals.Expense
 
 	// W-15: trigger count-up animation on the KPI hero figures whenever the
 	// underlying values change. The sig is keyed on the four headline amounts so
@@ -713,11 +715,15 @@ func dashboardController(props dashboardControllerProps) ui.Node {
 	// Cash flow = income − spending for the period (G1 §7): the surplus/deficit Elena
 	// wants in one line. Shown as a signed sub-line on the Income tile so "what
 	// changed?" is answerable above the fold without mental arithmetic.
-	cashFlow := money.New(income.Amount-expense.Amount, income.Currency)
-	cashFlowSub := "cash flow −" + fmtMoney(money.New(-cashFlow.Amount, income.Currency))
-	if cashFlow.Amount >= 0 {
-		cashFlowSub = "cash flow +" + fmtMoney(cashFlow)
+	cashFlowSub := uistate.T("calculation.unavailable")
+	if totals.Known {
+		if totals.Net.Amount >= 0 {
+			cashFlowSub = "cash flow +" + fmtMoney(totals.Net)
+		} else if magnitude, err := totals.Net.AbsChecked(); err == nil {
+			cashFlowSub = "cash flow −" + fmtMoney(magnitude)
+		}
 	}
+
 	periodLabel := w.FromLabel()
 	if w.ToLabel() != w.FromLabel() {
 		periodLabel += " – " + w.ToLabel()
@@ -845,7 +851,7 @@ func dashboardController(props dashboardControllerProps) ui.Node {
 		Rates: rates, Base: base,
 		Start: start, End: end,
 		Net: net, Assets: assets, Liabilities: liabilities, Income: income, Expense: expense,
-		PeriodLabel: periodLabel, CashFlowSub: cashFlowSub,
+		PeriodTotals: totals, PeriodLabel: periodLabel, CashFlowSub: cashFlowSub,
 		IncCount: counts.Income, ExpCount: counts.Expense, ActiveAccounts: active,
 		NWSub: nwSub, NWTone: nwTone, HHNWSub: hhNWSub,
 		AttnCol: attnCol, AttnRow: attnRow,
@@ -1373,11 +1379,19 @@ func breakdownFrame(fr domain.Frame, c widgetrender.RenderCtx) ui.Node {
 
 // savingsRateWidget is the 2×1 Savings rate widget: the share of the period's
 // income that wasn't spent, as a big figure and a bar.
-func savingsRateWidget(ratePct float64, cfg widgetcfg.Config, periodLabel string) ui.Node {
+func savingsRateWidget(ratePct float64, known bool, cfg widgetcfg.Config, periodLabel string) ui.Node {
+	if !known {
+		return uiw.Widget(uiw.WidgetProps{ID: "savings", Title: uistate.T("dashboard.savingsRate"), Draggable: true, Resizable: true, GridColumn: "1 / span 2", GridRow: "7",
+			Body: Div(Attr("data-testid", "savings-unavailable"), P(css.Class("fig t-figure-lg", tw.TextDim), "—"), P(css.Class("t-caption", tw.TextDim), uistate.T("period.savingsUnavailable")))})
+	}
+
 	// ratePct is the tile's configurable formula evaluated over the engine surface
 	// (default (income−expense)/income·100). Truncate toward zero to match the hero's
 	// whole-percent reading (ledger.SavingsRate convention).
-	pct := int(ratePct)
+	pct := math.Trunc(ratePct)
+	if pct == 0 {
+		pct = 0
+	} // Normalize negative zero to the existing whole-percent display.
 
 	// Widget settings (gear → flip): target savings rate and whether to show the bar.
 	target, showBar := 20, true
@@ -1396,7 +1410,7 @@ func savingsRateWidget(ratePct float64, cfg widgetcfg.Config, periodLabel string
 	switch {
 	case pct < 0:
 		tone, bar = "text-down", "bg-down"
-	case pct < target:
+	case pct < float64(target):
 		tone, bar = "text-warn", "bg-warn"
 	}
 
@@ -1409,14 +1423,14 @@ func savingsRateWidget(ratePct float64, cfg widgetcfg.Config, periodLabel string
 		window = periodLabel
 	}
 	left := Div(
-		Div(ClassStr("fig t-figure-lg "+tw.Fold(tw.FontDisplay, tw.LeadingNone)+" "+tw.ColorClass(tone)), fmt.Sprintf("%d%%", pct)),
+		Div(ClassStr("fig t-figure-lg "+tw.Fold(tw.FontDisplay, tw.LeadingNone)+" "+tw.ColorClass(tone)), fmt.Sprintf("%.0f%%", pct)),
 		Div(css.Class("t-caption", tw.TextDim, tw.Mt1), uistate.T("dashboard.savingsSub", target)),
 		Div(css.Class("t-caption", tw.TextFaint), Attr("data-testid", "savings-window"), window),
 	)
 	var right ui.Node = Fragment()
 	if showBar {
 		right = Div(css.Class(tw.Flex1),
-			uiw.ProgressBar(uiw.ProgressBarProps{Percent: pct, Tone: bar}),
+			uiw.ProgressBar(uiw.ProgressBarProps{Percent: int(math.Max(0, math.Min(100, pct))), Tone: bar}),
 		)
 	}
 	body := Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap5), left, right)

@@ -5,6 +5,7 @@
 package screens
 
 import (
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -15,7 +16,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/ledger"
-	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/periodview"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
@@ -70,13 +71,10 @@ func useNetWorth(app *appstate.App, accounts []domain.Account, txns []domain.Tra
 // (already member-filtered) transactions. Period bounds and a member signature are
 // extra deps so changing the active period or member recomputes without a data
 // change.
-func usePeriodTotals(app *appstate.App, txns []domain.Transaction, start, end time.Time, rates currency.Rates, memberSig string) (money.Money, money.Money) {
-	type totals struct{ income, expense money.Money }
-	v := ui.UseMemo(func() totals {
-		i, e, _ := ledger.PeriodTotals(txns, start, end, rates)
-		return totals{i, e}
-	}, revKey(app), start, end, memberSig)
-	return v.income, v.expense
+func usePeriodTotals(app *appstate.App, txns []domain.Transaction, start, end time.Time, rates currency.Rates, memberSig string) periodview.Totals {
+	return ui.UseMemo(func() periodview.Totals {
+		return periodview.BuildTotals(txns, start, end, rates)
+	}, revKey(app), start, end, memberSig, fmt.Sprintf("%#v", rates))
 }
 
 // useBudgetHealth returns the memoized per-budget status (health) for the period.

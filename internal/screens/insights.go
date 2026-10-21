@@ -134,14 +134,18 @@ func Insights() ui.Node {
 	now := time.Now()
 	mStart, mEnd := dateutil.MonthRange(now)
 	net := useNetWorth(app, accounts, txns, rates).Net
-	income, expense := usePeriodTotals(app, scopedTxns, mStart, mEnd, rates, scopeKey)
+	totals := usePeriodTotals(app, scopedTxns, mStart, mEnd, rates, scopeKey)
 	active := 0
 	for _, a := range accounts {
 		if !a.Archived {
 			active++
 		}
 	}
-	aiCtx := ai.FinancialContext{NetWorth: fmtMoney(net), Income: fmtMoney(income), Spending: fmtMoney(expense), Accounts: active}
+	incomeText, expenseText := uistate.T("calculation.unavailable"), uistate.T("calculation.unavailable")
+	if totals.Known {
+		incomeText, expenseText = fmtMoney(totals.Income), fmtMoney(totals.Expense)
+	}
+	aiCtx := ai.FinancialContext{NetWorth: fmtMoney(net), Income: incomeText, Spending: expenseText, Accounts: active}
 
 	// Typing and chat effects reuse the same scoped snapshot and question facts.
 	// Day is a dependency because budget cadence and upcoming goals can change
@@ -584,11 +588,14 @@ func Insights() ui.Node {
 
 		// Affordability fast-path: answer from real numbers, no AI key needed.
 		if q, ok := insights.ParseAffordQuery(text); ok {
-			monthlyNet := income.Amount - expense.Amount // this month's net (minor units)
-			ar := insights.AffordAnswer(*q, net.Amount, monthlyNet, 0)
+			answer := chatTurn{ID: id.New(), Role: "assistant", Text: uistate.T("insights.affordTotalsUnavailable")}
+			if totals.Known {
+				ar := insights.AffordAnswer(*q, net.Amount, totals.Net.Amount, 0)
+				answer.Role, answer.Text = "afford", affordCardText(ar, q, base)
+			}
 			hist := append(append([]chatTurn{}, turns.Get()...),
 				chatTurn{ID: id.New(), Role: "user", Text: text},
-				chatTurn{ID: id.New(), Role: "afford", Text: affordCardText(ar, q, base)},
+				answer,
 			)
 			turns.Set(hist)
 			setComposer("")
@@ -1795,6 +1802,7 @@ func Insights() ui.Node {
 		// so the user knows these figures are filtered. "Change scope in Reports →"
 		// links directly to the ScopeSelector on /reports.
 		scopeNotice,
+		If(!totals.Known, P(css.Class("t-caption", tw.TextDim), Attr("role", "status"), Attr("data-testid", "assistant-totals-unavailable"), uistate.T("period.totalsUnavailable"))),
 		Div(css.Class("ask-deck"), Attr("data-testid", "assistant-layout"), Attr("id", "ask"),
 			askMain,
 			// The agent's periphery as quiet margin notes: anomaly findings,
