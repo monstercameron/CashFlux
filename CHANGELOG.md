@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- The WASM test runner reports missing, empty or invalid compiler output before starting Node.
 - Net-worth headlines, monthly changes and trends consistently respect the account exclusion setting.
 - Transaction focus tests wait for the actual deferred callback rather than a fixed timer delay.
 - Dashboard, Accounts, Assistant and Notifications distinguish complete net worth, disclosed missing-rate subtotals and fatal calculation failures.

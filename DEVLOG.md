@@ -1,3 +1,7 @@
+## 2026-10-20 - Reject invalid WASM test artifacts at compile time
+
+Disk pressure produced an empty test artifact despite a successful Go compiler exit. Compile-TestBinary now verifies the expected output exists and reads only its eight-byte WebAssembly magic and version header, with package and path in errors. Both fresh and rerun compiles use the guard. Isolated AST-loaded validation passed under Windows PowerShell 5.1 for missing, empty, truncated, invalid version, invalid magic, exclusively locked and valid artifacts; it does not execute runner environment setup or invoke Go.
+
 ## 2026-10-20 - Keep net-worth account selection consistent
 
 Added one native account eligibility predicate and shared checked total accumulation for strict and explained household values. Balance-sheet and attribution account selection now use it, while explicit investment portfolio series retain excluded holdings through a separate AccountNetValueSeries entry point. Native selection, overflow, fail-fast and duplicate-account tests passed across six packages with vet; the actual account editor WASM regression passed after adding required fixture descriptions. It toggles the setting and back and checks both headlines, deltas, trend SVG and exclusion disclosure. Report cash-flow transaction scope and archived-account behavior are preserved.
