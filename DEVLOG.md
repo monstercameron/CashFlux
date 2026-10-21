@@ -1,3 +1,7 @@
+## 2026-10-20 - Assistant planning continuation and schedule availability
+
+Separated recurring source and schedule availability, so unassigned/deleted accounts no longer erase independently known forward dates. Retained per-definition source/schedule issues and explicit occurrences completeness. Planning continuation requires the returned dataset revision and refuses mixed pages after a store edit; oversized output requests a smaller page instead of silent truncation. Native Planning tests/vet and all nine actual-handler Planning WASM groups passed in integration pass4, including stale page, missing source, month-end cursor and bounded output regressions.
+
 ## 2026-10-20 - Assistant formula input and clock freshness
 
 A single snapshot feeds both calculation and cache identity: exact time/zone, week start/pay anchor, idle benchmark, allocation/planning settings, bill settings, pools and Smart counts. Input serialization failure computes uncached rather than colliding with another key. Tests verify unchanged-input reuse, config changes without store/UI revision bumps, exact intraday canonical behavior and nonfinite fingerprint bypass; all three cache WASM tests passed in integration pass5 after replacing an ineffective pace fixture with a real days-left boundary. Exact clock identity reduces whole-map cache hits during unrelated renders; prepared financial facts are a separate optimization, and this commit makes no latency improvement claim.

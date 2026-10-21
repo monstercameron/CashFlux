@@ -430,6 +430,9 @@ func (p *Planning) Funding(id string) (FundingFact, error) {
 			}
 		}
 	}
+	if !f.Known {
+		f.Incomplete = true
+	}
 	funding := goalview.BuildFundingWithReservations(p.in.Goals, p.in.Accounts, index, p.in.Rates, p.base())
 	if v, ok := funding.Suggestions[id]; ok {
 		f.Suggestion = &FundingSource{v.AccountID, v.AccountName, amount(v.Amount)}
@@ -448,6 +451,10 @@ type RecurringFact struct {
 	AccountName       string                  `json:"account_name"`
 	AccountExists     bool                    `json:"account_exists"`
 	AccountArchived   bool                    `json:"account_archived"`
+	SourceKnown       bool                    `json:"source_known"`
+	SourceError       string                  `json:"source_error,omitempty"`
+	ScheduleKnown     bool                    `json:"schedule_known"`
+	ScheduleError     string                  `json:"schedule_error,omitempty"`
 	CategoryID        string                  `json:"category_id"`
 	Paused            bool                    `json:"paused"`
 	Autopost          bool                    `json:"autopost"`
@@ -469,16 +476,17 @@ type OccurrenceFact struct {
 // RecurringResult includes schedule definitions and a paginated half-open
 // calendar window [From, Before). Paused definitions have no active occurrences.
 type RecurringResult struct {
-	From            time.Time        `json:"from"`
-	Before          time.Time        `json:"before"`
-	ObservedAt      time.Time        `json:"observed_at"`
-	Definitions     []RecurringFact  `json:"definitions"`
-	DefinitionCount int              `json:"definition_count"`
-	PausedExcluded  int              `json:"paused_excluded"`
-	Occurrences     []OccurrenceFact `json:"occurrences"`
-	Total           int              `json:"total"`
-	NextOffset      *int             `json:"next_offset"`
-	Incomplete      bool             `json:"incomplete"`
+	From                time.Time        `json:"from"`
+	Before              time.Time        `json:"before"`
+	ObservedAt          time.Time        `json:"observed_at"`
+	Definitions         []RecurringFact  `json:"definitions"`
+	DefinitionCount     int              `json:"definition_count"`
+	PausedExcluded      int              `json:"paused_excluded"`
+	Occurrences         []OccurrenceFact `json:"occurrences"`
+	Total               int              `json:"total"`
+	NextOffset          *int             `json:"next_offset"`
+	Incomplete          bool             `json:"incomplete"`
+	OccurrencesComplete bool             `json:"occurrences_complete"`
 }
 
 // Recurring returns canonical cadence dates without bill magnitudes: signed
@@ -487,7 +495,7 @@ type RecurringResult struct {
 // explicit errors, rather than silently returning an empty upcoming list.
 func (p *Planning) Recurring(id, accountID string, includePaused bool, from, before time.Time, offset, limit int) (RecurringResult, error) {
 	from, before = dateutil.CalendarDayUTC(from), dateutil.CalendarDayUTC(before)
-	f := RecurringResult{From: from, Before: before, ObservedAt: p.in.Now, Definitions: []RecurringFact{}, Occurrences: []OccurrenceFact{}}
+	f := RecurringResult{From: from, Before: before, ObservedAt: p.in.Now, Definitions: []RecurringFact{}, Occurrences: []OccurrenceFact{}, OccurrencesComplete: true}
 	if !before.After(from) || before.After(from.AddDate(0, 0, 366)) {
 		return f, fmt.Errorf("provide a nonempty recurring window no longer than 366 days")
 	}
@@ -512,21 +520,33 @@ func (p *Planning) Recurring(id, accountID string, includePaused bool, from, bef
 		}
 		a, err := p.account(r.AccountID)
 		d := RecurringFact{ID: r.ID, Label: r.Label, Amount: amount(r.Amount), Cadence: r.Cadence, NextDue: r.NextDue, AccountID: r.AccountID, AccountName: a.Name, AccountExists: err == nil, AccountArchived: a.Archived, CategoryID: r.CategoryID, Paused: r.Paused, Autopost: r.Autopost, Autopay: r.Autopay}
+		d.SourceKnown = err == nil
 		if err != nil {
-			d.Error = err.Error()
+			d.SourceError = err.Error()
+			if r.AccountID == "" {
+				d.SourceError = "The recurring item has no source account assigned."
+			}
+			d.Error = d.SourceError
 		}
 		if destination, ok := txnclassify.RecurringLiabilityDestination(r, p.in.Accounts); ok {
 			d.TransferAccountID = destination.ID
 		}
 		if !validCadence(r.Cadence) || r.NextDue.IsZero() {
-			d.Error = "The recurring schedule is unavailable: missing due date or unsupported cadence."
+			d.ScheduleError = "The recurring schedule is unavailable: missing due date or unsupported cadence."
 		}
 		var dates []time.Time
-		if !r.Paused && d.Error == "" {
+		if !r.Paused && d.ScheduleError == "" {
 			var err error
 			dates, err = recurringDates(r, from, before)
 			if err != nil {
-				d.Error = err.Error()
+				d.ScheduleError = err.Error()
+			}
+		}
+		d.ScheduleKnown = d.ScheduleError == ""
+		if d.ScheduleError != "" {
+			f.OccurrencesComplete = false
+			if d.Error == "" {
+				d.Error = d.ScheduleError
 			}
 		}
 		if d.Error != "" {

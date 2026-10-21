@@ -6,6 +6,7 @@ package screens
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
 	"strings"
 	"testing"
@@ -268,9 +269,24 @@ func TestAssistantPlanningRecurringReadsPaidFlagsAndPaginates(t *testing.T) {
 	result = assistantPlanningRead[struct {
 		Schedules assistantdata.RecurringResult `json:"schedules"`
 		Next      *int                          `json:"definitions_next_offset"`
-	}](t, tool, `{"from":"2026-10-20","before":"2026-10-23","limit":1,"offset":2,"definitions_offset":1,"include_paused":true}`)
+	}](t, tool, `{"from":"2026-10-20","before":"2026-10-23","limit":1,"offset":2,"definitions_offset":1,"include_paused":true,"revision":"`+fmt.Sprint(app.Store().Rev())+`"}`)
 	if result.Schedules.Occurrences[0].Paid || result.Schedules.NextOffset != nil || len(result.Schedules.Definitions) != 1 || !result.Schedules.Definitions[0].Paused || result.Next != nil {
 		t.Fatalf("paid flags/last page stale: %+v", result)
+	}
+	unassigned := r
+	unassigned.ID = "unassigned"
+	unassigned.Label = "Unassigned income"
+	unassigned.AccountID = ""
+	unassigned.Amount = money.New(500, "USD")
+	if err := app.PutRecurring(unassigned); err != nil {
+		t.Fatal(err)
+	}
+	result = assistantPlanningRead[struct {
+		Schedules assistantdata.RecurringResult `json:"schedules"`
+		Next      *int                          `json:"definitions_next_offset"`
+	}](t, tool, `{"recurring_id":"unassigned","from":"2026-10-20","before":"2026-10-23"}`)
+	if result.Schedules.Total != 3 || !result.Schedules.OccurrencesComplete || result.Schedules.Definitions[0].SourceKnown || !result.Schedules.Definitions[0].ScheduleKnown || result.Schedules.Definitions[0].SourceError == "" {
+		t.Fatalf("unassigned source hid known schedule: %+v", result)
 	}
 }
 
@@ -283,5 +299,52 @@ func TestAssistantPlanningReadFailureIsExplicit(t *testing.T) {
 	out := assistantPlanningTool(t, tools, "list_goals").run(json.RawMessage(`{}`))
 	if !strings.Contains(out, `"error"`) || strings.Contains(out, `"data"`) {
 		t.Fatalf("closed store became an empty result: %s", out)
+	}
+}
+
+func TestAssistantPlanningContinuationRejectsChangedOrMissingRevision(t *testing.T) {
+	app := primaryAccountsGoalsApp(t)
+	tool := assistantPlanningTool(t, agToolsPlanning(app, "USD", currency.Rates{Base: "USD"}), "list_goals")
+	for _, id := range []string{"first", "second"} {
+		if err := app.PutGoal(domain.Goal{ID: id, Name: id, OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared, TargetAmount: money.New(100, "USD"), CurrentAmount: money.Zero("USD")}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var page struct {
+		Revision string                                        `json:"revision"`
+		Data     assistantPlanningPage[assistantdata.GoalFact] `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(tool.run(json.RawMessage(`{"limit":1}`))), &page); err != nil {
+		t.Fatal(err)
+	}
+	if page.Data.Total != 2 || page.Data.NextOffset == nil {
+		t.Fatalf("first page unavailable: %+v", page)
+	}
+	oldRevision := page.Revision
+	s := app.Settings()
+	s.FXRates = map[string]float64{"EUR": 2}
+	if err := app.PutSettings(s); err != nil {
+		t.Fatal(err)
+	}
+	for _, raw := range []string{`{"offset":1,"limit":1}`, `{"offset":1,"limit":1,"revision":"` + oldRevision + `"}`} {
+		out := tool.run(json.RawMessage(raw))
+		if !strings.Contains(out, `"error"`) || strings.Contains(out, `"data"`) {
+			t.Fatalf("mixed continuation accepted: %s", out)
+		}
+	}
+	if err := json.Unmarshal([]byte(tool.run(json.RawMessage(`{"limit":1}`))), &page); err != nil {
+		t.Fatal(err)
+	}
+	next := assistantPlanningRead[assistantPlanningPage[assistantdata.GoalFact]](t, tool, `{"offset":1,"limit":1,"revision":"`+page.Revision+`"}`)
+	if len(next.Items) != 1 || next.Items[0].ID == page.Data.Items[0].ID || next.NextOffset != nil {
+		t.Fatalf("valid continuation failed: %+v", next)
+	}
+}
+
+func TestAssistantPlanningOversizeResultIsExplicit(t *testing.T) {
+	app := primaryAccountsGoalsApp(t)
+	out := assistantPlanningJSON(app, time.Now(), map[string]any{"long": strings.Repeat("x", 24001)}, nil)
+	if !strings.Contains(out, "smaller") || !strings.Contains(out, `"error"`) || strings.Contains(out, `"data"`) {
+		t.Fatalf("oversized output silently escaped cap: length%d", len(out))
 	}
 }

@@ -70,6 +70,7 @@ type assistantPlanningArgs struct {
 	Offset            int    `json:"offset"`
 	Limit             int    `json:"limit"`
 	DefinitionsOffset int    `json:"definitions_offset"`
+	Revision          string `json:"revision"`
 }
 
 func assistantPlanningArgsFrom(raw json.RawMessage) (assistantPlanningArgs, error) {
@@ -81,10 +82,13 @@ func assistantPlanningArgsFrom(raw json.RawMessage) (assistantPlanningArgs, erro
 		return a, fmt.Errorf("offsets must be nonnegative")
 	}
 	if a.Limit == 0 {
-		a.Limit = 50
+		a.Limit = 20
 	}
 	if a.Limit < 1 || a.Limit > 100 {
 		return a, fmt.Errorf("limit must be between 1 and 100")
+	}
+	if (a.Offset > 0 || a.DefinitionsOffset > 0) && strings.TrimSpace(a.Revision) == "" {
+		return a, fmt.Errorf("continue with the first page's revision; restart at offset0 if the data changed")
 	}
 	return a, nil
 }
@@ -133,26 +137,64 @@ func assistantPlanningJSON(app *appstate.App, now time.Time, data any, err error
 	}
 	b, marshalErr := json.Marshal(out)
 	if marshalErr != nil {
-		b, _ = json.Marshal(map[string]any{"read_only": true, "error": "The planning result could not be encoded: " + marshalErr.Error()})
+		delete(out, "data")
+		out["error"] = "The planning result could not be encoded: " + marshalErr.Error()
+		b, _ = json.Marshal(out)
+	} else if len(b) > 24000 {
+		delete(out, "data")
+		out["error"] = "The planning result exceeds 24000 bytes. Request a smaller limit or a specific goal_id/account_id/recurring_id; use query_data/read_record for long raw records."
+		b, _ = json.Marshal(out)
 	}
 	return string(b)
+}
+
+func assistantPlanningSchema(schema string) json.RawMessage {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(schema), &fields); err != nil {
+		return json.RawMessage(schema)
+	}
+	var properties map[string]json.RawMessage
+	if err := json.Unmarshal(fields["properties"], &properties); err != nil {
+		return json.RawMessage(schema)
+	}
+	properties["revision"] = json.RawMessage(`{"type":"string","description":"Return the first page's revision when continuing; a changed revision requires restarting at offset0."}`)
+	encoded, err := json.Marshal(properties)
+	if err != nil {
+		return json.RawMessage(schema)
+	}
+	fields["properties"] = encoded
+	encoded, err = json.Marshal(fields)
+	if err != nil {
+		return json.RawMessage(schema)
+	}
+	return encoded
 }
 
 // agToolsPlanning supplies account, goal and recurring reads. Every handler
 // resolves exact IDs against live state; all arithmetic lives in native models.
 func agToolsPlanning(app *appstate.App, _ string, _ currency.Rates) []chatTool {
 	tool := func(name, description, schema string, run func(*assistantdata.Planning, assistantPlanningArgs, time.Time) (any, error)) chatTool {
-		return chatTool{spec: ai.FunctionTool(name, description, json.RawMessage(schema)), run: func(raw json.RawMessage) string {
+		return chatTool{spec: ai.FunctionTool(name, description+" Continue paginated results using the returned revision; changed data requires restarting at offset0. Default limit20, maximum100; oversized results return an explicit error requesting a smaller limit.", assistantPlanningSchema(schema)), run: func(raw json.RawMessage) string {
 			now := time.Now()
 			a, err := assistantPlanningArgsFrom(raw)
 			if err != nil {
 				return assistantPlanningJSON(app, now, nil, err)
+			}
+			revision := ""
+			if app != nil {
+				revision = fmt.Sprint(app.Store().Rev())
+				if a.Revision != "" && a.Revision != revision {
+					return assistantPlanningJSON(app, now, nil, fmt.Errorf("planning data changed since revision %s; restart at offset0", a.Revision))
+				}
 			}
 			p, err := assistantPlanningSnapshot(app, now)
 			if err != nil {
 				return assistantPlanningJSON(app, now, nil, err)
 			}
 			data, err := run(p, a, now)
+			if app != nil && fmt.Sprint(app.Store().Rev()) != revision {
+				return assistantPlanningJSON(app, now, nil, fmt.Errorf("planning data changed during this read; restart at offset0"))
+			}
 			return assistantPlanningJSON(app, now, data, err)
 		}}
 	}

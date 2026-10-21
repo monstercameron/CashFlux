@@ -292,3 +292,20 @@ func TestPlanningProjectionRejectsTruncatedOrInvalidSchedules(t *testing.T) {
 		})
 	}
 }
+
+func TestPlanningRecurringUnassignedSourceKeepsKnownCadenceDates(t *testing.T) {
+	in := planningFixture()
+	from := time.Date(2026, 10, 20, 0, 0, 0, 0, time.UTC)
+	for _, source := range []string{"", "deleted"} {
+		t.Run("source "+source, func(t *testing.T) {
+			in.Recurring = []domain.Recurring{{ID: "income", Label: "Pay", AccountID: source, Amount: money.New(500, "USD"), Cadence: domain.CadenceDaily, NextDue: from}}
+			f, err := NewPlanning(in).Recurring("", "", false, from, from.AddDate(0, 0, 3), 0, 100)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if f.DefinitionCount != 1 || f.Definitions[0].AccountExists || f.Definitions[0].SourceKnown || !f.Definitions[0].ScheduleKnown || !f.OccurrencesComplete || f.Definitions[0].SourceError == "" || f.Definitions[0].Error == "" || f.Total != 3 || len(f.Occurrences) != 3 || !f.Occurrences[0].Due.Equal(from) {
+				t.Fatalf("unknown source suppressed known cadence: %+v", f)
+			}
+		})
+	}
+}
