@@ -149,9 +149,8 @@ type settingsRightProps struct {
 	OnAiToggle       func(bool)
 	AiKey            string
 	OnKey            func(string) // the field owns the hook (see uiw.fieldCore)
-	KeySet           bool         // a cloud AI key is stored server-side (§7.11)
-	OnRemoveKey      uic.Handler  // UseEvent — clears the server-side key
 	OnRememberKey    func(bool)
+	OnServerAIRoute  func(bool)
 	OnModel          uic.Handler // UseEvent
 	CurModel         string
 	Models           []string // model ids from the selected AI route (empty = built-in defaults)
@@ -346,6 +345,7 @@ func idleCashBenchmarkDisplay(apr float64) string {
 // search key. Pure rendering helper — no hooks.
 func settingsAIPane(p settingsRightProps) uic.Node {
 	serverAI := uistate.BackendAIActive(p.Pr)
+	serverAvailable := uistate.BackendConnectionActive(p.Pr)
 	routeText := func(serverKey, directKey string, args ...any) string {
 		if serverAI {
 			return uistate.T(serverKey, args...)
@@ -353,23 +353,28 @@ func settingsAIPane(p settingsRightProps) uic.Node {
 		return uistate.T(directKey, args...)
 	}
 	return Div(
+		If(serverAvailable, Fragment(
+			ui.ToggleRow(ui.ToggleRowProps{Label: uistate.T("settings.aiUseServer"), On: serverAI, OnChange: p.OnServerAIRoute}),
+			P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiRouteHint")),
+		)),
 		H4(css.Class("set-label"), routeText("settings.aiServerTitle", "settings.aiTitle")),
-		// The local key is for direct mode. The server keeps its account key
-		// separately, so server mode can work without a key on this device.
-		ui.TextInput(ui.TextFieldProps{Class: "set-input", Value: p.AiKey, OnInput: p.OnKey,
-			AriaLabel: uistate.T("settings.aiKeyPlaceholder"), Placeholder: uistate.T("settings.aiKeyPlaceholder"),
-			Rules: []any{tw.Mt045}, Extra: []any{Type("password")}}),
-		// C292: always disclose where the key goes (BYOK, device-local, direct to OpenAI),
-		// not only the conditional no-key hint below — the trust statement shouldn't hide
-		// the moment a key is entered.
-		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiKeyTrust")),
-		// C100: explain what the key is for, that it's BYOK/pay-per-use, and where to get one.
 		IfElse(serverAI,
-			P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiServerExplainer")),
-			P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiKeyExplainer"))),
-		If(!serverAI && strings.TrimSpace(p.AiKey) == "", P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiNoKey"))),
-		ui.ToggleRow(ui.ToggleRowProps{Label: uistate.T("settings.rememberKey"), On: p.Pr.RememberAIKey, OnChange: p.OnRememberKey}),
-		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.rememberKeyNote")),
+			Fragment(
+				P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiServerExplainer")),
+				P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiServerDestination", backendHost(p.Pr.ServerURL))),
+				uic.CreateElement(serverAIKeySettings),
+			),
+			Fragment(
+				ui.TextInput(ui.TextFieldProps{Class: "set-input", Value: p.AiKey, OnInput: p.OnKey,
+					AriaLabel: uistate.T("settings.aiKeyPlaceholder"), Placeholder: uistate.T("settings.aiKeyPlaceholder"),
+					Rules: []any{tw.Mt045}, Extra: []any{Type("password"), Attr("data-testid", "settings-ai-device-key")}}),
+				P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiKeyTrust")),
+				P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiKeyExplainer")),
+				If(strings.TrimSpace(p.AiKey) == "", P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiNoKey"))),
+				ui.ToggleRow(ui.ToggleRowProps{Label: uistate.T("settings.rememberKey"), On: p.Pr.RememberAIKey, OnChange: p.OnRememberKey}),
+				P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.rememberKeyNote")),
+			),
+		),
 		// The list comes from the selected route. Search only filters what is
 		// shown, and a typed id can still be selected as a custom model.
 		ui.TextInput(ui.TextFieldProps{Class: "set-input", Value: p.ModelQuery, OnInput: p.OnModelQuery,
@@ -401,13 +406,14 @@ func settingsAIPane(p settingsRightProps) uic.Node {
 		If(len(p.Models) > 0, P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), routeText("settings.aiServerModelLive", "settings.aiModelLive", len(p.Models)))),
 		// AG18: point the app at any OpenAI-compatible endpoint (a local model or a
 		// proxy) — the honest "no key leaves the house" path. Blank = OpenAI direct.
-		H4(css.Class("set-label"), uistate.T("settings.aiBaseUrlTitle")),
-		ui.TextInput(ui.TextFieldProps{Class: "set-input", Rules: []any{tw.Mt045}, Value: p.BaseURL, OnInput: p.OnBaseURL,
-			AriaLabel: uistate.T("settings.aiBaseUrlTitle"), Placeholder: uistate.T("settings.aiBaseUrlPlaceholder"),
-			Extra: []any{Attr("spellcheck", "false"), Attr("data-testid", "settings-ai-base-url")}}),
-		P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiBaseUrlHint")),
-		If(serverAI, P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiBaseUrlDirectOnly"))),
-		If(aiprovider.IsLocalEndpoint(p.BaseURL), P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiBaseUrlLocal"))),
+		If(!serverAI, Fragment(
+			H4(css.Class("set-label"), uistate.T("settings.aiBaseUrlTitle")),
+			ui.TextInput(ui.TextFieldProps{Class: "set-input", Rules: []any{tw.Mt045}, Value: p.BaseURL, OnInput: p.OnBaseURL,
+				AriaLabel: uistate.T("settings.aiBaseUrlTitle"), Placeholder: uistate.T("settings.aiBaseUrlPlaceholder"),
+				Extra: []any{Attr("spellcheck", "false"), Attr("data-testid", "settings-ai-base-url")}}),
+			P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiBaseUrlHint")),
+			If(aiprovider.IsLocalEndpoint(p.BaseURL), P(css.Class(tw.TextFaint, tw.Text12, tw.Mt1), uistate.T("settings.aiBaseUrlLocal"))),
+		)),
 		// AG19: the assistant's transparent, editable memory.
 		uic.CreateElement(agentMemoryForm),
 		H4(css.Class("set-label"), uistate.T("settings.webSearchTitle")),
