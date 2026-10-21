@@ -19,6 +19,7 @@ and every commit updates this file under `Unreleased`.
 - The device-erasure audit now identifies retained workspace, queue, file, credential, and key records that the current “Erase everything” action does not remove, with acceptance criteria for a truthful full erase.
 
 ### Fixed
+- Legacy queued snapshots and inactive-workspace backup datasets now strip the device OpenAI key while gathering file bytes, including when no external file read is needed.
 - SQLite workspace exports now omit the device's OpenAI key, matching JSON exports; older SQLite files may still contain a key and should be handled as sensitive.
 - Settings → Data now distinguishes current-workspace JSON and SQLite exports from the all-workspace backup, which includes files from every workspace.
 - Server `/v1/` and `/grpc` responses now send `Cache-Control: private, no-store`, including account export and authentication errors, so private API data is not retained by HTTP caches.

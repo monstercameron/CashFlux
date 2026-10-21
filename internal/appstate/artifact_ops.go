@@ -171,10 +171,14 @@ func (a *App) ExportJSONRedactedWithBlobs() ([]byte, error) {
 // portable snapshot. It reads artifact metadata from that snapshot, not live
 // SQLite rows, so a later financial edit cannot enter an earlier sync push.
 // Missing or unreadable bytes fail the push instead of publishing a fileless
-// server copy. The common no-external-blob path returns the original bytes.
+// server copy. Legacy device credentials are removed before a queued snapshot
+// can become a sync payload or an inactive-workspace backup dataset.
 func (a *App) CompleteArtifactSnapshot(data []byte) ([]byte, error) {
 	var probe struct {
 		Artifacts []domain.Artifact `json:"artifacts"`
+		Settings  struct {
+			OpenAIKey string `json:"openAiKey"`
+		} `json:"settings"`
 	}
 	if err := json.Unmarshal(data, &probe); err != nil {
 		return nil, fmt.Errorf("appstate: inspect committed artifacts: %w", err)
@@ -186,13 +190,14 @@ func (a *App) CompleteArtifactSnapshot(data []byte) ([]byte, error) {
 			break
 		}
 	}
-	if !needBlobs {
+	if !needBlobs && probe.Settings.OpenAIKey == "" {
 		return data, nil
 	}
 	ds, err := store.Import(data)
 	if err != nil {
 		return nil, fmt.Errorf("appstate: import committed artifact snapshot: %w", err)
 	}
+	ds.Settings.OpenAIKey = ""
 	if err := a.rehydrateArtifactBytes(ds.Artifacts); err != nil {
 		return nil, err
 	}
