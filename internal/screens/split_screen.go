@@ -6,7 +6,6 @@ package screens
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -17,6 +16,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/mermaid"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/split"
+	"github.com/monstercameron/CashFlux/internal/splitview"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -84,45 +84,32 @@ func Split() ui.Node {
 		weights.Set(next)
 	}
 
-	amt, _ := money.ParseMinor(strings.TrimSpace(amountS.Get()), dec)
 	var ids []string
 	for _, m := range members {
 		if selected.Get()[m.ID] {
 			ids = append(ids, m.ID)
 		}
 	}
-	shareByID := map[string]int64{}
-	if weighted.Get() {
-		// Proportional split: a blank or invalid weight defaults to 1 (so a fresh
-		// proportional split behaves like an even one until weights are set); an
-		// explicit 0 excludes that member from the share.
-		wm := make([]split.WeightedMember, 0, len(ids))
-		for _, id := range ids {
-			w := int64(1)
-			if s := strings.TrimSpace(weights.Get()[id]); s != "" {
-				if v, err := strconv.Atoi(s); err == nil {
-					w = int64(v)
-				}
-			}
-			wm = append(wm, split.WeightedMember{MemberID: id, Weight: w})
-		}
-		for _, s := range split.ByWeights(amt, wm) {
-			shareByID[s.MemberID] = s.Amount
-		}
-	} else {
-		for _, s := range split.Equal(amt, ids) {
-			shareByID[s.MemberID] = s.Amount
-		}
-	}
-	nameByID := map[string]string{}
+	modelMembers := make([]splitview.Member, 0, len(members))
 	for _, m := range members {
-		nameByID[m.ID] = m.Name
+		modelMembers = append(modelMembers, splitview.Member{ID: m.ID, Name: m.Name})
 	}
+	prepared, prepareErr := splitview.Prepare(splitview.Input{
+		AmountText: amountS.Get(), Decimals: dec, Members: modelMembers, Selected: ids,
+		Weights: weights.Get(), Weighted: weighted.Get(), PayerID: payerS.Get(),
+	})
+	if prepareErr != nil {
+		prepared = splitview.Model{ShareByID: map[string]int64{}, NameByID: map[string]string{}}
+		for _, m := range members {
+			prepared.NameByID[m.ID] = m.Name
+		}
+	}
+	amt, shareByID, nameByID := prepared.Amount, prepared.ShareByID, prepared.NameByID
 
 	// saveSplit records the current forward split as a persisted SharedExpense so it
 	// joins the running settle-up ledger below.
 	saveSplit := func() {
-		if amt <= 0 || payerS.Get() == "" || len(ids) == 0 {
+		if prepareErr != nil || !prepared.HasAmount || amt <= 0 || payerS.Get() == "" || len(ids) == 0 {
 			errS.Set("Enter an amount, pick who paid, and who's sharing.")
 			return
 		}
@@ -162,7 +149,7 @@ func Split() ui.Node {
 		func(m domain.Member) ui.Node {
 			on := selected.Get()[m.ID]
 			share := ""
-			if on && amt > 0 {
+			if on && prepared.HasAmount && prepareErr == nil {
 				share = fmtMoney(money.New(shareByID[m.ID], base))
 			}
 			return ui.CreateElement(SplitMemberRow, splitMemberRowProps{
@@ -179,17 +166,14 @@ func Split() ui.Node {
 
 	// Settle-up: each sharer who isn't the payer owes the payer their share.
 	var owes []ui.Node
-	var transfers []split.Transfer
-	if payer := payerS.Get(); payer != "" && amt > 0 {
-		for _, mid := range ids {
-			if mid == payer {
-				continue
-			}
+	transfers := prepared.Transfers
+	if payer := payerS.Get(); payer != "" && prepared.HasAmount && prepareErr == nil {
+		for _, transfer := range transfers {
+			mid := transfer.From
 			owes = append(owes, Div(css.Class("row"),
 				Span(css.Class("row-desc"), uistate.T("split.owes", nameByID[mid], nameByID[payer])),
-				Span(css.Class("budget-amount"), fmtMoney(money.New(shareByID[mid], base))),
+				Span(css.Class("budget-amount"), fmtMoney(money.New(transfer.Amount, base))),
 			))
-			transfers = append(transfers, split.Transfer{From: mid, To: payer, Amount: shareByID[mid]})
 		}
 	}
 
@@ -238,7 +222,7 @@ func Split() ui.Node {
 	// even per-person figure with any rounding remainder the core hands the first
 	// sharer (C58). For a weighted split the per-person figure doesn't apply.
 	var splitSummary ui.Node = Fragment()
-	if n := len(ids); n > 0 && amt > 0 {
+	if n := len(ids); n > 0 && prepared.HasAmount && prepareErr == nil {
 		if weighted.Get() {
 			// The summary is the key computed output — highlight it, not muted (G12 §4).
 			splitSummary = P(css.Class("split-summary", tw.FontDisplay), fmt.Sprintf("%s split among %d (weighted)", fmtMoney(money.New(amt, base)), n))
@@ -256,11 +240,15 @@ func Split() ui.Node {
 	var memberControls ui.Node = Fragment()
 	if len(members) > 1 {
 		memberControls = Div(css.Class(tw.Flex, tw.FlexWrap, tw.Gap2, tw.ItemsCenter), Style(map[string]string{"margin-bottom": "0.6rem"}),
-			Button(css.Class("btn"), Type("button"), OnClick(selectAll), uistate.T("split.selectAll")),
+			Button(css.Class("btn"), Type("button"), Attr("data-testid", "split-select-all"), OnClick(selectAll), uistate.T("split.selectAll")),
 			// "Clear" is the destructive (deselect-all) counterpart to the additive
 			// "Select all" — a ghost-danger style distinguishes the two (G12 §2).
 			Button(css.Class("btn btn-ghost-danger"), Type("button"), OnClick(clearAll), uistate.T("split.clear")),
 		)
+	}
+	formError := errS.Get()
+	if prepareErr != nil {
+		formError = "Check the amount and weights before saving."
 	}
 
 	return Div(
@@ -268,12 +256,12 @@ func Split() ui.Node {
 			Fragment(
 				P(css.Class("muted"), uistate.T("split.hint")),
 				Div(css.Class("form-grid"),
-					Input(css.Class("field"), Type("number"), Attr("aria-label", uistate.T("split.amount")), Placeholder(uistate.T("split.amount")), Step("0.01"), OnInput(onAmount), uiw.FieldValue(amountS.Get())),
+					Input(css.Class("field"), Type("number"), Attr("aria-label", uistate.T("split.amount")), Attr("data-testid", "split-amount"), Placeholder(uistate.T("split.amount")), Step("0.01"), OnInput(onAmount), uiw.FieldValue(amountS.Get())),
 					Input(css.Class("field"), Type("text"), Attr("aria-label", uistate.T("split.whatForLabel")), Placeholder(uistate.T("split.whatForLabel")), OnInput(onDesc), uiw.FieldValue(descS.Get())),
 					Select(css.Class("field"), Attr("aria-label", uistate.T("split.payer")), Title(uistate.T("split.payer")), OnChange(onPayer), payerOpts),
 				),
 				uiw.ToggleRow(uiw.ToggleRowProps{Label: uistate.T("split.byWeight"), On: weighted.Get(), OnChange: func(v bool) { weighted.Set(v) }}),
-				errText("split-err", errS.Get()),
+				errText("split-err", formError),
 			),
 		),
 		rptSection("sec-split-members", uistate.T("split.members"), nil,
