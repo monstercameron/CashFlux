@@ -168,13 +168,9 @@ func liveBillsSmartDataAt(app *appstate.App, cfg uistate.BillsSmartConfig, ancho
 		return out
 	}
 	out.Paydays = billsched.Paydays(anchor, cfg.PayFrequency, now, engineenv.BillsSmartHorizonDays)
-	var monthlyIn int64
-	for _, r := range app.Recurring() {
-		if me := r.MonthlyEquivalent(); me > 0 {
-			monthlyIn += me
-		}
-	}
-	out.IncomePerPayday = monthlyIn * 12 / int64(payPeriodsPerYear(cfg.PayFrequency))
+	settings := app.Settings()
+	out.IncomePerPayday, err = billsched.IncomePerPayday(app.Recurring(), currency.Rates{Base: settings.BaseCurrency, Rates: settings.FXRates}, cfg.PayFrequency)
+	out.Unavailable = err != nil
 	return out
 }
 
@@ -190,28 +186,11 @@ func liveBillsSmartHorizon(app *appstate.App, horizonDays int) engineenv.BillsSm
 		return out // no anchor configured — smart figures fall back to raw
 	}
 	out.Paydays = billsched.Paydays(anchor, cfg.PayFrequency, time.Now(), horizonDays)
-	var monthlyIn int64
-	for _, r := range app.Recurring() {
-		if me := r.MonthlyEquivalent(); me > 0 {
-			monthlyIn += me
-		}
-	}
-	out.IncomePerPayday = monthlyIn * 12 / int64(payPeriodsPerYear(cfg.PayFrequency))
+	var incomeErr error
+	settings := app.Settings()
+	out.IncomePerPayday, incomeErr = billsched.IncomePerPayday(app.Recurring(), currency.Rates{Base: settings.BaseCurrency, Rates: settings.FXRates}, cfg.PayFrequency)
+	out.Unavailable = incomeErr != nil
 	return out
-}
-
-// payPeriodsPerYear maps a pay frequency to its yearly period count.
-func payPeriodsPerYear(freq string) int {
-	switch freq {
-	case "weekly":
-		return 52
-	case "semimonthly":
-		return 24
-	case "monthly":
-		return 12
-	default: // biweekly
-		return 26
-	}
 }
 
 // livePlanningData converts the persisted planning config into engine PlanningData, so the

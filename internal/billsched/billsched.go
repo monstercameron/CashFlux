@@ -26,9 +26,54 @@
 package billsched
 
 import (
+	"fmt"
+	"math"
 	"sort"
 	"time"
+
+	recurringview "github.com/monstercameron/CashFlux/internal/budgetview/recurring"
+	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/money"
 )
+
+// IncomePerPayday converts active positive recurring income to the base
+// currency, sums checked monthly equivalents, then scales to the pay cycle.
+// Any cadence, FX, or arithmetic failure makes the result unavailable.
+func IncomePerPayday(flows []domain.Recurring, rates currency.Rates, frequency string) (int64, error) {
+	base := rates.Base
+	if base == "" {
+		base = "USD"
+	}
+	var monthlyTotal int64
+	for _, flow := range flows {
+		if !flow.Active() || flow.Amount.Amount <= 0 {
+			continue
+		}
+		monthly, err := recurringview.MonthlyEquivalent(flow)
+		if err != nil {
+			return 0, fmt.Errorf("recurring income cadence: %w", err)
+		}
+		converted, err := rates.Convert(money.New(monthly, flow.Amount.Currency), base)
+		if err != nil {
+			return 0, fmt.Errorf("recurring income FX: %w", err)
+		}
+		monthlyTotal, err = money.Add(monthlyTotal, converted.Amount)
+		if err != nil {
+			return 0, fmt.Errorf("recurring income total: %w", err)
+		}
+	}
+	periods := int64(26)
+	switch frequency {
+	case "weekly":
+		periods = 52
+	case "semimonthly":
+		periods = 24
+	case "monthly":
+		periods = 12
+	}
+	return money.MulDiv(monthlyTotal, 12, periods, money.RoundTowardZero)
+}
 
 // Item is one schedulable obligation inside the horizon.
 type Item struct {
@@ -317,6 +362,48 @@ func Optimize(startLiquid int64, items []Item, paydays []time.Time, incomePerPay
 	})
 	res.Suggestions = Suggest(startLiquid, items, paydays, incomePerPayday, from, horizonDays)
 	return res
+}
+
+// OptimizeChecked runs the same scheduler as Optimize after proving a
+// conservative bound for all daily balances and reported low-point deltas.
+// It rejects malformed negative inputs and inputs whose gross flows could
+// overflow any candidate schedule. Optimize remains the legacy unchecked API.
+func OptimizeChecked(startLiquid int64, items []Item, paydays []time.Time, incomePerPayday int64, from time.Time, horizonDays int, minKeep int64) (Result, error) {
+	if incomePerPayday < 0 || minKeep < 0 {
+		return Result{}, fmt.Errorf("bills schedule contains a negative income or keep floor")
+	}
+	bound, err := money.Money{Amount: startLiquid}.AbsChecked()
+	if err != nil {
+		return Result{}, fmt.Errorf("bills starting balance: %w", err)
+	}
+	total := bound.Amount
+	for _, item := range items {
+		if item.Amount < 0 {
+			return Result{}, fmt.Errorf("bills schedule contains a negative obligation")
+		}
+		total, err = money.Add(total, item.Amount)
+		if err != nil {
+			return Result{}, fmt.Errorf("bills obligations: %w", err)
+		}
+	}
+	if horizonDays > 0 {
+		from = midnight(from)
+		end := from.AddDate(0, 0, horizonDays)
+		for _, payday := range paydays {
+			if !payday.Before(from) && !payday.After(end) {
+				total, err = money.Add(total, incomePerPayday)
+				if err != nil {
+					return Result{}, fmt.Errorf("bills income: %w", err)
+				}
+			}
+		}
+	}
+	// Suggestion gains subtract two lows, so keep the gross bound within half
+	// the signed range as well as ensuring every individual balance is safe.
+	if total > math.MaxInt64/2 {
+		return Result{}, fmt.Errorf("bills schedule exceeds safe arithmetic range: %w", money.ErrOverflow)
+	}
+	return Optimize(startLiquid, items, paydays, incomePerPayday, from, horizonDays, minKeep), nil
 }
 
 // evener reports whether metrics a (with candidate date da) beat metrics b

@@ -121,6 +121,10 @@ type BillsSmartData struct {
 	Paydays         []time.Time
 	IncomePerPayday int64
 	MinKeepMinor    int64
+	// Unavailable means the inputs needed for a trustworthy smart-bills result
+	// failed validation or checked financial arithmetic. In that case the
+	// derived bills_* variables are omitted rather than reported as zero.
+	Unavailable bool
 }
 
 // PlanningData is the persisted planning policy the wasm layer feeds in (from PlanningConfig), so
@@ -275,6 +279,9 @@ func Vars(d Data) map[string]float64 {
 			atoms[base.Prefix+field] = true
 		}
 	}
+	for _, name := range BillsSmartVarNames {
+		atoms[name] = true
+	}
 	pending := make([]domain.Molecule, 0, len(mols))
 	for _, m := range mols {
 		if atoms[m.Name] {
@@ -405,7 +412,14 @@ func computeAtoms(d Data) map[string]float64 {
 	}
 	_, monthEnd := dateutil.MonthRange(d.Now)
 	toBase := safespend.ToBaseFunc(d.Rates)
-	billsDue := safespend.BillsDueBefore(d.Accounts, d.Recurring, d.Now, monthEnd, toBase)
+	billCommitmentErr := scheduledBillMagnitudeError(d.Accounts, d.Recurring)
+	if billCommitmentErr != nil {
+		d.BillsSmart.Unavailable = true
+	}
+	var billsDue int64
+	if billCommitmentErr == nil {
+		billsDue = safespend.BillsDueBefore(d.Accounts, d.Recurring, d.Now, monthEnd, toBase)
+	}
 	goalNeeds := safespend.GoalContributionsProrated(d.Goals, d.Now, toBase)
 	// LF-6: how long the liquid balance lasts at the current burn.
 	//
@@ -516,6 +530,11 @@ func computeAtoms(d Data) map[string]float64 {
 		delete(out, "idle_cash")
 		delete(out, "idle_cash_forgone_annual")
 	}
+	if billCommitmentErr != nil {
+		delete(out, "bills_due")
+		delete(out, "idle_cash")
+		delete(out, "idle_cash_forgone_annual")
+	}
 	if periodTotalsErr != nil {
 		delete(out, "income")
 		delete(out, "expense")
@@ -533,7 +552,7 @@ func computeAtoms(d Data) map[string]float64 {
 	addAllocVars(out, d, major)
 	addPlanningVars(out, d, major)
 	addRecurringVars(out, d, major, toBase)
-	addBillsSmartVars(out, d, major, toBase, liquid.Amount)
+	addBillsSmartVars(out, d, major, liquid.Amount, liquidErr)
 	addReportsVars(out, d, major, liquid.Amount, liquidErr)
 	addNetWorthVars(out, d, major, toBase, bals)
 	addHealthVars(out, d, bals)
@@ -604,20 +623,44 @@ const BillsSmartHorizonDays = 60
 // recurring in the window, not just each bill's next due) against the
 // configured pay cycle, exposing the schedule as engine variables. With no
 // paydays configured the raw and smart figures coincide and the gains are 0.
-func addBillsSmartVars(out map[string]float64, d Data, major func(int64) float64, toBase func(int64, string) int64, liquidMinor int64) {
+func addBillsSmartVars(out map[string]float64, d Data, major func(int64) float64, liquidMinor int64, liquidErr error) {
+	if d.BillsSmart.Unavailable || liquidErr != nil {
+		return
+	}
+	// OccurrencesWithin normalizes scheduled amounts with Abs. Validate its
+	// source magnitudes first so MinInt64 cannot overflow before the checked
+	// conversion below gets a chance to omit the family.
+	if scheduledBillMagnitudeError(d.Accounts, d.Recurring) != nil {
+		return
+	}
 	const horizonDays = BillsSmartHorizonDays
 	occurrences := bills.OccurrencesWithin(d.Accounts, d.Recurring, d.Now, d.Now.AddDate(0, 0, horizonDays))
 	items := make([]billsched.Item, 0, len(occurrences))
+	base := d.Rates.Base
+	if base == "" {
+		base = "USD"
+	}
 	for _, b := range occurrences {
+		amount, err := b.Amount.AbsChecked()
+		if err != nil {
+			return
+		}
+		converted, err := d.Rates.Convert(amount, base)
+		if err != nil {
+			return
+		}
 		items = append(items, billsched.Item{
 			ID:      b.AccountID + "|" + b.DueDate.Format("2006-01-02") + "|" + b.Name,
 			Name:    b.Name,
-			Amount:  toBase(b.Amount.Amount, b.Amount.Currency),
+			Amount:  converted.Amount,
 			Due:     b.DueDate,
 			Movable: !b.Autopay,
 		})
 	}
-	res := billsched.Optimize(liquidMinor, items, d.BillsSmart.Paydays, d.BillsSmart.IncomePerPayday, d.Now, horizonDays, d.BillsSmart.MinKeepMinor)
+	res, err := billsched.OptimizeChecked(liquidMinor, items, d.BillsSmart.Paydays, d.BillsSmart.IncomePerPayday, d.Now, horizonDays, d.BillsSmart.MinKeepMinor)
+	if err != nil {
+		return
+	}
 
 	maxLoad := func(loads []billsched.PeriodLoad) int64 {
 		var m int64
@@ -638,6 +681,25 @@ func addBillsSmartVars(out map[string]float64, d Data, major func(int64) float64
 		bestSuggest = res.Suggestions[0].LowGainMinor
 	}
 	out["bills_suggest_gain"] = major(bestSuggest)
+}
+
+func scheduledBillMagnitudeError(accounts []domain.Account, recurring []domain.Recurring) error {
+	for _, a := range accounts {
+		if a.Archived || a.Class != domain.ClassLiability || a.DueDayOfMonth <= 0 || a.MinPayment.Amount == 0 {
+			continue
+		}
+		if _, err := a.MinPayment.AbsChecked(); err != nil {
+			return err
+		}
+	}
+	for _, r := range recurring {
+		if r.Active() && r.Amount.IsNegative() {
+			if _, err := r.Amount.AbsChecked(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // RecurringVarNames are the fixed recurring-schedule aggregates addRecurringVars exposes.

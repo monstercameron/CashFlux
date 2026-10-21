@@ -1,3 +1,7 @@
+## 2026-10-20 - Checked smart bill formula inputs
+
+Reused the canonical checked recurring cadence model for income-per-payday and the existing optimizer behind a conservative checked arithmetic envelope. Missing FX, invalid magnitudes and overflow omit dependent bill variables instead of producing zero; known liquid cash remains independently available. Native billsched and engineenv tests/vet passed, and three real-host cache adapter groups passed with the new formula builder adapters.
+
 ## 2026-10-20 - Assistant retained notifications and financial policies
 
 Added fresh bound-store readers for retained notification feed/archive, allocation/planning/bill policies and investment pools. Canonical native config parsers are shared with existing UI getters; defaults and malformed data are distinguished. Declared Unix-second timestamps use checked UTC calendar filtering without interpreting numeric money as dates. Native Query7 and FinancialConfig2 tests passed; all eight Data WASM groups plus three cache adapter groups passed exit0 in the combined real-App gate.
