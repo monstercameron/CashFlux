@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Made the asynchronous Import review regression wait for its visible result instead of a fixed transport delay.
 - Reduced sample payoff-baseline preparation to one checked ledger traversal.
 - Split Reports into typed child sections so Summary skips hidden charts and full-detail builders.
 - Aligned budget savings, annual goal projections, dashboard goal summaries and Assistant questions with canonical goal evaluation.

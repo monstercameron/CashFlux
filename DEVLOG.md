@@ -1,3 +1,7 @@
+## 2026-10-20 - Wait for the Import review transition in tests
+
+The first complete screen run exposed an existing timing assumption: a 10 ms fetch-promise drain did not always finish the separate Review render on a busy machine. The regression now polls the visible review panel with a bounded three-second deadline and preserves all subsequent placement/footer/save assertions. Product code is unchanged. The complete 817-test WASM screen rerun passes; no paid calls occur because extraction is stubbed.
+
 ## 2026-10-20 - Prepare sample payoff balances in one pass
 
 Fresh-sample startup does not use the saved-checkpoint reuse path. A separate audit found the sample payoff baseline scanned every transaction once per included liability. Reused ledger.Balances for one shared traversal while preserving account filters, per-account balance-error skipping, sample USD assumptions and ordinary truncation. Checked magnitudes, totals and wide scaling omit an unrepresentable baseline safely. Focused native store tests pass for parity against the old implementation at three sample dates, invalid accounts and arithmetic boundaries. No startup percentage claim is made for this source change.

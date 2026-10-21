@@ -146,6 +146,13 @@ func TestImportUXReviewAutoShownAndFooter(t *testing.T) {
 	}
 	deliverImportExtraction(t, calls, 0)
 	f.Stabilize()
+	// Fetch resolution and the review render use separate scheduler turns. Wait
+	// for the visible result rather than assuming the transport's short drain
+	// delay also completed the component transition on a busy test machine.
+	for deadline := time.Now().Add(3 * time.Second); findByTestID(f, "div", "draft-review-page") == nil && time.Now().Before(deadline); {
+		time.Sleep(5 * time.Millisecond)
+		f.Stabilize()
+	}
 	if findByTestID(f, "div", "import-source-form") != nil || findByTestID(f, "div", "draft-review-page") == nil || !current().inReview {
 		t.Fatal("successful read did not replace source with review")
 	}
