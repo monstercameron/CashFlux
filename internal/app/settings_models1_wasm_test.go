@@ -8,10 +8,32 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/monstercameron/CashFlux/internal/prefs"
+	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
 	"github.com/monstercameron/GoWebComponents/v5/testkit/render"
 	uic "github.com/monstercameron/GoWebComponents/v5/ui"
 )
+
+func TestAISettingsDescribeServerRouteWithoutRequiringDeviceKey(t *testing.T) {
+	pr := prefs.Default()
+	pr.ServerURL, pr.ServerToken, pr.BackendDisabled = "https://ai-settings.test", "test-session", false
+	fixture := render.New(t)
+	defer fixture.Cleanup()
+	fixture.Render(Body(uic.CreateElement(func() uic.Node {
+		return settingsAIPane(settingsRightProps{Pr: pr, CurModel: "gpt-5.4-mini", Models: []string{"gpt-5.4-mini"}, ModelsLoaded: true})
+	})))
+	fixture.Stabilize()
+	text := fixture.Text()
+	for _, want := range []string{uistate.T("settings.aiServerTitle"), uistate.T("settings.aiServerModelLive", 1)} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("server AI settings omitted %q: %q", want, text)
+		}
+	}
+	if strings.Contains(text, uistate.T("settings.aiNoKey")) || strings.Contains(text, uistate.T("settings.aiModelLive", 1)) {
+		t.Fatalf("server AI settings described direct-only requirements: %q", text)
+	}
+}
 
 func TestAIModelPickerShowsAllSearchesAcceptsCustomAndKeepsReloadSelection(t *testing.T) {
 	fixture := render.New(t)
