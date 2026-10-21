@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Account PDF and image attachments now save to encrypted local blob storage, and a server pull stores restored files there before committing the local dataset. The three-browser regression checks PDF bytes and encrypted IndexedDB records on both devices.
 - Image uploads now commit bytes to the encrypted local blob store before saving artifact metadata, keeping large files out of the autosaved dataset; the three-browser sync regression checks that local record and the returned file bytes.
 - Prepared v1.19.9 with the verified encrypted cross-browser file sync and privacy fixes.
 - The server load smoke test now waits for its watch subscription before sending writes and allows for CI load, so it cannot miss events before the watch starts.

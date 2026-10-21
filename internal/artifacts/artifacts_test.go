@@ -66,6 +66,13 @@ func TestValidate(t *testing.T) {
 	if errs := Validate(domain.Artifact{ID: "a", Name: "n", Kind: KindImage}); len(errs) == 0 {
 		t.Error("image with no bytes should be invalid")
 	}
+	if !IsBinaryKind(KindDocument) {
+		t.Error("legacy account documents must remain blob-backed")
+	}
+	legacy := domain.Artifact{ID: "doc", Name: "statement.pdf", Kind: KindDocument, Bytes: []byte("%PDF-")}
+	if errs := Validate(legacy); errs != nil {
+		t.Errorf("legacy account document flagged: %v", errs)
+	}
 }
 
 func TestCSVBytesRoundTrip(t *testing.T) {

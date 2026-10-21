@@ -105,7 +105,16 @@ export async function configureRemote(page, origin) {
   await page.getByTestId("cloud-address-advanced").click();
   await page.getByTestId("sync-server-url").fill(`${origin}/`);
   await page.getByTestId("sync-test").click();
-  await expect(page.getByTestId("sync-discovery-ok")).toBeVisible({ timeout: 20_000 });
+  try {
+    await expect(page.getByTestId("sync-discovery-ok")).toBeVisible({ timeout: 20_000 });
+  } catch (firstError) {
+    // Retry the user's Test connection action only when the local server is
+    // healthy; a persistent CORS or configuration error still fails.
+    const health = await fetch(`${origin}/readyz`).then((response) => response.status).catch(() => 0);
+    if (health !== 204) throw new Error(`sync discovery failed and local server health is ${health}`, { cause: firstError });
+    await page.getByTestId("sync-test").click();
+    await expect(page.getByTestId("sync-discovery-ok")).toBeVisible({ timeout: 20_000 });
+  }
   await page.getByTestId("cloud-where-continue").click();
   await expect(page.getByTestId("cloud-setup-signin")).toBeVisible();
 }
@@ -114,9 +123,17 @@ export async function openPasswordForm(page) {
   await expect(page.getByTestId("sync-discovery-ok")).toBeVisible({ timeout: 20_000 });
   const expand = page.getByTestId("password-auth-expand");
   const card = page.getByTestId("password-auth-card");
-  if (!(await expand.or(card).isVisible())) await page.getByTestId("sync-advanced-token-toggle").click();
-  if (await expand.isVisible()) await expand.click();
-  await expect(card).toBeVisible();
+  if (!(await expand.or(card).isVisible())) {
+    await page.getByTestId("sync-advanced-token-toggle").click();
+    await expect(expand.or(card)).toBeVisible({ timeout: 15_000 });
+  }
+  // A connection-state render can replace the disclosure just as it is clicked.
+  // Wait for the actual form and retry only while the collapsed link remains.
+  await expect.poll(async () => {
+    if (await card.isVisible()) return true;
+    if (await expand.isVisible()) await expand.click().catch(() => {});
+    return card.isVisible();
+  }, { timeout: 30_000, intervals: [500, 1000, 2000] }).toBe(true);
 }
 
 export async function login(page, username, password) {

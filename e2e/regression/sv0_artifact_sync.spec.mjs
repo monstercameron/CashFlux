@@ -6,6 +6,26 @@ let server;
 test.beforeAll(async () => { server = await startServer(); });
 test.afterAll(async () => { await server?.stop(); });
 
+async function artifactRecordMIME(page, id) {
+  return page.evaluate(async (key) => {
+    const db = await new Promise((resolve, reject) => {
+      const request = indexedDB.open("cashflux", 1);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    try {
+      const record = await new Promise((resolve, reject) => {
+        const request = db.transaction("artifacts", "readonly").objectStore("artifacts").get(key);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      return record?.mime || "";
+    } finally {
+      db.close();
+    }
+  }, id);
+}
+
 async function connectWithPassword(page, username, password, expectExistingRemote = false) {
   await configureRemote(page, server.origin);
   try {
@@ -51,7 +71,7 @@ test("encrypted file and later edits sync across both devices", async ({ app, br
   const pixels = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=", "base64");
   const user = { username: `sv0-file-${suffix}`, password: `CashFlux-F-${suffix}-Pass!` };
   await createPasswordAccount(request, server.origin, user.username, user.password);
-  await expect(app.getByTestId("sample-start-fresh")).toBeVisible();
+  await expect(app.getByTestId("sample-start-fresh")).toBeVisible({ timeout: 30_000 });
   await Promise.all([app.waitForEvent("load", { timeout: 20_000 }), app.getByTestId("sample-start-fresh").click()]);
   await app.waitForFunction(() => document.documentElement.getAttribute("data-app-ready") === "true", null, { timeout: 45_000 });
   await nav(app, "/accounts");
@@ -99,29 +119,39 @@ test("encrypted file and later edits sync across both devices", async ({ app, br
   const uploadedRow = app.locator(".row").filter({ has: uploadedName });
   const menuID = await uploadedRow.locator('[data-testid^="artifact-menu-btn-"]').getAttribute("data-testid");
   const artifactID = menuID.slice("artifact-menu-btn-".length);
-  await expect.poll(() => app.evaluate(async (id) => {
-    const db = await new Promise((resolve, reject) => {
-      const request = indexedDB.open("cashflux", 1);
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
-    try {
-      const record = await new Promise((resolve, reject) => {
-        const request = db.transaction("artifacts", "readonly").objectStore("artifacts").get(id);
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
-      });
-      return record?.mime || "";
-    } finally {
-      db.close();
-    }
-  }, artifactID), { timeout: 30_000 }).toBe("application/x-cashflux-encrypted-artifact");
+  await expect.poll(() => artifactRecordMIME(app, artifactID), { timeout: 30_000 }).toBe("application/x-cashflux-encrypted-artifact");
   await expect.poll(async () => {
     const found = await accountSnapshots(request, server.origin, await accessToken(app));
     return found.some((snapshot) => !beforeUpload.some((old) => old.workspaceID === snapshot.workspaceID && old.envelope === snapshot.envelope));
   }, { timeout: 90_000 }).toBe(true);
   const serverCopies = await accountSnapshots(request, server.origin, await accessToken(app));
   expect(serverCopies.every((snapshot) => !snapshot.envelope.includes(filename)), "server snapshot must not expose the filename").toBe(true);
+
+  // Account documents accept PDFs too. A PDF must not bloat the protected
+  // dataset, and its safe open link must recover the exact bytes after pull.
+  const pdfName = `private-statement-${suffix}.pdf`;
+  const pdfBytes = Buffer.from("%PDF-1.4\n1 0 obj << /Type /Catalog >> endobj\n%%EOF\n");
+  await nav(app, "/accounts");
+  const detailsToggle = app.locator('[data-testid^="acct-details-toggle-"]').first();
+  const accountID = (await detailsToggle.getAttribute("data-testid")).slice("acct-details-toggle-".length);
+  await detailsToggle.click();
+  await app.getByTestId(`acct-docs-toggle-${accountID}`).click();
+  const [pdfChooser] = await Promise.all([
+    app.waitForEvent("filechooser", { timeout: 20_000 }),
+    app.getByTestId(`acct-doc-attach-btn-${accountID}`).click(),
+  ]);
+  await pdfChooser.setFiles({ name: pdfName, mimeType: "application/pdf", buffer: pdfBytes });
+  const docRow = app.locator('[data-testid^="acct-doc-row-"]').first();
+  await expect(docRow).toBeVisible({ timeout: 30_000 });
+  const docID = (await docRow.getAttribute("data-testid")).slice("acct-doc-row-".length);
+  await expect.poll(() => artifactRecordMIME(app, docID), { timeout: 30_000 }).toBe("application/x-cashflux-encrypted-artifact");
+  const localDocLink = app.getByTestId(`acct-doc-open-${docID}`);
+  await expect(localDocLink).toBeVisible({ timeout: 30_000 });
+  expect(Buffer.from((await localDocLink.getAttribute("href")).split(",")[1], "base64")).toEqual(pdfBytes);
+  await expect.poll(async () => {
+    const snapshots = await accountSnapshots(request, server.origin, await accessToken(app));
+    return snapshots.some((snapshot) => !serverCopies.some((old) => old.workspaceID === snapshot.workspaceID && old.envelope === snapshot.envelope));
+  }, { timeout: 90_000 }).toBe(true);
   const appOrigin = new URL(app.url()).origin;
   await app.close(); // release the first WebAssembly runtime before booting another profile
 
@@ -141,6 +171,13 @@ test("encrypted file and later edits sync across both devices", async ({ app, br
       row.locator('[data-testid^="artifact-download-"]').click({ timeout: 20_000 }),
     ]);
     expect(await readFile(await download.path())).toEqual(pixels);
+    await nav(second, "/accounts");
+    await second.getByTestId(`acct-details-toggle-${accountID}`).click();
+    await second.getByTestId(`acct-docs-toggle-${accountID}`).click();
+    const remoteDocLink = second.getByTestId(`acct-doc-open-${docID}`);
+    await waitForVisibleUnlocked(second, remoteDocLink);
+    expect(Buffer.from((await remoteDocLink.getAttribute("href")).split(",")[1], "base64")).toEqual(pdfBytes);
+    await expect.poll(() => artifactRecordMIME(second, docID), { timeout: 30_000 }).toBe("application/x-cashflux-encrypted-artifact");
     const beforeReturn = await accountSnapshots(request, server.origin, await accessToken(second));
     const edit = `second-device-edit-${suffix}`;
     await addUniqueTransaction(second, edit);
