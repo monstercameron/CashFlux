@@ -1,3 +1,7 @@
+## 2026-10-21 - Complete assistant financial decision inputs
+
+Added fallible bound-store readers for eleven remaining financial configuration and historical evidence collections. Retained expired resolutions and transfer receipts are read without pruning or trigger installation. Native persistence/getter tests passed; all sixteen assistant data WASM test groups passed in integration pass10.
+
 ## 2026-10-21 - Byte-bounded assistant record details
 
 ReadRecord sizes the complete JSON envelope, including UTF-8, escaping, redaction metadata and the next cursor, within 24000 bytes. Binary search chooses the largest fitting character prefix; oversized metadata fails explicitly. Native assistantdata tests and vet passed, covering Unicode, escaped controls, stable snapshots and offsets, and exact reconstruction.

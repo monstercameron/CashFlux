@@ -6,6 +6,7 @@ package uistate
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/smart"
@@ -36,20 +37,15 @@ const smartSettingsKey = "cashflux:smart-settings"
 // here; it is written on the next normal SaveSmartSettings call.
 func LoadSmartSettings() smart.Settings {
 	raw := SettingKVGet(smartSettingsKey)
-	if raw == "" {
-		// Store not yet initialised or fresh first session. Return free-on
-		// defaults without any write so we cannot race with store init.
-		return smart.EnableFreeOnly(smart.Settings{})
+	// Retain the legacy valid-null migration while strict data readers reject null.
+	if strings.TrimSpace(raw) == "null" {
+		return smart.Migrate(smart.Settings{})
 	}
-	var s smart.Settings
-	if err := json.Unmarshal([]byte(raw), &s); err != nil {
+	s, err := ParseSmartSettings(raw)
+	if err != nil {
 		return smart.Settings{}
 	}
-	// Transparently upgrade legacy rows (Version==0) to the current schema.
-	// Explicit user choices are preserved; only unset Free features are filled
-	// in. The migrated value is persisted on the next normal SaveSmartSettings
-	// call, not here, so this path stays free of side-effects.
-	return smart.Migrate(s)
+	return s
 }
 
 // InitSmartSettings performs the one-time default persist for new installs. It

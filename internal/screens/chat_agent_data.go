@@ -194,6 +194,7 @@ func assistantDataCollections(app *appstate.App) ([]assistantdata.Collection, er
 	}
 	collections = append(collections, assistantFinancialKVCollections(app)...)
 	collections = append(collections, assistantAdditionalFinancialCollections(app)...)
+	collections = append(collections, assistantDecisionCollections(app)...)
 	for i := range collections {
 		collections[i] = assistantdata.RedactValues(collections[i], privateValues...)
 		collections[i].Revision = fmt.Sprintf("%d:%d", app.InstanceID(), app.Rev())

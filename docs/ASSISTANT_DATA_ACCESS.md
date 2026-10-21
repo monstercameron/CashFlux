@@ -9,12 +9,15 @@ read-only tools. The prompt summary is a starting point, not the data boundary.
 | `query_data` | Filter by IDs, exact scalar fields, stored text or date bounds; follow `nextOffset` with the returned snapshot. |
 | `read_record` | Read an exact record or field, including long text through numbered character chunks. |
 
-The catalog covers 65 typed collections, including archived records,
+The catalog covers 76 typed collections, including archived records,
 orphan balance history, transaction links, custom fields, documents, workflows,
 saved views, financial settings, explicit financial preferences, notification feed
 and archive history, allocation/planning/bill policies, investment pools,
 saved reports and snapshots, health/benchmark history, transaction templates,
 standing instructions, and financial assumptions and automation policies.
+It also includes effective subscription, Smart, report, net-worth and widget
+settings, retained flag verdicts and review resolutions, learning inputs,
+assistant memory, and historical transfer-operation receipts.
 Call the manifest for the current catalog;
 field names match persisted JSON, including legacy uppercase identity fields.
 Money fields retain exact integer minor units and their currencies. These tools
@@ -34,6 +37,8 @@ App store, including when another dataset is active in the UI.
 Pages report both total and filtered counts. A changed snapshot rejects a later
 page instead of silently combining revisions. Oversized records point to
 `read_record`; consecutive `jsonText` chunks must be joined before decoding.
+Detail chunks fit a 24,000-byte encoded envelope, including Unicode, escaping,
+redaction metadata and continuation cursors; character limits are ceilings.
 Every call reads current storage. Store failures are explicit, not empty data.
 Declared Unix-second timestamp fields support UTC calendar filtering; ordinary
 numeric money fields are never inferred to be dates. The manifest lists each
