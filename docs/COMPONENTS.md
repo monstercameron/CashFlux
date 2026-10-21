@@ -235,6 +235,47 @@ different ordering. Child row components should be mounted as components (such
 as `ui.CreateElement(GoalRow, ...)`) so per-row event hooks remain isolated and
 stable.
 
+Compact goal cards evaluate the shared row model but do not prepare interest,
+trajectory or contribution-history details. `goals_card_details.go` owns that
+expanded-only preparation boundary; preserve it when adding card details. The
+contribution-history panel uses `Evaluation.Assignment` for the canonical
+monthly plan (explicit plan converted to the goal currency, or evaluated
+required pace when no explicit plan exists). It uses checked `goalhistory`
+series/summary arithmetic; assignment failure, currency mismatch or overflow must
+render as unavailable rather than a partial history. Contribution writes use
+`Goal.RecordContributionChecked`, which preserves the original goal on checked
+rollup failure and retains the established policy for a same-month currency
+conflict. Keep contribution persistence in shared `appstate` hooks: an optional
+ledger debit and the goal history are committed together, and notification,
+workflow and observer effects run only after that commit succeeds. UI components
+own the user action and feedback, not the transaction boundary or post-commit
+effects.
+
+#### Period totals: carry availability with the numbers
+
+`periodview.BuildTotals` is the checked preparation boundary for Dashboard and
+Assistant period activity. `Totals.Known` must gate use of `Income`, `Expense`
+and `Net`: a failure converting any included transaction or checked subtraction
+leaves those values unavailable rather than implying zero activity.
+`SavingsKnown` is a separate check because a savings-rate calculation can fail
+even when the money totals are known. Preserve the existing no-division display
+convention for zero income. Dashboard widgets receive the complete
+`RenderCtx.PeriodTotals`; legacy `Income`/`Expense` fields are meaningful only
+when its `Known` flag is true. Do not drop the availability bit when building a
+widget context or replace an error with zero-valued money.
+
+#### Prepared dataset ingress
+
+`store.PreparedDataset` is an opaque token created only by `PrepareDataset`,
+which performs the ordinary full import validation and migration. App recovery
+may retain and pass that token through `appstate.ParsedDataset` only while the
+source checkpoint is unchanged. `LoadPrepared` skips only the normalizers
+already covered by that validation; ordinary `Load` remains the ingress for
+unprepared datasets. Keep the token's dataset private, reject its zero value,
+preserve per-device credential replacement and run transaction-link netting
+after a successful load. This avoids duplicate work without introducing a
+caller-controlled validation bypass.
+
 #### Reports: typed sections and lazy full-detail rendering
 
 `reportController` owns the report's fixed hook sequence, state, scope/window

@@ -1,3 +1,7 @@
+## 2026-10-20 - Record pass-five integration evidence and native contracts
+
+Updated shared component guidance from current production contracts and recorded exact evidence for native integration, 835 screen WASM cases, focused canonical history, 17 recovery checks and six frozen sample browser cases over 47 routes. Recorded the matching local/served artifact hash and explicitly separated these correctness checks from latency measurements and subsequent in-progress changes. No code changed in this documentation commit.
+
 ## 2026-10-20 - Check goal history and use the canonical monthly plan
 
 Added SeriesChecked, SummarizeChecked, ShortfallChecked and PercentOfPeak so mixed currencies, invalid records, duplicate-month totals and overflow cannot draw wrapped or mislabeled history. The card passes its canonical evaluated assignment and current rates rather than recomputing a rate-less plan and dropping errors in markup. Compatibility APIs remain documented; financial rendering uses checked results. Native tests and the full 835-screen rerun passed; six focused history/compact-card cases then passed, including the additional FX-adjusted deadline-plan regression. The six frozen browser cases also passed against the corresponding production source.

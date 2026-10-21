@@ -224,6 +224,33 @@ Goals alphabetical sorting, Reports Summary/Full and saved-view actions, and the
 all-routes smoke sweep. The log is `work/primary-pass3-focused.log` in the task
 workspace. This was a functional verification run, not another latency capture.
 
+## Pass-five verification
+
+The next integrated batch passed all native packages and 835 WASM screen tests.
+The screen rerun replaced another immediate fake-fetch assertion with a bounded
+wait for the visible Import Review panel; the initial run failed only that
+parent test and its PDF/image/receipt subtests. A subsequent six-case focused
+history/card run also verified the added FX-adjusted deadline-plan fixture.
+Seventeen journal/recovery WASM tests passed after the prepared-import and undo
+record-key changes, and six contribution app-host tests covered atomic retry,
+Undo/Redo, workflow effects and conflict retention.
+
+Six sample-only browser cases passed on the existing port 8080 live server with
+one Chromium worker, no retries and external DNS blocked: Accounts details and
+notes, Goals alphabetical order and allocation validation, Dashboard goal counts,
+Reports Summary/Full and saved views, and substantive smoke checks for 47 routes.
+The local and served artifact hashes before and after the browser run matched:
+`9bf0df25055acc89e3985c0821abf07013cee853d01b1a50a8a12c9fdb736130`.
+This identifies the frozen working-tree artifact used for that functional run;
+subsequent snapshot, net-worth and notification work is not verified by it.
+
+Evidence in the task workspace: `work/primary-native-pass5-final.log`,
+`work/primary-screens-pass5-fixed.log`,
+`work/primary-goal-history-canonical-final.log`,
+`work/primary-prepared-recovery-pass5.log` and
+`work/primary-pass5-focused.log`. These are correctness checks, not a fresh
+latency comparison or proof that the entire nine-page objective is complete.
+
 ## Native transaction-filter preparation benchmark
 
 The prepared matcher was compared with the frozen prior matcher retained in the

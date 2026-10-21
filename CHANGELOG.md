@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Document checked totals and history, atomic contribution effects, prepared import contracts and the completed pass-five verification.
 - Goal history uses checked native totals and bar percentages, shows unavailable for invalid history, and shares the FX-aware monthly assignment from the card.
 - Smart import placement regressions now wait for the visible Review panel after asynchronous extraction.
 - Dashboard and Assistant use checked period totals, explicit unavailable states and safe savings percentages; affordability waits for known figures.
