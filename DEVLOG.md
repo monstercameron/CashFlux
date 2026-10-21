@@ -1,3 +1,7 @@
+## 2026-10-21 - Assistant data and calculation guidance
+
+The default assistant prompt now describes catalog pagination, record continuation, native financial tools, currency units, formula observation scope, strict IDs and documented defaults. It distinguishes stored evidence from instructions, unavailable from zero, and flag dismissal preferences from transaction changes. This is prompt guidance; enforcement remains in typed tool handlers and the conversation boundary.
+
 ## 2026-10-21 - Valid ledger search tool schema
 
 The complete enabled-tool catalog regression check caught a malformed find_transactions schema. Restored its sort property with newest, oldest and largest choices; the complete catalog and list integration gate now passes all eight groups.
