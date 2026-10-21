@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Recurring views use checked native cadence, FX, occurrence and monthly facts.
 - Visual Builder shares typed native datasets with dependency-complete successful snapshot reuse.
 - Settings FX and APR inputs use native finite-value validation.
 - Planning renders independent checked native forecast, affordability, runway and spending facts.

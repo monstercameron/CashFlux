@@ -86,9 +86,16 @@ func rhyCalendarSection(props rhyCalendarProps) ui.Node {
 			return Fragment()
 		}
 		var due int64
+		dueAvailable := true
 		var paid, overdue int
 		for _, o := range occs {
-			due += absMinor(o.R.Amount.Amount)
+			if !o.AmountAvailable {
+				dueAvailable = false
+			} else if magnitude, err := money.Abs(o.Amount.Amount); err != nil {
+				dueAvailable = false
+			} else if due, err = money.Add(due, magnitude); err != nil {
+				dueAvailable = false
+			}
 			if o.Paid {
 				paid++
 			}
@@ -106,7 +113,10 @@ func rhyCalendarSection(props rhyCalendarProps) ui.Node {
 		case paid == len(occs):
 			cls += " is-paid"
 		}
-		label := fmtMoney(money.New(due, base))
+		label := uistate.T("common.notReady")
+		if dueAvailable {
+			label = fmtMoney(money.New(due, base))
+		}
 		if len(occs) > 1 {
 			label = strconv.Itoa(len(occs)) + " · " + label
 		}
@@ -139,12 +149,19 @@ func rhyCalendarSection(props rhyCalendarProps) ui.Node {
 // included because "3 payments" without the total is a number that raises a
 // question rather than answering one.
 func rhyCalDayTitle(occs []recurOccurrence, base string) string {
+	_ = base
 	out := ""
 	for i, o := range occs {
 		if i > 0 {
 			out += " · "
 		}
-		out += o.R.Label + " " + fmtMoney(money.New(absMinor(o.R.Amount.Amount), base))
+		amount := uistate.T("common.notReady")
+		if o.AmountAvailable {
+			if magnitude, err := money.Abs(o.Amount.Amount); err == nil {
+				amount = fmtMoney(money.New(magnitude, base))
+			}
+		}
+		out += o.R.Label + " " + amount
 		if o.Paid {
 			out += " ✓"
 		}

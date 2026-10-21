@@ -14,6 +14,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/recurringview"
 	"github.com/monstercameron/CashFlux/internal/subscriptions"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -106,22 +107,24 @@ func rhyRosterSection(props rhyRosterProps) ui.Node {
 	// Lens filter.
 	cur := lens.Get()
 	var filtered []domain.Recurring
-	var subsMonthly int64
+	var subscriptionFacts []recurringview.FlowFact
 	for _, r := range v.Flows {
 		_, anchored := anchors[r.ID]
 		isSub := subscriptions.IsSubscriptionCommitment(r.Label, catName[r.CategoryID], confirmedSubs)
 		cl := rosterClass(r, anchored, isSub)
 		if cl == "subs" {
-			subsMonthly += -r.MonthlyEquivalent()
+			subscriptionFacts = append(subscriptionFacts, v.MonthlyByID[r.ID])
 		}
 		if cur != "all" && cl != cur {
 			continue
 		}
 		filtered = append(filtered, r)
 	}
+	subsMonthly, subsMonthlyErr := recurringview.MonthlyExpenseTotal(subscriptionFacts)
+	subsAnnual, subsAnnualErr := recurringview.AnnualizeMonthly(subsMonthly)
 
 	// Sort.
-	sortFlows(filtered, sortKey.Get(), creep)
+	sortFlows(filtered, sortKey.Get(), creep, v.MonthlyByID)
 
 	// Split off the watching tail.
 	var main, tail []domain.Recurring
@@ -134,12 +137,10 @@ func rhyRosterSection(props rhyRosterProps) ui.Node {
 	}
 
 	rowOf := func(r domain.Recurring, isWatching bool) ui.Node {
-		total := v.MonthlyOut
-		if !r.Amount.IsNegative() {
-			total = v.MonthlyIn
-		}
+		fact := v.MonthlyByID[r.ID]
 		return ui.CreateElement(rhyClaimRow, rhyClaimRowProps{
-			R: r, Base: base, ShareTotal: total, VarPrefix: v.VarPrefixByID[r.ID],
+			R: r, Base: base, MonthlyAmount: fact.MonthlyAmount, MonthlyAvailable: fact.MonthlyAvailable,
+			SharePercent: fact.SharePercent, ShareAvailable: fact.ShareAvailable, VarPrefix: v.VarPrefixByID[r.ID],
 			HasBudget: r.CategoryID != "" && v.BudgetedCats[r.CategoryID],
 			CreepPct:  creep[strings.ToLower(strings.TrimSpace(r.Label))],
 			Watching:  isWatching, Acts: props.Acts,
@@ -175,8 +176,12 @@ func rhyRosterSection(props rhyRosterProps) ui.Node {
 		rhyLensBtn(uistate.T("rhythm.lensBills"), "recurring-tab-bills", cur == "bills", setLens("bills")),
 		rhyLensBtn(uistate.T("rhythm.lensSubs"), "recurring-tab-subscriptions", cur == "subs", setLens("subs")),
 		rhyLensBtn(uistate.T("rhythm.lensIncome"), "rhy-lens-income", cur == "income", setLens("income")),
-		If(subsMonthly > 0, Span(css.Class("rhy-lens-sub"), Attr("data-testid", "rhy-subs-subtotal"),
-			uistate.T("rhythm.subsSubtotal", fmtMoney(money.New(subsMonthly, base)), fmtMoney(money.New(subsMonthly*12, base))))),
+		If(subsMonthlyErr != nil, Span(css.Class("rhy-lens-sub"), Attr("data-testid", "rhy-subs-subtotal"),
+			uistate.T("rhythm.subsSubtotal", uistate.T("common.notReady"), uistate.T("common.notReady")))),
+		If(subsMonthlyErr == nil && subsAnnualErr != nil, Span(css.Class("rhy-lens-sub"), Attr("data-testid", "rhy-subs-subtotal"),
+			uistate.T("rhythm.subsSubtotal", fmtMoney(money.New(subsMonthly, base)), uistate.T("common.notReady")))),
+		If(subsMonthlyErr == nil && subsAnnualErr == nil && subsMonthly > 0, Span(css.Class("rhy-lens-sub"), Attr("data-testid", "rhy-subs-subtotal"),
+			uistate.T("rhythm.subsSubtotal", fmtMoney(money.New(subsMonthly, base)), fmtMoney(money.New(subsAnnual, base))))),
 	)
 	sortPick := Select(css.Class("field field-sm"), Attr("data-testid", "rhy-sort"),
 		Attr("aria-label", uistate.T("rhythm.sortAria")), Value(sortKey.Get()), OnChange(onSort),
@@ -201,7 +206,7 @@ func rhyLensBtn(label, testid string, on bool, onClick any) ui.Node {
 
 // sortFlows orders the roster by the chosen key (largest monthly first by
 // default), all stable and deterministic.
-func sortFlows(flows []domain.Recurring, key string, creep map[string]int) {
+func sortFlows(flows []domain.Recurring, key string, creep map[string]int, facts map[string]recurringview.FlowFact) {
 	switch key {
 	case "next":
 		sort.SliceStable(flows, func(i, j int) bool { return flows[i].NextDue.Before(flows[j].NextDue) })
@@ -215,29 +220,37 @@ func sortFlows(flows []domain.Recurring, key string, creep map[string]int) {
 		})
 	default: // size
 		sort.SliceStable(flows, func(i, j int) bool {
-			return absMonthly(flows[i]) > absMonthly(flows[j])
+			left, leftOK := recurringMagnitude(facts[flows[i].ID])
+			right, rightOK := recurringMagnitude(facts[flows[j].ID])
+			if leftOK != rightOK {
+				return leftOK
+			}
+			return left > right
 		})
 	}
 }
 
-func absMonthly(r domain.Recurring) int64 {
-	me := r.MonthlyEquivalent()
-	if me < 0 {
-		return -me
+func recurringMagnitude(fact recurringview.FlowFact) (int64, bool) {
+	if !fact.MonthlyAvailable {
+		return 0, false
 	}
-	return me
+	amount, err := money.Abs(fact.MonthlyAmount)
+	return amount, err == nil
 }
 
 // rhyClaimRowProps drives one roster claim row.
 type rhyClaimRowProps struct {
-	R          domain.Recurring
-	Base       string
-	ShareTotal int64
-	VarPrefix  string
-	HasBudget  bool
-	CreepPct   int
-	Watching   bool
-	Acts       rhyActions
+	R                domain.Recurring
+	Base             string
+	MonthlyAmount    int64
+	MonthlyAvailable bool
+	SharePercent     float64
+	ShareAvailable   bool
+	VarPrefix        string
+	HasBudget        bool
+	CreepPct         int
+	Watching         bool
+	Acts             rhyActions
 }
 
 // rhyClaimRow renders one weight-first roster row: a %-of-outflow spine, the
@@ -290,10 +303,12 @@ func rhyClaimRow(props rhyClaimRowProps) ui.Node {
 		Attr("data-testid", "recurring-del-"+r.ID), Title(uistate.T("recurring.deleteTitle")), OnClick(delItem), uistate.T("recurring.deleteTitle")))
 
 	// Spine: share of the relevant monthly total.
-	me := r.MonthlyEquivalent()
 	pct := 0.0
-	if props.ShareTotal > 0 {
-		pct = float64(absMonthly(r)) / float64(props.ShareTotal) * 100
+	if props.ShareAvailable {
+		pct = props.SharePercent
+		if pct > 100 {
+			pct = 100
+		}
 	}
 	// Income is a share of income, not of outflow — saying "of outflow" beside a
 	// paycheck reads as a contradiction.
@@ -301,8 +316,12 @@ func rhyClaimRow(props rhyClaimRowProps) ui.Node {
 	if !r.Amount.IsNegative() {
 		shareKey = "rhythm.shareOfIn"
 	}
+	shareValue := ui.Node(Span(css.Class("rhy-spine-pct"), uistate.T(shareKey, pct)))
+	if !props.ShareAvailable {
+		shareValue = Span(css.Class("rhy-spine-pct"), uistate.T("common.notReady"))
+	}
 	spine := Div(css.Class("rhy-spine"),
-		Span(css.Class("rhy-spine-pct"), uistate.T(shareKey, pct)),
+		shareValue,
 		Div(css.Class("rhy-spine-track"), Div(css.Class("rhy-spine-fill"), Style(map[string]string{"width": pctWidth(pct)}))),
 	)
 
@@ -326,7 +345,12 @@ func rhyClaimRow(props rhyClaimRowProps) ui.Node {
 		chips = append(chips, Span(css.Class("rhy-badge is-watch"), uistate.T("rhythm.watchStatus")))
 	}
 
-	perMonth := uistate.T("rhythm.perMonth", fmtMoney(money.New(me, props.Base)))
+	perMonth := uistate.T("common.notReady")
+	amountTone := tw.ColorClass("text-dim")
+	if props.MonthlyAvailable {
+		perMonth = uistate.T("rhythm.perMonth", fmtMoney(money.New(props.MonthlyAmount, props.Base)))
+		amountTone = recurAmountTone(money.New(props.MonthlyAmount, props.Base))
+	}
 	nextLine := recurCadence(r.Cadence) + " · " + uistate.T("rhythm.nextOn", uistate.LoadPrefs().FormatDate(r.NextDue))
 
 	return Div(css.Class("rhy-claim"), Attr("role", "listitem"), Attr("data-testid", "rhy-claim-"+r.ID),
@@ -338,7 +362,7 @@ func rhyClaimRow(props rhyClaimRowProps) ui.Node {
 		// The cadence already reads on the meta line ("Monthly · next Aug 1"), so the
 		// amount column carries only the normalized figure — no second "Monthly".
 		Div(css.Class("rhy-claim-amt"),
-			Div(ClassStr("rhy-claim-per "+tw.Fold(tw.FontDisplay)+" "+recurAmountTone(money.New(me, props.Base))), perMonth),
+			Div(ClassStr("rhy-claim-per "+tw.Fold(tw.FontDisplay)+" "+amountTone), perMonth),
 		),
 		uiw.KebabMenu(uiw.KebabMenuProps{
 			ID:           "recurring-menu-" + r.ID,

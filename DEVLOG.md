@@ -1,3 +1,7 @@
+## 2026-10-21 - Native recurring flow preparation
+
+Preserved paused/scheduled distinctions, window bounds, ordering and management actions. Independent known rows survive missing FX while incomplete totals are unavailable. Native recurringview tests and vet pass; the focused Recurring WASM case passes with refreshed FX. Screen controller and row components consume prepared facts.
+
 ## 2026-10-21 - Native Visual Builder live data preparation
 
 Prepared named datasets and net-worth change sources natively, reading each ordered collection once per successful snapshot. Cache identity includes app/store, mutation revision, local day, base and FX. Source errors are explicit and uncached; unavailable net-worth facts do not block unrelated graphs. Native preparation, settings, i18n and architecture tests pass; both focused Builder WASM host cases pass. Updated the architecture test to require canonical nwchange in the native layer, without adding exceptions.

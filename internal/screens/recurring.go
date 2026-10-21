@@ -14,8 +14,8 @@
 package screens
 
 import (
+	"errors"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
@@ -29,6 +29,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/recurdiscover"
+	"github.com/monstercameron/CashFlux/internal/recurringview"
 	"github.com/monstercameron/CashFlux/internal/runway"
 	"github.com/monstercameron/CashFlux/internal/subscriptions"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -61,9 +62,12 @@ func recurCadence(c domain.RecurringCadence) string {
 
 // recurOccurrence is one concrete due date derived from a flow's schedule.
 type recurOccurrence struct {
-	R       domain.Recurring
-	Date    time.Time
-	Overdue bool
+	R               domain.Recurring
+	Date            time.Time
+	Overdue         bool
+	Amount          money.Money
+	AmountAvailable bool
+	AmountError     error
 	// Paid is true when this occurrence carries a durable bill-match link (TX9) —
 	// a real transaction settled it. Variance is that payment's actual magnitude
 	// minus the expected amount (signed; positive = ran over), valid only when
@@ -75,15 +79,21 @@ type recurOccurrence struct {
 // recurView is the derived render model the roster/agenda/hero share. Pure —
 // built once per render from the live store.
 type recurView struct {
-	Base        string
-	Dec         int
-	Flows       []domain.Recurring // sorted soonest-due first
-	MonthlyIn   int64              // Σ positive monthly equivalents
-	MonthlyOut  int64              // Σ |negative| monthly equivalents (positive figure)
-	MonthlyNet  int64
-	Upcoming    []recurOccurrence // overdue + next 30 days, sorted by date
-	UpcomingIn  int64
-	UpcomingOut int64
+	Base                    string
+	Dec                     int
+	Flows                   []domain.Recurring // sorted soonest-due first
+	MonthlyIn               int64              // Σ positive monthly equivalents
+	MonthlyOut              int64              // Σ |negative| monthly equivalents (positive figure)
+	MonthlyNet              int64
+	MonthlyAvailable        bool
+	MonthlyError            error
+	MonthlyByID             map[string]recurringview.FlowFact
+	Upcoming                []recurOccurrence // overdue + next 30 days, sorted by date
+	UpcomingIn              int64
+	UpcomingOut             int64
+	UpcomingTotalsAvailable bool
+	UpcomingTotalsError     error
+	Rates                   currency.Rates
 	// VarPrefixByID maps a flow ID to its engine-variable prefix ("recurring_<slug>_")
 	// — the flow's stable formula identity. Computed over the flows in STORE order
 	// (the same order the engine disambiguates in), so the name shown on a row is
@@ -98,73 +108,74 @@ type recurView struct {
 // due dates for the next 30 days (overdue included, capped per flow so a stale
 // schedule can't flood the list), and the detected-but-unplanned charges.
 func computeRecurView(app *appstate.App, now time.Time) recurView {
-	base := app.Settings().BaseCurrency
+	settings, settingsErr := app.Store().GetSettings()
+	base := settings.BaseCurrency
+	if settingsErr != nil {
+		base = app.Settings().BaseCurrency
+	}
 	if base == "" {
 		base = "USD"
 	}
-	v := recurView{Base: base, Dec: currency.Decimals(base)}
+	rates := currency.Rates{Base: base, Rates: settings.FXRates}
+	v := recurView{Base: base, Dec: currency.Decimals(base), Rates: rates}
 
-	v.Flows = append(v.Flows, app.Recurring()...)
+	flows, flowsErr := app.Store().ListRecurring()
+	if flowsErr != nil {
+		// Keep saved definitions visible and manageable, but do not present their
+		// cached values as checked financial facts.
+		flows = app.Recurring()
+	}
 	// Formula identities are disambiguated in store order (matching the engine) —
 	// capture them BEFORE the display sort so a row shows the exact variable name
 	// the formula surface exposes.
 	v.VarPrefixByID = map[string]string{}
-	for _, b := range engineenv.RecurringVarBases(v.Flows) {
+	for _, b := range engineenv.RecurringVarBases(flows) {
 		v.VarPrefixByID[b.Recurring.ID] = b.Prefix
 	}
+	model := recurringview.Build(flows, now, base, rates)
+	v.MonthlyIn, v.MonthlyOut, v.MonthlyNet = model.MonthlyIn, model.MonthlyOut, model.MonthlyNet
+	v.MonthlyAvailable = model.MonthlyAvailable && settingsErr == nil && flowsErr == nil
+	v.MonthlyError = errors.Join(model.MonthlyError, settingsErr, flowsErr)
+	v.MonthlyByID = make(map[string]recurringview.FlowFact, len(model.Flows))
+	for _, fact := range model.Flows {
+		if settingsErr != nil || flowsErr != nil {
+			fact.MonthlyAvailable = false
+			fact.ShareAvailable = false
+			fact.MonthlyError = errors.Join(fact.MonthlyError, settingsErr, flowsErr)
+		}
+		v.MonthlyByID[fact.Recurring.ID] = fact
+		v.Flows = append(v.Flows, fact.Recurring)
+	}
+	v.UpcomingIn, v.UpcomingOut = model.UpcomingIn, model.UpcomingOut
+	v.UpcomingTotalsAvailable = model.UpcomingTotalsAvailable && settingsErr == nil && flowsErr == nil
+	v.UpcomingTotalsError = errors.Join(model.UpcomingTotalsError, settingsErr, flowsErr)
+	for _, fact := range model.Occurrences {
+		if settingsErr != nil || flowsErr != nil {
+			fact.AmountAvailable = false
+			fact.AmountError = errors.Join(fact.AmountError, settingsErr, flowsErr)
+		}
+		occ := recurOccurrence{
+			R: fact.Recurring, Date: fact.Date, Overdue: fact.Overdue,
+			Amount: fact.Amount, AmountAvailable: fact.AmountAvailable, AmountError: fact.AmountError,
+		}
+		if fact.Recurring.Amount.IsNegative() {
+			occ.Paid = rhySettled(app, fact.Recurring, fact.Date)
+			if _, ok := app.BillMatchForOccurrence(fact.Recurring.ID, fact.Date); ok {
+				if variance, vok := app.BillMatchVariance(fact.Recurring.ID, fact.Date, fact.Recurring.Amount.Amount); vok {
+					occ.Variance = variance
+				}
+			}
+		}
+		v.Upcoming = append(v.Upcoming, occ)
+	}
+	// Model.Build preserves source order on equal dates; these facts are already
+	// stable-sorted by NextDue and occurrence date respectively.
 	v.BudgetedCats = map[string]bool{}
 	for _, bg := range app.Budgets() {
 		if bg.CategoryID != "" {
 			v.BudgetedCats[bg.CategoryID] = true
 		}
 	}
-	sort.SliceStable(v.Flows, func(i, j int) bool { return v.Flows[i].NextDue.Before(v.Flows[j].NextDue) })
-
-	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	cutoff := today.AddDate(0, 0, 30)
-	for _, r := range v.Flows {
-		me := r.MonthlyEquivalent()
-		if me >= 0 {
-			v.MonthlyIn += me
-		} else {
-			v.MonthlyOut += -me
-		}
-		v.MonthlyNet += me
-
-		if !r.Active() {
-			continue // paused flows keep their definition but leave the schedule
-		}
-		// Walk the schedule from NextDue to the cutoff. Cap iterations so a NextDue
-		// far in the past (many missed occurrences) can't generate an unbounded list.
-		d := r.NextDue
-		for i := 0; i < 8 && !d.After(cutoff); i++ {
-			occ := recurOccurrence{R: r, Date: d, Overdue: d.Before(today)}
-			// Settled-ness is ONE test, shared with the calendar's past-day states
-			// (rhySettled) — when the strip and the calendar answered this
-			// differently the page contradicted itself about the same bill. It also
-			// closes a real hole here: the strip previously honoured only the
-			// bill-match link, so marking an overdue item paid from this very strip
-			// left it sitting in the strip.
-			if r.Amount.IsNegative() {
-				occ.Paid = rhySettled(app, r, d)
-				// TX9: the variance chip needs the matched transaction specifically.
-				if _, ok := app.BillMatchForOccurrence(r.ID, d); ok {
-					if variance, vok := app.BillMatchVariance(r.ID, d, r.Amount.Amount); vok {
-						occ.Variance = variance
-					}
-				}
-			}
-			v.Upcoming = append(v.Upcoming, occ)
-			if r.Amount.Amount >= 0 {
-				v.UpcomingIn += r.Amount.Amount
-			} else {
-				v.UpcomingOut += -r.Amount.Amount
-			}
-			d = r.Cadence.Next(d)
-		}
-	}
-	sort.SliceStable(v.Upcoming, func(i, j int) bool { return v.Upcoming[i].Date.Before(v.Upcoming[j].Date) })
-
 	return v
 }
 
@@ -247,8 +258,7 @@ type rhythmView struct {
 // immediately; the caller re-renders with it on once the page has settled.
 func computeRhythm(app *appstate.App, now time.Time, withDiscovery bool) rhythmView {
 	rv := rhythmView{recurView: recurViewOf(app, now), Now: now}
-	base := rv.Base
-	rv.Rates = currency.Rates{Base: base, Rates: app.Settings().FXRates}
+	rv.Rates = rv.recurView.Rates
 
 	// Split the derived occurrences: overdue lives in its own honest strip, the
 	// rest are the forward agenda.
@@ -493,13 +503,19 @@ func rhySection(id, title, note string, action, body ui.Node) ui.Node {
 // handler (the no-income degradation prompts to add a paycheck).
 func rhyHeroSection(rv rhythmView, onAddIncome any) ui.Node {
 	netTone := " " + tw.ColorClass("text-up")
-	if rv.MonthlyNet < 0 {
+	if rv.MonthlyAvailable && rv.MonthlyNet < 0 {
 		netTone = " " + tw.ColorClass("text-down")
 	}
+	net, income, outflow := uistate.T("common.notReady"), uistate.T("common.notReady"), uistate.T("common.notReady")
+	if rv.MonthlyAvailable {
+		net = fmtMoney(money.New(rv.MonthlyNet, rv.Base))
+		income = fmtMoney(money.New(rv.MonthlyIn, rv.Base))
+		outflow = fmtMoney(money.New(rv.MonthlyOut, rv.Base))
+	}
 	stats := Div(css.Class("rhy-stats"),
-		rhyStat(uistate.T("rhythm.statNet"), fmtMoney(money.New(rv.MonthlyNet, rv.Base)), netTone, "recurring-net"),
-		rhyStat(uistate.T("rhythm.statIn"), fmtMoney(money.New(rv.MonthlyIn, rv.Base)), " "+tw.ColorClass("text-up"), ""),
-		rhyStat(uistate.T("rhythm.statOut"), fmtMoney(money.New(rv.MonthlyOut, rv.Base)), " "+tw.ColorClass("text-down"), ""),
+		rhyStat(uistate.T("rhythm.statNet"), net, netTone, "recurring-net"),
+		rhyStat(uistate.T("rhythm.statIn"), income, " "+tw.ColorClass("text-up"), ""),
+		rhyStat(uistate.T("rhythm.statOut"), outflow, " "+tw.ColorClass("text-down"), ""),
 	)
 	// The household's own "keep at least this much" floor (from the smart pay
 	// schedule) is the honest threshold for calling a cycle tight.
@@ -534,10 +550,23 @@ func rhyOverdueSection(rv rhythmView, acts rhyActions) ui.Node {
 	if len(rv.Overdue) == 0 {
 		return Fragment()
 	}
-	var total int64
+	total := int64(0)
+	totalAvailable := true
 	for _, occ := range rv.Overdue {
 		if occ.R.Amount.IsNegative() {
-			total += -occ.R.Amount.Amount
+			if !occ.AmountAvailable {
+				totalAvailable = false
+				continue
+			}
+			magnitude, err := money.Abs(occ.Amount.Amount)
+			if err != nil {
+				totalAvailable = false
+				continue
+			}
+			total, err = money.Add(total, magnitude)
+			if err != nil {
+				totalAvailable = false
+			}
 		}
 	}
 	rows := []any{}
@@ -545,9 +574,13 @@ func rhyOverdueSection(rv rhythmView, acts rhyActions) ui.Node {
 		o := occ
 		rows = append(rows, ui.CreateElement(rhyOverdueRow, rhyOverdueRowProps{Occ: o, Base: rv.Base, OnMarkPaid: acts.OnMarkPaid}))
 	}
+	totalLabel := uistate.T("common.notReady")
+	if totalAvailable {
+		totalLabel = fmtMoney(money.New(total, rv.Base))
+	}
 	head := Div(css.Class("rhy-overdue-head"),
 		uiw.Icon(icon.AlertTriangle, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-		Span(uistate.T("rhythm.overdueSummary", plural(len(rv.Overdue), "item"), fmtMoney(money.New(total, rv.Base)))),
+		Span(uistate.T("rhythm.overdueSummary", plural(len(rv.Overdue), "item"), totalLabel)),
 	)
 	body := append([]any{css.Class("rhy-section rhy-overdue"), Attr("data-testid", "rhy-overdue"), head}, rows...)
 	return Div(body...)
