@@ -852,6 +852,28 @@ func TestUsageCountersIncrementAndLimit(t *testing.T) {
 	}
 }
 
+func TestAIUsageCostPersistsWithTokensAndMarksUnknownPrices(t *testing.T) {
+	s := openTestStore(t)
+	day := time.Date(2026, time.October, 21, 12, 0, 0, 0, time.UTC)
+	if err := s.UpsertUser(User{ID: "ai-cost-user", Provider: "token", Subject: "ai-cost-user", CreatedAt: day}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.AddAIUsage("ai-cost-user", day, 5, 15_000, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.AddAIUsage("ai-cost-user", day, 7, 0, true); err != nil {
+		t.Fatal(err)
+	}
+	got, ok, err := s.GetUsage("ai-cost-user", day)
+	if err != nil || !ok || got.Tokens != 12 || got.EstimatedCostNanoUSD != 15_000 || !got.CostIncomplete {
+		t.Fatalf("AI usage = %+v/%v/%v", got, ok, err)
+	}
+	rows, err := s.ListUserUsage("ai-cost-user", day)
+	if err != nil || len(rows) != 1 || rows[0] != got {
+		t.Fatalf("AI usage history = %+v/%v", rows, err)
+	}
+}
+
 func TestUsageCountersValidateAndIsolateDays(t *testing.T) {
 	s := openTestStore(t)
 	day := time.Date(2026, time.June, 18, 10, 0, 0, 0, time.UTC)
