@@ -202,6 +202,18 @@ func TestSmartImportReviewAndAccountPlacement(t *testing.T) {
 					content = strings.ReplaceAll(content, `"amount":"-`, `"amount":"`)
 				}
 				deliverImportContent(t, calls, 0, content)
+				// Fetch and response.text settle on separate JavaScript turns. Wait for
+				// the actual review state before this fixture is torn down; a single
+				// 10 ms yield can leave the response callback running into the next test.
+				deadline := time.Now().Add(5 * time.Second)
+				for time.Now().Before(deadline) {
+					f.Stabilize()
+					c := current()
+					if c.stage.Get() == "review" && c.inReview && len(c.model.Rows) == 3 {
+						break
+					}
+					time.Sleep(10 * time.Millisecond)
+				}
 			}
 			f.Stabilize()
 			c := current()

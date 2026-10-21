@@ -1,3 +1,7 @@
+## 2026-10-20 - Wait for Smart Import review before fixture teardown
+
+The CI deploy-gate shard intermittently tore down the Smart Import fixture after a fixed 10 ms yield while the mocked fetch and response text callbacks still had work queued. The late callback then used a cleared app fixture and panicked. The test now waits up to five seconds for the actual three-row review state. Its targeted WebAssembly run passed from the isolated fresh Go build cache. The encrypted sync roundtrip remains under investigation.
+
 ## 2026-10-20 - Migrate inactive workspace files at protected boot
 
 The local encrypted blob wrapper upgraded a legacy plaintext file when it was read, but the post-unlock migration visited only active-workspace artifacts. Boot now also completes each saved inactive workspace snapshot, which reads and durably rewrites any referenced plaintext blob through the encrypted wrapper. Missing or damaged files are logged and kept for recovery. A browser regression simulates a legacy IndexedDB file under an inactive workspace, waits for its protected bundle write, reloads, and verifies the raw file record becomes encrypted without opening the workspace. Orphan records without a known owning workspace remain outside this migration.
