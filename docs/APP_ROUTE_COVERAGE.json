@@ -966,44 +966,94 @@
   "source_seams_pending_root_final_gates": [
     {
       "area": "Budget funding, row and pool",
-      "source": ["internal/budgetview/funding.go", "internal/budgetview/pool.go", "internal/screens/budgets_row.go"],
-      "validation_sources": ["internal/screens/budgets_funding_boundary_wasm_test.go", "internal/screens/budgets_pool_host_wasm_test.go"],
+      "source": [
+        "internal/budgetview/funding.go",
+        "internal/budgetview/pool.go",
+        "internal/screens/budgets_row.go"
+      ],
+      "validation_sources": [
+        "internal/screens/budgets_funding_boundary_wasm_test.go",
+        "internal/screens/budgets_pool_host_wasm_test.go"
+      ],
       "status": "Source and test files are present; verification pending root final gates."
     },
     {
       "area": "Dashboard What changed",
-      "source": ["internal/screens/dashboard_whatchanged.go", "internal/dashboardview/trend_facts.go"],
-      "validation_sources": ["internal/screens/dashboard_whatchanged_host_wasm_test.go", "internal/screens/dashboard_trend_facts_host_wasm_test.go"],
+      "source": [
+        "internal/screens/dashboard_whatchanged.go",
+        "internal/dashboardview/trend_facts.go"
+      ],
+      "validation_sources": [
+        "internal/screens/dashboard_whatchanged_host_wasm_test.go",
+        "internal/screens/dashboard_trend_facts_host_wasm_test.go"
+      ],
       "status": "Source and test files are present; verification pending root final gates."
     },
     {
       "area": "Retirement",
-      "source": ["internal/planningmodel/retirement.go", "internal/retirement/retirement.go", "internal/screens/planning_retirement.go"],
-      "validation_sources": ["internal/planningmodel/retirement_test.go", "internal/retirement/retirement_test.go", "internal/screens/planning_retirement_host_wasm_test.go"],
+      "source": [
+        "internal/planningmodel/retirement.go",
+        "internal/retirement/retirement.go",
+        "internal/screens/planning_retirement.go"
+      ],
+      "validation_sources": [
+        "internal/planningmodel/retirement_test.go",
+        "internal/retirement/retirement_test.go",
+        "internal/screens/planning_retirement_host_wasm_test.go"
+      ],
       "status": "Source and test files are present; verification pending root final gates."
     },
     {
       "area": "Debt strategy",
-      "source": ["internal/debtview/prepare.go", "internal/debtplan/debtplan.go", "internal/screens/debt_coach.go"],
-      "validation_sources": ["internal/debtview/prepare_test.go", "internal/debtplan/debtplan_test.go", "internal/screens/debt_loans_native_wasm_test.go"],
+      "source": [
+        "internal/debtview/prepare.go",
+        "internal/debtplan/debtplan.go",
+        "internal/screens/debt_coach.go"
+      ],
+      "validation_sources": [
+        "internal/debtview/prepare_test.go",
+        "internal/debtplan/debtplan_test.go",
+        "internal/screens/debt_loans_native_wasm_test.go"
+      ],
       "status": "Source and test files are present; verification pending root final gates."
     },
     {
       "area": "Recurring agenda",
-      "source": ["internal/recurringview/agenda.go", "internal/screens/recurring_agenda.go"],
-      "validation_sources": ["internal/recurringview/agenda_test.go", "internal/screens/recurring_agenda_unavailable_host_wasm_test.go"],
+      "source": [
+        "internal/recurringview/agenda.go",
+        "internal/screens/recurring_agenda.go"
+      ],
+      "validation_sources": [
+        "internal/recurringview/agenda_test.go",
+        "internal/screens/recurring_agenda_unavailable_host_wasm_test.go"
+      ],
       "status": "Source and test files are present; verification pending root final gates."
     },
     {
       "area": "Custom fields",
-      "source": ["internal/customfields/formvalues.go", "internal/customfields/customfields.go", "internal/screens/customfields.go"],
-      "validation_sources": ["internal/customfields/formvalues_test.go", "internal/customfields/customfields_test.go", "internal/screens/customfield_parse_wasm_test.go"],
+      "source": [
+        "internal/customfields/formvalues.go",
+        "internal/customfields/customfields.go",
+        "internal/screens/customfields.go"
+      ],
+      "validation_sources": [
+        "internal/customfields/formvalues_test.go",
+        "internal/customfields/customfields_test.go",
+        "internal/screens/customfield_parse_wasm_test.go"
+      ],
       "status": "Source and test files are present; verification pending root final gates."
     },
     {
       "area": "Subscription trailing spend and PYF",
-      "source": ["internal/subscriptions/trailing_spend.go", "internal/workflow/payyourself.go"],
-      "validation_sources": ["internal/subscriptions/trailing_spend_test.go", "internal/workflow/payyourself_test.go", "internal/screens/subscriptions_financial_wasm_test.go"],
+      "source": [
+        "internal/subscriptions/trailing_spend.go",
+        "internal/workflow/payyourself.go"
+      ],
+      "validation_sources": [
+        "internal/subscriptions/trailing_spend_test.go",
+        "internal/workflow/payyourself_test.go",
+        "internal/screens/subscriptions_financial_wasm_test.go"
+      ],
       "status": "Source and test files are present; verification pending root final gates."
     }
   ],
@@ -1085,5 +1135,11 @@
   ],
   "validation_status": "Representative test pointers are source references. The full-screen suite passed 1075 top-level tests at an earlier checkpoint before shared SMART and Allocate additions; later focused tests passed at their recorded checkpoints. These are not the current root final-gate result; verification of listed source seams is pending root final gates. Browser evidence and exact artifacts are retained in docs/performance/primary-pages-2026-10-21. Reports remains slower in the paired captures and the full nine-page performance objective is incomplete.",
   "source_reconciliation": "Initial inventory at e14066dc; follow-up first-nine residual review through 22dca667 on 2026-10-21; reconciled against current worktree sources on 2026-10-21. File-level references avoid unstable line positions; source presence is not final-gate verification.",
-  "field_semantics": "Field names above match the serialized route objects. Each static route has source navigation but no line-number entry because code is under active refactor. Dynamic custom-page patterns are listed separately and are outside the 47-route registry."
+  "field_semantics": "Field names above match the serialized route objects. Each static route has source navigation but no line-number entry because code is under active refactor. Dynamic custom-page patterns are listed separately and are outside the 47-route registry.",
+  "final_stability_checkpoint": {
+    "version": "1.19.10",
+    "evidence": "docs/STABILITY_2026-10-21.md",
+    "status": "Native and relevant WASM/browser gates passed; this supersedes historical pending-gate text without claiming full architecture or performance completion.",
+    "remaining_performance_objective": "Incomplete; retain the documented Reports regression and unproven interaction/cold-start gains."
+  }
 }

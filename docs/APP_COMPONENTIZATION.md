@@ -46,10 +46,10 @@ boundaries and cache behavior while finishing remaining gaps.
 | Remaining routes | The 47 static-route registry, dynamic `/p/:slug` custom-page route and observed boundary classes are recorded in [Route coverage inventory](APP_ROUTE_COVERAGE.json). | Review each route's ownership and exception against the same checklist; aliases and transport routes are not separate financial models. |
 | Performance | Native algorithm baselines and measured native changes are recorded below and in the linked performance notes. | Browser route/interaction before-and-after measurements are still required to claim page latency improvement. |
 
-## Current source seams pending root final gates
+## Current source seams at the stability checkpoint
 
 The following source and test files are present in the current worktree. Their
-presence is not a pass claim: verification remains pending the root final gates.
+presence alone is not a pass claim. Native and relevant host gates now pass as recorded in [the stability checkpoint](STABILITY_2026-10-21.md).
 
 | Area | Current source evidence | Validation evidence present in source |
 | --- | --- | --- |
@@ -166,3 +166,7 @@ follow-up first-nine review through `22dca667`. This document was reconciled
 against current worktree sources on 2026-10-21; source and test-file presence do
 not establish completion of the root final gates. References are file-level
 because active refactors can move functions.
+
+## Final session checkpoint
+
+The v1.19.10 stability gates pass; see [the exact scopes and artifact](STABILITY_2026-10-21.md). This updates the historical pending-gate notes above and does not certify completion of all componentization or performance work. The user ended the extended refactor run after this stability release.

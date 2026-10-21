@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Prepare v1.19.10 with GoWebComponents v7.0.1, preserved encrypted-sync protections, the Settings navigation stability fix and recorded final gates.
 - A deferred default Settings redirect cannot replace a newer navigation or a newly selected Settings tab.
 - Integrate the published v1.19.9 sync/privacy fixes with the v7 componentized app, preserving encrypted artifact migration and transport guards.
 - Pin GoWebComponents v7.0.1 after the final latest-version check.

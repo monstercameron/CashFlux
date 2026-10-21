@@ -70,8 +70,8 @@ that SQLite version; production verification uses `go build -tags production` di
 - The expanded app suite exposed three existing test issues: a leaked encrypted-workspace marker,
   a legacy-plaintext assertion contradicting App Lock downgrade protection, and a recovery-copy
   assertion that did not allow an existing identical copy. Test-only corrections are separate
-  follow-up changes. Their combined focused run passes **6 tests**; a complete app-suite rerun
-  after those corrections is still pending.
+  follow-up changes. Their combined focused run passes **6 tests**; the subsequent complete
+  v7.0.0 app-suite rerun passes **261 tests**.
 - Canonical browser smoke: **2 tests passed** against both the live development build and the exact
   production artifact, covering all 46 fixture routes and a light-theme sweep, without retries.
   The production artifact SHA-256 is
@@ -98,3 +98,11 @@ deployment is part of this change.
 - Main, services, admin and portal production WebAssembly bundles compile, as does
   the Linux/amd64 server. A final source integration and version checkpoint follows
   before any release publication.
+
+## Final stability checkpoint
+
+The v1.19.10 candidate integrates current main's v1.19.9 sync/privacy fixes and
+passes the final native, WASM, build and browser gates. A stale Settings redirect
+found by the production smoke was fixed and verified before publication. See
+[the full stability checkpoint](STABILITY_2026-10-21.md) for counts, exact artifact
+identity, test scopes, retained failures and remaining performance limits.
