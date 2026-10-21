@@ -29,6 +29,7 @@ type assistantFormulaTestPage struct {
 	Snapshot      string                   `json:"snapshot"`
 	Total         int                      `json:"total"`
 	FilteredTotal int                      `json:"filtered_total"`
+	Offset        int                      `json:"offset"`
 	NextOffset    *int                     `json:"next_offset"`
 	Metrics       []assistantFormulaMetric `json:"metrics"`
 	Error         string                   `json:"error"`
@@ -161,6 +162,80 @@ func TestAssistantFormulaCatalogPagesReachEveryNameAcrossRebuiltHelpers(t *testi
 	want, err := formula.Eval("zz_metric_164", formula.Env{Vars: liveEngineVarsAt(app, now)})
 	if err != nil || evaluated.Value != want.(float64) {
 		t.Fatalf("tool differs from canonical engine/evaluator: %s, canonical=%v (%v)", out, want, err)
+	}
+}
+
+func TestAssistantFormulaCatalogCapsEncodedPagesAndContinuesWithoutDuplicates(t *testing.T) {
+	assistantFormulaTestClock(t)
+	app := primaryTodoNotificationsApp(t)
+	doc := strings.Repeat("Long but complete custom formula documentation. ", 45)
+	for i := range 36 {
+		if err := app.Store().PutMolecule(domain.Molecule{Name: fmt.Sprintf("page_size_%02d", i), Formula: fmt.Sprintf("income + %d", i), Doc: doc}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tool := assistantFormulaTestTool(t, app, "list_formula_metrics")
+	read := func(offset int, snapshot string) (assistantFormulaTestPage, int) {
+		t.Helper()
+		raw, err := json.Marshal(assistantFormulaPageArgs{MoleculesOnly: true, Offset: offset, Limit: 100, Snapshot: snapshot})
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := tool.run(raw)
+		if len(out) > assistantFormulaPageMaxBytes {
+			t.Fatalf("encoded page is %d bytes, cap is %d", len(out), assistantFormulaPageMaxBytes)
+		}
+		var page assistantFormulaTestPage
+		if err := json.Unmarshal([]byte(out), &page); err != nil || page.Error != "" {
+			t.Fatalf("invalid bounded page: %s (%v)", out, err)
+		}
+		return page, len(out)
+	}
+	first, _ := read(0, "")
+	if len(first.Metrics) == 0 || first.NextOffset == nil || first.Snapshot == "" {
+		t.Fatalf("large page did not produce a continuable partial page: %+v", first)
+	}
+	seen := map[string]bool{}
+	for _, row := range first.Metrics {
+		seen[row.Name] = true
+	}
+	second, _ := read(*first.NextOffset, first.Snapshot)
+	if second.Snapshot != first.Snapshot || second.Offset != *first.NextOffset {
+		t.Fatalf("continuation changed its fixed context or cursor: %+v", second)
+	}
+	for _, row := range second.Metrics {
+		if seen[row.Name] {
+			t.Fatalf("continuation duplicated metric %q", row.Name)
+		}
+		seen[row.Name] = true
+	}
+}
+
+func TestAssistantFormulaOversizedMetricPointsToExactReadRecord(t *testing.T) {
+	assistantFormulaTestClock(t)
+	app := primaryTodoNotificationsApp(t)
+	largeDoc := "EXACT_FORMULA_DOC_START " + strings.Repeat("long custom definition ", 1500)
+	if err := app.Store().PutMolecule(domain.Molecule{Name: "large_formula_doc", Formula: "income + 1", Doc: largeDoc}); err != nil {
+		t.Fatal(err)
+	}
+	tool := assistantFormulaTestTool(t, app, "list_formula_metrics")
+	raw, _ := json.Marshal(assistantFormulaPageArgs{Filter: "large_formula_doc", MoleculesOnly: true, Limit: 1})
+	out := tool.run(raw)
+	if len(out) > assistantFormulaPageMaxBytes {
+		t.Fatalf("single-metric response is %d bytes, cap is %d", len(out), assistantFormulaPageMaxBytes)
+	}
+	var page assistantFormulaTestPage
+	if err := json.Unmarshal([]byte(out), &page); err != nil || page.Error != "" || len(page.Metrics) != 1 {
+		t.Fatalf("oversized metric did not return a compact discoverable row: %s (%v)", out, err)
+	}
+	row := page.Metrics[0]
+	if !row.DetailRequired || row.ReadRecord == nil || row.ReadRecord.Collection != "molecules" || row.ReadRecord.ID != "large_formula_doc" || row.Doc != "" || row.Formula != "" {
+		t.Fatalf("oversized metadata lacks explicit exact-record recovery: %+v", row)
+	}
+	read := assistantDataTool(t, app, "read_record")
+	detail := read.run(json.RawMessage(`{"collection":"molecules","id":"large_formula_doc","field":"doc","limit":120}`))
+	if !strings.Contains(detail, "EXACT_FORMULA_DOC_START") || !strings.Contains(detail, "totalCharacters") {
+		t.Fatalf("read_record did not recover the omitted exact metadata: %s", detail)
 	}
 }
 

@@ -1,3 +1,7 @@
+## 2026-10-21 - Bound formula catalog responses
+
+The catalog keeps each complete response within 24000 bytes, advances continuation at the first omitted metric, and retains its fixed observation and selector identity. Oversized custom documentation and formulas return an explicit detail-required record reference. All ten formula WASM groups passed, including full traversal and actual read_record recovery.
+
 ## 2026-10-21 - Current checked assistant audit evidence
 
 Added checked input and finding currency validation, fallible source reads, separate impact periods and limited empty-verdict wording. Financial estimates no longer become a false clean result after missing FX or storage errors. Nine native audit groups, vet, translation and category-ordering gates, and all three actual-tool WASM groups passed.

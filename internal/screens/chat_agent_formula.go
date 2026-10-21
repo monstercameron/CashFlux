@@ -31,6 +31,7 @@ import (
 )
 
 const assistantFormulaLifetime = 5 * time.Minute
+const assistantFormulaPageMaxBytes = 24000
 
 var assistantFormulaNow = time.Now
 var assistantFormulaCache = newViewCache[*assistantFormulaSnapshot](2)
@@ -46,15 +47,32 @@ type assistantFormulaContext struct {
 }
 
 type assistantFormulaMetric struct {
-	Name      string   `json:"name"`
-	Label     string   `json:"label"`
-	Doc       string   `json:"doc"`
-	Group     string   `json:"group"`
-	Kind      string   `json:"kind"`
-	Unit      string   `json:"unit"`
-	Formula   string   `json:"formula,omitempty"`
-	Available bool     `json:"available"`
-	Value     *float64 `json:"value,omitempty"`
+	Name           string                      `json:"name"`
+	Label          string                      `json:"label"`
+	Doc            string                      `json:"doc"`
+	Group          string                      `json:"group"`
+	Kind           string                      `json:"kind"`
+	Unit           string                      `json:"unit"`
+	Formula        string                      `json:"formula,omitempty"`
+	Available      bool                        `json:"available"`
+	Value          *float64                    `json:"value,omitempty"`
+	DetailRequired bool                        `json:"detail_required,omitempty"`
+	ReadRecord     *assistantFormulaReadRecord `json:"read_record,omitempty"`
+}
+
+type assistantFormulaReadRecord struct {
+	Collection string `json:"collection"`
+	ID         string `json:"id"`
+}
+
+type assistantFormulaMetricPage struct {
+	assistantFormulaContext
+	Snapshot      string                   `json:"snapshot"`
+	Total         int                      `json:"total"`
+	FilteredTotal int                      `json:"filtered_total"`
+	Offset        int                      `json:"offset"`
+	NextOffset    *int                     `json:"next_offset"`
+	Metrics       []assistantFormulaMetric `json:"metrics"`
 }
 
 type assistantFormulaSnapshot struct {
@@ -89,6 +107,64 @@ type assistantFormulaPageArgs struct {
 	Offset        int    `json:"offset"`
 	Limit         int    `json:"limit"`
 	Snapshot      string `json:"snapshot"`
+}
+
+// assistantFormulaEncodePage keeps the complete encoded tool response within the
+// assistant transport budget. Rows are never truncated: if one molecule's docs
+// or formula alone is too large, the page carries a read_record pointer instead.
+func assistantFormulaEncodePage(ctx assistantFormulaContext, snapshot string, total, offset, limit int, rows []assistantFormulaMetric) (string, error) {
+	pageRows := make([]assistantFormulaMetric, 0, min(limit, len(rows)-offset))
+	encode := func(candidate []assistantFormulaMetric) ([]byte, error) {
+		end := offset + len(candidate)
+		var next *int
+		if end < len(rows) {
+			copy := end
+			next = &copy
+		}
+		return json.Marshal(assistantFormulaMetricPage{ctx, snapshot, total, len(rows), offset, next, candidate})
+	}
+	for index := offset; index < len(rows) && len(pageRows) < limit; index++ {
+		row := rows[index]
+		candidate := append(append([]assistantFormulaMetric(nil), pageRows...), row)
+		encoded, err := encode(candidate)
+		if err != nil {
+			return "", err
+		}
+		if len(encoded) <= assistantFormulaPageMaxBytes {
+			pageRows = candidate
+			continue
+		}
+		if len(pageRows) != 0 {
+			break
+		}
+		if row.Kind != "molecule" || row.Name == "" {
+			return "", fmt.Errorf("formula metric metadata exceeds the response limit; use data_manifest and query_data to locate its exact record")
+		}
+		// Preserve the metric's identity and observation while clearly marking the
+		// omitted text and pointing to the canonical persisted molecule record.
+		row.Doc = ""
+		row.Formula = ""
+		row.DetailRequired = true
+		row.ReadRecord = &assistantFormulaReadRecord{Collection: "molecules", ID: row.Name}
+		candidate = []assistantFormulaMetric{row}
+		encoded, err = encode(candidate)
+		if err != nil {
+			return "", err
+		}
+		if len(encoded) > assistantFormulaPageMaxBytes {
+			return "", fmt.Errorf("formula metric metadata exceeds the response limit; use data_manifest and query_data to locate its exact record")
+		}
+		pageRows = candidate
+		break
+	}
+	encoded, err := encode(pageRows)
+	if err != nil {
+		return "", err
+	}
+	if len(encoded) > assistantFormulaPageMaxBytes {
+		return "", fmt.Errorf("formula page exceeds the response limit")
+	}
+	return string(encoded), nil
 }
 
 func assistantFormulaDigest(value any) (string, error) {
@@ -478,7 +554,7 @@ func assistantFormulaUnit(metric widgetcatalog.Metric, defaults map[string]domai
 func agToolsFormula(app *appstate.App, _ string, _ currency.Rates) []chatTool {
 	return []chatTool{
 		{spec: ai.FunctionTool("list_formula_metrics",
-			"Discover ALL canonical formula metric names, labels, groups, docs, units, formulas and availability. Metadata only by default; set include_values for observed numeric values. Whole household, current calendar month at fixed observed_at, base-currency major units for money. Stable name-order pagination: limit defaults50/max100; continue with snapshot and next_offset using identical filters. Changed, expired or evicted snapshots require restarting offset0 without snapshot. Unknown/unavailable metrics never imply zero.",
+			"Discover ALL canonical formula metric names, labels, groups, docs, units, formulas and availability. Metadata only by default; set include_values for observed numeric values. Whole household, current calendar month at fixed observed_at, base-currency major units for money. Stable name-order pagination: limit defaults50/max100; response is capped at 24000 bytes and may return fewer rows; continue with snapshot and next_offset using identical filters. A metric with detail_required points to its exact persisted molecules record via read_record; do not infer or omit that metadata. Changed, expired or evicted snapshots require restarting offset0 without snapshot. Unknown/unavailable metrics never imply zero.",
 			json.RawMessage(`{"type":"object","properties":{"filter":{"type":"string"},"group":{"type":"string"},"molecules_only":{"type":"boolean"},"include_values":{"type":"boolean"},"offset":{"type":"integer","minimum":0},"limit":{"type":"integer","minimum":0,"maximum":100},"snapshot":{"type":"string"}},"additionalProperties":false}`)),
 			run: func(raw json.RawMessage) string {
 				var args assistantFormulaPageArgs
@@ -517,21 +593,11 @@ func agToolsFormula(app *appstate.App, _ string, _ currency.Rates) []chatTool {
 				if args.Offset > len(rows) {
 					return assistantFormulaFailure(fmt.Errorf("offset exceeds filtered_total"), false)
 				}
-				end := min(args.Offset+args.Limit, len(rows))
-				var next *int
-				if end < len(rows) {
-					copy := end
-					next = &copy
+				out, err := assistantFormulaEncodePage(snapshot.Context, assistantFormulaEncodeToken(snapshot, selectionID), len(snapshot.Metrics), args.Offset, args.Limit, rows)
+				if err != nil {
+					return assistantFormulaFailure(err, false)
 				}
-				return assistantDataJSON(struct {
-					assistantFormulaContext
-					Snapshot      string                   `json:"snapshot"`
-					Total         int                      `json:"total"`
-					FilteredTotal int                      `json:"filtered_total"`
-					Offset        int                      `json:"offset"`
-					NextOffset    *int                     `json:"next_offset"`
-					Metrics       []assistantFormulaMetric `json:"metrics"`
-				}{snapshot.Context, assistantFormulaEncodeToken(snapshot, selectionID), len(snapshot.Metrics), len(rows), args.Offset, next, rows[args.Offset:end]}, nil)
+				return out
 			}},
 		{spec: ai.FunctionTool("evaluate_formula", evalFormulaToolDesc()+" Whole-household current calendar month; pass an optional catalog snapshot to use that same fixed observation. Missing or nonfinite referenced values fail explicitly.",
 			json.RawMessage(`{"type":"object","properties":{"expression":{"type":"string"},"snapshot":{"type":"string"}},"required":["expression"],"additionalProperties":false}`)),
