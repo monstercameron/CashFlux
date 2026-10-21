@@ -220,7 +220,7 @@ func TestENC39EraseRevokeAndLocalCredentialDeleteAreBestEffort(t *testing.T) {
 	eraseDataThen(notify)
 	select {
 	case target := <-navigations:
-		if !strings.HasSuffix(target, "/erase-device.html#start") {
+		if !strings.Contains(target, "/erase-device.html#start=") {
 			t.Fatalf("erase navigated to %q", target)
 		}
 	case <-time.After(15 * time.Second):
@@ -264,7 +264,7 @@ func TestENC39EraseRevokeAndLocalCredentialDeleteAreBestEffort(t *testing.T) {
 	eraseDataThen(func(string, bool) {})
 	select {
 	case target := <-navigations:
-		if !strings.HasSuffix(target, "/erase-device.html#start") {
+		if !strings.Contains(target, "/erase-device.html#start=") {
 			t.Fatalf("erase navigated to %q", target)
 		}
 	case <-time.After(15 * time.Second):

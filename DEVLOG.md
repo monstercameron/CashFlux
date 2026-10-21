@@ -35166,3 +35166,7 @@ The file-sync review still described the old in-memory wipe as current after the
 ## 2026-10-21 — Keep device erasure within its service-worker scope
 
 Review found that the standalone eraser matched any worker script named `sw.js` on the origin. On a shared origin, that could remove another application's registration. It now resolves CashFlux's own worker URL from the eraser document and compares both origin and path, allowing its build query parameter while leaving other registrations alone. A Node test verifies both cases, and the offline Chromium erasure test still passes with a controlled CashFlux worker.
+
+## 2026-10-21 — Require confirmed intent before automatic erasure
+
+The standalone eraser originally started whenever a browser opened its `#start` URL, including through a direct external link. The Settings confirmation now creates a random 128-bit ticket in localStorage and passes that ticket in the navigation fragment. The standalone page automatically erases only when the ticket in its fragment matches the locally stored one. A disposable Chromium test verifies that both a direct link without a ticket and a guessed ticket with an unmatched pending marker leave local data intact. The five existing browser cases passed in the same run; after correcting a same-document navigation in the new test, its focused rerun passed too. The focused Wasm session test passed. No production browser storage was accessed.

@@ -6,6 +6,8 @@ package app
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -1869,7 +1871,8 @@ func eraseDataThen(notify func(string, bool)) {
 	wasSuspended, wasSyncPaused := suspendAutosave, syncApplyPaused
 	suspendAutosave = true
 	syncApplyPaused = true
-	if err := markDeviceErasePending(); err != nil {
+	ticket, err := markDeviceErasePending()
+	if err != nil {
 		suspendAutosave, syncApplyPaused = wasSuspended, wasSyncPaused
 		notify(uistate.T("settings.wipeErr", err.Error()), true)
 		return
@@ -1877,7 +1880,8 @@ func eraseDataThen(notify func(string, bool)) {
 	var navigation sync.Once
 	openEraser := func() {
 		navigation.Do(func() {
-			url := js.Global().Get("URL").New("./erase-device.html#start", js.Global().Get("document").Get("baseURI"))
+			url := js.Global().Get("URL").New("./erase-device.html", js.Global().Get("document").Get("baseURI"))
+			url.Set("hash", "start="+ticket)
 			js.Global().Get("location").Call("replace", url.Get("href").String())
 		})
 	}
@@ -1894,18 +1898,23 @@ func eraseDataThen(notify func(string, bool)) {
 	})
 }
 
-func markDeviceErasePending() (err error) {
+func markDeviceErasePending() (ticket string, err error) {
 	defer func() {
 		if problem := recover(); problem != nil {
 			err = fmt.Errorf("could not coordinate open tabs: %v", problem)
 		}
 	}()
+	random := make([]byte, 16)
+	if _, err := rand.Read(random); err != nil {
+		return "", fmt.Errorf("create erasure ticket: %w", err)
+	}
+	ticket = hex.EncodeToString(random)
 	storage := js.Global().Get("localStorage")
 	if !storage.Truthy() {
-		return errors.New("browser local storage is unavailable")
+		return "", errors.New("browser local storage is unavailable")
 	}
-	storage.Call("setItem", "cashflux:erase-in-progress", "pending")
-	return nil
+	storage.Call("setItem", "cashflux:erase-in-progress", ticket)
+	return ticket, nil
 }
 
 func reportWipeRevokeFailure(err error, notify func(string, bool)) {

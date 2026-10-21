@@ -203,3 +203,21 @@ test("a waiting tab does not mistake marker removal for completed erasure", asyn
     await context.close();
   }
 });
+
+test("a direct eraser URL cannot delete data without Settings confirmation", async ({ browser }) => {
+  const context = await browser.newContext({ serviceWorkers: "block" });
+  const page = await context.newPage();
+  try {
+    await page.goto("/erase-device.html");
+    await page.evaluate(() => localStorage.setItem("cashflux:legacy-record", "keep this record"));
+    await page.goto("/erase-device.html#start=guessed-ticket");
+    await expect(page.getByRole("heading", { name: "No erasure is running" })).toBeVisible();
+    expect(await page.evaluate(() => localStorage.getItem("cashflux:legacy-record"))).toBe("keep this record");
+    await page.evaluate(() => localStorage.setItem("cashflux:erase-in-progress", "private-ticket"));
+    await page.reload();
+    await expect(page.getByRole("heading", { name: "Erasure is in progress in another tab" })).toBeVisible();
+    expect(await page.evaluate(() => localStorage.getItem("cashflux:legacy-record"))).toBe("keep this record");
+  } finally {
+    await context.close();
+  }
+});

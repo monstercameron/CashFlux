@@ -90,8 +90,10 @@
         }
       });
       try {
-        if (location.hash === "#start") start();
-        else if (localStorage.getItem(api.marker)) wait();
+        const pendingErase = localStorage.getItem(api.marker);
+        const launchTicket = location.hash.startsWith("#start=") ? location.hash.slice(7) : "";
+        if (launchTicket && pendingErase === launchTicket) start();
+        else if (pendingErase) wait();
         else {
           title.textContent = "No erasure is running";
           status.textContent = "Open CashFlux to start a new device erase.";
