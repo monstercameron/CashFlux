@@ -35,11 +35,15 @@ type WinsInput struct {
 // PrepareWins computes the primitives consumed by milestones.Detect. It keeps
 // goal order, counts only monthly budgets with positive spend at or below their
 // limit in the previous completed month, and skips individual budget errors.
-// No input data is modified; localization and seen-state stay with the caller.
+// Goal completion uses the canonical rate-aware evaluation; an unknown coverage
+// result never becomes a celebrated win. No input data is modified; localization
+// and seen-state stay with the caller.
 func PrepareWins(in WinsInput) milestones.Input {
 	var reached []string
+	taskIndex := goals.BuildTaskIndex(in.Tasks)
 	for _, goal := range in.Goals {
-		if goals.Reached(goal, in.Tasks, in.Now) {
+		evaluation := goals.EvaluateGoal(goal, taskIndex[goal.ID], in.Rates, in.Now)
+		if evaluation.Err == nil && evaluation.Complete {
 			reached = append(reached, goal.Name)
 		}
 	}

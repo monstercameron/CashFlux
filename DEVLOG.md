@@ -1,3 +1,7 @@
+## 2026-10-20 - Keep goal wins consistent with checked coverage
+
+Recent wins now requires known canonical goal completion, preventing celebrations from unconvertible or overflowed saved and reserved amounts. Existing milestone names and seen keys remain unchanged. Native notificationview tests cover foreign reservations, saved currency, missing rates, canonical parity, Unicode names and rate-only transitions; the actual Notifications tile/store regression and full 817-test screen suite pass.
+
 ## 2026-10-20 - Render Goals from shared native row facts
 
 The Goals view now builds one native row model per visible goal from a single linked-task index. Sorting, sections, health, retargeting, card figures, trajectory and contribution planners share the same converted facts while edit callbacks retain original stored currencies. Separate figures and task-preview components isolate hooks and avoid rebuilding task lists for every row. Unknown coverage has explicit unavailable presentation and suppresses unsafe financial actions. Native goalview tests and vet pass; the complete 817-test WASM screen suite passes, including actual-host rate revisions, inline target edits preserving currencies, and task-toggle refresh.
