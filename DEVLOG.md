@@ -1,3 +1,7 @@
+## 2026-10-20 - Document shared preparation and cache boundaries
+
+Read current implementations to document ownership, immutable cache data, complete invalidation identities, bounded cache behavior, compact versus expanded preparation and save-time state revalidation. These contracts guide reuse without moving money arithmetic back into markup or weakening financial freshness. Documentation-only change; native and 827 screen integration checks were already green for the described source.
+
 ## 2026-10-20 - Share native Dashboard transaction counts
 
 Extracted period transaction counts into dashboardview with half-open date boundaries, reporting exclusions, transfer/sign semantics, and currency-independent row counting. The controller memo uses app revision, full scope and exact bounds. Native predicate and immutability tests plus an actual Dashboard host regression passed; integration passed all native packages and 827 screen WASM tests. Existing visible KPI captions already followed reporting exclusions, so this removes duplicate inconsistent context logic rather than claiming a new caption repair.

@@ -263,6 +263,76 @@ amounts, return overflow errors and let the UI show an explicit unavailable stat
 instead of partial or wrapped totals. Do not duplicate the per-$100 arithmetic in
 screen code or substitute an unchecked `int64` multiplication/float percentage.
 
+#### Accounts: disclose detail before preparing it
+
+`accountSnapshot(app)` is the page's revision-keyed shared balance/ledger snapshot.
+Pass it to one `accountDetailContext` for the rendered account rows. Compact
+`AccountRow` renders balance and status without asking that context for history,
+flows or projections. Its own disclosure state gates those reads; the selected
+90-day/12-month/all history range is local, view-only row state. Keep this lazy
+boundary when adding account detail: expensive facts belong inside the disclosure,
+while the per-row component owns its hooks and child components own theirs.
+
+The detail context's broad facts key includes app/data revision, rates, base
+currency, as-of instant and time zone, plus account ID. This covers balance-derived
+flow/projection and valuation history. Projection inputs are prepared once per
+revision and reused across open rows. Historical account series are native-currency
+facts, so their cache keys intentionally omit display FX/preferences and instead
+include account/revision, day, zone and requested day count. Invalid exact balances
+must remain unavailable; do not turn missing/invalid balances into zero-valued
+history or forecast curves. A revision change invalidates the details while a
+range change reuses the prepared history.
+
+#### Goal allocation editor: a draft is not authority to save
+
+`goalview.BuildAllocationDraft` is the native owner of the manual earmark draft:
+it indexes other goals' reservations once, calculates checked account headroom from
+the shared account snapshot and current rates, and exposes immutable rows. The UI
+owns text/selection changes only. Unedited existing allocation records retain
+their original currency and order, including legacy or unavailable sources;
+display conversion failure is not permission to erase or rewrite them. Explicit
+amount edits and new selections must pass current currency, eligibility and
+headroom checks. Split refuses to silently omit selected unavailable reservations.
+
+The editor's snapshot cache is keyed by app revision and goal ID. Re-read that
+snapshot before splitting and again at save, and apply changes against the latest
+goal and balances. This closes the gap between an open modal and concurrent store,
+balance or FX changes. If the goal disappeared or the currency changed, show an
+error and leave storage alone. Keep row controls in `goalAllocateRow` components
+when mapping draft rows so each row owns stable input hooks; keep validation and
+arithmetic in the native draft model.
+
+#### Dashboard: cache layout separately from financial frames
+
+The dashboard has two intentionally independent preparation layers. The native
+`dashboardview.LayoutCache` prepares validated placements from instance, ready
+state, layout items, widget configs, hidden IDs, stored placements and current
+registry defaults. It retains two immutable configurations and freezes nested
+inputs before caching. Financial data revisions are not layout inputs: a new
+transaction should refresh frames without revalidating placement schemas. Layout
+changes should rebuild the placements without forcing unrelated frame preparation.
+Use this cache for the dashboard's configurable placement schema; do not use it as
+a generic financial-data cache.
+
+`dashboardview.FrameContexts` owns the other layer. Its identity includes app
+instance/revision, preference revision, full scope, base currency, full FX-rate
+identity, period bounds, clock minute and engine-variable timestamp. Each prepared
+context caches up to 32 serialized pipeline requests; `Hydrate` returns cloned
+frame fields/values so renderers cannot mutate cached results. Keep the identity
+complete when adding a frame input, and keep source data read-only. Moving or hiding
+a tile reuses the same financial context; changing data, scope, currency/rates,
+period or time identity refreshes it. Both caches are bounded.
+
+Dashboard's settled-state boundary also matters: the hero and direct headline
+figures render first, while engine variables and configurable tile frames wait
+until the surface settles. The drag-preview driver subscribes to drag atoms outside
+the expensive controller, so pointer movement updates tile shells without
+recomputing frames. Preserve that split when adding layout interactions or data
+tiles. Reuse the existing `accountSnapshot`/view-model preparation and
+`PreparedFrames` seams when another surface has the same inputs and immutable
+pipeline contract; otherwise keep the cache page-specific rather than weakening
+its identity.
+
 ### Toggle (`controls.go`)
 **Purpose:** Pill on/off switch (`.switch`, ARIA `role="switch"`). Keyboard-accessible (Space/Enter).
 ```go

@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Component guidance now records lazy Accounts facts, current-state goal allocation drafts, and separate Dashboard layout/frame cache contracts.
 - Dashboard render context counts now use a memoized native report-eligible transaction counter.
 - Goal contributions and Undo now validate checked amounts against the current stored goal; completion notices and workflows require known canonical coverage.
 - Reused bounded Dashboard source snapshots, pipeline results and validated layout configurations.
