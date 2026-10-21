@@ -1,3 +1,7 @@
+## 2026-10-20 - Assistant checked scoped finance tools
+
+Replaced six legacy inline read handlers with thin fresh fallible store adapters and native assistantdata finance facts. Category totals use checked ledger folds over an explicit scope-local refund ledger; net worth is labeled household-wide. Budgets use canonical cadence/rollover/coverage models. Affordability parses exact decimals, uses eligible liquid accounts and checked arithmetic, states its reserve assumptions and never treats total investments/property as spendable cash. Native Finance/reports/afford tests passed; all three real-App Finance WASM groups passed, including split/refund/exclusion/scope/FX/precision/date and healthy-to-closed-store transitions across every handler. Inherited split-linked-refund attribution and legacy report-section readers remain separately identified follow-ups.
+
 ## 2026-10-20 - Assistant exact flag dismissal approvals
 
 Replaced malformed-JSON-to-clear-all behavior with strict object/type/null validation and an approval-bound sorted key/title/detail snapshot. Changed or newly matching flags require review again, dataset switches are refused, and repeated execution cannot sweep new flags. The result verifies persisted dismissal preferences and states explicitly that transactions were not changed. All six focused real-App Flags WASM groups passed in integration pass2; approval metadata already reports unknown count/non-reversibility truthfully.

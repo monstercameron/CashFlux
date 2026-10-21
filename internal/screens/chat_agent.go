@@ -16,7 +16,6 @@ import (
 	"syscall/js"
 	"time"
 
-	"github.com/monstercameron/CashFlux/internal/afford"
 	"github.com/monstercameron/CashFlux/internal/ai"
 	"github.com/monstercameron/CashFlux/internal/aicontext"
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -29,6 +28,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/scope"
 	"github.com/monstercameron/CashFlux/internal/toolperm"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 )
@@ -323,7 +323,7 @@ func categoryNames(cats []domain.Category) string {
 // bound to the user's live data, so the model can answer specific questions from
 // real figures instead of guessing. All computation is local; only the short tool
 // results (totals, counts) go back to the model.
-func buildChatTools(app *appstate.App, base string, rates currency.Rates, tier aicontext.ConversationTier) []chatTool {
+func buildChatTools(app *appstate.App, base string, rates currency.Rates, tier aicontext.ConversationTier, currentScope ...func() scope.ReportScope) []chatTool {
 	txns := app.Transactions()
 	accounts := app.Accounts()
 	cats := app.Categories()
@@ -340,12 +340,6 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates, tier a
 			return n
 		}
 		return "an account"
-	}
-	catLabel := func(id string) string {
-		if n := catByID[id]; n != "" {
-			return n
-		}
-		return "uncategorized"
 	}
 	now := time.Now()
 	mStart, mEnd := dateutil.MonthRange(now)
@@ -409,96 +403,6 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates, tier a
 					return "No categories defined."
 				}
 				return "Categories: " + catNames()
-			},
-		},
-		{
-			spec: ai.FunctionTool("spending_by_category",
-				"Total the user's spending in a category over a period. Use for 'how much did I spend on X'.",
-				json.RawMessage(`{"type":"object","properties":{"category":{"type":"string","description":"category name"},"period":{"type":"string","enum":["this_month","last_month","all"]}},"required":["category"]}`)),
-			run: func(raw json.RawMessage) string {
-				var a struct {
-					Category string `json:"category"`
-					Period   string `json:"period"`
-				}
-				_ = json.Unmarshal(raw, &a)
-				cat, ok := resolveCategory(a.Category)
-				if !ok {
-					return fmt.Sprintf("No category matching %q. Available: %s", a.Category, catNames())
-				}
-				start, end, label := periodRange(a.Period)
-				var total, count int64
-				for _, t := range txns {
-					if !t.IsExpense() || t.CategoryID != cat.ID {
-						continue
-					}
-					if !start.IsZero() && !dateutil.InRange(t.Date, start, end) {
-						continue
-					}
-					if conv, err := rates.Convert(t.Amount.Abs(), base); err == nil {
-						total += conv.Amount
-						count++
-					}
-				}
-				return fmt.Sprintf("Spent %s on %s (%d transactions, %s).", fmtM(total), cat.Name, count, label)
-			},
-		},
-		{
-			spec: ai.FunctionTool("financial_summary", "The user's headline figures: net worth, this month's income/spending/net, and savings rate.", json.RawMessage(`{"type":"object","properties":{}}`)),
-			run: func(json.RawMessage) string {
-				net, assets, liab, _ := ledger.NetWorth(accounts, txns, rates)
-				income, expense, _ := ledger.PeriodTotals(txns, mStart, mEnd, rates)
-				netFlow := income.Amount - expense.Amount
-				rate := 0.0
-				if income.Amount > 0 {
-					rate = float64(netFlow) / float64(income.Amount) * 100
-				}
-				return fmt.Sprintf("Net worth %s (assets %s, liabilities %s). This month: income %s, spending %s, net %s, savings rate %.0f%%.",
-					fmtM(net.Amount), fmtM(assets.Amount), fmtM(liab.Amount), fmtM(income.Amount), fmtM(expense.Amount), fmtM(netFlow), rate)
-			},
-		},
-		{
-			spec: ai.FunctionTool("account_balances", "List the user's active accounts with their current balances.", json.RawMessage(`{"type":"object","properties":{}}`)),
-			run: func(json.RawMessage) string {
-				var b strings.Builder
-				for _, a := range accounts {
-					if a.Archived {
-						continue
-					}
-					bal, err := ledger.Balance(a, txns)
-					if err != nil {
-						continue
-					}
-					fmt.Fprintf(&b, "%s: %s\n", a.Name, fmtMoney(bal))
-				}
-				if b.Len() == 0 {
-					return "No active accounts."
-				}
-				return strings.TrimRight(b.String(), "\n")
-			},
-		},
-		{
-			spec: ai.FunctionTool("check_affordability",
-				"Project whether the user can afford an amount, optionally by a number of months out, from their assets and this month's net cash flow.",
-				json.RawMessage(`{"type":"object","properties":{"amount":{"type":"number","description":"amount in the base currency's major units, e.g. 2000"},"months":{"type":"integer","description":"months from now (0 = now)"}},"required":["amount"]}`)),
-			run: func(raw json.RawMessage) string {
-				var a struct {
-					Amount float64 `json:"amount"`
-					Months int     `json:"months"`
-				}
-				if err := json.Unmarshal(raw, &a); err != nil {
-					return "Could not read the amount."
-				}
-				amount := currency.MinorFromMajor(a.Amount, base)
-				_, assets, _, _ := ledger.NetWorth(accounts, txns, rates)
-				income, expense, _ := ledger.PeriodTotals(txns, mStart, mEnd, rates)
-				res := afford.CanAfford(amount, assets.Amount, income.Amount-expense.Amount, a.Months, 0)
-				if res.Affordable {
-					return fmt.Sprintf("Affordable: projected balance %s covers %s (%s free to spend).", fmtM(res.ProjectedBalance), fmtM(amount), fmtM(res.Available))
-				}
-				if res.MonthsNeeded > 0 {
-					return fmt.Sprintf("Not yet: short %s now; affordable in about %d months at the current pace.", fmtM(res.Shortfall), res.MonthsNeeded)
-				}
-				return fmt.Sprintf("Not affordable: short %s, and the current cash flow won't close the gap.", fmtM(res.Shortfall))
 			},
 		},
 		{
@@ -636,20 +540,6 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates, tier a
 			},
 		},
 		{
-			spec: ai.FunctionTool("list_budgets", "List the user's budgets with category, period, and limit.", json.RawMessage(`{"type":"object","properties":{}}`)),
-			run: func(json.RawMessage) string {
-				bs := app.Budgets()
-				if len(bs) == 0 {
-					return "No budgets set."
-				}
-				var b strings.Builder
-				for _, bd := range bs {
-					fmt.Fprintf(&b, "%s — %s, %s limit %s\n", bd.Name, catLabel(bd.CategoryID), string(bd.Period), fmtMoney(bd.Limit))
-				}
-				return strings.TrimRight(b.String(), "\n")
-			},
-		},
-		{
 			spec: ai.FunctionTool("list_tasks", "List the user's to-do tasks (title, status, priority, due date).", json.RawMessage(`{"type":"object","properties":{}}`)),
 			run: func(json.RawMessage) string {
 				ts := app.Tasks()
@@ -663,54 +553,6 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates, tier a
 						line += ", due " + t.Due.Format("Jan 2")
 					}
 					b.WriteString(line + "\n")
-				}
-				return strings.TrimRight(b.String(), "\n")
-			},
-		},
-		{
-			spec: ai.FunctionTool("spending_breakdown", "Top spending categories for a period (where the money went).", json.RawMessage(`{"type":"object","properties":{"period":{"type":"string","enum":["this_month","last_month","all"]},"limit":{"type":"integer"}}}`)),
-			run: func(raw json.RawMessage) string {
-				var a struct {
-					Period string `json:"period"`
-					Limit  int    `json:"limit"`
-				}
-				_ = json.Unmarshal(raw, &a)
-				start, end, label := periodRange(a.Period)
-				sums := map[string]int64{}
-				for _, t := range txns {
-					if !t.IsExpense() {
-						continue
-					}
-					if !start.IsZero() && !dateutil.InRange(t.Date, start, end) {
-						continue
-					}
-					if conv, err := rates.Convert(t.Amount.Abs(), base); err == nil {
-						sums[t.CategoryID] += conv.Amount
-					}
-				}
-				if len(sums) == 0 {
-					return "No spending in " + label + "."
-				}
-				type kv struct {
-					id  string
-					amt int64
-				}
-				rows := make([]kv, 0, len(sums))
-				for id, amt := range sums {
-					rows = append(rows, kv{id, amt})
-				}
-				sort.Slice(rows, func(i, j int) bool { return rows[i].amt > rows[j].amt })
-				limit := a.Limit
-				if limit <= 0 || limit > 15 {
-					limit = 8
-				}
-				if len(rows) > limit {
-					rows = rows[:limit]
-				}
-				var b strings.Builder
-				fmt.Fprintf(&b, "Top spending (%s):\n", label)
-				for _, r := range rows {
-					fmt.Fprintf(&b, "%s: %s\n", catLabel(r.id), fmtMoney(money.New(r.amt, base)))
 				}
 				return strings.TrimRight(b.String(), "\n")
 			},
@@ -1498,6 +1340,7 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates, tier a
 	tools = append(tools, agToolsData(app)...)
 	tools = append(tools, agToolsPlanning(app, base, rates)...)
 	tools = append(tools, agToolsFlags(app, base, rates)...)
+	tools = append(tools, agToolsFinance(app, base, rates, currentScope...)...)
 	tools = append(tools, agToolsTrust(app, base, rates)...)
 	tools = append(tools, agToolsAuditor(app, base, rates)...)
 	tools = append(tools, agToolsAuthoring(app, base, rates)...)
