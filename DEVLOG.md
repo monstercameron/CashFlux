@@ -1,3 +1,7 @@
+## 2026-10-21 - Unmount prepared-host fixtures before restoring browser globals
+
+Fixture.Cleanup does not unmount the framework tree. Added explicit empty-root render and stabilization before cleanup, allowing popover event/timer cleanup to run while the browser stubs are still installed. Both budget flex host tests and all five Household prepared-host tests passed; the focused fifteen-case batch also passed without runtime warnings. The full screen suite is rerunning.
+
 ## 2026-10-21 - Reuse successful tax preparation across Reports remounts
 
 Added an eight-entry successful preparation cache keyed by app identity, store revision, exact period bounds and tax year. Every render still checks the settings source before a cache hit, so a closed store remains unavailable. Host tests verify lazy first Full preparation, unchanged remount reuse, exact-window/data/FX/app invalidation and recovery from unavailable sources. The fifteen-case focused WASM batch passed; a broad rerun remains pending.

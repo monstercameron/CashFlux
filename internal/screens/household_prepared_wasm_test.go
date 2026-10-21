@@ -86,7 +86,11 @@ func householdTestFixture(t *testing.T) (*appstate.App, *render.Fixture, *househ
 	householdPreparedCache.Clear()
 	t.Cleanup(func() { householdPrepareObserver = previousObserver; householdPreparedCache.Clear() })
 	controls := &householdTestControls{}
-	t.Cleanup(f.Cleanup)
+	t.Cleanup(func() {
+		f.Render(ui.Fragment())
+		f.Stabilize()
+		f.Cleanup()
+	})
 	f.Render(ui.CreateElement(householdTestHost, controls))
 	f.Stabilize()
 	start, end := controls.Period.Get().Range()

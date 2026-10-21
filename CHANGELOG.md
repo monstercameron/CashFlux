@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Budget flex and Household host tests explicitly unmount before releasing their fixture and browser stubs.
 - Reports retains bounded successful tax preparation across Summary and Full remounts with exact source invalidation.
 - Assistant rail and chat scrolling use managed browser timers that cancel when their component unmounts.
 - Repeated Settings reads reuse a successful revision snapshot while retaining readiness errors and independently owned nested values.

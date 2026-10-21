@@ -57,7 +57,11 @@ func flexNativeFixture(t *testing.T) *render.Fixture {
 	t.Helper()
 	t.Cleanup(func() { time.Sleep(650 * time.Millisecond) })
 	f := render.New(t)
-	t.Cleanup(f.Cleanup)
+	t.Cleanup(func() {
+		f.Render(ui.Fragment())
+		f.Stabilize()
+		f.Cleanup()
+	})
 	return f
 }
 
