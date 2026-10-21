@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Moved numeric search parsing and multi-value filter preparation outside per-transaction matching.
 - Added fixed duration-only startup details for state creation, hydration and undo preparation.
 - Documented native goal row ownership, Reports lazy section identities and verified third-pass checks.
 - Made the asynchronous Import review regression wait for its visible result instead of a fixed transport delay.

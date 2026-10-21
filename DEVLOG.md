@@ -1,3 +1,7 @@
+## 2026-10-20 - Prepare transaction filter predicates once
+
+The existing compiled filter still reparsed search amounts and split selected CSV values for every transaction and widened preset. Prepared invocation-owned sets and numeric criteria now remove that repeated work without a retained cache. Frozen legacy-reference tests compare complete results, ordering, conversion issues and callback order across all sort directions, numeric/plain/invalid searches, split and OR scopes, bill-linked accounts, owner/tag cases and preset widening; raw inputs remain unchanged. Native txnfilter/txntoolbar tests and vet pass, related native screen gates pass and the main WASM preflight builds. Benchmark source was added for later measurement; it has not been run.
+
 ## 2026-10-20 - Separate startup phase details without recording data
 
 The broad hydration and pre-mount intervals could not identify which path dominated fresh-sample versus saved-data startup. Schema version 2 retains existing disjoint phases and adds nested timing details for app-state initialization, workspace preparation, artifact storage, hydration, legacy unlock waiting, undo baseline and audit restoration. All original calls execute inline exactly once with unchanged errors and ordering. Six isolated WASM timer tests pass, including fixed-name bounds, detail accumulation, non-additive totals and execution with disabled timers; a main WASM preflight build passes. A read-only review found no data capture or boot-order changes.
