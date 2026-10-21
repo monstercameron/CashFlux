@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- WASM validator tests verify their generated temporary path before recursive cleanup.
 - Typed undo snapshots avoid decoding each freshly encoded row just to recover its collection key.
 - The WASM test runner reports missing, empty or invalid compiler output before starting Node.
 - Net-worth headlines, monthly changes and trends consistently respect the account exclusion setting.

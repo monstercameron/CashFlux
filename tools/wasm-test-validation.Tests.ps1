@@ -59,5 +59,12 @@ try {
   Assert-WasmBinary './internal/screens/' $valid
   Write-Output 'PASS: missing, empty, truncated, invalid, and valid WASM headers'
 } finally {
-  Remove-Item -LiteralPath $tempDir -Recurse -Force
+  $resolvedTempRoot = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath())
+  $rootPrefix = $resolvedTempRoot.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
+  $resolvedTempDir = [System.IO.Path]::GetFullPath($tempDir)
+  $tempDirName = [System.IO.Path]::GetFileName($resolvedTempDir)
+  if (-not $resolvedTempDir.StartsWith($rootPrefix, [System.StringComparison]::OrdinalIgnoreCase) -or $tempDirName -notmatch '^cashflux-wasm-header-test-[0-9a-f]{32}$') {
+    throw "Refusing to remove unexpected test temp path '$resolvedTempDir'."
+  }
+  Remove-Item -LiteralPath $resolvedTempDir -Recurse -Force
 }

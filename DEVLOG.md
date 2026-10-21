@@ -1,3 +1,7 @@
+## 2026-10-20 - Constrain WASM validator fixture cleanup
+
+The isolated artifact-validator test now resolves its temporary directory and confirms strict containment under the system temporary root plus the expected GUID basename before removal. Windows PowerShell 5.1 validation passed. This keeps cleanup limited to the fixture it created.
+
 ## 2026-10-20 - Prepare typed snapshot row keys once per collection
 
 The snapshot converter resolves direct unique exported string keys once per collection, preserving the wire-JSON fallback for custom encoders, embedded fields, ambiguous tags and case variants. Transaction encoding is narrowly audited to preserve ID. Full native snapshot parity and adversarial key tests passed from a compiled binary; explicit package vet passed. Six actual app-host snapshot cache tests passed before the conservative resolver tightening. A three-sample CPU1 native benchmark of 3000 transactions reduced allocations from about45187 to24229 and bytes from6.90MB to6.14MB relative to the previous typed path; timing and its Windows AMD64 target/ARM64 host limitations are documented. SQLite reads and browser latency are outside this benchmark.
