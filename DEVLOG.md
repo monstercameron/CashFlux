@@ -1,3 +1,7 @@
+## 2026-10-21 - Keep deferred Settings redirects on their owning route
+
+The final production browser sweep exposed a stale passive effect: bare Settings captured an empty tab and later redirected from Help or Subscriptions. The registered callback now reads the logical browser path at execution and redirects only while bare Settings is still current. Deterministic ordering cases cover leaving for Help, About, Subscriptions, selecting another tab, unavailable location and valid default controls. The full native370-package suite with vet and focused WASM regression pass. The candidate production build passes; browser route validation is rerunning before publication.
+
 ## 2026-10-21 - Integrate published encrypted-sync stability fixes
 
 Merged currentmain before final release preparation so the new dependency build retains v1.19.9 encrypted cross-browser snapshots, attachment backup/migration, owner/bookmark durability and privacy fixes. Resolved startup instrumentation by retaining the referenced-blob migration, reused the canonical asynchronous Import review wait, and moved Admin endpoint validation into the shared native client before cache or HTTP access with rejection/allowed-transport tests. Go1.27.3 native370packages, module verification, all4productionWASMbundles andLinuxAMD64server build pass. Final merged-sourceWASM and browser gates are running; no release is published by this merge.

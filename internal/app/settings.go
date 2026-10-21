@@ -798,18 +798,15 @@ func globalSettingsForm() uic.Node {
 	// "/settings" (no tab segment) redirects to "/settings/household" once,
 	// on mount.
 	tab := liveSettingsTab()
-	// rawTab is captured (not the mutable tab, reassigned to "household" just
-	// below) because UseEffect's callback runs deferred, after commit — by
-	// then a closure over `tab` itself would see the reassigned fallback
-	// value, never the original "" that means "needs a redirect" (Go closures
-	// capture variables by reference, not a snapshot at registration time).
-	rawTab := tab
-	uic.UseEffect(func() func() {
-		if rawTab == "" {
-			uistate.NavigateTo("/settings/household")
+	// The callback rechecks the browser path when it runs. A passive effect
+	// from this render must not redirect after the user has already left.
+	uic.UseEffect(defaultSettingsTabRedirect(tab, func() string {
+		loc := js.Global().Get("location")
+		if !loc.Truthy() {
+			return ""
 		}
-		return nil
-	}, "settings-default-tab-redirect")
+		return uistate.LogicalPath(loc.Get("pathname").String())
+	}, uistate.NavigateTo), "settings-default-tab-redirect")
 	if tab == "" {
 		tab = "household"
 	}
