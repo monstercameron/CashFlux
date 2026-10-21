@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Accounts and Goals now share checked native-currency reservation facts and configurable warning content, including archived claims and explicit unavailable states.
 - Account projections now return arithmetic and currency errors, preserve independent horizon availability, and include same-day cash flows in the forward curve.
 - Reports mode and popover changes no longer write period settings or rebuild unchanged financial sections.
 - Goals and Earmarks tabs use the shared segmented control with keyboard navigation and roving focus.

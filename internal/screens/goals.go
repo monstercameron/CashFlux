@@ -42,6 +42,14 @@ var goalViewCache = newViewCache[goalView](1)
 
 var goalFundingCache = newViewCache[goalview.FundingIndex](1)
 
+var goalReservationCache = newViewCache[goalsvc.ReservationIndex](1)
+
+func goalReservations(app *appstate.App) goalsvc.ReservationIndex {
+	return memoByRev(goalReservationCache, revKey(app), func() goalsvc.ReservationIndex {
+		return goalsvc.BuildAccountReservations(app.Goals(), app.Accounts(), accountSnapshot(app).Balances, goalRates(app))
+	})
+}
+
 func goalFunding(app *appstate.App) goalview.FundingIndex {
 	return memoByRev(goalFundingCache, revKey(app), func() goalview.FundingIndex {
 		settings := app.Settings()
@@ -49,7 +57,7 @@ func goalFunding(app *appstate.App) goalview.FundingIndex {
 		if base == "" {
 			base = "USD"
 		}
-		return goalview.BuildFunding(app.Goals(), app.Accounts(), accountSnapshot(app).Balances,
+		return goalview.BuildFundingWithReservations(app.Goals(), app.Accounts(), goalReservations(app),
 			currency.Rates{Base: base, Rates: settings.FXRates}, base)
 	})
 }

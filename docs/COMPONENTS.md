@@ -325,6 +325,18 @@ must remain unavailable; do not turn missing/invalid balances into zero-valued
 history or forecast curves. A revision change invalidates the details while a
 range change reuses the prepared history.
 
+#### Accounts and Goals: share checked reservation facts
+
+`goals.BuildAccountReservations` is the native owner of retained goal claims,
+including archived goals and accounts. It sums source currencies before FX,
+checks arithmetic, and distinguishes unavailable positions from known zero.
+`goalReservations(app)` caches that lightweight index by data revision; warning
+consumers do not build funding suggestions. `goalview.BuildFundingWithReservations`
+reuses it for suggestions and headroom. `reservationNotice` adapts the same facts
+to inline Accounts warnings and the Goals conflict panel; callers own actions.
+Count unique goal IDs for shared claims, and keep interactive warning hooks in
+their own child so healthy, unavailable and breached transitions remain stable.
+
 #### Goal allocation editor: a draft is not authority to save
 
 `goalview.BuildAllocationDraft` is the native owner of the manual earmark draft:

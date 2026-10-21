@@ -1,3 +1,7 @@
+## 2026-10-20 - Shared checked goal reservations
+
+Added the canonical goals.BuildAccountReservations snapshot with checked source-currency aggregation before FX, unique goal identities, missing-balance/error metadata and stable warning order. Funding reuses that index; warning consumers avoid building suggestions. Accounts and Goals render the shared reservationNotice with independent action owners and unconditional child hooks, removing two stale hook exceptions. Native goals/goalview tests, vet and screen lint passed; both actual-host WASM regressions passed after the complete projection API migration, covering FX, stale data, unknown recovery, overflow and actions. Legacy payday and sweep consumers are a separate pending migration.
+
 ## 2026-10-20 - Checked account projections
 
 Migrated the canonical account projection API and all native/WASM consumers to explicit errors. Balance prefixes, daily flow summaries and debit magnitudes use checked money arithmetic; unavailable projections render translated status instead of wrapped amounts. The untouched starting point remains visible before same-day closing flows. Native acctproject, accountview, appstate and dashboardview tests and vet passed, the production WASM build passed, and both focused Accounts host tests passed. Daily flow summary availability can differ from a valid low/end balance when only the ancillary subtotal overflows.

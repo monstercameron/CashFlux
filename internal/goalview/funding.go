@@ -65,18 +65,24 @@ func EarmarkSource(a domain.Account) bool {
 // currency. Unknown reservations block further funding from that account. Existing
 // reservations from every goal, including the receiving goal, consume headroom.
 func BuildFunding(all []domain.Goal, accounts []domain.Account, balances map[string]money.Money, rates currency.Rates, base string) FundingIndex {
+	return BuildFundingWithReservations(all, accounts, goals.BuildAccountReservations(all, accounts, balances, rates), rates, base)
+}
+
+// BuildFundingWithReservations reuses a canonical reservation index built from
+// the same goals/accounts/FX snapshot, leaving lightweight warning consumers
+// free to reuse reservations without computing suggestions.
+func BuildFundingWithReservations(all []domain.Goal, accounts []domain.Account, reservations goals.ReservationIndex, rates currency.Rates, base string) FundingIndex {
 	if base == "" {
 		base = "USD"
 	}
 	f := FundingIndex{Suggestions: map[string]FundingSuggestion{}, Overbooked: map[string]bool{}}
 	v := EarmarkView{TotalBalance: money.Zero(base), TotalReserved: money.Zero(base), Free: money.Zero(base), Held: money.Zero(base)}
-	byID := make(map[string]domain.Account, len(accounts))
-	for _, a := range accounts {
-		byID[a.ID] = a
-	}
-	reserved, blocked, overflowed := map[string]int64{}, map[string]bool{}, map[string]bool{}
-	byCurrency := map[string]map[string]int64{}
+	reserved := map[string]int64{}
 	excluded := map[string]bool{}
+	v.Incomplete = reservations.Incomplete
+	for _, code := range reservations.ExcludedCurrencies {
+		excluded[code] = true
+	}
 	omit := func(code string) {
 		v.Incomplete = true
 		if code != "" {
@@ -86,33 +92,10 @@ func BuildFunding(all []domain.Goal, accounts []domain.Account, balances map[str
 	for _, g := range all {
 		has := false
 		for _, allocation := range g.Allocations {
-			if allocation.Amount.Amount == 0 {
-				continue
+			if allocation.Amount.Amount != 0 {
+				has = true
+				break
 			}
-			has = true
-			a, ok := byID[allocation.AccountID]
-			if !ok {
-				omit(allocation.Amount.Currency)
-				continue
-			}
-			if allocation.Amount.Amount < 0 {
-				blocked[a.ID] = true
-				omit(allocation.Amount.Currency)
-				continue
-			}
-			if byCurrency[a.ID] == nil {
-				byCurrency[a.ID] = map[string]int64{}
-			}
-			total, err := money.Add(byCurrency[a.ID][allocation.Amount.Currency], allocation.Amount.Amount)
-			if err != nil {
-				blocked[a.ID] = true
-				if allocation.Amount.Currency == a.Currency {
-					overflowed[a.ID] = true
-				}
-				omit(a.Currency)
-				continue
-			}
-			byCurrency[a.ID][allocation.Amount.Currency] = total
 		}
 		if has {
 			v.Goals = append(v.Goals, g)
@@ -120,41 +103,21 @@ func BuildFunding(all []domain.Goal, accounts []domain.Account, balances map[str
 			v.Unearmarked = append(v.Unearmarked, g)
 		}
 	}
-	// Aggregate in each reservation currency before FX, so many small earmarks
-	// cannot each round down to zero and disappear from account headroom.
-	for id, amounts := range byCurrency {
-		for code, amount := range amounts {
-			converted, err := rates.Convert(money.New(amount, code), byID[id].Currency)
-			if err != nil {
-				blocked[id] = true
-				omit(code)
-				continue
-			}
-			total, err := money.Add(reserved[id], converted.Amount)
-			if err != nil {
-				blocked[id], overflowed[id] = true, true
-				omit(code)
-				continue
-			}
-			reserved[id] = total
-		}
-	}
 	freeNative := map[string]money.Money{}
 	over := map[string]bool{}
 	for _, a := range accounts {
-		balance, valid := balances[a.ID]
-		over[a.ID] = overflowed[a.ID] || valid && reserved[a.ID] > 0 && reserved[a.ID] > balance.Amount
-		if !valid || balance.Currency != a.Currency || blocked[a.ID] {
-			if EarmarkSource(a) || reserved[a.ID] > 0 {
+		position, present := reservations.ByAccount[a.ID]
+		over[a.ID] = position.Overbooked
+		if !present || !position.Known {
+			if EarmarkSource(a) || len(position.GoalRefs) > 0 {
 				omit(a.Currency)
 			}
 			continue
 		}
-		free, err := money.Sub(balance.Amount, reserved[a.ID])
-		if err != nil {
-			omit(a.Currency)
-			continue
-		}
+		balance := position.Balance
+		reserved[a.ID] = position.Reserved.Amount
+		free := position.Free.Amount
+		var err error
 		if free > 0 && EarmarkSource(a) && LiquidSource(a.Type) {
 			freeNative[a.ID] = money.New(free, a.Currency)
 		}
@@ -218,7 +181,7 @@ func BuildFunding(all []domain.Goal, accounts []domain.Account, balances map[str
 	}
 	sort.Strings(v.ExcludedCurrencies)
 	f.Earmarks = v
-	f.Suggestions = fundingSuggestions(all, accounts, freeNative, byCurrency, rates)
+	f.Suggestions = fundingSuggestions(all, accounts, freeNative, reservations.ByCurrency, rates)
 	return f
 }
 

@@ -6,7 +6,6 @@ screens/accounts_groups.go:AccountGroupsForm
 screens/accounts_groups.go:acctGroupHeader
 screens/accounts_institutions.go:institutionEditForm
 screens/accounts_institutions.go:InstitutionsManagerForm
-screens/accounts_integrity.go:accountEarmarkWarning
 screens/accounts_recurring.go:accountRecurringPanel
 screens/accounts_row.go:AccountRow
 screens/accounts_sweep_card.go:accountsSweepCard
@@ -66,7 +65,6 @@ screens/formula_builder.go:FormulaBuilder
 screens/goaladdform.go:goalAddForm
 screens/goals_allocate_form.go:goalAllocateForm
 screens/goals_edit_form.go:GoalEditForm
-screens/goals_lane5.go:goalConflictStrip
 screens/goals_lane5.go:goalsFundingOrderCard
 screens/goals_lane5.go:goalsPaycheckPreviewCard
 screens/goals_pause_form.go:GoalPauseForm
