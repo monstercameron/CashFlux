@@ -538,11 +538,24 @@ func cpDataCtx(ctx pageCtx) widgetengine.DataCtx {
 // cpImageBody renders an image artifact bound by ID.
 func cpImageBody(w domain.PageWidget, ctx pageCtx) ui.Node {
 	art, ok := findArtifact(ctx.App.Artifacts(), w.Binding.ArtifactID)
-	if !ok || art.Kind != artifacts.KindImage || len(art.Bytes) == 0 {
+	if !ok || art.Kind != artifacts.KindImage {
 		return P(css.Class("empty"), uistate.T("pages.pickArtifact"))
 	}
-	return Img(Attr("src", artifacts.DataURL(art.MIME, art.Bytes)),
-		Attr("alt", art.Name), css.Class(tw.MaxWFull, tw.MaxHFull, tw.ObjectContain, tw.MAuto))
+	return ui.CreateElement(cpImageArtifact, cpImageArtifactProps{App: ctx.App, Artifact: art})
+}
+
+type cpImageArtifactProps struct {
+	App      *appstate.App
+	Artifact domain.Artifact
+}
+
+func cpImageArtifact(props cpImageArtifactProps) ui.Node {
+	url := useArtifactImageURL(props.App, props.Artifact)
+	if url == "" {
+		return P(css.Class("empty"), uistate.T("pages.pickArtifact"))
+	}
+	return Img(Attr("src", url), Attr("alt", props.Artifact.Name),
+		css.Class(tw.MaxWFull, tw.MaxHFull, tw.ObjectContain, tw.MAuto))
 }
 
 // cpTableBody renders a dataset artifact (columns + first rows) bound by ID.

@@ -136,7 +136,7 @@ export async function openPasswordForm(page) {
   }, { timeout: 30_000, intervals: [500, 1000, 2000] }).toBe(true);
 }
 
-export async function login(page, username, password) {
+export async function login(page, username, password, expectForeignGate = false) {
   await unlockIfNeeded(page);
   await openPasswordForm(page);
   const mode = page.getByRole("radio", { name: "Log in", exact: true });
@@ -144,7 +144,19 @@ export async function login(page, username, password) {
   await page.getByTestId("password-auth-username").fill(username);
   await page.getByTestId("password-auth-password").fill(password);
   await page.getByTestId("password-auth-submit").click({ force: true });
-  await expect(page.getByRole("button", { name: "Sign out", exact: true })).toBeVisible({ timeout: 60_000 });
+  const signedIn = page.getByRole("button", { name: "Sign out", exact: true });
+  const error = page.locator(".toast-err").filter({ hasText: /sign.?in|log.?in|password|credentials|account/i });
+  await expect.poll(async () => {
+    await unlockIfNeeded(page);
+    if (await error.isVisible().catch(() => false)) return "error";
+    return await signedIn.isVisible().catch(() => false) ? "signed-in" : "pending";
+  }, { timeout: 60_000, intervals: [500, 1000] }).not.toBe("pending");
+  if (await error.isVisible().catch(() => false)) throw new Error(`password sign-in failed: ${await error.innerText()}`);
+  await expect(signedIn).toBeVisible({ timeout: 20_000 });
+  if (expectForeignGate) {
+    await expect(page.getByTestId("foreign-dataset-gate")).toBeVisible({ timeout: 30_000 });
+    return;
+  }
   let previousGeneration = "";
   let stable = 0;
   await expect.poll(async () => {

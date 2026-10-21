@@ -6,6 +6,10 @@ and every commit updates this file under `Unreleased`.
 
 ## [Unreleased]
 
+### Fixed
+- Signing into a different account in the same browser now hides the previous account's local dataset and offers sign-out, while preserving the protected copy for its owner. The account-switch regression checks that the new account receives no inherited server snapshot.
+- Receipt images, goal photos, custom-page images, and artifact thumbnails now load from encrypted local blob storage after sync restores them. New receipt and goal-photo uploads save their bytes there before the dataset refers to them.
+
 ### Changed
 - Prepared v1.19.10 with encrypted local storage for restored account documents and a PDF cap that fits the default encrypted server upload limit.
 - PDF selection now caps files at 23 MiB so their base64 encrypted blob envelopes fit within the server's default 32 MiB upload limit.

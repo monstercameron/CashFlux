@@ -26,6 +26,25 @@ async function artifactRecordMIME(page, id) {
   }, id);
 }
 
+async function artifactIDForName(page, name) {
+  await nav(page, "/artifacts");
+  const item = page.getByTestId("artifact-name").filter({ hasText: name });
+  await expect(item).toBeVisible({ timeout: 30_000 });
+  const row = page.locator(".row").filter({ has: item });
+  const menuID = await row.locator('[data-testid^="artifact-menu-btn-"]').getAttribute("data-testid");
+  return menuID.slice("artifact-menu-btn-".length);
+}
+
+async function closeTransactionEditor(page) {
+  const dialog = page.getByTestId("txn-edit-dialog");
+  await expect(page.getByTestId("txn-edit-form")).toHaveAttribute("aria-busy", "false", { timeout: 45_000 });
+  await expect.poll(async () => {
+    if (!(await dialog.isVisible())) return true;
+    await page.getByTestId("txn-edit-cancel").click({ timeout: 2_000 }).catch(() => {});
+    return !(await dialog.isVisible());
+  }, { timeout: 25_000, intervals: [500, 1000] }).toBe(true);
+}
+
 async function connectWithPassword(page, username, password, expectExistingRemote = false) {
   await configureRemote(page, server.origin);
   try {
@@ -62,7 +81,7 @@ async function waitForVisibleUnlocked(page, locator) {
 }
 
 test("encrypted file and later edits sync across both devices", async ({ app, browser, request }) => {
-  test.setTimeout(420_000);
+  test.setTimeout(600_000);
   // Server timestamps use the real clock; fixture time is intentionally pinned
   // months earlier for UI screenshots and would make this edit look stale.
   await app.clock.setFixedTime(new Date());
@@ -152,6 +171,56 @@ test("encrypted file and later edits sync across both devices", async ({ app, br
     const snapshots = await accountSnapshots(request, server.origin, await accessToken(app));
     return snapshots.some((snapshot) => !serverCopies.some((old) => old.workspaceID === snapshot.workspaceID && old.envelope === snapshot.envelope));
   }, { timeout: 90_000 }).toBe(true);
+
+  // Transaction receipts and goal photos use the same encrypted local store.
+  // Check their actual UI paths, then reopen both from another browser.
+  const receiptName = `private-receipt-transaction-${suffix}.png`;
+  const receiptTxn = `receipt-owner-${suffix}`;
+  await addUniqueTransaction(app, receiptTxn);
+  const receiptRow = app.locator('tr[data-testid^="txn-row-"]').filter({ hasText: receiptTxn }).first();
+  await receiptRow.getByTestId("txn-rowedit").click();
+  await expect(app.getByTestId("txn-edit-amount")).toBeVisible({ timeout: 20_000 });
+  await app.getByTestId("txn-edit-more-actions").click();
+  const [receiptChooser] = await Promise.all([
+    app.waitForEvent("filechooser", { timeout: 20_000 }),
+    app.getByTestId("txn-edit-attach").click(),
+  ]);
+  await receiptChooser.setFiles({ name: receiptName, mimeType: "image/png", buffer: pixels });
+  const receiptThumb = app.getByTestId("txn-receipt-thumb").first().locator("img");
+  await expect(receiptThumb).toHaveAttribute("src", /^data:image\/png;base64,/, { timeout: 30_000 });
+  expect(Buffer.from((await receiptThumb.getAttribute("src")).split(",")[1], "base64")).toEqual(pixels);
+  await closeTransactionEditor(app);
+  const receiptID = await artifactIDForName(app, receiptName);
+  await expect.poll(() => artifactRecordMIME(app, receiptID), { timeout: 30_000 }).toBe("application/x-cashflux-encrypted-artifact");
+
+  const goalName = `photo-goal-${suffix}`;
+  const goalPhotoName = `private-goal-${suffix}.png`;
+  await nav(app, "/goals");
+  await app.getByTestId("goals-add").click();
+  const goalForm = app.getByTestId("goal-add-form");
+  await expect(goalForm).toBeVisible({ timeout: 20_000 });
+  await goalForm.locator("#goal-add").fill(goalName);
+  await goalForm.locator('input[type="number"]').first().fill("250");
+  await goalForm.locator('button[type="submit"]').click();
+  await expect(goalForm).toBeHidden({ timeout: 20_000 });
+  const goalRow = app.locator('[data-testid^="goal-row-"]').filter({ hasText: goalName }).first();
+  await expect(goalRow).toBeVisible();
+  const goalID = (await goalRow.getAttribute("data-testid")).slice("goal-row-".length);
+  const expandGoal = app.getByTestId(`goal-expand-${goalID}`);
+  if (await expandGoal.count()) await expandGoal.click();
+  await app.getByTestId(`goal-edit-btn-${goalID}`).click();
+  const [goalChooser] = await Promise.all([
+    app.waitForEvent("filechooser", { timeout: 20_000 }),
+    app.getByTestId(`goal-add-photo-${goalID}`).click(),
+  ]);
+  await goalChooser.setFiles({ name: goalPhotoName, mimeType: "image/png", buffer: pixels });
+  const goalImage = app.getByTestId(`goal-photo-${goalID}`).locator("img").first();
+  await expect(goalImage).toHaveAttribute("src", /^data:image\/png;base64,/, { timeout: 30_000 });
+  expect(Buffer.from((await goalImage.getAttribute("src")).split(",")[1], "base64")).toEqual(pixels);
+  await app.locator('[role="dialog"]').getByRole("button", { name: "Cancel" }).last().click();
+  const goalPhotoID = await artifactIDForName(app, goalPhotoName);
+  await expect.poll(() => artifactRecordMIME(app, goalPhotoID), { timeout: 30_000 }).toBe("application/x-cashflux-encrypted-artifact");
+  await waitForSync(app);
   const appOrigin = new URL(app.url()).origin;
   await app.close(); // release the first WebAssembly runtime before booting another profile
 
@@ -178,6 +247,23 @@ test("encrypted file and later edits sync across both devices", async ({ app, br
     await waitForVisibleUnlocked(second, remoteDocLink);
     expect(Buffer.from((await remoteDocLink.getAttribute("href")).split(",")[1], "base64")).toEqual(pdfBytes);
     await expect.poll(() => artifactRecordMIME(second, docID), { timeout: 30_000 }).toBe("application/x-cashflux-encrypted-artifact");
+    await nav(second, "/goals");
+    await waitForVisibleUnlocked(second, second.getByTestId(`goal-row-${goalID}`));
+    const remoteExpand = second.getByTestId(`goal-expand-${goalID}`);
+    if (await remoteExpand.count()) await remoteExpand.click();
+    const remoteGoal = second.getByTestId(`goal-photo-${goalID}`).locator("img").first();
+    await waitForVisibleUnlocked(second, remoteGoal);
+    expect(Buffer.from((await remoteGoal.getAttribute("src")).split(",")[1], "base64")).toEqual(pixels);
+    await expect.poll(() => artifactRecordMIME(second, goalPhotoID), { timeout: 30_000 }).toBe("application/x-cashflux-encrypted-artifact");
+    await nav(second, "/transactions");
+    const remoteReceiptRow = second.locator('tr[data-testid^="txn-row-"]').filter({ hasText: receiptTxn }).first();
+    await waitForVisibleUnlocked(second, remoteReceiptRow);
+    await remoteReceiptRow.getByTestId("txn-rowedit").click();
+    const remoteReceipt = second.getByTestId("txn-receipt-thumb").first().locator("img");
+    await expect(remoteReceipt).toHaveAttribute("src", /^data:image\/png;base64,/, { timeout: 30_000 });
+    expect(Buffer.from((await remoteReceipt.getAttribute("src")).split(",")[1], "base64")).toEqual(pixels);
+    await expect.poll(() => artifactRecordMIME(second, receiptID), { timeout: 30_000 }).toBe("application/x-cashflux-encrypted-artifact");
+    await closeTransactionEditor(second);
     const beforeReturn = await accountSnapshots(request, server.origin, await accessToken(second));
     const edit = `second-device-edit-${suffix}`;
     await addUniqueTransaction(second, edit);
