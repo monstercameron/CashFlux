@@ -194,7 +194,7 @@ func investGrowthWidget(props investPanelProps) ui.Node {
 	}
 	now := time.Now()
 	cutoffs, labels := growthCutoffs(now, months)
-	series, _ := ledger.NetWorthSeries(investAccts, app.Transactions(), cutoffs, rates)
+	series, _ := ledger.AccountNetValueSeries(investAccts, app.Transactions(), cutoffs, rates)
 
 	pts := make([]chartspec.Point, len(series))
 	valueLabels := make([]string, len(series))

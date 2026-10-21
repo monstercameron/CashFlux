@@ -1,3 +1,7 @@
+## 2026-10-20 - Keep net-worth account selection consistent
+
+Added one native account eligibility predicate and shared checked total accumulation for strict and explained household values. Balance-sheet and attribution account selection now use it, while explicit investment portfolio series retain excluded holdings through a separate AccountNetValueSeries entry point. Native selection, overflow, fail-fast and duplicate-account tests passed across six packages with vet; the actual account editor WASM regression passed after adding required fixture descriptions. It toggles the setting and back and checks both headlines, deltas, trend SVG and exclusion disclosure. Report cash-flow transaction scope and archived-account behavior are preserved.
+
 ## 2026-10-20 - Wait for transaction focus timers in WASM tests
 
 The integrated screen run exposed a scheduling race in two tests that assumed a 20 ms sleep always dispatched the JavaScript focus callback. Both now poll the observable outcome with a bounded three-second deadline, keeping the callback alive until it has run. The two focused transaction tests passed after the change; a separate net-worth fixture failed validation and is being corrected. Production focus behavior is unchanged.

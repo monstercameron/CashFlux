@@ -225,66 +225,25 @@ func CategorySpendSeries(all []domain.Transaction, bounds []time.Time, rates cur
 }
 
 // NetWorth returns net worth (assets − liabilities) along with the asset and
-// liability totals, all in the base currency. Archived accounts are excluded.
+// liability totals, all in the base currency. Archived accounts and accounts
+// excluded from net worth by choice are omitted.
 // Liability amounts are reported as positive amounts owed — taken as the magnitude
 // of the balance so a debt stored either negative (the sample convention) or
 // positive (the "amount you owe" add form) both subtract from net worth.
 func NetWorth(accounts []domain.Account, all []domain.Transaction, rates currency.Rates) (net, assets, liabilities money.Money, err error) {
-	assets = money.Zero(rates.Base)
-	liabilities = money.Zero(rates.Base)
-	for _, a := range accounts {
-		if a.Archived {
-			continue
-		}
-		bal, err := Balance(a, all)
-		if err != nil {
-			return money.Money{}, money.Money{}, money.Money{}, err
-		}
-		conv, err := rates.Convert(bal, rates.Base)
-		if err != nil {
-			return money.Money{}, money.Money{}, money.Money{}, err
-		}
-		if a.Class == domain.ClassLiability {
-			magnitude, absErr := conv.AbsChecked()
-			if absErr != nil {
-				return money.Money{}, money.Money{}, money.Money{}, fmt.Errorf("ledger: account %s liability magnitude: %w", a.ID, absErr)
-			}
-			if liabilities, err = liabilities.Add(magnitude); err != nil {
-				return money.Money{}, money.Money{}, money.Money{}, err
-			}
-		} else {
-			if assets, err = assets.Add(conv); err != nil {
-				return money.Money{}, money.Money{}, money.Money{}, err
-			}
-		}
-	}
-	net, err = assets.Sub(liabilities)
+	res, err := strictAccountTotals(accounts, all, rates, accountTotalsPolicy{})
 	if err != nil {
 		return money.Money{}, money.Money{}, money.Money{}, err
 	}
-	return net, assets, liabilities, nil
+	return res.Net, res.Assets, res.Liabilities, nil
 }
 
 // NetWorthSeries returns net worth as of each cutoff time, all in the base
 // currency. Transactions strictly before a cutoff are counted, so passing the
 // first day of successive months yields an end-of-month net-worth trend.
-// Archived accounts are excluded, as in NetWorth.
+// Archived accounts and accounts excluded by choice are omitted, as in NetWorth.
 func NetWorthSeries(accounts []domain.Account, all []domain.Transaction, cutoffs []time.Time, rates currency.Rates) ([]money.Money, error) {
-	out := make([]money.Money, len(cutoffs))
-	for i, c := range cutoffs {
-		upto := make([]domain.Transaction, 0, len(all))
-		for _, t := range all {
-			if t.Date.Before(c) {
-				upto = append(upto, t)
-			}
-		}
-		net, _, _, err := NetWorth(accounts, upto, rates)
-		if err != nil {
-			return nil, fmt.Errorf("ledger: net worth as of %s: %w", c.Format(dateutil.Layout), err)
-		}
-		out[i] = net
-	}
-	return out, nil
+	return accountValueSeries(accounts, all, cutoffs, rates, accountTotalsPolicy{}, "net worth")
 }
 
 // NetByOwner returns each owner's net worth (sum of their account balances in

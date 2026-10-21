@@ -261,6 +261,11 @@ type Account struct {
 // over t.Type.IsLiability() anywhere a formula asks "is this account money owed?".
 func (a Account) IsLiability() bool { return a.Class == ClassLiability }
 
+// CountsInNetWorth reports whether this account belongs in household net-worth,
+// asset and liability totals. Excluded accounts remain available to class views
+// and ordinary balance and cash-flow calculations.
+func (a Account) CountsInNetWorth() bool { return !a.Archived && !a.ExcludeFromNetWorth }
+
 // LiabilitySign is the fixed sign used to represent an amount owed.
 type LiabilitySign string
 

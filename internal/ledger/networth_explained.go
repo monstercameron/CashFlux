@@ -42,7 +42,7 @@ func NetWorthExplained(accounts []domain.Account, all []domain.Transaction, rate
 	eligible := make([]domain.Account, 0, len(accounts))
 	seen := make(map[string]struct{}, len(accounts))
 	for _, a := range accounts {
-		if a.Archived || a.ExcludeFromNetWorth {
+		if !a.CountsInNetWorth() {
 			continue
 		}
 		if _, exists := seen[a.ID]; exists {
@@ -64,12 +64,22 @@ func NetWorthExplained(accounts []domain.Account, all []domain.Transaction, rate
 	})
 }
 
-// netWorthAccumulate is the shared net-worth core: balanceOf supplies each
-// non-archived account's balance (a live scan for NetWorthExplained, a map
-// lookup for NetWorthFromBalances), and the accumulation — missing-rate
-// exclusion, liability magnitude via Abs, net = assets − liabilities — lives
-// in exactly one place.
+// netWorthAccumulate is the explained entry to the shared accumulation core.
+// balanceOf supplies eligible balances; missing-rate exclusions, checked
+// liability magnitudes and net = assets − liabilities are computed once below.
 func netWorthAccumulate(accounts []domain.Account, rates currency.Rates, balanceOf func(domain.Account) (money.Money, error)) (NetWorthResult, error) {
+	return accumulateAccountTotals(accounts, rates, balanceOf, accountTotalsPolicy{explainMissingRates: true})
+}
+
+// Strict household totals, explained totals and explicit class values share
+// conversion, liability magnitude and checked addition; only selection and the
+// handling of a missing exchange rate differ.
+type accountTotalsPolicy struct {
+	includeChosenAccounts bool
+	explainMissingRates   bool
+}
+
+func accumulateAccountTotals(accounts []domain.Account, rates currency.Rates, balanceOf func(domain.Account) (money.Money, error), policy accountTotalsPolicy) (NetWorthResult, error) {
 	res := NetWorthResult{Assets: money.Zero(rates.Base), Liabilities: money.Zero(rates.Base)}
 	missing := map[string]bool{}
 	for _, a := range accounts {
@@ -78,7 +88,7 @@ func netWorthAccumulate(accounts []domain.Account, rates currency.Rates, balance
 		}
 		// AC11: accounts the household flagged out of net worth are omitted from
 		// the totals and disclosed by name, never silently dropped.
-		if a.ExcludeFromNetWorth {
+		if !a.CountsInNetWorth() && !policy.includeChosenAccounts {
 			res.ExcludedByChoice = append(res.ExcludedByChoice, a.Name)
 			continue
 		}
@@ -88,7 +98,7 @@ func netWorthAccumulate(accounts []domain.Account, rates currency.Rates, balance
 		}
 		conv, err := rates.Convert(bal, rates.Base)
 		if err != nil {
-			if errors.Is(err, currency.ErrUnknownRate) {
+			if policy.explainMissingRates && errors.Is(err, currency.ErrUnknownRate) {
 				missing[strings.ToUpper(strings.TrimSpace(a.Currency))] = true
 				res.ExcludedAccounts = append(res.ExcludedAccounts, a.Name)
 				continue

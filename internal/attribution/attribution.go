@@ -166,7 +166,7 @@ func Compute(in Input) (Report, error) {
 	}
 	moves := make([]acctMove, 0, len(in.Accounts))
 	for _, a := range in.Accounts {
-		if a.Archived {
+		if !a.CountsInNetWorth() {
 			continue
 		}
 		balSince, balUntil := a.OpeningBalance.Amount, a.OpeningBalance.Amount

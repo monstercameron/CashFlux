@@ -364,7 +364,7 @@ func investPoolsWidget(props investPanelProps) ui.Node {
 	rates := currency.Rates{Base: v.Base, Rates: app.Settings().FXRates}
 	txns := app.Transactions()
 	seriesFor := func(accts []domain.Account) []money.Money {
-		s, _ := ledger.NetWorthSeries(accts, txns, cutoffs, rates)
+		s, _ := ledger.AccountNetValueSeries(accts, txns, cutoffs, rates)
 		return s
 	}
 	acctByID := map[string]domain.Account{}
