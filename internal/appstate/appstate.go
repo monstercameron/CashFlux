@@ -18,7 +18,6 @@ import (
 	"math"
 	"os"
 	"reflect"
-	"sort"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -1834,42 +1833,11 @@ func (a *App) engineVars() map[string]float64 {
 	})
 }
 
-// WorkflowVariableNames lists the variable names a workflow condition can
-// reference — the exact surface the trigger runners evaluate against — sorted,
-// so the composer can offer them for insertion instead of asking users to
-// memorize names. (The per-transaction txn_* fields join this set on
-// transaction-triggered runs.)
+// WorkflowVariableNames lists the sorted discovery union across all triggers.
+// Use WorkflowVariableNamesFor when validating a specific trigger's condition;
+// transaction-only names in this union are unavailable to other triggers.
 func (a *App) WorkflowVariableNames() []string {
-	vars := a.engineVars()
-	names := map[string]bool{}
-	for n := range vars {
-		names[n] = true
-	}
-	// A budget's spending can be unavailable (for example, a missing FX rate).
-	// Keep its established handles discoverable without supplying fake values.
-	for _, base := range engineenv.BudgetVarBases(a.Budgets()) {
-		for _, field := range engineenv.BudgetVarFields {
-			names[base.Prefix+field] = true
-		}
-	}
-	// The per-transaction merchant-baseline variables only exist on txn-added runs
-	// but must still be offerable in the composer — a variable you cannot discover
-	// is a variable nobody uses.
-	names["txn_payee_typical"] = true
-	names["txn_vs_typical"] = true
-	// Every transaction custom field is referenceable on txn-added runs —
-	// number and yes/no fields as cf_txn_<key> values, text/choice fields via
-	// contains(cf_txn_<key>, "…") — so offer them even though the base surface
-	// only carries numeric period sums.
-	for _, def := range a.CustomFieldDefsFor("transaction") {
-		names["cf_txn_"+def.Key] = true
-	}
-	out := make([]string, 0, len(names))
-	for n := range names {
-		out = append(out, n)
-	}
-	sort.Strings(out)
-	return out
+	return a.WorkflowVariableNamesFor(workflow.TriggerTxnAdded)
 }
 
 // txnContext builds the workflow context for a transaction-triggered run: the
@@ -1878,7 +1846,7 @@ func (a *App) WorkflowVariableNames() []string {
 // txn_category/txn_account/txn_tags, and transaction-mutating actions know which
 // transaction to change.
 func (a *App) txnContext(t domain.Transaction) workflow.Context {
-	ctx := workflow.Context{Vars: a.engineVars(), Strs: map[string]string{}, TxnID: t.ID}
+	ctx := workflow.Context{Vars: a.engineVars(), Strs: map[string]string{"txn_account": "", "txn_category": ""}, TxnID: t.ID}
 	div := 1.0
 	for i := 0; i < currency.Decimals(t.Amount.Currency); i++ {
 		div *= 10

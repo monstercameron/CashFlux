@@ -1,3 +1,7 @@
+## 2026-10-20 - Assistant trigger-aware workflow variables
+
+Added canonical workflow transaction-variable declarations and App.WorkflowVariableNamesFor(trigger), preserving the general discovery union while gating unavailable per-row names on other triggers. Transaction custom definitions follow their actual runtime types; absent account/category values are explicit empty strings. The authoring compiler and tool share that trigger-aware surface. Native workflow/nlauthor/appstate tests and vet passed, and the two actual-tool WASM regressions passed in integration pass4: the advertised txn_abs threshold executes at the real boundary, while non-transaction and unknown names refuse without writes.
+
 ## 2026-10-20 - Assistant atomic transaction removal approvals
 
 Added canonical App expected-before delete/merge operations that reuse the existing deletion/relationship planner and ReplayChangesExpected. Duplicate membership is recomputed and the survivor is computed by dedupe.Merge inside the service; stale edits, changed groups or changed transfer expansion refuse without partial state. New tool handlers strictly parse exact amount/date/identity arguments, show selected record IDs and the survivor, require the matching preview and consume it once. Focused native appstate operations passed; all five real-handler WASM groups passed across integration pass4 and the targeted pass5 fixture correction, including ambiguous/stale/excluded transfer cases and canonical merged metadata. Existing transfers remain outside these two Assistant tools.

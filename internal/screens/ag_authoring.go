@@ -208,7 +208,7 @@ func agToolsAuthoring(app *appstate.App, base string, rates currency.Rates) []ch
 		acts, actErrs := buildActions(a.Actions)
 		trig := workflow.Trigger{Kind: workflow.TriggerKind(strings.TrimSpace(a.Trigger))}
 		known := func(name string) bool { return false }
-		names := app.WorkflowVariableNames()
+		names := app.WorkflowVariableNamesFor(trig.Kind)
 		set := make(map[string]bool, len(names))
 		for _, n := range names {
 			set[n] = true
