@@ -7,6 +7,7 @@ package screens
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -160,6 +161,7 @@ func goalEarmarksManager(props goalEarmarksProps) ui.Node {
 	groups := MapKeyed(goalsWithEarmarks, func(g domain.Goal) any { return g.ID }, func(g domain.Goal) ui.Node {
 		return ui.CreateElement(goalEarmarkGroup, goalEarmarkGroupProps{
 			Goal: g, Accounts: accounts, Overbooked: overbooked[g.ID], OnDelete: onDelete,
+			Evaluation: goalsvc.EvaluateGoal(g, goalsvc.TaskSummary{}, goalRates(app), time.Now()),
 		})
 	})
 
@@ -198,6 +200,7 @@ func earmarkStartChip(props earmarkStartChipProps) ui.Node {
 
 // goalEarmarkGroupProps drives one goal's block in the earmarks manager.
 type goalEarmarkGroupProps struct {
+	Evaluation goalsvc.Evaluation
 	Goal       domain.Goal
 	Accounts   []domain.Account
 	Overbooked bool
@@ -212,10 +215,6 @@ func goalEarmarkGroup(props goalEarmarkGroupProps) ui.Node {
 	manage := ui.UseEvent(Prevent(func() {
 		uistate.SetGoalEdit(uistate.GoalEdit{ID: g.ID, Mode: uistate.GoalEditModeAllocate})
 	}))
-	cur := g.TargetAmount.Currency
-	if cur == "" {
-		cur = g.CurrentAmount.Currency
-	}
 	var warn ui.Node = Fragment()
 	if props.Overbooked {
 		warn = Span(ClassStr("pace-badge earmark-partial"), Attr("data-testid", "ea-over-"+g.ID), uistate.T("goals.earmarksOverbooked"))
@@ -230,18 +229,23 @@ func goalEarmarkGroup(props goalEarmarkGroupProps) ui.Node {
 			AmountStr: fmtMoney(al.Amount), OnDelete: props.OnDelete,
 		})
 	})
-	cov := goalsvc.CoveragePercent(g)
+	cov := props.Evaluation.Coverage.CoveragePercent
 	covFill := cov
 	if covFill > 100 {
 		covFill = 100
+	}
+	var coverage ui.Node = Fragment(
+		Div(css.Class("ea-cover"), Attr("role", "img"), Attr("aria-label", uistate.T("goalsredesign.coverageBarLabel", cov)),
+			Div(css.Class("ea-cover-fill"), Attr("style", fmt.Sprintf("width:%d%%", covFill)))),
+		Span(css.Class("goal-alloc-cover"), uistate.T("goals.coverageChip", cov)))
+	if props.Evaluation.Err != nil {
+		coverage = Span(css.Class("goal-alloc-cover"), uistate.T("goals.coverageUnavailableShort"))
 	}
 	return Div(css.Class("ea-goal"), Attr("data-testid", "ea-goal-"+g.ID),
 		Div(css.Class("ea-goal-head"),
 			Span(css.Class("ea-goal-name"), g.Name),
 			// Coverage as a mini bar beside the % chip, so how-close-to-covered reads at a glance.
-			Div(css.Class("ea-cover"), Attr("role", "img"), Attr("aria-label", uistate.T("goalsredesign.coverageBarLabel", cov)),
-				Div(css.Class("ea-cover-fill"), Attr("style", fmt.Sprintf("width:%d%%", covFill)))),
-			Span(css.Class("goal-alloc-cover"), uistate.T("goals.coverageChip", cov)),
+			coverage,
 			warn,
 			Button(css.Class("btn btn-sm", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"),
 				Attr("data-testid", "ea-manage-"+g.ID), OnClick(manage),

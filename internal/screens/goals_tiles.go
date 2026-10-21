@@ -299,8 +299,9 @@ func goalListWidget(props goalListProps) ui.Node {
 	}
 	overbooked := v.Overbooked
 	rowForU := func(g domain.Goal, fundSetAside int64, catName string, urgency goalsvc.PlanUrgency) ui.Node {
+		model := v.Rows[g.ID]
 		return ui.CreateElement(GoalRow, goalRowProps{
-			Goal: g, Accounts: v.Accounts, Members: v.Members, Tasks: v.Tasks,
+			Goal: g, Accounts: v.Accounts, Members: v.Members, Model: &model,
 			OnDelete:       deleteGoal,
 			OnDrillAccount: viewAccountTxns, OnArchive: archiveGoal, OnRetarget: retargetGoal,
 			OnRedirect:         redirectToAllocate,

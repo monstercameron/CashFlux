@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/goaltrajectory"
@@ -28,13 +29,16 @@ import (
 // to project from, and nothing at all for a non-financial goal or one without a
 // positive target — so a card never shows an empty box. `now` is the reference
 // date the projection starts from (passed in for testability / a single clock).
-func goalTrajectoryNode(g domain.Goal, now time.Time) ui.Node {
+func goalTrajectoryNode(g domain.Goal, evaluation goalsvc.Evaluation, now time.Time) ui.Node {
 	// Only financial goals with a real target have a money trajectory.
-	if !g.EffectiveKind().IsFinancial() || g.TargetAmount.Amount <= 0 {
+	if !g.EffectiveKind().IsFinancial() || g.TargetAmount.Amount <= 0 || evaluation.Err != nil {
 		return Fragment()
 	}
 
-	monthly, ok, _ := goalsvc.MonthlyAssignment(g, now)
+	monthly, ok, err := evaluation.Assignment(g, goalRates(appstate.Default))
+	if err != nil {
+		return Fragment()
+	}
 	hasContribution := ok && monthly.Amount > 0
 
 	heading := Div(css.Class("gtj-head"), uistate.T("goaltrajectory.heading"))
@@ -42,7 +46,7 @@ func goalTrajectoryNode(g domain.Goal, now time.Time) ui.Node {
 	// Coverage-aware: the projection starts from everything already accounted
 	// for — saved PLUS earmarked — so setting money aside moves the trajectory
 	// the moment it happens, month to month, exactly like the card's figures.
-	covered := goalsvc.CoverageMinor(g)
+	covered := evaluation.Coverage.Covered.Amount
 
 	// A goal that's already covered has no pace left to project — render nothing.
 	// The card already announces completion once (the 100% loader + the "Funded —

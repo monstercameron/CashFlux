@@ -7,6 +7,7 @@ package screens
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -15,6 +16,109 @@ import (
 	"github.com/monstercameron/GoWebComponents/v5/testkit/render"
 	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
+
+func TestPrimaryGoalCoverageFXRevisionAndTargetEditPreserveStoredCurrency(t *testing.T) {
+	app := primaryAccountsGoalsApp(t)
+	settings := store.Settings{BaseCurrency: "USD", FXRates: map[string]float64{"EUR": 2}}
+	if err := app.PutSettings(settings); err != nil {
+		t.Fatal(err)
+	}
+	a := domain.Account{ID: "bank", Name: "Bank", OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared, Class: domain.ClassAsset, Type: domain.TypeChecking, Currency: "USD", OpeningBalance: money.New(20000, "USD")}
+	if err := app.PutAccount(a); err != nil {
+		t.Fatal(err)
+	}
+	g := domain.Goal{ID: "foreign", Name: "Foreign earmark", OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared, CurrentAmount: money.New(2000, "EUR"), TargetAmount: money.New(10000, "EUR"), TargetDate: time.Now().AddDate(0, 3, 0), Allocations: []domain.GoalAllocation{{AccountID: a.ID, Amount: money.New(16000, "USD")}}}
+	if err := app.PutGoal(g); err != nil {
+		t.Fatal(err)
+	}
+	f := render.New(t)
+	defer f.Cleanup()
+	f.Render(ui.CreateElement(Goals))
+	f.Stabilize()
+	byTestID(f, "button", "goals-tab-goals").Click()
+	f.Stabilize()
+	if byTestID(f, "button", "goal-archive-primary-"+g.ID) == nil {
+		t.Fatalf("converted coverage should complete goal: %s", f.Text())
+	}
+	settings.FXRates = map[string]float64{"EUR": 4}
+	if err := app.PutSettings(settings); err != nil {
+		t.Fatal(err)
+	}
+	uistate.BumpDataRevision()
+	f.Stabilize()
+	row := byTestID(f, "div", "goal-row-"+g.ID)
+	if row == nil || !strings.Contains(row.Text(), "60%") || byTestID(f, "button", "goal-archive-primary-"+g.ID) != nil {
+		t.Fatalf("FX revision retained completed row: %s", f.Text())
+	}
+	settings.FXRates = nil
+	if err := app.PutSettings(settings); err != nil {
+		t.Fatal(err)
+	}
+	uistate.BumpDataRevision()
+	f.Stabilize()
+	if byTestID(f, "p", "goal-coverage-unavailable-"+g.ID) == nil || byTestID(f, "button", "goal-archive-primary-"+g.ID) != nil || byTestID(f, "button", "goal-whatif-"+g.ID) != nil {
+		t.Fatalf("unknown FX still implies a funded/plannable amount: %s", f.Text())
+	}
+	// Edit the raw target while its derived coverage is unavailable. The row must
+	// not save a display-normalized copy of the original foreign reservation.
+	byTestID(f, "button", "goal-target-btn-"+g.ID).Click()
+	f.Stabilize()
+	byTestID(f, "input", "goal-target-input-"+g.ID).Input("120.00")
+	f.Stabilize()
+	var form *render.QueryNode
+	for _, node := range f.AllByTag("form") {
+		if strings.Contains(node.Attr("class"), "budget-limit-editform") {
+			form = node
+		}
+	}
+	if form == nil {
+		t.Fatal("target editor missing")
+	}
+	form.Submit()
+	f.Stabilize()
+	stored := app.Goals()[0]
+	if stored.TargetAmount.Amount != 12000 || stored.CurrentAmount != g.CurrentAmount || len(stored.Allocations) != 1 || stored.Allocations[0].Amount != g.Allocations[0].Amount {
+		t.Fatalf("target edit changed raw amounts: %+v", stored)
+	}
+}
+
+func TestPrimaryGoalTaskPreviewToggleRefreshesSharedProgress(t *testing.T) {
+	app := primaryAccountsGoalsApp(t)
+	g := domain.Goal{ID: "check", Name: "Checklist", Kind: domain.GoalKindChecklist, OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared}
+	if err := app.PutGoal(g); err != nil {
+		t.Fatal(err)
+	}
+	for _, task := range []domain.Task{
+		{ID: "done", Title: "Already done", Status: domain.StatusDone, Priority: domain.PriorityMedium, RelatedType: domain.RelatedGoal, RelatedID: g.ID},
+		{ID: "open", Title: "Open first", Status: domain.StatusOpen, Priority: domain.PriorityMedium, RelatedType: domain.RelatedGoal, RelatedID: g.ID},
+	} {
+		if err := app.PutTask(task); err != nil {
+			t.Fatal(err)
+		}
+	}
+	f := render.New(t)
+	defer f.Cleanup()
+	f.Render(ui.CreateElement(Goals))
+	f.Stabilize()
+	byTestID(f, "button", "goals-tab-goals").Click()
+	f.Stabilize()
+	row := byTestID(f, "div", "goal-row-"+g.ID)
+	if row == nil || !strings.Contains(row.Text(), "50%") || byTestID(f, "div", "goal-todos-"+g.ID) != nil {
+		t.Fatalf("compact checklist wrong: %s", f.Text())
+	}
+	byTestID(f, "button", "goal-expand-"+g.ID).Click()
+	f.Stabilize()
+	preview := byTestID(f, "div", "goal-todos-"+g.ID)
+	if preview == nil || strings.Index(preview.Text(), "Open first") > strings.Index(preview.Text(), "Already done") {
+		t.Fatalf("task preview order wrong: %s", f.Text())
+	}
+	byTestID(f, "button", "goal-todo-check-open").Click()
+	f.Stabilize()
+	row = byTestID(f, "div", "goal-row-"+g.ID)
+	if row == nil || !strings.Contains(row.Text(), "100%") || byTestID(f, "button", "goal-todo-check-open").Attr("aria-checked") != "true" {
+		t.Fatalf("task toggle did not update shared progress: %s", f.Text())
+	}
+}
 
 func TestPrimaryGoalSummaryUsesConvertedTotalsAndDisclosesExclusions(t *testing.T) {
 	app := primaryAccountsGoalsApp(t)

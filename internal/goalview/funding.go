@@ -8,6 +8,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/money"
 )
 
@@ -323,52 +324,15 @@ func AddReservationAmount(existing, additional money.Money, rates currency.Rates
 }
 
 func fundingGap(g domain.Goal, rates currency.Rates) (money.Money, error) {
-	saved := g.CurrentAmount
-	if saved.Currency == "" && saved.Amount == 0 {
-		saved = money.Zero(g.TargetAmount.Currency)
-	}
-	gap, err := g.TargetAmount.Sub(saved)
-	if err != nil {
-		return money.Money{}, err
-	}
-	allocated, err := allocationTotal(g, rates, g.TargetAmount.Currency)
-	if err != nil {
-		return money.Money{}, err
-	}
-	return gap.Sub(allocated)
+	c, err := goals.EvaluateCoverage(g, rates)
+	return c.Remaining, err
 }
 
 // allocationTotal sums each source currency before conversion, rounding once
 // per currency. Storage accepts foreign-currency allocations even though the
 // current allocation editor normally writes the goal's target currency.
 func allocationTotal(g domain.Goal, rates currency.Rates, to string) (money.Money, error) {
-	amounts := map[string]int64{}
-	for _, allocation := range g.Allocations {
-		if allocation.Amount.Amount == 0 {
-			continue
-		}
-		if allocation.Amount.Amount < 0 {
-			return money.Money{}, fmt.Errorf("goalview: negative reservation on goal %s", g.ID)
-		}
-		code := allocation.Amount.Currency
-		total, err := money.Add(amounts[code], allocation.Amount.Amount)
-		if err != nil {
-			return money.Money{}, fmt.Errorf("goalview: sum goal %s reservations: %w", g.ID, err)
-		}
-		amounts[code] = total
-	}
-	total := money.Zero(to)
-	for code, amount := range amounts {
-		converted, err := rates.Convert(money.New(amount, code), to)
-		if err == nil {
-			converted, err = total.Add(converted)
-		}
-		if err != nil {
-			return money.Money{}, fmt.Errorf("goalview: convert goal %s reservations in %s: %w", g.ID, code, err)
-		}
-		total = converted
-	}
-	return total, nil
+	return goals.AllocationTotal(g, rates, to)
 }
 
 func sharePercent(n, d int64) int {

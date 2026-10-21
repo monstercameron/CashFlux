@@ -24,6 +24,18 @@ import (
 type goalView = goalview.View
 type goalPace = goalview.Pace
 
+func goalRates(app *appstate.App) currency.Rates {
+	if app == nil {
+		return currency.Rates{Base: "USD"}
+	}
+	settings := app.Settings()
+	base := settings.BaseCurrency
+	if base == "" {
+		base = "USD"
+	}
+	return currency.Rates{Base: base, Rates: settings.FXRates}
+}
+
 // Each model retains the full task/account snapshots, so keep only the current
 // context rather than retaining those backing arrays across eight revisions.
 var goalViewCache = newViewCache[goalView](1)
@@ -106,7 +118,7 @@ type goalRowProps struct {
 	Goal           domain.Goal
 	Accounts       []domain.Account
 	Members        []domain.Member
-	Tasks          []domain.Task // linked-to-do source for checklist-goal progress
+	Model          *goalview.RowModel // shared progress and bounded task preview
 	OnDelete       func(string)
 	OnDrillAccount func(accountID string)        // open Transactions filtered to the linked account
 	OnArchive      func(id string, archive bool) // move goal to/from the Achieved section

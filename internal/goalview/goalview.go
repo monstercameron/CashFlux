@@ -59,7 +59,7 @@ type View struct {
 	Accounts                                                     []domain.Account
 	Members                                                      []domain.Member
 	Categories                                                   []domain.Category
-	Tasks                                                        []domain.Task
+	Rows                                                         map[string]RowModel
 	All, Active, Missed, Fund, Achieved                          []domain.Goal
 	SavedTotal, SetAsideMin, TargetTotal, FundedTotal, LeftTotal money.Money
 	OverallPct                                                   int
@@ -77,19 +77,22 @@ func Build(in Input) View {
 	if in.Base == "" {
 		in.Base = "USD"
 	}
-	v := View{Base: in.Base, Accounts: in.Accounts, Members: in.Members, Categories: in.Categories, Tasks: in.Tasks}
-	tasks := tasksByGoal(in.Tasks)
+	v := View{Base: in.Base, Accounts: in.Accounts, Members: in.Members, Categories: in.Categories}
+	tasks := goals.BuildTaskIndex(in.Tasks)
+	v.Rows = make(map[string]RowModel, len(in.Goals))
 	for _, g := range in.Goals {
 		if !accountview.Visible(g.OwnerID, in.MemberID) {
 			continue
 		}
 		v.All = append(v.All, g)
+		row := BuildRow(g, tasks[g.ID], in.Rates, in.Now)
+		v.Rows[g.ID] = row
 		switch {
 		case g.Archived:
 			v.Achieved = append(v.Achieved, g)
 		case g.IsSinkingFund:
 			v.Fund = append(v.Fund, g)
-		case goals.Classify(g, tasks[g.ID], in.Now) == goals.StateMissed:
+		case row.Evaluation.State == goals.StateMissed:
 			v.Missed = append(v.Missed, g)
 		default:
 			v.Active = append(v.Active, g)
@@ -157,7 +160,12 @@ func Build(in Input) View {
 	if v.LeftTotal.Amount < 0 {
 		v.LeftTotal = money.Zero(in.Base)
 	}
-	v.Health = Health(v.All, in.Transactions, in.Rates, in.Base, in.Now)
+	v.Health = healthFromRows(v.All, v.Rows, in.Transactions, in.Rates, in.Base, in.Now)
+	for _, g := range v.All {
+		r := v.Rows[g.ID]
+		r.RetargetDate, r.HasRetarget = Retarget(g, r.Evaluation, v.Health[g.ID], in.Base, in.Rates, in.Now)
+		v.Rows[g.ID] = r
+	}
 	v.FundTargetTotal, v.FundExcludedCurrencies = FundTargets(v.Fund, in.Rates, in.Base)
 	if in.Funding != nil {
 		v.Overbooked = in.Funding.Overbooked
@@ -208,20 +216,20 @@ func ratioPercent(n, d int64) int {
 	return p
 }
 
-func tasksByGoal(tasks []domain.Task) map[string][]domain.Task {
-	out := map[string][]domain.Task{}
-	for _, task := range tasks {
-		if task.RelatedType == domain.RelatedGoal && task.RelatedID != "" {
-			out[task.RelatedID] = append(out[task.RelatedID], task)
-		}
-	}
-	return out
-}
-
 // Health derives pace using the same monthly-surplus model as the assistant.
 // A required amount with unavailable FX produces no verdict and consumes no
 // fair-share slot; it cannot invent an on-track status or penalize other goals.
 func Health(all []domain.Goal, txns []domain.Transaction, rates currency.Rates, base string, now time.Time) map[string]Pace {
+	rows := make(map[string]RowModel, len(all))
+	for _, g := range all {
+		if g.IsFinancial() {
+			rows[g.ID] = BuildRow(g, goals.TaskSummary{}, rates, now)
+		}
+	}
+	return healthFromRows(all, rows, txns, rates, base, now)
+}
+
+func healthFromRows(all []domain.Goal, rows map[string]RowModel, txns []domain.Transaction, rates currency.Rates, base string, now time.Time) map[string]Pace {
 	surplus := cashflow.TrailingMonthlySurplus(txns, rates, base, now, cashflow.DefaultTrailingMonths)
 	type need struct {
 		id     string
@@ -232,7 +240,8 @@ func Health(all []domain.Goal, txns []domain.Transaction, rates currency.Rates, 
 		if g.Archived || !g.IsFinancial() {
 			continue
 		}
-		required, ok, err := goals.MonthlyNeeded(g, now)
+		e := rows[g.ID].Evaluation
+		required, ok, err := e.MonthlyNeeded, e.HasMonthlyNeeded, e.Err
 		if err != nil || !ok {
 			continue
 		}

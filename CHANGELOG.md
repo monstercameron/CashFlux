@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Prepared Goals rows once and extracted figures and task previews using canonical checked coverage.
 - Added canonical currency-aware goal coverage, lifecycle, planner evaluation and bounded shared task indexing.
 - Avoided reparsing unchanged authenticated checkpoints during hydration while retaining replay and import safeguards.
 - Added checked native per-hundred spending and savings calculations with explicit overflow results.

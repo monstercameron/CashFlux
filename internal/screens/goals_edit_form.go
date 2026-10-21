@@ -356,10 +356,13 @@ func GoalEditForm(props GoalEditFormProps) ui.Node {
 			)
 		}
 		// Progress context: a compact bar (saved of target) and the amount left to go.
-		cpct := goalsvc.Percent(g)
-		rem := g.TargetAmount.Amount - g.CurrentAmount.Amount
-		if rem < 0 {
-			rem = 0
+		evaluation := goalsvc.EvaluateGoal(g, goalsvc.TaskSummary{}, goalRates(app), time.Now())
+		cpct := evaluation.Coverage.SavedPercent
+		rem := int64(0)
+		if evaluation.Coverage.SavedKnown {
+			if left, err := g.TargetAmount.Sub(evaluation.Coverage.Saved); err == nil {
+				rem = max(left.Amount, 0)
+			}
 		}
 		var finishChip ui.Node = Fragment()
 		if rem > 0 {
@@ -370,13 +373,15 @@ func GoalEditForm(props GoalEditFormProps) ui.Node {
 		// the reservation no longer fits the live balance, warn instead of claiming coverage —
 		// so Contribute never contradicts the card's overbooked warning.
 		var earmarkNote ui.Node = Fragment()
-		if g.AllocatedMinor() > 0 && rem > 0 {
+		if evaluation.Err != nil {
+			earmarkNote = goalCoverageUnavailable(g.ID+"-contribution", evaluation)
+		} else if evaluation.Coverage.SetAside.Amount > 0 && rem > 0 {
 			if overbookedGoals(app)[g.ID] {
 				earmarkNote = P(css.Class("t-caption", tw.TextWarn), Style(map[string]string{"margin": "0"}),
-					uistate.T("goals.earmarkOverbooked", fmtMoney(goalsvc.AllocatedTotal(g))))
+					uistate.T("goals.earmarkOverbooked", fmtMoney(evaluation.Coverage.SetAside)))
 			} else {
 				earmarkNote = P(css.Class("t-caption"), Style(map[string]string{"margin": "0", "color": "var(--up)"}),
-					uistate.T("goals.contribEarmark", fmtMoney(goalsvc.AllocatedTotal(g)), goalsvc.CoveragePercent(g)))
+					uistate.T("goals.contribEarmark", fmtMoney(evaluation.Coverage.SetAside), evaluation.Coverage.CoveragePercent))
 			}
 		}
 		return Form(css.Class("acct-edit-form", "goal-contribute"), OnSubmit(submitContribute),

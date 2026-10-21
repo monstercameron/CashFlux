@@ -51,7 +51,8 @@ func goalContribSlider(props goalSliderProps) ui.Node {
 		return Fragment()
 	}
 	now := time.Now()
-	min, max, step, ok := goalsvc.SliderRange(g, now)
+	evaluation := goalsvc.EvaluateGoal(g, goalsvc.TaskSummary{}, goalRates(props.App), now)
+	min, max, step, ok := evaluation.SliderRange(g, goalRates(props.App))
 	if !ok {
 		return Fragment()
 	}
@@ -60,8 +61,8 @@ func goalContribSlider(props goalSliderProps) ui.Node {
 	// the range midpoint — a realistic starting position the user can drag from.
 	seed := g.MonthlyContribution.Amount
 	if seed <= 0 {
-		if needed, has, err := goalsvc.MonthlyNeeded(g, now); err == nil && has {
-			seed = needed.Amount
+		if evaluation.HasMonthlyNeeded {
+			seed = evaluation.MonthlyNeeded.Amount
 		}
 	}
 	if seed < min.Amount {
@@ -229,16 +230,20 @@ func goalContribSlider(props goalSliderProps) ui.Node {
 // (goalinterest) so interest pulls the date in; otherwise it uses the linear
 // slider math. It returns hasFinish=false when no finish can be projected.
 func planFinish(app *appstate.App, g domain.Goal, monthlyMinor int64, now time.Time) (time.Time, bool) {
+	evaluation := goalsvc.EvaluateGoal(g, goalsvc.TaskSummary{}, goalRates(app), now)
+	if evaluation.Err != nil {
+		return time.Time{}, false
+	}
 	apy := goalLinkedAPY(app, g)
 	if apy > 0 {
-		p := goalinterest.Project(g.CurrentAmount.Amount, monthlyMinor, g.TargetAmount.Amount, apy)
+		p := goalinterest.Project(evaluation.Coverage.Covered.Amount, monthlyMinor, g.TargetAmount.Amount, apy)
 		if !p.Reached {
 			return time.Time{}, false
 		}
 		return dateutil.AddMonths(now, p.Months), true
 	}
-	pt := goalsvc.SliderPointAt(g, monthlyMinor, now)
-	return pt.Finish, pt.HasFinish
+	finish, has, _ := evaluation.Project(g, money.New(monthlyMinor, g.TargetAmount.Currency), now)
+	return finish, has
 }
 
 // goalLinkedAPY returns the highest APY among the goal's linked accounts (0 when

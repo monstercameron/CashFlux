@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/goalcompare"
 	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
@@ -35,23 +36,25 @@ type goalCompareStats struct {
 	target, covered, toGo money.Money
 	monthly               money.Money
 	hasMonthly            bool
+	unknown               bool
 	projected             time.Time
 	reachable             bool
 	deadline              time.Time
 	priority              int
 }
 
-func computeGoalCompareStats(g domain.Goal, now time.Time) goalCompareStats {
-	cur := g.TargetAmount.Currency
-	covered := goalsvc.CoverageMinor(g)
+func computeGoalCompareStats(g domain.Goal, now time.Time, rates currency.Rates) goalCompareStats {
+	e := goalsvc.EvaluateGoal(g, goalsvc.TaskSummary{}, rates, now)
+	covered := e.Coverage.Covered.Amount
 	st := goalCompareStats{
 		target:   g.TargetAmount,
-		covered:  money.New(covered, cur),
-		toGo:     money.New(max(g.TargetAmount.Amount-covered, 0), cur),
+		covered:  e.Coverage.Covered,
+		toGo:     e.Coverage.Remaining,
+		unknown:  e.Err != nil,
 		deadline: g.TargetDate,
 		priority: g.Priority,
 	}
-	if m, ok, _ := goalsvc.MonthlyAssignment(g, now); ok && m.Amount > 0 {
+	if m, ok, err := e.Assignment(g, rates); err == nil && ok && m.Amount > 0 {
 		st.monthly, st.hasMonthly = m, true
 		res := goaltrajectory.Project(goaltrajectory.Input{
 			CurrentMinor: covered, TargetMinor: g.TargetAmount.Amount,
@@ -106,7 +109,7 @@ func GoalCompareForm(props GoalCompareProps) ui.Node {
 		uistate.T("goalcompare.empty"))
 	var verdict ui.Node = Fragment()
 	if okA && okB {
-		sa, sb := computeGoalCompareStats(ga, now), computeGoalCompareStats(gb, now)
+		sa, sb := computeGoalCompareStats(ga, now, goalRates(app)), computeGoalCompareStats(gb, now, goalRates(app))
 		// One honest verdict sentence above the table, derived only from the figures the
 		// table shows (projected landings + monthly plans). The monthly gap is compared
 		// only when both goals share a currency (a cross-currency gap is meaningless).
@@ -148,8 +151,8 @@ func GoalCompareForm(props GoalCompareProps) ui.Node {
 			Thead(Tr(Th(""), Th(ga.Name), Th(gb.Name))),
 			Tbody(
 				row("goalcompare.target", fmtMoney(sa.target), fmtMoney(sb.target)),
-				row("goalcompare.covered", fmtMoney(sa.covered), fmtMoney(sb.covered)),
-				row("goalcompare.toGo", fmtMoney(sa.toGo), fmtMoney(sb.toGo)),
+				row("goalcompare.covered", fmtGoalCompareMoney(sa.covered, sa.unknown), fmtGoalCompareMoney(sb.covered, sb.unknown)),
+				row("goalcompare.toGo", fmtGoalCompareMoney(sa.toGo, sa.unknown), fmtGoalCompareMoney(sb.toGo, sb.unknown)),
 				row("goalcompare.monthly", fmtMonthly(sa), fmtMonthly(sb)),
 				row("goalcompare.projected", fmtDate(sa.projected, sa.reachable), fmtDate(sb.projected, sb.reachable)),
 				row("goalcompare.deadline", fmtDate(sa.deadline, true), fmtDate(sb.deadline, true)),
@@ -165,7 +168,7 @@ func GoalCompareForm(props GoalCompareProps) ui.Node {
 	// "same money, different order", which is the one the user can actually act on.
 	var orderPanel ui.Node = Fragment()
 	if okA && okB {
-		sa, sb := computeGoalCompareStats(ga, now), computeGoalCompareStats(gb, now)
+		sa, sb := computeGoalCompareStats(ga, now, goalRates(app)), computeGoalCompareStats(gb, now, goalRates(app))
 		switch {
 		case !sa.hasMonthly || !sb.hasMonthly:
 			orderPanel = P(css.Class("muted"), Attr("data-testid", "goal-compare-order-none"),
@@ -333,4 +336,11 @@ func goalCompareVerdict(c goaltrajectory.Comparison, aName, bName, gapCurrency s
 	default: // only the monthly plans are comparable
 		return uistate.T("goalcompare.vLeadCostOnly", nameOf(c.Costlier), gap, otherOf(c.Costlier))
 	}
+}
+
+func fmtGoalCompareMoney(amount money.Money, unknown bool) string {
+	if unknown {
+		return uistate.T("goals.coverageUnavailableShort")
+	}
+	return fmtMoney(amount)
 }

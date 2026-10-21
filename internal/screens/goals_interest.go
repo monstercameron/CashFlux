@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/goalinterest"
 	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
@@ -41,17 +42,20 @@ func linkedAPY(g domain.Goal, accounts []domain.Account) (float64, bool) {
 // contribution, or the goal is already complete. The line is explainable: it
 // shows the contribution + rate, the projected months, and how much the interest
 // itself adds (the contributions-vs-interest split).
-func goalInterestEtaLine(g domain.Goal, accounts []domain.Account, now time.Time) ui.Node {
+func goalInterestEtaLine(g domain.Goal, evaluation goalsvc.Evaluation, accounts []domain.Account, now time.Time) ui.Node {
+	if evaluation.Err != nil || evaluation.Complete {
+		return Fragment()
+	}
 	apy, ok := linkedAPY(g, accounts)
 	if !ok {
 		return Fragment()
 	}
-	monthly, ok, err := goalsvc.MonthlyAssignment(g, now)
+	monthly, ok, err := evaluation.Assignment(g, goalRates(appstate.Default))
 	if err != nil || !ok || monthly.Amount <= 0 {
 		return Fragment()
 	}
 	cur := g.TargetAmount.Currency
-	proj := goalinterest.Project(g.CurrentAmount.Amount, monthly.Amount, g.TargetAmount.Amount, apy)
+	proj := goalinterest.Project(evaluation.Coverage.Covered.Amount, monthly.Amount, g.TargetAmount.Amount, apy)
 	if !proj.Reached {
 		return Span(css.Class("budget-sub"), Attr("data-testid", "goal-interest-eta-"+g.ID),
 			uistate.T("goals.interestUnreached"))

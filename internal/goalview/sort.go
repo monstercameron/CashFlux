@@ -6,6 +6,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/goals"
 )
@@ -19,40 +20,28 @@ func OrderedOpen(v View, key string, now time.Time) []domain.Goal {
 			out = append(out, g)
 		}
 	}
-	Sort(out, key, v.Tasks, now)
+	sortPrepared(out, key, v.Rows)
 	return out
 }
 
 // Sort orders a caller-owned goal slice by the toolbar sort key. Ties retain
 // the existing actionable order. It never mutates tasks or goal children.
 func Sort(gs []domain.Goal, key string, tasks []domain.Task, now time.Time) {
-	// Decorate only the requested rank. Sorting never scans the task list or
-	// sorts habit check-ins inside its comparison function.
-	percent, counts := map[string]int{}, map[string]int{}
+	rows := map[string]RowModel{}
 	if key == "closest" || key == "farthest" || key == "complexity" {
-		done := map[string]int{}
-		for _, task := range tasks {
-			if task.RelatedType != domain.RelatedGoal || task.RelatedID == "" {
-				continue
-			}
-			counts[task.RelatedID]++
-			if task.Status == domain.StatusDone {
-				done[task.RelatedID]++
-			}
-		}
+		index := goals.BuildTaskIndex(tasks)
 		for _, g := range gs {
-			if key == "complexity" {
-				continue
-			}
-			if g.EffectiveKind() == domain.GoalKindChecklist {
-				percent[g.ID] = goals.ChecklistPercent(done[g.ID], counts[g.ID])
-			} else {
-				percent[g.ID] = goals.EvaluateProgress(g, nil, now).Percent
-			}
+			rows[g.ID] = BuildRow(g, index[g.ID], currency.Rates{}, now)
 		}
 	}
-	pct := func(g domain.Goal) int { return percent[g.ID] }
-	steps := func(g domain.Goal) int { return counts[g.ID] }
+	sortPrepared(gs, key, rows)
+}
+
+func sortPrepared(gs []domain.Goal, key string, rows map[string]RowModel) {
+	// Decorate only the requested rank. Sorting never scans the task list or
+	// sorts habit check-ins inside its comparison function.
+	pct := func(g domain.Goal) int { return rows[g.ID].Evaluation.Progress.Percent }
+	steps := func(g domain.Goal) int { return rows[g.ID].Tasks.Total }
 	switch key {
 	case "closest":
 		sort.SliceStable(gs, func(i, j int) bool {
