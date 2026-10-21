@@ -1,3 +1,7 @@
+## 2026-10-21 - Native Planning projections
+
+Added checked canonical cashflow/runway/cover and safe-spend seams, composing them in an immutable native planningmodel with explicit reference time and source errors. The controller samples time once and preserves existing policies and recurring authoring. Native models and vet pass; the focused Planning actual-host error/invalid-input case passes.
+
 ## 2026-10-21 - Native plan and resilience inputs
 
 Plan now delegates to existing finplan.AssessData instead of float engine values or account-count assumptions. Health resilience preparation retains source/FX errors independently for liquidity and card exposure. Native finplan/healthview tests pass; both actual-route WASM groups pass for known and failed FX inputs.

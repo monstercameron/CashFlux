@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Planning renders independent checked native forecast, affordability, runway and spending facts.
 - Plan and Health use checked native financial inputs with independent availability.
 - Debt and loan views consume checked native balances, totals, payoff schedules and extra-payment input.
 - Allocate uses native eligibility, balance, goal, validation and distribution facts.
