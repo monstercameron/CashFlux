@@ -1,3 +1,7 @@
+## 2026-10-20 - Cloud regression harness reliability
+
+The sync browser checks were racing the wizard's asynchronous render and discovery response, and a transaction helper could click Save more than once. The shared helpers now wait for the actual visible step or sync pulse, click once, and unlock protected storage before waiting for app readiness. On Windows, `go run` can leave the compiled server listening after its wrapper exits, so cleanup identifies the listener on the test's reserved port and stops it. The focused first-snapshot browser journey passed with these helpers; the protected reload journey still exposes an IndexedDB read timeout under investigation.
+
 ## 2026-10-20 - Durable sample reset before cloud setup
 
 The browser regression exposed a race when “Start fresh” was clicked while the initial sample autosave was still in flight. The wipe changed the in-memory dataset, but the saved generation advanced before its conditional durable replacement and the app stayed on an unsaved empty page. The action now requests a durable completion for the current App, then pauses autosave before wiping and reloads only after the empty dataset commits. A browser run confirmed the reset now reloads; subsequent attachment sync remains under investigation.
