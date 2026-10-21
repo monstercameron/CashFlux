@@ -5,6 +5,7 @@
 package screens
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -358,7 +359,12 @@ type budgetSummaryFundingProps struct {
 }
 
 // budgetSummaryFunding builds the summary funding section.
-func budgetSummaryFunding(p budgetSummaryFundingProps) (ui.Node, budgeting.FundingRead, int64) {
+type budgetSummaryFundingResult struct {
+	incomeActual ui.Node
+	prepared     budgetview.FundingPreparation
+}
+
+func budgetSummaryFunding(p budgetSummaryFundingProps) budgetSummaryFundingResult {
 	// #64: the plan figure is EXPECTED income — say what actually arrived, so the
 	// basis never masquerades as money already received. One quiet sub-line.
 	var incomeActual ui.Node = Fragment()
@@ -367,25 +373,31 @@ func budgetSummaryFunding(p budgetSummaryFundingProps) (ui.Node, budgeting.Fundi
 	// while only $6,961.00 has come in, and "fully assigned" then looks exactly
 	// like "fully funded". The difference is the part that decides whether a
 	// payment clears.
-	var funding budgeting.FundingRead
-	// Scanned ONCE per render and reused: the funding read below and the month-close
-	// gate further down both need it, and IncomeByCategory walks every transaction.
-	// Computing it twice made a full ledger sweep the price of drawing this tile.
-	actualIncome := int64(0)
-	if lines, err := reports.IncomeByCategory(p.app.Transactions(), p.wStart, p.wEnd, currency.Rates{Base: p.v.Base, Rates: p.app.Settings().FXRates}); err == nil {
-		for _, ln := range lines {
-			actualIncome += ln.Amount
+	var lines []reports.CategorySpend
+	var incomeErr error
+	var settingsRates map[string]float64
+	var transactions []domain.Transaction
+	if p.app == nil || p.app.Store() == nil {
+		incomeErr = fmt.Errorf("read budget income: app is unavailable")
+	} else {
+		if err := p.app.Store().CheckReady(); err != nil {
+			incomeErr = fmt.Errorf("read budget income: %w", err)
+		} else {
+			transactions, incomeErr = p.app.TransactionsChecked()
+			settings, settingsErr := p.app.SettingsChecked()
+			incomeErr = errors.Join(incomeErr, settingsErr)
+			settingsRates = settings.FXRates
+			if incomeErr == nil {
+				lines, incomeErr = reports.IncomeByCategoryChecked(transactions, p.wStart, p.wEnd,
+					currency.Rates{Base: p.v.Base, Rates: settingsRates})
+			}
 		}
 	}
-	if p.normalizationOK && p.v.BannerIncome > 0 && (p.v.Method == budgeting.MethodZeroBased || p.v.Method == budgeting.MethodSimple) {
-		funding = budgeting.FundingRead{
-			Expected: p.v.BannerIncome, Received: actualIncome,
-			Assigned: p.normalizedBudgetTotal + p.v.SavingsAssigned,
-			// The savings/investment assignments are part of the plan but not part
-			// of what a bulk budget adjustment can scale, so the reconcile
-			// percentage has to be computed against the budgets alone.
-			Fixed: p.v.SavingsAssigned,
-		}
+	prepared := budgetview.PrepareFunding(budgetview.FundingInput{
+		IncomeLines: lines, IncomeError: incomeErr, Method: p.v.Method, Expected: p.v.BannerIncome, RolledOver: p.v.RolledOver,
+		Budgeted: p.normalizedBudgetTotal, Fixed: p.v.SavingsAssigned, PlanKnown: p.normalizationOK,
+	})
+	if prepared.FundingEligible {
 		key := "budgets.incomeActualSoFar"
 		if p.hist {
 			key = "budgets.incomeActualEnded"
@@ -395,13 +407,16 @@ func budgetSummaryFunding(p budgetSummaryFundingProps) (ui.Node, budgeting.Fundi
 		// arrived there is no gap to report, and "$5,900.00 of the $5,900.00 your plan
 		// expects" is a tautology that reads as "fully funded" directly beneath a hero
 		// saying the plan is over-assigned (Cam, 2026-08-31).
-		if actualIncome < p.v.BannerIncome {
+		if !prepared.IncomeKnown || !prepared.AssignmentsKnown {
+			incomeActual = P(css.Class("budget-sub"), Attr("data-testid", "budgets-income-unavailable"),
+				uistate.T("budgets.fundingUnavailable"))
+		} else if prepared.Received < p.v.BannerIncome {
 			incomeActual = P(css.Class("budget-sub"), Attr("data-testid", "budgets-income-actual"),
-				uistate.T(key, fmtMoney(money.New(actualIncome, p.v.Base)), fmtMoney(money.New(p.v.BannerIncome, p.v.Base))))
+				uistate.T(key, fmtMoney(money.New(prepared.Received, p.v.Base)), fmtMoney(money.New(p.v.BannerIncome, p.v.Base))))
 		}
 	}
 
-	return incomeActual, funding, actualIncome
+	return budgetSummaryFundingResult{incomeActual: incomeActual, prepared: prepared}
 }
 
 // budgetSummaryAllocationResult carries the explicit results for budgetSummaryAllocation.
@@ -422,6 +437,9 @@ type budgetSummaryAllocationProps struct {
 	normalizedBudgetTotal int64
 	wEnd                  time.Time
 	actualIncome          int64
+	actualIncomeKnown     bool
+	overAssigned          int64
+	overAssignedKnown     bool
 	pr                    prefs.Prefs
 }
 
@@ -484,10 +502,9 @@ func budgetSummaryAllocation(p budgetSummaryAllocationProps) budgetSummaryAlloca
 	// amounts. Sharing the bar's arithmetic makes that impossible rather than
 	// unlikely.
 	overAssigned := int64(0)
-	if pool := p.v.BannerIncome + p.v.RolledOver; p.normalizationOK && pool > 0 {
-		if ta := budgeting.ToAssign(pool, p.normalizedBudgetTotal+p.v.SavingsAssigned); ta < 0 {
-			overAssigned = -ta
-		}
+	overAssignedKnown := p.overAssignedKnown
+	if overAssignedKnown {
+		overAssigned = p.overAssigned
 	}
 	// #64: offer the guided close flow when the period is in its last five days or
 	// already ended — the moment the checklist is actually useful. It rides in the
@@ -502,13 +519,13 @@ func budgetSummaryAllocation(p budgetSummaryAllocationProps) budgetSummaryAlloca
 	// An invitation that reliably leads nowhere teaches people to ignore it
 	// (Cam, 2026-08-31).
 	var closeOffer ui.Node = Fragment()
-	if daysLeft := int(p.wEnd.Sub(budgetNow()).Hours() / 24); p.hist || (daysLeft >= 0 && daysLeft <= 5) {
+	if daysLeft := int(p.wEnd.Sub(budgetNow()).Hours() / 24); (p.hist || (daysLeft >= 0 && daysLeft <= 5)) && p.actualIncomeKnown && overAssignedKnown {
 		// Built from figures this render already has — statuses, the over-assignment
 		// the rail uses, and the single income scan above — so the gate costs no
 		// extra passes over the ledger. Clean() stays the one definition of "nothing
 		// to review", shared with the flow the chip opens.
 		review := monthclose.Build(p.v.Statuses, nil, p.v.BannerIncome, p.actualIncome, overAssigned, p.pr.BudgetRolloverLeftover)
-		if !review.Clean() {
+		if review.Error == nil && !review.Clean() {
 			closeOffer = ui.CreateElement(monthCloseOfferChip, struct{}{})
 		}
 	}
@@ -557,6 +574,8 @@ type budgetSummaryStatusProps struct {
 	hist                  bool
 	normalizationOK       bool
 	overAssigned          int64
+	fundingKnown          bool
+	fundingEligible       bool
 	funding               budgeting.FundingRead
 	excluded              int
 	issues                []budgeting.ViewIssue
@@ -585,12 +604,12 @@ func budgetSummaryStatus(p budgetSummaryStatusProps) ui.Node {
 	if statusState == "fits" && p.excluded == 0 && !p.futurePeriod && p.overAssigned > 0 {
 		statusAmount = p.overAssigned
 		statusState = "over"
-	} else if statusState == "fits" && p.excluded == 0 && !p.futurePeriod && p.funding.Meaningful() && !p.funding.FullyFunded() && p.funding.Unfunded() > 0 {
+	} else if statusState == "fits" && p.excluded == 0 && !p.futurePeriod && p.fundingEligible && p.fundingKnown && p.funding.Meaningful() && !p.funding.FullyFunded() && p.funding.Unfunded() > 0 {
 		statusAmount = p.funding.Unfunded()
 		statusState = "unfunded"
 	}
 	var statusAction ui.Node = Fragment()
-	if statusState == "over" || statusState == "unfunded" {
+	if (statusState == "over" || statusState == "unfunded") && p.fundingKnown && p.fundingEligible {
 		label := uistate.T("bud2.bringPlanDown")
 		if statusState == "over" {
 			label = uistate.T("bud2.resolveAmount", fmtMoney(money.New(statusAmount, p.v.Base)))
@@ -711,6 +730,8 @@ type budgetSummaryDetailsProps struct {
 	alloc           ui.Node
 	futurePeriod    bool
 	funding         budgeting.FundingRead
+	fundingKnown    bool
+	fundingEligible bool
 	hist            bool
 	vw              period.Window
 	app             *appstate.App
@@ -728,16 +749,20 @@ type budgetSummaryDetailsProps struct {
 
 // budgetSummaryDetails renders the existing details disclosure and action groups.
 func budgetSummaryDetails(p budgetSummaryDetailsProps) ui.Node {
+	var fundingCallout ui.Node = Fragment()
+	if !p.futurePeriod && p.fundingKnown && p.fundingEligible {
+		fundingCallout = ui.CreateElement(budgetFundedCallout, budgetFundedProps{
+			Funding: p.funding, Base: p.v.Base, Historical: p.hist, PeriodLabel: p.vw.FromLabel(),
+			ScalableCount: budgetReconcileCount(p.app, p.activeMemberID, p.v, p.vw, p.pr, p.funding.ReduceToFitPct()),
+		})
+	}
 	details := Details(css.Class("bud2-status-details"), Attr("data-testid", "budgets-status-details"),
 		Summary(uistate.T("bud2.moreDetails")),
 		budgetIncompleteNotice(p.v.Incomplete),
 		If(!p.normalizationOK, P(css.Class("bud2-normalization-error"), Attr("role", "status"), uistate.T("bud2.normalizationUnavailable"))),
 		p.alloc,
 		ui.CreateElement(transferLeakNotice, transferLeakProps{Txns: p.v.LeakRows, Where: uistate.T("txnleak.whereBudgets")}),
-		If(!p.futurePeriod, ui.CreateElement(budgetFundedCallout, budgetFundedProps{
-			Funding: p.funding, Base: p.v.Base, Historical: p.hist, PeriodLabel: p.vw.FromLabel(),
-			ScalableCount: budgetReconcileCount(p.app, p.activeMemberID, p.v, p.vw, p.pr, p.funding.ReduceToFitPct()),
-		})),
+		fundingCallout,
 		p.rail,
 		Div(css.Class("budget-hero-cap"),
 			p.incomeActual,

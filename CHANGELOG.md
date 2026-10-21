@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Budget funding and month-close actions preserve unavailable income and assignment facts instead of treating errors as zero.
 - Custom-field edit forms share the native, tested value-to-string converter.
 - Give recovery-copy deduplication its own household scope while retaining durable one-copy and readable-payload assertions.
 - Isolate hosted pull tests from scoped encryption and durable workspace state, and verify plaintext downgrade refusal before import.

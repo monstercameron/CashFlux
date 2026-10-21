@@ -8,6 +8,7 @@ package i18n
 // (C669), and the compact-list toggle's stateful accessible name (C670). Kept in its
 // own file and merged via init so it never touches the shared en.go.
 var budgetGuardKeys = Catalog{
+	"budgets.fundingUnavailable": "Budget funding details are unavailable right now.",
 	// ── Limit validation (C665, C666) ────────────────────────────────────────
 	// Named by the LimitProblem the pure parser reports, so every editor that
 	// takes a limit says the same thing about the same input.

@@ -117,14 +117,17 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 		v: v, hist: summaryPlan.hist, filterAttn: filterAttn, fundHasPool: summaryPool.fundHasPool, fundFree: summaryPool.fundFree,
 		zbbHero: summaryPool.zbbHero, spendCap: summaryPool.spendCap, smartSettings: summaryPlan.smartSettings,
 	})
-	incomeActual, funding, actualIncome := budgetSummaryFunding(budgetSummaryFundingProps{
+	fundingSummary := budgetSummaryFunding(budgetSummaryFundingProps{
 		app: app, wStart: summaryPlan.wStart, wEnd: summaryPlan.wEnd, v: v, normalizationOK: summaryPlan.normalizationOK,
 		normalizedBudgetTotal: summaryPlan.normalizedBudgetTotal, hist: summaryPlan.hist,
 	})
+	funding, actualIncome := fundingSummary.prepared.Funding, fundingSummary.prepared.Received
+	actualIncomeKnown := fundingSummary.prepared.IncomeKnown
 	summaryAllocation := budgetSummaryAllocation(budgetSummaryAllocationProps{
 		futurePeriod: futurePeriod, planView: summaryPlan.planView, basisBtn: basisBtn, hist: summaryPlan.hist, v: v,
 		normalizationOK: summaryPlan.normalizationOK, normalizedBudgetTotal: summaryPlan.normalizedBudgetTotal, wEnd: summaryPlan.wEnd,
-		actualIncome: actualIncome, pr: pr,
+		actualIncome: actualIncome, actualIncomeKnown: actualIncomeKnown,
+		overAssigned: fundingSummary.prepared.OverAssigned, overAssignedKnown: fundingSummary.prepared.OverAssignedKnown, pr: pr,
 	})
 
 	rail := budgetSummaryIssues(budgetSummaryIssuesProps{
@@ -134,14 +137,17 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 
 	statusLine := budgetSummaryStatus(budgetSummaryStatusProps{
 		normalizedBudgetTotal: summaryPlan.normalizedBudgetTotal, vw: vw, v: summaryPlan.planView, futurePeriod: futurePeriod,
-		normalizationOK: summaryPlan.normalizationOK, overAssigned: summaryAllocation.overAssigned, funding: funding, hist: summaryPlan.hist,
+		normalizationOK: summaryPlan.normalizationOK, overAssigned: summaryAllocation.overAssigned,
+		fundingKnown: fundingSummary.prepared.FundingKnown, fundingEligible: fundingSummary.prepared.FundingEligible,
+		funding: funding, hist: summaryPlan.hist,
 		excluded: summaryPlan.excluded, issues: summaryPlan.issues, filterAttn: filterAttn,
 		attnCount: len(budgetAttentionStatuses(v.Statuses)), attnOver: attnOver, smartSettings: summaryPlan.smartSettings,
 	})
 	details := budgetSummaryDetails(budgetSummaryDetailsProps{
 		v: v, normalizationOK: summaryPlan.normalizationOK, alloc: summaryAllocation.alloc,
-		futurePeriod: futurePeriod, funding: funding, hist: summaryPlan.hist, vw: vw, app: app, activeMemberID: activeMemberID, pr: pr,
-		rail: rail, incomeActual: incomeActual, lastMonthTag: summaryPool.lastMonthTag,
+		futurePeriod: futurePeriod, funding: funding, fundingKnown: fundingSummary.prepared.FundingKnown,
+		fundingEligible: fundingSummary.prepared.FundingEligible, hist: summaryPlan.hist, vw: vw, app: app, activeMemberID: activeMemberID, pr: pr,
+		rail: rail, incomeActual: fundingSummary.incomeActual, lastMonthTag: summaryPool.lastMonthTag,
 		closeOffer: summaryAllocation.closeOffer, toAssignChip: toAssignChip,
 		hasAlloc: summaryAllocation.hasAlloc, basisBtn: basisBtn, ageChip: ageChip,
 	})

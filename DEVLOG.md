@@ -1,3 +1,7 @@
+## 2026-10-21 - Prepare checked budget funding facts outside views
+
+Added native checked category-income and assignment preparation with independent availability, method eligibility and over-assignment results. Budget adapters use checked sources and avoid reconciliation scans when the action is unavailable. Native budgetview tests passed; focused v7 host tests passed funding missing-FX, valid-income and warmed closed-store cases. Full Screens v7 run also covered this slice.
+
 ## 2026-10-21 - Move custom-field edit value conversion into native logic
 
 Moved the existing boolean, decimal, string and fallback conversion rules into customfields.FormValuesToStrings; the four form callers keep their thin wrapper. Native conversion, empty-map, round-trip and strict-parser regressions passed with Go 1.27.3; the v7 Screens host binary also compiled the adapter.

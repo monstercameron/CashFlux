@@ -5,6 +5,7 @@
 package screens
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -37,9 +38,20 @@ import (
 
 // buildMonthCloseSummary assembles the pure summary for the current budget view.
 func buildMonthCloseSummary(app *appstate.App, v budgetView, bs, be time.Time) monthclose.Summary {
-	rates := currency.Rates{Base: v.Base, Rates: app.Settings().FXRates}
+	if app == nil || app.Store() == nil {
+		return monthclose.Summary{Error: fmt.Errorf("read month-close income: app is unavailable")}
+	}
+	if err := app.Store().CheckReady(); err != nil {
+		return monthclose.Summary{Error: fmt.Errorf("read month-close income: %w", err)}
+	}
+	transactions, transactionsErr := app.TransactionsChecked()
+	settings, settingsErr := app.SettingsChecked()
+	if err := errors.Join(transactionsErr, settingsErr); err != nil {
+		return monthclose.Summary{Error: fmt.Errorf("read month-close income: %w", err)}
+	}
+	rates := currency.Rates{Base: v.Base, Rates: settings.FXRates}
 	actual := int64(0)
-	if lines, err := reports.IncomeByCategory(app.Transactions(), bs, be, rates); err == nil {
+	if lines, err := reports.IncomeByCategoryChecked(transactions, bs, be, rates); err == nil {
 		for _, ln := range lines {
 			next, addErr := money.Add(actual, ln.Amount)
 			if addErr != nil {
