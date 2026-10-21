@@ -50,6 +50,12 @@ test("worker leaves API requests alone and caches only public static paths", asy
     fetchListener({ request: new Request(origin + path), respondWith: () => { intercepted = true; } });
     assert.equal(intercepted, false, `${path} was intercepted`);
   }
+  let navigatedAPI = false;
+  fetchListener({
+    request: { method: "GET", mode: "navigate", url: `${origin}/v1/account/export` },
+    respondWith: () => { navigatedAPI = true; },
+  });
+  assert.equal(navigatedAPI, false, "top-level API navigation was intercepted");
   let response;
   fetchListener({ request: new Request(`${origin}/fonts/f1.woff2`), respondWith: (value) => { response = value; } });
   assert.equal((await response).status, 200);

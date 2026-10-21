@@ -445,9 +445,17 @@ function isBuildJSON(url) {
   return new URL(url).pathname.endsWith("/build.json");
 }
 
+function isBackendPath(url) {
+  const path = new URL(url).pathname;
+  return path === "/v1" || path.startsWith("/v1/")
+    || path === "/grpc" || path.startsWith("/grpc/")
+    || path === "/readyz" || path === "/healthz" || path === "/metrics";
+}
+
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
+  if (isBackendPath(req.url)) return;
   if (isBuildJSON(req.url)) return;
   if (req.mode === "navigate") {
     event.respondWith(handleNavigate(req));
