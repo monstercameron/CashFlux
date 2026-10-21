@@ -1,3 +1,7 @@
+## 2026-10-21 - Keep the period pill synchronized with page calculations
+
+An isolated browser smoke exposed a Dashboard mismatch: the body moved to June while the pill stayed July. TopBar now threads the live period through its stable slot, and handlers read the current atom. The focused WASM test passed for stepping, rapid clicks and external updates. The production build and all nine sample browser actions passed.
+
 ## 2026-10-21 - Preserve financial caches across unchanged Dashboard remounts
 
 Added an opt-in checked App.PutPlacementsIfChanged path that compares canonical stored placements and writes only changed or new rows; other store write semantics remain unchanged. Dashboard sync includes app identity and preparation readiness, so replacement workspaces and changed layout/configuration still persist. Native tests passed for repeated no-op sync, second app, layout/visibility/config/style/custom changes, invalid JSON retry and closed stores. Seven Dashboard WASM tests passed, including actual remount revision/frame retention and app replacement, and the production WASM build passed. Browser latency effects are being measured against the saved pre-fix artifact.

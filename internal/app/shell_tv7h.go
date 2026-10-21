@@ -5,6 +5,7 @@
 package app
 
 import (
+	"github.com/monstercameron/CashFlux/internal/period"
 	"github.com/monstercameron/CashFlux/internal/prefs"
 	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
 	uic "github.com/monstercameron/GoWebComponents/v5/ui"
@@ -13,12 +14,13 @@ import (
 type shellResolutionSlotProps struct {
 	PeriodAware bool
 	YearEnding  bool
+	Window      period.Window
 }
 
 // shellResolutionSlot keeps the top bar's child position stable across routes.
 func shellResolutionSlot(props shellResolutionSlotProps) uic.Node {
 	return If(props.PeriodAware,
-		uic.CreateElement(ResolutionControl, resolutionControlProps{YearEnding: props.YearEnding}),
+		uic.CreateElement(ResolutionControl, resolutionControlProps{YearEnding: props.YearEnding, Window: props.Window}),
 	)
 }
 
