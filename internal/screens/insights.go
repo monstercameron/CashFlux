@@ -55,6 +55,11 @@ type assistantChatTransportFunc func(
 	onDelta func(string), onResult func(ai.Message, ai.Usage), onError func(string),
 ) func()
 
+const (
+	assistantRelayMaxMessages = 64
+	assistantRelayMaxBytes    = 256 * 1024
+)
+
 // assistantChatTransport is replaceable by same-package host tests so lifecycle
 // behavior can be exercised without credentials or external provider requests.
 var assistantChatTransport assistantChatTransportFunc = func(
@@ -378,7 +383,7 @@ func Insights() ui.Node {
 	// persona/instructions prompt, then a live data-context system message (aggregates
 	// + the user's category names + a directive to call tools for any specific figure),
 	// then the conversation so far.
-	buildMessages := func(hist []chatTurn) []ai.Message {
+	buildMessages := func(hist []chatTurn) ([]ai.Message, int, int) {
 		persona := strings.TrimSpace(uistate.LoadSystemPrompt())
 		if persona == "" {
 			persona = defaultChatSystemPrompt
@@ -406,6 +411,8 @@ func Insights() ui.Node {
 		if mem := uistate.LoadAgentMemory().Prompt(); mem != "" {
 			msgs = append(msgs, ai.Message{Role: ai.RoleSystem, Content: mem})
 		}
+		prefixCount := len(msgs)
+		currentStart := len(msgs)
 		for _, t := range hist {
 			role := ai.RoleUser
 			if t.Role == "assistant" {
@@ -413,7 +420,10 @@ func Insights() ui.Node {
 			}
 			msgs = append(msgs, ai.Message{Role: role, Content: t.Text})
 		}
-		return msgs
+		if len(hist) > 0 {
+			currentStart = len(msgs) - 1
+		}
+		return msgs, prefixCount, currentStart
 	}
 
 	// sendTools dispatches one model turn. Both paths advertise the same tools: the
@@ -472,7 +482,7 @@ func Insights() ui.Node {
 			// Account real usage against the captured conversation even if its
 			// callback arrives after cancellation. Never write into a replacement
 			// app dataset or a closed store.
-			if appstate.Default != app || app.Store() != boundStore {
+			if app.Store() != boundStore {
 				return
 			}
 			if _, err := boundStore.GetSettings(); err != nil {
@@ -511,7 +521,14 @@ func Insights() ui.Node {
 		session := assistantloop.NewSession(conversationID)
 		sessionState.Set(session)
 		isCurrentSession := func() bool {
-			return session.Active() && sessionState.Get() == session && appstate.Default == app && app.Store() == boundStore
+			if !session.Active() || sessionState.Get() != session {
+				return false
+			}
+			if appstate.Default != app || app.Store() != boundStore {
+				session.Cancel()
+				return false
+			}
+			return true
 		}
 		finishSession := func() {
 			session.SetCancel(nil)
@@ -524,7 +541,7 @@ func Insights() ui.Node {
 			}
 		}
 		loading.Set(true)
-		msgs := buildMessages(hist)
+		msgs, prefixCount, currentStart := buildMessages(hist)
 		var total ai.Usage
 
 		// C387: every tool this answer runs is recorded as it runs, so the reply can
@@ -532,6 +549,24 @@ func Insights() ui.Node {
 		// that is the evidence; a citation that only names a source proves nothing.
 		var sources []domain.ChatSource
 
+		// There is no reactive app-identity atom: a dataset can be replaced while
+		// this component stays mounted. One short-lived owner watcher closes the
+		// provider session on that boundary and exits as soon as the session ends.
+		go func() {
+			ticker := time.NewTicker(250 * time.Millisecond)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-session.Done():
+					return
+				case <-ticker.C:
+					if appstate.Default != app || app.Store() != boundStore {
+						session.Cancel()
+						return
+					}
+				}
+			}
+		}()
 		go func() {
 			defer finishSession()
 			// Last line of defence. Everything below runs in a goroutine, and an
@@ -567,6 +602,15 @@ func Insights() ui.Node {
 					}
 					return
 				}
+				requestMessages, err := assistantloop.BoundRequestHistory(
+					msgs, prefixCount, currentStart, assistantRelayMaxMessages, assistantRelayMaxBytes, 64<<10,
+				)
+				if err != nil {
+					loading.Set(false)
+					streaming.Set("")
+					errMsg.Set("This turn and its required context exceed the assistant request limit. Start a new chat or shorten the current turn.")
+					return
+				}
 				ch := make(chan agentStep, 1)
 				// Each fragment lands in the live-answer atom, which the thread
 				// renders as a growing bubble. It is cleared when the turn resolves,
@@ -574,7 +618,7 @@ func Insights() ui.Node {
 				// any moment, never a draft sitting beside its finished self.
 				streaming.Set("")
 				var usageOnce sync.Once
-				fc := sendTools(requestModel, msgs, specs,
+				fc := sendTools(requestModel, requestMessages, specs,
 					func(delta string) {
 						if isCurrentSession() {
 							streaming.Set(streaming.Get() + delta)
@@ -708,8 +752,10 @@ func Insights() ui.Node {
 								out = write.Text
 								if write.Changed {
 									uistate.AddAgentActions(conversationID, []string{tc.Function.Name})
-									// buildChatTools snapshots table slices. Refresh after an
-									// applied write so later calls in this response see it.
+								}
+								if write.Changed || write.VerificationError != "" {
+									// A failed receipt capture makes the write outcome uncertain. Refresh
+									// handlers before another call so a possibly applied write is visible.
 									_, byName, err = buildToolSet(currentTier)
 									if err != nil {
 										errMsg.Set(uistate.T("insights.loopFailed"))

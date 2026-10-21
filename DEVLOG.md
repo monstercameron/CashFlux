@@ -1,3 +1,7 @@
+## 2026-10-21 - Bound assistant history and session cleanup
+
+Added native protocol-preserving message and byte limits, a session-owned identity watcher, fresh handlers after uncertain receipts, and usage accounting once against the original still-live dataset. Verified writes alone count as actions. All twelve actual Insights WASM groups passed after correcting a local-QA-intercepted fixture prompt and draining deferred test callbacks; native history tests passed.
+
 ## 2026-10-21 - Bound financial calendar preferences
 
 Replaced the global preference getter with the fallible bound-store reader for week start, pay-cycle anchor and budget rollover. Actual list_budgets tests passed for different active workspaces, fresh preference edits and corrupted stored preferences; failures remain explicit.

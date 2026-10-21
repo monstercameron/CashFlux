@@ -5,6 +5,7 @@
 package screens
 
 import (
+	"errors"
 	"io"
 	"strings"
 	"testing"
@@ -116,7 +117,7 @@ func setupInsightsLifecycle(t *testing.T, conversations ...domain.Conversation) 
 	t.Cleanup(func() { doc.Set("getElementById", previousGet); get.Release() })
 	// Insights schedules deferred rail and scroll callbacks. Let them drain after
 	// the fixture unmounts but before the minimal document globals are restored.
-	t.Cleanup(func() { time.Sleep(350 * time.Millisecond) })
+	t.Cleanup(func() { time.Sleep(650 * time.Millisecond) })
 
 	f := render.New(t)
 	f.Render(ui.CreateElement(Insights))
@@ -136,7 +137,7 @@ func submitInsightsLifecycleTurn(t *testing.T, f *render.Fixture, composer js.Va
 		time.Sleep(time.Millisecond)
 	}
 	if len(*callbacks) == start {
-		t.Fatal("mock provider was not called")
+		t.Fatalf("mock provider was not called; rendered UI: %s", f.Text())
 	}
 	return len(*callbacks) - 1
 }
@@ -405,6 +406,92 @@ func TestInsightsRefreshesToolHandlersAfterApprovedWriteInSameResponse(t *testin
 	}
 	if got := uistate.AgentReceiptActionCount(conversationID); got != 1 {
 		t.Fatalf("approved category action count = %d, want 1", got)
+	}
+}
+
+func TestInsightsRefreshesAfterUnverifiedWriteWithoutCountingIt(t *testing.T) {
+	app, f, composer, callbacks := setupInsightsLifecycle(t)
+	oldCapture := auditview.CaptureAssistantReceiptChecked
+	auditview.CaptureAssistantReceiptChecked = func() (string, bool, error) {
+		return "", false, errors.New("mock receipt unavailable")
+	}
+	t.Cleanup(func() { auditview.CaptureAssistantReceiptChecked = oldCapture })
+	request := submitInsightsLifecycleTurn(t, f, composer, "create an account, then run the follow-up read tool", callbacks)
+	conversationID := waitForInsightsConversation(t, f, app).ID
+	(*callbacks)[request].result(ai.Message{Role: ai.RoleAssistant, ToolCalls: []ai.ToolCall{
+		{ID: "uncertain-create", Type: "function", Function: ai.FunctionCall{Name: "add_account", Arguments: `{"name":"Unverified Fresh Account","class":"asset"}`}},
+		{ID: "read-after-uncertain", Type: "function", Function: ai.FunctionCall{Name: "account_balances", Arguments: `{}`}},
+	}}, ai.Usage{})
+	waitForInsightsApproval(t, f)
+	byTestID(f, "button", "assistant-approve").Click()
+	waitForInsightsCallbackCount(t, f, callbacks, 2)
+	foundFreshAccount := false
+	for _, message := range (*callbacks)[1].messages {
+		if message.Role == ai.RoleTool && message.Name == "account_balances" && strings.Contains(message.Content, "Unverified Fresh Account") {
+			foundFreshAccount = true
+		}
+	}
+	if !foundFreshAccount {
+		t.Fatalf("second tool result did not see the possibly applied account write: %#v", (*callbacks)[1].messages)
+	}
+	if got := uistate.AgentReceiptActionCount(conversationID); got != 0 {
+		t.Fatalf("unverified write was counted as %d verified actions, want 0", got)
+	}
+	foundAccount := false
+	for _, account := range app.Accounts() {
+		if account.Name == "Unverified Fresh Account" {
+			foundAccount = true
+		}
+	}
+	if !foundAccount {
+		t.Fatal("the tool did not execute despite the receipt capture failure")
+	}
+}
+
+func TestInsightsCancelsPendingProviderWhenDatasetIsReplaced(t *testing.T) {
+	app, f, composer, callbacks := setupInsightsLifecycle(t)
+	request := submitInsightsLifecycleTurn(t, f, composer, "wait for a response", callbacks)
+	conversationID := waitForInsightsConversation(t, f, app).ID
+	replacement, err := appstate.New(io.Discard, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldDefault := appstate.Default
+	appstate.Default = replacement
+	t.Cleanup(func() {
+		appstate.Default = oldDefault
+		_ = replacement.Store().Close()
+	})
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) && (*callbacks)[request].cancelCount == 0 {
+		f.Stabilize()
+		time.Sleep(time.Millisecond)
+	}
+	if got := (*callbacks)[request].cancelCount; got != 1 {
+		t.Fatalf("pending provider cancel calls after dataset replacement = %d, want 1", got)
+	}
+	for time.Now().Before(deadline) && strings.Contains(f.Text(), uistate.T("insights.thinking")) {
+		f.Stabilize()
+		time.Sleep(time.Millisecond)
+	}
+	if strings.Contains(f.Text(), uistate.T("insights.thinking")) {
+		t.Fatal("loading state remained after dataset replacement canceled the request")
+	}
+	// Cancellation suppresses UI delivery, but a late provider response still
+	// represents real spend and belongs to the original captured app/chat.
+	(*callbacks)[request].result(ai.Message{Role: ai.RoleAssistant, Content: "late response must stay hidden"}, ai.Usage{PromptTokens: 4, CompletionTokens: 3, TotalTokens: 7})
+	(*callbacks)[request].result(ai.Message{Role: ai.RoleAssistant, Content: "duplicate response must stay hidden"}, ai.Usage{PromptTokens: 40, CompletionTokens: 30, TotalTokens: 70})
+	if got := uistate.AgentTokensUsed(conversationID); got != 7 {
+		t.Fatalf("late provider usage recorded against original conversation = %d, want 7 exactly once", got)
+	}
+	if got := app.AISpendThisMonth().Tokens; got != 7 {
+		t.Fatalf("late provider usage recorded against original app = %d, want 7", got)
+	}
+	if got := replacement.AISpendThisMonth().Tokens; got != 0 {
+		t.Fatalf("late provider usage was retargeted to replacement app: %d tokens", got)
+	}
+	if strings.Contains(f.Text(), "late response") || strings.Contains(f.Text(), "duplicate response") {
+		t.Fatal("late provider result changed the canceled conversation UI")
 	}
 }
 

@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Assistant sessions now bound request history, cancel on dataset replacement, and refresh reads after uncertain writes.
 - Assistant financial calculations now read calendar and rollover preferences from their own workspace.
 - Added financial-plan questionnaire discovery and a native assessment tool, bringing full-detail access to 77 collections and 59 tools.
 - Incomplete or failed Responses replies no longer expose partial function calls for dispatch.
