@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Local development notes record the WebSocket write repair needed to keep the 8080 reload server running.
 - Account history series avoid repeated full transaction copies and scans of unrelated accounts.
 - Shared layout and widget-settings hooks avoid repeated storage reads and JSON decoding on warm renders.
 - The development service watcher skips generated tool trees before traversal and avoids an unchanged duplicate startup build.

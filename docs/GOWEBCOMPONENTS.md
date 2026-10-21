@@ -122,12 +122,24 @@ that had moved to an incompatible framework version. Keep the runner's source
 checkout available; rebuilding from an unrelated moving checkout can reintroduce
 that failure. These local tool repairs do not change the app's versioned module.
 
-That ignored tool installation also carries three compatibility fixes: it forwards
+That ignored tool installation also carries local compatibility fixes: it forwards
 the boolean flag as `-hot=false` rather than separate arguments, classifies that
 mode as a full reload for every rebuild, and serves the SPA entry for missing
 extensionless GET/HEAD routes such as `/transactions`. Missing asset paths still
 return 404. Replacing the ignored runner/source checkout requires preserving or
 upstreaming those fixes; they are not part of the downloaded framework module.
+
+The same local tool source serializes WebSocket data-frame writes across status
+delivery and reload broadcasts. Concurrent broadcasts previously terminated the
+server with `concurrent write to websocket connection`. A concurrent large-frame
+broadcast regression passed repeated native runs; the race detector was unavailable
+because this toolchain requires cgo for it. This repair is in the ignored source
+checkout, so replacing that checkout also requires preserving the write lock.
+
+The tracked `scripts/devwatch.ps1` helper prunes generated/tool directories before
+walking service sources, skips reparse-point directories and observes module-file
+timestamps. Run `scripts/devwatch.Tests.ps1` for the deterministic fixture;
+`-Probe` adds an optional local wall-time comparison with the previous scanner.
 
 Verify `/__gwc/status` reports `lastBuild.success: true` and
 `lastBuild.reloadType: "full"`, and verify `/transactions` returns 200. A source
