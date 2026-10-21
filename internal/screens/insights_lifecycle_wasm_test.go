@@ -35,6 +35,13 @@ type insightsLifecycleCallbacks struct {
 	tools       []ai.Tool
 }
 
+type insightsTitleCallback struct {
+	messages    []ai.Message
+	result      func(string, ai.Usage)
+	err         func(string)
+	cancelCount int
+}
+
 func setupInsightsLifecycle(t *testing.T, conversations ...domain.Conversation) (*appstate.App, *render.Fixture, js.Value, *[]insightsLifecycleCallbacks) {
 	t.Helper()
 	// The Node WASM runner has no browser globals. Install the package's minimal
@@ -78,6 +85,13 @@ func setupInsightsLifecycle(t *testing.T, conversations ...domain.Conversation) 
 
 	transport := assistantChatTransport
 	t.Cleanup(func() { assistantChatTransport = transport })
+	titleTransport := assistantTitleTransport
+	assistantTitleTransport = func(
+		_ bool, _, _, _, _, _ string, _ []ai.Message, _ func(string, ai.Usage), _ func(string),
+	) func() {
+		return func() {}
+	}
+	t.Cleanup(func() { assistantTitleTransport = titleTransport })
 	callbacks := []insightsLifecycleCallbacks{}
 	assistantChatTransport = func(
 		_ bool, _, _, _, _, model string, messages []ai.Message, _ float64, _ string, tools []ai.Tool,
@@ -140,6 +154,52 @@ func submitInsightsLifecycleTurn(t *testing.T, f *render.Fixture, composer js.Va
 		t.Fatalf("mock provider was not called; rendered UI: %s", f.Text())
 	}
 	return len(*callbacks) - 1
+}
+
+func installInsightsTitleTransport(t *testing.T) *[]insightsTitleCallback {
+	t.Helper()
+	old := assistantTitleTransport
+	calls := []insightsTitleCallback{}
+	assistantTitleTransport = func(
+		_ bool, _, _, _, _, _ string, messages []ai.Message, result func(string, ai.Usage), onErr func(string),
+	) func() {
+		calls = append(calls, insightsTitleCallback{messages: append([]ai.Message(nil), messages...), result: result, err: onErr})
+		idx := len(calls) - 1
+		return func() { calls[idx].cancelCount++ }
+	}
+	t.Cleanup(func() { assistantTitleTransport = old })
+	return &calls
+}
+
+func submitTwoInsightsTurnsForTitle(t *testing.T, app *appstate.App, f *render.Fixture, composer js.Value, callbacks *[]insightsLifecycleCallbacks, titleCalls *[]insightsTitleCallback) string {
+	t.Helper()
+	first := submitInsightsLifecycleTurn(t, f, composer, "first conversational prompt", callbacks)
+	(*callbacks)[first].result(ai.Message{Role: ai.RoleAssistant, Content: "First response."}, ai.Usage{})
+	waitForInsightsIdle(t, f)
+	second := submitInsightsLifecycleTurn(t, f, composer, "second conversational prompt", callbacks)
+	(*callbacks)[second].result(ai.Message{Role: ai.RoleAssistant, Content: "Second response."}, ai.Usage{})
+	deadline := time.Now().Add(2 * time.Second)
+	for len(*titleCalls) == 0 && time.Now().Before(deadline) {
+		f.Stabilize()
+		time.Sleep(time.Millisecond)
+	}
+	if len(*titleCalls) == 0 {
+		t.Fatalf("automatic title request was not dispatched; rendered UI: %s", f.Text())
+	}
+	return waitForInsightsConversation(t, f, app).ID
+}
+
+func waitForInsightsIdle(t *testing.T, f *render.Fixture) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		f.Stabilize()
+		if !strings.Contains(f.Text(), uistate.T("insights.thinking")) {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatalf("assistant request did not become idle: %s", f.Text())
 }
 
 func waitForInsightsCallbackCount(t *testing.T, f *render.Fixture, callbacks *[]insightsLifecycleCallbacks, count int) {
@@ -493,6 +553,83 @@ func TestInsightsCancelsPendingProviderWhenDatasetIsReplaced(t *testing.T) {
 	if strings.Contains(f.Text(), "late response") || strings.Contains(f.Text(), "duplicate response") {
 		t.Fatal("late provider result changed the canceled conversation UI")
 	}
+}
+
+func TestInsightsTitleRequestCancelsOnNewChatAndAccountsLateUsageOnce(t *testing.T) {
+	app, f, composer, callbacks := setupInsightsLifecycle(t)
+	titleCalls := installInsightsTitleTransport(t)
+	conversationID := submitTwoInsightsTurnsForTitle(t, app, f, composer, callbacks, titleCalls)
+	before := app.Conversations()[0]
+	byTestID(f, "button", "assistant-new-chat").Click()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) && (*titleCalls)[0].cancelCount == 0 {
+		f.Stabilize()
+		time.Sleep(time.Millisecond)
+	}
+	if got := (*titleCalls)[0].cancelCount; got != 1 {
+		t.Fatalf("title request cancel count after New chat = %d, want 1", got)
+	}
+	(*titleCalls)[0].result("Late Model Title", ai.Usage{PromptTokens: 7, CompletionTokens: 4, TotalTokens: 11})
+	(*titleCalls)[0].result("Duplicate Title", ai.Usage{PromptTokens: 70, CompletionTokens: 40, TotalTokens: 110})
+	if got := uistate.AgentTokensUsed(conversationID); got != 11 {
+		t.Fatalf("late title usage credited to original chat = %d tokens, want 11 once", got)
+	}
+	if got := app.AISpendThisMonth().Tokens; got != 11 {
+		t.Fatalf("late title household usage = %d tokens, want 11", got)
+	}
+	var after domain.Conversation
+	for _, saved := range app.Conversations() {
+		if saved.ID == conversationID {
+			after = saved
+			break
+		}
+	}
+	if after.ID == "" {
+		t.Fatal("original conversation disappeared after New chat")
+	}
+	if after.Title != before.Title || after.Named != before.Named {
+		t.Fatalf("late title callback changed original title pair from (%q,%t) to (%q,%t)", before.Title, before.Named, after.Title, after.Named)
+	}
+	if len(before.Messages) == 0 || len(after.Messages) != len(before.Messages) {
+		t.Fatalf("New chat changed saved message count from %d to %d", len(before.Messages), len(after.Messages))
+	}
+	for i := range before.Messages {
+		if after.Messages[i].ID != before.Messages[i].ID || after.Messages[i].Role != before.Messages[i].Role || after.Messages[i].Text != before.Messages[i].Text {
+			t.Fatalf("New chat overwrote saved message %d: before=%#v after=%#v", i, before.Messages[i], after.Messages[i])
+		}
+	}
+	if strings.Contains(f.Text(), "Late Model Title") || strings.Contains(f.Text(), "Duplicate Title") {
+		t.Fatal("stale title callback changed the current chat UI")
+	}
+}
+
+func TestInsightsTitleRequestDoesNotOverwriteManualRename(t *testing.T) {
+	app, f, composer, callbacks := setupInsightsLifecycle(t)
+	titleCalls := installInsightsTitleTransport(t)
+	conversationID := submitTwoInsightsTurnsForTitle(t, app, f, composer, callbacks, titleCalls)
+	conversations := app.Conversations()
+	if len(conversations) == 0 || conversations[0].ID != conversationID {
+		t.Fatalf("expected conversation %q to be persisted before rename: %#v", conversationID, conversations)
+	}
+	conversations[0].Title = "My Manual Chat Name"
+	conversations[0].Named = true
+	if err := app.PutConversation(conversations[0]); err != nil {
+		t.Fatal(err)
+	}
+	(*titleCalls)[0].result("Model Generated Name", ai.Usage{})
+	for i := 0; i < 10; i++ {
+		f.Stabilize()
+		time.Sleep(time.Millisecond)
+	}
+	for _, conversation := range app.Conversations() {
+		if conversation.ID == conversationID {
+			if conversation.Title != "My Manual Chat Name" || !conversation.Named {
+				t.Fatalf("automatic title overwrote manual name: %#v", conversation)
+			}
+			return
+		}
+	}
+	t.Fatalf("renamed conversation %q disappeared", conversationID)
 }
 
 func waitForInsightsApproval(t *testing.T, f *render.Fixture) *render.QueryNode {

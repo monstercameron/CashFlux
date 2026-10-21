@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Assistant title requests cancel safely, account usage, respect limits and preserve saved chats during switching.
 - On-device answers distinguish unavailable calculations from genuine zero and use current bound financial inputs.
 - Retain raw native model benchmark samples and environment metadata before further app refactoring.
 - Document the all-route componentization contract and measured performance criteria.

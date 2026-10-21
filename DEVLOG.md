@@ -1,3 +1,7 @@
+## 2026-10-21 - Protect titles and history across conversation transitions
+
+Bound and injected the title transport; it skips aggregate-only privacy and exhausted budgets, meters returned usage once to the original live store, and rejects stale or manually renamed title writes. A real mounted regression exposed synchronous intermediate persistence during New chat, so a transition guard now protects clearing/switching states and the final selected conversation is persisted explicitly. Final focused WASM gate passed 23 tests including preserved full message IDs, roles and text, late usage, manual rename, approvals and session cancellation.
+
 ## 2026-10-21 - Make local assistant answers checked and current
 
 Added optional error-aware native localqa sources and checked net-worth/goal arithmetic. The App adapter reads fresh fallible settings and datasets, uses canonical refund-aware category and budget models, checked FX and reductions, and the app clock. Unsupported category date ranges fall through to provider tools. Native Insights tests and vet pass; all five real-App cases pass in the final 23-test assistant WASM gate, alongside the 353-suite native gate.

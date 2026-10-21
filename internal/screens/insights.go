@@ -55,6 +55,11 @@ type assistantChatTransportFunc func(
 	onDelta func(string), onResult func(ai.Message, ai.Usage), onError func(string),
 ) func()
 
+type assistantTitleTransportFunc func(
+	useBackend bool, serverURL, serverToken, key, baseURL, model string,
+	messages []ai.Message, onResult func(string, ai.Usage), onError func(string),
+) func()
+
 const (
 	assistantRelayMaxMessages = 64
 	assistantRelayMaxBytes    = 256 * 1024
@@ -71,6 +76,16 @@ var assistantChatTransport assistantChatTransportFunc = func(
 		return ai.SendProxyChatToolsStreaming(serverURL, serverToken, model, messages, temperature, effort, tools, onDelta, onResult, onError)
 	}
 	return ai.SendResponsesChatToolsStreaming(key, baseURL, model, messages, temperature, effort, tools, onDelta, onResult, onError)
+}
+
+var assistantTitleTransport assistantTitleTransportFunc = func(
+	useBackend bool, serverURL, serverToken, key, baseURL, model string,
+	messages []ai.Message, onResult func(string, ai.Usage), onError func(string),
+) func() {
+	if useBackend {
+		return ai.SendProxyChat(serverURL, serverToken, model, messages, 0, onResult, onError)
+	}
+	return ai.SendChat(key, baseURL, model, messages, 0, onResult, onError)
 }
 
 // Insights is AI analysis (OpenAI, client-side, bring-your-own-key): an
@@ -209,6 +224,7 @@ func Insights() ui.Node {
 	// The Insights screen is a chat with the CashFlux assistant (C82 wiring): a
 	// conversation thread the user types into, answered from their own figures.
 	turns := ui.UseState([]chatTurn{})
+	persistTransition := ui.UseRef(false)
 	// The composer is deliberately NOT bound to a state that changes per keystroke.
 	//
 	// `value` is a special property the reconciler always writes, and it diffs the
@@ -982,8 +998,7 @@ func Insights() ui.Node {
 
 	// persist upserts the current thread as a conversation, creating one (and a fresh
 	// id + created stamp) on the first message. Title comes from the first user line.
-	persist := func(ts []chatTurn) {
-		cid := convID.Get()
+	persistConversation := func(cid string, created time.Time, ts []chatTurn) {
 		if cid == "" {
 			if len(ts) == 0 {
 				return
@@ -991,7 +1006,6 @@ func Insights() ui.Node {
 			cid = id.New()
 			convID.Set(cid)
 		}
-		created := convCreated.Get()
 		if created.IsZero() {
 			created = time.Now()
 			convCreated.Set(created)
@@ -1021,6 +1035,9 @@ func Insights() ui.Node {
 		})
 		bump()
 	}
+	persist := func(ts []chatTurn) {
+		persistConversation(convID.Get(), convCreated.Get(), ts)
+	}
 
 	// rateTurn records or clears a verdict on one answer, then persists it with the
 	// conversation so the mark survives a reload — a rating that vanishes on
@@ -1045,7 +1062,6 @@ func Insights() ui.Node {
 			if c.ID != cid {
 				continue
 			}
-			cancelCurrentSession()
 			ts := make([]chatTurn, len(c.Messages))
 			for i, m := range c.Messages {
 				ts[i] = chatTurn{ID: m.ID, Role: m.Role, Text: m.Text,
@@ -1053,40 +1069,49 @@ func Insights() ui.Node {
 					Sources:  m.Sources,
 					Feedback: chatpolish.Feedback(m.Feedback)}
 			}
-			turns.Set(ts)
-			convID.Set(cid)
-			// C390: resume this conversation on the model it was using, when it
-			// chose one. A thread reopened on a different model gives different
-			// answers to the same question, which reads as the assistant changing
-			// its mind rather than as the setting changing underneath it.
-			// The saved values are restored into session state first, so the
-			// pickers and the send-time budget check read the same thing whether
-			// the conversation was opened this session or last week.
-			if c.Model != "" {
-				uistate.SetAgentModel(cid, c.Model)
-			}
-			if c.TokenBudget > 0 {
-				uistate.SetAgentBudget(cid, c.TokenBudget)
-			}
-			if m := uistate.AgentModel(cid); m != "" {
-				modelSel.Set(m)
-			}
-			convCreated.Set(c.CreatedAt)
-			setComposer("")
-			errMsg.Set("")
+			persistTransition.Set(true)
+			func() {
+				defer persistTransition.Set(false)
+				cancelCurrentSession()
+				turns.Set(ts)
+				convID.Set(cid)
+				// C390: resume this conversation on the model it was using, when it
+				// chose one. A thread reopened on a different model gives different
+				// answers to the same question, which reads as the assistant changing
+				// its mind rather than as the setting changing underneath it.
+				if c.Model != "" {
+					uistate.SetAgentModel(cid, c.Model)
+				}
+				if c.TokenBudget > 0 {
+					uistate.SetAgentBudget(cid, c.TokenBudget)
+				}
+				if m := uistate.AgentModel(cid); m != "" {
+					modelSel.Set(m)
+				}
+				convCreated.Set(c.CreatedAt)
+				setComposer("")
+				errMsg.Set("")
+			}()
+			// Persist explicitly after the transition gate opens so a synchronous
+			// interim render cannot consume the final persist effect.
+			persistConversation(cid, c.CreatedAt, ts)
 			return
 		}
 	}
 
 	// newChat clears the thread for a fresh (unsaved) conversation.
 	newChat := func() {
-		cancelCurrentSession()
-		turns.Set(nil)
-		convID.Set("")
-		blankBudget.Set(0)
-		convCreated.Set(time.Time{})
-		setComposer("")
-		errMsg.Set("")
+		persistTransition.Set(true)
+		func() {
+			defer persistTransition.Set(false)
+			cancelCurrentSession()
+			turns.Set(nil)
+			convID.Set("")
+			blankBudget.Set(0)
+			convCreated.Set(time.Time{})
+			setComposer("")
+			errMsg.Set("")
+		}()
 	}
 
 	// renameConv gives a chat a name of the user's choosing. An empty name is not
@@ -1146,6 +1171,9 @@ func Insights() ui.Node {
 		persistSig += "|" + cur[n-1].ID
 	}
 	ui.UseEffect(func() func() {
+		if persistTransition.Get() {
+			return nil
+		}
 		if len(turns.Get()) > 0 || convID.Get() != "" {
 			persist(turns.Get())
 		}
@@ -1325,17 +1353,25 @@ func Insights() ui.Node {
 
 	// Once a chat has a few exchanges (>=4 messages), generate a short AI title for it
 	// (once) and update the switcher tab. Skips conversations already AI-named.
-	namingSig := convID.Get() + "|" + strconv.Itoa(len(turns.Get()))
+	titleStore := app.Store()
+	namingSig := convID.Get() + "|" + strconv.Itoa(len(turns.Get())) + fmt.Sprintf("|%p|%p|%s", app, titleStore, tier)
 	ui.UseEffect(func() func() {
 		ts := turns.Get()
 		cid := convID.Get()
-		if cid == "" || len(ts) < 4 || (key == "" && !useBackendAI) || namingDone.Get() == cid {
+		if cid == "" || len(ts) < 4 || tier != aicontext.TierFull || (key == "" && !useBackendAI) || namingDone.Get() == cid ||
+			uistate.AgentBudgetExhausted(cid) || (app.AISpendCap() > 0 && app.AISpendThisMonth().CostUSD >= app.AISpendCap()) {
 			return nil
 		}
+		originalTitle := conversationTitle(ts)
+		originalNamed := false
 		for _, c := range app.Conversations() {
-			if c.ID == cid && c.Named {
-				namingDone.Set(cid)
-				return nil
+			if c.ID == cid {
+				originalTitle, originalNamed = c.Title, c.Named
+				if c.Named {
+					namingDone.Set(cid)
+					return nil
+				}
+				break
 			}
 		}
 		namingDone.Set(cid) // attempt only once per chat
@@ -1347,13 +1383,43 @@ func Insights() ui.Node {
 			{Role: ai.RoleSystem, Content: "Give a very short, 2-4 word title for this personal-finance chat. Reply with ONLY the title — no quotes, no punctuation, no preamble."},
 			{Role: ai.RoleUser, Content: b.String()},
 		}
-		onName := func(content string, _ ai.Usage) {
+		messages, err := assistantloop.BoundRequestHistory(messages, 1, 1, assistantRelayMaxMessages, assistantRelayMaxBytes, 64<<10)
+		if err != nil {
+			return nil
+		}
+		active := true
+		var usageOnce sync.Once
+		boundStore := titleStore
+		recordUsage := func(usage ai.Usage) {
+			usageOnce.Do(func() {
+				if usage.TotalTokens <= 0 && usage.PromptTokens <= 0 && usage.CompletionTokens <= 0 {
+					return
+				}
+				if app.Store() != boundStore {
+					return
+				}
+				if _, err := boundStore.GetSettings(); err != nil {
+					return
+				}
+				cost, costOK := ai.EstimateCostUSD(model, usage)
+				uistate.AddAgentCost(cid, usage.TotalTokens, cost, costOK)
+				app.RecordAISpend("assistant-title", model, usage)
+			})
+		}
+		onName := func(content string, usage ai.Usage) {
+			recordUsage(usage)
+			if !active || appstate.Default != app || app.Store() != boundStore || convID.Get() != cid || privacyTier.Get() != tier {
+				return
+			}
 			name := cleanChatTitle(content)
 			if name == "" {
 				return
 			}
 			for _, c := range app.Conversations() {
 				if c.ID == cid {
+					if c.Named || c.Title != originalTitle || originalNamed {
+						return
+					}
 					c.Title, c.Named = name, true
 					_ = app.PutConversation(c)
 					bump()
@@ -1362,12 +1428,13 @@ func Insights() ui.Node {
 			}
 		}
 		noErr := func(string) {}
-		if useBackendAI {
-			ai.SendProxyChat(pr.ServerURL, uistate.EffectiveServerToken(pr.ServerToken), model, messages, 0, onName, noErr)
-		} else {
-			ai.SendChat(key, aiBaseURL, model, messages, 0, onName, noErr)
+		cancel := assistantTitleTransport(useBackendAI, pr.ServerURL, uistate.EffectiveServerToken(pr.ServerToken), key, aiBaseURL, model, messages, onName, noErr)
+		return func() {
+			active = false
+			if cancel != nil {
+				cancel()
+			}
 		}
-		return nil
 	}, namingSig)
 
 	onSubmit := ui.UseEvent(Prevent(func() { submitChat() }))
