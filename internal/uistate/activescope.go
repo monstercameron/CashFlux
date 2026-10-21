@@ -24,8 +24,10 @@ package uistate
 import (
 	"encoding/json"
 
+	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/scope"
 	"github.com/monstercameron/GoWebComponents/v5/state"
+	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
 
 const (
@@ -38,7 +40,16 @@ const (
 // which is the default household view. The atom is persisted so the chosen
 // scope survives page reloads.
 func UseActiveScope() state.Atom[scope.ReportScope] {
-	a := state.UseAtom(activeScopeAtomID, loadActiveScope())
+	return useActiveScopeWithLoader(loadActiveScope)
+}
+
+// Only a newly mounted hook needs a persisted seed. UseAtom ignores defaults
+// after the fixed shared atom exists; warm renders must not repeat SQLite reads
+// or legacy migration. App identity handles a newly available store, while the
+// supported workspace-switch boundary creates a fresh runtime and atom registry.
+func useActiveScopeWithLoader(load func() scope.ReportScope) state.Atom[scope.ReportScope] {
+	initial := ui.UseMemo(load, appstate.Default)
+	a := state.UseAtom(activeScopeAtomID, initial)
 	capturedActiveScope = a
 	activeScopeCaptured = true
 	return a

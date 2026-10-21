@@ -1,3 +1,7 @@
+## 2026-10-20 - Load the report scope once per mounted reader
+
+UseActiveScope memoizes its mounted seed by app identity before reading the existing fixed atom and capturing its setter. The original scope loader, legacy active-member migration, persistence and outside-render setter remain unchanged. Three new WASM tests passed, covering real-loader counts, live and persisted updates, late/remounted readers, migration/deletion and invalid/default cases, pre-capture no-op and fresh-runtime workspace changes. Four existing Dashboard/Accounts host regressions also passed under Go 1.26.9, including institution ambiguity, scope availability/disclosure and compact/detail lifecycle.
+
 ## 2026-10-20 - Remove the obsolete budget selector
 
 Confirmed useBudgetHealth had no callers anywhere in internal Go source. Removed the dead private helper and imports; it retained obsolete parameters and a second budgeting path beside the canonical native view model. Corrected selector comments to acknowledge that persisted UI settings also advance the store revision. The WASM screen package compiled successfully after removal. No new tests or runtime behavior changes were needed for this dead-code cleanup.
