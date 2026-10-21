@@ -35139,3 +35139,7 @@ budget, and I would rather be consistent than locally optimal. And I added autof
 textarea, measured it, found it does nothing — the attribute is inert for elements inserted after
 load, and the sibling modals that already use it do not focus either — so I reverted it rather than
 ship a prop that lies, and filed it as C615.
+
+## 2026-10-21 — Regress hosted sign-in with an unreadable local checkpoint
+
+The Chrome screenshots showed an unreadable local copy and incomplete account sign-in. The existing hosted two-browser test exercised normal encrypted recovery, while the quarantine test exercised an unreadable checkpoint separately. A new isolated browser test combines hosted sign-in with a deliberately corrupt checkpoint. It seeds IndexedDB before app startup, uses a disposable account on the local test server, confirms the financial shell stays hidden before sign-in and at the empty-account recovery choice, and verifies the exact corrupt bytes survive both states. This covers the preservation path without production credentials or data. It does not prove the cause of the original Chrome invalid-token state; server-side revocation and actual Chrome storage remain separate diagnostics.
