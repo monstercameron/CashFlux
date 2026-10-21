@@ -593,7 +593,7 @@ func agToolsLedgerEdit(app *appstate.App, base string, rates currency.Rates) []c
 			spec: ai.FunctionTool("find_transactions",
 				"Search the ledger and get matching transactions WITH THEIR IDS, so a specific one can then be edited with update_transaction. Filter by text, category, account, person, tag, kind, amount range and window. Unlike the report sections this reaches rows the reports exclude, which are often the ones that are wrong.",
 				json.RawMessage(`{"type":"object","properties":{"contains":{"type":"string","description":"text found in the payee or description"},"category":{"type":"string"},"account":{"type":"string"},"member":{"type":"string","description":"household member name"},"tag":{"type":"string"},"kind":{"type":"string","enum":["expense","income","transfer","any"]},"uncategorized":{"type":"boolean","description":"only transactions with no category"},"min_amount":{"type":"number","description":"absolute amount, major units"},"max_amount":{"type":"number","description":"absolute amount, major units"},`+agPeriodEnum+`,"sort"
- "slices":{"type":"string","enum":["newest","oldest","largest"]},"limit":{"type":"integer","description":"default 25, max 100"}}}`)),
+ :{"type":"string","enum":["newest","oldest","largest"]},"limit":{"type":"integer","description":"default 25, max 100"}}}`)),
 			run: func(raw json.RawMessage) string {
 				var f agTxnFilter
 				_ = json.Unmarshal(raw, &f)

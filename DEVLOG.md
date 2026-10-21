@@ -1,3 +1,7 @@
+## 2026-10-21 - Valid ledger search tool schema
+
+The complete enabled-tool catalog regression check caught a malformed find_transactions schema. Restored its sort property with newest, oldest and largest choices; the complete catalog and list integration gate now passes all eight groups.
+
 ## 2026-10-21 - Bounded complete assistant lists
 
 Replaced six captured list handlers with the shared typed reader, explicit ordering and totals, stable snapshots, exact IDs and recorded currency units. Unknown filters and read failures fail explicitly. Duplicate groups preserve complete membership or return an exact recovery query. All seven list WASM groups and the tool-catalog gate passed.
