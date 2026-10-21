@@ -20,6 +20,30 @@ import (
 	"time"
 )
 
+func TestAPIResponsesAreNotHTTPCacheable(t *testing.T) {
+	h := securityHeadersMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	for _, tc := range []struct {
+		path string
+		want string
+	}{
+		{path: "/v1/account/export", want: "private, no-store"},
+		{path: "/v1/me", want: "private, no-store"},
+		{path: "/v1/version", want: "private, no-store"},
+		{path: "/grpc", want: "private, no-store"},
+		{path: "/legal/privacy", want: ""},
+	} {
+		t.Run(tc.path, func(t *testing.T) {
+			rr := httptest.NewRecorder()
+			h.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, tc.path, nil))
+			if got := rr.Header().Get("Cache-Control"); got != tc.want {
+				t.Fatalf("Cache-Control = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestConfigValidate(t *testing.T) {
 	valid := Config{Addr: ":0", DataDir: t.TempDir(), AuthMode: "token"}
 	if err := valid.Validate(); err != nil {
@@ -628,6 +652,9 @@ func TestAccountExportAndDeleteEndpoints(t *testing.T) {
 	h.ServeHTTP(rr, req)
 	if rr.Code != http.StatusOK {
 		t.Fatalf("export status = %d body %q", rr.Code, rr.Body.String())
+	}
+	if got := rr.Header().Get("Cache-Control"); got != "private, no-store" {
+		t.Fatalf("account export Cache-Control = %q", got)
 	}
 	var export AccountExport
 	if err := json.Unmarshal(rr.Body.Bytes(), &export); err != nil {
