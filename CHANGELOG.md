@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Unmount each transaction performance fixture before restoring shared state.
 - Move custom-field, deductible and investment summary calculations into native prepared models with truthful unavailable states.
 - Move Goals Compare pooled monthly money into native checked preparation and reuse goal stats across its sections.
 - Move Dashboard trend movement, safe magnitudes and live-inclusive range into tested native preparation.

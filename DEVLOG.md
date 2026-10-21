@@ -1,3 +1,7 @@
+## 2026-10-21 - Unmount transaction performance fixtures
+
+The full screens baseline exposed retained mounted fixtures in the three-iteration write profile. Teardown now unmounts, stabilizes, and cleans the fixture even after failure, and restores the performance observer and app globals. The existing derivation-count assertions remain unchanged. Focused Go 1.26.9/v5 baseline: TestTCS2WarmRouteAndWriteProfile3300 passes (1 test, 10.1s).
+
 ## 2026-10-21 - Prepare checked Reports totals and presentation facts natively
 
 Native reports and reportview suites pass for checked category/grand totals, safe magnitudes, wide-product ratios, owned result rows, source order, bar truncation and investment return rounding. Custom-field and deductible native services now return arithmetic errors instead of wrapped sums. Prepared display slices are preallocated. Root review caught a rounding mismatch: total return now preserves half-even display ties with integer preparation and exact decimal formatting, covered by positive and negative host examples. Two final WASM tests pass, including three unavailable sections and four valid total-return tie cases; the broader corrected boundary batch also passed eleven tests. No browser Reports latency improvement is claimed; its measured regression remains open.
