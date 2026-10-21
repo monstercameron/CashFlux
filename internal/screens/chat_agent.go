@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"math"
 	"net/url"
-	"sort"
 	"strings"
 	"syscall/js"
 	"time"
@@ -323,148 +322,7 @@ func categoryNames(cats []domain.Category) string {
 // real figures instead of guessing. All computation is local; only the short tool
 // results (totals, counts) go back to the model.
 func buildChatTools(app *appstate.App, base string, rates currency.Rates, tier aicontext.ConversationTier, currentScope ...func() scope.ReportScope) []chatTool {
-	txns := app.Transactions()
-	accounts := app.Accounts()
-	cats := app.Categories()
-	catByID := make(map[string]string, len(cats))
-	for _, c := range cats {
-		catByID[c.ID] = c.Name
-	}
-	accNameByID := make(map[string]string, len(accounts))
-	for _, ac := range accounts {
-		accNameByID[ac.ID] = ac.Name
-	}
-	accLabel := func(id string) string {
-		if n := accNameByID[id]; n != "" {
-			return n
-		}
-		return "an account"
-	}
-	now := time.Now()
-	mStart, mEnd := dateutil.MonthRange(now)
-	lmStart, lmEnd := dateutil.MonthRange(dateutil.AddMonths(now, -1))
-	fmtM := func(minor int64) string { return fmtMoney(money.New(minor, base)) }
-
-	// resolveCategory maps a user/model-supplied name to a category ID: exact
-	// (case-insensitive) first, then a substring match. Returns ok=false if none.
-	resolveCategory := func(name string) (domain.Category, bool) {
-		q := strings.ToLower(strings.TrimSpace(name))
-		for _, c := range cats {
-			if strings.ToLower(c.Name) == q {
-				return c, true
-			}
-		}
-		for _, c := range cats {
-			if q != "" && strings.Contains(strings.ToLower(c.Name), q) {
-				return c, true
-			}
-		}
-		return domain.Category{}, false
-	}
-	catNames := func() string {
-		ns := make([]string, 0, len(cats))
-		for _, c := range cats {
-			ns = append(ns, c.Name)
-		}
-		return strings.Join(ns, ", ")
-	}
-	periodRange := func(p string) (time.Time, time.Time, string) {
-		switch p {
-		case "last_month":
-			return lmStart, lmEnd, "last month"
-		case "all":
-			return time.Time{}, dateutil.AddMonths(now, 1200), "all time"
-		default:
-			return mStart, mEnd, "this month"
-		}
-	}
-
 	tools := []chatTool{
-		{
-			spec: ai.FunctionTool("list_categories", "List the user's spending/income category names. Call this first when unsure which category a question refers to.", json.RawMessage(`{"type":"object","properties":{}}`)),
-			run: func(json.RawMessage) string {
-				if len(cats) == 0 {
-					return "No categories defined."
-				}
-				return "Categories: " + catNames()
-			},
-		},
-		{
-			spec: ai.FunctionTool("list_transactions",
-				"List the user's recent transactions (date, payee, amount, category), optionally filtered by category and period. Capped at 30 rows.",
-				json.RawMessage(`{"type":"object","properties":{"category":{"type":"string"},"period":{"type":"string","enum":["this_month","last_month","all"]},"limit":{"type":"integer"}}}`)),
-			run: func(raw json.RawMessage) string {
-				var a struct {
-					Category string `json:"category"`
-					Period   string `json:"period"`
-					Limit    int    `json:"limit"`
-				}
-				_ = json.Unmarshal(raw, &a)
-				start, end, _ := periodRange(a.Period)
-				catID, matchCat := "", false
-				if a.Category != "" {
-					if c, ok := resolveCategory(a.Category); ok {
-						catID, matchCat = c.ID, true
-					}
-				}
-				limit := a.Limit
-				if limit <= 0 || limit > 30 {
-					limit = 15
-				}
-				rows := make([]domain.Transaction, 0, len(txns))
-				for _, t := range txns {
-					if matchCat && t.CategoryID != catID {
-						continue
-					}
-					if !start.IsZero() && !dateutil.InRange(t.Date, start, end) {
-						continue
-					}
-					rows = append(rows, t)
-				}
-				sort.Slice(rows, func(i, j int) bool { return rows[i].Date.After(rows[j].Date) })
-				if len(rows) > limit {
-					rows = rows[:limit]
-				}
-				if len(rows) == 0 {
-					return "No matching transactions."
-				}
-				catName := make(map[string]string, len(cats))
-				for _, c := range cats {
-					catName[c.ID] = c.Name
-				}
-				var b strings.Builder
-				for _, t := range rows {
-					label := strings.TrimSpace(t.Payee)
-					if label == "" {
-						label = strings.TrimSpace(t.Desc)
-					}
-					cn := catName[t.CategoryID]
-					if cn == "" {
-						cn = "uncategorized"
-					}
-					fmt.Fprintf(&b, "%s  %s  %s  [%s]\n", t.Date.Format("Jan 2"), label, fmtMoney(t.Amount), cn)
-				}
-				return strings.TrimRight(b.String(), "\n")
-			},
-		},
-		{
-			spec: ai.FunctionTool("list_members", "List the household members.", json.RawMessage(`{"type":"object","properties":{}}`)),
-			run: func(json.RawMessage) string {
-				ms := app.Members()
-				if len(ms) == 0 {
-					return "No household members."
-				}
-				ns := make([]string, 0, len(ms))
-				for _, m := range ms {
-					n := m.Name
-					if m.IsDefault {
-						n += " (default)"
-					}
-					ns = append(ns, n)
-				}
-				return "Members: " + strings.Join(ns, ", ")
-			},
-		},
 		{
 			spec: ai.FunctionTool("web_search",
 				"Search the web for current or external facts (tax brackets, rates, prices, definitions). Returns a short summary. The query is sent to a public search engine; do not include the user's private financial details in it.",
@@ -523,91 +381,8 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates, tier a
 				return body
 			},
 		},
-		{
-			spec: ai.FunctionTool("list_tasks", "List the user's to-do tasks (title, status, priority, due date).", json.RawMessage(`{"type":"object","properties":{}}`)),
-			run: func(json.RawMessage) string {
-				ts := app.Tasks()
-				if len(ts) == 0 {
-					return "No tasks."
-				}
-				var b strings.Builder
-				for _, t := range ts {
-					line := fmt.Sprintf("[%s] %s (ID %s, %s priority)", string(t.Status), t.Title, t.ID, string(t.Priority))
-					if !t.Due.IsZero() {
-						line += ", due " + t.Due.Format("Jan 2")
-					}
-					b.WriteString(line + "\n")
-				}
-				return strings.TrimRight(b.String(), "\n")
-			},
-		},
 
 		// --- Write tools (mutates: require the user's approval before running) ---
-		{
-			spec: ai.FunctionTool("list_uncategorized_transactions",
-				"List the user's transactions that have no category yet, so you can propose categories for them. Returns up to `limit` (default 30) with payee, description, and amount.",
-				json.RawMessage(`{"type":"object","properties":{"limit":{"type":"integer"}}}`)),
-			run: func(raw json.RawMessage) string {
-				var a struct {
-					Limit int `json:"limit"`
-				}
-				_ = json.Unmarshal(raw, &a)
-				if a.Limit <= 0 || a.Limit > 60 {
-					a.Limit = 30
-				}
-				var b strings.Builder
-				n := 0
-				for _, t := range txns {
-					if t.IsTransfer() || t.CategoryID != "" {
-						continue
-					}
-					b.WriteString(fmt.Sprintf("- %s | %s\n", strings.TrimSpace(t.Payee+" — "+t.Desc), fmtM(t.Amount.Amount)))
-					if n++; n >= a.Limit {
-						break
-					}
-				}
-				if n == 0 {
-					return "Every transaction already has a category."
-				}
-				return fmt.Sprintf("%d uncategorized transaction(s):\n%s", n, b.String())
-			},
-		},
-		{
-			spec: ai.FunctionTool("find_duplicate_transactions",
-				"Find groups of likely-duplicate transactions — same calendar date, signed amount, and description — the app's CANONICAL duplicate definition (identical to the 'possible duplicate' flags and the Duplicates page). Call this to locate the duplicates behind a flag before merging or deleting them. Optionally filter by a description/payee phrase.",
-				json.RawMessage(`{"type":"object","properties":{"match":{"type":"string","description":"optional description/payee phrase to filter"}}}`)),
-			run: func(raw json.RawMessage) string {
-				var a struct {
-					Match string `json:"match"`
-				}
-				_ = json.Unmarshal(raw, &a)
-				byID := make(map[string]domain.Transaction, len(txns))
-				for _, t := range txns {
-					byID[t.ID] = t
-				}
-				var b strings.Builder
-				n := 0
-				for _, g := range dedupe.FindDuplicates(txns) {
-					if !dupGroupMatches(g, byID, a.Match, 0, false, false, "") {
-						continue
-					}
-					n++
-					label := strings.TrimSpace(g.Description)
-					acct := ""
-					if t, ok := byID[g.IDs[0]]; ok {
-						if label == "" {
-							label = strings.TrimSpace(t.Payee)
-						}
-						acct = accLabel(t.AccountID)
-					}
-					fmt.Fprintf(&b, "- %d× %s  %s  on %s%s\n", len(g.IDs), label, fmtMoney(money.New(absMinor(g.Amount), g.Currency)), g.Date, ifStr(acct != "", "  in "+acct, ""))
-				}
-				if n == 0 {
-					return "No duplicate transactions found."
-				}
-				return fmt.Sprintf("%d duplicate group(s):\n%sTo fix one, call merge_duplicate_transactions with its description phrase, amount, and date.", n, b.String())
-			},
-		},
 	}
 	// AG series — the assistant tool groups built in the ag_*.go / chat_agent_*.go
 	// sidecar files (registered here so those files never touched this one):
@@ -624,6 +399,7 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates, tier a
 	tools = append(tools, agToolsAccountWrites(app)...)
 	tools = append(tools, agToolsCreation(app, base, rates)...)
 	tools = append(tools, agToolsBasicCreation(app)...)
+	tools = append(tools, agToolsLists(app)...)
 	tools = append(tools, agToolsTrust(app, base, rates)...)
 	tools = append(tools, agToolsAuditor(app, base, rates)...)
 	tools = append(tools, agToolsAuthoring(app, base, rates)...)

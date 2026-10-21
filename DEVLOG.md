@@ -1,3 +1,7 @@
+## 2026-10-21 - Bounded complete assistant lists
+
+Replaced six captured list handlers with the shared typed reader, explicit ordering and totals, stable snapshots, exact IDs and recorded currency units. Unknown filters and read failures fail explicitly. Duplicate groups preserve complete membership or return an exact recovery query. All seven list WASM groups and the tool-catalog gate passed.
+
 ## 2026-10-21 - Complete document search evidence
 
 Removed the silent 200-row corpus cutoff, preserved stable row identity and source counts, centered excerpts around matched text, and disclosed excerpt truncation and record-detail recovery. Search reads fresh bound storage and reports read errors explicitly. Native docqa tests and vet passed; both document-search WASM integration tests passed.
