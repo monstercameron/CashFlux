@@ -1,3 +1,19 @@
+## 2026-10-21 - Prepare v1.19.10 for the attachment sync fixes
+
+Bumped the single product version source after the local three-browser password and file roundtrip, native artifact tests, focused WebAssembly cap test, and app build passed. PR #14 carries the storage and PDF limit fixes. The earlier v1.19.9 production shell and public health endpoints were checked, but a credentialed production login and attachment roundtrip remain unverified. The new PR's CI checks are still in progress; merge and deployment are pending.
+
+## 2026-10-21 - Align the PDF picker with the encrypted upload limit
+
+The file picker accepted 45 MiB PDFs while the server's default blob limit is 32 MiB. Artifact encryption wraps ciphertext in a JSON envelope with base64, so a 30 MiB raw cap would still exceed the server limit. PDF selection now caps raw files at 23 MiB, leaving over 1 MiB for envelope expansion. The focused WebAssembly file-cap test covers PDF and the unchanged JSON cap. Servers configured below the default limit can still reject a file during sync; the app retains the local file and queued change for recovery.
+
+## 2026-10-21 - Keep restored account documents out of the dataset
+
+Account PDF attachments still bypassed the encrypted local blob store, and the server pull restored every downloaded file inline through `ImportJSON`. The account drawer now stores new PDF and image bytes in encrypted IndexedDB, and its Open link reads external bytes asynchronously. Legacy `document` artifacts are treated as binary files for export, sync, and restore. The remote import uses `ImportJSONWithBlobs` before writing its protected dataset and sync bookmark. A local three-browser run verified password login on each profile, exact PDF and PNG bytes in browser B, encrypted raw IndexedDB records on both devices, and browser B's later edit in browser C. The Playwright assertion passed; its Windows test-server teardown then stalled and the runner was stopped. Native artifact and appstate tests and the WebAssembly build passed. Authenticated production sign-in is still untested.
+
+## 2026-10-21 - Store uploaded images outside the durable dataset
+
+The Artifacts screen called PutArtifact directly with full image bytes. That bypassed the encrypted IndexedDB blob store and could make a large image exhaust the durable dataset before cloud sync uploaded its ciphertext. The upload now leaves the FileReader callback, commits the encrypted blob, saves metadata without inline bytes, refreshes usage, and requests persistence. The local three-browser regression checks the encrypted IndexedDB record, exact downloaded bytes, a second-browser edit, and a third-browser restore. Its first run reached the third browser but stalled on the loading shell with three WebAssembly pages open; closing each previous page before the next profile made the rerun pass. Account document attachments still use the inline path and need a separate fix.
+
 ## 2026-10-21 - Prepare v1.19.9 for encrypted sync rollout
 
 Bumped the single product version source to 1.19.9 after the local three-browser encrypted file roundtrip and all PR checks passed. The release keeps server connection credentials on each device and restores the exact attachment bytes and later edits across browsers. Production rollout and an authenticated live roundtrip still need verification after merge.

@@ -38,23 +38,16 @@ import (
 //
 // Every push to the backend goes through ExportJSONRedacted (see persist.go and
 // the two upload sites below), which blanks Settings.OpenAIKey on the way out —
-// deliberately, so the secret never leaves the machine. The consequence is that a
-// server dataset can NEVER legitimately carry a key, so a straight ImportJSON —
-// "replaces all data", Settings included — silently wipes the one the user typed
-// here.
+// deliberately, so the secret never leaves the machine. Imported binary files
+// must also move into this browser's encrypted blob store before the durable
+// local checkpoint is written.
 //
-// That is invisible and it is total: on a hosted instance the key is entered,
-// saved, and then erased by the next pull, after which the assistant and the
-// Smart+ statement import both read an empty key and fail with messages about the
-// network. Locally there is no sync, so the same build works perfectly — which is
-// exactly how this hid.
-//
-// A key arriving in the incoming dataset still wins, so a user's own complete
-// backup (manual ExportJSON keeps the key) restores as written.
+// The incoming dataset may have been created by an older client, so retain the
+// device's credential and connection settings regardless of its contents.
 func importRemoteDataset(app *appstate.App, dataset []byte) ([]byte, error) {
 	keep := strings.TrimSpace(app.Settings().OpenAIKey)
 	connection := uistate.LoadPrefs().Normalize()
-	if err := app.ImportJSON(dataset); err != nil {
+	if err := app.ImportJSONWithBlobs(dataset); err != nil {
 		return nil, err
 	}
 	// A server dataset can contain older/default connection preferences. Keep
