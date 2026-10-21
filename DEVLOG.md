@@ -1,3 +1,7 @@
+## 2026-10-20 - Share native Dashboard transaction counts
+
+Extracted period transaction counts into dashboardview with half-open date boundaries, reporting exclusions, transfer/sign semantics, and currency-independent row counting. The controller memo uses app revision, full scope and exact bounds. Native predicate and immutability tests plus an actual Dashboard host regression passed; integration passed all native packages and 827 screen WASM tests. Existing visible KPI captions already followed reporting exclusions, so this removes duplicate inconsistent context logic rather than claiming a new caption repair.
+
 ## 2026-10-20 - Revalidate contribution writes and canonical completion
 
 Contribution orchestration resolves the latest goal by ID, preserves external metadata and account edits, rejects deleted or currency-conflicting forms, and preflights amounts/custom fields before ledger writes. Native result fields now own saved milestones and known coverage transitions; the form no longer computes percentages. Seven new native cases and three actual app-host WASM cases passed. Full native integration and all 827 screen WASM tests passed. Legacy memo-only fallback on ledger failure and independent goal/ledger writes remain follow-up work.

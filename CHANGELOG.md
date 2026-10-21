@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Dashboard render context counts now use a memoized native report-eligible transaction counter.
 - Goal contributions and Undo now validate checked amounts against the current stored goal; completion notices and workflows require known canonical coverage.
 - Reused bounded Dashboard source snapshots, pipeline results and validated layout configurations.
 - Made the manual earmark editor preserve untouched currencies and revalidate account headroom at save time.

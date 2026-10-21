@@ -723,18 +723,12 @@ func dashboardController(props dashboardControllerProps) ui.Node {
 		periodLabel += " – " + w.ToLabel()
 	}
 
-	incCount, expCount := 0, 0
-	for _, t := range kpiTxns {
-		if !dateutil.InRange(t.Date, start, end) {
-			continue
-		}
-		switch {
-		case t.IsIncome():
-			incCount++
-		case t.IsExpense():
-			expCount++
-		}
-	}
+	// Count captions/context follow the same report eligibility as money totals.
+	// Keep the hook unconditional and key the scoped snapshot by app identity,
+	// data/preference revision, the full scope signature and exact period bounds.
+	counts := ui.UseMemo(func() dashboardview.TransactionCounts {
+		return dashboardview.CountPeriodTransactions(kpiTxns, start, end)
+	}, revKey(app), scopeSig, start, end)
 
 	// scopedAccounts is already non-archived (ResolveScope excludes archived IDs).
 	active := len(scopedAccounts)
@@ -852,7 +846,7 @@ func dashboardController(props dashboardControllerProps) ui.Node {
 		Start: start, End: end,
 		Net: net, Assets: assets, Liabilities: liabilities, Income: income, Expense: expense,
 		PeriodLabel: periodLabel, CashFlowSub: cashFlowSub,
-		IncCount: incCount, ExpCount: expCount, ActiveAccounts: active,
+		IncCount: counts.Income, ExpCount: counts.Expense, ActiveAccounts: active,
 		NWSub: nwSub, NWTone: nwTone, HHNWSub: hhNWSub,
 		AttnCol: attnCol, AttnRow: attnRow,
 		Vars:           vars,
