@@ -15,7 +15,7 @@ bar. The full product spec is in [`SPEC.md`](./SPEC.md) — read it before imple
   backlog — what to build next), this file (rules),
   [`docs/GOWEBCOMPONENTS.md`](./docs/GOWEBCOMPONENTS.md) (framework API/patterns/gotchas),
   [`DEVLOG.md`](./DEVLOG.md) + [`CHANGELOG.md`](./CHANGELOG.md) (history/decisions).
-- **Toolchain (already installed):** Go 1.26.4, Git, GitHub CLI under
+- **Toolchain (already installed):** Go 1.27.3 (selected by `go.mod`), Git, GitHub CLI under
   `%LOCALAPPDATA%\Programs`, on user PATH. (Run via PowerShell on Windows.)
 - **Framework:** versioned Go module via `go get` — **no local `replace`**. Tidy/build with
   `GOOS=js GOARCH=wasm`.
@@ -48,9 +48,9 @@ bar. The full product spec is in [`SPEC.md`](./SPEC.md) — read it before imple
 
 ## Stack & layout
 
-- **Language:** Go (target `GOOS=js GOARCH=wasm`). Requires Go 1.26+.
+- **Language:** Go (target `GOOS=js GOARCH=wasm`). Requires Go 1.27+, with toolchain Go 1.27.3.
 - **Framework:** consumed as a **normal versioned Go module** via `go get`
-  (`github.com/monstercameron/GoWebComponents`, pinned pseudo-version) — **no local `replace`
+  (`github.com/monstercameron/GoWebComponents/v7`, pinned `v7.0.0`) — **no local `replace`
   / file-path dependency**. Update with `go get <module>@<commit-or-tag>` then `go mod tidy`.
 - **UI:** `html/shorthand` (dot-imported) element + control-flow funcs (`If`, `IfElse`, `Map`,
   `MapKeyed`). State via `ui` hooks and `state` atoms; pages via `router` (history).
@@ -60,7 +60,8 @@ bar. The full product spec is in [`SPEC.md`](./SPEC.md) — read it before imple
 ## Dev tooling: `gwc` + its MCP server (use these while developing)
 
 The framework ships the **`gwc`** runner. A prebuilt copy lives at **`.tools/gwc.exe`** (git-ignored;
-rebuild with `go build -o .tools/gwc.exe` from the GoWebComponents checkout's `./tools/gwc`).
+rebuild from the v7 framework's nested `tools/` module, without `-trimpath`; see
+[`docs/DEPENDENCY_UPGRADE_2026-10-21.md`](./docs/DEPENDENCY_UPGRADE_2026-10-21.md)).
 
 `gwc mcp` is also wired as a **project MCP server** (`.mcp.json`, server name `gwc`), exposing every
 gwc command as a `gwc_*` MCP tool (`gwc_dev`, `gwc_build`, `gwc_test`, `gwc_doctor`, `gwc_dom`,

@@ -7,20 +7,24 @@ framework README, its `examples/`, and source. Keep this current as we learn mor
   fiber-based runtime, typed HTML builders, a shorthand authoring layer, client-side routing,
   shared state, fetch helpers, SSR/hydration, i18n, a11y, PWA, feature flags, and devtools — all
   in one Go module. The whole UI is Go compiled to wasm; no JS build/bundler.
-- **Module:** `github.com/monstercameron/GoWebComponents` (we pin a pseudo-version via `go get`).
-- **Requires:** Go 1.26+. Target `GOOS=js GOARCH=wasm`.
+- **Module:** `github.com/monstercameron/GoWebComponents/v7`, pinned to `v7.0.0`.
+- **Requires:** Go 1.27.0+, with the CashFlux toolchain pinned to Go 1.27.3. Target `GOOS=js GOARCH=wasm`.
 - **Trade-offs:** not faster than hand-tuned React; wasm bundle is large raw (~6 MB for a counter)
   but compresses ~5x under brotli. Value = whole UI in Go, shared types client/server.
 
 ## Dependency wiring (important)
 
-- Consume it as a **normal module** (`go get …@<commit>`); **do not** use a local `replace`.
-- The framework's *own* `go.mod` has `replace agenthub => ./tools/agenthub` and a GoGRPCBridge
-  replace. Replace directives are **ignored when the module is a dependency**, but the core public
-  packages (`ui`, `html`, `html/shorthand`, `state`, `router`, `utils`) **do not import** agenthub,
-  so Go's module-graph pruning drops it — `go mod tidy` resolves cleanly (only `cbor`, `float16`,
-  `goldmark` come along as indirect deps). The agenthub bits are only used by the `gwc` tool, which
-  we build from the checkout instead of `go install`.
+- Consume it as a **normal versioned module**; **do not** use a local `replace` in CashFlux.
+- In v7 the CLI is a separate nested module under the framework's `tools/` directory.
+  Build the local runner from that module without `-trimpath`; the runner locates its source
+  tree with `runtime.Caller`. Keep that source tree after building the runner.
+- The Windows v7 release runner has a trimmed source path and cannot locate its framework
+  root here. See [the upgrade record](DEPENDENCY_UPGRADE_2026-10-21.md) for the verified source setup.
+- The v7 `gwc build` command forces `GOEXPERIMENT=nojsonv2`, which conflicts with CashFlux's
+  SQLite dependency on Go 1.27. Use the existing direct Go build scripts for application builds.
+  `gwc dev` does not force this setting and remains the live development entry point.
+- Markdown is opt-in in v7. `internal/screens/custompage.go` imports `html/markdown` so custom
+  text widgets retain their headings, emphasis, lists, and links.
 
 ## Public packages we use
 
@@ -40,14 +44,15 @@ returns exactly what router handlers (`func(router.Attrs) *router.Element`) need
 
 ## Authoring with `html/shorthand` (our default)
 
-Dot-import it: `import . "github.com/monstercameron/GoWebComponents/html/shorthand"`.
+Dot-import it: `import . "github.com/monstercameron/GoWebComponents/v7/html/shorthand"`.
 
 - **Elements** are `func(...any) ui.Node`: `Div`, `Span`, `Button`, `Input`, `Select`, `Option`,
   `Form`, `Nav`, `Header`, `Main`, `Section`, `H1`–`H6`, `P`, `Ul`, `Li`, `Table`, … (full set in
   `html/html.go`). Mixed args: prop-options + children in any order.
 - **Prop options:** `Class`, `ID`, `Type`, `Name`, `Value`, `Placeholder`, `Min`/`Max`/`Step`,
   `Title`, `For`, `Href`, `Disabled(…bool)`, `Selected(…bool)`, `SelectedIf(bool)`, `Attr(k,v)`,
-  and events `OnClick`/`OnInput`/`OnChange`/`OnSubmit`/… (each takes `any`).
+  and events `OnClick`/`OnInput`/`OnChange`/`OnSubmit`/…. `OnInput` and `OnChange` accept typed
+  callbacks or `ui.Handler`; input-handler props must retain those types instead of `any`.
 - **Children** auto-normalize: a `string` becomes text; a `[]ui.Node` (e.g. from `Map`/`MapKeyed`)
   is **flattened** — so `Div(Class("rows"), MapKeyed(items, key, render))` just works.
 - **Control flow:** `If(cond, node)`, `IfElse(cond, a, b)`, `Unless`, `Show`, `Switch`/`Case`/

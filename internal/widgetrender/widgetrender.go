@@ -22,7 +22,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/periodview"
 	"github.com/monstercameron/CashFlux/internal/txntoolbar"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // RenderCtx carries everything a registered widget body needs for one render of a

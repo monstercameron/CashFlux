@@ -11,10 +11,10 @@ import (
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/router"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/router"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // Investigating a number without leaving the page.

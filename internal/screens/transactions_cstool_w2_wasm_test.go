@@ -15,9 +15,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/txntoolbar"
 	"github.com/monstercameron/CashFlux/internal/txnview"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/testkit/render"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/testkit/render"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 func TestCSTOOLW2SummaryRejectsPreviousCollapsedRows(t *testing.T) {

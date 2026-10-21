@@ -8,9 +8,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // Fields is the custom-field-definitions screen (/fields): add / edit / delete

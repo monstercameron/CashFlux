@@ -11,8 +11,8 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
-	"github.com/monstercameron/GoWebComponents/v5/state"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/state"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // TxFilter is the transaction list's filter/sort selection. It aliases the pure

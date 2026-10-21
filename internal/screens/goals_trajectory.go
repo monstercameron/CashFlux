@@ -14,9 +14,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/goaltrajectory"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // goalTrajectoryNode renders a goal card's savings-trajectory section: a small

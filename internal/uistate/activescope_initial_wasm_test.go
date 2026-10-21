@@ -14,10 +14,10 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/scope"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/state"
-	"github.com/monstercameron/GoWebComponents/v5/testkit/render"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/state"
+	"github.com/monstercameron/GoWebComponents/v7/testkit/render"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 func activeScopeInitialApp(t *testing.T) *appstate.App {

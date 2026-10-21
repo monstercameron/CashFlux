@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/monstercameron/GoWebComponents/v5/testkit/render"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/testkit/render"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 func TestTXF6PageJumpAllowsInvalidDraftAndRestoresCurrentPage(t *testing.T) {

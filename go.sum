@@ -23,8 +23,8 @@ github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0 h1:5VipnvEpbqr2gA2VbM+nYVbkIF2
 github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0/go.mod h1:Hyl3n6Twe1hvtd9XUXDec4pTvgMSEixRuQKPTMH2bNs=
 github.com/monstercameron/GoGRPCBridge v0.0.19 h1:nYMrLMeoVp0EV/WMJ0qj0eMq7HmjKOBywGQ/ffuvxJA=
 github.com/monstercameron/GoGRPCBridge v0.0.19/go.mod h1:arqTZ5zqyn/byJ4lU4teJQQLi7esbPIvvuTPQeo1aK8=
-github.com/monstercameron/GoWebComponents/v5 v5.0.1 h1:z1STMmGqFPX0+14ssmf8cJ9v8ISXtKxwzPHx6bGwCaw=
-github.com/monstercameron/GoWebComponents/v5 v5.0.1/go.mod h1:grkE02YfOhN8D4b7Uajhl5Wi+cIFm3wOhg4SzkUBnds=
+github.com/monstercameron/GoWebComponents/v7 v7.0.0 h1:GWVAZuLrjtZZ3xagvy0oVie9BtlWc3QRmf+FqAAuL/8=
+github.com/monstercameron/GoWebComponents/v7 v7.0.0/go.mod h1:Ja5dNIWrUdk3Yhkib2t6a7M2Ff9oKT034XbK1GG3Qck=
 github.com/ncruces/go-sqlite3 v0.35.0 h1:10wTnMpLwmhNowJ19LqHivHK3m8heBBllfFRYEXzM/U=
 github.com/ncruces/go-sqlite3 v0.35.0/go.mod h1:fXOSIkWwN5NXgbJk+7Zls8QIW4xOflmgh11OFvcY+J0=
 github.com/ncruces/go-sqlite3-wasm/v3 v3.1.35302 h1:Cew7/eNAMd1zhpXYBjofBua/63pFvbvB2h4PM/p6gKU=
@@ -37,8 +37,8 @@ github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu
 github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
 github.com/x448/float16 v0.8.4 h1:qLwI1I70+NjRFUR3zs1JPUCgaCXSh3SW62uAKT1mSBM=
 github.com/x448/float16 v0.8.4/go.mod h1:14CWIYCyZA/cWjXOioeEpHeN/83MdbZDRQHoFcYsOfg=
-github.com/yuin/goldmark v1.7.13 h1:GPddIs617DnBLFFVJFgpo1aBfe/4xcvMc3SB5t/D0pA=
-github.com/yuin/goldmark v1.7.13/go.mod h1:ip/1k0VRfGynBgxOz0yCqHrbZXhcjxyuS66Brc7iBKg=
+github.com/yuin/goldmark v1.7.17 h1:p36OVWwRb246iHxA/U4p8OPEpOTESm4n+g+8t0EE5uA=
+github.com/yuin/goldmark v1.7.17/go.mod h1:ip/1k0VRfGynBgxOz0yCqHrbZXhcjxyuS66Brc7iBKg=
 go.opentelemetry.io/auto/sdk v1.2.1 h1:jXsnJ4Lmnqd11kwkBV2LgLoFMZKizbCi5fNZ/ipaZ64=
 go.opentelemetry.io/auto/sdk v1.2.1/go.mod h1:KRTj+aOaElaLi+wW1kO/DZRXwkF4C5xPbEe3ZiIhN7Y=
 go.opentelemetry.io/otel v1.45.0 h1:pdrWmLHofpubmArBv1LgFSv1Z0Ie/ppdZzu+kUN5EeU=

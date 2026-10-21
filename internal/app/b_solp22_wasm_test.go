@@ -24,9 +24,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/syncstate"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/CashFlux/internal/workspace"
-	"github.com/monstercameron/GoWebComponents/v5/state"
-	"github.com/monstercameron/GoWebComponents/v5/testkit/render"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/state"
+	"github.com/monstercameron/GoWebComponents/v7/testkit/render"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // The focused lane does not run ENC31's process-wide setup. Initialize the same

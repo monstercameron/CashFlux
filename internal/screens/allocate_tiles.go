@@ -13,9 +13,9 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // allocTile wraps a tile body in the shared Widget chrome + the full-width bento column.
@@ -56,7 +56,7 @@ func allocStatChip(label, value, valueCls string) ui.Node {
 type allocHeroProps struct {
 	View              allocView
 	AmountStr         string
-	OnAmount          any
+	OnAmount          ui.Handler
 	ShowIncomeNudge   bool
 	IncomeUnavailable bool
 	MonthIncome       money.Money
@@ -220,7 +220,7 @@ func allocModeLabel(mode string) string {
 }
 
 // allocWeightField is one criterion weight input (a small number field with a caption).
-func allocWeightField(label, value string, onInput any) ui.Node {
+func allocWeightField(label, value string, onInput ui.Handler) ui.Node {
 	return labeledField(label,
 		Input(css.Class("field"), Type("number"), Attr("min", "0"), Step("0.5"), Attr("aria-label", label), OnInput(onInput), uiw.FieldValue(value)))
 }

@@ -7,8 +7,8 @@ package app
 import (
 	"github.com/monstercameron/CashFlux/internal/period"
 	"github.com/monstercameron/CashFlux/internal/prefs"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	uic "github.com/monstercameron/GoWebComponents/v5/ui"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	uic "github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 type shellResolutionSlotProps struct {

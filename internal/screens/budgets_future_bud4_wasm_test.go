@@ -14,9 +14,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/period"
 	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	sh "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/testkit/render"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	sh "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/testkit/render"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 func TestFutureBudgetsProjectionStartsCollapsedAndUsesPlanIncome(t *testing.T) {

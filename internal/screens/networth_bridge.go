@@ -10,9 +10,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/attribution"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // THE BRIDGE — signature graphic #1.

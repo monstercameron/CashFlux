@@ -16,8 +16,8 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // goalView is prepared by the native goalview package and shared by page tiles.

@@ -7,9 +7,9 @@ package screens
 import (
 	"github.com/monstercameron/CashFlux/internal/smart"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // smart_rowinsights.go renders an entity's OWN findings inline on its row, as the

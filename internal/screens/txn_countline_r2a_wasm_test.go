@@ -15,7 +15,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/testkit/render"
+	"github.com/monstercameron/GoWebComponents/v7/testkit/render"
 )
 
 func TestR2ACountLineUsesPeriodTotalsAndOmitsPageRange(t *testing.T) {

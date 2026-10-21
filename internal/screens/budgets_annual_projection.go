@@ -6,7 +6,7 @@ package screens
 
 import (
 	"github.com/monstercameron/CashFlux/internal/budgetview"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // useBudgetAnnualProjection keeps recurring and goal occurrence projection out

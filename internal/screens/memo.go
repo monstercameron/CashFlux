@@ -12,7 +12,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/CashFlux/internal/viewcache"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // revKey identifies the app, stored-data revision, and browser-preference revision.

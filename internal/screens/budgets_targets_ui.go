@@ -18,9 +18,9 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // budgetTargetKindOptions builds the funding-target picker options (BG1). The first
@@ -66,7 +66,7 @@ type budgetTargetDraft struct {
 // select/input On* handlers register safely (the no-On*-in-loop rule only bans
 // variable-length loops).
 func budgetTargetSection(app *appstate.App, d budgetTargetDraft,
-	onKind func(string), onGoal func(string), onAmount any, onDate any) ui.Node {
+	onKind func(string), onGoal func(string), onAmount ui.Handler, onDate ui.Handler) ui.Node {
 	kind := domain.TargetKind(d.Kind)
 	needsAmount := kind == domain.TargetRefillUpTo || kind == domain.TargetSetAside || kind == domain.TargetByDate
 	isByDate := kind == domain.TargetByDate

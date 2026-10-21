@@ -18,7 +18,7 @@ package uistate
 import (
 	"time"
 
-	"github.com/monstercameron/GoWebComponents/v5/state"
+	"github.com/monstercameron/GoWebComponents/v7/state"
 )
 
 const agentActionsRevAtomID = "agent:actionsRevision"

@@ -23,9 +23,9 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/CashFlux/internal/widgetcatalog"
-	"github.com/monstercameron/GoWebComponents/v5/router"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
-	"github.com/monstercameron/GoWebComponents/v5/utils"
+	"github.com/monstercameron/GoWebComponents/v7/router"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
+	"github.com/monstercameron/GoWebComponents/v7/utils"
 )
 
 // liveCustomPageSlug reads the current custom-page slug from location.pathname at

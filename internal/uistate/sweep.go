@@ -7,7 +7,7 @@ package uistate
 import (
 	"encoding/json"
 
-	"github.com/monstercameron/GoWebComponents/v5/state"
+	"github.com/monstercameron/GoWebComponents/v7/state"
 )
 
 // UseSweepConfigOpen returns the shared atom controlling whether the "Sweep

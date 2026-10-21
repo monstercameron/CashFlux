@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/period"
-	"github.com/monstercameron/GoWebComponents/v5/state"
+	"github.com/monstercameron/GoWebComponents/v7/state"
 )
 
 const periodWindowStoreID = "cashflux:period-window"

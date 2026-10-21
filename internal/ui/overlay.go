@@ -5,9 +5,9 @@
 package ui
 
 import (
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	uic "github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	uic "github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // OverlayKind selects the placement and accessibility behavior for an overlay.

@@ -14,7 +14,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // Bills is the /bills route — a thin shell over the unified Bills & Recurring

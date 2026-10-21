@@ -14,7 +14,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/ai"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/testkit/render"
+	"github.com/monstercameron/GoWebComponents/v7/testkit/render"
 )
 
 func TestSmartImportServerStatementReachesReview(t *testing.T) {

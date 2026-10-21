@@ -4,7 +4,7 @@
 
 package uistate
 
-import "github.com/monstercameron/GoWebComponents/v5/state"
+import "github.com/monstercameron/GoWebComponents/v7/state"
 
 // goalEditAtomID keys the shared goal-editor modal selector.
 const goalEditAtomID = "goals:edit"

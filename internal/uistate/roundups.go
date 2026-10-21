@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/monstercameron/GoWebComponents/v5/state"
+	"github.com/monstercameron/GoWebComponents/v7/state"
 )
 
 // UseRoundUpConfigOpen returns the shared atom controlling whether the "Round-ups"

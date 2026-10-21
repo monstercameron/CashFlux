@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/monstercameron/GoWebComponents/v5/css"
+	"github.com/monstercameron/GoWebComponents/v7/css"
 )
 
 // emit folds a token (a css.Rule or []css.Rule) into a class and returns the CSS
