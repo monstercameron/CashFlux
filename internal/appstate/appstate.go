@@ -1837,6 +1837,9 @@ func (a *App) PutWorkflow(w workflow.Workflow) error {
 	if errs := workflow.Validate(w); len(errs) > 0 {
 		return fmt.Errorf("appstate: invalid workflow: %s", errs[0])
 	}
+	if err := a.checkPayYourselfFirstDuplicate(w); err != nil {
+		return err
+	}
 	if err := a.store.PutWorkflow(w); err != nil {
 		return err
 	}

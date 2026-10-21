@@ -1,3 +1,7 @@
+## 2026-10-21 - Enforce pay-yourself-first duplicate identity at writes
+
+Shared pure classification and route/cadence identity helpers preserve active/off UI messages through a typed duplicate error. Native tests cover disabled duplicates, self updates, no-mutation rejection, ordinary transfers and read failure. Native suite and full Screens suite pass. Separate list/write operations do not claim atomic concurrent duplicate prevention.
+
 ## 2026-10-21 - Check subscription trailing calendar months
 
 Prepared the three completed calendar months from the current month start, excluding the partial month and counting only nonempty expense months. Reuses checked transaction snapshot. Native tests cover May31, leapMarch31, local timezone boundaries, source/FX failures and overflow; full native suite and Screens compilation/render suite pass.

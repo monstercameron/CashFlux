@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Pay-yourself-first duplicate checks run at the native write boundary for all callers.
 - Subscription spending share uses native checked prior-month totals and fixes month-end window normalization.
 - Recurring agenda and calendar share native occurrence, settlement and checked conversion facts.
 - Debt tuner, coach and strategy comparison share checked native payoff results and suppress partial FX totals.

@@ -5,6 +5,7 @@
 package screens
 
 import (
+	"errors"
 	"sort"
 	"strconv"
 	"strings"
@@ -109,8 +110,6 @@ type pyfFormProps struct{ Refresh func() }
 // panel's "Already set up" block.
 type pyfEntry struct {
 	From, To, Amount, Cadence string
-	FromID, ToID              string
-	Cad                       domain.RecurringCadence
 	Enabled                   bool
 }
 
@@ -133,13 +132,10 @@ func pyfActive(app *appstate.App, dec int) []pyfEntry {
 	}
 	var out []pyfEntry
 	for _, w := range app.Workflows() {
-		if len(w.Actions) != 1 {
+		if !workflow.IsPayYourselfFirst(w) {
 			continue
 		}
 		a := w.Actions[0]
-		if a.Kind != workflow.ActionTransfer || !strings.HasPrefix(a.DedupeKey, "pyf:") {
-			continue
-		}
 		cadLabel := uistate.T("workflows.pyfCadenceMonthly")
 		if w.Trigger.Cadence == domain.CadenceWeekly {
 			cadLabel = uistate.T("workflows.pyfCadenceWeekly")
@@ -148,7 +144,6 @@ func pyfActive(app *appstate.App, dec int) []pyfEntry {
 			From: nameOf(a.TransferFromAccountID), To: nameOf(a.TransferToAccountID),
 			Amount:  money.FormatMinor(a.TransferAmount, dec),
 			Cadence: cadLabel,
-			FromID:  a.TransferFromAccountID, ToID: a.TransferToAccountID, Cad: w.Trigger.Cadence,
 			Enabled: w.Enabled,
 		})
 	}
@@ -215,21 +210,17 @@ func pyfForm(props pyfFormProps) ui.Node {
 			return
 		}
 		cad := domain.RecurringCadence(cadence.Get())
-		// Refuse a duplicate on the same route + schedule: a second scheduled
-		// workflow would silently double the money moved — and a duplicate of a
-		// merely-OFF transfer would do the same the day it's re-enabled.
-		for _, e := range pyfActive(app, dec) {
-			if e.FromID == from && e.ToID == to && e.Cad == cad {
-				if e.Enabled {
+		if _, err := app.CreatePayYourselfFirstWorkflow(from, to, amt, cad); err != nil {
+			var duplicate *appstate.DuplicatePayYourselfFirstError
+			if errors.As(err, &duplicate) {
+				if duplicate.ExistingEnabled {
 					msg.Set(uistate.T("wfs.pyfDuplicate"))
 				} else {
 					msg.Set(uistate.T("wfs.pyfDuplicateOff"))
 				}
-				return
+			} else {
+				msg.Set(err.Error())
 			}
-		}
-		if _, err := app.CreatePayYourselfFirstWorkflow(from, to, amt, cad); err != nil {
-			msg.Set(err.Error())
 			return
 		}
 		// Reset form on success and fold back to the summary.
