@@ -1,3 +1,7 @@
+## 2026-10-21 - Exact disposable assistant scenarios
+
+Added current bound settings/account selection, strict amounts and horizons, native clamped calendar-month arithmetic, exact diffs and unavailable labels. Scenarios disclose current-engine ledger semantics, suspend triggers, close their disposable store and never write the household ledger. Full native gates and all five sandbox WASM groups passed.
+
 ## 2026-10-21 - Bound transparent assistant memory
 
 Removed global active-dataset redirection from memory tools, surfaced storage and malformed-value errors, and required one matching preview with unchanged stored memory before writing. Existing canonical fact normalization remains shared. All three memory WASM groups passed, covering replacement datasets, changed previews and strict arguments.

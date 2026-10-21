@@ -59,6 +59,20 @@ func MonthStart(t time.Time) time.Time {
 // AddMonths returns t shifted by n calendar months (n may be negative).
 func AddMonths(t time.Time, n int) time.Time { return t.AddDate(0, n, 0) }
 
+// AddMonthsClamped returns t shifted by n calendar months while keeping its
+// original day when possible and clamping to the target month's last day
+// otherwise. The result is calculated from t each time, so Jan 31 → Feb 28 →
+// Mar 31 when callers use the same anchor with offsets 1 and 2.
+func AddMonthsClamped(t time.Time, n int) time.Time {
+	target := time.Date(t.Year(), t.Month()+time.Month(n), 1, t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), t.Location())
+	lastDay := time.Date(target.Year(), target.Month()+1, 0, 0, 0, 0, 0, t.Location()).Day()
+	day := t.Day()
+	if day > lastDay {
+		day = lastDay
+	}
+	return time.Date(target.Year(), target.Month(), day, t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), t.Location())
+}
+
 // MonthRange returns the half-open range [start, end) covering t's month.
 func MonthRange(t time.Time) (start, end time.Time) {
 	start = MonthStart(t)
