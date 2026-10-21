@@ -106,6 +106,35 @@ Use the `gwc` runner (we keep a built copy at `.tools/gwc.exe`; also wired as th
 ```
 Direct build also works: `$env:GOOS="js"; $env:GOARCH="wasm"; go build -o static\bin\main.wasm .`
 
+### CashFlux live development on port 8080
+
+Use `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev.ps1` for
+CashFlux development. It builds both `main.wasm` and `services.wasm`, watches
+source changes, and serves the app at `http://127.0.0.1:8080`. CashFlux requires a
+full-page reload after rebuilding: swapping the running WASM runtime can leave
+multiple autosave loops writing the same workspace. The script requests
+`-hot=false` for this reason.
+
+The local runner repaired on 2026-10-20 was built from the ignored
+`.tools/gwc-framework-v5` worktree at framework tag `v5.0.1`, matching `go.mod`.
+The previous executable resolved its development sources from a separate checkout
+that had moved to an incompatible framework version. Keep the runner's source
+checkout available; rebuilding from an unrelated moving checkout can reintroduce
+that failure. These local tool repairs do not change the app's versioned module.
+
+That ignored tool installation also carries three compatibility fixes: it forwards
+the boolean flag as `-hot=false` rather than separate arguments, classifies that
+mode as a full reload for every rebuild, and serves the SPA entry for missing
+extensionless GET/HEAD routes such as `/transactions`. Missing asset paths still
+return 404. Replacing the ignored runner/source checkout requires preserving or
+upstreaming those fixes; they are not part of the downloaded framework module.
+
+Verify `/__gwc/status` reports `lastBuild.success: true` and
+`lastBuild.reloadType: "full"`, and verify `/transactions` returns 200. A source
+timestamp change should produce a new successful build with that file listed in
+`lastClassification.changedFiles`. This checks the watcher, not just a previously
+built artifact. Port 8142/8143 test servers are not required for this workflow.
+
 Host page needs `wasm_exec.js` (from `GOROOT/lib/wasm/wasm_exec.js`; gwc copies it) and a boot
 script that instantiates `./bin/main.wasm` into a `#app` div (see framework README "Host HTML").
 

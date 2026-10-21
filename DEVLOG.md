@@ -1,3 +1,7 @@
+## 2026-10-20 - Restore the live development workflow on 8080
+
+Stopped the CashFlux test servers on 8142/8143 and restarted scripts/dev.ps1 on loopback 8080. Rebuilt the ignored gwc runner from a persistent v5.0.1 tool worktree matching the module, fixed boolean forwarding/full reload classification and extensionless SPA routing in that local tool installation. Verified an actual main.go timestamp change caused a successful full reload and /transactions returned HTTP 200. Documented these local ignored repairs explicitly so future tool replacement does not silently lose them; no application framework dependency or release changed.
+
 ## 2026-10-20 - Document shared preparation and cache boundaries
 
 Read current implementations to document ownership, immutable cache data, complete invalidation identities, bounded cache behavior, compact versus expanded preparation and save-time state revalidation. These contracts guide reuse without moving money arithmetic back into markup or weakening financial freshness. Documentation-only change; native and 827 screen integration checks were already green for the described source.

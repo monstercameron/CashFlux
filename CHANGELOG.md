@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Document the two-artifact live development entry point, full-page reload requirement, and locally repaired matching-version runner.
 - Component guidance now records lazy Accounts facts, current-state goal allocation drafts, and separate Dashboard layout/frame cache contracts.
 - Dashboard render context counts now use a memoized native report-eligible transaction counter.
 - Goal contributions and Undo now validate checked amounts against the current stored goal; completion notices and workflows require known canonical coverage.
