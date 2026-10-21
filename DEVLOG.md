@@ -1,3 +1,7 @@
+## 2026-10-21 - Prepare v1.19.9 for encrypted sync rollout
+
+Bumped the single product version source to 1.19.9 after the local three-browser encrypted file roundtrip and all PR checks passed. The release keeps server connection credentials on each device and restores the exact attachment bytes and later edits across browsers. Production rollout and an authenticated live roundtrip still need verification after merge.
+
 ## 2026-10-21 - Start the server load watch before its writes
 
 The second CI run's test/build job failed in `TestServerLoadSmokeSyncBlobAndWatch`: under concurrent CI load, the stream accepted the request before the server registered the subscription. Writes could then publish before the watcher existed, leaving the test waiting for a missing event until its shared ten-second context expired. The test now waits for the active-stream metric to confirm registration and uses a thirty-second load context. Five targeted local runs passed. This changes test sequencing, not sync delivery behavior.

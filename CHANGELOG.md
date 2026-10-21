@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Prepared v1.19.9 with the verified encrypted cross-browser file sync and privacy fixes.
 - The server load smoke test now waits for its watch subscription before sending writes and allows for CI load, so it cannot miss events before the watch starts.
 - Smart Import WebAssembly review tests now wait for the mocked response to finish before fixture teardown, preventing an intermittent CI render panic.
 - Encrypted cloud snapshots now omit this browser's server address and credentials; a restored browser keeps its own connection in its protected local checkpoint.
