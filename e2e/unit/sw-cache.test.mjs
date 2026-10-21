@@ -6,7 +6,7 @@ import vm from "node:vm";
 const source = readFileSync(new URL("../../web/sw.js", import.meta.url), "utf8");
 const origin = "https://cashflux.test";
 
-function worker(initialEntries = []) {
+function worker(initialEntries = [], { offline = false } = {}) {
   const listeners = new Map();
   const entries = new Set(initialEntries);
   const deletedCaches = [];
@@ -16,7 +16,8 @@ function worker(initialEntries = []) {
     delete: async (request) => entries.delete(request.url),
     match: async (key) => key === "./__cashflux_complete__.json"
       ? new Response(JSON.stringify({ buildId: "test", complete: true }))
-      : typeof key === "string" && key.startsWith("./") ? new Response("asset") : null,
+      : typeof key === "string" && key.startsWith("./")
+        ? new Response(key === "./erase-device.html" ? "ERASER" : "asset") : null,
     put: async (request) => { cached.push(request.url); },
   };
   const caches = {
@@ -30,7 +31,11 @@ function worker(initialEntries = []) {
     clients: { claim: async () => {}, matchAll: async () => [] },
     addEventListener: (name, listener) => listeners.set(name, listener),
   };
-  const context = vm.createContext({ self, caches, URL, Request, Response, fetch: async () => new Response("asset"), console });
+  const fetch = async () => {
+    if (offline) throw new Error("offline");
+    return new Response("asset");
+  };
+  const context = vm.createContext({ self, caches, URL, Request, Response, fetch, console });
   vm.runInContext(source, context);
   return { listeners, entries, deletedCaches, cached, context };
 }
@@ -40,6 +45,19 @@ test("API paths cannot masquerade as precached files", () => {
   assert.equal(vm.runInContext(`coreKeyFor("${origin}/icon-192.png")`, context), "./icon-192.png");
   assert.equal(vm.runInContext(`coreKeyFor("${origin}/v1/icon-192.png")`, context), "");
   assert.equal(vm.runInContext(`coreKeyFor("${origin}/v1/bin/main.wasm")`, context), "");
+});
+
+test("offline device erase navigation serves the eraser instead of the app shell", async () => {
+  const { context, listeners } = worker([], { offline: true });
+  assert.equal(vm.runInContext(`CORE_REQUIRED.includes("./erase-device.html")`, context), true);
+  assert.equal(vm.runInContext(`CORE_REQUIRED.includes("./device-erase.js")`, context), true);
+  assert.equal(vm.runInContext(`coreKeyFor("${origin}/device-erase.js")`, context), "./device-erase.js");
+  let response;
+  listeners.get("fetch")({
+    request: { method: "GET", mode: "navigate", url: `${origin}/erase-device.html` },
+    respondWith: (value) => { response = value; },
+  });
+  assert.equal(await (await response).text(), "ERASER");
 });
 
 test("worker leaves API requests alone and caches only public static paths", async () => {

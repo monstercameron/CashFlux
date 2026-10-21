@@ -6,11 +6,14 @@ package app
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall/js"
 	"time"
 
@@ -1862,23 +1865,56 @@ func wipeData(onChange func(), notify func(string, bool)) {
 }
 
 func eraseDataThen(notify func(string, bool)) {
+	// Leave the Wasm page before deleting origin-wide storage. This pauses its
+	// autosave/sync and releases its open IndexedDB handles; the dedicated page
+	// coordinates other tabs and verifies the browser inventory after deletion.
+	wasSuspended, wasSyncPaused := suspendAutosave, syncApplyPaused
+	suspendAutosave = true
+	syncApplyPaused = true
+	ticket, err := markDeviceErasePending()
+	if err != nil {
+		suspendAutosave, syncApplyPaused = wasSuspended, wasSyncPaused
+		notify(uistate.T("settings.wipeErr", err.Error()), true)
+		return
+	}
+	var navigation sync.Once
+	openEraser := func() {
+		navigation.Do(func() {
+			url := js.Global().Get("URL").New("./erase-device.html", js.Global().Get("document").Get("baseURI"))
+			url.Set("hash", "start="+ticket)
+			js.Global().Get("location").Call("replace", url.Get("href").String())
+		})
+	}
+	// Revocation is best effort. A broken credential store or unreachable server
+	// must never stop the user from erasing this browser. The timeout also keeps
+	// the action usable if an old server never responds.
+	time.AfterFunc(8*time.Second, openEraser)
 	endPageSessionForWipeThen(uistate.LoadPrefs().Normalize(), func(revokeErr, err error) {
 		if err != nil {
-			notify(uistate.T("settings.wipeErr", err.Error()), true)
-			return
+			slog.Warn("local sign-out before device erase was incomplete", "error", err)
 		}
 		reportWipeRevokeFailure(revokeErr, notify)
-		p := uistate.LoadPrefs().Normalize()
-		p.ServerToken, p.ServerCSRF = "", ""
-		p.BackendDisabled = true
-		commitCapturedAuthPreferences(p, func(err error) {
-			if err != nil {
-				notify(uistate.T("settings.wipeErr", err.Error()), true)
-				return
-			}
-			wipeAfterSession(notify)
-		})
+		openEraser()
 	})
+}
+
+func markDeviceErasePending() (ticket string, err error) {
+	defer func() {
+		if problem := recover(); problem != nil {
+			err = fmt.Errorf("could not coordinate open tabs: %v", problem)
+		}
+	}()
+	random := make([]byte, 16)
+	if _, err := rand.Read(random); err != nil {
+		return "", fmt.Errorf("create erasure ticket: %w", err)
+	}
+	ticket = hex.EncodeToString(random)
+	storage := js.Global().Get("localStorage")
+	if !storage.Truthy() {
+		return "", errors.New("browser local storage is unavailable")
+	}
+	storage.Call("setItem", "cashflux:erase-in-progress", ticket)
+	return ticket, nil
 }
 
 func reportWipeRevokeFailure(err error, notify func(string, bool)) {
@@ -1889,38 +1925,9 @@ func reportWipeRevokeFailure(err error, notify func(string, bool)) {
 	notify(uistate.T("enc39.revokeFailed"), false)
 }
 
-func wipeAfterSession(notify func(string, bool)) {
-	app := appstate.Default
-	if app == nil {
-		return
-	}
-	if err := app.Wipe(); err != nil {
-		notify(uistate.T("settings.wipeErr", err.Error()), true)
-		return
-	}
-	// The durable wipe batch tombstones the owner with the dataset. Keep the
-	// existing claim until that transaction commits so a failed wipe retains it.
-	// The store wipe cleared the financial tables and the audit_log table, but two
-	// things live outside that sweep and would otherwise survive: (1) the in-memory
-	// activity feed (the Activity screen's preferred source, re-hydrated from the
-	// table at boot), and (2) the data-derived SMART content — cached AI "messages",
-	// dismissals, last-run stamps, and the digest log — which sit in the PRESERVED
-	// settings KV. Clear both now, before the dataset export below, so a stale feed
-	// or stale smart message can't reappear after the reload.
-	auditview.Feed.Clear()
-	uistate.ClearSmartGenerated()
-	// A wipe means the user is starting fresh — hide the sample banner (L6).
-	uistate.SetSampleActive(false)
-	// Make the wipe authoritative: clear non-settings keys and persist the emptied
-	// store, then reload (after the IndexedDB write commits) so all in-memory state
-	// re-hydrates from the clean slate (nothing survives the wipe).
-	suspendAutosave = true
-	wipeFinancialLocalState(reloadPage, wipeEraseEverything)
-}
-
 // endPageSessionForWipeThen ends the current session locally before an erase.
-// Server revocation is best effort, but every local credential and route delete
-// must be durable before the caller is allowed to wipe the household data.
+// Server revocation is best effort; the separate eraser removes local credentials
+// even when the sign-out path cannot read or delete one of them.
 func endPageSessionForWipeThen(pr prefs.Prefs, done func(revokeErr, localErr error)) {
 	scope := outgoingRefreshScope()
 	if scope == nil {
