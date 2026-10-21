@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/monstercameron/CashFlux/internal/ai"
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -119,31 +118,70 @@ func agToolsTax(app *appstate.App, base string, rates currency.Rates) []chatTool
 	return []chatTool{
 		{
 			spec: ai.FunctionTool("gather_tax_records",
-				"Gather the user's records for a tax year: totals for deductible-flagged categories, charitable donations, and interest paid, plus a list of gaps (deductible/donation entries with no receipt attached). Returns a plain summary and a CSV block the user can save. It GATHERS the user's own records — it is not tax advice and makes no completeness or deductibility claim; the user (or their preparer) decides what actually applies.",
+				"Gather the household's retained records for a UTC calendar tax year: checked totals for deductible-flagged category lines, donation/interest keyword matches, and receipt gaps. Uses current stored base currency/FX and explicit refund links; excludes transfers and report-excluded rows. Returns a summary and exact-decimal CSV labelled with currency. Buckets may overlap and are not additive. Unavailable inputs or ambiguous partially refunded split allocation are explicit errors. This is record gathering, not tax advice or a completeness/deductibility claim.",
 				json.RawMessage(`{"type":"object","properties":{"year":{"type":"integer","description":"tax year, e.g. 2025; defaults to the previous calendar year"}}}`)),
 			run: func(raw json.RawMessage) string {
 				var a struct {
-					Year int `json:"year"`
+					Year *int `json:"year"`
 				}
-				_ = json.Unmarshal(raw, &a)
-				year := a.Year
-				if year == 0 {
-					year = time.Now().Year() - 1
+				if err := assistantDataArgs(raw, &a); err != nil {
+					return "Couldn't gather tax records: " + err.Error()
 				}
-				start := time.Date(year, 1, 1, 0, 0, 0, 0, time.UTC)
-				end := time.Date(year+1, 1, 1, 0, 0, 0, 0, time.UTC)
-				cats := app.Categories()
+				if app == nil || app.Store() == nil {
+					return "Couldn't gather tax records: local dataset is unavailable."
+				}
+				year := app.ClockNow().UTC().Year() - 1
+				if a.Year != nil {
+					year = *a.Year
+				} else {
+					// A pointer distinguishes explicit zero from omission; reject
+					// explicit null as well rather than silently choosing a year.
+					var supplied map[string]json.RawMessage
+					_ = json.Unmarshal(raw, &supplied) // already strictly decoded
+					if len(supplied) != 0 {
+						return "Couldn't gather tax records: year must be an integer from 1 through 9999."
+					}
+				}
+				start, end, err := taxgather.YearBounds(year)
+				if err != nil {
+					return "Couldn't gather tax records: " + err.Error()
+				}
+				settings, err := app.Store().GetSettings()
+				if err != nil {
+					return "Couldn't gather tax records: financial settings are unavailable."
+				}
+				currentBase := strings.ToUpper(strings.TrimSpace(settings.BaseCurrency))
+				if currentBase == "" {
+					currentBase = "USD"
+				}
+				currentRates := currency.Rates{Base: currentBase, Rates: settings.FXRates}
+				cats, err := app.CategoriesChecked()
+				if err != nil {
+					return "Couldn't gather tax records: categories are unavailable."
+				}
+				txns, err := app.Store().ListTransactions()
+				if err != nil {
+					return "Couldn't gather tax records: transactions are unavailable."
+				}
+				links, err := app.Store().ListTxnLinks()
+				if err != nil {
+					return "Couldn't gather tax records: refund links are unavailable."
+				}
 				catName := make(map[string]string, len(cats))
 				for _, c := range cats {
 					catName[c.ID] = c.Name
 				}
-				s, err := taxgather.Gather(app.Transactions(), cats, year, start, end, rates)
+				s, err := taxgather.GatherWithLinks(txns, cats, links, year, start, end, currentRates)
 				if err != nil {
 					return "Couldn't gather tax records: " + err.Error()
 				}
-				fmtM := func(minor int64) string { return fmtMoney(money.New(minor, base)) }
+				fmtM := func(minor int64) string { return fmtMoney(money.New(minor, currentBase)) }
 				var b strings.Builder
 				fmt.Fprintf(&b, "Tax-year %d gathering (your records, not tax advice — you or your preparer decide what applies):\n", year)
+				fmt.Fprintf(&b, "Household scope; UTC calendar year; amounts in %s using current stored FX. Negative category split lines follow the checked report rules; positive split credits are omitted. Deductible, charitable and interest buckets can overlap and must not be added together.\n", currentBase)
+				if !currency.Valid(currentBase) {
+					b.WriteString("This currency is not in the registry; CSV amounts use the app's canonical two-decimal fallback assumption.\n")
+				}
 				fmt.Fprintf(&b, "- Deductible-category spending: %s across %s\n", fmtM(s.Deductible.Total), pluralWord(len(s.Deductible.Rows), "category"))
 				for _, r := range s.Deductible.Rows {
 					n := catName[r.CategoryID]
@@ -155,7 +193,7 @@ func agToolsTax(app *appstate.App, base string, rates currency.Rates) []chatTool
 				fmt.Fprintf(&b, "- Charitable donations: %s (%d)\n", fmtM(s.Charitable.Total), s.Charitable.Count)
 				fmt.Fprintf(&b, "- Interest paid: %s (%d)\n", fmtM(s.InterestPaid.Total), s.InterestPaid.Count)
 				if len(s.Gaps) == 0 {
-					b.WriteString("- Gaps: none — every deductible/donation entry has a receipt attached.\n")
+					b.WriteString("- Receipt gaps: none among the matched retained deductible/donation records. This does not establish filing completeness.\n")
 				} else {
 					fmt.Fprintf(&b, "- Gaps (%d entries missing a receipt):\n", len(s.Gaps))
 					for i, g := range s.Gaps {
@@ -173,8 +211,10 @@ func agToolsTax(app *appstate.App, base string, rates currency.Rates) []chatTool
 					}
 					return "Uncategorized"
 				}
-				amt := func(v int64) string { return strconv.FormatFloat(currency.MajorFromMinor(v, base), 'f', 2, 64) }
-				csv := taxgather.GatherCSV(s, name, amt)
+				csv, err := taxgather.GatherCSVExact(s, name, currentBase)
+				if err != nil {
+					return "Couldn't gather tax records: " + err.Error()
+				}
 				b.WriteString("\nCSV export:\n```\n")
 				b.Write(csv)
 				b.WriteString("```")

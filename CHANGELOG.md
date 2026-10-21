@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Assistant tax gathering now uses fresh bound records, canonical refund and split rules, checked totals, and exact currency CSV amounts.
 - Dormant-account fee estimates now convert amounts before thresholding and annualization.
 - Report statistics and payee reductions now return checked errors, and assistant report formulas preserve unavailable results.
 - Assistant formulas now use checked pool, group, event, debt and saved-plan calculations.

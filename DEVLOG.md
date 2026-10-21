@@ -1,3 +1,7 @@
+## 2026-10-21 - Checked assistant tax record gathering
+
+Reused checked report category folds and explicit refund links, preserving exclusions and disclosing overlapping keyword buckets. Ambiguous partially refunded split allocation fails explicitly. Omitted years use the bound clock and explicit invalid years fail. Six native groups and all three actual-tool WASM groups passed.
+
 ## 2026-10-21 - Correct fee-drain currency evidence
 
 SMART-A9 uses the household-base decimal scale for its threshold, strict per-charge FX, checked magnitude and accumulation, and checked annualization. Missing FX or overflow omits that account estimate. Native Smart engine tests and vet passed, including EUR conversion, JPY precision, missing FX and MinInt64 regressions.
