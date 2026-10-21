@@ -1,3 +1,7 @@
+## 2026-10-21 - Prepare credit history in a checked native model
+
+Moved latest-eight sorting, currency assumptions, conversion, checked utilization and bounded bar facts into credithealth. The screen uses fresh fallible account/settings/history reads and keeps individual gaps and current-limit/current-FX disclosure. Six native groups, vet, screenlint and three actual-host WASM cases passed. Native large-history comparisons improved, while small cases overlap and add fixed metadata allocations; no page-latency gain is claimed. Aggregate/advice page migration remains separate.
+
 ## 2026-10-21 - Prepare tax report net income in a checked native model
 
 Added immutable taxgather.NetIncomeWithLinks with exact windows, checked income/deductible reductions and canonical refund policy. The tax section reads fresh fallible sources and memoizes prepared facts; unavailable sources bypass the legacy estimator instead of supplying zero. Household scope is explicit and hooks are isolated in a keyed child. Native tests/vet and three actual-App WASM cases passed; removed only the stale hook-baseline exception. Estimator policy and the benchmark optimization remain separate follow-ups.
