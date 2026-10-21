@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Local artifact encryption now frames the MIME with a validated separator, clearing the CI security scanner's integer-conversion finding.
 - Local artifact reads now report malformed IndexedDB byte records instead of leaving a file read waiting indefinitely.
 - Full-install backups now include external file bytes for inactive workspaces and stop with an error if any workspace has a missing or unreadable attachment.
 - New locally stored attachment bytes and MIME are encrypted with the protected workspace key; active legacy plaintext files are upgraded after unlock or on first read, and the upgrade waits for an IndexedDB commit.

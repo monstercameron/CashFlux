@@ -3,9 +3,10 @@
 package artifactstore
 
 import (
-	"encoding/binary"
+	"bytes"
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // EncryptedMIME marks an authenticated local artifact record. The actual MIME
@@ -30,13 +31,13 @@ func (s EncryptedStore) Put(id, mime string, data []byte) error {
 	if s.Raw == nil || s.Cipher == nil {
 		return ErrUnavailable
 	}
-	if len(mime) > 65535 {
-		return errors.New("artifactstore: MIME is too long")
+	if strings.ContainsRune(mime, '\x00') {
+		return errors.New("artifactstore: MIME contains a zero byte")
 	}
-	plain := make([]byte, 2+len(mime)+len(data))
-	binary.BigEndian.PutUint16(plain, uint16(len(mime)))
-	copy(plain[2:], mime)
-	copy(plain[2+len(mime):], data)
+	plain := make([]byte, len(mime)+1+len(data))
+	copy(plain, mime)
+	plain[len(mime)] = 0
+	copy(plain[len(mime)+1:], data)
 	sealed, err := s.Cipher.SealArtifact(id, plain)
 	if err != nil {
 		return fmt.Errorf("artifactstore: encrypt %s: %w", id, err)
@@ -62,14 +63,11 @@ func (s EncryptedStore) Get(id string) (mime string, data []byte, ok bool, err e
 	if err != nil {
 		return "", nil, false, fmt.Errorf("artifactstore: decrypt %s: %w", id, err)
 	}
-	if len(plain) < 2 {
-		return "", nil, false, errors.New("artifactstore: encrypted artifact is truncated")
+	n := bytes.IndexByte(plain, 0)
+	if n < 0 {
+		return "", nil, false, errors.New("artifactstore: encrypted MIME separator is missing")
 	}
-	n := int(binary.BigEndian.Uint16(plain))
-	if len(plain) < 2+n {
-		return "", nil, false, errors.New("artifactstore: encrypted MIME is truncated")
-	}
-	return string(plain[2 : 2+n]), plain[2+n:], true, nil
+	return string(plain[:n]), plain[n+1:], true, nil
 }
 
 func (s EncryptedStore) Delete(id string) error {

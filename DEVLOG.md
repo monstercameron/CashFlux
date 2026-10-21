@@ -1,3 +1,7 @@
+## 2026-10-20 - Remove artifact framing conversion flagged by CI
+
+The CI security scanner rejected the encrypted artifact wrapper's `int` to `uint16` MIME length conversion despite an earlier range check. The sealed plaintext now uses a zero separator after a validated MIME string, avoiding the conversion while still encrypting both fields and failing on a missing separator. Native artifact tests, the WebAssembly app build, and a focused gosec scan of `internal/artifactstore` passed.
+
 ## 2026-10-20 - Fail malformed local artifact reads
 
 The IndexedDB artifact getter assumed every stored record had a `Uint8Array` payload. A malformed legacy or tampered record could panic inside the JavaScript success callback, leaving the Go caller blocked and preventing sync or backup from reporting the file failure. The getter now validates the byte type and copy length and converts callback panics into errors. The WebAssembly app build passed.
