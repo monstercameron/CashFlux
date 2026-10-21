@@ -7,10 +7,11 @@ package i18n
 // cushion, debt & credit) that opens the document before the year's story.
 // Merged via init so this file does not touch en.go.
 var reportsVitalsKeys = Catalog{
-	"rpta.idxStand":    "Where you stand",
-	"rpta.secStand":    "Where you stand",
-	"rpta.secStandSub": "Today's position, before the year's story — what a month looks like, how deep the cushion is, and what's owed.",
-	"rpta.standBasis":  "Monthly figures are averages over your last %d active months.",
+	"reports.financialUnavailable": "Some report totals are unavailable because the amounts could not be combined safely.",
+	"rpta.idxStand":                "Where you stand",
+	"rpta.secStand":                "Where you stand",
+	"rpta.secStandSub":             "Today's position, before the year's story — what a month looks like, how deep the cushion is, and what's owed.",
+	"rpta.standBasis":              "Monthly figures are averages over your last %d active months.",
 
 	// Column heads.
 	"rpta.standColFlow":    "Cash flow",

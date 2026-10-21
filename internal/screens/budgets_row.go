@@ -25,10 +25,10 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/router"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/router"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // BudgetRow renders one budget's spend vs limit with a progress bar. Clicking
@@ -171,31 +171,32 @@ func budgetErrorHasUnknownRate(err error) bool { return errors.Is(err, currency.
 
 type budgetRowCompactProps struct {
 	budgetRowProps
-	Status                                                   budgeting.Status
-	Title                                                    string
-	LastMonthMode                                            bool
-	BarSpent                                                 string
-	Width                                                    int
-	FillClass                                                string
-	Limit                                                    money.Money
-	Label                                                    string
-	CanDrill                                                 bool
-	DrillTitle                                               string
-	Kebab                                                    ui.Node
-	OnLimitEdit, OnDrill                                     any
-	LimitEditing                                             bool
-	LimitDraft                                               string
-	OnLimitDraft, OnLimitSave, OnLimitCancel, OnLimitKeyDown any
-	LimitInputRef                                            ui.DOMRef
-	LimitButtonRef                                           ui.DOMRef
-	LimitErrorID, LimitError                                 string
-	FundedChip                                               string
-	HasRecurring                                             bool
-	RolloverDetail                                           ui.Node
-	ProjectionLine                                           ui.Node
-	HasNote                                                  bool
-	NotesLabel, NoteText                                     string
-	OnOpenNotes                                              func()
+	Status                                     budgeting.Status
+	Title                                      string
+	LastMonthMode                              bool
+	BarSpent                                   string
+	Width                                      int
+	FillClass                                  string
+	Limit                                      money.Money
+	Label                                      string
+	CanDrill                                   bool
+	DrillTitle                                 string
+	Kebab                                      ui.Node
+	OnLimitEdit, OnDrill                       any
+	LimitEditing                               bool
+	LimitDraft                                 string
+	OnLimitDraft                               ui.Handler
+	OnLimitSave, OnLimitCancel, OnLimitKeyDown any
+	LimitInputRef                              ui.DOMRef
+	LimitButtonRef                             ui.DOMRef
+	LimitErrorID, LimitError                   string
+	FundedChip                                 string
+	HasRecurring                               bool
+	RolloverDetail                             ui.Node
+	ProjectionLine                             ui.Node
+	HasNote                                    bool
+	NotesLabel, NoteText                       string
+	OnOpenNotes                                func()
 }
 
 // budgetRowCompact renders the dense row layout. All row interactions arrive as
@@ -434,7 +435,7 @@ func budgetCadenceSuffix(period domain.Period) string {
 	}
 }
 
-func budgetLimitEditor(id, budgetName string, inputRef ui.DOMRef, draft string, onDraft, save, cancel, keyDown any, errID, errMsg string, effective money.Money, base ...money.Money) ui.Node {
+func budgetLimitEditor(id, budgetName string, inputRef ui.DOMRef, draft string, onDraft ui.Handler, save, cancel, keyDown any, errID, errMsg string, effective money.Money, base ...money.Money) ui.Node {
 	return Form(css.Class("budget-limit-editor"), Attr("data-testid", "budget-limit-editor-"+id), OnSubmit(save),
 		Strong(css.Class("budget-limit-editor-title"), budgetName+" "+uistate.T("budgets.limitTitleSuffix")),
 		Div(css.Class("budget-limit-editor-cap"),
@@ -968,20 +969,25 @@ type budgetDriverMemoValue struct {
 	base    string
 }
 
+type goalFundedMemoValue struct {
+	split goalfunded.Split
+	err   error
+}
+
 var budgetPeriodMemos = struct {
 	sync.Mutex
-	goal    map[budgetPeriodMemoKey]goalfunded.Split
+	goal    map[budgetPeriodMemoKey]goalFundedMemoValue
 	funding map[budgetPeriodMemoKey][]goalfunded.BudgetFunding
 	drivers map[budgetPeriodMemoKey]budgetDriverMemoValue
 	pie     map[budgetPeriodMemoKey][]budgetSlice
-}{goal: make(map[budgetPeriodMemoKey]goalfunded.Split), funding: make(map[budgetPeriodMemoKey][]goalfunded.BudgetFunding), drivers: make(map[budgetPeriodMemoKey]budgetDriverMemoValue), pie: make(map[budgetPeriodMemoKey][]budgetSlice)}
+}{goal: make(map[budgetPeriodMemoKey]goalFundedMemoValue), funding: make(map[budgetPeriodMemoKey][]goalfunded.BudgetFunding), drivers: make(map[budgetPeriodMemoKey]budgetDriverMemoValue), pie: make(map[budgetPeriodMemoKey][]budgetSlice)}
 
 func periodMemoKey(app *appstate.App, revision int, budgetID string, start, end time.Time) budgetPeriodMemoKey {
 	return budgetPeriodMemoKey{app: app, revision: revision, budgetID: budgetID,
 		start: start.UTC().Format(time.RFC3339Nano), end: end.UTC().Format(time.RFC3339Nano)}
 }
 
-func memoGoalFunded(app *appstate.App, revision int, budgetID string, start, end time.Time, calculate func() goalfunded.Split) goalfunded.Split {
+func memoGoalFunded(app *appstate.App, revision int, budgetID string, start, end time.Time, calculate func() (goalfunded.Split, error)) goalFundedMemoValue {
 	key := periodMemoKey(app, revision, budgetID, start, end)
 	budgetPeriodMemos.Lock()
 	if value, ok := budgetPeriodMemos.goal[key]; ok {
@@ -989,10 +995,11 @@ func memoGoalFunded(app *appstate.App, revision int, budgetID string, start, end
 		return value
 	}
 	budgetPeriodMemos.Unlock()
-	value := calculate()
+	split, err := calculate()
+	value := goalFundedMemoValue{split: split, err: err}
 	budgetPeriodMemos.Lock()
 	if len(budgetPeriodMemos.goal) > 256 {
-		budgetPeriodMemos.goal = make(map[budgetPeriodMemoKey]goalfunded.Split)
+		budgetPeriodMemos.goal = make(map[budgetPeriodMemoKey]goalFundedMemoValue)
 	}
 	budgetPeriodMemos.goal[key] = value
 	budgetPeriodMemos.Unlock()

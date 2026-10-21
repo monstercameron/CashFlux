@@ -620,11 +620,11 @@ func TestBackendToolchainPinnedForServerAndWASM(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read go.mod: %v", err)
 	}
-	// Pin the Go 1.26 minor (not an exact patch): the Dockerfile tracks the same
-	// minor via golang:1.26-alpine, and security patches (e.g. 1.26.0 -> 1.26.4)
+	// Pin the Go 1.27 minor (not an exact patch): the Dockerfile tracks the same
+	// minor via golang:1.27-alpine, and security patches (e.g. 1.27.0 -> 1.27.3)
 	// should not require touching this guard.
-	if !strings.Contains(string(goMod), "\ngo 1.26.") {
-		t.Fatal("go.mod does not pin the Go 1.26 minor")
+	if !strings.Contains(string(goMod), "\ngo 1.27.") {
+		t.Fatal("go.mod does not pin the Go 1.27 minor")
 	}
 
 	dockerfile, err := os.ReadFile("../../Dockerfile.server")
@@ -635,7 +635,7 @@ func TestBackendToolchainPinnedForServerAndWASM(t *testing.T) {
 	// --platform=$BUILDPLATFORM prefix so the builder stays on the runner's arch
 	// while the output is cross-compiled to linux/amd64 for the droplet.
 	for _, want := range []string{
-		"golang:1.26-alpine AS build",
+		"golang:1.27-alpine AS build",
 		"-o /out/cashflux-server ./cmd/cashflux-server",
 	} {
 		if !strings.Contains(string(dockerfile), want) {

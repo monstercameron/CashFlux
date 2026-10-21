@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -38,6 +39,16 @@ func SpendingByTag(
 	priorStart, priorEnd time.Time,
 	rates currency.Rates,
 ) ([]TagSpend, error) {
+	return spendingByTag(netted(txns), start, end, compare, priorStart, priorEnd, rates)
+}
+
+// SpendingByTagFromLedger reads explicit refund-netted activity without the
+// legacy global overlay. Its grouping and comparison rules are unchanged.
+func SpendingByTagFromLedger(txns budgeting.NettedLedger, start, end time.Time, compare bool, priorStart, priorEnd time.Time, rates currency.Rates) ([]TagSpend, error) {
+	return spendingByTag(txns, start, end, compare, priorStart, priorEnd, rates)
+}
+
+func spendingByTag(txns []domain.Transaction, start, end time.Time, compare bool, priorStart, priorEnd time.Time, rates currency.Rates) ([]TagSpend, error) {
 	cur, counts, names, err := tagTotals(txns, start, end, rates)
 	if err != nil {
 		return nil, err
@@ -79,7 +90,6 @@ func SpendingByTag(
 // tagTotals accumulates per-tag absolute expense totals, charge counts, and
 // the display casing for one period.
 func tagTotals(txns []domain.Transaction, start, end time.Time, rates currency.Rates) (map[string]int64, map[string]int, map[string]string, error) {
-	txns = netted(txns)
 	amounts := map[string]int64{}
 	counts := map[string]int{}
 	names := map[string]string{}

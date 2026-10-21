@@ -294,6 +294,7 @@ type Prepared struct {
 	Category                  *domain.Category
 	CreatedName               string
 	ProblemKey, CollisionName string
+	CustomIssues              []string
 	LimitProblem              budgeting.LimitProblem
 }
 
@@ -302,6 +303,11 @@ func Prepare(d Draft, cats []domain.Category, budgets []domain.Budget, defs []cu
 	p := Prepared{}
 	if strings.TrimSpace(d.Name) == "" {
 		p.ProblemKey = "budgets.nameRequired"
+		return p
+	}
+	custom, customIssues := customfields.ParseFormValues(defs, d.Custom)
+	if len(customIssues) > 0 {
+		p.CustomIssues = customIssues
 		return p
 	}
 	amount, problem := budgeting.ParseLimitMajor(d.Limit, currency.Decimals(d.Currency))
@@ -361,7 +367,7 @@ func Prepare(d Draft, cats []domain.Category, budgets []domain.Budget, defs []cu
 	if method != "" && !budgeting.Methodology(method).Valid() {
 		method = ""
 	}
-	b := domain.Budget{ID: budgetID, Name: strings.TrimSpace(d.Name), Scope: scope, OwnerID: d.Owner, CategoryID: final, Period: domain.Period(d.Period), Limit: money.New(amount, d.Currency), Rollover: d.Rollover, Methodology: method, Custom: customValues(defs, d.Custom), VarName: strings.TrimSpace(d.VarName)}
+	b := domain.Budget{ID: budgetID, Name: strings.TrimSpace(d.Name), Scope: scope, OwnerID: d.Owner, CategoryID: final, Period: domain.Period(d.Period), Limit: money.New(amount, d.Currency), Rollover: d.Rollover, Methodology: method, Custom: custom, VarName: strings.TrimSpace(d.VarName)}
 	direction := domain.BudgetDirection(d.Direction)
 	if direction.Valid() {
 		b.Direction = direction
@@ -380,32 +386,6 @@ func Prepare(d Draft, cats []domain.Category, budgets []domain.Budget, defs []cu
 	b.TrackedTags = ParseTags(d.Tags)
 	p.Budget = b
 	return p
-}
-
-func customValues(defs []customfields.Def, values map[string]string) map[string]any {
-	var out map[string]any
-	for _, d := range defs {
-		raw := strings.TrimSpace(values[d.Key])
-		if raw == "" {
-			continue
-		}
-		if out == nil {
-			out = map[string]any{}
-		}
-		switch d.Type {
-		case customfields.TypeNumber:
-			if n, err := strconv.ParseFloat(raw, 64); err == nil {
-				out[d.Key] = n
-			} else {
-				out[d.Key] = raw
-			}
-		case customfields.TypeBool:
-			out[d.Key] = raw == "true"
-		default:
-			out[d.Key] = raw
-		}
-	}
-	return out
 }
 
 // Template proposes positive limits only for categories not tracked by an existing budget.

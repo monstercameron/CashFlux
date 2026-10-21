@@ -8,9 +8,9 @@ import (
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/currency"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	uic "github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	uic "github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // TextFieldProps configures TextInput / NumberInput / TextAreaInput.

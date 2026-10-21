@@ -545,58 +545,6 @@ func matchesCategory(t domain.Transaction, want func(categoryID string) bool) bo
 	return false
 }
 
-// matchesScopeAny evaluates the OR'd category-or-tag dimension used by the
-// budget drill-through: in one of the selected categories (whole or split), or
-// carrying one of the selected tags. With neither dimension set it matches
-// everything, so ScopeAny never narrows a filter that selected nothing.
-func matchesScopeAny(t domain.Transaction, c Criteria, singleTag string) bool {
-	catSel := c.Categories != "" || c.Category != ""
-	tagSel := c.Tags != "" || singleTag != ""
-	if !catSel && !tagSel {
-		return true
-	}
-	if catSel {
-		inCat := matchesCategory(t, func(id string) bool {
-			if c.Categories != "" {
-				return csvHas(c.Categories, id)
-			}
-			return id == c.Category
-		})
-		if inCat {
-			return true
-		}
-	}
-	if tagSel {
-		if c.Tags != "" {
-			return hasAnyTagCSV(t, c.Tags)
-		}
-		return hasTag(t, singleTag)
-	}
-	return false
-}
-
-// csvHasAccount reports whether any account id in csv matches the transaction's booked
-// account or its bill-linked account (mirroring the single Account filter's dual match).
-func csvHasAccount(csv string, t domain.Transaction) bool {
-	for _, id := range splitCSV(csv) {
-		if t.AccountID == id || t.BillAccountID == id {
-			return true
-		}
-	}
-	return false
-}
-
-// hasAnyTagCSV reports whether the transaction carries any of the comma-joined tags
-// (case-insensitive) — the multi-value counterpart of hasTag.
-func hasAnyTagCSV(t domain.Transaction, csv string) bool {
-	for _, tag := range splitCSV(csv) {
-		if hasTag(t, strings.ToLower(strings.TrimSpace(tag))) {
-			return true
-		}
-	}
-	return false
-}
-
 // toggleCSV adds value to a comma-joined set if absent, or removes it if present.
 func toggleCSV(csv, value string) string {
 	if csvHas(csv, value) {
@@ -825,12 +773,38 @@ func ApplyWithLabelsChecked(txns []domain.Transaction, c Criteria, labels Labels
 }
 
 type compiledCriteria struct {
-	criteria           Criteria
-	labels             Labels
-	text, tag          string
-	minMinor, maxMinor int64
-	hasMin, hasMax     bool
-	from, to           time.Time
+	criteria                            Criteria
+	labels                              Labels
+	text, tag                           string
+	minMinor, maxMinor                  int64
+	hasMin, hasMax                      bool
+	from, to                            time.Time
+	searchAmount                        int64
+	hasSearchAmount                     bool
+	accounts, categories, sources, tags criterionSet
+	members                             []string
+}
+
+// criterionSet is owned by one invocation, never retained beyond its compiled
+// matcher. Raw criterion strings still decide whether a dimension is engaged:
+// a non-empty CSV containing only commas must keep matching nothing.
+type criterionSet map[string]struct{}
+
+func (s criterionSet) contains(value string) bool { _, ok := s[value]; return ok }
+
+func compileSelection(csv string, lower bool) criterionSet {
+	values := splitCSV(csv)
+	if len(values) == 0 {
+		return nil
+	}
+	set := make(criterionSet, len(values))
+	for _, value := range values {
+		if lower {
+			value = strings.ToLower(value)
+		}
+		set[value] = struct{}{}
+	}
+	return set
 }
 
 func compileCriteria(c Criteria, labels Labels) compiledCriteria {
@@ -843,6 +817,18 @@ func compileCriteria(c Criteria, labels Labels) compiledCriteria {
 	}
 	filter.minMinor, filter.hasMin = parseAmountBound(c.AmountMin, labels.BaseCurrency)
 	filter.maxMinor, filter.hasMax = parseAmountBound(c.AmountMax, labels.BaseCurrency)
+	if filter.text != "" {
+		filter.searchAmount, filter.hasSearchAmount = parseSearchAmount(filter.text, labels.BaseCurrency)
+	}
+	filter.accounts = compileSelection(c.Accounts, false)
+	filter.categories = compileSelection(c.Categories, false)
+	filter.sources = compileSelection(c.Sources, false)
+	filter.tags = compileSelection(c.Tags, true)
+	memberSelection := c.Members
+	if memberSelection == "" {
+		memberSelection = c.Member
+	}
+	filter.members = splitCSV(memberSelection)
 	if d, err := dateutil.ParseDate(strings.TrimSpace(c.From)); err == nil {
 		filter.from = d
 	}
@@ -853,19 +839,16 @@ func compileCriteria(c Criteria, labels Labels) compiledCriteria {
 }
 
 func (f compiledCriteria) matches(t domain.Transaction) bool {
-	return matchesCriteria(t, f.criteria, f.labels, f.text, f.tag, f.minMinor, f.hasMin, f.maxMinor, f.hasMax, f.from, f.to)
-}
-
-func matchesCriteria(t domain.Transaction, c Criteria, labels Labels, ft, tagF string, minMinor int64, hasMin bool, maxMinor int64, hasMax bool, fromT, toT time.Time) bool {
+	c, labels := f.criteria, f.labels
 	// Reject rows by ordinary scope before attempting currency conversion, so an FX
 	// warning is only reported for a row the other active filters would show.
-	if c.Accounts != "" && !csvHasAccount(c.Accounts, t) || c.Accounts == "" && c.Account != "" && t.AccountID != c.Account && t.BillAccountID != c.Account {
+	if c.Accounts != "" && !f.accounts.contains(t.AccountID) && !f.accounts.contains(t.BillAccountID) || c.Accounts == "" && c.Account != "" && t.AccountID != c.Account && t.BillAccountID != c.Account {
 		return false
 	}
 	if c.BillAccount != "" && t.BillAccountID != c.BillAccount || c.Subscription != "" && t.SubscriptionName != c.Subscription {
 		return false
 	}
-	if !c.ScopeAny && c.Categories != "" && !matchesCategory(t, func(id string) bool { return csvHas(c.Categories, id) }) {
+	if !c.ScopeAny && c.Categories != "" && !matchesCategory(t, f.categories.contains) {
 		return false
 	}
 	if !c.ScopeAny && c.Categories == "" && c.Category != "" && !matchesCategory(t, func(id string) bool { return id == c.Category }) {
@@ -874,19 +857,19 @@ func matchesCriteria(t domain.Transaction, c Criteria, labels Labels, ft, tagF s
 	if c.Uncategorized && (!hasUncategorizedCategory(t) || t.IsTransfer()) {
 		return false
 	}
-	if c.Members != "" && !matchesMemberSelection(c.Members, t) || c.Members == "" && c.Member != "" && !matchesMemberSelection(c.Member, t) {
+	if (c.Members != "" || c.Member != "") && !f.matchesMembers(t) {
 		return false
 	}
-	if c.Sources != "" && !csvHas(c.Sources, string(t.Source)) || c.Sources == "" && c.Source != "" && string(t.Source) != c.Source {
+	if c.Sources != "" && !f.sources.contains(string(t.Source)) || c.Sources == "" && c.Source != "" && string(t.Source) != c.Source {
 		return false
 	}
-	if !c.ScopeAny && c.Tags != "" && !hasAnyTagCSV(t, c.Tags) || !c.ScopeAny && c.Tags == "" && tagF != "" && !hasTag(t, tagF) {
+	if !c.ScopeAny && c.Tags != "" && !f.matchesTags(t) || !c.ScopeAny && c.Tags == "" && f.tag != "" && !hasTag(t, f.tag) {
 		return false
 	}
-	if c.ScopeAny && !matchesScopeAny(t, c, tagF) {
+	if c.ScopeAny && !f.matchesScopeAny(t) {
 		return false
 	}
-	if !fromT.IsZero() && t.Date.Before(fromT) || !toT.IsZero() && calendarDayAfter(t.Date, toT) {
+	if !f.from.IsZero() && t.Date.Before(f.from) || !f.to.IsZero() && calendarDayAfter(t.Date, f.to) {
 		return false
 	}
 	if c.Cleared == "yes" && !t.Cleared || c.Cleared == "no" && t.Cleared {
@@ -900,7 +883,7 @@ func matchesCriteria(t domain.Transaction, c Criteria, labels Labels, ft, tagF s
 	if c.CustomKey != "" && c.CustomVal != "" && customString(t.Custom[c.CustomKey]) != c.CustomVal {
 		return false
 	}
-	if hasMin || hasMax {
+	if f.hasMin || f.hasMax {
 		amount, err := amountInBase(t, labels)
 		if err != nil {
 			if labels.OnConversionError != nil {
@@ -908,11 +891,55 @@ func matchesCriteria(t domain.Transaction, c Criteria, labels Labels, ft, tagF s
 			}
 			return false
 		}
-		if hasMin && amount < minMinor || hasMax && amount > maxMinor {
+		if f.hasMin && amount < f.minMinor || f.hasMax && amount > f.maxMinor {
 			return false
 		}
 	}
-	return ft == "" || matchTextWithLabels(t, ft, labels)
+	return f.text == "" || f.matchesText(t)
+}
+
+func (f compiledCriteria) matchesScopeAny(t domain.Transaction) bool {
+	c := f.criteria
+	categorySelected := c.Categories != "" || c.Category != ""
+	tagSelected := c.Tags != "" || f.tag != ""
+	if !categorySelected && !tagSelected {
+		return true
+	}
+	if categorySelected {
+		if c.Categories != "" && matchesCategory(t, f.categories.contains) || c.Categories == "" && matchesCategory(t, func(id string) bool { return id == c.Category }) {
+			return true
+		}
+	}
+	return tagSelected && f.matchesTags(t)
+}
+
+func (f compiledCriteria) matchesTags(t domain.Transaction) bool {
+	if f.criteria.Tags == "" {
+		return hasTag(t, f.tag)
+	}
+	for _, tag := range t.Tags {
+		// Selected values are trimmed by splitCSV; stored tags deliberately are
+		// not trimmed, matching the existing exact-facet semantics.
+		if f.tags.contains(strings.ToLower(tag)) {
+			return true
+		}
+	}
+	return false
+}
+
+func (f compiledCriteria) matchesMembers(txn domain.Transaction) bool {
+	for _, id := range f.members {
+		if id == UnassignedMemberID {
+			if txn.IsUnassigned() {
+				return true
+			}
+			continue
+		}
+		if txn.HasOwner(id) {
+			return true
+		}
+	}
+	return false
 }
 
 // hasUncategorizedCategory reports whether a transaction has at least one
@@ -975,24 +1002,6 @@ func emptySortValue(t domain.Transaction, key string) bool {
 	default:
 		return false
 	}
-}
-
-// matchesMemberSelection matches an OR-set of member IDs. The reserved
-// UnassignedMemberID selection represents rows whose actual MemberID is empty;
-// other values continue to match member IDs exactly.
-func matchesMemberSelection(selected string, txn domain.Transaction) bool {
-	for _, id := range splitCSV(selected) {
-		if id == UnassignedMemberID {
-			if txn.IsUnassigned() {
-				return true
-			}
-			continue
-		}
-		if txn.HasOwner(id) {
-			return true
-		}
-	}
-	return false
 }
 
 // compare orders two transactions by the given key in ascending sense, returning
@@ -1063,20 +1072,17 @@ func AbsAmount(t domain.Transaction) int64 {
 	return t.Amount.Amount
 }
 
-// matchText reports whether the (already-lowercased) query appears in a
+// matchesText reports whether the prepared query appears in a
 // transaction's payee, description, cleaned display name, or any of its tags. Payee
 // is a first-class field used by the rules engine and the activity screen, so a payee
 // that differs from the description (e.g. a cleaned-up merchant name) must still be
-// findable. resolve (optional) maps the raw payee to its cleaned alias so a search for
-// the clean merchant name matches every charge even though the raw payee is unchanged.
-func matchText(t domain.Transaction, q string, resolve func(string) string) bool {
-	return matchTextWithLabels(t, q, Labels{Payee: resolve})
-}
-
-func matchTextWithLabels(t domain.Transaction, q string, labels Labels) bool {
-	if amount, ok := parseSearchAmount(q, labels.BaseCurrency); ok {
+// findable. The optional Payee label maps the raw payee to its cleaned alias so a
+// clean-name search still matches without changing the raw payee on the row.
+func (f compiledCriteria) matchesText(t domain.Transaction) bool {
+	q, labels := f.text, f.labels
+	if f.hasSearchAmount {
 		actual, err := amountInBase(t, labels)
-		if err == nil && actual == amount {
+		if err == nil && actual == f.searchAmount {
 			return true
 		}
 		if err != nil && labels.OnConversionError != nil {

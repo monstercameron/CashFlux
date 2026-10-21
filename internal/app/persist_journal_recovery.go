@@ -114,25 +114,26 @@ func readDurableDatasetSnapshotContext(ctx context.Context, recovery ...bool) (d
 	return durableDatasetSnapshot{}, errors.New("the workspace changed while reading saved data")
 }
 
-func authenticatedCheckpoint(raw string) ([]byte, error) {
+func authenticatedCheckpoint(raw string) ([]byte, *appstate.ParsedDataset, error) {
 	if cryptobox.IsEnvelope([]byte(raw)) {
 		if activePasscode == "" {
-			return nil, errSyncDatasetLocked
+			return nil, nil, errSyncDatasetLocked
 		}
 		plain, err := decryptEnvelopeSync([]byte(raw), activePasscode)
 		if err != nil {
-			return nil, fmt.Errorf("open legacy checkpoint: %w", err)
+			return nil, nil, fmt.Errorf("open legacy checkpoint: %w", err)
 		}
 		raw = string(plain)
 	}
 	data, _, err := checkpointDatasetJSON([]byte(raw))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	if _, err := store.Import(data); err != nil {
-		return nil, fmt.Errorf("validate saved checkpoint: %w", err)
+	parsed, err := appstate.ParseDataset(data)
+	if err != nil {
+		return nil, nil, fmt.Errorf("validate saved checkpoint: %w", err)
 	}
-	return data, nil
+	return data, parsed, nil
 }
 
 // recoverDatasetSnapshot prefers the live checkpoint (the most recently CAS
@@ -141,18 +142,25 @@ func authenticatedCheckpoint(raw string) ([]byte, error) {
 // authenticated head's base hash; new nodes additionally chain generations and
 // logical cursors. Unusable branches remain in the retained recovery bundle.
 func recoverDatasetSnapshot(s durableDatasetSnapshot) (string, bool, error) {
+	portable, _, repair, err := recoverDatasetSnapshotParsed(s)
+	return portable, repair, err
+}
+
+// The parsed handle is valid only for the original authenticated checkpoint.
+// Any replay clears it so hydration cannot accidentally load the journal's base.
+func recoverDatasetSnapshotParsed(s durableDatasetSnapshot) (string, *appstate.ParsedDataset, bool, error) {
 	checkpoint := s.Values[datasetStoreKey]
-	data, err := authenticatedCheckpoint(checkpoint)
+	data, parsed, err := authenticatedCheckpoint(checkpoint)
 	repair := s.Errors[datasetStoreKey] != nil || s.Errors[datasetGenKey] != nil
 	if err != nil || s.Errors[datasetStoreKey] != nil {
 		var backup checkpointBackup
 		if s.Errors[datasetCheckpointBackupKey] != nil || json.Unmarshal([]byte(s.Values[datasetCheckpointBackupKey]), &backup) != nil || backup.Workspace != s.workspace || backup.Owner != s.Values[datasetOwnerKey] {
-			return "", false, fmt.Errorf("%w: %v", errNoDatasetCheckpoint, errors.Join(err, s.Errors[datasetStoreKey]))
+			return "", nil, false, fmt.Errorf("%w: %v", errNoDatasetCheckpoint, errors.Join(err, s.Errors[datasetStoreKey]))
 		}
 		checkpoint = backup.Checkpoint
-		data, err = authenticatedCheckpoint(checkpoint)
+		data, parsed, err = authenticatedCheckpoint(checkpoint)
 		if err != nil {
-			return "", false, fmt.Errorf("%w: %v", errNoDatasetCheckpoint, err)
+			return "", nil, false, fmt.Errorf("%w: %v", errNoDatasetCheckpoint, err)
 		}
 		repair = true
 	}
@@ -175,19 +183,19 @@ func recoverDatasetSnapshot(s durableDatasetSnapshot) (string, bool, error) {
 		if generation := checkpointGeneration(checkpoint); generation != "" && generation != s.Values[datasetGenKey] {
 			repair = true
 		}
-		return string(data), repair || hasUnclaimedJournal(s, nil), nil
+		return string(data), parsed, repair || hasUnclaimedJournal(s, nil), nil
 	}
 	if head.Version == 1 && head.Workspace != s.workspace && head.BaseHash == checkpointHash(checkpoint) {
 		// A matching authenticated head binds this checkpoint to the other
 		// workspace. Without an independently anchored local chain, do not
 		// relabel its household as the newly active workspace.
-		return "", false, fmt.Errorf("the saved checkpoint belongs to another workspace: %w", appstate.ErrStaleDataset)
+		return "", nil, false, fmt.Errorf("the saved checkpoint belongs to another workspace: %w", appstate.ErrStaleDataset)
 	}
 	if head.Generation != s.Values[datasetGenKey] {
 		repair = true
 	}
 	if head.Version != 1 || head.Workspace != s.workspace || head.BaseHash != checkpointHash(checkpoint) {
-		return string(data), true, nil
+		return string(data), parsed, true, nil
 	}
 	if records, err := readDatasetRecords(checkpoint, headRaw, head.Generation, s.workspace, s.Read); err == nil {
 		portable, err := portableDatasetFromRecords(baseDataset, records)
@@ -197,7 +205,7 @@ func recoverDatasetSnapshot(s durableDatasetSnapshot) (string, bool, error) {
 			for _, key := range keys {
 				claimed[key] = true
 			}
-			return portable, repair || keyErr != nil || hasUnclaimedJournal(s, claimed), nil
+			return portable, nil, repair || keyErr != nil || hasUnclaimedJournal(s, claimed), nil
 		}
 	}
 	repair = true
@@ -250,7 +258,7 @@ func recoverDatasetSnapshot(s durableDatasetSnapshot) (string, bool, error) {
 			repair = true
 			break
 		}
-		data, changes = []byte(portable), candidate
+		data, changes, parsed = []byte(portable), candidate, nil
 		priorGeneration, cursor = node.Generation, node.Through
 	}
 	if priorGeneration != "" && (priorGeneration != head.Generation || cursor != head.Cursor) {
@@ -259,7 +267,7 @@ func recoverDatasetSnapshot(s durableDatasetSnapshot) (string, bool, error) {
 	for key := range seen {
 		claimed[key] = true
 	}
-	return string(data), repair || hasUnclaimedJournal(s, claimed), nil
+	return string(data), parsed, repair || hasUnclaimedJournal(s, claimed), nil
 }
 
 func readRecoveryNodes(s durableDatasetSnapshot, head datasetRecordHead) ([]datasetRecordNode, map[string]bool, bool) {
@@ -364,7 +372,7 @@ func hydrateDurableDataset(app *appstate.App, s durableDatasetSnapshot) error {
 			return appstate.ErrStaleDataset
 		}
 		app.Log().Info("dataset hydration stage", "stage", "replay", "status", "started", "workspace", s.workspace)
-		portable, repair, err := recoverDatasetSnapshot(s)
+		portable, parsed, repair, err := recoverDatasetSnapshotParsed(s)
 		// The backup is deliberately excluded from normal hydration. Only an
 		// unreadable checkpoint or a repair needs its bytes and ciphertext CAS.
 		if err != nil || repair {
@@ -388,7 +396,7 @@ func hydrateDurableDataset(app *appstate.App, s durableDatasetSnapshot) error {
 				// A valid live checkpoint already supplied the replayed
 				// dataset. The added backup is only a guarded repair input.
 				if err != nil {
-					portable, repair, err = recoverDatasetSnapshot(s)
+					portable, parsed, repair, err = recoverDatasetSnapshotParsed(s)
 				}
 			}
 		}
@@ -465,11 +473,15 @@ func hydrateDurableDataset(app *appstate.App, s durableDatasetSnapshot) error {
 			return err
 		}
 		app.Log().Info("dataset hydration stage", "stage", "import", "status", "started")
-		if err := app.ImportJSON([]byte(portable)); err != nil {
+		if parsed != nil {
+			err = app.ImportParsedDataset(parsed)
+		} else {
+			err = app.ImportJSON([]byte(portable))
+		}
+		if err != nil {
 			return fmt.Errorf("load recovered dataset: %w", err)
 		}
 		app.Log().Info("dataset hydration stage", "stage", "import", "status", "complete")
-		app.SyncTxnLinkNetting()
 		hydratedRecordApp = app
 		hydratedRecordCursor, _ = app.Store().ChangeCursor()
 		hydratedRecordRevision = app.Rev()

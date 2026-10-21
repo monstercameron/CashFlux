@@ -3,6 +3,7 @@
 package reports
 
 import (
+	"fmt"
 	"sort"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/memberallocation"
+	"github.com/monstercameron/CashFlux/internal/money"
 )
 
 // MemberSpend is one household member's total expense over the reporting period,
@@ -24,6 +26,8 @@ type MemberSpend struct {
 // [start, end) in the base currency, largest first (ties broken by member id for
 // determinism). Transfers and income are excluded (IsExpense), matching the rest
 // of the reporting core. It answers the household question "who spent what?".
+// Conversion, magnitude and per-member sum failures return an error with no
+// partial rows; unavailable spending must not be interpreted as known zero.
 func SpendingByMember(txns []domain.Transaction, start, end time.Time, rates currency.Rates) ([]MemberSpend, error) {
 	totals := map[string]int64{}
 	for _, t := range txns {
@@ -32,14 +36,24 @@ func SpendingByMember(txns []domain.Transaction, start, end time.Time, rates cur
 		}
 		conv, err := rates.Convert(t.Amount, rates.Base)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("spending by member: transaction %s conversion: %w", t.ID, err)
 		}
-		shares := memberallocation.SplitAmount(conv.Abs().Amount, t.Owners())
+		magnitude, err := conv.AbsChecked()
+		if err != nil {
+			return nil, fmt.Errorf("spending by member: transaction %s magnitude: %w", t.ID, err)
+		}
+		shares := memberallocation.SplitAmount(magnitude.Amount, t.Owners())
 		if len(shares) == 0 {
-			totals[""] += conv.Abs().Amount
+			totals[""], err = money.Add(totals[""], magnitude.Amount)
+			if err != nil {
+				return nil, fmt.Errorf("spending by member: transaction %s unattributed total: %w", t.ID, err)
+			}
 		}
 		for _, share := range shares {
-			totals[share.MemberID] += share.Amount
+			totals[share.MemberID], err = money.Add(totals[share.MemberID], share.Amount)
+			if err != nil {
+				return nil, fmt.Errorf("spending by member: transaction %s member %s total: %w", t.ID, share.MemberID, err)
+			}
 		}
 	}
 

@@ -3,6 +3,8 @@
 package accountflow
 
 import (
+	"math"
+	"reflect"
 	"testing"
 	"time"
 
@@ -38,6 +40,10 @@ func TestPeriodFlow(t *testing.T) {
 	txns = append(txns, tr)
 
 	f := PeriodFlow(a, txns, start, end)
+	checked, err := PeriodFlowChecked(a, txns, start, end)
+	if err != nil || !reflect.DeepEqual(checked, f) {
+		t.Fatalf("checked period flow = %+v, %v; legacy = %+v", checked, err, f)
+	}
 	if f.In.Amount != 200000 {
 		t.Errorf("In = %d, want 200000", f.In.Amount)
 	}
@@ -49,6 +55,31 @@ func TestPeriodFlow(t *testing.T) {
 	}
 	if f.Transfer.Amount != -100000 {
 		t.Errorf("Transfer = %d, want -100000", f.Transfer.Amount)
+	}
+}
+
+func TestPeriodFlowCheckedRejectsMagnitudeAndAggregateOverflow(t *testing.T) {
+	a := acct("chk", 0)
+	start, end := day(2026, 7, 1), day(2026, 8, 1)
+	cases := []struct {
+		name string
+		rows []domain.Transaction
+	}{
+		{name: "income aggregate", rows: []domain.Transaction{txn("i1", "chk", math.MaxInt64, day(2026, 7, 2)), txn("i2", "chk", 1, day(2026, 7, 3))}},
+		{name: "expense magnitude min int", rows: []domain.Transaction{txn("e1", "chk", math.MinInt64, day(2026, 7, 2))}},
+		{name: "expense aggregate", rows: []domain.Transaction{txn("e1", "chk", -math.MaxInt64, day(2026, 7, 2)), txn("e2", "chk", -1, day(2026, 7, 3))}},
+		{name: "transfer aggregate", rows: func() []domain.Transaction {
+			first, second := txn("x1", "chk", math.MaxInt64, day(2026, 7, 2)), txn("x2", "chk", 1, day(2026, 7, 3))
+			first.TransferAccountID, second.TransferAccountID = "sav", "sav"
+			return []domain.Transaction{first, second}
+		}()},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := PeriodFlowChecked(a, tc.rows, start, end); err == nil {
+				t.Fatal("overflowing flow accepted")
+			}
+		})
 	}
 }
 

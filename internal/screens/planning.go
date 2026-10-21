@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/monstercameron/CashFlux/internal/afford"
 	"github.com/monstercameron/CashFlux/internal/amountmath"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/cashflow"
@@ -17,21 +16,18 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
-	"github.com/monstercameron/CashFlux/internal/forecast"
 	"github.com/monstercameron/CashFlux/internal/icon"
-	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/planning"
-	"github.com/monstercameron/CashFlux/internal/reports"
+	"github.com/monstercameron/CashFlux/internal/planningmodel"
 	"github.com/monstercameron/CashFlux/internal/runway"
-	"github.com/monstercameron/CashFlux/internal/safespend"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/router"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/router"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // planTile wraps a tile body in the shared Widget chrome + the full-width bento column.
@@ -124,6 +120,11 @@ func Planning() ui.Node {
 		uistate.SetPlanningConfig(pc)
 		return nil
 	}, planPersistKey)
+	planningNow := time.Now()
+	prepared := planningmodel.Prepared{}
+	if app != nil {
+		prepared = preparePlanning(app, planningNow, trimStr.Get(), compareID.Get(), afAmount.Get(), afMonths.Get(), afReserve.Get(), rwBuffer.Get(), dec)
+	}
 
 	// planAddOpen drives the "Add plan" FlipPanel modal (PlanAddForm). It is local state
 	// (not a shell-root atom) so the trigger button and the modal share it directly and the
@@ -158,195 +159,179 @@ func Planning() ui.Node {
 
 	forecastCard := Fragment()
 	if app != nil {
-		accounts := app.Accounts()
-		txns := app.Transactions()
-		rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-		net, _, _, _ := ledger.NetWorth(accounts, txns, rates)
-		// Base the forecast on the average of the last 3 complete months, not just
-		// this (possibly atypical) month — a one-off purchase or bonus shouldn't skew
-		// the 12-month projection (L27).
-		monthlyNet, _ := reports.TrailingMonthlyNet(txns, time.Now(), 3, rates)
+		if !prepared.Forecast.Available {
+			forecastCard = planTile("plan-forecast", planSection("sec-forecast", uistate.T("planning.forecastTitle"), Fragment(),
+				P(css.Class("muted"), Attr("data-testid", "planning-forecast-unavailable"), planningFactMessage(prepared.Forecast))))
+		} else {
+			series := prepared.Forecast.Value.Balances
+			monthlyNet := prepared.TrailingMonthlyNet.Value
+			endVal := money.New(series[len(series)-1], base)
 
-		series := forecast.Project(net.Amount, []forecast.Recurring{{Label: "net cash flow", Monthly: monthlyNet}}, nil, 12)
-		endVal := money.New(series[len(series)-1], base)
-
-		// C170: warn if the projection dips below zero at any point in the horizon —
-		// an end value alone hides a mid-horizon shortfall. Find the first month the
-		// balance crosses negative (month 0 = now).
-		dipMonth, dipsBelowZero := -1, false
-		for i, v := range series {
-			if v < 0 {
-				dipMonth, dipsBelowZero = i, true
-				break
+			// C170: warn if the projection dips below zero at any point in the horizon —
+			// an end value alone hides a mid-horizon shortfall. Find the first month the
+			// balance crosses negative (index 0 = the first projected month).
+			dipMonth, dipsBelowZero := prepared.Forecast.Value.DipMonth, prepared.Forecast.Value.DipsBelowZero
+			var dipWarning ui.Node = Fragment()
+			if dipsBelowZero {
+				when := planningNow.AddDate(0, dipMonth+1, 0).Format("Jan 2006")
+				dipWarning = P(ClassStr("t-body "+tw.ColorClass("text-down")), Attr("data-testid", "forecast-dip-warning"),
+					uistate.T("planning.forecastDip", when))
 			}
-		}
-		var dipWarning ui.Node = Fragment()
-		if dipsBelowZero {
-			when := time.Now().AddDate(0, dipMonth, 0).Format("Jan 2006")
-			dipWarning = P(ClassStr("t-body "+tw.ColorClass("text-down")), Attr("data-testid", "forecast-dip-warning"),
-				uistate.T("planning.forecastDip", when))
-		}
 
-		// Plot in major units (dollars) with a compact-currency axis (C16), and
-		// overlay the trimmed scenario beside the baseline when a trim is set, so
-		// the two net-worth curves can be compared directly (D10).
-		toPoints := func(vals []int64) []chartspec.Point {
-			pts := make([]chartspec.Point, len(vals))
-			for i, v := range vals {
-				pts[i] = chartspec.Point{X: float64(i), Y: currency.MajorFromMinor(v, base)}
-			}
-			return pts
-		}
-		yFmt := ".3~s"
-		if currency.Symbol(base) == "$" {
-			yFmt = "$.3~s"
-		}
-		chartSeries := []chartspec.Series{{Name: uistate.T("planning.seriesBaseline"), Color: accent, Points: toPoints(series)}}
-		// Calendar X-axis labels (G7 §7 / L61): the chart's X values are month indices
-		// 0..12, which read as opaque "0 · 2 · 4 …". Attach a real month label to each
-		// baseline point ("Jul 2026"); chart.js renders point labels as X ticks when no
-		// x.format is set, so Dev can answer "by when?" instead of "at which index?".
-		forecastStart := time.Now()
-		for i := range chartSeries[0].Points {
-			chartSeries[0].Points[i].Label = forecastStart.AddDate(0, i, 0).Format("Jan 2006")
-		}
-
-		trimNote := Fragment()
-		if trim, terr := money.ParseMinor(strings.TrimSpace(trimStr.Get()), currency.Decimals(base)); terr == nil && trim > 0 {
-			series2 := forecast.Project(net.Amount, []forecast.Recurring{{Monthly: monthlyNet + trim}}, nil, 12)
-			chartSeries = append(chartSeries, chartspec.Series{Name: uistate.T("planning.seriesTrim"), Color: "#cfa14e", Points: toPoints(series2)})
-			end2 := series2[len(series2)-1]
-			trimNote = P(css.Class("muted"), uistate.T("planning.trimNote",
-				fmtMoney(money.New(trim, base)), fmtMoney(money.New(end2, base)), fmtMoney(money.New(end2-series[len(series)-1], base))))
-		}
-
-		// Side-by-side plan comparison overlay (L27 enhancement): when a saved plan is
-		// selected in the compare-with picker, project its monthly change from the same
-		// baseline and overlay its curve on the forecast chart in a distinct color.
-		compareNote := Fragment()
-		savedPlans := app.Plans()
-		cid := compareID.Get()
-		if cid != "" {
-			for _, cp := range savedPlans {
-				if cp.ID != cid {
-					continue
+			// Plot in major units (dollars) with a compact-currency axis (C16), and
+			// overlay the trimmed scenario beside the baseline when a trim is set, so
+			// the two net-worth curves can be compared directly (D10).
+			toPoints := func(vals []int64) []chartspec.Point {
+				pts := make([]chartspec.Point, len(vals))
+				for i, v := range vals {
+					pts[i] = chartspec.Point{X: float64(i), Y: currency.MajorFromMinor(v, base)}
 				}
-				cMonthly := planning.MonthlyNet(cp)
-				cSeries := forecast.Project(net.Amount, []forecast.Recurring{{Monthly: cMonthly}}, nil, 12)
-				chartSeries = append(chartSeries, chartspec.Series{
-					Name:   cp.Name,
-					Color:  "#7b68ee",
-					Points: toPoints(cSeries),
-				})
-				cEnd := cSeries[len(cSeries)-1]
-				baseEnd := series[len(series)-1]
-				diff := cEnd - baseEnd
-				compareNote = P(css.Class("muted"),
-					Attr("data-testid", "plan-compare-note"),
-					uistate.T("plans.compareNote", cp.Name,
-						fmtMoney(money.New(cEnd, base)),
-						fmtMoney(money.New(baseEnd, base)),
-						fmtMoney(money.New(diff, base)),
-					),
-				)
-				break
+				return pts
 			}
-		}
+			yFmt := ".3~s"
+			if currency.Symbol(base) == "$" {
+				yFmt = "$.3~s"
+			}
+			chartSeries := []chartspec.Series{{Name: uistate.T("planning.seriesBaseline"), Color: accent, Points: toPoints(series)}}
+			// Calendar X-axis labels (G7 §7 / L61): the chart's X values are month indices
+			// 0..12, which read as opaque "0 · 2 · 4 …". Attach a real month label to each
+			// baseline point ("Jul 2026"); chart.js renders point labels as X ticks when no
+			// x.format is set, so Dev can answer "by when?" instead of "at which index?".
+			forecastStart := planningNow
+			for i := range chartSeries[0].Points {
+				chartSeries[0].Points[i].Label = forecastStart.AddDate(0, i+1, 0).Format("Jan 2006")
+			}
 
-		// Build compare-with plan select options.
-		compareOpts := []ui.Node{Option(Value(""), SelectedIf(cid == ""), uistate.T("plans.compareNone"))}
-		for _, cp := range savedPlans {
-			compareOpts = append(compareOpts, Option(Value(cp.ID), SelectedIf(cid == cp.ID), cp.Name))
-		}
+			trimNote := Fragment()
+			if prepared.TrimForecast.Available {
+				trim, _ := money.ParseMinor(strings.TrimSpace(trimStr.Get()), currency.Decimals(base))
+				series2 := prepared.TrimForecast.Value.Balances
+				chartSeries = append(chartSeries, chartspec.Series{Name: uistate.T("planning.seriesTrim"), Color: "#cfa14e", Points: toPoints(series2)})
+				end2 := series2[len(series2)-1]
+				if prepared.TrimEndChange.Available {
+					trimNote = P(css.Class("muted"), uistate.T("planning.trimNote",
+						fmtMoney(money.New(trim, base)), fmtMoney(money.New(end2, base)), fmtMoney(money.New(prepared.TrimEndChange.Value, base))))
+				}
+			} else if strings.TrimSpace(trimStr.Get()) != "" {
+				trimNote = P(css.Class("muted"), Attr("data-testid", "planning-trim-unavailable"), planningFactMessage(prepared.TrimForecast))
+			}
+			partialNotice := Fragment()
+			if prepared.Forecast.Partial && prepared.Forecast.Notice != "" {
+				partialNotice = P(css.Class("muted"), Attr("data-testid", "planning-forecast-partial"), prepared.Forecast.Notice)
+			}
 
-		spec := chartspec.Spec{
-			Kind:   chartspec.Line,
-			Series: chartSeries,
-			Y:      chartspec.Axis{Format: yFmt},
-			Legend: len(chartSeries) > 1,
+			// Side-by-side plan comparison overlay (L27 enhancement): when a saved plan is
+			// selected in the compare-with picker, project its monthly change from the same
+			// baseline and overlay its curve on the forecast chart in a distinct color.
+			compareNote := Fragment()
+			savedPlans := app.Plans()
+			cid := compareID.Get()
+			if cid != "" && !prepared.CompareForecast.Available {
+				compareNote = P(css.Class("muted"), Attr("data-testid", "planning-compare-unavailable"), planningFactMessage(prepared.CompareForecast))
+			}
+			if cid != "" {
+				for _, cp := range savedPlans {
+					if cp.ID != cid {
+						continue
+					}
+					cSeries := prepared.CompareForecast.Value.Balances
+					if !prepared.CompareForecast.Available {
+						break
+					}
+					chartSeries = append(chartSeries, chartspec.Series{
+						Name:   cp.Name,
+						Color:  "#7b68ee",
+						Points: toPoints(cSeries),
+					})
+					cEnd := cSeries[len(cSeries)-1]
+					baseEnd := series[len(series)-1]
+					if prepared.CompareEndChange.Available {
+						compareNote = P(css.Class("muted"),
+							Attr("data-testid", "plan-compare-note"),
+							uistate.T("plans.compareNote", cp.Name,
+								fmtMoney(money.New(cEnd, base)),
+								fmtMoney(money.New(baseEnd, base)),
+								fmtMoney(money.New(prepared.CompareEndChange.Value, base)),
+							),
+						)
+					} else {
+						compareNote = P(css.Class("muted"), Attr("data-testid", "planning-compare-unavailable"), planningFactMessage(prepared.CompareEndChange))
+					}
+					break
+				}
+			}
+
+			// Build compare-with plan select options.
+			compareOpts := []ui.Node{Option(Value(""), SelectedIf(cid == ""), uistate.T("plans.compareNone"))}
+			for _, cp := range savedPlans {
+				compareOpts = append(compareOpts, Option(Value(cp.ID), SelectedIf(cid == cp.ID), cp.Name))
+			}
+
+			spec := chartspec.Spec{
+				Kind:   chartspec.Line,
+				Series: chartSeries,
+				Y:      chartspec.Axis{Format: yFmt},
+				Legend: len(chartSeries) > 1,
+			}
+			planSmartSettings := uistate.LoadSmartSettings()
+			forecastCard = planTile("plan-forecast", planSection("sec-forecast", uistate.T("planning.forecastTitle"), smartSectionAction(planSmartSettings),
+				Fragment(
+					// Headline answer (G7 §4/§5): surface the projected 12-month net worth as a
+					// display-weight figure so Dev's primary question ("where will I be?") is
+					// answerable at glance-speed, before parsing the chart or the hint sentence.
+					Div(css.Class("stat-grid"),
+						// Projected net worth is the key planning figure — tooltip explains the methodology.
+						Div(css.Class("stat"),
+							Div(css.Class("stat-label "+tw.Fold(tw.InlineFlex, tw.ItemsCenter, tw.Gap1)),
+								uistate.T("planning.projectedNetWorth"),
+								smartTooltipFor(planSmartSettings, "planning-forecast", uistate.T("planning.projectedNetWorth"), uistate.T("smart.tipPlanningForecast")),
+							),
+							Div(ClassStr("stat-value is-hero "+accentFor(endVal)), fmtMoney(endVal)),
+						),
+						stat(uistate.T("planning.avgMonthlyNet"), fmtMoney(money.New(monthlyNet, base)), accentFor(money.New(monthlyNet, base))),
+					),
+					dipWarning,
+					// FP-T2d: a twelve-month projection is stated in the dollars of twelve
+					// months from now, and reading it as today's money overstates it by a
+					// year of inflation. Say what it is worth in money the reader can price.
+					forecastRealLine(series[len(series)-1], base),
+					partialNotice,
+					P(css.Class("muted"), uistate.T("planning.forecastHint", fmtMoney(money.New(monthlyNet, base)), fmtMoney(endVal))),
+					P(css.Class("muted"), Attr("data-testid", "forecast-basis"), uistate.T("planning.forecastBasis")),
+					uiw.Chart(uiw.ChartProps{Spec: spec, Height: "180px", Label: uistate.T("planning.forecastChartLabel", fmtMoney(endVal))}),
+					Form(css.Class("form-grid"),
+						labeledField(uistate.T("planning.trimLabel", base), Input(css.Class("field"), Type("number"), Step("0.01"), OnInput(onTrim), uiw.FieldValue(trimStr.Get()))),
+						If(len(savedPlans) > 0,
+							// G7: compare-with is a secondary overlay action; compact class
+							// keeps it visually subordinate to the primary trim input.
+							Label(css.Class("field-label"), uistate.T("plans.compareLabel"),
+								Select(css.Class("field", "plan-compare-select--compact"), Attr("aria-label", uistate.T("plans.compareLabel")),
+									Attr("data-testid", "plan-compare-select"), OnChange(onCompare), compareOpts),
+							),
+						),
+					),
+					trimNote,
+					compareNote,
+				)))
 		}
-		planSmartSettings := uistate.LoadSmartSettings()
-		forecastCard = planTile("plan-forecast", planSection("sec-forecast", uistate.T("planning.forecastTitle"), smartSectionAction(planSmartSettings),
-			Fragment(
-				// Headline answer (G7 §4/§5): surface the projected 12-month net worth as a
-				// display-weight figure so Dev's primary question ("where will I be?") is
-				// answerable at glance-speed, before parsing the chart or the hint sentence.
-				Div(css.Class("stat-grid"),
-					// Projected net worth is the key planning figure — tooltip explains the methodology.
-					Div(css.Class("stat"),
-						Div(css.Class("stat-label "+tw.Fold(tw.InlineFlex, tw.ItemsCenter, tw.Gap1)),
-							uistate.T("planning.projectedNetWorth"),
-							smartTooltipFor(planSmartSettings, "planning-forecast", uistate.T("planning.projectedNetWorth"), uistate.T("smart.tipPlanningForecast")),
-						),
-						Div(ClassStr("stat-value is-hero "+accentFor(endVal)), fmtMoney(endVal)),
-					),
-					stat(uistate.T("planning.avgMonthlyNet"), fmtMoney(money.New(monthlyNet, base)), accentFor(money.New(monthlyNet, base))),
-				),
-				dipWarning,
-				// FP-T2d: a twelve-month projection is stated in the dollars of twelve
-				// months from now, and reading it as today's money overstates it by a
-				// year of inflation. Say what it is worth in money the reader can price.
-				forecastRealLine(series[len(series)-1], base),
-				P(css.Class("muted"), uistate.T("planning.forecastHint", fmtMoney(money.New(monthlyNet, base)), fmtMoney(endVal))),
-				P(css.Class("muted"), Attr("data-testid", "forecast-basis"), uistate.T("planning.forecastBasis")),
-				uiw.Chart(uiw.ChartProps{Spec: spec, Height: "180px", Label: uistate.T("planning.forecastChartLabel", fmtMoney(endVal))}),
-				Form(css.Class("form-grid"),
-					labeledField(uistate.T("planning.trimLabel", base), Input(css.Class("field"), Type("number"), Step("0.01"), OnInput(onTrim), uiw.FieldValue(trimStr.Get()))),
-					If(len(savedPlans) > 0,
-						// G7: compare-with is a secondary overlay action; compact class
-						// keeps it visually subordinate to the primary trim input.
-						Label(css.Class("field-label"), uistate.T("plans.compareLabel"),
-							Select(css.Class("field", "plan-compare-select--compact"), Attr("aria-label", uistate.T("plans.compareLabel")),
-								Attr("data-testid", "plan-compare-select"), OnChange(onCompare), compareOpts),
-						),
-					),
-				),
-				trimNote,
-				compareNote,
-			)))
 	}
 
 	// C141: compute safe-to-spend once at top-level so both the runway card (the
 	// lead section per C168) and the affordability card share the same canonical
 	// figure. Zero when app is nil (no accounts yet).
-	planSafeToSpend := func() int64 {
-		if app == nil {
-			return 0
-		}
-		accts := app.Accounts()
-		txns := app.Transactions()
-		rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-		liq, _ := ledger.LiquidBalance(accts, txns, rates)
-		_, mEnd := dateutil.MonthRange(time.Now())
-		toBase := safespend.ToBaseFunc(rates)
-		billsDue := safespend.BillsDueBefore(accts, app.Recurring(), time.Now(), mEnd, toBase)
-		goalNeeds := safespend.GoalContributionsProrated(app.Goals(), time.Now(), toBase)
-		return safespend.Compute(liq.Amount, billsDue, goalNeeds, 0, base).SafeToSpend
-	}()
+	planSafeToSpend := int64(0)
+	if prepared.SafeToSpend.Available {
+		planSafeToSpend = prepared.SafeToSpend.Value.SafeToSpend
+	}
 
 	// Affordability check (L8): "can I afford $X (in N months, keeping a buffer)?"
 	// projected from today's net worth and this month's net cash flow, via the pure
 	// internal/afford engine — a deterministic answer, not an AI guess.
 	affordCard := Fragment()
 	if app != nil {
-		txns := app.Transactions()
-		rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-		// C175/C141: safeStart comes from planSafeToSpend (liquid minus bills/goals)
-		// so the "can I afford it?" card is consistent with the Safe to spend tile
-		// at the top of the page. Monthly net is still used to project future months.
-		safeStart := planSafeToSpend
-		mStart, mEnd := dateutil.MonthRange(time.Now())
-		income, expense, _ := ledger.PeriodTotals(txns, mStart, mEnd, rates)
-		monthlyNet := income.Amount - expense.Amount
-
 		var afBody ui.Node = P(css.Class("muted"), uistate.T("planning.affordEnter"))
-		if amt, aerr := money.ParseMinor(strings.TrimSpace(afAmount.Get()), currency.Decimals(base)); aerr == nil && amt > 0 {
-			months, _ := strconv.Atoi(strings.TrimSpace(afMonths.Get()))
-			reserved, _ := money.ParseMinor(strings.TrimSpace(afReserve.Get()), currency.Decimals(base))
-			if reserved < 0 {
-				reserved = 0
-			}
-			res := afford.CanAfford(amt, safeStart, monthlyNet, months, reserved)
+		if prepared.Affordability.Available {
+			res := prepared.Affordability.Value
 			var verdict ui.Node
 			if res.Affordable {
 				verdict = P(css.Class("budget-sub", tw.FontDisplay), uistate.T("planning.affordYes"))
@@ -368,6 +353,8 @@ func Planning() ui.Node {
 				),
 				verdict,
 			)
+		} else if strings.TrimSpace(afAmount.Get()) != "" || prepared.Affordability.Err != nil {
+			afBody = P(css.Class("muted"), Attr("data-testid", "planning-afford-unavailable"), planningFactMessage(prepared.Affordability))
 		}
 
 		affordCard = planTile("plan-afford", planSection("sec-afford", uistate.T("planning.affordTitle"), Fragment(),
@@ -388,148 +375,154 @@ func Planning() ui.Node {
 	// net-worth forecast above.
 	runwayCard := Fragment()
 	if app != nil {
-		recs := app.Recurring()
-		rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-		// C171: cash runway must start from LIQUID cash (checking/savings/cash), not
-		// total assets — projecting against a 401(k)/home balance wildly overstates how
-		// long money lasts against day-to-day bills.
-		liquid, _ := ledger.LiquidBalance(app.Accounts(), app.Transactions(), rates)
+		liquid := money.Zero(base)
+		if prepared.LiquidBalance.Available {
+			liquid = prepared.LiquidBalance.Value
+		}
 		buffer, _ := money.ParseMinor(strings.TrimSpace(rwBuffer.Get()), currency.Decimals(base))
 		if buffer < 0 {
 			buffer = 0
 		}
-		const runwayDays = 60
+		const runwayDays = planningmodel.RunwayDays
 
 		var rwBody ui.Node = ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("planning.runwayEmpty"), CTALabel: uistate.T("recurring.add"), FocusID: "recurring-add"}) // C174: actionable empty-state
-		if len(recs) > 0 {
-			if proj, perr := runway.Project(liquid.Amount, recs, time.Now(), runwayDays, buffer, rates); perr == nil {
-				lowTone := ""
-				if proj.MinBalance < 0 {
-					lowTone = "neg"
-				}
-				lowDate := time.Now().AddDate(0, 0, proj.MinDay).Format("Jan 2")
-				// C169: payday-anchored balance — "what will my liquid cash be on my next
-				// payday?" Anchors on the day-of-month derived from the configured pay-cycle
-				// anchor (prefs.PayCycleAnchor). Omitted entirely when no anchor is set.
-				var paydayStat ui.Node = Fragment()
-				if curPrefs := uistate.LoadPrefs(); curPrefs.PayCycleAnchor != "" {
-					if anchor, aerr := time.Parse("2006-01-02", curPrefs.PayCycleAnchor); aerr == nil {
-						ph := runway.NextPaydayHorizon(time.Now(), anchor.Day(), runwayDays)
-						paydayBal := cashflow.PaydayBalance(proj, ph)
-						paydayDate := time.Now().AddDate(0, 0, ph).Format("Jan 2")
-						payTone := ""
-						if paydayBal < 0 {
-							payTone = "neg"
-						}
-						paydayStat = stat(uistate.T("planning.paydayBalance", paydayDate), fmtMoney(money.New(paydayBal, base)), payTone)
+		if prepared.Runway.Available {
+			proj := prepared.Runway.Value
+			lowTone := ""
+			if proj.MinBalance < 0 {
+				lowTone = "neg"
+			}
+			lowDate := planningNow.AddDate(0, 0, proj.MinDay).Format("Jan 2")
+			// C169: payday-anchored balance — "what will my liquid cash be on my next
+			// payday?" Anchors on the day-of-month derived from the configured pay-cycle
+			// anchor (prefs.PayCycleAnchor). Omitted entirely when no anchor is set.
+			var paydayStat ui.Node = Fragment()
+			if curPrefs := uistate.LoadPrefs(); curPrefs.PayCycleAnchor != "" {
+				if anchor, aerr := time.Parse("2006-01-02", curPrefs.PayCycleAnchor); aerr == nil {
+					ph := runway.NextPaydayHorizon(planningNow, anchor.Day(), runwayDays)
+					paydayBal := cashflow.PaydayBalance(proj, ph)
+					paydayDate := planningNow.AddDate(0, 0, ph).Format("Jan 2")
+					payTone := ""
+					if paydayBal < 0 {
+						payTone = "neg"
 					}
+					paydayStat = stat(uistate.T("planning.paydayBalance", paydayDate), fmtMoney(money.New(paydayBal, base)), payTone)
 				}
-				var verdict ui.Node
-				if proj.WillBreach() {
-					breachDate := time.Now().AddDate(0, 0, proj.BreachDay).Format("Jan 2")
-					// Build the suggested-action line alongside the warning.
-					sug := runway.SuggestCover(proj.BreachShortfall, app.Accounts(), app.Transactions(), rates)
-					var sugNode ui.Node
-					switch {
-					case sug.Found && sug.AmountMinor >= proj.BreachShortfall:
-						sugNode = Div(css.Class("runway-suggest"),
-							Attr("data-testid", "runway-suggest"),
-							Span(uistate.T("planning.runwaySuggest",
-								fmtMoney(money.New(sug.AmountMinor, base)),
-								sug.SourceName,
-							)),
-							A(css.Class("btn btn-sm"), Href(uistate.RoutePath("/transactions")), OnClick(goTransactions), uistate.T("planning.runwaySuggestAction")),
-						)
-					case sug.Found:
-						sugNode = Div(css.Class("runway-suggest"),
-							Attr("data-testid", "runway-suggest"),
-							Span(uistate.T("planning.runwaySuggestPartial",
-								fmtMoney(money.New(sug.AmountMinor, base)),
-								sug.SourceName,
-							)),
-							A(css.Class("btn btn-sm"), Href(uistate.RoutePath("/transactions")), OnClick(goTransactions), uistate.T("planning.runwaySuggestAction")),
-						)
-					default:
-						sugNode = P(css.Class("muted"),
-							Attr("data-testid", "runway-suggest"),
-							uistate.T("planning.runwaySuggestNone"),
-						)
-					}
-					verdict = Div(
-						P(css.Class("err"), Attr("role", "alert"), Attr("data-testid", "runway-breach"), uistate.T("planning.runwayBreach", breachDate, fmtMoney(money.New(proj.BreachShortfall, base)))),
-						sugNode,
+			}
+			var verdict ui.Node
+			if proj.WillBreach() {
+				breachDate := planningNow.AddDate(0, 0, proj.BreachDay).Format("Jan 2")
+				// Build the suggested-action line alongside the warning.
+				sug := prepared.CoverSuggestion.Value
+				var sugNode ui.Node
+				switch {
+				case !prepared.CoverSuggestion.Available && prepared.CoverSuggestion.Err != nil:
+					sugNode = P(css.Class("muted"), Attr("data-testid", "runway-suggest"), planningFactMessage(prepared.CoverSuggestion))
+				case sug.Found && sug.AmountMinor >= proj.BreachShortfall:
+					sugNode = Div(css.Class("runway-suggest"),
+						Attr("data-testid", "runway-suggest"),
+						Span(uistate.T("planning.runwaySuggest",
+							fmtMoney(money.New(sug.AmountMinor, base)),
+							sug.SourceName,
+						)),
+						A(css.Class("btn btn-sm"), Href(uistate.RoutePath("/transactions")), OnClick(goTransactions), uistate.T("planning.runwaySuggestAction")),
 					)
-				} else {
-					verdict = P(css.Class("budget-sub", tw.FontDisplay), uistate.T("planning.runwaySafe", runwayDays))
+				case sug.Found:
+					sugNode = Div(css.Class("runway-suggest"),
+						Attr("data-testid", "runway-suggest"),
+						Span(uistate.T("planning.runwaySuggestPartial",
+							fmtMoney(money.New(sug.AmountMinor, base)),
+							sug.SourceName,
+						)),
+						A(css.Class("btn btn-sm"), Href(uistate.RoutePath("/transactions")), OnClick(goTransactions), uistate.T("planning.runwaySuggestAction")),
+					)
+				default:
+					sugNode = P(css.Class("muted"),
+						Attr("data-testid", "runway-suggest"),
+						uistate.T("planning.runwaySuggestNone"),
+					)
 				}
-				// C172: render the per-day balance curve (it was computed but never shown —
-				// only summary stats were). A line over the 60-day horizon, X = day index.
-				dayPts := make([]chartspec.Point, len(proj.Daily))
-				rwStart := time.Now()
-				for i, d := range proj.Daily {
-					dayPts[i] = chartspec.Point{X: float64(d.Day), Y: currency.MajorFromMinor(d.Balance, base), Label: rwStart.AddDate(0, 0, d.Day).Format("Jan 2")}
+				verdict = Div(
+					P(css.Class("err"), Attr("role", "alert"), Attr("data-testid", "runway-breach"), uistate.T("planning.runwayBreach", breachDate, fmtMoney(money.New(proj.BreachShortfall, base)))),
+					sugNode,
+				)
+			} else {
+				verdict = P(css.Class("budget-sub", tw.FontDisplay), uistate.T("planning.runwaySafe", runwayDays))
+			}
+			// C172: render the per-day balance curve (it was computed but never shown —
+			// only summary stats were). A line over the 60-day horizon, X = day index.
+			dayPts := make([]chartspec.Point, len(proj.Daily))
+			rwStart := planningNow
+			for i, d := range proj.Daily {
+				dayPts[i] = chartspec.Point{X: float64(d.Day), Y: currency.MajorFromMinor(d.Balance, base), Label: rwStart.AddDate(0, 0, d.Day).Format("Jan 2")}
+			}
+			rwYFmt := ".3~s"
+			if currency.Symbol(base) == "$" {
+				rwYFmt = "$.3~s"
+			}
+			rwSeries := []chartspec.Series{{Name: uistate.T("planning.runwayBalanceSeries"), Color: accent, Points: dayPts}}
+			// When a warning buffer is set, overlay it as a flat amber threshold line so the
+			// user can see where their floor sits against the projected balance — the input
+			// now has a visible effect (the balance dipping under it is the breach).
+			if buffer > 0 {
+				bufMajor := currency.MajorFromMinor(buffer, base)
+				bufPts := make([]chartspec.Point, len(dayPts))
+				for i, dp := range dayPts {
+					bufPts[i] = chartspec.Point{X: dp.X, Y: bufMajor, Label: dp.Label}
 				}
-				rwYFmt := ".3~s"
-				if currency.Symbol(base) == "$" {
-					rwYFmt = "$.3~s"
+				rwSeries = append(rwSeries, chartspec.Series{Name: uistate.T("planning.runwayBufferSeries"), Color: "#e0a93b", Points: bufPts})
+			}
+			rwSpec := chartspec.Spec{
+				Kind:   chartspec.Line,
+				Series: rwSeries,
+				Y:      chartspec.Axis{Format: rwYFmt},
+				Legend: len(rwSeries) > 1,
+			}
+			// C141: surface Safe to spend as the headline tile in the runway
+			// section (which is now the page lead per C168), matching the
+			// dashboard kpi-safetospend terminology exactly.
+			s2sTone := ""
+			if planSafeToSpend < 0 {
+				s2sTone = "neg"
+			}
+			_ = s2sTone
+			_ = lowDate
+			// Daily allowance: your discretionary "safe to spend" spread across the days
+			// until your next income (paycheck) — the "$X/day until payday" framing comps
+			// lead with. Derived from the same recurring schedule the runway projects.
+			var perDayNode ui.Node = Fragment()
+			if planSafeToSpend > 0 && prepared.DaysToNextInflow.Available {
+				nextIn := prepared.DaysToNextInflow.Value
+				if nextIn > 0 {
+					perDay := planSafeToSpend / int64(nextIn)
+					perDayNode = Div(css.Class("stat-sub", tw.TextDim), Attr("data-testid", "runway-perday"),
+						uistate.T("planning.safeToSpendPerDay", fmtMoney(money.New(perDay, base)), nextIn))
 				}
-				rwSeries := []chartspec.Series{{Name: uistate.T("planning.runwayBalanceSeries"), Color: accent, Points: dayPts}}
-				// When a warning buffer is set, overlay it as a flat amber threshold line so the
-				// user can see where their floor sits against the projected balance — the input
-				// now has a visible effect (the balance dipping under it is the breach).
-				if buffer > 0 {
-					bufMajor := currency.MajorFromMinor(buffer, base)
-					bufPts := make([]chartspec.Point, len(dayPts))
-					for i, dp := range dayPts {
-						bufPts[i] = chartspec.Point{X: dp.X, Y: bufMajor, Label: dp.Label}
-					}
-					rwSeries = append(rwSeries, chartspec.Series{Name: uistate.T("planning.runwayBufferSeries"), Color: "#e0a93b", Points: bufPts})
-				}
-				rwSpec := chartspec.Spec{
-					Kind:   chartspec.Line,
-					Series: rwSeries,
-					Y:      chartspec.Axis{Format: rwYFmt},
-					Legend: len(rwSeries) > 1,
-				}
-				// C141: surface Safe to spend as the headline tile in the runway
-				// section (which is now the page lead per C168), matching the
-				// dashboard kpi-safetospend terminology exactly.
-				s2sTone := ""
-				if planSafeToSpend < 0 {
-					s2sTone = "neg"
-				}
-				_ = s2sTone
-				_ = lowDate
-				// Daily allowance: your discretionary "safe to spend" spread across the days
-				// until your next income (paycheck) — the "$X/day until payday" framing comps
-				// lead with. Derived from the same recurring schedule the runway projects.
-				var perDayNode ui.Node = Fragment()
-				if planSafeToSpend > 0 {
-					if nextIn, nerr := runway.DaysToNextInflow(recs, time.Now(), runwayDays, rates); nerr == nil {
-						perDay := planSafeToSpend / int64(nextIn)
-						perDayNode = Div(css.Class("stat-sub", tw.TextDim), Attr("data-testid", "runway-perday"),
-							uistate.T("planning.safeToSpendPerDay", fmtMoney(money.New(perDay, base)), nextIn))
-					}
-				}
-				rwBody = Div(
-					// Safe-to-spend is the runway's headline (its bottom margin matches the grid
-					// gutter so the gap to the secondary figures is uniform); the secondary stats
-					// stretch across the row below.
-					Div(css.Class("stat plan-runway-hero"),
-						Div(css.Class("stat-label", tw.TextDim), uistate.T("planning.safeToSpend")),
-						Div(ClassStr("stat-value is-hero "+tw.Fold(tw.FontDisplay)+" "+accentFor(money.New(planSafeToSpend, base))), fmtMoney(money.New(planSafeToSpend, base))),
-						perDayNode,
-					),
-					Div(css.Class("stat-grid"),
-						stat(uistate.T("planning.runwayStart"), fmtMoney(money.New(liquid.Amount, base)), ""),
-						stat(uistate.T("planning.runwayLowLabel"), fmtMoney(money.New(proj.MinBalance, base)), lowTone),
-						paydayStat,
-					),
-					verdict,
-					// The daily balance curve over the horizon (date-labelled X axis).
-					uiw.Chart(uiw.ChartProps{Spec: rwSpec, Height: "160px", Label: uistate.T("planning.runwayChartLabel")}),
+			}
+			var safeSpendHero ui.Node = P(css.Class("muted"), Attr("data-testid", "planning-safe-to-spend-unavailable"), planningFactMessage(prepared.SafeToSpend))
+			if prepared.SafeToSpend.Available {
+				safeSpendHero = Div(css.Class("stat plan-runway-hero"),
+					Div(css.Class("stat-label", tw.TextDim), uistate.T("planning.safeToSpend")),
+					Div(ClassStr("stat-value is-hero "+tw.Fold(tw.FontDisplay)+" "+accentFor(money.New(planSafeToSpend, base))), fmtMoney(money.New(planSafeToSpend, base))),
+					perDayNode,
 				)
 			}
+			rwBody = Div(
+				// Safe-to-spend is the runway's headline (its bottom margin matches the grid
+				// gutter so the gap to the secondary figures is uniform); the secondary stats
+				// stretch across the row below.
+				safeSpendHero,
+				Div(css.Class("stat-grid"),
+					stat(uistate.T("planning.runwayStart"), fmtMoney(money.New(liquid.Amount, base)), ""),
+					stat(uistate.T("planning.runwayLowLabel"), fmtMoney(money.New(proj.MinBalance, base)), lowTone),
+					paydayStat,
+				),
+				verdict,
+				// The daily balance curve over the horizon (date-labelled X axis).
+				uiw.Chart(uiw.ChartProps{Spec: rwSpec, Height: "160px", Label: uistate.T("planning.runwayChartLabel")}),
+			)
+		} else if prepared.Runway.Err != nil || len(app.Recurring()) > 0 {
+			rwBody = P(css.Class("muted"), Attr("data-testid", "planning-runway-unavailable"), planningFactMessage(prepared.Runway))
 		}
 
 		runwayCard = planTile("plan-runway", planSection("sec-runway", uistate.T("planning.runwayTitle"), Fragment(),

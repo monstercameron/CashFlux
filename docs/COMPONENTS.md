@@ -108,9 +108,24 @@ ui.DataTable(ui.DataTableProps{Columns: cols, Body: rowNodes, Sort: sortKey, Dir
 
 ### FilterToolbar (`filtertoolbar.go`)
 **Purpose:** Search box + Filters popover trigger + active-filter chips + trailing action buttons.
-Screen-agnostic — used by Transactions; adopt for Reports, Categories, Rules per Phase 2.
+Screen-agnostic — used by Transactions, Accounts and To-do.
 ```go
 ui.FilterToolbar(ui.FilterToolbarProps{Search: q, OnSearch: fn, FilterFields: fieldNodes, Chips: chips, OnRemoveChip: removeFn})
+```
+
+### ControlStrip (`controlstrip.go`)
+**Purpose:** Control/action slots for pages that do not need `FilterToolbar` search,
+filter-panel and chip behavior. Goals and Assistant use it. The outer class is
+`filter-strip`; `Class` adds page classes. `ControlsClass` and `ActionsClass` replace
+the slots' default `filter-strip-controls` class. `Attrs` preserves page attributes.
+Supply a translated `Label` for a named group. The component owns no hooks or
+financial calculations; callers pass prepared nodes.
+```go
+ui.ControlStrip(ui.ControlStripProps{
+    Label: controlsLabel,
+    Controls: []uic.Node{periodPicker, viewPicker},
+    Actions: []uic.Node{addButton},
+})
 ```
 
 ### FlipPanel (`flippanel.go`)
@@ -153,6 +168,224 @@ ui.Icon(icon.Accounts, css.Class(tw.W4, tw.H4))
 ```go
 ui.Segmented(ui.SegmentedProps{Options: []ui.SegOption{{Value: "month", Label: "Month"}, …}, Selected: cur, OnSelect: fn})
 ```
+
+### SegmentedControl (`segmented.go`)
+**Purpose:** Keyed pressed choices or tabs with caller-owned classes, optional
+counts, disabled options and stable test IDs. To-do uses pressed choices for
+views/date lenses; Notifications uses tabs for triage and Goals uses tabs for
+Goals/Earmarks. `Segmented` above retains
+its animated radio-group presentation.
+
+Use stable, unique, nonempty keys. The group and button children own their hooks;
+mount groups through `uic.CreateElement` in variable-length lists. Tabs support
+wrapped Left/Right navigation, Home/End, disabled skipping and roving tab stops.
+`Selected` and `OnSelect` keep selection caller-owned.
+```go
+ui.SegmentedControl(ui.SegmentedControlProps{
+    Label: viewLabel, Selected: currentView, OnSelect: selectView,
+    Class: "page-views", ButtonClass: "page-view", ActiveClass: "is-active",
+    Options: []ui.SegmentOption{
+        {Key: "list", Label: listLabel},
+        {Key: "calendar", Label: calendarLabel},
+    },
+})
+```
+
+### surfaceTiles (`screens/surface_tiles.go` — screen package)
+**Purpose:** Keyed widget placement host for Accounts, Budgets, Goals, To-do and
+Notifications. It adds `bento`, accepts page classes/root attributes, copies the
+render context per placement and delegates failure handling to `safeRenderSpec`.
+Placement IDs must be stable, unique and nonempty. Event hooks stay in children.
+
+Transactions retains specialized `txnPlacement` dispatch/memoization. Dashboard
+and Reports retain composed grids/sections. Use the shared host when its placement
+contract fits the page; preserve specialized performance boundaries.
+
+### Native view models and bounded caches
+Financial rules and aggregate preparation belong in native packages (`accountview`,
+`assistantview`, `budgetview`, `dashboardview`, `goalview`, `notificationview`,
+`reportview`, `taskview`). Screens format facts and own events. Cached maps/slices
+are read-only; copy before sorting or editing.
+
+`viewcache.Cache` bounds retained models. Screen `revKey` includes app identity,
+stored revision and browser data revision; callers append scope, period, time and
+other inputs. Large snapshots use capacity one. Tests cover context/data/FX/date
+invalidation. See [Primary page performance](PRIMARY_PAGE_PERFORMANCE.md) for local
+measurements and their limits.
+
+#### Goals: prepare once, render children from facts
+
+`goals.BuildTaskIndex(tasks)` scans linked tasks once and produces per-goal
+`TaskSummary` values (counts plus at most three previews). `goalview.Build(Input)`
+uses that index to build one `goalview.RowModel` per visible goal; each row carries
+the canonical `goals.Evaluation`, task summary, growth projection and explicit
+`Now`. The same model set supplies sections, summary figures and health ordering.
+Pass the row model into `GoalRow`, then into `GoalFigures` and
+`GoalTaskPreview`; those child components render prepared values and own their
+interactive hooks. Keep the stored `domain.Goal` alongside the model for writes
+and callbacks. This prevents list rows from independently re-running evaluation
+or rebuilding task indexes. `GoalRow`'s nil-model fallback is for isolated use;
+it rebuilds the task index, so do not use that fallback in a per-goal list.
+
+The page-level view must be rebuilt when goals, tasks, accounts, transactions,
+FX rates, member scope or the effective date changes. Stored writes flow through
+the app/data revision; the date key must also account for day changes and goal
+deadline/pause transitions (`goalview.TimeKey`). Do not mutate or sort the view's
+shared slices/maps in render code; create a copy when a presentation needs a
+different ordering. Child row components should be mounted as components (such
+as `ui.CreateElement(GoalRow, ...)`) so per-row event hooks remain isolated and
+stable.
+
+Compact goal cards evaluate the shared row model but do not prepare interest,
+trajectory or contribution-history details. `goals_card_details.go` owns that
+expanded-only preparation boundary; preserve it when adding card details. The
+contribution-history panel uses `Evaluation.Assignment` for the canonical
+monthly plan (explicit plan converted to the goal currency, or evaluated
+required pace when no explicit plan exists). It uses checked `goalhistory`
+series/summary arithmetic; assignment failure, currency mismatch or overflow must
+render as unavailable rather than a partial history. Contribution writes use
+`Goal.RecordContributionChecked`, which preserves the original goal on checked
+rollup failure and retains the established policy for a same-month currency
+conflict. Keep contribution persistence in shared `appstate` hooks: an optional
+ledger debit and the goal history are committed together, and notification,
+workflow and observer effects run only after that commit succeeds. UI components
+own the user action and feedback, not the transaction boundary or post-commit
+effects.
+
+#### Period totals: carry availability with the numbers
+
+`periodview.BuildTotals` is the checked preparation boundary for Dashboard and
+Assistant period activity. `Totals.Known` must gate use of `Income`, `Expense`
+and `Net`: a failure converting any included transaction or checked subtraction
+leaves those values unavailable rather than implying zero activity.
+`SavingsKnown` is a separate check because a savings-rate calculation can fail
+even when the money totals are known. Preserve the existing no-division display
+convention for zero income. Dashboard widgets receive the complete
+`RenderCtx.PeriodTotals`; legacy `Income`/`Expense` fields are meaningful only
+when its `Known` flag is true. Do not drop the availability bit when building a
+widget context or replace an error with zero-valued money.
+
+#### Prepared dataset ingress
+
+`store.PreparedDataset` is an opaque token created only by `PrepareDataset`,
+which performs the ordinary full import validation and migration. App recovery
+may retain and pass that token through `appstate.ParsedDataset` only while the
+source checkpoint is unchanged. `LoadPrepared` skips only the normalizers
+already covered by that validation; ordinary `Load` remains the ingress for
+unprepared datasets. Keep the token's dataset private, reject its zero value,
+preserve per-device credential replacement and run transaction-link netting
+after a successful load. This avoids duplicate work without introducing a
+caller-controlled validation bypass.
+
+#### Reports: typed sections and lazy full-detail rendering
+
+`reportController` owns the report's fixed hook sequence, state, scope/window
+selection and shared prepared data. Its `reportSectionContext` explicitly
+includes the identities that change how a section reads or formats facts:
+revision, merged report/app scope, base currency, language, accent, date range,
+current activity date and preferences. Section components receive typed props
+containing this context and only their needed models/actions. Keep these display
+identities in props when adding sections; callback identity or transaction count
+alone does not invalidate translated, currency-formatted, themed or differently
+scoped output.
+
+Keep expensive full-detail sections as component elements (`ui.CreateElement`)
+under the Full-mode branch. Summary mode should mount the compact executive view
+without executing the long-form section builders. Do not call a section renderer
+directly while constructing the controller's Summary branch, and do not put
+controller hooks inside conditional Summary/Full branches or variable-length
+loops. Any section with hooks must itself be a component with an unconditional,
+fixed hook order. The report controller may prepare shared native aggregates for
+the summary and full report, but each expensive section should stay separately
+mountable so unopened detail isn't rendered speculatively.
+
+For annual-review money-flow detail, use the checked native helpers
+`reports.Per100Checked` and `reports.PositiveSavingsPer100`; they use integer
+amounts, return overflow errors and let the UI show an explicit unavailable state
+instead of partial or wrapped totals. Do not duplicate the per-$100 arithmetic in
+screen code or substitute an unchecked `int64` multiplication/float percentage.
+
+#### Accounts: disclose detail before preparing it
+
+`accountSnapshot(app)` is the page's revision-keyed shared balance/ledger snapshot.
+Pass it to one `accountDetailContext` for the rendered account rows. Compact
+`AccountRow` renders balance and status without asking that context for history,
+flows or projections. Its own disclosure state gates those reads; the selected
+90-day/12-month/all history range is local, view-only row state. Keep this lazy
+boundary when adding account detail: expensive facts belong inside the disclosure,
+while the per-row component owns its hooks and child components own theirs.
+
+The detail context's broad facts key includes app/data revision, rates, base
+currency, as-of instant and time zone, plus account ID. This covers balance-derived
+flow/projection and valuation history. Projection inputs are prepared once per
+revision and reused across open rows. Historical account series are native-currency
+facts, so their cache keys intentionally omit display FX/preferences and instead
+include account/revision, day, zone and requested day count. Invalid exact balances
+must remain unavailable; do not turn missing/invalid balances into zero-valued
+history or forecast curves. A revision change invalidates the details while a
+range change reuses the prepared history.
+
+#### Accounts and Goals: share checked reservation facts
+
+`goals.BuildAccountReservations` is the native owner of retained goal claims,
+including archived goals and accounts. It sums source currencies before FX,
+checks arithmetic, and distinguishes unavailable positions from known zero.
+`goalReservations(app)` caches that lightweight index by data revision; warning
+consumers do not build funding suggestions. `goalview.BuildFundingWithReservations`
+reuses it for suggestions and headroom. `reservationNotice` adapts the same facts
+to inline Accounts warnings and the Goals conflict panel; callers own actions.
+Count unique goal IDs for shared claims, and keep interactive warning hooks in
+their own child so healthy, unavailable and breached transitions remain stable.
+
+#### Goal allocation editor: a draft is not authority to save
+
+`goalview.BuildAllocationDraft` is the native owner of the manual earmark draft:
+it indexes other goals' reservations once, calculates checked account headroom from
+the shared account snapshot and current rates, and exposes immutable rows. The UI
+owns text/selection changes only. Unedited existing allocation records retain
+their original currency and order, including legacy or unavailable sources;
+display conversion failure is not permission to erase or rewrite them. Explicit
+amount edits and new selections must pass current currency, eligibility and
+headroom checks. Split refuses to silently omit selected unavailable reservations.
+
+The editor's snapshot cache is keyed by app revision and goal ID. Re-read that
+snapshot before splitting and again at save, and apply changes against the latest
+goal and balances. This closes the gap between an open modal and concurrent store,
+balance or FX changes. If the goal disappeared or the currency changed, show an
+error and leave storage alone. Keep row controls in `goalAllocateRow` components
+when mapping draft rows so each row owns stable input hooks; keep validation and
+arithmetic in the native draft model.
+
+#### Dashboard: cache layout separately from financial frames
+
+The dashboard has two intentionally independent preparation layers. The native
+`dashboardview.LayoutCache` prepares validated placements from instance, ready
+state, layout items, widget configs, hidden IDs, stored placements and current
+registry defaults. It retains two immutable configurations and freezes nested
+inputs before caching. Financial data revisions are not layout inputs: a new
+transaction should refresh frames without revalidating placement schemas. Layout
+changes should rebuild the placements without forcing unrelated frame preparation.
+Use this cache for the dashboard's configurable placement schema; do not use it as
+a generic financial-data cache.
+
+`dashboardview.FrameContexts` owns the other layer. Its identity includes app
+instance/revision, preference revision, full scope, base currency, full FX-rate
+identity, period bounds, clock minute and engine-variable timestamp. Each prepared
+context caches up to 32 serialized pipeline requests; `Hydrate` returns cloned
+frame fields/values so renderers cannot mutate cached results. Keep the identity
+complete when adding a frame input, and keep source data read-only. Moving or hiding
+a tile reuses the same financial context; changing data, scope, currency/rates,
+period or time identity refreshes it. Both caches are bounded.
+
+Dashboard's settled-state boundary also matters: the hero and direct headline
+figures render first, while engine variables and configurable tile frames wait
+until the surface settles. The drag-preview driver subscribes to drag atoms outside
+the expensive controller, so pointer movement updates tile shells without
+recomputing frames. Preserve that split when adding layout interactions or data
+tiles. Reuse the existing `accountSnapshot`/view-model preparation and
+`PreparedFrames` seams when another surface has the same inputs and immutable
+pipeline contract; otherwise keep the cache page-specific rather than weakening
+its identity.
 
 ### Toggle (`controls.go`)
 **Purpose:** Pill on/off switch (`.switch`, ARIA `role="switch"`). Keyboard-accessible (Space/Enter).

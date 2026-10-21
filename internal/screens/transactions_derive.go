@@ -11,6 +11,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
+	"github.com/monstercameron/CashFlux/internal/txntable"
 )
 
 // deriveTxnRows applies the ledger criteria and then orders the Description column
@@ -70,13 +71,7 @@ func memoTxnLabel(resolve func(string) string) func(string) string {
 
 // txnDisplayDescription returns the exact description text the ledger row shows.
 func txnDisplayDescription(desc, payee string, hasLearned func(string) bool, resolve func(string) string) string {
-	if strings.TrimSpace(payee) != "" && hasLearned != nil && hasLearned(payee) {
-		return resolve(payee)
-	}
-	if strings.TrimSpace(desc) == "" {
-		return resolve(payee)
-	}
-	return desc
+	return txntable.Description(desc, payee, hasLearned, resolve)
 }
 
 // sortTxnDescriptions orders transactions by their rendered Description cell.

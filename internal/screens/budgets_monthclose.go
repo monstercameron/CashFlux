@@ -5,6 +5,7 @@
 package screens
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -21,10 +22,10 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/router"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/router"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // budgets_monthclose.go is the guided month-close flow (#64): one flip modal that
@@ -37,9 +38,20 @@ import (
 
 // buildMonthCloseSummary assembles the pure summary for the current budget view.
 func buildMonthCloseSummary(app *appstate.App, v budgetView, bs, be time.Time) monthclose.Summary {
-	rates := currency.Rates{Base: v.Base, Rates: app.Settings().FXRates}
+	if app == nil || app.Store() == nil {
+		return monthclose.Summary{Error: fmt.Errorf("read month-close income: app is unavailable")}
+	}
+	if err := app.Store().CheckReady(); err != nil {
+		return monthclose.Summary{Error: fmt.Errorf("read month-close income: %w", err)}
+	}
+	transactions, transactionsErr := app.TransactionsChecked()
+	settings, settingsErr := app.SettingsChecked()
+	if err := errors.Join(transactionsErr, settingsErr); err != nil {
+		return monthclose.Summary{Error: fmt.Errorf("read month-close income: %w", err)}
+	}
+	rates := currency.Rates{Base: v.Base, Rates: settings.FXRates}
 	actual := int64(0)
-	if lines, err := reports.IncomeByCategory(app.Transactions(), bs, be, rates); err == nil {
+	if lines, err := reports.IncomeByCategoryChecked(transactions, bs, be, rates); err == nil {
 		for _, ln := range lines {
 			next, addErr := money.Add(actual, ln.Amount)
 			if addErr != nil {

@@ -17,9 +17,9 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // The /networth surface.
@@ -178,6 +178,9 @@ func nwsRatioCards(v nwsView) ui.Node {
 // by magnitude names the cause. The residual is never offered as an
 // explanation — it is an honesty disclosure, not an answer.
 func nwsTakeaway(v nwsView) string {
+	if v.BridgeErr != nil {
+		return uistate.T("nws.windowUnavailable")
+	}
 	b := v.Bridge
 	delta := b.DeltaMinor()
 	window := nwsWindowSpan(v.Months)
@@ -305,7 +308,10 @@ func nwsSlot(body ui.Node) ui.Node { return Div(css.Class("nws-slot"), body) }
 // movement over the selected window, and the two side totals. No chart junk.
 func nwsHero(v nwsView) ui.Node {
 	p := v.Latest()
-	delta := v.Bridge.DeltaMinor()
+	delta := int64(0)
+	if v.BridgeErr == nil {
+		delta = v.Bridge.DeltaMinor()
+	}
 	valCls := "nws-hero-value " + tw.Fold(tw.FontDisplay)
 	// A negative net worth is the one balance-sheet state that is unambiguously
 	// alarming, so it is the only one that turns the headline red.
@@ -313,7 +319,9 @@ func nwsHero(v nwsView) ui.Node {
 		valCls += " is-negative"
 	}
 	var deltaNode ui.Node = Fragment()
-	if delta != 0 {
+	if v.BridgeErr != nil {
+		deltaNode = Span(css.Class("nws-hero-delta", tw.TextDim), Attr("data-testid", "nw-delta"), uistate.T("nws.windowUnavailable"))
+	} else if delta != 0 {
 		arrow, tone := "▲", " "+tw.ColorClass("text-up")
 		if delta < 0 {
 			arrow, tone = "▼", ""
@@ -325,7 +333,9 @@ func nwsHero(v nwsView) ui.Node {
 
 	// Exclusions are disclosed, never silently folded into the figure.
 	var missingNote, byChoiceNote ui.Node = Fragment(), Fragment()
-	if len(v.Snapshot.MissingCurrencies) > 0 {
+	if v.SnapshotErr != nil {
+		missingNote = P(css.Class("err"), Attr("role", "alert"), uistate.T("networth.unavailable"))
+	} else if len(v.Snapshot.MissingCurrencies) > 0 {
 		missingNote = P(css.Class("err"), Attr("role", "alert"),
 			uistate.T("accounts.nwExcludes", plural(len(v.Snapshot.ExcludedAccounts), "account"),
 				strings.Join(v.Snapshot.MissingCurrencies, ", ")))
@@ -342,7 +352,7 @@ func nwsHero(v nwsView) ui.Node {
 				AsOfLine: uistate.T("nw.asOf", uistate.LoadPrefs().FormatDate(v.Now)) + " ",
 			}),
 			Div(ClassStr(valCls), Attr("data-countup", ""), Attr("data-testid", "nw-hero-value"),
-				fmtMoney(money.New(p.NetMinor, v.Base))),
+				IfElse(v.SeriesErr == nil, Text(fmtMoney(money.New(p.NetMinor, v.Base))), Text("—"))),
 			deltaNode,
 			missingNote,
 			byChoiceNote,
@@ -351,12 +361,12 @@ func nwsHero(v nwsView) ui.Node {
 			Div(css.Class("nws-side", "is-assets"),
 				Span(css.Class("nws-side-label"), uistate.T("accounts.assets")),
 				Span(ClassStr("nws-side-value "+tw.Fold(tw.FontDisplay)), Attr("data-testid", "nws-assets"),
-					fmtMoney(money.New(p.AssetsMinor, v.Base))),
+					IfElse(v.SeriesErr == nil, Text(fmtMoney(money.New(p.AssetsMinor, v.Base))), Text("—"))),
 			),
 			Div(css.Class("nws-side", "is-liabilities"),
 				Span(css.Class("nws-side-label"), uistate.T("dashboard.liabilities")),
 				Span(ClassStr("nws-side-value "+tw.Fold(tw.FontDisplay)), Attr("data-testid", "nws-liabilities"),
-					fmtMoney(money.New(p.LiabilitiesMinor, v.Base))),
+					IfElse(v.SeriesErr == nil, Text(fmtMoney(money.New(p.LiabilitiesMinor, v.Base))), Text("—"))),
 			),
 		),
 	), true)

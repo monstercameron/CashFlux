@@ -1,0 +1,17 @@
+go version go1.26.9 windows/arm64
+windows
+amd64
+C:\Users\mreca\Documents\Codex\2026-10-19\fin\work\gocache-go1269-app
+WORK=C:\Users\mreca\AppData\Local\Temp\go-build702392921
+goos: windows
+goarch: amd64
+pkg: github.com/monstercameron/CashFlux/internal/taxgather
+cpu: Virtual CPU @ 4.45GHz
+BenchmarkNetIncomeMatched/rows_10000-18         	       6	 142041900 ns/op	  82292433 gather-ns/op	  59779417 selected-ns/op	40275354 B/op	   78378 allocs/op
+BenchmarkNetIncomeMatched/rows_10000-18         	       6	  99780400 ns/op	  59931683 gather-ns/op	  39726750 selected-ns/op	40275458 B/op	   78378 allocs/op
+BenchmarkNetIncomeMatched/rows_10000-18         	       6	 507896183 ns/op	 287466200 gather-ns/op	 220447483 selected-ns/op	40275421 B/op	   78378 allocs/op
+BenchmarkNetIncomeMatched/rows_100000-18        	       6	2500863900 ns/op	1221681717 gather-ns/op	1279276317 selected-ns/op	408539440 B/op	  782710 allocs/op
+BenchmarkNetIncomeMatched/rows_100000-18        	       6	1419351750 ns/op	 810961633 gather-ns/op	 608253283 selected-ns/op	408537832 B/op	  782709 allocs/op
+BenchmarkNetIncomeMatched/rows_100000-18        	       6	 753325983 ns/op	 427223033 gather-ns/op	 326037467 selected-ns/op	408537813 B/op	  782708 allocs/op
+PASS
+ok  	github.com/monstercameron/CashFlux/internal/taxgather	37.836s

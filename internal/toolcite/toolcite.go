@@ -14,8 +14,8 @@
 package toolcite
 
 import (
+	"bytes"
 	"encoding/json"
-	"fmt"
 	"strings"
 )
 
@@ -54,31 +54,38 @@ type citable struct {
 // entry — those are the answers a person wants to check.
 var tools = map[string]citable{
 	"financial_summary":               {label: "Your headline figures"},
-	"spending_by_category":            {label: "Spending by category", scopeKeys: []string{"month", "period"}},
-	"spending_breakdown":              {label: "Spending breakdown", scopeKeys: []string{"month", "period", "category"}},
+	"spending_by_category":            {label: "Spending by category", scopeKeys: []string{"category", "period", "from", "to"}},
+	"spending_breakdown":              {label: "Spending breakdown", scopeKeys: []string{"period", "from", "to", "limit"}},
 	"account_balances":                {label: "Account balances"},
-	"list_transactions":               {label: "Transactions", scopeKeys: []string{"match", "category", "month", "from", "to", "limit"}},
+	"list_transactions":               {label: "Transactions", scopeKeys: []string{"category", "period", "limit"}},
 	"list_uncategorized_transactions": {label: "Uncategorized transactions"},
-	"list_budgets":                    {label: "Your budgets", scopeKeys: []string{"month", "period"}},
-	"list_goals":                      {label: "Your goals"},
-	"list_recurring":                  {label: "Recurring bills and subscriptions"},
+	"list_budgets":                    {label: "Your budgets", scopeKeys: []string{"period", "from", "to"}},
+	"list_goals":                      {label: "Your goals", scopeKeys: []string{"goal_id", "include_archived", "offset", "limit"}},
+	"list_recurring":                  {label: "Recurring bills and subscriptions", scopeKeys: []string{"recurring_id", "account_id", "include_paused", "from", "before", "offset", "definitions_offset", "limit"}},
 	"list_tasks":                      {label: "Your to-dos"},
 	"list_members":                    {label: "Household members"},
 	"list_categories":                 {label: "Your categories"},
 	"find_duplicate_transactions":     {label: "Possible duplicate transactions"},
 	"list_report_sections":            {label: "The report's sections"},
 	"report_section":                  {label: "A section of your report", scopeKeys: []string{"section", "period", "from", "to", "field"}},
-	"trace_report_row":                {label: "The transactions behind a report figure", scopeKeys: []string{"section", "row", "period", "from", "to"}},
-	"find_transactions":               {label: "Transactions", scopeKeys: []string{"contains", "category", "account", "member", "tag", "kind", "period", "from", "to"}},
-	"check_affordability":             {label: "Affordability check", scopeKeys: []string{"amount", "item"}},
-	"evaluate_formula":                {label: "A formula you defined", scopeKeys: []string{"name", "expression"}},
+	"trace_report_row":                {label: "The transactions behind a report figure", scopeKeys: []string{"section", "row", "period", "from", "to", "field", "limit"}},
+	"find_transactions":               {label: "Transactions", scopeKeys: []string{"contains", "category", "account", "member", "tag", "kind", "uncategorized", "min_amount", "max_amount", "period", "from", "to", "slices", "sort", "limit"}},
+	"check_affordability":             {label: "Affordability check", scopeKeys: []string{"amount", "months", "reserve"}},
+	"evaluate_formula":                {label: "A formula you defined", scopeKeys: []string{"expression", "snapshot"}},
 	"list_formula_metrics":            {label: "Your formula metrics"},
 	"gather_tax_records":              {label: "Tax-season gather", scopeKeys: []string{"year"}},
-	"search_documents":                {label: "Your documents", scopeKeys: []string{"query"}},
+	"search_documents":                {label: "Your documents", scopeKeys: []string{"question"}},
 	"web_search":                      {label: "A web search", scopeKeys: []string{"query"}},
 	"fetch_webpage":                   {label: "A web page", scopeKeys: []string{"url"}},
 	"list_remembered_facts":           {label: "What the assistant remembers"},
 	"parse_rapid_capture":             {label: "The text you pasted"},
+	"data_manifest":                   {label: "Your local data catalog", scopeKeys: []string{"collection"}},
+	"query_data":                      {label: "Local records", scopeKeys: []string{"collection", "ids", "equals", "search", "dateField", "from", "through", "offset", "limit", "snapshot"}},
+	"read_record":                     {label: "A local record", scopeKeys: []string{"collection", "id", "field", "offset", "limit", "snapshot"}},
+	"get_account_details":             {label: "Account details", scopeKeys: []string{"account_id"}},
+	"project_account":                 {label: "Account projection", scopeKeys: []string{"account_id", "horizon_days", "as_of"}},
+	"goal_funding_plan":               {label: "Goal funding plan", scopeKeys: []string{"goal_id", "offset", "limit"}},
+	"list_goal_reservations":          {label: "Goal reservations", scopeKeys: []string{"account_id", "offset", "limit"}},
 }
 
 // For returns the citation for one tool call. Evidence is left to the caller,
@@ -102,34 +109,41 @@ func scopeOf(args json.RawMessage, keys []string) string {
 		return ""
 	}
 	var decoded map[string]any
-	if err := json.Unmarshal(args, &decoded); err != nil {
+	decoder := json.NewDecoder(bytes.NewReader(args))
+	decoder.UseNumber()
+	if err := decoder.Decode(&decoded); err != nil {
 		return ""
 	}
 	parts := make([]string, 0, len(keys))
 	for _, key := range keys {
-		if v := valueOf(decoded[key]); v != "" {
-			parts = append(parts, v)
+		if v := valueOf(decoded[key], key); v != "" {
+			parts = append(parts, key+"="+v)
 		}
 	}
 	return strings.Join(parts, " · ")
 }
 
-// valueOf renders one JSON argument as a short display string. Numbers print
-// without a trailing ".0" so a limit of 20 reads as "20" rather than "20.000000".
-func valueOf(v any) string {
+// valueOf renders one JSON argument without rounding its numeric lexeme.
+func valueOf(v any, key string) string {
 	switch t := v.(type) {
 	case string:
-		return strings.TrimSpace(t)
-	case float64:
-		if t == float64(int64(t)) {
-			return fmt.Sprintf("%d", int64(t))
+		if key == "snapshot" && strings.TrimSpace(t) != "" {
+			return "continuation snapshot"
 		}
-		return strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.2f", t), "0"), ".")
+		return strings.TrimSpace(t)
+	case json.Number:
+		return t.String()
 	case bool:
 		if t {
 			return "yes"
 		}
 		return ""
+	case []any, map[string]any:
+		b, err := json.Marshal(t)
+		if err != nil {
+			return ""
+		}
+		return string(b)
 	default:
 		return ""
 	}

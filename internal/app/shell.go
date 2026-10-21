@@ -24,10 +24,10 @@ import (
 	"github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/router"
-	uic "github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/router"
+	uic "github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // ShellProps configures the chrome around a screen.
@@ -1478,6 +1478,7 @@ type topBarProps struct {
 func TopBar(props topBarProps) uic.Node {
 	useTopbarHeight()
 	collapsed := uistate.UseRailCollapsed()
+	viewedPeriod := uistate.UsePeriod().Get()
 	curPath := props.ActivePath
 	onDashboard := curPath == "/"
 	// The time-resolution control only makes sense where there's a period concept;
@@ -1529,6 +1530,7 @@ func TopBar(props topBarProps) uic.Node {
 			uic.CreateElement(shellResolutionSlot, shellResolutionSlotProps{
 				PeriodAware: periodAware,
 				YearEnding:  curPath == "/reports",
+				Window:      viewedPeriod,
 			}),
 			uic.CreateElement(OfflineIndicator),
 			// Sample-data status chip (audit P0): lives in the bar's context zone —
@@ -1779,6 +1781,7 @@ func LockToggle() uic.Node {
 // annual heading read as a broken monthly filter).
 type resolutionControlProps struct {
 	YearEnding bool
+	Window     period.Window
 }
 
 // ResolutionControl is the top bar's time-resolution control. The common case is
@@ -1802,6 +1805,9 @@ type resolutionControlProps struct {
 func ResolutionControl(props resolutionControlProps) uic.Node {
 	atom := uistate.UsePeriod()
 	w := atom.Get()
+	if props.Window.Res.Valid() {
+		w = props.Window
+	}
 	open := uic.UseState(false)
 	// rangeAsked is only the user's REQUEST to see the range editor. Whether the
 	// editor shows is derived below from that plus the window itself, so an
@@ -1822,20 +1828,21 @@ func ResolutionControl(props resolutionControlProps) uic.Node {
 		return Button(css.Class("period-preset"), Type("button"), Attr("role", "menuitem"),
 			OnClick(func() {
 				now := time.Now()
+				current := atom.Get()
 				switch v {
 				case "this":
-					uistate.SetPeriod(atom, period.NewWindow(w.Res, now, w.WeekStart))
+					uistate.SetPeriod(atom, period.NewWindow(current.Res, now, current.WeekStart))
 				case "last":
-					uistate.SetPeriod(atom, period.Previous(w.Res, now, w.WeekStart))
+					uistate.SetPeriod(atom, period.Previous(current.Res, now, current.WeekStart))
 				case "quarter":
 					uistate.PersistResolution(period.Quarter)
-					uistate.SetPeriod(atom, period.NewWindow(period.Quarter, now, w.WeekStart))
+					uistate.SetPeriod(atom, period.NewWindow(period.Quarter, now, current.WeekStart))
 				case "ytd":
 					uistate.PersistResolution(period.Month)
-					uistate.SetPeriod(atom, period.YearToDate(now, w.WeekStart))
+					uistate.SetPeriod(atom, period.YearToDate(now, current.WeekStart))
 				case "lastyear":
 					uistate.PersistResolution(period.Year)
-					uistate.SetPeriod(atom, period.PriorYear(now, w.WeekStart))
+					uistate.SetPeriod(atom, period.PriorYear(now, current.WeekStart))
 				}
 				closeMenu()
 			}),
@@ -1940,7 +1947,7 @@ func ResolutionControl(props resolutionControlProps) uic.Node {
 	// center pill opens a popover with the granularity, quick jumps and custom range.
 	return Div(css.Class("period-control add-wrap"), Attr("id", menuID),
 		Button(css.Class("period-step"), Type("button"), Attr("aria-label", uistate.T("resolution.prevPeriod")), Attr("title", uistate.T("resolution.prevPeriod")),
-			OnClick(func() { uistate.SetPeriod(atom, w.Shift(-1)) }), ui.Icon(icon.ChevronLeft, css.Class(tw.W4, tw.H4))),
+			OnClick(func() { uistate.SetPeriod(atom, atom.Get().Shift(-1)) }), ui.Icon(icon.ChevronLeft, css.Class(tw.W4, tw.H4))),
 		Button(css.Class("period-pill"), Type("button"), Attr("aria-haspopup", "menu"), Attr("aria-expanded", expanded),
 			Attr("data-testid", "period-pill"), Attr("aria-label", uistate.T("bud21.periodPillName", pillLabel)),
 			Attr("title", uistate.T("resolution.jumpTo")),
@@ -1949,7 +1956,7 @@ func ResolutionControl(props resolutionControlProps) uic.Node {
 			ui.Icon(icon.ChevronDown, css.Class("period-caret", tw.W3, tw.H3)),
 		),
 		Button(css.Class("period-step"), Type("button"), Attr("aria-label", uistate.T("resolution.nextPeriod")), Attr("title", uistate.T("resolution.nextPeriod")),
-			OnClick(func() { uistate.SetPeriod(atom, w.Shift(1)) }), ui.Icon(icon.ChevronRight, css.Class(tw.W4, tw.H4))),
+			OnClick(func() { uistate.SetPeriod(atom, atom.Get().Shift(1)) }), ui.Icon(icon.ChevronRight, css.Class(tw.W4, tw.H4))),
 		Div(ClassStr("add-backdrop"+hidden), OnClick(closeMenu)),
 		Div(ClassStr("period-pop add-menu open-left"+hidden), Attr("role", "menu"),
 			ui.Segmented(ui.SegmentedProps{
@@ -1964,7 +1971,7 @@ func ResolutionControl(props resolutionControlProps) uic.Node {
 				OnSelect: func(v string) {
 					r := period.Resolution(v)
 					uistate.PersistResolution(r)
-					uistate.SetPeriod(atom, w.SetResolution(r, time.Now()))
+					uistate.SetPeriod(atom, atom.Get().SetResolution(r, time.Now()))
 				},
 			}),
 			Div(css.Class("period-presets", tw.Flex, tw.FlexWrap, tw.Gap15),
@@ -1980,8 +1987,9 @@ func ResolutionControl(props resolutionControlProps) uic.Node {
 				Attr("data-testid", "period-range-open"),
 				Attr("aria-expanded", "false"),
 				OnClick(func() {
-					draftFrom.Set(w.From)
-					draftTo.Set(w.To)
+					current := atom.Get()
+					draftFrom.Set(current.From)
+					draftTo.Set(current.To)
 					rangeAsked.Set(true)
 				}),
 				uistate.T("resolution.customRange"))),

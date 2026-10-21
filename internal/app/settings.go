@@ -33,15 +33,16 @@ import (
 	"github.com/monstercameron/CashFlux/internal/notify"
 	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/CashFlux/internal/screens"
+	"github.com/monstercameron/CashFlux/internal/settingsinput"
 	"github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/CashFlux/internal/version"
 	"github.com/monstercameron/CashFlux/internal/widgetcfg"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/router"
-	uic "github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/router"
+	uic "github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // backendHost extracts the lowercased host[:port] from a server URL, ignoring
@@ -800,18 +801,15 @@ func globalSettingsForm() uic.Node {
 	// "/settings" (no tab segment) redirects to "/settings/household" once,
 	// on mount.
 	tab := liveSettingsTab()
-	// rawTab is captured (not the mutable tab, reassigned to "household" just
-	// below) because UseEffect's callback runs deferred, after commit — by
-	// then a closure over `tab` itself would see the reassigned fallback
-	// value, never the original "" that means "needs a redirect" (Go closures
-	// capture variables by reference, not a snapshot at registration time).
-	rawTab := tab
-	uic.UseEffect(func() func() {
-		if rawTab == "" {
-			uistate.NavigateTo("/settings/household")
+	// The callback rechecks the browser path when it runs. A passive effect
+	// from this render must not redirect after the user has already left.
+	uic.UseEffect(defaultSettingsTabRedirect(tab, func() string {
+		loc := js.Global().Get("location")
+		if !loc.Truthy() {
+			return ""
 		}
-		return nil
-	}, "settings-default-tab-redirect")
+		return uistate.LogicalPath(loc.Get("pathname").String())
+	}, uistate.NavigateTo), "settings-default-tab-redirect")
 	if tab == "" {
 		tab = "household"
 	}
@@ -1005,6 +1003,7 @@ func globalSettingsForm() uic.Node {
 		if a == nil {
 			return
 		}
+		rate = settingsinput.NormalizeFXRate(rate)
 		s := a.Settings()
 		if s.FXRates == nil {
 			s.FXRates = map[string]float64{}
@@ -1154,10 +1153,7 @@ func globalSettingsForm() uic.Node {
 		// AC15: the idle-cash benchmark rate. A blank/invalid/negative entry clears it
 		// (0 disables the idle_cash_forgone_annual figure — nothing to compare to).
 		OnIdleCashBenchmarkAPR: uic.UseEvent(func(v string) {
-			apr, err := strconv.ParseFloat(strings.TrimSpace(v), 64)
-			if err != nil || apr < 0 {
-				apr = 0
-			}
+			apr := settingsinput.ParseIdleCashBenchmarkAPR(v)
 			p := prefsAtom.Get()
 			p.IdleCashBenchmarkAPR = apr
 			savePrefs(p)
@@ -1395,7 +1391,7 @@ type fxRateRowProps struct {
 // empty/zero value clears the rate.
 func fxRateRow(props fxRateRowProps) uic.Node {
 	on := uic.UseEvent(func(e uic.Event) {
-		r, _ := strconv.ParseFloat(strings.TrimSpace(e.GetValue()), 64)
+		r := settingsinput.ParseFXRate(e.GetValue())
 		props.OnSet(props.Code, r)
 	})
 	val := ""

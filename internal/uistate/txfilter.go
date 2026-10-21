@@ -8,9 +8,11 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
-	"github.com/monstercameron/GoWebComponents/v5/state"
+	"github.com/monstercameron/GoWebComponents/v7/state"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // TxFilter is the transaction list's filter/sort selection. It aliases the pure
@@ -23,10 +25,19 @@ const (
 	txFilterStoreID = "cashflux:tx-filter"
 )
 
-// UseTxFilter returns the shared transaction-filter atom, seeded from
-// localStorage so the last filter/sort is restored on reload.
+// UseTxFilter returns the shared transaction-filter atom, seeded from the
+// persisted filter so the last filter/sort is restored on reload.
 func UseTxFilter() state.Atom[TxFilter] {
-	return state.UseAtom(txFilterAtomID, loadTxFilter())
+	return useTxFilterWithLoader(loadTxFilter)
+}
+
+// UseAtom only consumes its default when the fixed atom is first created. Keep
+// that seed local to the mounted hook so row/menu renders do not reread SQLite
+// or decode ignored JSON. A late subscriber/remount still loads a fresh default
+// without replacing live atom state. Workspace switches reload the runtime.
+func useTxFilterWithLoader(load func() TxFilter) state.Atom[TxFilter] {
+	initial := ui.UseMemo(load, appstate.Default)
+	return state.UseAtom(txFilterAtomID, initial)
 }
 
 // CurrentTxFilter reads the persisted filter WITHOUT subscribing to the atom, for

@@ -6,7 +6,6 @@ package screens
 
 import (
 	"fmt"
-	"log/slog"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
@@ -15,10 +14,10 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/router"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/router"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // dashboard_whatchanged.go is the E-DB "What changed since your last visit"
@@ -93,13 +92,6 @@ func wcRow(p wcRowProps) ui.Node {
 	return Div(row...)
 }
 
-// wcMemo caches the attribution pass per (data revision, baseline) so dashboard
-// re-renders don't recompute an O(accounts × transactions) scan.
-var wcMemo struct {
-	key string
-	rep attribution.Report
-}
-
 // wcPlaceholder holds the card's DOM slot while it has nothing to say. A
 // stable hidden element (not an empty Fragment) so the reconciler keeps the
 // card's position above the bento when it appears after the settle window —
@@ -109,10 +101,17 @@ func wcPlaceholder() ui.Node {
 		Attr("aria-hidden", "true"), Style(map[string]string{"display": "none"}))
 }
 
+func wcUnavailable() ui.Node {
+	return Div(css.Class("wc-card"), Attr("data-testid", "dash-whatchanged-unavailable"),
+		Attr("role", "status"), uistate.T("dashboard.wcUnavailable"))
+}
+
 // dashWhatChangedCard assembles the card. Hooks sit above every early return.
 func dashWhatChangedCard() ui.Node {
 	app := appstate.Default
-	rev := uistate.UseDataRevision().Get()
+	// Keep the card subscribed to data writes even though the exact Until cutoff
+	// makes cross-render report memoization unsafe.
+	_ = uistate.UseDataRevision().Get()
 	baseline := uistate.UseVisitBaseline().Get()
 	settled := useAfterSettle("whatchanged")
 	// Roll the baseline once per session, after render (never during it).
@@ -125,39 +124,49 @@ func dashWhatChangedCard() ui.Node {
 		return wcPlaceholder()
 	}
 
-	settings := app.Settings()
+	settings, err := app.SettingsChecked()
+	if err != nil {
+		return wcUnavailable()
+	}
 	base := settings.BaseCurrency
 	rates := currency.Rates{Base: base, Rates: settings.FXRates}
 	adjDesc := uistate.T("accounts.balanceAdjustment")
-
-	key := fmt.Sprintf("%d|%d|%s", rev, baseline, base)
-	if wcMemo.key != key {
-		rep, err := attribution.Compute(attribution.Input{
-			Accounts: app.Accounts(),
-			Txns:     app.Transactions(),
-			Rates:    rates,
-			Since:    time.Unix(baseline, 0),
-			Until:    time.Now(),
-			IsAdjustment: func(t domain.Transaction) bool {
-				return t.Desc == adjDesc
-			},
-		})
-		if err != nil {
-			slog.Warn("what-changed: attribution failed", "err", err)
-			return wcPlaceholder()
-		}
-		wcMemo.key, wcMemo.rep = key, rep
+	accounts, err := app.AccountsChecked()
+	if err != nil {
+		return wcUnavailable()
 	}
-	rep := wcMemo.rep
+	txns, err := app.TransactionsChecked()
+	if err != nil {
+		return wcUnavailable()
+	}
+	// Until is an exact half-open cutoff, so it is captured once and never
+	// reused across renders with a rounded or stale cache key.
+	until := time.Now()
+	rep, err := attribution.Compute(attribution.Input{
+		Accounts: accounts,
+		Txns:     txns,
+		Rates:    rates,
+		Since:    time.Unix(baseline, 0),
+		Until:    until,
+		IsAdjustment: func(t domain.Transaction) bool {
+			return t.Desc == adjDesc
+		},
+	})
+	if err != nil {
+		return wcUnavailable()
+	}
 	if len(rep.Items) == 0 {
 		return wcPlaceholder()
 	}
 
-	txnByID := map[string]domain.Transaction{}
-	for _, t := range app.Transactions() {
+	txnByID := make(map[string]domain.Transaction, len(txns))
+	for _, t := range txns {
 		txnByID[t.ID] = t
 	}
-	cats := app.Categories()
+	cats, err := app.CategoriesChecked()
+	if err != nil {
+		return wcUnavailable()
+	}
 
 	rows := make([]ui.Node, 0, len(rep.Items))
 	for i, it := range rep.Items {

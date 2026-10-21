@@ -7,7 +7,11 @@
 // external service — the wasm layer wires a concrete Source at runtime.
 package localqa
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/monstercameron/CashFlux/internal/money"
+)
 
 // Source abstracts the financial data required to answer the supported
 // intents. All monetary values are expressed in minor units (e.g. cents for
@@ -65,6 +69,22 @@ type Source interface {
 	LargestExpense() (payee string, amountMinor int64, ok bool)
 }
 
+// ErrorSource is an optional extension for sources that can fail while reading
+// current data. Answer checks it immediately after each Source method, retaining
+// compatibility with existing test doubles and embedders that implement Source.
+type ErrorSource interface {
+	LastError() error
+}
+
+func checkedSourceError(src Source) bool {
+	if checked, ok := src.(ErrorSource); ok && checked.LastError() != nil {
+		return true
+	}
+	return false
+}
+
+const unavailableAnswer = "I can't verify this from your saved data right now, so the amount is unknown, not zero."
+
 // RecentTxn is one recent transaction, reduced to what an answer needs to say.
 type RecentTxn struct {
 	Payee       string
@@ -93,15 +113,27 @@ func Answer(intent Intent, src Source, rawText string, fmtMoney func(int64) stri
 	switch intent {
 	case IntentBalance:
 		bal := src.LiquidBalanceMinor()
+		if checkedSourceError(src) {
+			return unavailableAnswer, true
+		}
 		return fmt.Sprintf("Your current liquid balance is %s.", fmtMoney(bal)), true
 
 	case IntentSafeToSpend:
 		s2s := src.SafeToSpendMinor()
+		if checkedSourceError(src) {
+			return unavailableAnswer, true
+		}
 		return fmt.Sprintf("You have %s available to spend right now.", fmtMoney(s2s)), true
 
 	case IntentNetWorth:
 		assets, liabilities := src.NetWorthMinor()
-		nw := assets - liabilities
+		if checkedSourceError(src) {
+			return unavailableAnswer, true
+		}
+		nw, err := money.Sub(assets, liabilities)
+		if err != nil {
+			return unavailableAnswer, true
+		}
 		return fmt.Sprintf(
 			"Your net worth is %s (%s in assets minus %s in liabilities).",
 			fmtMoney(nw), fmtMoney(assets), fmtMoney(liabilities),
@@ -113,10 +145,16 @@ func Answer(intent Intent, src Source, rawText string, fmtMoney func(int64) stri
 			return "I couldn't tell which category you meant — try asking \"how much did I spend on groceries?\"", true
 		}
 		spent := src.SpendingOnCategoryMinor(cat)
+		if checkedSourceError(src) {
+			return unavailableAnswer, true
+		}
 		return fmt.Sprintf("You've spent %s on %s this period.", fmtMoney(spent), cat), true
 
 	case IntentUpcomingBills:
 		count, total := src.UpcomingBillsMinor()
+		if checkedSourceError(src) {
+			return unavailableAnswer, true
+		}
 		if count == 0 {
 			return "You have no upcoming bills due soon.", true
 		}
@@ -127,13 +165,19 @@ func Answer(intent Intent, src Source, rawText string, fmtMoney func(int64) stri
 
 	case IntentGoalProgress:
 		name, current, target, ok := src.TopGoal()
+		if checkedSourceError(src) {
+			return unavailableAnswer, true
+		}
 		if !ok {
 			return "You haven't set up any savings goals yet.", true
 		}
 		if target <= 0 {
 			return fmt.Sprintf("Your goal \"%s\" has no target amount set.", name), true
 		}
-		pct := current * 100 / target
+		pct, err := money.MulDiv(current, 100, target, money.RoundTowardZero)
+		if err != nil {
+			return unavailableAnswer, true
+		}
 		return fmt.Sprintf(
 			"You're %d%% of the way to your \"%s\" goal (%s saved of %s).",
 			pct, name, fmtMoney(current), fmtMoney(target),
@@ -141,6 +185,9 @@ func Answer(intent Intent, src Source, rawText string, fmtMoney func(int64) stri
 
 	case IntentHealthScore:
 		score, band, ok := src.HealthScore()
+		if checkedSourceError(src) {
+			return unavailableAnswer, true
+		}
 		if !ok {
 			return "Not enough data yet to score your finances.", true
 		}
@@ -148,6 +195,9 @@ func Answer(intent Intent, src Source, rawText string, fmtMoney func(int64) stri
 
 	case IntentBudgetStatus:
 		total, over, worst, worstOver, ok := src.BudgetStatus()
+		if checkedSourceError(src) {
+			return unavailableAnswer, true
+		}
 		if !ok || total == 0 {
 			return "You haven't set up any budgets yet.", true
 		}
@@ -162,6 +212,9 @@ func Answer(intent Intent, src Source, rawText string, fmtMoney func(int64) stri
 
 	case IntentRecentTransactions:
 		txns := src.RecentTransactions()
+		if checkedSourceError(src) {
+			return unavailableAnswer, true
+		}
 		if len(txns) == 0 {
 			return "You haven't recorded any transactions yet.", true
 		}
@@ -181,6 +234,9 @@ func Answer(intent Intent, src Source, rawText string, fmtMoney func(int64) stri
 
 	case IntentSubscriptions:
 		count, monthly := src.Subscriptions()
+		if checkedSourceError(src) {
+			return unavailableAnswer, true
+		}
 		if count == 0 {
 			return "No recurring subscriptions are set up.", true
 		}
@@ -189,6 +245,9 @@ func Answer(intent Intent, src Source, rawText string, fmtMoney func(int64) stri
 
 	case IntentLargestExpense:
 		payee, amount, ok := src.LargestExpense()
+		if checkedSourceError(src) {
+			return unavailableAnswer, true
+		}
 		if !ok {
 			return "Nothing has been spent this period yet.", true
 		}

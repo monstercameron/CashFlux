@@ -14,9 +14,9 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // recurAmountTone returns the semantic tone class for a signed money amount:
@@ -66,6 +66,14 @@ func rhyOverdueRow(props rhyOverdueRowProps) ui.Node {
 			Attr("data-testid", "rhy-mark-paid-"+r.ID), Title(uistate.T("bills.markPaidTitle")),
 			OnClick(markPaid), uistate.T("bills.markPaid"))
 	}
+	amount := uistate.T("common.notReady")
+	if props.Occ.AmountAvailable {
+		amount = fmtMoney(props.Occ.Amount)
+	}
+	amountTone := tw.ColorClass("text-dim")
+	if props.Occ.AmountAvailable {
+		amountTone = recurAmountTone(props.Occ.Amount)
+	}
 	return Div(css.Class("rhy-row"), Attr("role", "listitem"), Attr("data-testid", "rhy-overdue-row-"+r.ID),
 		Div(css.Class("rhy-row-main"),
 			Span(css.Class("rhy-row-name"), r.Label),
@@ -74,7 +82,7 @@ func rhyOverdueRow(props rhyOverdueRowProps) ui.Node {
 				uistate.LoadPrefs().FormatDate(props.Occ.Date)),
 		),
 		rhyModeBadge(r),
-		Span(ClassStr("rhy-row-amt "+recurAmountTone(r.Amount)), fmtMoney(r.Amount)),
+		Span(ClassStr("rhy-row-amt "+amountTone), amount),
 		Div(css.Class("rhy-row-actions"), verb),
 	)
 }

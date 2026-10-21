@@ -3,7 +3,9 @@
 package smartengine
 
 import (
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
+	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/smart"
 )
 
@@ -15,9 +17,9 @@ func init() {
 // "otherwise dormant" when its only activity over the lookback is such fees — no
 // deposits, no meaningful spending, no transfers.
 const (
-	feeBleedMonths   = 6     // lookback window for judging dormancy
-	feeBleedMaxMinor = 30_00 // a debit at or below this magnitude looks like a fee ($30)
-	feeBleedMinHits  = 2     // at least this many fee-like debits to call it recurring
+	feeBleedMonths   = 6  // lookback window for judging dormancy
+	feeBleedMaxMajor = 30 // a debit at or below this amount in base currency looks like a fee
+	feeBleedMinHits  = 2  // at least this many fee-like debits to call it recurring
 )
 
 // SMART-A9 — Fee-bleed on a dormant account (AC14). The sharp companion to the
@@ -35,6 +37,12 @@ const (
 // resolve-rule payload need adding there. Reported as deferred.
 func a9FeeBleed(in Input) []smart.Insight {
 	cutoff := dateutil.AddMonths(in.Now, -feeBleedMonths)
+	base := in.Base
+	if base == "" {
+		base = in.Rates.Base
+	}
+	in.Base = base
+	feeBleedMaxMinor := currency.MinorFromMajor(feeBleedMaxMajor, base)
 	var out []smart.Insight
 	for _, a := range activeAssetAccounts(in.Accounts) {
 		txns := txnsForAccount(in.Transactions, a.ID)
@@ -42,8 +50,9 @@ func a9FeeBleed(in Input) []smart.Insight {
 			continue
 		}
 		var feeCount int
-		var feeTotalMinor int64
+		feeTotal := money.Zero(base)
 		otherwiseDormant := true
+		unverifiable := false
 		for _, t := range txns {
 			if t.Date.Before(cutoff) {
 				continue // outside the window — ignore old real activity
@@ -54,19 +63,36 @@ func a9FeeBleed(in Input) []smart.Insight {
 				otherwiseDormant = false
 				break
 			}
-			mag := -t.Amount.Amount
-			if mag > feeBleedMaxMinor {
+			mag, err := t.Amount.AbsChecked()
+			if err != nil {
+				unverifiable = true
+				break
+			}
+			baseMag, err := in.Rates.Convert(mag, base)
+			if err != nil {
+				unverifiable = true
+				break
+			}
+			if baseMag.Amount > feeBleedMaxMinor {
 				otherwiseDormant = false
 				break
 			}
+			feeTotal, err = feeTotal.Add(baseMag)
+			if err != nil {
+				unverifiable = true
+				break
+			}
 			feeCount++
-			feeTotalMinor += mag
 		}
-		if !otherwiseDormant || feeCount < feeBleedMinHits {
+		if unverifiable || !otherwiseDormant || feeCount < feeBleedMinHits {
 			continue
 		}
 		// Annualize the observed fee drain over the window months.
-		annualMinor := feeTotalMinor * 12 / feeBleedMonths
+		annual, err := feeTotal.MulDiv(12, feeBleedMonths, money.RoundTowardZero)
+		if err != nil {
+			continue
+		}
+		feeTotalMinor, annualMinor := feeTotal.Amount, annual.Amount
 		ins := smart.Insight{
 			Feature:  "SMART-A9",
 			Page:     smart.PageAccounts,
@@ -79,7 +105,7 @@ func a9FeeBleed(in Input) []smart.Insight {
 				a.Name, plural(feeBleedMonths, "month"), plural(int64(feeCount), "fee-like charge"),
 				in.hmoney(feeTotalMinor), in.hmoney(annualMinor)).
 			// Closing it stops this much a year (WF-SM3).
-			WithAnnualAmount(in.baseMoney(annualMinor)).
+			WithAnnualAmount(annual).
 			WithAction(smart.Action{
 				Kind:        smart.ActionCreateTask,
 				TaskTitle:   "Close " + a.Name + " and stop the monthly fee",

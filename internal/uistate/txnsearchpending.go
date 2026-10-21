@@ -4,7 +4,7 @@
 
 package uistate
 
-import "github.com/monstercameron/GoWebComponents/v5/state"
+import "github.com/monstercameron/GoWebComponents/v7/state"
 
 // UseTxnSearchPending returns the atom that is true while a typed ledger search
 // is still inside its debounce window.

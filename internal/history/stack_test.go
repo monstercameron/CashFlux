@@ -45,6 +45,30 @@ func TestStackUndoRedoCursor(t *testing.T) {
 	}
 }
 
+func TestStackUndoIDTracksExactTopAcrossUndoRedo(t *testing.T) {
+	s := NewStack(0)
+	first := cs("tasks", "one", `{"v":1}`, `{"v":2}`)
+	first.UndoID = "assistant-one"
+	second := cs("tasks", "two", `{"v":1}`, `{"v":2}`)
+	second.UndoID = "manual-two"
+	s.Push(first)
+	s.Push(second)
+	if got := s.UndoID(); got != "manual-two" {
+		t.Fatalf("top undo ID = %q, want manual-two", got)
+	}
+	inverse, ok := s.Undo()
+	if !ok || inverse.UndoID != "manual-two" {
+		t.Fatalf("undo returned ID %q, ok=%v; want manual-two", inverse.UndoID, ok)
+	}
+	if got := s.UndoID(); got != "assistant-one" {
+		t.Fatalf("top undo ID after undo = %q, want assistant-one", got)
+	}
+	forward, ok := s.Redo()
+	if !ok || forward.UndoID != "manual-two" || s.UndoID() != "manual-two" {
+		t.Fatalf("redo ID=%q ok=%v top=%q; want manual-two", forward.UndoID, ok, s.UndoID())
+	}
+}
+
 func TestStackPushDiscardsRedoTail(t *testing.T) {
 	s := NewStack(0)
 	s.Push(cs("txn", "t1", `{"v":1}`, `{"v":2}`))

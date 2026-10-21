@@ -6,18 +6,40 @@ package app
 
 import (
 	"context"
+	"reflect"
 	"testing"
 
 	"github.com/monstercameron/CashFlux/internal/applock"
 	"github.com/monstercameron/CashFlux/internal/backendrpc"
 	"github.com/monstercameron/CashFlux/internal/prefs"
+	"github.com/monstercameron/CashFlux/internal/store"
+	"github.com/monstercameron/CashFlux/internal/uistate"
 )
 
-// TestPRODREVIEWLegacyPlaintextSnapshotWithAppLockCanReachMigration records
-// the production migration case: existing plaintext must be opened locally,
-// then saved under App Lock before hosted hydration releases the gate.
-func TestPRODREVIEWLegacyPlaintextSnapshotWithAppLockCanReachMigration(t *testing.T) {
+// TestPRODREVIEWAppLockRejectsLegacyPlaintextSnapshotBeforeImport records that
+// App Lock rejects an unprotected hosted snapshot before it can be imported.
+func TestPRODREVIEWAppLockRejectsLegacyPlaintextSnapshotBeforeImport(t *testing.T) {
 	fixpullFixture(t)
+	app := fixpullImportApp(t)
+	// Pulling may persist the already selected local connection preferences.
+	// Include those local preferences in the baseline before checking that no
+	// server financial data was imported.
+	uistate.PersistPrefs(uistate.LoadPrefs())
+	before, err := app.Store().Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	dataset := store.SampleDataset()
+	if len(dataset.Accounts) == 0 {
+		t.Fatal("sample dataset has no account for the plaintext-import sentinel")
+	}
+	dataset.Accounts[0].Name = "PRODREVIEW plaintext must not import"
+	plaintext, err := store.Export(dataset)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	oldRPC, oldPasscode, oldLock := hostedPullWorkspaceRPC, activePasscode, lsGet(appLockKey)
 	t.Cleanup(func() {
 		hostedPullWorkspaceRPC, activePasscode = oldRPC, oldPasscode
@@ -35,8 +57,9 @@ func TestPRODREVIEWLegacyPlaintextSnapshotWithAppLockCanReachMigration(t *testin
 	hostedPullWorkspaceRPC = func(_ context.Context, _ prefs.Prefs, req backendrpc.GetWorkspaceRequest, out *backendrpc.GetWorkspaceResponse) error {
 		out.Found = true
 		out.Workspace.ID = req.ID
+		out.Workspace.Version = 3
 		out.Workspace.UpdatedAt = "2026-10-19T12:00:00Z"
-		out.Dataset = []byte(`{"schemaVersion":2,"accounts":[]}`)
+		out.Dataset = plaintext
 		return nil
 	}
 
@@ -44,7 +67,14 @@ func TestPRODREVIEWLegacyPlaintextSnapshotWithAppLockCanReachMigration(t *testin
 	fixpullWait(t, func() bool {
 		return currentHostedHydration().Phase == hostedHydrationReady || currentHostedHydration().Phase == hostedHydrationError
 	})
-	if got := currentHostedHydration(); got.Phase == hostedHydrationError {
-		t.Fatalf("legacy snapshot left the hosted gate in an error instead of migrating locally: %q", got.Message)
+	if got := currentHostedHydration(); got.Phase != hostedHydrationError || got.Message != "The server returned an unprotected copy. CashFlux did not load it." {
+		t.Fatalf("hosted hydration = %#v, want plaintext rejection before import", got)
+	}
+	after, err := app.Store().Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(after, before) {
+		t.Fatalf("plaintext snapshot changed the local dataset: before=%#v after=%#v", before, after)
 	}
 }

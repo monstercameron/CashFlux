@@ -11,8 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/monstercameron/CashFlux/internal/accountflow"
-	"github.com/monstercameron/CashFlux/internal/acctseries"
+	"github.com/monstercameron/CashFlux/internal/accountview"
 	"github.com/monstercameron/CashFlux/internal/acctsort"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/auditview"
@@ -23,7 +22,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/idlecash"
-	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/liquidity"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/nwchange"
@@ -33,11 +31,11 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/router"
-	"github.com/monstercameron/GoWebComponents/v5/state"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/router"
+	"github.com/monstercameron/GoWebComponents/v7/state"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // accounts_tiles.go holds the Native widget bodies the /accounts surface host
@@ -97,36 +95,6 @@ func acctActiveMemberID() string {
 		return s.Owners[0]
 	}
 	return ""
-}
-
-// partitionAssetAccounts splits the account set into the visible asset rows and the
-// archived asset rows, applying owner scoping and excluding liabilities (which live
-// on /debt). Assets are sorted by base-converted balance, largest first, so the
-// accounts that move net worth most sit at the top. Pure (no hooks) so any tile can
-// call it after fetching its data.
-func partitionAssetAccounts(accounts []domain.Account, txns []domain.Transaction, rates currency.Rates, base, activeMemberID string) (assets, archived []domain.Account) {
-	for _, ac := range accounts {
-		if !ownerVisibleTo(ac.OwnerID, activeMemberID) {
-			continue
-		}
-		if ac.Class == domain.ClassLiability {
-			continue
-		}
-		if ac.Archived {
-			archived = append(archived, ac)
-		} else {
-			assets = append(assets, ac)
-		}
-	}
-	convBal := func(ac domain.Account) int64 {
-		bal, _ := ledger.Balance(ac, txns)
-		if c, err := rates.Convert(bal, base); err == nil {
-			return c.Amount
-		}
-		return bal.Amount
-	}
-	sort.SliceStable(assets, func(i, j int) bool { return convBal(assets[i]) > convBal(assets[j]) })
-	return assets, archived
 }
 
 // acctRowCallbacks bundles the per-row mutation handlers the asset/archived list
@@ -592,7 +560,7 @@ func acctSummaryWidget(props acctSummaryProps) ui.Node {
 	accounts := app.Accounts()
 	txns := app.Transactions()
 
-	nw, _ := ledger.NetWorthExplained(accounts, txns, props.Rates)
+	nw := netWorthBalanceSnapshot(app, accounts, accountSnapshot(app).Balances, props.Rates)
 	net, assets, liabilities := nw.Net, nw.Assets, nw.Liabilities
 
 	// Month-to-date net-worth delta (G3 §3): the honest change since the 1st,
@@ -603,8 +571,16 @@ func acctSummaryWidget(props acctSummaryProps) ui.Node {
 	// month start (Jul 1 00:00-04:00 = Jul 1 04:00Z) used to exclude
 	// first-of-month transactions and this tile said "No change this month"
 	// while the hero showed the real delta.
-	mtd, _ := nwchange.MonthToDateChange(accounts, txns, props.Rates, time.Now())
-	nwDelta, haveDelta := mtd.Delta(), mtd.Known
+	mtd := nwchange.Change{}
+	if nw.Complete() {
+		mtd, _ = nwchange.MonthToDateChange(accounts, txns, props.Rates, time.Now())
+	}
+	deltaMinor, deltaErr := mtd.DeltaMinorChecked()
+	nwDelta, haveDelta := money.New(deltaMinor, props.Base), deltaErr == nil
+	netText, assetsText, liabilitiesText, tone := "—", "—", "—", "text-dim"
+	if nw.Known {
+		netText, assetsText, liabilitiesText, tone = fmtMoney(net), fmtMoney(assets), fmtMoney(liabilities), accentFor(net)
+	}
 
 	smartSettings := uistate.LoadSmartSettings()
 
@@ -615,17 +591,16 @@ func acctSummaryWidget(props acctSummaryProps) ui.Node {
 					uistate.T("dashboard.netWorth"),
 					smartTooltipFor(smartSettings, "accounts-net", uistate.T("dashboard.netWorth"), uistate.T("smart.tipAccountsNet")),
 				),
-				Div(ClassStr("stat-value "+accentFor(net)), fmtMoney(net)),
+				Div(ClassStr("stat-value "+tone), Attr("data-testid", "acct-networth-value"), netText),
 				netWorthDeltaLine(nwDelta, haveDelta),
 			),
-			stat(uistate.T("accounts.assets"), fmtMoney(assets), "pos"),
+			stat(uistate.T("accounts.assets"), assetsText, "pos"),
 			Div(css.Class("stat"),
 				A(css.Class("stat-label"), Href(uistate.RoutePath("/debt")), uistate.T("dashboard.liabilities")),
-				Div(ClassStr("stat-value neg"), fmtMoney(liabilities)),
+				Div(ClassStr("stat-value neg"), liabilitiesText),
 			),
 		),
-		If(len(nw.MissingCurrencies) > 0, P(css.Class("err"), Attr("role", "alert"),
-			uistate.T("accounts.nwExcludes", plural(len(nw.ExcludedAccounts), "account"), strings.Join(nw.MissingCurrencies, ", ")))),
+		If(!nw.Complete(), P(css.Class("err"), Attr("role", "status"), Attr("data-testid", "acct-networth-note"), netWorthAvailabilityNote(nw))),
 		// AC11: disclose accounts left out of net worth by the household's choice.
 		If(len(nw.ExcludedByChoice) > 0, P(css.Class("t-caption", tw.TextDim), Attr("role", "status"), Attr("data-testid", "acct-nw-excludes-by-choice"),
 			uistate.T(excludesByChoiceKey(len(nw.ExcludedByChoice)), len(nw.ExcludedByChoice)))),
@@ -700,18 +675,8 @@ func acctIdleCashLine(app *appstate.App, base string, onAllocate ui.Handler) ui.
 // household learns nothing from it. Rate-less accounts are skipped (consistent
 // with the net-worth exclusion disclosure above).
 func acctLiquidityLine(app *appstate.App, base string, rates currency.Rates) ui.Node {
-	txns := app.Transactions()
-	totals := liquidity.Totals(app.Accounts(), time.Now(), func(a domain.Account) (int64, bool) {
-		bal, err := ledger.Balance(a, txns)
-		if err != nil {
-			return 0, false
-		}
-		c, cerr := rates.Convert(bal, base)
-		if cerr != nil {
-			return 0, false
-		}
-		return c.Amount, true
-	})
+	v := accountview.Liquidity(app.Accounts(), accountSnapshot(app).Balances, rates, base, time.Now())
+	totals := v.Totals
 	type item struct {
 		cls    liquidity.Class
 		key    string
@@ -729,7 +694,7 @@ func acctLiquidityLine(app *appstate.App, base string, rates currency.Rates) ui.
 			nonzero++
 		}
 	}
-	if nonzero < 2 {
+	if nonzero < 2 && !v.Incomplete {
 		return Fragment()
 	}
 	kids := []any{css.Class("t-caption", tw.TextDim), Attr("data-testid", "acct-liquidity-line"),
@@ -741,6 +706,9 @@ func acctLiquidityLine(app *appstate.App, base string, rates currency.Rates) ui.
 		}
 		kids = append(kids, Span(Attr("data-testid", it.testid),
 			uistate.T(it.key, fmtMoney(money.New(totals[it.cls], base)))))
+	}
+	if v.Incomplete {
+		kids = append(kids, Span(Attr("data-testid", "acct-liquidity-incomplete"), uistate.T("accounts.liquidityIncomplete")))
 	}
 	return P(kids...)
 }
@@ -1149,28 +1117,8 @@ func acctListWidget(props acctListProps) ui.Node {
 	markAllStale := ui.UseEvent(Prevent(func() { markAllStalePrompt(app) }))
 
 	accounts := app.Accounts()
-	txns := app.Transactions()
 
-	// Base-converted net-worth contribution: assets positive, liabilities the
-	// negative of their owed magnitude. Taking -Abs for liabilities keeps a debt
-	// below the assets regardless of how its balance is signed at rest (the sample
-	// stores debts negative; the "amount you owe" add form stores them positive).
-	// Falls back to the raw amount for rate-less accounts.
-	convBal := func(ac domain.Account) int64 {
-		bal, _ := ledger.Balance(ac, txns)
-		m := bal.Amount
-		if c, err := props.Rates.Convert(bal, props.Base); err == nil {
-			m = c.Amount
-		}
-		if ac.Class == domain.ClassLiability {
-			if m < 0 {
-				m = -m
-			}
-			return -m
-		}
-		return m
-	}
-
+	snapshot := accountSnapshot(app)
 	// Active, owner-visible accounts split by class (archived live in their own tile).
 	var active, liabs []domain.Account
 	for _, ac := range accounts {
@@ -1213,9 +1161,7 @@ func acctListWidget(props acctListProps) ui.Node {
 	windows := app.FreshnessWindows()
 	now := time.Now()
 	staleOf := func(ac domain.Account) bool { return freshness.IsStale(ac, windows, now) }
-	sort.SliceStable(shown, func(i, j int) bool {
-		return acctsort.RiskFirstLess(staleOf(shown[i]), staleOf(shown[j]), convBal(shown[i]), convBal(shown[j]))
-	})
+	accountview.SortRiskFirst(shown, snapshot.Balances, windows, props.Rates, props.Base, now)
 
 	// Stale-badge prioritisation collapse: once more than half the visible accounts are
 	// stale, a per-row STALE badge on nearly every line ranks nothing — so collapse the
@@ -1246,20 +1192,9 @@ func acctListWidget(props acctListProps) ui.Node {
 	// and show a chip for its Account.InstitutionID.
 	instByID := domain.InstitutionByID(app.Institutions())
 
-	// AC2/AC9: the 90-day sparkline window and this-month flow window, computed once.
-	monthStart, monthEnd := dateutil.MonthRange(now)
-
-	// C413: the earliest transaction date per account, folded once, so each row can
-	// size its "all" balance-history window without re-scanning the ledger per row.
-	earliestByAcct := map[string]time.Time{}
-	for _, t := range txns {
-		if e, ok := earliestByAcct[t.AccountID]; !ok || t.Date.Before(e) {
-			earliestByAcct[t.AccountID] = t.Date
-		}
-	}
-	// C413: cap the "all" window at ~20 years of daily points so a stray far-past
-	// date can't blow up the fold.
-	const allWindowCapDays = 366 * 20
+	// Share the existing ledger index. Compact rows need balances only; their
+	// chart windows, flows and recurring projections are prepared on disclosure.
+	detailContext := newAccountDetailContext(app, snapshot, props.Rates, props.Base, now)
 
 	renderRow := func(ac domain.Account) ui.Node {
 		defaultMemberID, defaultMemberName := accountDefaultMemberTarget(ac, members, activeMemberID)
@@ -1271,18 +1206,8 @@ func acctListWidget(props acctListProps) ui.Node {
 				}
 			}
 		}
-		bal, _ := ledger.Balance(ac, txns)
-		cleared, _ := ledger.ClearedBalance(ac, txns)
-		// C413: size the range picker's windows. Only compute the wider series when
-		// the account actually has more than 90 days of history (HasRange), so the
-		// picker stays hidden — and the extra folds skipped — for young accounts.
-		allDays := acctseries.AllDays(now, acctseries.Days90, allWindowCapDays, earliestByAcct[ac.ID])
-		hasRange := acctseries.HasRange(allDays)
-		var s12m, sall []int64
-		if hasRange {
-			s12m = accountflow.BalanceSeries(ac, txns, now, acctseries.Days12m)
-			sall = accountflow.BalanceSeries(ac, txns, now, allDays)
-		}
+		bal := snapshot.Balances[ac.ID]
+		cleared := snapshot.Cleared[ac.ID]
 		return ui.CreateElement(AccountRow, accountRowProps{
 			Account: ac, Balance: bal, Cleared: cleared, Stale: freshness.IsStale(ac, windows, now), DaysStale: freshness.DaysSinceUpdate(ac, now),
 			StaleCollapsed: staleCollapsed,
@@ -1294,14 +1219,10 @@ func acctListWidget(props acctListProps) ui.Node {
 			OnSetDefaultHousehold: cbs.OnSetDefaultHousehold, OnClearDefaultHousehold: cbs.OnClearDefaultHousehold,
 			OnSetDefaultMember:   cbs.OnSetDefaultMember,
 			OnClearDefaultMember: cbs.OnClearDefaultMember,
-			SmartSettings:        smartSettings, SmartByEntity: accountByEntity, ValuationHistory: app.BalanceHistory(ac.ID),
+			SmartSettings:        smartSettings, SmartByEntity: accountByEntity,
 			AccountDefs: accDefs, InstByID: instByID,
-			BillPayment: ledger.BillPaymentForAccount(ac.ID, txns), OnViewBills: viewBills,
-			Sparkline:    accountflow.BalanceSeries(ac, txns, now, acctseries.Days90),
-			Sparkline12m: s12m, SparklineAll: sall, HasRange: hasRange,
-			Flow:       accountflow.PeriodFlow(ac, txns, monthStart, monthEnd),
-			ShowFlow:   true,
-			Projection: app.ProjectAccount(ac.ID, now, 30),
+			BillPayment: snapshot.BillPayments[ac.ID], OnViewBills: viewBills,
+			DetailContext: detailContext,
 		})
 	}
 	keyOf := func(ac domain.Account) any { return ac.ID }
@@ -1310,7 +1231,7 @@ func acctListWidget(props acctListProps) ui.Node {
 	// by an "Ungrouped" catch-all. Built only for the "default" body case below.
 	groups := app.AccountGroups()
 	groupedBody := func() ui.Node {
-		sections := groupSections(shown, groups, txns, props.Rates, props.Base)
+		sections := groupSections(shown, groups, snapshot.Balances, props.Rates, props.Base)
 		return Div(css.Class("acct-groups"),
 			MapKeyed(sections, func(s acctGroupSection) any {
 				if s.Group.ID == "" {
@@ -1532,8 +1453,8 @@ func acctArchivedWidget(props acctArchivedProps) ui.Node {
 	f := filterAtom.Get()
 
 	accounts := app.Accounts()
-	txns := app.Transactions()
-	_, archived := partitionAssetAccounts(accounts, txns, props.Rates, props.Base, activeMemberID)
+	snapshot := accountSnapshot(app)
+	_, archived := accountview.Assets(accounts, snapshot.Balances, props.Rates, props.Base, activeMemberID)
 
 	var shown []domain.Account
 	for _, ac := range archived {
@@ -1553,15 +1474,15 @@ func acctArchivedWidget(props acctArchivedProps) ui.Node {
 	instByID := domain.InstitutionByID(app.Institutions())
 
 	renderRow := func(ac domain.Account) ui.Node {
-		bal, _ := ledger.Balance(ac, txns)
-		cleared, _ := ledger.ClearedBalance(ac, txns)
+		bal := snapshot.Balances[ac.ID]
+		cleared := snapshot.Cleared[ac.ID]
 		return ui.CreateElement(AccountRow, accountRowProps{
 			Account: ac, Balance: bal, Cleared: cleared, Stale: freshness.IsStale(ac, windows, now), DaysStale: freshness.DaysSinceUpdate(ac, now),
 			Members: members, Accounts: accounts, Categories: categories,
 			OnDelete: cbs.OnDelete, OnArchive: cbs.OnArchive, OnRefresh: cbs.OnRefresh,
 			OnSave: cbs.OnSave, OnView: viewTxns, OnSetBalance: cbs.OnSetBalance, OnTransfer: cbs.OnTransfer,
 			ValuationHistory: app.BalanceHistory(ac.ID), AccountDefs: accDefs, InstByID: instByID,
-			BillPayment: ledger.BillPaymentForAccount(ac.ID, txns), OnViewBills: viewBills,
+			BillPayment: snapshot.BillPayments[ac.ID], OnViewBills: viewBills,
 		})
 	}
 	keyOf := func(ac domain.Account) any { return ac.ID }

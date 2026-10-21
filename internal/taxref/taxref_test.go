@@ -115,3 +115,39 @@ func TestThousandsSeparatorsAreCorrect(t *testing.T) {
 		}
 	}
 }
+
+func TestPublished2025And2026ValuesMatchVerifiedPrimarySources(t *testing.T) {
+	// Source table and verification date: docs/TAX_REFERENCE_SOURCES.md.
+	for _, tc := range []struct {
+		year int
+		want []int
+	}{
+		{2025, []int{23500, 7500, 7000, 1000, 50, 4300, 8550, 1000, 55, 15750, 31500, 176100, 67, 62, 70}},
+		{2026, []int{24500, 8000, 7500, 1100, 50, 4400, 8750, 1000, 55, 16100, 32200, 184500, 67, 62, 70}},
+	} {
+		l, ok := For(tc.year)
+		if !ok {
+			t.Fatalf("missing verified year %d", tc.year)
+		}
+		got := []int{l.Contrib401k, l.Contrib401kCatchUp, l.ContribIRA, l.ContribIRACatchUp, l.CatchUpAge, l.ContribHSASelf, l.ContribHSAFamily, l.ContribHSACatchUp, l.ContribHSACatchUpAt, l.StandardDeductionSingle, l.StandardDeductionJoint, l.SocialSecurityWageBase, l.FullRetirementAge, l.EarliestClaimAge, l.LatestCreditAge}
+		for i, want := range tc.want {
+			if got[i] != want {
+				t.Errorf("year %d field index %d=%d want %d", tc.year, i, got[i], want)
+			}
+		}
+		if l.VerifiedOn != "2026-10-21" {
+			t.Errorf("year %d missing verification date: %q", tc.year, l.VerifiedOn)
+		}
+		for _, source := range []string{fmt.Sprintf("%d", tc.year), "https://www.irs.gov/irb/2025-45_IRB", "https://www.irs.gov/publications/p969", "https://www.ssa.gov/oact/cola/cbb.html", "https://www.ssa.gov/benefits/retirement/planner/1960.html", "https://www.ssa.gov/benefits/retirement/planner/delayret.html"} {
+			if !strings.Contains(l.SourceNote, source) {
+				t.Errorf("year %d source missing %q", tc.year, source)
+			}
+		}
+		summary := l.Summary()
+		for _, want := range []string{"Verified on " + l.VerifiedOn, l.SourceNote, "general", "higher catch-up rules apply at ages 60-63", "born in 1960 or later", fmt.Sprintf("$%s single, $%s married filing jointly", commas(l.StandardDeductionSingle), commas(l.StandardDeductionJoint))} {
+			if !strings.Contains(summary, want) {
+				t.Errorf("year %d summary missing %q", tc.year, want)
+			}
+		}
+	}
+}

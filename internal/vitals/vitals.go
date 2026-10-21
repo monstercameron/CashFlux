@@ -19,8 +19,7 @@
 package vitals
 
 import (
-	"math"
-
+	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/payoff"
 )
 
@@ -84,6 +83,9 @@ type Inputs struct {
 // Result is the full, explainable output. Every judged figure carries its Tone;
 // Has* flags mark applicability so the UI never renders a fake zero.
 type Result struct {
+	// Error marks an unavailable calculation. Consumers must not present the
+	// zero fields of a failed result as measured financial figures.
+	Error error
 	// ── Cash flow capacity ──
 	HasIncome bool // any income in the averaged window
 	// IncomeMonthlyMinor / ExpenseMonthlyMinor / LiquidMinor echo the inputs so a
@@ -178,7 +180,16 @@ const (
 )
 
 // Evaluate derives every position metric from the inputs. Deterministic.
+// Error marks unavailable arithmetic; new callers should use EvaluateChecked.
 func Evaluate(in Inputs) Result {
+	r, _ := EvaluateChecked(in)
+	return r
+}
+
+// EvaluateChecked derives position metrics with checked integer arithmetic.
+// On failure it returns only Error; no partial amount can look like a total.
+func EvaluateChecked(in Inputs) (Result, error) {
+	calc := checkedCalculation{}
 	r := Result{
 		HasIncome:             in.IncomeMonthlyMinor > 0,
 		IncomeMonthlyMinor:    in.IncomeMonthlyMinor,
@@ -188,11 +199,12 @@ func Evaluate(in Inputs) Result {
 	}
 
 	// ── Cash flow ──
-	r.SurplusMonthlyMinor = in.IncomeMonthlyMinor - in.ExpenseMonthlyMinor
-	r.SurplusAnnualMinor = r.SurplusMonthlyMinor * 12
+	r.SurplusMonthlyMinor = calc.sub("monthly surplus", in.IncomeMonthlyMinor, in.ExpenseMonthlyMinor)
+	r.SurplusAnnualMinor = calc.mul("annual surplus", r.SurplusMonthlyMinor, 12)
 	r.SurplusTone = signTone(r.SurplusMonthlyMinor)
 	if r.HasIncome {
-		r.SavingsRatePct = clampInt(int(r.SurplusMonthlyMinor*100/in.IncomeMonthlyMinor), -100, 100)
+		rate := calc.ratio("savings rate", r.SurplusMonthlyMinor, 100, in.IncomeMonthlyMinor, money.RoundTowardZero)
+		r.SavingsRatePct = int(min(max(rate, -100), 100))
 		switch {
 		case r.SavingsRatePct >= SavingsTargetPct:
 			r.SavingsTone = ToneUp
@@ -209,18 +221,19 @@ func Evaluate(in Inputs) Result {
 	var payoffDebts []payoff.Debt
 	for _, d := range in.Debts {
 		bal := max(d.BalanceMinor, 0)
-		total += bal
+		total = calc.add("debt balances", total, bal)
 		if d.IsMortgage {
 			r.HasMortgage = true
 		} else {
-			exMortgage += bal
+			exMortgage = calc.add("debt excluding mortgage", exMortgage, bal)
 		}
 		if d.MinPaymentMinor > 0 {
-			minPayments += d.MinPaymentMinor
+			minPayments = calc.add("minimum payments", minPayments, d.MinPaymentMinor)
 		}
 		if d.AprPercent > 0 && bal > 0 {
 			weighted += float64(bal) * d.AprPercent
-			drag += int64(math.Round(float64(bal) * d.AprPercent / 1200.0))
+			interest := calc.roundedInterest(float64(bal) * d.AprPercent / 1200.0)
+			drag = calc.add("monthly interest", drag, interest)
 		}
 		if d.InPayoff && bal > 0 {
 			payoffDebts = append(payoffDebts, payoff.Debt{
@@ -232,7 +245,7 @@ func Evaluate(in Inputs) Result {
 	r.TotalDebtMinor = total
 	r.ExMortgageMinor = exMortgage
 	r.MinPaymentsMinor = minPayments
-	r.AnnualDebtServiceMinor = minPayments * 12
+	r.AnnualDebtServiceMinor = calc.mul("annual debt service", minPayments, 12)
 	r.InterestDragMonthlyMinor = drag
 	if total > 0 {
 		r.WeightedAprPercent = weighted / float64(total)
@@ -246,7 +259,7 @@ func Evaluate(in Inputs) Result {
 		}
 	}
 	if r.HasIncome && r.HasDebts {
-		r.PaymentShareOfIncomePct = int(minPayments * 100 / in.IncomeMonthlyMinor)
+		r.PaymentShareOfIncomePct = calc.integer("payment share", calc.ratio("payment share", minPayments, 100, in.IncomeMonthlyMinor, money.RoundTowardZero))
 		switch {
 		case r.PaymentShareOfIncomePct < PaymentShareTargetPct:
 			r.PaymentShareTone = ToneUp
@@ -257,7 +270,13 @@ func Evaluate(in Inputs) Result {
 		}
 	}
 	if len(payoffDebts) > 0 {
-		plan, ok := payoff.BuildPlan(payoffDebts, 0, payoff.Avalanche)
+		if calc.err != nil {
+			return failedCalculation(calc.err)
+		}
+		plan, ok, err := payoff.BuildPlanChecked(payoffDebts, 0, payoff.Avalanche)
+		if err != nil {
+			return failedCalculation(err)
+		}
 		r.PayoffApplicable = true
 		if !ok {
 			r.PayoffNeverClears = true
@@ -279,11 +298,11 @@ func Evaluate(in Inputs) Result {
 	// so it reconciles with the surplus row (discretionary = surplus − minimums).
 	// Toned against income, not just sign — a technically-positive sliver is a
 	// tight month, not a healthy one.
-	r.DiscretionaryMinor = r.SurplusMonthlyMinor - minPayments
+	r.DiscretionaryMinor = calc.sub("discretionary cash", r.SurplusMonthlyMinor, minPayments)
 	switch {
 	case r.DiscretionaryMinor < 0:
 		r.DiscretionaryTone = ToneDown
-	case r.HasIncome && r.DiscretionaryMinor*100 < in.IncomeMonthlyMinor*int64(discretionaryWarnPctOfIncome):
+	case r.HasIncome && r.DiscretionaryMinor < calc.ratio("discretionary warning threshold", in.IncomeMonthlyMinor, int64(discretionaryWarnPctOfIncome), 100, money.RoundAwayFromZero):
 		r.DiscretionaryTone = ToneWarn
 	default:
 		r.DiscretionaryTone = ToneUp
@@ -296,7 +315,7 @@ func Evaluate(in Inputs) Result {
 	}
 	if in.EssentialMonthlyMinor > 0 {
 		r.HasCushion = true
-		r.CoverageMonthsTenths = tenths(in.LiquidMinor, in.EssentialMonthlyMinor)
+		r.CoverageMonthsTenths = calc.tenths(in.LiquidMinor, in.EssentialMonthlyMinor)
 		switch {
 		case r.CoverageMonthsTenths >= CoverageTargetTenths:
 			r.CoverageTone = ToneUp
@@ -305,11 +324,11 @@ func Evaluate(in Inputs) Result {
 		default:
 			r.CoverageTone = ToneDown
 		}
-		r.FundTargetMinor = in.EssentialMonthlyMinor * int64(r.FundMonths)
-		r.FundGapMinor = r.FundTargetMinor - in.LiquidMinor
+		r.FundTargetMinor = calc.mul("emergency fund target", in.EssentialMonthlyMinor, int64(r.FundMonths))
+		r.FundGapMinor = calc.sub("emergency fund gap", r.FundTargetMinor, in.LiquidMinor)
 	}
-	if burn := in.ExpenseMonthlyMinor + minPayments; burn > 0 {
-		r.RunwayAfterDebtTenths = tenths(in.LiquidMinor, burn)
+	if burn := calc.add("monthly burn", in.ExpenseMonthlyMinor, minPayments); burn > 0 {
+		r.RunwayAfterDebtTenths = calc.tenths(in.LiquidMinor, burn)
 		switch {
 		case r.RunwayAfterDebtTenths >= CoverageTargetTenths:
 			r.RunwayTone = ToneUp
@@ -327,12 +346,13 @@ func Evaluate(in Inputs) Result {
 	if in.Cards.HasCards {
 		r.CardBalanceMinor = in.Cards.BalanceMinor
 		r.CardLimitMinor = in.Cards.LimitMinor
-		if avail := in.Cards.LimitMinor - in.Cards.BalanceMinor; avail > 0 {
+		if avail := calc.sub("available credit", in.Cards.LimitMinor, in.Cards.BalanceMinor); avail > 0 {
 			r.CardAvailableMinor = avail
 		}
 		if in.Cards.LimitMinor > 0 {
 			r.HasUtilization = true
-			r.UtilizationPct = clampInt(int(in.Cards.BalanceMinor*100/in.Cards.LimitMinor), 0, 100)
+			utilization := calc.ratio("credit utilization", in.Cards.BalanceMinor, 100, in.Cards.LimitMinor, money.RoundTowardZero)
+			r.UtilizationPct = int(min(max(utilization, 0), 100))
 			switch {
 			case r.UtilizationPct <= UtilizationTargetPct:
 				r.UtilizationTone = ToneUp
@@ -344,7 +364,10 @@ func Evaluate(in Inputs) Result {
 		}
 	}
 
-	return r
+	if calc.err != nil {
+		return failedCalculation(calc.err)
+	}
+	return r, nil
 }
 
 // signTone maps a signed amount to up/down (zero reads as neutral-positive up:
@@ -354,22 +377,4 @@ func signTone(v int64) Tone {
 		return ToneDown
 	}
 	return ToneUp
-}
-
-// tenths returns numerator ÷ denominator in tenths (5.3 → 53), 0-floored.
-func tenths(num, den int64) int64 {
-	if den <= 0 || num <= 0 {
-		return 0
-	}
-	return num * 10 / den
-}
-
-func clampInt(v, lo, hi int) int {
-	if v < lo {
-		return lo
-	}
-	if v > hi {
-		return hi
-	}
-	return v
 }

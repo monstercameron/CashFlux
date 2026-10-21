@@ -307,6 +307,7 @@ var vSweepKeys = Catalog{
 	"goalcompare.orderMoot":             "Funding order does not change either date — the monthly plans already fit alongside each other.",
 	"goalcompare.orderNeedsPlans":       "Both goals need a monthly plan before funding order can be compared.",
 	"goalcompare.orderNeedsOneCurrency": "Funding order can only be compared when both goals use the same currency.",
+	"goalcompare.orderPoolUnavailable":  "The combined monthly plans are too large to compare safely.",
 
 	// C399 — contribution history: planned vs actual.
 	"goalhist.title":          "Funded each month",

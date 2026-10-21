@@ -89,25 +89,33 @@ func Descendants(cats []domain.Category, rootID string) map[string]bool {
 	if rootID == "" {
 		return map[string]bool{}
 	}
+	byParent := descendantAdjacency(cats)
+	out := make(map[string]bool, 1)
+	walkDescendants(byParent, rootID, out)
+	return out
+}
+
+// descendantAdjacency preserves Descendants' historical edge policy: parentless
+// rows and self-parent edges are omitted, while dangling parents and cycles remain
+// traversable. That lets unknown IDs still include records that point at them.
+func descendantAdjacency(cats []domain.Category) map[string][]string {
 	byParent := make(map[string][]string, len(cats))
 	for _, c := range cats {
 		if c.ParentID != "" && c.ParentID != c.ID {
 			byParent[c.ParentID] = append(byParent[c.ParentID], c.ID)
 		}
 	}
-	out := make(map[string]bool, 1)
-	var walk func(id string)
-	walk = func(id string) {
-		if out[id] {
-			return // already placed — guards against cycles
-		}
-		out[id] = true
-		for _, child := range byParent[id] {
-			walk(child)
-		}
+	return byParent
+}
+
+func walkDescendants(byParent map[string][]string, id string, out map[string]bool) {
+	if out[id] {
+		return // already placed — guards against cycles and overlapping roots
 	}
-	walk(rootID)
-	return out
+	out[id] = true
+	for _, child := range byParent[id] {
+		walkDescendants(byParent, child, out)
+	}
 }
 
 // DescendantsOfAll is the union of Descendants for each root in rootIDs — the full
@@ -115,13 +123,15 @@ func Descendants(cats []domain.Category, rootID string) map[string]bool {
 // Empty/blank roots are skipped; an empty input returns an empty set.
 func DescendantsOfAll(cats []domain.Category, rootIDs []string) map[string]bool {
 	out := make(map[string]bool)
+	if len(rootIDs) == 0 {
+		return out
+	}
+	byParent := descendantAdjacency(cats)
 	for _, root := range rootIDs {
 		if root == "" {
 			continue
 		}
-		for id := range Descendants(cats, root) {
-			out[id] = true
-		}
+		walkDescendants(byParent, root, out)
 	}
 	return out
 }

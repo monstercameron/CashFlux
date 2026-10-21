@@ -17,10 +17,10 @@ import (
 	"github.com/monstercameron/CashFlux/internal/reviewqueue"
 	"github.com/monstercameron/CashFlux/internal/txnfilter"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/state"
-	"github.com/monstercameron/GoWebComponents/v5/testkit/render"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/state"
+	"github.com/monstercameron/GoWebComponents/v7/testkit/render"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 func TestTCS2CommitBoundary(t *testing.T) {
@@ -160,31 +160,41 @@ func TestTCS2SplitPreservesLiveFields(t *testing.T) {
 
 func TestTCS2WarmRouteAndWriteProfile3300(t *testing.T) {
 	a := solp3FlagsApp(t, 3300)
-	old, oldCapture := appstate.Default, auditview.CaptureNow
+	old, oldCapture, oldObserve := appstate.Default, auditview.CaptureNow, txnPerfObserve
+	t.Cleanup(func() {
+		txnPerfObserve = oldObserve
+		appstate.Default = old
+		auditview.CaptureNow = oldCapture
+	})
 	appstate.Default = a
 	auditview.CaptureNow = func() {}
-	defer func() { appstate.Default = old; auditview.CaptureNow = oldCapture }()
 	a.SetDurableWriter(func(r uint64, done func(appstate.DurableResult)) { done(appstate.DurableResult{Revision: r}) })
 	uistate.PersistTxFilter(txnfilter.Criteria{PageSize: 25, Sort: "date"})
 	for i := 0; i < 3; i++ {
-		f := render.New(t)
-		counts := map[string]int{}
-		txnPerfObserve = func(stage string, _ time.Duration) { counts[stage]++ }
-		start := time.Now()
-		f.Render(ui.CreateElement(Transactions))
-		mount := time.Since(start)
-		t.Logf("TCS2 mount[%d] %.3f ms counts=%v", i, float64(mount.Microseconds())/1000, counts)
-		clear(counts)
-		row := a.Transactions()[0]
-		category := a.Categories()[i%2].ID
-		start = time.Now()
-		applyTxnManualCategory(row.ID, category)
-		elapsed := time.Since(start)
-		t.Logf("TCS2 write[%d] %.3f ms counts=%v", i, float64(elapsed.Microseconds())/1000, counts)
-		if counts["filter-sort"] != 1 || counts["placement-txn-table"] != 1 || counts["placement-txn-toolbar"] != 1 {
-			t.Fatalf("redundant work: %v", counts)
-		}
-		f.Cleanup()
-		txnPerfObserve = nil
+		func() {
+			f := render.New(t)
+			defer func() {
+				txnPerfObserve = nil
+				f.Render(ui.Fragment())
+				f.Stabilize()
+				f.Cleanup()
+			}()
+			counts := map[string]int{}
+			txnPerfObserve = func(stage string, _ time.Duration) { counts[stage]++ }
+			start := time.Now()
+			f.Render(ui.CreateElement(Transactions))
+			mount := time.Since(start)
+			t.Logf("TCS2 mount[%d] %.3f ms counts=%v", i, float64(mount.Microseconds())/1000, counts)
+			clear(counts)
+			row := a.Transactions()[0]
+			category := a.Categories()[i%2].ID
+			start = time.Now()
+			applyTxnManualCategory(row.ID, category)
+			elapsed := time.Since(start)
+			t.Logf("TCS2 write[%d] %.3f ms counts=%v", i, float64(elapsed.Microseconds())/1000, counts)
+			if counts["filter-sort"] != 1 || counts["placement-txn-table"] != 1 || counts["placement-txn-toolbar"] != 1 {
+				t.Fatalf("redundant work: %v", counts)
+			}
+		}()
 	}
 }

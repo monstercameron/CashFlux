@@ -12,6 +12,7 @@
 package runway
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/cashflow"
@@ -36,6 +37,19 @@ func dayOffset(from, t time.Time) int {
 // with the amount converted to the base currency (sign preserved, so outflows stay
 // negative). A non-positive horizon yields no events.
 func Events(recs []domain.Recurring, from time.Time, days int, rates currency.Rates) ([]cashflow.Event, error) {
+	return expandEvents(recs, from, days, rates, 0)
+}
+
+// EventsChecked expands a bounded recurring schedule and rejects an event count
+// beyond cashflow's checked projection budget. Existing Events remains unchanged.
+func EventsChecked(recs []domain.Recurring, from time.Time, days int, rates currency.Rates) ([]cashflow.Event, error) {
+	if days > cashflow.MaxCheckedProjectionDays {
+		return nil, fmt.Errorf("runway: horizon %d exceeds checked limit %d", days, cashflow.MaxCheckedProjectionDays)
+	}
+	return expandEvents(recs, from, days, rates, cashflow.MaxCheckedProjectionEvents)
+}
+
+func expandEvents(recs []domain.Recurring, from time.Time, days int, rates currency.Rates, maxEvents int) ([]cashflow.Event, error) {
 	if days <= 0 {
 		return nil, nil
 	}
@@ -56,6 +70,9 @@ func Events(recs []domain.Recurring, from time.Time, days int, rates currency.Ra
 			if d >= days {
 				break
 			}
+			if maxEvents > 0 && len(out) >= maxEvents {
+				return nil, fmt.Errorf("runway: recurring event count exceeds checked limit %d", maxEvents)
+			}
 			out = append(out, cashflow.Event{Day: d, Amount: amt, Label: r.Label})
 			occ = r.Cadence.Next(occ)
 		}
@@ -72,6 +89,16 @@ func Project(startBal int64, recs []domain.Recurring, from time.Time, days int, 
 		return cashflow.Projection{}, err
 	}
 	return cashflow.DailyBalances(startBal, events, days, buffer), nil
+}
+
+// ProjectChecked applies the same recurring schedule as Project with checked
+// event expansion and daily money arithmetic. It returns no partial result.
+func ProjectChecked(startBal int64, recs []domain.Recurring, from time.Time, days int, buffer int64, rates currency.Rates) (cashflow.Projection, error) {
+	events, err := EventsChecked(recs, from, days, rates)
+	if err != nil {
+		return cashflow.Projection{}, err
+	}
+	return cashflow.DailyBalancesChecked(startBal, events, days, buffer)
 }
 
 // DaysToNextInflow returns the day offset (from `from`) of the first scheduled

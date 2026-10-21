@@ -5,6 +5,7 @@ package goals
 import (
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 )
 
@@ -48,34 +49,11 @@ const finalStretchPct = 90
 // 90% always reads as the final stretch even if its deadline is far off, so the
 // most actionable goal surfaces first.
 func ClassifyPace(goal domain.Goal, from time.Time) Pace {
-	// Coverage-aware: a goal whose target is fully accounted for (saved +
-	// earmarked) is complete-paced, matching Reached and the card figures.
-	if rem, err := CoveredRemaining(goal); err == nil && rem.IsZero() {
-		return PaceComplete
-	}
-	// A paused goal is a chosen state: it never reads overdue/due-soon, so the
-	// pace stops scolding until the pause ends (GL7).
-	if goal.IsPaused(from) {
-		return PacePaused
-	}
-	pct := CoveragePercent(goal)
-	if goal.TargetDate.IsZero() {
-		// Undated: the only signal is progress.
-		if pct >= finalStretchPct {
-			return PaceFinalStretch
-		}
+	c, err := EvaluateCoverage(goal, currency.Rates{})
+	if err != nil {
 		return PaceNone
 	}
-	if !goal.TargetDate.After(from) {
-		return PaceOverdue
-	}
-	if pct >= finalStretchPct {
-		return PaceFinalStretch
-	}
-	if goal.TargetDate.Before(from.AddDate(0, 0, dueSoonDays)) {
-		return PaceDueSoon
-	}
-	return PaceOnTrack
+	return coveragePace(goal, c, from)
 }
 
 // SortActive orders active (non-archived) goals for the Goals list so the most

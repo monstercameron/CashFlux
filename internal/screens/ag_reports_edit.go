@@ -9,6 +9,7 @@ package screens
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -40,11 +41,13 @@ func agResolveTxn(txns []domain.Transaction, ref string) (domain.Transaction, er
 	if q == "" {
 		return domain.Transaction{}, fmt.Errorf("give the transaction id (the first column of a trace or search result)")
 	}
-	var hits []domain.Transaction
 	for _, t := range txns {
-		if strings.ToLower(t.ID) == q {
+		if t.ID == strings.TrimSpace(ref) {
 			return t, nil
 		}
+	}
+	var hits []domain.Transaction
+	for _, t := range txns {
 		if strings.HasPrefix(strings.ToLower(t.ID), q) {
 			hits = append(hits, t)
 		}
@@ -72,8 +75,9 @@ type agTxnFilter struct {
 	MinAmount float64 `json:"min_amount"`
 	MaxAmount float64 `json:"max_amount"`
 	Uncat     bool    `json:"uncategorized"`
-	Sort      string  `json:"sort"` // newest | oldest | largest
-	Limit     int     `json:"limit"`
+	Sort      string  `json:"sort"
+ "slices"` // newest | oldest | largest
+	Limit int `json:"limit"`
 }
 
 // agRunTxnFilter applies the filter and returns the matches in the requested
@@ -223,16 +227,18 @@ func agHasTag(t domain.Transaction, tag string) bool {
 // distinguishable — an edit that silently blanked the payee because the model
 // did not repeat it would be worse than no edit at all.
 type agTxnEdit struct {
-	ID          string    `json:"id"`
-	Category    *string   `json:"category"`
-	Payee       *string   `json:"payee"`
-	Description *string   `json:"description"`
-	Date        *string   `json:"date"`
-	Amount      *float64  `json:"amount"`
-	Direction   *string   `json:"direction"` // expense | income
-	Member      *string   `json:"member"`
-	Tags        *[]string `json:"tags"`
-	Cleared     *bool     `json:"cleared"`
+	ID          string          `json:"id"`
+	Category    *string         `json:"category"`
+	Payee       *string         `json:"payee"`
+	Description *string         `json:"description"`
+	Date        *string         `json:"date"`
+	Amount      json.RawMessage `json:"amount"`
+	CategoryID  *string         `json:"category_id"`
+	MemberID    *string         `json:"member_id"`
+	Direction   *string         `json:"direction"` // expense | income
+	Member      *string         `json:"member"`
+	Tags        *[]string       `json:"tags"`
+	Cleared     *bool           `json:"cleared"`
 }
 
 // agApplyTxnEdit resolves an edit against the current row and returns the
@@ -242,18 +248,32 @@ func agApplyTxnEdit(c agRptCtx, prior domain.Transaction, e agTxnEdit) (domain.T
 	next := prior
 	var changes []string
 
-	if e.Category != nil {
+	if e.Category != nil && e.CategoryID != nil {
+		return prior, nil, fmt.Errorf("provide category_id or category, not both")
+	}
+	if e.Member != nil && e.MemberID != nil {
+		return prior, nil, fmt.Errorf("provide member_id or member, not both")
+	}
+	if e.Category != nil || e.CategoryID != nil {
+		if e.CategoryID != nil {
+			copy := *e.CategoryID
+			e.Category = &copy
+		}
 		name := strings.TrimSpace(*e.Category)
-		if name == "" || strings.EqualFold(name, "uncategorized") || strings.EqualFold(name, "none") {
+		if name == "" || e.CategoryID == nil && (strings.EqualFold(name, "uncategorized") || strings.EqualFold(name, "none")) {
 			if prior.CategoryID != "" {
 				next.CategoryID = ""
 				changes = append(changes, "clear the category (was "+c.nameOf(prior.CategoryID)+")")
 			}
 		} else {
-			id, ok := c.resolveCatID(name)
-			if !ok {
+			category, err := assistantCreationCategory(c.cats, "", name)
+			if e.CategoryID != nil {
+				category, err = assistantCreationCategory(c.cats, name, "")
+			}
+			if err != nil {
 				return prior, nil, fmt.Errorf("no category matching %q — create it first with create_category", name)
 			}
+			id := category.ID
 			if id != prior.CategoryID {
 				next.CategoryID = id
 				changes = append(changes, fmt.Sprintf("category %s → %s", c.nameOf(prior.CategoryID), c.nameOf(id)))
@@ -278,22 +298,27 @@ func agApplyTxnEdit(c agRptCtx, prior domain.Transaction, e agTxnEdit) (domain.T
 			changes = append(changes, fmt.Sprintf("date %s → %s", prior.Date.Format(dateutil.Layout), d.Format(dateutil.Layout)))
 		}
 	}
-	if e.Member != nil {
+	if e.Member != nil || e.MemberID != nil {
+		if e.MemberID != nil {
+			copy := *e.MemberID
+			e.Member = &copy
+		}
 		name := strings.TrimSpace(*e.Member)
 		newID := ""
-		if name != "" && !strings.EqualFold(name, "unassigned") && !strings.EqualFold(name, "none") {
+		if name != "" && (e.MemberID != nil || !strings.EqualFold(name, "unassigned") && !strings.EqualFold(name, "none")) {
+			matches := 0
 			for _, m := range c.members {
-				if strings.EqualFold(m.Name, name) || strings.Contains(strings.ToLower(m.Name), strings.ToLower(name)) {
+				if e.MemberID != nil && m.ID == name || e.MemberID == nil && strings.EqualFold(strings.TrimSpace(m.Name), name) {
 					newID = m.ID
-					break
+					matches++
 				}
 			}
-			if newID == "" {
-				return prior, nil, fmt.Errorf("no household member matching %q", name)
+			if matches != 1 {
+				return prior, nil, fmt.Errorf("provide member_id or an unambiguous exact household member name; %d matches for %q", matches, name)
 			}
 		}
 		if newID != prior.PrimaryOwner() || len(prior.Owners()) > 1 {
-			next.SetOwners([]string{newID}) // TODO(WHO2): command edit accepts one owner.
+			next.SetOwners([]string{newID})
 			changes = append(changes, fmt.Sprintf("person %s → %s", c.memberOf(prior.PrimaryOwner()), c.memberOf(newID)))
 		}
 	}
@@ -304,7 +329,7 @@ func agApplyTxnEdit(c agRptCtx, prior domain.Transaction, e agTxnEdit) (domain.T
 				clean = append(clean, t)
 			}
 		}
-		if strings.Join(clean, ",") != strings.Join(prior.Tags, ",") {
+		if !slices.Equal(clean, prior.Tags) {
 			next.Tags = clean
 			changes = append(changes, fmt.Sprintf("tags [%s] → [%s]", strings.Join(prior.Tags, " "), strings.Join(clean, " ")))
 		}
@@ -323,39 +348,59 @@ func agApplyTxnEdit(c agRptCtx, prior domain.Transaction, e agTxnEdit) (domain.T
 	// Amount and direction resolve together: the magnitude is taken as an
 	// absolute figure and the sign says whether the money came in or went out,
 	// so "make this $40" can never silently flip an expense into income.
-	magnitude := agAbs(next.Amount.Amount)
-	sign := int64(1)
-	if next.Amount.Amount < 0 {
-		sign = -1
-	}
-	amountChanged := false
-	if e.Amount != nil {
-		newMag := agAbs(currency.MinorFromMajor(*e.Amount, next.Amount.Currency))
-		if newMag != magnitude {
-			magnitude, amountChanged = newMag, true
+	if len(e.Amount) > 0 || e.Direction != nil {
+		account, found := domain.AccountByID(c.accounts, prior.AccountID)
+		if !found {
+			return prior, nil, fmt.Errorf("transaction account is unavailable")
 		}
-	}
-	if e.Direction != nil {
-		switch strings.ToLower(strings.TrimSpace(*e.Direction)) {
-		case "expense", "out", "outbound", "spending":
-			if sign != -1 {
-				sign, amountChanged = -1, true
-				changes = append(changes, "reclassify it as money going out")
-			}
-		case "income", "in", "inbound", "deposit":
-			if sign != 1 {
-				sign, amountChanged = 1, true
-				changes = append(changes, "reclassify it as money coming in")
-			}
-		case "":
-		default:
-			return prior, nil, fmt.Errorf("direction must be \"expense\" or \"income\", not %q", *e.Direction)
+		flow, err := appstate.AssistantTransactionAmount(account, prior.Amount)
+		if err != nil {
+			return prior, nil, err
 		}
-	}
-	if amountChanged {
-		next.Amount = money.New(sign*magnitude, next.Amount.Currency)
-		if agAbs(next.Amount.Amount) != agAbs(prior.Amount.Amount) {
-			changes = append(changes, fmt.Sprintf("amount %s → %s", fmtMoney(prior.Amount), fmtMoney(next.Amount)))
+		negative := flow.Amount < 0
+		var magnitude int64
+		if len(e.Amount) > 0 {
+			decimal := string(e.Amount)
+			if e.Amount[0] == '"' {
+				if err := json.Unmarshal(e.Amount, &decimal); err != nil {
+					return prior, nil, err
+				}
+			}
+			magnitude, err = money.ParseMinor(decimal, currency.Decimals(prior.Amount.Currency))
+			if err != nil {
+				return prior, nil, err
+			}
+			if magnitude <= 0 {
+				return prior, nil, fmt.Errorf("amount must be an exact positive magnitude; use direction to change flow")
+			}
+		} else {
+			magnitude, err = money.Abs(flow.Amount)
+			if err != nil {
+				return prior, nil, err
+			}
+		}
+		if e.Direction != nil {
+			switch strings.ToLower(strings.TrimSpace(*e.Direction)) {
+			case "expense", "out", "outbound", "spending":
+				negative = true
+			case "income", "in", "inbound", "deposit":
+				negative = false
+			default:
+				return prior, nil, fmt.Errorf("direction must be \"expense\" or \"income\", not %q", *e.Direction)
+			}
+		}
+		if negative {
+			magnitude, err = money.Neg(magnitude)
+			if err != nil {
+				return prior, nil, err
+			}
+		}
+		next.Amount, err = appstate.AssistantTransactionAmount(account, money.New(magnitude, prior.Amount.Currency))
+		if err != nil {
+			return prior, nil, err
+		}
+		if next.Amount != prior.Amount {
+			changes = append(changes, fmt.Sprintf("booked amount %s → %s", assistantContributionMoney(prior.Amount), assistantContributionMoney(next.Amount)))
 		}
 	}
 
@@ -377,6 +422,169 @@ func agTxnLabel(t domain.Transaction) string {
 	return fmt.Sprintf("%s %s on %s", label, fmtMoney(t.Amount), t.Date.Format(dateutil.Layout))
 }
 
+type agExpectedEditPlan struct {
+	id      string
+	native  appstate.TransactionUpdatePreview
+	changes []string
+	preview string
+	err     error
+	used    bool
+	result  string
+}
+
+func agEditContext(app *appstate.App) (agRptCtx, error) {
+	c := agRptCtx{app: app, now: agReportNow()}
+	var err error
+	c.accounts, err = app.Store().ListAccounts()
+	if err != nil {
+		return c, err
+	}
+	c.cats, err = app.CategoriesChecked()
+	if err != nil {
+		return c, err
+	}
+	c.members, err = app.Store().ListMembers()
+	if err != nil {
+		return c, err
+	}
+	c.txns, err = app.Store().ListTransactions()
+	if err != nil {
+		return c, err
+	}
+	c.nameOf = func(id string) string {
+		for _, category := range c.cats {
+			if category.ID == id {
+				return category.Name
+			}
+		}
+		if id == "" {
+			return "uncategorized"
+		}
+		return id
+	}
+	c.memberOf = func(id string) string {
+		for _, member := range c.members {
+			if member.ID == id {
+				return member.Name
+			}
+		}
+		if id == "" {
+			return "unassigned"
+		}
+		return id
+	}
+	return c, nil
+}
+
+func agPrepareExpectedEdit(app *appstate.App, raw json.RawMessage) *agExpectedEditPlan {
+	p := &agExpectedEditPlan{}
+	e, err := assistantCreationDecode[agTxnEdit](raw)
+	if err != nil {
+		p.err = err
+		return p
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		p.err = err
+		return p
+	}
+	for key, value := range fields {
+		if string(value) == "null" {
+			p.err = fmt.Errorf("field %s cannot be null; omit it or use its explicit empty value", key)
+			return p
+		}
+	}
+	c, err := agEditContext(app)
+	if err != nil {
+		p.err = err
+		return p
+	}
+	prior, err := agResolveTxn(c.txns, e.ID)
+	if err != nil {
+		p.err = err
+		return p
+	}
+	p.id = prior.ID
+	next, changes, err := agApplyTxnEdit(c, prior, e)
+	if err != nil {
+		p.err = err
+		return p
+	}
+	p.changes = changes
+	p.native, err = app.PreviewTransactionUpdate(prior, next)
+	if err != nil {
+		p.err = fmt.Errorf("the complete edited transaction is invalid: %w", err)
+		return p
+	}
+	before, err := json.MarshalIndent(p.native.Before, "", "  ")
+	if err != nil {
+		p.err = err
+		return p
+	}
+	after, err := json.MarshalIndent(p.native.After, "", "  ")
+	if err != nil {
+		p.err = err
+		return p
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "Validated update of exact transaction ID %s: %s.\nAll affected group rows are shown; unchanged fees remain unchanged. JSON monetary integers below are exact minor units with their stored currency.\nBefore:\n%s\nAfter:\n%s\nExact booked amounts:\n", prior.ID, strings.Join(changes, "; "), before, after)
+	for _, row := range p.native.After {
+		account, found := domain.AccountByID(c.accounts, row.AccountID)
+		if !found {
+			p.err = fmt.Errorf("transaction account is unavailable")
+			return p
+		}
+		flow, err := appstate.AssistantTransactionAmount(account, row.Amount)
+		if err != nil {
+			p.err = err
+			return p
+		}
+		meaning := "negative public flow is spending; positive public flow is income"
+		if account.Class == domain.ClassLiability {
+			meaning = "negative public flow is a charge; positive public flow is a payment"
+		}
+		fmt.Fprintf(&b, "- ID %s: booked %s; public flow %s (account ID %s; %s).\n", row.ID, assistantContributionMoney(row.Amount), assistantContributionMoney(flow), row.AccountID, meaning)
+	}
+	p.preview = b.String()
+	if len(p.preview) > 24000 {
+		p.err = fmt.Errorf("complete before/after preview exceeds 24000 bytes; use the transaction editor")
+	}
+	return p
+}
+
+func agExpectedUpdateTool(app *appstate.App) chatTool {
+	plans := map[string]*agExpectedEditPlan{}
+	return chatTool{spec: ai.FunctionTool("update_transaction", "Edit one exact transaction ID after reviewing its full validated before/after snapshot; a unique legacy ID prefix is resolved only for preview and never retargeted at execution. Only supplied fields change. Prefer exact category_id/member_id or unambiguous exact names; blank IDs clear them. amount is an exact positive decimal magnitude (string preferred; numeric compatibility is parsed without float); existing public flow direction remains unless direction is provided, honoring fixed liability sign. Strict YYYY-MM-DD date. Canonical paired transfer amount/date edits show both legs and unchanged fees; malformed/ambiguous pairs and direction reversal are refused. Stale rows, references, group or FX require a new preview.", json.RawMessage(`{"type":"object","properties":{"id":{"type":"string"},"category_id":{"type":"string"},"category":{"type":"string"},"member_id":{"type":"string"},"member":{"type":"string"},"payee":{"type":"string"},"description":{"type":"string"},"date":{"type":"string"},"amount":{"type":["string","number"]},"direction":{"type":"string","enum":["expense","income"]},"tags":{"type":"array","items":{"type":"string"}},"cleared":{"type":"boolean"}},"required":["id"],"additionalProperties":false}`)), mutates: true,
+		preview: func(raw json.RawMessage) string {
+			p := agPrepareExpectedEdit(app, raw)
+			plans[string(raw)] = p
+			if p.err != nil {
+				return "Can't prepare the edit: " + p.err.Error()
+			}
+			return p.preview
+		},
+		run: func(raw json.RawMessage) string {
+			p, ok := plans[string(raw)]
+			if !ok {
+				return "Review and approve the transaction edit preview first."
+			}
+			if p.err != nil {
+				return "Can't make the edit: " + p.err.Error()
+			}
+			if p.used {
+				return "This approval was already processed. " + p.result
+			}
+			p.used = true
+			if err := app.UpdateTransactionExpected(p.native); err != nil {
+				p.result = "Couldn't save the change; review and approve again: " + err.Error()
+				return p.result
+			}
+			p.result = fmt.Sprintf("Updated exact transaction ID %s — %s.", p.id, strings.Join(p.changes, "; "))
+			return p.result
+		},
+	}
+}
+
 // agToolsLedgerEdit is the search-and-edit half of the report tooling: find the
 // exact rows behind a figure, then change one of them.
 func agToolsLedgerEdit(app *appstate.App, base string, rates currency.Rates) []chatTool {
@@ -384,11 +592,16 @@ func agToolsLedgerEdit(app *appstate.App, base string, rates currency.Rates) []c
 		{
 			spec: ai.FunctionTool("find_transactions",
 				"Search the ledger and get matching transactions WITH THEIR IDS, so a specific one can then be edited with update_transaction. Filter by text, category, account, person, tag, kind, amount range and window. Unlike the report sections this reaches rows the reports exclude, which are often the ones that are wrong.",
-				json.RawMessage(`{"type":"object","properties":{"contains":{"type":"string","description":"text found in the payee or description"},"category":{"type":"string"},"account":{"type":"string"},"member":{"type":"string","description":"household member name"},"tag":{"type":"string"},"kind":{"type":"string","enum":["expense","income","transfer","any"]},"uncategorized":{"type":"boolean","description":"only transactions with no category"},"min_amount":{"type":"number","description":"absolute amount, major units"},"max_amount":{"type":"number","description":"absolute amount, major units"},`+agPeriodEnum+`,"sort":{"type":"string","enum":["newest","oldest","largest"]},"limit":{"type":"integer","description":"default 25, max 100"}}}`)),
+				json.RawMessage(`{"type":"object","properties":{"contains":{"type":"string","description":"text found in the payee or description"},"category":{"type":"string"},"account":{"type":"string"},"member":{"type":"string","description":"household member name"},"tag":{"type":"string"},"kind":{"type":"string","enum":["expense","income","transfer","any"]},"uncategorized":{"type":"boolean","description":"only transactions with no category"},"min_amount":{"type":"number","description":"absolute amount, major units"},"max_amount":{"type":"number","description":"absolute amount, major units"},`+agPeriodEnum+`,"sort"
+ :{"type":"string","enum":["newest","oldest","largest"]},"limit":{"type":"integer","description":"default 25, max 100"}}}`)),
 			run: func(raw json.RawMessage) string {
 				var f agTxnFilter
 				_ = json.Unmarshal(raw, &f)
-				c := agBuildRptCtx(app, base, rates, f.Period, f.From, f.To, "")
+				c, err := agBuildRptCtx(app, base, rates, f.Period, f.From, f.To, "")
+				if err != nil {
+					return agReportUnavailable(err)
+				}
+				c.txns = c.rawTxns // Ledger search also reaches archived accounts, as before.
 				rows, what := agRunTxnFilter(c, f)
 				limit := f.Limit
 				if limit <= 0 {
@@ -400,48 +613,6 @@ func agToolsLedgerEdit(app *appstate.App, base string, rates currency.Rates) []c
 				return agRenderTxns(c, rows, what, limit)
 			},
 		},
-		{
-			spec: ai.FunctionTool("update_transaction",
-				"Edit ONE transaction, named by the id from a trace or search result. Use it to fix a single row behind a report figure — recategorize it, rename the payee, correct the date or amount, reassign it to a person, retag it, or flip it between money in and money out. Only the fields you pass are changed. To change many rows at once by payee phrase, use categorize_transactions instead.",
-				json.RawMessage(`{"type":"object","properties":{"id":{"type":"string","description":"the transaction id from trace_report_row or find_transactions"},"category":{"type":"string","description":"category name, or \"uncategorized\" to clear it"},"payee":{"type":"string"},"description":{"type":"string"},"date":{"type":"string","description":"YYYY-MM-DD"},"amount":{"type":"number","description":"absolute amount in major units; the direction is kept unless you also pass direction"},"direction":{"type":"string","enum":["expense","income"],"description":"whether this is money going out or coming in"},"member":{"type":"string","description":"household member name, or \"unassigned\""},"tags":{"type":"array","items":{"type":"string"},"description":"replaces the whole tag list"},"cleared":{"type":"boolean"}},"required":["id"]}`)),
-			mutates: true,
-			preview: func(raw json.RawMessage) string {
-				var e agTxnEdit
-				if err := json.Unmarshal(raw, &e); err != nil {
-					return "Edit one transaction."
-				}
-				c := agBuildRptCtx(app, base, rates, "all", "", "", "")
-				prior, err := agResolveTxn(c.txns, e.ID)
-				if err != nil {
-					return "Edit one transaction — " + err.Error()
-				}
-				_, changes, err := agApplyTxnEdit(c, prior, e)
-				if err != nil {
-					return "Edit " + agTxnLabel(prior) + " — " + err.Error()
-				}
-				return "On " + agTxnLabel(prior) + ": " + strings.Join(changes, "; ") + "."
-			},
-			run: func(raw json.RawMessage) string {
-				var e agTxnEdit
-				if err := json.Unmarshal(raw, &e); err != nil {
-					return "Couldn't read the edit."
-				}
-				c := agBuildRptCtx(app, base, rates, "all", "", "", "")
-				prior, err := agResolveTxn(c.txns, e.ID)
-				if err != nil {
-					return err.Error()
-				}
-				next, changes, err := agApplyTxnEdit(c, prior, e)
-				if err != nil {
-					return err.Error()
-				}
-				// A transfer's two legs have to stay reciprocal, so the edit goes
-				// through the pair-aware path rather than writing one side.
-				if err := app.PutTransactionWithTransferPair(prior, next); err != nil {
-					return "Couldn't save the change: " + err.Error()
-				}
-				return fmt.Sprintf("Updated %s — %s.%s", agTxnLabel(next), strings.Join(changes, "; "), openLink("/transactions", next.ID))
-			},
-		},
+		agExpectedUpdateTool(app),
 	}
 }

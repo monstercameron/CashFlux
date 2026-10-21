@@ -20,9 +20,16 @@ func SavingsRateSeries(txns []domain.Transaction, bounds []time.Time, rates curr
 	if err != nil {
 		return nil, err
 	}
+	return SavingsRates(flows), nil
+}
+
+// SavingsRates derives a savings-rate series from already computed cash flows.
+// Views showing both series can reuse their flows without scanning or netting
+// the ledger again. Each entry uses the same rule as the dashboard KPI.
+func SavingsRates(flows []PeriodFlow) []int {
 	out := make([]int, len(flows))
 	for i, f := range flows {
 		out[i] = f.SavingsRate()
 	}
-	return out, nil
+	return out
 }

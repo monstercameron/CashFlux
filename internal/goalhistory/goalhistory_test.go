@@ -3,6 +3,8 @@
 package goalhistory
 
 import (
+	"errors"
+	"math"
 	"testing"
 	"time"
 
@@ -158,6 +160,62 @@ func TestPeakSpansBothSeries(t *testing.T) {
 	}
 	if got := PeakMinor(nil); got != 0 {
 		t.Errorf("PeakMinor(nil) = %d", got)
+	}
+}
+
+func TestSeriesCheckedReportsOverflowAndMixedCurrency(t *testing.T) {
+	date := time.Date(2026, time.August, 1, 0, 0, 0, 0, time.UTC)
+	for _, tc := range []struct {
+		name string
+		goal domain.Goal
+		want error
+	}{
+		{"rollup plus detail overflow", domain.Goal{TargetAmount: money.New(100, "USD"), ContributionHistory: []domain.GoalMonthTotal{{Month: "2026-08", Amount: money.New(math.MaxInt64, "USD"), Count: 1}}, Contributions: []domain.GoalContribution{{Amount: money.New(1, "USD"), At: date}}}, money.ErrOverflow},
+		{"mixed historical currency", domain.Goal{TargetAmount: money.New(100, "USD"), Contributions: []domain.GoalContribution{{Amount: money.New(1, "EUR"), At: date}}}, ErrCurrencyMismatch},
+		{"negative stored amount", domain.Goal{TargetAmount: money.New(100, "USD"), ContributionHistory: []domain.GoalMonthTotal{{Month: "2026-08", Amount: money.New(-1, "USD"), Count: 1}}}, ErrInvalidHistory},
+		{"count overflow", domain.Goal{TargetAmount: money.New(100, "USD"), ContributionHistory: []domain.GoalMonthTotal{{Month: "2026-08", Amount: money.New(1, "USD"), Count: math.MaxInt}}, Contributions: []domain.GoalContribution{{Amount: money.New(1, "USD"), At: date}}}, money.ErrOverflow},
+		{"malformed month", domain.Goal{TargetAmount: money.New(100, "USD"), ContributionHistory: []domain.GoalMonthTotal{{Month: "bad", Amount: money.New(1, "USD"), Count: 1}}}, ErrInvalidHistory},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := SeriesChecked(tc.goal, 10, 1, now)
+			if err == nil || !errors.Is(err, tc.want) || got != nil {
+				t.Fatalf("got %v, %v; want no partial result and %v", got, err, tc.want)
+			}
+			if legacy := Series(tc.goal, 10, 1, now); legacy != nil {
+				t.Fatalf("legacy wrapper exposed partial result: %v", legacy)
+			}
+		})
+	}
+}
+
+func TestSeriesCheckedAddsDuplicateRollupsAndKeepsOutOfWindowHistoryOut(t *testing.T) {
+	g := domain.Goal{TargetAmount: money.New(100, "USD"), ContributionHistory: []domain.GoalMonthTotal{
+		{Month: "2026-08", Amount: money.New(10, "USD"), Count: 1},
+		{Month: "2026-08", Amount: money.New(20, "USD"), Count: 2},
+		{Month: "2020-01", Amount: money.New(math.MaxInt64, "EUR"), Count: 1},
+	}}
+	got, err := SeriesChecked(g, 0, 1, now)
+	if err != nil || len(got) != 1 || got[0].ActualMinor != 30 || got[0].Count != 3 {
+		t.Fatalf("duplicate rollups were not preserved: %+v, %v", got, err)
+	}
+}
+
+func TestCheckedShortfallSummaryAndChartPercent(t *testing.T) {
+	p := Point{PlannedMinor: math.MaxInt64, ActualMinor: math.MinInt64}
+	if _, err := p.ShortfallChecked(); !errors.Is(err, money.ErrOverflow) || p.ShortfallMinor() != 0 {
+		t.Fatalf("shortfall error=%v legacy=%d", err, p.ShortfallMinor())
+	}
+	if _, err := SummarizeChecked([]Point{{ActualMinor: math.MaxInt64}, {ActualMinor: 1}}); !errors.Is(err, money.ErrOverflow) {
+		t.Fatalf("actual total overflow = %v", err)
+	}
+	if got, err := PercentOfPeak(math.MaxInt64, math.MaxInt64); err != nil || got != 100 {
+		t.Fatalf("wide chart percent = %d, %v", got, err)
+	}
+	if got, err := PercentOfPeak(math.MaxInt64/2, math.MaxInt64); err != nil || got != 49 {
+		t.Fatalf("wide half chart percent = %d, %v", got, err)
+	}
+	if _, err := PercentOfPeak(-1, 10); !errors.Is(err, ErrInvalidHistory) {
+		t.Fatalf("negative chart amount accepted: %v", err)
 	}
 }
 

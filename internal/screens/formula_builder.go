@@ -5,9 +5,9 @@
 package screens
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -23,15 +23,48 @@ import (
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/CashFlux/internal/widgetcatalog"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
-// liveEngineVarsCache memoizes liveEngineVars by store revision + current month (the
-// vars are computed over the current month, so the month is part of the identity).
+// liveEngineVarsCache memoizes liveEngineVars by store revision and the complete set
+// of non-store inputs used to build the engine environment.
 // Callers only read the returned map, so sharing one instance is safe.
-var liveEngineVarsCache = map[string]map[string]float64{}
+var liveEngineVarsCache = newViewCache[map[string]float64]()
+
+// liveEngineVarInputs is one coherent snapshot of the browser settings and clock
+// inputs that are not covered by app.Rev or CurrentDataRevision. Keep this as the
+// single source for both cache identity and calculation inputs.
+type liveEngineVarInputs struct {
+	Now            time.Time
+	WeekStart      time.Weekday
+	PayCycleAnchor string
+	IdleBenchmark  float64
+	Alloc          engineenv.AllocData
+	Planning       engineenv.PlanningData
+	BillsConfig    uistate.BillsSmartConfig
+	Pools          []engineenv.PoolDef
+	Smart          engineenv.SmartCounts
+}
+
+func snapshotLiveEngineVarInputs(now time.Time) liveEngineVarInputs {
+	prefs := uistate.LoadPrefs()
+	return liveEngineVarInputs{
+		Now: now, WeekStart: prefs.WeekStartWeekday(), PayCycleAnchor: prefs.PayCycleAnchor,
+		IdleBenchmark: prefs.IdleCashBenchmarkAPR,
+		Alloc:         liveAllocData(), Planning: livePlanningData(), BillsConfig: uistate.BillsSmartConfigGet(),
+		Pools: livePoolDefs(), Smart: liveSmartCounts(),
+	}
+}
+
+func liveEngineVarsKey(app *appstate.App, in liveEngineVarInputs) (string, bool) {
+	encoded, err := json.Marshal(in)
+	if err != nil {
+		return "", false
+	}
+	return revKey(app) + "|" + string(encoded), true
+}
 
 // liveEngineVars computes the full engine variable surface (atoms + molecules +
 // custom fields) over the current month, for live formula evaluation. This is the
@@ -39,13 +72,22 @@ var liveEngineVarsCache = map[string]map[string]float64{}
 // when bound to a widget — and every figure traces back to atoms. Memoized: walking
 // the whole ledger is expensive and several tiles request it per render.
 func liveEngineVars(app *appstate.App) map[string]float64 {
-	mk := time.Now()
-	// The AC15 idle-cash benchmark is a prefs value (localStorage), not part of the
-	// dataset — it doesn't bump app.Rev() — so it rides along in the key too;
-	// otherwise setting a benchmark rate in Settings would show a stale (cached)
-	// idle_cash_forgone_annual until an unrelated data edit evicted the entry.
-	key := revKey(app) + "|" + strconv.Itoa(mk.Year()*100+int(mk.Month())) + "|" + strconv.FormatFloat(uistate.LoadPrefs().IdleCashBenchmarkAPR, 'f', -1, 64)
-	return memoByRev(liveEngineVarsCache, key, func() map[string]float64 { return liveEngineVarsRaw(app) })
+	return liveEngineVarsAt(app, time.Now())
+}
+
+func liveEngineVarsAt(app *appstate.App, now time.Time) map[string]float64 {
+	in := snapshotLiveEngineVarInputs(now)
+	return liveEngineVarsWithInputs(app, in)
+}
+
+func liveEngineVarsWithInputs(app *appstate.App, in liveEngineVarInputs) map[string]float64 {
+	key, cacheable := liveEngineVarsKey(app, in)
+	if !cacheable {
+		return liveEngineVarsRaw(app, in)
+	}
+	return memoByRev(liveEngineVarsCache, key, func() map[string]float64 {
+		return liveEngineVarsRaw(app, in)
+	})
 }
 
 // allFormulaMetrics assembles the full metric catalog — every atom, molecule, custom
@@ -74,8 +116,8 @@ func allFormulaMetrics(app *appstate.App) []widgetcatalog.Metric {
 	return metrics
 }
 
-func liveEngineVarsRaw(app *appstate.App) map[string]float64 {
-	now := time.Now()
+func liveEngineVarsRaw(app *appstate.App, in liveEngineVarInputs) map[string]float64 {
+	now := in.Now
 	start, end := dateutil.MonthRange(now)
 	base := app.Settings().BaseCurrency
 	if base == "" {
@@ -86,16 +128,16 @@ func liveEngineVarsRaw(app *appstate.App) map[string]float64 {
 		Ledger:   budgetLedgerForApp(app),
 		Accounts: app.Accounts(), Transactions: app.Transactions(), Members: app.Members(),
 		Budgets: app.Budgets(), Goals: app.Goals(), Tasks: app.Tasks(), Recurring: app.Recurring(),
-		Categories: app.Categories(), WeekStart: uistate.LoadPrefs().WeekStartWeekday(),
+		Categories: app.Categories(), WeekStart: in.WeekStart,
 		Rates: rates, Now: now, PeriodStart: start, PeriodEnd: end,
-		CustomDefs: app.CustomFieldDefs(), Molecules: app.Molecules(), Pools: livePoolDefs(),
+		CustomDefs: app.CustomFieldDefs(), Molecules: app.Molecules(), Pools: in.Pools,
 		Groups: liveGroupDefs(app),
-		Alloc:  liveAllocData(), Plans: app.Plans(), Planning: livePlanningData(),
-		BillsSmart: liveBillsSmartData(app), Smart: liveSmartCounts(),
+		Alloc:  in.Alloc, Plans: app.Plans(), Planning: in.Planning,
+		BillsSmart: liveBillsSmartDataAt(app, in.BillsConfig, in.PayCycleAnchor, now), Smart: in.Smart,
 		Events: liveEventDefs(app),
 		// AC15: the user-entered idle-cash benchmark rate (a Settings preference, not
 		// a live feed). Zero disables idle_cash_forgone_annual — nothing to compare to.
-		IdleBenchmarkAPRPercent: uistate.LoadPrefs().IdleCashBenchmarkAPR,
+		IdleBenchmarkAPRPercent: in.IdleBenchmark,
 	})
 }
 
@@ -119,8 +161,17 @@ func liveEventDefs(app *appstate.App) []engineenv.EventDef {
 // liveBillsSmartData builds the smart-bill-schedule inputs for the engine
 // variables' fixed 60-day window; views that page further use
 // liveBillsSmartHorizon directly.
-func liveBillsSmartData(app *appstate.App) engineenv.BillsSmartData {
-	return liveBillsSmartHorizon(app, engineenv.BillsSmartHorizonDays)
+func liveBillsSmartDataAt(app *appstate.App, cfg uistate.BillsSmartConfig, anchorText string, now time.Time) engineenv.BillsSmartData {
+	out := engineenv.BillsSmartData{MinKeepMinor: cfg.MinKeepMinor}
+	anchor, err := time.Parse("2006-01-02", anchorText)
+	if err != nil {
+		return out
+	}
+	out.Paydays = billsched.Paydays(anchor, cfg.PayFrequency, now, engineenv.BillsSmartHorizonDays)
+	settings := app.Settings()
+	out.IncomePerPayday, err = billsched.IncomePerPayday(app.Recurring(), currency.Rates{Base: settings.BaseCurrency, Rates: settings.FXRates}, cfg.PayFrequency)
+	out.Unavailable = err != nil
+	return out
 }
 
 // liveBillsSmartHorizon builds the smart-bill-schedule inputs: paydays projected
@@ -135,28 +186,11 @@ func liveBillsSmartHorizon(app *appstate.App, horizonDays int) engineenv.BillsSm
 		return out // no anchor configured — smart figures fall back to raw
 	}
 	out.Paydays = billsched.Paydays(anchor, cfg.PayFrequency, time.Now(), horizonDays)
-	var monthlyIn int64
-	for _, r := range app.Recurring() {
-		if me := r.MonthlyEquivalent(); me > 0 {
-			monthlyIn += me
-		}
-	}
-	out.IncomePerPayday = monthlyIn * 12 / int64(payPeriodsPerYear(cfg.PayFrequency))
+	var incomeErr error
+	settings := app.Settings()
+	out.IncomePerPayday, incomeErr = billsched.IncomePerPayday(app.Recurring(), currency.Rates{Base: settings.BaseCurrency, Rates: settings.FXRates}, cfg.PayFrequency)
+	out.Unavailable = incomeErr != nil
 	return out
-}
-
-// payPeriodsPerYear maps a pay frequency to its yearly period count.
-func payPeriodsPerYear(freq string) int {
-	switch freq {
-	case "weekly":
-		return 52
-	case "semimonthly":
-		return 24
-	case "monthly":
-		return 12
-	default: // biweekly
-		return 26
-	}
 }
 
 // livePlanningData converts the persisted planning config into engine PlanningData, so the

@@ -66,6 +66,20 @@ func TestDeriveTxnRowsReportsUncomparableAmounts(t *testing.T) {
 	}
 }
 
+func TestDeriveTxnRowsDescriptionSortWithoutPayeeResolver(t *testing.T) {
+	input := []domain.Transaction{
+		{ID: "b", Payee: "Beta"},
+		{ID: "a", Desc: "Alpha"},
+	}
+	rows := deriveTxnRows(input, txnfilter.Criteria{Sort: "payee", Dir: txnfilter.Asc}, txnfilter.Labels{}, nil, nil)
+	if len(rows) != 2 || rows[0].ID != "a" || rows[1].ID != "b" {
+		t.Fatalf("description order with raw labels = %+v", rows)
+	}
+	if input[0].ID != "b" {
+		t.Fatal("sorting mutated the shared ledger snapshot")
+	}
+}
+
 type benchmarkTxnRowsMemo struct {
 	revision uint64
 	criteria txnfilter.Criteria

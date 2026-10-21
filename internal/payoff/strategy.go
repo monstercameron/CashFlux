@@ -3,8 +3,11 @@
 package payoff
 
 import (
+	"fmt"
 	"math"
 	"sort"
+
+	"github.com/monstercameron/CashFlux/internal/money"
 )
 
 // Debt is one liability in a multi-debt payoff plan. Balance is the positive
@@ -49,8 +52,18 @@ type Plan struct {
 // progress in some month (total balance fails to fall) so the debts would never
 // clear. No debts owed is ok=true with a zero plan.
 func BuildPlan(debts []Debt, extra int64, strategy Strategy) (Plan, bool) {
+	plan, ok, _ := BuildPlanChecked(debts, extra, strategy)
+	return plan, ok
+}
+
+// BuildPlanChecked is BuildPlan with an explicit error for unrepresentable
+// arithmetic. A nonviable payment remains ok=false with no calculation error.
+func BuildPlanChecked(debts []Debt, extra int64, strategy Strategy) (Plan, bool, error) {
+	fail := func(operation string, err error) (Plan, bool, error) {
+		return Plan{}, false, fmt.Errorf("payoff %s: %w", operation, err)
+	}
 	if extra < 0 {
-		return Plan{}, false
+		return Plan{}, false, nil
 	}
 	n := len(debts)
 	bal := make([]int64, n)
@@ -65,15 +78,23 @@ func BuildPlan(debts []Debt, extra int64, strategy Strategy) (Plan, bool) {
 			cleared[i] = true // nothing owed → already done, never recorded in Order
 		}
 		if d.MinPayment > 0 {
-			budget += d.MinPayment
+			var err error
+			budget, err = money.Add(budget, d.MinPayment)
+			if err != nil {
+				return fail("minimum payments", err)
+			}
 		}
 	}
-	budget += extra
+	var err error
+	budget, err = money.Add(budget, extra)
+	if err != nil {
+		return fail("monthly budget", err)
+	}
 	if active == 0 {
-		return Plan{}, true
+		return Plan{}, true, nil
 	}
 	if budget <= 0 {
-		return Plan{}, false
+		return Plan{}, false, nil
 	}
 
 	var totalInterest, totalPaid int64
@@ -86,7 +107,10 @@ func BuildPlan(debts []Debt, extra int64, strategy Strategy) (Plan, bool) {
 		var sumBefore int64
 		for _, b := range bal {
 			if b > 0 {
-				sumBefore += b
+				sumBefore, err = money.Add(sumBefore, b)
+				if err != nil {
+					return fail("opening balances", err)
+				}
 			}
 		}
 		if sumBefore == 0 {
@@ -98,12 +122,22 @@ func BuildPlan(debts []Debt, extra int64, strategy Strategy) (Plan, bool) {
 			if bal[i] <= 0 {
 				continue
 			}
-			interest := int64(math.Round(float64(bal[i]) * debts[i].AprPercent / 1200.0))
+			charge := math.Round(float64(bal[i]) * debts[i].AprPercent / 1200.0)
+			if math.IsNaN(charge) || math.IsInf(charge, 0) || charge >= float64(math.MaxInt64) || charge < float64(math.MinInt64) {
+				return fail("interest charge", money.ErrOverflow)
+			}
+			interest := int64(charge)
 			if interest < 0 {
 				interest = 0
 			}
-			bal[i] += interest
-			totalInterest += interest
+			bal[i], err = money.Add(bal[i], interest)
+			if err != nil {
+				return fail("balance plus interest", err)
+			}
+			totalInterest, err = money.Add(totalInterest, interest)
+			if err != nil {
+				return fail("total interest", err)
+			}
 		}
 
 		avail := budget
@@ -124,7 +158,10 @@ func BuildPlan(debts []Debt, extra int64, strategy Strategy) (Plan, bool) {
 			}
 			bal[i] -= pay
 			avail -= pay
-			totalPaid += pay
+			totalPaid, err = money.Add(totalPaid, pay)
+			if err != nil {
+				return fail("total payments", err)
+			}
 		}
 		// Throw the rest at the focus debt, cascading as debts clear.
 		for avail > 0 {
@@ -138,14 +175,20 @@ func BuildPlan(debts []Debt, extra int64, strategy Strategy) (Plan, bool) {
 			}
 			bal[fi] -= pay
 			avail -= pay
-			totalPaid += pay
+			totalPaid, err = money.Add(totalPaid, pay)
+			if err != nil {
+				return fail("total payments", err)
+			}
 		}
 
 		// Record debts that cleared this month (index order).
 		var sumAfter int64
 		for i := range bal {
 			if bal[i] > 0 {
-				sumAfter += bal[i]
+				sumAfter, err = money.Add(sumAfter, bal[i])
+				if err != nil {
+					return fail("remaining balances", err)
+				}
 				continue
 			}
 			if !cleared[i] {
@@ -159,17 +202,17 @@ func BuildPlan(debts []Debt, extra int64, strategy Strategy) (Plan, bool) {
 
 		// No progress (budget couldn't outpace interest) → never clears.
 		if sumAfter > 0 && sumAfter >= sumBefore {
-			return Plan{}, false
+			return Plan{}, false, nil
 		}
 	}
 
 	// Still owing after the cap → not viable.
 	for _, b := range bal {
 		if b > 0 {
-			return Plan{}, false
+			return Plan{}, false, nil
 		}
 	}
-	return Plan{Months: months, TotalInterest: totalInterest, TotalPaid: totalPaid, Order: order, ClearedMonths: clearedMonths, Schedule: schedule}, true
+	return Plan{Months: months, TotalInterest: totalInterest, TotalPaid: totalPaid, Order: order, ClearedMonths: clearedMonths, Schedule: schedule}, true, nil
 }
 
 // FocusOrder returns the debt names in the order the strategy attacks them — the

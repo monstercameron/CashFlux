@@ -53,6 +53,11 @@ const NegativeCashFlowPenalty = negativeCashFlowPenalty
 // whether that factor applies to this household. A factor that doesn't apply (e.g.
 // no credit cards) is dropped and its weight redistributed — it is NOT scored zero.
 type Inputs struct {
+	// Unavailable records failed factor derivations by stable factor key. A failed
+	// factor is excluded independently, even when another shares its applicability
+	// flag (for example savings and debt both depend on income).
+	Unavailable map[string]error
+
 	// SavingsRatePct is the trailing-average savings rate (income kept), as a whole
 	// percent; may be negative when spending exceeds income. Applies iff HasIncome.
 	SavingsRatePct int
@@ -257,7 +262,12 @@ func Evaluate(in Inputs) Result {
 	// Sum of weights of applicable factors (the denominator for re-normalization).
 	var applWeight float64
 	applCount := 0
-	for _, d := range defs {
+	for i := range defs {
+		if in.Unavailable[defs[i].key] != nil {
+			defs[i].applicable = false
+			defs[i].targetMet = false
+		}
+		d := defs[i]
 		if d.applicable {
 			applWeight += d.weight
 			applCount++
@@ -265,7 +275,7 @@ func Evaluate(in Inputs) Result {
 	}
 
 	res := Result{
-		NegativeCashFlow: in.HasIncome && in.SavingsRatePct < 0,
+		NegativeCashFlow: in.HasIncome && in.Unavailable["savings"] == nil && in.SavingsRatePct < 0,
 		ApplicableCount:  applCount,
 		Factors:          make([]Factor, 0, len(defs)),
 	}

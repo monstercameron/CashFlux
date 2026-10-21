@@ -5,6 +5,7 @@
 package screens
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -12,7 +13,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
-	"github.com/monstercameron/CashFlux/internal/categorytree"
+	"github.com/monstercameron/CashFlux/internal/budgetview"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -23,9 +24,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/smart"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // budgetSummaryPlanResult carries the explicit results for budgetSummaryPlan.
@@ -68,12 +69,14 @@ func budgetSummaryPlan(v budgetView, app *appstate.App, vw period.Window) budget
 	normalizationOK := planExcluded == 0 && len(v.Incomplete) == 0
 	planView := v
 	planView.TotalLimit = normalizedBudgetTotal
-	actualSpent, spendIssues := v.SummaryActual, v.SummaryIssues
+	spending := budgetview.SummarySpending{Amount: money.New(v.SummaryActual, v.Base), Known: v.SummaryKnown, Complete: v.SummaryComplete, Issues: v.SummaryIssues}
 	if !v.SummaryReady {
-		actualSpent, spendIssues = budgetSummaryActualSpend(app, v.Statuses, vw, v.LastMonthMode, rates, v.Base)
+		spending = budgetSummarySpending(budgetLedgerForApp(app), app.Categories(), v.Statuses, vw, v.LastMonthMode, rates, v.Base)
 	}
-	issues = append(issues, spendIssues...)
-	planView.TotalSpent = actualSpent
+	issues = budgeting.DeduplicateViewIssues(append(issues, spending.Issues...))
+	planView.TotalSpent = spending.Amount.Amount
+	planView.SummaryActual, planView.SummaryIssues = spending.Amount.Amount, spending.Issues
+	planView.SummaryKnown, planView.SummaryComplete, planView.SummaryReady = spending.Known, spending.Complete, true
 	smartSettings := uistate.LoadSmartSettings()
 	// UX-05: a wholly-past view window flips the summary into past-tense wording —
 	// "Jun 2026 spending", "ended over budget" — because "so far this month" over a
@@ -101,103 +104,19 @@ func budgetSummaryActualSpend(app *appstate.App, statuses []budgeting.Status, vw
 }
 
 func budgetSummaryActualSpendNetted(transactions budgeting.NettedLedger, categories []domain.Category, statuses []budgeting.Status, vw period.Window, previous bool, rates currency.Rates, base string) (int64, []budgeting.ViewIssue) {
+	result := budgetSummarySpending(transactions, categories, statuses, vw, previous, rates, base)
+	return result.Amount.Amount, result.Issues
+}
+
+func budgetSummarySpending(transactions budgeting.NettedLedger, categories []domain.Category, statuses []budgeting.Status, vw period.Window, previous bool, rates currency.Rates, base string) budgetview.SummarySpending {
 	start, end := vw.Range()
 	if previous {
 		start, end = start.AddDate(0, -1, 0), end.AddDate(0, -1, 0)
 	}
-	if budgetNow().Before(start) {
-		return 0, nil
-	}
-	active := make([]budgetSummarySpendScope, 0, len(statuses))
-	for _, status := range statuses {
-		if status.Error == nil && !status.Budget.IsSaving() {
-			active = append(active, budgetSummarySpendScope{budget: status.Budget, covers: categorytree.DescendantsOfAll(categories, status.Budget.TrackedCategoryIDs())})
-		}
-	}
-	var total int64
-	var issues []budgeting.ViewIssue
-	for _, txn := range transactions {
-		if txn.Date.Before(start) || !txn.Date.Before(end) {
-			continue
-		}
-		contribution, matched, contributionIssues := budgetSummaryTransactionSpend(txn, active)
-		issues = append(issues, contributionIssues...)
-		if !matched {
-			continue
-		}
-		amount, err := rates.Convert(contribution, base)
-		if err != nil {
-			issues = append(issues, budgeting.ViewIssue{Operation: "convert selected-period budget spending", Err: err})
-			continue
-		}
-		total, err = money.Add(total, amount.Amount)
-		if err != nil {
-			issues = append(issues, budgeting.ViewIssue{Operation: "sum selected-period budget spending", Err: err})
-			return 0, budgeting.DeduplicateViewIssues(issues)
-		}
-	}
-	return total, budgeting.DeduplicateViewIssues(issues)
-}
-
-type budgetSummarySpendScope struct {
-	budget domain.Budget
-	covers map[string]bool
-}
-
-// budgetSummaryTransactionSpend returns a transaction's contribution to the
-// union of budget scopes. A tagged charge is counted whole once; split charges
-// combine distinct tracked lines and count overlaps only once.
-func budgetSummaryTransactionSpend(txn domain.Transaction, scopes []budgetSummarySpendScope) (money.Money, bool, []budgeting.ViewIssue) {
-	var issues []budgeting.ViewIssue
-	for _, scope := range scopes {
-		if !scope.budget.TracksAnyTag(txn.Tags) {
-			continue
-		}
-		amount, ok, err := budgeting.ContributionChecked(scope.budget, txn, func(id string) bool { return scope.covers[id] })
-		if err != nil {
-			issues = append(issues, budgeting.ViewIssue{Operation: "evaluate selected-period budget spending", BudgetID: scope.budget.ID, Err: err})
-			continue
-		}
-		if ok {
-			return amount, true, budgeting.DeduplicateViewIssues(issues)
-		}
-	}
-	if !txn.HasSplits() {
-		for _, scope := range scopes {
-			amount, ok, err := budgeting.ContributionChecked(scope.budget, txn, func(id string) bool { return scope.covers[id] })
-			if err != nil {
-				issues = append(issues, budgeting.ViewIssue{Operation: "evaluate selected-period budget spending", BudgetID: scope.budget.ID, Err: err})
-				continue
-			}
-			if ok {
-				return amount, true, budgeting.DeduplicateViewIssues(issues)
-			}
-		}
-		return money.Money{}, false, budgeting.DeduplicateViewIssues(issues)
-	}
-	total := money.Zero(txn.Amount.Currency)
-	matched := false
-	for _, split := range txn.Splits {
-		line := txn
-		line.Splits = []domain.CategorySplit{split}
-		for _, scope := range scopes {
-			amount, ok, err := budgeting.ContributionChecked(scope.budget, line, func(id string) bool { return scope.covers[id] })
-			if err != nil {
-				issues = append(issues, budgeting.ViewIssue{Operation: "evaluate selected-period budget spending", BudgetID: scope.budget.ID, Err: err})
-				continue
-			}
-			if ok {
-				total, err = total.Add(amount)
-				if err != nil {
-					issues = append(issues, budgeting.ViewIssue{Operation: "sum selected-period split spending", Err: err})
-					return money.Money{}, false, budgeting.DeduplicateViewIssues(issues)
-				}
-				matched = true
-				break
-			}
-		}
-	}
-	return total, matched, budgeting.DeduplicateViewIssues(issues)
+	return budgetview.PrepareSummarySpending(budgetview.SummarySpendingInput{
+		Ledger: transactions, Categories: categories, Statuses: statuses,
+		Start: start, End: end, Now: budgetNow(), Rates: rates, Base: base,
+	})
 }
 
 // budgetSummaryWindowPlan totals each budget's history-aware monthly plan over
@@ -307,7 +226,7 @@ type budgetSummaryPoolResult struct {
 }
 
 // budgetSummaryPool builds the summary pool section.
-func budgetSummaryPool(vw period.Window, v budgetView, hist bool, normalizedBudgetTotal int64) budgetSummaryPoolResult {
+func budgetSummaryPool(vw period.Window, v budgetView, hist bool, normalizedBudgetTotal int64, normalizationOK bool) budgetSummaryPoolResult {
 	// The spend figure the graph shows: this month by default; last period's total when
 	// the "Last month's spend" overlay is on, so the top graph matches the tiles.
 	// The band's geometry (spent-of-limit fill, overage segment, tone thresholds)
@@ -337,15 +256,14 @@ func budgetSummaryPool(vw period.Window, v budgetView, hist bool, normalizedBudg
 	// The sinking-fund commitment checks against the method's still-unallocated
 	// pool: To-Assign for zero-based, income − budgeted for simple. Envelope has no
 	// such pool (money lives in the envelopes), so it never alerts there.
+	pool := budgetview.PreparePool(budgetview.PoolInput{
+		Method: v.Method, Expected: v.BannerIncome, Rollover: v.RolledOver,
+		Budgeted: normalizedBudgetTotal, Fixed: v.SavingsAssigned, PlanKnown: normalizationOK,
+	})
 	var fundFree int64
-	fundHasPool := false
-	switch v.Method {
-	case budgeting.MethodZeroBased:
-		fundFree = budgeting.ToAssign(v.BannerIncome+v.RolledOver, normalizedBudgetTotal+v.SavingsAssigned)
-		fundHasPool = true
-	case budgeting.MethodSimple:
-		fundFree = v.BannerIncome - normalizedBudgetTotal
-		fundHasPool = true
+	fundHasPool := pool.Known && pool.HasPool
+	if fundHasPool {
+		fundFree = pool.Amount
 	}
 	// zbbHero (2026-08-31): in zero-based the hero figure is To Assign, not "Left".
 	// Zero-based asks exactly one question — is every dollar assigned? — and the
@@ -419,6 +337,10 @@ func budgetSummaryChips(p budgetSummaryChipsProps) (ui.Node, ui.Node, ui.Node) {
 			uistate.T("budgets.ageMoneyLabel")+" · "+figure,
 			Span(css.Class("bud3-age-explain"), uistate.T("budgets.ageMoneyOneLine")),
 			smartTooltipFor(p.smartSettings, "budget-agemoney", uistate.T("budgets.ageMoneyLabel"), why))
+	} else if am.Overflow {
+		ageChip = Span(css.Class("budget-hero-age"), Attr("data-testid", "budgets-agemoney-unavailable"),
+			uistate.T("budgets.ageMoneyUnavailable"),
+			Span(css.Class("bud3-age-explain"), uistate.T("budgets.ageMoneyTotalsTooLarge")))
 	}
 
 	return attnChip, toAssignChip, ageChip
@@ -436,7 +358,12 @@ type budgetSummaryFundingProps struct {
 }
 
 // budgetSummaryFunding builds the summary funding section.
-func budgetSummaryFunding(p budgetSummaryFundingProps) (ui.Node, budgeting.FundingRead, int64) {
+type budgetSummaryFundingResult struct {
+	incomeActual ui.Node
+	prepared     budgetview.FundingPreparation
+}
+
+func budgetSummaryFunding(p budgetSummaryFundingProps) budgetSummaryFundingResult {
 	// #64: the plan figure is EXPECTED income — say what actually arrived, so the
 	// basis never masquerades as money already received. One quiet sub-line.
 	var incomeActual ui.Node = Fragment()
@@ -445,25 +372,31 @@ func budgetSummaryFunding(p budgetSummaryFundingProps) (ui.Node, budgeting.Fundi
 	// while only $6,961.00 has come in, and "fully assigned" then looks exactly
 	// like "fully funded". The difference is the part that decides whether a
 	// payment clears.
-	var funding budgeting.FundingRead
-	// Scanned ONCE per render and reused: the funding read below and the month-close
-	// gate further down both need it, and IncomeByCategory walks every transaction.
-	// Computing it twice made a full ledger sweep the price of drawing this tile.
-	actualIncome := int64(0)
-	if lines, err := reports.IncomeByCategory(p.app.Transactions(), p.wStart, p.wEnd, currency.Rates{Base: p.v.Base, Rates: p.app.Settings().FXRates}); err == nil {
-		for _, ln := range lines {
-			actualIncome += ln.Amount
+	var lines []reports.CategorySpend
+	var incomeErr error
+	var settingsRates map[string]float64
+	var transactions []domain.Transaction
+	if p.app == nil || p.app.Store() == nil {
+		incomeErr = fmt.Errorf("read budget income: app is unavailable")
+	} else {
+		if err := p.app.Store().CheckReady(); err != nil {
+			incomeErr = fmt.Errorf("read budget income: %w", err)
+		} else {
+			transactions, incomeErr = p.app.TransactionsChecked()
+			settings, settingsErr := p.app.SettingsChecked()
+			incomeErr = errors.Join(incomeErr, settingsErr)
+			settingsRates = settings.FXRates
+			if incomeErr == nil {
+				lines, incomeErr = reports.IncomeByCategoryChecked(transactions, p.wStart, p.wEnd,
+					currency.Rates{Base: p.v.Base, Rates: settingsRates})
+			}
 		}
 	}
-	if p.normalizationOK && p.v.BannerIncome > 0 && (p.v.Method == budgeting.MethodZeroBased || p.v.Method == budgeting.MethodSimple) {
-		funding = budgeting.FundingRead{
-			Expected: p.v.BannerIncome, Received: actualIncome,
-			Assigned: p.normalizedBudgetTotal + p.v.SavingsAssigned,
-			// The savings/investment assignments are part of the plan but not part
-			// of what a bulk budget adjustment can scale, so the reconcile
-			// percentage has to be computed against the budgets alone.
-			Fixed: p.v.SavingsAssigned,
-		}
+	prepared := budgetview.PrepareFunding(budgetview.FundingInput{
+		IncomeLines: lines, IncomeError: incomeErr, Method: p.v.Method, Expected: p.v.BannerIncome, RolledOver: p.v.RolledOver,
+		Budgeted: p.normalizedBudgetTotal, Fixed: p.v.SavingsAssigned, PlanKnown: p.normalizationOK,
+	})
+	if prepared.FundingEligible {
 		key := "budgets.incomeActualSoFar"
 		if p.hist {
 			key = "budgets.incomeActualEnded"
@@ -473,13 +406,16 @@ func budgetSummaryFunding(p budgetSummaryFundingProps) (ui.Node, budgeting.Fundi
 		// arrived there is no gap to report, and "$5,900.00 of the $5,900.00 your plan
 		// expects" is a tautology that reads as "fully funded" directly beneath a hero
 		// saying the plan is over-assigned (Cam, 2026-08-31).
-		if actualIncome < p.v.BannerIncome {
+		if !prepared.IncomeKnown || !prepared.AssignmentsKnown {
+			incomeActual = P(css.Class("budget-sub"), Attr("data-testid", "budgets-income-unavailable"),
+				uistate.T("budgets.fundingUnavailable"))
+		} else if prepared.Received < p.v.BannerIncome {
 			incomeActual = P(css.Class("budget-sub"), Attr("data-testid", "budgets-income-actual"),
-				uistate.T(key, fmtMoney(money.New(actualIncome, p.v.Base)), fmtMoney(money.New(p.v.BannerIncome, p.v.Base))))
+				uistate.T(key, fmtMoney(money.New(prepared.Received, p.v.Base)), fmtMoney(money.New(p.v.BannerIncome, p.v.Base))))
 		}
 	}
 
-	return incomeActual, funding, actualIncome
+	return budgetSummaryFundingResult{incomeActual: incomeActual, prepared: prepared}
 }
 
 // budgetSummaryAllocationResult carries the explicit results for budgetSummaryAllocation.
@@ -500,6 +436,9 @@ type budgetSummaryAllocationProps struct {
 	normalizedBudgetTotal int64
 	wEnd                  time.Time
 	actualIncome          int64
+	actualIncomeKnown     bool
+	overAssigned          int64
+	overAssignedKnown     bool
 	pr                    prefs.Prefs
 }
 
@@ -524,7 +463,8 @@ func budgetSummaryAllocation(p budgetSummaryAllocationProps) budgetSummaryAlloca
 	if !p.futurePeriod {
 		alloc = budgetIncomeAllocation(p.planView, p.basisBtn, p.hist, true)
 	}
-	hasAlloc := p.v.BannerIncome+p.v.RolledOver > 0
+	incomeBasis, incomeBasisErr := money.Add(p.v.BannerIncome, p.v.RolledOver)
+	hasAlloc := incomeBasisErr == nil && incomeBasis > 0
 
 	// Zero-based drops the loader band entirely. The band is a spent/budgeted/left
 	// reading on its own axis; beneath a bar that plots the same money against
@@ -562,10 +502,9 @@ func budgetSummaryAllocation(p budgetSummaryAllocationProps) budgetSummaryAlloca
 	// amounts. Sharing the bar's arithmetic makes that impossible rather than
 	// unlikely.
 	overAssigned := int64(0)
-	if pool := p.v.BannerIncome + p.v.RolledOver; p.normalizationOK && pool > 0 {
-		if ta := budgeting.ToAssign(pool, p.normalizedBudgetTotal+p.v.SavingsAssigned); ta < 0 {
-			overAssigned = -ta
-		}
+	overAssignedKnown := p.overAssignedKnown
+	if overAssignedKnown {
+		overAssigned = p.overAssigned
 	}
 	// #64: offer the guided close flow when the period is in its last five days or
 	// already ended — the moment the checklist is actually useful. It rides in the
@@ -580,13 +519,13 @@ func budgetSummaryAllocation(p budgetSummaryAllocationProps) budgetSummaryAlloca
 	// An invitation that reliably leads nowhere teaches people to ignore it
 	// (Cam, 2026-08-31).
 	var closeOffer ui.Node = Fragment()
-	if daysLeft := int(p.wEnd.Sub(budgetNow()).Hours() / 24); p.hist || (daysLeft >= 0 && daysLeft <= 5) {
+	if daysLeft := int(p.wEnd.Sub(budgetNow()).Hours() / 24); (p.hist || (daysLeft >= 0 && daysLeft <= 5)) && p.actualIncomeKnown && overAssignedKnown {
 		// Built from figures this render already has — statuses, the over-assignment
 		// the rail uses, and the single income scan above — so the gate costs no
 		// extra passes over the ledger. Clean() stays the one definition of "nothing
 		// to review", shared with the flow the chip opens.
 		review := monthclose.Build(p.v.Statuses, nil, p.v.BannerIncome, p.actualIncome, overAssigned, p.pr.BudgetRolloverLeftover)
-		if !review.Clean() {
+		if review.Error == nil && !review.Clean() {
 			closeOffer = ui.CreateElement(monthCloseOfferChip, struct{}{})
 		}
 	}
@@ -635,6 +574,8 @@ type budgetSummaryStatusProps struct {
 	hist                  bool
 	normalizationOK       bool
 	overAssigned          int64
+	fundingKnown          bool
+	fundingEligible       bool
 	funding               budgeting.FundingRead
 	excluded              int
 	issues                []budgeting.ViewIssue
@@ -648,20 +589,27 @@ type budgetSummaryStatusProps struct {
 func budgetSummaryStatus(p budgetSummaryStatusProps) ui.Node {
 	statusAmount := p.normalizedBudgetTotal
 	statusState := "fits"
+	spendingKnown, spendingComplete := true, true
+	if p.v.SummaryReady {
+		spendingKnown, spendingComplete = p.v.SummaryKnown, p.v.SummaryComplete
+	}
 	if len(p.v.Incomplete) > 0 {
 		statusState = "unknown"
 	} else if !p.normalizationOK {
 		statusState = "unknown"
 	}
-	if p.excluded == 0 && !p.futurePeriod && p.overAssigned > 0 {
+	if !spendingComplete {
+		statusState = "unknown"
+	}
+	if statusState == "fits" && p.excluded == 0 && !p.futurePeriod && p.overAssigned > 0 {
 		statusAmount = p.overAssigned
 		statusState = "over"
-	} else if p.excluded == 0 && !p.futurePeriod && p.funding.Meaningful() && !p.funding.FullyFunded() && p.funding.Unfunded() > 0 {
+	} else if statusState == "fits" && p.excluded == 0 && !p.futurePeriod && p.fundingEligible && p.fundingKnown && p.funding.Meaningful() && !p.funding.FullyFunded() && p.funding.Unfunded() > 0 {
 		statusAmount = p.funding.Unfunded()
 		statusState = "unfunded"
 	}
 	var statusAction ui.Node = Fragment()
-	if statusState == "over" || statusState == "unfunded" {
+	if (statusState == "over" || statusState == "unfunded") && p.fundingKnown && p.fundingEligible {
 		label := uistate.T("bud2.bringPlanDown")
 		if statusState == "over" {
 			label = uistate.T("bud2.resolveAmount", fmtMoney(money.New(statusAmount, p.v.Base)))
@@ -671,11 +619,17 @@ func budgetSummaryStatus(p budgetSummaryStatusProps) ui.Node {
 		})
 	}
 	headlineView := p.v
+	if p.v.SummaryReady {
+		headlineView.TotalSpent = p.v.SummaryActual
+	}
 	if p.windowSpentSet {
 		headlineView.TotalSpent = p.windowSpent
 	}
 	spent, plan := budgetHeadlineAmounts(headlineView, p.normalizedBudgetTotal)
 	statusFigure := fmtMoney(money.New(spent, p.v.Base))
+	if !spendingKnown {
+		statusFigure = "—"
+	}
 	statusCopy := uistate.T("budgets.headlineSpentMonthly", fmtMoney(money.New(plan, p.v.Base)))
 	if p.hist {
 		statusCopy = uistate.T("budgets.headlineSpentMonthlyPast", fmtMoney(money.New(plan, p.v.Base)), p.vw.Label())
@@ -685,7 +639,7 @@ func budgetSummaryStatus(p budgetSummaryStatusProps) ui.Node {
 			fmtMoney(money.New(p.normalizedBudgetTotal, p.v.Base)),
 			fmtMoney(money.New(p.v.BannerIncome, p.v.Base)))
 	}
-	if len(p.v.Incomplete) > 0 || !p.normalizationOK {
+	if len(p.v.Incomplete) > 0 || !p.normalizationOK || !spendingComplete {
 		statusCopy = uistate.T("budgets.incomplete")
 	}
 	if p.excluded > 0 {
@@ -698,11 +652,11 @@ func budgetSummaryStatus(p budgetSummaryStatusProps) ui.Node {
 			Span(css.Class("bud3-headline-secondary"), Attr("data-testid", "budgets-status-sentence"), statusCopy),
 			Span(css.Class("bud3-headline-window"), Attr("data-testid", "budgets-status-window"), uistate.T("budgets.headlineWindowLabel", budgetHeadlineWindowLabel(p.vw, p.v.LastMonthMode))),
 		),
-		Div(css.Class("bud3-headline-meter"), Attr("data-testid", "budgets-status-meter"), Attr("role", "meter"), Attr("aria-label", uistate.T("budgets.headlineMeterLabel")),
+		If(spendingComplete, Div(css.Class("bud3-headline-meter"), Attr("data-testid", "budgets-status-meter"), Attr("role", "meter"), Attr("aria-label", uistate.T("budgets.headlineMeterLabel")),
 			Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"), Attr("aria-valuenow", strconv.Itoa(fillPct)),
 			Div(css.Class("bud3-headline-meter-fill"), Attr("style", "width:"+strconv.Itoa(fillPct)+"%")),
 			If(!p.hist && !p.v.LastMonthMode && !p.futurePeriod, Div(css.Class("bud3-headline-pace"), Attr("aria-hidden", "true"), Attr("style", "left:"+strconv.Itoa(budgetPeriodElapsedPct(p.vw, budgetNow()))+"%"))),
-		),
+		)),
 		If(p.attnCount > 0 && !p.hist && !p.v.LastMonthMode,
 			Div(css.Class("bud3-headline-attention"),
 				Button(css.Class("bud3-attention-link"), Type("button"), Attr("data-testid", "budgets-hero-attn"), OnClick(p.filterAttn), uistate.T("budgets.headlineAttention", p.attnCount)),
@@ -747,14 +701,7 @@ func budgetHeadlineAmounts(v budgetView, normalizedPlan int64) (int64, int64) {
 }
 
 func budgetHeadlinePercent(spent, plan int64) int {
-	if spent <= 0 || plan <= 0 {
-		return 0
-	}
-	pct := int(spent * 100 / plan)
-	if pct > 100 {
-		return 100
-	}
-	return pct
+	return budgetview.HeadlinePercent(spent, plan)
 }
 
 func budgetPeriodElapsedPct(vw period.Window, now time.Time) int {
@@ -783,6 +730,8 @@ type budgetSummaryDetailsProps struct {
 	alloc           ui.Node
 	futurePeriod    bool
 	funding         budgeting.FundingRead
+	fundingKnown    bool
+	fundingEligible bool
 	hist            bool
 	vw              period.Window
 	app             *appstate.App
@@ -800,16 +749,20 @@ type budgetSummaryDetailsProps struct {
 
 // budgetSummaryDetails renders the existing details disclosure and action groups.
 func budgetSummaryDetails(p budgetSummaryDetailsProps) ui.Node {
+	var fundingCallout ui.Node = Fragment()
+	if !p.futurePeriod && p.fundingKnown && p.fundingEligible {
+		fundingCallout = ui.CreateElement(budgetFundedCallout, budgetFundedProps{
+			Funding: p.funding, Base: p.v.Base, Historical: p.hist, PeriodLabel: p.vw.FromLabel(),
+			ScalableCount: budgetReconcileCount(p.app, p.activeMemberID, p.v, p.vw, p.pr, p.funding.ReduceToFitPct()),
+		})
+	}
 	details := Details(css.Class("bud2-status-details"), Attr("data-testid", "budgets-status-details"),
 		Summary(uistate.T("bud2.moreDetails")),
 		budgetIncompleteNotice(p.v.Incomplete),
 		If(!p.normalizationOK, P(css.Class("bud2-normalization-error"), Attr("role", "status"), uistate.T("bud2.normalizationUnavailable"))),
 		p.alloc,
 		ui.CreateElement(transferLeakNotice, transferLeakProps{Txns: p.v.LeakRows, Where: uistate.T("txnleak.whereBudgets")}),
-		If(!p.futurePeriod, ui.CreateElement(budgetFundedCallout, budgetFundedProps{
-			Funding: p.funding, Base: p.v.Base, Historical: p.hist, PeriodLabel: p.vw.FromLabel(),
-			ScalableCount: budgetReconcileCount(p.app, p.activeMemberID, p.v, p.vw, p.pr, p.funding.ReduceToFitPct()),
-		})),
+		fundingCallout,
 		p.rail,
 		Div(css.Class("budget-hero-cap"),
 			p.incomeActual,

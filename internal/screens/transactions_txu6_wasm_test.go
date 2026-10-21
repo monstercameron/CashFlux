@@ -9,8 +9,8 @@ import (
 	"testing"
 
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
-	"github.com/monstercameron/GoWebComponents/v5/testkit/render"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/testkit/render"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 func TestTXU6CountLineOmitsPageRange(t *testing.T) {

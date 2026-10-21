@@ -13,9 +13,9 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/customfields"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // customFieldInputProps drives one custom-field input. Value is the current
@@ -63,37 +63,10 @@ func CustomFieldInput(props customFieldInputProps) ui.Node {
 	}
 }
 
-// customValuesToMap converts the form's string values into a typed custom{} map
-// against the given definitions: numbers become float64 (or the raw string if
-// unparseable, so validation can flag it), yes/no becomes bool, everything else
-// stays a string. Empty values are omitted so optional fields stay unset.
-func customValuesToMap(defs []customfields.Def, vals map[string]string) map[string]any {
-	if len(defs) == 0 {
-		return nil
-	}
-	out := map[string]any{}
-	for _, d := range defs {
-		raw := strings.TrimSpace(vals[d.Key])
-		if raw == "" {
-			continue
-		}
-		switch d.Type {
-		case customfields.TypeNumber:
-			if f, err := strconv.ParseFloat(raw, 64); err == nil {
-				out[d.Key] = f
-			} else {
-				out[d.Key] = raw
-			}
-		case customfields.TypeBool:
-			out[d.Key] = raw == "true"
-		default:
-			out[d.Key] = raw
-		}
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	return out
+// customValuesToMap prepares the form state through the native customfields
+// validator. A nonempty issue list means no values may be persisted.
+func customValuesToMap(defs []customfields.Def, vals map[string]string) (map[string]any, []string) {
+	return customfields.ParseFormValues(defs, vals)
 }
 
 // customMapToStrings renders a typed custom{} map back into the string form-state map
@@ -101,24 +74,7 @@ func customValuesToMap(defs []customfields.Def, vals map[string]string) map[stri
 // float → trimmed decimal, anything else → its default string form). Used to seed an
 // inline-edit form from an entity's saved custom values.
 func customMapToStrings(custom map[string]any) map[string]string {
-	out := make(map[string]string, len(custom))
-	for k, v := range custom {
-		switch t := v.(type) {
-		case bool:
-			if t {
-				out[k] = "true"
-			} else {
-				out[k] = "false"
-			}
-		case float64:
-			out[k] = strconv.FormatFloat(t, 'f', -1, 64)
-		case string:
-			out[k] = t
-		default:
-			out[k] = fmt.Sprintf("%v", t)
-		}
-	}
-	return out
+	return customfields.FormValuesToStrings(custom)
 }
 
 // customSummary builds a compact "Label: value" string for an entity's non-empty

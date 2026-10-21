@@ -9,14 +9,15 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
-	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/engineenv"
 	"github.com/monstercameron/CashFlux/internal/finplan"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/router"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/router"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // planFrameworkKV persists which playbook the household chose (default FOO); the
@@ -28,39 +29,32 @@ const (
 	planDeductibleKV = "plan.q.deductible"
 )
 
-// livePlanInputs derives the finplan signals from the same shared surfaces the
-// health page reads (liquid cash + emergency-fund months + savings rate) plus a
-// pass over the accounts to classify debt. Kept in the view layer because it
-// glues the pure engines together; no assessment logic lives here.
-func livePlanInputs(app *appstate.App, now time.Time) finplan.Inputs {
-	h := liveHealthInputs(app, now)
-	base := app.Settings().BaseCurrency
+// livePlanAssessment gathers one app snapshot and sends financial derivation
+// and policy through finplan's native assessment contract. Unknown signals
+// remain NotAssessable instead of falling through a float engine value.
+func livePlanAssessment(app *appstate.App, now time.Time, choices finplan.Choices) finplan.Plan {
+	settings := app.Settings()
+	base := settings.BaseCurrency
 	if base == "" {
 		base = "USD"
 	}
-	liquid := majorMoney(liveEngineVars(app)["liquid_cash"], base).Amount
-
-	accts := app.Accounts()
-	hasHighInt, hasNonMort := false, false
-	for _, a := range accts {
-		if a.Archived || !a.IsLiability() || a.Type == domain.TypeMortgage {
-			continue
-		}
-		hasNonMort = true
-		if r, ok := a.RateAPR(); ok && r >= finplan.HighInterestAPR() {
-			hasHighInt = true
-		}
+	data := engineenv.Data{
+		Ledger:       budgetLedgerForApp(app),
+		Accounts:     app.Accounts(),
+		Transactions: app.Transactions(),
+		Budgets:      app.Budgets(),
+		Categories:   app.Categories(),
+		Rates:        currency.Rates{Base: base, Rates: settings.FXRates},
+		Now:          now,
+		WeekStart:    uistate.LoadPrefs().WeekStartWeekday(),
 	}
-	return finplan.Inputs{
-		HasLiquidData:       h.HasLiquidData,
-		LiquidCashMinor:     liquid,
-		EmergencyMonths:     h.EmergencyMonths,
-		HasIncome:           h.HasIncome,
-		SavingsRatePct:      h.SavingsRatePct,
-		KnowsLiabilities:    len(accts) > 0, // we can see the accounts, so we can judge the debt steps
-		HasHighInterestDebt: hasHighInt,
-		HasNonMortgageDebt:  hasNonMort,
+	assessment, err := finplan.AssessData(data, choices)
+	if err == nil {
+		return assessment.Plan
 	}
+	// A bad reference time or stored choice cannot become a positive financial
+	// claim. Preserve user answers while leaving every data-derived signal unknown.
+	return finplan.Assess(choices.Kind(), choices.Apply(finplan.Inputs{}))
 }
 
 // planStepKey builds the i18n key for a step's title/detail from the framework
@@ -172,13 +166,27 @@ func PlanScreen() ui.Node {
 	framework := fw.Get()
 
 	now := time.Now()
-	in := livePlanInputs(app, now)
 	matchDone, matchYes := answeredBool(matchAns.Get())
-	in.AnsweredMatch, in.GetsFullMatch = matchDone, matchYes
 	dedDone, dedYes := answeredBool(dedAns.Get())
-	in.AnsweredDeductible, in.DeductiblesCovered = dedDone, dedYes
-
-	plan := finplan.Assess(framework, in)
+	choices := finplan.Choices{Framework: "foo"}
+	if framework == finplan.Ramsey {
+		choices.Framework = "ramsey"
+	}
+	if matchDone {
+		if matchYes {
+			choices.Match = "yes"
+		} else {
+			choices.Match = "no"
+		}
+	}
+	if dedDone {
+		if dedYes {
+			choices.Deductible = "yes"
+		} else {
+			choices.Deductible = "no"
+		}
+	}
+	plan := livePlanAssessment(app, now, choices)
 	cur, hasCur := plan.Current()
 
 	done := 0

@@ -4,7 +4,7 @@
 
 package uistate
 
-import "github.com/monstercameron/GoWebComponents/v5/state"
+import "github.com/monstercameron/GoWebComponents/v7/state"
 
 // capturedCatSuggest lets a transaction row's "Categorize this" kebab item open
 // the categorize flip modal (SM-2) from a click handler without calling UseAtom

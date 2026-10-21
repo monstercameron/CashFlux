@@ -23,10 +23,10 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/router"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/router"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // AccountEditFormProps drives the account editor form rendered inside the shell-root
@@ -384,6 +384,7 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 	splitOwnS := ui.UseState(len(a.OwnershipShares) > 0)
 	sharesMapS := ui.UseState(cloneSharesMap(a.OwnershipShares))
 	customEditVals := ui.UseState(customMapToStrings(a.Custom))
+	customErrS := ui.UseState("")
 	notesS := ui.UseState(a.Notes)
 	onNotes := func(v string) { notesS.Set(v) }
 	onBal := ui.UseEvent(func(v string) { balS.Set(v) })
@@ -422,6 +423,7 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 	onToggleAsLiab := ui.UseEvent(func() { asLiabS.Set(!asLiabS.Get()) })
 	onToggleSplitOwn := ui.UseEvent(func() { splitOwnS.Set(!splitOwnS.Get()) })
 	onCustomEdit := func(key, value string) {
+		customErrS.Set("")
 		m := customEditVals.Get()
 		nm := make(map[string]string, len(m)+1)
 		for k, v := range m {
@@ -560,7 +562,12 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 			}
 		}
 		if defs := app.CustomFieldDefsFor("account"); len(defs) > 0 {
-			cp.Custom = customValuesToMap(defs, customEditVals.Get())
+			custom, issues := customValuesToMap(defs, customEditVals.Get())
+			if len(issues) > 0 {
+				customErrS.Set(strings.Join(issues, " "))
+				return
+			}
+			cp.Custom = custom
 		}
 		// Merged update-value + edit: when the user typed a new current value, OnSetBalance
 		// persists cp (all edits) AND posts the balance adjustment + freshens BalanceAsOf in
@@ -602,8 +609,12 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 		}
 		projStr := uistate.T("accounts.balNone")
 		if a.Class != domain.ClassLiability && !isValuationType(a.Type) {
-			proj := app.ProjectAccount(a.ID, time.Now(), 30)
-			projStr = fmtMoney(money.New(proj.End, a.Currency))
+			proj, err := app.ProjectAccount(a.ID, time.Now(), 30)
+			if err != nil {
+				projStr = uistate.T("calculation.unavailable")
+			} else if proj.Known() {
+				projStr = fmtMoney(money.New(proj.End, a.Currency))
+			}
 		}
 		stat := func(key, val, testid string) ui.Node {
 			return Div(Style(map[string]string{"display": "grid", "gap": "0.1rem"}),
@@ -639,7 +650,7 @@ func AccountEditForm(props AccountEditFormProps) ui.Node {
 		return editForm(a, dec, curBal, app.Members(), app.Accounts(), app.Categories(), app.CustomFieldDefsFor("account"),
 			nameS, typeS, ev.VarName, ownerS, balS, climS, aprS, minpS, dueS, lenderS, institutionS, retS, apyS, liqS, stabS, lockS, notesS,
 			setBalAmtS, setBalCatS,
-			editAdvOpen, asLiabS, splitOwnS, sharesMapS, customEditVals,
+			editAdvOpen, asLiabS, splitOwnS, sharesMapS, customEditVals, customErrS,
 			ev.OnName, ev.OnVarName, onBal, onClim, onApr, onMinp, onDue, onLender, onInstitution, onRet, onApy, onLiq, onStab, onLock,
 			onToggleEditAdv, onToggleAsLiab, onToggleSplitOwn, onNotes, onSetBalAmt, onCustomEdit, saveEdit, cancel, focusValue,
 			acctEditExtra{
@@ -968,7 +979,7 @@ type acctEditExtra struct {
 func editForm(a domain.Account, dec int, curBal money.Money, members []domain.Member, accounts []domain.Account, categories []domain.Category, accDefs []customfields.Def,
 	nameS, typeS, varNameS, ownerS, balS, climS, aprS, minpS, dueS, lenderS, institutionS, retS, apyS, liqS, stabS, lockS, notesS ui.State[string],
 	setBalAmtS, setBalCatS ui.State[string],
-	editAdvOpen, asLiabS, splitOwnS ui.State[bool], sharesMapS ui.State[map[string]int], customEditVals ui.State[map[string]string],
+	editAdvOpen, asLiabS, splitOwnS ui.State[bool], sharesMapS ui.State[map[string]int], customEditVals ui.State[map[string]string], customErrS ui.State[string],
 	onName, onVarName, onBal, onClim, onApr, onMinp, onDue, onLender ui.Handler,
 	// The free-text fields go through uiw's self-owning field components, which
 	// own the event hook themselves and so take a plain func.
@@ -1151,6 +1162,7 @@ func editForm(a domain.Account, dec int, curBal money.Money, members []domain.Me
 				If(!isLiab && editAdvOpen.Get() && isRevaluableType(selType), P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "-0.35rem 0 0"}), uistate.T("accounts.revalueDaysHint"))),
 				If(len(accDefs) > 0, Fragment(
 					P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0.5rem 0 0"}), uistate.T("accounts.customFieldsLabel")),
+					If(customErrS.Get() != "", P(css.Class("err"), Attr("role", "alert"), customErrS.Get())),
 					MapKeyed(accDefs, func(d customfields.Def) any { return d.ID }, func(d customfields.Def) ui.Node {
 						return labeledField(d.Label, ui.CreateElement(CustomFieldInput, customFieldInputProps{Def: d, Value: customEditVals.Get()[d.Key], OnChange: onCustomEdit}))
 					}),

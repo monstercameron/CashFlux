@@ -34,6 +34,30 @@ func MonthlyEquivalent(r domain.Recurring) (int64, error) {
 	}
 }
 
+// AnnualEquivalent normalizes a known billing cadence directly to annual minor
+// units. It preserves annual charges without first rounding a monthly amount.
+// Daily and unknown cadences have no established annual convention here.
+func AnnualEquivalent(r domain.Recurring) (int64, error) {
+	factor := int64(0)
+	switch r.Cadence {
+	case domain.CadenceWeekly:
+		factor = 52
+	case domain.CadenceBiweekly:
+		factor = 26
+	case domain.CadenceSemimonthly:
+		factor = 24
+	case domain.CadenceMonthly:
+		factor = 12
+	case domain.CadenceQuarterly:
+		factor = 4
+	case domain.CadenceYearly:
+		factor = 1
+	default:
+		return 0, fmt.Errorf("recurring annual amount: unsupported cadence %q", r.Cadence)
+	}
+	return money.MulDiv(r.Amount.Amount, factor, 1, money.RoundTowardZero)
+}
+
 // MonthlyBase negates the normalized bill into base-currency minor units.
 // Same-currency values never consult FX. Conversion uses decimal rates and
 // rounds once, half away from zero; amounts never pass through floating point.

@@ -89,6 +89,11 @@ func Size(a domain.Artifact) int {
 
 // HumanSize renders a byte count as a compact human string (B, KB, MB).
 func HumanSize(n int) string {
+	return HumanSize64(int64(n))
+}
+
+// HumanSize64 renders an int64 byte count without narrowing on wasm32.
+func HumanSize64(n int64) string {
 	switch {
 	case n >= 1<<20:
 		return fmt.Sprintf("%.1f MB", float64(n)/(1<<20))

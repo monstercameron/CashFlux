@@ -3,9 +3,11 @@
 package appstate
 
 import (
+	"errors"
 	"testing"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/acctproject"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
 )
@@ -45,12 +47,31 @@ func TestProjectAccountLowPoint(t *testing.T) {
 	if err := app.PutRecurring(rent); err != nil {
 		t.Fatalf("put recurring: %v", err)
 	}
-	p := app.ProjectAccount("a1", asOf, 30)
+	p, err := app.ProjectAccount("a1", asOf, 30)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if p.Low != 94000 {
 		t.Errorf("Low = %d, want 94000", p.Low)
 	}
 	if len(p.Drivers) == 0 || p.Drivers[0].Label != "Rent" {
 		t.Errorf("expected rent driver: %+v", p.Drivers)
+	}
+}
+
+func TestProjectAccountRejectsRecurringCurrencyMismatch(t *testing.T) {
+	app := newApp(t, false)
+	asOf := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	account := domain.Account{ID: "currency", Name: "Currency", Type: domain.TypeChecking, Class: domain.ClassAsset,
+		OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared, Currency: "USD", OpeningBalance: money.New(10000, "USD"), BalanceAsOf: asOf}
+	if err := app.PutAccount(account); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.PutRecurring(domain.Recurring{ID: "foreign", AccountID: account.ID, Label: "Foreign", Amount: money.New(-100, "EUR"), NextDue: asOf.AddDate(0, 0, 1), Cadence: domain.CadenceYearly}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := app.ProjectAccount(account.ID, asOf, 30); !errors.Is(err, acctproject.ErrCurrencyMismatch) {
+		t.Fatalf("currency mismatch was not surfaced: %v", err)
 	}
 }
 

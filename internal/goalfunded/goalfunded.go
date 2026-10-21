@@ -104,7 +104,7 @@ func SummarizeChecked(txns []domain.Transaction, categoryIDs map[string]bool,
 		}
 		amt, err := rates.ToBase(t.Amount)
 		if err != nil {
-			continue
+			return Split{}, fmt.Errorf("convert transaction %q for goal-funded summary: %w", t.ID, err)
 		}
 		v, err := money.Abs(amt.Amount)
 		if err != nil {

@@ -13,24 +13,6 @@ import "encoding/json"
 // dataset wipe would cost the user figures they had to look up on a tax return.
 const taxPlanKey = "cashflux:tax-plan"
 
-// TaxPlan is what an estimated-tax calculation needs beyond the ledger.
-type TaxPlan struct {
-	// EffectiveRatePct is the household's own blended rate — income tax plus
-	// self-employment tax. Stated by the user, never derived: this app does not
-	// know the filing status, the state, or the other income that sets it, and a
-	// rate invented from a bracket table would be wrong in a way that looks
-	// computed. Zero means unset, and the estimate refuses rather than guessing.
-	EffectiveRatePct float64 `json:"effectiveRatePct,omitempty"`
-	// PriorYearTaxMinor is what was owed last year — the number the safe harbour
-	// is a rule about. Zero means unknown, which removes the harbour rather than
-	// treating last year's tax as nothing.
-	PriorYearTaxMinor int64 `json:"priorYearTaxMinor,omitempty"`
-	// PriorYearIncomeMinor decides which safe-harbour tier applies.
-	PriorYearIncomeMinor int64 `json:"priorYearIncomeMinor,omitempty"`
-	// PaidToDateMinor is what has already been sent this year.
-	PaidToDateMinor int64 `json:"paidToDateMinor,omitempty"`
-}
-
 // LoadTaxPlan reads the household's tax assumptions.
 //
 // No defaults are filled in, deliberately. A default effective rate would be the
@@ -38,11 +20,9 @@ type TaxPlan struct {
 // would carry the authority of a calculation while resting on a guess nobody
 // made.
 func LoadTaxPlan() TaxPlan {
-	var p TaxPlan
-	if raw := SettingKVGet(taxPlanKey); raw != "" {
-		if err := json.Unmarshal([]byte(raw), &p); err != nil {
-			return TaxPlan{}
-		}
+	p, err := ParseTaxPlan(SettingKVGet(taxPlanKey))
+	if err != nil {
+		return TaxPlan{}
 	}
 	return p
 }

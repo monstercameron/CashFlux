@@ -3,6 +3,11 @@
 package attribution
 
 import (
+	"errors"
+	"fmt"
+	"math"
+	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -214,6 +219,241 @@ func TestComputeEmptyWindow(t *testing.T) {
 	}
 	if len(rep.Items) != 0 || rep.TxnCount != 0 || rep.NetDeltaMinor != 0 {
 		t.Fatalf("expected quiet report: %+v", rep)
+	}
+}
+
+func TestComputePreservesExactHalfOpenCutoffAcrossInterleavedAccounts(t *testing.T) {
+	cutoff := time.Date(2026, 7, 19, 12, 0, 0, 0, time.UTC)
+	before := txn("before", "a1", 19, -100, "Shop", "food")
+	before.Date = cutoff.Add(-time.Nanosecond)
+	atCutoff := txn("at-cutoff", "a2", 19, -900, "Shop", "food")
+	atCutoff.Date = cutoff
+	in := Input{
+		Accounts: []domain.Account{asset("a1", "Checking"), asset("a2", "Savings")},
+		Txns:     []domain.Transaction{before, atCutoff},
+		Rates:    rates(), Since: since, Until: cutoff,
+	}
+	got, err := Compute(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.NetDeltaMinor != -100 || got.SpendingMinor != 100 || got.TxnCount != 1 {
+		t.Fatalf("exact half-open cutoff report = %+v", got)
+	}
+	account := find(t, got.Items, KindAccount)
+	if account.Count != 1 || len(account.TxnIDs) != 1 || account.TxnIDs[0] != "before" {
+		t.Fatalf("cutoff evidence includes excluded transaction: %+v", account)
+	}
+}
+
+func BenchmarkComputeManyAccounts(b *testing.B) {
+	const accountCount, txnsPerAccount = 50, 100
+	accounts := make([]domain.Account, 0, accountCount)
+	txns := make([]domain.Transaction, 0, accountCount*txnsPerAccount)
+	for a := range accountCount {
+		id := fmt.Sprintf("account-%02d", a)
+		accounts = append(accounts, asset(id, id))
+		for n := range txnsPerAccount {
+			t := txn(fmt.Sprintf("txn-%02d-%03d", a, n), id, 12+n%7, -100, "Shop", "food")
+			txns = append(txns, t)
+		}
+	}
+	in := Input{Accounts: accounts, Txns: txns, Rates: rates(), Since: since, Until: until}
+	for _, tc := range []struct {
+		name    string
+		compute func(Input) (Report, error)
+	}{
+		{name: "legacy_full_scan", compute: computeLegacy},
+		{name: "indexed_positions", compute: Compute},
+	} {
+		b.Run(tc.name, func(b *testing.B) {
+			b.ReportAllocs()
+			b.ResetTimer()
+			for range b.N {
+				if _, err := tc.compute(in); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+	if b.N == 0 {
+		b.Fatal("benchmark did not execute")
+	}
+}
+
+func TestComputeMatchesFrozenLegacyScan(t *testing.T) {
+	cutoff := time.Date(2026, 7, 19, 12, 0, 0, 0, time.UTC)
+	before := txn("before", "a1", 19, math.MaxInt64, "Shop", "food")
+	before.Date = cutoff.Add(-time.Nanosecond)
+	atCutoff := txn("at-cutoff", "a2", 19, 1, "Shop", "food")
+	atCutoff.Date = cutoff
+	adj := txn("adj", "a1", 15, -math.MaxInt64, "", "")
+	adj.Desc = "Balance adjustment"
+	liability := domain.Account{ID: "a2", Name: "Card", Class: domain.ClassLiability, Currency: "USD", OpeningBalance: usd(-100)}
+	missingRate := Input{
+		Accounts: []domain.Account{{ID: "eur", Name: "Euro", Class: domain.ClassAsset, Currency: "EUR"}},
+		Txns:     []domain.Transaction{txn("bad-rate", "eur", 14, -1, "Shop", "food")},
+		Rates:    rates(), Since: since, Until: cutoff,
+	}
+	cases := []struct {
+		name string
+		in   Input
+	}{
+		{
+			name: "alternating cancellation preserves source order and account order",
+			in: Input{
+				Accounts: []domain.Account{asset("a2", "Savings"), asset("a1", "Checking")},
+				Txns: []domain.Transaction{
+					func() domain.Transaction {
+						t := txn("a1-max", "a1", 12, math.MaxInt64, "", "")
+						t.ExcludeFromReports = true
+						return t
+					}(),
+					func() domain.Transaction {
+						t := txn("a2-out", "a2", 13, -300, "", "")
+						t.ExcludeFromReports = true
+						return t
+					}(),
+					func() domain.Transaction {
+						t := txn("a1-minus", "a1", 14, -math.MaxInt64, "", "")
+						t.ExcludeFromReports = true
+						return t
+					}(),
+					func() domain.Transaction {
+						t := txn("a1-one", "a1", 15, 1, "", "")
+						t.ExcludeFromReports = true
+						return t
+					}(),
+				},
+				Rates: rates(), Since: since, Until: cutoff, IsAdjustment: isAdjDesc,
+			},
+		},
+		{
+			name: "liability adjustments and exact cutoff",
+			in: Input{
+				Accounts: []domain.Account{asset("a1", "Checking"), liability},
+				Txns:     []domain.Transaction{before, adj, atCutoff},
+				Rates:    rates(), Since: since, Until: cutoff, IsAdjustment: isAdjDesc,
+			},
+		},
+		{name: "conversion failure order and error", in: missingRate},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			want, wantErr := computeLegacy(tc.in)
+			got, gotErr := Compute(tc.in)
+			if !reflect.DeepEqual(got, want) {
+				t.Fatalf("indexed report differs from frozen scan\n got: %+v\nwant: %+v", got, want)
+			}
+			if (gotErr == nil) != (wantErr == nil) || (gotErr != nil && gotErr.Error() != wantErr.Error()) {
+				t.Fatalf("indexed error = %v; legacy error = %v", gotErr, wantErr)
+			}
+		})
+	}
+}
+
+func TestComputeRejectsMonetaryOverflowWithoutPartialReport(t *testing.T) {
+	adjustment := func(id, account string, day int, amount int64) domain.Transaction {
+		t := txn(id, account, day, amount, "", "")
+		t.Desc = "Balance adjustment"
+		return t
+	}
+	tooMuchSince := txn("since-overflow", "a", 1, 1, "", "")
+	flowMax := txn("flow-max", "a", 12, math.MaxInt64, "", "")
+	flowOne := txn("flow-one", "a", 14, 1, "", "")
+	flowOffset := adjustment("flow-offset", "a", 13, -1)
+	contribMax := txn("contrib-max", "a", 12, math.MaxInt64, "", "")
+	contribOne := adjustment("contrib-one", "a", 13, 1)
+	adjMax := adjustment("adj-max", "a1", 12, math.MaxInt64)
+	ordinaryMax := txn("ordinary-max", "a1", 13, -math.MaxInt64, "", "")
+	adjOne := adjustment("adj-one", "a2", 12, 1)
+	ordinaryOne := txn("ordinary-one", "a2", 13, -1, "", "")
+
+	assetWith := func(id string, opening int64) domain.Account {
+		a := asset(id, id)
+		a.OpeningBalance = usd(opening)
+		return a
+	}
+	liabilityWith := func(id string, opening int64) domain.Account {
+		a := domain.Account{ID: id, Name: id, Class: domain.ClassLiability, Currency: "USD"}
+		a.OpeningBalance = usd(opening)
+		return a
+	}
+	cases := []struct {
+		name    string
+		in      Input
+		context string
+	}{
+		{
+			name:    "balance since",
+			in:      Input{Accounts: []domain.Account{assetWith("a", math.MaxInt64)}, Txns: []domain.Transaction{tooMuchSince}, Rates: rates(), Since: since, Until: until},
+			context: "balance at since",
+		},
+		{
+			name:    "balance until",
+			in:      Input{Accounts: []domain.Account{asset("a", "a")}, Txns: []domain.Transaction{flowMax, flowOne}, Rates: rates(), Since: since, Until: until},
+			context: "balance at until",
+		},
+		{
+			name:    "ordinary flow despite offsetting adjustment",
+			in:      Input{Accounts: []domain.Account{asset("a", "a")}, Txns: []domain.Transaction{flowMax, flowOffset, flowOne}, Rates: rates(), Since: since, Until: until, IsAdjustment: isAdjDesc},
+			context: "ordinary flow",
+		},
+		{
+			name:    "asset endpoint subtraction",
+			in:      Input{Accounts: []domain.Account{assetWith("a", math.MinInt64)}, Txns: []domain.Transaction{contribMax, contribOne}, Rates: rates(), Since: since, Until: until, IsAdjustment: isAdjDesc},
+			context: "net-worth delta",
+		},
+		{
+			name:    "liability minimum magnitude",
+			in:      Input{Accounts: []domain.Account{liabilityWith("a", math.MinInt64)}, Rates: rates(), Since: since, Until: until},
+			context: "since liability magnitude",
+		},
+		{
+			name:    "transaction minimum magnitude",
+			in:      Input{Accounts: []domain.Account{asset("a", "a")}, Txns: []domain.Transaction{txn("minimum", "a", 12, math.MinInt64, "", "")}, Rates: rates(), Since: since, Until: until},
+			context: "transaction minimum magnitude",
+		},
+		{
+			name:    "net-worth total",
+			in:      Input{Accounts: []domain.Account{asset("a1", "a1"), asset("a2", "a2")}, Txns: []domain.Transaction{txn("max", "a1", 12, math.MaxInt64, "", ""), txn("one", "a2", 12, 1, "", "")}, Rates: rates(), Since: since, Until: until},
+			context: "net-worth movement total",
+		},
+		{
+			name:    "adjustment total",
+			in:      Input{Accounts: []domain.Account{asset("a1", "a1"), asset("a2", "a2")}, Txns: []domain.Transaction{adjMax, ordinaryMax, adjOne, ordinaryOne}, Rates: rates(), Since: since, Until: until, IsAdjustment: isAdjDesc},
+			context: "balance adjustment total",
+		},
+		{
+			name:    "spending total after representable net-worth movement",
+			in:      Input{Accounts: []domain.Account{liabilityWith("a1", math.MaxInt64), liabilityWith("a2", 0)}, Txns: []domain.Transaction{txn("expense-max", "a1", 12, -math.MaxInt64, "", "food"), txn("expense-one", "a2", 12, -1, "", "food")}, Rates: rates(), Since: since, Until: until},
+			context: "spending total",
+		},
+		{
+			name:    "income total after representable net-worth movement",
+			in:      Input{Accounts: []domain.Account{liabilityWith("a1", 0), liabilityWith("a2", -1)}, Txns: []domain.Transaction{txn("income-max", "a1", 12, math.MaxInt64, "", ""), txn("income-one", "a2", 12, 1, "", "")}, Rates: rates(), Since: since, Until: until},
+			context: "income total",
+		},
+		{
+			name: "residual subtraction",
+			in: Input{Accounts: []domain.Account{asset("a1", "a1"), liabilityWith("a2", math.MaxInt64)}, Txns: []domain.Transaction{func() domain.Transaction {
+				t := txn("excluded-max", "a1", 12, math.MaxInt64-1, "", "")
+				t.ExcludeFromReports = true
+				return t
+			}(), txn("expense-one", "a2", 12, -1, "", "food")}, Rates: rates(), Since: since, Until: until},
+			context: "residual after cash flow",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := Compute(tc.in)
+			if !errors.Is(err, money.ErrOverflow) || !strings.Contains(err.Error(), tc.context) {
+				t.Fatalf("Compute error = %v; want overflow in %q", err, tc.context)
+			}
+			if !reflect.DeepEqual(got, Report{}) {
+				t.Fatalf("overflow returned partial report: %+v", got)
+			}
+		})
 	}
 }
 

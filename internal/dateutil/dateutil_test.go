@@ -81,6 +81,30 @@ func TestAddMonthsAcrossYear(t *testing.T) {
 	}
 }
 
+func TestAddMonthsClampedAnchorsShortMonthsAndNegativeOffsets(t *testing.T) {
+	tests := []struct {
+		name   string
+		anchor string
+		offset int
+		want   string
+	}{
+		{"January 31 clamps in leap February", "2024-01-31", 1, "2024-02-29"},
+		{"January 31 resumes on 31 in March", "2024-01-31", 2, "2024-03-31"},
+		{"non-leap February clamps", "2023-01-31", 1, "2023-02-28"},
+		{"year boundary", "2024-12-31", 2, "2025-02-28"},
+		{"negative offset from March 31", "2024-03-31", -1, "2024-02-29"},
+		{"negative offset keeps anchor day", "2024-03-31", -2, "2024-01-31"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := AddMonthsClamped(date(tc.anchor), tc.offset)
+			if formatted := FormatDate(got); formatted != tc.want {
+				t.Errorf("AddMonthsClamped(%s, %d) = %s, want %s", tc.anchor, tc.offset, formatted, tc.want)
+			}
+		})
+	}
+}
+
 func TestWeekStart(t *testing.T) {
 	// 2026-06-15 is a Monday.
 	mon := WeekStart(date("2026-06-17"), time.Monday) // Wed -> back to Mon 15th

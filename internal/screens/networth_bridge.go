@@ -10,9 +10,9 @@ import (
 	"github.com/monstercameron/CashFlux/internal/attribution"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // THE BRIDGE — signature graphic #1.
@@ -158,6 +158,9 @@ func absFloat(v float64) float64 {
 // takes over at narrow pane widths (same legs, same figures, read downward
 // instead of across — the graphic changes FORM rather than clipping).
 func nwsBridge(v nwsView) ui.Node {
+	if v.BridgeErr != nil {
+		return P(css.Class("nws-drill-note"), Attr("data-testid", "nws-bridge-unavailable"), uistate.T("nws.windowUnavailable"))
+	}
 	b := v.Bridge
 	cols := nwsBridgeCols(b)
 	scale := newNwsBridgeScale(cols)

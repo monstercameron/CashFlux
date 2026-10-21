@@ -63,29 +63,35 @@ func PayeeTrends(txns []domain.Transaction, bounds []time.Time, rates currency.R
 		return nil, nil
 	}
 
-	// Collect per-bucket totals and build the union of display names across all
-	// buckets (earliest spelling wins per key, globally).
-	buckets := make([]map[string]int64, n)
-	allNames := map[string]string{} // key → display name (first seen across all buckets)
-	for i := range n {
-		totals, names, err := payeeTotals(txns, bounds[i], bounds[i+1], rates)
-		if err != nil {
-			return nil, err
-		}
-		buckets[i] = totals
-		for key, name := range names {
-			if _, exists := allNames[key]; !exists {
-				allNames[key] = name
-			}
-		}
-	}
-
-	// Sum each key's spend over the full window to rank candidates.
+	// Preserve the first spelling from the earliest bucket even when the
+	// transaction input is unsorted, while visiting the ledger only once.
+	byKey := map[string][]int64{}
+	allNames := map[string]string{}
+	nameBucket := map[string]int{}
 	totalByKey := map[string]int64{}
-	for _, b := range buckets {
-		for key, amt := range b {
-			totalByKey[key] += amt
+	err := visitBuckets(txns, bounds, func(i int, t domain.Transaction) error {
+		if !t.IsExpense() || !t.CountsInReports() {
+			return nil
 		}
+		conv, err := rates.Convert(t.Amount, rates.Base)
+		if err != nil {
+			return err
+		}
+		name := strings.TrimSpace(t.Desc)
+		key := strings.ToLower(name)
+		if first, ok := nameBucket[key]; !ok || i < first {
+			allNames[key], nameBucket[key] = name, i
+		}
+		if byKey[key] == nil {
+			byKey[key] = make([]int64, n)
+		}
+		amount := conv.Abs().Amount
+		byKey[key][i] += amount
+		totalByKey[key] += amount
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	// Collect all keys, sort by total descending (ties break by key for
@@ -115,10 +121,7 @@ func PayeeTrends(txns []domain.Transaction, bounds []time.Time, rates currency.R
 	for _, key := range keys {
 		trend := PayeeTrend{
 			Payee: allNames[key],
-			Spend: make([]int64, n),
-		}
-		for i, b := range buckets {
-			trend.Spend[i] = b[key]
+			Spend: byKey[key],
 		}
 		out = append(out, trend)
 	}

@@ -7,7 +7,10 @@ package uistate
 import (
 	"encoding/json"
 
-	"github.com/monstercameron/GoWebComponents/v5/state"
+	"github.com/monstercameron/CashFlux/internal/appstate"
+
+	"github.com/monstercameron/GoWebComponents/v7/state"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 const (
@@ -33,7 +36,17 @@ func UseNotifyFilter() state.Atom[string] { return state.UseAtom("notify:filter"
 // first). The catch-up runner appends to it; the center screen renders it. It also
 // captures the atom so out-of-render code can update it via setNotifyFeed.
 func UseNotifyFeed() state.Atom[[]FeedItem] {
-	a := state.UseAtom(notifyFeedAtomID, loadNotifyFeed())
+	return useNotifyFeedWithLoader(loadNotifyFeed)
+}
+
+// Keep initialization local to each mounted hook. UseAtom ignores its default
+// after the atom exists, so repeated renders must not reread SQLite or decode
+// the persisted feed. A new mount/runtime still loads its own seed. Supported
+// workspace switches reload the runtime; the fixed atom continues to preserve
+// live writes across late subscribers and child remounts within that runtime.
+func useNotifyFeedWithLoader(load func() []FeedItem) state.Atom[[]FeedItem] {
+	initial := ui.UseMemo(load, appstate.Default)
+	a := state.UseAtom(notifyFeedAtomID, initial)
 	capturedNotifyFeed = a
 	notifyFeedCaptured = true
 	return a

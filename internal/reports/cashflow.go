@@ -5,10 +5,12 @@ package reports
 import (
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/ledger"
+	"github.com/monstercameron/CashFlux/internal/money"
 )
 
 // PeriodFlow is income, expense, and the derived net/savings for one reporting
@@ -45,17 +47,54 @@ func IncomeVsExpense(txns []domain.Transaction, start, end time.Time, rates curr
 // the cash-flow trend chart. It returns exactly len(bounds)-1 flows; fewer than
 // two bounds yields an empty result.
 func IncomeExpenseSeries(txns []domain.Transaction, bounds []time.Time, rates currency.Rates) ([]PeriodFlow, error) {
+	return incomeExpenseSeries(netted(txns), bounds, rates)
+}
+
+// IncomeExpenseSeriesFromLedger reuses an explicit refund ledger without the
+// legacy global refund overlay. It retains checked sums and magnitude errors.
+func IncomeExpenseSeriesFromLedger(txns budgeting.NettedLedger, bounds []time.Time, rates currency.Rates) ([]PeriodFlow, error) {
+	return incomeExpenseSeries(txns, bounds, rates)
+}
+
+func incomeExpenseSeries(txns []domain.Transaction, bounds []time.Time, rates currency.Rates) ([]PeriodFlow, error) {
 	n := len(bounds) - 1
 	if n < 1 {
 		return nil, nil
 	}
-	out := make([]PeriodFlow, 0, n)
+	out := make([]PeriodFlow, n)
 	for i := 0; i < n; i++ {
-		f, err := IncomeVsExpense(txns, bounds[i], bounds[i+1], rates)
-		if err != nil {
-			return nil, err
+		out[i] = PeriodFlow{Start: bounds[i], End: bounds[i+1]}
+	}
+	err := visitBuckets(txns, bounds, func(i int, t domain.Transaction) error {
+		if t.IsTransfer() || !t.CountsInReports() {
+			return nil
 		}
-		out = append(out, f)
+		conv, err := rates.Convert(t.Amount, rates.Base)
+		if err != nil {
+			return err
+		}
+		switch {
+		case t.IsIncome():
+			total, err := money.New(out[i].Income, rates.Base).Add(conv)
+			if err != nil {
+				return err
+			}
+			out[i].Income = total.Amount
+		case t.IsExpense():
+			magnitude, err := conv.AbsChecked()
+			if err != nil {
+				return err
+			}
+			total, err := money.New(out[i].Expense, rates.Base).Add(magnitude)
+			if err != nil {
+				return err
+			}
+			out[i].Expense = total.Amount
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	return out, nil
 }

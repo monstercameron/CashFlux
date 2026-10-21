@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/dateutil"
-	"github.com/monstercameron/CashFlux/internal/ledger"
+	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/reports"
 )
 
@@ -57,36 +57,40 @@ func addReportsVars(out map[string]float64, d Data, major func(int64) float64, l
 	}
 	ps, pe := start.Add(-end.Sub(start)), start
 
-	cur, _ := reports.IncomeVsExpense(d.Transactions, start, end, d.Rates)
-	prev, _ := reports.IncomeVsExpense(d.Transactions, ps, pe, d.Rates)
-	out["report_prev_income"] = major(prev.Income)
-	out["report_prev_spend"] = major(prev.Expense)
-	out["report_prev_net"] = major(prev.Net())
-	out["report_income_delta_pct"] = 0
-	if pct, ok := ledger.PercentChange(cur.Income, prev.Income); ok {
-		out["report_income_delta_pct"] = float64(pct)
+	cur, curErr := reports.IncomeVsExpense(d.Transactions, start, end, d.Rates)
+	prev, prevErr := reports.IncomeVsExpense(d.Transactions, ps, pe, d.Rates)
+	if prevErr == nil {
+		out["report_prev_income"] = major(prev.Income)
+		out["report_prev_spend"] = major(prev.Expense)
+		out["report_prev_net"] = major(prev.Net())
 	}
-	out["report_spend_delta_pct"] = 0
-	if pct, ok := ledger.PercentChange(cur.Expense, prev.Expense); ok {
-		out["report_spend_delta_pct"] = float64(pct)
+	if curErr == nil && prevErr == nil {
+		if pct, ok := reportDeltaPct(cur.Income, prev.Income); ok {
+			out["report_income_delta_pct"] = pct
+		}
+		if pct, ok := reportDeltaPct(cur.Expense, prev.Expense); ok {
+			out["report_spend_delta_pct"] = pct
+		}
 	}
-
-	stats, _ := reports.SpendingStats(d.Transactions, start, end, d.Rates)
-	out["report_avg_expense"] = major(stats.Average)
-	out["report_median_expense"] = major(stats.Median)
+	if stats, err := reports.SpendingStats(d.Transactions, start, end, d.Rates); err == nil {
+		out["report_avg_expense"] = major(stats.Average)
+		out["report_median_expense"] = major(stats.Median)
+	}
 	out["report_no_spend_days"] = float64(reports.NoSpendDays(d.Transactions, start, end, d.Now))
 
-	// Payee concentration: the biggest payee's spend and its share of the total.
-	out["report_top_payee_spend"] = 0
-	out["report_top_payee_pct"] = 0
-	if payees, err := reports.TopPayees(d.Transactions, start, end, d.Rates, 1); err == nil && len(payees) > 0 {
-		top := payees[0].Amount
-		if top < 0 {
-			top = -top
+	// Payee totals are independently useful even if another report reducer is
+	// unavailable. A failed ranking never becomes a known zero concentration.
+	if payees, err := reports.TopPayees(d.Transactions, start, end, d.Rates, 1); err == nil {
+		var top int64
+		if len(payees) > 0 {
+			top = payees[0].Amount
 		}
 		out["report_top_payee_spend"] = major(top)
-		if cur.Expense > 0 {
-			out["report_top_payee_pct"] = float64(top*100) / float64(cur.Expense)
+		if curErr == nil {
+			out["report_top_payee_pct"] = 0
+			if cur.Expense > 0 {
+				out["report_top_payee_pct"] = float64(top) / float64(cur.Expense) * 100
+			}
 		}
 	}
 
@@ -99,14 +103,36 @@ func addReportsVars(out map[string]float64, d Data, major func(int64) float64, l
 	for k := 0; k <= reportsBurnMonths; k++ {
 		monthBounds = append(monthBounds, dateutil.AddMonths(curMonth, k-reportsBurnMonths))
 	}
-	flows, _ := reports.IncomeExpenseSeries(d.Transactions, monthBounds, d.Rates)
-	burn := reports.AverageMonthlyExpense(flows)
-	out["report_burn"] = major(burn)
-	out["report_runway_months"] = 0
-	if liquidErr == nil && burn > 0 {
-		rw := reports.EstimateRunway(liquidMinor, burn)
-		if !rw.Sustainable {
-			out["report_runway_months"] = float64(rw.Months) + float64(rw.Days)/30
-		}
+	flows, err := reports.IncomeExpenseSeries(d.Transactions, monthBounds, d.Rates)
+	if err != nil {
+		return
 	}
+	_, burn, _, err := reports.MonthlyAveragesChecked(flows)
+	if err != nil {
+		return
+	}
+	out["report_burn"] = major(burn)
+	if burn <= 0 {
+		out["report_runway_months"] = 0
+	} else if liquidErr == nil {
+		rw := reports.EstimateRunway(liquidMinor, burn)
+		out["report_runway_months"] = float64(rw.Months) + float64(rw.Days)/30
+	}
+}
+
+// reportDeltaPct retains whole-percent truncation and the existing no-baseline
+// zero convention without overflowing the intermediate scaled difference.
+func reportDeltaPct(current, prior int64) (float64, bool) {
+	if prior == 0 {
+		return 0, true
+	}
+	delta, err := money.Sub(current, prior)
+	if err != nil {
+		return 0, false
+	}
+	percent, err := money.MulDiv(delta, 100, prior, money.RoundTowardZero)
+	if err != nil {
+		return 0, false
+	}
+	return float64(percent), true
 }

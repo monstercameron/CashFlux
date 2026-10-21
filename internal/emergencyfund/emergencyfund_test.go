@@ -2,7 +2,10 @@
 
 package emergencyfund
 
-import "testing"
+import (
+	"math"
+	"testing"
+)
 
 func TestEssentialMonthlyMinor(t *testing.T) {
 	cases := []struct {
@@ -19,6 +22,33 @@ func TestEssentialMonthlyMinor(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			if got := c.basis.EssentialMonthlyMinor(); got != c.want {
 				t.Fatalf("EssentialMonthlyMinor = %d, want %d", got, c.want)
+			}
+		})
+	}
+}
+
+func TestEssentialMonthlyMinorChecked(t *testing.T) {
+	cases := []struct {
+		name  string
+		basis Basis
+		want  int64
+		fails bool
+	}{
+		{name: "clamps negative components", basis: Basis{FixedMonthlyMinor: -1, EssentialSpendMonthlyMinor: 7}, want: 7},
+		{name: "checked sum", basis: Basis{FixedMonthlyMinor: 12, EssentialSpendMonthlyMinor: 34}, want: 46},
+		{name: "overflow", basis: Basis{FixedMonthlyMinor: math.MaxInt64, EssentialSpendMonthlyMinor: 1}, fails: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := tc.basis.EssentialMonthlyMinorChecked()
+			if tc.fails {
+				if err == nil {
+					t.Fatal("expected overflow")
+				}
+				return
+			}
+			if err != nil || got != tc.want {
+				t.Fatalf("EssentialMonthlyMinorChecked = %d, %v; want %d", got, err, tc.want)
 			}
 		})
 	}

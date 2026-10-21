@@ -10,33 +10,157 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/monstercameron/CashFlux/internal/ai"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/audit"
+	"github.com/monstercameron/CashFlux/internal/billmatch"
+	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/CashFlux/internal/smart"
 	"github.com/monstercameron/CashFlux/internal/smartengine"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
-// runFullAudit sweeps every SMART Free detector family over the live data (fee
-// bleed, idle cash, price creep, dormant accounts, budget true-up, unbudgeted
-// spending, earmark integrity, duplicate/anomaly detectors) and ranks the combined
-// findings by dollar impact via the pure audit package. All Free features are
-// force-enabled so the audit is complete regardless of the user's per-feature
-// opt-ins; dismissed insights are still honored (they've been explicitly cleared).
-func runFullAudit(app *appstate.App, base string) audit.Report {
-	in := buildSmartInput(app, uistate.LoadPrefs().WeekStartWeekday())
-	settings := smart.EnableFreeOnly(uistate.LoadSmartSettings())
-	insights := smartengine.Run(in, settings)
-	return audit.Audit(insights, base)
+var assistantAuditNow = time.Now
+
+// runFullAudit gathers fresh fallible evidence for the existing free detectors.
+func runFullAudit(app *appstate.App, _ string) audit.Report {
+	in, settings, err := assistantAuditInput(app, assistantAuditNow())
+	if err != nil {
+		return audit.Report{Err: err}
+	}
+	rep, err := audit.RunChecked(in, settings)
+	if err != nil {
+		return audit.Report{Base: in.Base, Err: err}
+	}
+	return rep
+}
+
+func assistantAuditInput(app *appstate.App, now time.Time) (smartengine.Input, smart.Settings, error) {
+	fail := func(err error) (smartengine.Input, smart.Settings, error) {
+		return smartengine.Input{}, smart.Settings{}, err
+	}
+	if app == nil || app.Store() == nil {
+		return fail(fmt.Errorf("local workspace is unavailable"))
+	}
+	store := app.Store()
+	settings, err := store.GetSettings()
+	if err != nil {
+		return fail(fmt.Errorf("read audit settings: %w", err))
+	}
+	base := settings.BaseCurrency
+	if base == "" {
+		base = "USD"
+	}
+	if !currency.Valid(base) {
+		return fail(fmt.Errorf("audit base currency %q is unsupported", base))
+	}
+	in := smartengine.Input{Now: now, Base: base, Rates: currency.Rates{Base: base, Rates: settings.FXRates}}
+	in.Accounts, err = store.ListAccounts()
+	if err != nil {
+		return fail(fmt.Errorf("read audit accounts: %w", err))
+	}
+	in.Transactions, err = store.ListTransactions()
+	if err != nil {
+		return fail(fmt.Errorf("read audit transactions: %w", err))
+	}
+	in.Categories, err = app.CategoriesChecked()
+	if err != nil {
+		return fail(fmt.Errorf("read audit categories: %w", err))
+	}
+	in.Budgets, err = store.ListBudgets()
+	if err != nil {
+		return fail(fmt.Errorf("read audit budgets: %w", err))
+	}
+	in.Goals, err = store.ListGoals()
+	if err != nil {
+		return fail(fmt.Errorf("read audit goals: %w", err))
+	}
+	in.Recurring, err = store.ListRecurring()
+	if err != nil {
+		return fail(fmt.Errorf("read audit recurring: %w", err))
+	}
+	in.Members, err = store.ListMembers()
+	if err != nil {
+		return fail(fmt.Errorf("read audit members: %w", err))
+	}
+	in.Tasks, err = store.ListTasks()
+	if err != nil {
+		return fail(fmt.Errorf("read audit tasks: %w", err))
+	}
+	in.Subscriptions, err = store.ListSubscriptionCancellations()
+	if err != nil {
+		return fail(fmt.Errorf("read audit cancellations: %w", err))
+	}
+	in.Aliases, err = store.ListPayeeAliases()
+	if err != nil {
+		return fail(fmt.Errorf("read audit aliases: %w", err))
+	}
+
+	links, err := store.ListTxnLinks()
+	if err != nil {
+		return fail(fmt.Errorf("read audit transaction links: %w", err))
+	}
+	in.Ledger = budgeting.NewNettedLedger(in.Transactions, links)
+	in.PaidOccurrences = map[string]bool{}
+	for _, link := range links {
+		if id, due, ok := link.OccurrenceRef(); ok {
+			in.PaidOccurrences[billmatch.Key(id, due)] = true
+		}
+	}
+	raw, _, err := store.GetSettingKV("cashflux:prefs")
+	if err != nil {
+		return fail(fmt.Errorf("read audit calendar preferences: %w", err))
+	}
+	calendar := prefs.Default()
+	if raw != "" {
+		if err = json.Unmarshal([]byte(raw), &calendar); err != nil {
+			return fail(fmt.Errorf("decode audit calendar preferences: %w", err))
+		}
+	}
+	in.WeekStart = calendar.Normalize().WeekStartWeekday()
+	raw, _, err = store.GetSettingKV("cashflux:smart-settings")
+	if err != nil {
+		return fail(fmt.Errorf("read audit detector settings: %w", err))
+	}
+	detectorSettings, err := uistate.ParseSmartSettings(raw)
+	if err != nil {
+		return fail(fmt.Errorf("decode audit detector settings: %w", err))
+	}
+	return in, detectorSettings, nil
+}
+
+func auditMoney(minor int64, base string) string { return goalReviewMoney(money.New(minor, base)) }
+func auditSummary(rep audit.Report) string {
+	return fmt.Sprintf("%d detector findings; recurring impact estimates %s/year; one-time impact estimates %s; %d unclassified context amounts; %d available follow-ups. Period groups are separate and may overlap; these are not guaranteed savings.", len(rep.Findings), auditMoney(rep.RecurringAnnualMinor, rep.Base), auditMoney(rep.OneTimeMinor, rep.Base), rep.UnclassifiedCount, rep.OneTapCount())
+}
+func auditImpact(f audit.Finding, base string) string {
+	if !f.Insight.HasAmount {
+		return "No monetary impact supplied"
+	}
+	suffix := " (context amount; impact period unclassified)"
+	switch f.Insight.AmountCadence {
+	case smart.AmountMonthly:
+		suffix = "/month"
+	case smart.AmountAnnual:
+		suffix = "/year"
+	case smart.AmountOneTime:
+		suffix = " one time"
+	}
+	text := auditMoney(f.ImpactMinor, base) + suffix
+	if f.Insight.Amount.Currency != base {
+		text += "; original detector amount " + goalReviewMoney(f.Insight.Amount)
+	}
+	return text
 }
 
 // agToolsAuditor exposes the background auditor (AG6) as an assistant tool: one
@@ -44,37 +168,36 @@ func runFullAudit(app *appstate.App, base string) audit.Report {
 // where each row names its one-tap fix. It reads only; the fixes themselves run
 // through the existing mutating tools (per-family) on the user's approval.
 func agToolsAuditor(app *appstate.App, base string, rates currency.Rates) []chatTool {
-	fmtM := func(minor int64) string { return fmtMoney(money.New(minor, base)) }
 	return []chatTool{
 		{
 			spec: ai.FunctionTool("run_audit",
-				"Run a full background audit: sweep every detector family (fees, idle cash, price creep, dormant accounts, budget drift, unbudgeted spending, duplicate/anomaly flags, earmark breaches) over the user's live data and return the findings ranked by yearly dollar impact, each with its evidence and a one-tap fix. Use this for 'find me money', 'audit my finances', or a proactive review. Then offer to apply the top fixes (each waits for approval).",
+				"Run a full background audit: sweep every detector family (fees, idle cash, price creep, dormant accounts, budget drift, unbudgeted spending, duplicate/anomaly flags, earmark breaches) over the user's live data and return detector findings grouped by compatible impact periods, each with its evidence and an approval-required follow-up. Current household base currency and FX are loaded for every call; unavailable evidence is explicit. Amounts without a classified impact period are context, not savings. Use this for 'find me money', 'audit my finances', or a proactive review. Then offer to apply the top fixes (each waits for approval).",
 				json.RawMessage(`{"type":"object","properties":{"limit":{"type":"integer","description":"max findings to return (default 12)"}}}`)),
 			run: func(raw json.RawMessage) string {
 				var a struct {
 					Limit int `json:"limit"`
 				}
-				_ = json.Unmarshal(raw, &a)
+				if err := json.Unmarshal(raw, &a); err != nil {
+					return "Audit unavailable: invalid arguments: " + err.Error()
+				}
 				if a.Limit <= 0 || a.Limit > 30 {
 					a.Limit = 12
 				}
 				rep := runFullAudit(app, base)
+				if rep.Err != nil {
+					return "Audit unavailable: " + rep.Err.Error() + ". No clean financial verdict or savings total was inferred."
+				}
 				if len(rep.Findings) == 0 {
-					return "Audit complete — no findings. Nothing is bleeding money right now."
+					return "Audit completed over current household data: no active, non-dismissed free-detector findings. This does not establish that all financial issues are absent."
 				}
 				var b strings.Builder
-				fmt.Fprintf(&b, "Audit found %d issue(s), roughly %s in total impact (%d with a one-tap fix). Ranked by dollar impact:\n",
-					len(rep.Findings), fmtM(rep.TotalImpactMinor), rep.OneTapCount())
+				b.WriteString(auditSummary(rep) + "\nRecurring findings ranked by annual equivalent within their group, then one-time findings; context amounts rank by severity. Amounts converted using current household FX.\n")
 				for i, f := range rep.Findings {
 					if i >= a.Limit {
-						fmt.Fprintf(&b, "… %d more — raise limit to see them.\n", len(rep.Findings)-a.Limit)
+						fmt.Fprintf(&b, "%d additional findings omitted; maximum limit is 30. Use query_data for underlying records.\n", len(rep.Findings)-a.Limit)
 						break
 					}
-					impact := ""
-					if f.ImpactMinor > 0 {
-						impact = "  (" + fmtM(f.ImpactMinor) + ")"
-					}
-					fmt.Fprintf(&b, "%d. [%s] %s%s\n   %s\n", i+1, f.Family, f.Insight.Title, impact, f.Insight.Detail)
+					fmt.Fprintf(&b, "%d. [%s] %s (%s)\n   %s\n", i+1, f.Family, f.Insight.Title, auditImpact(f, rep.Base), f.Insight.Detail)
 					if f.Fix.OneTap && f.Fix.Label != "" {
 						fmt.Fprintf(&b, "   Fix: %s\n", f.Fix.Label)
 					}
@@ -101,6 +224,9 @@ func AuditFindingsCard(p AuditFindingsCardProps) ui.Node {
 
 func auditFindingsCardComp(p AuditFindingsCardProps) ui.Node {
 	rep := p.Report
+	if rep.Err != nil {
+		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("audit.unavailable", rep.Err.Error()))})
+	}
 	if len(rep.Findings) == 0 {
 		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("audit.empty"))})
 	}
@@ -110,7 +236,7 @@ func auditFindingsCardComp(p AuditFindingsCardProps) ui.Node {
 	}
 	head := Div(css.Class("audit-head", tw.Flex, tw.ItemsCenter, tw.JustifyBetween),
 		Span(css.Class(tw.FontSemibold), uistate.T("audit.title")),
-		Span(css.Class(tw.TextXs), uistate.T("audit.total", fmtMoney(rep.TotalImpact()), rep.OneTapCount())),
+		Span(css.Class(tw.TextXs), uistate.T("audit.periodTotals", auditMoney(rep.RecurringAnnualMinor, rep.Base), auditMoney(rep.OneTimeMinor, rep.Base), rep.UnclassifiedCount, rep.OneTapCount())),
 	)
 	return uiw.Card(uiw.CardProps{
 		TestID: "audit-findings",
@@ -130,10 +256,7 @@ func auditFindingRow(p auditFindingRowProps) ui.Node { return ui.CreateElement(a
 
 func auditFindingRowComp(p auditFindingRowProps) ui.Node {
 	f := p.Finding
-	impact := ""
-	if f.ImpactMinor > 0 {
-		impact = fmtMoney(money.New(f.ImpactMinor, p.Base))
-	}
+	impact := auditImpact(f, p.Base)
 	var fix ui.Node
 	if f.Fix.OneTap && f.Fix.Label != "" {
 		fix = Span(css.Class("audit-fix", tw.TextXs), f.Fix.Label)

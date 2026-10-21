@@ -68,10 +68,21 @@ test(`workspace recovery ${action}s an encrypted server copy with a local file`,
   await app.context().setOffline(false);
   await nav(app, "/settings");
   await app.locator(".settings-page .set-tab-strip button", { hasText: "Cloud" }).first().click();
-  if (!(await app.getByTestId("sync-rebind-card").isVisible())) {
-    await app.getByTestId("sync-now").click();
-  }
-  await expect(app.getByTestId("sync-rebind-card")).toBeVisible({ timeout: 30_000 });
+  const recoveryActions = ["cloud-start-encrypted-sync", "cloud-first-retry", "sync-now"];
+  const actionAttempts = new Map();
+  await expect.poll(async () => {
+    await unlockIfNeeded(app);
+    if (await app.getByTestId("sync-rebind-card").isVisible()) return true;
+    for (const id of recoveryActions) {
+      const button = app.getByTestId(id);
+      if ((actionAttempts.get(id) || 0) < 2 && await button.isVisible() && await button.isEnabled()) {
+        actionAttempts.set(id, (actionAttempts.get(id) || 0) + 1);
+        await button.click({ timeout: 15_000 });
+        break;
+      }
+    }
+    return false;
+  }, { timeout: 90_000, intervals: [1000] }).toBe(true);
   await app.getByTestId("rebind-start").click();
   await expect(app.getByTestId("rebind-target")).toBeVisible({ timeout: 30_000 });
   await app.getByTestId("rebind-target").selectOption("default");
@@ -116,11 +127,22 @@ test(`workspace recovery ${action}s an encrypted server copy with a local file`,
     const received = receiving.getByTestId("artifact-name").filter({ hasText: localName });
     await expect.poll(async () => { await unlockIfNeeded(receiving); return received.isVisible(); }, { timeout: 90_000 }).toBe(true);
     const receivedRow = receiving.locator(".row").filter({ has: received });
-    await receivedRow.locator('[data-testid^="artifact-menu-btn-"]').click();
-    const [receivedDownload] = await Promise.all([
-      receiving.waitForEvent("download"),
-      receivedRow.locator('[data-testid^="artifact-download-"]').click(),
-    ]);
+    let receivedDownload;
+    for (let attempt = 0; attempt < 3 && !receivedDownload; attempt++) {
+      try {
+        await unlockIfNeeded(receiving);
+        await expect(received).toBeVisible({ timeout: 30_000 });
+        await receivedRow.locator('[data-testid^="artifact-menu-btn-"]').click({ timeout: 15_000 });
+        const downloadButton = receivedRow.locator('[data-testid^="artifact-download-"]');
+        await expect(downloadButton).toBeVisible({ timeout: 15_000 });
+        [receivedDownload] = await Promise.all([
+          receiving.waitForEvent("download", { timeout: 15_000 }),
+          downloadButton.click({ timeout: 15_000 }),
+        ]);
+      } catch (error) {
+        if (attempt === 2) throw error;
+      }
+    }
     expect(await fs.readFile(await receivedDownload.path())).toEqual(image);
   } finally {
     await receivingContext.close();

@@ -1,0 +1,250 @@
+{
+  "schemaVersion": 1,
+  "beforeSource": "eb553074",
+  "afterGoSourceThrough": "22dca667",
+  "beforeSha256": "3129b60648c8f3259ceedc2da91c5e2363ac7996b61ec9f031dec50c58413510",
+  "afterSha256": "2965dc389a2b18b20774ca4f9b84598fb10f969bae1272d2fcbf55cc7fa51091",
+  "originalSource": "48e8f7ea90c76013a852a4c866b634ceb0fb2e8f",
+  "originalSha256": "e134f4cf64ae3fc1dd0aa77ca0967c01a4ec9df52cd1bf655bc8d11b86344186",
+  "pages": [
+    {
+      "route": "/",
+      "originalMedianMs": 813,
+      "beforeMedianMs": 727,
+      "afterMedianMs": 508,
+      "deltaPercent": -30.1,
+      "exactVisibleTextParityWithBefore": true,
+      "beforeRawMs": [
+        621,
+        672,
+        727,
+        1113,
+        752,
+        891,
+        620
+      ],
+      "afterRawMs": [
+        540,
+        364,
+        543,
+        541,
+        508,
+        320,
+        366
+      ]
+    },
+    {
+      "route": "/transactions",
+      "originalMedianMs": 924,
+      "beforeMedianMs": 847,
+      "afterMedianMs": 528,
+      "deltaPercent": -37.7,
+      "exactVisibleTextParityWithBefore": true,
+      "beforeRawMs": [
+        1217,
+        764,
+        894,
+        1164,
+        685,
+        847,
+        644
+      ],
+      "afterRawMs": [
+        926,
+        508,
+        575,
+        578,
+        528,
+        412,
+        466
+      ]
+    },
+    {
+      "route": "/accounts",
+      "originalMedianMs": 1085,
+      "beforeMedianMs": 692,
+      "afterMedianMs": 541,
+      "deltaPercent": -21.8,
+      "exactVisibleTextParityWithBefore": true,
+      "beforeRawMs": [
+        822,
+        692,
+        702,
+        838,
+        618,
+        602,
+        568
+      ],
+      "afterRawMs": [
+        1089,
+        526,
+        763,
+        550,
+        541,
+        447,
+        430
+      ]
+    },
+    {
+      "route": "/budgets",
+      "originalMedianMs": 458,
+      "beforeMedianMs": 400,
+      "afterMedianMs": 335,
+      "deltaPercent": -16.2,
+      "exactVisibleTextParityWithBefore": true,
+      "beforeRawMs": [
+        478,
+        333,
+        491,
+        448,
+        352,
+        400,
+        316
+      ],
+      "afterRawMs": [
+        490,
+        285,
+        456,
+        335,
+        362,
+        236,
+        255
+      ]
+    },
+    {
+      "route": "/goals",
+      "originalMedianMs": 177,
+      "beforeMedianMs": 153,
+      "afterMedianMs": 126,
+      "deltaPercent": -17.6,
+      "exactVisibleTextParityWithBefore": true,
+      "beforeRawMs": [
+        186,
+        140,
+        155,
+        210,
+        107,
+        153,
+        124
+      ],
+      "afterRawMs": [
+        158,
+        108,
+        143,
+        157,
+        126,
+        107,
+        90
+      ]
+    },
+    {
+      "route": "/todo",
+      "originalMedianMs": 256,
+      "beforeMedianMs": 205,
+      "afterMedianMs": 160,
+      "deltaPercent": -22.0,
+      "exactVisibleTextParityWithBefore": true,
+      "beforeRawMs": [
+        218,
+        207,
+        189,
+        205,
+        150,
+        227,
+        141
+      ],
+      "afterRawMs": [
+        238,
+        158,
+        251,
+        160,
+        160,
+        144,
+        128
+      ]
+    },
+    {
+      "route": "/notifications",
+      "originalMedianMs": 122,
+      "beforeMedianMs": 94,
+      "afterMedianMs": 90,
+      "deltaPercent": -4.3,
+      "exactVisibleTextParityWithBefore": true,
+      "beforeRawMs": [
+        131,
+        74,
+        94,
+        122,
+        59,
+        114,
+        80
+      ],
+      "afterRawMs": [
+        92,
+        81,
+        284,
+        90,
+        108,
+        65,
+        59
+      ]
+    },
+    {
+      "route": "/assistant",
+      "originalMedianMs": 872,
+      "beforeMedianMs": 717,
+      "afterMedianMs": 690,
+      "deltaPercent": -3.8,
+      "exactVisibleTextParityWithBefore": true,
+      "beforeRawMs": [
+        856,
+        1247,
+        717,
+        849,
+        694,
+        717,
+        653
+      ],
+      "afterRawMs": [
+        795,
+        665,
+        896,
+        688,
+        690,
+        903,
+        642
+      ]
+    },
+    {
+      "route": "/reports",
+      "originalMedianMs": 408,
+      "beforeMedianMs": 371,
+      "afterMedianMs": 428,
+      "deltaPercent": 15.4,
+      "exactVisibleTextParityWithBefore": true,
+      "beforeRawMs": [
+        296,
+        444,
+        515,
+        371,
+        683,
+        271,
+        201
+      ],
+      "afterRawMs": [
+        252,
+        604,
+        428,
+        554,
+        232,
+        207,
+        492
+      ]
+    }
+  ],
+  "failures": {
+    "before": [],
+    "after": []
+  },
+  "note": "Local descriptive timings with shared-machine contention. All nine immediate before/after visible texts match exactly. Reports is slower; no all-route or cold-start success claim."
+}

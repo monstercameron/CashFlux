@@ -5,39 +5,41 @@
 package screens
 
 import (
+	"errors"
 	"strings"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/allocate"
+	"github.com/monstercameron/CashFlux/internal/allocateview"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
-	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
-	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/marginal"
 	"github.com/monstercameron/CashFlux/internal/money"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // computeAllocInput carries everything computeAllocView needs to build the model — the scoring
 // weights, the split mode/controls, and the current member scope.
 type computeAllocInput struct {
-	Base         string
-	Dec          int
-	Rates        currency.Rates
-	ActiveMember string
-	Mode         string
-	Weights      allocate.Weights
-	Excluded     map[string]bool
-	MonthIncome  money.Money
-	AmountStr    string
-	ReserveStr   string
-	MaxPerStr    string
+	Base          string
+	Dec           int
+	Rates         currency.Rates
+	ActiveMember  string
+	Mode          string
+	Weights       allocate.Weights
+	Excluded      map[string]bool
+	MonthIncome   money.Money
+	AmountStr     string
+	ReserveStr    string
+	MaxPerStr     string
+	Now           time.Time
+	StandingFloor int64
 }
 
 // computeAllocView builds the shared allocate model over the live store: candidate destinations
@@ -46,111 +48,53 @@ type computeAllocInput struct {
 // hooks), so every tile renders from one consistent model.
 func computeAllocView(app *appstate.App, in computeAllocInput) allocView {
 	v := allocView{Base: in.Base, Dec: in.Dec, MonthIncome: in.MonthIncome, PlanByID: map[string]int64{}}
-
-	var cands []allocate.Candidate
-	for _, a := range app.Accounts() {
-		if a.Archived || !ownerVisibleTo(a.OwnerID, in.ActiveMember) {
-			continue
-		}
-		if a.Class == domain.ClassLiability {
-			if r, ok := a.RateAPR(); ok && r > 0 {
-				cands = append(cands, allocate.Candidate{
-					ID: a.ID, Name: uistate.T("allocate.payDown", a.Name), ExpectedReturnAPR: r,
-					StabilityScore: 100, LiquidityScore: 0, DebtReduction: true,
-				})
-			}
-			continue
-		}
-		// A locked account (e.g. a CD) can't take new money until its lock lifts.
-		if !a.LockUntil.IsZero() && a.LockUntil.After(time.Now()) {
-			continue
-		}
-		cands = append(cands, allocate.Candidate{
-			ID: a.ID, Name: a.Name, ExpectedReturnAPR: a.ExpectedReturnAPR,
-			StabilityScore: a.StabilityScore, LiquidityScore: a.LiquidityScore,
-		})
+	accounts, accountErr := app.AccountsChecked()
+	transactions, transactionErr := app.TransactionsChecked()
+	goals, goalErr := app.GoalsChecked()
+	if err := errors.Join(accountErr, transactionErr, goalErr); err != nil {
+		v.InputInvalid, v.InputUnavailable = true, true
+		return v
 	}
-	for _, g := range app.Goals() {
-		if done, _ := goalsvc.IsComplete(g); done {
-			continue
-		}
-		if !ownerVisibleTo(g.OwnerID, in.ActiveMember) {
-			continue
-		}
-		var remaining int64
-		if in.Mode == "fill" {
-			// R-LEAK: this re-derived max(0, target-current) inline, which is
-			// goalsvc.Remaining minus its currency check. The helper also refuses to
-			// subtract across currencies rather than silently comparing raw minor
-			// units of two different ones — a goal in EUR against a current amount
-			// in USD produced a number here that meant nothing.
-			if rem, err := goalsvc.Remaining(g); err == nil {
-				remaining = rem.Amount
-			}
-		}
-		cands = append(cands, allocate.Candidate{
-			ID: "goal:" + g.ID, Name: uistate.T("allocate.goalPrefix", g.Name),
-			StabilityScore: 80, LiquidityScore: 60,
-			GoalProgress:      float64(goalsvc.Percent(g)) / 100,
-			RemainingToTarget: remaining,
-		})
+	prepared, err := allocateview.Prepare(allocateview.Input{
+		Accounts: accounts, Transactions: transactions, Goals: goals,
+		Now: in.Now, ActiveMember: in.ActiveMember, Mode: in.Mode, Weights: in.Weights,
+		Excluded: in.Excluded, Decimals: in.Dec, Amount: in.AmountStr, Reserve: in.ReserveStr,
+		MaxPer: in.MaxPerStr, StandingFloor: in.StandingFloor,
+	})
+	if err != nil {
+		return v
+	} // failed snapshots never masquerade as a successfully prepared empty result
+	v.Candidates = prepared.Candidates
+	candidateByID := make(map[string]allocate.Candidate, len(v.Candidates))
+	liabilityByID := make(map[string]bool, len(accounts))
+	for _, a := range accounts {
+		liabilityByID[a.ID] = a.Class == domain.ClassLiability
 	}
-	v.Candidates = cands
-
-	// WF10: the same destinations on ONE scale a person can check. A rank says
-	// "this first"; "$220 a year against $40" says why, and is a claim somebody
-	// can disagree with. Only destinations with a RATE get a figure — a goal or an
-	// emergency reserve has real value that is not interest, and attaching a
-	// dollar number to it would be inventing one to fill a column.
-	v.Marginal = allocMarginalDestinations(app, in.ActiveMember)
-
-	ranked := allocate.RankWith(cands, in.Weights, allocate.Constraints{Exclude: in.Excluded})
-	scored := make([]allocate.Ranked, 0, len(ranked))
-	for _, r := range ranked {
-		if r.Score > 0 {
-			scored = append(scored, r)
+	for i := range v.Candidates {
+		if strings.HasPrefix(v.Candidates[i].ID, "goal:") {
+			v.Candidates[i].Name = uistate.T("allocate.goalPrefix", v.Candidates[i].Name)
 		}
+		if liabilityByID[v.Candidates[i].ID] {
+			v.Candidates[i].Name = uistate.T("allocate.payDown", v.Candidates[i].Name)
+		}
+		candidateByID[v.Candidates[i].ID] = v.Candidates[i]
 	}
-	v.HiddenZero = len(scored) < len(ranked)
-	v.Ranked = scored
-
-	v.TotalMinor, _ = money.ParseMinor(strings.TrimSpace(in.AmountStr), in.Dec)
-	v.ReserveMinor, _ = money.ParseMinor(strings.TrimSpace(in.ReserveStr), in.Dec)
-	// WF-SM4: a household that said "keep at least $15,000 in cash" should not
-	// have to say it again here. The floor applies only when no buffer was typed
-	// — a number somebody entered on this screen is a decision about THIS split,
-	// and silently overriding it would be the app arguing with the person using
-	// it. When the floor is what is holding money back, the screen says so
-	// (ReserveFromStanding), because a figure that appeared on its own reads as a
-	// bug.
-	if strings.TrimSpace(in.ReserveStr) == "" {
-		if floor, ok := uistate.LoadStanding().KeepLiquidMinor(); ok && floor > 0 {
-			v.ReserveMinor = floor
-			v.ReserveFromStanding = true
-		}
+	v.Ranked, v.HiddenZero = prepared.Ranked, prepared.HiddenZero
+	for i := range v.Ranked {
+		v.Ranked[i].Candidate = candidateByID[v.Ranked[i].Candidate.ID]
 	}
-	v.MaxPerMinor, _ = money.ParseMinor(strings.TrimSpace(in.MaxPerStr), in.Dec)
-	if v.TotalMinor > 0 {
-		var plans []allocate.Plan
-		opts := allocate.SplitOptions{Reserve: v.ReserveMinor, MaxPer: v.MaxPerMinor}
-		if in.Mode == "fill" {
-			plans, v.Remainder = allocate.DistributeFillToTarget(v.Ranked, v.TotalMinor, opts)
-		} else {
-			plans, v.Remainder = allocate.Distribute(v.Ranked, v.TotalMinor, opts)
+	v.PlanByID, v.TotalMinor, v.ReserveMinor, v.AllocatableMinor, v.MaxPerMinor = prepared.PlanByID, prepared.TotalMinor, prepared.ReserveMinor, prepared.AllocatableMinor, prepared.MaxPerMinor
+	v.ReserveFromStanding, v.Remainder, v.Marginal = prepared.ReserveFromStanding, prepared.Remainder, prepared.Marginal
+	v.InputInvalid = prepared.TotalErr != nil || prepared.ReserveErr != nil || prepared.MaxPerErr != nil
+	for i := range v.Marginal {
+		if strings.HasPrefix(v.Marginal[i].ID, "goal:") {
+			v.Marginal[i].Name = uistate.T("allocate.goalPrefix", v.Marginal[i].Name)
 		}
-		for _, p := range plans {
-			v.PlanByID[p.Candidate.ID] = p.Amount
+		if liabilityByID[v.Marginal[i].ID] {
+			v.Marginal[i].Name = uistate.T("allocate.payDown", v.Marginal[i].Name)
 		}
 	}
 	return v
-}
-
-// Allocatable is the amount that actually gets split (total minus the reserve, floored at 0).
-func (v allocView) Allocatable() int64 {
-	if a := v.TotalMinor - v.ReserveMinor; a > 0 {
-		return a
-	}
-	return 0
 }
 
 // allocMarginalDestinations describes each destination for the money-per-year
@@ -160,49 +104,6 @@ func (v allocView) Allocatable() int64 {
 // carries its expected return. Everything else is KindOther, which reports no
 // figure rather than a zero — see internal/marginal for why that distinction is
 // the whole point.
-func allocMarginalDestinations(app *appstate.App, activeMember string) []marginal.Destination {
-	var out []marginal.Destination
-	txns := app.Transactions()
-	for _, a := range app.Accounts() {
-		if a.Archived || !ownerVisibleTo(a.OwnerID, activeMember) {
-			continue
-		}
-		if a.Class == domain.ClassLiability {
-			owed := int64(0)
-			if bal, err := ledger.Balance(a, txns); err == nil {
-				owed = bal.Amount
-				if owed < 0 {
-					owed = -owed
-				}
-			}
-			out = append(out, marginal.Destination{
-				ID: a.ID, Name: uistate.T("allocate.payDown", a.Name),
-				Kind: marginal.KindDebt, AnnualRatePct: a.RateAPROrZero(),
-				CapacityMinor: owed,
-			})
-			continue
-		}
-		if !a.LockUntil.IsZero() && a.LockUntil.After(time.Now()) {
-			continue
-		}
-		out = append(out, marginal.Destination{
-			ID: a.ID, Name: a.Name, Kind: marginal.KindSavings,
-			AnnualRatePct: a.ExpectedReturnAPR,
-		})
-	}
-	for _, g := range app.Goals() {
-		if done, _ := goalsvc.IsComplete(g); done || !ownerVisibleTo(g.OwnerID, activeMember) {
-			continue
-		}
-		// A goal's value is hitting it by a date, which is not a rate. Listed so it
-		// is not silently dropped from the places money could go, with no figure.
-		out = append(out, marginal.Destination{
-			ID: "goal:" + g.ID, Name: uistate.T("allocate.goalPrefix", g.Name),
-			Kind: marginal.KindOther,
-		})
-	}
-	return out
-}
 
 // --- WF10: what another dollar actually earns, per destination ------------------
 

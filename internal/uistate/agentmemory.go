@@ -4,7 +4,12 @@
 
 package uistate
 
-import "github.com/monstercameron/CashFlux/internal/agentmemory"
+import (
+	"fmt"
+
+	"github.com/monstercameron/CashFlux/internal/agentmemory"
+	"github.com/monstercameron/CashFlux/internal/store"
+)
 
 // agentMemoryStore holds the assistant's transparent memory (AG19) — the durable
 // facts the user asked it to remember — in the SQLite dataset's settings KV, so it
@@ -17,6 +22,33 @@ const agentMemoryStore = "cashflux:agent-memory"
 // none are set.
 func LoadAgentMemory() agentmemory.Store {
 	return agentmemory.Load(SettingKVGet(agentMemoryStore))
+}
+
+// ReadAgentMemoryFromStore reads transparent memory from a caller-bound dataset.
+// The raw value and existence bit let write previews detect edits made between
+// approval and execution; storage failures remain visible to the caller.
+func ReadAgentMemoryFromStore(s *store.SQLiteStore) (agentmemory.Store, string, bool, error) {
+	if s == nil {
+		return agentmemory.Store{}, "", false, fmt.Errorf("agent memory store is unavailable")
+	}
+	raw, exists, err := s.GetSettingKV(agentMemoryStore)
+	if err != nil {
+		return agentmemory.Store{}, "", false, err
+	}
+	return agentmemory.Load(raw), raw, exists, nil
+}
+
+// WriteAgentMemoryToStore persists transparent memory to a caller-bound dataset.
+// The caller owns identity checks and the persist request so a stale screen cannot
+// redirect a write through the globally active app.
+func WriteAgentMemoryToStore(s *store.SQLiteStore, memory agentmemory.Store) error {
+	if s == nil {
+		return fmt.Errorf("agent memory store is unavailable")
+	}
+	if memory.Len() == 0 {
+		return s.DeleteSettingKV(agentMemoryStore)
+	}
+	return s.SetSettingKV(agentMemoryStore, memory.Marshal())
 }
 
 // PersistAgentMemory saves the assistant's remembered facts (clearing the entry

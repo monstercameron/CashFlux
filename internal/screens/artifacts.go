@@ -14,6 +14,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/artifacts"
 	"github.com/monstercameron/CashFlux/internal/artifactstore"
+	"github.com/monstercameron/CashFlux/internal/artifactview"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
@@ -21,10 +22,44 @@ import (
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
+
+type artifactVaultFacts struct {
+	Artifacts []domain.Artifact
+	Summary   artifactview.Summary
+}
+
+var artifactsSummaryCache = newViewCache[artifactVaultFacts](2)
+
+func artifactVaultSnapshot(app *appstate.App) (artifactVaultFacts, error) {
+	if app == nil {
+		return artifactVaultFacts{}, fmt.Errorf("artifact vault unavailable")
+	}
+	// GetSettings is a cheap fallible source guard: it detects a closed/broken
+	// store even when this app/revision key already has a warm prepared value.
+	if _, err := app.Store().GetSettings(); err != nil {
+		return artifactVaultFacts{}, err
+	}
+	blobUsage := app.BlobStoreUsage()
+	key := fmt.Sprintf("%s:%d", revKey(app), blobUsage)
+	if prepared, ok := artifactsSummaryCache.Get(key); ok {
+		return prepared, nil
+	}
+	dataset, err := app.Store().Snapshot()
+	if err != nil {
+		return artifactVaultFacts{}, err
+	}
+	summary, err := artifactview.Build(dataset, blobUsage)
+	if err != nil {
+		return artifactVaultFacts{}, err
+	}
+	prepared := artifactVaultFacts{Artifacts: dataset.Artifacts, Summary: summary}
+	artifactsSummaryCache.Set(key, prepared)
+	return prepared, nil
+}
 
 // Artifacts is the manager for user-stored assets: upload an image or import a
 // CSV dataset, see them listed with their size, and delete them. A storage meter
@@ -104,25 +139,15 @@ func Artifacts() ui.Node {
 		})
 	}
 
-	// Count how many transactions reference each artifact (L29), so each row can
-	// show "Referenced by N transaction(s)".
-	refCount := map[string]int{}
-	for _, t := range app.Transactions() {
-		for _, att := range t.Attachments {
-			refCount[att.ArtifactID]++
-		}
+	// A cache hit avoids cloning and serializing the whole dataset. Misses take one
+	// snapshot; both the list and prepared facts come from that same snapshot.
+	prepared, prepareErr := artifactVaultSnapshot(app)
+	if prepareErr != nil {
+		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), Attr("role", "status"), uistate.T("calculation.unavailable"))})
 	}
-	// Count how many custom-page widgets bind each artifact (C66), so the delete
-	// guard can warn before breaking a page that uses this image or dataset.
-	pageRefCount := map[string]int{}
-	for _, pg := range app.CustomPages() {
-		for _, w := range pg.Widgets {
-			if w.Binding.ArtifactID != "" {
-				pageRefCount[w.Binding.ArtifactID]++
-			}
-		}
-	}
-	list := app.Artifacts()
+	summary := prepared.Summary
+	blobUsage := summary.BlobBytes
+	list := prepared.Artifacts
 
 	// One page of the vault at a time (deleting off the last page clamps back).
 	const artifactsPageSize = 10
@@ -134,17 +159,16 @@ func Artifacts() ui.Node {
 		pageItems = pageItems[:3] // above-the-fold rows first; the rest after paint
 	}
 
-	var rows []ui.Node
-	for _, a := range pageItems {
-		rows = append(rows, ui.CreateElement(artifactRow, artifactRowProps{
+	rows := MapKeyed(pageItems, func(a domain.Artifact) any { return a.ID }, func(a domain.Artifact) ui.Node {
+		return ui.CreateElement(artifactRow, artifactRowProps{
 			Artifact: a, Refresh: refresh,
-			ReferencedBy: refCount[a.ID],
-			UsedByPages:  pageRefCount[a.ID],
+			ReferencedBy: summary.TransactionReferences[a.ID],
+			UsedByPages:  summary.PageReferences[a.ID],
 			Notice:       notify,
-		}))
-	}
+		})
+	})
 	listBody := P(css.Class("empty"), uistate.T("artifacts.empty"))
-	if len(rows) > 0 {
+	if len(pageItems) > 0 {
 		// NOTE (G20): a bottom add-artifact CTA was tried but a conditional On* button
 		// here shifts hook ordering when the row count changes (the no-On*-in-variable-
 		// position rule), breaking the screen. The always-visible upload card at the top
@@ -179,50 +203,23 @@ func Artifacts() ui.Node {
 		)
 	}
 
-	// Storage meter: combined localStorage dataset size + IndexedDB blob bytes.
-	// Use DatasetBytesWithBlobs so both storage locations are counted, but do NOT
-	// call any IDB Get in the render path — that would block the single-threaded
-	// wasm runtime waiting for a JS callback that can never fire.
-	total := app.DatasetBytesWithBlobs()
-	blobUsage := app.BlobStoreUsage()
+	// Storage facts were prepared from the same snapshot as the list rows.
+	total := summary.TotalBytes
 
 	// The near-limit quota story lives in the hero takeaway (art.takeNearLimit)
 	// — the old dismissible banner duplicated it word-for-word one section down.
-	storageLabel := uistate.T("artifacts.storage", artifacts.HumanSize(total))
+	storageLabel := uistate.T("artifacts.storage", artifacts.HumanSize64(total))
 	if blobUsage > 0 {
 		storageLabel = uistate.T("artifacts.storageIDB",
-			artifacts.HumanSize(int(blobUsage)),
-			artifacts.HumanSize(total),
+			artifacts.HumanSize64(blobUsage),
+			artifacts.HumanSize64(total),
 		)
 	}
 
 	// ── Hero: the storage footprint, the vault chips, and the takeaway. ────────
-	imgCount, csvCount, pdfCount := 0, 0, 0
-	for _, a := range list {
-		switch a.Kind {
-		case artifacts.KindImage:
-			imgCount++
-		case artifacts.KindPDF:
-			pdfCount++
-		default:
-			csvCount++
-		}
-	}
-	attachedCount, pageBoundCount := 0, 0
-	for aid, n := range refCount {
-		if n > 0 && aid != "" {
-			attachedCount++
-		}
-	}
-	for _, n := range pageRefCount {
-		if n > 0 {
-			pageBoundCount++
-		}
-	}
-	heroUsed := total
-	if int(blobUsage) > heroUsed {
-		heroUsed = int(blobUsage)
-	}
+	imgCount, csvCount, pdfCount := summary.ImageCount, summary.OtherCount, summary.PDFCount
+	attachedCount, pageBoundCount := summary.ReferencedArtifactCount, summary.PageBoundArtifactCount
+	heroUsed := summary.StorageMeterBytes
 
 	fileLine := uistate.T("artifacts.fileWordN", len(list))
 	if len(list) == 1 {
@@ -257,7 +254,7 @@ func Artifacts() ui.Node {
 		if csvCount == 1 {
 			csvWord = uistate.T("art.csvWordOne")
 		}
-		takeaway = uistate.T("art.takeStored", imgWord, csvWord, artifacts.HumanSize(heroUsed))
+		takeaway = uistate.T("art.takeStored", imgWord, csvWord, artifacts.HumanSize64(heroUsed))
 		if blobUsage > 0 && artifactstore.NearLimit(blobUsage) {
 			takeaway += " " + uistate.T("art.takeNearLimit")
 		}
@@ -268,7 +265,7 @@ func Artifacts() ui.Node {
 		Div(css.Class("rpt-hero-main"),
 			Div(
 				Div(css.Class("rpt-hero-label", tw.TextDim), uistate.T("artifacts.heroLabel")),
-				Div(ClassStr("rpt-hero-value "+tw.Fold(tw.FontDisplay)), artifacts.HumanSize(heroUsed)),
+				Div(ClassStr("rpt-hero-value "+tw.Fold(tw.FontDisplay)), artifacts.HumanSize64(heroUsed)),
 				Div(css.Class("vault-meter"), artifactStorageBar(total, blobUsage)),
 				P(css.Class("muted", tw.Mt1, tw.Text12), storageLabel),
 			),
@@ -571,11 +568,11 @@ func fileLimitLabel(limit int) string {
 
 // artifactStorageBar renders a thin progress bar showing how much of the practical
 // storage limit (~10 MB combined) is used, with a warning tone when near the limit (C66).
-func artifactStorageBar(totalBytes int, blobBytes int64) ui.Node {
+func artifactStorageBar(totalBytes int64, blobBytes int64) ui.Node {
 	const limitBytes = 10 * 1024 * 1024 // 10 MB practical cap
 	used := totalBytes
-	if int(blobBytes) > used {
-		used = int(blobBytes)
+	if blobBytes > used {
+		used = blobBytes
 	}
 	pct := float64(used) / float64(limitBytes) * 100
 	if pct > 100 {

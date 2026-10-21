@@ -3,8 +3,12 @@
 package reports
 
 import (
+	"errors"
+	"math"
 	"reflect"
 	"testing"
+
+	"github.com/monstercameron/CashFlux/internal/money"
 )
 
 func TestMonthsNegative(t *testing.T) {
@@ -58,6 +62,63 @@ func TestPer100(t *testing.T) {
 	}
 	if Per100(rows, 0, 2) != nil {
 		t.Fatal("zero income must yield nil")
+	}
+}
+
+func TestPer100CheckedRejectsMagnitudeShareAndRemainderOverflow(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		rows []CategorySpend
+		inc  int64
+	}{
+		{"minimum magnitude", []CategorySpend{{CategoryID: "bad", Amount: math.MinInt64}}, 100},
+		{"wide share result", []CategorySpend{{CategoryID: "large", Amount: math.MaxInt64}}, 1},
+		{"folded remainder", []CategorySpend{{Amount: 0}, {Amount: math.MaxInt64}, {Amount: 1}}, math.MaxInt64},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := Per100Checked(tc.rows, tc.inc, 1)
+			if err == nil || !errors.Is(err, money.ErrOverflow) || got != nil {
+				t.Fatalf("got %v, %v; want nil and money overflow", got, err)
+			}
+			if legacy := Per100(tc.rows, tc.inc, 1); legacy != nil {
+				t.Fatalf("legacy wrapper exposed partial/invalid result: %v", legacy)
+			}
+		})
+	}
+}
+
+func TestPer100CheckedUsesWideIntermediate(t *testing.T) {
+	got, err := Per100Checked([]CategorySpend{{CategoryID: "large", Amount: math.MaxInt64 / 4}}, math.MaxInt64/2, 1)
+	if err != nil || !reflect.DeepEqual(got, []Per100Row{{CategoryID: "large", AmountMinor: math.MaxInt64 / 4, Per100: 49, Tenths: 9}}) {
+		t.Fatalf("wide but representable share = %v, %v", got, err)
+	}
+}
+
+func TestPositiveSavingsPer100(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		income       int64
+		expense      int64
+		whole        int64
+		tenths       int64
+		ok           bool
+		wantOverflow bool
+	}{
+		{"positive", 100000, 87500, 12, 5, true, false},
+		{"no savings", 100, 100, 0, 0, false, false},
+		{"overspent", 100, 120, 0, 0, false, false},
+		{"no income", 0, 0, 0, 0, false, false},
+		{"checked net", math.MaxInt64, math.MinInt64, 0, 0, false, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			whole, tenths, ok, err := PositiveSavingsPer100(tc.income, tc.expense)
+			if (err != nil) != tc.wantOverflow || whole != tc.whole || tenths != tc.tenths || ok != tc.ok {
+				t.Fatalf("got (%d,%d,%v), %v", whole, tenths, ok, err)
+			}
+			if tc.wantOverflow && !errors.Is(err, money.ErrOverflow) {
+				t.Fatalf("error %v does not wrap money overflow", err)
+			}
+		})
 	}
 }
 

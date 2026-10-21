@@ -24,10 +24,10 @@ import (
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/CashFlux/internal/valuation"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/router"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/router"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 type accountRowProps struct {
@@ -35,6 +35,10 @@ type accountRowProps struct {
 	Balance money.Money
 	Cleared money.Money
 	Stale   bool
+	// DetailContext lazily prepares the production list's selected chart window,
+	// period flow and projection. Direct row consumers can still supply the
+	// individual display facts below.
+	DetailContext *accountDetailContext
 	// DaysStale is the days since the balance was last confirmed (−1 = never), shown
 	// on the stale badge so the row says HOW stale it is — matching the "it's been N
 	// days" wording of the balance-update notification. Only read when Stale is true.
@@ -87,7 +91,12 @@ type accountRowProps struct {
 	// flows (AC13). When it shows a dip below today's balance, the row renders a
 	// "→ ~$X low on <date>" line that expands to list the drivers. Zero value renders
 	// nothing.
-	Projection acctproject.Projection
+	Projection    acctproject.Projection
+	ProjectionErr error
+	// ForwardProjection carries recurring drivers through the forward chart's 90-day
+	// horizon. Projection above remains the independent 30-day AC13 summary.
+	ForwardProjection    acctproject.Projection
+	ForwardProjectionErr error
 	// Sparkline is the account's 90-day end-of-day balance series (AC2), oldest first,
 	// in the account's currency (minor units). Rendered as an inline SVG polyline; a
 	// flat run is itself the "nothing has posted since your last update" signal. Fewer
@@ -373,6 +382,24 @@ func AccountRow(props accountRowProps) ui.Node {
 	// per-row component). The choice is view-only, so it isn't persisted.
 	chartRange := ui.UseState("90d")
 	onChartRange := func(v string) { chartRange.Set(v) }
+	if detailsOpen.Get() && props.DetailContext != nil {
+		facts := props.DetailContext.facts(a)
+		props.Flow, props.ShowFlow, props.Projection = facts.Flow, true, facts.Projection
+		props.ProjectionErr = facts.ProjectionErr
+		props.ForwardProjection = facts.ForwardProjection
+		props.ForwardProjectionErr = facts.ForwardProjectionErr
+		props.ValuationHistory = facts.Valuations
+		series, hasRange := props.DetailContext.series(a, chartRange.Get())
+		props.HasRange = hasRange
+		switch chartRange.Get() {
+		case "12m":
+			props.Sparkline12m = series
+		case "all":
+			props.SparklineAll = series
+		default:
+			props.Sparkline = series
+		}
+	}
 	viewBills := ui.UseEvent(Prevent(func() {
 		if props.OnViewBills != nil {
 			props.OnViewBills(a.ID)
@@ -507,7 +534,9 @@ func AccountRow(props accountRowProps) ui.Node {
 	// disclosure that lists the recurring drivers ("Rent −$1,400 on Mar 1"). Skipped
 	// for liabilities and valuation-type assets, whose balances aren't cash curves.
 	var projNode ui.Node = Fragment()
-	if a.Class != domain.ClassLiability && !isValuationType(a.Type) && props.Projection.HasLowDip() {
+	if a.Class != domain.ClassLiability && !isValuationType(a.Type) && props.ProjectionErr != nil {
+		projNode = P(css.Class("row-meta"), Attr("role", "status"), Attr("data-testid", "acct-proj-unavailable-"+a.ID), uistate.T("calculation.unavailable"))
+	} else if a.Class != domain.ClassLiability && !isValuationType(a.Type) && props.Projection.HasLowDip() {
 		dec := currency.Decimals(a.Currency)
 		low := money.New(props.Projection.Low, a.Currency)
 		toggleLabel := uistate.T("accounts.projectedShow")
@@ -565,6 +594,16 @@ func AccountRow(props accountRowProps) ui.Node {
 	// so conditional mounting here is safe).
 	var detailsNode ui.Node = Fragment()
 	if detailsOpen.Get() {
+		var chart ui.Node
+		validBalance := true
+		if props.DetailContext != nil {
+			_, validBalance = props.DetailContext.snapshot.Balances[a.ID]
+		}
+		if validBalance {
+			chart = accountBalanceChart(a, props.Sparkline, props.Sparkline12m, props.SparklineAll, props.HasRange, chartRange.Get(), onChartRange)
+		} else {
+			chart = P(css.Class("row-meta"), Attr("role", "status"), Attr("data-testid", "acct-history-unavailable-"+a.ID), uistate.T("calculation.unavailable"))
+		}
 		detailsNode = Div(css.Class("acct-row-details"), Attr("data-testid", "acct-details-"+a.ID),
 			valChange,
 			projNode,
@@ -572,10 +611,10 @@ func AccountRow(props accountRowProps) ui.Node {
 			flowNode,
 			// AC2 + C413: the 90-day balance figure, with a 90d/12m/all range picker
 			// when the account has more than 90 days of history.
-			accountBalanceChart(a, props.Sparkline, props.Sparkline12m, props.SparklineAll, props.HasRange, chartRange.Get(), onChartRange),
+			chart,
 			// C381: and where it goes next. The history chart above answers where the
 			// account has been; this answers whether it survives until payday.
-			accountForwardLine(a, props.Balance, props.Projection, time.Now()),
+			accountForwardLine(a, props.Balance, props.ForwardProjection, props.ForwardProjectionErr, time.Now()),
 			// XC7: warn when goals have earmarked more against this account than it
 			// holds (goal money has been spent). Own component; healthy → Fragment().
 			ui.CreateElement(accountEarmarkWarning, accountEarmarkWarnProps{Account: a, Balance: props.Balance}),

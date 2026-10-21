@@ -14,6 +14,7 @@
 package accountflow
 
 import (
+	"fmt"
 	"sort"
 	"time"
 
@@ -40,16 +41,42 @@ type Flow struct {
 // (signed, in − out) but kept out of In/Out/Net so a transfer never reads as
 // income or spending. All amounts are in the account's currency.
 func PeriodFlow(account domain.Account, all []domain.Transaction, start, end time.Time) Flow {
+	flow, _ := periodFlow(account, all, start, end, false)
+	return flow
+}
+
+// PeriodFlowChecked is PeriodFlow with checked signed aggregation. Formula
+// consumers use this to distinguish a real zero from an unrepresentable flow;
+// existing view callers retain PeriodFlow's historical behavior.
+func PeriodFlowChecked(account domain.Account, all []domain.Transaction, start, end time.Time) (Flow, error) {
+	return periodFlow(account, all, start, end, true)
+}
+
+func periodFlow(account domain.Account, all []domain.Transaction, start, end time.Time, checked bool) (Flow, error) {
 	cur := account.Currency
 	in := money.Zero(cur)
 	out := money.Zero(cur)
 	xfer := money.Zero(cur)
+	add := func(a, b int64, label string) (int64, error) {
+		if !checked {
+			return a + b, nil
+		}
+		v, err := money.Add(a, b)
+		if err != nil {
+			return 0, fmt.Errorf("account flow %s: %w", label, err)
+		}
+		return v, nil
+	}
 	for _, t := range all {
 		if t.AccountID != account.ID || !dateutil.InRange(t.Date, start, end) {
 			continue
 		}
 		if t.IsTransfer() {
-			xfer.Amount += t.Amount.Amount
+			var err error
+			xfer.Amount, err = add(xfer.Amount, t.Amount.Amount, "transfers")
+			if err != nil {
+				return Flow{}, err
+			}
 			continue
 		}
 		// C693: an excluded row still moves the BALANCE (that is TXC-1's rule, and
@@ -59,12 +86,36 @@ func PeriodFlow(account domain.Account, all []domain.Transaction, start, end tim
 			continue
 		}
 		if t.Amount.Amount > 0 {
-			in.Amount += t.Amount.Amount
+			var err error
+			in.Amount, err = add(in.Amount, t.Amount.Amount, "income")
+			if err != nil {
+				return Flow{}, err
+			}
 		} else {
-			out.Amount += -t.Amount.Amount
+			amount := -t.Amount.Amount
+			if checked {
+				var err error
+				amount, err = money.Neg(t.Amount.Amount)
+				if err != nil {
+					return Flow{}, fmt.Errorf("account flow expense: %w", err)
+				}
+			}
+			var err error
+			out.Amount, err = add(out.Amount, amount, "expenses")
+			if err != nil {
+				return Flow{}, err
+			}
 		}
 	}
-	return Flow{In: in, Out: out, Net: money.New(in.Amount-out.Amount, cur), Transfer: xfer}
+	net := in.Amount - out.Amount
+	if checked {
+		var err error
+		net, err = money.Sub(in.Amount, out.Amount)
+		if err != nil {
+			return Flow{}, fmt.Errorf("account flow net: %w", err)
+		}
+	}
+	return Flow{In: in, Out: out, Net: money.New(net, cur), Transfer: xfer}, nil
 }
 
 // BalanceSeries returns the account's end-of-day balance for each of the last

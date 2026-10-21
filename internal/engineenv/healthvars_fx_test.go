@@ -50,29 +50,29 @@ func TestHealthInputsExcludeUnconvertibleAmounts(t *testing.T) {
 		}
 	}
 
-	// No JPY/EUR rates: the unconvertible figures must drop out entirely.
+	// No JPY/EUR rates: neither ratio may claim the convertible subset is complete.
 	in := HealthInputs(mk(map[string]float64{}))
 	if !in.HasIncome {
 		t.Fatal("fixture should have income")
 	}
-	// Only the $200 USD payment counts against the $3,000 monthly income
-	// ($9,000 over the trailing 3 full months): 200/3000 = 6%. The raw-fallback
-	// bug would have added ¥50,000 as $50,000 and blown this past 1000%.
-	if in.ObligationRatioPct != 6 {
-		t.Errorf("ObligationRatioPct = %d, want 6 (JPY payment excluded, not added raw)", in.ObligationRatioPct)
+	if in.Unavailable["debt"] == nil || in.Unavailable["utilization"] == nil {
+		t.Fatalf("partial foreign totals remained available: %+v", in)
 	}
-	// Only the USD card counts: 300/1000 = 30%.
-	if in.AggUtilizationPct != 30 {
-		t.Errorf("AggUtilizationPct = %d, want 30 (EUR card excluded, not added raw)", in.AggUtilizationPct)
+	if in.HasCredit {
+		t.Fatal("partial card set must not establish household utilization")
+	}
+	// Independent income/savings still use complete same-currency transactions.
+	if !in.HasIncome || in.SavingsRatePct != 100 || in.Unavailable["savings"] != nil {
+		t.Fatalf("foreign account failure removed independent cash flow: %+v", in)
 	}
 
-	// With rates present, the foreign figures participate (sanity: ratios move).
+	// With rates present, both complete aggregates become available again.
 	withRates := HealthInputs(mk(map[string]float64{"JPY": 150, "EUR": 0.9}))
-	if withRates.ObligationRatioPct <= in.ObligationRatioPct {
+	if withRates.Unavailable["debt"] != nil || withRates.ObligationRatioPct <= 0 {
 		t.Errorf("with a JPY rate the obligation ratio should rise: %d vs %d",
 			withRates.ObligationRatioPct, in.ObligationRatioPct)
 	}
-	if withRates.AggUtilizationPct == in.AggUtilizationPct {
+	if withRates.Unavailable["utilization"] != nil || !withRates.HasCredit || withRates.AggUtilizationPct <= 0 {
 		t.Error("with a EUR rate the utilization should include the EUR card")
 	}
 }

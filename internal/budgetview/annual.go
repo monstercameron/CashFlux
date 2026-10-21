@@ -79,7 +79,7 @@ func ProjectAnnual(grid budgeting.AnnualGrid, covers map[string]map[string]bool,
 			spending = append(spending, r.BudgetID)
 		}
 	}
-	projection := budgetplan.Project(recurrings, goals, grid.Year, out.FromMonth, grid.Currency, rates)
+	projection := budgetplan.ProjectWithGoalRates(recurrings, goals, grid.Year, out.FromMonth, grid.Currency, rates)
 	out.PerBudget, out.Err = projection.PerBudget(all, covers)
 	if out.Err != nil {
 		return out

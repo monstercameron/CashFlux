@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/ledger"
@@ -119,37 +120,19 @@ func (a *App) PutTransactionWithTransferPairReceived(prior, next domain.Transact
 		}
 		return a.PutTransaction(next)
 	}
-	amountChanged := prior.Amount.Amount != next.Amount.Amount
-	dateChanged := !prior.Date.Equal(next.Date)
-	if !amountChanged && !dateChanged {
+	writes, err := a.planPairedTransactionEdit(prior, next, receivedMinor)
+	if err != nil {
+		return err
+	}
+	if len(writes) == 1 {
 		return a.PutTransaction(next)
-	}
-
-	// Locate the counterpart against the PRE-edit values, while the pair still matches.
-	pair, found := a.transferPartner(prior)
-	if !found {
-		// Nothing to keep in step (an already-orphaned leg, or a cross-currency pair
-		// that isReciprocalTransferLeg cannot match). Write the one row and let the
-		// caller's own validation speak.
-		return a.PutTransaction(next)
-	}
-
-	if amountChanged {
-		mirrored, err := a.mirroredLegAmount(next, pair, receivedMinor)
-		if err != nil {
-			return err
-		}
-		pair.Amount = mirrored
-	}
-	if dateChanged {
-		pair.Date = next.Date
 	}
 
 	// Suppress per-leg firings so the surface re-renders once, with both legs written.
 	if err := a.roleGuard(); err != nil {
 		return err
 	}
-	for _, txn := range []domain.Transaction{next, pair} {
+	for _, txn := range writes {
 		if issues := validate.ValidateTransaction(txn, a.Accounts()...); !issues.OK() {
 			return issues
 		}
@@ -157,10 +140,10 @@ func (a *App) PutTransactionWithTransferPairReceived(prior, next domain.Transact
 			return err
 		}
 	}
-	if err := a.store.PutTransactionsAtomic([]domain.Transaction{next, pair}); err != nil {
+	if err := a.store.PutTransactionsAtomic(writes); err != nil {
 		return fmt.Errorf("save transfer pair: %w", err)
 	}
-	a.log.Info("transfer pair saved", "ids", []string{next.ID, pair.ID})
+	a.log.Info("transfer pair saved", "ids", expectedIDs(writes))
 	a.fireTxnMutated()
 	return nil
 }
@@ -172,7 +155,7 @@ func (a *App) transferPartner(prior domain.Transaction) (domain.Transaction, boo
 		if txn.ID == prior.ID {
 			continue
 		}
-		if prior.TransferGroupID != "" && txn.TransferGroupID == prior.TransferGroupID {
+		if prior.TransferGroupID != "" && txn.TransferGroupID == prior.TransferGroupID && txn.IsTransfer() && txn.AccountID == prior.TransferAccountID && txn.TransferAccountID == prior.AccountID {
 			return txn, true
 		}
 		// Normalize the amounts to the same currency before the account-aware
@@ -419,6 +402,10 @@ func (a *App) transferAccounts(fromID, toID string) (fromAcc, toAcc domain.Accou
 // reduce debt (payments). Cross-currency legs require saved rates or an explicit
 // receivedMinor magnitude; same-currency legs always share a magnitude.
 func (a *App) transferLegs(fromAcc, toAcc domain.Account, amountMinor, receivedMinor int64) (fromMoney, toMoney money.Money, err error) {
+	return transferLegsWithRates(fromAcc, toAcc, amountMinor, receivedMinor, a.transactionPairRates())
+}
+
+func transferLegsWithRates(fromAcc, toAcc domain.Account, amountMinor, receivedMinor int64, rates currency.Rates) (fromMoney, toMoney money.Money, err error) {
 	fromMoney = money.New(-fromAcc.InflowSign()*amountMinor, fromAcc.Currency)
 	toMoney = money.New(amountMinor, toAcc.Currency)
 	if fromAcc.Currency != toAcc.Currency {
@@ -426,7 +413,7 @@ func (a *App) transferLegs(fromAcc, toAcc domain.Account, amountMinor, receivedM
 			toMoney = money.New(receivedMinor, toAcc.Currency)
 		} else {
 			srcAbs := money.New(amountMinor, fromAcc.Currency)
-			conv, cerr := a.transactionPairRates().Convert(srcAbs, toAcc.Currency)
+			conv, cerr := rates.Convert(srcAbs, toAcc.Currency)
 			if cerr != nil {
 				return money.Money{}, money.Money{}, fmt.Errorf("%w: %s to %s", ErrTransferRateUnavailable, fromAcc.Currency, toAcc.Currency)
 			}

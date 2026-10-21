@@ -157,6 +157,32 @@ func Import(data []byte) (Dataset, error) {
 	return migrated, nil
 }
 
+// PreparedDataset is a dataset that passed Import's complete validation and
+// migration pipeline. Its contents are private so callers cannot invalidate
+// that guarantee between preparation and persistence.
+type PreparedDataset struct {
+	dataset Dataset
+	valid   bool
+}
+
+// PrepareDataset parses, validates, and migrates import JSON for a later
+// SQLiteStore.LoadPrepared call. Use Load for datasets not produced here.
+func PrepareDataset(data []byte) (*PreparedDataset, error) {
+	ds, err := Import(data)
+	if err != nil {
+		return nil, err
+	}
+	return &PreparedDataset{dataset: ds, valid: true}, nil
+}
+
+// Counts returns aggregate entity counts for non-sensitive logging.
+func (p *PreparedDataset) Counts() (accounts, transactions int) {
+	if p == nil || !p.valid {
+		return 0, 0
+	}
+	return len(p.dataset.Accounts), len(p.dataset.Transactions)
+}
+
 // migrate brings a decoded dataset up to the current schema version. Unversioned
 // data (version 0) is treated as the initial release. Newer-than-supported data
 // is rejected rather than silently mishandled.

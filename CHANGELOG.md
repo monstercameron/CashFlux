@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- Integrated the published v1.19.10 stability code with the pending sync/privacy changes and kept the encrypted three-browser file sync and both offline-file recovery choices passing on the combined v7 app.
 - A disposable two-browser recovery regression now exercises both merge and explicit replacement of an encrypted server copy with a locally saved file, then downloads that file byte-for-byte in a fresh profile.
 - The deploy gate now runs device-erasure storage unit tests and browser cases for two-workspace file removal and direct-link safety.
 - A two-browser full-backup regression now verifies that files from two workspaces survive a complete backup, restore, workspace switch, and byte-for-byte download on the receiving browser.
@@ -55,6 +56,241 @@ and every commit updates this file under `Unreleased`.
 - PDF selection now caps files at 23 MiB so their base64 encrypted blob envelopes fit within the server's default 32 MiB upload limit.
 - Account PDF and image attachments now save to encrypted local blob storage, and a server pull stores restored files there before committing the local dataset. The three-browser regression checks PDF bytes and encrypted IndexedDB records on both devices.
 - Image uploads now commit bytes to the encrypted local blob store before saving artifact metadata, keeping large files out of the autosaved dataset; the three-browser sync regression checks that local record and the returned file bytes.
+- Prepare v1.19.10 with GoWebComponents v7.0.1, preserved encrypted-sync protections, the Settings navigation stability fix and recorded final gates.
+- A deferred default Settings redirect cannot replace a newer navigation or a newly selected Settings tab.
+- Integrate the published v1.19.9 sync/privacy fixes with the v7 componentized app, preserving encrypted artifact migration and transport guards.
+- Pin GoWebComponents v7.0.1 after the final latest-version check.
+- Componentization inventory reflects current native seams and records remaining source and performance gaps.
+- Performance tools use bounded asset settling and explicit applied-search completion with retained provenance.
+- Pay-yourself-first duplicate checks run at the native write boundary for all callers.
+- Subscription spending share uses native checked prior-month totals and fixes month-end window normalization.
+- Recurring agenda and calendar share native occurrence, settlement and checked conversion facts.
+- Debt tuner, coach and strategy comparison share checked native payoff results and suppress partial FX totals.
+- Planning retirement uses native checked balances and dependency-complete bounded simulation reuse.
+- What changed preserves source errors, exact cutoff and app identity while sharing transaction indexes.
+- Budget summary pool calculations preserve unknown plans and arithmetic overflow.
+- Goal-funded budget details show unavailable results for missing conversion rates or arithmetic overflow.
+- Budget funding and month-close actions preserve unavailable income and assignment facts instead of treating errors as zero.
+- Custom-field edit forms share the native, tested value-to-string converter.
+- Give recovery-copy deduplication its own household scope while retaining durable one-copy and readable-payload assertions.
+- Isolate hosted pull tests from scoped encryption and durable workspace state, and verify plaintext downgrade refusal before import.
+- Upgrade GoWebComponents from v5.0.1 to v7.0.0, migrate typed handlers and Markdown registration, and select Go 1.27.3 consistently.
+- Unmount each transaction performance fixture before restoring shared state.
+- Move custom-field, deductible and investment summary calculations into native prepared models with truthful unavailable states.
+- Move Goals Compare pooled monthly money into native checked preparation and reuse goal stats across its sections.
+- Move Dashboard trend movement, safe magnitudes and live-inclusive range into tested native preparation.
+- Use checked net-worth differences and safe display magnitudes on Accounts; distinguish unavailable movement from known zero.
+- Block dev reload sockets in benchmark contexts and retain bounded startup failure diagnostics.
+- Reuse bounded, owned SMART results between the page strip and peek, preserving settings, page, time, language and data dependencies.
+- Verify frozen benchmark artifacts, require complete route content, and add representative nine-page interaction measurements and optional CPU profiles.
+- Move Allocate allocatable amounts into native preparation and retain failed income-prefill availability.
+- The top-bar period pill receives the live shared window and reads current state when stepping, matching page calculations after changes.
+- Returning to Dashboard skips unchanged placement writes, preserving the store revision and prepared financial snapshots.
+- Componentization docs now record current first-nine shared components, native seams and validation references, with explicit residuals and performance limits.
+- Budget flex and Household host tests explicitly unmount before releasing their fixture and browser stubs.
+- Reports retains bounded successful tax preparation across Summary and Full remounts with exact source invalidation.
+- Assistant rail and chat scrolling use managed browser timers that cancel when their component unmounts.
+- Repeated Settings reads reuse a successful revision snapshot while retaining readiness errors and independently owned nested values.
+- Receipt candidate matching includes its effective calendar date in memo dependencies.
+- Workflow authoring delegates schedule and transfer preparation to native validation.
+- Budget income-source facts retain unknown amounts separately from known fixed income.
+- Auto-budget rows, impact preview and save share one checked native tuning result.
+- Artifact rows and storage meters use native checked facts with successful snapshot reuse.
+- Admin overview and user reads share a tested native client and bounded successful-response cache.
+- Budget flex views delegate window proration, meter verdicts and days-left facts to native models.
+- Bills prepare shared upcoming flows and category-budget indexes before evaluating checked fit facts.
+- Recurring views use checked native cadence, FX, occurrence and monthly facts.
+- Visual Builder shares typed native datasets with dependency-complete successful snapshot reuse.
+- Settings FX and APR inputs use native finite-value validation.
+- Planning renders independent checked native forecast, affordability, runway and spending facts.
+- Plan and Health use checked native financial inputs with independent availability.
+- Debt and loan views consume checked native balances, totals, payoff schedules and extra-payment input.
+- Allocate uses native eligibility, balance, goal, validation and distribution facts.
+- Split previews and saves use native typed amount and weight validation.
+- Activity prepares a bounded ordered feed, filter facts and undo display assessments once.
+- Categories render native checked income, expense and lifetime usage facts.
+- Net Worth views consume prepared snapshot, bridge, series, expense and health facts.
+- Investment summaries use checked native balances, conversion and reconciliation facts.
+- Custom-field forms validate typed values natively before creating or updating records.
+- Full, embedded and AI Credit views share checked native preparation and keyed limit editors.
+- Household and Members share checked native facts with stable interactive rows.
+- Workflow drafts use injected-clock native scheduling and reject same-account transfers before persistence or execution.
+- Category deletion fails closed when any canonical non-child reference still needs reassignment.
+- Revision caches retain successful snapshots and retry failed reads without requiring a data mutation.
+- Prepared view adapters can distinguish failed account, budget, goal, transaction and link reads from empty data.
+- Tax net income avoids unused receipt gathering through the canonical selected-category fold.
+- Recorded the 47-route inventory, completed model slices and raw detector allocation evidence.
+- Unusual detection reuses candidate history capacity while preserving price-job ownership.
+- Rule coverage prepares ordered counts and conflicts once using the canonical matcher.
+- Net Worth account windows use native checked balances, flows and availability.
+- Investment growth headlines render checked native facts and explicit unavailable states.
+- Setup validates money through native typed preparation before saving or advancing.
+- Subscription rows and totals use native checked cadence, currency and share facts.
+- Budget summaries now use checked native preparation and shared category selection.
+- Credit utilization history preserves selected snapshots and renders unavailable points rather than wrapped or zero values.
+- Tax report net-income facts use canonical split/refund aggregation and explicit source failures outside markup.
+- Household spending, period income and fractional ownership propagate arithmetic failures instead of wrapping.
+- Category descendant unions share one adjacency map and avoid revisiting overlapping subtrees.
+- Document assistant data, tools, calculation paths, regression gates and remaining boundaries.
+- Render the assistant header and keyed conversation through typed presentational child components.
+- Assistant title requests cancel safely, account usage, respect limits and preserve saved chats during switching.
+- On-device answers distinguish unavailable calculations from genuine zero and use current bound financial inputs.
+- Retain raw native model benchmark samples and environment metadata before further app refactoring.
+- Document the all-route componentization contract and measured performance criteria.
+- Large assistant tax exports provide lossless bounded CSV continuation rather than oversized responses.
+- Assistant report drilldowns cap the complete response and identify omitted transactions for exact recovery.
+- Formula continuations fingerprint financial inputs instead of the global usage revision.
+- Assistant sessions now bound request history, cancel on dataset replacement, and refresh reads after uncertain writes.
+- Assistant financial calculations now read calendar and rollover preferences from their own workspace.
+- Added financial-plan questionnaire discovery and a native assessment tool, bringing full-detail access to 77 collections and 59 tools.
+- Incomplete or failed Responses replies no longer expose partial function calls for dispatch.
+- Assistant data and list continuations now survive model usage bookkeeping and unrelated writes.
+- Assistant credit formulas now use checked FX-weighted card utilization and explicit-currency paydown targets.
+- Health formulas now distinguish unavailable factors from valid independent scores.
+- Net-worth formula composition and change now preserve unavailable values instead of zero or partial totals.
+- The complete enabled assistant catalog is now checked against relay tool-count and schema-size limits.
+- Assistant record pages now include envelope and redaction metadata in their encoded byte budget.
+- Assistant what-if scenarios now use exact account-currency amounts, anchored monthly dates, and explicit simulation limits.
+- Assistant memory reads and approved writes now stay bound to their original dataset and checked preview.
+- Assistant formula discovery now sizes complete encoded pages and provides exact record recovery for oversized custom metadata.
+- Assistant audits now read current bound data and separate recurring, one-time and unclassified estimates.
+- Assistant tax gathering now uses fresh bound records, canonical refund and split rules, checked totals, and exact currency CSV amounts.
+- Dormant-account fee estimates now convert amounts before thresholding and annualization.
+- Report statistics and payee reductions now return checked errors, and assistant report formulas preserve unavailable results.
+- Assistant formulas now use checked pool, group, event, debt and saved-plan calculations.
+- Updated assistant instructions to discover complete data, respect calculation scope and use exact approved selectors.
+- Corrected the malformed sort property in the assistant ledger-search tool schema.
+- Assistant list and duplicate tools now expose complete paginated selections with strict filters and fresh storage reads.
+- Assistant document search now reaches all retained artifact rows and reports bounded, source-linked evidence.
+- Expanded assistant data discovery to 76 typed collections, including financial decision settings, learning evidence, memory and retained transfer receipts.
+- Assistant record detail chunks now fit a complete encoded response byte budget while preserving lossless continuation.
+- Added checked saved-plan and forecast calculations with explicit overflow and resource-limit errors.
+- Assistant formula facts now preserve unavailable goal, bill, and earmarked calculations instead of substituting zero.
+- Assistant subscription-call preparation preserves currency and exact annual costs with honest evidence limits.
+- Assistant edits validate and preview exact before/after transaction rows, including supported paired transfers.
+- Assistant baseline-history errors use the shared translation catalog.
+- Assistant readers preserve category storage failures while using the shared natural-ordering seam.
+- Assistant citations identify data collections, record selectors and calculation scope without rounding decimal arguments.
+- Formula facts preserve unavailable FX and overflow for account flows, recurring amounts and essential spending.
+- Assistant task/account creation rejects invalid drafts before approval and preserves exact money and selected defaults.
+- Assistant transaction/category creation and bulk categorization use complete fixed previews and atomic expected-state writes.
+- Assistant balance updates and transfers commit the exact previewed financial state with checked arithmetic.
+- Assistant tool rounds refresh data and currency settings, enforce per-round budgets, and retain reported usage from interrupted requests.
+- Assistant batch receipts distinguish real changes, no-ops and unverified mutations; Undo All reverses only exact captured changes.
+- Assistant data discovery covers 65 typed collections including financial assumptions, saved reports and retained benchmark history.
+- Assistant goal check-ins use canonical goal coverage and funding plans in each goal currency.
+- Assistant formula tools expose the complete paginated metric catalog and evaluate against one explicit bound-store observation.
+- Smart bill calculations use checked recurring income normalization, currency conversion and scheduler arithmetic bounds.
+- Assistant data discovery now covers 49 typed collections, including retained notifications and shared financial configurations.
+- Corrected 2025 and 2026 standard deductions in Assistant tax references and attached official verification sources.
+- Assistant reports preserve exact requested periods, share checked calculations, and return supporting records with explicit scope.
+- Cancel, new chat, and conversation switching stop pending Assistant requests and approvals; first-message model and budget choices persist.
+- Assistant approval permissions identify stable record IDs and preserve exact decimal amounts.
+- Assistant action history now records actual captured changes and only undoes its matching durable change.
+- Assistant workflow conditions now discover and validate transaction fields only for transaction-added triggers, matching the actual runtime context.
+- Assistant transaction deletion and duplicate merging now bind exact preview records and revalidate them atomically before changing storage.
+- Assistant goal contributions now resolve an exact goal, parse exact currency amounts and use the canonical checked contribution service after revalidating approval.
+- Assistant planning pages now pin continuation revisions and preserve known recurring dates even when their account source is unavailable.
+- Formula evaluation now keys its cache with the complete non-store configuration snapshot and exact calculation clock instead of retaining stale allocation/planning inputs.
+- Assistant data reads now include safe financial preferences and compare numeric filters exactly across decimal notation without losing large integer precision.
+- Assistant financial summaries, category spending, account balances, budgets and affordability now use fresh checked canonical models with explicit scope, period and unavailable states.
+- Assistant flag dismissal now validates arguments and applies only the exact set of activities shown in the approval preview.
+- Assistant rule/workflow creation now validates exact arguments, previews all persisted effects, and refuses stale or ambiguous approval targets.
+- Assistant can inspect checked account details, balance projections, goal progress, funding suggestions, retained reservations and recurring schedules through six live read tools.
+- Full-detail Assistant conversations can discover and page through 42 typed financial collections, with exact IDs, fresh reads and long-record continuation.
+- Responses function tools now explicitly preserve the app schemas optional-argument behavior with strict false.
+- Assistant task completion now resolves stable IDs, previews the exact occurrence, preserves recurring successors, and rejects stale or ambiguous approvals.
+- Assistant approval metadata now describes rule/workflow changes and matching scopes accurately; aggregate-only conversations withhold document, recurring and paginated record detail tools.
+- Accounts and Goals now share checked native-currency reservation facts and configurable warning content, including archived claims and explicit unavailable states.
+- Account projections now return arithmetic and currency errors, preserve independent horizon availability, and include same-day cash flows in the forward curve.
+- Reports mode and popover changes no longer write period settings or rebuild unchanged financial sections.
+- Goals and Earmarks tabs use the shared segmented control with keyboard navigation and roving focus.
+- The account detail forecast includes 90 days of recurring events while its near-term summary retains 30 days.
+- Shared report-scope hooks avoid repeated storage reads and legacy migration on warm renders.
+- Screen selectors remove an unused budget-health hook that duplicated native budget-view preparation.
+- Durable hydration reuses the transaction-link synchronization already performed by dataset import.
+- Budget task automation preserves open tasks when missing exchange rates or overflow prevents spending calculation.
+- Performance notes distinguish the transaction benchmark AMD64 target from its ARM64 host.
+- Transaction-filter readers avoid repeated SQLite reads and ignored JSON decoding on warm renders.
+- Primary-page verification records the current frozen build, passing checks and slower observed timings with load limitations.
+- Local development notes record the WebSocket write repair needed to keep the 8080 reload server running.
+- Account history series avoid repeated full transaction copies and scans of unrelated accounts.
+- Shared layout and widget-settings hooks avoid repeated storage reads and JSON decoding on warm renders.
+- The development service watcher skips generated tool trees before traversal and avoids an unchanged duplicate startup build.
+- WASM validator tests verify their generated temporary path before recursive cleanup.
+- Typed undo snapshots avoid decoding each freshly encoded row just to recover its collection key.
+- The WASM test runner reports missing, empty or invalid compiler output before starting Node.
+- Net-worth headlines, monthly changes and trends consistently respect the account exclusion setting.
+- Transaction focus tests wait for the actual deferred callback rather than a fixed timer delay.
+- Dashboard, Accounts, Assistant and Notifications distinguish complete net worth, disclosed missing-rate subtotals and fatal calculation failures.
+- To-do List paging and tree preparation are memoized across selection, drag and error-only renders; alternate views skip that work.
+- Undo initialization and record-writer startup share one checked credential-free snapshot instead of serializing and reparsing the full dataset separately.
+- Contribution validation and quick-fill now use the direct goal lookup instead of decoding every saved goal.
+- Warm notification renders no longer reread SQLite and decode feed JSON merely to supply an ignored atom default.
+- Notification budget wins share one previous-month netted ledger projection instead of rescanning all history for every monthly budget.
+- Document checked totals and history, atomic contribution effects, prepared import contracts and the completed pass-five verification.
+- Goal history uses checked native totals and bar percentages, shows unavailable for invalid history, and shares the FX-aware monthly assignment from the card.
+- Smart import placement regressions now wait for the visible Review panel after asynchronous extraction.
+- Dashboard and Assistant use checked period totals, explicit unavailable states and safe savings percentages; affordability waits for known figures.
+- Undo snapshots now preserve named molecules and placements sharing an ID across different surfaces, and reject duplicate keys.
+- Goal contributions and their optional debit now commit together; failed saves and Undo retain all records for a safe retry.
+- Validated imported datasets now retain an opaque prepared handle so reloads do not repeat completed normalization passes.
+- Compact Goal cards now avoid hidden interest, trajectory, history, task and action-node preparation.
+- Native goal history rollover now checks monthly money and count arithmetic and leaves the original goal unchanged on failure.
+- Document the two-artifact live development entry point, full-page reload requirement, and locally repaired matching-version runner.
+- Component guidance now records lazy Accounts facts, current-state goal allocation drafts, and separate Dashboard layout/frame cache contracts.
+- Dashboard render context counts now use a memoized native report-eligible transaction counter.
+- Goal contributions and Undo now validate checked amounts against the current stored goal; completion notices and workflows require known canonical coverage.
+- Reused bounded Dashboard source snapshots, pipeline results and validated layout configurations.
+- Made the manual earmark editor preserve untouched currencies and revalidate account headroom at save time.
+- Replaced overflowing proportional earmark arithmetic with exact bounded allocation.
+- Recorded native matcher benchmarks against the frozen previous per-row parsing implementation.
+- Made Accounts details lazy and reused indexed history and recurring projection inputs.
+- Moved numeric search parsing and multi-value filter preparation outside per-transaction matching.
+- Added fixed duration-only startup details for state creation, hydration and undo preparation.
+- Documented native goal row ownership, Reports lazy section identities and verified third-pass checks.
+- Made the asynchronous Import review regression wait for its visible result instead of a fixed transport delay.
+- Reduced sample payoff-baseline preparation to one checked ledger traversal.
+- Split Reports into typed child sections so Summary skips hidden charts and full-detail builders.
+- Aligned budget savings, annual goal projections, dashboard goal summaries and Assistant questions with canonical goal evaluation.
+- Made goal-win notifications use canonical FX-aware completion and one linked-task index.
+- Prepared Goals rows once and extracted figures and task previews using canonical checked coverage.
+- Added canonical currency-aware goal coverage, lifecycle, planner evaluation and bounded shared task indexing.
+- Avoided reparsing unchanged authenticated checkpoints during hydration while retaining replay and import safeguards.
+- Added checked native per-hundred spending and savings calculations with explicit overflow results.
+- Recorded matched nine-page latency captures, build hashes, startup phase timings, and background-load limitations.
+- Browser journeys use current shared-control semantics and web-first state checks for menus, dates, sorting, views and notification tabs.
+- Reports reuse native activity facts across summary/full and display changes. Category averages follow the selected month count, and parent totals share their rolled-up sparkline basis.
+- Dashboard cash forecasts reject overflowing aggregate totals and disclose accounts omitted for unavailable exchange rates.
+- Goals share native checked reservation, headroom and funding facts. Quick funding rechecks current balances, counts existing earmarks once and preserves foreign allocation currencies when merging.
+- Explicit Goal sorts apply across all open goals instead of pinning the Needs-a-plan section ahead of the selected order. The default actionable view retains its sections.
+- Report category rollups and monthly aggregates expose overflow errors, and runway durations retain int64 month counts on WebAssembly.
+- The component inventory documents control/action slots, keyed tabs and choices, shared tile hosts, native view models and bounded cache ownership.
+- The transaction calendar reuses its native projection across selection-only renders, with full scope, date, formatting, clock, preference and data dependencies.
+- Notifications cache native milestone preparation by app, revision and day, refresh member names/options after roster edits, and share accessible triage tabs.
+- To-do tiles share one bounded revision/day snapshot for counts, child relationships, open links and referenced display names. View and quick-filter switches use the shared segmented control.
+- Startup phase timings retain a common elapsed-time origin if the performance clock temporarily becomes unavailable.
+- Assistant spending-habit preparation uses native checked daily aggregates and overflow-safe averages, leaving wording and formatting in the screen.
+- Annual budget recurring/goal projections are reused when only a scenario or visible month window changes.
+- Budget savings timelines and age-of-money inputs use native tested models. Timelines retain wide month counts, and invalid cash-age totals show an explicit unavailable reason.
+- Account summary and liquidity buckets reuse the shared balance snapshot and native checked arithmetic, with explicit incomplete totals for omitted or invalid balances.
+- Startup exposes a bounded duration-only phase record, and the browser benchmark captures it alongside app readiness. Boot ordering and readiness semantics are unchanged.
+- Household position evaluation exposes calculation failures instead of wrapped debt, payment, surplus, coverage or utilization figures. Ratios use wide checked intermediates.
+- Payoff plans reject overflowing payment budgets, balance and interest additions, and cumulative totals through an explicit checked API.
+- Age-of-money keeps full-range int64 flows and exact weighted averages without overflowing dollar-days or the rounding increment. An unrepresentable exposed window total is explicitly unavailable.
+- Added a configurable segmented control for pressed choices and tabs, with optional counts, existing class slots, stable keyed handlers, disabled choices and keyboard navigation.
+- Added an isolated nine-page browser benchmark with raw samples, matched dataset counts, build identity and machine-load metadata. Local before/after captures are documented with noise and coverage limits.
+- To-do filtering, counts and calendar preparation use a native task projection. Suggestion caches track exact freshness transitions, and keyed rows preserve local state through sorting and view changes.
+- Notification summaries, filtering and grouping use native projections and keyed components. Empty transitions preserve actions and Undo; history renders legacy message text and wins retain their seen state.
+- Dashboard budget snapshots, net-worth trend preparation and cash-forecast eligibility use native models. The hero keeps a stable hook boundary through unavailable, empty and populated data states.
+- Report time series share one monthly ledger traversal. Native report models prepare scoped series, household financial position and budget adherence with consistent FX units and checked totals.
+- Assistant briefing, starter questions and purchase attribution use native projections and complete data/scope/time memo keys. Chat typing reuses ledger facts, and partially uncategorized split receipts count once.
+- Transaction description sorting uses the same native display rule as ledger rows, including a safe raw-label fallback, and account/category indexes refresh only when their data context changes.
+- Budget income allocation delegates checked money arithmetic, state selection and chart percentages to the native budgeting package; the page retains formatting and event handling.
+- Goal summaries and ordering use tested native projections, consistent base-currency totals, explicit FX exclusions and cache keys that track deadline and pause transitions.
+- Accounts share an indexed ledger snapshot for balances, payment hints and row series. Group subtotals exclude invalid or unconvertible balances and disclose incomplete totals.
+- Architecture checks follow the canonical money calculations through extracted native view models, and calendar overflow regressions require an unavailable amount rather than preserving the old overflowing conversion.
+- Shared derived views use bounded LRU caches keyed by app identity, stored data, browser preferences, scope, and time inputs. Heavy Smart snapshots retain one context, and anomaly/action sections share the same deterministic engine pass.
 - Prepared v1.19.9 with the verified encrypted cross-browser file sync and privacy fixes.
 - The server load smoke test now waits for its watch subscription before sending writes and allows for CI load, so it cannot miss events before the watch starts.
 - Smart Import WebAssembly review tests now wait for the mocked response to finish before fixture teardown, preventing an intermittent CI render panic.
@@ -91,6 +327,7 @@ and every commit updates this file under `Unreleased`.
 - Improved Transactions date filtering, fixed calendar cell overflow, and made unusual-spend evidence readable on click.
 
 ### Added
+- Shared configurable control strips and keyed tile surfaces preserve page-specific actions, attributes, tile context, and component state during reordering. Presentation components accept already-derived content and own no financial calculations.
 - The sync privacy review now records local blobs retained after artifact deletion and the queued-snapshot constraint on safe cleanup.
 - A file-sync and privacy review records the tested two-device flow, server-visible metadata, local attachment exposure, and backup recovery limits.
 - **Regular monthly spend calculation (BASE2, not wired in yet).** `internal/regularspend` works out "Fixed
@@ -176,6 +413,8 @@ and every commit updates this file under `Unreleased`.
   wired into the app yet.
 
 ### Fixed
+- Currency conversion rejects non-finite rates and results outside the money range. An exact fallback preserves valid boundary amounts and half-away-from-zero rounding without adding allocations to ordinary conversions.
+- Bulk balance reads now omit corrupted accounts instead of returning a partial balance. Net-worth aggregation shares one ledger pass while preserving account-specific errors, archived/excluded-account rules, and duplicate-ID behavior.
 - Let an in-flight local save finish before “Start fresh” replaces the sample dataset, so the durable wipe does not lose its generation check.
 - Verify downloaded attachment bytes against the content hash in the encrypted dataset before decrypting or importing them.
 - Require HTTPS or secure WebSockets for remote sync and credential requests; allow unencrypted loopback only for local development. Reject server URLs containing user credentials, queries, or fragments.

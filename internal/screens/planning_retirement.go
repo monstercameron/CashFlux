@@ -5,21 +5,23 @@
 package screens
 
 import (
+	"errors"
+	"math"
+	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
-	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
-	"github.com/monstercameron/CashFlux/internal/montecarlo"
+	"github.com/monstercameron/CashFlux/internal/planningmodel"
 	"github.com/monstercameron/CashFlux/internal/retirement"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
-	"github.com/monstercameron/GoWebComponents/v5/css"
-	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
-	"github.com/monstercameron/GoWebComponents/v5/ui"
+	"github.com/monstercameron/GoWebComponents/v7/css"
+	. "github.com/monstercameron/GoWebComponents/v7/html/shorthand"
+	"github.com/monstercameron/GoWebComponents/v7/ui"
 )
 
 // retirementTile is the long-horizon projection card on /planning (FP-T1a,
@@ -39,6 +41,7 @@ import (
 func retirementTile(base string) ui.Node {
 	_ = uistate.UseDataRevision().Get()
 	cfg := uistate.LoadRetirementPlan()
+	facts := cachedRetirementFacts(appstate.Default, cfg, base)
 
 	onYears := ui.UseEvent(func(v string) {
 		if n, err := strconv.Atoi(v); err == nil && n >= 0 && n <= retirement.MaxYears {
@@ -58,33 +61,32 @@ func retirementTile(base string) ui.Node {
 		saveRetirementMinor(v, base, func(c *uistate.RetirementPlan, m int64) { c.AnnualSpendMinor = m })
 	})
 
-	// The starting pot is the household's own retirement accounts, not a typed
-	// number: asking someone to re-enter a balance the app already holds is how a
-	// projection comes to disagree with the accounts page it sits beside.
-	startMinor, accounts := retirementStartMinor(base)
-
-	a := retirement.Assumptions{ReturnPct: cfg.ReturnPct, InflationPct: cfg.InflationPct}
-	proj := retirement.Project(startMinor, cfg.AnnualContributionMinor, cfg.YearsToRetirement, a)
-
 	var body ui.Node
 	switch {
-	case accounts == 0:
+	case !facts.StartingPot.Available:
+		body = P(css.Class("muted"), Attr("data-testid", "plan-retire-unavailable"),
+			uistate.T("retire.balancesUnavailable"))
+	case facts.AccountCount == 0:
 		// Nothing to project from. Saying WHICH accounts would feed it beats an
 		// empty card that looks broken.
 		body = P(css.Class("muted"), Attr("data-testid", "plan-retire-none"),
 			uistate.T("retire.noAccounts"))
-	case !proj.Known:
+	case !facts.Projection.Available:
 		body = P(css.Class("muted"), Attr("data-testid", "plan-retire-unset"),
 			uistate.T("retire.needsHorizon"))
 	default:
-		body = retirementResults(proj, cfg, a, base)
+		body = retirementResults(facts, cfg, base)
+	}
+	var basis ui.Node
+	if facts.StartingPot.Available {
+		basis = P(css.Class("muted"), Attr("data-testid", "plan-retire-basis"),
+			uistate.T("retire.basis", facts.AccountCount, fmtMoney(facts.StartingPot.Value)))
 	}
 
 	return planTile("plan-retirement", planSection("plan-retirement-sec",
 		uistate.T("retire.title"), Fragment(),
 		Fragment(
-			P(css.Class("muted"), Attr("data-testid", "plan-retire-basis"),
-				uistate.T("retire.basis", accounts, fmtMoney(money.New(startMinor, base)))),
+			basis,
 			retirementInputs(cfg, base, onYears, onReturn, onInflation, onContribution, onSpend),
 			// FP-T2d: the inflation field is the household's one assumption, not this
 			// card's. Saying so keeps a reader from setting it here, seeing the
@@ -95,9 +97,78 @@ func retirementTile(base string) ui.Node {
 		)))
 }
 
+var retirementFactsCache = newViewCache[planningmodel.RetirementFacts](2)
+
+func cachedRetirementFacts(app *appstate.App, cfg uistate.RetirementPlan, base string) planningmodel.RetirementFacts {
+	accounts, accountsErr := app.AccountsChecked()
+	txns, txnsErr := app.TransactionsChecked()
+	settings, settingsErr := app.SettingsChecked()
+	settingsBase := strings.TrimSpace(settings.BaseCurrency)
+	if settingsErr == nil && settingsBase != "" && !strings.EqualFold(settingsBase, strings.TrimSpace(base)) {
+		settingsErr = errors.Join(settingsErr, errors.New("planning: base currency changed while preparing retirement facts"))
+	}
+
+	snapshot := planningmodel.Snapshot{
+		Accounts: accounts, AccountsErr: accountsErr,
+		Transactions: txns, TransactionsErr: txnsErr,
+	}
+	inputs := planningmodel.RetirementInputs{
+		Base: base, FXRates: settings.FXRates, SettingsErr: settingsErr,
+		YearsToRetirement:       cfg.YearsToRetirement,
+		AnnualContributionMinor: cfg.AnnualContributionMinor,
+		AnnualSpendMinor:        cfg.AnnualSpendMinor,
+		ReturnPct:               cfg.ReturnPct, InflationPct: cfg.InflationPct,
+	}
+	if errors.Join(accountsErr, txnsErr, settingsErr) != nil {
+		return planningmodel.PrepareRetirement(snapshot, inputs)
+	}
+
+	key := retirementFactsKey(app, cfg, base, settings.BaseCurrency, settings.FXRates)
+	return memoByRev(retirementFactsCache, key, func() planningmodel.RetirementFacts {
+		return planningmodel.PrepareRetirement(snapshot, inputs)
+	})
+}
+
+// retirementFactsKey identifies every mutable input to the deterministic
+// retirement preparation: app/store and UI revisions, exact plan assumptions,
+// the selected currency, and the full FX table. The bounded cache can therefore
+// reuse completed simulation output without retaining a result for a partial key.
+func retirementFactsKey(app *appstate.App, cfg uistate.RetirementPlan, base, settingsBase string, rates map[string]float64) string {
+	var b strings.Builder
+	b.WriteString(revKey(app))
+	b.WriteString("|base=")
+	b.WriteString(strconv.Quote(base))
+	b.WriteString("|settings-base=")
+	b.WriteString(strconv.Quote(settingsBase))
+	b.WriteString("|years=")
+	b.WriteString(strconv.Itoa(cfg.YearsToRetirement))
+	b.WriteString("|contribution=")
+	b.WriteString(strconv.FormatInt(cfg.AnnualContributionMinor, 10))
+	b.WriteString("|spend=")
+	b.WriteString(strconv.FormatInt(cfg.AnnualSpendMinor, 10))
+	b.WriteString("|return=")
+	b.WriteString(strconv.FormatUint(math.Float64bits(cfg.ReturnPct), 16))
+	b.WriteString("|inflation=")
+	b.WriteString(strconv.FormatUint(math.Float64bits(cfg.InflationPct), 16))
+
+	codes := make([]string, 0, len(rates))
+	for code := range rates {
+		codes = append(codes, code)
+	}
+	sort.Strings(codes)
+	for _, code := range codes {
+		b.WriteString("|fx=")
+		b.WriteString(strconv.Quote(code))
+		b.WriteByte(':')
+		b.WriteString(strconv.FormatUint(math.Float64bits(rates[code]), 16))
+	}
+	return b.String()
+}
+
 // retirementResults renders the projection, the drawdown and the FIRE number.
-func retirementResults(proj retirement.Projection, cfg uistate.RetirementPlan,
-	a retirement.Assumptions, base string) ui.Node {
+func retirementResults(facts planningmodel.RetirementFacts, cfg uistate.RetirementPlan, base string) ui.Node {
+	proj := facts.Projection.Value
+	a := facts.Assumptions
 
 	// Real first. The nominal figure is beside it, deliberately smaller, because
 	// it is the one that flatters and the one that means less.
@@ -105,20 +176,18 @@ func retirementResults(proj retirement.Projection, cfg uistate.RetirementPlan,
 	nominal := money.New(proj.FinalNominalMinor, base)
 
 	var drawNode ui.Node = Fragment()
-	if cfg.AnnualSpendMinor > 0 {
+	if facts.Drawdown.Available {
 		// The drawdown horizon is deliberately generous: the question is "does it
 		// last", and a horizon that ends before the money does would answer it by
 		// running out of chart rather than out of money.
-		d := retirement.RunDrawdown(proj.FinalNominalMinor, cfg.AnnualSpendMinor, retirementDrawdownYears, a)
+		d := facts.Drawdown.Value
 		switch {
-		case !d.Known:
-			drawNode = Fragment()
 		case d.Depleted:
 			drawNode = P(ClassStr("retire-read retire-short"), Attr("data-testid", "plan-retire-lasts"),
 				uistate.T("retire.lastsYears", d.LastsYears))
 		default:
 			drawNode = P(ClassStr("retire-read retire-ok"), Attr("data-testid", "plan-retire-lasts"),
-				uistate.T("retire.lastsBeyond", retirementDrawdownYears,
+				uistate.T("retire.lastsBeyond", planningmodel.RetirementDrawdownYears,
 					fmtMoney(money.New(d.EndingRealMinor, base))))
 		}
 	}
@@ -129,40 +198,36 @@ func retirementResults(proj retirement.Projection, cfg uistate.RetirementPlan,
 	// average with the bad years first can exhaust a portfolio the same years at
 	// the end would have left intact.
 	var mcNode ui.Node = Fragment()
-	if cfg.AnnualSpendMinor > 0 {
-		mc, ok := montecarlo.Run(proj.FinalNominalMinor, cfg.AnnualSpendMinor, retirementDrawdownYears,
-			montecarlo.Config{MeanReturnPct: a.ReturnPct, InflationPct: a.InflationPct})
-		if ok {
-			tone := "retire-ok"
-			if mc.SuccessRatePct < 80 {
-				tone = "retire-short"
-			}
-			var failNode ui.Node = Fragment()
-			if mc.Depleted {
-				// "92% success" with the failures in year 4 is a different situation
-				// from "92%" with them in year 28, and the bare percentage hides which.
-				failNode = P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "plan-retire-mc-fail"),
-					uistate.T("retire.mcFail", mc.WorstDepletionYear))
-			}
-			mcNode = Fragment(
-				P(ClassStr("retire-read "+tone), Attr("data-testid", "plan-retire-mc"),
-					uistate.T("retire.mc", mc.SuccessRatePct, retirementDrawdownYears)),
-				failNode,
-				// The method is stated, not implied. A probability with no method is
-				// a number people plan a decade around and cannot check.
-				P(css.Class("muted", tw.Text12), Attr("data-testid", "plan-retire-mc-method"),
-					uistate.T("retire.mcMethod", mc.Iterations, mc.Seed)),
-			)
+	if facts.MonteCarlo.Available {
+		mc := facts.MonteCarlo.Value
+		tone := "retire-ok"
+		if mc.SuccessRatePct < 80 {
+			tone = "retire-short"
 		}
+		var failNode ui.Node = Fragment()
+		if mc.Depleted {
+			// "92% success" with the failures in year 4 is a different situation
+			// from "92%" with them in year 28, and the bare percentage hides which.
+			failNode = P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "plan-retire-mc-fail"),
+				uistate.T("retire.mcFail", mc.WorstDepletionYear))
+		}
+		mcNode = Fragment(
+			P(ClassStr("retire-read "+tone), Attr("data-testid", "plan-retire-mc"),
+				uistate.T("retire.mc", mc.SuccessRatePct, planningmodel.RetirementDrawdownYears)),
+			failNode,
+			// The method is stated, not implied. A probability with no method is
+			// a number people plan a decade around and cannot check.
+			P(css.Class("muted", tw.Text12), Attr("data-testid", "plan-retire-mc-method"),
+				uistate.T("retire.mcMethod", mc.Iterations, mc.Seed)),
+		)
 	}
 
 	var fireNode ui.Node = Fragment()
-	if n, ok := retirement.FIRENumber(cfg.AnnualSpendMinor, retirement.DefaultSWRPct); ok {
-		years, reachable := retirement.YearsToFI(
-			proj.Years[0].NominalMinor, cfg.AnnualContributionMinor, n, a.RealReturnPct())
-		line := uistate.T("retire.fireUnreachable", fmtMoney(money.New(n, base)))
-		if reachable {
-			line = uistate.T("retire.fireYears", fmtMoney(money.New(n, base)), years)
+	if facts.FI.Available {
+		fi := facts.FI.Value
+		line := uistate.T("retire.fireUnreachable", fmtMoney(money.New(fi.TargetMinor, base)))
+		if fi.Reachable {
+			line = uistate.T("retire.fireYears", fmtMoney(money.New(fi.TargetMinor, base)), fi.Years)
 		}
 		fireNode = Fragment(
 			P(css.Class("retire-read"), Attr("data-testid", "plan-retire-fire"), line),
@@ -191,13 +256,6 @@ func retirementResults(proj retirement.Projection, cfg uistate.RetirementPlan,
 	)
 }
 
-// retirementDrawdownYears is how far the "will it last" run looks.
-//
-// Forty years, so a retirement at 60 is covered to 100. A shorter horizon would
-// answer "does it last" by running out of chart rather than out of money, which
-// reads as a pass.
-const retirementDrawdownYears = 40
-
 // retirementInputs renders the adjustable assumptions.
 func retirementInputs(cfg uistate.RetirementPlan, base string,
 	onYears, onReturn, onInflation, onContribution, onSpend ui.Handler) ui.Node {
@@ -220,36 +278,6 @@ func retirementInputs(cfg uistate.RetirementPlan, base string,
 		num(uistate.T("retire.inflation"), "plan-retire-inflation",
 			strconv.FormatFloat(cfg.InflationPct, 'f', -1, 64), onInflation, "0.1"),
 	)
-}
-
-// retirementStartMinor sums the household's retirement-type accounts, and
-// reports how many fed the figure.
-//
-// Reading the accounts rather than asking for a number is the point: a typed
-// starting balance is one more thing to keep in sync, and the moment it drifts
-// the projection disagrees with the accounts page beside it.
-func retirementStartMinor(base string) (int64, int) {
-	app := appstate.Default
-	if app == nil {
-		return 0, 0
-	}
-	txns := app.Transactions()
-	var total int64
-	var n int
-	for _, a := range app.Accounts() {
-		if a.Archived || a.Type != domain.TypeRetirement {
-			continue
-		}
-		n++
-		bal := a.OpeningBalance.Amount
-		for _, t := range txns {
-			if t.AccountID == a.ID {
-				bal += t.Amount.Amount
-			}
-		}
-		total += bal
-	}
-	return total, n
 }
 
 // saveRetirementFloat parses a percent field and persists it. A value that does
