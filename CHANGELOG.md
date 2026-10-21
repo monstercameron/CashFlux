@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- A two-browser full-backup regression now verifies that files from two workspaces survive a complete backup, restore, workspace switch, and byte-for-byte download on the receiving browser.
 - The hosted corrupt-checkpoint and revoked-session browser regression now runs in the required deploy gate against CI's disposable local server.
 - The hosted corrupt-checkpoint regression now revokes the disposable account's session, reloads, and verifies that sign-in returns without exposing the financial shell or changing the unreadable bytes.
 - An isolated hosted-browser regression now verifies that sign-in with an unreadable local checkpoint keeps the financial shell hidden and preserves the exact checkpoint bytes through the empty-account recovery choice.
@@ -16,6 +17,7 @@ and every commit updates this file under `Unreleased`.
 - The device-erasure audit now identifies retained workspace, queue, file, credential, and key records that the current “Erase everything” action does not remove, with acceptance criteria for a truthful full erase.
 
 ### Fixed
+- Full backups now stop if any registered workspace dataset is unavailable, and restore rejects missing, unreadable, duplicated, or misaligned workspace data before replacing local state.
 - AI Settings now owns the server/direct route switch and the corresponding key controls. Server mode accepts a separate key only when explicitly saved to the server; direct mode shows the device key and endpoint. Cloud settings no longer duplicates server AI setup, and the route switch leaves encrypted sync connected.
 - Hosted Cloud settings now rely on the account gate and show only protection or first sync tasks. An authentication rejection triggers a fresh account check, and an old check cannot validate a replacement session. Portable server choices sit under Advanced while the selected destination remains visible.
 - In server AI mode, the assistant and AI settings load the server's allowed models through authenticated gRPC instead of fetching directly from OpenAI in the browser. The settings text now describes the selected route and does not claim a device key is required when server AI is active.
