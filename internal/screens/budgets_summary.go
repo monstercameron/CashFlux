@@ -226,7 +226,7 @@ type budgetSummaryPoolResult struct {
 }
 
 // budgetSummaryPool builds the summary pool section.
-func budgetSummaryPool(vw period.Window, v budgetView, hist bool, normalizedBudgetTotal int64) budgetSummaryPoolResult {
+func budgetSummaryPool(vw period.Window, v budgetView, hist bool, normalizedBudgetTotal int64, normalizationOK bool) budgetSummaryPoolResult {
 	// The spend figure the graph shows: this month by default; last period's total when
 	// the "Last month's spend" overlay is on, so the top graph matches the tiles.
 	// The band's geometry (spent-of-limit fill, overage segment, tone thresholds)
@@ -256,15 +256,14 @@ func budgetSummaryPool(vw period.Window, v budgetView, hist bool, normalizedBudg
 	// The sinking-fund commitment checks against the method's still-unallocated
 	// pool: To-Assign for zero-based, income − budgeted for simple. Envelope has no
 	// such pool (money lives in the envelopes), so it never alerts there.
+	pool := budgetview.PreparePool(budgetview.PoolInput{
+		Method: v.Method, Expected: v.BannerIncome, Rollover: v.RolledOver,
+		Budgeted: normalizedBudgetTotal, Fixed: v.SavingsAssigned, PlanKnown: normalizationOK,
+	})
 	var fundFree int64
-	fundHasPool := false
-	switch v.Method {
-	case budgeting.MethodZeroBased:
-		fundFree = budgeting.ToAssign(v.BannerIncome+v.RolledOver, normalizedBudgetTotal+v.SavingsAssigned)
-		fundHasPool = true
-	case budgeting.MethodSimple:
-		fundFree = v.BannerIncome - normalizedBudgetTotal
-		fundHasPool = true
+	fundHasPool := pool.Known && pool.HasPool
+	if fundHasPool {
+		fundFree = pool.Amount
 	}
 	// zbbHero (2026-08-31): in zero-based the hero figure is To Assign, not "Left".
 	// Zero-based asks exactly one question — is every dollar assigned? — and the
@@ -464,7 +463,8 @@ func budgetSummaryAllocation(p budgetSummaryAllocationProps) budgetSummaryAlloca
 	if !p.futurePeriod {
 		alloc = budgetIncomeAllocation(p.planView, p.basisBtn, p.hist, true)
 	}
-	hasAlloc := p.v.BannerIncome+p.v.RolledOver > 0
+	incomeBasis, incomeBasisErr := money.Add(p.v.BannerIncome, p.v.RolledOver)
+	hasAlloc := incomeBasisErr == nil && incomeBasis > 0
 
 	// Zero-based drops the loader band entirely. The band is a spent/budgeted/left
 	// reading on its own axis; beneath a bar that plots the same money against

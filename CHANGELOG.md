@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Budget summary pool calculations preserve unknown plans and arithmetic overflow.
 - Goal-funded budget details show unavailable results for missing conversion rates or arithmetic overflow.
 - Budget funding and month-close actions preserve unavailable income and assignment facts instead of treating errors as zero.
 - Custom-field edit forms share the native, tested value-to-string converter.

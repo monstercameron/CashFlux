@@ -102,7 +102,7 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 		uiw.Icon(icon.TrendingUp, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
 		Span(uistate.T("budgets.basisButton")))
 
-	summaryPool := budgetSummaryPool(vw, v, summaryPlan.hist, summaryPlan.normalizedBudgetTotal)
+	summaryPool := budgetSummaryPool(vw, v, summaryPlan.hist, summaryPlan.normalizedBudgetTotal, summaryPlan.normalizationOK)
 
 	// BUD2: count the same over-or-near set that the list's attention filter uses.
 	for _, s := range v.Statuses {

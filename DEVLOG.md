@@ -1,3 +1,7 @@
+## 2026-10-21 - Prepare checked budget pool facts
+
+Native pool preparation preserves method-specific rollover and assignment semantics. The adapter carries actual normalization status and suppresses overflowed allocation basis. All370 native packages and1101 Screens WASM tests passed before final main integration.
+
 ## 2026-10-21 - Preserve errors in goal-funded budget details
 
 Budget rows now call SummarizeChecked and retain its error alongside memoized results; overflow in limit comparisons or allocated funding remains visible as unavailable. Native goalfunded tests and the focused v7 rendered row regression passed missing-FX, overflow and valid controls. Existing memo call-count and revision tests passed in the full v7 Screens run. Source-read boundaries outside this slice remain follow-up work.
