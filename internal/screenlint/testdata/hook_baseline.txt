@@ -129,7 +129,6 @@ screens/recurring_rows.go:rhyOverdueRow
 screens/reports_annual.go:rptaHistRow
 screens/reports_events.go:reportEventChips
 screens/reports_range.go:reportRangePicker
-screens/reports_tax.go:taxDepthSection
 screens/reports_tax.go:taxScheduleTable
 screens/roundups_card.go:goalsRoundUpCard
 screens/roundups_card.go:roundupConfigForm

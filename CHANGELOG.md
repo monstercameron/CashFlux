@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Tax report net-income facts use canonical split/refund aggregation and explicit source failures outside markup.
 - Household spending, period income and fractional ownership propagate arithmetic failures instead of wrapping.
 - Category descendant unions share one adjacency map and avoid revisiting overlapping subtrees.
 - Document assistant data, tools, calculation paths, regression gates and remaining boundaries.

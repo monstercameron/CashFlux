@@ -5,6 +5,7 @@
 package screens
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -16,6 +17,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/esttax"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/schedulec"
+	"github.com/monstercameron/CashFlux/internal/taxgather"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -50,6 +52,20 @@ func taxDepthSection(props taxSectionProps) ui.Node {
 	if app == nil {
 		return Fragment()
 	}
+	return WithKey(ui.CreateElement(taxDepthContent, taxDepthContentProps{App: app, Window: props, Revision: revKey(app), Language: string(uistate.ActiveLanguage())}), strconv.FormatUint(app.InstanceID(), 10))
+}
+
+type taxDepthContentProps struct {
+	App                *appstate.App
+	Window             taxSectionProps
+	Revision, Language string
+}
+
+// taxDepthContent owns controls only while an App is mounted. Its hooks remain
+// unconditional through empty, loaded and failed-source transitions.
+func taxDepthContent(p taxDepthContentProps) ui.Node {
+	app, props := p.App, p.Window
+	prepared := ui.UseMemo(func() taxIncomePreparation { return taxNetIncomeForWindow(app, props) }, p.Revision, props.From, props.To, props.Year)
 	cfg := uistate.LoadTaxPlan()
 	rateS := ui.UseState("")
 	priorTaxS := ui.UseState("")
@@ -104,7 +120,7 @@ func taxDepthSection(props taxSectionProps) ui.Node {
 		uistate.T("tax.secSub"), "", Fragment(
 			taxScheduleTable(sched, nameOf, fmtM, exportCSV),
 			taxGainsBlock(gains, fmtM),
-			taxEstimateBlock(app, cfg, props, rates, base, fmtM, rateS, priorTaxS, paidS, onRate, onPriorTax, onPaid),
+			taxEstimateBlock(cfg, prepared, base, fmtM, rateS, priorTaxS, paidS, onRate, onPriorTax, onPaid),
 		))
 }
 
@@ -236,22 +252,22 @@ func taxGainsBlock(g capgains.Summary, fmtM func(int64) string) ui.Node {
 }
 
 // taxEstimateBlock renders the quarterly estimate and the assumptions it needs.
-func taxEstimateBlock(app *appstate.App, cfg uistate.TaxPlan, props taxSectionProps,
-	rates currency.Rates, base string, fmtM func(int64) string,
-	rateS, priorTaxS, paidS ui.State[string],
-	onRate, onPriorTax, onPaid ui.Handler) ui.Node {
-
-	// Net business income for the window: income less deductible expense. Both
-	// come from the same ledger the rest of the report reads, so the estimate
-	// cannot describe a different business from the section above it.
-	net := taxNetIncomeMinor(app, props.From, props.To, rates)
-
-	in := esttax.Inputs{
-		NetIncomeMinor: net, EffectiveRatePct: cfg.EffectiveRatePct,
-		PriorYearTaxMinor: cfg.PriorYearTaxMinor, PriorYearIncomeMinor: cfg.PriorYearIncomeMinor,
-		PaidToDateMinor: cfg.PaidToDateMinor, Now: time.Now(),
+func taxEstimateBlock(cfg uistate.TaxPlan, prepared taxIncomePreparation,
+	base string, fmtM func(int64) string,
+	rateS, priorTaxS, paidS ui.State[string], onRate, onPriorTax, onPaid ui.Handler) ui.Node {
+	// esttax remains the legacy estimator in this bounded extraction. Its policy,
+	// currency provenance and YTD-window eligibility are separate follow-up work.
+	// Source failures must never be passed to it as a fabricated zero net income.
+	net := prepared.Value.NetMinor
+	var est esttax.Estimate
+	ok := false
+	if prepared.Err == nil {
+		est, ok = esttax.Compute(esttax.Inputs{
+			NetIncomeMinor: net, EffectiveRatePct: cfg.EffectiveRatePct,
+			PriorYearTaxMinor: cfg.PriorYearTaxMinor, PriorYearIncomeMinor: cfg.PriorYearIncomeMinor,
+			PaidToDateMinor: cfg.PaidToDateMinor, Now: time.Now(),
+		})
 	}
-	est, ok := esttax.Compute(in)
 
 	fields := Div(css.Class("tax-inputs"),
 		labeledField(uistate.T("tax.rateLabel"),
@@ -272,7 +288,9 @@ func taxEstimateBlock(app *appstate.App, cfg uistate.TaxPlan, props taxSectionPr
 	)
 
 	var body ui.Node
-	if !ok {
+	if prepared.Err != nil {
+		body = P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "tax-est-unavailable"), uistate.T("tax.netIncomeUnavailable", prepared.Err.Error()))
+	} else if !ok {
 		// Say WHICH fact is missing. "Cannot estimate" with no reason is a dead end
 		// the reader has to guess their way out of.
 		reason := uistate.T("tax.estNeedRate")
@@ -317,39 +335,50 @@ func taxEstimateBlock(app *appstate.App, cfg uistate.TaxPlan, props taxSectionPr
 
 	return Div(css.Class("tax-block"),
 		rptaSubG("◷", "neutral", uistate.T("tax.estTitle"), nil),
+		P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "tax-est-household"), uistate.T("tax.netIncomeHousehold")),
 		fields,
 		body,
 	)
 }
 
-// taxNetIncomeMinor is income less deductible expense over the window.
-func taxNetIncomeMinor(app *appstate.App, from, to time.Time, rates currency.Rates) int64 {
-	deductible := map[string]bool{}
-	for _, c := range app.Categories() {
-		if c.Deductible {
-			deductible[c.ID] = true
-		}
+type taxIncomePreparation struct {
+	Value taxgather.NetIncome
+	Err   error
+}
+
+// taxNetIncomeForWindow acquires the same household record population as the
+// existing tax section, using fallible reads and explicit workspace refund links.
+func taxNetIncomeForWindow(app *appstate.App, window taxSectionProps) taxIncomePreparation {
+	unavailable := func(err error) taxIncomePreparation { return taxIncomePreparation{Err: err} }
+	if app == nil || app.Store() == nil {
+		return unavailable(fmt.Errorf("local workspace is unavailable"))
 	}
-	var net int64
-	for _, t := range app.Transactions() {
-		if !t.CountsInReports() || t.IsTransfer() {
-			continue
-		}
-		if t.Date.Before(from) || !t.Date.Before(to) {
-			continue
-		}
-		amt, err := rates.ToBase(t.Amount)
-		if err != nil {
-			continue
-		}
-		switch {
-		case t.IsIncome():
-			net += amt.Amount
-		case deductible[t.CategoryID]:
-			net += amt.Amount // already negative
-		}
+	settings, err := app.Store().GetSettings()
+	if err != nil {
+		return unavailable(fmt.Errorf("read tax settings: %w", err))
 	}
-	return net
+	base := settings.BaseCurrency
+	if base == "" {
+		base = "USD"
+	}
+	categories, err := app.CategoriesChecked()
+	if err != nil {
+		return unavailable(fmt.Errorf("read tax categories: %w", err))
+	}
+	transactions, err := app.Store().ListTransactions()
+	if err != nil {
+		return unavailable(fmt.Errorf("read tax transactions: %w", err))
+	}
+	links, err := app.Store().ListTxnLinks()
+	if err != nil {
+		return unavailable(fmt.Errorf("read tax refund links: %w", err))
+	}
+	reportModelBuilt("tax-net-income")
+	value, err := taxgather.NetIncomeWithLinks(taxgather.NetIncomeInput{Transactions: transactions, Categories: categories, Links: links, Year: window.Year, From: window.From, To: window.To, Rates: currency.Rates{Base: base, Rates: settings.FXRates}})
+	if err != nil {
+		return unavailable(err)
+	}
+	return taxIncomePreparation{Value: value}
 }
 
 // taxFieldValue prefers what the user is typing over what was stored, so a field

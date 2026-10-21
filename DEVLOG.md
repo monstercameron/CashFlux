@@ -1,3 +1,7 @@
+## 2026-10-21 - Prepare tax report net income in a checked native model
+
+Added immutable taxgather.NetIncomeWithLinks with exact windows, checked income/deductible reductions and canonical refund policy. The tax section reads fresh fallible sources and memoizes prepared facts; unavailable sources bypass the legacy estimator instead of supplying zero. Household scope is explicit and hooks are isolated in a keyed child. Native tests/vet and three actual-App WASM cases passed; removed only the stale hook-baseline exception. Estimator policy and the benchmark optimization remain separate follow-ups.
+
 ## 2026-10-21 - Check shared household money primitives
 
 Hardened canonical per-member spending magnitudes and reductions, period-income accumulation, equal-member apportionment and fractional owner splits. Added a checked signed Hamilton split using existing money.Allocate; retained the deprecated legacy signature unchanged, with no production callers remaining. Ten new native tests cover MinInt64, large fractions, rounding/ties, FX, overflow, no partial results and immutability. Full reports, allocate and ledger native suites and vet passed. This prepares the shared native household model; no UI change in this feature.
