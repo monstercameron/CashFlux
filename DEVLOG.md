@@ -1,3 +1,7 @@
+## 2026-10-21 - Native Visual Builder live data preparation
+
+Prepared named datasets and net-worth change sources natively, reading each ordered collection once per successful snapshot. Cache identity includes app/store, mutation revision, local day, base and FX. Source errors are explicit and uncached; unavailable net-worth facts do not block unrelated graphs. Native preparation, settings, i18n and architecture tests pass; both focused Builder WASM host cases pass. Updated the architecture test to require canonical nwchange in the native layer, without adding exceptions.
+
 ## 2026-10-21 - Native finite settings validation
 
 Extracted FX/APR parsing and guarded the shared rate setter. Existing blank/invalid clearing behavior and write order remain. NaN, infinity and numeric overflow no longer persist as rates. Native settingsinput tests pass; the complete application WASM build passes.

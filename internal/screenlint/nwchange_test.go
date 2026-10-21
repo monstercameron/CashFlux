@@ -116,7 +116,6 @@ func TestNwChangeSeamIsActuallyUsed(t *testing.T) {
 		"screens/dashboard.go",
 		"screens/accounts_tiles.go",
 		"screens/networth.go",
-		"screens/widget_builder.go",
 		"engineenv/networthvars.go",
 	}
 	for _, path := range want {
@@ -128,6 +127,19 @@ func TestNwChangeSeamIsActuallyUsed(t *testing.T) {
 		if !strings.Contains(src, "nwchange.") {
 			t.Errorf("%s no longer reads net-worth change through internal/nwchange (C341)", path)
 		}
+	}
+	// The Builder delegates its string and series preparation to a native model.
+	// Keep the route adapter thin while ensuring that model still uses nwchange's
+	// canonical MonthToDate window for the Builder's net-worth string source.
+	builder := files["screens/widget_builder.go"]
+	if !strings.Contains(builder, "widgetbuilderdata.Prepare(") {
+		t.Error("widget builder no longer delegates its prepared snapshot to the native builder data model")
+	}
+	builderData, ok := files["widgetbuilderdata/prepare.go"]
+	if !ok {
+		t.Error("widgetbuilderdata/prepare.go not found — the C341 guard needs updating")
+	} else if !strings.Contains(builderData, "nwchange.MonthToDateChange(") || !strings.Contains(builderData, "ledger.NetWorthSeries(") {
+		t.Error("widget builder data model no longer uses the canonical net-worth change and series seams")
 	}
 	// The hero delegates its expensive trend to a native model. Require that
 	// connection as well as the model's canonical window seam above, so moving

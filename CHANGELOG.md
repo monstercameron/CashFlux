@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Visual Builder shares typed native datasets with dependency-complete successful snapshot reuse.
 - Settings FX and APR inputs use native finite-value validation.
 - Planning renders independent checked native forecast, affordability, runway and spending facts.
 - Plan and Health use checked native financial inputs with independent availability.
