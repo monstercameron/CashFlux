@@ -1,3 +1,7 @@
+## 2026-10-21 - Native budget window and flex meter facts
+
+Preserved current calendar rounding, degenerate-window behavior, strict meter thresholds and date policy. Checked financial readings remain independently available; CSS and localized labels stay in the view. Native budgeting/budgetview tests and vet pass; both focused Flex actual-host WASM groups pass. This cheap reducer extraction makes no performance claim.
+
 ## 2026-10-21 - Shared native bill budget-fit preparation
 
 Removed repeated UpcomingAll and descendant preparation from each displayed bill. Checked native spent, pending, FX and fit arithmetic retain first-budget and half-open-window policies, distinguishing no budget from unavailable facts. Native model tests and vet pass; the focused Bills WASM case passes for missing and refreshed FX. Shared bill-category identity remains available to transaction matching through the native helper.

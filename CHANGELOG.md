@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Budget flex views delegate window proration, meter verdicts and days-left facts to native models.
 - Bills prepare shared upcoming flows and category-budget indexes before evaluating checked fit facts.
 - Recurring views use checked native cadence, FX, occurrence and monthly facts.
 - Visual Builder shares typed native datasets with dependency-complete successful snapshot reuse.
