@@ -1,3 +1,7 @@
+## 2026-10-21 - Checked goal and reservation formula facts
+
+Added checked bill and goal commitment helpers, canonical goal coverage and task progress inputs, checked idle cash arithmetic, and reserved unavailable atom names. Native safespend and engineenv suites and vet passed; independent known facts remain available when related financial calculations fail.
+
 ## 2026-10-21 - Checked Assistant subscription evidence
 
 Added checked annual cadence normalization and a native preparation path sharing existing negotiation output/script logic. Active negative schedules and past eligible charges are read afresh; unscheduled cost cadence stays unknown, and nonmonthly or mixed-FX evidence does not support a nominal price-rise claim. Missing FX, ambiguous matches and overflow are explicit. Native recurring/negotiationprep tests and vet passed; all three actual-tool WASM groups passed in integrated pass9 retry.

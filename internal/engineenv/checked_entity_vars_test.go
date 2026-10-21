@@ -124,3 +124,66 @@ func TestAccountDifferenceFieldsOmitOnOverflow(t *testing.T) {
 		}
 	}
 }
+
+func TestGoalVariablesKeepProgressWhenBaseFXIsUnavailableAndReserveMoneyFields(t *testing.T) {
+	now := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
+	goal := domain.Goal{ID: "g", Name: "Foreign", Kind: domain.GoalKindFinancial,
+		TargetAmount: money.New(10000, "EUR"), CurrentAmount: money.New(5000, "EUR")}
+	vars := Vars(Data{
+		Goals: []domain.Goal{goal}, Rates: currency.Rates{Base: "USD"}, Now: now,
+		Molecules: []domain.Molecule{
+			{Name: "goal_foreign_target", Formula: "999"},
+			{Name: "goal_foreign_saved", Formula: "999"},
+			{Name: "goal_foreign_earmarked", Formula: "999"},
+			{Name: "goal_foreign_coverage", Formula: "999"},
+		},
+	})
+	if got, ok := vars["goal_foreign_progress"]; !ok || got != 50 {
+		t.Errorf("progress = %v, present %v; want known native-currency 50%%", got, ok)
+	}
+	if got, ok := vars["goal_foreign_done"]; !ok || got != 0 {
+		t.Errorf("done = %v, present %v; want known false", got, ok)
+	}
+	for _, name := range []string{"goal_foreign_target", "goal_foreign_saved", "goal_foreign_remaining", "goal_foreign_earmarked", "goal_foreign_coverage", "goal_foreign_covered_pct"} {
+		if _, ok := vars[name]; ok {
+			t.Errorf("unavailable %s should be omitted and reserved from molecule replacement", name)
+		}
+	}
+}
+
+func TestGoalReservationOverflowOmitsDerivedTotals(t *testing.T) {
+	now := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
+	goal := domain.Goal{ID: "g", Name: "Overflow", TargetAmount: money.New(100, "USD"), CurrentAmount: money.New(0, "USD"),
+		Allocations: []domain.GoalAllocation{{Amount: money.New(math.MaxInt64, "USD")}, {Amount: money.New(1, "USD")}}}
+	vars := Vars(Data{
+		Goals: []domain.Goal{goal}, Rates: currency.Rates{Base: "USD"}, Now: now,
+		Molecules: []domain.Molecule{
+			{Name: "earmarked_total", Formula: "999"},
+			{Name: "goal_overflow_earmarked", Formula: "999"},
+			{Name: "goal_overflow_coverage", Formula: "999"},
+			{Name: "goal_overflow_covered_pct", Formula: "999"},
+		},
+	})
+	for _, name := range []string{"earmarked_total", "goal_overflow_earmarked", "goal_overflow_coverage", "goal_overflow_covered_pct"} {
+		if _, ok := vars[name]; ok {
+			t.Errorf("unavailable %s should be omitted and reserved", name)
+		}
+	}
+}
+
+func TestGoalCommitmentFXFailureOmitsDependentAtoms(t *testing.T) {
+	now := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
+	goal := domain.Goal{ID: "g", Name: "Trip", TargetAmount: money.New(12000, "EUR"), TargetDate: now.AddDate(0, 2, 0)}
+	vars := Vars(Data{
+		Goals: []domain.Goal{goal}, Rates: currency.Rates{Base: "USD"}, Now: now,
+		Molecules: []domain.Molecule{
+			{Name: "goal_needs", Formula: "999"},
+			{Name: "idle_cash", Formula: "999"},
+		},
+	})
+	for _, name := range []string{"goal_needs", "idle_cash", "idle_cash_forgone_annual"} {
+		if _, ok := vars[name]; ok {
+			t.Errorf("FX-dependent %s should be omitted and reserved", name)
+		}
+	}
+}

@@ -273,6 +273,9 @@ func Vars(d Data) map[string]float64 {
 	for k := range out {
 		atoms[k] = true
 	}
+	for _, name := range atomNames {
+		atoms[name] = true
+	}
 	// An unavailable budget atom remains reserved. A molecule that normally
 	// shadows it must not replace a failed spending calculation with a safe zero.
 	for _, base := range BudgetVarBases(d.Budgets) {
@@ -292,6 +295,11 @@ func Vars(d Data) map[string]float64 {
 	}
 	for _, base := range AccountVarBases(d.Accounts) {
 		for _, field := range AccountVarFields {
+			atoms[base.Prefix+field] = true
+		}
+	}
+	for _, base := range GoalVarBases(d.Goals) {
+		for _, field := range GoalVarFields {
 			atoms[base.Prefix+field] = true
 		}
 	}
@@ -428,14 +436,16 @@ func computeAtoms(d Data) map[string]float64 {
 	_, monthEnd := dateutil.MonthRange(d.Now)
 	toBase := safespend.ToBaseFunc(d.Rates)
 	billCommitmentErr := scheduledBillMagnitudeError(d.Accounts, d.Recurring)
+	var billsDue int64
 	if billCommitmentErr != nil {
 		d.BillsSmart.Unavailable = true
+	} else {
+		billsDue, billCommitmentErr = safespend.BillsDueBeforeChecked(d.Accounts, d.Recurring, d.Now, monthEnd, checkedRates)
+		if billCommitmentErr != nil {
+			d.BillsSmart.Unavailable = true
+		}
 	}
-	var billsDue int64
-	if billCommitmentErr == nil {
-		billsDue = safespend.BillsDueBefore(d.Accounts, d.Recurring, d.Now, monthEnd, toBase)
-	}
-	goalNeeds := safespend.GoalContributionsProrated(d.Goals, d.Now, toBase)
+	goalNeeds, goalNeedsErr := safespend.GoalContributionsProratedChecked(d.Goals, d.Now, checkedRates)
 	// LF-6: how long the liquid balance lasts at the current burn.
 	//
 	// The burn is a TRAILING three-month average, deliberately NOT the selected
@@ -460,18 +470,36 @@ func computeAtoms(d Data) map[string]float64 {
 	// idle-cash figure (AC15): liquid cash beyond this month's committed bills + goal
 	// set-asides, priced at the user's benchmark yield. Same committed basis as the
 	// safe_to_spend molecule, so the two figures reconcile.
-	idle := idlecash.Evaluate(idlecash.Inputs{
-		LiquidMinor:         liquid.Amount,
-		CommittedMinor:      billsDue + goalNeeds,
-		BenchmarkAPRPercent: d.IdleBenchmarkAPRPercent,
-	})
+	var idle idlecash.Result
+	idleErr := errors.Join(billCommitmentErr, goalNeedsErr, liquidErr)
+	if idleErr == nil {
+		committed, err := money.Add(billsDue, goalNeeds)
+		if err == nil {
+			_, err = money.Sub(liquid.Amount, committed)
+		}
+		if err != nil {
+			idleErr = err
+		} else {
+			idle = idlecash.Evaluate(idlecash.Inputs{
+				LiquidMinor:         liquid.Amount,
+				CommittedMinor:      committed,
+				BenchmarkAPRPercent: d.IdleBenchmarkAPRPercent,
+			})
+		}
+	}
 	// earmarked_total: Σ virtual allocations across all goals (base minor units). Money
 	// reserved-in-place for goals but NOT moved — the pool a decision layer can subtract
 	// from liquid cash to see what's genuinely unspoken-for.
 	var earmarkedTotal int64
+	var earmarkedErr error
 	for _, g := range d.Goals {
-		for _, al := range g.Allocations {
-			earmarkedTotal += toBase(al.Amount.Amount, al.Amount.Currency)
+		goalEarmarked, err := goals.AllocationTotal(g, checkedRates, base)
+		if err == nil {
+			earmarkedTotal, err = money.Add(earmarkedTotal, goalEarmarked.Amount)
+		}
+		if err != nil {
+			earmarkedErr = err
+			break
 		}
 	}
 
@@ -542,11 +570,17 @@ func computeAtoms(d Data) map[string]float64 {
 	}
 	if liquidErr != nil {
 		delete(out, "liquid_cash")
-		delete(out, "idle_cash")
-		delete(out, "idle_cash_forgone_annual")
 	}
 	if billCommitmentErr != nil {
 		delete(out, "bills_due")
+	}
+	if goalNeedsErr != nil {
+		delete(out, "goal_needs")
+	}
+	if earmarkedErr != nil {
+		delete(out, "earmarked_total")
+	}
+	if idleErr != nil {
 		delete(out, "idle_cash")
 		delete(out, "idle_cash_forgone_annual")
 	}
@@ -559,7 +593,7 @@ func computeAtoms(d Data) map[string]float64 {
 	addDailyAllowanceVars(out, d, major, start, end)
 	addAccountVars(out, d, major, checkedRates, bals, clearedBals)
 	addAccountFlowVars(out, d, major, checkedRates, start, end)
-	addGoalVars(out, d, major, toBase)
+	addGoalVars(out, d, major, checkedRates)
 	addDebtVars(out, d, major, toBase, bals)
 	addPoolVars(out, d, major, toBase, bals)
 	addGroupVars(out, d, major, toBase, bals)
@@ -1067,50 +1101,90 @@ func addAllocVars(out map[string]float64, d Data, major func(int64) float64) {
 //
 // Money amounts are FX-converted to the base currency. Name collisions are disambiguated
 // with a numeric suffix in stable goal order; archived goals still expose their variables.
-func addGoalVars(out map[string]float64, d Data, major func(int64) float64, toBase func(int64, string) int64) {
+func addGoalVars(out map[string]float64, d Data, major func(int64) float64, rates currency.Rates) {
+	taskIndex := goals.BuildTaskIndex(d.Tasks)
 	for _, base := range GoalVarBases(d.Goals) {
 		g := base.Goal
-		target := major(toBase(g.TargetAmount.Amount, g.TargetAmount.Currency))
-		saved := major(toBase(g.CurrentAmount.Amount, g.CurrentAmount.Currency))
-		remaining := target - saved
-		if remaining < 0 {
-			remaining = 0
+		prefix := base.Prefix
+		tasks := taskIndex[g.ID]
+		evaluation := goals.EvaluateGoal(g, tasks, rates, d.Now)
+		progress := evaluation.Progress
+
+		// The task counts are literal linked-to-do counts for every goal kind;
+		// progress.Done/Total instead means check-ins or a milestone step where
+		// appropriate.
+		out[prefix+"tasks_done"] = float64(tasks.Done)
+		out[prefix+"tasks_total"] = float64(tasks.Total)
+		out[prefix+"streak"] = float64(progress.Streak)
+
+		// Preserve nonfinancial progress even when any unrelated money fields are
+		// unavailable. Financial progress is available only when EvaluateGoal can
+		// convert saved money into the target currency.
+		progressKnown := !g.IsFinancial() || evaluation.Coverage.SavedKnown
+		if progressKnown {
+			out[prefix+"progress"] = float64(progress.Percent)
+			done := progress.Complete
+			if g.IsFinancial() {
+				done = g.TargetAmount.Amount > 0 && evaluation.Coverage.Saved.Amount >= g.TargetAmount.Amount
+			}
+			if done {
+				out[prefix+"done"] = 1
+			} else {
+				out[prefix+"done"] = 0
+			}
 		}
-		percent := 0.0
-		if target != 0 {
-			percent = saved / target * 100
+
+		targetMinor, targetErr := checkedGoalAmountToBase(g.TargetAmount, rates)
+		if targetErr == nil {
+			out[prefix+"target"] = major(targetMinor)
 		}
-		prog := goals.EvaluateProgress(g, d.Tasks, d.Now)
-		// tasks_done/_total are the LITERAL linked to-do counts (any goal can have
-		// linked to-dos), distinct from prog.Done/Total which for a habit/milestone
-		// counts check-ins / the milestone step rather than to-dos.
-		tasksDone, tasksTotal := goals.TaskCounts(d.Tasks, g.ID)
-		done := 0.0
-		if prog.Complete {
-			done = 1
+		savedAmount := g.CurrentAmount
+		if savedAmount.Amount == 0 && savedAmount.Currency == "" {
+			savedAmount.Currency = g.TargetAmount.Currency
 		}
-		// Virtual allocation ("earmarks") as first-class formula context: how much of the
-		// goal is reserved in place, committed+earmarked coverage, and that coverage as a
-		// percent of target — so assessments can reason about reserved-but-uncommitted funds.
-		earmarked := major(toBase(g.AllocatedMinor(), g.TargetAmount.Currency))
-		coverage := saved + earmarked
-		coveredPct := 0.0
-		if target != 0 {
-			coveredPct = coverage / target * 100
+		savedMinor, savedErr := checkedGoalAmountToBase(savedAmount, rates)
+		if savedErr == nil {
+			out[prefix+"saved"] = major(savedMinor)
 		}
-		out[base.Prefix+"target"] = target
-		out[base.Prefix+"saved"] = saved
-		out[base.Prefix+"remaining"] = remaining
-		out[base.Prefix+"percent"] = percent
-		out[base.Prefix+"progress"] = float64(prog.Percent)
-		out[base.Prefix+"tasks_done"] = float64(tasksDone)
-		out[base.Prefix+"tasks_total"] = float64(tasksTotal)
-		out[base.Prefix+"done"] = done
-		out[base.Prefix+"streak"] = float64(prog.Streak)
-		out[base.Prefix+"earmarked"] = earmarked
-		out[base.Prefix+"coverage"] = coverage
-		out[base.Prefix+"covered_pct"] = coveredPct
+		if targetErr == nil && savedErr == nil {
+			if remaining, err := money.Sub(targetMinor, savedMinor); err == nil {
+				out[prefix+"remaining"] = major(max(remaining, 0))
+			}
+			if targetMinor != 0 {
+				out[prefix+"percent"] = major(savedMinor) / major(targetMinor) * 100
+			} else {
+				out[prefix+"percent"] = 0
+			}
+		}
+
+		allocations, allocationErr := goals.AllocationTotal(g, rates, g.TargetAmount.Currency)
+		var earmarkedMinor int64
+		if allocationErr == nil {
+			earmarkedMinor, allocationErr = checkedGoalAmountToBase(allocations, rates)
+		}
+		if allocationErr == nil {
+			out[prefix+"earmarked"] = major(earmarkedMinor)
+		}
+		if savedErr == nil && allocationErr == nil {
+			if coverageMinor, err := money.Add(savedMinor, earmarkedMinor); err == nil {
+				out[prefix+"coverage"] = major(coverageMinor)
+				if targetErr == nil {
+					if targetMinor != 0 {
+						out[prefix+"covered_pct"] = major(coverageMinor) / major(targetMinor) * 100
+					} else {
+						out[prefix+"covered_pct"] = 0
+					}
+				}
+			}
+		}
 	}
+}
+
+func checkedGoalAmountToBase(amount money.Money, rates currency.Rates) (int64, error) {
+	if amount.Amount == 0 && amount.Currency == "" {
+		return 0, nil
+	}
+	return checkedToBase(amount.Amount, amount.Currency, rates)
 }
 
 // GoalVarFields are the per-goal metric suffixes exposed on the surface. Shared with the
