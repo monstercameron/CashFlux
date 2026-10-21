@@ -115,6 +115,100 @@ func TestQueryExplicitFiltersDatesArchivedAndFailures(t *testing.T) {
 	}
 }
 
+func TestReadPageBoundsCompleteEnvelopeAndContinuesAcrossRedactedUnicodeRows(t *testing.T) {
+	type note struct {
+		ID     string            `json:"id"`
+		Text   string            `json:"text"`
+		Custom map[string]string `json:"custom"`
+	}
+	rows := make([]note, 50)
+	for i := range rows {
+		custom := make(map[string]string, 32)
+		for field := range 32 {
+			custom[fmt.Sprintf("api_key_%03d", field)] = "secret"
+		}
+		rows[i] = note{ID: fmt.Sprintf("n%03d", i), Text: "café 🪙", Custom: custom}
+	}
+	c := NewCollection("notes", "id", func() ([]note, error) { return rows, nil })
+	q := Query{Collection: c.Name, Limit: 50}
+	seen := make(map[string]bool, len(rows))
+	var snapshot string
+	for {
+		p, err := ReadPage(c, q)
+		if err != nil {
+			t.Fatal(err)
+		}
+		encoded, err := json.Marshal(p)
+		if err != nil || len(encoded) > maxOutput {
+			t.Fatalf("encoded page bytes=%d err=%v budget=%d", len(encoded), err, maxOutput)
+		}
+		if p.Total != len(rows) || p.FilteredTotal != len(rows) || p.Offset != q.Offset {
+			t.Fatalf("page totals or offset changed: %+v", p)
+		}
+		if snapshot != "" && p.Snapshot != snapshot {
+			t.Fatal("snapshot changed between pages")
+		}
+		snapshot = p.Snapshot
+		for _, row := range p.Records {
+			if seen[row.ID] {
+				t.Fatalf("duplicate row across pages: %s", row.ID)
+			}
+			seen[row.ID] = true
+			if len(row.RedactedPaths) != 32 || !strings.Contains(string(row.Data), `"text":"café 🪙"`) {
+				t.Fatalf("redacted metadata or Unicode row data lost: %+v", row)
+			}
+		}
+		if p.NextOffset == nil {
+			if p.Truncated {
+				t.Fatal("last page marked truncated")
+			}
+			break
+		}
+		if len(p.Records) == 0 || !p.Truncated || *p.NextOffset != p.Offset+len(p.Records) {
+			t.Fatalf("invalid empty or discontinuous continuation: %+v", p)
+		}
+		q.Offset, q.Snapshot = *p.NextOffset, p.Snapshot
+	}
+	if len(seen) != len(rows) {
+		t.Fatalf("read %d of %d rows", len(seen), len(rows))
+	}
+}
+
+func TestReadPageOversizedFirstRowOffersDetailRecovery(t *testing.T) {
+	type note struct {
+		ID   string `json:"id"`
+		Text string `json:"text"`
+	}
+	c := NewCollection("notes", "id", func() ([]note, error) {
+		return []note{{ID: "large-content", Text: strings.Repeat("x", maxOutput-500)}}, nil
+	})
+	p, err := ReadPage(c, Query{Collection: c.Name})
+	if err != nil || len(p.Records) != 1 || !p.Records[0].DetailRequired || len(p.Records[0].Data) != 0 || p.Records[0].JSONCharacters == 0 {
+		t.Fatalf("near-budget first row did not return a detail placeholder: page=%+v err=%v", p, err)
+	}
+	detail, err := ReadRecord(c, DetailRequest{Collection: c.Name, ID: p.Records[0].ID, Field: "text"})
+	if err != nil || detail.JSONText == "" || detail.TotalCharacters != maxOutput-498 {
+		t.Fatalf("exact record detail did not recover first row: characters=%d text=%d err=%v", detail.TotalCharacters, len(detail.JSONText), err)
+	}
+}
+
+func TestReadPageOversizedRedactionMetadataErrorIdentifiesRecord(t *testing.T) {
+	type note struct {
+		ID     string            `json:"id"`
+		Custom map[string]string `json:"custom"`
+	}
+	custom := make(map[string]string, 1800)
+	for i := range 1800 {
+		custom[fmt.Sprintf("api_key_%04d", i)] = "secret"
+	}
+	c := NewCollection("notes", "id", func() ([]note, error) {
+		return []note{{ID: "large-metadata", Custom: custom}}, nil
+	})
+	if _, err := ReadPage(c, Query{Collection: c.Name}); err == nil || !strings.Contains(err.Error(), `collection "notes" record "large-metadata"`) || !strings.Contains(err.Error(), "record detail read") {
+		t.Fatalf("oversized redaction metadata error lacked an actionable record identity: %v", err)
+	}
+}
+
 func TestQueryLongRecordIsFullyReachableInUnicodeChunks(t *testing.T) {
 	type item struct {
 		ID   string `json:"id"`

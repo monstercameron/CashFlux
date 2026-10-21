@@ -37,8 +37,10 @@ App store, including when another dataset is active in the UI.
 Pages report both total and filtered counts. A changed snapshot rejects a later
 page instead of silently combining revisions. Oversized records point to
 `read_record`; consecutive `jsonText` chunks must be joined before decoding.
-Detail chunks fit a 24,000-byte encoded envelope, including Unicode, escaping,
+Record pages and detail chunks fit a 24,000-byte encoded envelope, including Unicode, escaping,
 redaction metadata and continuation cursors; character limits are ceilings.
+A record that cannot fit inline is marked for detail recovery. If even its
+metadata cannot fit, the error identifies the exact collection and record.
 Every call reads current storage. Store failures are explicit, not empty data.
 Declared Unix-second timestamp fields support UTC calendar filtering; ordinary
 numeric money fields are never inferred to be dates. The manifest lists each

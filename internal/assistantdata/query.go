@@ -385,26 +385,63 @@ func ReadPage(c Collection, q Query) (Page, error) {
 	if q.Offset > len(filtered) {
 		return Page{}, fmt.Errorf("offset exceeds filtered total")
 	}
-	used := 0
 	for i := q.Offset; i < len(filtered) && len(p.Records) < q.Limit; i++ {
 		r := filtered[i]
-		if used+len(r.raw) > maxOutput && len(p.Records) > 0 {
-			break
-		}
 		row := Row{ID: r.id, RedactedPaths: r.redacted}
 		if len(r.raw) > maxOutput {
 			row.DetailRequired = true
 			row.JSONCharacters = len([]rune(string(r.raw)))
 		} else {
 			row.Data = r.raw
-			used += len(r.raw)
 		}
 		p.Records = append(p.Records, row)
+		next := i + 1
+		if next < len(filtered) {
+			p.NextOffset = &next
+			p.Truncated = true
+		} else {
+			p.NextOffset = nil
+			p.Truncated = false
+		}
+		encoded, err := json.Marshal(p)
+		if err != nil {
+			return Page{}, fmt.Errorf("encode data page: %w", err)
+		}
+		if len(encoded) > maxOutput {
+			if !row.DetailRequired {
+				// A near-budget raw record may fit the old content-only limit but
+				// not the complete page envelope. Fall back to the established
+				// exact-record detail path before refusing the row.
+				placeholder := Row{ID: r.id, DetailRequired: true, JSONCharacters: len([]rune(string(r.raw))), RedactedPaths: r.redacted}
+				p.Records[len(p.Records)-1] = placeholder
+				encoded, err = json.Marshal(p)
+				if err != nil {
+					return Page{}, fmt.Errorf("encode data page: %w", err)
+				}
+				if len(encoded) <= maxOutput {
+					continue
+				}
+			}
+			p.Records = p.Records[:len(p.Records)-1]
+			if len(p.Records) == 0 {
+				return Page{}, fmt.Errorf("encoded page for collection %q record %q exceeds the %d-byte response limit even with detail metadata; retry with the exact record detail read", c.Name, r.id, maxOutput)
+			}
+			// Keep the rejected record as the next page's first row. The preceding
+			// page already included this same continuation offset in its size check.
+			next = i
+			p.NextOffset = &next
+			p.Truncated = true
+			break
+		}
 	}
-	next := q.Offset + len(p.Records)
-	if next < len(filtered) {
-		p.NextOffset = &next
-		p.Truncated = true
+	if len(p.Records) == 0 {
+		encoded, err := json.Marshal(p)
+		if err != nil {
+			return Page{}, fmt.Errorf("encode data page: %w", err)
+		}
+		if len(encoded) > maxOutput {
+			return Page{}, fmt.Errorf("encoded page metadata exceeds the %d-byte response limit", maxOutput)
+		}
 	}
 	return p, nil
 }

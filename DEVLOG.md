@@ -1,3 +1,7 @@
+## 2026-10-21 - Bound complete assistant record pages
+
+ReadPage sizes complete responses within 24000 bytes, preserves honest continuation, and returns detail-required placeholders for near-limit records. Unfit metadata errors identify the exact collection and record. Native assistantdata tests and full vet passed, including fifty-row Unicode/redaction traversal, stable snapshots and exact detail recovery.
+
 ## 2026-10-21 - Exact disposable assistant scenarios
 
 Added current bound settings/account selection, strict amounts and horizons, native clamped calendar-month arithmetic, exact diffs and unavailable labels. Scenarios disclose current-engine ledger semantics, suspend triggers, close their disposable store and never write the household ledger. Full native gates and all five sandbox WASM groups passed.

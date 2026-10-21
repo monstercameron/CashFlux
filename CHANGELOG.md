@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Assistant record pages now include envelope and redaction metadata in their encoded byte budget.
 - Assistant what-if scenarios now use exact account-currency amounts, anchored monthly dates, and explicit simulation limits.
 - Assistant memory reads and approved writes now stay bound to their original dataset and checked preview.
 - Assistant formula discovery now sizes complete encoded pages and provides exact record recovery for oversized custom metadata.
