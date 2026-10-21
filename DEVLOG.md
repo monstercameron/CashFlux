@@ -1,3 +1,7 @@
+## 2026-10-21 - Prepare checked Reports totals and presentation facts natively
+
+Native reports and reportview suites pass for checked category/grand totals, safe magnitudes, wide-product ratios, owned result rows, source order, bar truncation and investment return rounding. Custom-field and deductible native services now return arithmetic errors instead of wrapped sums. Prepared display slices are preallocated. Root review caught a rounding mismatch: total return now preserves half-even display ties with integer preparation and exact decimal formatting, covered by positive and negative host examples. Two final WASM tests pass, including three unavailable sections and four valid total-return tie cases; the broader corrected boundary batch also passed eleven tests. No browser Reports latency improvement is claimed; its measured regression remains open.
+
 ## 2026-10-21 - Prepare checked monthly funding pools for Goals Compare
 
 goalcompare.PrepareMonthlyPool preserves missing-plan, currency and sum-overflow availability before scheduling. Goal Compare now computes its two goal stats once and reuses them for its table, verdict and order panel. Native goalcompare tests passed; focused WASM tests cover overflowing pool unavailable and known fitting plans retaining the correct no-order-change result. An initial test wrongly expected priority to change dates when the pool already funds both monthly caps; the corrected test asserts the native meaningful result. This preserves valid semantics and removes the prior unchecked addition from the view.

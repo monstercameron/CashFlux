@@ -4,6 +4,8 @@ package reports
 
 import (
 	"encoding/json"
+	"errors"
+	"math"
 	"strconv"
 	"strings"
 	"testing"
@@ -173,6 +175,27 @@ func TestByCustomFieldEmpty(t *testing.T) {
 	}
 	if len(got) != 0 {
 		t.Errorf("empty input should yield no rows, got %+v", got)
+	}
+}
+
+func TestByCustomFieldRejectsMagnitudeAndGroupOverflow(t *testing.T) {
+	start, end := dt(2026, time.June, 1), dt(2026, time.July, 1)
+	for _, tc := range []struct {
+		name string
+		rows []domain.Transaction
+	}{
+		{name: "magnitude", rows: []domain.Transaction{{Amount: money.New(math.MinInt64, "USD"), Date: start, Custom: map[string]any{"project": "Work"}}}},
+		{name: "group total", rows: []domain.Transaction{
+			{Amount: money.New(-math.MaxInt64, "USD"), Date: start, Custom: map[string]any{"project": "Work"}},
+			{Amount: money.New(-1, "USD"), Date: start, Custom: map[string]any{"project": "Work"}},
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := ByCustomField(tc.rows, "project", start, end, usdRates())
+			if !errors.Is(err, money.ErrOverflow) || len(got) != 0 {
+				t.Fatalf("got rows=%+v, err=%v; want no rows and overflow", got, err)
+			}
+		})
 	}
 }
 

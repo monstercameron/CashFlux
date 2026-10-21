@@ -13,6 +13,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/money"
 )
 
 // CustomFieldSpend is the total expense for one custom-field value over the
@@ -84,7 +85,14 @@ func ByCustomField(txns []domain.Transaction, fieldKey string, start, end time.T
 			return nil, err
 		}
 		key := normaliseCustomValue(t.Custom[fieldKey])
-		totals[key] += conv.Abs().Amount
+		amount, err := conv.AbsChecked()
+		if err != nil {
+			return nil, fmt.Errorf("custom field %q expense magnitude: %w", fieldKey, err)
+		}
+		totals[key], err = money.Add(totals[key], amount.Amount)
+		if err != nil {
+			return nil, fmt.Errorf("custom field %q value %q total: %w", fieldKey, key, err)
+		}
 	}
 
 	out := make([]CustomFieldSpend, 0, len(totals))

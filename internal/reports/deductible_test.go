@@ -3,6 +3,8 @@
 package reports
 
 import (
+	"errors"
+	"math"
 	"testing"
 	"time"
 
@@ -104,6 +106,33 @@ func TestDeductibleTotals_IncomeExcluded(t *testing.T) {
 	}
 	if got.Total != 20000 {
 		t.Errorf("Total = %d, want 20000 (only the expense row)", got.Total)
+	}
+}
+
+func TestDeductibleTotalsRejectsMagnitudeCategoryAndGrandTotalOverflow(t *testing.T) {
+	start, end := dt(2025, time.January, 1), dt(2026, time.January, 1)
+	cases := []struct {
+		name string
+		cats []domain.Category
+		txns []domain.Transaction
+	}{
+		{name: "magnitude", cats: testCats("medical"), txns: []domain.Transaction{{Amount: money.New(math.MinInt64, "USD"), CategoryID: "medical", Date: start}}},
+		{name: "category total", cats: testCats("medical"), txns: []domain.Transaction{
+			{Amount: money.New(-math.MaxInt64, "USD"), CategoryID: "medical", Date: start},
+			{Amount: money.New(-1, "USD"), CategoryID: "medical", Date: start},
+		}},
+		{name: "grand total", cats: testCats("medical", "home-office"), txns: []domain.Transaction{
+			{Amount: money.New(-math.MaxInt64, "USD"), CategoryID: "medical", Date: start},
+			{Amount: money.New(-1, "USD"), CategoryID: "home-office", Date: start},
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := DeductibleTotals(tc.txns, tc.cats, start, end, usdRates())
+			if !errors.Is(err, money.ErrOverflow) || len(got.Rows) != 0 || got.Total != 0 {
+				t.Fatalf("got summary=%+v, err=%v; want empty summary and overflow", got, err)
+			}
+		})
 	}
 }
 
