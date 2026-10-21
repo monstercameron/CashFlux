@@ -1,3 +1,7 @@
+## 2026-10-20 - Assistant exact flag dismissal approvals
+
+Replaced malformed-JSON-to-clear-all behavior with strict object/type/null validation and an approval-bound sorted key/title/detail snapshot. Changed or newly matching flags require review again, dataset switches are refused, and repeated execution cannot sweep new flags. The result verifies persisted dismissal preferences and states explicitly that transactions were not changed. All six focused real-App Flags WASM groups passed in integration pass2; approval metadata already reports unknown count/non-reversibility truthfully.
+
 ## 2026-10-20 - Assistant workflow and rule approvals
 
 Authoring uses strict typed object validation, live unique category resolution, stable preview-bound IDs and repeat-call no-op checks. Workflow previews identify every ordered task/notification/category/tag/review effect and show full text and resolved IDs. Rule descriptions and receipts truthfully save the rule for future matches without promising existing-transaction backfill. Five actual App-backed WASM groups passed after correcting invalid test fixtures; these cover argument types, ambiguity, preview completeness, stale/retry/write-error behavior. A separately scoped trigger-aware variable-discovery follow-up will make the advertised transaction expression available to txn-added workflows.

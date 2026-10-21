@@ -1489,35 +1489,6 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates, tier a
 				return fmt.Sprintf("%d transactions match “%s” and they differ. Tell me the amount and date of the one to delete:\n%s", len(m), strings.TrimSpace(a.Match), strings.TrimRight(b.String(), "\n"))
 			},
 		},
-		{
-			spec: ai.FunctionTool("dismiss_flagged_activity",
-				"Dismiss (clear) flagged activities — the 'possible duplicate', spending-spike, missing-transaction, and balance-anomaly flags shown under Flagged activity. Omit match to clear ALL current flags; pass a phrase to dismiss only flags whose title or detail contains it. Dismissing hides a flag until its underlying situation changes; it does NOT delete or alter any transaction (use merge/delete for that).",
-				json.RawMessage(`{"type":"object","properties":{"match":{"type":"string","description":"optional phrase matched on a flag's title/detail; omit to clear all flags"}}}`)),
-			mutates: true,
-			preview: func(raw json.RawMessage) string {
-				var a struct {
-					Match string `json:"match"`
-				}
-				_ = json.Unmarshal(raw, &a)
-				n := len(flaggedActivityKeys(app, a.Match))
-				if n == 0 {
-					return "No flagged activities to dismiss."
-				}
-				return fmt.Sprintf("Dismiss %d flagged %s.", n, ifStr(n == 1, "activity", "activities"))
-			},
-			run: func(raw json.RawMessage) string {
-				var a struct {
-					Match string `json:"match"`
-				}
-				_ = json.Unmarshal(raw, &a)
-				keys := flaggedActivityKeys(app, a.Match)
-				if len(keys) == 0 {
-					return "No flagged activities to dismiss."
-				}
-				uistate.DismissAllSmartInsights(keys)
-				return fmt.Sprintf("Dismissed %d flagged %s — they'll stay hidden until the situation changes.", len(keys), ifStr(len(keys) == 1, "activity", "activities"))
-			},
-		},
 	}
 	// AG series — the assistant tool groups built in the ag_*.go / chat_agent_*.go
 	// sidecar files (registered here so those files never touched this one):
@@ -1526,6 +1497,7 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates, tier a
 	tools = append(tools, agToolsTasks(app, base, rates)...)
 	tools = append(tools, agToolsData(app)...)
 	tools = append(tools, agToolsPlanning(app, base, rates)...)
+	tools = append(tools, agToolsFlags(app, base, rates)...)
 	tools = append(tools, agToolsTrust(app, base, rates)...)
 	tools = append(tools, agToolsAuditor(app, base, rates)...)
 	tools = append(tools, agToolsAuthoring(app, base, rates)...)
