@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Investment growth headlines render checked native facts and explicit unavailable states.
 - Setup validates money through native typed preparation before saving or advancing.
 - Subscription rows and totals use native checked cadence, currency and share facts.
 - Budget summaries now use checked native preparation and shared category selection.

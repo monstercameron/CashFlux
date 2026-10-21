@@ -1,3 +1,7 @@
+## 2026-10-21 - Native investment growth facts
+
+Extracted current value, signed delta and percentage availability independently. Failed ledger series no longer appear as zero. Native portfolio tests and focused WASM headline coverage pass. Native benchmark is a baseline only; broader investment model migration remains pending.
+
 ## 2026-10-21 - Checked Setup input preparation
 
 Income and account input preparation now uses exact minor-unit parsing with explicit currency precision. Blank-input defaults and positive liability balances are preserved; malformed and overflowing input cannot write or advance. Native tests and vet pass; the focused WASM handler case passes.

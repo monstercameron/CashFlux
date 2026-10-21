@@ -19,6 +19,9 @@ var qpassBKeys = Catalog{
 	"investments.reconcileUnnamed":      "Account",
 	// --- growth card: clarify it charts account balances, not securities value ---
 	"investments.growthCaption": "Charts your investment-account balances over time — the figure net worth uses, not the tracked-securities market value.",
+	"investments.growthUnavailable": "Growth history unavailable",
+	"investments.growthChangeUnavailable": "Change unavailable",
+	"investments.growthPercentUnavailable": "percent unavailable from a zero starting value",
 	// --- honest rename of the "Portfolio metrics" toolbar control (it opens the
 	//     household-wide formula builder, not a portfolio-scoped tool) ---
 	"investments.formulaBuilderShow":  "Formula builder",
