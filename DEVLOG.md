@@ -1,3 +1,7 @@
+## 2026-10-21 - Capture native componentization baselines
+
+Captured five samples each for transaction filter/sort and memo hits, goal funding/indexed sorting, and task snapshot/filter paths. Stored raw logs, medians and exact source/environment metadata. All three native benchmark commands passed. These are existing synthetic algorithm comparisons, not new app before/after gains; the ARM64 host runs the amd64 benchmark target, which must stay consistent for later comparisons.
+
 ## 2026-10-21 - Plan the full application component boundary pass
 
 Extended the requested scope from the nine primary pages to all 47 registered routes. Read-only inventories identify existing native models, reusable UI, remaining screen calculations, large controllers, hook identity risks and existing benchmark seams. Recorded the bottom-up implementation order and evidence required for completion. This commit changes documentation only; no behavior or performance gain is claimed.

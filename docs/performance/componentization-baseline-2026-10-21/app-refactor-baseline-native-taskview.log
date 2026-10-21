@@ -1,0 +1,48 @@
+Command: go test -work -run '^$' -bench '^(BenchmarkSelect|BenchmarkSnapshotEntityLookup)$' -benchmem -count=5 ./internal/taskview
+WORK=C:\Users\mreca\AppData\Local\Temp\go-build3160168095
+goos: windows
+goarch: amd64
+pkg: github.com/monstercameron/CashFlux/internal/taskview
+cpu: Virtual CPU @ 4.45GHz
+BenchmarkSnapshotEntityLookup/prepared-18         	    1246	    971318 ns/op	   51020 B/op	     127 allocs/op
+BenchmarkSnapshotEntityLookup/prepared-18         	    1354	    918724 ns/op	   51016 B/op	     127 allocs/op
+BenchmarkSnapshotEntityLookup/prepared-18         	    1258	    901092 ns/op	   51016 B/op	     127 allocs/op
+BenchmarkSnapshotEntityLookup/prepared-18         	    1233	   1050988 ns/op	   51017 B/op	     127 allocs/op
+BenchmarkSnapshotEntityLookup/prepared-18         	    1225	   1013363 ns/op	   51016 B/op	     127 allocs/op
+BenchmarkSnapshotEntityLookup/previous-per-row-search-18         	      73	  17486889 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSnapshotEntityLookup/previous-per-row-search-18         	      75	  19733209 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSnapshotEntityLookup/previous-per-row-search-18         	      69	  20321493 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSnapshotEntityLookup/previous-per-row-search-18         	      52	  25938773 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSnapshotEntityLookup/previous-per-row-search-18         	      69	  24270880 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSelect/100/single-pass-18                               	   10000	    110347 ns/op	   28576 B/op	     201 allocs/op
+BenchmarkSelect/100/single-pass-18                               	   10000	    126066 ns/op	   28576 B/op	     201 allocs/op
+BenchmarkSelect/100/single-pass-18                               	   23016	     71456 ns/op	   28576 B/op	     201 allocs/op
+BenchmarkSelect/100/single-pass-18                               	   14857	     68136 ns/op	   28576 B/op	     201 allocs/op
+BenchmarkSelect/100/single-pass-18                               	   19928	     68266 ns/op	   28576 B/op	     201 allocs/op
+BenchmarkSelect/100/previous-multiple-passes-18                  	   10000	    250271 ns/op	  248850 B/op	     226 allocs/op
+BenchmarkSelect/100/previous-multiple-passes-18                  	    6361	    245760 ns/op	  248850 B/op	     226 allocs/op
+BenchmarkSelect/100/previous-multiple-passes-18                  	    6288	    239034 ns/op	  248851 B/op	     226 allocs/op
+BenchmarkSelect/100/previous-multiple-passes-18                  	    5703	    269446 ns/op	  248851 B/op	     226 allocs/op
+BenchmarkSelect/100/previous-multiple-passes-18                  	   10000	    229829 ns/op	  248851 B/op	     226 allocs/op
+BenchmarkSelect/1000/single-pass-18                              	    2893	    618892 ns/op	  277570 B/op	    2001 allocs/op
+BenchmarkSelect/1000/single-pass-18                              	    3205	    597291 ns/op	  277569 B/op	    2001 allocs/op
+BenchmarkSelect/1000/single-pass-18                              	    2689	    521459 ns/op	  277570 B/op	    2001 allocs/op
+BenchmarkSelect/1000/single-pass-18                              	    2068	    580962 ns/op	  277570 B/op	    2001 allocs/op
+BenchmarkSelect/1000/single-pass-18                              	    2037	    595878 ns/op	  277571 B/op	    2001 allocs/op
+BenchmarkSelect/1000/previous-multiple-passes-18                 	     225	   5378329 ns/op	 2873552 B/op	    2038 allocs/op
+BenchmarkSelect/1000/previous-multiple-passes-18                 	     416	   3138693 ns/op	 2873537 B/op	    2038 allocs/op
+BenchmarkSelect/1000/previous-multiple-passes-18                 	     361	   3888222 ns/op	 2873542 B/op	    2038 allocs/op
+BenchmarkSelect/1000/previous-multiple-passes-18                 	     470	   2150551 ns/op	 2873531 B/op	    2038 allocs/op
+BenchmarkSelect/1000/previous-multiple-passes-18                 	     510	   2767696 ns/op	 2873542 B/op	    2038 allocs/op
+BenchmarkSelect/10000/single-pass-18                             	     282	   4507947 ns/op	 2726529 B/op	   20001 allocs/op
+BenchmarkSelect/10000/single-pass-18                             	     264	   5277585 ns/op	 2726533 B/op	   20001 allocs/op
+BenchmarkSelect/10000/single-pass-18                             	     198	   7689868 ns/op	 2726533 B/op	   20001 allocs/op
+BenchmarkSelect/10000/single-pass-18                             	     237	   5707459 ns/op	 2726558 B/op	   20001 allocs/op
+BenchmarkSelect/10000/single-pass-18                             	     216	   5470362 ns/op	 2726533 B/op	   20001 allocs/op
+BenchmarkSelect/10000/previous-multiple-passes-18                	      62	  24161213 ns/op	40072958 B/op	   20062 allocs/op
+BenchmarkSelect/10000/previous-multiple-passes-18                	      50	  52537152 ns/op	40072961 B/op	   20062 allocs/op
+BenchmarkSelect/10000/previous-multiple-passes-18                	      38	  26987300 ns/op	40072982 B/op	   20062 allocs/op
+BenchmarkSelect/10000/previous-multiple-passes-18                	      39	  35551703 ns/op	40072981 B/op	   20062 allocs/op
+BenchmarkSelect/10000/previous-multiple-passes-18                	      60	  28062582 ns/op	40072972 B/op	   20062 allocs/op
+PASS
+ok  	github.com/monstercameron/CashFlux/internal/taskview	76.629s

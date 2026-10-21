@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Retain raw native model benchmark samples and environment metadata before further app refactoring.
 - Document the all-route componentization contract and measured performance criteria.
 - Large assistant tax exports provide lossless bounded CSV continuation rather than oversized responses.
 - Assistant report drilldowns cap the complete response and identify omitted transactions for exact recovery.

@@ -1,0 +1,18 @@
+Command: go test -work -run '^$' -bench '^BenchmarkTxnFilterSort3300$' -benchmem -count=5 ./internal/screens
+WORK=C:\Users\mreca\AppData\Local\Temp\go-build935147809
+goos: windows
+goarch: amd64
+pkg: github.com/monstercameron/CashFlux/internal/screens
+cpu: Virtual CPU @ 4.45GHz
+BenchmarkTxnFilterSort3300/derive-18         	      97	  17191336 ns/op	 1535816 B/op	    3326 allocs/op
+BenchmarkTxnFilterSort3300/derive-18         	     100	  12186404 ns/op	 1535808 B/op	    3326 allocs/op
+BenchmarkTxnFilterSort3300/derive-18         	     100	  13668392 ns/op	 1535800 B/op	    3326 allocs/op
+BenchmarkTxnFilterSort3300/derive-18         	     100	  13289381 ns/op	 1535811 B/op	    3326 allocs/op
+BenchmarkTxnFilterSort3300/derive-18         	     100	  10416365 ns/op	 1535812 B/op	    3326 allocs/op
+BenchmarkTxnFilterSort3300/memo-hit-18       	12937489	       106.7 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTxnFilterSort3300/memo-hit-18       	13156668	        92.86 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTxnFilterSort3300/memo-hit-18       	13129519	        90.41 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTxnFilterSort3300/memo-hit-18       	13412961	        95.82 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTxnFilterSort3300/memo-hit-18       	11729871	       100.3 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/monstercameron/CashFlux/internal/screens	15.049s

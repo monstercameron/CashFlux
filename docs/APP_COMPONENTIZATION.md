@@ -65,6 +65,12 @@ unrelated route rewrites into one commit.
   evidence that the page became faster. See
   [Primary page performance benchmark](PRIMARY_PAGE_PERFORMANCE.md).
 
+The initial native model capture, with five samples per benchmark and the exact
+environment/target caveat, is retained in
+[Native baseline](performance/componentization-baseline-2026-10-21/app-refactor-baseline-native-summary.md).
+These existing algorithm comparisons establish a reference; they are not a new
+application before/after result.
+
 ## Initial remaining calculation gaps
 
 The read-only inventory found unchecked or error-hiding paths in local Q&A,

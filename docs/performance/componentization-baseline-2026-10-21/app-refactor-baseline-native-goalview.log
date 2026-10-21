@@ -1,0 +1,28 @@
+Command: go test -work -run '^$' -bench '^(BenchmarkSortClosest|BenchmarkFundingSuggestions)$' -benchmem -count=5 ./internal/goalview
+WORK=C:\Users\mreca\AppData\Local\Temp\go-build2857703948
+goos: windows
+goarch: amd64
+pkg: github.com/monstercameron/CashFlux/internal/goalview
+cpu: Virtual CPU @ 4.45GHz
+BenchmarkFundingSuggestions/repeated-ledger-scan-18         	       1	3395779500 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFundingSuggestions/repeated-ledger-scan-18         	       1	2911176200 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFundingSuggestions/repeated-ledger-scan-18         	       1	2806399000 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFundingSuggestions/repeated-ledger-scan-18         	       1	3397099900 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFundingSuggestions/repeated-ledger-scan-18         	       1	3984194700 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFundingSuggestions/shared-index-18                 	    1320	   1543539 ns/op	  279572 B/op	     144 allocs/op
+BenchmarkFundingSuggestions/shared-index-18                 	     898	   2202352 ns/op	  279572 B/op	     144 allocs/op
+BenchmarkFundingSuggestions/shared-index-18                 	     801	   1454980 ns/op	  279571 B/op	     144 allocs/op
+BenchmarkFundingSuggestions/shared-index-18                 	    1106	   1185467 ns/op	  279571 B/op	     144 allocs/op
+BenchmarkFundingSuggestions/shared-index-18                 	    1504	    771701 ns/op	  279571 B/op	     144 allocs/op
+BenchmarkSortClosest/scan-comparator-18                     	       2	 657190300 ns/op	133980496 B/op	   16427 allocs/op
+BenchmarkSortClosest/scan-comparator-18                     	       2	1340247750 ns/op	133979768 B/op	   16421 allocs/op
+BenchmarkSortClosest/scan-comparator-18                     	       1	1171791500 ns/op	133980664 B/op	   16429 allocs/op
+BenchmarkSortClosest/scan-comparator-18                     	       2	 837077450 ns/op	133979936 B/op	   16422 allocs/op
+BenchmarkSortClosest/scan-comparator-18                     	       2	 767526900 ns/op	133980104 B/op	   16424 allocs/op
+BenchmarkSortClosest/indexed-18                             	     194	   5169584 ns/op	  412976 B/op	     630 allocs/op
+BenchmarkSortClosest/indexed-18                             	     510	   2245887 ns/op	  412977 B/op	     630 allocs/op
+BenchmarkSortClosest/indexed-18                             	     657	   1702111 ns/op	  412977 B/op	     630 allocs/op
+BenchmarkSortClosest/indexed-18                             	     837	   2060340 ns/op	  412978 B/op	     630 allocs/op
+BenchmarkSortClosest/indexed-18                             	     669	   1757426 ns/op	  412979 B/op	     630 allocs/op
+PASS
+ok  	github.com/monstercameron/CashFlux/internal/goalview	39.757s
