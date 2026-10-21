@@ -91,6 +91,9 @@ func revokeSession(endpoint, token, csrf, family string, onDone func(error)) {
 }
 
 func fetchResponseBody(endpoint string, opts js.Value, operation string) (int, string, error) {
+	if err := validateBackendTransport(endpoint); err != nil {
+		return 0, "", fmt.Errorf("%s: %w", operation, err)
+	}
 	type result struct {
 		status int
 		body   string

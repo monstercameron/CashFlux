@@ -2,12 +2,30 @@
 
 package backendauth
 
-import "strings"
+import (
+	"strconv"
+	"strings"
+)
 
 const (
-	ModeToken = "token"
-	ModeOAuth = "oauth"
+	ModeToken        = "token"
+	ModeOAuth        = "oauth"
+	ClientAPIVersion = 1
 )
+
+// CompatibleVersion checks the server's advertised client range. A newer
+// server can still serve this client's v1 RPCs when its minimum is at most 1.
+// Historical discovery responses used a "v" prefix; current ones use digits.
+func CompatibleVersion(serverVersion, minimumClientVersion string) bool {
+	parse := func(value string) (int, bool) {
+		value = strings.TrimPrefix(strings.TrimSpace(value), "v")
+		n, err := strconv.Atoi(value)
+		return n, err == nil && n > 0
+	}
+	server, serverOK := parse(serverVersion)
+	minimum, minimumOK := parse(minimumClientVersion)
+	return serverOK && minimumOK && minimum <= ClientAPIVersion && ClientAPIVersion <= server
+}
 
 type Discovery struct {
 	AuthMode      string

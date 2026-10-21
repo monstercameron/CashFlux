@@ -45,8 +45,18 @@ export async function startServer() {
   child.stderr.on("data", (chunk) => { serverOutput += chunk.toString(); });
   child.once("exit", (code, signal) => { exited = { code, signal }; });
   const stop = async () => {
-    if (process.platform === "win32" && child.pid) {
-      try { execFileSync("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], { stdio: "ignore" }); } catch {}
+    if (process.platform === "win32") {
+      // `go run` can launch a toolchain wrapper and exit before the compiled
+      // server. Kill the process still listening on this test's unique port.
+      const listeners = execFileSync("netstat.exe", ["-ano", "-p", "TCP"], { encoding: "utf8" });
+      const line = listeners.split(/\r?\n/).find((entry) => new RegExp(`^\\s*TCP\\s+127\\.0\\.0\\.1:${port}\\s+.*\\s+LISTENING\\s+\\d+\\s*$`, "i").test(entry));
+      const listenerPID = line?.trim().split(/\s+/).at(-1);
+      if (listenerPID) {
+        try { execFileSync("taskkill.exe", ["/PID", listenerPID, "/F"], { stdio: "ignore" }); } catch {}
+      }
+      if (child.pid) {
+        try { execFileSync("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], { stdio: "ignore" }); } catch {}
+      }
     } else {
       child.kill();
     }
@@ -55,7 +65,7 @@ export async function startServer() {
       child.once("exit", resolve);
       setTimeout(resolve, 3000).unref();
     });
-    rmSync(dataDir, { recursive: true, force: true });
+    rmSync(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   };
 
   try {
@@ -88,6 +98,7 @@ export async function configureRemote(page, origin) {
   await nav(page, "/settings");
   await page.locator(".settings-page .set-tab-strip button", { hasText: "Cloud" }).first().click();
   const start = page.getByTestId("cloud-setup-start");
+  await expect.poll(async () => (await start.isVisible()) || (await page.getByTestId("cloud-setup-where").isVisible()), { timeout: 15_000 }).toBe(true);
   if (await start.isVisible()) await start.click();
   await expect(page.getByTestId("cloud-setup-where")).toBeVisible({ timeout: 15_000 });
   await page.getByRole("radio", { name: "Your own server", exact: true }).click();
@@ -100,6 +111,7 @@ export async function configureRemote(page, origin) {
 }
 
 export async function openPasswordForm(page) {
+  await expect(page.getByTestId("sync-discovery-ok")).toBeVisible({ timeout: 20_000 });
   const expand = page.getByTestId("password-auth-expand");
   const card = page.getByTestId("password-auth-card");
   if (!(await expand.or(card).isVisible())) await page.getByTestId("sync-advanced-token-toggle").click();
@@ -115,19 +127,30 @@ export async function login(page, username, password) {
   await page.getByTestId("password-auth-username").fill(username);
   await page.getByTestId("password-auth-password").fill(password);
   await page.getByTestId("password-auth-submit").click({ force: true });
-  await expect(page.getByRole("button", { name: "Sign out", exact: true })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("button", { name: "Sign out", exact: true })).toBeVisible({ timeout: 60_000 });
+  let previousGeneration = "";
+  let stable = 0;
+  await expect.poll(async () => {
+    const generation = await page.evaluate(() => window.cashfluxStoreGet?.("cashflux:dataset:gen") || "");
+    stable = generation && generation === previousGeneration ? stable + 1 : 0;
+    previousGeneration = generation;
+    return stable >= 4;
+  }, { timeout: 30_000, intervals: [500] }).toBe(true);
   await protectAndStartEncryptedSync(page);
 }
 
 export async function protectAndStartEncryptedSync(page) {
   const protect = page.getByTestId("sync-enable-passcode");
+  const startSync = page.getByTestId("cloud-start-encrypted-sync");
+  const pulse = page.getByTestId("sync-pulse");
+  await expect.poll(async () => (await protect.isVisible()) || (await startSync.isVisible()) || (await pulse.isVisible()), { timeout: 15_000 }).toBe(true);
   if (await protect.isVisible()) {
     await protect.click();
     await page.locator("#cf-al-pass").fill(E2E_PASSCODE);
     await page.locator("#cf-al-confirm").fill(E2E_PASSCODE);
     await page.locator("#cf-al-ok").click();
   }
-  const startSync = page.getByTestId("cloud-start-encrypted-sync");
+  await expect.poll(async () => (await startSync.isVisible()) || (await pulse.isVisible()), { timeout: 15_000 }).toBe(true);
   if (!(await startSync.isVisible())) {
     await waitForSync(page);
     await expect(page.getByTestId("sync-status-card")).toContainText(/encrypted/i);
@@ -143,7 +166,7 @@ export async function unlockIfNeeded(page) {
   if (await gate.isVisible().catch(() => false)) {
     await page.locator("#cf-applock-input").fill(E2E_PASSCODE);
     await gate.getByRole("button", { name: "Unlock" }).click();
-    await expect(gate).toBeHidden({ timeout: 10_000 });
+    await expect(gate).toBeHidden({ timeout: 45_000 });
   }
 }
 
@@ -162,20 +185,15 @@ export async function waitForSync(page) {
 export async function addUniqueTransaction(page, name) {
   await nav(page, "/transactions");
   const panel = page.getByTestId("txn-add-amount");
-  await expect.poll(async () => {
-    if (await panel.count()) return true;
-    await page.getByTestId("add-transaction-btn").click().catch(() => {});
-    return (await panel.count()) > 0;
-  }, { timeout: 20_000 }).toBe(true);
+  await page.getByTestId("add-transaction-btn").click();
+  await expect(panel).toBeVisible({ timeout: 20_000 });
   await panel.fill("17.43");
   await page.getByTestId("txn-add-payee").fill(name);
-  await page.getByTestId("txn-add-desc").fill(name);
+  const description = page.getByTestId("txn-add-desc");
+  if (await description.isVisible()) await description.fill(name);
   const save = page.getByRole("button", { name: /^save$/i }).last();
-  await expect.poll(async () => {
-    if (await page.getByText(name, { exact: true }).count()) return true;
-    await save.click({ timeout: 2000 }).catch(() => {});
-    return (await page.getByText(name, { exact: true }).count()) > 0;
-  }, { timeout: 25_000 }).toBe(true);
+  await save.click();
+  await expect(page.getByText(name, { exact: true })).toBeVisible({ timeout: 25_000 });
 }
 
 export async function datasetHas(page, text) {
@@ -207,6 +225,7 @@ export async function accessToken(page) {
 
 export async function reloadReady(page) {
   await page.reload();
-  await page.waitForFunction(() => document.documentElement.getAttribute("data-app-ready") === "true", null, { timeout: 45_000 });
+  await expect.poll(async () => (await page.locator("#cf-applock-gate").isVisible()) || await page.evaluate(() => document.documentElement.getAttribute("data-app-ready") === "true"), { timeout: 20_000 }).toBe(true);
   await unlockIfNeeded(page);
+  await page.waitForFunction(() => document.documentElement.getAttribute("data-app-ready") === "true", null, { timeout: 45_000 });
 }

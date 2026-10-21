@@ -96,27 +96,22 @@ func (s *IDBStore) Put(id string, mime string, data []byte) error {
 
 	ch := make(chan error, 1)
 
-	var onSuccess, onError js.Func
-	onSuccess = js.FuncOf(func(_ js.Value, _ []js.Value) any {
-		defer onSuccess.Release()
-		defer onError.Release()
+	var onComplete, onAbort js.Func
+	onComplete = js.FuncOf(func(_ js.Value, _ []js.Value) any {
 		ch <- nil
 		return nil
 	})
-	onError = js.FuncOf(func(_ js.Value, args []js.Value) any {
-		defer onSuccess.Release()
-		defer onError.Release()
-		event := args[0]
-		msg := event.Get("target").Get("error").Get("message").String()
-		ch <- fmt.Errorf("artifactstore: idb put %s: %s", id, msg)
+	onAbort = js.FuncOf(func(_ js.Value, _ []js.Value) any {
+		ch <- fmt.Errorf("artifactstore: idb put %s aborted: %s", id, tx.Get("error"))
 		return nil
 	})
-
-	req := os.Call("put", jsObj, id)
-	req.Set("onsuccess", onSuccess)
-	req.Set("onerror", onError)
-
-	return <-ch
+	tx.Set("oncomplete", onComplete)
+	tx.Set("onabort", onAbort)
+	os.Call("put", jsObj, id)
+	err := <-ch
+	onComplete.Release()
+	onAbort.Release()
+	return err
 }
 
 // Get retrieves the blob for id. Returns ok=false when not found.
@@ -136,6 +131,11 @@ func (s *IDBStore) Get(id string) (mime string, data []byte, ok bool, err error)
 	onSuccess = js.FuncOf(func(_ js.Value, args []js.Value) any {
 		defer onSuccess.Release()
 		defer onError.Release()
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				ch <- result{err: fmt.Errorf("artifactstore: idb get %s has an invalid record: %v", id, recovered)}
+			}
+		}()
 		event := args[0]
 		val := event.Get("target").Get("result")
 		if val.IsUndefined() || val.IsNull() {
@@ -144,8 +144,15 @@ func (s *IDBStore) Get(id string) (mime string, data []byte, ok bool, err error)
 		}
 		m := val.Get("mime").String()
 		jsData := val.Get("data")
+		if !jsData.InstanceOf(js.Global().Get("Uint8Array")) {
+			ch <- result{err: fmt.Errorf("artifactstore: idb get %s has invalid bytes", id)}
+			return nil
+		}
 		buf := make([]byte, jsData.Get("byteLength").Int())
-		js.CopyBytesToGo(buf, jsData)
+		if copied := js.CopyBytesToGo(buf, jsData); copied != len(buf) {
+			ch <- result{err: fmt.Errorf("artifactstore: idb get %s copied %d of %d bytes", id, copied, len(buf))}
+			return nil
+		}
 		ch <- result{mime: m, data: buf, ok: true}
 		return nil
 	})
@@ -173,27 +180,22 @@ func (s *IDBStore) Delete(id string) error {
 
 	ch := make(chan error, 1)
 
-	var onSuccess, onError js.Func
-	onSuccess = js.FuncOf(func(_ js.Value, _ []js.Value) any {
-		defer onSuccess.Release()
-		defer onError.Release()
+	var onComplete, onAbort js.Func
+	onComplete = js.FuncOf(func(_ js.Value, _ []js.Value) any {
 		ch <- nil
 		return nil
 	})
-	onError = js.FuncOf(func(_ js.Value, args []js.Value) any {
-		defer onSuccess.Release()
-		defer onError.Release()
-		event := args[0]
-		msg := event.Get("target").Get("error").Get("message").String()
-		ch <- fmt.Errorf("artifactstore: idb delete %s: %s", id, msg)
+	onAbort = js.FuncOf(func(_ js.Value, _ []js.Value) any {
+		ch <- fmt.Errorf("artifactstore: idb delete %s aborted: %s", id, tx.Get("error"))
 		return nil
 	})
-
-	req := os.Call("delete", id)
-	req.Set("onsuccess", onSuccess)
-	req.Set("onerror", onError)
-
-	return <-ch
+	tx.Set("oncomplete", onComplete)
+	tx.Set("onabort", onAbort)
+	os.Call("delete", id)
+	err := <-ch
+	onComplete.Release()
+	onAbort.Release()
+	return err
 }
 
 // Usage queries navigator.storage.estimate() for bytes used. Returns 0, nil

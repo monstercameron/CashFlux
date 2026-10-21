@@ -45,14 +45,24 @@ func SampleDataBanner() uic.Node {
 		if app == nil {
 			return
 		}
-		if err := app.Wipe(); err != nil {
-			return
-		}
-		uistate.SetSampleActive(false)
-		// Authoritative wipe: clear non-settings keys + persist empty, then reload
-		// clean once the IndexedDB write commits.
-		suspendAutosave = true
-		wipeFinancialLocalState(reloadPage)
+		// The initial sample save may still be in flight. Its generation must
+		// settle before the wipe prepares a conditional replacement; otherwise
+		// the two writes race and the empty page cannot be committed.
+		app.RequestDurable(func(result appstate.DurableResult) {
+			if result.Err != nil || appstate.Default != app {
+				return
+			}
+			// Pause autosave before Wipe emits a data change.
+			wasSuspended := suspendAutosave
+			suspendAutosave = true
+			if err := app.Wipe(); err != nil {
+				suspendAutosave = wasSuspended
+				return
+			}
+			uistate.SetSampleActive(false)
+			// Persist the empty dataset, then reload only after the write commits.
+			wipeFinancialLocalState(reloadPage)
+		})
 	}
 
 	onDismiss := uic.UseEvent(dismiss)

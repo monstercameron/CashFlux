@@ -16,6 +16,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/monstercameron/CashFlux/internal/backendauth"
 )
 
 const OverviewTTL = 30 * time.Second
@@ -258,6 +260,11 @@ func identity(endpoint, token, kind string) (string, string, cacheKey, error) {
 	token = strings.TrimSpace(token)
 	if endpoint == "" || token == "" {
 		return "", "", cacheKey{}, ErrCredentials
+	}
+	if err := backendauth.ValidateServerEndpoint(endpoint); err != nil {
+		// Do not include endpoint or token details in transport errors. The
+		// identity check runs before either cache access or an HTTP request.
+		return "", "", cacheKey{}, &RequestError{Operation: kind, Kind: "invalid server endpoint"}
 	}
 	digest := sha256.Sum256([]byte(token))
 	return endpoint, token, cacheKey{endpoint: endpoint, tokenID: hex.EncodeToString(digest[:]), kind: kind}, nil

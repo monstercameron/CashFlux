@@ -255,7 +255,7 @@ func newRecordAutosave(app *appstate.App, commit func(map[string]string, map[str
 	var waiters []durableWaiter
 	datasetMyGen = writerGeneration
 	paused := func() bool {
-		return suspendAutosave || hostedHydrationRequired() || pendingEnvelopeRaw != "" || autosaveBlocked()
+		return suspendAutosave || syncApplyPaused || hostedHydrationRequired() || pendingEnvelopeRaw != "" || autosaveBlocked()
 	}
 	pausedErr := errors.New("saving is paused; keep this page open until recovery finishes")
 	var save func()
@@ -311,6 +311,9 @@ func newRecordAutosave(app *appstate.App, commit func(map[string]string, map[str
 		// Only an explicit full replacement adopted by this hydrated App may
 		// rebase its writer. Another App's generation is never our entitlement.
 		observed := browserstore.GetString(datasetStoreKey)
+		if lastAcceptedOwnerClaim.app == app && lastAcceptedOwnerClaim.workspace == workspace && browserstore.GetString(datasetOwnerKey) == lastAcceptedOwnerClaim.value {
+			writerOwner = lastAcceptedOwnerClaim.value
+		}
 		if datasetMyGen != writerGeneration && hydratedRecordApp == app && datasetMyGen == readDatasetGen() {
 			writerGeneration = datasetMyGen
 			checkpoint, baseHash, head, headRaw, initialized = observed, checkpointHash(observed), datasetRecordHead{}, "", false
@@ -540,7 +543,7 @@ func scheduleCommittedDatasetPush(snapshot history.Snapshot, generation string, 
 	workspace := recordWorkspace()
 	owner, server := signedInUserID(), currentDatasetServerID()
 	current := func() bool {
-		return job == committedPushJob && !suspendAutosave && recordWorkspace() == workspace && datasetMyGen == generation && signedInUserID() == owner && currentDatasetServerID() == server
+		return job == committedPushJob && !suspendAutosave && !syncApplyPaused && recordWorkspace() == workspace && datasetMyGen == generation && signedInUserID() == owner && currentDatasetServerID() == server
 	}
 	time.AfterFunc(10*time.Millisecond, func() {
 		defer func() {

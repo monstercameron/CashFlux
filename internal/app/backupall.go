@@ -6,6 +6,8 @@ package app
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -32,39 +34,49 @@ const (
 // autosave ticker hasn't flushed it to localStorage yet; an inactive one's comes
 // from its saved blob. With no registry yet (a fresh install), it backs up just the
 // active dataset.
-func gatherBackupDatasets(r workspace.Registry, activeDS string) []string {
+func gatherBackupDatasets(r workspace.Registry, activeDS string) ([]string, error) {
 	datasets := []string{}
 	if len(r.Workspaces) == 0 {
 		if activeDS != "" {
 			datasets = append(datasets, activeDS)
 		}
-		return datasets
+		return datasets, nil
 	}
+	app := appstate.Default
 	for _, w := range r.Workspaces {
 		ds := loadBlob(w.ID)[datasetStoreKey]
 		if w.ID == r.ActiveID {
 			ds = activeDS
+		} else if ds != "" {
+			if app == nil {
+				return nil, errors.New("active dataset is unavailable")
+			}
+			complete, err := app.CompleteArtifactSnapshot([]byte(ds))
+			if err != nil {
+				return nil, fmt.Errorf("complete backup for workspace %s: %w", w.ID, err)
+			}
+			ds = string(complete)
 		}
 		if ds != "" {
 			datasets = append(datasets, ds)
 		}
 	}
-	return datasets
+	return datasets, nil
 }
 
 // activeDataset serializes the live active-workspace dataset (OpenAI key redacted,
 // artifact image bytes rehydrated from IndexedDB so the backup is fully
 // self-contained), or "" when unavailable.
-func activeDataset() string {
+func activeDataset() (string, error) {
 	app := appstate.Default
 	if app == nil {
-		return ""
+		return "", errors.New("active dataset is unavailable")
 	}
 	data, err := app.ExportJSONRedactedWithBlobs()
 	if err != nil {
-		return ""
+		return "", err
 	}
-	return string(data)
+	return string(data), nil
 }
 
 // marshalFullBackup gathers the whole install — every workspace's dataset, the
@@ -77,8 +89,16 @@ func activeDataset() string {
 // install missing — the worst possible time and the worst possible way.
 func marshalFullBackup() ([]byte, error) {
 	r := loadRegistry()
+	active, err := activeDataset()
+	if err != nil {
+		return nil, err
+	}
+	datasets, err := gatherBackupDatasets(r, active)
+	if err != nil {
+		return nil, err
+	}
 	env := backup.Envelope{
-		Datasets:          gatherBackupDatasets(r, activeDataset()),
+		Datasets:          datasets,
 		WorkspaceRegistry: lsGet(workspacesKey),
 		Appearance: backup.Appearance{
 			Theme:  lsGet(themeKey),
@@ -99,14 +119,16 @@ func marshalFullBackup() ([]byte, error) {
 // single-workspace export, this is a lossless snapshot of the entire app, for
 // moving to a new device or keeping a safety copy.
 func backupEverything() {
-	data, err := marshalFullBackup()
-	if err != nil {
-		paletteNotify(uistate.T("backup.everythingErr"), true)
-		return
-	}
-	downloadBytes("cashflux-backup.json", "application/json", data)
-	recordBackupNow() // C299: stamp so "Last backed up" reflects full backups too
-	paletteNotify(uistate.T("backup.everythingDone"), false)
+	go func() {
+		data, err := marshalFullBackup()
+		if err != nil {
+			paletteNotify(uistate.T("backup.everythingErr"), true)
+			return
+		}
+		downloadBytes("cashflux-backup.json", "application/json", data)
+		recordBackupNow() // C299: stamp so "Last backed up" reflects full backups too
+		paletteNotify(uistate.T("backup.everythingDone"), false)
+	}()
 }
 
 // restoreFromBackup picks a full-backup JSON file, confirms the (destructive)

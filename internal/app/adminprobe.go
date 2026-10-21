@@ -24,7 +24,7 @@ func probeAdminAccess() {
 	// uses the configured prefs token; the shared cache is keyed by token identity,
 	// so those two paths cannot accidentally share a response across credentials.
 	token := strings.TrimSpace(effectiveServerToken(pr))
-	if endpoint == "" || token == "" {
+	if endpoint == "" || token == "" || validateBackendTransport(endpoint) != nil {
 		return
 	}
 	endpoint = normalizedBackendEndpoint(endpoint)

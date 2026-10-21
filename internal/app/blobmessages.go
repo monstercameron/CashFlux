@@ -2,7 +2,14 @@
 
 package app
 
-import "github.com/monstercameron/CashFlux/internal/backendrpc"
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
+	"strings"
+
+	"github.com/monstercameron/CashFlux/internal/backendrpc"
+)
 
 // buildUploadBlobHeader constructs the header chunk uploadBlobStream sends
 // first on a BlobService.UploadBlob client stream. Pulled out as a pure,
@@ -32,4 +39,20 @@ func buildDownloadBlobRequest(workspaceID, hash string) *backendrpc.DownloadBlob
 		Hash:        hash,
 		WorkspaceID: workspaceID,
 	}
+}
+
+// verifyDownloadedBlob checks the content address from the encrypted dataset
+// before any downloaded bytes are decrypted or imported into local storage.
+func verifyDownloadedBlob(hash string, data []byte) error {
+	if len(hash) != sha256.Size*2 {
+		return errors.New("blob download: invalid content hash")
+	}
+	if _, err := hex.DecodeString(hash); err != nil {
+		return errors.New("blob download: invalid content hash")
+	}
+	sum := sha256.Sum256(data)
+	if !strings.EqualFold(hex.EncodeToString(sum[:]), hash) {
+		return errors.New("blob download: content hash mismatch")
+	}
+	return nil
 }

@@ -60,22 +60,39 @@ func datasetOwner() syncstate.DatasetOwner {
 // device's copy has been accepted by the server as theirs. Claiming anywhere
 // else would launder an inherited dataset into a legitimate one, which is the
 // whole failure being prevented.
-func claimDatasetForCurrentUser() {
+type acceptedOwnerClaim struct {
+	app       *appstate.App
+	workspace string
+	value     string
+}
+
+var lastAcceptedOwnerClaim acceptedOwnerClaim
+
+func claimDatasetForCurrentUser() error {
 	owner := currentDatasetOwner()
 	if owner.UserID == "" || owner.ServerID == "" {
 		// Unknown identity claims nothing. See syncstate.DatasetForeign: an
 		// unknown identity must never be treated as authoritative, in either
 		// direction.
-		return
+		return nil
 	}
 	if datasetOwner() == owner {
-		return
+		return nil
 	}
 	encoded, err := json.Marshal(owner)
 	if err != nil {
-		return
+		return err
 	}
-	lsSet(datasetOwnerKey, string(encoded))
+	done := make(chan error, 1)
+	browserstore.SetSecure(datasetOwnerKey, string(encoded), func(err error) { done <- err })
+	if err := <-done; err != nil {
+		return fmt.Errorf("save accepted dataset owner: %w", err)
+	}
+	// This page's record writer captured the former owner at boot. Only a
+	// durable claim after this account's accepted server push may rebase that
+	// comparison; a change from another tab must still make it read-only.
+	lastAcceptedOwnerClaim = acceptedOwnerClaim{app: appstate.Default, workspace: activeWorkspaceID(), value: string(encoded)}
+	return nil
 }
 
 // releaseDatasetOwner forgets the claim. Used when the local dataset is

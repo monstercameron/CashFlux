@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/backendauth"
 	"github.com/monstercameron/GoGRPCBridge/pkg/grpctunnel"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
@@ -42,6 +43,9 @@ func Target(serverURL string) (string, error) {
 	raw := strings.TrimSpace(serverURL)
 	if raw == "" {
 		return "", fmt.Errorf("sync bridge: server url is required")
+	}
+	if err := backendauth.ValidateServerEndpoint(raw); err != nil {
+		return "", fmt.Errorf("sync bridge: %w", err)
 	}
 	u, err := url.Parse(raw)
 	if err != nil {

@@ -20,7 +20,7 @@ func TestTarget(t *testing.T) {
 		{"https://cashflux.example", "wss://cashflux.example/grpc"},
 		{"ws://localhost:8081/grpc", "ws://localhost:8081/grpc"},
 		{"wss://api.example/base/", "wss://api.example/base/grpc"},
-		{" http://localhost:8081?token=nope#frag ", "ws://localhost:8081/grpc"},
+		{"http://[::1]:8081", "ws://[::1]:8081/grpc"},
 	}
 	for _, tt := range tests {
 		got, err := Target(tt.in)
@@ -34,7 +34,7 @@ func TestTarget(t *testing.T) {
 }
 
 func TestTargetRejectsInvalidURLs(t *testing.T) {
-	for _, in := range []string{"", "http://", "ftp://example.com"} {
+	for _, in := range []string{"", "http://", "ftp://example.com", "http://sync.example.com", "ws://sync.example.com", "https://user:pass@sync.example.com", "https://sync.example.com?token=nope"} {
 		if _, err := Target(in); err == nil {
 			t.Fatalf("Target(%q) accepted invalid url", in)
 		}

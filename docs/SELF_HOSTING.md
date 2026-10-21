@@ -138,7 +138,7 @@ CASHFLUX_SERVER_APP_ORIGIN=http://127.0.0.1:8080 \
 go run ./cmd/cashflux-server
 ```
 
-Use `http://127.0.0.1:8081` and `dev-token` in Settings. The browser still uses the GoGRPCBridge tunnel; `http://` is converted to `ws://.../grpc` by the client.
+Use `http://127.0.0.1:8081` and `dev-token` in Settings. The browser still uses the GoGRPCBridge tunnel; local `http://` is converted to `ws://.../grpc` by the client. Servers outside the device must use HTTPS so access tokens and encrypted financial data cannot travel over an unprotected connection. A LAN address also needs HTTPS; terminate TLS at a reverse proxy if necessary.
 
 ## OAuth Mode
 

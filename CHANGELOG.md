@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Integrate the published v1.19.9 sync/privacy fixes with the v7 componentized app, preserving encrypted artifact migration and transport guards.
 - Pin GoWebComponents v7.0.1 after the final latest-version check.
 - Componentization inventory reflects current native seams and records remaining source and performance gaps.
 - Performance tools use bounded asset settling and explicit applied-search completion with retained provenance.
@@ -239,6 +240,28 @@ and every commit updates this file under `Unreleased`.
 - Accounts share an indexed ledger snapshot for balances, payment hints and row series. Group subtotals exclude invalid or unconvertible balances and disclose incomplete totals.
 - Architecture checks follow the canonical money calculations through extracted native view models, and calendar overflow regressions require an unavailable amount rather than preserving the old overflowing conversion.
 - Shared derived views use bounded LRU caches keyed by app identity, stored data, browser preferences, scope, and time inputs. Heavy Smart snapshots retain one context, and anomaly/action sections share the same deterministic engine pass.
+- Prepared v1.19.9 with the verified encrypted cross-browser file sync and privacy fixes.
+- The server load smoke test now waits for its watch subscription before sending writes and allows for CI load, so it cannot miss events before the watch starts.
+- Smart Import WebAssembly review tests now wait for the mocked response to finish before fixture teardown, preventing an intermittent CI render panic.
+- Encrypted cloud snapshots now omit this browser's server address and credentials; a restored browser keeps its own connection in its protected local checkpoint.
+- Remote replacement now pauses autosave and queued uploads until its dataset, owner, and sync bookmark commit together. Later edits queued by the same page follow an accepted upload version without creating a false conflict.
+- The browser regression now verifies an encrypted file download, a second-browser edit, a clean queue, and restoration of that edit in a third browser.
+- The Smart Import WebAssembly regression now waits for its mocked response to reach the review state before fixture teardown, avoiding an intermittent CI callback crash.
+- Protected boot now encrypts legacy external files referenced by inactive workspace snapshots as well as the active workspace.
+- CI and release builds now use Go 1.26.10, which fixes the reported `crypto/x509` standard-library vulnerability.
+- Local artifact encryption now frames the MIME with a validated separator, clearing the CI security scanner's integer-conversion finding.
+- Local artifact reads now report malformed IndexedDB byte records instead of leaving a file read waiting indefinitely.
+- Full-install backups now include external file bytes for inactive workspaces and stop with an error if any workspace has a missing or unreadable attachment.
+- New locally stored attachment bytes and MIME are encrypted with the protected workspace key; active legacy plaintext files are upgraded after unlock or on first read, and the upgrade waits for an IndexedDB commit.
+- Snapshot preparation now refuses to return a dataset unless App Lock encryption stays active through the final envelope, closing a plaintext fallback for future sync callers.
+- File-bearing JSON and full-install exports now run outside browser click callbacks so IndexedDB can deliver attachment reads and the backup can finish or report an error.
+- Unlocking a saved encrypted dataset now replays its IndexedDB journal after the WebCrypto callback returns, so a server-change reload can finish and show the signed-out setup for the new server.
+- Full-install backup now stops when the active dataset or one of its locally stored files cannot be read, instead of downloading an archive with that dataset missing.
+- Cloud sync now includes bytes from locally stored PDF and image attachments in each committed snapshot; unreadable, missing, or truncated files pause upload, and manual JSON/SQLite backups report the same failure instead of exporting an incomplete copy.
+- The Cloud sign-in step now lets its connection check finish across setup renders and preserves the last successful public discovery result for that server during a pane remount, preventing a persistent "Checking the connection" state.
+- A successful first sync now durably records the dataset's account owner before the local autosave writer adopts that same-page ownership, preventing a false "another tab" read-only state before attachment uploads.
+- First encrypted sync now rebases its queued snapshot on the version returned when it creates an empty server workspace, allowing the snapshot push to succeed.
+- Cloud browser regression helpers now wait for the actual setup and unlock states, click save once, and stop their own Windows test server process reliably.
 - Prepared v1.19.8 from the verified Transactions, Import, sync, budget, dashboard, navigation, and development-server changes below.
 - Dev-server reloads now replace the page instead of starting overlapping WebAssembly runtimes that could each autosave the same workspace.
 - Aligned the sticky top bar and sidebar border at expanded and collapsed widths, and kept the ledger below the top bar while scrolling.
@@ -254,6 +277,8 @@ and every commit updates this file under `Unreleased`.
 
 ### Added
 - Shared configurable control strips and keyed tile surfaces preserve page-specific actions, attributes, tile context, and component state during reordering. Presentation components accept already-derived content and own no financial calculations.
+- The sync privacy review now records local blobs retained after artifact deletion and the queued-snapshot constraint on safe cleanup.
+- A file-sync and privacy review records the tested two-device flow, server-visible metadata, local attachment exposure, and backup recovery limits.
 - **Regular monthly spend calculation (BASE2, not wired in yet).** `internal/regularspend` works out "Fixed
   commitments" (recurring bills and subscriptions, debt minimums, annual and quarterly bills as a monthly set-aside with
   their due months) and "Typical essential month" (fixed plus the median of the last six complete months of the essential
@@ -339,6 +364,11 @@ and every commit updates this file under `Unreleased`.
 ### Fixed
 - Currency conversion rejects non-finite rates and results outside the money range. An exact fallback preserves valid boundary amounts and half-away-from-zero rounding without adding allocations to ordinary conversions.
 - Bulk balance reads now omit corrupted accounts instead of returning a partial balance. Net-worth aggregation shares one ledger pass while preserving account-specific errors, archived/excluded-account rules, and duplicate-ID behavior.
+- Let an in-flight local save finish before “Start fresh” replaces the sample dataset, so the durable wipe does not lose its generation check.
+- Verify downloaded attachment bytes against the content hash in the encrypted dataset before decrypting or importing them.
+- Require HTTPS or secure WebSockets for remote sync and credential requests; allow unencrypted loopback only for local development. Reject server URLs containing user credentials, queries, or fragments.
+- Show the actual Cloud setup connection error, check discovery without sending a token, and time out unresponsive hosts. Clarify that separate app and server origins can work when the server allows the app origin.
+- Accept a server advertising API version 2 when it still supports the client's version 1 sync RPCs; reject malformed or truly incompatible version ranges.
 - Style the reviewed budget template bucket selector.
 - Improve import tile hierarchy, Smart+ marks, contrast and draft spacing.
 - Reject overflowing budget calculations and clarify budget save feedback.

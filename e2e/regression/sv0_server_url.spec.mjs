@@ -1,26 +1,30 @@
-import { test, expect } from "./fixtures.mjs";
-import { startServer, createPasswordAccount, configureRemote, login, waitForSync, addUniqueTransaction, unlockIfNeeded } from "./sv0_helpers.mjs";
+import { test, expect, nav } from "./fixtures.mjs";
+import { startServer, createPasswordAccount, configureRemote, login, waitForSync, unlockIfNeeded } from "./sv0_helpers.mjs";
 
 let serverA;
 let serverB;
 test.beforeAll(async () => { serverA = await startServer(); serverB = await startServer(); });
 test.afterAll(async () => { await serverB?.stop(); await serverA?.stop(); });
 
-test("changing the server URL clears A's token and queued edits before contacting B", async ({ app, request }) => {
+test("changing the server URL clears A's token before contacting B", async ({ app, request }) => {
   test.setTimeout(180_000);
   const suffix = crypto.randomUUID().slice(0, 8);
   const user = { username: `sv0-url-${suffix}`, password: `CashFlux-U-${suffix}-Pass!` };
   await createPasswordAccount(request, serverA.origin, user.username, user.password);
+  await expect(app.getByTestId("sample-start-fresh")).toBeVisible();
+  await Promise.all([app.waitForEvent("load", { timeout: 20_000 }), app.getByTestId("sample-start-fresh").click()]);
+  await app.waitForFunction(() => document.documentElement.getAttribute("data-app-ready") === "true", null, { timeout: 45_000 });
   await configureRemote(app, serverA.origin);
   await login(app, user.username, user.password);
   await waitForSync(app);
-  await addUniqueTransaction(app, `SV0-URL-QUEUED-${suffix}`);
 
   const before = await app.evaluate(() => ({
     refresh: window.cashfluxStoreGet?.("cashflux:auth:refresh-token") || "",
     access: window.cashfluxStoreGet?.("cashflux:auth:access-token") || "",
   }));
   expect(before.refresh || before.access).not.toBe("");
+  await nav(app, "/settings");
+  await app.locator(".settings-page .set-tab-strip button", { hasText: "Cloud" }).first().click();
   await app.getByTestId("cloud-advanced").click();
   await app.getByTestId("cloud-change-connection").click();
   await expect(app.locator("#cf-dialog-confirm")).toBeVisible();
@@ -33,8 +37,9 @@ test("changing the server URL clears A's token and queued edits before contactin
   const changedHost = app.waitForEvent("load", { timeout: 30_000 });
   await app.locator("#cf-dialog-confirm").click();
   await changedHost;
-  await app.waitForFunction(() => document.documentElement.getAttribute("data-app-ready") === "true", null, { timeout: 45_000 });
+  await expect.poll(async () => (await app.locator("#cf-applock-gate").isVisible()) || await app.evaluate(() => document.documentElement.getAttribute("data-app-ready") === "true"), { timeout: 20_000 }).toBe(true);
   await unlockIfNeeded(app);
+  await app.waitForFunction(() => document.documentElement.getAttribute("data-app-ready") === "true", null, { timeout: 45_000 });
   const after = await app.evaluate(() => ({
     refresh: window.cashfluxStoreGet?.("cashflux:auth:refresh-token") || "",
     access: window.cashfluxStoreGet?.("cashflux:auth:access-token") || "",

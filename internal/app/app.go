@@ -133,6 +133,7 @@ func Run() {
 	bootTiming.MeasureDetail("blobStoreInitMs", initBlobStore)
 	bootTiming.MeasureDetail("datasetHydrationMs", hydrateOpenedProtectedStorage)
 	bootTiming.MeasureDetail("legacyUnlockWaitMs", awaitLegacyDatasetUnlock)
+	bootTiming.MeasureDetail("artifactBlobMigrationMs", migrateReferencedArtifactBlobs)
 	bootTiming.EndPhase("appStateWorkspaceAndHydrationMs")
 	// Restore and refresh the selected account before any identity, sync or watch.
 	// Failure leaves household data intact and the connection behind sign-in.

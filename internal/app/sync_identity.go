@@ -186,7 +186,7 @@ func clearSignedInUserID() { _ = setSignedInUserID("") }
 func refreshSignedInUserID(serverURL, token string) (string, bool) {
 	serverURL = strings.TrimRight(strings.TrimSpace(serverURL), "/")
 	token = strings.TrimSpace(token)
-	if serverURL == "" || token == "" {
+	if serverURL == "" || token == "" || validateBackendTransport(serverURL) != nil {
 		return "", false
 	}
 	req, err := http.NewRequest(http.MethodGet, serverURL+"/v1/me", nil)

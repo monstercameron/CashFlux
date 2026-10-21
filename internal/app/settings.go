@@ -1586,14 +1586,18 @@ func exportJSON(notify func(string, bool)) {
 	if app == nil {
 		return
 	}
-	data, err := app.ExportJSONWithBlobs()
-	if err != nil {
-		notify(uistate.T("settings.exportDataErr", err.Error()), true)
-		return
-	}
-	downloadBytes("cashflux.json", "application/json", data)
-	recordBackupNow() // stamp the backup so the B28 reminder resets
-	notify(uistate.T("settings.exportedData", "cashflux.json"), false)
+	// Artifact bytes can be in IndexedDB, whose callbacks need the click handler
+	// to return before the synchronous export helper may wait for them.
+	go func() {
+		data, err := app.ExportJSONWithBlobs()
+		if err != nil {
+			notify(uistate.T("settings.exportDataErr", err.Error()), true)
+			return
+		}
+		downloadBytes("cashflux.json", "application/json", data)
+		recordBackupNow() // stamp the backup so the B28 reminder resets
+		notify(uistate.T("settings.exportedData", "cashflux.json"), false)
+	}()
 }
 
 // exportSQLiteFile downloads the household as a standalone SQLite database.

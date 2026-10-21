@@ -33,7 +33,7 @@ func TestServerLoadSmokeSyncBlobAndWatch(t *testing.T) {
 	bridge := httptest.NewServer(NewMux(cfg, store))
 	defer bridge.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	watchConn, err := syncbridge.Dial(ctx, syncbridge.Config{ServerURL: bridge.URL, Token: "dev-token"})
 	if err != nil {
@@ -55,6 +55,15 @@ func TestServerLoadSmokeSyncBlobAndWatch(t *testing.T) {
 	}
 	if err := stream.CloseSend(); err != nil {
 		t.Fatalf("WatchWorkspaces close send: %v", err)
+	}
+	// The client returning from SendMsg does not mean the server has installed
+	// its watch yet. Sending writes before that subscription is visible can
+	// permanently miss an event and turn this load smoke into a timeout.
+	for cfg.Metrics.streamsActive.Load() == 0 {
+		if err := ctx.Err(); err != nil {
+			t.Fatalf("watch did not subscribe: %v", err)
+		}
+		time.Sleep(5 * time.Millisecond)
 	}
 
 	const workspaceCount = 8

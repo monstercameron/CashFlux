@@ -75,3 +75,23 @@ func stripConnectionPrefsJSON(raw string) string {
 	}
 	return stripConnectionPrefs(map[string]string{prefsStoreKey: raw})[prefsStoreKey]
 }
+
+// stripDatasetConnectionPrefs removes this device's server credentials from a
+// dataset immediately before it is encrypted for upload. The local protected
+// checkpoint keeps its own connection; another browser must use its own.
+func stripDatasetConnectionPrefs(settings map[string]string) bool {
+	raw, ok := settings[prefsStoreKey]
+	if !ok {
+		return false
+	}
+	clean := stripConnectionPrefsJSON(raw)
+	if clean == raw {
+		return false
+	}
+	if clean == "" {
+		delete(settings, prefsStoreKey)
+	} else {
+		settings[prefsStoreKey] = clean
+	}
+	return true
+}
