@@ -1,3 +1,7 @@
+## 2026-10-21 - Reconcile componentization source inventory
+
+Updated47staticroute inventory and separate dynamiccustompages, removing stale resolved arithmetic residuals. Source presence is not full completion; injected Settings, Events arithmetic, Reports latency and unproven interaction/cold-start improvements remain explicit. Documentation JSON parses; final merged-source gates follow.
+
 ## 2026-10-21 - Bound performance capture waits and retain diagnostics
 
 Asset font/visible-image waits share a5seconddeadline; timed-out captures cannot enter medians. Interaction diagnostics use applied-query/count contracts rather than a transient busy edge. Both scripts pass node--check; earlier failed interaction capture remains failed, and no new latency improvement is claimed. Retained paired route evidence shows8lower medians and a Reports regression, not overall completion.

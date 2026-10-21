@@ -1,12 +1,20 @@
 {
   "source": "internal/screens/screens.go:All (authoritative registry)",
   "route_count": 47,
+  "dynamic_routes_outside_registry": [
+    {
+      "path_pattern": "/p/:slug",
+      "source": "internal/app/app.go",
+      "description": "User-authored custom pages resolve by slug from app state and use the shared CustomPage renderer. This pattern route is separate from the 47 static screens.All registrations; user-created pages are not counted as static routes.",
+      "boundary_status": "The shared renderer and per-page widget composition remain within the full componentization review."
+    }
+  ],
   "fields": {
     "entry": "null in every route; function-level locations are omitted because active refactors move source. route_source names the authoritative registry.",
     "route_source": "authoritative registry source for route registration",
     "native_model_evidence": "native package/preparation seams observed in the routed implementation; presence is not a completion claim",
     "typed_child_evidence": "typed child components and surface APIs observed in current source",
-    "known_exceptions_or_residuals": "verified route caveats/residuals from source review; empty means none recorded in this audit, not proof of completeness",
+    "known_exceptions_or_residuals": "current source caveats/gaps and explicitly pending route verification; empty means none recorded, not proof of completeness",
     "boundary_class": "observed source boundary classification, not a completion rating",
     "test_evidence_pointer": "test source references only; execution/pass status is not inferred",
     "verified_component_refs": "first-nine route component call sites verified against current source",
@@ -27,7 +35,7 @@
         "ui.Widget",
         "DashboardLayoutControls"
       ],
-      "known_exceptions_or_residuals": "",
+      "known_exceptions_or_residuals": "Current source includes checked trend facts and WhatChanged preparation/cache dependencies. Mounted-host and boundary verification remain pending root final gates. Browser captures show local route gains but do not establish the full performance objective.",
       "test_evidence_pointer": "internal/dashboardview/*_test.go; dashboard screen WASM tests",
       "route_source": "internal/screens/screens.go:All",
       "verified_component_refs": [
@@ -86,7 +94,7 @@
         "AccountRow",
         "accountDetailContext"
       ],
-      "known_exceptions_or_residuals": "Disclosure-lazy account history/projections are intentional; retain snapshot cache identity and invalid-balance unavailable behavior.",
+      "known_exceptions_or_residuals": "No current Accounts delta arithmetic residual is recorded. History and projections remain disclosure-lazy; preserve snapshot cache identity and invalid-balance unavailable behavior. Current source remains subject to root final gates.",
       "test_evidence_pointer": "internal/screens/accounts_details_lazy_wasm_test.go; internal/screens/reservations_primary_wasm_test.go",
       "route_source": "internal/screens/screens.go:All",
       "verified_component_refs": [
@@ -115,7 +123,7 @@
         "BudgetRow",
         "BudgetAnnualGrid"
       ],
-      "known_exceptions_or_residuals": "",
+      "known_exceptions_or_residuals": "Checked funding and pool preparation plus budget row components are present in current source. Verification remains pending root final gates.",
       "test_evidence_pointer": "internal/screens/budgets_bc4b1_wasm_test.go; internal/screens/budgets_flex_native_wasm_test.go",
       "route_source": "internal/screens/screens.go:All",
       "verified_component_refs": [
@@ -145,7 +153,7 @@
         "GoalFigures",
         "GoalTaskPreview"
       ],
-      "known_exceptions_or_residuals": "",
+      "known_exceptions_or_residuals": "No current Goals Compare pooled-contribution arithmetic residual recorded in the source review. Current source remains subject to root final gates.",
       "test_evidence_pointer": "internal/goalview/*_test.go; internal/screens/goals_*_wasm_test.go",
       "route_source": "internal/screens/screens.go:All",
       "verified_component_refs": [
@@ -266,7 +274,7 @@
         "reportController",
         "typed report section components"
       ],
-      "known_exceptions_or_residuals": "Summary keeps expensive typed sections unmounted; retain typed context identity and checked per-$100 helpers.",
+      "known_exceptions_or_residuals": "Summary keeps expensive typed sections unmounted; typed context identity and checked per-$100 helpers are preserved. No current Reports arithmetic residual is recorded. Latest browser captures show a Reports latency regression; the full nine-page performance objective remains incomplete. Root final gates are pending.",
       "test_evidence_pointer": "internal/screens/reports_tax_checked_wasm_test.go; internal/screens/reports_render_wasm_test.go",
       "route_source": "internal/screens/screens.go:All",
       "verified_component_refs": [
@@ -312,8 +320,8 @@
         "DebtStrategyPanel",
         "DebtRow"
       ],
-      "known_exceptions_or_residuals": "",
-      "test_evidence_pointer": "See the corresponding internal native model package tests; no dedicated screen test pointer recorded in this audit.",
+      "known_exceptions_or_residuals": "Debt strategy preparation is present in debtview.Prepare/payoff; verification remains pending root final gates.",
+      "test_evidence_pointer": "internal/debtview/prepare_test.go; internal/debtplan/debtplan_test.go; internal/screens/debt_loans_native_wasm_test.go",
       "route_source": "internal/screens/screens.go:All"
     },
     {
@@ -344,7 +352,7 @@
       "native_model_evidence": [
         "allocateview.Prepare (candidates, rank, amount parsing, reserve/cap/split)",
         "allocate package; marginal comparison",
-        "ledger.PeriodTotals (screen currently drops error for income-prefill hint)"
+        "ledger.PeriodTotals (checked transactions and retained error for income-prefill availability)"
       ],
       "typed_child_evidence": [
         "allocHeroTile",
@@ -352,7 +360,7 @@
         "allocPlanTile",
         "allocDestRow"
       ],
-      "known_exceptions_or_residuals": "Concrete screen-boundary gaps: internal/screens/allocate.go:186 discards ledger.PeriodTotals error while producing the income-prefill hint (`monthIncome`); failure can look like zero and expose a misleading prefill. internal/screens/allocate_view.go:101 computes `TotalMinor - ReserveMinor` for Allocatable in the screen package although allocation model preparation is native; carry this derived money fact from allocateview.Prepare. Candidate/ranking/splitting otherwise use allocateview.Prepare.",
+      "known_exceptions_or_residuals": "AllocatableMinor is prepared natively by allocateview.Prepare. The screen retains income aggregation errors and disables prefill with an unavailable notice while manual entry remains active. Native preparation and Allocate host tests cover missing FX, aggregate overflow, invalid input and closed sources. No further residual recorded in this source audit.",
       "test_evidence_pointer": "internal/screens/allocate_prepared_host_wasm_test.go; internal/allocateview/prepare_test.go",
       "route_source": "internal/screens/screens.go:All"
     },
@@ -363,15 +371,15 @@
       "entry": null,
       "boundary_class": "prepared-model",
       "native_model_evidence": [
-        "planningmodel, planning, forecast, cashflow, runway"
+        "planningmodel, planning, forecast, cashflow, runway, planningmodel retirement, retirement"
       ],
       "typed_child_evidence": [
         "RecurringRow",
         "PlanRow",
         "detectedRecurringRow"
       ],
-      "known_exceptions_or_residuals": "Forecast, runway, safe-spend, trim/compare computations are native through planningmodel.Prepare; `preparePlanning` (internal/screens/planning_prepared.go:19) is the typed screen adapter, parsing form strings with money.ParseMinor and validating nonnegative month input before invoking the model. Planning.go formats prepared values and builds chart points. Treat input parsing as adapter responsibility; no forecast math in the view identified.",
-      "test_evidence_pointer": "See the corresponding internal native model package tests; no dedicated screen test pointer recorded in this audit.",
+      "known_exceptions_or_residuals": "Forecast, runway, safe-spend and trim/compare computations are native through planningmodel.Prepare; `preparePlanning` is the typed adapter for money parsing and nonnegative month validation, and the screen formats prepared values/builds chart points. Retirement preparation is present in native models; its host/native verification remains pending root final gates.",
+      "test_evidence_pointer": "internal/planningmodel/planningmodel_test.go; internal/planningmodel/retirement_test.go; internal/retirement/retirement_test.go; internal/screens/planning_retirement_host_wasm_test.go",
       "route_source": "internal/screens/screens.go:All"
     },
     {
@@ -387,8 +395,8 @@
         "RhythmSurface",
         "recurring review rows"
       ],
-      "known_exceptions_or_residuals": "",
-      "test_evidence_pointer": "See the corresponding internal native model package tests; no dedicated screen test pointer recorded in this audit.",
+      "known_exceptions_or_residuals": "Native recurring agenda preparation and screen wiring are present; verification remains pending root final gates.",
+      "test_evidence_pointer": "internal/recurringview/agenda_test.go; internal/screens/recurring_agenda_unavailable_host_wasm_test.go",
       "route_source": "internal/screens/screens.go:All"
     },
     {
@@ -650,8 +658,8 @@
         "CustomFieldsManager",
         "CustomFieldRow"
       ],
-      "known_exceptions_or_residuals": "",
-      "test_evidence_pointer": "See the corresponding internal native model package tests; no dedicated screen test pointer recorded in this audit.",
+      "known_exceptions_or_residuals": "Native custom-field parsing/validation and the manager screen are present; verification remains pending root final gates.",
+      "test_evidence_pointer": "internal/customfields/formvalues_test.go; internal/customfields/customfields_test.go; internal/screens/customfield_parse_wasm_test.go",
       "route_source": "internal/screens/screens.go:All"
     },
     {
@@ -668,8 +676,8 @@
         "stagedActionRow",
         "workflowHistory"
       ],
-      "known_exceptions_or_residuals": "",
-      "test_evidence_pointer": "See the corresponding internal native model package tests; no dedicated screen test pointer recorded in this audit.",
+      "known_exceptions_or_residuals": "The workflow package contains native PYF identity/duplicate preparation; verification remains pending root final gates.",
+      "test_evidence_pointer": "internal/workflow/payyourself_test.go; internal/workflow/workflow_test.go",
       "route_source": "internal/screens/screens.go:All"
     },
     {
@@ -771,8 +779,8 @@
         "SubscriptionRow",
         "IgnoredSubscriptionRow"
       ],
-      "known_exceptions_or_residuals": "",
-      "test_evidence_pointer": "internal/screens/subscriptions_financial_wasm_test.go",
+      "known_exceptions_or_residuals": "Native subscription trailing-spend preparation is present; verification remains pending root final gates.",
+      "test_evidence_pointer": "internal/subscriptions/trailing_spend_test.go; internal/screens/subscriptions_financial_wasm_test.go",
       "route_source": "internal/screens/screens.go:All"
     },
     {
@@ -944,16 +952,61 @@
         "internal/app sync injected"
       ],
       "typed_child_evidence": [
-        "SyncView injection"
+        "screens.SyncScreen delegates to app-injected SyncRedirect (internal/app/cloudtab.go), which navigates to /settings/cloud"
       ],
-      "known_exceptions_or_residuals": "Compatibility route is documented as redirect to Settings → Cloud, but current SyncScreen returns injected SyncView; verify that boot injection performs redirect. Old coverage calling it a separate surface is stale.",
+      "known_exceptions_or_residuals": "",
       "test_evidence_pointer": "See the corresponding internal native model package tests; no dedicated screen test pointer recorded in this audit.",
       "route_source": "internal/screens/screens.go:All"
     }
   ],
-  "audit_head": "e14066dc",
+  "initial_audit_head": "e14066dc",
   "audited_date": "2026-10-21",
-  "classification_note": "Source-reviewed boundary classification. Prepared-model indicates native preparation is present, not that all view facts are complete. Residuals name only verified behavior and distinguish view math, typed form adapters, display policy, and command orchestration. Test pointers are references only; this audit ran no tests/build/browser tools.",
+  "current_source_state": "Reconciled against current worktree sources on 2026-10-21. Exact final revision and root gate result are not asserted here.",
+  "classification_note": "Source-reviewed boundary classification. Prepared-model indicates native preparation is present, not that all view facts are complete. Route notes distinguish source presence, remaining gaps, and verification pending root final gates. Test pointers are references only; this documentation reconciliation ran no tests/build/browser tools.",
+  "source_seams_pending_root_final_gates": [
+    {
+      "area": "Budget funding, row and pool",
+      "source": ["internal/budgetview/funding.go", "internal/budgetview/pool.go", "internal/screens/budgets_row.go"],
+      "validation_sources": ["internal/screens/budgets_funding_boundary_wasm_test.go", "internal/screens/budgets_pool_host_wasm_test.go"],
+      "status": "Source and test files are present; verification pending root final gates."
+    },
+    {
+      "area": "Dashboard What changed",
+      "source": ["internal/screens/dashboard_whatchanged.go", "internal/dashboardview/trend_facts.go"],
+      "validation_sources": ["internal/screens/dashboard_whatchanged_host_wasm_test.go", "internal/screens/dashboard_trend_facts_host_wasm_test.go"],
+      "status": "Source and test files are present; verification pending root final gates."
+    },
+    {
+      "area": "Retirement",
+      "source": ["internal/planningmodel/retirement.go", "internal/retirement/retirement.go", "internal/screens/planning_retirement.go"],
+      "validation_sources": ["internal/planningmodel/retirement_test.go", "internal/retirement/retirement_test.go", "internal/screens/planning_retirement_host_wasm_test.go"],
+      "status": "Source and test files are present; verification pending root final gates."
+    },
+    {
+      "area": "Debt strategy",
+      "source": ["internal/debtview/prepare.go", "internal/debtplan/debtplan.go", "internal/screens/debt_coach.go"],
+      "validation_sources": ["internal/debtview/prepare_test.go", "internal/debtplan/debtplan_test.go", "internal/screens/debt_loans_native_wasm_test.go"],
+      "status": "Source and test files are present; verification pending root final gates."
+    },
+    {
+      "area": "Recurring agenda",
+      "source": ["internal/recurringview/agenda.go", "internal/screens/recurring_agenda.go"],
+      "validation_sources": ["internal/recurringview/agenda_test.go", "internal/screens/recurring_agenda_unavailable_host_wasm_test.go"],
+      "status": "Source and test files are present; verification pending root final gates."
+    },
+    {
+      "area": "Custom fields",
+      "source": ["internal/customfields/formvalues.go", "internal/customfields/customfields.go", "internal/screens/customfields.go"],
+      "validation_sources": ["internal/customfields/formvalues_test.go", "internal/customfields/customfields_test.go", "internal/screens/customfield_parse_wasm_test.go"],
+      "status": "Source and test files are present; verification pending root final gates."
+    },
+    {
+      "area": "Subscription trailing spend and PYF",
+      "source": ["internal/subscriptions/trailing_spend.go", "internal/workflow/payyourself.go"],
+      "validation_sources": ["internal/subscriptions/trailing_spend_test.go", "internal/workflow/payyourself_test.go", "internal/screens/subscriptions_financial_wasm_test.go"],
+      "status": "Source and test files are present; verification pending root final gates."
+    }
+  ],
   "shared_component_evidence": [
     {
       "source": [
@@ -1030,7 +1083,7 @@
       "component": "Specialized placement"
     }
   ],
-  "validation_status": "Test evidence pointers identify files in the worktree; this documentation reconciliation did not execute tests. The current full-screen suite is awaiting validation.",
-  "source_reconciliation": "Source audit dated 2026-10-21 at HEAD e14066dc with concurrent in-progress edits visible. No line-number assertions retained.",
-  "field_semantics": "Field names above match the serialized route objects. Each route has source navigation but no line-number entry because code is under active refactor."
+  "validation_status": "Representative test pointers are source references. The full-screen suite passed 1075 top-level tests at an earlier checkpoint before shared SMART and Allocate additions; later focused tests passed at their recorded checkpoints. These are not the current root final-gate result; verification of listed source seams is pending root final gates. Browser evidence and exact artifacts are retained in docs/performance/primary-pages-2026-10-21. Reports remains slower in the paired captures and the full nine-page performance objective is incomplete.",
+  "source_reconciliation": "Initial inventory at e14066dc; follow-up first-nine residual review through 22dca667 on 2026-10-21; reconciled against current worktree sources on 2026-10-21. File-level references avoid unstable line positions; source presence is not final-gate verification.",
+  "field_semantics": "Field names above match the serialized route objects. Each static route has source navigation but no line-number entry because code is under active refactor. Dynamic custom-page patterns are listed separately and are outside the 47-route registry."
 }

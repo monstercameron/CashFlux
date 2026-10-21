@@ -25,10 +25,13 @@ does not need a generic abstraction just to reduce file count.
 
 ## Current inventory
 
-The registry in `internal/screens/screens.go` contains 47 routes: nine primary,
-19 other rail pages and 19 off-rail or system routes. Route registrations remain
-the coverage checklist. Existing primitives and component contracts are described
-in [Component inventory](COMPONENTS.md).
+The registry in `internal/screens/screens.go` contains 47 static routes: nine
+primary, 19 other rail pages and 19 off-rail or system routes. User-authored
+custom pages are served separately through `/p/:slug` and are not included in
+that registry count; their shared renderer and per-page widget composition still
+need boundary review. Route registrations remain the static coverage checklist.
+Existing primitives and component contracts are described in
+[Component inventory](COMPONENTS.md).
 
 The primary pages already use `accountview`, `budgetview`, `goalview`,
 `taskview`, `txnview`, `txntable`, `notificationview`, `assistantview`,
@@ -39,13 +42,30 @@ boundaries and cache behavior while finishing remaining gaps.
 
 | Slice | Current evidence/status | Next evidence needed |
 | --- | --- | --- |
-| First nine primary routes | Source and representative validation references are reconciled below; this is not a claim that every view fact has moved into a native model. | Continue the route boundary review and resolve verified residuals below. |
-| Remaining routes | The 47-route registry and observed boundary classes are recorded in [Route coverage inventory](APP_ROUTE_COVERAGE.json). | Review each route's ownership and exception against the same checklist; aliases and transport routes are not separate financial models. |
+| First nine primary routes | Source and representative validation references are reconciled below; this is not a claim that every view fact has moved into a native model. | Run the root final gates for pending source seams and record any new gaps. |
+| Remaining routes | The 47 static-route registry, dynamic `/p/:slug` custom-page route and observed boundary classes are recorded in [Route coverage inventory](APP_ROUTE_COVERAGE.json). | Review each route's ownership and exception against the same checklist; aliases and transport routes are not separate financial models. |
 | Performance | Native algorithm baselines and measured native changes are recorded below and in the linked performance notes. | Browser route/interaction before-and-after measurements are still required to claim page latency improvement. |
+
+## Current source seams pending root final gates
+
+The following source and test files are present in the current worktree. Their
+presence is not a pass claim: verification remains pending the root final gates.
+
+| Area | Current source evidence | Validation evidence present in source |
+| --- | --- | --- |
+| Budget funding, row and pool | `internal/budgetview/funding.go`, `internal/budgetview/pool.go`, `internal/screens/budgets_row.go` and related row components | `internal/screens/budgets_funding_boundary_wasm_test.go`, `internal/screens/budgets_pool_host_wasm_test.go`, budget row host tests |
+| Dashboard What changed | `internal/screens/dashboard_whatchanged.go`, `internal/dashboardview/trend_facts.go` | `internal/screens/dashboard_whatchanged_host_wasm_test.go`, `internal/screens/dashboard_trend_facts_host_wasm_test.go` |
+| Retirement | `internal/planningmodel/retirement.go`, `internal/retirement/retirement.go`, `internal/screens/planning_retirement.go` | Native retirement tests and `internal/screens/planning_retirement_host_wasm_test.go` |
+| Debt strategy | `internal/debtview/prepare.go`, `internal/debtplan/debtplan.go`, `internal/screens/debt_coach.go` | Native debt preparation/plan tests and `internal/screens/debt_loans_native_wasm_test.go` |
+| Recurring agenda | `internal/recurringview/agenda.go`, `internal/screens/recurring_agenda.go` | Native agenda tests and `internal/screens/recurring_agenda_unavailable_host_wasm_test.go` |
+| Custom fields | `internal/customfields/formvalues.go`, `internal/customfields/customfields.go`, `internal/screens/customfields.go` | Native custom-fields tests and `internal/screens/customfield_parse_wasm_test.go` |
+| Subscription trailing spend and PYF | `internal/subscriptions/trailing_spend.go`, `internal/workflow/payyourself.go` | Native trailing-spend/PYF tests and `internal/screens/subscriptions_financial_wasm_test.go` |
+
 ## Completion checks
 
-- Review every registered route against the boundaries above; record remaining
-  exceptions explicitly instead of declaring completion from the primary pages.
+- Review every static registered route and the dynamic `/p/:slug` custom-page
+  renderer against the boundaries above; record remaining exceptions explicitly
+  instead of declaring completion from the primary pages.
 - No financial calculation in markup or row callbacks; native services own the
   calculation and retain truthful known/unavailable states.
 - No event hook inside variable-length parent loops. Dynamic children own hooks
@@ -68,7 +88,9 @@ application before/after result.
 
 The table records current source seams and representative test files present in the
 worktree. References identify coverage locations; this documentation reconciliation
-did not run tests. The current full-screen suite passed 1,075 top-level tests after the lifecycle fixes. Call sites
+did not run tests. At an earlier recorded checkpoint, the full-screen suite passed
+1,075 top-level tests after lifecycle fixes; that is not the current root final-gate
+result. Call sites
 show `surfaceTiles` on Accounts, Budgets, Goals, To-do and Notifications; `FilterToolbar`
 on Transactions, Accounts and To-do; `ControlStrip` on Goals, Assistant and Reports;
 `SegmentedControl` on Goals, To-do and Notifications. Transactions keeps specialized
@@ -89,22 +111,34 @@ on Transactions, Accounts and To-do; `ControlStrip` on Goals, Assistant and Repo
 This is a source-and-reference inventory, not a completion certificate. Route coverage
 references do not imply that a test passed during this documentation pass.
 
-## Verified residuals
+## Resolved boundary evidence
 
-- **Allocate:** `internal/screens/allocate.go` ignores the error from
-  `ledger.PeriodTotals` while preparing the income-prefill hint, so a failed
-  conversion/aggregation can be presented as a zero-like hint. Preserve availability
-  and suppress or label the hint on failure. `internal/screens/allocate_view.go`
-  still derives the displayed allocatable amount as `TotalMinor - ReserveMinor` in
-  `allocView.Allocatable`; move that fact into native preparation. These are separate
-  from native candidate ranking and split preparation.
+- **Allocate:** `allocateview.Prepare` owns the displayed allocatable
+  amount. The screen retains checked transaction and income-total errors, labels
+  unavailable income, and suppresses prefill while allowing manual amount entry.
+  Native `allocateview` and `i18n` suites and all three Allocate host tests passed;
+  fixtures cover missing FX, total overflow, malformed amounts and closed sources.
+
+## Remaining source gaps
+
 - **Events:** the page delegates totals to `events.Totals`, but
   `internal/events/events.go` accumulates `int64` totals without overflow checking.
   This is a native service correctness gap. Parsing typed date input and dispatching
   writes remain adapter/command responsibilities.
-- **Sync route:** the registry comment describes `/sync` as a compatibility redirect,
-  while `SyncScreen` returns the injected `SyncView`. Confirm boot injection behavior
-  before documenting it as a redirect.
+- **Settings:** the app injects `SettingsView`; the route registry cannot verify
+  that calculations and validation in the injected view stay in native services.
+
+No current source residual is recorded for Accounts delta arithmetic, Dashboard
+trend/WhatChanged preparation, Goals Compare pooled contribution arithmetic,
+Budget funding/row/pool arithmetic, or Reports arithmetic. The corresponding
+source implementations are listed above or in the route table; their final
+verification status is subject to the root gates. Reports still has a measured
+browser latency regression, and the full app-wide componentization/performance
+scope remains incomplete.
+
+The `/sync` compatibility route receives `SyncRedirect` from
+`internal/app/cloudtab.go` during boot and redirects to `/settings/cloud`.
+The injected `SyncView` seam is transport wiring, not a missing financial model.
 
 Categories period usage is prepared by `categoryview.PreparePeriod`; Rules coverage,
 counts and conflict facts come from `rules.SummarizeCoverage`. Earlier claims that
@@ -120,9 +154,15 @@ It compares existing algorithms and is not an application before/after result.
 Measured native changes include shared category-tree union traversal,
 [Unusual history buffer reuse](performance/unusual-buffer-reuse-2026-10-21/README.md),
 and [checked Settings snapshots](performance/settings-snapshot-2026-10-21/README.md).
-No browser route/interaction before-and-after evidence is recorded here; therefore no
-page-latency improvement across the nine routes is claimed.
+Current browser route evidence is retained in
+[Primary-page browser captures](performance/primary-pages-2026-10-21/README.md).
+The paired captures preserve exact visible-text parity and show lower local
+settle medians on eight routes; Reports is slower. Interaction and cold-start
+improvement remain unproven. This does not establish the full nine-page latency
+objective.
 
-The route inventory was reconciled against the source audit at `e14066dc`, with
-concurrent in-progress edits visible. Source references are file-level because active
-refactors can move functions.
+The route inventory retains the historical source audit at `e14066dc` and the
+follow-up first-nine review through `22dca667`. This document was reconciled
+against current worktree sources on 2026-10-21; source and test-file presence do
+not establish completion of the root final gates. References are file-level
+because active refactors can move functions.
