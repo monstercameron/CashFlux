@@ -44,24 +44,26 @@ type budgetView struct {
 	// SummaryActual and SummaryIssues cache the union-of-scopes calendar-window
 	// spend alongside the own-cadence statuses. SummaryReady allows isolated view
 	// fixtures to use the uncached helper without making production renders scan.
-	SummaryActual  int64
-	SummaryIssues  []budgeting.ViewIssue
-	SummaryReady   bool
-	Base           string
-	Method         budgeting.Methodology
-	Statuses       []budgeting.Status
-	CatName        map[string]string
-	PaceOver       map[string]string         // budgetID → projected overspend (in-progress only)
-	PaceMark       map[string]budgetPaceMark // budgetID → even-pace tick + caption (BG3, in-progress only)
-	RollCarry      map[string]string         // budgetID → previous-period carry phrase
-	RollNeg        map[string]bool           // budgetID → carry is negative
-	RollEffCap     map[string]string         // budgetID → effective cap (when it differs from the base limit)
-	RollEffCapMath map[string]string         // budgetID → the cap's arithmetic ("$250 limit + $50 top-up")
-	ProratedRest   map[string]string         // budgetID → even-pace amount left
-	EnvAvail       map[string]string         // budgetID → envelope balance (envelope method)
-	EnvNeg         map[string]bool           // budgetID → envelope overdrawn
-	EnvDebtStart   map[string]string         // budgetID → BG5 "starts <month> down $X" when overdrawn
-	Covered        map[string]bool           // budgetID → received cover money this period
+	SummaryActual   int64
+	SummaryIssues   []budgeting.ViewIssue
+	SummaryReady    bool
+	SummaryKnown    bool
+	SummaryComplete bool
+	Base            string
+	Method          budgeting.Methodology
+	Statuses        []budgeting.Status
+	CatName         map[string]string
+	PaceOver        map[string]string         // budgetID → projected overspend (in-progress only)
+	PaceMark        map[string]budgetPaceMark // budgetID → even-pace tick + caption (BG3, in-progress only)
+	RollCarry       map[string]string         // budgetID → previous-period carry phrase
+	RollNeg         map[string]bool           // budgetID → carry is negative
+	RollEffCap      map[string]string         // budgetID → effective cap (when it differs from the base limit)
+	RollEffCapMath  map[string]string         // budgetID → the cap's arithmetic ("$250 limit + $50 top-up")
+	ProratedRest    map[string]string         // budgetID → even-pace amount left
+	EnvAvail        map[string]string         // budgetID → envelope balance (envelope method)
+	EnvNeg          map[string]bool           // budgetID → envelope overdrawn
+	EnvDebtStart    map[string]string         // budgetID → BG5 "starts <month> down $X" when overdrawn
+	Covered         map[string]bool           // budgetID → received cover money this period
 	// EarlyPeriod marks budgets whose own period is too young to score (C344).
 	// Three days in, nothing has been broken yet, and a card that renders that as
 	// "On track" is making a claim about the calendar, not about the household.
@@ -340,7 +342,9 @@ func computeBudgetViewRaw(app *appstate.App, activeMemberID string, vw period.Wi
 	builder.addEnvelopes(budgets, app.Settings().BudgetMethodology)
 	builder.addIncome(pr)
 	builder.addSavings(app, activeMemberID)
-	builder.view.SummaryActual, builder.view.SummaryIssues = budgetSummaryActualSpendNetted(ledger, app.Categories(), builder.view.Statuses, vw, showLastMonth, rates, base)
+	summary := budgetSummarySpending(ledger, app.Categories(), builder.view.Statuses, vw, showLastMonth, rates, base)
+	builder.view.SummaryActual, builder.view.SummaryIssues = summary.Amount.Amount, summary.Issues
+	builder.view.SummaryKnown, builder.view.SummaryComplete = summary.Known, summary.Complete
 	builder.view.SummaryReady = true
 	return builder.view
 }

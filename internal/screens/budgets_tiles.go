@@ -133,7 +133,7 @@ func budgetSummaryWidget(props budgetSummaryProps) ui.Node {
 	})
 
 	statusLine := budgetSummaryStatus(budgetSummaryStatusProps{
-		normalizedBudgetTotal: summaryPlan.normalizedBudgetTotal, vw: vw, v: v, futurePeriod: futurePeriod,
+		normalizedBudgetTotal: summaryPlan.normalizedBudgetTotal, vw: vw, v: summaryPlan.planView, futurePeriod: futurePeriod,
 		normalizationOK: summaryPlan.normalizationOK, overAssigned: summaryAllocation.overAssigned, funding: funding, hist: summaryPlan.hist,
 		excluded: summaryPlan.excluded, issues: summaryPlan.issues, filterAttn: filterAttn,
 		attnCount: len(budgetAttentionStatuses(v.Statuses)), attnOver: attnOver, smartSettings: summaryPlan.smartSettings,

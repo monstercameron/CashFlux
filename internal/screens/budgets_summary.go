@@ -12,7 +12,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
-	"github.com/monstercameron/CashFlux/internal/categorytree"
+	"github.com/monstercameron/CashFlux/internal/budgetview"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -68,12 +68,14 @@ func budgetSummaryPlan(v budgetView, app *appstate.App, vw period.Window) budget
 	normalizationOK := planExcluded == 0 && len(v.Incomplete) == 0
 	planView := v
 	planView.TotalLimit = normalizedBudgetTotal
-	actualSpent, spendIssues := v.SummaryActual, v.SummaryIssues
+	spending := budgetview.SummarySpending{Amount: money.New(v.SummaryActual, v.Base), Known: v.SummaryKnown, Complete: v.SummaryComplete, Issues: v.SummaryIssues}
 	if !v.SummaryReady {
-		actualSpent, spendIssues = budgetSummaryActualSpend(app, v.Statuses, vw, v.LastMonthMode, rates, v.Base)
+		spending = budgetSummarySpending(budgetLedgerForApp(app), app.Categories(), v.Statuses, vw, v.LastMonthMode, rates, v.Base)
 	}
-	issues = append(issues, spendIssues...)
-	planView.TotalSpent = actualSpent
+	issues = budgeting.DeduplicateViewIssues(append(issues, spending.Issues...))
+	planView.TotalSpent = spending.Amount.Amount
+	planView.SummaryActual, planView.SummaryIssues = spending.Amount.Amount, spending.Issues
+	planView.SummaryKnown, planView.SummaryComplete, planView.SummaryReady = spending.Known, spending.Complete, true
 	smartSettings := uistate.LoadSmartSettings()
 	// UX-05: a wholly-past view window flips the summary into past-tense wording —
 	// "Jun 2026 spending", "ended over budget" — because "so far this month" over a
@@ -101,103 +103,19 @@ func budgetSummaryActualSpend(app *appstate.App, statuses []budgeting.Status, vw
 }
 
 func budgetSummaryActualSpendNetted(transactions budgeting.NettedLedger, categories []domain.Category, statuses []budgeting.Status, vw period.Window, previous bool, rates currency.Rates, base string) (int64, []budgeting.ViewIssue) {
+	result := budgetSummarySpending(transactions, categories, statuses, vw, previous, rates, base)
+	return result.Amount.Amount, result.Issues
+}
+
+func budgetSummarySpending(transactions budgeting.NettedLedger, categories []domain.Category, statuses []budgeting.Status, vw period.Window, previous bool, rates currency.Rates, base string) budgetview.SummarySpending {
 	start, end := vw.Range()
 	if previous {
 		start, end = start.AddDate(0, -1, 0), end.AddDate(0, -1, 0)
 	}
-	if budgetNow().Before(start) {
-		return 0, nil
-	}
-	active := make([]budgetSummarySpendScope, 0, len(statuses))
-	for _, status := range statuses {
-		if status.Error == nil && !status.Budget.IsSaving() {
-			active = append(active, budgetSummarySpendScope{budget: status.Budget, covers: categorytree.DescendantsOfAll(categories, status.Budget.TrackedCategoryIDs())})
-		}
-	}
-	var total int64
-	var issues []budgeting.ViewIssue
-	for _, txn := range transactions {
-		if txn.Date.Before(start) || !txn.Date.Before(end) {
-			continue
-		}
-		contribution, matched, contributionIssues := budgetSummaryTransactionSpend(txn, active)
-		issues = append(issues, contributionIssues...)
-		if !matched {
-			continue
-		}
-		amount, err := rates.Convert(contribution, base)
-		if err != nil {
-			issues = append(issues, budgeting.ViewIssue{Operation: "convert selected-period budget spending", Err: err})
-			continue
-		}
-		total, err = money.Add(total, amount.Amount)
-		if err != nil {
-			issues = append(issues, budgeting.ViewIssue{Operation: "sum selected-period budget spending", Err: err})
-			return 0, budgeting.DeduplicateViewIssues(issues)
-		}
-	}
-	return total, budgeting.DeduplicateViewIssues(issues)
-}
-
-type budgetSummarySpendScope struct {
-	budget domain.Budget
-	covers map[string]bool
-}
-
-// budgetSummaryTransactionSpend returns a transaction's contribution to the
-// union of budget scopes. A tagged charge is counted whole once; split charges
-// combine distinct tracked lines and count overlaps only once.
-func budgetSummaryTransactionSpend(txn domain.Transaction, scopes []budgetSummarySpendScope) (money.Money, bool, []budgeting.ViewIssue) {
-	var issues []budgeting.ViewIssue
-	for _, scope := range scopes {
-		if !scope.budget.TracksAnyTag(txn.Tags) {
-			continue
-		}
-		amount, ok, err := budgeting.ContributionChecked(scope.budget, txn, func(id string) bool { return scope.covers[id] })
-		if err != nil {
-			issues = append(issues, budgeting.ViewIssue{Operation: "evaluate selected-period budget spending", BudgetID: scope.budget.ID, Err: err})
-			continue
-		}
-		if ok {
-			return amount, true, budgeting.DeduplicateViewIssues(issues)
-		}
-	}
-	if !txn.HasSplits() {
-		for _, scope := range scopes {
-			amount, ok, err := budgeting.ContributionChecked(scope.budget, txn, func(id string) bool { return scope.covers[id] })
-			if err != nil {
-				issues = append(issues, budgeting.ViewIssue{Operation: "evaluate selected-period budget spending", BudgetID: scope.budget.ID, Err: err})
-				continue
-			}
-			if ok {
-				return amount, true, budgeting.DeduplicateViewIssues(issues)
-			}
-		}
-		return money.Money{}, false, budgeting.DeduplicateViewIssues(issues)
-	}
-	total := money.Zero(txn.Amount.Currency)
-	matched := false
-	for _, split := range txn.Splits {
-		line := txn
-		line.Splits = []domain.CategorySplit{split}
-		for _, scope := range scopes {
-			amount, ok, err := budgeting.ContributionChecked(scope.budget, line, func(id string) bool { return scope.covers[id] })
-			if err != nil {
-				issues = append(issues, budgeting.ViewIssue{Operation: "evaluate selected-period budget spending", BudgetID: scope.budget.ID, Err: err})
-				continue
-			}
-			if ok {
-				total, err = total.Add(amount)
-				if err != nil {
-					issues = append(issues, budgeting.ViewIssue{Operation: "sum selected-period split spending", Err: err})
-					return money.Money{}, false, budgeting.DeduplicateViewIssues(issues)
-				}
-				matched = true
-				break
-			}
-		}
-	}
-	return total, matched, budgeting.DeduplicateViewIssues(issues)
+	return budgetview.PrepareSummarySpending(budgetview.SummarySpendingInput{
+		Ledger: transactions, Categories: categories, Statuses: statuses,
+		Start: start, End: end, Now: budgetNow(), Rates: rates, Base: base,
+	})
 }
 
 // budgetSummaryWindowPlan totals each budget's history-aware monthly plan over
@@ -652,15 +570,22 @@ type budgetSummaryStatusProps struct {
 func budgetSummaryStatus(p budgetSummaryStatusProps) ui.Node {
 	statusAmount := p.normalizedBudgetTotal
 	statusState := "fits"
+	spendingKnown, spendingComplete := true, true
+	if p.v.SummaryReady {
+		spendingKnown, spendingComplete = p.v.SummaryKnown, p.v.SummaryComplete
+	}
 	if len(p.v.Incomplete) > 0 {
 		statusState = "unknown"
 	} else if !p.normalizationOK {
 		statusState = "unknown"
 	}
-	if p.excluded == 0 && !p.futurePeriod && p.overAssigned > 0 {
+	if !spendingComplete {
+		statusState = "unknown"
+	}
+	if statusState == "fits" && p.excluded == 0 && !p.futurePeriod && p.overAssigned > 0 {
 		statusAmount = p.overAssigned
 		statusState = "over"
-	} else if p.excluded == 0 && !p.futurePeriod && p.funding.Meaningful() && !p.funding.FullyFunded() && p.funding.Unfunded() > 0 {
+	} else if statusState == "fits" && p.excluded == 0 && !p.futurePeriod && p.funding.Meaningful() && !p.funding.FullyFunded() && p.funding.Unfunded() > 0 {
 		statusAmount = p.funding.Unfunded()
 		statusState = "unfunded"
 	}
@@ -675,11 +600,17 @@ func budgetSummaryStatus(p budgetSummaryStatusProps) ui.Node {
 		})
 	}
 	headlineView := p.v
+	if p.v.SummaryReady {
+		headlineView.TotalSpent = p.v.SummaryActual
+	}
 	if p.windowSpentSet {
 		headlineView.TotalSpent = p.windowSpent
 	}
 	spent, plan := budgetHeadlineAmounts(headlineView, p.normalizedBudgetTotal)
 	statusFigure := fmtMoney(money.New(spent, p.v.Base))
+	if !spendingKnown {
+		statusFigure = "—"
+	}
 	statusCopy := uistate.T("budgets.headlineSpentMonthly", fmtMoney(money.New(plan, p.v.Base)))
 	if p.hist {
 		statusCopy = uistate.T("budgets.headlineSpentMonthlyPast", fmtMoney(money.New(plan, p.v.Base)), p.vw.Label())
@@ -689,7 +620,7 @@ func budgetSummaryStatus(p budgetSummaryStatusProps) ui.Node {
 			fmtMoney(money.New(p.normalizedBudgetTotal, p.v.Base)),
 			fmtMoney(money.New(p.v.BannerIncome, p.v.Base)))
 	}
-	if len(p.v.Incomplete) > 0 || !p.normalizationOK {
+	if len(p.v.Incomplete) > 0 || !p.normalizationOK || !spendingComplete {
 		statusCopy = uistate.T("budgets.incomplete")
 	}
 	if p.excluded > 0 {
@@ -702,11 +633,11 @@ func budgetSummaryStatus(p budgetSummaryStatusProps) ui.Node {
 			Span(css.Class("bud3-headline-secondary"), Attr("data-testid", "budgets-status-sentence"), statusCopy),
 			Span(css.Class("bud3-headline-window"), Attr("data-testid", "budgets-status-window"), uistate.T("budgets.headlineWindowLabel", budgetHeadlineWindowLabel(p.vw, p.v.LastMonthMode))),
 		),
-		Div(css.Class("bud3-headline-meter"), Attr("data-testid", "budgets-status-meter"), Attr("role", "meter"), Attr("aria-label", uistate.T("budgets.headlineMeterLabel")),
+		If(spendingComplete, Div(css.Class("bud3-headline-meter"), Attr("data-testid", "budgets-status-meter"), Attr("role", "meter"), Attr("aria-label", uistate.T("budgets.headlineMeterLabel")),
 			Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"), Attr("aria-valuenow", strconv.Itoa(fillPct)),
 			Div(css.Class("bud3-headline-meter-fill"), Attr("style", "width:"+strconv.Itoa(fillPct)+"%")),
 			If(!p.hist && !p.v.LastMonthMode && !p.futurePeriod, Div(css.Class("bud3-headline-pace"), Attr("aria-hidden", "true"), Attr("style", "left:"+strconv.Itoa(budgetPeriodElapsedPct(p.vw, budgetNow()))+"%"))),
-		),
+		)),
 		If(p.attnCount > 0 && !p.hist && !p.v.LastMonthMode,
 			Div(css.Class("bud3-headline-attention"),
 				Button(css.Class("bud3-attention-link"), Type("button"), Attr("data-testid", "budgets-hero-attn"), OnClick(p.filterAttn), uistate.T("budgets.headlineAttention", p.attnCount)),
@@ -751,14 +682,7 @@ func budgetHeadlineAmounts(v budgetView, normalizedPlan int64) (int64, int64) {
 }
 
 func budgetHeadlinePercent(spent, plan int64) int {
-	if spent <= 0 || plan <= 0 {
-		return 0
-	}
-	pct := int(spent * 100 / plan)
-	if pct > 100 {
-		return 100
-	}
-	return pct
+	return budgetview.HeadlinePercent(spent, plan)
 }
 
 func budgetPeriodElapsedPct(vw period.Window, now time.Time) int {

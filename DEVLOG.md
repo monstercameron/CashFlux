@@ -1,3 +1,7 @@
+## 2026-10-21 - Native budget summary preparation
+
+Extracted immutable budget selection and summary facts from the views. Preserved cache invalidation, canonical split/tag matching and independent funding availability. Native budgeting/budgetview tests and vet pass; two focused WASM host groups pass. The synthetic benchmark is a baseline only; no browser speed claim.
+
 ## 2026-10-21 - Prepare credit history in a checked native model
 
 Moved latest-eight sorting, currency assumptions, conversion, checked utilization and bounded bar facts into credithealth. The screen uses fresh fallible account/settings/history reads and keeps individual gaps and current-limit/current-FX disclosure. Six native groups, vet, screenlint and three actual-host WASM cases passed. Native large-history comparisons improved, while small cases overlap and add fixed metadata allocations; no page-latency gain is claimed. Aggregate/advice page migration remains separate.
