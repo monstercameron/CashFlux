@@ -1,3 +1,7 @@
+## 2026-10-20 - Initialize each transaction filter reader once
+
+UseTxFilter memoizes its mounted seed by app identity while retaining the established fixed atom, CurrentTxFilter, persistence and rolling-date resolution. The shared hook has 40 production call sites, including notification rows and transaction category controls; this removes warm per-reader work, not all initial subscriber loads. Five focused WASM uistate tests passed, covering actual loader counters, live/store revision writes, late mounts, remounts, legacy date migration, invalid defaults and fresh workspace runtimes. An actual Notification Center to Transactions host test passed after fixing fixture DOM stubs and canonical date-only timestamps; it verifies the latest account/date/sort selection, merchant action, read flag and exact destination rows.
+
 ## 2026-10-20 - Record pass-seven page verification and timing
 
 Full native integration and 845 WASM screen tests passed. Three sample-only browser cases verified notification keyboard tabs, To-do view parity and all 47 routes. One warm-up and seven measured nine-page sweeps completed without failure; local and served artifact hashes matched throughout. Dataset counts matched earlier captures, while Assistant DOM content grew. Observed settled medians were slower than the previous capture under different uncontrolled machine load, so no causal page-latency improvement is claimed. PRIMARY_PAGE_PERFORMANCE records all medians, nested startup schema 2 details and exact evidence paths. Broader latency verification remains ongoing.
