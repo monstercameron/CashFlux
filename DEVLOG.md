@@ -1,3 +1,7 @@
+## 2026-10-21 - Checked revision-cached source reads
+
+Added fallible source accessors with revision-cached account/goal/budget reads and a cheap store readiness check before warm reuse. Warm success then closed-store regression coverage passes with native tests and vet. Existing best-effort account/goal convenience methods retain logged-error behavior. Category deletion and workflow validation hunks remain separate pending their own gates.
+
 ## 2026-10-21 - Prepare only selected tax category totals
 
 Native ledger/taxgather tests and vet pass, including adversarial unused-category overflow and FX/error parity. Same-fixture captures show about 74% fewer allocations and 24-29% fewer allocated bytes. A 100k-row separate-run timing regression is retained along with a matched diagnostic; no reliable wall-time or browser speedup is claimed. Raw captures and full caveats are tracked in docs/performance/tax-selected-fold-2026-10-21.

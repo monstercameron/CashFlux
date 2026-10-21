@@ -406,11 +406,12 @@ type revCache[T any] struct {
 	rev    uint64
 	val    []T
 	loaded bool
+	err    error
 }
 
 func (c *revCache[T]) get(rev uint64, load func() []T) []T {
 	if !c.loaded || c.rev != rev {
-		c.val, c.rev, c.loaded = load(), rev, true
+		c.val, c.rev, c.loaded, c.err = load(), rev, true, nil
 	}
 	if len(c.val) == 0 {
 		return nil
@@ -418,6 +419,22 @@ func (c *revCache[T]) get(rev uint64, load func() []T) []T {
 	out := make([]T, len(c.val))
 	copy(out, c.val)
 	return out
+}
+
+func (c *revCache[T]) getChecked(rev uint64, load func() ([]T, error)) ([]T, error) {
+	if !c.loaded || c.rev != rev {
+		c.val, c.err = load()
+		c.rev, c.loaded = rev, true
+	}
+	if c.err != nil {
+		return nil, c.err
+	}
+	if len(c.val) == 0 {
+		return nil, nil
+	}
+	out := make([]T, len(c.val))
+	copy(out, c.val)
+	return out, nil
 }
 
 // appReadCaches holds one revCache per frequently-read table. It lives inline on
@@ -445,11 +462,11 @@ func (a *App) Members() []domain.Member {
 	})
 }
 func (a *App) Accounts() []domain.Account {
-	return a.reads.accounts.get(a.store.Rev(), func() []domain.Account {
-		v, err := a.store.ListAccounts()
+	rows, err := a.AccountsChecked()
+	if err != nil {
 		a.logErr("accounts", err)
-		return v
-	})
+	}
+	return rows
 }
 
 // Categories returns every category, ordered naturally by name.
@@ -519,11 +536,11 @@ func (a *App) Budgets() []domain.Budget {
 	})
 }
 func (a *App) Goals() []domain.Goal {
-	return a.reads.goals.get(a.store.Rev(), func() []domain.Goal {
-		v, err := a.store.ListGoals()
+	rows, err := a.GoalsChecked()
+	if err != nil {
 		a.logErr("goals", err)
-		return v
-	})
+	}
+	return rows
 }
 func (a *App) Tasks() []domain.Task {
 	return a.reads.tasks.get(a.store.Rev(), func() []domain.Task {

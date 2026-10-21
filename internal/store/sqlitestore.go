@@ -98,6 +98,20 @@ func NewMemory() (*SQLiteStore, error) {
 // Close releases the database.
 func (s *SQLiteStore) Close() error { return s.db.Close() }
 
+// CheckReady performs a minimal database read so revision-cached callers can
+// distinguish a live but unchanged store from a closed or otherwise unavailable
+// source without reloading a full table.
+func (s *SQLiteStore) CheckReady() error {
+	if s == nil || s.db == nil {
+		return fmt.Errorf("store: database unavailable")
+	}
+	var one int
+	if err := s.db.QueryRow("SELECT 1").Scan(&one); err != nil {
+		return fmt.Errorf("store: readiness check: %w", err)
+	}
+	return nil
+}
+
 func replaceRows[T any](tx *sql.Tx, table string, items []T, idOf func(T) string) error {
 	if _, err := tx.Exec("DELETE FROM " + table); err != nil {
 		return err
