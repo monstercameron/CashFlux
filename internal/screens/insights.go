@@ -364,16 +364,9 @@ func Insights() ui.Node {
 	// frame later. The hooks below stay unconditional (rule of hooks); only the work
 	// inside them is gated.
 	railReady := ui.UseState(false)
-	ui.UseEffect(func() func() {
-		if !railReady.Get() {
-			// Fill the rail once the page has settled — after first paint AND the 160ms
-			// route cross-fade (var(--wonder-dur)), so the deferred re-render doesn't
-			// abort the entrance transition. A Go timer keeps the primary chat
-			// interactive immediately; the secondary rail loads a beat later.
-			time.AfterFunc(300*time.Millisecond, func() { railReady.Set(true) })
-		}
-		return nil
-	}, "rail-defer-once")
+	// Fill the rail after first paint and the 160ms route cross-fade. The managed
+	// browser timer runs on the UI goroutine and is cancelled if this page unmounts.
+	ui.UseTimeout(func() { railReady.Set(true) }, 300*time.Millisecond, "rail-defer-once")
 
 	// pinText saves an answer to the pinned-insights list. (Saving an answer as a
 	// To-do is no longer a UI button — it becomes an agent tool the model invokes
@@ -1216,12 +1209,11 @@ func Insights() ui.Node {
 	if loading.Get() {
 		scrollSig += "|L"
 	}
-	ui.UseEffect(func() func() {
+	ui.UseTimeout(func() {
 		if len(turns.Get()) > 0 {
 			scrollChatToEnd()
 		}
-		return nil
-	}, scrollSig)
+	}, 80*time.Millisecond, scrollSig)
 
 	// Composer keyboard: Enter sends (Shift+Enter ignored), Up/Down cycle prior messages
 	// (shell-style). A raw document keydown listener (so it gets NATIVE events — the
@@ -2633,7 +2625,9 @@ type streamingBubbleProps struct{ Text string }
 // completes. It is aria-live=polite so a screen reader hears the finished answer
 // once, rather than being interrupted by every fragment.
 func StreamingBubble(p streamingBubbleProps) ui.Node {
-	ui.UseEffect(func() func() { scrollChatToEnd(); return nil }, p.Text)
+	// Plain streaming text needs only the next browser turn after its DOM commit.
+	// A managed timer cancels pending work when this bubble is replaced or removed.
+	ui.UseTimeout(scrollChatToEnd, 0, p.Text)
 	return Div(css.Class(tw.Flex, tw.FlexCol, tw.ItemsStart),
 		Div(css.Class("chat-row-agent"),
 			Div(css.Class("chat-avatar"), Attr("aria-hidden", "true"), "✦"),
@@ -3188,21 +3182,14 @@ func thinkPickerComp(p thinkPickerProps) ui.Node {
 
 // scrollChatToEnd scrolls the bounded canvas (#cf-chat-scroll — the single
 // scroller wrapping the thread) to its bottom (only the container, never the
-// page), so the latest message stays in view. The scroll is deferred via
-// setTimeout so it runs AFTER the bubbles' Markdown innerHTML has been filled
-// (each bubble renders in its own effect, growing scrollHeight) — otherwise an
-// on-load resume would scroll a still-empty container and land at the top.
+// page), so the latest message stays in view. Callers own the deferred browser
+// timer through their component lifecycle. Completed Markdown waits for the
+// bubble effects; streaming plain text waits only for its DOM commit.
 func scrollChatToEnd() {
-	var cb js.Func
-	cb = js.FuncOf(func(js.Value, []js.Value) any {
-		cb.Release()
-		el := js.Global().Get("document").Call("getElementById", "cf-chat-scroll")
-		if el.Truthy() {
-			el.Set("scrollTop", el.Get("scrollHeight"))
-		}
-		return nil
-	})
-	js.Global().Call("setTimeout", cb, 80)
+	el := js.Global().Get("document").Call("getElementById", "cf-chat-scroll")
+	if el.Truthy() {
+		el.Set("scrollTop", el.Get("scrollHeight"))
+	}
 }
 
 // isAppRoutePath reports whether a raw URL pathname (possibly host-prefixed by the

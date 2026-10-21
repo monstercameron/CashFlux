@@ -1,3 +1,7 @@
+## 2026-10-21 - Cancel deferred Assistant UI work with its component lifecycle
+
+The full screen suite exposed an off-render Go timer and then an uncancelled scroll callback after Assistant teardown. Replaced the rail Go timer and raw deferred scrolling with framework-managed browser timers; streaming text scrolls after its DOM commit and completed Markdown retains the settling delay. A regression checks mounted canvas scrolling and cancellation after mount/update removal. Fifteen focused WASM tests passed, including Assistant availability and lifecycle, Reports cache and Household host paths; production WASM build passed. Assistant fixtures now explicitly unmount before restoring browser stubs. The full screen suite is rerunning.
+
 ## 2026-10-21 - Cache checked Settings snapshots with owned values
 
 Added SettingsChecked and a bounded per-App revision snapshot, deep copying mutable settings on every return. Native tests cover ownership, direct store writes, error retry, unchanged revisions and closed warm stores. All appstate tests and vet passed; the production WASM build passed. Five native benchmark samples reduced median allocated bytes by 70% and allocations by 77% for nine reads; local elapsed results and contention caveat are retained in docs/performance/settings-snapshot-2026-10-21. Browser latency effects remain unproven.

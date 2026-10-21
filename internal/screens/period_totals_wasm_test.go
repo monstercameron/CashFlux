@@ -205,7 +205,11 @@ func TestAssistantAffordabilityWaitsForKnownPeriodTotals(t *testing.T) {
 	doc.Set("getElementById", get)
 	defer func() { time.Sleep(120 * time.Millisecond); doc.Set("getElementById", previousGet); get.Release() }()
 	f := render.New(t)
-	defer f.Cleanup()
+	defer func() {
+		f.Render(ui.Fragment())
+		f.Stabilize()
+		f.Cleanup()
+	}()
 	f.Render(ui.CreateElement(Insights))
 	f.Stabilize()
 	if byTestID(f, "p", "assistant-totals-unavailable") == nil {

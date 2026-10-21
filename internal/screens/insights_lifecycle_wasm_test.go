@@ -136,7 +136,11 @@ func setupInsightsLifecycle(t *testing.T, conversations ...domain.Conversation) 
 	f := render.New(t)
 	f.Render(ui.CreateElement(Insights))
 	f.Stabilize()
-	t.Cleanup(f.Cleanup)
+	t.Cleanup(func() {
+		f.Render(Fragment())
+		f.Stabilize()
+		f.Cleanup()
+	})
 	return app, f, composer, &callbacks
 }
 

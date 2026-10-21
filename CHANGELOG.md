@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Assistant rail and chat scrolling use managed browser timers that cancel when their component unmounts.
 - Repeated Settings reads reuse a successful revision snapshot while retaining readiness errors and independently owned nested values.
 - Receipt candidate matching includes its effective calendar date in memo dependencies.
 - Workflow authoring delegates schedule and transfer preparation to native validation.
