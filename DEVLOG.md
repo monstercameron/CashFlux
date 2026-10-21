@@ -1,3 +1,7 @@
+## 2026-10-21 - Workflow composer delegates native drafts
+
+The route now calls the checked injected-clock draft service, preserving existing feedback and commands. Both actual-host composer cases pass, proving weekly NextRun and dedupe persistence plus same-account rejection. Stable composer selectors distinguish its controls from identically labelled quick-start forms. Native workflow/appstate draft validation was committed separately.
+
 ## 2026-10-21 - Native budget income-source preparation
 
 Preserved source ordering, month windows and per-source truncation while composing checked canonical reports. Source failures no longer become zero or no-history claims, and bulk actions preserve manual choices when data is unknown. Fixed income remains independently known. Native budgetview tests and vet pass; both focused actual-host groups pass for source choices, average rounding, FX failure/recovery and exact fixed preview.
