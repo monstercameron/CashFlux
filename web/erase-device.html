@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Erase this device — CashFlux</title>
+  <style>
+    :root { color-scheme: dark; font: 16px/1.55 system-ui, sans-serif; background: #0d1015; color: #f4f6f7; }
+    body { min-height: 100vh; display: grid; place-items: center; margin: 0; padding: 1rem; box-sizing: border-box; }
+    main { width: min(36rem, 100%); padding: 2rem; background: #171b21; border: 1px solid #343a42; border-radius: 1rem; }
+    h1 { margin: 0 0 .5rem; font-size: 1.7rem; }
+    p { color: #c8d0d5; }
+    button, a { display: inline-block; padding: .8rem 1rem; border-radius: .5rem; background: #318b5d; border: 0; color: white; font: inherit; text-decoration: none; cursor: pointer; }
+    button:focus-visible, a:focus-visible { outline: 3px solid white; outline-offset: 3px; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1 id="title">Erasing CashFlux from this device</h1>
+    <p id="status" role="status" aria-live="polite">Checking saved data…</p>
+    <p id="detail">Your copy on the server is separate and will remain available.</p>
+    <button id="retry" type="button" hidden>Retry erasure</button>
+    <a id="open" href="./" hidden>Open CashFlux</a>
+  </main>
+  <script src="./device-erase.js"></script>
+  <script>
+    (function () {
+      const api = window.CashFluxDeviceErase;
+      const title = document.getElementById("title");
+      const status = document.getElementById("status");
+      const detail = document.getElementById("detail");
+      const retry = document.getElementById("retry");
+      const open = document.getElementById("open");
+      let running = false;
+      const wait = () => {
+        title.textContent = "Erasure is in progress in another tab";
+        status.textContent = "Keep this tab here while CashFlux closes its saved data.";
+        detail.textContent = "If erasure stops, return to the erasing tab or retry here.";
+        retry.hidden = false;
+      };
+      async function start() {
+        if (running) return;
+        running = true;
+        history.replaceState(null, "", location.pathname + "#erasing");
+        retry.hidden = true;
+        open.hidden = true;
+        title.textContent = "Erasing CashFlux from this device";
+        const ticket = crypto.randomUUID();
+        try {
+          localStorage.setItem(api.marker, ticket);
+          // Give other tabs time to navigate away and release open databases.
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          if (localStorage.getItem(api.marker) !== ticket) { wait(); return; }
+          await api.erase(window, (step) => { status.textContent = step + "…"; });
+          // This marker contains no household or account information.
+          localStorage.setItem(api.erasedFlag, "1");
+          localStorage.removeItem(api.marker);
+          title.textContent = "This device has been erased";
+          status.textContent = "CashFlux's saved data and files have been removed from this browser.";
+          detail.textContent = "Your server copy remains separate. Opening CashFlux again may reconnect to it after you sign in.";
+          open.hidden = false;
+        } catch (error) {
+          title.textContent = "Erasure is unfinished";
+          status.textContent = error && error.message ? error.message : "The browser could not finish erasing saved data.";
+          detail.textContent = "Close other CashFlux tabs, then retry. The server copy has not been deleted.";
+          retry.hidden = false;
+        } finally { running = false; }
+      }
+      retry.addEventListener("click", start);
+      window.addEventListener("storage", async (event) => {
+        if (event.key === api.marker && !event.newValue && !running) {
+          try {
+            const remaining = await api.inventory(window);
+            if (localStorage.getItem(api.erasedFlag) !== "1" ||
+                remaining.databases.length || remaining.caches.length || remaining.localKeys.length) {
+              throw new Error("Saved CashFlux records remain. Retry erasure.");
+            }
+            title.textContent = "This device has been erased";
+            status.textContent = "The other tab completed erasure.";
+            detail.textContent = "Your server copy remains separate.";
+            retry.hidden = true;
+            open.hidden = false;
+          } catch (error) {
+            title.textContent = "Erasure is unfinished";
+            status.textContent = error && error.message ? error.message : "Erasure could not be verified.";
+            detail.textContent = "Retry to finish removing CashFlux from this browser.";
+            retry.hidden = false;
+          }
+        }
+      });
+      try {
+        if (location.hash === "#start") start();
+        else if (localStorage.getItem(api.marker)) wait();
+        else {
+          title.textContent = "No erasure is running";
+          status.textContent = "Open CashFlux to start a new device erase.";
+          detail.textContent = "Your server copy remains separate.";
+          open.hidden = false;
+        }
+      } catch (error) {
+        title.textContent = "Erasure is unfinished";
+        status.textContent = "The browser could not access local storage. Enable it and retry.";
+        retry.hidden = false;
+      }
+    })();
+  </script>
+</body>
+</html>

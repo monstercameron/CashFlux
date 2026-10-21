@@ -40,6 +40,7 @@ const COMPLETE_ENTRY = "./__cashflux_complete__.json";
 const CORE_REQUIRED = [
   "./", "./index.html", "./wasm_exec.js", "./manifest.webmanifest",
   "./favicon.ico", "./favicon.svg", "./favicon-32.png", "./fonts.css",
+  "./erase-device.html", "./device-erase.js",
 ];
 // The wasm binary is boot-critical too. Prefer the loader's negotiated URL:
 // the browser transparently decodes its Content-Encoding, so that response
@@ -353,6 +354,12 @@ async function appShell() {
 // /p/<slug> works on a static host with no history fallback (e.g. gwc dev returns 404
 // for the route). It can never reject: every branch resolves to a Response.
 async function handleNavigate(req) {
+  // Device erasure runs outside Wasm and must remain reachable offline. A
+  // stamped worker normally serves index.html for every navigation; doing so
+  // here would re-enter the app while its erase marker is set.
+  if (new URL(req.url).origin === self.location.origin && coreKeyFor(req.url) === "./erase-device.html") {
+    return handleAsset(req, true);
+  }
   const buildId = await resolveBuildId();
   if (buildId !== DEV_BUILD) {
     // A stamped worker always serves its verified shell. Returning the

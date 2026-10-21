@@ -97,6 +97,15 @@ func TestNoRawSensitiveStorageWrites(t *testing.T) {
 					return true
 				}
 				if name, ok := sel.X.(*ast.Ident); ok && aliases[name.Name] {
+					// Whole-device erasure coordinates tabs through a nonpersonal
+					// localStorage marker before deleting browserstore itself.
+					if filepath.Base(path) == "settings.go" && fn.Name.Name == "markDeviceErasePending" && len(call.Args) == 3 {
+						key, keyOK := call.Args[1].(*ast.BasicLit)
+						value, valueOK := call.Args[2].(*ast.BasicLit)
+						if keyOK && valueOK && key.Value == `"cashflux:erase-in-progress"` && value.Value == `"pending"` {
+							return true
+						}
+					}
 					t.Errorf("%s: web storage writer bypasses browserstore", fset.Position(call.Pos()))
 				}
 				return true
@@ -126,6 +135,15 @@ func TestNoRawSensitiveStorageWrites(t *testing.T) {
 				continue
 			}
 			if strings.Contains(line, "localStorage.setItem(") || strings.Contains(line, "sessionStorage.setItem(") {
+				// This standalone page cannot call browserstore: it runs after
+				// Wasm exits. These exact writes carry no household data.
+				if filepath.Base(path) == "erase-device.html" {
+					trimmed := strings.TrimSpace(line)
+					if trimmed == `localStorage.setItem(api.marker, ticket);` ||
+						trimmed == `localStorage.setItem(api.erasedFlag, "1");` {
+						continue
+					}
+				}
 				t.Errorf("%s:%d: web storage writer bypasses browserstore", path, i+1)
 			}
 		}
