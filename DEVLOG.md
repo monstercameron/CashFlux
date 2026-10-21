@@ -1,3 +1,7 @@
+## 2026-10-21 - Cache checked Settings snapshots with owned values
+
+Added SettingsChecked and a bounded per-App revision snapshot, deep copying mutable settings on every return. Native tests cover ownership, direct store writes, error retry, unchanged revisions and closed warm stores. All appstate tests and vet passed; the production WASM build passed. Five native benchmark samples reduced median allocated bytes by 70% and allocations by 77% for nine reads; local elapsed results and contention caveat are retained in docs/performance/settings-snapshot-2026-10-21. Browser latency effects remain unproven.
+
 ## 2026-10-21 - Complete receipt matching memo dependencies
 
 Parsed statement dates remain authoritative. The native helper normalizes an absent-date fallback to the local calendar day at UTC midnight, matching stored date-only transaction identity. The controller samples this date once and includes it in memo invalidation instead of retaining stale candidates across a day change. Focused native importdraft tests and vet pass for candidate cutoff and parsed-date precedence; the full native suite passed before this additive fix.

@@ -78,7 +78,8 @@ type App struct {
 	// pays the SQL query + JSON unmarshal only once. Each accessor still returns a fresh
 	// top-level copy, so callers keep their "you own this slice" contract (safe to sort
 	// or filter in place). Single-threaded wasm, so no locking.
-	reads appReadCaches
+	reads    appReadCaches
+	settings settingsSnapshotCache
 	// triggersSuspended pauses automatic workflow firing from PutTransaction while
 	// a bulk operation (import) or a workflow's own effects are running, so a single
 	// user-facing "add a transaction" fires triggers but a 500-row import doesn't
@@ -687,7 +688,7 @@ func (a *App) FreshnessWindows() freshness.Windows {
 
 // Settings returns the stored settings.
 func (a *App) Settings() store.Settings {
-	s, err := a.store.GetSettings()
+	s, err := a.SettingsChecked()
 	a.logErr("settings", err)
 	return s
 }

@@ -1,0 +1,17 @@
+WORK=C:\Users\mreca\AppData\Local\Temp\go-build1376458096
+goos: windows
+goarch: amd64
+pkg: github.com/monstercameron/CashFlux/internal/appstate
+cpu: Virtual CPU @ 4.45GHz
+BenchmarkSettingsSnapshot/SQLJSON         	     668	    362337 ns/op	   73800 B/op	     855 allocs/op
+BenchmarkSettingsSnapshot/SQLJSON         	     746	    345097 ns/op	   73800 B/op	     855 allocs/op
+BenchmarkSettingsSnapshot/SQLJSON         	     697	    346707 ns/op	   73800 B/op	     855 allocs/op
+BenchmarkSettingsSnapshot/SQLJSON         	     717	    348313 ns/op	   73800 B/op	     855 allocs/op
+BenchmarkSettingsSnapshot/SQLJSON         	     607	    364976 ns/op	   73800 B/op	     855 allocs/op
+BenchmarkSettingsSnapshot/CheckedSnapshot 	    4405	     47183 ns/op	   21816 B/op	     198 allocs/op
+BenchmarkSettingsSnapshot/CheckedSnapshot 	    5973	     54293 ns/op	   21816 B/op	     198 allocs/op
+BenchmarkSettingsSnapshot/CheckedSnapshot 	    5367	     47421 ns/op	   21816 B/op	     198 allocs/op
+BenchmarkSettingsSnapshot/CheckedSnapshot 	    5312	     42438 ns/op	   21816 B/op	     198 allocs/op
+BenchmarkSettingsSnapshot/CheckedSnapshot 	    6649	     50321 ns/op	   21816 B/op	     198 allocs/op
+PASS
+ok  	github.com/monstercameron/CashFlux/internal/appstate	4.948s
