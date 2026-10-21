@@ -10,7 +10,9 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 )
 
@@ -110,39 +112,87 @@ func BenchmarkAccountWindowPreparation(b *testing.B) {
 	b.Run("legacy-per-account-scan", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			legacyWindowScan(accounts, txns, rates, since, until)
+			legacyAccountWindowPreparation(accounts, txns, rates, since, until)
 		}
 	})
 	b.Run("indexed-one-pass", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			AccountWindows(accounts, txns, rates, since, until, nil)
+			rows := AccountWindows(accounts, txns, rates, since, until, nil)
+			benchmarkWindowSink = int64(len(rows))
+			for _, row := range rows {
+				benchmarkWindowSink += row.BaseBalance.Amount + row.Move.Amount + row.Start.Amount + row.End.Amount + row.Flow.Amount + row.Adjustment.Amount
+			}
 		}
 	})
 }
 
-// legacyWindowScan mirrors the pre-extraction per-account reduction for an
-// identical same-process comparison. It is benchmark-only and never used by
-// production callers.
-func legacyWindowScan(accounts []domain.Account, txns []domain.Transaction, rates currency.Rates, since, until time.Time) {
+var benchmarkWindowSink int64
+
+// legacyAccountWindowPreparation mirrors the actual pre-extraction route work:
+// a ledger balance scan and conversion, a separate selected-window transaction
+// scan with five conversions, and a separate provenance scan per account.
+// It is benchmark-only and never used by production callers.
+func legacyAccountWindowPreparation(accounts []domain.Account, txns []domain.Transaction, rates currency.Rates, since, until time.Time) {
+	var checksum int64
 	for _, account := range accounts {
-		var start, end int64
-		for _, tx := range txns {
-			if tx.AccountID != account.ID {
-				continue
-			}
-			if tx.Date.Before(since) {
-				start += tx.Amount.Amount
-			}
-			if tx.Date.Before(until) {
-				end += tx.Amount.Amount
+		balance, err := ledger.Balance(account, txns)
+		if err != nil {
+			continue
+		}
+		if converted, err := rates.Convert(balance, rates.Base); err == nil {
+			checksum += converted.Amount
+		}
+		move, start, end, flow, adjustment := legacyWindowScan(account, txns, since, until)
+		for _, amount := range []int64{move, start, end, flow, adjustment} {
+			if converted, err := rates.Convert(money.New(amount, account.Currency), rates.Base); err == nil {
+				checksum += converted.Amount
 			}
 		}
-		if account.Class == domain.ClassLiability {
-			_, _ = liabilityDelta(account, start, end)
-		} else {
-			_ = end - start
+		kind, _ := ledger.BalanceProvenance(account.ID, txns, nil)
+		if kind == ledger.ProvenanceOpening {
+			checksum++
 		}
-		_, _ = rates.Convert(money.New(end, account.Currency), rates.Base)
 	}
+	benchmarkWindowSink = checksum
+}
+
+func legacyWindowScan(account domain.Account, txns []domain.Transaction, since, until time.Time) (move, start, end, flow, adjustment int64) {
+	start, end = account.OpeningBalance.Amount, account.OpeningBalance.Amount
+	if account.OpeningBalance.Currency == "" {
+		start, end = 0, 0
+	}
+	var flowAccount, adjustmentAccount int64
+	for _, tx := range txns {
+		if tx.AccountID != account.ID {
+			continue
+		}
+		if tx.Date.Before(since) {
+			start += tx.Amount.Amount
+		}
+		if tx.Date.Before(until) {
+			end += tx.Amount.Amount
+		}
+		if !dateutil.InRange(tx.Date, since, until) {
+			continue
+		}
+		flowAccount += tx.Amount.Amount
+	}
+	delta := end - start
+	factor := int64(1)
+	if account.Class == domain.ClassLiability {
+		delta = -(absLegacy(end) - absLegacy(start))
+		if !(start < 0 || (start == 0 && end < 0)) {
+			factor = -1
+		}
+	}
+	flow, adjustment = factor*flowAccount, factor*adjustmentAccount
+	return delta, start, end, flow, adjustment
+}
+
+func absLegacy(value int64) int64 {
+	if value < 0 {
+		return -value
+	}
+	return value
 }

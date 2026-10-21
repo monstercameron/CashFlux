@@ -158,6 +158,9 @@ func absFloat(v float64) float64 {
 // takes over at narrow pane widths (same legs, same figures, read downward
 // instead of across — the graphic changes FORM rather than clipping).
 func nwsBridge(v nwsView) ui.Node {
+	if v.BridgeErr != nil {
+		return P(css.Class("nws-drill-note"), Attr("data-testid", "nws-bridge-unavailable"), uistate.T("nws.windowUnavailable"))
+	}
 	b := v.Bridge
 	cols := nwsBridgeCols(b)
 	scale := newNwsBridgeScale(cols)

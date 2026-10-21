@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Net Worth views consume prepared snapshot, bridge, series, expense and health facts.
 - Investment summaries use checked native balances, conversion and reconciliation facts.
 - Custom-field forms validate typed values natively before creating or updating records.
 - Full, embedded and AI Credit views share checked native preparation and keyed limit editors.

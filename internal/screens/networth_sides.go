@@ -165,6 +165,9 @@ func nwsGapPath(upper, lower []int64, s nwsGapScale) string {
 // regions named where they sit, and the net worth called out at the right end —
 // plus the composition strips for both sides.
 func nwsSides(v nwsView) ui.Node {
+	if v.SeriesErr != nil {
+		return P(css.Class("empty"), Attr("data-testid", "nws-sides-unavailable"), uistate.T("networth.unavailable"))
+	}
 	pts := v.Points
 	if len(pts) < 2 {
 		return P(css.Class("empty"), Attr("data-testid", "nws-sides-empty"), uistate.T("nws.sidesEmpty"))

@@ -1,3 +1,7 @@
+## 2026-10-21 - Complete native Net Worth preparation
+
+Moved remaining model composition into native networthview with independent errors, explicit periods, stable account partitions and mover ordering. Native tests pass and focused WASM adapter checks pass. Corrected the earlier benchmark reference to include the full legacy account-window work; its synthetic results describe only account-window preparation, not browser latency.
+
 ## 2026-10-21 - Native investment account preparation
 
 Extracted full investment preparation with independent availability, retaining valid security facts when account reconciliation fails. Removed raw FX and zero fallbacks. Native model/portfolio tests pass; focused WASM scenarios cover missing FX and invalid ledger balances. An initial allocation regression was corrected before wiring. Final synthetic comparison uses 39,232 bytes versus 40,976 for the reference but has more allocations; timings vary and are not an app speed claim.

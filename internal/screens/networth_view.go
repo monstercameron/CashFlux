@@ -5,14 +5,12 @@
 package screens
 
 import (
-	"sort"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/attribution"
 	"github.com/monstercameron/CashFlux/internal/balancesheet"
 	"github.com/monstercameron/CashFlux/internal/currency"
-	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/networthview"
@@ -71,43 +69,42 @@ type nwsView struct {
 
 	// Snapshot as of now, with the exclusions disclosed rather than silently
 	// folded in (ledger.NetWorthExplained).
-	Snapshot ledger.NetWorthResult
+	Snapshot    ledger.NetWorthResult
+	SnapshotErr error
 
 	// Bridge decomposes the window; its EndMinor is the same net worth the hero
 	// prints and its legs sum to it exactly, residual included.
-	Bridge attribution.Bridge
+	Bridge    attribution.Bridge
+	BridgeErr error
 
 	// Points is the monthly composition series across the window, with today
 	// appended as the final point so the chart ends where the hero does.
-	Points []balancesheet.Point
+	Points    []balancesheet.Point
+	SeriesErr error
 	// Labels captions Points, one per point (blank where thinned).
-	Labels []string
+	Labels         []string
+	PreparationErr error
 
 	Health balancesheet.Health
 	// CashMinor is the spendable (BucketCash) total; MonthlyExpenseMinor is
 	// typical monthly spending over the trailing quarter (0 when unknown).
 	CashMinor, MonthlyExpenseMinor int64
+	CashKnown, MonthlyExpenseKnown bool
+	HealthKnown, RunwayKnown       bool
 
 	// Accounts holds EVERY non-archived account, biggest side-magnitude first.
 	// Nothing is capped here: a view that hides rows must say so itself.
-	Accounts []nwsAcctRow
+	Accounts  []nwsAcctRow
+	AssetRows []nwsAcctRow
+	DebtRows  []nwsAcctRow
+	MoverRows []nwsAcctRow
 }
 
 // Assets returns the asset rows in display order.
-func (v nwsView) Assets() []nwsAcctRow { return v.side(domain.ClassAsset) }
+func (v nwsView) Assets() []nwsAcctRow { return v.AssetRows }
 
 // Liabilities returns the liability rows in display order.
-func (v nwsView) Liabilities() []nwsAcctRow { return v.side(domain.ClassLiability) }
-
-func (v nwsView) side(c domain.AccountClass) []nwsAcctRow {
-	out := make([]nwsAcctRow, 0, len(v.Accounts))
-	for _, r := range v.Accounts {
-		if r.Acct.Class == c {
-			out = append(out, r)
-		}
-	}
-	return out
-}
+func (v nwsView) Liabilities() []nwsAcctRow { return v.DebtRows }
 
 // Latest is the composition point the hero describes (the final point).
 func (v nwsView) Latest() balancesheet.Point {
@@ -121,16 +118,7 @@ func (v nwsView) Latest() balancesheet.Point {
 // absolute movement first. Every mover is returned — the caller decides how to
 // present them, but it may not quietly drop any.
 func (v nwsView) Movers() []nwsAcctRow {
-	out := make([]nwsAcctRow, 0, len(v.Accounts))
-	for _, r := range v.Accounts {
-		if !r.WindowKnown || r.MoveMinor != 0 {
-			out = append(out, r)
-		}
-	}
-	sort.SliceStable(out, func(i, j int) bool {
-		return absMinor(out[i].MoveMinor) > absMinor(out[j].MoveMinor)
-	})
-	return out
+	return v.MoverRows
 }
 
 // nwsWindowMonths are the selectable window lengths, shortest first. Zero is
@@ -153,114 +141,40 @@ func computeNwsView(app *appstate.App, months int, now time.Time) nwsView {
 	accounts := app.Accounts()
 	txns := app.Transactions()
 
-	v := nwsView{Base: base, Dec: currency.Decimals(base), Now: now, Months: months, Rates: rates}
-	curMonth := dateutil.MonthStart(now)
-	if months == nwsAllTime {
-		v.Since = dateutil.MonthStart(nwsEarliestRecord(accounts, txns, now))
-	} else {
-		v.Since = dateutil.AddMonths(curMonth, -(months - 1))
-	}
-	// Until is tomorrow so "strictly before the cutoff" includes everything
-	// posted today — the hero must not lag the ledger by a day.
-	v.Until = dateutil.DayStart(now).AddDate(0, 0, 1)
-
-	v.Snapshot, _ = ledger.NetWorthExplained(accounts, txns, rates)
-
-	isAdj := isBalanceAdjustment
-	v.Bridge, _ = attribution.BuildBridge(attribution.Input{
-		Accounts: accounts, Txns: txns, Rates: rates,
-		Since: v.Since, Until: v.Until, IsAdjustment: isAdj,
+	prepared, err := networthview.Prepare(networthview.Input{
+		Accounts: accounts, Transactions: txns, Rates: rates, Months: months, Now: now,
+		IsAdjustment: isBalanceAdjustment,
 	})
-
-	// Composition series: one point per month boundary in the window, plus today.
-	// An all-time window is thinned to a sane number of points — a household with
-	// ten years of records does not need 120 of them to see a shape.
-	span := months
-	if span == nwsAllTime {
-		span = nwsMonthsBetween(v.Since, curMonth) + 1
+	if err != nil {
+		return nwsView{Base: base, Dec: currency.Decimals(base), Now: now, Months: months, Rates: rates, PreparationErr: err}
 	}
-	step := 1
-	if span > 36 {
-		step = (span + 35) / 36
+	v := nwsView{
+		Base: prepared.Base, Dec: currency.Decimals(prepared.Base), Now: now, Months: prepared.Months,
+		Since: prepared.Since, Until: prepared.Until, Snapshot: prepared.Snapshot.NetWorthResult,
+		SnapshotErr: prepared.SnapshotErr, Bridge: prepared.Bridge, BridgeErr: prepared.BridgeErr,
+		Points: prepared.Points, SeriesErr: prepared.SeriesErr, Labels: nwsLabels(prepared.Cutoffs, prepared.SpanMonths),
+		CashMinor: prepared.Cash.Amount, CashKnown: prepared.CashKnown,
+		MonthlyExpenseMinor: prepared.Expense.Amount.Amount, MonthlyExpenseKnown: prepared.Expense.Known,
+		Health: prepared.Health, HealthKnown: prepared.HealthKnown, RunwayKnown: prepared.RunwayKnown,
 	}
-	cutoffs := make([]time.Time, 0, span/step+2)
-	for k := 0; k <= span-1; k += step {
-		cutoffs = append(cutoffs, dateutil.AddMonths(v.Since, k))
-	}
-	cutoffs = append(cutoffs, v.Until)
-	v.Points, _ = balancesheet.Series(accounts, txns, cutoffs, rates)
-	v.Labels = nwsLabels(cutoffs, span)
-
-	// Per-account standing and movement over the same window.
-	accountWindows := networthview.AccountWindows(accounts, txns, rates, v.Since, v.Until, isAdj)
-	for i, a := range accounts {
-		if a.Archived {
-			continue
+	mapFacts := func(facts []networthview.AccountFact) []nwsAcctRow {
+		rows := make([]nwsAcctRow, 0, len(facts))
+		for _, fact := range facts {
+			row := nwsAcctRow{
+				Acct: fact.Account, BalanceMinor: fact.Window.BaseBalance.Amount, SideMinor: int64(fact.SideMagnitude),
+				Bucket: fact.Bucket, AsOf: fact.AsOf, WindowKnown: fact.Window.WindowKnown(), Manual: fact.Window.Manual,
+			}
+			if row.WindowKnown {
+				row.MoveMinor = fact.Window.Move.Amount
+				row.StartMinor, row.EndMinor = fact.Window.Start.Amount, fact.Window.End.Amount
+				row.FlowMinor, row.AdjMinor = fact.Window.Flow.Amount, fact.Window.Adjustment.Amount
+			}
+			rows = append(rows, row)
 		}
-		if i >= len(accountWindows) || !accountWindows[i].BaseBalanceKnown() {
-			continue // already disclosed by NetWorthExplained
-		}
-		window := accountWindows[i]
-		row := nwsAcctRow{Acct: a, BalanceMinor: window.BaseBalance.Amount, Bucket: balancesheet.BucketOf(a), AsOf: a.BalanceAsOf, WindowKnown: window.WindowKnown()}
-		row.SideMinor = absMinor(window.BaseBalance.Amount)
-		if row.WindowKnown {
-			row.MoveMinor = window.Move.Amount
-			row.StartMinor, row.EndMinor = window.Start.Amount, window.End.Amount
-			row.FlowMinor, row.AdjMinor = window.Flow.Amount, window.Adjustment.Amount
-		}
-		row.Manual = window.Manual
-		v.Accounts = append(v.Accounts, row)
+		return rows
 	}
-	sort.SliceStable(v.Accounts, func(i, j int) bool {
-		return v.Accounts[i].SideMinor > v.Accounts[j].SideMinor
-	})
-
-	latest := v.Latest()
-	v.CashMinor = latest.Assets[balancesheet.BucketCash]
-	v.MonthlyExpenseMinor = nwsTypicalMonthlyExpense(txns, rates, now)
-	v.Health = balancesheet.Assess(latest.AssetsMinor, latest.LiabilitiesMinor, v.CashMinor, v.MonthlyExpenseMinor)
+	v.Accounts, v.AssetRows, v.DebtRows, v.MoverRows = mapFacts(prepared.Accounts), mapFacts(prepared.Assets), mapFacts(prepared.Liabilities), mapFacts(prepared.Movers)
 	return v
-}
-
-// nwsEarliestRecord is the oldest date the household has any record of: the
-// first transaction, or today when there are none.
-func nwsEarliestRecord(accounts []domain.Account, txns []domain.Transaction, now time.Time) time.Time {
-	earliest := now
-	for _, t := range txns {
-		if !t.Date.IsZero() && t.Date.Before(earliest) {
-			earliest = t.Date
-		}
-	}
-	return earliest
-}
-
-// nwsMonthsBetween counts whole calendar months from a to b (never negative).
-func nwsMonthsBetween(a, b time.Time) int {
-	m := int(b.Year()-a.Year())*12 + int(b.Month()) - int(a.Month())
-	if m < 0 {
-		return 0
-	}
-	return m
-}
-
-// nwsAccountWindow reads one account across the window: its signed net-worth
-// contribution, its own balance at each end, and the split between money that
-// moved through it and balance that was asserted by hand. All in the canonical
-// convention — an asset contributes its balance delta, a liability contributes
-// minus the change in what is owed — so these agree with the bridge to the cent.
-// nwsTypicalMonthlyExpense averages spending over the last three COMPLETE
-// months, which is what makes "months of expenses on hand" a real figure rather
-// than a reading of whatever this half-finished month happens to look like.
-// Returns 0 when there is no spending history to average.
-func nwsTypicalMonthlyExpense(txns []domain.Transaction, rates currency.Rates, now time.Time) int64 {
-	const window = 3
-	end := dateutil.MonthStart(now)
-	start := dateutil.AddMonths(end, -window)
-	_, expense, err := ledger.PeriodTotals(txns, start, end, rates)
-	if err != nil || expense.Amount <= 0 {
-		return 0
-	}
-	return expense.Amount / window
 }
 
 // nwsLabels captions the composition points: a month abbreviation per boundary

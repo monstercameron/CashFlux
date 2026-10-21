@@ -332,6 +332,11 @@ func nwsStandSection(v nwsView) ui.Node {
 // nwsChangedSection (01) carries the full bridge — every leg with what it
 // contains and the residual stated outright — plus every account that moved.
 func nwsChangedSection(v nwsView) ui.Node {
+	if v.BridgeErr != nil {
+		return nwsDetailSection("nws-01", "01", uistate.T("nws.secChanged"),
+			uistate.T("nws.secChangedNote", nwsWindowSpan(v.Months)), nil,
+			P(css.Class("nws-drill-note"), Attr("data-testid", "nws-bridge-unavailable"), uistate.T("nws.windowUnavailable")))
+	}
 	b := v.Bridge
 	rows := []any{}
 	for _, k := range attribution.BridgeLegOrder {
@@ -529,6 +534,11 @@ func nwsShareBar(share int64, asset bool) ui.Node {
 // nwsHistorySection (04) is the window month by month: the mirrored chart
 // again, then the figures behind it.
 func nwsHistorySection(v nwsView) ui.Node {
+	if v.SeriesErr != nil {
+		return nwsDetailSection("nws-04", "04", uistate.T("nws.secHistory"),
+			uistate.T("nws.secHistoryNote"), nil,
+			P(css.Class("nws-drill-note"), Attr("data-testid", "nws-history-unavailable"), uistate.T("networth.unavailable")))
+	}
 	body := Fragment(
 		nwsSides(v),
 		nwsMilestones(v),
