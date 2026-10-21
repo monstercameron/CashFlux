@@ -6,12 +6,12 @@ package screens
 
 import (
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/smart"
-	"github.com/monstercameron/CashFlux/internal/smartengine"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -56,15 +56,14 @@ func SmartStrip(props smartStripProps) ui.Node {
 	if settings.IsSnoozed(time.Now().Unix()) {
 		return Fragment()
 	}
-	in := buildSmartInput(app, pr.WeekStartWeekday())
-
-	var insights []smart.Insight
+	insights, err := preparedSmartInsights(app, pr.WeekStartWeekday(), settings, props.Page)
+	if err != nil {
+		slog.Warn("smart strip unavailable", "err", err)
+		return Fragment()
+	}
 	limit := stripCap
 	if props.Page == "" {
-		insights = smartengine.Run(in, settings)
 		limit = stripCapAll
-	} else {
-		insights = smartengine.RunPage(in, settings, props.Page)
 	}
 
 	// The page's enabled AI features surface inline as run-controls (the
@@ -319,12 +318,10 @@ func smartPeekTrigger(props smartPeekProps) ui.Node {
 	if settings.IsSnoozed(time.Now().Unix()) {
 		return Fragment()
 	}
-	in := buildSmartInput(app, pr.WeekStartWeekday())
-	var insights []smart.Insight
-	if page == "" {
-		insights = smartengine.Run(in, settings)
-	} else {
-		insights = smartengine.RunPage(in, settings, page)
+	insights, err := preparedSmartInsights(app, pr.WeekStartWeekday(), settings, page)
+	if err != nil {
+		slog.Warn("smart peek unavailable", "err", err)
+		return Fragment()
 	}
 	var aiFeats []smart.Feature
 	if page != "" {
