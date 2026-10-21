@@ -1,3 +1,7 @@
+## 2026-10-20 - Verified Assistant tax reference values
+
+Checked every existing field for both supported tax years against IRS and SSA primary publications. Fixed four deduction values, preserved the year-specific reference contract, and added verification dates/source URLs plus catch-up and retirement-age qualifications. Native taxref tests (nine groups), vet and diff checks passed; docs/TAX_REFERENCE_SOURCES.md records the source mapping.
+
 ## 2026-10-20 - Assistant report calculation fidelity
 
 Reports now read fresh fallible Store data and financial settings, preserve partial-date ranges, reject oversized monthly series, and propagate unavailable FX/arithmetic rather than false zero. Added checked native report adapters and independent full-history investment basis traces. Current balance-sheet reports explicitly differ from selected activity windows; split-linked-refund category ambiguity is disclosed. Native reports tests/vet and twelve selected WASM report and trace regressions passed. Root forwards current Assistant activity scope into the report tools.
