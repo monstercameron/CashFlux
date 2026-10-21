@@ -611,6 +611,9 @@ func pushBlockedReasonAllowing(allowLockedDifferent bool) string {
 	if uistate.SampleActive() {
 		return "local dataset is the seeded sample"
 	}
+	if hostedHydrationRequired() {
+		return "account data must be loaded from the server first"
+	}
 	// The dataset loaded here belongs to a DIFFERENT account. Pushing it would
 	// write one household's records over another's under a timestamp that looks
 	// perfectly legitimate — which is exactly what happened on 2026-08-19. The
@@ -1026,6 +1029,12 @@ func flushBackendSyncQueue() {
 		return
 	}
 	if !requireDatasetEncryption() {
+		return
+	}
+	// A hosted first-open may have an unreadable local checkpoint and an older
+	// pending queue entry. Resolve the signed-in account's workspace and pull its
+	// authoritative snapshot before sending anything from that queue.
+	if hostedHydrationRequired() {
 		return
 	}
 	go func() {
