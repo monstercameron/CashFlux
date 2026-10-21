@@ -13,6 +13,9 @@ package engineenv
 // screen, the dashboard tile, and these variables, so they can never disagree.
 
 import (
+	"fmt"
+	"math"
+	"math/big"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/budgeting"
@@ -82,96 +85,108 @@ func healthInputs(d Data, bals map[string]money.Money) healthscore.Inputs {
 		rates.Base = "USD"
 	}
 	base := rates.Base
-
-	var in healthscore.Inputs
-
-	// Trailing three full months (exclude the current partial month).
+	in := healthscore.Inputs{Unavailable: map[string]error{}}
+	fail := func(factor string, err error) {
+		if in.Unavailable[factor] == nil {
+			in.Unavailable[factor] = fmt.Errorf("health %s: %w", factor, err)
+		}
+	}
 	curMonth := dateutil.MonthStart(d.Now)
 	start := dateutil.AddMonths(curMonth, -healthLookbackMonths)
-	flow, err := reports.IncomeVsExpense(d.Transactions, start, curMonth, rates)
-	hasFlow := err == nil && (flow.Income > 0 || flow.Expense > 0)
-
-	monthlyIncome := int64(0)
-	avgMonthlySpend := int64(0)
-	if hasFlow {
+	flows, flowErr := reports.IncomeExpenseSeriesFromLedger(d.budgetLedger(), []time.Time{start, curMonth}, rates)
+	monthlyIncome, avgMonthlySpend := int64(0), int64(0)
+	if flowErr != nil {
+		for _, key := range []string{"savings", "emergency", "debt"} {
+			fail(key, flowErr)
+		}
+	} else if len(flows) == 1 {
+		flow := flows[0]
 		monthlyIncome = flow.Income / healthLookbackMonths
 		avgMonthlySpend = flow.Expense / healthLookbackMonths
 		if flow.Income > 0 {
 			in.HasIncome = true
-			in.SavingsRatePct = ledger.SavingsRate(flow.Income, flow.Expense)
+			net, err := money.Sub(flow.Income, flow.Expense)
+			if err == nil {
+				in.SavingsRatePct, err = healthPercent(net, flow.Income, money.RoundTowardZero)
+			}
+			if err != nil {
+				fail("savings", err)
+			}
 		}
 	}
-
-	// Emergency fund: liquid cash ÷ average monthly spending.
 	if avgMonthlySpend > 0 {
-		if liquid, lerr := ledger.LiquidFromBalances(d.Accounts, bals, rates); lerr == nil {
+		liquid, err := ledger.LiquidFromBalances(d.Accounts, bals, rates)
+		if err != nil {
+			fail("emergency", err)
+		} else {
 			in.HasLiquidData = true
 			in.EmergencyMonths = float64(liquid.Amount) / float64(avgMonthlySpend)
 		}
 	}
-
-	// Debt payments vs income: Σ liability minimum payments ÷ monthly income.
-	// Applicable whenever there's income; zero debt scores 100 (in the model).
 	if in.HasIncome {
 		var minSum int64
-		anyLiab := false
 		for _, a := range d.Accounts {
 			if a.Archived || !a.IsLiability() {
 				continue
 			}
-			anyLiab = true
-			conv, cerr := currency.ConvertBetween(a.MinPayment.Amount, a.MinPayment.Currency, base, rates)
-			if cerr != nil {
-				// No usable rate: exclude the payment (the same convention as
-				// every other atom) — a raw foreign amount added as if it were
-				// base-currency cents (¥50,000 ≠ $50,000) corrupts the ratio.
+			in.HasLiabilities = true
+			if a.MinPayment.Amount == 0 {
 				continue
 			}
-			minSum += conv
+			converted, err := currency.ConvertBetween(a.MinPayment.Amount, a.MinPayment.Currency, base, rates)
+			if err == nil {
+				converted, err = money.Abs(converted)
+			}
+			if err == nil {
+				minSum, err = money.Add(minSum, converted)
+			}
+			if err != nil {
+				fail("debt", fmt.Errorf("account %s minimum payment: %w", a.ID, err))
+				break
+			}
 		}
-		in.HasLiabilities = anyLiab
-		if monthlyIncome > 0 {
-			in.ObligationRatioPct = int(minSum * 100 / monthlyIncome)
+		if in.Unavailable["debt"] == nil {
+			if monthlyIncome <= 0 {
+				fail("debt", fmt.Errorf("monthly income rounds to zero"))
+			} else {
+				var err error
+				in.ObligationRatioPct, err = healthPercent(minSum, monthlyIncome, money.RoundTowardZero)
+				if err != nil {
+					fail("debt", err)
+				}
+			}
 		}
 	}
-
-	// Budget adherence: share of budgets within their limit. Mirrors the
-	// dashboard's budget evaluation (rollup over sub-categories).
-	//
-	// C344: three days into a month NO budget has been broken yet, so scoring the
-	// current period there returned a confident 100% — "excellent" as a statement
-	// about the calendar rather than about the household. While the period is too
-	// young to read, this scores the LAST COMPLETED one instead and says so, the
-	// same way the savings factor deliberately excludes the partial month.
 	if len(d.Budgets) > 0 {
 		in.BudgetAdherenceWindow = healthscore.WindowCurrentPeriod
 		measureAt := d.Now
 		ms, me := budgeting.PeriodRange(domain.PeriodMonthly, d.Now, d.WeekStart)
 		if age := periodage.Of(ms, me, d.Now); age.Early() {
-			// One instant before the current period opened lands inside the last
-			// completed one, whatever each budget's own cadence turns out to be.
 			measureAt = age.Start.Add(-time.Nanosecond)
 			in.BudgetAdherenceWindow = healthscore.WindowPriorPeriod
 		}
-		total, within := 0, 0
+		within := int64(0)
 		for _, b := range d.Budgets {
 			bs, be := budgeting.PeriodRange(b.Period, measureAt, d.WeekStart)
-			st, berr := budgeting.EvaluateRollup(b, d.budgetLedger(), bs, be, rates, budgeting.DefaultNearThreshold, categorytree.DescendantsOfAll(d.Categories, b.TrackedCategoryIDs()))
-			if berr != nil {
-				continue
+			status, err := budgeting.EvaluateRollup(b, d.budgetLedger(), bs, be, rates, budgeting.DefaultNearThreshold, categorytree.DescendantsOfAll(d.Categories, b.TrackedCategoryIDs()))
+			if err != nil {
+				fail("budget", fmt.Errorf("budget %s: %w", b.ID, err))
+				break
 			}
-			total++
-			if st.State != budgeting.StateOver {
+			if status.State != budgeting.StateOver {
 				within++
 			}
 		}
-		if total > 0 {
-			in.HasBudgets = true
-			in.BudgetAdherencePct = within * 100 / total
+		if in.Unavailable["budget"] == nil {
+			var err error
+			in.BudgetAdherencePct, err = healthPercent(within, int64(len(d.Budgets)), money.RoundTowardZero)
+			if err != nil {
+				fail("budget", err)
+			} else {
+				in.HasBudgets = true
+			}
 		}
 	}
-
-	// Aggregate credit utilization: Σ card balances ÷ Σ card limits.
 	var balSum, limitSum int64
 	for _, a := range d.Accounts {
 		if a.Archived || a.CreditLimit.Amount <= 0 {
@@ -179,40 +194,79 @@ func healthInputs(d Data, bals map[string]money.Money) healthscore.Inputs {
 		}
 		bal, ok := bals[a.ID]
 		if !ok {
-			continue
+			fail("utilization", fmt.Errorf("account %s balance unavailable", a.ID))
+			break
 		}
-		owed := bal.Amount
-		if owed < 0 {
-			owed = -owed
+		owed, err := money.Abs(bal.Amount)
+		if err != nil {
+			fail("utilization", fmt.Errorf("account %s balance magnitude: %w", a.ID, err))
+			break
 		}
-		ob, oerr := currency.ConvertBetween(owed, bal.Currency, base, rates)
-		ol, lerr := currency.ConvertBetween(a.CreditLimit.Amount, a.CreditLimit.Currency, base, rates)
-		if oerr != nil || lerr != nil {
-			// No usable rate for the balance or the limit: exclude the whole
-			// card — adding raw foreign minor units (or half a card) into a
-			// base-currency ratio corrupts the utilization percentage.
-			continue
+		ob, err := currency.ConvertBetween(owed, bal.Currency, base, rates)
+		if err == nil {
+			balSum, err = money.Add(balSum, ob)
 		}
-		balSum += ob
-		limitSum += ol
+		if err == nil {
+			var ol int64
+			ol, err = currency.ConvertBetween(a.CreditLimit.Amount, a.CreditLimit.Currency, base, rates)
+			if err == nil {
+				limitSum, err = money.Add(limitSum, ol)
+			}
+		}
+		if err != nil {
+			fail("utilization", fmt.Errorf("account %s credit: %w", a.ID, err))
+			break
+		}
 	}
-	if limitSum > 0 {
-		in.HasCredit = true
-		if pct, ok := ledger.Utilization(balSum, limitSum); ok {
-			in.AggUtilizationPct = pct
+	if in.Unavailable["utilization"] == nil && limitSum > 0 {
+		var err error
+		in.AggUtilizationPct, err = healthPercent(balSum, limitSum, money.RoundHalfAwayFromZero)
+		if err != nil {
+			fail("utilization", err)
+		} else {
+			in.HasCredit = true
 		}
 	}
-
-	// Net-worth trend: the trailing six-month change as a percentage. A meaningful
-	// percentage needs a positive starting net worth; otherwise the factor is
-	// inapplicable (the model excludes it and re-normalizes the remaining weights).
 	nwStart := dateutil.AddMonths(curMonth, -healthNWTrendMonths)
-	if series, nwErr := ledger.NetWorthSeries(d.Accounts, d.Transactions, []time.Time{nwStart, d.Now}, rates); nwErr == nil && len(series) == 2 && series[0].Amount > 0 {
-		in.HasNWTrend = true
-		in.NWTrendPct = float64(series[1].Amount-series[0].Amount) / float64(series[0].Amount) * 100
+	series, err := ledger.NetWorthSeries(d.Accounts, d.Transactions, []time.Time{nwStart, d.Now}, rates)
+	if err != nil {
+		fail("nw-trend", err)
+	} else if len(series) == 2 && series[0].Amount > 0 {
+		in.NWTrendPct, err = healthTrendPercent(series[0].Amount, series[1].Amount)
+		if err != nil {
+			fail("nw-trend", err)
+		} else {
+			in.HasNWTrend = true
+		}
 	}
-
 	return in
+}
+
+func healthPercent(numerator, denominator int64, rounding money.RoundingMode) (int, error) {
+	wide, err := money.MulDiv(numerator, 100, denominator, rounding)
+	if err != nil {
+		return 0, err
+	}
+	value := int(wide)
+	if int64(value) != wide {
+		return 0, fmt.Errorf("health percentage: %w", money.ErrOverflow)
+	}
+	return value, nil
+}
+
+func healthTrendPercent(start, end int64) (float64, error) {
+	if start <= 0 {
+		return 0, fmt.Errorf("net-worth trend requires a positive baseline")
+	}
+	// Subtract in a wide rational: two valid int64 positions can have a change
+	// outside int64, while their percentage remains a small, valid number.
+	delta := new(big.Rat).Sub(new(big.Rat).SetInt64(end), new(big.Rat).SetInt64(start))
+	delta.Mul(delta, big.NewRat(100, start))
+	pct, _ := delta.Float64()
+	if math.IsNaN(pct) || math.IsInf(pct, 0) {
+		return 0, fmt.Errorf("net-worth trend is not finite")
+	}
+	return pct, nil
 }
 
 // addHealthVars runs the health model over the shared HealthInputs derivation
@@ -236,4 +290,17 @@ func addHealthVars(out map[string]float64, d Data, bals map[string]money.Money) 
 	}
 	out["health_emergency_months"] = in.EmergencyMonths
 	out["health_obligation_pct"] = float64(in.ObligationRatioPct)
+	for key := range in.Unavailable {
+		name := healthFactorVar(key)
+		delete(out, name)
+		delete(out, name+"_weight")
+		switch key {
+		case "savings":
+			delete(out, "health_penalty")
+		case "emergency":
+			delete(out, "health_emergency_months")
+		case "debt":
+			delete(out, "health_obligation_pct")
+		}
+	}
 }

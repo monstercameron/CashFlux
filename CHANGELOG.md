@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Health formulas now distinguish unavailable factors from valid independent scores.
 - Net-worth formula composition and change now preserve unavailable values instead of zero or partial totals.
 - The complete enabled assistant catalog is now checked against relay tool-count and schema-size limits.
 - Assistant record pages now include envelope and redaction metadata in their encoded byte budget.

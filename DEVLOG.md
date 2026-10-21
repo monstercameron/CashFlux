@@ -1,3 +1,7 @@
+## 2026-10-21 - Independent checked financial health factors
+
+Checked payment and utilization FX, magnitudes, sums, percentages and net-worth trends; every applicable budget must evaluate before adherence is published. The native health model accepts explicit per-factor unavailability. Independent factors remain known and failed factors cannot be refilled by custom molecules. Full engineenv/healthscore tests, vet and seven new regression groups passed.
+
 ## 2026-10-21 - Checked net-worth formula availability
 
 Added checked delta and percentage helpers, strict per-bucket FX and checked accumulation. Independent complete buckets remain usable; missing financial inputs cannot be replaced by a custom molecule. Full engineenv and nwchange native suites, vet and the behavioral molecule regression passed.
