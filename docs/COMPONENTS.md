@@ -212,6 +212,57 @@ other inputs. Large snapshots use capacity one. Tests cover context/data/FX/date
 invalidation. See [Primary page performance](PRIMARY_PAGE_PERFORMANCE.md) for local
 measurements and their limits.
 
+#### Goals: prepare once, render children from facts
+
+`goals.BuildTaskIndex(tasks)` scans linked tasks once and produces per-goal
+`TaskSummary` values (counts plus at most three previews). `goalview.Build(Input)`
+uses that index to build one `goalview.RowModel` per visible goal; each row carries
+the canonical `goals.Evaluation`, task summary, growth projection and explicit
+`Now`. The same model set supplies sections, summary figures and health ordering.
+Pass the row model into `GoalRow`, then into `GoalFigures` and
+`GoalTaskPreview`; those child components render prepared values and own their
+interactive hooks. Keep the stored `domain.Goal` alongside the model for writes
+and callbacks. This prevents list rows from independently re-running evaluation
+or rebuilding task indexes. `GoalRow`'s nil-model fallback is for isolated use;
+it rebuilds the task index, so do not use that fallback in a per-goal list.
+
+The page-level view must be rebuilt when goals, tasks, accounts, transactions,
+FX rates, member scope or the effective date changes. Stored writes flow through
+the app/data revision; the date key must also account for day changes and goal
+deadline/pause transitions (`goalview.TimeKey`). Do not mutate or sort the view's
+shared slices/maps in render code; create a copy when a presentation needs a
+different ordering. Child row components should be mounted as components (such
+as `ui.CreateElement(GoalRow, ...)`) so per-row event hooks remain isolated and
+stable.
+
+#### Reports: typed sections and lazy full-detail rendering
+
+`reportController` owns the report's fixed hook sequence, state, scope/window
+selection and shared prepared data. Its `reportSectionContext` explicitly
+includes the identities that change how a section reads or formats facts:
+revision, merged report/app scope, base currency, language, accent, date range,
+current activity date and preferences. Section components receive typed props
+containing this context and only their needed models/actions. Keep these display
+identities in props when adding sections; callback identity or transaction count
+alone does not invalidate translated, currency-formatted, themed or differently
+scoped output.
+
+Keep expensive full-detail sections as component elements (`ui.CreateElement`)
+under the Full-mode branch. Summary mode should mount the compact executive view
+without executing the long-form section builders. Do not call a section renderer
+directly while constructing the controller's Summary branch, and do not put
+controller hooks inside conditional Summary/Full branches or variable-length
+loops. Any section with hooks must itself be a component with an unconditional,
+fixed hook order. The report controller may prepare shared native aggregates for
+the summary and full report, but each expensive section should stay separately
+mountable so unopened detail isn't rendered speculatively.
+
+For annual-review money-flow detail, use the checked native helpers
+`reports.Per100Checked` and `reports.PositiveSavingsPer100`; they use integer
+amounts, return overflow errors and let the UI show an explicit unavailable state
+instead of partial or wrapped totals. Do not duplicate the per-$100 arithmetic in
+screen code or substitute an unchecked `int64` multiplication/float percentage.
+
 ### Toggle (`controls.go`)
 **Purpose:** Pill on/off switch (`.switch`, ARIA `role="switch"`). Keyboard-accessible (Space/Enter).
 ```go

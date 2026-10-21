@@ -1,3 +1,7 @@
+## 2026-10-20 - Document shared goal and lazy Reports component contracts
+
+Updated the component guide with one-pass task summaries, immutable row facts, raw-domain mutation boundaries, invalidation requirements and stable lazy Report section hooks. Documented checked per-hundred math APIs and the final 817-screen/native/browser verification with exact artifact provenance, without treating functional checks as latency measurements. Browser cases passed on isolated sample data with external DNS blocked.
+
 ## 2026-10-20 - Wait for the Import review transition in tests
 
 The first complete screen run exposed an existing timing assumption: a 10 ms fetch-promise drain did not always finish the separate Review render on a busy machine. The regression now polls the visible review panel with a bounded three-second deadline and preserves all subsequent placement/footer/save assertions. Product code is unchanged. The complete 817-test WASM screen rerun passes; no paid calls occur because extraction is stubbed.

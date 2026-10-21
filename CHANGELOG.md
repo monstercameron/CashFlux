@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Documented native goal row ownership, Reports lazy section identities and verified third-pass checks.
 - Made the asynchronous Import review regression wait for its visible result instead of a fixed transport delay.
 - Reduced sample payoff-baseline preparation to one checked ledger traversal.
 - Split Reports into typed child sections so Summary skips hidden charts and full-detail builders.

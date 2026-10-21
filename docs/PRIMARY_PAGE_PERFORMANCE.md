@@ -201,3 +201,20 @@ matching `.log` files. Commands, run from the repository root in PowerShell (wit
 node e2e/perf/primary-pages-benchmark.mjs --base-url http://127.0.0.1:8142 --label before-48e8f7e-pass2-final --build-id e134f4cf64ae3fc1dd0aa77ca0967c01a4ec9df52cd1bf655bc8d11b86344186 --warmups 1 --runs 7 --out C:\Users\mreca\Documents\Codex\2026-10-19\fin\work\primary-baseline-pass2-final.json
 node e2e/perf/primary-pages-benchmark.mjs --base-url http://127.0.0.1:8143 --label after-37d895c-pass2-final --build-id 37d895c4a8093a13a2397ee0bfde0ed047da89b956c75ad4bb666791bf21e02b --warmups 1 --runs 7 --out C:\Users\mreca\Documents\Codex\2026-10-19\fin\work\primary-current-pass2-final.json
 ```
+
+## Pass-three verification
+
+The canonical goal models and lazy Reports sections were verified with the full
+native suite and 817 WASM screen tests. One existing asynchronous Import test
+needed a bounded wait for the visible Review panel rather than assuming a 10 ms
+transport delay also completed the render; the complete rerun passed.
+
+The rebuilt artifact had SHA256
+`b39389a35392aacce2408a1f5d2dcc424e0cbf5e1c984042347971ee1a260f34`.
+Its production source was subsequently committed through `239d2669`; the later
+sample payoff-baseline optimization is not in this artifact. Five focused browser
+cases passed with one Chromium worker, no retries, fixed sample data and external
+DNS blocked: Dashboard Focus presets, an unusual-charge notification deep link,
+Goals alphabetical sorting, Reports Summary/Full and saved-view actions, and the
+all-routes smoke sweep. The log is `work/primary-pass3-focused.log` in the task
+workspace. This was a functional verification run, not another latency capture.
