@@ -9,7 +9,6 @@ import (
 	"math"
 	"strings"
 	"syscall/js"
-	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
@@ -26,15 +25,6 @@ import (
 )
 
 // --- shared coaching model ------------------------------------------------------
-
-// baseDebts returns the FX-converted base-currency debts (for the whole-plan
-// figures) alongside the base currency code — the same AggregateDebts the strategy
-// panel and ladder use, so every derived plan agrees.
-func baseDebts(app *appstate.App, base string) []payoff.Debt {
-	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	debts, _ := payoff.AggregateDebts(app.Accounts(), app.Transactions(), base, rates)
-	return debts
-}
 
 // coachAlerts builds the debtcoach snapshot from the shared debt view and evaluates
 // the rules. Per-account figures stay in each debt's own currency (the per-debt rules
@@ -55,14 +45,30 @@ func coachAlerts(app *appstate.App) []debtcoach.Alert {
 			Currency:   owed.Currency,
 		})
 	}
-	debts := baseDebts(app, v.Base)
+	debts := v.Prepared.Debts
 	var monthlyInterest int64
-	for _, d := range debts {
-		monthlyInterest += int64(math.Round(float64(d.Balance) * d.AprPercent / 1200.0))
-	}
 	minMonths, minOK := 0, false
-	if plan, ok := payoff.BuildPlan(debts, 0, strategyFromConfig(v.Cfg)); ok {
-		minMonths, minOK = plan.Months, true
+	if v.Prepared.PlanKnown {
+		interestKnown := true
+		for _, d := range debts {
+			charge := math.Round(float64(d.Balance) * d.AprPercent / 1200.0)
+			if math.IsNaN(charge) || math.IsInf(charge, 0) || charge >= float64(math.MaxInt64) || charge < 0 {
+				interestKnown = false
+				break
+			}
+			var err error
+			monthlyInterest, err = money.Add(monthlyInterest, int64(charge))
+			if err != nil {
+				interestKnown = false
+				break
+			}
+		}
+		if !interestKnown {
+			monthlyInterest = 0
+		}
+		if v.Prepared.MinimumPlanValid {
+			minMonths, minOK = v.Prepared.MinimumPlan.Months, true
+		}
 	}
 	return debtcoach.Evaluate(debtcoach.Input{
 		Debts:                lines,
@@ -229,8 +235,16 @@ func debtPlanBarWidget(props debtPanelProps) ui.Node {
 		method = uistate.T("planning.snowball")
 	}
 	free := v.DebtFree
-	if free == "" {
-		free = "—"
+	planOwed := fmtMoney(v.PlanOwed)
+	switch {
+	case !v.Prepared.PlanKnown:
+		free, planOwed = uistate.T("calculation.unavailable"), uistate.T("calculation.unavailable")
+	case !v.Prepared.PlanValid:
+		free, planOwed = uistate.T("calculation.unavailable"), uistate.T("calculation.unavailable")
+	case len(v.Prepared.Debts) == 0:
+		free = uistate.T("debt.debtFreeLabel")
+	case free == "":
+		free = uistate.T("calculation.unavailable")
 	}
 	item := func(label, val string) ui.Node {
 		return Div(css.Class("debt-planbar-item"),
@@ -240,7 +254,7 @@ func debtPlanBarWidget(props debtPanelProps) ui.Node {
 	return Div(css.Class("debt-planbar"), Attr("data-testid", "debt-planbar"), Attr("aria-label", uistate.T("debt.planbar.aria")),
 		item(uistate.T("debt.planbar.method"), method),
 		item(uistate.T("debt.planbar.extra"), fmtMoney(money.New(v.Cfg.DefaultExtraMinor, v.Base))),
-		item(uistate.T("debt.planbar.inPlan"), fmtMoney(v.PlanOwed)),
+		item(uistate.T("debt.planbar.inPlan"), planOwed),
 		item(uistate.T("debt.planbar.free"), free),
 	)
 }
@@ -288,10 +302,8 @@ func publishDebtHeaderOffset() {
 func debtTunerWidget(props debtPanelProps) ui.Node {
 	_ = uistate.UseDataRevision().Get()
 	app := props.App
-	base := app.Settings().BaseCurrency
-	if base == "" {
-		base = "USD"
-	}
+	view := computeDebtView(app)
+	base := view.Base
 	dec := currency.Decimals(base)
 
 	// $25 in this currency's minor units — the stepper increment.
@@ -300,7 +312,7 @@ func debtTunerWidget(props debtPanelProps) ui.Node {
 		step *= 10
 	}
 
-	cfg := uistate.DebtConfigGet()
+	cfg := view.Cfg
 
 	// Handlers sit at fixed positions (the control set is fixed, never a loop), each
 	// re-reading the config so concurrent edits don't clobber. Every write persists
@@ -320,7 +332,11 @@ func debtTunerWidget(props debtPanelProps) ui.Node {
 	decExtra := ui.UseEvent(Prevent(func() { commit(func(c *uistate.DebtConfig) { c.DefaultExtraMinor -= step }) }))
 	clearExtra := ui.UseEvent(Prevent(func() { commit(func(c *uistate.DebtConfig) { c.DefaultExtraMinor = 0 }) }))
 	suggestExtra := ui.UseEvent(Prevent(func() {
-		s := payoff.SuggestedExtra(baseDebts(app, base))
+		prepared := computeDebtView(app).Prepared
+		if !prepared.PlanKnown {
+			return
+		}
+		s := payoff.SuggestedExtra(prepared.Debts)
 		commit(func(c *uistate.DebtConfig) { c.DefaultExtraMinor = s })
 	}))
 	onExactExtra := ui.UseEvent(func(v string) {
@@ -371,7 +387,7 @@ func debtTunerWidget(props debtPanelProps) ui.Node {
 		),
 		Div(css.Class("debt-tuner-chips"),
 			Button(css.Class("chip-btn"), Type("button"), Attr("data-testid", "debt-extra-suggest"),
-				Title(uistate.T("planning.fillSensibleTitle")), OnClick(suggestExtra), uistate.T("debt.tuner.suggest")),
+				Title(uistate.T("planning.fillSensibleTitle")), Disabled(!view.Prepared.PlanKnown), OnClick(suggestExtra), uistate.T("debt.tuner.suggest")),
 			If(cfg.DefaultExtraMinor > 0,
 				Button(css.Class("chip-btn"), Type("button"), Attr("data-testid", "debt-extra-clear"),
 					OnClick(clearExtra), uistate.T("debt.tuner.clear"))),
@@ -383,7 +399,7 @@ func debtTunerWidget(props debtPanelProps) ui.Node {
 		Fragment(
 			P(css.Class("muted"), uistate.T("debt.tuner.hint")),
 			Div(css.Class("debt-tuner-grid"), methodPick, extraPick),
-			debtTunerReadout(app, base, cfg),
+			debtTunerReadout(view),
 		))
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "debt-tuner", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
@@ -391,33 +407,44 @@ func debtTunerWidget(props debtPanelProps) ui.Node {
 	})
 }
 
-// debtTunerReadout renders the live outcome of the tuned plan: the debt-free date,
-// months, and total interest, plus what the extra payment buys versus minimums only.
-func debtTunerReadout(app *appstate.App, base string, cfg uistate.DebtConfig) ui.Node {
-	debts := baseDebts(app, base)
-	plan, ok := payoff.BuildPlan(debts, cfg.DefaultExtraMinor, strategyFromConfig(cfg))
-	if !ok || len(debts) == 0 {
-		return Fragment()
+// debtTunerReadout renders the prepared outcome and comparison without doing
+// aggregation or payoff calculations in the view.
+func debtTunerReadout(v debtView) ui.Node {
+	prepared := v.Prepared
+	switch {
+	case !prepared.PlanKnown:
+		return P(css.Class("debt-tuner-impact muted"), Attr("data-testid", "debt-tuner-unavailable"), Attr("title", debtSourceError(prepared.PlanErr)),
+			uistate.T("calculation.unavailable"))
+	case !prepared.PlanValid:
+		if prepared.PlanErrCalc != nil {
+			return P(css.Class("debt-tuner-impact muted"), Attr("data-testid", "debt-tuner-unavailable"), Attr("title", debtSourceError(prepared.PlanErrCalc)),
+				uistate.T("calculation.unavailable"))
+		}
+		return P(css.Class("debt-tuner-impact muted"), Attr("data-testid", "debt-tuner-not-viable"), uistate.T("planning.strategyNotViable"))
+	case len(prepared.Debts) == 0:
+		return P(css.Class("debt-tuner-impact muted"), Attr("data-testid", "debt-tuner-debt-free"), uistate.T("debt.debtFreeLabel"))
 	}
-	freeDate := payoff.DebtFreeMonth(time.Now(), plan.Months).Format("Jan 2006")
+
+	plan := prepared.Plan
+	freeDate := prepared.DebtFree.Format("Jan 2006")
 
 	stats := Div(css.Class("debt-tuner-stats"),
+		Attr("data-testid", "debt-tuner-stats"),
 		tunerStat(uistate.T("debt.debtFreeLabel"), freeDate),
 		tunerStat(uistate.T("debt.tuner.timeToFree"), fmtMonthsHuman(plan.Months)),
-		tunerStat(uistate.T("debt.totalInterestLabel"), fmtMoney(money.New(plan.TotalInterest, base))),
+		tunerStat(uistate.T("debt.totalInterestLabel"), fmtMoney(money.New(plan.TotalInterest, v.Base))),
 	)
 
 	// The payoff of the extra: only meaningful once there IS an extra and minimums
 	// alone also clear the debt (so there's a baseline to beat).
 	var impact ui.Node = Fragment()
-	if cfg.DefaultExtraMinor > 0 {
-		if minPlan, okMin := payoff.BuildPlan(debts, 0, strategyFromConfig(cfg)); okMin {
-			monthsSaved := minPlan.Months - plan.Months
-			interestSaved := minPlan.TotalInterest - plan.TotalInterest
-			if monthsSaved > 0 || interestSaved > 0 {
-				impact = P(css.Class("debt-tuner-impact"), Attr("data-testid", "debt-tuner-impact"),
-					uistate.T("debt.tuner.impact", fmtMonthsHuman(monthsSaved), fmtMoney(money.New(interestSaved, base))))
-			}
+	if v.Cfg.DefaultExtraMinor > 0 {
+		if !prepared.SavingsKnown {
+			impact = P(css.Class("debt-tuner-impact muted"), Attr("data-testid", "debt-tuner-impact-unavailable"), Attr("title", debtSourceError(prepared.SavingsErr)),
+				uistate.T("calculation.unavailable"))
+		} else if prepared.MonthsSaved > 0 || prepared.InterestSaved.Amount > 0 {
+			impact = P(css.Class("debt-tuner-impact"), Attr("data-testid", "debt-tuner-impact"),
+				uistate.T("debt.tuner.impact", fmtMonthsHuman(prepared.MonthsSaved), fmtMoney(prepared.InterestSaved)))
 		}
 	} else {
 		impact = P(css.Class("debt-tuner-impact muted"), uistate.T("debt.tuner.addExtraHint"))

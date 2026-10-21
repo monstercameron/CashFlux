@@ -49,6 +49,36 @@ func debtSummaryText(f *render.Fixture) string {
 	return "<missing>"
 }
 
+func TestDebtTunerHostShowsUnavailableForMissingIncludedFX(t *testing.T) {
+	app := bud2TestApp(t)
+	settings := app.Settings()
+	settings.BaseCurrency = "USD"
+	settings.FXRates = nil
+	if err := app.PutSettings(settings); err != nil {
+		t.Fatal(err)
+	}
+	for _, account := range []domain.Account{
+		{ID: "usd-card", Name: "USD card", OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared, Currency: "USD", Class: domain.ClassLiability, Type: domain.TypeCreditCard, OpeningBalance: money.New(-100_000, "USD"), MinPayment: money.New(5_000, "USD")},
+		{ID: "eur-card", Name: "EUR card", OwnerID: domain.GroupOwnerID, Scope: domain.ScopeShared, Currency: "EUR", Class: domain.ClassLiability, Type: domain.TypeCreditCard, OpeningBalance: money.New(-1_000, "EUR"), MinPayment: money.New(100, "EUR")},
+	} {
+		if err := app.PutAccount(account); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	f := render.New(t)
+	f.Render(ui.CreateElement(debtTunerWidget, debtPanelProps{App: app}))
+	if byTestID(f, "p", "debt-tuner-unavailable") == nil {
+		t.Fatalf("missing included FX did not make the tuner unavailable: %q", f.Text())
+	}
+	if byTestID(f, "div", "debt-tuner-stats") != nil {
+		t.Fatalf("tuner displayed partial payoff facts: %q", f.Text())
+	}
+	if suggest := byTestID(f, "button", "debt-extra-suggest"); suggest == nil || !isDisabled(suggest) {
+		t.Fatalf("suggestion remained available for an incomplete debt set: node=%v", suggest)
+	}
+}
+
 func TestDebtLoansNativeLoanCardExtraMoneyAndInvalidPrecision(t *testing.T) {
 	a := domain.Account{ID: "loan", Name: "Family loan", Currency: "USD", Class: domain.ClassLiability, Type: domain.TypeLoan, TermMonths: 12, InterestRateAPR: loanAPRPtr(0)}
 	props := loanCardProps{Account: a, Balance: money.New(120000, "USD"), BaseCur: "USD"}

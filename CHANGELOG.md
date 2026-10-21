@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Debt tuner, coach and strategy comparison share checked native payoff results and suppress partial FX totals.
 - Planning retirement uses native checked balances and dependency-complete bounded simulation reuse.
 - What changed preserves source errors, exact cutoff and app identity while sharing transaction indexes.
 - Budget summary pool calculations preserve unknown plans and arithmetic overflow.

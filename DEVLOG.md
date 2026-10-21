@@ -1,3 +1,7 @@
+## 2026-10-21 - Share native payoff comparisons across debt views
+
+Preparation independently requests minimum-only and strategy comparisons, reuses selected plans and computes only the alternate strategy. Removed redundant render-time debt aggregation/planning and an obsolete unused variable found by WASM compilation. Native comparison fixtures retain viable controls. Native suite and full1101 Screens suite pass; static call-count savings are not measured latency evidence.
+
 ## 2026-10-21 - Prepare checked retirement facts
 
 Retirement balance aggregation uses a single ledger fold and all-or-nothing conversion. Native projection and drawdown assumptions are preserved; cache includes app/store/UI revisions, exact inputs and FX. All370 native packages and1101 Screens tests passed including missingFX, closed-store and FX-only mounted controls. Unavailable copy uses the translation catalog.

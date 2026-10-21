@@ -120,6 +120,7 @@ type debtView struct {
 	TotalKnown    bool
 	TotalErr      error
 	PlanKnown     bool
+	Prepared      debtview.Result
 }
 
 // strategyFromConfig maps the config's default-strategy string to a payoff.Strategy.
@@ -187,7 +188,11 @@ func computeDebtViewRaw(app *appstate.App) debtView {
 		AvailByID: map[string]money.Money{}, RankByID: map[string]int{}, InPayByID: map[string]bool{},
 		Defs: app.CustomFieldDefsFor("account"),
 	}
-	prepared := debtview.Prepare(app.Accounts(), txns, rates, base, debtview.Config{ExtraMinor: cfg.DefaultExtraMinor, Strategy: strategyFromConfig(cfg)}, time.Now())
+	prepared := debtview.Prepare(app.Accounts(), txns, rates, base, debtview.Config{
+		ExtraMinor: cfg.DefaultExtraMinor, Strategy: strategyFromConfig(cfg),
+		CompareMinimumOnly: true, CompareStrategies: true,
+	}, time.Now())
+	v.Prepared = prepared
 	v.TotalOwed, v.TotalKnown, v.TotalErr = prepared.TotalOwed, prepared.TotalKnown, prepared.TotalErr
 	v.PlanOwed, v.PlanKnown = prepared.PlanOwed, prepared.PlanKnown
 	for _, fact := range prepared.Accounts {
@@ -264,8 +269,14 @@ func debtSummaryWidget(props debtSummaryProps) ui.Node {
 	// out loud: what the plan clears, and how much sits outside it.
 	var freeLine ui.Node = Fragment()
 	if v.DebtFree != "" {
-		excluded := v.TotalOwed.Amount - v.PlanOwed.Amount
-		if !v.TotalKnown || excluded > 0 {
+		if !v.TotalKnown {
+			freeLine = Fragment(
+				P(css.Class("debt-hero-sub", tw.FontDisplay), Attr("data-testid", "debt-plan-scope"),
+					uistate.T("debt.planClearsBy", fmtMoney(v.PlanOwed), v.DebtFree)),
+				P(css.Class("debt-hero-note", tw.TextDim),
+					uistate.T("debt.planExcludes", uistate.T("calculation.unavailable"))),
+			)
+		} else if excluded := v.TotalOwed.Amount - v.PlanOwed.Amount; excluded > 0 {
 			freeLine = Fragment(
 				P(css.Class("debt-hero-sub", tw.FontDisplay), Attr("data-testid", "debt-plan-scope"),
 					uistate.T("debt.planClearsBy", fmtMoney(v.PlanOwed), v.DebtFree)),
@@ -475,9 +486,12 @@ func debtListWidget(props debtListProps) ui.Node {
 
 // debtStrategyWidget hosts the shared snowball-vs-avalanche planner as a surface tile.
 func debtStrategyWidget(props debtPanelProps) ui.Node {
+	view := computeDebtView(props.App)
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "debt-strategy", Title: "", GridColumn: "1 / span 4", Draggable: false, Resizable: false, Preview: true,
-		Body: Div(Attr("id", "sec-strategy"), ui.CreateElement(DebtStrategyPanel, DebtStrategyPanelProps{HideExtraInput: true})),
+		Body: Div(Attr("id", "sec-strategy"), ui.CreateElement(DebtStrategyPanel, DebtStrategyPanelProps{
+			HideExtraInput: true, App: props.App, Base: view.Base, Prepared: &view.Prepared,
+		})),
 	})
 }
 
