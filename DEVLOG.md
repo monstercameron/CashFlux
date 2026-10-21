@@ -1,3 +1,7 @@
+## 2026-10-21 - Native budget income-source preparation
+
+Preserved source ordering, month windows and per-source truncation while composing checked canonical reports. Source failures no longer become zero or no-history claims, and bulk actions preserve manual choices when data is unknown. Fixed income remains independently known. Native budgetview tests and vet pass; both focused actual-host groups pass for source choices, average rounding, FX failure/recovery and exact fixed preview.
+
 ## 2026-10-21 - Shared checked auto-budget tuning
 
 Scaling and selected totals now use checked arithmetic; failed rows or aggregate overflow cannot produce pending writes. Native budgeting tests and vet pass; actual-host tuning and save regressions pass, including recovery without remount. Fixture teardown explicitly unmounts before cleanup because framework Cleanup alone releases ownership without unmounting; no production nil guard was added.

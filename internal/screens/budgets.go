@@ -6,7 +6,6 @@ package screens
 
 import (
 	"encoding/json"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -22,7 +21,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/period"
 	"github.com/monstercameron/CashFlux/internal/prefs"
-	"github.com/monstercameron/CashFlux/internal/reports"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	. "github.com/monstercameron/GoWebComponents/v5/html/shorthand"
@@ -188,12 +186,8 @@ type budgetLastMonth struct {
 }
 
 // incomeSource is one selectable income category in the "by source" budget basis: its
-// id, display name, and how much it brought in last full month (base minor units).
-type incomeSource struct {
-	CategoryID string
-	Name       string
-	Minor      int64
-}
+// id, display name, checked monthly average and availability (base minor units).
+type incomeSource = budgetview.IncomeSource
 
 // savingsAcct is one savings/investment account in the zero-based "Savings &
 // investments" section: its identity, the per-account monthly savings budget
@@ -407,52 +401,13 @@ func resolveIncomeBasis(
 	return budgeting.AveragedIncomeChecked(mode, paycheckMin, fixed, sources, app.Transactions(), ms, avgMonths, base, rates)
 }
 
-// computeIncomeSources builds the income-source menu the "by source" basis presents:
-// every income-kind category with how much it earned per month over the last `months`
-// full months ending at monthStart (a plain average when months > 1), largest first,
-// plus any uncategorized income that actually landed. months < 1 is treated as 1 (last
-// month only). A category with no income in the window shows a zero amount, so the user
-// can still pre-include it; the checked rows sum to the AveragedIncome figure.
-func computeIncomeSources(app *appstate.App, base string, rates currency.Rates, monthStart time.Time, months int) []incomeSource {
-	if months < 1 {
-		months = 1
-	}
-	start := dateutil.AddMonths(monthStart, -months)
-	amtByCat := map[string]int64{}
-	if lines, err := reports.IncomeByCategory(app.Transactions(), start, monthStart, rates); err == nil {
-		for _, ln := range lines {
-			amtByCat[ln.CategoryID] = ln.Amount / int64(months)
-		}
-	}
-	// Rank rows by LAST month's amount — a window independent of `months` — so toggling
-	// the averaging window changes only the figures shown, never the row order (no
-	// reshuffle under the user's cursor). Sources that only earned in prior months stay
-	// pinned at the bottom, showing their average, instead of jumping up when averaging
-	// surfaces them.
-	rankByCat := map[string]int64{}
-	rankStart := dateutil.AddMonths(monthStart, -1)
-	if lines, err := reports.IncomeByCategory(app.Transactions(), rankStart, monthStart, rates); err == nil {
-		for _, ln := range lines {
-			rankByCat[ln.CategoryID] = ln.Amount
-		}
-	}
-	var out []incomeSource
-	for _, c := range app.Categories() {
-		if c.Kind != domain.KindIncome {
-			continue
-		}
-		out = append(out, incomeSource{CategoryID: c.ID, Name: c.Name, Minor: amtByCat[c.ID]})
-	}
-	if amt := amtByCat[""]; amt > 0 {
-		out = append(out, incomeSource{CategoryID: "", Name: uistate.T("budgets.incomeSourceUncat"), Minor: amt})
-	}
-	sort.SliceStable(out, func(i, j int) bool {
-		if ri, rj := rankByCat[out[i].CategoryID], rankByCat[out[j].CategoryID]; ri != rj {
-			return ri > rj
-		}
-		return out[i].Name < out[j].Name
+// computeIncomeSources acquires one immutable ledger snapshot for the native
+// source-average and last-month ranking model. Availability stays explicit.
+func computeIncomeSources(app *appstate.App, rates currency.Rates, monthStart time.Time, months int) budgetview.IncomeSourceModel {
+	return budgetview.PrepareIncomeSources(budgetview.IncomeSourceInput{
+		Transactions: app.Transactions(), Categories: app.Categories(), Rates: rates,
+		MonthStart: monthStart, Months: months, UncategorizedName: uistate.T("budgets.incomeSourceUncat"),
 	})
-	return out
 }
 
 // budgetRowCallbacks bundles the per-row mutation handlers the list tile hands to each
