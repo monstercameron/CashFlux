@@ -9,7 +9,7 @@ read-only tools. The prompt summary is a starting point, not the data boundary.
 | `query_data` | Filter by IDs, exact scalar fields, stored text or date bounds; follow `nextOffset` with the returned snapshot. |
 | `read_record` | Read an exact record or field, including long text through numbered character chunks. |
 
-The catalog covers 76 typed collections, including archived records,
+The catalog covers 77 typed collections, including archived records,
 orphan balance history, transaction links, custom fields, documents, workflows,
 saved views, financial settings, explicit financial preferences, notification feed
 and archive history, allocation/planning/bill policies, investment pools,
@@ -18,6 +18,9 @@ standing instructions, and financial assumptions and automation policies.
 It also includes effective subscription, Smart, report, net-worth and widget
 settings, retained flag verdicts and review resolutions, learning inputs,
 assistant memory, and historical transfer-operation receipts.
+The financial-plan configuration includes the current framework and questionnaire
+answers; `assess_financial_plan` runs the native assessment with fresh household
+inputs and preserves unknown answers, APRs and failed calculations.
 Call the manifest for the current catalog;
 field names match persisted JSON, including legacy uppercase identity fields.
 Money fields retain exact integer minor units and their currencies. These tools

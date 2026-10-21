@@ -82,6 +82,7 @@ var DetailToolNames = map[string]bool{
 	"get_account_details":    true,
 	"list_goal_reservations": true,
 	"goal_funding_plan":      true,
+	"assess_financial_plan":  true,
 }
 
 // ToolAllowed reports whether a tool may be offered to the model at the given

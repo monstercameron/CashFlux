@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Added financial-plan questionnaire discovery and a native assessment tool, bringing full-detail access to 77 collections and 59 tools.
 - Incomplete or failed Responses replies no longer expose partial function calls for dispatch.
 - Assistant data and list continuations now survive model usage bookkeeping and unrelated writes.
 - Assistant credit formulas now use checked FX-weighted card utilization and explicit-currency paydown targets.

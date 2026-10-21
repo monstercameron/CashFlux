@@ -65,6 +65,7 @@ func TestAssistantEnabledToolCatalogIsCompleteAndUnambiguous(t *testing.T) {
 		"data_manifest", "query_data", "read_record", "list_formula_metrics", "evaluate_formula",
 		"financial_summary", "spending_by_category", "spending_breakdown", "account_balances", "list_budgets", "check_affordability",
 		"get_account_details", "project_account", "list_goals", "goal_funding_plan", "list_goal_reservations", "list_recurring",
+		"assess_financial_plan",
 		"list_report_sections", "report_section", "trace_report_row", "complete_task", "create_rule", "create_workflow",
 		"add_goal_contribution", "add_transfer", "delete_transaction", "merge_duplicate_transactions", "dismiss_flagged_activity",
 	} {
@@ -72,7 +73,7 @@ func TestAssistantEnabledToolCatalogIsCompleteAndUnambiguous(t *testing.T) {
 			t.Errorf("Assistant capability %s is not registered", name)
 		}
 	}
-	for _, name := range []string{"query_data", "read_record", "search_documents", "gather_tax_records", "list_recurring", "project_account", "trace_report_row"} {
+	for _, name := range []string{"query_data", "read_record", "search_documents", "gather_tax_records", "list_recurring", "project_account", "trace_report_row", "assess_financial_plan"} {
 		if !seen[name] {
 			t.Errorf("detail gate test refers to unregistered tool %s", name)
 		} else if aicontext.ToolAllowed(name, aicontext.TierAggregatesOnly) {

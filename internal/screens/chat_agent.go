@@ -395,6 +395,7 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates, tier a
 	tools = append(tools, agToolsTasks(app, base, rates)...)
 	tools = append(tools, agToolsData(app)...)
 	tools = append(tools, agToolsPlanning(app, base, rates)...)
+	tools = append(tools, agToolsFinancialPlan(app)...)
 	tools = append(tools, agToolsFlags(app, base, rates)...)
 	tools = append(tools, agToolsFinance(app, base, rates, currentScope...)...)
 	tools = append(tools, agToolsGoalWrites(app, base, rates)...)

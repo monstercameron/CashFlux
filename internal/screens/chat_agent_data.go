@@ -195,6 +195,7 @@ func assistantDataCollections(app *appstate.App) ([]assistantdata.Collection, er
 	collections = append(collections, assistantFinancialKVCollections(app)...)
 	collections = append(collections, assistantAdditionalFinancialCollections(app)...)
 	collections = append(collections, assistantDecisionCollections(app)...)
+	collections = append(collections, assistantFinancialPlanCollection(app))
 	for i := range collections {
 		collections[i] = assistantdata.RedactValues(collections[i], privateValues...)
 		// Provider usage and unrelated writes advance App.Rev. The reader hashes

@@ -92,7 +92,7 @@ func TestAssistantDataCatalogReadsEveryRetainedCollectionAndWhitelistsSettings(t
 	if err := json.Unmarshal([]byte(out), &m); err != nil {
 		t.Fatal(out, err)
 	}
-	if len(m.Collections) != 76 {
+	if len(m.Collections) != 77 {
 		t.Fatalf("catalog count %d: %s", len(m.Collections), out)
 	}
 	query := assistantDataTool(t, app, "query_data")
