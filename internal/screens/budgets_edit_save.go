@@ -92,7 +92,12 @@ func useBudgetEditSave(p budgetEditSaveProps) ui.Handler {
 				bb.Methodology = ""
 			}
 			if defs := p.app.CustomFieldDefsFor("budget"); len(defs) > 0 {
-				bb.Custom = customValuesToMap(defs, p.customEditVals.Get())
+				custom, issues := customValuesToMap(defs, p.customEditVals.Get())
+				if len(issues) > 0 {
+					p.errS.Set(strings.Join(issues, " "))
+					return
+				}
+				bb.Custom = custom
 			}
 			// BG1: funding target. An invalid/none kind clears every target field so a
 			// budget switched back to "no target" doesn't keep a stale amount or date.

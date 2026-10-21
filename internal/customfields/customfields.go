@@ -7,6 +7,8 @@
 package customfields
 
 import (
+	"math"
+	"strconv"
 	"strings"
 
 	"github.com/monstercameron/CashFlux/internal/dateutil"
@@ -150,6 +152,52 @@ func Validate(defs []Def, values map[string]any) []string {
 		}
 	}
 	return issues
+}
+
+// ParseFormValues converts string form state into the typed custom-value map
+// accepted by entities. Empty values stay omitted, unknown form keys are ignored,
+// and all definitions are validated before any map is returned. On error, the
+// returned map is nil so callers cannot accidentally persist a partial form.
+func ParseFormValues(defs []Def, rawValues map[string]string) (map[string]any, []string) {
+	if len(defs) == 0 {
+		return nil, nil
+	}
+	values := make(map[string]any, len(defs))
+	for _, def := range defs {
+		raw := strings.TrimSpace(rawValues[def.Key])
+		if raw == "" {
+			continue
+		}
+		switch def.Type {
+		case TypeNumber:
+			n, err := strconv.ParseFloat(raw, 64)
+			if err != nil || math.IsNaN(n) || math.IsInf(n, 0) {
+				// Preserve a wrong-typed value for Validate to report the field's
+				// existing, user-facing number error.
+				values[def.Key] = raw
+			} else {
+				values[def.Key] = n
+			}
+		case TypeBool:
+			if raw == "true" {
+				values[def.Key] = true
+			} else if raw == "false" {
+				values[def.Key] = false
+			} else {
+				values[def.Key] = raw
+			}
+		default:
+			values[def.Key] = raw
+		}
+	}
+	if len(values) == 0 {
+		values = nil
+	}
+	issues := Validate(defs, values)
+	if len(issues) > 0 {
+		return nil, issues
+	}
+	return values, nil
 }
 
 func isNumber(v any) bool {

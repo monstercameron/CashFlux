@@ -55,6 +55,69 @@ func TestValidateIgnoresUnknownKeys(t *testing.T) {
 	}
 }
 
+func TestParseFormValuesTypesAndOptionalBlanks(t *testing.T) {
+	defs := []Def{
+		{Key: "amount", Label: "Amount", Type: TypeNumber},
+		{Key: "date", Label: "Date", Type: TypeDate},
+		{Key: "enabled", Label: "Enabled", Type: TypeBool},
+		{Key: "choice", Label: "Choice", Type: TypeSelect, Options: []string{"a", "b"}},
+		{Key: "optional", Label: "Optional", Type: TypeText},
+	}
+	got, issues := ParseFormValues(defs, map[string]string{
+		"amount": "12.5", "date": "2026-10-21", "enabled": "false", "choice": "b",
+		"optional": "  ", "unknown": "ignored",
+	})
+	if len(issues) != 0 {
+		t.Fatalf("ParseFormValues issues = %v", issues)
+	}
+	if got["amount"] != float64(12.5) || got["date"] != "2026-10-21" || got["enabled"] != false || got["choice"] != "b" {
+		t.Fatalf("ParseFormValues = %#v", got)
+	}
+	if _, ok := got["optional"]; ok {
+		t.Fatalf("blank optional value was retained: %#v", got)
+	}
+}
+
+func TestParseFormValuesRejectsMalformedAndReturnsNoPartialMap(t *testing.T) {
+	tests := []struct {
+		name  string
+		def   Def
+		value string
+		want  string
+	}{
+		{"number", Def{Key: "x", Label: "Amount", Type: TypeNumber}, "bad", "Amount must be a number."},
+		{"number nan", Def{Key: "x", Label: "Amount", Type: TypeNumber}, "NaN", "Amount must be a number."},
+		{"number infinity", Def{Key: "x", Label: "Amount", Type: TypeNumber}, "+Inf", "Amount must be a number."},
+		{"number overflow", Def{Key: "x", Label: "Amount", Type: TypeNumber}, "1e999", "Amount must be a number."},
+		{"date", Def{Key: "x", Label: "Date", Type: TypeDate}, "2026-02-30", "Date must be a valid date (YYYY-MM-DD)."},
+		{"boolean", Def{Key: "x", Label: "Enabled", Type: TypeBool}, "yes", "Enabled must be true or false."},
+		{"select", Def{Key: "x", Label: "Choice", Type: TypeSelect, Options: []string{"a"}}, "b", "Choice must be one of the allowed options."},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, issues := ParseFormValues([]Def{tt.def, {Key: "valid", Label: "Valid", Type: TypeText}}, map[string]string{"x": tt.value, "valid": "kept"})
+			if got != nil {
+				t.Fatalf("invalid form returned partial map: %#v", got)
+			}
+			if len(issues) != 1 || issues[0] != tt.want {
+				t.Fatalf("issues = %v, want [%q]", issues, tt.want)
+			}
+		})
+	}
+}
+
+func TestParseFormValuesRequiredAndEmpty(t *testing.T) {
+	defs := []Def{{Key: "name", Label: "Name", Type: TypeText, Required: true}}
+	got, issues := ParseFormValues(defs, map[string]string{"name": "  "})
+	if got != nil || len(issues) != 1 || issues[0] != "Name is required." {
+		t.Fatalf("empty required value = %#v, %v", got, issues)
+	}
+	got, issues = ParseFormValues(nil, map[string]string{"unused": "value"})
+	if got != nil || len(issues) != 0 {
+		t.Fatalf("no definitions = %#v, %v", got, issues)
+	}
+}
+
 func TestDefValidate(t *testing.T) {
 	good := Def{ID: "f1", EntityType: "account", Key: "tier", Label: "Tier", Type: TypeSelect, Options: []string{"gold"}}
 	if issues := good.Validate(); len(issues) != 0 {

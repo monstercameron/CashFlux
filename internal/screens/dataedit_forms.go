@@ -112,7 +112,12 @@ func MemberEditForm(props MemberEditFormProps) ui.Node {
 		if r, err := memberrole.ParseRole(strings.TrimSpace(roleS.Get())); err == nil {
 			m.Role = r
 		}
-		m.Custom = customValuesToMap(memberDefs, customS.Get())
+		custom, customIssues := customValuesToMap(memberDefs, customS.Get())
+		if len(customIssues) > 0 {
+			errS.Set(strings.Join(customIssues, " "))
+			return
+		}
+		m.Custom = custom
 		if err := app.PutMember(m); err != nil {
 			errS.Set(err.Error())
 			return

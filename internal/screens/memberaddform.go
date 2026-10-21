@@ -70,12 +70,17 @@ func memberAddForm(props MemberAddFormProps) ui.Node {
 		if err != nil {
 			role = memberrole.DefaultRole(false)
 		}
+		custom, customIssues := customValuesToMap(memberDefs, customVals.Get())
+		if len(customIssues) > 0 {
+			errMsg.Set(strings.Join(customIssues, " "))
+			return
+		}
 		m := domain.Member{
 			ID:     id.New(),
 			Name:   n,
 			Color:  strings.TrimSpace(color.Get()),
 			Role:   role,
-			Custom: customValuesToMap(memberDefs, customVals.Get()),
+			Custom: custom,
 		}
 		if err := app.PutMember(m); err != nil {
 			errMsg.Set(err.Error())

@@ -244,7 +244,12 @@ func accountAddForm(props AccountAddFormProps) ui.Node {
 			inst = titleCaseWords(acc.Lender)
 		}
 		acc.Institution = inst
-		acc.Custom = customValuesToMap(accDefs, customVals.Get())
+		custom, customIssues := customValuesToMap(accDefs, customVals.Get())
+		if len(customIssues) > 0 {
+			errMsg.Set(strings.Join(customIssues, " "))
+			return
+		}
+		acc.Custom = custom
 		if splitOwn.Get() {
 			shares := cloneSharesMap(ownerShares.Get())
 			sum := 0

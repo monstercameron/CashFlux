@@ -148,6 +148,11 @@ func goalAddForm(props GoalAddFormProps) ui.Node {
 			}
 			targetDate = d
 		}
+		custom, customIssues := customValuesToMap(goalDefs, customVals.Get())
+		if len(customIssues) > 0 {
+			errMsg.Set(strings.Join(customIssues, " "))
+			return
+		}
 		scope := domain.ScopeIndividual
 		if owner.Get() == domain.GroupOwnerID {
 			scope = domain.ScopeShared
@@ -158,7 +163,7 @@ func goalAddForm(props GoalAddFormProps) ui.Node {
 			ID: id.New(), Name: strings.TrimSpace(name.Get()), Scope: scope, OwnerID: owner.Get(),
 			Kind: kind, TargetDate: targetDate,
 			TargetAmount: money.New(0, base), CurrentAmount: money.New(0, base),
-			Custom:         customValuesToMap(goalDefs, customVals.Get()),
+			Custom:         custom,
 			LastReviewedAt: time.Now(), // a freshly-created goal counts as just reviewed
 		}
 		switch kind {

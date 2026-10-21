@@ -63,37 +63,10 @@ func CustomFieldInput(props customFieldInputProps) ui.Node {
 	}
 }
 
-// customValuesToMap converts the form's string values into a typed custom{} map
-// against the given definitions: numbers become float64 (or the raw string if
-// unparseable, so validation can flag it), yes/no becomes bool, everything else
-// stays a string. Empty values are omitted so optional fields stay unset.
-func customValuesToMap(defs []customfields.Def, vals map[string]string) map[string]any {
-	if len(defs) == 0 {
-		return nil
-	}
-	out := map[string]any{}
-	for _, d := range defs {
-		raw := strings.TrimSpace(vals[d.Key])
-		if raw == "" {
-			continue
-		}
-		switch d.Type {
-		case customfields.TypeNumber:
-			if f, err := strconv.ParseFloat(raw, 64); err == nil {
-				out[d.Key] = f
-			} else {
-				out[d.Key] = raw
-			}
-		case customfields.TypeBool:
-			out[d.Key] = raw == "true"
-		default:
-			out[d.Key] = raw
-		}
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	return out
+// customValuesToMap prepares the form state through the native customfields
+// validator. A nonempty issue list means no values may be persisted.
+func customValuesToMap(defs []customfields.Def, vals map[string]string) (map[string]any, []string) {
+	return customfields.ParseFormValues(defs, vals)
 }
 
 // customMapToStrings renders a typed custom{} map back into the string form-state map

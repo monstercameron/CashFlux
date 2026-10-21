@@ -1,3 +1,7 @@
+## 2026-10-21 - Native custom-field form parsing
+
+Extracted supported text/number/date/bool/select parsing, required/choice validation and finite-number checks, preserving optional blank semantics and the existing schema. Account, budget, goal and member forms stop writes on issues. Native customfields/budgetform tests and vet pass; the focused actual member form WASM case verifies malformed boolean rejection and valid false persistence.
+
 ## 2026-10-21 - Native checked Credit preparation
 
 Extracted aggregate, factor, advice and hypothetical facts without fake legacy defaults. Summary skips details/history work. Native credithealth/creditview tests pass; all seven focused Credit WASM cases pass. Host testing caught a real editor remount when a payment hint disappeared; the disclosure now has stable account identity and rejects a stale-currency draft without writing. Removed only owned stale Credit hook exceptions. Existing credit heuristic policies remain unchanged.
