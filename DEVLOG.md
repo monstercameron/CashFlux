@@ -1,3 +1,7 @@
+## 2026-10-20 - Include inactive workspace files in full backup
+
+The full-install backup previously rehydrated the active dataset's attached files but copied each inactive workspace's saved portable JSON as-is. Those inactive snapshots can contain blob metadata with bytes held separately in IndexedDB. The backup builder now completes each inactive snapshot from the local blob store and aborts if a required file cannot be read, preserving an honest failure instead of a silently incomplete archive. The WebAssembly app build passed. A dedicated multi-workspace browser restore case remains to be added.
+
 ## 2026-10-20 - Encrypt locally stored attachment bytes
 
 The separate `cashflux/artifacts` IndexedDB store previously wrote PDF bytes and MIME as plaintext even when the dataset had App Lock. An encrypted wrapper now seals both with the protected workspace key and authenticated artifact ID before every new write. Its read path upgrades a legacy entry in place and returns the bytes only after the encrypted replacement's IndexedDB transaction completes; failed upgrades leave the old record and surface an error. A background pass visits active-household legacy files after unlock, while inactive or orphaned legacy records remain a documented migration limit. Native wrapper tests and a WebAssembly key-binding test passed; the app WebAssembly build passed. The full browser attachment and protected reload journeys are being rerun.

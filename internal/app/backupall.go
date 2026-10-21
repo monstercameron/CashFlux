@@ -7,6 +7,7 @@ package app
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -33,24 +34,34 @@ const (
 // autosave ticker hasn't flushed it to localStorage yet; an inactive one's comes
 // from its saved blob. With no registry yet (a fresh install), it backs up just the
 // active dataset.
-func gatherBackupDatasets(r workspace.Registry, activeDS string) []string {
+func gatherBackupDatasets(r workspace.Registry, activeDS string) ([]string, error) {
 	datasets := []string{}
 	if len(r.Workspaces) == 0 {
 		if activeDS != "" {
 			datasets = append(datasets, activeDS)
 		}
-		return datasets
+		return datasets, nil
 	}
+	app := appstate.Default
 	for _, w := range r.Workspaces {
 		ds := loadBlob(w.ID)[datasetStoreKey]
 		if w.ID == r.ActiveID {
 			ds = activeDS
+		} else if ds != "" {
+			if app == nil {
+				return nil, errors.New("active dataset is unavailable")
+			}
+			complete, err := app.CompleteArtifactSnapshot([]byte(ds))
+			if err != nil {
+				return nil, fmt.Errorf("complete backup for workspace %s: %w", w.ID, err)
+			}
+			ds = string(complete)
 		}
 		if ds != "" {
 			datasets = append(datasets, ds)
 		}
 	}
-	return datasets
+	return datasets, nil
 }
 
 // activeDataset serializes the live active-workspace dataset (OpenAI key redacted,
@@ -82,8 +93,12 @@ func marshalFullBackup() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	datasets, err := gatherBackupDatasets(r, active)
+	if err != nil {
+		return nil, err
+	}
 	env := backup.Envelope{
-		Datasets:          gatherBackupDatasets(r, active),
+		Datasets:          datasets,
 		WorkspaceRegistry: lsGet(workspacesKey),
 		Appearance: backup.Appearance{
 			Theme:  lsGet(themeKey),
