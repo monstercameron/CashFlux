@@ -51,6 +51,7 @@ and every commit updates this file under `Unreleased`.
 - Receipt images, goal photos, custom-page images, and artifact thumbnails now load from encrypted local blob storage after sync restores them. New receipt and goal-photo uploads save their bytes there before the dataset refers to them.
 
 ### Changed
+- Prepared v1.19.11 from the published v1.19.10 stability baseline and the pending private sync, hosted sign-in, recovery, and server AI changes. Production rollout and an authenticated live roundtrip remain pending.
 - Updated the built-in standard-rate estimates for GPT-5.4 mini and GPT-5.5 using OpenAI's published API prices checked on 2026-10-21.
 - Prepared v1.19.10 with encrypted local storage for restored account documents and a PDF cap that fits the default encrypted server upload limit.
 - PDF selection now caps files at 23 MiB so their base64 encrypted blob envelopes fit within the server's default 32 MiB upload limit.

@@ -1,3 +1,7 @@
+## 2026-10-21 — Prepare v1.19.11 without reusing the published tag
+
+The v1.19.10 tag already published a stability build from the v7 branch. After integrating that exact tag with the pending sync/privacy changes and passing native, WebAssembly, and local browser file-sync checks, moved the single product version source to 1.19.11. This is draft release preparation only: no new tag or deployment has been created, and no authenticated production account was used for validation.
+
 ## 2026-10-21 — Integrate the published v1.19.10 baseline
 
 The published v1.19.10 tag contains 238 commits beyond main, including the GoWebComponents v7 app and stability work. A new sync/privacy release must build on that tag rather than replace its code with the older main-based branch. Merged the tag into the draft sync branch, resolved five conflicts, and updated one new artifact file that still imported v5. The full native test suite and WebAssembly build passed. The three-browser encrypted file/edit journey passed. Both local offline-file recovery choices then passed on the combined app after the browser test handled the first-sync state and the App Lock reload that follows a receiving pull. No production account or household data was used.
