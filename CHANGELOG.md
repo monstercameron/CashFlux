@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Assistant can inspect checked account details, balance projections, goal progress, funding suggestions, retained reservations and recurring schedules through six live read tools.
 - Full-detail Assistant conversations can discover and page through 42 typed financial collections, with exact IDs, fresh reads and long-record continuation.
 - Responses function tools now explicitly preserve the app schemas optional-argument behavior with strict false.
 - Assistant task completion now resolves stable IDs, previews the exact occurrence, preserves recurring successors, and rejects stale or ambiguous approvals.

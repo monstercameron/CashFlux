@@ -26,7 +26,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/engineenv"
 	"github.com/monstercameron/CashFlux/internal/formula"
-	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
@@ -651,25 +650,6 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates, tier a
 			},
 		},
 		{
-			spec: ai.FunctionTool("list_goals", "List the user's savings goals with progress (current/target, percent, target date).", json.RawMessage(`{"type":"object","properties":{}}`)),
-			run: func(json.RawMessage) string {
-				gs := app.Goals()
-				if len(gs) == 0 {
-					return "No savings goals."
-				}
-				var b strings.Builder
-				for _, g := range gs {
-					pct := goalsvc.RawPercent(g)
-					line := fmt.Sprintf("%s — %s of %s (%d%%)", g.Name, fmtMoney(g.CurrentAmount), fmtMoney(g.TargetAmount), pct)
-					if !g.TargetDate.IsZero() {
-						line += ", by " + g.TargetDate.Format("Jan 2, 2006")
-					}
-					b.WriteString(line + "\n")
-				}
-				return strings.TrimRight(b.String(), "\n")
-			},
-		},
-		{
 			spec: ai.FunctionTool("list_tasks", "List the user's to-do tasks (title, status, priority, due date).", json.RawMessage(`{"type":"object","properties":{}}`)),
 			run: func(json.RawMessage) string {
 				ts := app.Tasks()
@@ -683,20 +663,6 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates, tier a
 						line += ", due " + t.Due.Format("Jan 2")
 					}
 					b.WriteString(line + "\n")
-				}
-				return strings.TrimRight(b.String(), "\n")
-			},
-		},
-		{
-			spec: ai.FunctionTool("list_recurring", "List recurring cash flows / upcoming bills (label, amount, cadence, next due date).", json.RawMessage(`{"type":"object","properties":{}}`)),
-			run: func(json.RawMessage) string {
-				rs := app.Recurring()
-				if len(rs) == 0 {
-					return "No recurring items or bills."
-				}
-				var b strings.Builder
-				for _, r := range rs {
-					fmt.Fprintf(&b, "%s — %s %s, next %s\n", r.Label, fmtMoney(r.Amount), string(r.Cadence), r.NextDue.Format("Jan 2, 2006"))
 				}
 				return strings.TrimRight(b.String(), "\n")
 			},
@@ -1559,6 +1525,7 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates, tier a
 	// web-grounded benchmarks, rapid capture, tax gather, and document Q&A.
 	tools = append(tools, agToolsTasks(app, base, rates)...)
 	tools = append(tools, agToolsData(app)...)
+	tools = append(tools, agToolsPlanning(app, base, rates)...)
 	tools = append(tools, agToolsTrust(app, base, rates)...)
 	tools = append(tools, agToolsAuditor(app, base, rates)...)
 	tools = append(tools, agToolsAuthoring(app, base, rates)...)
