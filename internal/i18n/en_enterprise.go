@@ -21,6 +21,8 @@ var adminKeys = Catalog{
 	"admin.todayRequests": "Requests today",
 	"admin.todayTokens":   "Tokens today",
 	"admin.dayLabel":      "Stats as of",
+	"admin.fetchedAt":     "%s fetched at %s",
+	"admin.cached":        "cached within the last 30 seconds",
 
 	// Users table headers
 	"admin.colEmail":    "Email",

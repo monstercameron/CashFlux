@@ -1,3 +1,7 @@
+## 2026-10-21 - Shared Admin data service
+
+Removed duplicate client DTOs/fetch logic while preserving existing probe effective-token versus route configured-token selection and exact200 versus2xx acceptance. Cache identity includes endpoint and token hash, with30second freshness metadata and owned results; failures are not cached. Native client tests and the actual app/probe WASM adapter test pass, including rotation, status and cache behavior. No auth policy or server endpoint changed.
+
 ## 2026-10-21 - Native budget window and flex meter facts
 
 Preserved current calendar rounding, degenerate-window behavior, strict meter thresholds and date policy. Checked financial readings remain independently available; CSS and localized labels stay in the view. Native budgeting/budgetview tests and vet pass; both focused Flex actual-host WASM groups pass. This cheap reducer extraction makes no performance claim.
