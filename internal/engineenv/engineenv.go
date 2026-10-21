@@ -31,6 +31,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/bills"
 	"github.com/monstercameron/CashFlux/internal/billsched"
 	"github.com/monstercameron/CashFlux/internal/budgeting"
+	recurringview "github.com/monstercameron/CashFlux/internal/budgetview/recurring"
 	"github.com/monstercameron/CashFlux/internal/cashflow"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
@@ -282,6 +283,18 @@ func Vars(d Data) map[string]float64 {
 	for _, name := range BillsSmartVarNames {
 		atoms[name] = true
 	}
+	for _, name := range RecurringVarNames {
+		atoms[name] = true
+	}
+	for _, base := range RecurringVarBases(d.Recurring) {
+		atoms[base.Prefix+"monthly"] = true
+		atoms[base.Prefix+"amount"] = true
+	}
+	for _, base := range AccountVarBases(d.Accounts) {
+		for _, field := range AccountVarFields {
+			atoms[base.Prefix+field] = true
+		}
+	}
 	pending := make([]domain.Molecule, 0, len(mols))
 	for _, m := range mols {
 		if atoms[m.Name] {
@@ -350,6 +363,8 @@ func computeAtoms(d Data) map[string]float64 {
 	if base == "" {
 		base = "USD"
 	}
+	checkedRates := d.Rates
+	checkedRates.Base = base
 	div := 1.0
 	for i := 0; i < currency.Decimals(base); i++ {
 		div *= 10
@@ -497,7 +512,7 @@ func computeAtoms(d Data) map[string]float64 {
 		"expense_count":            float64(expCount),
 		"bills_due":                major(billsDue),
 		"goal_needs":               major(goalNeeds),
-		"essential_monthly":        major(essentialMonthly(d, toBase)),
+		"essential_monthly":        major(0), // filled below only when all required inputs are known
 		"earmarked_total":          major(earmarkedTotal),
 		"accounts":                 float64(active),
 		"asset_accounts":           float64(assetAccts),
@@ -542,8 +557,8 @@ func computeAtoms(d Data) map[string]float64 {
 	addCustomFieldVars(out, d, start, end)
 	addBudgetVars(out, d, major)
 	addDailyAllowanceVars(out, d, major, start, end)
-	addAccountVars(out, d, major, toBase, bals, clearedBals)
-	addAccountFlowVars(out, d, major, toBase, start, end)
+	addAccountVars(out, d, major, checkedRates, bals, clearedBals)
+	addAccountFlowVars(out, d, major, checkedRates, start, end)
 	addGoalVars(out, d, major, toBase)
 	addDebtVars(out, d, major, toBase, bals)
 	addPoolVars(out, d, major, toBase, bals)
@@ -551,7 +566,12 @@ func computeAtoms(d Data) map[string]float64 {
 	addEventVars(out, d, major, toBase)
 	addAllocVars(out, d, major)
 	addPlanningVars(out, d, major)
-	addRecurringVars(out, d, major, toBase)
+	addRecurringVars(out, d, major, checkedRates)
+	if essential, err := essentialMonthlyChecked(d, checkedRates); err == nil {
+		out["essential_monthly"] = major(essential)
+	} else {
+		delete(out, "essential_monthly")
+	}
 	addBillsSmartVars(out, d, major, liquid.Amount, liquidErr)
 	addReportsVars(out, d, major, liquid.Amount, liquidErr)
 	addNetWorthVars(out, d, major, toBase, bals)
@@ -754,25 +774,81 @@ func RecurringVarSlug(s string) string { return budgetVarSlug(s) }
 // monthly aggregates (in/out/net/count) plus, per flow, recurring_<slug>_monthly
 // (its signed monthly equivalent) and recurring_<slug>_amount (its signed
 // per-occurrence amount). Money is FX-converted to the base currency, major units.
-func addRecurringVars(out map[string]float64, d Data, major func(int64) float64, toBase func(int64, string) int64) {
+func addRecurringVars(out map[string]float64, d Data, major func(int64) float64, rates currency.Rates) {
 	var in, outflow int64
+	inErr, outErr := error(nil), error(nil)
 	for _, r := range d.Recurring {
-		me := toBase(r.MonthlyEquivalent(), r.Amount.Currency)
-		if me >= 0 {
-			in += me
-		} else {
-			outflow += -me
+		monthly, err := recurringview.MonthlyEquivalent(r)
+		if err != nil {
+			if r.Amount.Amount > 0 {
+				inErr = err
+			} else if r.Amount.Amount < 0 {
+				outErr = err
+			}
+			continue
+		}
+		baseAmount, err := checkedToBase(monthly, r.Amount.Currency, rates)
+		if err != nil {
+			if monthly > 0 {
+				inErr = err
+			} else if monthly < 0 {
+				outErr = err
+			}
+			continue
+		}
+		if baseAmount > 0 {
+			in, err = money.Add(in, baseAmount)
+			if err != nil {
+				inErr = err
+			}
+		} else if baseAmount < 0 {
+			magnitude, negErr := money.Neg(baseAmount)
+			if negErr != nil {
+				outErr = negErr
+				continue
+			}
+			outflow, err = money.Add(outflow, magnitude)
+			if err != nil {
+				outErr = err
+			}
 		}
 	}
-	out["recurring_monthly_in"] = major(in)
-	out["recurring_monthly_out"] = major(outflow)
-	out["recurring_monthly_net"] = major(in - outflow)
+	if inErr == nil {
+		out["recurring_monthly_in"] = major(in)
+	}
+	if outErr == nil {
+		out["recurring_monthly_out"] = major(outflow)
+	}
+	if inErr == nil && outErr == nil {
+		if net, err := money.Sub(in, outflow); err == nil {
+			out["recurring_monthly_net"] = major(net)
+		}
+	}
 	out["recurring_count"] = float64(len(d.Recurring))
 	for _, base := range RecurringVarBases(d.Recurring) {
 		r := base.Recurring
-		out[base.Prefix+"monthly"] = major(toBase(r.MonthlyEquivalent(), r.Amount.Currency))
-		out[base.Prefix+"amount"] = major(toBase(r.Amount.Amount, r.Amount.Currency))
+		if monthly, err := recurringview.MonthlyEquivalent(r); err == nil {
+			if converted, err := checkedToBase(monthly, r.Amount.Currency, rates); err == nil {
+				out[base.Prefix+"monthly"] = major(converted)
+			}
+		}
+		if converted, err := checkedToBase(r.Amount.Amount, r.Amount.Currency, rates); err == nil {
+			out[base.Prefix+"amount"] = major(converted)
+		}
 	}
+}
+
+func checkedToBase(amount int64, from string, rates currency.Rates) (int64, error) {
+	base := rates.Base
+	if base == "" {
+		base = "USD"
+		rates.Base = base
+	}
+	converted, err := rates.Convert(money.New(amount, from), base)
+	if err != nil {
+		return 0, err
+	}
+	return converted.Amount, nil
 }
 
 // essentialMonthlyTrailingMonths is how many prior whole months of essential
@@ -784,12 +860,29 @@ const essentialMonthlyTrailingMonths = 3
 // trailing average of essential-classified (ClassFixed / ClassNonMonthly, NOT
 // discretionary ClassFlex) categorized spend over the prior whole months. It is
 // the honest emergency-fund sizing figure, shared with the SMART-G21 re-suggest.
-func essentialMonthly(d Data, toBase func(int64, string) int64) int64 {
+func essentialMonthlyChecked(d Data, rates currency.Rates) (int64, error) {
 	var fixed int64
 	for _, r := range d.Recurring {
-		me := toBase(r.MonthlyEquivalent(), r.Amount.Currency)
+		if r.Amount.Amount >= 0 {
+			continue
+		}
+		me, err := recurringview.MonthlyEquivalent(r)
+		if err != nil {
+			return 0, err
+		}
+		me, err = checkedToBase(me, r.Amount.Currency, rates)
+		if err != nil {
+			return 0, err
+		}
 		if me < 0 {
-			fixed += -me // only outflow commitments count toward the essential month
+			magnitude, err := money.Neg(me)
+			if err != nil {
+				return 0, err
+			}
+			fixed, err = money.Add(fixed, magnitude)
+			if err != nil {
+				return 0, err
+			}
 		}
 	}
 
@@ -814,12 +907,26 @@ func essentialMonthly(d Data, toBase func(int64, string) int64) int64 {
 			if cls == domain.ClassFlex {
 				continue
 			}
-			essentialSpend += toBase(-t.Amount.Amount, t.Amount.Currency)
+			magnitude, err := money.Neg(t.Amount.Amount)
+			if err != nil {
+				return 0, err
+			}
+			converted, err := checkedToBase(magnitude, t.Amount.Currency, rates)
+			if err != nil {
+				return 0, err
+			}
+			essentialSpend, err = money.Add(essentialSpend, converted)
+			if err != nil {
+				return 0, err
+			}
 		}
 	}
 	essentialSpend /= essentialMonthlyTrailingMonths
 
-	return emergencyfund.Basis{FixedMonthlyMinor: fixed, EssentialSpendMonthlyMinor: essentialSpend}.EssentialMonthlyMinor()
+	return (emergencyfund.Basis{
+		FixedMonthlyMinor:          fixed,
+		EssentialSpendMonthlyMinor: essentialSpend,
+	}).EssentialMonthlyMinorChecked()
 }
 
 // PlanningVarNames are the fixed planning-policy variables addPlanningVars exposes.
@@ -1207,11 +1314,22 @@ func GroupVarSlug(s string) string { return budgetVarSlug(s) }
 // between your own accounts is not income or spending — so these answer "which
 // account is bleeding?" without a transfer masquerading as a paycheck. Slugging
 // matches AccountVarBases so the flow figures share an account's variable family.
-func addAccountFlowVars(out map[string]float64, d Data, major func(int64) float64, toBase func(int64, string) int64, start, end time.Time) {
+func addAccountFlowVars(out map[string]float64, d Data, major func(int64) float64, rates currency.Rates, start, end time.Time) {
 	for _, base := range AccountVarBases(d.Accounts) {
-		f := accountflow.PeriodFlow(base.Account, d.Transactions, start, end)
-		out[base.Prefix+"in"] = major(toBase(f.In.Amount, f.In.Currency))
-		out[base.Prefix+"out"] = major(toBase(f.Out.Amount, f.Out.Currency))
+		f, err := accountflow.PeriodFlowChecked(base.Account, d.Transactions, start, end)
+		if err != nil {
+			continue
+		}
+		in, err := checkedToBase(f.In.Amount, f.In.Currency, rates)
+		if err != nil {
+			continue
+		}
+		outflow, err := checkedToBase(f.Out.Amount, f.Out.Currency, rates)
+		if err != nil {
+			continue
+		}
+		out[base.Prefix+"in"] = major(in)
+		out[base.Prefix+"out"] = major(outflow)
 	}
 }
 
@@ -1307,39 +1425,57 @@ func BudgetVarSlug(s string) string { return budgetVarSlug(s) }
 // Balances are FX-converted to the base currency (same as net worth) so accounts in
 // different currencies compare on one scale. Name collisions are disambiguated with a
 // numeric suffix (…_2, …_3) in stable account order.
-func addAccountVars(out map[string]float64, d Data, major func(int64) float64, toBase func(int64, string) int64, bals, clearedBals map[string]money.Money) {
+func addAccountVars(out map[string]float64, d Data, major func(int64) float64, rates currency.Rates, bals, clearedBals map[string]money.Money) {
 	// How much of each account is virtually earmarked toward goals (base minor units),
 	// precomputed once so a formula can ask "how much of this account is spoken for?".
 	earmarkByAcct := map[string]int64{}
+	earmarkErr := map[string]error{}
+	knownAccounts := make(map[string]bool, len(d.Accounts))
+	for _, a := range d.Accounts {
+		knownAccounts[a.ID] = true
+	}
 	for _, g := range d.Goals {
 		for _, al := range g.Allocations {
-			if al.AccountID != "" {
-				earmarkByAcct[al.AccountID] += toBase(al.Amount.Amount, al.Amount.Currency)
+			if al.AccountID != "" && knownAccounts[al.AccountID] {
+				converted, err := checkedToBase(al.Amount.Amount, al.Amount.Currency, rates)
+				if err == nil {
+					earmarkByAcct[al.AccountID], err = money.Add(earmarkByAcct[al.AccountID], converted)
+				}
+				if err != nil {
+					earmarkErr[al.AccountID] = err
+				}
 			}
 		}
 	}
 	for _, base := range AccountVarBases(d.Accounts) {
 		a := base.Account
-		balBase := 0.0
+		var balBase int64
+		balanceKnown := false
 		if bal, ok := bals[a.ID]; ok {
-			balBase = major(toBase(bal.Amount, bal.Currency))
-			out[base.Prefix+"balance"] = balBase
+			if converted, err := checkedToBase(bal.Amount, bal.Currency, rates); err == nil {
+				balBase = converted
+				balanceKnown = true
+				out[base.Prefix+"balance"] = major(converted)
+			}
 		}
 		if cl, ok := clearedBals[a.ID]; ok {
-			out[base.Prefix+"cleared"] = major(toBase(cl.Amount, cl.Currency))
+			if converted, err := checkedToBase(cl.Amount, cl.Currency, rates); err == nil {
+				out[base.Prefix+"cleared"] = major(converted)
+			}
 		}
-		earmarked := major(earmarkByAcct[a.ID])
-		out[base.Prefix+"earmarked"] = earmarked
-		free := balBase - earmarked
-		if free < 0 {
-			free = 0
+		earmarkKnown := earmarkErr[a.ID] == nil
+		if earmarkKnown {
+			earmarked := earmarkByAcct[a.ID]
+			out[base.Prefix+"earmarked"] = major(earmarked)
+			if balanceKnown {
+				if free, err := money.Sub(balBase, earmarked); err == nil {
+					out[base.Prefix+"free"] = major(max(free, 0))
+				}
+				if over, err := money.Sub(earmarked, balBase); err == nil {
+					out[base.Prefix+"overearmarked"] = major(max(over, 0))
+				}
+			}
 		}
-		out[base.Prefix+"free"] = free // balance not earmarked toward any goal (never negative)
-		over := earmarked - balBase
-		if over < 0 {
-			over = 0
-		}
-		out[base.Prefix+"overearmarked"] = over // goal money earmarked beyond the real balance (XC7 breach; 0 when healthy)
 	}
 }
 

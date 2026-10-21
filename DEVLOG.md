@@ -1,3 +1,7 @@
+## 2026-10-21 - Checked account and recurring formula facts
+
+Added a checked account-flow reducer sharing the existing legacy fold and reused checked recurring cadence/FX arithmetic. Invalid facts omit only dependent variables; unavailable dynamic names are reserved against custom-molecule shadowing. Account free/overearmarked differences stay in exact minor units before formatting, and essential-month totals use an additive checked emergencyfund Basis API. Native accountflow, engineenv and emergencyfund tests passed exit0 with -work; vet and diff checks passed. Prior ordinary test bodies passed but Windows refused temporary-executable cleanup, so the retained-work run supplied the clean process gate.
+
 ## 2026-10-21 - Strict Assistant task and account creation
 
 Added strict typed arguments, complete previews, canonical task/account validation, expected collection/base-currency guards and explicit duplicate no-ops. Account creation preserves shared ownership, supported currency/type/class, liability sign, APR, limits and opening-balance history; task creation discloses full notes, dates and priority. Monetary parsing uses canonical plain-decimal ParseMinor. Focused native tests passed; all eight strict Basic creation WASM groups passed in integrated pass8, and the actual duplicate-approval session test passed with the replacement handler.
