@@ -28,6 +28,25 @@ func TestCacheRetainsRecentlyUsedView(t *testing.T) {
 	}
 }
 
+func TestCacheGetSetAndFailureRetryPattern(t *testing.T) {
+	cache := New[string, int](1)
+	if _, ok := cache.Get("miss"); ok {
+		t.Fatal("empty cache returned a hit")
+	}
+	cache.Set("good", 7)
+	if got, ok := cache.Get("good"); !ok || got != 7 {
+		t.Fatalf("Set/Get = %d, %v; want 7, true", got, ok)
+	}
+	cache.Set("good", 8)
+	if got, ok := cache.Get("good"); !ok || got != 8 {
+		t.Fatalf("replacement Set/Get = %d, %v; want 8, true", got, ok)
+	}
+	cache.Set("new", 9)
+	if _, ok := cache.Get("good"); ok {
+		t.Fatal("Set did not enforce the cache bound")
+	}
+}
+
 func TestCacheKeysCoverDistinctInputs(t *testing.T) {
 	type key struct {
 		app, revision, scope, day int

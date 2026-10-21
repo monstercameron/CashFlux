@@ -1,3 +1,7 @@
+## 2026-10-21 - Native artifact vault preparation
+
+Prepared reference counts, kind totals and exact export/storage sizes outside the view. Int64 storage facts reject negative usage and overflow without wasm32 narrowing. Warm renders reuse a snapshot/summary by app revision and blob usage, while fresh source guards detect closed stores and failures are not cached. Native artifactview/artifacts/viewcache tests pass; actual-host checks pass for row facts, warm reuse, reference refresh and unavailable source state.
+
 ## 2026-10-21 - Shared Admin data service
 
 Removed duplicate client DTOs/fetch logic while preserving existing probe effective-token versus route configured-token selection and exact200 versus2xx acceptance. Cache identity includes endpoint and token hash, with30second freshness metadata and owned results; failures are not cached. Native client tests and the actual app/probe WASM adapter test pass, including rotation, status and cache behavior. No auth policy or server endpoint changed.

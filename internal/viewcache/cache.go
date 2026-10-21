@@ -75,6 +75,36 @@ func (c *Cache[K, V]) lookup(key K) (V, bool) {
 	return zero, false
 }
 
+// Get returns a cached value and marks it recently used.
+func (c *Cache[K, V]) Get(key K) (V, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.lookup(key)
+}
+
+// Set inserts or replaces a value and applies the configured LRU bound.
+func (c *Cache[K, V]) Set(key K, value V) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if _, ok := c.lookup(key); ok {
+		el := c.values[key]
+		el.Value = entry[K, V]{key: key, value: value}
+		return
+	}
+	if c.capacity <= 0 {
+		c.capacity = defaultCapacity
+	}
+	if c.values == nil {
+		c.values = make(map[K]*list.Element, c.capacity)
+	}
+	if len(c.values) == c.capacity {
+		oldest := c.order.Back()
+		delete(c.values, oldest.Value.(entry[K, V]).key)
+		c.order.Remove(oldest)
+	}
+	c.values[key] = c.order.PushFront(entry[K, V]{key: key, value: value})
+}
+
 // Len reports the number of retained values.
 func (c *Cache[K, V]) Len() int {
 	c.mu.Lock()

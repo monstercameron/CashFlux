@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Artifact rows and storage meters use native checked facts with successful snapshot reuse.
 - Admin overview and user reads share a tested native client and bounded successful-response cache.
 - Budget flex views delegate window proration, meter verdicts and days-left facts to native models.
 - Bills prepare shared upcoming flows and category-budget indexes before evaluating checked fit facts.
