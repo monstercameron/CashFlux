@@ -345,15 +345,15 @@ func GoalRow(props goalRowProps) ui.Node {
 		}
 		// The diagnostic "why" behind the badge (required /mo + available-money
 		// constraint), shown only on the live card (not archived/complete).
-		if !g.Archived && !complete {
+		if cardExpanded.Get() && !g.Archived && !complete {
 			paceReasonNode = goalPaceReason(props.Health, props.Base, g.ID)
 		}
-		if g.IsSinkingFund && props.FundSetAside > 0 {
+		if cardExpanded.Get() && g.IsSinkingFund && props.FundSetAside > 0 {
 			fundAmt := money.New(props.FundSetAside, g.CurrentAmount.Currency)
 			fundChip = Span(ClassStr("pace-badge pace-rate"), Attr("data-testid", "fund-setaside-"+g.ID),
 				uistate.T("goals.monthlySetAside", fmtMoney(fundAmt)))
 		}
-	} else if kind == domain.GoalKindHabit && prog.Streak > 0 {
+	} else if cardExpanded.Get() && kind == domain.GoalKindHabit && prog.Streak > 0 {
 		streakChip = Span(ClassStr("pace-badge pace-rate"), Attr("data-testid", "goal-streak-"+g.ID),
 			uistate.T("goals.streakFmt", prog.Streak))
 	}
@@ -367,14 +367,115 @@ func GoalRow(props goalRowProps) ui.Node {
 	// Review-due chip (any kind, when the review cadence has elapsed) + a linked-budgets
 	// count chip (financial goals that feed one or more budgets).
 	var reviewChip, budgetChip ui.Node = Fragment(), Fragment()
-	if goalsvc.ReviewDue(g, now) {
+	if cardExpanded.Get() && goalsvc.ReviewDue(g, now) {
 		reviewChip = Span(ClassStr("pace-badge pace-review"), Attr("data-testid", "goal-review-due-"+g.ID),
 			uistate.T("goals.reviewDue"))
 	}
-	if len(g.BudgetIDs) > 0 {
+	if cardExpanded.Get() && len(g.BudgetIDs) > 0 {
 		budgetChip = Span(ClassStr("pace-badge pace-rate"), Attr("data-testid", "goal-budgets-"+g.ID),
 			uistate.T("goals.linkedBudgetChip", len(g.BudgetIDs)))
 	}
+	// GL redesign (Task 2): the contribution planner is opt-in. Show its disclosure chip
+	// only when the slider itself would render (financial, active, with a sensible range),
+	// mirroring GoalContribSlider's own guard — so a chip never leads to an empty planner.
+	_, _, _, sliderOK := evaluation.SliderRange(g, goalRates(appstate.Default))
+	// A REACHED goal has nothing left to plan — the planner chip hides with the figures
+	// (completion propagates to every sub-feature, not just the tint).
+	showPlanner := financial && coverageKnown && !g.Archived && !complete && sliderOK
+	// C367: the planner is the "what if I add more?" scenario tool — label it in the
+	// reviewer's own words so its purpose is obvious, not a generic "plan contribution".
+	planLabel := uistate.T("goals.whatIfMore")
+	if planOpen.Get() {
+		planLabel = uistate.T("goals.whatIfMoreHide")
+	}
+
+	// The card's "loader": a progress bar with a kind-appropriate label + percent
+	// inside it. Built once — both the compact and expanded states render it.
+	// Progress semantics live on the childless saved-fill bar (role="img" with
+	// the percent in the label): the loader wrapper contains focusable figure
+	// buttons, and a labeled role wrapping interactive children fails axe
+	// nested-interactive (#67).
+	loaderNode := Div(css.Class("goal-card-loader"),
+		// Two-tone fill: a hatched earmark band runs out to coverage BEHIND the solid
+		// saved segment, so the gap between "saved" and "backed" is legible at a glance.
+		// Rendered first → painted under the saved fill (same stacking context, later
+		// DOM node wins), leaving only the pct..coverage slice showing through.
+		If(financial && coveragePct > pct,
+			Div(ClassStr("bar-fill bar-earmark"), Attr("data-testid", "goal-bar-earmark-"+g.ID), Attr("style", barFillStyle(coveragePct)))),
+		Div(ClassStr("bar-fill "+barClass),
+			Attr("role", "img"),
+			Attr("aria-label", uistate.T("goals.progressLabel")+": "+strconv.Itoa(coveragePct)+"%"),
+			Attr("style", barFillStyle(pct))),
+		Div(css.Class("goal-card-loader-figs"),
+			mainFig,
+			pctFig,
+		),
+	)
+
+	// UX-06: compact default. One context-sensitive primary action per kind, plus the
+	// Details control that reveals the full card.
+	if !cardExpanded.Get() {
+		var compactPrimary ui.Node = Fragment()
+		if !g.Archived {
+			switch kind {
+			case domain.GoalKindFinancial:
+				if complete {
+					compactPrimary = Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "goal-archive-primary-"+g.ID), Attr("aria-label", uistate.T("goals.archive")), Title(uistate.T("goals.archiveReachedTitle")), OnClick(doArchive), uiw.Icon(icon.Check, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("goals.archive")))
+				} else {
+					compactPrimary = Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "goal-setaside-"+g.ID), Attr("aria-label", uistate.T("goals.setAsideTitle")+" — "+g.Name), Title(uistate.T("goals.setAsideTitle")), OnClick(openAllocate), uiw.Icon(icon.Lock, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("goals.setAside")))
+				}
+			case domain.GoalKindMilestone:
+				if complete {
+					compactPrimary = Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "goal-reopen-"+g.ID), OnClick(markUndone), uiw.Icon(icon.Refresh, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("goals.markUndone")))
+				} else {
+					compactPrimary = Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "goal-markdone-"+g.ID), OnClick(markDone), uiw.Icon(icon.Check, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("goals.markDone")))
+				}
+			case domain.GoalKindHabit:
+				compactPrimary = Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "goal-checkin-"+g.ID), OnClick(checkIn), uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("goals.checkIn")))
+			}
+		}
+		var compactSub ui.Node
+		if financial {
+			compactSub = ui.CreateElement(GoalFigures, goalFiguresProps{Goal: g, Model: *model, Compact: true})
+		} else {
+			compactSub = goalNonFinancialSummary(g, evaluation, pr.FormatDate)
+			if jar, ok := goalRoundUpJar(appstate.Default, g.ID); ok {
+				compactSub = Fragment(compactSub, Div(css.Class("goal-sub"), jar))
+			}
+		}
+		return Div(ClassStr("goal-card is-compact "+cardState),
+			Attr("data-testid", "goal-row-"+g.ID), Attr("data-kind", string(kind)),
+			Div(css.Class("goal-card-head"),
+				Span(css.Class("goal-card-title"), g.Name),
+				paceBadgeNode,
+				pausedChip,
+			),
+			loaderNode,
+			// The bar's saved-vs-set-aside key, decodable without expanding the card. The
+			// "saved" swatch samples the bar's status tint (barClass) so an amber Watch bar
+			// gets an amber swatch, not a hardcoded green one.
+			If(financial && !complete, goalBarLegend(g, evaluation, barClass, props.EarmarkOverbooked, true)),
+			compactSub,
+			Div(css.Class("goal-card-actions"),
+				compactPrimary,
+				// C367: a visible "What if I add more?" jump into the scenario planner —
+				// only when the goal actually has a plan to explore (mirrors showPlanner).
+				If(showPlanner, Button(css.Class("btn btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap1), Type("button"),
+					Attr("data-testid", "goal-whatif-"+g.ID),
+					Attr("aria-label", uistate.T("goals.whatIfMore")+" — "+g.Name), Title(uistate.T("goals.whatIfMore")),
+					OnClick(openWhatIf),
+					uiw.Icon(icon.TrendingUp, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
+					Span(uistate.T("goals.whatIfMore")))),
+				Button(css.Class("btn btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap1), Type("button"),
+					Attr("data-testid", "goal-expand-"+g.ID), Attr("aria-expanded", "false"),
+					Attr("aria-label", uistate.T("goals.expandTitle")+" — "+g.Name), Title(uistate.T("goals.expandTitle")), OnClick(toggleExpand),
+					Span(uistate.T("goals.expand")),
+					uiw.Icon(icon.ChevronDown, css.Class(tw.ShrinkO, tw.W35, tw.H35))),
+			),
+		)
+	}
+
+	// Everything below belongs exclusively to the expanded card.
 	// G8 quick-fund chip (computed at render; the click handler re-derives the same
 	// figures so a stale card can never over-reserve).
 	var quickFundChip ui.Node = Fragment()
@@ -402,9 +503,8 @@ func GoalRow(props goalRowProps) ui.Node {
 	// not in the meta strip.
 	var earmarkLegend ui.Node = Fragment()
 	var subSection ui.Node
-	// UX-06: the compact card's figure strip — to go, needed/mo, landing date only.
-	var compactFigs ui.Node = Fragment()
 	if financial {
+		details := prepareGoalCardDetails(g, evaluation, props.Accounts, now)
 		overfund, _ := goalsvc.Overfund(g)
 		// Figures grid (redesign): the key numbers as scannable stat cells instead of a
 		// run-on "$X to go · by date · save $X/mo" sentence. Only cells with real data
@@ -414,7 +514,6 @@ func GoalRow(props goalRowProps) ui.Node {
 		// grounded in earmarks reads as closer to done — consistent with the backed
 		// headline. rem (savings-only) still feeds over-fund/what-next below.
 		figsNode := ui.CreateElement(GoalFigures, goalFiguresProps{Goal: g, Model: *model})
-		compactFigs = ui.CreateElement(GoalFigures, goalFiguresProps{Goal: g, Model: *model, Compact: true})
 		var whatNext ui.Node = Fragment()
 		if complete && !g.Archived {
 			whatNext = Div(css.Class("budget-sub"), Attr("data-testid", "goal-whatnext-"+g.ID),
@@ -461,32 +560,20 @@ func GoalRow(props goalRowProps) ui.Node {
 			figsNode,
 			Div(css.Class("goal-meta"),
 				overfundNote, whatNext, linkedLine, catLine,
-				goalInterestEtaLine(g, evaluation, props.Accounts, now),
+				details.Interest,
 			),
 			// The savings-pace rail lives INSIDE the card's metadata block (right below the
 			// figures/notes it summarises), not as a detached section underneath the card.
-			goalTrajectoryNode(g, evaluation, now),
+			details.Trajectory,
 			// C399: the trajectory projects forward from the plan; this looks back at
 			// whether the plan was actually funded. The projection is only as good as
 			// that, so the two belong together.
-			goalContribHistoryNode(g, now),
+			details.History,
 		)
 	} else {
-		var line string
-		if complete {
-			line = uistate.T("goals.complete")
-		} else if !g.TargetDate.IsZero() {
-			line = uistate.T("goals.bySuffix", pr.FormatDate(g.TargetDate))
-			if len(line) > 3 && line[:3] == " · " {
-				line = line[3:] // drop the leading separator when it stands alone
-			}
-		}
-		if line != "" {
-			subSection = Div(css.Class("budget-sub goal-sub"), Span(line))
-		} else {
-			subSection = Fragment()
-		}
+		subSection = goalNonFinancialSummary(g, evaluation, pr.FormatDate)
 	}
+
 	// TX11: show the running round-up jar on the target goal's row ("$6.37 in
 	// round-ups"), only when this is the round-up target goal and something has
 	// accrued this cadence period.
@@ -626,20 +713,6 @@ func GoalRow(props goalRowProps) ui.Node {
 		todosSection = ui.CreateElement(GoalTaskPreview, goalTaskPreviewProps{Goal: g, Summary: model.Tasks, OnToggle: toggleTodo, OnAdd: openAddStep})
 	}
 
-	// GL redesign (Task 2): the contribution planner is opt-in. Show its disclosure chip
-	// only when the slider itself would render (financial, active, with a sensible range),
-	// mirroring GoalContribSlider's own guard — so a chip never leads to an empty planner.
-	_, _, _, sliderOK := evaluation.SliderRange(g, goalRates(appstate.Default))
-	// A REACHED goal has nothing left to plan — the planner chip hides with the figures
-	// (completion propagates to every sub-feature, not just the tint).
-	showPlanner := financial && coverageKnown && !g.Archived && !complete && sliderOK
-	// C367: the planner is the "what if I add more?" scenario tool — label it in the
-	// reviewer's own words so its purpose is obvious, not a generic "plan contribution".
-	planLabel := uistate.T("goals.whatIfMore")
-	if planOpen.Get() {
-		planLabel = uistate.T("goals.whatIfMoreHide")
-	}
-
 	// A free-text note on the goal — a clamped preview that opens the goal editor on click
 	// (where the full note is read/edited), mirroring the budget card.
 	var goalNotesNode ui.Node = Fragment()
@@ -648,89 +721,6 @@ func GoalRow(props goalRowProps) ui.Node {
 			Attr("aria-label", uistate.T("goals.notesLabel")), Title(uistate.T("goals.editTitle")), OnClick(openEdit),
 			uiw.Icon(icon.FileText, css.Class("acct-notes-icon", tw.ShrinkO, tw.W4, tw.H4)),
 			Span(css.Class("acct-notes-text"), notes))
-	}
-
-	// The card's "loader": a progress bar with a kind-appropriate label + percent
-	// inside it. Built once — both the compact and expanded states render it.
-	// Progress semantics live on the childless saved-fill bar (role="img" with
-	// the percent in the label): the loader wrapper contains focusable figure
-	// buttons, and a labeled role wrapping interactive children fails axe
-	// nested-interactive (#67).
-	loaderNode := Div(css.Class("goal-card-loader"),
-		// Two-tone fill: a hatched earmark band runs out to coverage BEHIND the solid
-		// saved segment, so the gap between "saved" and "backed" is legible at a glance.
-		// Rendered first → painted under the saved fill (same stacking context, later
-		// DOM node wins), leaving only the pct..coverage slice showing through.
-		If(financial && coveragePct > pct,
-			Div(ClassStr("bar-fill bar-earmark"), Attr("data-testid", "goal-bar-earmark-"+g.ID), Attr("style", barFillStyle(coveragePct)))),
-		Div(ClassStr("bar-fill "+barClass),
-			Attr("role", "img"),
-			Attr("aria-label", uistate.T("goals.progressLabel")+": "+strconv.Itoa(coveragePct)+"%"),
-			Attr("style", barFillStyle(pct))),
-		Div(css.Class("goal-card-loader-figs"),
-			mainFig,
-			pctFig,
-		),
-	)
-
-	// UX-06: compact default. One context-sensitive primary action per kind, plus the
-	// Details control that reveals the full card.
-	if !cardExpanded.Get() {
-		var compactPrimary ui.Node = Fragment()
-		if !g.Archived {
-			switch kind {
-			case domain.GoalKindFinancial:
-				if complete {
-					compactPrimary = Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "goal-archive-primary-"+g.ID), Attr("aria-label", uistate.T("goals.archive")), Title(uistate.T("goals.archiveReachedTitle")), OnClick(doArchive), uiw.Icon(icon.Check, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("goals.archive")))
-				} else {
-					compactPrimary = Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "goal-setaside-"+g.ID), Attr("aria-label", uistate.T("goals.setAsideTitle")+" — "+g.Name), Title(uistate.T("goals.setAsideTitle")), OnClick(openAllocate), uiw.Icon(icon.Lock, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("goals.setAside")))
-				}
-			case domain.GoalKindMilestone:
-				if complete {
-					compactPrimary = Button(css.Class("btn", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "goal-reopen-"+g.ID), OnClick(markUndone), uiw.Icon(icon.Refresh, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("goals.markUndone")))
-				} else {
-					compactPrimary = Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "goal-markdone-"+g.ID), OnClick(markDone), uiw.Icon(icon.Check, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("goals.markDone")))
-				}
-			case domain.GoalKindHabit:
-				compactPrimary = Button(css.Class("btn btn-primary", tw.InlineFlex, tw.ItemsCenter, tw.Gap15), Type("button"), Attr("data-testid", "goal-checkin-"+g.ID), OnClick(checkIn), uiw.Icon(icon.PlusCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(uistate.T("goals.checkIn")))
-			}
-		}
-		var compactSub ui.Node
-		if financial {
-			compactSub = compactFigs
-		} else {
-			compactSub = subSection
-		}
-		return Div(ClassStr("goal-card is-compact "+cardState),
-			Attr("data-testid", "goal-row-"+g.ID), Attr("data-kind", string(kind)),
-			Div(css.Class("goal-card-head"),
-				Span(css.Class("goal-card-title"), g.Name),
-				paceBadgeNode,
-				pausedChip,
-			),
-			loaderNode,
-			// The bar's saved-vs-set-aside key, decodable without expanding the card. The
-			// "saved" swatch samples the bar's status tint (barClass) so an amber Watch bar
-			// gets an amber swatch, not a hardcoded green one.
-			If(financial && !complete, goalBarLegend(g, evaluation, barClass, props.EarmarkOverbooked, true)),
-			compactSub,
-			Div(css.Class("goal-card-actions"),
-				compactPrimary,
-				// C367: a visible "What if I add more?" jump into the scenario planner —
-				// only when the goal actually has a plan to explore (mirrors showPlanner).
-				If(showPlanner, Button(css.Class("btn btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap1), Type("button"),
-					Attr("data-testid", "goal-whatif-"+g.ID),
-					Attr("aria-label", uistate.T("goals.whatIfMore")+" — "+g.Name), Title(uistate.T("goals.whatIfMore")),
-					OnClick(openWhatIf),
-					uiw.Icon(icon.TrendingUp, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
-					Span(uistate.T("goals.whatIfMore")))),
-				Button(css.Class("btn btn-tool", tw.InlineFlex, tw.ItemsCenter, tw.Gap1), Type("button"),
-					Attr("data-testid", "goal-expand-"+g.ID), Attr("aria-expanded", "false"),
-					Attr("aria-label", uistate.T("goals.expandTitle")+" — "+g.Name), Title(uistate.T("goals.expandTitle")), OnClick(toggleExpand),
-					Span(uistate.T("goals.expand")),
-					uiw.Icon(icon.ChevronDown, css.Class(tw.ShrinkO, tw.W35, tw.H35))),
-			),
-		)
 	}
 
 	return Div(ClassStr("goal-card "+cardState),

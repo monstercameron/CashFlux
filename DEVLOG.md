@@ -1,3 +1,7 @@
+## 2026-10-20 - Prepare Goal card details only after disclosure
+
+Moved the compact return ahead of expanded-only metadata, quick funding, task previews, notes, menus and detail preparation while keeping hook registration stable. Shared detail preparation delegates to the existing tested native calculations. Actual Goals host counters prove zero detail preparations across nine compact cards, only the opened goal prepares, collapsed revisions remain cold, and expanded output refreshes correctly after settings and contribution changes. Also replaced a byte-length separator slice with UTF-8-safe TrimPrefix for nonfinancial due labels. Screenlint and four focused WASM cases passed.
+
 ## 2026-10-20 - Check contribution history rollup arithmetic
 
 Added RecordContributionChecked with copy-on-write detailed logs and monthly history, checked money addition and portable count bounds, retaining chronological caps and the documented currency-mismatch policy. The legacy wrapper preserves source compatibility without returning wrapped amounts. Boundary, multiple-aged-entry rollback, aged currency mismatch, cap and nonmutation cases passed via go test -work on the domain package. Appstate preflight and atomic goal/ledger orchestration follow separately.
