@@ -1593,42 +1593,23 @@ func trendFrame(fr domain.Frame, c widgetrender.RenderCtx) ui.Node {
 	for i := 0; i < fr.Rows; i++ {
 		series[i] = money.New(valCol.Int64(i), net.Currency)
 	}
-	deltaLabel, deltaTone := "No change", "text-dim"
-	rangeLabel := ""
-	if len(series) > 0 {
-		first := series[0]
-		last := series[len(series)-1]
-		delta := money.New(last.Amount-first.Amount, last.Currency)
+	facts := dashboardview.PrepareTrendFacts(series, net)
+	deltaLabel, deltaTone := uistate.T("dashboard.trendUnavailable"), "text-dim"
+	if facts.DeltaAvailable {
 		switch {
-		case delta.IsPositive():
-			deltaLabel = "Up " + fmtMoney(delta)
+		case facts.Delta.Amount > 0:
+			deltaLabel = "Up " + fmtMoney(facts.DeltaMagnitude)
 			deltaTone = "text-up"
-		case delta.IsNegative():
-			deltaLabel = "Down " + fmtMoney(delta.Abs())
+		case facts.Delta.Amount < 0:
+			deltaLabel = "Down " + fmtMoney(facts.DeltaMagnitude)
 			deltaTone = "text-down"
+		default:
+			deltaLabel = "No change"
 		}
-		low, high := first, first
-		for _, m := range series[1:] {
-			if m.Amount < low.Amount {
-				low = m
-			}
-			if m.Amount > high.Amount {
-				high = m
-			}
-		}
-		// net is always the LIVE net worth (a position, not period activity — see
-		// the "netWorthAsOfToday" comment above), but the series anchors on the
-		// VIEWED period (periodChartAnchor in frameDataCtx) and ends short of today
-		// once the dashboard is paged to a past period. Without this, a paged-away
-		// dashboard could show a headline figure above the chart's own high — the
-		// range text silently understating where "now" actually sits.
-		if net.Amount < low.Amount {
-			low = net
-		}
-		if net.Amount > high.Amount {
-			high = net
-		}
-		rangeLabel = fmt.Sprintf("%s - %s", fmtMoney(low), fmtMoney(high))
+	}
+	rangeLabel := uistate.T("dashboard.trendUnavailable")
+	if facts.RangeAvailable {
+		rangeLabel = fmt.Sprintf("%s - %s", fmtMoney(facts.Low), fmtMoney(facts.High))
 	}
 	// Plot in major units (dollars), not raw minor units (cents): feeding cents
 	// made the Y axis read "2,000,000 / 1,500,000 …" and clip in the narrow
@@ -1695,11 +1676,11 @@ func trendFrame(fr domain.Frame, c widgetrender.RenderCtx) ui.Node {
 		Div(css.Class("trend-expanded"),
 			Div(css.Class("trend-stat"),
 				Span(css.Class("t-caption", tw.TextFaint), uistate.T("dashboard.trendChange")),
-				Span(ClassStr("fig t-body "+deltaTone), deltaLabel),
+				Span(ClassStr("fig t-body "+deltaTone), Attr("data-testid", "dashboard-trend-delta"), deltaLabel),
 			),
 			Div(css.Class("trend-stat"),
 				Span(css.Class("t-caption", tw.TextFaint), uistate.T("dashboard.trendRange")),
-				Span(css.Class("fig t-body", tw.TextDim), rangeLabel),
+				Span(css.Class("fig t-body", tw.TextDim), Attr("data-testid", "dashboard-trend-range"), rangeLabel),
 			),
 		),
 		uiw.Chart(uiw.ChartProps{

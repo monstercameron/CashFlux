@@ -1,3 +1,7 @@
+## 2026-10-21 - Prepare Dashboard trend movement and range outside rendering
+
+dashboardview.PrepareTrendFacts owns checked endpoint subtraction, safe absolute magnitude and chart range facts in one validation/range pass. Overflowed movement remains unavailable while valid plotted range remains usable. Native dashboardview tests cover both overflow directions, MinInt64 magnitude, currency mismatch, empty and ordinary series, and live-point range inclusion. Focused WASM trend-host regression passed; the integrated corrected primary-boundary batch passed eleven tests. The view retains chart formatting and consumes the prepared facts. What changed cache/service work is a separate pending slice.
+
 ## 2026-10-21 - Keep Accounts net-worth movement checked and explicitly available
 
 Native nwchange and money suites passed, including both endpoint overflow directions and a representable MinInt64 signed delta. Two focused WASM host tests passed: presenter cases cover unknown, known zero, ordinary negative movement and unavailable MinInt64 magnitude; the actual Accounts summary receives valid MinInt64/MaxInt64 endpoints whose difference overflows and renders unavailable instead of no change. The initial integration compile caught a missing props qualifier; corrected wiring passes. Fixtures explicitly unmount before app/global cleanup. This fixes a concrete remaining boundary error and does not claim all Accounts logic or all nine pages complete.

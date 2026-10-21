@@ -2531,6 +2531,7 @@ var english = Catalog{
 	"dashboard.netWorthConverted": "converted to %s",
 	"dashboard.trendSoFar":        "(so far)",
 	"dashboard.trendNow":          "Now",
+	"dashboard.trendUnavailable":  "Trend movement or range is unavailable",
 	"dashboard.netWorthTrend":     "Net worth trend",
 	"dashboard.spotlight":         "Spotlight",
 	"dashboard.income":            "Income",
