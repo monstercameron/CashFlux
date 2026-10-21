@@ -80,3 +80,12 @@ still contain model composition in screen code. These are starting targets;
 the route audit remains necessary for the rest of the application.
 
 No production behavior or performance result is claimed by this plan.
+
+## Completed slices
+
+- Assistant Ask header and conversation thread are typed child components in
+  `assistant_chat_components.go`. The controller owns state and actions; the
+  children own their event hooks and render prepared props. Tests cover header
+  callbacks/ARIA, edit-state identity through turn reordering, retry eligibility,
+  deletion and thinking/streaming states. This extraction is not a measured
+  latency improvement.

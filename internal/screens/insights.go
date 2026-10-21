@@ -1438,7 +1438,6 @@ func Insights() ui.Node {
 	}, namingSig)
 
 	onSubmit := ui.UseEvent(Prevent(func() { submitChat() }))
-	newChatEvt := ui.UseEvent(Prevent(func() { newChat() }))
 	// System-prompt editor handlers.
 	onPromptInput := ui.UseEvent(func(v string) { promptDraft.Set(v) })
 	openPrompt := ui.UseEvent(Prevent(func() {
@@ -1566,50 +1565,11 @@ func Insights() ui.Node {
 	convo := turns.Get()
 	empty := len(convo) == 0
 
-	// Retry is offered on the latest message (user or assistant) when idle, so a
-	// failed turn with no reply can still be re-sent. resendLast re-answers the last
-	// user prompt either way.
-	lastID := ""
-	if n := len(convo); n > 0 {
-		lastID = convo[n-1].ID
-	}
-	retryFor := func(tid string) func() {
-		if tid == lastID && !loading.Get() {
-			return resendLast
-		}
-		return nil
-	}
-
-	// The conversation is a plain flex column; the SINGLE scroller is the canvas
-	// (.chat-scroll) that wraps it, so the composer below stays put while history
-	// scrolls. Auto-scroll keeps the newest message in view.
-	thread := Div(Attr("id", "cf-chat-thread"), css.Class("chat-thread", tw.Flex, tw.FlexCol, tw.Gap4),
-		MapKeyed(convo,
-			func(t chatTurn) any { return t.ID },
-			func(t chatTurn) ui.Node {
-				if t.Role == "user" {
-					return ui.CreateElement(UserBubble, userBubbleProps{ID: t.ID, Text: t.Text, OnDelete: deleteTurn, OnRetry: retryFor(t.ID), OnEdit: editAndResend})
-				}
-				if t.Role == "afford" {
-					return ui.CreateElement(AffordResultBubble, affordResultBubbleProps{ID: t.ID, HTML: t.Text, OnDelete: deleteTurn})
-				}
-				return ui.CreateElement(AssistantBubble, asstBubbleProps{ID: t.ID, Text: t.Text, Usage: t.Usage, Model: model,
-					Sources: t.Sources, Feedback: t.Feedback, OnPin: pinText, OnDelete: deleteTurn, OnRetry: retryFor(t.ID), OnFeedback: rateTurn})
-			},
-		),
-		// While a turn is in flight the thread shows either the answer being
-		// written or, before the first fragment lands, the thinking line. They are
-		// mutually exclusive: showing both would put a spinner above text that has
-		// visibly started arriving.
-		If(loading.Get() && strings.TrimSpace(streaming.Get()) == "", Div(css.Class(tw.Flex, tw.JustifyStart),
-			Div(css.Class("chat-row-agent"),
-				Div(css.Class("chat-avatar"), Attr("aria-hidden", "true"), "✦"),
-				Div(css.Class("insights-thinking chat-thinking", tw.Text13, tw.TextFaint), uistate.T("insights.thinking")),
-			),
-		)),
-		If(loading.Get() && strings.TrimSpace(streaming.Get()) != "",
-			ui.CreateElement(StreamingBubble, streamingBubbleProps{Text: streaming.Get()})),
-	)
+	thread := ui.CreateElement(assistantChatThread, assistantChatThreadProps{
+		Turns: convo, Model: model, Loading: loading.Get(), Streaming: streaming.Get(),
+		OnDelete: deleteTurn, OnRetry: resendLast, OnEdit: editAndResend,
+		OnPin: pinText, OnFeedback: rateTurn,
+	})
 
 	// Composer: always show the Ask input (so the starter chips have a visible box to
 	// fill and a new user sees what they'd ask, L8). With AI configured it pairs with
@@ -1789,9 +1749,7 @@ func Insights() ui.Node {
 	// the aside becomes a slide-in drawer — so the thread + composer own the first
 	// screen on every viewport.
 	ctrlOpen := ui.UseState(false)
-	toggleCtrls := ui.UseEvent(Prevent(func() { ctrlOpen.Set(!ctrlOpen.Get()) }))
 	asideOpen := ui.UseState(false)
-	toggleAside := ui.UseEvent(Prevent(func() { asideOpen.Set(!asideOpen.Get()) }))
 	closeAside := ui.UseEvent(Prevent(func() { asideOpen.Set(false) }))
 	togglePrivacy := func() {
 		next := aicontext.TierAggregatesOnly
@@ -2047,32 +2005,13 @@ func Insights() ui.Node {
 	// Advanced as quiet ghost actions on the right) over the content-height canvas,
 	// and a quiet "margin notes" aside — chrome-less typographic groups, not tiles —
 	// for the agent's periphery and saved chats.
-	askHead := Div(css.Class("ask-head"),
-		Div(css.Class("ask-head-row"),
-			Div(css.Class("ask-head-id"),
-				Span(ClassStr(statusCls), Attr("aria-hidden", "true")),
-				H2(css.Class("ask-title"), uistate.T("assistant.agentTitle")),
-			),
-			// UX-09 header actions: New chat is the everyday verb; Chat settings
-			// opens the collapsed controls drawer; Notes & chats slides the aside
-			// in on narrow widths (hidden on desktop, where the aside is visible).
-			Div(css.Class("ask-head-actions"),
-				Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "assistant-new-chat"), OnClick(newChatEvt),
-					uiw.Icon(icon.Plus, css.Class(tw.ShrinkO, tw.W35, tw.H35)), Span(uistate.T("insights.newChat"))),
-				Button(css.Class("btn btn-tool"), Type("button"), Attr("data-testid", "assistant-settings-toggle"),
-					Attr("aria-expanded", ariaBool(ctrlOpen.Get())), Attr("aria-controls", "ask-settings-drawer"),
-					OnClick(toggleCtrls),
-					uiw.Icon(icon.Settings, css.Class(tw.ShrinkO, tw.W35, tw.H35)), Span(uistate.T("assistant.chatSettings"))),
-				Button(css.Class("btn btn-tool ask-aside-toggle"), Type("button"), Attr("data-testid", "assistant-aside-toggle"),
-					Attr("aria-expanded", ariaBool(asideOpen.Get())),
-					OnClick(toggleAside),
-					uiw.Icon(icon.MessageCircle, css.Class(tw.ShrinkO, tw.W35, tw.H35)), Span(uistate.T("assistant.notesDrawer"))),
-			),
-		),
-		// The status/caption sits on its own subtitle line below the agent name, rather
-		// than sharing the title's baseline at a clashing scale.
-		Span(css.Class("ask-status"), uistate.T(statusKey)),
-	)
+	askHead := ui.CreateElement(assistantAskHeader, assistantAskHeaderProps{
+		StatusClass: statusCls, StatusKey: statusKey,
+		ControlsOpen: ctrlOpen.Get(), AsideOpen: asideOpen.Get(),
+		OnNewChat:        newChat,
+		OnToggleControls: func() { ctrlOpen.Set(!ctrlOpen.Get()) },
+		OnToggleAside:    func() { asideOpen.Set(!asideOpen.Get()) },
+	})
 	askMain := Div(css.Class("ask-main"),
 		askHead,
 		// The controls drawer: the full settings cell, revealed by the header's

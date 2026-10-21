@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Render the assistant header and keyed conversation through typed presentational child components.
 - Assistant title requests cancel safely, account usage, respect limits and preserve saved chats during switching.
 - On-device answers distinguish unavailable calculations from genuine zero and use current bound financial inputs.
 - Retain raw native model benchmark samples and environment metadata before further app refactoring.
