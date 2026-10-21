@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Local artifact reads now report malformed IndexedDB byte records instead of leaving a file read waiting indefinitely.
 - Full-install backups now include external file bytes for inactive workspaces and stop with an error if any workspace has a missing or unreadable attachment.
 - New locally stored attachment bytes and MIME are encrypted with the protected workspace key; active legacy plaintext files are upgraded after unlock or on first read, and the upgrade waits for an IndexedDB commit.
 - Snapshot preparation now refuses to return a dataset unless App Lock encryption stays active through the final envelope, closing a plaintext fallback for future sync callers.

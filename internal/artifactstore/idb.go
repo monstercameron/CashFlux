@@ -131,6 +131,11 @@ func (s *IDBStore) Get(id string) (mime string, data []byte, ok bool, err error)
 	onSuccess = js.FuncOf(func(_ js.Value, args []js.Value) any {
 		defer onSuccess.Release()
 		defer onError.Release()
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				ch <- result{err: fmt.Errorf("artifactstore: idb get %s has an invalid record: %v", id, recovered)}
+			}
+		}()
 		event := args[0]
 		val := event.Get("target").Get("result")
 		if val.IsUndefined() || val.IsNull() {
@@ -139,8 +144,15 @@ func (s *IDBStore) Get(id string) (mime string, data []byte, ok bool, err error)
 		}
 		m := val.Get("mime").String()
 		jsData := val.Get("data")
+		if !jsData.InstanceOf(js.Global().Get("Uint8Array")) {
+			ch <- result{err: fmt.Errorf("artifactstore: idb get %s has invalid bytes", id)}
+			return nil
+		}
 		buf := make([]byte, jsData.Get("byteLength").Int())
-		js.CopyBytesToGo(buf, jsData)
+		if copied := js.CopyBytesToGo(buf, jsData); copied != len(buf) {
+			ch <- result{err: fmt.Errorf("artifactstore: idb get %s copied %d of %d bytes", id, copied, len(buf))}
+			return nil
+		}
 		ch <- result{mime: m, data: buf, ok: true}
 		return nil
 	})

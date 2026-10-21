@@ -1,3 +1,7 @@
+## 2026-10-20 - Fail malformed local artifact reads
+
+The IndexedDB artifact getter assumed every stored record had a `Uint8Array` payload. A malformed legacy or tampered record could panic inside the JavaScript success callback, leaving the Go caller blocked and preventing sync or backup from reporting the file failure. The getter now validates the byte type and copy length and converts callback panics into errors. The WebAssembly app build passed.
+
 ## 2026-10-20 - Record the local blob deletion constraint
 
 The dataset's artifact delete removes its SQLite row but leaves a separate IndexedDB blob. A direct blob delete was prototyped and rejected before commit: an older durable sync queue item can still reference that file, so deleting the blob immediately would make the queue permanently fail its new completeness check. The privacy review now states the residual storage risk and the need for garbage collection that accounts for every workspace and pending snapshot before erasure.
