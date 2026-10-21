@@ -1,3 +1,7 @@
+## 2026-10-20 - Wait for visible Smart import review in tests
+
+The complete screen run exposed another test that inspected controller state immediately after resolving a fake fetch. PDF, image and receipt responses were still processing on separate scheduler turns, and test teardown could then race that response. Replaced the timing assumption with a bounded three-second wait for draft-review-page, retaining the existing row/account assertions. The full rerun passed all 835 screen WASM tests; production import behavior is unchanged.
+
 ## 2026-10-20 - Distinguish unavailable period totals from genuine zero
 
 Added native periodview.Totals with known money versus independent percentage availability, preserved all-or-nothing FX semantics and changed MinInt64 expense absolute values from panic to checked error. Shared selectors now carry availability through Dashboard render context, hero, KPI/gauge and Assistant context; unsupported affordability renders an explanation rather than a zero-income result. Wide int64 gauge text no longer narrows to wasm int, while width remains clamped and truncation preserves 0% rather than -0%. Native periodview/ledger/i18n/screenlint and all native integration passed. Five focused actual-host/selector/gauge WASM cases and the final signed gauge parity case passed; full screens and sample browser integration are running separately.

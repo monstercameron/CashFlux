@@ -204,6 +204,12 @@ func TestSmartImportReviewAndAccountPlacement(t *testing.T) {
 				deliverImportContent(t, calls, 0, content)
 			}
 			f.Stabilize()
+			// Resolving the fake response and rendering Review use different
+			// scheduler turns. Observe the visible result before inspecting state.
+			for deadline := time.Now().Add(3 * time.Second); findByTestID(f, "div", "draft-review-page") == nil && time.Now().Before(deadline); {
+				time.Sleep(5 * time.Millisecond)
+				f.Stabilize()
+			}
 			c := current()
 			if c.stage.Get() != "review" || !c.inReview || len(c.model.Rows) != 3 {
 				t.Fatalf("stage=%q review=%v rows=%d status=%q", c.stage.Get(), c.inReview, len(c.model.Rows), f.Text())
