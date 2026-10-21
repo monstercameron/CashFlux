@@ -255,7 +255,7 @@ func newRecordAutosave(app *appstate.App, commit func(map[string]string, map[str
 	var waiters []durableWaiter
 	datasetMyGen = writerGeneration
 	paused := func() bool {
-		return suspendAutosave || hostedHydrationRequired() || pendingEnvelopeRaw != "" || autosaveBlocked()
+		return suspendAutosave || syncApplyPaused || hostedHydrationRequired() || pendingEnvelopeRaw != "" || autosaveBlocked()
 	}
 	pausedErr := errors.New("saving is paused; keep this page open until recovery finishes")
 	var save func()
@@ -543,7 +543,7 @@ func scheduleCommittedDatasetPush(snapshot history.Snapshot, generation string, 
 	workspace := recordWorkspace()
 	owner, server := signedInUserID(), currentDatasetServerID()
 	current := func() bool {
-		return job == committedPushJob && !suspendAutosave && recordWorkspace() == workspace && datasetMyGen == generation && signedInUserID() == owner && currentDatasetServerID() == server
+		return job == committedPushJob && !suspendAutosave && !syncApplyPaused && recordWorkspace() == workspace && datasetMyGen == generation && signedInUserID() == owner && currentDatasetServerID() == server
 	}
 	time.AfterFunc(10*time.Millisecond, func() {
 		defer func() {

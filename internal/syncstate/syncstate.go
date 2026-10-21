@@ -5,6 +5,24 @@ package syncstate
 
 import "time"
 
+// UploadLineage identifies a queued snapshot's authenticated scope and the
+// same-page snapshot it extends. A browser reload starts a new page lineage.
+type UploadLineage struct {
+	UserID, WorkspaceID, PageID, Hash, AncestorHash string
+	BaseVersion                                     int64
+}
+
+// CanRebaseQueuedSuccessor permits a later local edit to use the version just
+// accepted by the server only when it descends from that exact queued snapshot.
+// Other tabs, accounts and workspaces must still take the normal conflict path.
+func CanRebaseQueuedSuccessor(accepted, pending UploadLineage, acceptedVersion int64) bool {
+	return acceptedVersion > accepted.BaseVersion &&
+		accepted.UserID != "" && accepted.WorkspaceID != "" && accepted.PageID != "" && accepted.Hash != "" &&
+		pending.UserID == accepted.UserID && pending.WorkspaceID == accepted.WorkspaceID &&
+		pending.PageID == accepted.PageID && pending.AncestorHash == accepted.Hash &&
+		pending.BaseVersion == accepted.BaseVersion && pending.Hash != accepted.Hash
+}
+
 // EncryptionStatus is the typed sync state used when cloud sync is configured
 // but this device cannot encrypt the dataset with its passcode.
 type EncryptionStatus string

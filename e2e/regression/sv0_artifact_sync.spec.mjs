@@ -1,18 +1,48 @@
 import { readFile } from "node:fs/promises";
 import { test, expect, boot, nav } from "./fixtures.mjs";
-import { startServer, createPasswordAccount, configureRemote, login, waitForSync, accountSnapshots, accessToken } from "./sv0_helpers.mjs";
+import { startServer, createPasswordAccount, configureRemote, login, waitForSync, accountSnapshots, accessToken, addUniqueTransaction, unlockIfNeeded } from "./sv0_helpers.mjs";
 
 let server;
 test.beforeAll(async () => { server = await startServer(); });
 test.afterAll(async () => { await server?.stop(); });
 
-async function connectWithPassword(page, username, password) {
+async function connectWithPassword(page, username, password, expectExistingRemote = false) {
   await configureRemote(page, server.origin);
-  await login(page, username, password);
+  try {
+    await login(page, username, password);
+  } catch (err) {
+    console.log("sync login diagnostic", (await page.locator("body").innerText()).slice(-1000));
+    throw err;
+  }
+  if (expectExistingRemote) await waitForRemoteReady(page);
 }
 
-test("encrypted image attachment uploads and restores to a second device", async ({ app, browser, request }) => {
-  test.setTimeout(360_000);
+async function waitForRemoteReady(page) {
+  let previousGeneration = "";
+  let stableChecks = 0;
+  await expect.poll(async () => {
+    await unlockIfNeeded(page);
+    const state = await page.evaluate(() => ({
+      owner: !!window.cashfluxStoreGet?.("cashflux:dataset-owner"),
+      generation: window.cashfluxStoreGet?.("cashflux:dataset:gen") || "",
+      ready: document.documentElement.getAttribute("data-app-ready") === "true",
+    })).catch(() => ({ owner: false, generation: "", ready: false }));
+    const locked = await page.locator("#cf-applock-gate").isVisible().catch(() => true);
+    stableChecks = state.owner && state.ready && !locked && state.generation === previousGeneration ? stableChecks + 1 : 0;
+    previousGeneration = state.generation;
+    return stableChecks >= 4;
+  }, { timeout: 120_000, intervals: [500] }).toBe(true);
+}
+
+async function waitForVisibleUnlocked(page, locator) {
+  await expect.poll(async () => {
+    await unlockIfNeeded(page);
+    return locator.isVisible();
+  }, { timeout: 90_000, intervals: [500, 1000, 2000] }).toBe(true);
+}
+
+test("encrypted file and later edits sync across both devices", async ({ app, browser, request }) => {
+  test.setTimeout(420_000);
   // Server timestamps use the real clock; fixture time is intentionally pinned
   // months earlier for UI screenshots and would make this edit look stale.
   await app.clock.setFixedTime(new Date());
@@ -31,6 +61,16 @@ test("encrypted image attachment uploads and restores to a second device", async
   await accountForm.locator('input[type="text"]').first().fill(`File sync ${suffix}`);
   await accountForm.locator('input[type="number"]').first().fill("10");
   await app.locator('button[form="account-add-form"]').click();
+  await expect(accountForm).toBeHidden({ timeout: 20_000 });
+  let localGeneration = "";
+  let settledSaves = 0;
+  await expect.poll(async () => {
+    const generation = await app.evaluate(() => window.cashfluxStoreGet?.("cashflux:dataset:gen") || "");
+    const failed = await app.getByText("Changes aren't saved yet").isVisible().catch(() => false);
+    settledSaves = generation && generation === localGeneration && !failed ? settledSaves + 1 : 0;
+    localGeneration = generation;
+    return settledSaves >= 4;
+  }, { timeout: 30_000, intervals: [500] }).toBe(true);
   await connectWithPassword(app, user.username, user.password);
   await expect.poll(async () => (await accountSnapshots(request, server.origin, await accessToken(app))).length, { timeout: 90_000 }).toBeGreaterThan(0);
   await waitForSync(app);
@@ -67,16 +107,82 @@ test("encrypted image attachment uploads and restores to a second device", async
   try {
     await boot(second);
     await second.clock.setFixedTime(new Date());
-    await connectWithPassword(second, user.username, user.password);
+    await connectWithPassword(second, user.username, user.password, true);
+    await unlockIfNeeded(second);
     await nav(second, "/artifacts");
-    await expect(second.getByTestId("artifact-name").filter({ hasText: filename })).toBeVisible({ timeout: 45_000 });
+    await waitForVisibleUnlocked(second, second.getByTestId("artifact-name").filter({ hasText: filename }));
     const row = second.locator(".row").filter({ has: second.getByTestId("artifact-name").filter({ hasText: filename }) });
-    await row.locator('[data-testid^="artifact-menu-btn-"]').click();
+    await row.locator('[data-testid^="artifact-menu-btn-"]').click({ timeout: 20_000 });
     const [download] = await Promise.all([
-      second.waitForEvent("download"),
-      row.locator('[data-testid^="artifact-download-"]').click(),
+      second.waitForEvent("download", { timeout: 25_000 }),
+      row.locator('[data-testid^="artifact-download-"]').click({ timeout: 20_000 }),
     ]);
     expect(await readFile(await download.path())).toEqual(pixels);
+    const beforeReturn = await accountSnapshots(request, server.origin, await accessToken(second));
+    const edit = `second-device-edit-${suffix}`;
+    await addUniqueTransaction(second, edit);
+    try {
+      await expect.poll(async () => {
+        const snapshots = await accountSnapshots(request, server.origin, await accessToken(second));
+        return snapshots.some((snapshot) => !beforeReturn.some((old) => old.workspaceID === snapshot.workspaceID && old.envelope === snapshot.envelope));
+      }, { timeout: 30_000 }).toBe(true);
+    } catch (err) {
+      console.log("second browser sync state", await second.evaluate(() => {
+        const registry = JSON.parse(window.cashfluxStoreGet?.("cashflux:workspaces") || "{}");
+        return {
+          status: window.cashfluxStoreGet?.("cashflux:sync-status"),
+          queue: !!window.cashfluxStoreGet?.("cashflux:sync-queue"),
+          owner: !!window.cashfluxStoreGet?.("cashflux:dataset-owner"),
+          generation: !!window.cashfluxStoreGet?.("cashflux:dataset:gen"),
+          head: !!window.cashfluxStoreGet?.("cashflux:dataset:head"),
+          auth: !!window.cashfluxStoreGet?.("cashflux:auth:user-id"),
+          meta: window.cashfluxStoreGet?.(`cashflux:sync-meta:${registry.activeId}`)?.slice(0, 200),
+          saveBanner: document.querySelector('[data-testid="save-failure-banner"]')?.textContent,
+        };
+      }));
+      throw err;
+    }
+    await waitForSync(second);
+    let stableSyncChecks = 0;
+    const cleanState = async () => {
+      const state = await second.evaluate(() => {
+        const get = window.cashfluxStoreGet;
+        const registry = JSON.parse(get?.("cashflux:workspaces") || "{}");
+        return {
+          status: JSON.parse(get?.("cashflux:sync-status") || "{}"),
+          queued: JSON.parse(get?.("cashflux:sync-queue") || "[]").length > 0,
+          conflict: !!get?.(`cashflux:sync-conflict:${registry.activeId}`),
+        };
+      });
+      stableSyncChecks = state.status.state === "synced" && !state.queued && !state.conflict ? stableSyncChecks + 1 : 0;
+      return stableSyncChecks >= 6;
+    };
+    try {
+      await expect.poll(cleanState, { timeout: 30_000, intervals: [500] }).toBe(true);
+    } catch (err) {
+      console.log("second browser unsettled sync", await second.evaluate(() => {
+        const get = window.cashfluxStoreGet;
+        const registry = JSON.parse(get?.("cashflux:workspaces") || "{}");
+        const conflict = JSON.parse(get?.(`cashflux:sync-conflict:${registry.activeId}`) || "null");
+        const meta = JSON.parse(get?.(`cashflux:sync-meta:${registry.activeId}`) || "null");
+        return { status: get?.("cashflux:sync-status"), queue: get?.("cashflux:sync-queue")?.slice(0, 300), conflict: conflict && { baseVersion: conflict.baseVersion, hash: conflict.hash, hasEdit: conflict.dataset?.includes("second-device-edit") }, meta: meta && { version: meta.version, hash: meta.hash } };
+      }));
+      throw err;
+    }
+    const returned = await accountSnapshots(request, server.origin, await accessToken(second));
+    expect(returned.every((snapshot) => !snapshot.envelope.includes(edit)), "second-device edit must remain encrypted on the server").toBe(true);
+    const thirdContext = await browser.newContext({ baseURL: new URL(app.url()).origin, reducedMotion: "reduce" });
+    try {
+      const third = await thirdContext.newPage();
+      await boot(third);
+      await third.clock.setFixedTime(new Date());
+      await connectWithPassword(third, user.username, user.password, true);
+      await unlockIfNeeded(third);
+      await nav(third, "/transactions");
+      await waitForVisibleUnlocked(third, third.getByText(edit, { exact: true }));
+    } finally {
+      await thirdContext.close();
+    }
   } finally {
     await secondContext.close();
   }

@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/atrest"
 	"github.com/monstercameron/CashFlux/internal/backendrpc"
 	"github.com/monstercameron/CashFlux/internal/backoff"
 	"github.com/monstercameron/CashFlux/internal/browserstore"
@@ -50,11 +51,11 @@ import (
 //
 // A key arriving in the incoming dataset still wins, so a user's own complete
 // backup (manual ExportJSON keeps the key) restores as written.
-func importRemoteDataset(app *appstate.App, dataset []byte) error {
+func importRemoteDataset(app *appstate.App, dataset []byte) ([]byte, error) {
 	keep := strings.TrimSpace(app.Settings().OpenAIKey)
 	connection := uistate.LoadPrefs().Normalize()
 	if err := app.ImportJSON(dataset); err != nil {
-		return err
+		return nil, err
 	}
 	// A server dataset can contain older/default connection preferences. Keep
 	// this page bound to its authenticated server while importing display prefs;
@@ -62,26 +63,27 @@ func importRemoteDataset(app *appstate.App, dataset []byte) error {
 	remote := prefs.Default()
 	if raw := uistate.SettingKVGet("cashflux:prefs"); raw != "" {
 		if err := json.Unmarshal([]byte(raw), &remote); err != nil {
-			return fmt.Errorf("read imported preferences: %w", err)
+			return nil, fmt.Errorf("read imported preferences: %w", err)
 		}
 	}
 	remote.ServerURL, remote.ServerToken, remote.ServerCSRF = connection.ServerURL, connection.ServerToken, connection.ServerCSRF
 	remote.ServerMode, remote.ConnectionSegment, remote.BackendDisabled = connection.ServerMode, connection.ConnectionSegment, connection.BackendDisabled
 	if err := uistate.PersistPrefs(remote.Normalize()); err != nil {
-		return fmt.Errorf("keep this device's server connection after import: %w", err)
+		return nil, fmt.Errorf("keep this device's server connection after import: %w", err)
 	}
-	if keep == "" {
-		return nil
+	if keep != "" {
+		s := app.Settings()
+		if strings.TrimSpace(s.OpenAIKey) == "" {
+			s.OpenAIKey = keep
+			if err := app.PutSettings(s); err != nil {
+				app.Log().Error("restoring on-device OpenAI key after remote import", "err", err)
+			}
+		}
 	}
-	s := app.Settings()
-	if strings.TrimSpace(s.OpenAIKey) != "" {
-		return nil
-	}
-	s.OpenAIKey = keep
-	if err := app.PutSettings(s); err != nil {
-		app.Log().Error("restoring on-device OpenAI key after remote import", "err", err)
-	}
-	return nil
+	// The server snapshot intentionally has no device connection fields. Export
+	// the imported store after restoring this browser's settings so the local
+	// checkpoint remains able to bootstrap its saved session on the next load.
+	return localDatasetExport(app)
 }
 
 const syncMetaPrefix = "cashflux:sync-meta:"
@@ -152,6 +154,11 @@ type queuedSyncMutation struct {
 	// this was recorded, which the server reads as "not sent" (legacy
 	// comparison) rather than as version zero.
 	BaseVersion int64 `json:"baseVersion,omitempty"`
+	// PageID and AncestorHash prove that a later queued snapshot was built by
+	// this same page on top of an upload still in flight. They are never used
+	// to advance work left by another tab or a previous page load.
+	PageID       string `json:"pageId,omitempty"`
+	AncestorHash string `json:"ancestorHash,omitempty"`
 }
 
 // syncStateLockedDifferentPasscode is the sync status state for "the server
@@ -753,6 +760,9 @@ var (
 )
 
 func pushActiveWorkspaceToBackend(dataset []byte, updatedAt time.Time) {
+	if syncApplyPaused {
+		return
+	}
 	pr := uistate.LoadPrefs().Normalize()
 	if !backendConnectionActive(pr) {
 		return
@@ -792,6 +802,11 @@ func pushActiveWorkspaceToBackend(dataset []byte, updatedAt time.Time) {
 	})
 	flushBackendSyncQueue()
 }
+
+// A pulled snapshot is only authoritative on this device after its protected
+// checkpoint and sync bookmark commit together. Keep the record writer and
+// queued pushes from publishing the in-memory import in that interval.
+var syncApplyPaused bool
 
 // ForcePushActiveWorkspace asks the user to keep this device's copy. It queues
 // the dataset against the latest server version, so an intervening server write
@@ -852,6 +867,9 @@ func ReplaceServerCopyWithThisDevice() {
 }
 
 func queueActiveWorkspaceAtServerVersion(force bool) {
+	if syncApplyPaused {
+		return
+	}
 	pr := uistate.LoadPrefs().Normalize()
 	if !backendConnectionActive(pr) {
 		return
@@ -935,7 +953,7 @@ func queueActiveWorkspaceAtServerVersion(force bool) {
 }
 
 func requestBackendSyncNow() {
-	if !backendSessionReady() {
+	if syncApplyPaused || !backendSessionReady() {
 		return
 	}
 	// Seed the queue with the CURRENT dataset before flushing. The queue is only ever
@@ -964,7 +982,7 @@ func requestBackendSyncNow() {
 // sync-meta hash forces the next push through; prepareBackendSyncDataset then
 // (re)encrypts or (re)plaintexts per the now-current mode.
 func forceBackendResyncActiveWorkspace() {
-	if !backendConnectionActive(uistate.LoadPrefs().Normalize()) {
+	if syncApplyPaused || !backendConnectionActive(uistate.LoadPrefs().Normalize()) {
 		return
 	}
 	r := loadRegistry()
@@ -1006,7 +1024,7 @@ func forceBackendSeedActiveWorkspace() {
 }
 
 func flushBackendSyncQueue() {
-	if !backendSessionReady() {
+	if syncApplyPaused || !backendSessionReady() {
 		return
 	}
 	pr := uistate.LoadPrefs().Normalize()
@@ -1021,6 +1039,9 @@ func flushBackendSyncQueue() {
 		defer timePhase("flush.total")()
 		syncPushMu.Lock()
 		defer syncPushMu.Unlock()
+		if syncApplyPaused {
+			return
+		}
 		// Only upload queue entries that have actually committed. The legacy
 		// synchronous cache can also contain tentative, not-yet-durable edits.
 		browserstore.Barrier()
@@ -1068,6 +1089,9 @@ func flushBackendSyncQueue() {
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 		for _, item := range queue {
+			if syncApplyPaused {
+				return
+			}
 			maybeYield() // a queue of any length must not cost the user a click
 			// Re-check the captured scope against the identity at SEND time
 			// (SV0.1). The queue was filtered above, but an account switch in
@@ -1229,6 +1253,7 @@ func flushBackendSyncQueue() {
 			// signed in at ack time, so the ack can never clear a different
 			// scope's entry (SV0.1); the bookmark is stamped for that owner too.
 			removeQueuedSyncMutationFor(item.UserID, item.WorkspaceID, item.Hash)
+			rebaseQueuedSuccessorAfterAck(item, resp.Version)
 			if backup, ok := loadConflictBackup(item.WorkspaceID); ok && backup.Hash == item.Hash {
 				clearConflictBackup(item.WorkspaceID)
 			}
@@ -1787,12 +1812,17 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 			markHostedHydrationError("CashFlux could not open its local data store.")
 			return
 		}
-		if err := importRemoteDataset(app, dataset); err != nil {
+		syncApplyPaused = true
+		committedPushJob++
+		localDataset, err := importRemoteDataset(app, dataset)
+		if err != nil {
+			syncApplyPaused = false
 			logSyncError("backend sync import failed", err)
 			markHostedHydrationError("CashFlux could not import your server data.")
 			return
 		}
 		if allowed, reason := syncstate.CheckPullScope(pulledWorkspaceID, activeWorkspaceID(), requestedOwner, signedInUserID()); !allowed {
+			syncApplyPaused = false
 			if app := appstate.Default; app != nil {
 				app.Log().Warn("backend snapshot import abandoned because its scope changed", "reason", reason,
 					"pulledWorkspace", pulledWorkspaceID, "activeWorkspace", activeWorkspaceID(),
@@ -1807,9 +1837,11 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 		// cleared this flag, so a freshly signed-in browser showed a wipe affordance
 		// over freshly arrived real records.
 		uistate.SetSampleActive(false)
-		meta = syncMeta{UpdatedAt: resp.Workspace.UpdatedAt, Version: resp.Workspace.Version, Hash: datasetHash(dataset), Owner: requestedOwner}
+		// Hash the durable local form, which retains this browser's connection.
+		// The shared server form deliberately omits those device-only fields.
+		meta = syncMeta{UpdatedAt: resp.Workspace.UpdatedAt, Version: resp.Workspace.Version, Hash: datasetHash(localDataset), Owner: requestedOwner}
 		meta.LegacyPlaintext = !cryptobox.IsEnvelope(resp.Dataset)
-		meta.Server = currentDatasetServerID()
+		meta.Server = datasetServerIDForURL(pr.ServerURL)
 		if hostedHydrationRequired() || (hostedDocument() && meta.LegacyPlaintext && !datasetEncryptionActive()) {
 			// The financial shell is still unmounted. Persist the authoritative
 			// snapshot first, then release the hosted gate without a reload so the
@@ -1819,7 +1851,7 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 			if meta.LegacyPlaintext && !datasetEncryptionActive() {
 				done = markHostedLegacyProtection
 			}
-			saveSyncedDatasetThen(w.ID, dataset, meta, done)
+			saveSyncedDatasetThen(w.ID, localDataset, meta, done)
 			return
 		}
 		if reloadOnApply {
@@ -1828,9 +1860,9 @@ func pullActiveWorkspaceFromBackend(reloadOnApply bool) {
 			// lose the metadata; the next watch event then looked like it would
 			// overwrite unsynced local work and was rejected forever. Commit both,
 			// in order, before allowing the document to reload.
-			saveSyncedDatasetThen(w.ID, dataset, meta, reloadPage)
+			saveSyncedDatasetThen(w.ID, localDataset, meta, reloadPage)
 		} else {
-			saveSyncedDatasetThen(w.ID, dataset, meta, nil)
+			saveSyncedDatasetThen(w.ID, localDataset, meta, nil)
 		}
 	}()
 }
@@ -1898,15 +1930,17 @@ func saveSyncMeta(workspaceID string, meta syncMeta) {
 // boundary together: a dataset without its server timestamp/hash is treated as
 // unsynced local work and correctly protected from later remote overwrites.
 func saveSyncedDatasetThen(workspaceID string, dataset []byte, meta syncMeta, done func()) {
-	generation := datasetMyGen
+	app := appstate.Default
 	data, err := json.Marshal(meta)
 	if err != nil {
+		syncApplyPaused = false
 		return
 	}
 	payload := dataset
 	if datasetEncryptionActive() {
 		payload, err = encryptDatasetSync(dataset, activePasscode)
 		if err != nil {
+			syncApplyPaused = false
 			if app := appstate.Default; app != nil {
 				app.Log().Error("backend sync local encryption failed; snapshot not persisted", "err", err)
 			}
@@ -1915,31 +1949,65 @@ func saveSyncedDatasetThen(workspaceID string, dataset []byte, meta syncMeta, do
 			return
 		}
 	}
-	values, expected := prepareWorkspaceCommit(map[string]string{datasetStoreKey: string(payload), syncMetaKey(workspaceID): string(data)}, generation)
 	owner := currentDatasetOwner()
+	if meta.Server != "" && meta.Owner != "" {
+		if owner.ServerID != meta.Server || owner.UserID != meta.Owner {
+			syncApplyPaused = false
+			setSyncStatus(syncStatus{State: syncStateIdentityUnknown, AuthFailed: true, Message: uistate.T("sync.identityUnknown")})
+			return
+		}
+		owner = syncstate.DatasetOwner{ServerID: meta.Server, UserID: meta.Owner}
+	}
+	ownerRaw := ""
 	if owner.ServerID != "" && owner.UserID != "" {
 		encoded, err := json.Marshal(owner)
 		if err != nil {
+			syncApplyPaused = false
 			return
 		}
-		values[datasetOwnerKey] = string(encoded)
+		ownerRaw = string(encoded)
 	}
-	browserstore.SetSecureBatch(values, expected, func(err error) {
-		if err != nil {
-			logSyncError("backend sync local replacement failed", err)
-			message := "CashFlux could not save your server data on this device. Keep this page open and retry."
-			setSyncStatus(syncStatus{State: "error", Message: message})
-			markHostedHydrationError(message)
-			return
+	var attempt func(string, int)
+	attempt = func(generation string, retries int) {
+		updates := map[string]string{datasetStoreKey: string(payload), syncMetaKey(workspaceID): string(data)}
+		if ownerRaw != "" {
+			updates[datasetOwnerKey] = ownerRaw
 		}
-		datasetMyGen = values[datasetGenKey]
-		hadLocalDataset = true
-		noteSyncActivity()
-		setSyncStatus(syncStatus{State: "synced", Pending: pendingSyncCount(), LastSyncedAt: time.Now().UTC().Format(time.RFC3339Nano)})
-		if done != nil {
-			done()
-		}
-	})
+		values, expected := prepareWorkspaceCommit(updates, generation)
+		browserstore.SetSecureBatch(values, expected, func(err error) {
+			if err != nil {
+				// An autosave already in flight when the pull began may own the
+				// generation that won this CAS. Retry only when this same page
+				// adopted that generation; a different tab's write stays foreign.
+				if errors.Is(err, atrest.ErrRecordChanged) && retries < 3 && appstate.Default == app && activeWorkspaceID() == workspaceID && signedInUserID() == meta.Owner && datasetMyGen != generation && datasetMyGen == readDatasetGen() {
+					attempt(datasetMyGen, retries+1)
+					return
+				}
+				logSyncError("backend sync local replacement failed", err)
+				message := uistate.T("sync.localReplacementFailed")
+				setSyncStatus(syncStatus{State: "error", Message: message})
+				markHostedHydrationError(message)
+				return
+			}
+			datasetMyGen = values[datasetGenKey]
+			hadLocalDataset = true
+			if appstate.Default == app && activeWorkspaceID() == workspaceID {
+				hydratedRecordApp = app
+				hydratedRecordCursor, _ = app.Store().ChangeCursor()
+				hydratedRecordRevision = app.Rev()
+				if ownerRaw != "" {
+					lastAcceptedOwnerClaim = acceptedOwnerClaim{app: app, workspace: workspaceID, value: ownerRaw}
+				}
+			}
+			syncApplyPaused = false
+			noteSyncActivity()
+			setSyncStatus(syncStatus{State: "synced", Pending: pendingSyncCount(), LastSyncedAt: time.Now().UTC().Format(time.RFC3339Nano)})
+			if done != nil {
+				done()
+			}
+		})
+	}
+	attempt(datasetMyGen, 0)
 }
 
 // pendingCount caches the queue LENGTH so callers that only want a number never
@@ -2220,12 +2288,17 @@ func resolveConflictUseServer() {
 			setSyncStatus(syncStatus{State: "conflict"})
 			return
 		}
-		if err := importRemoteDataset(app, dataset); err != nil {
+		syncApplyPaused = true
+		committedPushJob++
+		localDataset, err := importRemoteDataset(app, dataset)
+		if err != nil {
+			syncApplyPaused = false
 			setSyncStatus(syncStatus{State: "conflict", Message: customSyncErrorMessage(err, "import failed"), AuthFailed: isAuthError(err)})
 			logSyncError("conflict resolve-server import failed", err)
 			return
 		}
 		if allowed, reason := syncstate.CheckPullScope(pulledWorkspaceID, activeWorkspaceID(), requestedOwner, signedInUserID()); !allowed {
+			syncApplyPaused = false
 			if app := appstate.Default; app != nil {
 				app.Log().Warn("conflict snapshot import abandoned because its scope changed", "reason", reason,
 					"pulledWorkspace", pulledWorkspaceID, "activeWorkspace", activeWorkspaceID(),
@@ -2236,12 +2309,13 @@ func resolveConflictUseServer() {
 		meta := syncMeta{
 			UpdatedAt: resp.Workspace.UpdatedAt,
 			Version:   resp.Workspace.Version,
-			Hash:      datasetHash(dataset),
+			Hash:      datasetHash(localDataset),
 			Owner:     requestedOwner,
+			Server:    datasetServerIDForURL(pr.ServerURL),
 		}
 		// Retain the recovery copy and the old generation until the replacement
 		// is durable; an in-memory import alone cannot acknowledge resolution.
-		saveSyncedDatasetThen(wID, dataset, meta, func() {
+		saveSyncedDatasetThen(wID, localDataset, meta, func() {
 			clearConflictBackup(wID)
 			uistate.PostNotice(uistate.T("sync.conflictResolvedUseServer"), false)
 			reloadPage()
@@ -2250,8 +2324,41 @@ func resolveConflictUseServer() {
 }
 
 func enqueueSyncMutation(item queuedSyncMutation) {
+	item.PageID = currentSyncPageID()
+	item.AncestorHash = ""
 	upsertQueuedSyncMutation(item)
 	setSyncStatus(syncStatus{State: "syncing", Pending: pendingSyncCount()})
+}
+
+var syncPageNonce string
+
+func currentSyncPageID() string {
+	if syncPageNonce == "" {
+		syncPageNonce = randomUUIDSafe(js.Global().Get("crypto"))
+		if syncPageNonce == "" {
+			syncPageNonce = fmt.Sprintf("page-%d-%d", time.Now().UnixNano(), rand.Int63())
+		}
+	}
+	return syncPageNonce
+}
+
+func queuedLineage(item queuedSyncMutation) syncstate.UploadLineage {
+	return syncstate.UploadLineage{
+		UserID: item.UserID, WorkspaceID: item.WorkspaceID, PageID: item.PageID,
+		Hash: item.Hash, AncestorHash: item.AncestorHash, BaseVersion: item.BaseVersion,
+	}
+}
+
+func rebaseQueuedSuccessorAfterAck(accepted queuedSyncMutation, version int64) {
+	queue := loadSyncQueue()
+	for i := range queue {
+		if !accepted.Force && !queue[i].Force && syncstate.CanRebaseQueuedSuccessor(queuedLineage(accepted), queuedLineage(queue[i]), version) {
+			queue[i].BaseVersion = version
+			queue[i].AncestorHash = ""
+			saveSyncQueue(queue)
+			return
+		}
+	}
 }
 
 func upsertQueuedSyncMutation(item queuedSyncMutation) {
@@ -2261,6 +2368,17 @@ func upsertQueuedSyncMutation(item queuedSyncMutation) {
 	// the next sign-in (adoptIdentityForSync).
 	if strings.TrimSpace(item.UserID) == "" {
 		item.UserID = signedInUserID()
+	}
+	if item.PageID != "" && item.AncestorHash == "" && !item.Force {
+		for _, prior := range queue {
+			if prior.UserID == item.UserID && prior.WorkspaceID == item.WorkspaceID && prior.PageID == item.PageID && !prior.Force && prior.BaseVersion == item.BaseVersion && prior.Hash != item.Hash {
+				item.AncestorHash = prior.AncestorHash
+				if item.AncestorHash == "" {
+					item.AncestorHash = prior.Hash
+				}
+				break
+			}
+		}
 	}
 	pending := make([]syncstate.PendingMutation, 0, len(queue))
 	for _, q := range queue {

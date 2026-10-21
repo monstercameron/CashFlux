@@ -7,6 +7,9 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Encrypted cloud snapshots now omit this browser's server address and credentials; a restored browser keeps its own connection in its protected local checkpoint.
+- Remote replacement now pauses autosave and queued uploads until its dataset, owner, and sync bookmark commit together. Later edits queued by the same page follow an accepted upload version without creating a false conflict.
+- The browser regression now verifies an encrypted file download, a second-browser edit, a clean queue, and restoration of that edit in a third browser.
 - The Smart Import WebAssembly regression now waits for its mocked response to reach the review state before fixture teardown, avoiding an intermittent CI callback crash.
 - Protected boot now encrypts legacy external files referenced by inactive workspace snapshots as well as the active workspace.
 - CI and release builds now use Go 1.26.10, which fixes the reported `crypto/x509` standard-library vulnerability.

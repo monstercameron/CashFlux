@@ -127,7 +127,15 @@ export async function login(page, username, password) {
   await page.getByTestId("password-auth-username").fill(username);
   await page.getByTestId("password-auth-password").fill(password);
   await page.getByTestId("password-auth-submit").click({ force: true });
-  await expect(page.getByRole("button", { name: "Sign out", exact: true })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("button", { name: "Sign out", exact: true })).toBeVisible({ timeout: 60_000 });
+  let previousGeneration = "";
+  let stable = 0;
+  await expect.poll(async () => {
+    const generation = await page.evaluate(() => window.cashfluxStoreGet?.("cashflux:dataset:gen") || "");
+    stable = generation && generation === previousGeneration ? stable + 1 : 0;
+    previousGeneration = generation;
+    return stable >= 4;
+  }, { timeout: 30_000, intervals: [500] }).toBe(true);
   await protectAndStartEncryptedSync(page);
 }
 

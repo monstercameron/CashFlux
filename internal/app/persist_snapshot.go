@@ -6,9 +6,11 @@ package app
 
 import "github.com/monstercameron/CashFlux/internal/appstate"
 
-// The local, undo and backend paths all consume the same credential-free JSON.
-// Retain a single immutable export per revision instead of reading every table
-// again for each consumer. A failed export never advances the cache key.
+// The local, undo and backend paths start from the same JSON snapshot. Local
+// protected checkpoints retain this device's connection preferences; the
+// backend strips them immediately before encrypting the shared payload. Retain
+// one immutable export per revision instead of reading every table again.
+// A failed export never advances the cache key.
 var datasetExportMemo struct {
 	app    *appstate.App
 	rev    uint64
