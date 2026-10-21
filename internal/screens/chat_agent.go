@@ -369,20 +369,6 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates, tier a
 		}
 		return strings.Join(ns, ", ")
 	}
-	resolveAccount := func(name string) (domain.Account, bool) {
-		q := strings.ToLower(strings.TrimSpace(name))
-		for _, ac := range accounts {
-			if strings.ToLower(ac.Name) == q {
-				return ac, true
-			}
-		}
-		for _, ac := range accounts {
-			if q != "" && strings.Contains(strings.ToLower(ac.Name), q) {
-				return ac, true
-			}
-		}
-		return domain.Account{}, false
-	}
 	periodRange := func(p string) (time.Time, time.Time, string) {
 		switch p {
 		case "last_month":
@@ -617,73 +603,6 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates, tier a
 			},
 		},
 		{
-			spec: ai.FunctionTool("add_transaction",
-				"Record a transaction. A negative amount is an expense, positive is income. Resolve account and category by name. (description is optional — a sensible one is used if omitted.)",
-				json.RawMessage(`{"type":"object","properties":{"amount":{"type":"number","description":"major units; negative = expense"},"account":{"type":"string"},"category":{"type":"string"},"payee":{"type":"string"},"description":{"type":"string"},"date":{"type":"string","description":"YYYY-MM-DD, defaults to today"}},"required":["amount","account"]}`)),
-			mutates: true,
-			preview: func(raw json.RawMessage) string {
-				var a struct {
-					Amount  float64 `json:"amount"`
-					Account string  `json:"account"`
-					Payee   string  `json:"payee"`
-				}
-				_ = json.Unmarshal(raw, &a)
-				return fmt.Sprintf("Record %s in %s%s", fmtMoney(money.New(currency.MinorFromMajor(a.Amount, base), base)), a.Account, ifStr(a.Payee != "", " — "+a.Payee, ""))
-			},
-			run: func(raw json.RawMessage) string {
-				var a struct {
-					Amount      float64 `json:"amount"`
-					Account     string  `json:"account"`
-					Category    string  `json:"category"`
-					Payee       string  `json:"payee"`
-					Description string  `json:"description"`
-					Date        string  `json:"date"`
-				}
-				if err := json.Unmarshal(raw, &a); err != nil {
-					return "Couldn't read the transaction details."
-				}
-				acc, ok := resolveAccount(a.Account)
-				if !ok {
-					return "No account matching “" + a.Account + "”."
-				}
-				// Desc is required by validation; derive a sensible one so the model never
-				// has to ask the user for it.
-				desc := strings.TrimSpace(a.Description)
-				if desc == "" {
-					desc = strings.TrimSpace(a.Payee)
-				}
-				if desc == "" {
-					if a.Amount >= 0 {
-						desc = "Income"
-					} else {
-						desc = "Expense"
-					}
-				}
-				amt := money.New(currency.MinorFromMajor(a.Amount, acc.Currency), acc.Currency)
-				t := domain.Transaction{ID: id.New(), AccountID: acc.ID, Amount: amt, Payee: strings.TrimSpace(a.Payee), Desc: desc, Date: now, Source: domain.TxnSourceAssistant}
-				if d, err := dateutil.ParseDate(a.Date); err == nil && a.Date != "" {
-					t.Date = d
-				}
-				if a.Category != "" {
-					if c, ok := resolveCategory(a.Category); ok {
-						t.CategoryID = c.ID
-					}
-				}
-				// Dedupe: skip an identical entry already recorded the same day.
-				for _, ex := range txns {
-					if ex.AccountID == t.AccountID && ex.Amount.Amount == t.Amount.Amount &&
-						ex.Date.Year() == t.Date.Year() && ex.Date.YearDay() == t.Date.YearDay() &&
-						strings.EqualFold(strings.TrimSpace(ex.Payee), t.Payee) {
-						return fmt.Sprintf("A matching transaction (%s in %s) is already recorded that day.%s", fmtMoney(amt), acc.Name, openLink("/transactions", ex.ID))
-					}
-				}
-				if err := app.PutTransaction(t); err != nil {
-					return "Couldn't record the transaction: " + err.Error()
-				}
-				return fmt.Sprintf("Recorded %s in %s.%s", fmtMoney(t.Amount), acc.Name, openLink("/transactions", t.ID))
-			},
-		},
-		{
 			spec: ai.FunctionTool("list_uncategorized_transactions",
 				"List the user's transactions that have no category yet, so you can propose categories for them. Returns up to `limit` (default 30) with payee, description, and amount.",
 				json.RawMessage(`{"type":"object","properties":{"limit":{"type":"integer"}}}`)),
@@ -710,108 +629,6 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates, tier a
 					return "Every transaction already has a category."
 				}
 				return fmt.Sprintf("%d uncategorized transaction(s):\n%s", n, b.String())
-			},
-		},
-		{
-			spec: ai.FunctionTool("create_category",
-				"Create a new spending or income category. Use this when the user's transactions aren't covered by any existing category. Returns the existing one instead if a category with that name already exists.",
-				json.RawMessage(`{"type":"object","properties":{"name":{"type":"string"},"kind":{"type":"string","enum":["expense","income"],"description":"defaults to expense"}},"required":["name"]}`)),
-			mutates: true,
-			preview: func(raw json.RawMessage) string {
-				var a struct {
-					Name string `json:"name"`
-					Kind string `json:"kind"`
-				}
-				_ = json.Unmarshal(raw, &a)
-				kind := "expense"
-				if strings.EqualFold(a.Kind, "income") {
-					kind = "income"
-				}
-				return fmt.Sprintf("Create the %s category “%s”.", kind, strings.TrimSpace(a.Name))
-			},
-			run: func(raw json.RawMessage) string {
-				var a struct {
-					Name string `json:"name"`
-					Kind string `json:"kind"`
-				}
-				if err := json.Unmarshal(raw, &a); err != nil {
-					return "Couldn't read the category details."
-				}
-				name := strings.TrimSpace(a.Name)
-				if name == "" {
-					return "A category needs a name."
-				}
-				for _, c := range cats {
-					if strings.EqualFold(c.Name, name) {
-						return fmt.Sprintf("A category “%s” already exists.%s", c.Name, openLink("/categories", c.ID))
-					}
-				}
-				kind := domain.KindExpense
-				if strings.EqualFold(a.Kind, "income") {
-					kind = domain.KindIncome
-				}
-				c := domain.Category{ID: id.New(), Name: name, Kind: kind}
-				if err := app.PutCategory(c); err != nil {
-					return "Couldn't create the category: " + err.Error()
-				}
-				return fmt.Sprintf("Created the category “%s”.%s", c.Name, openLink("/categories", c.ID))
-			},
-		},
-		{
-			spec: ai.FunctionTool("categorize_transactions",
-				"Assign a category to the user's transactions whose payee or description contains a phrase. Use to auto-categorize uncategorized transactions or to fix mis-categorized ones. Resolves the category by name; create it first with create_category if it doesn't exist.",
-				json.RawMessage(`{"type":"object","properties":{"match":{"type":"string","description":"case-insensitive phrase found in the payee or description"},"category":{"type":"string"},"only_uncategorized":{"type":"boolean","description":"when true (default), only change transactions that currently have no category; set false to also re-categorize"}},"required":["match","category"]}`)),
-			mutates: true,
-			preview: func(raw json.RawMessage) string {
-				var a struct {
-					Match             string `json:"match"`
-					Category          string `json:"category"`
-					OnlyUncategorized *bool  `json:"only_uncategorized"`
-				}
-				_ = json.Unmarshal(raw, &a)
-				onlyUncat := a.OnlyUncategorized == nil || *a.OnlyUncategorized
-				n := countTxnMatches(txns, a.Match, onlyUncat)
-				return fmt.Sprintf("Set %s matching “%s” to %s.", plural(n, "transaction"), strings.TrimSpace(a.Match), strings.TrimSpace(a.Category))
-			},
-			run: func(raw json.RawMessage) string {
-				var a struct {
-					Match             string `json:"match"`
-					Category          string `json:"category"`
-					OnlyUncategorized *bool  `json:"only_uncategorized"`
-				}
-				if err := json.Unmarshal(raw, &a); err != nil {
-					return "Couldn't read the details."
-				}
-				q := strings.ToLower(strings.TrimSpace(a.Match))
-				if q == "" {
-					return "Give a phrase to match on."
-				}
-				c, ok := resolveCategory(a.Category)
-				if !ok {
-					return "No category matching “" + a.Category + "”. Create it first with create_category. Existing: " + catNames() + "."
-				}
-				onlyUncat := a.OnlyUncategorized == nil || *a.OnlyUncategorized
-				changed := 0
-				for _, t := range txns {
-					if t.IsTransfer() || t.CategoryID == c.ID {
-						continue
-					}
-					if onlyUncat && t.CategoryID != "" {
-						continue
-					}
-					if !strings.Contains(strings.ToLower(t.Payee+" "+t.Desc), q) {
-						continue
-					}
-					t.CategoryID = c.ID
-					if err := app.PutTransaction(t); err != nil {
-						return fmt.Sprintf("Set %d, then hit an error: %s", changed, err.Error())
-					}
-					changed++
-				}
-				if changed == 0 {
-					return fmt.Sprintf("No transactions matched “%s”.", strings.TrimSpace(a.Match))
-				}
-				return fmt.Sprintf("Categorized %s as %s.", plural(changed, "transaction"), c.Name)
 			},
 		},
 		{
@@ -933,6 +750,7 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates, tier a
 	tools = append(tools, agToolsTransactionWrites(app)...)
 	tools = append(tools, agToolsFormula(app, base, rates)...)
 	tools = append(tools, agToolsAccountWrites(app)...)
+	tools = append(tools, agToolsCreation(app, base, rates)...)
 	tools = append(tools, agToolsTrust(app, base, rates)...)
 	tools = append(tools, agToolsAuditor(app, base, rates)...)
 	tools = append(tools, agToolsAuthoring(app, base, rates)...)

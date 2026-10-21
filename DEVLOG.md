@@ -1,3 +1,7 @@
+## 2026-10-21 - Exact Assistant transaction creation and categorization
+
+Replaced float amounts and ambiguous substring selection with exact decimal parsing, stable IDs or exact unique names, validated effective fields and canonical duplicate checks. Public signed cash flow maps through each account liability convention. Categorization previews every affected ID, excludes transfers, preserves other fields and rejects a changed match set or stale row atomically. Six focused native groups/vet and all seven real-App WASM creation groups passed in integrated pass7.
+
 ## 2026-10-21 - Preview-bound account reconciliation and transfers
 
 Added immutable expected-state native APIs for reconciliation and transfers, using shared checkpoint/transfer math and atomic replay. Repeated checkpoints replace against the underlying ledger correctly; returning to that ledger removes old checkpoints without a zero row. Balances and both currency legs are previewed; stale ledger/account/rate context refuses execution. Transfers retain explicit idempotency keys and assistant source. Native provisional/appstate suites and expected retry regression passed; all five actual account-write WASM groups passed in integrated pass8.
