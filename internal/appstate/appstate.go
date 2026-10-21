@@ -1082,6 +1082,13 @@ func (a *App) DeleteCategory(id string) error {
 	if err := a.roleGuard(); err != nil {
 		return err
 	}
+	refs, err := a.CategoryDeleteReferences(id)
+	if err != nil {
+		return fmt.Errorf("appstate: check category references before deleting %q: %w", id, err)
+	}
+	if refs.Total() != 0 {
+		return fmt.Errorf("appstate: category %q still has %d live reference(s); reassign them before deleting", id, refs.Total())
+	}
 	for _, child := range categorytree.ReparentOnDelete(a.Categories(), id) {
 		if err := a.store.PutCategory(child); err != nil {
 			return fmt.Errorf("appstate: re-home child %q before deleting %q: %w", child.ID, id, err)

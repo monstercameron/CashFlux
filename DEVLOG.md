@@ -1,3 +1,7 @@
+## 2026-10-21 - Guard category deletion with complete references
+
+The native guard checks split transactions, multi-category budgets, goals, rules, recurring templates, learned tally and widget bindings through checked reads. Existing child reparent behavior remains. Full native appstate tests and vet pass, including reference-specific and child reparent tests. The Categories view migration is a separate slice.
+
 ## 2026-10-21 - Retry failed cached source reads
 
 A checked loader error now leaves the prior cache state untouched. The same-revision failure-to-success regression also verifies returned-slice ownership. Full native appstate tests and vet pass. Other appstate category/workflow changes remain separate.
