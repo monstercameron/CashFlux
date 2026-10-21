@@ -172,7 +172,8 @@ ui.Segmented(ui.SegmentedProps{Options: []ui.SegOption{{Value: "month", Label: "
 ### SegmentedControl (`segmented.go`)
 **Purpose:** Keyed pressed choices or tabs with caller-owned classes, optional
 counts, disabled options and stable test IDs. To-do uses pressed choices for
-views/date lenses; Notifications uses tabs for triage. `Segmented` above retains
+views/date lenses; Notifications uses tabs for triage and Goals uses tabs for
+Goals/Earmarks. `Segmented` above retains
 its animated radio-group presentation.
 
 Use stable, unique, nonempty keys. The group and button children own their hooks;

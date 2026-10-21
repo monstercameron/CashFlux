@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Goals and Earmarks tabs use the shared segmented control with keyboard navigation and roving focus.
 - The account detail forecast includes 90 days of recurring events while its near-term summary retains 30 days.
 - Shared report-scope hooks avoid repeated storage reads and legacy migration on warm renders.
 - Screen selectors remove an unused budget-health hook that duplicated native budget-view preparation.

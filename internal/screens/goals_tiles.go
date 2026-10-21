@@ -117,27 +117,22 @@ func goalToolbarWidget(props goalToolbarProps) ui.Node {
 	onSort := ui.UseEvent(func(e ui.Event) { sortAtom.Set(e.GetValue()) })
 	compareAtom := uistate.UseGoalCompareOpen()
 	openCompare := ui.UseEvent(Prevent(func() { compareAtom.Set(true) }))
-	showGoals := ui.UseEvent(Prevent(func() { viewAtom.Set(uistate.GoalsViewGoals) }))
-	showEarmarks := ui.UseEvent(Prevent(func() { viewAtom.Set(uistate.GoalsViewEarmarks) }))
 	sortVal := sortAtom.Get()
 	view := viewAtom.Get()
-	goalsActive, earmarksActive := "goals-tab", "goals-tab"
-	if view == uistate.GoalsViewGoals {
-		goalsActive += " is-active"
-	} else {
-		earmarksActive += " is-active"
-	}
 	// A tab strip (Goals · Earmarks) + a "Sort by" picker (goals view only) on the left, the
 	// primary "Add goal" pushed to the right.
 	toolbar := uiw.ControlStrip(uiw.ControlStripProps{
 		Label: uistate.T("goals.toolbarLabel"),
 		Controls: []ui.Node{
-			Div(css.Class("goals-tabs"), Attr("role", "tablist"),
-				Button(ClassStr(goalsActive), Type("button"), Attr("role", "tab"), Attr("data-testid", "goals-tab-goals"),
-					Attr("aria-selected", ariaBool(view == uistate.GoalsViewGoals)), OnClick(showGoals), uistate.T("goals.viewGoals")),
-				Button(ClassStr(earmarksActive), Type("button"), Attr("role", "tab"), Attr("data-testid", "goals-tab-earmarks"),
-					Attr("aria-selected", ariaBool(view == uistate.GoalsViewEarmarks)), OnClick(showEarmarks), uistate.T("goals.viewEarmarks")),
-			),
+			uiw.SegmentedControl(uiw.SegmentedControlProps{
+				Tabs: true, Label: uistate.T("goals.toolbarLabel"), Class: "goals-tabs",
+				ButtonClass: "goals-tab", ActiveClass: "is-active", Selected: view,
+				Options: []uiw.SegmentOption{
+					{Key: uistate.GoalsViewGoals, Label: uistate.T("goals.viewGoals"), TestID: "goals-tab-goals"},
+					{Key: uistate.GoalsViewEarmarks, Label: uistate.T("goals.viewEarmarks"), TestID: "goals-tab-earmarks"},
+				},
+				OnSelect: viewAtom.Set,
+			}),
 			If(view == uistate.GoalsViewGoals, Label(css.Class("fctrl"),
 				uiw.Icon(icon.List, css.Class(tw.ShrinkO, tw.W35, tw.H35)),
 				Span(css.Class("fctrl-label"), uistate.T("goals.sortLabel")),

@@ -1,3 +1,7 @@
+## 2026-10-20 - Reuse shared keyboard tabs on Goals
+
+Replaced the hand-built Goals tab buttons with the established configurable SegmentedControl Tabs. Existing labels, classes, test IDs, view atom callbacks, sort visibility and uncounted presentation remain intact. The shared component adds ArrowLeft/Right wrapping, Home/End, stable tab IDs, selected ARIA state and roving tab stops. Native segment/stable-hook checks passed. Four focused actual-host WASM tests passed, including keyboard/content/data transitions and existing FX/task-preview regressions. Component inventory now records Goals adoption.
+
 ## 2026-10-20 - Use independent account projection horizons
 
 Added native ProjectionInputs.ProjectPair to expand recurring occurrences once through the longer horizon and filter each exact timestamp boundary before calendar-day normalization. This fixes the forward chart previously receiving only 30 days of drivers. The 30-day summary remains separate; a flow one hour beyond its endpoint cannot leak in from the longer window. Native accountview tests and vet passed, including independent App.ProjectAccount parity, exact boundaries, later flows, reversed/zero horizons and unknown cadence fallback. The actual lazy Accounts host test passed, showing a debit after day 30 affects the 90-day warning but not the near-term driver list. Single-window projection avoids redundant filtering.
