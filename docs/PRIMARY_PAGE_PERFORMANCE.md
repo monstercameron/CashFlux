@@ -278,3 +278,29 @@ The same run includes 1,000-row cases. Raw results are in the task workspace at
 on the machine, so elapsed values are local observations rather than browser
 performance guarantees. The allocation reduction is direct evidence that the
 repeated parsing work was removed; numeric parsing primarily reduces CPU work.
+
+## Native undo snapshot key preparation
+
+The typed snapshot converter now resolves direct row-key fields once per
+collection instead of decoding every newly encoded row just to find its key.
+Unknown custom encoders, embedded fields, ambiguous tags and case variants keep
+the wire-JSON fallback. Exact snapshot bytes, device-key redaction, receipts,
+nil/empty collections and duplicate-key errors remain covered by parity tests.
+Six actual app-host snapshot cache tests also passed.
+
+A three-sample, one-CPU benchmark of 3,000 transactions compared the legacy
+export/parse path, the prior typed converter and the optimized typed converter:
+
+| Path | Median time | Allocations per operation | Bytes per operation, approximately |
+| --- | ---: | ---: | ---: |
+| Legacy export and parse | 34.33 ms | 39,116 | 8.58 MB |
+| Prior typed converter | 23.03 ms | 45,187 | 6.90 MB |
+| Typed converter with prepared keys | 13.74 ms | 24,229 | 6.14 MB |
+
+This ran with Go 1.26.9 targeting Windows AMD64 on an ARM64 host while other
+functional development work was active. It excludes the SQLite snapshot read
+and does not measure startup or browser navigation. The reduction in allocations
+is direct evidence of removed row decoding; elapsed times are local observations.
+Raw output is in the task workspace at `work/primary-snapshot-key-bench.log`.
+The reproducible benchmark is `BenchmarkSnapshot3000Transactions` in
+`internal/undosnap/dataset_snapshot_bench_test.go` (`-count=3 -cpu=1 -benchmem`).

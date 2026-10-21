@@ -244,6 +244,63 @@ func TestToSnapshotDatasetNilAndEmptyCollectionsMatchExport(t *testing.T) {
 	}
 }
 
+func TestToSnapshotDatasetKeyValidationRemainsStrict(t *testing.T) {
+	tests := []struct {
+		name string
+		ds   store.Dataset
+	}{
+		{name: "missing id", ds: store.Dataset{Accounts: []domain.Account{{Name: "no id"}}}},
+		{name: "duplicate id", ds: store.Dataset{Accounts: []domain.Account{{ID: "same"}, {ID: "same"}}}},
+		{name: "missing molecule name", ds: store.Dataset{Molecules: []domain.Molecule{{Formula: "x"}}}},
+		{name: "missing placement surface", ds: store.Dataset{Placements: []domain.Placement{{ID: "same"}}}},
+		{name: "missing placement id", ds: store.Dataset{Placements: []domain.Placement{{Surface: "dashboard"}}}},
+		{name: "duplicate composite placement key", ds: store.Dataset{Placements: []domain.Placement{{ID: "same", Surface: "dashboard"}, {ID: "same", Surface: "dashboard"}}}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := undosnap.ToSnapshotDataset(tc.ds); err == nil {
+				t.Fatal("ToSnapshotDataset succeeded; want key validation error")
+			}
+		})
+	}
+}
+
+func TestToSnapshotDatasetTransactionCustomMarshalerPreservesKeyAndRawFields(t *testing.T) {
+	transaction := domain.Transaction{
+		ID:        "transaction-key",
+		MemberIDs: []string{"owner-z", "", "owner-a", "owner-z"},
+		MemberID:  "legacy-owner",
+		Custom: map[string]any{
+			"graph": json.RawMessage(` { "nodes": [ { "id": "n1" } ] } `),
+		},
+	}
+	ds := store.Dataset{Transactions: []domain.Transaction{transaction}}
+	before := ds.Transactions[0]
+	redacted := ds
+	redacted.Settings.OpenAIKey = ""
+	exported, err := store.Export(redacted)
+	if err != nil {
+		t.Fatalf("store.Export: %v", err)
+	}
+	want, err := undosnap.ToSnapshot(exported)
+	if err != nil {
+		t.Fatalf("ToSnapshot(export): %v", err)
+	}
+	got, err := undosnap.ToSnapshotDataset(ds)
+	if err != nil {
+		t.Fatalf("ToSnapshotDataset: %v", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("transaction snapshot mismatch\n got: %#v\nwant: %#v", got["transactions"], want["transactions"])
+	}
+	if _, ok := got["transactions"]["transaction-key"]; !ok {
+		t.Fatalf("custom marshaler changed direct row key: %#v", got["transactions"])
+	}
+	if !reflect.DeepEqual(ds.Transactions[0], before) {
+		t.Fatal("typed key extraction mutated transaction owners or custom payload")
+	}
+}
+
 func populateEveryDatasetSlice(t *testing.T, dataset *store.Dataset) {
 	t.Helper()
 	value := reflect.ValueOf(dataset).Elem()

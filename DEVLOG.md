@@ -1,3 +1,7 @@
+## 2026-10-20 - Prepare typed snapshot row keys once per collection
+
+The snapshot converter resolves direct unique exported string keys once per collection, preserving the wire-JSON fallback for custom encoders, embedded fields, ambiguous tags and case variants. Transaction encoding is narrowly audited to preserve ID. Full native snapshot parity and adversarial key tests passed from a compiled binary; explicit package vet passed. Six actual app-host snapshot cache tests passed before the conservative resolver tightening. A three-sample CPU1 native benchmark of 3000 transactions reduced allocations from about45187 to24229 and bytes from6.90MB to6.14MB relative to the previous typed path; timing and its Windows AMD64 target/ARM64 host limitations are documented. SQLite reads and browser latency are outside this benchmark.
+
 ## 2026-10-20 - Reject invalid WASM test artifacts at compile time
 
 Disk pressure produced an empty test artifact despite a successful Go compiler exit. Compile-TestBinary now verifies the expected output exists and reads only its eight-byte WebAssembly magic and version header, with package and path in errors. Both fresh and rerun compiles use the guard. Isolated AST-loaded validation passed under Windows PowerShell 5.1 for missing, empty, truncated, invalid version, invalid magic, exclusively locked and valid artifacts; it does not execute runner environment setup or invoke Go.

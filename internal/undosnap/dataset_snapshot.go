@@ -3,6 +3,7 @@
 package undosnap
 
 import (
+	"encoding"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -44,13 +45,15 @@ func ToSnapshotDataset(ds store.Dataset) (history.Snapshot, error) {
 				continue
 			}
 			rows := make(map[string]json.RawMessage, fieldValue.Len())
+			keyFields := resolveCollectionKeyFields(name, field.Type.Elem())
 			for rowIndex := 0; rowIndex < fieldValue.Len(); rowIndex++ {
-				row := fieldValue.Index(rowIndex).Interface()
+				rowValue := fieldValue.Index(rowIndex)
+				row := rowValue.Interface()
 				raw, err := marshalIndentedValue(row, "    ")
 				if err != nil {
 					return nil, fmt.Errorf("undosnap: marshal %s row %d: %w", name, rowIndex, err)
 				}
-				key, err := extractCollectionKey(name, raw)
+				key, err := extractCollectionKeyTyped(name, rowValue, raw, keyFields)
 				if err != nil {
 					return nil, fmt.Errorf("undosnap: element %d of %q: %w", rowIndex, name, err)
 				}
@@ -70,6 +73,110 @@ func ToSnapshotDataset(ds store.Dataset) (history.Snapshot, error) {
 		snap["_meta:"+name] = map[string]json.RawMessage{name: raw}
 	}
 	return snap, nil
+}
+
+type collectionKeyFields struct {
+	primaryIndex []int
+	surfaceIndex []int
+	safe         bool
+}
+
+// resolveCollectionKeyFields examines a row type once per collection. It only
+// enables typed extraction for direct, unique, exported string fields with the
+// same effective JSON names used by the wire key extractor. Unknown shapes and
+// custom JSON marshalers use the raw-JSON fallback.
+func resolveCollectionKeyFields(collection string, rowType reflect.Type) collectionKeyFields {
+	if rowType.Kind() == reflect.Pointer {
+		rowType = rowType.Elem()
+	}
+	if rowType.Kind() != reflect.Struct || (hasCustomRowEncoding(rowType) && !customJSONPreservesCollectionKey(collection, rowType)) {
+		return collectionKeyFields{}
+	}
+	primaryName := "id"
+	if collection == "molecules" {
+		primaryName = "name"
+	}
+	primaryIndex, primaryOK := directJSONFieldIndex(rowType, primaryName)
+	if !primaryOK {
+		return collectionKeyFields{}
+	}
+	fields := collectionKeyFields{primaryIndex: primaryIndex, safe: true}
+	if collection == "placements" {
+		fields.surfaceIndex, fields.safe = directJSONFieldIndex(rowType, "surface")
+		if !fields.safe {
+			return collectionKeyFields{}
+		}
+	}
+	return fields
+}
+
+// Transaction.MarshalJSON normalizes the owner fields on a value copy, then
+// marshals an alias of the full struct. Its explicit id field is not changed,
+// so direct key extraction remains equivalent while the conservative fallback
+// stays enabled for every other custom row encoder.
+func customJSONPreservesCollectionKey(collection string, rowType reflect.Type) bool {
+	return collection == "transactions" && rowType == reflect.TypeOf(domain.Transaction{})
+}
+
+func hasCustomRowEncoding(rowType reflect.Type) bool {
+	jsonMarshaler := reflect.TypeOf((*json.Marshaler)(nil)).Elem()
+	textMarshaler := reflect.TypeOf((*encoding.TextMarshaler)(nil)).Elem()
+	for _, typ := range []reflect.Type{rowType, reflect.PointerTo(rowType)} {
+		if typ.Implements(jsonMarshaler) || typ.Implements(textMarshaler) {
+			return true
+		}
+	}
+	return false
+}
+
+func directJSONFieldIndex(rowType reflect.Type, wanted string) ([]int, bool) {
+	var index []int
+	for i := 0; i < rowType.NumField(); i++ {
+		field := rowType.Field(i)
+		if field.Anonymous {
+			// Embedded fields can promote JSON names in ways that are not
+			// captured by this direct-field scan. Keep these row types on the
+			// wire-key path, even when the embedded field looks unrelated.
+			return nil, false
+		}
+		if field.PkgPath != "" {
+			continue
+		}
+		name, _, ok := jsonField(field)
+		if !ok || !strings.EqualFold(name, wanted) {
+			continue
+		}
+		// encoding/json accepts case-insensitive field matches, while the
+		// collection key extractor reads the exact canonical JSON property.
+		// Any case variant or same-name field of another type is ambiguous for
+		// typed extraction, even if an exact string field is also present.
+		if name != wanted || field.Type.Kind() != reflect.String || index != nil {
+			return nil, false
+		}
+		index = field.Index
+	}
+	return index, index != nil
+}
+
+func extractCollectionKeyTyped(collection string, row reflect.Value, raw json.RawMessage, fields collectionKeyFields) (string, error) {
+	if !fields.safe || row.Kind() == reflect.Pointer || row.Kind() != reflect.Struct {
+		return extractCollectionKey(collection, raw)
+	}
+	primary := row.FieldByIndex(fields.primaryIndex).String()
+	if primary == "" {
+		if collection == "molecules" {
+			return "", fmt.Errorf("element has no non-empty \"name\" field")
+		}
+		return "", fmt.Errorf("element has no non-empty \"id\" field")
+	}
+	if collection == "placements" {
+		surface := row.FieldByIndex(fields.surfaceIndex).String()
+		if surface == "" {
+			return "", fmt.Errorf("placement has no non-empty \"surface\" or \"id\" field")
+		}
+		return surface + "/" + primary, nil
+	}
+	return primary, nil
 }
 
 func jsonField(field reflect.StructField) (string, map[string]bool, bool) {
