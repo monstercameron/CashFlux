@@ -50,6 +50,29 @@ const projectionSteps = 2000
 // added to every projected month, keyed by its CategoryID when set, otherwise by
 // each of its BudgetIDs.
 func Project(recs []domain.Recurring, gs []domain.Goal, year, fromMonth int, base string, rates currency.Rates) Projection {
+	return project(recs, gs, year, fromMonth, base, rates, goals.MonthlyAssignment, false)
+}
+
+// ProjectWithGoalRates preserves explicit monthly goal assignments and evaluates
+// derived assignments with canonical, rate-aware goal coverage. Unknown coverage
+// or assignment conversions set Error, so annual consumers cannot show false zero
+// projections. Project retains its existing omission contract for other callers.
+func ProjectWithGoalRates(recs []domain.Recurring, gs []domain.Goal, year, fromMonth int, base string, rates currency.Rates) Projection {
+	assignment := func(goal domain.Goal, from time.Time) (money.Money, bool, error) {
+		if !goal.IsFinancial() {
+			return money.Money{}, false, nil
+		}
+		if goal.MonthlyContribution.Amount > 0 {
+			return goal.MonthlyContribution, true, nil
+		}
+		evaluation := goals.EvaluateGoal(goal, goals.TaskSummary{}, rates, from)
+		return evaluation.MonthlyNeeded, evaluation.HasMonthlyNeeded, evaluation.Err
+	}
+	return project(recs, gs, year, fromMonth, base, rates, assignment, true)
+}
+
+func project(recs []domain.Recurring, gs []domain.Goal, year, fromMonth int, base string, rates currency.Rates,
+	assignment func(domain.Goal, time.Time) (money.Money, bool, error), strictGoals bool) Projection {
 	if fromMonth < 0 {
 		fromMonth = 0
 	}
@@ -122,12 +145,24 @@ func Project(recs []domain.Recurring, gs []domain.Goal, year, fromMonth int, bas
 		var any bool
 		for m := fromMonth; m < 12; m++ {
 			from := time.Date(year, time.Month(m+1), 1, 0, 0, 0, 0, time.UTC)
-			assign, ok, err := goals.MonthlyAssignment(g, from)
-			if err != nil || !ok || assign.Amount <= 0 {
+			assign, ok, err := assignment(g, from)
+			if err != nil {
+				if strictGoals {
+					p.Error = fmt.Errorf("goal %q assignment: %w", g.ID, err)
+				}
+				continue
+			}
+			if !ok || assign.Amount <= 0 {
 				continue
 			}
 			minor, err := currency.ConvertBetween(assign.Amount, assign.Currency, base, rates)
-			if err != nil || minor <= 0 {
+			if err != nil {
+				if strictGoals {
+					p.Error = fmt.Errorf("goal %q assignment conversion: %w", g.ID, err)
+				}
+				continue
+			}
+			if minor <= 0 {
 				continue
 			}
 			any = true

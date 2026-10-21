@@ -11,6 +11,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
+	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/money"
 )
 
@@ -29,8 +30,9 @@ type QuestionFacts struct {
 // Questions scans current-period expenses once for both category totals and the
 // largest purchase. Category and budget ties preserve the supplied view order.
 // Unconvertible purchases can still need categorization, but their raw foreign
-// minor units must never become a base-currency amount in a question.
-func Questions(txns []domain.Transaction, categories []domain.Category, statuses []budgeting.Status, goals []domain.Goal, rates currency.Rates, start, end, now time.Time) QuestionFacts {
+// minor units must never become a base-currency amount in a question. An optional
+// shared task index lets completed checklist goals step aside as starter subjects.
+func Questions(txns []domain.Transaction, categories []domain.Category, statuses []budgeting.Status, goalList []domain.Goal, rates currency.Rates, start, end, now time.Time, taskIndexes ...map[string]goalsvc.TaskSummary) QuestionFacts {
 	var out QuestionFacts
 	topSpend := make(map[string]int64)
 	for _, txn := range txns {
@@ -85,8 +87,15 @@ func Questions(txns []domain.Transaction, categories []domain.Category, statuses
 		}
 	}
 	var soonest time.Time
-	for _, goal := range goals {
+	var taskIndex map[string]goalsvc.TaskSummary
+	if len(taskIndexes) > 0 {
+		taskIndex = taskIndexes[0]
+	}
+	for _, goal := range goalList {
 		if goal.Archived || goal.TargetDate.IsZero() || !goal.TargetDate.After(now) {
+			continue
+		}
+		if evaluation := goalsvc.EvaluateGoal(goal, taskIndex[goal.ID], rates, now); evaluation.Err == nil && evaluation.Complete {
 			continue
 		}
 		if soonest.IsZero() || goal.TargetDate.Before(soonest) {

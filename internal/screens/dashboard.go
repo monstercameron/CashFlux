@@ -25,7 +25,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/engineenv"
 	"github.com/monstercameron/CashFlux/internal/freshness"
-	"github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/insights"
 	"github.com/monstercameron/CashFlux/internal/ledger"
@@ -2026,6 +2025,7 @@ func todoMoreLink(props todoMoreProps) ui.Node {
 // feature the goal nearest completion, and the target-date caption is optional.
 func goalsWidget(app *appstate.App, cfg widgetcfg.Config) ui.Node {
 	pr := uistate.UsePrefs().Get()
+	_ = uistate.UseDataRevision().Get()
 	byProgress, showDate := false, true
 	if sch, ok := widgetcfg.SchemaFor("goals"); ok {
 		if f, ok := sch.FieldByKey("byProgress"); ok {
@@ -2035,48 +2035,49 @@ func goalsWidget(app *appstate.App, cfg widgetcfg.Config) ui.Node {
 			showDate = f.Bool(cfg)
 		}
 	}
-	list := app.Goals()
-	if len(list) == 0 {
+	featured, hasGoal := dashboardGoalFacts(app, time.Now()).Featured(byProgress)
+	if !hasGoal {
 		return uiw.Widget(uiw.WidgetProps{
 			ID: "goals", Title: uistate.T("nav.goals"), Draggable: true, Resizable: true, GridColumn: "1", GridRow: "5",
 			Body: ui.CreateElement(emptyAddCTA, emptyAddProps{Message: uistate.T("dashboard.noGoalsYet"), Label: uistate.T("dashboard.addGoal"), Path: "/goals"}),
 		})
 	}
-	g := list[0]
-	if byProgress {
-		// Feature the goal nearest completion (highest percent; first wins ties).
-		best := goals.Percent(g)
-		for _, cand := range list[1:] {
-			if p := goals.Percent(cand); p > best {
-				best, g = p, cand
-			}
-		}
-	}
+	g, evaluation := featured.Goal, featured.Evaluation
 	// Coverage % (saved + set aside) is the SAME figure /goals headlines, so the two
 	// surfaces tell one story instead of the widget showing only cash-in-hand. The
 	// breakdown sub-line keeps the saved-vs-earmarked split honest.
-	cov := goals.CoveragePercent(g)
-	earmark := g.AllocatedMinor()
-	cur := g.TargetAmount.Currency
-	if cur == "" {
-		cur = g.CurrentAmount.Currency
+	cov := evaluation.Progress.Percent
+	if g.IsFinancial() && evaluation.Err == nil {
+		cov = evaluation.Coverage.CoveragePercent
 	}
 	caption := fmt.Sprintf("%d%%", cov)
+	if evaluation.Err != nil {
+		caption = uistate.T("calculation.unavailable")
+	}
 	if showDate && !g.TargetDate.IsZero() {
 		caption += " · by " + pr.FormatDate(g.TargetDate)
 	}
 	var metaLine string
-	if earmark > 0 {
-		metaLine = uistate.T("dashboard.goalSavedSetAside", fmtMoney(g.CurrentAmount), fmtMoney(money.New(earmark, cur)), fmtMoney(g.TargetAmount))
-	} else {
-		metaLine = uistate.T("dashboard.goalSavedOf", fmtMoney(g.CurrentAmount), fmtMoney(g.TargetAmount))
+	switch {
+	case evaluation.Err != nil:
+		metaLine = uistate.T("dashboard.goalUnavailable")
+	case !g.IsFinancial():
+		metaLine = uistate.T("dashboard.goalNonFinancialProgress", evaluation.Progress.Done, evaluation.Progress.Total)
+	case evaluation.Coverage.SetAside.Amount > 0:
+		metaLine = uistate.T("dashboard.goalSavedSetAside", fmtMoney(evaluation.Coverage.Saved), fmtMoney(evaluation.Coverage.SetAside), fmtMoney(g.TargetAmount))
+	default:
+		metaLine = uistate.T("dashboard.goalSavedOf", fmtMoney(evaluation.Coverage.Saved), fmtMoney(g.TargetAmount))
+	}
+	var progressBar ui.Node = Fragment()
+	if evaluation.Err == nil {
+		progressBar = uiw.ProgressBar(uiw.ProgressBarProps{Percent: cov, Tone: "bg-up", Class: "mt-2"})
 	}
 	body := Div(
 		Div(css.Class("t-body", tw.Flex, tw.JustifyBetween),
 			Span(css.Class(tw.TextDim), uistate.T("goals.progressLabel")),
 			Span(css.Class("fig t-body", tw.FontDisplay), caption),
 		),
-		uiw.ProgressBar(uiw.ProgressBarProps{Percent: cov, Tone: "bg-up", Class: "mt-2"}),
+		progressBar,
 		Div(css.Class("t-caption", tw.TextDim, tw.Mt15), metaLine),
 	)
 	return uiw.Widget(uiw.WidgetProps{

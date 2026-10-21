@@ -27,6 +27,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/flagverdict"
+	"github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
 	"github.com/monstercameron/CashFlux/internal/insights"
@@ -146,7 +147,7 @@ func Insights() ui.Node {
 	// Day is a dependency because budget cadence and upcoming goals can change
 	// without a store mutation while this conversation remains mounted.
 	starters := ui.UseMemo(func() []string {
-		facts := assistantview.Questions(scopedTxns, app.Categories(), budgetStatusesAt(app, now), app.Goals(), rates, mStart, mEnd, now)
+		facts := assistantview.Questions(scopedTxns, app.Categories(), budgetStatusesAt(app, now), app.Goals(), rates, mStart, mEnd, now, goals.BuildTaskIndex(app.Tasks()))
 		ctx := insights.QuestionContext{
 			TopCategory: facts.TopCategory, NearLimitBudget: facts.NearLimitBudget,
 			UpcomingGoal: facts.UpcomingGoal, OverBudgetCount: facts.OverBudgetCount,

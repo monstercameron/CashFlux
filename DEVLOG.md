@@ -1,3 +1,7 @@
+## 2026-10-20 - Share checked goal facts across budget and dashboard consumers
+
+Consumers now distinguish known completion from unavailable goal coverage and preserve original stored amounts. Budget savings cannot offer Sync or funded status for unknown coverage; linked targets and sinking funds derive converted remaining needs. A rate-aware annual-projection entry point preserves explicit plans while exposing unavailable inferred assignments. Dashboard featured goals and lifecycle counts share one indexed native model; Assistant starter questions skip confirmed completed goals. Native budgetplan, budgetview, dashboardview and assistantview tests pass, and all three new actual-screen currency regressions pass within the complete 817-test WASM screen suite.
+
 ## 2026-10-20 - Keep goal wins consistent with checked coverage
 
 Recent wins now requires known canonical goal completion, preventing celebrations from unconvertible or overflowed saved and reserved amounts. Existing milestone names and seen keys remain unchanged. Native notificationview tests cover foreign reservations, saved currency, missing rates, canonical parity, Unicode names and rate-only transitions; the actual Notifications tile/store regression and full 817-test screen suite pass.

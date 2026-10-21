@@ -859,6 +859,12 @@ func budgetSavingsGoalNode(sa savingsAcct, onSync ui.Handler) ui.Node {
 			Span(css.Class("zbb-savings-goal-name"), uistate.T("budgets.savingsFunds", sa.GoalName)),
 			Span(css.Class("zbb-savings-goal-time"), uistate.T("budgets.savingsFunded")))
 	}
+	if sa.GoalError != nil {
+		return Div(css.Class("zbb-savings-goal"),
+			Span(css.Class("zbb-savings-goal-name"), uistate.T("budgets.savingsFunds", sa.GoalName)),
+			Span(css.Class("zbb-savings-goal-time"), Attr("role", "status"), Attr("data-testid", "budgets-savings-goal-unavailable-"+sa.AccountID),
+				uistate.T("budgets.savingsGoalUnavailable")))
+	}
 	// No amount set yet — invite one, no projection to make.
 	if sa.Monthly <= 0 {
 		return Div(css.Class("zbb-savings-goal"),

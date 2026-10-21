@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
-	"github.com/monstercameron/CashFlux/internal/goals"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -29,7 +28,8 @@ func goalStatesWidget(app *appstate.App) ui.Node {
 	nav := router.UseNavigate()
 	open := ui.UseEvent(func() { nav.Navigate(uistate.RoutePath("/goals")) })
 
-	c := goals.CountByState(app.Goals(), app.Tasks(), time.Now(), false)
+	facts := dashboardGoalFacts(app, time.Now())
+	c := facts.Counts
 	if c.Total() == 0 {
 		return uiw.Widget(uiw.WidgetProps{
 			ID: "goal-states", Title: uistate.T("dashboard.goalStates"), Draggable: true, Resizable: true,
@@ -49,6 +49,8 @@ func goalStatesWidget(app *appstate.App) ui.Node {
 		goalStateStat(open, "goal-states-current", c.Current, uistate.T("dashboard.goalsCurrent"), ""),
 		goalStateStat(open, "goal-states-missed", c.Missed, uistate.T("dashboard.goalsMissed"), missedMod),
 		goalStateStat(open, "goal-states-completed", c.Completed, uistate.T("dashboard.goalsCompleted"), " is-done"),
+		If(facts.Unavailable > 0, P(css.Class("muted"), Attr("role", "status"), Attr("data-testid", "goal-states-unavailable"),
+			uistate.T("dashboard.goalStatesUnavailable", facts.Unavailable))),
 	)
 	return uiw.Widget(uiw.WidgetProps{
 		ID: "goal-states", Title: uistate.T("dashboard.goalStates"), Draggable: true, Resizable: true,

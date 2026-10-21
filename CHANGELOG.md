@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Aligned budget savings, annual goal projections, dashboard goal summaries and Assistant questions with canonical goal evaluation.
 - Made goal-win notifications use canonical FX-aware completion and one linked-task index.
 - Prepared Goals rows once and extracted figures and task previews using canonical checked coverage.
 - Added canonical currency-aware goal coverage, lifecycle, planner evaluation and bounded shared task indexing.

@@ -9,7 +9,6 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
-	"github.com/monstercameron/CashFlux/internal/money"
 )
 
 // SavingsAccount is one member-visible savings account and its funded goal's
@@ -22,6 +21,10 @@ type SavingsAccount struct {
 	Monthly         int64  // monthly savings budget, account-currency minor units
 	AssignedBase    int64  // Monthly converted to base currency (0 when unconvertible)
 	ConversionError error
+	// GoalError leaves completion and the funded-goal timeline unknown while the
+	// account's own monthly assignment may still be usable.
+	GoalError                 error
+	GoalUnavailableCurrencies []string
 
 	// Plan-vs-reality against the account's funded goal (populated only when the
 	// account funds a financial goal visible to the active member).
@@ -68,7 +71,12 @@ func SavingsAccounts(accounts []domain.Account, goals []domain.Goal, activeMembe
 	// target first, so each account picks its most time-sensitive goal. Sinking-fund
 	// goals are excluded here — they have their own monthly set-aside line, so counting
 	// them a second time via the account row would double-report the same commitment.
-	goalsByAcct := map[string][]domain.Goal{}
+	type linkedGoal struct {
+		goal     domain.Goal
+		coverage goalsvc.CoverageEvaluation
+		err      error
+	}
+	goalsByAcct := map[string][]linkedGoal{}
 	for _, g := range goals {
 		if g.Archived || g.IsSinkingFund || !g.IsFinancial() || g.AccountID == "" {
 			continue
@@ -76,10 +84,23 @@ func SavingsAccounts(accounts []domain.Account, goals []domain.Goal, activeMembe
 		if !savingsOwnerVisible(g.OwnerID, activeMemberID) {
 			continue
 		}
-		goalsByAcct[g.AccountID] = append(goalsByAcct[g.AccountID], g)
+		coverage, err := goalsvc.EvaluateCoverage(g, rates)
+		goalsByAcct[g.AccountID] = append(goalsByAcct[g.AccountID], linkedGoal{g, coverage, err})
 	}
 	for id, gs := range goalsByAcct {
-		sort.SliceStable(gs, func(i, j int) bool { return goalsvc.LessForList(gs[i], gs[j]) })
+		sort.SliceStable(gs, func(i, j int) bool {
+			a, b := gs[i], gs[j]
+			if a.goal.TargetDate.IsZero() != b.goal.TargetDate.IsZero() {
+				return !a.goal.TargetDate.IsZero()
+			}
+			if !a.goal.TargetDate.Equal(b.goal.TargetDate) {
+				return a.goal.TargetDate.Before(b.goal.TargetDate)
+			}
+			if a.coverage.SavedPercent != b.coverage.SavedPercent {
+				return a.coverage.SavedPercent > b.coverage.SavedPercent
+			}
+			return a.goal.Name < b.goal.Name
+		})
 		goalsByAcct[id] = gs
 	}
 
@@ -107,26 +128,30 @@ func SavingsAccounts(accounts []domain.Account, goals []domain.Goal, activeMembe
 		// "fully funded" state rather than silently reverting to an unlinked-looking row.
 		linked := goalsByAcct[ac.ID]
 		incomplete := 0
-		var picked domain.Goal
-		var pickedRem money.Money
+		var picked linkedGoal
 		havePick := false
 		for _, g := range linked {
-			rem, err := goalsvc.CoveredRemaining(g)
-			if err != nil || rem.Amount <= 0 {
+			if g.err == nil && g.coverage.Complete {
 				continue
 			}
 			incomplete++
 			if !havePick {
-				picked, pickedRem, havePick = g, rem, true
+				picked, havePick = g, true
 			}
 		}
 		switch {
 		case havePick:
 			sa.HasGoal = true
-			sa.GoalID = picked.ID
-			sa.GoalName = picked.Name
+			sa.GoalID = picked.goal.ID
+			sa.GoalName = picked.goal.Name
 			sa.MoreGoals = incomplete - 1
-			sa.PlannedMonths = MonthsUntil(asOf, picked.TargetDate)
+			if picked.err != nil {
+				sa.GoalError = picked.err
+				sa.GoalUnavailableCurrencies = append([]string(nil), picked.coverage.UnavailableCurrencies...)
+				break
+			}
+			pickedRem := picked.coverage.Remaining
+			sa.PlannedMonths = MonthsUntil(asOf, picked.goal.TargetDate)
 			// The monthly rate expressed in the goal's currency for the projection. When
 			// an FX rate is missing the conversion fails; rather than silently treat the
 			// raw amount as if it were in the goal's currency (which would then be
@@ -139,11 +164,11 @@ func SavingsAccounts(accounts []domain.Account, goals []domain.Goal, activeMembe
 					rateOK = false
 				}
 			}
-			if rateOK && rate > 0 {
+			if rateOK && rate > 0 && pickedRem.Amount > 0 {
 				sa.RateMonths = 1 + (pickedRem.Amount-1)/rate // overflow-safe ceil division
 				sa.SyncMinor = rate
 				sa.SyncCurrency = pickedRem.Currency
-				sa.Synced = monthly > 0 && picked.MonthlyContribution.Amount == rate && picked.MonthlyContribution.Currency == pickedRem.Currency
+				sa.Synced = monthly > 0 && picked.goal.MonthlyContribution.Amount == rate && picked.goal.MonthlyContribution.Currency == pickedRem.Currency
 				if sa.PlannedMonths > 0 {
 					sa.DeltaMonths = sa.RateMonths - int64(sa.PlannedMonths)
 				}
@@ -152,7 +177,7 @@ func SavingsAccounts(accounts []domain.Account, goals []domain.Goal, activeMembe
 			// Every linked goal is already met — surface the win, don't vanish.
 			sa.HasGoal = true
 			sa.GoalComplete = true
-			sa.GoalName = linked[0].Name
+			sa.GoalName = linked[0].goal.Name
 		}
 		out = append(out, sa)
 	}
