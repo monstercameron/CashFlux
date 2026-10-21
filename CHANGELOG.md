@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Report statistics and payee reductions now return checked errors, and assistant report formulas preserve unavailable results.
 - Assistant formulas now use checked pool, group, event, debt and saved-plan calculations.
 - Updated assistant instructions to discover complete data, respect calculation scope and use exact approved selectors.
 - Corrected the malformed sort property in the assistant ledger-search tool schema.

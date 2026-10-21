@@ -1,3 +1,7 @@
+## 2026-10-21 - Checked report statistics and formula reductions
+
+Fixed MinInt64 absolute-value panics, median and group-sum overflow, percentage scaling and monthly-burn accumulation in the report-variable path. Counts remain independent; failed financial reducers no longer publish false zero values. Nine new native groups and full reports/engineenv suites plus vet passed.
+
 ## 2026-10-21 - Checked entity financial formula facts
 
 Replaced tolerant FX and unchecked arithmetic in entity formula families, preserved independent known fields, and reserved unavailable built-in and generated metric names against custom formula replacement. Saved plans use the checked native evaluation. Full frozen-source engineenv tests, Reports/engineenv vet, and focused missing-FX/overflow regressions passed.
