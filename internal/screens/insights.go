@@ -72,8 +72,8 @@ func Insights() ui.Node {
 	useBackendAI := uistate.BackendAIActive(pr)
 	// Model + thinking level are adjustable inline from the assistant header (a quick
 	// switch, no trip to Settings). Seed from the saved settings; picks persist back so
-	// they stick and stay in sync with Settings. modelList is populated live from
-	// OpenAI's /v1/models when a key is set (falls back to the built-in defaults).
+	// they stick and stay in sync with Settings. The list comes from the selected
+	// AI route and falls back to built-in defaults while loading or offline.
 	initModel := settings.OpenAIModel
 	if initModel == "" {
 		initModel = "gpt-5.4-mini"
@@ -82,11 +82,16 @@ func Insights() ui.Node {
 	effortSel := ui.UseState(settings.OpenAIReasoningEffort)
 	modelList := ui.UseState([]string{})
 	ui.UseEffect(func() func() {
+		modelList.Set(nil)
+		if useBackendAI {
+			return ai.FetchProxyModels(pr.ServerURL, uistate.EffectiveServerToken(pr.ServerToken),
+				func(ids []string) { modelList.Set(ids) }, func(string) {})
+		}
 		if k := strings.TrimSpace(settings.OpenAIKey); k != "" {
-			ai.FetchModels(k, aiBaseURL, func(ids []string) { modelList.Set(ids) }, func(string) {})
+			return ai.FetchModels(k, aiBaseURL, func(ids []string) { modelList.Set(ids) }, func(string) {})
 		}
 		return nil
-	}, "")
+	}, useBackendAI, pr.ServerURL, pr.ServerToken, settings.OpenAIKey, aiBaseURL)
 	pickEffort := func(v string) {
 		effortSel.Set(v)
 		s := app.Settings()

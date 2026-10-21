@@ -13,6 +13,7 @@ and every commit updates this file under `Unreleased`.
 - The device-erasure audit now identifies retained workspace, queue, file, credential, and key records that the current “Erase everything” action does not remove, with acceptance criteria for a truthful full erase.
 
 ### Fixed
+- In server AI mode, the assistant and AI settings load the server's allowed models through authenticated gRPC instead of fetching directly from OpenAI in the browser. The settings text now describes the selected route and does not claim a device key is required when server AI is active.
 - Hosted sign-in now holds both new uploads and an existing sync queue until the account's server workspace has been resolved, preventing an unreadable local checkpoint from racing the first recovery pull.
 - Switching the assistant between server AI and direct OpenAI now changes only AI routing. Cloud sync remains connected, and each browser keeps its own AI route after downloading a dataset.
 - Closed-registration servers now show existing-account login directly, with a clearly labeled request-access link secondary. Retrying discovery on the sign-in step no longer writes preferences, and a successful new login clears the old session's invalid-token warning.
