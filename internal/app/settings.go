@@ -30,6 +30,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/notify"
 	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/CashFlux/internal/screens"
+	"github.com/monstercameron/CashFlux/internal/settingsinput"
 	"github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -982,6 +983,7 @@ func globalSettingsForm() uic.Node {
 		if a == nil {
 			return
 		}
+		rate = settingsinput.NormalizeFXRate(rate)
 		s := a.Settings()
 		if s.FXRates == nil {
 			s.FXRates = map[string]float64{}
@@ -1131,10 +1133,7 @@ func globalSettingsForm() uic.Node {
 		// AC15: the idle-cash benchmark rate. A blank/invalid/negative entry clears it
 		// (0 disables the idle_cash_forgone_annual figure — nothing to compare to).
 		OnIdleCashBenchmarkAPR: uic.UseEvent(func(v string) {
-			apr, err := strconv.ParseFloat(strings.TrimSpace(v), 64)
-			if err != nil || apr < 0 {
-				apr = 0
-			}
+			apr := settingsinput.ParseIdleCashBenchmarkAPR(v)
 			p := prefsAtom.Get()
 			p.IdleCashBenchmarkAPR = apr
 			savePrefs(p)
@@ -1367,7 +1366,7 @@ type fxRateRowProps struct {
 // empty/zero value clears the rate.
 func fxRateRow(props fxRateRowProps) uic.Node {
 	on := uic.UseEvent(func(e uic.Event) {
-		r, _ := strconv.ParseFloat(strings.TrimSpace(e.GetValue()), 64)
+		r := settingsinput.ParseFXRate(e.GetValue())
 		props.OnSet(props.Code, r)
 	})
 	val := ""

@@ -1,3 +1,7 @@
+## 2026-10-21 - Native finite settings validation
+
+Extracted FX/APR parsing and guarded the shared rate setter. Existing blank/invalid clearing behavior and write order remain. NaN, infinity and numeric overflow no longer persist as rates. Native settingsinput tests pass; the complete application WASM build passes.
+
 ## 2026-10-21 - Native Planning projections
 
 Added checked canonical cashflow/runway/cover and safe-spend seams, composing them in an immutable native planningmodel with explicit reference time and source errors. The controller samples time once and preserves existing policies and recurring authoring. Native models and vet pass; the focused Planning actual-host error/invalid-input case passes.
