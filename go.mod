@@ -1,6 +1,6 @@
 module github.com/monstercameron/CashFlux
 
-go 1.26.9
+go 1.26.10
 
 require (
 	github.com/monstercameron/GoGRPCBridge v0.0.19

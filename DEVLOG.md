@@ -1,3 +1,7 @@
+## 2026-10-20 - Update Go for x509 security fix
+
+The PR's CI `govulncheck` found GO-2026-6809 in Go 1.26.9's `crypto/x509`. Go 1.26.10 fixes it, and every GitHub workflow uses the version from `go.mod`, so the module version now selects the patched toolchain for test, build, E2E, and release jobs. The full native suite, WebAssembly build, and local `govulncheck` passed; the scanner reports zero vulnerabilities affecting called code.
+
 ## 2026-10-20 - Remove artifact framing conversion flagged by CI
 
 The CI security scanner rejected the encrypted artifact wrapper's `int` to `uint16` MIME length conversion despite an earlier range check. The sealed plaintext now uses a zero separator after a validated MIME string, avoiding the conversion while still encrypting both fields and failing on a missing separator. Native artifact tests, the WebAssembly app build, and a focused gosec scan of `internal/artifactstore` passed.
