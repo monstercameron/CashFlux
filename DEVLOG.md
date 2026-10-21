@@ -1,3 +1,7 @@
+## 2026-10-21 - Prepared rule coverage
+
+Moved coverage business logic into a native summary while retaining keyed rule rows and lazy previews. Native tests, vet, host compilation and focused WASM wiring pass. Synthetic prepared-model benchmark reduced repeated matcher preparation; it is not browser latency evidence.
+
 ## 2026-10-21 - Native Net Worth account windows
 
 Prepared indexed account windows outside the view, preserving manual balance provenance, ordering, liability signs and independent failures. Native networthview tests and the focused WASM unavailable-state case pass. The initial benchmark reference omitted legacy work and cannot support a speed comparison. Full Net Worth preparation remains a separate slice.

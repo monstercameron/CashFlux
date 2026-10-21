@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Rule coverage prepares ordered counts and conflicts once using the canonical matcher.
 - Net Worth account windows use native checked balances, flows and availability.
 - Investment growth headlines render checked native facts and explicit unavailable states.
 - Setup validates money through native typed preparation before saving or advancing.
