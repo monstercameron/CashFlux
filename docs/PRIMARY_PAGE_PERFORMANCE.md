@@ -257,8 +257,9 @@ The prepared matcher was compared with the frozen prior matcher retained in the
 parity tests. This isolates predicate preparation/matching and widened preset
 counts; it does not measure WASM, sorting, DOM updates or typing-to-paint latency.
 The synthetic rows and criteria are defined in
-`internal/txnfilter/compiled_bench_test.go`. The command used Go 1.26.9 on Windows
-ARM64 with one benchmark CPU, 25 iterations and three samples per case:
+`internal/txnfilter/compiled_bench_test.go`. The command used Go 1.26.9 targeting
+Windows AMD64 on an ARM64 host, with one benchmark CPU, 25 iterations and three
+samples per case (the target is recorded in the raw benchmark header):
 
 ```powershell
 go test -work ./internal/txnfilter -run '^$' -bench '^BenchmarkCompiledCriteriaPreparation$' -benchtime=25x -count=3 -cpu=1 -benchmem

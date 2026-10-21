@@ -1,3 +1,7 @@
+## 2026-10-20 - Correct the transaction benchmark target metadata
+
+Rechecked the original transaction-filter benchmark header, which records goos windows and goarch amd64. Corrected the documentation that had described the ARM64 host as the benchmark target. Raw observations, fixtures and measured results are unchanged; no new benchmark run was needed.
+
 ## 2026-10-20 - Initialize each transaction filter reader once
 
 UseTxFilter memoizes its mounted seed by app identity while retaining the established fixed atom, CurrentTxFilter, persistence and rolling-date resolution. The shared hook has 40 production call sites, including notification rows and transaction category controls; this removes warm per-reader work, not all initial subscriber loads. Five focused WASM uistate tests passed, covering actual loader counters, live/store revision writes, late mounts, remounts, legacy date migration, invalid defaults and fresh workspace runtimes. An actual Notification Center to Transactions host test passed after fixing fixture DOM stubs and canonical date-only timestamps; it verifies the latest account/date/sort selection, merchant action, read flag and exact destination rows.

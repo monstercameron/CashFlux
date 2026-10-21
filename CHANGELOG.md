@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Performance notes distinguish the transaction benchmark AMD64 target from its ARM64 host.
 - Transaction-filter readers avoid repeated SQLite reads and ignored JSON decoding on warm renders.
 - Primary-page verification records the current frozen build, passing checks and slower observed timings with load limitations.
 - Local development notes record the WebSocket write repair needed to keep the 8080 reload server running.
