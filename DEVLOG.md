@@ -1,3 +1,7 @@
+## 2026-10-21 - Check shared household money primitives
+
+Hardened canonical per-member spending magnitudes and reductions, period-income accumulation, equal-member apportionment and fractional owner splits. Added a checked signed Hamilton split using existing money.Allocate; retained the deprecated legacy signature unchanged, with no production callers remaining. Ten new native tests cover MinInt64, large fractions, rounding/ties, FX, overflow, no partial results and immutability. Full reports, allocate and ledger native suites and vet passed. This prepares the shared native household model; no UI change in this feature.
+
 ## 2026-10-21 - Reuse category traversal work across selected roots
 
 Preserved empty roots, unknown/dangling IDs, cycles, self-parent policy and caller-owned inputs. Native categorytree suite and parity cases passed. On the same 2047-category/512-overlapping-root synthetic fixture, five-sample medians fell from 484.23ms to0.776ms and 1053689 to2086 allocations per operation. Raw before/after logs and environment caveats are retained; this is a native kernel result, not a measured browser latency gain.

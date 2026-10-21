@@ -3,8 +3,10 @@
 package ledger
 
 import (
+	"fmt"
 	"sort"
 
+	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/split"
 )
 
@@ -22,6 +24,9 @@ import (
 //
 // Delegates to split.ByWeights for the Hamilton apportionment; this function
 // is a thin adapter that converts the map representation and handles the sign.
+//
+// Deprecated: use SplitBySharesChecked to retain invalid-share errors and
+// correctly apportion amounts whose magnitude or weighted products exceed int64.
 func SplitByShares(amountMinor int64, shares map[string]int) map[string]int64 {
 	if len(shares) == 0 {
 		return map[string]int64{}
@@ -57,4 +62,46 @@ func SplitByShares(amountMinor int64, shares map[string]int) map[string]int64 {
 		out[s.MemberID] = s.Amount * sign
 	}
 	return out
+}
+
+// SplitBySharesChecked apportions signed minor units by percentage-point shares
+// with exact Hamilton remainders, including MinInt64 and large products. Equal
+// remainders favor lexical member ID order. Empty shares return an empty map.
+// Nonempty shares must be nonnegative and sum to 100; invalid inputs return an
+// error wrapping money.ErrInvalidWeights. The caller's map is never modified.
+func SplitBySharesChecked(amountMinor int64, shares map[string]int) (map[string]int64, error) {
+	if len(shares) == 0 {
+		return map[string]int64{}, nil
+	}
+	memberIDs := make([]string, 0, len(shares))
+	for id := range shares {
+		memberIDs = append(memberIDs, id)
+	}
+	sort.Strings(memberIDs)
+	weights := make([]int64, len(memberIDs))
+	var total int64
+	for i, id := range memberIDs {
+		weight := int64(shares[id])
+		if weight < 0 || weight > 100 {
+			return nil, fmt.Errorf("ledger: ownership share for member %s: %w", id, money.ErrInvalidWeights)
+		}
+		var err error
+		total, err = money.Add(total, weight)
+		if err != nil {
+			return nil, fmt.Errorf("ledger: ownership share total: %w", err)
+		}
+		weights[i] = weight
+	}
+	if total != 100 {
+		return nil, fmt.Errorf("ledger: ownership shares total %d, want 100: %w", total, money.ErrInvalidWeights)
+	}
+	parts, err := money.Allocate(amountMinor, weights)
+	if err != nil {
+		return nil, fmt.Errorf("ledger: ownership split: %w", err)
+	}
+	out := make(map[string]int64, len(memberIDs))
+	for i, id := range memberIDs {
+		out[id] = parts[i]
+	}
+	return out, nil
 }

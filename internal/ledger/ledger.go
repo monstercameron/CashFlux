@@ -251,8 +251,9 @@ func NetWorthSeries(accounts []domain.Account, all []domain.Transaction, cutoffs
 // shared accounts. Archived accounts are excluded.
 //
 // When an account has a non-empty OwnershipShares map, its base-currency
-// balance is split across the share members via SplitByShares (largest-remainder
-// Hamilton apportionment) rather than attributed wholly to OwnerID.
+// balance is split across the share members via SplitBySharesChecked
+// (largest-remainder Hamilton apportionment) rather than attributed wholly to
+// OwnerID. Invalid ownership shares and arithmetic failures return an error.
 func NetByOwner(accounts []domain.Account, all []domain.Transaction, rates currency.Rates) (map[string]money.Money, error) {
 	out := make(map[string]money.Money)
 	for _, a := range accounts {
@@ -270,7 +271,10 @@ func NetByOwner(accounts []domain.Account, all []domain.Transaction, rates curre
 
 		if len(a.OwnershipShares) > 0 {
 			// Fractional ownership: split the base-currency amount across share holders.
-			parts := SplitByShares(conv.Amount, a.OwnershipShares)
+			parts, err := SplitBySharesChecked(conv.Amount, a.OwnershipShares)
+			if err != nil {
+				return nil, fmt.Errorf("ledger: account %s ownership: %w", a.ID, err)
+			}
 			for memberID, part := range parts {
 				cur, ok := out[memberID]
 				if !ok {
