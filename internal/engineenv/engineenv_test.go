@@ -65,8 +65,16 @@ func TestVars(t *testing.T) {
 func TestVarsDefaultsBaseCurrency(t *testing.T) {
 	// No base currency set: should not panic and should default sensibly.
 	v := Vars(Data{Now: time.Now()})
-	if len(v) != len(Names) {
-		t.Errorf("got %d vars, want %d", len(v), len(Names))
+	for _, name := range Names {
+		if name == "networth_change_pct" || name == "networth_liquid_pct" {
+			if _, ok := v[name]; ok {
+				t.Errorf("%s should be unavailable without a nonzero baseline and asset total", name)
+			}
+			continue
+		}
+		if _, ok := v[name]; !ok {
+			t.Errorf("missing default variable %q", name)
+		}
 	}
 }
 

@@ -1,3 +1,7 @@
+## 2026-10-21 - Checked net-worth formula availability
+
+Added checked delta and percentage helpers, strict per-bucket FX and checked accumulation. Independent complete buckets remain usable; missing financial inputs cannot be replaced by a custom molecule. Full engineenv and nwchange native suites, vet and the behavioral molecule regression passed.
+
 ## 2026-10-21 - Assistant catalog transport compatibility gate
 
 Extended the actual registry test to guard the 64-tool and 32-KiB-per-schema relay contract. The current full-detail catalog contains 58 unique tools with valid object schemas, truthful mutation permissions and previews; the focused WASM gate passed.

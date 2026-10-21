@@ -290,6 +290,9 @@ func Vars(d Data) map[string]float64 {
 	for _, name := range ReportsVarNames {
 		atoms[name] = true
 	}
+	for _, name := range NetWorthVarNames {
+		atoms[name] = true
+	}
 	for _, name := range RecurringVarNames {
 		atoms[name] = true
 	}
