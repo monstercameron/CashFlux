@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Formula evaluation now keys its cache with the complete non-store configuration snapshot and exact calculation clock instead of retaining stale allocation/planning inputs.
 - Assistant data reads now include safe financial preferences and compare numeric filters exactly across decimal notation without losing large integer precision.
 - Assistant financial summaries, category spending, account balances, budgets and affordability now use fresh checked canonical models with explicit scope, period and unavailable states.
 - Assistant flag dismissal now validates arguments and applies only the exact set of activities shown in the approval preview.

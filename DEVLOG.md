@@ -1,3 +1,7 @@
+## 2026-10-20 - Assistant formula input and clock freshness
+
+A single snapshot feeds both calculation and cache identity: exact time/zone, week start/pay anchor, idle benchmark, allocation/planning settings, bill settings, pools and Smart counts. Input serialization failure computes uncached rather than colliding with another key. Tests verify unchanged-input reuse, config changes without store/UI revision bumps, exact intraday canonical behavior and nonfinite fingerprint bypass; all three cache WASM tests passed in integration pass5 after replacing an ineffective pace fixture with a real days-left boundary. Exact clock identity reduces whole-map cache hits during unrelated renders; prepared financial facts are a separate optimization, and this commit makes no latency improvement claim.
+
 ## 2026-10-20 - Assistant financial preferences and exact filters
 
 Added the 43rd typed collection, financial_preferences, through a strict audited DTO for budget income modes, rollover, pay-cycle, sweep and round-up settings. Provider/server/auth/CSRF fields stay excluded and their exact credential values are used only for local text redaction. Corrupt stored preferences report unavailable rather than valid defaults. Generic scalar filters normalize exact decimal identity with bounded exponent handling, avoiding float conversion or giant exponent expansion. Six native query tests and all four real-App Data WASM groups passed in integration pass4. Notification feed and other financial configuration namespaces are under a separate coverage audit.
