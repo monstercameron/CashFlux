@@ -1,3 +1,7 @@
+## 2026-10-21 - Start the server load watch before its writes
+
+The second CI run's test/build job failed in `TestServerLoadSmokeSyncBlobAndWatch`: under concurrent CI load, the stream accepted the request before the server registered the subscription. Writes could then publish before the watcher existed, leaving the test waiting for a missing event until its shared ten-second context expired. The test now waits for the active-stream metric to confirm registration and uses a thirty-second load context. Five targeted local runs passed. This changes test sequencing, not sync delivery behavior.
+
 ## 2026-10-21 - Settle the remaining Smart Import CI race
 
 The latest draft PR passed test/build and one E2E shard; the other failed in `TestImportUXReviewAutoShownAndFooter`. Its mocked fetch resolved, but the response text callback had not reached the three-row review when the test asserted and tore down the app. A late render then dereferenced the cleared fixture. Both this test and the earlier Smart Import review test now share a bounded wait for the actual review state. The two focused WebAssembly tests passed locally, including a repeated run; the next CI result remains to be checked.
