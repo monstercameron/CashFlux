@@ -1,3 +1,7 @@
+## 2026-10-20 - Record the file-sync privacy boundary
+
+The review in `docs/SYNC_PRIVACY_REVIEW.md` traces local save, first connection, encrypted blob upload, authenticated restore, and server switching against code and synthetic tests. It explicitly distinguishes encrypted remote file contents from readable server metadata and the plaintext local artifact IndexedDB store. It also records incomplete server exports and inactive-workspace backup bundles as recovery limits. No production credential or customer file was used.
+
 ## 2026-10-20 - Let file-bearing exports read IndexedDB
 
 JSON export and both full-install backup actions called their synchronous blob-rehydrating helpers directly from UI callbacks. A PDF stored in IndexedDB makes those helpers wait for a browser event that cannot arrive until the callback returns. These actions now start a Go goroutine before reading the file bytes, matching the existing SQLite export pattern. The WebAssembly app build passed. Inactive workspace file completeness remains a separate backup limitation.
