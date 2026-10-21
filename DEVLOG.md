@@ -1,3 +1,7 @@
+## 2026-10-20 - Assistant atomic transaction removal approvals
+
+Added canonical App expected-before delete/merge operations that reuse the existing deletion/relationship planner and ReplayChangesExpected. Duplicate membership is recomputed and the survivor is computed by dedupe.Merge inside the service; stale edits, changed groups or changed transfer expansion refuse without partial state. New tool handlers strictly parse exact amount/date/identity arguments, show selected record IDs and the survivor, require the matching preview and consume it once. Focused native appstate operations passed; all five real-handler WASM groups passed across integration pass4 and the targeted pass5 fixture correction, including ambiguous/stale/excluded transfer cases and canonical merged metadata. Existing transfers remain outside these two Assistant tools.
+
 ## 2026-10-20 - Assistant canonical goal contribution approvals
 
 Replaced the inline first-substring saved-amount update with stable-ID or unique-name resolution, exact decimal parsing in the selected actual currency, full goal/FX approval binding and canonical App.ContributeToGoal. Blank/ambiguous targets, nonpositive/malformed/overprecision amounts, stale/deleted goals, missing rates, unsupported legacy currency mismatch and task/archived state are refused before writing. The same approval cannot double-contribute. All seven real-App WASM groups passed in integration pass4, covering history/undo parity, values above float integer precision, foreign goal currency, atomic failure and role guard.
