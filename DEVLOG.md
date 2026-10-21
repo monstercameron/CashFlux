@@ -1,3 +1,7 @@
+## 2026-10-20 - Assistant request lifecycle
+
+Added concurrency-safe session ownership and one-shot approval decisions, immutable conversation accounting identity, guarded late streaming/result callbacks, and cancellation on unmount/switch/new chat. A scheduling-order bug lost blank-chat preferences when message persistence allocated the conversation first; preference transfer now follows identity resolution. Native assistantloop tests and all five actual Insights lifecycle WASM groups passed using a mocked provider, including exact-cap blocking and duplicate approval decisions. Registry parity coverage also passed in the integrated tool gate.
+
 ## 2026-10-20 - Assistant permission selectors
 
 Aligned permission scopes with current task, goal, transaction delete/merge, and transaction edit schemas. Numeric JSON lexemes and decimal strings remain exact; optional selectors do not invent affected counts. Native toolperm tests and vet passed. Existing irreversible labels remain conservative.

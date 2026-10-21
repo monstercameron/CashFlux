@@ -19,6 +19,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/ai"
 	"github.com/monstercameron/CashFlux/internal/aicontext"
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/assistantloop"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/dedupe"
@@ -188,10 +189,11 @@ func assistantTransferBuildCacheKey(raw json.RawMessage, from, to domain.Account
 // structurally (what it reads, what it changes, whether it can be undone) so the
 // card can be scanned rather than parsed (C388).
 type approvalReq struct {
-	tool    string
-	preview string
-	perm    toolperm.Permission
-	resp    chan bool
+	tool     string
+	preview  string
+	perm     toolperm.Permission
+	resp     chan bool
+	decision *assistantloop.Approval
 }
 
 // agentStep is one model turn delivered to the tool loop over a channel: either a

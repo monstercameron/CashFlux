@@ -20,6 +20,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/anomalyattrib"
 	"github.com/monstercameron/CashFlux/internal/anomalyprobe"
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/assistantloop"
 	"github.com/monstercameron/CashFlux/internal/assistantview"
 	"github.com/monstercameron/CashFlux/internal/chatpolish"
 	"github.com/monstercameron/CashFlux/internal/currency"
@@ -46,6 +47,25 @@ import (
 	"github.com/monstercameron/GoWebComponents/v5/router"
 	"github.com/monstercameron/GoWebComponents/v5/ui"
 )
+
+type assistantChatTransportFunc func(
+	useBackend bool, serverURL, serverToken, key, baseURL, model string,
+	messages []ai.Message, temperature float64, effort string, tools []ai.Tool,
+	onDelta func(string), onResult func(ai.Message, ai.Usage), onError func(string),
+) func()
+
+// assistantChatTransport is replaceable by same-package host tests so lifecycle
+// behavior can be exercised without credentials or external provider requests.
+var assistantChatTransport assistantChatTransportFunc = func(
+	useBackend bool, serverURL, serverToken, key, baseURL, model string,
+	messages []ai.Message, temperature float64, effort string, tools []ai.Tool,
+	onDelta func(string), onResult func(ai.Message, ai.Usage), onError func(string),
+) func() {
+	if useBackend {
+		return ai.SendProxyChatToolsStreaming(serverURL, serverToken, model, messages, temperature, effort, tools, onDelta, onResult, onError)
+	}
+	return ai.SendResponsesChatToolsStreaming(key, baseURL, model, messages, temperature, effort, tools, onDelta, onResult, onError)
+}
 
 // Insights is AI analysis (OpenAI, client-side, bring-your-own-key): an
 // "Explain my month" narrative generated from the user's live figures.
@@ -254,17 +274,13 @@ func Insights() ui.Node {
 	errMsg := ui.UseState("")
 	rev := ui.UseState(0)
 	bump := func() { rev.Set(rev.Get() + 1) }
-	var noCancel func()
-	cancelFn := ui.UseState(noCancel)
-	cancelAI := ui.UseEvent(func() {
-		if c := cancelFn.Get(); c != nil {
-			c()
-		}
-		loading.Set(false)
-	})
+	sessionState := ui.UseState((*assistantloop.Session)(nil))
 	// The conversation this thread belongs to ("" = a new, unsaved chat). convCreated
 	// preserves the original timestamp across saves; inited guards the one-time load.
 	convID := ui.UseState("")
+	// A not-yet-created conversation still has a selectable per-chat cap. Keep it
+	// locally until the first request gives that conversation its durable identity.
+	blankBudget := ui.UseState(0)
 	convCreated := ui.UseState(time.Time{})
 	inited := ui.UseState(false)
 	// Editable system prompt (persona/instructions) — the live data context is always
@@ -278,6 +294,24 @@ func Insights() ui.Node {
 	// The answer currently being written, fragment by fragment (G2-C7). Empty
 	// between turns.
 	streaming := ui.UseState("")
+	cancelCurrentSession := func() {
+		if current := sessionState.Get(); current != nil {
+			current.Cancel()
+		}
+		sessionState.Set(nil)
+		pendingApproval.Set(nil)
+		loading.Set(false)
+		streaming.Set("")
+	}
+	cancelAI := ui.UseEvent(func() { cancelCurrentSession() })
+	ui.UseEffect(func() func() {
+		return func() {
+			if current := sessionState.Get(); current != nil {
+				current.Cancel()
+			}
+			pendingApproval.Set(nil)
+		}
+	}, "assistant-session-owner")
 
 	// C390: picking a model sticks to THIS conversation as well as to the household
 	// default, so returning to a long analytical thread does not quietly continue it
@@ -293,7 +327,13 @@ func Insights() ui.Node {
 	// pickBudget caps what this conversation may spend in total. It is a per-chat
 	// decision, not a global one: "don't let this exploration run away" is a
 	// different thing from "cap my month".
-	pickBudget := func(tokens int) { uistate.SetAgentBudget(convID.Get(), tokens) }
+	pickBudget := func(tokens int) {
+		if convID.Get() == "" {
+			blankBudget.Set(tokens)
+			return
+		}
+		uistate.SetAgentBudget(convID.Get(), tokens)
+	}
 
 	// railReady defers the periphery rail's heavy detectors (spend-anomaly + the four
 	// SMART anomaly detectors, each a full-transaction scan) to just after first paint.
@@ -378,16 +418,11 @@ func Insights() ui.Node {
 	// sendTools dispatches one model turn. Both paths advertise the same tools: the
 	// direct key goes straight to OpenAI, the shared server key goes through the
 	// backend proxy, and neither is the weaker assistant (C551).
-	sendTools := func(messages []ai.Message, tools []ai.Tool, onDelta func(string), onResult func(ai.Message, ai.Usage), onErr func(string)) func() {
-		if useBackendAI {
-			return ai.SendProxyChatToolsStreaming(pr.ServerURL, uistate.EffectiveServerToken(pr.ServerToken), model, messages, chatTemp, chatEffort, tools, onDelta, onResult, onErr)
-		}
-		// Route the tool loop through the Responses API: it's the only endpoint that
-		// accepts reasoning.effort together with function tools for the reasoning models
-		// (gpt-5.x / o-series), so the thinking level actually works instead of being
-		// rejected by /chat/completions. Streaming rides the same endpoint, so both
-		// paths show the answer being written (G2-C7).
-		return ai.SendResponsesChatToolsStreaming(key, aiBaseURL, model, messages, chatTemp, chatEffort, tools, onDelta, onResult, onErr)
+	sendTools := func(requestModel string, messages []ai.Message, tools []ai.Tool, onDelta func(string), onResult func(ai.Message, ai.Usage), onErr func(string)) func() {
+		// The real direct path uses Responses because it accepts reasoning effort
+		// together with function tools; both paths keep streaming enabled.
+		return assistantChatTransport(useBackendAI, pr.ServerURL, uistate.EffectiveServerToken(pr.ServerToken), key, aiBaseURL, requestModel,
+			messages, chatTemp, chatEffort, tools, onDelta, onResult, onErr)
 	}
 
 	// run drives the bounded tool-calling loop: ask the model; if it requests tools,
@@ -395,16 +430,48 @@ func Insights() ui.Node {
 	// step cap is hit). It runs in a goroutine, blocking on a channel per turn (Go
 	// wasm schedules cooperatively, so the fetch callback resumes it). Turns are set
 	// deterministically to the sent history + reply (the stale-base fix), and a shared
-	// done channel lets Cancel unblock the loop.
+	// assistantloop session lets cancellation unblock the loop and rejects late callbacks.
 	run := func(hist []chatTurn) {
+		cancelCurrentSession()
+		requestModel := modelSel.Get()
+		if requestModel == "" {
+			requestModel = model
+		}
+		conversationID := convID.Get()
+		if conversationID == "" {
+			conversationID = id.New()
+			convID.Set(conversationID)
+			convCreated.Set(time.Now())
+		}
+		// A render caused by turns.Set in onSubmit may persist the first user
+		// message, and allocate convID, before this handler reaches run. Transfer
+		// blank-chat preferences after ID resolution so both scheduling orders
+		// bind them to the same conversation before budget enforcement.
+		if requestModel != "" && uistate.AgentModel(conversationID) == "" {
+			uistate.SetAgentModel(conversationID, requestModel)
+		}
+		if budget := blankBudget.Get(); budget > 0 {
+			uistate.SetAgentBudget(conversationID, budget)
+			blankBudget.Set(0)
+		}
 		errMsg.Set("")
 		// C390: a spent budget stops the conversation BEFORE the call, not after.
 		// A cap that only notices it was exceeded once the tokens are gone is a
 		// receipt, not a budget. The message says how to carry on, because the cap
 		// is the user's own and they are allowed to change their mind.
-		if uistate.AgentBudgetExhausted(convID.Get()) {
-			errMsg.Set(uistate.T("insights.budgetSpent", ai.FormatTokens(uistate.AgentBudget(convID.Get()))))
+		if uistate.AgentBudgetExhausted(conversationID) {
+			errMsg.Set(uistate.T("insights.budgetSpent", ai.FormatTokens(uistate.AgentBudget(conversationID))))
 			return
+		}
+		session := assistantloop.NewSession(conversationID)
+		sessionState.Set(session)
+		isCurrentSession := func() bool { return session.Active() && sessionState.Get() == session }
+		finishSession := func() {
+			session.SetCancel(nil)
+			session.Cancel()
+			if sessionState.Get() == session {
+				sessionState.Set(nil)
+			}
 		}
 		loading.Set(true)
 		allTools := buildChatTools(app, base, rates, tier, insightsScopeAtom.Get)
@@ -423,15 +490,6 @@ func Insights() ui.Node {
 			byName[t.spec.Function.Name] = t
 		}
 		msgs := buildMessages(hist)
-		done := make(chan struct{})
-		doneClosed := false
-		closeDone := func() {
-			if !doneClosed {
-				doneClosed = true
-				close(done)
-			}
-		}
-		cancelFn.Set(closeDone)
 		var total ai.Usage
 
 		// C387: every tool this answer runs is recorded as it runs, so the reply can
@@ -440,36 +498,62 @@ func Insights() ui.Node {
 		var sources []domain.ChatSource
 
 		go func() {
+			defer finishSession()
 			// Last line of defence. Everything below runs in a goroutine, and an
 			// unrecovered panic in a Go/wasm goroutine ends the whole program — the
 			// entire app, not the chat. A failure here becomes a message in the
 			// thread instead.
 			defer func() {
 				if r := recover(); r != nil {
-					loading.Set(false)
-					streaming.Set("")
-					errMsg.Set(uistate.T("insights.loopFailed"))
+					if isCurrentSession() {
+						loading.Set(false)
+						streaming.Set("")
+						errMsg.Set(uistate.T("insights.loopFailed"))
+					}
 				}
 			}()
 			for step := 0; step < 6; step++ {
+				if !isCurrentSession() {
+					return
+				}
 				ch := make(chan agentStep, 1)
 				// Each fragment lands in the live-answer atom, which the thread
 				// renders as a growing bubble. It is cleared when the turn resolves,
 				// at which point the real turn takes over — one answer on screen at
 				// any moment, never a draft sitting beside its finished self.
 				streaming.Set("")
-				fc := sendTools(msgs, specs,
-					func(delta string) { streaming.Set(streaming.Get() + delta) },
-					func(m ai.Message, u ai.Usage) { ch <- agentStep{msg: m, usage: u} },
-					func(e string) { ch <- agentStep{err: e} })
-				cancelFn.Set(func() { fc(); closeDone() })
+				fc := sendTools(requestModel, msgs, specs,
+					func(delta string) {
+						if isCurrentSession() {
+							streaming.Set(streaming.Get() + delta)
+						}
+					},
+					func(m ai.Message, u ai.Usage) {
+						if isCurrentSession() {
+							select {
+							case ch <- agentStep{msg: m, usage: u}:
+							default:
+							}
+						}
+					},
+					func(e string) {
+						if isCurrentSession() {
+							select {
+							case ch <- agentStep{err: e}:
+							default:
+							}
+						}
+					})
+				session.SetCancel(fc)
 
 				var r agentStep
 				select {
 				case r = <-ch:
-				case <-done:
-					loading.Set(false)
-					streaming.Set("")
+				case <-session.Done():
+					return
+				}
+				session.SetCancel(nil)
+				if !isCurrentSession() {
 					return
 				}
 				if r.err != "" {
@@ -504,12 +588,12 @@ func Insights() ui.Node {
 					turns.Set(append(append([]chatTurn{}, hist...), reply))
 					// AG20: feed this turn's token spend into the per-conversation
 					// receipt (cost estimated from the resolved model).
-					cost, costOK := ai.EstimateCostUSD(model, total)
-					uistate.AddAgentCost(convID.Get(), total.TotalTokens, cost, costOK)
+					cost, costOK := ai.EstimateCostUSD(requestModel, total)
+					uistate.AddAgentCost(conversationID, total.TotalTokens, cost, costOK)
 					// EC-15: and into the household's running AI spend meter, so
 					// "what is this costing me?" has an answer here rather than on
 					// next month's provider bill.
-					app.RecordAISpend("assistant", model, total)
+					app.RecordAISpend("assistant", requestModel, total)
 					return
 				}
 				// This turn asked for tools, so whatever text it streamed was a
@@ -520,6 +604,9 @@ func Insights() ui.Node {
 				streaming.Set("")
 				msgs = append(msgs, r.msg)
 				for _, tc := range r.msg.ToolCalls {
+					if !isCurrentSession() {
+						return
+					}
 					args := json.RawMessage(tc.Function.Arguments)
 					out := "tool unavailable"
 					if tool, ok := byName[tc.Function.Name]; ok {
@@ -531,23 +618,25 @@ func Insights() ui.Node {
 							if tool.preview != nil {
 								preview = tool.preview(args)
 							}
-							resp := make(chan bool, 1)
-							pendingApproval.Set(&approvalReq{
-								tool:    tc.Function.Name,
-								preview: preview,
-								perm:    toolperm.For(tc.Function.Name, args),
-								resp:    resp,
-							})
-							var approved bool
-							select {
-							case approved = <-resp:
-							case <-done:
-								pendingApproval.Set(nil)
-								loading.Set(false)
-								streaming.Set("")
+							decision := assistantloop.NewApproval()
+							pa := &approvalReq{
+								tool:     tc.Function.Name,
+								preview:  preview,
+								perm:     toolperm.For(tc.Function.Name, args),
+								resp:     make(chan bool, 1),
+								decision: decision,
+							}
+							pendingApproval.Set(pa)
+							approved, responded := decision.Wait(session.Done())
+							if !isCurrentSession() {
 								return
 							}
-							pendingApproval.Set(nil)
+							if pendingApproval.Get() == pa {
+								pendingApproval.Set(nil)
+							}
+							if !responded {
+								return
+							}
 							if !approved {
 								msgs = append(msgs, ai.ToolResultMessage(tc.ID, tc.Function.Name, "The user declined this change."))
 								continue
@@ -557,9 +646,15 @@ func Insights() ui.Node {
 							// who made the change and offers to take it back. Without
 							// this, a change the assistant made was indistinguishable
 							// in the log from one the household made by hand.
-							out = runAssistantWrite(tc.Function.Name, func() string { return tool.run(args) })
-							uistate.AddAgentActions(convID.Get(), []string{tc.Function.Name})
+							write := runAssistantWriteResult(tc.Function.Name, func() string { return tool.run(args) })
+							out = write.Text
+							if write.Changed {
+								uistate.AddAgentActions(conversationID, []string{tc.Function.Name})
+							}
 						}
+					}
+					if !isCurrentSession() {
+						return
 					}
 					cite := toolcite.For(tc.Function.Name, args)
 					sources = append(sources, domain.ChatSource{
@@ -568,9 +663,11 @@ func Insights() ui.Node {
 					msgs = append(msgs, ai.ToolResultMessage(tc.ID, tc.Function.Name, out))
 				}
 			}
-			loading.Set(false)
-			streaming.Set("")
-			errMsg.Set(uistate.T("insights.tooManySteps"))
+			if isCurrentSession() {
+				loading.Set(false)
+				streaming.Set("")
+				errMsg.Set(uistate.T("insights.tooManySteps"))
+			}
 		}()
 	}
 
@@ -836,6 +933,7 @@ func Insights() ui.Node {
 			if c.ID != cid {
 				continue
 			}
+			cancelCurrentSession()
 			ts := make([]chatTurn, len(c.Messages))
 			for i, m := range c.Messages {
 				ts[i] = chatTurn{ID: m.ID, Role: m.Role, Text: m.Text,
@@ -870,8 +968,10 @@ func Insights() ui.Node {
 
 	// newChat clears the thread for a fresh (unsaved) conversation.
 	newChat := func() {
+		cancelCurrentSession()
 		turns.Set(nil)
 		convID.Set("")
+		blankBudget.Set(0)
 		convCreated.Set(time.Time{})
 		setComposer("")
 		errMsg.Set("")
@@ -927,6 +1027,9 @@ func Insights() ui.Node {
 	// Persist whenever the thread's shape changes (message added/removed/redone).
 	cur := turns.Get()
 	persistSig := convID.Get() + "|" + strconv.Itoa(len(cur))
+	if cid := convID.Get(); cid != "" {
+		persistSig += "|" + uistate.AgentModel(cid) + "|" + strconv.Itoa(uistate.AgentBudget(cid))
+	}
 	if n := len(cur); n > 0 {
 		persistSig += "|" + cur[n-1].ID
 	}
@@ -1384,6 +1487,12 @@ func Insights() ui.Node {
 	budgetCap := uistate.AgentBudget(convID.Get())
 	budgetUsed := uistate.AgentTokensUsed(convID.Get())
 	budgetLeft, budgetCapped := uistate.AgentBudgetRemaining(convID.Get())
+	if convID.Get() == "" {
+		budgetCap = blankBudget.Get()
+		budgetUsed = 0
+		budgetCapped = budgetCap > 0
+		budgetLeft = budgetCap
+	}
 
 	// C250: which model is answering, and what this chat has cost so far, sit
 	// directly under the box where the next question is typed. Both belong at the
@@ -1626,9 +1735,10 @@ func Insights() ui.Node {
 
 	approvalPreview := ""
 	approvalPerm := toolperm.Permission{}
-	if pa := pendingApproval.Get(); pa != nil {
-		approvalPreview = pa.preview
-		approvalPerm = pa.perm
+	approval := pendingApproval.Get()
+	if approval != nil {
+		approvalPreview = approval.preview
+		approvalPerm = approval.perm
 	}
 
 	noData := len(accounts) == 0 && len(txns) == 0
@@ -1720,8 +1830,8 @@ func Insights() ui.Node {
 				If(approvalPreview != "", ui.CreateElement(ApprovalCard, approvalCardProps{
 					Preview:   approvalPreview,
 					Perm:      approvalPerm,
-					OnApprove: func() { respondApproval(pendingApproval.Get(), true) },
-					OnDecline: func() { respondApproval(pendingApproval.Get(), false) },
+					OnApprove: func() { respondApproval(approval, true) },
+					OnDecline: func() { respondApproval(approval, false) },
 				})),
 				// AG20: the running per-conversation receipt (actions taken + spend).
 				If(!empty, AgentSessionReceipt(convID.Get())),
@@ -3079,8 +3189,18 @@ func PinnedInsightRow(props pinnedInsightRowProps) ui.Node {
 
 // respondApproval sends the user's yes/no to a pending mutating tool (no-op if none).
 func respondApproval(pa *approvalReq, ok bool) {
-	if pa != nil {
-		pa.resp <- ok
+	if pa == nil {
+		return
+	}
+	if pa.decision != nil {
+		pa.decision.TryRespond(ok)
+		return
+	}
+	if pa.resp != nil {
+		select {
+		case pa.resp <- ok:
+		default:
+		}
 	}
 }
 
