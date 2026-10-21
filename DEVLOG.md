@@ -1,3 +1,7 @@
+## 2026-10-20 - Preserve and validate manual goal earmarks
+
+Opening and saving legacy foreign reservations previously relabeled raw amounts as target currency. A native allocation draft now preserves untouched records exactly, including archived/deleted sources, and treats explicit amount edits separately. It indexes balances and other-goal reservations, checks aggregate FX rounding carry and totals, and marks unavailable headroom explicitly. Submit rebuilds from current goal, balances and rates, preserves external metadata and unedited changes, and rejects stale currency text or newly excessive reservations. Proper boolean DisabledIf controls replace empty-string disabled properties. Native draft tests, goals/goalview vet, screenlint, four actual editor WASM regressions and a main WASM preflight pass; a separate read-only review found no model or live-save defect.
+
 ## 2026-10-20 - Keep goal splits exact at integer limits
 
 Proportional goal splits previously summed capacities and multiplied total by capacity in signed int64; overflow could produce invalid shares and an extremely long per-unit remainder loop. The common path now uses wide quotient/remainder arithmetic and one bounded stable remainder pass, with an exact big-integer fallback when aggregate capacity exceeds uint64. Native tests verify caps, exact totals and deterministic order at MaxInt64 and beyond uint64 aggregate capacity, plus 300 reference-checked random cases. Goals native tests and vet pass; the manual allocation screen using this helper passes four focused WASM tests.

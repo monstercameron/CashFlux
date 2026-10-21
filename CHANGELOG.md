@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Made the manual earmark editor preserve untouched currencies and revalidate account headroom at save time.
 - Replaced overflowing proportional earmark arithmetic with exact bounded allocation.
 - Recorded native matcher benchmarks against the frozen previous per-row parsing implementation.
 - Made Accounts details lazy and reused indexed history and recurring projection inputs.
