@@ -11,9 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/monstercameron/CashFlux/internal/accountflow"
 	"github.com/monstercameron/CashFlux/internal/accountview"
-	"github.com/monstercameron/CashFlux/internal/acctseries"
 	"github.com/monstercameron/CashFlux/internal/acctsort"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/auditview"
@@ -1188,15 +1186,9 @@ func acctListWidget(props acctListProps) ui.Node {
 	// and show a chip for its Account.InstitutionID.
 	instByID := domain.InstitutionByID(app.Institutions())
 
-	// AC2/AC9: the 90-day sparkline window and this-month flow window, computed once.
-	monthStart, monthEnd := dateutil.MonthRange(now)
-
-	// C413: the earliest transaction date per account, folded once, so each row can
-	// size its "all" balance-history window without re-scanning the ledger per row.
-	earliestByAcct := snapshot.Earliest
-	// C413: cap the "all" window at ~20 years of daily points so a stray far-past
-	// date can't blow up the fold.
-	const allWindowCapDays = 366 * 20
+	// Share the existing ledger index. Compact rows need balances only; their
+	// chart windows, flows and recurring projections are prepared on disclosure.
+	detailContext := newAccountDetailContext(app, snapshot, props.Rates, props.Base, now)
 
 	renderRow := func(ac domain.Account) ui.Node {
 		defaultMemberID, defaultMemberName := accountDefaultMemberTarget(ac, members, activeMemberID)
@@ -1208,19 +1200,8 @@ func acctListWidget(props acctListProps) ui.Node {
 				}
 			}
 		}
-		rowTxns := snapshot.Transactions[ac.ID]
 		bal := snapshot.Balances[ac.ID]
 		cleared := snapshot.Cleared[ac.ID]
-		// C413: size the range picker's windows. Only compute the wider series when
-		// the account actually has more than 90 days of history (HasRange), so the
-		// picker stays hidden — and the extra folds skipped — for young accounts.
-		allDays := acctseries.AllDays(now, acctseries.Days90, allWindowCapDays, earliestByAcct[ac.ID])
-		hasRange := acctseries.HasRange(allDays)
-		var s12m, sall []int64
-		if hasRange {
-			s12m = accountflow.BalanceSeries(ac, rowTxns, now, acctseries.Days12m)
-			sall = accountflow.BalanceSeries(ac, rowTxns, now, allDays)
-		}
 		return ui.CreateElement(AccountRow, accountRowProps{
 			Account: ac, Balance: bal, Cleared: cleared, Stale: freshness.IsStale(ac, windows, now), DaysStale: freshness.DaysSinceUpdate(ac, now),
 			StaleCollapsed: staleCollapsed,
@@ -1232,14 +1213,10 @@ func acctListWidget(props acctListProps) ui.Node {
 			OnSetDefaultHousehold: cbs.OnSetDefaultHousehold, OnClearDefaultHousehold: cbs.OnClearDefaultHousehold,
 			OnSetDefaultMember:   cbs.OnSetDefaultMember,
 			OnClearDefaultMember: cbs.OnClearDefaultMember,
-			SmartSettings:        smartSettings, SmartByEntity: accountByEntity, ValuationHistory: app.BalanceHistory(ac.ID),
+			SmartSettings:        smartSettings, SmartByEntity: accountByEntity,
 			AccountDefs: accDefs, InstByID: instByID,
 			BillPayment: snapshot.BillPayments[ac.ID], OnViewBills: viewBills,
-			Sparkline:    accountflow.BalanceSeries(ac, rowTxns, now, acctseries.Days90),
-			Sparkline12m: s12m, SparklineAll: sall, HasRange: hasRange,
-			Flow:       accountflow.PeriodFlow(ac, rowTxns, monthStart, monthEnd),
-			ShowFlow:   true,
-			Projection: app.ProjectAccount(ac.ID, now, 30),
+			DetailContext: detailContext,
 		})
 	}
 	keyOf := func(ac domain.Account) any { return ac.ID }

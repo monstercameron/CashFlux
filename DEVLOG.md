@@ -1,3 +1,7 @@
+## 2026-10-20 - Defer Accounts history and projection work until disclosure
+
+Compact account rows no longer compute cash flow, three history windows or a projection. An opened detail panel builds only its selected series from an immutable chronological index, while projection inputs reuse captured recurring rows and exact snapshot balances. Bounded caches include app/data identity, currency/rates, exact occurrence time and local history boundaries; invalid ledger balances show unavailable status without a plausible curve or zero-start projection. Native parity tests pass for history windows, intraday recurring cutoffs and invalid data; all three actual Accounts-host/cache regressions pass, related native gates pass and a main WASM preflight builds.
+
 ## 2026-10-20 - Prepare transaction filter predicates once
 
 The existing compiled filter still reparsed search amounts and split selected CSV values for every transaction and widened preset. Prepared invocation-owned sets and numeric criteria now remove that repeated work without a retained cache. Frozen legacy-reference tests compare complete results, ordering, conversion issues and callback order across all sort directions, numeric/plain/invalid searches, split and OR scopes, bill-linked accounts, owner/tag cases and preset widening; raw inputs remain unchanged. Native txnfilter/txntoolbar tests and vet pass, related native screen gates pass and the main WASM preflight builds. Benchmark source was added for later measurement; it has not been run.

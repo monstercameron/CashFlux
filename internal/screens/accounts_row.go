@@ -35,6 +35,10 @@ type accountRowProps struct {
 	Balance money.Money
 	Cleared money.Money
 	Stale   bool
+	// DetailContext lazily prepares the production list's selected chart window,
+	// period flow and projection. Direct row consumers can still supply the
+	// individual display facts below.
+	DetailContext *accountDetailContext
 	// DaysStale is the days since the balance was last confirmed (−1 = never), shown
 	// on the stale badge so the row says HOW stale it is — matching the "it's been N
 	// days" wording of the balance-update notification. Only read when Stale is true.
@@ -373,6 +377,21 @@ func AccountRow(props accountRowProps) ui.Node {
 	// per-row component). The choice is view-only, so it isn't persisted.
 	chartRange := ui.UseState("90d")
 	onChartRange := func(v string) { chartRange.Set(v) }
+	if detailsOpen.Get() && props.DetailContext != nil {
+		facts := props.DetailContext.facts(a)
+		props.Flow, props.ShowFlow, props.Projection = facts.Flow, true, facts.Projection
+		props.ValuationHistory = facts.Valuations
+		series, hasRange := props.DetailContext.series(a, chartRange.Get())
+		props.HasRange = hasRange
+		switch chartRange.Get() {
+		case "12m":
+			props.Sparkline12m = series
+		case "all":
+			props.SparklineAll = series
+		default:
+			props.Sparkline = series
+		}
+	}
 	viewBills := ui.UseEvent(Prevent(func() {
 		if props.OnViewBills != nil {
 			props.OnViewBills(a.ID)
@@ -565,6 +584,16 @@ func AccountRow(props accountRowProps) ui.Node {
 	// so conditional mounting here is safe).
 	var detailsNode ui.Node = Fragment()
 	if detailsOpen.Get() {
+		var chart ui.Node
+		validBalance := true
+		if props.DetailContext != nil {
+			_, validBalance = props.DetailContext.snapshot.Balances[a.ID]
+		}
+		if validBalance {
+			chart = accountBalanceChart(a, props.Sparkline, props.Sparkline12m, props.SparklineAll, props.HasRange, chartRange.Get(), onChartRange)
+		} else {
+			chart = P(css.Class("row-meta"), Attr("role", "status"), Attr("data-testid", "acct-history-unavailable-"+a.ID), uistate.T("calculation.unavailable"))
+		}
 		detailsNode = Div(css.Class("acct-row-details"), Attr("data-testid", "acct-details-"+a.ID),
 			valChange,
 			projNode,
@@ -572,7 +601,7 @@ func AccountRow(props accountRowProps) ui.Node {
 			flowNode,
 			// AC2 + C413: the 90-day balance figure, with a 90d/12m/all range picker
 			// when the account has more than 90 days of history.
-			accountBalanceChart(a, props.Sparkline, props.Sparkline12m, props.SparklineAll, props.HasRange, chartRange.Get(), onChartRange),
+			chart,
 			// C381: and where it goes next. The history chart above answers where the
 			// account has been; this answers whether it survives until payday.
 			accountForwardLine(a, props.Balance, props.Projection, time.Now()),
