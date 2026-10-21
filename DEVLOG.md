@@ -1,3 +1,7 @@
+## 2026-10-21 - Isolate recovery deduplication test scope
+
+RetainRecovery correctly reused an identical copy already present under the shared journal fixture, so the old test counted zero newly-added copies and failed. The fixture now accepts an explicit workspace while existing callers retain their default. The stale-edit test uses a fresh workspace and exact owner-scoped prefix, checks one retained copy after two calls, requires both calls to return the same scoped key and reads the authenticated payload. It removes no unrelated recovery entries. The combined focused app WASM run passes all six cases including this regression.
+
 ## 2026-10-21 - Isolate hosted legacy migration fixtures
 
 The expanded app WASM suite exposed a marker leaked from an encrypted-pull test into a legacy fixture. The fixture now saves, clears and restores the exact storage scope, uses persisted App Lock settings, and verifies actual legacy import/protection metadata. A contradictory production-review assertion now tests the documented SEC6 downgrade rejection and complete unchanged local financial data, with local connection preferences established before the baseline. Production encryption guards are unchanged. Combined focused app WASM run passes six tests, including these pull cases and recovery deduplication (42.7s).
