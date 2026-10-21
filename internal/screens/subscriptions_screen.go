@@ -12,7 +12,6 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
-	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
 	"github.com/monstercameron/CashFlux/internal/id"
@@ -156,7 +155,7 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("common.notReady"))})
 	}
 
-	settings, settingsErr := app.Store().GetSettings()
+	settings, settingsErr := app.SettingsChecked()
 	if settingsErr != nil {
 		settingsErr = fmt.Errorf("read subscription settings: %w", settingsErr)
 	}
@@ -167,10 +166,10 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 	// lets users tune out noisy spending (e.g. "Dining" one-offs or investment
 	// account transfers) without touching the per-subscription ignore list.
 	detectPrefs := uistate.LoadSubsDetectPrefs()
-	allTxns, readErr := app.Store().ListTransactions()
+	allTxns, txnReadErr := app.TransactionsChecked()
 	detectErr := settingsErr
-	if readErr != nil && detectErr == nil {
-		detectErr = fmt.Errorf("read subscription transactions: %w", readErr)
+	if txnReadErr != nil && detectErr == nil {
+		detectErr = fmt.Errorf("read subscription transactions: %w", txnReadErr)
 	}
 	allAccts, readErr := app.Store().ListAccounts()
 	if readErr != nil && detectErr == nil {
@@ -332,30 +331,8 @@ func SubscriptionsPanel(p SubscriptionsPanelProps) ui.Node {
 	// Prepare checked subscription totals and the trailing spend denominator once,
 	// before constructing any row or summary markup.
 	modelNow := app.ClockNow()
-	trailingExpense := int64(0)
-	trailingMonths := 0
-	var shareErr error
-	modelTxns, readErr := app.Store().ListTransactions()
-	if readErr != nil {
-		shareErr = readErr
-	} else {
-		for k := 1; k <= 3; k++ {
-			ms, me := dateutil.MonthRange(modelNow.AddDate(0, -k, 0))
-			_, expense, periodErr := ledger.PeriodTotals(modelTxns, ms, me, rates)
-			if periodErr != nil {
-				shareErr = periodErr
-				break
-			}
-			if expense.Amount > 0 {
-				trailingExpense, periodErr = money.Add(trailingExpense, expense.Amount)
-				if periodErr != nil {
-					shareErr = periodErr
-					break
-				}
-				trailingMonths++
-			}
-		}
-	}
+	trailingSpend, shareErr := subscriptions.TrailingSpendChecked(allTxns, txnReadErr, modelNow, rates)
+	trailingExpense, trailingMonths := trailingSpend.TotalExpense, trailingSpend.EligibleMonths
 	if shareErr != nil {
 		trailingExpense, trailingMonths = 0, 0
 	}

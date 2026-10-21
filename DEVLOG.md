@@ -1,3 +1,7 @@
+## 2026-10-21 - Check subscription trailing calendar months
+
+Prepared the three completed calendar months from the current month start, excluding the partial month and counting only nonempty expense months. Reuses checked transaction snapshot. Native tests cover May31, leapMarch31, local timezone boundaries, source/FX failures and overflow; full native suite and Screens compilation/render suite pass.
+
 ## 2026-10-21 - Prepare recurring agenda facts natively
 
 Moved schedule rewind, occurrence merge, settlement and projection adaptation into recurringview. Calendar reuses one prepared span; unknown FX remains unavailable and disables dependent paid actions instead of relabelling source amounts as base currency. Native and full1101 Screens suites pass. Existing projection policy is preserved; this does not certify every source-read boundary.
