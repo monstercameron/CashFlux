@@ -13,6 +13,7 @@ and every commit updates this file under `Unreleased`.
 - Authenticated server AI calls now record daily estimated USD cost alongside token usage. The operator console shows per-account estimates and marks historical or unpriced activity as incomplete; server logs contain model and usage totals without prompts or responses.
 
 ### Documentation
+- The sync privacy review now distinguishes the verified but undeployed whole-device erase from the still-open per-artifact garbage-collection gap.
 - The device-erasure audit now identifies retained workspace, queue, file, credential, and key records that the current “Erase everything” action does not remove, with acceptance criteria for a truthful full erase.
 
 ### Fixed
