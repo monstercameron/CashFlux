@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Recurring agenda and calendar share native occurrence, settlement and checked conversion facts.
 - Debt tuner, coach and strategy comparison share checked native payoff results and suppress partial FX totals.
 - Planning retirement uses native checked balances and dependency-complete bounded simulation reuse.
 - What changed preserves source errors, exact cutoff and app identity while sharing transaction indexes.

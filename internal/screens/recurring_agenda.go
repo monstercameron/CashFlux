@@ -5,19 +5,17 @@
 package screens
 
 import (
-	"strconv"
-
-	"sort"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/billmatch"
 	"github.com/monstercameron/CashFlux/internal/bills"
-	"github.com/monstercameron/CashFlux/internal/billsched"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
+	"github.com/monstercameron/CashFlux/internal/recurringview"
 	"github.com/monstercameron/CashFlux/internal/subscriptions"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
@@ -32,39 +30,14 @@ import (
 // pay cycle; matches the tideline's cap).
 const agendaWindowDays = 45
 
-// agendaItem is one merged forward occurrence — a bill (outflow) or a paycheck
-// (income). Amount is SIGNED (outflow negative, income positive) so the row tones
-// it directly. AccountID is "recurring:<id>" or a real liability account for
-// bills, empty for income.
+// agendaItem adds only display and action affordances to native recurring facts.
 type agendaItem struct {
-	Date       time.Time
-	Name       string
-	AccountID  string
-	Amount     money.Money
+	recurringview.AgendaOccurrence
 	ModeLabel  string
 	ModeHint   string
 	ModeCls    string
 	Fit        *billFitChip
 	Negotiable bool
-	Paid       bool
-	Income     bool
-	// Past marks an occurrence whose due date has already gone by. The forward
-	// agenda never carries these (overdue has its own strip), but the calendar
-	// renders whole months, and a month whose first three weeks are blank because
-	// they already happened reads as a broken calendar rather than a settled one.
-	Past bool
-	// Missed marks a past occurrence the app can actually SHOW went unpaid: no
-	// settlement evidence, and the flow's own schedule never advanced past it.
-	//
-	// It is deliberately narrower than "past and not known paid". Absence of a
-	// payment record is not evidence of a missed payment — most households settle
-	// most bills without ever telling the app — so a past day with nothing known
-	// about it recedes quietly instead of accusing.
-	Missed bool
-	// AnchorAccountID is the liability account this row settles when the row is a
-	// merged obligation (the statement bill folded into its recurring flow), so
-	// the single row keeps the account identity's capabilities.
-	AnchorAccountID string
 }
 
 // buildAgenda merges the forward bill occurrences (recurring-derived + liability
@@ -78,164 +51,93 @@ func buildAgenda(app *appstate.App, now time.Time, base string) []agendaItem {
 // buildAgendaRange is buildAgenda over an explicit forward horizon — everything
 // due between now and until, overdue excluded (it has its own strip).
 func buildAgendaRange(app *appstate.App, now, until time.Time, base string) []agendaItem {
-	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	all := buildAgendaSpan(app, now, now, until, base)
-	out := all[:0:0]
-	for _, it := range all {
-		if it.Date.Before(today) {
-			continue
-		}
-		out = append(out, it)
-	}
-	return out
+	span := prepareAgendaSpan(app, now, now, until, base)
+	return presentAgendaSpan(app, recurringview.ForwardAgenda(span, now), now)
 }
 
-// buildAgendaSpan is the merged agenda model over an ARBITRARY span, which may
-// start in the past. The calendar view needs this: it renders whole months, and
-// a stored schedule only knows its NEXT due date, so the flows are wound back to
-// the start of the span (domain.RecurringCadence.Prev) before being projected
-// forward across it. now stays separate from from — it decides what counts as
-// already-happened and is not the window.
-func buildAgendaSpan(app *appstate.App, now, from, until time.Time, base string) []agendaItem {
-	rates := currency.Rates{Base: base, Rates: app.Settings().FXRates}
-	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	start := time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, from.Location())
-
-	recByID := map[string]domain.Recurring{}
-	for _, r := range app.Recurring() {
-		recByID[r.ID] = r
+// prepareAgendaSpan gathers durable evidence, then delegates occurrence dates,
+// merge policy, FX conversion, and settlement rules to the pure recurring view.
+func prepareAgendaSpan(app *appstate.App, now, from, until time.Time, base string) recurringview.AgendaSpan {
+	if app == nil {
+		return recurringview.AgendaSpan{Base: base}
 	}
-	rewound := rhyRewind(app.Recurring(), start)
+	settings := app.Settings()
+	recurring := app.Recurring()
+	span := recurringview.BuildAgendaSpan(recurringview.AgendaSpanInput{
+		Accounts: app.Accounts(), Recurring: recurring, Now: now, From: from, Until: until, Base: base,
+		Rates: currency.Rates{Base: base, Rates: settings.FXRates},
+	})
 
-	var items []agendaItem
-	// A liability's statement bill and the monthly recurring flow that pays it are
-	// ONE obligation — listing both double-counts the money owed. OccurrencesWithin
-	// collapses them onto the recurring row and records the liability as its anchor.
-	occurrences := bills.OccurrencesWithin(app.Accounts(), rewound, start, until)
-	fitModel := prepareBillFitModel(app, occurrences, now)
-	for _, b := range occurrences {
-		amt, err := rates.Convert(b.Amount, base)
-		if err != nil {
-			amt = money.New(b.Amount.Amount, base)
-		}
-		it := agendaItem{
-			Date: b.DueDate, Name: b.Name, AccountID: b.AccountID,
-			Amount: money.New(-amt.Amount, base), Fit: billFitFor(fitModel, b),
-			AnchorAccountID: b.AnchorAccountID,
-		}
-		if rid, ok := recurringIDFromBillAccount(b.AccountID); ok {
-			it.ModeLabel, it.ModeHint, it.ModeCls = postingMode(recByID[rid])
-			it.Negotiable = !recByID[rid].Autopay
-		} else if b.Autopay {
-			it.ModeLabel, it.ModeHint, it.ModeCls = uistate.T("rhythm.modeWatch"), uistate.T("rhythm.modeWatchHint"), "is-watch"
-		} else {
-			it.ModeLabel, it.ModeHint, it.ModeCls = uistate.T("rhythm.modeManual"), uistate.T("rhythm.modeManualHint"), ""
-			it.Negotiable = true
-		}
-		it.Paid = app.OccurrencePaid(b.AccountID, b.DueDate)
-		hasSchedule := false
-		if rid, ok := recurringIDFromBillAccount(b.AccountID); ok {
-			hasSchedule = true
-			it.Paid = rhySettled(app, recByID[rid], b.DueDate)
-		}
-		it.Past = b.DueDate.Before(today)
-		// A liability statement has no schedule of its own to reason about, so a
-		// past one is never claimed as missed — only shown as history.
-		it.Missed = it.Past && !it.Paid && hasSchedule
-		items = append(items, it)
-	}
-
-	// Income paychecks make the rhythm real.
-	for _, r := range rewound {
-		if !r.Active() || r.Amount.IsNegative() {
+	matched := app.BillMatchPaidOccurrences()
+	evidence := make([]recurringview.AgendaSettlementEvidence, 0, len(span.Occurrences))
+	for _, occurrence := range span.Occurrences {
+		if occurrence.Income {
 			continue
 		}
-		amt, err := rates.Convert(r.Amount, base)
-		if err != nil {
-			amt = money.New(r.Amount.Amount, base)
-		}
-		label, hint, cls := postingMode(r)
-		d := r.NextDue
-		for i := 0; i < 24 && !d.After(until); i++ {
-			if !d.Before(start) {
-				items = append(items, agendaItem{
-					Date: d, Name: r.Label, Amount: money.New(amt.Amount, base),
-					ModeLabel: label, ModeHint: hint, ModeCls: cls, Income: true,
-					Past: d.Before(today),
-				})
-			}
-			next := r.Cadence.Next(d)
-			if !next.After(d) {
-				break
-			}
-			d = next
+		paid := app.OccurrencePaid(occurrence.AccountID, occurrence.Date)
+		isMatched := occurrence.RecurringID != "" && matched[billmatch.Key(occurrence.RecurringID, occurrence.Date)]
+		if paid || isMatched {
+			evidence = append(evidence, recurringview.AgendaSettlementEvidence{
+				BillID: occurrence.AccountID, RecurringID: occurrence.RecurringID,
+				DueDate: occurrence.Date, Paid: paid, Matched: isMatched,
+			})
 		}
 	}
-	sort.SliceStable(items, func(i, j int) bool { return items[i].Date.Before(items[j].Date) })
+	return recurringview.WithSettlementEvidence(span, evidence)
+}
+
+// presentAgendaSpan attaches UI labels and budget-fit chips to prepared facts.
+func presentAgendaSpan(app *appstate.App, span recurringview.AgendaSpan, now time.Time) []agendaItem {
+	if app == nil || len(span.Occurrences) == 0 {
+		return nil
+	}
+	recurring := app.Recurring()
+	recByID := make(map[string]domain.Recurring, len(recurring))
+	var candidates []bills.Bill
+	for _, flow := range recurring {
+		recByID[flow.ID] = flow
+	}
+	for _, occurrence := range span.Occurrences {
+		if !occurrence.Income {
+			candidates = append(candidates, occurrence.Bill)
+		}
+	}
+	fitModel := prepareBillFitModel(app, candidates, now)
+	items := make([]agendaItem, 0, len(span.Occurrences))
+	for _, fact := range span.Occurrences {
+		item := agendaItem{AgendaOccurrence: fact}
+		if fact.Income {
+			item.ModeLabel, item.ModeHint, item.ModeCls = postingMode(recByID[fact.RecurringID])
+		} else {
+			item.Fit = billFitFor(fitModel, fact.Bill)
+			if rid, ok := bills.RecurringIDFromAccount(fact.AccountID); ok {
+				flow := recByID[rid]
+				item.ModeLabel, item.ModeHint, item.ModeCls = postingMode(flow)
+				item.Negotiable = !flow.Autopay
+			} else if fact.Bill.Autopay {
+				item.ModeLabel, item.ModeHint, item.ModeCls = uistate.T("rhythm.modeWatch"), uistate.T("rhythm.modeWatchHint"), "is-watch"
+			} else {
+				item.ModeLabel, item.ModeHint, item.ModeCls = uistate.T("rhythm.modeManual"), uistate.T("rhythm.modeManualHint"), ""
+				item.Negotiable = true
+			}
+		}
+		items = append(items, item)
+	}
 	return items
 }
 
-// rhySettled is THE test for "this occurrence of this flow is dealt with", used
-// by both the overdue strip and the calendar's past-day states.
-//
-// It has to be one function. The strip and the calendar are two views of the same
-// question, and when they answered it differently the page contradicted itself:
-// the strip said three items were overdue for $127 while the calendar painted a
-// fourth in the same warning tone. A user cannot tell which of two disagreeing
-// claims to believe, so both become worthless.
-//
-// Three kinds of evidence settle an occurrence, and any one is enough:
-//
-//   - the user marked it paid (the durable occurrence record);
-//   - a real transaction matched it (auto-matched bills are paid bills, and a
-//     month of them must not render as a month of misses); or
-//   - the flow's own schedule has advanced past it — NextDue sitting after this
-//     date means the occurrence ran its course and the flow moved on.
-//
-// Everything else is merely unknown, which is NOT a miss. Absence of a payment
-// record is not evidence of a missed payment; most households settle most bills
-// without ever telling the app.
-func rhySettled(app *appstate.App, r domain.Recurring, due time.Time) bool {
-	if app.OccurrencePaid("recurring:"+r.ID, due) {
-		return true
+// rhySettled gathers app-state evidence for the overdue strip and keeps the
+// shared settlement rule in recurringview.
+func rhySettled(app *appstate.App, recurring domain.Recurring, due time.Time) bool {
+	if app == nil {
+		return false
 	}
-	if _, matched := app.BillMatchForOccurrence(r.ID, due); matched {
-		return true
+	evidence := recurringview.AgendaSettlementEvidence{
+		BillID: "recurring:" + recurring.ID, RecurringID: recurring.ID, DueDate: due,
+		Paid: app.OccurrencePaid("recurring:"+recurring.ID, due),
 	}
-	return !r.NextDue.IsZero() && due.Before(r.NextDue)
-}
-
-// rhyRewindCap bounds the backward walk so a flow whose NextDue sits far in the
-// future (or a degenerate imported cadence) cannot spin.
-const rhyRewindCap = 400
-
-// rhyRewind returns copies of the flows with NextDue wound back to the last
-// occurrence on or before from, so a projection starting at from sees the
-// occurrences that already happened rather than only the ones still ahead.
-//
-// The store keeps a schedule as its NEXT due date, which is everything a forward
-// agenda needs and nothing a calendar does: asking "what was due on the 12th of
-// last month" of a flow whose NextDue is the 12th of next month gets silence,
-// which is what made past weeks render blank. Winding back through the cadence's
-// own inverse (never a fixed day count — months are not 30 days long) keeps the
-// anchor day exactly where the schedule puts it.
-func rhyRewind(recs []domain.Recurring, from time.Time) []domain.Recurring {
-	out := make([]domain.Recurring, 0, len(recs))
-	for _, r := range recs {
-		if !r.NextDue.IsZero() {
-			d := r.NextDue
-			for i := 0; i < rhyRewindCap && d.After(from); i++ {
-				prev := r.Cadence.Prev(d)
-				if !prev.Before(d) {
-					break // a cadence that does not move backwards cannot be wound
-				}
-				d = prev
-			}
-			r.NextDue = d
-		}
-		out = append(out, r)
-	}
-	return out
+	_, evidence.Matched = app.BillMatchForOccurrence(recurring.ID, due)
+	return recurringview.OccurrenceSettled(recurring, due, evidence)
 }
 
 // rhyAgendaProps configures the agenda section.
@@ -410,8 +312,10 @@ func rhyAgendaCalendar(app *appstate.App, now time.Time, offset int, base string
 	// Bucket the merged agenda (bills + income) by calendar day. The grid's
 	// leading/trailing edge days belong to the neighbouring months, so the span is
 	// widened a week each way to fill them too.
+	span := prepareAgendaSpan(app, now, disp.AddDate(0, 0, -7), monthEnd.AddDate(0, 0, 7), base)
+	items := presentAgendaSpan(app, span, now)
 	byDay := map[string][]agendaItem{}
-	for _, it := range buildAgendaSpan(app, now, disp.AddDate(0, 0, -7), monthEnd.AddDate(0, 0, 7), base) {
+	for _, it := range items {
 		k := it.Date.Format("2006-01-02")
 		byDay[k] = append(byDay[k], it)
 	}
@@ -429,9 +333,7 @@ func rhyAgendaCalendar(app *appstate.App, now time.Time, offset int, base string
 	// WF9: project the account forward across the displayed month, from the same
 	// agenda items the grid is drawing — so the balances and the chips can never
 	// describe different obligations.
-	closing, shortNote := rhyProjectedClosing(app,
-		buildAgendaSpan(app, now, disp.AddDate(0, 0, -7), monthEnd.AddDate(0, 0, 7), base),
-		disp, base, now)
+	closing, shortNote := rhyProjectedClosing(app, span, disp, base, now)
 	return Fragment(
 		Div(css.Class(tw.Flex, tw.ItemsCenter, tw.JustifyBetween, tw.Mb2),
 			Span(css.Class("rhy-sec-note"), Style(map[string]string{"margin": "0"}), monthLabel(disp)), nav),
@@ -488,7 +390,8 @@ func rhyCalendarGrid(grid [][]bills.CalendarDay, weekStart time.Weekday, now tim
 				// A calendar of anonymous numbers is half a feature — the name says
 				// WHAT is due; CSS truncates it when the cell is narrow.
 				chip := "rhy-cal-item"
-				tip := it.Name + " · " + fmtMoney(it.Amount)
+				amountLabel := rhyAgendaAmountText(it)
+				tip := it.Name + " · " + amountLabel
 				// A day that has gone by says what HAPPENED, not what was due — but
 				// only as far as the app actually knows. Settled, genuinely missed,
 				// and simply-in-the-past are three different claims and read as three
@@ -509,13 +412,20 @@ func rhyCalendarGrid(grid [][]bills.CalendarDay, weekStart time.Weekday, now tim
 				}
 				cell = append(cell, Div(ClassStr(chip), Title(tip),
 					Span(css.Class("rhy-cal-name"), it.Name),
-					Span(css.Class("rhy-cal-amt"), fmtMoney(it.Amount)),
+					Span(css.Class("rhy-cal-amt"), amountLabel),
 				))
 			}
 			args = append(args, Div(cell...))
 		}
 	}
 	return Div(args...)
+}
+
+func rhyAgendaAmountText(item agendaItem) string {
+	if !item.AmountAvailable {
+		return uistate.T("transactions.calScheduledAmountUnavailable")
+	}
+	return fmtMoney(item.Amount)
 }
 
 // rhyAgendaRowProps drives one compact agenda row.
@@ -532,7 +442,7 @@ func rhyAgendaRow(props rhyAgendaRowProps) ui.Node {
 	it := props.Item
 	markPaid := ui.UseEvent(Prevent(func() {
 		app := appstate.Default
-		if app == nil {
+		if app == nil || !it.AmountAvailable {
 			return
 		}
 		pay := money.New(-it.Amount.Amount, props.Base) // positive magnitude
@@ -577,6 +487,9 @@ func rhyAgendaRow(props rhyAgendaRowProps) ui.Node {
 		if it.Paid {
 			verb = Span(css.Class("pill", tw.ColorClass("text-ok")), Attr("data-testid", "bill-paid"),
 				Title(uistate.T("bills.paidBadgeTitle")), uistate.T("bills.paidBadge"))
+		} else if !it.AmountAvailable {
+			verb = Button(css.Class("btn btn-primary btn-sm"), Type("button"), Attr("data-testid", "rhy-ag-markpaid-"+it.AccountID),
+				Title(uistate.T("transactions.calScheduledAmountUnavailable")), Disabled(true), uistate.T("bills.markPaid"))
 		} else {
 			verb = Button(css.Class("btn btn-primary btn-sm"), Type("button"), Attr("data-testid", "rhy-ag-markpaid-"+it.AccountID),
 				Title(uistate.T("bills.markPaidTitle")), OnClick(markPaid), uistate.T("bills.markPaid"))
@@ -620,6 +533,10 @@ func rhyAgendaRow(props rhyAgendaRowProps) ui.Node {
 		})
 	}
 
+	amountClass := "rhy-ag-amt"
+	if it.AmountAvailable {
+		amountClass += " " + recurAmountTone(it.Amount)
+	}
 	return Div(ClassStr(rowCls), Attr("role", "listitem"),
 		Span(css.Class("rhy-ag-date"), uistate.LoadPrefs().FormatDate(it.Date)),
 		Div(css.Class("rhy-ag-body"),
@@ -632,7 +549,7 @@ func rhyAgendaRow(props rhyAgendaRowProps) ui.Node {
 				rhyAccountName(it.AnchorAccountID))),
 			fitNode,
 		),
-		Span(ClassStr("rhy-ag-amt "+recurAmountTone(it.Amount)), fmtMoney(it.Amount)),
+		Span(ClassStr(amountClass), rhyAgendaAmountText(it)),
 		Div(css.Class("rhy-ag-verb"), verb, kebab),
 	)
 }
@@ -644,7 +561,7 @@ func rhyAgendaRow(props rhyAgendaRowProps) ui.Node {
 // Projects from TODAY forward, so a month already past shows nothing: a
 // "projected" balance for days that have happened would be a forecast of the
 // past, and the ledger already knows what occurred.
-func rhyProjectedClosing(app *appstate.App, items []agendaItem, month time.Time,
+func rhyProjectedClosing(app *appstate.App, span recurringview.AgendaSpan, month time.Time,
 	base string, now time.Time) (map[string]int64, ui.Node) {
 
 	if app == nil {
@@ -659,36 +576,7 @@ func rhyProjectedClosing(app *appstate.App, items []agendaItem, month time.Time,
 	if err != nil {
 		return nil, Fragment()
 	}
-	sched := make([]billsched.Item, 0, len(items))
-	assign := make(map[string]time.Time, len(items))
-	var paydays []time.Time
-	var incomePer int64
-	for i, it := range items {
-		if it.Date.Before(now) {
-			// Already due: the ledger has the truth, and projecting it again would
-			// count the same money twice.
-			continue
-		}
-		if it.Income {
-			// Income is projected as its own dated credit rather than folded into a
-			// per-payday average — an average would smooth away the very gap between
-			// a bill and the paycheque that covers it.
-			paydays = append(paydays, it.Date)
-			if amt := it.Amount.Amount; amt > incomePer {
-				incomePer = amt
-			}
-			continue
-		}
-		id := it.Name + strconv.Itoa(i)
-		amt := it.Amount.Amount
-		if amt < 0 {
-			amt = -amt
-		}
-		sched = append(sched, billsched.Item{ID: id, Amount: amt, Due: it.Date})
-		assign[id] = it.Date
-	}
-	horizon := int(monthEnd.Sub(now).Hours() / 24)
-	pr, ok := billsched.Project(liq.Amount, sched, assign, paydays, incomePer, now, horizon)
+	pr, ok := recurringview.ProjectAgendaMonth(span, liq.Amount, month, now)
 	if !ok {
 		return nil, Fragment()
 	}

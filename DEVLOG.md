@@ -1,3 +1,7 @@
+## 2026-10-21 - Prepare recurring agenda facts natively
+
+Moved schedule rewind, occurrence merge, settlement and projection adaptation into recurringview. Calendar reuses one prepared span; unknown FX remains unavailable and disables dependent paid actions instead of relabelling source amounts as base currency. Native and full1101 Screens suites pass. Existing projection policy is preserved; this does not certify every source-read boundary.
+
 ## 2026-10-21 - Share native payoff comparisons across debt views
 
 Preparation independently requests minimum-only and strategy comparisons, reuses selected plans and computes only the alternate strategy. Removed redundant render-time debt aggregation/planning and an obsolete unused variable found by WASM compilation. Native comparison fixtures retain viable controls. Native suite and full1101 Screens suite pass; static call-count savings are not measured latency evidence.
