@@ -1,3 +1,7 @@
+## 2026-10-20 - Assistant change receipts and exact undo
+
+Added canonical Assistant baseline isolation and exact undo receipts, preserving prior manual edits and avoiding phantom actions for no-op or failed tools. Undo rechecks the published receipt before replay and removes history only after durable success. Native history and action-state tests, two app WASM groups, and three screens receipt groups passed with mocked local fixtures. No release or deployment.
+
 ## 2026-10-20 - Assistant trigger-aware workflow variables
 
 Added canonical workflow transaction-variable declarations and App.WorkflowVariableNamesFor(trigger), preserving the general discovery union while gating unavailable per-row names on other triggers. Transaction custom definitions follow their actual runtime types; absent account/category values are explicit empty strings. The authoring compiler and tool share that trigger-aware surface. Native workflow/nlauthor/appstate tests and vet passed, and the two actual-tool WASM regressions passed in integration pass4: the advertised txn_abs threshold executes at the real boundary, while non-transaction and unknown names refuse without writes.

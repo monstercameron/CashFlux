@@ -38,3 +38,18 @@ var CanUndoFunc = func() bool { return false }
 // right before showing an "Undo" toast so the undo stack is ready when the user
 // clicks Undo (§6.8). Wired to app.captureUndoPoint; default is a no-op.
 var CaptureNow = func() {}
+
+// CaptureAssistantBaseline flushes any already-written household change before
+// an approved Assistant tool starts. The actor is still the household then.
+var CaptureAssistantBaseline = func() bool { return false }
+
+// CaptureAssistantReceipt captures the just-finished Assistant tool mutation and
+// returns its undo ID only when the filtered diff created a real undo point.
+var CaptureAssistantReceipt = func() (undoID string, changed bool) { return "", false }
+
+// TopUndoID returns the ID attached to the published top undo point.
+var TopUndoID = func() string { return "" }
+
+// UndoExpected starts an undo only when expectedID is still the published top
+// undo point. Completion runs after the durable replay finishes.
+var UndoExpected = func(expectedID string, done func(error)) bool { return false }

@@ -162,6 +162,20 @@ func undoLastChange() bool {
 }
 
 func undoLastChangeThen(redo bool, done func(error)) {
+	undoChangeThen(redo, "", done)
+}
+
+// undoExpected accepts an undo only when the named receipt still owns the
+// published top stack entry. The ID is checked again immediately before pop.
+func undoExpected(expectedID string, done func(error)) bool {
+	if expectedID == "" || applyingUndo {
+		return false
+	}
+	undoChangeThen(false, expectedID, done)
+	return true
+}
+
+func undoChangeThen(redo bool, expectedID string, done func(error)) {
 	app := appstate.Default
 	if app == nil || applyingUndo {
 		done(fmt.Errorf("another change is still being saved"))
@@ -173,12 +187,25 @@ func undoLastChangeThen(redo bool, done func(error)) {
 			if result.Err == nil {
 				undoPersistencePending = false
 			}
-			done(result.Err)
+			if result.Err != nil || expectedID == "" {
+				done(result.Err)
+				return
+			}
+			undoChangeThen(redo, expectedID, done)
 		})
 		return
 	}
 
-	captureUndoPoint()
+	if expectedID != "" {
+		// Check the store cursor even when App.Rev did not move: the undo target
+		// must not hide a newer manual write behind a stale top-of-stack view.
+		if !captureAssistantBaseline() {
+			done(fmt.Errorf("could not verify the top Assistant undo item"))
+			return
+		}
+	} else {
+		captureUndoPoint()
+	}
 	if len(undoPending) > 0 {
 		applyingUndo = true
 		app.RequestDurable(func(result appstate.DurableResult) {
@@ -187,8 +214,12 @@ func undoLastChangeThen(redo bool, done func(error)) {
 				done(result.Err)
 				return
 			}
-			undoLastChangeThen(redo, done)
+			undoChangeThen(redo, expectedID, done)
 		})
+		return
+	}
+	if expectedID != "" && undoStack.UndoID() != expectedID {
+		done(fmt.Errorf("the Assistant change is no longer the top undo item"))
 		return
 	}
 	var cs history.ChangeSet
@@ -200,6 +231,17 @@ func undoLastChangeThen(redo bool, done func(error)) {
 	}
 	if !ok {
 		done(fmt.Errorf("there is no change to undo"))
+		return
+	}
+	if expectedID != "" && cs.UndoID != expectedID {
+		// The stack is single-threaded, but keep this guard adjacent to the
+		// cursor move so a future caller cannot accidentally weaken the check.
+		if redo {
+			_, _ = undoStack.Undo()
+		} else {
+			_, _ = undoStack.Redo()
+		}
+		done(fmt.Errorf("the Assistant change is no longer the top undo item"))
 		return
 	}
 	restoreCursor := func() {

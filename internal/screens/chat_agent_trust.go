@@ -77,8 +77,16 @@ func agToolsTrust(app *appstate.App, base string, rates currency.Rates) []chatTo
 	}
 }
 
-// runAssistantWrite runs one approved mutating tool under the assistant's identity
-// and takes an undo point for it (C389 / AG20).
+// assistantWriteResult reports the tool output and the exact captured change, if
+// the approved call produced a nonempty filtered undo point.
+type assistantWriteResult struct {
+	Text    string
+	Changed bool
+	UndoID  string
+}
+
+// runAssistantWriteResult runs one approved mutating tool under the assistant's
+// identity and returns the receipt for its exact captured change (C389 / AG20).
 //
 // The changeset path (AG1) already did this, but a tool the model called directly
 // did not: the write landed in the audit log attributed to the household, and the
@@ -89,9 +97,14 @@ func agToolsTrust(app *appstate.App, base string, rates currency.Rates) []chatTo
 // The actor is cleared on the way out even if the tool panics, because a leaked
 // assistant tag would mis-attribute every subsequent hand-made edit in the session
 // — a worse failure than the one being fixed.
-func runAssistantWrite(tool string, run func() string) (out string) {
+func runAssistantWriteResult(tool string, run func() string) (result assistantWriteResult) {
+	previousActor := auditview.SessionActor()
+	auditview.SetSessionActor("")
+	if !auditview.CaptureAssistantBaseline() {
+		auditview.SetSessionActor(previousActor)
+		return assistantWriteResult{Text: "The approved change could not start because its undo history was unavailable."}
+	}
 	auditview.SetSessionActor(auditview.ActorAssistant)
-	defer auditview.SetSessionActor("")
 	// A tool runs with arguments the MODEL wrote — unvalidated JSON shaped by
 	// something outside this program. An unrecovered panic in a Go/wasm goroutine
 	// takes down the whole page, not just the chat, so one malformed argument
@@ -101,14 +114,25 @@ func runAssistantWrite(tool string, run func() string) (out string) {
 	// handle.
 	defer func() {
 		if r := recover(); r != nil {
-			out = fmt.Sprintf("The %s tool failed: %v", tool, r)
+			result.Text = fmt.Sprintf("The %s tool failed: %v", tool, r)
 		}
+		// Capture real partial writes even after a panic. Empty/filtered diffs
+		// have no receipt and cannot create a phantom Assistant action.
+		result.UndoID, result.Changed = auditview.CaptureAssistantReceipt()
+		result.Changed = result.Changed && result.UndoID != ""
+		if result.Changed {
+			uistate.NoteAssistantAction(tool, result.UndoID)
+		}
+		auditview.SetSessionActor(previousActor)
 	}()
-	out = run()
-	// Capture while the tag is still set, so the undo point carries it.
-	auditview.CaptureNow()
-	uistate.NoteAssistantAction(tool)
-	return out
+	result.Text = run()
+	return result
+}
+
+// runAssistantWrite preserves the original string result for older callers. New
+// callers use runAssistantWriteResult so tallies can honor its Changed field.
+func runAssistantWrite(tool string, run func() string) string {
+	return runAssistantWriteResult(tool, run).Text
 }
 
 // runReadTool runs one read-only tool with the same panic guard as a write, minus

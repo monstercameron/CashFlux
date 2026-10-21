@@ -287,9 +287,17 @@ func AgentActionHistory(props agentActionHistoryProps) ui.Node {
 	nav := router.UseNavigate()
 	openActivity := ui.UseEvent(Prevent(func() { nav.Navigate(uistate.RoutePath("/activity")) }))
 	undo := ui.UseEvent(Prevent(func() {
-		if auditview.UndoFunc() {
-			uistate.DropLastAssistantAction()
+		action, ok := uistate.LastAssistantAction()
+		if !ok || action.UndoID == "" || auditview.TopUndoID() != action.UndoID {
+			return
 		}
+		auditview.UndoExpected(action.UndoID, func(err error) {
+			if err != nil {
+				uistate.PostNotice(uistate.T("bv6d1.undoTheSaveFailed"), true)
+				return
+			}
+			uistate.DropLastAssistantActionFor(action.UndoID)
+		})
 	}))
 
 	actions := uistate.AssistantActions()
@@ -305,7 +313,8 @@ func AgentActionHistory(props agentActionHistoryProps) ui.Node {
 		))
 	}
 	list := append([]any{css.Class("asst-act-list"), Attr("data-testid", "agent-action-list")}, rows...)
-	canUndo := auditview.CanUndoFunc()
+	last, hasLast := uistate.LastAssistantAction()
+	canUndo := hasLast && last.UndoID != "" && auditview.TopUndoID() == last.UndoID
 	return Details(css.Class("asst-act"), Attr("data-testid", "agent-action-history"),
 		Summary(css.Class("asst-act-summary"), uistate.T("changeset.historySummary", len(actions))),
 		Ul(list...),
