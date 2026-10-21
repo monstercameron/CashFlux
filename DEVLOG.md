@@ -35147,3 +35147,7 @@ The Chrome screenshots showed an unreadable local copy and incomplete account si
 ## 2026-10-21 — Recheck a revoked account session with corrupt local data
 
 The disposable account's session is now revoked after the first hosted sign-in, then the browser reloads against the same local checkpoint. The account gate returns to the login form, keeps the financial shell hidden, and leaves the corrupt IndexedDB bytes unchanged. The local browser regression passed. This recreates the invalid-session and unreadable-copy combination under controlled conditions, though it cannot identify what made the user's original Chrome token invalid.
+
+## 2026-10-21 — Gate releases on hosted corrupt-copy recovery
+
+The controlled hosted login regression is short and uses only CI's local backend and a disposable account. It now carries the deploy-gate tag so a future change that exposes financial screens or overwrites an unreadable checkpoint after session revocation prevents release. The same test remains in the full Chromium suite. No live production account or file is involved.

@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Added
+- The hosted corrupt-checkpoint and revoked-session browser regression now runs in the required deploy gate against CI's disposable local server.
 - The hosted corrupt-checkpoint regression now revokes the disposable account's session, reloads, and verifies that sign-in returns without exposing the financial shell or changing the unreadable bytes.
 - An isolated hosted-browser regression now verifies that sign-in with an unreadable local checkpoint keeps the financial shell hidden and preserves the exact checkpoint bytes through the empty-account recovery choice.
 - Authenticated server AI calls now record daily estimated USD cost alongside token usage. The operator console shows per-account estimates and marks historical or unpriced activity as incomplete; server logs contain model and usage totals without prompts or responses.

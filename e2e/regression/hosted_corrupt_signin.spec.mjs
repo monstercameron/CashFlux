@@ -3,7 +3,7 @@ import { test, expect } from "@playwright/test";
 const HOSTED = `http://127.0.0.1:${process.env.E2E_RPC_PORT || "8198"}`;
 const ADMIN_HEADERS = { Authorization: "Bearer e2e-worker-token" };
 
-test("hosted sign-in preserves an unreadable local copy through the recovery choice", async ({ browser, request }) => {
+test("hosted sign-in preserves an unreadable local copy through the recovery choice", { tag: "@prod" }, async ({ browser, request }) => {
   test.setTimeout(180_000);
   const suffix = crypto.randomUUID().slice(0, 8);
   const username = `corrupt-signin-${suffix}`;
