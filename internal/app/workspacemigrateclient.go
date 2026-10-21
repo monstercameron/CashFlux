@@ -167,6 +167,17 @@ func pushDatasetToWorkspace(workspaceID string, dataset []byte, baseVersion int6
 	if workspaceID == "" {
 		return fmt.Errorf("no workspace to write to")
 	}
+	app := appstate.Default
+	if app == nil {
+		return fmt.Errorf("no local dataset is loaded")
+	}
+	// Sync bookmarks compare against the lightweight local dataset, whose file
+	// bytes live in IndexedDB. The portable upload includes those bytes, so its
+	// hash would otherwise make the next ordinary flush look like a new edit.
+	localCheckpoint, err := app.ExportJSONRedacted()
+	if err != nil {
+		return fmt.Errorf("read local sync checkpoint: %w", err)
+	}
 	pr := uistate.LoadPrefs().Normalize()
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
@@ -197,7 +208,7 @@ func pushDatasetToWorkspace(workspaceID string, dataset []byte, baseVersion int6
 		return fmt.Errorf("server copy changed before this action finished (%s); compare again", resp.Reason)
 	}
 	saveSyncMeta(workspaceID, syncMeta{
-		UpdatedAt: resp.UpdatedAt, Version: resp.Version, Hash: datasetHash(dataset),
+		UpdatedAt: resp.UpdatedAt, Version: resp.Version, Hash: datasetHash(localCheckpoint), Owner: signedInUserID(),
 	})
 	setSyncStatus(syncStatus{State: "synced", LastSyncedAt: time.Now().UTC().Format(time.RFC3339Nano)})
 	return nil
