@@ -1,3 +1,7 @@
+## 2026-10-20 - Assistant report calculation fidelity
+
+Reports now read fresh fallible Store data and financial settings, preserve partial-date ranges, reject oversized monthly series, and propagate unavailable FX/arithmetic rather than false zero. Added checked native report adapters and independent full-history investment basis traces. Current balance-sheet reports explicitly differ from selected activity windows; split-linked-refund category ambiguity is disclosed. Native reports tests/vet and twelve selected WASM report and trace regressions passed. Root forwards current Assistant activity scope into the report tools.
+
 ## 2026-10-20 - Assistant request lifecycle
 
 Added concurrency-safe session ownership and one-shot approval decisions, immutable conversation accounting identity, guarded late streaming/result callbacks, and cancellation on unmount/switch/new chat. A scheduling-order bug lost blank-chat preferences when message persistence allocated the conversation first; preference transfer now follows identity resolution. Native assistantloop tests and all five actual Insights lifecycle WASM groups passed using a mocked provider, including exact-cap blocking and duplicate approval decisions. Registry parity coverage also passed in the integrated tool gate.

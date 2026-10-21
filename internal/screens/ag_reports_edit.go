@@ -388,7 +388,11 @@ func agToolsLedgerEdit(app *appstate.App, base string, rates currency.Rates) []c
 			run: func(raw json.RawMessage) string {
 				var f agTxnFilter
 				_ = json.Unmarshal(raw, &f)
-				c := agBuildRptCtx(app, base, rates, f.Period, f.From, f.To, "")
+				c, err := agBuildRptCtx(app, base, rates, f.Period, f.From, f.To, "")
+				if err != nil {
+					return agReportUnavailable(err)
+				}
+				c.txns = c.rawTxns // Ledger search also reaches archived accounts, as before.
 				rows, what := agRunTxnFilter(c, f)
 				limit := f.Limit
 				if limit <= 0 {
@@ -410,7 +414,11 @@ func agToolsLedgerEdit(app *appstate.App, base string, rates currency.Rates) []c
 				if err := json.Unmarshal(raw, &e); err != nil {
 					return "Edit one transaction."
 				}
-				c := agBuildRptCtx(app, base, rates, "all", "", "", "")
+				c, err := agBuildRptCtx(app, base, rates, "all", "", "", "")
+				if err != nil {
+					return agReportUnavailable(err)
+				}
+				c.txns = c.rawTxns // An explicit transaction ID can name archived-account history.
 				prior, err := agResolveTxn(c.txns, e.ID)
 				if err != nil {
 					return "Edit one transaction — " + err.Error()
@@ -426,7 +434,11 @@ func agToolsLedgerEdit(app *appstate.App, base string, rates currency.Rates) []c
 				if err := json.Unmarshal(raw, &e); err != nil {
 					return "Couldn't read the edit."
 				}
-				c := agBuildRptCtx(app, base, rates, "all", "", "", "")
+				c, err := agBuildRptCtx(app, base, rates, "all", "", "", "")
+				if err != nil {
+					return agReportUnavailable(err)
+				}
+				c.txns = c.rawTxns // An explicit transaction ID can name archived-account history.
 				prior, err := agResolveTxn(c.txns, e.ID)
 				if err != nil {
 					return err.Error()

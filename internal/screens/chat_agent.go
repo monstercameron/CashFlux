@@ -1166,7 +1166,7 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates, tier a
 	tools = append(tools, agToolsSandbox(app, base, rates)...)
 	tools = append(tools, agToolsSpotlight(app, base, rates)...)
 	tools = append(tools, agToolsReference(app, base, rates)...)
-	tools = append(tools, agToolsReports(app, base, rates, tier)...)
+	tools = append(tools, agToolsReports(app, base, rates, tier, currentScope...)...)
 	return tools
 }
 

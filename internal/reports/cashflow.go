@@ -5,6 +5,7 @@ package reports
 import (
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/budgeting"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -46,6 +47,16 @@ func IncomeVsExpense(txns []domain.Transaction, start, end time.Time, rates curr
 // the cash-flow trend chart. It returns exactly len(bounds)-1 flows; fewer than
 // two bounds yields an empty result.
 func IncomeExpenseSeries(txns []domain.Transaction, bounds []time.Time, rates currency.Rates) ([]PeriodFlow, error) {
+	return incomeExpenseSeries(netted(txns), bounds, rates)
+}
+
+// IncomeExpenseSeriesFromLedger reuses an explicit refund ledger without the
+// legacy global refund overlay. It retains checked sums and magnitude errors.
+func IncomeExpenseSeriesFromLedger(txns budgeting.NettedLedger, bounds []time.Time, rates currency.Rates) ([]PeriodFlow, error) {
+	return incomeExpenseSeries(txns, bounds, rates)
+}
+
+func incomeExpenseSeries(txns []domain.Transaction, bounds []time.Time, rates currency.Rates) ([]PeriodFlow, error) {
 	n := len(bounds) - 1
 	if n < 1 {
 		return nil, nil
@@ -54,7 +65,7 @@ func IncomeExpenseSeries(txns []domain.Transaction, bounds []time.Time, rates cu
 	for i := 0; i < n; i++ {
 		out[i] = PeriodFlow{Start: bounds[i], End: bounds[i+1]}
 	}
-	err := visitBuckets(netted(txns), bounds, func(i int, t domain.Transaction) error {
+	err := visitBuckets(txns, bounds, func(i int, t domain.Transaction) error {
 		if t.IsTransfer() || !t.CountsInReports() {
 			return nil
 		}
@@ -70,7 +81,11 @@ func IncomeExpenseSeries(txns []domain.Transaction, bounds []time.Time, rates cu
 			}
 			out[i].Income = total.Amount
 		case t.IsExpense():
-			total, err := money.New(out[i].Expense, rates.Base).Add(conv.Abs())
+			magnitude, err := conv.AbsChecked()
+			if err != nil {
+				return err
+			}
+			total, err := money.New(out[i].Expense, rates.Base).Add(magnitude)
 			if err != nil {
 				return err
 			}

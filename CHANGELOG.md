@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Assistant reports preserve exact requested periods, share checked calculations, and return supporting records with explicit scope.
 - Cancel, new chat, and conversation switching stop pending Assistant requests and approvals; first-message model and budget choices persist.
 - Assistant approval permissions identify stable record IDs and preserve exact decimal amounts.
 - Assistant action history now records actual captured changes and only undoes its matching durable change.
