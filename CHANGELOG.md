@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Contribution validation and quick-fill now use the direct goal lookup instead of decoding every saved goal.
 - Warm notification renders no longer reread SQLite and decode feed JSON merely to supply an ignored atom default.
 - Notification budget wins share one previous-month netted ledger projection instead of rescanning all history for every monthly budget.
 - Document checked totals and history, atomic contribution effects, prepared import contracts and the completed pass-five verification.

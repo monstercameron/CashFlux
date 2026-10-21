@@ -173,14 +173,12 @@ func goalCompletionForWrite(goal domain.Goal, rates currency.Rates) (complete, k
 // storedContributionGoal always reads the current store, rather than accepting a
 // form's captured goal as the new record. Missing IDs must never be resurrected.
 func (a *App) storedContributionGoal(goalID string) (domain.Goal, error) {
-	rows, err := a.store.ListGoals()
+	goal, found, err := a.store.GetGoal(goalID)
 	if err != nil {
 		return domain.Goal{}, fmt.Errorf("appstate: contribution: load goal: %w", err)
 	}
-	for _, goal := range rows {
-		if goal.ID == goalID {
-			return goal, nil
-		}
+	if found {
+		return goal, nil
 	}
 	return domain.Goal{}, fmt.Errorf("appstate: contribution: goal %q not found", goalID)
 }

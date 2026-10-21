@@ -1,3 +1,7 @@
+## 2026-10-20 - Read only the goal needed for a contribution
+
+Replaced storedContributionGoal ListGoals scanning with SQLiteStore.GetGoal by ID, preserving current-store freshness, missing-goal rejection and wrapped load errors. This removes whole-goal-table decoding from contribution, remaining-amount and Undo actions without changing their financial behavior. The focused native contribution, rollback, retry, Undo and remaining-amount regressions passed with exit zero.
+
 ## 2026-10-20 - Initialize persisted notification feed once per mounted hook
 
 UseNotifyFeed now memoizes its persisted seed per mounted hook and app identity, then keeps the existing fixed shared atom and out-of-render catch-up capture. No global cache or framework change was added. Three real-hook counter/lifecycle cases prove zero warm initializer reads, live updates across late subscribers/remounts, and supported workspace reloads with runtime reset. Five Notifications host cases passed, covering read/catch-up/history/remount/dismiss/Undo plus existing group/member/shared-tab transitions.
