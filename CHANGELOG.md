@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Notification budget wins share one previous-month netted ledger projection instead of rescanning all history for every monthly budget.
 - Document checked totals and history, atomic contribution effects, prepared import contracts and the completed pass-five verification.
 - Goal history uses checked native totals and bar percentages, shows unavailable for invalid history, and shares the FX-aware monthly assignment from the card.
 - Smart import placement regressions now wait for the visible Review panel after asynchronous extraction.

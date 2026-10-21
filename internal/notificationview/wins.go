@@ -55,16 +55,7 @@ func PrepareWins(in WinsInput) milestones.Input {
 	}
 	lastMonth := in.Now.AddDate(0, 0, -in.Now.Day())
 	start, end := budgeting.PeriodRange(domain.PeriodMonthly, lastMonth, in.WeekStart)
-	kept := 0
-	for _, budget := range in.Budgets {
-		if budget.Period != domain.PeriodMonthly {
-			continue
-		}
-		spent, err := budgeting.Spent(budget, in.BudgetLedger, start, end, in.Rates)
-		if err == nil && spent.Amount > 0 && spent.Amount <= budget.Limit.Amount {
-			kept++
-		}
-	}
+	kept := keptMonthlyBudgetWins(in.Budgets, in.BudgetLedger, start, end, in.Rates)
 	return milestones.Input{
 		ReachedGoals: reached, NetWorthMinor: netWorth,
 		NoSpendDays: NoSpendStreak(in.Transactions, in.Now, in.NoSpendLimit),

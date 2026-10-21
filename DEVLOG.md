@@ -1,3 +1,7 @@
+## 2026-10-20 - Project the completed month once for budget wins
+
+The native preparation preserves row order, netted semantics and canonical Spent calls while changing date-filter work from B*N to N+B*K. Parity tests cover date bounds/time zones, owners/splits/tags, saving transfers, duplicate budgets/categories, report exclusions, FX rounding, invalid-amount isolation and cross-month refunds. Native tests and vet passed. Three same-binary synthetic 60k-row/180-budget benchmark samples measured medians 155.9 ms versus 12.56 ms with identical 180 wins and 10.8M versus 150k candidate date checks. The projection adds 515552 bytes and ten allocations per operation; concurrent functional work and Windows amd64 target on the arm64 tool host mean these are local native phase observations, not browser speed claims.
+
 ## 2026-10-20 - Record pass-five integration evidence and native contracts
 
 Updated shared component guidance from current production contracts and recorded exact evidence for native integration, 835 screen WASM cases, focused canonical history, 17 recovery checks and six frozen sample browser cases over 47 routes. Recorded the matching local/served artifact hash and explicitly separated these correctness checks from latency measurements and subsequent in-progress changes. No code changed in this documentation commit.
