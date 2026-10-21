@@ -50,6 +50,17 @@ test("hosted sign-in preserves an unreadable local copy through the recovery cho
     await expect(page.getByTestId("hosted-hydration-empty-account")).toBeVisible({ timeout: 45_000 });
     await expect(page.locator(".cf-shell")).toHaveCount(0);
     await expect.poll(() => page.evaluate(() => window.cashfluxStoreGet?.("cashflux:dataset") || "")).toBe(corrupt);
+
+    const revoked = await request.post(`${HOSTED}/v1/admin/users/${encodeURIComponent(created.id)}/revoke-sessions`, {
+      headers: ADMIN_HEADERS,
+    });
+    expect(revoked.status()).toBe(200);
+    await page.reload();
+    await page.waitForFunction(() => document.documentElement.getAttribute("data-app-ready") === "true", null, { timeout: 60_000 });
+    await expect(page.getByTestId("hosted-auth-gate")).toBeVisible({ timeout: 45_000 });
+    await expect(page.getByTestId("password-auth-username")).toBeVisible({ timeout: 45_000 });
+    await expect(page.locator(".cf-shell")).toHaveCount(0);
+    await expect.poll(() => page.evaluate(() => window.cashfluxStoreGet?.("cashflux:dataset") || "")).toBe(corrupt);
   } finally {
     await context.close();
     await request.delete(`${HOSTED}/v1/admin/users/${encodeURIComponent(created.id)}`, { headers: ADMIN_HEADERS });

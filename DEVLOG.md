@@ -35143,3 +35143,7 @@ ship a prop that lies, and filed it as C615.
 ## 2026-10-21 — Regress hosted sign-in with an unreadable local checkpoint
 
 The Chrome screenshots showed an unreadable local copy and incomplete account sign-in. The existing hosted two-browser test exercised normal encrypted recovery, while the quarantine test exercised an unreadable checkpoint separately. A new isolated browser test combines hosted sign-in with a deliberately corrupt checkpoint. It seeds IndexedDB before app startup, uses a disposable account on the local test server, confirms the financial shell stays hidden before sign-in and at the empty-account recovery choice, and verifies the exact corrupt bytes survive both states. This covers the preservation path without production credentials or data. It does not prove the cause of the original Chrome invalid-token state; server-side revocation and actual Chrome storage remain separate diagnostics.
+
+## 2026-10-21 — Recheck a revoked account session with corrupt local data
+
+The disposable account's session is now revoked after the first hosted sign-in, then the browser reloads against the same local checkpoint. The account gate returns to the login form, keeps the financial shell hidden, and leaves the corrupt IndexedDB bytes unchanged. The local browser regression passed. This recreates the invalid-session and unreadable-copy combination under controlled conditions, though it cannot identify what made the user's original Chrome token invalid.
