@@ -1,3 +1,7 @@
+## 2026-10-21 — Compare saved goal baselines in UTC browser tests
+
+Two Windows CI screen assertions repeatedly failed while the same tests passed locally. Reproducing locally with `TZ=UTC` showed that `reflect.DeepEqual` saw the original `time.Local` pointer and the stored JSON's `time.UTC` pointer as different even though the goal's amounts and instant were identical. Both tests now capture the persisted goal immediately after writing and compare that baseline after rejected assistant input or FX evaluation. The UTC-targeted tests pass, and the money invariants remain checked.
+
 ## 2026-10-21 — Stabilize the merged WebAssembly screen gate
 
 The exact-head CI screen lane failed after the v7 merge, and a local full-suite run exposed a render-thread diagnostic in an assistant title test. Its fixture used the synchronous mock scheduler even though title callbacks may arrive from background work. The fixture now uses the queued scheduler, matching the browser's render scheduling, and the streaming-bubble test waits for its committed scroll state instead of assuming a 25 ms timer. A full 1,101-test screen run then passed without a render-thread diagnostic. No production account was involved.

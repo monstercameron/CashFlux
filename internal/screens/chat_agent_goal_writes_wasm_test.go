@@ -134,12 +134,13 @@ func TestAssistantGoalContributionExactMajorParsingAndForeignGoalCurrency(t *tes
 	if err := app.Store().PutGoal(g); err != nil {
 		t.Fatal(err)
 	}
+	legacySaved := assistantStoredGoal(t, app, g.ID)
 	revision := app.Rev()
 	raw = json.RawMessage(`{"goal_id":"write-goal","amount":1,"currency":"USD"}`)
 	if preview := tool.preview(raw); !strings.Contains(preview, "Can't record") {
 		t.Fatalf("unsupported legacy currency mismatch was offered: %s", preview)
 	}
-	if out := tool.run(raw); !strings.Contains(out, "Can't record") || app.Rev() != revision || !reflect.DeepEqual(assistantStoredGoal(t, app, g.ID), g) {
+	if out := tool.run(raw); !strings.Contains(out, "Can't record") || app.Rev() != revision || !reflect.DeepEqual(assistantStoredGoal(t, app, g.ID), legacySaved) {
 		t.Fatalf("legacy saved currency was rewritten: %s", out)
 	}
 }
