@@ -1,3 +1,7 @@
+## 2026-10-21 - Native debt and loan planning facts
+
+Preserved debt strategy and mortgage inclusion policy, kept source failures unavailable, and replaced floating extra-payment parsing with exact minor-unit preparation. Native debtview/loanview tests and vet pass; both focused actual-host WASM groups pass, including overflow and invalid precision. Engine major-unit figures remain a presentation boundary.
+
 ## 2026-10-21 - Native allocation preparation
 
 Shared one checked balance fold, retained ranking/distribution policy and independent goal availability, and stopped invalid/source-failed input from producing or saving a plan. Native allocateview/appstate tests pass; both actual-host WASM cases pass. Checked source readers were committed separately.

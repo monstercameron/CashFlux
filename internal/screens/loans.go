@@ -15,6 +15,8 @@ import (
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/ledger"
+	"github.com/monstercameron/CashFlux/internal/loanview"
+	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/payoff"
 	"github.com/monstercameron/CashFlux/internal/trust"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -51,9 +53,10 @@ type loanCardProps struct {
 	// session-only.
 	OnTerm func(a domain.Account, months int)
 
-	Account domain.Account
-	Balance int64  // balance in minor units (positive = principal owed)
-	BaseCur string // household base currency
+	Account    domain.Account
+	Balance    money.Money // balance in minor units (positive = principal owed)
+	BalanceErr error
+	BaseCur    string // household base currency
 }
 
 // loanCard is a standalone component (one per installment loan) so that each
@@ -63,7 +66,7 @@ type loanCardProps struct {
 //   - an extra monthly payment input for payoff acceleration simulation (C205)
 func loanCard(props loanCardProps) ui.Node {
 	a := props.Account
-	balance := props.Balance
+	balance := props.Balance.Amount
 	cur := a.Currency
 	if cur == "" {
 		cur = props.BaseCur
@@ -113,52 +116,14 @@ func loanCard(props loanCardProps) ui.Node {
 		term = t
 	}
 
-	extraMinor := int64(0)
-	if raw := extraS.Get(); raw != "" {
-		if f, err := strconv.ParseFloat(raw, 64); err == nil && f > 0 {
-			// Convert major-unit input to minor units.
-			mul := int64(1)
-			for i := 0; i < dec; i++ {
-				mul *= 10
-			}
-			extraMinor = int64(f * float64(mul))
-		}
-	}
-
 	apr, aprKnown := a.RateAPR()
 	now := time.Now()
-
-	// --- C204: base amortization schedule ---
-	baseRows := payoff.AmortizeFixed(balance, apr, term, now)
-	var baseMonthlyPayment int64
-	var baseTotalInterest, baseTotalPaid int64
-	var basePayoffDate time.Time
-	if len(baseRows) > 0 {
-		baseMonthlyPayment = baseRows[0].PaymentMinor
-		baseTotalInterest, baseTotalPaid, basePayoffDate = payoff.AmortSummary(baseRows)
-	}
-
-	// --- C205: accelerated schedule with extra payment ---
-	var extraRows []payoff.AmortRow
-	var extraTotalInterest int64
-	var extraPayoffDate time.Time
-	var monthsSaved int
-	var interestSaved int64
-	hasExtra := extraMinor > 0 && len(baseRows) > 0
-	if hasExtra {
-		extraRows = payoff.AmortizeWithExtra(balance, apr, term, extraMinor, now)
-		var extraTotalPaid int64
-		extraTotalInterest, extraTotalPaid, extraPayoffDate = payoff.AmortSummary(extraRows)
-		_ = extraTotalPaid
-		monthsSaved = len(baseRows) - len(extraRows)
-		if monthsSaved < 0 {
-			monthsSaved = 0
-		}
-		interestSaved = baseTotalInterest - extraTotalInterest
-		if interestSaved < 0 {
-			interestSaved = 0
-		}
-	}
+	prepared := loanview.Prepare(loanview.Input{Account: a, Balance: props.Balance, BalanceErr: props.BalanceErr, TermMonths: term, ExtraText: extraS.Get(), Now: now})
+	baseRows, extraRows := prepared.BaseRows, prepared.ExtraRows
+	baseMonthlyPayment, baseTotalInterest, baseTotalPaid, basePayoffDate := prepared.MonthlyPayment, prepared.TotalInterest, prepared.TotalPaid, prepared.PayoffDate
+	extraMinor, extraTotalInterest, extraPayoffDate := prepared.ExtraMinor, prepared.ExtraInterest, prepared.ExtraPayoffDate
+	monthsSaved, interestSaved := prepared.MonthsSaved, prepared.InterestSaved
+	hasExtra := extraMinor > 0 && len(baseRows) > 0 && len(extraRows) > 0
 
 	// Format helpers.
 	fmtMoney := func(minor int64) string {
@@ -204,7 +169,7 @@ func loanCard(props loanCardProps) ui.Node {
 				Span(css.Class("t-caption", tw.TextDim), aprLabel),
 			),
 		),
-		Div(ClassStr("t-figure "+tw.Fold(tw.FontDisplay)+" text-down"), fmtMoney(balance)),
+		Div(ClassStr("t-figure "+tw.Fold(tw.FontDisplay)+" text-down"), Attr("title", debtSourceError(props.BalanceErr)), IfElse(prepared.BalanceKnown, Text(fmtMoney(balance)), Text("—"))),
 	)
 
 	// Term input row.
@@ -264,7 +229,7 @@ func loanCard(props loanCardProps) ui.Node {
 		{Name: uistate.T("trust.inLoanTerm"), Required: true, Missing: term <= 0,
 			Assumed: a.TermMonths <= 0},
 		{Name: uistate.T("trust.inLoanBalance"), Required: true,
-			Missing: balance <= 0, AgeDays: accountAgeDays(a, now)},
+			Missing: !prepared.BalanceKnown || balance <= 0, AgeDays: accountAgeDays(a, now)},
 	})
 	var trustNode ui.Node = Fragment()
 	if assessment.Level != trust.LevelSolid {
@@ -292,6 +257,11 @@ func loanCard(props loanCardProps) ui.Node {
 			Attr("aria-label", uistate.T("debt.loanExtraAria", a.Name)), uiw.FieldValue(extraS.Get())),
 		Span(css.Class("t-caption", tw.TextDim), uistate.T("loans.extraPerMonth")),
 	)
+	var extraErrorNode ui.Node = Fragment()
+	if prepared.ExtraErr != nil {
+		extraErrorNode = P(css.Class("t-caption", tw.TextWarn), Attr("data-testid", "loan-extra-error-"+a.ID),
+			uistate.T("loans.extraAmountError", dec))
+	}
 
 	// WF6: the extra payment as a before-and-after across every figure it moves,
 	// including the ones it does not. The savings tiles below say what improves;
@@ -346,6 +316,7 @@ func loanCard(props loanCardProps) ui.Node {
 	var savingsNode ui.Node = Fragment()
 	if hasExtra && len(extraRows) > 0 {
 		savingsNode = Div(css.Class("card-inset", tw.Flex, tw.FlexCol, tw.Gap2, tw.Mt2),
+			Attr("data-testid", "loan-savings-"+a.ID),
 			Div(css.Class("t-caption", tw.TextDim), uistate.T("loans.savingsTitle")),
 			Div(css.Class(tw.Grid, tw.GridCols2, tw.Gap3),
 				Div(css.Class("stat"),
@@ -438,6 +409,7 @@ func loanCard(props loanCardProps) ui.Node {
 			summaryNode,
 			trustNode,
 			extraRow,
+			extraErrorNode,
 			previewNode,
 			savingsNode,
 			scheduleNode,
@@ -513,18 +485,12 @@ func LoansPanel(props LoansPanelProps) ui.Node {
 	cards := make([]any, 0, len(loans))
 	for _, a := range loans {
 		bal, err := ledger.Balance(a, txns)
-		var balMinor int64
-		if err == nil {
-			balMinor = bal.Amount
-			// Liabilities carry negative balances in the ledger; amortization
-			// takes a positive principal.
-			if balMinor < 0 {
-				balMinor = -balMinor
-			}
+		if err == nil && bal.Amount < 0 {
+			bal, err = bal.AbsChecked()
 		}
 		p := loanCardProps{
 			Account: a,
-			Balance: balMinor,
+			Balance: bal, BalanceErr: err,
 			BaseCur: baseCur,
 			OnTerm:  onTerm,
 		}

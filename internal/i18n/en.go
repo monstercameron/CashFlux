@@ -3626,6 +3626,7 @@ var english = Catalog{
 	"loans.extraLabel":       "Extra per month",
 	"loans.extraPlaceholder": "Extra/mo (%s)",
 	"loans.extraPerMonth":    "extra/month",
+	"loans.extraAmountError": "Enter a valid amount with up to %d decimal places.",
 	"loans.savingsTitle":     "With extra payment",
 	"loans.monthsSaved":      "Months saved",
 	"loans.interestSaved":    "Interest saved",

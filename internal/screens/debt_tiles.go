@@ -7,13 +7,13 @@ package screens
 import (
 	"fmt"
 	"math"
-	"sort"
 	"syscall/js"
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/customfields"
+	"github.com/monstercameron/CashFlux/internal/debtview"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/engineenv"
 	"github.com/monstercameron/CashFlux/internal/icon"
@@ -100,21 +100,26 @@ type debtPanelProps struct{ App *appstate.App }
 // persisted DebtConfig. Every figure is either read from the engine (Vars) or banded by
 // the config — nothing the tiles render is a hardcoded threshold or inline computation.
 type debtView struct {
-	Base      string
-	Cfg       uistate.DebtConfig
-	Vars      map[string]float64
-	Liabs     []domain.Account
-	OwedByID  map[string]money.Money
-	UtilByID  map[string]float64 // -1 = not a line of credit
-	AvailByID map[string]money.Money
-	RankByID  map[string]int
-	InPayByID map[string]bool
-	Defs      []customfields.Def
-	TotalOwed money.Money // every non-archived liability (base)
-	PlanOwed  money.Money // only the debts included in the payoff plan (base)
-	DebtFree  string      // projection date ("January 2026"), or ""
-	HasCC     bool
-	HasLoans  bool
+	Base          string
+	Cfg           uistate.DebtConfig
+	Vars          map[string]float64
+	Liabs         []domain.Account
+	OwedByID      map[string]money.Money
+	UtilByID      map[string]float64 // -1 = not a line of credit
+	AvailByID     map[string]money.Money
+	RankByID      map[string]int
+	InPayByID     map[string]bool
+	OwedKnownByID map[string]bool
+	OwedErrByID   map[string]error
+	Defs          []customfields.Def
+	TotalOwed     money.Money // every non-archived liability (base)
+	PlanOwed      money.Money // only the debts included in the payoff plan (base)
+	DebtFree      string      // projection date ("January 2026"), or ""
+	HasCC         bool
+	HasLoans      bool
+	TotalKnown    bool
+	TotalErr      error
+	PlanKnown     bool
 }
 
 // strategyFromConfig maps the config's default-strategy string to a payoff.Strategy.
@@ -123,6 +128,13 @@ func strategyFromConfig(cfg uistate.DebtConfig) payoff.Strategy {
 		return payoff.Snowball
 	}
 	return payoff.Avalanche
+}
+
+func debtSourceError(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
 }
 
 // majorMoney converts a base-currency major-unit engine value into a money.Money, rounding
@@ -171,22 +183,26 @@ func computeDebtViewRaw(app *appstate.App) debtView {
 
 	v := debtView{
 		Base: base, Cfg: cfg, Vars: vars,
-		OwedByID: map[string]money.Money{}, UtilByID: map[string]float64{},
+		OwedByID: map[string]money.Money{}, OwedKnownByID: map[string]bool{}, OwedErrByID: map[string]error{}, UtilByID: map[string]float64{},
 		AvailByID: map[string]money.Money{}, RankByID: map[string]int{}, InPayByID: map[string]bool{},
-		Defs:      app.CustomFieldDefsFor("account"),
-		TotalOwed: majorMoney(vars["liabilities"], base),
+		Defs: app.CustomFieldDefsFor("account"),
 	}
-
-	for _, ac := range app.Accounts() {
-		if ac.Archived || ac.Class != domain.ClassLiability {
-			continue
+	prepared := debtview.Prepare(app.Accounts(), txns, rates, base, debtview.Config{ExtraMinor: cfg.DefaultExtraMinor, Strategy: strategyFromConfig(cfg)}, time.Now())
+	v.TotalOwed, v.TotalKnown, v.TotalErr = prepared.TotalOwed, prepared.TotalKnown, prepared.TotalErr
+	v.PlanOwed, v.PlanKnown = prepared.PlanOwed, prepared.PlanKnown
+	for _, fact := range prepared.Accounts {
+		ac, owed := fact.Account, fact.Owed
+		v.OwedErrByID[ac.ID] = fact.BalanceErr
+		if fact.OwedKnown {
+			v.OwedByID[ac.ID] = owed
+			v.OwedKnownByID[ac.ID] = true
 		}
-		bal, _ := ledger.Balance(ac, txns)
-		owed := bal.Abs()
-		v.OwedByID[ac.ID] = owed
-		v.InPayByID[ac.ID] = ac.IncludedInPayoff()
+		v.InPayByID[ac.ID] = fact.Included
 		util := -1.0
-		if ac.Type == domain.TypeCreditCard && ac.CreditLimit.Amount > 0 {
+		if ac.Type == domain.TypeCreditCard {
+			v.HasCC = true
+		}
+		if ac.Type == domain.TypeCreditCard && ac.CreditLimit.Amount > 0 && fact.OwedKnown {
 			// Utilization comes from the engine's debt_<slug>_utilization variable (a
 			// currency-independent %, so it matches the owed/limit ratio exactly) — the meter
 			// is formula-driven. Fall back to the direct ratio if the account has no slug.
@@ -200,7 +216,6 @@ func computeDebtViewRaw(app *appstate.App) debtView {
 				avail = 0
 			}
 			v.AvailByID[ac.ID] = money.New(avail, ac.Currency)
-			v.HasCC = true
 		}
 		v.UtilByID[ac.ID] = util
 		if isInstallmentLoan(ac.Type) {
@@ -216,42 +231,17 @@ func computeDebtViewRaw(app *appstate.App) debtView {
 	// AggregateDebts already filters to the debts the user includes in the plan, so
 	// their sum is the plan's scope (distinct from TotalOwed, which counts every
 	// liability including an excluded mortgage).
-	debts, _ := payoff.AggregateDebts(app.Accounts(), txns, base, rates)
-	var includedOwed int64
-	for _, d := range debts {
-		includedOwed += d.Balance
-	}
-	v.PlanOwed = money.New(includedOwed, base)
-	rankByName := map[string]int{}
-	for i, name := range payoff.FocusOrder(debts, strategyFromConfig(cfg)) {
-		if _, seen := rankByName[name]; !seen {
-			rankByName[name] = i + 1
+	for _, fact := range prepared.Accounts {
+		if fact.Rank > 0 {
+			v.RankByID[fact.Account.ID] = fact.Rank
 		}
 	}
-	for i := range v.Liabs {
-		if r, ok := rankByName[v.Liabs[i].Name]; ok {
-			v.RankByID[v.Liabs[i].ID] = r
-		}
-	}
-	if plan, ok := payoff.BuildPlan(debts, cfg.DefaultExtraMinor, strategyFromConfig(cfg)); ok && plan.Months >= 0 && len(debts) > 0 {
-		v.DebtFree = payoff.DebtFreeMonth(time.Now(), plan.Months).Format("January 2006")
+	if prepared.PlanKnown && prepared.PlanValid && !prepared.DebtFree.IsZero() {
+		v.DebtFree = prepared.DebtFree.Format("January 2006")
 	}
 
 	// Order the ladder: in-plan debts by ascending payoff rank, then everything else by
 	// amount owed descending (heaviest first) — the same convention as /accounts.
-	sort.SliceStable(v.Liabs, func(i, j int) bool {
-		ri, rj := v.RankByID[v.Liabs[i].ID], v.RankByID[v.Liabs[j].ID]
-		switch {
-		case ri > 0 && rj > 0:
-			return ri < rj
-		case ri > 0:
-			return true
-		case rj > 0:
-			return false
-		default:
-			return v.OwedByID[v.Liabs[i].ID].Amount > v.OwedByID[v.Liabs[j].ID].Amount
-		}
-	})
 	return v
 }
 
@@ -275,7 +265,7 @@ func debtSummaryWidget(props debtSummaryProps) ui.Node {
 	var freeLine ui.Node = Fragment()
 	if v.DebtFree != "" {
 		excluded := v.TotalOwed.Amount - v.PlanOwed.Amount
-		if excluded > 0 {
+		if !v.TotalKnown || excluded > 0 {
 			freeLine = Fragment(
 				P(css.Class("debt-hero-sub", tw.FontDisplay), Attr("data-testid", "debt-plan-scope"),
 					uistate.T("debt.planClearsBy", fmtMoney(v.PlanOwed), v.DebtFree)),
@@ -311,7 +301,7 @@ func debtSummaryWidget(props debtSummaryProps) ui.Node {
 	body := Div(css.Class("debt-hero"), Attr("id", "sec-overview"),
 		Div(css.Class("debt-hero-main"),
 			Div(css.Class("debt-hero-label", tw.TextDim), uistate.T("debt.totalOwed")),
-			Div(css.Class("debt-hero-value neg", tw.FontDisplay), Attr("data-testid", "debt-total-owed"), fmtMoney(v.TotalOwed)),
+			Div(css.Class("debt-hero-value neg", tw.FontDisplay), Attr("data-testid", "debt-total-owed"), Attr("title", debtSourceError(v.TotalErr)), IfElse(v.TotalKnown, Text(fmtMoney(v.TotalOwed)), Text("—"))),
 			freeLine,
 			// The Net worth page owns the assets-vs-liabilities picture the debt-to-asset
 			// chip summarizes — link there.
@@ -463,7 +453,7 @@ func debtListWidget(props debtListProps) ui.Node {
 	rows := MapKeyed(v.Liabs, func(ac domain.Account) any { return ac.ID }, func(ac domain.Account) ui.Node {
 		avail := v.AvailByID[ac.ID]
 		return ui.CreateElement(DebtRow, debtRowProps{
-			Account: ac, Owed: v.OwedByID[ac.ID], Rank: v.RankByID[ac.ID],
+			Account: ac, Owed: v.OwedByID[ac.ID], OwedKnown: v.OwedKnownByID[ac.ID], OwedErr: v.OwedErrByID[ac.ID], Rank: v.RankByID[ac.ID],
 			Utilization: v.UtilByID[ac.ID], Available: avail,
 			Band:     v.Cfg.UtilizationBand(v.UtilByID[ac.ID]),
 			InPayoff: v.InPayByID[ac.ID], Defs: v.Defs,
