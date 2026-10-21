@@ -1,3 +1,7 @@
+## 2026-10-21 - Shared checked auto-budget tuning
+
+Scaling and selected totals now use checked arithmetic; failed rows or aggregate overflow cannot produce pending writes. Native budgeting tests and vet pass; actual-host tuning and save regressions pass, including recovery without remount. Fixture teardown explicitly unmounts before cleanup because framework Cleanup alone releases ownership without unmounting; no production nil guard was added.
+
 ## 2026-10-21 - Native artifact vault preparation
 
 Prepared reference counts, kind totals and exact export/storage sizes outside the view. Int64 storage facts reject negative usage and overflow without wasm32 narrowing. Warm renders reuse a snapshot/summary by app revision and blob usage, while fresh source guards detect closed stores and failures are not cached. Native artifactview/artifacts/viewcache tests pass; actual-host checks pass for row facts, warm reuse, reference refresh and unavailable source state.

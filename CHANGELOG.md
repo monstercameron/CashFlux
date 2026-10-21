@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Auto-budget rows, impact preview and save share one checked native tuning result.
 - Artifact rows and storage meters use native checked facts with successful snapshot reuse.
 - Admin overview and user reads share a tested native client and bounded successful-response cache.
 - Budget flex views delegate window proration, meter verdicts and days-left facts to native models.
