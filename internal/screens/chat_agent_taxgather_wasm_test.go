@@ -5,6 +5,7 @@ package screens
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
 	"reflect"
 	"strconv"
@@ -12,10 +13,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/ai"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/store"
+	"github.com/monstercameron/CashFlux/internal/taxgather"
 )
 
 func TestAssistantTaxGatherReadsFreshBoundCurrencyRefundsAndSplits(t *testing.T) {
@@ -135,5 +138,128 @@ func TestAssistantTaxGatherExportsExactLargeMinorAmountsAndStrictYear(t *testing
 	out = tool.run(json.RawMessage(`{"year":2025}`))
 	if !strings.Contains(out, "canonical two-decimal fallback assumption") || !strings.Contains(out, "Currency,ZZZ\n") || !strings.Contains(out, "TOTAL,1.00\n") {
 		t.Fatal("unknown currency support lost its explicit precision assumption", out)
+	}
+}
+
+func TestAssistantTaxGatherChunksLargeCSVLosslesslyAndRejectsStaleCursor(t *testing.T) {
+	app := primaryAccountsGoalsApp(t)
+	const rows = 900
+	start := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	ds := store.Dataset{Settings: store.Settings{BaseCurrency: "USD"}}
+	for i := 0; i < rows; i++ {
+		id := fmt.Sprintf("tax-category-%04d", i)
+		label := fmt.Sprintf("Category %04d %s", i, strings.Repeat("Long retained label ", 30))
+		ds.Categories = append(ds.Categories, domain.Category{ID: id, Name: label, Deductible: true})
+		ds.Transactions = append(ds.Transactions, domain.Transaction{
+			ID: fmt.Sprintf("tax-transaction-%04d", i), Date: start, CategoryID: id, Amount: money.New(-1234, "USD"),
+		})
+	}
+	if err := app.Store().Load(ds); err != nil {
+		t.Fatal(err)
+	}
+	tool := assistantFinanceTestTool(t, agToolsTax(app, "USD", currency.Rates{Base: "USD"}), "gather_tax_records")
+	first := tool.run(json.RawMessage(`{"year":2025,"csv_limit":3000}`))
+	if len(first) >= taxToolOutputMaxBytes {
+		t.Fatalf("first chunk output is %d bytes, want < %d", len(first), taxToolOutputMaxBytes)
+	}
+	var response taxCSVChunkOutput
+	if err := json.Unmarshal([]byte(first), &response); err != nil {
+		t.Fatalf("large CSV response is not chunk JSON: %v; response prefix=%q", err, first[:min(200, len(first))])
+	}
+	if response.Year != 2025 || response.CSV.Collection != "tax_csv" || response.CSV.ID != "tax-year-2025" || response.CSV.Offset != 0 || response.CSV.NextOffset == nil {
+		t.Fatalf("unexpected first chunk metadata: year=%d csv=%+v", response.Year, response.CSV)
+	}
+	if response.Counts.DeductibleCategories != rows || response.Counts.ReceiptGaps != rows ||
+		!strings.Contains(response.Summary, fmt.Sprintf("across %d categories", rows)) || !strings.Contains(response.Summary, fmt.Sprintf("Gaps (%d entries", rows)) {
+		t.Fatalf("summary did not keep full-dataset counts: counts=%+v summary=%q", response.Counts, response.Summary)
+	}
+	snapshot := response.CSV.Snapshot
+	// Provider usage is persisted between tool calls and advances App.Rev, but
+	// does not alter the retained tax dataset or its canonical CSV.
+	beforeUsageWrite := app.Rev()
+	app.RecordAISpend("assistant", "unpriced-test-model", ai.Usage{TotalTokens: 1})
+	if app.Rev() <= beforeUsageWrite {
+		t.Fatal("recording provider usage did not advance the app revision")
+	}
+	var joined strings.Builder
+	joined.WriteString(response.CSV.JSONText)
+	offset := *response.CSV.NextOffset
+	for pages := 0; ; pages++ {
+		if pages > 1000 {
+			t.Fatal("CSV continuation did not terminate")
+		}
+		raw, _ := json.Marshal(struct {
+			Year        int    `json:"year"`
+			CSVOffset   int    `json:"csv_offset"`
+			CSVLimit    int    `json:"csv_limit"`
+			CSVSnapshot string `json:"csv_snapshot"`
+		}{2025, offset, taxCSVChunkCharacters, snapshot})
+		out := tool.run(raw)
+		if len(out) >= taxToolOutputMaxBytes {
+			t.Fatalf("chunk at offset %d is %d bytes, want < %d", offset, len(out), taxToolOutputMaxBytes)
+		}
+		var page taxCSVChunkOutput
+		if err := json.Unmarshal([]byte(out), &page); err != nil {
+			t.Fatalf("chunk at offset %d is invalid JSON: %v: %s", offset, err, out)
+		}
+		if page.CSV.Offset != offset || page.CSV.Snapshot != snapshot {
+			t.Fatalf("chunk cursor mismatch: asked offset %d, got %+v", offset, page.CSV)
+		}
+		joined.WriteString(page.CSV.JSONText)
+		if page.CSV.NextOffset == nil {
+			break
+		}
+		if *page.CSV.NextOffset <= offset {
+			t.Fatalf("continuation did not advance: offset=%d next=%d", offset, *page.CSV.NextOffset)
+		}
+		offset = *page.CSV.NextOffset
+	}
+	var reconstructed string
+	if err := json.Unmarshal([]byte(joined.String()), &reconstructed); err != nil {
+		t.Fatalf("concatenated JSON character chunks are not a complete JSON string: %v", err)
+	}
+	cats, err := app.CategoriesChecked()
+	if err != nil {
+		t.Fatal(err)
+	}
+	txns, err := app.Store().ListTransactions()
+	if err != nil {
+		t.Fatal(err)
+	}
+	links, err := app.Store().ListTxnLinks()
+	if err != nil {
+		t.Fatal(err)
+	}
+	end := start.AddDate(1, 0, 0)
+	summary, err := taxgather.GatherWithLinks(txns, cats, links, 2025, start, end, currency.Rates{Base: "USD"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := make(map[string]string, len(cats))
+	for _, c := range cats {
+		names[c.ID] = c.Name
+	}
+	expected, err := taxgather.GatherCSVExact(summary, func(id string) string { return names[id] }, "USD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(expected) <= 64*1024 {
+		t.Fatalf("fixture CSV is only %d bytes, want a payload larger than the relay's 64 KiB limit", len(expected))
+	}
+	if reconstructed != string(expected) {
+		t.Fatalf("reconstructed CSV differs from canonical CSV: got %d bytes, want %d", len(reconstructed), len(expected))
+	}
+	if err := app.PutCategory(domain.Category{ID: "tax-category-0000", Name: "Changed retained tax category", Kind: domain.KindExpense, Deductible: true}); err != nil {
+		t.Fatal(err)
+	}
+	staleArgs, _ := json.Marshal(struct {
+		Year        int    `json:"year"`
+		CSVOffset   int    `json:"csv_offset"`
+		CSVSnapshot string `json:"csv_snapshot"`
+	}{2025, 1, snapshot})
+	stale := tool.run(staleArgs)
+	var staleResponse map[string]string
+	if err := json.Unmarshal([]byte(stale), &staleResponse); err != nil || !strings.Contains(staleResponse["error"], "snapshot changed") {
+		t.Fatalf("stale CSV cursor was accepted: %s (err=%v)", stale, err)
 	}
 }

@@ -1,3 +1,7 @@
+## 2026-10-21 - Page complete tax record exports
+
+Small results retain the complete inline CSV. Large results return JSON-character chunks with explicit year and snapshot continuation, truthful category and receipt counts, bounded prose, and a 32KiB envelope. CSV identity tracks actual output and the bound dataset, not usage accounting. Added a 900-category reconstruction, stale-data, and malformed-argument regression. Full screen WASM suite passed 1015 tests.
+
 ## 2026-10-21 - Bound transaction evidence responses
 
 Kept report totals complete while limiting transport output to 24000 UTF-8 bytes. Whole omitted rows retain exact transaction IDs with query_data and read_record recovery instructions; pathological metadata fails explicitly. Added Unicode-heavy response regression. Full screen WASM suite passed 1015 tests.

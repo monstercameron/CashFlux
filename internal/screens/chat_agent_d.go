@@ -23,6 +23,7 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/ai"
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/assistantdata"
 	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/docqa"
 	"github.com/monstercameron/CashFlux/internal/domain"
@@ -91,6 +92,33 @@ func agToolsCapture(app *appstate.App, base string, rates currency.Rates) []chat
 	}
 }
 
+const (
+	taxProseCategoryLimit = 8
+	taxProseLabelRunes    = 120
+	taxCSVChunkCharacters = 24000
+	taxToolOutputMaxBytes = 32 * 1024
+)
+
+type taxCSVRecord struct {
+	ID  string `json:"id"`
+	CSV string `json:"csv"`
+}
+
+type taxGatherCounts struct {
+	DeductibleCategories int `json:"deductibleCategories"`
+	DonationMatches      int `json:"donationMatches"`
+	InterestMatches      int `json:"interestMatches"`
+	ReceiptGaps          int `json:"receiptGaps"`
+}
+
+type taxCSVChunkOutput struct {
+	Year            int                  `json:"year"`
+	Counts          taxGatherCounts      `json:"counts"`
+	Summary         string               `json:"summary"`
+	CSV             assistantdata.Detail `json:"csv"`
+	CSVInstructions string               `json:"csvInstructions"`
+}
+
 // captureLooksDuplicate reports whether an existing non-transfer transaction has
 // the same absolute amount and a payee/description that contains the draft label —
 // a cheap "you may have already logged this" badge for the review list.
@@ -118,11 +146,14 @@ func agToolsTax(app *appstate.App, base string, rates currency.Rates) []chatTool
 	return []chatTool{
 		{
 			spec: ai.FunctionTool("gather_tax_records",
-				"Gather the household's retained records for a UTC calendar tax year: checked totals for deductible-flagged category lines, donation/interest keyword matches, and receipt gaps. Uses current stored base currency/FX and explicit refund links; excludes transfers and report-excluded rows. Returns a summary and exact-decimal CSV labelled with currency. Buckets may overlap and are not additive. Unavailable inputs or ambiguous partially refunded split allocation are explicit errors. This is record gathering, not tax advice or a completeness/deductibility claim.",
-				json.RawMessage(`{"type":"object","properties":{"year":{"type":"integer","description":"tax year, e.g. 2025; defaults to the previous calendar year"}}}`)),
+				"Gather the household's retained records for a UTC calendar tax year: checked totals for deductible-flagged category lines, donation/interest keyword matches, and receipt gaps. Uses current stored base currency/FX and explicit refund links; excludes transfers and report-excluded rows. Buckets may overlap and are not additive. Small results include complete exact-decimal CSV. Large CSV is returned in bounded chunks with a snapshot and nextOffset. Continue with the same year and csv_snapshot, setting csv_offset to nextOffset and optionally csv_limit (maximum 24000 characters). Concatenate each csv.jsonText slice, then JSON-decode the concatenated text to recover the exact CSV. A changed snapshot requires restarting at offset 0; never combine chunks from different snapshots. Unavailable inputs or ambiguous partially refunded split allocation are explicit errors. This is record gathering, not tax advice or a completeness/deductibility claim.",
+				json.RawMessage(`{"type":"object","properties":{"year":{"type":"integer","description":"tax year, e.g. 2025; defaults to the previous calendar year"},"csv_offset":{"type":"integer","minimum":0,"description":"CSV JSON-character offset from the prior response's nextOffset; requires csv_snapshot when greater than zero"},"csv_limit":{"type":"integer","minimum":0,"maximum":24000,"description":"maximum CSV JSON characters in this response; default 24000 for chunked output"},"csv_snapshot":{"type":"string","description":"snapshot from the prior CSV chunk; reuse unchanged for every continuation"}},"additionalProperties":false}`)),
 			run: func(raw json.RawMessage) string {
 				var a struct {
-					Year *int `json:"year"`
+					Year        *int   `json:"year"`
+					CSVOffset   int    `json:"csv_offset,omitempty"`
+					CSVLimit    int    `json:"csv_limit,omitempty"`
+					CSVSnapshot string `json:"csv_snapshot,omitempty"`
 				}
 				if err := assistantDataArgs(raw, &a); err != nil {
 					return "Couldn't gather tax records: " + err.Error()
@@ -130,6 +161,7 @@ func agToolsTax(app *appstate.App, base string, rates currency.Rates) []chatTool
 				if app == nil || app.Store() == nil {
 					return "Couldn't gather tax records: local dataset is unavailable."
 				}
+				sourceRevision := app.Rev()
 				year := app.ClockNow().UTC().Year() - 1
 				if a.Year != nil {
 					year = *a.Year
@@ -138,9 +170,21 @@ func agToolsTax(app *appstate.App, base string, rates currency.Rates) []chatTool
 					// explicit null as well rather than silently choosing a year.
 					var supplied map[string]json.RawMessage
 					_ = json.Unmarshal(raw, &supplied) // already strictly decoded
-					if len(supplied) != 0 {
+					if _, hasYear := supplied["year"]; hasYear {
 						return "Couldn't gather tax records: year must be an integer from 1 through 9999."
 					}
+				}
+				if a.CSVOffset < 0 || a.CSVLimit < 0 || a.CSVLimit > taxCSVChunkCharacters {
+					return "Couldn't gather tax records: csv_offset must be nonnegative and csv_limit must be 0 through 24000."
+				}
+				if a.CSVOffset > 0 && a.CSVSnapshot == "" {
+					return "Couldn't gather tax records: csv_snapshot is required when continuing beyond offset 0."
+				}
+				if len(a.CSVSnapshot) > 128 {
+					return "Couldn't gather tax records: csv_snapshot is invalid."
+				}
+				if (a.CSVOffset > 0 || a.CSVSnapshot != "") && a.Year == nil {
+					return "Couldn't gather tax records: include the same year when continuing a CSV snapshot."
 				}
 				start, end, err := taxgather.YearBounds(year)
 				if err != nil {
@@ -182,13 +226,17 @@ func agToolsTax(app *appstate.App, base string, rates currency.Rates) []chatTool
 				if !currency.Valid(currentBase) {
 					b.WriteString("This currency is not in the registry; CSV amounts use the app's canonical two-decimal fallback assumption.\n")
 				}
-				fmt.Fprintf(&b, "- Deductible-category spending: %s across %s\n", fmtM(s.Deductible.Total), pluralWord(len(s.Deductible.Rows), "category"))
-				for _, r := range s.Deductible.Rows {
+				fmt.Fprintf(&b, "- Deductible-category spending: %s across %d %s\n", fmtM(s.Deductible.Total), len(s.Deductible.Rows), pluralWord(len(s.Deductible.Rows), "category"))
+				for i, r := range s.Deductible.Rows {
+					if i >= taxProseCategoryLimit {
+						fmt.Fprintf(&b, "    • …and %d more categories; exact full category detail is in the CSV export.\n", len(s.Deductible.Rows)-taxProseCategoryLimit)
+						break
+					}
 					n := catName[r.CategoryID]
 					if n == "" {
 						n = "Uncategorized"
 					}
-					fmt.Fprintf(&b, "    • %s: %s\n", n, fmtM(r.Amount))
+					fmt.Fprintf(&b, "    • %s: %s\n", taxProseLabel(n), fmtM(r.Amount))
 				}
 				fmt.Fprintf(&b, "- Charitable donations: %s (%d)\n", fmtM(s.Charitable.Total), s.Charitable.Count)
 				fmt.Fprintf(&b, "- Interest paid: %s (%d)\n", fmtM(s.InterestPaid.Total), s.InterestPaid.Count)
@@ -198,10 +246,10 @@ func agToolsTax(app *appstate.App, base string, rates currency.Rates) []chatTool
 					fmt.Fprintf(&b, "- Gaps (%d entries missing a receipt):\n", len(s.Gaps))
 					for i, g := range s.Gaps {
 						if i >= 10 {
-							fmt.Fprintf(&b, "    • …and %d more\n", len(s.Gaps)-10)
+							fmt.Fprintf(&b, "    • …and %d more; exact gap details are in the CSV export.\n", len(s.Gaps)-10)
 							break
 						}
-						fmt.Fprintf(&b, "    • %s — %s on %s (%s)\n", g.Label, fmtM(g.Amount), g.Date.Format("Jan 2"), g.Reason)
+						fmt.Fprintf(&b, "    • %s — %s on %s (%s)\n", taxProseLabel(g.Label), fmtM(g.Amount), g.Date.Format("Jan 2"), g.Reason)
 					}
 					b.WriteString("Offer to file each gap as a to-do (add_task) so it resolves when the receipt is attached.\n")
 				}
@@ -215,10 +263,53 @@ func agToolsTax(app *appstate.App, base string, rates currency.Rates) []chatTool
 				if err != nil {
 					return "Couldn't gather tax records: " + err.Error()
 				}
-				b.WriteString("\nCSV export:\n```\n")
-				b.Write(csv)
-				b.WriteString("```")
-				return b.String()
+				if app.Rev() != sourceRevision {
+					return "Couldn't gather tax records: local data changed during collection; retry the tax-year request."
+				}
+				summary := b.String()
+				chunkRequested := a.CSVOffset > 0 || a.CSVSnapshot != "" || a.CSVLimit > 0
+				if !chunkRequested {
+					legacy := summary + "\nCSV export:\n```\n" + string(csv) + "```"
+					if len(legacy) < taxToolOutputMaxBytes {
+						return legacy
+					}
+				}
+				chunkLimit := a.CSVLimit
+				if chunkLimit == 0 {
+					chunkLimit = taxCSVChunkCharacters
+				}
+				collectionID := fmt.Sprintf("tax-year-%d", year)
+				csvCollection := assistantdata.NewCollection("tax_csv", "id", func() ([]taxCSVRecord, error) {
+					return []taxCSVRecord{{ID: collectionID, CSV: string(csv)}}, nil
+				})
+				// Assistant usage and unrelated household writes can advance the app
+				// revision without changing this CSV. Keep the snapshot identity tied to
+				// the app/store instance and tax query; ReadRecord fingerprints the full
+				// CSV itself so relevant changes still invalidate continuations.
+				csvCollection.Revision = fmt.Sprintf("tax-csv:v1;app:%p;store:%p;year:%d;base:%s", app, app.Store(), year, currentBase)
+				counts := taxGatherCounts{DeductibleCategories: len(s.Deductible.Rows), DonationMatches: s.Charitable.Count,
+					InterestMatches: s.InterestPaid.Count, ReceiptGaps: len(s.Gaps)}
+				for {
+					detail, detailErr := assistantdata.ReadRecord(csvCollection, assistantdata.DetailRequest{
+						Collection: "tax_csv", ID: collectionID, Field: "csv", Offset: a.CSVOffset,
+						Limit: chunkLimit, Snapshot: a.CSVSnapshot,
+					})
+					if detailErr != nil {
+						return assistantDataJSON(nil, detailErr)
+					}
+					output := taxCSVChunkOutput{
+						Year: year, Counts: counts, Summary: summary, CSV: detail,
+						CSVInstructions: "csv.jsonText is a slice of the JSON serialization of the CSV string. Append slices in offset order through nextOffset, then JSON-decode the concatenated text once to recover the exact CSV. Keep csv.snapshot unchanged; if it changes, restart at offset 0.",
+					}
+					encoded := assistantDataJSON(output, nil)
+					if len(encoded) < taxToolOutputMaxBytes {
+						return encoded
+					}
+					if chunkLimit <= 1 {
+						return "Couldn't gather tax records: bounded CSV chunk metadata exceeds the response limit."
+					}
+					chunkLimit /= 2
+				}
 			},
 		},
 	}
@@ -293,4 +384,12 @@ func pluralWord(n int, word string) string {
 		return word[:len(word)-1] + "ies"
 	}
 	return word + "s"
+}
+
+func taxProseLabel(label string) string {
+	runes := []rune(label)
+	if len(runes) <= taxProseLabelRunes {
+		return label
+	}
+	return string(runes[:taxProseLabelRunes-1]) + "…"
 }
