@@ -1,3 +1,7 @@
+## 2026-10-21 - Bound transparent assistant memory
+
+Removed global active-dataset redirection from memory tools, surfaced storage and malformed-value errors, and required one matching preview with unchanged stored memory before writing. Existing canonical fact normalization remains shared. All three memory WASM groups passed, covering replacement datasets, changed previews and strict arguments.
+
 ## 2026-10-21 - Bound formula catalog responses
 
 The catalog keeps each complete response within 24000 bytes, advances continuation at the first omitted metric, and retains its fixed observation and selector identity. Oversized custom documentation and formulas return an explicit detail-required record reference. All ten formula WASM groups passed, including full traversal and actual read_record recovery.

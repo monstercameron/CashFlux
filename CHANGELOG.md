@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Assistant memory reads and approved writes now stay bound to their original dataset and checked preview.
 - Assistant formula discovery now sizes complete encoded pages and provides exact record recovery for oversized custom metadata.
 - Assistant audits now read current bound data and separate recurring, one-time and unclassified estimates.
 - Assistant tax gathering now uses fresh bound records, canonical refund and split rules, checked totals, and exact currency CSV amounts.
