@@ -260,14 +260,14 @@ func (a *App) DatasetBytesWithBlobs() int {
 // point of keeping them out of it — the next autosave would then push every
 // receipt back into localStorage.
 //
-// The OpenAI key is KEPT, matching ExportJSONWithBlobs: a backup the user asked
-// for by hand is meant to be complete. The autosave path is the one that
-// redacts, because that writes to storage nobody chose.
+// Device credentials are omitted, as in the JSON export. A SQLite file can be
+// opened by other tools and may be copied or shared outside CashFlux.
 func (a *App) ExportSQLite() ([]byte, error) {
 	ds, err := a.store.Snapshot()
 	if err != nil {
 		return nil, err
 	}
+	ds.Settings.OpenAIKey = ""
 	if err := a.rehydrateArtifactBytes(ds.Artifacts); err != nil {
 		return nil, err
 	}

@@ -45,6 +45,29 @@ func TestDatasetJSONExportsAlwaysOmitOpenAIKey(t *testing.T) {
 	}
 }
 
+func TestSQLiteExportOmitsDeviceOpenAIKey(t *testing.T) {
+	a, err := New(nil, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ds := store.EmptyDataset()
+	ds.Settings.OpenAIKey = "sk-device-secret"
+	if err := a.Store().Load(ds); err != nil {
+		t.Fatal(err)
+	}
+	data, err := a.ExportSQLite()
+	if err != nil {
+		t.Fatal(err)
+	}
+	exported, err := store.ImportSQLiteFile(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if exported.Settings.OpenAIKey != "" {
+		t.Fatal("SQLite export contains a device credential")
+	}
+}
+
 func TestImportJSONKeepsCurrentDeviceKey(t *testing.T) {
 	a, err := New(nil, false)
 	if err != nil {

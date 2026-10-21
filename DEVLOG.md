@@ -1,3 +1,7 @@
+## 2026-10-21 — Omit device AI credentials from SQLite exports
+
+The manual JSON exports already cleared `Settings.OpenAIKey`, but the SQLite export loaded a live snapshot into a portable database without clearing it. A focused test first reproduced that a device key was present in the exported SQLite file. The export now clears the key before building its scratch database; import already keeps the current device credential rather than adopting one from a file. Existing SQLite exports are not changed retroactively and should be treated as sensitive if they were made while a legacy dataset key was present. This fix does not alter financial records or attachment bytes.
+
 ## 2026-10-21 — Say which backup includes every workspace
 
 Settings → Data called the current-workspace JSON export a backup of everything, even though the adjacent “Back up everything” action is the only one that gathers every workspace and its external files. The JSON and SQLite button labels now say “current workspace,” and the help text points to the all-workspace backup for a complete install recovery copy. This changes wording only; it does not change export bytes or restore behavior. The server account export remains a separate metadata-and-snapshot export without file payloads.
