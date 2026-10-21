@@ -1,3 +1,7 @@
+## 2026-10-20 - Responses tool argument semantics
+
+Followed the official Responses migration documentation to send strict:false for flattened function tools; this avoids implicit strict normalization of intentionally optional app parameters. Existing tool names, descriptions, parameter schemas and call IDs are unchanged. A native request contract verifies the explicit flag and optional properties; the complete internal/ai native package passed. No paid API request or credential was used.
+
 ## 2026-10-20 - Canonical Assistant task completion
 
 Replaced the legacy title-substring PutTask path with a preview-bound canonical App.CompleteTask helper. Exact IDs are exposed by list_tasks; exact titles precede unique partial matches, completed retries remain unchanged, and execution refuses edited or removed preview records. Six focused actual-handler WASM test groups passed in the combined Data/CompleteTask run, including recurrence, identity, ambiguity, stale approvals, no-op retry and write-error recovery; the separate Data catalog ID fixture failure was outside this slice.

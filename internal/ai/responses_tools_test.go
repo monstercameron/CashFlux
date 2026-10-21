@@ -49,6 +49,9 @@ func TestBuildResponsesToolRequest(t *testing.T) {
 	if tool0["type"] != "function" || tool0["name"] != "find_dupes" {
 		t.Errorf("tool[0] = %v, want flat function find_dupes", tool0)
 	}
+	if tool0["strict"] != false {
+		t.Errorf("tool[0].strict = %v, want explicit false", tool0["strict"])
+	}
 	// input: system, user, function_call, function_call_output — in order.
 	input, _ := got["input"].([]any)
 	if len(input) != 4 {
@@ -65,6 +68,42 @@ func TestBuildResponsesToolRequest(t *testing.T) {
 	i3, _ := input[3].(map[string]any)
 	if i3["type"] != "function_call_output" || i3["call_id"] != "call_1" || i3["output"] != "found 1 group" {
 		t.Errorf("input[3] = %v, want function_call_output call_1", i3)
+	}
+}
+
+func TestResponsesToolsKeepOptionalFieldsNonStrict(t *testing.T) {
+	params := json.RawMessage(`{"type":"object","properties":{"query":{"type":"string"},"limit":{"type":"integer"}}}`)
+	body, err := BuildResponsesToolRequest("gpt-4o", []Message{{Role: RoleUser, Content: "search"}}, 0, "", []Tool{
+		FunctionTool("search_records", "Search records", params),
+	})
+	if err != nil {
+		t.Fatalf("BuildResponsesToolRequest: %v", err)
+	}
+	var got struct {
+		Tools []struct {
+			Strict     *bool           `json:"strict"`
+			Parameters json.RawMessage `json:"parameters"`
+		} `json:"tools"`
+	}
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(got.Tools) != 1 || got.Tools[0].Strict == nil || *got.Tools[0].Strict {
+		t.Fatalf("tool strict flag must be present and false: %+v", got.Tools)
+	}
+	var schema map[string]json.RawMessage
+	if err := json.Unmarshal(got.Tools[0].Parameters, &schema); err != nil {
+		t.Fatalf("unmarshal parameters: %v", err)
+	}
+	if _, required := schema["required"]; required {
+		t.Fatalf("non-strict optional schema unexpectedly gained required fields: %s", got.Tools[0].Parameters)
+	}
+	var properties map[string]json.RawMessage
+	if err := json.Unmarshal(schema["properties"], &properties); err != nil {
+		t.Fatalf("unmarshal properties: %v", err)
+	}
+	if len(properties) != 2 {
+		t.Fatalf("parameters lost optional fields: %s", got.Tools[0].Parameters)
 	}
 }
 

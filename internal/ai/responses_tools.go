@@ -37,6 +37,9 @@ type responsesFunctionTool struct {
 	Name        string          `json:"name"`
 	Description string          `json:"description,omitempty"`
 	Parameters  json.RawMessage `json:"parameters,omitempty"`
+	// Responses otherwise attempts strict normalization when this is omitted.
+	// Current app schemas intentionally allow best-effort optional arguments.
+	Strict bool `json:"strict"`
 }
 
 // responsesReasoning carries the thinking level for reasoning models.
@@ -96,7 +99,7 @@ func messagesToResponsesInput(messages []Message) []json.RawMessage {
 func toolsToResponses(tools []Tool) []responsesFunctionTool {
 	out := make([]responsesFunctionTool, 0, len(tools))
 	for _, t := range tools {
-		out = append(out, responsesFunctionTool{Type: "function", Name: t.Function.Name, Description: t.Function.Description, Parameters: t.Function.Parameters})
+		out = append(out, responsesFunctionTool{Type: "function", Name: t.Function.Name, Description: t.Function.Description, Parameters: t.Function.Parameters, Strict: false})
 	}
 	return out
 }
