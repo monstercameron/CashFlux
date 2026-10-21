@@ -133,7 +133,9 @@ func setupInsightsLifecycle(t *testing.T, conversations ...domain.Conversation) 
 	// the fixture unmounts but before the minimal document globals are restored.
 	t.Cleanup(func() { time.Sleep(650 * time.Millisecond) })
 
-	f := render.New(t)
+	// Model callbacks can arrive from another goroutine. Queue their updates for
+	// the fixture's render goroutine, as the browser scheduler does.
+	f := render.New(t, render.WithQueuedScheduler())
 	f.Render(ui.CreateElement(Insights))
 	f.Stabilize()
 	t.Cleanup(func() {

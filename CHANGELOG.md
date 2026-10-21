@@ -21,6 +21,9 @@ and every commit updates this file under `Unreleased`.
 - The device-erasure audit now identifies retained workspace, queue, file, credential, and key records that the current “Erase everything” action does not remove, with acceptance criteria for a truthful full erase.
 
 ### Fixed
+- Assistant browser tests now queue background model callbacks onto the fixture render scheduler and wait for the committed scroll result, preventing timing-dependent failures under the v7 runtime.
+- Server-model discovery now validates the document base URL before starting its worker and reports a connection error instead of crashing on an invalid URL.
+- CI's high-severity Go security scan now uses a pinned Go 1.27-compatible analyzer; exact guarded integer casts in the published v7 financial code carry local bound justifications so the scan can report new issues.
 - Workspace merge and replacement now serialize with the normal sync writer. Merge publishes its local revision only after the direct server decision, preventing autosave from racing the version-bound recovery write.
 - A direct workspace recovery upload now bookmarks the hash of the local lightweight dataset and the signed-in owner, so the next ordinary sync does not mistake the file-complete upload for a new edit or leave an ownerless bookmark.
 - Workspace recovery now decrypts and downloads the server copy before comparing or merging, carries local file bytes into replacement uploads, and checks that the server accepted a version-bound merge. Its safety export includes active and inactive workspace files and must succeed before rebinding.

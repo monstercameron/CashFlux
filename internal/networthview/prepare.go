@@ -142,13 +142,9 @@ func Prepare(in Input) (Prepared, error) {
 		if !ok || account.Archived {
 			continue
 		}
-		magnitude := uint64(window.BaseBalance.Amount)
-		if window.BaseBalance.Amount < 0 {
-			magnitude = uint64(-(window.BaseBalance.Amount + 1)) + 1
-		}
 		p.Accounts = append(p.Accounts, AccountFact{
 			Account: account, Bucket: balancesheet.BucketOf(account), AsOf: account.BalanceAsOf,
-			Window: window, SideMagnitude: magnitude,
+			Window: window, SideMagnitude: magnitude(window.BaseBalance.Amount),
 		})
 	}
 	sortAccountFacts(p.Accounts)
@@ -219,7 +215,7 @@ func sortAccountFacts(accounts []AccountFact) {
 
 func magnitude(value int64) uint64 {
 	if value < 0 {
-		return uint64(-(value + 1)) + 1
+		return uint64(-(value + 1)) + 1 // #nosec G115 -- negative value plus one is negated without overflowing at MinInt64.
 	}
 	return uint64(value)
 }

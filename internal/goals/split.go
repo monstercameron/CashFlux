@@ -115,10 +115,10 @@ func splitProportional(total int64, cap []int64, out []int64, capacity uint64) [
 		if c <= 0 {
 			continue
 		}
-		hi, lo := bits.Mul64(uint64(total), uint64(c))
+		hi, lo := bits.Mul64(uint64(total), uint64(c)) // #nosec G115 -- total and c are positive int64 values, so both fit uint64.
 		share, remainder := bits.Div64(hi, lo, capacity)
-		out[i] = int64(share)
-		distributed += int64(share)
+		out[i] = int64(share)       // #nosec G115 -- the proportional share cannot exceed positive int64 total.
+		distributed += int64(share) // #nosec G115 -- shares sum to at most positive int64 total.
 		rem[i] = remainder
 	}
 	// Hand out the leftover to the largest remainders first (stable), skipping capped ones.

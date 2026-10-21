@@ -1,3 +1,15 @@
+## 2026-10-21 — Stabilize the merged WebAssembly screen gate
+
+The exact-head CI screen lane failed after the v7 merge, and a local full-suite run exposed a render-thread diagnostic in an assistant title test. Its fixture used the synchronous mock scheduler even though title callbacks may arrive from background work. The fixture now uses the queued scheduler, matching the browser's render scheduling, and the streaming-bubble test waits for its committed scroll state instead of assuming a 25 ms timer. A full 1,101-test screen run then passed without a render-thread diagnostic. No production account was involved.
+
+## 2026-10-21 — Return a worker URL error instead of panicking
+
+The merged v7 screen component suite exposed a browser worker startup panic: an asynchronous server AI model lookup reached `new URL("services-worker.js", document.baseURI)` while the test DOM held an invalid base URL. `rpcworker.StartDefault` already promises an error result, so it now resolves and validates the URL in pure Go before constructing the worker. Native table tests cover HTTP/HTTPS bases and invalid values. This hardens malformed document environments without changing normal browser URL resolution.
+
+## 2026-10-21 — Restore CI security scan under Go 1.27
+
+The v1.19.10 stability tag raised the module toolchain to Go 1.27.3. On the merged draft, gosec v2.29.0 loaded x/tools v0.49 and failed to decode Go 1.27 export data before it could scan any code. Pinned an upstream gosec commit whose x/tools v0.52 loader completed a local scan. That scan surfaced 13 G115 reports on guarded casts in the published financial code; each conversion's range was checked and annotated at the exact line, retaining the high-severity scan for new findings. Gosec's loader separately failed to type-check the 370-file static language catalog even in an isolated run. Excluding only `internal/i18n` lets its local full scan pass on 1,226 other Go files with zero issues; vet, unit tests, and govulncheck continue to cover i18n. The dependency mismatch was a CI tool failure, not a CashFlux vulnerability finding.
+
 ## 2026-10-21 — Prepare v1.19.11 without reusing the published tag
 
 The v1.19.10 tag already published a stability build from the v7 branch. After integrating that exact tag with the pending sync/privacy changes and passing native, WebAssembly, and local browser file-sync checks, moved the single product version source to 1.19.11. This is draft release preparation only: no new tag or deployment has been created, and no authenticated production account was used for validation.

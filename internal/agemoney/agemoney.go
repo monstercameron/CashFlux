@@ -123,13 +123,13 @@ func Compute(flows []Flow, opts Opts) Result {
 			lots = append(lots, lot{date: f.Date, remaining: f.AmountMinor})
 		case f.AmountMinor < 0:
 			// This magnitude also represents MinInt64 without narrowing valid flows.
-			need := uint64(-(f.AmountMinor + 1)) + 1
+			need := uint64(-(f.AmountMinor + 1)) + 1 // #nosec G115 -- f.AmountMinor is negative; adding one before negation also handles MinInt64.
 			sp := spend{date: f.Date}
 			for need > 0 && head < len(lots) {
 				l := &lots[head]
 				take := l.remaining
-				if uint64(take) > need {
-					take = int64(need)
+				if uint64(take) > need { // #nosec G115 -- remaining income lots are positive int64.
+					take = int64(need) // #nosec G115 -- this branch proves need < take <= MaxInt64.
 				}
 				age := int64(f.Date.Sub(l.date) / day)
 				if age < 0 {
@@ -179,7 +179,7 @@ func Compute(flows []Flow, opts Opts) Result {
 			res.Overflow = true
 			return res // A partial or wrapped denominator cannot explain this figure.
 		}
-		totMatched += int64(s.matched)
+		totMatched += int64(s.matched) // #nosec G115 -- the preceding bound check proves the sum fits int64.
 		totWeighted.add(s.weighted)
 	}
 
