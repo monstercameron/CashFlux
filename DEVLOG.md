@@ -1,3 +1,7 @@
+## 2026-10-21 - Checked subscription financial preparation
+
+Extracted monthly/annual amounts, totals and share availability into a pure native model. Views render prepared facts and expose share percentages on hover. Native tests and vet pass; both focused WASM cases pass. The checked model adds correctness overhead in the small synthetic fixture; no performance improvement claimed.
+
 ## 2026-10-21 - Native budget summary preparation
 
 Extracted immutable budget selection and summary facts from the views. Preserved cache invalidation, canonical split/tag matching and independent funding availability. Native budgeting/budgetview tests and vet pass; two focused WASM host groups pass. The synthetic benchmark is a baseline only; no browser speed claim.
