@@ -27,26 +27,55 @@ type cloudConnection struct {
 	Test, SaveToken           func()
 }
 
+// Discovery contains only public server capabilities. Keep the last successful
+// response for this page so a Settings remount does not strand sign-in while a
+// fresh probe is in flight. An error clears it, and another URL never reuses it.
+var cloudDiscoveryCache struct {
+	endpoint string
+	value    backendauth.Discovery
+}
+
 // useCloudServer owns drafts. Typing never switches server/account scope. Only
 // the explicit connection check commits the address, after a successful probe.
 func useCloudServer(atom state.Atom[prefs.Prefs], step cloudStep) cloudConnection {
 	p := atom.Get().Normalize()
+	cached := cloudDiscoveryCache.endpoint != "" && cloudDiscoveryCache.endpoint == normalizedBackendEndpoint(p.ServerURL)
+	initialPhase := discoveryIdle
+	initialDiscovery := backendauth.Discovery{}
+	if cached {
+		initialPhase, initialDiscovery = discoveryOK, cloudDiscoveryCache.value
+	}
 	segment := uic.UseState(segmentFor(p))
 	url := uic.UseState(p.ServerURL)
 	token := uic.UseState(p.ServerToken)
-	discovery := uic.UseState(backendauth.Discovery{})
-	phase := uic.UseState(discoveryIdle)
+	discovery := uic.UseState(initialDiscovery)
+	phase := uic.UseState(initialPhase)
 	connectionError := uic.UseState("")
 	generation := uic.UseRef(0)
+	mounted := uic.UseRef(true)
+	// A static dependency runs this cleanup only when the Cloud pane unmounts.
+	// The probe effect below may clean up during a setup render and must not
+	// invalidate an otherwise current response.
+	uic.UseEffect(func() func() {
+		mounted.Set(true)
+		return func() {
+			mounted.Set(false)
+			generation.Set(generation.Get() + 1)
+		}
+	}, true)
 	probe := func(address string, save bool) {
 		g := generation.Get() + 1
 		generation.Set(g)
-		phase.Set(discoveryChecking)
+		endpoint := normalizedBackendEndpoint(address)
+		if save || cloudDiscoveryCache.endpoint != endpoint {
+			phase.Set(discoveryChecking)
+		}
 		connectionError.Set("")
 		testBackendConnection(address, func(d backendauth.Discovery) {
-			if generation.Get() != g {
+			if !mounted.Get() || generation.Get() != g {
 				return
 			}
+			cloudDiscoveryCache.endpoint, cloudDiscoveryCache.value = endpoint, d
 			complete := func() { discovery.Set(d); phase.Set(discoveryOK) }
 			if !save {
 				complete()
@@ -108,17 +137,24 @@ func useCloudServer(atom state.Atom[prefs.Prefs], step cloudStep) cloudConnectio
 				commit()
 			}
 		}, func(message string) {
-			if generation.Get() == g {
-				connectionError.Set(message)
-				phase.Set(discoveryError)
+			if !mounted.Get() || generation.Get() != g {
+				return
 			}
+			if cloudDiscoveryCache.endpoint == endpoint {
+				cloudDiscoveryCache.endpoint, cloudDiscoveryCache.value = "", backendauth.Discovery{}
+			}
+			connectionError.Set(message)
+			phase.Set(discoveryError)
 		})
 	}
 	uic.UseEffect(func() func() {
 		if step != cloudOff && step != cloudWhere {
 			probe(p.ServerURL, false)
 		}
-		return func() { generation.Set(generation.Get() + 1) }
+		// The next probe or a draft-address edit invalidates the previous result.
+		// Cleanup can run after a render while this probe is still in flight;
+		// invalidating here stranded the sign-in pane at "Checking the connection".
+		return nil
 	}, p.ServerURL, string(step))
 	test := func() {
 		address := strings.TrimSpace(url.Get())

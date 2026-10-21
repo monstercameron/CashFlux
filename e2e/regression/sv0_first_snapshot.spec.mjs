@@ -25,6 +25,7 @@ test("first encrypted snapshot reaches a newly created server workspace", async 
   await app.locator('button[form="account-add-form"]').click();
 
   await configureRemote(app, server.origin);
+  await expect(app.getByTestId("sync-discovery-ok")).toBeVisible({ timeout: 20_000 });
   await login(app, username, password);
   await waitForSync(app);
   const snapshots = await accountSnapshots(request, server.origin, await accessToken(app));
