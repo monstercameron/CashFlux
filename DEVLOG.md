@@ -1,3 +1,7 @@
+## 2026-10-21 - Native activity feed preparation
+
+Preserved Recent50 selection, fallback synthesis, redaction and stable ordering. Rendered day groups and rows use stable keys. Undo still performs authoritative live preflight at click time. Native model tests and both focused actual-host WASM cases pass.
+
 ## 2026-10-21 - Prepared category period and usage facts
 
 Prepared independent counts, income/expense availability, totals and bar shares outside the view, using canonical netted ledger rules. Lifetime usage preserves whole-transaction and primary-budget semantics while delete routing uses the complete canonical reference guard. Added checked income aggregation in reports. Native categoryview/reports/appstate tests pass and the focused missing-FX/usage WASM case passes.

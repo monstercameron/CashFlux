@@ -40,14 +40,15 @@ package screens
 //	activity.labelChanged "Changed"
 import (
 	"fmt"
-	"sort"
 	"strings"
 
+	"github.com/monstercameron/CashFlux/internal/activityview"
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/auditimpact"
 	"github.com/monstercameron/CashFlux/internal/auditlog"
 	"github.com/monstercameron/CashFlux/internal/auditundo"
 	"github.com/monstercameron/CashFlux/internal/auditview"
+	"github.com/monstercameron/CashFlux/internal/domain"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -61,10 +62,27 @@ import (
 type activityRowProps struct {
 	Entry   auditlog.Entry
 	IsFirst bool // first (newest) entry — may have an inline Undo affordance
-	// All is the whole timeline, so a row can say how many LATER changes a
-	// checkpoint restore would also reverse (WF-AUDIT). A row cannot answer that
-	// from itself.
-	All []auditlog.Entry
+	Undo    auditundo.Assessment
+}
+
+type activityDayProps struct {
+	Group   activityview.Day
+	Label   string
+	FirstID string
+}
+
+func activityDay(props activityDayProps) ui.Node {
+	return Fragment(
+		Div(css.Class("act-day", tw.FontDisplay), props.Label),
+		MapKeyed(props.Group.Rows,
+			func(row activityview.Row) any { return row.Entry.ID },
+			func(row activityview.Row) ui.Node {
+				return ui.CreateElement(activityRow, activityRowProps{
+					Entry: row.Entry, Undo: row.Undo, IsFirst: row.Entry.ID == props.FirstID,
+				})
+			},
+		),
+	)
 }
 
 // activityRow renders a single audit timeline row with an optional inline Undo
@@ -183,10 +201,10 @@ func activityRow(props activityRowProps) ui.Node {
 	// button, because a control that does nothing and says nothing is read as a
 	// broken feature rather than an honest limit.
 	var undoLine ui.Node = Fragment()
-	if a := auditundo.Assess(e, props.All, uistate.Checkpoints()); a.Possible() {
+	if props.Undo.Possible() {
 		undoLine = Div(css.Class("act-undo", tw.TextFaint), Attr("data-testid", "act-undo-"+e.ID),
 			uistate.T("activity.undoCheckpoint",
-				uistate.LoadPrefs().FormatDate(a.CheckpointAt), a.AlsoReverses))
+				uistate.LoadPrefs().FormatDate(props.Undo.CheckpointAt), props.Undo.AlsoReverses))
 	} else if len(e.Details) > 0 {
 		undoLine = Div(css.Class("act-undo", tw.TextFaint), Attr("data-testid", "act-undo-"+e.ID),
 			uistate.T("activity.undoNone"))
@@ -197,7 +215,7 @@ func activityRow(props activityRowProps) ui.Node {
 		actorCls = css.Class(causeCls)
 	}
 
-	return Div(ClassStr(rowCls),
+	return Div(ClassStr(rowCls), Attr("data-testid", "activity-entry-"+e.ID),
 		Div(css.Class("row-main"),
 			Div(css.Class("row-desc"),
 				Span(css.Class(tw.FontMedium), actionLabel),
@@ -214,6 +232,7 @@ func activityRow(props activityRowProps) ui.Node {
 				Button(
 					css.Class("btn btn-xs"),
 					Type("button"),
+					Attr("data-testid", "activity-undo-"+e.ID),
 					Attr("aria-label", undoBtnLabel),
 					OnClick(doUndo),
 					undoBtnLabel,
@@ -280,11 +299,23 @@ func Activity() ui.Node {
 	filterAtom := state.UseAtom(activityFilterAtomID, "")
 	selectedFilter := filterAtom.Get()
 
-	entries := buildActivityFeed(app)
-
-	// Apply entity-type filter when one is selected. The filter logic lives in the
-	// pure, unit-tested auditlog package (§1.9 — no logic leaks into view code).
-	entries = auditlog.FilterByEntityType(entries, selectedFilter)
+	auditEntries := auditview.Feed.Recent(activityFeedMax)
+	var transactions []domain.Transaction
+	var tasks []domain.Task
+	if len(auditEntries) == 0 {
+		transactions = app.Transactions()
+		tasks = app.Tasks()
+	}
+	prepared := activityview.Build(activityview.Input{
+		AuditEntries:      auditEntries,
+		AuditAvailable:    true,
+		Transactions:      transactions,
+		Tasks:             tasks,
+		SnapshotAvailable: true,
+		Limit:             activityFeedMax,
+		Filter:            selectedFilter,
+		Checkpoints:       uistate.Checkpoints(),
+	})
 
 	emptyMsg := uistate.T("activity.empty")
 	if emptyMsg == "activity.empty" {
@@ -305,33 +336,21 @@ func Activity() ui.Node {
 
 	// ── Hero: the record's size, who changed what, and the latest change. ──────
 	pr := uistate.UsePrefs().Get()
-	allEntries := entries // pre-filter view feeds the hero figures
-	if selectedFilter != "" {
-		allEntries = buildActivityFeed(app)
-	}
-	youCount, otherCount := 0, 0
-	for _, e := range allEntries {
-		if e.Actor == "user" || e.Actor == "" {
-			youCount++
-		} else {
-			otherCount++
-		}
-	}
 	chips := []ui.Node{
-		rptChip(uistate.T("activity.chipShown"), fmt.Sprintf("%d", len(entries)), ""),
+		rptChip(uistate.T("activity.chipShown"), fmt.Sprintf("%d", len(prepared.Rows)), ""),
 	}
-	if otherCount > 0 {
+	if prepared.Hero.OtherCount > 0 {
 		chips = append(chips,
-			rptChip(uistate.T("activity.chipYou"), fmt.Sprintf("%d", youCount), ""),
-			rptChip(uistate.T("activity.chipOthers"), fmt.Sprintf("%d", otherCount), ""))
+			rptChip(uistate.T("activity.chipYou"), fmt.Sprintf("%d", prepared.Hero.YouCount), ""),
+			rptChip(uistate.T("activity.chipOthers"), fmt.Sprintf("%d", prepared.Hero.OtherCount), ""))
 	}
 	if auditview.CanUndoFunc() {
 		chips = append(chips, rptChip(uistate.T("activity.chipUndo"), uistate.T("activity.chipUndoYes"), rptToneCls("pos")))
 	}
 
 	takeaway := uistate.T("act.takeEmpty")
-	if len(allEntries) > 0 {
-		latest := allEntries[0]
+	if prepared.Hero.HasLatest {
+		latest := prepared.Hero.Latest
 		who := latest.Actor
 		switch who {
 		case "user", "":
@@ -353,7 +372,7 @@ func Activity() ui.Node {
 		Div(css.Class("rpt-hero-main"),
 			Div(
 				Div(css.Class("rpt-hero-label", tw.TextDim), uistate.T("activity.heroLabel")),
-				Div(ClassStr("rpt-hero-value "+tw.Fold(tw.FontDisplay)), fmt.Sprintf("%d", len(allEntries))),
+				Div(ClassStr("rpt-hero-value "+tw.Fold(tw.FontDisplay)), fmt.Sprintf("%d", prepared.Hero.Count)),
 			),
 		),
 		Div(css.Class("debt-chips"), chips),
@@ -363,27 +382,27 @@ func Activity() ui.Node {
 
 	// ── Timeline: entries grouped under serif day dividers. ────────────────────
 	var timeline ui.Node
-	if len(entries) == 0 {
+	if len(prepared.Rows) == 0 {
 		timeline = P(css.Class("empty"), emptyMsg)
 	} else {
-		nodes := make([]ui.Node, 0, len(entries)+8)
-		lastDay := "\x00"
-		for i, e := range entries {
+		dayProps := make([]activityDayProps, 0, len(prepared.Days))
+		firstID := prepared.Rows[0].Entry.ID
+		for _, dayGroup := range prepared.Days {
 			day := uistate.T("activity.dayUndated")
-			if !e.At.IsZero() {
-				day = pr.FormatDate(e.At)
+			if len(dayGroup.Rows) > 0 && !dayGroup.Rows[0].Entry.At.IsZero() {
+				day = pr.FormatDate(dayGroup.Rows[0].Entry.At)
 			}
-			if day != lastDay {
-				nodes = append(nodes, Div(css.Class("act-day", tw.FontDisplay), day))
-				lastDay = day
-			}
-			nodes = append(nodes, ui.CreateElement(activityRow, activityRowProps{
-				Entry:   e,
-				IsFirst: i == 0,
-				All:     entries,
-			}))
+			dayProps = append(dayProps, activityDayProps{Group: dayGroup, Label: day, FirstID: firstID})
 		}
-		timeline = hhRowsList(nodes)
+		timeline = hhRowsList(MapKeyed(dayProps,
+			func(day activityDayProps) any {
+				if day.Group.Key == "" {
+					return "undated"
+				}
+				return day.Group.Key
+			},
+			func(day activityDayProps) ui.Node { return ui.CreateElement(activityDay, day) },
+		))
 	}
 
 	return Div(css.Class("bento bento-record"),
@@ -393,127 +412,9 @@ func Activity() ui.Node {
 	)
 }
 
-// ─── feed synthesis ───────────────────────────────────────────────────────────
+// ─── prepared feed ───────────────────────────────────────────────────────────
 
 const activityFeedMax = 50 // maximum rows shown on the timeline
-
-// actEntityLabel maps an audit entry's entity type — including legacy raw
-// collection names persisted by older builds ("auditEntries", "placements",
-// "settingsState") — to a plain-English label. Unknown types pass through.
-func actEntityLabel(t string) string {
-	switch t {
-	case "auditEntries", "auditEntry":
-		return "history"
-	case "placements", "placement":
-		return "dashboard layout"
-	case "recurring":
-		return "recurring item"
-	case "settingsState", "settings":
-		return "settings"
-	case "customPages":
-		return "page"
-	case "sharedExpenses":
-		return "shared expense"
-	}
-	return t
-}
-
-// actHumanizeSummary repairs machine-speak in legacy persisted summaries:
-// "Added 20 placements records" gets its collection word relabelled, and a
-// single-record "Added settings settingsState" drops the raw identifier.
-func actHumanizeSummary(s string) string {
-	fields := strings.Fields(s)
-	// "<Action> <N> <coll> records" — relabel the collection word.
-	if len(fields) == 4 && fields[3] == "records" {
-		if lbl := actEntityLabel(fields[2]); lbl != fields[2] {
-			return fields[0] + " " + fields[1] + " " + lbl + " records"
-		}
-		return s
-	}
-	// "<Action> a settings" (persisted before the mass-noun fix) — drop the article.
-	if len(fields) == 3 && fields[1] == "a" && fields[2] == "settings" {
-		return fields[0] + " settings"
-	}
-	// "<Action> <type> <rawID>" (legacy single-change fallback) — keep the
-	// action + type, drop the identifier when the type is a known entity word.
-	if len(fields) == 3 {
-		if lbl := actEntityLabel(fields[1]); lbl != fields[1] {
-			return fields[0] + " " + lbl
-		}
-	}
-	return s
-}
-
-// buildActivityFeed returns at most activityFeedMax entries newest-first.
-// It prefers the audit feed (auditview.Feed) and falls back to entity-timestamp
-// synthesis when the feed is empty (Phase 2 not yet landed).
-func buildActivityFeed(app *appstate.App) []auditlog.Entry {
-	// Primary: in-process audit feed (populated by RecordAuditPoint).
-	if primary := auditview.Feed.Recent(activityFeedMax); len(primary) > 0 {
-		// The feed's storage order isn't guaranteed newest-first (imported/seeded
-		// entries append in file order) — the page promises "newest first", so
-		// enforce it: dated entries newest-first, with undated legacy entries
-		// (recorded before timestamps existed) trailing at the end.
-		out := make([]auditlog.Entry, len(primary))
-		copy(out, primary)
-		sort.SliceStable(out, func(i, j int) bool {
-			zi, zj := out[i].At.IsZero(), out[j].At.IsZero()
-			if zi != zj {
-				return zj // dated before undated
-			}
-			return out[i].At.After(out[j].At)
-		})
-		// Humanize legacy machine-speak (raw collection names / record IDs) that
-		// older builds persisted into the audit log.
-		for i := range out {
-			out[i].EntityType = actEntityLabel(out[i].EntityType)
-			out[i].Summary = actHumanizeSummary(out[i].Summary)
-		}
-		return out
-	}
-
-	// Fallback: synthesise from live entity data.
-	var entries []auditlog.Entry
-
-	// Recent transactions — use the transaction business date as the at time.
-	for _, t := range app.Transactions() {
-		desc := t.Desc
-		if desc == "" {
-			desc = t.Payee
-		}
-		entries = append(entries, auditlog.Entry{
-			ID:         "txn-" + t.ID,
-			At:         t.Date,
-			Actor:      "user",
-			Action:     "added",
-			EntityType: "transaction",
-			EntityID:   t.ID,
-			Summary:    auditlog.Redact(fmt.Sprintf("Transaction: %s", actTruncate(desc, 60))),
-		})
-	}
-
-	// Recent tasks — use Due date (tasks have no CreatedAt field); zero-At
-	// entries sort to the bottom but are still shown.
-	for _, t := range app.Tasks() {
-		entries = append(entries, auditlog.Entry{
-			ID:         "task-" + t.ID,
-			At:         t.Due,
-			Actor:      "user",
-			Action:     "added",
-			EntityType: "task",
-			EntityID:   t.ID,
-			Summary:    auditlog.Redact(fmt.Sprintf("Task: %s", actTruncate(t.Title, 60))),
-		})
-	}
-
-	sort.Slice(entries, func(i, j int) bool {
-		return entries[i].At.After(entries[j].At)
-	})
-	if len(entries) > activityFeedMax {
-		entries = entries[:activityFeedMax]
-	}
-	return entries
-}
 
 // ─── small helpers (prefixed act* to avoid clashing with other screens) ───────
 
