@@ -1,3 +1,7 @@
+## 2026-10-21 - Correct fee-drain currency evidence
+
+SMART-A9 uses the household-base decimal scale for its threshold, strict per-charge FX, checked magnitude and accumulation, and checked annualization. Missing FX or overflow omits that account estimate. Native Smart engine tests and vet passed, including EUR conversion, JPY precision, missing FX and MinInt64 regressions.
+
 ## 2026-10-21 - Checked report statistics and formula reductions
 
 Fixed MinInt64 absolute-value panics, median and group-sum overflow, percentage scaling and monthly-burn accumulation in the report-variable path. Counts remain independent; failed financial reducers no longer publish false zero values. Nine new native groups and full reports/engineenv suites plus vet passed.
