@@ -1,3 +1,7 @@
+## 2026-10-21 - Bound transaction evidence responses
+
+Kept report totals complete while limiting transport output to 24000 UTF-8 bytes. Whole omitted rows retain exact transaction IDs with query_data and read_record recovery instructions; pathological metadata fails explicitly. Added Unicode-heavy response regression. Full screen WASM suite passed 1015 tests.
+
 ## 2026-10-21 - Keep formula pages stable across assistant usage writes
 
 Bound formula snapshots to the dataset, persisted engine inputs, catalog definitions, reference time, base currency and FX. Provider usage and unrelated app writes no longer invalidate continuation tokens; actual financial changes still require restarting. Full screen WASM suite passed 1015 tests and the full native suite passed.

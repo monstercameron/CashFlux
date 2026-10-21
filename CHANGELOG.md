@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Assistant report drilldowns cap the complete response and identify omitted transactions for exact recovery.
 - Formula continuations fingerprint financial inputs instead of the global usage revision.
 - Assistant sessions now bound request history, cancel on dataset replacement, and refresh reads after uncertain writes.
 - Assistant financial calculations now read calendar and rollover preferences from their own workspace.

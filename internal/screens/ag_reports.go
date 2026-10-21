@@ -1498,6 +1498,8 @@ func agRptTraceMoneyFlow(c agRptCtx, row string) ([]domain.Transaction, string, 
 // re-resolves it and refuses rather than guessing if two ever collide.
 const agTxnShortID = 8
 
+const agTxnToolOutputLimit = 24000
+
 func agShortID(id string) string {
 	if len(id) <= agTxnShortID {
 		return id
@@ -1526,15 +1528,12 @@ func agRenderTxns(c agRptCtx, rows []domain.Transaction, header string, limit in
 			return agReportUnavailable(err)
 		}
 	}
-	shown := rows
-	if limit > 0 && len(shown) > limit {
-		shown = shown[:limit]
+	shownCount := len(rows)
+	if limit > 0 && shownCount > limit {
+		shownCount = limit
 	}
-	var b strings.Builder
-	fmt.Fprintf(&b, "%s behind %s, %s — %s totalling %s:\n",
-		plural(len(rows), "transaction"), header, c.label, plural(len(rows), "row"), c.fmtM(total))
-	b.WriteString("These are original ledger receipt magnitudes, before split attribution and linked-refund netting; their gross total can differ from the report row.\n")
-	for _, t := range shown {
+	lines := make([]string, shownCount)
+	for i, t := range rows[:shownCount] {
 		label := strings.TrimSpace(t.Payee)
 		if label == "" {
 			label = strings.TrimSpace(t.Desc)
@@ -1547,13 +1546,37 @@ func agRenderTxns(c agRptCtx, rows []domain.Transaction, header string, limit in
 		if len(t.Tags) > 0 {
 			line += " #" + strings.Join(t.Tags, " #")
 		}
-		b.WriteString(line + "\n")
+		lines[i] = line + "\n"
 	}
-	if len(shown) < len(rows) {
-		fmt.Fprintf(&b, "…%d more not shown; raise `limit` or narrow the window to see them.\n", len(rows)-len(shown))
+	prefix := fmt.Sprintf("%s behind %s, %s — %s totalling %s:\n",
+		plural(len(rows), "transaction"), header, c.label, plural(len(rows), "row"), c.fmtM(total)) +
+		"These are original ledger receipt magnitudes, before split attribution and linked-refund netting; their gross total can differ from the report row.\n"
+	const suffix = "The first column is the transaction id — pass it to update_transaction to edit one.\n"
+	omitted := append([]domain.Transaction(nil), rows[shownCount:]...)
+	var output string
+	for {
+		body := prefix + strings.Join(lines[:shownCount], "")
+		if len(omitted) > 0 {
+			ids := make([]string, len(omitted))
+			for i := range omitted {
+				ids[i] = omitted[i].ID
+			}
+			encodedIDs, _ := json.Marshal(ids)
+			body += fmt.Sprintf("%d matching transactions omitted from this response. Omitted transaction IDs: %s. Recover exact rows with query_data (collection `transactions`, these IDs); use read_record for any record too large to return inline.\n", len(omitted), encodedIDs)
+		}
+		output = body + suffix
+		if len(output) <= agTxnToolOutputLimit {
+			break
+		}
+		if shownCount == 0 {
+			// Pathological IDs or a caller-supplied header can itself exceed the
+			// response budget. Never return a partial list as if it were complete.
+			return "Transaction result exceeds the 24000-byte response limit. Recover rows with query_data (collection `transactions`) using the original filters, then use read_record for exact records."
+		}
+		shownCount--
+		omitted = append([]domain.Transaction(nil), rows[shownCount:]...)
 	}
-	b.WriteString("The first column is the transaction id — pass it to update_transaction to edit one.")
-	return b.String()
+	return output
 }
 
 // ── Tools ────────────────────────────────────────────────────────────────────
