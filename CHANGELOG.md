@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Full, embedded and AI Credit views share checked native preparation and keyed limit editors.
 - Household and Members share checked native facts with stable interactive rows.
 - Workflow drafts use injected-clock native scheduling and reject same-account transfers before persistence or execution.
 - Category deletion fails closed when any canonical non-child reference still needs reassignment.

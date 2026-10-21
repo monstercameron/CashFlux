@@ -1,3 +1,7 @@
+## 2026-10-21 - Native checked Credit preparation
+
+Extracted aggregate, factor, advice and hypothetical facts without fake legacy defaults. Summary skips details/history work. Native credithealth/creditview tests pass; all seven focused Credit WASM cases pass. Host testing caught a real editor remount when a payment hint disappeared; the disclosure now has stable account identity and rejects a stale-currency draft without writing. Removed only owned stale Credit hook exceptions. Existing credit heuristic policies remain unchanged.
+
 ## 2026-10-21 - Native household preparation and components
 
 Prepared worth, spending and exact income distribution retain independent source/total availability and known individual rows on aggregate overflow. One model is shared across tabs and route reuse, keyed by app instance/store revision/period; redundant local revision notifications were removed. Native tests and vet pass; five focused WASM host cases pass, including cache refresh, closed store, period boundaries and keyed PIN/menu identity. Removed only two stale hook exceptions.

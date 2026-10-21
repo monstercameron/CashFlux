@@ -16,9 +16,9 @@ import (
 // UtilizationHistoryLimit preserves the Credit page's latest-eight-record view.
 const UtilizationHistoryLimit = 8
 
-// ErrUnsupportedCurrency means a history comparison cannot establish minor-unit
+// ErrUnsupportedCurrency means a credit calculation cannot establish minor-unit
 // precision from the supported currency registry.
-var ErrUnsupportedCurrency = errors.New("credit history: unsupported currency")
+var ErrUnsupportedCurrency = errors.New("credit health: unsupported currency")
 
 // UtilizationHistoryPoint is one snapshot compared with the current credit limit
 // and current saved FX. An erroneous point is a gap, never a zero reading.

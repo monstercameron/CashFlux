@@ -27,8 +27,6 @@ screens/categoryaddform.go:categoryAddForm
 screens/changeset_card.go:AgentActionHistory
 screens/changeset_card.go:changesetReviewCard
 screens/contradictions.go:contradictionStrip
-screens/credit.go:CreditHealthPanel
-screens/credit.go:CreditScreen
 screens/customfieldform.go:CustomFieldInput
 screens/customfields.go:CustomFieldsManager
 screens/customize.go:Customize

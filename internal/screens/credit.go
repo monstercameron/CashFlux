@@ -11,10 +11,9 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/credithealth"
+	"github.com/monstercameron/CashFlux/internal/creditview"
 	"github.com/monstercameron/CashFlux/internal/currency"
-	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/icon"
-	"github.com/monstercameron/CashFlux/internal/ledger"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/smart"
 	uiw "github.com/monstercameron/CashFlux/internal/ui"
@@ -91,35 +90,6 @@ func creditHistoryNode(trend credithealth.UtilizationHistory) ui.Node {
 	return Div(rows...)
 }
 
-// buildCreditInputs derives the credithealth.Inputs from live app data.
-// It computes current balances for every credit-card account via ledger.Balance
-// (matching the same pattern used by liveHealthInputs in health.go).
-func buildCreditInputs(app *appstate.App, now time.Time) credithealth.Inputs {
-	accounts := app.Accounts()
-	txns := app.Transactions()
-
-	// Build the per-card balance map expected by credithealth.Evaluate.
-	balances := make(map[string]int64, len(accounts))
-	for _, a := range accounts {
-		if a.Type != domain.TypeCreditCard || a.Archived {
-			continue
-		}
-		// ledger.Balance computes the running balance from transactions.
-		bal, err := ledger.Balance(a, txns)
-		if err != nil {
-			continue
-		}
-		balances[a.ID] = bal.Amount
-	}
-
-	return credithealth.Inputs{
-		Accounts:     accounts,
-		Balances:     balances,
-		Transactions: txns,
-		Now:          now,
-	}
-}
-
 // creditBandTone maps a credithealth.Band to a semantic tone class.
 //
 // Only Excellent and Good are green (C354). A 55 used to be Good, so a score
@@ -185,166 +155,251 @@ func creditHue(score int) int {
 	}
 }
 
-// creditProxyColor returns the ring/figure stroke for a proxy score.
-func creditProxyColor(r credithealth.Result) string {
-	return fmt.Sprintf("hsl(%d, 64%%, 52%%)", creditHue(r.ProxyScore))
+// creditScoreRing renders known scores only. Unknown arithmetic/source facts
+// receive an explicit status instead of a zero-valued gauge or severity band.
+func creditScoreRing(r creditview.Model, size int) ui.Node {
+	if !r.ProxyKnown {
+		return Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap1), Attr("data-testid", "credit-score-unavailable"), Attr("role", "status"),
+			P(css.Class("t-body", tw.TextDim), uistate.T("credit.modelUnavailable")))
+	}
+	color := fmt.Sprintf("hsl(%d, 64%%, 52%%)", creditHue(r.ProxyScore))
+	center := Div(ClassStr("fig "+tw.Fold(tw.FontDisplay, tw.LeadingNone)+" "+tw.ColorClass(creditBandTone(r.Band))),
+		Style(map[string]string{"font-size": fmt.Sprintf("%dpx", size/3)}), Attr("data-testid", "credit-score"), fmt.Sprintf("%d", r.ProxyScore))
+	return scoreRingNode(float64(r.ProxyScore), color, size, uistate.T("credit.ringLabel", r.ProxyScore, string(r.Band)), center,
+		Div(css.Class("t-caption", tw.TextFaint), uistate.T("credit.outOf100")))
 }
 
-// creditScoreRing renders the circular proxy-score gauge as an SVG, delegating
-// the shared geometry to scoreRingNode (FEATURE_MAP §5.7c). This wrapper is
-// responsible only for deriving the credit-specific color, figure text, and
-// R52/R64 aria label.
-func creditScoreRing(r credithealth.Result, size int) ui.Node {
-	pct := float64(r.ProxyScore)
-	color := creditProxyColor(r)
-	figure := fmt.Sprintf("%d", r.ProxyScore)
-	// R52/R64 a11y: label the ring (role=img + one-sentence name) rather than
-	// hiding it; the overlay number below is aria-hidden so the score isn't read
-	// twice. Mirrors the healthRing fix.
-	ringLabel := uistate.T("credit.ringLabel", r.ProxyScore, string(r.Band))
-	centerLabel := Div(ClassStr("fig "+tw.Fold(tw.FontDisplay, tw.LeadingNone)+" "+tw.ColorClass(creditBandTone(r.Band))),
-		Style(map[string]string{"font-size": fmt.Sprintf("%dpx", size/3)}), figure)
-	subLabel := Div(css.Class("t-caption", tw.TextFaint), Style(map[string]string{"margin-top": "2px"}), uistate.T("credit.outOf100"))
-	return scoreRingNode(pct, color, size, ringLabel, centerLabel, subLabel)
+func creditAggregateLabel(r creditview.Model) string {
+	if r.UtilErr != nil {
+		return uistate.T("credit.modelUnavailable")
+	}
+	if r.UtilPct < 0 {
+		return uistate.T("credit.noLimit")
+	}
+	return fmt.Sprintf("%d%%", r.UtilPct)
 }
 
-// creditTrendBarTone returns the bar tone for a utilization pct.
-func creditTrendBarTone(pct int) string {
-	switch {
-	case pct <= 10:
-		return "bg-up"
-	case pct <= 30:
-		return "bg-up"
-	case pct <= 50:
-		return "bg-warn"
-	default:
-		return "bg-down"
+func creditProvenance(r creditview.Model) ui.Node {
+	base := r.Base
+	if base == "" {
+		base = uistate.T("credit.modelUnavailable")
 	}
+	return P(css.Class("t-caption", tw.TextFaint), Attr("data-testid", "credit-provenance"), uistate.T("credit.modelBasis", base, r.AsOf.Format("Jan 2, 2006")))
 }
 
-// creditCardRow renders one credit card's utilization detail: name, balance,
-// limit, utilization bar, the actionable "pay $X to reach 30%" nudge, and
-// (when ≥2 balance snapshots exist) a compact chronological utilization trend.
-// This is a plain (non-interactive) display row, so MapKeyed is safe to use.
-func creditCardRow(cu credithealth.CardUtil, base, baseCur, acctCur string, onSaveLimit func(string, int64), trend credithealth.UtilizationHistory) ui.Node {
-	// Format balance: cards carry a negative balance (money owed); show owed amount.
-	owed := cu.BalanceMinor
-	if owed < 0 {
-		owed = -owed
+func creditSourceFailure() ui.Node {
+	return uiw.Card(uiw.CardProps{TestID: "credit-source-unavailable", Body: Fragment(
+		P(css.Class("t-body", tw.TextDim), Attr("role", "status"), uistate.T("credit.modelSourceUnavailable")),
+		P(css.Class("t-caption", tw.TextFaint), credithealth.Disclaimer))})
+}
+
+type creditCardProps struct {
+	Card creditview.Card
+	App  *appstate.App
+}
+
+// creditCard owns the interactive row, keyed by stable account identity. All
+// amounts, ratios, bands, target payments and widths are prepared native facts.
+func creditCard(p creditCardProps) ui.Node {
+	c := p.Card
+	label := uistate.T("credit.modelUnavailable")
+	if c.NoLimit {
+		label = uistate.T("credit.noLimit")
+	} else if c.UtilKnown {
+		label = fmt.Sprintf("%d%%", c.UtilPct)
 	}
-	// A card's balance and limit are in its OWN currency — format with the account's
-	// symbol/decimals, not the household base (a EUR card must read €, not $). The
-	// utilization percent is currency-independent, so no conversion is needed here.
-	dec := currency.Decimals(acctCur)
-	sym := currency.Symbol(acctCur)
-
-	balStr := sym + fmtMinorAmount(owed, dec)
-	limitStr := sym + fmtMinorAmount(cu.LimitMinor, dec)
-	_ = base
-	_ = baseCur
-
-	// Utilization label.
-	var utilLabel string
-	var utilPct int
-	if cu.UtilPct < 0 {
-		utilLabel = uistate.T("credit.noLimit")
-		utilPct = 0
-	} else {
-		utilLabel = fmt.Sprintf("%d%%", cu.UtilPct)
-		utilPct = cu.UtilPct
+	var bar ui.Node = Fragment()
+	var bandLabel ui.Node = Fragment()
+	if c.UtilKnown && !c.NoLimit {
+		bar = uiw.ProgressBar(uiw.ProgressBarProps{Percent: c.Meter, Tone: creditUtilBarTone(c.Band)})
+		bandLabel = Span(ClassStr("t-caption "+tw.ColorClass(creditUtilBandTone(c.Band))), string(c.Band))
 	}
-
-	// Progress bar: cap at 100 for display.
-	barPct := utilPct
-	if barPct > 100 {
-		barPct = 100
+	owed := uistate.T("credit.modelUnavailable")
+	if c.OwedErr == nil {
+		owed = fmtMoney(c.Owed)
 	}
-
-	// The severity band sits BESIDE the percentage it describes (review: an
-	// orphaned chip three lines below forced a zigzag to reconnect them).
-	head := Div(css.Class(tw.Flex, tw.ItemsCenter, tw.JustifyBetween),
-		Span(ClassStr("t-body "+tw.Fold(tw.FontMedium)), cu.Name),
-		Span(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2),
-			Span(ClassStr("t-body "+tw.ColorClass(creditUtilBandTone(cu.Band))), utilLabel),
-			Span(ClassStr("t-caption "+tw.ColorClass(creditUtilBandTone(cu.Band))), string(cu.Band)),
-		),
-	)
-
-	bar := uiw.ProgressBar(uiw.ProgressBarProps{
-		Percent: barPct,
-		Tone:    creditUtilBarTone(cu.Band),
-	})
-
-	meta := Div(css.Class(tw.Flex, tw.ItemsCenter, tw.JustifyBetween, tw.Mt1),
-		Span(css.Class("t-caption", tw.TextFaint),
-			fmt.Sprintf(uistate.T("credit.balanceOfLimit"), balStr, limitStr)),
-	)
-
-	// Actionable nudge: pay $X to reach 30% utilization.
+	limit := fmtMoney(c.Limit)
+	if !currency.Valid(c.Limit.Currency) {
+		limit = uistate.T("credit.modelUnavailable")
+	}
 	var nudge ui.Node = Fragment()
-	if cu.Target30Minor > 0 {
-		payStr := sym + fmtMinorAmount(cu.Target30Minor, dec)
-		nudge = Div(css.Class("t-caption", tw.TextDim, tw.Mt1),
-			uistate.T("credit.payToReach30Prefix"),
-			Span(ClassStr("t-caption "+tw.Fold(tw.FontMedium)), payStr),
-			uistate.T("credit.payToReach30Suffix"),
-		)
+	if c.HasPayment {
+		nudge = P(css.Class("t-caption", tw.TextDim, tw.Mt1), Attr("data-testid", "credit-card-payment-"+c.AccountID),
+			uistate.T("credit.payToReach30Prefix"), Span(css.Class("t-caption", tw.FontMedium), fmtMoney(c.Target30)), uistate.T("credit.payToReach30Suffix"))
 	}
-
-	// History arithmetic and display-width preparation are native facts.
-	trendPanel := creditHistoryNode(trend)
-
-	// C211: inline credit-limit editor so the limit (which drives utilization) can
-	// be corrected right here, instead of only in the account edit form. Its own
-	// component so its input hook sits at a stable position (rows render in a loop).
-	// Rare-use maintenance UI folds behind a disclosure (review: a permanently
-	// open full-width input carried the same weight as the read-only data). The
-	// c211 flow is intact — open the disclosure, edit, blur.
-	limitEditor := Details(css.Class("hlt-curve"),
-		Summary(Attr("aria-label", uistate.T("debt.creditLimitAria", cu.Name)), uistate.T("credit.editLimit")),
-		ui.CreateElement(creditLimitEditor, creditLimitEditorProps{
-			AccountID: cu.AccountID, Currency: acctCur, LimitMinor: cu.LimitMinor, OnSave: onSaveLimit,
-		}),
-	)
-
-	return Div(css.Class("credit-card-item "+tw.Fold(tw.Flex, tw.FlexCol, tw.Gap1)), head, bar, meta, nudge, trendPanel, limitEditor)
+	save := func(id, accountCurrency string, limit money.Money) error {
+		return saveCreditLimit(p.App, id, accountCurrency, limit)
+	}
+	return Div(css.Class("credit-card-item", tw.Flex, tw.FlexCol, tw.Gap1), Attr("data-testid", "credit-card-"+c.AccountID),
+		Div(css.Class(tw.Flex, tw.ItemsCenter, tw.JustifyBetween), Span(css.Class("t-body", tw.FontMedium), c.Name),
+			Span(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2), Span(css.Class("t-body", tw.TextDim), Attr("data-testid", "credit-card-util-"+c.AccountID), label), bandLabel)),
+		bar, P(css.Class("t-caption", tw.TextFaint), Attr("data-testid", "credit-card-balances-"+c.AccountID), uistate.T("credit.balanceOfLimit", owed, limit)), nudge,
+		creditHistoryNode(c.History),
+		// Keep the editor's draft identity when conditional payment/history
+		// siblings appear or disappear before it in the flattened child list.
+		WithKey(Details(css.Class("hlt-curve"), Summary(Attr("aria-label", uistate.T("debt.creditLimitAria", c.Name)), uistate.T("credit.editLimit")),
+			ui.CreateElement(creditLimitEditor, creditLimitEditorProps{AccountID: c.AccountID, AccountCurrency: c.Balance.Currency, Currency: c.EditorCurrency, LimitMinor: c.Limit.Amount, OnSave: save})), "credit-limit-"+c.AccountID))
 }
 
-// creditLimitEditorProps drives the inline credit-limit editor (C211).
+func creditCards(r creditview.Model, app *appstate.App) ui.Node {
+	return Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap4, tw.Mt3), MapKeyed(r.Cards, func(c creditview.Card) any { return c.AccountID }, func(c creditview.Card) ui.Node {
+		return ui.CreateElement(creditCard, creditCardProps{Card: c, App: app})
+	}))
+}
+
 type creditLimitEditorProps struct {
-	AccountID  string
-	Currency   string
-	LimitMinor int64
-	OnSave     func(accountID string, limitMinor int64)
+	AccountID, AccountCurrency, Currency string
+	LimitMinor                           int64
+	OnSave                               func(string, string, money.Money) error
 }
 
-// creditLimitEditor is a small inline editor for a card's credit limit. It is its
-// own component so its UseState/UseEvent hooks sit at a stable render position —
-// credit-card rows render in a variable-length loop (the framework gotcha).
-func creditLimitEditor(props creditLimitEditorProps) ui.Node {
-	dec := currency.Decimals(props.Currency)
+func creditLimitEditor(p creditLimitEditorProps) ui.Node {
 	init := ""
-	if props.LimitMinor > 0 {
-		init = money.FormatMinor(props.LimitMinor, dec)
+	if p.LimitMinor > 0 {
+		init = money.FormatMinor(p.LimitMinor, currency.Decimals(p.Currency))
 	}
 	val := ui.UseState(init)
+	origin := ui.UseState([2]string{p.AccountCurrency, p.Currency})
 	saved := ui.UseState(false)
-	onInput := ui.UseEvent(func(v string) { val.Set(v); saved.Set(false) })
+	failed := ui.UseState(false)
+	onInput := ui.UseEvent(func(v string) { val.Set(v); saved.Set(false); failed.Set(false) })
 	commit := func() {
-		m, err := money.ParseMinor(strings.TrimSpace(val.Get()), dec)
-		if err == nil && m >= 0 && props.OnSave != nil {
-			props.OnSave(props.AccountID, m)
-			saved.Set(true)
+		identity := origin.Get()
+		amount, err := money.ParseMinor(strings.TrimSpace(val.Get()), currency.Decimals(identity[1]))
+		if err == nil && amount >= 0 && p.OnSave != nil && identity == [2]string{p.AccountCurrency, p.Currency} {
+			err = p.OnSave(p.AccountID, identity[0], money.New(amount, identity[1]))
+		} else {
+			err = fmt.Errorf("invalid credit limit")
 		}
+		saved.Set(err == nil)
+		failed.Set(err != nil)
 	}
 	return Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap2, tw.Mt1),
-		Span(css.Class("t-caption", tw.TextFaint), Style(map[string]string{"min-width": "5rem"}), uistate.T("credit.limitLabel")),
-		Input(css.Class("field"), Type("number"), Attr("min", "0"), Step("0.01"),
-			Attr("data-testid", "credit-limit-edit-"+props.AccountID),
-			Attr("aria-label", uistate.T("credit.limitEditAria", props.AccountID)),
-			Placeholder(uistate.T("credit.limitPlaceholder")), OnInput(onInput), OnBlur(func() { commit() }), uiw.FieldValue(val.Get())),
-		If(saved.Get(), Span(ClassStr("t-caption "+tw.ColorClass("text-up")), Attr("role", "status"), uistate.T("credit.limitSaved"))),
-	)
+		Span(css.Class("t-caption", tw.TextFaint), uistate.T("credit.limitLabel")),
+		Span(css.Class("t-caption", tw.TextFaint), Attr("data-testid", "credit-limit-currency-"+p.AccountID), origin.Get()[1]),
+		Input(css.Class("field"), Type("number"), Attr("min", "0"), Step("any"), Attr("data-testid", "credit-limit-edit-"+p.AccountID),
+			Attr("aria-label", uistate.T("credit.limitEditAria", p.AccountID)), Placeholder(uistate.T("credit.limitPlaceholder")), OnInput(onInput), OnBlur(func() { commit() }), uiw.FieldValue(val.Get())),
+		If(saved.Get(), Span(css.Class("t-caption", tw.TextUp), Attr("role", "status"), uistate.T("credit.limitSaved"))),
+		If(failed.Get(), Span(css.Class("t-caption", tw.TextDim), Attr("role", "status"), Attr("data-testid", "credit-limit-error-"+p.AccountID), uistate.T("credit.modelLimitSaveFailed"))))
+}
+
+// CreditHealthPanelProps selects the embedded hand-off or complete breakdown.
+type CreditHealthPanelProps struct{ Summary bool }
+
+// CreditHealthPanel shares the same native preparation as /credit and AI.
+// A summary returns before constructing cards, editors, advice or AI children.
+func CreditHealthPanel(p CreditHealthPanelProps) ui.Node {
+	_ = uistate.UseDataRevision().Get()
+	app := appstate.Default
+	r := prepareCredit(app, time.Now(), !p.Summary, !p.Summary)
+	if r.Fatal {
+		return creditSourceFailure()
+	}
+	if r.Empty {
+		return uiw.Card(uiw.CardProps{Body: Fragment(P(css.Class("empty"), uistate.T("credit.emptyBody")), P(css.Class("t-caption", tw.TextFaint), r.Disclaimer))})
+	}
+	hero := uiw.Card(uiw.CardProps{Body: Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap5), creditScoreRing(r, 150),
+		Div(css.Class(tw.Flex1), If(r.ProxyKnown, Div(css.Class("t-figure-lg"), string(r.Band))),
+			P(css.Class("t-caption", tw.TextFaint), Attr("data-testid", "credit-estimate-note"), uistate.T("detail6.creditScoreLabel")),
+			P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "credit-aggregate-util"), uistate.T("credit.aggUtil", creditAggregateLabel(r)))))})
+	if p.Summary {
+		return Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap3), hero, creditProvenance(r),
+			P(css.Class("t-caption"), Attr("data-testid", "credit-handoff"), A(Href(uistate.RoutePath("/credit")), uistate.T("credit.seeFullPanel"))), P(css.Class("t-caption", tw.TextFaint), r.Disclaimer))
+	}
+	return Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap5), hero, creditProvenance(r),
+		uiw.Card(uiw.CardProps{Title: uistate.T("credit.demeritsTitle"), TestID: "credit-demerits", Body: creditIssues(r, false)}),
+		uiw.Card(uiw.CardProps{Title: uistate.T("credit.improveTitle"), TestID: "credit-advice", Body: creditIssues(r, true)}),
+		ui.CreateElement(creditAINode), uiw.Card(uiw.CardProps{Title: uistate.T("credit.utilTitle"), Body: creditCards(r, app)}),
+		creditMissingNote(r), P(css.Class("t-caption", tw.TextFaint), r.Disclaimer))
+}
+
+func creditMissingNote(r creditview.Model) ui.Node {
+	if r.CardsMissingLimit == 0 {
+		return Fragment()
+	}
+	return P(css.Class("muted", tw.Mt2), uistate.T("credit.missingLimitNote", r.CardsMissingLimit))
+}
+
+func creditDemeritText(d credithealth.CheckedDemerit) string {
+	switch d.Kind {
+	case credithealth.DemeritUtilization:
+		return uistate.T("credit.demeritUtil", d.Pct)
+	case credithealth.DemeritCardUtil:
+		return uistate.T("credit.demeritCardUtil", d.Name, d.Pct)
+	case credithealth.DemeritOnTime:
+		return uistate.T("credit.demeritOnTime")
+	case credithealth.DemeritAge:
+		return uistate.T("credit.demeritAge")
+	case credithealth.DemeritOverLimit:
+		return uistate.T("credit.demeritOverLimit", d.Name, d.Pct)
+	case credithealth.DemeritMissingLimit:
+		return uistate.T("credit.demeritMissingLimit", d.Pct)
+	}
+	return ""
+}
+
+func creditAdviceText(a credithealth.CheckedAdvice) string {
+	switch a.Kind {
+	case credithealth.AdviceLowerUtilization:
+		return uistate.T("credit.adviceLowerUtil", fmtMoney(a.Pay), a.Name, a.TargetPct)
+	case credithealth.AdviceOnTime:
+		return uistate.T("credit.adviceOnTime")
+	case credithealth.AdviceAddLimit:
+		return uistate.T("credit.adviceAddLimit", a.Name)
+	}
+	return ""
+}
+
+// creditContextString includes the same checked facts as visual hosts. Unknown
+// values are identified explicitly; suggestions retain their native currencies.
+func creditContextString(app *appstate.App) string {
+	r := prepareCredit(app, time.Now(), true, false)
+	var b strings.Builder
+	fmt.Fprintf(&b, "Scope: %s; base currency: %s; as of: %s; current saved FX rates.\n", r.Scope, r.Base, r.AsOf.Format(time.RFC3339))
+	b.WriteString(r.Disclaimer + "\n")
+	if r.Fatal {
+		b.WriteString("Credit data unavailable.\n")
+		return b.String()
+	}
+	if r.ProxyKnown {
+		fmt.Fprintf(&b, "Overall score: %d/100 (%s)\n", r.ProxyScore, r.Band)
+	} else {
+		b.WriteString("Overall score: unavailable.\n")
+	}
+	fmt.Fprintf(&b, "Overall utilization: %s\n", creditAggregateLabel(r))
+	if r.OnTime.Err != nil {
+		b.WriteString("On-time factor: unavailable.\n")
+	} else if !r.OnTime.NoData {
+		fmt.Fprintf(&b, "On-time factor: %d/100\n", r.OnTime.Score)
+	}
+	if !r.Age.NoData {
+		fmt.Fprintf(&b, "Age factor: %d/100\n", r.Age.Score)
+	}
+	for _, c := range r.Cards {
+		if c.UtilKnown && !c.NoLimit {
+			fmt.Fprintf(&b, "- %s [%s]: %d%% utilization\n", c.Name, c.AccountID, c.UtilPct)
+		} else if c.NoLimit {
+			fmt.Fprintf(&b, "- %s [%s]: no limit set\n", c.Name, c.AccountID)
+		} else {
+			fmt.Fprintf(&b, "- %s [%s]: utilization unavailable\n", c.Name, c.AccountID)
+		}
+	}
+	for _, d := range r.Demerits {
+		fmt.Fprintf(&b, "- %s\n", creditDemeritText(d))
+	}
+	for _, a := range r.Advice {
+		fmt.Fprintf(&b, "- %s", creditAdviceText(a))
+		if a.ProjectedKnown {
+			fmt.Fprintf(&b, " (projected score %d)", a.ProjectedScore)
+		} else if a.Kind == credithealth.AdviceLowerUtilization {
+			b.WriteString(" (score impact unavailable)")
+		}
+		b.WriteByte('\n')
+	}
+	if r.Incomplete {
+		b.WriteString("Some credit facts are unavailable; absent issues are not confirmation that every factor is healthy.\n")
+	}
+	return b.String()
 }
 
 // fmtMinorAmount formats minor-unit integer cents into a comma-grouped decimal
@@ -366,253 +421,6 @@ func fmtMinorAmount(minor int64, decimals int) string {
 		frac = -frac
 	}
 	return money.Group(fmt.Sprintf("%d.%0*d", whole, decimals, frac))
-}
-
-// CreditHealthPanelProps configures CreditHealthPanel. No external props are
-// required; the panel reads appstate.Default directly.
-type CreditHealthPanelProps struct {
-	// Summary renders the hand-off form: the ring, the band, aggregate
-	// utilization, and a link to /credit — without the per-card breakdown,
-	// demerits, advice, trend bars or limit editors.
-	//
-	// It exists because /debt was embedding the WHOLE panel, so the same content
-	// appeared verbatim on two pages and neither could say what it was for
-	// (V-sweep C359). /debt's question is "in what order do I pay these off";
-	// /credit's is "what are my card habits doing to my score". The payoff page
-	// needs the headline to plan against and nothing more.
-	Summary bool
-}
-
-// CreditHealthPanel renders the credit-health proxy score ring (C208), per-card
-// utilization breakdown with actionable nudges (C209), utilization trend bars
-// (C210), and inline credit-limit editors (C211) as a registered component.
-// It owns its UseDataRevision hook so it can be embedded at two call sites
-// (/credit and /debt) without duplicating state or violating GWC hook rules.
-func CreditHealthPanel(props CreditHealthPanelProps) ui.Node {
-	// Hook declared unconditionally before any conditional return (GWC rule).
-	_ = uistate.UseDataRevision().Get()
-
-	app := appstate.Default
-	if app == nil {
-		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("common.notReady"))})
-	}
-
-	now := time.Now()
-	base := app.Settings().BaseCurrency
-	if base == "" {
-		base = "USD"
-	}
-
-	in := buildCreditInputs(app, now)
-	r := credithealth.Evaluate(in)
-
-	// Empty state: no credit cards at all.
-	if len(r.Cards) == 0 {
-		empty := uiw.Card(uiw.CardProps{
-			Body: Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap3),
-				P(ClassStr("t-body "+tw.Fold(tw.FontMedium)), uistate.T("credit.emptyTitle")),
-				P(css.Class("t-caption", tw.TextDim), uistate.T("credit.emptyBody")),
-			),
-		})
-		disclaimer := P(css.Class("t-caption", tw.TextFaint), r.Disclaimer)
-		return Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap5), empty, disclaimer)
-	}
-
-	// Hero: ring + band + aggregate utilization.
-	aggLabel := fmt.Sprintf("%d%%", r.Agg.UtilPct)
-	if r.Agg.UtilPct < 0 {
-		aggLabel = uistate.T("credit.noLimit")
-	}
-
-	hero := uiw.Card(uiw.CardProps{Body: Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap5),
-		creditScoreRing(r, 150),
-		Div(css.Class(tw.Flex1, tw.Flex, tw.FlexCol, tw.JustifyCenter),
-			Div(ClassStr("t-figure-lg "+tw.Fold(tw.FontDisplay)+" "+tw.ColorClass(creditBandTone(r.Band))),
-				string(r.Band)),
-			// Name the figure as a CashFlux estimate right at the ring — this embedded
-			// panel carries its full disclaimer only at the very bottom, so the score
-			// otherwise reads as a bureau number until the reader scrolls past it.
-			Div(css.Class("t-caption", tw.TextFaint, tw.Mt1), Attr("data-testid", "credit-estimate-note"),
-				uistate.T("detail6.creditScoreLabel")),
-			Div(css.Class("t-caption", tw.TextDim, tw.Mt1),
-				fmt.Sprintf(uistate.T("credit.aggUtil"), aggLabel)),
-		),
-	)})
-
-	// Per-card breakdown.
-	accByID := map[string]domain.Account{}
-	for _, a := range app.Accounts() {
-		accByID[a.ID] = a
-	}
-	// C211: persist an edited credit limit (in the account's own currency), then the
-	// data-revision bump re-renders utilization with the new denominator.
-	saveLimit := func(id string, limitMinor int64) {
-		acc, ok := accByID[id]
-		if !ok {
-			return
-		}
-		acc.CreditLimit = money.New(limitMinor, acc.Currency)
-		if err := app.PutAccount(acc); err != nil {
-			app.Log().Error("credit-limit save failed", "account", id, "err", err)
-			return
-		}
-		// PutAccount is the logic layer and doesn't touch the UI; bump the shared
-		// data revision so the screen re-renders and utilization recomputes.
-		uistate.BumpDataRevision()
-	}
-	cardRows := []any{css.Class(tw.Flex, tw.FlexCol, tw.Gap4)}
-	for _, cu := range r.Cards {
-		trend := buildUtilTrend(app, cu.AccountID)
-		acctCur := base
-		if a, ok := accByID[cu.AccountID]; ok && a.Currency != "" {
-			acctCur = a.Currency
-		}
-		cardRows = append(cardRows, creditCardRow(cu, base, base, acctCur, saveLimit, trend))
-	}
-	breakdown := uiw.Card(uiw.CardProps{
-		Title: uistate.T("credit.breakdownTitle"),
-		Body:  Div(cardRows...),
-	})
-
-	// Demerits — the factors dragging the score down, most costly first (C-credit demerits).
-	var demeritsCard ui.Node = Fragment()
-	if len(r.Demerits) > 0 {
-		items := []any{css.Class("credit-list")}
-		for _, d := range r.Demerits {
-			var chip ui.Node = Fragment()
-			if d.PointsLost > 0 {
-				chip = Span(css.Class("credit-pts credit-pts-down"), uistate.T("credit.ptsDown", d.PointsLost))
-			}
-			items = append(items, Div(css.Class("credit-item"),
-				Span(css.Class("credit-item-icon is-down"), Attr("aria-hidden", "true"),
-					uiw.Icon(icon.AlertTriangle, css.Class(tw.ShrinkO, tw.W4, tw.H4))),
-				Span(css.Class("credit-item-text"), creditDemeritText(d)),
-				chip,
-			))
-		}
-		demeritsCard = uiw.Card(uiw.CardProps{Title: uistate.T("credit.demeritsTitle"),
-			TestID: "credit-demerits", Body: Div(items...)})
-	}
-
-	// Advice — the clearest, prioritized actions to raise the score, biggest impact first.
-	var adviceCard ui.Node = Fragment()
-	if len(r.Advice) > 0 {
-		items := []any{css.Class("credit-list")}
-		for _, a := range r.Advice {
-			var chip ui.Node = Fragment()
-			if a.ImpactPts > 0 {
-				chip = Span(css.Class("credit-pts credit-pts-up"), uistate.T("credit.ptsUp", a.ImpactPts))
-			}
-			items = append(items, Div(css.Class("credit-item"),
-				Span(css.Class("credit-item-icon is-up"), Attr("aria-hidden", "true"),
-					uiw.Icon(icon.ArrowUpCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4))),
-				Span(css.Class("credit-item-text"), creditAdviceText(a, base)),
-				chip,
-			))
-		}
-		adviceCard = uiw.Card(uiw.CardProps{Title: uistate.T("credit.improveTitle"),
-			TestID: "credit-advice", Body: Div(items...)})
-	}
-
-	// Optional Smart+ AI analysis (SMART-A11) — a deeper, personalized read, shown only when
-	// the feature is enabled and an inference provider is configured (see creditAINode).
-	aiCard := creditAINode()
-
-	// Missing-limit note (if any cards lack a limit).
-	var missingNote ui.Node = Fragment()
-	if r.Agg.CardsMissingLimit > 0 {
-		missingNote = uiw.Card(uiw.CardProps{
-			Body: P(css.Class("t-caption", tw.TextDim),
-				fmt.Sprintf(uistate.T("credit.missingLimitNote"), r.Agg.CardsMissingLimit)),
-		})
-	}
-
-	// Privacy + disclaimer note.
-	disclaimer := P(css.Class("t-caption", tw.TextFaint), r.Disclaimer)
-
-	if props.Summary {
-		return Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap3),
-			hero,
-			P(css.Class("t-caption"), Attr("data-testid", "credit-handoff"),
-				A(Href(uistate.RoutePath("/credit")), uistate.T("credit.seeFullPanel"))),
-			disclaimer,
-		)
-	}
-	return Div(css.Class(tw.Flex, tw.FlexCol, tw.Gap5),
-		hero, demeritsCard, adviceCard, aiCard, breakdown, missingNote, disclaimer)
-}
-
-// creditDemeritText renders one demerit as a plain-English sentence (i18n).
-func creditDemeritText(d credithealth.Demerit) string {
-	switch d.Kind {
-	case credithealth.DemeritUtilization:
-		return uistate.T("credit.demeritUtil", d.Pct)
-	case credithealth.DemeritCardUtil:
-		return uistate.T("credit.demeritCardUtil", d.Name, d.Pct)
-	case credithealth.DemeritOnTime:
-		return uistate.T("credit.demeritOnTime")
-	case credithealth.DemeritAge:
-		return uistate.T("credit.demeritAge")
-	case credithealth.DemeritOverLimit:
-		return uistate.T("credit.demeritOverLimit", d.Name, d.Pct)
-	case credithealth.DemeritMissingLimit:
-		return uistate.T("credit.demeritMissingLimit", d.Pct)
-	}
-	return ""
-}
-
-// creditAdviceText renders one advice item as an imperative sentence (i18n), formatting any
-// suggested payment in the base currency.
-func creditAdviceText(a credithealth.Advice, base string) string {
-	switch a.Kind {
-	case credithealth.AdviceLowerUtilization:
-		return uistate.T("credit.adviceLowerUtil", fmtMoney(money.New(a.PayMinor, base)), a.Name, a.TargetPct)
-	case credithealth.AdviceOnTime:
-		return uistate.T("credit.adviceOnTime")
-	case credithealth.AdviceAddLimit:
-		return uistate.T("credit.adviceAddLimit", a.Name)
-	}
-	return ""
-}
-
-// creditContextString builds the compact, hook-free snapshot the SMART-A11 AI analysis is
-// grounded in: the proxy score/band, per-card utilization, the demerits, and the suggested
-// actions — the same deterministic figures shown on screen, so the model only personalizes
-// and prioritizes them (never invents numbers).
-func creditContextString(app *appstate.App) string {
-	base := app.Settings().BaseCurrency
-	if base == "" {
-		base = "USD"
-	}
-	r := credithealth.Evaluate(buildCreditInputs(app, time.Now()))
-	var b strings.Builder
-	fmt.Fprintf(&b, "Overall score: %d/100 (%s)\n", r.ProxyScore, r.Band)
-	if r.Agg.UtilPct >= 0 {
-		fmt.Fprintf(&b, "Overall utilization: %d%%\n", r.Agg.UtilPct)
-	}
-	if len(r.Cards) > 0 {
-		b.WriteString("Cards:\n")
-		for _, c := range r.Cards {
-			if c.UtilPct >= 0 {
-				fmt.Fprintf(&b, "- %s: %d%% utilization\n", c.Name, c.UtilPct)
-			} else {
-				fmt.Fprintf(&b, "- %s: no limit set\n", c.Name)
-			}
-		}
-	}
-	if len(r.Demerits) > 0 {
-		b.WriteString("Dragging it down:\n")
-		for _, d := range r.Demerits {
-			fmt.Fprintf(&b, "- %s\n", creditDemeritText(d))
-		}
-	}
-	if len(r.Advice) > 0 {
-		b.WriteString("Suggested actions:\n")
-		for _, a := range r.Advice {
-			fmt.Fprintf(&b, "- %s\n", creditAdviceText(a, base))
-		}
-	}
-	return b.String()
 }
 
 // creditAINode renders the opt-in Smart+ AI credit analysis (SMART-A11): a deeper,
@@ -645,146 +453,107 @@ func creditAINode() ui.Node {
 		Body: smartAIFeatureNode(f, conn)})
 }
 
-// CreditScreen is the /credit route — a thin shell rendering CreditHealthPanel.
-// The panel owns all hooks and state so it can also be embedded in /debt.
-// creditFactorTileProps drives one proxy-factor tile (on-time / age): the
-// score, its exact normalized weight, and the copy keys. Its own component so
-// any future interaction hooks sit at stable positions.
 type creditFactorTileProps struct {
-	Key     string // "ontime" | "age"
-	Title   string
-	Score   int // -1 = not enough data
-	Weight  float64
-	VarName string
+	Key, Title, VarName string
+	Factor              creditview.Factor
 }
 
-// creditFactorTile renders one supporting proxy factor in the /health tile
-// style: the meter as the only score visual, a why-paragraph, and the exact
-// score/weight/variable identity folded behind "How it's scored".
 func creditFactorTile(p creditFactorTileProps) ui.Node {
-	if p.Score < 0 {
-		return hltSection("sec-cf-"+p.Key, p.Title, nil, Fragment(
-			P(css.Class("empty"), Attr("data-testid", "cf-na-"+p.Key), uistate.T("credit.na."+p.Key)),
-			P(css.Class("muted"), uistate.T("credit.f."+p.Key+".why")),
-		))
+	f := p.Factor
+	if f.Err != nil {
+		return hltSection("sec-cf-"+p.Key, p.Title, nil, P(css.Class("empty"), Attr("data-testid", "cf-unavailable-"+p.Key), uistate.T("credit.modelUnavailable")))
 	}
-	meterPct := p.Score
-	if meterPct == 0 {
-		meterPct = 2 // a zero still renders a visible sliver (scored, not broken)
+	if f.NoData {
+		return hltSection("sec-cf-"+p.Key, p.Title, nil, Fragment(P(css.Class("empty"), Attr("data-testid", "cf-na-"+p.Key), uistate.T("credit.na."+p.Key)), P(css.Class("muted"), uistate.T("credit.f."+p.Key+".why"))))
 	}
-	var statusLine ui.Node
-	if p.Score >= 90 {
-		statusLine = Span(ClassStr("t-caption "+tw.ColorClass("text-up")), Attr("data-testid", "cf-met-"+p.Key),
-			uistate.T("credit.f."+p.Key+".good"))
-	} else {
-		statusLine = Span(css.Class("t-caption", tw.TextDim), Attr("data-testid", "cf-unmet-"+p.Key),
-			uistate.T("credit.f."+p.Key+".room"))
+	status := Span(css.Class("t-caption", tw.TextDim), Attr("data-testid", "cf-unmet-"+p.Key), uistate.T("credit.f."+p.Key+".room"))
+	if f.OnTarget {
+		status = Span(css.Class("t-caption", tw.TextUp), Attr("data-testid", "cf-met-"+p.Key), uistate.T("credit.f."+p.Key+".good"))
 	}
 	return hltSection("sec-cf-"+p.Key, p.Title, nil, Fragment(
-		Div(css.Class("hlt-factor-head"),
-			// The unit rides with the value (review: a bare "57" on the age tile
-			// could read as months; the hero's own score says "out of 100").
-			Span(
-				Span(ClassStr("hlt-factor-value "+tw.Fold(tw.FontDisplay)+" "+tw.ColorClass(healthTextTone(healthBandForScore(p.Score)))), fmt.Sprintf("%d", p.Score)),
-				Span(css.Class("t-caption", tw.TextFaint), " "+uistate.T("credit.outOf100")),
-			),
-			statusLine,
-		),
-		uiw.ProgressBar(uiw.ProgressBarProps{Percent: meterPct, Tone: healthBarTone(p.Score)}),
-		P(css.Class("muted", tw.Mt2), uistate.T("credit.f."+p.Key+".why")),
-		Details(css.Class("hlt-curve"),
-			Summary(uistate.T("health.curveSummary")),
-			P(css.Class("t-caption", tw.TextFaint), uistate.T("credit.f."+p.Key+".curve")),
-			P(css.Class("t-caption", tw.TextFaint), uistate.T("health.scoreDetail", p.Score, int(p.Weight*100+0.5))),
-			Div(css.Class("hlt-varchip"), Attr("data-testid", "cf-var-"+p.Key),
-				Title(uistate.T("health.varChipTitle")),
-				Code(p.VarName), Span(css.Class(tw.TextDim), fmt.Sprintf(" · %d", p.Score)),
-			),
-		),
-	))
+		Div(css.Class("hlt-factor-head"), Span(Span(ClassStr("hlt-factor-value "+tw.Fold(tw.FontDisplay)+" "+tw.ColorClass(healthTextTone(healthBandForScore(f.Score)))), fmt.Sprintf("%d", f.Score)), Span(css.Class("t-caption", tw.TextFaint), " "+uistate.T("credit.outOf100"))), status),
+		uiw.ProgressBar(uiw.ProgressBarProps{Percent: f.Meter, Tone: healthBarTone(f.Score)}), P(css.Class("muted", tw.Mt2), uistate.T("credit.f."+p.Key+".why")),
+		Details(css.Class("hlt-curve"), Summary(uistate.T("health.curveSummary")), P(css.Class("t-caption", tw.TextFaint), uistate.T("credit.f."+p.Key+".curve")), P(css.Class("t-caption", tw.TextFaint), uistate.T("health.scoreDetail", f.Score, f.WeightPercent)),
+			Div(css.Class("hlt-varchip"), Attr("data-testid", "cf-var-"+p.Key), Title(uistate.T("health.varChipTitle")), Code(p.VarName), Span(css.Class(tw.TextDim), fmt.Sprintf(" · %d", f.Score))))))
 }
 
-// creditListItems renders the demerit/advice item rows (icons + point chips)
-// shared with the embedded panel's cards.
-func creditListItems(r credithealth.Result, base string, up bool) []any {
+func creditIssues(r creditview.Model, up bool) ui.Node {
 	items := []any{css.Class("credit-list")}
 	if up {
 		for _, a := range r.Advice {
 			var chip ui.Node = Fragment()
-			if a.ImpactPts > 0 {
-				// Show the destination, not just the delta (review: "+24 pts" carries
-				// no scale context; "→ 79" makes the payoff concrete).
-				projected := r.ProxyScore + a.ImpactPts
-				if projected > 100 {
-					projected = 100
+			if a.ImpactKnown && a.ImpactPts > 0 {
+				if a.ProjectedKnown {
+					chip = Span(css.Class("credit-pts credit-pts-up"), uistate.T("credit.ptsUpTo", a.ImpactPts, a.ProjectedScore))
+				} else {
+					chip = Span(css.Class("credit-pts credit-pts-up"), uistate.T("credit.ptsUp", a.ImpactPts))
 				}
-				chip = Span(css.Class("credit-pts credit-pts-up"), uistate.T("credit.ptsUpTo", a.ImpactPts, projected))
 			}
-			items = append(items, Div(css.Class("credit-item"),
-				Span(css.Class("credit-item-icon is-up"), Attr("aria-hidden", "true"),
-					uiw.Icon(icon.ArrowUpCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4))),
-				Span(css.Class("credit-item-text"), creditAdviceText(a, base)),
-				chip,
-			))
+			items = append(items, Div(css.Class("credit-item"), Span(css.Class("credit-item-icon is-up"), Attr("aria-hidden", "true"), uiw.Icon(icon.ArrowUpCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4))), Span(css.Class("credit-item-text"), creditAdviceText(a)), chip))
 		}
-		return items
-	}
-	for _, d := range r.Demerits {
-		var chip ui.Node = Fragment()
-		if d.PointsLost > 0 {
-			chip = Span(css.Class("credit-pts credit-pts-down"), uistate.T("credit.ptsDown", d.PointsLost))
+	} else {
+		for _, d := range r.Demerits {
+			var chip ui.Node = Fragment()
+			if d.PointsLost > 0 {
+				chip = Span(css.Class("credit-pts credit-pts-down"), uistate.T("credit.ptsDown", d.PointsLost))
+			}
+			items = append(items, Div(css.Class("credit-item"), Span(css.Class("credit-item-icon is-down"), Attr("aria-hidden", "true"), uiw.Icon(icon.AlertTriangle, css.Class(tw.ShrinkO, tw.W4, tw.H4))), Span(css.Class("credit-item-text"), creditDemeritText(d)), chip))
 		}
-		items = append(items, Div(css.Class("credit-item"),
-			Span(css.Class("credit-item-icon is-down"), Attr("aria-hidden", "true"),
-				uiw.Icon(icon.AlertTriangle, css.Class(tw.ShrinkO, tw.W4, tw.H4))),
-			Span(css.Class("credit-item-text"), creditDemeritText(d)),
-			chip,
-		))
 	}
-	return items
+	if r.Incomplete {
+		items = append(items, P(css.Class("t-caption", tw.TextDim), Attr("data-testid", "credit-details-incomplete"), uistate.T("credit.modelPartial")))
+	} else if len(items) == 1 {
+		key := "credit.demeritsEmpty"
+		if up {
+			key = "credit.adviceEmpty"
+		}
+		items = append(items, P(css.Class("empty"), uistate.T(key)))
+	}
+	return Div(items...)
 }
 
-// CreditScreen is the full /credit page, a widgetized bento surface where the
-// proxy score IS a formula: a hero tile (score ring + band + the folded
-// credit_proxy molecule — auditable, referenceable, re-weightable under
-// Formulas), a full-width utilization tile (the dominant 55% factor: the
-// aggregate meter with a met/unmet target line plus every card's detail rows
-// with limit editing and pay-down targets), the on-time and account-age
-// factor tiles, the what's-dragging-it-down / how-to-raise-it pair, the
-// optional Smart+ AI read, and an opt-in FormulaBuilder seeded with
-// credit_proxy. The embedded summary panel (CreditHealthPanel, used on /debt)
-// is unchanged.
+func creditUtilization(r creditview.Model, app *appstate.App) ui.Node {
+	status := Span(css.Class("t-caption", tw.TextDim), Attr("data-testid", "cf-unmet-util"), uistate.T("health.target", uistate.T("credit.utilTarget")))
+	if r.UtilOnTarget {
+		status = Span(css.Class("t-caption", tw.TextUp), Attr("data-testid", "cf-met-util"), uistate.T("health.onTarget", uistate.T("credit.utilTarget")))
+	}
+	var meter, curve ui.Node = Fragment(), Fragment()
+	if r.UtilErr == nil && r.UtilPct >= 0 {
+		meter = Div(css.Class("crd-meter-wrap"), uiw.ProgressBar(uiw.ProgressBarProps{Percent: r.UtilMeter, Tone: creditUtilBarTone(r.UtilBand)}), Div(css.Class("crd-target-tick"), Attr("title", uistate.T("credit.utilTarget")), Attr("aria-hidden", "true")))
+		curve = Details(css.Class("hlt-curve"), Summary(uistate.T("health.curveSummary")), P(css.Class("t-caption", tw.TextFaint), uistate.T("credit.f.util.curve")), P(css.Class("t-caption", tw.TextFaint), uistate.T("health.scoreDetail", r.UtilScore, r.UtilWeightPercent)),
+			Div(css.Class("hlt-varchip"), Attr("data-testid", "cf-var-util"), Title(uistate.T("health.varChipTitle")), Code("credit_util_score"), Span(css.Class(tw.TextDim), fmt.Sprintf(" · %d", r.UtilScore))))
+	}
+	return hltSection("sec-cf-util", uistate.T("credit.utilTitle"), nil, Fragment(Div(css.Class("hlt-factor-head"), Span(css.Class("hlt-factor-value", tw.FontDisplay), Attr("data-testid", "credit-aggregate-util"), creditAggregateLabel(r)), status), meter,
+		P(css.Class("muted", tw.Mt2), uistate.T("credit.f.util.why")), curve, creditCards(r, app), creditMissingNote(r)))
+}
+
+type creditMetricsProps struct {
+	Shown  bool
+	Toggle func()
+}
+
+func creditMetricsButton(p creditMetricsProps) ui.Node {
+	cls, label := "strip-toggle", uistate.T("credit.metricsShow")
+	if p.Shown {
+		cls += " is-on"
+		label = uistate.T("credit.metricsHide")
+	}
+	return Button(ClassStr(cls), Type("button"), Attr("aria-pressed", ariaBool(p.Shown)), Attr("data-testid", "credit-toggle-formulas"), Title(uistate.T("credit.metricsTitle")), OnClick(Prevent(p.Toggle)), Text(label))
+}
+
+// CreditScreen renders prepared financial facts; the controller owns reads and
+// native creditview/credithealth own calculations and independent availability.
 func CreditScreen() ui.Node {
-	app := appstate.Default
-	if app == nil {
-		return uiw.Card(uiw.CardProps{Body: P(css.Class("empty"), uistate.T("common.notReady"))})
-	}
 	_ = uistate.UseDataRevision().Get()
-
 	showFormulas := ui.UseState(false)
-	toggleFormulas := ui.UseEvent(Prevent(func() { showFormulas.Set(!showFormulas.Get()) }))
-
-	now := time.Now()
-	base := app.Settings().BaseCurrency
-	if base == "" {
-		base = "USD"
+	app := appstate.Default
+	r := prepareCredit(app, time.Now(), true, true)
+	if r.Fatal {
+		return creditSourceFailure()
 	}
-	in := buildCreditInputs(app, now)
-	r := credithealth.Evaluate(in)
-
-	if len(r.Cards) == 0 {
-		return Fragment(
-			ui.CreateElement(EmptyStateCTA, emptyCTAProps{
-				Message:   uistate.T("credit.emptyBody"),
-				CTALabel:  uistate.T("accounts.addFirst"),
-				AddTarget: "account",
-			}),
-			P(css.Class("t-caption", tw.TextFaint), r.Disclaimer),
-		)
+	if r.Empty {
+		return Fragment(ui.CreateElement(EmptyStateCTA, emptyCTAProps{Message: uistate.T("credit.emptyBody"), CTALabel: uistate.T("accounts.addFirst"), AddTarget: "account"}), P(css.Class("t-caption", tw.TextFaint), r.Disclaimer))
 	}
-
-	// The proxy's formula identity (the persisted molecule — a user edit under
-	// Formulas travels here too).
 	scoreFormula := ""
 	for _, m := range app.Molecules() {
 		if m.Name == "credit_proxy" {
@@ -792,139 +561,19 @@ func CreditScreen() ui.Node {
 			break
 		}
 	}
-
-	// ── Hero: ring + band + disclaimer + the folded formula. ────────────────────
-	metricsCls := "strip-toggle"
-	metricsLabel := uistate.T("credit.metricsShow")
+	button := ui.CreateElement(creditMetricsButton, creditMetricsProps{Shown: showFormulas.Get(), Toggle: func() { showFormulas.Set(!showFormulas.Get()) }})
+	hero := hltTile("crd-hero", "1 / span 4", hltSection("sec-credit-hero", uistate.T("credit.pageTitle"), button, Fragment(
+		Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap5, tw.FlexWrap), creditScoreRing(r, 150), Div(css.Class(tw.Flex1, tw.Flex, tw.FlexCol, tw.JustifyCenter), If(r.ProxyKnown, Div(css.Class("t-figure-lg", tw.FontDisplay), string(r.Band))),
+			Div(css.Class("crd-disclaimer", tw.Mt2), Attr("data-testid", "credit-disclaimer"), uiw.Icon(icon.HelpCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)), Span(r.Disclaimer)))), creditProvenance(r),
+		If(scoreFormula != "", Details(css.Class("hlt-formula"), Attr("data-testid", "credit-formula"), Summary(css.Class("t-caption", tw.TextDim), uistate.T("health.formulaTitle")), Code(css.Class("hlt-formula-code"), "credit_proxy = "+scoreFormula), P(css.Class("t-caption", tw.TextFaint), uistate.T("credit.formulaNote")))))))
+	tiles := []ui.Node{hero, hltTile("crd-util", "1 / span 4", creditUtilization(r, app)),
+		hltTile("crd-ontime", "span 2", ui.CreateElement(creditFactorTile, creditFactorTileProps{Key: "ontime", Title: uistate.T("credit.ontimeTitle"), Factor: r.OnTime, VarName: "credit_ontime_score"})),
+		hltTile("crd-age", "span 2", ui.CreateElement(creditFactorTile, creditFactorTileProps{Key: "age", Title: uistate.T("credit.ageTitle"), Factor: r.Age, VarName: "credit_age_score"})),
+		hltTile("crd-down", "span 2", hltSection("sec-credit-down", uistate.T("credit.demeritsTitle"), nil, creditIssues(r, false))),
+		hltTile("crd-up", "span 2", hltSection("sec-credit-up", uistate.T("credit.improveTitle"), nil, creditIssues(r, true))),
+		Div(Style(map[string]string{"grid-column": "1 / span 4"}), ui.CreateElement(creditAINode))}
 	if showFormulas.Get() {
-		metricsCls += " is-on"
-		metricsLabel = uistate.T("credit.metricsHide")
-	}
-	metricsBtn := Button(ClassStr(metricsCls), Type("button"), Attr("aria-pressed", ariaBool(showFormulas.Get())),
-		Attr("data-testid", "credit-toggle-formulas"), Title(uistate.T("credit.metricsTitle")),
-		OnClick(toggleFormulas), Text(metricsLabel))
-	aggLabel := fmt.Sprintf("%d%%", r.Agg.UtilPct)
-	if r.Agg.UtilPct < 0 {
-		aggLabel = uistate.T("credit.noLimit")
-	}
-	// The hero carries ONLY the score story (review: "Overall utilization: 58%"
-	// beside "55 / Good" read as the same metric restated — utilization lives on
-	// its own tile below). The not-a-FICO line gets chip weight, not filler weight.
-	hero := hltTile("crd-hero", "1 / span 4", hltSection("sec-credit-hero", uistate.T("credit.pageTitle"), metricsBtn,
-		Fragment(
-			Div(css.Class(tw.Flex, tw.ItemsCenter, tw.Gap5, tw.FlexWrap),
-				creditScoreRing(r, 150),
-				Div(css.Class(tw.Flex1, tw.Flex, tw.FlexCol, tw.JustifyCenter),
-					Div(ClassStr("t-figure-lg "+tw.Fold(tw.FontDisplay)+" "+tw.ColorClass(creditBandTone(r.Band))), string(r.Band)),
-					Div(css.Class("crd-disclaimer", tw.Mt2), Attr("data-testid", "credit-disclaimer"),
-						uiw.Icon(icon.HelpCircle, css.Class(tw.ShrinkO, tw.W4, tw.H4)),
-						Span(r.Disclaimer)),
-				),
-			),
-			If(scoreFormula != "", Details(css.Class("hlt-formula"), Attr("data-testid", "credit-formula"),
-				Summary(css.Class("t-caption", tw.TextDim), uistate.T("health.formulaTitle")),
-				Code(css.Class("hlt-formula-code"), "credit_proxy = "+scoreFormula),
-				P(css.Class("t-caption", tw.TextFaint), uistate.T("credit.formulaNote")),
-			)),
-		)))
-
-	// ── Utilization: the dominant factor, with every card's detail. ─────────────
-	accByID := map[string]domain.Account{}
-	for _, a := range app.Accounts() {
-		accByID[a.ID] = a
-	}
-	saveLimit := func(id string, limitMinor int64) {
-		acc, ok := accByID[id]
-		if !ok {
-			return
-		}
-		acc.CreditLimit = money.New(limitMinor, acc.Currency)
-		if err := app.PutAccount(acc); err != nil {
-			app.Log().Error("credit-limit save failed", "account", id, "err", err)
-			return
-		}
-		uistate.BumpDataRevision()
-	}
-	cardRows := []any{css.Class(tw.Flex, tw.FlexCol, tw.Gap4, tw.Mt3)}
-	for _, cu := range r.Cards {
-		trend := buildUtilTrend(app, cu.AccountID)
-		acctCur := base
-		if a, ok := accByID[cu.AccountID]; ok && a.Currency != "" {
-			acctCur = a.Currency
-		}
-		cardRows = append(cardRows, creditCardRow(cu, base, base, acctCur, saveLimit, trend))
-	}
-	utilScoreVal := credithealth.UtilScore(r.Agg.UtilPct)
-	utilMeter := r.Agg.UtilPct
-	if utilMeter < 0 {
-		utilMeter = 0
-	}
-	if utilMeter > 100 {
-		utilMeter = 100
-	}
-	var utilStatus ui.Node
-	if r.Agg.UtilPct >= 0 && r.Agg.UtilPct < 30 {
-		utilStatus = Span(ClassStr("t-caption "+tw.ColorClass("text-up")), Attr("data-testid", "cf-met-util"),
-			uistate.T("health.onTarget", uistate.T("credit.utilTarget")))
-	} else {
-		utilStatus = Span(css.Class("t-caption", tw.TextDim), Attr("data-testid", "cf-unmet-util"),
-			uistate.T("health.target", uistate.T("credit.utilTarget")))
-	}
-	utilTile := hltTile("crd-util", "1 / span 4", hltSection("sec-cf-util", uistate.T("credit.utilTitle"), nil,
-		Fragment(
-			Div(css.Class("hlt-factor-head"),
-				Span(ClassStr("hlt-factor-value "+tw.Fold(tw.FontDisplay)+" "+tw.ColorClass(creditUtilBandTone(r.Agg.Band))), aggLabel),
-				utilStatus,
-			),
-			// The meter shows the utilization VALUE (how much of the limit is in
-			// use), matching the headline — with the 30% target rendered ON the
-			// bar as a tick so value-vs-target is visual, not just prose.
-			Div(css.Class("crd-meter-wrap"),
-				uiw.ProgressBar(uiw.ProgressBarProps{Percent: utilMeter, Tone: creditTrendBarTone(r.Agg.UtilPct)}),
-				Div(css.Class("crd-target-tick"), Attr("title", uistate.T("credit.utilTarget")), Attr("aria-hidden", "true")),
-			),
-			P(css.Class("muted", tw.Mt2), uistate.T("credit.f.util.why")),
-			Details(css.Class("hlt-curve"),
-				Summary(uistate.T("health.curveSummary")),
-				P(css.Class("t-caption", tw.TextFaint), uistate.T("credit.f.util.curve")),
-				P(css.Class("t-caption", tw.TextFaint), uistate.T("health.scoreDetail", utilScoreVal, int(r.Weights.Util*100+0.5))),
-				Div(css.Class("hlt-varchip"), Attr("data-testid", "cf-var-util"),
-					Title(uistate.T("health.varChipTitle")),
-					Code("credit_util_score"), Span(css.Class(tw.TextDim), fmt.Sprintf(" · %d", utilScoreVal)),
-				),
-			),
-			Div(cardRows...),
-			If(r.Agg.CardsMissingLimit > 0, P(css.Class("muted", tw.Mt2),
-				fmt.Sprintf(uistate.T("credit.missingLimitNote"), r.Agg.CardsMissingLimit))),
-		)))
-
-	// ── Supporting factors + the down/up pair. ───────────────────────────────────
-	onTimeTile := hltTile("crd-ontime", "span 2", ui.CreateElement(creditFactorTile, creditFactorTileProps{
-		Key: "ontime", Title: uistate.T("credit.ontimeTitle"), Score: r.OnTimeScore, Weight: r.Weights.OnTime, VarName: "credit_ontime_score"}))
-	ageTile := hltTile("crd-age", "span 2", ui.CreateElement(creditFactorTile, creditFactorTileProps{
-		Key: "age", Title: uistate.T("credit.ageTitle"), Score: r.AgeScore, Weight: r.Weights.Age, VarName: "credit_age_score"}))
-
-	var downBody ui.Node = P(css.Class("empty"), uistate.T("credit.demeritsEmpty"))
-	if len(r.Demerits) > 0 {
-		downBody = Div(creditListItems(r, base, false)...)
-	}
-	var upBody ui.Node = P(css.Class("empty"), uistate.T("credit.adviceEmpty"))
-	if len(r.Advice) > 0 {
-		upBody = Div(creditListItems(r, base, true)...)
-	}
-	downTile := hltTile("crd-down", "span 2", hltSection("sec-credit-down", uistate.T("credit.demeritsTitle"), nil, downBody))
-	upTile := hltTile("crd-up", "span 2", hltSection("sec-credit-up", uistate.T("credit.improveTitle"), nil, upBody))
-
-	tiles := []ui.Node{hero, utilTile, onTimeTile, ageTile, downTile, upTile}
-
-	// Optional Smart+ AI read renders its own card chrome → a bare grid child.
-	tiles = append(tiles, Div(Style(map[string]string{"grid-column": "1 / span 4"}), creditAINode()))
-
-	if showFormulas.Get() {
-		tiles = append(tiles, hltTile("crd-formula", "1 / span 4", Fragment(
-			P(css.Class("t-caption", tw.TextDim), Style(map[string]string{"margin": "0 0 0.5rem"}), uistate.T("credit.formulaHint")),
-			ui.CreateElement(FormulaBuilder, FormulaBuilderProps{Title: uistate.T("credit.metricsShow"), Initial: "credit_proxy", ShowSaved: true}),
-		)))
+		tiles = append(tiles, hltTile("crd-formula", "1 / span 4", Fragment(P(css.Class("t-caption", tw.TextDim), uistate.T("credit.formulaHint")), ui.CreateElement(FormulaBuilder, FormulaBuilderProps{Title: uistate.T("credit.metricsShow"), Initial: "credit_proxy", ShowSaved: true}))))
 	}
 	return Div(css.Class("bento bento-credit"), tiles)
 }

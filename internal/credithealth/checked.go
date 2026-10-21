@@ -39,6 +39,7 @@ type CheckedResult struct {
 	UtilErr, PayTo30Err, PayTo10Err  error
 	CardsMissingLimit                int
 	OnTimeScore, AgeScore            int
+	OnTimeErr                        error
 	Weights                          ProxyWeights
 	ProxyScore                       int
 	ProxyKnown                       bool
@@ -68,6 +69,10 @@ func checkedCard(a domain.Account, balances map[string]int64, rates currency.Rat
 		return c
 	}
 	c.Balance = money.New(balance, a.Currency)
+	if !currency.Valid(a.Currency) || (a.CreditLimit.Currency != "" && !currency.Valid(a.CreditLimit.Currency)) {
+		c.Err = fmt.Errorf("%w: account %q or limit %q", ErrUnsupportedCurrency, a.Currency, a.CreditLimit.Currency)
+		return c
+	}
 	if a.CreditLimit.Amount == 0 {
 		return c
 	}
@@ -114,18 +119,44 @@ func checkedCard(a domain.Account, balances map[string]int64, rates currency.Rat
 // limits directly to base, avoiding mixed-unit sums or double conversion.
 // Failed monetary facts do not discard independent scores or known weights.
 func EvaluateWithRates(in Inputs, rates currency.Rates) CheckedResult {
-	r := CheckedResult{Balance: money.Zero(rates.Base), Limit: money.Zero(rates.Base), PayTo30: money.Zero(rates.Base), PayTo10: money.Zero(rates.Base), UtilPct: -1}
-	var accounts []domain.Account
-	for _, a := range in.Accounts {
-		if a.Type == domain.TypeCreditCard && !a.Archived {
-			accounts = append(accounts, a)
+	accounts := activeCreditCards(in.Accounts)
+	r := evaluateWithFactors(in, rates, computeOnTime(accounts, in.Transactions, in.Now), computeAge(accounts, in.Now))
+	if in.TransactionsErr != nil {
+		for _, a := range accounts {
+			if a.DueDayOfMonth > 0 {
+				r.OnTimeErr = in.TransactionsErr
+				r.OnTimeScore = -1
+				// Eligibility and its weight are known; an unread source cannot remove
+				// the factor and renormalize the remaining factors into a known score.
+				r.Weights = proxyWeights(0, r.AgeScore)
+				r.ProxyKnown = false
+				break
+			}
 		}
 	}
-	r.OnTimeScore = computeOnTime(accounts, in.Transactions, in.Now)
-	r.AgeScore = computeAge(accounts, in.Now)
+	return r
+}
+
+func activeCreditCards(accounts []domain.Account) []domain.Account {
+	var cards []domain.Account
+	for _, a := range accounts {
+		if a.Type == domain.TypeCreditCard && !a.Archived {
+			cards = append(cards, a)
+		}
+	}
+	return cards
+}
+
+// evaluateWithFactors shares the entire checked money fold with hypothetical
+// advice calculations without rescanning transaction history or recomputing age.
+func evaluateWithFactors(in Inputs, rates currency.Rates, onTime, age int) CheckedResult {
+	r := CheckedResult{Balance: money.Zero(rates.Base), Limit: money.Zero(rates.Base), PayTo30: money.Zero(rates.Base), PayTo10: money.Zero(rates.Base), UtilPct: -1}
+	accounts := activeCreditCards(in.Accounts)
+	r.OnTimeScore = onTime
+	r.AgeScore = age
 	r.Weights = proxyWeights(r.OnTimeScore, r.AgeScore)
-	if rates.Base == "" {
-		err := fmt.Errorf("credit health: base currency is required")
+	if !currency.Valid(rates.Base) {
+		err := fmt.Errorf("%w: base %q", ErrUnsupportedCurrency, rates.Base)
 		r.UtilErr, r.PayTo30Err, r.PayTo10Err = err, err, err
 	}
 	for _, a := range accounts {
