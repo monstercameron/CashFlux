@@ -1558,6 +1558,7 @@ func buildChatTools(app *appstate.App, base string, rates currency.Rates, tier a
 	// trust (remember facts), the auditor, natural-language rule/workflow authoring,
 	// web-grounded benchmarks, rapid capture, tax gather, and document Q&A.
 	tools = append(tools, agToolsTasks(app, base, rates)...)
+	tools = append(tools, agToolsData(app)...)
 	tools = append(tools, agToolsTrust(app, base, rates)...)
 	tools = append(tools, agToolsAuditor(app, base, rates)...)
 	tools = append(tools, agToolsAuthoring(app, base, rates)...)

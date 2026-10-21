@@ -1,3 +1,7 @@
+## 2026-10-20 - Assistant full financial record access
+
+Added native typed data catalog/query/detail models and three registered read-only tools: data_manifest, query_data and read_record. The catalog includes archived rows, orphan balance history through a dedicated table-only store read, links, custom data, documents, workflows and safe financial settings. Snapshot-bound continuation refuses mixed revisions; exact JSON numbers avoid float precision loss; large content remains reachable in character chunks. Raw credentials, arbitrary KV and binary payloads are excluded, with known credential/text redaction. Native query/history tests passed and all three real-App Data WASM groups passed in integration pass2 after correcting the legacy rules uppercase ID field. Financial preferences remain the next explicit coverage addition.
+
 ## 2026-10-20 - Responses tool argument semantics
 
 Followed the official Responses migration documentation to send strict:false for flattened function tools; this avoids implicit strict normalization of intentionally optional app parameters. Existing tool names, descriptions, parameter schemas and call IDs are unchanged. A native request contract verifies the explicit flag and optional properties; the complete internal/ai native package passed. No paid API request or credential was used.

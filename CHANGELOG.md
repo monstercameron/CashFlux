@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Full-detail Assistant conversations can discover and page through 42 typed financial collections, with exact IDs, fresh reads and long-record continuation.
 - Responses function tools now explicitly preserve the app schemas optional-argument behavior with strict false.
 - Assistant task completion now resolves stable IDs, previews the exact occurrence, preserves recurring successors, and rejects stale or ambiguous approvals.
 - Assistant approval metadata now describes rule/workflow changes and matching scopes accurately; aggregate-only conversations withhold document, recurring and paginated record detail tools.
