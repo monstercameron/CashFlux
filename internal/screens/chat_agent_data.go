@@ -197,7 +197,10 @@ func assistantDataCollections(app *appstate.App) ([]assistantdata.Collection, er
 	collections = append(collections, assistantDecisionCollections(app)...)
 	for i := range collections {
 		collections[i] = assistantdata.RedactValues(collections[i], privateValues...)
-		collections[i].Revision = fmt.Sprintf("%d:%d", app.InstanceID(), app.Rev())
+		// Provider usage and unrelated writes advance App.Rev. The reader hashes
+		// every collection row itself; only the bound app/store identity belongs
+		// here so an unchanged collection can continue across provider responses.
+		collections[i].Revision = fmt.Sprintf("%d:%p", app.InstanceID(), s)
 		switch collections[i].Name {
 		case "financial_preferences":
 			collections[i].Notes = "Effective preferences use the app's canonical defaults and Normalize. monthlyIncomeMinor and budgetPaycheckMinMinor use financial_settings.baseCurrency. sweepBufferMinor and roundUpGranularityMinor use their source account's native currency. idleCashBenchmarkApr is an annual percentage, not a decimal fraction. Zero monthlyIncomeMinor means no configured income override."

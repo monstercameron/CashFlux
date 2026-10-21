@@ -1,3 +1,7 @@
+## 2026-10-21 - Stable content-bound assistant read pages
+
+Removed global mutation revisions from raw read token identity. Snapshots retain bound App/store identity and hash exact selected content, so real row/settings changes still reject stale pages. Four actual-tool regressions passed for positive provider usage, unrelated writes, off-page edits and distinct stores with identical rows.
+
 ## 2026-10-21 - Currency-aware assistant credit calculations
 
 Added a checked rates-aware credit-health API that preserves native card targets and converts aggregate amounts once. Missing balances, FX and overflow make dependent utilization or targets unavailable while age, on-time and weight facts remain independent. Fourteen new groups and full credithealth/engineenv tests plus vet passed. The legacy credit page remains on its existing adapter.

@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Assistant data and list continuations now survive model usage bookkeeping and unrelated writes.
 - Assistant credit formulas now use checked FX-weighted card utilization and explicit-currency paydown targets.
 - Health formulas now distinguish unavailable factors from valid independent scores.
 - Net-worth formula composition and change now preserve unavailable values instead of zero or partial totals.
