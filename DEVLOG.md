@@ -1,3 +1,7 @@
+## 2026-10-20 - Keep goal splits exact at integer limits
+
+Proportional goal splits previously summed capacities and multiplied total by capacity in signed int64; overflow could produce invalid shares and an extremely long per-unit remainder loop. The common path now uses wide quotient/remainder arithmetic and one bounded stable remainder pass, with an exact big-integer fallback when aggregate capacity exceeds uint64. Native tests verify caps, exact totals and deterministic order at MaxInt64 and beyond uint64 aggregate capacity, plus 300 reference-checked random cases. Goals native tests and vet pass; the manual allocation screen using this helper passes four focused WASM tests.
+
 ## 2026-10-20 - Measure native transaction-filter preparation
 
 Ran three 25-iteration samples at one benchmark CPU for 1k/10k synthetic rows. At 10k rows median widened preset counting fell from 25.170 ms to 6.044 ms and allocations from 230066 to 30096; plain and multi-facet cases also reduced allocations, while numeric search reduced elapsed work with unchanged allocations. Saved raw results and exact command, documented synthetic/native scope and concurrent-development timing caveats. These numbers do not claim browser or end-to-end typing latency improvements.

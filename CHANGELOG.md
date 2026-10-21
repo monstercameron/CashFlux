@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- Replaced overflowing proportional earmark arithmetic with exact bounded allocation.
 - Recorded native matcher benchmarks against the frozen previous per-row parsing implementation.
 - Made Accounts details lazy and reused indexed history and recurring projection inputs.
 - Moved numeric search parsing and multi-value filter preparation outside per-transaction matching.
