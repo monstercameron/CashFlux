@@ -1,3 +1,7 @@
+## 2026-10-20 - Assistant permission selectors
+
+Aligned permission scopes with current task, goal, transaction delete/merge, and transaction edit schemas. Numeric JSON lexemes and decimal strings remain exact; optional selectors do not invent affected counts. Native toolperm tests and vet passed. Existing irreversible labels remain conservative.
+
 ## 2026-10-20 - Assistant change receipts and exact undo
 
 Added canonical Assistant baseline isolation and exact undo receipts, preserving prior manual edits and avoiding phantom actions for no-op or failed tools. Undo rechecks the published receipt before replay and removes history only after durable success. Native history and action-state tests, two app WASM groups, and three screens receipt groups passed with mocked local fixtures. No release or deployment.

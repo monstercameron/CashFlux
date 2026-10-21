@@ -18,6 +18,7 @@ package toolperm
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 )
@@ -111,7 +112,7 @@ var rules = map[string]rule{
 	"complete_task": {
 		reads: fixed(read("your to-dos")),
 		writes: func(a map[string]any) []Access {
-			return []Access{{Verb: VerbChange, Entity: "to-do", Count: 1, Scope: scopePhrase(a, "title", "matching %q")}}
+			return []Access{{Verb: VerbChange, Entity: "to-do", Count: 1, Scope: taskScope(a)}}
 		},
 		reversible: true,
 	},
@@ -157,7 +158,7 @@ var rules = map[string]rule{
 	"add_goal_contribution": {
 		reads: fixed(read("your goals")),
 		writes: func(a map[string]any) []Access {
-			return []Access{{Verb: VerbChange, Entity: "goal", Count: 1, Scope: scopePhrase(a, "goal", "matching %q")}}
+			return []Access{{Verb: VerbChange, Entity: "goal", Count: 1, Scope: goalContributionScope(a)}}
 		},
 		reversible: true,
 	},
@@ -183,7 +184,7 @@ var rules = map[string]rule{
 	"merge_duplicate_transactions": {
 		reads: fixed(read("the transactions being merged")),
 		writes: func(a map[string]any) []Access {
-			return []Access{{Verb: VerbDelete, Entity: "duplicate transaction", Scope: duplicateMatchScope(a)}}
+			return []Access{{Verb: VerbDelete, Entity: "duplicate transaction", Scope: transactionTargetScope(a)}}
 		},
 		// A merge removes rows; Activity records it, but the removed rows are gone.
 		reversible: false,
@@ -195,7 +196,7 @@ var rules = map[string]rule{
 				Verb:   VerbChange,
 				Entity: "transaction",
 				Count:  1,
-				Scope:  editedFields(a),
+				Scope:  transactionEditScope(a),
 			}}
 		},
 		reversible: true,
@@ -203,7 +204,7 @@ var rules = map[string]rule{
 	"delete_transaction": {
 		reads: fixed(read("the transaction being deleted")),
 		writes: func(a map[string]any) []Access {
-			return []Access{{Verb: VerbDelete, Entity: "transaction", Count: 1}}
+			return []Access{{Verb: VerbDelete, Entity: "transaction", Count: 1, Scope: transactionTargetScope(a)}}
 		},
 		reversible: false,
 	},
@@ -269,7 +270,12 @@ func decodeArgs(args json.RawMessage) map[string]any {
 	if len(args) == 0 {
 		return out
 	}
-	if err := json.Unmarshal(args, &out); err != nil {
+	decoder := json.NewDecoder(strings.NewReader(string(args)))
+	decoder.UseNumber()
+	if err := decoder.Decode(&out); err != nil {
+		return map[string]any{}
+	}
+	if err := decoder.Decode(new(any)); err != io.EOF {
 		return map[string]any{}
 	}
 	return out
@@ -314,6 +320,40 @@ func editedFields(args map[string]any) string {
 	return "— " + joinPhrase(named)
 }
 
+func taskScope(args map[string]any) string {
+	if id := scopePhrase(args, "task_id", "to-do ID %q"); id != "" {
+		return id
+	}
+	return scopePhrase(args, "title", "matching title %q")
+}
+
+func goalContributionScope(args map[string]any) string {
+	var parts []string
+	if id := scopePhrase(args, "goal_id", "goal ID %q"); id != "" {
+		parts = append(parts, id)
+	} else if name := scopePhrase(args, "goal", "named %q"); name != "" {
+		parts = append(parts, name)
+	}
+	if amount := exactAmount(args); amount != "" {
+		parts = append(parts, "amount "+amount)
+	}
+	if currency := scopePhrase(args, "currency", "in %q"); currency != "" {
+		parts = append(parts, currency)
+	}
+	return strings.Join(parts, ", ")
+}
+
+func transactionEditScope(args map[string]any) string {
+	var parts []string
+	if id := scopePhrase(args, "id", "transaction ID %q"); id != "" {
+		parts = append(parts, id)
+	}
+	if fields := editedFields(args); fields != "" {
+		parts = append(parts, strings.TrimSpace(strings.TrimPrefix(fields, "—")))
+	}
+	return strings.Join(parts, " — ")
+}
+
 // joinPhrase renders a list as "a", "a and b", or "a, b and c".
 func joinPhrase(items []string) string {
 	switch len(items) {
@@ -325,19 +365,33 @@ func joinPhrase(items []string) string {
 	return strings.Join(items[:len(items)-1], ", ") + " and " + items[len(items)-1]
 }
 
-// countOf returns the length of an array argument, or 0 when it is absent.
-func duplicateMatchScope(args map[string]any) string {
+// transactionTargetScope describes the selector without inventing a match count.
+func transactionTargetScope(args map[string]any) string {
 	var parts []string
-	if match := scopePhrase(args, "match", "description/payee matching %q"); match != "" {
-		parts = append(parts, match)
+	if target := scopePhrase(args, "target", "matching target %q"); target != "" {
+		parts = append(parts, target)
 	}
-	if amount, ok := args["amount"].(float64); ok && amount != 0 {
-		parts = append(parts, fmt.Sprintf("amount %g", amount))
+	if id := scopePhrase(args, "transaction_id", "transaction ID %q"); id != "" {
+		parts = append(parts, id)
+	}
+	if amount := exactAmount(args); amount != "" {
+		parts = append(parts, "amount "+amount)
 	}
 	if date := scopePhrase(args, "date", "on %q"); date != "" {
 		parts = append(parts, date)
 	}
 	return strings.Join(parts, ", ")
+}
+
+func exactAmount(args map[string]any) string {
+	switch value := args["amount"].(type) {
+	case string:
+		return strings.TrimSpace(value)
+	case json.Number:
+		return value.String()
+	default:
+		return ""
+	}
 }
 
 // plural renders "1 transaction" / "3 transactions", pluralising the last word of a
