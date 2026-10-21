@@ -969,20 +969,25 @@ type budgetDriverMemoValue struct {
 	base    string
 }
 
+type goalFundedMemoValue struct {
+	split goalfunded.Split
+	err   error
+}
+
 var budgetPeriodMemos = struct {
 	sync.Mutex
-	goal    map[budgetPeriodMemoKey]goalfunded.Split
+	goal    map[budgetPeriodMemoKey]goalFundedMemoValue
 	funding map[budgetPeriodMemoKey][]goalfunded.BudgetFunding
 	drivers map[budgetPeriodMemoKey]budgetDriverMemoValue
 	pie     map[budgetPeriodMemoKey][]budgetSlice
-}{goal: make(map[budgetPeriodMemoKey]goalfunded.Split), funding: make(map[budgetPeriodMemoKey][]goalfunded.BudgetFunding), drivers: make(map[budgetPeriodMemoKey]budgetDriverMemoValue), pie: make(map[budgetPeriodMemoKey][]budgetSlice)}
+}{goal: make(map[budgetPeriodMemoKey]goalFundedMemoValue), funding: make(map[budgetPeriodMemoKey][]goalfunded.BudgetFunding), drivers: make(map[budgetPeriodMemoKey]budgetDriverMemoValue), pie: make(map[budgetPeriodMemoKey][]budgetSlice)}
 
 func periodMemoKey(app *appstate.App, revision int, budgetID string, start, end time.Time) budgetPeriodMemoKey {
 	return budgetPeriodMemoKey{app: app, revision: revision, budgetID: budgetID,
 		start: start.UTC().Format(time.RFC3339Nano), end: end.UTC().Format(time.RFC3339Nano)}
 }
 
-func memoGoalFunded(app *appstate.App, revision int, budgetID string, start, end time.Time, calculate func() goalfunded.Split) goalfunded.Split {
+func memoGoalFunded(app *appstate.App, revision int, budgetID string, start, end time.Time, calculate func() (goalfunded.Split, error)) goalFundedMemoValue {
 	key := periodMemoKey(app, revision, budgetID, start, end)
 	budgetPeriodMemos.Lock()
 	if value, ok := budgetPeriodMemos.goal[key]; ok {
@@ -990,10 +995,11 @@ func memoGoalFunded(app *appstate.App, revision int, budgetID string, start, end
 		return value
 	}
 	budgetPeriodMemos.Unlock()
-	value := calculate()
+	split, err := calculate()
+	value := goalFundedMemoValue{split: split, err: err}
 	budgetPeriodMemos.Lock()
 	if len(budgetPeriodMemos.goal) > 256 {
-		budgetPeriodMemos.goal = make(map[budgetPeriodMemoKey]goalfunded.Split)
+		budgetPeriodMemos.goal = make(map[budgetPeriodMemoKey]goalFundedMemoValue)
 	}
 	budgetPeriodMemos.goal[key] = value
 	budgetPeriodMemos.Unlock()

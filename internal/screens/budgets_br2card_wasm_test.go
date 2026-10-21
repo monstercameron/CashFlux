@@ -104,9 +104,9 @@ func TestBR2CardExpensiveHelpersRunOncePerBudgetRevisionAndPeriod(t *testing.T) 
 	end := start.AddDate(0, 1, 0)
 	var goalCalls, followUpCalls int
 	for range 3 {
-		memoGoalFunded(app, 44001, "br2-counter", start, end, func() goalfunded.Split {
+		memoGoalFunded(app, 44001, "br2-counter", start, end, func() (goalfunded.Split, error) {
 			goalCalls++
-			return goalfunded.Split{FundedMinor: 1}
+			return goalfunded.Split{FundedMinor: 1}, nil
 		})
 		memoBudgetFollowUps(app, app.Rev(), "br2-counter", func() []followUpItem {
 			followUpCalls++
@@ -120,9 +120,9 @@ func TestBR2CardExpensiveHelpersRunOncePerBudgetRevisionAndPeriod(t *testing.T) 
 		t.Fatalf("PutCategory: %v", err)
 	}
 	newRevision := int(app.Rev())
-	memoGoalFunded(app, newRevision, "br2-counter", start, end, func() goalfunded.Split {
+	memoGoalFunded(app, newRevision, "br2-counter", start, end, func() (goalfunded.Split, error) {
 		goalCalls++
-		return goalfunded.Split{}
+		return goalfunded.Split{}, nil
 	})
 	memoBudgetFollowUps(app, app.Rev(), "br2-counter", func() []followUpItem {
 		followUpCalls++

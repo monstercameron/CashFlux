@@ -1,3 +1,7 @@
+## 2026-10-21 - Preserve errors in goal-funded budget details
+
+Budget rows now call SummarizeChecked and retain its error alongside memoized results; overflow in limit comparisons or allocated funding remains visible as unavailable. Native goalfunded tests and the focused v7 rendered row regression passed missing-FX, overflow and valid controls. Existing memo call-count and revision tests passed in the full v7 Screens run. Source-read boundaries outside this slice remain follow-up work.
+
 ## 2026-10-21 - Prepare checked budget funding facts outside views
 
 Added native checked category-income and assignment preparation with independent availability, method eligibility and over-assignment results. Budget adapters use checked sources and avoid reconciliation scans when the action is unavailable. Native budgetview tests passed; focused v7 host tests passed funding missing-FX, valid-income and warmed closed-store cases. Full Screens v7 run also covered this slice.
