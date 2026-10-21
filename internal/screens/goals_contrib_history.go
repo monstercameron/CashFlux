@@ -10,7 +10,6 @@ import (
 
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/goalhistory"
-	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/money"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v5/css"
@@ -36,28 +35,46 @@ const contribHistoryMonths = 12
 // It renders nothing for a non-financial goal, a goal with no target, or a goal
 // that has never received a contribution — an empty twelve-bar chart is a box
 // that says "no data" in a very expensive way.
-func goalContribHistoryNode(g domain.Goal, now time.Time) ui.Node {
+func goalContribHistoryNode(g domain.Goal, assignment money.Money, hasAssignment bool, assignmentErr error, now time.Time) ui.Node {
 	if !g.EffectiveKind().IsFinancial() || g.TargetAmount.Amount <= 0 {
 		return Fragment()
 	}
 	if len(g.Contributions) == 0 && len(g.ContributionHistory) == 0 {
 		return Fragment()
 	}
+	if assignmentErr != nil {
+		return goalContribHistoryUnavailable(g.ID)
+	}
 	cur := g.TargetAmount.Currency
 	var plannedMinor int64
-	if m, ok, _ := goalsvc.MonthlyAssignment(g, now); ok && m.Amount > 0 && m.Currency == cur {
-		plannedMinor = m.Amount
+	if hasAssignment {
+		if assignment.Currency != cur {
+			return goalContribHistoryUnavailable(g.ID)
+		}
+		if assignment.Amount > 0 {
+			plannedMinor = assignment.Amount
+		}
 	}
-	pts := goalhistory.Series(g, plannedMinor, contribHistoryMonths, now)
+	pts, err := goalhistory.SeriesChecked(g, plannedMinor, contribHistoryMonths, now)
+	if err != nil {
+		return goalContribHistoryUnavailable(g.ID)
+	}
 	peak := goalhistory.PeakMinor(pts)
 	if peak <= 0 {
 		return Fragment()
 	}
-	sum := goalhistory.Summarize(pts)
+	sum, err := goalhistory.SummarizeChecked(pts)
+	if err != nil {
+		return goalContribHistoryUnavailable(g.ID)
+	}
 
 	bars := make([]any, 0, len(pts))
 	for _, p := range pts {
-		bars = append(bars, contribHistoryBar(p, peak, cur))
+		bar, err := contribHistoryBar(p, peak, cur)
+		if err != nil {
+			return goalContribHistoryUnavailable(g.ID)
+		}
+		bars = append(bars, bar)
 	}
 
 	// One sentence over the bars, because a reader should not have to add up
@@ -88,17 +105,21 @@ func goalContribHistoryNode(g domain.Goal, now time.Time) ui.Node {
 	)
 }
 
+func goalContribHistoryUnavailable(id string) ui.Node {
+	return P(css.Class("budget-sub"), Attr("data-testid", "goal-hist-unavailable-"+id), Attr("role", "status"), uistate.T("calculation.unavailable"))
+}
+
 // contribHistoryBar is one month. The plan is a marker ON the bar's track rather
 // than a second bar, so "did this month clear the line" is a glance rather than
 // a comparison of two lengths.
-func contribHistoryBar(p goalhistory.Point, peakMinor int64, currency string) ui.Node {
-	pct := 0
-	if peakMinor > 0 {
-		pct = int(p.ActualMinor * 100 / peakMinor)
+func contribHistoryBar(p goalhistory.Point, peakMinor int64, currency string) (ui.Node, error) {
+	pct, err := goalhistory.PercentOfPeak(p.ActualMinor, peakMinor)
+	if err != nil {
+		return nil, err
 	}
-	planPct := 0
-	if peakMinor > 0 && p.PlannedMinor > 0 {
-		planPct = int(p.PlannedMinor * 100 / peakMinor)
+	planPct, err := goalhistory.PercentOfPeak(p.PlannedMinor, peakMinor)
+	if err != nil {
+		return nil, err
 	}
 	cls := "goal-hist-fill"
 	if p.PlannedMinor > 0 && !p.Met() {
@@ -125,5 +146,5 @@ func contribHistoryBar(p goalhistory.Point, peakMinor int64, currency string) ui
 		),
 		Span(css.Class("goal-hist-amt"), Attr("aria-hidden", "true"),
 			fmtMoney(money.New(p.ActualMinor, currency))),
-	)
+	), nil
 }

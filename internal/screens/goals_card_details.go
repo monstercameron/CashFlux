@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	goalsvc "github.com/monstercameron/CashFlux/internal/goals"
 	"github.com/monstercameron/CashFlux/internal/uistate"
@@ -24,11 +25,12 @@ type goalCardDetails struct {
 // return. The function value also lets actual-host tests observe preparations.
 var prepareGoalCardDetails = buildGoalCardDetails
 
-func buildGoalCardDetails(g domain.Goal, e goalsvc.Evaluation, accounts []domain.Account, now time.Time) goalCardDetails {
+func buildGoalCardDetails(g domain.Goal, e goalsvc.Evaluation, accounts []domain.Account, rates currency.Rates, now time.Time) goalCardDetails {
+	assignment, hasAssignment, assignmentErr := e.Assignment(g, rates)
 	return goalCardDetails{
 		Interest:   goalInterestEtaLine(g, e, accounts, now),
 		Trajectory: goalTrajectoryNode(g, e, now),
-		History:    goalContribHistoryNode(g, now),
+		History:    goalContribHistoryNode(g, assignment, hasAssignment, assignmentErr, now),
 	}
 }
 

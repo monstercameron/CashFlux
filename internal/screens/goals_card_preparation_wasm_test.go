@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/monstercameron/CashFlux/internal/appstate"
+	"github.com/monstercameron/CashFlux/internal/currency"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/goalhistory"
 	"github.com/monstercameron/CashFlux/internal/goalinterest"
@@ -50,10 +51,10 @@ func TestPrimaryGoalCompactCardsSkipDetailPreparation(t *testing.T) {
 	counts := map[string]int{}
 	preparedAt := map[string]time.Time{}
 	previous := prepareGoalCardDetails
-	prepareGoalCardDetails = func(goal domain.Goal, e goalsvc.Evaluation, accounts []domain.Account, at time.Time) goalCardDetails {
+	prepareGoalCardDetails = func(goal domain.Goal, e goalsvc.Evaluation, accounts []domain.Account, rates currency.Rates, at time.Time) goalCardDetails {
 		counts[goal.ID]++
 		preparedAt[goal.ID] = at
-		return previous(goal, e, accounts, at)
+		return previous(goal, e, accounts, rates, at)
 	}
 	defer func() { prepareGoalCardDetails = previous }()
 	f := render.New(t)

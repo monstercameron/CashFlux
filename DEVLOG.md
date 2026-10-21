@@ -1,3 +1,7 @@
+## 2026-10-20 - Check goal history and use the canonical monthly plan
+
+Added SeriesChecked, SummarizeChecked, ShortfallChecked and PercentOfPeak so mixed currencies, invalid records, duplicate-month totals and overflow cannot draw wrapped or mislabeled history. The card passes its canonical evaluated assignment and current rates rather than recomputing a rate-less plan and dropping errors in markup. Compatibility APIs remain documented; financial rendering uses checked results. Native tests and the full 835-screen rerun passed; six focused history/compact-card cases then passed, including the additional FX-adjusted deadline-plan regression. The six frozen browser cases also passed against the corresponding production source.
+
 ## 2026-10-20 - Wait for visible Smart import review in tests
 
 The complete screen run exposed another test that inspected controller state immediately after resolving a fake fetch. PDF, image and receipt responses were still processing on separate scheduler turns, and test teardown could then race that response. Replaced the timing assumption with a bounded three-second wait for draft-review-page, retaining the existing row/account assertions. The full rerun passed all 835 screen WASM tests; production import behavior is unchanged.

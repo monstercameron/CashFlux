@@ -504,7 +504,7 @@ func GoalRow(props goalRowProps) ui.Node {
 	var earmarkLegend ui.Node = Fragment()
 	var subSection ui.Node
 	if financial {
-		details := prepareGoalCardDetails(g, evaluation, props.Accounts, now)
+		details := prepareGoalCardDetails(g, evaluation, props.Accounts, goalRates(appstate.Default), now)
 		overfund, _ := goalsvc.Overfund(g)
 		// Figures grid (redesign): the key numbers as scannable stat cells instead of a
 		// run-on "$X to go · by date · save $X/mo" sentence. Only cells with real data
