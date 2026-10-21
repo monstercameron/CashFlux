@@ -7,6 +7,7 @@ and every commit updates this file under `Unreleased`.
 ## [Unreleased]
 
 ### Changed
+- First encrypted sync now rebases its queued snapshot on the version returned when it creates an empty server workspace, allowing the snapshot push to succeed.
 - Cloud browser regression helpers now wait for the actual setup and unlock states, click save once, and stop their own Windows test server process reliably.
 - Prepared v1.19.8 from the verified Transactions, Import, sync, budget, dashboard, navigation, and development-server changes below.
 - Dev-server reloads now replace the page instead of starting overlapping WebAssembly runtimes that could each autosave the same workspace.

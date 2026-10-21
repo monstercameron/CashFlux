@@ -1,3 +1,7 @@
+## 2026-10-20 - First encrypted snapshot on a new workspace
+
+The first sync creates an empty workspace row before uploading any attachment blobs, because the blob endpoint requires an owned workspace. That creation advances the server row to version 1, but the already queued snapshot still carried base version 0 and was rejected as stale against the client's own row. After the server confirms that exact creation, the subsequent snapshot push uses its returned version and timestamp. A concurrent writer still advances the server version and causes an ordinary conflict. A fresh local-server browser run confirmed that one encrypted snapshot reached the account export and did not expose the account name; this does not yet establish a full attachment roundtrip.
+
 ## 2026-10-20 - Cloud regression harness reliability
 
 The sync browser checks were racing the wizard's asynchronous render and discovery response, and a transaction helper could click Save more than once. The shared helpers now wait for the actual visible step or sync pulse, click once, and unlock protected storage before waiting for app readiness. On Windows, `go run` can leave the compiled server listening after its wrapper exits, so cleanup identifies the listener on the test's reserved port and stops it. The focused first-snapshot browser journey passed with these helpers; the protected reload journey still exposes an IndexedDB read timeout under investigation.

@@ -1108,16 +1108,19 @@ func flushBackendSyncQueue() {
 					logSyncError("backend workspace create failed", err)
 					return
 				}
-				// Creating the row stamps it with the SERVER's clock, which is later than
-				// the moment this mutation was queued — so the real push below would lose
-				// the LWW comparison against a row it just created itself, and the dataset
-				// would be backed up as a "conflict" against nothing. Carry the server's
-				// timestamp forward so the push that follows is contemporaneous with it.
-				// Only when the create was accepted: a rejection means the server really
-				// does hold something newer (another device got there first), and that
-				// push SHOULD lose — leaving the timestamp alone keeps that intact.
-				if ensured.Accepted && strings.TrimSpace(ensured.UpdatedAt) != "" {
-					item.ClientUpdatedAt = ensured.UpdatedAt
+				// Creating the row advances its version. The queued dataset was based
+				// on version zero, but this client has now seen and owns the accepted
+				// create. Rebase only on that exact response; another device can still
+				// write between create and push, in which case the push must conflict.
+				if ensured.Accepted {
+					if ensured.Version < 1 {
+						setSyncStatus(syncStatus{State: "error", Pending: pendingSyncCount(), Message: "Server did not return a workspace version after creation."})
+						return
+					}
+					item.BaseVersion = ensured.Version
+					if strings.TrimSpace(ensured.UpdatedAt) != "" {
+						item.ClientUpdatedAt = ensured.UpdatedAt
+					}
 				}
 			}
 			// The connection is up; let the browser deliver its events and paint
