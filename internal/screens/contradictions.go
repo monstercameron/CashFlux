@@ -106,10 +106,9 @@ func contradictionStrip(props contradictionStripProps) ui.Node {
 	found := contradict.Visible(scoped, dismissedContradictions(app))
 	hidden := len(scoped) - len(found)
 	if len(found) == 0 {
-		// Every finding was dismissed. Keep one line so the reader can bring them back.
-		return Div(css.Class("contra-strip"), Attr("data-testid", "contra-all-dismissed"),
-			Button(css.Class("btn-link"), Type("button"), Attr("data-testid", "contra-restore"),
-				OnClick(restore), uistate.T("contra.restore", hidden)))
+		// Everything was dismissed on purpose, so there is nothing left to show. Undo on the
+		// dismissal toast brings the last one back.
+		return Fragment()
 	}
 
 	shown := found
