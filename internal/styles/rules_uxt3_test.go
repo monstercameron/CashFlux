@@ -22,7 +22,7 @@ func TestUXT3ResponsiveTransactionsRules(t *testing.T) {
 		".bento-ledger .txn-table tbody tr.row > td{display:table-cell;vertical-align:middle;}",
 		".bento-ledger .txn-table .txn-col-who{display:none !important;}",
 		".bento-ledger .txn-table .txn-col-account{display:none !important;}",
-		".txn-desc-account{display:block;flex:0 0 100%;min-width:0;font-size:12px;",
+		".txn-desc-account{display:block;flex:0 0 100%;min-width:0;font-size:var(--fs-meta);",
 		".txn-table .txn-col-amount{width:112px;min-width:112px;text-align:right;}",
 		".txn-table .txn-col-actions{width:76px;min-width:76px;white-space:nowrap;}",
 		".txn-table .txn-desc-mainline{flex-wrap:wrap;}",

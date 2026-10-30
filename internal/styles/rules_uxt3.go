@@ -75,7 +75,7 @@ func registerRulesUXT3() {
 		display("block"),
 		flex("0 0 100%"),
 		minWidth("0"),
-		fontSize("12px"),
+		fontSize("var(--fs-meta)"),
 		lineHeight("1.2"),
 		color("var(--text-dim)"),
 		overflow("hidden"),
