@@ -16,7 +16,7 @@ func registerUXT1() {
 		width("100%"),
 		minWidth("0"),
 		color("var(--text)"),
-		fontSize("var(--type-14)"),
+		fontSize("var(--fs-body)"),
 	)
 	rule(".txn-count-band",
 		display("flex"),
@@ -32,7 +32,7 @@ func registerUXT1() {
 		alignItems("baseline"),
 		flexWrap("wrap"),
 		gap("0.35rem 1rem"),
-		fontSize("var(--type-12)"),
+		fontSize("var(--fs-meta)"),
 		color("var(--text-dim)"),
 	)
 	rule(".txn-count-future-period",
@@ -69,7 +69,7 @@ func registerUXT1() {
 		outlineOffset("3px"),
 	)
 	rule(".txn-count-value",
-		fontSize("17px"),
+		fontSize("var(--fs-body)"),
 		fontWeight("600"),
 		lineHeight("1.25"),
 		fontVariantNumeric("tabular-nums"),
@@ -77,7 +77,7 @@ func registerUXT1() {
 		whiteSpace("nowrap"),
 	)
 	rule(".txn-count-label",
-		fontSize("12px"),
+		fontSize("var(--fs-meta)"),
 		fontWeight("500"),
 		lineHeight("1.3"),
 		color("var(--text-dim)"),
@@ -152,7 +152,7 @@ func registerUXT1() {
 		border("0"),
 		background("transparent"),
 		color("var(--text-dim)"),
-		fontSize("var(--type-12)"),
+		fontSize("var(--fs-meta)"),
 		fontWeight("500"),
 		textAlign("left"),
 		cursor("pointer"),
@@ -184,7 +184,7 @@ func registerUXT1() {
 	rule(".txn-category-more",
 		flex("0 0 auto"),
 		color("var(--text-dim)"),
-		fontSize("12px"),
+		fontSize("var(--fs-meta)"),
 	)
 	rule(".txn-category-item.is-selected, .txn-category-item:hover",
 		color("var(--accent)"),
@@ -206,7 +206,7 @@ func registerUXT1() {
 		gap("0.35rem 1rem"),
 		minWidth("0"),
 		color("var(--text-dim)"),
-		fontSize("12px"),
+		fontSize("var(--fs-meta)"),
 		fontWeight("500"),
 		lineHeight("1.4"),
 	)
@@ -231,7 +231,7 @@ func registerUXT1() {
 	rule(".txn-count-upcoming-fact",
 		flex("0 0 auto"),
 		marginLeft("auto"),
-		fontSize("12px"),
+		fontSize("var(--fs-meta)"),
 	)
 	rule(".txn-count-secondary",
 		paddingLeft("0"),

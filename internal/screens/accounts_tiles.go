@@ -16,6 +16,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/appstate"
 	"github.com/monstercameron/CashFlux/internal/auditview"
 	"github.com/monstercameron/CashFlux/internal/currency"
+	"github.com/monstercameron/CashFlux/internal/dashboardview"
 	"github.com/monstercameron/CashFlux/internal/dateutil"
 	"github.com/monstercameron/CashFlux/internal/domain"
 	"github.com/monstercameron/CashFlux/internal/freshness"
@@ -556,7 +557,7 @@ func acctSummaryWidget(props acctSummaryProps) ui.Node {
 	// Subscribe to the shared data revision so a mutation in any tile (a transfer, a
 	// balance update, a delete) re-renders this tile — its props are the same *App
 	// pointer across host renders, so without this the engine would memoize it stale.
-	_ = uistate.UseDataRevision().Get()
+	rev := uistate.UseDataRevision().Get()
 	app := props.App
 	nav := router.UseNavigate()
 	// AC15: client-side nav for the idle-cash line's "See allocation options" link,
@@ -584,27 +585,27 @@ func acctSummaryWidget(props acctSummaryProps) ui.Node {
 	nwDelta, haveDelta := money.New(deltaMinor, props.Base), deltaErr == nil
 	netText, assetsText, liabilitiesText, tone := "—", "—", "—", "text-dim"
 	if nw.Known {
-		netText, assetsText, liabilitiesText, tone = fmtMoney(net), fmtMoney(assets), fmtMoney(liabilities), accentFor(net)
+		netText, assetsText, liabilitiesText, tone = fmtMoney(net), fmtMoney(assets), fmtMoney(money.New(-liabilities.Amount, liabilities.Currency)), accentFor(net)
 	}
 
 	smartSettings := uistate.LoadSmartSettings()
 
+	// The six-month net-worth shape the Dashboard hero also draws, so the two agree.
+	now := time.Now()
+	// The trend is deferred one settle, as the Dashboard hero defers its own, so the
+	// header never adds work to the first paint.
+	settled := useAfterSettle("acct-headline")
+	spark := ui.UseMemo(func() []float64 {
+		if !settled || !nw.Complete() {
+			return nil
+		}
+		return dashboardview.BuildNetWorthTrend(accounts, txns, props.Rates, now).Spark
+	}, rev, settled, now.Format(dateutil.Layout), nw.Complete())
+	trendVisual := uiw.PageHeadlineTrend(uiw.PageHeadlineTrendProps{Values: spark, Label: uistate.T("dashboard.netWorth"), GradientID: "acct-headline-trend"})
+
 	body := Div(
-		Div(css.Class("nw-summary"),
-			Div(css.Class("stat stat-hero"),
-				Div(css.Class("stat-label "+tw.Fold(tw.InlineFlex, tw.ItemsCenter, tw.Gap1)),
-					uistate.T("dashboard.netWorth"),
-					smartTooltipFor(smartSettings, "accounts-net", uistate.T("dashboard.netWorth"), uistate.T("smart.tipAccountsNet")),
-				),
-				Div(ClassStr("stat-value "+tone), Attr("data-testid", "acct-networth-value"), netText),
-				netWorthDeltaLine(nwDelta, haveDelta),
-			),
-			stat(uistate.T("accounts.assets"), assetsText, "pos"),
-			Div(css.Class("stat"),
-				A(css.Class("stat-label"), Href(uistate.RoutePath("/debt")), uistate.T("dashboard.liabilities")),
-				Div(ClassStr("stat-value neg"), liabilitiesText),
-			),
-		),
+		acctHeadline(netText, assetsText, liabilitiesText, tone, nwDelta, haveDelta,
+			smartTooltipFor(smartSettings, "accounts-net", uistate.T("dashboard.netWorth"), uistate.T("smart.tipAccountsNet")), trendVisual),
 		If(!nw.Complete(), P(css.Class("err"), Attr("role", "status"), Attr("data-testid", "acct-networth-note"), netWorthAvailabilityNote(nw))),
 		// AC11: disclose accounts left out of net worth by the household's choice.
 		If(len(nw.ExcludedByChoice) > 0, P(css.Class("t-caption", tw.TextDim), Attr("role", "status"), Attr("data-testid", "acct-nw-excludes-by-choice"),

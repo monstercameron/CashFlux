@@ -22,6 +22,7 @@ import (
 	"github.com/monstercameron/CashFlux/internal/prefs"
 	"github.com/monstercameron/CashFlux/internal/reports"
 	"github.com/monstercameron/CashFlux/internal/smart"
+	uiw "github.com/monstercameron/CashFlux/internal/ui"
 	"github.com/monstercameron/CashFlux/internal/ui/tw"
 	"github.com/monstercameron/CashFlux/internal/uistate"
 	"github.com/monstercameron/GoWebComponents/v7/css"
@@ -646,26 +647,33 @@ func budgetSummaryStatus(p budgetSummaryStatusProps) ui.Node {
 		statusCopy += " · " + budgetExclusionsLabel(p.excluded)
 	}
 	fillPct := budgetHeadlinePercent(spent, plan)
-	statusLine := Div(css.Class("bud3-headline"), Attr("data-state", statusState),
-		Div(css.Class("bud3-headline-copy"), Attr("role", "status"),
-			Span(css.Class("bud3-headline-figure"), Attr("data-testid", "budgets-status-figure"), statusFigure),
-			Span(css.Class("bud3-headline-secondary"), Attr("data-testid", "budgets-status-sentence"), statusCopy),
-			Span(css.Class("bud3-headline-window"), Attr("data-testid", "budgets-status-window"), uistate.T("budgets.headlineWindowLabel", budgetHeadlineWindowLabel(p.vw, p.v.LastMonthMode))),
+	statusLine := uiw.PageHeadline(uiw.PageHeadlineProps{
+		Live:   true,
+		State:  statusState,
+		TestID: "budgets-status",
+		Figure: uiw.PageHeadlineFigure(uiw.PageHeadlineFigureProps{Text: statusFigure, TestID: "budgets-status-figure"}),
+		Sentence: Fragment(
+			Span(Attr("data-testid", "budgets-status-sentence"), statusCopy),
+			Span(css.Class("page-headline-aside"), Attr("data-testid", "budgets-status-window"),
+				budgetHeadlineWindowLabel(p.vw, p.v.LastMonthMode)),
 		),
-		If(spendingComplete, Div(css.Class("bud3-headline-meter"), Attr("data-testid", "budgets-status-meter"), Attr("role", "meter"), Attr("aria-label", uistate.T("budgets.headlineMeterLabel")),
-			Attr("aria-valuemin", "0"), Attr("aria-valuemax", "100"), Attr("aria-valuenow", strconv.Itoa(fillPct)),
-			Div(css.Class("bud3-headline-meter-fill"), Attr("style", "width:"+strconv.Itoa(fillPct)+"%")),
-			If(!p.hist && !p.v.LastMonthMode && !p.futurePeriod, Div(css.Class("bud3-headline-pace"), Attr("aria-hidden", "true"), Attr("style", "left:"+strconv.Itoa(budgetPeriodElapsedPct(p.vw, budgetNow()))+"%"))),
-		)),
-		If(p.attnCount > 0 && !p.hist && !p.v.LastMonthMode,
-			Div(css.Class("bud3-headline-attention"),
+		Meter: If(spendingComplete, uiw.MeterBar(uiw.MeterBarProps{
+			Value:         float64(fillPct),
+			Label:         uistate.T("budgets.headlineMeterLabel"),
+			Tone:          "bg-accent",
+			TestID:        "budgets-status-meter",
+			PaceMarker:    float64(budgetPeriodElapsedPct(p.vw, budgetNow())),
+			HasPaceMarker: !p.hist && !p.v.LastMonthMode && !p.futurePeriod,
+		})),
+		Attention: Fragment(
+			If(p.attnCount > 0 && !p.hist && !p.v.LastMonthMode, Fragment(
 				Button(css.Class("bud3-attention-link"), Type("button"), Attr("data-testid", "budgets-hero-attn"), OnClick(p.filterAttn), uistate.T("budgets.headlineAttention", p.attnCount)),
 				If(p.attnOver > 0 && p.smartSettings.IsEnabled(coverAllFeatureCode), Span(css.Class("bud3-attention-separator"), "·")),
 				If(p.attnOver > 0 && p.smartSettings.IsEnabled(coverAllFeatureCode), ui.CreateElement(coverAllBannerButton, coverAllButtonProps{})),
-			),
+			)),
+			statusAction,
 		),
-		statusAction,
-	)
+	})
 
 	return Fragment(statusLine, budgetSummaryDiagnosticLines(p.issues))
 }

@@ -16,8 +16,8 @@ func TestV5SUMBandIsCompactAndUsesProportionalSixPixelBar(t *testing.T) {
 	css := Build()
 	for _, want := range []string{
 		".txn-count-band{display:flex;align-items:center;gap:1rem;width:100%;min-width:0;min-height:44px;max-height:64px;",
-		".txn-count-value{font-size:17px;",
-		".txn-count-label{font-size:12px;",
+		".txn-count-value{font-size:var(--fs-body);",
+		".txn-count-label{font-size:var(--fs-meta);",
 		".txn-category-bar{display:flex;width:100%;height:6px;min-height:6px;",
 		".txn-category-segment{display:block;flex:0 0 auto;min-width:0;height:6px;",
 	} {

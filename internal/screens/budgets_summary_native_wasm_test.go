@@ -124,7 +124,7 @@ func TestBudgetSummaryNativeHostDisclosesPartialAndFatalSpendWithoutHidingPlan(t
 			}
 			unknown := false
 			for _, div := range f.AllByTag("div") {
-				if div.Attr("class") == "bud3-headline" && div.Attr("data-state") == "unknown" {
+				if div.Attr("class") == "page-headline" && div.Attr("data-state") == "unknown" {
 					unknown = true
 				}
 			}

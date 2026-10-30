@@ -11,33 +11,6 @@ func registerBR3Head() {
 	rule(".bento-budgets h2, .bento-budgets .brc-head",
 		fontSize("15px"), fontWeight("600"), lineHeight("1.3"),
 	)
-	rule(".bento-budgets .bud3-headline",
-		display("flex"), flexDirection("column"), gap("0.45rem"), minWidth("0"),
-	)
-	rule(".bento-budgets .bud3-headline-copy",
-		display("flex"), alignItems("baseline"), flexWrap("wrap"), gap("0.25rem 0.55rem"), minWidth("0"),
-	)
-	rule(".bento-budgets .bud3-headline-figure",
-		fontSize("28px"), fontWeight("600"), fontVariantNumeric("tabular-nums"), lineHeight("1.15"), color("var(--text)"),
-	)
-	rule(".bento-budgets .bud3-headline-secondary",
-		fontSize("15px"), fontWeight("400"), lineHeight("1.4"), color("var(--text)"),
-	)
-	rule(".bento-budgets .bud3-headline-meter",
-		position("relative"), height("6px"), minHeight("6px"), width("100%"), overflow("hidden"),
-		borderRadius("var(--radius-pill)"), background("var(--bg-elev)"),
-	)
-	rule(".bento-budgets .bud3-headline-meter-fill",
-		height("100%"), borderRadius("inherit"), background("var(--accent)"),
-	)
-	rule(".bento-budgets .bud3-headline-pace",
-		position("absolute"), top("0"), bottom("0"), width("2px"), zIndex("1"),
-		background("var(--text)"), opacity("0.65"), pointerEvents("none"),
-	)
-	rule(".bento-budgets .bud3-headline-attention",
-		display("flex"), alignItems("center"), flexWrap("wrap"), gap("0.35rem"),
-		fontSize("var(--fs-meta)"), color("var(--text-dim)"),
-	)
 	rule(".bento-budgets .bud3-attention-separator", color("var(--text-faint)"))
 	rule(".bento-budgets .bud3-attention-link",
 		minWidth("24px"), minHeight("24px"), padding("0"), border("0"), background("transparent"),
