@@ -8,6 +8,7 @@ and every commit updates this file under `Unreleased`.
 
 ### Changed
 - Update balance shows the current figure with its sign, explains a debt going down or up in plain words, and flags a debt typed without its minus sign. The typed figure is converted to the account's stored convention before it is posted, so debts no longer move in opposite directions.
+- "These figures disagree" rows can be dismissed, and "Bring back" restores them. Dismissals are kept with the household data and follow each finding, so they survive the amounts changing and end when the contradiction does. Dismissing and bringing back can be undone.
 - Prepare v1.19.10 with GoWebComponents v7.0.1, preserved encrypted-sync protections, the Settings navigation stability fix and recorded final gates.
 - A deferred default Settings redirect cannot replace a newer navigation or a newly selected Settings tab.
 - Integrate the published v1.19.9 sync/privacy fixes with the v7 componentized app, preserving encrypted artifact migration and transport guards.

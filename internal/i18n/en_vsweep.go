@@ -449,11 +449,15 @@ var vSweepKeys = Catalog{
 	"bench.noOverlap":       "%s does not cover this window, so there is nothing to compare yet.",
 
 	// E3 — where the app's own numbers disagree with each other.
-	"contra.title": "These figures disagree",
-	"contra.count": "%d found",
-	"contra.look":  "Go look",
-	"contra.more":  "Show %d more",
-	"contra.less":  "Show fewer",
+	"contra.title":           "These figures disagree",
+	"contra.count":           "%d found",
+	"contra.look":            "Go look",
+	"contra.more":            "Show %d more",
+	"contra.less":            "Show fewer",
+	"contra.dismiss":         "Dismiss",
+	"contra.restore":         "Bring back %d dismissed",
+	"contra.dismissedNotice": "Dismissed.",
+	"contra.restoredNotice":  "Brought back %d.",
 
 	// LF-8 — unfinished work, as distinct from the integrity findings beside it.
 	"health.hygieneLead":            "Worth finishing:",
