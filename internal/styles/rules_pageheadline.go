@@ -74,6 +74,15 @@ func registerPageHeadline() {
 		prop("mask-image", "linear-gradient(to right, transparent 0, #000 16%, #000 84%, transparent 100%)"),
 		prop("-webkit-mask-image", "linear-gradient(to right, transparent 0, #000 16%, #000 84%, transparent 100%)"),
 	)
+	rule(".page-headline-stack",
+		display("flex"), flexDirection("column"), gap("0.6rem"), flex("1 1 220px"), minWidth("0"),
+	)
+	rule(".page-headline-footer",
+		fontSize("var(--fs-meta)"), color("var(--text-dim)"),
+	)
+	rule(".page-headline-footer:empty",
+		display("none"),
+	)
 	rule(".page-headline-visual:empty",
 		display("none"),
 	)

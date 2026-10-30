@@ -605,7 +605,7 @@ func acctSummaryWidget(props acctSummaryProps) ui.Node {
 
 	body := Div(
 		acctHeadline(netText, assetsText, liabilitiesText, tone, nwDelta, haveDelta,
-			smartTooltipFor(smartSettings, "accounts-net", uistate.T("dashboard.netWorth"), uistate.T("smart.tipAccountsNet")), trendVisual),
+			smartTooltipFor(smartSettings, "accounts-net", uistate.T("dashboard.netWorth"), uistate.T("smart.tipAccountsNet")), trendVisual, acctLiquidityLine(app, props.Base, props.Rates)),
 		If(!nw.Complete(), P(css.Class("err"), Attr("role", "status"), Attr("data-testid", "acct-networth-note"), netWorthAvailabilityNote(nw))),
 		// AC11: disclose accounts left out of net worth by the household's choice.
 		If(len(nw.ExcludedByChoice) > 0, P(css.Class("t-caption", tw.TextDim), Attr("role", "status"), Attr("data-testid", "acct-nw-excludes-by-choice"),
@@ -616,7 +616,6 @@ func acctSummaryWidget(props acctSummaryProps) ui.Node {
 		// idle cash to be worth naming.
 		acctIdleCashLine(app, props.Base, goToAllocate),
 		// Liquidity breakdown: the asset side grouped by how usable the money is.
-		acctLiquidityLine(app, props.Base, props.Rates),
 		// E3: where the app's own numbers disagree with each other — a transfer
 		// with one leg, holdings that do not add up to their account's balance.
 		// Always on, and absent entirely when the data agrees.

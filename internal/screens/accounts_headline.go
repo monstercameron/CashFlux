@@ -15,9 +15,10 @@ import (
 // acctHeadline is the accounts page summary, built on the shared PageHeadline. Net
 // worth leads, with its change this month; assets and liabilities follow as facts.
 // Liabilities still link through to /debt.
-func acctHeadline(netText, assetsText, liabilitiesText, tone string, delta money.Money, haveDelta bool, netTip, visual ui.Node) ui.Node {
+func acctHeadline(netText, assetsText, liabilitiesText, tone string, delta money.Money, haveDelta bool, netTip, visual, footer ui.Node) ui.Node {
 	return uiw.PageHeadline(uiw.PageHeadlineProps{
 		Visual: visual,
+		Footer: footer,
 		Figure: uiw.PageHeadlineFigure(uiw.PageHeadlineFigureProps{Text: netText, Tone: tone, TestID: "acct-networth-value", Block: true}),
 		Sentence: Fragment(
 			uistate.T("dashboard.netWorth"),

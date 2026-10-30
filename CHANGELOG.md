@@ -13,6 +13,7 @@ and every commit updates this file under `Unreleased`.
 - The Accounts headline carries the six-month net-worth trend on its right, drawn with the shared area chart and faded at both ends, and liabilities show as a red negative figure.
 - Headline and transaction summary text takes its sizes from the shared --fs tokens, so Accounts, Budgets and Transactions read the same. The Budgets window label no longer repeats its wording.
 - When every "These figures disagree" finding is dismissed, the strip disappears instead of showing a "Bring back" box. Bring back stays available while some findings are still shown, and Undo on the dismissal toast restores the last one.
+- The Accounts headline is one left column (figure, change, facts, liquidity) with the six-month trend beside it, so the header has no dead space under the figure. Budgets and Accounts share the same headline layout and type tokens.
 - Prepare v1.19.10 with GoWebComponents v7.0.1, preserved encrypted-sync protections, the Settings navigation stability fix and recorded final gates.
 - A deferred default Settings redirect cannot replace a newer navigation or a newly selected Settings tab.
 - Integrate the published v1.19.9 sync/privacy fixes with the v7 componentized app, preserving encrypted artifact migration and transport guards.

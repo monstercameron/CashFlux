@@ -28,6 +28,8 @@ type PageHeadlineProps struct {
 	Meter uic.Node
 	// Facts are the supporting figures, shown in one quiet row (see PageHeadlineFact).
 	Facts []uic.Node
+	// Footer is an optional quiet line under the facts, such as the liquidity breakdown.
+	Footer uic.Node
 	// Attention is an optional line of things that need a look, such as a filter link.
 	Attention uic.Node
 	// Live announces the figure and sentence to assistive technology when they change.
@@ -46,19 +48,25 @@ func PageHeadline(props PageHeadlineProps) uic.Node {
 	if props.Live {
 		copyArgs = append(copyArgs, Attr("role", "status"))
 	}
-	facts := make([]any, 0, len(props.Facts)+2)
+	facts := make([]any, 0, len(props.Facts)+1)
 	facts = append(facts, css.Class("page-headline-facts"))
 	for _, f := range props.Facts {
 		facts = append(facts, f)
 	}
-	args := []any{css.Class("page-headline"), Attr("data-testid", props.TestID),
-		Div(css.Class("page-headline-top"),
-			Div(copyArgs...),
-			Div(css.Class("page-headline-visual"), props.Visual),
-		),
+	// One left column carries everything that reads as the headline, so the trend beside
+	// it is exactly as tall as the content and never leaves dead space under the figure.
+	stack := []any{css.Class("page-headline-stack"),
+		Div(copyArgs...),
 		props.Meter,
 		Div(facts...),
+		Div(css.Class("page-headline-footer"), props.Footer),
 		Div(css.Class("page-headline-attention"), props.Attention),
+	}
+	args := []any{css.Class("page-headline"), Attr("data-testid", props.TestID),
+		Div(css.Class("page-headline-top"),
+			Div(stack...),
+			Div(css.Class("page-headline-visual"), props.Visual),
+		),
 	}
 	if props.State != "" {
 		args = append(args, Attr("data-state", props.State))
